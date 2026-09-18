@@ -1027,6 +1027,318 @@ describe('GraphQL remote profile boundary', () => {
     });
   });
 
+  test('profile pin mutations require the selected owner and concrete Relay IDs', async () => {
+    const auth = await createAuthenticatedSession();
+    const otherProfile = await createProfile({
+      handle: 'pin-other-profile',
+      instanceId: localInstanceId,
+    });
+    const post = await createContentfulPost({ profileId: auth.profile.id });
+
+    const anonymous = await requestGraphQL(
+      `mutation PinAnonymous($input: PinProfilePostInput!) {
+        pinProfilePost(input: $input) { changed }
+      }`,
+      {
+        input: {
+          profileId: globalId('Profile', auth.profile.id),
+          postId: globalId('Post', post.id),
+        },
+      },
+    );
+    assertGraphQLErrorCode(anonymous, 'PERMISSION_DENIED');
+
+    const otherProfileMutation = await requestGraphQL(
+      `mutation PinOtherProfile($input: PinProfilePostInput!) {
+        pinProfilePost(input: $input) { changed }
+      }`,
+      {
+        input: {
+          profileId: globalId('Profile', otherProfile.id),
+          postId: globalId('Post', post.id),
+        },
+      },
+      auth.token,
+    );
+    assertGraphQLErrorCode(otherProfileMutation, 'PERMISSION_DENIED');
+
+    const wrongProfileType = await requestGraphQL(
+      `mutation PinWrongProfileType($input: PinProfilePostInput!) {
+        pinProfilePost(input: $input) { changed }
+      }`,
+      {
+        input: {
+          profileId: globalId('Post', post.id),
+          postId: globalId('Post', post.id),
+        },
+      },
+      auth.token,
+    );
+    assert.equal(wrongProfileType.data, null);
+    assert.ok(wrongProfileType.errors?.[0]);
+
+    const wrongPostType = await requestGraphQL(
+      `mutation PinWrongPostType($input: PinProfilePostInput!) {
+        pinProfilePost(input: $input) { changed }
+      }`,
+      {
+        input: {
+          profileId: globalId('Profile', auth.profile.id),
+          postId: globalId('Profile', auth.profile.id),
+        },
+      },
+      auth.token,
+    );
+    assert.equal(wrongPostType.data, null);
+    assert.ok(wrongPostType.errors?.[0]);
+
+    const pinned = await requestGraphQL<{
+      pinProfilePost: { changed: boolean; profile: { id: string } };
+    }>(
+      `mutation PinOwner($input: PinProfilePostInput!) {
+        pinProfilePost(input: $input) { changed profile { id } }
+      }`,
+      {
+        input: {
+          profileId: globalId('Profile', auth.profile.id),
+          postId: globalId('Post', post.id),
+        },
+      },
+      auth.token,
+    );
+    assertNoGraphQLErrors(pinned);
+    assert.deepEqual(pinned.data?.pinProfilePost, {
+      changed: true,
+      profile: { id: globalId('Profile', auth.profile.id) },
+    });
+  });
+
+  test('profile pinnedPosts uses ordered composite cursors, visibility, and reply/quote rows', async () => {
+    const auth = await createAuthenticatedSession();
+    const first = await createContentfulPost({ profileId: auth.profile.id });
+    const reply = await createContentfulPost({
+      profileId: auth.profile.id,
+      replyParentId: first.id,
+    });
+    const quote = await createContentfulPost({
+      profileId: auth.profile.id,
+      repostSourceId: first.id,
+    });
+    const hidden = await createContentfulPost({ profileId: auth.profile.id });
+
+    const pin = (postId: string) =>
+      requestGraphQL(
+        `mutation Pin($input: PinProfilePostInput!) {
+          pinProfilePost(input: $input) { changed }
+        }`,
+        {
+          input: {
+            profileId: globalId('Profile', auth.profile.id),
+            postId: globalId('Post', postId),
+          },
+        },
+        auth.token,
+      );
+    for (const post of [first, reply, quote, hidden]) {
+      const result = await pin(post.id);
+      assertNoGraphQLErrors(result);
+    }
+    await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, hidden.id));
+
+    const query = `query PinnedPosts(
+      $profileId: ID!
+      $after: String
+      $before: String
+      $first: Int
+      $last: Int
+    ) {
+      node(id: $profileId) {
+        ... on Profile {
+          pinnedPosts(after: $after, before: $before, first: $first, last: $last) {
+            edges {
+              cursor
+              node {
+                id
+                replyParent { id }
+                repostSource { id }
+              }
+            }
+            pageInfo { endCursor hasNextPage hasPreviousPage startCursor }
+          }
+        }
+      }
+    }`;
+    type PinnedPage = {
+      node: {
+        pinnedPosts: {
+          edges: Array<{
+            cursor: string;
+            node: {
+              id: string;
+              replyParent: { id: string } | null;
+              repostSource: { id: string } | null;
+            };
+          }>;
+          pageInfo: {
+            endCursor: string | null;
+            hasNextPage: boolean;
+            hasPreviousPage: boolean;
+            startCursor: string | null;
+          };
+        };
+      } | null;
+    };
+    const variables = { profileId: globalId('Profile', auth.profile.id) };
+
+    const firstPage = await requestGraphQL<PinnedPage>(
+      query,
+      { ...variables, first: 2, after: null, before: null, last: null },
+      auth.token,
+    );
+    assertNoGraphQLErrors(firstPage);
+    assert.deepEqual(
+      firstPage.data?.node?.pinnedPosts.edges.map(({ node }) => node.id),
+      [first, reply].map(({ id }) => globalId('Post', id)),
+    );
+    assert.equal(
+      firstPage.data?.node?.pinnedPosts.edges[1]?.node.replyParent?.id,
+      globalId('Post', first.id),
+    );
+    assert.equal(firstPage.data?.node?.pinnedPosts.pageInfo.hasNextPage, true);
+    assert.equal(firstPage.data?.node?.pinnedPosts.pageInfo.hasPreviousPage, false);
+
+    const secondPage = await requestGraphQL<PinnedPage>(
+      query,
+      {
+        ...variables,
+        after: firstPage.data?.node?.pinnedPosts.pageInfo.endCursor,
+        before: null,
+        first: 2,
+        last: null,
+      },
+      auth.token,
+    );
+    assertNoGraphQLErrors(secondPage);
+    assert.deepEqual(
+      secondPage.data?.node?.pinnedPosts.edges.map(({ node }) => node.id),
+      [quote].map(({ id }) => globalId('Post', id)),
+    );
+    assert.equal(
+      secondPage.data?.node?.pinnedPosts.edges[0]?.node.repostSource?.id,
+      globalId('Post', first.id),
+    );
+    assert.equal(secondPage.data?.node?.pinnedPosts.pageInfo.hasNextPage, false);
+    assert.equal(secondPage.data?.node?.pinnedPosts.pageInfo.hasPreviousPage, true);
+
+    const backwardPage = await requestGraphQL<PinnedPage>(
+      query,
+      {
+        ...variables,
+        after: null,
+        before: secondPage.data?.node?.pinnedPosts.pageInfo.startCursor,
+        first: null,
+        last: 2,
+      },
+      auth.token,
+    );
+    assertNoGraphQLErrors(backwardPage);
+    assert.deepEqual(
+      backwardPage.data?.node?.pinnedPosts.edges.map(({ node }) => node.id),
+      [first, reply].map(({ id }) => globalId('Post', id)),
+    );
+    assert.equal(backwardPage.data?.node?.pinnedPosts.pageInfo.hasPreviousPage, false);
+    assert.equal(backwardPage.data?.node?.pinnedPosts.pageInfo.hasNextPage, true);
+
+    const chronology = await requestGraphQL<{
+      node: { posts: { edges: Array<{ node: { id: string } }> } } | null;
+    }>(
+      `query ProfileChronology($profileId: ID!) {
+        node(id: $profileId) {
+          ... on Profile { posts(first: 10) { edges { node { id } } } }
+        }
+      }`,
+      variables,
+      auth.token,
+    );
+    assertNoGraphQLErrors(chronology);
+    assert.deepEqual(
+      chronology.data?.node?.posts.edges.map(({ node }) => node.id),
+      [quote, first].map(({ id }) => globalId('Post', id)),
+    );
+  });
+
+  test('profile pin mutation payloads are idempotent and stale replacement is a conflict', async () => {
+    const auth = await createAuthenticatedSession();
+    const current = await createContentfulPost({ profileId: auth.profile.id });
+    const next = await createContentfulPost({ profileId: auth.profile.id });
+    const profileId = globalId('Profile', auth.profile.id);
+    const postId = (id: string) => globalId('Post', id);
+
+    const pin = (id: string) =>
+      requestGraphQL<{ pinProfilePost: { changed: boolean; profile: { id: string } } }>(
+        `mutation Pin($input: PinProfilePostInput!) {
+          pinProfilePost(input: $input) { changed profile { id } }
+        }`,
+        { input: { profileId, postId: postId(id) } },
+        auth.token,
+      );
+    const firstPin = await pin(current.id);
+    const repeatedPin = await pin(current.id);
+    assertNoGraphQLErrors(firstPin);
+    assertNoGraphQLErrors(repeatedPin);
+    assert.equal(firstPin.data?.pinProfilePost.changed, true);
+    assert.equal(repeatedPin.data?.pinProfilePost.changed, false);
+
+    const replaced = await requestGraphQL<{
+      replaceCurrentProfilePin: { changed: boolean; profile: { id: string } };
+    }>(
+      `mutation Replace($input: ReplaceCurrentProfilePinInput!) {
+        replaceCurrentProfilePin(input: $input) { changed profile { id } }
+      }`,
+      {
+        input: {
+          profileId,
+          expectedCurrentPostId: postId(current.id),
+          newPostId: postId(next.id),
+        },
+      },
+      auth.token,
+    );
+    assertNoGraphQLErrors(replaced);
+    assert.equal(replaced.data?.replaceCurrentProfilePin.changed, true);
+
+    const stale = await requestGraphQL(
+      `mutation ReplaceStale($input: ReplaceCurrentProfilePinInput!) {
+        replaceCurrentProfilePin(input: $input) { changed }
+      }`,
+      {
+        input: {
+          profileId,
+          expectedCurrentPostId: postId(current.id),
+          newPostId: postId(current.id),
+        },
+      },
+      auth.token,
+    );
+    assertGraphQLErrorCode(stale, 'CONFLICT');
+    assert.equal(stale.errors?.[0]?.extensions?.field, 'expectedCurrentPostId');
+
+    const unpin = (id: string) =>
+      requestGraphQL<{ unpinProfilePost: { changed: boolean; profile: { id: string } } }>(
+        `mutation Unpin($input: UnpinProfilePostInput!) {
+          unpinProfilePost(input: $input) { changed profile { id } }
+        }`,
+        { input: { profileId, postId: postId(id) } },
+        auth.token,
+      );
+    const firstUnpin = await unpin(next.id);
+    const repeatedUnpin = await unpin(next.id);
+    assertNoGraphQLErrors(firstUnpin);
+    assertNoGraphQLErrors(repeatedUnpin);
+    assert.equal(firstUnpin.data?.unpinProfilePost.changed, true);
+    assert.equal(repeatedUnpin.data?.unpinProfilePost.changed, false);
+  });
+
   test('reads stored active remote posts through the general visibility policy', async () => {
     const remoteInstance = await createRemoteInstance();
     const remote = await createProfile({

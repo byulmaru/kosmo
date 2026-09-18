@@ -5,5 +5,6 @@ import './follow-request';
 import './mute';
 import './migration';
 import './select';
+import './pin';
 import './unfollow';
 import './update';
