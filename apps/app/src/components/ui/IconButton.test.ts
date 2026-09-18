@@ -66,7 +66,7 @@ let getIconButtonPlatformGeometry:
       visualSize?: number,
     ) => { minimumHitSlop: number; minimumTargetSize: number })
   | undefined;
-let getIconButtonTargetSize: ((platform: string) => number) | undefined;
+let getInteractionTargetSize: ((platform: string) => number) | undefined;
 
 before(async () => {
   mockPlatform.OS = 'ios';
@@ -80,9 +80,7 @@ before(async () => {
     getIconButtonPlatformGeometry = module?.getIconButtonPlatformGeometry as
       | typeof getIconButtonPlatformGeometry
       | undefined;
-    getIconButtonTargetSize = module?.getIconButtonTargetSize as
-      | ((platform: string) => number)
-      | undefined;
+    ({ getInteractionTargetSize } = await import('./interactionTarget'));
   } finally {
     mockPlatform.OS = 'web';
   }
@@ -119,11 +117,11 @@ function flattenStyle(style: unknown): Record<string, unknown> {
 }
 
 test('platform target mapping stays centralized for Web, iOS, and Android', () => {
-  assert.ok(getIconButtonTargetSize, 'target size resolver must exist');
-  assert.equal(getIconButtonTargetSize('web'), 32);
-  assert.equal(getIconButtonTargetSize('ios'), 44);
-  assert.equal(getIconButtonTargetSize('android'), 48);
-  assert.equal(getIconButtonTargetSize('windows'), 48);
+  assert.ok(getInteractionTargetSize, 'target size resolver must exist');
+  assert.equal(getInteractionTargetSize('web'), 32);
+  assert.equal(getInteractionTargetSize('ios'), 44);
+  assert.equal(getInteractionTargetSize('android'), 48);
+  assert.equal(getInteractionTargetSize('windows'), 48);
 });
 
 test('hit slop preserves the requested effective region from the rendered layout box', () => {

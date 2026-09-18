@@ -40,6 +40,7 @@ const storyProfiles = [
       id: 'reaction-profile-starlight-avatar',
       url: appleTouchIconUrl,
     },
+    bio: '기존 modal 목록에 표시되는 소개입니다.',
     displayName: '별빛 반응 프로필',
     id: 'reaction-profile-starlight',
     relativeHandle: '@starlight',
@@ -357,6 +358,8 @@ export const ProfileListStates: Story = {
     expect(canvas.getAllByText(profileCopy.emptyTitle)).toHaveLength(2);
     expect(canvasElement.querySelector('a[href="/@starlight"]')).toBeInTheDocument();
     expect(canvasElement.querySelector('a[href="/@milky-way"]')).toBeInTheDocument();
+    expect(populatedSection.getByRole('heading', { name: '반응한 사람' })).toBeVisible();
+    expect(populatedSection.getByText('기존 modal 목록에 표시되는 소개입니다.')).toBeVisible();
     const imageAvatar = populatedSection.getByLabelText('별빛 반응 프로필 프로필 이미지');
     const fallbackAvatar = populatedSection.getByLabelText('은하수 반응 프로필 프로필 이미지');
     await waitFor(() =>

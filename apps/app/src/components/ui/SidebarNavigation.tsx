@@ -19,7 +19,8 @@ import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, motion, radius, space, textStyles } from '@/theme/tokens';
 import { ActionMenu } from './ActionMenu';
 import { Avatar } from './Avatar';
-import { getIconButtonHitSlop, getIconButtonTargetSize } from './IconButton';
+import { getIconButtonHitSlop } from './IconButton';
+import { getInteractionTargetSize } from './interactionTarget';
 import { getUnreadNotificationAccessibilityLabel } from './navigationChrome';
 import type { LucideIcon } from 'lucide-react-native';
 import type { ReactElement, Ref } from 'react';
@@ -59,7 +60,7 @@ const primaryItems = [
   ['bookmarks', '북마크', Bookmark],
 ] as const satisfies readonly (readonly [NavigationDestination, string, LucideIcon])[];
 
-const compactHitSlop = getIconButtonHitSlop(44, getIconButtonTargetSize(Platform.OS));
+const compactHitSlop = getIconButtonHitSlop(44, getInteractionTargetSize(Platform.OS));
 
 type SidebarControlProps = {
   accessibilityLabel?: string;

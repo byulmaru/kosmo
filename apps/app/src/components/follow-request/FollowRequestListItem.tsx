@@ -4,7 +4,8 @@ import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
 import { ProfileListItemContent } from '@/components/profile/ProfileListItemContent';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
-import { getIconButtonTargetSize, IconButton } from '@/components/ui/IconButton';
+import { IconButton } from '@/components/ui/IconButton';
+import { getInteractionTargetSize } from '@/components/ui/interactionTarget';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { iconSizes, space } from '@/theme/tokens';
@@ -179,7 +180,7 @@ function FollowRequestActionButton({
   const theme = useTheme();
   const label = action === 'approve' ? '승인' : '거절';
   const iconColor = busy ? theme.stateDisabledForeground : theme.foregroundPrimary;
-  const targetSize = getIconButtonTargetSize(Platform.OS);
+  const targetSize = getInteractionTargetSize(Platform.OS);
 
   return (
     <IconButton

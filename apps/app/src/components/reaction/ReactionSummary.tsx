@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { IconButton } from '@/components/ui/IconButton';
+import { getInteractionTargetSize } from '@/components/ui/interactionTarget';
 import { StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, radii, spacing } from '@/theme/tokens';
@@ -35,7 +36,7 @@ const copy = {
   loadingTitle: '반응 요약을 불러오는 중입니다.',
 } as const;
 
-const summaryControlSize = Platform.OS === 'web' ? 32 : Platform.OS === 'ios' ? 44 : 48;
+const summaryControlSize = getInteractionTargetSize(Platform.OS);
 
 export function ReactionSummary({
   disabled = false,

@@ -1,18 +1,7 @@
 import { Platform, Pressable, StyleSheet, View } from 'react-native';
+import { getInteractionTargetSize } from './interactionTarget';
 import type { ReactNode, Ref } from 'react';
 import type { PressableProps } from 'react-native';
-
-export function getIconButtonTargetSize(platform: string): number {
-  if (platform === 'web') {
-    return 32;
-  }
-
-  if (platform === 'ios') {
-    return 44;
-  }
-
-  return 48;
-}
 
 export function getIconButtonHitSlop(
   renderedTargetSize: number,
@@ -27,7 +16,7 @@ export function getIconButtonPlatformGeometry(
   visualSize?: number,
 ): { minimumHitSlop: number; minimumTargetSize: number } {
   const renderedTargetSize = Math.max(0, targetSize, visualSize ?? 0);
-  const platformTargetSize = getIconButtonTargetSize(platform);
+  const platformTargetSize = getInteractionTargetSize(platform);
 
   if (platform === 'web') {
     return {
@@ -47,7 +36,7 @@ export function getIconButtonOverlayGeometry(
   visualSize: number,
   visualInset: number,
 ): { targetInset: number; targetSize: number; visualInset: number } {
-  const targetSize = Math.max(getIconButtonTargetSize(platform), visualSize);
+  const targetSize = Math.max(getInteractionTargetSize(platform), visualSize);
   const targetInset = Math.max(0, visualInset - (targetSize - visualSize) / 2);
 
   return {
@@ -57,7 +46,7 @@ export function getIconButtonOverlayGeometry(
   };
 }
 
-export const ICON_BUTTON_TARGET_SIZE = getIconButtonTargetSize(Platform.OS);
+export const ICON_BUTTON_TARGET_SIZE = getInteractionTargetSize(Platform.OS);
 
 function mergeHitSlop(
   hitSlop: PressableProps['hitSlop'],
