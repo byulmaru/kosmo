@@ -16,6 +16,7 @@ import {
 import { getDocumentLoader } from '@fedify/vocab-runtime';
 import {
   ActivityPubActorType,
+  ActivityPubQuoteFormat,
   ActivityPubQuoteStatus,
   InstanceKind,
   InstanceState,
@@ -51,6 +52,7 @@ let Instances: typeof CoreDb.Instances;
 let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
+let ProfileFollows: typeof CoreDb.ProfileFollows;
 let Profiles: typeof CoreDb.Profiles;
 let createPost: typeof CoreServices.createPost;
 let createKosmoFederation: typeof createKosmoFederationType;
@@ -74,6 +76,7 @@ before(async () => {
     pg,
     PostContents,
     Posts,
+    ProfileFollows,
     Profiles,
   } = await import('@kosmo/core/db'));
   const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
@@ -1365,9 +1368,509 @@ test('FEP self-quote는 승인서 없이 승인하되 다른 Post만 Source로 �
   );
 });
 
+test('검증된 Followers Only Source는 결정적인 Local Follower identity로 signed fetch한다', async () => {
+  const sourceActor = await createRemoteActor(
+    'private-source',
+    'https://source.example/users/private-source',
+  );
+  const sourceFollowersUri = 'https://source.example/users/private-source/followers';
+  await db
+    .update(ActivityPubActors)
+    .set({ followersUri: sourceFollowersUri })
+    .where(eq(ActivityPubActors.profileId, sourceActor.id));
+
+  const firstFollower = await createLocalProfile('private-first');
+  const secondFollower = await createLocalProfile('private-second');
+  await db.insert(ProfileFollows).values([
+    { followerProfileId: firstFollower.id, followeeProfileId: sourceActor.id },
+    { followerProfileId: secondFollower.id, followeeProfileId: sourceActor.id },
+  ]);
+  const quoteActor = await createRemoteActor(
+    'private-quote',
+    'https://quote.example/users/private-quote',
+  );
+  const quoteUri = new URL('https://quote.example/notes/private-quote');
+  const quote = await createRemotePost(quoteActor.id, quoteUri.href);
+  const sourceUri = new URL('https://source.example/notes/private-source');
+  const sourceNote = new Note({
+    attribution: new URL('https://source.example/users/private-source'),
+    content: 'private source body',
+    cc: new URL('https://mention.example/users/extra'),
+    id: sourceUri,
+    to: new URL(sourceFollowersUri),
+  });
+  const firstKeyPair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
+  const secondKeyPair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
+  const keyPairs = new Map([
+    [
+      firstFollower.id,
+      { ...firstKeyPair, keyId: new URL(`https://local.example/keys/${firstFollower.id}`) },
+    ],
+    [
+      secondFollower.id,
+      { ...secondKeyPair, keyId: new URL(`https://local.example/keys/${secondFollower.id}`) },
+    ],
+  ]);
+  const selectedFollower = [firstFollower.id, secondFollower.id].sort()[0]!;
+  const keyCalls: string[] = [];
+  const signedKeyIds: string[] = [];
+  const lookupObject = mock.fn(async (identifier: string | URL, options?: unknown) => {
+    void options;
+    assert.equal(identifier.toString(), sourceUri.href);
+    return sourceNote;
+  });
+
+  const result = await handleInboundQuote({
+    actorUri: 'https://quote.example/users/private-quote',
+    context: createSignedContext(keyPairs, keyCalls, signedKeyIds, lookupObject),
+    note: new Note({
+      attribution: new URL('https://quote.example/users/private-quote'),
+      id: quoteUri,
+      quoteUrl: sourceUri,
+      to: PUBLIC_COLLECTION,
+    }),
+    postId: quote.post.id,
+    receivedAt,
+    startWorkflow: false,
+    trustedSource: {
+      authorUri: 'https://source.example/users/private-source',
+      sourceUri: sourceUri.href,
+    },
+  });
+
+  assert.deepEqual(result, { retryable: false, status: ActivityPubQuoteStatus.APPROVED });
+  assert.deepEqual(keyCalls, [selectedFollower]);
+  assert.deepEqual(signedKeyIds, [`https://local.example/keys/${selectedFollower}`]);
+  assert.equal(lookupObject.mock.calls.length, 1);
+  const lookupOptions = lookupObject.mock.calls[0]?.arguments[1] as
+    | { documentLoader?: unknown }
+    | undefined;
+  assert.ok(lookupOptions?.documentLoader);
+  const sourcePost = await db
+    .select()
+    .from(ActivityPubPosts)
+    .where(eq(ActivityPubPosts.uri, sourceUri.href))
+    .then(firstOrThrow);
+  const storedSource = await db
+    .select()
+    .from(Posts)
+    .where(eq(Posts.id, sourcePost.postId))
+    .then(firstOrThrow);
+  const storedQuote = await db
+    .select()
+    .from(Posts)
+    .where(eq(Posts.id, quote.post.id))
+    .then(firstOrThrow);
+  assert.equal(storedSource.profileId, sourceActor.id);
+  assert.equal(storedSource.visibility, PostVisibility.FOLLOWERS);
+  assert.equal(storedQuote.repostSourceId, sourcePost.postId);
+});
+
+test('trusted author가 저장되지 않았거나 eligible Local Follower가 없으면 Source fetch와 저장을 하지 않는다', async () => {
+  const sourceActor = await createRemoteActor(
+    'private-unavailable-source',
+    'https://source.example/users/private-unavailable',
+  );
+  const sourceUri = new URL('https://source.example/notes/private-unavailable');
+  await db
+    .update(ActivityPubActors)
+    .set({ followersUri: 'https://source.example/users/private-unavailable/followers' })
+    .where(eq(ActivityPubActors.profileId, sourceActor.id));
+  const quoteActor = await createRemoteActor(
+    'private-unavailable-quote',
+    'https://quote.example/users/private-unavailable',
+  );
+  const quoteUri = new URL('https://quote.example/notes/private-unavailable');
+  const quote = await createRemotePost(quoteActor.id, quoteUri.href);
+  const keyCalls: string[] = [];
+  const signedKeyIds: string[] = [];
+  const lookupObject = mock.fn(async () => {
+    throw new Error('Source must not be fetched without a candidate');
+  });
+
+  const result = await handleInboundQuote({
+    actorUri: 'https://quote.example/users/private-unavailable',
+    context: createSignedContext(new Map(), keyCalls, signedKeyIds, lookupObject),
+    note: new Note({
+      attribution: new URL('https://quote.example/users/private-unavailable'),
+      id: quoteUri,
+      quoteUrl: sourceUri,
+      to: PUBLIC_COLLECTION,
+    }),
+    postId: quote.post.id,
+    receivedAt,
+    startWorkflow: false,
+    trustedSource: {
+      authorUri: 'https://source.example/users/private-unavailable',
+      sourceUri: sourceUri.href,
+    },
+  });
+
+  assert.deepEqual(result, { retryable: false, status: ActivityPubQuoteStatus.INVALID });
+  assert.deepEqual(keyCalls, []);
+  assert.deepEqual(signedKeyIds, []);
+  assert.equal(lookupObject.mock.calls.length, 0);
+  assert.equal(await db.$count(ActivityPubPosts, eq(ActivityPubPosts.uri, sourceUri.href)), 0);
+  assert.equal(
+    (await db.select().from(Posts).where(eq(Posts.id, quote.post.id)).then(firstOrThrow))
+      .repostSourceId,
+    null,
+  );
+});
+
+test('선택된 Local Follower에 signing key가 없으면 일반 loader로 fallback하지 않는다', async () => {
+  const sourceActor = await createRemoteActor(
+    'private-no-key-source',
+    'https://source.example/users/private-no-key',
+  );
+  const sourceUri = new URL('https://source.example/notes/private-no-key');
+  await db
+    .update(ActivityPubActors)
+    .set({ followersUri: 'https://source.example/users/private-no-key/followers' })
+    .where(eq(ActivityPubActors.profileId, sourceActor.id));
+  const follower = await createLocalProfile('private-no-key-follower');
+  await db.insert(ProfileFollows).values({
+    followerProfileId: follower.id,
+    followeeProfileId: sourceActor.id,
+  });
+  const quoteActor = await createRemoteActor(
+    'private-no-key-quote',
+    'https://quote.example/users/private-no-key',
+  );
+  const quoteUri = new URL('https://quote.example/notes/private-no-key');
+  const quote = await createRemotePost(quoteActor.id, quoteUri.href);
+  const keyCalls: string[] = [];
+  const signedKeyIds: string[] = [];
+  const lookupObject = mock.fn(async () => {
+    throw new Error('Source must not be fetched without a signing key');
+  });
+
+  const result = await handleInboundQuote({
+    actorUri: 'https://quote.example/users/private-no-key',
+    context: createSignedContext(new Map(), keyCalls, signedKeyIds, lookupObject),
+    note: new Note({
+      attribution: new URL('https://quote.example/users/private-no-key'),
+      id: quoteUri,
+      quoteUrl: sourceUri,
+      to: PUBLIC_COLLECTION,
+    }),
+    postId: quote.post.id,
+    receivedAt,
+    startWorkflow: false,
+    trustedSource: {
+      authorUri: 'https://source.example/users/private-no-key',
+      sourceUri: sourceUri.href,
+    },
+  });
+
+  assert.deepEqual(result, { retryable: false, status: ActivityPubQuoteStatus.INVALID });
+  assert.deepEqual(keyCalls, [follower.id]);
+  assert.deepEqual(signedKeyIds, []);
+  assert.equal(lookupObject.mock.calls.length, 0);
+  assert.equal(await db.$count(ActivityPubPosts, eq(ActivityPubPosts.uri, sourceUri.href)), 0);
+});
+
+test('Followers Only Source fetch 중 Follow가 해제되면 저장 직전 재검증이 전체 저장을 거부한다', async () => {
+  const sourceActor = await createRemoteActor(
+    'private-revoked-source',
+    'https://source.example/users/private-revoked',
+  );
+  const sourceFollowersUri = 'https://source.example/users/private-revoked/followers';
+  await db
+    .update(ActivityPubActors)
+    .set({ followersUri: sourceFollowersUri })
+    .where(eq(ActivityPubActors.profileId, sourceActor.id));
+  const follower = await createLocalProfile('private-revoked-follower');
+  const follow = await db
+    .insert(ProfileFollows)
+    .values({ followerProfileId: follower.id, followeeProfileId: sourceActor.id })
+    .returning()
+    .then(firstOrThrow);
+  const quoteActor = await createRemoteActor(
+    'private-revoked-quote',
+    'https://quote.example/users/private-revoked',
+  );
+  const sourceUri = new URL('https://source.example/notes/private-revoked');
+  const quote = await createRemotePost(
+    quoteActor.id,
+    'https://quote.example/notes/private-revoked',
+  );
+  const keyPair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
+  const keyPairs = new Map([
+    [follower.id, { ...keyPair, keyId: new URL(`https://local.example/keys/${follower.id}`) }],
+  ]);
+  const lookupObject = mock.fn(async () => {
+    await db.delete(ProfileFollows).where(eq(ProfileFollows.id, follow.id));
+    return new Note({
+      attribution: new URL('https://source.example/users/private-revoked'),
+      content: 'must not be saved after follow revocation',
+      id: sourceUri,
+      to: new URL(sourceFollowersUri),
+    });
+  });
+  const keyCalls: string[] = [];
+  const signedKeyIds: string[] = [];
+
+  const result = await handleInboundQuote({
+    actorUri: 'https://quote.example/users/private-revoked',
+    context: createSignedContext(keyPairs, keyCalls, signedKeyIds, lookupObject),
+    note: new Note({
+      attribution: new URL('https://quote.example/users/private-revoked'),
+      id: new URL('https://quote.example/notes/private-revoked'),
+      quoteUrl: sourceUri,
+      to: PUBLIC_COLLECTION,
+    }),
+    postId: quote.post.id,
+    receivedAt,
+    startWorkflow: false,
+    trustedSource: {
+      authorUri: 'https://source.example/users/private-revoked',
+      sourceUri: sourceUri.href,
+    },
+  });
+
+  assert.deepEqual(result, { retryable: false, status: ActivityPubQuoteStatus.INVALID });
+  assert.deepEqual(keyCalls, [follower.id]);
+  assert.equal(lookupObject.mock.calls.length, 1);
+  assert.equal(await db.$count(ActivityPubPosts, eq(ActivityPubPosts.uri, sourceUri.href)), 0);
+  assert.equal(
+    (await db.select().from(Posts).where(eq(Posts.id, quote.post.id)).then(firstOrThrow))
+      .repostSourceId,
+    null,
+  );
+});
+
+test('private admission은 Source Note의 exact author와 canonical Followers audience를 모두 검증한다', async () => {
+  const sourceActor = await createRemoteActor(
+    'private-validation-source',
+    'https://source.example/users/private-validation',
+  );
+  const sourceFollowersUri = 'https://source.example/users/private-validation/followers';
+  await db
+    .update(ActivityPubActors)
+    .set({ followersUri: sourceFollowersUri })
+    .where(eq(ActivityPubActors.profileId, sourceActor.id));
+  const follower = await createLocalProfile('private-validation-follower');
+  await db.insert(ProfileFollows).values({
+    followerProfileId: follower.id,
+    followeeProfileId: sourceActor.id,
+  });
+  const quoteActor = await createRemoteActor(
+    'private-validation-quote',
+    'https://quote.example/users/private-validation',
+  );
+  const keyPair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
+  const keyPairs = new Map([
+    [follower.id, { ...keyPair, keyId: new URL(`https://local.example/keys/${follower.id}`) }],
+  ]);
+  const cases = [
+    {
+      name: 'wrong-author',
+      note: (id: URL, followersUri: string) =>
+        new Note({
+          attribution: new URL('https://source.example/users/not-expected'),
+          content: 'wrong author',
+          id,
+          to: new URL(followersUri),
+        }),
+    },
+    {
+      name: 'public-audience',
+      note: (id: URL) =>
+        new Note({
+          attribution: new URL('https://source.example/users/private-validation'),
+          content: 'public is not private admission',
+          id,
+          to: PUBLIC_COLLECTION,
+        }),
+    },
+  ] as const;
+
+  for (const currentCase of cases) {
+    const sourceUri = new URL(`https://source.example/notes/private-${currentCase.name}`);
+    const quoteUri = new URL(`https://quote.example/notes/private-${currentCase.name}`);
+    const quote = await createRemotePost(quoteActor.id, quoteUri.href);
+    const keyCalls: string[] = [];
+    const signedKeyIds: string[] = [];
+    const lookupObject = mock.fn(async () => currentCase.note(sourceUri, sourceFollowersUri));
+    const result = await handleInboundQuote({
+      actorUri: 'https://quote.example/users/private-validation',
+      context: createSignedContext(keyPairs, keyCalls, signedKeyIds, lookupObject),
+      note: new Note({
+        attribution: new URL('https://quote.example/users/private-validation'),
+        id: quoteUri,
+        quoteUrl: sourceUri,
+        to: PUBLIC_COLLECTION,
+      }),
+      postId: quote.post.id,
+      receivedAt,
+      startWorkflow: false,
+      trustedSource: {
+        authorUri: 'https://source.example/users/private-validation',
+        sourceUri: sourceUri.href,
+      },
+    });
+
+    assert.deepEqual(result, { retryable: false, status: ActivityPubQuoteStatus.INVALID });
+    assert.equal(lookupObject.mock.calls.length, 1);
+    assert.equal(await db.$count(ActivityPubPosts, eq(ActivityPubPosts.uri, sourceUri.href)), 0);
+  }
+});
+
+test('동시 실행한 같은 private Source는 하나의 Post와 각 Quote의 현재 revision으로 수렴한다', async () => {
+  const sourceActor = await createRemoteActor(
+    'private-concurrent-source',
+    'https://source.example/users/private-concurrent',
+  );
+  const sourceFollowersUri = 'https://source.example/users/private-concurrent/followers';
+  await db
+    .update(ActivityPubActors)
+    .set({ followersUri: sourceFollowersUri })
+    .where(eq(ActivityPubActors.profileId, sourceActor.id));
+  const follower = await createLocalProfile('private-concurrent-follower');
+  await db.insert(ProfileFollows).values({
+    followerProfileId: follower.id,
+    followeeProfileId: sourceActor.id,
+  });
+  const quoteActor = await createRemoteActor(
+    'private-concurrent-quote',
+    'https://quote.example/users/private-concurrent',
+  );
+  const firstQuoteUri = new URL('https://quote.example/notes/private-concurrent-1');
+  const secondQuoteUri = new URL('https://quote.example/notes/private-concurrent-2');
+  const firstQuote = await createRemotePost(quoteActor.id, firstQuoteUri.href);
+  const secondQuote = await createRemotePost(quoteActor.id, secondQuoteUri.href);
+  const sourceUri = new URL('https://source.example/notes/private-concurrent');
+  const sourceNote = new Note({
+    attribution: new URL('https://source.example/users/private-concurrent'),
+    content: 'one source for concurrent quotes',
+    id: sourceUri,
+    to: new URL(sourceFollowersUri),
+  });
+  const keyPair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
+  const keyPairs = new Map([
+    [follower.id, { ...keyPair, keyId: new URL(`https://local.example/keys/${follower.id}`) }],
+  ]);
+  const lookupObject = mock.fn(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    return sourceNote;
+  });
+  const trustedSource = {
+    authorUri: 'https://source.example/users/private-concurrent',
+    sourceUri: sourceUri.href,
+  } as const;
+
+  const [firstResult, secondResult] = await Promise.all(
+    [
+      { postId: firstQuote.post.id, quoteUri: firstQuoteUri },
+      { postId: secondQuote.post.id, quoteUri: secondQuoteUri },
+    ].map(({ postId, quoteUri }) =>
+      handleInboundQuote({
+        actorUri: 'https://quote.example/users/private-concurrent',
+        context: createSignedContext(keyPairs, [], [], lookupObject),
+        note: new Note({
+          attribution: new URL('https://quote.example/users/private-concurrent'),
+          id: quoteUri,
+          quoteUrl: sourceUri,
+          to: PUBLIC_COLLECTION,
+        }),
+        postId,
+        receivedAt,
+        startWorkflow: false,
+        trustedSource,
+      }),
+    ),
+  );
+
+  assert.deepEqual(firstResult, { retryable: false, status: ActivityPubQuoteStatus.APPROVED });
+  assert.deepEqual(secondResult, { retryable: false, status: ActivityPubQuoteStatus.APPROVED });
+  const sourcePosts = await db
+    .select()
+    .from(ActivityPubPosts)
+    .where(eq(ActivityPubPosts.uri, sourceUri.href));
+  assert.equal(sourcePosts.length, 1);
+  const quotePosts = await db
+    .select({ repostSourceId: Posts.repostSourceId })
+    .from(Posts)
+    .where(eq(Posts.id, firstQuote.post.id));
+  const secondQuotePosts = await db
+    .select({ repostSourceId: Posts.repostSourceId })
+    .from(Posts)
+    .where(eq(Posts.id, secondQuote.post.id));
+  assert.equal(quotePosts[0]?.repostSourceId, sourcePosts[0]?.postId);
+  assert.equal(secondQuotePosts[0]?.repostSourceId, sourcePosts[0]?.postId);
+  assert.equal(lookupObject.mock.calls.length, 2);
+});
+
+test('private Source fetch 중 revision이 stale해지면 늦은 응답을 저장하거나 연결하지 않는다', async () => {
+  const sourceActor = await createRemoteActor(
+    'private-stale-source',
+    'https://source.example/users/private-stale',
+  );
+  const sourceFollowersUri = 'https://source.example/users/private-stale/followers';
+  await db
+    .update(ActivityPubActors)
+    .set({ followersUri: sourceFollowersUri })
+    .where(eq(ActivityPubActors.profileId, sourceActor.id));
+  const follower = await createLocalProfile('private-stale-follower');
+  await db.insert(ProfileFollows).values({
+    followerProfileId: follower.id,
+    followeeProfileId: sourceActor.id,
+  });
+  const quoteActor = await createRemoteActor(
+    'private-stale-quote',
+    'https://quote.example/users/private-stale',
+  );
+  const quote = await createRemotePost(quoteActor.id, 'https://quote.example/notes/private-stale');
+  const sourceUri = new URL('https://source.example/notes/private-stale');
+  await db.insert(ActivityPubPostQuotes).values({
+    format: ActivityPubQuoteFormat.FEP_044F,
+    postId: quote.post.id,
+    resolutionRevision: 1,
+    status: ActivityPubQuoteStatus.PENDING,
+    targetUri: sourceUri.href,
+  });
+  const keyPair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
+  const keyPairs = new Map([
+    [follower.id, { ...keyPair, keyId: new URL(`https://local.example/keys/${follower.id}`) }],
+  ]);
+  const lookupObject = mock.fn(async () => {
+    await db
+      .update(ActivityPubPostQuotes)
+      .set({ resolutionRevision: 2, status: ActivityPubQuoteStatus.REVOKED })
+      .where(eq(ActivityPubPostQuotes.postId, quote.post.id));
+    return new Note({
+      attribution: new URL('https://source.example/users/private-stale'),
+      content: 'late private source',
+      id: sourceUri,
+      to: new URL(sourceFollowersUri),
+    });
+  });
+
+  const result = await resolveStoredInboundQuote({
+    context: createSignedContext(keyPairs, [], [], lookupObject),
+    postId: quote.post.id,
+    receivedAt,
+    revision: 1,
+    trustedSource: {
+      authorUri: 'https://source.example/users/private-stale',
+      sourceUri: sourceUri.href,
+    },
+  });
+
+  assert.deepEqual(result, { retryable: false, status: ActivityPubQuoteStatus.REVOKED });
+  assert.equal(await db.$count(ActivityPubPosts, eq(ActivityPubPosts.uri, sourceUri.href)), 0);
+  assert.equal(
+    (await db.select().from(Posts).where(eq(Posts.id, quote.post.id)).then(firstOrThrow))
+      .repostSourceId,
+    null,
+  );
+});
+
 const createContext = (
   documents = new Map<string, unknown>(),
-  lookupObject: (identifier: string | URL) => Promise<unknown> = async () => null,
+  lookupObject: (identifier: string | URL, options?: unknown) => Promise<unknown> = async () =>
+    null,
 ) => {
   const contextLoader = getDocumentLoader();
   return {
@@ -1383,6 +1886,43 @@ const createContext = (
     lookupObject,
     parseUri: () => null,
   } as never;
+};
+
+const createLocalProfile = async (handle: string) =>
+  db
+    .insert(Profiles)
+    .values({
+      displayName: handle,
+      followPolicy: ProfileFollowPolicy.OPEN,
+      handle,
+      instanceId: localInstanceId,
+      normalizedHandle: handle,
+      state: ProfileState.ACTIVE,
+    })
+    .returning()
+    .then(firstOrThrow);
+
+const createSignedContext = (
+  keyPairs: ReadonlyMap<string, { keyId: URL; privateKey: CryptoKey }>,
+  keyCalls: string[],
+  signedKeyIds: string[],
+  lookupObject: (identifier: string | URL, options?: unknown) => Promise<unknown>,
+) => {
+  const context = createContext(new Map(), lookupObject) as unknown as Record<string, unknown>;
+  return Object.assign(context, {
+    getActorKeyPairs: async (profileId: string) => {
+      keyCalls.push(profileId);
+      const keyPair = keyPairs.get(profileId);
+      return (keyPair ? [keyPair] : []) as never;
+    },
+    getDocumentLoader: ({ keyId, privateKey }: { keyId: URL; privateKey: CryptoKey }) => {
+      assert.ok(privateKey);
+      signedKeyIds.push(keyId.href);
+      return (async () => {
+        throw new Error('test document loader should be passed to lookupObject');
+      }) as never;
+    },
+  }) as never;
 };
 
 const createRemoteActor = async (handle: string, actorUri: string) => {

@@ -1,15 +1,18 @@
 import '@kosmo/core/polyfill';
 
 import { federation, resolveStoredInboundQuote } from '@kosmo/fedify';
+import type { TrustedInboundQuoteSource } from '@kosmo/fedify';
 
 export type ActivityPubQuoteResolutionInput = {
   readonly postId: string;
   readonly revision: number;
+  readonly trustedSource?: TrustedInboundQuoteSource;
 };
 
 export const resolveActivityPubQuoteActivity = async ({
   postId,
   revision,
+  trustedSource,
 }: ActivityPubQuoteResolutionInput): Promise<void> => {
   const origin = process.env.PUBLIC_ORIGIN?.trim() || 'http://127.0.0.1:4173';
   const result = await resolveStoredInboundQuote({
@@ -17,6 +20,7 @@ export const resolveActivityPubQuoteActivity = async ({
     postId,
     receivedAt: Temporal.Now.instant(),
     revision,
+    trustedSource,
   });
 
   if (result.retryable && result.status === 'PENDING') {
