@@ -79,18 +79,18 @@ export function markNativePushRoute(href: Href): Href {
   return `${href}${href.includes('?') ? '&' : '?'}fromPush=1` as Href;
 }
 
+function notificationRequestFromResponse(response: RecordValue): RecordValue | null {
+  const notification = response.notification;
+  return isRecord(notification) && isRecord(notification.request) ? notification.request : null;
+}
+
 export function notificationDataFromResponse(response: unknown): unknown {
   if (!isRecord(response)) {
     return null;
   }
 
-  const notification = response.notification;
-  if (!isRecord(notification)) {
-    return null;
-  }
-
-  const request = notification.request;
-  if (!isRecord(request)) {
+  const request = notificationRequestFromResponse(response);
+  if (!request) {
     return null;
   }
 
@@ -107,8 +107,7 @@ export function nativePushResponseKey(response: unknown): string | null {
     return null;
   }
 
-  const notification = isRecord(response.notification) ? response.notification : null;
-  const request = notification && isRecord(notification.request) ? notification.request : null;
+  const request = notificationRequestFromResponse(response);
   const identifier = nonEmptyString(request?.identifier);
   const actionIdentifier = nonEmptyString(response.actionIdentifier);
   return identifier ? `${identifier}:${actionIdentifier ?? ''}` : null;
