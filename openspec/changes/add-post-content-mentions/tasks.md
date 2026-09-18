@@ -100,17 +100,17 @@
 
 - renderer는 raw ActivityPub tag를 다시 해석하거나 신규 원격 Profile lookup/materialization을 수행하지 않는다.
 - Post visibility·eligibility와 기존 접근성 계약을 유지하며 Mention 표시나 `to`/`cc` 값으로 viewer 접근 범위를 넓히지 않는다.
-- unresolved·malformed·identity mismatch fallback은 Profile 이동 affordance 없이 안전한 link/text로 표시한다.
+- unresolved·malformed·identity mismatch fallback은 Profile 이동 affordance 없이 안전한 link/text로 표시한다. `PostContentRenderer`는 node/relation exact lookup과 occurrence order만 소유하고, `PostContentMention`이 optional Profile의 matched link 또는 fixed fallback text를 소유한다.
 - 긴 Profile 이름과 서로 유사한 대상도 stable identity에 따라 구분하고, 표시 문자열은 해당 Profile의 `relativeHandle`에서 파생한다. Profile을 조회할 수 없으면 `@알 수 없는 사용자`를 비링크로 표시해 잘못된 Profile 이동을 만들지 않는다.
 - `PROD-911` Notification·FCM 구현은 이 task group에 포함하지 않는다.
-- `PostContent.mentionedProfiles: [Profile!]!`은 기존 Profile visibility predicate(Profile이 `ACTIVE`이고 소속 Instance가 `SUSPENDED`가 아님)를 통과한 같은 revision의 Profile을 deduplicate해 제공하고, Post visibility·eligibility는 PostContent 조회의 기존 정책을 따른다. 이 field에서 viewer별 Profile Domain Block 정책을 새로 조합하지 않는다. document의 canonical UUID는 기존 Media와 같은 client-facing global ID로 projection한다. renderer는 node global ID와 Profile ID를 exact match하며 positional zip이나 client-side encode/decode를 사용하지 않는다. matched target은 Profile의 `relativeHandle`에서 표시 문자열을 파생해 기존 `/${relativeHandle}` route를 사용하고, match가 없으면 `@알 수 없는 사용자`를 link 없이 표시한다. 활성 Mention link는 기존 Profile text-link 강조 계약을 재사용하며 accessible name에 `displayName`·`relativeHandle`을 포함한다.
+- `PostContent.mentionedProfiles: [Profile!]!`은 기존 Profile visibility predicate(Profile이 `ACTIVE`이고 소속 Instance가 `SUSPENDED`가 아님)를 통과한 같은 revision의 Profile을 deduplicate해 제공하고, Post visibility·eligibility는 PostContent 조회의 기존 정책을 따른다. 이 field에서 viewer별 Profile Domain Block 정책을 새로 조합하지 않는다. document의 canonical UUID는 기존 Media와 같은 client-facing global ID로 projection한다. renderer는 node global ID와 Profile ID를 exact match하며 positional zip이나 client-side encode/decode를 사용하지 않는다. matched Profile의 표시 문자열·기존 `/${relativeHandle}` route·accessible name과 missing match의 `@알 수 없는 사용자` 비링크는 `PostContentMention`이 소유한다. 활성 Mention link는 기존 Profile text-link 강조 계약을 재사용하며 accessible name에 `displayName`·`relativeHandle`을 포함한다.
 
 **Verification**
 
-- current revision의 valid Mention 표시·Profile 이동, repeated occurrence/deduplicated relation과 unresolved fallback을 renderer에서 실행 검증한다.
+- current revision의 valid Mention lookup·Profile 이동, repeated occurrence/deduplicated relation과 unresolved fallback 전달을 renderer에서 실행 검증한다. 전용 `PostContentMention` component에서 relative handle 표시, unavailable non-link fallback, route, parent propagation 차단, `interactive=false` plain text와 inline link behavior를 실행 검증한다.
 - visibility·eligibility, 기존 Profile visibility predicate, keyboard/screen-reader 접근성 회귀를 통합 검증한다. viewer별 Profile Domain Block 정책은 이 task의 완료 증거로 주장하지 않는다.
 - `PostContent.mentionedProfiles` relation의 current revision·visible Profile filter·global ID projection과 node/relation exact matching을 검증하고, relation 배열 순서와 무관하게 반복 occurrence를 문서 순서로 표시하는지 확인한다.
-- 긴 이름·유사 대상, Light/Dark, Web keyboard·screen reader, Native touch·accessible focus 경계를 포함해 `PROD-910`의 renderer 계약을 실행 검증한다. 실행 환경이 없는 플랫폼은 검증 범위를 완료로 일반화하지 않는다.
+- 긴 이름·유사 대상, Light/Dark, Web keyboard·screen reader와 Native inline link semantics를 포함해 `PROD-910`의 renderer 계약을 실행 검증한다. 이 component-specific Native inline text-link exception은 기존 navigation/text primitive를 사용해 link role·accessible name·route navigation·parent propagation 차단을 유지하며, 독립 minimum touch target이나 별도 focus boundary를 요구하지 않는다. 전용 component test는 matched/fallback/`interactive=false`와 inline 표현을 실행 검증한다. 이 rendered props evidence는 실제 Native touch target, VoiceOver·TalkBack focus·announcement runtime 완료를 의미하지 않으며, 다른 interactive control의 global accessibility baseline은 이 예외로 바뀌지 않는다.
 - inbound 저장 결과, reader compatibility gate와 renderer 결과를 함께 확인하고 `PROD-910` 구현·통합 완료 후 delta spec 동기화, archive와 archive 후 validation 증거를 정리한다.
 
 - [x] 3.1 canonical Mention node와 current revision Profile relation을 소비하는 renderer 표시·Profile 이동·접근성을 구현한다.
@@ -122,6 +122,12 @@
 - 이번 correction에서 PostContentRenderer 9개와 PostSourcePresentationView source wiring 2개를 포함한 renderer focused test 11/11, Core unit 87/87이 통과했다.
 - App TypeScript check, Relay compiler(`--noWatchman`), targeted ESLint·Prettier와 `openspec validate --all --strict`(128/128)가 통과했다.
 - Storybook/manual Web와 Native runtime 검증은 이번 correction에서 다시 실행하지 않았다. 따라서 3.2와 3.3은 계속 미완료이며, 전체 integration·delta spec sync·`PROD-910` archive와 archive 후 validation은 blocked/deferred 상태로 둔다.
+
+**3.x component-focused evidence (2026-09-18)**
+
+- `PostContentRenderer.test.ts` 10/10와 `PostContentMention.test.ts` 3/3가 통과했다. 검증 범위는 Profile ID exact lookup과 document occurrence order, repeated Mention, matched `relativeHandle` route, parent propagation 차단, unavailable non-link fallback, `interactive=false` plain text와 inline link 표현이다.
+- App TypeScript check(`pnpm --filter @kosmo/app exec tsc --noEmit`), Relay compiler(`pnpm --filter @kosmo/app exec relay-compiler --noWatchman`), 소유 테스트 대상 ESLint·Prettier와 `git diff --check`가 통과했다.
+- Native inline Mention의 link role·accessible name·route navigation과 parent propagation 차단은 component execution evidence로 확인했다. 독립 touch target·focus boundary, 실제 Native touch runtime, VoiceOver/TalkBack focus·announcement, Web keyboard/screen-reader runtime과 broader integration은 실행하지 않았으므로 3.2·3.3과 전체 archive 완료를 주장하지 않는다.
 
 ## Verification Boundary
 

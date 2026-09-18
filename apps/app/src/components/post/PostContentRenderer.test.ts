@@ -337,33 +337,28 @@ describe('PostContentRenderer', () => {
       ['/@first-profile', '/@second-profile'],
     );
     assert.equal(
-      rendered('Text').filter(({ props }) => props.children === '@first-profile').length,
+      rendered('Text').filter((node) => renderedText(node) === '@first-profile').length,
       1,
     );
     assert.equal(
-      rendered('Text').filter(({ props }) => props.children === '@second-profile').length,
+      rendered('Text').filter((node) => renderedText(node) === '@second-profile').length,
       1,
     );
     assert.equal(
-      rendered('Text').filter(({ props }) => props.children === '@알 수 없는 사용자').length,
+      rendered('Text').filter((node) => renderedText(node) === '@알 수 없는 사용자').length,
       1,
     );
     assert.equal(
-      rendered('Text').some(({ props }) => props.children === '@missing'),
+      rendered('Text').some((node) => renderedText(node) === '@missing'),
       false,
     );
-
-    const linkText = rendered('Text').find(({ props }) => props.accessibilityRole === 'link');
-    assert.ok(linkText);
-    let propagationStopped = false;
-    linkText.props.onPress({ stopPropagation: () => (propagationStopped = true) });
-    assert.equal(propagationStopped, true);
   });
 
-  it('renders a matched relative handle as plain text when interactive is false', async () => {
-    const profileId = '019f6678-86fa-709b-984e-1520766b8450';
+  it('keeps repeated Mention occurrences in document order while matching by Profile ID', async () => {
+    const firstProfileId = 'profile-first';
+    const secondProfileId = 'profile-second';
     await render({
-      bodyText: '@quiet-profile',
+      bodyText: '@first-profile / @first-profile / @second-profile',
       contentWarning: null,
       document: {
         version: 1,
@@ -373,28 +368,80 @@ describe('PostContentRenderer', () => {
           content: [
             {
               type: 'paragraph',
-              content: [{ type: 'mention', attrs: { profileId } }],
+              content: [
+                { type: 'mention', attrs: { profileId: firstProfileId } },
+                { type: 'text', text: ' / ' },
+                { type: 'mention', attrs: { profileId: firstProfileId } },
+                { type: 'text', text: ' / ' },
+                { type: 'mention', attrs: { profileId: secondProfileId } },
+              ],
             },
           ],
         },
       },
-      interactive: false,
       media: [],
       mentionedProfiles: [
         {
-          displayName: 'Quiet Profile',
-          id: profileId,
-          relativeHandle: '@quiet-profile',
+          displayName: 'Second Profile',
+          id: secondProfileId,
+          relativeHandle: '@second-profile',
+        },
+        {
+          displayName: 'First Profile',
+          id: firstProfileId,
+          relativeHandle: '@first-profile',
         },
       ],
-      postId: 'post-mention-static',
+      postId: 'post-mention-repeated-order',
     });
 
-    assert.equal(rendered('NavigationLink').length, 0);
-    assert.equal(
-      rendered('Text').filter(({ props }) => props.children === '@quiet-profile').length,
-      1,
+    assert.deepEqual(
+      rendered('NavigationLink').map(({ props }) => props.href),
+      ['/@first-profile', '/@first-profile', '/@second-profile'],
     );
+  });
+
+  it('keeps a matched Mention inline while the post body remains the parent target', async () => {
+    await render({
+      bodyText: '본문 @profile',
+      contentWarning: null,
+      document: {
+        version: 1,
+        summary: null,
+        body: {
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                { type: 'text', text: '본문 ' },
+                { type: 'mention', attrs: { profileId: 'profile-inline' } },
+              ],
+            },
+          ],
+        },
+      },
+      media: [],
+      mentionedProfiles: [
+        {
+          displayName: 'Inline Profile',
+          id: 'profile-inline',
+          relativeHandle: '@profile',
+        },
+      ],
+      onBodyPress: () => undefined,
+      postId: 'post-mention-inline',
+    });
+
+    assert.deepEqual(
+      rendered('Pressable').map(({ props }) => props.testID),
+      ['post-list-row-body'],
+    );
+    assert.deepEqual(
+      rendered('NavigationLink').map(({ props }) => props.href),
+      ['/@profile'],
+    );
+    assert.equal(rendered('Text').filter((node) => renderedText(node) === '@profile').length, 1);
   });
 });
 
@@ -429,4 +476,15 @@ function rendered(type: string): ReactTestInstance[] {
 function byTestId(testID: string): ReactTestInstance {
   assert.ok(renderer);
   return renderer.root.findByProps({ testID });
+}
+
+function renderedText(instance: ReactTestInstance): string {
+  return instance.children
+    .map((child) => {
+      if (typeof child === 'string' || typeof child === 'number') {
+        return String(child);
+      }
+      return renderedText(child as ReactTestInstance);
+    })
+    .join('');
 }
