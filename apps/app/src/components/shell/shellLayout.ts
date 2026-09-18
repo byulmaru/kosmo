@@ -54,6 +54,25 @@ export function isTimelineRoute(pathname: string) {
   return pathname === '/home' || pathname === '/local';
 }
 
+function isProfileHomeRoute(routeSegments: readonly string[]) {
+  const profileRouteIndex = routeSegments.lastIndexOf('(profile)');
+
+  return (
+    profileRouteIndex >= 0 &&
+    routeSegments[profileRouteIndex + 1] === '[profileHandle]' &&
+    routeSegments.length === profileRouteIndex + 2
+  );
+}
+
+export function isNativeDrawerSwipeEnabled(pathname: string, routeSegments: readonly string[]) {
+  return (
+    isTimelineRoute(pathname) ||
+    pathname === '/search' ||
+    pathname === '/notifications' ||
+    isProfileHomeRoute(routeSegments)
+  );
+}
+
 export function getShellRoutePresentation(web: boolean, width: number, pathname: string) {
   const layout = getShellLayout(web, width);
   const settingsWorkspace = layout === 'full' && isSettingsRoute(pathname);

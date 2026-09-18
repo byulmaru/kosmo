@@ -35,6 +35,7 @@ import { ShellChromeProvider } from './ShellChromeContext';
 import {
   getShellRoutePresentation,
   getWebMobileShellHeader,
+  isNativeDrawerSwipeEnabled,
   isSettingsRoute,
   isTimelineRoute,
   isWebMobileRouteOwnedHeader,
@@ -142,6 +143,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
   );
   const profile = data.currentSession?.selectedProfile ?? null;
   const web = Platform.OS === 'web';
+  const nativeDrawerSwipeEnabled = !web && isNativeDrawerSwipeEnabled(pathname, routeSegments);
   // Web keeps the shell root out of the tab order. Native View#focus() requires an explicit
   // focusable host target; tabIndex={-1} maps to focusable=false on Native.
   const screenFallbackFocusProps = web ? { tabIndex: -1 as const } : { focusable: true };
@@ -485,6 +487,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
         onSwitcherOpenChange={setSwitcherOpen}
         query={data}
         switcherOpen={switcherOpen}
+        swipeEnabled={nativeDrawerSwipeEnabled}
       >
         {shellContent}
       </NativeNavigationDrawer>

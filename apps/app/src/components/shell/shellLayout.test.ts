@@ -7,6 +7,7 @@ import {
   getShellRoutePresentation,
   getWebMobileShellHeader,
   getWebMobileShellHeaderStickyOffset,
+  isNativeDrawerSwipeEnabled,
   isSettingsRoute,
   isTimelineRoute,
   isWebMobileRouteOwnedHeader,
@@ -113,6 +114,29 @@ describe('getShellLayout', () => {
     assert.equal(isTimelineRoute('/local'), true);
     assert.equal(isTimelineRoute('/local/post'), false);
     assert.equal(isTimelineRoute('/search'), false);
+  });
+
+  it('enables Native drawer edge swipe only on approved main and Profile Home routes', () => {
+    const profileHomeSegments = ['(tabs)', '(profile)', '[profileHandle]'];
+    const postDetailSegments = ['(tabs)', '(post)', '[profileHandle]', '[postId]'];
+    const profileFollowersSegments = ['(tabs)', '(profile)', '[profileHandle]', 'followers'];
+    const profileFollowingSegments = ['(tabs)', '(profile)', '[profileHandle]', 'following'];
+
+    for (const pathname of ['/home', '/local', '/search', '/notifications']) {
+      assert.equal(isNativeDrawerSwipeEnabled(pathname, []), true, pathname);
+    }
+    assert.equal(isNativeDrawerSwipeEnabled('/@writer', profileHomeSegments), true);
+
+    for (const [pathname, routeSegments] of [
+      ['/@writer/post-id', postDetailSegments],
+      ['/@writer/followers', profileFollowersSegments],
+      ['/@writer/following', profileFollowingSegments],
+      ['/settings', []],
+      ['/settings/info', []],
+      ['/bookmarks', []],
+    ] as const) {
+      assert.equal(isNativeDrawerSwipeEnabled(pathname, routeSegments), false, pathname);
+    }
   });
 
   it('replaces only the full Web RightRail with the Settings workspace', () => {
