@@ -43,6 +43,13 @@ export class RemoteActorMaterializationError extends Error {
   }
 }
 
+export class RemoteActorDiscoveryUnavailableError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'RemoteActorDiscoveryUnavailableError';
+  }
+}
+
 type RemoteActorLookupContext = Pick<Context<void>, 'lookupObject'>;
 export type RemoteActorMaterializationOptions = {
   context: RemoteActorLookupContext;

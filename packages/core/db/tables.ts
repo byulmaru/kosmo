@@ -110,6 +110,23 @@ export const ActivityPubPosts = pgTable('activitypub_post', {
   publishedAt: datetime('published_at'),
 });
 
+export const ActivityPubPostQuotes = pgTable(
+  'activitypub_post_quote',
+  {
+    postId: uuid('post_id')
+      .primaryKey()
+      .references(() => Posts.id, { onDelete: 'cascade' }),
+    targetUri: text('target_uri').notNull(),
+    format: Enum.activityPubQuoteFormat('format').notNull(),
+    status: Enum.activityPubQuoteStatus('status').notNull(),
+    approvalUri: text('approval_uri'),
+    resolutionRevision: integer('resolution_revision').notNull().default(0),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [index().on(table.targetUri), index().on(table.status)],
+);
+
 export const ActivityPubReactions = pgTable('activitypub_reaction', {
   uri: text('uri').unique().notNull(),
   reactionId: uuid('reaction_id')

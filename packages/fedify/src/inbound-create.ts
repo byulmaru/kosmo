@@ -2,9 +2,11 @@ import '@kosmo/core/polyfill';
 
 import { Note } from '@fedify/vocab';
 import { InstanceState, ProfileState } from '@kosmo/core/enums';
+import { findPostByActivityPubUri } from './activitypub-post-uri';
 import { uniqueHref } from './activitypub-uri';
 import { handleInboundCreateNote } from './inbound-create-note';
 import { observeInbound } from './inbound-observability';
+import { handleInboundQuote, hasInboundQuote } from './inbound-quote';
 import { findStoredRemoteProfileActorByUri } from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
 import type { Create } from '@fedify/vocab';
@@ -71,6 +73,12 @@ export const handleInboundCreate = async (
       storedActor,
       receivedAt,
     });
+    if (await hasInboundQuote({ context, note: object })) {
+      const postId = await findPostByActivityPubUri(context, new URL(objectUri));
+      if (postId) {
+        await handleInboundQuote({ actorUri, context, note: object, postId, receivedAt });
+      }
+    }
     return;
   }
 

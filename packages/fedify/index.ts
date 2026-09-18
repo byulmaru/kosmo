@@ -16,6 +16,11 @@ export {
   setInboundObservabilityReporter,
   withInboundObservability,
 } from './src/inbound-observability';
+export {
+  handleInboundQuote,
+  resolveStoredInboundQuote,
+  revokeInboundQuote,
+} from './src/inbound-quote';
 export { sendLocalPostCreate, sendLocalPostDelete } from './src/local-post-delivery';
 export { sendLocalProfileUpdate } from './src/local-profile-update-delivery';
 export { sendProfileFollow, sendProfileUnfollow } from './src/profile-follow-delivery';
