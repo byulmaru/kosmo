@@ -117,8 +117,8 @@ jobs:
 
           runtime_info="$(pnpm exec expo-updates runtimeversion:resolve --platform android --workflow managed)"
           runtime_version="$(printf '%s\n' "${runtime_info}" | node --input-type=module -e 'import fs from "node:fs"; const info = JSON.parse(fs.readFileSync(0, "utf8")); process.stdout.write(typeof info.runtimeVersion === "string" ? info.runtimeVersion : "");')"
-          if [[ ! "${runtime_version}" =~ ^[0-9a-f]{40,64}$ ]]; then
-            echo "::error::Resolved Android runtimeVersion must be a lowercase fingerprint hash."
+          if [[ ! "${runtime_version}" =~ ^[A-Za-z0-9._-]+$ || "${runtime_version}" == "." || "${runtime_version}" == ".." ]]; then
+            echo "::error::Resolved Android runtimeVersion must be a safe non-empty path segment."
             exit 1
           fi
           echo "KOSMO_OTA_RUNTIME_VERSION=${runtime_version}" >> "${GITHUB_ENV}"
@@ -435,8 +435,8 @@ jobs:
 
           runtime_info="$(pnpm exec expo-updates runtimeversion:resolve --platform ios --workflow managed)"
           runtime_version="$(printf '%s\n' "${runtime_info}" | node --input-type=module -e 'import fs from "node:fs"; const info = JSON.parse(fs.readFileSync(0, "utf8")); process.stdout.write(typeof info.runtimeVersion === "string" ? info.runtimeVersion : "");')"
-          if [[ ! "${runtime_version}" =~ ^[0-9a-f]{40,64}$ ]]; then
-            echo "::error::Resolved iOS runtimeVersion must be a lowercase fingerprint hash."
+          if [[ ! "${runtime_version}" =~ ^[A-Za-z0-9._-]+$ || "${runtime_version}" == "." || "${runtime_version}" == ".." ]]; then
+            echo "::error::Resolved iOS runtimeVersion must be a safe non-empty path segment."
             exit 1
           fi
           echo "KOSMO_OTA_RUNTIME_VERSION=${runtime_version}" >> "${GITHUB_ENV}"

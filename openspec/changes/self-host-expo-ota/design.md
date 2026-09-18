@@ -26,7 +26,7 @@ Delivery는 기존 Temporal `apps/worker`의 책임을 확장하지 않고 조�
 ### Current Constraints
 
 - `apps/app`은 Expo SDK 56이며 package manifest에 `expo-updates`가 직접 선언되어 있지 않다. SDK가 요구하는 패키지 버전과 prebuild 결과를 PROD-333이 확인해야 한다.
-- `app.config.ts`에 build identity와 plugin 목록이 있으므로 runtimeVersion, 고정 tuple update URL, code-signing 설정은 이 설정과 native prebuild 결과가 일치하도록 연결해야 한다. `runtimeVersion`만으로 project를 선택하면 안 된다.
+- `app.config.ts`에 build identity와 plugin 목록이 있으므로 수동으로 관리하는 호환성 세대 `runtimeVersion`(초기값 문자열 `"0.2"`), 고정 tuple update URL, code-signing 설정은 이 설정과 native prebuild 결과가 일치하도록 연결해야 한다. Native compatibility가 변경될 때마다 runtime generation을 올리고 새 native binary를 만들며, JS/assets-only OTA는 같은 세대를 사용한다. 호환되지 않는 OTA는 새 native binary와 새 generation 없이는 publish하지 않고 `EXPO_UPDATES_FINGERPRINT_OVERRIDE`를 사용하지 않는다. `runtimeVersion`만으로 project를 선택하면 안 된다.
 - `public.ts`는 Native 개발에서 `dev`, release에서 `prod`를 선택한다. Deploy workflow의 논리 mapping은 `dev`/`prod`를 사용하지만, OTA client·delivery는 channel 이름 목록을 제한하지 않고 안전한 단일 path segment 형식만 요구한다. 두 설정 책임을 분리하므로 OTA channel input으로 public-config를 자동 변경하지 않는다. Store binary의 OTA consumer channel은 `prod`로 고정한다.
 - Android workflow는 completed PROD-886 Google Play Alpha 경로이고 iOS workflow는 completed PROD-876 TestFlight 경로다. OTA-enabled binary를 만들 때 signing과 seed artifact evidence를 잃지 않아야 한다.
 - 기존 `apps/worker`와 `apps/helm/templates/worker.yaml`은 Temporal Worker runtime이다. 여기에 OTA manifest/asset route를 임의로 추가하면 delivery와 workflow의 보안 경계가 섞인다.
@@ -38,7 +38,7 @@ Delivery는 기존 Temporal `apps/worker`의 책임을 확장하지 않고 조�
 
 ### Recommended Approach
 
-1. PROD-333이 client bootstrap을 먼저 `expo-updates`가 지원하는 native config와 앱 초기화 경계에 연결한다. approved handoff가 제공한 project/platform/channel/runtime tuple을 URL에 사용하고, channel path safety는 release/delivery contract에서 검증한다. Store binary의 OTA consumer channel과 public-config `prod` 선택은 고정하되 deploy workflow의 논리 `dev`/`prod` mapping과 분리한다.
+1. PROD-333이 client bootstrap을 먼저 `expo-updates`가 지원하는 native config와 앱 초기화 경계에 연결한다. 수동으로 할당한 runtime generation(초기값 `"0.2"`)과 approved handoff가 제공한 project/platform/channel/runtime tuple을 URL에 사용하고, native compatibility 변경 때만 generation을 올린다. JS/assets-only OTA는 같은 generation을 유지하고, channel path safety는 release/delivery contract에서 검증한다. Store binary의 OTA consumer channel과 public-config `prod` 선택은 고정하되 deploy workflow의 논리 `dev`/`prod` mapping과 분리한다.
 2. manifest의 `expo-signature`와 asset hash 검증은 public certificate를 신뢰하는 client의 update 적용 직전 경계로 모으고, 오류는 last-known-good 또는 embedded update로 되돌린다. native requirement가 있는 변경은 release pipeline에서 새 store binary 경로로 보낸다.
 3. PROD-334가 public `byulmaru/expo-ota` repository에서 조직 공용 정적 R2 delivery와 multipart publisher Action을 유지한다. 새 asset upload에는 사전 계산한 SHA-256 표준 Base64를 통한 R2 서버 검증을 적용하고, 이미 존재하는 content-addressed immutable object는 `IfNoneMatch: "*"`의 412 응답으로 재사용한다. 모든 asset의 upload 성공 또는 기존 존재 확인 뒤 fixed tuple manifest object를 갱신한다. 정적 endpoint는 이미 서명된 bytes만 제공하며 signing이나 요청별 release 선택을 하지 않는다.
 4. Kosmo의 Deploy Dev/Production workflow가 각각 기존 approved source SHA와 승인 경계를 사용해 `dev`/`prod` channel을 선택하고 app export를 publisher에 전달한다. promotion과 recovery reissue는 이 구현에서 보류한다. native-store-distribution의 binary upload는 publisher 호출과 분리한다.
@@ -58,6 +58,7 @@ Delivery는 기존 Temporal `apps/worker`의 책임을 확장하지 않고 조�
 - manifest object를 먼저 바꾸거나 이미 공개한 asset을 덮어쓰면 partial release와 client별 다른 bytes가 발생한다.
 - static R2 origin 또는 public `byulmaru/expo-ota` repository에 signing private key, Play/TestFlight credential 또는 publish token을 넣으면 read-only delivery와 repository 경계가 깨진다. Kosmo repository secret `EXPO_OTA_SIGNING_PRIVATE_KEY`는 caller 전달용으로만 사용한다.
 - certificate rotation은 새 public certificate를 포함한 새 runtime과 새 Store binary를 배포하는 경계다. 구 runtime은 구 certificate를 계속 사용하며, 기존 binary에 새 certificate를 주입하거나 dual trust를 추가하지 않는다.
+- runtime generation은 자동 fingerprint나 `EXPO_UPDATES_FINGERPRINT_OVERRIDE`로 계산하지 않는다. Native compatibility가 바뀐 OTA를 기존 generation으로 publish하지 말고, 세대를 올린 새 native binary를 먼저 준비한다. JS/assets-only 변경은 현재 generation을 유지한다.
 - Firebase App Distribution 또는 과거 PROD-285 Internal 경로를 현재 Android seed binary evidence로 재사용하면 current path인 PROD-886과 검증 결과가 불일치한다.
 - PROD-287의 store-native automation을 OTA 전용 device verification의 blocker로 취급하면 독립적으로 완료 가능한 PROD-336 결과를 막게 된다.
 

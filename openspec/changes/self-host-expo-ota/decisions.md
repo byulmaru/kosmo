@@ -52,17 +52,29 @@
 - Consequences: active requirements와 task checkboxes는 channel handoff, client compatibility, fallback, binary metadata에 집중한다. promotion/recovery evidence와 archive gate는 재개 전까지 요구하지 않는다.
 - Confirmation / Follow-up: 외부 publisher가 generic safe channel segment contract를 제공하고 운영 owner가 재개를 승인할 때 deferred contract와 task를 다시 활성화한다.
 
-### ExpoConfigVersions are excluded from the compatibility fingerprint
+### Superseded historical decision: ExpoConfigVersions are excluded from the compatibility fingerprint
 
 - Decision Date: 2026-09-10
 - Decision Class: Derived Build Contract
 - Authority / Provenance: Expo SDK 56 `@expo/fingerprint` `SourceSkips.ExpoConfigVersions`, `apps/app/fingerprint.config.js`, `PROD-333`
-- Status: Active
+- Status: Superseded by the explicit manual runtime generation decision recorded on 2026-09-18
 - Context / Problem: store build metadata can change between Android and iOS builds even when the JavaScript/assets and native compatibility contract are unchanged. Including that metadata in `runtimeVersion` would make build/export runtime values diverge unnecessarily.
 - Decision Outcome: use the official `ExpoConfigVersions` source skip. It excludes `version`, `android.versionCode`, and `ios.buildNumber` from the compatibility fingerprint. SDK and dependency sources, tracked native sources, and the bundled OTA certificate remain fingerprint inputs, so changes to those inputs still produce a new runtime and require the corresponding native binary path.
 - Alternatives Considered: hard-coding a prior runtime or excluding the whole Expo config would hide real SDK, dependency, native, or certificate changes and is therefore excluded.
 - Consequences: release builds may increment app version, Android versionCode, or iOS buildNumber without changing the OTA runtime. Each build and export must still resolve the runtime through the same `fingerprint.config.js` inputs before publishing the project/platform/channel/runtime tuple; the pipeline must not derive runtime identity from store build metadata.
 - Confirmation / Follow-up: SDK 56 runtime resolution, native prebuild output, and `createUpdatesResources.js` fingerprint output were checked against the same configuration. Android and iOS resolver outputs matched, while SDK/dependency/native/certificate source mutations changed the runtime as expected. PROD-333 retains the exact build/export evidence.
+
+### Runtime compatibility uses an explicit manual generation
+
+- Decision Date: 2026-09-18
+- Decision Class: User-approved Compatibility Policy
+- Authority / Provenance: explicit current user instruction for `PROD-336` / `self-host-expo-ota`
+- Status: Active
+- Context / Problem: automatic fingerprint resolution couples the OTA compatibility contract to build inputs and can silently change the runtime generation. The current contract requires an explicit compatibility generation that operators can review and increment with native compatibility changes.
+- Decision Outcome: `runtimeVersion` is an explicitly managed manual compatibility generation, initially the string `"0.2"`. Whenever native compatibility changes, the runtime generation MUST be incremented and a new Android/iOS native binary MUST be produced before publishing compatible OTA content for that generation. JS/assets-only OTA changes MUST keep the existing runtime generation. An incompatible OTA MUST NOT be published without both a new native binary and a new runtime generation. `EXPO_UPDATES_FINGERPRINT_OVERRIDE` MUST NOT be used.
+- Alternatives Considered: automatic `@expo/fingerprint` resolution and the `EXPO_UPDATES_FINGERPRINT_OVERRIDE` escape hatch are excluded because they do not make the required generation change explicit. Reusing an old generation after a native compatibility change is also excluded because it can expose an incompatible OTA to an existing binary.
+- Consequences: client, delivery, release, and device evidence use the same manually assigned runtime generation in the project/platform/channel/runtime tuple. The existing generation remains valid for JS/assets-only OTA releases; a native compatibility change requires a new generation, native binary, and corresponding release evidence.
+- Confirmation / Follow-up: PROD-333 client/build metadata and PROD-335 release validation must record the assigned runtime generation. PROD-336 device evidence must identify that generation and must not treat automatic fingerprint output as the active contract.
 
 ### OTA channel and Native public-config channel remain separate (superseded channel values)
 
@@ -176,3 +188,4 @@
 
 - 2026-09-07 `Canonical OTA identity is a project/platform/channel/runtime tuple`의 channel 값 `staging|production`은 2026-09-10 deploy-channel ownership decision으로 대체되었다.
 - 2026-09-07 `OTA channel and Native public-config channel remain separate`의 channel 값과 발행 owner는 2026-09-10 deploy-channel ownership decision으로 대체되었다. 설정 책임 분리와 release binary의 Native public-config `prod`는 계속 유효하다.
+- 2026-09-10 `ExpoConfigVersions are excluded from the compatibility fingerprint` decision and its validation notes are historical evidence only; the active runtime policy is the 2026-09-18 explicit manual generation decision.

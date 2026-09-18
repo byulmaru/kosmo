@@ -59,9 +59,7 @@ const config: ExpoConfig = {
     favicon: './public/favicon-32x32.png',
     output: 'single',
   },
-  runtimeVersion: {
-    policy: 'fingerprint',
-  },
+  runtimeVersion: '0.2',
   updates: {
     checkAutomatically: 'ON_LOAD',
     codeSigningCertificate: './certs/certificate.pem',

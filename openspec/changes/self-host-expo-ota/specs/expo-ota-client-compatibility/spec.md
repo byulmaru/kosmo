@@ -2,7 +2,7 @@
 
 ### Requirement: OTA client selects a trusted project and channel tuple
 
-**Authority / Provenance:** `PROD-331`, `PROD-332`, `PROD-333`; 적용되는 `docs/domain`·`docs/design` canonical 행동 문서 없음. Android·iOS release binary는 approved handoff가 제공한 논리 project `kosmo-native`, binary platform(`ios` 또는 `android`), OTA channel path segment, 그리고 binary의 `runtimeVersion`을 함께 사용하는 fixed tuple을 조회해야 한다(MUST). Channel path safety는 release/delivery contract에서 보장하며 client bootstrap은 이를 위한 별도 native prebuild 검증을 추가하지 않는다. `runtimeVersion`만으로 project를 식별하거나 OTA channel을 Native public-config channel로 해석해서는 안 된다(MUST NOT). Deploy workflow는 논리적으로 `dev`/`prod` mapping을 사용하며 Store release binary는 OTA consumer channel `prod`와 Native public-config `prod`를 사용해야 한다(MUST). Channel 이름 자체는 이 목록으로 제한하지 않는다.
+**Authority / Provenance:** `PROD-331`, `PROD-332`, `PROD-333`; 적용되는 `docs/domain`·`docs/design` canonical 행동 문서 없음. Android·iOS release binary는 approved handoff가 제공한 논리 project `kosmo-native`, binary platform(`ios` 또는 `android`), OTA channel path segment, 그리고 binary의 명시적 수동 호환성 세대인 `runtimeVersion`(초기값 문자열 `"0.2"`)을 함께 사용하는 fixed tuple을 조회해야 한다(MUST). Channel path safety는 release/delivery contract에서 보장하며 client bootstrap은 이를 위한 별도 native prebuild 검증을 추가하지 않는다. `runtimeVersion`만으로 project를 식별하거나 OTA channel을 Native public-config channel로 해석해서는 안 된다(MUST NOT). Deploy workflow는 논리적으로 `dev`/`prod` mapping을 사용하며 Store release binary는 OTA consumer channel `prod`와 Native public-config `prod`를 사용해야 한다(MUST). Channel 이름 자체는 이 목록으로 제한하지 않는다.
 
 #### Scenario: Select the prod route for a Store Android binary
 
@@ -15,6 +15,28 @@
 - **WHEN** an update response can be selected using only `runtimeVersion` without the trusted `kosmo-native` project and platform context
 - **THEN** the client does not select that response
 - **AND** the client continues with its embedded update
+
+### Requirement: Runtime compatibility generation is manually managed
+
+**Authority / Provenance:** explicit current user instruction for `PROD-336` / `self-host-expo-ota`. The client and release pipeline MUST use an explicitly assigned manual compatibility generation in `runtimeVersion`, initially the string `"0.2"`. Whenever native compatibility changes, the generation MUST be incremented and a new Android/iOS native binary MUST be produced before publishing an OTA for that generation. JS/assets-only OTA changes MUST keep the existing generation. An incompatible OTA MUST NOT be published without a new native binary and new runtime generation. `EXPO_UPDATES_FINGERPRINT_OVERRIDE` MUST NOT be used.
+
+#### Scenario: Keep JS/assets-only OTA on the current generation
+
+- **WHEN** a release changes only JavaScript or assets and remains compatible with the installed native binary
+- **THEN** the release uses the existing runtime generation, initially `"0.2"`
+- **AND** no new native binary or runtime generation is required
+
+#### Scenario: Increment the generation for native compatibility changes
+
+- **WHEN** a release changes native code, a native module, an SDK, or other native compatibility input
+- **THEN** the runtime generation is incremented and a new Android/iOS native binary is produced
+- **AND** the release is not published as an OTA for the previous generation
+
+#### Scenario: Hold an incompatible OTA until a new binary exists
+
+- **WHEN** an OTA requires a native compatibility change but no new native binary and incremented runtime generation are available
+- **THEN** the release is not published
+- **AND** the existing binary continues to use its current compatible generation
 
 ### Requirement: OTA client applies only a compatible signed update
 
