@@ -33,8 +33,8 @@ const publicConfigByChannel = {
     ...commonPublicConfig,
     apiOrigin: 'https://api.kos.moe',
     channel: 'prod',
-    posthogHost: undefined,
-    posthogKey: undefined,
+    posthogHost: 'https://us.i.posthog.com',
+    posthogKey: 'phc_vYTsfHrgz8wE6wQv5kfpQM5XPBnKKjvNQgaHabb6zdsS',
     webOrigin: 'https://kos.moe',
   },
 } satisfies Record<DeploymentChannel, PublicConfig>;
