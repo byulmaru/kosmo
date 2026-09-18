@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Modal, Platform, StyleSheet, Text, View } from 'react-native';
-import { useMutation, useRelayEnvironment } from 'react-relay';
+import { graphql, useMutation, useRelayEnvironment } from 'react-relay';
 import { fetchQuery } from 'relay-runtime';
 import { Button } from '@/components/ui/Button';
 import { useRelayActor } from '@/relay/RelayActorProvider';
@@ -16,13 +16,6 @@ import {
   subscribeToNativeFcmTokenRefresh,
   subscribeToNativeNotificationResponses,
 } from './nativePushClient';
-import {
-  NativePushNotificationTargetQuery,
-  NativePushRegisterInstallationMutation,
-  NativePushSelectProfileMutation,
-  NativePushUnregisterInstallationMutation,
-  NativePushUpdateInstallationMutation,
-} from './nativePushOperations';
 import { unregisterDeniedPushInstallation } from './pushInstallationLifecycle';
 import { prepareNativePushNavigation } from './pushNavigation';
 import {
@@ -43,6 +36,87 @@ import type { NativePushRegisterInstallationMutation as NativePushRegisterInstal
 import type { NativePushSelectProfileMutation as NativePushSelectProfileMutationType } from './__generated__/NativePushSelectProfileMutation.graphql';
 import type { NativePushUnregisterInstallationMutation as NativePushUnregisterInstallationMutationType } from './__generated__/NativePushUnregisterInstallationMutation.graphql';
 import type { NativePushUpdateInstallationMutation as NativePushUpdateInstallationMutationType } from './__generated__/NativePushUpdateInstallationMutation.graphql';
+
+const NativePushRegisterInstallationMutation = graphql`
+  mutation NativePushRegisterInstallationMutation(
+    $platform: PushInstallationPlatform!
+    $token: String!
+  ) {
+    registerPushInstallation(input: { platform: $platform, token: $token }) {
+      id
+    }
+  }
+`;
+
+const NativePushUpdateInstallationMutation = graphql`
+  mutation NativePushUpdateInstallationMutation(
+    $id: ID!
+    $platform: PushInstallationPlatform!
+    $token: String!
+  ) {
+    updatePushInstallation(input: { id: $id, platform: $platform, token: $token }) {
+      completed
+    }
+  }
+`;
+
+const NativePushUnregisterInstallationMutation = graphql`
+  mutation NativePushUnregisterInstallationMutation($id: ID!) {
+    unregisterPushInstallation(input: { id: $id }) {
+      completed
+    }
+  }
+`;
+
+const NativePushSelectProfileMutation = graphql`
+  mutation NativePushSelectProfileMutation($id: ID!) {
+    selectProfile(input: { id: $id }) {
+      profile {
+        id
+      }
+    }
+  }
+`;
+
+const NativePushNotificationTargetQuery = graphql`
+  query NativePushNotificationTargetQuery($notificationId: ID!) {
+    node(id: $notificationId) {
+      __typename
+      ... on FollowNotification {
+        profile {
+          relativeHandle
+        }
+      }
+      ... on FollowRequestNotification {
+        id
+      }
+      ... on ReactionNotification {
+        post {
+          id
+          profile {
+            relativeHandle
+          }
+        }
+      }
+      ... on RepostNotification {
+        post {
+          id
+          profile {
+            relativeHandle
+          }
+        }
+      }
+      ... on ReplyNotification {
+        post {
+          id
+          profile {
+            relativeHandle
+          }
+        }
+      }
+    }
+  }
+`;
 
 type PushMutationFailure = Error & { retryable: boolean };
 
