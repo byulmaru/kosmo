@@ -1564,6 +1564,22 @@ test(
         assert.deepEqual(await updateResultPromise, execution.result);
         assert.deepEqual(calls, ['undo:' + JSON.stringify(effectInput)]);
 
+        const conflictingInput = { ...input, origin: 'ACTIVITYPUB' as const };
+        const conflictingStart = new WithStartWorkflowOperation('profileBlockWorkflow', {
+          args: [conflictingInput],
+          taskQueue,
+          workflowId: 'profile-block-test:' + process.pid + ':success',
+          workflowIdConflictPolicy: 'USE_EXISTING',
+          workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+        });
+        await assert.rejects(
+          environment.client.workflow.executeUpdateWithStart(PROFILE_BLOCK_UPDATE_NAME, {
+            args: [conflictingInput],
+            updateId: PROFILE_BLOCK_UPDATE_ID + ':conflicting-origin',
+            startWorkflowOperation: conflictingStart,
+          }),
+        );
+
         releaseEffect();
         const handle = await startWorkflowOperation.workflowHandle();
         await handle.result();

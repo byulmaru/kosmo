@@ -61,20 +61,24 @@ export async function profileBlockWorkflow(input: ProfileBlockInput): Promise<vo
   // Keep the initial Workflow input fail-closed for direct starts. Normal
   // callers use Update-with-Start, so the command is validated again by the
   // Update validator and handler below.
-  parseProfileBlockInput(input);
+  const workflowInput = parseProfileBlockInput(input);
 
   let transitionPromise: ReturnType<typeof executeProfileBlockTransitionActivity> | undefined;
 
   setHandler(
     defineUpdate<ProfileBlockTransitionResult, [ProfileBlockInput]>(PROFILE_BLOCK_UPDATE_NAME),
     async (command) => {
-      if (transitionPromise !== undefined) {
+      const parsedCommand = parseProfileBlockInput(command);
+      if (
+        parsedCommand.ownerProfileId !== workflowInput.ownerProfileId ||
+        parsedCommand.targetProfileId !== workflowInput.targetProfileId ||
+        parsedCommand.origin !== workflowInput.origin
+      ) {
         throw profileBlockConflict();
       }
-
-      const parsedCommand = parseProfileBlockInput(command);
-      const promise = executeProfileBlockTransitionActivity(parsedCommand);
-      transitionPromise = promise;
+      const promise =
+        transitionPromise ??
+        (transitionPromise = executeProfileBlockTransitionActivity(parsedCommand));
       const execution = await promise;
       if (!execution.ok) {
         throw profileBlockTransitionFailure(execution.error);
@@ -83,8 +87,12 @@ export async function profileBlockWorkflow(input: ProfileBlockInput): Promise<vo
     },
     {
       validator: (command) => {
-        parseProfileBlockInput(command);
-        if (transitionPromise !== undefined) {
+        const parsedCommand = parseProfileBlockInput(command);
+        if (
+          parsedCommand.ownerProfileId !== workflowInput.ownerProfileId ||
+          parsedCommand.targetProfileId !== workflowInput.targetProfileId ||
+          parsedCommand.origin !== workflowInput.origin
+        ) {
           throw profileBlockConflict();
         }
       },

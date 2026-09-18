@@ -109,28 +109,32 @@ test(
     });
 
     await worker.runUntil(async () => {
-      const first = runBlock(input);
-      await transitionStarted.promise;
-      const existing = runBlock(input);
-      transitionReleased.resolve();
-      const [firstResult, existingResult] = await Promise.all([first, existing]);
-      assert.equal(firstResult.created, true);
-      assert.deepEqual(existingResult, firstResult);
-      const rows = await db
-        .select()
-        .from(ProfileBlocks)
-        .where(
-          and(
-            eq(ProfileBlocks.ownerProfileId, input.ownerProfileId),
-            eq(ProfileBlocks.targetProfileId, input.targetProfileId),
-          ),
+      try {
+        const first = runBlock(input);
+        await transitionStarted.promise;
+        const existing = runBlock(input);
+        transitionReleased.resolve();
+        const [firstResult, existingResult] = await Promise.all([first, existing]);
+        assert.equal(firstResult.created, true);
+        assert.deepEqual(existingResult, firstResult);
+        const rows = await db
+          .select()
+          .from(ProfileBlocks)
+          .where(
+            and(
+              eq(ProfileBlocks.ownerProfileId, input.ownerProfileId),
+              eq(ProfileBlocks.targetProfileId, input.targetProfileId),
+            ),
+          );
+        assert.deepEqual(
+          rows.map(({ id }) => id),
+          [firstResult.profileBlockId],
         );
-      assert.deepEqual(
-        rows.map(({ id }) => id),
-        [firstResult.profileBlockId],
-      );
-      const duplicate = await runBlock(input);
-      assert.deepEqual(duplicate, { ...firstResult, created: false });
+        const duplicate = await runBlock(input);
+        assert.deepEqual(duplicate, { ...firstResult, created: false });
+      } finally {
+        transitionReleased.resolve();
+      }
     });
   },
 );
