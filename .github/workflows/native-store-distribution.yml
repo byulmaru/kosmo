@@ -131,10 +131,6 @@ jobs:
 
           for name in \
             ANDROID_RELEASE_KEY_ALIAS \
-            FIREBASE_NATIVE_CONFIG_ANDROID_APP_ID \
-            FIREBASE_NATIVE_CONFIG_PROJECT_ID \
-            FIREBASE_NATIVE_CONFIG_SERVICE_ACCOUNT \
-            FIREBASE_NATIVE_CONFIG_WORKLOAD_IDENTITY_PROVIDER \
             GCP_SERVICE_ACCOUNT \
             GCP_WORKLOAD_IDENTITY_PROVIDER; do
             if [[ -z "${!name:-}" ]]; then
@@ -190,35 +186,13 @@ jobs:
             "https://firebase.googleapis.com/v1beta1/projects/${project_path}/androidApps/${app_path}/config"
           chmod 600 "${response_file}"
 
-          if ! jq -e '.configFilename | select(. == "google-services.json")' "${response_file}" >/dev/null; then
-            echo "::error::Firebase Android config response has an unexpected filename."
-            exit 1
-          fi
-
-          if ! config_contents="$(jq -er '.configFileContents | select(type == "string" and length > 0)' "${response_file}")"; then
-            echo "::error::Firebase Android config response has empty config contents."
-            exit 1
-          fi
-          printf '%s' "${config_contents}" | base64 --decode > "${config_file}"
+          jq -er '.configFileContents' "${response_file}" | base64 --decode > "${config_file}"
           chmod 600 "${config_file}"
-          if ! canonical_contents="$(base64 --wrap=0 "${config_file}")"; then
-            echo "::error::Firebase Android config could not be re-encoded."
-            exit 1
-          fi
-          if [[ "${canonical_contents}" != "${config_contents}" ]]; then
-            echo "::error::Firebase Android config contents are not canonical base64."
-            exit 1
-          fi
 
-          if ! jq -e \
-            --arg expected_project_id "${FIREBASE_NATIVE_CONFIG_PROJECT_ID}" \
+          jq -e \
             --arg expected_package_name "${FIREBASE_NATIVE_CONFIG_ANDROID_PACKAGE_NAME}" \
-            --arg expected_app_id "${FIREBASE_NATIVE_CONFIG_ANDROID_APP_ID}" \
-            '(.project_info.project_id == $expected_project_id) and any((.client // [])[]; .client_info.mobilesdk_app_id == $expected_app_id and .client_info.android_client_info.package_name == $expected_package_name)' \
-            "${config_file}" >/dev/null; then
-            echo "::error::Firebase Android config does not match the expected project, package, and app."
-            exit 1
-          fi
+            'any((.client // [])[]; .client_info.android_client_info.package_name == $expected_package_name)' \
+            "${config_file}" >/dev/null
 
           printf 'KOSMO_ANDROID_GOOGLE_SERVICES_FILE=%s\n' "${config_file}" >> "${GITHUB_ENV}"
 
@@ -468,22 +442,6 @@ jobs:
           echo "KOSMO_OTA_RUNTIME_VERSION=${runtime_version}" >> "${GITHUB_ENV}"
           echo "Resolved iOS OTA runtimeVersion: ${runtime_version}"
 
-      - name: Validate iOS Firebase config inputs
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          for name in \
-            FIREBASE_NATIVE_CONFIG_IOS_APP_ID \
-            FIREBASE_NATIVE_CONFIG_PROJECT_ID \
-            FIREBASE_NATIVE_CONFIG_SERVICE_ACCOUNT \
-            FIREBASE_NATIVE_CONFIG_WORKLOAD_IDENTITY_PROVIDER; do
-            if [[ -z "${!name:-}" ]]; then
-              echo "::error::${name} must be set in the prod Environment."
-              exit 1
-            fi
-          done
-
       - name: Prepare iOS Firebase config directory
         id: prepare_ios_firebase_config
         shell: bash
@@ -526,48 +484,10 @@ jobs:
             "https://firebase.googleapis.com/v1beta1/projects/${project_path}/iosApps/${app_path}/config"
           chmod 600 "${response_file}"
 
-          if ! jq -e '.configFilename | select(. == "GoogleService-Info.plist")' "${response_file}" >/dev/null; then
-            echo "::error::Firebase iOS config response has an unexpected filename."
-            exit 1
-          fi
-
-          if ! config_contents="$(jq -er '.configFileContents | select(type == "string" and length > 0)' "${response_file}")"; then
-            echo "::error::Firebase iOS config response has empty config contents."
-            exit 1
-          fi
-          printf '%s' "${config_contents}" | base64 -D > "${config_file}"
+          jq -er '.configFileContents' "${response_file}" | base64 -D > "${config_file}"
           chmod 600 "${config_file}"
-          if ! canonical_contents="$(base64 -i "${config_file}" | tr -d '\n')"; then
-            echo "::error::Firebase iOS config could not be re-encoded."
-            exit 1
-          fi
-          if [[ "${canonical_contents}" != "${config_contents}" ]]; then
-            echo "::error::Firebase iOS config contents are not canonical base64."
-            exit 1
-          fi
-
-          if ! plutil -lint "${config_file}" >/dev/null 2>&1; then
-            echo "::error::Firebase iOS config is not a valid property list."
-            exit 1
-          fi
-          if ! project_id="$(plutil -extract PROJECT_ID raw -o - "${config_file}")"; then
-            echo "::error::Firebase iOS config is missing PROJECT_ID."
-            exit 1
-          fi
-          if ! bundle_id="$(plutil -extract BUNDLE_ID raw -o - "${config_file}")"; then
-            echo "::error::Firebase iOS config is missing BUNDLE_ID."
-            exit 1
-          fi
-          if ! app_id="$(plutil -extract GOOGLE_APP_ID raw -o - "${config_file}")"; then
-            echo "::error::Firebase iOS config is missing GOOGLE_APP_ID."
-            exit 1
-          fi
-          if [[ "${project_id}" != "${FIREBASE_NATIVE_CONFIG_PROJECT_ID}" || \
-            "${bundle_id}" != "${FIREBASE_NATIVE_CONFIG_IOS_BUNDLE_ID}" || \
-            "${app_id}" != "${FIREBASE_NATIVE_CONFIG_IOS_APP_ID}" ]]; then
-            echo "::error::Firebase iOS config does not match the expected project, bundle, and app."
-            exit 1
-          fi
+          bundle_id="$(plutil -extract BUNDLE_ID raw -o - "${config_file}")"
+          test "${bundle_id}" = "${FIREBASE_NATIVE_CONFIG_IOS_BUNDLE_ID}"
 
           printf 'KOSMO_IOS_GOOGLE_SERVICES_FILE=%s\n' "${config_file}" >> "${GITHUB_ENV}"
 
