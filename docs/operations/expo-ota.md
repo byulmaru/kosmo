@@ -6,7 +6,7 @@ platform export가 Argo 배포와 병렬로 시작하고, 각 publish는 Argo �
 성공한 뒤 시작한다. Native module, SDK, entitlement, permission 또는 그 밖의 native
 설정이 바뀐 release는 OTA가 아니라 새 Store binary 경로를 사용한다.
 
-`runtimeVersion`은 자동 계산이 아닌 수동 호환성 세대다. 현재 승인된 세대는 `"0.2"`이며,
+`runtimeVersion`은 자동 계산이 아닌 수동 호환성 세대다. 현재 승인된 세대는 `"0.3"`이며,
 JavaScript/assets-only OTA는 현재 세대를 유지한다. Native compatibility가 바뀌면 세대를 증가시키고
 새 Android/iOS Store binary를 만든 뒤 그 세대에 호환되는 OTA만 publish한다. 새 binary와 증가한 세대
 없이 호환되지 않는 OTA를 publish하지 않으며, `EXPO_UPDATES_FINGERPRINT_OVERRIDE`는 사용하지 않는다.
@@ -32,7 +32,7 @@ static delivery에는 private key나 publish credential을 넣지 않는다.
 | project        | `kosmo-native`                           |
 | platform       | `android` 또는 `ios`                     |
 | OTA channel    | caller가 선택한 안전한 단일 path segment |
-| runtimeVersion | 수동 호환성 세대 (현재 `0.2`)            |
+| runtimeVersion | 수동 호환성 세대 (현재 `0.3`)            |
 | keyid          | 등록된 signing key identifier            |
 
 채널은 비어 있지 않고 영문 대소문자, 숫자, `.`, `_`, `-`만 포함하는 단일 path segment여야
@@ -96,7 +96,7 @@ ref로 사용한다. reusable workflow가 최신 `main`을 다시 선택하거�
 않는다. Production Release의 기존 `prod` Environment 승인과 canonical Docker Build 확인이
 OTA 호출에 선행한다. OTA에 별도의 두 번째 production approval을 두지 않는다.
 
-Android와 iOS export job은 `apps/app/app.config.ts`에 명시한 수동 `runtimeVersion`(현재 `"0.2"`)을
+Android와 iOS export job은 `apps/app/app.config.ts`에 명시한 수동 `runtimeVersion`(현재 `"0.3"`)을
 resolve해 사용한다. Workflow는 resolve한 값이 비어 있지 않은 안전한 단일 path segment
 (`[A-Za-z0-9._-]+`, `.`·`..` 제외)인지 검증한 뒤 `pnpm exec expo export --clear`로 artifact를
 만든다. 자동 runtime 계산이나 `EXPO_UPDATES_FINGERPRINT_OVERRIDE`로 runtime을 계산하지 않는다.
@@ -158,7 +158,7 @@ trust를 추가하지 않는다.
 자동 release 완료를 기록할 때 workflow 로그와 publisher 결과에서 다음 값을 확인한다.
 
 - workflow run ID, caller workflow ref와 source SHA
-- project, platform, OTA channel, 수동 runtime generation(`runtimeVersion`, 현재 `0.2`)과 keyid
+- project, platform, OTA channel, 수동 runtime generation(`runtimeVersion`, 현재 `0.3`)과 keyid
 - publisher의 R2 upload SHA-256 검증 결과와 publish job 결과
 - production release의 Environment 승인과 동일한 source SHA
 
