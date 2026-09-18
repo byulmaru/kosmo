@@ -32,7 +32,7 @@ Local pin API가 승인된 Post를 ordered set에 추가하고 지정한 Post만
   이미 pinned인 replacement target 이동, ineligible replacement 거부, stale concurrent request, same-pin/unpin no-op을 입력·결과·저장 상태로 검증한다. replacement
   stale/conflict 결과가 idempotent success와 구별되고 저장 상태를 보존하는지도 검증한다.
 
-- [x] 1.1 Local Profile pin/unpin의 eligibility, Owner 권한과 ordered add/remove semantics를 구현한다.
+- [x] 1.1 Local Profile pin/unpin의 eligibility, Member 권한과 ordered add/remove semantics를 구현한다.
 - [x] 1.2 current first-party UI slot 교체에서만 expected value를 검증하고 원자성·idempotent no-op을 보장한다.
 - [x] 1.3 current UI slot replacement 확인과 실패·동시성 결과를 API 계약에 연결하고 focused DB/core 테스트를 통과시킨다.
 

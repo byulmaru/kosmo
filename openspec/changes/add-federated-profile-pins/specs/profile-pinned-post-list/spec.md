@@ -71,7 +71,7 @@ Post를 목록에 표시해서는 안 된다(MUST NOT). Local pinned Post가 이
 
 #### Scenario: Do not block a replacement after pin eligibility loss
 
-- **WHEN** Local pinned Post가 Tombstone·unavailable·author 또는 visibility eligibility 상실 상태가 된 뒤 Owner가 새
+- **WHEN** Local pinned Post가 Tombstone·unavailable·author 또는 visibility eligibility 상실 상태가 된 뒤 Member가 새
   eligible Post를 고정한다
 - **THEN** 시스템은 이전 Post를 제품상 visible pin으로 간주하지 않고 새 Post를 pinned segment에 표시한다
 - **AND** 물리 cleanup 방식은 목록의 이 결과를 바꾸지 않는다
