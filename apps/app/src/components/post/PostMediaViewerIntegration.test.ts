@@ -260,7 +260,9 @@ describe('Post Media Viewer Host production wiring', () => {
 
     for (const os of ['web', 'ios', 'android']) {
       platform.OS = os;
-      await renderHost(createElement(PostListItem, { post: asListItemKey(post) }));
+      await renderHost(
+        createElement(PostListItem, { post: asListItemKey(post), presentation: 'wide' }),
+      );
       assert.equal(
         flattenStyle(renderer?.root.findByProps({ role: 'article' }).props.style).backgroundColor,
         '#ffffff',

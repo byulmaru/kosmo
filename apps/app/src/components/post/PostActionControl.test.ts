@@ -15,6 +15,7 @@ import type { PostThreadLayout as PostThreadLayoutExport } from './PostThreadLay
 const platform = { OS: 'web' };
 let windowWidth = 1_024;
 const theme = {
+  backgroundCanvas: 'canvas',
   borderSubtle: 'border',
   primary: 'primary',
   stateHover: 'hover',
@@ -378,11 +379,15 @@ test('PostListItem uses the supplied list presentation', async () => {
 
 test('PostListItem uses Web pointer hover and Native touch pressed feedback', async () => {
   platform.OS = 'web';
-  let root = await renderListItem({ post: {} as never, showDivider: false });
+  let root = await renderListItem({
+    post: {} as never,
+    presentation: 'wide',
+    showDivider: false,
+  });
   let card = findByTestID(root, 'post-list-item-card');
   let feedback = findByTestID(root, 'post-list-item-feedback');
 
-  assert.equal(flattenStyle(card.props.style).backgroundColor, undefined);
+  assert.equal(flattenStyle(card.props.style).backgroundColor, 'canvas');
   assert.equal(flattenStyle(feedback.props.style).borderRadius, 12);
   assert.equal(flattenStyle(feedback.props.style).pointerEvents, 'none');
 
@@ -414,7 +419,11 @@ test('PostListItem uses Web pointer hover and Native touch pressed feedback', as
 
   for (const os of ['ios', 'android'] as const) {
     platform.OS = os;
-    root = await renderListItem({ post: {} as never, showDivider: false });
+    root = await renderListItem({
+      post: {} as never,
+      presentation: 'wide',
+      showDivider: false,
+    });
     card = findByTestID(root, 'post-list-item-card');
     feedback = findByTestID(root, 'post-list-item-feedback');
 
