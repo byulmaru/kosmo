@@ -1027,7 +1027,7 @@ describe('GraphQL remote profile boundary', () => {
     });
   });
 
-  test('profile pin mutations require the selected owner and concrete Relay IDs', async () => {
+  test('profile pin mutations require the selected profile membership and concrete Relay IDs', async () => {
     const auth = await createAuthenticatedSession();
     const otherProfile = await createProfile({
       handle: 'pin-other-profile',
@@ -1095,7 +1095,7 @@ describe('GraphQL remote profile boundary', () => {
     const pinned = await requestGraphQL<{
       pinProfilePost: { changed: boolean; profile: { id: string } };
     }>(
-      `mutation PinOwner($input: PinProfilePostInput!) {
+      `mutation PinSelectedProfile($input: PinProfilePostInput!) {
         pinProfilePost(input: $input) { changed profile { id } }
       }`,
       {
@@ -1267,8 +1267,8 @@ describe('GraphQL remote profile boundary', () => {
     );
   });
 
-  test('profile pin mutation payloads are idempotent and stale replacement is a conflict', async () => {
-    const auth = await createAuthenticatedSession();
+  test('profile members can pin, replace, and unpin posts with idempotent payloads', async () => {
+    const auth = await createAuthenticatedSession({ role: AccountProfileRole.MEMBER });
     const current = await createContentfulPost({ profileId: auth.profile.id });
     const next = await createContentfulPost({ profileId: auth.profile.id });
     const profileId = globalId('Profile', auth.profile.id);
@@ -5136,8 +5136,9 @@ const createRemoteActor = (
   });
 
 const createAuthenticatedSession = async ({
+  role = AccountProfileRole.OWNER,
   selectedProfile = true,
-}: { selectedProfile?: boolean } = {}) => {
+}: { role?: AccountProfileRole; selectedProfile?: boolean } = {}) => {
   const account = await db
     .insert(Accounts)
     .values({
@@ -5154,7 +5155,7 @@ const createAuthenticatedSession = async ({
   await db.insert(AccountProfiles).values({
     accountId: account.id,
     profileId: profile.id,
-    role: AccountProfileRole.OWNER,
+    role,
   });
   const token = `token-${crypto.randomUUID()}`;
   const session = await db
