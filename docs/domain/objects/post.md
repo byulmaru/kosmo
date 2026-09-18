@@ -78,7 +78,7 @@ Author Profile/Repost Source 조합에는 Lifecycle State가 Active이고 Conten
 - Local Profile pin mutation이 소비하는 Post state는 해당 Post가 Active이고 Current Content가 있으며 Visibility가
   Public, Unlisted 또는 Followers Only인지와 Author Profile 관계를 제공한다.
 - Mentioned Profiles Visibility, Content 없는 pure Repost와 다른 Profile이 작성한 Post는 Local Profile 고정 대상이
-  아니다. 고정 cardinality·Owner 권한·expected-current·mutation 결과는 [Profile 객체](./profile.md)의 행동 표가
+  아니다. 고정 cardinality·Member 권한·expected-current·mutation 결과는 [Profile 객체](./profile.md)의 행동 표가
   소유하며, 이 문서는 Post eligibility 사실만 정의한다.
 
 ## 행동
