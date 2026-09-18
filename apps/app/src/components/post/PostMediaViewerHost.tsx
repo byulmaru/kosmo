@@ -1,3 +1,4 @@
+import { unstable_navigationEvents } from 'expo-router';
 import {
   createContext,
   useCallback,
@@ -88,8 +89,16 @@ export function PostMediaViewerHostProvider({ children }: PropsWithChildren) {
   const sessionRef = useRef<ViewerSession | null>(null);
   sessionRef.current = session;
   const openViewer = useCallback<OpenViewer>((nextSession) => setSession(nextSession), []);
-  const closeViewer = useCallback(() => setSession(null), []);
+  const closeViewer = useCallback(() => {
+    sessionRef.current = null;
+    setSession(null);
+  }, []);
   const lifecycleFallbackFocus = screenFallback ?? fallbackFocus;
+
+  useEffect(
+    () => unstable_navigationEvents.addListener('actionDispatched', closeViewer),
+    [closeViewer],
+  );
 
   useLayoutEffect(() => {
     return () => {
