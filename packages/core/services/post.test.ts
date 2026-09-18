@@ -31,7 +31,7 @@ import {
   postContentDocumentFromTextAndMedia,
 } from '../post-content/server';
 import { temporalClient } from '../temporal/client';
-import { createPost } from './post';
+import { createPost, createPostInTransaction } from './post';
 
 after(async () => pg.end());
 
@@ -123,6 +123,114 @@ test('createPost는 local Post와 최초 content 연결을 하나의 transaction
       .then((rows) => rows.length),
     0,
   );
+});
+
+test('createPostInTransaction은 outer transaction rollback 뒤 Post와 effect를 남기지 않는다', async () => {
+  const profile = await createProfile();
+  const objectUri = `https://remote.example/notes/rollback-${crypto.randomUUID()}`;
+  const input = {
+    document: postContentDocumentFromText('rollback post'),
+    mentionProfileIds: [],
+    objectUri,
+    origin: 'ACTIVITYPUB' as const,
+    profileId: profile.id,
+    publishedAt: null,
+    receivedAt: Temporal.Now.instant(),
+    visibility: PostVisibility.PUBLIC,
+  };
+  const workflowStart = mock.method(
+    temporalClient.workflow,
+    'start',
+    async () => undefined as never,
+  );
+
+  try {
+    await assert.rejects(
+      db.transaction(async (tx) => {
+        await createPostInTransaction(input, tx);
+        assert.equal(workflowStart.mock.callCount(), 0);
+        throw new Error('outer rollback');
+      }),
+      /outer rollback/,
+    );
+
+    assert.equal(
+      await db
+        .select({ id: Posts.id })
+        .from(Posts)
+        .innerJoin(ActivityPubPosts, eq(ActivityPubPosts.postId, Posts.id))
+        .where(eq(ActivityPubPosts.uri, objectUri))
+        .then((rows) => rows.length),
+      0,
+    );
+    assert.equal(workflowStart.mock.callCount(), 0);
+  } finally {
+    workflowStart.mock.restore();
+  }
+});
+
+test('createPostInTransaction은 commit 뒤 postCommit을 한 번만 실행한다', async () => {
+  const profile = await createProfile();
+  const input = {
+    document: postContentDocumentFromText('post commit lifecycle'),
+    mentionProfileIds: [],
+    objectUri: `https://remote.example/notes/post-commit-${crypto.randomUUID()}`,
+    origin: 'ACTIVITYPUB' as const,
+    profileId: profile.id,
+    publishedAt: null,
+    receivedAt: Temporal.Now.instant(),
+    visibility: PostVisibility.PUBLIC,
+  };
+  const workflowStart = mock.method(
+    temporalClient.workflow,
+    'start',
+    async () => undefined as never,
+  );
+
+  try {
+    const result = await db.transaction((tx) => createPostInTransaction(input, tx));
+    assert.equal(workflowStart.mock.callCount(), 0);
+
+    const first = result.postCommit();
+    const repeated = result.postCommit();
+    assert.strictEqual(repeated, first);
+    await first;
+    await repeated;
+
+    assert.equal(workflowStart.mock.callCount(), 1);
+  } finally {
+    workflowStart.mock.restore();
+  }
+});
+
+test('createPostInTransaction은 ActivityPub URI duplicate를 exact postId로 수렴하고 outer transaction을 보존한다', async () => {
+  const profile = await createProfile();
+  const input = {
+    document: postContentDocumentFromText('duplicate post'),
+    mentionProfileIds: [],
+    objectUri: `https://remote.example/notes/duplicate-${crypto.randomUUID()}`,
+    origin: 'ACTIVITYPUB' as const,
+    profileId: profile.id,
+    publishedAt: null,
+    receivedAt: Temporal.Now.instant(),
+    visibility: PostVisibility.PUBLIC,
+  };
+  const first = await db.transaction((tx) => createPostInTransaction(input, tx));
+  if (!first.created) {
+    throw new Error('Expected the first ActivityPub post to be created');
+  }
+
+  const duplicate = await db.transaction(async (tx) => {
+    const result = await createPostInTransaction(input, tx);
+    await tx.select({ id: Posts.id }).from(Posts).limit(1);
+    return result;
+  });
+
+  assert.equal(duplicate.created, false);
+  if (duplicate.created) {
+    throw new Error('Expected the second ActivityPub post to be a duplicate');
+  }
+  assert.equal(duplicate.postId, first.post.id);
 });
 
 test('createPost는 같은 Upload Account의 Ready Local Media를 document 순서대로 저장한다', async () => {

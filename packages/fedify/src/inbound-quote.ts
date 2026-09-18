@@ -1,7 +1,7 @@
 import '@kosmo/core/polyfill';
 
 import { quoteInteraction } from '@fedify/interaction-controls';
-import { Note } from '@fedify/vocab';
+import { Note, PUBLIC_COLLECTION } from '@fedify/vocab';
 import {
   ActivityPubActors,
   ActivityPubPostQuotes,
@@ -19,12 +19,13 @@ import {
   InstanceKind,
   InstanceState,
   PostState,
+  PostVisibility,
   ProfileState,
 } from '@kosmo/core/enums';
 import { NotFoundError } from '@kosmo/core/error';
 import { temporalClient } from '@kosmo/core/temporal/client';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, isNull, or } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { findPostByActivityPubUri } from './activitypub-post-uri';
 import { isHttpUri } from './activitypub-uri';
@@ -38,6 +39,7 @@ import {
 } from './remote-actor-materialization';
 import type { Context } from '@fedify/fedify';
 import type { Object as ActivityPubObject } from '@fedify/vocab';
+import type { Transaction } from '@kosmo/core/db';
 import type { StoredRemoteProfileActor } from './inbound-create-note';
 import type { InboundObservation } from './inbound-observability';
 
@@ -60,7 +62,8 @@ type QuoteContext = Pick<
   | 'parseUri'
 >;
 
-export type TrustedInboundQuoteSource = {
+type TrustedInboundQuoteSource = {
+  readonly approvalUri: string;
   readonly authorUri: string;
   readonly sourceUri: string;
 };
@@ -72,7 +75,6 @@ type InboundQuoteInput = {
   postId: string;
   receivedAt: Temporal.Instant;
   startWorkflow?: boolean;
-  trustedSource?: TrustedInboundQuoteSource;
   expectedRevision?: number;
 };
 
@@ -112,6 +114,13 @@ type QuoteResolution = {
 
 type QuoteTargetResolution =
   | { kind: 'found'; postId: string }
+  | {
+      expectedActor: StoredRemoteProfileActor;
+      followerProfileId: string;
+      kind: 'followers_note';
+      note: Note;
+      sourceUri: URL;
+    }
   | { kind: 'permanent_failure' }
   | { kind: 'stale' }
   | { kind: 'transient_failure' };
@@ -196,7 +205,6 @@ const hydrateFepReferences = async (
   context: QuoteContext,
   note: Note,
   extraction: QuoteExtraction,
-  { skipTargetHydration = false }: { skipTargetHydration?: boolean } = {},
 ): Promise<QuoteExtraction> => {
   if (!extraction.fepPropertyPresent || extraction.malformed) {
     return extraction;
@@ -204,17 +212,15 @@ const hydrateFepReferences = async (
 
   let targetObject: ActivityPubObject | null = null;
   let authorization = null;
-  if (!skipTargetHydration) {
-    try {
-      targetObject = await note.getQuote({
-        contextLoader: context.contextLoader,
-        crossOrigin: 'trust',
-        documentLoader: context.documentLoader,
-        suppressError: true,
-      });
-    } catch {
-      targetObject = null;
-    }
+  try {
+    targetObject = await note.getQuote({
+      contextLoader: context.contextLoader,
+      crossOrigin: 'trust',
+      documentLoader: context.documentLoader,
+      suppressError: true,
+    });
+  } catch {
+    targetObject = null;
   }
   try {
     authorization = await note.getQuoteAuthorization({
@@ -263,25 +269,42 @@ const loadQuoteSource = async (postId: string): Promise<QuoteSource | null> => {
   return row;
 };
 
-const parseHttpUri = (value: string): URL | null => {
-  try {
-    const uri = new URL(value);
-    return isHttpUri(uri) ? uri : null;
-  } catch {
-    return null;
+const deriveVerifiedInboundQuoteSource = async ({
+  context,
+  extraction,
+  note,
+}: {
+  context: QuoteContext;
+  extraction: QuoteExtraction;
+  note: Note;
+}): Promise<TrustedInboundQuoteSource | undefined> => {
+  const authorizationId = extraction.authorizationId;
+  const candidateAuthor = extraction.authorization?.attributionId;
+  if (
+    !extraction.fepPropertyPresent ||
+    extraction.malformed ||
+    !authorizationId ||
+    !candidateAuthor ||
+    !isHttpUri(candidateAuthor)
+  ) {
+    return undefined;
   }
-};
 
-const isTrustedSourceForTarget = (
-  trustedSource: TrustedInboundQuoteSource | undefined,
-  targetUri: string,
-): trustedSource is TrustedInboundQuoteSource => {
-  if (!trustedSource || trustedSource.sourceUri !== targetUri) {
-    return false;
+  const verification = await quoteInteraction.verifyAuthorization(context as Context<void>, {
+    attributedTo: candidateAuthor,
+    authorization: authorizationId,
+    interactionTarget: new URL(extraction.targetUri),
+    interactingObject: note,
+  });
+  if (!verification.verified) {
+    return undefined;
   }
-  return (
-    parseHttpUri(trustedSource.sourceUri) !== null && parseHttpUri(trustedSource.authorUri) !== null
-  );
+
+  return {
+    approvalUri: verification.authorizationId.href,
+    authorUri: candidateAuthor.href,
+    sourceUri: extraction.targetUri,
+  };
 };
 
 const hasCurrentPendingRevision = async ({
@@ -348,16 +371,7 @@ const materializeFollowersOnlyTarget = async ({
   receivedAt: Temporal.Instant;
   trustedSource: TrustedInboundQuoteSource;
 }): Promise<QuoteTargetResolution> => {
-  const sourceUri = parseHttpUri(trustedSource.sourceUri);
-  const authorUri = parseHttpUri(trustedSource.authorUri);
-  if (
-    !sourceUri ||
-    !authorUri ||
-    sourceUri.href !== extraction.targetUri ||
-    trustedSource.sourceUri !== extraction.targetUri
-  ) {
-    return { kind: 'permanent_failure' };
-  }
+  const sourceUri = new URL(trustedSource.sourceUri);
 
   let expectedActor: StoredRemoteProfileActor | undefined;
   try {
@@ -427,26 +441,47 @@ const materializeFollowersOnlyTarget = async ({
     return { kind: 'stale' };
   }
 
-  let materialized;
-  try {
-    materialized = await materializeFollowersOnlyQuoteNote({
-      context,
-      expectedActor,
-      followerProfileId: follower.profileId,
-      note: targetObject,
-      objectUri: sourceUri,
-      receivedAt,
-    });
-  } catch (error) {
-    if (error instanceof RemoteActorDiscoveryUnavailableError) {
-      return { kind: 'transient_failure' };
+  if (
+    targetObject.toIds.some((uri) => uri.href === PUBLIC_COLLECTION.href) ||
+    targetObject.ccIds.some((uri) => uri.href === PUBLIC_COLLECTION.href)
+  ) {
+    try {
+      const materialized = await materializeHydratedRemoteNote({
+        context: {
+          ...context,
+          lookupObject: async (identifier) => {
+            try {
+              return await context.lookupObject(identifier);
+            } catch (error) {
+              throw new RemoteActorDiscoveryUnavailableError('Remote actor lookup failed.', {
+                cause: error,
+              });
+            }
+          },
+        },
+        note: targetObject,
+        objectUri: sourceUri,
+        observation: { activityType: 'Create', handler: 'create' },
+        receivedAt,
+      });
+      return materialized.status === 'rejected'
+        ? { kind: 'permanent_failure' }
+        : { kind: 'found', postId: materialized.postId };
+    } catch (error) {
+      if (error instanceof RemoteActorDiscoveryUnavailableError) {
+        return { kind: 'transient_failure' };
+      }
+      throw error;
     }
-    throw error;
   }
 
-  return materialized.status === 'rejected'
-    ? { kind: 'permanent_failure' }
-    : { kind: 'found', postId: materialized.postId };
+  return {
+    expectedActor,
+    followerProfileId: follower.profileId,
+    kind: 'followers_note',
+    note: targetObject,
+    sourceUri,
+  };
 };
 
 const materializeTarget = async ({
@@ -464,7 +499,7 @@ const materializeTarget = async ({
   receivedAt: Temporal.Instant;
   trustedSource?: TrustedInboundQuoteSource;
 }): Promise<QuoteTargetResolution> => {
-  if (trustedSource) {
+  if (trustedSource && extraction.targetObject === null) {
     return materializeFollowersOnlyTarget({
       context,
       expectedRevision,
@@ -608,112 +643,145 @@ const classifyAuthorization = async ({
         };
 };
 
+const persistQuoteResolutionInTransaction = async (
+  tx: Transaction,
+  resolution: QuoteResolution,
+  postId: string,
+  expectedRevision?: number,
+): Promise<
+  | { applied: boolean; row: typeof ActivityPubPostQuotes.$inferSelect }
+  | { applied: false; raced: true; row: typeof ActivityPubPostQuotes.$inferSelect }
+  | null
+> => {
+  const current = await tx
+    .select()
+    .from(ActivityPubPostQuotes)
+    .where(eq(ActivityPubPostQuotes.postId, postId))
+    .limit(1)
+    .for('update')
+    .then(first);
+
+  if (
+    expectedRevision !== undefined &&
+    (!current ||
+      current.resolutionRevision !== expectedRevision ||
+      current.status !== ActivityPubQuoteStatus.PENDING)
+  ) {
+    return current ? { applied: false, row: current } : null;
+  }
+
+  if (
+    current &&
+    current.targetUri === resolution.targetUri &&
+    current.format === resolution.format &&
+    current.status === resolution.status &&
+    current.approvalUri === resolution.approvalUri
+  ) {
+    if (resolution.sourcePostId === postId) {
+      throw new Error('Quote Source cannot reference the Quote Post itself');
+    }
+    if (resolution.sourcePostId !== null) {
+      const linked = await tx
+        .update(Posts)
+        .set({ repostSourceId: resolution.sourcePostId })
+        .where(
+          and(
+            eq(Posts.id, postId),
+            or(isNull(Posts.repostSourceId), eq(Posts.repostSourceId, resolution.sourcePostId)),
+          ),
+        )
+        .returning({ id: Posts.id })
+        .then(first);
+      if (!linked) {
+        throw new Error('Quote Source relation conflicts with the persisted resolution');
+      }
+    }
+    return { applied: true, row: current };
+  }
+
+  if (
+    current?.status === ActivityPubQuoteStatus.REVOKED &&
+    resolution.status === ActivityPubQuoteStatus.APPROVED &&
+    current.targetUri === resolution.targetUri &&
+    current.approvalUri === resolution.approvalUri
+  ) {
+    return { applied: false, row: current };
+  }
+
+  const nextRevision = expectedRevision ?? (current?.resolutionRevision ?? 0) + 1;
+  const next = current
+    ? await tx
+        .update(ActivityPubPostQuotes)
+        .set({
+          approvalUri: resolution.approvalUri,
+          format: resolution.format,
+          resolutionRevision: nextRevision,
+          status: resolution.status,
+          targetUri: resolution.targetUri,
+          updatedAt: Temporal.Now.instant(),
+        })
+        .where(
+          expectedRevision === undefined
+            ? and(
+                eq(ActivityPubPostQuotes.postId, postId),
+                eq(ActivityPubPostQuotes.resolutionRevision, current.resolutionRevision),
+              )
+            : and(
+                eq(ActivityPubPostQuotes.postId, postId),
+                eq(ActivityPubPostQuotes.resolutionRevision, expectedRevision),
+                eq(ActivityPubPostQuotes.status, ActivityPubQuoteStatus.PENDING),
+              ),
+        )
+        .returning()
+        .then(first)
+    : await tx
+        .insert(ActivityPubPostQuotes)
+        .values({
+          approvalUri: resolution.approvalUri,
+          format: resolution.format,
+          postId,
+          resolutionRevision: nextRevision,
+          status: resolution.status,
+          targetUri: resolution.targetUri,
+        })
+        .onConflictDoNothing()
+        .returning()
+        .then(first);
+
+  if (next) {
+    if (resolution.sourcePostId === postId) {
+      throw new Error('Quote Source cannot reference the Quote Post itself');
+    }
+    if (resolution.sourcePostId !== null) {
+      await tx
+        .update(Posts)
+        .set({ repostSourceId: resolution.sourcePostId })
+        .where(eq(Posts.id, postId));
+    }
+    return { applied: true, row: next };
+  }
+
+  const raced = await tx
+    .select()
+    .from(ActivityPubPostQuotes)
+    .where(eq(ActivityPubPostQuotes.postId, postId))
+    .limit(1)
+    .then(first);
+  if (!raced) {
+    throw new Error('Quote resolution row disappeared after concurrent insert');
+  }
+  return { applied: false, raced: true as const, row: raced };
+};
+
 const persistQuoteResolution = async (
   resolution: QuoteResolution,
   postId: string,
   expectedRevision?: number,
 ): Promise<{ applied: boolean; row: typeof ActivityPubPostQuotes.$inferSelect }> => {
   for (;;) {
-    const result = await db.transaction(async (tx) => {
-      const current = await tx
-        .select()
-        .from(ActivityPubPostQuotes)
-        .where(eq(ActivityPubPostQuotes.postId, postId))
-        .limit(1)
-        .then(first);
-
-      if (
-        expectedRevision !== undefined &&
-        (!current ||
-          current.resolutionRevision !== expectedRevision ||
-          current.status !== ActivityPubQuoteStatus.PENDING)
-      ) {
-        return current ? { applied: false, row: current } : null;
-      }
-
-      if (
-        current &&
-        current.targetUri === resolution.targetUri &&
-        current.format === resolution.format &&
-        current.status === resolution.status &&
-        current.approvalUri === resolution.approvalUri
-      ) {
-        return { applied: true, row: current };
-      }
-
-      if (
-        current?.status === ActivityPubQuoteStatus.REVOKED &&
-        resolution.status === ActivityPubQuoteStatus.APPROVED &&
-        current.targetUri === resolution.targetUri &&
-        current.approvalUri === resolution.approvalUri
-      ) {
-        return { applied: false, row: current };
-      }
-
-      const nextRevision = expectedRevision ?? (current?.resolutionRevision ?? 0) + 1;
-      const next = current
-        ? await tx
-            .update(ActivityPubPostQuotes)
-            .set({
-              approvalUri: resolution.approvalUri,
-              format: resolution.format,
-              resolutionRevision: nextRevision,
-              status: resolution.status,
-              targetUri: resolution.targetUri,
-              updatedAt: Temporal.Now.instant(),
-            })
-            .where(
-              expectedRevision === undefined
-                ? and(
-                    eq(ActivityPubPostQuotes.postId, postId),
-                    eq(ActivityPubPostQuotes.resolutionRevision, current.resolutionRevision),
-                  )
-                : and(
-                    eq(ActivityPubPostQuotes.postId, postId),
-                    eq(ActivityPubPostQuotes.resolutionRevision, expectedRevision),
-                    eq(ActivityPubPostQuotes.status, ActivityPubQuoteStatus.PENDING),
-                  ),
-            )
-            .returning()
-            .then(first)
-        : await tx
-            .insert(ActivityPubPostQuotes)
-            .values({
-              approvalUri: resolution.approvalUri,
-              format: resolution.format,
-              postId,
-              resolutionRevision: nextRevision,
-              status: resolution.status,
-              targetUri: resolution.targetUri,
-            })
-            .onConflictDoNothing()
-            .returning()
-            .then(first);
-
-      if (next) {
-        if (resolution.sourcePostId === postId) {
-          throw new Error('Quote Source cannot reference the Quote Post itself');
-        }
-        if (resolution.sourcePostId !== null) {
-          await tx
-            .update(Posts)
-            .set({ repostSourceId: resolution.sourcePostId })
-            .where(eq(Posts.id, postId));
-        }
-        return { applied: true, row: next };
-      }
-
-      const raced = await tx
-        .select()
-        .from(ActivityPubPostQuotes)
-        .where(eq(ActivityPubPostQuotes.postId, postId))
-        .limit(1)
-        .then(first);
-      if (!raced) {
-        throw new Error('Quote resolution row disappeared after concurrent insert');
-      }
-      return { applied: false, raced: true as const, row: raced };
-    });
+    const result = await db.transaction((tx) =>
+      persistQuoteResolutionInTransaction(tx, resolution, postId, expectedRevision),
+    );
     if (!result) {
       throw new Error('Quote resolution row disappeared');
     }
@@ -724,18 +792,120 @@ const persistQuoteResolution = async (
   }
 };
 
-const startQuoteResolutionWorkflow = async (
-  postId: string,
-  revision: number,
-  trustedSource?: TrustedInboundQuoteSource,
-): Promise<void> => {
+class FollowersQuoteCommitRaceError extends Error {
+  constructor(readonly status: ActivityPubQuoteStatus | null) {
+    super('Followers-only Quote resolution changed before its Source could be committed');
+  }
+}
+
+class FollowersQuoteMaterializationRejectedError extends Error {
+  constructor() {
+    super('Followers-only Quote Source no longer satisfies the verified private projection');
+  }
+}
+
+const commitFollowersOnlyQuoteResolution = async ({
+  context,
+  expectedRevision,
+  extraction,
+  postId,
+  receivedAt,
+  target,
+  trustedSource,
+}: {
+  context: QuoteContext;
+  expectedRevision?: number;
+  extraction: QuoteExtraction;
+  postId: string;
+  receivedAt: Temporal.Instant;
+  target: Extract<QuoteTargetResolution, { kind: 'followers_note' }>;
+  trustedSource: TrustedInboundQuoteSource;
+}): Promise<InboundQuoteResolution | null> => {
+  let postCommit: (() => Promise<void>) | undefined;
+  try {
+    const stored = await db.transaction(async (tx) => {
+      const materialized = await materializeFollowersOnlyQuoteNote({
+        context,
+        expectedActor: target.expectedActor,
+        followerProfileId: target.followerProfileId,
+        note: target.note,
+        objectUri: target.sourceUri,
+        receivedAt,
+        transaction: tx,
+      });
+      if (materialized.status === 'rejected' || !materialized.postId) {
+        return null;
+      }
+
+      const materializedSource = await tx
+        .select({
+          actorUri: ActivityPubActors.uri,
+          currentContentId: Posts.currentContentId,
+          profileId: Posts.profileId,
+          state: Posts.state,
+          visibility: Posts.visibility,
+        })
+        .from(Posts)
+        .innerJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Posts.profileId))
+        .where(eq(Posts.id, materialized.postId))
+        .limit(1)
+        .then(first);
+      if (
+        materializedSource?.actorUri !== trustedSource.authorUri ||
+        materializedSource.profileId !== target.expectedActor.profile.id ||
+        materializedSource.state !== PostState.ACTIVE ||
+        materializedSource.currentContentId === null ||
+        materializedSource.visibility !== PostVisibility.FOLLOWERS
+      ) {
+        throw new FollowersQuoteMaterializationRejectedError();
+      }
+
+      const resolution: QuoteResolution = {
+        approvalUri: trustedSource.approvalUri,
+        format: extraction.format,
+        retryable: false,
+        sourcePostId: materialized.postId,
+        status: ActivityPubQuoteStatus.APPROVED,
+        targetUri: extraction.targetUri,
+      };
+      const persisted = await persistQuoteResolutionInTransaction(
+        tx,
+        resolution,
+        postId,
+        expectedRevision,
+      );
+      if (!persisted || !persisted.applied) {
+        throw new FollowersQuoteCommitRaceError(persisted?.row.status ?? null);
+      }
+      postCommit = materialized.postCommit;
+      return persisted.row;
+    });
+    if (!stored) {
+      return null;
+    }
+    await postCommit?.();
+    return { retryable: false, status: stored.status };
+  } catch (error) {
+    if (error instanceof FollowersQuoteCommitRaceError) {
+      return { retryable: false, status: error.status };
+    }
+    if (error instanceof FollowersQuoteMaterializationRejectedError) {
+      return null;
+    }
+    if (error instanceof RemoteActorDiscoveryUnavailableError) {
+      return { retryable: true, status: ActivityPubQuoteStatus.PENDING };
+    }
+    throw error;
+  }
+};
+
+const startQuoteResolutionWorkflow = async (postId: string, revision: number): Promise<void> => {
   await temporalClient.withDeadline(Date.now() + 5_000, () =>
     temporalClient.workflow.start('activitypubQuoteResolutionWorkflow', {
       args: [
         {
           postId,
           revision,
-          ...(trustedSource ? { trustedSource } : {}),
         },
       ],
       taskQueue: KOSMO_TASK_QUEUE,
@@ -753,7 +923,6 @@ export const handleInboundQuote = async ({
   postId,
   receivedAt,
   startWorkflow = true,
-  trustedSource,
   expectedRevision,
 }: InboundQuoteInput): Promise<InboundQuoteResolution> => {
   let extraction = await extractQuote(context, note);
@@ -780,35 +949,26 @@ export const handleInboundQuote = async ({
     return { retryable: false, status: current.status };
   }
 
-  extraction = await hydrateFepReferences(context, note, extraction, {
-    skipTargetHydration: trustedSource !== undefined,
-  });
+  extraction = await hydrateFepReferences(context, note, extraction);
+  const trustedSource = await deriveVerifiedInboundQuoteSource({ context, extraction, note });
 
   let targetResolution: QuoteTargetResolution = { kind: 'permanent_failure' };
   if (!extraction.malformed) {
-    if (trustedSource && !isTrustedSourceForTarget(trustedSource, extraction.targetUri)) {
-      targetResolution = { kind: 'permanent_failure' };
+    const existingSourcePostId = await findPostByActivityPubUri(
+      context,
+      new URL(extraction.targetUri),
+    );
+    if (existingSourcePostId) {
+      targetResolution = { kind: 'found', postId: existingSourcePostId };
     } else {
-      const existingSourcePostId = await findPostByActivityPubUri(
+      targetResolution = await materializeTarget({
         context,
-        new URL(extraction.targetUri),
-      );
-      if (existingSourcePostId) {
-        const existingSource = await loadQuoteSource(existingSourcePostId);
-        targetResolution =
-          trustedSource && existingSource?.actorUri !== trustedSource.authorUri
-            ? { kind: 'permanent_failure' }
-            : { kind: 'found', postId: existingSourcePostId };
-      } else {
-        targetResolution = await materializeTarget({
-          context,
-          expectedRevision,
-          extraction,
-          postId,
-          receivedAt,
-          trustedSource,
-        });
-      }
+        expectedRevision,
+        extraction,
+        postId,
+        receivedAt,
+        trustedSource,
+      });
     }
   }
 
@@ -820,6 +980,21 @@ export const handleInboundQuote = async ({
       .limit(1)
       .then(first);
     return { retryable: false, status: current?.status ?? null };
+  }
+  if (targetResolution.kind === 'followers_note' && trustedSource) {
+    const committed = await commitFollowersOnlyQuoteResolution({
+      context,
+      expectedRevision,
+      extraction,
+      postId,
+      receivedAt,
+      target: targetResolution,
+      trustedSource,
+    });
+    if (committed) {
+      return committed;
+    }
+    targetResolution = { kind: 'permanent_failure' };
   }
   let sourcePostId = targetResolution.kind === 'found' ? targetResolution.postId : undefined;
   let source = sourcePostId ? await loadQuoteSource(sourcePostId) : null;
@@ -886,7 +1061,7 @@ export const handleInboundQuote = async ({
     stored.row.status === ActivityPubQuoteStatus.PENDING &&
     resolution.retryable
   ) {
-    await startQuoteResolutionWorkflow(postId, stored.row.resolutionRevision, trustedSource);
+    await startQuoteResolutionWorkflow(postId, stored.row.resolutionRevision);
   }
   return { retryable: resolution.retryable, status: stored.row.status };
 };
@@ -896,13 +1071,11 @@ export const resolveStoredInboundQuote = async ({
   postId,
   receivedAt,
   revision,
-  trustedSource,
 }: {
   context: QuoteContext;
   postId: string;
   receivedAt: Temporal.Instant;
   revision: number;
-  trustedSource?: TrustedInboundQuoteSource;
 }): Promise<InboundQuoteResolution> => {
   const row = await db
     .select({
@@ -949,7 +1122,6 @@ export const resolveStoredInboundQuote = async ({
     postId,
     receivedAt,
     startWorkflow: false,
-    trustedSource,
     expectedRevision: revision,
   });
 };
