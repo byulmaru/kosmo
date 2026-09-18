@@ -4,9 +4,12 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, test } from 'node:test';
 import { InstanceKind, InstanceState, ProfileFollowPolicy, ProfileState } from '@kosmo/core/enums';
+import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
+import { WithStartWorkflowOperation } from '@temporalio/client';
 import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
 import { and, eq } from 'drizzle-orm';
+import type { ProfileBlockTransitionResult } from '@kosmo/core/temporal/profile-block';
 
 process.env.DATABASE_URL ??= 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 
@@ -17,13 +20,11 @@ process.env.TEMPORAL_ADDRESS = environment.address;
 process.env.TEMPORAL_NAMESPACE = environment.namespace ?? 'default';
 
 const [
-  { PROFILE_BLOCK_UPDATE_ID, profileBlockWorkflow },
-  { runWorkflow, temporalClient },
+  { PROFILE_BLOCK_UPDATE_ID, PROFILE_BLOCK_UPDATE_NAME, profileBlockWorkflow },
   { db, firstOrThrow, Instances, pg, ProfileBlocks, Profiles },
   activities,
 ] = await Promise.all([
   import('@kosmo/core/temporal/profile-block'),
-  import('@kosmo/core/temporal/client'),
   import('@kosmo/core/db'),
   import('./activities'),
 ]);
@@ -75,7 +76,6 @@ after(async () => {
     }
   } finally {
     await truncateDatabase();
-    await temporalClient.connection.close();
     await pg.end();
     await environment.teardown();
   }
@@ -88,14 +88,17 @@ test(
     await truncateDatabase();
     const input = await createFixture();
     const runBlock = (value: typeof input, updateId: string) =>
-      runWorkflow(profileBlockWorkflow, {
+      environment.client.workflow.executeUpdateWithStart(PROFILE_BLOCK_UPDATE_NAME, {
         args: [value],
-        updateArgs: [value],
         updateId,
-        mode: 'update-with-start',
-        workflowIdConflictPolicy: 'USE_EXISTING',
-        workflowIdReusePolicy: 'ALLOW_DUPLICATE',
-      });
+        startWorkflowOperation: new WithStartWorkflowOperation(profileBlockWorkflow.workflow, {
+          args: [value],
+          taskQueue: KOSMO_TASK_QUEUE,
+          workflowId: profileBlockWorkflow.workflowIdFromArgs(value),
+          workflowIdConflictPolicy: 'USE_EXISTING',
+          workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+        }),
+      }) as Promise<ProfileBlockTransitionResult>;
     const transitionStarted = Promise.withResolvers<void>();
     const transitionReleased = Promise.withResolvers<void>();
     let holdFirstTransition = true;
@@ -115,7 +118,7 @@ test(
       },
       connection: environment.nativeConnection,
       namespace: environment.namespace,
-      taskQueue: 'kosmo',
+      taskQueue: KOSMO_TASK_QUEUE,
       workflowsPath,
     });
     workerRun = worker.run();
