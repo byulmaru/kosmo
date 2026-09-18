@@ -7,7 +7,7 @@ import { Profile } from '../ref';
 
 const assertSelectedProfile = (profileId: string, selectedProfileId: string) => {
   if (profileId !== selectedProfileId) {
-    throw new PermissionDeniedError('Profile owner is required');
+    throw new PermissionDeniedError('Selected Profile is required');
   }
 };
 
