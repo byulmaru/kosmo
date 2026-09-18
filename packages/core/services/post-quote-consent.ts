@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNotNull, ne, notExists, or, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, isNull, or, sql } from 'drizzle-orm';
 import {
   ActivityPubActors,
   ActivityPubPosts,
@@ -8,6 +8,7 @@ import {
   PostQuoteConsents,
   PostQuoteEffectReceipts,
   PostQuotePolicies,
+  PostQuoteRevocations,
   Posts,
   ProfileBlocks,
   ProfileFollows,
@@ -31,9 +32,31 @@ import type { DatabaseHandle, Transaction } from '../db';
 
 export const defaultPostQuotePolicy = PostQuotePolicy.EVERYONE;
 
-type PostQuotePolicyRow = typeof PostQuotePolicies.$inferSelect;
 export type PostQuoteConsentRow = typeof PostQuoteConsents.$inferSelect;
 export type PostQuoteEffectReceiptRow = typeof PostQuoteEffectReceipts.$inferSelect;
+
+type InboundQuoteRevocationIdentity = {
+  readonly approvalUri: string;
+  readonly quoteUri?: string | null;
+  readonly sourceAuthorActorUri: string;
+  readonly sourceUri: string;
+};
+
+const storeInboundQuoteRevocation = async (
+  database: DatabaseHandle,
+  { approvalUri, quoteUri, sourceAuthorActorUri, sourceUri }: InboundQuoteRevocationIdentity,
+) => {
+  await database
+    .insert(PostQuoteRevocations)
+    .values({ approvalUri, quoteUri: quoteUri ?? null, sourceAuthorActorUri, sourceUri })
+    .onConflictDoNothing({ target: PostQuoteRevocations.approvalUri });
+  return database
+    .select()
+    .from(PostQuoteRevocations)
+    .where(eq(PostQuoteRevocations.approvalUri, approvalUri))
+    .limit(1)
+    .then(first);
+};
 
 type PostQuoteEffectReceiptInput = {
   readonly approvalUri?: string | null;
@@ -232,24 +255,49 @@ export const startPostQuoteEffect = async (receiptId: string): Promise<void> => 
 };
 
 export const replayPendingPostQuoteEffects = async (limit = 100): Promise<number> => {
-  const receipts = await db
-    .select()
-    .from(PostQuoteEffectReceipts)
-    .where(eq(PostQuoteEffectReceipts.status, PostQuoteEffectReceiptStatus.PENDING))
-    .orderBy(asc(PostQuoteEffectReceipts.createdAt), asc(PostQuoteEffectReceipts.id))
-    .limit(Math.max(1, Math.min(limit, 100)));
+  const batchSize = Math.max(1, Math.min(limit, 100));
+  let cursor: Pick<PostQuoteEffectReceiptRow, 'createdAt' | 'id'> | null = null;
   let started = 0;
-  for (const receipt of receipts) {
-    try {
-      await startPostQuoteEffectWorkflow(receipt);
-      started += 1;
-    } catch (error) {
-      console.error('Pending Post Quote Effect replay failed', {
-        effectKind: receipt.effectKind,
-        error,
-        receiptId: receipt.id,
-      });
+  while (true) {
+    const afterCursor: ReturnType<typeof or> = cursor
+      ? or(
+          gt(PostQuoteEffectReceipts.createdAt, cursor.createdAt),
+          and(
+            eq(PostQuoteEffectReceipts.createdAt, cursor.createdAt),
+            gt(PostQuoteEffectReceipts.id, cursor.id),
+          ),
+        )
+      : undefined;
+    const receipts: PostQuoteEffectReceiptRow[] = await db
+      .select()
+      .from(PostQuoteEffectReceipts)
+      .where(
+        afterCursor
+          ? and(
+              eq(PostQuoteEffectReceipts.status, PostQuoteEffectReceiptStatus.PENDING),
+              afterCursor,
+            )
+          : eq(PostQuoteEffectReceipts.status, PostQuoteEffectReceiptStatus.PENDING),
+      )
+      .orderBy(asc(PostQuoteEffectReceipts.createdAt), asc(PostQuoteEffectReceipts.id))
+      .limit(batchSize);
+    for (const receipt of receipts) {
+      try {
+        await startPostQuoteEffectWorkflow(receipt);
+        started += 1;
+      } catch (error) {
+        console.error('Pending Post Quote Effect replay failed', {
+          effectKind: receipt.effectKind,
+          error,
+          receiptId: receipt.id,
+        });
+      }
     }
+    const lastReceipt: PostQuoteEffectReceiptRow | undefined = receipts.at(-1);
+    if (!lastReceipt || receipts.length < batchSize) {
+      break;
+    }
+    cursor = { createdAt: lastReceipt.createdAt, id: lastReceipt.id };
   }
   return started;
 };
@@ -267,56 +315,6 @@ const configuredLegacyQuotePostIds = (): ReadonlySet<string> => {
 
 export const isLegacyLocalQuotePost = (postId: string): boolean =>
   configuredLegacyQuotePostIds().has(postId);
-
-const postQuotePolicyFor = async (
-  database: DatabaseHandle,
-  postId: string,
-): Promise<PostQuotePolicy | null> => {
-  const row = await database
-    .select({
-      instanceKind: Instances.kind,
-      instanceState: Instances.state,
-      policy: PostQuotePolicies.policy,
-      postContentId: Posts.currentContentId,
-      postState: Posts.state,
-      profileState: Profiles.state,
-    })
-    .from(Posts)
-    .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
-    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .leftJoin(PostQuotePolicies, eq(PostQuotePolicies.postId, Posts.id))
-    .where(eq(Posts.id, postId))
-    .limit(1)
-    .then(first);
-
-  if (
-    !row ||
-    row.instanceKind !== InstanceKind.LOCAL ||
-    row.instanceState === InstanceState.SUSPENDED ||
-    row.profileState !== ProfileState.ACTIVE ||
-    row.postState !== PostState.ACTIVE ||
-    row.postContentId === null
-  ) {
-    return null;
-  }
-
-  return row.policy ?? defaultPostQuotePolicy;
-};
-
-export const getPostQuotePolicy = (postId: string, database: DatabaseHandle = db) =>
-  postQuotePolicyFor(database, postId);
-
-export const getPostQuotePolicyRow = async (
-  database: DatabaseHandle,
-  postId: string,
-): Promise<PostQuotePolicyRow | null> =>
-  database
-    .select()
-    .from(PostQuotePolicies)
-    .where(eq(PostQuotePolicies.postId, postId))
-    .limit(1)
-    .then(first)
-    .then((row) => row ?? null);
 
 export const updatePostQuotePolicy = async ({
   actorProfileId,
@@ -895,12 +893,27 @@ export const applyInboundQuoteAccept = async ({
       }
     }
 
+    const revocation = await tx
+      .select()
+      .from(PostQuoteRevocations)
+      .where(eq(PostQuoteRevocations.approvalUri, approvalUri))
+      .limit(1)
+      .then(first);
+    if (
+      revocation &&
+      (revocation.sourceAuthorActorUri !== sourceAuthorActorUri ||
+        revocation.sourceUri !== sourceUri ||
+        (revocation.quoteUri !== null && revocation.quoteUri !== quoteUri))
+    ) {
+      return null;
+    }
+
     const updated = await tx
       .update(PostQuoteConsents)
       .set({
         approvalUri,
         revision: sql`${PostQuoteConsents.revision} + 1`,
-        status: PostQuoteConsentStatus.APPROVED,
+        status: revocation ? PostQuoteConsentStatus.REVOKED : PostQuoteConsentStatus.APPROVED,
         updatedAt: sql`now()`,
       })
       .where(
@@ -1024,30 +1037,86 @@ export const applyInboundQuoteReject = async ({
 
 export const applyInboundQuoteRevocation = async ({
   approvalUri,
+  consentId,
+  quoteUri,
   sourceAuthorActorUri,
+  sourceUri,
 }: {
   readonly approvalUri: string;
+  readonly consentId?: string;
+  readonly quoteUri: string;
   readonly sourceAuthorActorUri: string;
-}): Promise<PostQuoteConsentRow | null> => {
+  readonly sourceUri: string;
+}): Promise<{
+  readonly consent: PostQuoteConsentRow;
+  readonly forwardingAt: Temporal.Instant | null;
+} | null> => {
   const result = await db.transaction(async (tx) => {
     const current = await tx
       .select()
       .from(PostQuoteConsents)
-      .where(eq(PostQuoteConsents.approvalUri, approvalUri))
+      .where(
+        consentId === undefined
+          ? eq(PostQuoteConsents.approvalUri, approvalUri)
+          : eq(PostQuoteConsents.id, consentId),
+      )
       .limit(1)
       .then(first);
     if (
       !current ||
       current.sourceAuthorActorUri !== sourceAuthorActorUri ||
-      current.status === PostQuoteConsentStatus.REVOKED ||
-      current.status === PostQuoteConsentStatus.REJECTED
+      (current.approvalUri !== null && current.approvalUri !== approvalUri)
     ) {
+      return null;
+    }
+
+    const revocation = await storeInboundQuoteRevocation(tx, {
+      approvalUri,
+      quoteUri,
+      sourceAuthorActorUri,
+      sourceUri,
+    });
+    if (
+      !revocation ||
+      revocation.sourceAuthorActorUri !== sourceAuthorActorUri ||
+      revocation.sourceUri !== sourceUri ||
+      (revocation.quoteUri !== null && revocation.quoteUri !== quoteUri)
+    ) {
+      return null;
+    }
+
+    const claimForwarding = async (eligible: boolean): Promise<Temporal.Instant | null> => {
+      if (!eligible || revocation.forwardedAt !== null) {
+        return null;
+      }
+      const claimed = await tx
+        .update(PostQuoteRevocations)
+        .set({ forwardingAt: sql`now()` })
+        .where(
+          and(
+            eq(PostQuoteRevocations.id, revocation.id),
+            isNull(PostQuoteRevocations.forwardedAt),
+            or(
+              isNull(PostQuoteRevocations.forwardingAt),
+              sql`${PostQuoteRevocations.forwardingAt} < now() - interval '5 minutes'`,
+            ),
+          ),
+        )
+        .returning({ forwardingAt: PostQuoteRevocations.forwardingAt })
+        .then(first);
+      return claimed?.forwardingAt ?? null;
+    };
+    if (current.status === PostQuoteConsentStatus.REVOKED) {
+      return { consent: current, forwardingAt: await claimForwarding(true), receiptId: null };
+    }
+    if (current.status === PostQuoteConsentStatus.REJECTED) {
       return null;
     }
 
     const updated = await tx
       .update(PostQuoteConsents)
       .set({
+        approvalUri: current.approvalUri ?? approvalUri,
         revision: sql`${PostQuoteConsents.revision} + 1`,
         status: PostQuoteConsentStatus.REVOKED,
         updatedAt: sql`now()`,
@@ -1065,7 +1134,13 @@ export const applyInboundQuoteRevocation = async ({
       .then(first)
       .then((row) => row ?? null);
     if (!updated || !updated.quotePostId) {
-      return updated ? { consent: updated, receiptId: null } : null;
+      return updated
+        ? {
+            consent: updated,
+            forwardingAt: await claimForwarding(current.status === PostQuoteConsentStatus.APPROVED),
+            receiptId: null,
+          }
+        : null;
     }
 
     const receipt = await createPostQuoteEffectReceipt(tx, {
@@ -1082,7 +1157,11 @@ export const applyInboundQuoteRevocation = async ({
       sourcePostId: updated.sourcePostId,
       sourceUri: updated.sourceUri,
     });
-    return { consent: updated, receiptId: receipt.id };
+    return {
+      consent: updated,
+      forwardingAt: await claimForwarding(current.status === PostQuoteConsentStatus.APPROVED),
+      receiptId: receipt.id,
+    };
   });
   if (result?.receiptId) {
     try {
@@ -1097,7 +1176,34 @@ export const applyInboundQuoteRevocation = async ({
       });
     }
   }
-  return result?.consent ?? null;
+  return result ? { consent: result.consent, forwardingAt: result.forwardingAt } : null;
+};
+
+export const loadPendingQuoteConsentByBinding = async (
+  database: DatabaseHandle,
+  {
+    quoteUri,
+    sourceAuthorActorUri,
+    sourceUri,
+  }: {
+    readonly quoteUri?: string;
+    readonly sourceAuthorActorUri: string;
+    readonly sourceUri: string;
+  },
+): Promise<PostQuoteConsentRow | null> => {
+  const rows = await database
+    .select()
+    .from(PostQuoteConsents)
+    .where(
+      and(
+        eq(PostQuoteConsents.status, PostQuoteConsentStatus.PENDING),
+        eq(PostQuoteConsents.sourceAuthorActorUri, sourceAuthorActorUri),
+        eq(PostQuoteConsents.sourceUri, sourceUri),
+        quoteUri === undefined ? undefined : eq(PostQuoteConsents.quoteUri, quoteUri),
+      ),
+    )
+    .limit(2);
+  return rows.length === 1 ? rows[0]! : null;
 };
 
 export const loadQuoteConsentByRequestUri = async (
@@ -1146,6 +1252,14 @@ export const revokePostQuoteConsentsForSource = async (
   tx: Transaction,
   sourcePostId: string,
 ): Promise<readonly string[]> => {
+  const source = await tx
+    .select({ instanceKind: Instances.kind })
+    .from(Posts)
+    .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
+    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+    .where(eq(Posts.id, sourcePostId))
+    .limit(1)
+    .then(first);
   const revoked = await tx
     .update(PostQuoteConsents)
     .set({
@@ -1166,14 +1280,20 @@ export const revokePostQuoteConsentsForSource = async (
 
   const receiptIds: string[] = [];
   for (const consent of revoked) {
-    if (!consent.approvalUri) {
+    const remoteSourceWithLocalQuote =
+      source?.instanceKind === InstanceKind.ACTIVITYPUB && consent.quotePostId !== null;
+    if (!remoteSourceWithLocalQuote && !consent.approvalUri) {
       continue;
     }
     const receipt = await createPostQuoteEffectReceipt(tx, {
       approvalUri: consent.approvalUri,
       consentId: consent.id,
-      effectKey: `post-quote-revocation:${consent.id}:${consent.revision}`,
-      effectKind: PostQuoteEffectKind.SOURCE_REVOCATION,
+      effectKey: remoteSourceWithLocalQuote
+        ? `post-quote-consent:${consent.id}:${consent.revision}`
+        : `post-quote-revocation:${consent.id}:${consent.revision}`,
+      effectKind: remoteSourceWithLocalQuote
+        ? PostQuoteEffectKind.CONSENT_UPDATE
+        : PostQuoteEffectKind.SOURCE_REVOCATION,
       postId: consent.quotePostId,
       quoteAuthorActorUri: consent.quoteAuthorActorUri,
       quoteUri: consent.quoteUri,
@@ -1307,143 +1427,6 @@ export const canDisplayQuoteSource = async (
 
   const consent = await loadQuoteConsentForPost(database, quotePostId, sourcePostId);
   return consent?.status === PostQuoteConsentStatus.APPROVED;
-};
-
-export const sourceCanBeQuotedBy = async (
-  database: DatabaseHandle,
-  {
-    actorProfileId,
-    sourcePostId,
-  }: { readonly actorProfileId: string; readonly sourcePostId: string },
-): Promise<boolean> => {
-  const source = await database
-    .select({
-      currentContentId: Posts.currentContentId,
-      instanceKind: Instances.kind,
-      profileId: Posts.profileId,
-      visibility: Posts.visibility,
-    })
-    .from(Posts)
-    .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
-    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .where(
-      and(
-        eq(Posts.id, sourcePostId),
-        eq(Posts.state, PostState.ACTIVE),
-        eq(Profiles.state, ProfileState.ACTIVE),
-        ne(Instances.state, InstanceState.SUSPENDED),
-        isNotNull(Posts.currentContentId),
-        notExists(
-          database
-            .select({ id: ProfileBlocks.id })
-            .from(ProfileBlocks)
-            .where(
-              or(
-                and(
-                  eq(ProfileBlocks.ownerProfileId, actorProfileId),
-                  eq(ProfileBlocks.targetProfileId, Posts.profileId),
-                ),
-                and(
-                  eq(ProfileBlocks.ownerProfileId, Posts.profileId),
-                  eq(ProfileBlocks.targetProfileId, actorProfileId),
-                ),
-              ),
-            ),
-        ),
-        or(
-          eq(Posts.profileId, actorProfileId),
-          eq(Posts.visibility, PostVisibility.PUBLIC),
-          eq(Posts.visibility, PostVisibility.UNLISTED),
-        ),
-      ),
-    )
-    .limit(1)
-    .then(first);
-  if (!source) {
-    return false;
-  }
-  if (source.visibility === PostVisibility.DIRECT) {
-    return false;
-  }
-  if (source.profileId === actorProfileId) {
-    return true;
-  }
-  if (
-    source.visibility !== PostVisibility.PUBLIC &&
-    source.visibility !== PostVisibility.UNLISTED
-  ) {
-    return false;
-  }
-  if (source.instanceKind === InstanceKind.ACTIVITYPUB) {
-    return true;
-  }
-
-  return sourceCanBeQuotedByLocalPolicy(database, {
-    actorProfileId,
-    sourceAuthorProfileId: source.profileId,
-    sourcePostId,
-  });
-};
-
-const sourceCanBeQuotedByLocalPolicy = async (
-  database: DatabaseHandle,
-  {
-    actorProfileId,
-    sourceAuthorProfileId,
-    sourcePostId,
-  }: {
-    readonly actorProfileId: string;
-    readonly sourceAuthorProfileId: string;
-    readonly sourcePostId: string;
-  },
-): Promise<boolean> => {
-  const policy =
-    (
-      await database
-        .select({ policy: PostQuotePolicies.policy })
-        .from(PostQuotePolicies)
-        .where(eq(PostQuotePolicies.postId, sourcePostId))
-        .limit(1)
-        .then(first)
-    )?.policy ?? defaultPostQuotePolicy;
-  if (policy === PostQuotePolicy.EVERYONE) {
-    return true;
-  }
-  if (policy === PostQuotePolicy.AUTHOR) {
-    return false;
-  }
-  return Boolean(
-    await database
-      .select({ id: ProfileFollows.id })
-      .from(ProfileFollows)
-      .where(
-        and(
-          eq(ProfileFollows.followerProfileId, actorProfileId),
-          eq(ProfileFollows.followeeProfileId, sourceAuthorProfileId),
-        ),
-      )
-      .limit(1)
-      .then(first),
-  );
-};
-
-export const ensureQuotePolicyUpdateAllowed = async (
-  postId: string,
-  actorProfileId: string,
-): Promise<void> => {
-  const policy = await postQuotePolicyFor(db, postId);
-  if (policy === null) {
-    throw new NotFoundError('Post not found');
-  }
-  const post = await db
-    .select({ profileId: Posts.profileId })
-    .from(Posts)
-    .where(eq(Posts.id, postId))
-    .limit(1)
-    .then(first);
-  if (post?.profileId !== actorProfileId) {
-    throw new PermissionDeniedError('Post author permission is required');
-  }
 };
 
 export const assertPostQuotePolicy = (policy: string): PostQuotePolicy => {

@@ -41,17 +41,22 @@ if (import.meta.main) {
         taskQueue: KOSMO_TASK_QUEUE,
         workflowsPath: new URL('./workflows/index.ts', import.meta.url).pathname,
       });
-      const replayedPostQuoteEffects = await replayPendingPostQuoteEffects();
-      if (replayedPostQuoteEffects > 0) {
-        console.log(
-          JSON.stringify({
-            event: 'post_quote_effect_receipts_replayed',
-            count: replayedPostQuoteEffects,
-          }),
-        );
-      }
       const running = worker.run();
       process.off('SIGTERM', terminateDuringStartup);
+      void replayPendingPostQuoteEffects()
+        .then((count) => {
+          if (count > 0) {
+            console.log(JSON.stringify({ event: 'post_quote_effect_receipts_replayed', count }));
+          }
+        })
+        .catch((error) => {
+          console.error(
+            JSON.stringify({
+              event: 'post_quote_effect_receipts_replay_failed',
+              error: error instanceof Error ? error.message : String(error),
+            }),
+          );
+        });
       void runSchedules(connection, namespace)
         .then((schedules) => {
           console.log(JSON.stringify({ event: 'temporal_schedules_registered', schedules }));

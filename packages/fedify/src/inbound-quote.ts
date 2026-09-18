@@ -1,7 +1,14 @@
 import '@kosmo/core/polyfill';
 
 import { Accept, Note, QuoteAuthorization, Reject } from '@fedify/vocab';
-import { db as coreDb, first, Instances, Posts, Profiles } from '@kosmo/core/db';
+import {
+  db as coreDb,
+  first,
+  Instances,
+  PostQuoteRevocations,
+  Posts,
+  Profiles,
+} from '@kosmo/core/db';
 import {
   InstanceKind,
   InstanceState,
@@ -16,13 +23,14 @@ import {
   applyInboundQuoteReject,
   applyInboundQuoteRevocation,
   completePostQuoteEffectReceipt,
+  loadPendingQuoteConsentByBinding,
   loadQuoteConsentByApprovalUri,
   loadQuoteConsentByRequestUri,
   loadQuotePostIdentity,
   loadQuoteSourceIdentity,
   recordInboundQuoteRequest,
 } from '@kosmo/core/services';
-import { and, eq, isNotNull } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import { findPostByActivityPubUri } from './activitypub-post-uri';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
 import { resolveInboundLocalRecipient } from './inbound-local-recipient';
@@ -461,6 +469,38 @@ const forwardQuoteRevocation = async (
   });
 };
 
+const forwardClaimedQuoteRevocation = async (
+  context: InboxContext<void>,
+  consent: PostQuoteConsentRow,
+  approvalUri: string,
+  forwardingAt: Temporal.Instant,
+): Promise<void> => {
+  try {
+    await forwardQuoteRevocation(context, consent);
+    await coreDb
+      .update(PostQuoteRevocations)
+      .set({ forwardedAt: sql`now()`, forwardingAt: null })
+      .where(
+        and(
+          eq(PostQuoteRevocations.approvalUri, approvalUri),
+          eq(PostQuoteRevocations.forwardingAt, forwardingAt),
+        ),
+      );
+  } catch (error) {
+    await coreDb
+      .update(PostQuoteRevocations)
+      .set({ forwardingAt: null })
+      .where(
+        and(
+          eq(PostQuoteRevocations.approvalUri, approvalUri),
+          isNull(PostQuoteRevocations.forwardedAt),
+          eq(PostQuoteRevocations.forwardingAt, forwardingAt),
+        ),
+      );
+    throw error;
+  }
+};
+
 export const handleInboundQuoteAccept = async ({
   accept,
   context,
@@ -592,17 +632,55 @@ export const handleInboundQuoteRevocation = async (
     return false;
   }
 
-  const consent = await loadQuoteConsentByApprovalUri(coreDb, approvalUri.href);
-  if (!consent) {
-    return false;
-  }
-
   const targetHrefs = activity.targetIds.map(({ href }) => href);
   const embedded = await activity.getObject({
     crossOrigin: 'trust',
     documentLoader: noNetworkDocumentLoader,
     suppressError: true,
   });
+  const consent = await loadQuoteConsentByApprovalUri(coreDb, approvalUri.href);
+  if (!consent) {
+    const sourceUri = targetHrefs.length === 1 ? targetHrefs[0] : undefined;
+    const embeddedQuoteUri =
+      embedded instanceof QuoteAuthorization ? embedded.interactingObjectId?.href : undefined;
+    if (
+      approvalUri.origin !== actorUri.origin ||
+      !sourceUri ||
+      (embedded !== null &&
+        (!(embedded instanceof QuoteAuthorization) ||
+          embedded.id?.href !== approvalUri.href ||
+          uniqueHref(embedded.attributionIds) !== actorUri.href ||
+          !embeddedQuoteUri ||
+          embedded.interactionTargetId?.href !== sourceUri))
+    ) {
+      return false;
+    }
+    const pendingConsent = await loadPendingQuoteConsentByBinding(coreDb, {
+      quoteUri: embeddedQuoteUri,
+      sourceAuthorActorUri: actorUri.href,
+      sourceUri,
+    });
+    if (!pendingConsent) {
+      return false;
+    }
+    const revocation = await applyInboundQuoteRevocation({
+      approvalUri: approvalUri.href,
+      consentId: pendingConsent.id,
+      quoteUri: embeddedQuoteUri ?? pendingConsent.quoteUri,
+      sourceAuthorActorUri: actorUri.href,
+      sourceUri,
+    });
+    if (revocation?.forwardingAt) {
+      await forwardClaimedQuoteRevocation(
+        context,
+        revocation.consent,
+        approvalUri.href,
+        revocation.forwardingAt,
+      );
+    }
+    return revocation !== null;
+  }
+
   if (
     consent.sourceAuthorActorUri !== actorUri.href ||
     approvalUri.origin !== actorUri.origin ||
@@ -625,15 +703,23 @@ export const handleInboundQuoteRevocation = async (
     return true;
   }
 
-  await applyInboundQuoteRevocation({
+  const revocation = await applyInboundQuoteRevocation({
     approvalUri: approvalUri.href,
+    quoteUri: consent.quoteUri,
     sourceAuthorActorUri: actorUri.href,
+    sourceUri: consent.sourceUri,
   });
   if (
-    consent.status === PostQuoteConsentStatus.APPROVED ||
-    consent.status === PostQuoteConsentStatus.REVOKED
+    revocation?.forwardingAt &&
+    (consent.status === PostQuoteConsentStatus.APPROVED ||
+      consent.status === PostQuoteConsentStatus.REVOKED)
   ) {
-    await forwardQuoteRevocation(context, consent);
+    await forwardClaimedQuoteRevocation(
+      context,
+      revocation.consent,
+      approvalUri.href,
+      revocation.forwardingAt,
+    );
   }
   return true;
 };

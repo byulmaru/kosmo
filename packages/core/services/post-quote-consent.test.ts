@@ -11,7 +11,6 @@ import {
   PostQuotePolicies,
   Posts,
   ProfileBlocks,
-  ProfileFollows,
   Profiles,
 } from '../db';
 import {
@@ -21,7 +20,6 @@ import {
   PostQuoteEffectKind,
   PostQuoteEffectReceiptStatus,
   PostQuotePolicy,
-  PostState,
   PostVisibility,
   ProfileFollowPolicy,
   ProfileState,
@@ -32,9 +30,7 @@ import { createPost, deletePost } from './post';
 import {
   canDisplayQuoteSource,
   completePostQuoteEffectReceipt,
-  getPostQuotePolicy,
   replayPendingPostQuoteEffects,
-  sourceCanBeQuotedBy,
   updatePostQuotePolicy,
 } from './post-quote-consent';
 
@@ -77,7 +73,15 @@ test('Local content-bearing Post는 quote policy를 기본값과 함께 저장�
     visibility: PostVisibility.PUBLIC,
   });
 
-  assert.equal(await getPostQuotePolicy(post.post.id), PostQuotePolicy.EVERYONE);
+  assert.equal(
+    await db
+      .select({ policy: PostQuotePolicies.policy })
+      .from(PostQuotePolicies)
+      .where(eq(PostQuotePolicies.postId, post.post.id))
+      .then(firstOrThrow)
+      .then(({ policy }) => policy),
+    PostQuotePolicy.EVERYONE,
+  );
   await assert.rejects(
     updatePostQuotePolicy({
       actorProfileId: other.id,
@@ -94,7 +98,15 @@ test('Local content-bearing Post는 quote policy를 기본값과 함께 저장�
     }),
     PostQuotePolicy.FOLLOWERS,
   );
-  assert.equal(await getPostQuotePolicy(post.post.id), PostQuotePolicy.FOLLOWERS);
+  assert.equal(
+    await db
+      .select({ policy: PostQuotePolicies.policy })
+      .from(PostQuotePolicies)
+      .where(eq(PostQuotePolicies.postId, post.post.id))
+      .then(firstOrThrow)
+      .then(({ policy }) => policy),
+    PostQuotePolicy.FOLLOWERS,
+  );
   const receipt = await db
     .select()
     .from(PostQuoteEffectReceipts)
@@ -103,28 +115,6 @@ test('Local content-bearing Post는 quote policy를 기본값과 함께 저장�
   assert.equal(receipt.effectKind, PostQuoteEffectKind.POLICY_UPDATE);
   assert.equal(receipt.revision, 2);
   assert.equal(receipt.status, 'PENDING');
-});
-
-test('quote policy는 Content 없는 Repost와 remote Post에 합성되지 않는다', async () => {
-  const author = await createProfile();
-  const source = await createPost({
-    document: postContentDocumentFromText('source'),
-    origin: 'LOCAL',
-    profileId: author.id,
-    visibility: PostVisibility.PUBLIC,
-  });
-  const repost = await db
-    .insert(Posts)
-    .values({
-      profileId: author.id,
-      repostSourceId: source.post.id,
-      state: PostState.ACTIVE,
-      visibility: PostVisibility.UNLISTED,
-    })
-    .returning()
-    .then(firstOrThrow);
-
-  assert.equal(await getPostQuotePolicy(repost.id), null);
 });
 
 test('pending effect receipt는 Worker 재시작에서 같은 workflow identity로 bounded replay된다', async (t) => {
@@ -178,6 +168,45 @@ test('pending effect receipt는 Worker 재시작에서 같은 workflow identity�
   );
 });
 
+test('pending effect replay는 앞 batch 실패와 무관하게 101번째 receipt까지 진행한다', async (t) => {
+  const author = await createProfile();
+  const post = await createPost({
+    document: postContentDocumentFromText('replay backlog'),
+    origin: 'LOCAL',
+    profileId: author.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const backlog = await db
+    .insert(PostQuoteEffectReceipts)
+    .values(
+      Array.from({ length: 101 }, (_, index) => ({
+        effectKey: `test-post-quote-backlog:${post.post.id}:${index}`,
+        effectKind: PostQuoteEffectKind.POLICY_UPDATE,
+        postId: post.post.id,
+        revision: 1000 + index,
+      })),
+    )
+    .returning();
+  const firstReceipt = backlog[0];
+  const tailReceipt = backlog.at(-1);
+  assert.ok(firstReceipt && tailReceipt);
+  const start = t.mock.method(temporalClient.workflow, 'start', async (_workflow, options) => {
+    if (options.workflowId === `post-quote-policy-effects:${post.post.id}:1000`) {
+      throw new Error('poison receipt');
+    }
+    return undefined as never;
+  });
+
+  await replayPendingPostQuoteEffects(100);
+
+  assert.ok(
+    start.mock.calls.some(
+      ({ arguments: [, options] }) =>
+        options.workflowId === `post-quote-policy-effects:${post.post.id}:1100`,
+    ),
+  );
+});
+
 test('quote eligibility는 정책·실제 Follow·양방향 Block을 적용하고 기존 승인은 유지한다', async () => {
   const sourceAuthor = await createProfile();
   const quoteAuthor = await createProfile();
@@ -197,10 +226,6 @@ test('quote eligibility는 정책·실제 Follow·양방향 Block을 적용하�
   });
 
   assert.equal(
-    await sourceCanBeQuotedBy(db, { actorProfileId: quoteAuthor.id, sourcePostId: source.post.id }),
-    true,
-  );
-  assert.equal(
     await canDisplayQuoteSource(db, {
       quotePostId: quote.post.id,
       sourcePostId: source.post.id,
@@ -215,32 +240,11 @@ test('quote eligibility는 정책·실제 Follow·양방향 Block을 적용하�
     postId: source.post.id,
   });
   assert.equal(
-    await sourceCanBeQuotedBy(db, { actorProfileId: viewer.id, sourcePostId: source.post.id }),
-    false,
-  );
-  assert.equal(
     await canDisplayQuoteSource(db, {
       quotePostId: quote.post.id,
       sourcePostId: source.post.id,
       viewerProfileId: viewer.id,
     }),
-    true,
-  );
-
-  await db
-    .update(PostQuotePolicies)
-    .set({ policy: PostQuotePolicy.FOLLOWERS })
-    .where(eq(PostQuotePolicies.postId, source.post.id));
-  assert.equal(
-    await sourceCanBeQuotedBy(db, { actorProfileId: viewer.id, sourcePostId: source.post.id }),
-    false,
-  );
-  await db.insert(ProfileFollows).values({
-    followerProfileId: viewer.id,
-    followeeProfileId: sourceAuthor.id,
-  });
-  assert.equal(
-    await sourceCanBeQuotedBy(db, { actorProfileId: viewer.id, sourcePostId: source.post.id }),
     true,
   );
 
@@ -319,4 +323,53 @@ test('Local Source 삭제는 승인 lifecycle과 동일 transaction에 원격 �
   assert.equal(receipt.approvalUri, approvalUri);
   assert.equal(receipt.sourcePostId, source.post.id);
   assert.equal(receipt.status, 'PENDING');
+});
+
+test('Remote Source 삭제는 Local Quote audience 갱신 receipt를 남긴다', async () => {
+  const sourceAuthor = await createProfile(InstanceKind.ACTIVITYPUB);
+  const quoteAuthor = await createProfile();
+  const source = await createPost({
+    document: postContentDocumentFromText('remote source'),
+    origin: 'LOCAL',
+    profileId: sourceAuthor.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const quote = await createPost({
+    document: postContentDocumentFromText('local quote'),
+    origin: 'LOCAL',
+    profileId: quoteAuthor.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  await db.update(Posts).set({ repostSourceId: source.post.id }).where(eq(Posts.id, quote.post.id));
+  const consent = await db
+    .insert(PostQuoteConsents)
+    .values({
+      approvalUri: 'https://remote-source.example/quote-authorizations/local-quote',
+      quoteAuthorActorUri: `https://${quoteAuthor.displayName}.example/ap/actor/${quoteAuthor.id}`,
+      quoteAuthorProfileId: quoteAuthor.id,
+      quotePostId: quote.post.id,
+      quoteUri: `https://${quoteAuthor.displayName}.example/ap/note/${quote.post.id}`,
+      requestUri: `https://${quoteAuthor.displayName}.example/ap/quote-request/${quote.post.id}`,
+      sourceAuthorActorUri: 'https://remote-source.example/users/author',
+      sourcePostId: source.post.id,
+      sourceUri: 'https://remote-source.example/notes/source',
+      status: PostQuoteConsentStatus.APPROVED,
+    })
+    .returning()
+    .then(firstOrThrow);
+
+  await deletePost({
+    actorProfileId: sourceAuthor.id,
+    origin: 'ACTIVITYPUB',
+    postId: source.post.id,
+  });
+
+  const receipt = await db
+    .select()
+    .from(PostQuoteEffectReceipts)
+    .where(eq(PostQuoteEffectReceipts.consentId, consent.id))
+    .then(firstOrThrow);
+  assert.equal(receipt.effectKind, PostQuoteEffectKind.CONSENT_UPDATE);
+  assert.equal(receipt.postId, quote.post.id);
+  assert.equal(receipt.revision, 2);
 });

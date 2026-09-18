@@ -477,6 +477,24 @@ describe('ActivityPub Local Post delivery', () => {
     assert.ok(regularNote);
     assert.equal(regularNote.object.quoteId, null);
 
+    await db
+      .update(ActivityPubActors)
+      .set({ inboxUri: null })
+      .where(eq(ActivityPubActors.profileId, sourceAuthor.profile.id));
+    await assert.rejects(
+      sendLocalPostQuoteRequest({
+        consentId: consent.id,
+        postId: quote.id,
+        revision: consent.revision,
+      }),
+      /delivery identity is incomplete/,
+    );
+    assert.equal(fixture.calls.length, 0);
+    await db
+      .update(ActivityPubActors)
+      .set({ inboxUri: 'https://remote.example/inbox' })
+      .where(eq(ActivityPubActors.profileId, sourceAuthor.profile.id));
+
     await sendLocalPostQuoteRequest({
       consentId: consent.id,
       postId: quote.id,

@@ -415,9 +415,25 @@ export const PostQuoteConsents = pgTable(
     unique().on(table.sourcePostId, table.quoteUri, table.quoteAuthorActorUri),
     index().on(table.sourcePostId),
     index().on(table.quotePostId),
-    index().on(table.approvalUri),
+    index('post_quote_consent_binding_index').on(
+      table.status,
+      table.sourceAuthorActorUri,
+      table.sourceUri,
+      table.quoteUri,
+    ),
   ],
 );
+
+export const PostQuoteRevocations = pgTable('post_quote_revocation', {
+  id: id(),
+  approvalUri: text('approval_uri').notNull().unique(),
+  sourceAuthorActorUri: text('source_author_actor_uri').notNull(),
+  sourceUri: text('source_uri').notNull(),
+  quoteUri: text('quote_uri'),
+  forwardingAt: datetime('forwarding_at'),
+  forwardedAt: datetime('forwarded_at'),
+  createdAt: createdAt(),
+});
 
 export const PostQuoteEffectReceipts = pgTable(
   'post_quote_effect_receipt',
