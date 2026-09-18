@@ -1,6 +1,9 @@
 # KOSMO 디자인 문서
 
-KOSMO의 UI/프로덕트 디자인 결정을 기록하고 공유하는 문서 모음이다. 디자인 관련 코드 변경이나 Figma 작업을 하기 전에 이 문서들을 먼저 확인한다.
+KOSMO의 UI/시각 디자인, 상호작용 표현, 접근성 결정을 기록하고 공유하는 문서 모음이다. 디자인 관련 코드
+변경이나 Figma 작업을 하기 전에 이 문서들을 먼저 확인한다. 제품 도메인 정책·권한·상태 전이·서버 행동의
+정본은 `docs/domain`, 승인된 ADR과 Linear 이슈에 있으며, 이 문서 모음은 그 정책을 대신 결정하거나 재정의하지
+않는다.
 
 ## 문서 목록
 
@@ -13,7 +16,7 @@ KOSMO의 UI/프로덕트 디자인 결정을 기록하고 공유하는 문서 �
 - [motion.md](./motion.md) — duration, easing, component motion과 OS reduced-motion 대체 규칙
 - [logo.md](./logo.md) — 확정 로고 자산, clear space와 플랫폼별 소비처
 - [page-header.md](./page-header.md) — 주요 화면 공용 헤더의 variant, 높이와 소유권
-- [settings.md](./settings.md) — 인증 설정 route, Account/Profile 정보 구조와 공통 상태 계약
+- [settings.md](./settings.md) — 인증 설정 화면의 시각 구조, 반응형 배치, 공통 상태 표현과 접근성
 - [feedback.md](./feedback.md) — Web 피드백 page의 정보 위계와 후속 popup 재사용 경계
 - [typography.md](./typography.md) — 폰트 사용 규칙
 - [breakpoints.md](./breakpoints.md) — 레이아웃 브레이크포인트 단계와 컨벤션
