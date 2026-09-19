@@ -9,7 +9,12 @@ import {
   prepareProfileBlockProtocolUndo,
   recordProfileBlockProtocolTombstone,
 } from '@kosmo/core/services';
-import { executeProfileBlock, executeProfileUnblock } from '@kosmo/core/temporal/profile-block';
+import { runWorkflow } from '@kosmo/core/temporal/client';
+import {
+  profileBlockWorkflow,
+  profileUnblockUpdateId,
+  profileUnblockWorkflow,
+} from '@kosmo/core/temporal/profile-block';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
 import { resolveInboundLocalRecipient } from './inbound-local-recipient';
 import { observeInbound } from './inbound-observability';
@@ -18,12 +23,22 @@ import {
   RemoteActorMaterializationError,
 } from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
+import type { ProfileBlockTransitionResult } from '@kosmo/core/temporal/profile-block';
+
+const isExpectedTemporalAdmissionRejection = (
+  error: unknown,
+): error is Error & { readonly type: string } =>
+  error instanceof Error &&
+  'type' in error &&
+  typeof error.type === 'string' &&
+  ['CONFLICT', 'NOT_FOUND', 'PERMISSION_DENIED', 'VALIDATION'].includes(error.type);
 
 const isExpectedAdmissionRejection = (error: unknown) =>
   error instanceof ConflictError ||
   error instanceof NotFoundError ||
   error instanceof RemoteActorMaterializationError ||
-  error instanceof ValidationError;
+  error instanceof ValidationError ||
+  isExpectedTemporalAdmissionRejection(error);
 
 const observeRejectedBlock = ({
   actorUri,
@@ -113,9 +128,9 @@ export const handleInboundBlock = async (
     throw error;
   }
 
-  let result: Awaited<ReturnType<typeof executeProfileBlock>>;
+  let result: ProfileBlockTransitionResult;
   try {
-    result = await executeProfileBlock({
+    const command = {
       ownerProfileId: remoteActor.profile.id,
       origin: 'ACTIVITYPUB',
       protocolActivity: {
@@ -127,6 +142,13 @@ export const handleInboundBlock = async (
         targetProfileId: localRecipient.id,
       },
       targetProfileId: localRecipient.id,
+    } as const;
+    result = await runWorkflow(profileBlockWorkflow, {
+      args: [command],
+      updateArgs: [command],
+      mode: 'update-with-start',
+      workflowIdConflictPolicy: 'USE_EXISTING',
+      workflowIdReusePolicy: 'ALLOW_DUPLICATE',
     });
   } catch (error) {
     if (isExpectedAdmissionRejection(error)) {
@@ -345,12 +367,20 @@ export const handleInboundUndoBlock = async ({
     return true;
   }
 
-  const result = await executeProfileUnblock({
+  const command = {
     ownerProfileId: stored.ownerProfileId,
     origin: 'ACTIVITYPUB',
     profileBlockId: stored.profileBlockId,
     protocolActivityUri: stored.activityUri,
     targetProfileId: stored.targetProfileId,
+  } as const;
+  const result = await runWorkflow(profileUnblockWorkflow, {
+    args: [command],
+    updateArgs: [command],
+    updateId: profileUnblockUpdateId(command),
+    mode: 'update-with-start',
+    workflowIdConflictPolicy: 'USE_EXISTING',
+    workflowIdReusePolicy: 'ALLOW_DUPLICATE',
   });
   await finalizeProfileBlockProtocolUndo({
     activityUri: stored.activityUri,
