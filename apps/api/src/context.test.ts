@@ -31,4 +31,21 @@ describe('GraphQL request context', () => {
     assert.equal(loader, loaderAgain);
     assert.equal(context.$loaders.size, 1);
   });
+
+  it('memoizes loader results within the request by key', async () => {
+    const context = await createRequestContext();
+    let loadCount = 0;
+    const loader = context.loader({
+      name: 'request-context-cache',
+      load: async (keys: string[]) => {
+        loadCount += 1;
+        return keys.map((key) => ({ key }));
+      },
+      key: (row) => row.key,
+    });
+
+    await loader.load('same-key');
+    await loader.load('same-key');
+    assert.equal(loadCount, 1);
+  });
 });

@@ -7,17 +7,10 @@ import { builder } from '@/graphql/builder';
 import { createObjectRef } from '@/graphql/utils';
 import { mediaByIdLoader } from '../media/loader/by-id';
 import { Media } from '../media/ref';
-import { postAccessWhere } from './access';
 import { postVisibilityAccessWhere } from './access/visibility';
+import { postByIdLoader } from './loader/by-id';
 
-export const Post = createObjectRef('Post', (ids, ctx) =>
-  db
-    .select(getColumns(Posts))
-    .from(Posts)
-    .innerJoin(Profiles, eq(Posts.profileId, Profiles.id))
-    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .where(and(inArray(Posts.id, ids), postAccessWhere({ ctx, profileMute: 'ignore' }))),
-);
+export const Post = createObjectRef('Post', (ids, ctx) => postByIdLoader(ctx).loadMany(ids));
 
 Post.implement({
   fields: (t) => ({
