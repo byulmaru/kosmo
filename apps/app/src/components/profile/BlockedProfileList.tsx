@@ -22,7 +22,6 @@ type Props = { state: BlockedProfileListState };
 /** The action owner composes rows; this list does not execute relationship mutations. */
 export function BlockedProfileList({ state }: Props) {
   const theme = useTheme();
-  const headingRef = useRef<View>(null);
   const { showToast } = useToast();
   const loadError =
     state.status === 'error'
@@ -46,17 +45,14 @@ export function BlockedProfileList({ state }: Props) {
         tone: 'danger',
         action: {
           label: '다시 시도',
-          onPress: () => {
-            headingRef.current?.focus();
-            retryRef.current?.();
-          },
+          onPress: () => retryRef.current?.(),
         },
       });
     }
   }, [errorMessage, showToast]);
   return (
     <ScrollView contentContainerStyle={styles.root}>
-      <View accessible accessibilityRole="header" ref={headingRef} tabIndex={-1}>
+      <View accessible accessibilityRole="header">
         <Text
           style={[
             styles.heading,

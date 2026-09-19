@@ -36,6 +36,10 @@ export type StoryProfile = {
     follow: { follower?: { followingCount: number; id: string } | null; id: string } | null;
     followRequest: { id: string } | null;
     isSelf: boolean;
+    profileBlock?: {
+      id: string;
+      targetProfile: Pick<StoryProfile, 'displayName' | 'id' | 'relativeHandle'>;
+    } | null;
     profileMute?: { id: string } | null;
     membership?: { role: 'MEMBER' | 'OWNER' } | null;
   } | null;
@@ -62,11 +66,18 @@ export function profile(overrides: Partial<StoryProfile> = {}): StoryProfile {
     overrides.defaultPostVisibility === undefined ? 'UNLISTED' : overrides.defaultPostVisibility;
   const viewerState =
     overrides.viewerState === undefined
-      ? { follow: null, followRequest: null, isSelf: false, profileMute: null }
+      ? {
+          follow: null,
+          followRequest: null,
+          isSelf: false,
+          profileBlock: null,
+          profileMute: null,
+        }
       : overrides.viewerState === null
         ? null
         : {
             ...overrides.viewerState,
+            profileBlock: overrides.viewerState.profileBlock ?? null,
             profileMute: overrides.viewerState.profileMute ?? null,
           };
   return {

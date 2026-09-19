@@ -16,7 +16,8 @@ export const RowComposition: Story = {
     args.onSelectAction.mockClear();
     const canvas = within(canvasElement);
     const action = canvas.getByRole('button', { name: `${args.displayName} 차단 해제` });
-    expect(action.getBoundingClientRect().width).toBe(88);
+    expect(action.getBoundingClientRect().width).toBe(96);
+    expect(action.getBoundingClientRect().height).toBe(40);
     await userEvent.click(action);
     expect(args.onSelectAction).toHaveBeenCalledWith('kosmo');
     expect(canvas.getByText(args.displayName)).toBeVisible();
@@ -33,9 +34,6 @@ export const InitialRetry: Story = {
     expect(within(toast).getByText('차단한 프로필을 불러오지 못했어요')).toBeVisible();
     await userEvent.click(within(toast).getByRole('button', { name: '다시 시도' }));
     expect(args.onRetry).toHaveBeenCalledTimes(1);
-    await waitFor(() =>
-      expect(canvas.getByRole('heading', { name: '차단한 프로필' })).toHaveFocus(),
-    );
     expect(await canvas.findByText(args.displayName)).toBeVisible();
   },
 };

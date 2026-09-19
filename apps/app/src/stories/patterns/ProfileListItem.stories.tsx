@@ -113,7 +113,7 @@ function ProfileListItemCatalog() {
 
   return (
     <Catalog>
-      <Section title="Bio and Medium action">
+      <Section title="Bio and relation action">
         <ProfileListItem linked profile={requireProfile(profiles, withBio.id).listItem} />
       </Section>
       <Section title="Following and no bio">
