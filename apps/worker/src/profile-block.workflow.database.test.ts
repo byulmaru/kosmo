@@ -144,6 +144,9 @@ test(
         rows.map(({ id }) => id),
         [firstResult.profileBlockId],
       );
+      await environment.client.workflow
+        .getHandle(profileBlockWorkflow.workflowIdFromArgs(input))
+        .result();
       const duplicate = await runBlock(input, `${PROFILE_BLOCK_UPDATE_ID}:duplicate`);
       assert.deepEqual(duplicate, { ...firstResult, created: false });
     } finally {

@@ -38,6 +38,21 @@ Profile Block의 도메인 계약은 Owner Profile이 Local인지 Remote인지 �
 인증된 selected Profile을 사용하며, 선택 자격에 Profile Origin·Role·생성자 조건을 추가하지 않는다.
 remote ActivityPub ingress와 Block/Undo 전달은 `PROD-818`의 후속 범위다.
 
+ActivityPub 연합은 [ADR 0031](../decisions/0031-profile-block-federation.md)에 따라 Mastodon 호환 발신·수신을
+지원한다. Local Owner가 Remote Target을 차단하거나 해제하면 `Block` 또는 `Undo(Block)`를 Target의 원격
+서버에 전달한다. 차단 사실은 그 서버에 알려지며, 상대 서버의 표시·알림과 실제 제한 적용은 보장하지 않는다.
+원격 전달 실패는 확정된 로컬 차단·해제를 되돌리지 않는다.
+
+검증된 Remote Owner의 Local Target 차단은 같은 Profile Block 관계와 차단 생성의 필수 cleanup을 사용한다. Remote
+Owner는 자기 방향의 관계만 생성·제거하며, 반대 방향 Local Owner의 Block은 변경하지 않는다. 수신한 차단·해제를
+다시 같은 `Block` 또는 `Undo(Block)`로 발신하지 않는다.
+
+Profile Block과 연합 기능은 함께 사용 가능해졌으므로 protocol 원본 없이 먼저 존재하던 발신 대상 Profile Block을
+legacy 상태로 취급하지 않는다. 발신 대상인 모든 Local Owner → Remote Target 해제는 exact `profileBlockId`로
+안정적인 원본 identity를 구성해 `Undo(Block)`만 전달한다. metadata 부재를 이유로 선행 `Block`을 만들거나 해제를
+생략하지 않으며, 상대 서버가 원본을 모르는 경우 Undo no-op을 허용한다. inbound Undo는 embedded object가 실제
+`Block`일 때만 이 관계를 변경하며 URI-only와 non-Block Activity는 URI 일치만으로 Block으로 추론하지 않는다.
+
 ## 권한
 
 | 권한                 | 종류      | 성립 조건                                             |

@@ -2,6 +2,7 @@ import { createFederation, MemoryKvStore } from '@fedify/fedify';
 import {
   Accept,
   Announce,
+  Block,
   Create,
   Delete,
   EmojiReact,
@@ -28,6 +29,7 @@ import {
   observeInbound,
   withInboundObservability,
 } from './inbound-observability';
+import { handleInboundBlock } from './inbound-profile-block';
 import { handleInboundReaction } from './inbound-reaction';
 import { handleInboundReject } from './inbound-reject';
 import { handleInboundUpdate } from './inbound-update';
@@ -184,6 +186,7 @@ federation
   .setInboxListeners('/ap/actor/{identifier}/inbox', '/inbox')
   .on(Accept, withInboundObservability('accept', handleInboundAccept))
   .on(Announce, withInboundObservability('announce', handleInboundAnnounce))
+  .on(Block, withInboundObservability('block', handleInboundBlock))
   .on(Create, withInboundObservability('create', handleInboundCreate))
   .on(Delete, withInboundObservability('delete', handleInboundDelete))
   .on(EmojiReact, withInboundObservability('reaction', handleInboundReaction))
