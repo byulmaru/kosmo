@@ -37,7 +37,6 @@ const ProfileLayoutQuery = graphql`
   query ProfileLayoutQuery($handle: String!) {
     profileBlockStatus(handle: $handle) {
       blockedBy
-      blocking
       ...ProfileHero_profileBlockStatus
     }
     profileByHandle(handle: $handle) {
@@ -52,6 +51,9 @@ const ProfileLayoutQuery = graphql`
         isSelf
         membership {
           role
+        }
+        profileBlock {
+          id
         }
       }
       ...ProfileHero_profile
@@ -180,7 +182,7 @@ function ProfileLayoutContent({
     label: profile?.relativeHandle ?? '',
   });
   const blockStatus = data.profileBlockStatus;
-  const blocking = Boolean(blockStatus?.blocking);
+  const blocking = Boolean(profile?.viewerState?.profileBlock);
   const blockedBy = Boolean(blockStatus?.blockedBy);
 
   if (!profile) {
