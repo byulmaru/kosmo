@@ -83,6 +83,11 @@ export default function PrivacyScreen() {
         있는 권리를 안내합니다.
       </PolicyParagraph>
 
+      <PolicyParagraph>
+        현재 PostHog 제품 분석과 Session Replay의 신규 수집은 중단되어 있습니다. 아래 PostHog 관련
+        내용은 수집을 재개할 때 적용할 처리 범위이며, 시행일은 별도로 공지합니다.
+      </PolicyParagraph>
+
       <PolicySection title="1. 개인정보 처리 목적·항목·보유기간 및 근거">
         <SubsectionTitle>동의를 받아 처리하는 개인정보</SubsectionTitle>
         <PolicyParagraph>별도의 동의를 받아 처리하는 항목은 없습니다.</PolicyParagraph>
