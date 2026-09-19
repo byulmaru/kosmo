@@ -32,7 +32,6 @@
 
 ### Requirement: Follow-cause Notification cleanup follows the Profile Block transaction
 
-
 **Authority / Provenance:** `docs/domain/objects/profile-block.md`, `docs/domain/objects/follow-relationship.md`, `docs/domain/objects/follow-request.md`, `docs/domain/objects/notification.md`, `docs/domain/decisions/0003-policy-ownership-clarifications.md`, `docs/domain/decisions/0009-pending-only-follow-request-lifecycle.md`, `PROD-821`. 새 Profile Block 관계를 저장하는 Profile Block transaction에서 제거하는 Follow Request 또는 Follow Relationship을 직접 원인으로 가진 Notification은 같은 transaction에서 제거해야 한다(MUST). 이미 Profile Block 관계가 존재한 뒤 동시성이나 후속 경로로 뒤늦게 관찰되는 Notification은 Active Block pair 정책으로 처리해야 하며(MUST), duplicate Block이나 Unblock의 보상 cleanup으로 처리해서는 안 된다(MUST NOT). 제거된 Follow 객체가 직접 원인이 아닌 다른 기존 Notification과 Repost·Reaction·Bookmark 관계의 Notification은 이 action에서 동기적으로 삭제하거나 Read State를 바꾸지 않아야 한다(MUST NOT). commit 뒤 별도 effect의 성공·실패는 Profile Block 관계 성공을 바꾸지 않아야 한다(MUST NOT).
 
 #### Scenario: 제거된 Follow Request/Relationship 직접 원인 Notification을 transaction에서 정리한다
