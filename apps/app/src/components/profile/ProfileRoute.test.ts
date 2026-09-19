@@ -5,7 +5,6 @@ import { createContext, createElement, useContext, useState } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ComponentType, ReactNode, Ref } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
-import type { UseAutomaticPaginationResult } from '../pagination/useAutomaticPagination';
 import type { FollowButton as FollowButtonExport } from './FollowButton';
 import type {
   ProfileBlockAction as ProfileBlockActionExport,
@@ -37,7 +36,6 @@ const queryHistory: Array<{
 const pending = new Promise<never>(() => undefined);
 
 type RouteParams = { profileHandle?: string | string[] };
-type NativeScrollProps = UseAutomaticPaginationResult['nativeScrollProps'];
 type ReportMenuInput = {
   id: string;
   kind: 'PROFILE';
@@ -72,12 +70,6 @@ let profileInstanceKind: 'ACTIVITYPUB' | 'LOCAL' = 'LOCAL';
 const routerHistory: string[] = [];
 let routerBackCount = 0;
 let sessionId: string | null = null;
-let usePaginationScrollRegistration: (props: NativeScrollProps | null) => void = () => undefined;
-let routeMetrics = {
-  contentHeight: 0,
-  layoutHeight: 0,
-  scrollOffset: 0,
-};
 let selectedProfileId: string | null = null;
 let profileBlockStatus: {
   blockedBy: boolean;
@@ -433,7 +425,6 @@ let FollowButton: typeof FollowButtonExport;
 before(async () => {
   ({ ProfileBlockAction } = await import('./ProfileBlockAction'));
   ({ FollowButton } = await import('./FollowButton'));
-  ({ usePaginationScrollRegistration } = await import('../pagination/PaginationScrollView'));
   ({ default: ProfileFollowersPage } =
     await import('../../app/(tabs)/(profile)/[profileHandle]/followers'));
   ({ default: ProfileFollowingPage } =
