@@ -1535,6 +1535,10 @@ test(
           await effectReleased;
           throw ApplicationFailure.nonRetryable('ActivityPub effect failed');
         },
+        sendProfileBlockActivity: async (profileBlockId: string, options: unknown) => {
+          assert.equal(profileBlockId, execution.result.profileBlockId);
+          assert.deepEqual(options, { createIfMissing: true });
+        },
       },
       connection: environment.nativeConnection,
       namespace: environment.namespace,
