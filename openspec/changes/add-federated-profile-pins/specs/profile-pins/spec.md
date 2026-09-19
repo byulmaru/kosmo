@@ -18,7 +18,7 @@ Mentioned Profiles Post, Content 없는 pure Repost와 다른 Profile이 작성�
 
 #### Scenario: Pin an eligible Local Post
 
-- **WHEN** Profile Owner가 현재 Local Profile이 작성한 Active Content Post·Reply·Quote를 고정하고 Post Visibility가
+- **WHEN** Profile Member가 현재 Local Profile이 작성한 Active Content Post·Reply·Quote를 고정하고 Post Visibility가
   Public, Unlisted 또는 Followers Only다
 - **THEN** 시스템은 해당 Post를 Local Profile의 server-authoritative ordered pin collection에 추가한다
 - **AND** 같은 Profile의 기존 pinned Post 관계는 유지한다
@@ -56,7 +56,7 @@ Repost와 다른 Profile 작성 Post로 교체해서는 안 된다(MUST NOT). �
 
 #### Scenario: Replace the current Local pin after confirmation
 
-- **WHEN** Owner가 다른 eligible Post를 선택하고 기존 ModalSheet 교체 확인을 완료하며, 확인 당시의 current pinned Post
+- **WHEN** Member가 다른 eligible Post를 선택하고 기존 ModalSheet 교체 확인을 완료하며, 확인 당시의 current pinned Post
   기대값이 아직 일치한다
 - **THEN** 시스템은 현재 UI slot에 해당하는 기존 pinned 관계를 새 Post로 원자적으로 교체한다
 - **AND** 그 외 ordered pinned 관계는 보존한다
@@ -121,7 +121,7 @@ cleanup은 기존 lifecycle 구현 선택으로 둔다. Profile이 deactivated, 
 #### Scenario: Add a new pin after an existing pin loses eligibility
 
 - **WHEN** Local Profile의 기존 pinned Post가 Tombstone, unavailable, 작성자 자격 상실 또는 Visibility 자격 상실 상태가
-  된 뒤 Owner가 새 eligible Post를 고정한다
+  된 뒤 Member가 새 eligible Post를 고정한다
 - **THEN** 시스템은 기존 Post를 제품상 visible pin으로 취급하지 않고 새 Post를 ordered pin collection에 추가한다
 - **AND** 물리 cleanup 방식은 이 결과를 바꾸지 않는다
 

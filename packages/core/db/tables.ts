@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  bigserial,
   check,
   index,
   integer,
@@ -538,6 +539,24 @@ export const ProfileMutes = pgTable(
     unique().on(table.ownerProfileId, table.targetProfileId),
     index().on(table.ownerProfileId, table.id.desc()),
     index().on(table.targetProfileId),
+  ],
+);
+
+export const ProfilePins = pgTable(
+  'profile_pin',
+  {
+    id: id(),
+    profileId: uuid('profile_id')
+      .notNull()
+      .references(() => Profiles.id, { onDelete: 'cascade' }),
+    postId: uuid('post_id')
+      .notNull()
+      .references(() => Posts.id, { onDelete: 'cascade' }),
+    orderKey: bigserial('order_key', { mode: 'bigint' }).notNull(),
+  },
+  (table) => [
+    unique().on(table.profileId, table.postId),
+    index().on(table.profileId, table.orderKey, table.id),
   ],
 );
 

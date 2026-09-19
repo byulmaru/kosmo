@@ -51,6 +51,7 @@ export type { AcceptProfileFollowRequestResult } from './profile-follow-transact
 export type { PrepareProfileMigrationInput } from './profile-migration';
 export { prepareProfileMigration } from './profile-migration';
 export { muteProfile, unmuteProfile } from './profile-mute';
+export { pinProfilePost, replaceCurrentProfilePin, unpinProfilePost } from './profile-pin';
 export { updateProfile } from './profile-update';
 export { findEligiblePushInstallations, invalidatePushInstallation } from './push-installation';
 export { addReaction, deleteReaction } from './reaction';
