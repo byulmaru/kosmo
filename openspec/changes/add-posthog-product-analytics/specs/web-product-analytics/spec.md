@@ -136,7 +136,13 @@
 
 ### Requirement: Session Replay Cloud privacy controls
 
-**Authority / Provenance:** `PROD-820`, `PROD-741`, `PROD-795`, `PROD-575` — production Web SDK 배포 전에 `Kosmo Production`은 Session Replay 10% sampling, production canonical origin 제한, input·textarea와 canonical Post Content masking, 30일 retention을 적용해야 한다(MUST). Standard event metadata 수집은 이 Replay 계약과 별도로 적용한다(MUST). PROD-741은 이 설정을 처음 활성화하지 않고 실제 replay 품질·masking·fail-open을 acceptance 해야 한다(MUST).
+**Authority / Provenance:** `PROD-820`, `PROD-741`, `PROD-795`, `PROD-575`와 [PR #955](https://github.com/byulmaru/kosmo/pull/955)에 기록된 최신 사용자 결정 — 제품 분석을 먼저 활성화해도 Session Replay는 PROD-741 완료 뒤 별도 결정·검증까지 비활성화해야 한다(MUST). 이후 Replay를 활성화할 때는 `Kosmo Production`의 10% sampling, production canonical origin 제한, input·textarea와 canonical Post Content masking, 30일 retention을 확인해야 한다(MUST). Standard event metadata 수집은 이 Replay 계약과 별도로 적용한다(MUST). 아래 recording 관련 scenario는 향후 Replay 활성화 시 검증할 범위다.
+
+#### Scenario: 제품 분석만 먼저 활성화한다
+
+- **WHEN** PR #955의 제품 분석 활성화 결정을 적용한다
+- **THEN** 표준 제품 분석은 수집하되 Session Replay는 기록하거나 업로드하지 않는다
+- **AND** 공개 개인정보 고지는 Replay 비활성 상태와 추후 활성화 시 처리 범위를 구분한다
 
 #### Scenario: production Session Replay 설정을 조회한다
 

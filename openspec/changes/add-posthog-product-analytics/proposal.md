@@ -1,6 +1,6 @@
 ## 현재 범위
 
-이 change는 canonical·Linear 요구사항을 실행하기 위한 선택적 세션 하네스다. PR #714는 PROD-795의 공개 개인정보 처리방침 반영과 최신 main 동기화만 다룬다. 현재 prod 수집 중단과 재개 시 적용할 고지를 구분하며, 수집 재활성화·배포는 수행하지 않는다. PROD-795의 운영 문서·통합 검증, PROD-839의 외부 cleanup과 PROD-741·575의 acceptance는 각 owner의 후속 범위로 남긴다.
+이 change는 canonical·Linear 요구사항을 실행하기 위한 선택적 세션 하네스다. PR #714는 PROD-795의 공개 개인정보 처리방침 반영과 최신 main 동기화만 다룬다. main의 prod 수집 중단과 재개 시 적용할 고지를 구분한다. [PR #955](https://github.com/byulmaru/kosmo/pull/955)에 기록된 최신 결정에 따라 제품 분석을 먼저 활성화해도 Replay는 기록하지 않으며, Replay는 PROD-741 완료 뒤 별도 결정·검증 대상으로 남긴다. 아래 Replay 보호 조건은 이후 활성화하는 경우의 범위다. PR #714에서 수집 재활성화·배포는 수행하지 않는다. PROD-795의 운영 문서·통합 검증, PROD-839의 외부 cleanup과 PROD-741·575의 acceptance는 각 owner의 후속 범위로 남긴다.
 
 ## Why
 

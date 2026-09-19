@@ -182,7 +182,7 @@ Docker와 GitHub production release가 같은 공개 PostHog key·host를 Web bu
 
 ## 6. PROD-795 개인정보·운영 통합
 
-**PR #714 범위 (2026-09-20):** 6.1의 공개 개인정보 고지와 최신 main 동기화다. 현재 prod 수집 중단을 안내하며 재개 시 적용할 수집 범위·시행일 별도 공지를 유지한다. 6.2–6.7의 운영·통합 검증과 그룹 9의 외부 cleanup은 Pending으로 남기며 이번 PR의 고지 검증으로 완료 처리하지 않는다. PR #733의 병합은 외부 설정 삭제·실제 production acceptance 증거를 대신하지 않는다.
+**PR #714 범위 (2026-09-20):** 6.1의 공개 개인정보 고지와 최신 main 동기화다. main의 prod 수집 중단과 재개 시 적용할 수집 범위·시행일 별도 공지를 구분한다. PR #955의 최신 결정에 따라 제품 분석 재개와 Replay 활성화를 분리하며, Replay는 PROD-741 완료 뒤 별도 결정·검증까지 비활성화한다. 아래 Replay 수집·보호 task는 향후 활성화할 경우의 범위다. 6.2–6.7의 운영·통합 검증과 그룹 9의 외부 cleanup은 Pending으로 남기며 이번 PR의 고지 검증으로 완료 처리하지 않는다. PR #733의 병합은 외부 설정 삭제·실제 production acceptance 증거를 대신하지 않는다.
 
 **Authority / Provenance**
 

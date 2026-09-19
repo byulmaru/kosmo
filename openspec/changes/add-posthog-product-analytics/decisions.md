@@ -112,17 +112,17 @@
 - Consequences: 검색 입력 자체는 자유 형식이므로 예상과 달리 개인정보나 민감 정보가 입력돼 수집될 가능성이 남는다. PROD-795 개인정보 처리방침과 runbook은 실제 수집 surface를 설명해야 한다. 게시물·본문·전문 검색 또는 더 넓은 검색 의미를 도입하기 전에 이 결정을 재검토한다. Post Content·Post Media Viewer의 `ph-mask ph-no-capture`와 Cloud Replay 보호는 유지한다.
 - Confirmation / Follow-up: unit config에서 명시적 `false`와 masking hook 부재를 확인하고, `/e/` E2E에서 current/referrer/session URL의 `q`, 기본 click ID, referrer·session에서 파생되는 검색·캠페인 metadata와 `utm_*` 원문 보존을 확인한다. SDK가 사용하는 개별 derived property 이름은 현재 dependency의 관측값으로만 기록하고 계약의 authority로 삼지 않는다. Post Content autocapture 비노출은 별도로 계속 검증한다.
 
-### Session Replay 보호는 Cloud와 표준 masking marker가 소유한다
+### 제품 분석과 Session Replay의 활성화를 분리한다
 
-- Decision Date: 2026-08-28
-- Decision Class: Derived Contract
-- Authority / Provenance: Linear `PROD-820`, `PROD-741`, `PROD-795`, `PROD-575`; PostHog Session Replay privacy documentation
-- Status: Active
-- Context / Problem: Replay 보호를 후속 활성화 이슈로 미루면 표준 SDK 배포와 개인정보 보호 사이에 공백이 생긴다.
-- Decision Outcome: production 배포 전에 Cloud에서 10% sampling, `kos.moe` URL 조건, Normal input masking과 30일 retention을 적용한다. canonical Post Content는 PostHog 표준 `ph-mask ph-no-capture` class로 Replay masking과 autocapture 제외를 함께 지정한다. standard event metadata 수집과 이 Replay 계약은 별도로 검증하며, PROD-741은 activation이 아니라 실제 replay acceptance를 소유한다.
-- Alternatives Considered: Replay 비활성화, 앱 자체 recorder, 모든 text mask는 표준 기능 사용 또는 진단 가치와 맞지 않아 제외했다.
-- Consequences: Cloud 설정과 client marker를 함께 운영해야 하며 실제 사용자 콘텐츠 노출 여부를 PROD-741에서 확인한다.
-- Confirmation / Follow-up: Cloud 설정 증거, marker unit test와 autocapture outbound 증거, production-equivalent replay acceptance를 남긴다.
+- Decision Date: PR #955에 기록된 결정, 2026-09-20 확인
+- Decision Class: Product Decision
+- Authority / Provenance: [PR #955](https://github.com/byulmaru/kosmo/pull/955)에 기록된 @robin-maki의 선택; 보호 조건은 Linear `PROD-820`, `PROD-741`, `PROD-795`, `PROD-575`
+- Status: Active — 2026-08-28의 Replay 동시 활성화 전제를 대체한다.
+- Context / Problem: 현재 제품 분석 신호는 필요하지만 Session Replay의 정책·운영 준비는 끝나지 않았다.
+- Decision Outcome: 제품 분석만 먼저 활성화하고 Session Replay는 PROD-741 완료 뒤 별도 결정·검증까지 기록하지 않는다. 이후 Replay를 활성화할 때는 Cloud의 10% sampling, `kos.moe` URL 조건, Normal input masking과 30일 retention, canonical Post Content의 `ph-mask ph-no-capture` 보호를 확인한다. 표준 event metadata와 Replay 보호는 별도로 검증한다.
+- Alternatives Considered: 제품 분석과 Replay 동시 활성화, 격리된 테스트만 추가하는 안을 검토했다. 필요한 분석 신호를 확보하면서 Replay 준비 전 녹화를 피하기 위해 제품 분석만 먼저 활성화한다.
+- Consequences: 제품 분석이 켜져도 Replay recording은 발생하지 않으며, 개인정보 고지는 현재 비활성 상태와 향후 활성화 시의 처리 범위를 구분한다. 기존 Cloud 보호 설정은 recording 활성화 증거가 아니다.
+- Confirmation / Follow-up: PR #955가 제품 분석 활성화와 Replay 무전송을 검증한다. PR #714는 공개 고지를 맞추며 실제 설정·배포는 변경하지 않는다. PROD-741 완료만으로 Replay를 자동 활성화하지 않고 별도 결정·검증을 남긴다.
 
 ### 분석 장애를 제품 흐름에서 격리한다
 
