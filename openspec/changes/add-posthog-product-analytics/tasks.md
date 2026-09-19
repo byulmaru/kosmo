@@ -182,11 +182,13 @@ Docker와 GitHub production release가 같은 공개 PostHog key·host를 Web bu
 
 ## 6. PROD-795 개인정보·운영 통합
 
+**PR #714 범위 (2026-09-20):** 6.1의 공개 개인정보 고지와 최신 main 동기화다. 현재 prod 수집 중단을 안내하며 재개 시 적용할 수집 범위·시행일 별도 공지를 유지한다. 6.2–6.7의 운영·통합 검증과 그룹 9의 외부 cleanup은 Pending으로 남기며 이번 PR의 고지 검증으로 완료 처리하지 않는다. PR #733의 병합은 외부 설정 삭제·실제 production acceptance 증거를 대신하지 않는다.
+
 **Authority / Provenance**
 
 - [Linear `PROD-795`](https://linear.app/byulmaru/issue/PROD-795)의 개인정보 처리방침·runbook·cross-slice 검증 계약과 `2026-08-31 명세 구체화 범위 확인`, `2026-09-16 PostHog 국외 처리 고지 방식 결정` 댓글(`fe9c8467-3ebb-4a15-bdbf-872810de964a`)
 - `docs/design/breakpoints.md`의 공개 `/privacy`와 진입 위치, `docs/domain/objects/account.md`·`docs/domain/objects/session.md`의 기존 Account·Session 경계
-- `PROD-819`의 Web runtime과 `PROD-820`의 Cloud·build 계약. 그룹 1~5의 handoff는 구현·검증 증거로 대조하되 제품 authority를 대신하지 않는다.
+- `PROD-819`의 Web runtime과 `PROD-820`의 Cloud·전환기 build 이력, `PROD-891`의 현재 채널 설정과 `PROD-833`·`docs/operations/production-release.md`의 canonical build·SHA release 계약. 그룹 1~5의 handoff는 구현·검증 증거로 대조하되 제품 authority를 대신하지 않는다.
 - `PROD-839`의 OpenPanel build/deployment·외부 설정 cleanup 계약
 
 **Deliverable**

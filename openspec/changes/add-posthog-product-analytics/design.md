@@ -96,7 +96,8 @@ PROD-839는 두 선행 변경이 같은 지원 release line에 반영된 뒤에�
 
 이 절에서는 [Linear `PROD-795`](https://linear.app/byulmaru/issue/PROD-795)의 `2026-08-31 명세 구체화 범위 확인`을 구체적으로 다룬다. PR #685의 shared spec과 PR #653의 runtime을 바탕으로 하며 SDK·Cloud·build 계약은 새로 결정하지 않는다. 2026-09-03 KST 기준으로 PROD-820과 PROD-819는 모두 Done이다. PR #685의 merge commit `47fb36f52`와 그 뒤에 병합된 PR #653의 merge commit `2176b7e38`은 `main`과 현재 PROD-795 브랜치의 ancestor다. 구현과 통합 검증에서는 두 merge commit을 모두 포함한 실제 source와 build artifact를 기록한다.
 
-- 현재 공개 개인정보 화면과 운영 문서는 OpenPanel을 설명한다. PostHog로 전환하면서 바꿀 내용은 제공자·처리 위치, 자동 수집·브라우저 저장, 보호 범위, 보존·권리 행사와 운영 절차다. UI 배치와 `/privacy` 진입은 바꾸지 않는다.
+- PR #714의 공개 개인정보 화면은 PostHog 제공자·처리 위치, 자동 수집·브라우저 저장, 보호 범위, 보존·권리 행사를 반영한다. 현재 채널 설정의 key·host 누락으로 신규 수집은 중단된 상태이며, 공개 고지는 재개 시 적용할 처리 범위와 이를 구분한다. `/privacy`와 기존 정책 문서 진입은 유지한다. OpenPanel 운영 문서 전환과 통합 검증은 후속 범위다.
+- 2026-09-20 동기화 기준 main에는 PROD-839의 PR #733(`b2996ba9a`)이 병합됐다. Source 주입 제거·names-only inventory와 외부 설정 삭제·지원 artifact 검증은 구분하며, 그룹 9의 남은 operational follow-up을 완료로 바꾸지 않는다.
 - 2026-08-31 읽기 전용 Cloud 조회로 `Kosmo Production`, `Asia/Seoul`, Replay `session_recording_sample_rate=0.10`, `session_recording_retention_period=30d`와 canonical origin URL trigger를 확인했다. 이는 설정 조회 증거이며 실제 녹화 품질을 인수한 증거는 아니다.
 - 일반 이벤트는 `event_retention_months=12`, `events_retention_enforced=false`를 함께 반환했다. PostHog 모델 소스는 전자를 billing entitlement에서 동기화되는 값이라고 설명한다. 이를 이벤트의 물리적 삭제 시점이나 12개월 자동 삭제 보장으로 해석하지 않는다.
 - `session_recording_masking_config=null`과 `recording_domains=null`만으로 입력 masking이 없거나 모든 origin을 허용한다고 단정하지 않는다. URL trigger, 사용 중인 SDK 버전의 기본값·원격 응답과 실제 동작을 함께 대조한다. rrweb 자체 기본값을 PostHog SDK의 최종 설정으로 대신 삼지 않는다.
@@ -106,7 +107,7 @@ PROD-839는 두 선행 변경이 같은 지원 release line에 반영된 뒤에�
 
 ### 권장 작업 순서
 
-1. 병합된 runtime·build commit `2176b7e38`·`47fb36f52`와 PROD-839 cleanup이 함께 적용되는 release·rebuild·rollback 범위를 식별한다. 두 선행 PR의 병합만으로 cleanup·통합 완료를 선언하지 않는다.
+1. 병합된 runtime·전환기 build commit `2176b7e38`·`47fb36f52`, 현재 PROD-891 채널 설정과 PROD-833 canonical build·SHA release·rollback 경로를 식별한다. PROD-839의 PR #733 병합만으로 외부 cleanup·통합 완료를 선언하지 않는다.
 2. 수집 표면별 관측 결과를 먼저 정리한 다음 개인정보 화면을 수정한다. 기존 `apps/app/src/app/privacy.tsx`의 분석·위탁·국외 이전·권리 행사 절을 대상으로 하며, 2026-09-16 결정의 국외 처리 경로와 필수 고지 항목을 반영하고 시행일과 일반 이벤트 보존·삭제는 아래 미확정 항목으로 남긴다.
 3. 기존 `docs/operations/openpanel.md`의 provider 전용 안내와 `production-release.md` 링크를 PostHog 운영 안내로 전환한다. 실제 삭제·장애 대응 절차를 대조하고, PROD-839 gate 전에는 지원 중인 OpenPanel 경로 안내를 제거하지 않는다. 이전 안내는 Git 이력에서 추적할 수 있게 한다.
 4. 기존 unit·browser 검증은 같은 build와 source를 기준으로 재사용한다. 이미 PROD-819에서 확인한 helper 동작을 반복하기보다는 `/flags` 등 빠진 표면과 문서·운영 설정이 맞물리는 경계를 보완한다. 테스트 편의를 위해 production adapter를 바꾸지 않는다.
@@ -120,7 +121,7 @@ PROD-839는 두 선행 변경이 같은 지원 release line에 반영된 뒤에�
 | `/flags`·원격 설정                 | 실제 요청의 식별자·속성 범위, 응답 설정과 필요한 외부 모듈 로딩                                                                            | 요청 발생만 확인하는 테스트로는 body의 원문 포함 여부를 증명할 수 없다. 발견한 계약 문제는 PROD-819/820으로 돌려보내고 범용 필터를 추가하지 않는다. |
 | 브라우저 저장·identity             | cookie/localStorage, reload·같은 Account·다른 Account·guest 전환과 reset                                                                   | 분석 식별자와 인증 Session credential을 구분한다. identity trait의 제한을 모든 DOM·metadata의 비식별 보장으로 확대하지 않는다.                      |
 | Replay·performance·heatmap·console | Cloud 설정과 실제 수집 상태, input·Post Content 보호, origin·sampling·retention                                                            | SDK 옵션, 원격 설정, outbound와 실제 recording을 구분한다. 최종 Viewer 녹화 품질은 PROD-741에 남긴다.                                               |
-| 설정·장애·배포                     | key/host 완전·부분·누락, 초기화·전송 실패 시 인증·탐색·게시, rebuild·rollback                                                              | fake endpoint나 로컬 no-op이 통과한 결과를 실제 production 수집 인수로 표시하지 않는다.                                                             |
+| 설정·장애·배포                     | 채널별 key/host 완전·부분·누락, 초기화·전송 실패 시 인증·탐색·게시, canonical build·SHA release·rollback                                   | fake endpoint나 로컬 no-op이 통과한 결과를 실제 production 수집 인수로 표시하지 않는다.                                                             |
 
 운영 기록에는 관측일, source commit/build artifact, 환경, 설정 또는 요청 표면, 합성 데이터 사용 여부, 결과, 미검증 범위와 후속 owner를 담으면 충분하다. 새 저장소나 범용 검증 프레임워크는 만들지 않는다. raw payload와 사용자 정보는 공유 문서에 첨부하지 않는다.
 

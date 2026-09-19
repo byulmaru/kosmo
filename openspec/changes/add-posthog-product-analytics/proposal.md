@@ -1,6 +1,6 @@
 ## 현재 범위
 
-이 change는 canonical·Linear 요구사항을 실행하기 위한 선택적 세션 하네스다. PROD-839는 기존 OpenPanel cleanup과 그 검증만 소유하며 Native OTA, PostHog 재활성화·배포, PROD-795의 통합, PROD-741·575의 acceptance는 포함하지 않는다.
+이 change는 canonical·Linear 요구사항을 실행하기 위한 선택적 세션 하네스다. PR #714는 PROD-795의 공개 개인정보 처리방침 반영과 최신 main 동기화만 다룬다. 현재 prod 수집 중단과 재개 시 적용할 고지를 구분하며, 수집 재활성화·배포는 수행하지 않는다. PROD-795의 운영 문서·통합 검증, PROD-839의 외부 cleanup과 PROD-741·575의 acceptance는 각 owner의 후속 범위로 남긴다.
 
 ## Why
 
@@ -51,5 +51,5 @@ Kosmo Web 분석 runtime을 OpenPanel에서 PostHog로 전환하면서 PostHog�
 - Docker와 GitHub Actions: 현재 채널 설정·canonical build·SHA digest 승격을 보존하는 OpenPanel 잔여 참조 정리
 - GitHub repository·environment variables와 활성 배포 설정: OpenPanel 전용 항목 확인·정리 및 값 없는 검증 근거
 - PostHog Cloud US `Kosmo Production`: standard remote config와 Session Replay privacy controls
-- `apps/app/src/app/privacy.tsx`, `docs/operations`의 분석·배포 안내와 `apps/web/e2e`: PROD-795의 고지·운영 전환과 통합 검증 대상. 이 Spec 단계에서는 실행 코드·공개 고지·Cloud 설정을 변경하지 않는다.
+- `apps/app/src/app/privacy.tsx`, `docs/operations`의 분석·배포 안내와 `apps/web/e2e`: PROD-795의 고지·운영 전환과 통합 검증 대상. PR #714는 공개 고지만 반영하며 운영 문서·통합 검증은 후속 범위다. Cloud·채널 설정은 변경하지 않는다.
 - GraphQL/API, 데이터베이스 schema·migration과 Native SDK에는 영향 없음

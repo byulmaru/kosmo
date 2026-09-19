@@ -218,6 +218,7 @@
 
 - **WHEN** 비로그인 또는 로그인 사용자가 공개 `/privacy`를 연다
 - **THEN** 현재 분석 제공자와 수집 목적·항목·방법, 브라우저 식별자 저장, 실제 확인한 처리·보존·권리 행사 조건을 확인할 수 있다
+- **AND** 현재 prod 채널에서 신규 수집이 중단된 상태와 재개 시 적용할 PostHog 처리 범위를 구분한다
 - **AND** 공개 진입을 바꾸거나 새 설정 화면·수집 동의 기능이 있는 것처럼 안내하지 않는다
 
 #### Scenario: 수집 표면별 보호 범위를 고지한다
@@ -244,7 +245,7 @@
 
 ### Requirement: PostHog 운영 전환과 장애 대응 안내
 
-**Authority / Provenance:** [Linear `PROD-795`](https://linear.app/byulmaru/issue/PROD-795)의 운영 문서·OpenPanel 계약 제거 범위, [Linear `PROD-839`](https://linear.app/byulmaru/issue/PROD-839)의 cleanup 선행 조건, `PROD-820`의 공개 build-time 설정 계약 — 운영 문서는 실제 provider의 설정 확인, 수집 점검, 장애 대응과 권리 행사 절차를 안내해야 한다(MUST). PROD-839의 지원 release·rebuild·rollback 및 외부 설정 정리 증거를 대조한 뒤 OpenPanel 운영 계약 제거를 완료로 처리해야 한다(MUST). PROD-795가 Cloud나 배포·외부 설정 삭제를 대신 수행하지 않아야 한다(MUST NOT).
+**Authority / Provenance:** [Linear `PROD-795`](https://linear.app/byulmaru/issue/PROD-795)의 운영 문서·OpenPanel 계약 제거 범위, [Linear `PROD-839`](https://linear.app/byulmaru/issue/PROD-839)의 cleanup 선행 조건, `PROD-891`의 채널 설정과 `PROD-833`·`docs/operations/production-release.md`의 canonical build·SHA release 계약 — 운영 문서는 실제 provider의 설정 확인, 수집 점검, 장애 대응과 권리 행사 절차를 안내해야 한다(MUST). PROD-839의 지원 release·rebuild·rollback 및 외부 설정 정리 증거를 대조한 뒤 OpenPanel 운영 계약 제거를 완료로 처리해야 한다(MUST). PROD-795가 Cloud나 배포·외부 설정 삭제를 대신 수행하지 않아야 한다(MUST NOT).
 
 #### Scenario: 운영자가 분석 수집과 보호 설정을 점검한다
 
@@ -261,8 +262,9 @@
 
 #### Scenario: 분석을 긴급 중단하거나 설정을 바꾼다
 
-- **WHEN** 운영자가 PostHog 공개 key 또는 host를 제거하거나 교체한다
-- **THEN** 이미 발행한 정적 Web bundle에는 변경이 소급되지 않으므로 rebuild·승인된 배포와 새 artifact 확인이 필요하다고 안내한다
+- **WHEN** 운영자가 채널 설정표의 PostHog 공개 key 또는 host를 제거하거나 교체한다
+- **THEN** 이미 발행한 정적 Web bundle에는 변경이 소급되지 않으므로 변경을 포함한 canonical build와 승인된 SHA digest 배포·새 artifact 확인이 필요하다고 안내한다
+- **AND** production release에서 재빌드하거나 과거 GitHub Variable 주입을 복구하도록 안내하지 않는다
 - **AND** OpenPanel과 PostHog를 동시에 활성화하는 fallback을 안내하지 않는다
 
 ### Requirement: PROD-795 통합 증거와 후속 인계
