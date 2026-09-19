@@ -23,7 +23,7 @@ import {
   postContentDocumentFromTextAndMedia,
 } from '@kosmo/core/post-content/server';
 import { temporalClient } from '@kosmo/core/temporal/client';
-import { profileBlockWorkflowId } from '@kosmo/core/temporal/profile-block-contract';
+import { profileBlockWorkflowId } from '@kosmo/core/temporal/profile-block';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { and, eq, inArray, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
