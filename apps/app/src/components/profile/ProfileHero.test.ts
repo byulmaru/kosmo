@@ -18,6 +18,11 @@ type ProfileData = {
   header: { id: string; url: string | null } | null;
   relativeHandle: string;
   tags: ReadonlyArray<{ id: string; name: string }>;
+  viewerState?: {
+    isSelf: boolean;
+    profileBlock: { id: string; targetProfile: ProfileData } | null;
+    profileMute: { id: string } | null;
+  } | null;
 };
 
 let fragmentData: ProfileData;
@@ -60,8 +65,12 @@ mockModule('react-native', {
   View: 'View',
 });
 mockModule('react-relay', {
-  graphql: () => 'ProfileHero_profile',
-  useFragment: () => fragmentData,
+  graphql: (parts: TemplateStringsArray) =>
+    parts.join('').includes('ProfileHero_profileBlockStatus')
+      ? 'ProfileHero_profileBlockStatus'
+      : 'ProfileHero_profile',
+  useFragment: (document: string, key: { status?: object } | null) =>
+    document === 'ProfileHero_profileBlockStatus' ? (key?.status ?? null) : fragmentData,
 });
 mockModule(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
   useTheme: () => ({
@@ -89,8 +98,21 @@ const require = createRequire(import.meta.url);
 require.extensions['.png'] = (module, filename) => {
   module.exports = filename;
 };
-mockModule('lucide-react-native', { XIcon: 'XIcon', VolumeOff: 'VolumeOff' });
-mockModule(require.resolve('lucide-react-native'), { XIcon: 'XIcon', VolumeOff: 'VolumeOff' });
+mockModule('lucide-react-native', {
+  Ban: 'Ban',
+  Link2: 'Link2',
+  VolumeOff: 'VolumeOff',
+  XIcon: 'XIcon',
+});
+mockModule(require.resolve('lucide-react-native'), {
+  Ban: 'Ban',
+  Link2: 'Link2',
+  VolumeOff: 'VolumeOff',
+  XIcon: 'XIcon',
+});
+mockModule(new URL('./ProfileBlockAction.tsx', import.meta.url), {
+  ProfileBlockAction: 'ProfileBlockAction',
+});
 mockModule(new URL('./ProfileMuteAction.tsx', import.meta.url), {
   ProfileMuteAction: 'ProfileMuteAction',
 });
@@ -132,6 +154,7 @@ const baseProfile: ProfileData = {
   header: null,
   relativeHandle: '@kosmo',
   tags: [],
+  viewerState: { isSelf: false, profileBlock: null, profileMute: null },
 };
 
 const findCoverStyle = () => {
@@ -323,6 +346,110 @@ describe('ProfileHero media presentation', () => {
     const images = renderer!.root.findAll((node) => (node.type as unknown) === 'Image');
     assert.equal(images.length, 1);
     assert.match(String((images[0]!.props.source as { uri?: string }).uri), /default-avatar\.png$/);
+  });
+});
+
+describe('ProfileHero 관리 메뉴 조립', () => {
+  it('blockedBy는 status fragment에서 읽어 관계 관리 action을 숨긴다', async () => {
+    fragmentData = baseProfile;
+    await act(async () => {
+      renderer = create(
+        createElement(ProfileHero, {
+          moreItems: [{ key: 'report', label: '신고하기', onSelect: () => undefined }],
+          profile: {} as never,
+          profileBlockStatus: {
+            status: { blockedBy: true, blocking: false },
+          } as never,
+        }),
+      );
+    });
+    assert.ok(renderer);
+
+    assert.equal(
+      renderer.root.findAll((node) => (node.type as unknown) === 'ProfileBlockAction').length,
+      0,
+    );
+    assert.equal(
+      renderer.root.findAll((node) => (node.type as unknown) === 'ProfileMuteAction').length,
+      0,
+    );
+  });
+
+  it('뮤트·차단·신고 action을 한 메뉴에 합성하고 포커스 연결을 유지한다', async () => {
+    fragmentData = baseProfile;
+    await act(async () => {
+      renderer = create(
+        createElement(ProfileHero, {
+          moreItems: [{ key: 'report', label: '신고하기', onSelect: () => undefined }],
+          profile: {} as never,
+          profileBlockStatus: {
+            status: { blockedBy: false, blocking: false },
+          } as never,
+        }),
+      );
+    });
+    assert.ok(renderer);
+
+    const muteAction = renderer.root.find((node) => (node.type as unknown) === 'ProfileMuteAction');
+    const blockAction = muteAction.props.renderMenuItem({
+      disabled: false,
+      focusTriggerRef: { current: () => undefined },
+      item: { key: 'mute' },
+    });
+    assert.equal(blockAction.type, 'ProfileBlockAction');
+    const actionMenu = blockAction.props.renderMenuItem({
+      disabled: false,
+      focusTriggerRef: { current: () => undefined },
+      item: { key: 'block' },
+    });
+    assert.deepEqual(
+      actionMenu.props.items.map((item: { key: string }) => item.key),
+      ['copy-profile-link', 'mute', 'block', 'report'],
+    );
+  });
+
+  it('차단 해제와 신고 항목을 별도 더보기 없이 같은 메뉴에 표시한다', async () => {
+    fragmentData = {
+      ...baseProfile,
+      viewerState: {
+        isSelf: false,
+        profileBlock: { id: 'block-a', targetProfile: baseProfile },
+        profileMute: null,
+      },
+    };
+    const onUnblock = mock.fn();
+    const onReport = mock.fn();
+    await act(async () => {
+      renderer = create(
+        createElement(ProfileHero, {
+          moreItems: [{ key: 'report', label: '신고하기', onSelect: onReport }],
+          profile: {} as never,
+          profileBlockStatus: {
+            status: { blockedBy: true, blocking: true },
+          } as never,
+        }),
+      );
+    });
+    assert.ok(renderer);
+
+    assert.equal(
+      renderer.root.findAll((node) => (node.type as unknown) === 'ProfileMoreMenu').length,
+      0,
+    );
+    const action = renderer.root.find((node) => (node.type as unknown) === 'ProfileBlockAction');
+    const menu = action.props.renderMenuItem({
+      disabled: false,
+      focusTriggerRef: { current: () => undefined },
+      item: { key: 'unblock', onSelect: onUnblock },
+    });
+    assert.deepEqual(
+      menu.props.items.map((item: { key: string }) => item.key),
+      ['copy-profile-link', 'unblock', 'report'],
+    );
+    menu.props.items[1].onSelect();
+    assert.equal(onUnblock.mock.callCount(), 1);
+    menu.props.items[2].onSelect();
+    assert.equal(onReport.mock.callCount(), 1);
   });
 });
 

@@ -66,6 +66,13 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
   사용한다. 2026-09-09 [현재 Block 정책](../domain/objects/profile-block.md)에 맞춰
   Figma [`4595:6482`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4595-6482)의
   설명도 같은 문구로 갱신했다. 기존 리액션은 삭제하지 않는다. 현재 Storybook은 메뉴·목록 presentation을 검증하며 차단·해제 요청과 관계·리액션 정리를 구현하지 않는다.
+- 조회 가능한 Profile의 공통 관계 action은 기존 `FollowButton`이 소유한다. 내가 차단한 경우 플랫폼과
+  pointer 상태에 관계없이 고정 `차단 해제` label을 표시하고, Web click과 Native tap은 같은 해제 확인창을
+  연다. 상대만 나를 차단한 경우 부모 surface는 관계 action을 숨긴다. 서로 차단한 경우에는 내 `차단 해제`
+  action을 유지하고, 내 관계를 해제한 뒤 서버의 현재 결과가 `blockedBy`만 남으면 action을 숨긴다.
+  이 action은 Profile·ProfileBlock 상태 fragment, mutation, pending·실패와 Relay 수렴을 소유한다. Profile
+  route와 차단 관리 목록은 노출 여부와 목록 조회·pagination을 조합한다. 관리 목록은 해제 성공 뒤 현재 행을
+  유지하고 Target Profile의 최신 Block 상태에 따라 action과 focus target을 `차단`으로 전환하며 이전 Follow 상태를 복구하지 않는다.
 - pending에는 같은 action의 중복 입력과 dismiss를 막고 busy 상태를 전달한다. 실패하면 기존 서버 확정 상태를
   유지하고 제품의 기존 오류 피드백을 사용한다.
 
@@ -74,6 +81,10 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
 - Settings root에는 `뮤트 및 차단` 진입점 하나를 제공한다.
 - 진입점 안에는 `뮤트한 프로필`과 `차단한 프로필`을 이 순서의 별도 destination으로 제공한다. 두 상태를
   하나의 혼합 목록이나 filter로 만들지 않는다.
+- 공통 Settings source는 `PROD-814`·`PROD-823` 중 실제로 먼저 구현한 이슈가 소유하고, 후행 이슈는 그 source를
+  재사용한다. 완성된 destination부터 공개하며, Block은 route·data·action 연결과 검증을 마친 뒤 추가한다.
+  미완성 destination의 disabled item·placeholder·연결되지 않은 route는 노출하지 않는다. 두 destination이
+  모두 완성되면 `뮤트한 프로필 → 차단한 프로필` 순서를 유지한다.
 - 각 목록은 자기 heading, loading, error·retry, empty, pagination과 해제 action을 소유한다. 한 목록의 상태나
   action이 다른 목록의 항목을 바꾸지 않는다.
 - 같은 Target에 Mute와 Block이 모두 적용돼도 두 관리 관계는 각각의 목록·관계 Node·해제 경로에 남는다. Active
@@ -100,13 +111,14 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
 - 유효한 Account에 selected Profile이 있으면 그 Profile을 `searchProfiles`의 viewer로 사용한다. selected Profile이
   없으면 기존 Account 인증과 공개 후보 결과를 유지하며 Profile Block predicate나 selected Profile을 새로 요구하지
   않는다. 임의 입력 actor나 이전 selected Profile·client cache를 viewer로 재사용하지 않는다.
-- 정상적인 GraphQL `node(id:)`·`profileByHandle` 직접 route 진입·새로고침은 identity-free 결과가 아니라 기본 Profile 정보, viewer 방향별 콘텐츠 상태와
-  인증된 selected Owner 범위의 정확한 unblock 관계 ID를 확인한다. Profile 자체가 기존 lifecycle 정책으로 조회 불가한
-  경우에만 조건부 identity-free fallback 문구를 사용한다.
+- 정상적인 GraphQL `node(id:)`·`profileByHandle` 직접 route 진입·새로고침은 기본 Profile 정보, viewer 방향별 콘텐츠 상태와
+  현재 Owner 범위의 정확한 unblock 관계 ID를 확인한다. Profile 자체가 기존 lifecycle 정책으로 조회 불가하면
+  Block 전용 identity나 관계 상태를 복구하지 않고 기존 unavailable 결과를 유지한다.
 - `blocking` 화면에서는 Target Profile의 Post List·Post detail·첨부 Media를 기존 Post·Media 조회 정책으로
-  제공한다. Profile route는 `차단한 프로필의 게시물입니다` 경고와 `게시물 보기` action을 먼저 표시하고,
+  제공한다. Profile Post List page는 자신의 query 결과에 따라 `차단한 프로필의 게시물입니다` 경고와 `게시물 보기` action을 먼저 표시하고,
   사용자가 action을 실행한 뒤 해당 결과를 표시한다. 경고는 현재 Profile handle과 selected actor lifecycle마다
-  다시 적용하며, 사용자가 명시적으로 확인하기 전에는 시간 경과만으로 콘텐츠를 표시하지 않는다.
+  다시 적용하며, 사용자가 명시적으로 확인하기 전에는 시간 경과만으로 콘텐츠를 표시하지 않는다. 상위 Profile layout은
+  이 경고 상태를 소유하지 않고 nested route의 `Slot`을 유지한다.
 - `blockedBy` 화면에서는 Owner Profile의 기본 Profile 정보를 유지하면서 Post·Media 콘텐츠 차단 상태를 표시한다.
   양방향 Block이면 양쪽 화면에서 콘텐츠 차단 상태를 적용하며, Profile route와 다른 API 표면은 같은 콘텐츠 정책을
   사용한다. 차단 해제의 data와 lifecycle은 적용 Product/OpenSpec/runtime 범위다.
@@ -284,3 +296,16 @@ Web 최소 폭 160px과 키보드·focus 처리를 재사용하고, 목록은 �
 네이티브 앱 자체가 별도 이슈/PR에서 아직 작업 중이므로 iOS·Android runtime·접근성 검증은
 앱 작업 완료 후 수행한다. 이는 미실행 후속 검증이며 Native 제품 계약이나 지원 대상의 삭제가 아니다.
 PROD-814 담당자가 후속 검증 추적을 소유한다. OpenSpec archive는 Native 검증 통과나 PR 머지를 뜻하지 않는다.
+
+## 기존 UI 구현과 후속 교체
+
+2026-09-08 `PROD-823`·`PROD-813`·`PROD-917`의 확정 범위에 따라, 기존 UI의 기능 구현과 신규 UI 교체를 나누어
+진행한다. `PROD-823`은 기존 레거시 컴포넌트를 조합해 실제 Profile·Settings의 차단 화면과 관리 진입점을
+연결하고, 조회·생성·해제·pagination·재시도·pending·성공 피드백을 구현·검증한다. 기존 UI에서도 위 제품 행동,
+접근성과 기본 Profile 정보·viewer 방향별 콘텐츠 계약을 지킨다.
+
+`PROD-858`·`PROD-861`의 신규 공용 UI·Storybook 확정이나 `PROD-917`의 교체 완료를 기다리지 않는다.
+`PROD-823`은 기존 화면·데이터·action 연결 코드와 인터페이스, 상태·접근성·cache·프로필 전환 검증 증거를
+인계하고, `PROD-813`은 기존 UI 기준 차단 종단 간 통합 검증과 `add-profile-block` archive를 소유한다.
+`PROD-917`은 Storybook 확정 뒤 신규 UI로 교체하고 교체에 따른 회귀를 검증한다. 교체 작업자의 수신 확인과
+신규 UI 교체 완료는 기존 기능의 완료나 archive 조건이 아니다.

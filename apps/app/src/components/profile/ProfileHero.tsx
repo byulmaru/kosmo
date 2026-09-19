@@ -1,4 +1,4 @@
-import { Link2, VolumeOff } from 'lucide-react-native';
+import { Ban, Link2, VolumeOff } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import {
   Image,
@@ -18,6 +18,7 @@ import { useToast } from '@/components/ui/ToastProvider';
 import { getPublicWebOrigin } from '@/config/origin';
 import { useTheme } from '@/theme/ThemeProvider';
 import { breakpoints, radius, space, textStyles } from '@/theme/tokens';
+import { ProfileBlockAction } from './ProfileBlockAction';
 import { ProfileMoreMenu } from './ProfileMoreMenu';
 import { ProfileMuteAction } from './ProfileMuteAction';
 import { ProfileNameBlock } from './ProfileNameBlock';
@@ -26,14 +27,15 @@ import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import type { ActionMenuItem } from '@/components/ui/ActionMenu';
 import type { ProfileHero_profile$key } from './__generated__/ProfileHero_profile.graphql';
+import type { ProfileHero_profileBlockStatus$key } from './__generated__/ProfileHero_profileBlockStatus.graphql';
 
 type ProfileHeroProps = {
   action?: ReactNode;
   heading?: boolean;
-  showMuteAction?: boolean;
   moreItems?: readonly ActionMenuItem[];
   loading?: boolean;
   profile?: ProfileHero_profile$key | null;
+  profileBlockStatus?: ProfileHero_profileBlockStatus$key | null;
 };
 
 const profileHeroFragment = graphql`
@@ -59,11 +61,22 @@ const profileHeroFragment = graphql`
     followingCount
     ...ProfileNameBlock_profile
     ...ProfileMuteAction_profile
+    ...ProfileBlockAction_profile
     viewerState {
+      isSelf
       profileMute {
         id
       }
+      profileBlock {
+        ...ProfileBlockAction_profileBlock
+      }
     }
+  }
+`;
+
+const profileHeroBlockStatusFragment = graphql`
+  fragment ProfileHero_profileBlockStatus on ProfileBlockStatus {
+    blockedBy
   }
 `;
 
@@ -75,10 +88,10 @@ const countFormatter = new Intl.NumberFormat('en', {
 export function ProfileHero({
   action,
   heading = true,
-  showMuteAction = false,
-  moreItems,
+  moreItems = [],
   loading = false,
   profile = null,
+  profileBlockStatus,
 }: ProfileHeroProps) {
   const followingRef = useRef<View>(null);
   const [unmuteFocusRevision, setUnmuteFocusRevision] = useState(0);
@@ -91,6 +104,7 @@ export function ProfileHero({
   const { showToast } = useToast();
   const { width } = useWindowDimensions();
   const data = useFragment(profileHeroFragment, profile);
+  const blockStatus = useFragment(profileHeroBlockStatusFragment, profileBlockStatus ?? null);
   const compact = Platform.OS !== 'web' || width < breakpoints.compact;
   const avatarSize = compact ? 88 : 120;
   const avatarFrameSize = compact ? 96 : 128;
@@ -146,8 +160,95 @@ export function ProfileHero({
     return null;
   }
 
+  const profileBlock = data.viewerState?.profileBlock;
+  const blocking = Boolean(profileBlock);
+  const blockedBy = Boolean(blockStatus?.blockedBy);
+  const canManageRelationship = blockStatus != null && data.viewerState?.isSelf !== true;
+  const blockAction = canManageRelationship
+    ? blocking && profileBlock
+      ? ({ nextBlocked: false as const, profileBlock } as const)
+      : !blockedBy
+        ? ({ nextBlocked: true as const, profile: data } as const)
+        : undefined
+    : undefined;
+  const showMuteAction = canManageRelationship && !blocking && !blockedBy;
+
   const followingHref = `/${data.relativeHandle}/following` as Href;
   const followersHref = `/${data.relativeHandle}/followers` as Href;
+  const copyProfileLinkItem: ActionMenuItem = {
+    key: 'copy-profile-link',
+    icon: Link2,
+    label: '프로필 링크 복사',
+    onSelect: () => {
+      void (async () => {
+        try {
+          const copied = await setStringAsync(
+            new URL(`/${data.relativeHandle}`, getPublicWebOrigin()).toString(),
+          );
+          if (!copied) {
+            throw new Error('Clipboard did not confirm the copy.');
+          }
+        } catch {
+          showToast('링크를 복사하지 못했습니다. 잠시 후 다시 시도해 주세요.', {
+            tone: 'danger',
+          });
+        }
+      })();
+    },
+  };
+  const moreMenu = showMuteAction ? (
+    <ProfileMuteAction
+      profile={data}
+      renderMenuItem={({
+        disabled: muteDisabled,
+        focusTriggerRef: muteFocusRef,
+        item: muteItem,
+      }) =>
+        blockAction ? (
+          <ProfileBlockAction
+            {...blockAction}
+            icon={Ban}
+            renderMenuItem={({
+              disabled: blockDisabled,
+              focusTriggerRef: blockFocusRef,
+              item: blockItem,
+            }) => (
+              <ProfileMoreMenu
+                disabled={muteDisabled || blockDisabled}
+                items={[copyProfileLinkItem, muteItem, blockItem, ...moreItems]}
+                onTriggerReady={(focusTrigger) => {
+                  muteFocusRef.current = focusTrigger;
+                  blockFocusRef.current = focusTrigger;
+                }}
+              />
+            )}
+            surface="menu"
+          />
+        ) : (
+          <ProfileMoreMenu
+            disabled={muteDisabled}
+            focusTriggerRef={muteFocusRef}
+            items={[copyProfileLinkItem, muteItem, ...moreItems]}
+          />
+        )
+      }
+    />
+  ) : blockAction ? (
+    <ProfileBlockAction
+      {...blockAction}
+      icon={Ban}
+      renderMenuItem={({ disabled, focusTriggerRef, item }) => (
+        <ProfileMoreMenu
+          disabled={disabled}
+          focusTriggerRef={focusTriggerRef}
+          items={[copyProfileLinkItem, item, ...moreItems]}
+        />
+      )}
+      surface="menu"
+    />
+  ) : moreItems.length > 0 ? (
+    <ProfileMoreMenu items={[copyProfileLinkItem, ...moreItems]} />
+  ) : null;
 
   return (
     <View style={styles.root}>
@@ -176,7 +277,7 @@ export function ProfileHero({
             size={avatarSize}
           />
         </View>
-        {action || showMuteAction || moreItems?.length ? (
+        {action || showMuteAction || blockAction || moreItems.length > 0 ? (
           <View
             style={[
               actionGeometry,
@@ -187,44 +288,8 @@ export function ProfileHero({
               },
             ]}
           >
-            {showMuteAction ? (
-              <ProfileMuteAction
-                profile={data}
-                renderMenuItem={({ disabled, focusTriggerRef, item }) => (
-                  <ProfileMoreMenu
-                    disabled={disabled}
-                    focusTriggerRef={focusTriggerRef}
-                    items={[
-                      {
-                        key: 'copy-profile-link',
-                        icon: Link2,
-                        label: '프로필 링크 복사',
-                        onSelect: () => {
-                          void (async () => {
-                            try {
-                              const copied = await setStringAsync(
-                                new URL(`/${data.relativeHandle}`, getPublicWebOrigin()).toString(),
-                              );
-                              if (!copied) {
-                                throw new Error('Clipboard did not confirm the copy.');
-                              }
-                            } catch {
-                              showToast('링크를 복사하지 못했습니다. 잠시 후 다시 시도해 주세요.', {
-                                tone: 'danger',
-                              });
-                            }
-                          })();
-                        },
-                      },
-                      ...(moreItems ?? []),
-                      item,
-                    ]}
-                  />
-                )}
-              />
-            ) : null}
+            {moreMenu}
             {action ? <View style={styles.action}>{action}</View> : null}
-            {!showMuteAction && moreItems?.length ? <ProfileMoreMenu items={moreItems} /> : null}
           </View>
         ) : null}
       </View>

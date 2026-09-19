@@ -50,8 +50,8 @@ geometry를 유지하도록 한다. 이 문서는 Profile 편집 화면의 heade
 - 프로필 팝오버 메뉴는 오른쪽 위 모서리를 더보기 trigger의 오른쪽 위에 맞춘다. 간격 없이 trigger와
   겹치며 왼쪽·아래로 펼쳐진다. viewport 밖으로 나가면 경계 안으로 보정하고 아래 공간이 부족하면 방향을
   전환한다. 메뉴 항목과 dismiss·focus 복귀 계약은 유지한다.
-- 로딩 중이거나 프로필 action을 사용할 수 없는 상태에서는 더보기를 숨긴다. `blockedBy`의 최소 정보
-  화면에도 더보기를 노출하지 않는다.
+- 로딩 중이거나 사용할 수 있는 프로필 action이 없으면 더보기를 숨긴다. `blockedBy`에서는 뮤트·차단 생성
+  action을 숨기지만, 조회 가능한 Profile의 신고 진입점은 아래 신고 조립 계약을 따른다.
 - 2026-09-07 승인된 Figma 계약을 `ProfileMoreButton`·`ProfileHero`·`ActionMenu`에 반영했다.
   Storybook Tests에서 40px 원형·16px 간격, hover·pressed·focus 조합, 메뉴 겹침·viewport 보정과
   dismiss 후 trigger 복귀를 검증한다. Native 44/48 입력 target과 disabled·reduced motion은 단위
@@ -124,3 +124,12 @@ geometry를 유지하도록 한다. 이 문서는 Profile 편집 화면의 heade
   검증 범위에서 제외하고 Native 출시 gate에서 별도로 수행한다.
 - Web 자동화나 공용 source·단위 테스트 결과를 Native runtime 완료 증거로 사용하지 않는다. Native 출시
   전에는 실제 환경에서 비율, 중앙 cover crop, avatar overlap과 profile action 배치를 다시 검증한다.
+
+## 신고와 관계 action 조립 · 2026-09-15
+
+- #857의 신고와 #772의 차단 UI를 함께 반영하며, 더보기 trigger 하나에 링크 복사·뮤트·차단 또는 차단 해제·신고를
+  해당 action의 노출 조건에 따라 합성한다. 신고용 두 번째 trigger를 만들지 않는다.
+- 신고는 [신고 계약](content-reporting.md)의 로그인한 Account 조건을 유지한다. selected Profile이 없거나
+  차단 관계여도 조회 가능한 Profile 화면의 신고 진입점은 유지한다. 차단 방향에 따른 콘텐츠·관계 action 제한과
+  신고 eligibility를 합치지 않는다.
+- 뮤트·차단 action의 pending과 포커스 연결은 같은 메뉴를 통해 유지한다.

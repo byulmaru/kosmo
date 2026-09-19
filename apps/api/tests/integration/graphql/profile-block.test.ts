@@ -22,6 +22,8 @@ import {
   postContentDocumentFromText,
   postContentDocumentFromTextAndMedia,
 } from '@kosmo/core/post-content/server';
+import { temporalClient } from '@kosmo/core/temporal/client';
+import { profileBlockWorkflowId } from '@kosmo/core/temporal/profile-block';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { and, eq, inArray, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -1313,6 +1315,18 @@ describe('GraphQL Profile Block', () => {
     const blockingOwnerResult = await createBookmark(owner.token);
     assertNoGraphQLErrors(blockingOwnerResult);
     assert.equal(blockingOwnerResult.data?.createBookmark.bookmark.post?.id, postId);
+
+    // Block returns after its transition commits but before post-commit effects
+    // finish. This policy test replaces the relation out of band, so wait for
+    // that run to close before starting a new generation for the same pair.
+    await temporalClient.workflow
+      .getHandle(
+        profileBlockWorkflowId({
+          ownerProfileId: owner.profile.id,
+          targetProfileId: target.id,
+        }),
+      )
+      .result();
 
     await db.delete(ProfileBlocks);
     const targetBlock = await blockProfile(owner.profile.id, targetSession.token);

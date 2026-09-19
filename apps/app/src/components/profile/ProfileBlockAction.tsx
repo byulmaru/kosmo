@@ -66,7 +66,7 @@ type ProfileBlockMenuItemRenderProps = Readonly<{
   item: ActionMenuItem;
 }>;
 
-type ProfileBlockActionTarget =
+export type ProfileBlockActionTarget =
   | { nextBlocked: true; profile: ProfileBlockAction_profile$key; profileBlock?: never }
   | {
       nextBlocked: false;

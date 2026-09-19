@@ -74,7 +74,10 @@ const storyProfiles = [
 const storyProfileIds = storyProfiles.map(({ id }) => id);
 
 const ProfileHeroStoriesQuery = graphql`
-  query ProfileHeroStoriesQuery($ids: [ID!]!) {
+  query ProfileHeroStoriesQuery($handle: String!, $ids: [ID!]!) {
+    profileBlockStatus(handle: $handle) {
+      ...ProfileHero_profileBlockStatus
+    }
     nodes(ids: $ids) {
       __typename
       ... on Profile {
@@ -86,20 +89,24 @@ const ProfileHeroStoriesQuery = graphql`
   }
 `;
 
-function useStoryProfiles() {
+function useStoryProfiles(handle: string) {
   const data = useLazyLoadQuery<ProfileHeroStoriesQueryType>(ProfileHeroStoriesQuery, {
+    handle,
     ids: storyProfileIds,
   });
 
-  return data.nodes.map((node) => {
-    if (node?.__typename !== 'Profile' || !node.hero || !node.followButton) {
-      throw new Error('ProfileHeroStoriesQuery must return Profile fragments in fixture order.');
-    }
-    return { followButton: node.followButton, hero: node.hero, id: node.id };
-  });
+  return {
+    profileBlockStatus: data.profileBlockStatus,
+    profiles: data.nodes.map((node) => {
+      if (node?.__typename !== 'Profile' || !node.hero || !node.followButton) {
+        throw new Error('ProfileHeroStoriesQuery must return Profile fragments in fixture order.');
+      }
+      return { followButton: node.followButton, hero: node.hero, id: node.id };
+    }),
+  };
 }
 
-function requireProfile(profiles: ReturnType<typeof useStoryProfiles>, id: string) {
+function requireProfile(profiles: ReturnType<typeof useStoryProfiles>['profiles'], id: string) {
   const result = profiles.find((profileNode) => profileNode.id === id);
   if (!result) {
     throw new Error(`Missing ProfileHero profile fixture: ${id}.`);
@@ -118,7 +125,11 @@ function ProfileHeroFixture({
   profileId?: string;
   showAction?: boolean;
 }) {
-  const profiles = useStoryProfiles();
+  const profileHandle =
+    storyProfiles
+      .find((profileFixture) => profileFixture.id === profileId)
+      ?.relativeHandle.replace(/^@/, '') ?? defaultProfile.handle;
+  const { profileBlockStatus, profiles } = useStoryProfiles(profileHandle);
   const target = requireProfile(profiles, profileId);
 
   return (
@@ -128,7 +139,7 @@ function ProfileHeroFixture({
           action={showAction ? <FollowButton profile={target.followButton} /> : undefined}
           loading={loading}
           profile={target.hero}
-          showMuteAction={showAction}
+          profileBlockStatus={showAction ? profileBlockStatus : null}
         />
       </View>
     </SessionProvider>
@@ -136,7 +147,7 @@ function ProfileHeroFixture({
 }
 
 function ProfileHeroCatalog() {
-  const profiles = useStoryProfiles();
+  const { profiles } = useStoryProfiles(defaultProfile.relativeHandle.replace(/^@/, ''));
 
   return (
     <Catalog>
@@ -176,6 +187,7 @@ const meta = {
         currentSession: { id: 'profile-hero-session', selectedProfile: { id: 'profile-viewer' } },
         me: { id: 'account-story', name: '스토리 계정' },
         nodes: storyProfiles,
+        profileBlockStatus: { blockedBy: false, blocking: false, profileBlockId: null },
       },
     },
   },

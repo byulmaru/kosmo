@@ -35,6 +35,11 @@ const connectionOptions: readonly TabOption<ProfileConnectionKind>[] = [
 
 const ProfileLayoutQuery = graphql`
   query ProfileLayoutQuery($handle: String!) {
+    profileBlockStatus(handle: $handle) {
+      blockedBy
+      blocking
+      ...ProfileHero_profileBlockStatus
+    }
     profileByHandle(handle: $handle) {
       id
       displayName
@@ -138,6 +143,7 @@ export default function ProfileLayout() {
         backButton={backButton}
         connectionKind={connectionKind}
         handle={handle}
+        pathname={pathname}
         scrollKey={scrollKey}
         showPageHeader={isProfileHome}
       />
@@ -149,12 +155,14 @@ function ProfileLayoutContent({
   backButton,
   connectionKind,
   handle,
+  pathname,
   scrollKey,
   showPageHeader,
 }: {
   backButton: ReactNode;
   connectionKind: ProfileConnectionKind | null;
   handle: string;
+  pathname: string;
   scrollKey: string;
   showPageHeader: boolean;
 }) {
@@ -171,6 +179,10 @@ function ProfileLayoutContent({
     kind: ContentReportTargetType.PROFILE,
     label: profile?.relativeHandle ?? '',
   });
+  const blockStatus = data.profileBlockStatus;
+  const blocking = Boolean(blockStatus?.blocking);
+  const blockedBy = Boolean(blockStatus?.blockedBy);
+
   if (!profile) {
     const missingState = (
       <StateView
@@ -215,17 +227,15 @@ function ProfileLayoutContent({
     profile.instance.kind === 'LOCAL' &&
     profile.viewerState?.isSelf === true &&
     profile.viewerState.membership?.role === 'OWNER';
-  const canMute = Boolean(selectedProfileId && profile.viewerState && !profile.viewerState.isSelf);
   const relationshipAction = canEdit ? (
     <NavigationLink href={'/profile-edit' as Href}>
       <Button accessibilityLabel="프로필 편집" tone="secondary">
         편집
       </Button>
     </NavigationLink>
-  ) : (
+  ) : blockedBy && !blocking ? undefined : (
     <FollowButton profile={profile} />
   );
-
   const chrome = (
     <>
       {showPageHeader ? (
@@ -237,20 +247,31 @@ function ProfileLayoutContent({
         heading={!showPageHeader}
         moreItems={sessionId ? [reportItem] : undefined}
         profile={profile}
-        showMuteAction={canMute}
+        profileBlockStatus={selectedProfileId ? blockStatus : null}
       />
     </>
   );
 
+  const relationshipRoute = pathname.endsWith('/followers') || pathname.endsWith('/following');
+  const blockedProfileContent =
+    relationshipRoute || !blockedBy ? null : <StateView title="이 프로필을 볼 수 없습니다" />;
+  const blockedProfileRoute = blockedProfileContent ? (
+    <ProfileRouteContainer scrollKey={scrollKey}>
+      {chrome}
+      {blockedProfileContent}
+    </ProfileRouteContainer>
+  ) : null;
+
   return (
     <ProfileRouteProvider chrome={chrome} scrollKey={scrollKey}>
-      {Platform.OS === 'web' ? (
-        <Slot />
-      ) : (
-        <View style={styles.nativeRoute}>
-          <Stack screenOptions={{ headerShown: false }} />
-        </View>
-      )}
+      {blockedProfileRoute ??
+        (Platform.OS === 'web' ? (
+          <Slot />
+        ) : (
+          <View style={styles.nativeRoute}>
+            <Stack screenOptions={{ headerShown: false }} />
+          </View>
+        ))}
     </ProfileRouteProvider>
   );
 }
