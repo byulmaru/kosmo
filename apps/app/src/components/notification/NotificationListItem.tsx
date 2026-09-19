@@ -171,14 +171,16 @@ export function ReactionNotificationListItem({
 }) {
   const data = useFragment(reactionNotificationFragment, notification);
   const markRead = useNotificationRead();
+  const post = data.post;
 
   return (
     <NotificationListItemView
       actors={[actor(data.profile)]}
-      href={`/${data.post.profile.relativeHandle}/${data.post.id}`}
+      disabled={!post}
+      href={post ? `/${post.profile.relativeHandle}/${post.id}` : '/'}
       kind="reaction"
       onNavigate={() => markRead(data.id)}
-      preview={toPreview(data.post)}
+      preview={post ? toPreview(post) : null}
       timestamp={formatTimelineTimestamp(data.createdAt)}
       unread={data.readAt === null}
     />
@@ -202,6 +204,10 @@ export function ReplyNotificationListItem({
 }) {
   const data = useFragment(replyNotificationFragment, notification);
   const markRead = useNotificationRead();
+
+  if (!data.post) {
+    return null;
+  }
 
   return (
     <NotificationListItemView kind="reply" unread={data.readAt === null}>
@@ -250,14 +256,16 @@ export function RepostNotificationListItem({
 }) {
   const data = useFragment(repostNotificationFragment, notification);
   const markRead = useNotificationRead();
+  const post = data.post;
 
   return (
     <NotificationListItemView
       actors={[actor(data.profile)]}
-      href={`/${data.post.profile.relativeHandle}/${data.post.id}`}
+      disabled={!post}
+      href={post ? `/${post.profile.relativeHandle}/${post.id}` : '/'}
       kind="repost"
       onNavigate={() => markRead(data.id)}
-      preview={toPreview(data.post)}
+      preview={post ? toPreview(post) : null}
       timestamp={formatTimelineTimestamp(data.createdAt)}
       unread={data.readAt === null}
     />

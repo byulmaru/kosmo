@@ -1,9 +1,10 @@
-import { and, eq, exists, isNotNull, isNull, or, sql } from 'drizzle-orm';
+import { and, eq, exists, isNotNull, isNull, not, or, sql } from 'drizzle-orm';
 import { alias, unionAll } from 'drizzle-orm/pg-core';
 import {
   Instances,
   Notifications,
   Posts,
+  ProfileBlocks,
   ProfileFollowRequests,
   ProfileFollows,
   Profiles,
@@ -51,6 +52,21 @@ const NotificationReplyAuthors = alias(Profiles, 'notification_availability_repl
 const NotificationReplyAuthorInstances = alias(
   Instances,
   'notification_availability_reply_author_instance',
+);
+const NotificationQuotePosts = alias(Posts, 'notification_availability_quote_post');
+const NotificationQuoteSources = alias(Posts, 'notification_availability_quote_source');
+const NotificationQuoteAuthors = alias(Profiles, 'notification_availability_quote_author');
+const NotificationQuoteAuthorInstances = alias(
+  Instances,
+  'notification_availability_quote_author_instance',
+);
+const NotificationQuoteRecipientProfiles = alias(
+  Profiles,
+  'notification_availability_quote_recipient',
+);
+const NotificationQuoteRecipientInstances = alias(
+  Instances,
+  'notification_availability_quote_recipient_instance',
 );
 
 export type NotificationSourceAvailabilityOptions = {
@@ -139,6 +155,7 @@ export const notificationSourceAvailabilityKinds = [
   NotificationKind.REACTION,
   NotificationKind.REPOST,
   NotificationKind.REPLY,
+  NotificationKind.QUOTE,
 ] as const;
 
 /**
@@ -178,6 +195,12 @@ export const notificationSourceAvailabilityWhere = (
     includeRecipientAvailability,
     profile: NotificationReplyRecipientProfiles,
     instance: NotificationReplyRecipientInstances,
+    requireLocalInstance: true,
+  });
+  const quoteRecipientAvailability = isRecipientAvailable({
+    includeRecipientAvailability,
+    profile: NotificationQuoteRecipientProfiles,
+    instance: NotificationQuoteRecipientInstances,
     requireLocalInstance: true,
   });
 
@@ -415,6 +438,83 @@ export const notificationSourceAvailabilityWhere = (
                   ),
                 ),
             ),
+          ),
+        ),
+      database
+        .select({ id: NotificationQuotePosts.id })
+        .from(NotificationQuotePosts)
+        .innerJoin(
+          NotificationQuoteSources,
+          eq(NotificationQuoteSources.id, NotificationQuotePosts.repostSourceId),
+        )
+        .innerJoin(
+          NotificationQuoteRecipientProfiles,
+          eq(NotificationQuoteRecipientProfiles.id, NotificationQuoteSources.profileId),
+        )
+        .innerJoin(
+          NotificationQuoteRecipientInstances,
+          eq(NotificationQuoteRecipientInstances.id, NotificationQuoteRecipientProfiles.instanceId),
+        )
+        .innerJoin(
+          NotificationQuoteAuthors,
+          eq(NotificationQuoteAuthors.id, NotificationQuotePosts.profileId),
+        )
+        .innerJoin(
+          NotificationQuoteAuthorInstances,
+          eq(NotificationQuoteAuthorInstances.id, NotificationQuoteAuthors.instanceId),
+        )
+        .where(
+          and(
+            eq(Notifications.kind, NotificationKind.QUOTE),
+            eq(NotificationQuotePosts.id, Notifications.sourceId),
+            eq(NotificationQuoteSources.profileId, Notifications.recipientProfileId),
+            eq(NotificationQuotePosts.state, PostState.ACTIVE),
+            isNotNull(NotificationQuotePosts.currentContentId),
+            eq(NotificationQuoteSources.state, PostState.ACTIVE),
+            isNotNull(NotificationQuoteSources.currentContentId),
+            quoteRecipientAvailability,
+            not(
+              exists(
+                database
+                  .select({ id: ProfileBlocks.id })
+                  .from(ProfileBlocks)
+                  .where(
+                    or(
+                      and(
+                        eq(ProfileBlocks.ownerProfileId, Notifications.recipientProfileId),
+                        eq(ProfileBlocks.targetProfileId, NotificationQuotePosts.profileId),
+                      ),
+                      and(
+                        eq(ProfileBlocks.ownerProfileId, NotificationQuotePosts.profileId),
+                        eq(ProfileBlocks.targetProfileId, Notifications.recipientProfileId),
+                      ),
+                    ),
+                  ),
+              ),
+            ),
+            visiblePostWhere({
+              post: NotificationQuotePosts,
+              profileVisible: sql<boolean>`${relatedProfileAvailability({
+                database,
+                includeRecipientAvailability,
+                instance: NotificationQuoteAuthorInstances,
+                profile: NotificationQuoteAuthors,
+                recipientProfileId: Notifications.recipientProfileId,
+              })}`,
+              viewerProfileId: Notifications.recipientProfileId,
+              db: database,
+            }),
+            visiblePostWhere({
+              post: NotificationQuoteSources,
+              profileVisible: includeRecipientAvailability
+                ? sql<boolean>`${visibleProfileWhere({
+                    instance: NotificationQuoteRecipientInstances,
+                    profile: NotificationQuoteRecipientProfiles,
+                  })}`
+                : sql<boolean>`true`,
+              viewerProfileId: Notifications.recipientProfileId,
+              db: database,
+            }),
           ),
         ),
     ),

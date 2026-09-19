@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { expect, fireEvent, fn, screen, userEvent, waitFor, within } from 'storybook/test';
+import { ReactionNotificationListItem } from '@/components/notification/NotificationListItem';
 import { NotificationListItemView } from '@/components/notification/NotificationListItemView';
 import { ReplyNotificationPost } from '@/components/notification/ReplyNotificationPost';
 import { PostActionAuthenticationProvider } from '@/components/post/PostActionAuthentication';
@@ -12,6 +13,7 @@ import { getCopiedStrings, resetClipboardMock } from '../../../.storybook/mocks/
 import { post, profile } from '../fixtures';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { NotificationListItemViewProps } from '@/components/notification/NotificationListItemView';
+import type { NotificationListItemNullableReactionQuery as NullableReactionQuery } from './__generated__/NotificationListItemNullableReactionQuery.graphql';
 import type { NotificationListItemStoriesQuery as Query } from './__generated__/NotificationListItemStoriesQuery.graphql';
 
 const thumbnail = {
@@ -95,6 +97,25 @@ function ReplyPost() {
       </PostActionAuthenticationProvider>
     </SessionProvider>
   );
+}
+
+function NullableReaction() {
+  const data = useLazyLoadQuery<NullableReactionQuery>(
+    graphql`
+      query NotificationListItemNullableReactionQuery {
+        node(id: "notification-reaction-null") {
+          ... on ReactionNotification {
+            ...ReactionNotificationListItem_notification @alias(as: "reaction")
+          }
+        }
+      }
+    `,
+    {},
+  );
+  if (!data.node?.reaction) {
+    throw new Error('Nullable Reaction fixture is missing.');
+  }
+  return <ReactionNotificationListItem notification={data.node.reaction} />;
 }
 
 export function NotificationExample(args: Args) {
@@ -305,6 +326,39 @@ export const ProtectedContent: Story = {
       <NotificationExample {...args} kind="reaction" unavailable />
     </View>
   ),
+};
+
+export const NullableReactionPost: Story = {
+  parameters: {
+    controls: { disable: true },
+    relay: {
+      operationResponses: {
+        NotificationListItemNullableReactionQuery: {
+          data: {
+            node: {
+              __typename: 'ReactionNotification',
+              id: 'notification-reaction-null',
+              createdAt: '2026-09-18T00:00:00.000Z',
+              readAt: null,
+              profile: {
+                id: 'notification-reaction-author',
+                displayName: '게시글 반응자',
+                handle: 'reaction-author',
+                avatar: null,
+              },
+              post: null,
+            },
+          },
+        },
+      },
+    },
+  },
+  render: () => <NullableReaction />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText('게시글을 볼 수 없습니다')).toBeVisible();
+    await expect(canvas.getByRole('link')).toHaveAttribute('aria-disabled', 'true');
+  },
 };
 
 export const ReadAndUnavailableStates: Story = {

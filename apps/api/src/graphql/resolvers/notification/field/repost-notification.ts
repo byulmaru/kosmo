@@ -6,6 +6,7 @@ import { getNotificationSource, RepostNotification } from '../ref';
 builder.objectFields(RepostNotification, (t) => ({
   post: t.field({
     type: Post,
+    nullable: true,
     resolve: async (notification, _, ctx) => (await getNotificationSource(notification, ctx)).post!,
   }),
   profile: t.field({

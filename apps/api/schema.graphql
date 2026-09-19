@@ -567,6 +567,14 @@ type Query {
   searchProfiles(after: String, before: String, first: Int, last: Int, query: String!): ProfileConnection!
 }
 
+type QuoteNotification implements Node & Notification {
+  createdAt: DateTime!
+  id: ID!
+  post: Post
+  profile: Profile!
+  readAt: DateTime
+}
+
 type Reaction implements Node {
   createdAt: DateTime!
   id: ID!
@@ -581,7 +589,7 @@ type ReactionCount {
 type ReactionNotification implements Node & Notification {
   createdAt: DateTime!
   id: ID!
-  post: Post!
+  post: Post
   profile: Profile!
   readAt: DateTime
   type: String!
@@ -616,7 +624,7 @@ type RejectProfileFollowRequestPayload {
 type ReplyNotification implements Node & Notification {
   createdAt: DateTime!
   id: ID!
-  post: Post!
+  post: Post
   profile: Profile!
   readAt: DateTime
 }
@@ -624,7 +632,7 @@ type ReplyNotification implements Node & Notification {
 type RepostNotification implements Node & Notification {
   createdAt: DateTime!
   id: ID!
-  post: Post!
+  post: Post
   profile: Profile!
   readAt: DateTime
 }

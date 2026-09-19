@@ -56,6 +56,22 @@ const readHistory = () => sql<MigrationHistoryRow[]>`
 `;
 
 try {
+  const [{ count: quoteRolloutCount }] = await sql<{ count: number }[]>`
+    SELECT count(*)::integer AS count FROM notification_rollout
+    WHERE key = 'QUOTE_NOTIFICATION'
+  `;
+  assert.equal(
+    quoteRolloutCount,
+    0,
+    'Schema migration must not activate Quote generation or fix T0.',
+  );
+  const [disabledRollout] = await sql<{ enabled: boolean; activatedAt: string }[]>`
+    INSERT INTO notification_rollout (key, activated_at)
+    VALUES ('QUOTE_NOTIFICATION', clock_timestamp())
+    RETURNING enabled, activated_at::text AS "activatedAt"
+  `;
+  assert.equal(disabledRollout.enabled, false, 'Rollout rows must default to disabled.');
+
   const freshHistory = await readHistory();
 
   assert.equal(
@@ -96,6 +112,15 @@ try {
   );
 
   const historyAfterNoop = await readHistory();
+  const [rolloutAfterNoop] = await sql<{ enabled: boolean; activatedAt: string }[]>`
+    SELECT enabled, activated_at::text AS "activatedAt" FROM notification_rollout
+    WHERE key = 'QUOTE_NOTIFICATION'
+  `;
+  assert.deepEqual(
+    rolloutAfterNoop,
+    disabledRollout,
+    'Migration rerun must preserve T0 and activation state.',
+  );
   assert.deepEqual(
     historyAfterNoop,
     nonlinearHistory,

@@ -193,6 +193,93 @@ test(
 );
 
 test(
+  'Post Create Effects Workflow는 Reply와 Quote Notification effect를 함께 실행한다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+    const taskQueue = `${KOSMO_TASK_QUEUE}-post-create-effects-test-${process.pid}`;
+    const postId = '00000000-0000-8000-8000-000000000301';
+    const calls: string[] = [];
+
+    const worker = await Worker.create({
+      activities: {
+        createQuoteNotificationActivity: async (id: string) => calls.push(`quote:${id}`),
+        createReplyNotificationActivity: async (id: string) => calls.push(`reply:${id}`),
+        sendLocalPostCreateActivity: async (id: string) => calls.push(`send:${id}`),
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      for (const origin of ['LOCAL', 'ACTIVITYPUB'] as const) {
+        calls.length = 0;
+        const handle = await environment.client.workflow.start('postCreateEffectsWorkflow', {
+          args: [{ postId, origin }],
+          taskQueue,
+          workflowId: `post-create-effects-test:${origin}:${postId}`,
+        });
+        await handle.result();
+        assert.deepEqual(
+          calls.toSorted(),
+          (origin === 'LOCAL'
+            ? [`quote:${postId}`, `reply:${postId}`, `send:${postId}`]
+            : [`quote:${postId}`, `reply:${postId}`]
+          ).toSorted(),
+        );
+        await Worker.runReplayHistory(
+          { workflowsPath },
+          await handle.fetchHistory(),
+          handle.workflowId,
+        );
+      }
+    });
+  },
+);
+
+test(
+  'Post Create Effects Workflow는 Quote 도입 전 Local·Remote history를 재생한다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+    const taskQueue = `${KOSMO_TASK_QUEUE}-post-create-replay-${process.pid}`;
+    const worker = await Worker.create({
+      activities: {
+        createReplyNotificationActivity: async () => undefined,
+        sendLocalPostCreateActivity: async () => undefined,
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath: new URL('./test-fixtures/legacy-post-create.ts', import.meta.url).pathname,
+    });
+    await worker.runUntil(async () => {
+      for (const origin of ['LOCAL', 'ACTIVITYPUB'] as const) {
+        const handle = await environment.client.workflow.start('postCreateEffectsWorkflow', {
+          args: [{ postId: crypto.randomUUID(), origin }],
+          taskQueue,
+          workflowId: `post-create-replay:${origin}:${process.pid}`,
+        });
+        await handle.result();
+        await Worker.runReplayHistory(
+          { workflowsPath },
+          await handle.fetchHistory(),
+          handle.workflowId,
+        );
+      }
+    });
+  },
+);
+
+test(
   'Profile Update Effects Workflow는 production registry에서 stable input으로 Activity를 재시도한다',
   { timeout: 120_000 },
   async (t) => {

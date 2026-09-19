@@ -23,6 +23,28 @@ export const materializeNotification = async (
   database: DatabaseHandle,
   { kind, recipientProfileId, relatedProfileId, sourceId }: MaterializeNotificationInput,
 ): Promise<void> => {
+  if (await isNotificationSuppressed(database, recipientProfileId, relatedProfileId)) {
+    return;
+  }
+
+  await database
+    .insert(Notifications)
+    .values({
+      data: {},
+      kind,
+      recipientProfileId,
+      sourceId,
+    })
+    .onConflictDoNothing({
+      target: [Notifications.recipientProfileId, Notifications.kind, Notifications.sourceId],
+    });
+};
+
+export const isNotificationSuppressed = async (
+  database: DatabaseHandle,
+  recipientProfileId: string,
+  relatedProfileId: string,
+): Promise<boolean> => {
   const profileBlock = await database
     .select({ id: ProfileBlocks.id })
     .from(ProfileBlocks)
@@ -31,7 +53,7 @@ export const materializeNotification = async (
     .then(first);
 
   if (profileBlock) {
-    return;
+    return true;
   }
 
   const profileMute = await database
@@ -48,18 +70,8 @@ export const materializeNotification = async (
     .then(first);
 
   if (profileMute) {
-    return;
+    return true;
   }
 
-  await database
-    .insert(Notifications)
-    .values({
-      data: {},
-      kind,
-      recipientProfileId,
-      sourceId,
-    })
-    .onConflictDoNothing({
-      target: [Notifications.recipientProfileId, Notifications.kind, Notifications.sourceId],
-    });
+  return false;
 };
