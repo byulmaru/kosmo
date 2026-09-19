@@ -104,6 +104,22 @@ describe('GraphQL Profile Block', () => {
     assertGraphQLErrorCode(result, 'NOT_FOUND');
   });
 
+  test('Workflow admission failure is mapped to the GraphQL domain error contract', async () => {
+    const owner = await createAuthenticatedSession();
+
+    const result = await blockProfile(owner.profile.id, owner.token);
+
+    assertGraphQLErrorCode(result, 'CONFLICT');
+    assert.equal(
+      await db
+        .select({ id: ProfileBlocks.id })
+        .from(ProfileBlocks)
+        .where(eq(ProfileBlocks.ownerProfileId, owner.profile.id))
+        .then((rows) => rows.length),
+      0,
+    );
+  });
+
   test('selected Profile이 없으면 Block 읽기 필드를 nullable null로 반환한다', async () => {
     const owner = await createAuthenticatedSession();
     const target = await createProfile('nullable-block-read-target');

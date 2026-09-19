@@ -1,12 +1,42 @@
 import { db, first, Instances, Profiles } from '@kosmo/core/db';
 import { AccountProfileRole } from '@kosmo/core/enums';
-import { NotFoundError } from '@kosmo/core/error';
-import { executeProfileBlock, executeProfileUnblock } from '@kosmo/core/temporal/profile-block';
+import {
+  ConflictError,
+  NotFoundError,
+  PermissionDeniedError,
+  ValidationError,
+} from '@kosmo/core/error';
+import { runWorkflow } from '@kosmo/core/temporal/client';
+import {
+  profileBlockWorkflow,
+  profileUnblockUpdateId,
+  profileUnblockWorkflow,
+} from '@kosmo/core/temporal/profile-block';
+import { ApplicationFailure } from '@temporalio/client';
 import { and, eq } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { visibleProfileWhere } from '@/profile/visibility';
 import { profileBlockByIdLoader } from '../loader/block';
 import { Profile, ProfileBlock } from '../ref';
+
+const rethrowProfileBlockFailure = (error: unknown): never => {
+  if (!(error instanceof ApplicationFailure)) {
+    throw error;
+  }
+
+  switch (error.type) {
+    case 'CONFLICT':
+      throw new ConflictError({ message: error.message });
+    case 'NOT_FOUND':
+      throw new NotFoundError(error.message);
+    case 'PERMISSION_DENIED':
+      throw new PermissionDeniedError(error.message);
+    case 'VALIDATION':
+      throw new ValidationError(error.message);
+    default:
+      throw error;
+  }
+};
 
 builder.mutationField('blockProfile', (t) =>
   t.withAuth({ profileRole: AccountProfileRole.MEMBER }).fieldWithInput({
@@ -37,11 +67,18 @@ builder.mutationField('blockProfile', (t) =>
         throw new NotFoundError('Profile not found');
       }
 
-      const result = await executeProfileBlock({
+      const command = {
         ownerProfileId: selectedProfileId,
         targetProfileId: target.id,
         origin: 'LOCAL',
-      });
+      } as const;
+      const result = await runWorkflow(profileBlockWorkflow, {
+        args: [command],
+        updateArgs: [command],
+        mode: 'update-with-start',
+        workflowIdConflictPolicy: 'USE_EXISTING',
+        workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+      }).catch(rethrowProfileBlockFailure);
 
       return {
         profileBlock: result.profileBlockId,
@@ -75,12 +112,19 @@ builder.mutationField('unblockProfile', (t) =>
         throw new NotFoundError('Profile Block not found');
       }
 
-      const result = await executeProfileUnblock({
+      const command = {
         ownerProfileId: selectedProfileId,
         targetProfileId: profileBlock.targetProfileId,
         profileBlockId: profileBlock.id,
-        origin: 'LOCAL',
-      });
+      };
+      const result = await runWorkflow(profileUnblockWorkflow, {
+        args: [command],
+        updateArgs: [command],
+        updateId: profileUnblockUpdateId(command),
+        mode: 'update-with-start',
+        workflowIdConflictPolicy: 'USE_EXISTING',
+        workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+      }).catch(rethrowProfileBlockFailure);
 
       return {
         profileBlockId: result.removed ? result.profileBlockId : null,
