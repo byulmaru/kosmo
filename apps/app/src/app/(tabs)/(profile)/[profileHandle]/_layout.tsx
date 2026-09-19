@@ -1,7 +1,7 @@
 import { ContentReportTargetType } from '@kosmo/core/enums';
 import { Slot, Stack, useGlobalSearchParams, usePathname, useRouter } from 'expo-router';
 import { ArrowLeft, ChevronLeftIcon } from 'lucide-react-native';
-import { StyleSheet } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { useContentReportMenuItem } from '@/components/content-report/ContentReportContext';
 import { PageHeader } from '@/components/PageHeader';
@@ -253,9 +253,8 @@ function ProfileLayoutContent({
   );
 
   const relationshipRoute = pathname.endsWith('/followers') || pathname.endsWith('/following');
-  const blockedProfileContent = relationshipRoute || !blockedBy ? null : (
-    <StateView title="이 프로필을 볼 수 없습니다" />
-  );
+  const blockedProfileContent =
+    relationshipRoute || !blockedBy ? null : <StateView title="이 프로필을 볼 수 없습니다" />;
   const blockedProfileRoute = blockedProfileContent ? (
     <ProfileRouteContainer scrollKey={scrollKey}>
       {chrome}
