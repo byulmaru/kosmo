@@ -99,6 +99,7 @@ builder.mutationField('unblockProfile', (t) =>
             return profileBlockId ? { id: profileBlockId, type: ProfileBlock } : null;
           },
         }),
+        targetProfile: field.field({ type: Profile, nullable: true }),
         success: field.boolean(),
       }),
     }),
@@ -128,6 +129,7 @@ builder.mutationField('unblockProfile', (t) =>
 
       return {
         profileBlockId: result.removed ? result.profileBlockId : null,
+        targetProfile: profileBlock.targetProfileId,
         success: result.removed,
       };
     },

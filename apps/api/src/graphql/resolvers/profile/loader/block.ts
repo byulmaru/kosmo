@@ -5,6 +5,8 @@ import type { UserContext } from '@/context';
 
 export type ProfileBlockRow = typeof ProfileBlocks.$inferSelect;
 
+type ViewerBlockedByRow = Pick<ProfileBlockRow, 'ownerProfileId'>;
+
 export const profileBlockByIdLoader = (ctx: UserContext) =>
   ctx.loader<string, ProfileBlockRow, string, true>({
     name: `profileBlock.byId:${ctx.session?.profile?.id ?? 'anonymous'}`,
@@ -55,4 +57,30 @@ export const viewerProfileBlockLoader = (ctx: UserContext) =>
         );
     },
     key: (profileBlock) => profileBlock?.targetProfileId ?? null,
+  });
+
+export const viewerBlockedByProfileLoader = (ctx: UserContext) =>
+  ctx.loader<string, ViewerBlockedByRow, string, true>({
+    name: `profileBlock.viewerBlockedByProfile:${ctx.session?.profile?.id ?? 'anonymous'}`,
+    nullable: true,
+    load: async (ownerProfileIds) => {
+      const targetProfileId = ctx.session?.profile?.id;
+      if (!targetProfileId) {
+        return [];
+      }
+
+      return db
+        .select({ ownerProfileId: ProfileBlocks.ownerProfileId })
+        .from(ProfileBlocks)
+        .innerJoin(Profiles, eq(Profiles.id, ProfileBlocks.ownerProfileId))
+        .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+        .where(
+          and(
+            inArray(ProfileBlocks.ownerProfileId, ownerProfileIds),
+            eq(ProfileBlocks.targetProfileId, targetProfileId),
+            visibleProfileWhere({ profile: Profiles, instance: Instances }),
+          ),
+        );
+    },
+    key: (profileBlock) => profileBlock?.ownerProfileId ?? null,
   });

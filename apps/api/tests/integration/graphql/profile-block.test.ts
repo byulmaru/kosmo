@@ -130,10 +130,10 @@ describe('GraphQL Profile Block', () => {
 
     const result = await requestGraphQL<{
       node: { profileBlocks: null } | null;
-      profileBlockStatus: null;
+      target: { viewerState: null } | null;
     }>(
       `query NullableBlockReads($id: ID!, $handle: String!) {
-        profileBlockStatus(handle: $handle) { blocking }
+        target: profileByHandle(handle: $handle) { viewerState { blockedBy } }
         node(id: $id) {
           ... on Profile { profileBlocks(first: 10) { edges { node { id } } } }
         }
@@ -145,7 +145,7 @@ describe('GraphQL Profile Block', () => {
     assertNoGraphQLErrors(result);
     assert.deepEqual(result.data, {
       node: { profileBlocks: null },
-      profileBlockStatus: null,
+      target: { viewerState: null },
     });
   });
 
@@ -216,18 +216,18 @@ describe('GraphQL Profile Block', () => {
 
     await db.delete(AccountProfiles).where(eq(AccountProfiles.accountId, owner.account.id));
     const revoked = await requestGraphQL<{
-      node: { id: string } | null;
-      profileBlockStatus: null;
+      block: { id: string } | null;
+      target: { viewerState: null } | null;
     }>(
       `query RevokedBlockOwner($blockId: ID!, $handle: String!) {
-        node(id: $blockId) { ... on ProfileBlock { id } }
-        profileBlockStatus(handle: $handle) { blocking }
+        block: node(id: $blockId) { ... on ProfileBlock { id } }
+        target: profileByHandle(handle: $handle) { viewerState { blockedBy } }
       }`,
       { blockId, handle: target.handle },
       owner.token,
     );
     assertNoGraphQLErrors(revoked);
-    assert.deepEqual(revoked.data, { node: null, profileBlockStatus: null });
+    assert.deepEqual(revoked.data, { block: null, target: { viewerState: null } });
     const unauthorized = await requestGraphQL(
       `mutation UnblockAfterMembershipRevoked($id: ID!) {
         unblockProfile(input: { id: $id }) { success profileBlockId }
@@ -310,7 +310,12 @@ describe('GraphQL Profile Block', () => {
       handle: localTarget.handle,
       displayName: localTarget.displayName,
       instance: { kind: 'LOCAL' },
-      viewerState: { follow: null, followRequest: null, profileBlock: { id: localBlockId } },
+      viewerState: {
+        blockedBy: false,
+        follow: null,
+        followRequest: null,
+        profileBlock: { id: localBlockId },
+      },
     });
     assert.deepEqual(
       decodeGlobalId(localBlock.data?.blockProfile.profileBlock.targetProfile.id ?? ''),
@@ -380,29 +385,28 @@ describe('GraphQL Profile Block', () => {
       managed.data?.node?.profileBlocks.edges.map(({ node }) => node.targetProfile.id).sort(),
       [globalId('Profile', localTarget.id), globalId('Profile', remoteTarget.id)].sort(),
     );
-    assert.equal(
-      localBlock.data?.blockProfile.profileBlock.targetProfile.viewerState?.profileBlock?.id,
-      localBlockId,
-    );
-
-    const localStatus = await profileBlockStatus(localTarget.handle, owner.token);
+    const localStatus = await profileBlockViewerState(localTarget.handle, owner.token);
     assertNoGraphQLErrors(localStatus);
-    assert.deepEqual(localStatus.data?.profileBlockStatus, {
-      blocking: true,
+    assert.deepEqual(localStatus.data?.profileByHandle?.viewerState, {
       blockedBy: false,
-      profileBlockId: localBlockId,
+      profileBlock: { id: localBlockId },
     });
 
     const unblocked = await requestGraphQL<{
       unblockProfile: {
         profileBlockId: string | null;
         success: boolean;
+        targetProfile: {
+          id: string;
+          viewerState: { blockedBy: boolean; profileBlock: { id: string } | null } | null;
+        } | null;
       };
     }>(
       `mutation UnblockProfile($id: ID!) {
         unblockProfile(input: { id: $id }) {
           profileBlockId
           success
+          targetProfile { id viewerState { blockedBy profileBlock { id } } }
         }
       }`,
       { id: localBlockId },
@@ -412,24 +416,17 @@ describe('GraphQL Profile Block', () => {
     assert.deepEqual(unblocked.data?.unblockProfile, {
       profileBlockId: localBlockId,
       success: true,
+      targetProfile: {
+        id: globalId('Profile', localTarget.id),
+        viewerState: { blockedBy: false, profileBlock: null },
+      },
     });
 
-    const restored = await requestGraphQL<{ node: { id: string } | null }>(
-      `query RestoredProfile($id: ID!) {
-        node(id: $id) { ... on Profile { id } }
-      }`,
-      { id: globalId('Profile', localTarget.id) },
-      owner.token,
-    );
-    assertNoGraphQLErrors(restored);
-    assert.deepEqual(restored.data?.node, { id: globalId('Profile', localTarget.id) });
-
-    const restoredStatus = await profileBlockStatus(localTarget.handle, owner.token);
+    const restoredStatus = await profileBlockViewerState(localTarget.handle, owner.token);
     assertNoGraphQLErrors(restoredStatus);
-    assert.deepEqual(restoredStatus.data?.profileBlockStatus, {
-      blocking: false,
+    assert.deepEqual(restoredStatus.data?.profileByHandle?.viewerState, {
       blockedBy: false,
-      profileBlockId: null,
+      profileBlock: null,
     });
 
     const deletedNode = await requestGraphQL<{ node: { id: string } | null }>(
@@ -442,16 +439,24 @@ describe('GraphQL Profile Block', () => {
     assertNoGraphQLErrors(deletedNode);
     assert.equal(deletedNode.data?.node, null);
 
-    const remoteStillVisible = await requestGraphQL<{ node: { id: string } | null }>(
+    const remoteStillBlocked = await requestGraphQL<{
+      node: {
+        id: string;
+        viewerState: { profileBlock: { id: string } | null } | null;
+      } | null;
+    }>(
       `query RemoteProfile($id: ID!) {
-        node(id: $id) { ... on Profile { id } }
+        node(id: $id) {
+          ... on Profile { id viewerState { profileBlock { id } } }
+        }
       }`,
       { id: globalId('Profile', remoteTarget.id) },
       owner.token,
     );
-    assertNoGraphQLErrors(remoteStillVisible);
-    assert.deepEqual(remoteStillVisible.data?.node, {
+    assertNoGraphQLErrors(remoteStillBlocked);
+    assert.deepEqual(remoteStillBlocked.data?.node, {
       id: globalId('Profile', remoteTarget.id),
+      viewerState: { profileBlock: { id: remoteBlockId } },
     });
   });
 
@@ -509,16 +514,12 @@ describe('GraphQL Profile Block', () => {
     assert.deepEqual(hidden.data?.nodes, [{ id: activeBlockId }, null, null]);
 
     const [deactivatedStatus, suspendedStatus] = await Promise.all([
-      profileBlockStatus(deactivatedTarget.handle, owner.token),
-      profileBlockStatus(suspendedTarget.handle, owner.token),
+      profileBlockViewerState(deactivatedTarget.handle, owner.token),
+      profileBlockViewerState(suspendedTarget.handle, owner.token),
     ]);
     for (const status of [deactivatedStatus, suspendedStatus]) {
       assertNoGraphQLErrors(status);
-      assert.deepEqual(status.data?.profileBlockStatus, {
-        blocking: false,
-        blockedBy: false,
-        profileBlockId: null,
-      });
+      assert.equal(status.data?.profileByHandle, null);
     }
 
     await db
@@ -562,7 +563,7 @@ describe('GraphQL Profile Block', () => {
     ]);
   });
 
-  test('keeps Block management owner-scoped and exposes reverse status without the other ID', async () => {
+  test('keeps mutual Block viewer state on one Profile record without exposing the other ID', async () => {
     const owner = await createAuthenticatedSession();
     const target = await createProfile('blocked-target');
     const targetSession = await createAuthenticatedSession(target);
@@ -573,12 +574,23 @@ describe('GraphQL Profile Block', () => {
     const blockId = created.data?.blockProfile.profileBlock.id;
     assert.ok(blockId);
 
-    const targetStatus = await profileBlockStatus(owner.profile.handle, targetSession.token);
-    assertNoGraphQLErrors(targetStatus);
-    assert.deepEqual(targetStatus.data?.profileBlockStatus, {
-      blocking: false,
+    const reverse = await blockProfile(owner.profile.id, targetSession.token);
+    assertNoGraphQLErrors(reverse);
+    const reverseBlockId = reverse.data?.blockProfile.profileBlock.id;
+    assert.ok(reverseBlockId);
+
+    const ownerStatus = await profileBlockViewerState(target.handle, owner.token);
+    assertNoGraphQLErrors(ownerStatus);
+    assert.deepEqual(ownerStatus.data?.profileByHandle?.viewerState, {
       blockedBy: true,
-      profileBlockId: null,
+      profileBlock: { id: blockId },
+    });
+
+    const targetStatus = await profileBlockViewerState(owner.profile.handle, targetSession.token);
+    assertNoGraphQLErrors(targetStatus);
+    assert.deepEqual(targetStatus.data?.profileByHandle?.viewerState, {
+      blockedBy: true,
+      profileBlock: { id: reverseBlockId },
     });
 
     const targetNode = await requestGraphQL<{ node: { id: string } | null }>(
@@ -627,6 +639,29 @@ describe('GraphQL Profile Block', () => {
         .then((rows) => rows.length),
       1,
     );
+
+    const unblocked = await requestGraphQL<{
+      unblockProfile: {
+        profileBlockId: string | null;
+        targetProfile: {
+          viewerState: { blockedBy: boolean; profileBlock: { id: string } | null } | null;
+        } | null;
+      };
+    }>(
+      `mutation UnblockMutualProfile($id: ID!) {
+        unblockProfile(input: { id: $id }) {
+          profileBlockId
+          targetProfile { viewerState { blockedBy profileBlock { id } } }
+        }
+      }`,
+      { id: blockId },
+      owner.token,
+    );
+    assertNoGraphQLErrors(unblocked);
+    assert.deepEqual(unblocked.data?.unblockProfile, {
+      profileBlockId: blockId,
+      targetProfile: { viewerState: { blockedBy: true, profileBlock: null } },
+    });
   });
 
   test('uses the current selected actor after a same-operation Profile switch', async () => {
@@ -700,6 +735,7 @@ const blockProfile = (profileId: string, token?: string) =>
           displayName: string;
           instance: { kind: string };
           viewerState: {
+            blockedBy: boolean;
             follow: { id: string } | null;
             followRequest: { id: string } | null;
             profileBlock: { id: string } | null;
@@ -718,7 +754,7 @@ const blockProfile = (profileId: string, token?: string) =>
             handle
             displayName
             instance { kind }
-            viewerState { follow { id } followRequest { id } profileBlock { id } }
+            viewerState { blockedBy follow { id } followRequest { id } profileBlock { id } }
           }
         }
       }
@@ -727,12 +763,14 @@ const blockProfile = (profileId: string, token?: string) =>
     token,
   );
 
-const profileBlockStatus = (handle: string, token?: string) =>
+const profileBlockViewerState = (handle: string, token?: string) =>
   requestGraphQL<{
-    profileBlockStatus: { blocking: boolean; blockedBy: boolean; profileBlockId: string | null };
+    profileByHandle: {
+      viewerState: { blockedBy: boolean; profileBlock: { id: string } | null } | null;
+    } | null;
   }>(
-    `query ProfileBlockStatus($handle: String!) {
-      profileBlockStatus(handle: $handle) { blocking blockedBy profileBlockId }
+    `query ProfileBlockViewerState($handle: String!) {
+      profileByHandle(handle: $handle) { viewerState { blockedBy profileBlock { id } } }
     }`,
     { handle },
     token,

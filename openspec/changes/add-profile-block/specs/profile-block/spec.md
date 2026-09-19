@@ -113,10 +113,10 @@
 - **THEN** 시스템은 대상 Profile 조회와 mutation을 수행하기 전에 기존 GraphQL 인증·권한 오류로 거부한다
 - **AND** 다른 Profile의 Block 관계나 Target 식별 정보를 응답으로 노출하지 않는다
 
-#### Scenario: selected Profile auth scope가 없으면 nullable 읽기 결과를 반환한다
+#### Scenario: selected Profile auth scope가 없으면 nullable viewer 읽기 결과를 반환한다
 
-- **WHEN** 현재 요청이 selected Profile auth scope를 충족하지 못한 상태에서 `profileBlockStatus` 또는 `Profile.profileBlocks`를 조회한다
-- **THEN** 해당 읽기 필드는 GraphQL 오류 대신 `null`을 반환한다
+- **WHEN** 현재 요청이 selected Profile auth scope를 충족하지 못한 상태에서 `Profile.viewerState` 또는 `Profile.profileBlocks`를 조회한다
+- **THEN** 해당 viewer·관리 읽기 필드는 GraphQL 오류 대신 `null`을 반환한다
 - **AND** 다른 Owner의 관리 목록 접근처럼 resolver 내부에서 실패한 권한 검사는 기존 오류를 유지한다
 
 #### Scenario: selected Profile별 Owner 목록을 격리한다
@@ -161,6 +161,7 @@
 
 - **WHEN** 인증된 selected Owner가 이전 Profile·Block client cache 없이 GraphQL `node(id:)` 또는 `profileByHandle`로 이미 차단한 Target의 Profile route에 직접 진입하거나 새로고침한다
 - **THEN** API는 정상적인 경우 기존 lifecycle·membership·공개 Profile 조회 정책을 충족한 Target의 기본 Profile 정보와 viewer 방향별 콘텐츠 상태, 현재 Owner의 차단 여부·정확한 해제 Profile Block ID를 제공한다
+- **AND** 현재 Owner의 관계와 상대 방향 차단 상태는 같은 Target `Profile.viewerState`의 `profileBlock`·`blockedBy`에서 표현하고 별도 root 상태 object에 중복 저장하지 않는다
 - **AND** 기존 Block 목록의 client cache가 있어야 이 결과를 제공할 수 있다는 조건을 두지 않는다
 - **AND** Profile 자체가 기존 lifecycle 정책으로 조회 불가하면 기존 null/unavailable 결과를 반환하고 Block 전용 identity payload를 만들지 않는다
 - **AND** Post·Media·social field는 각 surface의 Profile Block 정책을 적용한다
