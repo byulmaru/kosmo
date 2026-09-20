@@ -2,11 +2,11 @@ import '@kosmo/core/polyfill';
 
 export { deleteAccountActivity } from './activities/account-deletion';
 export { cleanupUnavailableNotificationsActivity } from './activities/cleanup-unavailable-notifications';
-export { resolveActivityPubQuoteActivity } from './activities/quote-resolution';
 export {
   executeProfileBlockTransitionActivity,
   executeProfileUnblockTransitionActivity,
 } from './activities/profile-block';
+export { resolveActivityPubQuoteActivity } from './activities/quote-resolution';
 export {
   lookupRemoteActorUriActivity,
   materializeRemoteProfileActorActivity,

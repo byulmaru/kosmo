@@ -51,6 +51,7 @@ type InboundQuoteInput = {
   receivedAt: Temporal.Instant;
   startWorkflow?: boolean;
   expectedRevision?: number;
+  authorizationUpdate?: boolean;
 };
 
 export type InboundQuoteResolution = {
@@ -402,6 +403,7 @@ const persistQuoteResolution = async (
   resolution: QuoteResolution,
   postId: string,
   expectedRevision?: number,
+  authorizationUpdate = false,
 ): Promise<{ applied: boolean; row: typeof ActivityPubPostQuotes.$inferSelect }> => {
   for (;;) {
     const result = await db.transaction(async (tx) => {
@@ -411,6 +413,16 @@ const persistQuoteResolution = async (
         .where(eq(ActivityPubPostQuotes.postId, postId))
         .limit(1)
         .then(first);
+
+      // Embedded Updates can only change authorization on the existing Quote identity.
+      if (
+        authorizationUpdate &&
+        (!current ||
+          current.targetUri !== resolution.targetUri ||
+          current.format !== resolution.format)
+      ) {
+        return current ? { applied: false, row: current } : null;
+      }
 
       if (
         expectedRevision !== undefined &&
@@ -534,6 +546,7 @@ export const handleInboundQuote = async ({
   receivedAt,
   startWorkflow = true,
   expectedRevision,
+  authorizationUpdate = false,
 }: InboundQuoteInput): Promise<InboundQuoteResolution> => {
   let extraction = await extractQuote(context, note);
   if (!extraction) {
@@ -546,6 +559,16 @@ export const handleInboundQuote = async ({
     .where(eq(ActivityPubPostQuotes.postId, postId))
     .limit(1)
     .then(first);
+  if (
+    authorizationUpdate &&
+    (!current ||
+      extraction.malformed ||
+      current.targetUri !== extraction.targetUri ||
+      current.format !== extraction.format)
+  ) {
+    return { retryable: false, status: current?.status ?? null };
+  }
+
   if (
     current &&
     current.targetUri === extraction.targetUri &&
@@ -638,7 +661,12 @@ export const handleInboundQuote = async ({
     };
   }
 
-  const stored = await persistQuoteResolution(resolution, postId, expectedRevision);
+  const stored = await persistQuoteResolution(
+    resolution,
+    postId,
+    expectedRevision,
+    authorizationUpdate,
+  );
   if (!stored.applied) {
     return { retryable: false, status: stored.row.status };
   }

@@ -80,6 +80,7 @@ export const handleInboundUpdate = async (
     }
 
     await handleInboundQuote({
+      authorizationUpdate: true,
       actorUri: actorUri.href,
       context,
       note: object,
