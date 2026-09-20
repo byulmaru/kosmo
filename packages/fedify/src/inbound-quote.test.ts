@@ -26,7 +26,6 @@ import {
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { temporalClient } from '@kosmo/core/temporal/client';
 import { eq, ne } from 'drizzle-orm';
-import { RemoteActorDiscoveryUnavailableError } from './remote-actor-materialization';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type * as CoreServices from '@kosmo/core/services';
@@ -600,23 +599,18 @@ test('Source 작성자 discovery 장애는 transient PENDING으로 분류한다'
     'https://quote.example/notes/author-discovery',
   );
   const targetUri = new URL('https://source.example/notes/author-discovery');
-  const context = Object.assign(
-    createContext(
-      new Map(),
-      async () =>
-        new Note({
-          attribution: new URL('https://source.example/users/author-discovery'),
-          content: 'temporarily undiscoverable author',
-          id: targetUri,
-          to: PUBLIC_COLLECTION,
-        }),
-    ) as unknown as Record<string, unknown>,
-    {
-      resolveActorHandle: async () => {
-        throw new RemoteActorDiscoveryUnavailableError('temporary WebFinger outage');
-      },
-    },
-  ) as never;
+  const actorUri = new URL('https://source.example/users/author-discovery');
+  const context = createContext(new Map(), async (identifier) => {
+    if (identifier.toString() === actorUri.href) {
+      throw new Error('temporary actor lookup outage');
+    }
+    return new Note({
+      attribution: actorUri,
+      content: 'temporarily unavailable author',
+      id: targetUri,
+      to: PUBLIC_COLLECTION,
+    });
+  });
 
   const result = await handleInboundQuote({
     actorUri: 'https://quote.example/users/author-discovery',
@@ -869,6 +863,40 @@ test('Update authorization add/remove와 Delete listener가 revision 및 철회 
     postId: quote.post.id,
     receivedAt,
   });
+  for (const object of [
+    base.clone({ quote: null, quoteUrl: base.quoteId }),
+    base.clone({ quote: new URL('https://source.example/notes/another-target') }),
+  ]) {
+    await deliver(
+      new Update({ actor: quotePerson.id!, object }),
+      quoteKeyPair.privateKey,
+      quoteKeyUri,
+    );
+    const unchanged = await db
+      .select()
+      .from(ActivityPubPostQuotes)
+      .where(eq(ActivityPubPostQuotes.postId, quote.post.id))
+      .then(firstOrThrow);
+    assert.equal(unchanged.status, ActivityPubQuoteStatus.PENDING);
+    assert.equal(unchanged.format, 'FEP_044F');
+    assert.equal(unchanged.targetUri, base.quoteId!.href);
+    assert.equal(unchanged.approvalUri, null);
+    assert.equal(unchanged.resolutionRevision, 1);
+    assert.equal(
+      (await db.select().from(Posts).where(eq(Posts.id, quote.post.id)).then(firstOrThrow))
+        .repostSourceId,
+      source.post.id,
+    );
+  }
+  await Promise.all(
+    [0, 1].map(() =>
+      deliver(
+        new Update({ actor: quotePerson.id!, object: approved }),
+        quoteKeyPair.privateKey,
+        quoteKeyUri,
+      ),
+    ),
+  );
   await deliver(
     new Update({ actor: quotePerson.id!, object: approved }),
     quoteKeyPair.privateKey,
@@ -960,6 +988,129 @@ test('Update authorization add/remove와 Delete listener가 revision 및 철회 
   );
 });
 
+for (const change of [
+  'target',
+  'missing-target',
+  'quoteUrl',
+  'quoteUri',
+  '_misskey_quote',
+] as const) {
+  test(`embedded Update의 ${change} 변경은 기존 FEP target/format/status를 보존한다`, async () => {
+    const sourceActor = await createRemoteActor(
+      'immutable-source',
+      'https://source.example/users/immutable',
+    );
+    const quoteActor = await createRemoteActor(
+      'immutable-quote',
+      'https://quote.example/users/immutable',
+    );
+    const target = new URL('https://source.example/notes/immutable-a');
+    const source = await createRemotePost(sourceActor.id, target.href);
+    const quote = await createRemotePost(quoteActor.id, 'https://quote.example/notes/immutable');
+    const base = new Note({
+      attribution: new URL('https://quote.example/users/immutable'),
+      id: new URL('https://quote.example/notes/immutable'),
+      quote: target,
+      to: PUBLIC_COLLECTION,
+    });
+    const lookupObject = mock.fn(async () => null);
+    const context = createContext(new Map(), lookupObject);
+    await handleInboundQuote({
+      actorUri: base.attributionId!.href,
+      context,
+      note: base,
+      postId: quote.post.id,
+      receivedAt,
+    });
+    const before = await db
+      .select()
+      .from(ActivityPubPostQuotes)
+      .where(eq(ActivityPubPostQuotes.postId, quote.post.id))
+      .then(firstOrThrow);
+    assert.equal(before.status, ActivityPubQuoteStatus.PENDING);
+    const aliases = {
+      quoteUrl: 'https://www.w3.org/ns/activitystreams#quoteUrl',
+      quoteUri: 'http://fedibird.com/ns#quoteUri',
+      _misskey_quote: 'https://misskey-hub.net/ns#_misskey_quote',
+    };
+    if (change === 'target') {
+      await createRemotePost(sourceActor.id, 'https://source.example/notes/immutable-b');
+    }
+    const changesTarget = change === 'target' || change === 'missing-target';
+    const changed = changesTarget
+      ? base.clone({ quote: new URL('https://source.example/notes/immutable-b') })
+      : await Note.fromJsonLd(
+          {
+            '@context': [
+              'https://www.w3.org/ns/activitystreams',
+              {
+                [change]: {
+                  '@id': aliases[change],
+                  '@type': 'http://www.w3.org/2001/XMLSchema#anyURI',
+                },
+              },
+            ],
+            type: 'Note',
+            id: base.id!.href,
+            attributedTo: base.attributionId!.href,
+            [change]: target.href,
+          },
+          { contextLoader: getDocumentLoader() },
+        );
+    if (!changesTarget) {
+      assert.equal(changed.quoteUrl?.href, target.href);
+    }
+    const update = new Update({ actor: base.attributionId!, object: changed });
+    await Promise.all([
+      handleInboundUpdate(context, update, receivedAt),
+      handleInboundUpdate(context, update, receivedAt),
+    ]);
+    await handleInboundUpdate(context, update, receivedAt);
+    assert.deepEqual(
+      await db
+        .select()
+        .from(ActivityPubPostQuotes)
+        .where(eq(ActivityPubPostQuotes.postId, quote.post.id))
+        .then(firstOrThrow),
+      before,
+    );
+    assert.equal(
+      (await db.select().from(Posts).where(eq(Posts.id, quote.post.id)).then(firstOrThrow))
+        .repostSourceId,
+      source.post.id,
+    );
+    assert.equal(lookupObject.mock.calls.length, 0);
+  });
+}
+
+test('Quote metadata가 없는 기존 Post는 embedded Update로 backfill하지 않는다', async () => {
+  const actor = await createRemoteActor('no-backfill', 'https://quote.example/users/no-backfill');
+  const source = await createRemotePost(actor.id, 'https://quote.example/notes/no-backfill-source');
+  const quote = await createRemotePost(actor.id, 'https://quote.example/notes/no-backfill');
+  await db.update(Posts).set({ repostSourceId: source.post.id }).where(eq(Posts.id, quote.post.id));
+  await handleInboundUpdate(
+    createContext(),
+    new Update({
+      actor: new URL('https://quote.example/users/no-backfill'),
+      object: new Note({
+        attribution: new URL('https://quote.example/users/no-backfill'),
+        id: new URL('https://quote.example/notes/no-backfill'),
+        quoteUrl: new URL('https://quote.example/notes/no-backfill-source'),
+      }),
+    }),
+    receivedAt,
+  );
+  assert.equal(
+    await db.$count(ActivityPubPostQuotes, eq(ActivityPubPostQuotes.postId, quote.post.id)),
+    0,
+  );
+  assert.equal(
+    (await db.select().from(Posts).where(eq(Posts.id, quote.post.id)).then(firstOrThrow))
+      .repostSourceId,
+    source.post.id,
+  );
+});
+
 test('IRI-only 및 authorization-only Update는 Quote 상태를 변경하지 않는다', async () => {
   const sourceActor = await createRemoteActor(
     'out-of-scope-source',
@@ -1029,7 +1180,10 @@ test('self-quote와 legacy Update는 승인 참조 revision만 바꾸고 APPROVE
     'update-self',
     'https://quote.example/users/update-self',
   );
-  await createRemotePost(selfActor.id, 'https://quote.example/notes/update-self-source');
+  const selfSource = await createRemotePost(
+    selfActor.id,
+    'https://quote.example/notes/update-self-source',
+  );
   const selfQuote = await createRemotePost(
     selfActor.id,
     'https://quote.example/notes/update-self-quote',
@@ -1054,6 +1208,33 @@ test('self-quote와 legacy Update는 승인 참조 revision만 바꾸고 APPROVE
     postId: selfQuote.post.id,
     receivedAt,
   });
+  const selfBefore = await db
+    .select()
+    .from(ActivityPubPostQuotes)
+    .where(eq(ActivityPubPostQuotes.postId, selfQuote.post.id))
+    .then(firstOrThrow);
+  await createRemotePost(selfActor.id, 'https://quote.example/notes/update-self-other');
+  await handleInboundUpdate(
+    selfContext,
+    new Update({
+      actor: selfBase.attributionId!,
+      object: selfBase.clone({ quote: new URL('https://quote.example/notes/update-self-other') }),
+    }),
+    receivedAt,
+  );
+  assert.deepEqual(
+    await db
+      .select()
+      .from(ActivityPubPostQuotes)
+      .where(eq(ActivityPubPostQuotes.postId, selfQuote.post.id))
+      .then(firstOrThrow),
+    selfBefore,
+  );
+  assert.equal(
+    (await db.select().from(Posts).where(eq(Posts.id, selfQuote.post.id)).then(firstOrThrow))
+      .repostSourceId,
+    selfSource.post.id,
+  );
   await handleInboundUpdate(
     selfContext,
     new Update({
@@ -1238,6 +1419,7 @@ const createRemoteActor = async (handle: string, actorUri: string) => {
 const createRemotePost = async (profileId: string, objectUri: string) => {
   const result = await createPost({
     document: postContentDocumentFromText(objectUri),
+    mentionProfileIds: [],
     objectUri,
     origin: 'ACTIVITYPUB',
     profileId,
