@@ -2302,72 +2302,80 @@ test('private Source fetch 중 revision이 stale해지면 늦은 응답을 저�
   );
 });
 
-test('private Source 생성 뒤 Quote revision이 바뀌면 Source와 post-commit effect를 함께 rollback한다', async () => {
-  const sourceActor = await createRemoteActor(
-    'private-commit-race-source',
-    'https://source.example/users/private-commit-race',
-  );
-  const followersUri = 'https://source.example/users/private-commit-race/followers';
-  await db
-    .update(ActivityPubActors)
-    .set({ followersUri })
-    .where(eq(ActivityPubActors.profileId, sourceActor.id));
-  const follower = await createLocalProfile('private-commit-race-follower');
-  await db.insert(ProfileFollows).values({
-    followerProfileId: follower.id,
-    followeeProfileId: sourceActor.id,
-  });
-  const quoteActor = await createRemoteActor(
-    'private-commit-race-quote',
-    'https://quote.example/users/private-commit-race',
-  );
-  const sourceUri = new URL('https://source.example/notes/private-commit-race');
-  const quoteUri = new URL('https://quote.example/notes/private-commit-race');
-  const quote = await createRemotePost(quoteActor.id, quoteUri.href);
-  const authorized = await authorizeQuoteSource({
-    note: new Note({
-      attribution: new URL('https://quote.example/users/private-commit-race'),
-      id: quoteUri,
-      quote: sourceUri,
-      to: PUBLIC_COLLECTION,
-    }),
-    sourceAuthorUri: 'https://source.example/users/private-commit-race',
-    sourceUri,
-  });
-  await db.insert(ActivityPubPostQuotes).values({
-    approvalUri: authorized.note.quoteAuthorizationId!.href,
-    format: ActivityPubQuoteFormat.FEP_044F,
-    postId: quote.post.id,
-    resolutionRevision: 1,
-    status: ActivityPubQuoteStatus.PENDING,
-    targetUri: sourceUri.href,
-  });
-  const sourceNote = new Note({
-    attribution: new URL('https://source.example/users/private-commit-race'),
-    content: 'private commit race source',
-    id: sourceUri,
-    to: new URL(followersUri),
-  });
-  Object.defineProperty(sourceNote, 'getAttachments', {
-    configurable: true,
-    value: async function* () {
-      await db
-        .update(ActivityPubPostQuotes)
-        .set({ resolutionRevision: 2, status: ActivityPubQuoteStatus.REVOKED })
-        .where(eq(ActivityPubPostQuotes.postId, quote.post.id));
-      yield* [];
-    },
-  });
-  const keyPair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
-  const workflowStart = mock.method(
-    temporalClient.workflow,
-    'start',
-    async () => undefined as never,
-  );
+for (const mode of ['workflow', 'update-target', 'update-format'] as const) {
+  test(`private Source 저장 중 ${mode} 경쟁은 Source와 post-commit effect를 함께 rollback한다`, async () => {
+    const sourceActor = await createRemoteActor(
+      'private-commit-race-source',
+      'https://source.example/users/private-commit-race',
+    );
+    const followersUri = 'https://source.example/users/private-commit-race/followers';
+    await db
+      .update(ActivityPubActors)
+      .set({ followersUri })
+      .where(eq(ActivityPubActors.profileId, sourceActor.id));
+    const follower = await createLocalProfile('private-commit-race-follower');
+    await db.insert(ProfileFollows).values({
+      followerProfileId: follower.id,
+      followeeProfileId: sourceActor.id,
+    });
+    const quoteActor = await createRemoteActor(
+      'private-commit-race-quote',
+      'https://quote.example/users/private-commit-race',
+    );
+    const sourceUri = new URL('https://source.example/notes/private-commit-race');
+    const quoteUri = new URL('https://quote.example/notes/private-commit-race');
+    const quote = await createRemotePost(quoteActor.id, quoteUri.href);
+    const authorized = await authorizeQuoteSource({
+      note: new Note({
+        attribution: new URL('https://quote.example/users/private-commit-race'),
+        id: quoteUri,
+        quote: sourceUri,
+        to: PUBLIC_COLLECTION,
+      }),
+      sourceAuthorUri: 'https://source.example/users/private-commit-race',
+      sourceUri,
+    });
+    await db.insert(ActivityPubPostQuotes).values({
+      approvalUri: authorized.note.quoteAuthorizationId!.href,
+      format: ActivityPubQuoteFormat.FEP_044F,
+      postId: quote.post.id,
+      resolutionRevision: 1,
+      status: ActivityPubQuoteStatus.PENDING,
+      targetUri: sourceUri.href,
+    });
+    const sourceNote = new Note({
+      attribution: new URL('https://source.example/users/private-commit-race'),
+      content: 'private commit race source',
+      id: sourceUri,
+      to: new URL(followersUri),
+    });
+    Object.defineProperty(sourceNote, 'getAttachments', {
+      configurable: true,
+      value: async function* () {
+        await db
+          .update(ActivityPubPostQuotes)
+          .set({
+            resolutionRevision: 2,
+            status:
+              mode === 'workflow' ? ActivityPubQuoteStatus.REVOKED : ActivityPubQuoteStatus.PENDING,
+            ...(mode === 'update-target'
+              ? { targetUri: 'https://source.example/notes/replacement' }
+              : {}),
+            ...(mode === 'update-format' ? { format: ActivityPubQuoteFormat.LEGACY } : {}),
+          })
+          .where(eq(ActivityPubPostQuotes.postId, quote.post.id));
+        yield* [];
+      },
+    });
+    const keyPair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
+    const workflowStart = mock.method(
+      temporalClient.workflow,
+      'start',
+      async () => undefined as never,
+    );
 
-  try {
-    const result = await resolveStoredInboundQuote({
-      context: createSignedContext(
+    try {
+      const context = createSignedContext(
         new Map([
           [
             follower.id,
@@ -2378,24 +2386,55 @@ test('private Source 생성 뒤 Quote revision이 바뀌면 Source와 post-commi
         [],
         async () => sourceNote,
         authorized.documents,
-      ),
-      postId: quote.post.id,
-      receivedAt,
-      revision: 1,
-    });
-
-    assert.deepEqual(result, { retryable: false, status: ActivityPubQuoteStatus.REVOKED });
-    assert.equal(await db.$count(ActivityPubPosts, eq(ActivityPubPosts.uri, sourceUri.href)), 0);
-    assert.equal(
-      (await db.select().from(Posts).where(eq(Posts.id, quote.post.id)).then(firstOrThrow))
-        .repostSourceId,
-      null,
-    );
-    assert.equal(workflowStart.mock.callCount(), 0);
-  } finally {
-    workflowStart.mock.restore();
-  }
-});
+      );
+      if (mode === 'workflow') {
+        const result = await resolveStoredInboundQuote({
+          context,
+          postId: quote.post.id,
+          receivedAt,
+          revision: 1,
+        });
+        assert.deepEqual(result, { retryable: false, status: ActivityPubQuoteStatus.REVOKED });
+      } else {
+        await handleInboundUpdate(
+          context,
+          new Update({
+            actor: new URL('https://quote.example/users/private-commit-race'),
+            object: authorized.note,
+          }),
+          receivedAt,
+        );
+      }
+      const row = await db
+        .select()
+        .from(ActivityPubPostQuotes)
+        .where(eq(ActivityPubPostQuotes.postId, quote.post.id))
+        .then(firstOrThrow);
+      assert.equal(row.resolutionRevision, 2);
+      assert.equal(
+        row.status,
+        mode === 'workflow' ? ActivityPubQuoteStatus.REVOKED : ActivityPubQuoteStatus.PENDING,
+      );
+      assert.equal(
+        row.targetUri,
+        mode === 'update-target' ? 'https://source.example/notes/replacement' : sourceUri.href,
+      );
+      assert.equal(
+        row.format,
+        mode === 'update-format' ? ActivityPubQuoteFormat.LEGACY : ActivityPubQuoteFormat.FEP_044F,
+      );
+      assert.equal(await db.$count(ActivityPubPosts, eq(ActivityPubPosts.uri, sourceUri.href)), 0);
+      assert.equal(
+        (await db.select().from(Posts).where(eq(Posts.id, quote.post.id)).then(firstOrThrow))
+          .repostSourceId,
+        null,
+      );
+      assert.equal(workflowStart.mock.callCount(), 0);
+    } finally {
+      workflowStart.mock.restore();
+    }
+  });
+}
 
 const createContext = (
   documents = new Map<string, unknown>(),
