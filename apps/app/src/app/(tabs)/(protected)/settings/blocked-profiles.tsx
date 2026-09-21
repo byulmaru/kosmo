@@ -6,6 +6,7 @@ import { SettingsBlockedProfiles } from '@/components/settings/SettingsBlockedPr
 import { returnToSettingsParent } from '@/components/settings/settingsNavigation';
 import { useSettingsDetailHeaderMode } from '@/components/settings/SettingsRouteContext';
 import { IconButton } from '@/components/ui/IconButton';
+import { RouteScrollContainer } from '@/components/ui/RouteScrollContainer';
 import { useTheme } from '@/theme/ThemeProvider';
 
 export default function SettingsBlockedProfilesRoute() {
@@ -25,12 +26,18 @@ export default function SettingsBlockedProfilesRoute() {
     ) : undefined;
 
   return (
-    <>
+    <RouteScrollContainer
+      nativeScrollProps={{
+        contentContainerStyle: styles.nativeContent,
+        style: styles.nativeRoot,
+      }}
+      webStyle={styles.webRoot}
+    >
       {detailHeaderMode !== 'hidden' ? (
         <PageHeader leading={backButton} title="차단한 프로필" />
       ) : null}
       <SettingsBlockedProfiles />
-    </>
+    </RouteScrollContainer>
   );
 }
 
@@ -42,4 +49,7 @@ const styles = StyleSheet.create({
     minHeight: 44,
     width: 44,
   },
+  nativeContent: { flexGrow: 1, minWidth: 0, width: '100%' },
+  nativeRoot: { flex: 1, minWidth: 0, width: '100%' },
+  webRoot: { minWidth: 0, width: '100%' },
 });

@@ -311,6 +311,19 @@ describe('Settings routes', () => {
     assert.deepEqual(replacedPaths, ['/settings/mute-and-block']);
   });
 
+  it('Native blocked profile detail은 header와 목록을 하나의 vertical ScrollView에 표시한다', async () => {
+    platform = 'android';
+    await renderRoute('/settings/blocked-profiles', SettingsBlockedProfilesRoute);
+
+    const scrollView = rendered('ScrollView')[0];
+    assert.ok(scrollView);
+    assert.equal(scrollView.findAll((node) => (node.type as unknown) === 'PageHeader').length, 1);
+    assert.equal(
+      scrollView.findAll((node) => (node.type as unknown) === 'SettingsBlockedProfiles').length,
+      1,
+    );
+  });
+
   it('full Web blocked profile deep link도 공통 master의 mute category를 선택한다', async () => {
     await renderRoute('/settings/blocked-profiles', SettingsBlockedProfilesRoute);
 
