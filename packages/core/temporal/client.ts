@@ -95,7 +95,7 @@ export async function runWorkflow<T extends Workflow>(
 ): Promise<WorkflowHandleWithStartDetails<T> | WorkflowResultType<T> | unknown> {
   const args = (options.args ?? []) as Parameters<T>;
   const workflowId = definition.workflowIdFromArgs(...args);
-  const deadline = Date.now() + 5_000;
+  const deadline = Date.now() + 30_000;
 
   try {
     if (options.mode === 'update-with-start') {

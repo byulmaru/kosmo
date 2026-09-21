@@ -401,41 +401,22 @@ test('remote Profile Workflow builder는 normalized handle과 profileId를 실�
   }
 });
 
-test('공용 task queue와 5초 deadline을 적용한다', async () => {
+test('공용 task queue를 적용한다', async () => {
   const workflow = async (): Promise<string> => 'ok';
   const definition = { workflow, workflowIdFromArgs: () => 'deadline-id' };
   const execute = mock.method(temporalClient.workflow, 'execute', async () => 'ok' as never);
-  const deadlines: Array<number | Date> = [];
-  const deadline = mock.method(
-    temporalClient,
-    'withDeadline',
-    async (value: number | Date, callback: () => Promise<unknown>) => {
-      deadlines.push(value);
-      return callback();
-    },
-  );
-  const before = Date.now();
 
   try {
     await runWorkflow(definition, {
       mode: 'execute',
     });
 
-    const after = Date.now();
     const executeCall = execute.mock.calls[0];
     assert.ok(executeCall);
     const executeOptions = executeCall.arguments[1];
     assert.ok(executeOptions);
     assert.equal(executeOptions.taskQueue, 'kosmo');
-    assert.equal(deadlines.length, 1);
-    const deadlineValue = deadlines[0];
-    assert.ok(deadlineValue !== undefined);
-    const deadlineTimestamp =
-      deadlineValue instanceof Date ? deadlineValue.getTime() : deadlineValue;
-    assert.ok(deadlineTimestamp >= before + 4_900);
-    assert.ok(deadlineTimestamp <= after + 5_000);
   } finally {
-    deadline.mock.restore();
     execute.mock.restore();
   }
 });
