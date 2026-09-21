@@ -14,7 +14,7 @@ import { KosmoError } from '@kosmo/core/error';
 import { temporalClient } from '@kosmo/core/temporal/client';
 import { profileFollowRemovalWorkflowId } from '@kosmo/core/temporal/follow-command';
 import { eq, ne } from 'drizzle-orm';
-import { setInboundObservabilityReporter } from './inbound-observability';
+import { setInboundObservabilityReporter, withInboundObservability } from './inbound-observability';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
@@ -36,6 +36,7 @@ let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
 let Notifications: typeof CoreDb.Notifications;
 let pg: typeof CoreDb.pg;
+let ProfileBlocks: typeof CoreDb.ProfileBlocks;
 let ProfileFollowRequests: typeof CoreDb.ProfileFollowRequests;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
 let Profiles: typeof CoreDb.Profiles;
@@ -56,6 +57,7 @@ describe('inbound Accept and Reject', () => {
       Instances,
       Notifications,
       pg,
+      ProfileBlocks,
       ProfileFollowRequests,
       ProfileFollows,
       Profiles,
@@ -291,6 +293,48 @@ describe('inbound Accept and Reject', () => {
     assert.equal((await db.select().from(ProfileFollowRequests)).length, 0);
     assert.equal((await db.select().from(ProfileFollows)).length, 1);
     assert.deepEqual(await readCounts(fixture), { localFollowing: 1, remoteFollowers: 1 });
+  });
+
+  test('rejects a blocked inbound Accept without reporting an internal failure', async () => {
+    const fixture = await createFixture({ projection: 'PENDING' });
+    await db.insert(ProfileBlocks).values({
+      ownerProfileId: fixture.remoteProfile.id,
+      targetProfileId: fixture.localProfile.id,
+    });
+    const logs: unknown[] = [];
+    const captures: unknown[] = [];
+    const restoreReporter = setInboundObservabilityReporter({
+      captureException: (error) => captures.push(error),
+      log: (observation) => logs.push(observation),
+    });
+
+    try {
+      await withInboundObservability('accept', handleInboundAccept)(
+        createContext(localProfileId),
+        new Accept({
+          actor: remoteActorUri,
+          object: createOutboundFollow(fixture.projection),
+        }),
+      );
+    } finally {
+      restoreReporter();
+    }
+
+    assert.deepEqual(await db.select().from(ProfileFollowRequests), [fixture.projection]);
+    assert.equal((await db.select().from(ProfileFollows)).length, 0);
+    assert.deepEqual(await readCounts(fixture), { localFollowing: 0, remoteFollowers: 0 });
+    assert.equal(captures.length, 0);
+    assert.deepEqual(logs, [
+      {
+        activityType: 'Accept',
+        actorOrigin: localActorUri.origin,
+        handler: 'accept',
+        objectOrigin: remoteActorUri.origin,
+        outcome: 'rejected',
+        phase: 'projection',
+        reasonCode: 'accept_follow_policy_rejected',
+      },
+    ]);
   });
 
   test('concurrent pending Accepts converge on one relation through the pair Workflow', async () => {

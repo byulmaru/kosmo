@@ -30,6 +30,7 @@ let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
 let pg: typeof CoreDb.pg;
+let ProfileBlocks: typeof CoreDb.ProfileBlocks;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
 let ProfileFollowRequests: typeof CoreDb.ProfileFollowRequests;
 let Profiles: typeof CoreDb.Profiles;
@@ -52,6 +53,7 @@ describe('GraphQL profile follow graph', () => {
       firstOrThrow,
       Instances,
       pg,
+      ProfileBlocks,
       ProfileFollows,
       ProfileFollowRequests,
       Profiles,
@@ -106,6 +108,135 @@ describe('GraphQL profile follow graph', () => {
       isSelf: false,
     });
   });
+
+  for (const candidateKind of ['Local', 'Remote'] as const) {
+    test(`${candidateKind} 제3자 Follow 목록은 viewer와 후보의 차단을 pagination 전에 제외한다`, async () => {
+      const viewer = await createAuthenticatedSession();
+      const observer = await createAuthenticatedSession();
+      const withoutViewer = await createAuthenticatedSession({ activeProfile: false });
+      const collection = await createProfile({
+        handle: 'candidate-collection',
+        instanceId: localInstanceId,
+      });
+      const candidateInstanceId =
+        candidateKind === 'Remote' ? (await createRemoteInstance()).id : localInstanceId;
+      const candidates = await Promise.all(
+        ['outgoing', 'visible-first', 'incoming', 'residual', 'visible-last'].map((name) =>
+          createProfile({ handle: `candidate-${name}`, instanceId: candidateInstanceId }),
+        ),
+      );
+      await db.insert(ProfileFollows).values(
+        candidates.flatMap((candidate, index) => [
+          {
+            id: `019f8ed2-0000-7000-8000-0000000000${9 - index}1`,
+            followerProfileId: candidate.id,
+            followeeProfileId: collection.id,
+          },
+          {
+            id: `019f8ed2-0000-7000-8000-0000000000${9 - index}2`,
+            followerProfileId: collection.id,
+            followeeProfileId: candidate.id,
+          },
+        ]),
+      );
+      type Connection = {
+        edges: Array<{ node: ProfileFollowNode }>;
+        pageInfo: {
+          startCursor: string;
+          endCursor: string;
+          hasNextPage: boolean;
+          hasPreviousPage: boolean;
+        };
+      };
+      const read = async (
+        token: string | undefined,
+        pagination: Record<string, string | number> = { first: 1 },
+      ) => {
+        const result = await requestGraphQL<{
+          node: { followers: Connection; following: Connection };
+          direct: { id: string };
+        }>(
+          `query FollowCandidatePages(
+            $id: ID!, $candidateId: ID!, $first: Int, $last: Int,
+            $afterFollower: String, $afterFollowing: String,
+            $beforeFollower: String, $beforeFollowing: String
+          ) {
+            node(id: $id) {
+              ... on Profile {
+                followers(first: $first, last: $last, after: $afterFollower, before: $beforeFollower) {
+                  edges { node { id follower { id } followee { id } } }
+                  pageInfo { startCursor endCursor hasNextPage hasPreviousPage }
+                }
+                following(first: $first, last: $last, after: $afterFollowing, before: $beforeFollowing) {
+                  edges { node { id follower { id } followee { id } } }
+                  pageInfo { startCursor endCursor hasNextPage hasPreviousPage }
+                }
+              }
+            }
+            direct: node(id: $candidateId) { id }
+          }`,
+          {
+            id: globalId('Profile', collection.id),
+            candidateId: globalId('Profile', candidates[0]!.id),
+            ...pagination,
+          },
+          token,
+        );
+        assertNoGraphQLErrors(result);
+        assert.ok(result.data?.node);
+        assert.deepEqual(result.data.direct, { id: globalId('Profile', candidates[0]!.id) });
+        return result.data.node;
+      };
+      const assertCandidates = (
+        graph: Awaited<ReturnType<typeof read>>,
+        expected: typeof candidates,
+      ) => {
+        const ids = expected.map(({ id }) => globalId('Profile', id));
+        assert.deepEqual(
+          graph.followers.edges.map(({ node }) => node.follower?.id),
+          ids,
+        );
+        assert.deepEqual(
+          graph.following.edges.map(({ node }) => node.followee?.id),
+          ids,
+        );
+      };
+      assertCandidates(await read(viewer.token, { first: 10 }), candidates);
+      await db.insert(ProfileBlocks).values([
+        { ownerProfileId: viewer.profile.id, targetProfileId: candidates[0]!.id },
+        { ownerProfileId: candidates[2]!.id, targetProfileId: viewer.profile.id },
+        { ownerProfileId: candidates[3]!.id, targetProfileId: collection.id },
+      ]);
+
+      const first = await read(viewer.token);
+      assertCandidates(first, [candidates[1]!]);
+      assert.equal(first.followers.pageInfo.hasNextPage, true);
+      assert.equal(first.following.pageInfo.hasNextPage, true);
+      const next = await read(viewer.token, {
+        first: 1,
+        afterFollower: first.followers.pageInfo.endCursor,
+        afterFollowing: first.following.pageInfo.endCursor,
+      });
+      assertCandidates(next, [candidates[4]!]);
+      assert.equal(next.followers.pageInfo.hasNextPage, false);
+      assert.equal(next.following.pageInfo.hasNextPage, false);
+      const previous = await read(viewer.token, {
+        last: 1,
+        beforeFollower: next.followers.pageInfo.startCursor,
+        beforeFollowing: next.following.pageInfo.startCursor,
+      });
+      assertCandidates(previous, [candidates[1]!]);
+      for (const token of [observer.token, withoutViewer.token, undefined]) {
+        assertCandidates(await read(token, { first: 10 }), [
+          candidates[0]!,
+          candidates[1]!,
+          candidates[2]!,
+          candidates[4]!,
+        ]);
+      }
+      assert.equal(await db.$count(ProfileFollows), 10);
+    });
+  }
 
   test('returns self viewer state without a follow relationship', async () => {
     const auth = await createAuthenticatedSession();
@@ -1077,6 +1208,7 @@ const createAuthenticatedSession = async ({
 };
 
 const resetFixtures = async () => {
+  await db.delete(ProfileBlocks);
   await db.delete(Sessions);
   await db.delete(ProfileFollowRequests);
   await db.delete(ProfileFollows);

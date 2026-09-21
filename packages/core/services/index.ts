@@ -15,6 +15,7 @@ export {
 } from './notification';
 export { createPost, deletePost, repostPost } from './post';
 export { disableProfile } from './profile';
+export { assertProfilePairIsNotBlocked, ProfilePairBlockedError } from './profile-block-policy';
 export { followProfile, unfollowProfile } from './profile-follow';
 export type {
   HydratedProfileFollowPairTransition,

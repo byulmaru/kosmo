@@ -1,5 +1,6 @@
 import { db, Instances, ProfileFollows, Profiles } from '@kosmo/core/db';
 import { AccountProfileRole } from '@kosmo/core/enums';
+import { profileBlockVisibilityWhere } from '@kosmo/core/visibility';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, getColumns, gt, lt } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
@@ -18,6 +19,8 @@ import {
   ProfileFollowRequest,
   ProfileMute,
 } from '../ref';
+import type { SQLWrapper } from 'drizzle-orm';
+import type { UserContext } from '@/context';
 
 type ProfileFollowRow = typeof ProfileFollows.$inferSelect;
 
@@ -25,6 +28,25 @@ const FollowerProfiles = alias(Profiles, 'profile_follow_connection_follower_pro
 const FolloweeProfiles = alias(Profiles, 'profile_follow_connection_followee_profile');
 const FollowerInstances = alias(Instances, 'profile_follow_connection_follower_instance');
 const FolloweeInstances = alias(Instances, 'profile_follow_connection_followee_instance');
+
+const followCandidateAccessWhere = (ctx: UserContext, candidateProfileId: SQLWrapper) => {
+  const viewerProfileId = ctx.session?.profile?.id;
+  return viewerProfileId
+    ? and(
+        profileBlockVisibilityWhere({
+          database: db,
+          ownerProfileId: viewerProfileId,
+          targetProfileId: candidateProfileId,
+        }),
+        profileBlockVisibilityWhere({
+          database: db,
+          ownerProfileId: candidateProfileId,
+          targetProfileId: viewerProfileId,
+        }),
+      )
+    : undefined;
+};
+
 const ProfileViewerState = builder.simpleObject('ProfileViewerState', {
   fields: (field) => ({
     isSelf: field.boolean(),
@@ -70,6 +92,7 @@ builder.objectFields(Profile, (t) => ({
             .where(
               and(
                 eq(ProfileFollows.followeeProfileId, profile.id),
+                followCandidateAccessWhere(ctx, ProfileFollows.followerProfileId),
                 before ? gt(ProfileFollows.id, before) : undefined,
                 after ? lt(ProfileFollows.id, after) : undefined,
                 profileFollowAccessWhere({
@@ -106,6 +129,7 @@ builder.objectFields(Profile, (t) => ({
             .where(
               and(
                 eq(ProfileFollows.followerProfileId, profile.id),
+                followCandidateAccessWhere(ctx, ProfileFollows.followeeProfileId),
                 before ? gt(ProfileFollows.id, before) : undefined,
                 after ? lt(ProfileFollows.id, after) : undefined,
                 profileFollowAccessWhere({
