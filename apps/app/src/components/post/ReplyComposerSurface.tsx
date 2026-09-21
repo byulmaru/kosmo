@@ -433,7 +433,13 @@ function ReplyComposerSurfaceContents({
                   <PostComposerController
                     beforeEditor={
                       quoteMode ? undefined : (
-                        <View style={styles.parent} testID="reply-parent">
+                        <View
+                          style={[
+                            styles.parent,
+                            presentation === 'modal' ? styles.modalParent : null,
+                          ]}
+                          testID="reply-parent"
+                        >
                           <View style={styles.parentAvatarColumn}>
                             <Avatar
                               imageUri={parent.profile.avatar?.url}
@@ -441,7 +447,10 @@ function ReplyComposerSurfaceContents({
                               size={40}
                             />
                             <PostThreadConnector
-                              style={styles.parentConnector}
+                              style={[
+                                styles.parentConnector,
+                                presentation === 'modal' ? styles.modalParentConnector : null,
+                              ]}
                               testID="reply-parent-thread-connector"
                             />
                           </View>
@@ -544,6 +553,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingBottom: spacing.lg,
   },
+  modalParent: { zIndex: 1 },
   parentAvatarColumn: { position: 'relative', width: 40 },
   parentConnector: {
     bottom: -spacing.md,
@@ -551,6 +561,7 @@ const styles = StyleSheet.create({
     top: 40 + spacing.xs,
     transform: [{ translateX: -1 }],
   },
+  modalParentConnector: { bottom: -(spacing.md + spacing.xxl) },
   parentContent: { flex: 1, gap: spacing.md, minWidth: 0 },
   parentIdentity: { flex: 1, minWidth: 0 },
   timestamp: { fontFamily: fontFamilies.ui, marginTop: spacing.xs, ...typography.xsm },

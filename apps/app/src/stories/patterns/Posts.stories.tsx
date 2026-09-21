@@ -7654,7 +7654,13 @@ export const ReplyModalPresentation: Story = {
       ),
     ).toBeLessThanOrEqual(1);
     expect(connectorBounds.top).toBeGreaterThanOrEqual(parentAvatarBounds.bottom);
+    expect(connectorBounds.bottom).toBeGreaterThanOrEqual(composerAvatarBounds.top);
+    expect(connectorBounds.bottom).toBeLessThanOrEqual(composerAvatarBounds.bottom);
     expect(connectorBounds.height).toBeGreaterThan(0);
+    const editor = within(dialog).getByTestId('post-composer-editor');
+    expect(Number(getComputedStyle(replyParent).zIndex)).toBeGreaterThan(
+      Number(getComputedStyle(editor).zIndex),
+    );
     const modalSurface = within(dialog).getByTestId('reply-composer-dialog-surface');
     expect(modalSurface.getBoundingClientRect().width).toBe(600);
     const initialModalHeight = modalSurface.getBoundingClientRect().height;
