@@ -409,6 +409,23 @@ const repostAuthor = profile({
   id: 'profile-repost-author',
   relativeHandle: '@reposter',
 });
+const contentWarningQuoteSourcePost = post({
+  bodyText: '인용 원문의 가림 해제 뒤 표시되는 본문입니다.',
+  contentWarning: '인용 원문 자체 경고',
+  id: 'content-warning-quote-source',
+  profile: sourceAuthor,
+});
+const contentWarningQuotePost = {
+  ...post({
+    bodyText: '인용 게시글의 가림 해제 뒤 표시되는 본문입니다.',
+    contentWarning: '인용 게시글 바깥 경고',
+    id: 'content-warning-quote-outer',
+    profile: repostAuthor,
+    repostSource: contentWarningQuoteSourcePost,
+  }),
+  repostCount: 1,
+  viewerRepost: null,
+};
 const sourcePost = {
   ...post({
     bodyText: '원문 작성자의 긴 본문과 줄바꿈을 표시합니다.\n두 번째 줄입니다.',
@@ -847,6 +864,8 @@ const storyPosts = [
   mediaTextPost,
   mediaOnlyPost,
   contentWarningPost,
+  contentWarningQuoteSourcePost,
+  contentWarningQuotePost,
   contentWarningSourcePreviewPost,
   sensitiveTwoMediaPost,
   threeMediaPost,
@@ -2022,8 +2041,28 @@ function ContentWarningConsumerIntegrationStory() {
           presentation="wide"
         />
       </View>
-      <View testID="content-warning-body-surface">
-        <PostBody post={requireFragment(post.body, 'Content Warning body consumer')} size="lg" />
+      <View testID="content-warning-layout-surface">
+        <PostLayout post={requireFragment(post.layout, 'Content Warning PostLayout consumer')} />
+      </View>
+    </Catalog>
+  );
+}
+
+function ContentWarningQuoteIndependentLifecycleStory() {
+  const post = requirePostById(usePostsStoryData().posts, contentWarningQuotePost.id);
+
+  return (
+    <Catalog>
+      <View testID="content-warning-quote-list-surface">
+        <PostListItem
+          post={requireFragment(post.listItem, 'Content Warning Quote list item consumer')}
+          presentation="wide"
+        />
+      </View>
+      <View testID="content-warning-quote-layout-surface">
+        <PostLayout
+          post={requireFragment(post.layout, 'Content Warning Quote PostLayout consumer')}
+        />
       </View>
     </Catalog>
   );
@@ -2948,7 +2987,14 @@ const meta = {
     resetImagePickerMock();
   },
   component: PostCatalog,
-  excludeStories: ['ComposerBeforeUnloadContract', 'LinkedSourceQuoteInteraction'],
+  excludeStories: [
+    'ComposerBeforeUnloadContract',
+    'ContentWarningProductionConsumersShareRevealStateInteraction',
+    'ContentWarningQuoteIndependentLifecycleInteraction',
+    'ContentWarningRevealInteraction',
+    'ContentWarningSourcePreviewRevealInteraction',
+    'LinkedSourceQuoteInteraction',
+  ],
   decorators: [
     (Story) => (
       <SessionProvider>
@@ -6222,14 +6268,20 @@ export const ProductionComposerDefaultVisibilityUpdate: Story = {
 };
 
 export const ContentWarningReveal: Story = {
+  render: () => <ContentWarningRevealStory />,
+};
+
+export const ContentWarningRevealInteraction: Story = {
+  ...ContentWarningReveal,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     expect(canvas.queryByText('가림 해제 뒤 표시되는 원문 본문입니다.')).not.toBeInTheDocument();
     expect(canvas.queryByTestId('post-media-gallery')).not.toBeInTheDocument();
 
-    const toggle = canvas.getByRole('button', { name: '내용 보기' });
-    const toggleLabel = within(toggle).getByText('내용 보기');
-    expect(getComputedStyle(toggle).justifyContent).toBe('center');
+    const toggle = canvas.getByRole('button', {
+      name: /민감한 내용이 포함되어 있습니다\., 본문 · 이미지 1개, 보기/,
+    });
+    const toggleLabel = within(toggle).getByText('보기');
     const toggleBox = toggle.getBoundingClientRect();
     const toggleLabelBox = toggleLabel.getBoundingClientRect();
     expect(
@@ -6248,10 +6300,14 @@ export const ContentWarningReveal: Story = {
     expect(canvas.queryByText('가림 해제 뒤 표시되는 원문 본문입니다.')).not.toBeInTheDocument();
     expect(canvas.queryByTestId('post-media-gallery')).not.toBeInTheDocument();
   },
-  render: () => <ContentWarningRevealStory />,
 };
 
 export const ContentWarningSourcePreviewReveal: Story = {
+  render: () => <ContentWarningSourcePreviewStory />,
+};
+
+export const ContentWarningSourcePreviewRevealInteraction: Story = {
+  ...ContentWarningSourcePreviewReveal,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     expect(
@@ -6259,31 +6315,102 @@ export const ContentWarningSourcePreviewReveal: Story = {
     ).not.toBeInTheDocument();
     expect(canvas.queryByTestId('post-media-gallery')).not.toBeInTheDocument();
 
-    await userEvent.click(canvas.getByRole('button', { name: '내용 보기' }));
+    await userEvent.click(
+      canvas.getByRole('button', { name: /원문 프리뷰 경고, 본문 · 이미지 1개, 보기/ }),
+    );
 
     expect(canvas.getByText('가림 해제 뒤 표시되는 원문 프리뷰 본문입니다.')).toBeVisible();
     expect(canvas.getByTestId('post-media-gallery')).toBeVisible();
     expect(canvas.getByLabelText('가림 해제 뒤 표시되는 원문 프리뷰 이미지')).toBeVisible();
   },
-  render: () => <ContentWarningSourcePreviewStory />,
 };
 
 export const ContentWarningProductionConsumersShareRevealState: Story = {
+  render: () => <ContentWarningConsumerIntegrationStory />,
+};
+
+export const ContentWarningProductionConsumersShareRevealStateInteraction: Story = {
+  ...ContentWarningProductionConsumersShareRevealState,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const listSurface = within(canvas.getByTestId('content-warning-list-surface'));
-    const bodySurface = within(canvas.getByTestId('content-warning-body-surface'));
+    const layoutSurface = within(canvas.getByTestId('content-warning-layout-surface'));
     expect(canvas.queryByText(contentWarningPost.content!.bodyText)).not.toBeInTheDocument();
 
-    await userEvent.click(listSurface.getByRole('button', { name: '내용 보기' }));
+    await userEvent.click(
+      listSurface.getByRole('button', {
+        name: /실제 Post 소비자 통합 검증 경고, 본문, 보기/,
+      }),
+    );
     expect(canvas.getAllByText(contentWarningPost.content!.bodyText)).toHaveLength(2);
-    expect(bodySurface.getByRole('button', { name: '내용 다시 가리기' })).toBeVisible();
+    expect(
+      layoutSurface.getByRole('button', {
+        name: /실제 Post 소비자 통합 검증 경고, 본문, 다시 가리기/,
+      }),
+    ).toBeVisible();
 
-    await userEvent.click(bodySurface.getByRole('button', { name: '내용 다시 가리기' }));
+    await userEvent.click(
+      layoutSurface.getByRole('button', {
+        name: /실제 Post 소비자 통합 검증 경고, 본문, 다시 가리기/,
+      }),
+    );
     expect(canvas.queryByText(contentWarningPost.content!.bodyText)).not.toBeInTheDocument();
-    expect(listSurface.getByRole('button', { name: '내용 보기' })).toBeVisible();
+    expect(
+      listSurface.getByRole('button', { name: /실제 Post 소비자 통합 검증 경고, 본문, 보기/ }),
+    ).toBeVisible();
   },
-  render: () => <ContentWarningConsumerIntegrationStory />,
+};
+
+export const ContentWarningQuoteIndependentLifecycle: Story = {
+  render: () => <ContentWarningQuoteIndependentLifecycleStory />,
+};
+
+export const ContentWarningQuoteIndependentLifecycleInteraction: Story = {
+  ...ContentWarningQuoteIndependentLifecycle,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const listSurface = within(canvas.getByTestId('content-warning-quote-list-surface'));
+    const layoutSurface = within(canvas.getByTestId('content-warning-quote-layout-surface'));
+    const outerBody = '인용 게시글의 가림 해제 뒤 표시되는 본문입니다.';
+    const sourceBody = '인용 원문의 가림 해제 뒤 표시되는 본문입니다.';
+    const outerWarning = /인용 게시글 바깥 경고, 본문, 보기/;
+    const sourceWarning = /인용 원문 자체 경고, 본문, 보기/;
+
+    expect(listSurface.getByTestId('source-post-preview')).toBeVisible();
+    expect(listSurface.getByRole('button', { name: outerWarning })).toBeVisible();
+    expect(listSurface.getByRole('button', { name: sourceWarning })).toBeVisible();
+    expect(listSurface.queryByText(outerBody)).not.toBeInTheDocument();
+    expect(listSurface.queryByText(sourceBody)).not.toBeInTheDocument();
+    expect(layoutSurface.queryByText(outerBody)).not.toBeInTheDocument();
+    expect(layoutSurface.queryByText(sourceBody)).not.toBeInTheDocument();
+
+    await userEvent.click(listSurface.getByRole('button', { name: outerWarning }));
+    expect(listSurface.getByText(outerBody)).toBeVisible();
+    expect(listSurface.queryByText(sourceBody)).not.toBeInTheDocument();
+    expect(layoutSurface.getByText(outerBody)).toBeVisible();
+    expect(layoutSurface.queryByText(sourceBody)).not.toBeInTheDocument();
+
+    await userEvent.click(listSurface.getByRole('button', { name: sourceWarning }));
+    expect(listSurface.getByText(sourceBody)).toBeVisible();
+    expect(layoutSurface.getByText(sourceBody)).toBeVisible();
+
+    await userEvent.click(
+      listSurface.getByRole('button', { name: /인용 게시글 바깥 경고, 본문, 다시 가리기/ }),
+    );
+    expect(listSurface.queryByText(outerBody)).not.toBeInTheDocument();
+    expect(listSurface.getByTestId('source-post-preview')).toBeVisible();
+    expect(listSurface.getByText(sourceBody)).toBeVisible();
+    expect(layoutSurface.queryByText(outerBody)).not.toBeInTheDocument();
+    expect(layoutSurface.getByText(sourceBody)).toBeVisible();
+
+    await userEvent.click(
+      listSurface.getByRole('button', { name: /인용 원문 자체 경고, 본문, 다시 가리기/ }),
+    );
+    expect(listSurface.queryByText(outerBody)).not.toBeInTheDocument();
+    expect(listSurface.queryByText(sourceBody)).not.toBeInTheDocument();
+    expect(layoutSurface.queryByText(outerBody)).not.toBeInTheDocument();
+    expect(layoutSurface.queryByText(sourceBody)).not.toBeInTheDocument();
+  },
 };
 
 export const ComposerMediaStates: Story = {

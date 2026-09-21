@@ -344,6 +344,30 @@ route shell 안의 current row를 `PostLayout`으로 조립해 Collapsed
 화면과 Dark consumer는 변경하지 않았고, disclosure interaction·공유 reveal state·VoiceOver·TalkBack·실제 hit area는
 runtime 검증 범위다.
 
+공용 Content Warning의 Production 표현은 [PROD-989](https://linear.app/byulmaru/issue/PROD-989)가
+다음 계약으로 이관한다.
+
+- 경고 행 전체가 하나의 disclosure button이다. 장식용 `EyeOff` 20px, 작성자 summary와 content meta,
+  오른쪽 `보기`·`다시 가리기`를 배치하고 현재 공개 여부를 expanded 상태로 전달한다.
+- summary와 action은 `UI/Label/M`, meta는 `UI/Copy/S`를 사용한다. summary는 긴 문구를 줄바꿈하고
+  action은 한 줄을 유지한다. 실제 서비스에서는 SUIT·Pretendard를 사용한다.
+- 배경은 `backgroundSurface`, radius는 16, 수평·수직 padding은 24·8이다. 아이콘과 copy 간격은 16,
+  copy와 action 간격은 8, summary와 meta 간격은 4다. 행의 최소 높이 56은 Web·iOS·Android의 입력 target 기준을 충족하며
+  긴 summary와 글자 확대에 따라 높이가 늘어난다. 공개된 content는 경고 행 아래 8px에 배치한다.
+  실제 화면 검토를 반영해 Figma의 수평 padding 12px은 24px로, 아이콘과 copy 간격 8px은 16px로,
+  radius 8px은 16px로 조정한다.
+- meta는 `본문` 또는 `본문 · 이미지 N개`로, 해당 Post의 첨부 이미지 수를 표시한다.
+- 같은 canonical `Post.id`의 공개·다시 가리기는 지원 surface에서 공유한다. Profile·session 전환 시
+  초기화하며 Sensitive Media의 공개 상태는 별도로 유지한다. `Reason=Muted`는 이관 대상이 아니다.
+- Quote는 기존 Post별 가림 범위를 유지한다. 바깥 Post의 CW를 접어도 인용 원문 카드는 남으며,
+  원문의 CW는 원문 `Post.id`로 독립 적용한다. Figma의 Quote 전체 가림 조합은 이번 이관에서 적용하지 않는다.
+- Storybook은 실제 공용 UI와 `PostListItem`·`PostLayout` 소비를 렌더링한다. Playground는 수동
+  Controls·Actions, Tests는 공개·다시 가리기와 keyboard·focus·접근성 상태 검증을 소유한다.
+
+실제 Home·Local·Profile·Bookmark·상세·Thread 및 source surface의 연결과 Web·iOS·Android runtime,
+VoiceOver·TalkBack·Native touch target 검증은 후속 [PROD-990](https://linear.app/byulmaru/issue/PROD-990)가
+소유한다. Storybook과 코드 수준의 target 검증은 이 runtime 완료 판정을 대신하지 않는다.
+
 2026-09-03에는 공용 [`PostContentWarning`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5001-14786)에
 `Reason=ContentWarning|Muted`를 추가했다. 기존 `Reason=ContentWarning`의 `EyeOff`, 입력 가능한 summary와
 Collapsed·Revealed 시각은 유지한다. 새 `Reason=Muted`는 canonical `VolumeOff`, 고정 문구
