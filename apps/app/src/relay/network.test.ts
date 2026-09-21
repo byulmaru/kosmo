@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { executeGraphQLRequest, formatGraphQLError } from './network';
+import { executeGraphQLRequest, formatGraphQLError, GraphQLHttpError } from './network';
 import { RelayTransportError } from './transportError';
 
 const request = {
@@ -134,9 +134,26 @@ describe('Relay 네트워크', () => {
           }),
       ),
       (error: unknown) => {
-        assert.ok(error instanceof Error);
+        assert.ok(error instanceof GraphQLHttpError);
         assert.equal(error.message, 'server unavailable');
+        assert.equal(error.name, 'Error');
+        assert.equal(error.operationName, request.name);
+        assert.equal(error.status, 503);
+        assert.equal(Number.isInteger(error.elapsedMs), true);
+        assert.equal(error.elapsedMs >= 0, true);
         assert.equal(error instanceof RelayTransportError, false);
+        return true;
+      },
+    );
+
+    await assert.rejects(
+      executeGraphQLRequest(request, {}, null, async () => new Response(null, { status: 502 })),
+      (error: unknown) => {
+        assert.ok(error instanceof GraphQLHttpError);
+        assert.equal(error.message, 'GraphQL request failed with HTTP 502.');
+        assert.equal(error.operationName, request.name);
+        assert.equal(error.status, 502);
+        assert.equal(error.elapsedMs >= 0, true);
         return true;
       },
     );
