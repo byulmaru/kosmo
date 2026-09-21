@@ -1,11 +1,11 @@
 import { db, Instances, Posts, ProfilePins, Profiles } from '@kosmo/core/db';
 import { ValidationError } from '@kosmo/core/error';
+import { profilePostListAccessWhere } from '@kosmo/core/visibility';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, getColumns, gt, isNull, lt, or } from 'drizzle-orm';
 import { parse as parseUuid } from 'uuid';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/resolvers/profile';
-import { directPostAccessWhere } from '../access';
 import { Post, PostConnection } from '../ref';
 
 type PostRow = typeof Posts.$inferSelect;
@@ -92,7 +92,11 @@ builder.objectFields(Profile, (t) => ({
               .where(
                 and(
                   eq(ProfilePins.profileId, profile.id),
-                  postAccessWhere({ ctx, profileMute: { excludeExcept: profile.id } }),
+                  profilePostListAccessWhere({
+                    db,
+                    visitedProfileId: profile.id,
+                    viewerProfileId: ctx.session?.profile?.id,
+                  }),
                   pinnedPostCursorWhere(after, 'after'),
                   pinnedPostCursorWhere(before, 'before'),
                 ),
@@ -126,9 +130,10 @@ builder.objectFields(Profile, (t) => ({
               .where(
                 and(
                   eq(Posts.profileId, profile.id),
-                  directPostAccessWhere({
-                    ctx,
-                    profileMute: { excludeExcept: profile.id },
+                  profilePostListAccessWhere({
+                    db,
+                    visitedProfileId: profile.id,
+                    viewerProfileId: ctx.session?.profile?.id,
                   }),
                   isNull(Posts.replyParentId),
                   before ? gt(Posts.id, before) : undefined,

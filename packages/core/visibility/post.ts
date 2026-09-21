@@ -1,7 +1,9 @@
-import { and, eq, exists, inArray, or, sql } from 'drizzle-orm';
-import { ProfileFollows } from '../db';
+import { and, eq, exists, inArray, isNotNull, isNull, ne, not, or, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
+import { Instances, Posts, ProfileBlocks, ProfileFollows, ProfileMutes, Profiles } from '../db';
 import { PostState, PostVisibility } from '../enums';
 import { profileBlockVisibilityWhere } from './profile-block';
+import { visibleProfileWhere } from './profile';
 import type { SQL, SQLWrapper } from 'drizzle-orm';
 import type { DatabaseHandle } from '../db';
 
@@ -109,5 +111,117 @@ export const visiblePostWhere = ({
       viewerFollowsAuthor,
       viewerProfileId,
     }),
+  )!}`;
+};
+
+const ProfileListDirectSources = alias(Posts, 'profile_list_direct_source');
+const ProfileListDirectSourceProfiles = alias(Profiles, 'profile_list_direct_source_profile');
+const ProfileListDirectSourceInstances = alias(Instances, 'profile_list_direct_source_instance');
+
+export const profilePostListAccessWhere = ({
+  db,
+  visitedProfileId,
+  viewerProfileId,
+}: {
+  readonly db: DatabaseHandle;
+  readonly visitedProfileId: string;
+  readonly viewerProfileId?: string | null;
+}): SQL<boolean> => {
+  const postVisible = visiblePostWhere({
+    post: Posts,
+    profileVisible: sql<boolean>`${visibleProfileWhere({ profile: Profiles, instance: Instances })}`,
+    viewerProfileId,
+    db,
+  });
+  const directSourceVisible = visiblePostWhere({
+    post: ProfileListDirectSources,
+    profileVisible: sql<boolean>`${visibleProfileWhere({
+      profile: ProfileListDirectSourceProfiles,
+      instance: ProfileListDirectSourceInstances,
+    })}`,
+    viewerProfileId,
+    db,
+  });
+  const directSourceAccessible = or(
+    isNotNull(Posts.currentContentId),
+    isNull(Posts.repostSourceId),
+    and(
+      isNull(Posts.currentContentId),
+      isNull(Posts.replyParentId),
+      exists(
+        db
+          .select({ id: ProfileListDirectSources.id })
+          .from(ProfileListDirectSources)
+          .innerJoin(
+            ProfileListDirectSourceProfiles,
+            eq(ProfileListDirectSourceProfiles.id, ProfileListDirectSources.profileId),
+          )
+          .innerJoin(
+            ProfileListDirectSourceInstances,
+            eq(ProfileListDirectSourceInstances.id, ProfileListDirectSourceProfiles.instanceId),
+          )
+          .where(
+            and(
+              eq(ProfileListDirectSources.id, Posts.repostSourceId),
+              isNotNull(ProfileListDirectSources.currentContentId),
+              directSourceVisible,
+            ),
+          ),
+      ),
+    ),
+  );
+
+  if (!viewerProfileId) {
+    return sql<boolean>`${and(postVisible, directSourceAccessible)!}`;
+  }
+
+  const directSourceExcluded = exists(
+    db
+      .select({ id: ProfileListDirectSources.id })
+      .from(ProfileListDirectSources)
+      .where(
+        and(
+          eq(ProfileListDirectSources.id, Posts.repostSourceId),
+          or(
+            exists(
+              db
+                .select({ id: ProfileMutes.id })
+                .from(ProfileMutes)
+                .where(
+                  and(
+                    eq(ProfileMutes.ownerProfileId, viewerProfileId),
+                    eq(ProfileMutes.targetProfileId, ProfileListDirectSources.profileId),
+                    ne(ProfileMutes.targetProfileId, visitedProfileId),
+                    isNull(ProfileMutes.expiresAt),
+                  ),
+                ),
+            ),
+            exists(
+              db
+                .select({ id: ProfileBlocks.id })
+                .from(ProfileBlocks)
+                .where(
+                  or(
+                    and(
+                      eq(ProfileBlocks.ownerProfileId, viewerProfileId),
+                      eq(ProfileBlocks.targetProfileId, ProfileListDirectSources.profileId),
+                      ne(ProfileBlocks.targetProfileId, visitedProfileId),
+                    ),
+                    and(
+                      eq(ProfileBlocks.ownerProfileId, ProfileListDirectSources.profileId),
+                      eq(ProfileBlocks.targetProfileId, viewerProfileId),
+                    ),
+                  ),
+                ),
+            ),
+          ),
+        ),
+      ),
+  );
+
+  return sql<boolean>`${and(
+    postVisible,
+    directSourceAccessible,
+    not(directSourceExcluded),
   )!}`;
 };

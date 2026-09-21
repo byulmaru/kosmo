@@ -57,7 +57,9 @@ let ProfileFollows: typeof CoreDb.ProfileFollows;
 let ProfileFollowRequests: typeof CoreDb.ProfileFollowRequests;
 let ProfileHashtags: typeof CoreDb.ProfileHashtags;
 let ProfileMedia: typeof CoreDb.ProfileMedia;
+let ProfileBlocks: typeof CoreDb.ProfileBlocks;
 let ProfileMutes: typeof CoreDb.ProfileMutes;
+let ProfilePins: typeof CoreDb.ProfilePins;
 let Profiles: typeof CoreDb.Profiles;
 let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
@@ -96,7 +98,9 @@ describe('GraphQL remote profile boundary', () => {
       ProfileFollowRequests,
       ProfileHashtags,
       ProfileMedia,
+      ProfileBlocks,
       ProfileMutes,
+      ProfilePins,
       Profiles,
       PostContents,
       Posts,
@@ -1265,6 +1269,48 @@ describe('GraphQL remote profile boundary', () => {
       chronology.data?.node?.posts.edges.map(({ node }) => node.id),
       [quote, first].map(({ id }) => globalId('Post', id)),
     );
+  });
+
+  test('profile pinnedPosts excludes posts when the visited profile blocks the viewer', async () => {
+    const viewer = await createAuthenticatedSession();
+    const visited = await createAuthenticatedSession();
+    const pinned = await createContentfulPost({ profileId: visited.profile.id });
+    await db.insert(ProfileBlocks).values({
+      ownerProfileId: visited.profile.id,
+      targetProfileId: viewer.profile.id,
+    });
+    await db.insert(ProfilePins).values({
+      orderKey: 0n,
+      postId: pinned.id,
+      profileId: visited.profile.id,
+    });
+
+    const query = `query BlockedPinnedPosts($profileId: ID!) {
+      node(id: $profileId) {
+        ... on Profile { pinnedPosts(first: 10) { edges { node { id } } } }
+      }
+    }`;
+    const variables = { profileId: globalId('Profile', visited.profile.id) };
+    const result = await requestGraphQL<{
+      node: { pinnedPosts: { edges: Array<{ node: { id: string } }> } } | null;
+    }>(query, variables, viewer.token);
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.node?.pinnedPosts.edges, []);
+
+    await db.delete(ProfileBlocks).where(eq(ProfileBlocks.ownerProfileId, visited.profile.id));
+    await db.insert(ProfileBlocks).values({
+      ownerProfileId: viewer.profile.id,
+      targetProfileId: visited.profile.id,
+    });
+    const ownerView = await requestGraphQL<{
+      node: { pinnedPosts: { edges: Array<{ node: { id: string } }> } } | null;
+    }>(query, variables, viewer.token);
+
+    assertNoGraphQLErrors(ownerView);
+    assert.deepEqual(ownerView.data?.node?.pinnedPosts.edges, [
+      { node: { id: globalId('Post', pinned.id) } },
+    ]);
   });
 
   test('profile members can pin, replace, and unpin posts with idempotent payloads', async () => {
