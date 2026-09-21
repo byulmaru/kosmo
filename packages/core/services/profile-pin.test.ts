@@ -94,10 +94,12 @@ const createFixture = async () => {
   return { instance, profile };
 };
 
-test('eligible posts append in order and pinning the same post is a no-op', async () => {
+test('eligible posts append per profile and pinning the same post is a no-op', async () => {
   const { profile } = await createFixture();
   const first = await createPost(profile.id);
   const second = await createPost(profile.id);
+  const { profile: otherProfile } = await createFixture();
+  const otherPost = await createPost(otherProfile.id);
 
   const created = await pinProfilePost({ profileId: profile.id, postId: first.id });
   const repeated = await pinProfilePost({ profileId: profile.id, postId: first.id });
@@ -118,7 +120,91 @@ test('eligible posts append in order and pinning the same post is a no-op', asyn
     appended.profilePins.map(({ postId }) => postId),
     [first.id, second.id],
   );
+  assert.deepEqual(
+    appended.profilePins.map(({ orderKey }) => orderKey),
+    [0n, 1n],
+  );
+  assert.equal(
+    (await pinProfilePost({ profileId: otherProfile.id, postId: otherPost.id })).profilePins[0]
+      ?.orderKey,
+    0n,
+  );
   assert.deepEqual(await loadPins(profile.id), appended.profilePins);
+});
+
+test('concurrent new pins retry a profile order collision', async () => {
+  const { profile } = await createFixture();
+  const first = await createPost(profile.id);
+  const second = await createPost(profile.id);
+  const lockSession = await pg.reserve();
+  let lockHeld = false;
+  let triggerInstalled = false;
+  let pins: Promise<Awaited<ReturnType<typeof pinProfilePost>>>[] = [];
+
+  try {
+    await lockSession`SELECT pg_advisory_lock(973, 2)`;
+    lockHeld = true;
+    await pg.unsafe(`
+      CREATE FUNCTION block_profile_pin_insert() RETURNS trigger
+      LANGUAGE plpgsql AS $function$
+      BEGIN
+        PERFORM pg_advisory_xact_lock(973, 2);
+        RETURN NEW;
+      END
+      $function$;
+      CREATE TRIGGER block_profile_pin_insert
+      BEFORE INSERT ON profile_pin
+      FOR EACH ROW EXECUTE FUNCTION block_profile_pin_insert();
+    `);
+    triggerInstalled = true;
+
+    pins = [
+      pinProfilePost({ profileId: profile.id, postId: first.id }),
+      pinProfilePost({ profileId: profile.id, postId: second.id }),
+    ];
+
+    let insertsBlocked = false;
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const [lock] = await pg<{ waiting: number }[]>`
+        SELECT count(*)::integer AS waiting
+        FROM pg_locks
+        WHERE locktype = 'advisory'
+          AND NOT granted
+          AND classid = 973
+          AND objid = 2
+      `;
+      if ((lock?.waiting ?? 0) === 2) {
+        insertsBlocked = true;
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.equal(insertsBlocked, true, 'pins did not reach the INSERT barrier');
+
+    await lockSession`SELECT pg_advisory_unlock(973, 2)`;
+    lockHeld = false;
+
+    const results = await Promise.all(pins);
+    assert.ok(results.every(({ changed }) => changed));
+    const stored = await loadPins(profile.id);
+    assert.deepEqual(
+      stored.map(({ orderKey }) => orderKey),
+      [0n, 1n],
+    );
+    assert.deepEqual(stored.map(({ postId }) => postId).sort(), [first.id, second.id].sort());
+  } finally {
+    if (lockHeld) {
+      await lockSession`SELECT pg_advisory_unlock(973, 2)`;
+    }
+    await Promise.allSettled(pins);
+    if (triggerInstalled) {
+      await pg.unsafe(`
+        DROP TRIGGER IF EXISTS block_profile_pin_insert ON profile_pin;
+        DROP FUNCTION IF EXISTS block_profile_pin_insert();
+      `);
+    }
+    lockSession.release();
+  }
 });
 
 test('unpin removes only the exact present post and absent unpin is idempotent', async () => {
@@ -280,6 +366,9 @@ test('replacement moves an already-pinned target to the current position', async
   await pinProfilePost({ profileId: profile.id, postId: a.id });
   await pinProfilePost({ profileId: profile.id, postId: c.id });
   await pinProfilePost({ profileId: profile.id, postId: b.id });
+  const before = await loadPins(profile.id);
+  const currentOrderKey = before.find(({ postId }) => postId === a.id)!.orderKey;
+  const untouchedOrderKey = before.find(({ postId }) => postId === c.id)!.orderKey;
 
   const result = await replaceCurrentProfilePin({
     expectedCurrentPostId: a.id,
@@ -292,6 +381,8 @@ test('replacement moves an already-pinned target to the current position', async
     result.profilePins.map(({ postId }) => postId),
     [b.id, c.id],
   );
+  assert.equal(result.profilePins[0]!.orderKey, currentOrderKey);
+  assert.equal(result.profilePins[1]!.orderKey, untouchedOrderKey);
 });
 
 test('replacement preserves a newer generation when two requests race on one expected row', async () => {

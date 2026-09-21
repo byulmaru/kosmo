@@ -174,6 +174,15 @@ try {
     'Representative final schema columns must exist.',
   );
 
+  const [{ profilePinOrderSequence }] = await sql<{ profilePinOrderSequence: string | null }[]>`
+    SELECT pg_get_serial_sequence('public.profile_pin', 'order_key') AS "profilePinOrderSequence"
+  `;
+  assert.equal(
+    profilePinOrderSequence,
+    null,
+    'Profile pin ordering must not depend on a sequence unavailable to runtime roles.',
+  );
+
   await assertRuntimeAcl(sql);
 } finally {
   await sql.end({ timeout: 5 });

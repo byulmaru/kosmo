@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNotNull } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull } from 'drizzle-orm';
 import { db, first, Instances, isUniqueViolation, Posts, ProfilePins, Profiles } from '../db';
 import { InstanceKind, PostVisibility } from '../enums';
 import { ConflictError, NotFoundError } from '../error';
@@ -110,23 +110,42 @@ const staleReplacementError = () =>
 export const pinProfilePost = async ({
   profileId,
   postId,
-}: ProfilePinInput): Promise<ProfilePinResult> =>
-  db.transaction(async (tx) => {
-    await ensureLocalProfile(tx, profileId);
-    await ensureEligiblePost(tx, { profileId, postId });
+}: ProfilePinInput): Promise<ProfilePinResult> => {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      return await db.transaction(async (tx) => {
+        await ensureLocalProfile(tx, profileId);
+        await ensureEligiblePost(tx, { profileId, postId });
 
-    const inserted = await tx
-      .insert(ProfilePins)
-      .values({ profileId, postId })
-      .onConflictDoNothing({ target: [ProfilePins.profileId, ProfilePins.postId] })
-      .returning()
-      .then(first);
+        const latest = await tx
+          .select({ orderKey: ProfilePins.orderKey })
+          .from(ProfilePins)
+          .where(eq(ProfilePins.profileId, profileId))
+          .orderBy(desc(ProfilePins.orderKey))
+          .limit(1)
+          .then(first);
+        const inserted = await tx
+          .insert(ProfilePins)
+          .values({ orderKey: (latest?.orderKey ?? -1n) + 1n, profileId, postId })
+          .onConflictDoNothing({ target: [ProfilePins.profileId, ProfilePins.postId] })
+          .returning()
+          .then(first);
 
-    return {
-      changed: inserted !== undefined,
-      profilePins: await loadOrderedPins(tx, profileId),
-    };
-  });
+        return {
+          changed: inserted !== undefined,
+          profilePins: await loadOrderedPins(tx, profileId),
+        };
+      });
+    } catch (error) {
+      if (attempt === 0 && isUniqueViolation(error)) {
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  throw new Error('Unreachable');
+};
 
 export const unpinProfilePost = async ({
   profileId,

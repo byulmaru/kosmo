@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
-  bigserial,
+  bigint,
   check,
   index,
   integer,
@@ -552,10 +552,11 @@ export const ProfilePins = pgTable(
     postId: uuid('post_id')
       .notNull()
       .references(() => Posts.id, { onDelete: 'cascade' }),
-    orderKey: bigserial('order_key', { mode: 'bigint' }).notNull(),
+    orderKey: bigint('order_key', { mode: 'bigint' }).notNull(),
   },
   (table) => [
     unique().on(table.profileId, table.postId),
+    unique().on(table.profileId, table.orderKey),
     index().on(table.profileId, table.orderKey, table.id),
   ],
 );

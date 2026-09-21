@@ -2383,7 +2383,7 @@
       "table": "profile_pin"
     },
     {
-      "type": "bigserial",
+      "type": "bigint",
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
@@ -4781,6 +4781,15 @@
       "columns": ["profile_id", "post_id"],
       "nullsNotDistinct": false,
       "name": "profile_pin_profile_id_post_id_unique",
+      "entityType": "uniques",
+      "schema": "public",
+      "table": "profile_pin"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["profile_id", "order_key"],
+      "nullsNotDistinct": false,
+      "name": "profile_pin_profile_id_order_key_unique",
       "entityType": "uniques",
       "schema": "public",
       "table": "profile_pin"

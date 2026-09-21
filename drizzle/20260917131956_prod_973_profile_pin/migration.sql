@@ -2,8 +2,9 @@ CREATE TABLE "profile_pin" (
 	"id" uuid PRIMARY KEY DEFAULT uuidv7(),
 	"profile_id" uuid NOT NULL,
 	"post_id" uuid NOT NULL,
-	"order_key" bigserial,
-	CONSTRAINT "profile_pin_profile_id_post_id_unique" UNIQUE("profile_id","post_id")
+	"order_key" bigint NOT NULL,
+	CONSTRAINT "profile_pin_profile_id_post_id_unique" UNIQUE("profile_id","post_id"),
+	CONSTRAINT "profile_pin_profile_id_order_key_unique" UNIQUE("profile_id","order_key")
 );
 --> statement-breakpoint
 CREATE INDEX "profile_pin_profile_id_order_key_id_index" ON "profile_pin" ("profile_id","order_key","id");--> statement-breakpoint
