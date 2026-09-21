@@ -103,7 +103,7 @@ describe('PostComposerHost', () => {
     );
   });
 
-  it('모든 Composer surface가 height 기반 KeyboardAvoidingView를 사용한다', async () => {
+  it('KeyboardAvoidingView는 키보드 높이에 맞춰 surface를 줄인다', async () => {
     platform.OS = 'ios';
     await act(async () => {
       renderer = create(
