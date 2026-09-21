@@ -79,8 +79,25 @@ const config: ExpoConfig = {
     'expo-router',
     'expo-secure-store',
     'expo-notifications',
-    '@react-native-firebase/app',
+    // RNFirebase SPM is incompatible with static frameworks; use CocoaPods for static RNFB linkage.
+    [
+      '@react-native-firebase/app',
+      {
+        ios: {
+          disableSPM: true,
+        },
+      },
+    ],
     '@react-native-firebase/messaging',
+    [
+      'expo-build-properties',
+      {
+        ios: {
+          useFrameworks: 'static',
+          forceStaticLinking: ['RNFBApp', 'RNFBMessaging'],
+        },
+      },
+    ],
     [
       '@sentry/react-native/expo',
       {

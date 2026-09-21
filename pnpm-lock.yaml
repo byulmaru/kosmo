@@ -286,6 +286,9 @@ importers:
       expo-auth-session:
         specifier: ~56.0.15
         version: 56.0.15(expo@56.0.14)(react-native@0.85.3(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.85.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.15)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1)
+      expo-build-properties:
+        specifier: ~56.0.27
+        version: 56.0.27(expo@56.0.14)
       expo-clipboard:
         specifier: ~56.0.4
         version: 56.0.4(expo@56.0.14)(react-native@0.85.3(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.85.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.15)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)
@@ -5433,6 +5436,11 @@ packages:
     peerDependencies:
       react: '*'
       react-native: '*'
+
+  expo-build-properties@56.0.27:
+    resolution: {integrity: sha512-m9rRYr1hqIrR/ggDKCkHHJ4rTcN3P4+Sve0cYmsWNgB0bRp3lMu4pSSMqr09BSoJBLOxB8ECcfW2r4VU3igR+g==}
+    peerDependencies:
+      expo: '*'
 
   expo-clipboard@56.0.4:
     resolution: {integrity: sha512-qb4DYlkiowHYHaUYVT2FN9nk/nI1xShXOUYsI7J9dVpQCOHcGFjCBPX1VAvEW4Ye4/Aagd6IuhOVAq/+scBOiA==}
@@ -13848,6 +13856,13 @@ snapshots:
     transitivePeerDependencies:
       - expo
       - supports-color
+
+  expo-build-properties@56.0.27(expo@56.0.14):
+    dependencies:
+      '@expo/schema-utils': 56.0.2
+      expo: 56.0.14(@babel/core@7.29.7(supports-color@8.1.1))(@expo/dom-webview@56.0.6)(@expo/metro-runtime@56.0.16)(expo-router@56.2.13)(react-dom@19.2.3(react@19.2.3))(react-native-web@0.21.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-native-worklets@0.8.3(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.85.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(react-native@0.85.3(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.85.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.15)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(react-native@0.85.3(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.85.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.15)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1)(typescript@6.0.3)
+      resolve-from: 5.0.0
+      semver: 7.8.0
 
   expo-clipboard@56.0.4(expo@56.0.14)(react-native@0.85.3(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.85.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.15)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3):
     dependencies:
