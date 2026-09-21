@@ -74,10 +74,7 @@ const storyProfiles = [
 const storyProfileIds = storyProfiles.map(({ id }) => id);
 
 const ProfileHeroStoriesQuery = graphql`
-  query ProfileHeroStoriesQuery($handle: String!, $ids: [ID!]!) {
-    profileBlockStatus(handle: $handle) {
-      ...ProfileHero_profileBlockStatus
-    }
+  query ProfileHeroStoriesQuery($ids: [ID!]!) {
     nodes(ids: $ids) {
       __typename
       ... on Profile {
@@ -89,14 +86,12 @@ const ProfileHeroStoriesQuery = graphql`
   }
 `;
 
-function useStoryProfiles(handle: string) {
+function useStoryProfiles() {
   const data = useLazyLoadQuery<ProfileHeroStoriesQueryType>(ProfileHeroStoriesQuery, {
-    handle,
     ids: storyProfileIds,
   });
 
   return {
-    profileBlockStatus: data.profileBlockStatus,
     profiles: data.nodes.map((node) => {
       if (node?.__typename !== 'Profile' || !node.hero || !node.followButton) {
         throw new Error('ProfileHeroStoriesQuery must return Profile fragments in fixture order.');
@@ -125,11 +120,7 @@ function ProfileHeroFixture({
   profileId?: string;
   showAction?: boolean;
 }) {
-  const profileHandle =
-    storyProfiles
-      .find((profileFixture) => profileFixture.id === profileId)
-      ?.relativeHandle.replace(/^@/, '') ?? defaultProfile.handle;
-  const { profileBlockStatus, profiles } = useStoryProfiles(profileHandle);
+  const { profiles } = useStoryProfiles();
   const target = requireProfile(profiles, profileId);
 
   return (
@@ -139,7 +130,6 @@ function ProfileHeroFixture({
           action={showAction ? <FollowButton profile={target.followButton} /> : undefined}
           loading={loading}
           profile={target.hero}
-          profileBlockStatus={showAction ? profileBlockStatus : null}
         />
       </View>
     </SessionProvider>
@@ -147,7 +137,7 @@ function ProfileHeroFixture({
 }
 
 function ProfileHeroCatalog() {
-  const { profiles } = useStoryProfiles(defaultProfile.relativeHandle.replace(/^@/, ''));
+  const { profiles } = useStoryProfiles();
 
   return (
     <Catalog>
@@ -187,7 +177,6 @@ const meta = {
         currentSession: { id: 'profile-hero-session', selectedProfile: { id: 'profile-viewer' } },
         me: { id: 'account-story', name: '스토리 계정' },
         nodes: storyProfiles,
-        profileBlockStatus: { blockedBy: false, blocking: false, profileBlockId: null },
       },
     },
   },

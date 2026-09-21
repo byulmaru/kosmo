@@ -19,6 +19,7 @@ type ProfileData = {
   relativeHandle: string;
   tags: ReadonlyArray<{ id: string; name: string }>;
   viewerState?: {
+    blockedBy: boolean;
     isSelf: boolean;
     profileBlock: { id: string; targetProfile: ProfileData } | null;
     profileMute: { id: string } | null;
@@ -65,12 +66,8 @@ mockModule('react-native', {
   View: 'View',
 });
 mockModule('react-relay', {
-  graphql: (parts: TemplateStringsArray) =>
-    parts.join('').includes('ProfileHero_profileBlockStatus')
-      ? 'ProfileHero_profileBlockStatus'
-      : 'ProfileHero_profile',
-  useFragment: (document: string, key: { status?: object } | null) =>
-    document === 'ProfileHero_profileBlockStatus' ? (key?.status ?? null) : fragmentData,
+  graphql: () => 'ProfileHero_profile',
+  useFragment: () => fragmentData,
 });
 mockModule(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
   useTheme: () => ({
@@ -154,7 +151,7 @@ const baseProfile: ProfileData = {
   header: null,
   relativeHandle: '@kosmo',
   tags: [],
-  viewerState: { isSelf: false, profileBlock: null, profileMute: null },
+  viewerState: { blockedBy: false, isSelf: false, profileBlock: null, profileMute: null },
 };
 
 const findCoverStyle = () => {
@@ -350,16 +347,16 @@ describe('ProfileHero media presentation', () => {
 });
 
 describe('ProfileHero 관리 메뉴 조립', () => {
-  it('blockedBy는 status fragment에서 읽어 관계 관리 action을 숨긴다', async () => {
-    fragmentData = baseProfile;
+  it('blockedBy는 Profile viewerState에서 읽어 관계 관리 action을 숨긴다', async () => {
+    fragmentData = {
+      ...baseProfile,
+      viewerState: { ...baseProfile.viewerState!, blockedBy: true },
+    };
     await act(async () => {
       renderer = create(
         createElement(ProfileHero, {
           moreItems: [{ key: 'report', label: '신고하기', onSelect: () => undefined }],
           profile: {} as never,
-          profileBlockStatus: {
-            status: { blockedBy: true, blocking: false },
-          } as never,
         }),
       );
     });
@@ -382,9 +379,6 @@ describe('ProfileHero 관리 메뉴 조립', () => {
         createElement(ProfileHero, {
           moreItems: [{ key: 'report', label: '신고하기', onSelect: () => undefined }],
           profile: {} as never,
-          profileBlockStatus: {
-            status: { blockedBy: false, blocking: false },
-          } as never,
         }),
       );
     });
@@ -412,6 +406,7 @@ describe('ProfileHero 관리 메뉴 조립', () => {
     fragmentData = {
       ...baseProfile,
       viewerState: {
+        blockedBy: true,
         isSelf: false,
         profileBlock: { id: 'block-a', targetProfile: baseProfile },
         profileMute: null,
@@ -424,9 +419,6 @@ describe('ProfileHero 관리 메뉴 조립', () => {
         createElement(ProfileHero, {
           moreItems: [{ key: 'report', label: '신고하기', onSelect: onReport }],
           profile: {} as never,
-          profileBlockStatus: {
-            status: { blockedBy: true, blocking: true },
-          } as never,
         }),
       );
     });

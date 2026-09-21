@@ -27,7 +27,6 @@ import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import type { ActionMenuItem } from '@/components/ui/ActionMenu';
 import type { ProfileHero_profile$key } from './__generated__/ProfileHero_profile.graphql';
-import type { ProfileHero_profileBlockStatus$key } from './__generated__/ProfileHero_profileBlockStatus.graphql';
 
 type ProfileHeroProps = {
   action?: ReactNode;
@@ -35,7 +34,6 @@ type ProfileHeroProps = {
   moreItems?: readonly ActionMenuItem[];
   loading?: boolean;
   profile?: ProfileHero_profile$key | null;
-  profileBlockStatus?: ProfileHero_profileBlockStatus$key | null;
 };
 
 const profileHeroFragment = graphql`
@@ -63,6 +61,7 @@ const profileHeroFragment = graphql`
     ...ProfileMuteAction_profile
     ...ProfileBlockAction_profile
     viewerState {
+      blockedBy
       isSelf
       profileMute {
         id
@@ -71,12 +70,6 @@ const profileHeroFragment = graphql`
         ...ProfileBlockAction_profileBlock
       }
     }
-  }
-`;
-
-const profileHeroBlockStatusFragment = graphql`
-  fragment ProfileHero_profileBlockStatus on ProfileBlockStatus {
-    blockedBy
   }
 `;
 
@@ -91,7 +84,6 @@ export function ProfileHero({
   moreItems = [],
   loading = false,
   profile = null,
-  profileBlockStatus,
 }: ProfileHeroProps) {
   const followingRef = useRef<View>(null);
   const [unmuteFocusRevision, setUnmuteFocusRevision] = useState(0);
@@ -104,7 +96,6 @@ export function ProfileHero({
   const { showToast } = useToast();
   const { width } = useWindowDimensions();
   const data = useFragment(profileHeroFragment, profile);
-  const blockStatus = useFragment(profileHeroBlockStatusFragment, profileBlockStatus ?? null);
   const compact = Platform.OS !== 'web' || width < breakpoints.compact;
   const avatarSize = compact ? 88 : 120;
   const avatarFrameSize = compact ? 96 : 128;
@@ -162,8 +153,8 @@ export function ProfileHero({
 
   const profileBlock = data.viewerState?.profileBlock;
   const blocking = Boolean(profileBlock);
-  const blockedBy = Boolean(blockStatus?.blockedBy);
-  const canManageRelationship = blockStatus != null && data.viewerState?.isSelf !== true;
+  const blockedBy = Boolean(data.viewerState?.blockedBy);
+  const canManageRelationship = data.viewerState != null && !data.viewerState.isSelf;
   const blockAction = canManageRelationship
     ? blocking && profileBlock
       ? ({ nextBlocked: false as const, profileBlock } as const)

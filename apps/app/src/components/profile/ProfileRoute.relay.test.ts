@@ -210,23 +210,17 @@ async function respond(request: Request, data: Record<string, unknown>) {
 }
 
 function readBlockState(environment: Environment) {
-  let rootBlocking: unknown;
+  let blockedBy: unknown;
   let profileBlockId: string | null | undefined;
   environment.commitUpdate((store) => {
-    rootBlocking = store
-      .getRoot()
-      .getLinkedRecord('profileBlockStatus', { handle: 'target' })
-      ?.getValue('blocking');
-    profileBlockId = store
-      .get('profile-target')
-      ?.getLinkedRecord('viewerState')
-      ?.getLinkedRecord('profileBlock')
-      ?.getDataID();
+    const viewerState = store.get('profile-target')?.getLinkedRecord('viewerState');
+    blockedBy = viewerState?.getValue('blockedBy');
+    profileBlockId = viewerState?.getLinkedRecord('profileBlock')?.getDataID();
   });
-  return { profileBlockId, rootBlocking };
+  return { blockedBy, profileBlockId };
 }
 
-const blockedProfile = (profileBlock: object | null) => ({
+const blockedProfile = (profileBlock: object | null, blockedBy = false) => ({
   __typename: 'Profile',
   id: 'profile-target',
   displayName: 'Target',
@@ -241,6 +235,7 @@ const blockedProfile = (profileBlock: object | null) => ({
   header: null,
   instance: { kind: 'LOCAL' },
   viewerState: {
+    blockedBy,
     isSelf: false,
     membership: { id: 'membership-owner-target', role: 'MEMBER' },
     follow: null,
@@ -255,28 +250,23 @@ describe('Profile route with real Relay', () => {
     const environment = createEnvironment();
     await render(environment);
     await respond(latestRequest('ProfileLayoutQuery'), {
-      profileBlockStatus: {
-        blockedBy: true,
-      },
-      profileByHandle: blockedProfile({
-        __typename: 'ProfileBlock',
-        id: 'block-1',
-        targetProfile: {
-          __typename: 'Profile',
-          id: 'profile-target',
-          displayName: 'Target',
-          relativeHandle: '@target',
+      profileByHandle: blockedProfile(
+        {
+          __typename: 'ProfileBlock',
+          id: 'block-1',
+          targetProfile: {
+            __typename: 'Profile',
+            id: 'profile-target',
+            displayName: 'Target',
+            relativeHandle: '@target',
+          },
         },
-      }),
-    });
-    environment.commitUpdate((store) => {
-      const status = store.getRoot().getLinkedRecord('profileBlockStatus', { handle: 'target' });
-      assert.ok(status);
-      status.setValue(true, 'blocking');
+        true,
+      ),
     });
     assert.deepEqual(readBlockState(environment), {
+      blockedBy: true,
       profileBlockId: 'block-1',
-      rootBlocking: true,
     });
 
     await act(async () => button('차단 해제').props.onPress());
@@ -285,13 +275,13 @@ describe('Profile route with real Relay', () => {
       unblockProfile: {
         success: true,
         profileBlockId: 'block-1',
-        targetProfile: blockedProfile(null),
+        targetProfile: blockedProfile(null, true),
       },
     });
 
     assert.deepEqual(readBlockState(environment), {
+      blockedBy: true,
       profileBlockId: undefined,
-      rootBlocking: true,
     });
     assert.deepEqual(
       all('Button').map((node) => node.props.children),

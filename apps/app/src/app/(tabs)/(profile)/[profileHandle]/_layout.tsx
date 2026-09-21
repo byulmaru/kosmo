@@ -35,10 +35,6 @@ const connectionOptions: readonly TabOption<ProfileConnectionKind>[] = [
 
 const ProfileLayoutQuery = graphql`
   query ProfileLayoutQuery($handle: String!) {
-    profileBlockStatus(handle: $handle) {
-      blockedBy
-      ...ProfileHero_profileBlockStatus
-    }
     profileByHandle(handle: $handle) {
       id
       displayName
@@ -48,6 +44,7 @@ const ProfileLayoutQuery = graphql`
         kind
       }
       viewerState {
+        blockedBy
         isSelf
         membership {
           role
@@ -181,9 +178,8 @@ function ProfileLayoutContent({
     kind: ContentReportTargetType.PROFILE,
     label: profile?.relativeHandle ?? '',
   });
-  const blockStatus = data.profileBlockStatus;
   const blocking = Boolean(profile?.viewerState?.profileBlock);
-  const blockedBy = Boolean(blockStatus?.blockedBy);
+  const blockedBy = Boolean(profile?.viewerState?.blockedBy);
 
   if (!profile) {
     const missingState = (
@@ -249,7 +245,6 @@ function ProfileLayoutContent({
         heading={!showPageHeader}
         moreItems={sessionId ? [reportItem] : undefined}
         profile={profile}
-        profileBlockStatus={selectedProfileId ? blockStatus : null}
       />
     </>
   );

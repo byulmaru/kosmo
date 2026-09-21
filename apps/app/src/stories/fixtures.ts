@@ -33,6 +33,7 @@ export type StoryProfile = {
   tags: Array<{ id: string; name: string }>;
   unreadNotificationCount: number;
   viewerState: {
+    blockedBy?: boolean;
     follow: { follower?: { followingCount: number; id: string } | null; id: string } | null;
     followRequest: { id: string } | null;
     isSelf: boolean;
@@ -67,6 +68,7 @@ export function profile(overrides: Partial<StoryProfile> = {}): StoryProfile {
   const viewerState =
     overrides.viewerState === undefined
       ? {
+          blockedBy: false,
           follow: null,
           followRequest: null,
           isSelf: false,
@@ -77,6 +79,7 @@ export function profile(overrides: Partial<StoryProfile> = {}): StoryProfile {
         ? null
         : {
             ...overrides.viewerState,
+            blockedBy: overrides.viewerState.blockedBy ?? false,
             profileBlock: overrides.viewerState.profileBlock ?? null,
             profileMute: overrides.viewerState.profileMute ?? null,
           };

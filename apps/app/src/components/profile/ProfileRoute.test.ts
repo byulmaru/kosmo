@@ -235,7 +235,6 @@ mockModule('react-relay', {
       currentSession: selectedProfileId
         ? { selectedProfile: { id: selectedProfileId } }
         : { selectedProfile: null },
-      profileBlockStatus: selectedProfileId ? profileBlockStatus : null,
       profileByHandle: profileAvailable
         ? {
             displayName: profileDisplayName ?? `Display ${variables.handle}`,
@@ -248,7 +247,25 @@ mockModule('react-relay', {
                 ? {
                     profileBlock: postListProfileBlockId ? { id: postListProfileBlockId } : null,
                   }
-                : profileViewerState,
+                : profileBlockStatus == null || profileViewerState == null
+                  ? null
+                  : {
+                      ...profileViewerState,
+                      blockedBy: profileBlockStatus.blockedBy,
+                      profileBlock:
+                        profileViewerState.profileBlock === undefined
+                          ? profileBlockStatus.profileBlockId
+                            ? {
+                                id: profileBlockStatus.profileBlockId,
+                                targetProfile: {
+                                  displayName: `Display ${variables.handle}`,
+                                  id: `profile:${variables.handle}`,
+                                  relativeHandle: `@${variables.handle}`,
+                                },
+                              }
+                            : null
+                          : profileViewerState.profileBlock,
+                    },
           }
         : null,
     };
@@ -261,7 +278,6 @@ mockModule(new URL('./ProfileHero.tsx', import.meta.url), {
     loading,
     moreItems,
     profile,
-    profileBlockStatus,
   }: {
     action?: ReturnType<typeof createElement>;
     heading?: boolean;
@@ -270,20 +286,21 @@ mockModule(new URL('./ProfileHero.tsx', import.meta.url), {
     profile?: {
       handle: string;
       viewerState?: {
+        blockedBy?: boolean;
         isSelf?: boolean;
         profileBlock?: ProfileBlockActionTarget['profileBlock'];
       } | null;
     };
-    profileBlockStatus?: { blockedBy: boolean; blocking: boolean } | null;
   }) => {
     const canManageRelationship =
-      profileBlockStatus != null && profile?.viewerState?.isSelf !== true;
+      profile?.viewerState != null && profile.viewerState.isSelf !== true;
     const profileBlock = profile?.viewerState?.profileBlock;
+    const blockedBy = Boolean(profile?.viewerState?.blockedBy);
     const blockAction = (
       canManageRelationship
-        ? profileBlockStatus.blocking && profileBlock
+        ? profileBlock
           ? ({ nextBlocked: false, profileBlock } as const)
-          : !profileBlockStatus.blockedBy && profile
+          : !blockedBy && profile
             ? ({ nextBlocked: true, profile } as const)
             : undefined
         : undefined
@@ -294,7 +311,7 @@ mockModule(new URL('./ProfileHero.tsx', import.meta.url), {
         heading,
         identity: loading ? 'loading' : profile?.handle,
         moreItems,
-        profileBlockStatus,
+        blockedBy,
       },
       blockAction
         ? createElement(ProfileBlockAction, {
@@ -617,7 +634,7 @@ describe('profile route parameter lifecycle', () => {
     await renderRoute('@target');
     assert.deepEqual(requireRendered('ActionMenu').props.items, [reportMenuItem]);
     assert.equal(rendered('FollowButton').length, 0);
-    assert.deepEqual(requireRendered('ProfileHero').props.profileBlockStatus, profileBlockStatus);
+    assert.equal(requireRendered('ProfileHero').props.blockedBy, true);
   });
 
   it('selected Profile이 없는 공개 Profile은 nullable block status와 함께 사용할 수 있다', async () => {
@@ -636,13 +653,13 @@ describe('profile route parameter lifecycle', () => {
     assert.deepEqual(identities('ProfileHero'), ['target']);
     assert.equal(rendered('ActionMenu').length, 0);
   });
-  it('인증된 Profile의 viewerState가 한 렌더 동안 없어도 뮤트 메뉴를 유지한다', async () => {
+  it('인증된 Profile의 viewerState가 한 렌더 동안 없으면 관계 action을 숨긴다', async () => {
     selectedProfileId = 'owner';
     profileViewerState = null;
 
     await renderRoute('@target');
 
-    assert.deepEqual(requireRendered('ProfileHero').props.profileBlockStatus, profileBlockStatus);
+    assert.equal(rendered('ActionMenu').length, 0);
   });
   it('표시 중인 selected Local Owner Profile에만 편집 Link를 노출한다', async () => {
     profileViewerState = { isSelf: true, membership: { role: 'OWNER' } };
@@ -977,19 +994,19 @@ describe('profile route parameter lifecycle', () => {
     assert.deepEqual(identities('PostList'), ['blocked']);
   });
 
-  it('route block status와 Profile viewerState를 독립 fixture로 관찰한다', async () => {
+  it('Profile viewerState에 own block이 없으면 일반 관계 상태를 유지한다', async () => {
     selectedProfileId = 'owner';
     profileViewerState = {
       isSelf: false,
       membership: { role: 'MEMBER' },
       profileBlock: null,
     };
-    profileBlockStatus = { blockedBy: false, blocking: true, profileBlockId: 'block-1' };
+    profileBlockStatus = { blockedBy: false, blocking: false, profileBlockId: null };
     postListProfileBlockId = null;
 
     await renderRoute('@blocked');
 
-    assert.deepEqual(requireRendered('ProfileHero').props.profileBlockStatus, profileBlockStatus);
+    assert.equal(requireRendered('ProfileHero').props.blockedBy, false);
     assert.deepEqual(identities('PostList'), ['blocked']);
     assert.equal(
       requireRendered('FollowButton').findByType('Button' as never).props.children,
@@ -1009,7 +1026,7 @@ describe('profile route parameter lifecycle', () => {
     assert.equal(requireRendered('StateView').props.title, '이 프로필을 볼 수 없습니다');
     assert.equal(rendered('Button').length, 0);
     assert.equal(rendered('FollowButton').length, 0);
-    assert.deepEqual(requireRendered('ProfileHero').props.profileBlockStatus, profileBlockStatus);
+    assert.equal(requireRendered('ProfileHero').props.blockedBy, true);
   });
 
   it('경고는 시간 경과로 사라지지 않고 handle과 상위 actor boundary remount마다 다시 적용된다', async (t) => {
@@ -1192,7 +1209,7 @@ describe('profile route parameter lifecycle', () => {
 
     await renderRoute('@blocked');
     assert.deepEqual(identities('FollowButton'), ['blocked']);
-    assert.deepEqual(requireRendered('ProfileHero').props.profileBlockStatus, profileBlockStatus);
+    assert.equal(requireRendered('ProfileHero').props.blockedBy, true);
     assert.deepEqual(
       requireRendered('ActionMenu').props.items.map((item: { label: string }) => item.label),
       ['차단 해제'],
@@ -1206,7 +1223,7 @@ describe('profile route parameter lifecycle', () => {
     await act(async () => action.findByType('ConfirmationContent' as never).props.onConfirm());
     await renderRoute('@blocked');
     assert.equal(rendered('FollowButton').length, 0);
-    assert.deepEqual(requireRendered('ProfileHero').props.profileBlockStatus, profileBlockStatus);
+    assert.equal(requireRendered('ProfileHero').props.blockedBy, true);
 
     assert.equal(menuTriggerFocus.mock.callCount(), 0);
   });
