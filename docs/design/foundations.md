@@ -125,6 +125,7 @@ Fullscreen media와 제품 고유 shadow는 일괄 치환하지 않고 아래 In
 - DSN-19: Button·TextField·TextArea·ModalSheet·ActionMenu·StateView·Skeleton·ToastProvider·Avatar가 승인 foundation과 semantic color를 직접 소비한다.
 - DSN-21 또는 연결된 Product 이슈: route, shell, domain consumer와 상태를 이관·검증한다.
 - PROD-752: Search와 당시 `ReactionProfilesModal`의 raw tab을 공용 `TabList`·`Tab`으로 이관했다. Search의 consumer별 상태·lifecycle과 Android 다음 콘텐츠 4dp geometry는 유지한다. `ReactionProfilesModal`은 이후 PROD-938에서 전용 route로 교체·삭제됐으므로 DSN-13의 활성 재바인딩 대상이 아니다.
+- PROD-965: 화면 내부 상태만 고르는 consumer는 `TabList`를 직접 사용한다. URL-backed 탭은 같은 visual·keyboard 계약을 합성한 `RouteTabList`를 사용하며, Web은 canonical URL로 이동하고 Android/iOS는 현재 route 파라미터와 자식 콘텐츠만 바꿔 Stack 전환을 만들지 않는다.
 - PROD-753: FeedbackForm·ProfileDefaultPostVisibilityControl의 controlled value·radio role/state semantics·Web keyboard·disabled 동작을 공용 `RadioGroup`·`RadioOption`으로 수렴하고, mutation·dirty/submitting·Relay actor lifecycle과 option layout은 각 consumer에 유지했다.
 - PROD-775: PROD-753에서 consumer에 남긴 canonical option presentation·state visuals를 공용 `RadioOption`으로 이전하고, group placement·mutation·dirty/submitting·Relay actor lifecycle은 각 consumer에 유지한다.
 - DSN-13: 선행 구현 후 Components/Screens를 최종 재바인딩하고 evidence를 남긴다.

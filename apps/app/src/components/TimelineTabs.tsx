@@ -1,5 +1,5 @@
-import { useRouter } from 'expo-router';
-import { Tab, TabList } from '@/components/ui/Tabs';
+import { RouteTabList } from '@/components/ui/RouteTabList';
+import { Tab } from '@/components/ui/Tabs';
 import type { TabOption } from '@/components/ui/Tabs';
 
 export type TimelineTab = 'home' | 'local';
@@ -16,25 +16,19 @@ export function TimelineTabs({
   onReselect?: () => void;
   value: TimelineTab;
 }) {
-  const router = useRouter();
-
   return (
-    <TabList
+    <RouteTabList
       accessibilityLabel="타임라인"
-      onValueChange={(nextValue) => {
-        if (nextValue === value) {
-          onReselect?.();
-          return;
-        }
-
-        router.replace(nextValue === 'home' ? '/home' : '/local');
-      }}
+      href={(nextValue) => (nextValue === 'home' ? '/home' : '/local')}
+      onReselect={onReselect}
+      param="timeline"
       value={value}
       variant="underline"
+      webAction="replace"
     >
       {options.map((option) => (
         <Tab key={option.value} option={option} />
       ))}
-    </TabList>
+    </RouteTabList>
   );
 }
