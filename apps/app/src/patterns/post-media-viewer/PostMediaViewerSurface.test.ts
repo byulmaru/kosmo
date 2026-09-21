@@ -604,6 +604,21 @@ describe('PostMediaViewerSurface', () => {
       { outlineColor: '#ffffff', outlineOffset: -2, outlineStyle: 'solid', outlineWidth: 2 },
     );
     assert.equal(resolveStyle(findByLabel('이전 이미지').props.visualStyle).opacity, 0.35);
+
+    const navigationVisual = findByLabel('다음 이미지').props.visualStyle;
+    assert.equal(resolveStyle(navigationVisual, { hovered: true }).backgroundColor, 'transparent');
+    assert.equal(resolveStyle(navigationVisual, { pressed: true }).backgroundColor, 'transparent');
+    assert.equal(resolveStyle(navigationVisual).boxShadow, undefined);
+    assert.equal(resolveStyle(navigationVisual).filter, undefined);
+    assert.deepEqual(
+      pick(resolveStyle(navigationVisual, { focused: true }), [
+        'outlineColor',
+        'outlineOffset',
+        'outlineStyle',
+        'outlineWidth',
+      ]),
+      { outlineColor: '#ffffff', outlineOffset: -2, outlineStyle: 'solid', outlineWidth: 2 },
+    );
   });
 
   it('viewer control halo는 플랫폼에서 지원되는 shadow를 사용한다', async () => {
@@ -611,7 +626,7 @@ describe('PostMediaViewerSurface', () => {
       mockPlatform.OS = platform;
       await render({ currentIndex: 0 });
 
-      for (const label of ['이미지 뷰어 닫기', '이전 이미지', '다음 이미지']) {
+      for (const label of ['이미지 뷰어 닫기']) {
         const visualStyle = resolveStyle(findByLabel(label).props.visualStyle);
         assert.equal(
           visualStyle.boxShadow,
@@ -621,6 +636,12 @@ describe('PostMediaViewerSurface', () => {
           visualStyle.filter,
           platform === 'web' ? 'drop-shadow(0 1px 2px rgba(0, 0, 0, 0.9))' : undefined,
         );
+      }
+
+      for (const label of ['이전 이미지', '다음 이미지']) {
+        const visualStyle = resolveStyle(findByLabel(label).props.visualStyle);
+        assert.equal(visualStyle.boxShadow, undefined);
+        assert.equal(visualStyle.filter, undefined);
       }
     }
   });

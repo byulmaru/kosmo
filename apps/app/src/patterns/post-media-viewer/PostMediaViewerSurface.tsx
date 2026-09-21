@@ -303,7 +303,7 @@ export function PostMediaViewerSurface({
                 style={[styles.navigationButton, styles.previousButton]}
                 targetSize={48}
                 visualSize={48}
-                visualStyle={controlVisualStyle(previousDisabled)}
+                visualStyle={controlVisualStyle(previousDisabled, false)}
               >
                 <ChevronLeftIcon color="#ffffff" size={30} strokeWidth={2.5} />
               </IconButton>
@@ -319,7 +319,7 @@ export function PostMediaViewerSurface({
                 style={[styles.navigationButton, styles.nextButton]}
                 targetSize={48}
                 visualSize={48}
-                visualStyle={controlVisualStyle(nextDisabled)}
+                visualStyle={controlVisualStyle(nextDisabled, false)}
               >
                 <ChevronRightIcon color="#ffffff" size={30} strokeWidth={2.5} />
               </IconButton>
@@ -582,7 +582,7 @@ function StatusAction({
   );
 }
 
-function controlVisualStyle(disabled: boolean) {
+function controlVisualStyle(disabled: boolean, showDecoration = true) {
   return (state: PressableStateCallbackType): ViewStyle[] => {
     const webState = state as PressableStateCallbackType & {
       focused?: boolean;
@@ -592,14 +592,18 @@ function controlVisualStyle(disabled: boolean) {
     return [
       styles.controlVisual,
       {
-        backgroundColor: state.pressed
-          ? 'rgba(255, 255, 255, 0.24)'
-          : webState.hovered
-            ? 'rgba(255, 255, 255, 0.16)'
-            : 'transparent',
-        ...(Platform.OS === 'web'
-          ? ({ filter: 'drop-shadow(0 1px 2px rgba(0, 0, 0, 0.9))' } as unknown as ViewStyle)
-          : { boxShadow: '0 1px 2px rgba(0, 0, 0, 0.9)' }),
+        backgroundColor: showDecoration
+          ? state.pressed
+            ? 'rgba(255, 255, 255, 0.24)'
+            : webState.hovered
+              ? 'rgba(255, 255, 255, 0.16)'
+              : 'transparent'
+          : 'transparent',
+        ...(showDecoration
+          ? Platform.OS === 'web'
+            ? ({ filter: 'drop-shadow(0 1px 2px rgba(0, 0, 0, 0.9))' } as unknown as ViewStyle)
+            : { boxShadow: '0 1px 2px rgba(0, 0, 0, 0.9)' }
+          : undefined),
         opacity: disabled ? 0.35 : 1,
         ...(Platform.OS === 'web' && webState.focused
           ? ({
