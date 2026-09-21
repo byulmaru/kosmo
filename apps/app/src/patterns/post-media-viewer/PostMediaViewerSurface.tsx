@@ -187,6 +187,16 @@ export function PostMediaViewerSurface({
     <View style={styles.surface} testID="post-media-viewer-surface">
       <View style={[styles.content, presentation === 'wide' ? styles.wideContent : undefined]}>
         <View style={styles.mediaPane} testID="post-media-viewer-media-pane">
+          {Platform.OS === 'web' ? (
+            <Pressable
+              accessible={false}
+              focusable={false}
+              onPress={() => onClose()}
+              style={styles.mediaPaneDismissTarget}
+              tabIndex={-1}
+              testID="post-media-viewer-media-pane-dismiss"
+            />
+          ) : null}
           <View
             style={[
               styles.mediaViewport,
@@ -557,6 +567,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
     position: 'relative',
   },
+  mediaPaneDismissTarget: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
   mediaViewport: {
     alignItems: 'center',
     borderRadius: radius[8],

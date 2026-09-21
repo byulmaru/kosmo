@@ -370,6 +370,10 @@ describe('PostMediaViewer', () => {
       flattenStyle(byTestId('post-media-viewer-compact-detail').props.style).backgroundColor,
       '#fafafa',
     );
+    assert.equal(
+      flattenStyle(byTestId('post-media-viewer-backdrop').props.style).backgroundColor,
+      '#000000',
+    );
 
     viewport.width = 768;
     await render();
@@ -384,7 +388,22 @@ describe('PostMediaViewer', () => {
       flattenStyle(byTestId('post-media-viewer-context-rail').props.style).backgroundColor,
       '#fafafa',
     );
-    assert.equal(flattenStyle(byTestId('post-media-viewer-backdrop').props.style).padding, 24);
+    assert.equal(
+      flattenStyle(byTestId('post-media-viewer-backdrop').props.style).backgroundColor,
+      'transparent',
+    );
+    assert.equal(
+      flattenStyle(byTestId('post-media-viewer-backdrop').props.style).padding,
+      undefined,
+    );
+    assert.equal(
+      flattenStyle(byTestId('post-media-viewer-dialog').props.style).borderRadius,
+      undefined,
+    );
+    assert.equal(
+      flattenStyle(byTestId('post-media-viewer-dialog').props.style).backgroundColor,
+      undefined,
+    );
 
     viewport.width = 1200;
     await render();
@@ -413,6 +432,12 @@ describe('PostMediaViewer', () => {
       flattenStyle(byTestId('post-media-viewer-backdrop').props.style).padding,
       undefined,
     );
+    assert.equal(
+      flattenStyle(byTestId('post-media-viewer-backdrop').props.style).backgroundColor,
+      '#000000',
+    );
+    assert.equal(flattenStyle(byTestId('post-media-viewer-close').props.style).top, 16);
+    assert.equal(flattenStyle(byTestId('post-media-viewer-close').props.style).right, 16);
   });
 
   it('Compact detail은 내용 높이를 따르고 viewport 상한 안에서 body만 줄어든다', async () => {

@@ -20,6 +20,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
@@ -105,6 +106,7 @@ export function PostMediaViewer({
   selectedIndex: number;
 }>) {
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const closeRef = useRef<NativeView>(null);
   const dialogRef = useRef<NativeView>(null);
   const ignoreNextPlatformClose = useRef(false);
@@ -113,7 +115,10 @@ export function PostMediaViewer({
   const [expanded, setExpanded] = useState(false);
   const [lastContentId, setLastContentId] = useState<string | null>(null);
   const wide = Platform.OS === 'web' && width >= breakpoints.compact;
-  const safeAreaStyle = useSafeAreaPadding(wide ? spacing.xl : spacing.xs);
+  const safeAreaStyle = useSafeAreaPadding();
+  const closeTop = spacing.lg + (Platform.OS === 'web' ? 0 : insets.top);
+  const closeHorizontal =
+    spacing.lg + (Platform.OS === 'web' ? 0 : wide ? insets.left : insets.right);
 
   useEffect(() => {
     setCurrentIndex(selectedIndex);
@@ -210,15 +215,7 @@ export function PostMediaViewer({
       visible
     >
       <View
-        style={[
-          styles.backdrop,
-          Platform.OS === 'web'
-            ? wide
-              ? styles.wideWebBackdrop
-              : styles.compactWebBackdrop
-            : null,
-          safeAreaStyle,
-        ]}
+        style={[styles.backdrop, Platform.OS === 'web' && wide ? styles.wideWebBackdrop : null]}
         testID="post-media-viewer-backdrop"
       >
         <Pressable
@@ -232,7 +229,7 @@ export function PostMediaViewer({
         <View
           accessibilityViewIsModal
           ref={dialogRef}
-          style={[styles.dialog, Platform.OS === 'web' ? styles.webDialog : null]}
+          style={[styles.dialog, Platform.OS === 'web' ? null : safeAreaStyle]}
           testID="post-media-viewer-dialog"
         >
           <IconButton
@@ -240,7 +237,11 @@ export function PostMediaViewer({
             controlRef={closeRef}
             feedback="opacity"
             onPress={requestClose}
-            style={[styles.stableClose, wide ? styles.stableCloseWide : styles.stableCloseCompact]}
+            style={[
+              styles.stableClose,
+              wide ? styles.stableCloseWide : styles.stableCloseCompact,
+              { top: closeTop, ...(wide ? { left: closeHorizontal } : { right: closeHorizontal }) },
+            ]}
             targetSize={48}
             testID="post-media-viewer-close"
             visualSize={48}
@@ -588,12 +589,11 @@ function stableCloseVisualStyle(state: PressableStateCallbackType): ViewStyle[] 
 const styles = StyleSheet.create({
   backdrop: {
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: '#000000',
     flex: 1,
     justifyContent: 'center',
   },
-  compactWebBackdrop: { padding: spacing.xs },
-  wideWebBackdrop: { padding: spacing.xl },
+  wideWebBackdrop: { backgroundColor: 'transparent' },
   backdropDismissTarget: {
     bottom: 0,
     left: 0,
@@ -602,7 +602,6 @@ const styles = StyleSheet.create({
     top: 0,
   },
   dialog: {
-    backgroundColor: '#000000',
     flex: 1,
     minHeight: 0,
     minWidth: 0,
@@ -610,10 +609,9 @@ const styles = StyleSheet.create({
     width: '100%',
     zIndex: 1,
   },
-  webDialog: { borderRadius: radii.lg, overflow: 'hidden' },
-  stableClose: { position: 'absolute', top: spacing.md, zIndex: 4 },
-  stableCloseCompact: { right: spacing.md },
-  stableCloseWide: { left: spacing.md },
+  stableClose: { position: 'absolute', top: spacing.lg, zIndex: 4 },
+  stableCloseCompact: { right: spacing.lg },
+  stableCloseWide: { left: spacing.lg },
   stableCloseVisual: { borderRadius: radii.full },
   layout: { flex: 1, minHeight: 0, minWidth: 0 },
   mobileLayout: { flexDirection: 'column' },

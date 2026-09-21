@@ -305,6 +305,29 @@ describe('PostMediaViewerSurface', () => {
     assert.equal(byTestId('post-media-viewer-position').children.join(''), '2 / 4');
   });
 
+  it('Web media pane 빈 stage만 닫고 Native에서는 기존 backdrop semantics를 유지한다', async () => {
+    const args: unknown[][] = [];
+    await render({ onClose: (...values: unknown[]) => args.push(values) });
+
+    const dismissTarget = byTestId('post-media-viewer-media-pane-dismiss');
+    assert.equal(dismissTarget.props.accessible, false);
+    assert.equal(dismissTarget.props.focusable, false);
+    assert.equal(dismissTarget.props.tabIndex, -1);
+    assert.deepEqual(flattenStyle(dismissTarget.props.style), {
+      bottom: 0,
+      left: 0,
+      position: 'absolute',
+      right: 0,
+      top: 0,
+    });
+    dismissTarget.props.onPress({ type: 'press' });
+    assert.deepEqual(args, [[]]);
+
+    mockPlatform.OS = 'ios';
+    await render();
+    assert.equal(queryByTestId('post-media-viewer-media-pane-dismiss'), null);
+  });
+
   it('Ready image는 contain, trimmed alt name 또는 document fallback을 사용한다', async () => {
     await render({ currentIndex: 0, media: [media(1, '  Trimmed alt  ')] });
     assert.equal(image().props.accessibilityLabel, 'Trimmed alt');
