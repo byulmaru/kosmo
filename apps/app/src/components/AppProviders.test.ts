@@ -54,6 +54,7 @@ type MockRelayActorValue = {
   clearNativeSession: () => Promise<void>;
   nativeToken: string | null;
   resetActor: (profileId?: string | null) => void;
+  selectedProfileId: string | null;
   setNativeSession: (token: string) => Promise<void>;
 };
 
@@ -76,15 +77,19 @@ function MockRelayActorProvider({ children }: PropsWithChildren) {
 
   const [nativeToken, setNativeToken] = useState<string | null>(null);
   const [actorLifecycleKey, setActorLifecycleKey] = useState('actor-session');
+  const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   const setNativeSession = useCallback(async (token: string) => {
     setNativeToken(token);
+    setSelectedProfileId(null);
     setActorLifecycleKey((current) => `${current}:native`);
   }, []);
   const clearNativeSession = useCallback(async () => {
     setNativeToken(null);
+    setSelectedProfileId(null);
     setActorLifecycleKey((current) => `${current}:guest`);
   }, []);
   const resetActor = useCallback((profileId?: string | null) => {
+    setSelectedProfileId(profileId ?? null);
     setActorLifecycleKey((current) => `${current}:profile:${profileId ?? 'session'}`);
   }, []);
   const value = useMemo(
@@ -93,9 +98,17 @@ function MockRelayActorProvider({ children }: PropsWithChildren) {
       clearNativeSession,
       nativeToken,
       resetActor,
+      selectedProfileId,
       setNativeSession,
     }),
-    [actorLifecycleKey, clearNativeSession, nativeToken, resetActor, setNativeSession],
+    [
+      actorLifecycleKey,
+      clearNativeSession,
+      nativeToken,
+      resetActor,
+      selectedProfileId,
+      setNativeSession,
+    ],
   );
 
   return createElement(MockRelayActorContext.Provider, { value }, children);

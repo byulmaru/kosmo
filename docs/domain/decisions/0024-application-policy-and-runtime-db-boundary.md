@@ -25,8 +25,13 @@ Accepted
   shared DB access 경계를 사용한다.
 - GraphQL HTTP endpoint는 request마다 하나의 operation만 실행하고 JSON array batching을 지원하지 않는다.
   request 인증에서 검증한 identity와 request-scoped DataLoader context를 해당 operation이 직접 사용하며,
-  별도의 operation context snapshot을 만들지 않는다. `selectProfile`로 바뀐 selected Profile은 같은
-  Mutation의 이후 직렬 top-level field에 반영하고, 다음 HTTP request에서는 저장된 선택을 다시 인증한다.
+  별도의 operation context snapshot을 만들지 않는다. 호환 단계에서는 GraphQL
+  `extensions.selectedProfileId`가 Active Account의 Membership과 Profile 조회 가능 상태를 통과하고
+  Membership 역할을 서버에서 파생하여 해당 요청의 actor를 덮어쓴다. 클라이언트가 제시한 역할은
+  권한 근거가 아니다. Extension이 없거나 잘못되었거나 알 수 없거나 다른 Account에 속하거나 조회할 수
+  없는 Profile을 가리키면 오류 없이 `Sessions.activeProfileId`에서 파생한 기존 actor를 유지하며, 이 값은
+  Session에 저장하지 않는다. `selectProfile`로 바뀐 selected Profile은 같은 Mutation의 이후 직렬 top-level
+  field에 반영하고, 다음 HTTP request에서는 저장된 선택을 다시 인증한다.
 - API, Web과 Worker application runtime은 표준 `PGHOST`, `PGPORT`, `PGUSER`, `PGDATABASE`,
   `PGPASSWORD`와 하나의 shared non-owner runtime role을 사용한다. migration owner와 Fedify queue의
   별도 database/role 경계는 유지한다.
@@ -51,6 +56,8 @@ Accepted
 - RLS consumer가 제거된 뒤 operation session과 actor helper를 제거한다. 기존 PgBouncer Pooler 리소스는
   이 전환에서 제거하지 않되 GraphQL application traffic은 더 이상 사용하지 않는다. 향후 재사용 또는
   retirement는 별도 결정과 이슈가 소유한다.
+- GraphQL selected Profile extension의 request-local override와 `Sessions.activeProfileId` fallback은
+  호환 단계에서 유지한다. DB Session 저장값 또는 fallback 경계를 제거하는 작업은 별도 결정과 전환의 범위다.
 - runtime role 통합은 별도 구현 slice가 소유한다. production role drop, Secret sync/apply, cutover와 live
   verification은 이 결정의 실행 범위가 아니며 별도 승인이 필요하다.
 

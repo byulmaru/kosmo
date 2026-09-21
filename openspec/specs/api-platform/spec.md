@@ -104,6 +104,11 @@ API는 concrete GraphQL typename과 DB UUID를 포함하는 opaque global ID를 
 ### Requirement: API authentication scopes
 
 API는 request context에서 로그인 여부와 actor profile 선택 여부를 GraphQL auth scope로 제공해야 한다(MUST).
+Actor profile은 기본적으로 `Sessions.activeProfileId`에서 파생하며, 호환 단계에서는 유효한
+`extensions.selectedProfileId`가 현재 HTTP 요청에 한해 이를 덮어쓸 수 있어야 한다(MUST). Extension은
+Active Account, Account-Profile Membership, Profile 조회 가능 상태를 서버에서 확인하고 Membership 역할을 서버에서
+파생하여 적용해야 하며(MUST), client-provided role을 신뢰해서는 안 된다(MUST NOT). Extension 값은
+Session에 저장하지 않으며, 유효하지 않은 값은 기존 Session actor로 조용히 fallback해야 한다(MUST).
 
 #### Scenario: Logged-in request
 
@@ -119,6 +124,20 @@ API는 request context에서 로그인 여부와 actor profile 선택 여부를 
 
 - **WHEN** request context에 세션과 actor profile ID가 존재한다
 - **THEN** `usingProfile` auth scope는 참이다
+
+#### Scenario: Request using a valid selected Profile extension
+
+- **WHEN** 활성 Session을 사용하는 GraphQL 요청이 `extensions.selectedProfileId`를 제공하고, 해당 Profile이
+  Active Account의 Account-Profile Membership과 조회 가능 상태를 만족한다
+- **THEN** request context는 해당 Profile을 actor로 사용한다
+- **AND** actor 역할은 Membership에서 서버가 파생한다
+- **AND** extension 값은 현재 HTTP 요청에만 적용되고 Session을 변경하지 않는다
+
+#### Scenario: Fallback from an invalid selected Profile extension
+
+- **WHEN** extension이 없거나 malformed이거나, 알 수 없거나 다른 Account에 속하거나 조회할 수 없는 Profile을 가리킨다
+- **THEN** request context는 `Sessions.activeProfileId`에서 파생한 기존 actor를 오류 없이 유지한다
+- **AND** extension 값이나 client-provided role을 권한 근거 또는 Session 상태로 저장하지 않는다
 
 #### Scenario: Request without actor profile
 
@@ -241,12 +260,12 @@ API는 request 승인·거절·취소 결과가 Relay cache에서 삭제된 requ
 
 ### Requirement: GraphQL request별 단일 operation 실행 context
 
-**Authority / Provenance:** `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`, `docs/architecture/core-services.md`, PROD-776, PROD-779 — API는 MUST HTTP request마다 하나의 GraphQL operation만 실행하고, request 인증에서 검증한 session identity와 request-scoped DataLoader context를 해당 operation에 직접 제공한다. API는 JSON array batching 또는 별도의 operation context snapshot을 지원해서는 안 되며(MUST NOT), context는 DB handle을 소유하거나 노출해서도 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`, `docs/architecture/core-services.md`, PROD-776, PROD-779 — API는 MUST HTTP request마다 하나의 GraphQL operation만 실행하고, request 인증에서 검증한 session identity와 actor identity 및 request-scoped DataLoader context를 해당 operation에 직접 제공한다. 호환 단계에서 유효한 `extensions.selectedProfileId` actor는 해당 request context에만 적용하고 Session에는 저장하지 않으며, 유효하지 않은 extension은 기존 Session actor로 fallback한다. API는 JSON array batching 또는 별도의 operation context snapshot을 지원해서는 안 되며(MUST NOT), context는 DB handle을 소유하거나 노출해서도 안 된다(MUST NOT).
 
 #### Scenario: 인증된 단일 operation request
 
 - **WHEN** 인증된 HTTP request가 하나의 GraphQL operation을 실행한다
-- **THEN** operation은 request에서 검증한 session ID, account ID와 선택적 profile ID를 직접 사용한다
+- **THEN** operation은 request에서 검증한 session ID, account ID와 Session 또는 유효한 GraphQL extension에서 파생한 선택적 profile ID를 직접 사용한다
 - **AND** request-scoped DataLoader context를 사용한다
 - **AND** operation별 context clone이나 PostgreSQL database owner를 생성하지 않는다
 

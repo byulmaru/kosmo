@@ -74,7 +74,11 @@
 
 ### Requirement: API 세션 컨텍스트 파생
 
-API 서버는 Bearer token에서 현재 세션과 세션에 저장된 actor profile을 파생해야 한다(MUST).
+API 서버는 Bearer token에서 현재 세션과 `Sessions.activeProfileId`에 저장된 actor profile을 파생해야 한다(MUST).
+호환 단계에서는 GraphQL 요청의 유효한 `extensions.selectedProfileId`가 해당 HTTP 요청의
+actor profile만 덮어쓸 수 있어야 한다(MUST). Extension actor는 Active Account, Account-Profile Membership,
+Profile 조회 가능 상태를 서버에서 확인하고 Membership에서 역할을 서버가 파생한 경우에만 사용해야 하며(MUST), 클라이언트가
+제시한 역할을 권한 근거로 사용해서는 안 된다(MUST NOT).
 
 #### Scenario: 유효한 Bearer token
 
@@ -87,7 +91,22 @@ API 서버는 Bearer token에서 현재 세션과 세션에 저장된 actor prof
 
 - **WHEN** 유효한 세션의 `active_profile_id`가 존재한다
 - **THEN** 시스템은 해당 프로필이 활성 상태이고 세션 계정과 `account_profile`로 연결된 경우에만 actor profile로 사용한다
+- **AND** actor에 적용할 Membership 역할은 서버 저장 관계에서 파생한다
 - **AND** 유효하지 않은 actor profile은 `null`로 처리한다
+
+#### Scenario: 유효한 GraphQL selected Profile extension
+
+- **WHEN** 활성 Session을 사용하는 GraphQL 요청이 `extensions.selectedProfileId`를 제공하고, 해당 Profile이
+  Active Account의 Account-Profile Membership과 조회 가능 상태를 만족한다
+- **THEN** 시스템은 Membership에서 서버가 파생한 역할과 함께 해당 Profile을 현재 HTTP 요청의 actor profile로 사용한다
+- **AND** client-provided role은 무시한다
+- **AND** 시스템은 `Sessions.activeProfileId`를 변경하지 않는다
+
+#### Scenario: GraphQL selected Profile extension fallback
+
+- **WHEN** GraphQL extension이 없거나 malformed이거나, 알 수 없거나 다른 Account에 속하거나 조회할 수 없는 Profile을 가리킨다
+- **THEN** 시스템은 오류를 노출하지 않고 `Sessions.activeProfileId`에서 파생한 기존 actor profile을 유지한다
+- **AND** 시스템은 extension 값을 Session에 저장하지 않는다
 
 #### Scenario: actor profile 없음
 
