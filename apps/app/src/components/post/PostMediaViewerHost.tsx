@@ -8,10 +8,11 @@ import {
   useRef,
   useState,
 } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { useRelayActorLifecycleKey } from '@/relay/RelayActorProvider';
+import { breakpoints } from '@/theme/tokens';
 import { usePostActionAuthentication } from './PostActionAuthentication';
 import { PostActionSurface } from './PostActionSurface';
 import { usePostComposerBinding } from './PostComposerCoordinator';
@@ -177,6 +178,11 @@ function PostMediaViewerHostContent({
   onDeleted: () => void;
   session: ViewerSession;
 }>) {
+  const { width } = useWindowDimensions();
+  const compactWideReply =
+    Platform.OS === 'web' && width >= breakpoints.compact && width < breakpoints.full;
+  const viewerReplyOwner =
+    Platform.OS !== 'web' || width < breakpoints.full ? ('list' as const) : undefined;
   const { fetchKey } = useRouteBoundary();
   const data = useLazyLoadQuery<PostMediaViewerHostQuery>(
     PostMediaViewerHostOperation,
@@ -219,7 +225,13 @@ function PostMediaViewerHostContent({
         ...reply,
         onPress: () => {
           onClose();
-          requestAnimationFrame(() => reply.onPress());
+          requestAnimationFrame(() => {
+            if (replyAuthentication.execution.kind === 'enabled') {
+              replyBinding?.onPress(viewerReplyOwner);
+            } else {
+              reply.onPress();
+            }
+          });
         },
       }
     : undefined;
@@ -242,6 +254,7 @@ function PostMediaViewerHostContent({
     <PostMediaViewerThread
       contentId={contentId}
       mediaOwnerPostId={mediaOwner.id}
+      onReply={compactWideReply ? viewerReply?.onPress : undefined}
       onPostDeleted={onDeleted}
       replyAvailable={Boolean(surface?.content)}
       replySurfacePostId={session.surfacePostId}
