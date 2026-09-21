@@ -74,7 +74,7 @@ export function PostLayout({
   contentWarningPresentation = 'default',
   mediaPresentation = 'default',
   onDeleted,
-  onReply,
+  onReplyPress,
   post: postKey,
   presentation = 'default',
   replyAvailable,
@@ -83,7 +83,7 @@ export function PostLayout({
   contentWarningPresentation?: PostContentWarningPresentation;
   mediaPresentation?: 'default' | 'hidden';
   onDeleted?: () => void;
-  onReply?: () => void;
+  onReplyPress?: () => void;
   post: PostLayout_post$key;
   presentation?: 'compact' | 'default';
   replyAvailable?: boolean;
@@ -158,9 +158,9 @@ export function PostLayout({
     if (replyAuthentication.execution.kind === 'resolution-required') {
       replyAuthentication.resolve(replyAuthentication.execution.reason);
     } else if (replyAuthentication.execution.kind === 'enabled') {
-      replyBinding?.onPress();
+      (onReplyPress ?? replyBinding?.onPress)?.();
     }
-  }, [replyAuthentication, replyBinding]);
+  }, [onReplyPress, replyAuthentication, replyBinding]);
   const handleDeleted = useCallback(() => onDeleted?.(), [onDeleted]);
   const handleMediaOpen = useCallback<PostMediaOpenHandler>(
     (selectedIndex, originControl) => {
@@ -327,22 +327,19 @@ export function PostLayout({
             onDeleted={handleDeleted}
             onQuote={openQuote}
             reactionSummaryStyle={compact ? styles.compactReactionSummary : undefined}
-            reply={reply ? { ...reply, onPress: onReply ?? reply.onPress } : undefined}
+            reply={reply}
             socialActionTarget={socialActionTarget!}
           />
         </View>
         {quoteBinding?.expanded && quoteParent && quoteBinding.profile ? (
-          <View style={styles.quoteSurface}>
-            <ReplyComposerSurface
-              ref={quoteBinding.surfaceRef}
-              mode="quote"
-              onRequestClose={closeQuote}
-              open
-              owner={quoteBinding.owner}
-              parent={quoteParent}
-              profile={quoteBinding.profile}
-            />
-          </View>
+          <ReplyComposerSurface
+            ref={quoteBinding.surfaceRef}
+            mode="quote"
+            onRequestClose={closeQuote}
+            open
+            parent={quoteParent}
+            profile={quoteBinding.profile}
+          />
         ) : null}
         {!compact &&
         replyBinding?.expanded &&
@@ -350,18 +347,15 @@ export function PostLayout({
         replyBinding?.profile &&
         post.content &&
         post.replySurface ? (
-          <View style={styles.replySurface}>
-            <ReplyComposerSurface
-              ref={replyBinding.surfaceRef}
-              onPostCreated={replyBinding.onPostCreated}
-              onRequestClose={replyBinding.onRequestClose}
-              open={replyBinding.expanded}
-              owner={replyBinding.owner}
-              parent={post.replySurface}
-              profile={replyBinding.profile}
-              triggerRef={replyTriggerRef}
-            />
-          </View>
+          <ReplyComposerSurface
+            ref={replyBinding.surfaceRef}
+            onPostCreated={replyBinding.onPostCreated}
+            onRequestClose={replyBinding.onRequestClose}
+            open={replyBinding.expanded}
+            parent={post.replySurface}
+            profile={replyBinding.profile}
+            triggerRef={replyTriggerRef}
+          />
         ) : null}
       </View>
     </View>
@@ -403,7 +397,6 @@ const styles = StyleSheet.create({
   webActionBarFrame: { paddingVertical: spacing.md },
   engagement: { gap: spacing.xs, marginTop: spacing.sm, width: '100%' },
   compactReactionSummary: { display: 'none' },
-  quoteSurface: { marginTop: spacing.lg },
   moreButton: {
     alignSelf: 'flex-start',
     flexShrink: 0,
@@ -413,5 +406,4 @@ const styles = StyleSheet.create({
   moreText: { fontFamily: fontFamilies.ui, fontWeight: '700', ...typography.sm },
   meta: { fontFamily: fontFamilies.ui, marginTop: 6, textAlign: 'right', ...typography.xsm },
   source: { marginTop: spacing.sm },
-  replySurface: { marginTop: spacing.lg },
 });

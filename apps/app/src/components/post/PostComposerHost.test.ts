@@ -4,7 +4,7 @@ import { createElement, useState } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ElementType } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
-import type { PostComposerCreatedPost } from './PostComposer';
+import type { PostComposerCreatedPost } from './PostComposerController';
 import type { PostComposerHost as PostComposerHostComponent } from './PostComposerHost';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -37,8 +37,10 @@ mockModule('react-native', {
   Text: 'Text',
   View: 'View',
 });
-mockModule(require.resolve('./PostComposer'), {
-  PostComposer: (props: Omit<NonNullable<typeof composerProps>, 'body' | 'onBodyChange'>) => {
+mockModule(require.resolve('./PostComposerController'), {
+  PostComposerController: (
+    props: Omit<NonNullable<typeof composerProps>, 'body' | 'onBodyChange'>,
+  ) => {
     const [body, setBody] = useState('');
     composerProps = { ...props, body, onBodyChange: setBody };
     return createElement('PostComposer', composerProps);

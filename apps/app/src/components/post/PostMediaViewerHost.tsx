@@ -179,8 +179,6 @@ function PostMediaViewerHostContent({
   session: ViewerSession;
 }>) {
   const { width } = useWindowDimensions();
-  const compactWideReply =
-    Platform.OS === 'web' && width >= breakpoints.compact && width < breakpoints.full;
   const viewerReplyOwner =
     Platform.OS !== 'web' || width < breakpoints.full ? ('list' as const) : undefined;
   const { fetchKey } = useRouteBoundary();
@@ -253,8 +251,8 @@ function PostMediaViewerHostContent({
   const wideDetail = contentId ? (
     <PostMediaViewerThread
       contentId={contentId}
+      currentPostReplyOnPress={viewerReply?.onPress}
       mediaOwnerPostId={mediaOwner.id}
-      onReply={compactWideReply ? viewerReply?.onPress : undefined}
       onPostDeleted={onDeleted}
       replyAvailable={Boolean(surface?.content)}
       replySurfacePostId={session.surfacePostId}

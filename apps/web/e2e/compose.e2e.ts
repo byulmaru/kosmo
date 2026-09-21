@@ -84,7 +84,7 @@ test('compose에서 공개 범위와 500자 제한을 적용해 createPost를 �
   await setE2ESessionCookie(context, viewer.token);
   await page.setViewportSize({ width: 320, height: 720 });
   const composer = await openComposer(page);
-  const input = composer.getByRole('textbox', { name: '게시물 내용' });
+  const input = composer.getByRole('textbox', { name: '게시글 본문' });
   const submit = composer.getByRole('button', { name: '게시', exact: true });
 
   await expect(input).toBeVisible();
@@ -107,7 +107,7 @@ test('compose에서 공개 범위와 500자 제한을 적용해 createPost를 �
   expect(editorBeforeOpen).not.toBeNull();
 
   await visibilityTrigger.click();
-  const visibilityMenu = page.getByRole('radiogroup', { name: '공개 범위 선택' });
+  const visibilityMenu = page.getByRole('menu', { name: '공개 범위 선택' });
   await expect(visibilityMenu).toBeVisible();
   const visibilityMenuBox = await visibilityMenu.boundingBox();
   const viewport = page.viewportSize();
@@ -121,7 +121,7 @@ test('compose에서 공개 범위와 500자 제한을 적용해 createPost를 �
   expect(editorAfterOpen).not.toBeNull();
   expect(editorAfterOpen?.y).toBe(editorBeforeOpen?.y);
 
-  await expect(visibilityMenu.getByRole('radio', { name: '조용한 공개' })).toHaveAttribute(
+  await expect(visibilityMenu.getByRole('menuitemradio', { name: '조용한 공개' })).toHaveAttribute(
     'aria-checked',
     'true',
   );
@@ -135,13 +135,13 @@ test('compose에서 공개 범위와 500자 제한을 적용해 createPost를 �
 
   await visibilityTrigger.click();
   await page.keyboard.press('End');
-  await expect(visibilityMenu.getByRole('radio', { name: '팔로워만' })).toBeFocused();
+  await expect(visibilityMenu.getByRole('menuitemradio', { name: '팔로워만' })).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(visibilityMenu).toHaveCount(0);
 
   await visibilityTrigger.click();
   await page.keyboard.press('Home');
-  const publicOption = visibilityMenu.getByRole('radio', { name: '공개', exact: true });
+  const publicOption = visibilityMenu.getByRole('menuitemradio', { name: '공개', exact: true });
   await expect(publicOption).toBeFocused();
   await page.keyboard.press('Space');
   await expect(visibilityMenu).toHaveCount(0);
@@ -213,7 +213,7 @@ test('기본 공개 범위 저장부터 Local 재선택까지 production wiring�
 
   const body = 'E2E production wiring local body';
   const composer = await openComposer(page);
-  const input = composer.getByRole('textbox', { name: '게시물 내용' });
+  const input = composer.getByRole('textbox', { name: '게시글 본문' });
   const submit = composer.getByRole('button', { name: '게시', exact: true });
 
   await expect(composer.getByRole('button', { name: '공개 범위: 공개' })).toBeVisible();
@@ -505,7 +505,7 @@ test('compose에서 이미지 clipboard paste는 본문을 보존하고 기존 M
   });
 
   const composer = await openComposer(page);
-  const input = composer.getByRole('textbox', { name: '게시물 내용' });
+  const input = composer.getByRole('textbox', { name: '게시글 본문' });
   const submit = composer.getByRole('button', { name: '게시', exact: true });
   await input.fill('기존 본문');
   await input.evaluate((element) => element.setSelectionRange(2, 2));
@@ -723,7 +723,7 @@ test('compose의 touch 취소가 본문 포커스와 닫힌 공개 범위 menu�
   await setE2ESessionCookie(context, viewer.token);
   await page.setViewportSize({ width: 280, height: 720 });
   const composer = await openComposer(page);
-  const input = composer.getByRole('textbox', { name: '게시물 내용' });
+  const input = composer.getByRole('textbox', { name: '게시글 본문' });
   const visibilityTrigger = composer.getByRole('button', { name: '공개 범위: 조용한 공개' });
 
   await input.fill('touch 취소 뒤에도 포커스를 유지하는 본문입니다.');
@@ -752,7 +752,7 @@ test('compose의 touch 취소가 본문 포커스와 닫힌 공개 범위 menu�
     await page.waitForTimeout(100);
 
     await expect(input).toBeFocused();
-    await expect(page.getByRole('radiogroup', { name: '공개 범위 선택' })).toHaveCount(0);
+    await expect(page.getByRole('menu', { name: '공개 범위 선택' })).toHaveCount(0);
   } finally {
     await session.detach();
   }

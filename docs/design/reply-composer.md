@@ -28,8 +28,8 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
   연다. Viewer rail의 현재 Post Reply는 Viewer를 먼저 닫은 뒤 다음 frame에 배경 Post surface의 modal을 열며
   현재 Viewer 위에 modal을 중첩하지 않는다. 기본 route frame과 Viewer frame은 closed thread만 표시하고
   Composer-open을 별도 frame으로 중복 만들지 않는다.
-- Full Web Post 상세는 기존 thread rail Reply surface를 유지한다. Compact modal과 Full rail은 direct Parent와
-  공용 Composer 계약을 공유하지만 서로의 배치를 억지로 재사용하지 않는다.
+- Web `≥ compact`의 Post 상세도 목록과 같은 Reply modal을 연다. 일반 Post Composer의 Full Web right rail은
+  유지하며, Reply/Quote surface만 modal로 분리한다.
 - Current runtime과 OpenSpec은 Web `< compact`와 Android/iOS의 목록 surface에서 같은 Reply 맥락을 전체 화면
   작성기로 연다. Current는 surface가 열리는 즉시 작성자·시각·전체 본문과 Quote Source를 포함한 direct Parent를
   editor 앞에 표시한다.
@@ -143,8 +143,8 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
 - Web modal의 `X`·backdrop·`Escape`, modal close와 원래 Reply action focus restore는 modal에만 적용한다.
   fullscreen은 보이는 header close와 Web navigation back·Native platform back을 사용하고 backdrop dismiss를
   제공하지 않는다. 폐기 확인은 두 surface가 공유한다.
-- Full Web thread rail은 backdrop modal이 아니므로 위 dismiss 계약을 상속하지 않는다. 기존 rail의
-  open·reset·success lifecycle은 이번 DSN-50 Target에서 재정의하지 않는다.
+- Reply/Quote surface는 Web `≥ compact`에서 backdrop modal이므로 위 dismiss 계약을 상속한다. 일반 Post
+  Composer에만 남는 Full Web right rail은 이 Reply lifecycle의 대상이 아니다.
 - modal Reply surface를 여는 순간 direct Parent 맥락 자체를 dirty로 취급하므로, 본문·Content Warning·Visibility와
   Media가 초기값이어도 `X`, backdrop 또는 `Escape`로 닫을 때 확인을 표시한다. fullscreen도 같은 dirty
   판정을 사용하되 header close 또는 navigation/platform back에서 확인한다.
@@ -214,15 +214,12 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
 
 ## 구현 정렬 gate
 
-- 이 디자인의 Web modal, Full Web thread rail과 좁은 화면 전체 작성기는 PROD-425의 기본 Reply 작성 계약과
-  PROD-640의 기존 Media 계약 복구를 함께 적용한다. `add-local-reply-creation`의 최종 delta 동기화와 archive는
+- 이 디자인의 Web modal과 좁은 화면 전체 작성기는 PROD-425의 기본 Reply 작성 계약과 PROD-640의 기존 Media
+  계약 복구를 함께 적용한다. `add-local-reply-creation`의 최종 delta 동기화와 archive는
   전체 통합 검증을 소유한 PROD-423에서 수행한다.
-- 현재 runtime의 `detail` Reply는 viewport·platform과 관계없이 inline이므로 Compact Post 상세,
-  Compact Web PostMediaViewer rail과 Web `< compact`·Android/iOS Target이 아직 구현되지 않았다. DSN-50은
-  Figma Target과 handoff만 기록하며 component·test·Storybook을 수정하지 않는다. PostMediaViewer 반영은
-  PROD-849의 범위를 먼저 동기화한 뒤 그 Product 흐름에서 소유하고, 일반 Post 상세와 Native presentation
-  이관은 별도 Product 구현 이슈에서 소유해야 한다. Figma와 이 문서의 Target을 Current runtime 완료 증거로
-  사용하지 않는다.
+- Reply/Quote는 목록과 상세에서 Web `≥ compact`는 modal, Web `< compact`와 Android/iOS는 fullscreen을 사용한다.
+  상세 inline Composer는 이 계약에서 제외하고 재도입은 별도 Product 범위로 남긴다. 일반 Full Web right rail은
+  유지한다.
 - Local API 입력·저장(PROD-460)과 일반·Reply Composer 및 공용 reveal UI(PROD-642)의 Content Warning 계약은
   `add-local-content-warning` change가 공동 소유한다. PR readiness와 별개로 Android/iOS 및 원격 federation
   runtime gate가 완료되기 전에는 이 change를 archive하지 않는다.
@@ -251,8 +248,9 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
   `보기` 이동과 자동 이동 없음, Media upload 중 dirty close를 확인한다. fullscreen은 backdrop 없이 header
   close와 navigation/platform back에서 같은 dirty·pending 보호를 제공하는지 확인한다. 두 surface 모두 selected
   Profile·Parent·Relay Environment 전환의 첫 commit과 늦은 설정 조회·upload·mutation completion 격리를 확인한다.
-- Web `< compact` 전체 화면, Compact Post 상세 modal과 Full Web thread rail의 Parent·Composer 계약을
-  Storybook에서 확인한다. Compact 기본 thread에는 inline Composer wrapper가 남지 않아야 한다. 실제 API의
+- Web `≥ compact` 목록·상세 modal과 Web `< compact` 전체 화면의 Parent·Composer 계약을 Storybook에서
+  확인한다. 일반 Post Composer의 Full Web right rail은 유지하되 Reply/Quote에는 inline Composer wrapper가
+  남지 않아야 한다. 실제 API의
   targeted refetch 실패·retry와 Web 짧은-height layout은 통합 runtime 검증으로 분리한다.
 - Native 전체 화면 구현은 같은 Parent·Composer 계약을 공유하지만, Android·iOS의 scroll, keyboard, safe area,
   platform back과 접근성 runtime은 이번 Web 우선 PR의 Ready 근거로 사용하지 않고 Native 출시 gate에서 별도로

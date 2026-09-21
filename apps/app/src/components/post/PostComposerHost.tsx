@@ -13,7 +13,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, textStyles } from '@/theme/tokens';
-import { PostComposer } from './PostComposer';
+import { PostComposerController } from './PostComposerController';
 import type { RefObject } from 'react';
 import type { PostComposer_profile$key } from './__generated__/PostComposer_profile.graphql';
 import type { PostComposerProfileRef } from './PostComposerProfileSwitcher';
@@ -204,7 +204,7 @@ export function PostComposerHost({
   });
 
   const composer = (
-    <PostComposer
+    <PostComposerController
       expandControlRef={expandControlRef}
       focusOnMount={overlayVisible}
       onPostCreated={() => requestClose('created')}

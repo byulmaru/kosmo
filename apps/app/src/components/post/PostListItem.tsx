@@ -121,12 +121,7 @@ export function PostListItem({
   const restoreQuoteTriggerFocusRef = useRef<(() => void) | null>(null);
   const post = useFragment(PostListItemFragment, postKey);
   const openViewer = usePostMediaViewerHost();
-  const {
-    binding: replyBinding,
-    reply,
-    replySurface,
-    owner: replyOwner,
-  } = usePostReplySurface(post);
+  const { binding: replyBinding, reply, replySurface } = usePostReplySurface(post);
   const quoteBinding = usePostComposerBinding(post.id, 'quote');
   const composerExpandedRef = useRef(false);
   composerExpandedRef.current = Boolean(replyBinding?.expanded || quoteBinding?.expanded);
@@ -155,12 +150,6 @@ export function PostListItem({
     [quoteBinding],
   );
   const profileHref = `/${post.profile.relativeHandle}` as const;
-  const presentedReplySurface =
-    replySurface && replyOwner === 'detail' ? (
-      <View style={styles.detailReplySurface}>{replySurface}</View>
-    ) : (
-      replySurface
-    );
   const quoteSurface =
     quoteBinding?.expanded && quoteParent && quoteBinding.profile ? (
       <ReplyComposerSurface
@@ -168,7 +157,6 @@ export function PostListItem({
         mode="quote"
         onRequestClose={closeQuote}
         open
-        owner={quoteBinding.owner}
         parent={quoteParent}
         profile={quoteBinding.profile}
       />
@@ -239,7 +227,7 @@ export function PostListItem({
   const renderWithReplySurface = (presentation: ReactNode) => (
     <>
       {presentation}
-      {presentedReplySurface}
+      {replySurface}
       {quoteSurface}
     </>
   );
@@ -503,10 +491,6 @@ const styles = StyleSheet.create({
   },
   avatar: { borderRadius: radii.full },
   actionBarSlot: { paddingTop: spacing.xs },
-  detailReplySurface: {
-    marginLeft: spacing.xxl * 2,
-    marginRight: spacing.sm,
-  },
   reactionSummary: { marginTop: spacing.xs },
   quoteReactionSummary: { marginTop: spacing.sm },
   quoteSourcePreview: { paddingBottom: spacing.xs },

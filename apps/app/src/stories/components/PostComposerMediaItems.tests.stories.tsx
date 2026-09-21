@@ -1,6 +1,6 @@
 import { Text, View } from 'react-native';
 import { expect, fn, userEvent, within } from 'storybook/test';
-import { PostComposerTarget } from '@/components/post/PostComposerTarget';
+import { PostComposer } from '@/components/post/PostComposer';
 import baseMeta, {
   InteractionContract as interactionContract,
   mixedMedia,
@@ -21,7 +21,7 @@ export const InteractionContract: Story = interactionContract;
 export const HorizontalReachabilityContract: Story = {
   render: () => (
     <View style={{ width: 320 }}>
-      <PostComposerTarget
+      <PostComposer
         author={<Text>테스트 작성자</Text>}
         body=""
         contentWarning=""

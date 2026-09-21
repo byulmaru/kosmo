@@ -1,6 +1,7 @@
 import { useState } from 'react';
+import { Text, View } from 'react-native';
 import { expect, userEvent, waitFor, within } from 'storybook/test';
-import { PostComposerTarget } from '@/components/post/PostComposerTarget';
+import { PostComposer } from '@/components/post/PostComposer';
 import baseMeta, {
   ActionSemanticsContract as actionSemanticsContract,
   Error as errorStory,
@@ -35,7 +36,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 const meta = {
   ...baseMeta,
   excludeStories: [],
-  title: 'KOSMO/Patterns/Post Composer Target/Tests',
+  title: 'KOSMO/Patterns/Post Composer/Tests',
 } satisfies Meta;
 
 export default meta;
@@ -63,6 +64,46 @@ export const RailBodyMaxHeightContract: Story = railBodyMaxHeightContract;
 export const RailFocusBoundaryContract: Story = railFocusBoundaryContract;
 export const RailProgressRingContract: Story = railProgressRingContract;
 
+export const ReplyModeContract: Story = {
+  ...playgroundContract,
+  args: {
+    ...playgroundContract.args,
+    body: '',
+    beforeEditor: <Text testID="reply-context-preview">Parent preview</Text>,
+    items: [],
+    mode: 'reply',
+    remaining: 500,
+    surface: 'overlay',
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    expect(canvas.getByTestId('reply-context-preview')).toBeVisible();
+    expect(canvas.getByRole('textbox', { name: '답글 본문' })).toHaveAttribute(
+      'placeholder',
+      '답글을 입력하세요…',
+    );
+    expect(canvas.getByRole('button', { name: '답글 게시' })).toBeDisabled();
+  },
+};
+
+export const QuoteModeContract: Story = {
+  ...ReplyModeContract,
+  args: {
+    ...ReplyModeContract.args,
+    beforeEditor: <View testID="quote-context-preview" />,
+    mode: 'quote',
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    expect(canvas.getByTestId('quote-context-preview')).toBeVisible();
+    expect(canvas.getByRole('textbox', { name: '인용 게시글 본문' })).toHaveAttribute(
+      'placeholder',
+      '인용할 내용을 입력하세요…',
+    );
+    expect(canvas.getByRole('button', { name: '인용 게시' })).toBeDisabled();
+  },
+};
+
 export const ProgrammaticBodyResetHeightContract: Story = {
   ...playgroundContract,
   args: {
@@ -75,7 +116,7 @@ export const ProgrammaticBodyResetHeightContract: Story = {
   render: (args) => {
     const [body, setBody] = useState(args.body);
     return (
-      <PostComposerTarget
+      <PostComposer
         {...args}
         body={body}
         onBodyChange={setBody}
@@ -88,7 +129,7 @@ export const ProgrammaticBodyResetHeightContract: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const body = canvas.getByRole('textbox', { name: '게시물 내용' });
+    const body = canvas.getByRole('textbox', { name: '게시글 본문' });
     await waitFor(() => expect(body.getBoundingClientRect().height).toBe(300));
 
     await userEvent.click(canvas.getByRole('button', { name: '게시' }));
@@ -265,7 +306,7 @@ export const ShortViewportContract: Story = {
       0,
     );
     expect(getComputedStyle(scroll).overflowY).toBe('auto');
-    expect(outerScroll.scrollHeight).toBe(outerScroll.clientHeight);
+    expect(getComputedStyle(outerScroll).overflow).toBe('hidden');
     expect(scroll.scrollHeight).toBeGreaterThan(scroll.clientHeight);
     scroll.scrollTop = scroll.scrollHeight;
     expect(scroll.scrollTop).toBeGreaterThan(0);

@@ -7,8 +7,8 @@ import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { ComposerMediaEditor } from '@/components/post/ComposerMediaEditor';
 import {
   MobileFullscreenComposerShellCandidate,
-  PostComposerTarget,
-} from '@/components/post/PostComposerTarget';
+  PostComposer,
+} from '@/components/post/PostComposer';
 import { FullReactionPicker } from '@/components/reaction/FullReactionPicker';
 import { Avatar } from '@/components/ui/Avatar';
 import { IconButton } from '@/components/ui/IconButton';
@@ -19,8 +19,8 @@ import ogImage from '../../../public/og-default.png?url';
 import { ComposerOverlayFixture } from '../fixtures/ComposerOverlayFixture';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { ComposerMediaEditorMobileState } from '@/components/post/ComposerMediaEditor';
+import type { PostComposerProps } from '@/components/post/PostComposer';
 import type { ComposerMediaItem } from '@/components/post/PostComposerMediaControls';
-import type { PostComposerTargetProps } from '@/components/post/PostComposerTarget';
 
 const mediaAsset = { height: 390, uri: ogImage, width: 560 };
 
@@ -150,7 +150,7 @@ const meta = {
     surface: { control: 'inline-radio', options: ['rail', 'overlay'] },
     visibility: { control: 'select', options: ['PUBLIC', 'UNLISTED', 'FOLLOWERS'] },
   },
-  component: PostComposerTarget,
+  component: PostComposer,
   excludeStories: [
     'ActionSemanticsContract',
     'InteractionContract',
@@ -176,8 +176,8 @@ const meta = {
     'composerMedia',
   ],
   parameters: { controls: { disable: true }, layout: 'centered' },
-  title: 'KOSMO/Patterns/Post Composer Target',
-} satisfies Meta<typeof PostComposerTarget>;
+  title: 'KOSMO/Patterns/Post Composer',
+} satisfies Meta<typeof PostComposer>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
@@ -298,7 +298,7 @@ export const MobileKeyboardCW: Story = {
   render: (args) => <InteractiveComposer {...args} keyboard mobile />,
 };
 
-function SubmitFailureComposer(props: PostComposerTargetProps) {
+function SubmitFailureComposer(props: PostComposerProps) {
   const { showToast } = useToast();
 
   return (
@@ -316,7 +316,7 @@ function InteractiveComposer({
   keyboard = false,
   mobile = false,
   ...props
-}: PostComposerTargetProps & { keyboard?: boolean; mobile?: boolean }) {
+}: PostComposerProps & { keyboard?: boolean; mobile?: boolean }) {
   const theme = useTheme();
   const composerProps = { ...props, showPollAction: false };
   const [body, setBody] = useState(props.body);
@@ -557,7 +557,7 @@ function InteractiveComposer({
         />
       ) : (
         <View style={props.surface === 'rail' ? styles.railTarget : styles.overlayTarget}>
-          <PostComposerTarget
+          <PostComposer
             {...composerProps}
             body={body}
             contentWarning={contentWarning}
@@ -654,7 +654,7 @@ function InteractiveComposer({
                   <XIcon color={theme.foregroundPrimary} size={iconSizes[20]} strokeWidth={2} />
                 </IconButton>
               </View>
-              <PostComposerTarget
+              <PostComposer
                 {...composerProps}
                 body={body}
                 contentWarning={contentWarning}
@@ -706,7 +706,7 @@ function InteractiveComposer({
   );
 }
 
-function SubmittingPickerComposer(props: PostComposerTargetProps) {
+function SubmittingPickerComposer(props: PostComposerProps) {
   const [submitting, setSubmitting] = useState(false);
 
   return (
@@ -733,7 +733,7 @@ export const InteractionContract: Story = {
     args.onMediaRetry.mockClear();
     const canvas = within(canvasElement);
     const page = within(canvasElement.ownerDocument.body);
-    const railBody = canvas.getByRole('textbox', { name: '게시물 내용' });
+    const railBody = canvas.getByRole('textbox', { name: '게시글 본문' });
 
     await userEvent.click(canvas.getByRole('button', { name: 'Composer 확장' }));
     expect(args.onExpand).toHaveBeenCalledOnce();
@@ -746,7 +746,7 @@ export const InteractionContract: Story = {
     expect(within(dialog).getByRole('heading', { name: '글쓰기' })).toBeVisible();
     expect(within(dialog).getByRole('button', { name: '글쓰기 닫기' })).toBeVisible();
     expect(within(dialog).queryByRole('button', { name: 'Composer 확장' })).toBeNull();
-    const body = within(dialog).getByRole('textbox', { name: '게시물 내용' });
+    const body = within(dialog).getByRole('textbox', { name: '게시글 본문' });
     expect(body).toHaveValue('오늘의 코스모 이야기를 나눠보세요.');
     await userEvent.type(body, ' 오버레이');
     expect(args.onBodyChange).toHaveBeenLastCalledWith(
@@ -778,7 +778,7 @@ export const InteractionContract: Story = {
     expect(args.onMediaEdit).toHaveBeenLastCalledWith('ready', 'alt');
     expect(within(dialog).getByRole('heading', { name: '미디어 편집' })).toBeVisible();
     await userEvent.click(within(dialog).getByRole('button', { name: '완료' }));
-    expect(within(dialog).getByRole('textbox', { name: '게시물 내용' })).toHaveValue(
+    expect(within(dialog).getByRole('textbox', { name: '게시글 본문' })).toHaveValue(
       '오늘의 코스모 이야기를 나눠보세요. 오버레이',
     );
 
@@ -800,7 +800,7 @@ export const InteractionContract: Story = {
 
     await userEvent.click(within(dialog).getByRole('button', { name: '이모지 추가' }));
     await userEvent.click(page.getAllByRole('button', { name: '빨간 하트 ❤️' })[0]);
-    expect(within(dialog).getByRole('textbox', { name: '게시물 내용' })).toHaveValue(
+    expect(within(dialog).getByRole('textbox', { name: '게시글 본문' })).toHaveValue(
       '오늘의 코스모 이야기를 나눠보세요. 오버레이❤️',
     );
 
@@ -823,7 +823,7 @@ export const ActionSemanticsContract: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
-    for (const name of ['이미지 추가', '투표 추가', '이모지 추가']) {
+    for (const name of [/^이미지 추가/, '투표 추가', '이모지 추가']) {
       expect(canvas.getByRole('button', { name })).not.toHaveAttribute('aria-pressed');
     }
     expect(canvas.getByRole('button', { name: '콘텐츠 경고 켜기' })).toHaveAttribute(
@@ -859,7 +859,7 @@ export const MobileFlexLayoutContract: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = canvas.getByTestId('mobile-composer-body');
-    const editor = canvas.getByRole('textbox', { name: '게시물 내용' });
+    const editor = canvas.getByRole('textbox', { name: '게시글 본문' });
 
     expect(body).toHaveStyle({ gap: '8px' });
     expect(getComputedStyle(body).overflow).toBe('visible');
@@ -890,15 +890,15 @@ export const MobilePlaygroundContract: Story = {
 
     await userEvent.click(canvas.getByRole('button', { name: '공개 범위: 조용한 공개' }));
 
-    const menu = canvas.getByRole('radiogroup', { name: '공개 범위 선택' });
+    const menu = canvas.getByRole('menu', { name: '공개 범위 선택' });
     const trigger = canvas.getByRole('button', { name: '공개 범위: 조용한 공개' });
-    expect(within(menu).getAllByRole('radio')).toHaveLength(3);
+    expect(within(menu).getAllByRole('menuitemradio')).toHaveLength(3);
     expect(menu.getBoundingClientRect().right).toBe(trigger.getBoundingClientRect().right - 16);
 
-    await userEvent.click(within(menu).getByRole('radio', { name: '공개' }));
+    await userEvent.click(within(menu).getByRole('menuitemradio', { name: '공개' }));
     expect(args.onVisibilityChange).toHaveBeenLastCalledWith('PUBLIC');
     expect(canvas.getByRole('button', { name: '공개 범위: 공개' })).toBeVisible();
-    expect(canvas.queryByRole('radiogroup', { name: '공개 범위 선택' })).toBeNull();
+    expect(canvas.queryByRole('menu', { name: '공개 범위 선택' })).toBeNull();
 
     await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 1 편집' }));
     expect(canvas.getByRole('heading', { name: '미디어 편집' })).toBeVisible();
@@ -981,7 +981,7 @@ export const OverlayGeometryContract: Story = {
     const visibilityTrigger = canvas.getByRole('button', { name: '공개 범위: 조용한 공개' });
     const submit = canvas.getByRole('button', { name: '게시' });
     const scroll = canvas.getByTestId('post-composer-scroll');
-    const body = canvas.getByRole('textbox', { name: '게시물 내용' });
+    const body = canvas.getByRole('textbox', { name: '게시글 본문' });
     const gallery = canvas.getByLabelText('첨부 이미지 갤러리, 1개');
     const galleryShell = gallery.parentElement!;
     const content = galleryShell.parentElement!;
@@ -1045,7 +1045,7 @@ export const RailGeometryContract: Story = {
     const canvas = within(canvasElement);
     const target = canvas.getByTestId('post-composer-target');
     const scroll = canvas.getByTestId('post-composer-scroll');
-    const body = canvas.getByRole('textbox', { name: '게시물 내용' });
+    const body = canvas.getByRole('textbox', { name: '게시글 본문' });
     const expand = canvas.getByRole('button', { name: 'Composer 확장' });
     const visibility = canvas.getByRole('button', { name: '공개 범위: 조용한 공개' });
     const gallery = canvas.getByLabelText('첨부 이미지 갤러리, 1개');
@@ -1094,7 +1094,7 @@ export const RailFocusBoundaryContract: Story = {
   ...RailEmptyPublic,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const body = canvas.getByRole('textbox', { name: '게시물 내용' });
+    const body = canvas.getByRole('textbox', { name: '게시글 본문' });
     const editor = canvas.getByTestId('post-composer-editor');
     const baselineBorderColor = getComputedStyle(editor).borderColor;
 
@@ -1113,7 +1113,7 @@ export const RailBodyMaxHeightContract: Story = {
   args: { ...RailEmptyPublic.args, body: '긴 본문\n'.repeat(40) },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const body = canvas.getByRole('textbox', { name: '게시물 내용' });
+    const body = canvas.getByRole('textbox', { name: '게시글 본문' });
     const scroll = canvas.getByTestId('post-composer-scroll');
 
     await waitFor(() => expect(body.getBoundingClientRect().height).toBe(300));
@@ -1128,9 +1128,9 @@ export const ProgressRingToneContract: Story = {
   ...Playground,
   render: (args) => (
     <View style={{ gap: space[16] }}>
-      <PostComposerTarget {...args} body="일반" items={[]} remaining={250} surface="overlay" />
-      <PostComposerTarget {...args} body="경고" items={[]} remaining={100} surface="overlay" />
-      <PostComposerTarget {...args} body="위험" items={[]} remaining={0} surface="overlay" />
+      <PostComposer {...args} body="일반" items={[]} remaining={250} surface="overlay" />
+      <PostComposer {...args} body="경고" items={[]} remaining={100} surface="overlay" />
+      <PostComposer {...args} body="위험" items={[]} remaining={0} surface="overlay" />
     </View>
   ),
   play: async ({ canvasElement }) => {
@@ -1162,7 +1162,7 @@ export const SubmittingPickerContract: Story = {
     args.onBodyChange.mockClear();
     args.onSubmit.mockClear();
     const canvas = within(canvasElement);
-    const body = canvas.getByRole('textbox', { name: '게시물 내용' });
+    const body = canvas.getByRole('textbox', { name: '게시글 본문' });
 
     await userEvent.click(canvas.getByRole('button', { name: '이모지 추가' }));
     expect(await canvas.findByTestId('post-composer-emoji-picker')).toBeVisible();
@@ -1187,12 +1187,10 @@ export const SubmittingVisibilityContract: Story = {
     const canvas = within(canvasElement);
 
     await userEvent.click(canvas.getByRole('button', { name: '공개 범위: 조용한 공개' }));
-    expect(canvas.getByRole('radiogroup', { name: '공개 범위 선택' })).toBeVisible();
+    expect(canvas.getByRole('menu', { name: '공개 범위 선택' })).toBeVisible();
 
     await userEvent.click(canvas.getByRole('button', { name: '게시' }));
-    await waitFor(() =>
-      expect(canvas.queryByRole('radiogroup', { name: '공개 범위 선택' })).toBeNull(),
-    );
+    await waitFor(() => expect(canvas.queryByRole('menu', { name: '공개 범위 선택' })).toBeNull());
 
     expect(canvas.getByRole('button', { name: '공개 범위: 조용한 공개' })).toBeDisabled();
     expect(args.onVisibilityChange).not.toHaveBeenCalled();
@@ -1253,7 +1251,7 @@ export const MobileKeyboardCWEditorGeometryContract: Story = {
     expect(borderWidth).toBe('1px');
     expect(focusedStyle.outlineWidth).toBe('0px');
 
-    await userEvent.click(canvas.getByRole('textbox', { name: '게시물 내용' }));
+    await userEvent.click(canvas.getByRole('textbox', { name: '게시글 본문' }));
     await waitFor(() => expect(contentWarning).not.toHaveFocus());
     expect(getComputedStyle(contentWarning).borderWidth).toBe(borderWidth);
     expect(getComputedStyle(contentWarning).outlineWidth).toBe('0px');
@@ -1272,7 +1270,7 @@ export const MobileKeyboardContract: Story = {
 
 function expectMobileEditorFitsMediaShelf(canvasElement: HTMLElement) {
   const canvas = within(canvasElement);
-  const editor = canvas.getByRole('textbox', { name: '게시물 내용' });
+  const editor = canvas.getByRole('textbox', { name: '게시글 본문' });
   const shelf = canvas.getByLabelText('첨부 이미지 갤러리, 1개').parentElement;
 
   expect(getComputedStyle(editor).flexGrow).toBe('1');

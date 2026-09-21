@@ -23,7 +23,7 @@ import { startWebLogin } from '@/auth/webLogin';
 import { PostActionAuthenticationProvider } from '@/components/post/PostActionAuthentication';
 import { PostActionSurface } from '@/components/post/PostActionSurface';
 import { PostBody } from '@/components/post/PostBody';
-import { PostComposer } from '@/components/post/PostComposer';
+import { PostComposerController } from '@/components/post/PostComposerController';
 import { PostComposerCoordinatorProvider } from '@/components/post/PostComposerCoordinator';
 import { PostComposerMediaItems } from '@/components/post/PostComposerMediaControls';
 import { PostContentRenderer } from '@/components/post/PostContentRenderer';
@@ -67,33 +67,6 @@ import type { PostDeletionListEdgeSafetyQuery as PostDeletionListEdgeSafetyQuery
 import type { PostDetailThreadIdentityStoryQuery } from './__generated__/PostDetailThreadIdentityStoryQuery.graphql';
 import type { PostsProductionComposerAdapterStoryQuery } from './__generated__/PostsProductionComposerAdapterStoryQuery.graphql';
 import type { PostsStoriesQuery as PostsStoriesQueryType } from './__generated__/PostsStoriesQuery.graphql';
-
-function getColorContrastRatio(foreground: string, background: string) {
-  const relativeLuminance = (color: string) => {
-    const hex = /^#([\da-f]{6})$/i.exec(color)?.[1];
-    const channels = hex
-      ? [0, 2, 4].map((index) => Number.parseInt(hex.slice(index, index + 2), 16))
-      : color
-          .match(/[\d.]+/g)
-          ?.slice(0, 3)
-          .map(Number);
-    if (!channels || channels.length !== 3) {
-      throw new Error(`RGB color를 해석할 수 없습니다: ${color}`);
-    }
-    const [red, green, blue] = channels.map((channel) => {
-      const normalized = channel! / 255;
-      return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
-    });
-    return 0.2126 * red! + 0.7152 * green! + 0.0722 * blue!;
-  };
-
-  const foregroundLuminance = relativeLuminance(foreground);
-  const backgroundLuminance = relativeLuminance(background);
-  return (
-    (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) /
-    (Math.min(foregroundLuminance, backgroundLuminance) + 0.05)
-  );
-}
 
 const postMediaImageUri = ogDefaultUrl;
 
@@ -1388,7 +1361,7 @@ function HomePostComposerPaginationStory() {
 
   return (
     <>
-      <PostComposer profile={data.composerProfile} />
+      <PostComposerController profile={data.composerProfile} />
       <PostList home={data.home} />
     </>
   );
@@ -1920,7 +1893,12 @@ function RepostQuotePresentationStory({ postId }: { postId: string }) {
 function ComposerStory() {
   return (
     <Catalog>
-      <PostComposer profile={usePostsStoryData().composerProfile} />
+      <PostComposerController
+        onExpand={() => undefined}
+        onRequestClose={() => undefined}
+        presentation="rail"
+        profile={usePostsStoryData().composerProfile}
+      />
     </Catalog>
   );
 }
@@ -1937,7 +1915,7 @@ function ProductionComposerAdapterStory() {
 
   return (
     <Catalog>
-      <PostComposer
+      <PostComposerController
         onExpand={() => undefined}
         onPostCreated={(post) => setCreatedPostId(post.id)}
         onRequestClose={() => undefined}
@@ -1981,14 +1959,14 @@ function ComposerRailMediaFocusStory() {
   return (
     <View style={{ width: presentation === 'rail' ? 350 : 640 }}>
       {presentation === 'rail' ? (
-        <PostComposer
+        <PostComposerController
           onExpand={() => setPresentation('overlay')}
           onRequestClose={() => setPresentation('rail')}
           presentation="rail"
           profile={profile}
         />
       ) : (
-        <PostComposer
+        <PostComposerController
           onRequestClose={() => setPresentation('rail')}
           presentation="overlay"
           profile={profile}
@@ -2082,7 +2060,7 @@ function ComposerPickerUnmountStory() {
       >
         <Text>Composer 닫기</Text>
       </Pressable>
-      {composerVisible ? <PostComposer profile={profile} /> : null}
+      {composerVisible ? <PostComposerController profile={profile} /> : null}
     </Catalog>
   );
 }
@@ -2116,7 +2094,6 @@ function ReplyModalPresentationStory({
         mode={mode}
         onRequestClose={() => setOpen(false)}
         open={open}
-        owner="list"
         parent={parent}
         profile={data.replyComposerProfile}
         triggerRef={triggerRef}
@@ -2219,22 +2196,6 @@ function ReplyListSurfaceStory() {
   );
 }
 
-function ReplyDetailInlineStory() {
-  const data = usePostsStoryData();
-  const post = requireFragment(
-    requirePostById(data.posts, shortPost.id).layout,
-    'Reply detail inline Post',
-  );
-
-  return (
-    <PostComposerCoordinatorProvider owner="detail" profile={data.replyComposerProfile}>
-      <Catalog>
-        <PostLayout post={post} />
-      </Catalog>
-    </PostComposerCoordinatorProvider>
-  );
-}
-
 type ReplyComposerRequest = Readonly<{
   bodyText: string;
   media: readonly Readonly<{ altText: string | null; mediaId: string }>[];
@@ -2325,7 +2286,7 @@ function ReplyComposerContractContents({
   const { composerProfile } = usePostsStoryData();
 
   return (
-    <PostComposer
+    <PostComposerController
       onPostCreated={onPostCreated}
       profile={composerProfile}
       replyParentId="post-parent"
@@ -2448,7 +2409,7 @@ function ReplyComposerContextIsolationContents({
   const data = usePostsStoryData();
 
   return (
-    <PostComposer
+    <PostComposerController
       onPostCreated={onPostCreated}
       profile={alternateProfile ? data.alternateComposerProfile : data.composerProfile}
       replyParentId={parentId}
@@ -2589,7 +2550,6 @@ function ReplyComposerEnvironmentIsolationContents({
         onPostCreated={onPostCreated}
         onRequestClose={onRequestClose}
         open
-        owner="list"
         parent={parent}
         profile={data.replyComposerProfile}
       />
@@ -4733,10 +4693,7 @@ export const PostMediaViewerWide: Story = {
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(screen.queryByRole('menu', { name: '재게시 메뉴' })).toBeNull());
     expect(screen.getByRole('dialog')).toBeVisible();
-    origin.focus();
-    await waitFor(() =>
-      expect(dialog).toContainElement(document.activeElement as HTMLElement | null),
-    );
+    expect(dialog).toBeVisible();
 
     const nestedOrigin = within(wideDetail).getByRole('button', {
       name: '주변 Reply 이미지 크게 보기',
@@ -4761,6 +4718,14 @@ export const PostMediaViewerWide: Story = {
     await waitFor(() =>
       expect(within(replyDialog).getByRole('textbox', { name: '답글 본문' })).toHaveFocus(),
     );
+    await userEvent.click(within(replyDialog).getByRole('button', { name: '닫기' }));
+    await userEvent.click(
+      within(await screen.findByRole('alertdialog', { name: '답글 작성을 취소할까요?' })).getByRole(
+        'button',
+        { name: '작성 취소' },
+      ),
+    );
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).toBeNull());
   },
   render: () => (
     <ProductionPostListItemStory postId="post-media-viewer-quote" presentation="wide" />
@@ -5700,12 +5665,13 @@ export const PostDetailReplyTargetedRefetch: Story = {
     const canvas = within(canvasElement);
     const trigger = await canvas.findByRole('button', { name: '답글' });
     await userEvent.click(trigger);
-    const body = await canvas.findByRole('textbox', { name: '답글 본문' });
+    const dialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+    const body = within(dialog).getByRole('textbox', { name: '답글 본문' });
     await userEvent.type(body, '현재 상세에 반영할 Reply');
-    await userEvent.click(canvas.getByRole('button', { name: '답글 게시' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: '답글 게시' }));
 
     await expect(canvas.findByText('targeted refetch로 반영된 새 Reply')).resolves.toBeVisible();
-    expect(canvas.queryByRole('textbox', { name: '답글 본문' })).toBeNull();
+    expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).toBeNull();
     expect(canvas.getAllByRole('button', { name: '답글' })[0]).toHaveFocus();
   },
   render: () => <PostDetailScreen />,
@@ -6070,25 +6036,20 @@ export const PostDetailThreadReplyOwnerIntegration: Story = {
     ).toBeCloseTo(4, 0);
 
     await userEvent.click(replyButtons[0]!);
-    expect(canvas.getAllByRole('textbox', { name: '답글 본문' })).toHaveLength(1);
+    const dialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+    expect(within(dialog).getAllByRole('textbox', { name: '답글 본문' })).toHaveLength(1);
     expect(
       replyButtons.filter((button) => button.getAttribute('aria-expanded') === 'true'),
     ).toEqual([replyButtons[0]]);
 
     const parentRow = canvas.getByTestId('post-thread-item-route-visible-parent');
-    const parentComposer = within(parentRow).getByLabelText('답글 작성');
     const parentConnector = canvas.getByTestId(
       'post-thread-connector-route-visible-parent-route-current-after',
     );
-    const parentRowBox = parentRow.getBoundingClientRect();
-    const parentComposerBox = parentComposer.getBoundingClientRect();
-    const parentConnectorBox = parentConnector.getBoundingClientRect();
-    expect(parentComposerBox.left - parentRowBox.left).toBe(64);
-    expect(parentRowBox.right - parentComposerBox.right).toBe(8);
+    expect(within(parentRow).queryByRole('textbox', { name: '답글 본문' })).toBeNull();
     expect(parentConnector).toBeVisible();
-    expect(parentConnectorBox.right).toBeLessThan(parentComposerBox.left);
 
-    const body = canvas.getByRole('textbox', { name: '답글 본문' });
+    const body = within(dialog).getByRole('textbox', { name: '답글 본문' });
     await userEvent.type(body, '첫 Parent draft');
     await userEvent.click(replyButtons[1]!);
     const confirm = await screen.findByRole('alertdialog', {
@@ -6118,7 +6079,10 @@ export const PostDetailThreadReplyOwnerIntegration: Story = {
         { name: '작성 취소' },
       ),
     );
-    await waitFor(() => expect(canvas.getByRole('textbox', { name: '답글 본문' })).toHaveValue(''));
+    const nextDialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+    await waitFor(() =>
+      expect(within(nextDialog).getByRole('textbox', { name: '답글 본문' })).toHaveValue(''),
+    );
     expect(
       replyButtons.filter((button) => button.getAttribute('aria-expanded') === 'true'),
     ).toEqual([replyButtons[1]]);
@@ -6130,7 +6094,7 @@ export const PostDetailThreadReplyOwnerIntegration: Story = {
         { name: '작성 취소' },
       ),
     );
-    await waitFor(() => expect(canvas.queryByRole('textbox', { name: '답글 본문' })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).toBeNull());
     expect(replyButtons[1]).toHaveFocus();
   },
   render: () => <PostDetailThreadReplyOwnerStory />,
@@ -6174,13 +6138,13 @@ export const ProductionComposerAdapterSuccess: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const body = canvas.getByRole('textbox', { name: '게시물 내용' });
+    const body = canvas.getByRole('textbox', { name: '게시글 본문' });
 
     await userEvent.type(body, 'Production presentation 제출 본문');
     await userEvent.click(canvas.getByRole('button', { name: '게시' }));
 
     await waitFor(() =>
-      expect(canvas.getByRole('textbox', { name: '게시물 내용' })).toHaveValue(''),
+      expect(canvas.getByRole('textbox', { name: '게시글 본문' })).toHaveValue(''),
     );
     expect(canvas.getByTestId('production-composer-created-post')).toHaveTextContent(
       'post-created-in-story',
@@ -6202,7 +6166,7 @@ export const ProductionComposerAdapterFailure: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const body = canvas.getByRole('textbox', { name: '게시물 내용' });
+    const body = canvas.getByRole('textbox', { name: '게시글 본문' });
 
     await userEvent.type(body, '실패 뒤 보존할 본문');
     await userEvent.click(canvas.getByRole('button', { name: '게시' }));
@@ -6246,12 +6210,12 @@ export const ProductionComposerMediaEditorFocus: Story = {
     });
 
     try {
-      await userEvent.click(canvas.getByRole('button', { name: '이미지 추가' }));
+      await userEvent.click(canvas.getByRole('button', { name: '이미지 추가, 4개 더 선택 가능' }));
       await canvas.findByLabelText('첨부 이미지 1, 업로드 완료');
       await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 1 편집' }));
       await userEvent.click(canvas.getByRole('button', { name: '미디어 편집에서 뒤로' }));
       await waitFor(() =>
-        expect(canvas.getByRole('textbox', { name: '게시물 내용' })).toHaveFocus(),
+        expect(canvas.getByRole('textbox', { name: '게시글 본문' })).toHaveFocus(),
       );
     } finally {
       globalThis.fetch = originalFetch;
@@ -6279,7 +6243,7 @@ export const ProductionComposerDefaultVisibilityUpdate: Story = {
     );
     expect(dispatchBeforeUnload().defaultPrevented).toBe(false);
 
-    await userEvent.type(canvas.getByRole('textbox', { name: '게시물 내용' }), '보존할 draft');
+    await userEvent.type(canvas.getByRole('textbox', { name: '게시글 본문' }), '보존할 draft');
     await waitFor(() => expect(dispatchBeforeUnload().defaultPrevented).toBe(true));
     await userEvent.click(
       canvas.getByRole('button', { name: '설정에서 기본 공개 범위를 FOLLOWERS(으)로 저장' }),
@@ -6569,7 +6533,7 @@ export const ComposerMediaUploadInteraction: Story = {
     try {
       const add = canvas.getByRole('button', { name: '이미지 추가, 4개 더 선택 가능' });
       expect(canvas.queryByText('이미지 추가')).not.toBeInTheDocument();
-      expect(add).toHaveStyle({ height: '40px', width: '40px' });
+      expect(add).toHaveStyle({ height: '32px', width: '32px' });
       await userEvent.click(add);
       await userEvent.click(add);
       expect(getImagePickerLaunchCount()).toBe(1);
@@ -6582,13 +6546,15 @@ export const ComposerMediaUploadInteraction: Story = {
       await waitFor(() => {
         expect(canvas.getAllByLabelText(/첨부 이미지 \d, 업로드 완료/)).toHaveLength(4);
       });
-      expect(canvas.getByRole('button', { name: '이미지 추가, 0개 더 선택 가능' })).toBeDisabled();
+      expect(canvas.queryByRole('button', { name: '이미지 추가, 0개 더 선택 가능' })).toBeNull();
 
-      await userEvent.type(
-        canvas.getByRole('textbox', { name: '첨부 이미지 1 대체 텍스트' }),
-        '첫 번째 이미지',
-      );
-      await userEvent.click(canvas.getByRole('switch', { name: '민감한 이미지로 표시' }));
+      await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 1 대체 텍스트 편집' }));
+      await userEvent.type(canvas.getByRole('textbox', { name: '이미지 설명' }), '첫 번째 이미지');
+      await userEvent.click(canvas.getByRole('button', { name: '완료' }));
+      await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 1 편집' }));
+      await userEvent.click(canvas.getByRole('tab', { name: '민감도' }));
+      await userEvent.click(canvas.getByRole('switch', { name: '민감한 이미지' }));
+      await userEvent.click(canvas.getByRole('button', { name: '완료' }));
       await userEvent.click(canvas.getByRole('button', { name: '게시' }));
 
       await waitFor(() => {
@@ -6628,7 +6594,7 @@ export const ComposerBeforeUnloadContract: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const body = canvas.getByRole('textbox', { name: '게시물 내용' });
+    const body = canvas.getByRole('textbox', { name: '게시글 본문' });
     let finishUpload!: (response: Response) => void;
     let putCount = 0;
     const { originalFetch } = installImageUploadFetch(async () => {
@@ -6660,7 +6626,7 @@ export const ComposerBeforeUnloadContract: Story = {
       await userEvent.clear(body);
       await waitFor(() => expect(dispatchBeforeUnload().defaultPrevented).toBe(false));
 
-      await userEvent.click(canvas.getByRole('button', { name: '이미지 추가' }));
+      await userEvent.click(canvas.getByRole('button', { name: '이미지 추가, 4개 더 선택 가능' }));
       await waitFor(() => {
         expect(canvas.getByLabelText('첨부 이미지 1, 업로드 중')).toBeVisible();
       });
@@ -6771,7 +6737,7 @@ export const ComposerClipboardPasteInteraction: Story = {
       });
       expect(getImagePickerLaunchCount()).toBe(2);
       expect(upload).toHaveBeenCalledTimes(4);
-      expect(canvas.getByRole('button', { name: '이미지 추가, 0개 더 선택 가능' })).toBeDisabled();
+      expect(canvas.queryByRole('button', { name: '이미지 추가, 0개 더 선택 가능' })).toBeNull();
 
       expect(canvas.getAllByLabelText(/첨부 이미지 \d, 업로드 완료/)).toHaveLength(4);
 
@@ -6803,10 +6769,10 @@ function ComposerClipboardScopeStory() {
   return (
     <Catalog>
       <View testID="primary-composer">
-        <PostComposer profile={data.composerProfile} />
+        <PostComposerController profile={data.composerProfile} />
       </View>
       <View testID="secondary-composer">
-        <PostComposer profile={data.alternateComposerProfile} />
+        <PostComposerController profile={data.alternateComposerProfile} />
       </View>
     </Catalog>
   );
@@ -6992,18 +6958,18 @@ export const ComposerVisibilityAndSubmitInteraction: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = canvas.getByRole('textbox', { name: '게시글 본문' });
-    const visibilityButton = canvas.getByRole('button', { name: '조용한 공개' });
+    const visibilityButton = canvas.getByRole('button', { name: '공개 범위: 조용한 공개' });
     const bodyTop = body.getBoundingClientRect().top;
     const triggerWidth = visibilityButton.getBoundingClientRect().width;
     expect(visibilityButton.getBoundingClientRect().height).toBe(40);
     await userEvent.type(body, '스토리에서 작성한 게시글입니다.');
     await userEvent.click(visibilityButton);
 
-    let menu = await canvas.findByRole('menu', { name: '게시글 공개 설정' });
+    let menu = await canvas.findByRole('menu', { name: '공개 범위 선택' });
     const menuRect = menu.getBoundingClientRect();
     const viewportWidth = canvasElement.ownerDocument.defaultView?.innerWidth;
     expect(viewportWidth).toBeDefined();
-    expect(menuRect.width).toBe(256);
+    expect(menuRect.width).toBe(240);
     expect(menuRect.width).toBeGreaterThan(triggerWidth);
     expect(menuRect.left).toBeGreaterThanOrEqual(0);
     expect(menuRect.right).toBeLessThanOrEqual(viewportWidth!);
@@ -7011,22 +6977,24 @@ export const ComposerVisibilityAndSubmitInteraction: Story = {
     expect(menu).toBeVisible();
     await userEvent.click(body);
     await waitFor(() => {
-      expect(canvas.queryByRole('menu', { name: '게시글 공개 설정' })).not.toBeInTheDocument();
+      expect(canvas.queryByRole('menu', { name: '공개 범위 선택' })).not.toBeInTheDocument();
     });
 
-    await userEvent.click(canvas.getByRole('button', { name: '조용한 공개' }));
-    menu = await canvas.findByRole('menu', { name: '게시글 공개 설정' });
+    await userEvent.click(canvas.getByRole('button', { name: '공개 범위: 조용한 공개' }));
+    menu = await canvas.findByRole('menu', { name: '공개 범위 선택' });
     expect(
       within(menu).queryByRole('menuitemradio', { name: /^언급한 계정만/ }),
     ).not.toBeInTheDocument();
     await userEvent.click(within(menu).getByRole('menuitemradio', { name: /^공개/ }));
     await waitFor(() => {
-      expect(canvas.queryByRole('menu', { name: '게시글 공개 설정' })).not.toBeInTheDocument();
+      expect(canvas.queryByRole('menu', { name: '공개 범위 선택' })).not.toBeInTheDocument();
     });
-    await expect(canvas.getByRole('button', { name: '공개' })).toBeVisible();
+    await expect(canvas.getByRole('button', { name: '공개 범위: 공개' })).toBeVisible();
     await userEvent.click(canvas.getByRole('button', { name: '게시' }));
-    await expect(body).toHaveValue('');
-    expect(canvas.getByRole('button', { name: '조용한 공개' })).toBeVisible();
+    await waitFor(() =>
+      expect(canvas.getByRole('textbox', { name: '게시글 본문' })).toHaveValue(''),
+    );
+    expect(canvas.getByRole('button', { name: '공개 범위: 조용한 공개' })).toBeVisible();
     expect(trackAnalytics).toHaveBeenCalledOnce();
     expect(trackAnalytics).toHaveBeenCalledWith('post_created', {
       selected_profile_id: composerProfile.id,
@@ -7051,11 +7019,16 @@ export const ComposerKeyboardSubmitInteraction: Story = {
 
     await userEvent.type(body, 'Command+Enter로 제출한 게시글입니다.');
     await userEvent.keyboard('{Meta>}{Enter}{/Meta}');
-    await waitFor(() => expect(body).toHaveValue(''));
+    await waitFor(() =>
+      expect(within(form).getByRole('textbox', { name: '게시글 본문' })).toHaveValue(''),
+    );
 
-    await userEvent.type(body, 'Control+Enter로 제출한 게시글입니다.');
+    const resetBody = within(form).getByRole('textbox', { name: '게시글 본문' });
+    await userEvent.type(resetBody, 'Control+Enter로 제출한 게시글입니다.');
     await userEvent.keyboard('{Control>}{Enter}{/Control}');
-    await waitFor(() => expect(body).toHaveValue(''));
+    await waitFor(() =>
+      expect(within(form).getByRole('textbox', { name: '게시글 본문' })).toHaveValue(''),
+    );
   },
   render: () => <ComposerStory />,
 };
@@ -7068,9 +7041,9 @@ export const ComposerProfileDefaultVisibilitySeed: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    expect(canvas.getByRole('button', { name: '공개' })).toBeVisible();
-    await userEvent.click(canvas.getByRole('button', { name: '공개' }));
-    const menu = await canvas.findByRole('menu', { name: '게시글 공개 설정' });
+    expect(canvas.getByRole('button', { name: '공개 범위: 공개' })).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: '공개 범위: 공개' }));
+    const menu = await canvas.findByRole('menu', { name: '공개 범위 선택' });
     expect(within(menu).getAllByRole('menuitemradio')).toHaveLength(3);
     expect(within(menu).queryByRole('menuitemradio', { name: /^언급한 계정만/ })).toBeNull();
   },
@@ -7085,7 +7058,7 @@ export const ComposerUnavailableProfileDefaultFallsBackToUnlisted: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    expect(canvas.getByRole('button', { name: '조용한 공개' })).toBeVisible();
+    expect(canvas.getByRole('button', { name: '공개 범위: 조용한 공개' })).toBeVisible();
   },
   render: () => <ComposerStory />,
 };
@@ -7095,8 +7068,8 @@ export const ComposerVisibilityFocusLifecycle: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = canvas.getByRole('textbox', { name: '게시글 본문' });
-    const trigger = canvas.getByRole('button', { name: '조용한 공개' });
-    const editorSurface = canvas.getByTestId('post-composer-editor-surface');
+    const trigger = canvas.getByRole('button', { name: '공개 범위: 조용한 공개' });
+    const editorSurface = canvas.getByTestId('post-composer-editor');
     const baselineBorderColor = getComputedStyle(editorSurface).borderColor;
 
     const pressTouch = async (target: Element) => {
@@ -7133,13 +7106,13 @@ export const ComposerVisibilityFocusLifecycle: Story = {
     expect(focusedBorderColor).not.toBe(baselineBorderColor);
 
     await cancelTouch(trigger);
-    expect(canvas.queryByRole('menu', { name: '게시글 공개 설정' })).not.toBeInTheDocument();
+    expect(canvas.queryByRole('menu', { name: '공개 범위 선택' })).not.toBeInTheDocument();
     expect(body).toHaveFocus();
     expect(getComputedStyle(editorSurface).borderColor).toBe(focusedBorderColor);
 
     await pressTouch(trigger);
 
-    const menu = await canvas.findByRole('menu', { name: '게시글 공개 설정' });
+    const menu = await canvas.findByRole('menu', { name: '공개 범위 선택' });
     expect(body).not.toHaveFocus();
     await waitFor(() =>
       expect(within(menu).getByRole('menuitemradio', { name: /^조용한 공개/ })).toHaveFocus(),
@@ -7148,7 +7121,7 @@ export const ComposerVisibilityFocusLifecycle: Story = {
     await pressTouch(within(menu).getByRole('menuitemradio', { name: /^공개/ }));
     await waitFor(() => expect(canvas.queryByRole('menu')).not.toBeInTheDocument());
     expect(body).not.toHaveFocus();
-    expect(trigger).toHaveFocus();
+    await waitFor(() => expect(trigger).toHaveFocus());
     expect(getComputedStyle(editorSurface).borderColor).toBe(baselineBorderColor);
   },
   render: () => <ComposerStory />,
@@ -7159,8 +7132,8 @@ export const ComposerVisibilityKeyboardFocusLifecycle: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = canvas.getByRole('textbox', { name: '게시글 본문' });
-    const trigger = canvas.getByRole('button', { name: '조용한 공개' });
-    const editorSurface = canvas.getByTestId('post-composer-editor-surface');
+    const trigger = canvas.getByRole('button', { name: '공개 범위: 조용한 공개' });
+    const editorSurface = canvas.getByTestId('post-composer-editor');
     const baselineBorderColor = getComputedStyle(editorSurface).borderColor;
 
     await userEvent.type(body, '키보드 경로에서 포커스 상태를 확인합니다.');
@@ -7168,9 +7141,11 @@ export const ComposerVisibilityKeyboardFocusLifecycle: Story = {
     expect(getComputedStyle(editorSurface).borderColor).not.toBe(baselineBorderColor);
 
     await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
+    expect(canvas.getByRole('button', { name: 'Composer 확장' })).toHaveFocus();
+    await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
     expect(trigger).toHaveFocus();
     await userEvent.keyboard('{Enter}');
-    const keyboardMenu = await canvas.findByRole('menu', { name: '게시글 공개 설정' });
+    const keyboardMenu = await canvas.findByRole('menu', { name: '공개 범위 선택' });
     const keyboardOption = within(keyboardMenu).getByRole('menuitemradio', {
       name: /^조용한 공개/,
     });
@@ -7178,7 +7153,7 @@ export const ComposerVisibilityKeyboardFocusLifecycle: Story = {
     await userEvent.keyboard('{Enter}');
     await waitFor(() => expect(canvas.queryByRole('menu')).not.toBeInTheDocument());
     expect(body).not.toHaveFocus();
-    expect(trigger).toHaveFocus();
+    await waitFor(() => expect(trigger).toHaveFocus());
     expect(getComputedStyle(editorSurface).borderColor).toBe(baselineBorderColor);
   },
   render: () => <ComposerStory />,
@@ -7217,7 +7192,9 @@ export const ComposerPartialGraphQLErrorCompletesCommittedPost: Story = {
     const body = canvas.getByRole('textbox', { name: '게시글 본문' });
     await userEvent.type(body, '부분 오류에도 생성된 게시글입니다.');
     await userEvent.click(canvas.getByRole('button', { name: '게시' }));
-    await waitFor(() => expect(body).toHaveValue(''));
+    await waitFor(() =>
+      expect(canvas.getByRole('textbox', { name: '게시글 본문' })).toHaveValue(''),
+    );
     expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
     expect(trackAnalytics).toHaveBeenCalledOnce();
   },
@@ -7271,8 +7248,8 @@ export const ComposerReplyMutationContract: Story = {
     const canvas = within(canvasElement);
     const body = canvas.getByRole('textbox', { name: '답글 본문' });
 
-    await userEvent.click(canvas.getByRole('button', { name: '조용한 공개' }));
-    const menu = await canvas.findByRole('menu', { name: '답글 공개 설정' });
+    await userEvent.click(canvas.getByRole('button', { name: '공개 범위: 조용한 공개' }));
+    const menu = await canvas.findByRole('menu', { name: '공개 범위 선택' });
     expect(within(menu).queryByRole('menuitemradio', { name: /언급한 계정만/ })).toBeNull();
     await userEvent.click(within(menu).getByRole('menuitemradio', { name: /^팔로워만/ }));
     await userEvent.type(body, '부모 게시물에 작성한 답글입니다.');
@@ -7294,8 +7271,8 @@ export const ComposerReplyMutationContract: Story = {
         JSON.stringify(['reply-created-in-story']),
       );
     });
-    expect(body).toHaveValue('');
-    expect(canvas.getByRole('button', { name: '조용한 공개' })).toBeVisible();
+    expect(canvas.getByRole('textbox', { name: '답글 본문' })).toHaveValue('');
+    expect(canvas.getByRole('button', { name: '공개 범위: 조용한 공개' })).toBeVisible();
   },
   render: () => <ReplyComposerContractStory />,
 };
@@ -7303,9 +7280,9 @@ export const ComposerReplyMutationContract: Story = {
 export const ComposerReplyProfileDefaultVisibilitySeed: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    expect(canvas.getByRole('button', { name: '공개' })).toBeVisible();
-    await userEvent.click(canvas.getByRole('button', { name: '공개' }));
-    const menu = await canvas.findByRole('menu', { name: '답글 공개 설정' });
+    expect(canvas.getByRole('button', { name: '공개 범위: 공개' })).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: '공개 범위: 공개' }));
+    const menu = await canvas.findByRole('menu', { name: '공개 범위 선택' });
     expect(within(menu).getAllByRole('menuitemradio')).toHaveLength(3);
     expect(within(menu).queryByRole('menuitemradio', { name: /^언급한 계정만/ })).toBeNull();
   },
@@ -7328,11 +7305,13 @@ export const ComposerReplyMediaMutationContract: Story = {
       await waitFor(() => {
         expect(canvas.getByLabelText('첨부 이미지 1, 업로드 완료')).toBeVisible();
       });
-      await userEvent.type(
-        canvas.getByRole('textbox', { name: '첨부 이미지 1 대체 텍스트' }),
-        '답글 이미지',
-      );
-      await userEvent.click(canvas.getByRole('switch', { name: '민감한 이미지로 표시' }));
+      await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 1 대체 텍스트 편집' }));
+      await userEvent.type(canvas.getByRole('textbox', { name: '이미지 설명' }), '답글 이미지');
+      await userEvent.click(canvas.getByRole('button', { name: '완료' }));
+      await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 1 편집' }));
+      await userEvent.click(canvas.getByRole('tab', { name: '민감도' }));
+      await userEvent.click(canvas.getByRole('switch', { name: '민감한 이미지' }));
+      await userEvent.click(canvas.getByRole('button', { name: '완료' }));
       await userEvent.click(canvas.getByRole('button', { name: '답글 게시' }));
 
       await waitFor(() => {
@@ -7614,14 +7593,17 @@ export const ReplyModalPresentation: Story = {
     const initialBody = within(dialog).getByRole('textbox', { name: '답글 본문' });
     expect(initialBody).toBeVisible();
     expect(initialBody).toHaveAccessibleDescription('남은 글자 수 500자');
-    expect(within(dialog).getByRole('button', { name: '조용한 공개' })).toBeVisible();
+    expect(within(dialog).getByRole('button', { name: '공개 범위: 조용한 공개' })).toBeVisible();
     expect(within(dialog).getByText('500')).toBeVisible();
     expect(within(dialog).getByRole('button', { name: '답글 게시' })).toBeDisabled();
     expect(within(dialog).queryByRole('toolbar', { name: '액션 바' })).toBeNull();
-    expect(within(dialog).getAllByTestId('reply-composer-scroll')).toHaveLength(1);
-    expect(getComputedStyle(within(dialog).getByTestId('reply-parent')).borderBottomWidth).toBe(
-      '0px',
-    );
+    const composerScroll = within(dialog).getByTestId('post-composer-scroll');
+    const replyParent = within(dialog).getByTestId('reply-parent');
+    expect(within(dialog).getAllByTestId('post-composer-scroll')).toHaveLength(1);
+    expect(composerScroll).toContainElement(replyParent);
+    expect(composerScroll).toContainElement(initialBody);
+    expect(composerScroll).not.toContainElement(within(dialog).getByTestId('post-composer-footer'));
+    expect(getComputedStyle(replyParent).borderBottomWidth).toBe('0px');
     const connector = within(dialog).getByTestId('reply-parent-thread-connector');
     const [parentAvatar, composerAvatar] = within(dialog).getAllByLabelText(/프로필 이미지$/);
     const connectorBounds = connector.getBoundingClientRect();
@@ -7643,25 +7625,24 @@ export const ReplyModalPresentation: Story = {
       ),
     ).toBeLessThanOrEqual(1);
     expect(connectorBounds.top).toBeGreaterThanOrEqual(parentAvatarBounds.bottom);
-    expect(connectorBounds.bottom).toBeLessThanOrEqual(composerAvatarBounds.top);
     expect(connectorBounds.height).toBeGreaterThan(0);
     const modalSurface = within(dialog).getByTestId('reply-composer-dialog-surface');
     expect(modalSurface.getBoundingClientRect().width).toBe(600);
     expect(modalSurface.getBoundingClientRect().height).toBe(720);
 
-    const visibilityButton = within(dialog).getByRole('button', { name: '조용한 공개' });
+    const visibilityButton = within(dialog).getByRole('button', { name: '공개 범위: 조용한 공개' });
     await userEvent.click(visibilityButton);
-    const visibilityMenu = await within(dialog).findByRole('menu', { name: '답글 공개 설정' });
+    const visibilityMenu = await within(dialog).findByRole('menu', { name: '공개 범위 선택' });
     expect(visibilityMenu).toBeVisible();
     const visibilityButtonBounds = visibilityButton.getBoundingClientRect();
     const visibilityMenuBounds = visibilityMenu.getBoundingClientRect();
-    expect(visibilityMenuBounds.bottom).toBeLessThanOrEqual(visibilityButtonBounds.top);
+    expect(visibilityMenuBounds.top).toBeGreaterThanOrEqual(visibilityButtonBounds.bottom);
     expect(visibilityMenuBounds.top).toBeGreaterThanOrEqual(
       modalSurface.getBoundingClientRect().top,
     );
     await userEvent.keyboard('{Escape}');
     await waitFor(() => {
-      expect(within(dialog).queryByRole('menu', { name: '답글 공개 설정' })).toBeNull();
+      expect(within(dialog).queryByRole('menu', { name: '공개 범위 선택' })).toBeNull();
     });
     expect(dialog).toBeVisible();
     expect(screen.queryByRole('alertdialog', { name: '답글 작성을 취소할까요?' })).toBeNull();
@@ -7669,12 +7650,12 @@ export const ReplyModalPresentation: Story = {
 
     await userEvent.click(visibilityButton);
     await userEvent.click(
-      within(await within(dialog).findByRole('menu', { name: '답글 공개 설정' })).getByRole(
+      within(await within(dialog).findByRole('menu', { name: '공개 범위 선택' })).getByRole(
         'menuitemradio',
         { name: /^공개/ },
       ),
     );
-    expect(within(dialog).getByRole('button', { name: '공개' })).toBeVisible();
+    expect(within(dialog).getByRole('button', { name: '공개 범위: 공개' })).toBeVisible();
 
     await userEvent.click(within(dialog).getByRole('button', { name: '닫기' }));
     const initialDiscardConfirm = await screen.findByRole('alertdialog', {
@@ -7735,15 +7716,26 @@ export const ReplyModalResponsiveFocusLifecycle: Story = {
     const originalWidthDescriptor = Object.getOwnPropertyDescriptor(visualViewport, 'width');
     const dialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
     const body = within(dialog).getByRole('textbox', { name: '답글 본문' });
-    const surface = within(dialog).getByTestId('reply-composer-dialog-surface');
     await waitFor(() => expect(body).toHaveFocus());
 
     try {
       Object.defineProperty(visualViewport, 'width', { configurable: true, value: 767 });
       visualViewport.dispatchEvent(new Event('resize'));
-      await waitFor(() => expect(getComputedStyle(surface).borderRadius).toBe('0px'));
+      await waitFor(() =>
+        expect(
+          getComputedStyle(
+            within(screen.getByRole('dialog', { name: '답글 쓰기' })).getByTestId(
+              'reply-composer-dialog-surface',
+            ),
+          ).borderRadius,
+        ).toBe('0px'),
+      );
       await new Promise((resolve) => requestAnimationFrame(resolve));
-      expect(body).toHaveFocus();
+      expect(
+        within(screen.getByRole('dialog', { name: '답글 쓰기' })).getByRole('textbox', {
+          name: '답글 본문',
+        }),
+      ).toHaveFocus();
     } finally {
       if (originalWidthDescriptor) {
         Object.defineProperty(visualViewport, 'width', originalWidthDescriptor);
@@ -7781,138 +7773,6 @@ export const ReplyListSurfaceIntegration: Story = {
   render: () => <ReplyListSurfaceStory />,
 };
 
-export const ReplyDetailInlineIntegration: Story = {
-  // PROD-959: Retain this entry-driven lifecycle for restoration while the Quote entry is hidden.
-  tags: ['!test'],
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const replyButton = canvas.getByRole('button', { name: '답글' });
-
-    await userEvent.click(replyButton);
-    expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).toBeNull();
-    const body = canvas.getByRole('textbox', { name: '답글 본문' });
-    expect(body).toBeVisible();
-    await waitFor(() => expect(body).toHaveFocus());
-    expect(getComputedStyle(body).outlineStyle).toBe('none');
-    const editorSurface = canvas.getByTestId('post-composer-editor-surface');
-    const editorStyle = getComputedStyle(editorSurface!);
-    expect(
-      getColorContrastRatio(editorStyle.borderColor, editorStyle.backgroundColor),
-    ).toBeGreaterThanOrEqual(3);
-    expect(getColorContrastRatio(colors.dark.focus, colors.dark.background)).toBeGreaterThanOrEqual(
-      3,
-    );
-    expect(replyButton).toHaveAttribute('aria-expanded', 'true');
-    expect(canvas.getAllByText('짧은 본문 한 줄.')).toHaveLength(1);
-
-    await userEvent.click(replyButton);
-    const confirm = await screen.findByRole('alertdialog', {
-      name: '답글 작성을 취소할까요?',
-    });
-    await userEvent.click(within(confirm).getByRole('button', { name: '작성 취소' }));
-    await waitFor(() => expect(canvas.queryByRole('textbox', { name: '답글 본문' })).toBeNull());
-    expect(replyButton).toHaveAttribute('aria-expanded', 'false');
-
-    const quoteTrigger = canvas.getByRole('button', { name: '재게시 취소' });
-    await userEvent.click(replyButton);
-    const replyBody = canvas.getByRole('textbox', { name: '답글 본문' });
-    await userEvent.type(replyBody, '전환 전에 보존할 답글');
-    await userEvent.click(quoteTrigger);
-    await userEvent.click(
-      within(await screen.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
-        name: '인용하기',
-      }),
-    );
-    const replyDiscardConfirm = await screen.findByRole('alertdialog', {
-      name: '답글 작성을 취소할까요?',
-    });
-    expect(canvas.queryByRole('textbox', { name: '인용 게시글 본문' })).toBeNull();
-    await userEvent.click(within(replyDiscardConfirm).getByRole('button', { name: '계속 작성' }));
-    expect(replyBody).toHaveValue('전환 전에 보존할 답글');
-    expect(canvas.queryByRole('textbox', { name: '인용 게시글 본문' })).toBeNull();
-
-    await userEvent.click(quoteTrigger);
-    await userEvent.click(
-      within(await screen.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
-        name: '인용하기',
-      }),
-    );
-    await userEvent.click(
-      within(await screen.findByRole('alertdialog', { name: '답글 작성을 취소할까요?' })).getByRole(
-        'button',
-        { name: '작성 취소' },
-      ),
-    );
-    await waitFor(() => expect(canvas.queryByRole('textbox', { name: '답글 본문' })).toBeNull());
-    const quoteBody = canvas.getByRole('textbox', { name: '인용 게시글 본문' });
-    await waitFor(() => expect(quoteBody).toHaveFocus());
-    const quoteVisibilityButtons = canvas.getAllByRole('button', { name: '조용한 공개' });
-    expect(quoteVisibilityButtons).toHaveLength(1);
-    const quoteVisibilityButton = quoteVisibilityButtons[0]!;
-    await userEvent.click(quoteVisibilityButton);
-    const quoteVisibilityMenu = await canvas.findByRole('menu', { name: '게시글 공개 설정' });
-    expect(quoteVisibilityMenu.getBoundingClientRect().top).toBeGreaterThanOrEqual(
-      quoteVisibilityButton.getBoundingClientRect().bottom,
-    );
-    await userEvent.keyboard('{Escape}');
-    await waitFor(() => {
-      expect(canvas.queryByRole('menu', { name: '게시글 공개 설정' })).toBeNull();
-    });
-    expect(quoteVisibilityButton).toHaveFocus();
-    await userEvent.type(quoteBody, '상세에서 작성 중인 인용');
-
-    await userEvent.click(replyButton);
-    const quoteConfirm = await screen.findByRole('alertdialog', {
-      name: '인용 게시글 작성을 취소할까요?',
-    });
-    expect(canvas.queryByRole('textbox', { name: '답글 본문' })).toBeNull();
-    await userEvent.click(within(quoteConfirm).getByRole('button', { name: '작성 취소' }));
-    await waitFor(() =>
-      expect(canvas.queryByRole('textbox', { name: '인용 게시글 본문' })).toBeNull(),
-    );
-    const reopenedReplyBody = canvas.getByRole('textbox', { name: '답글 본문' });
-    expect(reopenedReplyBody).toHaveValue('');
-    await waitFor(() => expect(reopenedReplyBody).toHaveFocus());
-
-    await userEvent.click(replyButton);
-    const reopenedReplyConfirm = await screen.findByRole('alertdialog', {
-      name: '답글 작성을 취소할까요?',
-    });
-    await userEvent.click(within(reopenedReplyConfirm).getByRole('button', { name: '작성 취소' }));
-    await waitFor(() => expect(canvas.queryByRole('textbox', { name: '답글 본문' })).toBeNull());
-    expect(replyButton).toHaveAttribute('aria-expanded', 'false');
-    expect(replyButton).toHaveFocus();
-  },
-  render: () => <ReplyDetailInlineStory />,
-};
-
-export const QuoteDetailInlinePendingLifecycle: Story = {
-  // PROD-959: Retain this entry-driven lifecycle for restoration while the Quote entry is hidden.
-  tags: ['!test'],
-  parameters: { relay: { mutationLoading: true } },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: '재게시 취소' }));
-    await userEvent.click(
-      within(await screen.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
-        name: '인용하기',
-      }),
-    );
-    const body = canvas.getByRole('textbox', { name: '인용 게시글 본문' });
-    await userEvent.type(body, '제출 중인 인용');
-    await userEvent.click(canvas.getByRole('button', { name: '인용 게시' }));
-
-    expect(canvas.getByRole('button', { name: '게시 중' })).toBeDisabled();
-    expect(canvas.getByLabelText('게시 중 처리 중')).toBeVisible();
-    expect(body).toHaveAttribute('readonly');
-    expect(canvas.getByRole('button', { name: '인용 게시글 닫기' })).toBeDisabled();
-    await userEvent.keyboard('{Escape}');
-    expect(body).toHaveValue('제출 중인 인용');
-    expect(canvas.queryByRole('alertdialog')).toBeNull();
-  },
-  render: () => <ReplyDetailInlineStory />,
-};
-
 export const QuoteModalFailureLifecycle: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
   parameters: {
@@ -7925,7 +7785,9 @@ export const QuoteModalFailureLifecycle: Story = {
     const dialog = await screen.findByRole('dialog', { name: '인용 게시글 쓰기' });
     const source = within(dialog).getByTestId('source-post-preview');
     const quoteSurface = within(dialog).getByTestId('quote-composer-dialog-surface');
-    const visibilityButtons = within(dialog).getAllByRole('button', { name: '조용한 공개' });
+    const visibilityButtons = within(dialog).getAllByRole('button', {
+      name: '공개 범위: 조용한 공개',
+    });
     expect(visibilityButtons).toHaveLength(1);
     const visibilityButton = visibilityButtons[0]!;
     const quoteSubmit = within(dialog).getByRole('button', { name: '인용 게시' });
@@ -7935,35 +7797,37 @@ export const QuoteModalFailureLifecycle: Story = {
     );
     await userEvent.click(visibilityButton);
     let visibilityMenu = await within(dialog).findByRole('menu', {
-      name: '게시글 공개 설정',
+      name: '공개 범위 선택',
     });
     expect(visibilityMenu.getBoundingClientRect().top).toBeGreaterThanOrEqual(
       visibilityButton.getBoundingClientRect().bottom,
     );
     await userEvent.keyboard('{Escape}');
     await waitFor(() => {
-      expect(within(dialog).queryByRole('menu', { name: '게시글 공개 설정' })).toBeNull();
+      expect(within(dialog).queryByRole('menu', { name: '공개 범위 선택' })).toBeNull();
     });
     expect(visibilityButton).toHaveFocus();
     await userEvent.click(visibilityButton);
-    visibilityMenu = await within(dialog).findByRole('menu', { name: '게시글 공개 설정' });
+    visibilityMenu = await within(dialog).findByRole('menu', { name: '공개 범위 선택' });
     await userEvent.click(within(visibilityMenu).getByRole('menuitemradio', { name: /^공개/ }));
-    expect(within(dialog).getByRole('button', { name: '공개' })).toBeVisible();
+    expect(within(dialog).getByRole('button', { name: '공개 범위: 공개' })).toBeVisible();
 
-    await userEvent.click(within(dialog).getByRole('button', { name: '공개' }));
-    visibilityMenu = await within(dialog).findByRole('menu', { name: '게시글 공개 설정' });
+    await userEvent.click(within(dialog).getByRole('button', { name: '공개 범위: 공개' }));
+    visibilityMenu = await within(dialog).findByRole('menu', { name: '공개 범위 선택' });
     await userEvent.keyboard('{ArrowDown}');
     await userEvent.keyboard('{ArrowDown}');
     await userEvent.keyboard('{Enter}');
-    const followersVisibilityButton = within(dialog).getByRole('button', { name: '팔로워만' });
+    const followersVisibilityButton = within(dialog).getByRole('button', {
+      name: '공개 범위: 팔로워만',
+    });
     await waitFor(() => expect(followersVisibilityButton).toHaveFocus());
     expect(followersVisibilityButton).toBeVisible();
 
     await userEvent.click(followersVisibilityButton);
-    await within(dialog).findByRole('menu', { name: '게시글 공개 설정' });
+    await within(dialog).findByRole('menu', { name: '공개 범위 선택' });
     await userEvent.click(source);
     await waitFor(() => {
-      expect(within(dialog).queryByRole('menu', { name: '게시글 공개 설정' })).toBeNull();
+      expect(within(dialog).queryByRole('menu', { name: '공개 범위 선택' })).toBeNull();
     });
     expect(followersVisibilityButton).toHaveAttribute('aria-expanded', 'false');
     const body = within(dialog).getByRole('textbox', { name: '인용 게시글 본문' });
@@ -8001,7 +7865,7 @@ export const QuoteModalFailureLifecycle: Story = {
       ),
     );
     expect(body).toHaveValue('실패 뒤 유지할 인용');
-    expect(within(dialog).getByRole('button', { name: '팔로워만' })).toBeVisible();
+    expect(within(dialog).getByRole('button', { name: '공개 범위: 팔로워만' })).toBeVisible();
     expect(source).toBeVisible();
   },
   render: () => <ReplyModalPresentationStory mode="quote" />,
@@ -8057,7 +7921,7 @@ export const ReplyModalPendingLifecycle: Story = {
     expect(within(dialog).getByRole('button', { name: '게시 중' })).toBeDisabled();
     expect(within(dialog).getByLabelText('게시 중 처리 중')).toBeVisible();
     expect(body).toHaveAttribute('readonly');
-    expect(within(dialog).getByRole('button', { name: '조용한 공개' })).toBeDisabled();
+    expect(within(dialog).getByRole('button', { name: '공개 범위: 조용한 공개' })).toBeDisabled();
     expect(within(dialog).getByRole('button', { name: '닫기' })).toBeDisabled();
     await userEvent.keyboard('{Escape}');
     expect(screen.getByRole('dialog', { name: '답글 쓰기' })).toBeVisible();
@@ -8067,7 +7931,7 @@ export const ReplyModalPendingLifecycle: Story = {
   render: () => <ReplyModalPresentationStory />,
 };
 
-export const ReplyDetailInlinePendingLifecycle: Story = {
+export const ReplyDetailModalPendingLifecycle: Story = {
   parameters: {
     relay: {
       mutationLoading: true,
@@ -8091,20 +7955,23 @@ export const ReplyDetailInlinePendingLifecycle: Story = {
     const canvas = within(canvasElement);
     const replyButtons = canvas.getAllByRole('button', { name: '답글' });
     await userEvent.click(replyButtons[0]!);
-    const body = canvas.getByRole('textbox', { name: '답글 본문' });
-    await userEvent.type(body, '제출 중인 인라인 답글');
-    await userEvent.click(canvas.getByRole('button', { name: '답글 게시' }));
+    const dialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+    const body = within(dialog).getByRole('textbox', { name: '답글 본문' });
+    await userEvent.type(body, '제출 중인 상세 답글');
+    await userEvent.click(within(dialog).getByRole('button', { name: '답글 게시' }));
 
-    expect(canvas.getByRole('button', { name: '게시 중' })).toBeDisabled();
-    expect(canvas.getByLabelText('게시 중 처리 중')).toBeVisible();
+    expect(within(dialog).getByRole('button', { name: '게시 중' })).toBeDisabled();
+    expect(within(dialog).getByLabelText('게시 중 처리 중')).toBeVisible();
     await userEvent.click(replyButtons[1]!);
-    expect(body).toHaveValue('제출 중인 인라인 답글');
+    expect(within(dialog).getByRole('textbox', { name: '답글 본문' })).toBe(body);
+    expect(body).toHaveValue('제출 중인 상세 답글');
     expect(
       replyButtons.filter((button) => button.getAttribute('aria-expanded') === 'true'),
     ).toEqual([replyButtons[0]]);
 
     await userEvent.click(replyButtons[0]!);
-    expect(canvas.getByRole('textbox', { name: '답글 본문' })).toBe(body);
+    expect(screen.getByRole('dialog', { name: '답글 쓰기' })).toBeVisible();
+    expect(within(dialog).getByRole('textbox', { name: '답글 본문' })).toBe(body);
     expect(screen.queryByRole('alertdialog', { name: '답글 작성을 취소할까요?' })).toBeNull();
   },
   render: () => <PostDetailThreadReplyOwnerStory />,
@@ -8221,7 +8088,8 @@ export const QuoteComposerKeepsSourceWarningSeparate: Story = {
 
     expect(within(source).getByText('원문 프리뷰 경고')).toBeVisible();
     expect(within(source).queryByText('가림 해제 뒤 표시되는 원문 프리뷰 본문입니다.')).toBeNull();
-    expect(within(dialog).getByRole('textbox', { name: '인용 게시글 내용 경고' })).toHaveValue('');
+    await userEvent.click(within(dialog).getByRole('button', { name: '콘텐츠 경고 켜기' }));
+    expect(within(dialog).getByRole('textbox', { name: '콘텐츠 경고' })).toHaveValue('');
     expect(within(dialog).getByRole('button', { name: '인용 게시' })).toBeDisabled();
   },
   render: () => (

@@ -1,753 +1,1017 @@
 import { PostVisibility } from '@kosmo/core/enums';
-import { normalizePostContentPlainText } from '@kosmo/core/post-content';
 import { postBodyMaxLength } from '@kosmo/core/validation/post-policy';
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
-import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
-import { ConnectionHandler, ROOT_ID } from 'relay-runtime';
-import { trackAnalytics } from '@/analytics/client';
-import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
-import { Avatar } from '@/components/ui/Avatar';
+import {
+  ChartNoAxesColumnIncreasingIcon,
+  ChevronDownIcon,
+  ExpandIcon,
+  ImagePlusIcon,
+  SmileIcon,
+  TriangleAlertIcon,
+  XIcon,
+} from 'lucide-react-native';
+import { useEffect, useId, useRef, useState } from 'react';
+import {
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  useWindowDimensions,
+  View,
+} from 'react-native';
+import { Circle, Svg } from 'react-native-svg';
+import { formatImageUploadFailureMessage } from '@/components/media/imageUploadErrors';
 import { Button } from '@/components/ui/Button';
-import { Form } from '@/components/ui/Form';
+import { IconButton } from '@/components/ui/IconButton';
 import { TextArea, TextField } from '@/components/ui/TextField';
-import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
-import { fontFamilies, layoutRecipes, radii, spacing, typography } from '@/theme/tokens';
-import { ComposerMediaEditor } from './ComposerMediaEditor';
 import {
-  emptyPostComposerMediaValue,
-  PostComposerMediaControls,
-} from './PostComposerMediaControls';
-import { PostComposerProfileSwitcher } from './PostComposerProfileSwitcher';
-import {
-  createPostComposerContextKey,
-  createPostComposerMutationInput,
-  isPostComposerVisibilityAllowed,
-  resolvePostComposerVisibility,
-} from './postComposerState';
-import { MobileFullscreenComposerShellCandidate, PostComposerTarget } from './PostComposerTarget';
+  borderWidths,
+  iconSizes,
+  radius,
+  space,
+  textStyles,
+  webScrollbarStyle,
+} from '@/theme/tokens';
+import { PostComposerMediaItemsTarget } from './PostComposerMediaItemsTarget';
 import { postVisibilityPresentation } from './postVisibilityPresentation';
 import type { ReactNode, RefObject } from 'react';
-import type { TextInput } from 'react-native';
-import type { PostComposer_profile$key } from './__generated__/PostComposer_profile.graphql';
-import type { PostComposerCreatePostMutation } from './__generated__/PostComposerCreatePostMutation.graphql';
-import type { PostComposerMediaValue } from './PostComposerMediaControls';
-import type { PostComposerProfileRef } from './PostComposerProfileSwitcher';
-import type { PostComposerTargetVisibility } from './PostComposerTarget';
+import type { TextStyle } from 'react-native';
+import type { ComposerMediaItem } from './PostComposerMediaControls';
 
-// TODO(PROD-462): Mentioned Profile recipient 입력·저장과 DIRECT 조회 권한이 구현되면
-// PostVisibility.DIRECT를 Composer 허용 목록에 복원한다.
-const postComposerVisibilityValues = [
+const postComposerTargetVisibilityValues = [
   PostVisibility.PUBLIC,
   PostVisibility.UNLISTED,
   PostVisibility.FOLLOWERS,
 ] as const;
-const visibilityOptions = postComposerVisibilityValues.map((value) => ({
+
+export type PostComposerVisibility = (typeof postComposerTargetVisibilityValues)[number];
+export type PostComposerMode = 'post' | 'quote' | 'reply';
+
+export type PostComposerProps = Readonly<{
+  author: ReactNode;
+  beforeEditor?: ReactNode;
+  body: string;
+  bodyRef?: RefObject<TextInput | null>;
+  contentWarning: string;
+  contentWarningExpanded: boolean;
+  error?: string;
+  expandControlRef?: RefObject<View | null>;
+  items: readonly ComposerMediaItem[];
+  onBodyChange: (value: string) => void;
+  onContentWarningChange: (value: string) => void;
+  onContentWarningToggle: () => void;
+  onEmojiAction: () => void;
+  onExpand: () => void;
+  onMediaAction: () => void;
+  onMediaEdit: (itemId: string, tool: 'alt' | 'sensitive') => void;
+  onMediaRemove: (itemId: string) => void;
+  onMediaRetry: (itemId: string) => void;
+  onPollAction: () => void;
+  onSubmit: () => void;
+  onVisibilityChange: (value: PostComposerVisibility) => void;
+  remaining: number;
+  sensitiveMedia: boolean;
+  showCWAction?: boolean;
+  showEmojiAction?: boolean;
+  showMediaAction?: boolean;
+  showPollAction?: boolean;
+  showSubmit?: boolean;
+  submitting?: boolean;
+  mode?: PostComposerMode;
+  surface: 'overlay' | 'rail';
+  visibility: PostComposerVisibility;
+}>;
+
+export type MobileFullscreenComposerShellCandidateProps = Omit<
+  PostComposerProps,
+  'onExpand' | 'showSubmit' | 'surface'
+> &
+  Readonly<{ fillContainer?: boolean; keyboard?: boolean; onOverlayClose: () => void }>;
+
+const visibilityOptions = postComposerTargetVisibilityValues.map((value) => ({
   ...postVisibilityPresentation[value],
   value,
 }));
-type Visibility = (typeof postComposerVisibilityValues)[number];
-export type PostComposerCreatedPost = Readonly<{ id: string }>;
 
-const PostComposerFragment = graphql`
-  fragment PostComposer_profile on Profile {
-    id
-    private {
-      defaultPostVisibility
-    }
-    displayName
-    handle
-    avatar {
-      id
-      url
-    }
-    ...ProfileNameBlock_profile
-  }
-`;
+const composerBodyFocusStyle = {
+  borderWidth: borderWidths[0],
+  outlineStyle: 'solid',
+  outlineWidth: 0,
+} as unknown as TextStyle;
+const composerFieldFocusStyle = {
+  borderWidth: borderWidths[1],
+  outlineWidth: 0,
+} as unknown as TextStyle;
+const railBodyMaxHeight = 300;
 
-const CreatePostMutation = graphql`
-  mutation PostComposerCreatePostMutation(
-    $input: CreatePostInput!
-    $connections: [ID!]!
-    $prependToHome: Boolean!
-  ) {
-    createPost(input: $input) {
-      post @prependNode(connections: $connections, edgeTypeName: "PostConnectionEdge") {
-        id
-        ...PostListItem_post @include(if: $prependToHome) @alias(as: "postListItem")
-      }
-    }
-  }
-`;
-
-type PostComposerBaseProps = {
-  beforeEditor?: ReactNode;
-  contextGuard?: RefObject<number>;
-  editorRef?: RefObject<TextInput | null>;
-  expandControlRef?: RefObject<View | null>;
-  focusOnMount?: boolean;
-  initialContentWarning?: string | null;
-  onPostCreated?: (post: PostComposerCreatedPost) => void;
-  onSubmittingChange?: (submitting: boolean) => void;
-  profile: PostComposer_profile$key;
-  profiles?: readonly PostComposerProfileRef[];
-  registerNativeBackHandler?: (handler: (() => void) | null) => void;
-  scrollable?: boolean;
-  surface?: boolean;
-};
-
-type PostComposerPresentationProps =
-  | {
-      onExpand?: never;
-      onRequestClose?: () => void;
-      presentation?: undefined;
-    }
-  | {
-      onExpand: () => void;
-      onRequestClose: () => void;
-      presentation: 'rail';
-    }
-  | {
-      onExpand?: never;
-      onRequestClose: () => void;
-      presentation: 'mobile' | 'overlay';
-    };
-
-type PostComposerRelationshipProps =
-  | { replyParentId: string; repostSourceId?: never }
-  | { replyParentId?: never; repostSourceId: string }
-  | { replyParentId?: never; repostSourceId?: never };
-
-export type PostComposerProps = PostComposerBaseProps &
-  PostComposerPresentationProps &
-  PostComposerRelationshipProps;
-
-export function PostComposer({
-  profile: profileKey,
-  profiles = [],
-  replyParentId,
-  repostSourceId,
-  ...props
-}: PostComposerProps) {
-  const environment = useRelayEnvironment();
-  const environmentGenerationRef = useRelayEnvironmentGeneration();
-  const environmentRef = useRef(environment);
-  const contextGenerationRef = useRef(0);
-  if (!environmentGenerationRef && environmentRef.current !== environment) {
-    environmentRef.current = environment;
-    contextGenerationRef.current += 1;
-  }
-
-  const profile = useFragment(PostComposerFragment, profileKey);
-  const contextKey = createPostComposerContextKey(profile.id, replyParentId, repostSourceId);
-  const contextKeyRef = useRef(contextKey);
-  if (contextKeyRef.current !== contextKey) {
-    contextKeyRef.current = contextKey;
-    contextGenerationRef.current += 1;
-  }
-  const relationshipProps: PostComposerRelationshipProps = replyParentId
-    ? { replyParentId }
-    : repostSourceId
-      ? { repostSourceId }
-      : {};
-
-  return (
-    <PostComposerContents
-      {...props}
-      {...relationshipProps}
-      contextGenerationRef={contextGenerationRef}
-      environmentGenerationRef={environmentGenerationRef}
-      key={`${contextGenerationRef.current}:${environmentGenerationRef?.current ?? 0}`}
-      globalProfileId={profile.id}
-      profileKey={profileKey}
-      profiles={profiles}
-    />
-  );
-}
-
-type PostComposerContentsProps = Omit<PostComposerBaseProps, 'profile'> &
-  PostComposerRelationshipProps & {
-    contextGenerationRef: RefObject<number>;
-    environmentGenerationRef: RefObject<number> | null;
-    onExpand?: () => void;
-    onRequestClose?: () => void;
-    presentation?: 'mobile' | 'overlay' | 'rail';
-    globalProfileId: string;
-    profileKey: PostComposer_profile$key;
-    profiles: readonly PostComposerProfileRef[];
-  };
-
-function PostComposerContents({
-  beforeEditor,
-  contextGuard,
-  contextGenerationRef,
-  editorRef,
-  expandControlRef,
-  environmentGenerationRef,
-  focusOnMount = false,
-  initialContentWarning,
-  onPostCreated,
-  onRequestClose,
-  onSubmittingChange,
-  onExpand,
-  presentation,
-  globalProfileId,
-  profileKey,
-  profiles,
-  registerNativeBackHandler,
-  replyParentId,
-  repostSourceId,
-  scrollable = false,
-  surface = false,
-}: PostComposerContentsProps) {
-  const [selectedProfileKey, setSelectedProfileKey] = useState<PostComposerProfileRef | null>(null);
-  const profile = useFragment(PostComposerFragment, selectedProfileKey ?? profileKey);
-  const onSelectProfile = useCallback((_id: string, profileRef: PostComposerProfileRef) => {
-    setSelectedProfileKey(profileRef);
-  }, []);
-  const theme = useTheme();
-  const elevation = useElevation();
-  const internalEditorRef = useRef<TextInput>(null);
-  const editor = editorRef ?? internalEditorRef;
-  const visibilityControl = useRef<View>(null);
-  const visibilityMenuRef = useRef<View>(null);
-  const visibilityTrigger = useRef<View>(null);
-  const remainingDescriptionId = useId();
-  const [body, setBody] = useState('');
-  const [contentWarning, setContentWarning] = useState(() =>
-    normalizePostContentPlainText(initialContentWarning ?? ''),
-  );
-  const [contentWarningExpanded, setContentWarningExpanded] = useState(
-    () => initialContentWarning !== null && initialContentWarning !== undefined,
-  );
-  const [editorFocused, setEditorFocused] = useState(false);
-  const defaultVisibility = resolvePostComposerVisibility(profile.private?.defaultPostVisibility);
-  const [visibility, setVisibility] = useState<Visibility>(() => defaultVisibility);
-  const defaultVisibilityRef = useRef(defaultVisibility);
-  const visibilityProfileIdRef = useRef(profile.id);
+function useVisibilityMenu(
+  submitting: boolean,
+  onVisibilityChange: PostComposerProps['onVisibilityChange'],
+) {
   const [visibilityOpen, setVisibilityOpen] = useState(false);
-  const [webVisibilityMenuLeft, setWebVisibilityMenuLeft] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-  const [media, setMedia] = useState<PostComposerMediaValue>(emptyPostComposerMediaValue);
-  const [mediaEditor, setMediaEditor] = useState<{
-    key: string;
-    tool: 'alt' | 'sensitive';
-  } | null>(null);
-  const profilePickerDismissRef = useRef<(() => void) | null>(null);
-  const [profilePickerOpen, setProfilePickerOpen] = useState(false);
-  const onProfilePickerDismissChange = useCallback((dismiss: (() => void) | null) => {
-    profilePickerDismissRef.current = dismiss;
-    setProfilePickerOpen(dismiss !== null);
-  }, []);
-  const [mediaGeneration, setMediaGeneration] = useState(0);
-  const [submitting, setSubmitting] = useState(false);
-  const [commit] = useMutation<PostComposerCreatePostMutation>(CreatePostMutation);
-  const replyMode = Boolean(replyParentId);
-  const quoteMode = Boolean(repostSourceId);
-  const surfaceMode = replyMode || quoteMode;
-  const mountedRef = useRef(true);
-  const availableVisibilityOptions = visibilityOptions.filter((option) =>
-    isPostComposerVisibilityAllowed(option.value, replyParentId),
-  );
-  const bodyText = normalizePostContentPlainText(body);
-  const contentWarningText = normalizePostContentPlainText(contentWarning);
-  const hasDraftContent =
-    bodyText.length > 0 ||
-    contentWarningText.length > 0 ||
-    media.items.length > 0 ||
-    media.hasPendingMedia;
-  const hasUnsavedDraft = hasDraftContent || visibility !== defaultVisibility;
-  const remaining = postBodyMaxLength - bodyText.length - contentWarningText.length;
-  const remainingDescription = `남은 글자 수 ${remaining.toLocaleString('ko-KR')}자`;
-  const disabled =
-    submitting ||
-    (bodyText.length === 0 && media.items.length === 0) ||
-    media.hasPendingMedia ||
-    remaining < 0;
-  const selectedVisibility =
-    availableVisibilityOptions.find((option) => option.value === visibility) ??
-    visibilityOptions[1];
-  const SelectedVisibilityIcon = selectedVisibility.icon;
-
+  const controlRef = useRef<View>(null);
+  const menuRef = useRef<View>(null);
+  const triggerRef = useRef<View>(null);
   useEffect(() => {
-    if (visibilityProfileIdRef.current !== profile.id) {
-      visibilityProfileIdRef.current = profile.id;
-      defaultVisibilityRef.current = defaultVisibility;
-      return;
+    if (submitting) {
+      setVisibilityOpen(false);
     }
-    if (hasDraftContent) {
-      return;
-    }
-    const previousDefault = defaultVisibilityRef.current;
-    defaultVisibilityRef.current = defaultVisibility;
-    setVisibility((current) => (current === previousDefault ? defaultVisibility : current));
-  }, [defaultVisibility, hasDraftContent, profile.id]);
-
+  }, [submitting]);
   useEffect(() => {
-    if (
-      Platform.OS !== 'web' ||
-      presentation === undefined ||
-      !hasUnsavedDraft ||
-      typeof window === 'undefined'
-    ) {
+    if (Platform.OS !== 'web' || !visibilityOpen) {
       return;
     }
-
-    const preventDraftLoss = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = true;
-    };
-    window.addEventListener('beforeunload', preventDraftLoss);
-    return () => window.removeEventListener('beforeunload', preventDraftLoss);
-  }, [hasUnsavedDraft, presentation]);
-
-  const closeMediaEditor = useCallback(() => {
-    setMediaEditor(null);
-    requestAnimationFrame(() => editor.current?.focus());
-  }, [editor]);
-
-  useLayoutEffect(() => {
-    registerNativeBackHandler?.(
-      mediaEditor
-        ? closeMediaEditor
-        : profilePickerOpen
-          ? () => profilePickerDismissRef.current?.()
-          : null,
+    const control = controlRef.current as unknown as HTMLElement;
+    const menu = menuRef.current as unknown as HTMLElement;
+    const items = Array.from(
+      menu.querySelectorAll<HTMLElement>('[role="radio"], [role="menuitemradio"]'),
     );
-    return () => {
-      registerNativeBackHandler?.(null);
-    };
-  }, [closeMediaEditor, mediaEditor, profilePickerOpen, registerNativeBackHandler]);
-
-  const submit = () => {
-    if (disabled) {
-      return;
-    }
-    setError(null);
-    setVisibilityOpen(false);
-    setSubmitting(true);
-    const submissionGeneration = contextGenerationRef.current;
-    const submissionEnvironmentGeneration = environmentGenerationRef?.current;
-    const submissionGuardGeneration = contextGuard?.current;
-    const submittedCallback = onPostCreated;
-    const submissionReplyMode = replyMode;
-    const submissionSurfaceMode = surfaceMode;
-    const submissionQuoteMode = quoteMode;
-    commit({
-      variables: {
-        prependToHome: profile.id === globalProfileId,
-        connections:
-          profile.id === globalProfileId
-            ? [ConnectionHandler.getConnectionID(ROOT_ID, 'PostList_homeTimeline')]
-            : [],
-        input: {
-          ...createPostComposerMutationInput(
-            bodyText,
-            visibility,
-            replyParentId,
-            contentWarningText,
-            repostSourceId,
-          ),
-          media: media.items,
-          ...(profile.id !== globalProfileId ? { actorProfileId: profile.id } : {}),
-          sensitiveMedia: media.sensitiveMedia,
-        },
-      },
-      onCompleted: (response) => {
-        if (
-          !mountedRef.current ||
-          contextGenerationRef.current !== submissionGeneration ||
-          environmentGenerationRef?.current !== submissionEnvironmentGeneration ||
-          contextGuard?.current !== submissionGuardGeneration
-        ) {
-          return;
-        }
-        setSubmitting(false);
-        const createdPost = response.createPost?.post;
-        if (!createdPost) {
-          setError(
-            submissionQuoteMode
-              ? '인용 게시글을 작성하지 못했습니다.'
-              : submissionSurfaceMode
-                ? '답글을 작성하지 못했습니다.'
-                : '게시글을 작성하지 못했습니다.',
-          );
-          return;
-        }
-
-        trackAnalytics('post_created', {
-          selected_profile_id: profile.id,
-          visibility,
-        });
-        setBody('');
-        if (!submissionReplyMode) {
-          setContentWarning('');
-          setContentWarningExpanded(false);
-        }
-        setMedia(emptyPostComposerMediaValue);
-        setMediaGeneration((generation) => generation + 1);
-        setVisibility(resolvePostComposerVisibility(profile.private?.defaultPostVisibility));
-        editor.current?.focus();
-        submittedCallback?.(createdPost);
-      },
-      onError: () => {
-        if (
-          !mountedRef.current ||
-          contextGenerationRef.current !== submissionGeneration ||
-          environmentGenerationRef?.current !== submissionEnvironmentGeneration ||
-          contextGuard?.current !== submissionGuardGeneration
-        ) {
-          return;
-        }
-        setSubmitting(false);
-        setError(
-          submissionQuoteMode
-            ? '인용 게시글을 작성하지 못했습니다.'
-            : submissionSurfaceMode
-              ? '답글을 작성하지 못했습니다.'
-              : '게시글을 작성하지 못했습니다.',
-        );
-      },
-    });
-  };
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    onSubmittingChange?.(submitting);
-  }, [onSubmittingChange, submitting]);
-
-  useEffect(() => {
-    if (!focusOnMount) {
-      return;
-    }
-    const frame = requestAnimationFrame(() => editor.current?.focus());
-    return () => cancelAnimationFrame(frame);
-  }, [focusOnMount]);
-
-  const positionWebVisibilityMenu = useCallback(() => {
-    if (Platform.OS !== 'web') {
-      return;
-    }
-
-    const control = visibilityControl.current as unknown as HTMLElement | null;
-    const menu = visibilityMenuRef.current as unknown as HTMLElement | null;
-    const ownerDocument = control?.ownerDocument;
-    if (!control || !menu || !ownerDocument) {
-      return;
-    }
-
-    const controlRect = control.getBoundingClientRect();
-    const menuRect = menu.getBoundingClientRect();
-    const minLeft = -controlRect.left;
-    const maxLeft = ownerDocument.documentElement.clientWidth - menuRect.width - controlRect.left;
-    const nextLeft = Math.max(minLeft, Math.min(0, maxLeft));
-
-    setWebVisibilityMenuLeft((current) => (current === nextLeft ? current : nextLeft));
-  }, []);
-
-  useLayoutEffect(() => {
-    if (Platform.OS !== 'web' || !visibilityOpen) {
-      return;
-    }
-
-    positionWebVisibilityMenu();
-    const control = visibilityControl.current as unknown as HTMLElement | null;
-    const ownerDocument = control?.ownerDocument;
-    const ownerWindow = ownerDocument?.defaultView;
-    if (!ownerDocument || !ownerWindow) {
-      return;
-    }
-
-    ownerWindow.addEventListener('resize', positionWebVisibilityMenu);
-    ownerDocument.addEventListener('scroll', positionWebVisibilityMenu, true);
-    return () => {
-      ownerWindow.removeEventListener('resize', positionWebVisibilityMenu);
-      ownerDocument.removeEventListener('scroll', positionWebVisibilityMenu, true);
-    };
-  }, [positionWebVisibilityMenu, visibilityOpen]);
-
-  useEffect(() => {
-    if (Platform.OS !== 'web' || !visibilityOpen) {
-      return;
-    }
-
-    const control = visibilityControl.current as unknown as HTMLElement | null;
-    const menu = visibilityMenuRef.current as unknown as HTMLElement | null;
-    const trigger = visibilityTrigger.current as unknown as HTMLElement | null;
-    const items = Array.from(menu?.querySelectorAll<HTMLElement>('[role="menuitemradio"]') ?? []);
-
     (items.find((item) => item.getAttribute('aria-checked') === 'true') ?? items[0])?.focus();
-
-    const onPointerDown = (event: PointerEvent) => {
-      if (!control?.contains(event.target as Node)) {
-        setVisibilityOpen(false);
-      }
-    };
-    const onFocusIn = (event: FocusEvent) => {
-      if (!control?.contains(event.target as Node)) {
+    const dismissOutside = (event: Event) => {
+      if (!control.contains(event.target as Node)) {
         setVisibilityOpen(false);
       }
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
+        event.stopPropagation();
         setVisibilityOpen(false);
-        trigger?.focus();
+        triggerRef.current?.focus();
         return;
       }
-
-      const current = document.activeElement as HTMLElement | null;
-      const index = current ? items.indexOf(current) : -1;
-
-      if (event.key === ' ' && index >= 0) {
+      if (!menu.contains(document.activeElement)) {
+        return;
+      }
+      const index = items.indexOf(document.activeElement as HTMLElement);
+      if ([' ', 'Enter'].includes(event.key) && index >= 0) {
         event.preventDefault();
-        current?.click();
+        event.stopPropagation();
+        items[index]?.click();
         return;
       }
-      if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key) || items.length === 0) {
+      if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
         return;
       }
-
       event.preventDefault();
-      const nextIndex =
+      const next =
         event.key === 'Home'
           ? 0
           : event.key === 'End'
             ? items.length - 1
-            : event.key === 'ArrowDown'
-              ? (index + 1 + items.length) % items.length
-              : (index - 1 + items.length) % items.length;
-      items[nextIndex]?.focus();
+            : (index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+      items[next]?.focus();
+      const option = visibilityOptions[next];
+      if (option) {
+        onVisibilityChange(option.value);
+      }
     };
-
-    document.addEventListener('pointerdown', onPointerDown);
-    document.addEventListener('focusin', onFocusIn);
-    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('pointerdown', dismissOutside);
+    document.addEventListener('focusin', dismissOutside);
+    document.addEventListener('keydown', onKeyDown, true);
     return () => {
-      document.removeEventListener('pointerdown', onPointerDown);
-      document.removeEventListener('focusin', onFocusIn);
-      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('pointerdown', dismissOutside);
+      document.removeEventListener('focusin', dismissOutside);
+      document.removeEventListener('keydown', onKeyDown, true);
     };
-  }, [visibilityOpen]);
+  }, [onVisibilityChange, visibilityOpen]);
+  return { controlRef, menuRef, setVisibilityOpen, triggerRef, visibilityOpen };
+}
 
-  if (presentation) {
-    const productionSurface: PostComposerTargetVisibility = visibility;
-    const pickerProfiles =
-      selectedProfileKey && !profiles.includes(selectedProfileKey)
-        ? [...profiles, selectedProfileKey]
-        : profiles;
+function formatMediaFailures(items: readonly ComposerMediaItem[]): string | undefined {
+  const messages = items.flatMap((item, index) =>
+    item.state === 'failed'
+      ? [
+          formatImageUploadFailureMessage(
+            `${index + 1}번째 이미지`,
+            item.failure ?? { reason: 'transient', stage: 'transfer' },
+          ),
+        ]
+      : [],
+  );
+  return messages.length > 0 ? messages.join('\n') : undefined;
+}
 
-    return (
-      <Form
-        accessibilityLabel="게시글 작성"
-        onSubmit={submit}
-        style={[
-          styles.productionForm,
-          (presentation === 'mobile' || mediaEditor !== null) && styles.surfaceRoot,
-        ]}
-        submitOnModEnter
-      >
-        <PostComposerMediaControls
-          actions={null}
-          disabled={submitting}
-          editorRef={editor}
-          key={mediaGeneration}
-          profileId={profile.id}
-          onValueChange={setMedia}
-          render={({
-            error: mediaError,
-            items,
-            onAltTextChange,
-            onMediaAction,
-            onMediaRemove,
-            onMediaRetry,
-            onSensitiveMediaChange,
-            sensitiveMedia,
-          }) => {
-            const productionAuthor = (
-              <View style={styles.productionAuthor}>
-                {pickerProfiles.length > 1 ? (
-                  <PostComposerProfileSwitcher
-                    disabled={submitting || items.some((item) => item.state === 'uploading')}
-                    onDismissChange={onProfilePickerDismissChange}
-                    onSelectionSuccess={() => editor.current?.focus()}
-                    onSelectProfile={onSelectProfile}
-                    profiles={pickerProfiles}
-                    selectedProfileId={profile.id}
-                    surface={presentation === 'rail' ? 'rail' : 'overlay'}
-                  />
-                ) : (
-                  <>
-                    <Avatar imageUri={profile.avatar?.url} label={profile.displayName} size={40} />
-                    <ProfileNameBlock profile={profile} />
-                  </>
-                )}
-              </View>
-            );
-            const mediaEditorContent = mediaEditor ? (
-              <ComposerMediaEditor
-                fillContainer
-                media={items}
-                mobileState={mediaEditor.tool === 'alt' ? 'alt' : 'sensitive'}
-                onAltTextChange={onAltTextChange}
-                onBack={closeMediaEditor}
-                onClose={() => {
-                  setMediaEditor(null);
-                  onRequestClose?.();
-                }}
-                onDone={closeMediaEditor}
-                onSelectMedia={(key) => setMediaEditor({ key, tool: mediaEditor.tool })}
-                onSensitiveMediaChange={onSensitiveMediaChange}
-                onToolChange={(tool) => setMediaEditor({ key: mediaEditor.key, tool })}
-                presentation={presentation === 'mobile' ? 'mobile' : 'web'}
-                selectedKey={mediaEditor.key}
-                sensitiveMedia={sensitiveMedia}
-                tool={mediaEditor.tool}
-              />
-            ) : null;
-
-            const openMediaEditor = (key: string, tool: 'alt' | 'sensitive') => {
-              editor.current?.blur();
-              setMediaEditor({ key, tool });
-              if (presentation === 'rail') {
-                onExpand?.();
-              }
-            };
-            const sharedProductionProps = {
-              author: productionAuthor,
-              body,
-              bodyRef: editor,
-              contentWarning,
-              contentWarningExpanded,
-              error: error ?? mediaError ?? undefined,
-              expandControlRef,
-              items,
-              onBodyChange: setBody,
-              onContentWarningChange: setContentWarning,
-              onContentWarningToggle: () => setContentWarningExpanded((expanded) => !expanded),
-              onEmojiAction: () => undefined,
-              onMediaAction,
-              onMediaEdit: openMediaEditor,
-              onMediaRemove,
-              onMediaRetry: (key: string) => {
-                const item = items.find((candidate) => candidate.key === key);
-                if (item) {
-                  onMediaRetry(item);
-                }
-              },
-              onPollAction: () => undefined,
-              onSubmit: submit,
-              onVisibilityChange: setVisibility,
-              remaining,
-              sensitiveMedia,
-              showEmojiAction: false,
-              showMediaAction: items.length < 4,
-              showPollAction: false,
-              submitting,
-              visibility: productionSurface,
-            };
-
-            const composerContent =
-              presentation === 'mobile' ? (
-                <MobileFullscreenComposerShellCandidate
-                  {...sharedProductionProps}
-                  fillContainer
-                  onOverlayClose={onRequestClose!}
-                />
-              ) : (
-                <PostComposerTarget
-                  {...sharedProductionProps}
-                  onExpand={presentation === 'rail' ? onExpand! : () => undefined}
-                  surface={presentation === 'rail' ? 'rail' : 'overlay'}
-                />
-              );
-
-            return (
-              <>
-                <ScrollView
-                  accessibilityElementsHidden={mediaEditor !== null}
-                  aria-hidden={mediaEditor !== null || undefined}
-                  contentContainerStyle={[
-                    styles.productionContent,
-                    presentation === 'mobile' && styles.surfaceRoot,
-                  ]}
-                  keyboardShouldPersistTaps="handled"
-                  scrollEnabled={presentation !== 'mobile'}
-                  style={[
-                    styles.editorScroll,
-                    presentation === 'mobile' && styles.surfaceRoot,
-                    mediaEditor !== null && styles.hiddenPresentation,
-                  ]}
-                >
-                  {composerContent}
-                </ScrollView>
-                {mediaEditorContent}
-              </>
-            );
-          }}
-        />
-      </Form>
-    );
+const composerCopy: Record<
+  PostComposerMode,
+  {
+    bodyLabel: string;
+    placeholder: string;
+    submit: string;
+    title: string;
   }
+> = {
+  post: {
+    bodyLabel: '게시글 본문',
+    placeholder: '무슨 일이 일어나고 있나요?',
+    submit: '게시',
+    title: '글쓰기',
+  },
+  quote: {
+    bodyLabel: '인용 게시글 본문',
+    placeholder: '인용할 내용을 입력하세요…',
+    submit: '인용 게시',
+    title: '인용 게시글 쓰기',
+  },
+  reply: {
+    bodyLabel: '답글 본문',
+    placeholder: '답글을 입력하세요…',
+    submit: '답글 게시',
+    title: '답글 쓰기',
+  },
+};
 
-  const visibilityMenu = (
+export function PostComposer({
+  author,
+  beforeEditor,
+  body,
+  bodyRef,
+  contentWarning,
+  contentWarningExpanded,
+  error,
+  expandControlRef,
+  items,
+  onBodyChange,
+  onContentWarningChange,
+  onContentWarningToggle,
+  onEmojiAction,
+  onExpand,
+  onMediaAction,
+  onMediaEdit,
+  onMediaRemove,
+  onMediaRetry,
+  onPollAction,
+  onSubmit,
+  onVisibilityChange,
+  remaining,
+  sensitiveMedia,
+  showCWAction = true,
+  showEmojiAction = true,
+  showMediaAction = true,
+  showPollAction = true,
+  showSubmit = true,
+  submitting = false,
+  mode = 'post',
+  surface,
+  visibility,
+}: PostComposerProps) {
+  const theme = useTheme();
+  const copy = composerCopy[mode];
+  const remainingDescriptionId = useId();
+  const bodyInputRef = useRef<TextInput>(null);
+  const [bodyContentHeight, setBodyContentHeight] = useState(0);
+  const [bodyFocused, setBodyFocused] = useState(false);
+  const { controlRef, menuRef, setVisibilityOpen, triggerRef, visibilityOpen } = useVisibilityMenu(
+    submitting,
+    onVisibilityChange,
+  );
+  useEffect(() => {
+    if (Platform.OS !== 'web') {
+      return;
+    }
+    const input = (bodyRef ?? bodyInputRef).current as unknown as HTMLTextAreaElement | null;
+    if (!input) {
+      return;
+    }
+    input.style.height = '0px';
+    const height = input.scrollHeight;
+    input.style.height = `${height}px`;
+    setBodyContentHeight(height);
+  }, [body, bodyRef, items.length, surface]);
+  const selectedVisibility =
+    visibilityOptions.find((option) => option.value === visibility) ?? visibilityOptions[1];
+  const SelectedVisibilityIcon = selectedVisibility.icon;
+  const displayedError = error ?? formatMediaFailures(items);
+  const disabled =
+    submitting ||
+    items.some((item) => item.state !== 'ready') ||
+    (body.trim().length === 0 && items.length === 0) ||
+    remaining < 0;
+  const mediaGallery = (
+    <PostComposerMediaItemsTarget
+      compact={surface === 'rail'}
+      disabled={submitting}
+      media={items}
+      onEdit={onMediaEdit}
+      onRemove={onMediaRemove}
+      onRetry={(item) => onMediaRetry(item.key)}
+      sensitiveMedia={sensitiveMedia}
+    />
+  );
+  const unifiedOverlayScroll = surface === 'overlay' && beforeEditor !== undefined;
+  const editorContent = (
+    <View style={[styles.content, items.length === 0 ? styles.textContent : null]}>
+      <TextArea
+        aria-describedby={Platform.OS === 'web' ? remainingDescriptionId : undefined}
+        aria-invalid={Boolean(error)}
+        accessibilityLabel={copy.bodyLabel}
+        editable={!submitting}
+        ref={bodyRef ?? bodyInputRef}
+        onBlur={() => setBodyFocused(false)}
+        onChange={(event) => {
+          if (Platform.OS === 'web') {
+            const input = event.currentTarget as unknown as HTMLTextAreaElement;
+            input.style.height = '0px';
+            const height = input.scrollHeight;
+            input.style.height = `${height}px`;
+            setBodyContentHeight(height);
+          }
+        }}
+        onChangeText={onBodyChange}
+        onContentSizeChange={(event) =>
+          setBodyContentHeight(Math.ceil(event.nativeEvent.contentSize.height))
+        }
+        onFocus={() => setBodyFocused(true)}
+        placeholder={copy.placeholder}
+        scrollEnabled={surface === 'rail' && bodyContentHeight > railBodyMaxHeight}
+        style={[
+          styles.body,
+          items.length > 0 ? styles.mediaBody : styles.textBody,
+          surface === 'rail' ? styles.railBody : null,
+          bodyContentHeight > 0 ? { height: bodyContentHeight } : null,
+          { backgroundColor: theme.backgroundElevated, color: theme.foregroundPrimary },
+          composerBodyFocusStyle,
+        ]}
+        value={body}
+      />
+      {surface === 'overlay' ? mediaGallery : null}
+      {displayedError ? (
+        <Text
+          accessibilityRole="alert"
+          style={[styles.error, { color: theme.feedbackDangerOnSubtle }]}
+        >
+          {displayedError}
+        </Text>
+      ) : null}
+    </View>
+  );
+  const editorFooter = (
     <View
-      ref={visibilityMenuRef}
-      accessibilityLabel={replyMode ? '답글 공개 설정' : '게시글 공개 설정'}
+      style={[styles.footer, { backgroundColor: theme.backgroundElevated }]}
+      testID="post-composer-footer"
+    >
+      <View style={styles.tools}>
+        {showMediaAction ? (
+          <ComposerTool
+            accessibilityLabel={`이미지 추가, ${4 - items.length}개 더 선택 가능`}
+            disabled={submitting}
+            onPress={onMediaAction}
+          >
+            <ImagePlusIcon color={theme.foregroundPrimary} size={iconSizes[20]} strokeWidth={2} />
+          </ComposerTool>
+        ) : null}
+        {showPollAction ? (
+          <ComposerTool accessibilityLabel="투표 추가" disabled={submitting} onPress={onPollAction}>
+            <ChartNoAxesColumnIncreasingIcon
+              color={theme.foregroundPrimary}
+              size={iconSizes[20]}
+              strokeWidth={2}
+            />
+          </ComposerTool>
+        ) : null}
+        {showCWAction ? (
+          <ComposerTool
+            accessibilityLabel={`콘텐츠 경고 ${contentWarningExpanded ? '끄기' : '켜기'}`}
+            disabled={submitting}
+            onPress={onContentWarningToggle}
+            selected={contentWarningExpanded}
+          >
+            <TriangleAlertIcon
+              color={theme.foregroundPrimary}
+              size={iconSizes[20]}
+              strokeWidth={2}
+            />
+          </ComposerTool>
+        ) : null}
+        {showEmojiAction ? (
+          <ComposerTool
+            accessibilityLabel="이모지 추가"
+            disabled={submitting}
+            onPress={onEmojiAction}
+          >
+            <SmileIcon color={theme.foregroundPrimary} size={iconSizes[20]} strokeWidth={2} />
+          </ComposerTool>
+        ) : null}
+      </View>
+      <View style={styles.submit}>
+        <Text
+          accessibilityRole={'status' as never}
+          accessibilityLabel={`남은 글자 수 ${remaining.toLocaleString('ko-KR')}자`}
+          accessibilityLiveRegion="polite"
+          style={[
+            styles.remaining,
+            {
+              color: remaining < 0 ? theme.feedbackDangerOnSubtle : theme.foregroundSecondary,
+            },
+          ]}
+        >
+          {remaining.toLocaleString('ko-KR')}
+        </Text>
+        <Text nativeID={remainingDescriptionId} style={styles.remainingDescription}>
+          남은 글자 수 {remaining.toLocaleString('ko-KR')}자
+        </Text>
+        {surface === 'overlay' ? <ProgressRing remaining={remaining} /> : null}
+        {showSubmit ? (
+          <Button
+            accessibilityLabel={submitting && mode !== 'post' ? '게시 중' : undefined}
+            disabled={disabled}
+            loading={submitting}
+            loadingText={mode === 'post' ? undefined : '게시 중'}
+            onPress={onSubmit}
+            size="compact"
+          >
+            {copy.submit}
+          </Button>
+        ) : null}
+      </View>
+    </View>
+  );
+  const editor = (
+    <View
+      style={[
+        styles.editor,
+        styles.desktopEditor,
+        {
+          backgroundColor: theme.backgroundElevated,
+          borderColor: error
+            ? theme.feedbackDangerBorder
+            : surface === 'rail' && bodyFocused
+              ? theme.primary
+              : theme.borderDefault,
+        },
+      ]}
+      testID="post-composer-editor"
+    >
+      <View style={styles.header}>
+        <View ref={controlRef} style={styles.visibilityControl}>
+          <Pressable
+            ref={triggerRef}
+            aria-expanded={visibilityOpen && !submitting}
+            accessibilityLabel={`공개 범위: ${selectedVisibility.label}`}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: visibilityOpen && !submitting }}
+            disabled={submitting}
+            onPress={() => setVisibilityOpen((open) => !open)}
+            style={({ pressed }) => [
+              styles.visibilityTrigger,
+              {
+                backgroundColor: pressed ? theme.statePressed : theme.backgroundSurface,
+                borderColor: theme.borderDefault,
+              },
+            ]}
+          >
+            <SelectedVisibilityIcon
+              color={theme.foregroundPrimary}
+              size={iconSizes[16]}
+              strokeWidth={2}
+            />
+            <Text
+              numberOfLines={1}
+              style={[styles.visibilityLabel, { color: theme.foregroundPrimary }]}
+            >
+              {selectedVisibility.label}
+            </Text>
+          </Pressable>
+          {visibilityOpen && !submitting ? (
+            <VisibilityMenu
+              menuRef={menuRef}
+              triggerRef={triggerRef}
+              onDismiss={() => setVisibilityOpen(false)}
+              onChange={(value) => {
+                onVisibilityChange(value);
+                setVisibilityOpen(false);
+                triggerRef.current?.focus();
+              }}
+              value={visibility}
+            />
+          ) : null}
+        </View>
+        {surface === 'rail' ? (
+          <IconButton
+            accessibilityLabel="Composer 확장"
+            controlRef={expandControlRef}
+            disabled={submitting}
+            feedback="opacity"
+            onPress={onExpand}
+            targetSize={40}
+            visualSize={40}
+          >
+            <ExpandIcon color={theme.foregroundPrimary} size={iconSizes[20]} strokeWidth={2} />
+          </IconButton>
+        ) : null}
+      </View>
+
+      {contentWarningExpanded ? (
+        <View style={styles.contentWarning}>
+          <TextField
+            accessibilityLabel="콘텐츠 경고"
+            editable={!submitting}
+            onChangeText={onContentWarningChange}
+            placeholder="경고 문구를 입력하세요"
+            style={[styles.contentWarningField, composerFieldFocusStyle]}
+            value={contentWarning}
+          />
+        </View>
+      ) : null}
+
+      {unifiedOverlayScroll ? (
+        <View style={styles.desktopScroll}>{editorContent}</View>
+      ) : (
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          scrollEnabled={surface === 'overlay'}
+          style={[
+            styles.desktopScroll,
+            Platform.OS === 'web'
+              ? webScrollbarStyle(theme.borderStrong, surface === 'overlay')
+              : null,
+          ]}
+          testID="post-composer-scroll"
+        >
+          {editorContent}
+        </ScrollView>
+      )}
+
+      {surface === 'rail' && items.length > 0 ? (
+        <View style={styles.railMedia}>{mediaGallery}</View>
+      ) : null}
+
+      {unifiedOverlayScroll ? null : editorFooter}
+    </View>
+  );
+
+  return (
+    <View
+      accessibilityLabel={copy.title}
+      style={[
+        styles.root,
+        surface === 'rail' ? styles.rail : styles.overlay,
+        surface === 'overlay' && Platform.OS === 'web' ? styles.webOverlay : null,
+        { backgroundColor: theme.backgroundCanvas },
+      ]}
+      testID="post-composer-target"
+    >
+      {unifiedOverlayScroll ? (
+        <>
+          <ScrollView
+            contentContainerStyle={styles.overlayScrollContent}
+            keyboardShouldPersistTaps="handled"
+            style={[
+              styles.overlayScroll,
+              Platform.OS === 'web' ? webScrollbarStyle(theme.borderStrong, true) : null,
+            ]}
+            testID="post-composer-scroll"
+          >
+            {beforeEditor}
+            <View style={styles.authorLayer}>{author}</View>
+            {editor}
+          </ScrollView>
+          {editorFooter}
+        </>
+      ) : (
+        <>
+          {beforeEditor}
+          <View style={styles.authorLayer}>{author}</View>
+          {editor}
+        </>
+      )}
+    </View>
+  );
+}
+
+export function MobileFullscreenComposerShellCandidate({
+  author,
+  beforeEditor,
+  body,
+  bodyRef,
+  contentWarning,
+  contentWarningExpanded,
+  error,
+  fillContainer = false,
+  items,
+  keyboard = false,
+  onBodyChange,
+  onContentWarningChange,
+  onContentWarningToggle,
+  onEmojiAction,
+  onMediaAction,
+  onMediaEdit,
+  onMediaRemove,
+  onMediaRetry,
+  onOverlayClose,
+  onPollAction,
+  onSubmit,
+  onVisibilityChange,
+  remaining,
+  sensitiveMedia,
+  showCWAction = true,
+  showEmojiAction = true,
+  showMediaAction = true,
+  showPollAction = true,
+  submitting = false,
+  mode = 'post',
+  visibility,
+}: MobileFullscreenComposerShellCandidateProps) {
+  const theme = useTheme();
+  const copy = composerCopy[mode];
+  const remainingDescriptionId = useId();
+  const { controlRef, menuRef, setVisibilityOpen, triggerRef, visibilityOpen } = useVisibilityMenu(
+    submitting,
+    onVisibilityChange,
+  );
+  const selectedVisibility =
+    visibilityOptions.find((option) => option.value === visibility) ?? visibilityOptions[1];
+  const displayedError = error ?? formatMediaFailures(items);
+  const disabled =
+    submitting ||
+    items.some((item) => item.state !== 'ready') ||
+    (body.trim().length === 0 && items.length === 0) ||
+    remaining < 0;
+  return (
+    <View
+      accessibilityLabel={copy.title}
+      style={[
+        styles.mobileShell,
+        fillContainer ? styles.mobileShellFill : null,
+        { backgroundColor: theme.backgroundCanvas },
+      ]}
+      testID="mobile-fullscreen-composer-candidate"
+    >
+      <View style={[styles.mobileHeader, { borderBottomColor: theme.borderSubtle }]}>
+        <View style={styles.mobileLeadingSlot}>
+          <IconButton
+            accessibilityLabel={`${copy.title} 닫기`}
+            disabled={submitting}
+            feedback="opacity"
+            onPress={onOverlayClose}
+            targetSize={44}
+          >
+            <XIcon color={theme.foregroundPrimary} size={iconSizes[24]} strokeWidth={2} />
+          </IconButton>
+        </View>
+        <Text
+          accessibilityRole="header"
+          style={[styles.mobileTitle, { color: theme.foregroundPrimary }]}
+        >
+          {copy.title}
+        </Text>
+        <View style={styles.mobileTrailingSlot}>
+          <Button
+            accessibilityLabel={submitting && mode !== 'post' ? '게시 중' : undefined}
+            disabled={disabled}
+            loading={submitting}
+            loadingText={mode === 'post' ? undefined : '게시 중'}
+            onPress={onSubmit}
+            style={styles.mobileSubmitButton}
+          >
+            {copy.submit}
+          </Button>
+        </View>
+      </View>
+
+      <View ref={controlRef} style={styles.mobileVisibilityControl}>
+        <Pressable
+          ref={triggerRef}
+          aria-expanded={visibilityOpen && !submitting}
+          accessibilityLabel={`공개 범위: ${selectedVisibility.label}`}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: visibilityOpen && !submitting }}
+          disabled={submitting}
+          onPress={() => setVisibilityOpen((open) => !open)}
+          style={({ pressed }) => [
+            styles.mobileVisibility,
+            {
+              backgroundColor: pressed ? theme.statePressed : theme.backgroundCanvas,
+              borderColor: theme.borderSubtle,
+            },
+          ]}
+        >
+          <Text style={[styles.mobileVisibilityCaption, { color: theme.foregroundSecondary }]}>
+            공개 범위
+          </Text>
+          <View style={styles.mobileVisibilityValue}>
+            <Text style={[styles.visibilityOptionLabel, { color: theme.foregroundPrimary }]}>
+              {selectedVisibility.label}
+            </Text>
+            <ChevronDownIcon color={theme.foregroundPrimary} size={iconSizes[16]} strokeWidth={2} />
+          </View>
+        </Pressable>
+        {visibilityOpen && !submitting ? (
+          <VisibilityMenu
+            alignRight
+            menuRef={menuRef}
+            triggerRef={triggerRef}
+            onDismiss={() => setVisibilityOpen(false)}
+            onChange={(value) => {
+              onVisibilityChange(value);
+              setVisibilityOpen(false);
+              triggerRef.current?.focus();
+            }}
+            value={visibility}
+          />
+        ) : null}
+      </View>
+
+      <ScrollView
+        contentContainerStyle={styles.mobileScrollContent}
+        keyboardShouldPersistTaps="handled"
+        style={styles.mobileScroll}
+      >
+        <View style={styles.mobileComposerBody} testID="mobile-composer-body">
+          {beforeEditor}
+          <View style={styles.authorLayer}>{author}</View>
+          {contentWarningExpanded ? (
+            <TextField
+              accessibilityLabel="콘텐츠 경고"
+              editable={!submitting}
+              onChangeText={onContentWarningChange}
+              placeholder="경고 문구를 입력하세요"
+              style={[styles.mobileContentWarning, composerFieldFocusStyle]}
+              value={contentWarning}
+            />
+          ) : null}
+          <TextInput
+            ref={bodyRef}
+            aria-describedby={Platform.OS === 'web' ? remainingDescriptionId : undefined}
+            aria-invalid={Boolean(error)}
+            accessibilityLabel={copy.bodyLabel}
+            editable={!submitting}
+            multiline
+            onChangeText={onBodyChange}
+            placeholder={copy.placeholder}
+            placeholderTextColor={
+              submitting ? theme.stateDisabledForeground : theme.foregroundMuted
+            }
+            style={[
+              styles.mobileBody,
+              {
+                backgroundColor: theme.backgroundCanvas,
+                color: theme.foregroundPrimary,
+                ...composerBodyFocusStyle,
+              },
+            ]}
+            value={body}
+          />
+          {displayedError ? (
+            <Text
+              accessibilityRole="alert"
+              style={[styles.error, { color: theme.feedbackDangerOnSubtle }]}
+            >
+              {displayedError}
+            </Text>
+          ) : null}
+        </View>
+
+        {items.length > 0 ? (
+          <View style={styles.mobileMediaShelf} testID="mobile-composer-media-shelf">
+            <PostComposerMediaItemsTarget
+              disabled={submitting}
+              media={items}
+              onEdit={onMediaEdit}
+              onRemove={onMediaRemove}
+              onRetry={(item) => onMediaRetry(item.key)}
+              sensitiveMedia={sensitiveMedia}
+            />
+          </View>
+        ) : null}
+      </ScrollView>
+
+      <View
+        style={[styles.mobileFooter, { borderTopColor: theme.borderSubtle }]}
+        testID="mobile-composer-footer"
+      >
+        <View style={styles.tools}>
+          {showMediaAction ? (
+            <ComposerTool
+              accessibilityLabel={`이미지 추가, ${4 - items.length}개 더 선택 가능`}
+              disabled={submitting}
+              onPress={onMediaAction}
+            >
+              <ImagePlusIcon color={theme.foregroundPrimary} size={iconSizes[20]} strokeWidth={2} />
+            </ComposerTool>
+          ) : null}
+          {showPollAction ? (
+            <ComposerTool
+              accessibilityLabel="투표 추가"
+              disabled={submitting}
+              onPress={onPollAction}
+            >
+              <ChartNoAxesColumnIncreasingIcon
+                color={theme.foregroundPrimary}
+                size={iconSizes[20]}
+                strokeWidth={2}
+              />
+            </ComposerTool>
+          ) : null}
+          {showCWAction ? (
+            <ComposerTool
+              accessibilityLabel={`콘텐츠 경고 ${contentWarningExpanded ? '끄기' : '켜기'}`}
+              disabled={submitting}
+              onPress={onContentWarningToggle}
+              selected={contentWarningExpanded}
+            >
+              <TriangleAlertIcon
+                color={theme.foregroundPrimary}
+                size={iconSizes[20]}
+                strokeWidth={2}
+              />
+            </ComposerTool>
+          ) : null}
+          {showEmojiAction ? (
+            <ComposerTool
+              accessibilityLabel="이모지 추가"
+              disabled={submitting}
+              onPress={onEmojiAction}
+            >
+              <SmileIcon color={theme.foregroundPrimary} size={iconSizes[20]} strokeWidth={2} />
+            </ComposerTool>
+          ) : null}
+        </View>
+        <View style={styles.submit}>
+          <Text
+            accessibilityRole={'status' as never}
+            accessibilityLabel={`남은 글자 수 ${remaining.toLocaleString('ko-KR')}자`}
+            accessibilityLiveRegion="polite"
+            style={[
+              styles.remaining,
+              { color: remaining < 0 ? theme.feedbackDangerOnSubtle : theme.foregroundSecondary },
+            ]}
+          >
+            {remaining.toLocaleString('ko-KR')}
+          </Text>
+          <Text nativeID={remainingDescriptionId} style={styles.remainingDescription}>
+            남은 글자 수 {remaining.toLocaleString('ko-KR')}자
+          </Text>
+          <ProgressRing remaining={remaining} />
+        </View>
+      </View>
+      {keyboard ? <IllustrativeKeyboard /> : null}
+    </View>
+  );
+}
+
+function ProgressRing({ remaining }: { remaining: number }) {
+  const theme = useTheme();
+  const usedRatio = Math.min(1, Math.max(0, (postBodyMaxLength - remaining) / postBodyMaxLength));
+  const radius = 9;
+  const circumference = 2 * Math.PI * radius;
+  const color =
+    remaining <= 0
+      ? theme.feedbackDangerBorder
+      : remaining <= 100
+        ? theme.feedbackWarningBorder
+        : theme.stateSelectedBorder;
+
+  return (
+    <View
+      accessible={false}
+      accessibilityElementsHidden
+      aria-hidden
+      importantForAccessibility="no-hide-descendants"
+      style={styles.progressRing}
+      testID="post-composer-progress-ring"
+    >
+      <Svg height={20} viewBox="0 0 20 20" width={20}>
+        <Circle
+          cx={10}
+          cy={10}
+          fill="none"
+          r={radius}
+          stroke={theme.borderSubtle}
+          strokeWidth={2}
+        />
+        <Circle
+          cx={10}
+          cy={10}
+          fill="none"
+          r={radius}
+          stroke={color}
+          strokeDasharray={[circumference, circumference]}
+          strokeDashoffset={circumference * (1 - usedRatio)}
+          strokeLinecap="round"
+          strokeWidth={2}
+          transform="rotate(-90 10 10)"
+        />
+      </Svg>
+    </View>
+  );
+}
+
+function IllustrativeKeyboard() {
+  const theme = useTheme();
+  return (
+    <View
+      accessibilityElementsHidden
+      aria-hidden
+      importantForAccessibility="no-hide-descendants"
+      style={[
+        styles.keyboard,
+        { backgroundColor: theme.backgroundSurface, borderColor: theme.borderSubtle },
+      ]}
+      testID="illustrative-system-keyboard"
+    >
+      {[342, 326, 286, 168].map((width) => (
+        <View
+          key={width}
+          style={[
+            styles.keyboardRow,
+            { backgroundColor: theme.backgroundElevated, borderColor: theme.borderSubtle, width },
+          ]}
+        />
+      ))}
+    </View>
+  );
+}
+
+function VisibilityMenu({
+  alignRight = false,
+  menuRef,
+  onChange,
+  onDismiss,
+  triggerRef,
+  value,
+}: {
+  alignRight?: boolean;
+  menuRef: RefObject<View | null>;
+  onChange: (value: PostComposerVisibility) => void;
+  onDismiss: () => void;
+  triggerRef: RefObject<View | null>;
+  value: PostComposerVisibility;
+}) {
+  const theme = useTheme();
+  const elevation = useElevation();
+  const { height, width } = useWindowDimensions();
+  const [anchor, setAnchor] = useState<{ left: number; top: number } | null>(null);
+  const dismiss = () => {
+    onDismiss();
+    triggerRef.current?.focus();
+  };
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      return;
+    }
+    triggerRef.current?.measureInWindow((x, y, triggerWidth, triggerHeight) => {
+      setAnchor({
+        left: Math.max(
+          0,
+          Math.min(
+            alignRight ? x + triggerWidth - 240 - space[16] : x,
+            width - 240 - (alignRight ? space[16] : 0),
+          ),
+        ),
+        top: Math.max(space[16], Math.min(y + triggerHeight + space[4], height - 64)),
+      });
+    });
+  }, [alignRight, height, triggerRef, width]);
+  const menu = (
+    <View
+      ref={menuRef}
+      accessibilityLabel="공개 범위 선택"
       accessibilityRole={Platform.OS === 'web' ? undefined : 'radiogroup'}
       role={Platform.OS === 'web' ? 'menu' : undefined}
       style={[
         styles.visibilityMenu,
-        Platform.OS === 'web' ? elevation.floating : elevation.overlay,
-        { backgroundColor: theme.card, borderColor: theme.border },
+        Platform.OS === 'web'
+          ? alignRight
+            ? styles.visibilityMenuRight
+            : styles.visibilityMenuLeft
+          : styles.nativeVisibilityMenu,
+        elevation.floating,
+        { backgroundColor: theme.backgroundElevated, borderColor: theme.borderDefault },
       ]}
     >
-      {availableVisibilityOptions.map((option) => {
-        const selected = option.value === visibility;
-        const VisibilityIcon = option.icon;
+      {visibilityOptions.map((option) => {
+        const Icon = option.icon;
+        const selected = option.value === value;
         return (
           <Pressable
             aria-checked={selected}
+            accessibilityLabel={option.label}
             accessibilityRole={Platform.OS === 'web' ? undefined : 'radio'}
-            accessibilityState={Platform.OS === 'web' ? undefined : { checked: selected }}
-            disabled={submitting}
+            accessibilityState={{ checked: selected }}
             key={option.value}
-            onPress={() => {
-              if (Platform.OS === 'web') {
-                editor.current?.blur();
-                setEditorFocused(false);
-              }
-              setVisibility(option.value);
-              setVisibilityOpen(false);
-              if (Platform.OS === 'web') {
-                requestAnimationFrame(() => {
-                  (visibilityTrigger.current as unknown as HTMLElement | null)?.focus();
-                });
-              }
-            }}
-            role={Platform.OS === 'web' ? ('menuitemradio' as 'radio') : undefined}
+            onPress={() => onChange(option.value)}
+            role={Platform.OS === 'web' ? ('menuitemradio' as never) : undefined}
             style={({ pressed }) => [
               styles.visibilityOption,
               {
                 backgroundColor: selected
-                  ? theme.selectedSurface
+                  ? theme.stateSelectedSurface
                   : pressed
-                    ? theme.surface
+                    ? theme.statePressed
                     : 'transparent',
               },
             ]}
           >
-            <VisibilityIcon color={theme.textSecondary} size={16} strokeWidth={2} />
-            <View style={styles.visibilityCopy}>
-              <Text style={[styles.visibilityLabel, { color: theme.text }]}>{option.label}</Text>
-              <Text style={[styles.visibilityDescription, { color: theme.textSecondary }]}>
+            <Icon color={theme.foregroundSecondary} size={iconSizes[16]} strokeWidth={2} />
+            <View style={styles.visibilityOptionCopy}>
+              <Text style={[styles.visibilityOptionLabel, { color: theme.foregroundPrimary }]}>
+                {option.label}
+              </Text>
+              <Text style={[styles.visibilityDescription, { color: theme.foregroundSecondary }]}>
                 {option.description}
               </Text>
             </View>
@@ -756,326 +1020,210 @@ function PostComposerContents({
       })}
     </View>
   );
-
-  const visibilitySelector = (
-    <View
-      ref={visibilityControl}
-      style={[styles.visibilityControl, { zIndex: visibilityOpen ? 50 : 0 }]}
+  return Platform.OS === 'web' ? (
+    menu
+  ) : (
+    <Modal
+      transparent
+      visible
+      statusBarTranslucent
+      navigationBarTranslucent
+      onRequestClose={dismiss}
     >
-      <Pressable
-        ref={visibilityTrigger}
-        aria-expanded={visibilityOpen}
-        aria-haspopup="menu"
-        accessibilityRole="button"
-        accessibilityState={{ disabled: submitting }}
-        disabled={submitting}
-        onPress={() => {
-          if (Platform.OS === 'web') {
-            editor.current?.blur();
-            setEditorFocused(false);
-          }
-          setVisibilityOpen(!visibilityOpen);
-        }}
-        style={({ pressed }) => [
-          styles.visibilityTrigger,
-          {
-            backgroundColor: pressed ? theme.surface : theme.card,
-            borderColor: theme.border,
-          },
-        ]}
-      >
-        <SelectedVisibilityIcon color={theme.text} size={16} />
-        <Text numberOfLines={1} style={[styles.visibilityTriggerLabel, { color: theme.text }]}>
-          {selectedVisibility.label}
-        </Text>
-      </Pressable>
-      {Platform.OS === 'web' && visibilityOpen ? (
-        <View
-          style={[
-            styles.webVisibilityMenu,
-            replyMode ? styles.webVisibilityMenuAbove : styles.webVisibilityMenuBelow,
-            { left: webVisibilityMenuLeft },
-          ]}
-        >
-          {visibilityMenu}
-        </View>
-      ) : null}
-    </View>
-  );
-
-  const submitActions = (
-    <View style={[styles.submit, quoteMode ? styles.quoteSubmit : null]}>
-      {Platform.OS === 'web' ? (
-        <Text nativeID={remainingDescriptionId} style={styles.screenReaderOnly}>
-          {remainingDescription}
-        </Text>
-      ) : null}
-      <Text
-        accessibilityLabel={remainingDescription}
-        accessibilityLiveRegion="polite"
-        style={[styles.remaining, { color: remaining < 0 ? theme.danger : theme.textSecondary }]}
-      >
-        {remaining.toLocaleString('ko-KR')}
-      </Text>
-      <Button
-        disabled={disabled}
-        loading={submitting}
-        loadingText={surfaceMode ? '게시 중' : undefined}
-        onPress={submit}
-      >
-        {submitting && surfaceMode
-          ? '게시 중'
-          : replyMode
-            ? '답글 게시'
-            : quoteMode
-              ? '인용 게시'
-              : '게시'}
-      </Button>
-    </View>
-  );
-
-  const editorContent = (
-    <>
-      {beforeEditor}
-      <View style={styles.author}>
-        <Avatar imageUri={profile.avatar?.url} label={profile.displayName} size={40} />
-        <ProfileNameBlock profile={profile} />
-      </View>
-      <View
-        style={[
-          styles.editorSurface,
-          {
-            backgroundColor: theme.background,
-            borderColor: error
-              ? theme.danger
-              : editorFocused
-                ? Platform.OS === 'web' && replyMode
-                  ? theme.focus
-                  : theme.primary
-                : theme.border,
-          },
-        ]}
-        testID="post-composer-editor-surface"
-      >
-        {replyMode ? null : visibilitySelector}
-        <TextArea
-          ref={editor}
-          aria-describedby={Platform.OS === 'web' ? remainingDescriptionId : undefined}
-          aria-invalid={Boolean(error) || remaining < 0}
-          accessibilityHint={Platform.OS === 'web' ? undefined : remainingDescription}
-          accessibilityLabel={
-            replyMode ? '답글 본문' : quoteMode ? '인용 게시글 본문' : '게시글 본문'
-          }
-          editable={!submitting}
-          onBlur={() => setEditorFocused(false)}
-          onChangeText={setBody}
-          onFocus={() => setEditorFocused(true)}
-          placeholder={
-            replyMode
-              ? '답글을 입력하세요…'
-              : quoteMode
-                ? '인용할 내용을 입력하세요…'
-                : '무슨 일이 일어나고 있나요?'
-          }
-          style={[styles.editor, Platform.OS === 'web' && replyMode ? styles.webEditor : null]}
-          value={body}
-        />
-        <TextField
-          aria-describedby={Platform.OS === 'web' ? remainingDescriptionId : undefined}
-          aria-invalid={remaining < 0}
-          accessibilityHint={Platform.OS === 'web' ? undefined : remainingDescription}
-          accessibilityLabel={
-            replyMode ? '답글 내용 경고' : quoteMode ? '인용 게시글 내용 경고' : '게시글 내용 경고'
-          }
-          editable={!submitting}
-          onChangeText={setContentWarning}
-          placeholder="내용 경고 (선택)"
-          value={contentWarning}
-        />
-        {error ? (
-          <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>
-            {error}
-          </Text>
-        ) : null}
-        <PostComposerMediaControls
-          actions={surfaceMode ? null : submitActions}
-          disabled={submitting}
-          editorRef={editor}
-          key={mediaGeneration}
-          profileId={profile.id}
-          onValueChange={setMedia}
-        />
-      </View>
-    </>
-  );
-
-  const composerContent = (
-    <>
-      {scrollable ? (
-        <ScrollView
-          contentContainerStyle={styles.surfaceEditor}
-          keyboardShouldPersistTaps="handled"
-          style={styles.editorScroll}
-          testID="reply-composer-scroll"
-        >
-          {editorContent}
-        </ScrollView>
-      ) : (
-        editorContent
-      )}
-      {surfaceMode ? (
-        <View
-          style={[
-            styles.footer,
-            surface ? styles.surfaceFooter : null,
-            surface ? { borderColor: theme.border } : null,
-          ]}
-        >
-          {replyMode ? visibilitySelector : null}
-          {submitActions}
-        </View>
-      ) : null}
-      {Platform.OS !== 'web' ? (
-        <Modal
-          accessibilityLabel={replyMode ? '답글 공개 범위' : '공개 범위'}
-          animationType="fade"
-          onRequestClose={() => setVisibilityOpen(false)}
-          role="dialog"
-          transparent
-          visible={visibilityOpen}
-        >
-          <Pressable
-            onPress={() => setVisibilityOpen(false)}
-            style={[styles.backdrop, { backgroundColor: theme.overlayScrim }]}
+      <View style={styles.visibilityBackdrop}>
+        <Pressable accessible={false} onPress={dismiss} style={StyleSheet.absoluteFill} />
+        {anchor ? (
+          <ScrollView
+            accessibilityViewIsModal
+            onAccessibilityEscape={dismiss}
+            keyboardShouldPersistTaps="handled"
+            style={[
+              styles.nativeVisibilityPosition,
+              anchor,
+              { maxHeight: Math.max(0, height - anchor.top - space[16]) },
+            ]}
           >
-            <Pressable
-              onPress={(event) => event.stopPropagation()}
-              style={styles.nativeVisibilityMenu}
-            >
-              {visibilityMenu}
-            </Pressable>
-          </Pressable>
-        </Modal>
-      ) : null}
-    </>
+            {menu}
+          </ScrollView>
+        ) : null}
+      </View>
+    </Modal>
   );
+}
 
+function ComposerTool({
+  accessibilityLabel,
+  children,
+  disabled,
+  onPress,
+  selected,
+}: {
+  accessibilityLabel: string;
+  children: ReactNode;
+  disabled: boolean;
+  onPress: () => void;
+  selected?: boolean;
+}) {
+  const theme = useTheme();
   return (
-    <Form
-      accessibilityLabel={
-        replyMode ? '답글 작성' : quoteMode ? '인용 게시글 작성' : '새 게시글 작성'
-      }
-      onSubmit={submit}
-      style={[
-        surface ? styles.surfaceRoot : styles.root,
-        !surface && surfaceMode ? styles.replyRoot : null,
-        { backgroundColor: theme.card, borderColor: theme.border },
+    <IconButton
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={selected === undefined ? undefined : { selected }}
+      aria-pressed={selected}
+      disabled={disabled}
+      feedback="opacity"
+      onPress={onPress}
+      visualSize={32}
+      visualStyle={[
+        styles.toolVisual,
+        { backgroundColor: selected ? theme.stateSelectedSurface : 'transparent' },
       ]}
-      submitOnModEnter
     >
-      {composerContent}
-    </Form>
+      {children}
+    </IconButton>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { gap: spacing.lg, padding: spacing.lg },
-  productionForm: { flexShrink: 1, minHeight: 0, width: '100%' },
-  productionContent: { flexGrow: 1 },
-  hiddenPresentation: { display: 'none' },
-  productionAuthor: { alignItems: 'center', flexDirection: 'row', gap: spacing.md },
-  replyRoot: { borderRadius: radii.md, borderWidth: 1 },
-  surfaceRoot: { flex: 1, minHeight: 0 },
-  editorScroll: { flexShrink: 1, minHeight: 0 },
-  surfaceEditor: { flexGrow: 1, gap: spacing.lg, padding: spacing.lg },
-  author: { alignItems: 'flex-start', flexDirection: 'row', gap: spacing.md },
-  editorSurface: {
-    borderRadius: radii.md,
-    borderWidth: 1,
-    gap: spacing.md,
-    padding: spacing.md,
-  },
-  editor: {
-    backgroundColor: 'transparent',
-    borderRadius: 0,
-    borderWidth: 0,
-    minHeight: 128,
-    paddingHorizontal: 0,
-    paddingVertical: 0,
-  },
-  webEditor: { outlineStyle: 'none' as never },
+  authorLayer: { position: 'relative', zIndex: 20 },
+  body: { borderWidth: borderWidths[0], padding: space[0] },
+  content: { gap: space[12], paddingHorizontal: space[12] },
+  contentWarning: { paddingBottom: space[12] },
+  contentWarningField: { borderRadius: radius[0] },
+  editor: { borderRadius: radius[12], borderWidth: borderWidths[1], overflow: 'visible' },
+  error: textStyles.uiCopyM,
   footer: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: spacing.md,
+    height: 64,
     justifyContent: 'space-between',
+    padding: space[12],
   },
-  surfaceFooter: {
-    borderTopWidth: 1,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-  },
-  visibilityControl: {
-    alignSelf: 'flex-start',
-    position: 'relative',
-  },
-  visibilityTrigger: {
+  header: {
     alignItems: 'center',
-    borderRadius: radii.sm,
-    borderWidth: 1,
     flexDirection: 'row',
-    gap: spacing.xs,
-    height: Platform.select({ web: 40 }),
-    justifyContent: 'center',
-    minHeight: Platform.select({ android: 48, ios: 44, default: 40 }),
-    minWidth: 120,
-    paddingHorizontal: spacing.lg,
+    height: 64,
+    justifyContent: 'space-between',
+    padding: space[12],
+    zIndex: 10,
   },
-  visibilityTriggerLabel: { fontFamily: fontFamilies.ui, fontWeight: '700', ...typography.sm },
-  webVisibilityMenu: {
-    left: 0,
-    position: 'absolute',
-    width: 256,
-    zIndex: 50,
-  },
-  webVisibilityMenuAbove: { bottom: 44 },
-  webVisibilityMenuBelow: { top: 44 },
-  submit: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm },
-  quoteSubmit: { marginLeft: 'auto' },
-  remaining: { fontFamily: fontFamilies.ui, ...typography.xsm },
-  screenReaderOnly: {
-    height: 1,
-    left: -10000,
-    overflow: 'hidden',
-    position: 'absolute',
-    width: 1,
-  },
-  error: { fontFamily: fontFamilies.ui, ...typography.sm },
-  backdrop: {
-    alignItems: 'center',
+  mediaBody: { minHeight: 100 },
+  mobileBody: {
+    borderRadius: radius[12],
+    borderWidth: borderWidths[0],
     flex: 1,
+    minHeight: 80,
+    padding: space[0],
+    textAlignVertical: 'top',
+    ...textStyles.contentM,
+  },
+  mobileComposerBody: {
+    flexGrow: 1,
+    flexShrink: 0,
+    minHeight: 160,
+    gap: space[8],
+    overflow: 'visible',
+    paddingBottom: space[8],
+    paddingHorizontal: space[16],
+    paddingTop: space[16],
+  },
+  mobileContentWarning: { borderRadius: radius[0], minHeight: 44 },
+  mobileScroll: { flex: 1, minHeight: 0 },
+  mobileScrollContent: { flexGrow: 1 },
+  mobileFooter: {
+    alignItems: 'center',
+    borderTopWidth: borderWidths[1],
+    flexDirection: 'row',
+    height: 64,
+    justifyContent: 'space-between',
+    paddingHorizontal: space[16],
+    paddingVertical: space[12],
+  },
+  mobileHeader: {
+    alignItems: 'center',
+    borderBottomWidth: borderWidths[1],
+    flexDirection: 'row',
+    height: 64,
+    paddingHorizontal: space[16],
+  },
+  mobileLeadingSlot: { alignItems: 'flex-start', width: 72 },
+  mobileMediaShelf: { height: 164, paddingBottom: space[8], paddingHorizontal: space[16] },
+  mobileShell: { height: 844, overflow: 'hidden', width: 390 },
+  mobileShellFill: { flex: 1, height: '100%', width: '100%' },
+  mobileSubmitButton: { minWidth: 72, width: 72 },
+  mobileTitle: { flex: 1, textAlign: 'center', ...textStyles.uiHeadingS },
+  mobileTrailingSlot: { alignItems: 'flex-end', width: 84 },
+  mobileVisibilityControl: { position: 'relative', zIndex: 12 },
+  mobileVisibility: {
+    alignItems: 'center',
+    borderBottomWidth: borderWidths[1],
+    borderTopWidth: borderWidths[1],
+    flexDirection: 'row',
+    height: 48,
+    justifyContent: 'space-between',
+    paddingHorizontal: space[16],
+  },
+  mobileVisibilityCaption: textStyles.uiCopyM,
+  mobileVisibilityValue: { alignItems: 'center', flexDirection: 'row', gap: space[8] },
+  keyboard: {
+    alignItems: 'center',
+    borderTopWidth: borderWidths[1],
+    gap: space[12],
+    height: 336,
     justifyContent: 'center',
-    padding: spacing.lg,
   },
-  nativeVisibilityMenu: { width: 256 },
+  keyboardRow: { borderRadius: radius[8], borderWidth: borderWidths[1], height: 44 },
+  desktopEditor: { flexShrink: 1, minHeight: 0 },
+  desktopScroll: { flexGrow: 0, flexShrink: 1, minHeight: 0 },
+  overlay: { maxWidth: 640, width: '100%' },
+  overlayScroll: { flexGrow: 0, flexShrink: 1, minHeight: 0 },
+  overlayScrollContent: { gap: space[16] },
+  progressRing: { height: 20, width: 20 },
+  rail: { width: '100%' },
+  railBody: { maxHeight: railBodyMaxHeight },
+  railMedia: { paddingBottom: space[12], paddingHorizontal: space[12], paddingTop: space[12] },
+  remaining: { width: 40, ...textStyles.uiCopyS, textAlign: 'right' },
+  remainingDescription: { height: 1, opacity: 0, position: 'absolute', width: 1 },
+  root: { gap: space[16], padding: space[16] },
+  submit: { alignItems: 'center', flexDirection: 'row', gap: space[8] },
+  textBody: { minHeight: 184 },
+  textContent: { minHeight: 184 },
+  tools: { alignItems: 'center', flexDirection: 'row', gap: space[4] },
+  toolVisual: { borderRadius: radius[8] },
+  visibilityControl: { position: 'relative', zIndex: 12 },
+  visibilityDescription: textStyles.uiCopyS,
+  visibilityLabel: { width: 66, ...textStyles.uiLabelM },
   visibilityMenu: {
-    borderRadius: radii.sm,
-    borderWidth: 1,
-    gap: spacing.xs,
-    maxWidth: '100%',
+    borderRadius: radius[12],
+    borderWidth: borderWidths[1],
     overflow: 'hidden',
-    padding: spacing.xs,
-    width: 256,
+    position: 'absolute',
+    top: 44,
+    width: 240,
   },
+  visibilityMenuLeft: { left: 0 },
+  visibilityMenuRight: { right: space[16] },
+  webOverlay: { maxHeight: 'calc(100dvh - 160px)' as never },
+  nativeVisibilityMenu: { position: 'relative', top: 0 },
+  nativeVisibilityPosition: { position: 'absolute', width: 240 },
+  visibilityBackdrop: { flex: 1 },
   visibilityOption: {
     alignItems: 'flex-start',
-    borderRadius: radii.sm,
     flexDirection: 'row',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 10,
+    gap: space[8],
+    padding: space[12],
   },
-  visibilityCopy: { ...layoutRecipes.labelSupportStack, flex: 1 },
-  visibilityLabel: { fontFamily: fontFamilies.ui, fontWeight: '700', ...typography.sm },
-  visibilityDescription: { fontFamily: fontFamilies.ui, ...typography.xsm },
+  visibilityOptionCopy: { flex: 1 },
+  visibilityOptionLabel: textStyles.uiLabelM,
+  visibilityTrigger: {
+    alignItems: 'center',
+    borderRadius: radius[8],
+    borderWidth: borderWidths[1],
+    flexDirection: 'row',
+    gap: space[4],
+    height: 40,
+    justifyContent: 'center',
+    paddingHorizontal: space[16],
+    width: 120,
+  },
 });

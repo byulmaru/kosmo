@@ -50,12 +50,11 @@ export function usePostReplySurface(postKey: PostReplySurface_post$key) {
         onPostCreated={binding.onPostCreated}
         onRequestClose={binding.onRequestClose}
         open={binding.expanded}
-        owner={binding.owner}
         parent={post.replySurface}
         profile={binding.profile}
         triggerRef={triggerRef}
       />
     ) : null;
 
-  return { binding, reply, replySurface, owner: binding?.owner };
+  return { binding, reply, replySurface };
 }

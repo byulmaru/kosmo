@@ -17,7 +17,7 @@ import type { PostDetailThreadNextPageQuery } from './__generated__/PostDetailTh
 import type { PostLayout_post$key } from './__generated__/PostLayout_post.graphql';
 import type { PostListItem_post$key } from './__generated__/PostListItem_post.graphql';
 import type { ReplyComposerSurface_profile$key } from './__generated__/ReplyComposerSurface_profile.graphql';
-import type { PostComposerCreatedPost } from './PostComposer';
+import type { PostComposerCreatedPost } from './PostComposerController';
 import type { PostListPresentation } from './postListMetrics';
 
 const PostDetailThreadFragment = graphql`
@@ -90,10 +90,10 @@ export function PostDetailFrame({ children, header, nativeScrollProps }: PostDet
 
 export function PostDetailThread({
   currentPostReplyAvailable,
+  currentPostReplyOnPress,
   currentPostReplySurfaceId,
   header,
   identity,
-  onReply,
   onReplyCreated,
   onPostDeleted,
   post: postKey,
@@ -101,11 +101,11 @@ export function PostDetailThread({
   replyProfile,
 }: {
   currentPostReplyAvailable?: boolean;
+  currentPostReplyOnPress?: () => void;
   currentPostReplySurfaceId?: string;
   header: ReactNode;
   identity: string;
   onReplyCreated?: (post: PostComposerCreatedPost) => void;
-  onReply?: () => void;
   onPostDeleted?: () => void;
   post: PostDetailThread_post$key;
   presentation?: 'route' | 'viewer';
@@ -114,10 +114,10 @@ export function PostDetailThread({
   return (
     <PostDetailThreadContent
       currentPostReplyAvailable={currentPostReplyAvailable}
+      currentPostReplyOnPress={currentPostReplyOnPress}
       currentPostReplySurfaceId={currentPostReplySurfaceId}
       header={header}
       key={identity}
-      onReply={onReply}
       onReplyCreated={onReplyCreated}
       onPostDeleted={onPostDeleted}
       post={postKey}
@@ -129,20 +129,20 @@ export function PostDetailThread({
 
 function PostDetailThreadContent({
   currentPostReplyAvailable,
+  currentPostReplyOnPress,
   currentPostReplySurfaceId,
   header,
   onReplyCreated,
-  onReply,
   onPostDeleted,
   post: postKey,
   presentation,
   replyProfile,
 }: {
   currentPostReplyAvailable?: boolean;
+  currentPostReplyOnPress?: () => void;
   currentPostReplySurfaceId?: string;
   header: ReactNode;
   onReplyCreated?: (post: PostComposerCreatedPost) => void;
-  onReply?: () => void;
   onPostDeleted?: () => void;
   post: PostDetailThread_post$key;
   presentation: 'route' | 'viewer';
@@ -210,7 +210,7 @@ function PostDetailThreadContent({
                 contentWarningPresentation={presentation === 'viewer' ? 'revealed' : 'default'}
                 mediaPresentation={presentation === 'viewer' ? 'hidden' : 'default'}
                 onDeleted={onPostDeleted}
-                onReply={onReply}
+                onReplyPress={currentPostReplyOnPress}
                 post={requireThreadFragment(item.post.detail, 'current detail')}
                 replyAvailable={currentPostReplyAvailable}
                 replySurfacePostId={currentPostReplySurfaceId}

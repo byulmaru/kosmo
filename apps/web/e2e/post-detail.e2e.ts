@@ -432,7 +432,7 @@ test('연합 프로필 게시글은 relativeHandle URL을 유지하고 정규화
   await expect(page.getByText(body)).toBeVisible();
 });
 
-test('Child Reply 상세의 Parent inline Reply geometry를 320px까지 유지한다', async ({
+test('Child Reply 상세의 Parent 답글은 좁은 Web에서 fullscreen Composer로 연다', async ({
   context,
   page,
 }) => {
@@ -467,35 +467,18 @@ test('Child Reply 상세의 Parent inline Reply geometry를 320px까지 유지�
   await expect(parentRow).toBeVisible();
   await parentRow.getByRole('button', { name: '답글' }).click();
 
-  const parentComposer = parentRow.getByLabel('답글 작성');
-  const parentConnector = page.getByTestId(`post-thread-connector-${parentId}-${childId}-after`);
-  await expect(parentComposer).toBeVisible();
-  await expect(parentConnector).toBeVisible();
-
-  const [parentRowBox, parentComposerBox, parentConnectorBox] = await Promise.all([
-    parentRow.boundingBox(),
-    parentComposer.boundingBox(),
-    parentConnector.boundingBox(),
-  ]);
-  expect(parentRowBox).not.toBeNull();
-  expect(parentComposerBox).not.toBeNull();
-  expect(parentConnectorBox).not.toBeNull();
-  expect(parentComposerBox!.x - parentRowBox!.x).toBe(64);
-  expect(
-    parentRowBox!.x + parentRowBox!.width - (parentComposerBox!.x + parentComposerBox!.width),
-  ).toBe(8);
-  expect(parentConnectorBox!.x + parentConnectorBox!.width).toBeLessThan(parentComposerBox!.x);
+  const composer = page.getByRole('dialog', { name: '답글 쓰기' });
+  await expect(composer).toBeVisible();
+  await expect(composer.getByText(parentBody)).toBeVisible();
+  await expect(composer.getByRole('textbox', { name: '답글 본문' })).toBeFocused();
+  await expect(parentRow.getByRole('textbox', { name: '답글 본문' })).toHaveCount(0);
 
   await page.setViewportSize({ height: 844, width: 320 });
-  await parentComposer.getByRole('button', { name: '조용한 공개' }).click();
-
-  const visibilityMenu = parentComposer.getByRole('menu', { name: '답글 공개 설정' });
-  await expect(visibilityMenu).toBeVisible();
-  const visibilityMenuBox = await visibilityMenu.boundingBox();
-  const viewport = page.viewportSize();
-  expect(visibilityMenuBox).not.toBeNull();
-  expect(visibilityMenuBox?.width).toBe(256);
-  expect(viewport).not.toBeNull();
-  expect(visibilityMenuBox?.x).toBeGreaterThanOrEqual(0);
-  expect(visibilityMenuBox!.x + visibilityMenuBox!.width).toBeLessThanOrEqual(viewport!.width);
+  await expect(composer).toBeVisible();
+  await composer.getByRole('button', { name: '답글 쓰기 닫기' }).click();
+  await page
+    .getByRole('alertdialog', { name: '답글 작성을 취소할까요?' })
+    .getByRole('button', { name: '작성 취소' })
+    .click();
+  await expect(composer).toHaveCount(0);
 });

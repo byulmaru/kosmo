@@ -68,7 +68,7 @@ export function PostNotificationPost({
   const theme = useTheme();
   const router = useRouter();
   const openViewer = usePostMediaViewerHost();
-  const { reply, replySurface, owner: replyOwner } = usePostReplySurface(post);
+  const { reply, replySurface } = usePostReplySurface(post);
   const profileHref = `/${post.profile.relativeHandle}` as const;
   const detailHref = `/${post.profile.relativeHandle}/${post.id}` as const;
   const { Icon, label, reason } = presentations[kind];
@@ -162,11 +162,7 @@ export function PostNotificationPost({
           />
         </View>
       </View>
-      {replySurface && replyOwner === 'detail' ? (
-        <View style={styles.detailReplySurface}>{replySurface}</View>
-      ) : (
-        replySurface
-      )}
+      {replySurface}
     </>
   );
 }
@@ -212,5 +208,4 @@ const styles = StyleSheet.create({
   bodyLink: { borderRadius: radii.sm, minWidth: 0 },
   actionBar: { paddingTop: spacing.xs },
   reactionSummary: { marginTop: spacing.xs },
-  detailReplySurface: { marginLeft: spacing.xxl * 2, marginRight: spacing.sm },
 });

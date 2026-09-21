@@ -636,7 +636,7 @@ documentation·state specimen을 두 번째 행에 둔다.
 - Media 조합의 attachment shelf는 `164px` 높이와 `space/8` bottom padding을 사용해 마지막 media row와 footer 사이에
   정확히 `8px`을 둔다. Empty·Poll·CW 조합과 Desktop Composer의 spacing은 이 규칙의 영향을 받지 않는다.
 - [`Composer Dark coverage`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5884-14199)는
-  Full Web Composer overlay, Full Web thread rail Reply, Compact Web ReplyComposer modal과 전역 Mobile Composer의
+  Full Web Composer overlay, Full Web ReplyComposer modal, Compact Web ReplyComposer modal과 전역 Mobile Composer의
   [`Reply Parent upward-scroll reveal Dark representative 5884:14891`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5884-14891)를
   제공한다. 기존 Parent-below preview는 숨기고 새 source를 만들지 않은 채 Light reveal 조립과 기존 instance
   main-component를 그대로 유지하며 nested Light mode override를 제거한 표본이다.
