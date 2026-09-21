@@ -15,7 +15,7 @@ const uploadResponseSchema = z.object({
 const MEDIA_STORAGE_REQUEST_TIMEOUT_MS = 10_000;
 
 builder.mutationField('issueMediaUploadUrl', (t) =>
-  t.withAuth({ profileRole: AccountProfileRole.MEMBER }).field({
+  t.withAuth({ profileRole: AccountProfileRole.MEMBER }).fieldWithInput({
     type: builder.simpleObject('IssueMediaUploadUrlPayload', {
       fields: (field) => ({
         media: field.field({ type: Media }),
@@ -23,11 +23,14 @@ builder.mutationField('issueMediaUploadUrl', (t) =>
         expiresAt: field.field({ type: 'DateTime' }),
       }),
     }),
-    args: {
-      profileId: t.arg.globalID({ for: Profile, required: false }),
+    argOptions: {
+      required: false,
     },
-    resolve: async (_, { profileId }, ctx) => {
-      const composerProfileId = await resolveComposerProfileId(ctx, profileId?.id);
+    input: {
+      actorProfileId: t.input.globalID({ for: Profile, required: false }),
+    },
+    resolve: async (_, { input }, ctx) => {
+      const composerProfileId = await resolveComposerProfileId(ctx, input?.actorProfileId?.id);
       const mediaStorageOrigin = process.env.MEDIA_STORAGE_SERVICE_ORIGIN;
       const mediaStorageApiKey = process.env.MEDIA_STORAGE_SERVICE_API_KEY;
       if (!mediaStorageOrigin || !mediaStorageApiKey) {

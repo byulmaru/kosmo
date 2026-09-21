@@ -104,10 +104,10 @@ type CreateBookmarkPayload {
 }
 
 input CreatePostInput {
+  actorProfileId: ID
   bodyText: String!
   contentWarning: String
   media: [CreatePostMediaInput!]
-  profileId: ID
   replyParentId: ID
   repostSourceId: ID
   sensitiveMedia: Boolean
@@ -229,6 +229,10 @@ enum InstanceKind {
   LOCAL
 }
 
+input IssueMediaUploadUrlInput {
+  actorProfileId: ID
+}
+
 type IssueMediaUploadUrlPayload {
   expiresAt: DateTime!
   media: Media!
@@ -273,7 +277,7 @@ type Mutation {
   deleteReaction(input: DeleteReactionInput!): DeleteReactionPayload!
   exchangeNativeOidcSession(input: ExchangeNativeOidcSessionInput!): ExchangeNativeOidcSessionPayload!
   followProfile(input: FollowProfileInput!): FollowProfilePayload!
-  issueMediaUploadUrl(profileId: ID): IssueMediaUploadUrlPayload!
+  issueMediaUploadUrl(input: IssueMediaUploadUrlInput): IssueMediaUploadUrlPayload!
   markNotificationRead(input: MarkNotificationReadInput!): MarkNotificationReadPayload!
   muteProfile(input: MuteProfileInput!): MuteProfilePayload!
   registerProfileMigrationSource(input: RegisterProfileMigrationSourceInput!): RegisterProfileMigrationSourcePayload!

@@ -164,6 +164,30 @@ describe('Local Media upload GraphQL 경계', () => {
     assert.equal(issuedStorage.length, 1);
   });
 
+  test('upload input 생략·null·빈 객체는 active session Profile로 fallback한다', async (t) => {
+    const issuedStorage = mockUploadIssuance(t);
+    const auth = await createAuthenticatedSession();
+
+    const results = await Promise.all([
+      requestIssueMediaUploadUrl(auth.token),
+      requestIssueMediaUploadUrl(auth.token, undefined, 'null'),
+      requestIssueMediaUploadUrl(auth.token, undefined, 'empty'),
+    ]);
+
+    for (const result of results) {
+      assertNoGraphQLErrors(result);
+      assert.equal(result.data?.issueMediaUploadUrl.media.state, MediaState.UPLOADING);
+    }
+
+    const stored = await db.select().from(Media);
+    assert.equal(stored.length, 3);
+    assert.deepEqual(
+      stored.map((media) => media.profileId),
+      [auth.profile.id, auth.profile.id, auth.profile.id],
+    );
+    assert.equal(issuedStorage.length, 3);
+  });
+
   test(
     '실제 Media Storage Service를 거쳐 같은 Local Media를 Ready로 전환한다',
     { skip: !crossServiceRequested },
@@ -535,14 +559,31 @@ type CompleteMediaUploadData = {
   };
 };
 
-const requestIssueMediaUploadUrl = (token?: string, profileId?: string) =>
-  requestGraphQL<IssueMediaUploadUrlData>(
-    `mutation IssueMediaUploadUrl($profileId: ID) {
-      issueMediaUploadUrl(profileId: $profileId) { media { id state } uploadUrl expiresAt }
+const requestIssueMediaUploadUrl = (
+  token?: string,
+  actorProfileId?: string,
+  inputMode: 'none' | 'null' | 'empty' = actorProfileId === undefined ? 'none' : 'empty',
+) => {
+  if (actorProfileId === undefined && inputMode === 'none') {
+    return requestGraphQL<IssueMediaUploadUrlData>(
+      `mutation IssueMediaUploadUrl {
+        issueMediaUploadUrl { media { id state } uploadUrl expiresAt }
+      }`,
+      {},
+      token,
+    );
+  }
+
+  return requestGraphQL<IssueMediaUploadUrlData>(
+    `mutation IssueMediaUploadUrl($input: IssueMediaUploadUrlInput) {
+      issueMediaUploadUrl(input: $input) { media { id state } uploadUrl expiresAt }
     }`,
-    { profileId },
+    {
+      input: inputMode === 'null' ? null : actorProfileId ? { actorProfileId } : {},
+    },
     token,
   );
+};
 
 const requestCompleteMediaUpload = (id: string, token?: string) =>
   requestGraphQL<CompleteMediaUploadData>(

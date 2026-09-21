@@ -58,7 +58,7 @@ builder.mutationField('createPost', (t) =>
         required: false,
         validate: z.array(z.unknown()).max(4, { message: '이미지는 4개까지 첨부할 수 있어요.' }),
       }),
-      profileId: t.input.globalID({ for: Profile, required: false }),
+      actorProfileId: t.input.globalID({ for: Profile, required: false }),
       replyParentId: t.input.globalID({ for: Post, required: false }),
       repostSourceId: t.input.globalID({ for: Post, required: false }),
       sensitiveMedia: t.input.boolean({ required: false }),
@@ -67,7 +67,7 @@ builder.mutationField('createPost', (t) =>
     resolve: async (_, { input }, ctx) => {
       const media = input.media ?? [];
       const contentWarning = normalizePostContentPlainText(input.contentWarning ?? '');
-      const profileId = await resolveComposerProfileId(ctx, input.profileId?.id);
+      const profileId = await resolveComposerProfileId(ctx, input.actorProfileId?.id);
 
       const result = await createPost({
         accountId: ctx.session.accountId,

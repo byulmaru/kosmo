@@ -163,7 +163,7 @@ describe('Post Reply GraphQL 경계', () => {
       {
         input: {
           bodyText: '명시 Profile 작성',
-          profileId: encodeGlobalId('Profile', composerProfile.id),
+          actorProfileId: encodeGlobalId('Profile', composerProfile.id),
           visibility: PostVisibility.FOLLOWERS,
         },
       },
@@ -185,7 +185,7 @@ describe('Post Reply GraphQL 경계', () => {
     const denied = await requestCreatePost(
       {
         bodyText: '교차 계정 작성',
-        profileId: encodeGlobalId('Profile', other.profile.id),
+        actorProfileId: encodeGlobalId('Profile', other.profile.id),
         visibility: PostVisibility.PUBLIC,
       },
       auth.token,
@@ -1583,7 +1583,7 @@ const requestCreatePost = (
     bodyText: string;
     contentWarning?: string | null;
     media?: Array<{ altText: string | null; mediaId: string }>;
-    profileId?: string;
+    actorProfileId?: string;
     replyParentId?: string;
     sensitiveMedia?: boolean;
     visibility: PostVisibility;
