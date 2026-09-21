@@ -167,6 +167,19 @@ describe('PostMediaViewerSurface', () => {
     assert.ok(image().props.source?.uri);
     await render({ currentIndex: 1 });
     assert.ok(getToast(), 'A retry는 B의 실패를 초기화하지 않는다');
+
+    const replacementMedia = [
+      { ...media(1, '첫 번째 이미지'), url: 'https://media.example/1-replacement.webp' },
+      media(2, '두 번째 이미지'),
+      media(3, null),
+      media(4, null),
+    ];
+    await render({ currentIndex: 1, media: replacementMedia });
+    assert.ok(getToast(), 'A URL 변경은 현재 B의 실패 상태를 초기화하지 않는다');
+    await render({ currentIndex: 0, media: replacementMedia });
+    assert.equal(image().props.source.uri, 'https://media.example/1-replacement.webp');
+    assert.equal(image().props.accessibilityState.busy, true);
+
     await render({ viewState: 'unavailable' });
     assert.equal(getToast(), null);
     assert.equal(queryByTestId('post-media-viewer-image'), null);

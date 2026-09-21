@@ -1,6 +1,7 @@
-import { ChevronLeftIcon, ChevronRightIcon, XIcon } from 'lucide-react-native';
+import { XIcon } from 'lucide-react-native';
 import {
   createContext,
+  isValidElement,
   useCallback,
   useContext,
   useEffect,
@@ -9,7 +10,6 @@ import {
   useState,
 } from 'react';
 import {
-  Image,
   Modal,
   PanResponder,
   Platform,
@@ -25,13 +25,28 @@ import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
 import { IconButton } from '@/components/ui/IconButton';
 import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
+import { PostMediaViewerSurface } from '@/patterns/post-media-viewer/PostMediaViewerSurface';
 import { useTheme } from '@/theme/ThemeProvider';
-import { breakpoints, fontFamilies, iconSizes, radii, spacing, typography } from '@/theme/tokens';
+import {
+  borderWidths,
+  breakpoints,
+  fontFamilies,
+  radii,
+  spacing,
+  typography,
+} from '@/theme/tokens';
 import { PostContentPrivacyBoundary } from './PostContentPrivacyBoundary';
 import { focusPostMediaViewerTarget } from './postMediaViewerSession';
 import type { ReactNode, RefObject } from 'react';
-import type { LayoutChangeEvent, View as NativeView } from 'react-native';
+import type {
+  LayoutChangeEvent,
+  PressableStateCallbackType,
+  View as NativeView,
+  ViewStyle,
+} from 'react-native';
+import type { PostMediaViewerViewState } from '@/patterns/post-media-viewer/PostMediaViewerSurface';
 import type { PostMediaViewer_post$key } from './__generated__/PostMediaViewer_post.graphql';
+import type { PostMediaItem } from './PostMediaImage';
 
 const PostMediaViewerFragment = graphql`
   fragment PostMediaViewer_post on Post {
@@ -56,11 +71,6 @@ const PostMediaViewerFragment = graphql`
   }
 `;
 
-type ImageState = Readonly<{
-  generation: number;
-  status: 'loading' | 'ready' | 'error';
-}>;
-
 type ContentProps = Readonly<{
   actionBar: ReactNode;
   post: PostMediaViewer_post$key;
@@ -70,18 +80,12 @@ type ContentProps = Readonly<{
 type ViewerState = Readonly<{
   currentIndex: number;
   expanded: boolean;
-  hasOverflow: boolean;
-  imageStates: Record<string, ImageState>;
   lastContentId: string | null;
   moveByRef: RefObject<((delta: number) => void) | null>;
+  requestClose: () => void;
   selectedIndex: number;
   setCurrentIndex: React.Dispatch<React.SetStateAction<number>>;
   setExpanded: React.Dispatch<React.SetStateAction<boolean>>;
-  setHasOverflow: React.Dispatch<React.SetStateAction<boolean>>;
-  setImageStates: React.Dispatch<React.SetStateAction<Record<string, ImageState>>>;
-  setPosition: React.Dispatch<
-    React.SetStateAction<Readonly<{ current: number; total: number }> | null>
-  >;
   syncContentId: (contentId: string | null) => void;
 }>;
 
@@ -107,12 +111,7 @@ export function PostMediaViewer({
   const moveByRef = useRef<((delta: number) => void) | null>(null);
   const [currentIndex, setCurrentIndex] = useState(selectedIndex);
   const [expanded, setExpanded] = useState(false);
-  const [hasOverflow, setHasOverflow] = useState(false);
-  const [imageStates, setImageStates] = useState<Record<string, ImageState>>({});
   const [lastContentId, setLastContentId] = useState<string | null>(null);
-  const [position, setPosition] = useState<Readonly<{ current: number; total: number }> | null>(
-    null,
-  );
   const wide = Platform.OS === 'web' && width >= breakpoints.compact;
   const safeAreaStyle = useSafeAreaPadding(wide ? spacing.xl : spacing.xs);
 
@@ -128,30 +127,28 @@ export function PostMediaViewer({
       if (lastContentId !== null) {
         setCurrentIndex(selectedIndex);
         setExpanded(false);
-        setHasOverflow(false);
-        setImageStates({});
       }
       setLastContentId(contentId);
     },
     [lastContentId, selectedIndex],
   );
+  const requestClose = useCallback(() => {
+    onClose();
+    requestAnimationFrame(() => focusPostMediaViewerTarget(originControl, fallbackFocus));
+  }, [fallbackFocus, onClose, originControl]);
   const viewerState = useMemo<ViewerState>(
     () => ({
       currentIndex,
       expanded,
-      hasOverflow,
-      imageStates,
       lastContentId,
       moveByRef,
+      requestClose,
       selectedIndex,
       setCurrentIndex,
       setExpanded,
-      setHasOverflow,
-      setImageStates,
-      setPosition,
       syncContentId,
     }),
-    [currentIndex, expanded, hasOverflow, imageStates, lastContentId, selectedIndex, syncContentId],
+    [currentIndex, expanded, lastContentId, requestClose, selectedIndex, syncContentId],
   );
 
   useEffect(() => {
@@ -159,10 +156,6 @@ export function PostMediaViewer({
     return () => globalThis.cancelAnimationFrame?.(focusFrame);
   }, []);
 
-  const requestClose = useCallback(() => {
-    onClose();
-    requestAnimationFrame(() => focusPostMediaViewerTarget(originControl, fallbackFocus));
-  }, [fallbackFocus, onClose, originControl]);
   const handlePlatformRequestClose = useCallback(() => {
     if (Platform.OS === 'web' && ignoreNextPlatformClose.current) {
       ignoreNextPlatformClose.current = false;
@@ -242,27 +235,19 @@ export function PostMediaViewer({
           style={[styles.dialog, Platform.OS === 'web' ? styles.webDialog : null]}
           testID="post-media-viewer-dialog"
         >
-          <View style={styles.chrome}>
-            <IconButton
-              accessibilityLabel="이미지 뷰어 닫기"
-              onPress={requestClose}
-              controlRef={closeRef}
-              style={({ pressed }) => [styles.iconButton, { opacity: pressed ? 0.7 : 1 }]}
-              targetSize={48}
-              testID="post-media-viewer-close"
-              visualSize={48}
-            >
-              <XIcon color="#ffffff" size={iconSizes[24]} strokeWidth={2} />
-            </IconButton>
-            {position && position.total > 1 ? (
-              <Text aria-hidden style={styles.counter} testID="post-media-viewer-counter">
-                {position.current} / {position.total}
-              </Text>
-            ) : (
-              <View />
-            )}
-            <View style={styles.chromeSpacer} />
-          </View>
+          <IconButton
+            accessibilityLabel="이미지 뷰어 닫기"
+            controlRef={closeRef}
+            feedback="opacity"
+            onPress={requestClose}
+            style={[styles.stableClose, wide ? styles.stableCloseWide : styles.stableCloseCompact]}
+            targetSize={48}
+            testID="post-media-viewer-close"
+            visualSize={48}
+            visualStyle={stableCloseVisualStyle}
+          >
+            <XIcon color="#ffffff" size={30} strokeWidth={2.5} />
+          </IconButton>
           <PostMediaViewerStateContext.Provider value={viewerState}>
             {children}
           </PostMediaViewerStateContext.Provider>
@@ -276,7 +261,7 @@ export function PostMediaViewerContent({ actionBar, post: postKey, wideDetail }:
   const viewerState = usePostMediaViewerState();
   const post = useFragment(PostMediaViewerFragment, postKey);
   const content = post.content;
-  const media = useMemo(
+  const media = useMemo<readonly PostMediaItem[]>(
     () =>
       content?.media?.map(({ altText, id, url }) => ({
         altText: altText ?? null,
@@ -291,49 +276,27 @@ export function PostMediaViewerContent({ actionBar, post: postKey, wideDetail }:
     content.id !== viewerState.lastContentId;
   const currentIndex = revisionChanged ? viewerState.selectedIndex : viewerState.currentIndex;
   const expanded = revisionChanged ? false : viewerState.expanded;
-  const hasOverflow = revisionChanged ? false : viewerState.hasOverflow;
   const currentMedia = media[currentIndex];
-  const currentMediaUrl = currentMedia?.url;
-  const currentMediaStateKey = currentMedia
-    ? `${currentMedia.id}:${currentMedia.url ?? ''}`
-    : undefined;
   const bodyText = content?.bodyText ?? '';
+  const bodyMeasurementKey = JSON.stringify([content?.id ?? null, bodyText]);
+  const currentBodyMeasurementKey = useRef(bodyMeasurementKey);
+  currentBodyMeasurementKey.current = bodyMeasurementKey;
+  const [bodyMeasurement, setBodyMeasurement] = useState({ key: '', overflow: false });
+  const hasOverflow =
+    !revisionChanged && bodyMeasurement.key === bodyMeasurementKey && bodyMeasurement.overflow;
   const theme = useTheme();
-  const { height, width } = useWindowDimensions();
+  const { width } = useWindowDimensions();
   const wide = Platform.OS === 'web' && width >= breakpoints.compact;
-  const wideDetailWidth = Math.min(350, Math.max(320, width / 4));
-  const compactDetailMaxHeight = Math.min(240, Math.max(192, height * 0.32));
+  const contextRailWidth = boundedContextRailWidth(width);
+  const viewState: PostMediaViewerViewState =
+    content === null || currentMedia === undefined || currentMedia.url === null
+      ? 'unavailable'
+      : 'ready';
 
   useEffect(
     () => viewerState.syncContentId(content?.id ?? null),
     [content?.id, viewerState.syncContentId],
   );
-
-  useEffect(() => {
-    viewerState.setPosition(
-      currentMedia ? { current: currentIndex + 1, total: media.length } : null,
-    );
-    return () => viewerState.setPosition(null);
-  }, [currentIndex, currentMedia, media.length, viewerState.setPosition]);
-
-  useEffect(() => {
-    if (media.length === 0 || revisionChanged) {
-      return;
-    }
-    const currentMediaStateKeys = new Set(media.map((item) => `${item.id}:${item.url ?? ''}`));
-    viewerState.setImageStates((states) => {
-      const retainedStates: Record<string, ImageState> = {};
-      let removed = false;
-      for (const [key, state] of Object.entries(states)) {
-        if (currentMediaStateKeys.has(key)) {
-          retainedStates[key] = state;
-        } else {
-          removed = true;
-        }
-      }
-      return removed ? retainedStates : states;
-    });
-  }, [media, revisionChanged, viewerState.setImageStates]);
 
   const moveBy = useCallback(
     (delta: number) => {
@@ -370,230 +333,131 @@ export function PostMediaViewerContent({ actionBar, post: postKey, wideDetail }:
       }),
     [currentMedia, moveBy],
   );
-
-  const setCurrentImageState = useCallback(
-    (update: (state: ImageState) => ImageState) => {
-      if (!currentMediaStateKey) {
-        return;
-      }
-      viewerState.setImageStates((states) => ({
-        ...states,
-        [currentMediaStateKey]: update(
-          states[currentMediaStateKey] ?? {
-            generation: 0,
-            status: currentMediaUrl ? 'loading' : 'error',
-          },
-        ),
-      }));
-    },
-    [currentMediaStateKey, currentMediaUrl, viewerState.setImageStates],
-  );
-  const handleImageError = useCallback(
-    () => setCurrentImageState((state) => ({ ...state, status: 'error' })),
-    [setCurrentImageState],
-  );
-  const handleImageLoad = useCallback(
-    () => setCurrentImageState((state) => ({ ...state, status: 'ready' })),
-    [setCurrentImageState],
-  );
-  const handleImageLoadStart = useCallback(
-    () => setCurrentImageState((state) => ({ ...state, status: 'loading' })),
-    [setCurrentImageState],
-  );
   const handleBodyLayout = useCallback(
     (event: LayoutChangeEvent) => {
-      viewerState.setHasOverflow(
-        event.nativeEvent.layout.height > typography.md.lineHeight * 3 + 0.5,
-      );
+      if (currentBodyMeasurementKey.current !== bodyMeasurementKey) {
+        return;
+      }
+      setBodyMeasurement({
+        key: bodyMeasurementKey,
+        overflow: event.nativeEvent.layout.height > typography.md.lineHeight * 3 + 0.5,
+      });
     },
-    [viewerState.setHasOverflow],
+    [bodyMeasurementKey],
   );
-
-  const imageName =
-    currentMedia?.altText?.trim() ||
-    (currentMedia ? `${currentIndex + 1}번째 첨부 이미지` : '이미지');
-  const currentState = currentMediaStateKey
-    ? (viewerState.imageStates[currentMediaStateKey] ?? {
-        generation: 0,
-        status: currentMedia.url ? 'loading' : 'error',
-      })
-    : null;
-  const unavailable = !currentMedia || !currentMediaUrl;
-  const multiple = media.length > 1 && currentMedia != null;
-  const previousDisabled = currentIndex <= 0;
-  const nextDisabled = currentIndex >= media.length - 1;
-
-  return (
-    <View
-      style={[styles.layout, wide ? styles.wideLayout : styles.mobileLayout]}
-      testID="post-media-viewer-layout"
-    >
-      <View
-        {...swipeResponder.panHandlers}
-        style={[styles.imagePane, wide ? styles.wideImagePane : null]}
-        testID="post-media-viewer-image-pane"
-      >
-        {unavailable ? (
-          <View
-            accessibilityLiveRegion="polite"
-            style={styles.imageFallback}
-            testID="post-media-viewer-unavailable"
-          >
-            <Text style={styles.imageFallbackText}>이미지를 더 이상 표시할 수 없습니다.</Text>
-          </View>
-        ) : currentState?.status === 'error' ? (
-          <View
-            accessibilityLiveRegion="polite"
-            style={styles.imageFallback}
-            testID={`post-media-viewer-error-${currentMedia!.id}`}
-          >
-            <Text style={styles.imageFallbackText}>이미지를 불러오지 못했습니다.</Text>
-            {currentMedia!.url ? (
-              <Pressable
-                accessibilityLabel={`${imageName} 다시 시도`}
-                accessibilityRole="button"
-                onPress={() =>
-                  setCurrentImageState((state) => ({
-                    generation: state.generation + 1,
-                    status: 'loading',
-                  }))
-                }
-                style={styles.retryButton}
-              >
-                <Text style={styles.retryText}>다시 시도</Text>
-              </Pressable>
-            ) : null}
-          </View>
-        ) : (
-          <PostContentPrivacyBoundary
-            style={styles.imagePrivacyBoundary}
-            testID="post-media-viewer-image-privacy-boundary"
-          >
-            <Image
-              accessibilityLabel={imageName}
-              accessibilityState={{ busy: currentState?.status === 'loading' }}
-              key={`${currentMediaStateKey}:${currentState!.generation}`}
-              onError={handleImageError}
-              onLoad={handleImageLoad}
-              onLoadStart={handleImageLoadStart}
-              resizeMode="contain"
-              source={{ uri: currentMedia!.url! }}
-              style={styles.image}
-              testID="post-media-viewer-image"
-            />
-          </PostContentPrivacyBoundary>
-        )}
-
-        {multiple ? (
-          <>
-            <NavigationButton
-              disabled={previousDisabled}
-              direction="previous"
-              onPress={() => moveBy(-1)}
-            />
-            <NavigationButton disabled={nextDisabled} direction="next" onPress={() => moveBy(1)} />
-          </>
-        ) : null}
-        {currentMedia ? (
-          <Text
-            accessibilityLiveRegion="polite"
-            role="status"
-            style={styles.screenReaderOnly}
-            testID="post-media-viewer-position"
-          >
-            {`${currentIndex + 1} / ${media.length}`}
-          </Text>
-        ) : null}
+  const compactDetail = (
+    <View testID="post-media-viewer-detail" style={styles.detailPanel}>
+      <View style={styles.author}>
+        <Avatar
+          imageUri={post.profile.avatar?.url}
+          label={post.profile.displayName || post.profile.relativeHandle}
+          size={40}
+        />
+        <ProfileNameBlock profile={post.profile} />
       </View>
-
-      {wide ? (
-        wideDetail != null ? (
-          <View
-            style={[
-              styles.wideDetail,
-              {
-                backgroundColor: theme.background,
-                flexBasis: wideDetailWidth,
-                maxWidth: wideDetailWidth,
-                minWidth: wideDetailWidth,
-              },
-            ]}
-            testID="post-media-viewer-wide-detail"
-          >
-            {wideDetail}
-          </View>
-        ) : null
-      ) : (
-        <View
-          style={[
-            styles.detailPanel,
-            { backgroundColor: theme.card, maxHeight: compactDetailMaxHeight },
-          ]}
-          testID="post-media-viewer-detail"
+      <View style={styles.bodyRegion} testID="post-media-viewer-body-region">
+        <PostContentPrivacyBoundary
+          style={styles.bodyPrivacyBoundary}
+          testID="post-media-viewer-body-privacy-boundary"
         >
-          <View style={styles.author}>
-            <Avatar
-              imageUri={post.profile.avatar?.url}
-              label={post.profile.displayName || post.profile.relativeHandle}
-              size={40}
-            />
-            <ProfileNameBlock profile={post.profile} />
-          </View>
-
-          <View style={styles.bodyRegion} testID="post-media-viewer-body-region">
-            <PostContentPrivacyBoundary
-              style={styles.bodyPrivacyBoundary}
-              testID="post-media-viewer-body-privacy-boundary"
+          <View
+            style={styles.bodyMeasureBoundary}
+            testID="post-media-viewer-body-measure-container"
+          >
+            <Text
+              key={bodyMeasurementKey}
+              accessible={false}
+              onLayout={handleBodyLayout}
+              style={[styles.bodyText, styles.bodyMeasure, { color: theme.text }]}
+              testID="post-media-viewer-body-measure"
             >
+              {bodyText}
+            </Text>
+          </View>
+          {expanded ? (
+            <ScrollView style={styles.bodyScroll} testID="post-media-viewer-body-scroll">
+              <Text style={[styles.bodyText, { color: theme.text }]}>{bodyText}</Text>
+            </ScrollView>
+          ) : (
+            <View style={styles.collapsedBody} testID="post-media-viewer-collapsed-body">
               <Text
-                accessible={false}
-                onLayout={handleBodyLayout}
-                style={[styles.bodyText, styles.bodyMeasure, { color: theme.text }]}
-                testID="post-media-viewer-body-measure"
+                numberOfLines={3}
+                style={[styles.bodyText, { color: theme.text }]}
+                testID="post-media-viewer-body"
               >
                 {bodyText}
               </Text>
-              {expanded ? (
-                <ScrollView style={styles.bodyScroll} testID="post-media-viewer-body-scroll">
-                  <Text style={[styles.bodyText, { color: theme.text }]}>{bodyText}</Text>
-                </ScrollView>
-              ) : (
-                <View style={styles.collapsedBody} testID="post-media-viewer-collapsed-body">
-                  <Text
-                    numberOfLines={3}
-                    style={[styles.bodyText, { color: theme.text }]}
-                    testID="post-media-viewer-body"
-                  >
-                    {bodyText}
-                  </Text>
-                </View>
-              )}
-            </PostContentPrivacyBoundary>
-            {hasOverflow ? (
-              <Pressable
-                accessibilityLabel={expanded ? '원문 접기' : '원문 더 보기'}
-                accessibilityRole="button"
-                accessibilityState={{ expanded }}
-                onPress={() => viewerState.setExpanded((value) => !value)}
-                style={styles.moreButton}
-              >
-                <Text style={[styles.moreText, { color: theme.textSecondary }]}>
-                  {expanded ? '접기' : '더 보기'}
-                </Text>
-              </Pressable>
-            ) : null}
-          </View>
-
-          {actionBar != null ? (
-            <View
-              style={[styles.actionBar, { borderColor: theme.border }]}
-              testID="post-media-viewer-action-bar"
-            >
-              {actionBar}
             </View>
-          ) : null}
+          )}
+        </PostContentPrivacyBoundary>
+        {hasOverflow ? (
+          <Pressable
+            accessibilityLabel={expanded ? '원문 접기' : '원문 더 보기'}
+            accessibilityRole="button"
+            accessibilityState={{ expanded }}
+            onPress={() => viewerState.setExpanded((value) => !value)}
+            style={styles.moreButton}
+          >
+            <Text style={[styles.moreText, { color: theme.textSecondary }]}>
+              {expanded ? '접기' : '더 보기'}
+            </Text>
+          </Pressable>
+        ) : null}
+      </View>
+      {actionBar != null ? (
+        <View
+          style={[styles.actionBar, { borderColor: theme.border }]}
+          testID="post-media-viewer-action-bar"
+        >
+          {actionBar}
         </View>
-      )}
+      ) : null}
+    </View>
+  );
+  const contextRail = isValidElement(wideDetail) ? (
+    wideDetail
+  ) : (
+    <View style={styles.wideDetailFallback} testID="post-media-viewer-wide-detail-fallback" />
+  );
+
+  const surface = wide ? (
+    <PostMediaViewerSurface
+      contextRail={contextRail}
+      contextRailWidth={contextRailWidth}
+      contentRevisionId={content?.id ?? null}
+      currentIndex={currentIndex}
+      media={media}
+      onClose={viewerState.requestClose}
+      onNext={() => moveBy(1)}
+      onPrevious={() => moveBy(-1)}
+      onRetry={() => undefined}
+      presentation="wide"
+      showCloseControl={false}
+      viewState={viewState}
+    />
+  ) : (
+    <PostMediaViewerSurface
+      compactDetail={compactDetail}
+      contentRevisionId={content?.id ?? null}
+      currentIndex={currentIndex}
+      media={media}
+      onClose={viewerState.requestClose}
+      onNext={() => moveBy(1)}
+      onPrevious={() => moveBy(-1)}
+      onRetry={() => undefined}
+      presentation="compact"
+      showCloseControl={false}
+      viewState={viewState}
+    />
+  );
+
+  return (
+    <View
+      {...swipeResponder.panHandlers}
+      style={[styles.layout, wide ? styles.wideLayout : styles.mobileLayout]}
+      testID="post-media-viewer-layout"
+    >
+      {surface}
     </View>
   );
 }
@@ -605,48 +469,54 @@ export function PostMediaViewerQueryState({
 }: Readonly<{ loading?: boolean; onRetry?: () => void; unavailable?: boolean }>) {
   const { width } = useWindowDimensions();
   const wide = Platform.OS === 'web' && width >= breakpoints.compact;
+  const contextRailWidth = boundedContextRailWidth(width);
   const viewerState = usePostMediaViewerState();
+  const viewState: PostMediaViewerViewState = loading
+    ? 'loading'
+    : unavailable
+      ? 'unavailable'
+      : 'error';
+  const secondarySurface = (
+    <View style={styles.querySecondarySurface} testID="post-media-viewer-query-secondary-surface" />
+  );
 
-  useEffect(() => {
-    viewerState.setPosition(null);
-  }, [viewerState.setPosition]);
+  const surface = wide ? (
+    <PostMediaViewerSurface
+      contextRail={secondarySurface}
+      contextRailWidth={contextRailWidth}
+      contentRevisionId={null}
+      currentIndex={0}
+      media={[]}
+      onClose={viewerState.requestClose}
+      onNext={() => undefined}
+      onPrevious={() => undefined}
+      onRetry={onRetry ?? (() => undefined)}
+      presentation="wide"
+      showCloseControl={false}
+      viewState={viewState}
+    />
+  ) : (
+    <PostMediaViewerSurface
+      compactDetail={secondarySurface}
+      contentRevisionId={null}
+      currentIndex={0}
+      media={[]}
+      onClose={viewerState.requestClose}
+      onNext={() => undefined}
+      onPrevious={() => undefined}
+      onRetry={onRetry ?? (() => undefined)}
+      presentation="compact"
+      showCloseControl={false}
+      viewState={viewState}
+    />
+  );
 
   return (
     <View
       style={[styles.layout, wide ? styles.wideLayout : styles.mobileLayout]}
       testID="post-media-viewer-layout"
     >
-      <View
-        accessibilityLiveRegion="polite"
-        style={[styles.imagePane, wide ? styles.wideImagePane : null]}
-        testID={
-          unavailable
-            ? 'post-media-viewer-unavailable'
-            : loading
-              ? 'post-media-viewer-query-loading'
-              : 'post-media-viewer-query-error'
-        }
-      >
-        <View style={styles.imageFallback}>
-          <Text style={styles.imageFallbackText}>
-            {unavailable
-              ? '이미지를 더 이상 표시할 수 없습니다.'
-              : loading
-                ? '게시글을 불러오는 중입니다.'
-                : '게시글을 불러오지 못했습니다.'}
-          </Text>
-          {onRetry ? (
-            <Pressable
-              accessibilityLabel="게시글 다시 불러오기"
-              accessibilityRole="button"
-              onPress={onRetry}
-              style={styles.retryButton}
-            >
-              <Text style={styles.retryText}>다시 시도</Text>
-            </Pressable>
-          ) : null}
-        </View>
-      </View>
+      {surface}
     </View>
   );
 }
@@ -659,38 +529,12 @@ function usePostMediaViewerState(): ViewerState {
   return value;
 }
 
-function NavigationButton({
-  direction,
-  disabled,
-  onPress,
-}: {
-  direction: 'next' | 'previous';
-  disabled: boolean;
-  onPress: () => void;
-}) {
-  const label = direction === 'previous' ? '이전 이미지' : '다음 이미지';
-  const NavigationIcon = direction === 'previous' ? ChevronLeftIcon : ChevronRightIcon;
-  return (
-    <IconButton
-      accessibilityLabel={label}
-      accessibilityState={{ disabled }}
-      disabled={disabled}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.navigationButton,
-        direction === 'previous' ? styles.previousButton : styles.nextButton,
-        { opacity: disabled ? 0.3 : pressed ? 0.7 : 1 },
-      ]}
-      targetSize={48}
-      visualSize={48}
-    >
-      <NavigationIcon color="#ffffff" size={iconSizes[24]} strokeWidth={2} />
-    </IconButton>
-  );
-}
-
 function boundedIndex(index: number, length: number): number {
   return Math.max(0, Math.min(index, Math.max(length - 1, 0)));
+}
+
+function boundedContextRailWidth(viewportWidth: number): number {
+  return Math.min(350, Math.max(320, viewportWidth * 0.25));
 }
 
 function isEditableTarget(target: EventTarget | null): boolean {
@@ -706,10 +550,39 @@ function containsTarget(dialog: RefObject<NativeView | null>, target: EventTarge
   return element.contains?.(target) ?? false;
 }
 
+function stableCloseVisualStyle(state: PressableStateCallbackType): ViewStyle[] {
+  const webState = state as PressableStateCallbackType & {
+    focused?: boolean;
+    hovered?: boolean;
+  };
+
+  return [
+    styles.stableCloseVisual,
+    {
+      backgroundColor: state.pressed
+        ? 'rgba(255, 255, 255, 0.24)'
+        : webState.hovered
+          ? 'rgba(255, 255, 255, 0.16)'
+          : 'transparent',
+      ...(Platform.OS === 'web'
+        ? ({ filter: 'drop-shadow(0 1px 2px rgba(0, 0, 0, 0.9))' } as unknown as ViewStyle)
+        : { boxShadow: '0 1px 2px rgba(0, 0, 0, 0.9)' }),
+      ...(Platform.OS === 'web' && webState.focused
+        ? ({
+            outlineColor: '#ffffff',
+            outlineOffset: -2,
+            outlineStyle: 'solid',
+            outlineWidth: borderWidths[2],
+          } as unknown as ViewStyle)
+        : undefined),
+    },
+  ];
+}
+
 const styles = StyleSheet.create({
   backdrop: {
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.92)',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     flex: 1,
     justifyContent: 'center',
   },
@@ -727,81 +600,38 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     minWidth: 0,
+    position: 'relative',
     width: '100%',
     zIndex: 1,
   },
   webDialog: { borderRadius: radii.lg, overflow: 'hidden' },
-  chrome: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    height: 56,
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.sm,
-  },
-  chromeSpacer: { height: 48, width: 48 },
-  iconButton: {
-    alignItems: 'center',
-    borderRadius: radii.full,
-    height: 48,
-    justifyContent: 'center',
-    width: 48,
-  },
-  counter: { color: '#ffffff', fontFamily: fontFamilies.ui, fontWeight: '700', ...typography.sm },
+  stableClose: { position: 'absolute', top: spacing.md, zIndex: 4 },
+  stableCloseCompact: { right: spacing.md },
+  stableCloseWide: { left: spacing.md },
+  stableCloseVisual: { borderRadius: radii.full },
   layout: { flex: 1, minHeight: 0, minWidth: 0 },
   mobileLayout: { flexDirection: 'column' },
   wideLayout: { flexDirection: 'row' },
-  imagePane: {
-    alignItems: 'center',
-    backgroundColor: '#000000',
-    flex: 3,
-    justifyContent: 'center',
-    minHeight: 0,
-    minWidth: 0,
-    position: 'relative',
-  },
-  wideImagePane: { flex: 1 },
-  image: { height: '100%', width: '100%' },
-  imagePrivacyBoundary: { height: '100%', width: '100%' },
-  imageFallback: { alignItems: 'center', gap: spacing.md, justifyContent: 'center' },
-  imageFallbackText: { color: '#ffffff', fontFamily: fontFamilies.ui, ...typography.sm },
-  retryButton: {
-    alignItems: 'center',
-    borderColor: '#777777',
-    borderRadius: radii.full,
-    borderWidth: 1,
-    justifyContent: 'center',
-    minHeight: 48,
-    minWidth: 112,
-    paddingHorizontal: spacing.lg,
-  },
-  retryText: { color: '#ffffff', fontFamily: fontFamilies.ui, fontWeight: '700', ...typography.sm },
-  navigationButton: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.55)',
-    borderRadius: radii.full,
-    height: 48,
-    justifyContent: 'center',
-    marginTop: -24,
-    position: 'absolute',
-    top: '50%',
-    width: 48,
-  },
-  previousButton: { left: spacing.sm },
-  nextButton: { right: spacing.sm },
-  screenReaderOnly: { height: 1, opacity: 0, position: 'absolute', width: 1 },
   detailPanel: {
     flexShrink: 1,
     gap: spacing.sm,
     minHeight: 0,
     minWidth: 0,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
   },
-  wideDetail: { flex: 0, minHeight: 0 },
+  wideDetailFallback: { flex: 1, minHeight: 0, minWidth: 0 },
+  querySecondarySurface: { flex: 1, minHeight: 64, minWidth: 0 },
   author: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm },
   bodyRegion: { flexShrink: 1, minHeight: 0, position: 'relative' },
   bodyPrivacyBoundary: { flexShrink: 1, minHeight: 0, position: 'relative' },
-  bodyMeasure: { left: 0, opacity: 0, position: 'absolute', right: 0, top: 0 },
+  bodyMeasureBoundary: {
+    height: 0,
+    left: 0,
+    overflow: 'hidden',
+    position: 'absolute',
+    right: 0,
+    top: 0,
+  },
+  bodyMeasure: { opacity: 0 },
   bodyText: { fontFamily: fontFamilies.content, ...typography.md },
   collapsedBody: { flexShrink: 1, minHeight: 0, overflow: 'hidden' },
   bodyScroll: { flexShrink: 1, minHeight: 0 },

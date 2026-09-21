@@ -56,6 +56,7 @@ mock.module('expo-router', {
 
 mock.module('react-native', {
   exports: {
+    Animated: { View: 'AnimatedView' },
     Image: 'Image',
     Modal: 'Modal',
     PanResponder: { create: () => ({ panHandlers: {} }) },
@@ -129,6 +130,8 @@ mock.module('@/relay/RelayActorProvider', {
 
 mock.module('@/theme/ThemeProvider', {
   exports: {
+    useElevation: () => ({ floating: {} }),
+    useReducedMotion: () => false,
     useTheme: () => ({
       background: '#ffffff',
       backgroundCanvas: '#ffffff',
@@ -138,6 +141,15 @@ mock.module('@/theme/ThemeProvider', {
       surface: '#111111',
       text: '#111111',
       textSecondary: '#666666',
+    }),
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+
+mock.module('@/theme/useOverlayMotion', {
+  exports: {
+    useToastMotion: (visible: boolean) => ({
+      mounted: visible,
+      progress: { interpolate: () => 1 },
     }),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
@@ -458,7 +470,7 @@ describe('Post Media Viewer Host production wiring', () => {
     await openFromBody({ current: { focus: () => undefined } });
     await act(async () => pressable('다음 이미지').props.onPress());
     await act(async () => currentImage().props.onError());
-    assert.ok(byTestId('post-media-viewer-error-media-content-1-2'));
+    assert.ok(byTestId('post-media-viewer-error-toast'));
 
     queryPosts.set(post.id, hostPost({ ...post, content: null }));
     await updateHost(createElement(PostLayout, { post: asLayoutKey(post) }));
@@ -466,13 +478,13 @@ describe('Post Media Viewer Host production wiring', () => {
 
     queryPosts.set(post.id, hostPost(post));
     await updateHost(createElement(PostLayout, { post: asLayoutKey(post) }));
-    assert.ok(byTestId('post-media-viewer-error-media-content-1-2'));
+    assert.ok(byTestId('post-media-viewer-error-toast'));
 
     const nextRevision = storyPost('revision-post', 'content-2');
     queryPosts.set(post.id, hostPost(nextRevision));
     await updateHost(createElement(PostLayout, { post: asLayoutKey(nextRevision) }));
     assert.equal(currentImage().props.source.uri, 'https://media.example/content-2-1.webp');
-    assert.equal(findByTestId('post-media-viewer-error-media-content-1-2').length, 0);
+    assert.equal(findByTestId('post-media-viewer-error-toast').length, 0);
   });
 
   it('Compact PostLayout은 긴 원문만 펼치고 Action Bar 밖의 본문만 scroll한다', async () => {

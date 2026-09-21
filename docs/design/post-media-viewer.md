@@ -1,12 +1,12 @@
 # Post Media Viewer
 
-일반 Post의 공개된 이미지 tile을 선택하면 기존 Post visibility·authorization 경계를 통과한 현재 Post query projection의 이미지를 document 순서대로 살펴보는 modal viewer를 연다. Viewer는 이미지만 고립시키지 않고 Post 맥락과 기존 interaction을 함께 제공한다. Compact Web과 Native는 작성자, 원문 text와 기존 Post Action Bar를 보여주고, Wide Web은 기존 Post 상세의 원문·reply thread를 사용할 수 있는 surface를 보여준다. Figma Target에서 Viewer의 현재 Post Reply Composer는 Compact Web에서 Viewer를 닫은 뒤 공용 modal로 열고 Full Web에서만 thread rail 안에 펼친다. 현재 runtime의 inline Reply는 이 Target의 완료 증거가 아니다.
+일반 Post의 공개된 이미지 tile을 선택하면 기존 Post visibility·authorization 경계를 통과한 현재 Post query projection의 이미지를 document 순서대로 살펴보는 modal viewer를 연다. Viewer는 이미지만 고립시키지 않고 Post 맥락과 기존 interaction을 함께 제공한다. Compact Web과 Native는 작성자, 원문 text와 기존 Post Action Bar를 보여주고, Wide Web은 기존 Post 상세의 원문·reply thread를 사용할 수 있는 surface를 보여준다. Figma Target에서 Viewer의 현재 Post Reply Composer는 Compact Web에서 Viewer를 닫은 뒤 공용 modal로 열고 Full Web에서만 thread rail 안에 펼친다. Viewer의 Compact/Full Reply 분기는 PROD-849에서 연결하며, 일반 Post 상세 route의 Reply presentation은 별도 범위다.
 
 ## Current와 Target 및 전달 lifecycle
 
 ### Current runtime (PROD-650 historical)
 
-- PROD-650의 Compact author/body/detail panel, connected Post Action Bar와 Wide thread surface는 현재 Production 동작이자 historical evidence다.
+- PROD-650의 Compact author/body/detail panel, connected Post Action Bar와 Wide thread surface는 이관 전 Production의 historical evidence다.
 - 이 Current 동작을 DSN-63 Target 완료 증거로 승격하지 않는다. Figma와 문서만으로 focus·dismiss·keyboard·보조 기술 runtime을 증명하지 않는다.
 
 ### DSN-63 Target
@@ -57,7 +57,7 @@
 
 PROD-853의 `src/patterns/post-media-viewer/PostMediaViewerSurface.tsx`는 기존 Post presentation을 조합하는 overlay pattern이다. 이미지 표시·탐색·재시도와 Compact detail·Wide rail 배치를 소유하며, 별도 route screen은 만들지 않는다. PostLayout·PostListItem·PostThreadLayout·PostActionBar는 기존 component의 표현과 interaction을 재사용한다. Storybook은 이 pattern을 직접 소비하고 fixture는 데이터와 callback 연결만 제공한다.
 
-`PostMediaViewerHost`와 `PostMediaViewerThread`는 Relay 조회·재시도 및 Production 연결을 소유하는 기존 경계다. 패턴 폴더 분리를 이유로 함께 이동하거나 조회 로직을 Surface에 넣지 않는다. 실제 Production consumer의 패턴 연결은 PROD-849에서 수행한다.
+`PostMediaViewerHost`와 `PostMediaViewerThread`는 Relay 조회·재시도 및 Production 연결을 소유하는 기존 경계다. 패턴 폴더 분리를 이유로 함께 이동하거나 조회 로직을 Surface에 넣지 않는다. PROD-849는 기존 Host의 session·조회·액션 경계를 유지하면서 Production consumer를 이 패턴에 연결한다. 연결된 자동화와 실제 플랫폼 runtime 결과는 구분한다.
 
 목록과 상세의 안정적인 surface 경계에 `PostMediaViewerHost`를 둔다. Gallery는 공개된 정상 tile을 선택했을 때 `{surfacePostId, mediaOwnerPostId, selectedIndex, originControl}`만 Host에 전달하고 modal lifecycle이나 Post 데이터를 소유하지 않는다. Host는 기존 GraphQL `node(surfacePostId)` 경로와 현재 Relay actor environment로 surface Post를 조회하고, `mediaOwnerPostId`가 그 surface 또는 direct `repostSource`인지 확인한다. 일반·Quote는 두 ID가 같고, pure Repost는 바깥 contentless Repost가 surface, direct Source가 Media·본문·Profile과 Repost·Reaction·Bookmark·More의 owner다. Reply는 surface Post identity를 유지하므로 pure Repost에서는 disabled다. Content availability로 owner를 재추론하지 않으므로 Quote Content가 일시 unavailable이어도 Source로 전환하지 않는다. 이 경로가 이미 사용하는 Post visibility·authorization을 그대로 적용하며 별도 Media 조회나 standalone authorization을 추가하지 않는다.
 
@@ -117,7 +117,7 @@ Viewer는 [기존 Post Action Bar](./post-action-bar.md)가 현재 제공하는 
 - PROD-650 Current Host Post query가 cache hit·loading·error·retry이거나 null Post·Content·Media를 반환해도 modal shell과 close control은 유지한다. Host query fallback은 안전한 한국어 상태와 retry만 제공하고 raw 오류·authorization 세부 정보를 노출하지 않는다.
 - Target의 `Loading`·`Error`·`Unavailable`은 Host query 또는 선택 Media projection의 차단 상태에 각각 canonical 상태 설명을 사용한다. `Error`만 Host/query `다시 시도` action을 제공하며, 세 상태 모두 navigation·counter는 렌더링하지 않는다. Compact presentation은 현재 Post detail panel을, Wide presentation은 346px context rail을 세 상태에서도 유지한다. 일반 motion의 Loading spinner와 reduced-motion의 정적 `···`는 접근성 트리에서 숨기고 상태 제목을 한 번만 보조 기술에 전달한다.
 - DSN-51 Mobile Figma에서 `Ready` surface 안의 개별 Media load 실패는 top-level `Error`가 아니다. 중앙 blocking state 대신 기존 공용 Danger Action Toast를 stage 하단에 지속 표시한다. Mobile Error consumer [`6665:55675`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6665-55675)는 [`Toast 7380:55058`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7380-55058)의 `미디어를 불러오지 못했어요`와 `다시 시도`를 사용하며 modal chrome, 현재 index와 Post detail surface를 유지한다.
-- PROD-650 Current runtime은 개별 Media load 실패를 stage 중앙의 inline fallback과 `다시 시도`로 표시하며 modal chrome, 현재 index와 현재 breakpoint의 Post detail surface를 유지한다.
+- PROD-650의 stage 중앙 inline fallback은 historical 표현이다. PROD-849 Production consumer는 공용 Surface의 지속 Danger Action Toast와 이미지별 재시도를 사용한다.
 - 실패한 Media는 같은 위치에서 다시 시도할 수 있고, retry는 현재 index를 바꾸거나 다른 Media의 상태를 초기화하지 않는다.
 - PROD-853 공용 Surface는 Media ID·URL별 오류 상태와 재시도 generation을 session 동안 보존한다. 다른 이미지로 이동했다 돌아와도 실패 이미지는 명시적 재시도 전 자동 요청하지 않는다. 실패 토스트는 `ui/Toast`의 공용 표시를 image stage 하단에 지속 렌더하며, 전역 Toast slot과 분리해 다른 액션 알림이 retry를 덮어쓰지 않는다. 재시도·선택 Media 변경·차단 상태 전환·Surface unmount 때 토스트를 해제하고, 실패 이미지로 돌아오면 보존된 오류에 따라 다시 표시한다. 기존 Toast motion을 재사용한다. 이전 요청의 늦은 완료·실패 callback은 현재 이미지를 변경하지 않는다. Host/query `onRetry`와 이미지 재시도는 별개다.
 - `PostMediaViewerSurface` consumer는 필수 `contentRevisionId`에 immutable Content ID를 전달한다. 일시적인 `null`은 마지막 non-null revision의 Media 상태를 보존하고, 다른 non-null ID는 같은 Media ID·URL을 재사용해도 이미지 요청·오류 상태만 초기화한다. Surface 전체에 revision key를 붙이지 않아 close·focus를 유지하며, 선택 index와 원문 초기화는 consumer가 소유한다.

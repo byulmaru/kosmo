@@ -52,6 +52,8 @@ Object.assign(globalThis, {
 
 mock.module('react-native', {
   exports: {
+    ActivityIndicator: 'ActivityIndicator',
+    Animated: { View: 'AnimatedView' },
     Image: 'Image',
     Modal: 'Modal',
     PanResponder: {
@@ -107,13 +109,25 @@ mock.module('@/components/ui/Avatar', {
 
 mock.module('@/theme/ThemeProvider', {
   exports: {
+    useElevation: () => ({ floating: {} }),
+    useReducedMotion: () => false,
     useTheme: () => ({
       background: '#ffffff',
+      backgroundCanvas: '#fafafa',
       border: '#333333',
       card: '#fafafa',
       surface: '#222222',
       text: '#ffffff',
       textSecondary: '#999999',
+    }),
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+
+mock.module('@/theme/useOverlayMotion', {
+  exports: {
+    useToastMotion: (visible: boolean) => ({
+      mounted: visible,
+      progress: { interpolate: () => 1 },
     }),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
@@ -172,6 +186,10 @@ describe('PostMediaViewer', () => {
   it('viewer controls use the shared 48px IconButton contract', async () => {
     await render({ selectedIndex: 0 });
 
+    const closeControl = renderer?.root.findAllByType(IconButton)[0];
+    assert.equal(closeControl?.props.feedback, 'opacity');
+    assert.equal(typeof closeControl?.props.visualStyle, 'function');
+
     assert.deepEqual(
       renderer?.root.findAllByType(IconButton).map(({ props }) => ({
         accessibilityLabel: props.accessibilityLabel,
@@ -217,17 +235,17 @@ describe('PostMediaViewer', () => {
       [
         {
           count: 1,
-          props: { color: '#ffffff', size: 24, strokeWidth: 2 },
+          props: { color: '#ffffff', size: 30, strokeWidth: 2.5 },
           type: 'XIcon',
         },
         {
           count: 1,
-          props: { color: '#ffffff', size: 24, strokeWidth: 2 },
+          props: { color: '#ffffff', size: 30, strokeWidth: 2.5 },
           type: 'ChevronLeftIcon',
         },
         {
           count: 1,
-          props: { color: '#ffffff', size: 24, strokeWidth: 2 },
+          props: { color: '#ffffff', size: 30, strokeWidth: 2.5 },
           type: 'ChevronRightIcon',
         },
       ],
@@ -349,7 +367,7 @@ describe('PostMediaViewer', () => {
       'column',
     );
     assert.equal(
-      flattenStyle(byTestId('post-media-viewer-detail').props.style).backgroundColor,
+      flattenStyle(byTestId('post-media-viewer-compact-detail').props.style).backgroundColor,
       '#fafafa',
     );
 
@@ -359,27 +377,22 @@ describe('PostMediaViewer', () => {
       flattenStyle(byTestId('post-media-viewer-layout').props.style).flexDirection,
       'row',
     );
-    assert.ok(byTestId('post-media-viewer-wide-detail'));
+    assert.ok(byTestId('post-media-viewer-context-rail'));
     assert.equal(renderer?.root.findAllByProps({ testID: 'post-media-viewer-detail' }).length, 0);
+    assert.equal(flattenStyle(byTestId('post-media-viewer-context-rail').props.style).width, 320);
     assert.equal(
-      flattenStyle(byTestId('post-media-viewer-wide-detail').props.style).flexBasis,
-      320,
+      flattenStyle(byTestId('post-media-viewer-context-rail').props.style).backgroundColor,
+      '#fafafa',
     );
     assert.equal(flattenStyle(byTestId('post-media-viewer-backdrop').props.style).padding, 24);
 
     viewport.width = 1200;
     await render();
-    assert.equal(
-      flattenStyle(byTestId('post-media-viewer-wide-detail').props.style).flexBasis,
-      320,
-    );
+    assert.equal(flattenStyle(byTestId('post-media-viewer-context-rail').props.style).width, 320);
 
     viewport.width = 1440;
     await render();
-    assert.equal(
-      flattenStyle(byTestId('post-media-viewer-wide-detail').props.style).flexBasis,
-      350,
-    );
+    assert.equal(flattenStyle(byTestId('post-media-viewer-context-rail').props.style).width, 350);
     assert.equal(
       flattenStyle(byTestId('post-media-viewer-dialog').props.style).maxWidth,
       undefined,
@@ -393,7 +406,7 @@ describe('PostMediaViewer', () => {
       'column',
     );
     assert.equal(
-      flattenStyle(byTestId('post-media-viewer-detail').props.style).flexBasis,
+      flattenStyle(byTestId('post-media-viewer-compact-detail').props.style).flexBasis,
       undefined,
     );
     assert.equal(
@@ -404,8 +417,14 @@ describe('PostMediaViewer', () => {
 
   it('Compact detail은 내용 높이를 따르고 viewport 상한 안에서 body만 줄어든다', async () => {
     await render();
-    assert.equal(flattenStyle(byTestId('post-media-viewer-detail').props.style).maxHeight, 240);
-    assert.equal(flattenStyle(byTestId('post-media-viewer-detail').props.style).flex, undefined);
+    assert.equal(
+      flattenStyle(byTestId('post-media-viewer-compact-detail').props.style).maxHeight,
+      240,
+    );
+    assert.equal(
+      flattenStyle(byTestId('post-media-viewer-compact-detail').props.style).flex,
+      undefined,
+    );
     assert.equal(
       flattenStyle(byTestId('post-media-viewer-body-region').props.style).flex,
       undefined,
@@ -414,12 +433,18 @@ describe('PostMediaViewer', () => {
 
     viewport.height = 600;
     await render();
-    assert.equal(flattenStyle(byTestId('post-media-viewer-detail').props.style).maxHeight, 192);
+    assert.equal(
+      flattenStyle(byTestId('post-media-viewer-compact-detail').props.style).maxHeight,
+      192,
+    );
     assert.ok(byTestId('post-media-viewer-action-bar'));
 
     viewport.height = 390;
     await render();
-    assert.equal(flattenStyle(byTestId('post-media-viewer-detail').props.style).maxHeight, 192);
+    assert.equal(
+      flattenStyle(byTestId('post-media-viewer-compact-detail').props.style).maxHeight,
+      192,
+    );
     assert.ok(byTestId('post-media-viewer-action-bar'));
   });
 
@@ -469,21 +494,58 @@ describe('PostMediaViewer', () => {
     assert.ok(byTestId('post-media-viewer-action-bar'));
   });
 
+  it('같은 높이의 새 Content에서 이전 원문 측정 callback이 overflow를 덮지 않는다', async () => {
+    await render({ post: viewerPost({ contentId: 'content-a' }) });
+    const previousMeasure = byTestId('post-media-viewer-body-measure');
+    const previousMeasureLayout = previousMeasure.props.onLayout as (event: unknown) => void;
+    await act(async () =>
+      previousMeasureLayout({
+        nativeEvent: { layout: { height: 96 } },
+      }),
+    );
+    assert.ok(pressable('원문 더 보기'));
+
+    await render({ post: viewerPost({ contentId: 'content-b' }) });
+    const nextMeasure = byTestId('post-media-viewer-body-measure');
+    assert.notEqual(previousMeasure, nextMeasure);
+    assert.equal(
+      rendered('Pressable').some((node) => node.props.accessibilityLabel === '원문 더 보기'),
+      false,
+    );
+
+    await act(async () =>
+      previousMeasureLayout({
+        nativeEvent: { layout: { height: 96 } },
+      }),
+    );
+    assert.equal(
+      rendered('Pressable').some((node) => node.props.accessibilityLabel === '원문 더 보기'),
+      false,
+    );
+
+    await act(async () =>
+      (nextMeasure.props.onLayout as (event: unknown) => void)({
+        nativeEvent: { layout: { height: 96 } },
+      }),
+    );
+    assert.ok(pressable('원문 더 보기'));
+  });
+
   it('Media error와 retry를 identity별로 유지한다', async () => {
     await render({ selectedIndex: 0 });
     await act(async () => currentImage().props.onError());
-    assert.ok(byTestId('post-media-viewer-error-media-1'));
+    assert.ok(byTestId('post-media-viewer-error-toast'));
     assert.equal(
       textContents().some((text) => text.includes('https://')),
       false,
     );
 
-    await act(async () => pressable('첫 번째 이미지 다시 시도').props.onPress());
+    await act(async () => retryToast().props.onPress());
     assert.ok(currentImage());
     await act(async () => currentImage().props.onError());
     await act(async () => pressable('다음 이미지').props.onPress());
     await act(async () => pressable('이전 이미지').props.onPress());
-    assert.ok(byTestId('post-media-viewer-error-media-1'));
+    assert.ok(byTestId('post-media-viewer-error-toast'));
   });
 
   it('현재 Media가 unavailable이면 이전 이미지를 제거하고 modal chrome을 유지한다', async () => {
@@ -500,7 +562,7 @@ describe('PostMediaViewer', () => {
       rendered('Text').some((node) => node.props.testID === 'post-media-viewer-position'),
       false,
     );
-    assert.equal(textContents().includes('이미지를 더 이상 표시할 수 없습니다.'), true);
+    assert.equal(textContents().includes('이 미디어를 볼 수 없어요'), true);
     assert.ok(pressable('이미지 뷰어 닫기'));
   });
 
@@ -747,6 +809,13 @@ function pressable(accessibilityLabel: string): ReactTestInstance {
   );
   assert.ok(result);
   return result;
+}
+
+function retryToast(): ReactTestInstance {
+  const label = rendered('Text').find((node) => node.children.join('') === '다시 시도');
+  assert.ok(label);
+  assert.ok(label.parent);
+  return label.parent;
 }
 
 function currentImage(): ReactTestInstance {

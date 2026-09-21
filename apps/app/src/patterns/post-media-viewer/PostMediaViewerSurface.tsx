@@ -27,12 +27,14 @@ export type PostMediaViewerViewState = 'ready' | 'loading' | 'error' | 'unavaila
 
 export type PostMediaViewerSurfaceProps = Readonly<{
   contentRevisionId: string | null;
+  contextRailWidth?: number;
   currentIndex: number;
   media: readonly PostMediaItem[];
   onClose: () => void;
   onNext: () => void;
   onPrevious: () => void;
   onRetry: () => void;
+  showCloseControl?: boolean;
 }> &
   (
     | Readonly<{
@@ -68,6 +70,7 @@ export function PostMediaViewerSurface({
   compactDetail,
   contentRevisionId,
   contextRail,
+  contextRailWidth = 346,
   currentIndex,
   media,
   onClose,
@@ -75,6 +78,7 @@ export function PostMediaViewerSurface({
   onPrevious,
   onRetry,
   presentation,
+  showCloseControl = true,
   viewState,
 }: PostMediaViewerSurfaceProps) {
   const theme = useTheme();
@@ -90,14 +94,41 @@ export function PostMediaViewerSurface({
   const [imageState, setImageState] = useState({
     revisionId: contentRevisionId,
     epoch: 0,
+    mediaEpochs: {} as Record<string, number>,
     requests: {} as Record<string, ImageRequest>,
+    mediaUrls: {} as Record<string, string | null>,
   });
   if (contentRevisionId !== null && contentRevisionId !== imageState.revisionId) {
-    setImageState({ revisionId: contentRevisionId, epoch: imageState.epoch + 1, requests: {} });
+    setImageState({
+      revisionId: contentRevisionId,
+      epoch: imageState.epoch + 1,
+      mediaEpochs: {},
+      mediaUrls: {},
+      requests: {},
+    });
+  } else if (media.some((item) => imageState.mediaUrls[item.id] !== (item.url ?? null))) {
+    setImageState((previous) => {
+      const mediaUrls = { ...previous.mediaUrls };
+      const mediaEpochs = { ...previous.mediaEpochs };
+      for (const item of media) {
+        const nextUrl = item.url ?? null;
+        const previousUrl = mediaUrls[item.id];
+        if (previousUrl !== undefined && previousUrl !== nextUrl) {
+          mediaEpochs[item.id] = (mediaEpochs[item.id] ?? 0) + 1;
+        }
+        mediaUrls[item.id] = nextUrl;
+      }
+      return { ...previous, mediaEpochs, mediaUrls };
+    });
   }
   const identity =
     navigable && currentMedia?.url
-      ? JSON.stringify([imageState.epoch, currentMedia.id, currentMedia.url])
+      ? JSON.stringify([
+          imageState.epoch,
+          imageState.mediaEpochs[currentMedia.id] ?? 0,
+          currentMedia.id,
+          currentMedia.url,
+        ])
       : null;
   const activeIdentity = useRef<string | null>(null);
   const request = identity ? (imageState.requests[identity] ?? initialRequest) : initialRequest;
@@ -184,6 +215,7 @@ export function PostMediaViewerSurface({
               accessibilityLiveRegion={viewState === 'error' ? 'assertive' : 'polite'}
               role="status"
               style={styles.status}
+              testID={`post-media-viewer-${viewState}`}
             >
               {viewState === 'loading' ? (
                 reducedMotion ? (
@@ -215,19 +247,21 @@ export function PostMediaViewerSurface({
             </View>
           ) : null}
 
-          <IconButton
-            accessibilityLabel="이미지 뷰어 닫기"
-            onPress={() => onClose()}
-            style={[
-              styles.closeButton,
-              presentation === 'compact' ? styles.compactCloseButton : styles.wideCloseButton,
-            ]}
-            targetSize={48}
-            visualSize={48}
-            visualStyle={controlVisualStyle(false)}
-          >
-            <XIcon color="#ffffff" size={30} strokeWidth={2.5} />
-          </IconButton>
+          {showCloseControl ? (
+            <IconButton
+              accessibilityLabel="이미지 뷰어 닫기"
+              onPress={() => onClose()}
+              style={[
+                styles.closeButton,
+                presentation === 'compact' ? styles.compactCloseButton : styles.wideCloseButton,
+              ]}
+              targetSize={48}
+              visualSize={48}
+              visualStyle={controlVisualStyle(false)}
+            >
+              <XIcon color="#ffffff" size={30} strokeWidth={2.5} />
+            </IconButton>
+          ) : null}
 
           {multiple ? (
             <>
@@ -299,7 +333,13 @@ export function PostMediaViewerSurface({
         </View>
 
         {presentation === 'wide' && contextRail != null ? (
-          <View style={styles.contextRail} testID="post-media-viewer-context-rail">
+          <View
+            style={[
+              styles.contextRail,
+              { backgroundColor: theme.backgroundCanvas, width: contextRailWidth },
+            ]}
+            testID="post-media-viewer-context-rail"
+          >
             {contextRail}
           </View>
         ) : null}
