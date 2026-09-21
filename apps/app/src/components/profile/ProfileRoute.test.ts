@@ -64,6 +64,7 @@ let profileDisplayName: string | null = null;
 let profileInstanceKind: 'ACTIVITYPUB' | 'LOCAL' = 'LOCAL';
 const routerHistory: string[] = [];
 let routerBackCount = 0;
+let routerCanGoBack = true;
 let sessionId: string | null = null;
 let profileViewerState: {
   isSelf: boolean;
@@ -102,6 +103,7 @@ mockModule('expo-router', {
   usePathname: () => pathname,
   useRouter: () => ({
     back: () => (routerBackCount += 1),
+    canGoBack: () => routerCanGoBack,
     replace: (href: string) => routerHistory.push(href),
   }),
 });
@@ -292,6 +294,7 @@ afterEach(async () => {
   pathname = '/profile/';
   platform.OS = 'web';
   routerBackCount = 0;
+  routerCanGoBack = true;
   routerHistory.length = 0;
   queryModes.ProfileFollowersPageQuery = 'success';
   queryModes.ProfileFollowingPageQuery = 'success';
@@ -380,6 +383,18 @@ describe('profile route parameter lifecycle', () => {
     assert.equal(leading?.props.accessibilityLabel, '뒤로 가기');
     await act(async () => leading?.props.onPress());
     assert.equal(routerBackCount, 1);
+  });
+
+  it('directly opened Profile Home returns to Home instead of dispatching an unhandled back action', async () => {
+    routerCanGoBack = false;
+    await renderRoute('@local', '/@local');
+
+    const leading = requireRendered('PageHeader').props.leading;
+    assert.ok(leading);
+    await act(async () => leading.props.onPress());
+
+    assert.equal(routerBackCount, 0);
+    assert.deepEqual(routerHistory, ['/home']);
   });
 
   it('canonical missing Profile Home keeps route chrome with only the missing state', async () => {
