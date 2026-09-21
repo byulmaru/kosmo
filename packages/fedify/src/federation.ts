@@ -23,9 +23,7 @@ import { handleInboundCreate } from './inbound-create';
 import { handleInboundDelete } from './inbound-delete';
 import { handleInboundFollow, handleInboundUndo } from './inbound-follow';
 import {
-  hasInboundErrorBeenObserved,
-  isExternalInboundError,
-  observeInbound,
+  observeUnhandledInboundListenerError,
   withInboundObservability,
 } from './inbound-observability';
 import { handleInboundReaction } from './inbound-reaction';
@@ -192,22 +190,4 @@ federation
   .on(Reject, withInboundObservability('reject', handleInboundReject))
   .on(Undo, withInboundObservability('undo', handleInboundUndo))
   .on(Update, withInboundObservability('update', handleInboundUpdate))
-  .onError((_context, error) => {
-    if (hasInboundErrorBeenObserved(error)) {
-      return;
-    }
-
-    // Fedify invokes this boundary for failures that happen before a typed
-    // listener receives an Activity (for example, malformed request JSON).
-    // Typed listener errors are marked observed by withInboundObservability,
-    // so SyntaxError is external only at this unobserved pre-dispatch edge.
-    const external = error instanceof SyntaxError || isExternalInboundError(error);
-    observeInbound({
-      activityType: 'Unknown',
-      error,
-      handler: 'listener',
-      outcome: external ? 'external_failure' : 'internal_failure',
-      phase: 'listener',
-      reasonCode: external ? 'external_listener_error' : 'unexpected_listener_error',
-    });
-  });
+  .onError((_context, error) => observeUnhandledInboundListenerError(error));

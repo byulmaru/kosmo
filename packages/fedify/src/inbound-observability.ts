@@ -99,14 +99,6 @@ const externalErrorNames = new Set([
   'WebFingerError',
 ]);
 
-const nodeIncomingRequestAbortStack = /\bat abortIncoming \(node:_http_server:\d+:\d+\)/u;
-
-const isNodeIncomingRequestAbort = (error: unknown): boolean =>
-  error instanceof Error &&
-  error.message === 'aborted' &&
-  typeof error.stack === 'string' &&
-  nodeIncomingRequestAbortStack.test(error.stack);
-
 const defaultReporter: InboundObservabilityReporter = {
   countMetric: () => undefined,
   log: (observation) => {
@@ -239,15 +231,37 @@ export const isExternalInboundError = (error: unknown, seen = new Set<object>())
     return true;
   }
 
-  if (isNodeIncomingRequestAbort(error)) {
-    return true;
-  }
-
   if (error instanceof Error && 'cause' in error && isExternalInboundError(error.cause, seen)) {
     return true;
   }
 
   return false;
+};
+
+const isUnobservedPreDispatchConnectionReset = (error: unknown): boolean =>
+  error instanceof Error &&
+  Object.prototype.hasOwnProperty.call(error, 'code') &&
+  (error as Error & { code?: unknown }).code === 'ECONNRESET';
+
+export const observeUnhandledInboundListenerError = (error: unknown): void => {
+  if (hasInboundErrorBeenObserved(error)) {
+    return;
+  }
+
+  // Fedify invokes this boundary for failures that happen before a typed
+  // listener receives an Activity (for example, malformed request JSON).
+  const external =
+    error instanceof SyntaxError ||
+    isUnobservedPreDispatchConnectionReset(error) ||
+    isExternalInboundError(error);
+  observeInbound({
+    activityType: 'Unknown',
+    error,
+    handler: 'listener',
+    outcome: external ? 'external_failure' : 'internal_failure',
+    phase: 'listener',
+    reasonCode: external ? 'external_listener_error' : 'unexpected_listener_error',
+  });
 };
 
 export const withInboundObservability =

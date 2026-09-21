@@ -163,7 +163,7 @@ describe('inbound ActivityPub observability', () => {
     }
   });
 
-  test('listener wrapper reports internal errors once and rethrows', async () => {
+  test('keeps typed handler connection resets internal and rethrows once', async () => {
     const captures: unknown[] = [];
     const restore = setInboundObservabilityReporter({
       log: () => undefined,
@@ -171,7 +171,7 @@ describe('inbound ActivityPub observability', () => {
     });
 
     try {
-      const error = new Error('database failed');
+      const error = Object.assign(new Error('aborted'), { code: 'ECONNRESET' });
       const listener = withInboundObservability('create', async () => {
         throw error;
       });
@@ -189,71 +189,6 @@ describe('inbound ActivityPub observability', () => {
     }
   });
 
-  test('classifies only Node incoming-request aborts as external', async () => {
-    const captures: unknown[] = [];
-    const logs: unknown[] = [];
-    const restore = setInboundObservabilityReporter({
-      captureException: (error, context) => captures.push({ context, error }),
-      log: (observation) => logs.push(observation),
-    });
-
-    try {
-      const abortError = new Error('aborted');
-      abortError.stack = 'Error: aborted\n    at abortIncoming (node:_http_server:809:17)';
-      const abortListener = withInboundObservability('create', async () => {
-        throw abortError;
-      });
-
-      await assert.rejects(() => abortListener({} as never, new Create({})), abortError);
-      assert.deepEqual(logs, [
-        {
-          activityOrigin: undefined,
-          activityType: 'Create',
-          actorOrigin: undefined,
-          handler: 'create',
-          objectOrigin: undefined,
-          outcome: 'external_failure',
-          phase: 'listener',
-          reasonCode: 'external_listener_error',
-        },
-      ]);
-      assert.equal(captures.length, 0);
-
-      const handlerError = new Error('aborted');
-      handlerError.stack =
-        'Error: aborted\n    at handleInboundCreate (file:///app/packages/fedify/src/inbound-create.ts:100:11)';
-      const handlerListener = withInboundObservability('create', async () => {
-        throw handlerError;
-      });
-
-      await assert.rejects(() => handlerListener({} as never, new Create({})), handlerError);
-      assert.deepEqual(logs[1], {
-        activityOrigin: undefined,
-        activityType: 'Create',
-        actorOrigin: undefined,
-        handler: 'create',
-        objectOrigin: undefined,
-        outcome: 'internal_failure',
-        phase: 'listener',
-        reasonCode: 'unexpected_listener_error',
-      });
-      assert.equal(captures.length, 1);
-      assert.equal((captures[0] as { error: unknown }).error, handlerError);
-      assert.deepEqual(
-        (captures[0] as { context: { tags: Record<string, string> } }).context.tags,
-        {
-          activity_type: 'Create',
-          handler: 'create',
-          outcome: 'internal_failure',
-          phase: 'listener',
-          reason_code: 'unexpected_listener_error',
-        },
-      );
-    } finally {
-      restore();
-    }
-  });
-
   test('recognizes remote failures and tracks observed error identity', () => {
     const error = new Error('remote failed');
     error.name = 'FetchError';
@@ -263,9 +198,9 @@ describe('inbound ActivityPub observability', () => {
     assert.equal(hasInboundErrorBeenObserved(error), true);
   });
 
-  test('does not infer a remote failure from a generic socket code', () => {
-    const error = Object.assign(new Error('connection refused'), {
-      code: 'ECONNREFUSED',
+  test('does not infer a remote failure from a generic connection reset code', () => {
+    const error = Object.assign(new Error('aborted'), {
+      code: 'ECONNRESET',
     });
 
     assert.equal(isExternalInboundError(error), false);
