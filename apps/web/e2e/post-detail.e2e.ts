@@ -139,6 +139,129 @@ test('현재 Light 정책의 실제 게시글 액션은 Home·Local·Profile·�
   }
 });
 
+test('실제 GraphQL Home의 Local·Remote 콘텐츠 경고는 행 진입과 분리되고 같은 Post.id의 상세와 상태를 공유한다', async ({
+  context,
+  page,
+}) => {
+  test.setTimeout(120_000);
+  await page.setViewportSize({ height: 844, width: 390 });
+
+  const localBody = 'E2E local content warning body';
+  const localWarning = 'E2E local content warning';
+  const remoteBody = 'E2E remote content warning body';
+  const remoteWarning = 'E2E remote content warning';
+  const viewer = await createE2ESession({
+    displayName: 'E2E Content Warning Viewer',
+    handle: 'e2e-content-warning-viewer',
+  });
+  const remoteAuthor = await createE2ERemoteProfile({
+    displayName: 'E2E Content Warning Remote Author',
+    domain: 'e2e-content-warning.remote.example',
+    handle: 'e2e-content-warning-remote',
+  });
+  const localPost = await createE2EPost({
+    body: localBody,
+    contentWarning: localWarning,
+    profileId: viewer.profile!.id,
+  });
+  await createE2EPost({
+    body: remoteBody,
+    contentWarning: remoteWarning,
+    profileId: remoteAuthor.id,
+  });
+  await createE2EFollow({
+    followerProfileId: viewer.profile!.id,
+    followeeProfileId: remoteAuthor.id,
+  });
+  await setE2ESessionCookie(context, viewer.token);
+
+  const homeResponse = waitForGraphQLOperation(page, 'HomePageQuery');
+  await page.goto('/home');
+  await expectGraphQLSuccess(await homeResponse);
+
+  const localArticle = postArticle(page, localWarning);
+  const remoteArticle = postArticle(page, remoteWarning);
+  const localHidden = localArticle.getByRole('button', {
+    name: `${localWarning}, 본문, 보기`,
+  });
+  const remoteHidden = remoteArticle.getByRole('button', {
+    name: `${remoteWarning}, 본문, 보기`,
+  });
+
+  await expect(localHidden).toBeVisible();
+  await expect(remoteHidden).toBeVisible();
+  await expect(localArticle.getByText(localBody, { exact: true })).toHaveCount(0);
+  await expect(remoteArticle.getByText(remoteBody, { exact: true })).toHaveCount(0);
+  await expectNoHorizontalOverflow(page);
+
+  await localHidden.click();
+  await expect(page).toHaveURL(/\/home$/);
+  await expect(localArticle.getByText(localBody, { exact: true })).toBeVisible();
+  await expect(
+    localArticle.getByRole('button', { name: `${localWarning}, 본문, 다시 가리기` }),
+  ).toBeVisible();
+
+  await remoteHidden.click();
+  await expect(page).toHaveURL(/\/home$/);
+  await expect(remoteArticle.getByText(remoteBody, { exact: true })).toBeVisible();
+  await remoteArticle.getByRole('button', { name: `${remoteWarning}, 본문, 다시 가리기` }).click();
+  await expect(page).toHaveURL(/\/home$/);
+  await expect(remoteArticle.getByText(remoteBody, { exact: true })).toHaveCount(0);
+  await expect(
+    remoteArticle.getByRole('button', { name: `${remoteWarning}, 본문, 보기` }),
+  ).toBeVisible();
+
+  const postId = toGlobalId('Post', localPost.id);
+  const detailResponse = waitForGraphQLOperation(page, 'PostDetailQuery');
+  await localArticle.getByTestId('post-list-row-body').click();
+  const response = await detailResponse;
+  await expectGraphQLSuccess(response);
+  const operation = readGraphQLOperation(response.request().postData());
+  expect(operation).toMatchObject({
+    operationName: 'PostDetailQuery',
+    variables: { postId },
+  });
+  await expect(page).toHaveURL(`/@${viewer.profile!.handle}/${postId}`);
+  await expect(page.getByText(localBody, { exact: true })).toBeVisible();
+  await expect(
+    page.getByTestId('post-content-warning').getByText('다시 가리기', { exact: true }),
+  ).toBeVisible();
+
+  await page.getByTestId('post-content-warning').click();
+  await expect(page).toHaveURL(`/@${viewer.profile!.handle}/${postId}`);
+  await expect(page.getByText(localBody, { exact: true })).toHaveCount(0);
+  await expect(
+    page.getByTestId('post-content-warning').getByText('보기', { exact: true }),
+  ).toBeVisible();
+
+  await page.getByRole('button', { name: '뒤로 가기' }).click();
+  await expect(page).toHaveURL(/\/home$/);
+  await expect(
+    postArticle(page, localWarning).getByRole('button', {
+      name: `${localWarning}, 본문, 보기`,
+    }),
+  ).toBeVisible();
+  await expect(postArticle(page, localWarning).getByText(localBody, { exact: true })).toHaveCount(
+    0,
+  );
+
+  for (const width of [1024, 1440] as const) {
+    await page.setViewportSize({ height: 844, width });
+
+    const wideLocalArticle = postArticle(page, localWarning);
+    const wideRemoteArticle = postArticle(page, remoteWarning);
+    await expect(
+      wideLocalArticle.getByRole('button', { name: `${localWarning}, 본문, 보기` }),
+    ).toBeVisible();
+    await expect(
+      wideRemoteArticle.getByRole('button', { name: `${remoteWarning}, 본문, 보기` }),
+    ).toBeVisible();
+    await expect(wideLocalArticle.getByText(localBody, { exact: true })).toHaveCount(0);
+    await expect(wideRemoteArticle.getByText(remoteBody, { exact: true })).toHaveCount(0);
+    await expectNoHorizontalOverflow(page);
+  }
+});
+
 test('실제 북마크 목록은 GraphQL 삭제 오류에서 상태를 보존하고 재시도 성공 후 제거한다', async ({
   context,
   page,
