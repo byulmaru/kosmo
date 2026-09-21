@@ -4,13 +4,20 @@ import { after, beforeEach, describe, it, mock } from 'node:test';
 import { RelayTransportError } from '@/relay/transportError';
 
 type InitOptions = Record<string, unknown>;
-type CaptureCall = { cause: unknown; hint: unknown; extras: unknown };
+type CaptureCall = {
+  cause?: unknown;
+  extras: unknown;
+  hint?: unknown;
+  level?: unknown;
+  message?: string;
+};
 type ReactCaptureCall = { cause: unknown; info: unknown; hint: unknown };
 
 const initCalls: InitOptions[] = [];
 const captureCalls: CaptureCall[] = [];
 const reactCaptureCalls: ReactCaptureCall[] = [];
 let captureExceptionThrows = false;
+let captureMessageThrows = false;
 
 const sentryMock = {
   exports: {
@@ -20,6 +27,13 @@ const sentryMock = {
       }
 
       captureCalls.push({ cause, hint, extras: undefined });
+    },
+    captureMessage: (message: string, level: unknown) => {
+      if (captureMessageThrows) {
+        throw new Error('capture message failed');
+      }
+
+      captureCalls.push({ extras: undefined, level, message });
     },
     captureReactException: (cause: unknown, info: unknown, hint: unknown) => {
       reactCaptureCalls.push({ cause, info, hint });
@@ -80,6 +94,7 @@ describe('Web app handled Sentry errors', { concurrency: false }, () => {
     captureCalls.length = 0;
     reactCaptureCalls.length = 0;
     captureExceptionThrows = false;
+    captureMessageThrows = false;
   });
 
   it('does not capture without a release', async () => {
@@ -106,6 +121,21 @@ describe('Web app handled Sentry errors', { concurrency: false }, () => {
       mechanism: { handled: true, type: 'auto.function.handled_error' },
     });
     assert.deepEqual(captureCalls[0]?.extras, context);
+  });
+
+  it('captures handled warning messages with primitive context', async () => {
+    process.env.EXPO_PUBLIC_SENTRY_RELEASE = 'kosmo@abc123';
+    const { captureHandledMessage } = await import(`${sentryModule}?handled-message`);
+    const context = { owner: 'ProfileSwitcher_query', ageBucket: 'under_5m' } as const;
+
+    captureHandledMessage('Relay missing expected data', context);
+
+    assert.equal(captureCalls.length, 1);
+    assert.deepEqual(captureCalls[0], {
+      extras: context,
+      level: 'warning',
+      message: 'Relay missing expected data',
+    });
   });
 
   it('preserves the existing React error capture behavior', async () => {
@@ -150,6 +180,15 @@ describe('Web app handled Sentry errors', { concurrency: false }, () => {
     captureExceptionThrows = true;
 
     assert.doesNotThrow(() => captureHandledError(new Error('upload failed')));
+    assert.equal(captureCalls.length, 0);
+  });
+
+  it('isolates a Sentry warning capture failure from the caller', async () => {
+    process.env.EXPO_PUBLIC_SENTRY_RELEASE = 'kosmo@abc123';
+    const { captureHandledMessage } = await import(`${sentryModule}?capture-message-fails`);
+    captureMessageThrows = true;
+
+    assert.doesNotThrow(() => captureHandledMessage('Relay missing expected data'));
     assert.equal(captureCalls.length, 0);
   });
 });

@@ -1,4 +1,5 @@
 import { Environment, Network, RecordSource, Store } from 'relay-runtime';
+import { createRelayFieldLogger } from './fieldLogger';
 import { executeGraphQLRequest } from './network';
 
 export function createRelayEnvironment(token: string | null): Environment {
@@ -6,6 +7,7 @@ export function createRelayEnvironment(token: string | null): Environment {
     network: Network.create((request, variables) =>
       executeGraphQLRequest(request, variables, token),
     ),
+    relayFieldLogger: createRelayFieldLogger(),
     store: new Store(new RecordSource()),
   });
 }

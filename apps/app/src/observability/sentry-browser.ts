@@ -51,3 +51,21 @@ export const captureHandledError = (error: Error, context?: HandledErrorContext)
     // Sentry reporting is best-effort and must not affect the product flow.
   }
 };
+
+export const captureHandledMessage = (message: string, context?: HandledErrorContext): void => {
+  if (!enabled) {
+    return;
+  }
+
+  try {
+    Sentry.withScope((scope) => {
+      if (context) {
+        scope.setExtras(context);
+      }
+
+      Sentry.captureMessage(message, 'warning');
+    });
+  } catch {
+    // Sentry reporting is best-effort and must not affect the product flow.
+  }
+};

@@ -4,10 +4,18 @@ import { RelayTransportError } from '@/relay/transportError';
 import type { ErrorInfo } from 'react';
 
 type InitOptions = Record<string, unknown>;
-type CaptureCall = { cause: unknown; hint: unknown; context: unknown; extras: unknown };
+type CaptureCall = {
+  cause?: unknown;
+  context: unknown;
+  extras: unknown;
+  hint?: unknown;
+  level?: unknown;
+  message?: string;
+};
 const initCalls: InitOptions[] = [];
 const captureCalls: CaptureCall[] = [];
 let captureExceptionThrows = false;
+let captureMessageThrows = false;
 
 mock.module('@sentry/react-native', {
   exports: {
@@ -17,6 +25,13 @@ mock.module('@sentry/react-native', {
       }
 
       captureCalls.push({ cause, hint, context: undefined, extras: undefined });
+    },
+    captureMessage: (message: string, level: unknown) => {
+      if (captureMessageThrows) {
+        throw new Error('capture message failed');
+      }
+
+      captureCalls.push({ context: undefined, extras: undefined, level, message });
     },
     init: (options: InitOptions) => {
       initCalls.push(options);
@@ -67,6 +82,7 @@ describe('Native app Sentry configuration', () => {
     initCalls.length = 0;
     captureCalls.length = 0;
     captureExceptionThrows = false;
+    captureMessageThrows = false;
   });
 
   it('does not initialize or capture without a release', async () => {
@@ -149,12 +165,37 @@ describe('Native app Sentry configuration', () => {
     assert.deepEqual(captureCalls[0]?.extras, context);
   });
 
+  it('captures handled warning messages with primitive context', async () => {
+    process.env.EXPO_PUBLIC_SENTRY_RELEASE = 'kosmo@abc123';
+    const { captureHandledMessage } = await import(`${sentryModule}?handled-message`);
+    const context = { owner: 'ProfileSwitcher_query', ageBucket: 'under_5m' } as const;
+
+    captureHandledMessage('Relay missing expected data', context);
+
+    assert.equal(captureCalls.length, 1);
+    assert.deepEqual(captureCalls[0], {
+      context: undefined,
+      extras: context,
+      level: 'warning',
+      message: 'Relay missing expected data',
+    });
+  });
+
   it('isolates a Sentry capture failure from the caller', async () => {
     process.env.EXPO_PUBLIC_SENTRY_RELEASE = 'kosmo@abc123';
     const { captureHandledError } = await import(`${sentryModule}?capture-fails`);
     captureExceptionThrows = true;
 
     assert.doesNotThrow(() => captureHandledError(new Error('upload failed')));
+    assert.equal(captureCalls.length, 0);
+  });
+
+  it('isolates a Sentry warning capture failure from the caller', async () => {
+    process.env.EXPO_PUBLIC_SENTRY_RELEASE = 'kosmo@abc123';
+    const { captureHandledMessage } = await import(`${sentryModule}?capture-message-fails`);
+    captureMessageThrows = true;
+
+    assert.doesNotThrow(() => captureHandledMessage('Relay missing expected data'));
     assert.equal(captureCalls.length, 0);
   });
 });
