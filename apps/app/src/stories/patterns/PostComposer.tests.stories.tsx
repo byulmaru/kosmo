@@ -17,7 +17,6 @@ import baseMeta, {
   MobilePlaygroundContract as mobilePlaygroundContract,
   MobileRuntimeAltEditorContract as mobileRuntimeAltEditorContract,
   OverlayGeometryContract as overlayGeometryContract,
-  OverlayOverflowScrollContract as overlayOverflowScrollContract,
   OverlayProgressRingContract as overlayProgressRingContract,
   PendingMediaContract as pendingMediaContract,
   Playground as playgroundContract,
@@ -85,7 +84,6 @@ export const MobilePlaygroundContract: Story = mobilePlaygroundContract;
 export const MobileRuntimeAltEditorContract: Story = mobileRuntimeAltEditorContract;
 export const MobileFlexLayoutContract: Story = mobileFlexLayoutContract;
 export const OverlayGeometryContract: Story = overlayGeometryContract;
-export const OverlayOverflowScrollContract: Story = overlayOverflowScrollContract;
 export const WebModalLayoutContract: Story = {
   ...webModalLayoutContract,
   parameters: { controls: { disable: true } },

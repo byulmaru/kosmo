@@ -162,7 +162,6 @@ const meta = {
     'MobileRuntimeAltEditorContract',
     'MobileFlexLayoutContract',
     'OverlayGeometryContract',
-    'OverlayOverflowScrollContract',
     'OverlayProgressRingContract',
     'PendingMediaContract',
     'ProgressRingToneContract',
@@ -1052,38 +1051,6 @@ export const OverlayGeometryContract: Story = {
   },
 };
 
-export const OverlayOverflowScrollContract: Story = {
-  args: {
-    body: '\n긴 본문'.repeat(40),
-    contentWarning: '경고 문구',
-    contentWarningExpanded: true,
-    items: readyComposerMedia.slice(0, 1),
-    surface: 'overlay',
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const scroll = canvas.getByTestId('post-composer-scroll');
-    const author = canvas.getByTestId('post-composer-author');
-    const visibility = canvas.getByRole('button', { name: '공개 범위: 조용한 공개' });
-    const contentWarning = canvas.getByRole('textbox', { name: '콘텐츠 경고' });
-    const body = canvas.getByRole('textbox', { name: '게시글 본문' });
-    const gallery = canvas.getByLabelText('첨부 이미지 갤러리, 1개');
-    const footer = canvas.getByTestId('post-composer-footer');
-    await waitFor(() => expect(scroll.scrollHeight).toBeGreaterThan(scroll.clientHeight));
-
-    const top = (element: Element) => element.getBoundingClientRect().top;
-    const fixedTops = [author, visibility, contentWarning, footer].map(top);
-    const bodyTop = top(body);
-    const galleryTop = top(gallery);
-    scroll.scrollTop = scroll.scrollHeight;
-    await waitFor(() => expect(scroll.scrollTop).toBeGreaterThan(0));
-
-    expect([author, visibility, contentWarning, footer].map(top)).toEqual(fixedTops);
-    expect(top(body)).toBeLessThan(bodyTop);
-    expect(top(gallery)).toBeLessThan(galleryTop);
-  },
-};
-
 export const WebModalLayoutContract: Story = {
   ...Playground,
   args: {
@@ -1113,7 +1080,7 @@ export const WebModalLayoutContract: Story = {
       visibility.getBoundingClientRect().left,
     );
     expect(getComputedStyle(editor).borderWidth).toBe('0px');
-    expect(scroll.contains(author)).toBe(false);
+    expect(scroll.contains(editor)).toBe(true);
     expect(scroll.contains(footer)).toBe(false);
     expect(target.getBoundingClientRect().height).toBeLessThan(320);
     expect(footer.getBoundingClientRect().bottom).toBeCloseTo(
