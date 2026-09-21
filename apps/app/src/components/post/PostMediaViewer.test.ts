@@ -14,7 +14,6 @@ import type { PostMediaItem } from './PostMediaImage';
 const require = createRequire(import.meta.url);
 const platform = { OS: 'web' };
 const viewport = { height: 800, width: 767 };
-let panResponderConfig: Record<string, (...args: never[]) => unknown> | null = null;
 let keydownListener: ((event: KeyboardEvent) => void) | null = null;
 let closeFocused = 0;
 const viewerKeyTarget = { tagName: 'DIV' };
@@ -60,12 +59,6 @@ mock.module('react-native', {
     Animated: { View: 'AnimatedView' },
     Image: MockImage,
     Modal: 'Modal',
-    PanResponder: {
-      create: (config: Record<string, (...args: never[]) => unknown>) => {
-        panResponderConfig = config;
-        return { panHandlers: { testID: 'pan-handlers' } };
-      },
-    },
     Platform: platform,
     Pressable,
     ScrollView: 'ScrollView',
@@ -181,7 +174,6 @@ afterEach(async () => {
   platform.OS = 'web';
   viewport.height = 800;
   viewport.width = 767;
-  panResponderConfig = null;
   keydownListener = null;
   closeFocused = 0;
 });
@@ -347,21 +339,65 @@ describe('PostMediaViewer', () => {
     platform.OS = 'ios';
     await render({ post: viewerPost({ contentId: 'content-2' }), selectedIndex: 1 });
     assert.equal(currentImage().props.accessibilityLabel, '두 번째 이미지');
-    assert.ok(panResponderConfig);
-    assert.equal(
-      panResponderConfig.onMoveShouldSetPanResponder?.(
-        null as never,
-        {
-          dx: -40,
-          dy: 4,
-        } as never,
-      ),
-      true,
-    );
     await act(async () => {
-      panResponderConfig?.onPanResponderRelease?.(null as never, { dx: -80, dy: 4 } as never);
+      const layout = byTestId('post-media-viewer-layout');
+      layout.props.onTouchStart({
+        nativeEvent: { pageX: 100, pageY: 100, touches: [{}] },
+      } as never);
+      layout.props.onTouchMove({
+        nativeEvent: { pageX: 99, pageY: 102, touches: [{}] },
+      } as never);
+      layout.props.onTouchMove({
+        nativeEvent: { pageX: 60, pageY: 104, touches: [{}] },
+      } as never);
+      layout.props.onTouchEnd({
+        nativeEvent: { pageX: 40, pageY: 104, touches: [] },
+      } as never);
     });
     assert.equal(currentImage().props.accessibilityLabel, '3번째 첨부 이미지');
+
+    await act(async () => pressable('이전 이미지').props.onPress());
+    assert.equal(currentImage().props.accessibilityLabel, '두 번째 이미지');
+    await act(async () => {
+      const layout = byTestId('post-media-viewer-layout');
+      layout.props.onTouchStart({
+        nativeEvent: { pageX: 100, pageY: 100, touches: [{}] },
+      } as never);
+      layout.props.onTouchMove({
+        nativeEvent: { pageX: 100, pageY: 120, touches: [{}] },
+      } as never);
+      layout.props.onTouchMove({
+        nativeEvent: { pageX: 40, pageY: 120, touches: [{}] },
+      } as never);
+      layout.props.onTouchEnd({
+        nativeEvent: { pageX: 20, pageY: 120, touches: [] },
+      } as never);
+    });
+    assert.equal(currentImage().props.accessibilityLabel, '두 번째 이미지');
+    await act(async () => {
+      const layout = byTestId('post-media-viewer-layout');
+      layout.props.onTouchStart({
+        nativeEvent: { pageX: 100, pageY: 100, touches: [{}] },
+      } as never);
+      layout.props.onTouchMove({
+        nativeEvent: { pageX: 40, pageY: 104, touches: [{}, {}] },
+      } as never);
+      layout.props.onTouchEnd({
+        nativeEvent: { pageX: 20, pageY: 104, touches: [] },
+      } as never);
+    });
+    assert.equal(currentImage().props.accessibilityLabel, '두 번째 이미지');
+    await act(async () => {
+      const layout = byTestId('post-media-viewer-layout');
+      layout.props.onTouchStart({
+        nativeEvent: { pageX: 100, pageY: 100, touches: [{}] },
+      } as never);
+      layout.props.onTouchCancel();
+      layout.props.onTouchEnd({
+        nativeEvent: { pageX: 20, pageY: 104, touches: [] },
+      } as never);
+    });
+    assert.equal(currentImage().props.accessibilityLabel, '두 번째 이미지');
   });
 
   it('767px Web과 Native는 세로, 768px Web은 좌우 layout을 사용한다', async () => {
@@ -454,6 +490,23 @@ describe('PostMediaViewer', () => {
     );
     assert.equal(flattenStyle(byTestId('post-media-viewer-close').props.style).top, 16);
     assert.equal(flattenStyle(byTestId('post-media-viewer-close').props.style).right, 16);
+  });
+
+  it('Content가 바뀐 진행 중 Native touch는 새 Content를 이동시키지 않는다', async () => {
+    platform.OS = 'ios';
+    await render({ post: viewerPost({ contentId: 'content-a' }), selectedIndex: 1 });
+    const previousLayout = byTestId('post-media-viewer-layout');
+    previousLayout.props.onTouchStart({
+      nativeEvent: { pageX: 100, pageY: 100, touches: [{}] },
+    } as never);
+
+    await render({ post: viewerPost({ contentId: 'content-b' }), selectedIndex: 1 });
+    await act(async () =>
+      byTestId('post-media-viewer-layout').props.onTouchEnd({
+        nativeEvent: { pageX: 20, pageY: 104, touches: [] },
+      } as never),
+    );
+    assert.equal(currentImage().props.accessibilityLabel, '두 번째 이미지');
   });
 
   it('Compact detail은 내용 높이를 따르고 viewport 상한 안에서 body만 줄어든다', async () => {
@@ -641,18 +694,17 @@ describe('PostMediaViewer', () => {
 
     platform.OS = 'ios';
     await render({ post: viewerPost({ media: [media(0, '첫 번째 이미지')] }), selectedIndex: 1 });
-    assert.equal(
-      panResponderConfig?.onMoveShouldSetPanResponder?.(null as never, { dx: -80, dy: 4 } as never),
-      false,
-    );
     await act(async () => {
-      await panResponderConfig?.onPanResponderRelease?.(
-        null as never,
-        {
-          dx: -80,
-          dy: 4,
-        } as never,
-      );
+      const layout = byTestId('post-media-viewer-layout');
+      layout.props.onTouchStart({
+        nativeEvent: { pageX: 100, pageY: 100, touches: [{}] },
+      } as never);
+      layout.props.onTouchMove({
+        nativeEvent: { pageX: 20, pageY: 104, touches: [{}] },
+      } as never);
+      layout.props.onTouchEnd({
+        nativeEvent: { pageX: 0, pageY: 104, touches: [] },
+      } as never);
     });
     assert.ok(byTestId('post-media-viewer-unavailable'));
   });

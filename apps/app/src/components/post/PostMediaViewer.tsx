@@ -11,7 +11,6 @@ import {
 } from 'react';
 import {
   Modal,
-  PanResponder,
   Platform,
   Pressable,
   ScrollView,
@@ -40,6 +39,7 @@ import { PostContentPrivacyBoundary } from './PostContentPrivacyBoundary';
 import { focusPostMediaViewerTarget } from './postMediaViewerSession';
 import type { ReactNode, RefObject } from 'react';
 import type {
+  GestureResponderEvent,
   LayoutChangeEvent,
   PressableStateCallbackType,
   View as NativeView,
@@ -290,6 +290,13 @@ export function PostMediaViewerContent({ actionBar, post: postKey, wideDetail }:
     content === null || currentMedia === undefined || currentMedia.url === null
       ? 'unavailable'
       : 'ready';
+  const swipeTouchStart = useRef<{
+    contentId: string | null;
+    mediaId: string;
+    mediaUrl: string | null;
+    pageX: number;
+    pageY: number;
+  } | null>(null);
 
   useEffect(
     () => viewerState.syncContentId(content?.id ?? null),
@@ -313,24 +320,79 @@ export function PostMediaViewerContent({ actionBar, post: postKey, wideDetail }:
     };
   }, [moveBy, viewerState.moveByRef]);
 
-  const swipeResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onMoveShouldSetPanResponder: (_event, gesture) =>
-          Boolean(currentMedia) &&
-          Platform.OS !== 'web' &&
-          Math.abs(gesture.dx) > 12 &&
-          Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.2,
-        onPanResponderRelease: (_event, gesture) => {
-          if (gesture.dx <= -48) {
-            moveBy(1);
-          } else if (gesture.dx >= 48) {
-            moveBy(-1);
-          }
-        },
-      }),
-    [currentMedia, moveBy],
+  const handleTouchStart = useCallback(
+    (event: GestureResponderEvent) => {
+      if (Platform.OS === 'web' || !currentMedia || event.nativeEvent.touches.length !== 1) {
+        swipeTouchStart.current = null;
+        return;
+      }
+      swipeTouchStart.current = {
+        contentId: content?.id ?? null,
+        mediaId: currentMedia.id,
+        mediaUrl: currentMedia.url,
+        pageX: event.nativeEvent.pageX,
+        pageY: event.nativeEvent.pageY,
+      };
+    },
+    [content?.id, currentMedia],
   );
+  const handleTouchMove = useCallback(
+    (event: GestureResponderEvent) => {
+      if (Platform.OS === 'web' || !swipeTouchStart.current || !currentMedia) {
+        swipeTouchStart.current = null;
+        return;
+      }
+      if (
+        event.nativeEvent.touches.length !== 1 ||
+        currentMedia.id !== swipeTouchStart.current.mediaId ||
+        currentMedia.url !== swipeTouchStart.current.mediaUrl ||
+        (content?.id ?? null) !== swipeTouchStart.current.contentId
+      ) {
+        swipeTouchStart.current = null;
+        return;
+      }
+      const deltaX = event.nativeEvent.pageX - swipeTouchStart.current.pageX;
+      const deltaY = event.nativeEvent.pageY - swipeTouchStart.current.pageY;
+      if (
+        Math.max(Math.abs(deltaX), Math.abs(deltaY)) > 12 &&
+        Math.abs(deltaX) <= Math.abs(deltaY) * 1.2
+      ) {
+        swipeTouchStart.current = null;
+      }
+    },
+    [content?.id, currentMedia],
+  );
+  const handleTouchEnd = useCallback(
+    (event: GestureResponderEvent) => {
+      const start = swipeTouchStart.current;
+      swipeTouchStart.current = null;
+      if (
+        Platform.OS === 'web' ||
+        !start ||
+        !currentMedia ||
+        currentMedia.id !== start.mediaId ||
+        currentMedia.url !== start.mediaUrl ||
+        (content?.id ?? null) !== start.contentId ||
+        event.nativeEvent.touches.length !== 0
+      ) {
+        return;
+      }
+      const deltaX = event.nativeEvent.pageX - start.pageX;
+      const deltaY = event.nativeEvent.pageY - start.pageY;
+      if (Math.abs(deltaX) <= Math.abs(deltaY) * 1.2) {
+        return;
+      }
+      if (deltaX <= -48) {
+        moveBy(1);
+      } else if (deltaX >= 48) {
+        moveBy(-1);
+      }
+    },
+    [content?.id, currentMedia, moveBy],
+  );
+  const handleTouchCancel = useCallback(() => {
+    swipeTouchStart.current = null;
+  }, []);
   const handleBodyLayout = useCallback(
     (event: LayoutChangeEvent) => {
       if (currentBodyMeasurementKey.current !== bodyMeasurementKey) {
@@ -459,7 +521,10 @@ export function PostMediaViewerContent({ actionBar, post: postKey, wideDetail }:
 
   return (
     <View
-      {...swipeResponder.panHandlers}
+      onTouchCancel={handleTouchCancel}
+      onTouchEnd={handleTouchEnd}
+      onTouchMove={handleTouchMove}
+      onTouchStart={handleTouchStart}
       style={[styles.layout, wide ? styles.wideLayout : styles.mobileLayout]}
       testID="post-media-viewer-layout"
     >
