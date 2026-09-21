@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
@@ -13,6 +14,7 @@ const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, {
     exports,
   } as unknown as Parameters<typeof mock.module>[1]);
+const require = createRequire(import.meta.url);
 
 mockModule('react-native', {
   Linking: { openURL: async () => undefined },
@@ -21,6 +23,12 @@ mockModule('react-native', {
   StyleSheet: { create: (styles: object) => styles },
   Text: 'Text',
   View: 'View',
+});
+mockModule('lucide-react-native', {
+  EyeOff: (props: Record<string, unknown>) => createElement('EyeOff', props),
+});
+mockModule(require.resolve('lucide-react-native'), {
+  EyeOff: (props: Record<string, unknown>) => createElement('EyeOff', props),
 });
 mockModule(new URL('../../session/SessionProvider.tsx', import.meta.url), {
   useSession: () => ({ selectedProfileId: null, sessionId: null }),
@@ -54,13 +62,11 @@ type RendererProps = {
 
 let PostContentRenderer: ComponentType<RendererProps>;
 let PostContentWarningRevealProvider: ComponentType<{ children?: ReactNode }>;
-let Button: ComponentType<Record<string, unknown>>;
 let renderer: ReactTestRenderer | null = null;
 
 before(async () => {
   ({ PostContentRenderer } = await import('./PostContentRenderer'));
   ({ PostContentWarningRevealProvider } = await import('./PostContentWarningRevealContext'));
-  ({ Button } = await import('@/components/ui/Button'));
 });
 
 afterEach(async () => {
@@ -72,7 +78,7 @@ afterEach(async () => {
 });
 
 describe('PostContentRenderer', () => {
-  it('content warning reveal uses Button and forwards expanded state', async () => {
+  it('content warning row exposes its summary, metadata, action, and expanded state', async () => {
     await render({
       bodyText: '원문 본문',
       contentWarning: '민감한 내용',
@@ -81,19 +87,71 @@ describe('PostContentRenderer', () => {
       postId: 'post-warning-button',
     });
 
+    const toggle = rendered('Pressable').find(
+      (node) => node.props.testID === 'post-content-warning',
+    );
+    assert.ok(toggle);
     assert.deepEqual(
-      renderer?.root.findAllByType(Button).map(({ props }) => ({
-        accessibilityLabel: props.accessibilityLabel,
-        accessibilityState: props.accessibilityState,
-        ariaExpanded: props['aria-expanded'],
-      })),
-      [
-        {
-          accessibilityLabel: '내용 보기',
-          accessibilityState: { expanded: false },
-          ariaExpanded: false,
-        },
+      {
+        accessibilityLabel: toggle.props.accessibilityLabel,
+        accessibilityRole: toggle.props.accessibilityRole,
+        accessibilityState: toggle.props.accessibilityState,
+        ariaExpanded: toggle.props['aria-expanded'],
+      },
+      {
+        accessibilityLabel: '민감한 내용, 본문, 보기',
+        accessibilityRole: 'button',
+        accessibilityState: { expanded: false },
+        ariaExpanded: false,
+      },
+    );
+    assert.equal(
+      rendered('Text').some((node) => node.props.children === '본문'),
+      true,
+    );
+    assert.equal(
+      rendered('Text').some((node) => node.props.children === '보기'),
+      true,
+    );
+    const warningStyle = toggle.props.style({ pressed: false, hovered: false })[0];
+    assert.deepEqual(
+      {
+        borderRadius: warningStyle.borderRadius,
+        gap: warningStyle.gap,
+        minHeight: warningStyle.minHeight,
+        paddingHorizontal: warningStyle.paddingHorizontal,
+        paddingVertical: warningStyle.paddingVertical,
+      },
+      {
+        borderRadius: 16,
+        gap: 8,
+        minHeight: 56,
+        paddingHorizontal: 24,
+        paddingVertical: 8,
+      },
+    );
+  });
+
+  it('content warning metadata counts only the canonical post media passed to the renderer', async () => {
+    await render({
+      bodyText: '원문 본문',
+      contentWarning: '긴 경고 요약',
+      document: null,
+      media: [
+        { altText: null, id: 'media-1', url: 'https://media.example/1.webp' },
+        { altText: null, id: 'media-2', url: 'https://media.example/2.webp' },
       ],
+      postId: 'post-warning-metadata',
+    });
+
+    assert.equal(
+      rendered('Text').some((node) => node.props.children === '본문 · 이미지 2개'),
+      true,
+    );
+    assert.equal(
+      rendered('Pressable').find((node) => node.props.testID === 'post-content-warning')?.props
+        .accessibilityLabel,
+      '긴 경고 요약, 본문 · 이미지 2개, 보기',
     );
   });
 
@@ -142,7 +200,7 @@ describe('PostContentRenderer', () => {
     const contentRoot = byTestId('post-content-renderer');
     assert.equal(rendered('PostMediaGallery').length, 0);
     const toggle = rendered('Pressable').find(
-      (node) => node.props.testID === 'post-content-warning-toggle',
+      (node) => node.props.testID === 'post-content-warning',
     );
     assert.ok(toggle);
     assert.equal(
@@ -150,11 +208,15 @@ describe('PostContentRenderer', () => {
       false,
     );
 
+    let stopped = false;
     await act(async () =>
       toggle.props.onPress({
-        stopPropagation: () => undefined,
+        stopPropagation: () => {
+          stopped = true;
+        },
       }),
     );
+    assert.equal(stopped, true);
 
     const galleries = rendered('PostMediaGallery');
     assert.equal(galleries.length, 1);
@@ -181,7 +243,7 @@ describe('PostContentRenderer', () => {
     });
 
     assert.equal(
-      rendered('Pressable').some((node) => node.props.testID === 'post-content-warning-toggle'),
+      rendered('Pressable').some((node) => node.props.testID === 'post-content-warning'),
       false,
     );
     assert.equal(
@@ -245,7 +307,7 @@ describe('PostContentRenderer', () => {
     );
 
     const toggle = rendered('Pressable').find(
-      (node) => node.props.testID === 'post-content-warning-toggle',
+      (node) => node.props.testID === 'post-content-warning',
     );
     assert.ok(toggle);
     await act(async () =>
