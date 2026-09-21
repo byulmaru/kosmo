@@ -52,6 +52,7 @@ type RunWorkflowOptions<T extends Workflow, Mode extends 'start' | 'execute'> = 
   'workflowId' | 'taskQueue'
 > & {
   readonly mode: Mode;
+  readonly rpcTimeoutMs?: number;
 };
 
 type RunWorkflowUpdateOptions<T extends Workflow, Args extends unknown[]> = Omit<
@@ -59,6 +60,7 @@ type RunWorkflowUpdateOptions<T extends Workflow, Args extends unknown[]> = Omit
   'workflowId' | 'taskQueue'
 > & {
   readonly mode: 'update-with-start';
+  readonly rpcTimeoutMs?: number;
   readonly updateId?: string;
   readonly workflowIdConflictPolicy: WorkflowIdConflictPolicy;
 } & (Args extends [] ? { readonly updateArgs?: Args } : { readonly updateArgs: Args });
@@ -68,6 +70,7 @@ type RunWorkflowUpdateImplementationOptions<T extends Workflow> = Omit<
   'workflowId' | 'taskQueue'
 > & {
   readonly mode: 'update-with-start';
+  readonly rpcTimeoutMs?: number;
   readonly updateArgs?: unknown[];
   readonly updateId?: string;
   readonly workflowIdConflictPolicy: WorkflowIdConflictPolicy;
@@ -95,12 +98,20 @@ export async function runWorkflow<T extends Workflow>(
 ): Promise<WorkflowHandleWithStartDetails<T> | WorkflowResultType<T> | unknown> {
   const args = (options.args ?? []) as Parameters<T>;
   const workflowId = definition.workflowIdFromArgs(...args);
-  const deadline = Date.now() + 5_000;
+  const deadline = Date.now() + (options.rpcTimeoutMs ?? 30_000);
 
   try {
     if (options.mode === 'update-with-start') {
-      const { mode, args: workflowArgs, updateArgs, updateId, ...workflowOptions } = options;
+      const {
+        mode,
+        args: workflowArgs,
+        updateArgs,
+        updateId,
+        rpcTimeoutMs: _rpcTimeoutMs,
+        ...workflowOptions
+      } = options;
       void mode;
+      void _rpcTimeoutMs;
       const startOptions = {
         ...workflowOptions,
         args: workflowArgs,
@@ -125,7 +136,8 @@ export async function runWorkflow<T extends Workflow>(
       );
     }
 
-    const { mode, ...workflowOptions } = options;
+    const { mode, rpcTimeoutMs: _rpcTimeoutMs, ...workflowOptions } = options;
+    void _rpcTimeoutMs;
     const startOptions = {
       ...workflowOptions,
       workflowId,

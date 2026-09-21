@@ -401,7 +401,7 @@ test('remote Profile Workflow builder는 normalized handle과 profileId를 실�
   }
 });
 
-test('공용 task queue와 5초 deadline을 적용한다', async () => {
+test('공용 task queue와 기본 및 호출별 deadline을 적용한다', async () => {
   const workflow = async (): Promise<string> => 'ok';
   const definition = { workflow, workflowIdFromArgs: () => 'deadline-id' };
   const execute = mock.method(temporalClient.workflow, 'execute', async () => 'ok' as never);
@@ -421,19 +421,36 @@ test('공용 task queue와 5초 deadline을 적용한다', async () => {
       mode: 'execute',
     });
 
+    const defaultAfter = Date.now();
+    const overrideBefore = Date.now();
+    await runWorkflow(definition, {
+      mode: 'execute',
+      rpcTimeoutMs: 5_000,
+    });
+
     const after = Date.now();
-    const executeCall = execute.mock.calls[0];
-    assert.ok(executeCall);
-    const executeOptions = executeCall.arguments[1];
-    assert.ok(executeOptions);
-    assert.equal(executeOptions.taskQueue, 'kosmo');
-    assert.equal(deadlines.length, 1);
-    const deadlineValue = deadlines[0];
-    assert.ok(deadlineValue !== undefined);
-    const deadlineTimestamp =
-      deadlineValue instanceof Date ? deadlineValue.getTime() : deadlineValue;
-    assert.ok(deadlineTimestamp >= before + 4_900);
-    assert.ok(deadlineTimestamp <= after + 5_000);
+    const defaultDeadlineValue = deadlines[0];
+    const overrideDeadlineValue = deadlines[1];
+    assert.ok(defaultDeadlineValue !== undefined);
+    assert.ok(overrideDeadlineValue !== undefined);
+    assert.equal(deadlines.length, 2);
+    const defaultDeadline =
+      defaultDeadlineValue instanceof Date ? defaultDeadlineValue.getTime() : defaultDeadlineValue;
+    const overrideDeadline =
+      overrideDeadlineValue instanceof Date
+        ? overrideDeadlineValue.getTime()
+        : overrideDeadlineValue;
+    assert.ok(defaultDeadline >= before + 29_900);
+    assert.ok(defaultDeadline <= defaultAfter + 30_000);
+    assert.ok(overrideDeadline >= overrideBefore + 4_900);
+    assert.ok(overrideDeadline <= after + 5_000);
+    assert.equal(execute.mock.calls.length, 2);
+    for (const call of execute.mock.calls) {
+      const executeOptions = call.arguments[1];
+      assert.ok(executeOptions);
+      assert.equal(executeOptions.taskQueue, 'kosmo');
+      assert.equal('rpcTimeoutMs' in executeOptions, false);
+    }
   } finally {
     deadline.mock.restore();
     execute.mock.restore();
