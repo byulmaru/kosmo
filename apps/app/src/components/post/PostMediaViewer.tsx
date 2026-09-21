@@ -375,7 +375,13 @@ export function PostMediaViewerContent({ actionBar, post: postKey, wideDetail }:
             </Text>
           </View>
           {expanded ? (
-            <ScrollView style={styles.bodyScroll} testID="post-media-viewer-body-scroll">
+            <ScrollView
+              accessibilityLabel="펼친 원문"
+              showsVerticalScrollIndicator={false}
+              style={styles.bodyScroll}
+              tabIndex={0}
+              testID="post-media-viewer-body-scroll"
+            >
               <Text style={[styles.bodyText, { color: theme.text }]}>{bodyText}</Text>
             </ScrollView>
           ) : (

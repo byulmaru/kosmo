@@ -4588,7 +4588,12 @@ export const PostMediaViewerCompact: Story = {
     expect(viewer.queryByRole('button', { name: /다운로드|저장/ })).toBeNull();
 
     await userEvent.click(await viewer.findByRole('button', { name: '원문 더 보기' }));
-    expect(viewer.getByTestId('post-media-viewer-body-scroll')).toBeVisible();
+    const expandedBody = viewer.getByTestId('post-media-viewer-body-scroll');
+    expect(expandedBody).toBeVisible();
+    expect(expandedBody).toHaveAttribute('aria-label', '펼친 원문');
+    expect(expandedBody).toHaveAttribute('tabindex', '0');
+    expandedBody.focus();
+    expect(expandedBody).toHaveFocus();
     expect(viewer.getByTestId('post-media-viewer-action-bar')).toBeVisible();
 
     await userEvent.keyboard('{Escape}');

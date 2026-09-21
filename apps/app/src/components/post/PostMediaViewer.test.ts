@@ -489,7 +489,10 @@ describe('PostMediaViewer', () => {
     assert.equal(collapsedBody.overflow, 'hidden');
     assert.equal(flattenStyle(more.props.style).flexShrink, 0);
     await act(async () => more.props.onPress());
-    assert.ok(byTestId('post-media-viewer-body-scroll'));
+    const expandedBody = byTestId('post-media-viewer-body-scroll');
+    assert.equal(expandedBody.props.accessibilityLabel, '펼친 원문');
+    assert.equal(expandedBody.props.tabIndex, 0);
+    assert.equal(expandedBody.props.showsVerticalScrollIndicator, false);
     assert.deepEqual(pressable('원문 접기').props.accessibilityState, { expanded: true });
     assert.ok(byTestId('post-media-viewer-action-bar'));
   });
