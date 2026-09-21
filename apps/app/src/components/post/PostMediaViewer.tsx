@@ -25,7 +25,10 @@ import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
 import { IconButton } from '@/components/ui/IconButton';
 import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
-import { PostMediaViewerSurface } from '@/patterns/post-media-viewer/PostMediaViewerSurface';
+import {
+  PostMediaViewerImageStateProvider,
+  PostMediaViewerSurface,
+} from '@/patterns/post-media-viewer/PostMediaViewerSurface';
 import { useTheme } from '@/theme/ThemeProvider';
 import {
   borderWidths,
@@ -247,7 +250,7 @@ export function PostMediaViewer({
             <XIcon color="#ffffff" size={30} strokeWidth={2.5} />
           </IconButton>
           <PostMediaViewerStateContext.Provider value={viewerState}>
-            {children}
+            <PostMediaViewerImageStateProvider>{children}</PostMediaViewerImageStateProvider>
           </PostMediaViewerStateContext.Provider>
         </View>
       </View>
