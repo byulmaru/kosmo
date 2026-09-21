@@ -57,8 +57,10 @@ Profile Block의 저장 관계, transaction cleanup, 공통 조회·상호작용
   selected Profile 유무에 따라 `searchProfiles`와 같은 탐색 후보 Block 정책을 적용한다.
 - GraphQL 생성·해제는 선행 transaction action의 확정 결과를 사용하며, Owner 관리 관계는 일반 Profile 조회 권한과 독립적으로 격리한다.
   Membership으로 인증된 selected Profile과 request-scoped loader의 actor 격리를 함께 검증한다.
-- Block·Mute 관계의 `targetProfile`은 기존 `Profile`과 같은 global ID를 사용한다. Unblock 성공은 실제 삭제한 `ProfileBlock` ID를 반환하고,
-  관계를 제거하지 않은 결과만 `null`이며 오류·partial 결과를 성공으로 취급하지 않는다.
+- Block·Mute 관계의 `targetProfile`은 기존 `Profile`과 같은 global ID를 사용한다. Unblock 성공은 실제 삭제한 `ProfileBlock` ID를 반환한다.
+  정확한 행을 제거하지 않은 결과는 `success: false`와 `profileBlockId: null`을 유지한다. 이 결과에서 `targetProfile`을 제거 여부에 따라
+  null로 강제하지 않으며, 반환된 `targetProfile.viewerState`는 mutation 이후 authoritative server state를 반영할 수 있다. 오류·partial 결과를
+  성공으로 취급하지 않는다.
 - Mute와 Block 관리 관계는 독립적으로 유지한다. 같은 Target을 Mute한 뒤 Block해도 Mute Owner connection·관계 Node·해제
   경로는 유지하되, 이를 일반 Target Profile 조회 권한으로 사용하지 않는다.
 - GraphQL `node(id:)`·`profileByHandle`로 직접 Profile route에 새로고침·링크로 진입해도 정상 결과는 기본 Profile 정보, viewer 방향별 콘텐츠 상태와 현재
