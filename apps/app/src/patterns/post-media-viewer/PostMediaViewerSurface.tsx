@@ -22,6 +22,7 @@ import type {
   ImageLoadEvent,
   LayoutChangeEvent,
   PressableStateCallbackType,
+  StyleProp,
   ViewStyle,
 } from 'react-native';
 import type { PostMediaItem } from '@/components/post/PostMediaImage';
@@ -40,6 +41,7 @@ export type PostMediaViewerSurfaceProps = Readonly<{
   onPrevious: () => void;
   onRetry: () => void;
   showCloseControl?: boolean;
+  style?: StyleProp<ViewStyle>;
 }> &
   (
     | Readonly<{
@@ -84,6 +86,7 @@ export function PostMediaViewerSurface({
   onRetry,
   presentation,
   showCloseControl = true,
+  style,
   viewState,
 }: PostMediaViewerSurfaceProps) {
   const theme = useTheme();
@@ -190,7 +193,7 @@ export function PostMediaViewerSurface({
   };
 
   return (
-    <View style={styles.surface} testID="post-media-viewer-surface">
+    <View style={[styles.surface, style]} testID="post-media-viewer-surface">
       <View style={[styles.content, presentation === 'wide' ? styles.wideContent : undefined]}>
         <View style={styles.mediaPane} testID="post-media-viewer-media-pane">
           {Platform.OS === 'web' ? (

@@ -214,10 +214,7 @@ export function PostMediaViewer({
       transparent
       visible
     >
-      <View
-        style={[styles.backdrop, Platform.OS === 'web' && wide ? styles.wideWebBackdrop : null]}
-        testID="post-media-viewer-backdrop"
-      >
+      <View style={styles.backdrop} testID="post-media-viewer-backdrop">
         <Pressable
           accessible={false}
           focusable={false}
@@ -440,6 +437,7 @@ export function PostMediaViewerContent({ actionBar, post: postKey, wideDetail }:
       onRetry={() => undefined}
       presentation="wide"
       showCloseControl={false}
+      style={styles.transparentSurface}
       viewState={viewState}
     />
   ) : (
@@ -454,6 +452,7 @@ export function PostMediaViewerContent({ actionBar, post: postKey, wideDetail }:
       onRetry={() => undefined}
       presentation="compact"
       showCloseControl={false}
+      style={styles.transparentSurface}
       viewState={viewState}
     />
   );
@@ -500,6 +499,7 @@ export function PostMediaViewerQueryState({
       onRetry={onRetry ?? (() => undefined)}
       presentation="wide"
       showCloseControl={false}
+      style={styles.transparentSurface}
       viewState={viewState}
     />
   ) : (
@@ -514,6 +514,7 @@ export function PostMediaViewerQueryState({
       onRetry={onRetry ?? (() => undefined)}
       presentation="compact"
       showCloseControl={false}
+      style={styles.transparentSurface}
       viewState={viewState}
     />
   );
@@ -589,11 +590,10 @@ function stableCloseVisualStyle(state: PressableStateCallbackType): ViewStyle[] 
 const styles = StyleSheet.create({
   backdrop: {
     alignItems: 'center',
-    backgroundColor: '#000000',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     flex: 1,
     justifyContent: 'center',
   },
-  wideWebBackdrop: { backgroundColor: 'transparent' },
   backdropDismissTarget: {
     bottom: 0,
     left: 0,
@@ -614,6 +614,7 @@ const styles = StyleSheet.create({
   stableCloseWide: { left: spacing.lg },
   stableCloseVisual: { borderRadius: radii.full },
   layout: { flex: 1, minHeight: 0, minWidth: 0 },
+  transparentSurface: { backgroundColor: 'transparent' },
   mobileLayout: { flexDirection: 'column' },
   wideLayout: { flexDirection: 'row' },
   detailPanel: {

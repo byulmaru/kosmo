@@ -97,6 +97,7 @@ type SurfaceProps = Readonly<{
   onPrevious: () => void;
   onRetry: () => void;
   presentation: 'compact' | 'wide';
+  style?: Record<string, unknown>;
   viewState: 'ready' | 'loading' | 'error' | 'unavailable';
 }>;
 
@@ -541,6 +542,12 @@ describe('PostMediaViewerSurface', () => {
     const status = byRole('status');
     assert.equal(status.parent?.props.testID, 'post-media-viewer-media-pane');
     assert.equal(flattenStyle(status.props.style).backgroundColor, undefined);
+
+    await render({ style: { backgroundColor: 'transparent' } });
+    assert.equal(
+      flattenStyle(byTestId('post-media-viewer-surface').props.style).backgroundColor,
+      'transparent',
+    );
   });
 
   it('viewer control은 48 target·30/2.5 fixed-white icon과 interaction state를 사용한다', async () => {

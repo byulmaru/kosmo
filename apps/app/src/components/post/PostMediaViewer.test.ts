@@ -19,6 +19,10 @@ let keydownListener: ((event: KeyboardEvent) => void) | null = null;
 let closeFocused = 0;
 const viewerKeyTarget = { tagName: 'DIV' };
 const childOverlayKeyTarget = { tagName: 'DIV' };
+const MockImage = Object.assign((props: Record<string, unknown>) => createElement('Image', props), {
+  getSize: (_url: string, onSuccess: (width: number, height: number) => void) =>
+    onSuccess(1600, 900),
+});
 type PressableMockState = { pressed: boolean };
 type PressableMockProps = Record<string, unknown> & {
   children?: ReactNode | ((state: PressableMockState) => ReactNode);
@@ -54,7 +58,7 @@ mock.module('react-native', {
   exports: {
     ActivityIndicator: 'ActivityIndicator',
     Animated: { View: 'AnimatedView' },
-    Image: 'Image',
+    Image: MockImage,
     Modal: 'Modal',
     PanResponder: {
       create: (config: Record<string, (...args: never[]) => unknown>) => {
@@ -372,7 +376,11 @@ describe('PostMediaViewer', () => {
     );
     assert.equal(
       flattenStyle(byTestId('post-media-viewer-backdrop').props.style).backgroundColor,
-      '#000000',
+      'rgba(0, 0, 0, 0.7)',
+    );
+    assert.equal(
+      flattenStyle(byTestId('post-media-viewer-surface').props.style).backgroundColor,
+      'transparent',
     );
 
     viewport.width = 768;
@@ -390,6 +398,10 @@ describe('PostMediaViewer', () => {
     );
     assert.equal(
       flattenStyle(byTestId('post-media-viewer-backdrop').props.style).backgroundColor,
+      'rgba(0, 0, 0, 0.7)',
+    );
+    assert.equal(
+      flattenStyle(byTestId('post-media-viewer-surface').props.style).backgroundColor,
       'transparent',
     );
     assert.equal(
@@ -434,7 +446,11 @@ describe('PostMediaViewer', () => {
     );
     assert.equal(
       flattenStyle(byTestId('post-media-viewer-backdrop').props.style).backgroundColor,
-      '#000000',
+      'rgba(0, 0, 0, 0.7)',
+    );
+    assert.equal(
+      flattenStyle(byTestId('post-media-viewer-surface').props.style).backgroundColor,
+      'transparent',
     );
     assert.equal(flattenStyle(byTestId('post-media-viewer-close').props.style).top, 16);
     assert.equal(flattenStyle(byTestId('post-media-viewer-close').props.style).right, 16);
