@@ -82,6 +82,16 @@ jobs:
             --clear \
             --platform "${PLATFORM}" \
             --output-dir ".artifacts/${PLATFORM}"
+          expo_client_path=".artifacts/${PLATFORM}/expo-client.json"
+          pnpm exec expo config --type public --json > "${expo_client_path}"
+          if ! jq -e '
+            .scheme == "kosmo" and
+            .ios.bundleIdentifier == "moe.kos" and
+            .android.package == "moe.kos"
+          ' "${expo_client_path}" >/dev/null; then
+            echo "::error::Public Expo config must include the Kosmo scheme and native platform identifiers."
+            exit 1
+          fi
           echo "artifact_name=expo-ota-${PLATFORM}-${GITHUB_RUN_ID}-export" >> "${GITHUB_OUTPUT}"
           echo "runtime_version=${runtime_version}" >> "${GITHUB_OUTPUT}"
 
