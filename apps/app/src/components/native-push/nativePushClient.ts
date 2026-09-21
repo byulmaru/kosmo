@@ -1,7 +1,6 @@
-export type NativeNotificationPermissionStatus = {
-  granted: boolean;
-  status?: 'undetermined' | 'denied' | 'granted';
-};
+import type { NativeNotificationPermissionStatus } from './nativeNotificationPermission';
+
+export type { NativeNotificationPermissionStatus } from './nativeNotificationPermission';
 
 export function getNativeNotificationPermissionStatus(): Promise<NativeNotificationPermissionStatus> {
   return Promise.resolve({ granted: false });

@@ -1,6 +1,9 @@
 import { getMessaging } from '@react-native-firebase/messaging';
 import * as Notifications from 'expo-notifications';
 import type { NotificationPermissionsStatus, NotificationResponse } from 'expo-notifications';
+import type { NativeNotificationPermissionStatus } from './nativeNotificationPermission';
+
+export type { NativeNotificationPermissionStatus } from './nativeNotificationPermission';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -11,16 +14,27 @@ Notifications.setNotificationHandler({
   }),
 });
 
-export type NativeNotificationPermissionStatus = NotificationPermissionsStatus;
+function normalizeNativeNotificationPermission(
+  permission: NotificationPermissionsStatus,
+): NativeNotificationPermissionStatus {
+  return {
+    granted:
+      permission.granted ||
+      permission.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL,
+    status: permission.status,
+  };
+}
 
 export async function getNativeNotificationPermissionStatus(): Promise<NativeNotificationPermissionStatus> {
-  return Notifications.getPermissionsAsync();
+  return normalizeNativeNotificationPermission(await Notifications.getPermissionsAsync());
 }
 
 export async function requestNativeNotificationPermission(): Promise<NativeNotificationPermissionStatus> {
-  return Notifications.requestPermissionsAsync({
-    ios: { allowAlert: true, allowBadge: false, allowSound: true },
-  });
+  return normalizeNativeNotificationPermission(
+    await Notifications.requestPermissionsAsync({
+      ios: { allowAlert: true, allowBadge: false, allowSound: true },
+    }),
+  );
 }
 
 export async function getNativeFcmToken(): Promise<string> {
