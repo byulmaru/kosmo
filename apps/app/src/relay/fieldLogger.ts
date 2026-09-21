@@ -27,19 +27,18 @@ export function createRelayFieldLogger(
   now: () => number = Date.now,
 ): (event: RelayFieldLoggerEvent) => void {
   const environmentCreatedAt = now();
-  const reportedEvents = new Map<string, Set<string>>();
+  const reportedEvents = new Set<string>();
 
   return (event) => {
     if (event.kind !== MISSING_EXPECTED_DATA_KIND) {
       return;
     }
 
-    const ownerEvents = reportedEvents.get(event.owner) ?? new Set<string>();
-    if (ownerEvents.has(event.fieldPath)) {
+    const eventKey = JSON.stringify([event.owner, event.fieldPath]);
+    if (reportedEvents.has(eventKey)) {
       return;
     }
-    ownerEvents.add(event.fieldPath);
-    reportedEvents.set(event.owner, ownerEvents);
+    reportedEvents.add(eventKey);
 
     captureHandledMessage(RELAY_MISSING_EXPECTED_DATA_MESSAGE, {
       relay_kind: event.kind,
