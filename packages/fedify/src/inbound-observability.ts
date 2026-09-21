@@ -99,6 +99,14 @@ const externalErrorNames = new Set([
   'WebFingerError',
 ]);
 
+const nodeIncomingRequestAbortStack = /\bat abortIncoming \(node:_http_server:\d+:\d+\)/u;
+
+const isNodeIncomingRequestAbort = (error: unknown): boolean =>
+  error instanceof Error &&
+  error.message === 'aborted' &&
+  typeof error.stack === 'string' &&
+  nodeIncomingRequestAbortStack.test(error.stack);
+
 const defaultReporter: InboundObservabilityReporter = {
   countMetric: () => undefined,
   log: (observation) => {
@@ -228,6 +236,10 @@ export const isExternalInboundError = (error: unknown, seen = new Set<object>())
 
   const name = getErrorName(error);
   if (name && externalErrorNames.has(name)) {
+    return true;
+  }
+
+  if (isNodeIncomingRequestAbort(error)) {
     return true;
   }
 
