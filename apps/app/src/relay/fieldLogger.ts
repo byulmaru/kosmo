@@ -1,7 +1,6 @@
 import { captureHandledMessage } from '@/observability/sentry';
 import type { RelayFieldLogger } from 'relay-runtime';
 
-const PROFILE_SWITCHER_OWNER = 'ProfileSwitcher_query';
 const MISSING_EXPECTED_DATA_KIND = 'missing_expected_data.log';
 const RELAY_MISSING_EXPECTED_DATA_MESSAGE = 'Relay missing expected data';
 
@@ -28,17 +27,19 @@ export function createRelayFieldLogger(
   now: () => number = Date.now,
 ): (event: RelayFieldLoggerEvent) => void {
   const environmentCreatedAt = now();
-  const reportedEvents = new Set<string>();
+  const reportedEvents = new Map<string, Set<string>>();
 
   return (event) => {
-    if (event.kind !== MISSING_EXPECTED_DATA_KIND || event.owner !== PROFILE_SWITCHER_OWNER) {
+    if (event.kind !== MISSING_EXPECTED_DATA_KIND) {
       return;
     }
 
-    if (reportedEvents.has(event.fieldPath)) {
+    const ownerEvents = reportedEvents.get(event.owner) ?? new Set<string>();
+    if (ownerEvents.has(event.fieldPath)) {
       return;
     }
-    reportedEvents.add(event.fieldPath);
+    ownerEvents.add(event.fieldPath);
+    reportedEvents.set(event.owner, ownerEvents);
 
     captureHandledMessage(RELAY_MISSING_EXPECTED_DATA_MESSAGE, {
       relay_kind: event.kind,

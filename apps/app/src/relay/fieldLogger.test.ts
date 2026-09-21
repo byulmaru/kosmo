@@ -48,7 +48,7 @@ beforeEach(() => {
 });
 
 describe('Relay field diagnostics', () => {
-  it('captures one warning per field path with safe diagnostic fields', () => {
+  it('captures one warning per owner and field path with safe diagnostic fields', () => {
     let currentTime = 0;
     const logger = createRelayFieldLogger(() => currentTime);
     const baseEvent = {
@@ -61,6 +61,8 @@ describe('Relay field diagnostics', () => {
     logger(baseEvent);
     currentTime = 5 * 60_000;
     logger({ ...baseEvent, fieldPath: 'me.profiles' });
+    logger({ ...baseEvent, owner: 'UniversalShellQuery' });
+    logger({ ...baseEvent, owner: 'UniversalShellQuery' });
 
     assert.deepEqual(captureCalls, [
       {
@@ -81,15 +83,24 @@ describe('Relay field diagnostics', () => {
           relay_owner: 'ProfileSwitcher_query',
         },
       },
+      {
+        message: 'Relay missing expected data',
+        context: {
+          relay_environment_age_bucket: '5m_to_30m',
+          relay_field_path: 'currentSession.selectedProfile.id',
+          relay_kind: 'missing_expected_data.log',
+          relay_owner: 'UniversalShellQuery',
+        },
+      },
     ]);
   });
 
-  it('ignores unrelated events and excludes user values from the warning context', () => {
+  it('excludes user values and non-missing events from the warning context', () => {
     const logger = createRelayFieldLogger(() => 0);
     const eventWithUserValues = {
       fieldPath: 'currentSession.selectedProfile.id',
       kind: 'missing_expected_data.log',
-      owner: 'ProfileSwitcher_query',
+      owner: 'UniversalShellQuery',
       accountId: 'account-secret',
       handle: '@private-handle',
       profileId: 'profile-secret',
@@ -107,17 +118,13 @@ describe('Relay field diagnostics', () => {
       ...eventWithUserValues,
       kind: 'missing_required_field.log',
     });
-    logger({
-      ...eventWithUserValues,
-      owner: 'UniversalShellQuery',
-    });
 
     assert.equal(captureCalls.length, 1);
     assert.deepEqual(captureCalls[0]?.context, {
       relay_environment_age_bucket: 'under_5m',
       relay_field_path: 'currentSession.selectedProfile.id',
       relay_kind: 'missing_expected_data.log',
-      relay_owner: 'ProfileSwitcher_query',
+      relay_owner: 'UniversalShellQuery',
     });
   });
 
