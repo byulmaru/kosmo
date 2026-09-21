@@ -64,20 +64,16 @@ Profile이 달라도 참조할 수 있다.
 
 ## 행동
 
-| 행동              | 행동 주체 | 대상 객체 | 입력값                         | 권한                                    | 조건                                                                                                       | 결과                                                                                             |
-| ----------------- | --------- | --------- | ------------------------------ | --------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Local 업로드 시작 | Profile   | Media     | 없음                           | `Account.Active`, `Profile.Member`      | 행동 주체는 선택된 Active/Normal Profile이고 Media Storage Service가 제한된 업로드 권한을 발급한다         | Source=Local, State=Uploading인 Media와 행동 주체 Profile/요청 Account 관계가 생성된다           |
-| Local 업로드 완료 | Profile   | Media     | Uploading Media                | `Account.Active`, `Media.UploadAccount` | Source가 Local이고 State가 Uploading이며 Media Storage Service에서 이미지 저장 성공과 공개 표현이 확인된다 | 같은 Media의 State가 Ready가 되고 Ready At, URL과 Media Type이 함께 기록된다                     |
-| Remote Media 등록 | 시스템    | Media     | Remote Profile, Remote URL     | `System.RemoteMediaSource`              | Remote Profile의 Instance가 새 원격 요청 허용 상태다                                                       | Source=Remote, State=Ready인 새 Media와 Remote Profile 관계가 생성된다                           |
-| Remote Media 갱신 | 시스템    | Media     | Fetch 결과                     | `System.RemoteMediaSource`              | Source가 Remote이고 Profile의 Instance가 새 원격 요청 허용 상태다                                          | 원격 속성과 Remote Fetched At이 갱신된다                                                         |
-| Post 첨부         | Profile   | Media     | Ready Media, nullable Alt Text | `Account.Active`, `Media.UploadAccount` | 새 Post Content가 같은 Media를 참조하며 Media가 첨부 가능하다                                              | Post Content에는 Media ID만 저장되고 같은 transaction에서 Media의 Alt Text가 입력값으로 갱신된다 |
+| 행동              | 행동 주체 | 대상 객체 | 입력값                         | 권한                                    | 조건                                                                                                                                                     | 결과                                                                                             |
+| ----------------- | --------- | --------- | ------------------------------ | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Local 업로드 시작 | Profile   | Media     | 없음                           | `Account.Active`, `Profile.Member`      | 행동 주체는 선택된 Active/Normal Profile이며 이 행동은 Session의 active Profile을 변경하지 않는다. Media Storage Service가 제한된 업로드 권한을 발급한다 | Source=Local, State=Uploading인 Media와 행동 주체 Profile/요청 Account 관계가 생성된다           |
+| Local 업로드 완료 | Profile   | Media     | Uploading Media                | `Account.Active`, `Media.UploadAccount` | Source가 Local이고 State가 Uploading이며 Media Storage Service에서 이미지 저장 성공과 공개 표현이 확인된다                                               | 같은 Media의 State가 Ready가 되고 Ready At, URL과 Media Type이 함께 기록된다                     |
+| Remote Media 등록 | 시스템    | Media     | Remote Profile, Remote URL     | `System.RemoteMediaSource`              | Remote Profile의 Instance가 새 원격 요청 허용 상태다                                                                                                     | Source=Remote, State=Ready인 새 Media와 Remote Profile 관계가 생성된다                           |
+| Remote Media 갱신 | 시스템    | Media     | Fetch 결과                     | `System.RemoteMediaSource`              | Source가 Remote이고 Profile의 Instance가 새 원격 요청 허용 상태다                                                                                        | 원격 속성과 Remote Fetched At이 갱신된다                                                         |
+| Post 첨부         | Profile   | Media     | Ready Media, nullable Alt Text | `Account.Active`, `Media.UploadAccount` | 새 Post Content가 같은 Media를 참조하며 Media가 첨부 가능하다                                                                                            | Post Content에는 Media ID만 저장되고 같은 transaction에서 Media의 Alt Text가 입력값으로 갱신된다 |
 
 Local 업로드 완료는 Media identity, Profile과 Upload Account를 바꾸지 않는다. 저장 참조를 알고 있다는 사실만으로
 Media 완료, 조회 또는 Post 연결 권한을 부여하지 않는다.
-
-새 Post Composer는 Local 업로드 발급 요청에 선택적인 Profile ID를 전달할 수 있다. ID를 전달하면 요청 Account의
-Account-Profile Membership과 Profile visibility, `Member` 이상 Role을 확인한 Profile을 Media Profile로 사용하며,
-Session의 active Profile은 바꾸지 않는다. ID를 생략하면 기존처럼 Session의 active Profile을 사용한다.
 
 이미 Ready인 Local Media의 반복 완료 요청은 외부 저장 확인이나 persistence write를 반복하지 않고 같은 Media
 identity와 최초 Ready At을 반환한다.
