@@ -336,12 +336,99 @@ export function PostComposer({
       {surface === 'overlay' ? mediaGallery : null}
     </View>
   );
+  const visibilityControl = (
+    <View
+      ref={controlRef}
+      style={[
+        styles.visibilityControl,
+        surface === 'overlay' ? styles.overlayVisibilityControl : null,
+      ]}
+    >
+      <Pressable
+        ref={triggerRef}
+        aria-expanded={visibilityOpen && !submitting}
+        accessibilityLabel={`공개 범위: ${selectedVisibility.label}`}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: visibilityOpen && !submitting }}
+        disabled={submitting}
+        onPress={() => setVisibilityOpen((open) => !open)}
+        style={({ pressed }) =>
+          surface === 'overlay'
+            ? [
+                styles.mobileVisibility,
+                {
+                  backgroundColor: pressed ? theme.statePressed : theme.backgroundElevated,
+                  borderColor: theme.borderSubtle,
+                },
+              ]
+            : [
+                styles.visibilityTrigger,
+                {
+                  backgroundColor: pressed ? theme.statePressed : theme.backgroundSurface,
+                  borderColor: theme.borderDefault,
+                },
+              ]
+        }
+      >
+        {surface === 'overlay' ? (
+          <>
+            <Text style={[styles.mobileVisibilityCaption, { color: theme.foregroundSecondary }]}>
+              공개 범위
+            </Text>
+            <View style={styles.mobileVisibilityValue}>
+              <Text style={[styles.visibilityOptionLabel, { color: theme.foregroundPrimary }]}>
+                {selectedVisibility.label}
+              </Text>
+              <ChevronDownIcon
+                color={theme.foregroundPrimary}
+                size={iconSizes[16]}
+                strokeWidth={2}
+              />
+            </View>
+          </>
+        ) : (
+          <>
+            <SelectedVisibilityIcon
+              color={theme.foregroundPrimary}
+              size={iconSizes[16]}
+              strokeWidth={2}
+            />
+            <Text
+              numberOfLines={1}
+              style={[styles.visibilityLabel, { color: theme.foregroundPrimary }]}
+            >
+              {selectedVisibility.label}
+            </Text>
+          </>
+        )}
+      </Pressable>
+      {visibilityOpen && !submitting ? (
+        <VisibilityMenu
+          alignRight={surface === 'overlay'}
+          openAbove={surface === 'overlay'}
+          menuRef={menuRef}
+          triggerRef={triggerRef}
+          onDismiss={() => setVisibilityOpen(false)}
+          onChange={(value) => {
+            onVisibilityChange(value);
+            setVisibilityOpen(false);
+            triggerRef.current?.focus();
+          }}
+          value={visibility}
+        />
+      ) : null}
+    </View>
+  );
   const editorFooter = (
     <View
       style={[
         styles.footer,
         surface === 'overlay' ? styles.overlayFooter : null,
-        { backgroundColor: theme.backgroundElevated, borderTopColor: theme.borderSubtle },
+        {
+          backgroundColor: theme.backgroundElevated,
+          borderTopColor: theme.borderSubtle,
+          borderTopWidth: surface === 'overlay' ? borderWidths[0] : borderWidths[1],
+        },
       ]}
       testID="post-composer-footer"
     >
@@ -448,49 +535,7 @@ export function PostComposer({
             {author}
           </View>
         ) : null}
-        <View ref={controlRef} style={styles.visibilityControl}>
-          <Pressable
-            ref={triggerRef}
-            aria-expanded={visibilityOpen && !submitting}
-            accessibilityLabel={`공개 범위: ${selectedVisibility.label}`}
-            accessibilityRole="button"
-            accessibilityState={{ expanded: visibilityOpen && !submitting }}
-            disabled={submitting}
-            onPress={() => setVisibilityOpen((open) => !open)}
-            style={({ pressed }) => [
-              styles.visibilityTrigger,
-              {
-                backgroundColor: pressed ? theme.statePressed : theme.backgroundSurface,
-                borderColor: theme.borderDefault,
-              },
-            ]}
-          >
-            <SelectedVisibilityIcon
-              color={theme.foregroundPrimary}
-              size={iconSizes[16]}
-              strokeWidth={2}
-            />
-            <Text
-              numberOfLines={1}
-              style={[styles.visibilityLabel, { color: theme.foregroundPrimary }]}
-            >
-              {selectedVisibility.label}
-            </Text>
-          </Pressable>
-          {visibilityOpen && !submitting ? (
-            <VisibilityMenu
-              menuRef={menuRef}
-              triggerRef={triggerRef}
-              onDismiss={() => setVisibilityOpen(false)}
-              onChange={(value) => {
-                onVisibilityChange(value);
-                setVisibilityOpen(false);
-                triggerRef.current?.focus();
-              }}
-              value={visibility}
-            />
-          ) : null}
-        </View>
+        {surface === 'rail' ? visibilityControl : null}
         {surface === 'rail' ? (
           <IconButton
             accessibilityLabel="Composer 확장"
@@ -570,6 +615,7 @@ export function PostComposer({
             <View style={styles.authorLayer}>{author}</View>
             {editor}
           </ScrollView>
+          {visibilityControl}
           {editorFooter}
         </>
       ) : (
@@ -951,6 +997,7 @@ function IllustrativeKeyboard() {
 
 function VisibilityMenu({
   alignRight = false,
+  openAbove = false,
   menuRef,
   onChange,
   onDismiss,
@@ -958,6 +1005,7 @@ function VisibilityMenu({
   value,
 }: {
   alignRight?: boolean;
+  openAbove?: boolean;
   menuRef: RefObject<View | null>;
   onChange: (value: PostComposerVisibility) => void;
   onDismiss: () => void;
@@ -1002,6 +1050,7 @@ function VisibilityMenu({
             ? styles.visibilityMenuRight
             : styles.visibilityMenuLeft
           : styles.nativeVisibilityMenu,
+        Platform.OS === 'web' && openAbove ? styles.visibilityMenuAbove : null,
         elevation.floating,
         { backgroundColor: theme.backgroundElevated, borderColor: theme.borderDefault },
       ]}
@@ -1120,6 +1169,7 @@ const styles = StyleSheet.create({
   overlayFooter: { borderTopWidth: borderWidths[1], marginHorizontal: -space[16] },
   overlayHeader: { paddingHorizontal: space[0] },
   overlayRoot: { gap: space[0], paddingBottom: space[0] },
+  overlayVisibilityControl: { marginHorizontal: -space[16] },
   overlayTextBody: { minHeight: 80 },
   footer: {
     alignItems: 'center',
@@ -1239,6 +1289,7 @@ const styles = StyleSheet.create({
     top: 44,
     width: 240,
   },
+  visibilityMenuAbove: { bottom: 48, top: 'auto' },
   visibilityMenuLeft: { left: 0 },
   visibilityMenuRight: { right: space[16] },
   webOverlay: { maxHeight: 'calc(100dvh - 160px)' as never },

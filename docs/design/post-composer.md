@@ -52,8 +52,8 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
 - modal 너비는 `600px`이고 높이는 Parent, editor, Content Warning, media 내용에 맞춰
   자동으로 늘고 줄어든다.
 - 최대 높이는 `min(720px, 85dvh)`로 제한한다.
-- header와 footer는 modal 안에 고정하고, 제한 높이를 넘는 Parent와 editor만 하나의 중앙 scroll 영역에서
-  함께 스크롤한다. Parent만 별도 스크롤하는 nested scroll은 만들지 않는다.
+- header·공개 범위 행·footer는 modal 안에 고정하고, 제한 높이를 넘는 Parent와 editor만 하나의 중앙 scroll
+  영역에서 함께 스크롤한다. Parent만 별도 스크롤하는 nested scroll은 만들지 않는다.
 - card surface, semantic `border`, `radius/lg` 16px과 기존 modal backdrop을 사용한다. 배경 document는 modal이
   열린 동안 스크롤되지 않는다.
 
@@ -85,8 +85,8 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
 
 ### editor와 고정 footer
 
-- 중앙 작성 영역의 첫 행은 원본 작성 Profile 정보와 Visibility control을 함께 표시한다. Profile 정보는
-  정적 표시이며 switcher나 action이 아니다. Profile은 좌측, Visibility control은 우측에 둔다. Web TextArea의
+- 중앙 작성 영역의 첫 행에는 원본 작성 Profile 정보만 표시한다. Profile 정보는
+  정적 표시이며 switcher나 action이 아니다. Web TextArea의
   브라우저 기본 사각 outline과 중첩 editor border는 표시하지 않는다. modal/card surface의 semantic border는
   유지하고 입력 위치는 caret·selection으로 표시한다. placeholder는 일반 Post, Reply, Quote 모두 `무슨 일이 일어나고 있나요?`를
   사용한다.
@@ -100,7 +100,8 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   `본문 → Quote Source → Media`다. 선택한 이미지의 미리보기, 업로드 상태,
   제거·재시도, nullable Alt Text와 Sensitive Media control이 늘어나면 Parent와 editor가 공유하는 중앙 영역에서
   함께 스크롤하고 고정 footer를 밀어내지 않는다.
-- Visibility control은 작성 영역 첫 행의 우측에 둔다.
+- Visibility control은 중앙 scroll 영역과 footer 사이의 고정된 전체 폭 행에 둔다. 모바일과 같이
+  `공개 범위` label은 좌측, 현재 값과 펼침 아이콘은 우측에 표시하며 행의 위·아래 경계로 구분한다.
 - footer는 modal 바닥에 고정한다. 좌측에는 기존 작성 도구를, 우측에는 남은 글자 수와 공용 `게시` primary
   button을 이 순서로 둔다.
 - 남은 글자 수는 trim·normalize한 Content Warning과 본문 Plain Text의 합계를 500에서 차감해 항상 표시하며

@@ -7668,12 +7668,14 @@ export const ReplyModalPresentation: Story = {
     expect(initialModalHeight).toBeLessThanOrEqual(window.innerHeight * 0.85 + 1);
 
     const visibilityButton = within(dialog).getByRole('button', { name: '공개 범위: 조용한 공개' });
+    expect(composerScroll).not.toContainElement(visibilityButton);
+    expect(within(visibilityButton).getByText('공개 범위')).toBeVisible();
     await userEvent.click(visibilityButton);
     const visibilityMenu = await within(dialog).findByRole('menu', { name: '공개 범위 선택' });
     expect(visibilityMenu).toBeVisible();
     const visibilityButtonBounds = visibilityButton.getBoundingClientRect();
     const visibilityMenuBounds = visibilityMenu.getBoundingClientRect();
-    expect(visibilityMenuBounds.top).toBeGreaterThanOrEqual(visibilityButtonBounds.bottom);
+    expect(visibilityMenuBounds.bottom).toBeLessThanOrEqual(visibilityButtonBounds.top);
     expect(visibilityMenuBounds.top).toBeGreaterThanOrEqual(
       modalSurface.getBoundingClientRect().top,
     );
@@ -7852,8 +7854,8 @@ export const QuoteModalFailureLifecycle: Story = {
     let visibilityMenu = await within(dialog).findByRole('menu', {
       name: '공개 범위 선택',
     });
-    expect(visibilityMenu.getBoundingClientRect().top).toBeGreaterThanOrEqual(
-      visibilityButton.getBoundingClientRect().bottom,
+    expect(visibilityMenu.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+      visibilityButton.getBoundingClientRect().top,
     );
     await userEvent.keyboard('{Escape}');
     await waitFor(() => {

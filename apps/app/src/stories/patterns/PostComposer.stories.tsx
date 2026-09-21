@@ -1006,7 +1006,6 @@ export const OverlayGeometryContract: Story = {
     const content = galleryShell.parentElement!;
     const initialTargetHeight = target.getBoundingClientRect().height;
     const initialTargetTop = target.getBoundingClientRect().top;
-    const initialVisibilityTop = visibilityTrigger.getBoundingClientRect().top;
     const initialSubmitTop = submit.getBoundingClientRect().top;
 
     expect(initialTargetHeight).toBeLessThan(560);
@@ -1030,7 +1029,7 @@ export const OverlayGeometryContract: Story = {
     expect(target.getBoundingClientRect().height).toBeGreaterThan(initialTargetHeight);
     expect(scroll.scrollTop).toBe(0);
     expect(scroll.scrollHeight).toBe(scroll.clientHeight);
-    expect(contentWarningTop).toBeGreaterThan(visibilityTrigger.getBoundingClientRect().bottom);
+    expect(contentWarningTop).toBeLessThan(visibilityTrigger.getBoundingClientRect().top);
     expect(getComputedStyle(scroll).overflowY).toBe('auto');
     scroll.scrollTop = 0;
 
@@ -1038,7 +1037,10 @@ export const OverlayGeometryContract: Story = {
 
     expect(target.getBoundingClientRect().top).toBe(initialTargetTop);
     expect(target.getBoundingClientRect().height).toBeLessThan(initialTargetHeight);
-    expect(visibilityTrigger.getBoundingClientRect().top).toBe(initialVisibilityTop);
+    expect(visibilityTrigger.getBoundingClientRect().bottom).toBeCloseTo(
+      canvas.getByTestId('post-composer-footer').getBoundingClientRect().top,
+      0,
+    );
     expect(submit.getBoundingClientRect().top).toBeLessThan(initialSubmitTop);
     expect(contentWarning.getBoundingClientRect().top).toBe(contentWarningTop);
     expect(scroll.scrollHeight).toBe(scroll.clientHeight);
@@ -1067,22 +1069,30 @@ export const WebModalLayoutContract: Story = {
     const footer = canvas.getByTestId('post-composer-footer');
     const target = canvas.getByTestId('post-composer-target');
 
-    const authorBounds = author.getBoundingClientRect();
-    const visibilityBounds = visibility.getBoundingClientRect();
-    expect(
-      Math.abs(
-        authorBounds.top +
-          authorBounds.height / 2 -
-          (visibilityBounds.top + visibilityBounds.height / 2),
-      ),
-    ).toBeLessThanOrEqual(2);
-    expect(author.getBoundingClientRect().right).toBeLessThanOrEqual(
-      visibility.getBoundingClientRect().left,
-    );
+    expect(within(visibility).getByText('공개 범위')).toBeVisible();
+    expect(within(visibility).getByText('조용한 공개')).toBeVisible();
     expect(getComputedStyle(editor).borderWidth).toBe('0px');
     expect(scroll.contains(editor)).toBe(true);
+    expect(scroll.contains(author)).toBe(true);
+    expect(scroll.contains(visibility)).toBe(false);
     expect(scroll.contains(footer)).toBe(false);
-    expect(target.getBoundingClientRect().height).toBeLessThan(320);
+    expect(visibility.getBoundingClientRect().top).toBeCloseTo(
+      scroll.getBoundingClientRect().bottom,
+      0,
+    );
+    expect(visibility.getBoundingClientRect().bottom).toBeCloseTo(
+      footer.getBoundingClientRect().top,
+      0,
+    );
+    expect(visibility.getBoundingClientRect().left).toBeCloseTo(
+      footer.getBoundingClientRect().left,
+      0,
+    );
+    expect(visibility.getBoundingClientRect().right).toBeCloseTo(
+      footer.getBoundingClientRect().right,
+      0,
+    );
+    expect(target.getBoundingClientRect().height).toBeLessThan(380);
     expect(footer.getBoundingClientRect().bottom).toBeCloseTo(
       target.getBoundingClientRect().bottom,
       0,
@@ -1092,6 +1102,19 @@ export const WebModalLayoutContract: Story = {
       target.getBoundingClientRect().right,
       0,
     );
+
+    await userEvent.click(visibility);
+    const menu = canvas.getByRole('menu', { name: '공개 범위 선택' });
+    expect(menu.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+      visibility.getBoundingClientRect().top,
+    );
+    expect(menu.getBoundingClientRect().right).toBeCloseTo(
+      visibility.getBoundingClientRect().right - space[16],
+      0,
+    );
+    await userEvent.keyboard('{Escape}');
+    expect(canvas.queryByRole('menu', { name: '공개 범위 선택' })).toBeNull();
+    expect(visibility).toHaveFocus();
   },
 };
 
