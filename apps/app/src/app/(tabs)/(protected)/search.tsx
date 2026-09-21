@@ -380,6 +380,11 @@ export default function SearchScreen() {
       setFocused(false);
       return;
     }
+    if (!web && source === 'tab') {
+      setFocused(false);
+      router.setParams({ tab });
+      return;
+    }
     preserveQueryNavigationPosition();
     setFocused(false);
     router.push(searchHref(normalized, tab));
