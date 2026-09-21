@@ -121,7 +121,11 @@ function usePostComposerOverlayLifecycle({
     const dialog = dialogRef.current as unknown as HTMLElement | null;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        if (dialog?.querySelector('[role="menu"], [role="radiogroup"]')) {
+        if (
+          dialog?.querySelector(
+            '[role="menu"], [role="radiogroup"], [data-testid="post-composer-profile-picker"]',
+          )
+        ) {
           return;
         }
         event.preventDefault();

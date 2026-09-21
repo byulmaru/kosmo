@@ -376,7 +376,7 @@ function PostComposerContents({
             repostSourceId,
           ),
           media: media.items,
-          profileId: profile.id,
+          ...(profile.id !== globalProfileId ? { profileId: profile.id } : {}),
           sensitiveMedia: media.sensitiveMedia,
         },
       },

@@ -186,7 +186,7 @@ export function PostComposerProfileSwitcher({
         </View>
       </View>
       {open ? (
-        <View style={styles.pickerLayer}>
+        <View testID="post-composer-profile-picker" style={styles.pickerLayer}>
           <ProfilePicker
             busy={disabled || pending}
             footer={
