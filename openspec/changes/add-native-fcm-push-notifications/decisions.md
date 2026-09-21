@@ -235,6 +235,18 @@ server-issued installation row ID와 GraphQL mutation surface는 sibling 구현�
 - Consequences: register 응답은 후속 update·unregister의 cacheable public ID를 제공하고, 알 수 없거나 삭제된 ID와 다른 Account 소유 ID의 update는 동일한 `PERMISSION_DENIED`(`Push installation is unavailable.`)로 실패하며, 알 수 없거나 삭제된 ID와 다른 Account 소유 ID의 unregister는 `{ completed: true }`로 멱등 처리한다. GraphQL scalar·typename 검증은 API boundary가 소유하고 core token lifecycle은 transport-neutral 상태를 유지한다.
 - Confirmation / Follow-up: repository의 `field.globalID`와 `t.input.globalID()` 관행, `PushInstallation` typename 인코딩, register/update/unregister의 unknown/deleted ID 결과를 API integration에서 확인한다.
 
+### Native·Web 권한 상태는 공유된 최소 타입으로 전달한다
+
+- Decision Date: 2026-09-21
+- Decision Class: Implementation Choice
+- Authority / Provenance: `PROD-913`
+- Status: Active
+- Context / Problem: Expo 권한 응답은 플랫폼별 세부 필드를 포함하지만 Web fallback과 권한 lifecycle 소비자는 공통 상태만 필요하다.
+- Decision Outcome: `NativeNotificationPermissionStatus`는 `granted: boolean`과 선택적인 `status`만 공유한다. Native adapter는 Expo 응답의 `granted`를 사용하고 iOS provisional(`IosAuthorizationStatus.PROVISIONAL`, `3`)이면 granted로 취급하며, `status`를 그대로 전달한다. Web fallback은 같은 타입의 `{ granted: false }`를 반환한다.
+- Alternatives Considered: Expo `NotificationPermissionsStatus`를 그대로 노출하면 `ios`·`android`·`expires`·`canAskAgain`이 플랫폼 경계를 새고 Web과의 공통 계약이 깨지므로 선택하지 않는다.
+- Consequences: downstream 권한 흐름은 플랫폼 중립적인 두 필드만 소비하며, 플랫폼별 세부 설정은 이 경계 밖에 남긴다.
+- Confirmation / Follow-up: Native provisional·request 결과와 Web fallback을 실행하는 단위 테스트로 정규화 동작을 확인한다. signed-build에서 실제 OS 권한 상태를 확인하는 작업은 남은 결정으로 유지한다.
+
 ## Remaining Decisions
 
 - Provider SDK·service credential 주입·secret rotation, retry/backoff 수치, deduplication key와 운영 관측 field.
