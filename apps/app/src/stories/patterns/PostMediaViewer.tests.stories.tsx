@@ -103,7 +103,7 @@ export const ResourceFailureContract: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '다음 이미지' }));
     expect(canvas.queryByTestId('post-media-viewer-error-toast')).toBeNull();
     await userEvent.click(canvas.getByRole('button', { name: '이전 이미지' }));
-    expect(await canvas.findByTestId('post-media-viewer-error-toast')).toBeVisible();
+    await waitFor(() => expect(canvas.getByTestId('post-media-viewer-error-toast')).toBeVisible());
   },
 };
 
