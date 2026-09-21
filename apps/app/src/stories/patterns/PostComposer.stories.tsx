@@ -171,6 +171,7 @@ const meta = {
     'SubmittingSpinnerContract',
     'SubmittingPickerContract',
     'SubmittingVisibilityContract',
+    'WebModalLayoutContract',
     'composerMedia',
   ],
   parameters: { controls: { disable: true }, layout: 'centered' },
@@ -212,6 +213,26 @@ export const RailFilledUnlistedCW: Story = {
 
 export const OverlayMediaFollowers: Story = {
   args: { surface: 'overlay', visibility: 'FOLLOWERS' },
+  render: (args) => (
+    <View style={{ width: 600 }}>
+      <InteractiveComposer {...args} />
+    </View>
+  ),
+};
+
+export const OverlayFourMediaCW: Story = {
+  args: {
+    body: '긴 본문\n'.repeat(35).trim(),
+    contentWarning: '민감한 내용',
+    contentWarningExpanded: true,
+    items: [0, 1, 2, 3].map((index) => ({
+      ...readyComposerMedia[0],
+      key: `ready-${index}`,
+      mediaId: `media-ready-${index}`,
+    })),
+    remaining: 320,
+    surface: 'overlay',
+  },
   render: (args) => (
     <View style={{ width: 600 }}>
       <InteractiveComposer {...args} />
@@ -1027,6 +1048,50 @@ export const OverlayGeometryContract: Story = {
     expect(scroll.scrollHeight).toBe(scroll.clientHeight);
     await userEvent.click(canvas.getByRole('button', { name: '콘텐츠 경고 끄기' }));
     expect(scroll.scrollHeight).toBe(scroll.clientHeight);
+  },
+};
+
+export const WebModalLayoutContract: Story = {
+  ...Playground,
+  args: {
+    body: '웹 모달 레이아웃을 확인할 본문',
+    items: [],
+    surface: 'overlay',
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const author = canvas.getByTestId('post-composer-author');
+    const visibility = canvas.getByRole('button', { name: '공개 범위: 조용한 공개' });
+    const editor = canvas.getByTestId('post-composer-editor');
+    const scroll = canvas.getByTestId('post-composer-scroll');
+    const footer = canvas.getByTestId('post-composer-footer');
+    const target = canvas.getByTestId('post-composer-target');
+
+    const authorBounds = author.getBoundingClientRect();
+    const visibilityBounds = visibility.getBoundingClientRect();
+    expect(
+      Math.abs(
+        authorBounds.top +
+          authorBounds.height / 2 -
+          (visibilityBounds.top + visibilityBounds.height / 2),
+      ),
+    ).toBeLessThanOrEqual(2);
+    expect(author.getBoundingClientRect().right).toBeLessThanOrEqual(
+      visibility.getBoundingClientRect().left,
+    );
+    expect(getComputedStyle(editor).borderWidth).toBe('0px');
+    expect(scroll.contains(editor)).toBe(true);
+    expect(scroll.contains(footer)).toBe(false);
+    expect(target.getBoundingClientRect().height).toBeLessThan(320);
+    expect(footer.getBoundingClientRect().bottom).toBeCloseTo(
+      target.getBoundingClientRect().bottom,
+      0,
+    );
+    expect(footer.getBoundingClientRect().left).toBeCloseTo(target.getBoundingClientRect().left, 0);
+    expect(footer.getBoundingClientRect().right).toBeCloseTo(
+      target.getBoundingClientRect().right,
+      0,
+    );
   },
 };
 

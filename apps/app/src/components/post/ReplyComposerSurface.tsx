@@ -404,7 +404,14 @@ function ReplyComposerSurfaceContents({
                       disabled={submitting}
                       hitSlop={4}
                       onPress={() => requestClose()}
-                      style={{ height: closeControlSize, width: closeControlSize }}
+                      style={[
+                        styles.closeButton,
+                        {
+                          height: closeControlSize,
+                          transform: [{ translateY: -closeControlSize / 2 }],
+                          width: closeControlSize,
+                        },
+                      ]}
                       targetSize={closeControlSize}
                       visualSize={closeControlSize}
                       visualStyle={({ pressed }) => [
@@ -521,13 +528,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderBottomWidth: 1,
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     minHeight: 56,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
+    position: 'relative',
     width: '100%',
   },
   title: { fontFamily: fontFamilies.ui, fontWeight: '800', ...typography.lg },
+  closeButton: { position: 'absolute', right: spacing.lg, top: '50%' },
   close: { alignItems: 'center', borderRadius: radii.full, justifyContent: 'center' },
   parent: {
     alignItems: 'stretch',

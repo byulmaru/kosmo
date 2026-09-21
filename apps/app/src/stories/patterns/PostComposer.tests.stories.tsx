@@ -30,6 +30,7 @@ import baseMeta, {
   SubmittingPickerContract as submittingPickerContract,
   SubmittingSpinnerContract as submittingSpinnerContract,
   SubmittingVisibilityContract as submittingVisibilityContract,
+  WebModalLayoutContract as webModalLayoutContract,
 } from './PostComposer.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
@@ -83,6 +84,10 @@ export const MobilePlaygroundContract: Story = mobilePlaygroundContract;
 export const MobileRuntimeAltEditorContract: Story = mobileRuntimeAltEditorContract;
 export const MobileFlexLayoutContract: Story = mobileFlexLayoutContract;
 export const OverlayGeometryContract: Story = overlayGeometryContract;
+export const WebModalLayoutContract: Story = {
+  ...webModalLayoutContract,
+  parameters: { controls: { disable: true } },
+};
 export const OverlayProgressRingContract: Story = overlayProgressRingContract;
 export const PendingMediaContract: Story = pendingMediaContract;
 export const ProgressRingToneContract: Story = progressRingToneContract;

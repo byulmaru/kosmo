@@ -74,6 +74,50 @@ test('목록의 재게시 메뉴에서 Quote Composer를 연다', async ({ conte
   await expect(composer).toBeVisible();
   await expect(composer.getByText(sourceBody)).toBeVisible();
   await expect(composer.getByRole('textbox', { name: '인용 게시글 본문' })).toBeFocused();
+  const dialogBox = await composer.boundingBox();
+  const titleBox = await composer.getByRole('heading', { name: '글쓰기' }).boundingBox();
+  expect(dialogBox).not.toBeNull();
+  expect(titleBox).not.toBeNull();
+  expect(
+    Math.abs(titleBox!.x + titleBox!.width / 2 - (dialogBox!.x + dialogBox!.width / 2)),
+  ).toBeLessThanOrEqual(1);
+  const author = composer.getByTestId('post-composer-author');
+  const visibility = composer.getByRole('button', { name: /^공개 범위:/ });
+  const authorBox = await author.boundingBox();
+  const visibilityBox = await visibility.boundingBox();
+  expect(authorBox).not.toBeNull();
+  expect(visibilityBox).not.toBeNull();
+  expect(authorBox!.x + authorBox!.width).toBeLessThanOrEqual(visibilityBox!.x);
+  await expect(composer.getByTestId('post-composer-footer')).toBeVisible();
+  await expect(composer.getByTestId('post-composer-editor')).toHaveCSS('border-width', '0px');
+});
+
+test('Web Composer는 긴 본문을 중앙에서 스크롤하고 footer를 modal 바닥에 유지한다', async ({
+  context,
+  page,
+}) => {
+  const viewer = await createE2ESession({
+    displayName: 'E2E Web Composer Layout',
+    handle: 'e2e-web-composer-layout',
+  });
+  await setE2ESessionCookie(context, viewer.token);
+  await page.setViewportSize({ width: 1024, height: 380 });
+
+  const composer = await openComposer(page);
+  const input = composer.getByRole('textbox', { name: '게시글 본문' });
+  await input.fill('긴 본문 줄\n'.repeat(60));
+
+  const scroll = composer.getByTestId('post-composer-scroll');
+  const footer = composer.getByTestId('post-composer-footer');
+  const metrics = await scroll.evaluate((element) => ({
+    clientHeight: element.clientHeight,
+    scrollHeight: element.scrollHeight,
+  }));
+  const footerBox = await footer.boundingBox();
+
+  expect(metrics.scrollHeight).toBeGreaterThan(metrics.clientHeight);
+  expect(footerBox).not.toBeNull();
+  expect(footerBox!.y + footerBox!.height).toBeLessThanOrEqual(380);
 });
 
 test('compose에서 공개 범위와 500자 제한을 적용해 createPost를 실행한다', async ({

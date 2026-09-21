@@ -89,7 +89,6 @@ export const UniversalFullComposerLifecycle: Story = {
     const page = within(context.canvasElement.ownerDocument.body);
     const railComposer = page.getByTestId('post-composer-target');
     const privacyLink = page.getByRole('link', { name: '개인정보 처리방침' });
-    const railHeight = railComposer.getBoundingClientRect().height;
     expect(railComposer.getBoundingClientRect().width).toBe(320);
     expect(privacyLink.getBoundingClientRect().left).toBeCloseTo(
       railComposer.getBoundingClientRect().left + spacing.lg,
@@ -97,7 +96,9 @@ export const UniversalFullComposerLifecycle: Story = {
     );
     await userEvent.click(page.getByRole('button', { name: 'Composer 확장' }));
     const dialog = page.getByRole('dialog', { name: '글쓰기' });
-    expect(dialog.getBoundingClientRect().height).toBeGreaterThan(railHeight);
+    expect(dialog.getBoundingClientRect().height).toBeLessThan(
+      context.canvasElement.ownerDocument.defaultView!.innerHeight - 96,
+    );
     expect(dialog.getBoundingClientRect().top).toBe(48);
     expect(dialog.getBoundingClientRect().width).toBe(640);
     const overlayBody = within(dialog).getByRole('textbox', { name: '게시글 본문' });

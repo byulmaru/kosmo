@@ -284,12 +284,13 @@ export function PostComposer({
       sensitiveMedia={sensitiveMedia}
     />
   );
-  const unifiedOverlayScroll = surface === 'overlay' && beforeEditor !== undefined;
+  const unifiedOverlayScroll = surface === 'overlay';
   const editorContent = (
     <View
       style={[
         styles.content,
         items.length === 0 && !hasTrailingContent ? styles.textContent : null,
+        surface === 'overlay' ? styles.overlayContent : null,
       ]}
     >
       <TextArea
@@ -322,6 +323,9 @@ export function PostComposer({
               ? styles.mediaBody
               : styles.textBody,
           surface === 'rail' ? styles.railBody : null,
+          surface === 'overlay' && items.length === 0 && !hasTrailingContent
+            ? styles.overlayTextBody
+            : null,
           bodyContentHeight > 0 ? { height: bodyContentHeight } : null,
           { backgroundColor: theme.backgroundElevated, color: theme.foregroundPrimary },
           composerBodyFocusStyle,
@@ -334,7 +338,11 @@ export function PostComposer({
   );
   const editorFooter = (
     <View
-      style={[styles.footer, { backgroundColor: theme.backgroundElevated }]}
+      style={[
+        styles.footer,
+        surface === 'overlay' ? styles.overlayFooter : null,
+        { backgroundColor: theme.backgroundElevated, borderTopColor: theme.borderSubtle },
+      ]}
       testID="post-composer-footer"
     >
       <View style={styles.tools}>
@@ -426,6 +434,7 @@ export function PostComposer({
       style={[
         styles.editor,
         styles.desktopEditor,
+        surface === 'overlay' ? styles.overlayEditor : null,
         {
           backgroundColor: theme.backgroundElevated,
           borderColor: surface === 'rail' && bodyFocused ? theme.primary : theme.borderDefault,
@@ -433,7 +442,12 @@ export function PostComposer({
       ]}
       testID="post-composer-editor"
     >
-      <View style={styles.header}>
+      <View style={[styles.header, surface === 'overlay' ? styles.overlayHeader : null]}>
+        {surface === 'overlay' ? (
+          <View style={styles.overlayAuthor} testID="post-composer-author">
+            {author}
+          </View>
+        ) : null}
         <View ref={controlRef} style={styles.visibilityControl}>
           <Pressable
             ref={triggerRef}
@@ -510,12 +524,10 @@ export function PostComposer({
       ) : (
         <ScrollView
           keyboardShouldPersistTaps="handled"
-          scrollEnabled={surface === 'overlay'}
+          scrollEnabled={false}
           style={[
             styles.desktopScroll,
-            Platform.OS === 'web'
-              ? webScrollbarStyle(theme.borderStrong, surface === 'overlay')
-              : null,
+            Platform.OS === 'web' ? webScrollbarStyle(theme.borderStrong, false) : null,
           ]}
           testID="post-composer-scroll"
         >
@@ -537,6 +549,7 @@ export function PostComposer({
       style={[
         styles.root,
         surface === 'rail' ? styles.rail : styles.overlay,
+        surface === 'overlay' ? styles.overlayRoot : null,
         surface === 'overlay' && Platform.OS === 'web' ? styles.webOverlay : null,
         { backgroundColor: theme.backgroundCanvas },
       ]}
@@ -1101,6 +1114,13 @@ const styles = StyleSheet.create({
   contentWarning: { paddingBottom: space[12] },
   contentWarningField: { borderRadius: radius[0] },
   editor: { borderRadius: radius[12], borderWidth: borderWidths[1], overflow: 'visible' },
+  overlayAuthor: { flex: 1, minWidth: 0 },
+  overlayContent: { minHeight: 0 },
+  overlayEditor: { borderWidth: borderWidths[0] },
+  overlayFooter: { borderTopWidth: borderWidths[1], marginHorizontal: -space[16] },
+  overlayHeader: { paddingHorizontal: space[0] },
+  overlayRoot: { gap: space[0], paddingBottom: space[0] },
+  overlayTextBody: { minHeight: 80 },
   footer: {
     alignItems: 'center',
     borderBottomLeftRadius: radius[12],
@@ -1194,7 +1214,7 @@ const styles = StyleSheet.create({
   desktopScroll: { flexGrow: 0, flexShrink: 1, minHeight: 0 },
   overlay: { flexShrink: 1, maxWidth: 640, minHeight: 0, width: '100%' },
   overlayScroll: { flexGrow: 0, flexShrink: 1, minHeight: 0 },
-  overlayScrollContent: { gap: space[16] },
+  overlayScrollContent: { gap: space[16], paddingBottom: space[16] },
   progressRing: { height: 20, width: 20 },
   rail: { width: '100%' },
   railBody: { maxHeight: railBodyMaxHeight },
