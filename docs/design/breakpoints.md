@@ -50,7 +50,7 @@ PROD-797에서 Full Rail·compact Overlay·mobile fullscreen의 shell 진입을 
 - 검색 초기화 뒤로가기는 현재 `tab`을 유지하면서 검색어와 `q`를 비우고 포커스를 해제한다. 입력 내부 지우기는
   포커스를 유지하며, browser history 뒤로가기와 `q`·`tab` deep link는 기존 동작을 유지한다.
 - 모바일 검색 상태에서도 왼쪽 가장자리 스와이프로 drawer를 열 수 있어야 한다.
-- Android/iOS에는 이 검색 상단바 통합을 적용하지 않는다.
+- Android/iOS에서는 같은 검색 상태와 입력을 단일 Native Stack PageHeader에 표시하고, 본문에 검색 도구막대를 중복 렌더링하지 않는다.
 
 ## 공개 정책 문서 진입
 
