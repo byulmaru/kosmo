@@ -24,6 +24,14 @@ Remote 선택 capability를 명시한 문구와 selected Profile이 Remote일 �
 - `selectProfile`과 GraphQL `usingProfile` 경계는 Active Account, selected Profile Membership과 selected
   Profile의 조회 가능 상태를 공통으로 확인한다. 이 경계를 통과한 resolver와 application action은 같은 Account,
   Membership, Profile visibility를 중복 조회하거나 권한 조건으로 다시 만들지 않는다.
+- GraphQL 요청은 호환 단계에서 `extensions.selectedProfileId`로 요청 actor Profile을 제시할 수 있다.
+  서버는 Active Account를 기준으로 Account-Profile Membership과 Profile의 조회 가능 상태를 확인하고,
+  Membership에서 역할을 서버 권위로 파생하여 이 값을 해당 HTTP 요청의 actor로 사용한다. 클라이언트가
+  함께 제시하는 역할 값은 권한 근거로 사용하지 않는다. Extension 값은 요청에만 적용하며 Session의 저장된
+  selected Profile을 변경하지 않는다.
+- Extension이 없거나 잘못된 형식이거나, 알 수 없거나 다른 Account에 속하거나 조회할 수 없는 Profile을
+  가리키면 오류를 노출하지 않고 `Sessions.activeProfileId`에서 파생한 기존 actor를 유지한다. 이 호환 단계의
+  DB Session 저장값과 fallback 경계는 즉시 제거하지 않으며, 제거는 별도 결정과 전환에서 다룬다.
 - application action은 검증된 Profile identity를 받고 행동에 고유한 상태, 관계, 대상, transaction과
   persistence 조건을 검증한다. Profile Origin, Instance Reachability 또는 Instance Type은 해당 행동의
   의미가 명시적으로 요구할 때만 조건으로 사용한다.

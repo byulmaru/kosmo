@@ -1,14 +1,24 @@
 import { initContextCache } from '@pothos/core';
 import { createYoga, useExecutionCancellation } from 'graphql-yoga';
 import { Hono } from 'hono';
+import { applySelectedProfileExtension } from '../context';
 import { useError } from './plugins/error';
 import { schema } from './schema';
 import type { Env, ServerContext, UserContext } from '../context';
 
 export const yoga = new Hono<Env>();
 
-export const createGraphQLContext = ({ c }: { c: ServerContext }): UserContext =>
-  Object.assign(c.get('context'), initContextCache(), { c });
+export const createGraphQLContext = async ({
+  c,
+  params,
+}: {
+  c: ServerContext;
+  params?: { extensions?: unknown };
+}): Promise<UserContext> => {
+  const context = c.get('context');
+  await applySelectedProfileExtension(context, params?.extensions);
+  return Object.assign(context, initContextCache(), { c });
+};
 
 const app = createYoga<{ c: ServerContext }, UserContext>({
   schema,

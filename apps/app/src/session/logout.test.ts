@@ -74,6 +74,11 @@ mockModule(new URL('../auth/logout.ts', import.meta.url), {
   LOGOUT_FAILURE_MESSAGE: '로그아웃하지 못했습니다. 다시 시도해주세요.',
   requestWebLogout: () => state.requestWebLogout(),
 });
+mockModule(new URL('../auth/selectedProfileStorage.ts', import.meta.url), {
+  deleteSelectedProfile: async () => {
+    state.events.push('delete-selected-profile');
+  },
+});
 mockModule(new URL('../analytics/client.ts', import.meta.url), {
   clearAnalytics: () => state.events.push('clear-analytics'),
 });
@@ -108,6 +113,7 @@ describe('useLogout production composition', () => {
 
     assert.deepEqual(state.events, [
       'request-web-logout',
+      'delete-selected-profile',
       'reset-actor',
       'clear-analytics',
       'replace-root',
@@ -121,6 +127,7 @@ describe('useLogout production composition', () => {
     assert.deepEqual(state.events, [
       'request-native-logout',
       'clear-native-session',
+      'delete-selected-profile',
       'replace-root',
     ]);
   });

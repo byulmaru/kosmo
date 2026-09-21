@@ -36,6 +36,11 @@ type PressableChildren = ReactNode | ((state: { pressed: boolean }) => ReactNode
 const platform: { OS: PlatformName } = { OS: 'ios' };
 const resetActorCalls: Array<string | null | undefined> = [];
 const analyticsCalls: Array<[string, Record<string, unknown>]> = [];
+const selectedProfileWrites: Array<{
+  accountId: string;
+  profileId: string;
+  sessionId: string;
+}> = [];
 const queryData = {
   currentSession: {
     id: 'session-1',
@@ -173,6 +178,14 @@ mockModule('@/analytics/client', {
     analyticsCalls.push(args as (typeof analyticsCalls)[number]);
   },
 });
+mockModule('@/auth/selectedProfileStorage', {
+  writeSelectedProfile: async (
+    scope: { accountId: string; sessionId: string },
+    profileId: string,
+  ) => {
+    selectedProfileWrites.push({ ...scope, profileId });
+  },
+});
 mockModule('@/components/profile/ProfilePicker', {
   ProfilePicker: MockProfilePicker,
 });
@@ -195,6 +208,9 @@ mockModule('@/components/ui/ToastProvider', {
 });
 mockModule('@/relay/RelayActorProvider', {
   useRelayActor: () => ({ resetActor }),
+});
+mockModule('@/session/SessionProvider', {
+  useSession: () => ({ accountId: 'account-1', sessionId: 'session-1' }),
 });
 mockModule('@/theme/ThemeProvider', {
   useTheme: () => ({
@@ -231,6 +247,7 @@ afterEach(async () => {
   pendingSelectMutation = null;
   resetActorCalls.length = 0;
   analyticsCalls.length = 0;
+  selectedProfileWrites.length = 0;
   mock.restoreAll();
 });
 
@@ -252,6 +269,9 @@ describe('ProfileSwitcher selection lifecycle', () => {
 
     await completeSelection();
     assert.deepEqual(resetActorCalls, ['profile-b']);
+    assert.deepEqual(selectedProfileWrites, [
+      { accountId: 'account-1', profileId: 'profile-b', sessionId: 'session-1' },
+    ]);
     assert.equal(modal().props.visible, false);
     assert.deepEqual(
       analyticsCalls.map(([event, properties]) => ({ event, properties })),

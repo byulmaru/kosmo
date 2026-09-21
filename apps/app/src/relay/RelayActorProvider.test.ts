@@ -14,6 +14,7 @@ type RelayActorSnapshot = {
   environment: Environment;
   nativeToken: string | null;
   resetActor: (profileId?: string | null) => void;
+  selectedProfileId: string | null;
   setNativeSession: (token: string) => Promise<void>;
 };
 
@@ -26,6 +27,7 @@ let stableSubtreeMountCount = 0;
 let renderer: ReactTestRenderer | null = null;
 let snapshot: RelayActorSnapshot | null = null;
 let storedToken: string | null = null;
+const environmentInputs: Array<{ selectedProfileId: string | null; token: string | null }> = [];
 
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, {
@@ -58,7 +60,9 @@ mockModule(new URL('../components/Splash.tsx', import.meta.url), {
 });
 
 let RelayActorProvider: ComponentType<
-  PropsWithChildren<{ createEnvironment?: (token: string | null) => Environment }>
+  PropsWithChildren<{
+    createEnvironment?: (token: string | null, selectedProfileId: string | null) => Environment;
+  }>
 >;
 let ActorBoundary: ComponentType<PropsWithChildren>;
 let useRelayActor: () => RelayActorSnapshotValue;
@@ -82,6 +86,7 @@ beforeEach(() => {
   stableSubtreeMountCount = 0;
   snapshot = null;
   storedToken = null;
+  environmentInputs.length = 0;
 });
 
 afterEach(async () => {
@@ -91,7 +96,8 @@ afterEach(async () => {
   }
 });
 
-function createEnvironment(token: string | null): Environment {
+function createEnvironment(token: string | null, selectedProfileId: string | null): Environment {
+  environmentInputs.push({ selectedProfileId, token });
   return new Environment({
     network: Network.create(async () => ({ data: { token } })),
     store: new Store(new RecordSource()),
@@ -110,6 +116,7 @@ function Probe() {
     environment: useRelayEnvironment(),
     nativeToken: actor.nativeToken,
     resetActor: actor.resetActor,
+    selectedProfileId: actor.selectedProfileId,
     setNativeSession: actor.setNativeSession,
   };
   return null;
@@ -133,6 +140,17 @@ async function renderProvider() {
 }
 
 describe('RelayActorProvider session cleanup', () => {
+  it('각 actor Environment는 immutable selected profile ID를 캡처한다', async () => {
+    await renderProvider();
+
+    assert.equal(environmentInputs.at(-1)?.selectedProfileId, null);
+
+    await act(async () => snapshot?.resetActor('profile-a'));
+
+    assert.equal(snapshot?.selectedProfileId, 'profile-a');
+    assert.equal(environmentInputs.at(-1)?.selectedProfileId, 'profile-a');
+  });
+
   it('actor reset은 같은 app lifecycle에서 이전 Store를 새 Store로 교체한다', async () => {
     await renderProvider();
 

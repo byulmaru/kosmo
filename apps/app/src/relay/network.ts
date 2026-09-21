@@ -11,6 +11,7 @@ export async function executeGraphQLRequest(
   variables: Variables,
   token: string | null,
   fetchImplementation: typeof fetch = fetch,
+  selectedProfileId: string | null = null,
 ): Promise<GraphQLResponse> {
   if (!request.text) {
     throw new Error(`Relay operation ${request.name} has no query text.`);
@@ -30,6 +31,7 @@ export async function executeGraphQLRequest(
       operationName: request.name,
       query: request.text,
       variables,
+      ...(selectedProfileId ? { extensions: { selectedProfileId } } : {}),
     }),
   });
   const response = await responsePromise.catch((cause) => {

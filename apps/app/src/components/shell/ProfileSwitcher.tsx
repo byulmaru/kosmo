@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
+import { writeSelectedProfile } from '@/auth/selectedProfileStorage';
 import { ProfilePicker } from '@/components/profile/ProfilePicker';
 import { ProfileSwitcherUnreadIndicator } from '@/components/profile/ProfileSwitcherUnread';
 import { Avatar } from '@/components/ui/Avatar';
@@ -22,6 +23,7 @@ import { TextField } from '@/components/ui/TextField';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { useRelayActor } from '@/relay/RelayActorProvider';
+import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import {
   fontFamilies,
@@ -178,6 +180,7 @@ export function ProfileSwitcher({
   const pathname = usePathname();
   const data = useFragment(ProfileSwitcherFragment, query);
   const { resetActor } = useRelayActor();
+  const { accountId, sessionId } = useSession();
   const { request: requestNavigation } = useNavigationGuard();
   const { showToast } = useToast();
   const [internalOpen, setInternalOpen] = useState(false);
@@ -298,6 +301,9 @@ export function ProfileSwitcher({
           selection_cause: cause,
           ...(previousProfileId ? { previous_profile_id: previousProfileId } : {}),
         });
+        if (accountId && sessionId) {
+          void writeSelectedProfile({ accountId, sessionId }, selectedProfileId);
+        }
         setOpen(false);
         resetActor(selectedProfileId);
       },
