@@ -131,10 +131,6 @@ const isPushMutationFailure = (error: unknown): error is PushMutationFailure =>
 
 const platform = Platform.OS === 'ios' ? ('IOS' as const) : ('ANDROID' as const);
 
-function isPermissionGranted(status: { granted: boolean; ios?: { status?: number } }): boolean {
-  return status.granted || status.ios?.status === 3;
-}
-
 export function NativePushProvider() {
   const theme = useTheme();
   const router = useRouter();
@@ -268,7 +264,7 @@ export function NativePushProvider() {
       }
 
       const status = await getNativeNotificationPermissionStatus();
-      if (!isPermissionGranted(status)) {
+      if (!status.granted) {
         if (status.status !== 'denied') {
           return;
         }
