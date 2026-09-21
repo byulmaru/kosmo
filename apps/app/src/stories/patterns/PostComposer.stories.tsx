@@ -95,7 +95,6 @@ const meta = {
     body: '오늘의 코스모 이야기를 나눠보세요.',
     contentWarning: '',
     contentWarningExpanded: false,
-    error: undefined,
     items: composerMedia,
     onBodyChange: fn(),
     onContentWarningChange: fn(),
@@ -125,7 +124,6 @@ const meta = {
     body: { control: 'text' },
     contentWarning: { control: 'text' },
     contentWarningExpanded: { control: 'boolean' },
-    error: { control: 'text' },
     items: { control: false },
     onBodyChange: { action: 'bodyChange', control: false },
     onContentWarningChange: { action: 'contentWarningChange', control: false },
@@ -223,11 +221,11 @@ export const OverlayMediaFollowers: Story = {
 
 export const Submitting: Story = { args: { items: [], submitting: true } };
 export const Error: Story = {
-  args: { body: '미디어 업로드 실패를 확인할 본문', error: undefined, items: [composerMedia[2]] },
+  args: { body: '미디어 업로드 실패를 확인할 본문', items: [composerMedia[2]] },
 };
 
 export const SubmitFailure: Story = {
-  args: { body: '제출 실패를 확인할 본문', error: undefined, items: [], surface: 'rail' },
+  args: { body: '제출 실패를 확인할 본문', items: [], surface: 'rail' },
   render: (args) => <SubmitFailureComposer {...args} />,
 };
 

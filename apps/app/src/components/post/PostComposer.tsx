@@ -22,7 +22,6 @@ import {
   View,
 } from 'react-native';
 import { Circle, Svg } from 'react-native-svg';
-import { formatImageUploadFailureMessage } from '@/components/media/imageUploadErrors';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { TextArea, TextField } from '@/components/ui/TextField';
@@ -53,11 +52,11 @@ export type PostComposerMode = 'post' | 'quote' | 'reply';
 export type PostComposerProps = Readonly<{
   author: ReactNode;
   beforeEditor?: ReactNode;
+  children?: ReactNode;
   body: string;
   bodyRef?: RefObject<TextInput | null>;
   contentWarning: string;
   contentWarningExpanded: boolean;
-  error?: string;
   expandControlRef?: RefObject<View | null>;
   items: readonly ComposerMediaItem[];
   onBodyChange: (value: string) => void;
@@ -181,57 +180,41 @@ function useVisibilityMenu(
   return { controlRef, menuRef, setVisibilityOpen, triggerRef, visibilityOpen };
 }
 
-function formatMediaFailures(items: readonly ComposerMediaItem[]): string | undefined {
-  const messages = items.flatMap((item, index) =>
-    item.state === 'failed'
-      ? [
-          formatImageUploadFailureMessage(
-            `${index + 1}번째 이미지`,
-            item.failure ?? { reason: 'transient', stage: 'transfer' },
-          ),
-        ]
-      : [],
-  );
-  return messages.length > 0 ? messages.join('\n') : undefined;
-}
-
 const composerCopy: Record<
   PostComposerMode,
   {
     bodyLabel: string;
-    placeholder: string;
     submit: string;
     title: string;
   }
 > = {
   post: {
     bodyLabel: '게시글 본문',
-    placeholder: '무슨 일이 일어나고 있나요?',
     submit: '게시',
     title: '글쓰기',
   },
   quote: {
     bodyLabel: '인용 게시글 본문',
-    placeholder: '인용할 내용을 입력하세요…',
-    submit: '인용 게시',
-    title: '인용 게시글 쓰기',
+    submit: '게시',
+    title: '글쓰기',
   },
   reply: {
     bodyLabel: '답글 본문',
-    placeholder: '답글을 입력하세요…',
-    submit: '답글 게시',
-    title: '답글 쓰기',
+    submit: '게시',
+    title: '글쓰기',
   },
 };
+
+const composerPlaceholder = '무슨 일이 일어나고 있나요?';
 
 export function PostComposer({
   author,
   beforeEditor,
   body,
   bodyRef,
+  children,
   contentWarning,
   contentWarningExpanded,
-  error,
   expandControlRef,
   items,
   onBodyChange,
@@ -284,7 +267,7 @@ export function PostComposer({
   const selectedVisibility =
     visibilityOptions.find((option) => option.value === visibility) ?? visibilityOptions[1];
   const SelectedVisibilityIcon = selectedVisibility.icon;
-  const displayedError = error ?? formatMediaFailures(items);
+  const hasTrailingContent = children !== undefined && children !== null;
   const disabled =
     submitting ||
     items.some((item) => item.state !== 'ready') ||
@@ -303,10 +286,14 @@ export function PostComposer({
   );
   const unifiedOverlayScroll = surface === 'overlay' && beforeEditor !== undefined;
   const editorContent = (
-    <View style={[styles.content, items.length === 0 ? styles.textContent : null]}>
+    <View
+      style={[
+        styles.content,
+        items.length === 0 && !hasTrailingContent ? styles.textContent : null,
+      ]}
+    >
       <TextArea
         aria-describedby={Platform.OS === 'web' ? remainingDescriptionId : undefined}
-        aria-invalid={Boolean(error)}
         accessibilityLabel={copy.bodyLabel}
         editable={!submitting}
         ref={bodyRef ?? bodyInputRef}
@@ -325,11 +312,15 @@ export function PostComposer({
           setBodyContentHeight(Math.ceil(event.nativeEvent.contentSize.height))
         }
         onFocus={() => setBodyFocused(true)}
-        placeholder={copy.placeholder}
+        placeholder={composerPlaceholder}
         scrollEnabled={surface === 'rail' && bodyContentHeight > railBodyMaxHeight}
         style={[
           styles.body,
-          items.length > 0 ? styles.mediaBody : styles.textBody,
+          hasTrailingContent
+            ? styles.trailingContentBody
+            : items.length > 0
+              ? styles.mediaBody
+              : styles.textBody,
           surface === 'rail' ? styles.railBody : null,
           bodyContentHeight > 0 ? { height: bodyContentHeight } : null,
           { backgroundColor: theme.backgroundElevated, color: theme.foregroundPrimary },
@@ -337,15 +328,8 @@ export function PostComposer({
         ]}
         value={body}
       />
+      {children}
       {surface === 'overlay' ? mediaGallery : null}
-      {displayedError ? (
-        <Text
-          accessibilityRole="alert"
-          style={[styles.error, { color: theme.feedbackDangerOnSubtle }]}
-        >
-          {displayedError}
-        </Text>
-      ) : null}
     </View>
   );
   const editorFooter = (
@@ -416,7 +400,15 @@ export function PostComposer({
         {surface === 'overlay' ? <ProgressRing remaining={remaining} /> : null}
         {showSubmit ? (
           <Button
-            accessibilityLabel={submitting && mode !== 'post' ? '게시 중' : undefined}
+            accessibilityLabel={
+              mode === 'post'
+                ? undefined
+                : submitting
+                  ? '게시 중'
+                  : mode === 'reply'
+                    ? '답글 게시'
+                    : '인용 게시'
+            }
             disabled={disabled}
             loading={submitting}
             loadingText={mode === 'post' ? undefined : '게시 중'}
@@ -436,11 +428,7 @@ export function PostComposer({
         styles.desktopEditor,
         {
           backgroundColor: theme.backgroundElevated,
-          borderColor: error
-            ? theme.feedbackDangerBorder
-            : surface === 'rail' && bodyFocused
-              ? theme.primary
-              : theme.borderDefault,
+          borderColor: surface === 'rail' && bodyFocused ? theme.primary : theme.borderDefault,
         },
       ]}
       testID="post-composer-editor"
@@ -587,9 +575,9 @@ export function MobileFullscreenComposerShellCandidate({
   beforeEditor,
   body,
   bodyRef,
+  children,
   contentWarning,
   contentWarningExpanded,
-  error,
   fillContainer = false,
   items,
   keyboard = false,
@@ -618,13 +606,28 @@ export function MobileFullscreenComposerShellCandidate({
   const theme = useTheme();
   const copy = composerCopy[mode];
   const remainingDescriptionId = useId();
+  const bodyInputRef = useRef<TextInput>(null);
+  const [bodyContentHeight, setBodyContentHeight] = useState(0);
+  const hasTrailingContent = children !== undefined && children !== null;
   const { controlRef, menuRef, setVisibilityOpen, triggerRef, visibilityOpen } = useVisibilityMenu(
     submitting,
     onVisibilityChange,
   );
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !hasTrailingContent) {
+      return;
+    }
+    const input = (bodyRef ?? bodyInputRef).current as unknown as HTMLTextAreaElement | null;
+    if (!input) {
+      return;
+    }
+    input.style.height = '0px';
+    const height = input.scrollHeight;
+    input.style.height = `${height}px`;
+    setBodyContentHeight(height);
+  }, [body, bodyRef, hasTrailingContent]);
   const selectedVisibility =
     visibilityOptions.find((option) => option.value === visibility) ?? visibilityOptions[1];
-  const displayedError = error ?? formatMediaFailures(items);
   const disabled =
     submitting ||
     items.some((item) => item.state !== 'ready') ||
@@ -734,19 +737,33 @@ export function MobileFullscreenComposerShellCandidate({
             />
           ) : null}
           <TextInput
-            ref={bodyRef}
+            ref={bodyRef ?? bodyInputRef}
             aria-describedby={Platform.OS === 'web' ? remainingDescriptionId : undefined}
-            aria-invalid={Boolean(error)}
             accessibilityLabel={copy.bodyLabel}
             editable={!submitting}
             multiline
+            onChange={(event) => {
+              if (Platform.OS === 'web' && hasTrailingContent) {
+                const input = event.currentTarget as unknown as HTMLTextAreaElement;
+                input.style.height = '0px';
+                const height = input.scrollHeight;
+                input.style.height = `${height}px`;
+                setBodyContentHeight(height);
+              }
+            }}
             onChangeText={onBodyChange}
-            placeholder={copy.placeholder}
+            onContentSizeChange={(event) =>
+              hasTrailingContent &&
+              setBodyContentHeight(Math.ceil(event.nativeEvent.contentSize.height))
+            }
+            placeholder={composerPlaceholder}
             placeholderTextColor={
               submitting ? theme.stateDisabledForeground : theme.foregroundMuted
             }
             style={[
               styles.mobileBody,
+              hasTrailingContent ? styles.mobileTrailingContentBody : null,
+              hasTrailingContent && bodyContentHeight > 0 ? { height: bodyContentHeight } : null,
               {
                 backgroundColor: theme.backgroundCanvas,
                 color: theme.foregroundPrimary,
@@ -755,14 +772,7 @@ export function MobileFullscreenComposerShellCandidate({
             ]}
             value={body}
           />
-          {displayedError ? (
-            <Text
-              accessibilityRole="alert"
-              style={[styles.error, { color: theme.feedbackDangerOnSubtle }]}
-            >
-              {displayedError}
-            </Text>
-          ) : null}
+          {children}
         </View>
 
         {items.length > 0 ? (
@@ -1091,9 +1101,10 @@ const styles = StyleSheet.create({
   contentWarning: { paddingBottom: space[12] },
   contentWarningField: { borderRadius: radius[0] },
   editor: { borderRadius: radius[12], borderWidth: borderWidths[1], overflow: 'visible' },
-  error: textStyles.uiCopyM,
   footer: {
     alignItems: 'center',
+    borderBottomLeftRadius: radius[12],
+    borderBottomRightRadius: radius[12],
     flexDirection: 'row',
     height: 64,
     justifyContent: 'space-between',
@@ -1116,6 +1127,12 @@ const styles = StyleSheet.create({
     padding: space[0],
     textAlignVertical: 'top',
     ...textStyles.contentM,
+  },
+  mobileTrailingContentBody: {
+    flexBasis: 'auto',
+    flexGrow: 0,
+    flexShrink: 0,
+    minHeight: 44,
   },
   mobileComposerBody: {
     flexGrow: 1,
@@ -1175,7 +1192,7 @@ const styles = StyleSheet.create({
   keyboardRow: { borderRadius: radius[8], borderWidth: borderWidths[1], height: 44 },
   desktopEditor: { flexShrink: 1, minHeight: 0 },
   desktopScroll: { flexGrow: 0, flexShrink: 1, minHeight: 0 },
-  overlay: { maxWidth: 640, width: '100%' },
+  overlay: { flexShrink: 1, maxWidth: 640, minHeight: 0, width: '100%' },
   overlayScroll: { flexGrow: 0, flexShrink: 1, minHeight: 0 },
   overlayScrollContent: { gap: space[16] },
   progressRing: { height: 20, width: 20 },
@@ -1188,6 +1205,7 @@ const styles = StyleSheet.create({
   submit: { alignItems: 'center', flexDirection: 'row', gap: space[8] },
   textBody: { minHeight: 184 },
   textContent: { minHeight: 184 },
+  trailingContentBody: { minHeight: 44 },
   tools: { alignItems: 'center', flexDirection: 'row', gap: space[4] },
   toolVisual: { borderRadius: radius[8] },
   visibilityControl: { position: 'relative', zIndex: 12 },

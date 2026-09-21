@@ -53,6 +53,8 @@ accessible name에 사용하지 않는다.
 ## 실패 보존과 재시도
 
 - Post Composer는 실패한 항목의 preview와 순서를 유지하고 해당 항목에만 재시도와 제거 action을 제공한다.
+- Post Composer는 상세 실패 문구를 공용 Danger Toast로 한 번 알린다. Toast가 사라진 뒤에도 실패한 항목은
+  `업로드 실패` 상태와 재시도·제거 action을 유지하며, 같은 문구를 Composer 안에 inline으로 중복 표시하지 않는다.
 - Profile 편집은 실패한 avatar/header field의 local preview와 나머지 draft, 다른 field의 Ready Media ID를 유지한다.
 - 명시적 재시도는 실패한 항목이나 field에 새 Uploading Media와 새 제한 URL을 발급받아
   `issue → transfer → complete` 전체 순서를 다시 실행한다.
@@ -70,8 +72,9 @@ accessible name에 사용하지 않는다.
 
 ## 접근성
 
-- 새 실패 문구는 해당 항목이나 field의 오류 상태에서 한 번 alert로 전달하며 같은 render의 다른 상태 문구와
-  중복 announcement하지 않는다.
+- Post Composer의 새 실패 문구는 공용 Danger Toast에서 한 번 alert로 전달하고, 해당 항목의 accessible name은
+  Toast가 사라진 뒤에도 `업로드 실패` 상태를 전달한다. Profile 편집은 field의 오류 상태에서 한 번 alert로
+  전달하며 같은 render의 다른 상태 문구와 중복 announcement하지 않는다.
 - 재시도 action의 accessible name은 `{subject} 업로드 다시 시도`처럼 대상과 행동을 함께 식별한다.
 - 시각 문구, alert와 accessible name은 같은 실패 대상과 복구 행동을 가리키며 색상만으로 원인이나 상태를
   구분하지 않는다.
@@ -86,7 +89,8 @@ accessible name에 사용하지 않는다.
   민감한 입력·URL·토큰·응답 본문이 추가되지 않는지를 실행 결과로 검증한다. 관측 실패가 업로드 결과를 바꾸지
   않는지도 확인한다.
 - Post Composer와 Profile 편집은 같은 분류 결과를 각 UI 상태에 연결하고 실패 보존·항목별 재시도·accessible
-  name을 유지하는지 component test로 검증한다.
+  name을 유지하는지 component test로 검증한다. Post Composer는 상세 문구가 Toast에만 표시되고 실패 항목의
+  상태와 복구 action이 남는지도 확인한다.
 - 현재 Web 출시 gate에서는 실제 browser 흐름을 검증한다. 공용 React Native 자동화는 유지하지만 Web 결과를
   Android·iOS 실제 기기 업로드와 보조 기술 검증의 완료 증거로 사용하지 않는다.
 

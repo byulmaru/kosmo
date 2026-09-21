@@ -50,6 +50,9 @@ mockModule('@/components/ui/IconButton', {
   IconButton: ({ children, ...props }: { children?: unknown; [key: string]: unknown }) =>
     createElement('Pressable', props, children as never),
 });
+mockModule('@/components/ui/ToastProvider', {
+  ToastProvider: ({ children }: { children?: unknown }) => children,
+});
 mockModule('@/components/ui/useSafeAreaPadding', { useSafeAreaPadding: () => ({}) });
 mockModule('@/theme/ThemeProvider', {
   useElevation: () => ({ overlay: { shadowOpacity: 1 } }),

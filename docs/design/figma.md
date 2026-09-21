@@ -152,7 +152,9 @@ migration은 해당 Product 계약에서 별도로 추적한다.
 - [`Refresh error`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6576-8485)는 마지막 성공 목록을,
   [`Pagination error`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6576-8495)는 기존 목록을 유지한 채
   같은 [`Toast · Danger · Action`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1890-1020)을 재사용한다.
-- Toast는 Mobile root의 `x=15`, `y=696`, `360×52` absolute overlay이며 `BottomTabBar` 위 16px을 유지한다.
+- Figma source의 Toast는 Mobile root의 `x=15`, `y=696`, `360×52` absolute overlay다. Runtime 공용 Toast는
+  mobile viewport에서 좌우 16px 여백으로 가용 폭을 채우고 compact Web 이상에서는 360px 상한을 유지하며,
+  `BottomTabBar` 위 16px을 유지한다.
   Initial은 기존 blocking `StateView`를 Target으로 이관한 것이고 Refresh·Pagination은 확정 누락 Target이다.
   세 FRAME 모두 runtime data 보존·retry·accessibility 동작의 완료 증거는 아니다.
 

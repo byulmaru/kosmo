@@ -117,6 +117,18 @@ Fullscreen media와 제품 고유 shadow는 일괄 치환하지 않고 아래 In
 - 공용 header geometry와 상태는 [page-header.md](./page-header.md)를 따른다.
 - route별 loading, empty, error, retry 의미와 전용 geometry는 각 제품 문서를 따른다.
 
+### 오류 피드백
+
+- 공용 Toast는 mobile viewport에서 좌우 16px 여백을 남기고 가용 폭을 채우며, compact Web 이상에서는
+  360px을 상한으로 중앙 정렬한다.
+- 일시적인 action·mutation 실패는 기본적으로 공용 Danger Toast로 알리고 현재 content, focus와 재시도 가능한
+  action을 유지한다.
+- field·행·Media처럼 실패 대상과 복구 action이 특정 위치에 묶이거나, 사용자가 해결할 때까지 지속적으로
+  보여야 하는 오류는 해당 위치의 상태와 복구 action을 유지한다. 상세 실패 문구는 일시적이면 Toast로
+  전달할 수 있으며 같은 문구를 inline으로 중복하지 않는다.
+- 같은 실패를 Toast와 inline alert로 중복 표시하지 않는다. 기존 inline 오류가 있는 surface를 디자인하거나
+  이관할 때도 관성적으로 보존하지 않고 위 기준에 따라 Toast 전환을 검토한다.
+
 ## 후속 작업 경계
 
 - DSN-14: 이 문서와 Figma Foundation 계약을 정본으로 고정한다.

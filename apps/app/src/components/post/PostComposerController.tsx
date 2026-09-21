@@ -8,6 +8,7 @@ import { trackAnalytics } from '@/analytics/client';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
 import { Form } from '@/components/ui/Form';
+import { useToast } from '@/components/ui/ToastProvider';
 import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { spacing } from '@/theme/tokens';
 import { ComposerMediaEditor } from './ComposerMediaEditor';
@@ -32,6 +33,8 @@ import type { PostComposerProfileRef } from './PostComposerProfileSwitcher';
 
 type Visibility = PostComposerVisibility;
 export type PostComposerCreatedPost = Readonly<{ id: string }>;
+
+const submitFailureMessage = '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.';
 
 const PostComposerFragment = graphql`
   fragment PostComposer_profile on Profile {
@@ -66,6 +69,7 @@ const CreatePostMutation = graphql`
 
 type PostComposerBaseProps = {
   beforeEditor?: ReactNode;
+  children?: ReactNode;
   contextGuard?: RefObject<number>;
   editorRef?: RefObject<TextInput | null>;
   expandControlRef?: RefObject<View | null>;
@@ -161,6 +165,7 @@ type PostComposerContentsProps = Omit<PostComposerBaseProps, 'profile'> &
 
 function PostComposerContents({
   beforeEditor,
+  children,
   contextGuard,
   contextGenerationRef,
   editorRef,
@@ -199,7 +204,6 @@ function PostComposerContents({
   const [visibility, setVisibility] = useState<Visibility>(() => defaultVisibility);
   const defaultVisibilityRef = useRef(defaultVisibility);
   const visibilityProfileIdRef = useRef(profile.id);
-  const [error, setError] = useState<string | null>(null);
   const [media, setMedia] = useState<PostComposerMediaValue>(emptyPostComposerMediaValue);
   const [mediaEditor, setMediaEditor] = useState<{
     key: string;
@@ -214,9 +218,9 @@ function PostComposerContents({
   const [mediaGeneration, setMediaGeneration] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [commit] = useMutation<PostComposerCreatePostMutation>(CreatePostMutation);
+  const { showToast } = useToast();
   const replyMode = Boolean(replyParentId);
   const quoteMode = Boolean(repostSourceId);
-  const surfaceMode = replyMode || quoteMode;
   const mountedRef = useRef(true);
   const bodyText = normalizePostContentPlainText(body);
   const contentWarningText = normalizePostContentPlainText(contentWarning);
@@ -287,15 +291,12 @@ function PostComposerContents({
     if (disabled) {
       return;
     }
-    setError(null);
     setSubmitting(true);
     const submissionGeneration = contextGenerationRef.current;
     const submissionEnvironmentGeneration = environmentGenerationRef?.current;
     const submissionGuardGeneration = contextGuard?.current;
     const submittedCallback = onPostCreated;
     const submissionReplyMode = replyMode;
-    const submissionSurfaceMode = surfaceMode;
-    const submissionQuoteMode = quoteMode;
     commit({
       variables: {
         prependToHome: profile.id === globalProfileId,
@@ -328,13 +329,7 @@ function PostComposerContents({
         setSubmitting(false);
         const createdPost = response.createPost?.post;
         if (!createdPost) {
-          setError(
-            submissionQuoteMode
-              ? '인용 게시글을 작성하지 못했습니다.'
-              : submissionSurfaceMode
-                ? '답글을 작성하지 못했습니다.'
-                : '게시글을 작성하지 못했습니다.',
-          );
+          showToast(submitFailureMessage, { tone: 'danger' });
           return;
         }
 
@@ -363,13 +358,7 @@ function PostComposerContents({
           return;
         }
         setSubmitting(false);
-        setError(
-          submissionQuoteMode
-            ? '인용 게시글을 작성하지 못했습니다.'
-            : submissionSurfaceMode
-              ? '답글을 작성하지 못했습니다.'
-              : '게시글을 작성하지 못했습니다.',
-        );
+        showToast(submitFailureMessage, { tone: 'danger' });
       },
     });
   };
@@ -423,7 +412,6 @@ function PostComposerContents({
         profileId={profile.id}
         onValueChange={setMedia}
         render={({
-          error: mediaError,
           items,
           onAltTextChange,
           onMediaAction,
@@ -485,9 +473,9 @@ function PostComposerContents({
             author: productionAuthor,
             body,
             bodyRef: editor,
+            children,
             contentWarning,
             contentWarningExpanded,
-            error: error ?? mediaError ?? undefined,
             expandControlRef,
             items,
             onBodyChange: setBody,

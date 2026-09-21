@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { IconButton } from '@/components/ui/IconButton';
+import { ToastProvider } from '@/components/ui/ToastProvider';
 import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, textStyles } from '@/theme/tokens';
@@ -238,32 +239,34 @@ export function PostComposerHost({
     ) : null;
 
   const dialog = (
-    <View
-      accessibilityLabel={overlayVisible ? '글쓰기' : undefined}
-      accessibilityViewIsModal={overlayVisible}
-      aria-modal={overlayVisible || undefined}
-      ref={dialogRef}
-      role={overlayVisible ? 'dialog' : undefined}
-      style={[
-        styles.dialog,
-        mode !== 'rail' && !nativeMobile && elevation.overlay,
-        mode === 'rail'
-          ? styles.railDialog
-          : mode === 'mobile'
-            ? styles.mobileDialog
-            : styles.overlayDialog,
-        { backgroundColor: theme.card },
-      ]}
-      testID={mode === 'rail' ? 'post-composer-rail' : 'post-composer-dialog'}
-    >
-      {header}
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={[styles.composerFrame, mode === 'mobile' ? styles.composerFrameFill : null]}
+    <ToastProvider>
+      <View
+        accessibilityLabel={overlayVisible ? '글쓰기' : undefined}
+        accessibilityViewIsModal={overlayVisible}
+        aria-modal={overlayVisible || undefined}
+        ref={dialogRef}
+        role={overlayVisible ? 'dialog' : undefined}
+        style={[
+          styles.dialog,
+          mode !== 'rail' && !nativeMobile && elevation.overlay,
+          mode === 'rail'
+            ? styles.railDialog
+            : mode === 'mobile'
+              ? styles.mobileDialog
+              : styles.overlayDialog,
+          { backgroundColor: theme.card },
+        ]}
+        testID={mode === 'rail' ? 'post-composer-rail' : 'post-composer-dialog'}
       >
-        {composer}
-      </KeyboardAvoidingView>
-    </View>
+        {header}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={[styles.composerFrame, mode === 'mobile' ? styles.composerFrameFill : null]}
+        >
+          {composer}
+        </KeyboardAvoidingView>
+      </View>
+    </ToastProvider>
   );
 
   if (!web) {

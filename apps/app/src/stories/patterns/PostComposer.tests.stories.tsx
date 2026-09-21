@@ -47,6 +47,33 @@ export const InteractionContract: Story = interactionContract;
 export const MobileKeyboardMediaFooterGeometryContract: Story =
   mobileKeyboardMediaFooterGeometryContract;
 export const MobileCandidateContract: Story = mobileCandidateContract;
+export const MobileQuoteFlowContract: Story = {
+  ...mobilePlaygroundStory,
+  args: {
+    ...mobilePlaygroundStory.args,
+    body: '',
+    children: (
+      <View testID="mobile-quote-context-preview">
+        <Text>인용 원문</Text>
+      </View>
+    ),
+    items: [],
+    mode: 'quote',
+    remaining: 500,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = canvas.getByRole('textbox', { name: '인용 게시글 본문' });
+    const quote = canvas.getByTestId('mobile-quote-context-preview');
+    const initialBodyBounds = body.getBoundingClientRect();
+    const initialQuoteTop = quote.getBoundingClientRect().top;
+
+    expect(initialBodyBounds.height).toBeLessThanOrEqual(60);
+    expect(initialQuoteTop - initialBodyBounds.bottom).toBeLessThanOrEqual(16);
+    await userEvent.type(body, '첫째 줄{Enter}둘째 줄{Enter}셋째 줄');
+    await waitFor(() => expect(quote.getBoundingClientRect().top).toBeGreaterThan(initialQuoteTop));
+  },
+};
 export const MobileKeyboardContract: Story = mobileKeyboardContract;
 export const MobileKeyboardCWEditorGeometryContract: Story = mobileKeyboardCWEditorGeometryContract;
 export const MobileKeyboardMediaEditorGeometryContract: Story =
@@ -80,9 +107,11 @@ export const ReplyModeContract: Story = {
     expect(canvas.getByTestId('reply-context-preview')).toBeVisible();
     expect(canvas.getByRole('textbox', { name: '답글 본문' })).toHaveAttribute(
       'placeholder',
-      '답글을 입력하세요…',
+      '무슨 일이 일어나고 있나요?',
     );
-    expect(canvas.getByRole('button', { name: '답글 게시' })).toBeDisabled();
+    const submit = canvas.getByRole('button', { name: '답글 게시' });
+    expect(submit).toHaveTextContent(/^게시$/);
+    expect(submit).toBeDisabled();
   },
 };
 
@@ -90,17 +119,24 @@ export const QuoteModeContract: Story = {
   ...ReplyModeContract,
   args: {
     ...ReplyModeContract.args,
-    beforeEditor: <View testID="quote-context-preview" />,
+    beforeEditor: undefined,
     mode: 'quote',
   },
+  render: (args) => (
+    <PostComposer {...args}>
+      <View testID="quote-context-preview" />
+    </PostComposer>
+  ),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    expect(canvas.getByTestId('quote-context-preview')).toBeVisible();
-    expect(canvas.getByRole('textbox', { name: '인용 게시글 본문' })).toHaveAttribute(
-      'placeholder',
-      '인용할 내용을 입력하세요…',
-    );
-    expect(canvas.getByRole('button', { name: '인용 게시' })).toBeDisabled();
+    const body = canvas.getByRole('textbox', { name: '인용 게시글 본문' });
+    const quote = canvas.getByTestId('quote-context-preview');
+    expect(quote).toBeVisible();
+    expect(body.compareDocumentPosition(quote) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+    expect(body).toHaveAttribute('placeholder', '무슨 일이 일어나고 있나요?');
+    const submit = canvas.getByRole('button', { name: '인용 게시' });
+    expect(submit).toHaveTextContent(/^게시$/);
+    expect(submit).toBeDisabled();
   },
 };
 
@@ -141,14 +177,13 @@ export const SubmittingPickerContract: Story = submittingPickerContract;
 export const SubmittingSpinnerContract: Story = submittingSpinnerContract;
 export const SubmittingVisibilityContract: Story = submittingVisibilityContract;
 
-export const MediaFailureAnnouncementContract: Story = {
+export const MediaFailureRecoveryContract: Story = {
   ...errorStory,
   play: async ({ canvasElement }) => {
-    const alerts = within(canvasElement).getAllByRole('alert');
-    expect(alerts).toHaveLength(1);
-    expect(alerts[0]).toHaveTextContent(
-      '1번째 이미지를 업로드하지 못했어요. 잠시 후 다시 시도해 주세요.',
-    );
+    const canvas = within(canvasElement);
+    expect(canvas.queryByRole('alert')).toBeNull();
+    expect(canvas.getByLabelText('첨부 이미지 1, 업로드 실패')).toBeVisible();
+    expect(canvas.getByRole('button', { name: '1번째 이미지 업로드 다시 시도' })).toBeVisible();
   },
 };
 

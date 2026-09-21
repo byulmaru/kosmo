@@ -3214,10 +3214,10 @@ export const BodyTimeAndLayoutStates: Story = {
       }),
     ).toBeVisible();
     expect(
-      within(screen.getByRole('menu', { name: '재게시 메뉴' })).queryByRole('menuitem', {
+      within(screen.getByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
         name: '인용하기',
       }),
-    ).toBeNull();
+    ).toBeVisible();
   },
 };
 
@@ -4363,8 +4363,6 @@ export const Quote: Story = {
 
 export const QuoteComposerListIntegration: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
-  // PROD-959: Retain this entry-driven lifecycle for restoration while the Quote entry is hidden.
-  tags: ['!test'],
   parameters: {
     relay: {
       mutationResponse: {
@@ -4405,8 +4403,6 @@ export const QuoteComposerListIntegration: Story = {
 
 export const QuoteReplyListCoordinatorIntegration: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
-  // PROD-959: Retain this entry-driven lifecycle for restoration while the Quote entry is hidden.
-  tags: ['!test'],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const replyButton = canvas.getByRole('button', { name: '답글' });
@@ -5989,7 +5985,7 @@ export const PostDetailThreadPageFailureIdentityReset: Story = {
     );
     await userEvent.click(canvas.getByRole('button', { name: '다른 actor query로 전환' }));
     await waitFor(() => {
-      expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
+      expect(canvas.queryByRole('alert')).toBeNull();
     });
   },
   render: () => <PostDetailThreadIdentityFailureStory />,
@@ -6171,7 +6167,10 @@ export const ProductionComposerAdapterFailure: Story = {
     await userEvent.type(body, '실패 뒤 보존할 본문');
     await userEvent.click(canvas.getByRole('button', { name: '게시' }));
 
-    expect(await canvas.findByRole('alert')).toHaveTextContent('게시글을 작성하지 못했습니다.');
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+    );
+    expect(within(canvas.getByTestId('post-composer-editor')).queryByRole('alert')).toBeNull();
     expect(body).toHaveValue('실패 뒤 보존할 본문');
     expect(canvas.getByTestId('production-composer-created-post')).toHaveTextContent('none');
   },
@@ -6464,9 +6463,7 @@ export const ComposerMediaStates: Story = {
     expect(canvas.queryByText('업로드 중…')).not.toBeInTheDocument();
     expect(canvas.getByLabelText('첨부 이미지 2, 업로드 완료')).toBeVisible();
     expect(canvas.getByLabelText('첨부 이미지 3, 업로드 실패')).toBeVisible();
-    expect(canvas.getByRole('alert')).toHaveTextContent(
-      '3번째 이미지 파일이 너무 커요. 16 MiB 이하의 이미지를 선택해 주세요.',
-    );
+    expect(canvas.queryByRole('alert')).toBeNull();
     const remove = canvas.getByRole('button', { name: '첨부 이미지 1 제거' });
     const removeVisual = remove.firstElementChild as HTMLElement | null;
     const preview = remove.parentElement;
@@ -6566,6 +6563,33 @@ export const ComposerMediaUploadInteraction: Story = {
     } finally {
       globalThis.fetch = originalFetch;
     }
+  },
+  render: () => <ComposerStory />,
+};
+
+export const ComposerMediaUploadFailureToast: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostComposerIssueMediaUploadUrlMutation: { error: 'media upload failed' },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    setNextImagePickerResult({
+      assets: [createComposerPickerAsset('failed-upload.svg')],
+      canceled: false,
+    });
+
+    await userEvent.click(canvas.getByRole('button', { name: '이미지 추가, 4개 더 선택 가능' }));
+
+    expect(await canvas.findByLabelText('첨부 이미지 1, 업로드 실패')).toBeVisible();
+    expect(canvas.getByRole('button', { name: '1번째 이미지 업로드 다시 시도' })).toBeVisible();
+    expect(within(canvas.getByTestId('post-composer-editor')).queryByRole('alert')).toBeNull();
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      '1번째 이미지 업로드를 시작하지 못했어요. 잠시 후 다시 시도해 주세요.',
+    );
   },
   render: () => <ComposerStory />,
 };
@@ -6702,9 +6726,10 @@ export const ComposerClipboardPasteInteraction: Story = {
       );
       await userEvent.click(canvas.getByRole('button', { name: '이미지 추가, 4개 더 선택 가능' }));
       rejectSelection(new Error('picker failed'));
-      await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+      await expect(screen.findByRole('alert')).resolves.toHaveTextContent(
         '이미지를 선택하지 못했습니다.',
       );
+      expect(within(canvas.getByTestId('post-composer-editor')).queryByRole('alert')).toBeNull();
 
       const clipboardData = new DataTransfer();
       clipboardData.items.add(clipboardImageOne);
@@ -6722,7 +6747,7 @@ export const ComposerClipboardPasteInteraction: Story = {
       await waitFor(() => {
         expect(canvas.getByLabelText('첨부 이미지 2, 업로드 완료')).toBeVisible();
       });
-      expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
+      expect(within(canvas.getByTestId('post-composer-editor')).queryByRole('alert')).toBeNull();
 
       setNextImagePickerResult({
         assets: [
@@ -7168,12 +7193,13 @@ export const ComposerErrorInteraction: Story = {
       '오류 상태를 확인합니다.',
     );
     await userEvent.click(canvas.getByRole('button', { name: '게시' }));
-    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
-      '게시글을 작성하지 못했습니다.',
+    await expect(screen.findByRole('alert')).resolves.toHaveTextContent(
+      '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.',
     );
+    expect(within(canvas.getByTestId('post-composer-editor')).queryByRole('alert')).toBeNull();
     expect(canvas.getByRole('textbox', { name: '게시글 본문' })).toHaveAttribute(
       'aria-invalid',
-      'true',
+      'false',
     );
     expect(trackAnalytics).not.toHaveBeenCalled();
   },
@@ -7213,9 +7239,10 @@ export const ComposerGraphQLErrorWithoutCommittedPostPreservesInput: Story = {
     const body = canvas.getByRole('textbox', { name: '게시글 본문' });
     await userEvent.type(body, '생성되지 않으면 보존할 본문입니다.');
     await userEvent.click(canvas.getByRole('button', { name: '게시' }));
-    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
-      '게시글을 작성하지 못했습니다.',
+    await expect(screen.findByRole('alert')).resolves.toHaveTextContent(
+      '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.',
     );
+    expect(within(canvas.getByTestId('post-composer-editor')).queryByRole('alert')).toBeNull();
     expect(body).toHaveValue('생성되지 않으면 보존할 본문입니다.');
     expect(trackAnalytics).not.toHaveBeenCalled();
   },
@@ -7236,7 +7263,7 @@ export const ComposerReplyGraphQLErrorWithoutCommittedPostPreservesInput: Story 
     await userEvent.type(body, '오류가 나도 보존할 답글입니다.');
     await userEvent.click(within(dialog).getByRole('button', { name: '답글 게시' }));
     await expect(within(dialog).findByRole('alert')).resolves.toHaveTextContent(
-      '답글을 작성하지 못했습니다.',
+      '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.',
     );
     expect(body).toHaveValue('오류가 나도 보존할 답글입니다.');
   },
@@ -7584,7 +7611,7 @@ export const ReplyModalPresentation: Story = {
     const canvas = within(canvasElement);
     const dialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
 
-    expect(within(dialog).getByRole('heading', { name: '답글 쓰기' })).toBeVisible();
+    expect(within(dialog).getByRole('heading', { name: '글쓰기' })).toBeVisible();
     const close = within(dialog).getByRole('button', { name: '닫기' });
     expect(close).toBeVisible();
     expect(close.getBoundingClientRect().width).toBe(36);
@@ -7595,7 +7622,9 @@ export const ReplyModalPresentation: Story = {
     expect(initialBody).toHaveAccessibleDescription('남은 글자 수 500자');
     expect(within(dialog).getByRole('button', { name: '공개 범위: 조용한 공개' })).toBeVisible();
     expect(within(dialog).getByText('500')).toBeVisible();
-    expect(within(dialog).getByRole('button', { name: '답글 게시' })).toBeDisabled();
+    const submit = within(dialog).getByRole('button', { name: '답글 게시' });
+    expect(submit).toHaveTextContent(/^게시$/);
+    expect(submit).toBeDisabled();
     expect(within(dialog).queryByRole('toolbar', { name: '액션 바' })).toBeNull();
     const composerScroll = within(dialog).getByTestId('post-composer-scroll');
     const replyParent = within(dialog).getByTestId('reply-parent');
@@ -7628,7 +7657,9 @@ export const ReplyModalPresentation: Story = {
     expect(connectorBounds.height).toBeGreaterThan(0);
     const modalSurface = within(dialog).getByTestId('reply-composer-dialog-surface');
     expect(modalSurface.getBoundingClientRect().width).toBe(600);
-    expect(modalSurface.getBoundingClientRect().height).toBe(720);
+    const initialModalHeight = modalSurface.getBoundingClientRect().height;
+    expect(initialModalHeight).toBeLessThan(720);
+    expect(initialModalHeight).toBeLessThanOrEqual(window.innerHeight * 0.85 + 1);
 
     const visibilityButton = within(dialog).getByRole('button', { name: '공개 범위: 조용한 공개' });
     await userEvent.click(visibilityButton);
@@ -7784,6 +7815,21 @@ export const QuoteModalFailureLifecycle: Story = {
   play: async () => {
     const dialog = await screen.findByRole('dialog', { name: '인용 게시글 쓰기' });
     const source = within(dialog).getByTestId('source-post-preview');
+    const body = within(dialog).getByRole('textbox', { name: '인용 게시글 본문' });
+    const editor = within(dialog).getByTestId('post-composer-editor');
+    const footer = within(dialog).getByTestId('post-composer-footer');
+    expect(body.compareDocumentPosition(source) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+    expect(body).toHaveAttribute('placeholder', '무슨 일이 일어나고 있나요?');
+    expect(getComputedStyle(footer).borderBottomLeftRadius).toBe(
+      getComputedStyle(editor).borderBottomLeftRadius,
+    );
+    expect(getComputedStyle(footer).borderBottomRightRadius).toBe(
+      getComputedStyle(editor).borderBottomRightRadius,
+    );
+    const initialBodyBounds = body.getBoundingClientRect();
+    const initialSourceTop = source.getBoundingClientRect().top;
+    expect(initialBodyBounds.height).toBeLessThanOrEqual(60);
+    expect(initialSourceTop - initialBodyBounds.bottom).toBeLessThanOrEqual(16);
     const quoteSurface = within(dialog).getByTestId('quote-composer-dialog-surface');
     const visibilityButtons = within(dialog).getAllByRole('button', {
       name: '공개 범위: 조용한 공개',
@@ -7791,6 +7837,7 @@ export const QuoteModalFailureLifecycle: Story = {
     expect(visibilityButtons).toHaveLength(1);
     const visibilityButton = visibilityButtons[0]!;
     const quoteSubmit = within(dialog).getByRole('button', { name: '인용 게시' });
+    expect(quoteSubmit).toHaveTextContent(/^게시$/);
     const quoteSurfaceBounds = quoteSurface.getBoundingClientRect();
     expect(quoteSubmit.getBoundingClientRect().right).toBeGreaterThan(
       quoteSurfaceBounds.left + quoteSurfaceBounds.width / 2,
@@ -7830,12 +7877,14 @@ export const QuoteModalFailureLifecycle: Story = {
       expect(within(dialog).queryByRole('menu', { name: '공개 범위 선택' })).toBeNull();
     });
     expect(followersVisibilityButton).toHaveAttribute('aria-expanded', 'false');
-    const body = within(dialog).getByRole('textbox', { name: '인용 게시글 본문' });
-    await userEvent.type(body, '실패 뒤 유지할 인용');
+    await userEvent.type(body, '실패 뒤 유지할 인용{Enter}둘째 줄{Enter}셋째 줄');
+    await waitFor(() =>
+      expect(source.getBoundingClientRect().top).toBeGreaterThan(initialSourceTop),
+    );
     await userEvent.click(within(dialog).getByRole('button', { name: '인용 게시' }));
 
     await expect(within(dialog).findByRole('alert')).resolves.toHaveTextContent(
-      '인용 게시글을 작성하지 못했습니다.',
+      '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.',
     );
     expect(quoteFailureMutationRequestObserver).toHaveBeenCalledTimes(1);
     expect(quoteFailureMutationRequestObserver).toHaveBeenNthCalledWith(
@@ -7845,7 +7894,7 @@ export const QuoteModalFailureLifecycle: Story = {
         input: expect.objectContaining({ visibility: 'FOLLOWERS' }),
       }),
     );
-    expect(body).toHaveValue('실패 뒤 유지할 인용');
+    expect(body).toHaveValue('실패 뒤 유지할 인용\n둘째 줄\n셋째 줄');
     expect(source).toBeVisible();
     expect(within(source).getByText('짧은 본문 한 줄.')).toBeVisible();
     const retry = within(dialog).getByRole('button', { name: '인용 게시' });
@@ -7859,14 +7908,32 @@ export const QuoteModalFailureLifecycle: Story = {
         input: expect.objectContaining({ visibility: 'FOLLOWERS' }),
       }),
     );
-    await waitFor(() =>
-      expect(within(dialog).getByRole('alert')).toHaveTextContent(
-        '인용 게시글을 작성하지 못했습니다.',
-      ),
+    expect(within(dialog).getByRole('alert')).toHaveTextContent(
+      '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.',
     );
-    expect(body).toHaveValue('실패 뒤 유지할 인용');
+    expect(body).toHaveValue('실패 뒤 유지할 인용\n둘째 줄\n셋째 줄');
     expect(within(dialog).getByRole('button', { name: '공개 범위: 팔로워만' })).toBeVisible();
     expect(source).toBeVisible();
+  },
+  render: () => <ReplyModalPresentationStory mode="quote" />,
+};
+
+export const QuoteModalOverflowScrollContract: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  play: async () => {
+    const dialog = await screen.findByRole('dialog', { name: '인용 게시글 쓰기' });
+    const body = within(dialog).getByRole('textbox', { name: '인용 게시글 본문' });
+    const surface = within(dialog).getByTestId('quote-composer-dialog-surface');
+    const scroll = within(dialog).getByTestId('post-composer-scroll');
+    const footer = within(dialog).getByTestId('post-composer-footer');
+
+    await userEvent.type(body, '\n긴 본문'.repeat(40));
+    await waitFor(() => expect(scroll.scrollHeight).toBeGreaterThan(scroll.clientHeight));
+    expect(footer.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+      surface.getBoundingClientRect().bottom,
+    );
+    scroll.scrollTop = scroll.scrollHeight;
+    expect(scroll.scrollTop).toBeGreaterThan(0);
   },
   render: () => <ReplyModalPresentationStory mode="quote" />,
 };
@@ -7888,7 +7955,7 @@ export const QuoteModalNullFailureLifecycle: Story = {
     await userEvent.click(within(dialog).getByRole('button', { name: '인용 게시' }));
 
     await expect(within(dialog).findByRole('alert')).resolves.toHaveTextContent(
-      '인용 게시글을 작성하지 못했습니다.',
+      '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.',
     );
     expect(quoteFailureMutationRequestObserver).toHaveBeenCalledTimes(1);
     expect(body).toHaveValue('null 응답 뒤 유지할 인용');
@@ -7898,10 +7965,8 @@ export const QuoteModalNullFailureLifecycle: Story = {
     expect(retry).toBeEnabled();
     await userEvent.click(retry);
     await waitFor(() => expect(quoteFailureMutationRequestObserver).toHaveBeenCalledTimes(2));
-    await waitFor(() =>
-      expect(within(dialog).getByRole('alert')).toHaveTextContent(
-        '인용 게시글을 작성하지 못했습니다.',
-      ),
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.',
     );
     expect(body).toHaveValue('null 응답 뒤 유지할 인용');
     expect(source).toBeVisible();
@@ -7987,7 +8052,7 @@ export const ReplyModalFailureLifecycle: Story = {
     await userEvent.click(within(dialog).getByRole('button', { name: '답글 게시' }));
 
     expect(await within(dialog).findByRole('alert')).toHaveTextContent(
-      '답글을 작성하지 못했습니다.',
+      '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.',
     );
     expect(within(dialog).getByText('짧은 본문 한 줄.')).toBeVisible();
     expect(body).toHaveValue('실패 뒤 유지할 답글');
