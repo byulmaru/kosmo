@@ -152,6 +152,7 @@ function ReplyComposerSurfaceContents({
   const dialogRef = useRef<NativeView>(null);
   const discardConfirmRef = useRef<NativeView>(null);
   const editorRef = useRef<TextInput>(null);
+  const nativeBackHandlerRef = useRef<(() => void) | null>(null);
   const closeAfterDiscardRef = useRef<(() => void) | undefined>(undefined);
   const restoreTriggerFocusRef = useRef(true);
   const replyPlatform =
@@ -192,6 +193,20 @@ function ReplyComposerSurfaceContents({
   const requestCloseRef = useRef(requestClose);
   requestCloseRef.current = requestClose;
   useImperativeHandle(surfaceRef, () => ({ requestClose }), [requestClose]);
+
+  const requestNativeBack = useCallback(() => {
+    if (submitting) {
+      return;
+    }
+    if (nativeBackHandlerRef.current) {
+      nativeBackHandlerRef.current();
+      return;
+    }
+    requestClose();
+  }, [requestClose, submitting]);
+  const registerNativeBackHandler = useCallback((handler: (() => void) | null) => {
+    nativeBackHandlerRef.current = handler;
+  }, []);
 
   const continueEditing = useCallback(() => {
     closeAfterDiscardRef.current = undefined;
@@ -338,7 +353,7 @@ function ReplyComposerSurfaceContents({
       navigationBarTranslucent
       onRequestClose={() => {
         if (Platform.OS !== 'web') {
-          requestClose();
+          requestNativeBack();
         }
       }}
       onShow={() => requestAnimationFrame(() => editorRef.current?.focus())}
@@ -451,6 +466,7 @@ function ReplyComposerSurfaceContents({
                     onPostCreated={handlePostCreated}
                     onSubmittingChange={setSubmitting}
                     profile={profile.composer}
+                    registerNativeBackHandler={registerNativeBackHandler}
                     {...(quoteMode ? { repostSourceId: parent.id } : { replyParentId: parent.id })}
                   >
                     {quoteMode ? (

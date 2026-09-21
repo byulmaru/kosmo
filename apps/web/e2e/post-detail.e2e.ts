@@ -475,7 +475,7 @@ test('Child Reply 상세의 Parent 답글은 좁은 Web에서 fullscreen Compose
 
   await page.setViewportSize({ height: 844, width: 320 });
   await expect(composer).toBeVisible();
-  await composer.getByRole('button', { name: '답글 쓰기 닫기' }).click();
+  await composer.getByRole('button', { name: '글쓰기 닫기', exact: true }).click();
   await page
     .getByRole('alertdialog', { name: '답글 작성을 취소할까요?' })
     .getByRole('button', { name: '작성 취소' })

@@ -7891,7 +7891,10 @@ export const QuoteModalFailureLifecycle: Story = {
       1,
       expect.anything(),
       expect.objectContaining({
-        input: expect.objectContaining({ visibility: 'FOLLOWERS' }),
+        input: expect.objectContaining({
+          repostSourceId: shortPost.id,
+          visibility: 'FOLLOWERS',
+        }),
       }),
     );
     expect(body).toHaveValue('실패 뒤 유지할 인용\n둘째 줄\n셋째 줄');
@@ -7905,7 +7908,10 @@ export const QuoteModalFailureLifecycle: Story = {
       2,
       expect.anything(),
       expect.objectContaining({
-        input: expect.objectContaining({ visibility: 'FOLLOWERS' }),
+        input: expect.objectContaining({
+          repostSourceId: shortPost.id,
+          visibility: 'FOLLOWERS',
+        }),
       }),
     );
     expect(within(dialog).getByRole('alert')).toHaveTextContent(

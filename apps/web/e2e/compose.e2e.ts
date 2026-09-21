@@ -48,7 +48,7 @@ test.beforeEach(async () => {
   await resetE2EDatabase();
 });
 
-test('목록의 재게시 메뉴에서 Quote 작성 진입점을 임시로 숨긴다', async ({ context, page }) => {
+test('목록의 재게시 메뉴에서 Quote Composer를 연다', async ({ context, page }) => {
   const sourceBody = 'E2E Quote direct source body';
   const viewer = await createE2ESession({
     displayName: 'E2E Quote Entry Viewer',
@@ -68,7 +68,12 @@ test('목록의 재게시 메뉴에서 Quote 작성 진입점을 임시로 숨�
   const menu = page.getByRole('menu', { name: '재게시 메뉴' });
   await expect(menu).toBeVisible();
   await expect(menu.getByRole('menuitem', { name: '재게시하기' })).toBeVisible();
-  await expect(menu.getByRole('menuitem', { name: '인용하기' })).toHaveCount(0);
+  await menu.getByRole('menuitem', { name: '인용하기' }).click();
+
+  const composer = page.getByRole('dialog', { name: '인용 게시글 쓰기' });
+  await expect(composer).toBeVisible();
+  await expect(composer.getByText(sourceBody)).toBeVisible();
+  await expect(composer.getByRole('textbox', { name: '인용 게시글 본문' })).toBeFocused();
 });
 
 test('compose에서 공개 범위와 500자 제한을 적용해 createPost를 실행한다', async ({
