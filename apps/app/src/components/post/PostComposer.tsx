@@ -376,7 +376,7 @@ function PostComposerContents({
             repostSourceId,
           ),
           media: media.items,
-          ...(profile.id !== globalProfileId ? { profileId: profile.id } : {}),
+          ...(profile.id !== globalProfileId ? { actorProfileId: profile.id } : {}),
           sensitiveMedia: media.sensitiveMedia,
         },
       },

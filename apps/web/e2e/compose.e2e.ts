@@ -387,7 +387,9 @@ test('Composer 프로필 선택은 draft와 공개 범위를 유지하고 선택
   await pasteComposerImage(input);
   const issueMediaOperation = readGraphQLOperation((await issueMediaResponse).request().postData());
   await completeMediaResponse;
-  expect(issueMediaOperation?.variables).toMatchObject({ profileId: selectedProfileId });
+  expect(issueMediaOperation?.variables).toMatchObject({
+    input: { actorProfileId: selectedProfileId },
+  });
   expect(completedMediaId).toBe(mediaId);
   await expect(composer.getByLabel('첨부 이미지 1, 업로드 완료')).toBeVisible();
   await expect(input).toHaveValue(body);
@@ -414,7 +416,7 @@ test('Composer 프로필 선택은 draft와 공개 범위를 유지하고 선택
       bodyText: body,
       contentWarning,
       media: [],
-      profileId: selectedProfileId,
+      actorProfileId: selectedProfileId,
       sensitiveMedia: false,
       visibility: 'FOLLOWERS',
     },
@@ -596,7 +598,9 @@ test('Composer 프로필 전환은 첨부 이미지 편집 상태와 draft를 �
   await page.route('**/graphql', async (route) => {
     const operation = readGraphQLOperation(route.request().postData());
     if (operation?.operationName === 'PostComposerIssueMediaUploadUrlMutation') {
-      issueMediaProfileId = (operation.variables?.profileId as string | undefined) ?? null;
+      issueMediaProfileId =
+        (operation.variables?.input as { actorProfileId?: string } | undefined)?.actorProfileId ??
+        null;
       await route.fulfill({
         body: JSON.stringify({
           data: {
@@ -702,7 +706,7 @@ test('Composer 프로필 전환은 첨부 이미지 편집 상태와 draft를 �
     input: {
       bodyText: body,
       media: [{ altText, mediaId }],
-      profileId: secondProfileId,
+      actorProfileId: secondProfileId,
       sensitiveMedia: true,
     },
   });

@@ -267,7 +267,7 @@ describe('PostComposer local author', () => {
         bodyText: '보존할 본문',
         contentWarning: '보존할 CW',
         media: mediaValue.items,
-        profileId: profileB.id,
+        actorProfileId: profileB.id,
         sensitiveMedia: true,
         visibility: 'FOLLOWERS',
       },

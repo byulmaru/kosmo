@@ -107,8 +107,8 @@ export function PostComposerMediaControls({
   const selectingMedia = useRef(false);
   const nextMediaKey = useRef(0);
   const [commitIssueMediaUploadUrl] = useMutation<PostComposerIssueMediaUploadUrlMutation>(graphql`
-    mutation PostComposerIssueMediaUploadUrlMutation($profileId: ID) {
-      issueMediaUploadUrl(profileId: $profileId) {
+    mutation PostComposerIssueMediaUploadUrlMutation($input: IssueMediaUploadUrlInput) {
+      issueMediaUploadUrl(input: $input) {
         media {
           id
         }
@@ -163,7 +163,7 @@ export function PostComposerMediaControls({
         issue: () =>
           new Promise((resolve, reject) => {
             commitIssueMediaUploadUrl({
-              variables: { profileId },
+              variables: { input: { actorProfileId: profileId } },
               onCompleted: (response, errors) => {
                 if (errors?.length) {
                   reject(new Error('이미지 업로드를 시작하지 못했습니다.'));
