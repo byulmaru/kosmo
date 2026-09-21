@@ -2,7 +2,7 @@ import { and, asc, desc, eq, inArray, isNotNull } from 'drizzle-orm';
 import { db, first, Instances, isUniqueViolation, Posts, ProfilePins, Profiles } from '../db';
 import { InstanceKind, PostVisibility } from '../enums';
 import { ConflictError, NotFoundError } from '../error';
-import { postVisibilityCondition } from '../visibility/post';
+import { postVisibilityCondition, profilePostListAccessWhere } from '../visibility/post';
 import { visibleProfileWhere } from '../visibility/profile';
 import type { Transaction } from '../db';
 
@@ -96,7 +96,17 @@ const loadFirstVisiblePin = (tx: Transaction, profileId: string) =>
     .innerJoin(Posts, eq(Posts.id, ProfilePins.postId))
     .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
     .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .where(and(eq(ProfilePins.profileId, profileId), eligiblePostWhere(profileId)))
+    .where(
+      and(
+        eq(ProfilePins.profileId, profileId),
+        eligiblePostWhere(profileId),
+        profilePostListAccessWhere({
+          db: tx,
+          visitedProfileId: profileId,
+          viewerProfileId: profileId,
+        }),
+      ),
+    )
     .orderBy(asc(ProfilePins.orderKey), asc(ProfilePins.id))
     .limit(1)
     .then(first);

@@ -1,7 +1,17 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
 import { asc, eq } from 'drizzle-orm';
-import { db, firstOrThrow, Instances, pg, PostContents, Posts, ProfilePins, Profiles } from '../db';
+import {
+  db,
+  firstOrThrow,
+  Instances,
+  pg,
+  PostContents,
+  Posts,
+  ProfileMutes,
+  ProfilePins,
+  Profiles,
+} from '../db';
 import {
   InstanceKind,
   InstanceState,
@@ -47,10 +57,12 @@ const createPost = async (
   profileId: string,
   {
     content = true,
+    repostSourceId,
     state = PostState.ACTIVE,
     visibility = PostVisibility.PUBLIC,
   }: {
     content?: boolean;
+    repostSourceId?: string;
     state?: PostState;
     visibility?: PostVisibility;
   } = {},
@@ -67,6 +79,7 @@ const createPost = async (
     .values({
       currentContentId: contentRow?.id,
       profileId,
+      repostSourceId,
       state,
       visibility,
     })
@@ -574,6 +587,33 @@ test('replacement of the current post with itself is an idempotent no-op', async
   assert.deepEqual(
     result.profilePins.map(({ postId }) => postId),
     [current.id],
+  );
+});
+
+test('replacement uses the first pin visible under the profile list source mute policy', async () => {
+  const { profile } = await createFixture();
+  const { profile: sourceProfile } = await createFixture();
+  const source = await createPost(sourceProfile.id);
+  const hiddenQuote = await createPost(profile.id, { repostSourceId: source.id });
+  const current = await createPost(profile.id);
+  const next = await createPost(profile.id);
+  await pinProfilePost({ profileId: profile.id, postId: hiddenQuote.id });
+  await pinProfilePost({ profileId: profile.id, postId: current.id });
+  await db.insert(ProfileMutes).values({
+    ownerProfileId: profile.id,
+    targetProfileId: sourceProfile.id,
+  });
+
+  const result = await replaceCurrentProfilePin({
+    expectedCurrentPostId: current.id,
+    newPostId: next.id,
+    profileId: profile.id,
+  });
+
+  assert.equal(result.changed, true);
+  assert.deepEqual(
+    result.profilePins.map(({ postId }) => postId),
+    [hiddenQuote.id, next.id],
   );
 });
 
