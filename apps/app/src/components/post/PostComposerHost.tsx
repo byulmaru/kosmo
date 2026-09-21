@@ -16,6 +16,7 @@ import { radii, spacing, textStyles } from '@/theme/tokens';
 import { PostComposer } from './PostComposer';
 import type { RefObject } from 'react';
 import type { PostComposer_profile$key } from './__generated__/PostComposer_profile.graphql';
+import type { PostComposerProfileCandidate } from './PostComposer';
 
 export type PostComposerHostMode = 'mobile' | 'overlay' | 'rail';
 export type PostComposerHostCloseReason = 'created' | 'dismiss';
@@ -25,6 +26,7 @@ type PostComposerHostProps = {
   onRequestClose: (reason: PostComposerHostCloseReason) => void;
   open: boolean;
   profile: PostComposer_profile$key;
+  profiles?: readonly PostComposerProfileCandidate[];
   triggerFocusRef?: RefObject<HTMLElement | null>;
 } & ({ mode: 'rail'; onExpand: () => void } | { mode: 'mobile' | 'overlay'; onExpand?: never });
 
@@ -173,6 +175,7 @@ export function PostComposerHost({
   onRequestClose,
   open,
   profile,
+  profiles,
   triggerFocusRef,
 }: PostComposerHostProps) {
   const theme = useTheme();
@@ -203,6 +206,7 @@ export function PostComposerHost({
       onPostCreated={() => requestClose('created')}
       onSubmittingChange={setSubmitting}
       profile={profile}
+      profiles={profiles}
       registerNativeBackHandler={registerNativeBackHandler}
       {...(mode === 'rail'
         ? { onExpand, onRequestClose: requestClose, presentation: mode }

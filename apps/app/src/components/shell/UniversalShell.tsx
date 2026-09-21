@@ -51,6 +51,7 @@ import type { HomeReselectionHandler } from './ShellChromeContext';
 const ShellQuery = graphql`
   query UniversalShellQuery {
     ...SidebarNavigation_query
+    ...RightRail_query
     currentSession {
       id
       selectedProfile {
@@ -449,6 +450,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
               onRequestClose={closeComposer}
               open={composerVisible}
               profile={profile}
+              query={data}
               triggerFocusRef={composerTriggerFocusRef}
               {...(composerMode === 'rail'
                 ? { mode: composerMode, onExpand: openComposer }

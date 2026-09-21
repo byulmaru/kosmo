@@ -86,12 +86,14 @@ export function PostComposerMediaControls({
   actions,
   disabled,
   editorRef,
+  profileId,
   onValueChange,
   render,
 }: {
   readonly actions: ReactNode;
   readonly disabled: boolean;
   readonly editorRef: RefObject<TextInput | null>;
+  readonly profileId: string;
   readonly onValueChange: (value: PostComposerMediaValue) => void;
   readonly render?: (props: PostComposerMediaControlsRenderProps) => ReactNode;
 }) {
@@ -105,8 +107,8 @@ export function PostComposerMediaControls({
   const selectingMedia = useRef(false);
   const nextMediaKey = useRef(0);
   const [commitIssueMediaUploadUrl] = useMutation<PostComposerIssueMediaUploadUrlMutation>(graphql`
-    mutation PostComposerIssueMediaUploadUrlMutation {
-      issueMediaUploadUrl {
+    mutation PostComposerIssueMediaUploadUrlMutation($profileId: ID) {
+      issueMediaUploadUrl(profileId: $profileId) {
         media {
           id
         }
@@ -161,7 +163,7 @@ export function PostComposerMediaControls({
         issue: () =>
           new Promise((resolve, reject) => {
             commitIssueMediaUploadUrl({
-              variables: {},
+              variables: { profileId },
               onCompleted: (response, errors) => {
                 if (errors?.length) {
                   reject(new Error('이미지 업로드를 시작하지 못했습니다.'));

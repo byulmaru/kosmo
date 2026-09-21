@@ -161,14 +161,21 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
   같은 close 요청으로 처리한다. dirty 상태에서는 확인 뒤 닫거나 Parent를 전환하고, Reply 제출 pending
   상태에서는 현재 작성과 active Parent를 유지한다.
 - 제출 실패 시 열린 modal·fullscreen surface, direct Parent 맥락, 본문, Content Warning, Visibility와 Media 작성 상태를 유지한다.
-- selected Profile, direct Parent 또는 Relay Environment가 바뀌면 새 문맥의 첫 Composer commit부터 본문,
+- 전역 selected Profile, direct Parent 또는 Relay Environment가 바뀌면 새 문맥의 첫 Composer commit부터 본문,
   Content Warning, Visibility, Media, error와 pending을 초기 상태로 시작한다. Content
   Warning은 새 direct Parent 값에서 다시 한 번 초기화하며, 이전 Parent에서 수정한 값을 이어받지 않는다. 이전
   문맥의 늦은 upload·mutation completion은 새 문맥의 상태나 성공 callback을 변경하지 않는다.
-- 선택한 Profile의 기본 Visibility, Media, error와 pending을 초기 상태로 시작한다. 이전 문맥의 늦은 설정
+- 새 문맥의 전역 selected Profile 기본 Visibility, Media, error와 pending을 초기 상태로 시작한다. 이전 문맥의 늦은 설정
   조회·upload·mutation completion은 새 문맥의 상태나 성공 callback을 변경하지 않는다. Composer를 연 뒤
   Profile 기본값이 저장되거나 다른 화면에서 바뀌어도 현재 draft의 개별 Visibility는 자동으로 덮어쓰지 않으며,
   다음 새 Composer부터 갱신된 기본값을 사용한다.
+- 새 Post Rail·Overlay Composer에 한해 Composer-local 작성 Profile을 전환할 수 있다. 이 전환은 전역
+  Session/Profile과 Relay actor를 바꾸지 않으며, 본문·Content Warning·Media·ALT·Sensitive Media·현재 Visibility를
+  보존한 채 다음 mutation과 새 Media upload issue에 선택한 Profile ID를 전달한다. Reply·Quote Composer에는
+  이 local 전환을 제공하지 않는다.
+- 업로드·게시 중에는 작성 Profile 전환을 잠그고 요청이 끝나면 다시 허용한다. 실패한 첨부와 draft는 유지한다.
+- 전역 Profile과 다른 작성 Profile로 게시하면 성공 ID만 확인하고 현재 화면의 목록과 캐시에는 작성자 관점의
+  Post 내용을 넣지 않는다. 작성자가 전역 Profile과 같으면 기존 목록 갱신을 유지한다.
 - 제출 성공 뒤 같은 Composer가 초기화될 때의 Visibility는 성공 callback을 만든 render가 캡처한 Profile
   Fragment 값을 best-effort seed로 사용한다. 제출 중 별도 render에서 갱신된 최신 Profile 기본값까지 보장하지
   않는다.

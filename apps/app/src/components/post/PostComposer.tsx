@@ -19,6 +19,7 @@ import {
   emptyPostComposerMediaValue,
   PostComposerMediaControls,
 } from './PostComposerMediaControls';
+import { PostComposerProfileSwitcher } from './PostComposerProfileSwitcher';
 import {
   createPostComposerContextKey,
   createPostComposerMutationInput,
@@ -29,10 +30,8 @@ import { MobileFullscreenComposerShellCandidate, PostComposerTarget } from './Po
 import { postVisibilityPresentation } from './postVisibilityPresentation';
 import type { ReactNode, RefObject } from 'react';
 import type { TextInput } from 'react-native';
-import type {
-  PostComposer_profile$data,
-  PostComposer_profile$key,
-} from './__generated__/PostComposer_profile.graphql';
+import type { ProfilePickerProfile } from '@/components/profile/ProfilePicker';
+import type { PostComposer_profile$key } from './__generated__/PostComposer_profile.graphql';
 import type { PostComposerCreatePostMutation } from './__generated__/PostComposerCreatePostMutation.graphql';
 import type { PostComposerMediaValue } from './PostComposerMediaControls';
 import type { PostComposerTargetVisibility } from './PostComposerTarget';
@@ -51,6 +50,12 @@ const visibilityOptions = postComposerVisibilityValues.map((value) => ({
 type Visibility = (typeof postComposerVisibilityValues)[number];
 export type PostComposerCreatedPost = Readonly<{ id: string }>;
 
+export type PostComposerProfileCandidate = Readonly<{
+  id: string;
+  pickerProfile: ProfilePickerProfile;
+  profileKey: PostComposer_profile$key;
+}>;
+
 const PostComposerFragment = graphql`
   fragment PostComposer_profile on Profile {
     id
@@ -68,11 +73,15 @@ const PostComposerFragment = graphql`
 `;
 
 const CreatePostMutation = graphql`
-  mutation PostComposerCreatePostMutation($input: CreatePostInput!, $connections: [ID!]!) {
+  mutation PostComposerCreatePostMutation(
+    $input: CreatePostInput!
+    $connections: [ID!]!
+    $prependToHome: Boolean!
+  ) {
     createPost(input: $input) {
       post @prependNode(connections: $connections, edgeTypeName: "PostConnectionEdge") {
         id
-        ...PostListItem_post
+        ...PostListItem_post @include(if: $prependToHome) @alias(as: "postListItem")
       }
     }
   }
@@ -88,6 +97,7 @@ type PostComposerBaseProps = {
   onPostCreated?: (post: PostComposerCreatedPost) => void;
   onSubmittingChange?: (submitting: boolean) => void;
   profile: PostComposer_profile$key;
+  profiles?: readonly PostComposerProfileCandidate[];
   registerNativeBackHandler?: (handler: (() => void) | null) => void;
   scrollable?: boolean;
   surface?: boolean;
@@ -121,6 +131,7 @@ export type PostComposerProps = PostComposerBaseProps &
 
 export function PostComposer({
   profile: profileKey,
+  profiles = [],
   replyParentId,
   repostSourceId,
   ...props
@@ -154,7 +165,9 @@ export function PostComposer({
       contextGenerationRef={contextGenerationRef}
       environmentGenerationRef={environmentGenerationRef}
       key={`${contextGenerationRef.current}:${environmentGenerationRef?.current ?? 0}`}
-      profile={profile}
+      globalProfileId={profile.id}
+      profileKey={profileKey}
+      profiles={profiles}
     />
   );
 }
@@ -166,7 +179,9 @@ type PostComposerContentsProps = Omit<PostComposerBaseProps, 'profile'> &
     onExpand?: () => void;
     onRequestClose?: () => void;
     presentation?: 'mobile' | 'overlay' | 'rail';
-    profile: PostComposer_profile$data;
+    globalProfileId: string;
+    profileKey: PostComposer_profile$key;
+    profiles: readonly PostComposerProfileCandidate[];
   };
 
 function PostComposerContents({
@@ -183,13 +198,39 @@ function PostComposerContents({
   onSubmittingChange,
   onExpand,
   presentation,
-  profile,
+  globalProfileId,
+  profileKey,
+  profiles,
   registerNativeBackHandler,
   replyParentId,
   repostSourceId,
   scrollable = false,
   surface = false,
 }: PostComposerContentsProps) {
+  const globalProfile = useFragment(PostComposerFragment, profileKey);
+  const fallbackProfile = {
+    id: globalProfile.id,
+    pickerProfile: {
+      avatar: globalProfile.avatar,
+      displayName: globalProfile.displayName,
+      id: globalProfile.id,
+      relativeHandle: `@${globalProfile.handle}`,
+    },
+    profileKey,
+  } satisfies PostComposerProfileCandidate;
+  const [selectedProfile, setSelectedProfile] = useState<PostComposerProfileCandidate>(
+    () => profiles.find((candidate) => candidate.id === globalProfile.id) ?? fallbackProfile,
+  );
+  const profile = useFragment(PostComposerFragment, selectedProfile.profileKey);
+  const onSelectProfile = useCallback(
+    (id: string) => {
+      const candidate = profiles.find((entry) => entry.id === id);
+      if (candidate) {
+        setSelectedProfile(candidate);
+      }
+    },
+    [profiles],
+  );
   const theme = useTheme();
   const elevation = useElevation();
   const internalEditorRef = useRef<TextInput>(null);
@@ -209,6 +250,7 @@ function PostComposerContents({
   const defaultVisibility = resolvePostComposerVisibility(profile.private?.defaultPostVisibility);
   const [visibility, setVisibility] = useState<Visibility>(() => defaultVisibility);
   const defaultVisibilityRef = useRef(defaultVisibility);
+  const visibilityProfileIdRef = useRef(profile.id);
   const [visibilityOpen, setVisibilityOpen] = useState(false);
   const [webVisibilityMenuLeft, setWebVisibilityMenuLeft] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -217,6 +259,12 @@ function PostComposerContents({
     key: string;
     tool: 'alt' | 'sensitive';
   } | null>(null);
+  const profilePickerDismissRef = useRef<(() => void) | null>(null);
+  const [profilePickerOpen, setProfilePickerOpen] = useState(false);
+  const onProfilePickerDismissChange = useCallback((dismiss: (() => void) | null) => {
+    profilePickerDismissRef.current = dismiss;
+    setProfilePickerOpen(dismiss !== null);
+  }, []);
   const [mediaGeneration, setMediaGeneration] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [commit] = useMutation<PostComposerCreatePostMutation>(CreatePostMutation);
@@ -249,13 +297,18 @@ function PostComposerContents({
   const SelectedVisibilityIcon = selectedVisibility.icon;
 
   useEffect(() => {
+    if (visibilityProfileIdRef.current !== profile.id) {
+      visibilityProfileIdRef.current = profile.id;
+      defaultVisibilityRef.current = defaultVisibility;
+      return;
+    }
     if (hasDraftContent) {
       return;
     }
     const previousDefault = defaultVisibilityRef.current;
     defaultVisibilityRef.current = defaultVisibility;
     setVisibility((current) => (current === previousDefault ? defaultVisibility : current));
-  }, [defaultVisibility, hasDraftContent]);
+  }, [defaultVisibility, hasDraftContent, profile.id]);
 
   useEffect(() => {
     if (
@@ -281,11 +334,17 @@ function PostComposerContents({
   }, [editor]);
 
   useLayoutEffect(() => {
-    registerNativeBackHandler?.(mediaEditor ? closeMediaEditor : null);
+    registerNativeBackHandler?.(
+      mediaEditor
+        ? closeMediaEditor
+        : profilePickerOpen
+          ? () => profilePickerDismissRef.current?.()
+          : null,
+    );
     return () => {
       registerNativeBackHandler?.(null);
     };
-  }, [closeMediaEditor, mediaEditor, registerNativeBackHandler]);
+  }, [closeMediaEditor, mediaEditor, profilePickerOpen, registerNativeBackHandler]);
 
   const submit = () => {
     if (disabled) {
@@ -303,7 +362,11 @@ function PostComposerContents({
     const submissionQuoteMode = quoteMode;
     commit({
       variables: {
-        connections: [ConnectionHandler.getConnectionID(ROOT_ID, 'PostList_homeTimeline')],
+        prependToHome: profile.id === globalProfileId,
+        connections:
+          profile.id === globalProfileId
+            ? [ConnectionHandler.getConnectionID(ROOT_ID, 'PostList_homeTimeline')]
+            : [],
         input: {
           ...createPostComposerMutationInput(
             bodyText,
@@ -313,6 +376,7 @@ function PostComposerContents({
             repostSourceId,
           ),
           media: media.items,
+          profileId: profile.id,
           sensitiveMedia: media.sensitiveMedia,
         },
       },
@@ -501,12 +565,9 @@ function PostComposerContents({
 
   if (presentation) {
     const productionSurface: PostComposerTargetVisibility = visibility;
-    const productionAuthor = (
-      <View style={styles.productionAuthor}>
-        <Avatar imageUri={profile.avatar?.url} label={profile.displayName} size={40} />
-        <ProfileNameBlock profile={profile} />
-      </View>
-    );
+    const pickerProfiles = profiles.some((candidate) => candidate.id === profile.id)
+      ? profiles
+      : [...profiles, selectedProfile];
 
     return (
       <Form
@@ -523,6 +584,7 @@ function PostComposerContents({
           disabled={submitting}
           editorRef={editor}
           key={mediaGeneration}
+          profileId={profile.id}
           onValueChange={setMedia}
           render={({
             error: mediaError,
@@ -534,6 +596,25 @@ function PostComposerContents({
             onSensitiveMediaChange,
             sensitiveMedia,
           }) => {
+            const productionAuthor = (
+              <View style={styles.productionAuthor}>
+                {pickerProfiles.length > 1 ? (
+                  <PostComposerProfileSwitcher
+                    disabled={submitting || items.some((item) => item.state === 'uploading')}
+                    onDismissChange={onProfilePickerDismissChange}
+                    onSelectProfile={onSelectProfile}
+                    profiles={pickerProfiles.map((candidate) => candidate.pickerProfile)}
+                    selectedProfileId={profile.id}
+                    surface={presentation === 'rail' ? 'rail' : 'overlay'}
+                  />
+                ) : (
+                  <>
+                    <Avatar imageUri={profile.avatar?.url} label={profile.displayName} size={40} />
+                    <ProfileNameBlock profile={profile} />
+                  </>
+                )}
+              </View>
+            );
             const mediaEditorContent = mediaEditor ? (
               <ComposerMediaEditor
                 fillContainer
@@ -845,6 +926,7 @@ function PostComposerContents({
           disabled={submitting}
           editorRef={editor}
           key={mediaGeneration}
+          profileId={profile.id}
           onValueChange={setMedia}
         />
       </View>

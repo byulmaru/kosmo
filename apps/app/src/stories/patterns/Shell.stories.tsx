@@ -166,6 +166,7 @@ const profileCreationRequestObserver = fn();
 const ShellStoriesQuery = graphql`
   query ShellStoriesQuery {
     ...ProfileSwitcher_query
+    ...RightRail_query
     ...SidebarNavigation_query
     currentSession {
       selectedProfile {
@@ -218,6 +219,7 @@ function NavigationCatalog() {
             onExpand={() => undefined}
             onRequestClose={() => undefined}
             profile={data.profile}
+            query={data.query}
           />
           <RightRailFooter />
         </View>

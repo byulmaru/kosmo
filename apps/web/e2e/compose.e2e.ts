@@ -1,11 +1,12 @@
 import {
+  createE2EAccountProfile,
   createE2EPost,
   createE2ESession,
   resetE2EDatabase,
   setE2ESessionCookie,
 } from './db-fixtures';
 import { expect, test } from './fixtures';
-import { readGraphQLOperation, waitForGraphQLOperation } from './graphql';
+import { readGraphQLOperation, toGlobalId, waitForGraphQLOperation } from './graphql';
 import type { Locator, Page } from '@playwright/test';
 
 async function pasteComposerImage(input: Locator) {
@@ -275,6 +276,169 @@ test('기본 공개 범위 저장부터 Local 재선택까지 production wiring�
     ]),
   );
   await expect(page.getByText(body, { exact: true })).toBeVisible();
+});
+
+test('Composer 프로필 선택은 draft와 공개 범위를 유지하고 선택 프로필로 실제 게시한다', async ({
+  context,
+  page,
+}) => {
+  const body = 'E2E composer profile body';
+  const contentWarning = 'E2E composer content warning';
+  const session = await createE2ESession({
+    displayName: 'E2E Composer Profile A',
+    handle: 'e2e-composer-profile-a',
+  });
+  const selectedProfile = await createE2EAccountProfile({
+    accountId: session.account.id,
+    displayName: 'E2E Composer Profile B',
+    handle: 'e2e-composer-profile-b',
+  });
+  const sessionProfileId = toGlobalId('Profile', session.profile!.id);
+  const selectedProfileId = toGlobalId('Profile', selectedProfile.id);
+
+  await setE2ESessionCookie(context, session.token);
+  const mediaId = 'media-composer-profile-e2e';
+  let completedMediaId: string | null = null;
+  await page.route('**/graphql', async (route) => {
+    const operation = readGraphQLOperation(route.request().postData());
+    if (operation?.operationName === 'PostComposerIssueMediaUploadUrlMutation') {
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            issueMediaUploadUrl: {
+              media: { id: mediaId },
+              uploadUrl: 'https://upload.example/composer-profile-e2e',
+            },
+          },
+        }),
+        contentType: 'application/json',
+        status: 200,
+      });
+      return;
+    }
+    if (operation?.operationName === 'PostComposerCompleteMediaUploadMutation') {
+      completedMediaId = (operation.variables?.input as { id: string }).id;
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            completeMediaUpload: { media: { id: completedMediaId, state: 'READY' } },
+          },
+        }),
+        contentType: 'application/json',
+        status: 200,
+      });
+      return;
+    }
+    await route.fallback();
+  });
+  await page.route('https://upload.example/**', async (route) => {
+    await route.fulfill({ body: '', status: 204 });
+  });
+
+  const initialHomeResponse = waitForGraphQLOperation(page, 'HomePageQuery');
+  const composer = await openComposer(page);
+  const initialHomeBody = (await (await initialHomeResponse).json()) as {
+    data?: {
+      currentSession?: { selectedProfile?: { id?: string | null } | null } | null;
+    };
+    errors?: unknown[];
+  };
+
+  expect(initialHomeBody.errors, JSON.stringify(initialHomeBody, null, 2)).toBeUndefined();
+  expect(initialHomeBody.data?.currentSession?.selectedProfile?.id).toBe(sessionProfileId);
+
+  const input = composer.getByRole('textbox', { name: '게시물 내용', exact: true });
+  await input.fill(body);
+  await composer.getByRole('button', { name: '콘텐츠 경고 켜기', exact: true }).click();
+  const contentWarningInput = composer.getByRole('textbox', {
+    name: '콘텐츠 경고',
+    exact: true,
+  });
+  await contentWarningInput.fill(contentWarning);
+
+  const visibilityTrigger = composer.getByRole('button', { name: /^공개 범위:/ });
+  await visibilityTrigger.click();
+  const visibilityMenu = page.getByRole('radiogroup', { name: '공개 범위 선택' });
+  await visibilityMenu.getByRole('radio', { name: '팔로워만', exact: true }).click();
+
+  await composer.getByRole('button', { name: '작성 프로필', exact: true }).click();
+  const profilePicker = composer.getByLabel('프로필 전환');
+  await expect(profilePicker).toBeVisible();
+  await profilePicker
+    .getByRole('button', {
+      name: `${selectedProfile.displayName}, @${selectedProfile.handle}`,
+      exact: true,
+    })
+    .click();
+
+  await expect(composer.getByText(selectedProfile.displayName, { exact: true })).toBeVisible();
+  await expect(input).toHaveValue(body);
+  await expect(contentWarningInput).toHaveValue(contentWarning);
+  await expect(composer.getByRole('button', { name: '공개 범위: 팔로워만' })).toBeVisible();
+
+  const issueMediaResponse = waitForGraphQLOperation(
+    page,
+    'PostComposerIssueMediaUploadUrlMutation',
+  );
+  const completeMediaResponse = waitForGraphQLOperation(
+    page,
+    'PostComposerCompleteMediaUploadMutation',
+  );
+  await pasteComposerImage(input);
+  const issueMediaOperation = readGraphQLOperation((await issueMediaResponse).request().postData());
+  await completeMediaResponse;
+  expect(issueMediaOperation?.variables).toMatchObject({ profileId: selectedProfileId });
+  expect(completedMediaId).toBe(mediaId);
+  await expect(composer.getByLabel('첨부 이미지 1, 업로드 완료')).toBeVisible();
+  await expect(input).toHaveValue(body);
+  await composer.getByRole('button', { name: '첨부 이미지 1 제거', exact: true }).click();
+  await expect(composer.getByLabel('첨부 이미지 1, 업로드 완료')).toHaveCount(0);
+
+  const createPostResponse = waitForGraphQLOperation(page, 'PostComposerCreatePostMutation');
+  await composer.getByRole('button', { name: '게시', exact: true }).click();
+  const response = await createPostResponse;
+  const operation = readGraphQLOperation(response.request().postData());
+  const responseBody = (await response.json()) as {
+    data?: {
+      createPost?: {
+        post?: { id?: string | null } | null;
+      } | null;
+    };
+    errors?: unknown[];
+  };
+
+  expect(response.ok(), JSON.stringify(responseBody, null, 2)).toBe(true);
+  expect(responseBody.errors, JSON.stringify(responseBody, null, 2)).toBeUndefined();
+  expect(operation?.variables).toMatchObject({
+    input: {
+      bodyText: body,
+      contentWarning,
+      media: [],
+      profileId: selectedProfileId,
+      sensitiveMedia: false,
+      visibility: 'FOLLOWERS',
+    },
+    prependToHome: false,
+  });
+  const responsePost = responseBody.data?.createPost?.post;
+  expect(responsePost?.id).toEqual(expect.any(String));
+  expect(responsePost).not.toHaveProperty('content');
+  expect(responsePost).not.toHaveProperty('profile');
+  expect(responsePost).not.toHaveProperty('replyParent');
+  expect(responsePost).not.toHaveProperty('repostSource');
+  expect(responsePost).not.toHaveProperty('viewerBookmark');
+  expect(responsePost).not.toHaveProperty('viewerRepost');
+
+  const refreshedHomeResponse = waitForGraphQLOperation(page, 'HomePageQuery');
+  await page.reload();
+  const refreshedHomeBody = (await (await refreshedHomeResponse).json()) as {
+    data?: {
+      currentSession?: { selectedProfile?: { id?: string | null } | null } | null;
+    };
+    errors?: unknown[];
+  };
+  expect(refreshedHomeBody.errors, JSON.stringify(refreshedHomeBody, null, 2)).toBeUndefined();
+  expect(refreshedHomeBody.data?.currentSession?.selectedProfile?.id).toBe(sessionProfileId);
 });
 
 test('compose에서 이미지 clipboard paste는 본문을 보존하고 기존 Media 제출 흐름을 사용한다', async ({
