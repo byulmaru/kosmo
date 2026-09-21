@@ -196,5 +196,6 @@
 - **WHEN** 인증된 selected Owner의 Unblock이 required cleanup과 관계 제거를 완료한다
 - **THEN** mutation은 `success: true`와 실제 제거한 Profile Block의 식별자를 함께 반환한다
 - **AND** 다른 Owner의 관계나 이후 생성된 별도 Block을 삭제 결과로 반환하지 않는다
-- **AND** 관계를 제거하지 않은 결과는 `success: false`와 `null` 관계 projection을 반환한다
+- **AND** 관계를 제거하지 않은 결과는 `success: false`와 `profileBlockId: null`을 반환한다
+- **AND** 이 결과에서 `targetProfile`을 제거 여부에 따라 null로 강제하지 않으며, 반환된 `targetProfile.viewerState`는 mutation 이후 authoritative server state를 반영할 수 있다
 - **AND** payload 누락이나 완료 결과와 일치하지 않는 관계 식별자를 성공으로 취급하지 않는다
