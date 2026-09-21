@@ -99,9 +99,14 @@ OTA 호출에 선행한다. OTA에 별도의 두 번째 production approval을 �
 Android와 iOS export job은 `apps/app/app.config.ts`에 명시한 수동 `runtimeVersion`(현재 `"0.3"`)을
 resolve해 사용한다. Workflow는 resolve한 값이 비어 있지 않은 안전한 단일 path segment
 (`[A-Za-z0-9._-]+`, `.`·`..` 제외)인지 검증한 뒤 `pnpm exec expo export --clear`로 artifact를
-만든다. 자동 runtime 계산이나 `EXPO_UPDATES_FINGERPRINT_OVERRIDE`로 runtime을 계산하지 않는다.
-각 platform publish job은 자신의 export가 성공하고 caller의 배포 gate를 통과하면 해당
-artifact와 runtimeVersion을 public publisher reusable workflow에 전달한다. Publisher는 Expo Metro
+만든다. Export가 성공하면 같은 `apps/app` workspace와 환경에서 `pnpm exec expo config --type public --json`의
+전체 결과를 export root의 `expo-client.json`으로 저장하고, scheme `kosmo`와 Android/iOS platform
+identifier를 검증한다. 이 public config는 Expo SDK 호환성에 필요한 client metadata를 publisher에
+전달하기 위한 것으로, secret이나 publish credential을 포함하지 않는다. `expo-client.json`은
+export artifact에 포함된다. 자동 runtime 계산이나 `EXPO_UPDATES_FINGERPRINT_OVERRIDE`로 runtime을
+계산하지 않는다. 각 platform publish job은 자신의 export가 성공하고 caller의 배포 gate를 통과하면 해당
+artifact와 runtimeVersion, export root 기준 `expo_client_path: expo-client.json`을 public publisher
+reusable workflow에 전달한다. Publisher는 Expo Metro
 `metadata.json`과 참조된 파일을 읽어 export를 검증하고, 실제 bundle과 asset bytes를
 hashing한 뒤 사전 계산한 SHA-256 표준 Base64를 각 R2 `PutObject`에 전달해 서버 검증을 수행하며 signed immutable release를 R2에 기록한다.
 
