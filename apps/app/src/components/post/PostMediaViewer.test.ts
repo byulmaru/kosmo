@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
-import { createElement } from 'react';
+import { createElement, forwardRef, useImperativeHandle } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ComponentType, ReactNode, RefObject } from 'react';
 import type { View as NativeView } from 'react-native';
@@ -21,6 +21,13 @@ const childOverlayKeyTarget = { tagName: 'DIV' };
 const MockImage = Object.assign((props: Record<string, unknown>) => createElement('Image', props), {
   getSize: (_url: string, onSuccess: (width: number, height: number) => void) =>
     onSuccess(1600, 900),
+});
+const MockScrollView = forwardRef<
+  { scrollTo: (options: { animated?: boolean; x?: number; y?: number }) => void },
+  Record<string, unknown>
+>((props, ref) => {
+  useImperativeHandle(ref, () => ({ scrollTo: () => undefined }), []);
+  return createElement('ScrollView', props, props.children as ReactNode);
 });
 type PressableMockState = { pressed: boolean };
 type PressableMockProps = Record<string, unknown> & {
@@ -61,7 +68,7 @@ mock.module('react-native', {
     Modal: 'Modal',
     Platform: platform,
     Pressable,
-    ScrollView: 'ScrollView',
+    ScrollView: MockScrollView,
     StyleSheet: { create: <T>(styles: T) => styles },
     Text: 'Text',
     View: 'View',
@@ -307,7 +314,7 @@ describe('PostMediaViewer', () => {
     assert.equal(byTestId('post-media-viewer-position').children.join(''), '1 / 1');
   });
 
-  it('Web keyboard와 Native swipe가 같은 인접 index를 사용한다', async () => {
+  it('Web keyboard와 Native pager가 같은 인접 index를 사용한다', async () => {
     await render({ selectedIndex: 1 });
     assert.ok(keydownListener);
     await act(async () =>
@@ -339,64 +346,28 @@ describe('PostMediaViewer', () => {
     platform.OS = 'ios';
     await render({ post: viewerPost({ contentId: 'content-2' }), selectedIndex: 1 });
     assert.equal(currentImage().props.accessibilityLabel, '두 번째 이미지');
+
     await act(async () => {
-      const layout = byTestId('post-media-viewer-layout');
-      layout.props.onTouchStart({
-        nativeEvent: { pageX: 100, pageY: 100, touches: [{}] },
-      } as never);
-      layout.props.onTouchMove({
-        nativeEvent: { pageX: 99, pageY: 102, touches: [{}] },
-      } as never);
-      layout.props.onTouchMove({
-        nativeEvent: { pageX: 60, pageY: 104, touches: [{}] },
-      } as never);
-      layout.props.onTouchEnd({
-        nativeEvent: { pageX: 40, pageY: 104, touches: [] },
-      } as never);
+      byTestId('post-media-viewer-media-viewport').props.onLayout({
+        nativeEvent: { layout: { width: 390, height: 600 } },
+      });
     });
+
+    const pager = byTestId('post-media-viewer-native-pager');
+    assert.equal(pager.props.horizontal, true);
+    assert.equal(pager.props.pagingEnabled, true);
+    await act(async () =>
+      pager.props.onMomentumScrollEnd({
+        nativeEvent: {
+          contentOffset: { x: 780, y: 0 },
+          layoutMeasurement: { width: 390, height: 600 },
+        },
+      }),
+    );
     assert.equal(currentImage().props.accessibilityLabel, '3번째 첨부 이미지');
 
     await act(async () => pressable('이전 이미지').props.onPress());
     assert.equal(currentImage().props.accessibilityLabel, '두 번째 이미지');
-    await act(async () => {
-      const layout = byTestId('post-media-viewer-layout');
-      layout.props.onTouchStart({
-        nativeEvent: { pageX: 100, pageY: 100, touches: [{}] },
-      } as never);
-      layout.props.onTouchMove({
-        nativeEvent: { pageX: 100, pageY: 120, touches: [{}] },
-      } as never);
-      layout.props.onTouchMove({
-        nativeEvent: { pageX: 40, pageY: 120, touches: [{}] },
-      } as never);
-      layout.props.onTouchEnd({
-        nativeEvent: { pageX: 20, pageY: 120, touches: [] },
-      } as never);
-    });
-    assert.equal(currentImage().props.accessibilityLabel, '두 번째 이미지');
-    await act(async () => {
-      const layout = byTestId('post-media-viewer-layout');
-      layout.props.onTouchStart({
-        nativeEvent: { pageX: 100, pageY: 100, touches: [{}] },
-      } as never);
-      layout.props.onTouchMove({
-        nativeEvent: { pageX: 40, pageY: 104, touches: [{}, {}] },
-      } as never);
-      layout.props.onTouchEnd({
-        nativeEvent: { pageX: 20, pageY: 104, touches: [] },
-      } as never);
-    });
-    assert.equal(currentImage().props.accessibilityLabel, '두 번째 이미지');
-    await act(async () => {
-      const layout = byTestId('post-media-viewer-layout');
-      layout.props.onTouchStart({
-        nativeEvent: { pageX: 100, pageY: 100, touches: [{}] },
-      } as never);
-      layout.props.onTouchCancel();
-      layout.props.onTouchEnd({
-        nativeEvent: { pageX: 20, pageY: 104, touches: [] },
-      } as never);
-    });
     assert.equal(currentImage().props.accessibilityLabel, '두 번째 이미지');
   });
 
@@ -492,19 +463,25 @@ describe('PostMediaViewer', () => {
     assert.equal(flattenStyle(byTestId('post-media-viewer-close').props.style).right, 16);
   });
 
-  it('Content가 바뀐 진행 중 Native touch는 새 Content를 이동시키지 않는다', async () => {
+  it('Content가 바뀌면 Native pager는 새 projection만 사용한다', async () => {
     platform.OS = 'ios';
     await render({ post: viewerPost({ contentId: 'content-a' }), selectedIndex: 1 });
-    const previousLayout = byTestId('post-media-viewer-layout');
-    previousLayout.props.onTouchStart({
-      nativeEvent: { pageX: 100, pageY: 100, touches: [{}] },
-    } as never);
+    await act(async () =>
+      byTestId('post-media-viewer-media-viewport').props.onLayout({
+        nativeEvent: { layout: { width: 390, height: 600 } },
+      }),
+    );
+    const stalePager = byTestId('post-media-viewer-native-pager');
+    const staleOnMomentumScrollEnd = stalePager.props.onMomentumScrollEnd;
 
     await render({ post: viewerPost({ contentId: 'content-b' }), selectedIndex: 1 });
     await act(async () =>
-      byTestId('post-media-viewer-layout').props.onTouchEnd({
-        nativeEvent: { pageX: 20, pageY: 104, touches: [] },
-      } as never),
+      staleOnMomentumScrollEnd({
+        nativeEvent: {
+          contentOffset: { x: 780, y: 0 },
+          layoutMeasurement: { width: 390, height: 600 },
+        },
+      }),
     );
     assert.equal(currentImage().props.accessibilityLabel, '두 번째 이미지');
   });
@@ -698,18 +675,10 @@ describe('PostMediaViewer', () => {
 
     platform.OS = 'ios';
     await render({ post: viewerPost({ media: [media(0, '첫 번째 이미지')] }), selectedIndex: 1 });
-    await act(async () => {
-      const layout = byTestId('post-media-viewer-layout');
-      layout.props.onTouchStart({
-        nativeEvent: { pageX: 100, pageY: 100, touches: [{}] },
-      } as never);
-      layout.props.onTouchMove({
-        nativeEvent: { pageX: 20, pageY: 104, touches: [{}] },
-      } as never);
-      layout.props.onTouchEnd({
-        nativeEvent: { pageX: 0, pageY: 104, touches: [] },
-      } as never);
-    });
+    assert.equal(
+      rendered('ScrollView').some((node) => node.props.testID === 'post-media-viewer-native-pager'),
+      false,
+    );
     assert.ok(byTestId('post-media-viewer-unavailable'));
   });
 

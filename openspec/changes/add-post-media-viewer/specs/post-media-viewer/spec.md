@@ -126,6 +126,7 @@ Host·query·runtime 구현은 historical evidence로 보존한다. PROD-853은 
 
 - **WHEN** Web 사용자가 arrow key를 누르거나 Native 사용자가 유효한 수평 swipe를 실행한다
 - **THEN** Viewer는 같은 Post Content revision 안의 해당 방향 인접 Media로 이동한다
+- **AND** Native에서는 image stage가 손가락을 따라 수평 이동하고 손을 놓으면 페이지에 안착한다
 - **AND** Post detail과 Action Bar 대상은 바뀌지 않는다
 
 #### Scenario: 한 장의 Media

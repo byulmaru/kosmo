@@ -89,7 +89,7 @@ Wide Web의 오른쪽 thread rail은 fullscreen modal 안의 별도 elevation su
 - 이전·다음 control은 document 순서를 따르며 첫 장의 이전과 마지막 장의 다음은 비활성화한다. 끝에서 반대편으로 순환하지 않는다.
 - Web은 이전·다음 control과 `ArrowLeft`·`ArrowRight` keyboard 입력을 제공한다.
 - iOS·Android는 이전·다음 control과 수평 swipe를 제공한다. Gesture가 성립하지 않으면 현재 이미지에 머문다.
-- Native 수평 swipe는 빠르게 밀고 떼어도 인접 이미지로 이동한다. 작은 손떨림은 허용하되 세로 스크롤·다중 터치·취소된 터치와 도중에 이미지가 바뀐 터치는 이미지 전환으로 처리하지 않는다.
+- Native image stage는 플랫폼의 수평 paging을 사용한다. 이미지는 손가락을 따라 움직이고 손을 놓으면 페이지에 안착하며 첫·마지막에서 순환하지 않는다. 이전·다음 버튼도 같은 페이지 이동을 사용하고, reduced motion에서는 버튼 이동 애니메이션을 생략한다. 최초 선택 위치와 화면 폭 변경은 애니메이션 없이 정렬한다. 수평 paging은 image stage에만 적용해 원문의 세로 스크롤을 유지한다.
 - 이전·다음 control은 48×48 hit target과 keyboard focus ring을 유지하며, idle·press 상태에 보이는 원형 배경·테두리·그림자·가장자리를 표시하지 않는다. 화살표 자체는 idle `1`, hover `0.8`, press `0.6`, disabled `0.35` opacity로 상태 피드백을 제공한다.
 - 현재 이미지가 바뀌어도 작성자·원문과 Action Bar의 surface routing은 바뀌지 않는다. Pure Repost에서는 Reply만 바깥 contentless Repost identity를 유지하고 나머지 표시·social action은 direct Source를 대상으로 한다.
 - Viewer open과 Media 탐색은 route나 browser history를 변경하지 않는다.

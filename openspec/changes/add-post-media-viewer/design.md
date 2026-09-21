@@ -66,7 +66,7 @@ Compact 원문 overflow 여부는 실제 text layout에서 확인해 3줄을 넘
 
 Host Post query의 loading·error boundary는 Content presentation에만 적용해 modal shell과 close·focus를 유지한다. Wide thread loading·error boundary는 오른쪽 surface에만 적용해 왼쪽 선택 image와 modal chrome을 유지한다. Route와 Viewer의 `PostDetailThread`는 각각 scroll surface의 end-reached, same-surface burst 재진입 guard, pending·error·retry UI state와 completion 뒤 saved metrics 재평가를 소유하고 component 간 request token이나 Viewer visibility gate를 공유하지 않는다. 같은 Relay environment에서 query와 variables가 동일한 pagination operation이 두 surface에서 겹치면 in-flight dedupe와 normalized connection merge는 Relay에 맡긴다. 서로 다른 cursor·count·environment의 request가 dedupe된다고 가정하지 않는다. Viewer 뒤의 원래 Post surface는 modal이 열린 동안 focus와 interaction 대상에서 제외한다.
 
-Web key handler는 Viewer가 최상위 active modal일 때만 arrow·Escape를 처리하고 form·button 입력과 충돌하지 않게 한다. Web backdrop은 직접 press만 close로 처리하고 image·detail·내부 control press의 전파로 닫지 않는다. Native swipe는 수평 의도가 수직 scroll보다 분명할 때만 인식하며 첫·마지막 경계를 넘기지 않는다. Close ref를 초기 focus target으로 사용하고, dismiss 시 보관한 origin control이 유효하면 그곳으로 복귀한다.
+Web key handler는 Viewer가 최상위 active modal일 때만 arrow·Escape를 처리하고 form·button 입력과 충돌하지 않게 한다. Web backdrop은 직접 press만 close로 처리하고 image·detail·내부 control press의 전파로 닫지 않는다. Native image stage는 플랫폼의 수평 paging을 사용해 손가락을 따라 이동하고 손을 놓으면 페이지에 안착한다. 첫·마지막 경계는 순환하지 않는다. Close ref를 초기 focus target으로 사용하고, dismiss 시 보관한 origin control이 유효하면 그곳으로 복귀한다.
 
 Post Action Bar와 thread child overlay는 기존 surface를 재사용하되 Viewer와 child overlay를 동시에 무조건 dismiss하지 않는다. 구현 초기에 Web wide thread와 iOS·Android compact Action Bar에서 overlay layering과 focus를 확인하고, 중첩 native `Modal`이 기존 동작을 보존하지 못하면 같은 coordinator가 Viewer와 child overlay의 표시 순서를 조정한다. 어느 방식이든 action target·pending·cache·실패 계약은 기존 child component가 계속 소유한다.
 
@@ -101,7 +101,7 @@ Post Action Bar와 thread child overlay는 기존 surface를 재사용하되 Vie
 - [목록에서 Wide thread를 위해 추가 Post detail operation이 필요할 수 있음] → 같은 Post node·visibility를 사용하고 thread boundary에만 loading·error를 두며 Media authorization과 route/history는 변경하지 않는다.
 - [Viewer 오른쪽 scroller와 기존 document pagination이 가까운 시점에 같은 connection을 load할 수 있음] → 각 surface가 synchronous burst 재진입을 local guard로 막고 loading·error·retry 상태를 분리한다. 두 surface에서 겹친 같은 Relay environment의 동일 operation·variables는 Relay 21의 in-flight dedupe와 connection merge에 맡긴다. Viewer completion 뒤 saved metrics 재평가는 유지하되 서로 다른 surface를 조정하는 앱 token이나 실제 network 횟수를 별도 앱 계약으로 고정하지 않는다.
 - [Viewer와 Reaction·Repost·More overlay의 native stacking이 불안정할 수 있음] → 구현 초기에 각 child action을 세 플랫폼에서 확인하고, 실패하면 action 의미를 바꾸지 않는 coordinator-level layer 전환으로 제한한다.
-- [긴 원문 scroll과 Native 수평 swipe가 gesture를 경쟁할 수 있음] → 수평 의도 threshold를 두고 vertical text scroll을 우선하며 이전·다음 button을 항상 대체 입력으로 유지한다.
+- [긴 원문 scroll과 Native 수평 swipe가 gesture를 경쟁할 수 있음] → 수평 paging을 image stage에 한정해 본문의 vertical text scroll을 유지하며 이전·다음 button을 항상 대체 입력으로 유지한다.
 - [768px 부근에서 최소 rail이 image surface를 지나치게 줄일 수 있음] → rail은 현재 274px bounded Action Bar footprint가 잘리지 않는 320px 최소폭을 지키되 modal의 24px inset 안에서 image가 남는지 768px 경계를 직접 확인하고, 넓은 viewport에서는 350px 상한으로 image 비중을 회복한다.
 - [Compact panel의 내용 높이와 expanded scroll 제약이 Action Bar를 밀거나 낮은 viewport에서 고정 chrome을 가릴 수 있음] → `clamp(192px, 32vh, 240px)` 최대 높이와 body-only shrink 경계를 함께 두고 짧은 원문·3줄 초과 원문·expanded 상태를 일반 높이와 390px 높이에서 각각 실측한다.
 - [Post·revision 변경 뒤 이전 Media가 잠시 남을 수 있음] → Viewer가 소유 Post의 현재 Relay fragment projection만 읽고 이전 Media URL을 session이나 별도 state에 보존하지 않는다. 선택 Media가 사라지면 modal chrome과 close control을 유지한 unavailable 상태로 전환한다.

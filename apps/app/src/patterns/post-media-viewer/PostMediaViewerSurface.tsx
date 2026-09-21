@@ -6,6 +6,7 @@ import {
   Image,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -37,6 +38,7 @@ export type PostMediaViewerSurfaceProps = Readonly<{
   currentIndex: number;
   media: readonly PostMediaItem[];
   onClose: () => void;
+  onIndexChange: (index: number) => void;
   onNext: () => void;
   onPrevious: () => void;
   onRetry: () => void;
@@ -82,6 +84,7 @@ export function PostMediaViewerSurface({
   currentIndex,
   media,
   onClose,
+  onIndexChange,
   onNext,
   onPrevious,
   onRetry,
@@ -198,17 +201,37 @@ export function PostMediaViewerSurface({
           >
             {viewState === 'ready' && currentMedia?.url ? (
               <PostContentPrivacyBoundary
-                style={styles.imagePrivacyBoundary}
+                style={Platform.OS === 'web' ? styles.imagePrivacyBoundary : mediaViewportSize}
                 testID="post-media-viewer-image-privacy-boundary"
               >
-                <ViewerImage
-                  key={JSON.stringify([identity, token])}
-                  accessibilityLabel={imageName}
-                  onStatus={settle}
-                  viewportSize={mediaViewportSize}
-                  status={request.status}
-                  url={currentMedia.url}
-                />
+                {Platform.OS !== 'web' && mediaViewportSize ? (
+                  <NativeMediaPager
+                    key={contentRevisionId}
+                    currentIndex={currentIndex}
+                    media={media}
+                    onIndexChange={onIndexChange}
+                    reducedMotion={reducedMotion}
+                    viewportSize={mediaViewportSize}
+                  >
+                    <ViewerImage
+                      key={JSON.stringify([identity, token])}
+                      accessibilityLabel={imageName}
+                      onStatus={settle}
+                      viewportSize={mediaViewportSize}
+                      status={request.status}
+                      url={currentMedia.url}
+                    />
+                  </NativeMediaPager>
+                ) : (
+                  <ViewerImage
+                    key={JSON.stringify([identity, token])}
+                    accessibilityLabel={imageName}
+                    onStatus={settle}
+                    viewportSize={mediaViewportSize}
+                    status={request.status}
+                    url={currentMedia.url}
+                  />
+                )}
               </PostContentPrivacyBoundary>
             ) : null}
           </View>
@@ -366,14 +389,105 @@ export function PostMediaViewerSurface({
   );
 }
 
+function NativeMediaPager({
+  children,
+  currentIndex,
+  media,
+  onIndexChange,
+  reducedMotion,
+  viewportSize,
+}: Readonly<{
+  children: ReactElement;
+  currentIndex: number;
+  media: readonly PostMediaItem[];
+  onIndexChange: (index: number) => void;
+  reducedMotion: boolean;
+  viewportSize: ImageSize;
+}>) {
+  const scroll = useRef<ScrollView>(null);
+  const active = useRef(true);
+  const position = useRef({ index: currentIndex, width: viewportSize.width });
+  const initialOffset = useRef({ x: currentIndex * viewportSize.width, y: 0 });
+  const { width, height } = viewportSize;
+  useEffect(() => {
+    active.current = true;
+    return () => {
+      active.current = false;
+    };
+  }, []);
+  useEffect(() => {
+    const previous = position.current;
+    if (previous.index !== currentIndex || previous.width !== width) {
+      scroll.current?.scrollTo({
+        x: currentIndex * width,
+        animated: previous.width === width && !reducedMotion,
+      });
+    }
+    position.current = { index: currentIndex, width };
+  }, [currentIndex, reducedMotion, width]);
+
+  return (
+    <ScrollView
+      ref={scroll}
+      horizontal
+      pagingEnabled
+      bounces={false}
+      directionalLockEnabled
+      disableIntervalMomentum
+      scrollEnabled={media.length > 1}
+      showsHorizontalScrollIndicator={false}
+      contentOffset={initialOffset.current}
+      onMomentumScrollEnd={(event) => {
+        if (!active.current || event.nativeEvent.layoutMeasurement.width !== width || width <= 0) {
+          return;
+        }
+        const index = Math.max(
+          0,
+          Math.min(media.length - 1, Math.round(event.nativeEvent.contentOffset.x / width)),
+        );
+        position.current = { index, width };
+        if (index !== currentIndex) {
+          onIndexChange(index);
+        }
+      }}
+      style={{ width, height }}
+      testID="post-media-viewer-native-pager"
+    >
+      {media.map((item, index) => (
+        <View
+          key={JSON.stringify([item.id, item.url])}
+          accessibilityElementsHidden={index !== currentIndex}
+          importantForAccessibility={index === currentIndex ? 'auto' : 'no-hide-descendants'}
+          style={{ width, height, alignItems: 'center', justifyContent: 'center' }}
+        >
+          {index === currentIndex ? (
+            children
+          ) : item.url ? (
+            <ViewerImage
+              accessibilityLabel={item.altText?.trim() || `${index + 1}번째 첨부 이미지`}
+              onStatus={() => undefined}
+              status="ready"
+              url={item.url}
+              viewportSize={viewportSize}
+              testID="post-media-viewer-preview-image"
+            />
+          ) : null}
+        </View>
+      ))}
+    </ScrollView>
+  );
+}
+
 function ViewerImage({
   accessibilityLabel,
+  testID = 'post-media-viewer-image',
   onStatus,
   status,
   url,
   viewportSize,
 }: Readonly<{
   accessibilityLabel: string;
+  testID?: string;
   onStatus: (status: ImageRequest['status']) => void;
   status: ImageRequest['status'];
   url: string;
@@ -434,7 +548,7 @@ function ViewerImage({
         resizeMode="contain"
         source={status === 'error' ? undefined : { uri: url }}
         style={styles.image}
-        testID="post-media-viewer-image"
+        testID={testID}
       />
     </View>
   );

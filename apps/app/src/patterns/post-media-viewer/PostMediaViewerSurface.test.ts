@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
-import { createElement } from 'react';
+import { createElement, forwardRef, useImperativeHandle } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ComponentType, ReactNode } from 'react';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
@@ -15,9 +15,17 @@ const require = createRequire(import.meta.url);
 const mockPlatform: { OS: string } = { OS: 'web' };
 let mockWindowHeight = 844;
 let mockReducedMotion = false;
+const scrollCalls: Array<{ animated?: boolean; x?: number; y?: number }> = [];
 const MockImage = Object.assign((props: Record<string, unknown>) => createElement('Image', props), {
   getSize: (_url: string, onSuccess: (width: number, height: number) => void) =>
     onSuccess(1600, 900),
+});
+const MockScrollView = forwardRef<
+  { scrollTo: (options: { animated?: boolean; x?: number; y?: number }) => void },
+  Record<string, unknown>
+>((props, ref) => {
+  useImperativeHandle(ref, () => ({ scrollTo: (options) => scrollCalls.push(options) }), []);
+  return createElement('ScrollView', props, props.children as ReactNode);
 });
 const getToast = () =>
   renderer?.root.findAll((node) => typeof node.type === 'function' && node.type.name === 'Toast')[0]
@@ -46,6 +54,7 @@ mock.module('react-native', {
         typeof children === 'function' ? children({ pressed: false }) : (children as ReactNode),
       );
     },
+    ScrollView: MockScrollView,
     StyleSheet: {
       absoluteFillObject: {
         bottom: 0,
@@ -93,6 +102,7 @@ type SurfaceProps = Readonly<{
   currentIndex: number;
   media: readonly PostMediaItem[];
   onClose: () => void;
+  onIndexChange: (index: number) => void;
   onNext: () => void;
   onPrevious: () => void;
   onRetry: () => void;
@@ -113,6 +123,7 @@ afterEach(async () => {
   mockPlatform.OS = 'web';
   mockWindowHeight = 844;
   mockReducedMotion = false;
+  scrollCalls.length = 0;
   if (renderer) {
     await act(async () => renderer?.unmount());
     renderer = null;
@@ -120,6 +131,53 @@ afterEach(async () => {
 });
 
 describe('PostMediaViewerSurface', () => {
+  it('Native image stage uses horizontal paging and reports the snapped index', async () => {
+    mockPlatform.OS = 'ios';
+    const indexes: number[] = [];
+    await render({ currentIndex: 1, onIndexChange: (index) => indexes.push(index) });
+
+    await act(async () =>
+      byTestId('post-media-viewer-media-viewport').props.onLayout({
+        nativeEvent: { layout: { width: 390, height: 600 } },
+      }),
+    );
+
+    const pager = byTestId('post-media-viewer-native-pager');
+    assert.equal(pager.props.horizontal, true);
+    assert.equal(pager.props.pagingEnabled, true);
+    assert.deepEqual(pager.props.contentOffset, { x: 390, y: 0 });
+
+    await act(async () =>
+      pager.props.onMomentumScrollEnd({
+        nativeEvent: {
+          contentOffset: { x: 780, y: 0 },
+          layoutMeasurement: { width: 390, height: 600 },
+        },
+      }),
+    );
+
+    assert.deepEqual(indexes, [2]);
+
+    await render({ currentIndex: 2 });
+    assert.equal(scrollCalls.length, 0, 'momentum snap must not animate back to the same page');
+
+    await render({ currentIndex: 3 });
+    assert.deepEqual(scrollCalls.at(-1), { animated: true, x: 1170 });
+    mockReducedMotion = true;
+    await render({ currentIndex: 2 });
+    assert.deepEqual(scrollCalls.at(-1), { animated: false, x: 780 });
+
+    await act(async () =>
+      byTestId('post-media-viewer-media-viewport').props.onLayout({
+        nativeEvent: { layout: { width: 400, height: 600 } },
+      }),
+    );
+    assert.deepEqual(scrollCalls.at(-1), { animated: false, x: 800 });
+
+    await render({ viewState: 'error' });
+    assert.equal(queryByTestId('post-media-viewer-native-pager'), null);
+  });
+
   it('Ready 이미지 실패는 현재 이미지 retry와 stale callback을 유지하고 다시 방문하면 reload한다', async () => {
     await render({ currentIndex: 0 });
     const first = image();
@@ -222,6 +280,7 @@ describe('PostMediaViewerSurface', () => {
       currentIndex: 0,
       media: [] as const,
       onClose: () => undefined,
+      onIndexChange: () => undefined,
       onNext: () => undefined,
       onPrevious: () => undefined,
       onRetry: () => undefined,
@@ -664,6 +723,7 @@ function baseProps(overrides: Partial<SurfaceProps> = {}): SurfaceProps {
     currentIndex: 1,
     media: [media(1, '첫 번째 이미지'), media(2, '두 번째 이미지'), media(3, null), media(4, null)],
     onClose: () => undefined,
+    onIndexChange: () => undefined,
     onNext: () => undefined,
     onPrevious: () => undefined,
     onRetry: () => undefined,

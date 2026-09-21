@@ -134,6 +134,7 @@ export function PostMediaViewerCatalog({
     currentIndex: clampedIndex,
     media,
     onClose,
+    onIndexChange: fn(),
     onNext,
     onPrevious,
     onRetry,
