@@ -89,6 +89,17 @@ Active/Normal selected Profile이 일반 Post 또는 Reply를 작성할 때 opti
 - Android/iOS 실제 runtime과 원격 Misskey/Mastodon federation runtime은 미실행이며 이 active change의 남은
   completion gate다.
 
+**Verification Evidence (2026-09-21, PROD-990)**
+
+- 최신 `main`에서 별도 화면 adapter 없이 공용 renderer를 경유했다.
+- Unit 15 passed, focused Storybook 9 passed. Storybook 수동 검토에서 두 consumer의 reveal state 공유·재가리기와
+  390 Dark를 확인했다.
+- Isolated DB의 실제 GraphQL Local·Remote Home 경고와 Local Home↔detail 상태 공유 E2E 1개가 통과했고,
+  Light Web 390·1024·1440에서 수평 overflow를 검증했다.
+- Production `AppProviders`는 `mode='light'`이므로 Production Dark는 미검증이며 결정 대기다.
+- iOS·Android 실제 runtime, VoiceOver·TalkBack, safe area·font scaling·실제 target, 실제 federation 수신은
+  미검증이다.
+
 ## 3. PROD-460·PROD-642 OpenSpec 정합성과 archive
 
 **Authority / Provenance**
