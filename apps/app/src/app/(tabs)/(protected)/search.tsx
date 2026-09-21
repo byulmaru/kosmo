@@ -484,7 +484,7 @@ export default function SearchScreen() {
 
   return (
     <ScrollView
-      contentContainerStyle={[styles.root, web && styles.webRoot]}
+      contentContainerStyle={[styles.root, web ? styles.webRoot : styles.nativeRoot]}
       keyboardShouldPersistTaps="handled"
     >
       {nativeSearchHeader}
@@ -616,6 +616,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
     paddingVertical: 0,
   },
+  nativeRoot: { paddingTop: 0 },
   webContent: {
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.xxl,
