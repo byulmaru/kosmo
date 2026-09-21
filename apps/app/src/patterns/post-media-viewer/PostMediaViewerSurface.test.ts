@@ -603,11 +603,19 @@ describe('PostMediaViewerSurface', () => {
       ]),
       { outlineColor: '#ffffff', outlineOffset: -2, outlineStyle: 'solid', outlineWidth: 2 },
     );
-    assert.equal(resolveStyle(findByLabel('이전 이미지').props.visualStyle).opacity, 0.35);
+    const disabledNavigationVisual = findByLabel('이전 이미지').props.visualStyle;
+    assert.equal(resolveStyle(disabledNavigationVisual).opacity, 0.35);
+    assert.equal(
+      resolveStyle(disabledNavigationVisual, { hovered: true, pressed: true }).opacity,
+      0.35,
+    );
 
     const navigationVisual = findByLabel('다음 이미지').props.visualStyle;
     assert.equal(resolveStyle(navigationVisual, { hovered: true }).backgroundColor, 'transparent');
     assert.equal(resolveStyle(navigationVisual, { pressed: true }).backgroundColor, 'transparent');
+    assert.equal(resolveStyle(navigationVisual).opacity, 1);
+    assert.equal(resolveStyle(navigationVisual, { hovered: true }).opacity, 0.8);
+    assert.equal(resolveStyle(navigationVisual, { pressed: true }).opacity, 0.6);
     assert.equal(resolveStyle(navigationVisual).boxShadow, undefined);
     assert.equal(resolveStyle(navigationVisual).filter, undefined);
     assert.deepEqual(

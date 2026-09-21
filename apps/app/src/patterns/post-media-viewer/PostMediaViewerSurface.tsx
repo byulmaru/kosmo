@@ -668,7 +668,15 @@ function controlVisualStyle(disabled: boolean, showDecoration = true) {
             ? ({ filter: 'drop-shadow(0 1px 2px rgba(0, 0, 0, 0.9))' } as unknown as ViewStyle)
             : { boxShadow: '0 1px 2px rgba(0, 0, 0, 0.9)' }
           : undefined),
-        opacity: disabled ? 0.35 : 1,
+        opacity: disabled
+          ? 0.35
+          : showDecoration
+            ? 1
+            : state.pressed
+              ? 0.6
+              : webState.hovered
+                ? 0.8
+                : 1,
         ...(Platform.OS === 'web' && webState.focused
           ? ({
               outlineColor: '#ffffff',
