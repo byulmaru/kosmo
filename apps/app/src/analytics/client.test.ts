@@ -66,10 +66,18 @@ let constructorFails = false;
 const globals = globalThis as typeof globalThis & { __KOSMO_CHANNEL__?: unknown };
 const originalChannel = globals.__KOSMO_CHANNEL__;
 const originalDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
+const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
 const mockPostHogConfig = {
   posthogHost: 'https://posthog.example.test',
   posthogKey: 'phc_test',
 } as const;
+
+function setBrowserHostname(hostname: string): void {
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { location: { hostname } },
+  });
+}
 
 mock.module(new URL('../config/public.ts', import.meta.url), {
   exports: {
@@ -106,6 +114,7 @@ let moduleInstance = 0;
 
 beforeEach(async () => {
   globals.__KOSMO_CHANNEL__ = 'prod';
+  setBrowserHostname('kos.moe');
   analytics = await import(
     new URL(`./client.web.ts?test=${++moduleInstance}`, import.meta.url).href
   );
@@ -115,6 +124,11 @@ beforeEach(async () => {
 });
 
 after(() => {
+  if (originalWindow) {
+    Object.defineProperty(globalThis, 'window', originalWindow);
+  } else {
+    Reflect.deleteProperty(globalThis, 'window');
+  }
   if (originalDocument) {
     Object.defineProperty(globalThis, 'document', originalDocument);
   } else {
@@ -128,6 +142,43 @@ after(() => {
 });
 
 describe('PostHog Web client', () => {
+  for (const hostname of ['localhost', '127.0.0.1', '[::1]']) {
+    it(`${hostname} loopback에서는 초기화와 event 전송을 하지 않는다`, () => {
+      setBrowserHostname(hostname);
+
+      analytics.trackAnalytics('profile_created', { selected_profile_id: 'profile-id' });
+
+      assert.equal(initCalls.length, 0);
+      assert.equal(instances.length, 0);
+    });
+  }
+
+  for (const hostname of ['kos.moe', 'preview.kos.moe']) {
+    it(`${hostname}에서는 기존 PostHog 초기화와 event 전송을 유지한다`, () => {
+      setBrowserHostname(hostname);
+
+      analytics.trackAnalytics('profile_created', { selected_profile_id: 'profile-id' });
+
+      assert.equal(initCalls.length, 1);
+      assert.equal(instances.length, 1);
+      assert.deepEqual(instances[0]?.calls, [
+        { event: 'profile_created', properties: { selected_profile_id: 'profile-id' } },
+      ]);
+    });
+  }
+
+  it('cached client가 있어도 loopback으로 바뀌면 event 전송을 중단한다', () => {
+    analytics.trackAnalytics('profile_created', { selected_profile_id: 'before-loopback' });
+    setBrowserHostname('127.0.0.1');
+
+    analytics.trackAnalytics('profile_created', { selected_profile_id: 'after-loopback' });
+
+    assert.equal(initCalls.length, 1);
+    assert.deepEqual(instances[0]?.calls, [
+      { event: 'profile_created', properties: { selected_profile_id: 'before-loopback' } },
+    ]);
+  });
+
   it('dev 채널에서는 PostHog를 초기화하지 않는다', () => {
     globals.__KOSMO_CHANNEL__ = 'dev';
 
