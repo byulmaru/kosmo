@@ -67,10 +67,14 @@
 - `packages/fedify`: 기존 actor materialization·refresh가 보유한 Profile URL metadata를 재사용하고, inbound Note의 typed
   `Mention.href`를 이미 알려진 Profile identity와 확인해 `to`/`cc` audience와 분리한다. Mention 수신 중 새 actor/profile fetch,
   materialization 또는 backfill은 수행하지 않는다.
-- PostgreSQL/Drizzle 및 GraphQL read projection: immutable revision 관계를 `post_mentions` table에 저장·조회하되
-  column/index/primary-key shape는 구현 전 검토한다.
+- PostgreSQL/Drizzle 및 GraphQL read projection: immutable revision 관계를 `post_mentions` table에 저장·조회하고,
+  `PostContent.mentionedProfiles: [Profile!]!`에서 기존 Profile visibility predicate(Profile이 `ACTIVE`이고 소속 Instance가
+  `SUSPENDED`가 아님)를 통과한 같은 revision의 Profile을 deduplicate해 제공한다. Post visibility·eligibility는 PostContent 조회의
+  기존 정책을 따르며 viewer별 Profile Domain Block 정책은 이 field에서 새로 조합하지 않는다.
+  document의 canonical UUID는 기존 Media와 같은 client-facing global ID로 projection하며, node global ID와 relation Profile ID를
+  exact match한다. 저장 UUID와 `post_mentions`의 column/index/primary-key shape는 서버 구현 계약으로 유지한다.
 - `packages/core`, `packages/fedify`의 unit/integration 검증: valid, duplicate, unresolved, malformed,
-  mismatch, atomic rollback과 legacy reader body preservation을 증명한다.
+  mismatch, atomic rollback을 증명한다. legacy reader body preservation은 deferred 2.x gate로 별도 기록한다.
 - `PROD-910`은 이 change에서 canonical node/relation을 소비하는 renderer/Profile 이동과 통합 검증,
   archive를 완료한다. `PROD-911`은 별도 Notification/FCM change에서 같은 capability를 소비하며 그
   범위·완료 책임은 이 change와 분리한다.

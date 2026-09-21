@@ -4,6 +4,7 @@ import { Linking, Pressable, StyleSheet, Text } from 'react-native';
 import { match } from 'ts-pattern';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, spacing, typography } from '@/theme/tokens';
+import { PostContentMention } from './PostContentMention';
 import { PostContentPrivacyBoundary } from './PostContentPrivacyBoundary';
 import { PostContentWarning } from './PostContentWarning';
 import { usePostContentWarningReveal } from './PostContentWarningRevealContext';
@@ -16,6 +17,7 @@ import type {
 } from '@kosmo/core/post-content';
 import type { Key, ReactNode } from 'react';
 import type { StyleProp, TextStyle } from 'react-native';
+import type { PostContentMentionProfile } from './PostContentMention';
 import type { PostMediaItem } from './PostMediaGallery';
 import type { PostMediaOpenHandler } from './PostMediaImage';
 
@@ -25,6 +27,7 @@ interface RenderContext {
   readonly bodyStyle: StyleProp<TextStyle>;
   readonly interactive: boolean;
   readonly linkColor: string;
+  readonly mentionedProfiles: ReadonlyMap<string, PostContentMentionProfile>;
   readonly numberOfLines?: number;
 }
 
@@ -38,6 +41,7 @@ export function PostContentRenderer({
   interactive = true,
   media,
   mediaPresentation = 'default',
+  mentionedProfiles,
   numberOfLines,
   onBodyPress,
   onMediaOpen,
@@ -51,6 +55,7 @@ export function PostContentRenderer({
   interactive?: boolean;
   media: ReadonlyArray<PostMediaItem> | null;
   mediaPresentation?: 'default' | 'hidden';
+  mentionedProfiles: ReadonlyArray<PostContentMentionProfile>;
   numberOfLines?: number;
   onBodyPress?: () => void;
   onMediaOpen?: PostMediaOpenHandler;
@@ -69,6 +74,7 @@ export function PostContentRenderer({
     size === 'lg' ? typography.lg : typography.md,
     { color: theme.text },
   ];
+  const mentionedProfilesById = new Map(mentionedProfiles.map((profile) => [profile.id, profile]));
 
   const body = !contentVisible ? null : !bodyText ? null : !document ? (
     <Text numberOfLines={numberOfLines} style={bodyStyle}>
@@ -79,6 +85,7 @@ export function PostContentRenderer({
       bodyStyle,
       interactive,
       linkColor: theme.actionLinkBase,
+      mentionedProfiles: mentionedProfilesById,
       numberOfLines,
     })
   );
@@ -153,6 +160,17 @@ function renderNode(node: PostContentNode, key: Key, context: RenderContext): Re
     ))
     .with({ type: 'text' }, (text) => renderMarks(text, key, context))
     .with({ type: 'hard_break' }, () => '\n')
+    .with({ type: 'mention' }, (mention) => {
+      const profile = context.mentionedProfiles.get(mention.attrs.profileId);
+      return (
+        <PostContentMention
+          key={key}
+          interactive={context.interactive}
+          linkColor={context.linkColor}
+          profile={profile}
+        />
+      );
+    })
     .otherwise(() => null);
 }
 
