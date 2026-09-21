@@ -369,7 +369,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
           { borderColor: theme.borderSubtle },
         ]}
       >
-        {mobile && !routeOwnsMobileHeader ? (
+        {mobile && web && !routeOwnsMobileHeader ? (
           <View
             style={[
               styles.mobileChrome,
@@ -398,12 +398,10 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
                   ) : undefined
                 }
               />
-            ) : web ? (
+            ) : (
               <View style={[styles.mobileHeader, { borderColor: theme.borderSubtle }]}>
                 {menuButton}
               </View>
-            ) : (
-              <PageHeader leading={menuButton} title="" />
             )}
           </View>
         ) : null}

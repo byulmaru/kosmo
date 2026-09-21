@@ -30,6 +30,9 @@ type RightRailProps = {
 let rightRailProps: RightRailProps | undefined;
 let bottomTabBarProps: { onComposeOpen?: () => void } | undefined;
 let sidebarNavigationProps: { onComposeOpen?: () => void } | undefined;
+let shellChromeProps:
+  | { navigationDrawerOpen?: boolean; openNavigationDrawer?: () => void }
+  | undefined;
 let rightRailFooterCount = 0;
 
 function MockBottomTabBar(props: typeof bottomTabBarProps) {
@@ -110,6 +113,8 @@ mockModule('@/components/notification/NotificationReadAllContext', {
 mockModule('@/components/PageHeader', {
   PageHeader: ({ leading, ...props }: { leading?: ReactNode; [key: string]: unknown }) =>
     createElement('PageHeader', props, leading),
+  PageHeaderView: ({ leading, ...props }: { leading?: ReactNode; [key: string]: unknown }) =>
+    createElement('PageHeader', props, leading),
 });
 mockModule('@/components/post/PostMediaViewerHost', {
   PostMediaViewerScreenFallbackProvider: PassThrough,
@@ -154,7 +159,12 @@ mockModule('./RightRail', {
     return null;
   },
 });
-mockModule('./ShellChromeContext', { ShellChromeProvider: PassThrough });
+mockModule('./ShellChromeContext', {
+  ShellChromeProvider: ({ children, ...props }: PropsWithChildren) => {
+    shellChromeProps = props;
+    return children;
+  },
+});
 mockModule('./SidebarNavigation', {
   SidebarNavigation: MockSidebarNavigation,
 });
@@ -191,6 +201,7 @@ afterEach(async () => {
   bottomTabBarProps = undefined;
   rightRailProps = undefined;
   sidebarNavigationProps = undefined;
+  shellChromeProps = undefined;
   rightRailFooterCount = 0;
   router.back.mock.resetCalls();
   router.push.mock.resetCalls();
@@ -222,16 +233,15 @@ describe('UniversalShell screen fallback focus target', () => {
     await renderShell();
 
     const drawerType = 'Drawer' as ElementType;
-    const menu = renderer?.root.findByProps({ accessibilityLabel: '메뉴 열기' });
-    assert.ok(menu);
     const drawer = renderer?.root.findByType(drawerType);
     assert.ok(drawer);
-    assert.deepEqual(menu.props.accessibilityState, { expanded: false });
     assert.equal(drawer.props.open, false);
     assert.equal(drawer.props.swipeEnabled, true);
+    assert.equal(shellChromeProps?.navigationDrawerOpen, false);
 
-    await act(async () => menu.props.onPress());
-    assert.equal(drawer.props.open, true);
+    await act(async () => shellChromeProps?.openNavigationDrawer?.());
+    assert.equal(renderer?.root.findByType(drawerType).props.open, true);
+    assert.equal(shellChromeProps?.navigationDrawerOpen, true);
     assert.ok(hardwareBackPressListener);
 
     let handled = false;
@@ -250,15 +260,14 @@ describe('UniversalShell screen fallback focus target', () => {
         await renderShell();
 
         const drawer = renderer?.root.findByType('Drawer' as ElementType);
-        const menu = renderer?.root.findByProps({ accessibilityLabel: '메뉴 열기' });
         assert.ok(drawer);
-        assert.ok(menu);
-        assert.deepEqual(menu.props.accessibilityState, { expanded: false });
         assert.equal(drawer.props.open, false);
         assert.equal(drawer.props.swipeEnabled, false);
+        assert.equal(shellChromeProps?.navigationDrawerOpen, false);
 
-        await act(async () => menu.props.onPress());
+        await act(async () => shellChromeProps?.openNavigationDrawer?.());
         assert.equal(drawer.props.open, true);
+        assert.equal(shellChromeProps?.navigationDrawerOpen, true);
         assert.ok(hardwareBackPressListener);
 
         await act(async () => renderer?.unmount());
@@ -275,9 +284,7 @@ describe('UniversalShell screen fallback focus target', () => {
       await renderShell();
 
       const drawerType = 'Drawer' as ElementType;
-      const initialMenu = renderer?.root.findByProps({ accessibilityLabel: '메뉴 열기' });
-      assert.ok(initialMenu);
-      await act(async () => initialMenu.props.onPress());
+      await act(async () => shellChromeProps?.openNavigationDrawer?.());
       assert.equal(renderer?.root.findByType(drawerType).props.open, true);
 
       pathname = disabledPathname;
@@ -286,12 +293,10 @@ describe('UniversalShell screen fallback focus target', () => {
       });
 
       const backStackDrawer = renderer?.root.findByType(drawerType);
-      const backStackMenu = renderer?.root.findByProps({ accessibilityLabel: '메뉴 열기' });
       assert.ok(backStackDrawer);
-      assert.ok(backStackMenu);
       assert.equal(backStackDrawer.props.open, true);
       assert.equal(backStackDrawer.props.swipeEnabled, false);
-      assert.deepEqual(backStackMenu.props.accessibilityState, { expanded: true });
+      assert.equal(shellChromeProps?.navigationDrawerOpen, true);
       assert.ok(hardwareBackPressListener);
 
       let handled = false;
@@ -307,31 +312,12 @@ describe('UniversalShell screen fallback focus target', () => {
     }
   });
 
-  it('Native 비타임라인 fallback은 menu-only PageHeader를 통해 메뉴 상태를 유지한다', async () => {
+  it('Native 비타임라인은 route PageHeader와 중복되는 shell fallback을 렌더링하지 않는다', async () => {
     platform.OS = 'ios';
     pathname = '/notifications';
     await renderShell();
 
-    const pageHeader = renderer?.root.findByType('PageHeader' as ElementType);
-    const menu = renderer?.root.findByProps({ accessibilityLabel: '메뉴 열기' });
-    assert.ok(pageHeader);
-    assert.equal(pageHeader.props.title, '');
-    assert.ok(menu);
-    assert.deepEqual(menu.props.accessibilityState, { expanded: false });
-
-    await act(async () => menu.props.onPress());
-    assert.deepEqual(
-      renderer?.root.findByProps({ accessibilityLabel: '메뉴 열기' }).props.accessibilityState,
-      { expanded: true },
-    );
-    assert.equal(renderer?.root.findByType('Drawer' as ElementType).props.open, true);
-
-    await act(async () => renderer?.root.findByType('Drawer' as ElementType).props.onClose());
-    assert.deepEqual(
-      renderer?.root.findByProps({ accessibilityLabel: '메뉴 열기' }).props.accessibilityState,
-      { expanded: false },
-    );
-    assert.equal(renderer?.root.findByType('Drawer' as ElementType).props.open, false);
+    assert.equal(renderer?.root.findAllByType('PageHeader' as ElementType).length, 0);
   });
 
   it('Web은 기존 Modal drawer surface를 유지한다', async () => {

@@ -50,7 +50,7 @@ mockModule('@/components/ui/IconButton', {
 });
 mockModule('@/components/ui/useSafeAreaPadding', { useSafeAreaPadding: () => ({}) });
 mockModule('@/theme/ThemeProvider', {
-  useElevation: () => ({ overlay: {} }),
+  useElevation: () => ({ overlay: { shadowOpacity: 1 } }),
   useTheme: () => ({ border: '#ddd', card: '#fff', overlayScrim: '#000', text: '#111' }),
 });
 mockModule('@/theme/tokens', {
@@ -78,6 +78,31 @@ afterEach(async () => {
 });
 
 describe('PostComposerHost', () => {
+  it('Native mobile composer는 scrim과 overlay elevation 없이 fullscreen surface를 표시한다', async () => {
+    platform.OS = 'ios';
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposerHost, {
+          mode: 'mobile',
+          onRequestClose: () => undefined,
+          open: true,
+          profile: {} as never,
+        }),
+      );
+    });
+
+    const modal = renderer?.root.findByType('Modal' as ElementType);
+    const dialog = renderer?.root.findByProps({ testID: 'post-composer-dialog' });
+    const dialogStyles = (dialog?.props.style as Array<Record<string, unknown>>).filter(Boolean);
+
+    assert.equal(modal?.props.transparent, false);
+    assert.equal(renderer?.root.findAllByProps({ testID: 'post-composer-backdrop' }).length, 0);
+    assert.equal(
+      dialogStyles.some((style) => style.shadowOpacity === 1),
+      false,
+    );
+  });
+
   it('닫힌 Overlay를 modal로 노출하지 않는다', async () => {
     await act(async () => {
       renderer = create(

@@ -123,7 +123,8 @@ function LocalFrame({
 }>) {
   const shellChrome = useShellChrome();
   const { width } = useWindowDimensions();
-  const routeOwnsHeader = getShellLayout(Platform.OS === 'web', width) !== 'mobile';
+  const routeOwnsHeader =
+    Platform.OS !== 'web' || getShellLayout(Platform.OS === 'web', width) !== 'mobile';
 
   return (
     <View style={styles.root}>
