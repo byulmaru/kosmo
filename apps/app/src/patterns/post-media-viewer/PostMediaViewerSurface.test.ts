@@ -120,7 +120,7 @@ afterEach(async () => {
 });
 
 describe('PostMediaViewerSurface', () => {
-  it('Ready 이미지 실패는 persistent Danger Toast로 재시도하고 오래된 요청을 무시한다', async () => {
+  it('Ready 이미지 실패는 현재 이미지 retry와 stale callback을 유지하고 다시 방문하면 reload한다', async () => {
     await render({ currentIndex: 0 });
     const first = image();
     const oldFailure = first.props.onError;
@@ -160,18 +160,20 @@ describe('PostMediaViewerSurface', () => {
     assert.equal(byTestId('post-media-viewer-position').children.join(''), '2 / 4');
     await act(async () => image().props.onError());
     await render({ currentIndex: 0 });
-    assert.ok(getToast(), 'A로 돌아오면 실패 상태와 retry를 보존한다');
-    assert.equal(image().props.source, undefined, '명시적인 retry 전에는 A를 자동 요청하지 않는다');
+    assert.equal(getToast(), null, 'A로 돌아오면 이전 오류 이력 없이 다시 요청한다');
+    assert.equal(image().props.source.uri, 'https://media.example/1.webp');
+    assert.equal(image().props.accessibilityState.busy, true);
     await act(async () => {
+      oldFailure();
       oldLoad();
       oldLoadStart();
     });
-    assert.ok(getToast(), '이전 mount callback은 보존된 실패를 지우지 않는다');
-    await act(async () => getToastRetry()?.());
-    assert.equal(getToast(), null);
-    assert.ok(image().props.source?.uri);
+    assert.equal(getToast(), null, '이전 mount callback은 현재 요청을 변경하지 않는다');
+    assert.equal(image().props.accessibilityState.busy, true);
     await render({ currentIndex: 1 });
-    assert.ok(getToast(), 'A retry는 B의 실패를 초기화하지 않는다');
+    assert.equal(getToast(), null, 'B로 돌아오면 이전 오류 이력 없이 다시 요청한다');
+    assert.equal(image().props.source.uri, 'https://media.example/2.webp');
+    assert.equal(image().props.accessibilityState.busy, true);
 
     const replacementMedia = [
       { ...media(1, '첫 번째 이미지'), url: 'https://media.example/1-replacement.webp' },
@@ -180,7 +182,7 @@ describe('PostMediaViewerSurface', () => {
       media(4, null),
     ];
     await render({ currentIndex: 1, media: replacementMedia });
-    assert.ok(getToast(), 'A URL 변경은 현재 B의 실패 상태를 초기화하지 않는다');
+    assert.equal(getToast(), null, '다른 이미지 URL 변경은 현재 이미지 상태를 바꾸지 않는다');
     await render({ currentIndex: 0, media: replacementMedia });
     assert.equal(image().props.source.uri, 'https://media.example/1-replacement.webp');
     assert.equal(image().props.accessibilityState.busy, true);
@@ -190,7 +192,7 @@ describe('PostMediaViewerSurface', () => {
     assert.equal(queryByTestId('post-media-viewer-image'), null);
   });
 
-  it('Content revision 변경만 Media 오류를 초기화하고 close를 유지한다', async () => {
+  it('Content revision과 query fallback은 Media 오류 이력을 초기화하고 close를 유지한다', async () => {
     await render();
     const close = findByLabel('이미지 뷰어 닫기');
     const oldError = image().props.onError;
@@ -199,7 +201,8 @@ describe('PostMediaViewerSurface', () => {
 
     await render({ contentRevisionId: null, viewState: 'unavailable' });
     await render();
-    assert.equal(image().props.source, undefined, '같은 revision 복구는 실패 상태를 보존한다');
+    assert.equal(image().props.source.uri, 'https://media.example/2.webp');
+    assert.equal(queryByTestId('post-media-viewer-error-toast'), null);
 
     await render({ contentRevisionId: 'content-b' });
     assert.ok(image().props.source?.uri, '같은 Media를 재사용하는 새 revision은 다시 로드한다');

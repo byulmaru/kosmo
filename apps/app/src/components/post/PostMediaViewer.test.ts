@@ -628,7 +628,7 @@ describe('PostMediaViewer', () => {
     assert.ok(pressable('원문 더 보기'));
   });
 
-  it('Media error와 retry를 identity별로 유지한다', async () => {
+  it('Media error와 retry는 현재 이미지만 유지하고 다시 방문하면 reload한다', async () => {
     await render({ selectedIndex: 0 });
     await act(async () => currentImage().props.onError());
     assert.ok(byTestId('post-media-viewer-error-toast'));
@@ -642,7 +642,11 @@ describe('PostMediaViewer', () => {
     await act(async () => currentImage().props.onError());
     await act(async () => pressable('다음 이미지').props.onPress());
     await act(async () => pressable('이전 이미지').props.onPress());
-    assert.ok(byTestId('post-media-viewer-error-toast'));
+    assert.equal(
+      renderer?.root.findAllByProps({ testID: 'post-media-viewer-error-toast' }).length,
+      0,
+    );
+    assert.equal(currentImage().props.source.uri, 'https://media.example/1.webp');
   });
 
   it('현재 Media가 unavailable이면 이전 이미지를 제거하고 modal chrome을 유지한다', async () => {

@@ -55,7 +55,7 @@ Host·query·runtime 구현은 historical evidence로 보존한다. PROD-853은 
 #### Scenario: 같은 Content projection의 일시 unavailable과 복구
 
 - **WHEN** 열린 Viewer의 현재 Content ID가 query loading·error 또는 null projection 뒤 같은 ID로 복구된다
-- **THEN** Viewer는 같은 instance와 current index·expanded·Media loading/error/retry state를 유지한다
+- **THEN** Viewer는 같은 instance와 current index·expanded state를 유지하고 이미지는 새로 로드한다
 - **AND** unavailable 동안 이전 Media byte·URL은 표시하지 않는다
 
 #### Scenario: 다른 Content revision
@@ -63,7 +63,7 @@ Host·query·runtime 구현은 historical evidence로 보존한다. PROD-853은 
 - **WHEN** 열린 Viewer의 Post query가 다른 non-null Content ID를 반환한다
 - **THEN** Viewer는 expanded·overflow·Media loading/error/retry state를 초기화하고 session을 연 document index를 다시 사용한다
 - **AND** 새 revision에 그 index가 없으면 다른 Media로 이동하지 않고 unavailable을 표시한다
-- **AND** Surface consumer는 immutable Content ID를 필수 `contentRevisionId`로 전달하며 일시적인 null은 마지막 non-null revision을 유지한다
+- **AND** Surface consumer는 immutable Content ID를 필수 `contentRevisionId`로 전달하며 일시적인 null에서 복구되면 이미지를 새로 로드한다
 - **AND** 다른 non-null revision은 동일 Media ID·URL을 재사용해도 이미지 요청 상태를 초기화하고 이전 callback을 무시하며, Surface의 close control과 focus를 재마운트하지 않는다
 
 #### Scenario: selected Profile 또는 Relay actor 변경
@@ -299,9 +299,9 @@ Host·query·runtime 구현은 historical evidence로 보존한다. PROD-853은 
 - **THEN** top-level shared surface `viewState`는 `Ready`로 MUST 유지한다
 - **AND** image stage 하단에 공용 Danger Action Toast와 `다시 시도`를 표시하며 다른 액션의 전역 Toast가 이를 덮어쓰지 않는다
 - **AND** modal chrome·현재 index·navigation·counter·Compact detail·Wide context rail을 MUST 유지한다
-- **AND** retry는 실패한 Media만 다시 loading으로 전환하고 현재 index와 다른 Media 상태를 MUST NOT 변경한다
+- **AND** retry는 현재 Media를 다시 loading으로 전환하고 현재 index를 MUST NOT 변경한다
 - **AND** 오류 토스트는 자동 만료하지 않으며 재시도·선택 Media 변경·차단 상태 전환·unmount 시 해제한다
-- **AND** 실패 Media로 돌아오면 보존된 오류와 retry를 다시 표시하고 명시적 재시도 전 자동 요청하지 않는다
+- **AND** 실패 Media로 돌아오거나 query 차단 상태에서 복구되면 이전 오류 이력을 보존하지 않고 이미지를 새로 로드한다
 - **AND** 이전 Media 또는 이전 retry generation의 늦은 callback은 현재 요청 상태를 MUST NOT 변경한다
 
 #### Scenario: PROD-853 Storybook-first delivery

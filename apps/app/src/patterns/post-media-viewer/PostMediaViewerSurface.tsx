@@ -1,13 +1,5 @@
 import { ChevronLeftIcon, ChevronRightIcon, XIcon } from 'lucide-react-native';
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -25,7 +17,7 @@ import { Toast } from '@/components/ui/Toast';
 import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, radius, space, textStyles } from '@/theme/tokens';
 import { useToastMotion } from '@/theme/useOverlayMotion';
-import type { Dispatch, ReactElement, ReactNode, SetStateAction } from 'react';
+import type { ReactElement } from 'react';
 import type {
   ImageLoadEvent,
   LayoutChangeEvent,
@@ -67,81 +59,8 @@ export type PostMediaViewerSurfaceProps = Readonly<{
   );
 
 type ImageRequest = Readonly<{ generation: number; status: 'loading' | 'ready' | 'error' }>;
-type ImageState = Readonly<{
-  epoch: number;
-  mediaEpochs: Record<string, number>;
-  mediaUrls: Record<string, string | null>;
-  requests: Record<string, ImageRequest>;
-  revisionId: string | null;
-}>;
-type ImageStateStore = Readonly<{
-  imageState: ImageState;
-  setImageState: Dispatch<SetStateAction<ImageState>>;
-}>;
-
 const initialRequest: ImageRequest = { generation: 0, status: 'loading' };
-const PostMediaViewerImageStateContext = createContext<ImageStateStore | null>(null);
-
-export function PostMediaViewerImageStateProvider({
-  children,
-}: Readonly<{ children?: ReactNode }>) {
-  const [imageState, setImageState] = useState<ImageState>(() => createInitialImageState());
-  const value = useMemo(() => ({ imageState, setImageState }), [imageState]);
-  return (
-    <PostMediaViewerImageStateContext.Provider value={value}>
-      {children}
-    </PostMediaViewerImageStateContext.Provider>
-  );
-}
-
-function createInitialImageState(): ImageState {
-  return {
-    epoch: 0,
-    mediaEpochs: {},
-    mediaUrls: {},
-    requests: {},
-    revisionId: null,
-  };
-}
-
-function useLocalImageStateStore(): ImageStateStore {
-  const [imageState, setImageState] = useState<ImageState>(() => createInitialImageState());
-  return useMemo(() => ({ imageState, setImageState }), [imageState]);
-}
-
-function reconcileImageState(
-  imageState: ImageState,
-  contentRevisionId: string | null,
-  media: readonly PostMediaItem[],
-): ImageState {
-  if (contentRevisionId !== null && contentRevisionId !== imageState.revisionId) {
-    return {
-      epoch: imageState.epoch + 1,
-      mediaEpochs: {},
-      mediaUrls: Object.fromEntries(media.map((item) => [item.id, item.url ?? null])),
-      requests: {},
-      revisionId: contentRevisionId,
-    };
-  }
-
-  let mediaUrls: Record<string, string | null> | null = null;
-  let mediaEpochs: Record<string, number> | null = null;
-  for (const item of media) {
-    const nextUrl = item.url ?? null;
-    const previousUrl = imageState.mediaUrls[item.id];
-    if (previousUrl === nextUrl) {
-      continue;
-    }
-    mediaUrls ??= { ...imageState.mediaUrls };
-    mediaEpochs ??= { ...imageState.mediaEpochs };
-    if (previousUrl !== undefined) {
-      mediaEpochs[item.id] = (mediaEpochs[item.id] ?? 0) + 1;
-    }
-    mediaUrls[item.id] = nextUrl;
-  }
-
-  return mediaUrls && mediaEpochs ? { ...imageState, mediaEpochs, mediaUrls } : imageState;
-}
+type LocalImageState = Readonly<{ identity: string | null; request: ImageRequest; token: number }>;
 
 const statusCopy = {
   error: {
@@ -182,44 +101,38 @@ export function PostMediaViewerSurface({
   const previousDisabled = currentIndex <= 0;
   const nextDisabled = currentIndex >= media.length - 1;
   const status = viewState === 'ready' ? null : statusCopy[viewState];
-  const localStore = useLocalImageStateStore();
-  const sharedStore = useContext(PostMediaViewerImageStateContext);
-  const imageState = sharedStore?.imageState ?? localStore.imageState;
-  const setImageState = sharedStore?.setImageState ?? localStore.setImageState;
-  const resolvedImageState = reconcileImageState(imageState, contentRevisionId, media);
-  useEffect(() => {
-    setImageState((current) => reconcileImageState(current, contentRevisionId, media));
-  }, [contentRevisionId, media, setImageState]);
+  const [imageState, setImageState] = useState<LocalImageState>(() => ({
+    identity: null,
+    request: initialRequest,
+    token: 0,
+  }));
   const identity =
     navigable && currentMedia?.url
-      ? JSON.stringify([
-          resolvedImageState.epoch,
-          resolvedImageState.mediaEpochs[currentMedia.id] ?? 0,
-          currentMedia.id,
-          currentMedia.url,
-        ])
+      ? JSON.stringify([contentRevisionId, currentMedia.id, currentMedia.url])
       : null;
-  const activeIdentity = useRef<string | null>(null);
-  const request = identity
-    ? (resolvedImageState.requests[identity] ?? initialRequest)
-    : initialRequest;
-  const generation = request.generation;
+  const request = imageState.identity === identity ? imageState.request : initialRequest;
+  const token = imageState.identity === identity ? imageState.token : imageState.token + 1;
 
   useEffect(() => {
-    activeIdentity.current = identity;
-    return () => {
-      activeIdentity.current = null;
-    };
+    setImageState((current) =>
+      current.identity === identity
+        ? current
+        : { identity, request: initialRequest, token: current.token + 1 },
+    );
   }, [identity]);
+
+  const generation = request.generation;
 
   const settle = useCallback(
     (nextStatus: ImageRequest['status']) => {
-      if (!identity || activeIdentity.current !== identity) {
+      if (!identity) {
         return;
       }
       setImageState((previous) => {
-        const reconciled = reconcileImageState(previous, contentRevisionId, media);
-        const current = reconciled.requests[identity] ?? initialRequest;
+        if (previous.identity !== identity || previous.token !== token) {
+          return previous;
+        }
+        const current = previous.request;
         if (
           current.generation !== generation ||
           current.status === 'error' ||
@@ -228,30 +141,30 @@ export function PostMediaViewerSurface({
           return previous;
         }
         return {
-          ...reconciled,
-          requests: { ...reconciled.requests, [identity]: { ...current, status: nextStatus } },
+          ...previous,
+          request: { ...current, status: nextStatus },
         };
       });
     },
-    [contentRevisionId, generation, identity, media, setImageState],
+    [generation, identity, token],
   );
 
   const retryImage = () => {
-    if (!identity || activeIdentity.current !== identity) {
+    if (!identity) {
       return;
     }
     setImageState((previous) => {
-      const reconciled = reconcileImageState(previous, contentRevisionId, media);
-      const current = reconciled.requests[identity] ?? initialRequest;
+      if (previous.identity !== identity || previous.token !== token) {
+        return previous;
+      }
+      const current = previous.request;
       if (current.generation !== generation || current.status !== 'error') {
         return previous;
       }
       return {
-        ...reconciled,
-        requests: {
-          ...reconciled.requests,
-          [identity]: { generation: generation + 1, status: 'loading' },
-        },
+        identity,
+        request: { generation: generation + 1, status: 'loading' },
+        token: previous.token + 1,
       };
     });
   };
@@ -289,7 +202,7 @@ export function PostMediaViewerSurface({
                 testID="post-media-viewer-image-privacy-boundary"
               >
                 <ViewerImage
-                  key={JSON.stringify([identity, generation])}
+                  key={JSON.stringify([identity, token])}
                   accessibilityLabel={imageName}
                   onStatus={settle}
                   viewportSize={mediaViewportSize}

@@ -483,7 +483,7 @@ describe('Post Media Viewer Host production wiring', () => {
     assert.notEqual(screenFallback.current.isConnected, false);
   });
 
-  it('같은 Content unavailable 복구는 state를 유지하고 다른 revision은 original index로 reset한다', async () => {
+  it('같은 Content unavailable 복구는 index를 유지하고 Media 오류는 reload하며 다른 revision은 original index로 reset한다', async () => {
     const post = storyPost('revision-post', 'content-1');
     queryPosts.set(post.id, hostPost(post));
     await renderHost(createElement(PostLayout, { post: asLayoutKey(post) }));
@@ -498,7 +498,8 @@ describe('Post Media Viewer Host production wiring', () => {
 
     queryPosts.set(post.id, hostPost(post));
     await updateHost(createElement(PostLayout, { post: asLayoutKey(post) }));
-    assert.ok(byTestId('post-media-viewer-error-toast'));
+    assert.equal(findByTestId('post-media-viewer-error-toast').length, 0);
+    assert.equal(currentImage().props.source.uri, 'https://media.example/content-1-2.webp');
 
     const nextRevision = storyPost('revision-post', 'content-2');
     queryPosts.set(post.id, hostPost(nextRevision));
@@ -507,7 +508,7 @@ describe('Post Media Viewer Host production wiring', () => {
     assert.equal(findByTestId('post-media-viewer-error-toast').length, 0);
   });
 
-  it('RouteBoundary error fallback unmount 뒤 같은 Content 복구도 Media error state를 유지한다', async () => {
+  it('RouteBoundary error fallback unmount 뒤 같은 Content 복구는 Media를 reload한다', async () => {
     const originalConsoleError = console.error;
     console.error = () => undefined;
     try {
@@ -525,10 +526,9 @@ describe('Post Media Viewer Host production wiring', () => {
 
       queryError = null;
       await act(async () => pressable('다시 시도').props.onPress());
-      assert.equal(findByTestId('post-media-viewer-error-toast').length, 1);
-      assert.equal(currentImage().props.source, undefined);
-      await act(async () => toastRetry().props.onPress());
+      assert.equal(findByTestId('post-media-viewer-error-toast').length, 0);
       assert.equal(currentImage().props.source.uri, 'https://media.example/content-1-1.webp');
+      assert.equal(currentImage().props.accessibilityState.busy, true);
 
       await act(async () => currentImage().props.onError());
       assert.equal(findByTestId('post-media-viewer-error-toast').length, 1);
@@ -780,12 +780,6 @@ function pressable(accessibilityLabel: string) {
 
 function currentImage() {
   return byTestId('post-media-viewer-image');
-}
-
-function toastRetry() {
-  return byTestId('post-media-viewer-error-toast').find(
-    (node) => (node.type as unknown) === 'Pressable' && typeof node.props.onPress === 'function',
-  );
 }
 
 function flattenStyle(style: unknown): Record<string, unknown> {
