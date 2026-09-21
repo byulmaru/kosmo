@@ -284,7 +284,7 @@ export function PostComposer({
       sensitiveMedia={sensitiveMedia}
     />
   );
-  const unifiedOverlayScroll = surface === 'overlay';
+  const unifiedOverlayScroll = surface === 'overlay' && beforeEditor !== undefined;
   const editorContent = (
     <View
       style={[
@@ -524,10 +524,12 @@ export function PostComposer({
       ) : (
         <ScrollView
           keyboardShouldPersistTaps="handled"
-          scrollEnabled={false}
+          scrollEnabled={surface === 'overlay'}
           style={[
             styles.desktopScroll,
-            Platform.OS === 'web' ? webScrollbarStyle(theme.borderStrong, false) : null,
+            Platform.OS === 'web'
+              ? webScrollbarStyle(theme.borderStrong, surface === 'overlay')
+              : null,
           ]}
           testID="post-composer-scroll"
         >
@@ -539,7 +541,7 @@ export function PostComposer({
         <View style={styles.railMedia}>{mediaGallery}</View>
       ) : null}
 
-      {unifiedOverlayScroll ? null : editorFooter}
+      {surface === 'rail' ? editorFooter : null}
     </View>
   );
 
@@ -575,8 +577,9 @@ export function PostComposer({
       ) : (
         <>
           {beforeEditor}
-          <View style={styles.authorLayer}>{author}</View>
+          {surface === 'rail' ? <View style={styles.authorLayer}>{author}</View> : null}
           {editor}
+          {surface === 'overlay' ? editorFooter : null}
         </>
       )}
     </View>
