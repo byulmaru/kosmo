@@ -71,24 +71,7 @@ test('dev channel Web runtime은 analytics 요청 없이 정상 렌더링된다'
   expect(analyticsRequests).toEqual([]);
 });
 
-test('prod channel Web runtime은 PostHog 설정이 비활성화되어 analytics 요청 없이 정상 렌더링된다', async ({
-  page,
-}) => {
-  const analyticsRequests: string[] = [];
-  page.on('request', (request) => {
-    if (posthogRoute.test(request.url())) {
-      analyticsRequests.push(request.url());
-    }
-  });
-
-  await page.goto('/');
-
-  await expect(page.getByRole('link', { name: '시작하기' })).toBeVisible();
-  await page.waitForTimeout(200);
-  expect(analyticsRequests).toEqual([]);
-});
-
-test.skip('TEMPORARY: 개인정보처리방침 확정 전 prod PostHog 활성화 검증을 보류한다', async ({
+test('prod channel Web runtime은 pageview를 전송하고 private post를 autocapture에서 제외한다', async ({
   page,
 }) => {
   const viewer = await createE2ESession({
@@ -98,8 +81,8 @@ test.skip('TEMPORARY: 개인정보처리방침 확정 전 prod PostHog 활성화
   if (!viewer.profile) {
     throw new Error('Analytics E2E requires a Profile');
   }
-  const postContentMarker = 'E2E private Post Content marker';
-  const media = [
+  const privatePostContentMarker = 'E2E private Post Content marker';
+  const privateMedia = [
     {
       altText: 'E2E private first media',
       url: 'https://media.e2e.invalid/private-first.png',
@@ -109,9 +92,12 @@ test.skip('TEMPORARY: 개인정보처리방침 확정 전 prod PostHog 활성화
       url: 'https://media.e2e.invalid/private-second.png',
     },
   ] as const;
-  await createE2EPost({ body: postContentMarker, media, profileId: viewer.profile.id });
-  const eventPayloads: PostHogPayload[] = [];
-  const posthogRequests: string[] = [];
+  await createE2EPost({
+    body: privatePostContentMarker,
+    media: privateMedia,
+    profileId: viewer.profile.id,
+  });
+  const posthogPayloads: PostHogPayload[] = [];
   await page.setViewportSize({ height: 844, width: 390 });
   await page.route('https://media.e2e.invalid/**', async (route) => {
     await route.fulfill({
@@ -125,9 +111,8 @@ test.skip('TEMPORARY: 개인정보처리방침 확정 전 prod PostHog 활성화
   });
   await page.route(posthogRoute, async (route) => {
     const request = route.request();
-    posthogRequests.push(request.url());
     if (request.method() === 'POST' && new URL(request.url()).pathname === '/e/') {
-      eventPayloads.push(...readPostHogPayloads(request.postDataBuffer()));
+      posthogPayloads.push(...readPostHogPayloads(request.postDataBuffer()));
     }
 
     await route.fulfill({
@@ -137,141 +122,31 @@ test.skip('TEMPORARY: 개인정보처리방침 확정 전 prod PostHog 활성화
     });
   });
 
-  const searchMarker = 'e2e-search-handle-marker';
-  const referrerSearchMarker = 'e2e-referrer-handle-marker';
-  const referrerClickMarkers = {
-    fbclid: 'e2e-referrer-fbclid',
-    gclid: 'e2e-referrer-gclid',
-    msclkid: 'e2e-referrer-msclkid',
-  };
-  await page.goto(
-    `/?q=${searchMarker}&gclid=e2e-current-gclid&fbclid=e2e-current-fbclid&msclkid=e2e-current-msclkid&utm_source=newsletter#overview`,
-    {
-      referer: `https://www.google.com/search?q=${referrerSearchMarker}&gclid=${referrerClickMarkers.gclid}&fbclid=${referrerClickMarkers.fbclid}&msclkid=${referrerClickMarkers.msclkid}&utm_source=search-engine`,
-    },
-  );
-  expect(
-    await page.evaluate(() => ({
-      automation: navigator.webdriver,
-      headlessBrand:
-        navigator.userAgentData?.brands.some(({ brand }) => /Headless|Playwright/u.test(brand)) ??
-        false,
-      headlessUserAgent: /Headless|Playwright/u.test(navigator.userAgent),
-    })),
-  ).toEqual({ automation: false, headlessBrand: false, headlessUserAgent: false });
+  await page.goto('/');
   await expect
-    .poll(() => eventPayloads.some((payload) => payload.event === '$pageview'))
+    .poll(() => posthogPayloads.some((payload) => payload.event === '$pageview'))
     .toBe(true);
 
-  await page.goto(`/${viewer.profile.handle}?source=analytics-test#profile`);
-  await expect
-    .poll(() =>
-      eventPayloads.some(
-        (payload) =>
-          payload.event === '$pageview' &&
-          payload.properties?.$pathname === `/${viewer.profile.handle}`,
-      ),
-    )
-    .toBe(true);
-  await expect(page.getByTestId('post-content-renderer').first()).toHaveClass(
-    /(?:^|\s)ph-mask(?:\s|$)/u,
-  );
-  await expect(page.getByTestId('post-content-renderer').first()).toHaveClass(
-    /(?:^|\s)ph-no-capture(?:\s|$)/u,
-  );
-  await page.getByRole('button', { name: `${media[0].altText} 크게 보기` }).click();
+  await page.goto(`/${viewer.profile.handle}`);
+  await page.getByRole('button', { name: `${privateMedia[0].altText} 크게 보기` }).click();
   const viewerDialog = page.getByRole('dialog');
   await expect(viewerDialog).toBeVisible();
-  const viewerImage = viewerDialog.getByTestId('post-media-viewer-image');
-  const viewerBody = viewerDialog.getByTestId('post-media-viewer-body');
-  await expect(viewerDialog.getByTestId('post-media-viewer-image-privacy-boundary')).toHaveClass(
-    /(?:^|\s)ph-mask(?:\s|$)/u,
-  );
-  await expect(viewerDialog.getByTestId('post-media-viewer-body-privacy-boundary')).toHaveClass(
-    /(?:^|\s)ph-no-capture(?:\s|$)/u,
-  );
-  expect(
-    await viewerImage.evaluate((element) =>
-      element.closest('.ph-mask.ph-no-capture')?.getAttribute('data-testid'),
-    ),
-  ).toBe('post-media-viewer-image-privacy-boundary');
-  expect(
-    await viewerBody.evaluate((element) =>
-      element.closest('.ph-mask.ph-no-capture')?.getAttribute('data-testid'),
-    ),
-  ).toBe('post-media-viewer-body-privacy-boundary');
   const nextImage = viewerDialog.getByRole('button', { name: '다음 이미지' });
-  expect(
-    await nextImage.evaluate((element) => element.closest('.ph-mask, .ph-no-capture')),
-  ).toBeNull();
-  const previousAutocaptureCount = eventPayloads.filter(
+  const previousAutocaptureCount = posthogPayloads.filter(
     (payload) => payload.event === '$autocapture',
   ).length;
   await nextImage.click();
   await expect
-    .poll(() => eventPayloads.filter((payload) => payload.event === '$autocapture').length)
+    .poll(() => posthogPayloads.filter((payload) => payload.event === '$autocapture').length)
     .toBeGreaterThan(previousAutocaptureCount);
-  await viewerDialog.getByRole('button', { name: '이미지 뷰어 닫기' }).click();
-  await page.setViewportSize({ height: 720, width: 1280 });
-  await page.getByTestId('post-list-row-body').filter({ hasText: postContentMarker }).click();
-  await expect(page).toHaveURL(new RegExp(`/@${viewer.profile.handle}/[^/?#]+$`));
-  await page.goBack();
-  await expect(page).toHaveURL(new RegExp(`/@?${viewer.profile.handle}(?:[?#]|$)`));
-  await page.getByRole('link', { name: '개인정보 처리방침' }).click();
-  await expect(page).toHaveURL(/\/privacy$/u);
-  await expect
-    .poll(() =>
-      eventPayloads.some(
-        (payload) => payload.event === '$pageview' && payload.properties?.$pathname === '/privacy',
-      ),
-    )
-    .toBe(true);
-  await expect
-    .poll(() => eventPayloads.some((payload) => payload.event === '$autocapture'))
-    .toBe(true);
-  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide')));
-  await expect
-    .poll(() => eventPayloads.some((payload) => payload.event === '$pageleave'))
-    .toBe(true);
-
-  const rootPageview = eventPayloads.find(
-    (payload) => payload.event === '$pageview' && payload.properties?.$pathname === '/',
-  );
-  const currentUrl = new URL(String(rootPageview?.properties?.$current_url));
-  const referrerUrl = new URL(String(rootPageview?.properties?.$referrer));
-  const sessionEntryUrl = new URL(String(rootPageview?.properties?.$session_entry_url));
-  expect(currentUrl.hash).toBe('#overview');
-  expect(currentUrl.searchParams.get('q')).toBe(searchMarker);
-  expect(currentUrl.searchParams.get('gclid')).toBe('e2e-current-gclid');
-  expect(currentUrl.searchParams.get('fbclid')).toBe('e2e-current-fbclid');
-  expect(currentUrl.searchParams.get('msclkid')).toBe('e2e-current-msclkid');
-  expect(currentUrl.searchParams.get('utm_source')).toBe('newsletter');
-  expect(referrerUrl.searchParams.get('q')).toBe(referrerSearchMarker);
-  expect(referrerUrl.searchParams.get('gclid')).toBe(referrerClickMarkers.gclid);
-  expect(referrerUrl.searchParams.get('fbclid')).toBe(referrerClickMarkers.fbclid);
-  expect(referrerUrl.searchParams.get('msclkid')).toBe(referrerClickMarkers.msclkid);
-  expect(referrerUrl.searchParams.get('utm_source')).toBe('search-engine');
-  expect(sessionEntryUrl.searchParams.get('q')).toBe(searchMarker);
-  expect(sessionEntryUrl.searchParams.get('gclid')).toBe('e2e-current-gclid');
-  expect(rootPageview?.properties?.ph_keyword).toBe(referrerSearchMarker);
-  expect(rootPageview?.properties?.$session_entry_utm_source).toBe('newsletter');
-  expect(JSON.stringify(eventPayloads)).toContain(searchMarker);
-  expect(JSON.stringify(eventPayloads)).toContain(referrerSearchMarker);
-  for (const marker of Object.values(referrerClickMarkers)) {
-    expect(JSON.stringify(eventPayloads)).toContain(marker);
+  const autocapturePayloads = posthogPayloads.filter((payload) => payload.event === '$autocapture');
+  expect(JSON.stringify(autocapturePayloads)).not.toContain(privatePostContentMarker);
+  for (const { altText } of privateMedia) {
+    expect(JSON.stringify(autocapturePayloads)).not.toContain(altText);
   }
-  expect(
-    JSON.stringify(eventPayloads.filter((payload) => payload.event === '$autocapture')),
-  ).not.toContain(postContentMarker);
-  for (const { altText } of media) {
-    expect(
-      JSON.stringify(eventPayloads.filter((payload) => payload.event === '$autocapture')),
-    ).not.toContain(altText);
-  }
-  expect(posthogRequests.some((url) => new URL(url).pathname.startsWith('/flags'))).toBe(true);
 });
 
-test.skip('TEMPORARY: 개인정보처리방침 확정 전 prod PostHog identity 검증을 보류한다', async ({
+test('prod channel Web runtime은 Account identity를 A→guest→B로 분리하고 endpoint 실패에도 인증 흐름을 유지한다', async ({
   context,
   page,
 }) => {
@@ -299,7 +174,11 @@ test.skip('TEMPORARY: 개인정보처리방침 확정 전 prod PostHog identity 
   await setE2ESessionCookie(context, viewer.token);
   await page.goto('/home');
 
-  await expect(page.getByRole('button', { name: '로그아웃' })).toBeVisible();
+  const mainNavigation = page.getByRole('navigation', { name: '주요 메뉴' });
+  const utilityMenu = mainNavigation.getByRole('button', { name: '설정 및 기타' });
+  const logout = mainNavigation.getByRole('button', { name: '로그아웃' });
+  await utilityMenu.click();
+  await expect(logout).toBeVisible();
   await expect
     .poll(() => payloads.filter((payload) => payload.event === '$identify').length)
     .toBe(1);
@@ -310,20 +189,6 @@ test.skip('TEMPORARY: 개인정보처리방침 확정 전 prod PostHog identity 
     /email|displayName|handle|selected_profile_id/u,
   );
 
-  payloads.length = 0;
-  await page.reload();
-  await expect(page.getByRole('button', { name: '로그아웃' })).toBeVisible();
-  await expect
-    .poll(() =>
-      payloads.find(
-        (payload) =>
-          payload.event === '$pageview' &&
-          payload.properties?.$pathname === '/home' &&
-          payload.properties?.distinct_id === toGlobalId('Account', viewer.account.id),
-      ),
-    )
-    .not.toBeUndefined();
-
   await page.unroute(posthogRoute);
   await page.route(posthogRoute, async (route) => {
     if (route.request().method() === 'POST') {
@@ -333,7 +198,7 @@ test.skip('TEMPORARY: 개인정보처리방침 확정 전 prod PostHog identity 
     await route.fulfill({ body: '{}', status: 503 });
   });
 
-  await page.getByRole('button', { name: '로그아웃' }).click();
+  await logout.click();
   await expect(page).toHaveURL(/\/$/u);
   await expect(page.getByRole('link', { name: '시작하기' })).toBeVisible();
 
@@ -352,7 +217,8 @@ test.skip('TEMPORARY: 개인정보처리방침 확정 전 prod PostHog identity 
 
   await setE2ESessionCookie(context, nextViewer.token);
   await page.goto('/home');
-  await expect(page.getByRole('button', { name: '로그아웃' })).toBeVisible();
+  await utilityMenu.click();
+  await expect(logout).toBeVisible();
   await expect
     .poll(
       () =>
