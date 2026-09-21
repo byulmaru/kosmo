@@ -15,6 +15,10 @@ const require = createRequire(import.meta.url);
 const mockPlatform: { OS: string } = { OS: 'web' };
 let mockWindowHeight = 844;
 let mockReducedMotion = false;
+const MockImage = Object.assign((props: Record<string, unknown>) => createElement('Image', props), {
+  getSize: (_url: string, onSuccess: (width: number, height: number) => void) =>
+    onSuccess(1600, 900),
+});
 const getToast = () =>
   renderer?.root.findAll((node) => typeof node.type === 'function' && node.type.name === 'Toast')[0]
     ?.props ?? null;
@@ -32,7 +36,7 @@ mock.module('react-native', {
   exports: {
     ActivityIndicator: 'ActivityIndicator',
     Animated: { View: 'AnimatedView' },
-    Image: 'Image',
+    Image: MockImage,
     Platform: mockPlatform,
     Pressable: (props: Record<string, unknown>) => {
       const children = props.children;
@@ -338,6 +342,28 @@ describe('PostMediaViewerSurface', () => {
     assert.equal(image().props.accessibilityLabel, '3번째 첨부 이미지');
   });
 
+  it('intrinsic 비율로 stage를 최대한 채우고 실제 image bounds만 hit area로 둔다', async () => {
+    await render({ presentation: 'wide' });
+
+    const viewport = byTestId('post-media-viewer-media-viewport');
+    assert.equal(viewport.props.pointerEvents, 'box-none');
+    await act(async () =>
+      viewport.props.onLayout({ nativeEvent: { layout: { height: 600, width: 1000 } } }),
+    );
+    await act(async () => image().props.onLoad());
+
+    const frame = image().parent;
+    assert.ok(frame);
+    assert.deepEqual(pick(flattenStyle(frame.props.style), ['height', 'width']), {
+      height: 562.5,
+      width: 1000,
+    });
+    assert.deepEqual(
+      flattenStyle(byTestId('post-media-viewer-image-privacy-boundary').props.style),
+      {},
+    );
+  });
+
   it('상태 action은 104x40 visual을 플랫폼별 accessible target 안에 둔다', async () => {
     try {
       for (const [platform, targetHeight] of [
@@ -368,22 +394,19 @@ describe('PostMediaViewerSurface', () => {
     }
   });
 
-  it('390 Compact와 1024·1440 Wide의 canonical frame·secondary geometry를 사용한다', async () => {
+  it('Compact와 Wide에서 rail·detail을 제외한 전체 stage를 image viewport로 사용한다', async () => {
     await render({
       compactDetail: createElement('CompactDetailContent'),
       contextRail: createElement('ContextRailContent'),
       presentation: 'compact',
     });
     assert.deepEqual(flattenStyle(byTestId('post-media-viewer-media-viewport').props.style), {
+      alignSelf: 'stretch',
       alignItems: 'center',
-      borderRadius: 8,
-      bottom: 16,
+      flex: 1,
       justifyContent: 'center',
-      left: 16,
-      overflow: 'hidden',
-      position: 'absolute',
-      right: 16,
-      top: 80,
+      minHeight: 0,
+      minWidth: 0,
     });
     assert.ok(byTestId('post-media-viewer-compact-detail'));
     assert.equal(flattenStyle(findByLabel('이미지 뷰어 닫기').props.style).right, 16);
@@ -395,14 +418,12 @@ describe('PostMediaViewerSurface', () => {
       presentation: 'wide',
     });
     assert.deepEqual(flattenStyle(byTestId('post-media-viewer-media-viewport').props.style), {
+      alignSelf: 'stretch',
       alignItems: 'center',
-      aspectRatio: 4 / 3,
-      borderRadius: 8,
+      flex: 1,
       justifyContent: 'center',
-      maxHeight: 420,
-      maxWidth: 560,
-      overflow: 'hidden',
-      width: '100%',
+      minHeight: 0,
+      minWidth: 0,
     });
     assert.equal(flattenStyle(byTestId('post-media-viewer-context-rail').props.style).width, 346);
     assert.equal(flattenStyle(findByLabel('이미지 뷰어 닫기').props.style).left, 16);

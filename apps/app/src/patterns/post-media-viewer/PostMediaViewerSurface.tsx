@@ -18,7 +18,12 @@ import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, radius, space, textStyles } from '@/theme/tokens';
 import { useToastMotion } from '@/theme/useOverlayMotion';
 import type { ReactElement } from 'react';
-import type { PressableStateCallbackType, ViewStyle } from 'react-native';
+import type {
+  ImageLoadEvent,
+  LayoutChangeEvent,
+  PressableStateCallbackType,
+  ViewStyle,
+} from 'react-native';
 import type { PostMediaItem } from '@/components/post/PostMediaImage';
 
 export type PostMediaViewerPresentation = 'compact' | 'wide';
@@ -84,6 +89,7 @@ export function PostMediaViewerSurface({
   const theme = useTheme();
   const reducedMotion = useReducedMotion();
   const { height: viewportHeight } = useWindowDimensions();
+  const [mediaViewportSize, setMediaViewportSize] = useState<ImageSize | null>(null);
   const navigable = viewState === 'ready';
   const multiple = navigable && media.length > 1;
   const currentMedia = media[currentIndex];
@@ -198,10 +204,16 @@ export function PostMediaViewerSurface({
             />
           ) : null}
           <View
-            style={[
-              styles.mediaViewport,
-              presentation === 'compact' ? styles.compactMediaViewport : styles.wideMediaViewport,
-            ]}
+            onLayout={(event: LayoutChangeEvent) => {
+              const { height, width } = event.nativeEvent.layout;
+              setMediaViewportSize((previous) =>
+                previous?.height === height && previous.width === width
+                  ? previous
+                  : { height, width },
+              );
+            }}
+            pointerEvents="box-none"
+            style={styles.mediaViewport}
             testID="post-media-viewer-media-viewport"
           >
             {viewState === 'ready' && currentMedia?.url ? (
@@ -213,6 +225,7 @@ export function PostMediaViewerSurface({
                   key={JSON.stringify([identity, generation])}
                   accessibilityLabel={imageName}
                   onStatus={settle}
+                  viewportSize={mediaViewportSize}
                   status={request.status}
                   url={currentMedia.url}
                 />
@@ -378,13 +391,16 @@ function ViewerImage({
   onStatus,
   status,
   url,
+  viewportSize,
 }: Readonly<{
   accessibilityLabel: string;
   onStatus: (status: ImageRequest['status']) => void;
   status: ImageRequest['status'];
   url: string;
+  viewportSize: ImageSize | null;
 }>) {
   const active = useRef(true);
+  const [intrinsicSize, setIntrinsicSize] = useState<ImageSize | null>(null);
   useEffect(() => {
     active.current = true;
     return () => {
@@ -399,23 +415,76 @@ function ViewerImage({
     },
     [onStatus],
   );
+  const updateIntrinsicSize = useCallback((width: number, height: number) => {
+    if (active.current && width > 0 && height > 0) {
+      setIntrinsicSize({ height, width });
+    }
+  }, []);
   const handleError = useCallback(() => settle('error'), [settle]);
-  const handleLoad = useCallback(() => settle('ready'), [settle]);
-  const handleLoadStart = useCallback(() => settle('loading'), [settle]);
-  return (
-    <Image
-      accessibilityLabel={accessibilityLabel}
-      accessibilityRole="image"
-      accessibilityState={{ busy: status === 'loading' }}
-      onError={handleError}
-      onLoad={handleLoad}
-      onLoadStart={handleLoadStart}
-      resizeMode="contain"
-      source={status === 'error' ? undefined : { uri: url }}
-      style={styles.image}
-      testID="post-media-viewer-image"
-    />
+  const handleLoad = useCallback(
+    (event?: ImageLoadEvent) => {
+      const source = event?.nativeEvent?.source;
+      const width = source?.width ?? 0;
+      const height = source?.height ?? 0;
+      if (width > 0 && height > 0) {
+        updateIntrinsicSize(width, height);
+      } else {
+        Image.getSize(
+          url,
+          (naturalWidth, naturalHeight) => updateIntrinsicSize(naturalWidth, naturalHeight),
+          () => undefined,
+        );
+      }
+      settle('ready');
+    },
+    [settle, updateIntrinsicSize, url],
   );
+  const handleLoadStart = useCallback(() => settle('loading'), [settle]);
+  const imageSize = fitImageSize(viewportSize, intrinsicSize);
+  const frameSize = imageSize ?? viewportSize;
+  return (
+    <View style={frameSize ? [styles.imageFrame, frameSize] : styles.imageFrameFallback}>
+      <Image
+        accessibilityLabel={accessibilityLabel}
+        accessibilityRole="image"
+        accessibilityState={{ busy: status === 'loading' }}
+        onError={handleError}
+        onLoad={handleLoad}
+        onLoadStart={handleLoadStart}
+        resizeMode="contain"
+        source={status === 'error' ? undefined : { uri: url }}
+        style={styles.image}
+        testID="post-media-viewer-image"
+      />
+    </View>
+  );
+}
+
+type ImageSize = Readonly<{ height: number; width: number }>;
+
+function fitImageSize(
+  viewportSize: ImageSize | null,
+  intrinsicSize: ImageSize | null,
+): ImageSize | null {
+  if (
+    !viewportSize ||
+    !intrinsicSize ||
+    viewportSize.height <= 0 ||
+    viewportSize.width <= 0 ||
+    intrinsicSize.height <= 0 ||
+    intrinsicSize.width <= 0
+  ) {
+    return null;
+  }
+
+  const scale = Math.min(
+    viewportSize.width / intrinsicSize.width,
+    viewportSize.height / intrinsicSize.height,
+  );
+  return {
+    height: intrinsicSize.height * scale,
+    width: intrinsicSize.width * scale,
+  };
 }
 
 function ViewerErrorToast({
@@ -569,24 +638,15 @@ const styles = StyleSheet.create({
   },
   mediaPaneDismissTarget: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
   mediaViewport: {
+    alignSelf: 'stretch',
     alignItems: 'center',
-    borderRadius: radius[8],
+    flex: 1,
     justifyContent: 'center',
-    overflow: 'hidden',
+    minHeight: 0,
+    minWidth: 0,
   },
-  compactMediaViewport: {
-    bottom: space[16],
-    left: space[16],
-    position: 'absolute',
-    right: space[16],
-    top: 80,
-  },
-  wideMediaViewport: {
-    aspectRatio: 4 / 3,
-    maxHeight: 420,
-    maxWidth: 560,
-    width: '100%',
-  },
+  imageFrame: { borderRadius: radius[8], height: '100%', overflow: 'hidden', width: '100%' },
+  imageFrameFallback: { height: '100%', width: '100%' },
   image: {
     bottom: 0,
     height: '100%',
@@ -596,7 +656,7 @@ const styles = StyleSheet.create({
     top: 0,
     width: '100%',
   },
-  imagePrivacyBoundary: { height: '100%', width: '100%' },
+  imagePrivacyBoundary: {},
   closeButton: { position: 'absolute', top: space[16], zIndex: 2 },
   compactCloseButton: { right: space[16] },
   wideCloseButton: { left: space[16] },
