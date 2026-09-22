@@ -73,14 +73,17 @@ Remote Profile은 기존 actor materialization·refresh가 같은 Actor document
 alias가 있을 때만 그 alias를 추가 허용 URI로 사용한다. alias가 없으면 이미 알려진 actor URI만 사용하며 Mention 수신 중 URL을
 fetch하거나 새 Profile을 materialize하지 않는다. actor Profile URL이 빠지거나 malformed인 경우에는 기존 정상
 materialization·refresh가 기존 alias를 제거하고, Mention receipt가 refresh를 새로 트리거하지 않는다. tag `name`·handle과
-본문 표시 문자열의 일치로 identity를 확정하거나 거부하지 않으며, 기존 Profile/Post를 backfill하거나 이미 저장된 글을 자동
-보정하지 않는다.
+본문 표시 문자열의 일치로 identity를 확정하거나 거부하지 않지만, 허용된 alias가 본문 anchor와 일치하지 않을 때는 이미
+확인된 typed `Mention.name`을 transient body-position hint로만 사용한다. anchor visible text와 exact match하고 해당 label이 정확히
+하나의 verified Profile candidate로 해석될 때에만 `profileId` Mention node를 만들며, 중복·ambiguous label claim 또는 label
+mismatch는 안전한 link/text로 보존한다. 기존 Profile/Post를 backfill하거나 이미 저장된 글을 자동 보정하지 않는다.
 
 본문 parser는 알려진 typed identity와 HTML anchor를 best effort로 결합한다. anchor href가 대응하면 `profileId`만 가진
-canonical Mention node를 만들 수 있지만, href가 다르거나 anchor가 없으면 해당 본문은 안전한 일반 link 또는 표시 text로 보존한다.
-이 본문 fallback만으로 Mention 관계를 만들지 않는다. body conversion이 fallback이 되어도 이미 확인된 typed identity의
-Mentioned Profile 관계는 유지한다. actor URI·저장된 alias와 tag metadata 또는 원문 표시 문자열은 Content Document에 저장하지
-않는다. `post_mentions` row는 Post Content revision과 Profile을 foreign keys로 가리키며 body node와 별도로 typed identity 집합에서
+canonical Mention node를 만들 수 있다. href가 다르더라도 typed `Mention.name`과 anchor visible text가 exact match하고 label이
+정확히 하나의 verified Profile candidate를 가리키면 같은 node를 만들 수 있다. 어느 조건도 충족하지 않거나 anchor가 없으면
+해당 본문은 안전한 일반 link 또는 표시 text로 보존한다. 이 본문 fallback만으로 Mention 관계를 만들지 않는다. body conversion이
+fallback이 되어도 이미 확인된 typed identity의 Mentioned Profile 관계는 유지한다. actor URI·저장된 alias와 tag metadata 또는 원문
+표시 문자열은 Content Document에 저장하지 않는다. `post_mentions` row는 Post Content revision과 Profile을 foreign keys로 가리키며 body node와 별도로 typed identity 집합에서
 투영한다. column, index와 primary key의 구체 shape는 이 문서에서 고정하지 않는다. 새 revision은 새 Mentioned Profile 관계 집합을
 가지며, immutable한 과거 revision과 그 관계는 보존한다. Current Post의 Mentioned Profile은 현재 Post Content 관계에서 투영한다.
 document와 관계 또는 Current Content 포인터 중 하나라도 저장되지 않으면 같은 transaction을 rollback해 partial relation을 남기지
@@ -98,13 +101,14 @@ revision을 만드는 행동이다. 이전 revision은 이전 Media 참조를 �
 
 ActivityPub `tag`의 typed `Mention`은 `Mention.href`가 이미 저장된 Local/Remote Profile의 stable identity로 검증될 때
 Mentioned Profile 관계의 입력이 된다. 이 검증은 본문 anchor URL이나 body parser 결과와 독립적이다. 본문 anchor href가 actor URI 또는
-기존에 정상 refresh로 저장된 Profile URL alias에 대응하면 `profileId`만 가진 canonical Mention node로 표현할 수 있고, 대응하지
-않거나 본문 anchor가 없으면 그 부분은 안전한 일반 link 또는 표시 text로 보존한다. 그 일반 link/text와 `to`/`cc` audience는 Mention
-관계 입력이 아니다. body anchor가 일치하지 않아도 typed identity에서 확인한 Profile 관계는 저장한다. Local Profile의 trusted
+기존에 정상 refresh로 저장된 Profile URL alias에 대응하면 `profileId`만 가진 canonical Mention node로 표현할 수 있다. 대응하지
+않더라도 typed `Mention.name`과 anchor visible text가 exact match하고 label이 정확히 하나의 verified Profile candidate를 가리키면
+같은 node로 표현할 수 있으며, 그 외에는 해당 부분을 안전한 일반 link 또는 표시 text로 보존한다. 그 일반 link/text와 `to`/`cc`
+audience는 Mention 관계 입력이 아니다. body anchor가 일치하지 않아도 typed identity에서 확인한 Profile 관계는 저장한다. Local Profile의 trusted
 human Profile URL은 actor URI와 다른 표현으로 허용할 수 있다. Remote Profile의 alias는 기존 actor materialization·refresh가 직접
 광고된 hostname 보유 HTTP(S) URL을 저장한 경우에만 사용하며, alias가 없으면 actor URI만 사용한다. tag `name`·handle은 identity
-증거가 아니고 본문 표시 문자열과 exact match할 필요가 없다. 서로 다른 Profile이 같은 alias를 광고하면 해당 body anchor는 first
-match 없이 안전한 일반 link/text로 낮추지만 각 typed href의 알려진 Profile 관계는 유지한다. inbound URI, actor alias, tag metadata와
+증거가 아니며, alias 불일치 상황에서만 transient body-position hint로 exact match할 수 있다. 서로 다른 Profile이 같은 alias 또는
+같은 label을 광고하면 해당 body anchor는 first match 없이 안전한 일반 link/text로 낮추지만 각 typed href의 알려진 Profile 관계는 유지한다. inbound URI, actor alias, tag metadata와
 원문 표시 문자열은 저장 전에만 사용하고 canonical document에는 보존하지 않는다. unresolved 또는 malformed typed Mention은 관계를
 만들지 않으며, 본문 URL 불일치만으로 알려진 typed identity를 unresolved로 낮추지 않는다. Mention 수신 중 원격 Profile을 새로
 탐색하거나 materialize하지 않고, 이미 저장된 기존 글을 자동으로 보정하지 않는다. renderer의 표시 문자열은 같은 revision의

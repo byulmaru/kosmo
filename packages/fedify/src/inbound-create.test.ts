@@ -202,6 +202,44 @@ describe('inbound Create dispatch', () => {
     ]);
   });
 
+  test('uses the typed Mention name when a NULL profile URL alias differs from the body anchor', async () => {
+    const profile = await createStoredRemoteActor({ profileUrl: null });
+    const objectUri = new URL('https://remote.example/notes/name-hint-mention');
+    const note = new Note({
+      attribution: remoteActorUri,
+      content: '<p>Hello <a href="https://profile.example/@alice">@alice</a></p>',
+      id: objectUri,
+      mediaType: 'text/html',
+      tags: [
+        new Mention({
+          href: remoteActorUri,
+          name: '@alice',
+        }),
+      ],
+      to: PUBLIC_COLLECTION,
+    });
+
+    await handleInboundCreate(
+      createContext(),
+      new Create({ actor: remoteActorUri, object: note }),
+      receivedAt,
+    );
+
+    const { content } = await getMaterializedPost(objectUri);
+    assert.deepEqual(content.document.body.content, [
+      {
+        type: 'paragraph',
+        content: [
+          { text: 'Hello ', type: 'text' },
+          { attrs: { profileId: profile.id }, type: 'mention' },
+        ],
+      },
+    ]);
+    assert.deepEqual(await db.select().from(PostMentions), [
+      { postContentId: content.id, profileId: profile.id },
+    ]);
+  });
+
   test('falls back to the actor URI when a stored profile URL alias is malformed', async () => {
     const profile = await createStoredRemoteActor({ profileUrl: 'not a URL' });
     const objectUri = new URL('https://remote.example/notes/malformed-profile-url');
@@ -360,9 +398,9 @@ describe('inbound Create dispatch', () => {
     const note = new Note({
       attribution: remoteActorUri,
       content:
-        `<p><a href="${mismatchedTarget.href}">@alice</a> ` +
+        `<p><a href="${mismatchedTarget.href}">@wrong</a> ` +
         `<a href="${unresolvedTarget.href}">@bob</a> ` +
-        `<a href="${remoteActorUri.origin}/@alice">@alice</a> ` +
+        `<a href="${remoteActorUri.origin}/@alice">@different</a> ` +
         `<a href="${unsafeDisplayTarget.href}">\u0001</a></p>`,
       id: objectUri,
       mediaType: 'text/html',
@@ -406,7 +444,7 @@ describe('inbound Create dispatch', () => {
         content: [
           {
             marks: [{ attrs: { href: mismatchedTarget.href }, type: 'link' }],
-            text: '@alice',
+            text: '@wrong',
             type: 'text',
           },
           { text: ' ', type: 'text' },
@@ -418,7 +456,7 @@ describe('inbound Create dispatch', () => {
           { text: ' ', type: 'text' },
           {
             marks: [{ attrs: { href: `${remoteActorUri.origin}/@alice` }, type: 'link' }],
-            text: '@alice',
+            text: '@different',
             type: 'text',
           },
           { text: ' ', type: 'text' },

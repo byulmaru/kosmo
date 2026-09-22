@@ -439,8 +439,9 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
   typed Mention은 V1에 additive한 node로 보존한다. Mention node는 저장된 Profile stable identity인 `profileId`만
   attrs로 가진다. inbound typed `Mention.href`는 이미 저장된 ActivityPub actor/Profile mapping으로 알려진 Profile stable
   identity인지 본문 변환과 독립적으로 확인하고, 확인된 identity를 Mentioned Profile 관계 입력으로 보존한다. 본문 anchor가 typed
-  href 또는 기존 정상 actor materialization·refresh가 저장한 Profile URL alias에 대응하면 `profileId` node로 표현할 수 있고, URL이
-  다르거나 anchor가 없으면 본문을 안전한 일반 link 또는 표시 text로 보존한다. body anchor 불일치와 관계 저장은 독립적이다. 일반
+  href 또는 기존 정상 actor materialization·refresh가 저장한 Profile URL alias에 대응하면 `profileId` node로 표현할 수 있다. URL이
+  다르더라도 verified typed `Mention.name`과 parser가 산출한 anchor visible text가 exact match하고 해당 label이 정확히 하나의
+  Profile candidate로 해석될 때에만 같은 node로 표현하며, 그 외에는 본문을 안전한 일반 link 또는 표시 text로 보존한다. body anchor 불일치와 관계 저장은 독립적이다. 일반
   link/text와 `to`/`cc` audience는 Mention 관계를 만들지 않는다. Local Profile의 trusted human URL은 actor URI와 다른 표현으로
   사용할 수 있다. Remote Profile URL alias가 없으면 이미 알려진 actor URI만 사용하며 Mention 수신 중 fetch·신규
   materialization·backfill을 수행하지 않는다. 누락·malformed alias는 기존 정상 refresh가 제거·갱신하고 Mention receipt가 refresh를

@@ -339,6 +339,114 @@ describe('projectRemoteNoteContent', () => {
     ]);
   });
 
+  it('uses a unique typed Mention name as a transient hint for an unmatched anchor', () => {
+    const result = projectRemoteNoteContent({
+      content:
+        '<p><a href="https://remote.example/@different"><span>@alice</span></a> ' +
+        '<a href="https://remote.example/@different">@wrong</a> ' +
+        '<a href="https://remote.example/@different">@unknown</a></p>',
+      mentions: [
+        {
+          name: '@alice',
+          profileId: aliceProfileId,
+          targetHref: 'https://remote.example/users/alice',
+        },
+      ],
+      summary: null,
+      mediaType: 'text/html',
+    });
+
+    assert.deepEqual(result.body.content, [
+      {
+        type: 'paragraph',
+        content: [
+          { attrs: { profileId: aliceProfileId }, type: 'mention' },
+          { text: ' ', type: 'text' },
+          {
+            marks: [{ attrs: { href: 'https://remote.example/@different' }, type: 'link' }],
+            text: '@wrong',
+            type: 'text',
+          },
+          { text: ' ', type: 'text' },
+          {
+            marks: [{ attrs: { href: 'https://remote.example/@different' }, type: 'link' }],
+            text: '@unknown',
+            type: 'text',
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('does not use a typed Mention name from removed anchor content', () => {
+    const result = projectRemoteNoteContent({
+      content:
+        '<p><a href="https://remote.example/@different"><script>@alice</script>' +
+        '<style>@alice</style><template>@alice</template><span hidden>@alice</span></a></p>',
+      mentions: [
+        {
+          name: '@alice',
+          profileId: aliceProfileId,
+          targetHref: 'https://remote.example/users/alice',
+        },
+      ],
+      summary: null,
+      mediaType: 'text/html',
+    });
+
+    assert.deepEqual(result.body.content, [{ type: 'paragraph' }]);
+  });
+
+  it('does not use an all-whitespace typed Mention name or anchor label', () => {
+    const result = projectRemoteNoteContent({
+      content: '<p><a href="https://remote.example/@different">   </a></p>',
+      mentions: [
+        {
+          name: '   ',
+          profileId: aliceProfileId,
+          targetHref: 'https://remote.example/users/alice',
+        },
+      ],
+      summary: null,
+      mediaType: 'text/html',
+    });
+
+    assert.deepEqual(result.body.content, [{ type: 'paragraph' }]);
+  });
+
+  it('keeps an unmatched anchor safe when its typed Mention name is ambiguous', () => {
+    const result = projectRemoteNoteContent({
+      content: '<p><a href="https://remote.example/@different">@same</a></p>',
+      mentions: [
+        {
+          name: '@same',
+          profileId: aliceProfileId,
+          targetHref: 'https://remote.example/users/alice',
+        },
+        {
+          name: '@same',
+          profileId: bobProfileId,
+          targetHref: 'https://remote.example/users/bob',
+        },
+      ],
+      summary: null,
+      mediaType: 'text/html',
+    });
+
+    assert.deepEqual(result.body.content, [
+      {
+        type: 'paragraph',
+        content: [
+          {
+            marks: [{ attrs: { href: 'https://remote.example/@different' }, type: 'link' }],
+            text: '@same',
+            type: 'text',
+          },
+        ],
+      },
+    ]);
+  });
+
   it('keeps microformats h-card anchors as ordinary links without typed candidates', () => {
     const result = projectRemoteNoteContent({
       content:
