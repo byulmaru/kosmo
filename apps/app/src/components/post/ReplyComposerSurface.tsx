@@ -450,6 +450,9 @@ function ReplyComposerSurfaceContents({
                               style={[
                                 styles.parentConnector,
                                 presentation === 'modal' ? styles.modalParentConnector : null,
+                                Platform.OS === 'web' && presentation === 'fullscreen'
+                                  ? styles.webFullscreenParentConnector
+                                  : null,
                               ]}
                               testID="reply-parent-thread-connector"
                             />
@@ -562,6 +565,7 @@ const styles = StyleSheet.create({
     transform: [{ translateX: -1 }],
   },
   modalParentConnector: { bottom: -(spacing.md + spacing.xxl - spacing.xs) },
+  webFullscreenParentConnector: { bottom: -(spacing.xl - 2) },
   parentContent: { flex: 1, gap: spacing.md, minWidth: 0 },
   parentIdentity: { flex: 1, minWidth: 0 },
   timestamp: { fontFamily: fontFamilies.ui, marginTop: spacing.xs, ...typography.xsm },

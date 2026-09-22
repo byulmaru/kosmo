@@ -33,6 +33,7 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   유지하며, Reply/Quote surface만 modal로 분리한다.
 - Current runtime과 OpenSpec은 Web `< compact`와 Android/iOS의 목록 surface에서 같은 관계 맥락을 전체 화면
   작성기로 연다. Reply Parent는 editor 앞에, Quote Source는 본문 아래에 표시한다.
+- Web `< compact`의 Reply 연결선도 Parent와 작성 Profile의 Avatar에서 각각 `4px` 띄운다.
 - Figma Target의 Focused/Keyboard는 입력과 keyboard를 우선하고 `@kosmo님에게 답글` 같은 최소 맥락만 표시한다.
 - Figma Target의 비키보드 Initial anchor에서도 direct Parent는 작성 영역 아래로 내려오지 않으며 기본
   viewport에 표시하지 않는다.

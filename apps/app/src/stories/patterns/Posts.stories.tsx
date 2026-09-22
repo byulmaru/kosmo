@@ -8127,12 +8127,17 @@ export const ReplyFullscreenPresentation: Story = {
   play: async ({ canvasElement }) => {
     const dialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
     const surface = within(dialog).getByTestId('reply-composer-dialog-surface');
+    const connector = within(dialog).getByTestId('reply-parent-thread-connector');
+    const composerAvatar = within(dialog).getAllByLabelText(/프로필 이미지$/)[1]!;
     const bounds = surface.getBoundingClientRect();
     const documentElement = canvasElement.ownerDocument.documentElement;
 
     expect(bounds.width).toBe(documentElement.clientWidth);
     expect(bounds.height).toBe(documentElement.clientHeight);
     expect(getComputedStyle(surface).borderRadius).toBe('0px');
+    expect(
+      composerAvatar.getBoundingClientRect().top - connector.getBoundingClientRect().bottom,
+    ).toBeCloseTo(4, 0);
   },
   render: () => <ReplyModalPresentationStory />,
 };
