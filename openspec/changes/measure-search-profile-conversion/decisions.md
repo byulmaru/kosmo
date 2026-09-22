@@ -28,6 +28,7 @@
 - Upstream context: 승인된 분모·분자·시작일·잠정치 조건과 2026-09-22 사용자 수정 지시.
 - Choice: HogQL을 canonical 집계로 사용하고 distinct `search_profile_journey_id` 기준의 분모·전체·Profile 조회·Follow 분자를 계산한다. PostHog Funnel·dashboard는 필요한 경우 시각화·교차검증용 보조 수단으로 둔다.
 - Reason: 같은 Account의 여러 journey와 기간을 넘는 성공을 정확히 세어야 한다.
+- Rationale clarification (2026-09-23): 2026-09-03 승인에는 대상별 분모와 같은 journey·대상의 성공 귀속이 있지만 제품적 이유의 상세 기록은 부족했다. 이 지표는 각 검색 결과 선택이 **그 대상**의 조회 또는 Follow로 이어졌는지 묻는다. 서로 다른 대상 A·B·C를 선택해 A·C에서만 성공하면 `3 selections / 2 conversions`이고, A에서 실패한 뒤 B에서 조회에 성공해도 A는 성공이 아니다. 이 설명은 계산 계약을 변경하지 않는다.
 - Alternatives: 기본 Funnel 우선·HogQL fallback 방식은 이번 사용자 지시로 대체됐다. person 단위 집계나 성공 날짜만의 집계는 요구한 비율과 달라질 수 있다.
 - Consequences: HogQL이 fixture의 `6 / 4 / 3 / 2`를 정확히 재현해야 acceptance를 충족한다. 30분 포함·시작일·Asia/Seoul·잠정치·분모 0 조건을 유지하고 query·환경·시각·결과 URL·기대값·관측 결과를 남긴다.
 
