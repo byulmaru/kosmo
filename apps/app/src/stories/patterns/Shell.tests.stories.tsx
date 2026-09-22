@@ -377,6 +377,7 @@ export const ProfileSwitcherDrawerNestedDialogEscape: Story = {
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(page.queryByLabelText('프로필 전환')).toBeNull());
     expect(drawer).toBeVisible();
+    expect(profileTrigger).toHaveFocus();
 
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(page.queryByRole('navigation', { name: '주요 메뉴' })).toBeNull());

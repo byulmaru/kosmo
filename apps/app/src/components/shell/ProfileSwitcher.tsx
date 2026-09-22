@@ -39,6 +39,7 @@ import {
   getProfileEditActionTargetMetrics,
   profileEditActionLabelColor,
 } from './shellLayout';
+import type { RefObject } from 'react';
 import type { ViewStyle } from 'react-native';
 import type { ProfileSwitcher_query$key } from './__generated__/ProfileSwitcher_query.graphql';
 import type { ProfileSwitcherCreateProfileMutation } from './__generated__/ProfileSwitcherCreateProfileMutation.graphql';
@@ -160,6 +161,7 @@ type Props = {
   open?: boolean;
   query: ProfileSwitcher_query$key;
   surface: ProfileSwitcherSurface;
+  triggerRef?: RefObject<View | null>;
 };
 
 export function ProfileSwitcher({
@@ -168,6 +170,7 @@ export function ProfileSwitcher({
   open: controlledOpen,
   query,
   surface,
+  triggerRef: forwardedTriggerRef,
 }: Props) {
   const theme = useTheme();
   const safeAreaStyle = useSafeAreaPadding(spacing.lg);
@@ -181,7 +184,8 @@ export function ProfileSwitcher({
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [operationError, setOperationErrorState] = useState<string | null>(null);
   const pickerRef = useRef<View>(null);
-  const triggerRef = useRef<View>(null);
+  const fallbackTriggerRef = useRef<View>(null);
+  const triggerRef = forwardedTriggerRef ?? fallbackTriggerRef;
   const dismissalVersionRef = useRef(0);
   const [commitSelect, selecting] =
     useMutation<ProfileSwitcherSelectProfileMutation>(SelectProfileMutation);
@@ -236,7 +240,7 @@ export function ProfileSwitcher({
   }, [open, redesignedWeb]);
 
   useEffect(() => {
-    if (Platform.OS !== 'web' || !open) {
+    if (Platform.OS !== 'web' || !open || surface === 'drawer') {
       return;
     }
 
@@ -271,33 +275,6 @@ export function ProfileSwitcher({
         trigger?.focus();
       }
     };
-    const onDrawerKeyUp = (event: KeyboardEvent) => {
-      if (surface !== 'drawer' || event.key !== 'Escape') {
-        return;
-      }
-
-      const triggerModal = trigger?.closest('[aria-modal="true"]');
-      const eventModal =
-        event.target instanceof Element ? event.target.closest('[aria-modal="true"]') : null;
-      if (
-        (triggerModal && triggerModal.getAttribute('role') !== 'dialog') ||
-        (eventModal && eventModal !== triggerModal)
-      ) {
-        return;
-      }
-
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      dismissPicker();
-      trigger?.focus();
-    };
-
-    if (surface === 'drawer') {
-      // React Native Web Modal dismisses on document keyup; the open picker consumes it first.
-      document.addEventListener('keyup', onDrawerKeyUp, true);
-      return () => document.removeEventListener('keyup', onDrawerKeyUp, true);
-    }
-
     document.addEventListener('pointerdown', onPointerDown);
     document.addEventListener('keydown', onKeyDown);
     return () => {

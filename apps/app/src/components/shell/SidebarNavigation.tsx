@@ -12,7 +12,7 @@ import { NavigationLink } from './NavigationLink';
 import { ProfileSwitcher } from './ProfileSwitcher';
 import { isSettingsRoute, isTimelineRoute } from './shellLayout';
 import type { Href, LinkProps } from 'expo-router';
-import type { ReactElement } from 'react';
+import type { ReactElement, RefObject } from 'react';
 import type { NavigationDestination } from '@/components/ui/navigationChrome';
 import type { SidebarNavigationRenderControlProps } from '@/components/ui/SidebarNavigation';
 import type { SidebarNavigation_query$key } from './__generated__/SidebarNavigation_query.graphql';
@@ -44,6 +44,7 @@ type Props = {
   onHomeReselect?: () => void;
   onNavigate?: () => void;
   onSwitcherOpenChange?: (open: boolean) => void;
+  profileTriggerRef?: RefObject<View | null>;
   query: SidebarNavigation_query$key;
   surface?: 'desktop' | 'drawer';
   switcherOpen?: boolean;
@@ -67,6 +68,7 @@ export function SidebarNavigation({
   onHomeReselect,
   onNavigate,
   onSwitcherOpenChange,
+  profileTriggerRef,
   query,
   surface = 'desktop',
   switcherOpen,
@@ -174,6 +176,7 @@ export function SidebarNavigation({
         open={switcherOpen}
         query={data}
         surface={switcherSurface}
+        triggerRef={profileTriggerRef}
       />
       <ScrollView
         contentContainerStyle={styles.navigationContent}
