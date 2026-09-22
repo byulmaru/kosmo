@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import test, { mock } from 'node:test';
+import { ApplicationFailure } from '@temporalio/client';
+import { ConflictError } from '../error';
 
 process.env.TEMPORAL_ADDRESS ??= '127.0.0.1:7233';
 process.env.TEMPORAL_NAMESPACE ??= 'test';
@@ -14,6 +16,7 @@ const {
   profileUnblockUpdateId,
   profileUnblockWorkflowId,
 } = await import('./profile-block');
+const { rethrowProfileBlockWorkflowFailure } = await import('./profile-block-failure');
 
 const input = {
   ownerProfileId: '00000000-0000-8000-8000-000000000001',
@@ -26,6 +29,24 @@ const unblockInput = {
   targetProfileId: input.targetProfileId,
   profileBlockId: '00000000-0000-8000-8000-000000000004',
 };
+
+test('Profile Block Workflow domain failure를 caller 오류로 복원한다', () => {
+  assert.throws(
+    () =>
+      rethrowProfileBlockWorkflowFailure(
+        ApplicationFailure.nonRetryable('already handled', 'CONFLICT'),
+      ),
+    (error) => error instanceof ConflictError && error.message === 'already handled',
+  );
+});
+
+test('Profile Block Workflow의 알 수 없는 실패는 원본으로 전파한다', () => {
+  const error = new Error('unexpected');
+  assert.throws(
+    () => rethrowProfileBlockWorkflowFailure(error),
+    (thrown) => thrown === error,
+  );
+});
 
 test('Profile Block Workflow definition dispatches the committed result with a directed pair ID', async () => {
   const result = {

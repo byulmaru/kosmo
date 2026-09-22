@@ -1,8 +1,3 @@
-import '../polyfill';
-
-import { ApplicationFailure } from '@temporalio/client';
-import { ConflictError, NotFoundError, PermissionDeniedError, ValidationError } from '../error';
-import { runWorkflow } from './client';
 import type { ProfileBlockProtocolActivityInput } from '../services/profile-block-protocol';
 import type { WorkflowUpdateDefinition } from './client';
 
