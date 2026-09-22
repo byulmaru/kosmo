@@ -51,8 +51,9 @@ base64/hash를 대체값으로 사용하지 않는다. 실제 계측 입력은 T
 route parameter를 신뢰해 복사하지 않는다. not-found라도 진입 때 확인한 ID가 남아 있으면 같은 값을 유지한다.
 확인된 ID가 없으면 `hashtag_id`만 생략하고 수집 누락을 검증 결과에 남긴다. 제품 흐름과 전체 오류 집계는 유지한다.
 
-전체 네 비율에는 Hashtag ID가 필요하지 않다. 이번 수집 항목 추가는 향후 Hashtag별 탐색량·도달/사용·선택률·Empty/Error·
-추세를 분석할 수 있는 원천 자료를 보존하기 위한 명시적 수집 변경이다. 무작위 session ID만으로는 여러 탐색을
+전체 네 비율에는 Hashtag ID가 필요하지 않다. 이번 수집 항목 추가는 Hashtag별 distinct 탐색 Account 수·
+탐색 session 수·선택률·Empty/Error 비율·주간 추세를 이번 Insight·dashboard에서 재현하고 원천 자료를
+보존하기 위한 명시적 수집 변경이다. 무작위 session ID만으로는 여러 탐색을
 같은 Hashtag로 묶을 수 없다. 안정적인 ID 하나로 목적을 충족하고 이름이나 Profile 정보를 더 보내지 않는다.
 이 ID는 암호화나 익명화가 아니다. Hashtag 자료와 Account 행동을 결합하면 관심 주제를 연결할 수 있다는
 한계를 canonical에 기록했으며, 이번 허용을 다른 custom identifier나 표준 SDK 수집 변경으로 확대하지 않는다.
@@ -117,8 +118,15 @@ SDK fault는 mock/stub/fault injection으로 재현하며 production 장애를 �
    잃지 않는다. 늦게 수신한 관측과 늦게 발생한 선택도 같은 계산 규칙으로 다시 집계하고 실행 시각을 남긴다.
 5. 네 비율과 각각의 분자·분모, WAA, 기간·실행 시각·규칙 버전·제외 목록 버전을 저장 Insight·dashboard에
    표시한다. pagination 오류는 별도 품질 항목이다. URL·원문·Profile ID로 breakdown하지 않는다.
-   `hashtag_id`는 이후 Hashtag별 분석에 사용할 원천 자료로 보존한다. Hashtag별 Insight·dashboard의 소유권은
-   아래 범위 선택에서 별도로 다루며, 전체 지표의 WAA·중복 규칙과 계산식은 변경하지 않는다.
+6. 같은 확정 session 결과에 `hashtag_id` dimension을 적용한다. Hashtag·주별 distinct 첫 성공 Account 수,
+   확정 session 수, 선택률·Empty 비율·Error 비율과 각각의 주간 추세를 저장 Insight·dashboard에 표시한다.
+   Account 수는 기존 사용률 분자이며 session 수는 기존 확정 결과 분모다. 첫 결과와 오류가 발생하기 전에 이탈한 session은
+   확정 session 수에 넣지 않는다. 새로운 Hashtag별 WAA 비율이나 도달률을 만들지 않는다.
+7. 여러 Hashtag의 탐색에 성공한 Account는 각 Hashtag에서 한 번씩 세되 전체에서는 기존대로 한 번만 센다.
+   비율은 각 분자·분모로 계산하고 Hashtag별 비율을 평균해 전체 비율로 쓰지 않는다. ID 누락은 특정 Hashtag로
+   추정하지 않고 누락 관측으로 표시하며 전체 집계는 유지한다. 분모 0은 계산할 수 없음으로 표시한다.
+8. raw text/name이나 이름 조회용 속성을 PostHog에 추가하지 않는다. breakdown은 opaque `hashtag_id` 자체로
+   재현한다. 저장 query·Insight·dashboard ID, 관측 주차, 계산·제외 버전과 손계산 대조 결과를 증거로 남긴다.
 
 WAA는 기존 승인된 활동 집합을 유지한다. Hashtag 첫 목록 성공 Account가 같은 주 WAA에 누락되지 않는지
 인증 화면 관측과 함께 확인한다. WAA 계측의 증거가 부족하면 완성된 비율이라고 보고하지 않는다.
@@ -147,7 +155,42 @@ WAA는 기존 승인된 활동 집합을 유지한다. Hashtag 첫 목록 성공
 ID가 유지되고 다른 Hashtag에서는 달라지는지 capture payload를 대조한다. ID를 decode한 값이 fixture UUID와
 `Hashtag` 타입으로만 구성되는지 확인하고, raw text·Canonical/Display Hashtag Name·검색어·Profile 값과 그
 인코딩 대체값이 custom property로 복제되지 않는지 검증한다. not-found·확인되지 않은 ID의 생략과 수집 누락도
-확인한다. 이는 ID 계측·검증이며 Hashtag별 저장 Insight를 완성했다는 증거로 사용하지 않는다.
+확인한다. 이 payload 검증에 이어 아래 합성 자료를 실제 Hashtag별 저장 Insight·dashboard에서도 재현해야 한다.
+
+### Hashtag별 합성 breakdown과 acceptance
+
+앞선 자료의 주를 W1, 그다음 주를 W2라고 한다. H1·H2는 서로 다른 synthetic opaque Hashtag Node ID를
+가리키는 문서상의 별칭이며 payload에는 실제 fixture ID만 넣는다. 이름이나 새 분석 속성을 보내지 않는다.
+W1의 s1·s4·s6은 H1, s2·s3·s5는 H2에 연결한다. s4는 W1 일요일 오류 후 W2 월요일까지 성공 없이
+이탈하고, s3의 성공은 W1·선택은 W2 월요일이다. 따라서 두 session 모두 기존 규칙에 따라 W1에 남는다.
+
+W2에는 다음 자료를 추가한다. A·B·C·D의 인증 화면 관측이 W2에도 있어 WAA는 4다.
+
+| Account / session | Hashtag        | 흐름                                           | 확정 결과 / 선택                                      |
+| ----------------- | -------------- | ---------------------------------------------- | ----------------------------------------------------- |
+| A / s7            | H1             | W1 일요일 initial 오류 뒤 W2 월요일 retry 성공 | `has_results`, 선택 없음, W2 귀속                     |
+| B / s8            | H2             | W2 첫 목록 성공, 결과 없음                     | `empty`, 선택 없음                                    |
+| C / s9            | H2             | W2 initial 오류 뒤 성공 없이 이탈              | `error`, 선택 없음                                    |
+| D / s10           | 확인된 ID 없음 | W2 첫 목록 성공과 선택                         | `has_results`, 전환 1회, 특정 Hashtag에 배정하지 않음 |
+
+| 주 / Hashtag | distinct 첫 성공 Account | 확정 session | 선택 분자/분모 | 선택률         | Empty 분자/분모 | Empty 비율 | Error 분자/분모 | Error 비율 |
+| ------------ | ------------------------ | ------------ | -------------- | -------------- | --------------- | ---------- | --------------- | ---------- |
+| W1 / H1      | 1                        | 2            | 1/1            | 100%           | 0/2             | 0%         | 1/2             | 50%        |
+| W1 / H2      | 2                        | 2            | 1/1            | 100%           | 1/2             | 50%        | 0/2             | 0%         |
+| W2 / H1      | 1                        | 1            | 0/1            | 0%             | 0/1             | 0%         | 0/1             | 0%         |
+| W2 / H2      | 1                        | 2            | 0/0            | 계산할 수 없음 | 1/2             | 50%        | 1/2             | 50%        |
+
+W1의 Hashtag별 Account 수 합은 3이지만 전체 distinct 성공 Account는 A·B의 2다. W2는 ID 누락
+session 1개를 별도로 표시하며 전체 확정 session은 4, 전체 성공 Account는 A·B·D의 3이다.
+W2 전체 사용률 75%, 선택률 50%, Empty 25%, Error 25%로 기존 전체 계산도 대조한다.
+H1·H2의 W1→W2 값을 각각 이어 주간 추세를 확인한다. 중복 전송·같은 Account의 여러 기기를 더해도
+같은 수치가 유지되는지 확인하고 제외 Account s6과 미확정 s5가 섞이지 않게 한다.
+
+구현 acceptance에서는 합성 관측을 승인된 검증 환경의 실제 PostHog query·저장 Insight·dashboard로 집계해
+위 값과 각 분자·분모, ID 누락, 주 경계 귀속, 주간 추세를 대조한다. 기존 운영 test 제외 정책을 production에서
+해제하지 않고 검증 데이터셋을 분리한다. 이후 운영 인수는 실제 선행 증거가 확인된 production 자료로 검증한다.
+payload 확인이나 로컬 계산만 통과한 상태를 breakdown acceptance 완료로 표시하지 않는다. 이번 Spec 세션은
+이 검증 계획과 기대값만 준비하며 실제 PostHog 전송·Insight 생성·Cloud 변경을 수행하지 않는다.
 
 ### Hashtag별 Insight 범위 조사
 
@@ -156,13 +199,10 @@ ID가 유지되고 다른 Hashtag에서는 달라지는지 capture payload를 �
 breakdown Insight를 소유한 별도 이슈를 찾지 못했다. PROD-525는 탐색 기능, PROD-557은 검색→Profile/Follow
 전환, PROD-575는 production 인수, breakdown 검색의 PROD-988은 UTM 분석을 맡는다.
 
-| 선택             | PROD-556 완료 범위                                             | 별도로 정할 내용                                                             |
-| ---------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| 후속 이슈로 분리 | opaque Hashtag ID 계측·검증과 기존 전체 네 비율 dashboard      | 후속 소유권, Hashtag별 탐색량·도달/사용·전환·품질·추세의 정의와 Insight 운영 |
-| 이번 이슈에 포함 | 위 범위에 Hashtag별 지표 정의·Insight·dashboard·통합 검증 추가 | 도달의 분모, 기간·추세 표현, ID 표시·검토 책임 등 추가 제품 기준             |
-
-후속 분리를 권장한다. 기존 승인 결과는 전체 네 비율이며 Hashtag별 분석 화면은 독립적으로 전달할 수 있다.
-이는 추천일 뿐 확정 범위가 아니다. ID 계측·검증은 어느 선택이든 PROD-556 책임이며 사용자 결정을 기다린다.
+사용자는 조사 결과를 확인한 뒤 2026-09-22 Hashtag별 탐색 성과 breakdown과 주간 추세를 PROD-556에
+포함하도록 결정했다. 별도 소유 이슈를 만들지 않고 기존 전체 dashboard와 함께 검증·운영한다.
+Hashtag별 도달률, TagChip impression과 노출→탐색 funnel은 새 계측이 필요한 후속 후보로만 남긴다.
+이번 event·task·acceptance를 그 후보까지 확대하지 않는다.
 
 ## Alternatives and Traps
 
@@ -187,7 +227,7 @@ PROD-795는 Done이지만 실제 개인정보·운영 준비와 production 증�
 ## Open Questions
 
 주 경계를 넘긴 최종 오류는 첫 오류 발생 주에 집계하도록 2026-09-22 사용자가 결정했다.
-Hashtag별 breakdown Insight·dashboard를 PROD-556에 포함할지 후속 이슈로 분리할지만 사용자 결정 대기다.
-Opaque Hashtag ID 계측·검증과 명명은 이번 요청으로 확정됐으며 나머지 기존 지표 계약을 다시 결정하지 않는다.
+Hashtag별 다섯 탐색 성과 지표·주간 추세와 실제 Insight·dashboard 검증은 2026-09-22 사용자 결정으로
+PROD-556에 포함됐다. 도달률·TagChip impression은 제외하며 현재 미결정 제품 질문은 없다.
 위 구현 연결점은 제안과 검증 과제이며 새 제품 결정이 아니다.
 구현이 승인된 관측 범위를 충족하지 못하거나 공개 계약·수집 범위를 바꿔야 하면 그 경계에서 사용자에게 묻는다.

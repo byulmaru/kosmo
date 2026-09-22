@@ -5,7 +5,7 @@
 공개 Profile의 TagChip에서 시작한 관련 Profile 탐색의 사용률과 결과 선택률을 같은 기준으로 재현한다.
 [PROD-556](https://linear.app/byulmaru/issue/PROD-556)의 2026-09-03 지표·session 승인을 따른다.
 이 문서는 2026-09-22 현재 Linear 본문과 승인 댓글을 바탕으로 복원했다. 같은 날 사용자가 요청한
-Profile Tag 탐색 session 명명과 opaque Hashtag identity 수집 변경을 반영한다.
+Profile Tag 탐색 session 명명, opaque Hashtag identity 수집과 Hashtag별 탐색 성과 breakdown 범위를 반영한다.
 
 탐색 기능의 인증, 공개 후보, 정확한 Hashtag identity, 최대 20개 forward pagination과 실패 시 기존 목록
 유지는 [ADR 0021](../decisions/0021-hashtag-related-profile-navigation.md)과
@@ -57,6 +57,32 @@ Session 지표는 첫 목록 결과가 일어난 주에 귀속한다. 주 경계
 결과 주차에 반영한다. 최종 `error`는 session 종료 주가 아니라 첫 initial 오류가 발생한 주에 귀속한다.
 같은 session에서 retry에 성공하면 오류로 세지 않고 성공 결과가 발생한 주에 귀속한다.
 
+## Hashtag별 탐색 성과 breakdown
+
+전체 지표와 같은 session·결과·주차·인증·제외·중복 규칙을 `hashtag_id` dimension에 적용한다.
+새로운 도달률은 정의하지 않는다. Hashtag별 지표는 다음 다섯 값과 각 값의 주간 추세다.
+
+| 지표                     | 같은 Hashtag와 주차에서의 계산                                                                                                    |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| distinct 탐색 Account 수 | 첫 목록 결과가 `has_results` 또는 `empty`인 distinct Account 수. 기존 전체 사용률 분자를 breakdown하며 별도 비율로 바꾸지 않는다. |
+| 탐색 session 수          | 첫 목록 결과가 확정된 session 수. 기존 공통 분모인 `has_results`, `empty`, `error`의 합이다.                                      |
+| 결과 선택률              | Profile을 선택한 `has_results` session 수 / `has_results` session 수 × 100                                                        |
+| Empty 비율               | `empty` session 수 / 첫 목록 결과가 확정된 session 수 × 100                                                                       |
+| Error 비율               | `error` session 수 / 첫 목록 결과가 확정된 session 수 × 100                                                                       |
+
+Account 수는 첫 목록 성공 기준, session 수는 첫 결과 확정 기준임을 표시한다. 오류만 있던 Account를
+성공 Account 수에 넣거나, 결과·오류 전에 이탈한 session을 확정 session 수에 넣지 않는다.
+성공 결과는 성공 주, 성공 없이 종료한 오류는 첫 initial 오류 주, 주 경계 뒤 선택은 같은 session의
+결과 주에 둔다. 각 주를 같은 방식으로 계산해 주간 추세를 제공하고 분모 0은 계산할 수 없음으로 표시한다.
+
+같은 Account가 여러 Hashtag를 탐색하면 각 Hashtag에서 한 번씩 셀 수 있다. Hashtag별 Account 수를 더해
+전체 distinct Account 수로 사용하지 않으며, Hashtag별 비율의 단순 평균으로 전체 비율을 만들지 않는다.
+전체 값은 기존 계약대로 다시 계산한다. `hashtag_id`가 없는 관측은 특정 Hashtag에 추정 배정하지 않고
+별도 누락 범위를 표시한다. 전체 집계는 기존 규칙을 유지한다.
+
+Hashtag별 도달률, TagChip impression과 이를 분모로 한 노출→탐색 funnel은 이번 범위가 아니다.
+이런 새 계측이 필요하면 후속 후보로 남기며 이번 완료 조건에 넣지 않는다.
+
 ## 개인정보와 수집 경계
 
 - 이 지표의 앱 소유 custom event는 `profile_tag_exploration_session_id`, 탐색 대상의 안정적인 opaque
@@ -65,8 +91,8 @@ Session 지표는 첫 목록 결과가 일어난 주에 귀속한다. 주 경계
   대체값, 임의 route 입력으로 만들지 않는다. 같은 Hashtag의 여러 session은 같은 identity를 사용하며
   session 식별자와 Hashtag identity를 혼동하지 않는다. 확인된 identity가 없으면 해당 property를 생략하고
   누락 범위를 검증 결과에 남긴다. 이름·URL을 대신 보내거나 기존 전체 오류 집계에서 조용히 제외하지 않는다.
-- 이 수집은 Hashtag별 탐색량·도달/사용·결과 선택 전환율·Empty/Error 비율·추세를 이후 분석할 수 있도록
-  원천 자료를 보존하기 위해 필요하다. 전체 네 비율 계산만을 위해서는 필요하지 않은 항목임을 구분한다.
+- 이 수집은 이번 Hashtag별 distinct 탐색 Account 수·탐색 session 수·결과 선택률·Empty/Error 비율과
+  주간 추세를 재현하고 그 원천 자료를 보존하기 위해 필요하다. 전체 네 비율 계산만을 위해서는 필요하지 않은 항목임을 구분한다.
   session마다 바뀌는 식별자로는 동일 Hashtag의 여러 탐색을 연결할 수 없으므로 안정적인 identity 하나를
   추가하며, 사람이 읽을 수 있는 주제 이름과 Profile 정보는 복제하지 않는다.
 - Opaque identity라고 해서 익명 데이터이거나 민감하지 않은 데이터가 되는 것은 아니다. Hashtag 자료와 연결하면 주제를 알 수 있고,
@@ -88,14 +114,16 @@ Session 지표는 첫 목록 결과가 일어난 주에 귀속한다. 주 경계
 
 ## Dashboard와 책임
 
-PROD-556 담당자는 초기 PostHog Insight·dashboard를 만들고 매주 완료된 직전 주의 네 비율을 검토한다.
+PROD-556 담당자는 초기 PostHog Insight·dashboard를 만들고 매주 완료된 직전 주의 전체 네 비율과
+Hashtag별 다섯 지표·주간 추세를 검토한다.
 분자·분모 절대 수, WAA, 관측 기간, 집계 실행 시각, 계산 규칙 버전과 제외 목록 버전을 함께 표시한다.
 다음 page 오류는 주 지표와 분리해서 확인하며 production Web 외 플랫폼은 미검증으로 표시한다.
 
-PROD-556은 자신의 지표 계약, 이벤트, 전체 네 비율 dashboard, 합성 자료 대조와 실제 수집 검증을 맡는다.
-이번 opaque Hashtag identity의 계측·안정성·원문 비포함·수집 누락 검증도 PROD-556 책임이다.
-Hashtag별 breakdown Insight·dashboard까지 이번 전달 범위로 넓힐지는 사용자 결정 대기다.
-원천 자료 수집 결정만으로 Hashtag별 지표의 새 계산식·화면·운영 책임을 확정하지 않는다.
+PROD-556은 자신의 지표 계약, 이벤트, 전체 네 비율과 Hashtag별 탐색 성과 Insight·dashboard, 합성 자료
+대조와 실제 수집 검증을 맡는다. opaque Hashtag identity의 계측·안정성·원문 비포함·수집 누락 검증도
+PROD-556 책임이다. payload에 ID가 있는 것만으로 완료로 보지 않는다. 여러 Hashtag·주차의 합성 자료를
+실제 PostHog Insight·dashboard에서 breakdown하고 Account 수·session 수·각 비율의 분자/분모·주간 추세가
+기대값과 일치하는지 확인한다. raw Hashtag text/name을 보내거나 분석용 이름 속성을 추가해 재현하지 않는다.
 PROD-795의 실제 개인정보·운영 통합 결과가 확인되기 전에는 production 수집 인수를 완료로 표시하지 않는다.
 이슈 Done만으로 실제 적용과 검증을 대신하지 않는다. PROD-741의 Replay 재활성화·검증과 PROD-575의 전체
 제품 분석 인수 책임은 가져오지 않는다.
@@ -114,4 +142,7 @@ Native SDK, 과거 이벤트와의 호환성은 제외한다.
   집계하도록 현재 Spec 작업에서 선택했다.
 - 2026-09-22 Review Packet 수정 요청은 기존 Hashtag ID 수집 금지를 위 목적의 opaque Hashtag identity
   허용으로 변경했다. raw 이름과 Profile 정보 금지, 표준 SDK 수집·Replay 책임, 기존 네 계산식은 유지한다.
-  이 계약 변경 지시는 수정 산출물의 최종 승인이나 구현·배포 승인을 뜻하지 않는다.
+  이 수집 변경 지시만으로 수정 산출물의 최종 승인이나 구현·배포 승인을 뜻하지 않는다.
+- 같은 날 후속 결정으로 Hashtag별 다섯 지표·주간 추세와 실제 Insight·dashboard 재현 검증을 PROD-556에
+  포함했다. 새 도달률·TagChip impression은 제외한다. 사용자는 이 범위 반영과 재검증에 문제가 없으면
+  수정 Spec을 최종 승인하며, 이번 세션의 구현·push/PR·배포·Cloud 변경은 금지한다고 명시했다.
