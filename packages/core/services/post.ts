@@ -235,6 +235,7 @@ const findVisibleQuoteSource = async (
       ),
     )
     .limit(1)
+    .for('update', { of: Posts })
     .then(first);
 
 const validateQuoteSource = async (

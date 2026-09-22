@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
-import { eq } from 'drizzle-orm';
+import { setTimeout as delay } from 'node:timers/promises';
+import { eq, sql } from 'drizzle-orm';
 import {
   db,
   firstOrThrow,
@@ -20,6 +21,7 @@ import {
   PostQuoteEffectKind,
   PostQuoteEffectReceiptStatus,
   PostQuotePolicy,
+  PostState,
   PostVisibility,
   ProfileFollowPolicy,
   ProfileState,
@@ -30,6 +32,7 @@ import { createPost, deletePost } from './post';
 import {
   canDisplayQuoteSource,
   completePostQuoteEffectReceipt,
+  recordInboundQuoteRequest,
   replayPendingPostQuoteEffects,
   updatePostQuotePolicy,
 } from './post-quote-consent';
@@ -61,6 +64,23 @@ const createProfile = async (kind: InstanceKind = InstanceKind.LOCAL) => {
     })
     .returning()
     .then(firstOrThrow);
+};
+
+const waitUntilBlockedBy = async (blockingPid: number) => {
+  for (let attempt = 0; attempt < 250; attempt += 1) {
+    const [activity] = await db.execute<{ blocked: boolean }>(sql`
+      SELECT EXISTS (
+        SELECT 1
+        FROM pg_stat_activity
+        WHERE ${blockingPid} = ANY(pg_blocking_pids(pid))
+      ) AS blocked
+    `);
+    if (activity?.blocked) {
+      return;
+    }
+    await delay(20);
+  }
+  assert.fail('Quote authorization did not wait for the Source transaction');
 };
 
 test('Local content-bearing Post는 quote policy를 기본값과 함께 저장하고 작성자만 변경한다', async () => {
@@ -323,6 +343,99 @@ test('Local Source 삭제는 승인 lifecycle과 동일 transaction에 원격 �
   assert.equal(receipt.approvalUri, approvalUri);
   assert.equal(receipt.sourcePostId, source.post.id);
   assert.equal(receipt.status, 'PENDING');
+});
+
+test('Source 삭제와 경합한 원격 QuoteRequest는 삭제 뒤 승인되지 않는다', async () => {
+  const sourceAuthor = await createProfile();
+  const quoteAuthor = await createProfile(InstanceKind.ACTIVITYPUB);
+  const source = await createPost({
+    document: postContentDocumentFromText('source race'),
+    origin: 'LOCAL',
+    profileId: sourceAuthor.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const sourceLocked = Promise.withResolvers<number>();
+  const allowDelete = Promise.withResolvers<void>();
+  const deletion = db.transaction(async (tx) => {
+    const [connection] = await tx.execute<{ pid: number }>(
+      sql`SELECT pg_backend_pid()::int AS pid`,
+    );
+    assert.ok(connection);
+    await tx
+      .select({ id: Posts.id })
+      .from(Posts)
+      .where(eq(Posts.id, source.post.id))
+      .for('update', { of: Posts });
+    sourceLocked.resolve(connection.pid);
+    await allowDelete.promise;
+    await tx
+      .update(Posts)
+      .set({ deletedAt: sql`now()`, state: PostState.DELETED })
+      .where(eq(Posts.id, source.post.id));
+  });
+
+  const blockingPid = await sourceLocked.promise;
+  const request = recordInboundQuoteRequest({
+    approvalUri: 'https://source.example/quote-authorizations/race',
+    quoteAuthorActorUri: 'https://remote.example/users/quote',
+    quoteAuthorProfileId: quoteAuthor.id,
+    quotePostId: null,
+    quoteUri: 'https://remote.example/notes/race',
+    requestUri: 'https://remote.example/quote-requests/race',
+    sourceAuthorActorUri: `https://${sourceAuthor.displayName}.example/ap/actor/${sourceAuthor.id}`,
+    sourcePostId: source.post.id,
+    sourceUri: `https://${sourceAuthor.displayName}.example/ap/note/${source.post.id}`,
+  });
+  await waitUntilBlockedBy(blockingPid);
+  allowDelete.resolve();
+
+  const [, result] = await Promise.all([deletion, request]);
+  assert.equal(result.accepted, false);
+  assert.equal(result.consent.status, PostQuoteConsentStatus.REJECTED);
+});
+
+test('Source 삭제와 경합한 Local Quote 작성은 삭제 뒤 실패한다', async () => {
+  const sourceAuthor = await createProfile();
+  const quoteAuthor = await createProfile();
+  const source = await createPost({
+    document: postContentDocumentFromText('local source race'),
+    origin: 'LOCAL',
+    profileId: sourceAuthor.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const sourceLocked = Promise.withResolvers<number>();
+  const allowDelete = Promise.withResolvers<void>();
+  const deletion = db.transaction(async (tx) => {
+    const [connection] = await tx.execute<{ pid: number }>(
+      sql`SELECT pg_backend_pid()::int AS pid`,
+    );
+    assert.ok(connection);
+    await tx
+      .select({ id: Posts.id })
+      .from(Posts)
+      .where(eq(Posts.id, source.post.id))
+      .for('update', { of: Posts });
+    sourceLocked.resolve(connection.pid);
+    await allowDelete.promise;
+    await tx
+      .update(Posts)
+      .set({ deletedAt: sql`now()`, state: PostState.DELETED })
+      .where(eq(Posts.id, source.post.id));
+  });
+
+  const blockingPid = await sourceLocked.promise;
+  const quote = createPost({
+    document: postContentDocumentFromText('local quote race'),
+    origin: 'LOCAL',
+    profileId: quoteAuthor.id,
+    repostSourceId: source.post.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  await waitUntilBlockedBy(blockingPid);
+  allowDelete.resolve();
+
+  await deletion;
+  await assert.rejects(quote, /Post not found/);
 });
 
 test('Remote Source 삭제는 Local Quote audience 갱신 receipt를 남긴다', async () => {

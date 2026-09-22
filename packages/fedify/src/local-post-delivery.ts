@@ -32,6 +32,7 @@ import { alias } from 'drizzle-orm/pg-core';
 import { localOutboundFederation } from './local-outbound-federation';
 import { projectLocalPostNote, projectLocalPostQuoteRequestInstrument } from './local-post-note';
 import { dispatchActivityPubActivity } from './outbound-recipient-dispatch';
+import type { Recipient } from '@fedify/vocab';
 
 const ReplyParents = alias(Posts, 'local_post_delivery_reply_parent');
 const ReplyParentProfiles = alias(Profiles, 'local_post_delivery_reply_parent_profile');
@@ -476,10 +477,12 @@ type LocalPostQuoteRevocation = {
   readonly approvalUri: string | null;
   readonly id: string;
   readonly quoteAuthorActorRecordUri: string | null;
+  readonly quoteAuthorInboxUri: string | null;
   readonly quoteAuthorActorUri: string;
   readonly quoteAuthorInstanceKind: InstanceKind;
   readonly quoteAuthorProfileId: string;
   readonly quotePostId: string | null;
+  readonly quoteAuthorSharedInboxUri: string | null;
   readonly revision: number;
   readonly sourceAuthorProfileId: string;
   readonly sourceCanonicalOrigin: string | null;
@@ -497,10 +500,12 @@ const loadLocalPostQuoteRevocation = async (
       approvalUri: PostQuoteConsents.approvalUri,
       id: PostQuoteConsents.id,
       quoteAuthorActorRecordUri: QuoteAuthorActors.uri,
+      quoteAuthorInboxUri: QuoteAuthorActors.inboxUri,
       quoteAuthorActorUri: PostQuoteConsents.quoteAuthorActorUri,
       quoteAuthorInstanceKind: QuoteAuthorInstances.kind,
       quoteAuthorProfileId: QuoteAuthorProfiles.id,
       quotePostId: PostQuoteConsents.quotePostId,
+      quoteAuthorSharedInboxUri: QuoteAuthorActors.sharedInboxUri,
       revision: PostQuoteConsents.revision,
       sourceAuthorProfileId: Profiles.id,
       sourceCanonicalOrigin: Instances.canonicalOrigin,
@@ -532,11 +537,8 @@ const loadLocalPostQuoteRevocation = async (
         isNotNull(PostQuoteConsents.approvalUri),
         eq(Posts.state, PostState.DELETED),
         eq(Instances.kind, InstanceKind.LOCAL),
-        eq(Instances.state, InstanceState.ACTIVE),
         isNotNull(Instances.canonicalOrigin),
         inArray(QuoteAuthorInstances.kind, [InstanceKind.LOCAL, InstanceKind.ACTIVITYPUB]),
-        eq(QuoteAuthorInstances.state, InstanceState.ACTIVE),
-        eq(QuoteAuthorProfiles.state, ProfileState.ACTIVE),
       ),
     )
     .limit(1)
@@ -561,7 +563,7 @@ const dispatchLocalPostQuoteRevocation = async (
     });
     return;
   }
-  if (!consent.quoteAuthorActorRecordUri) {
+  if (!consent.quoteAuthorActorRecordUri || !consent.quoteAuthorInboxUri) {
     return;
   }
 
@@ -575,12 +577,15 @@ const dispatchLocalPostQuoteRevocation = async (
     target: new URL(consent.sourceUri),
     tos: [new URL(consent.quoteAuthorActorRecordUri)],
   });
-  await dispatchActivityPubActivity({
-    activity,
-    actorProfileId: consent.sourceAuthorProfileId,
-    context,
-    directProfileIds: [consent.quoteAuthorProfileId],
-    includeFollowers: false,
+  const recipient: Recipient = {
+    endpoints: consent.quoteAuthorSharedInboxUri
+      ? { sharedInbox: new URL(consent.quoteAuthorSharedInboxUri) }
+      : null,
+    id: new URL(consent.quoteAuthorActorRecordUri),
+    inboxId: new URL(consent.quoteAuthorInboxUri),
+  };
+  await context.sendActivity({ identifier: consent.sourceAuthorProfileId }, [recipient], activity, {
+    preferSharedInbox: true,
   });
 };
 
@@ -605,10 +610,12 @@ export const sendLocalPostQuoteRevocations = async (sourcePostId: string): Promi
       approvalUri: PostQuoteConsents.approvalUri,
       id: PostQuoteConsents.id,
       quoteAuthorActorRecordUri: QuoteAuthorActors.uri,
+      quoteAuthorInboxUri: QuoteAuthorActors.inboxUri,
       quoteAuthorActorUri: PostQuoteConsents.quoteAuthorActorUri,
       quoteAuthorInstanceKind: QuoteAuthorInstances.kind,
       quoteAuthorProfileId: QuoteAuthorProfiles.id,
       quotePostId: PostQuoteConsents.quotePostId,
+      quoteAuthorSharedInboxUri: QuoteAuthorActors.sharedInboxUri,
       revision: PostQuoteConsents.revision,
       sourceAuthorProfileId: Profiles.id,
       sourceCanonicalOrigin: Instances.canonicalOrigin,
@@ -638,11 +645,8 @@ export const sendLocalPostQuoteRevocations = async (sourcePostId: string): Promi
         isNotNull(PostQuoteConsents.approvalUri),
         eq(Posts.state, PostState.DELETED),
         eq(Instances.kind, InstanceKind.LOCAL),
-        eq(Instances.state, InstanceState.ACTIVE),
         isNotNull(Instances.canonicalOrigin),
         inArray(QuoteAuthorInstances.kind, [InstanceKind.LOCAL, InstanceKind.ACTIVITYPUB]),
-        eq(QuoteAuthorInstances.state, InstanceState.ACTIVE),
-        eq(QuoteAuthorProfiles.state, ProfileState.ACTIVE),
       ),
     );
   if (source.length === 0) {

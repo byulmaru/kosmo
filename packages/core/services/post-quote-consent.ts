@@ -732,6 +732,7 @@ export const recordInboundQuoteRequest = async (
       .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
       .where(eq(Posts.id, values.sourcePostId))
       .limit(1)
+      .for('update', { of: Posts })
       .then(first);
     const accepted =
       source?.instanceKind === InstanceKind.LOCAL &&

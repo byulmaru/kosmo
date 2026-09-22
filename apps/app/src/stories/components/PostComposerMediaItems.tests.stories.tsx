@@ -84,3 +84,58 @@ export const HorizontalReachabilityContract: Story = {
     expect(gallery.scrollLeft).toBeGreaterThan(initialScrollLeft);
   },
 };
+
+export const QuotePolicyKeyboardContract: Story = {
+  render: () => {
+    const onQuotePolicyChange = fn();
+    const onVisibilityChange = fn();
+    return (
+      <View style={{ width: 420 }}>
+        <PostComposerTarget
+          author={<Text>테스트 작성자</Text>}
+          body=""
+          contentWarning=""
+          contentWarningExpanded={false}
+          items={[]}
+          onBodyChange={fn()}
+          onContentWarningChange={fn()}
+          onContentWarningToggle={fn()}
+          onEmojiAction={fn()}
+          onExpand={fn()}
+          onMediaAction={fn()}
+          onMediaEdit={fn()}
+          onMediaRemove={fn()}
+          onMediaRetry={fn()}
+          onPollAction={fn()}
+          onQuotePolicyChange={onQuotePolicyChange}
+          onSubmit={fn()}
+          onVisibilityChange={onVisibilityChange}
+          remaining={500}
+          sensitiveMedia={false}
+          surface="rail"
+          visibility="PUBLIC"
+        />
+      </View>
+    );
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '공개 범위: 공개' }));
+
+    const quotePolicyGroup = canvas.getByRole('radiogroup', { name: '인용 허용 정책' });
+    const policyOptions = within(quotePolicyGroup).getAllByRole('radio');
+    policyOptions[0]?.focus();
+    await userEvent.keyboard('{ArrowDown}');
+
+    expect(policyOptions[1]).toHaveFocus();
+    expect(
+      within(quotePolicyGroup).getByRole('radio', {
+        name: '팔로워: 나를 팔로우하는 사람이 인용할 수 있어요.',
+      }),
+    ).toHaveAttribute('aria-checked', 'true');
+    expect(canvas.getByRole('button', { name: '공개 범위: 공개' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+  },
+};

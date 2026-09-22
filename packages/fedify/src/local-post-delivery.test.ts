@@ -654,6 +654,14 @@ describe('ActivityPub Local Post delivery', () => {
       .then(firstOrThrow);
     const fixture = createContextFixture(publicOrigin);
     mock.method(localOutboundFederation, 'createContext', () => fixture.context);
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.DISABLED })
+      .where(inArray(Profiles.id, [sourceAuthor.id, remoteQuoteAuthor.profile.id]));
+    await db
+      .update(Instances)
+      .set({ state: InstanceState.SUSPENDED })
+      .where(inArray(Instances.id, [sourceInstanceId, remoteQuoteAuthor.profile.instanceId]));
 
     await sendLocalPostQuoteRevocation({
       consentId: remoteConsent.id,
