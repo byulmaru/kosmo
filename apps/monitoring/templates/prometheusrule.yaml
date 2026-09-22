@@ -3,7 +3,10 @@ kind: PrometheusRule
 metadata:
   name: kosmo-public
   labels:
-    {{- include "kosmo-monitoring.labels" . | nindent 4 }}
+    helm.sh/chart: '{{ printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}'
+    app.kubernetes.io/name: kosmo-monitoring
+    app.kubernetes.io/instance: '{{ .Release.Name }}'
+    app.kubernetes.io/managed-by: '{{ .Release.Service }}'
 spec:
   groups:
     - name: kosmo.public
