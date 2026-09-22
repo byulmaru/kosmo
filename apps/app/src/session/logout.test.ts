@@ -84,10 +84,11 @@ mockModule(new URL('../relay/RelayActorProvider.tsx', import.meta.url), {
   }),
 });
 
+let useAccountDeletionCleanup: () => LogoutState;
 let useLogout: () => LogoutState;
 
 before(async () => {
-  ({ useLogout } = await import('./logout'));
+  ({ useAccountDeletionCleanup, useLogout } = await import('./logout'));
 });
 
 beforeEach(() => {
@@ -162,5 +163,40 @@ describe('useLogout production composition', () => {
 
     assert.deepEqual(state.events, ['request-native-logout', 'clear-native-session']);
     assert.ok(state.errors.includes('로그아웃하지 못했습니다. 다시 시도해주세요.'));
+  });
+
+  it('Account 탈퇴 확정 뒤 Web은 cookie를 지우고 local viewer를 정리한 뒤 root로 replace한다', async () => {
+    platform.OS = 'web';
+
+    useAccountDeletionCleanup().logout();
+    await flushLogout();
+
+    assert.deepEqual(state.events, [
+      'request-web-logout',
+      'reset-actor',
+      'clear-analytics',
+      'replace-root',
+    ]);
+  });
+
+  it('Account 탈퇴 확정 뒤 Web cookie 정리가 실패하면 local viewer와 route를 유지한다', async () => {
+    platform.OS = 'web';
+    state.requestWebLogout = async () => {
+      state.events.push('request-web-logout');
+      throw new Error('cookie clear failure');
+    };
+
+    useAccountDeletionCleanup().logout();
+    await flushLogout();
+
+    assert.deepEqual(state.events, ['request-web-logout']);
+    assert.ok(state.errors.includes('로그아웃하지 못했습니다. 다시 시도해주세요.'));
+  });
+
+  it('Account 탈퇴 확정 뒤 Native는 재로그아웃 mutation 없이 local credential을 정리하고 root로 replace한다', async () => {
+    useAccountDeletionCleanup().logout();
+    await flushLogout();
+
+    assert.deepEqual(state.events, ['clear-native-session', 'replace-root']);
   });
 });
