@@ -148,13 +148,17 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
 
 - modal을 열면 Reply action은 expanded 상태를 노출하고 본문 editor로 focus를 이동한다.
 - Web modal의 `X`·backdrop·`Escape`, modal close와 원래 Reply action focus restore는 modal에만 적용한다.
-  fullscreen은 보이는 header close와 Web navigation back·Native platform back을 사용하고 backdrop dismiss를
+  fullscreen은 보이는 header close와 Native platform back을 사용하고 backdrop dismiss를
   제공하지 않는다. 폐기 확인은 두 surface가 공유한다.
+- 현재 Web 브라우저 뒤로가기·앞으로가기는 이 폐기 확인의 보호 범위에 포함하지 않는다. 페이지 전환으로
+  Reply/Quote Composer가 닫히면 작성 중인 초안이 유실될 수 있으며, Browser Back 보호는 후속 범위로 남긴다.
+  이를 위해 Composer를 열 때 브라우저 히스토리 항목을 추가하지 않는다. 저장되지 않은 작성 내용이 있을 때
+  새로고침·탭 닫기에 사용하는 기존 브라우저 이탈 경고는 유지한다.
 - Reply/Quote surface는 Web `≥ compact`에서 backdrop modal이므로 위 dismiss 계약을 상속한다. 일반 Post
   Composer에만 남는 Full Web right rail은 이 Reply lifecycle의 대상이 아니다.
 - modal Reply surface를 여는 순간 direct Parent 맥락 자체를 dirty로 취급하므로, 본문·Content Warning·Visibility와
   Media가 초기값이어도 `X`, backdrop 또는 `Escape`로 닫을 때 확인을 표시한다. fullscreen도 같은 dirty
-  판정을 사용하되 header close 또는 navigation/platform back에서 확인한다.
+  판정을 사용하되 header close 또는 Native platform back에서 확인한다.
 - Reply 보호 정책은 Parent와 close lifecycle을 아는 surface가 직접 소유한다. modal·fullscreen surface는 입력별 dirty를
   다시 계산하지 않고 열린 동안 항상 폐기 확인 대상으로 취급하며, 공용 Post Composer에서는 제출 중 여부만
   전달받아 close 차단에 사용한다. 따라서 Parent에서 복사된 Content Warning을 그대로 두거나 수정·제거해도
@@ -250,7 +254,8 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   다시 계산해야 한다.
 - modal Reply-open dirty/pristine Post/pending/success close, 취소 확인, focus open/restore, 성공 snackbar의
   `보기` 이동과 자동 이동 없음, Media upload 중 dirty close를 확인한다. fullscreen은 backdrop 없이 header
-  close와 navigation/platform back에서 같은 dirty·pending 보호를 제공하는지 확인한다. 두 surface 모두 selected
+  close와 Native platform back에서 같은 dirty·pending 보호를 제공하는지 확인한다. Web 브라우저 Back 보호는
+  위의 알려진 제한에 따라 후속으로 검증한다. 두 surface 모두 selected
   Profile·Parent·Relay Environment 전환의 첫 commit과 늦은 설정 조회·upload·mutation completion 격리를 확인한다.
 - Web `≥ compact` 목록·상세 modal과 Web `< compact` 전체 화면의 Parent·Composer 계약을 Storybook에서
   확인한다. 일반 Post Composer의 Full Web right rail은 유지하되 Reply/Quote에는 inline Composer wrapper가
