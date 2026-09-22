@@ -95,13 +95,13 @@
 #### Scenario: 새 탭과 전체 reload
 
 - **WHEN** 선택 맥락을 전달받지 않은 새 탭에서 진입하거나 탭을 닫거나 전체 reload한다
-- **THEN** 이전 journey를 공유·복원하지 않으며 새 진입을 이전 funnel에 연결하지 않는다
+- **THEN** 이전 journey를 공유·복원하지 않으며 새 진입을 이전 journey에 연결하지 않는다
 
 ### Requirement: 전체와 행동별 전환 집계
 
-**Source Context**: canonical 정책의 계산식·집계 기간, PROD-557 승인된 계산 계약.
+**Source Context**: canonical 정책의 계산식·집계 기간·기준 집계와 acceptance, PROD-557 승인된 계산 계약과 2026-09-22 사용자 수정 지시.
 
-시스템은 전체 전환 분자를 조회 또는 Follow가 성공한 journey의 합집합으로 계산하고, 조회·Follow 비율도 별도로 제공해야 한다(SHALL). 집계 기간은 journey 시작 시점과 Asia/Seoul을 따른다. 마지막 journey의 관측 window가 끝나기 전에는 잠정치로 표시하며, 분모 0은 데이터 없음으로 표시해야 한다(SHALL).
+시스템은 HogQL을 canonical 집계로 사용하고 distinct `search_profile_journey_id` 기준으로 분모·전체 분자·Profile 조회 분자·Follow 분자를 계산해야 한다(SHALL). 전체 전환 분자는 분모의 journey 중 조회 또는 Follow가 성공한 journey의 합집합이며, 조회·Follow 비율도 같은 분모로 별도 제공해야 한다(SHALL). PostHog Funnel·dashboard는 필요한 경우 시각화·교차검증용 보조 수단으로 사용한다. 집계 기간은 journey 시작 시점과 Asia/Seoul을 따른다. 마지막 journey의 관측 window가 끝나기 전에는 잠정치로 표시하며, 분모 0은 데이터 없음으로 표시해야 한다(SHALL).
 
 #### Scenario: 두 성공의 중복 제거
 
@@ -121,14 +121,14 @@
 
 ### Requirement: custom 귀속 개인정보 경계
 
-**Source Context**: canonical 정책의 수집 경계, PROD-557 및 PROD-819·820의 승인된 metadata 계약.
+**Source Context**: canonical 정책의 수집 경계, PROD-557 및 PROD-819·820의 승인된 metadata 계약과 2026-09-22 사용자 명명 지시.
 
-시스템은 Account·Profile·검색어에서 파생하지 않은 불투명 journey 값으로 연결해야 한다(SHALL). custom 귀속 속성에 raw 검색어·이름·handle·대상 Profile ID 또는 그 hash·암호화 대체값을 전송해서는 안 된다(MUST NOT). 기존 SDK identity와 승인된 표준 Search `q`·click/referrer/session metadata 계약을 유지해야 한다(SHALL).
+시스템은 귀속 속성 이름을 `search_profile_journey_id`로 통일하고 Account·Profile·검색어에서 파생하지 않은 opaque identifier로 연결해야 한다(SHALL). custom 귀속 속성에 raw 검색어·이름·handle·대상 Profile ID 또는 그 hash·암호화 대체값을 전송해서는 안 된다(MUST NOT). 기존 SDK identity와 승인된 표준 Search `q`·click/referrer/session metadata 계약을 유지해야 한다(SHALL).
 
 #### Scenario: 귀속 payload
 
 - **WHEN** 검색 journey의 시작·조회·Follow 이벤트를 보낸다
-- **THEN** custom 귀속 속성에 금지된 값과 파생값이 없다
+- **THEN** 모든 event schema와 payload는 같은 귀속 속성 `search_profile_journey_id`를 사용하며 금지된 값과 파생값이 없다
 - **AND** journey 값으로 SDK person identity를 바꾸지 않는다
 
 #### Scenario: 표준 metadata와 실패 격리
@@ -137,18 +137,25 @@
 - **THEN** custom 개인정보 제한을 이유로 표준 metadata 계약을 바꾸지 않는다
 - **AND** analytics 실패가 검색·Profile·Follow 동작을 중단하지 않는다
 
-### Requirement: PostHog 결과 재현
+### Requirement: HogQL 결과 재현
 
-**Source Context**: PROD-557 전달 결과와 완료 조건, canonical 정책의 계산식.
+**Source Context**: PROD-557 전달 결과와 완료 조건, canonical 정책의 기준 집계와 acceptance, 2026-09-22 사용자 수정 지시.
 
-PROD-557은 정의된 테스트 journey의 기대 분모·분자를 PostHog funnel·dashboard에서 재현하고 증거를 남겨야 한다(SHALL). 공통 production acceptance나 다른 이슈의 검증 완료를 대신 주장해서는 안 된다(MUST NOT).
+PROD-557은 정의된 6개 journey fixture의 분모·전체 분자·Profile 조회 분자·Follow 분자를 HogQL canonical 집계로 계산해 정확히 `6 / 4 / 3 / 2`를 재현하고 증거를 남겨야 한다(SHALL). 보조 Funnel·dashboard만으로 이 acceptance를 대신해서는 안 된다(MUST NOT). 공통 production acceptance나 다른 이슈의 검증 완료를 대신 주장해서는 안 된다(MUST NOT).
 
 #### Scenario: 같은 Account의 여러 journey
 
 - **WHEN** 같은 Account에서 서로 다른 검색·대상 journey를 포함한 fixture를 실행한다
-- **THEN** 사람 수로 합치지 않고 journey별 기대 분모·전체·조회·Follow 분자와 일치한다
+- **THEN** HogQL은 사람 수로 합치지 않고 distinct `search_profile_journey_id`별 기대 분모·전체·Profile 조회·Follow 분자와 일치한다
+
+#### Scenario: 6개 journey acceptance fixture
+
+- **WHEN** design의 J1–J6 fixture를 서로 다른 opaque `search_profile_journey_id`로 실행하고 관측 window가 끝난 뒤 HogQL로 집계한다
+- **THEN** 분모 6·전체 분자 4·Profile 조회 분자 3·Follow 분자 2를 정확히 재현한다
+- **AND** 30분 포함·시작 시점 기준 Asia/Seoul 기간 귀속·잠정치·분모 0 조건도 같은 HogQL 집계의 추가 경계 fixture로 검증한다
 
 #### Scenario: 검증 증거
 
-- **WHEN** funnel·dashboard 검증을 완료한다
-- **THEN** query·설정, fixture, 기대값·실제값, 환경·시각, dashboard/insight URL로 결과를 다시 확인할 수 있다
+- **WHEN** HogQL canonical 집계 검증을 완료한다
+- **THEN** HogQL query, 같은 `search_profile_journey_id`를 사용하는 fixture, 기대값·실제값, 환경·시각과 결과 URL로 집계를 다시 확인할 수 있다
+- **AND** 보조 Funnel·dashboard를 사용했다면 설정·URL과 교차검증 결과를 함께 남긴다

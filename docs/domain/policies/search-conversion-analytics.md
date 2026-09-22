@@ -5,6 +5,8 @@
 검색 결과 선택이 실제 Profile 조회 또는 Follow로 이어지는 비율을 같은 탐색 단위로 계산한다.
 [PROD-557](https://linear.app/byulmaru/issue/PROD-557)의 2026-09-03 승인 댓글
 `ccb6d7a3-1d3e-48f8-a556-dfbf38638d21`이 계산 계약과 소유권의 근거다.
+2026-09-22 현재 작업의 사용자 지시에 따라 귀속 속성 이름을 `search_profile_journey_id`로 정하고,
+HogQL을 canonical 집계로 사용한다. 사람 수가 아닌 탐색별 결과를 재현하기 위한 결정이다.
 이 정책은 취소된 PROD-520의 전체 북극성 지표나 WAA를 정의하지 않는다.
 
 ## 계산 단위
@@ -45,9 +47,25 @@ journey 시작 시점을 기준으로 기간을 묶고, timezone은 PROD-820이 
 발생해도 귀속 기간 안이면 시작 날짜의 journey에 포함한다. 마지막 journey의 관측 window가 끝나기 전 결과는
 잠정치로 표시한다. 분모가 0이면 데이터 없음으로 표시한다.
 
+## 기준 집계와 acceptance
+
+이 지표의 canonical 집계는 HogQL이다. 집계 단위는 person이 아닌 `search_profile_journey_id`이며,
+같은 Account의 여러 journey도 각각 계산한다.
+
+- 분모: 대상 기간에 시작한 distinct `search_profile_journey_id` 수.
+- 전체 분자: 분모의 journey 중 귀속 기간 안에 Profile 조회 또는 Follow가 성공한 distinct `search_profile_journey_id` 수.
+- Profile 조회 분자: 분모의 journey 중 귀속 기간 안에 Profile 조회가 성공한 distinct `search_profile_journey_id` 수.
+- Follow 분자: 분모의 journey 중 귀속 기간 안에 Follow가 성공한 distinct `search_profile_journey_id` 수.
+
+각 전환율은 해당 분자를 같은 분모로 나눈 비율이다. 위 성공·종료 조건, 정확히 30분 포함,
+시작 시점 기준 Asia/Seoul 기간 귀속, 잠정치와 분모 0 표시를 그대로 적용한다.
+정의된 6개 journey fixture에서 HogQL 결과가 분모 6·전체 분자 4·Profile 조회 분자 3·Follow 분자 2를
+정확히 재현해야 acceptance를 충족한다. query와 기대값·실제값을 다시 확인할 수 있는 증거를 남긴다.
+PostHog Funnel과 dashboard는 필요할 때 시각화·교차검증에 사용하는 보조 수단이며 기준 집계를 대체하지 않는다.
+
 ## 수집 경계
 
-journey의 귀속값은 Account·Profile·검색어에서 파생하지 않은 불투명 값이다. custom 귀속 속성으로 raw 검색어,
+귀속 속성 `search_profile_journey_id`의 값은 Account·Profile·검색어에서 파생하지 않은 불투명 식별자다. custom 귀속 속성으로 raw 검색어,
 이름, handle, 대상 Profile ID를 보내지 않으며, 대상 ID의 hash나 암호화 대체값도 보내지 않는다.
 기존 SDK identity 계약을 유지한다.
 
@@ -56,6 +74,6 @@ metadata 수집은 별도 계약으로 유지한다. custom 속성 제한을 표
 
 ## 범위와 책임
 
-PROD-557은 이 계산 정의, 탐색 귀속 계측, 단위·회귀 검증과 초기 PostHog funnel·dashboard 재현을 소유한다.
+PROD-557은 이 계산 정의, 탐색 귀속 계측, 단위·회귀 검증과 HogQL 기준 집계·fixture 재현을 소유한다.
 검색·Profile·Follow UX, 추천·랭킹·개인화, 이전 이벤트명·property 호환성, 전체 북극성 지표와 다른 제품 지표는
 포함하지 않는다. 공통 PostHog 개인정보·운영 전환은 PROD-795와 그 인계를 받은 이슈의 책임이다.

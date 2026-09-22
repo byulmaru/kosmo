@@ -14,7 +14,7 @@
 
 ### 귀속 상태와 navigation
 
-현재 탭의 메모리에 검색 맥락별 대상→journey 정보를 둔다. 대상 판정에 필요한 Profile ID와 navigation 정보는 로컬에서만 사용하고, 전송용 `journey_id`는 Account·Profile·검색어와 무관하게 생성한다. 최초 선택 시각, 성공 종류별 기록 여부, 시작 시점의 인증·선택 Profile·PostHog session을 함께 보관한다.
+현재 탭의 메모리에 검색 맥락별 대상→journey 정보를 둔다. 대상 판정에 필요한 Profile ID와 navigation 정보는 로컬에서만 사용하고, 전송용 `search_profile_journey_id`는 Account·Profile·검색어와 무관하게 생성한다. 최초 선택 시각, 성공 종류별 기록 여부, 시작 시점의 인증·선택 Profile·PostHog session을 함께 보관한다.
 
 결과를 다시 선택하거나 기존 검색 화면으로 돌아오면 같은 대상의 journey를 재사용하고 최초 선택 시각을 연장하지 않는다. 실제 새 검색은 기존 귀속을 닫는다. 만료된 journey도 같은 검색 맥락에서 재선택 분모가 늘지 않도록 중복 판정은 유지한다. pagination, 재렌더, 조회 재시도를 새 검색으로 오인하지 않도록 현재 route 전환과 제출 동작을 함께 확인한다. 같은 query의 no-op 제출은 결과 맥락을 바꾸지 않는 현행 동작을 따른다.
 
@@ -30,32 +30,34 @@ PostHog 공개 session API를 웹 adapter에서 사용하고 초기 callback을 
 
 ### 이벤트 제안
 
-| 이벤트                            | 기록 시점                                                | custom 속성                                           |
-| --------------------------------- | -------------------------------------------------------- | ----------------------------------------------------- |
-| `search_profile_journey_started`  | 같은 검색·대상의 최초 유효 선택                          | `journey_id`, `source: 'search_people'`               |
-| `search_profile_view_succeeded`   | 선택한 대상의 유효한 Profile이 실제 표시된 첫 시점       | `journey_id`, `source: 'search_people'`, `elapsed_ms` |
-| `search_profile_follow_succeeded` | 같은 대상의 `ProfileFollow` 성공 응답을 처음 확인한 시점 | `journey_id`, `source: 'search_people'`, `elapsed_ms` |
+| 이벤트                            | 기록 시점                                                | custom 속성                                                          |
+| --------------------------------- | -------------------------------------------------------- | -------------------------------------------------------------------- |
+| `search_profile_journey_started`  | 같은 검색·대상의 최초 유효 선택                          | `search_profile_journey_id`, `source: 'search_people'`               |
+| `search_profile_view_succeeded`   | 선택한 대상의 유효한 Profile이 실제 표시된 첫 시점       | `search_profile_journey_id`, `source: 'search_people'`, `elapsed_ms` |
+| `search_profile_follow_succeeded` | 같은 대상의 `ProfileFollow` 성공 응답을 처음 확인한 시점 | `search_profile_journey_id`, `source: 'search_people'`, `elapsed_ms` |
 
-이벤트명과 payload는 구현 제안이며 기존 이름의 호환성 요구를 새로 만들지 않는다. `journey_id`를 PostHog person identity로 사용하지 않는다. 금지된 검색어·이름·handle·대상 ID와 파생값은 custom 속성에 넣지 않고, 기존 SDK 표준 metadata는 유지한다. 공통 이벤트·SDK 설정을 바꾸는 것은 이 제안에 필요하지 않다.
+이벤트명과 나머지 payload는 구현 제안이며 기존 이름의 호환성 요구를 새로 만들지 않는다. 귀속 속성 이름 `search_profile_journey_id`와 파생하지 않은 opaque 값은 사용자 지시로 확정됐으며 시작·조회·Follow event schema, fixture와 HogQL에서 같은 이름을 사용한다. `search_profile_journey_id`를 PostHog person identity로 사용하지 않는다. 금지된 검색어·이름·handle·대상 ID와 파생값은 custom 속성에 넣지 않고, 기존 SDK 표준 metadata는 유지한다. 공통 이벤트·SDK 설정을 바꾸는 것은 이 제안에 필요하지 않다.
 
 ### 집계와 검증 fixture
 
-기준 집계는 최초 start event를 `journey_id`별 한 행으로 만든다. 선택한 Asia/Seoul 기간의 시작 이벤트에 같은 journey의 성공을 연결하고, 각 성공 종류의 중복을 제거한다. 전체 분자는 조회·Follow 성공의 합집합이다. 성공만 있고 start가 없으면 분모나 분자를 새로 만들지 않는다. 기간 마지막 날에 시작한 journey를 위해 성공 조회 범위는 기간 끝 뒤 30분까지 열어 둔다. 마지막 시작 시각의 30분 window가 끝나기 전에는 잠정치로 표시한다.
+HogQL을 canonical 집계로 사용한다. 최초 start event를 `search_profile_journey_id`별 한 행으로 만든다. 선택한 Asia/Seoul 기간의 시작 이벤트에 같은 journey의 성공을 연결하고, 각 성공 종류의 중복을 제거한다. 전체 분자는 조회·Follow 성공의 합집합이다. 성공만 있고 start가 없으면 분모나 분자를 새로 만들지 않는다. 기간 마지막 날에 시작한 journey를 위해 성공 조회 범위는 기간 끝 뒤 30분까지 열어 둔다. 마지막 시작 시각의 30분 window가 끝나기 전에는 잠정치로 표시한다.
 
-PostHog의 사용자 단위 funnel 설정이 journey 수와 일치한다고 가정하지 않는다. 두 단계의 조회·Follow funnel을 제공하되, 같은 Account의 여러 journey가 분리되는지 fixture로 검증한다. 기본 funnel에서 승인된 집계 단위를 표현하지 못하면 `journey_id`별 SQL/HogQL insight를 기준 지표로 함께 제공한다. UI의 breakdown만으로 정확한 dedupe를 보장한다고 주장하지 않는다. 참고: [PostHog funnels](https://posthog.com/docs/product-analytics/funnels).
+HogQL은 분모의 distinct `search_profile_journey_id` 집합에서 조회 성공 집합과 Follow 성공 집합을 각각 구한다. 전체 분자는 두 성공 집합의 합집합 크기이며, Profile 조회·Follow 분자는 각 집합의 크기다. 각 전환율은 해당 분자를 같은 분모로 나눈다. 사람 수나 event 행 수로 대체하지 않는다.
 
-다음 fixture는 모두 관측 window가 끝난 뒤 검증한다. J5는 다른 종료 경계 없이 같은 PostHog session을 유지한 조건이다. A·B 등은 테스트 내 대상 표기이며 전송 속성이 아니다.
+PostHog Funnel·dashboard는 필요한 경우 HogQL 결과의 시각화·교차검증에 사용한다. HogQL을 기본 Funnel의 표현 가능성에 따른 fallback으로 두지 않는다. 보조 수단의 수치가 다르면 집계 단위와 설정 차이를 확인하며, 보조 수단의 일치 여부만으로 acceptance를 대신하지 않는다.
 
-| journey | 입력                                                 | 전체 | 조회 | Follow |
-| ------- | ---------------------------------------------------- | ---- | ---- | ------ |
-| J1      | A 선택, 조회 성공, 뒤로가기·재선택, Follow 성공      | 1    | 1    | 1      |
-| J2      | 같은 검색의 B 선택, 조회 실패, Follow Request만 반환 | 0    | 0    | 0      |
-| J3      | 새 검색의 A 선택, 조회 실패, 실제 Follow 성공        | 1    | 0    | 1      |
-| J4      | C 선택, 조회 성공, 새 검색 뒤 Follow 응답 도착       | 1    | 1    | 0      |
-| J5      | D 선택, 정확히 30분에 조회 성공                      | 1    | 1    | 0      |
-| J6      | E 선택, 30분 초과 뒤 조회·Follow 성공                | 0    | 0    | 0      |
+다음 fixture는 모두 관측 window가 끝난 뒤 검증한다. J5는 다른 종료 경계 없이 같은 PostHog session을 유지한 조건이다. J1–J6은 테스트에서 생성한 서로 다른 opaque `search_profile_journey_id` 값을 가리키는 표기다. 실제 값은 Account·Profile·검색어에서 파생하지 않는다. A·B 등은 테스트 내 대상 표기이며 전송 속성이 아니다.
 
-기대값은 분모 6, 전체 분자 4, 조회 분자 3, Follow 분자 2다. 추가 fixture로 Account·선택 Profile·인증·PostHog session 전환, 다른 대상·새 탭·reload, 날짜 경계, 분모 0, 미성숙 window, 중복 전송과 종료 후 늦은 응답을 검증한다. funnel 설정·query·테스트 journey·기대값·실제 결과·환경·시각·dashboard/insight URL을 함께 남긴다.
+| `search_profile_journey_id` | 입력                                                 | 전체 | 조회 | Follow |
+| --------------------------- | ---------------------------------------------------- | ---- | ---- | ------ |
+| J1                          | A 선택, 조회 성공, 뒤로가기·재선택, Follow 성공      | 1    | 1    | 1      |
+| J2                          | 같은 검색의 B 선택, 조회 실패, Follow Request만 반환 | 0    | 0    | 0      |
+| J3                          | 새 검색의 A 선택, 조회 실패, 실제 Follow 성공        | 1    | 0    | 1      |
+| J4                          | C 선택, 조회 성공, 새 검색 뒤 Follow 응답 도착       | 1    | 1    | 0      |
+| J5                          | D 선택, 정확히 30분에 조회 성공                      | 1    | 1    | 0      |
+| J6                          | E 선택, 30분 초과 뒤 조회·Follow 성공                | 0    | 0    | 0      |
+
+acceptance 기준은 같은 fixture의 HogQL 결과가 분모 6, 전체 분자 4, Profile 조회 분자 3, Follow 분자 2를 정확히 재현하는 것이다. 추가 fixture로 Account·선택 Profile·인증·PostHog session 전환, 다른 대상·새 탭·reload, 날짜 경계, 분모 0, 미성숙 window, 중복 전송과 종료 후 늦은 응답을 검증한다. HogQL query·테스트 `search_profile_journey_id`·기대값·실제 결과·환경·시각과 결과를 재조회할 수 있는 URL을 남긴다. 보조 Funnel·dashboard를 사용했다면 설정과 URL도 함께 남긴다.
 
 ## Alternatives and Traps
 
@@ -70,4 +72,4 @@ SDK 전송은 best-effort이므로 수집된 데이터의 재현성과 앱 성�
 
 ## Open Questions
 
-미결 제품 결정은 없다. 실제 dashboard URL, 설치 SDK의 session 갱신 시점, 최종 query와 검증 환경은 구현·검증 단계에서 확인한다. 기존 승인 범위를 바꾸는 새로운 선택이 발견되면 canonical·Linear 경계에서 결정한다.
+미결 제품 결정은 없다. 설치 SDK의 session 갱신 시점, 최종 HogQL query·검증 환경·결과 URL은 구현·검증 단계에서 확인한다. 기존 승인 범위를 바꾸는 새로운 선택이 발견되면 canonical·Linear 경계에서 결정한다.

@@ -1,6 +1,6 @@
 ## Session Context
 
-[PROD-557](https://linear.app/byulmaru/issue/PROD-557)의 2026-09-03 승인 댓글 `ccb6d7a3-1d3e-48f8-a556-dfbf38638d21`과 복원한 canonical policy를 구현 계획의 근거로 삼는다. 이 파일은 영구 결정이나 별도 승인 기록이 아니다.
+[PROD-557](https://linear.app/byulmaru/issue/PROD-557)의 2026-09-03 승인 댓글 `ccb6d7a3-1d3e-48f8-a556-dfbf38638d21`과 복원한 canonical policy, 2026-09-22 사용자의 귀속 속성 명명·HogQL canonical 집계 지시를 구현 계획의 근거로 삼는다. 이 파일은 영구 결정이나 별도 승인 기록이 아니다.
 
 ## Choice Notes
 
@@ -17,19 +17,19 @@
 
 - Date: 2026-09-22
 - Upstream context: 위 정책의 탭 수명과 불투명 귀속값 조건, PROD-819의 fail-open·Native no-op.
-- Choice: 메모리의 대상별 journey와 시작·조회·Follow 이벤트 세 개를 제안한다.
+- Choice: 메모리의 대상별 journey와 시작·조회·Follow 이벤트 세 개를 제안한다. 귀속 속성은 확정된 `search_profile_journey_id`를 사용하며 값은 Account·Profile·검색어에서 파생하지 않는다.
 - Reason: 대상 ID를 전송하지 않고 재선택 중복과 비동기 완료를 판정할 수 있다.
 - Alternatives: SDK 표준 pageview만으로는 실제 Profile 표시를 알 수 없다. persistence나 서버 저장은 현재 범위를 넓힌다.
-- Consequences: 기존 navigation·mutation 소유 경계에 좁은 연결이 필요하다. 이름·파일 배치·자료구조는 구현 시 더 간단하게 바꿀 수 있다.
+- Consequences: 기존 navigation·mutation 소유 경계에 좁은 연결이 필요하다. 확정된 귀속 속성 이름을 유지하면서 이벤트명·파일 배치·자료구조는 구현 시 더 간단하게 바꿀 수 있다.
 
-### journey 단위 기준 집계
+### HogQL canonical 집계
 
 - Date: 2026-09-22
-- Upstream context: 승인된 분모·분자·시작일·잠정치 조건.
-- Choice: `journey_id`별 기준 집계와 조회·Follow funnel을 같은 fixture로 대조한다.
+- Upstream context: 승인된 분모·분자·시작일·잠정치 조건과 2026-09-22 사용자 수정 지시.
+- Choice: HogQL을 canonical 집계로 사용하고 distinct `search_profile_journey_id` 기준의 분모·전체·Profile 조회·Follow 분자를 계산한다. PostHog Funnel·dashboard는 필요한 경우 시각화·교차검증용 보조 수단으로 둔다.
 - Reason: 같은 Account의 여러 journey와 기간을 넘는 성공을 정확히 세어야 한다.
-- Alternatives: person 단위 기본 funnel이나 성공 날짜만으로 집계하면 요구한 비율과 달라질 수 있다.
-- Consequences: 최종 PostHog 설정과 query를 실제 환경에서 확인하고 URL·기대값·관측 결과를 남긴다.
+- Alternatives: 기본 Funnel 우선·HogQL fallback 방식은 이번 사용자 지시로 대체됐다. person 단위 집계나 성공 날짜만의 집계는 요구한 비율과 달라질 수 있다.
+- Consequences: HogQL이 fixture의 `6 / 4 / 3 / 2`를 정확히 재현해야 acceptance를 충족한다. 30분 포함·시작일·Asia/Seoul·잠정치·분모 0 조건을 유지하고 query·환경·시각·결과 URL·기대값·관측 결과를 남긴다.
 
 ### 현재 저장소의 세션 하네스 정책 적용
 
