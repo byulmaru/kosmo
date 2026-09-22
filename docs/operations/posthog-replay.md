@@ -2,11 +2,15 @@
 
 [PROD-741](https://linear.app/byulmaru/issue/PROD-741)은 조건 충족 후 Web Session Replay 재활성화와 Post Media Viewer 검증을 담당한다. PR #955 이후 Product Analytics는 활성화됐지만 Replay는 비활성 상태다. 2026-09-22 Spec 보강 요청은 아래 검증·인계 절차를 정하며 실제 활성화나 배포 승인이 아니다.
 
-## Spec Gate와 Replay Rollout Gate
+## Spec Gate, PR Ready Gate와 Replay Rollout Gate
 
 `Spec Gate`는 요구사항·범위·미결정 사항이 정리돼 구현을 시작할 수 있는지 판단한다. `Replay Rollout Gate`는 **“production에서 Session Replay를 실제로 재활성화해도 되는가?”**를 판단하는 PROD-741의 rollout checkpoint다. PostHog의 기능명이 아니며 Cloud 값을 설정하는 작업 하나만 뜻하지 않는다.
 
 Replay Rollout Gate의 입력은 수용된 privacy baseline, 아래 네 Cloud 설정의 실제 값, masking·장애 격리의 사전 검증, 재활성화 코드·대상 버전·배포 및 rollback 준비다. Human-required Cloud 확인은 이 입력을 확보하는 절차 중 하나다. Spec Gate PASS여도 Replay Rollout Gate가 pending이면 실제 Replay를 켜지 않는다. Gate PASS 후에도 production 배포는 [기존 release 절차](./production-release.md)를 따른다. 활성화 후 실제 Replay acceptance는 별도로 완료해야 한다.
+
+2026-09-22 사용자가 확정한 `PR Ready Gate`는 A Implement 완료, C Review 완료와 unresolved finding 0건, Review Gate PASS, 필요한 코드·PR CI PASS를 조건으로 한다. 최신 main 기준 Stack 정합성까지 확인되면 PR을 Ready for review로 전환한다. B의 Cloud screenshot 확인, Operational Verification, Replay Rollout Gate, production Replay 활성화와 실제 Replay acceptance는 PR Ready Gate의 blocker가 아니다.
+
+PR Ready 전환은 merge·auto-merge·queue·production 배포·Replay 활성화 승인이 아니다. B의 운영 검증과 Replay Rollout Gate는 별도 책임으로 유지하며, 실제 활성화와 production acceptance는 최신 HEAD와 배포 버전의 대응을 확인한 뒤 기존 절차에 따라 수행한다.
 
 ## 확정된 privacy baseline과 Viewer
 
