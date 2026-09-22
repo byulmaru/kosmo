@@ -34,7 +34,6 @@ function initializeAnalytics(): PostHog | null {
     client = posthogClient.init(configuredApiKey, {
       api_host: configuredApiHost,
       defaults: '2026-05-30',
-      disable_session_recording: true,
       mask_personal_data_properties: false,
     } satisfies Partial<PostHogConfig>);
   } catch {

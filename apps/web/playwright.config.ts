@@ -4,6 +4,7 @@ import { defineConfig } from '@playwright/test';
 const host = '127.0.0.1';
 const portOffset = Number(process.env.KOSMO_TEST_PORT_OFFSET ?? 0);
 const webPort = 4173 + portOffset;
+const prodAnalyticsWebPort = 4174 + portOffset;
 const apiPort = 3001 + portOffset;
 const oidcPort = 4300 + portOffset;
 const temporalPort = 4401 + portOffset;
@@ -21,6 +22,7 @@ const databaseUrl =
   defaultDatabaseUrl;
 const apiOrigin = `http://${host}:${apiPort}`;
 const webOrigin = `http://${host}:${webPort}`;
+const prodAnalyticsWebOrigin = `http://${host}:${prodAnalyticsWebPort}`;
 const oidcOrigin = `http://${host}:${oidcPort}`;
 const oidcClientId = process.env.PUBLIC_OIDC_CLIENT_ID ?? 'kosmo-e2e-client';
 const oidcClientSecret = process.env.OIDC_CLIENT_SECRET ?? 'kosmo-e2e-secret';
@@ -149,6 +151,25 @@ export default defineConfig({
       reuseExistingServer: false,
       timeout: 120_000,
       url: `${webOrigin}/health`,
+    },
+    {
+      command: 'pnpm --dir ../app build && node --import tsx src/server/index.ts',
+      env: {
+        DATABASE_URL: databaseUrl,
+        ENVIRONMENT: 'prod',
+        EXPO_WEB_ROOT: '../app/dist',
+        OIDC_CLIENT_SECRET: oidcClientSecret,
+        PORT: String(prodAnalyticsWebPort),
+        INTERNAL_API_ORIGIN: apiOrigin,
+        PUBLIC_ORIGIN: prodAnalyticsWebOrigin,
+        PUBLIC_OIDC_CLIENT_ID: oidcClientId,
+        PUBLIC_OIDC_ISSUER: oidcOrigin,
+        TEMPORAL_ADDRESS: `${host}:${temporalPort}`,
+        TEMPORAL_NAMESPACE: 'test',
+      },
+      reuseExistingServer: false,
+      timeout: 120_000,
+      url: `${prodAnalyticsWebOrigin}/health`,
     },
   ],
 });

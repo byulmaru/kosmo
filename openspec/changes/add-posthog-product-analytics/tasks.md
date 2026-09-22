@@ -3,7 +3,7 @@
 - `PROD-820` / PR #685가 이 승인된 shared spec 전체를 소유한다. `PROD-819` / PR #653는 그 계약을 소비하는 Web runtime 구현을 소유한다.
 - `PROD-839`는 선행 release 반영과 지원 build·rebuild·rollback 확인 뒤 OpenPanel build/deployment·외부 설정 cleanup과 그 증거를 소유한다.
 - 현재 metadata 수집 결정은 [Linear `PROD-820`](https://linear.app/byulmaru/issue/PROD-820)의 `2026-09-02 검색·캠페인 메타데이터 비마스킹 결정` 댓글(`59d34cd1-96b2-446f-8a8d-3a48277f285a`)을 근거로 한다. 사용자 정혜주(HJSmiley)가 2026-08-31 마스킹 승인을 대체했으며, 이 결정은 GitHub reviewer signoff나 production acceptance가 아니다.
-- `PROD-795`, `PROD-741`, `PROD-575`가 각각 개인정보·운영 통합, Replay acceptance, production acceptance와 archive를 소유한다. 이 change는 해당 결과를 대신 완료하거나 archive하지 않는다.
+- `PROD-795`의 정책·고지 책임은 별도 범위다. `PROD-741`은 아래 그룹 7의 두 세션으로 자체 최종 acceptance를 소유한다. `PROD-575`의 향후 acceptance·archive 전제는 과거 계획이며 현재 의존성이 아니다.
 
 ## 1. PROD-820 Cloud project와 privacy controls
 
@@ -11,7 +11,7 @@
 
 - `PROD-820`의 Cloud project·공개 설정·privacy control 계약
 - `PROD-741`의 Session Replay acceptance 계약
-- `PROD-575`의 production acceptance 계약
+- `PROD-575`의 과거 production acceptance 계획(현재 후속 의존성 아님)
 
 **Deliverable**
 
@@ -177,7 +177,7 @@ Docker와 GitHub production release가 같은 공개 PostHog key·host를 Web bu
 - [x] 9.2 이미 제거된 주입의 선행 SHA·현재 상태를 기록하고, gate 충족 후 남은 source 참조만 정리한다. 현재 채널 설정·SHA 승격과 PostHog 설정을 보존한다.
 - [x] 9.3 gate와 대상 범위를 재확인한 뒤 실제 남은 외부 OpenPanel 전용 설정을 제거하고 이름·환경·범위·존재 여부만 전후 기록에 남긴다.
 - [x] 9.4 격리된 가짜 설정의 활성화·누락 no-op, 현재 prod OpenPanel 무전송, production-equivalent Web export·image inspection과 지원 release·rollback 검증으로 OpenPanel 비의존을 입증한다.
-- [x] 9.5 제거 전후 목록·환경·검증 결과·문서 잔여 참조·남은 production 확인 사항을 실제 값 없이 PROD-795에 인계하고 PROD-575의 acceptance 입력을 식별한다.
+- [x] 9.5 제거 전후 목록·환경·검증 결과·문서 잔여 참조·남은 production 확인 사항을 실제 값 없이 PROD-795에 인계한다. 과거 PROD-575 acceptance 입력 계획은 현재 후속 의존성이 아니다.
 
 ## 6. PROD-795 개인정보·운영 통합
 
@@ -197,7 +197,7 @@ Docker와 GitHub production release가 같은 공개 PostHog key·host를 Web bu
 - OpenPanel 운영 계약 제거 시 consumer·provider 전환 순서를 확인한다.
 - PROD-839가 지원 release·rollback 경로의 OpenPanel 주입과 GitHub 외부 설정을 정리한 뒤 그 cleanup 증거를 입력으로 사용한다.
 - production-equivalent 검증을 실제 production acceptance나 OpenSpec archive로 일반화하지 않는다.
-- PROD-741 replay acceptance가 시작되기 전에 이 cross-slice gate를 완료한다.
+- 당시 PROD-741 이전 cross-slice gate 계획은 현재 privacy baseline 수용 결정으로 대체됐다. 그룹 6의 미완료 항목을 PROD-741의 재감사·수정 blocker로 가져오지 않는다.
 
 **Verification**
 
@@ -210,68 +210,49 @@ Docker와 GitHub production release가 같은 공개 PostHog key·host를 Web bu
 - [ ] 6.2 Cloud 설정·배포·장애 대응·수집 확인 runbook을 작성하고 OpenPanel 운영 계약을 제거한다.
 - [ ] 6.3 PROD-819와 PROD-820 결과를 production-equivalent Web flow에서 cross-slice 검증한다.
 
-## 7. PROD-741 Session Replay acceptance
+## 7. PROD-741 조건부 Replay 재활성화와 Viewer acceptance
 
 **Authority / Provenance**
 
-- `PROD-741`의 Post Media Viewer Replay acceptance 계약
-- `PROD-820`의 sampling·origin·masking·retention 설정 증거
-- `PROD-795`의 선행 cross-slice gate
+- `PROD-741`의 2026-09-22 사용자 범위 결정·Spec 보강 요청과 `docs/operations/posthog-replay.md`
+- `PROD-820`의 sampling·origin·masking·retention 계약. Done·문서는 현재 Cloud 값의 증거가 아니다.
+- 2026-09-22 사용자가 현재 main privacy baseline 수용과 기존 compact·wide Viewer 시각 확인을 확정했다. 법적 완결성을 새로 판단하거나 PROD-795 정책·고지를 재감사·수정하지 않는다.
 - 배포된 경우 `PROD-540`의 analytics opt-out 계약
 
-**Deliverable**
+**Deliverable / Guardrails**
 
-production canonical origin의 Post Media Viewer 표본 session에서 navigation·전환·닫기 Replay와 masking을 확인하고, Replay 초기화·업로드 실패가 Viewer와 제품 흐름에 영향을 주지 않음을 증명한다.
+Replay Rollout Gate는 production에서 실제 Replay를 재활성화해도 되는지 판단하는 checkpoint다. privacy baseline, 네 Cloud 실제 값과 코드·사전 검증·배포/rollback 준비를 입력으로 판정한다. PostHog 기능명이나 사람의 설정 작업 하나를 뜻하지 않는다. Spec Gate PASS만으로 Replay를 켜지 않는다. 활성화 후 실제 Replay acceptance도 별도로 남는다.
 
-**Guardrails**
+실제 사용자 개인정보·콘텐츠를 사용하지 않는다. production canonical origin 밖의 실제 Replay 전송, production sampling 100% 변경·강제 recording 우회, 추가 pageview·앱 소유 emitter·custom selector 정책·새 Storybook story·opt-out UI를 범위에 추가하지 않는다. sibling task와 공유 change archive는 완료 조건이 아니다. production 배포·rollback은 기존 release 절차를 따른다.
 
-- PROD-795 cross-slice gate가 끝나기 전에 acceptance를 시작하지 않는다.
-- 10% sampling 설정값과 선택한 표본 replay 재생을 구분하며 작은 표본의 관찰 비율로 설정값을 추정하지 않는다.
-- input·textarea와 canonical Post Content 원문이 recording에 포함되지 않아야 하며, canonical Post Content subtree는 autocapture에도 포함되지 않아야 한다.
-- production canonical origin 외 환경에서 Replay를 활성화하지 않는다.
-- 추가 custom selector 정책을 현재 완료 조건으로 넓히지 않는다. `ph-mask ph-no-capture`는 canonical marker 계약으로 유지한다.
-- PROD-540 opt-out이 배포된 경우 opt-out 사용자의 replay가 전송되지 않아야 한다.
+**Progress (2026-09-22)**
 
-**Verification**
+현재 branch의 Implement checkpoint는 `disable_session_recording: true`라는 명시적 차단을 제거했지만, production 배포·Cloud 실제 값·Replay 재활성화는 수행하지 않았다. 7.1의 privacy baseline 수용과 Viewer 시각 확인은 완료됐고, Spec Gate는 PASS다. A의 7.2–7.4 자동 검증은 완료했으며 Cloud screenshot·실제 값·배포/rollback 준비·실제 녹화가 미확인인 B의 7.5–7.9와 Replay Rollout Gate는 pending이다.
 
-- Post Media Viewer의 navigation·전환·닫기가 표본 replay에서 재생 가능한지 확인한다.
-- input·textarea와 canonical Post Content masking, canonical Post Content autocapture 제외, 10% sampling, production origin과 30일 retention을 실제 설정·recording·outbound 증거로 확인한다.
-- Replay 초기화·업로드 실패에서도 Viewer와 사용자 흐름이 지속되는지 확인한다.
-- 개인정보 처리방침·운영 문서가 실제 Replay 보호를 설명하고, 증거에 Account ID·project key·사용자 콘텐츠가 없는지 확인한다.
+- [x] 7.1 2026-09-22 현재 사용자 결정: main 개인정보처리방침을 완료된 privacy baseline으로 수용하고 기존 Storybook `Post Media Viewer Compact` / `Post Media Viewer Wide`가 검증 대상임을 직접 확인했다. 과거 동일 결정의 존재는 blocker가 아니며 법적 완결성의 새 판단이나 PROD-795 정책·고지 재감사·수정을 포함하지 않는다.
 
-- [ ] 7.1 Post Media Viewer 표본 session의 navigation·전환·닫기 replay를 확인한다.
-- [ ] 7.2 input·textarea와 canonical Post Content masking, 10% sampling, production origin과 30일 retention을 실제 recording에서 확인한다.
-- [ ] 7.3 replay 초기화·업로드 실패가 Viewer와 제품 흐름에 영향을 주지 않음을 확인한다.
+**A. Implement — Luna Max (`gpt-5.6-luna`, reasoning `max`)**
 
-## 8. PROD-575 production acceptance와 archive
+코드와 자동화 가능한 검증만 수행한다. Cloud screenshot 판독·실제 설정 판정/변경·Replay Rollout Gate 최종 판정·실제 Replay 재활성화·실제 재생 시각 검증은 B의 책임이다.
 
-**Authority / Provenance**
+- [x] 7.2 기존 adapter·Viewer·격리된 합성 fixture를 사용해 필요한 runtime 코드를 구현한다. `apps/app/src/analytics/client.web.ts`의 명시적 `disable_session_recording` 차단을 제거하고 SDK 표준 이벤트·identity·Native no-op과 기존 fail-open 경계를 보존했다. 실제 Cloud 전송·Replay 활성화·배포는 수행하지 않았다.
+- [x] 7.3 synthetic data와 가짜 endpoint로 자동 검증 가능한 masking·autocapture 제외·fail-open 경계를 검증했다. `apps/web/e2e/analytics.e2e.ts`에서 실제 lockfile `posthog-js` lazy recorder를 사용해 initialization remote config 차단, recorder load 차단, snapshot upload 503, analytics endpoint 503을 각각 재현하고 route/pageview·Viewer·이미지 전환·identity 흐름의 성공을 대조했다. input·textarea와 `ph-mask ph-no-capture` Post Content marker가 snapshot/autocapture에 노출되지 않는지 gzip snapshot payload로 확인했으며 실제 사용자 개인정보·콘텐츠는 사용하지 않았다.
+- [x] 7.4 변경 범위의 typecheck·lint·focused test·build를 완료하고 코드·자동 검증 결과·대상 version·남은 운영 항목을 B에 handoff한다. 운영 검증을 기다리지 않고 A를 종료한다. A 완료는 PROD-741 전체 완료나 Replay Rollout Gate PASS가 아니다.
 
-- `PROD-575`의 production acceptance·OpenSpec lifecycle 계약
-- 그룹 1~7의 구현·운영·Replay acceptance handoff
-- `PROD-839`의 OpenPanel cleanup 증거
-- `PROD-545`의 production release·public smoke 결과
+**B. Operational Verification**
 
-**Deliverable**
+코드 구현 외 남은 운영·실환경 검증과 최종 acceptance를 모두 소유한다. Human-required 조치는 정확한 대상·행위·기대 결과를 요청하고 사용자가 수행하거나 명시적으로 승인하기 전에는 실행·완료 처리하지 않는다. 승인 후에도 실제 실행·검증 증거가 필요하다.
 
-actual production에서 PostHog 표준 runtime·typed custom event·identity·Replay 보호를 개인정보 없는 증거로 확인하고, old OpenPanel change와 현재 PostHog change를 정해진 순서로 archive한다.
+- [ ] 7.5 실제 재활성화 직전에 반드시 멈춰 Human-required Cloud 확인을 요청한다. canonical 캡처 표에 따라 당시 UI의 sampling·전체 origin/trigger 조건·privacy/masking·Data retention 화면을 안내한다. 사용자가 screenshot을 제공하면 Codex가 이미지를 읽어 10%·production canonical origin·Normal·30일과 대조한다. 불완전한 화면은 추가 screenshot 또는 관련 필드만 추린 실제 설정 API 응답·관리자 내보내기로 보완한다. 불일치는 현재 값·기대값·사람의 조치·pending인 Replay Rollout Gate 입력으로 보고하고 새 증거를 재확인한다.
+- [ ] 7.6 privacy baseline, 7.5의 실제 Cloud 값, A의 코드·자동 검증 결과와 대상 버전·배포/rollback 준비로 Replay Rollout Gate를 판정한다. PASS와 필요한 Human-required 조치·기존 release 절차 충족 후에만 실제 재활성화를 진행하고 대상·적용 시점·실행 증거를 기록한다. Spec Gate PASS를 대신 사용하지 않는다.
+- [ ] 7.7 합성 journey의 일반 route navigation과 compact·wide Viewer 열기·이미지 전환·닫기를 하나의 실제 session replay에서 재생하고 기존 SDK pageview·pageleave·autocapture 연결을 확인한다. synthetic input·textarea의 실제 masking·recorder 전송 전 보호, canonical Post Content의 `ph-mask` 실제 재생 비노출·`ph-no-capture` 실제 autocapture 제외, 비대상 origin 미전송을 확인한다. Viewer 내부 전환을 위한 별도 pageview·앱 소유 emitter는 추가하지 않는다. PROD-540이 배포됐다면 opt-out·재방문 뒤 미전송도 확인하고 미배포면 조건부 미적용으로 기록한다.
+- [ ] 7.8 A의 자동 검증을 입력으로 필요한 실환경 장애 격리 acceptance를 수행한다. Replay initialization·recorder load·upload와 analytics 전송 실패에도 Viewer·route navigation·관련 제품 기능이 정상 동작하는지 별도 증거를 남긴다. 보호 실패 시 acceptance를 보류하고 필요한 Human-required 조치를 요청해 Replay 비활성 상태 회복을 확인한다.
+- [ ] 7.9 baseline·Viewer 결정, A의 코드/자동 검증, Cloud 네 실제 값·Gate 판정, 재활성화·배포, 실제 재생·masking·장애 격리, 필요한 Human-required 조치의 수행/승인과 실행 증거를 PROD-741 자체의 최종 acceptance로 정리한다. 필수 결과가 미확인·실패면 완료 처리하지 않는다. 실제 ID·key·사용자 콘텐츠·raw payload는 제외한다. PROD-575로의 후속 인계·최종 검증·공유 OpenSpec archive를 완료 조건으로 두지 않는다.
 
-**Guardrails**
+추가 Test·Review·세 번째 운영 세션을 필수로 만들지 않는다. B에서 코드 결함이 발견되면 같은 A에 보완을 돌린 뒤 B를 재개한다.
 
-- 그룹 1~7의 완료와 required validation을 확인하기 전 archive하지 않는다.
-- 지원 canonical build·수동 SHA release·rollback 경로가 OpenPanel 설정에 의존하지 않는지 PROD-839 증거로 확인한다.
-- production release 선택·승인·배포와 전체 public smoke는 PROD-545의 결과를 입력으로 사용하고 이 그룹에서 다시 소유하지 않는다.
-- old `add-web-openpanel-product-analytics`는 active spec을 되돌리지 않도록 `--skip-specs`로 먼저 archive한다.
-- 현재 `add-posthog-product-analytics`는 delta spec 동기화와 strict validation을 포함해 정상 archive한다.
-- PR 하나의 Ready·merge만으로 전체 change 완료를 추론하지 않는다.
+## 8. PROD-575 과거 계획과 확인 범위
 
-**Verification**
+이전 그룹 8의 production acceptance·두 analytics change archive checklist는 현재 사용자의 책임 결정으로 대체됐다. PROD-741이 향후 결과를 PROD-575에 인계하거나 PROD-575가 후속 최종 acceptance·archive를 수행해야 한다는 의존성을 두지 않는다. 과거 checklist를 완료한 것으로 표시하지도 않는다.
 
-- production에서 표준 automatic event·metadata·remote config, typed custom event, identify/reset과 Replay 보호를 개인정보 없는 증거로 확인한다.
-- PROD-545 production release와 public smoke, PROD-839 cleanup, PROD-741 replay acceptance 완료를 확인한다.
-- old change의 `--skip-specs` archive 뒤 active spec이 PostHog 계약을 유지하는지 확인한다.
-- 현재 change의 정상 archive와 strict validation, unresolved task·review thread 부재를 확인한다.
-
-- [ ] 8.1 production에서 표준 자동 이벤트·metadata·remote config, typed custom event, identity/reset과 Replay 보호를 개인정보 없는 증거로 확인한다.
-- [ ] 8.2 old `add-web-openpanel-product-analytics`를 `--skip-specs` archive한다.
-- [ ] 8.3 `add-posthog-product-analytics`를 정상 archive하고 strict validation을 통과시킨다.
+2026-09-22 연결된 Linear를 identifier와 UUID로 조회한 결과 PROD-575는 Jiyu Park 담당, Todo, completedAt null이었다. 사용자 설명과 차이가 있으며 완료 당시 PROD-741에 남긴 미완료 책임을 확인할 완료 기록은 없었다. 본문과 댓글 3개는 과거 후속 계획이다. 연결된 PR #404의 Jiyu Park 작성·2026-07-30 병합과 OpenPanel 구현 범위는 historical evidence로 유지하되 PostHog acceptance 완료로 일반화하지 않는다. 자세한 근거는 `docs/operations/posthog-replay.md`에 기록한다. PROD-575 본문·상태를 수정하거나 재개하지 않는다.
