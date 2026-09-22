@@ -46,6 +46,41 @@ describe('Relay 네트워크', () => {
     });
   });
 
+  it('선택된 profile actor는 GraphQL extensions로 전달한다', async () => {
+    let captured: RequestInit | undefined;
+    const fakeFetch = async (_input: RequestInfo | URL, init?: RequestInit) => {
+      captured = init;
+      return new Response(JSON.stringify({ data: { viewer: null } }), { status: 200 });
+    };
+
+    await executeGraphQLRequest(request, {}, null, fakeFetch, 'profile-selected');
+
+    assert.deepEqual(JSON.parse(String(captured?.body)), {
+      operationName: 'ViewerQuery',
+      query: request.text,
+      variables: {},
+      extensions: { selectedProfileId: 'profile-selected' },
+    });
+  });
+
+  it('선택된 profile actor가 없으면 selected profile extension을 생략한다', async () => {
+    for (const selectedProfileId of [null, ''] as const) {
+      let captured: RequestInit | undefined;
+      const fakeFetch = async (_input: RequestInfo | URL, init?: RequestInit) => {
+        captured = init;
+        return new Response(JSON.stringify({ data: { currentSession: null } }), { status: 200 });
+      };
+
+      await executeGraphQLRequest(request, {}, null, fakeFetch, selectedProfileId);
+
+      assert.deepEqual(JSON.parse(String(captured?.body)), {
+        operationName: 'ViewerQuery',
+        query: request.text,
+        variables: {},
+      });
+    }
+  });
+
   it('web BFF cookie transport를 Bearer token 없이 사용한다', async () => {
     let captured: RequestInit | undefined;
     let capturedUrl: RequestInfo | URL | undefined;

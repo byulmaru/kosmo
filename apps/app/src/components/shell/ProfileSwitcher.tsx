@@ -5,12 +5,14 @@ import { useEffect, useRef, useState } from 'react';
 import { Image, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
+import { writeSelectedProfile } from '@/auth/selectedProfileStorage';
 import { ProfilePicker } from '@/components/profile/ProfilePicker';
 import { ProfileSwitcherUnreadIndicator } from '@/components/profile/ProfileSwitcherUnread';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { TextField } from '@/components/ui/TextField';
 import { useRelayActor } from '@/relay/RelayActorProvider';
+import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import {
   fontFamilies,
@@ -163,6 +165,7 @@ export function ProfileSwitcher({
   const pathname = usePathname();
   const data = useFragment(ProfileSwitcherFragment, query);
   const { resetActor } = useRelayActor();
+  const { accountId, sessionId } = useSession();
   const { request: requestNavigation } = useNavigationGuard();
   const [internalOpen, setInternalOpen] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -278,6 +281,9 @@ export function ProfileSwitcher({
 
         const selectedProfileId = response.selectProfile.profile.id;
         trackAnalytics('profile_selected', { selected_profile_id: selectedProfileId });
+        if (accountId && sessionId) {
+          void writeSelectedProfile({ accountId, sessionId }, selectedProfileId);
+        }
         setOpen(false);
         resetActor(selectedProfileId);
       },

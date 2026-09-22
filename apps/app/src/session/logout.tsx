@@ -4,6 +4,7 @@ import { Platform } from 'react-native';
 import { graphql, useMutation } from 'react-relay';
 import { clearAnalytics } from '@/analytics/client';
 import { LOGOUT_FAILURE_MESSAGE, requestWebLogout } from '@/auth/logout';
+import { deleteSelectedProfile } from '@/auth/selectedProfileStorage';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import type { LogoutRevokeCurrentSessionMutation as LogoutRevokeCurrentSessionMutationType } from './__generated__/LogoutRevokeCurrentSessionMutation.graphql';
 
@@ -63,11 +64,13 @@ export function useLogout(): LogoutState {
       try {
         if (Platform.OS === 'web') {
           await requestWebLogout();
+          await deleteSelectedProfile();
           resetActor(null);
           clearAnalytics();
         } else {
           await revokeNativeSession();
           await clearNativeSession();
+          await deleteSelectedProfile();
         }
 
         router.replace('/');
