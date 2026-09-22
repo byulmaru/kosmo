@@ -3,6 +3,7 @@ import { spacing } from '@/theme/tokens';
 import baseMeta, {
   UniversalCompactComposerLifecycle as universalCompactComposerLifecycle,
   UniversalFullComposerLifecycle as universalFullComposerLifecycle,
+  UniversalMobile as universalMobile,
   UniversalMobileComposerLifecycle as universalMobileComposerLifecycle,
 } from './Shell.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -124,5 +125,71 @@ export const UniversalMobileComposerLifecycle: Story = {
     expect(
       dialog.getByRole('textbox', { name: '게시물 내용' }).getBoundingClientRect().height,
     ).toBeGreaterThan(400);
+  },
+};
+
+export const UniversalMobileProfilePickerDismissesInsideDrawer: Story = {
+  ...universalMobile,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    await userEvent.click(canvas.getByRole('button', { name: '메뉴 열기' }));
+
+    const drawer = await page.findByRole('navigation', { name: '주요 메뉴' });
+    const trigger = page.getByRole('button', { name: '프로필 목록' });
+    await userEvent.click(trigger);
+    await page.findByRole('menu', { name: '프로필 전환' });
+
+    const profileSummary = page.getByLabelText('활성 프로필');
+    await userEvent.click(within(profileSummary).getByLabelText('코스모 작가 프로필 이미지'));
+    await waitFor(() => expect(page.queryByRole('menu', { name: '프로필 전환' })).toBeNull());
+    expect(drawer).toBeVisible();
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+
+    await userEvent.click(trigger);
+    const picker = await page.findByRole('menu', { name: '프로필 전환' });
+    await userEvent.click(within(picker).getByRole('menuitem', { name: '새 프로필 추가' }));
+    const input = page.getByRole('textbox', { name: '프로필 핸들' });
+    await userEvent.type(input, 'drawer_draft');
+    expect(picker).toBeVisible();
+    expect(input).toHaveValue('drawer_draft');
+    expect(input).toHaveFocus();
+
+    const utility = within(drawer).getByRole('button', { name: '설정 및 기타' });
+    await userEvent.click(utility);
+
+    await waitFor(() => expect(page.queryByRole('menu', { name: '프로필 전환' })).toBeNull());
+    expect(drawer).toBeVisible();
+    expect(utility).toHaveFocus();
+    expect(utility).toHaveAttribute('aria-expanded', 'true');
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+
+    await userEvent.click(trigger);
+    const reopenedPicker = await page.findByRole('menu', { name: '프로필 전환' });
+    await userEvent.click(within(reopenedPicker).getByRole('menuitem', { name: '새 프로필 추가' }));
+    expect(page.getByRole('textbox', { name: '프로필 핸들' })).toHaveValue('drawer_draft');
+    await userEvent.click(trigger);
+    expect(page.queryByRole('menu', { name: '프로필 전환' })).toBeNull();
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(drawer).toBeVisible();
+
+    await userEvent.click(trigger);
+    await page.findByRole('menu', { name: '프로필 전환' });
+    const followRequestsLink = within(drawer).getByRole('link', { name: '팔로워 요청' });
+    expect(followRequestsLink).toHaveAttribute('href', '/follow-requests');
+    await userEvent.click(followRequestsLink);
+    await waitFor(() => expect(page.queryByRole('navigation', { name: '주요 메뉴' })).toBeNull());
+    expect(page.queryByRole('menu', { name: '프로필 전환' })).toBeNull();
+
+    await userEvent.click(canvas.getByRole('link', { name: '홈' }));
+    await userEvent.click(canvas.getByRole('button', { name: '메뉴 열기' }));
+    await page.findByRole('navigation', { name: '주요 메뉴' });
+    const reopenedTrigger = page.getByRole('button', { name: '프로필 목록' });
+    await userEvent.click(reopenedTrigger);
+    await page.findByRole('menu', { name: '프로필 전환' });
+    await userEvent.click(page.getByRole('button', { name: '사이드바 닫기' }));
+    await waitFor(() => expect(page.queryByRole('navigation', { name: '주요 메뉴' })).toBeNull());
+    expect(page.queryByRole('menu', { name: '프로필 전환' })).toBeNull();
+    await waitFor(() => expect(canvas.getByRole('button', { name: '메뉴 열기' })).toHaveFocus());
   },
 };
