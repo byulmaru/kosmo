@@ -2,7 +2,7 @@
 2026-09-14 완료된 Membership-only 결정을 따른다. selected Profile의 Instance kind·Role·생성자를 선택 자격으로
 중복 검증하지 않으며, Remote 선택 지원·금지 capability나 인위적인 Remote-selected 검증을 추가하지 않는다.
 
-## 1. PROD-821 — Profile Block 저장과 transaction cleanup
+## 1. PROD-821 — Profile Block 저장과 durable cleanup
 
 **Authority / Provenance**
 
@@ -20,26 +20,20 @@
 
 **Deliverable**
 
-OpenSpec Gate 승인 뒤, Local 또는 Remote Owner가 Local 또는 Remote Target을 차단·해제할 수 있는 additive Profile Block
-관계와 transaction cleanup을 구현한다. 새 Profile Block 관계를 저장하는 하나의 transaction에서만 현재 양방향 Follow Request·Follow Relationship과
-직접 원인 Follow Notification을 정리하고 Profile Block 관계를 commit한다. commit된 관계가 Block action의 성공 결과이며, commit 뒤 effect의
-성공·실패는 관계 성공을 바꾸지 않는다. 같은 조합의 Block이 이미 있으면 기존 관계를 성공 결과로 관찰하고 새 cleanup을 실행하지 않는다. 이미
-관계가 존재한 뒤 동시성이나 후속 경로로 뒤늦게 관찰되는 Follow·Request·Notification은 Active Block 정책으로 처리하며 duplicate Block이나
-Unblock의 보상 cleanup으로 확장하지 않는다. Unblock은
-Owner가 지정한 정확한 Profile Block ID 관계만 제거하며 Follow/Request/Notification을 추가로 정리하거나 차단 생성 때 제거된 관계를 복구하지 않는다.
+Local 또는 Remote Owner가 Local 또는 Remote Target을 차단·해제할 수 있는 additive Profile Block 관계와 durable cleanup orchestration을
+구현한다. Block policy/admission을 적용하고 이번 실행이 포착한 양방향 Follow Request·Follow Relationship과 직접 원인 Follow Notification을
+required cleanup으로 정리하며, 필수 cleanup 완료 전에는 Block action을 성공으로 확정하지 않는다. 이미 진입한 Follow transition이 cleanup 뒤
+관계를 남길 수 있으므로, Unblock은 현재 남아 있는 양방향 Follow/Request와 그 직접 원인 Notification을 정리한 뒤 Block을 제거하며 삭제된 관계를 복구하지 않는다.
 
 **Guardrails**
 
 - Owner → Target 방향의 단일 관계, 생성 시각, Owner/Target uniqueness·referential integrity·self-block 불변식과 no-backfill를 유지하고 별도
   lifecycle state·expiry·복제 속성을 추가하지 않는다.
-- 도메인 capability에 특정 Account·Membership·Local 상태를 일반 Owner 조건으로 추가하지 않는다. GraphQL은 Membership으로
-  인증된 selected Profile을 사용하며 이 admission은 `PROD-822-graphql`의 ingress 경계다.
-- profile-block requirement의 새 관계 생성 시 transaction cleanup·relation success·duplicate observation·Active Block policy·post-commit effect 분리를
-  준수하고, 기존 Reaction은 이번 action에서 변경하지 않는다.
-- transaction이 실패하면 Profile Block 관계와 현재 관계 cleanup을 성공으로 반환하지 않으며, commit 뒤 effect의 실패·재시도는 이미 성공한 관계를
-  바꾸지 않는다.
-- 기존 Reaction·Repost Post·Bookmark와 직접 원인이 아닌 기존 Notification·Read State는 보존하고, Unblock은 profile-block requirement의
-  exact-ID 삭제 범위를 준수한다.
+- 도메인 capability에 특정 Account·Membership·Instance 종류를 일반 Owner 조건으로 추가하지 않는다. GraphQL은 Membership으로 인증된
+  selected Profile actor를 사용하며 이 admission은 `PROD-822-graphql`의 ingress 경계다.
+- profile-block requirement의 captured cleanup·success gate·relaxed overlap을 준수하고, 기존 Reaction은 이번 action에서 변경하지 않는다.
+- required cleanup 완료 전 성공 응답을 반환하지 않으며, 일시 오류·worker 재시작 시 이미 처리한 effect를 중복 적용하지 않는다.
+- 기존 Reaction·Repost Post·Bookmark와 직접 원인이 아닌 기존 Notification·Read State는 보존하고, Unblock은 profile-block requirement의 cleanup/no-restore 순서를 준수한다.
 - 이 그룹은 Block 후 신규 입력 거부·공통 visibility/interaction policy·GraphQL(`PROD-822`), UI/Relay(`PROD-823`), 전체 cross-slice E2E·archive(`PROD-813`)를 구현하지 않는다.
 - 현재 Notification source 신규 생성 suppression(`PROD-327`), ActivityPub Block/Undo(`PROD-818`), 비동기 물리 cleanup(`PROD-328`)을 추가하지 않는다.
 
@@ -47,17 +41,36 @@ Owner가 지정한 정확한 Profile Block ID 관계만 제거하며 Follow/Requ
 
 - 기존 Profile·Follow·Reaction·Notification·Post row를 보존하는 additive migration과 uniqueness·referential integrity·self-block 불변식 및 관계 저장 정합성 검증을 수행한다.
 - Local/Remote Owner·Target pair, duplicate/self와 Owner scope를 자동화된 관계·scope 회귀로 검증하고 ingress별 admission을 도메인 계약과 분리한다.
-- 새 Profile Block 관계를 저장하는 하나의 transaction이 현재 양방향 Follow Request·Follow Relationship과 직접 원인 Follow Notification을 관계와
-  함께 처리하고 기존 Reaction·Repost·Bookmark·비직접 Notification·Read State를 보존하는지 확인한다. Duplicate가 기존 관계를 성공으로
-  관찰하고 새 cleanup을 실행하지 않는지, 뒤늦게 관찰되는 관계가 Active Block policy로 처리되는지, Unblock이 정확한 Profile Block ID 관계만
-  삭제하는지와 차단 생성 때 제거된 관계를 복구하지 않는지도 확인한다.
-- transaction 실패가 관계 성공으로 확정되지 않는지, commit 뒤 effect 실패·재시도가 Profile Block 성공을 바꾸지 않는지와 Owner scope를 자동화된
-  lifecycle 회귀로 확인한다.
+- durable orchestration이 Block 실행이 포착한 양방향 Follow Request·Follow Relationship, pending request와 직접 원인 Follow Notification을 처리하고 기존
+  Reaction·Repost·Bookmark·비직접 Notification을 보존하는지 확인한다. Unblock이 현재 남은 관계와 그 직접 원인 Notification을 정리한 뒤 삭제 관계를
+  복구하지 않는지도 확인한다.
+- worker restart·일시 오류·retry 뒤 required cleanup success gate가 유지되는지, Block insert/cleanup 실패가 성공으로 확정되지 않는지와 Unblock
+  no-restore를 자동화된 lifecycle 회귀로 확인한다.
 
 - [x] 1.1 OpenSpec Gate 승인 후 Profile Block의 additive 저장 관계와 Owner/Target·생성 시각·uniqueness·referential integrity·self-block 불변식을 구현한다.
-- [x] 1.2 Block policy/admission 뒤 하나의 transaction에서 현재 양방향 Follow Request·Follow Relationship과 직접 원인 Follow Notification을 Profile Block 관계와 함께 처리한다.
-- [x] 1.3 profile-block requirement의 transaction cleanup·relation success·duplicate observation·post-commit effect 분리·Reaction 보존·Unblock exact-ID 삭제를 구현한다.
-- [x] 1.4 migration·관계 불변식·transaction 실패·보존·Owner scope를 검증하는 자동화 회귀와 공개 계약 정합성 검증을 추가한다.
+- [x] 1.2 Block policy/admission 뒤 durable cleanup orchestration을 시작하고 양방향 Follow Request·Follow Relationship과 직접 원인 Follow Notification의 required cleanup을 연결한다.
+- [x] 1.3 profile-block requirement의 durable cleanup·success gate·Reaction 보존·Unblock no-restore를 구현한다.
+- [x] 1.4 migration·관계 불변식·restart/retry·성공 gate·보존·Owner scope를 검증하는 자동화 회귀와 공개 계약 정합성 검증을 추가한다.
+
+**2026-09-16 수정·검증 — terminal 이후 동일 generation의 false success 차단**
+
+기존 PostgreSQL UUIDv7 Block ID와 captured source를 generation별 cleanup child Workflow에 전달하고 pair Workflow가 child 결과를 기다린다.
+뒤 child가 기존 Block을 관찰하면 source를 삭제하거나 새 cleanup을 만들지 않고, 해당 Block의 cleanup child 결과를 Activity로 확인한다. 기존 child가 FAILED이면 뒤 실행도 실패한다.
+정상 COMPLETED duplicate, RUNNING reuse, Unblock 뒤 새 generation은 유지한다. 동일 candidate의 completion-loss retry는 자기 자신을 기다리지 않는다.
+DB schema·UUIDv7 생성·completion marker와 공통 retry policy는 변경하지 않았다.
+
+`apps/worker/src/profile-block.workflow.database.test.ts`는 실제 DB·production registry·public caller·Temporal Worker를 연결한다.
+non-retryable 1회 실패와 retryable 오류 10회 소진(`MAXIMUM_ATTEMPTS_REACHED`) 각각에서 W1/W2/W3 FAILED,
+최초 Block ID 유지, Follow 삭제·Notification 잔존과 false-success 차단을 검증했다. exhaustion 테스트는 대기 간격만 `nextRetryDelay: 1ms`로 단축하며 maximumAttempts는 production의 10을 그대로 사용한다.
+완료된 Block의 연속 duplicate가 늦게 생긴 Follow/Notification을 보존하고, 이후 Unblock이 이를 정리하는 경계도 검증한다.
+public 5초 deadline과 최종 Workflow 상태는 별도로 확인한다. 정상 duplicate·transient retry·RUNNING reuse·Unblock/re-Block·old generation 보호를 포함해 5개가 통과했다.
+
+Core unit 92, migration 19 및 migration smoke, DB service 209, Worker unit 10, 기존 DB 32, Workflow 25가 통과했다.
+Workflow suite는 Block·Unblock Worker 교체/replay와 completion-loss를 포함하며, Core DB suite는 Reaction·Repost·Bookmark·비직접 원인 Notification·Read State 보존과 no-restore를 검증한다.
+
+새 completion evidence 저장이 필수라는 이전 판단은 철회했다. #726은 기존 success gate를 복구하며,
+[PROD-976](https://linear.app/byulmaru/issue/PROD-976)은 ActivityPub 장기 장애를 포함한 일반 retry budget·terminal 판정·실제 recovery/abandon·History retention 정책을 소유한다.
+History 조회 불가는 성공으로 추정하지 않는다. #726 Ready는 원격 CI·review·conflict gate까지 별도로 확인하며, 전체 통합·OpenSpec archive는 PROD-813 책임을 유지한다.
 
 ## 2. PROD-822 — Profile Block 정책과 GraphQL 경계
 
@@ -103,7 +116,7 @@ pagination·cursor·limit 전에 제외한다.
 
 **Dependencies**
 
-- cleanup PR #726을 `PROD-822`의 부모 layer로 두고 그 transaction action·success result를 소비한다. #726의 구현·검증 책임은 `PROD-821`에 남기며,
+- cleanup PR #726을 `PROD-822`의 부모 layer로 두고 그 durable action·success gate를 소비한다. #726의 구현·검증 책임은 `PROD-821`에 남기며,
   이 그룹은 cleanup을 복제하거나 대신 소유하지 않는다. 부모 PR이 Draft여도 자식 layer 작업은 시작할 수 있다.
 - #770은 canonical 문서와 OpenSpec 정책·계약만 소유한다. `PROD-822-graphql`이 Membership으로 인증된 selected Profile actor 관리 API와 generated schema·관리 API 테스트를
   소유하고, 그 자식 `PROD-822-policy`가 공통 정책·Local/ActivityPub 실행 경로와 회귀를 소유한다.
@@ -120,7 +133,7 @@ pagination·cursor·limit 전에 제외한다.
   Target → Owner 방향을 구분하고, 후보·Home·Local·Hashtag list/search·interaction은 양방향으로 후보 반환 전에 Exclude한다. Repost는 Author와 Source Post Author를 모두 검사한다.
 - 유효한 Account에 selected Profile이 있으면 현재 selected Profile을 `searchProfiles` viewer로 사용한다. selected Profile이 없으면 기존 Account 인증과 공개 후보 결과를 유지하며
   Profile Block predicate나 selected Profile을 새로 요구하지 않는다. 임의 입력 actor나 이전 selected Profile·client cache를 viewer로 재사용하지 않는다.
-- Active Block은 transaction 이후 남거나 뒤늦게 관찰되는 Follow Request·Follow Relationship의 물리적 존재보다 우선하며, Follow와 Reply·Quote·Reaction·Repost의 새 입력은 양쪽에서
+- Active Block은 cleanup 뒤 남은 Follow Request·Follow Relationship의 물리적 존재보다 우선하며, Follow와 Reply·Quote·Reaction·Repost의 새 입력은 양쪽에서
   거부한다. 쓰기 admission assertion은 origin과 무관하게 공유하고 목록용 SQL predicate와 분리하며, page limit 뒤 client filter나 resolver별 정책 복제를 보안 경계로 사용하지 않는다.
 - Profile Block pair의 기존 Notification은 connection·Unread count·Node·read 처리에서 숨기되, `PROD-821`의 직접 원인 삭제 이외의 기존 Notification을
   동기 삭제하거나 Read State를 바꾸지 않는다. 이 Notification policy는 방향성 있는 Post·Media 조회와 독립적으로 적용한다.
@@ -137,14 +150,14 @@ pagination·cursor·limit 전에 제외한다.
 - `PROD-822-graphql`의 GraphQL Block 생성·해제와 Owner 관리 조회는 검증된 Session의 Membership으로 인증된 selected Profile actor 및 Owner scope를 사용하고, request-specific DB actor state나 client-only filter로
   중앙 application policy를 대체하지 않는다. 일반 조회·Notification membership 권한에 Instance 종류 조건을 추가하지 않으며 remote ActivityPub ingress는 `PROD-818`에 남긴다.
 - Block·Mute 관계의 Target은 기존 `Profile` 조회 결과와 global ID를 사용하고, Post·Media·Follow에는 각 surface의 Profile Block 정책을 적용한다.
-  Block 관리 connection과 관계 Node는 Target의 기존 Profile 조회 조건을 적용하고 목록에서는 pagination 전에 제외한다. 생성·해제는 transaction action의 확정 결과를 사용하고 성공한 해제는 실제 삭제한 관계 ID를 반환한다. 같은 operation의 actor 전환과 mutation 뒤에도 이전 loader 권한을 재사용하지 않는다.
+  Block 관리 connection과 관계 Node는 Target의 기존 Profile 조회 조건을 적용하고 목록에서는 pagination 전에 제외한다. 생성·해제는 durable action의 완료 결과를 사용하고 성공한 해제는 실제 삭제한 관계 ID를 반환한다. 같은 operation의 actor 전환과 mutation 뒤에도 이전 loader 권한을 재사용하지 않는다.
 - GraphQL `node(id:)`·`profileByHandle`로 직접 route handle의 Profile을 조회할 때 자신의 차단 여부·해제 관계 ID를 얻는 결과는 이전 client cache를 요구하지 않는다.
   자신의 Block이 없으면 다른 Owner의 관계 ID를 반환하지 않는다.
 - Block 성공은 생성한 non-null 관계를 반환하고 client는 그 관계의 ID를 사용한다. Unblock 성공은 실제 삭제한 관계 ID를 반환하며
   관계를 제거하지 않은 결과만 `null`이다. Payload 누락·GraphQL 오류·`success: false` 또는 Unblock 관계 ID 불일치는 action 완료로
   확정하지 않는다.
 - Mute와 Block 관리 관계는 독립적이다. 같은 Target의 Active Block에서도 기존 Mute 관계는 Owner connection·관계 Node·해제 경로에 남아야 한다.
-- 저장·transaction cleanup(`PROD-821`), UI/Relay(`PROD-823`)와 최종 cross-slice E2E/archive(`PROD-813`)를 이 그룹에서 재구현하지 않는다.
+- 저장·durable cleanup(`PROD-821`), UI/Relay(`PROD-823`)와 최종 cross-slice E2E/archive(`PROD-813`)를 이 그룹에서 재구현하지 않는다.
 
 **Verification**
 
@@ -175,7 +188,7 @@ pagination·cursor·limit 전에 제외한다.
 - [ ] 2.3 [PROD-822-policy] Follow/Request Node·followers/following·요청 목록·viewer 상태와 Home·`FOLLOWERS` 권한이 차단 중 잔존 관계를 유효하게 사용하지 않도록 한다.
 - [ ] 2.4 [PROD-822-policy] Post·PostContent·Media relation·Profile Post List와 Bookmark의 대상 Post projection에는 방향별 정책을, 현재 존재하는 Home·Local·Reaction Profile 목록에는 양방향 정책을 연결하고 Author·Source Author의 후보 제외와 cursor/pageInfo를 검증한다. Hashtag Post List·Post 검색은 endpoint가 구현 시점에 존재할 때만 같은 정책 연결·공개 회귀를 요구하고, 없으면 공통 Author·Source Author 후보 정책을 검증한다. Bookmark row·Owner 권한·Node·삭제는 보존하고 `Bookmark.post`의 nullable 결과와 `Profile.bookmarks` edge만 현재 Post 조회 정책에 맞추는 기존 계약을 유지한다.
 - [ ] 2.5 [PROD-822-policy] Block 적용 뒤 시작한 로컬 Follow·Follow Request 승인과 Local/ActivityPub Reply·Reaction·Repost 및 기존 ActivityPub inbound Follow·Accept가 새 관계나 상호작용을 저장하지 않도록 쓰기 경계를 검증한다. Reply·Quote·Reaction·Repost는 origin과 무관한 공통 admission assertion을 사용하고 목록용 SQL predicate와 분리한다. Local Quote는 `CreatePostInput.repostSourceId`를 사용한 GraphQL 요청을 차단 양방향에서 각각 거부하고 새 Post row가 없음을 검증한다. ingress가 없는 Quote origin은 공통 assertion 단위 결과와 실제 ingress 미검증을 구분한다. 실제 consumer의 각 origin 거부 뒤 새 row가 없고 inbound 예상 거절이 내부 오류로 보고되지 않는지 확인한다.
-- [ ] 2.6 [PROD-822-graphql] Membership으로 인증된 selected Profile actor의 Block 생성·해제 mutation을 부모 layer의 transaction action에 연결하고 관계 commit success·post-commit effect 분리·정확한 해제 ID·no-restore를 검증한다.
+- [ ] 2.6 [PROD-822-graphql] Membership으로 인증된 selected Profile actor의 Block 생성·해제 mutation을 부모 layer의 durable action에 연결하고 cleanup 지연·실패·정확한 해제 ID·no-restore를 검증한다.
 - [ ] 2.7 [PROD-822-graphql] Owner 전용 Block connection·관계 Node에서 조회 가능한 기존 Profile Target과 GraphQL `node(id:)`·`profileByHandle` 기반 직접 route 진입의 차단 여부·해제 ID를 제공하고, unavailable Target은 pagination 전과 관계 Node에서 제외하며 타인 Block ID 접근을 차단한다. lifecycle상 조회 불가 Target에는 기존 null/unavailable 결과와 Block 전용 identity payload 부재를 유지한다.
 - [ ] 2.8 [PROD-822-graphql] Block·Unblock과 같은 operation의 selected Profile 전환 뒤 후속 field 및 다음 요청이 현재 actor·Block 정책을 반영하게 한다.
 - [ ] 2.9 [PROD-822-policy] 기존 Notification의 Recipient별 list·Unread·Node·mark-read 비노출을 연결하고 비직접 row·Read State 보존과 혼합 ID 처리를 검증한다.
@@ -185,15 +198,12 @@ pagination·cursor·limit 전에 제외한다.
 
 ## 3. PROD-823 — Profile Block UI·Relay 관리 흐름
 
-2026-09-09 리뷰 반영: PROD-861은 메뉴·목록 presentation만 유지하며 부모 mutation callback과 가짜 요청 fixture를 제거한다.
-이 그룹이 실제 action의 요청·confirmation·pending·오류·Relay 갱신과 메뉴·버튼 공통 동작을 구현·검증한다.
-PROD-917은 인계된 action을 신규 UI에 합성한다. 기존 presentation 검증을 아래 task의 완료 증거로 사용하지 않는다.
-
 **Authority / Provenance**
 
 - `docs/design/profile-mute-block.md`
 - `docs/design/settings.md`
 - `docs/design/accessibility.md`
+- `docs/domain/objects/profile-block.md`
 - `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`
 - `PROD-823`
 - `DSN-51`
@@ -204,17 +214,30 @@ PROD-917은 인계된 action을 신규 UI에 합성한다. 기존 presentation �
 
 `PROD-822`의 서버 확정 상태와 최신 canonical의 기존 Profile 정보·viewer 방향 콘텐츠 상태를 소비해 Profile Block
 confirmation·pending·실패·retry, Mute와 분리된 관리 목록과 selected Profile별 client 상태 수렴을 제공한다. 신규 UI 교체는 `PROD-917` 후속 범위다.
+같은 이슈의 부모 `PROD-823-follow-action` PR은 공통 `FollowButton` 관계 action과 회귀를, 자식 #772는 Profile·Settings
+surface 조합과 목록 조회·pagination을 소유한다.
 
 **Guardrails**
 
-- 최신 canonical의 기존 Profile 정보·viewer 방향 콘텐츠 상태를 소비한다. `PROD-861`은 공용 presentation 선행 구현 증거로만 참고하고
-  신규 UI 교체는 `PROD-917` 후속 범위로 유지한다.
+- 기존 레거시 Profile·Settings UI에 최신 canonical의 direct Profile route와 기존 Profile 정보·viewer 방향 콘텐츠 상태를 구현·통합한다. `blocking` route의
+  frontend 콘텐츠 경고와 `blockedBy` route의 콘텐츠 차단 상태를 표시하며, `PROD-861`은 공용 presentation 선행 구현 증거로, `PROD-917`의 신규 UI 교체는
+  후속 범위로 관리한다. selected Profile auth scope 부재는 API Block 읽기 필드의 nullable `null` 결과로 처리하고 App Session에 Profile kind capability나 조건부 GraphQL 변수를
+  추가하지 않는다. Remote Owner의 Block/Undo ingress와 관계 projection은 `PROD-818`이 소유한다. 기존 화면의 기능·접근성·client 회귀와 검증 결과 인계는
+  `PROD-823`이 소유하며, 신규 UI 교체·수신 확인은 완료 조건으로 삼지 않는다.
 - Block과 Mute는 별도 Settings destination으로 유지하고, Block 목록의 loading/error·retry/empty/pagination·unblock 상태를 소유한다. 차단된 상세
   데이터는 각 viewer 방향 콘텐츠 정책에 따라 표시한다.
 - 기존 Button·ActionMenu·ModalSheet·Toast·SettingsItem과 canonical 접근성·viewport 계약을 재사용하고 새 범용 safety component·Settings shell을
   만들지 않는다.
 - 성공은 서버 확정 결과로 client 상태를 수렴하고 실패 시 optimistic Block을 확정하지 않는다. selected Profile/Session 전환 때 각 actor의
   기본 Profile 정보·콘텐츠 상태·Block 목록을 해당 actor 결과로 격리하며 Unblock 때 제거된 Follow Request·Follow Relationship을 optimistic 복구하지 않는다.
+- API의 기존 `Profile` global ID와 `ProfileBlock` 관계 ID 및 해제 payload의 의미를 구분한다.
+  `targetProfile`은 별도 typename·ID 없이 기존 Profile cache로 정규화하고, 실제 성공·미제거·오류 응답에 맞춰 상태를 수렴시킨다.
+- 새로고침·직접 링크는 이전 cache나 관리 목록 선행 로딩 없이 기존 Target Profile 조회와 현재 Owner의 서버 차단 결과를 사용한다.
+  Profile이 조회되면 기본 Profile 정보와 방향성 콘텐츠 상태를 유지하고, 조회되지 않으면 기존 unavailable 결과를 유지하며 Block 전용 identity·관계 상태·관리 action을 복구하지 않는다.
+- 해제는 Profile 메뉴·조회 가능한 `blocking` 상태·차단 목록 모두 확인창에서 확정한 뒤 요청한다. 취소 시 요청하지 않으며
+  해제 pending의 중복 입력·dismiss 차단과 실패 후 재시도를 검증한다.
+- 공통 Settings source의 최초 owner는 실제 구현 변경 증거로 확인한다. `PROD-814`가 먼저 통합한 경우 그 source를 재사용하고, Block destination의
+  route·data·action과 검증을 완료한 뒤 `뮤트한 프로필 → 차단한 프로필` 순서로 공개한다. 미완성 destination을 노출하지 않는다.
 - 저장·정책(`PROD-821`·`PROD-822`)과 전체 E2E/archive(`PROD-813`)의 책임을 이 그룹으로 옮기지 않는다.
 
 **Verification**
@@ -222,19 +245,30 @@ confirmation·pending·실패·retry, Mute와 분리된 관리 목록과 selecte
 - confirmation 취소, pending 중복/dismiss, 성공·실패·retry와 기존 레거시 Profile·Settings UI의 action/state를 app component 또는 E2E로 검증한다.
 - direct `blocking` Profile route에서 `차단한 프로필의 게시물입니다`와 `게시물 보기`를 표시하고, action 전에는 시간 경과만으로 Post·Media를 노출하지 않으며 action 뒤 허용된 콘텐츠를 표시하는지 검증한다. Profile handle·selected actor lifecycle 전환 뒤에는 경고가 다시 적용되는지 component 또는 E2E로 실행한다.
 - Settings의 분리된 Block 목록에서 loading/error·retry/empty/pagination·unblock과 다른 Target 상태 보존을 검증한다.
-- selected Profile A/B와 Session 전환에서 actor별 상태 격리·서버 결과 수렴·optimistic state isolation을 검증한다. Block 성공 뒤 기본 Profile 정보는 유지하고,
-  각 surface 정책상 unavailable한 Post·Media·Notification만 숨기거나 갱신하며 정상 refetch로 현재 서버 상태에 수렴하는지 확인한다.
-- GraphQL `node(id:)`·`profileByHandle` 기반 새로고침·직접 링크 진입에서 기존 Profile 정보와 API의 현재 Owner 결과·정확한 관계 ID의 해제를 제공한다.
-  이전 Profile cache 없이 검증하며 A/B 전환 뒤 이전 해제 ID를 재사용하지 않는다.
+- selected Profile A/B와 Session 전환에서 actor별 상태 격리·서버 결과 수렴·optimistic state isolation 및 Block 성공 후 direct Profile의 기본 정보,
+  viewer 방향 콘텐츠 상태와 Block 관리 목록의 갱신을 검증한다. Home·Local·Hashtag timeline·Profile Post List·Notification을 연결한 상태 수렴은 `PROD-813`의 cross-slice 검증에서 확인한다.
+- cache 없는 직접 링크·새로고침에서 자신의 Block 관계 ID로 해제하는 경로, 상대에게만 차단된 actionless 경로와 양방향 Block 해제 후
+  `blockedBy`로 수렴하는 경로를 검증한다. A의 요청 중 B로 전환한 뒤 도착하는 응답이 B의 화면·목록·피드백을 바꾸지 않는지도 확인한다.
+- 실제 공개 응답의 기존 `Profile` global ID를 사용하는 생성 성공·오류·partial response와 해제된 관계 ID·미제거 `null`·오류 응답을
+  실행해 상태 수렴을 검증한다. 별도 Target typename·ID나 반대 의미의 성공 fixture로 API 계약을 숨기지 않는다.
 - Web 1024/1440·Mobile 390 Light/Dark, keyboard/보조 기술, Web Escape·Native back·focus 복원과 실제 Web/iOS/Android presentation evidence를
   실행 환경별로 기록한다.
 
-- [ ] 3.1 기존 차단·차단 해제 공용 confirmation을 Profile mutation 상태에 연결해 확인 전 요청 차단·취소·pending·실패·retry를 구현한다. direct `blocking` Profile route는 `차단한 프로필의 게시물입니다`와 `게시물 보기`를 제공하고, 현재 Profile handle·selected actor lifecycle에서 명시적 확인 전까지 콘텐츠를 숨기며 새 route lifecycle에는 경고를 다시 적용한다.
-- [ ] 3.2 Settings에 Mute와 분리된 Block 관리 destination·목록 상태·pagination·unblock action을 연결한다.
-- [ ] 3.3 Membership으로 인증된 selected Profile actor 경계 안에서 Block/Unblock 성공·실패 결과에 따라 관리 목록과 표시 중 Profile·Post·Notification 상태를
-      서버 정책에 맞게 수렴시키고, GraphQL `node(id:)`·`profileByHandle` 기반 직접 route 진입·새로고침의 기존 Profile 정보와 정확한 해제 관계를 연결한다. 정상 route 결과는 identity-free가 아니며,
-      Profile 자체가 기존 lifecycle 정책으로 조회 불가할 때 UI에서만 조건부 identity-free fallback을 사용한다.
-- [ ] 3.4 접근성·viewport·Web/Native presentation regression과 actor 전환·Unblock no-restore 검증을 추가하고 통과시킨다.
+- [x] 3.1 기존 공용 confirmation을 Profile mutation 상태에 연결해 취소·pending·실패·retry와 direct Profile route의 경고·콘텐츠 상태 및 보호된 데이터 비복구를 구현한다.
+- [x] 3.2 Settings에 Mute와 분리된 Block 관리 destination·목록 상태·pagination·unblock action을 연결한다.
+- [x] 3.3 생성 응답의 기존 Profile global ID와 Block 관계 ID, 해제 성공의 관계 ID·미제거 `null`·오류/partial 결과를 client 계약에 맞게 처리하고, Membership으로 인증된 selected
+      Profile actor 경계 안에서 Block/Unblock 성공·실패 결과에 따라 관리 목록과 표시 중 기본 Profile 정보·viewer 방향
+      콘텐츠 상태를 서버 정책에 맞게 수렴시킨다. cross-slice surface 수렴과 통합 검증은 `PROD-813` task 4.1·4.2가 소유한다.
+- [ ] 3.4 접근성·viewport·Web/Native direct route presentation regression과 actor 전환·Unblock no-restore, 확인창 dismiss 후 Profile 메뉴
+      trigger와 Settings 목록의 같은 행 현재 action focus 복원을 검증하고 `PROD-917` 후속 UI 교체 경계를 유지한다.
+- [x] 3.5 직접 링크·새로고침·selected Profile 전환에서 현재 Owner의 차단 결과와 조회 가능한 기본 Profile을 소비하고, Profile 미조회 시 기존 unavailable 결과를 유지한다.
+- [x] 3.6 차단 결과 재조회, 양방향 Block의 자기 관계 해제와 이전 actor의 늦은 응답을 실행하는 data/cache integration 회귀를 통과시킨다.
+- [x] 3.7 선행 API와 실제 공통 Settings source를 통합한 상태에서 표준 `pnpm --filter @kosmo/app relay`,
+      `pnpm --filter @kosmo/app check`, `pnpm --filter @kosmo/app test:unit` 및 변경 범위 lint·format 검증을 통과시킨다.
+- [x] 3.8 기존 UI의 코드·PR·진입점, 데이터와 loading·empty·error·pending 인터페이스, action 입력·결과·오류·재시도·pagination,
+      실제 기능·접근성·cache·프로필 전환 증거와 남은 제약을 PROD-917에 인계하고 PROD-813의 통합 검증에 제공한다.
+- [x] 3.9 공통 `FollowButton`이 자신의 Block 관계 fragment·해제 mutation·pending·실패·Relay 수렴과 플랫폼·pointer 상태에 관계없는
+      고정 `차단 해제` label을 소유하도록 부모 PR로 분리한다. #772의 Profile route는 `FollowButton`을 소비하고, Block 목록은 Target Profile 최신 `viewerState.profileBlock`에 따라 `ProfileBlockAction`의 해제·차단 target을 선택해 같은 lifecycle을 재사용한다.
 
 ## 4. PROD-813 — Profile Block cross-slice E2E·canonical sync·archive
 
@@ -284,5 +318,5 @@ E2E를 완료하고, 최신 canonical·Linear·OpenSpec을 동기화한 뒤 모�
       bilateral Home/Local list·`searchProfiles`·`Hashtag.relatedProfiles`·interaction·Notification·cleanup의 현재 구현된 consumer cross-slice E2E를 실행한다. 미구현 Hashtag Post List·Post 검색은 실제 endpoint E2E가 아니라 공통 후보 정책 검증 결과와 endpoint 미실행 기록을 확인한다.
 - [ ] 4.2 cross-slice UI/API 결과와 selected Profile actor 상태 격리, 기본 Profile 정보·viewer 방향 콘텐츠 상태, 보존·비복구 및 `PROD-917` 후속
       범위 경계를 플랫폼별 evidence로 기록한다. 정상적인 GraphQL `node(id:)`·`profileByHandle` 직접 route 진입·새로고침은 기본 Profile 정보, viewer 방향별 콘텐츠 상태와
-      인증된 selected Owner 범위의 정확한 unblock 관계 ID를 검증한다. API의 lifecycle상 null/unavailable 결과와 UI의 조건부 fallback 표시를 구분해 기록한다.
+      현재 인증된 selected Owner 범위의 정확한 unblock 관계 ID를 검증한다. API의 lifecycle상 null/unavailable 결과와 UI의 조건부 fallback 표시를 구분해 기록한다.
 - [ ] 4.3 최신 canonical·Linear·OpenSpec 정합성을 확인하고 strict validation·Prettier·diff 검증과 모든 task 완료 뒤 `add-profile-block`을 archive한다.

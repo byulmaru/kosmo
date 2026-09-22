@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { before, mock, test } from 'node:test';
+import { afterEach, before, mock, test } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ElementType } from 'react';
@@ -14,9 +14,15 @@ const mockModule = (specifier: string | URL, exports: object) =>
 const TextHost = 'Text' as unknown as ElementType;
 const ViewHost = 'View' as unknown as ElementType;
 const ButtonHost = 'Button' as unknown as ElementType;
+let platform = 'web';
 
 mockModule('react-native', {
   ActivityIndicator: 'ActivityIndicator',
+  Platform: {
+    get OS() {
+      return platform;
+    },
+  },
   StyleSheet: { create: <T>(styles: T) => styles },
   Text: TextHost,
   View: ViewHost,
@@ -42,6 +48,10 @@ let stateViewModule: typeof StateViewModule | undefined;
 
 before(async () => {
   stateViewModule = await import('./StateView');
+});
+
+afterEach(() => {
+  platform = 'web';
 });
 
 test('alert StateView keeps the host surface with danger copy and primary recovery action', async () => {

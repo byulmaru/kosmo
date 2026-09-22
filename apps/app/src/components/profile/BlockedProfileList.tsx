@@ -1,10 +1,9 @@
 import { useEffect, useRef } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
 import { useToast } from '@/components/ui/ToastProvider';
-import { useTheme } from '@/theme/ThemeProvider';
-import { borderWidths, space, textStyles } from '@/theme/tokens';
+import { space } from '@/theme/tokens';
 import type { ReactNode } from 'react';
 
 type Pagination =
@@ -21,7 +20,6 @@ type Props = { state: BlockedProfileListState };
 
 /** The action owner composes rows; this list does not execute relationship mutations. */
 export function BlockedProfileList({ state }: Props) {
-  const theme = useTheme();
   const { showToast } = useToast();
   const loadError =
     state.status === 'error'
@@ -51,17 +49,7 @@ export function BlockedProfileList({ state }: Props) {
     }
   }, [errorMessage, showToast]);
   return (
-    <ScrollView contentContainerStyle={styles.root}>
-      <View accessible accessibilityRole="header">
-        <Text
-          style={[
-            styles.heading,
-            { color: theme.foregroundPrimary, borderColor: theme.borderDefault },
-          ]}
-        >
-          차단한 프로필
-        </Text>
-      </View>
+    <View style={styles.root}>
       {state.status === 'loading' ? (
         <StateView loading title="차단한 프로필을 불러오는 중입니다." />
       ) : state.status === 'error' ? (
@@ -92,11 +80,10 @@ export function BlockedProfileList({ state }: Props) {
           ) : null}
         </>
       )}
-    </ScrollView>
+    </View>
   );
 }
 const styles = StyleSheet.create({
   root: { flexGrow: 1, width: '100%' },
-  heading: { ...textStyles.uiHeadingM, borderBottomWidth: borderWidths[1], padding: space[16] },
   pagination: { alignItems: 'center', padding: space[16] },
 });

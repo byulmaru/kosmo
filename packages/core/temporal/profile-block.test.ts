@@ -7,7 +7,6 @@ process.env.TEMPORAL_NAMESPACE ??= 'test';
 const { runWorkflow, temporalClient } = await import('./client');
 const {
   PROFILE_BLOCK_UPDATE_NAME,
-  PROFILE_BLOCK_UPDATE_ID,
   PROFILE_UNBLOCK_UPDATE_NAME,
   profileBlockWorkflow,
   profileBlockWorkflowId,
@@ -117,7 +116,7 @@ test('Profile Unblock Workflow definition includes the exact Block ID in its exe
   }
 });
 
-test('Profile Block definitions use Update-with-Start names and stable transport IDs', async () => {
+test('Profile Block definitions use fresh Block updates and stable Unblock transport IDs', async () => {
   const blockResult = {
     created: true,
     profileBlockId: '00000000-0000-8000-8000-000000000003',
@@ -146,7 +145,6 @@ test('Profile Block definitions use Update-with-Start names and stable transport
       await runWorkflow(profileBlockWorkflow, {
         args: [input],
         updateArgs: [input],
-        updateId: PROFILE_BLOCK_UPDATE_ID,
         mode: 'update-with-start',
         workflowIdConflictPolicy: 'USE_EXISTING',
         workflowIdReusePolicy: 'ALLOW_DUPLICATE',
@@ -170,7 +168,8 @@ test('Profile Block definitions use Update-with-Start names and stable transport
     assert.equal(blockCall.arguments[0], PROFILE_BLOCK_UPDATE_NAME);
     const blockOptions = blockCall.arguments[1];
     assert.ok(blockOptions);
-    assert.equal(blockOptions.updateId, 'block');
+    assert.deepEqual(blockOptions.args, [input]);
+    assert.equal(blockOptions.updateId, undefined);
     assert.equal(
       blockOptions.startWorkflowOperation.options.workflowId,
       profileBlockWorkflowId(input),

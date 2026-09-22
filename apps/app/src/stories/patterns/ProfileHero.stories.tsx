@@ -91,15 +91,17 @@ function useStoryProfiles() {
     ids: storyProfileIds,
   });
 
-  return data.nodes.map((node) => {
-    if (node?.__typename !== 'Profile' || !node.hero || !node.followButton) {
-      throw new Error('ProfileHeroStoriesQuery must return Profile fragments in fixture order.');
-    }
-    return { followButton: node.followButton, hero: node.hero, id: node.id };
-  });
+  return {
+    profiles: data.nodes.map((node) => {
+      if (node?.__typename !== 'Profile' || !node.hero || !node.followButton) {
+        throw new Error('ProfileHeroStoriesQuery must return Profile fragments in fixture order.');
+      }
+      return { followButton: node.followButton, hero: node.hero, id: node.id };
+    }),
+  };
 }
 
-function requireProfile(profiles: ReturnType<typeof useStoryProfiles>, id: string) {
+function requireProfile(profiles: ReturnType<typeof useStoryProfiles>['profiles'], id: string) {
   const result = profiles.find((profileNode) => profileNode.id === id);
   if (!result) {
     throw new Error(`Missing ProfileHero profile fixture: ${id}.`);
@@ -118,7 +120,7 @@ function ProfileHeroFixture({
   profileId?: string;
   showAction?: boolean;
 }) {
-  const profiles = useStoryProfiles();
+  const { profiles } = useStoryProfiles();
   const target = requireProfile(profiles, profileId);
 
   return (
@@ -128,7 +130,6 @@ function ProfileHeroFixture({
           action={showAction ? <FollowButton profile={target.followButton} /> : undefined}
           loading={loading}
           profile={target.hero}
-          showMuteAction={showAction}
         />
       </View>
     </SessionProvider>
@@ -136,7 +137,7 @@ function ProfileHeroFixture({
 }
 
 function ProfileHeroCatalog() {
-  const profiles = useStoryProfiles();
+  const { profiles } = useStoryProfiles();
 
   return (
     <Catalog>
