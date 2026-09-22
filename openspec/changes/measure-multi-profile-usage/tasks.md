@@ -8,27 +8,34 @@
 **Deliverable**
 
 production Web의 인증 화면 조회에서 현재 선택 Profile과 멀티 Profile 자격을 Account identity에 한 번 연결할
-수 있다.
+수 있다. 같은 화면에서 새 KST 주차의 WAA 포함 행동이 발생해도 그 주의 자격을 확인할 수 있다.
 
 **Guardrails**
 
 - 사용 가능 Profile은 Membership과 기존 조회 가능 조건으로 판단한다.
 - Local·Remote, Owner·Member를 임의로 제외하지 않는다.
-- 앱 소유 속성에는 선택 Profile ID와 자격 boolean만 추가한다. Account ID, Profile 목록, 이름, handle과
-  pathname을 복제하지 않는다.
+- custom 속성에는 관측 종류, 자격 boolean과 화면 조회의 선택 Profile ID만 추가한다. 자격 확인만으로
+  WAA·사용 Profile을 만들지 않는다. Account ID, Profile 목록, 이름, handle, Post Content, 검색 원문,
+  Follow 대상 Profile ID와 pathname을 custom 속성으로 복제하지 않는다.
+- 기존 승인된 SDK URL·referrer 등의 standard metadata는 제거하거나 필터링하지 않는다.
 - 표준 PostHog pageview와 Native no-op 경계를 바꾸지 않는다.
 
 **Verification**
 
-- 타입이 정해진 이벤트의 허용·거부 조합과 Web 전달, Native no-op을 단위 검증한다.
+- 타입이 정해진 이벤트의 허용·거부 조합과 Web 전달, Native no-op을 단위 검증한다. `eligibility`에는
+  선택 Profile ID가 없고 WAA·사용 Profile의 독립 근거가 되지 않는지 확인한다.
+- custom 속성의 금지 항목 부재와 기존 SDK standard metadata 보존을 별도로 검증한다.
 - Profile 0·1·2개, 선택 Profile 없음과 여러 shell 형태에서 전송 이벤트 수와 속성을 브라우저로
   확인한다.
 - `pnpm --filter @kosmo/app check`, 관련 unit·Storybook 검증을 통과시킨다.
 
 - [ ] 1.1 인증 화면의 선택 Profile·멀티 Profile 자격을 표현하는 타입이 정해진 이벤트 계약을 추가한다.
-- [ ] 1.2 인증 shell 상태가 준비되고 실제 화면이 바뀔 때 문맥 관측을 한 번 남기며 같은 상태의 중복 실행을
-      막는다.
-- [ ] 1.3 Profile 0·1·2개, 선택 없음, route 재방문과 shell 중복 렌더 사례를 검증한다.
+- [ ] 1.2 단일 shell 관측자에서 실제 화면 조회와 자격 확인을 구분한다. 모든 WAA 포함 typed 호출 경계를
+      연결하고 행동 시각의 Account·KST 주차·자격을 비교해 새 주의 첫 행동에서도 자격을 관측한다. 같은
+      상태의 중복 실행을 막고 이전 주 자격의 자동 이월이나 주차 변경만으로 생기는 관측을 만들지 않는다.
+- [ ] 1.3 Profile 0·1·2개, 선택 없음, route 재방문과 shell 중복 렌더를 검증한다. 일요일 검색 화면을 유지한
+      채 월요일에 동일 검색을 재제출하면 새 주 WAA·대상 WAA가 각각 1이고 자격 확인만으로 사용 Profile이
+      늘지 않음을 검증한다. 같은 주 반복 행동과 다른 WAA 포함 호출부에도 이 경계를 확인한다.
 
 ## 2. PROD-555 Profile 생성·선택·직접 전환 분류
 
@@ -110,15 +117,20 @@ Profile 생성·선택·Post·Follow 성공을 원래 인증 Account와 행동 �
 
 **Verification**
 
-- 주간 경계, 지연 수신, 여러 기기, Profile 0·1·2개, 생성 뒤 선택 실패, 전환 제외, 재전송, Account 전환과
-  제외 목록 변경을 포함한 기대표를 대조한다.
+- 주간 경계, 동일 화면의 새 주 행동·반복 행동·행동 없는 주, 지연 수신, 여러 기기, Profile 0·1·2개, 생성 뒤
+  선택 실패, 전환 제외, 재전송, Account 전환과 제외 목록 변경을 포함한 기대표를 대조한다.
+- Account A의 Profile 생성 2회는 생성 총횟수 2·distinct 생성 Account 1이어야 한다.
+- 활성 Account A/B의 직접 전환 2회·0회이고 다른 전환이 없으면 총횟수 2·활성 Account당 평균 1이어야 한다.
+  활성 집단이 비어 있으면 평균은 계산 불가다. 이벤트 발생 여부만 검증하고 완료 처리하지 않는다.
 - WAA 10, 대상 WAA 4, 활성 Account 2에서 50%와 20%가 각각 나오는지 확인한다.
 - 합성 결과에는 관측 기간, 집계 실행 시각, 계산 규칙과 제외 목록 버전을 포함한다.
 
 - [ ] 4.1 승인된 경계 사례를 포함하는 결정적 합성 이벤트 자료와 기대 결과를 만든다.
 - [ ] 4.2 주간 Account 집합, 활성 사용률·도달률, 절대 수와 W+1·W+4 리텐션을 독립 계산해 기대표와
       대조한다.
-- [ ] 4.3 생성·전환·Post·Follow 결과와 중복 제거 결과를 같은 자료에서 대조한다.
+- [ ] 4.3 Profile 생성 총횟수·distinct 생성 Account 수, 직접 전환 총횟수·활성 Account당 평균, Post·Follow와
+      중복 제거 결과를 같은 자료에서 대조한다. 생성 2·생성 Account 1, 전환 2·평균 1을 기대값으로 고정하고
+      평균의 0회 Account 포함과 빈 집단을 검증한다.
 
 ## 5. PROD-555 PostHog 쿼리·대시보드와 제외 목록
 
@@ -146,10 +158,14 @@ PostHog에서 승인된 주간 Account 집합과 지표를 같은 제외 목록�
 - 대시보드의 두 비율, 세 절대 수, 생성·전환·핵심 행동과 리텐션 정의를 서로 대조한다.
 
 - [ ] 5.1 접근이 제한된 운영 제외 목록의 첫 버전과 담당자·점검 절차를 만든다.
-- [ ] 5.2 Account·Asia/Seoul 주차별 WAA, 자격, distinct 사용 Profile 수와 활성 여부를 재현하는 저장 쿼리를
-      만든다.
-- [ ] 5.3 두 비율, 세 절대 수, 생성·전환·핵심 행동과 두 리텐션의 Insight·대시보드를 구성한다.
-- [ ] 5.4 저장 쿼리와 대시보드를 합성 기대표, 실행 metadata와 제외 목록 변경으로 검증한다.
+- [ ] 5.2 같은 제외 목록과 중복 제거를 적용한 뒤 Account × KST week의 자격·사용 Profile 수·생성·전환을
+      HogQL에서 결합한다. 자격 전용 관측을 WAA·Profile 사용에서 제외하고 독립 Trends의 최종 수치 조합이나
+      별도 영속 DB·materialized table을 추가하지 않는다.
+- [ ] 5.3 두 비율, 세 절대 수, Profile 생성 총횟수·distinct 생성 Account 수, 직접 전환 총횟수·활성 Account당
+      평균, 핵심 행동과 두 리텐션을 각각 표시한다. 평균은 활성 집단의 전환 합계 / 전환 0회도 포함한 활성
+      Account 수로 계산한다. 새 Account 생성 이벤트는 추가하지 않는다.
+- [ ] 5.4 실제 저장 쿼리와 대시보드 출력을 4번의 명시적 기대값, 실행 metadata와 제외 목록 변경으로
+      검증한다. 총횟수와 함께 생성 Account 수와 평균도 검증한다.
 
 ## 6. PROD-555 production 실수집 인수와 주간 운영
 
@@ -168,6 +184,7 @@ PROD-795 통합 검증 뒤 production 실수집 관측이 승인된 identity·Pr
 
 - 합성 검증을 production 실수집 인수로 대신하지 않는다.
 - 이름, handle, Post Content, 검색 원문, Follow 대상 Profile ID와 실제 제외 목록을 증거에 남기지 않는다.
+  PROD-555 custom 속성의 금지 항목 부재와 기존 SDK standard metadata 보존은 별도로 확인한다.
 - SDK 차단·전송 실패로 누락된 행동을 추정하거나 완전 수집이라고 주장하지 않는다.
 - PROD-795가 끝나기 전에는 production 수집 인수를 완료하지 않는다.
 

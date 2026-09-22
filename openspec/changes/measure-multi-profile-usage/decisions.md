@@ -55,17 +55,21 @@
 - Context / Problem: 표준 pageview는 selected Profile과 자격을 모르고, 기존 `profile_selected`는 첫 선택,
   재선택과 생성 자동 선택을 직접 전환과 구분하지 않는다.
 - Decision Outcome: 단일 shell 관측 지점에서 `multi_profile_context_observed`를 보내고
-  `selected_profile_id`와 `multi_profile_eligible`만 담는다. 기존 `profile_selected`는 모든 선택 성공의 도착
+  `observation_kind`로 `screen`과 `eligibility`를 구분한다. 두 종류 모두 `multi_profile_eligible`을 담고
+  `selected_profile_id`는 `screen`에만 담는다. 기존 `profile_selected`는 모든 선택 성공의 도착
   Profile 관측으로 유지한다. 서로 다른 기존 Profile 사이의 직접 선택 성공에는 `profile_switched`를 추가하고
   `previous_profile_id`, `selected_profile_id`를 담는다.
 - Alternatives Considered: app-owned pageview를 다시 보내면 표준 SDK 계약과 중복된다. 기존
   `profile_selected`에 원인과 출발 Profile을 추가할 수도 있지만 과거 관측과 필터를 잘못 섞을 가능성이 커
   기본안에서 제외한다.
-- Consequences: 화면 조회마다 앱 소유 이벤트 하나가 늘어난다. pathname, Profile 목록, 이름과 handle은 앱 소유
-  속성으로 추가하지 않는다. 생성 자동 선택은 `profile_selected`에는 남지만 `profile_switched`에는 들어가지
-  않는다.
+- Consequences: 화면 조회와 해당 주의 첫 포함 행동에서 자격을 확인한다. 단일 shell 관측자는 기존 typed
+  호출 경계에서 행동 발생 시각을 받아 Account·KST 주차·자격을 비교하므로 동일 화면에서도 새 주가 누락되지
+  않는다. 자격 확인만으로 WAA나 사용 Profile을 만들지 않는다. pathname, Profile 목록, 이름과 handle은
+  custom 속성으로 추가하지 않고 기존 SDK standard metadata는 유지한다. 생성 자동 선택은
+  `profile_selected`에는 남지만 `profile_switched`에는 들어가지 않는다.
 - Confirmation / Follow-up: desktop·compact·drawer 조합에서 route마다 문맥 이벤트가 중복되지 않는지,
-  첫 선택·재선택·자동 선택·직접 전환의 이벤트 조합이 다른지 확인한다.
+  첫 선택·재선택·자동 선택·직접 전환의 이벤트 조합이 다른지 확인한다. 일요일 화면을 유지한 채 월요일에
+  같은 검색을 다시 제출하면 새 주 WAA·대상 WAA는 각각 1, 다른 사용 관측이 없으면 사용 Profile 수는 0이다.
 
 ### mutation 시작 시점의 주체와 이벤트 UUID를 고정한다
 
@@ -79,7 +83,8 @@
 - Decision Outcome: mutation을 시작할 때 Account identity, 행동 주체 Profile과 논리적 작업 ID를 closure에
   고정한다. 성공 이벤트는 고정한 Profile을 사용한다. 현재 PostHog Account가 시작 시점과 다르면 이벤트를
   생략해 다른 Account로의 오귀속을 막는다. 이벤트 종류마다 작업 ID에서 고정한 UUID를 public PostHog capture
-  옵션으로 전달하고 재시도에서 다시 만들지 않는다.
+  옵션으로 전달하고 최초 성공 관측 시각도 고정한다. 재전송에서 UUID·시각과 함께 기록한 자격 스냅샷을
+  다시 생성하지 않는다.
 - Alternatives Considered: 완료 시점의 현재 selected Profile은 원래 행동 주체를 잃는다. Account ID를 앱 소유
   속성으로 추가하면 개인정보 최소화와 식별자 단일 경계를 깨뜨린다. `$insert_id`나 SDK 내부 함수를 직접
   조작하는 방식은 공개 API보다 취약해 제외한다.
@@ -101,13 +106,16 @@
 - Context / Problem: 한 Account의 여러 이벤트에서 distinct Profile을 합치고 자격 boolean과 교차해야 하므로
   단순 이벤트 Trends만으로 승인된 분자와 분모를 안전하게 재현하기 어렵다.
 - Decision Outcome: Asia/Seoul 주차와 Account를 기준으로 WAA 여부, 자격 여부, distinct 사용 Profile 수와
-  활성 여부를 한 행에 만드는 저장 HogQL 쿼리를 기준 자료로 둔다. 두 비율, 절대 수, 전환·생성·핵심 행동과
-  리텐션은 이 자료 또는 같은 결과를 보장하는 후속 저장 쿼리에서 계산한다.
+  활성 여부와 생성·직접 전환 횟수를 Account × KST week 단위로 결합하는 저장 HogQL 쿼리를 기준으로 둔다.
+  같은 제외 목록과 중복 제거 규칙을 적용한 뒤 비율·절대 수·생성·전환·핵심 행동·리텐션을 계산한다.
+  조회 안의 CTE·서브쿼리를 사용하며 별도 영속 DB나 materialized table은 추가하지 않는다.
 - Alternatives Considered: 서로 독립된 Insight 수를 formula로 나누면 분자가 대상 분모의 부분집합인지 확인하기
   어렵고, distinct Profile 2개 조건을 안정적으로 표현하기 어렵다.
 - Consequences: 대시보드 시각화보다 저장 쿼리가 계산 기준이 된다. 쿼리에는 최신 제외 목록 한 버전과
   계산 규칙 버전, 실행 시각을 연결한다.
 - Confirmation / Follow-up: 같은 합성 이벤트 집합을 독립 계산한 표와 HogQL 결과가 일치하는지 대조한다.
+  생성 총횟수 2·distinct 생성 Account 1, 직접 전환 총횟수 2·활성 Account당 평균 1을 명시적으로 검증한다.
+  평균의 분모에는 전환 0회 활성 Account도 포함하고 이벤트 발생 여부만으로 집계 검증을 끝내지 않는다.
 
 ### 최신 제외 목록을 과거 주에도 같은 방식으로 적용한다
 

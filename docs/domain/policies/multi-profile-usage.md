@@ -46,6 +46,10 @@ WAA로 세지 않는다. 실패한 요청만 있는 경우도 마찬가지다. �
 WAA다. 이 자격은 Profile 사용 횟수나 행동량과 무관하게 Membership과 조회 가능 상태로만 판단한다. 서로
 다른 시점에 하나씩만 사용할 수 있었던 Profile을 합쳐 자격을 만들지 않는다.
 
+주차가 바뀐 뒤 화면, 선택 Profile과 사용 가능 Profile이 그대로여도 새 주에 WAA 포함 대상 행동이 발생하면
+그 주의 자격을 함께 확인해야 한다. 화면을 다시 열지 않았다는 이유로 WAA에만 포함하고 대상 WAA에서
+누락하지 않는다. 자격 확인만으로 새 화면 조회나 선택 Profile 사용이 있었다고 간주하지 않는다.
+
 ### 사용한 Profile
 
 Account별로 다음 관측 중 하나가 있는 Profile을 그 주에 사용한 Profile로 센다.
@@ -104,7 +108,9 @@ W+1과 W+4는 기준 주와 같은 Asia/Seoul 주차를 사용한다. 아직 해
 ## 생성과 전환
 
 Profile 생성 횟수는 생성이 실제로 성공한 횟수다. 생성 뒤 자동 선택이 실패해도 생성 성공은 유지한다. 주간
-생성 총횟수와 생성한 distinct Account 수를 함께 표시한다.
+생성 총횟수와 해당 주에 Profile을 1개 이상 생성한 distinct Account 수를 함께 표시한다. 같은 Account가
+Profile을 2회 생성했다면 생성 총횟수는 2, distinct 생성 Account 수는 1이다. 이는 Profile 생성의 집계이며
+새 Account 생성 관측을 요구하지 않는다.
 
 Profile 전환은 이미 선택한 Profile이 있는 상태에서 Account가 다른 기존 Profile을 직접 선택해 성공한 경우다.
 다음 선택은 전환 횟수에서 제외한다.
@@ -117,7 +123,9 @@ Profile 전환은 이미 선택한 Profile이 있는 상태에서 Account가 다
 
 주간 전환 총횟수와 멀티 Profile 활성 Account당 평균 전환 횟수를 함께 표시한다. 평균의 분모에는 해당 집단의
 전환 0회 Account도 포함한다. 집단이 비어 있으면 계산할 수 없음으로 표시한다. 생성 뒤 자동 선택이
-성공했다면 사용 Profile에는 포함할 수 있지만 전환으로 세지 않는다.
+성공했다면 사용 Profile에는 포함할 수 있지만 전환으로 세지 않는다. 평균의 분자는 멀티 Profile 활성
+Account 집단의 직접 전환 횟수 합계다. 활성 Account A와 B 중 A가 직접 전환 2회, B가 0회이고 다른 전환이
+없다면 주간 직접 전환 총횟수는 2, 활성 Account당 평균은 1이다.
 
 ## 핵심 행동과 귀속
 
@@ -143,6 +151,9 @@ Profile이나 Follow 대상 Profile은 사용한 Profile이 아니다.
   추정하지 않는다.
 - 앱 소유 지표 관측에는 opaque Account ID와 행동 주체 또는 선택 Profile ID만 사용한다. Account ID는 기존
   분석 식별자를 사용하고 이벤트 속성으로 중복 추가하지 않는다.
+- 위 추가 수집 금지는 PROD-555가 정의하는 application-defined/custom analytics properties에 적용한다.
+  기존 승인된 분석 계약과 PostHog SDK가 생성·유지하는 URL·referrer 등의 standard metadata를 이 지표
+  때문에 제거하거나 필터링하지 않는다. 기존 개인정보·분석 계약을 이 정책에서 재설계하지 않는다.
 - 실제 제외 목록은 저장소 문서에 복제하지 않는다.
 
 ## 운영과 책임

@@ -46,13 +46,26 @@
 
 ### Requirement: 멀티 Profile 자격과 화면 사용 관측
 
-**Authority / Provenance:** `docs/domain/policies/multi-profile-usage.md`, [Linear PROD-555](https://linear.app/byulmaru/issue/PROD-555)의 승인된 계산 계약과 `2026-09-03 멀티 Profile 계산 계약 승인` 댓글(`2b97dc17-844c-4b62-a128-3344d53b123a`) — 인증된 화면 조회 관측은 해당 시점의 선택 Profile이 있으면 그 opaque ID를 담고, Account가 서로 다른 사용 가능 Profile 2개 이상을 동시에 가졌는지도 담아야 한다(MUST). 사용 가능 Profile은 Account-Profile Membership이 있고 selected Profile 조회 가능 조건을 충족해야 하며(MUST), Local·Remote와 Owner·Member를 임의로 제외하지 않아야 한다(MUST NOT). 이름, handle, Profile 표시 속성과 화면 경로 원문은 앱 소유 지표 속성에 추가하지 않아야 한다(MUST NOT).
+**Authority / Provenance:** `docs/domain/policies/multi-profile-usage.md`, [Linear PROD-555](https://linear.app/byulmaru/issue/PROD-555)의 승인된 계산 계약과 `2026-09-03 멀티 Profile 계산 계약 승인` 댓글(`2b97dc17-844c-4b62-a128-3344d53b123a`) — 인증된 화면 조회 관측은 해당 시점의 선택 Profile이 있으면 그 opaque ID를 담고, Account가 서로 다른 사용 가능 Profile 2개 이상을 동시에 가졌는지도 담아야 한다(MUST). 사용 가능 Profile은 Account-Profile Membership이 있고 selected Profile 조회 가능 조건을 충족해야 하며(MUST), Local·Remote와 Owner·Member를 임의로 제외하지 않아야 한다(MUST NOT). 이름, handle, Profile 표시 속성과 화면 경로 원문은 앱 소유 지표 속성에 추가하지 않아야 한다(MUST NOT). 화면이나 Profile 상태가 그대로여도 새 KST 주차에 WAA 포함 대상 행동이 발생하면 그 주의 자격을 확인해야 하며(MUST), 이 자격 확인만으로 새 화면 조회나 Profile 사용을 만들지 않아야 한다(MUST NOT).
 
 #### Scenario: 사용 가능한 Profile이 두 개다
 
 - **WHEN** 인증 화면 조회 시 Account가 Membership과 조회 가능 조건을 충족하는 Profile 2개를 동시에 가진다
 - **THEN** 관측은 멀티 Profile 자격이 있음을 나타낸다
 - **AND** 선택 Profile이 있으면 그 opaque Profile ID를 사용 관측으로 남긴다
+
+#### Scenario: 같은 화면에서 새 주의 첫 행동을 한다
+
+- **WHEN** 사용 가능 Profile 2개를 가진 Account가 일요일부터 검색 화면을 유지하고 화면·route·선택 Profile·사용 가능 목록 변경 없이 월요일 00:00 이후 동일 검색을 다시 제출한다
+- **THEN** 새 주 WAA와 멀티 Profile 대상 WAA에 각각 1 Account를 포함한다
+- **AND** 검색 제출에 따른 자격 확인만으로 새 화면 조회나 Profile 사용을 추가하지 않는다
+- **AND** 같은 경계는 Profile 생성·선택·Post 생성·Follow 실행 성공과 검색 결과 로드·결과 선택에도 적용한다
+
+#### Scenario: 같은 새 주에 포함 행동을 반복한다
+
+- **WHEN** 새 주의 자격을 확인한 Account가 같은 상태에서 포함 대상 행동을 반복한다
+- **THEN** WAA와 대상 WAA는 각각 1 Account로 유지된다
+- **AND** 새 주가 됐다는 이유로 이전 주의 자격을 그대로 이월하거나 행동이 없는 Account를 활성으로 만들지 않는다
 
 #### Scenario: 서로 다른 시점에 하나씩만 사용할 수 있다
 
@@ -118,7 +131,7 @@
 
 ### Requirement: Profile 생성과 직접 전환
 
-**Authority / Provenance:** `docs/domain/policies/multi-profile-usage.md`, [Linear PROD-555](https://linear.app/byulmaru/issue/PROD-555)의 승인된 계산 계약과 `2026-09-03 멀티 Profile 계산 계약 승인` 댓글(`2b97dc17-844c-4b62-a128-3344d53b123a`) — Profile 생성 횟수는 생성 mutation이 성공한 횟수여야 한다(MUST). Profile 전환은 이미 선택한 Profile이 있는 상태에서 Account가 다른 기존 Profile을 직접 선택해 성공한 경우만 세야 한다(MUST). 전환 관측은 출발 Profile과 도착 Profile의 opaque ID를 구분할 수 있어야 하고(MUST), 같은 Profile 재선택, 첫 선택, 생성 직후 자동 선택, Session 복원·화면 재조회, 실패와 취소를 전환으로 기록하지 않아야 한다(MUST NOT).
+**Authority / Provenance:** `docs/domain/policies/multi-profile-usage.md`, [Linear PROD-555](https://linear.app/byulmaru/issue/PROD-555)의 승인된 계산 계약과 `2026-09-03 멀티 Profile 계산 계약 승인` 댓글(`2b97dc17-844c-4b62-a128-3344d53b123a`) — Profile 생성 횟수는 생성 mutation이 성공한 횟수여야 한다(MUST). Profile 전환은 이미 선택한 Profile이 있는 상태에서 Account가 다른 기존 Profile을 직접 선택해 성공한 경우만 세야 한다(MUST). 전환 관측은 출발 Profile과 도착 Profile의 opaque ID를 구분할 수 있어야 하고(MUST), 같은 Profile 재선택, 첫 선택, 생성 직후 자동 선택, Session 복원·화면 재조회, 실패와 취소를 전환으로 기록하지 않아야 한다(MUST NOT). 주간 Profile 생성 총횟수와 Profile을 1개 이상 생성한 distinct Account 수를 각각 제공해야 한다(MUST). 주간 직접 전환 총횟수와 멀티 Profile 활성 Account당 평균 직접 전환 횟수를 각각 제공해야 하며(MUST), 평균은 해당 활성 Account 집단의 직접 전환 합계를 전환 0회도 포함한 전체 활성 Account 수로 나눠야 한다(MUST). 활성 Account 집단이 비어 있으면 평균은 계산할 수 없음으로 표시해야 한다(MUST).
 
 #### Scenario: 생성 성공 뒤 자동 선택이 실패한다
 
@@ -142,6 +155,22 @@
 - **WHEN** 새 Profile 생성 성공 흐름이 그 Profile을 자동 선택한다
 - **THEN** 선택 성공이면 새 Profile 사용에는 포함할 수 있다
 - **AND** 직접 전환으로는 세지 않는다
+
+#### Scenario: 같은 Account가 Profile을 두 개 생성한다
+
+- **WHEN** Account A가 해당 주에 Profile 생성에 2회 성공하고 다른 생성은 없다
+- **THEN** Profile 생성 총횟수는 2이고 distinct 생성 Account 수는 1이다
+- **AND** 기존 Profile 생성 성공 관측으로 계산하며 새 Account 생성 이벤트를 요구하지 않는다
+
+#### Scenario: 직접 전환이 없는 활성 Account도 평균에 포함한다
+
+- **WHEN** 멀티 Profile 활성 Account는 A와 B이고 A의 직접 전환은 2회, B는 0회이며 다른 전환은 없다
+- **THEN** 주간 직접 전환 총횟수는 2이고 활성 Account당 평균 직접 전환 횟수는 1이다
+
+#### Scenario: 직접 전환 평균의 집단이 비어 있다
+
+- **WHEN** 해당 주에 멀티 Profile 활성 Account가 없다
+- **THEN** 활성 Account당 평균 직접 전환 횟수는 0이 아니라 계산할 수 없음으로 표시한다
 
 ### Requirement: 핵심 행동 귀속과 중복 제거
 
@@ -170,7 +199,7 @@
 
 ### Requirement: 제외 목록과 개인정보 경계
 
-**Authority / Provenance:** `docs/domain/policies/multi-profile-usage.md`, [Linear PROD-555](https://linear.app/byulmaru/issue/PROD-555)의 승인된 계산 계약과 `2026-09-03 멀티 Profile 계산 계약 승인` 댓글(`2b97dc17-844c-4b62-a128-3344d53b123a`) — 모든 지표는 익명 관측과 development·test 환경을 제외하고, 같은 버전의 운영 제외 목록으로 내부·테스트·알려진 자동화 Account를 제외해야 한다(MUST). 일반 조회와 주간 비교는 조회 시점의 최신 목록을 과거 주에도 적용해야 한다(MUST). 앱 소유 지표 관측에는 기존 opaque Account identity와 행동 주체 또는 선택 Profile의 opaque ID만 사용해야 하며(MUST), 이름·handle·Post Content·검색 원문·Follow 대상 Profile ID를 추가하지 않아야 한다(MUST NOT).
+**Authority / Provenance:** `docs/domain/policies/multi-profile-usage.md`, [Linear PROD-555](https://linear.app/byulmaru/issue/PROD-555)의 승인된 계산 계약과 `2026-09-03 멀티 Profile 계산 계약 승인` 댓글(`2b97dc17-844c-4b62-a128-3344d53b123a`) — 모든 지표는 익명 관측과 development·test 환경을 제외하고, 같은 버전의 운영 제외 목록으로 내부·테스트·알려진 자동화 Account를 제외해야 한다(MUST). 일반 조회와 주간 비교는 조회 시점의 최신 목록을 과거 주에도 적용해야 한다(MUST). 앱 소유 지표 관측에는 기존 opaque Account identity와 행동 주체 또는 선택 Profile의 opaque ID만 사용해야 하며(MUST), 이름·handle·Post Content·검색 원문·Follow 대상 Profile ID를 PROD-555의 application-defined/custom analytics properties로 추가 수집하지 않아야 한다(MUST NOT). 기존 승인된 분석 계약과 PostHog SDK가 생성·유지하는 URL·referrer 등의 standard metadata를 PROD-555 때문에 제거하거나 필터링하지 않아야 한다(MUST NOT).
 
 #### Scenario: 제외 목록에 Account를 추가한다
 
@@ -180,9 +209,15 @@
 
 #### Scenario: 지표 관측 페이로드를 검사한다
 
-- **WHEN** 화면, 선택, 생성, Post와 Follow 관측 페이로드를 검사한다
-- **THEN** Account는 기존 opaque 분석 식별자로만 연결된다
-- **AND** 허용된 행동 주체 또는 선택 Profile ID 외의 이름·handle·내용·검색 원문·대상 Profile ID가 없다
+- **WHEN** 화면, 선택, 생성, Post, Follow와 검색 관측에서 PROD-555가 추가한 custom properties를 검사한다
+- **THEN** Account는 기존 opaque 분석 식별자로만 연결되고 custom property에 중복되지 않는다
+- **AND** 이름·handle·Post Content·검색 원문·Follow 대상 Profile ID를 추가하지 않는다
+
+#### Scenario: 기존 SDK standard metadata를 유지한다
+
+- **WHEN** 기존 승인된 분석 계약에 따라 SDK가 검색 원문을 포함한 URL·referrer 등의 standard metadata를 전송한다
+- **THEN** PROD-555는 해당 metadata를 제거하거나 필터링하지 않는다
+- **AND** custom property의 추가 수집 금지와 standard metadata 보존을 별도로 검증하며 기존 개인정보·분석 계약을 재설계하지 않는다
 
 ### Requirement: 보고와 검증
 
@@ -196,8 +231,10 @@
 
 #### Scenario: 합성 자료를 대조한다
 
-- **WHEN** Profile 0·1·2개, 분모 0, 주간 경계, 재전송, 생성 뒤 선택 실패와 전환 제외 사례를 계산한다
+- **WHEN** Profile 0·1·2개, 분모 0, 동일 화면의 새 주 행동, 주간 경계, 재전송, 생성 뒤 선택 실패와 전환 제외 사례를 계산한다
 - **THEN** 각 결과가 이 spec의 집합·비율·귀속 규칙과 일치한다
+- **AND** 생성 2회·생성 Account 1, 직접 전환 2회·활성 Account당 평균 1의 기대값을 실제 집계 결과와 대조한다
+- **AND** 이벤트 발생 여부만 확인한 결과로 집계 검증을 완료하지 않는다
 
 #### Scenario: production 인수 조건이 남아 있다
 
