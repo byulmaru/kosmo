@@ -127,6 +127,47 @@ resource "argocd_application" "kosmo_prod" {
   }
 }
 
+resource "argocd_application" "kosmo_monitoring_prod" {
+  cascade = false
+  wait    = false
+
+  metadata {
+    name      = "kosmo-monitoring-prod"
+    namespace = "argocd"
+  }
+
+  spec {
+    project                = "kosmo"
+    revision_history_limit = 10
+
+    source {
+      repo_url        = "https://github.com/byulmaru/kosmo.git"
+      target_revision = "main"
+      path            = "apps/monitoring"
+
+      helm {
+        release_name = "kosmo-monitoring"
+      }
+    }
+
+    destination {
+      server    = "https://kubernetes.default.svc"
+      namespace = "kosmo-prod"
+    }
+
+    sync_policy {
+      automated {
+        prune     = true
+        self_heal = true
+      }
+
+      sync_options = ["CreateNamespace=true"]
+    }
+  }
+
+  depends_on = [argocd_application.kosmo_prod]
+}
+
 import {
   to = argocd_application_set.kosmo
   id = "kosmo:argocd"

@@ -41,6 +41,12 @@ jobs:
               if grep -Eq '^kind: HTTPRoute$' <<<"$rendered"; then exit 1; fi
               helm lint apps/helm --set env=prod --set imageDigest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
               helm template kosmo apps/helm --namespace kosmo-prod --set env=prod --set imageDigest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa >/dev/null
+          - name: Monitoring Helm
+            command: |
+              set -euo pipefail
+              helm dependency build apps/monitoring
+              helm lint apps/monitoring
+              helm template kosmo-monitoring apps/monitoring --namespace kosmo-prod >/dev/null
           - name: Admin Image
             command: |
               set -euo pipefail

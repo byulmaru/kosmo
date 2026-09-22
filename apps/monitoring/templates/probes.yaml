@@ -1,0 +1,43 @@
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: kosmo-public-web
+  labels:
+    {{- include "kosmo-monitoring.labels" . | nindent 4 }}
+spec:
+  jobName: kosmo-public
+  interval: 30s
+  scrapeTimeout: 10s
+  module: http_2xx
+  prober:
+    url: http://prometheus-blackbox-exporter.kosmo-prod.svc:9115/probe
+    scheme: http
+    path: /probe
+  targets:
+    staticConfig:
+      static:
+        - https://kos.moe/health
+      labels:
+        target: kosmo-web
+---
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: kosmo-public-api
+  labels:
+    {{- include "kosmo-monitoring.labels" . | nindent 4 }}
+spec:
+  jobName: kosmo-public
+  interval: 30s
+  scrapeTimeout: 10s
+  module: http_2xx
+  prober:
+    url: http://prometheus-blackbox-exporter.kosmo-prod.svc:9115/probe
+    scheme: http
+    path: /probe
+  targets:
+    staticConfig:
+      static:
+        - https://api.kos.moe/health
+      labels:
+        target: kosmo-api
