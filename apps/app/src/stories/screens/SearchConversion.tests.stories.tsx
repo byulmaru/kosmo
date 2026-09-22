@@ -325,8 +325,8 @@ export const SessionRotatesOnReselection: Story = {
     const onSession = mocked(observeAnalyticsSession).mock.calls.at(-1)?.[0];
     expect(onSession).toBeDefined();
     let rotate = true;
-    mocked(trackAnalytics).mockImplementation((event) => {
-      if (event === 'search_result_selected' && rotate) {
+    mocked(trackAnalytics).mockImplementation((...args: Parameters<typeof trackAnalytics>) => {
+      if (args[0] === 'search_result_selected' && rotate) {
         rotate = false;
         mocked(captureSearchProfileAnalytics).mockReturnValue('next-sdk-session');
         onSession!('next-sdk-session');
