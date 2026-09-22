@@ -65,6 +65,10 @@ type LocalPostNoteProjection = LocalPostNote & {
 
 type LocalPostNoteContext = Pick<Context<void>, 'canonicalOrigin' | 'getActorUri'>;
 
+// Outbound-only, after the caller verifies a REVOKED consent and its revision.
+// Ordinary Note fetch/authorization must retain the default active-author checks.
+type LocalPostNoteOptions = { readonly forQuoteRevocation?: boolean };
+
 const isHttpUrl = (value: string): boolean => {
   try {
     const url = new URL(value);
@@ -74,7 +78,11 @@ const isHttpUrl = (value: string): boolean => {
   }
 };
 
-const loadLocalPostNoteRow = async (context: LocalPostNoteContext, postId: string) => {
+const loadLocalPostNoteRow = async (
+  context: LocalPostNoteContext,
+  postId: string,
+  { forQuoteRevocation = false }: LocalPostNoteOptions = {},
+) => {
   if (!isCanonicalPostId(postId)) {
     return null;
   }
@@ -99,8 +107,8 @@ const loadLocalPostNoteRow = async (context: LocalPostNoteContext, postId: strin
         eq(Posts.state, PostState.ACTIVE),
         eq(Instances.kind, InstanceKind.LOCAL),
         eq(Instances.canonicalOrigin, context.canonicalOrigin),
-        eq(Profiles.state, ProfileState.ACTIVE),
-        eq(Instances.state, InstanceState.ACTIVE),
+        forQuoteRevocation ? undefined : eq(Profiles.state, ProfileState.ACTIVE),
+        forQuoteRevocation ? undefined : eq(Instances.state, InstanceState.ACTIVE),
       ),
     )
     .limit(1)
@@ -116,8 +124,9 @@ const loadLocalPostNoteRow = async (context: LocalPostNoteContext, postId: strin
 export const loadLocalPostNote = async (
   context: LocalPostNoteContext,
   postId: string,
+  options: LocalPostNoteOptions = {},
 ): Promise<LocalPostNote | null> => {
-  const row = await loadLocalPostNoteRow(context, postId);
+  const row = await loadLocalPostNoteRow(context, postId, options);
   if (!row) {
     return null;
   }
@@ -128,12 +137,14 @@ export const loadLocalPostNote = async (
     return null;
   }
 
-  const quote = await projectLocalQuote(
-    row.post.id,
-    row.profile.id,
-    row.post.repostSourceId,
-    row.post.visibility,
-  );
+  const quote = options.forQuoteRevocation
+    ? { quoteAuthorizationUri: null, quoteProtocolEnabled: false, quoteSourceUri: null }
+    : await projectLocalQuote(
+        row.post.id,
+        row.profile.id,
+        row.post.repostSourceId,
+        row.post.visibility,
+      );
 
   return {
     authorHandle: row.profile.handle,
@@ -364,8 +375,9 @@ export const dispatchLocalPostNote = async (
 export const projectLocalPostNote = async (
   context: LocalPostNoteContext,
   postId: string,
+  options: LocalPostNoteOptions = {},
 ): Promise<LocalPostNoteProjection | null> => {
-  const note = await loadLocalPostNote(context, postId);
+  const note = await loadLocalPostNote(context, postId, options);
   if (!note) {
     return null;
   }

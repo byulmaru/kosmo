@@ -597,94 +597,119 @@ describe('ActivityPub Local Post delivery', () => {
     assert.ok(fixture.calls[1]?.activity instanceof Reject);
   });
 
-  test('Source 삭제 철회는 원격 Quote Author에는 URI-only Delete를 보내고 Local Quote에는 Note Update를 보낸다', async () => {
-    const { canonicalOrigin: sourceOrigin, id: sourceInstanceId } = await createLocalInstance();
-    const sourceAuthor = await createProfile({
-      instanceId: sourceInstanceId,
-      kind: InstanceKind.LOCAL,
-    });
-    const remoteQuoteAuthor = await createRemoteActor({ handle: 'revocation-author' });
-    const source = await createPost(sourceAuthor.id);
-    const sourceUri = sourceOrigin + '/ap/note/' + source.id;
-    await db
-      .update(Posts)
-      .set({
-        deletedAt: Temporal.Instant.from('2026-09-17T01:00:00Z'),
-        state: PostState.DELETED,
-      })
-      .where(eq(Posts.id, source.id));
-    const remoteConsent = await db
-      .insert(PostQuoteConsents)
-      .values({
-        approvalUri: sourceOrigin + '/ap/quote-authorization/remote-quote',
-        quoteAuthorActorUri: remoteQuoteAuthor.actorUri,
-        quoteAuthorProfileId: remoteQuoteAuthor.profile.id,
-        quotePostId: null,
-        quoteUri: 'https://revocation.example/notes/remote-quote',
-        requestUri: 'https://revocation.example/quote-requests/remote-quote',
-        sourceAuthorActorUri: sourceOrigin + '/ap/actor/' + sourceAuthor.id,
-        sourcePostId: source.id,
-        sourceUri,
-        status: PostQuoteConsentStatus.REVOKED,
-      })
-      .returning()
-      .then(firstOrThrow);
-    const localQuoteAuthor = await createProfile({ kind: InstanceKind.LOCAL });
-    const localQuoteFollower = await createRemoteActor({ handle: 'local-quote-follower' });
-    await db.insert(ProfileFollows).values({
-      followeeProfileId: localQuoteAuthor.id,
-      followerProfileId: localQuoteFollower.profile.id,
-    });
-    const localQuote = await createPost(localQuoteAuthor.id, { repostSourceId: source.id });
-    const localConsent = await db
-      .insert(PostQuoteConsents)
-      .values({
-        approvalUri: sourceOrigin + '/ap/quote-authorization/local-quote',
-        quoteAuthorActorUri: publicOrigin + '/ap/actor/' + localQuoteAuthor.id,
-        quoteAuthorProfileId: localQuoteAuthor.id,
-        quotePostId: localQuote.id,
-        quoteUri: publicOrigin + '/ap/note/' + localQuote.id,
-        requestUri: publicOrigin + '/ap/quote-request/' + localQuote.id,
-        sourceAuthorActorUri: sourceOrigin + '/ap/actor/' + sourceAuthor.id,
-        sourcePostId: source.id,
-        sourceUri,
-        status: PostQuoteConsentStatus.REVOKED,
-      })
-      .returning()
-      .then(firstOrThrow);
-    const fixture = createContextFixture(publicOrigin);
-    mock.method(localOutboundFederation, 'createContext', () => fixture.context);
-    await db
-      .update(Profiles)
-      .set({ state: ProfileState.DISABLED })
-      .where(inArray(Profiles.id, [sourceAuthor.id, remoteQuoteAuthor.profile.id]));
-    await db
-      .update(Instances)
-      .set({ state: InstanceState.SUSPENDED })
-      .where(inArray(Instances.id, [sourceInstanceId, remoteQuoteAuthor.profile.instanceId]));
+  for (const inactiveQuoteAuthor of ['profile', 'instance'] as const) {
+    test(`Source 삭제 철회는 비활성 ${inactiveQuoteAuthor}의 Local Quote에도 Source 없는 Update를 보낸다`, async () => {
+      const { canonicalOrigin: sourceOrigin, id: sourceInstanceId } = await createLocalInstance();
+      const sourceAuthor = await createProfile({
+        instanceId: sourceInstanceId,
+        kind: InstanceKind.LOCAL,
+      });
+      const remoteQuoteAuthor = await createRemoteActor({ handle: 'revocation-author' });
+      const source = await createPost(sourceAuthor.id);
+      const sourceUri = sourceOrigin + '/ap/note/' + source.id;
+      await db
+        .update(Posts)
+        .set({
+          deletedAt: Temporal.Instant.from('2026-09-17T01:00:00Z'),
+          state: PostState.DELETED,
+        })
+        .where(eq(Posts.id, source.id));
+      const remoteConsent = await db
+        .insert(PostQuoteConsents)
+        .values({
+          approvalUri: sourceOrigin + '/ap/quote-authorization/remote-quote',
+          quoteAuthorActorUri: remoteQuoteAuthor.actorUri,
+          quoteAuthorProfileId: remoteQuoteAuthor.profile.id,
+          quotePostId: null,
+          quoteUri: 'https://revocation.example/notes/remote-quote',
+          requestUri: 'https://revocation.example/quote-requests/remote-quote',
+          sourceAuthorActorUri: sourceOrigin + '/ap/actor/' + sourceAuthor.id,
+          sourcePostId: source.id,
+          sourceUri,
+          status: PostQuoteConsentStatus.REVOKED,
+        })
+        .returning()
+        .then(firstOrThrow);
+      const { canonicalOrigin: quoteOrigin, id: quoteInstanceId } = await createLocalInstance();
+      const localQuoteAuthor = await createProfile({
+        instanceId: quoteInstanceId,
+        kind: InstanceKind.LOCAL,
+      });
+      const localQuoteFollower = await createRemoteActor({ handle: 'local-quote-follower' });
+      await db.insert(ProfileFollows).values({
+        followeeProfileId: localQuoteAuthor.id,
+        followerProfileId: localQuoteFollower.profile.id,
+      });
+      const localQuote = await createPost(localQuoteAuthor.id, { repostSourceId: source.id });
+      const localConsent = await db
+        .insert(PostQuoteConsents)
+        .values({
+          approvalUri: sourceOrigin + '/ap/quote-authorization/local-quote',
+          quoteAuthorActorUri: quoteOrigin + '/ap/actor/' + localQuoteAuthor.id,
+          quoteAuthorProfileId: localQuoteAuthor.id,
+          quotePostId: localQuote.id,
+          quoteUri: quoteOrigin + '/ap/note/' + localQuote.id,
+          requestUri: quoteOrigin + '/ap/quote-request/' + localQuote.id,
+          sourceAuthorActorUri: sourceOrigin + '/ap/actor/' + sourceAuthor.id,
+          sourcePostId: source.id,
+          sourceUri,
+          status: PostQuoteConsentStatus.REVOKED,
+        })
+        .returning()
+        .then(firstOrThrow);
+      const fixture = createContextFixture(quoteOrigin);
+      mock.method(localOutboundFederation, 'createContext', () => fixture.context);
+      await db
+        .update(Profiles)
+        .set({ state: ProfileState.DISABLED })
+        .where(inArray(Profiles.id, [sourceAuthor.id, remoteQuoteAuthor.profile.id]));
+      await db
+        .update(Instances)
+        .set({ state: InstanceState.SUSPENDED })
+        .where(inArray(Instances.id, [sourceInstanceId, remoteQuoteAuthor.profile.instanceId]));
+      if (inactiveQuoteAuthor === 'profile') {
+        await db
+          .update(Profiles)
+          .set({ state: ProfileState.DISABLED })
+          .where(eq(Profiles.id, localQuoteAuthor.id));
+      } else {
+        await db
+          .update(Instances)
+          .set({ state: InstanceState.SUSPENDED })
+          .where(eq(Instances.id, quoteInstanceId));
+      }
+      assert.equal(await projectLocalPostNote(fixture.context, localQuote.id), null);
 
-    await sendLocalPostQuoteRevocation({
-      consentId: remoteConsent.id,
-      revision: remoteConsent.revision,
-      sourcePostId: source.id,
-    });
-    assert.equal(fixture.calls.length, 1);
-    const deletion = fixture.calls[0]?.activity;
-    assert.ok(deletion instanceof Delete);
-    assert.equal(deletion.objectId?.href, sourceOrigin + '/ap/quote-authorization/remote-quote');
-    assert.equal(deletion.targetId?.href, sourceUri);
+      await sendLocalPostQuoteRevocation({
+        consentId: remoteConsent.id,
+        revision: remoteConsent.revision,
+        sourcePostId: source.id,
+      });
+      assert.equal(fixture.calls.length, 1);
+      const deletion = fixture.calls[0]?.activity;
+      assert.ok(deletion instanceof Delete);
+      assert.equal(deletion.objectId?.href, sourceOrigin + '/ap/quote-authorization/remote-quote');
+      assert.equal(deletion.targetId?.href, sourceUri);
 
-    await sendLocalPostQuoteRevocation({
-      consentId: localConsent.id,
-      revision: localConsent.revision,
-      sourcePostId: source.id,
+      await sendLocalPostQuoteRevocation({
+        consentId: localConsent.id,
+        revision: localConsent.revision,
+        sourcePostId: source.id,
+      });
+      assert.equal(fixture.calls.length, 2);
+      assert.ok(fixture.calls[1]?.activity instanceof Update);
+      const updatedNote = await (fixture.calls[1]?.activity as Update).getObject();
+      assert.ok(updatedNote instanceof Note);
+      assert.equal(updatedNote.quoteId, null);
+      assert.equal(updatedNote.quoteUrl, null);
+      assert.equal(updatedNote.quoteAuthorizationId, null);
+      assert.equal(updatedNote.content, '<p>body</p>');
+      assert.deepEqual(
+        fixture.calls[1]?.recipients.map((recipient) => recipient.id?.href),
+        [localQuoteFollower.actorUri],
+      );
     });
-    assert.equal(fixture.calls.length, 2);
-    assert.ok(fixture.calls[1]?.activity instanceof Update);
-    const updatedNote = await (fixture.calls[1]?.activity as Update).getObject();
-    assert.ok(updatedNote instanceof Note);
-    assert.equal(updatedNote.quoteId, null);
-  });
+  }
 
   test('Create Activity 실행 전에 삭제된 Post는 Create를 보내지 않는다', async () => {
     const { canonicalOrigin: authorOrigin, id: authorInstanceId } = await createLocalInstance();

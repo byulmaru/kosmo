@@ -27,7 +27,7 @@ import {
   PostVisibility,
   ProfileState,
 } from '@kosmo/core/enums';
-import { and, eq, inArray, isNotNull, ne } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, ne, or } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { localOutboundFederation } from './local-outbound-federation';
 import { projectLocalPostNote, projectLocalPostQuoteRequestInstrument } from './local-post-note';
@@ -188,6 +188,7 @@ export const sendLocalPostConsentUpdate = async ({
       canonicalOrigin: Instances.canonicalOrigin,
       localInstanceId: Instances.id,
       consentRevision: PostQuoteConsents.revision,
+      consentStatus: PostQuoteConsents.status,
     })
     .from(PostQuoteConsents)
     .innerJoin(Posts, eq(Posts.id, PostQuoteConsents.quotePostId))
@@ -202,9 +203,11 @@ export const sendLocalPostConsentUpdate = async ({
         isNotNull(Posts.currentContentId),
         ne(Posts.visibility, PostVisibility.DIRECT),
         eq(Instances.kind, InstanceKind.LOCAL),
-        eq(Instances.state, InstanceState.ACTIVE),
         isNotNull(Instances.canonicalOrigin),
-        eq(Profiles.state, ProfileState.ACTIVE),
+        or(
+          eq(PostQuoteConsents.status, PostQuoteConsentStatus.REVOKED),
+          and(eq(Instances.state, InstanceState.ACTIVE), eq(Profiles.state, ProfileState.ACTIVE)),
+        ),
       ),
     )
     .limit(1)
@@ -216,8 +219,12 @@ export const sendLocalPostConsentUpdate = async ({
   const context = localOutboundFederation.createContext(new URL(quote.canonicalOrigin), {
     localInstanceId: quote.localInstanceId,
   });
-  const projection = await projectLocalPostNote(context, postId);
+  const forQuoteRevocation = quote.consentStatus === PostQuoteConsentStatus.REVOKED;
+  const projection = await projectLocalPostNote(context, postId, { forQuoteRevocation });
   if (!projection) {
+    if (forQuoteRevocation) {
+      throw new Error(`Cannot project Quote revocation for consent ${consentId}`);
+    }
     return;
   }
 
