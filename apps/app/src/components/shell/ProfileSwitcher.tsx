@@ -271,6 +271,32 @@ export function ProfileSwitcher({
         trigger?.focus();
       }
     };
+    const onDrawerKeyUp = (event: KeyboardEvent) => {
+      if (surface !== 'drawer' || event.key !== 'Escape') {
+        return;
+      }
+
+      const triggerModal = trigger?.closest('[aria-modal="true"]');
+      const eventModal =
+        event.target instanceof Element ? event.target.closest('[aria-modal="true"]') : null;
+      if (
+        (triggerModal && triggerModal.getAttribute('role') !== 'dialog') ||
+        (eventModal && eventModal !== triggerModal)
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      dismissPicker();
+      trigger?.focus();
+    };
+
+    if (surface === 'drawer') {
+      // React Native Web Modal dismisses on document keyup; the open picker consumes it first.
+      document.addEventListener('keyup', onDrawerKeyUp, true);
+      return () => document.removeEventListener('keyup', onDrawerKeyUp, true);
+    }
 
     document.addEventListener('pointerdown', onPointerDown);
     document.addEventListener('keydown', onKeyDown);
@@ -428,14 +454,13 @@ export function ProfileSwitcher({
         !creating ? (
           <Pressable
             accessibilityLabel="새 프로필 추가"
-            accessibilityRole={redesignedWeb || Platform.OS !== 'web' ? 'button' : undefined}
+            accessibilityRole="button"
             disabled={busy}
             onPress={() => {
               setCreating(true);
               setFieldError(null);
               setOperationErrorState(null);
             }}
-            role={Platform.OS === 'web' && !redesignedWeb ? 'menuitem' : undefined}
             style={({ pressed }) => [
               styles.addProfile,
               {
@@ -522,7 +547,7 @@ export function ProfileSwitcher({
         >
           <Pressable
             accessibilityRole="link"
-            onFocus={fullWeb && open ? dismissPicker : undefined}
+            onFocus={(fullWeb || mobileWebDrawer) && open ? dismissPicker : undefined}
             style={styles.countLink}
           >
             <Text style={[styles.count, { color: theme.text }]}>
@@ -537,7 +562,7 @@ export function ProfileSwitcher({
         >
           <Pressable
             accessibilityRole="link"
-            onFocus={fullWeb && open ? dismissPicker : undefined}
+            onFocus={(fullWeb || mobileWebDrawer) && open ? dismissPicker : undefined}
             style={styles.countLink}
           >
             <Text style={[styles.count, { color: theme.text }]}>
@@ -555,6 +580,10 @@ export function ProfileSwitcher({
   );
   const fullWebPicker =
     fullWeb && open ? (
+      <View style={[styles.webMenu, styles.fullOverlayPosition]}>{pickerContent}</View>
+    ) : null;
+  const drawerWebPicker =
+    mobileWebDrawer && open ? (
       <View style={[styles.webMenu, styles.fullOverlayPosition]}>{pickerContent}</View>
     ) : null;
   const triggerSurface = !compact ? (
@@ -599,6 +628,7 @@ export function ProfileSwitcher({
       >
         {trigger}
         {fullWebPicker}
+        {drawerWebPicker}
         {profileDetails}
       </View>
       {canEditSelectedProfile ? (
@@ -646,7 +676,7 @@ export function ProfileSwitcher({
       {triggerSurface}
 
       {Platform.OS === 'web' ? (
-        open && !fullWeb ? (
+        open && !fullWeb && !mobileWebDrawer ? (
           <View
             style={[
               styles.webMenu,

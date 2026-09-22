@@ -27,6 +27,7 @@ import ogDefaultUrl from '../../../public/og-default.png?url';
 import { profile, shellQuery } from '../fixtures';
 import { Catalog, Section } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { ProfilePickerSurface } from '@/components/profile/ProfilePicker';
 import type { GuardedNavigationAction } from '@/components/shell/NavigationGuardContext';
 import type { ShellStoriesQuery as ShellStoriesQueryType } from './__generated__/ShellStoriesQuery.graphql';
 
@@ -270,12 +271,12 @@ function FeedbackNavigationDrawerStory() {
   );
 }
 
-function ProfileSwitcherStory() {
+function ProfileSwitcherStory({ surface = 'full' }: { surface?: ProfilePickerSurface } = {}) {
   const data = useShellStoryData();
   return (
     <SessionProvider>
       <View style={{ maxWidth: 360 }}>
-        <ProfileSwitcher query={data.query} surface="full" />
+        <ProfileSwitcher query={data.query} surface={surface} />
       </View>
     </SessionProvider>
   );
@@ -332,12 +333,14 @@ function NavigationGuardRegistrar({
   return null;
 }
 
-function GuardedProfileSwitcherStory() {
+function GuardedProfileSwitcherStory({
+  surface = 'full',
+}: { surface?: ProfilePickerSurface } = {}) {
   const [pending, setPending] = useState<GuardedNavigationAction | null>(null);
   return (
     <NavigationGuardProvider>
       <NavigationGuardRegistrar onPending={(action) => setPending(() => action)} />
-      <ProfileSwitcherStory />
+      <ProfileSwitcherStory surface={surface} />
       <ProfileEditDiscardDialog
         onContinue={() => setPending(null)}
         onDiscard={() => {
@@ -1327,7 +1330,7 @@ export const ProfileSwitcherDrawerUnreadPresence: Story = {
     await userEvent.click(trigger);
 
     const list = await canvas.findByLabelText('전환할 프로필 목록');
-    const unreadOption = within(list).getByRole('menuitemradio', {
+    const unreadOption = within(list).getByRole('button', {
       name: `${secondProfile.displayName}, ${secondProfile.relativeHandle}, 읽지 않은 알림 있음`,
     });
     expect(within(unreadOption).getByTestId('profile-switcher-unread-count')).toHaveTextContent(
@@ -1475,6 +1478,10 @@ export const ProfileSwitcherApprovedSelectRunsOnce: Story = {
     expect(canvas.queryByLabelText('프로필 전환')).not.toBeInTheDocument();
   },
   render: () => <GuardedProfileSwitcherStory />,
+};
+
+export const ProfileSwitcherGuardedDrawer: Story = {
+  render: () => <GuardedProfileSwitcherStory surface="drawer" />,
 };
 
 export const ProfileSwitcherApprovedSelectGraphQLErrorPreservesPicker: Story = {
@@ -2169,9 +2176,9 @@ export const UniversalMobileLongProfilePickerScroll: Story = {
 
     await userEvent.click(profileTrigger);
     const list = await page.findByLabelText('전환할 프로필 목록');
-    const picker = await page.findByRole('menu', { name: '프로필 전환' });
-    const options = within(list).getAllByRole('menuitemradio');
-    const addProfile = within(picker).getByRole('menuitem', { name: '새 프로필 추가' });
+    const picker = await page.findByLabelText('프로필 전환');
+    const options = within(list).getAllByRole('button');
+    const addProfile = within(picker).getByRole('button', { name: '새 프로필 추가' });
 
     expect(picker).toBeVisible();
     expect(options).toHaveLength(12);
@@ -2196,10 +2203,10 @@ export const UniversalMobileLongProfilePickerScroll: Story = {
 
     await userEvent.type(handle, 'drawer_draft');
     await userEvent.click(profileTrigger);
-    await waitFor(() => expect(page.queryByRole('menu', { name: '프로필 전환' })).toBeNull());
+    await waitFor(() => expect(page.queryByLabelText('프로필 전환')).toBeNull());
     await userEvent.click(profileTrigger);
-    const reopenedPicker = await page.findByRole('menu', { name: '프로필 전환' });
-    await userEvent.click(within(reopenedPicker).getByRole('menuitem', { name: '새 프로필 추가' }));
+    const reopenedPicker = await page.findByLabelText('프로필 전환');
+    await userEvent.click(within(reopenedPicker).getByRole('button', { name: '새 프로필 추가' }));
     expect(page.getByRole('textbox', { name: '프로필 핸들' })).toHaveValue('drawer_draft');
 
     await userEvent.click(page.getByRole('button', { name: '사이드바 닫기' }));
