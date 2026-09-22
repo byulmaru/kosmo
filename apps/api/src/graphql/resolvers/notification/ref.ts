@@ -115,7 +115,6 @@ type ReplyNotificationSourceRow = {
 
 type QuoteNotificationSourceRow = {
   id: string;
-  post: typeof Posts.$inferSelect;
   profileId: string;
 };
 
@@ -221,7 +220,6 @@ const quoteNotificationSourceLoader = (ctx: UserContext) =>
       db
         .select({
           id: Posts.id,
-          post: getColumns(Posts),
           profileId: Posts.profileId,
         })
         .from(Posts)

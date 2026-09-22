@@ -7,8 +7,7 @@ builder.objectFields(QuoteNotification, (t) => ({
   post: t.field({
     type: Post,
     nullable: true,
-    resolve: async (notification, _, ctx) =>
-      (await getNotificationSource(notification, ctx)).post?.id ?? null,
+    resolve: (notification) => notification.sourceId,
   }),
   profile: t.field({
     type: Profile,
