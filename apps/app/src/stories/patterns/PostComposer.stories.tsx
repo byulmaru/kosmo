@@ -153,6 +153,7 @@ const meta = {
     'ActionSemanticsContract',
     'InteractionContract',
     'MobileCandidateContract',
+    'MobileReplyShellContract',
     'MobileKeyboardMediaFooterGeometryContract',
     'MobileKeyboardContract',
     'MobileKeyboardCWEditorGeometryContract',
@@ -870,6 +871,72 @@ export const MobileCandidateContract: Story = {
     expect(canvas.getByTestId('post-composer-progress-ring')).toBeVisible();
     expect(canvas.queryByRole('button', { name: 'Composer 확장' })).not.toBeInTheDocument();
     expect(canvas.queryByTestId('illustrative-system-keyboard')).toBeNull();
+  },
+};
+
+export const MobileReplyShellContract: Story = {
+  ...MobileEmpty,
+  args: { ...MobileEmpty.args, body: '', items: [], mode: 'reply' },
+  render: (args) => {
+    const [parentResized, setParentResized] = useState(false);
+    return (
+      <>
+        <MobileFullscreenComposerShellCandidate
+          {...args}
+          beforeEditor={
+            <View style={{ height: parentResized ? 260 : 180 }} testID="mobile-reply-parent">
+              <Text>부모 게시글</Text>
+            </View>
+          }
+          mode="reply"
+          onOverlayClose={onMobileClose}
+          replyContext={<Text testID="mobile-reply-context">@reply-target님에게 답글</Text>}
+        />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="부모 게시글 높이 변경"
+          onPress={() => setParentResized(true)}
+          testID="mobile-reply-parent-resize"
+        >
+          <Text>Parent resize test</Text>
+        </Pressable>
+      </>
+    );
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const scroll = canvas.getByTestId('mobile-fullscreen-composer-scroll');
+    const parent = canvas.getByTestId('mobile-reply-parent');
+    const visibility = canvas.getByRole('button', { name: '공개 범위: 조용한 공개' });
+    const body = canvas.getByRole('textbox', { name: '답글 본문' });
+
+    expect(scroll).toContainElement(parent);
+    expect(scroll).toContainElement(visibility);
+    await waitFor(() =>
+      expect(parent.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+        scroll.getBoundingClientRect().top + 1,
+      ),
+    );
+    await userEvent.click(canvas.getByRole('button', { name: '부모 게시글 높이 변경' }));
+    await waitFor(() =>
+      expect(parent.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+        scroll.getBoundingClientRect().top + 1,
+      ),
+    );
+    scroll.scrollTop = 0;
+    scroll.dispatchEvent(new Event('scroll'));
+    await waitFor(() =>
+      expect(parent.getBoundingClientRect().top).toBeGreaterThanOrEqual(
+        scroll.getBoundingClientRect().top - 1,
+      ),
+    );
+    expect(body).toHaveAttribute('placeholder', '무슨 일이 일어나고 있나요?');
+    expect(canvas.queryByTestId('mobile-reply-context')).toBeNull();
+
+    await userEvent.click(body);
+    expect(canvas.getByTestId('mobile-reply-context')).toHaveTextContent(
+      '@reply-target님에게 답글',
+    );
   },
 };
 
