@@ -64,7 +64,7 @@ mockModule('@/session/SessionProvider', { useSession: () => ({ selectedProfileId
 const targetId = 'target-a';
 const blockId = 'block-a';
 const stateId = 'client:target-a:viewerState';
-let actorLifecycleKey = 0;
+let networkTeardownCount = 0;
 const requests: Array<{
   name: string;
   variables: unknown;
@@ -87,9 +87,9 @@ afterEach(async () => {
   await act(async () => renderer?.unmount());
   renderer = null;
   requests.length = 0;
+  networkTeardownCount = 0;
   toasts.length = 0;
   selectedProfileId = 'owner-a';
-  actorLifecycleKey = 0;
   focusCount = 0;
 });
 
@@ -98,6 +98,9 @@ function createEnvironment() {
     network: Network.create((request, variables) =>
       Observable.create((sink) => {
         requests.push({ name: request.name, variables, sink });
+        return () => {
+          networkTeardownCount += 1;
+        };
       }),
     ),
     store: new Store(new RecordSource()),
@@ -166,7 +169,7 @@ async function render(environment: Environment, showBlockAction = false) {
   const tree = createElement(
     ReactRelay.RelayEnvironmentProvider,
     // The production RelayActorBoundary remounts its subtree on actor selection.
-    { environment, key: actorLifecycleKey, children },
+    { environment, key: selectedProfileId, children },
   );
   await act(async () => {
     if (renderer) {
@@ -246,9 +249,9 @@ test('실제 FollowButton의 늦은 A 응답은 B의 action·Store·피드백을
   await render(actorA);
   await confirm();
   selectedProfileId = 'owner-b';
-  actorLifecycleKey += 1;
   const actorB = createEnvironment();
   await render(actorB);
+  assert.equal(networkTeardownCount, 1);
   assert.equal(button().props.disabled, false);
   assert.equal(modal().props.visible, false);
   const before = actorB.getStore().getSource().toJSON();
