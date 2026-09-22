@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { createContext, useState } from 'react';
 import { Platform } from 'react-native';
 import type { PointerEvent, ViewProps } from 'react-native';
 
@@ -6,6 +6,10 @@ type SurfaceFeedbackOptions = Readonly<{
   hover: boolean;
   press: boolean;
 }>;
+
+export const PostSurfaceHoverSuppressionContext = createContext<
+  ((suppressed: boolean) => void) | null
+>(null);
 
 type SurfaceFeedbackHandlers = Pick<
   ViewProps,

@@ -1,5 +1,6 @@
 import baseMeta, {
   ComposerBeforeUnloadContract as composerBeforeUnloadContract,
+  ContentWarningCardHoverIsolationInteraction as contentWarningCardHoverIsolation,
   ContentWarningProductionConsumersShareRevealStateInteraction as contentWarningConsumersInteraction,
   ContentWarningQuoteIndependentLifecycleInteraction as contentWarningQuoteInteraction,
   ContentWarningRevealInteraction as contentWarningRevealInteraction,
@@ -27,6 +28,8 @@ export const ContentWarningSourcePreviewReveal: Story = contentWarningSourcePrev
 
 export const ContentWarningProductionConsumersShareRevealState: Story =
   contentWarningConsumersInteraction;
+
+export const ContentWarningCardHoverIsolation: Story = contentWarningCardHoverIsolation;
 
 export const ContentWarningQuoteIndependentLifecycle: Story = contentWarningQuoteInteraction;
 

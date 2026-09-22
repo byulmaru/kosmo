@@ -2996,6 +2996,7 @@ const meta = {
   excludeStories: [
     'ComposerBeforeUnloadContract',
     'ContentWarningProductionConsumersShareRevealStateInteraction',
+    'ContentWarningCardHoverIsolationInteraction',
     'ContentWarningQuoteIndependentLifecycleInteraction',
     'ContentWarningRevealInteraction',
     'ContentWarningSourcePreviewRevealInteraction',
@@ -6380,6 +6381,32 @@ export const ContentWarningProductionConsumersShareRevealStateInteraction: Story
     expect(
       listSurface.getByRole('button', { name: /실제 Post 소비자 통합 검증 경고, 본문, 보기/ }),
     ).toBeVisible();
+  },
+};
+
+export const ContentWarningCardHoverIsolationInteraction: Story = {
+  ...ContentWarningProductionConsumersShareRevealState,
+  parameters: { controls: { disable: true } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const listSurface = canvas.getByTestId('content-warning-list-surface');
+    const card = within(listSurface).getByTestId('post-list-item-card');
+    const feedback = within(card).getByTestId('post-list-item-feedback');
+    const warning = within(card).getByRole('button', {
+      name: /실제 Post 소비자 통합 검증 경고, 본문, 보기/,
+    });
+
+    await userEvent.hover(canvas.getByTestId('content-warning-layout-surface'));
+    const restingCardColor = getComputedStyle(feedback).backgroundColor;
+    const restingWarningColor = getComputedStyle(warning).backgroundColor;
+
+    await userEvent.hover(warning);
+    expect(getComputedStyle(feedback).backgroundColor).toBe(restingCardColor);
+    expect(getComputedStyle(warning).backgroundColor).not.toBe(restingWarningColor);
+
+    await userEvent.unhover(warning);
+    await userEvent.hover(within(card).getAllByRole('link')[0]!);
+    expect(getComputedStyle(feedback).backgroundColor).not.toBe(restingCardColor);
   },
 };
 

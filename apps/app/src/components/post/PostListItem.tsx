@@ -1,6 +1,6 @@
 import { Link, useRouter } from 'expo-router';
 import { MessageCircle, Pin } from 'lucide-react-native';
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
@@ -17,7 +17,10 @@ import { usePostMediaViewerHost } from './PostMediaViewerHost';
 import { usePostReplySurface } from './PostReplySurface';
 import { PostSourcePresentationView } from './PostSourcePresentationView';
 import { ReplyComposerSurface } from './ReplyComposerSurface';
-import { usePostSurfaceFeedback } from './usePostSurfaceFeedback';
+import {
+  PostSurfaceHoverSuppressionContext,
+  usePostSurfaceFeedback,
+} from './usePostSurfaceFeedback';
 import type { ReactNode } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { PostListItem_post$key } from './__generated__/PostListItem_post.graphql';
@@ -354,6 +357,7 @@ function PostListItemCard({
     hover: true,
     press: true,
   });
+  const [warningHovered, setWarningHovered] = useState(false);
 
   return (
     <View
@@ -370,14 +374,16 @@ function PostListItemCard({
           {
             backgroundColor: pressed
               ? theme.statePressedSubtle
-              : hovered
+              : hovered && !warningHovered
                 ? theme.stateHover
                 : undefined,
           },
         ]}
         testID="post-list-item-feedback"
       />
-      {children}
+      <PostSurfaceHoverSuppressionContext.Provider value={setWarningHovered}>
+        {children}
+      </PostSurfaceHoverSuppressionContext.Provider>
     </View>
   );
 }
