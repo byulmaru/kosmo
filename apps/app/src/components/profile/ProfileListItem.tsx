@@ -10,6 +10,7 @@ import type { ProfileListItem_profile$key } from './__generated__/ProfileListIte
 type ProfileListItemProps = {
   linked?: boolean;
   onPress?: () => void;
+  onNavigate?: () => void;
   profile: ProfileListItem_profile$key;
   showBio?: boolean;
   style?: StyleProp<ViewStyle>;
@@ -33,6 +34,7 @@ const profileListItemFragment = graphql`
 export function ProfileListItem({
   linked = false,
   onPress,
+  onNavigate,
   profile,
   showBio = true,
   style,
@@ -47,6 +49,7 @@ export function ProfileListItem({
       href={linked ? (`/${data.relativeHandle}` as Href) : undefined}
       identity={<ProfileNameBlock profile={data} style={{ flex: 0 }} variant="compact" />}
       onPress={onPress}
+      onNavigate={onNavigate}
       relativeHandle={data.relativeHandle}
       style={style}
     >

@@ -1,77 +1,124 @@
 import assert from 'node:assert/strict';
-import { before, beforeEach, describe, it, mock } from 'node:test';
-import type { AnalyticsSessionBridge as AnalyticsSessionBridgeType } from './AnalyticsSessionBridge';
+import { after, afterEach, before, mock, test } from 'node:test';
+import { createElement } from 'react';
+import { act, create } from 'react-test-renderer';
+import type { ReactTestRenderer } from 'react-test-renderer';
+import type { AnalyticsSessionBridge } from './AnalyticsSessionBridge';
+import type { SearchProfileEventArgs } from './events';
+import type { searchProfileJourneys } from './searchProfileJourneys';
 
-const calls: string[] = [];
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+const events: SearchProfileEventArgs[] = [];
+const identities: string[] = [];
 const session = {
-  accountId: null as string | null,
-  status: 'guest' as 'error' | 'guest' | 'valid',
+  accountId: 'account-a' as string | null,
+  selectedProfileId: 'profile-a' as string | null,
+  status: 'valid',
 };
-
+let pathname = '/search';
+let listener: ((id: string) => void) | undefined;
+let renderer: ReactTestRenderer | undefined;
+const page = new EventTarget();
+const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+Object.defineProperty(globalThis, 'window', { configurable: true, value: page });
 const mockModule = (specifier: string | URL, exports: object) =>
-  mock.module(specifier, {
-    exports,
-  } as unknown as Parameters<typeof mock.module>[1]);
-
-mockModule('react', {
-  useEffect: (effect: () => void) => effect(),
-});
+  mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
+mockModule('expo-router', { usePathname: () => pathname });
+mockModule('react-native', { Platform: { OS: 'web' } });
 mockModule(new URL('../session/SessionProvider.tsx', import.meta.url), {
   useSession: () => session,
 });
 mockModule(new URL('./client.ts', import.meta.url), {
-  clearAnalytics: () => calls.push('clear'),
-  identifyAnalytics: (accountId: string) => calls.push(`identify:${accountId}`),
+  clearAnalytics: () => identities.push('clear'),
+  identifyAnalytics: (id: string) => identities.push(id),
+  observeAnalyticsSession: (callback: (id: string) => void) => {
+    listener = callback;
+    callback('session-a');
+    return () => {
+      listener = undefined;
+    };
+  },
+  captureSearchProfileAnalytics: (args: SearchProfileEventArgs) => {
+    events.push(args);
+    return 'session-a';
+  },
 });
-
-let AnalyticsSessionBridge: typeof AnalyticsSessionBridgeType;
-
+let Bridge: typeof AnalyticsSessionBridge;
+let journeys: typeof searchProfileJourneys;
 before(async () => {
-  ({ AnalyticsSessionBridge } = await import('./AnalyticsSessionBridge'));
+  ({ AnalyticsSessionBridge: Bridge } = await import('./AnalyticsSessionBridge'));
+  ({ searchProfileJourneys: journeys } = await import('./searchProfileJourneys'));
+});
+afterEach(async () => {
+  await act(async () => renderer?.unmount());
+  renderer = undefined;
+  events.length = 0;
+  identities.length = 0;
+  session.accountId = 'account-a';
+  session.selectedProfileId = 'profile-a';
+  session.status = 'valid';
+  pathname = '/search';
 });
 
-beforeEach(() => {
-  calls.length = 0;
-  session.accountId = null;
-  session.status = 'guest';
+afterEach(() => {
+  journeys.end();
 });
 
-describe('AnalyticsSessionBridge', () => {
-  it('guest session은 anonymous client를 초기화하고 이전 identity를 지운다', () => {
-    AnalyticsSessionBridge();
-    assert.deepEqual(calls, ['clear']);
+test('실제 effect에서 identity·actor·SDK session·pagehide 종료를 연결한다', async () => {
+  await act(async () => {
+    renderer = create(createElement(Bridge));
   });
+  assert.deepEqual(identities, ['account-a']);
+  for (const boundary of ['profile', 'account', 'auth', 'sdk', 'pagehide']) {
+    journeys.setSearch(boundary);
+    const journey = journeys.select(boundary, 'target', '/@target');
+    if (boundary === 'profile') {
+      session.selectedProfileId = 'profile-b';
+    }
+    if (boundary === 'account') {
+      session.accountId = 'account-b';
+    }
+    if (boundary === 'auth') {
+      session.status = 'guest';
+      session.accountId = null;
+    }
+    if (boundary === 'sdk') {
+      listener?.('session-b');
+    }
+    if (boundary === 'pagehide') {
+      page.dispatchEvent(new Event('pagehide'));
+    }
+    await act(async () => renderer!.update(createElement(Bridge)));
+    journeys.succeed(journey, 'target', 'follow');
+  }
+  assert.equal(events.length, 5);
+  assert.equal(
+    events.every(([event]) => event === 'search_profile_journey_started'),
+    true,
+  );
+  assert.deepEqual(identities, ['account-a', 'account-b', 'clear']);
+});
 
-  it('valid session은 opaque Account ID로 identify한다', () => {
-    session.accountId = 'account-id';
-    session.status = 'valid';
-
-    AnalyticsSessionBridge();
-
-    assert.deepEqual(calls, ['identify:account-id']);
+test('다른 route로 이동하면 선택을 분리하고 unmount 후 SDK 구독을 해제한다', async () => {
+  await act(async () => {
+    renderer = create(createElement(Bridge));
   });
+  journeys.setSearch('route');
+  journeys.select('route', 'target', '/@target');
+  pathname = '/@target';
+  await act(async () => renderer!.update(createElement(Bridge)));
+  assert.ok(journeys.forRoute('/@target', 'target'));
+  pathname = '/home';
+  await act(async () => renderer!.update(createElement(Bridge)));
+  assert.equal(journeys.forRoute('/@target', 'target'), null);
+  await act(async () => renderer!.unmount());
+  assert.equal(listener, undefined);
+});
 
-  it('valid session이 guest로 바뀌면 이전 identity를 지운다', () => {
-    session.accountId = 'account-id';
-    session.status = 'valid';
-    AnalyticsSessionBridge();
-
-    session.accountId = null;
-    session.status = 'guest';
-    AnalyticsSessionBridge();
-
-    assert.deepEqual(calls, ['identify:account-id', 'clear']);
-  });
-
-  it('valid session이 error로 바뀌면 이전 identity를 지운다', () => {
-    session.accountId = 'account-id';
-    session.status = 'valid';
-    AnalyticsSessionBridge();
-
-    session.accountId = null;
-    session.status = 'error';
-    AnalyticsSessionBridge();
-
-    assert.deepEqual(calls, ['identify:account-id', 'clear']);
-  });
+after(() => {
+  if (originalWindow) {
+    Object.defineProperty(globalThis, 'window', originalWindow);
+  } else {
+    Reflect.deleteProperty(globalThis, 'window');
+  }
 });

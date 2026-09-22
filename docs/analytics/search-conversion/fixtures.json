@@ -1,0 +1,132 @@
+{
+  "acceptance": [
+    {
+      "event": "search_profile_journey_started",
+      "timestamp": "2026-09-01 23:50:00.000",
+      "journey_id": "a059b1ce-d4dd-4a54-b493-b5e25bbd67ba",
+      "session_id": "29e26280-6223-44d1-a2c6-146eafe7c4eb",
+      "elapsed_ms": 0
+    },
+    {
+      "event": "search_profile_journey_started",
+      "timestamp": "2026-09-01 23:50:00.000",
+      "journey_id": "7dbb98af-8c99-4677-9e17-05975345a533",
+      "session_id": "29e26280-6223-44d1-a2c6-146eafe7c4eb",
+      "elapsed_ms": 0
+    },
+    {
+      "event": "search_profile_journey_started",
+      "timestamp": "2026-09-01 23:50:00.000",
+      "journey_id": "74143cbe-8f75-49df-b1df-b98157c15142",
+      "session_id": "29e26280-6223-44d1-a2c6-146eafe7c4eb",
+      "elapsed_ms": 0
+    },
+    {
+      "event": "search_profile_journey_started",
+      "timestamp": "2026-09-01 23:50:00.000",
+      "journey_id": "816ba176-cbf6-4901-8268-9ed72c75d44b",
+      "session_id": "29e26280-6223-44d1-a2c6-146eafe7c4eb",
+      "elapsed_ms": 0
+    },
+    {
+      "event": "search_profile_journey_started",
+      "timestamp": "2026-09-01 23:50:00.000",
+      "journey_id": "fa4d1e7f-de89-4734-b814-d37d9766e463",
+      "session_id": "29e26280-6223-44d1-a2c6-146eafe7c4eb",
+      "elapsed_ms": 0
+    },
+    {
+      "event": "search_profile_journey_started",
+      "timestamp": "2026-09-01 23:50:00.000",
+      "journey_id": "1b67e873-0d8c-42f0-bde3-a812c0b219f8",
+      "session_id": "29e26280-6223-44d1-a2c6-146eafe7c4eb",
+      "elapsed_ms": 0
+    },
+    {
+      "event": "search_profile_view_succeeded",
+      "timestamp": "2026-09-01 23:50:01.000",
+      "journey_id": "a059b1ce-d4dd-4a54-b493-b5e25bbd67ba",
+      "session_id": "29e26280-6223-44d1-a2c6-146eafe7c4eb",
+      "elapsed_ms": 1000
+    },
+    {
+      "event": "search_profile_follow_succeeded",
+      "timestamp": "2026-09-01 23:50:02.000",
+      "journey_id": "a059b1ce-d4dd-4a54-b493-b5e25bbd67ba",
+      "session_id": "29e26280-6223-44d1-a2c6-146eafe7c4eb",
+      "elapsed_ms": 2000
+    },
+    {
+      "event": "search_profile_follow_succeeded",
+      "timestamp": "2026-09-01 23:50:03.000",
+      "journey_id": "74143cbe-8f75-49df-b1df-b98157c15142",
+      "session_id": "29e26280-6223-44d1-a2c6-146eafe7c4eb",
+      "elapsed_ms": 3000
+    },
+    {
+      "event": "search_profile_view_succeeded",
+      "timestamp": "2026-09-01 23:50:04.000",
+      "journey_id": "816ba176-cbf6-4901-8268-9ed72c75d44b",
+      "session_id": "29e26280-6223-44d1-a2c6-146eafe7c4eb",
+      "elapsed_ms": 4000
+    },
+    {
+      "event": "search_profile_view_succeeded",
+      "timestamp": "2026-09-02 00:20:00.000",
+      "journey_id": "fa4d1e7f-de89-4734-b814-d37d9766e463",
+      "session_id": "29e26280-6223-44d1-a2c6-146eafe7c4eb",
+      "elapsed_ms": 1800000
+    },
+    {
+      "event": "search_profile_view_succeeded",
+      "timestamp": "2026-09-02 00:20:00.001",
+      "journey_id": "1b67e873-0d8c-42f0-bde3-a812c0b219f8",
+      "session_id": "29e26280-6223-44d1-a2c6-146eafe7c4eb",
+      "elapsed_ms": 1800001
+    }
+  ],
+  "extraBoundaries": [
+    {
+      "event": "search_profile_journey_started",
+      "timestamp": "2026-09-01 23:50:00.000",
+      "journey_id": "a059b1ce-d4dd-4a54-b493-b5e25bbd67ba",
+      "session_id": "29e26280-6223-44d1-a2c6-146eafe7c4eb",
+      "elapsed_ms": 0
+    },
+    {
+      "event": "search_profile_view_succeeded",
+      "timestamp": "2026-09-01 23:50:01.000",
+      "journey_id": "a059b1ce-d4dd-4a54-b493-b5e25bbd67ba",
+      "session_id": "29e26280-6223-44d1-a2c6-146eafe7c4eb",
+      "elapsed_ms": 1000
+    },
+    {
+      "event": "search_profile_follow_succeeded",
+      "timestamp": "2026-09-01 23:50:02.000",
+      "journey_id": "a059b1ce-d4dd-4a54-b493-b5e25bbd67ba",
+      "session_id": "29e26280-6223-44d1-a2c6-146eafe7c4eb",
+      "elapsed_ms": 2000
+    },
+    {
+      "event": "search_profile_follow_succeeded",
+      "timestamp": "2026-09-01 23:50:05.000",
+      "journey_id": "7dbb98af-8c99-4677-9e17-05975345a533",
+      "session_id": "27628098-b4a2-407b-bbaf-b4c38287d971",
+      "elapsed_ms": 5000
+    },
+    {
+      "event": "search_profile_follow_succeeded",
+      "timestamp": "2026-09-01 23:50:05.000",
+      "journey_id": "cbae08c3-e884-449f-a773-fc66deb27d18",
+      "session_id": "29e26280-6223-44d1-a2c6-146eafe7c4eb",
+      "elapsed_ms": 5000
+    },
+    {
+      "event": "search_profile_view_succeeded",
+      "timestamp": "2026-09-01 23:49:59.000",
+      "journey_id": "7dbb98af-8c99-4677-9e17-05975345a533",
+      "session_id": "29e26280-6223-44d1-a2c6-146eafe7c4eb",
+      "elapsed_ms": -1000
+    }
+  ]
+}

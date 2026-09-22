@@ -11,8 +11,10 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { graphql, useLazyLoadQuery, usePaginationFragment } from 'react-relay';
+import { graphql, useFragment, useLazyLoadQuery, usePaginationFragment } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
+import { SearchProfileJourneyContext } from '@/analytics/SearchProfileAttribution';
+import { searchProfileJourneys } from '@/analytics/searchProfileJourneys';
 import { PageHeader } from '@/components/PageHeader';
 import {
   PaginationScrollView,
@@ -40,6 +42,7 @@ import type { SearchToolbarRenderLeadingControlProps } from '@/components/ui/Sea
 import type { SearchPeopleByHandlePageQuery } from './__generated__/SearchPeopleByHandlePageQuery.graphql';
 import type { SearchPeopleResults_query$key } from './__generated__/SearchPeopleResults_query.graphql';
 import type { SearchPeopleResultsNextPageQuery } from './__generated__/SearchPeopleResultsNextPageQuery.graphql';
+import type { SearchResultProfile_profile$key } from './__generated__/SearchResultProfile_profile.graphql';
 
 const tabs = [
   { label: '인기', value: SearchTab.POPULAR },
@@ -67,7 +70,7 @@ const SearchPeopleResultsFragment = graphql`
       edges {
         cursor
         node {
-          ...ProfileListItem_profile
+          ...SearchResultProfile_profile
         }
       }
     }
@@ -151,13 +154,7 @@ function SearchPeopleResults({
   return (
     <View>
       {edges.map(({ cursor, node }) => (
-        <ProfileListItem
-          key={cursor}
-          linked
-          onPress={() => trackAnalytics('search_result_selected', { tab: 'people' })}
-          profile={node}
-          showBio
-        />
+        <SearchResultProfile key={cursor} handle={handle} profile={node} />
       ))}
       <PaginationSurface
         endRef={endRef}
@@ -170,6 +167,41 @@ function SearchPeopleResults({
         style={styles.pagination}
       />
     </View>
+  );
+}
+
+function SearchResultProfile({
+  handle,
+  profile,
+}: {
+  handle: string;
+  profile: SearchResultProfile_profile$key;
+}) {
+  const data = useFragment(
+    graphql`
+      fragment SearchResultProfile_profile on Profile {
+        id
+        relativeHandle
+        ...ProfileListItem_profile
+      }
+    `,
+    profile,
+  );
+  const searchKey = JSON.stringify([handle, SearchTab.PEOPLE]);
+  return (
+    <SearchProfileJourneyContext.Provider
+      value={() => searchProfileJourneys.forSearch(searchKey, data.id)}
+    >
+      <ProfileListItem
+        linked
+        onNavigate={() => {
+          searchProfileJourneys.select(searchKey, data.id, `/${data.relativeHandle}`);
+          trackAnalytics('search_result_selected', { tab: 'people' });
+        }}
+        profile={data}
+        showBio
+      />
+    </SearchProfileJourneyContext.Provider>
   );
 }
 
@@ -220,6 +252,9 @@ export default function SearchScreen() {
   const params = useLocalSearchParams<{ q?: string; tab?: string }>();
   const query = typeof params.q === 'string' ? params.q.trim() : '';
   const activeTab = parseSearchTab(params.tab ?? null);
+  useLayoutEffect(() => {
+    searchProfileJourneys.setSearch(JSON.stringify([query, activeTab]));
+  }, [query, activeTab]);
   const inputRef = useRef<TextInput>(null);
   const [input, setInput] = useState(query);
   const [recent, setRecent] = useState<string[]>([]);
@@ -380,6 +415,7 @@ export default function SearchScreen() {
     }
     preserveQueryNavigationPosition();
     setFocused(false);
+    searchProfileJourneys.setSearch(JSON.stringify([normalized, activeTab]));
     router.push(searchHref(normalized, activeTab));
   };
 
@@ -388,6 +424,7 @@ export default function SearchScreen() {
     keepSearchFocused();
     if (query) {
       preserveQueryNavigationPosition();
+      searchProfileJourneys.setSearch(JSON.stringify(['', activeTab]));
       router.setParams({ q: undefined });
     }
     inputRef.current?.focus();
@@ -402,7 +439,14 @@ export default function SearchScreen() {
       }>,
       { accessibilityRole: 'link' },
     );
-    return <NavigationLink href={searchHref('', activeTab)}>{linkControl}</NavigationLink>;
+    return (
+      <NavigationLink
+        href={searchHref('', activeTab)}
+        onNavigate={() => searchProfileJourneys.setSearch(JSON.stringify(['', activeTab]))}
+      >
+        {linkControl}
+      </NavigationLink>
+    );
   };
 
   const nativeSearchHeader = !web ? (
@@ -429,7 +473,10 @@ export default function SearchScreen() {
             <Menu color={theme.text} size={24} strokeWidth={2} />
           </IconButton>
         ) : (
-          <NavigationLink href={searchHref('', activeTab)}>
+          <NavigationLink
+            href={searchHref('', activeTab)}
+            onNavigate={() => searchProfileJourneys.setSearch(JSON.stringify(['', activeTab]))}
+          >
             <Pressable
               accessibilityLabel="뒤로"
               accessibilityRole="link"
@@ -520,7 +567,12 @@ export default function SearchScreen() {
             {recent.length ? (
               recent.map((term) => (
                 <View key={term} style={[styles.recentItem, { borderColor: theme.border }]}>
-                  <NavigationLink href={searchHref(term, activeTab)}>
+                  <NavigationLink
+                    href={searchHref(term, activeTab)}
+                    onNavigate={() => {
+                      searchProfileJourneys.setSearch(JSON.stringify([term, activeTab]));
+                    }}
+                  >
                     <Pressable
                       accessibilityRole="link"
                       onPress={(event) => {
@@ -577,6 +629,7 @@ export default function SearchScreen() {
             href={(tab) => searchHref(query, tab)}
             param="tab"
             onValueChange={(tab) => {
+              searchProfileJourneys.setSearch(JSON.stringify([query, tab]));
               if (query) {
                 remember(query);
                 trackAnalytics('search_submitted', { source: 'tab', tab });

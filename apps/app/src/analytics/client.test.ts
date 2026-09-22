@@ -1,12 +1,22 @@
 import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it, mock } from 'node:test';
-import type { PostHogConfig } from 'posthog-js';
+import type { CaptureResult, PostHogConfig } from 'posthog-js';
 import type * as AnalyticsModule from './client.web';
 
 type Call = { event: string; properties?: Record<string, unknown> };
 
 class FakePostHog {
+  constructor(readonly config: Partial<PostHogConfig>) {}
+  sessionId = 'session-a';
+  rotateOnCapture = false;
+  sessionListeners = new Set<(sessionId: string, windowId: string) => void>();
+  onSessionId(callback: (sessionId: string, windowId: string) => void) {
+    this.sessionListeners.add(callback);
+    callback(this.sessionId, 'window');
+    return () => this.sessionListeners.delete(callback);
+  }
   readonly calls: Call[] = [];
+  readonly timestamps: Date[] = [];
   readonly identities: string[] = [];
   readonly actions: string[] = [];
   captureAttempts = 0;
@@ -17,13 +27,32 @@ class FakePostHog {
   distinctId = 'anonymous-id';
   userId: string | undefined;
 
-  capture(event: string, properties?: Record<string, unknown>) {
+  capture(event: string, properties?: Record<string, unknown>, options?: { timestamp?: Date }) {
     this.captureAttempts += 1;
     if (this.captureFails) {
       throw new Error('capture failure');
     }
     this.actions.push(`capture:${event}`);
+    if (this.rotateOnCapture) {
+      this.sessionId = 'session-b';
+      this.sessionListeners.forEach((listener) => listener(this.sessionId, 'window'));
+      this.rotateOnCapture = false;
+    }
+    const result = {
+      event,
+      properties: { ...properties, $session_id: this.sessionId },
+      uuid: 'test',
+      timestamp: options?.timestamp ?? new Date(),
+    } as CaptureResult;
+    const filtered =
+      typeof this.config.before_send === 'function' ? this.config.before_send(result) : result;
+    if (!filtered) {
+      return undefined;
+    }
     this.calls.push({ event, properties });
+    assert.ok(filtered.timestamp);
+    this.timestamps.push(filtered.timestamp);
+    return filtered;
   }
 
   identify(accountId: string) {
@@ -93,7 +122,7 @@ mock.module('posthog-js', {
         }
 
         initCalls.push({ token, config });
-        const instance = new FakePostHog();
+        const instance = new FakePostHog(config);
         instances.push(instance);
         return instance;
       },
@@ -318,4 +347,83 @@ describe('PostHog Web client', () => {
     assert.doesNotThrow(() => analytics.clearAnalytics());
     assert.equal(instance.captureAttempts, 1);
   });
+});
+
+it('capture 순간 session이 바뀌면 검색 성공을 보내지 않고 표준 이벤트는 유지한다', () => {
+  const changes: string[] = [];
+  const unsubscribe = analytics.observeAnalyticsSession((id) => changes.push(id));
+  const instance = instances[0]!;
+  const properties = {
+    search_profile_journey_id: 'opaque-journey',
+    source: 'search_people' as const,
+  };
+  assert.equal(
+    analytics.captureSearchProfileAnalytics(['search_profile_journey_started', properties]),
+    'session-a',
+  );
+  instance.rotateOnCapture = true;
+  assert.equal(
+    analytics.captureSearchProfileAnalytics(
+      ['search_profile_view_succeeded', { ...properties, elapsed_ms: 1 }],
+      'session-a',
+    ),
+    null,
+  );
+  analytics.trackAnalytics('search_submitted', { source: 'keyboard', tab: 'people' });
+  assert.deepEqual(
+    instance.calls.map(({ event }) => event),
+    ['search_profile_journey_started', 'search_submitted'],
+  );
+  assert.deepEqual(changes, ['session-a', 'session-b']);
+  unsubscribe();
+  assert.equal(instance.sessionListeners.size, 0);
+});
+
+it('같은 SDK session의 검색 성공만 opaque payload로 전달한다', () => {
+  const properties = {
+    search_profile_journey_id: 'opaque-journey',
+    source: 'search_people' as const,
+  };
+  assert.equal(
+    analytics.captureSearchProfileAnalytics(['search_profile_journey_started', properties]),
+    'session-a',
+  );
+  assert.equal(
+    analytics.captureSearchProfileAnalytics(
+      ['search_profile_follow_succeeded', { ...properties, elapsed_ms: 1_800_000 }],
+      'session-a',
+    ),
+    'session-a',
+  );
+  assert.deepEqual(instances[0]!.calls, [
+    { event: 'search_profile_journey_started', properties },
+    {
+      event: 'search_profile_follow_succeeded',
+      properties: { ...properties, elapsed_ms: 1_800_000 },
+    },
+  ]);
+  instances[0]!.captureFails = true;
+  assert.equal(
+    analytics.captureSearchProfileAnalytics(['search_profile_journey_started', properties]),
+    null,
+  );
+});
+
+it('SDK capture 처리 시각과 관계없이 판정 시각을 최종 timestamp로 전달한다', () => {
+  const startedAt = Date.parse('2026-09-01T14:50:00.000Z');
+  const properties = { search_profile_journey_id: 'opaque', source: 'search_people' as const };
+  analytics.captureSearchProfileAnalytics(
+    ['search_profile_journey_started', properties],
+    undefined,
+    startedAt,
+  );
+  analytics.captureSearchProfileAnalytics(
+    ['search_profile_view_succeeded', { ...properties, elapsed_ms: 1_800_000 }],
+    'session-a',
+    startedAt + 1_800_000,
+  );
+  assert.deepEqual(
+    instances[0]!.timestamps.map((timestamp) => timestamp.getTime()),
+    [startedAt, startedAt + 1_800_000],
+  );
 });
