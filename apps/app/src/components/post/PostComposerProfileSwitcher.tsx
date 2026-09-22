@@ -1,19 +1,36 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { graphql, useFragment } from 'react-relay';
 import { ProfilePicker } from '@/components/profile/ProfilePicker';
 import { Avatar } from '@/components/ui/Avatar';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import type { ProfilePickerProfile } from '@/components/profile/ProfilePicker';
+import type { PostComposer_profile$key } from './__generated__/PostComposer_profile.graphql';
+import type { PostComposerProfileSwitcher_profiles$key } from './__generated__/PostComposerProfileSwitcher_profiles.graphql';
 
 export type PostComposerProfileSwitcherSurface = 'overlay' | 'rail';
+
+export type PostComposerProfileRef = PostComposer_profile$key &
+  PostComposerProfileSwitcher_profiles$key[number];
+
+const PostComposerProfileSwitcherFragment = graphql`
+  fragment PostComposerProfileSwitcher_profiles on Profile @relay(plural: true) {
+    id
+    relativeHandle
+    displayName
+    avatar {
+      url
+    }
+  }
+`;
 
 type Props = Readonly<{
   disabled?: boolean;
   onDismissChange?: (dismiss: (() => void) | null) => void;
   onSelectionSuccess?: () => void;
-  onSelectProfile: (id: string) => void | Promise<void>;
-  profiles: readonly ProfilePickerProfile[];
+  onSelectProfile: (id: string, profile: PostComposerProfileRef) => void | Promise<void>;
+  profiles: readonly PostComposerProfileRef[];
   selectedProfileId: string;
   surface: PostComposerProfileSwitcherSurface;
 }>;
@@ -29,7 +46,6 @@ export function PostComposerProfileSwitcher({
 }: Props) {
   const theme = useTheme();
   const rootRef = useRef<View>(null);
-  const pickerRef = useRef<View>(null);
   const triggerRef = useRef<View>(null);
   const pendingRef = useRef(false);
   const operationVersionRef = useRef(0);
@@ -37,7 +53,24 @@ export function PostComposerProfileSwitcher({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedProfileId, setSelectedProfileId] = useState(initialSelectedProfileId);
-  const selectedProfile = profiles.find((profile) => profile.id === selectedProfileId);
+  const profileData = useFragment(PostComposerProfileSwitcherFragment, profiles);
+  const pickerEntries = profiles.reduce<
+    Array<{
+      profile: (typeof profileData)[number];
+      profileKey: PostComposerProfileRef;
+    }>
+  >((entries, profileKey, index) => {
+    const profile = profileData[index];
+    if (!profile || entries.some(({ profile: entryProfile }) => entryProfile.id === profile.id)) {
+      return entries;
+    }
+    entries.push({ profile, profileKey });
+    return entries;
+  }, []);
+  const pickerProfiles: readonly ProfilePickerProfile[] = pickerEntries.map(
+    ({ profile }) => profile,
+  );
+  const selectedProfile = profileData.find((profile) => profile.id === selectedProfileId);
 
   useEffect(() => {
     setSelectedProfileId(initialSelectedProfileId);
@@ -114,9 +147,15 @@ export function PostComposerProfileSwitcher({
     setPending(true);
     setError(null);
     const operationVersion = operationVersionRef.current;
+    const entry = pickerEntries.find(({ profile }) => profile.id === id);
+    if (!entry) {
+      pendingRef.current = false;
+      setPending(false);
+      return;
+    }
 
     void Promise.resolve()
-      .then(() => onSelectProfile(id))
+      .then(() => onSelectProfile(id, entry.profileKey))
       .then(
         () => {
           if (operationVersion !== operationVersionRef.current) {
@@ -199,8 +238,7 @@ export function PostComposerProfileSwitcher({
               ) : null
             }
             onSelect={selectProfile}
-            pickerRef={pickerRef}
-            profiles={profiles}
+            profiles={pickerProfiles}
             selectedProfileId={selectedProfileId}
             showDivider={false}
             surface={surface === 'rail' ? 'compact' : 'full'}

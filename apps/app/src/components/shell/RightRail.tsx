@@ -5,7 +5,6 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import { NavigationLink } from './NavigationLink';
 import type { RefObject } from 'react';
-import type { PostComposerProfileCandidate } from '@/components/post/PostComposer';
 import type { PostComposerHostCloseReason } from '@/components/post/PostComposerHost';
 import type { RightRail_profile$key } from './__generated__/RightRail_profile.graphql';
 import type { RightRail_query$key } from './__generated__/RightRail_query.graphql';
@@ -22,6 +21,7 @@ type RightRailProps = {
 const RightRailFragment = graphql`
   fragment RightRail_profile on Profile {
     ...PostComposer_profile
+    ...PostComposerProfileSwitcher_profiles
   }
 `;
 
@@ -29,14 +29,8 @@ const RightRailQueryFragment = graphql`
   fragment RightRail_query on Query {
     me {
       profiles {
-        id
-        relativeHandle
-        displayName
-        avatar {
-          id
-          url
-        }
         ...PostComposer_profile
+        ...PostComposerProfileSwitcher_profiles
       }
     }
   }
@@ -54,24 +48,13 @@ export function RightRail({
 }: RightRailProps) {
   const profile = useFragment(RightRailFragment, profileKey);
   const query = useFragment(RightRailQueryFragment, queryKey);
-  const profiles: readonly PostComposerProfileCandidate[] =
-    query.me?.profiles?.map((candidate) => ({
-      id: candidate.id,
-      pickerProfile: {
-        avatar: candidate.avatar,
-        displayName: candidate.displayName,
-        id: candidate.id,
-        relativeHandle: candidate.relativeHandle,
-      },
-      profileKey: candidate,
-    })) ?? [];
   return (
     <PostComposerHost
       fallbackFocusRef={fallbackFocusRef}
       onRequestClose={onRequestClose}
       open={open}
       profile={profile}
-      profiles={profiles}
+      profiles={query.me?.profiles ?? []}
       triggerFocusRef={triggerFocusRef}
       {...(mode === 'rail' ? { mode, onExpand } : { mode })}
     />

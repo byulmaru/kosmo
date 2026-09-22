@@ -13,8 +13,26 @@ let renderer: ReactTestRenderer | null = null;
 let PostComposerProfileSwitcher: typeof PostComposerProfileSwitcherComponent;
 
 const profiles = [
-  { avatar: null, displayName: '프로필 A', id: 'profile-a', relativeHandle: '@profile-a' },
-  { avatar: null, displayName: '프로필 B', id: 'profile-b', relativeHandle: '@profile-b' },
+  {
+    ' $fragmentSpreads': {
+      PostComposerProfileSwitcher_profiles: true,
+      PostComposer_profile: true,
+    } as const,
+    avatar: null,
+    displayName: '프로필 A',
+    id: 'profile-a',
+    relativeHandle: '@profile-a',
+  },
+  {
+    ' $fragmentSpreads': {
+      PostComposerProfileSwitcher_profiles: true,
+      PostComposer_profile: true,
+    } as const,
+    avatar: null,
+    displayName: '프로필 B',
+    id: 'profile-b',
+    relativeHandle: '@profile-b',
+  },
 ];
 
 const mockModule = (specifier: string | URL, exports: object) =>
@@ -43,6 +61,10 @@ mockModule('react-native', {
   StyleSheet: { create: <T>(styles: T) => styles },
   Text: 'Text',
   View: 'View',
+});
+mockModule('react-relay', {
+  graphql: () => ({}),
+  useFragment: (_fragment: unknown, fragmentKey: unknown) => fragmentKey,
 });
 mockModule('@/components/profile/ProfilePicker', {
   ProfilePicker: (props: Record<string, unknown>) => createElement('ProfilePicker', props),
@@ -135,5 +157,34 @@ describe('PostComposerProfileSwitcher focus lifecycle', () => {
     await openPicker();
     await act(async () => dismiss?.());
     assert.equal(triggerFocusCount, 1);
+  });
+
+  it('deduplicates refreshed fragment refs by profile id', async () => {
+    const refreshedProfileA = {
+      ...profiles[0]!,
+      ' $fragmentSpreads': {
+        PostComposerProfileSwitcher_profiles: true,
+        PostComposer_profile: true,
+      } as const,
+    };
+    assert.notEqual(refreshedProfileA, profiles[0]);
+
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposerProfileSwitcher, {
+          onSelectProfile: () => undefined,
+          profiles: [profiles[0]!, refreshedProfileA, profiles[1]!],
+          selectedProfileId: profiles[0]!.id,
+          surface: 'rail',
+        }),
+      );
+    });
+
+    const picker = await openPicker();
+    const pickerProfiles = picker?.props.profiles as readonly { id: string }[];
+    assert.deepEqual(
+      pickerProfiles.map(({ id }) => id),
+      ['profile-a', 'profile-b'],
+    );
   });
 });
