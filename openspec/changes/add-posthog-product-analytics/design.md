@@ -7,7 +7,7 @@
 **확인한 상태와 Gate**
 
 - 조사 기준 main·HEAD는 `8650253d7cfaea3cab94f35d318d381c838af6c9`였고 당시 `apps/app/src/analytics/client.web.ts`는 `disable_session_recording: true`를 사용했다. Implement checkpoint는 이 명시적 차단을 제거했으며 production 배포·Cloud 실제 값·Replay 재활성화는 여전히 B의 pending 범위다.
-- `PostContentPrivacyBoundary.web.tsx`의 `ph-mask ph-no-capture`와 기존 `apps/web/e2e/analytics.e2e.ts`는 재사용할 기반이다. marker 존재나 기존 E2E 성공은 실제 recorder masking·Cloud 재생 증거가 아니다.
+- `PostContentPrivacyBoundary.web.tsx`의 `ph-mask ph-no-capture`와 analytics adapter의 기존 unit test는 앱 소유 경계를 검증하는 기반이다. marker 존재나 unit test 성공은 실제 recorder masking·Cloud 재생 증거가 아니다.
 - 2026-09-22 사용자가 현재 main의 개인정보처리방침을 PROD-741의 완료된 privacy baseline으로 수용했다. 과거 동일 결정의 존재는 blocker가 아니다. 이는 법적 완결성의 새 판단이 아닌 범위 결정이며 PROD-795의 정책·고지 책임을 재감사하거나 수정하지 않는다.
 - Spec Gate는 baseline 수용·Viewer 확인의 현재 결정 반영과 문서 검증을 기준으로 PASS로 판정한다. Replay Rollout Gate는 Cloud 실제 값과 코드·배포 준비 미확인으로 pending이다. Replay Rollout Gate는 production Replay를 실제 재활성화해도 되는지 판단하는 checkpoint다. privacy baseline, 네 Cloud 실제 값, 사전 보호·장애 검증과 코드·배포·rollback 준비가 입력이다. Spec Gate PASS만으로 Replay를 켜지 않는다.
 - PROD-540은 Backlog이고 PR #984는 조사 시 열려 있었다. 구현 재개 시 배포·main과 fixture 상태를 다시 확인한다.
@@ -32,7 +32,7 @@ Compact·Wide story의 `play`는 Viewer를 조작한 뒤 닫거나 Reply dialog�
 
 **정확히 두 세션으로 실행한다**
 
-1. A. Implement는 Luna Max (`gpt-5.6-luna`, reasoning `max`)로 runtime 구현과 자동화 가능한 unit/integration/E2E·typecheck/lint/build, synthetic masking·fail-open 검증 및 handoff만 수행한다. 가짜 설정·endpoint와 요청 차단을 사용해 자동화가 실제 Cloud recording을 만들지 않도록 한다. 코드 변경을 준비해도 실제 활성화·배포는 수행하지 않는다.
+1. A. Implement는 Luna Max (`gpt-5.6-luna`, reasoning `max`)로 runtime 구현과 앱 소유 config·identity·동기 fail-open·Post Content marker 자동 테스트, typecheck/lint/build 및 handoff만 수행한다. SDK recorder의 내부 bundle·payload·rrweb 형식과 기본 masking은 재검증하지 않는다. 코드 변경을 준비해도 실제 활성화·배포는 수행하지 않는다.
 2. A가 코드·자동 검증을 마치면 결과·source 버전·남은 운영 항목을 B에 인계하고 종료한다. Cloud screenshot 판독·실제 설정 판정/변경·Replay Rollout Gate 최종 판정·실제 Replay 시각 확인을 기다리며 A를 열어 두지 않는다.
 3. B. Operational Verification은 구현 외 남은 운영·실환경 검증 전부를 소유한다. 실제 재활성화 직전에 멈춰 canonical 캡처 표를 당시 UI에 맞춰 안내하고, 사용자의 screenshot을 읽어 10% sampling·production canonical origin만 허용하는 전체 조건·Normal input masking·30일 retention의 실제 값을 대조한다. 불일치·미확인은 현재 값·기대값·사람의 조치·pending Gate 입력으로 보고한다.
 4. B는 필요한 조치를 정확히 요청한다. 사용자가 수행하거나 명시적으로 승인하기 전에는 해당 조치를 실행·완료 처리하지 않는다. 추가 화면 또는 저장 설정 API/관리자 내보내기 증거가 필요하면 어떤 필드가 부족한지 안내하며 승인만으로 실제 적용 증거를 대신하지 않는다.

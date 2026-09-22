@@ -11,7 +11,7 @@
 - Authority / Provenance: 사용자의 현재 두 세션 책임 정정 요청, [Linear PROD-741](https://linear.app/byulmaru/issue/PROD-741), `docs/operations/posthog-replay.md`
 - Status: Active
 - Context / Problem: 기존 handoff는 Implement에 운영 검증을 섞고 PROD-575의 미래 최종 acceptance·archive에 의존했다.
-- Decision Outcome: A. Implement는 Luna Max (`gpt-5.6-luna`, reasoning `max`)로 runtime 구현·자동 테스트·typecheck/lint/build·synthetic masking/fail-open과 handoff만 수행한다. 코드·자동 검증이 끝나면 운영 대기 없이 B. Operational Verification에 인계한다. B는 screenshot 판독·Cloud 네 실제 값·불일치 조치 안내·Rollout Gate·PASS 후 실제 재활성화 절차·실제 Replay/SDK/Viewer/masking·필요한 실환경 장애 격리와 PROD-741 최종 acceptance 증거를 모두 소유한다.
+- Decision Outcome: A. Implement는 Luna Max (`gpt-5.6-luna`, reasoning `max`)로 runtime 구현과 앱 소유 config·identity·동기 fail-open·Post Content marker 자동 테스트, typecheck/lint/build와 handoff만 수행한다. 코드·자동 검증이 끝나면 운영 대기 없이 B. Operational Verification에 인계한다. B는 screenshot 판독·Cloud 네 실제 값·불일치 조치 안내·Rollout Gate·PASS 후 실제 재활성화 절차·실제 Replay/SDK/Viewer/masking·필요한 실환경 장애 격리와 PROD-741 최종 acceptance 증거를 모두 소유한다.
 - Alternatives Considered: Implement에서 운영 검증을 기다리거나 별도 Test·Review·세 번째 세션을 필수로 만드는 구조는 사용자의 두 세션 결정으로 제외했다.
 - Consequences: Human-required 조치는 사용자가 수행하거나 명시적으로 승인하기 전에 실행·완료 처리하지 않고 실제 실행·검증 증거를 확인한다. A 완료는 이슈 완료나 Rollout PASS가 아니다. B의 코드 결함은 같은 A로 돌린다. PROD-575 미래 인계·최종 acceptance·archive 의존성은 제거한다.
 - Confirmation / Follow-up: 연결된 PROD-575는 재조회에서도 Jiyu Park 담당 Todo·completedAt null로 반환돼 사용자 설명의 완료 상태와 다르다. 완료 시 남긴 책임은 확인하지 못했고, PR #404는 과거 OpenPanel 구현 증거다. PROD-575 본문·상태를 수정하거나 재개하지 않으며 이 관측 차이를 PROD-741 착수 blocker로 두지 않는다. Spec Gate는 문서 검증 후 PASS, Replay Rollout Gate는 B의 실제 입력 확인 전까지 pending이다.

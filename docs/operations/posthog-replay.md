@@ -24,16 +24,16 @@ PR Ready 전환은 merge·auto-merge·queue·production 배포·Replay 활성화
 
 | 세션                        | 소유 범위                                                                                                                                                                                                  | 완료·인계 경계                                                                                                                                                                                                           |
 | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| A. Implement — Luna Max     | runtime 코드 구현, unit/integration/E2E 등 자동 테스트, typecheck/lint/build, synthetic data로 자동 검증 가능한 masking·fail-open, handoff                                                                 | 코드와 자동 검증을 마치면 B에 결과·대상 버전·남은 운영 항목을 인계하고 종료한다. Cloud screenshot·실제 설정 판정/변경·Replay Rollout Gate 최종 판정·실제 재활성화·실제 Replay 시각 검증을 수행하거나 기다리지 않는다.    |
+| A. Implement — Luna Max     | runtime 코드 구현, 앱 소유 analytics config·identity·동기 fail-open·Post Content marker 자동 테스트, typecheck/lint/build, handoff                                                                         | 코드와 자동 검증을 마치면 B에 결과·대상 버전·남은 운영 항목을 인계하고 종료한다. Cloud screenshot·실제 설정 판정/변경·Replay Rollout Gate 최종 판정·실제 재활성화·실제 Replay 시각 검증을 수행하거나 기다리지 않는다.    |
 | B. Operational Verification | 코드 구현 외 남은 운영·실환경 검증 전부: Cloud screenshot과 네 실제 값, 불일치 조치 안내, Rollout Gate, PASS 후 재활성화 절차, 실제 Replay·SDK journey·Viewer·masking·제품 장애 격리 acceptance, 최종 증거 | PROD-741 자체의 최종 acceptance를 정리한다. Human-required 조치는 정확한 대상·행위·기대 결과를 요청하고 사용자가 수행하거나 명시적으로 승인하기 전에는 완료 처리하지 않는다. 승인 후에도 실제 실행·검증 증거를 확보한다. |
 
 A의 완료는 PROD-741 전체 완료나 Replay Rollout Gate PASS가 아니다. B에서 구현 결함이 발견되면 같은 A 세션으로 보완 책임을 돌리고 B를 재개한다. 코드 보완을 위한 세 번째 세션을 필수로 추가하지 않는다.
 
 ## A. Implement checkpoint (2026-09-22)
 
-A는 `apps/app/src/analytics/client.web.ts`의 명시적 `disable_session_recording` 차단을 제거하고 기존 analytics adapter의 표준 이벤트·identity·Native no-op·fail-open 경계를 유지했다. `apps/web/e2e/analytics.e2e.ts`는 실제 lockfile `posthog-js` lazy recorder와 synthetic data를 사용해 remote config/init 차단, recorder load 차단, snapshot upload 503, analytics endpoint 503을 자동 검증하고 route/pageview·Viewer 이미지 전환·identity 흐름이 계속 성공하는지 확인한다. input·textarea와 `ph-mask ph-no-capture` Post Content marker는 gzip snapshot payload 및 autocapture payload에서 비노출임을 확인한다.
+A는 `apps/app/src/analytics/client.web.ts`의 명시적 `disable_session_recording` 차단을 제거하고 기존 analytics adapter의 표준 이벤트·identity·Native no-op·fail-open 경계를 유지했다. 자동 검증은 앱이 소유하는 초기화 config·identity 전환·동기 SDK 예외 격리와 canonical Post Content의 `ph-mask ph-no-capture` DOM marker에 한정한다.
 
-현재 A의 자동 검증은 통과했으며 이 결과는 B의 입력으로 handoff한다. 이 checkpoint는 production 배포·Cloud sampling/origin/masking/retention 확인·실제 Replay 시각 검증을 포함하지 않으므로 Replay Rollout Gate는 계속 pending이다.
+SDK recorder의 내부 bundle 경로·압축 payload·rrweb snapshot 구조와 기본 masking은 자동 테스트에서 재검증하지 않는다. 실제 recorder 전송·input/textarea 및 Post Content masking·autocapture 제외·recorder/network 장애 격리는 B의 Operational Verification에서 확인하므로 Replay Rollout Gate는 계속 pending이다.
 
 ## Human-required: Cloud 실제 값 확인
 

@@ -8,13 +8,13 @@ PR #955 이후 조사 시점의 runtime은 Product Analytics만 활성화하고 
 
 - Goal: 선행 조건 충족 후 Web Replay를 재활성화하고, 10% sampling·production canonical origin·민감 텍스트 masking·30일 retention을 유지한 Viewer journey의 재생과 fail-open을 증명한다.
 - Non-goals: 개인정보 정책 결정·고지 책임 인수, Cloud 최초 구성, 새 emitter·filter·custom selector·opt-out UI, Native SDK와 Post visibility 변경.
-- Verification: 사용자의 기존 Storybook Viewer 시각 확인, Human-required screenshot으로 확인한 네 Cloud 실제 값, 합성 데이터의 SDK outbound·제품 장애 격리, 실제 route navigation·Viewer replay·SDK 이벤트 연결을 구분한다. PROD-540이 배포된 경우에만 opt-out 미전송을 추가 확인한다.
-- Progress: 2026-09-22 사용자가 현재 main의 개인정보처리방침을 완료된 privacy baseline으로 수용하고 기존 compact·wide Viewer를 직접 확인했다. 법적 완결성의 새 판단이나 PROD-795 정책·고지 재감사·수정은 포함하지 않는다. 과거 동일 결정의 존재는 더 이상 blocker가 아니다. Spec Gate는 PASS이며, Implement A는 runtime 변경과 자동 검증을 완료했다. Replay Rollout Gate와 Cloud 실제 값·배포/rollback·실제 Replay acceptance는 B의 pending 범위다.
+- Verification: 사용자의 기존 Storybook Viewer 시각 확인, 앱 소유 config·identity·동기 fail-open·Post Content marker 자동 검증, Human-required screenshot으로 확인한 네 Cloud 실제 값, 실제 route navigation·Viewer replay·SDK 이벤트·masking·장애 격리를 구분한다. PROD-540이 배포된 경우에만 opt-out 미전송을 추가 확인한다.
+- Progress: 2026-09-22 사용자가 현재 main의 개인정보처리방침을 완료된 privacy baseline으로 수용하고 기존 compact·wide Viewer를 직접 확인했다. 법적 완결성의 새 판단이나 PROD-795 정책·고지 재감사·수정은 포함하지 않는다. 과거 동일 결정의 존재는 더 이상 blocker가 아니다. Spec Gate는 PASS이며, Implement A는 runtime 변경과 앱 소유 경계의 자동 검증을 완료했다. Replay Rollout Gate와 Cloud 실제 값·배포/rollback·실제 Replay·masking·장애 격리 acceptance는 B의 pending 범위다.
 - Human-required: baseline 수용과 기존 Viewer의 사용자 시각 확인은 완료됐다. Operational Verification에서 실제 재활성화 직전에 Codex가 Cloud 화면 캡처 방법을 안내하고 사용자의 screenshot을 직접 읽어 10%·canonical origin·Normal·30일을 대조한다. 불일치는 현재 값·기대값·사람의 조치·pending Gate 입력으로 보고한다.
 
 ## 두 세션의 완료 경계
 
-- Implement (Luna Max): runtime 구현과 자동 unit/integration/E2E·typecheck/lint/build, synthetic masking·fail-open 검증 및 handoff. Cloud 실제 값·screenshot·Rollout 최종 판정·실제 재활성화·실제 Replay 시각 검증은 제외한다. 자동 검증이 끝나면 운영 확인을 기다리지 않고 Operational Verification에 인계한다.
+- Implement (Luna Max): runtime 구현과 앱 소유 config·identity·동기 fail-open·Post Content marker 자동 테스트, typecheck/lint/build 및 handoff. Cloud 실제 값·screenshot·Rollout 최종 판정·실제 재활성화·실제 recorder·masking·장애 격리 검증은 제외한다. 자동 검증이 끝나면 운영 확인을 기다리지 않고 Operational Verification에 인계한다.
 - Operational Verification: screenshot의 10%·canonical origin·Normal·30일 판독, 불일치 조치 안내, Replay Rollout Gate 판정, PASS 후 실제 재활성화 절차, 실제 route/SDK/Viewer/masking·장애 격리 acceptance와 PROD-741 최종 증거. Human-required 조치는 사용자의 수행 또는 명시적 승인과 실행 증거 전까지 완료 처리하지 않는다.
 - PROD-575 조회 상태와 사용자 설명의 차이는 canonical 운영 문서에 기록한다. 과거 완료 범위는 추정하지 않고, 이 차이를 PROD-741의 두 세션 착수 blocker로 만들지 않는다.
 
@@ -58,7 +58,6 @@ Kosmo Web 분석 runtime을 OpenPanel에서 PostHog로 전환하면서 PostHog�
 ## Impact
 
 - `apps/app/src/analytics`, `apps/app/src/session`, `apps/app/src/components/post`: Web adapter, typed event·identity 경계와 Post Content replay masking·autocapture 제외
-- `apps/web/e2e`: 표준 SDK outbound, identity와 fail-open 브라우저 검증
 - `apps/app/package.json`, `pnpm-lock.yaml`: OpenPanel 제거와 PostHog 도입
 - Docker와 GitHub Actions: 현재 채널 설정·canonical build·SHA digest 승격을 보존하는 OpenPanel 잔여 참조 정리
 - GitHub repository·environment variables와 활성 배포 설정: OpenPanel 전용 항목 확인·정리 및 값 없는 검증 근거

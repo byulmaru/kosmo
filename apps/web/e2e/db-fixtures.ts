@@ -490,12 +490,8 @@ export async function createE2EPost(options: CreateE2EPostOptions) {
   return post;
 }
 
-export async function setE2ESessionCookie(
-  context: BrowserContext,
-  token: string,
-  cookieOrigin = webOrigin,
-) {
-  const origin = new URL(cookieOrigin);
+export async function setE2ESessionCookie(context: BrowserContext, token: string) {
+  const origin = new URL(webOrigin);
 
   await context.addCookies([
     {

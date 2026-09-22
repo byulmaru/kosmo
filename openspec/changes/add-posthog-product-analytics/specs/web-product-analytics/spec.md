@@ -155,9 +155,10 @@
 
 #### Scenario: Implement의 코드와 자동 검증을 완료한다
 
-- **WHEN** A. Implement가 Luna Max로 runtime 구현·자동 테스트·typecheck/lint/build와 synthetic masking·fail-open 검증을 완료한다
+- **WHEN** A. Implement가 Luna Max로 runtime 구현과 앱 소유 config·identity·동기 fail-open·Post Content marker 자동 테스트, typecheck/lint/build를 완료한다
 - **THEN** 코드·자동 검증 결과·대상 버전·남은 운영 항목을 B. Operational Verification에 인계하고 운영 검증을 기다리지 않고 종료한다
 - **AND** A는 Cloud screenshot·실제 설정값·Replay Rollout Gate 최종 판정·실제 Replay 재활성화·실제 재생 시각 검증을 수행하지 않는다
+- **AND** SDK recorder의 내부 bundle·payload·rrweb 형식과 기본 masking은 자동 테스트로 재검증하지 않으며 실제 recorder·masking·장애 격리는 B가 확인한다
 - **AND** 남은 운영·실환경 검증과 PROD-741 최종 acceptance는 B가 소유하며 추가 필수 세션이나 PROD-575 후속 검증·archive에 의존하지 않는다
 
 #### Scenario: Human-required Cloud screenshot을 확인한다
@@ -190,7 +191,7 @@
 
 - **WHEN** production canonical origin 외 환경에서 Web을 사용한다
 - **THEN** 해당 환경의 실제 Replay는 전송되지 않는다
-- **AND** 격리된 가짜 endpoint의 합성 검증을 production 외 origin의 실제 수집 승인으로 해석하지 않는다
+- **AND** 앱 소유 config·DOM marker 단위 검증이나 dev 무전송 smoke를 production 외 origin의 실제 수집 승인으로 해석하지 않는다
 
 #### Scenario: 일반 route navigation과 Viewer를 함께 기록한다
 

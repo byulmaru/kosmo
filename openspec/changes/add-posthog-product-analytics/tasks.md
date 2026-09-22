@@ -227,7 +227,7 @@ Replay Rollout Gate는 production에서 실제 Replay를 재활성화해도 되�
 
 **Progress (2026-09-22)**
 
-현재 branch의 Implement checkpoint는 `disable_session_recording: true`라는 명시적 차단을 제거했지만, production 배포·Cloud 실제 값·Replay 재활성화는 수행하지 않았다. 7.1의 privacy baseline 수용과 Viewer 시각 확인은 완료됐고, Spec Gate는 PASS다. A의 7.2–7.4 자동 검증은 완료했으며 Cloud screenshot·실제 값·배포/rollback 준비·실제 녹화가 미확인인 B의 7.5–7.9와 Replay Rollout Gate는 pending이다.
+현재 branch의 Implement checkpoint는 `disable_session_recording: true`라는 명시적 차단을 제거했지만, production 배포·Cloud 실제 값·Replay 재활성화는 수행하지 않았다. 7.1의 privacy baseline 수용과 Viewer 시각 확인은 완료됐고, Spec Gate는 PASS다. A의 7.2–7.4는 runtime 변경과 앱 소유 경계의 자동 검증을 완료했으며 Cloud screenshot·실제 값·배포/rollback 준비·실제 Replay·masking·장애 격리가 미확인인 B의 7.5–7.9와 Replay Rollout Gate는 pending이다.
 
 - [x] 7.1 2026-09-22 현재 사용자 결정: main 개인정보처리방침을 완료된 privacy baseline으로 수용하고 기존 Storybook `Post Media Viewer Compact` / `Post Media Viewer Wide`가 검증 대상임을 직접 확인했다. 과거 동일 결정의 존재는 blocker가 아니며 법적 완결성의 새 판단이나 PROD-795 정책·고지 재감사·수정을 포함하지 않는다.
 
@@ -235,8 +235,8 @@ Replay Rollout Gate는 production에서 실제 Replay를 재활성화해도 되�
 
 코드와 자동화 가능한 검증만 수행한다. Cloud screenshot 판독·실제 설정 판정/변경·Replay Rollout Gate 최종 판정·실제 Replay 재활성화·실제 재생 시각 검증은 B의 책임이다.
 
-- [x] 7.2 기존 adapter·Viewer·격리된 합성 fixture를 사용해 필요한 runtime 코드를 구현한다. `apps/app/src/analytics/client.web.ts`의 명시적 `disable_session_recording` 차단을 제거하고 SDK 표준 이벤트·identity·Native no-op과 기존 fail-open 경계를 보존했다. 실제 Cloud 전송·Replay 활성화·배포는 수행하지 않았다.
-- [x] 7.3 synthetic data와 가짜 endpoint로 자동 검증 가능한 masking·autocapture 제외·fail-open 경계를 검증했다. `apps/web/e2e/analytics.e2e.ts`에서 실제 lockfile `posthog-js` lazy recorder를 사용해 initialization remote config 차단, recorder load 차단, snapshot upload 503, analytics endpoint 503을 각각 재현하고 route/pageview·Viewer·이미지 전환·identity 흐름의 성공을 대조했다. input·textarea와 `ph-mask ph-no-capture` Post Content marker가 snapshot/autocapture에 노출되지 않는지 gzip snapshot payload로 확인했으며 실제 사용자 개인정보·콘텐츠는 사용하지 않았다.
+- [x] 7.2 기존 analytics adapter에서 필요한 runtime 코드를 구현한다. `apps/app/src/analytics/client.web.ts`의 명시적 `disable_session_recording` 차단을 제거하고 SDK 표준 이벤트·identity·Native no-op과 기존 fail-open 경계를 보존했다. 실제 Cloud 전송·Replay 활성화·배포는 수행하지 않았다.
+- [x] 7.3 앱이 소유하는 초기화 config·identity 전환·동기 SDK 예외 격리와 canonical Post Content의 `ph-mask ph-no-capture` DOM marker를 자동 검증했다. SDK recorder의 내부 bundle 경로·압축 payload·rrweb snapshot 구조와 기본 masking은 재검증하지 않는다. 실제 recorder 전송·masking·autocapture 제외·recorder/network 장애 격리는 B의 7.7–7.8에서 확인한다.
 - [x] 7.4 변경 범위의 typecheck·lint·focused test·build를 완료하고 코드·자동 검증 결과·대상 version·남은 운영 항목을 B에 handoff한다. 운영 검증을 기다리지 않고 A를 종료한다. A 완료는 PROD-741 전체 완료나 Replay Rollout Gate PASS가 아니다.
 
 **B. Operational Verification**
@@ -246,7 +246,7 @@ Replay Rollout Gate는 production에서 실제 Replay를 재활성화해도 되�
 - [ ] 7.5 실제 재활성화 직전에 반드시 멈춰 Human-required Cloud 확인을 요청한다. canonical 캡처 표에 따라 당시 UI의 sampling·전체 origin/trigger 조건·privacy/masking·Data retention 화면을 안내한다. 사용자가 screenshot을 제공하면 Codex가 이미지를 읽어 10%·production canonical origin·Normal·30일과 대조한다. 불완전한 화면은 추가 screenshot 또는 관련 필드만 추린 실제 설정 API 응답·관리자 내보내기로 보완한다. 불일치는 현재 값·기대값·사람의 조치·pending인 Replay Rollout Gate 입력으로 보고하고 새 증거를 재확인한다.
 - [ ] 7.6 privacy baseline, 7.5의 실제 Cloud 값, A의 코드·자동 검증 결과와 대상 버전·배포/rollback 준비로 Replay Rollout Gate를 판정한다. PASS와 필요한 Human-required 조치·기존 release 절차 충족 후에만 실제 재활성화를 진행하고 대상·적용 시점·실행 증거를 기록한다. Spec Gate PASS를 대신 사용하지 않는다.
 - [ ] 7.7 합성 journey의 일반 route navigation과 compact·wide Viewer 열기·이미지 전환·닫기를 하나의 실제 session replay에서 재생하고 기존 SDK pageview·pageleave·autocapture 연결을 확인한다. synthetic input·textarea의 실제 masking·recorder 전송 전 보호, canonical Post Content의 `ph-mask` 실제 재생 비노출·`ph-no-capture` 실제 autocapture 제외, 비대상 origin 미전송을 확인한다. Viewer 내부 전환을 위한 별도 pageview·앱 소유 emitter는 추가하지 않는다. PROD-540이 배포됐다면 opt-out·재방문 뒤 미전송도 확인하고 미배포면 조건부 미적용으로 기록한다.
-- [ ] 7.8 A의 자동 검증을 입력으로 필요한 실환경 장애 격리 acceptance를 수행한다. Replay initialization·recorder load·upload와 analytics 전송 실패에도 Viewer·route navigation·관련 제품 기능이 정상 동작하는지 별도 증거를 남긴다. 보호 실패 시 acceptance를 보류하고 필요한 Human-required 조치를 요청해 Replay 비활성 상태 회복을 확인한다.
+- [ ] 7.8 앱 소유 동기 fail-open 자동 검증과 실제 환경 증거를 구분해 실환경 장애 격리 acceptance를 수행한다. Replay initialization·recorder load·upload와 analytics 전송 실패에도 Viewer·route navigation·관련 제품 기능이 정상 동작하는지 별도 증거를 남긴다. 보호 실패 시 acceptance를 보류하고 필요한 Human-required 조치를 요청해 Replay 비활성 상태 회복을 확인한다.
 - [ ] 7.9 baseline·Viewer 결정, A의 코드/자동 검증, Cloud 네 실제 값·Gate 판정, 재활성화·배포, 실제 재생·masking·장애 격리, 필요한 Human-required 조치의 수행/승인과 실행 증거를 PROD-741 자체의 최종 acceptance로 정리한다. 필수 결과가 미확인·실패면 완료 처리하지 않는다. 실제 ID·key·사용자 콘텐츠·raw payload는 제외한다. PROD-575로의 후속 인계·최종 검증·공유 OpenSpec archive를 완료 조건으로 두지 않는다.
 
 추가 Test·Review·세 번째 운영 세션을 필수로 만들지 않는다. B에서 코드 결함이 발견되면 같은 A에 보완을 돌린 뒤 B를 재개한다.
