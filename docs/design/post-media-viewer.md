@@ -55,9 +55,9 @@
 
 ## 소유권과 데이터 경계
 
-PROD-853의 `src/patterns/post-media-viewer/PostMediaViewerSurface.tsx`는 기존 Post presentation을 조합하는 overlay pattern이다. 이미지 표시·탐색·재시도와 Compact detail·Wide rail 배치를 소유하며, 별도 route screen은 만들지 않는다. PostLayout·PostListItem·PostThreadLayout·PostActionBar는 기존 component의 표현과 interaction을 재사용한다. Storybook은 이 pattern을 직접 소비하고 fixture는 데이터와 callback 연결만 제공한다.
+`src/components/post/PostMediaViewerSurface.tsx`는 Production Viewer와 Storybook이 공유하는 독립 Post 컴포넌트다. 이미지 표시·탐색·재시도와 Compact detail·Wide rail 배치를 소유하며, 별도 route screen은 만들지 않는다. PostLayout·PostListItem·PostThreadLayout·PostActionBar는 기존 component의 표현과 interaction을 재사용한다. Storybook은 이 컴포넌트를 직접 소비하고 fixture는 데이터와 callback 연결만 제공한다.
 
-`PostMediaViewerHost`와 `PostMediaViewerThread`는 Relay 조회·재시도 및 Production 연결을 소유하는 기존 경계다. 패턴 폴더 분리를 이유로 함께 이동하거나 조회 로직을 Surface에 넣지 않는다. PROD-849는 기존 Host의 session·조회·액션 경계를 유지하면서 Production consumer를 이 패턴에 연결한다. 연결된 자동화와 실제 플랫폼 runtime 결과는 구분한다.
+`PostMediaViewerHost`와 `PostMediaViewerThread`는 Relay 조회·재시도 및 Production 연결을 소유하는 기존 경계다. 같은 Post 컴포넌트 경계에 두되 조회 로직을 Surface에 넣지 않는다. PROD-849는 기존 Host의 session·조회·액션 경계를 유지하면서 Production consumer를 이 Surface에 연결한다. 연결된 자동화와 실제 플랫폼 runtime 결과는 구분한다.
 
 목록과 상세의 안정적인 surface 경계에 `PostMediaViewerHost`를 둔다. Gallery는 공개된 정상 tile을 선택했을 때 `{surfacePostId, mediaOwnerPostId, selectedIndex, originControl}`만 Host에 전달하고 modal lifecycle이나 Post 데이터를 소유하지 않는다. Host는 기존 GraphQL `node(surfacePostId)` 경로와 현재 Relay actor environment로 surface Post를 조회하고, `mediaOwnerPostId`가 그 surface 또는 direct `repostSource`인지 확인한다. 일반·Quote는 두 ID가 같고, pure Repost는 바깥 contentless Repost가 surface, direct Source가 Media·본문·Profile과 Repost·Reaction·Bookmark·More의 owner다. Reply는 surface Post identity를 유지하므로 pure Repost에서는 disabled다. Content availability로 owner를 재추론하지 않으므로 Quote Content가 일시 unavailable이어도 Source로 전환하지 않는다. 이 경로가 이미 사용하는 Post visibility·authorization을 그대로 적용하며 별도 Media 조회나 standalone authorization을 추가하지 않는다.
 

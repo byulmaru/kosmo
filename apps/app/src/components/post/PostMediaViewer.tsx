@@ -21,11 +21,11 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { graphql, useFragment } from 'react-relay';
+import { PostMediaViewerSurface } from '@/components/post/PostMediaViewerSurface';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
 import { IconButton } from '@/components/ui/IconButton';
 import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
-import { PostMediaViewerSurface } from '@/patterns/post-media-viewer/PostMediaViewerSurface';
 import { useTheme } from '@/theme/ThemeProvider';
 import {
   borderWidths,
@@ -44,7 +44,7 @@ import type {
   View as NativeView,
   ViewStyle,
 } from 'react-native';
-import type { PostMediaViewerViewState } from '@/patterns/post-media-viewer/PostMediaViewerSurface';
+import type { PostMediaViewerViewState } from '@/components/post/PostMediaViewerSurface';
 import type { PostMediaViewer_post$key } from './__generated__/PostMediaViewer_post.graphql';
 import type { PostMediaItem } from './PostMediaImage';
 
