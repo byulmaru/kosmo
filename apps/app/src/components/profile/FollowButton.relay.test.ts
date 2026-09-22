@@ -22,7 +22,6 @@ import blockMutation from './__generated__/ProfileBlockActionBlockMutation.graph
 import unblockMutation from './__generated__/ProfileBlockActionUnblockMutation.graphql';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { GraphQLResponse } from 'relay-runtime';
-import type { RelayEnvironmentBoundary as BoundaryExport } from '../../relay/RelayEnvironmentBoundary';
 import type { FollowButton as FollowButtonExport } from './FollowButton';
 import type { ProfileBlockAction as BlockActionExport } from './ProfileBlockAction';
 
@@ -65,7 +64,7 @@ mockModule('@/session/SessionProvider', { useSession: () => ({ selectedProfileId
 const targetId = 'target-a';
 const blockId = 'block-a';
 const stateId = 'client:target-a:viewerState';
-const generationRef = { current: 0 };
+let actorLifecycleKey = 0;
 const requests: Array<{
   name: string;
   variables: unknown;
@@ -74,7 +73,6 @@ const requests: Array<{
 let renderer: ReactTestRenderer | null = null;
 let FollowButton: typeof FollowButtonExport;
 let ProfileBlockAction: typeof BlockActionExport;
-let RelayEnvironmentBoundary: typeof BoundaryExport;
 let focusCount = 0;
 const control = {
   focus: () => {
@@ -84,7 +82,6 @@ const control = {
 before(async () => {
   ({ FollowButton } = await import('./FollowButton'));
   ({ ProfileBlockAction } = await import('./ProfileBlockAction'));
-  ({ RelayEnvironmentBoundary } = await import('../../relay/RelayEnvironmentBoundary'));
 });
 afterEach(async () => {
   await act(async () => renderer?.unmount());
@@ -92,7 +89,7 @@ afterEach(async () => {
   requests.length = 0;
   toasts.length = 0;
   selectedProfileId = 'owner-a';
-  generationRef.current = 0;
+  actorLifecycleKey = 0;
   focusCount = 0;
 });
 
@@ -144,11 +141,9 @@ function createEnvironment() {
 
 async function render(environment: Environment, showBlockAction = false) {
   const owner = createOperationDescriptor(followMutation, { id: targetId }).request;
-  const tree = createElement(
-    RelayEnvironmentBoundary,
-    // The production RelayActorBoundary remounts its subtree on actor selection.
-    { environment, generationRef, key: generationRef.current },
+  const children = [
     createElement(FollowButton, {
+      key: 'follow',
       profile: {
         __id: targetId,
         __fragments: { FollowButton_profile: {} },
@@ -157,6 +152,7 @@ async function render(environment: Environment, showBlockAction = false) {
     }),
     showBlockAction
       ? createElement(ProfileBlockAction, {
+          key: 'block',
           nextBlocked: true,
           profile: {
             __id: targetId,
@@ -166,6 +162,11 @@ async function render(environment: Environment, showBlockAction = false) {
           surface: 'button',
         })
       : null,
+  ];
+  const tree = createElement(
+    ReactRelay.RelayEnvironmentProvider,
+    // The production RelayActorBoundary remounts its subtree on actor selection.
+    { environment, key: actorLifecycleKey, children },
   );
   await act(async () => {
     if (renderer) {
@@ -245,7 +246,7 @@ test('실제 FollowButton의 늦은 A 응답은 B의 action·Store·피드백을
   await render(actorA);
   await confirm();
   selectedProfileId = 'owner-b';
-  generationRef.current += 1;
+  actorLifecycleKey += 1;
   const actorB = createEnvironment();
   await render(actorB);
   assert.equal(button().props.disabled, false);
