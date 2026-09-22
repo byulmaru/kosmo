@@ -214,24 +214,24 @@ export const UniversalMobileCombinedDrawerScroll: Story = {
     const drawer = await page.findByRole('navigation', { name: '주요 메뉴' });
     const drawerScroll = page.getByTestId('mobile-sidebar-scroll');
     await userEvent.click(within(drawer).getByRole('button', { name: '설정 및 기타' }));
-    const feedback = within(drawer).getByRole('button', { name: '피드백 보내기' });
-    const settings = within(drawer).getByRole('link', { name: '설정' });
-    const logout = within(drawer).getByRole('button', { name: '로그아웃' });
+    const scrollControls = [
+      within(drawer).getByRole('link', { name: '홈' }),
+      within(drawer).getByRole('button', { name: '피드백 보내기' }),
+      within(drawer).getByRole('link', { name: '설정' }),
+      within(drawer).getByRole('button', { name: '로그아웃' }),
+    ];
+    const logout = scrollControls[3];
     drawerScroll.scrollTop = 0;
     await waitFor(() => expect(drawerScroll.scrollTop).toBe(0));
     const scrollDelta = Math.min(24, drawerScroll.scrollHeight - drawerScroll.clientHeight);
-    const beforeFooterPositions = [feedback, settings, logout].map(
-      (control) => control.getBoundingClientRect().top,
-    );
+    const beforeControlTops = scrollControls.map((control) => control.getBoundingClientRect().top);
 
     expect(scrollDelta).toBeGreaterThan(0);
     drawerScroll.scrollTop = scrollDelta;
     await waitFor(() => expect(drawerScroll.scrollTop).toBe(scrollDelta));
-    const afterFooterPositions = [feedback, settings, logout].map(
-      (control) => control.getBoundingClientRect().top,
-    );
-    for (const [index, position] of afterFooterPositions.entries()) {
-      expect(beforeFooterPositions[index] - position).toBeCloseTo(scrollDelta, 0);
+    const afterControlTops = scrollControls.map((control) => control.getBoundingClientRect().top);
+    for (const [index, top] of afterControlTops.entries()) {
+      expect(beforeControlTops[index] - top).toBeCloseTo(scrollDelta, 0);
     }
     drawerScroll.scrollTop = drawerScroll.scrollHeight;
     await waitFor(() => expect(drawerScroll.scrollTop).toBeGreaterThan(0));

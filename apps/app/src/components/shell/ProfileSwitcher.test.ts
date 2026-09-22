@@ -145,6 +145,7 @@ function useMockMutation(mutation: unknown) {
 mockModule('expo-router', { usePathname: () => '/home' });
 mockModule('react-native', {
   Image: 'Image',
+  KeyboardAvoidingView: 'KeyboardAvoidingView',
   Modal: MockModal,
   Platform: platform,
   Pressable: MockPressable,
@@ -180,6 +181,9 @@ mockModule('@/components/ui/Button', {
 });
 mockModule('@/components/ui/TextField', {
   TextField: (props: Record<string, unknown>) => createElement('TextField', props),
+});
+mockModule('@/components/ui/useSafeAreaPadding', {
+  useSafeAreaPadding: () => ({ padding: 8 }),
 });
 mockModule('@/relay/RelayActorProvider', {
   useRelayActor: () => ({ resetActor }),
@@ -225,6 +229,16 @@ afterEach(async () => {
 });
 
 describe('ProfileSwitcher selection lifecycle', () => {
+  it('Native picker modal은 긴 목록을 담을 수 있도록 메뉴 높이를 제한한다', async () => {
+    await renderProfileSwitcher({ surface: 'drawer' });
+    await openPicker();
+
+    const nativeMenu = renderer?.root.findByProps({ accessibilityViewIsModal: true });
+    assert.ok(nativeMenu);
+    assert.equal(nativeMenu.props.style.flexShrink, 1);
+    assert.equal(nativeMenu.props.style.maxHeight, '100%');
+  });
+
   it('성공한 프로필 전환은 선택된 profile id로 actor를 즉시 reset한다', async () => {
     await renderProfileSwitcher({ controlled: true, surface: 'drawer' });
     await openPicker();

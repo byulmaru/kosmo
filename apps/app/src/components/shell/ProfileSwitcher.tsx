@@ -2,7 +2,16 @@ import { localProfileHandleSchema, profileHandlePolicyErrorMessage } from '@kosm
 import { usePathname } from 'expo-router';
 import { ChevronDownIcon, ChevronUpIcon, PlusIcon } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
-import { Image, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  Image,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
 import { ProfilePicker } from '@/components/profile/ProfilePicker';
@@ -10,6 +19,7 @@ import { ProfileSwitcherUnreadIndicator } from '@/components/profile/ProfileSwit
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { TextField } from '@/components/ui/TextField';
+import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import {
@@ -160,6 +170,7 @@ export function ProfileSwitcher({
   surface,
 }: Props) {
   const theme = useTheme();
+  const safeAreaStyle = useSafeAreaPadding(spacing.lg);
   const pathname = usePathname();
   const data = useFragment(ProfileSwitcherFragment, query);
   const { resetActor } = useRelayActor();
@@ -649,24 +660,31 @@ export function ProfileSwitcher({
         <Modal
           accessibilityLabel="프로필 전환"
           animationType="fade"
+          navigationBarTranslucent
           onRequestClose={() => setOpen(false)}
           role="dialog"
+          statusBarTranslucent
           transparent
           visible={open}
         >
-          <Pressable
-            onPress={() => setOpen(false)}
-            style={[styles.backdrop, { backgroundColor: theme.overlayScrim }]}
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={styles.nativeKeyboardAvoidingView}
           >
             <Pressable
-              accessibilityLabel="프로필 전환"
-              accessibilityViewIsModal
-              onPress={(event) => event.stopPropagation()}
-              style={styles.nativeMenu}
+              onPress={() => setOpen(false)}
+              style={[styles.backdrop, safeAreaStyle, { backgroundColor: theme.overlayScrim }]}
             >
-              {pickerContent}
+              <Pressable
+                accessibilityLabel="프로필 전환"
+                accessibilityViewIsModal
+                onPress={(event) => event.stopPropagation()}
+                style={styles.nativeMenu}
+              >
+                {pickerContent}
+              </Pressable>
             </Pressable>
-          </Pressable>
+          </KeyboardAvoidingView>
         </Modal>
       )}
     </View>
@@ -742,9 +760,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
     justifyContent: 'center',
+    minHeight: 0,
     padding: spacing.lg,
   },
-  nativeMenu: { width: 280 },
+  nativeKeyboardAvoidingView: { flex: 1 },
+  nativeMenu: { flexShrink: 1, maxHeight: '100%', width: 280 },
   createForm: { ...layoutRecipes.labelSupportStack, padding: spacing.xs },
   createRow: { alignItems: 'flex-start', flexDirection: 'row', gap: spacing.sm },
   inputField: { flex: 1, minWidth: 0 },
