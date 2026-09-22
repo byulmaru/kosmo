@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { graphql, usePaginationFragment } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
@@ -31,11 +32,17 @@ const hashtagRelatedProfileListFragment = graphql`
 `;
 
 export function HashtagRelatedProfileList({
+  onInitialResults,
+  onPaginationFailure,
+  onResultSelected,
   hashtag,
   leading,
 }: {
   hashtag: HashtagRelatedProfileList_hashtag$key;
   leading?: ReactNode;
+  onInitialResults?: (hasResults: boolean) => void;
+  onPaginationFailure?: () => void;
+  onResultSelected?: () => void;
 }) {
   const pagination = usePaginationFragment<
     HashtagRelatedProfilesNextPageQuery,
@@ -47,17 +54,34 @@ export function HashtagRelatedProfileList({
     hasNext: pagination.hasNext,
     isLoadingNext: pagination.isLoadingNext,
     itemCount: profiles.length,
-    loadNext: pagination.loadNext,
+    loadNext: (count, options) => pagination.loadNext(count, {
+      onComplete: (error) => {
+        if (error) {
+          onPaginationFailure?.();
+        }
+        options.onComplete(error);
+      },
+    }),
     pageSize: 20,
     webScrollTarget: 'container',
   });
+  useEffect(() => {
+    onInitialResults?.(profiles.length > 0);
+  }, [onInitialResults, profiles.length]);
+
 
   return (
     <ScrollView {...nativeScrollProps} contentContainerStyle={styles.root}>
       <PageHeader leading={leading} title={`#${pagination.data.name} 관련 프로필`} />
       {profiles.length ? (
         profiles.map((edge) => (
-          <ProfileListItem key={edge.cursor} linked profile={edge.node} showBio />
+          <ProfileListItem
+            key={edge.cursor}
+            linked
+            onPress={onResultSelected}
+            profile={edge.node}
+            showBio
+          />
         ))
       ) : (
         <StateView
