@@ -66,19 +66,25 @@ function readPostHogPayloads(body: Buffer | null): PostHogPayload[] {
   }
 }
 
-function readReplaySnapshotText(payloads: PostHogPayload[]): string {
+type ReplaySnapshot = {
+  type: number;
+  data: { source?: number; id?: number; text?: string };
+};
+
+function readReplaySnapshots(payloads: PostHogPayload[]): ReplaySnapshot[] {
   return payloads
     .filter((payload) => payload.event === '$snapshot')
-    .map((payload) => payload.properties?.$snapshot_data)
-    .filter((snapshotData): snapshotData is string => typeof snapshotData === 'string')
-    .map((snapshotData) => {
-      try {
-        return gunzipSync(Buffer.from(snapshotData, 'latin1')).toString('utf8');
-      } catch {
-        return snapshotData;
-      }
-    })
-    .join('\n');
+    .flatMap((payload) => {
+      const snapshotData = payload.properties?.$snapshot_data;
+      expect(Array.isArray(snapshotData)).toBe(true);
+      // The locked SDK sends rrweb arrays and gzips individual snapshot fields.
+      return JSON.parse(JSON.stringify(snapshotData), (_key, value: unknown) => {
+        if (typeof value === 'string' && value.startsWith('\u001f\u008b')) {
+          return JSON.parse(gunzipSync(Buffer.from(value, 'latin1')).toString('utf8')) as unknown;
+        }
+        return value;
+      }) as ReplaySnapshot[];
+    });
 }
 
 test.beforeEach(async () => {
@@ -205,6 +211,11 @@ test('prod channel Web runtime은 pageview를 전송하고 private post를 autoc
     (payload) => payload.event === '$autocapture',
   ).length;
   await nextImage.click();
+  await expect(viewerDialog.getByTestId('post-media-viewer-image')).toHaveAccessibleName(
+    privateMedia[1].altText,
+  );
+  await expect(viewerDialog.getByTestId('post-media-viewer-image')).toBeVisible();
+  await expect(viewerDialog.getByTestId('post-media-viewer-counter')).toHaveText('2 / 2');
   await expect
     .poll(() => posthogPayloads.filter((payload) => payload.event === '$autocapture').length)
     .toBeGreaterThan(previousAutocaptureCount);
@@ -222,11 +233,18 @@ test('prod channel Web runtime은 pageview를 전송하고 private post를 autoc
   expect([...pageviewIdsAfterViewerTransition].sort()).toEqual(
     [...pageviewIdsBeforeViewerTransition].sort(),
   );
+  await viewerDialog.getByRole('button', { name: '이미지 뷰어 닫기' }).click();
+  await expect(viewerDialog).toBeHidden();
+  await page.goto(prodAnalyticsOrigin);
+  await page.getByRole('link', { name: '개인정보 처리방침' }).click();
+  await expect(page).toHaveURL(`${prodAnalyticsOrigin}/privacy`);
 });
 
 test('prod channel Web runtime은 Replay upload 실패에도 입력·textarea·Post Content를 보호하고 Viewer를 유지한다', async ({
   page,
 }) => {
+  // Observe separate recorder flushes for DOM setup and subsequent input events.
+  test.setTimeout(60_000);
   const viewer = await createE2ESession({
     displayName: 'E2E Replay Masking Profile',
     handle: 'e2e-replay-masking-profile',
@@ -325,9 +343,16 @@ test('prod channel Web runtime은 Replay upload 실패에도 입력·textarea·P
     page.getByRole('button', { name: `${privateMedia[0].altText} 크게 보기` }),
   ).toBeVisible();
 
-  await page.evaluate((postContentMarker) => {
+  await expect(page.getByText(privatePostContentMarker, { exact: true })).toBeVisible();
+  await page.evaluate(() => {
     const fixture = document.createElement('form');
     fixture.id = 'replay-synthetic-masking-fixture';
+    Object.assign(fixture.style, {
+      position: 'fixed',
+      bottom: '0',
+      left: '0',
+      zIndex: '2147483647',
+    });
 
     const input = document.createElement('input');
     input.type = 'text';
@@ -336,17 +361,26 @@ test('prod channel Web runtime은 Replay upload 실패에도 입력·textarea·P
     const textarea = document.createElement('textarea');
     textarea.setAttribute('aria-label', 'Synthetic masked textarea');
 
-    const postContent = document.createElement('div');
-    postContent.className = 'ph-mask ph-no-capture';
-    postContent.textContent = postContentMarker;
-
     const action = document.createElement('button');
     action.type = 'button';
     action.textContent = 'Synthetic interaction';
 
-    fixture.append(input, textarea, postContent, action);
+    fixture.append(input, textarea, action);
     document.body.append(fixture);
-  }, privatePostContentMarker);
+  });
+
+  // New documents flush only after interaction; the lazy recorder may still be starting.
+  await expect
+    .poll(
+      async () => {
+        await page.getByRole('button', { name: 'Synthetic interaction' }).click();
+        return JSON.stringify(readReplaySnapshots(posthogPayloads)).includes(
+          'Synthetic interaction',
+        );
+      },
+      { timeout: 15_000 },
+    )
+    .toBe(true);
 
   const inputMarker = 'E2E replay input marker';
   const textareaMarker = 'E2E replay textarea marker';
@@ -355,17 +389,40 @@ test('prod channel Web runtime은 Replay upload 실패에도 입력·textarea·P
   await page.getByRole('button', { name: 'Synthetic interaction' }).click();
 
   await expect.poll(() => snapshotUploadFailures, { timeout: 15_000 }).toBeGreaterThan(0);
-  const snapshotPayloads = posthogPayloads.filter((payload) => payload.event === '$snapshot');
-  expect(snapshotPayloads.length).toBeGreaterThan(0);
-  const snapshotText = readReplaySnapshotText(snapshotPayloads);
+  await expect
+    .poll(
+      () => {
+        const snapshots = readReplaySnapshots(posthogPayloads);
+        return snapshots
+          .filter((snapshot) => snapshot.type === 3 && snapshot.data.source === 5)
+          .map((snapshot) => snapshot.data.text);
+      },
+      { timeout: 15_000 },
+    )
+    .toEqual(
+      expect.arrayContaining(['*'.repeat(inputMarker.length), '*'.repeat(textareaMarker.length)]),
+    );
+  const snapshotText = JSON.stringify(readReplaySnapshots(posthogPayloads));
+  expect(snapshotText).toContain('Synthetic interaction');
   expect(snapshotText).not.toContain(inputMarker);
   expect(snapshotText).not.toContain(textareaMarker);
   expect(snapshotText).not.toContain(privatePostContentMarker);
+  await page.locator('#replay-synthetic-masking-fixture').evaluate((fixture) => fixture.remove());
 
   await page.getByRole('button', { name: `${privateMedia[0].altText} 크게 보기` }).click();
   const viewerDialog = page.getByRole('dialog');
   await expect(viewerDialog).toBeVisible();
   await viewerDialog.getByRole('button', { name: '다음 이미지' }).click();
+  await expect(viewerDialog.getByTestId('post-media-viewer-image')).toHaveAccessibleName(
+    privateMedia[1].altText,
+  );
+  await expect(viewerDialog.getByTestId('post-media-viewer-image')).toBeVisible();
+  await expect(viewerDialog.getByTestId('post-media-viewer-counter')).toHaveText('2 / 2');
+  await viewerDialog.getByRole('button', { name: '이미지 뷰어 닫기' }).click();
+  await expect(viewerDialog).toBeHidden();
+  await page.goto(prodAnalyticsOrigin);
+  await page.getByRole('link', { name: '개인정보 처리방침' }).click();
+  await expect(page).toHaveURL(`${prodAnalyticsOrigin}/privacy`);
 });
 
 test('prod channel Web runtime은 Account identity를 A→guest→B로 분리하고 endpoint 실패에도 인증 흐름을 유지한다', async ({
