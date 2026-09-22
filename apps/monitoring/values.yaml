@@ -1,6 +1,0 @@
-prometheus-blackbox-exporter:
-  fullnameOverride: prometheus-blackbox-exporter
-  resources:
-    requests:
-      cpu: 5m
-      memory: 32Mi

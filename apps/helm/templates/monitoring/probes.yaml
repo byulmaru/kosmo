@@ -1,19 +1,21 @@
+{{- if eq .Values.env "prod" }}
 apiVersion: monitoring.coreos.com/v1
 kind: Probe
 metadata:
   name: kosmo-public-web
   labels:
-    helm.sh/chart: '{{ printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}'
-    app.kubernetes.io/name: kosmo-monitoring
-    app.kubernetes.io/instance: '{{ .Release.Name }}'
-    app.kubernetes.io/managed-by: '{{ .Release.Service }}'
+    helm.sh/chart: {{ include "kosmo.chart" . }}
+    app.kubernetes.io/name: monitoring
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/version: {{ .Values.version | quote }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
 spec:
   jobName: kosmo-public
   interval: 30s
   scrapeTimeout: 10s
   module: http_2xx
   prober:
-    url: http://prometheus-blackbox-exporter.kosmo-prod.svc:9115/probe
+    url: prometheus-blackbox-exporter.prometheus.svc:9115
     scheme: http
     path: /probe
   targets:
@@ -28,17 +30,18 @@ kind: Probe
 metadata:
   name: kosmo-public-api
   labels:
-    helm.sh/chart: '{{ printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}'
-    app.kubernetes.io/name: kosmo-monitoring
-    app.kubernetes.io/instance: '{{ .Release.Name }}'
-    app.kubernetes.io/managed-by: '{{ .Release.Service }}'
+    helm.sh/chart: {{ include "kosmo.chart" . }}
+    app.kubernetes.io/name: monitoring
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/version: {{ .Values.version | quote }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
 spec:
   jobName: kosmo-public
   interval: 30s
   scrapeTimeout: 10s
   module: http_2xx
   prober:
-    url: http://prometheus-blackbox-exporter.kosmo-prod.svc:9115/probe
+    url: prometheus-blackbox-exporter.prometheus.svc:9115
     scheme: http
     path: /probe
   targets:
@@ -47,3 +50,4 @@ spec:
         - https://api.kos.moe/health
       labels:
         target: kosmo-api
+{{- end }}

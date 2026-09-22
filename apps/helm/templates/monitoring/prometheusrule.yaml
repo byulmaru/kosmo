@@ -1,12 +1,14 @@
+{{- if eq .Values.env "prod" }}
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
   name: kosmo-public
   labels:
-    helm.sh/chart: '{{ printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}'
-    app.kubernetes.io/name: kosmo-monitoring
-    app.kubernetes.io/instance: '{{ .Release.Name }}'
-    app.kubernetes.io/managed-by: '{{ .Release.Service }}'
+    helm.sh/chart: {{ include "kosmo.chart" . }}
+    app.kubernetes.io/name: monitoring
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/version: {{ .Values.version | quote }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
 spec:
   groups:
     - name: kosmo.public
@@ -31,3 +33,4 @@ spec:
             description: The {{ "{{ $labels.target }}" }} health endpoint has averaged more than 2 seconds from the AWS Prometheus blackbox probe for approximately 5 minutes. Confirm the public URL from a second location, then inspect Cloudflare, the Kosmo ingress/origin, and the in-cluster probe.
             owner: Platform/SRE
             runbook_url: https://github.com/byulmaru/kubernetes/blob/main/docs/operations.md#alertmanager-slack-notifications
+{{- end }}
