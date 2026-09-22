@@ -76,6 +76,7 @@ const queryData = {
     ],
   },
 };
+let fragmentData: typeof queryData = queryData;
 
 let pendingSelectMutation: MutationResult | null = null;
 let renderer: ReactTestRenderer | null = null;
@@ -157,7 +158,7 @@ mockModule('react-native', {
 mockModule('react-relay', {
   graphql: (parts: TemplateStringsArray) =>
     parts.join('').match(/(?:fragment|mutation)\s+(\w+)/)?.[1] ?? 'unknown',
-  useFragment: () => queryData,
+  useFragment: () => fragmentData,
   useMutation: useMockMutation,
 });
 mockModule(require.resolve('lucide-react-native'), {
@@ -217,6 +218,7 @@ afterEach(async () => {
     renderer = null;
   }
   platform.OS = 'ios';
+  fragmentData = queryData;
   pendingSelectMutation = null;
   resetActorCalls.length = 0;
   mock.restoreAll();
@@ -303,6 +305,23 @@ describe('ProfileSwitcher Relay normalization', () => {
       afterData?.currentSession?.selectedProfile?.viewerState?.membership?.role,
       'OWNER',
     );
+  });
+});
+
+describe('ProfileSwitcher incomplete Relay data', () => {
+  it('keeps the existing fallback and hides the local-only edit action', async () => {
+    fragmentData = {
+      ...queryData,
+      currentSession: {
+        ...queryData.currentSession,
+        selectedProfile: { id: 'profile-a' } as typeof queryData.currentSession.selectedProfile,
+      },
+    };
+
+    await renderProfileSwitcher({ surface: 'drawer' });
+
+    profileTrigger();
+    assert.equal(renderer?.root.findAllByProps({ accessibilityLabel: '프로필 편집' }).length, 0);
   });
 });
 

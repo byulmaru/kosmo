@@ -178,7 +178,7 @@ export function ProfileSwitcher({
     useMutation<ProfileSwitcherCreateProfileMutation>(CreateProfileMutation);
   const active = data.currentSession?.selectedProfile ?? null;
   const canEditSelectedProfile =
-    active?.instance.kind === 'LOCAL' && active.viewerState?.membership?.role === 'OWNER';
+    active?.instance?.kind === 'LOCAL' && active.viewerState?.membership?.role === 'OWNER';
   const profiles = data.me?.profiles ?? [];
   const otherHasUnread = profiles.some(
     (profile) => profile.id !== active?.id && (profile.unreadNotificationCount ?? 0) > 0,
