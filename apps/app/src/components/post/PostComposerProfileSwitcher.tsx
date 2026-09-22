@@ -11,6 +11,7 @@ export type PostComposerProfileSwitcherSurface = 'overlay' | 'rail';
 type Props = Readonly<{
   disabled?: boolean;
   onDismissChange?: (dismiss: (() => void) | null) => void;
+  onSelectionSuccess?: () => void;
   onSelectProfile: (id: string) => void | Promise<void>;
   profiles: readonly ProfilePickerProfile[];
   selectedProfileId: string;
@@ -20,6 +21,7 @@ type Props = Readonly<{
 export function PostComposerProfileSwitcher({
   disabled = false,
   onDismissChange,
+  onSelectionSuccess,
   onSelectProfile,
   profiles,
   selectedProfileId: initialSelectedProfileId,
@@ -126,7 +128,7 @@ export function PostComposerProfileSwitcher({
           setPending(false);
           pendingRef.current = false;
           operationVersionRef.current += 1;
-          focusTrigger();
+          onSelectionSuccess?.();
         },
         () => {
           if (operationVersion !== operationVersionRef.current) {

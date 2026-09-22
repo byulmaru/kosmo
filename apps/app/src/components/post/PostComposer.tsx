@@ -271,7 +271,6 @@ function PostComposerContents({
   const replyMode = Boolean(replyParentId);
   const quoteMode = Boolean(repostSourceId);
   const surfaceMode = replyMode || quoteMode;
-  const contextKey = createPostComposerContextKey(profile.id, replyParentId, repostSourceId);
   const mountedRef = useRef(true);
   const availableVisibilityOptions = visibilityOptions.filter((option) =>
     isPostComposerVisibilityAllowed(option.value, replyParentId),
@@ -455,7 +454,7 @@ function PostComposerContents({
     }
     const frame = requestAnimationFrame(() => editor.current?.focus());
     return () => cancelAnimationFrame(frame);
-  }, [contextKey, focusOnMount]);
+  }, [focusOnMount]);
 
   const positionWebVisibilityMenu = useCallback(() => {
     if (Platform.OS !== 'web') {
@@ -602,6 +601,7 @@ function PostComposerContents({
                   <PostComposerProfileSwitcher
                     disabled={submitting || items.some((item) => item.state === 'uploading')}
                     onDismissChange={onProfilePickerDismissChange}
+                    onSelectionSuccess={() => editor.current?.focus()}
                     onSelectProfile={onSelectProfile}
                     profiles={pickerProfiles.map((candidate) => candidate.pickerProfile)}
                     selectedProfileId={profile.id}

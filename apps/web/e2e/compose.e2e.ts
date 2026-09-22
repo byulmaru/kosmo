@@ -689,7 +689,7 @@ test('Composer 프로필 전환은 첨부 이미지 편집 상태와 draft를 �
       exact: true,
     })
     .click();
-  await expect(profileTrigger).toBeFocused();
+  await expect(input).toBeFocused();
   await expect(input).toHaveValue(body);
   await expect(composer.getByLabel('첨부 이미지 1, 업로드 완료')).toBeVisible();
 

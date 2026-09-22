@@ -173,6 +173,8 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
   Session/Profile과 Relay actor를 바꾸지 않으며, 본문·Content Warning·Media·ALT·Sensitive Media·현재 Visibility를
   보존한 채 다음 mutation과 새 Media upload issue에 선택한 Profile ID를 전달한다. Reply·Quote Composer에는
   이 local 전환을 제공하지 않는다.
+- local Profile 선택이 성공하면 본문 editor로 focus를 옮겨 Native에서는 키보드를 이어서 입력할 수 있게 한다. Profile
+  picker의 Escape·취소는 작성 Profile을 바꾸지 않고 trigger로 focus를 복원한다.
 - 업로드·게시 중에는 작성 Profile 전환을 잠그고 요청이 끝나면 다시 허용한다. 실패한 첨부와 draft는 유지한다.
 - 전역 Profile과 다른 작성 Profile로 게시하면 성공 ID만 확인하고 현재 화면의 목록과 캐시에는 작성자 관점의
   Post 내용을 넣지 않는다. 작성자가 전역 Profile과 같으면 기존 목록 갱신을 유지한다.

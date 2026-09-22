@@ -21,6 +21,7 @@ let refreshMedia: (() => void) | undefined;
 let switcherProps:
   | {
       disabled?: boolean;
+      onSelectionSuccess?: () => void;
       onSelectProfile: (id: string) => void | Promise<void>;
       profiles: readonly { id: string }[];
       selectedProfileId: string;
@@ -212,9 +213,12 @@ afterEach(async () => {
 
 describe('PostComposer local author', () => {
   it('preserves the draft while switching author, sends the local id, isolates home, and unlocks failed media', async () => {
+    let editorFocusCount = 0;
+    const editorRef = { current: { focus: () => editorFocusCount++ } };
     await act(async () => {
       renderer = create(
         createElement(PostComposer, {
+          editorRef: editorRef as never,
           onExpand: () => undefined,
           onRequestClose: () => undefined,
           presentation: 'rail',
@@ -239,10 +243,13 @@ describe('PostComposer local author', () => {
     assert.equal(switcherProps?.disabled, false);
 
     await act(async () => switcherProps?.onSelectProfile(profileB.id));
+    await act(async () => switcherProps?.onSelectionSuccess?.());
     assert.equal(switcherProps?.selectedProfileId, profileB.id);
+    assert.equal(editorFocusCount, 1);
     await act(async () => {
       renderer?.update(
         createElement(PostComposer, {
+          editorRef: editorRef as never,
           onExpand: () => undefined,
           onRequestClose: () => undefined,
           presentation: 'rail',
@@ -281,5 +288,33 @@ describe('PostComposer local author', () => {
       renderer?.root.findByType('PostComposerTarget' as never).props.visibility,
       'FOLLOWERS',
     );
+  });
+
+  it('focuses the real editor ref on Web and Native success, including same-id selection', async () => {
+    for (const platformName of ['web', 'ios'] as const) {
+      platform.OS = platformName;
+      let editorFocusCount = 0;
+      const editorRef = { current: { focus: () => editorFocusCount++ } };
+      await act(async () => {
+        renderer = create(
+          createElement(PostComposer, {
+            editorRef: editorRef as never,
+            onExpand: () => undefined,
+            onRequestClose: () => undefined,
+            presentation: 'rail',
+            profile: profileA as never,
+            profiles: candidates as never,
+          }),
+        );
+      });
+      await act(async () => undefined);
+
+      await act(async () => switcherProps?.onSelectProfile(profileA.id));
+      await act(async () => switcherProps?.onSelectionSuccess?.());
+      assert.equal(editorFocusCount, 1);
+
+      await act(async () => renderer?.unmount());
+      renderer = null;
+    }
   });
 });
