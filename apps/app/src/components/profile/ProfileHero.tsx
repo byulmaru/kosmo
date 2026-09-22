@@ -17,6 +17,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Skeleton } from '@/components/ui/StateView';
 import { useToast } from '@/components/ui/ToastProvider';
 import { getPublicWebOrigin } from '@/config/origin';
+import { useAnalyticsAccountId } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { breakpoints, radius, space, textStyles } from '@/theme/tokens';
 import { ProfileBioPrivacyBoundary } from './ProfileBioPrivacyBoundary';
@@ -95,6 +96,7 @@ export function ProfileHero({
     }
   }, [unmuteFocusRevision]);
   const theme = useTheme();
+  const accountId = useAnalyticsAccountId();
   const { showToast } = useToast();
   const { width } = useWindowDimensions();
   const data = useFragment(profileHeroFragment, profile);
@@ -292,7 +294,7 @@ export function ProfileHero({
         {data.tags.length ? (
           <View style={styles.tags} testID="profile-tag-list">
             {data.tags.map((tag) => (
-              <ProfileTagLink id={tag.id} key={tag.id} name={tag.name} />
+              <ProfileTagLink accountId={accountId} id={tag.id} key={tag.id} name={tag.name} />
             ))}
           </View>
         ) : null}
@@ -342,15 +344,23 @@ export function ProfileHero({
   );
 }
 
-function ProfileTagLink({ id, name }: { id: string; name: string }) {
+function ProfileTagLink({
+  accountId,
+  id,
+  name,
+}: {
+  accountId: string | null;
+  id: string;
+  name: string;
+}) {
   const targetSize = Platform.select({ android: 48, default: 48, ios: 44, web: 32 });
   const href = {
     params: { hashtagId: id },
     pathname: '/hashtags/[hashtagId]/profiles',
   } as const;
-  const beginExploration = () => beginProfileHashtagExploration(id);
+  const beginExploration = () => accountId && beginProfileHashtagExploration(accountId, id);
   const beginExternalExploration = () =>
-    beginProfileHashtagExploration(id, { persistForExternal: true });
+    accountId && beginProfileHashtagExploration(accountId, id, { persistForExternal: true });
 
   return (
     <NavigationLink

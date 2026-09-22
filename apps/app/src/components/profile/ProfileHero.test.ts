@@ -60,6 +60,9 @@ mockModule(new URL('../shell/NavigationLink.tsx', import.meta.url), {
 mockModule('@/analytics/profileHashtagExploration', {
   beginProfileHashtagExploration: beginExploration,
 });
+mockModule(new URL('../../session/SessionProvider.tsx', import.meta.url), {
+  useAnalyticsAccountId: () => 'account-a',
+});
 mockModule('react-native', {
   Image: 'Image',
   Platform: platform,
@@ -489,9 +492,13 @@ describe('ProfileHero Profile Tag presentation', () => {
     );
     assert.ok(links.every((node) => node.props.onNavigate !== node.props.onExternalNavigate));
     links[0]?.props.onNavigate?.();
-    assert.equal(beginExploration.mock.callCount(), 1);
+    assert.deepEqual(beginExploration.mock.calls[0]?.arguments, ['account-a', 'hashtag-fediverse']);
     links[0]?.props.onExternalNavigate?.();
-    assert.equal(beginExploration.mock.callCount(), 2);
+    assert.deepEqual(beginExploration.mock.calls[1]?.arguments, [
+      'account-a',
+      'hashtag-fediverse',
+      { persistForExternal: true },
+    ]);
     assert.deepEqual(
       targets.map((node) => ({
         label: node.props.accessibilityLabel,

@@ -42,6 +42,8 @@ let routerBackCount = 0;
 const routerReplacements: string[] = [];
 let pendingExploration: ExplorationSession | null = null;
 let listTrackingProps: ListTrackingProps | undefined;
+let accountId: string | null = 'account-a';
+let identityAccountId: string | null = 'account-a';
 const consumedExplorations: string[] = [];
 const explorationTrackerCalls = {
   end: 0,
@@ -126,33 +128,39 @@ mockModule(new URL('./HashtagRelatedProfileList.tsx', import.meta.url), {
 mockModule(new URL('../../observability/UnexpectedErrorContext.ts', import.meta.url), {
   useUnexpectedErrorReporter: () => undefined,
 });
-mockModule(new URL('../../relay/RelayActorProvider.tsx', import.meta.url), {
-  useRelayActorLifecycleKey: () => 'actor-a',
+mockModule(new URL('../../session/SessionProvider.tsx', import.meta.url), {
+  useAnalyticsAccountId: () => accountId,
+  useAnalyticsIdentityAccountId: () => identityAccountId,
 });
 mockModule(new URL('../../analytics/profileHashtagExploration.ts', import.meta.url), {
-  consumeProfileHashtagExploration: (id: string) => {
+  acquireProfileHashtagExplorationTracker: (_accountId: string, id: string) => {
     consumedExplorations.push(id);
     const session = pendingExploration;
     pendingExploration = null;
-    return session;
+    if (!session) {
+      return null;
+    }
+    return {
+      release: () => {
+        explorationTrackerCalls.end += 1;
+      },
+      tracker: {
+        end: () => undefined,
+        recordInitialFailure: () => {
+          explorationTrackerCalls.initialFailure += 1;
+        },
+        recordInitialResults: (hasResults: boolean) => {
+          explorationTrackerCalls.initialResults.push(hasResults);
+        },
+        recordPaginationFailure: () => {
+          explorationTrackerCalls.paginationFailure += 1;
+        },
+        recordResultSelected: () => {
+          explorationTrackerCalls.resultSelected += 1;
+        },
+      },
+    };
   },
-  createProfileHashtagExplorationTracker: () => ({
-    end: () => {
-      explorationTrackerCalls.end += 1;
-    },
-    recordInitialFailure: () => {
-      explorationTrackerCalls.initialFailure += 1;
-    },
-    recordInitialResults: (hasResults: boolean) => {
-      explorationTrackerCalls.initialResults.push(hasResults);
-    },
-    recordPaginationFailure: () => {
-      explorationTrackerCalls.paginationFailure += 1;
-    },
-    recordResultSelected: () => {
-      explorationTrackerCalls.resultSelected += 1;
-    },
-  }),
 });
 mockModule(new URL('../ui/StateView.tsx', import.meta.url), {
   StateView: (props: object) => createElement('StateView', props),
@@ -184,6 +192,8 @@ afterEach(async () => {
   routerBackCount = 0;
   routerCanGoBack = true;
   routerReplacements.length = 0;
+  accountId = 'account-a';
+  identityAccountId = 'account-a';
   pendingExploration = null;
   listTrackingProps = undefined;
   consumedExplorations.length = 0;
@@ -290,6 +300,43 @@ describe('hashtag related profiles route identity and lifecycle', () => {
     assert.deepEqual(explorationTrackerCalls.initialResults, [true]);
     assert.equal(explorationTrackerCalls.resultSelected, 1);
     assert.equal(explorationTrackerCalls.end, 1);
+  });
+
+  it('Account 검증 중에는 기존 lease를 보존하되 결과를 기록하지 않는다', async () => {
+    pendingExploration = { hashtagId: 'hashtag-global-a', sessionId: 'session-a' };
+    await renderScreen();
+    assert.deepEqual(consumedExplorations, ['hashtag-global-a']);
+
+    accountId = null;
+    await renderScreen();
+    await act(async () => listTrackingProps?.onInitialResults?.(true));
+    await act(async () => listTrackingProps?.onResultSelected?.());
+
+    assert.deepEqual(explorationTrackerCalls.initialResults, []);
+    assert.equal(explorationTrackerCalls.resultSelected, 0);
+    assert.equal(explorationTrackerCalls.end, 0);
+
+    accountId = 'account-a';
+    await renderScreen();
+    await act(async () => listTrackingProps?.onInitialResults?.(true));
+
+    assert.deepEqual(consumedExplorations, ['hashtag-global-a']);
+    assert.deepEqual(explorationTrackerCalls.initialResults, [true]);
+  });
+
+  it('actor remount 중에는 identity Account로 lease를 다시 획득하고 callback은 막는다', async () => {
+    pendingExploration = { hashtagId: 'hashtag-global-a', sessionId: 'session-a' };
+    await renderScreen();
+    await act(async () => renderer?.unmount());
+    renderer = null;
+
+    accountId = null;
+    pendingExploration = { hashtagId: 'hashtag-global-a', sessionId: 'session-a' };
+    await renderScreen();
+    await act(async () => listTrackingProps?.onInitialResults?.(true));
+
+    assert.deepEqual(consumedExplorations, ['hashtag-global-a', 'hashtag-global-a']);
+    assert.deepEqual(explorationTrackerCalls.initialResults, []);
   });
 
   it('첫 요청 중에는 관련 Profile 맥락을 유지한다', async () => {

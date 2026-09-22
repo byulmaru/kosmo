@@ -3,17 +3,14 @@ import { ArrowLeftIcon } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
-import {
-  consumeProfileHashtagExploration,
-  createProfileHashtagExplorationTracker,
-} from '@/analytics/profileHashtagExploration';
+import { acquireProfileHashtagExplorationTracker } from '@/analytics/profileHashtagExploration';
 import {
   HashtagRelatedProfileList,
   HashtagRelatedProfileListState,
 } from '@/components/profile/HashtagRelatedProfileList';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { IconButton } from '@/components/ui/IconButton';
-import { useRelayActorLifecycleKey } from '@/relay/RelayActorProvider';
+import { useAnalyticsAccountId, useAnalyticsIdentityAccountId } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import type { ReactNode } from 'react';
@@ -114,16 +111,26 @@ function HashtagRelatedProfilesContent({
 }
 
 function useProfileHashtagExploration(hashtagId: string) {
-  const actorLifecycleKey = useRelayActorLifecycleKey();
-  const [tracker, setTracker] = useState<ProfileHashtagExplorationTracker | null>(null);
+  const accountId = useAnalyticsAccountId();
+  const identityAccountId = useAnalyticsIdentityAccountId();
+  const [retainedTracker, setRetainedTracker] = useState<{
+    accountId: string;
+    tracker: ProfileHashtagExplorationTracker;
+  } | null>(null);
 
   useEffect(() => {
-    const session = consumeProfileHashtagExploration(hashtagId);
-    const nextTracker = session ? createProfileHashtagExplorationTracker(session) : null;
-    setTracker(nextTracker);
+    const lease = identityAccountId
+      ? acquireProfileHashtagExplorationTracker(identityAccountId, hashtagId)
+      : null;
+    setRetainedTracker(
+      lease && identityAccountId ? { accountId: identityAccountId, tracker: lease.tracker } : null,
+    );
 
-    return () => nextTracker?.end();
-  }, [actorLifecycleKey, hashtagId]);
+    return () => lease?.release();
+  }, [hashtagId, identityAccountId]);
+
+  const tracker =
+    accountId && retainedTracker?.accountId === accountId ? retainedTracker.tracker : null;
 
   const onInitialFailure = useCallback(() => tracker?.recordInitialFailure(), [tracker]);
   const onInitialResults = useCallback(

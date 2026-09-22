@@ -77,11 +77,18 @@ mockModule(new URL('../auth/logout.ts', import.meta.url), {
 mockModule(new URL('../analytics/client.ts', import.meta.url), {
   clearAnalytics: () => state.events.push('clear-analytics'),
 });
+mockModule(new URL('../analytics/profileHashtagExploration.ts', import.meta.url), {
+  endProfileHashtagExplorationsForAccount: (accountId: string) =>
+    state.events.push(`end-exploration:${accountId}`),
+});
 mockModule(new URL('../relay/RelayActorProvider.tsx', import.meta.url), {
   useRelayActor: () => ({
     clearNativeSession: () => state.clearNativeSession(),
     resetActor: () => state.events.push('reset-actor'),
   }),
+});
+mockModule(new URL('./SessionProvider.tsx', import.meta.url), {
+  useAnalyticsIdentityAccountId: () => 'account-a',
 });
 
 let useLogout: () => LogoutState;
@@ -108,10 +115,25 @@ describe('useLogout production composition', () => {
 
     assert.deepEqual(state.events, [
       'request-web-logout',
+      'end-exploration:account-a',
       'reset-actor',
       'clear-analytics',
       'replace-root',
     ]);
+  });
+
+  it('Web BFF 실패에서는 탐색과 identity, actor, route를 유지한다', async () => {
+    platform.OS = 'web';
+    state.requestWebLogout = async () => {
+      state.events.push('request-web-logout');
+      throw new Error('BFF failure');
+    };
+
+    useLogout().logout();
+    await flushLogout();
+
+    assert.deepEqual(state.events, ['request-web-logout']);
+    assert.ok(state.errors.includes('로그아웃하지 못했습니다. 다시 시도해주세요.'));
   });
 
   it('Native는 실제 Relay mutation 성공 뒤 SecureStore와 actor를 정리하고 root로 replace한다', async () => {
@@ -120,6 +142,7 @@ describe('useLogout production composition', () => {
 
     assert.deepEqual(state.events, [
       'request-native-logout',
+      'end-exploration:account-a',
       'clear-native-session',
       'replace-root',
     ]);
@@ -160,7 +183,11 @@ describe('useLogout production composition', () => {
     useLogout().logout();
     await flushLogout();
 
-    assert.deepEqual(state.events, ['request-native-logout', 'clear-native-session']);
+    assert.deepEqual(state.events, [
+      'request-native-logout',
+      'end-exploration:account-a',
+      'clear-native-session',
+    ]);
     assert.ok(state.errors.includes('로그아웃하지 못했습니다. 다시 시도해주세요.'));
   });
 });
