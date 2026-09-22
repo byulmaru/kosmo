@@ -195,8 +195,8 @@ function SearchResultProfile({
       <ProfileListItem
         linked
         onNavigate={() => {
-          searchProfileJourneys.select(searchKey, data.id, `/${data.relativeHandle}`);
           trackAnalytics('search_result_selected', { tab: 'people' });
+          searchProfileJourneys.select(searchKey, data.id, `/${data.relativeHandle}`);
         }}
         profile={data}
         showBio

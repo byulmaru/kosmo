@@ -94,12 +94,27 @@ test('동일 검색 재렌더는 유지하고 새 검색은 이전 응답을 새
   assert.equal(events.length, 3);
 });
 
-for (const boundary of ['account', 'profile', 'auth', 'session', 'pagehide'] as const) {
-  test(`${boundary} 변경은 이전 귀속을 종료하고 분모를 보존한다`, () => {
-    const { events, journeys } = setup();
+for (const boundary of ['account', 'profile', 'auth', 'session'] as const) {
+  test(`${boundary} 종료만으로는 시작하지 않고 같은 대상을 재선택하면 새 journey를 만든다`, (t) => {
+    t.mock.timers.enable({ apis: ['Date'], now: 100 });
+    const events: SearchProfileEventArgs[] = [];
+    let sessionId = 'session-a';
+    const journeys = createSearchProfileJourneys((args, expectedSessionId) => {
+      if (expectedSessionId && expectedSessionId !== sessionId) {
+        return null;
+      }
+      events.push(args);
+      return sessionId;
+    });
+    journeys.setSearch('people:cosmos');
     journeys.setActor('account-a', 'profile-a', 'valid');
-    journeys.observeSession('posthog-session');
+    if (boundary === 'auth') {
+      journeys.setActor(null, null, 'guest');
+    }
+    journeys.observeSession(sessionId);
     const first = journeys.select('people:cosmos', 'target-a', '/@a');
+    assert.ok(first);
+    journeys.succeed(first, 'target-a', 'view');
     if (boundary === 'account') {
       journeys.setActor('account-b', 'profile-a', 'valid');
     }
@@ -107,20 +122,60 @@ for (const boundary of ['account', 'profile', 'auth', 'session', 'pagehide'] as 
       journeys.setActor('account-a', 'profile-b', 'valid');
     }
     if (boundary === 'auth') {
-      journeys.setActor(null, null, 'guest');
+      journeys.setActor(null, null, 'error');
     }
     if (boundary === 'session') {
-      journeys.observeSession('next-session');
+      sessionId = 'session-b';
+      journeys.observeSession(sessionId);
     }
-    if (boundary === 'pagehide') {
-      journeys.end();
-    }
-    journeys.succeed(first, 'target-a', 'view');
+
+    journeys.succeed(first, 'target-a', 'follow');
+    assert.equal(journeys.forSearch('people:cosmos', 'target-a'), null);
+    assert.equal(journeys.forRoute('/@a', 'target-a'), null);
+    assert.equal(journeys.select('people:other', 'target-a', '/@a'), null);
+    assert.deepEqual(
+      events.map(([event]) => event),
+      ['search_profile_journey_started', 'search_profile_view_succeeded'],
+    );
+
+    t.mock.timers.setTime(200);
     const again = journeys.select('people:cosmos', 'target-a', '/@a');
+    assert.ok(again);
+    assert.notEqual(first.id, again.id);
+    assert.equal(again.startedAt, 200);
+    assert.equal(again.sessionId, sessionId);
+    assert.equal(journeys.select('people:cosmos', 'target-a', '/@a'), again);
+    journeys.succeed(first, 'target-a', 'follow');
+    journeys.succeed(again, 'target-a', 'view');
+    journeys.succeed(again, 'target-a', 'view');
     journeys.succeed(again, 'target-a', 'follow');
-    assert.equal(events.length, 1);
+    journeys.succeed(again, 'target-a', 'follow');
+    assert.deepEqual(
+      events.map(([event]) => event),
+      [
+        'search_profile_journey_started',
+        'search_profile_view_succeeded',
+        'search_profile_journey_started',
+        'search_profile_view_succeeded',
+        'search_profile_follow_succeeded',
+      ],
+    );
+    assert.deepEqual(
+      events.map(([, properties]) => properties.search_profile_journey_id),
+      [first.id, first.id, again.id, again.id, again.id],
+    );
   });
 }
+
+test('pagehide는 기존 귀속을 끝내고 기록된 분모를 보존한다', () => {
+  const { events, journeys } = setup();
+  const first = journeys.select('people:cosmos', 'target-a', '/@a');
+  journeys.end();
+  journeys.succeed(first, 'target-a', 'view');
+  const again = journeys.select('people:cosmos', 'target-a', '/@a');
+  journeys.succeed(again, 'target-a', 'follow');
+  assert.equal(events.length, 1);
+});
 
 test('같은 actor와 최초 session 알림은 유효한 귀속을 닫지 않는다', () => {
   const { events, journeys } = setup();

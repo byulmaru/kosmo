@@ -31,6 +31,15 @@
 - Alternatives: 기본 Funnel 우선·HogQL fallback 방식은 이번 사용자 지시로 대체됐다. person 단위 집계나 성공 날짜만의 집계는 요구한 비율과 달라질 수 있다.
 - Consequences: HogQL이 fixture의 `6 / 4 / 3 / 2`를 정확히 재현해야 acceptance를 충족한다. 30분 포함·시작일·Asia/Seoul·잠정치·분모 0 조건을 유지하고 query·환경·시각·결과 URL·기대값·관측 결과를 남긴다.
 
+### 종료 후 명시적 재선택의 새 journey
+
+- Date: 2026-09-22
+- Upstream context: 2026-09-22 사용자 결정 및 `docs/domain/policies/search-conversion-analytics.md`의 귀속 기간·종료 계약.
+- Choice: Account·선택 Profile·인증 상태·PostHog session 변경은 기존 journey의 수명을 끝내지만, 변경 자체로 새 journey를 만들지 않는다. 같은 검색 결과 맥락에서 같은 대상을 다시 명시적으로 유효하게 선택할 때만 새 `search_profile_journey_id`로 새 journey를 시작한다. 재선택 중복 제거는 동일한 journey의 수명 안에서만 적용한다.
+- Reason: 종료 후 실제 재선택이 있어야 새 분모가 생기며, 종료 전 중복 제거 상태가 이후 재선택을 막아서는 안 된다.
+- Alternatives: 종료 시 즉시 새 journey를 생성하거나 종료 후에도 이전 중복 제거 상태를 유지하는 방식은 사용자 결정의 분모·시작 조건과 맞지 않는다.
+- Consequences: 네 종료 경계 각각에 대해 `같은 대상 재선택 → 새 journey`와 `종료만 발생 → 새 journey 없음`을 검증한다. 종료 전 기록은 유지하고 종료 후 늦은 응답은 어느 journey에도 연결하지 않는다.
+
 ### 현재 저장소의 세션 하네스 정책 적용
 
 - Date: 2026-09-22

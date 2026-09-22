@@ -16,6 +16,7 @@ const session = {
   status: 'valid',
 };
 let pathname = '/search';
+let posthogSession = 'session-a';
 let listener: ((id: string) => void) | undefined;
 let renderer: ReactTestRenderer | undefined;
 const page = new EventTarget();
@@ -33,14 +34,14 @@ mockModule(new URL('./client.ts', import.meta.url), {
   identifyAnalytics: (id: string) => identities.push(id),
   observeAnalyticsSession: (callback: (id: string) => void) => {
     listener = callback;
-    callback('session-a');
+    callback(posthogSession);
     return () => {
       listener = undefined;
     };
   },
   captureSearchProfileAnalytics: (args: SearchProfileEventArgs) => {
     events.push(args);
-    return 'session-a';
+    return posthogSession;
   },
 });
 let Bridge: typeof AnalyticsSessionBridge;
@@ -58,6 +59,7 @@ afterEach(async () => {
   session.selectedProfileId = 'profile-a';
   session.status = 'valid';
   pathname = '/search';
+  posthogSession = 'session-a';
 });
 
 afterEach(() => {
@@ -98,6 +100,60 @@ test('실제 effect에서 identity·actor·SDK session·pagehide 종료를 연�
   );
   assert.deepEqual(identities, ['account-a', 'account-b', 'clear']);
 });
+
+for (const boundary of ['account', 'profile', 'auth', 'sdk'] as const) {
+  test(`${boundary} effect 종료 뒤 실제 재선택에만 새 journey를 연결한다`, async () => {
+    if (boundary === 'auth') {
+      session.accountId = null;
+      session.selectedProfileId = null;
+      session.status = 'guest';
+    }
+    await act(async () => {
+      renderer = create(createElement(Bridge));
+    });
+    journeys.setSearch(`reselect:${boundary}`);
+    const first = journeys.select(`reselect:${boundary}`, 'target', '/@target');
+    assert.ok(first);
+    journeys.succeed(first, 'target', 'view');
+
+    if (boundary === 'account') {
+      session.accountId = 'account-b';
+    }
+    if (boundary === 'profile') {
+      session.selectedProfileId = 'profile-b';
+    }
+    if (boundary === 'auth') {
+      session.status = 'error';
+    }
+    if (boundary === 'sdk') {
+      posthogSession = 'session-b';
+      listener?.(posthogSession);
+    }
+    await act(async () => renderer!.update(createElement(Bridge)));
+    journeys.succeed(first, 'target', 'follow');
+    assert.equal(events.length, 2);
+    assert.equal(journeys.forSearch(`reselect:${boundary}`, 'target'), null);
+
+    const next = journeys.select(`reselect:${boundary}`, 'target', '/@target');
+    assert.ok(next);
+    assert.notEqual(next.id, first.id);
+    journeys.succeed(first, 'target', 'follow');
+    journeys.succeed(next, 'target', 'view');
+    assert.deepEqual(
+      events.map(([event]) => event),
+      [
+        'search_profile_journey_started',
+        'search_profile_view_succeeded',
+        'search_profile_journey_started',
+        'search_profile_view_succeeded',
+      ],
+    );
+    assert.deepEqual(
+      events.map(([, properties]) => properties.search_profile_journey_id),
+      [first.id, first.id, next.id, next.id],
+    );
+  });
+}
 
 test('다른 route로 이동하면 선택을 분리하고 unmount 후 SDK 구독을 해제한다', async () => {
   await act(async () => {

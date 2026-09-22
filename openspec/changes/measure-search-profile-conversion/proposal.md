@@ -4,12 +4,14 @@
 
 ## Goal
 
-검색 결과에서 선택한 대상별 `search_profile_journey_id`를 기준으로, 최초 선택 후 30분 이내의 Profile 조회 또는 Follow 성공을 HogQL canonical 집계로 재현할 수 있게 한다.
+검색 결과에서 선택한 대상별 `search_profile_journey_id`를 기준으로, 최초 선택 후 30분 이내의 Profile 조회 또는 Follow 성공을 HogQL canonical 집계로 재현할 수 있게 한다. Account·선택 Profile·인증 상태·PostHog session 변경 뒤 같은 대상의 명시적 재선택은 새 journey로 집계한다.
 
 ## What Changes
 
 - 복원한 canonical 계산 정책에 현재 사용자가 정한 `search_profile_journey_id` 이름과 HogQL canonical 집계를 반영한다.
-- 검색 선택, 실제 Profile 표시, Follow 응답과 귀속 종료 경계를 연결할 작업을 정리한다.
+- 검색 선택, 실제 Profile 표시, Follow 응답과 귀속 종료 경계를 연결할 작업을 정리한다. Account·선택 Profile·인증 상태·PostHog
+  session 변경 자체는 새 journey를 만들지 않으며, 그중 하나로 기존 journey가 끝난 뒤 같은 검색 결과의 같은 대상을 다시 명시적으로
+  선택할 때만 새 `search_profile_journey_id`를 만든다.
 - distinct `search_profile_journey_id` 기준의 분모·전체·Profile 조회·Follow 분자와 `6 / 4 / 3 / 2` fixture acceptance를 정리한다.
 
 ## Non-Goals
@@ -21,9 +23,14 @@
 
 ## Constraints
 
-- 같은 검색 결과 맥락에서 같은 대상의 재선택·뒤로가기는 중복 제거한다. 다른 대상은 별도 journey다.
+- 같은 검색 결과 맥락에서 같은 journey의 수명 동안 같은 대상의 재선택·뒤로가기는 중복 제거한다. 다른 대상은 별도 journey다.
+- Account·선택 Profile·인증 상태·PostHog session 변경으로 기존 journey가 종료된 뒤 같은 대상을 다시 명시적으로 선택하면 새
+  `search_profile_journey_id`와 분모를 만든다. 종료만 발생하고 재선택이 없으면 새 journey를 만들지 않으며, 이전 중복 제거 상태는 새
+  재선택을 막지 않는다.
 - 유효한 Profile 표시 또는 실제 Follow Relationship 응답만 성공이다. Pending Follow Request와 이후 비동기 승인은 제외한다.
-- 최초 선택 후 정확히 30분까지 포함한다. 새 검색, Account·선택 Profile·인증 상태·PostHog session 변경, 탭 종료·전체 reload 중 먼저 발생한 경계에서 새 귀속을 끝낸다.
+- 최초 선택 후 정확히 30분까지 포함한다. 새 검색, Account·선택 Profile·인증 상태·PostHog session 변경, 탭 종료·전체 reload 중 먼저 발생한 경계에서
+  기존 귀속을 끝낸다. 경계 자체는 새 journey를 만들지 않는다.
+- 30분 경과만으로 같은 검색·대상의 새 journey를 시작하거나 최초 선택 시각을 연장하지 않는다. 탭 종료·전체 reload 뒤 복원하지 않는 동작도 유지한다.
 - 시작 시점·Asia/Seoul로 집계한다. 관측 window가 남으면 잠정치, 분모가 0이면 데이터 없음으로 표시한다.
 - `search_profile_journey_id`는 Account·Profile·검색어에서 파생하지 않은 opaque identifier다. custom 귀속의 개인정보 제한과 기존 SDK identity·표준 Search `q`·click/referrer/session metadata 계약을 함께 유지한다.
 - canonical 집계는 HogQL이다. PostHog Funnel·dashboard는 필요한 경우 시각화·교차검증에만 사용한다.
@@ -31,7 +38,10 @@
 
 ## Verification
 
-단위 테스트로 중복·시간·종료 경계를, 컴포넌트와 웹 통합 테스트로 실제 표시·응답을 확인한다. 동일 테스트 journey를 HogQL로 집계해 분모·전체·Profile 조회·Follow 분자가 정확히 `6 / 4 / 3 / 2`인지 확인한다. 시작일·Asia/Seoul·30분 포함·잠정치·분모 0과 추가 종료 경계도 검증한다. 이번 Spec 세션은 문서 윤문·구조 대조·strict validation만 수행한다.
+단위 테스트로 같은 journey 안의 중복·시간·종료 경계를, 컴포넌트와 웹 통합 테스트로 실제 표시·응답을 확인한다. Account·선택 Profile·인증 상태·PostHog
+session 각각의 종료 뒤 같은 대상 재선택이 새 journey를 만들고, 종료만 발생한 경우 새 journey를 만들지 않는 경로를 검증한다. 동일 테스트 journey를
+HogQL로 집계해 분모·전체·Profile 조회·Follow 분자가 정확히 `6 / 4 / 3 / 2`인지 확인한다. 시작일·Asia/Seoul·30분 포함·잠정치·분모 0과 추가 종료 경계도
+검증한다. 이번 Spec 세션은 문서 윤문·구조 대조·strict validation만 수행한다.
 
 ## Business Context
 

@@ -8,7 +8,10 @@
 [canonical.sql](canonical.sql)은 각 `search_profile_journey_id`를 한 행으로 묶고, 최초 선택 후 30분 이내
 같은 SDK session에서 발생한 조회·Follow 성공을 합집합으로 센다.
 앱은 시작·성공 판정과 SDK timestamp에 같은 시각 표본을 사용해 정확히 30분의 성공을 보존한다. person·Account별 집계가 아니다.
-시작·성공 중복 전송과 시작 없는 성공을 제거한다. 귀속 종료 이후 응답은 클라이언트에서 이벤트를 만들지 않는다.
+시작·성공 중복 전송과 시작 없는 성공을 제거한다. 같은 대상 재선택 중복 제거는 같은 journey의 수명 안에서만 적용한다.
+Account·선택 Profile·인증 상태·PostHog session 변경으로 귀속이 종료된 뒤 같은 검색 결과에서 같은 대상을 다시 명시적으로
+선택하면 새 `search_profile_journey_id`를 만들고, 종료만 발생한 경우에는 새 journey를 만들지 않는다. 귀속 종료 이후 응답은
+클라이언트에서 이벤트를 만들지 않는다.
 쿼리에서 인증 변경이나 새 검색을 사후 추론하지 않는다.
 
 - [운영 데이터 기준 집계](https://us.posthog.com/project/563575/insights/apNWWNxN)
@@ -18,6 +21,7 @@
 다른 기간은 SQL 상단의 `period_start`·`period_end`를 편집한다. `observed_at`은 실행 시각이다.
 기간 끝 뒤 30분까지 성공을 읽고, 결과는 시작일에 귀속한다. 마지막 journey의 30분 window가 아직 끝나지
 않으면 `provisional`, 끝나면 `final`, 분모가 0이면 `no_data`와 null 전환율을 반환한다.
+30분 경과만으로 같은 검색·대상의 새 journey를 시작하거나 최초 선택 시각을 연장하지 않는다. pagehide·전체 reload 뒤 journey를 복원하지 않는 동작도 유지한다.
 
 ## 실제 HogQL 검증
 
@@ -54,14 +58,18 @@ node docs/analytics/search-conversion/fixture.mjs no-data
 
 ## 앱 검증과 남은 책임
 
-`searchProfileJourneys.test.ts`는 fake clock과 이벤트 출력으로 중복·대상·30분·종료·새 메모리 경계를 검증한다.
+`searchProfileJourneys.test.ts`는 fake clock과 이벤트 출력으로 같은 journey 안의 중복·대상·30분·종료·새 메모리 경계를 검증한다.
+Account·선택 Profile·인증 상태·PostHog session 각 종료 경계 뒤 같은 대상 재선택이 새 journey를 만들고, 재선택 없이 경계만
+발생한 경우 새 journey가 생기지 않는지 함께 검증한다.
 `AnalyticsSessionBridge.test.ts`는 실제 React effect에서 Account·선택 Profile·인증·SDK session·pagehide·route
 변경을 연결한다. `client.test.ts`는 SDK 경계에서 세션 회전 후 성공 payload 제거와 기존 이벤트 보존을,
 `client.native.test.ts`는 Native no-op을 검증한다.
 
 `SearchConversion.tests.stories.tsx`는 Chromium에서 실제 검색 화면·Profile layout·FollowButton과 Relay 응답을
-사용한다. adapter 출력만 관찰하며 유효 Profile 표시, 로딩·없음·오류, 재선택, 선택 없는 Follow,
+사용한다. adapter 출력만 관찰하며 유효 Profile 표시, 로딩·없음·오류, 같은 journey 재선택, 선택 없는 Follow,
 modifier click, optimistic 상태·Request·오류, pagehide·새 검색 뒤 늦은 응답을 다룬다.
+`SessionRotatesOnReselection`은 기존 일반 `search_result_selected` capture를 먼저 발생시켜 SDK lazy session callback이 선택보다
+먼저 실행되는 실제 경로를 재현하고, 첫 재선택이 새 journey를 시작하는지 검증한다.
 
 Implement 단계에서는 테스트 코드를 작성하고 Relay compiler·TypeScript·ESLint·Prettier 정적 검증을 수행한다.
 동작 테스트 실행은 GitHub CI `Test (App)`의 unit·Storybook이 담당한다. `Lint`는 workspace 정적 검증,

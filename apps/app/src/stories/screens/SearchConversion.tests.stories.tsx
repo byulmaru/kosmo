@@ -1,7 +1,11 @@
 import { Text } from 'react-native';
 import { expect, fireEvent, mocked, userEvent, waitFor, within } from 'storybook/test';
 import { AnalyticsSessionBridge } from '@/analytics/AnalyticsSessionBridge';
-import { captureSearchProfileAnalytics, observeAnalyticsSession } from '@/analytics/client';
+import {
+  captureSearchProfileAnalytics,
+  observeAnalyticsSession,
+  trackAnalytics,
+} from '@/analytics/client';
 import { searchProfileJourneys } from '@/analytics/searchProfileJourneys';
 import ProfileLayout from '@/app/(tabs)/(profile)/[profileHandle]/_layout';
 import SearchScreen from '@/app/(tabs)/(protected)/search';
@@ -110,6 +114,7 @@ const meta = {
   component: SearchConversionFixture,
   beforeEach: () => {
     searchProfileJourneys.setSearch('reset-story');
+    mocked(trackAnalytics).mockReset();
     mocked(captureSearchProfileAnalytics).mockReset().mockReturnValue('conversion-sdk-session');
     mocked(observeAnalyticsSession).mockImplementation((listener) => {
       listener('conversion-sdk-session');
@@ -119,6 +124,7 @@ const meta = {
       searchProfileJourneys.end();
       mocked(captureSearchProfileAnalytics).mockReset();
       mocked(observeAnalyticsSession).mockReset();
+      mocked(trackAnalytics).mockReset();
     };
   },
   parameters: {
@@ -306,5 +312,43 @@ export const NewSearchBeforeFollowResponse: Story = {
     await userEvent.type(input, 'another{Enter}');
     await waitFor(() => expect(canvas.getByRole('button', { name: '팔로잉' })).toBeEnabled());
     expect(successes().map(([event]) => event)).toEqual(['search_profile_view_succeeded']);
+  },
+};
+
+export const SessionRotatesOnReselection: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await selectResult(canvasElement);
+    await waitFor(() => expect(successes().length).toBe(1));
+    const firstId = emissions()[0]![1].search_profile_journey_id;
+    await userEvent.click(canvas.getByRole('button', { name: '검색으로 돌아가기' }));
+    const onSession = mocked(observeAnalyticsSession).mock.calls.at(-1)?.[0];
+    expect(onSession).toBeDefined();
+    let rotate = true;
+    mocked(trackAnalytics).mockImplementation((event) => {
+      if (event === 'search_result_selected' && rotate) {
+        rotate = false;
+        mocked(captureSearchProfileAnalytics).mockReturnValue('next-sdk-session');
+        onSession!('next-sdk-session');
+      }
+    });
+
+    await selectResult(canvasElement);
+    await expect(canvas.findByText('프로필 콘텐츠')).resolves.toBeVisible();
+    await waitFor(() => expect(successes().length).toBe(2));
+    expect(emissions().map(([event]) => event)).toEqual([
+      'search_profile_journey_started',
+      'search_profile_view_succeeded',
+      'search_profile_journey_started',
+      'search_profile_view_succeeded',
+    ]);
+    const nextId = emissions()[2]![1].search_profile_journey_id;
+    expect(nextId).not.toBe(firstId);
+    expect(emissions().map(([, properties]) => properties.search_profile_journey_id)).toEqual([
+      firstId,
+      firstId,
+      nextId,
+      nextId,
+    ]);
   },
 };

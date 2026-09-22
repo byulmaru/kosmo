@@ -4,7 +4,7 @@
 
 **Source Context**: `docs/domain/policies/search-conversion-analytics.md`의 계산 단위, PROD-557 승인 댓글 `ccb6d7a3-1d3e-48f8-a556-dfbf38638d21`.
 
-시스템은 같은 검색 결과 맥락에서 선택한 대상 Profile별 journey를 분모로 세어야 한다(SHALL). 같은 대상의 재선택·뒤로가기는 중복 제거하고, 다른 대상 선택은 별도 journey로 센다.
+시스템은 같은 검색 결과 맥락에서 선택한 대상 Profile별 journey를 분모로 세어야 한다(SHALL). 동일한 journey의 수명 안에서 같은 대상의 재선택·뒤로가기는 중복 제거하고, 다른 대상 선택은 별도 journey로 센다.
 
 #### Scenario: 최초 선택과 재선택
 
@@ -68,13 +68,14 @@
 
 **Source Context**: canonical 정책의 귀속 기간·종료, PROD-557 승인된 계산 계약.
 
-시스템은 최초 선택 후 30분 경계값을 포함하되, 새 검색, Account·선택 Profile·인증 상태·PostHog session 변경, 탭 종료·전체 reload 중 먼저 발생한 경계에서 새 귀속을 끝내야 한다(SHALL). 종료 전 기록은 유지하고 이후 늦은 성공을 추가해서는 안 된다(MUST NOT). 탭 간 공유·reload 뒤 복원은 하지 않는다.
+시스템은 최초 선택 후 30분 경계값을 포함하되, 새 검색, Account·선택 Profile·인증 상태·PostHog session 변경, 탭 종료·전체 reload 중 먼저 발생한 경계에서 기존 귀속을 끝내야 한다(SHALL). 30분 경과만으로 같은 검색·대상의 새 journey를 시작하거나 최초 선택 시각을 연장해서는 안 된다(MUST NOT). Account·선택 Profile·인증 상태·PostHog session 변경 자체는 새 journey를 만들지 않아야 하며(MUST NOT), 이 네 경계 중 하나로 기존 journey가 끝난 뒤 같은 검색 결과 맥락에서 같은 대상을 다시 명시적으로 선택한 경우에만 새 `search_profile_journey_id`로 새 journey를 시작해야 한다(SHALL). 재선택이 없으면 새 journey를 만들지 않아야 하며(MUST NOT), 같은 journey 안의 재선택 중복 제거 상태가 이 네 경계 이후의 재선택을 막아서는 안 된다(SHALL). 종료 전 기록은 유지하고 모든 종료 경계 뒤 늦은 성공을 이전 또는 새 journey에 추가해서는 안 된다(MUST NOT). 탭 간 공유·reload 뒤 복원은 하지 않는다.
 
 #### Scenario: 정확히 30분과 초과
 
 - **WHEN** 다른 종료 조건 없이 최초 선택 후 정확히 30분에 성공한다
 - **THEN** 전환에 포함한다
 - **AND** 30분을 초과한 성공은 제외한다
+- **AND** 재선택으로 최초 선택 시각이나 30분 관측 window를 연장하지 않는다
 
 #### Scenario: 새 검색과 늦은 완료
 
@@ -84,13 +85,27 @@
 
 #### Scenario: 인증과 선택 주체 전환
 
-- **WHEN** Account, 선택 Profile 또는 인증 상태가 바뀐다
-- **THEN** 이전 journey로 새 성공을 귀속하지 않는다
+- **WHEN** Account가 바뀐 뒤 같은 검색 결과에서 같은 대상을 다시 명시적으로 선택한다
+- **THEN** 이전 journey로 새 성공을 귀속하지 않고 새 `search_profile_journey_id`의 journey를 시작한다
+- **AND** Account 변경만 발생하고 재선택하지 않으면 새 journey를 만들지 않는다
+
+#### Scenario: 선택 Profile 전환 뒤 재선택
+
+- **WHEN** 선택 Profile이 바뀐 뒤 같은 검색 결과에서 같은 대상을 다시 명시적으로 선택한다
+- **THEN** 이전 journey로 새 성공을 귀속하지 않고 새 `search_profile_journey_id`의 journey를 시작한다
+- **AND** 선택 Profile 변경만 발생하고 재선택하지 않으면 새 journey를 만들지 않는다
+
+#### Scenario: 인증 상태 전환 뒤 재선택
+
+- **WHEN** 인증 상태가 바뀐 뒤 같은 검색 결과에서 같은 대상을 다시 명시적으로 선택한다
+- **THEN** 이전 journey로 새 성공을 귀속하지 않고 새 `search_profile_journey_id`의 journey를 시작한다
+- **AND** 인증 상태 변경만 발생하고 재선택하지 않으면 새 journey를 만들지 않는다
 
 #### Scenario: PostHog session 변경
 
-- **WHEN** 앱의 인증 상태는 같지만 PostHog session이 바뀐다
-- **THEN** 이전 session의 journey로 새 성공을 귀속하지 않는다
+- **WHEN** 앱의 인증 상태는 같지만 PostHog session이 바뀐 뒤 같은 검색 결과에서 같은 대상을 다시 명시적으로 선택한다
+- **THEN** 이전 session의 journey로 새 성공을 귀속하지 않고 새 `search_profile_journey_id`의 journey를 시작한다
+- **AND** PostHog session 변경만 발생하고 재선택하지 않으면 새 journey를 만들지 않는다
 
 #### Scenario: 새 탭과 전체 reload
 

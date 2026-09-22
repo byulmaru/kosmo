@@ -16,7 +16,13 @@
 
 현재 탭의 메모리에 검색 맥락별 대상→journey 정보를 둔다. 대상 판정에 필요한 Profile ID와 navigation 정보는 로컬에서만 사용하고, 전송용 `search_profile_journey_id`는 Account·Profile·검색어와 무관하게 생성한다. 최초 선택 시각, 성공 종류별 기록 여부, 시작 시점의 인증·선택 Profile·PostHog session을 함께 보관한다.
 
-결과를 다시 선택하거나 기존 검색 화면으로 돌아오면 같은 대상의 journey를 재사용하고 최초 선택 시각을 연장하지 않는다. 실제 새 검색은 기존 귀속을 닫는다. 만료된 journey도 같은 검색 맥락에서 재선택 분모가 늘지 않도록 중복 판정은 유지한다. pagination, 재렌더, 조회 재시도를 새 검색으로 오인하지 않도록 현재 route 전환과 제출 동작을 함께 확인한다. 같은 query의 no-op 제출은 결과 맥락을 바꾸지 않는 현행 동작을 따른다.
+결과를 다시 선택하거나 기존 검색 화면으로 돌아오면 같은 journey의 대상 재선택은 중복 제거하고 최초 선택 시각을 연장하지 않는다. 실제 새 검색과
+Account·선택 Profile·인증 상태·PostHog session 변경은 기존 귀속을 닫는다. 네 가지 주체·session 경계 중 하나로 귀속이 닫힌 뒤 같은 검색 결과
+맥락에서 같은 대상을 다시 명시적으로 선택할 때만 새 `search_profile_journey_id`와 journey를 만들며, 경계만 발생하면 분모를 만들지 않는다.
+따라서 중복 제거는 같은 journey의 수명 안에서 적용하고, 네 경계 뒤 이전 중복 제거 상태가 새 재선택을 막지 않도록 한다. pagination, 재렌더,
+조회 재시도를 새 검색으로 오인하지 않도록 현재 route 전환과 제출 동작을 함께 확인한다. 같은 query의 no-op 제출은 결과 맥락을 바꾸지 않는 현행 동작을 따른다.
+
+이번 변경 대상은 네 가지 주체·session 경계의 재선택 동작뿐이다. 30분 경과만으로 같은 검색·대상의 새 journey를 시작하거나 최초 선택 시각을 연장하지 않으며, 탭 종료·전체 reload 뒤 journey를 복원하지 않는 동작도 기존대로 유지한다.
 
 선택에서 시작한 navigation과 대상이 일치하는 경우에만 Profile 성공 신호를 연결한다. URL의 handle만 보고 마지막 journey에 연결하지 않는다. 기존 route/navigation 경계와 callback을 사용하고 별도의 history stack, URL query, storage 또는 탭 간 공유 수단을 만들지 않는다. 새 탭·수정키 클릭·별도 직접 진입은 선택 맥락을 전달받지 못하므로 연결하지 않는다.
 
@@ -24,7 +30,9 @@ Follow를 시작할 때 해당 선택 맥락과 대상의 참조를 확보하고
 
 ### 시간과 종료
 
-성공 신호를 처리할 때 최초 선택으로부터 경과 시간이 `0 <= elapsed_ms <= 1800000`인지 확인한다. 타이머의 실행 시각이나 재선택 시각으로 window를 연장하지 않는다. 새 검색, Account·선택 Profile·인증 상태·PostHog session 변경과 문서 종료는 이전 참조를 무효화한다. 이미 기록한 분모와 성공은 취소하지 않는다.
+성공 신호를 처리할 때 최초 선택으로부터 경과 시간이 `0 <= elapsed_ms <= 1800000`인지 확인한다. 타이머의 실행 시각이나 재선택 시각으로 window를 연장하지 않는다. 새 검색,
+Account·선택 Profile·인증 상태·PostHog session 변경, 탭 종료·전체 reload는 이전 참조를 무효화한다. 이미 기록한 분모와 성공은 취소하지 않는다. 네 가지
+주체·session 경계 뒤에는 유효한 명시적 재선택이 있어야 새 참조와 journey를 만들며, 경계만으로는 만들지 않는다.
 
 PostHog 공개 session API를 웹 adapter에서 사용하고 초기 callback을 session 변경으로 오인하지 않는다. `onSessionId`는 기존 session이 있으면 등록 즉시 호출되고 이후 session/window 변화도 알린다. SDK가 다음 capture에서 session을 갱신할 수 있으므로 callback 관찰만으로 충분하다고 가정하지 말고, 설치 버전의 session 판정과 실제 outbound event의 session 일치까지 검증한다. 조회·관찰 목적으로만 SDK session을 사용하며 feature가 reset/identify를 호출해 수명을 바꾸지 않는다. 근거: [PostHog JavaScript SDK](https://posthog.com/docs/references/posthog-js), [session 문서](https://posthog.com/docs/data/sessions).
 

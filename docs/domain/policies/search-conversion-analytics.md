@@ -12,7 +12,9 @@ HogQL을 canonical 집계로 사용한다. 사람 수가 아닌 탐색별 결과
 ## 계산 단위
 
 - 분모는 같은 검색 결과 맥락에서 선택한 대상 [Profile](../objects/profile.md)별 journey다.
-- 같은 대상의 재선택과 뒤로가기는 중복 제거하고, 다른 대상 선택은 별도 journey로 센다.
+- 같은 journey의 수명 안에서는 같은 대상의 재선택과 뒤로가기를 중복 제거하고, 다른 대상 선택은 별도 journey로 센다.
+- Account·선택 Profile·인증 상태·PostHog session 변경으로 기존 journey가 종료된 뒤 같은 검색 결과 맥락에서
+  같은 대상을 다시 명시적으로 선택하면 새 `search_profile_journey_id`로 새 journey를 시작한다.
 - 전체 전환 분자는 최초 선택 후 30분 이내 같은 journey·대상의 조회 또는 Follow가 성공한 journey 수다.
 - 조회와 Follow가 모두 성공해도 전체 전환은 한 번이다. 조회 전환율과 Follow 전환율은 같은 분모로 따로 계산한다.
 
@@ -27,8 +29,10 @@ Follow는 실제 [Follow Relationship](../objects/follow-relationship.md)이 응
 
 ## 귀속 기간과 종료
 
-최초 선택 후 정확히 30분인 성공까지 포함한다. 재선택으로 최초 선택 시각이나 관측 기간을 연장하지 않는다.
-아래 경계 중 먼저 발생한 시점부터 새 성공을 귀속하지 않는다.
+최초 선택 후 정확히 30분인 성공까지 포함한다. 30분 경과만으로 같은 검색·대상의 새 journey를 시작하거나 최초 선택 시각을
+연장하지 않는다. 탭 종료·전체 reload 뒤에도 journey를 복원하지 않는다.
+같은 journey의 재선택으로 최초 선택 시각이나 관측 기간을 연장하지 않는다.
+아래 경계 중 먼저 발생한 시점에 기존 journey의 귀속 수명이 끝나며, 그 시점 이후의 성공은 기존 journey에 귀속하지 않는다.
 
 - 최초 선택 후 30분 경과.
 - 새 검색.
@@ -36,7 +40,11 @@ Follow는 실제 [Follow Relationship](../objects/follow-relationship.md)이 응
 - PostHog session 변경.
 - 탭 종료 또는 전체 reload.
 
-종료 전에 기록한 분모와 성공은 유지한다. 종료 뒤 도착한 늦은 응답을 이전 또는 새 journey에 연결하지 않는다.
+종료 전에 기록한 분모와 성공은 유지한다. 종료 뒤 도착한 늦은 응답은 이전 또는 새 journey에 연결하지 않는다.
+Account·선택 Profile·인증 상태·PostHog session 변경 자체만으로 새 journey를 만들지 않는다. 이 네 경계 중 하나로 기존 journey가
+종료된 뒤 같은 검색 결과 맥락에서 같은 대상을 유효하게 다시 명시적으로 선택한 경우에만 새 `search_profile_journey_id`와 분모를
+만들며, 재선택이 없으면 새 journey도 만들지 않는다. 같은 journey 안의 재선택 중복 제거 상태가 이 네 경계 이후의 재선택을
+막지 않는다.
 앱의 인증 [Session](../objects/session.md)과 PostHog session은 별도 경계로 다룬다.
 탭 간 journey 공유와 reload 뒤 복원은 하지 않으며, 선택 맥락을 전달받지 않은 새 탭·별도 navigation은 기존
 journey에 연결하지 않는다.

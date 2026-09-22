@@ -47,12 +47,16 @@ export function createSearchProfileJourneys(capture: Capture) {
       const next = JSON.stringify([accountId, profileId, status]);
       if (actor !== null && next !== actor) {
         end();
+        selected.clear();
+        successes.clear();
       }
       actor = next;
     },
     observeSession(sessionId: string) {
       if (session !== null && sessionId !== session) {
         end();
+        selected.clear();
+        successes.clear();
       }
       session = sessionId;
     },
