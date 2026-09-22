@@ -561,7 +561,7 @@ const styles = StyleSheet.create({
     top: 40 + spacing.xs,
     transform: [{ translateX: -1 }],
   },
-  modalParentConnector: { bottom: -(spacing.md + spacing.xxl) },
+  modalParentConnector: { bottom: -(spacing.md + spacing.xxl - spacing.xs) },
   parentContent: { flex: 1, gap: spacing.md, minWidth: 0 },
   parentIdentity: { flex: 1, minWidth: 0 },
   timestamp: { fontFamily: fontFamilies.ui, marginTop: spacing.xs, ...typography.xsm },

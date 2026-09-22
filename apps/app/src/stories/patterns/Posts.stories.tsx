@@ -7653,9 +7653,8 @@ export const ReplyModalPresentation: Story = {
           (composerAvatarBounds.left + composerAvatarBounds.width / 2),
       ),
     ).toBeLessThanOrEqual(1);
-    expect(connectorBounds.top).toBeGreaterThanOrEqual(parentAvatarBounds.bottom);
-    expect(connectorBounds.bottom).toBeGreaterThanOrEqual(composerAvatarBounds.top);
-    expect(connectorBounds.bottom).toBeLessThanOrEqual(composerAvatarBounds.bottom);
+    expect(connectorBounds.top - parentAvatarBounds.bottom).toBeCloseTo(4, 0);
+    expect(composerAvatarBounds.top - connectorBounds.bottom).toBeCloseTo(4, 0);
     expect(connectorBounds.height).toBeGreaterThan(0);
     const editor = within(dialog).getByTestId('post-composer-editor');
     expect(Number(getComputedStyle(replyParent).zIndex)).toBeGreaterThan(

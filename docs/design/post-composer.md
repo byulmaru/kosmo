@@ -75,7 +75,7 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
 - Parent 본문은 줄 수로 생략하지 않는다. 제한 높이를 넘을 때 중앙 영역의 단일 scroll로 접근한다.
 - Parent에 Content Warning이 있으면 warning과 공용 reveal control을 표시한다. Parent 본문과 Media는 해당
   Post identity의 공용 reveal 상태를 따르며, 이 control은 작성 상태나 route를 변경하지 않는다.
-- Parent Avatar 아래의 thread connector를 Reply 작성 Profile의 Avatar까지 이어 기존 Reply 표시 구조와 같은
+- Parent Avatar 아래의 thread connector는 양쪽 Avatar에서 각각 `4px` 띄워 기존 Reply 표시 구조와 같은
   대화 관계를 표현한다.
 - Parent 영역은 작성 맥락 확인을 위한 비대화형 presentation이다. 작성자·Source·본문을 활성화해 modal 작성
   상태를 잃는 route 이동을 만들지 않는다.
