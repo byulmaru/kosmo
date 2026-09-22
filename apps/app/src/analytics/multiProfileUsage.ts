@@ -41,22 +41,6 @@ export type MultiProfileAnalyticsSnapshot = {
 
 export type AnalyticsCapture = (...args: AnalyticsEventArgs) => void;
 
-export type AnalyticsOperation = Readonly<{
-  accountId: string;
-  uuid: string;
-}>;
-
-export function beginAnalyticsOperation(accountId: string): AnalyticsOperation {
-  return { accountId, uuid: createUuid() };
-}
-
-export function completeAnalyticsOperation(
-  operation: AnalyticsOperation,
-  timestamp = new Date(),
-): AnalyticsCaptureOptions {
-  return { accountId: operation.accountId, timestamp, uuid: operation.uuid };
-}
-
 export type ProfileSelectionCause = 'auto' | 'direct';
 
 export function isDirectProfileSwitch({
@@ -228,6 +212,7 @@ type WeeklyState = {
 
 type DerivedWeeklyState = WeeklyState & {
   activeAccounts: Set<string>;
+  firstActiveAccounts: Set<string>;
   targetWaaAccounts: Set<string>;
 };
 
@@ -417,13 +402,24 @@ export function calculateMultiProfileUsage(
   }
 
   const derivedStates = new Map<string, DerivedWeeklyState>();
-  for (const [weekKey, state] of weeklyStates) {
+  const seenActiveAccounts = new Set<string>();
+  for (const [weekKey, state] of [...weeklyStates].sort(([first], [second]) =>
+    first.localeCompare(second),
+  )) {
     const targetWaaAccounts = new Set(
       [...state.eligibleAccounts].filter((accountId) => state.waaAccounts.has(accountId)),
     );
+    const activeAccounts = getActiveAccounts(state);
+    const firstActiveAccounts = new Set(
+      [...activeAccounts].filter((accountId) => !seenActiveAccounts.has(accountId)),
+    );
+    for (const accountId of activeAccounts) {
+      seenActiveAccounts.add(accountId);
+    }
     derivedStates.set(weekKey, {
       ...state,
-      activeAccounts: getActiveAccounts(state),
+      activeAccounts,
+      firstActiveAccounts,
       targetWaaAccounts,
     });
   }
@@ -452,13 +448,13 @@ export function calculateMultiProfileUsage(
       ),
       directSwitchCount: state.directSwitchCount,
       featureRetentionW1: getRetention(
-        state.activeAccounts,
+        state.firstActiveAccounts,
         nextWeek?.activeAccounts ?? new Set(),
         addWeeks(weekKey, 1),
         currentWeekKey,
       ),
       featureRetentionW4: getRetention(
-        state.activeAccounts,
+        state.firstActiveAccounts,
         fourthWeek?.activeAccounts ?? new Set(),
         addWeeks(weekKey, 4),
         currentWeekKey,

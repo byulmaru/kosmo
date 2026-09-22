@@ -56,8 +56,8 @@ typed no-op이다. PostHog SDK가 관리하는 URL·referrer 같은 standard met
 9. Profile 생성은 성공 이벤트 횟수와 distinct 생성 Account 수를 모두 계산한다. 직접 전환은
    `profile_switched` 성공 이벤트 횟수를 계산하고, 활성 Account당 평균은 활성 집단의 전환 합계 / 활성
    Account 수로 계산해 전환 0회 활성 Account도 분모에 포함한다.
-10. 기능 리텐션은 최초 활성 주차 cohort의 W+1/W+4 활성 재방문이고, 제품 리텐션은 최초 대상 WAA cohort의
-    W+1/W+4 WAA 재방문이다. 도래하지 않은 주는 `not_due`, 분모 0은 `null`이다.
+10. 기능 리텐션은 최초 활성 주차 cohort의 W+1/W+4 활성 재방문이고, 제품 리텐션은 기준 주의 대상 WAA가
+    W+1/W+4에 WAA로 재방문한 비율이다. 도래하지 않은 주는 `not_due`, 분모 0은 `null`이다.
 
 생성 직후 자동 선택, 첫 선택, 같은 Profile 재선택, 복원·재조회, 실패·취소는 직접 전환으로 세지 않는다.
 SDK 차단이나 전송 실패로 빠진 행동은 추정하지 않는다.
@@ -71,7 +71,7 @@ Follow 대상 식별자는 저장소나 문서에 남기지 않는다.
 ```sql
 WITH source AS (
     SELECT
-        coalesce(nullIf(toString(properties['$user_id']), ''), distinct_id) AS account_id,
+        nullIf(toString(properties['$user_id']), '') AS account_id,
         event,
         uuid,
         timestamp,
@@ -85,6 +85,7 @@ WITH source AS (
         'search_results_loaded', 'search_result_selected'
       )
       AND {production_web_filter}
+      AND account_id IS NOT NULL
       AND account_id NOT IN {managed_exclusion_accounts}
 ), deduplicated AS (
     SELECT

@@ -40,7 +40,6 @@ type Props = PropsWithChildren<{
 type CurrentSnapshot = {
   accountId: string | null;
   enabled: boolean;
-  observedAt: Date;
   profiles: ReadonlyArray<AnalyticsProfileSnapshot>;
   selectedProfileId: string | null;
   status: Props['status'];
@@ -63,7 +62,6 @@ export function MultiProfileAnalyticsProvider({
   const snapshotRef = useRef<CurrentSnapshot>({
     accountId,
     enabled,
-    observedAt: new Date(),
     profiles,
     selectedProfileId,
     status,
@@ -71,7 +69,6 @@ export function MultiProfileAnalyticsProvider({
   snapshotRef.current = {
     accountId,
     enabled,
-    observedAt: new Date(),
     profiles,
     selectedProfileId,
     status,
