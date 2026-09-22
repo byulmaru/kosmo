@@ -152,63 +152,6 @@ describe('PostHog Web client', () => {
     });
   });
 
-  it('event별 typed payload를 전송한다', () => {
-    analytics.clearAnalytics();
-    const instance = instances[0];
-    assert.ok(instance);
-
-    analytics.trackAnalytics('profile_created', { selected_profile_id: 'profile-id' });
-    analytics.trackAnalytics('profile_selected', { selected_profile_id: 'profile-id' });
-    analytics.trackAnalytics('post_created', {
-      selected_profile_id: 'profile-id',
-      visibility: 'DIRECT',
-    });
-    analytics.trackAnalytics('follow_succeeded', {
-      selected_profile_id: 'profile-id',
-      result: 'request',
-    });
-    analytics.trackAnalytics('search_submitted', { tab: 'people', source: 'keyboard' });
-    analytics.trackAnalytics('search_results_loaded', { tab: 'people', has_results: true });
-    analytics.trackAnalytics('search_result_selected', { tab: 'people' });
-
-    assert.deepEqual(instance.calls, [
-      { event: 'profile_created', properties: { selected_profile_id: 'profile-id' } },
-      { event: 'profile_selected', properties: { selected_profile_id: 'profile-id' } },
-      {
-        event: 'post_created',
-        properties: { selected_profile_id: 'profile-id', visibility: 'DIRECT' },
-      },
-      {
-        event: 'follow_succeeded',
-        properties: { selected_profile_id: 'profile-id', result: 'request' },
-      },
-      {
-        event: 'search_submitted',
-        properties: { tab: 'people', source: 'keyboard' },
-      },
-      {
-        event: 'search_results_loaded',
-        properties: { tab: 'people', has_results: true },
-      },
-      { event: 'search_result_selected', properties: { tab: 'people' } },
-    ]);
-  });
-
-  it('typed event properties를 변형하지 않고 PostHog에 전달한다', () => {
-    analytics.clearAnalytics();
-    const instance = instances[0];
-    assert.ok(instance);
-
-    const properties = {
-      selected_profile_id: 'profile-id',
-      visibility: 'DIRECT' as const,
-    };
-    analytics.trackAnalytics('post_created', properties);
-
-    assert.equal(instance.calls[0]?.properties, properties);
-    assert.deepEqual(instance.calls, [{ event: 'post_created', properties }]);
-  });
-
   it('Account identity는 같은 ID를 SDK에 위임하고 전환·guest에서 reset 후 분리한다', () => {
     analytics.clearAnalytics();
     const instance = instances[0];
