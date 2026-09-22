@@ -186,21 +186,64 @@
 - **WHEN** 인증된 Account가 TagChip을 통해 탐색하고 다음 page 요청이 실패한다
 - **THEN** 정확한 Hashtag identity·공개 후보·최대 20개 forward pagination과 기존 목록 유지 계약을 보존한다
 
+### Requirement: Hashtag별 탐색 성과 breakdown
+
+시스템은 기존 session/result/주차/제외 규칙을 `hashtag_id`에 적용한 다섯 탐색 성과 지표와 주간 추세를 제공해야 한다(MUST).
+
+**Source Context:** 2026-09-22 사용자의 Hashtag별 Insight 포함 결정, canonical의 Hashtag별 탐색 성과 breakdown.
+
+#### Scenario: Hashtag별 Account와 session 수
+
+- **WHEN** 같은 Hashtag와 주차의 탐색 결과를 집계한다
+- **THEN** distinct 탐색 Account 수는 첫 목록 결과가 `has_results` 또는 `empty`인 Account 수이며 탐색 session 수는 `has_results`, `empty`, `error`의 확정 session 합이다
+- **AND** 같은 Account의 여러 기기·session은 Account 수에서 한 번만 세고 오류만 있는 Account와 미확정 session을 각각 성공 Account 수와 확정 session 수에 넣지 않는다
+
+#### Scenario: Hashtag별 비율과 주간 추세
+
+- **WHEN** Hashtag별 선택률·Empty 비율·Error 비율을 주별로 계산한다
+- **THEN** 선택한 `has_results` session / `has_results` session, `empty` / 확정 session, `error` / 확정 session에 각각 100을 곱한다
+- **AND** Asia/Seoul 주차·인증·제외·중복·retry 성공 우선·첫 오류 주·주 경계 뒤 선택 귀속을 전체 지표와 동일하게 적용한다
+- **AND** 다섯 지표의 주간 추세를 제공하며 각 비율의 분모가 0이면 계산할 수 없음으로 표시한다
+
+#### Scenario: 여러 Hashtag와 전체 지표
+
+- **WHEN** 같은 Account가 같은 주 여러 Hashtag의 첫 목록 조회에 성공한다
+- **THEN** 각 Hashtag에서 한 번씩 세되 전체 distinct Account는 기존대로 한 번만 센다
+- **AND** Hashtag별 Account 수 합이나 비율의 단순 평균으로 전체 지표를 대체하지 않는다
+
+#### Scenario: ID가 없는 관측
+
+- **WHEN** 기존 집계 대상인 session에 확인된 `hashtag_id`가 없다
+- **THEN** 특정 Hashtag로 추정 배정하지 않고 누락 범위를 별도로 표시하되 전체 집계는 기존 규칙을 유지한다
+
+#### Scenario: 실제 breakdown acceptance
+
+- **WHEN** Hashtag별 Insight·dashboard 구현의 완료를 판단한다
+- **THEN** 여러 synthetic Hashtag ID와 주차의 합성 자료를 실제 PostHog query·저장 Insight·dashboard로 집계하고 다섯 지표·분자/분모·주간 추세가 기대값과 일치하는지 확인한다
+- **AND** ID 누락·분모 0·여러 Hashtag를 탐색한 Account·주 경계 실패와 성공을 대조한다
+- **AND** payload에 ID가 있는 것만으로 완료 처리하지 않으며 raw Hashtag text/name이나 이름용 property를 추가하지 않는다
+
+#### Scenario: 새 도달률과 impression 제외
+
+- **WHEN** Hashtag별 탐색 성과를 전달한다
+- **THEN** 별도 Hashtag 도달률, TagChip impression과 이를 분모로 한 노출→탐색 funnel을 정의하거나 계측하지 않는다
+- **AND** 새로운 계측이 필요하면 후속 후보로 기록하고 PROD-556 완료 범위에 임의로 추가하지 않는다
+
 ### Requirement: 지표 전달과 운영 검증
 
-시스템은 초기 PostHog Insight·dashboard에서 네 지표와 집계 근거를 재현할 수 있어야 한다(MUST).
+시스템은 초기 PostHog Insight·dashboard에서 전체 네 비율과 Hashtag별 다섯 지표·주간 추세 및 집계 근거를 재현할 수 있어야 한다(MUST).
 
-**Source Context:** PROD-556의 Dashboard와 책임·완료 조건, canonical의 Dashboard와 책임.
+**Source Context:** PROD-556의 Dashboard와 책임·완료 조건, 2026-09-22 사용자의 breakdown 포함 결정, canonical의 Dashboard와 책임.
 
 #### Scenario: 주간 검토
 
 - **WHEN** 담당자가 완료된 직전 주를 검토한다
-- **THEN** 네 비율, 분자·분모 절대 수, WAA, 관측 기간, 집계 실행 시각, 계산 규칙·제외 목록 버전과 pagination 오류를 확인할 수 있다
+- **THEN** 전체 네 비율과 Hashtag별 다섯 지표·주간 추세, 분자·분모 절대 수, WAA, 관측 기간, 집계 실행 시각, 계산 규칙·제외 목록 버전과 pagination 오류를 확인할 수 있다
 - **AND** production Web 외 플랫폼은 미검증으로 표시한다
 
 #### Scenario: 검증과 인수
 
 - **WHEN** 구현 결과의 완료를 판단한다
 - **THEN** 합성 자료의 기대값과 실제 집계를 대조하고 PROD-795의 실제 선행 증거를 확인한 뒤 production 수집 인수를 마친다
-- **AND** opaque Hashtag identity의 안정성·원문 비포함·수집 누락을 PROD-556에서 검증한다
+- **AND** opaque Hashtag identity의 안정성·원문 비포함·수집 누락과 실제 Hashtag별 Insight·dashboard 재현을 PROD-556에서 검증한다
 - **AND** PROD-741과 PROD-575의 책임을 이 이슈의 완료로 대신하지 않는다
