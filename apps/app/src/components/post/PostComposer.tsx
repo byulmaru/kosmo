@@ -37,7 +37,7 @@ import {
 import { PostComposerMediaItemsTarget } from './PostComposerMediaItemsTarget';
 import { postVisibilityPresentation } from './postVisibilityPresentation';
 import type { ReactNode, RefObject } from 'react';
-import type { TextStyle } from 'react-native';
+import type { TextStyle, ViewStyle } from 'react-native';
 import type { ComposerMediaItem } from './PostComposerMediaControls';
 
 const postComposerTargetVisibilityValues = [
@@ -668,23 +668,32 @@ export function MobileFullscreenComposerShellCandidate({
   const bodyInputRef = useRef<TextInput>(null);
   const [bodyContentHeight, setBodyContentHeight] = useState(0);
   const hasTrailingContent = children !== undefined && children !== null;
+  const shouldAutoSizeBody = Platform.OS === 'web' && (hasTrailingContent || mode === 'reply');
+  const bodyUsesTrailingContentLayout =
+    hasTrailingContent || (shouldAutoSizeBody && bodyContentHeight > 0);
+  const webReplyShellStyle =
+    Platform.OS === 'web' && mode === 'reply'
+      ? ({ overflow: 'clip' } as unknown as ViewStyle)
+      : null;
   const { controlRef, menuRef, setVisibilityOpen, triggerRef, visibilityOpen } = useVisibilityMenu(
     submitting,
     onVisibilityChange,
   );
   useEffect(() => {
-    if (Platform.OS !== 'web' || !hasTrailingContent) {
+    if (!shouldAutoSizeBody || bodyContentHeight > 0) {
       return;
     }
     const input = (bodyRef ?? bodyInputRef).current as unknown as HTMLTextAreaElement | null;
     if (!input) {
       return;
     }
+    const availableHeight = input.clientHeight;
     input.style.height = '0px';
     const height = input.scrollHeight;
-    input.style.height = `${height}px`;
-    setBodyContentHeight(height);
-  }, [body, bodyRef, hasTrailingContent]);
+    const overflowing = height > availableHeight;
+    input.style.height = overflowing ? `${height}px` : 'auto';
+    setBodyContentHeight(overflowing ? height : 0);
+  }, [body, bodyContentHeight, bodyRef, shouldAutoSizeBody]);
   const selectedVisibility =
     visibilityOptions.find((option) => option.value === visibility) ?? visibilityOptions[1];
   const disabled =
@@ -698,6 +707,7 @@ export function MobileFullscreenComposerShellCandidate({
       style={[
         styles.mobileShell,
         fillContainer ? styles.mobileShellFill : null,
+        webReplyShellStyle,
         { backgroundColor: theme.backgroundCanvas },
       ]}
       testID="mobile-fullscreen-composer-candidate"
@@ -781,6 +791,7 @@ export function MobileFullscreenComposerShellCandidate({
         contentContainerStyle={styles.mobileScrollContent}
         keyboardShouldPersistTaps="handled"
         style={styles.mobileScroll}
+        testID="mobile-fullscreen-composer-scroll"
       >
         <View style={styles.mobileComposerBody} testID="mobile-composer-body">
           {beforeEditor}
@@ -802,12 +813,14 @@ export function MobileFullscreenComposerShellCandidate({
             editable={!submitting}
             multiline
             onChange={(event) => {
-              if (Platform.OS === 'web' && hasTrailingContent) {
+              if (shouldAutoSizeBody) {
                 const input = event.currentTarget as unknown as HTMLTextAreaElement;
+                const availableHeight = input.clientHeight;
                 input.style.height = '0px';
                 const height = input.scrollHeight;
-                input.style.height = `${height}px`;
-                setBodyContentHeight(height);
+                const overflowing = height > availableHeight;
+                input.style.height = overflowing ? `${height}px` : 'auto';
+                setBodyContentHeight(overflowing ? height : 0);
               }
             }}
             onChangeText={onBodyChange}
@@ -821,8 +834,10 @@ export function MobileFullscreenComposerShellCandidate({
             }
             style={[
               styles.mobileBody,
-              hasTrailingContent ? styles.mobileTrailingContentBody : null,
-              hasTrailingContent && bodyContentHeight > 0 ? { height: bodyContentHeight } : null,
+              bodyUsesTrailingContentLayout ? styles.mobileTrailingContentBody : null,
+              bodyUsesTrailingContentLayout && bodyContentHeight > 0
+                ? { height: bodyContentHeight }
+                : null,
               {
                 backgroundColor: theme.backgroundCanvas,
                 color: theme.foregroundPrimary,

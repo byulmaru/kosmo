@@ -368,6 +368,7 @@ function ReplyComposerSurfaceContents({
           style={[
             styles.backdrop,
             presentation === 'fullscreen' ? styles.fullscreenBackdrop : null,
+            Platform.OS === 'web' && presentation === 'modal' ? styles.webModalBackdrop : null,
             safeAreaStyle,
             { backgroundColor: theme.overlayScrim },
           ]}
@@ -380,6 +381,7 @@ function ReplyComposerSurfaceContents({
               styles.dialog,
               elevation.overlay,
               presentation === 'fullscreen' ? styles.fullscreen : styles.modal,
+              Platform.OS === 'web' && presentation === 'modal' ? styles.webModal : null,
               {
                 backgroundColor: theme.card,
                 borderColor: theme.border,
@@ -479,7 +481,7 @@ function ReplyComposerSurfaceContents({
                     contextGuard={contextGuard}
                     editorRef={editorRef}
                     focusOnMount
-                    onRequestClose={requestClose}
+                    onRequestClose={() => requestClose()}
                     initialContentWarning={quoteMode ? undefined : parent.content?.contentWarning}
                     presentation={presentation === 'fullscreen' ? 'mobile' : 'overlay'}
                     onPostCreated={handlePostCreated}
@@ -514,6 +516,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: spacing.lg,
   },
+  webModalBackdrop: { justifyContent: 'flex-start' },
   fullscreenBackdrop: { padding: 0 },
   dialog: {
     borderWidth: 1,
@@ -524,6 +527,11 @@ const styles = StyleSheet.create({
     borderRadius: radii.lg,
     maxHeight: 'min(720px, 85dvh)' as never,
     width: 600,
+  },
+  webModal: {
+    marginTop: spacing.xxl,
+    maxHeight: 'calc(100dvh - 96px)' as never,
+    overflow: 'clip' as never,
   },
   fullscreen: {
     borderRadius: 0,

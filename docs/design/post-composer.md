@@ -52,7 +52,10 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
 
 - modal 너비는 `600px`이고 높이는 Parent, editor, Content Warning, media 내용에 맞춰
   자동으로 늘고 줄어든다.
-- 최대 높이는 `min(720px, 85dvh)`로 제한한다.
+- Web `≥ compact` modal의 최대 높이는 일반 Post Overlay와 동일하게 viewport 상·하 `48px` 여백을
+  제외한 `calc(100dvh - 96px)`이다. Android/iOS modal은 기존 `min(720px, 85dvh)`를 유지한다.
+- Web `≥ compact` Reply·Quote modal은 일반 Post Overlay와 같은 viewport 상단 `48px`에서 시작해 아래로
+  확장한다. Web `< compact` fullscreen과 Android/iOS modal의 기존 정렬은 유지한다.
 - header·공개 범위 행·footer는 modal 안에 고정하고, 제한 높이를 넘는 Parent와 editor만 하나의 중앙 scroll
   영역에서 함께 스크롤한다. Parent만 별도 스크롤하는 nested scroll은 만들지 않는다.
 - card surface, semantic `border`, `radius/lg` 16px과 기존 modal backdrop을 사용한다. 배경 document는 modal이

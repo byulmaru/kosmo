@@ -7726,6 +7726,22 @@ export const ReplyModalPresentation: Story = {
     expect(body).toHaveValue('작성 중인 답글');
     await waitFor(() => expect(body).toHaveFocus());
 
+    const reopenedSurface = within(reopenedDialog).getByTestId('reply-composer-dialog-surface');
+    const reopenedTitle = within(reopenedDialog).getByRole('heading', { name: '글쓰기' });
+    const titleTop = reopenedTitle.getBoundingClientRect().top;
+    const shortContentTop = reopenedSurface.getBoundingClientRect().top;
+    expect(shortContentTop).toBeCloseTo(48, 0);
+    await userEvent.paste('\n긴 본문'.repeat(40));
+    await waitFor(() =>
+      expect(
+        within(reopenedDialog).getByTestId('post-composer-scroll').scrollHeight,
+      ).toBeGreaterThan(within(reopenedDialog).getByTestId('post-composer-scroll').clientHeight),
+    );
+    reopenedSurface.scrollTop = 70;
+    expect(reopenedSurface.getBoundingClientRect().top).toBeCloseTo(shortContentTop, 0);
+    expect(reopenedSurface.scrollTop).toBe(0);
+    expect(reopenedTitle.getBoundingClientRect().top).toBe(titleTop);
+
     await userEvent.click(within(reopenedDialog).getByRole('button', { name: '닫기' }));
     await userEvent.click(
       within(await screen.findByRole('alertdialog', { name: '답글 작성을 취소할까요?' })).getByRole(
@@ -7939,9 +7955,14 @@ export const QuoteModalOverflowScrollContract: Story = {
     const surface = within(dialog).getByTestId('quote-composer-dialog-surface');
     const scroll = within(dialog).getByTestId('post-composer-scroll');
     const footer = within(dialog).getByTestId('post-composer-footer');
+    const initialModalTop = surface.getBoundingClientRect().top;
+    expect(initialModalTop).toBeCloseTo(48, 0);
 
     await userEvent.type(body, '\n긴 본문'.repeat(40));
     await waitFor(() => expect(scroll.scrollHeight).toBeGreaterThan(scroll.clientHeight));
+    expect(surface.getBoundingClientRect().top).toBeCloseTo(initialModalTop, 0);
+    expect(surface.getBoundingClientRect().bottom).toBeGreaterThanOrEqual(window.innerHeight - 64);
+    expect(surface.getBoundingClientRect().bottom).toBeLessThanOrEqual(window.innerHeight - 48);
     expect(footer.getBoundingClientRect().bottom).toBeLessThanOrEqual(
       surface.getBoundingClientRect().bottom,
     );
@@ -8127,7 +8148,14 @@ export const ReplyFullscreenPresentation: Story = {
   play: async ({ canvasElement }) => {
     const dialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
     const surface = within(dialog).getByTestId('reply-composer-dialog-surface');
+    const shell = within(dialog).getByTestId('mobile-fullscreen-composer-candidate');
+    const scroll = within(dialog).getByTestId('mobile-fullscreen-composer-scroll');
     const connector = within(dialog).getByTestId('reply-parent-thread-connector');
+    const parent = within(dialog).getByTestId('reply-parent');
+    const body = within(dialog).getByRole('textbox', { name: '답글 본문' });
+    const title = within(dialog).getByText('글쓰기');
+    const visibility = within(dialog).getByRole('button', { name: '공개 범위: 조용한 공개' });
+    const footer = within(dialog).getByTestId('mobile-composer-footer');
     const composerAvatar = within(dialog).getAllByLabelText(/프로필 이미지$/)[1]!;
     const bounds = surface.getBoundingClientRect();
     const documentElement = canvasElement.ownerDocument.documentElement;
@@ -8138,6 +8166,34 @@ export const ReplyFullscreenPresentation: Story = {
     expect(
       composerAvatar.getBoundingClientRect().top - connector.getBoundingClientRect().bottom,
     ).toBeCloseTo(4, 0);
+    await userEvent.type(body, '짧은 답글');
+    expect(body.getBoundingClientRect().height).toBeGreaterThan(200);
+    await userEvent.clear(body);
+
+    await userEvent.type(body, '\n긴 답글'.repeat(40));
+    await waitFor(() => expect(scroll.scrollHeight).toBeGreaterThan(scroll.clientHeight));
+
+    const initialParentTop = parent.getBoundingClientRect().top;
+    const initialTitleTop = title.getBoundingClientRect().top;
+    const initialVisibilityTop = visibility.getBoundingClientRect().top;
+    const initialFooterBottom = footer.getBoundingClientRect().bottom;
+    const surfaceBounds = surface.getBoundingClientRect();
+
+    shell.scrollTop = shell.scrollHeight;
+    expect(shell.scrollTop).toBe(0);
+    expect(title.getBoundingClientRect().top).toBeGreaterThanOrEqual(surfaceBounds.top);
+    expect(visibility.getBoundingClientRect().top).toBeGreaterThanOrEqual(surfaceBounds.top);
+    expect(footer.getBoundingClientRect().bottom).toBeLessThanOrEqual(surfaceBounds.bottom);
+
+    scroll.scrollTop = scroll.scrollHeight;
+
+    expect(scroll.scrollTop).toBeGreaterThan(0);
+    expect(parent.getBoundingClientRect().top).toBeLessThan(initialParentTop);
+    expect(body.scrollTop).toBe(0);
+    expect(body.scrollHeight).toBeLessThanOrEqual(body.clientHeight + 1);
+    expect(title.getBoundingClientRect().top).toBe(initialTitleTop);
+    expect(visibility.getBoundingClientRect().top).toBe(initialVisibilityTop);
+    expect(footer.getBoundingClientRect().bottom).toBe(initialFooterBottom);
   },
   render: () => <ReplyModalPresentationStory />,
 };
