@@ -5,20 +5,40 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import { NavigationLink } from './NavigationLink';
 import type { RefObject } from 'react';
+import type { PostComposerProfileCandidate } from '@/components/post/PostComposer';
 import type { PostComposerHostCloseReason } from '@/components/post/PostComposerHost';
 import type { RightRail_profile$key } from './__generated__/RightRail_profile.graphql';
+import type { RightRail_query$key } from './__generated__/RightRail_query.graphql';
 
 type RightRailProps = {
   fallbackFocusRef?: RefObject<HTMLElement | null>;
   onRequestClose: (reason: PostComposerHostCloseReason) => void;
   open?: boolean;
   profile: RightRail_profile$key;
+  query: RightRail_query$key;
   triggerFocusRef?: RefObject<HTMLElement | null>;
 } & ({ mode: 'rail'; onExpand: () => void } | { mode: 'mobile' | 'overlay'; onExpand?: never });
 
 const RightRailFragment = graphql`
   fragment RightRail_profile on Profile {
     ...PostComposer_profile
+  }
+`;
+
+const RightRailQueryFragment = graphql`
+  fragment RightRail_query on Query {
+    me {
+      profiles {
+        id
+        relativeHandle
+        displayName
+        avatar {
+          id
+          url
+        }
+        ...PostComposer_profile
+      }
+    }
   }
 `;
 
@@ -29,15 +49,29 @@ export function RightRail({
   onRequestClose,
   open = true,
   profile: profileKey,
+  query: queryKey,
   triggerFocusRef,
 }: RightRailProps) {
   const profile = useFragment(RightRailFragment, profileKey);
+  const query = useFragment(RightRailQueryFragment, queryKey);
+  const profiles: readonly PostComposerProfileCandidate[] =
+    query.me?.profiles?.map((candidate) => ({
+      id: candidate.id,
+      pickerProfile: {
+        avatar: candidate.avatar,
+        displayName: candidate.displayName,
+        id: candidate.id,
+        relativeHandle: candidate.relativeHandle,
+      },
+      profileKey: candidate,
+    })) ?? [];
   return (
     <PostComposerHost
       fallbackFocusRef={fallbackFocusRef}
       onRequestClose={onRequestClose}
       open={open}
       profile={profile}
+      profiles={profiles}
       triggerFocusRef={triggerFocusRef}
       {...(mode === 'rail' ? { mode, onExpand } : { mode })}
     />

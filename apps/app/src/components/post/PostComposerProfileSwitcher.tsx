@@ -9,6 +9,9 @@ import type { ProfilePickerProfile } from '@/components/profile/ProfilePicker';
 export type PostComposerProfileSwitcherSurface = 'overlay' | 'rail';
 
 type Props = Readonly<{
+  disabled?: boolean;
+  onDismissChange?: (dismiss: (() => void) | null) => void;
+  onSelectionSuccess?: () => void;
   onSelectProfile: (id: string) => void | Promise<void>;
   profiles: readonly ProfilePickerProfile[];
   selectedProfileId: string;
@@ -16,6 +19,9 @@ type Props = Readonly<{
 }>;
 
 export function PostComposerProfileSwitcher({
+  disabled = false,
+  onDismissChange,
+  onSelectionSuccess,
   onSelectProfile,
   profiles,
   selectedProfileId: initialSelectedProfileId,
@@ -58,6 +64,11 @@ export function PostComposerProfileSwitcher({
   );
 
   useEffect(() => {
+    onDismissChange?.(open ? () => dismiss(true) : null);
+    return () => onDismissChange?.(null);
+  }, [dismiss, onDismissChange, open]);
+
+  useEffect(() => {
     if (Platform.OS !== 'web' || !open) {
       return;
     }
@@ -95,7 +106,7 @@ export function PostComposerProfileSwitcher({
   };
 
   const selectProfile = (id: string) => {
-    if (pendingRef.current) {
+    if (disabled || pendingRef.current) {
       return;
     }
 
@@ -117,7 +128,7 @@ export function PostComposerProfileSwitcher({
           setPending(false);
           pendingRef.current = false;
           operationVersionRef.current += 1;
-          focusTrigger();
+          onSelectionSuccess?.();
         },
         () => {
           if (operationVersion !== operationVersionRef.current) {
@@ -137,13 +148,14 @@ export function PostComposerProfileSwitcher({
         <Pressable
           accessibilityLabel="작성 프로필"
           accessibilityRole="button"
-          accessibilityState={{ busy: pending, disabled: pending, expanded: open }}
+          accessibilityState={{ busy: pending, disabled: disabled || pending, expanded: open }}
           aria-busy={pending}
+          aria-disabled={disabled || undefined}
           aria-expanded={open}
-          disabled={pending && open}
+          disabled={disabled || (pending && open)}
           hitSlop={4}
           onPress={() => {
-            if (pendingRef.current) {
+            if (disabled || pendingRef.current) {
               return;
             }
             setError(null);
@@ -154,7 +166,7 @@ export function PostComposerProfileSwitcher({
             styles.avatarTrigger,
             {
               backgroundColor: pressed ? theme.surface : 'transparent',
-              opacity: pending ? 0.5 : 1,
+              opacity: disabled || pending ? 0.5 : 1,
             },
           ]}
         >
@@ -176,9 +188,9 @@ export function PostComposerProfileSwitcher({
         </View>
       </View>
       {open ? (
-        <View style={styles.pickerLayer}>
+        <View testID="post-composer-profile-picker" style={styles.pickerLayer}>
           <ProfilePicker
-            busy={pending}
+            busy={disabled || pending}
             footer={
               error ? (
                 <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>

@@ -274,7 +274,7 @@ export function PostComposerTarget({
       ]}
       testID="post-composer-target"
     >
-      {author}
+      <View style={styles.authorLayer}>{author}</View>
       <View
         style={[
           styles.editor,
@@ -632,7 +632,7 @@ export function MobileFullscreenComposerShellCandidate({
         style={styles.mobileScroll}
       >
         <View style={styles.mobileComposerBody} testID="mobile-composer-body">
-          {author}
+          <View style={styles.authorLayer}>{author}</View>
           {contentWarningExpanded ? (
             <TextField
               accessibilityLabel="콘텐츠 경고"
@@ -987,6 +987,7 @@ function ComposerTool({
 }
 
 const styles = StyleSheet.create({
+  authorLayer: { position: 'relative', zIndex: 20 },
   body: { borderWidth: borderWidths[0], padding: space[0] },
   content: { gap: space[12], paddingHorizontal: space[12] },
   contentWarning: { paddingBottom: space[12] },

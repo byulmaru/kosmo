@@ -9,6 +9,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import { composerMedia } from './PostComposer.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { TextInput } from 'react-native';
 import type { ComposerMediaItem } from '@/components/post/PostComposerMediaControls';
 import type { ProfilePickerProfile } from '@/components/profile/ProfilePicker';
 
@@ -80,6 +81,7 @@ export function ComposerProfileFixture({
   const [items, setItems] = useState(initialItems);
   const [sensitiveMedia, setSensitiveMedia] = useState(initialSensitiveMedia);
   const [visibility, setVisibility] = useState<'FOLLOWERS' | 'PUBLIC' | 'UNLISTED'>('UNLISTED');
+  const bodyRef = useRef<TextInput>(null);
   const remaining =
     postBodyMaxLength -
     normalizePostContentPlainText(body).length -
@@ -133,6 +135,7 @@ export function ComposerProfileFixture({
       <PostComposerTarget
         author={
           <PostComposerProfileSwitcher
+            onSelectionSuccess={() => bodyRef.current?.focus()}
             onSelectProfile={selectProfile}
             profiles={composerProfiles}
             selectedProfileId={initialSelectedProfileId}
@@ -140,6 +143,7 @@ export function ComposerProfileFixture({
           />
         }
         body={body}
+        bodyRef={bodyRef}
         contentWarning={contentWarning}
         contentWarningExpanded={contentWarningExpanded}
         items={items}
@@ -325,7 +329,7 @@ export const InteractionContract: Story = {
     expect(args.onSelectProfile).toHaveBeenCalledOnce();
     expect(args.onSelectProfile).toHaveBeenLastCalledWith('profile-kosmo');
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
-    await waitFor(() => expect(trigger).toHaveFocus());
+    await waitFor(() => expect(body).toHaveFocus());
     expect(body).toHaveValue('Controls에서 설정한 본문');
     expect(contentWarning).toHaveValue('Controls에서 설정한 경고');
     expect(canvas.getByLabelText('첨부 이미지 갤러리, 3개')).toBeVisible();
@@ -346,6 +350,7 @@ export const PendingSelectionContract: Story = {
     args.onSelectProfile?.mockClear();
     const canvas = within(canvasElement);
     const trigger = canvas.getByRole('button', { name: '작성 프로필' });
+    const body = canvas.getByRole('textbox', { name: '게시물 내용' });
 
     await userEvent.click(trigger);
     const remote = await canvas.findByRole('button', { name: '먼 우주의 사용자, @remote' });
@@ -359,7 +364,7 @@ export const PendingSelectionContract: Story = {
 
     await userEvent.click(canvas.getByRole('button', { name: '지연된 프로필 전환 완료' }));
     await waitFor(() => expect(trigger).not.toBeDisabled());
-    await waitFor(() => expect(trigger).toHaveFocus());
+    await waitFor(() => expect(body).toHaveFocus());
   },
 };
 
@@ -432,8 +437,8 @@ export const CancelSelectionContract: Story = {
     trigger.click();
     expect(canvas.queryByLabelText('프로필 전환')).not.toBeInTheDocument();
 
-    await userEvent.click(body);
-    await waitFor(() => expect(body).toHaveFocus());
+    await userEvent.click(contentWarning);
+    await waitFor(() => expect(contentWarning).toHaveFocus());
 
     expect(body).toHaveValue('프로필을 바꿔도 유지되는 본문');
     expect(contentWarning).toHaveValue('콘텐츠 경고');
@@ -446,7 +451,7 @@ export const CancelSelectionContract: Story = {
 
     await userEvent.click(canvas.getByRole('button', { name: '지연된 프로필 전환 완료' }));
     await waitFor(() => expect(trigger).not.toBeDisabled());
-    await waitFor(() => expect(body).toHaveFocus());
+    await waitFor(() => expect(contentWarning).toHaveFocus());
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
     expect(body).toHaveValue('프로필을 바꿔도 유지되는 본문');
     expect(contentWarning).toHaveValue('콘텐츠 경고');
