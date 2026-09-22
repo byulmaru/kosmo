@@ -1,9 +1,8 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
-  beginAnalyticsOperation,
   calculateMultiProfileUsage,
-  completeAnalyticsOperation,
+  createAnalyticsCaptureOptions,
   getKstWeekKey,
   isDirectProfileSwitch,
   isMultiProfileEligible,
@@ -67,15 +66,16 @@ const activeEvents = (accountId: string, occurredAt: string, prefix: string) => 
 ];
 
 describe('multi-profile analytics', () => {
-  it('mutation operation은 시작 시 UUID를 고정하고 성공 시각만 갱신한다', () => {
-    const started = beginAnalyticsOperation('account-a');
-    const completedAt = new Date('2026-09-22T00:00:00.000Z');
-    const completed = completeAnalyticsOperation(started, completedAt);
+  it('capture options는 Account와 행동 시각을 보존하고 관측마다 UUID를 만든다', () => {
+    const occurredAt = new Date('2026-09-22T00:00:00.000Z');
+    const first = createAnalyticsCaptureOptions('account-a', occurredAt);
+    const second = createAnalyticsCaptureOptions('account-a', occurredAt);
 
-    assert.equal(completed.accountId, 'account-a');
-    assert.equal(completed.uuid, started.uuid);
-    assert.equal(completed.timestamp, completedAt);
-    assert.match(completed.uuid, /^[0-9a-f-]{36}$/i);
+    assert.equal(first.accountId, 'account-a');
+    assert.equal(first.timestamp, occurredAt);
+    assert.ok(first.uuid);
+    assert.match(first.uuid, /^[0-9a-f-]{36}$/i);
+    assert.notEqual(first.uuid, second.uuid);
   });
 
   it('직접 선택이고 출발·도착 Profile이 다를 때만 switched로 분류한다', () => {
@@ -429,5 +429,30 @@ describe('multi-profile analytics', () => {
     assert.ok(partialBase);
     assert.equal(partialBase.featureRetentionW4, 'not_due');
     assert.equal(partialBase.productRetentionW4, 'not_due');
+  });
+
+  it('기능 리텐션은 재방문 Account를 다음 주의 신규 cohort에 다시 넣지 않는다', () => {
+    const events = [
+      ...activeEvents('account-a', '2026-08-31T01:00:00.000Z', 'base-a'),
+      ...activeEvents('account-a', '2026-09-07T01:00:00.000Z', 'week-1-a'),
+      ...activeEvents('account-b', '2026-09-07T01:00:00.000Z', 'week-1-b'),
+      ...activeEvents('account-b', '2026-09-14T01:00:00.000Z', 'week-2-b'),
+    ];
+
+    const result = calculateMultiProfileUsage([...events].reverse(), {
+      now: new Date('2026-09-29T00:00:00.000Z'),
+    });
+    const base = result.weeks.find(({ weekKey }) => weekKey === '2026-08-31');
+    const next = result.weeks.find(({ weekKey }) => weekKey === '2026-09-07');
+    const last = result.weeks.find(({ weekKey }) => weekKey === '2026-09-14');
+
+    assert.ok(base);
+    assert.ok(next);
+    assert.ok(last);
+    assert.equal(base.featureRetentionW1, 100);
+    assert.equal(next.activeAccountCount, 2);
+    assert.equal(next.featureRetentionW1, 100);
+    assert.equal(next.productRetentionW1, 50);
+    assert.equal(last.featureRetentionW1, null);
   });
 });

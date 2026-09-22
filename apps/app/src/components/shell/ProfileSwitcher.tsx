@@ -338,15 +338,11 @@ export function ProfileSwitcher({
         const selectedCaptureOptions = selectedOperation
           ? { ...selectedOperation, timestamp: occurredAt }
           : undefined;
-        if (selectedCaptureOptions) {
-          trackAnalytics(
-            'profile_selected',
-            { selected_profile_id: selectedProfileId },
-            selectedCaptureOptions,
-          );
-        } else {
-          trackAnalytics('profile_selected', { selected_profile_id: selectedProfileId });
-        }
+        trackAnalytics(
+          'profile_selected',
+          { selected_profile_id: selectedProfileId },
+          selectedCaptureOptions,
+        );
         if (directSwitch && previousProfileId && switchedOperation) {
           trackAnalytics(
             'profile_switched',
@@ -422,17 +418,11 @@ export function ProfileSwitcher({
         const captureOptions = creationOperation
           ? { ...creationOperation, timestamp: occurredAt }
           : undefined;
-        if (captureOptions) {
-          trackAnalytics(
-            'profile_created',
-            { selected_profile_id: response.createProfile.profile.id },
-            captureOptions,
-          );
-        } else {
-          trackAnalytics('profile_created', {
-            selected_profile_id: response.createProfile.profile.id,
-          });
-        }
+        trackAnalytics(
+          'profile_created',
+          { selected_profile_id: response.createProfile.profile.id },
+          captureOptions,
+        );
         setHandle('');
         setCreating(false);
         commitProfileSelection(response.createProfile.profile.id, operationVersion, onError, 'auto');

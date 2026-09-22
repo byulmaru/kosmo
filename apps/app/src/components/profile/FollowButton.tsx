@@ -2,7 +2,7 @@ import { StyleSheet, View } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
 import { useMultiProfileAnalytics } from '@/analytics/MultiProfileAnalyticsProvider';
-import { beginAnalyticsOperation, completeAnalyticsOperation } from '@/analytics/multiProfileUsage';
+import { createAnalyticsCaptureOptions } from '@/analytics/multiProfileUsage';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useSession } from '@/session/SessionProvider';
@@ -197,7 +197,9 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
       const actorProfileId = selectedProfileId;
       const analyticsAccountId = status === 'valid' ? accountId : null;
       const followOperation =
-        analyticsAccountId && actorProfileId ? beginAnalyticsOperation(analyticsAccountId) : null;
+        analyticsAccountId && actorProfileId
+          ? createAnalyticsCaptureOptions(analyticsAccountId)
+          : null;
       commitFollow({
         onCompleted: (response, errors) => {
           const failed = Boolean(errors?.length);
@@ -214,7 +216,7 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
             observeAction({ accountId: analyticsAccountId, occurredAt });
           }
           const followCaptureOptions = followOperation
-            ? completeAnalyticsOperation(followOperation, occurredAt)
+            ? { ...followOperation, timestamp: occurredAt }
             : undefined;
           const properties = {
             result:
@@ -223,11 +225,7 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
                 : ('follow' as const),
             selected_profile_id: actorProfileId,
           };
-          if (followCaptureOptions) {
-            trackAnalytics('follow_succeeded', properties, followCaptureOptions);
-          } else {
-            trackAnalytics('follow_succeeded', properties);
-          }
+          trackAnalytics('follow_succeeded', properties, followCaptureOptions);
         },
         onError: showFailureToast,
         optimisticUpdater: (store) => {
