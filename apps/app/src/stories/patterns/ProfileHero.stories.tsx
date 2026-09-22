@@ -108,13 +108,11 @@ function requireProfile(profiles: ReturnType<typeof useStoryProfiles>, id: strin
 }
 
 function ProfileHeroFixture({
-  actionSize,
   containerWidth = 600,
   loading = false,
   profileId = defaultProfile.id,
   showAction = true,
 }: {
-  actionSize?: 'compact' | 'medium';
   containerWidth?: number;
   loading?: boolean;
   profileId?: string;
@@ -127,11 +125,7 @@ function ProfileHeroFixture({
     <SessionProvider>
       <View style={{ width: containerWidth }} testID="profile-hero-surface">
         <ProfileHero
-          action={
-            showAction ? (
-              <FollowButton profile={target.followButton} size={actionSize} />
-            ) : undefined
-          }
+          action={showAction ? <FollowButton profile={target.followButton} /> : undefined}
           loading={loading}
           profile={target.hero}
           showMuteAction={showAction}
@@ -163,14 +157,12 @@ function ProfileHeroCatalog() {
 
 const meta = {
   args: {
-    actionSize: undefined,
     containerWidth: 600,
     loading: false,
     profileId: defaultProfile.id,
     showAction: true,
   },
   argTypes: {
-    actionSize: { control: 'inline-radio', options: ['compact', 'medium'] },
     containerWidth: { control: 'inline-radio', options: [390, 600] },
     loading: { control: 'boolean' },
     profileId: { control: 'select', options: storyProfileIds },
@@ -194,11 +186,10 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Playground: Story = {
-  args: { actionSize: 'medium' },
   parameters: {
     controls: {
       disable: false,
-      include: ['profileId', 'loading', 'showAction', 'actionSize', 'containerWidth'],
+      include: ['profileId', 'loading', 'showAction', 'containerWidth'],
     },
   },
 };
@@ -230,7 +221,7 @@ export const ImagesAndTags: Story = {
 };
 
 export const Loading: Story = {
-  args: { actionSize: 'medium', loading: true, showAction: true },
+  args: { loading: true, showAction: true },
   globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
   parameters: { layout: 'centered' },
 };
