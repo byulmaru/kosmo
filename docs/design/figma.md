@@ -247,7 +247,9 @@ DSN-51의 플랫폼별 완료 판정은 다음처럼 Figma 확인과 runtime 검
 - Mobile 검색의 Initial은 탭 없이 유지한다. Loading·No results·Initial error·Cached error·People success와
   Popular·Latest·Media 미구현 상태는 실제 Android `TabList`의 `인기 / 최신 / 미디어 / 사람` 4탭을 사용한다.
   People 상태는 `사람`을 선택하고 `ProfileListItem`·64px Profile skeleton만 표시하며, 나머지 세 탭은 임의 결과 대신
-  `Product not implemented`를 유지한다. iOS 결과 consumer도 같은 4탭의 iOS `TabList`를 사용한다.
+  `Product not implemented`를 유지한다. iOS 결과 consumer도 같은 4탭의 iOS `TabList`를 사용한다. Production에서
+  Search와 Home/Local처럼 route 상태를 고르는 consumer는 공용 visual source 위의 `RouteTabList` binding을 사용한다.
+  Web은 canonical URL로 이동하고 Android/iOS는 현재 route 파라미터와 콘텐츠만 바꿔 Stack 전환을 만들지 않는다.
 - Mobile [`followers`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1943-1852)·[`following`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1943-1998)은
   ProfileHero 없이 `~님의 팔로워`·`~님의 팔로잉` PageHeader와 Android `팔로워 / 팔로잉` TabList를 가진 독립 route다.
   이 화면 구조는 PROD-785가 공용 Expo Web·Android·iOS route에 이관하며, Relay connection·pagination lifecycle은

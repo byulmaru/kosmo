@@ -23,9 +23,10 @@ import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { getShellLayout } from '@/components/shell/shellLayout';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
+import { RouteTabList } from '@/components/ui/RouteTabList';
 import { SearchToolbar } from '@/components/ui/SearchToolbar';
 import { StateView } from '@/components/ui/StateView';
-import { Tab, TabList } from '@/components/ui/Tabs';
+import { Tab } from '@/components/ui/Tabs';
 import { addRecentSearch, readRecentSearches, writeRecentSearches } from '@/lib/recentSearches';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
@@ -366,28 +367,19 @@ export default function SearchScreen() {
   const isCurrentSearchTarget = (nextQuery: string, nextTab: SearchTab) =>
     nextQuery.trim() === query && nextTab === activeTab;
 
-  const navigate = (
-    nextQuery: string,
-    tab: SearchTab = activeTab,
-    source: 'keyboard' | 'tab' = 'keyboard',
-  ) => {
+  const navigate = (nextQuery: string) => {
     const normalized = nextQuery.trim();
     if (normalized) {
       remember(normalized);
-      trackAnalytics('search_submitted', { source, tab });
+      trackAnalytics('search_submitted', { source: 'keyboard', tab: activeTab });
     }
-    if (isCurrentSearchTarget(normalized, tab)) {
+    if (isCurrentSearchTarget(normalized, activeTab)) {
       setFocused(false);
-      return;
-    }
-    if (!web && source === 'tab') {
-      setFocused(false);
-      router.setParams({ tab });
       return;
     }
     preserveQueryNavigationPosition();
     setFocused(false);
-    router.push(searchHref(normalized, tab));
+    router.push(searchHref(normalized, activeTab));
   };
 
   const clearSearch = () => {
@@ -576,20 +568,26 @@ export default function SearchScreen() {
 
       {phase === 'results' ? (
         <View style={web && styles.webContent}>
-          <TabList
+          <RouteTabList
             accessibilityLabel="검색 결과 유형"
+            href={(tab) => searchHref(query, tab)}
+            param="tab"
             onValueChange={(tab) => {
-              if (tab !== activeTab) {
-                navigate(query, tab, 'tab');
+              if (query) {
+                remember(query);
+                trackAnalytics('search_submitted', { source: 'tab', tab });
               }
+              preserveQueryNavigationPosition();
+              setFocused(false);
             }}
             value={activeTab}
             variant="underline"
+            webAction="push"
           >
             {tabs.map((tab) => (
               <Tab key={tab.value} option={tab} />
             ))}
-          </TabList>
+          </RouteTabList>
           {activeTab === SearchTab.PEOPLE ? (
             <PeopleResults handle={query} />
           ) : (
