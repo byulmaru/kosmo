@@ -8,6 +8,16 @@ const POSTHOG_USER_ID = '$user_id';
 let client: PostHog | null | undefined;
 
 function initializeAnalytics(): PostHog | null {
+  const browserHostname = typeof window === 'undefined' ? undefined : window.location.hostname;
+  if (
+    browserHostname === 'localhost' ||
+    browserHostname === '127.0.0.1' ||
+    browserHostname === '[::1]'
+  ) {
+    client = null;
+    return client;
+  }
+
   if (client !== undefined) {
     return client;
   }
