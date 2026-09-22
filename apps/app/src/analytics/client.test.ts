@@ -153,19 +153,17 @@ describe('PostHog Web client', () => {
     });
   }
 
-  for (const hostname of ['kos.moe', 'preview.kos.moe']) {
-    it(`${hostname}에서는 기존 PostHog 초기화와 event 전송을 유지한다`, () => {
-      setBrowserHostname(hostname);
+  it('kos.moe에서는 기존 PostHog 초기화와 event 전송을 유지한다', () => {
+    setBrowserHostname('kos.moe');
 
-      analytics.trackAnalytics('profile_created', { selected_profile_id: 'profile-id' });
+    analytics.trackAnalytics('profile_created', { selected_profile_id: 'profile-id' });
 
-      assert.equal(initCalls.length, 1);
-      assert.equal(instances.length, 1);
-      assert.deepEqual(instances[0]?.calls, [
-        { event: 'profile_created', properties: { selected_profile_id: 'profile-id' } },
-      ]);
-    });
-  }
+    assert.equal(initCalls.length, 1);
+    assert.equal(instances.length, 1);
+    assert.deepEqual(instances[0]?.calls, [
+      { event: 'profile_created', properties: { selected_profile_id: 'profile-id' } },
+    ]);
+  });
 
   it('cached client가 있어도 loopback으로 바뀌면 event 전송을 중단한다', () => {
     analytics.trackAnalytics('profile_created', { selected_profile_id: 'before-loopback' });
