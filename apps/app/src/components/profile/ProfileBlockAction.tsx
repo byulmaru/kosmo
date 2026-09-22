@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { graphql, useFragment, useMutation } from 'react-relay';
 import { Button } from '@/components/ui/Button';
 import { ConfirmationContent } from '@/components/ui/ConfirmationContent';
@@ -7,7 +7,6 @@ import { useToast } from '@/components/ui/ToastProvider';
 import { useSession } from '@/session/SessionProvider';
 import type { ReactNode, RefObject } from 'react';
 import type { View } from 'react-native';
-import type { Disposable } from 'relay-runtime';
 import type { ActionMenuItem } from '@/components/ui/ActionMenu';
 import type { ProfileBlockAction_profile$key } from './__generated__/ProfileBlockAction_profile.graphql';
 import type { ProfileBlockAction_profileBlock$key } from './__generated__/ProfileBlockAction_profileBlock.graphql';
@@ -106,18 +105,7 @@ export function ProfileBlockAction({
   const actionRef = useRef<View>(null);
   const focusTrigger = useRef<() => void>(() => {});
   const completed = useRef<(() => void) | null>(null);
-  const mutationRef = useRef<Disposable | null>(null);
   const pending = blocking || unblocking;
-
-  useEffect(() => {
-    return () => {
-      mutationRef.current?.dispose();
-      mutationRef.current = null;
-      const notify = completed.current;
-      completed.current = null;
-      notify?.();
-    };
-  }, []);
 
   if (!selectedProfileId || !targetProfile) {
     return null;
@@ -152,7 +140,7 @@ export function ProfileBlockAction({
     };
     try {
       if (nextBlocked) {
-        mutationRef.current = commitBlock({
+        commitBlock({
           onCompleted: (response) =>
             finish(
               response.blockProfile?.success && response.blockProfile.profileBlock
@@ -169,7 +157,7 @@ export function ProfileBlockAction({
         finish('error');
         return;
       }
-      mutationRef.current = commitUnblock({
+      commitUnblock({
         onCompleted: (response) =>
           finish(
             response.unblockProfile?.success &&
