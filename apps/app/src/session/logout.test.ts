@@ -84,11 +84,18 @@ mockModule(new URL('../auth/selectedProfileStorage.ts', import.meta.url), {
 mockModule(new URL('../analytics/client.ts', import.meta.url), {
   clearAnalytics: () => state.events.push('clear-analytics'),
 });
+mockModule(new URL('../analytics/profileHashtagExploration.ts', import.meta.url), {
+  endProfileHashtagExplorationsForAccount: (accountId: string) =>
+    state.events.push(`end-exploration:${accountId}`),
+});
 mockModule(new URL('../relay/RelayActorProvider.tsx', import.meta.url), {
   useRelayActor: () => ({
     clearNativeSession: () => state.clearNativeSession(),
     resetSession: () => state.resetSession(),
   }),
+});
+mockModule(new URL('./SessionProvider.tsx', import.meta.url), {
+  useAnalyticsIdentityAccountId: () => 'account-a',
 });
 
 let useLogout: () => LogoutState;
@@ -115,6 +122,7 @@ describe('useLogout production composition', () => {
 
     assert.deepEqual(state.events, [
       'request-web-logout',
+      'end-exploration:account-a',
       'delete-selected-profile',
       'reset-session',
       'clear-analytics',
@@ -122,7 +130,7 @@ describe('useLogout production composition', () => {
     ]);
   });
 
-  it('Web BFF failure keeps the local auth lifecycle and route', async () => {
+  it('Web BFF 실패에서는 탐색과 identity, actor, route를 유지한다', async () => {
     platform.OS = 'web';
     state.requestWebLogout = async () => {
       state.events.push('request-web-logout');
@@ -142,6 +150,7 @@ describe('useLogout production composition', () => {
 
     assert.deepEqual(state.events, [
       'request-native-logout',
+      'end-exploration:account-a',
       'clear-native-session',
       'delete-selected-profile',
       'replace-root',
@@ -183,7 +192,11 @@ describe('useLogout production composition', () => {
     useLogout().logout();
     await flushLogout();
 
-    assert.deepEqual(state.events, ['request-native-logout', 'clear-native-session']);
+    assert.deepEqual(state.events, [
+      'request-native-logout',
+      'end-exploration:account-a',
+      'clear-native-session',
+    ]);
     assert.ok(state.errors.includes('로그아웃하지 못했습니다. 다시 시도해주세요.'));
   });
 });

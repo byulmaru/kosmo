@@ -69,6 +69,8 @@ let useSession: () => {
   sessionId: string | null;
   status: string;
 };
+let useAnalyticsAccountId: () => string | null;
+let useAnalyticsIdentityAccountId: () => string | null;
 let renderer: ReactTestRenderer | null = null;
 let originalFetch: typeof fetch;
 let originalWindowDescriptor: PropertyDescriptor | undefined;
@@ -380,7 +382,8 @@ before(async () => {
   ({ useFeatureFlag } = await import('./FeatureFlagsContext'));
   ({ UniversalShell } = await import('./shell/UniversalShell'));
   ({ RouteBoundary, useRouteBoundary } = await import('./RouteBoundary'));
-  ({ useSession } = await import('../session/SessionProvider'));
+  ({ useAnalyticsAccountId, useAnalyticsIdentityAccountId, useSession } =
+    await import('../session/SessionProvider'));
   ({ useRelayActor, useRelayAuthLifecycleKey } = await import('../relay/RelayActorProvider'));
 });
 
@@ -468,6 +471,8 @@ function ShellRecoveryRoute() {
 
 function NativeSessionFixture() {
   const actor = useRelayActor();
+  const analyticsAccountId = useAnalyticsAccountId();
+  const analyticsIdentityAccountId = useAnalyticsIdentityAccountId();
   const session = useSession();
   useEffect(() => {
     navigationMounts += 1;
@@ -480,6 +485,8 @@ function NativeSessionFixture() {
     accountId: session.accountId,
     accountName: session.accountName,
     authLifecycleKey: useRelayAuthLifecycleKey(),
+    analyticsAccountId,
+    analyticsIdentityAccountId,
     nativeToken: actor.nativeToken,
     onPress: () => actor.setNativeSession('native-session-token'),
     onExpireSession: () => {
@@ -985,6 +992,8 @@ describe('AppProviders runtime composition', () => {
       {
         accountId: duringTransition.props.accountId,
         accountName: duringTransition.props.accountName,
+        analyticsAccountId: duringTransition.props.analyticsAccountId,
+        analyticsIdentityAccountId: duringTransition.props.analyticsIdentityAccountId,
         nativeToken: duringTransition.props.nativeToken,
         selectedProfileId: duringTransition.props.selectedProfileId,
         sessionId: duringTransition.props.sessionId,
@@ -993,6 +1002,8 @@ describe('AppProviders runtime composition', () => {
       {
         accountId: null,
         accountName: null,
+        analyticsAccountId: null,
+        analyticsIdentityAccountId: 'account-1',
         nativeToken: 'native-session-token',
         selectedProfileId: null,
         sessionId: null,

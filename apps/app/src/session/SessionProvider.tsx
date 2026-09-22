@@ -61,6 +61,8 @@ const guestSession: SessionValue = {
 };
 const errorSession: SessionValue = { ...guestSession, status: 'error' };
 const SessionContext = createContext<SessionValue>(guestSession);
+const AnalyticsAccountContext = createContext<string | null>(null);
+const AnalyticsIdentityAccountContext = createContext<string | null>(null);
 
 const SessionProviderQuery = graphql`
   query SessionProviderQuery {
@@ -159,6 +161,8 @@ export function SessionProvider({ children }: PropsWithChildren) {
         : { ...sessionState.value, selectedProfileId: null };
 
   return (
+    <AnalyticsIdentityAccountContext.Provider value={sessionState.value.accountId}>
+      <AnalyticsAccountContext.Provider value={visibleSession.accountId}>
     <SessionContext.Provider value={visibleSession}>
       <RelayFailOpenBoundary
         fallback={
@@ -180,6 +184,8 @@ export function SessionProvider({ children }: PropsWithChildren) {
       </RelayFailOpenBoundary>
       {sessionState.ready ? children : null}
     </SessionContext.Provider>
+      </AnalyticsAccountContext.Provider>
+    </AnalyticsIdentityAccountContext.Provider>
   );
 }
 
@@ -363,6 +369,14 @@ function SessionErrorReporter({
 
 export function useSession(): SessionValue {
   return useContext(SessionContext);
+}
+
+export function useAnalyticsAccountId(): string | null {
+  return useContext(AnalyticsAccountContext);
+}
+
+export function useAnalyticsIdentityAccountId(): string | null {
+  return useContext(AnalyticsIdentityAccountContext);
 }
 
 export function SessionErrorProvider({ children }: PropsWithChildren) {
