@@ -203,7 +203,7 @@ PROD-902, PROD-431, PROD-924.
 
 원격 승인 대기 중에도 Quote 자체 Content를 게시해야 하며(MUST), Source는 정상 인용으로 노출해서는
 안 된다(MUST NOT). 새 lifecycle에서 검증된 승인 후에만 Source를 연결·표시하고 거절·철회·원문 삭제 후에는 자체 Content를
-유지한 채 Source를 숨겨야 한다(MUST). 승인 여부와 무관하게 Source 조회·차단 정책을 적용해야 한다(MUST). 도입 전 Local Quote 2건의 승인 기록 없는 표시는 아래 D15 전환 요구사항을 따라야 한다(MUST).
+유지한 채 Source를 숨겨야 한다(MUST). 승인 여부와 무관하게 Source 조회·차단 정책을 적용해야 한다(MUST). 도입 전 Local Quote 2건을 위한 표시 예외를 두어서는 안 된다(MUST NOT).
 
 #### Scenario: 원격 타인 원문의 승인 대기
 
@@ -252,38 +252,25 @@ Source 삭제를 처리하면 승인에 의존하는 Source를 비노출해야 �
 - **THEN** 승인을 무효로 만들고 제3자에게도 해당 승인에 따른 Source를 표시하지 않는다
 - **AND** Quote 작성자의 본문은 유지한다
 
-### Requirement: 도입 전 Local Quote 2건의 무백필과 Source 표시
+### Requirement: 기존 Local Quote 호환성 예외 제외
 
 **Authority / Provenance:** 이 요구사항은 반드시 준수해야 한다(MUST). 근거: `docs/domain/objects/post.md`,
-`docs/domain/decisions/0029-quote-consent-and-federation.md`, PROD-924·PROD-902의 2026-09-17 정정과 D15 Human Decision.
+`docs/domain/decisions/0029-quote-consent-and-federation.md`, 2026-09-22 사용자 결정과 갱신된 D15.
 
-시스템은 도입 전 Local Quote 2건의 존재를 인지한 상태에서 새 승인 상태나 QuoteAuthorization을 backfill해서는
-안 된다(MUST NOT). 확인된 두 Quote는 신규 승인으로 간주하지 않는 기존 데이터 예외로 Source 표시를 유지해야
-한다(MUST). 승인 기록 부재만으로 대기·거절·철회·승인 완료를 합성해서는 안 된다(MUST NOT).
-이 예외도 기존 Source 조회·방향별 차단·삭제 제한을 통과해야 하며 자체 Content는 보존해야 한다(MUST).
-정확한 두 identity로 예외를 제한하고 신규 Quote의 승인 누락으로 확대해서는 안 된다(MUST NOT).
+시스템은 신규 Quote consent 정책을 기존 Local Quote 2건을 위한 예외 없이 적용해야 한다(MUST).
+해당 2건의 migration/backfill·Source 표시 보존은 범위 밖이며 수행해서는 안 된다(MUST NOT).
+새 정책으로 기존 Source가 표시되지 않거나 접근할 수 없게 되어도 허용한다.
+production ID·Source 결속 확인이나 이를 위한 preflight·deployment validation·별도 배포 gate를 추가해서는 안 된다(MUST NOT).
 기존 Local Post의 정책 초기화와 이미 발급된 승인 보존은 별개로 유지해야 한다(MUST).
 
-#### Scenario: 기존 두 Quote의 migration과 정상 조회
+#### Scenario: 승인 기록 없는 타인 Quote
 
-- **WHEN** 확인된 기존 Local Quote 2건을 대상으로 PROD-924를 도입하고 Source가 기존 조회 조건을 통과한다
-- **THEN** 새 승인 상태·QuoteAuthorization을 생성하지 않으며 Source 관계와 카드를 계속 표시한다
-- **AND** 기존 Quote는 승인 lifecycle 미편입으로 읽고 새 승인이나 원격 pending으로 간주하지 않는다
+- **WHEN** 타인 Quote에 유효한 승인이 없다
+- **THEN** 기존 데이터라는 이유로 Source 표시 예외를 적용하지 않는다
+- **AND** Source FK 또는 승인 기록 부재만으로 승인을 추정하지 않는다
 
-#### Scenario: 기존 Source 삭제 또는 접근 제한
+#### Scenario: 기존 두 Quote의 도입 처리
 
-- **WHEN** 기존 두 Quote 중 하나의 Source가 삭제되거나 viewer별 조회·방향별 차단 조건을 통과하지 못한다
-- **THEN** Source를 숨기고 Quote 자체 Content는 그 Post의 조회 정책에 따라 보존한다
-- **AND** 기존 데이터 예외로 접근 제한을 우회하지 않는다
-
-#### Scenario: 신규 Quote의 승인 누락
-
-- **WHEN** 확인된 두 identity 밖의 신규 타인 Quote에 승인 상태나 유효한 QuoteAuthorization이 없다
-- **THEN** 기존 데이터 예외를 적용하지 않고 Source를 숨긴다
-- **AND** Source FK 또는 승인 기록 부재만으로 승인이나 기존 데이터 자격을 추정하지 않는다
-
-#### Scenario: 활성화 대상 확인과 호환 rollback
-
-- **WHEN** 활성화 전 실제 두 Quote identity·Source 결속과 구버전 writer를 점검하거나 호환 빌드로 rollback한다
-- **THEN** 확인된 두 Quote의 표시 예외와 신규 Quote의 승인 guard를 함께 유지한다
-- **AND** 대상이 확인된 두 건과 다르면 예외를 확대하지 않고 활성화를 보류해 범위를 재확인한다
+- **WHEN** 신규 consent 정책을 도입한다
+- **THEN** 기존 두 Quote를 위한 migration/backfill·표시 보존과 production identity 확인을 수행하지 않는다
+- **AND** 해당 2건만을 위한 preflight·deployment gate를 만들지 않는다

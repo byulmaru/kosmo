@@ -23,13 +23,13 @@ field·mutation·payload와 오류는 이번 `quote-consent`의 공개 API 계�
 
 - 새/기존 Post 초기값, 정책 변경 권한과 selected Profile 격리, 기존 승인 보존을 검증한다.
 - 세 정책의 최초 Local Note projection, 정책 변경 뒤 같은 identity Update와 manual 대상 비포함을 payload로 검증한다.
-- 기존 Local Quote 2건의 승인 상태·QuoteAuthorization 무백필, 기존 Source 표시, 조회 불가·삭제·방향별 차단 시 비노출과 본문 보존을 실행해 검증한다. 신규 Quote의 승인 누락은 예외로 처리하지 않는다.
+- 기존 2건의 migration/backfill·Source 표시 보존은 범위 밖이다. legacy 예외 없이 일반 승인·조회·차단·삭제 guard와 본문 보존을 검증한다.
 - 실제 schema diff와 migration/backfill, rollback 후 Source 접근 보호, 확정한 GraphQL 계약을 구현 PR에 기록한다.
 
 - [x] 1.1 새 글과 기존 글의 정책 조회·초기화 및 정책 변경을 연결하고 optional `CreatePostInput.quotePolicy`를 작성 transaction에 저장한다.
 - [x] 1.2 기존 공개 범위 설정 UI의 Public·Unlisted에 새 인용 허용 정책 선택 UI를 추가하고 게시 후 본인 글의 인용 설정에도 재사용한다. draft 수명·중복 제출 방지·오류 복구를 연결한다.
 - [x] 1.3 초기값·권한·변경 비소급·기존 데이터 보존을 검증한다.
-- [x] 1.4 정책 저장을 additive로 도입하고 기존 Local Post의 `모두` 초기화·재실행·이미 지정한 정책 보존을 검증한다. 기존 Local Quote 2건의 새 승인 상태·QuoteAuthorization은 backfill하지 않는다. 정확한 두 identity·Source 결속과 구버전 writer를 확인하고 D15의 기존 Source 표시 예외와 신규 Quote의 승인 guard를 함께 검증한다.
+- [x] 1.4 정책 저장을 additive로 도입하고 기존 Local Post의 `모두` 초기화·재실행·이미 지정한 정책 보존을 검증한다. 기존 2건의 migration/backfill·표시 보존은 수행하지 않으며, 해당 2건을 위한 identity 확인이나 배포 검증은 추가하지 않는다.
 - [x] 1.5 정책 enum·mutation·payload·권한 필드를 실제 API 요청과 readback으로 검증하고 SDL·Relay를 동기화한다.
 - [x] 1.6 세 정책의 최초 Note·동일 identity Update와 기존 승인 비소급을 실제 serialized payload·DB 상태로 검증한다.
 
@@ -208,7 +208,7 @@ QuoteRequest와 유효한 QuoteAuthorization을 통해 같은 Quote의 Source �
 - 승인 후 세 속성·원문 링크, 철회 후 자동 표현 제거, 직접 쓴 동일 URL 보존을 payload로 확인한다.
 - 중복 요청·승인, 동시 철회, 늦은 Accept, 일시 실패·재전달의 상태 수렴과 실패 관찰을 검증한다.
 
-- [ ] 6.1 승인 조건에 따른 세 호환 속성과 발신 본문 fallback을 연결한다. D15의 기존 두 Quote 표시 예외만으로 승인 객체나 승인된 자동 발신 표현을 생성하지 않는지 검증한다.
+- [ ] 6.1 승인 조건에 따른 세 호환 속성과 발신 본문 fallback을 연결한다. 유효한 승인 없이 승인 객체나 승인된 자동 발신 표현을 생성하지 않는지 검증한다.
 - [ ] 6.2 중복·동시·역순 응답 및 delivery 실패·재시도를 최신 상태에 수렴시킨다.
 - [ ] 6.3 공식 구현에 근거한 compatibility fixture와 상태·본문 보존 회귀를 검증한다. 잘못된 FEP payload와
       `quoteUrl` 등 legacy 속성이 동시에 있는 fixture가 승인 관계를 만들지 않고 Source를 계속 비노출하는지 포함한다.
@@ -233,7 +233,7 @@ PROD-431·924의 작성·정책·승인·발신 결과가 하나의 사용자 �
 
 - 1~6번 전체 task 완료와 인접 PROD-792 수신 경계 연동 증거가 필요하다.
 - 현재 명세는 조사 시점의 main 기준이다. 구현 시 PROD-431 미병합 코드를 소비하면 `main → PROD-431 → PROD-924` Stack으로 정렬하고, 이미 병합됐다면 최신 main에서 진행한다.
-- 기존 Local Quote 2건의 존재와 무백필·Source 표시 예외는 확정됐으며, 배포 전 정확한 두 identity·Source 결속과 구버전 writer를 확인한다.
+- D15는 기존 Local Quote 2건의 예외 제거로 확정됐다. 해당 2건의 ID·Source 결속 확인, 표시 보존이나 별도 배포 gate는 요구하지 않는다.
 - PROD-793의 기존 signed fetch 계약을 축소하지 않는다. PROD-925는 현재 완료 조건이 아니다.
 - 일부 PR 완료만으로 archive하지 않으며 다른 이슈의 독립 change도 대신 archive하지 않는다.
 
@@ -246,6 +246,6 @@ PROD-431·924의 작성·정책·승인·발신 결과가 하나의 사용자 �
 - 실제 schema diff의 초기화·기존 승인 보존·배포 순서와 rollback 시 Source 접근 보호를 확인한다.
 
 - [ ] 7.1 PROD-431 작성과 승인·발신·원격 수신·철회 audience forwarding 경계를 연결하는 연합 통합 검증을 수행한다.
-- [ ] 7.2 기존 데이터·승인 보존, 기존 Local Quote 2건 무백필·Source 표시 예외·신규 승인 누락 비노출·정책 backfill, API/Worker/consumer 선배포, 새 작성 중단과 승인 조회·철회 처리가 남는 호환 rollback을 확인한다.
+- [ ] 7.2 기존 데이터·승인 보존, legacy 예외 없는 신규 승인 누락 비노출·정책 backfill, API/Worker/consumer 선배포, 새 작성 중단과 승인 조회·철회 처리가 남는 호환 rollback을 확인한다.
 - [ ] 7.3 최신 canonical·Linear·OpenSpec과 전체 구현 결과를 대조하고 각 owner의 commit·명령·결과를 연결한다. 필요한 Web 공개 범위·인용 설정 E2E와 접근성·actor 격리, Native release 미검증 범위를 구분한다.
 - [ ] 7.4 전체 선언 task 완료 후 delta spec 동기화·archive와 archive 후 validation을 수행한다.

@@ -12,6 +12,7 @@ import {
   PostQuotePolicies,
   Posts,
   ProfileBlocks,
+  ProfileFollows,
   Profiles,
 } from '../db';
 import {
@@ -35,6 +36,7 @@ import {
   recordInboundQuoteRequest,
   replayPendingPostQuoteEffects,
   updatePostQuotePolicy,
+  visibleQuoteSources,
 } from './post-quote-consent';
 
 after(async () => pg.end());
@@ -293,6 +295,122 @@ test('quote eligibility는 정책·실제 Follow·양방향 Block을 적용하�
     }),
     true,
   );
+});
+
+test('batch Source 판정은 승인 상태·자기 인용·순수 Repost와 viewer 접근을 독립 적용한다', async () => {
+  const sourceAuthor = await createProfile();
+  const quoteAuthor = await createProfile();
+  const viewer = await createProfile();
+  const source = await createPost({
+    document: postContentDocumentFromText('source'),
+    origin: 'LOCAL',
+    profileId: sourceAuthor.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const quotes = [];
+  for (const status of [
+    PostQuoteConsentStatus.APPROVED,
+    PostQuoteConsentStatus.PENDING,
+    PostQuoteConsentStatus.REJECTED,
+    PostQuoteConsentStatus.REVOKED,
+    null,
+  ]) {
+    const quote = await createPost({
+      document: postContentDocumentFromText('quote'),
+      origin: 'LOCAL',
+      profileId: quoteAuthor.id,
+      repostSourceId: source.post.id,
+      visibility: PostVisibility.PUBLIC,
+    });
+    if (status) {
+      await db
+        .update(PostQuoteConsents)
+        .set({ status })
+        .where(eq(PostQuoteConsents.quotePostId, quote.post.id));
+    } else {
+      await db.delete(PostQuoteConsents).where(eq(PostQuoteConsents.quotePostId, quote.post.id));
+    }
+    quotes.push({ quotePostId: quote.post.id, sourcePostId: source.post.id });
+  }
+  const selfQuote = await createPost({
+    document: postContentDocumentFromText('self'),
+    origin: 'LOCAL',
+    profileId: sourceAuthor.id,
+    repostSourceId: source.post.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const repost = await db
+    .insert(Posts)
+    .values({
+      profileId: quoteAuthor.id,
+      repostSourceId: source.post.id,
+      visibility: PostVisibility.PUBLIC,
+      state: PostState.ACTIVE,
+    })
+    .returning()
+    .then(firstOrThrow);
+  quotes.push(
+    { quotePostId: selfQuote.post.id, sourcePostId: source.post.id },
+    { quotePostId: repost.id, sourcePostId: source.post.id },
+  );
+  const allowed = [quotes[0], quotes[5], quotes[6]];
+  const read = (viewerProfileId: string | null = viewer.id) =>
+    visibleQuoteSources(db, { quotes, viewerProfileId });
+  assert.deepEqual(await read(), allowed);
+  assert.deepEqual(await read(null), allowed);
+  await db
+    .insert(ProfileBlocks)
+    .values({ ownerProfileId: viewer.id, targetProfileId: sourceAuthor.id });
+  assert.deepEqual(await read(), allowed);
+  const block = await db
+    .insert(ProfileBlocks)
+    .values({ ownerProfileId: sourceAuthor.id, targetProfileId: viewer.id })
+    .returning()
+    .then(firstOrThrow);
+  assert.deepEqual(await read(), []);
+  await db.delete(ProfileBlocks).where(eq(ProfileBlocks.id, block.id));
+  await db
+    .update(Posts)
+    .set({ visibility: PostVisibility.FOLLOWERS })
+    .where(eq(Posts.id, source.post.id));
+  assert.deepEqual(await read(), []);
+  assert.deepEqual(await read(null), []);
+  await db
+    .insert(ProfileFollows)
+    .values({ followerProfileId: viewer.id, followeeProfileId: sourceAuthor.id });
+  assert.deepEqual(await read(), allowed);
+  // Preserve the existing direct Source-author read rule for Followers Only.
+  assert.deepEqual(await read(sourceAuthor.id), quotes);
+  await db
+    .update(Posts)
+    .set({ visibility: PostVisibility.DIRECT })
+    .where(eq(Posts.id, source.post.id));
+  assert.deepEqual(await read(sourceAuthor.id), []);
+  await db
+    .update(Posts)
+    .set({ visibility: PostVisibility.UNLISTED })
+    .where(eq(Posts.id, source.post.id));
+  assert.deepEqual(await read(), allowed);
+  await db
+    .update(Profiles)
+    .set({ state: ProfileState.DISABLED })
+    .where(eq(Profiles.id, quoteAuthor.id));
+  assert.deepEqual(await read(), [quotes[5]]);
+  await db
+    .update(Profiles)
+    .set({ state: ProfileState.ACTIVE })
+    .where(eq(Profiles.id, quoteAuthor.id));
+  await db
+    .update(Instances)
+    .set({ state: InstanceState.SUSPENDED })
+    .where(eq(Instances.id, sourceAuthor.instanceId));
+  assert.deepEqual(await read(), []);
+  await db
+    .update(Instances)
+    .set({ state: InstanceState.ACTIVE })
+    .where(eq(Instances.id, sourceAuthor.instanceId));
+  await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, source.post.id));
+  assert.deepEqual(await read(), []);
 });
 
 test('Local Source 삭제는 승인 lifecycle과 동일 transaction에 원격 철회 receipt를 남긴다', async () => {

@@ -1,9 +1,8 @@
-import { db } from '@kosmo/core/db';
-import { canDisplayQuoteSource } from '@kosmo/core/services';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/resolvers/profile';
 import { reactionCountLoader } from '../loader/reaction-count';
 import { repostCountLoader, viewerRepostLoader } from '../loader/repost';
+import { repostSourceLoader } from '../loader/repost-source';
 import { Post, PostContent } from '../ref';
 
 const ReactionCount = builder.simpleObject('ReactionCount', {
@@ -36,13 +35,14 @@ builder.objectFields(Post, (t) => ({
         return null;
       }
 
-      return (await canDisplayQuoteSource(db, {
-        quotePostId: post.id,
-        sourcePostId: post.repostSourceId,
-        viewerProfileId: ctx.session?.profile?.id,
-      }))
-        ? post.repostSourceId
-        : null;
+      return (
+        (
+          await repostSourceLoader(ctx).load({
+            quotePostId: post.id,
+            sourcePostId: post.repostSourceId,
+          })
+        )?.sourcePostId ?? null
+      );
     },
   }),
   repostCount: t.int({

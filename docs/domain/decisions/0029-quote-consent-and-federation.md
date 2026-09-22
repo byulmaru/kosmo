@@ -118,19 +118,15 @@ PROD-924 Spec 대화에서 인용 허용 설정을 기존 공개 범위 설정 U
 따른 승인 무효화·원격 전달·Quote audience forwarding, 본문 보존·Source 비노출은 유지한다. 이 정정은 앞선
 Author의 명시적 철회 기능 도입 결정을 대체한다. 정책 변경·차단에 따른 자동 철회는 계속 하지 않는다.
 
-## PROD-924 기존 데이터 전환 정정 (2026-09-17)
+## PROD-924 기존 데이터 예외 제거 (2026-09-22)
 
-PROD-924 Spec 대화에서 production에 기존 Local Quote 2건이 존재한다고 정정됐다. 이 사실을 인지한 상태에서 두 Quote의
-새 승인 상태나 QuoteAuthorization은 의도적으로 backfill하지 않는다. 기존 Local Post의 `모두` 정책 초기화와
-이미 발급된 승인 보존은 유지한다.
+사용자가 D15의 기존 Local Quote 2건 호환성 예외를 폐기했다. 신규 Quote consent 정책을 해당 2건을 위한
+예외 없이 적용하며, 두 Quote의 migration/backfill과 Source 표시 보존은 범위 밖으로 둔다. 새 정책으로
+기존 Source가 표시되지 않거나 접근할 수 없게 되어도 허용한다.
 
-기존 계약은 승인 없는 도입 전 Quote의 전환 결과를 정하지 않았으므로 Human Decision으로 확인했다. 명시적 답변에 따라
-신규 승인으로 간주하지 않는 기존 데이터 예외로 두 Quote의 Source 표시를 유지한다. 이 Quote들은
-승인 lifecycle에 편입되지 않은 기존 데이터이며 승인 기록 부재만으로 대기·거절·철회·승인 완료 상태를 부여하지
-않는다. Source의 기존 조회·방향별 차단·삭제 제한과 자체 Content 보존은 유지한다. 정확히 확인한 두 Quote만
-예외 대상으로 삼고 신규 Quote의 승인 누락으로 확대하지 않는다. 이 예외는 유효한 FEP 승인이나 승인 객체 발급의
-근거가 아니다. 운영 대상 확인과 rollout 검증은 PROD-924가 맡으며 PROD-431 완료 범위는 변경하지 않는다.
+정확한 production Quote ID·Source 결속을 확인하거나 주입하지 않는다. 해당 2건의 allowlist, compatibility
+path, preflight·deployment validation과 별도 배포 gate를 두지 않는다. 이 결정은 2026-09-17의 Source 표시
+보존 결정을 대체하며, 기존 Local Post의 정책 초기화와 이미 발급된 승인 보존은 유지한다.
 
-UI는 기존 게시글 공개 범위 설정 UI를 재사용하고, 그 안에 새로운 인용 허용 정책 선택 UI를 추가한다.
-이 문구는 기존 인용 정책 선택 UI가 있다는 의미가 아니다. 위 정정과 runtime 선택은 개별 결정의 근거이며
-수정본 전체 Spec Gate 승인으로 간주하지 않는다.
+UI는 기존 게시글 공개 범위 설정 UI 안에 새로운 인용 허용 정책 선택 UI를 추가한다. PROD-431 완료 범위와
+자기 인용 계약은 변경하지 않는다.

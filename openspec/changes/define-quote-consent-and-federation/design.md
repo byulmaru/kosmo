@@ -39,11 +39,11 @@ Canonical 근거는 `docs/domain/objects/post.md`, `docs/domain/objects/profile-
   새로운 인용 정책 선택을 추가한다. `PostComposerTarget`만 보고 현재 production 구현을 추정하지 않는다.
 - 현재 `Post.repostSource` resolver는 Source ID를 반환하고 Post loader가 일반 접근 정책을 적용한다.
   기존 코드에는 Local Quote 승인 상태 판정이 없으므로, 도입 전 데이터의 신규 lifecycle 편입 여부는 그 코드만으로
-  결정되지 않는다. D15가 기존 2건의 전환 계약을 보완한다.
+  결정되지 않는다. D15의 최신 결정은 기존 2건을 위한 호환성 예외를 두지 않는다.
 - PROD-959로 production `PostActionSurface`의 `onQuote` 전달이 임시 중단돼 있다. Composer·기존 Quote
   표시·작성 API는 남아 있다. 이 정정에서 PROD-959의 임시 숨김을 해제하지 않는다.
 - 기존 `Post.repostSource`와 카드가 Source FK의 존재를 최종 승인으로 해석하면 pending·철회 시 원문이
-  노출된다. 조회 판단에 승인과 viewer별 Source 접근을 연결하되, 도입 전 두 Quote는 D15의 명시적 표시 예외로 분리한다.
+  노출된다. 조회 판단에 승인과 viewer별 Source 접근을 연결하며 도입 전 두 Quote도 별도 예외로 분리하지 않는다.
 - `packages/fedify/src/local-post-note.ts`에는 Quote 전용 projection이 없고 기존 Create/Delete 경로를
   사용한다. 승인 후 Update는 이 change의 발신 lifecycle에서 연결할 부분이다.
 - 설치된 Fedify와 vocabulary는 2.3.0이다. 최신 문서의 helper 존재를 현재 dependency의 가용성으로
@@ -63,7 +63,7 @@ Canonical 근거는 `docs/domain/objects/post.md`, `docs/domain/objects/profile-
    Source를 낙관적으로 만들지 않는 seam을 유지하고, 정책·승인 상태·lifecycle을 별도로 구현하지 않는다.
 3. PROD-924는 게시글 정책을 연결하고 요청에 대응하는 Quote·Source·발급자와 처리된 응답의 순서를 확인할 수 있도록 승인 정보를
    보존한다. FK는 승인 상태가 아니므로 Source projection은 별도 승인 판정과 기존 접근 판정을 통과시킨다.
-   도입 전 두 Quote의 화면·GraphQL Source 표시에는 D15 예외를 적용하며 FEP 승인으로 승격하지 않는다.
+   도입 전 두 Quote의 화면·GraphQL Source 표시를 보존하는 예외를 두지 않는다.
 4. 일반 Note projection을 공유해 자체 Content를 먼저 전달하고 원문 서버에 QuoteRequest를 보낸다. 자기 인용은
    요청 없이 허용한다. 타인 원문의 `interactionPolicy`는 automatic/manual 분류나 부재·해석 실패 모두
    사전 힌트로만 사용하며 승인 증거로 사용하지 않는다. 승인이 유효해진 뒤 같은 Post identity로 Source·승인을
@@ -151,8 +151,8 @@ expand/transition/contract 경계와 rollback 근거를 상위 이슈에 반영�
 ### 저장과 기존 Source 관계
 
 Post 자체는 계속 `Posts`와 immutable `PostContents`를 사용한다. 인용의 Source FK를 보존하고, 관계 노출은
-유효한 승인과 기존 Source 조회 정책을 함께 판정한다. 자기 인용과 D15의 기존 두 Quote 표시 예외를 구분하며,
-D15를 승인 기록으로 바꾸지 않는다. 승인 저장을 `PostContent`나 새 Quote Node에 넣지 않는다.
+유효한 승인과 기존 Source 조회 정책을 함께 판정하고 자기 인용 계약은 유지한다.
+기존 데이터 표시 예외는 두지 않으며 승인 저장을 `PostContent`나 새 Quote Node에 넣지 않는다.
 
 | 저장 책임           | 기본 표현과 제약                                                                                                                                                                                                | 소비자                                                      |
 | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
@@ -174,26 +174,11 @@ identity로 연결하고, remote Quote materialization 없이도 Local Source �
 이미 설정된 row에는 `ON CONFLICT DO NOTHING`을 적용한다. 원격 Post와 Content 없는 Repost에는 Local 정책을
 합성하지 않는다. 발급된 승인·철회 기록과 작성자 Content를 migration 때문에 변경하지 않는다.
 
-2026-09-17 사용자 정정에 따르면 production에는 기존 Local Quote 2건이 존재한다. 이 두 Quote의 새 승인
-상태나 QuoteAuthorization은 의도적으로 backfill하지 않는다. 기존 Local Post의 정책 backfill과 이미 발급된
-승인 보존은 별개로 유지한다. 운영 DB를 조회해 건수를 확인한 결과로 기록하지 않는다.
-
-기존 코드와 상위 계약만으로는 승인 기록 없는 두 Quote의 도입 후 처리를 결정할 수 없어 Human Decision으로
-확인했다. 사용자는 신규 승인으로 간주하지 않는 기존 데이터 예외로 Source 표시를 유지하기로 선택했다(D15).
-조회 시 승인 lifecycle에 편입되지 않은 기존 Quote로 읽는다. 저장된 승인 상태가 없다는 이유로 `PENDING`, `REJECTED`,
-`REVOKED`를 합성하지 않고 `APPROVED`나 가짜 승인 객체도 만들지 않는다. 이는 새 저장 상태나 public enum 추가가 아니다.
-GraphQL `Post.repostSource`와 화면 Source 표시는 확인된 두 Quote에 한해 기존 Source 조회 조건으로 판정한다.
-Source 삭제·조회 불가·기존 방향별 차단 제한을 통과하지 못하면 Source만 숨기고 자체 Content는 보존한다.
-
-활성화 전 두 Quote의 정확한 identity와 기존 Source 결속을 검토 가능한 운영 snapshot으로 확인하고, 구현은 이 두
-identity를 명확히 구별해야 한다. 단순 `consent row 없음` 조건이나 생성 시각만으로 예외를 넓히지 않는다.
-이 식별에는 새 승인 상태나 승인 객체를 backfill하지 않으며 범용 legacy 관리 기능을 추가하지 않는다. 새 쓰기와
-조회 guard를 함께 준비하고 구버전 Quote writer가 확인되지 않은 대상을 만들지 않는지 검증한다. 대상이 두 건과
-다르면 임의로 포함하거나 숨기지 않고 활성화를 보류해 범위를 재확인한다.
-
-이 예외는 기존 Source 표시를 보존하는 계약이며 FEP 승인이 아니다. 승인 없는 두 Quote를 `APPROVED`로 광고하거나
-QuoteAuthorization을 발급·역참조하거나 승인된 FEP·자동 legacy 발신 표현을 생성하는 근거로 사용하지 않는다.
-일반 Content 발신과 직접 작성한 본문은 기존 계약을 따른다. 신규 Quote의 승인 누락은 이 예외로 우회하지 않는다.
+2026-09-22 사용자 결정(D15)에 따라 기존 Local Quote 2건은 특별 취급하지 않는다. 신규 consent 정책을
+예외 없이 적용하며 해당 2건의 migration/backfill·Source 표시 보존은 수행하지 않는다. 새 정책으로 기존
+Source가 비노출되거나 접근할 수 없게 되어도 허용한다. production ID·Source 결속을 조회·주입하지 않고,
+allowlist·compatibility path나 해당 2건을 위한 preflight·deployment validation·별도 배포 gate를 추가하지 않는다.
+기존 Local Post의 정책 초기화와 이미 발급된 승인 보존은 별개로 유지한다.
 
 ### 공개 API와 기존 Relay 연결
 
@@ -346,8 +331,8 @@ Source 승인 발급을, PROD-792는 remote Quote read model·resolution·철회
 3. API·Worker·Fedify-consumer의 호환 버전과 역참조·철회 수신·조회 보호를 배포한 뒤 정책 조작·Remote Quote
    작성·발신을 켠다. 새 데이터가 발생하기 전에 구버전 reader가 pending FK를 노출하지 않음을 확인한다.
 4. rollback은 새 작성/발신을 중단하되 기존 승인 조회 보호·철회 처리와 receipt replay가 남는 호환 빌드로 한다.
-   구버전 reader를 다시 올리거나 승인 기록을 삭제하는 down migration은 사용하지 않는다. D15의 두 Quote 표시
-   예외도 보존하고 신규 Quote의 승인 누락을 예외로 취급하지 않는지 rollback readback으로 검증한다.
+   구버전 reader를 다시 올리거나 승인 기록을 삭제하는 down migration은 사용하지 않는다.
+   기존 두 Quote를 위한 표시 보존·예외 검증은 요구하지 않는다.
 5. PROD-431 작성→원격 pending→승인/거절→Update→철회 forwarding과 PROD-792 readback을 실제 production
    registry/dispatcher로 연결한다. 각 테스트의 commit·명령·결과와 미검증 플랫폼을 남긴다.
 6. 전체 task 1~7, migration/rollback·통합 검증·spec sync가 완료된 뒤 PROD-924가 archive한다. 선행 PR 병합이나
@@ -355,9 +340,8 @@ Source 승인 발급을, PROD-792는 remote Quote read model·resolution·철회
 
 ## Open Questions
 
-- 기존 Local Quote 2건은 사용자 확인에 따른 운영 전제다. 새 승인 상태·QuoteAuthorization은 backfill하지 않고
-  D15의 기존 데이터 예외로 Source 표시를 유지한다. 활성화 직전 정확한 두 identity·Source 결속과 구버전 Quote
-  writer를 확인한다. 대상이 다르면 예외를 확대하지 않고 활성화를 보류해 범위를 재확인한다.
+- 기존 Local Quote 2건의 예외 제거와 표시 보존 제외는 2026-09-22 사용자 결정으로 확정됐다. production ID나
+  Source 결속 확인 및 이를 위한 배포 gate는 필요하지 않다.
 - 공개 범위 UI 통합과 사용자용 개별 승인 철회 제외는 2026-09-11 사용자 답변으로 정했다. API 이름·nullable 의미·retry 기본안은 이 수정본의 Spec Gate에서 검토한다.
 - Fedify 정확한 후보 버전과 compatibility 실행 증거, 운영 데이터 건수·receipt batch 크기·배포 image SHA는
   구현/검증 시 확인할 사실이다. 결과가 없는 값을 미리 확정하지 않는다.

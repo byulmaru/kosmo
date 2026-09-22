@@ -5,7 +5,7 @@ D1~D9은 상위 계약에서 파생한 기록이다. 2026-09-11 PROD-924 보강�
 사용자 확인을 다시 읽고 공개 API·상태 수렴·rollout의 Implementation Choice를 추가한다.
 Spec Gate 최종 승인은 별도이며 이 기록의 Active가 제품 구현 승인을 뜻하지 않는다.
 
-2026-09-17 정정과 Human Decision 답변을 canonical·Linear에 반영했으며 D15가 D13을 대체한다.
+D15는 2026-09-22 사용자 결정으로 갱신됐다. 기존 2건을 위한 표시 보존 예외는 폐기한다.
 
 ## Decision Records
 
@@ -167,10 +167,10 @@ Spec Gate 최종 승인은 별도이며 이 기록의 Active가 제품 구현 �
 - Authority / Provenance: 당시 PROD-924 Spec 대화의 데이터 전제. 2026-09-17 사용자 정정과 D15가 대체한다.
 - Status: Superseded
 - Context / Problem: 이전 초안은 기존 Local Quote가 없다고 잘못 전제했다.
-- Decision Outcome: 이 전제와 이를 근거로 한 활성화 조건은 폐기한다. 기존 2건을 인지한 무백필·Source 표시 계약은 D15를 따른다.
+- Decision Outcome: 이 전제와 이를 근거로 한 활성화 조건은 폐기한다. 기존 2건을 위한 예외 제거와 표시 보존 제외는 갱신된 D15를 따른다.
 - Alternatives Considered: 과거 전제를 현재 계약으로 유지하지 않는다.
 - Consequences: 기존 Local Post 정책 초기화와 이미 발급된 승인 보존은 바꾸지 않는다.
-- Confirmation / Follow-up: D15의 두 identity 확인, runtime 표시와 신규 Quote 격리 검증을 적용한다.
+- Confirmation / Follow-up: 기존 2건의 identity 확인이나 표시 보존 검증은 요구하지 않는다.
 
 ### D14 개별 승인 철회 도입 제외와 연합 lifecycle 유지
 
@@ -184,27 +184,27 @@ Spec Gate 최종 승인은 별도이며 이 기록의 Active가 제품 구현 �
 - Consequences: D4의 개별 철회 제공 범위를 대체한다. 정책 변경·차단은 기존 승인을 자동 철회하지 않으며 차단된 당사자의 Source 조회에는 기존 방향별 정책을 적용한다. PROD-924의 tasks 4~7은 연합 철회·삭제 검증을 유지한다.
 - Confirmation / Follow-up: 원격 유효·위조 철회, Local Source 삭제, Quote audience 전달·재시도, 제3자 비노출과 자체 Content 보존을 실행해 검증한다.
 
-### D15 기존 Local Quote 2건은 승인 backfill 없이 Source 표시 유지
+### D15 기존 Local Quote 2건의 legacy exception 제거
 
-- Decision Date: 2026-09-17
+- Decision Date: 2026-09-22
 - Decision Class: Derived Contract
-- Authority / Provenance: PROD-924 Spec 대화의 사용자 정정 “production에는 기존 Local Quote가 2건 존재”와 무백필 지시, Human Decision 답변 “기존 2건의 Source 표시 유지: 신규 승인으로 간주하지 않는 기존 데이터 예외를 명시한다.”; 정정된 PROD-924·PROD-902, `docs/domain/objects/post.md`, `docs/domain/decisions/0029-quote-consent-and-federation.md`.
+- Authority / Provenance: PROD-924 Review 대화의 명시적 사용자 결정; `docs/domain/objects/post.md`, `docs/domain/decisions/0029-quote-consent-and-federation.md`.
 - Status: Active
-- Context / Problem: 현재 main은 Source 관계와 일반 조회 권한으로 표시하며 승인 상태가 없다. 기존 계약은 발급된 승인 보존과 원격 pending을 정의하지만 승인 기록 없는 도입 전 두 Quote의 전환 결과는 정의하지 않았다. 무백필만 명시하면 승인 누락을 미승인으로 해석해 Source를 숨길 위험이 있었다.
-- Decision Outcome: 기존 Local Quote 2건의 존재를 인지한 상태에서 새 승인 상태·QuoteAuthorization을 backfill하지 않는다. 확인된 두 Quote는 신규 승인으로 간주하지 않는 기존 데이터 예외로 Source 표시를 유지한다. 승인 lifecycle 미편입이라는 읽기 분류이며 `PENDING / APPROVED / REJECTED / REVOKED` 상태를 합성하거나 새 저장 enum을 추가하지 않는다.
-- Alternatives Considered: 새 승인 기준으로 타인 Source를 숨기는 안을 제시했으나 사용자가 표시 유지를 선택했다. 승인 추정 backfill은 사용자 지시로 제외한다.
-- Consequences: 일반 Source 조회·방향별 차단·삭제 제한과 자체 Content 보존은 유지한다. 정확한 두 identity만 예외로 식별하며 신규 Quote의 누락 승인이나 임의의 과거 Quote로 확대하지 않는다. 이 표시 예외는 FEP 승인·QuoteAuthorization 발급·승인된 자동 발신 표현의 근거가 아니다. PROD-431 완료 범위와 자기 인용 계약을 바꾸지 않는다.
-- Confirmation / Follow-up: 활성화 전 두 identity·Source 결속과 구버전 writer를 확인하고 대상이 다르면 활성화를 보류한다. 두 Quote의 무백필·Source 표시, 조회 불가·삭제·차단 시 비노출, 신규 승인 누락 비노출과 호환 rollback을 검증한다. 이 답변은 D15의 권위이며 수정본 전체 Spec Gate 승인은 별도 대기다.
+- Context / Problem: 2026-09-17의 두 Quote 표시 보존 예외는 별도 identity 설정과 배포 검증을 요구했다. 사용자가 해당 예외와 보존 요구를 폐기했다.
+- Decision Outcome: 신규 Quote consent 정책을 legacy 2건을 위한 예외 없이 적용한다. 두 Quote의 migration/backfill·Source 표시 보존은 범위 밖이며 수행하지 않는다. 새 정책으로 기존 Source가 비노출되거나 접근할 수 없게 되어도 허용한다.
+- Alternatives Considered: 두 identity allowlist와 compatibility path, 이를 위한 production 조회·preflight·deployment gate는 채택하지 않는다.
+- Consequences: 기존 Local Post의 정책 초기화, 이미 발급된 승인 보존, 자기 인용 계약과 PROD-431 완료 범위는 유지한다. D15 설정 오류를 원인으로 한 P1은 예외 제거로 해결하며 별도 운영·사람 확인 항목으로 남기지 않는다.
+- Confirmation / Follow-up: 예외 설정·코드·문서 요구를 제거하고 일반 승인·Source 접근 판정 회귀를 검증한다. production ID를 추측하거나 요청하지 않는다.
 
 ## Remaining Decisions
 
-- 현재 범위의 미결정 제품 정책은 없다. 기존 두 Quote의 runtime 표시는 사용자 선택을 반영한 D15로 결정됐다.
+- 현재 범위의 미결정 제품 정책은 없다. 기존 두 Quote의 표시 예외 제거는 갱신된 D15로 결정됐다.
 - UI 진입점은 D10, 개별 승인 철회 제외는 D14를 따른다. 수정본 전체 Spec Gate는 승인 대기다.
 - Fedify exact version은 PROD-792의 조건부 채택 방침에 따라 실제 compatibility 검증 후 기록한다. 설치 성공이나 이 spec의 작성 완료를 채택 증거로 사용하지 않는다.
-- 정확한 두 Quote identity·Source 결속과 구버전 writer는 활성화 전 확인한다. 내부 테이블·파일명은 design의 기본안을 조정할 수 있지만 공개 API·권한·상태·복구 계약은 유지한다.
+- 두 Quote identity·Source 결속 확인과 이를 위한 배포 검증은 요구하지 않는다. 공개 API·권한·상태·복구의 나머지 계약은 유지한다.
 
 ## Superseded Decisions
 
 - D4는 2026-09-11 D14로 대체됐다. 사용자용 개별 승인 철회 도입을 제외하고 연합 철회·삭제 lifecycle은 유지한다.
-- D13의 기존 Local Quote 0건 전제는 2026-09-17 사용자 정정으로 폐기됐고 D15의 기존 2건 무백필·Source 표시 예외가 대체한다.
+- D13의 기존 Local Quote 0건 전제는 2026-09-17 사용자 정정으로 폐기됐고 D15가 대체한다. 2026-09-17 D15의 표시 보존 예외는 2026-09-22 사용자 결정으로 폐기됐다.
 - 작성 전의 ‘PROD-902는 OpenSpec 제외, PROD-924에서 스펙 작성’ 해석은 사용자 정정과 Linear 갱신으로 폐기했다. 현재 결정은 D6이며 당시 기록은 조사 record에 보존한다.

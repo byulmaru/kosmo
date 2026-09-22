@@ -30,7 +30,6 @@ import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { postContentDocumentToHtml } from '@kosmo/core/post-content/server';
 import {
   defaultPostQuotePolicy,
-  isLegacyLocalQuotePost,
   loadQuoteConsentForPost,
   loadQuotePostIdentity,
   loadQuoteSourceIdentity,
@@ -202,16 +201,6 @@ const projectLocalQuote = async (
     return {
       quoteAuthorizationUri: null,
       quoteProtocolEnabled: true,
-      quoteSourceUri: source.sourceUri,
-    };
-  }
-
-  // The two pre-lifecycle Local Quotes are a read-only display exception. They
-  // must not become FEP approvals or automatic legacy deliveries.
-  if (isLegacyLocalQuotePost(quotePostId) && source.instanceKind === InstanceKind.LOCAL) {
-    return {
-      quoteAuthorizationUri: null,
-      quoteProtocolEnabled: false,
       quoteSourceUri: source.sourceUri,
     };
   }

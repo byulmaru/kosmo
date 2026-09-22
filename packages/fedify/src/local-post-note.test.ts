@@ -236,7 +236,7 @@ describe('ActivityPub Local Post Note', () => {
     );
   });
 
-  test('projects an approved FEP-044f Quote and keeps the two D15 quotes display-only', async () => {
+  test('projects only approved FEP-044f Quotes and hides unapproved Source references', async () => {
     const fixtureId = crypto.randomUUID();
     const sourceAuthor = await createProfile({
       handle: `quote-source-${fixtureId}`,
@@ -272,30 +272,19 @@ describe('ActivityPub Local Post Note', () => {
     assert.match(approvedNote.content?.toString() ?? '', /quote-inline/);
     assert.match(JSON.stringify(await approvedNote.toJsonLd()), /quoteAuthorization/);
 
-    const displayOnlyAuthor = await createProfile({
-      handle: `quote-display-only-${fixtureId}`,
+    const unapprovedAuthor = await createProfile({
+      handle: `quote-unapproved-${fixtureId}`,
       kind: InstanceKind.LOCAL,
     });
-    const displayOnlyQuote = await createPost(displayOnlyAuthor.id, {
+    const unapprovedQuote = await createPost(unapprovedAuthor.id, {
       repostSourceId: source.id,
     });
-    const previousLegacyIds = process.env.KOSMO_LEGACY_LOCAL_QUOTE_POST_IDS;
-    process.env.KOSMO_LEGACY_LOCAL_QUOTE_POST_IDS = `${displayOnlyQuote.id},${crypto.randomUUID()}`;
-    try {
-      const displayOnlyNote = await dispatchLocalPostNote(createContext(), {
-        id: displayOnlyQuote.id,
-      });
-      assert.ok(displayOnlyNote);
-      assert.equal(displayOnlyNote.quoteId, null);
-      assert.equal(displayOnlyNote.quoteAuthorizationId, null);
-      assert.equal(displayOnlyNote.content?.toString(), '<p>body</p>');
-    } finally {
-      if (previousLegacyIds === undefined) {
-        delete process.env.KOSMO_LEGACY_LOCAL_QUOTE_POST_IDS;
-      } else {
-        process.env.KOSMO_LEGACY_LOCAL_QUOTE_POST_IDS = previousLegacyIds;
-      }
-    }
+    const unapprovedNote = await dispatchLocalPostNote(createContext(), { id: unapprovedQuote.id });
+    assert.ok(unapprovedNote);
+    assert.equal(unapprovedNote.quoteId, null);
+    assert.equal(unapprovedNote.quoteUrl, null);
+    assert.equal(unapprovedNote.quoteAuthorizationId, null);
+    assert.equal(unapprovedNote.content?.toString(), '<p>body</p>');
   });
 
   test('serves an approved QuoteAuthorization before the remote Quote is materialized', async () => {

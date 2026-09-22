@@ -305,17 +305,17 @@ PROD-902, PROD-924. 기존 원격 수신 경계: PROD-792.
 - **THEN** 세 호환 속성과 자동 생성한 원문 링크 fallback을 비노출한다
 - **AND** 작성자가 직접 쓴 동일한 URL이나 본문은 삭제하지 않는다
 
-### Requirement: 기존 데이터 표시 예외와 FEP 승인의 분리
+### Requirement: 승인 없는 Quote의 발신 표현
 
 **Authority / Provenance:** 이 요구사항은 반드시 준수해야 한다(MUST). 근거: `docs/domain/objects/post.md`,
-`docs/domain/decisions/0029-quote-consent-and-federation.md`, PROD-924·PROD-902의 2026-09-17 정정, D15.
+`docs/domain/decisions/0029-quote-consent-and-federation.md`, 2026-09-22 사용자 결정과 갱신된 D15.
 
-도입 전 두 Local Quote의 Source 표시 예외를 FEP 승인 증거로 사용해서는 안 된다(MUST NOT).
-이 예외만으로 QuoteAuthorization을 발급하거나 승인된 FEP·자동 legacy 발신 표현을 생성해서는 안 된다(MUST NOT).
+기존 Local Quote 2건을 위한 발신 예외를 두어서는 안 된다(MUST NOT). 타인 Quote의 유효한 승인 없이
+QuoteAuthorization이나 승인된 FEP·자동 legacy 발신 표현을 생성해서는 안 된다(MUST NOT).
 일반 Content 발신과 직접 작성한 본문은 기존 계약을 유지해야 한다(MUST).
 
-#### Scenario: 승인 기록 없는 기존 두 Quote의 발신 표현
+#### Scenario: 승인 기록 없는 타인 Quote의 발신 표현
 
-- **WHEN** 기존 데이터 예외로 Source를 표시하는 두 Quote 중 하나의 발신 표현을 생성하고 유효한 FEP 승인은 없다
-- **THEN** 표시 예외를 승인 완료로 광고하거나 QuoteAuthorization을 합성하지 않는다
-- **AND** 예외만을 근거로 승인된 자동 Source 표현을 추가하지 않고 직접 작성한 본문을 유지한다
+- **WHEN** 유효한 승인이 없는 타인 Quote의 발신 표현을 생성한다
+- **THEN** QuoteAuthorization과 승인된 자동 Source 표현을 추가하지 않는다
+- **AND** 직접 작성한 본문은 유지한다

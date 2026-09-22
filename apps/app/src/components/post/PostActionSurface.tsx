@@ -147,12 +147,12 @@ export function PostActionSurface({
       ) : (
         renderActions()
       )}
-      {canEditQuotePolicy && target.quotePolicy ? (
+      {canEditQuotePolicy && target.quotePolicy && quotePolicyEditorOpen ? (
         <PostQuotePolicyEditor
+          key={target.id}
           onClose={() => setQuotePolicyEditorOpen(false)}
           policy={target.quotePolicy as PostQuotePolicy}
           postId={target.id}
-          visible={quotePolicyEditorOpen}
           visibility={target.visibility === 'PUBLIC' ? 'PUBLIC' : 'UNLISTED'}
         />
       ) : null}

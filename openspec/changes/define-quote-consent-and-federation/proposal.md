@@ -8,16 +8,16 @@ Kosmo에는 Quote 저장·표시 기반이 있지만, 로컬 작성과 원문 �
 
 2026-09-11 PROD-924 보강은 승인된 공유 계약의 구현 명세를 구체화한다. 계약·스펙 owner는 계속 PROD-902이며,
 PROD-431 tasks 2~3의 작성 범위를 다시 소유하지 않는다. 2026-09-17 정정은 실제 main의 공개 범위 UI를
-근거로 새 선택 UI의 범위를 명확히 하고, 기존 Local Quote 2건의 무백필·Source 표시 예외(D15)를 반영한다.
+근거로 새 선택 UI의 범위를 명확히 한다. 2026-09-22 결정은 기존 Local Quote 2건의 표시 예외를 제거한다(D15).
 
 - 기존 `createPost`에 Source 입력을 추가하고 Repost 메뉴에서 공용 Composer로 기본 Quote를 작성한다.
   Reply+Quote 작성 UI·API와 링크의 인용 카드 전환은 제외한다.
 - 기존 게시글 공개 범위 설정 UI를 재사용하고, 그 안에 새 인용 허용 정책 선택 UI `모두 | 팔로워 | 본인만`을 추가한다.
   공개·조용한 공개에서 선택하고 작성과 함께 저장하며 게시 후 정책도 변경할 수 있다. 별도 선택이 없는 새 글과 기존 Local Post는 `모두`로 시작하며
   기존 승인에는 소급 적용하지 않는다.
-- 기존 Local Quote 2건이 존재한다는 사실을 반영하고 새 승인 상태·QuoteAuthorization은 backfill하지 않는다.
-  확인된 두 Quote는 신규 승인으로 간주하지 않는 기존 데이터 예외로 Source 표시를 유지하고 일반 조회·차단·삭제
-  제한을 적용한다. 신규 Quote의 승인 누락으로 예외를 확대하지 않는다.
+- 신규 Quote consent 정책을 기존 2건을 위한 예외 없이 적용한다. 두 Quote의 migration/backfill·Source 표시
+  보존과 production ID·Source 결속 확인, 이를 위한 preflight·deployment validation은 범위 밖이다.
+  새 정책으로 기존 Source가 비노출되거나 접근할 수 없게 되어도 허용한다.
 - 타인의 Public·Unlisted Source와 접근 범위를 넓히지 않는 자기 Followers Only 인용을 지원한다.
 - 자기 인용을 제외한 원격 타인 원문에는 `interactionPolicy`의 automatic/manual 광고나 부재·해석 실패와
   관계없이 QuoteRequest를 보내고, 유효한 QuoteAuthorization으로 실제 승인을 확인한다.

@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { Text } from 'react-native';
-import { graphql, useMutation, useRelayEnvironment } from 'react-relay';
+import { graphql, useMutation } from 'react-relay';
 import { ModalSheet } from '@/components/ui/ModalSheet';
 import { RadioGroup, RadioOption } from '@/components/ui/RadioGroup';
-import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, typography } from '@/theme/tokens';
 import { postQuotePolicyOptions, postQuotePolicyPresentation } from './postQuotePolicyPresentation';
@@ -27,92 +26,48 @@ type Props = Readonly<{
   onClose: () => void;
   postId: string;
   policy: PostQuotePolicy;
-  visible: boolean;
   visibility: PostVisibility;
 }>;
 
-type SaveState = 'idle' | 'saving' | 'success' | 'error';
-
 const saveFailureMessage = '인용 설정을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.';
 
-export function PostQuotePolicyEditor({ onClose, postId, policy, visibility, visible }: Props) {
+export function PostQuotePolicyEditor({ onClose, postId, policy, visibility }: Props) {
   const theme = useTheme();
-  const environment = useRelayEnvironment();
-  const environmentGenerationRef = useRelayEnvironmentGeneration();
-  const environmentRef = useRef(environment);
-  const requestIdRef = useRef(0);
-  const inFlightRef = useRef<number | null>(null);
   const [selected, setSelected] = useState(policy);
-  const [saveState, setSaveState] = useState<SaveState>('idle');
-  const [commit] = useMutation<PostQuotePolicyEditorMutation>(UpdatePostQuotePolicyMutation);
-
-  useEffect(() => {
-    if (environmentRef.current !== environment) {
-      environmentRef.current = environment;
-      requestIdRef.current += 1;
-      inFlightRef.current = null;
-      setSaveState('idle');
-    }
-  }, [environment]);
-
-  useEffect(() => {
-    if (!visible) {
-      return;
-    }
-    setSelected(policy);
-    setSaveState('idle');
-  }, [policy, postId, visible]);
-
-  const save = useCallback(
-    (nextPolicy: PostQuotePolicy) => {
-      if (nextPolicy === policy || inFlightRef.current !== null || !visible) {
-        return;
-      }
-
-      const requestId = requestIdRef.current + 1;
-      requestIdRef.current = requestId;
-      inFlightRef.current = requestId;
-      const environmentGeneration = environmentGenerationRef?.current;
-      setSelected(nextPolicy);
-      setSaveState('saving');
-
-      const finish = (state: SaveState) => {
-        if (
-          inFlightRef.current !== requestId ||
-          environmentGenerationRef?.current !== environmentGeneration
-        ) {
-          if (inFlightRef.current === requestId) {
-            inFlightRef.current = null;
-          }
-          return;
-        }
-        inFlightRef.current = null;
-        setSaveState(state);
-      };
-
-      commit({
-        variables: { input: { id: postId, quotePolicy: nextPolicy } },
-        onCompleted: (response, errors) => {
-          if (errors?.length || !response.updatePostQuotePolicy.post.quotePolicy) {
-            finish('error');
-            return;
-          }
-          finish('success');
-          onClose();
-        },
-        onError: () => finish('error'),
-      });
-    },
-    [commit, environmentGenerationRef, onClose, policy, postId, visible],
+  const [failed, setFailed] = useState(false);
+  const [commit, saving] = useMutation<PostQuotePolicyEditorMutation>(
+    UpdatePostQuotePolicyMutation,
   );
 
-  const saving = saveState === 'saving';
+  const save = (nextPolicy: PostQuotePolicy) => {
+    if (saving) {
+      return;
+    }
+    setSelected(nextPolicy);
+    setFailed(false);
+    if (nextPolicy === policy) {
+      return;
+    }
+
+    commit({
+      variables: { input: { id: postId, quotePolicy: nextPolicy } },
+      onCompleted: (response, errors) => {
+        if (errors?.length || !response.updatePostQuotePolicy.post.quotePolicy) {
+          setFailed(true);
+          return;
+        }
+        onClose();
+      },
+      onError: () => setFailed(true),
+    });
+  };
+
   const currentLabel = postQuotePolicyPresentation[selected].label;
 
   return (
-    <ModalSheet dismissDisabled={saving} onClose={onClose} title="인용 설정" visible={visible}>
+    <ModalSheet dismissDisabled={saving} onClose={onClose} title="인용 설정" visible>
       <Text style={[styles.summary, { color: theme.foregroundSecondary }]}>
-        현재 인용 허용: {currentLabel}
+        선택한 인용 허용: {currentLabel}
       </Text>
       <Text style={[styles.summary, { color: theme.foregroundSecondary }]}>
         공개 범위: {postVisibilityPresentation[visibility].label} (읽기 전용)
@@ -137,7 +92,7 @@ export function PostQuotePolicyEditor({ onClose, postId, policy, visibility, vis
           />
         ))}
       </RadioGroup>
-      {saveState === 'error' ? (
+      {failed ? (
         <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>
           {saveFailureMessage}
         </Text>

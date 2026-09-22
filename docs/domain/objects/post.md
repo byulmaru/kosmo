@@ -174,12 +174,10 @@ Notification이 소유하며, Quote·Reply Parent·Repost Source의 구조와 �
   Content, Visibility와 Eligibility를 기준으로 후보를 유지하며 `Repost Source` 관계만 표시하지 않는다.
 - 승인 대기·거절·철회된 Source도 같은 비노출 원칙을 적용한다. 유효한 인용 승인이나 자기 인용이라는 사실은
   viewer별 Source Visibility·Eligibility·Profile Block 검사를 대신하지 않는다.
-- PROD-924 도입 전 존재하는 것으로 확인된 Local Quote 2건은 새 승인 상태나 QuoteAuthorization을 backfill하지
-  않고 기존 데이터 예외로 Source 표시를 유지한다. 승인 lifecycle에 편입되지 않은 기존 Quote이며 승인 기록
-  부재만으로 대기·거절·철회 상태나 승인 완료 상태를 부여하지 않는다. 이 예외도 Source의 기존 Visibility·Eligibility·
-  Profile Block·삭제 제한을 통과해야 한다. 확인된 두 Quote에만 적용하며 신규 Quote의 승인 누락으로 확대하지 않는다.
-- 이 기존 데이터 예외는 인용 승인이나 FEP 승인 표현의 근거가 아니다. 정확한 대상 확인과 도입 검증은 PROD-924가
-  소유하며, 기존 Local Post의 정책 초기화와 이미 발급된 승인 보존은 별개로 유지한다.
+- 신규 Quote consent 정책은 도입 전 Local Quote 2건을 위한 예외 없이 적용한다. 해당 2건의 migration/backfill과
+  Source 표시 보존은 범위 밖이며, 새 정책에 따라 Source가 비노출되거나 접근할 수 없게 되어도 허용한다.
+  production Quote ID·Source 결속 확인이나 이를 위한 preflight·deployment validation은 요구하지 않는다.
+  기존 Local Post의 정책 초기화와 이미 발급된 승인 보존은 별개로 유지한다.
 - Reply Parent가 Tombstone이거나 조회 정책을 통과하지 못해도 Reply 자체의 Post Eligibility는 바뀌지 않는다.
 - Post Eligibility는 Post Visibility가 허용하지 않은 viewer에게 접근 범위를 넓히지 않는다.
 - 본문의 canonical Mention은 [Post Content Mention renderer](../../design/post-content-mentions.md)가 현재 revision의

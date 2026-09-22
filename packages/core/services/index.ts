@@ -14,7 +14,11 @@ export {
   deleteRepostNotification,
 } from './notification';
 export { createPost, deletePost, repostPost } from './post';
-export type { PostQuoteConsentRow, PostQuoteEffectReceiptRow } from './post-quote-consent';
+export type {
+  PostQuoteConsentRow,
+  PostQuoteEffectReceiptRow,
+  QuoteSource,
+} from './post-quote-consent';
 export {
   applyInboundQuoteAccept,
   applyInboundQuoteReject,
@@ -25,7 +29,6 @@ export {
   createPostQuoteConsent,
   createPostQuoteEffectReceipt,
   defaultPostQuotePolicy,
-  isLegacyLocalQuotePost,
   isLocalQuoteAllowedByPolicy,
   loadPendingQuoteConsentByBinding,
   loadQuoteConsentByApprovalUri,
@@ -38,6 +41,7 @@ export {
   revokePostQuoteConsentsForSource,
   startPostQuoteEffect,
   updatePostQuotePolicy,
+  visibleQuoteSources,
 } from './post-quote-consent';
 export { disableProfile } from './profile';
 export { assertProfilePairIsNotBlocked, ProfilePairBlockedError } from './profile-block-policy';

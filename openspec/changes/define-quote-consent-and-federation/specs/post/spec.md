@@ -7,10 +7,8 @@
 이 spec의 GraphQL enum `DIRECT`는 canonical 문서의 Mentioned Profiles visibility를 나타내는 API 표현이다.
 
 Quote Source는 인용 승인 조건과 viewer별 Source 조회 조건을 모두 통과할 때 반환해야 한다(MUST).
-단, D15의 도입 전 Local Quote 2건은 새 승인 상태·QuoteAuthorization을 backfill하지 않고 기존 데이터 예외로
-Source를 반환해야 한다(MUST). 두 Quote의 승인 기록 부재를 대기·거절·철회 또는 승인 완료로 해석해서는 안 되며
-(MUST NOT), 이 예외도 viewer별 Source 조회·차단·삭제 조건을 통과해야 한다(MUST). 자기 인용 예외는 유지한다.
-위 예외 밖의 미승인·거절·철회 Source는 반환해서는 안 되며(MUST NOT), 자체 Content와 Post Node는
+도입 전 Local Quote 2건을 위한 별도 표시 예외를 두어서는 안 되며(MUST NOT), 자기 인용 계약은 유지한다.
+미승인·거절·철회 Source는 반환해서는 안 되며(MUST NOT), 자체 Content와 Post Node는
 그 Post 자체의 조회 정책을 통과하면 유지해야 한다(MUST).
 
 게시글별 인용 제어에는 nullable `quotePolicy: PostQuotePolicy`와
@@ -85,17 +83,11 @@ viewerRepost 동작을 변경해서는 안 된다(MUST NOT).
 - **AND** nullable `repostSource`는 `null`을 반환한다
 - **AND** direct Source의 Source가 unavailable하다는 이유로 바깥 Quote를 숨기지 않는다
 
-#### Scenario: 도입 전 두 Local Quote의 승인 기록 없는 조회
+#### Scenario: 승인 기록 없는 타인 Quote 조회
 
-- **WHEN** D15로 식별한 기존 Local Quote 2건 중 하나를 조회하고 그 Post와 Source가 기존 조회 조건을 통과한다
-- **THEN** 새 승인 상태·QuoteAuthorization 없이 같은 Post의 자체 Content와 non-null `repostSource`를 반환한다
-- **AND** 승인 기록이 없다는 이유로 pending·거절·철회 상태를 합성하거나 Source를 숨기지 않는다
-
-#### Scenario: 기존 두 Quote의 접근 제한과 신규 승인 누락의 구분
-
-- **WHEN** 기존 두 Quote의 Source가 삭제·조회 불가 상태이거나, 예외 대상이 아닌 신규 타인 Quote에 유효한 승인이 없다
+- **WHEN** 타인 Quote에 유효한 승인이 없다
 - **THEN** `repostSource`는 null이고 조회 가능한 Quote 자체 Content는 보존한다
-- **AND** Source FK 존재나 승인 기록 부재만으로 기존 데이터 예외를 적용하지 않는다
+- **AND** Source FK 존재나 기존 데이터라는 이유로 표시 예외를 적용하지 않는다
 
 #### Scenario: 원격 승인 대기 또는 철회된 Quote 조회
 

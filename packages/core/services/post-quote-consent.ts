@@ -302,20 +302,6 @@ export const replayPendingPostQuoteEffects = async (limit = 100): Promise<number
   return started;
 };
 
-const configuredLegacyQuotePostIds = (): ReadonlySet<string> => {
-  const values = (process.env.KOSMO_LEGACY_LOCAL_QUOTE_POST_IDS ?? '')
-    .split(',')
-    .map((value) => value.trim())
-    .filter(Boolean);
-
-  // D15 is intentionally opt-in and exact. A partial or malformed rollout
-  // value must never turn every missing consent into a legacy exception.
-  return values.length === 2 && new Set(values).size === 2 ? new Set(values) : new Set();
-};
-
-export const isLegacyLocalQuotePost = (postId: string): boolean =>
-  configuredLegacyQuotePostIds().has(postId);
-
 export const updatePostQuotePolicy = async ({
   actorProfileId,
   policy,
@@ -1309,126 +1295,138 @@ export const revokePostQuoteConsentsForSource = async (
   return receiptIds;
 };
 
-export const canDisplayQuoteSource = async (
+export type QuoteSource = Readonly<{ quotePostId: string; sourcePostId: string }>;
+
+export const visibleQuoteSources = async (
   database: DatabaseHandle,
   {
-    quotePostId,
-    sourcePostId,
+    quotes,
     viewerProfileId,
   }: {
-    readonly quotePostId: string;
-    readonly sourcePostId: string;
+    readonly quotes: readonly QuoteSource[];
     readonly viewerProfileId?: string | null;
   },
-): Promise<boolean> => {
-  const [source, quote] = await Promise.all([
+): Promise<QuoteSource[]> => {
+  if (!quotes.length) {
+    return [];
+  }
+  const quotePostIds = [...new Set(quotes.map((quote) => quote.quotePostId))];
+  const sourcePostIds = [...new Set(quotes.map((quote) => quote.sourcePostId))];
+  const posts = await database
+    .select({
+      id: Posts.id,
+      authorProfileId: Posts.profileId,
+      currentContentId: Posts.currentContentId,
+      instanceState: Instances.state,
+      profileState: Profiles.state,
+      state: Posts.state,
+      visibility: Posts.visibility,
+    })
+    .from(Posts)
+    .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
+    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+    .where(inArray(Posts.id, [...new Set([...quotePostIds, ...sourcePostIds])]));
+  const postsById = new Map(posts.map((post) => [post.id, post]));
+  const sourceAuthorIds = [
+    ...new Set(
+      sourcePostIds.flatMap((id) => {
+        const source = postsById.get(id);
+        return source ? [source.authorProfileId] : [];
+      }),
+    ),
+  ];
+  const [blocks, follows, consents] = await Promise.all([
+    viewerProfileId && sourceAuthorIds.length
+      ? database
+          .select({ authorProfileId: ProfileBlocks.ownerProfileId })
+          .from(ProfileBlocks)
+          .where(
+            and(
+              inArray(ProfileBlocks.ownerProfileId, sourceAuthorIds),
+              eq(ProfileBlocks.targetProfileId, viewerProfileId),
+            ),
+          )
+      : [],
+    viewerProfileId && sourceAuthorIds.length
+      ? database
+          .select({ authorProfileId: ProfileFollows.followeeProfileId })
+          .from(ProfileFollows)
+          .where(
+            and(
+              eq(ProfileFollows.followerProfileId, viewerProfileId),
+              inArray(ProfileFollows.followeeProfileId, sourceAuthorIds),
+            ),
+          )
+      : [],
     database
       .select({
-        authorProfileId: Posts.profileId,
-        currentContentId: Posts.currentContentId,
-        instanceState: Instances.state,
-        profileState: Profiles.state,
-        state: Posts.state,
-        visibility: Posts.visibility,
+        quotePostId: PostQuoteConsents.quotePostId,
+        sourcePostId: PostQuoteConsents.sourcePostId,
+        status: PostQuoteConsents.status,
       })
-      .from(Posts)
-      .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
-      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-      .where(eq(Posts.id, sourcePostId))
-      .limit(1)
-      .then(first),
-    database
-      .select({
-        authorProfileId: Posts.profileId,
-        currentContentId: Posts.currentContentId,
-        instanceState: Instances.state,
-        profileState: Profiles.state,
-        repostSourceId: Posts.repostSourceId,
-        state: Posts.state,
-      })
-      .from(Posts)
-      .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
-      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-      .where(eq(Posts.id, quotePostId))
-      .limit(1)
-      .then(first),
+      .from(PostQuoteConsents)
+      .where(
+        and(
+          inArray(PostQuoteConsents.quotePostId, quotePostIds),
+          inArray(PostQuoteConsents.sourcePostId, sourcePostIds),
+        ),
+      ),
   ]);
-  if (
-    !source ||
-    !quote ||
-    source.state !== PostState.ACTIVE ||
-    source.currentContentId === null ||
-    quote.state !== PostState.ACTIVE ||
-    quote.profileState !== ProfileState.ACTIVE ||
-    quote.instanceState === InstanceState.SUSPENDED
-  ) {
-    return false;
-  }
-  if (
-    source.profileState !== ProfileState.ACTIVE ||
-    source.instanceState === InstanceState.SUSPENDED ||
-    source.visibility === PostVisibility.DIRECT
-  ) {
-    return false;
+  const blockingAuthors = new Set(blocks.map((block) => block.authorProfileId));
+  const followedAuthors = new Set(follows.map((follow) => follow.authorProfileId));
+  const consentStatuses = new Map<string, PostQuoteConsentStatus>();
+  for (const consent of consents) {
+    const binding = `${consent.quotePostId}:${consent.sourcePostId}`;
+    if (!consentStatuses.has(binding)) {
+      consentStatuses.set(binding, consent.status);
+    }
   }
 
-  if (viewerProfileId && viewerProfileId !== source.authorProfileId) {
-    const sourceBlocksViewer = await database
-      .select({ id: ProfileBlocks.id })
-      .from(ProfileBlocks)
-      .where(
-        and(
-          eq(ProfileBlocks.ownerProfileId, source.authorProfileId),
-          eq(ProfileBlocks.targetProfileId, viewerProfileId),
-        ),
-      )
-      .limit(1)
-      .then(first);
-    if (sourceBlocksViewer) {
+  return quotes.filter(({ quotePostId, sourcePostId }) => {
+    const source = postsById.get(sourcePostId);
+    const quote = postsById.get(quotePostId);
+    if (
+      !source ||
+      !quote ||
+      source.state !== PostState.ACTIVE ||
+      source.currentContentId === null ||
+      quote.state !== PostState.ACTIVE ||
+      quote.profileState !== ProfileState.ACTIVE ||
+      quote.instanceState === InstanceState.SUSPENDED ||
+      source.profileState !== ProfileState.ACTIVE ||
+      source.instanceState === InstanceState.SUSPENDED ||
+      source.visibility === PostVisibility.DIRECT ||
+      (viewerProfileId !== source.authorProfileId && blockingAuthors.has(source.authorProfileId))
+    ) {
       return false;
     }
-  }
-
-  if (source.visibility === PostVisibility.FOLLOWERS) {
-    if (!viewerProfileId || viewerProfileId === source.authorProfileId) {
-      return viewerProfileId === source.authorProfileId;
-    }
-    const follows = await database
-      .select({ id: ProfileFollows.id })
-      .from(ProfileFollows)
-      .where(
-        and(
-          eq(ProfileFollows.followerProfileId, viewerProfileId),
-          eq(ProfileFollows.followeeProfileId, source.authorProfileId),
-        ),
-      )
-      .limit(1)
-      .then(first);
-    if (!follows) {
+    if (source.visibility === PostVisibility.FOLLOWERS) {
+      if (!viewerProfileId || viewerProfileId === source.authorProfileId) {
+        return viewerProfileId === source.authorProfileId;
+      }
+      if (!followedAuthors.has(source.authorProfileId)) {
+        return false;
+      }
+    } else if (
+      source.visibility !== PostVisibility.PUBLIC &&
+      source.visibility !== PostVisibility.UNLISTED
+    ) {
       return false;
     }
-  } else if (
-    source.visibility !== PostVisibility.PUBLIC &&
-    source.visibility !== PostVisibility.UNLISTED
-  ) {
-    return false;
-  }
-
-  // A contentless Post is the existing Repost relation. Its source visibility
-  // is decided by the ordinary Post access policy, not quote consent.
-  if (quote.currentContentId === null) {
-    return true;
-  }
-  if (source.authorProfileId === quote.authorProfileId) {
-    return true;
-  }
-  if (isLegacyLocalQuotePost(quotePostId) && quote.repostSourceId === sourcePostId) {
-    return true;
-  }
-
-  const consent = await loadQuoteConsentForPost(database, quotePostId, sourcePostId);
-  return consent?.status === PostQuoteConsentStatus.APPROVED;
+    // Pure Reposts and self-quotes still use ordinary Source access rules.
+    return (
+      quote.currentContentId === null ||
+      source.authorProfileId === quote.authorProfileId ||
+      consentStatuses.get(`${quotePostId}:${sourcePostId}`) === PostQuoteConsentStatus.APPROVED
+    );
+  });
 };
+
+export const canDisplayQuoteSource = async (
+  database: DatabaseHandle,
+  { viewerProfileId, ...quote }: QuoteSource & { readonly viewerProfileId?: string | null },
+): Promise<boolean> =>
+  (await visibleQuoteSources(database, { quotes: [quote], viewerProfileId })).length > 0;
 
 export const assertPostQuotePolicy = (policy: string): PostQuotePolicy => {
   if (!Object.hasOwn(PostQuotePolicy, policy)) {
