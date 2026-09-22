@@ -1,11 +1,11 @@
 import { expect, userEvent, waitFor, within } from 'storybook/test';
 import { spacing } from '@/theme/tokens';
 import baseMeta, {
-  ProfileSwitcherGuardedDrawer as profileSwitcherGuardedDrawer,
   UniversalCompactComposerLifecycle as universalCompactComposerLifecycle,
   UniversalFullComposerLifecycle as universalFullComposerLifecycle,
   UniversalMobile as universalMobile,
   UniversalMobileComposerLifecycle as universalMobileComposerLifecycle,
+  UniversalMobileGuardedProfilePicker as universalMobileGuardedProfilePicker,
   UniversalMobileLongProfilePickerScroll as universalMobileLongProfilePickerScroll,
 } from './Shell.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -343,26 +343,43 @@ export const UniversalMobileProfilePickerKeyboard: Story = {
 };
 
 export const ProfileSwitcherDrawerNestedDialogEscape: Story = {
-  ...profileSwitcherGuardedDrawer,
+  ...universalMobileGuardedProfilePicker,
   parameters: {
-    ...profileSwitcherGuardedDrawer.parameters,
+    ...universalMobileGuardedProfilePicker.parameters,
     controls: { disable: true },
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const page = within(canvasElement.ownerDocument.body);
-    await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
-    const picker = await canvas.findByLabelText('프로필 전환');
+    const menuButton = canvas.getByRole('button', { name: '메뉴 열기' });
+    await userEvent.click(menuButton);
+    const drawer = await page.findByRole('navigation', { name: '주요 메뉴' });
+    const menuModal = page.getByLabelText('메뉴');
+    expect(menuModal).toHaveAttribute('role', 'dialog');
+    const profileTrigger = within(menuModal).getByRole('button', { name: '프로필 목록' });
+    await userEvent.click(profileTrigger);
+    const picker = await page.findByLabelText('프로필 전환');
     const options = within(picker).getAllByRole('button');
 
     await userEvent.click(options[1]!);
     const discardDialog = await page.findByRole('dialog', { name: '변경사항을 버릴까요?' });
     expect(discardDialog).toBeVisible();
+    expect(menuModal).not.toHaveAttribute('role', 'dialog');
     await userEvent.keyboard('{Escape}');
 
     await waitFor(() =>
       expect(page.queryByRole('dialog', { name: '변경사항을 버릴까요?' })).toBeNull(),
     );
-    expect(canvas.getByLabelText('프로필 전환')).toBeVisible();
+    await waitFor(() => expect(menuModal).toHaveAttribute('role', 'dialog'));
+    expect(drawer).toBeVisible();
+    expect(page.getByLabelText('프로필 전환')).toBeVisible();
+
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(page.queryByLabelText('프로필 전환')).toBeNull());
+    expect(drawer).toBeVisible();
+
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(page.queryByRole('navigation', { name: '주요 메뉴' })).toBeNull());
+    expect(menuButton).toHaveFocus();
   },
 };

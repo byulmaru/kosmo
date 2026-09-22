@@ -27,7 +27,6 @@ import ogDefaultUrl from '../../../public/og-default.png?url';
 import { profile, shellQuery } from '../fixtures';
 import { Catalog, Section } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import type { ProfilePickerSurface } from '@/components/profile/ProfilePicker';
 import type { GuardedNavigationAction } from '@/components/shell/NavigationGuardContext';
 import type { ShellStoriesQuery as ShellStoriesQueryType } from './__generated__/ShellStoriesQuery.graphql';
 
@@ -271,12 +270,12 @@ function FeedbackNavigationDrawerStory() {
   );
 }
 
-function ProfileSwitcherStory({ surface = 'full' }: { surface?: ProfilePickerSurface } = {}) {
+function ProfileSwitcherStory() {
   const data = useShellStoryData();
   return (
     <SessionProvider>
       <View style={{ maxWidth: 360 }}>
-        <ProfileSwitcher query={data.query} surface={surface} />
+        <ProfileSwitcher query={data.query} surface="full" />
       </View>
     </SessionProvider>
   );
@@ -333,14 +332,12 @@ function NavigationGuardRegistrar({
   return null;
 }
 
-function GuardedProfileSwitcherStory({
-  surface = 'full',
-}: { surface?: ProfilePickerSurface } = {}) {
+function GuardedProfileSwitcherStory() {
   const [pending, setPending] = useState<GuardedNavigationAction | null>(null);
   return (
     <NavigationGuardProvider>
       <NavigationGuardRegistrar onPending={(action) => setPending(() => action)} />
-      <ProfileSwitcherStory surface={surface} />
+      <ProfileSwitcherStory />
       <ProfileEditDiscardDialog
         onContinue={() => setPending(null)}
         onDiscard={() => {
@@ -389,6 +386,7 @@ const meta = {
     'UniversalCompactComposerLifecycle',
     'UniversalFullComposerLifecycle',
     'UniversalMobileComposerLifecycle',
+    'UniversalMobileGuardedProfilePicker',
   ],
   parameters: {
     relay: { data: query },
@@ -1480,10 +1478,6 @@ export const ProfileSwitcherApprovedSelectRunsOnce: Story = {
   render: () => <GuardedProfileSwitcherStory />,
 };
 
-export const ProfileSwitcherGuardedDrawer: Story = {
-  render: () => <GuardedProfileSwitcherStory surface="drawer" />,
-};
-
 export const ProfileSwitcherApprovedSelectGraphQLErrorPreservesPicker: Story = {
   parameters: {
     relay: {
@@ -1876,6 +1870,27 @@ function UniversalShellStory() {
   );
 }
 
+function GuardedUniversalShellStory() {
+  const [pending, setPending] = useState<GuardedNavigationAction | null>(null);
+  return (
+    <SessionProvider>
+      <UniversalShell>
+        <NavigationGuardRegistrar onPending={(action) => setPending(() => action)} />
+        <Slot />
+        <ProfileEditDiscardDialog
+          onContinue={() => setPending(null)}
+          onDiscard={() => {
+            const action = pending;
+            setPending(null);
+            action?.();
+          }}
+          visible={pending !== null}
+        />
+      </UniversalShell>
+    </SessionProvider>
+  );
+}
+
 function RemountableUniversalShellStory() {
   const [visible, setVisible] = useState(true);
 
@@ -2111,6 +2126,16 @@ export const UniversalMobile: Story = {
   render: () => (
     <View style={{ height: 844 }}>
       <UniversalShellStory />
+    </View>
+  ),
+};
+
+export const UniversalMobileGuardedProfilePicker: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: universalParameters,
+  render: () => (
+    <View style={{ height: 844 }}>
+      <GuardedUniversalShellStory />
     </View>
   ),
 };
