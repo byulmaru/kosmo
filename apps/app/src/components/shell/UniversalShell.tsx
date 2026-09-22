@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { graphql, useLazyLoadQuery } from 'react-relay';
+import { MultiProfileAnalyticsProvider } from '@/analytics/MultiProfileAnalyticsProvider';
 import { FeedbackOverlay } from '@/components/feedback/FeedbackOverlay';
 import {
   NotificationReadAllAction,
@@ -21,6 +22,7 @@ import { PostMediaViewerScreenFallbackProvider } from '@/components/post/PostMed
 import { IconButton } from '@/components/ui/IconButton';
 import { getBottomTabBarContentHeight } from '@/components/ui/navigationChrome';
 import { RelayActorBoundary } from '@/relay/RelayActorProvider';
+import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { returnToSettingsParent } from '../settings/settingsNavigation';
@@ -52,6 +54,11 @@ const ShellQuery = graphql`
   query UniversalShellQuery {
     ...SidebarNavigation_query
     ...RightRail_query
+    me {
+      profiles {
+        id
+      }
+    }
     currentSession {
       id
       selectedProfile {
@@ -119,6 +126,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
   const composerTriggerFocusRef = useRef<HTMLElement | null>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  const { accountId, status } = useSession();
   const menuButtonRef = useRef<NativeView>(null);
   const screenFallbackRef = useRef<NativeView>(null);
   const homeReselectionHandlerRef = useRef<HomeReselectionHandler | null>(null);
@@ -507,7 +515,16 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
       reselectHome={reselectHome}
     >
       <PrimaryNavigationScrollReset pathname={pathname} />
-      {nativeDrawer}
+      <MultiProfileAnalyticsProvider
+        accountId={accountId}
+        enabled={web}
+        pathname={pathname}
+        profiles={data.me?.profiles ?? []}
+        selectedProfileId={profile?.id ?? null}
+        status={status}
+      >
+        {nativeDrawer}
+      </MultiProfileAnalyticsProvider>
       <FeedbackOverlay
         fallbackFocusRef={menuButtonRef}
         onRequestClose={() => setFeedbackOpen(false)}

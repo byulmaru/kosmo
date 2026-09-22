@@ -35,6 +35,10 @@ type PressableChildren = ReactNode | ((state: { pressed: boolean }) => ReactNode
 
 const platform: { OS: PlatformName } = { OS: 'ios' };
 const resetActorCalls: Array<string | null | undefined> = [];
+const analyticsCalls: Array<
+  [string, Record<string, unknown>, { accountId?: string; uuid?: string; timestamp?: Date }?]
+> = [];
+const observedActionCalls: Array<{ accountId: string; occurredAt?: Date }> = [];
 const queryData = {
   currentSession: {
     id: 'session-1',
@@ -168,7 +172,19 @@ mockModule(require.resolve('lucide-react-native'), {
   PlusIcon: 'PlusIcon',
 });
 mockModule('@/analytics/client', {
-  trackAnalytics: () => undefined,
+  trackAnalytics: (...args: unknown[]) => {
+    analyticsCalls.push(args as (typeof analyticsCalls)[number]);
+  },
+});
+mockModule('@/analytics/MultiProfileAnalyticsProvider', {
+  useMultiProfileAnalytics: () => ({
+    observeAction: (action: { accountId: string; occurredAt?: Date }) => {
+      observedActionCalls.push(action);
+    },
+  }),
+});
+mockModule('@/session/SessionProvider', {
+  useSession: () => ({ accountId: 'account-1', status: 'valid' }),
 });
 mockModule('@/components/profile/ProfilePicker', {
   ProfilePicker: MockProfilePicker,
@@ -230,6 +246,8 @@ afterEach(async () => {
   fragmentData = queryData;
   pendingSelectMutation = null;
   resetActorCalls.length = 0;
+  analyticsCalls.length = 0;
+  observedActionCalls.length = 0;
   mock.restoreAll();
 });
 
@@ -252,6 +270,23 @@ describe('ProfileSwitcher selection lifecycle', () => {
     await completeSelection();
     assert.deepEqual(resetActorCalls, ['profile-b']);
     assert.equal(modal().props.visible, false);
+    assert.deepEqual(
+      analyticsCalls.map(([event, properties]) => ({ event, properties })),
+      [
+        { event: 'profile_selected', properties: { selected_profile_id: 'profile-b' } },
+        {
+          event: 'profile_switched',
+          properties: {
+            previous_profile_id: 'profile-a',
+            selected_profile_id: 'profile-b',
+          },
+        },
+      ],
+    );
+    assert.equal(analyticsCalls[0]?.[2]?.accountId, 'account-1');
+    assert.equal(analyticsCalls[1]?.[2]?.accountId, 'account-1');
+    assert.notEqual(analyticsCalls[0]?.[2]?.uuid, analyticsCalls[1]?.[2]?.uuid);
+    assert.equal(observedActionCalls[0]?.accountId, 'account-1');
   });
 
   it('GraphQL/network 실패와 단순 취소는 actor를 reset하지 않는다', async () => {

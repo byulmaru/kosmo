@@ -12,7 +12,7 @@ import {
   View,
 } from 'react-native';
 import { graphql, useFragment, useLazyLoadQuery, usePaginationFragment } from 'react-relay';
-import { trackAnalytics } from '@/analytics/client';
+import { useTrackMultiProfileAnalytics } from '@/analytics/MultiProfileAnalyticsProvider';
 import { PageHeader } from '@/components/PageHeader';
 import {
   PaginationScrollView,
@@ -118,6 +118,7 @@ function SearchPeopleResults({
     SearchPeopleResultsNextPageQuery,
     SearchPeopleResults_query$key
   >(SearchPeopleResultsFragment, query);
+  const trackSearchAnalytics = useTrackMultiProfileAnalytics();
   const trackedFetchKeyRef = useRef<number | null>(null);
   const edges = pagination.data.searchProfiles.edges;
   const hasResults = edges.length > 0;
@@ -137,8 +138,8 @@ function SearchPeopleResults({
     }
 
     trackedFetchKeyRef.current = fetchKey;
-    trackAnalytics('search_results_loaded', { has_results: hasResults, tab: 'people' });
-  }, [fetchKey, hasResults]);
+    trackSearchAnalytics('search_results_loaded', { has_results: hasResults, tab: 'people' });
+  }, [fetchKey, hasResults, trackSearchAnalytics]);
 
   if (!edges.length) {
     return (
@@ -169,6 +170,7 @@ function SearchPeopleResults({
 }
 
 function SearchResultProfile({ profile }: { profile: SearchResultProfile_profile$key }) {
+  const trackSearchAnalytics = useTrackMultiProfileAnalytics();
   const data = useFragment(
     graphql`
       fragment SearchResultProfile_profile on Profile {
@@ -180,7 +182,7 @@ function SearchResultProfile({ profile }: { profile: SearchResultProfile_profile
   return (
     <ProfileListItem
       linked
-      onNavigate={() => trackAnalytics('search_result_selected', { tab: 'people' })}
+      onNavigate={() => trackSearchAnalytics('search_result_selected', { tab: 'people' })}
       profile={data}
       showBio
     />
@@ -241,6 +243,7 @@ export default function SearchScreen() {
   const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { clearQueryNavigation, getQueryNavigation, recordQueryNavigation } =
     usePrimaryNavigationScroll();
+  const trackSearchAnalytics = useTrackMultiProfileAnalytics();
 
   useLayoutEffect(() => {
     const navigation = getQueryNavigation();
@@ -386,7 +389,7 @@ export default function SearchScreen() {
     const normalized = nextQuery.trim();
     if (normalized) {
       remember(normalized);
-      trackAnalytics('search_submitted', { source: 'keyboard', tab: activeTab });
+      trackSearchAnalytics('search_submitted', { source: 'keyboard', tab: activeTab });
     }
     if (isCurrentSearchTarget(normalized, activeTab)) {
       setFocused(false);
@@ -547,7 +550,10 @@ export default function SearchScreen() {
                         }
                         setFocused(false);
                         remember(term);
-                        trackAnalytics('search_submitted', { source: 'recent', tab: activeTab });
+                        trackSearchAnalytics('search_submitted', {
+                          source: 'recent',
+                          tab: activeTab,
+                        });
                       }}
                       onPressIn={keepSearchFocused}
                       style={styles.recentTerm}
@@ -593,7 +599,7 @@ export default function SearchScreen() {
             onValueChange={(tab) => {
               if (query) {
                 remember(query);
-                trackAnalytics('search_submitted', { source: 'tab', tab });
+                trackSearchAnalytics('search_submitted', { source: 'tab', tab });
               }
               preserveQueryNavigationPosition();
               setFocused(false);

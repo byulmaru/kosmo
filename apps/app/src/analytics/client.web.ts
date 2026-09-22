@@ -1,7 +1,11 @@
 import posthogClient from 'posthog-js';
 import { getPublicConfig } from '@/config/public';
 import type { PostHog } from 'posthog-js';
-import type { AnalyticsEventArgs } from './events';
+import type {
+  AnalyticsCaptureOptions,
+  AnalyticsEventName,
+  AnalyticsEventProperties,
+} from './events';
 
 const POSTHOG_USER_ID = '$user_id';
 
@@ -43,9 +47,43 @@ function initializeAnalytics(): PostHog | null {
   return client;
 }
 
-export function trackAnalytics(...args: AnalyticsEventArgs): void {
+export function trackAnalytics<Name extends AnalyticsEventName>(
+  eventName: Name,
+  properties: AnalyticsEventProperties[Name],
+  options?: AnalyticsCaptureOptions,
+): void {
   try {
-    initializeAnalytics()?.capture(args[0], args[1] as Parameters<PostHog['capture']>[1]);
+    const analyticsClient = initializeAnalytics();
+    if (!analyticsClient) {
+      return;
+    }
+
+    if (
+      options?.accountId !== undefined &&
+      (getPostHogAccountId(analyticsClient) !== options.accountId ||
+        analyticsClient.get_distinct_id() !== options.accountId)
+    ) {
+      return;
+    }
+
+    const captureOptions =
+      options?.uuid !== undefined || options?.timestamp !== undefined
+        ? {
+            ...(options.uuid !== undefined ? { uuid: options.uuid } : {}),
+            ...(options.timestamp !== undefined ? { timestamp: options.timestamp } : {}),
+          }
+        : undefined;
+
+    if (captureOptions) {
+      analyticsClient.capture(
+        eventName,
+        properties as Parameters<PostHog['capture']>[1],
+        captureOptions,
+      );
+      return;
+    }
+
+    analyticsClient.capture(eventName, properties as Parameters<PostHog['capture']>[1]);
   } catch {
     // Analytics is best-effort and must not affect the product flow.
   }

@@ -14,6 +14,11 @@ import {
 } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
+import { useMultiProfileAnalytics } from '@/analytics/MultiProfileAnalyticsProvider';
+import {
+  createAnalyticsCaptureOptions,
+  isDirectProfileSwitch,
+} from '@/analytics/multiProfileUsage';
 import { ProfilePicker } from '@/components/profile/ProfilePicker';
 import { ProfileSwitcherUnreadIndicator } from '@/components/profile/ProfileSwitcherUnread';
 import { Avatar } from '@/components/ui/Avatar';
@@ -22,6 +27,7 @@ import { TextField } from '@/components/ui/TextField';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { useRelayActor } from '@/relay/RelayActorProvider';
+import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import {
   fontFamilies,
@@ -42,6 +48,7 @@ import {
 } from './shellLayout';
 import type { RefObject } from 'react';
 import type { ViewStyle } from 'react-native';
+import type { ProfileSelectionCause } from '@/analytics/multiProfileUsage';
 import type { ProfileSwitcher_query$key } from './__generated__/ProfileSwitcher_query.graphql';
 import type { ProfileSwitcherCreateProfileMutation } from './__generated__/ProfileSwitcherCreateProfileMutation.graphql';
 import type { ProfileSwitcherSelectProfileMutation } from './__generated__/ProfileSwitcherSelectProfileMutation.graphql';
@@ -180,6 +187,8 @@ export function ProfileSwitcher({
   const pathname = usePathname();
   const data = useFragment(ProfileSwitcherFragment, query);
   const { resetActor } = useRelayActor();
+  const { accountId, status } = useSession();
+  const { observeAction } = useMultiProfileAnalytics();
   const { request: requestNavigation } = useNavigationGuard();
   const { showToast } = useToast();
   const [internalOpen, setInternalOpen] = useState(false);
@@ -294,11 +303,24 @@ export function ProfileSwitcher({
     id: string,
     operationVersion = dismissalVersionRef.current,
     onError?: OperationErrorHandler,
+    cause: ProfileSelectionCause = 'direct',
   ) => {
     const reportError =
       onError ?? ((message: string) => setOperationError(operationVersion, message));
     setFieldError(null);
     setOperationErrorState(null);
+    const previousProfileId = active?.id ?? null;
+    const analyticsAccountId = status === 'valid' ? accountId : null;
+    const selectedOperation = analyticsAccountId
+      ? createAnalyticsCaptureOptions(analyticsAccountId)
+      : null;
+    const directSwitch = isDirectProfileSwitch({
+      cause,
+      previousProfileId,
+      selectedProfileId: id,
+    });
+    const switchedOperation =
+      analyticsAccountId && directSwitch ? createAnalyticsCaptureOptions(analyticsAccountId) : null;
     commitSelect({
       variables: { id },
       onCompleted: (response, errors) => {
@@ -309,7 +331,32 @@ export function ProfileSwitcher({
         }
 
         const selectedProfileId = response.selectProfile.profile.id;
-        trackAnalytics('profile_selected', { selected_profile_id: selectedProfileId });
+        const occurredAt = new Date();
+        if (analyticsAccountId) {
+          observeAction({ accountId: analyticsAccountId, occurredAt });
+        }
+        const selectedCaptureOptions = selectedOperation
+          ? { ...selectedOperation, timestamp: occurredAt }
+          : undefined;
+        if (selectedCaptureOptions) {
+          trackAnalytics(
+            'profile_selected',
+            { selected_profile_id: selectedProfileId },
+            selectedCaptureOptions,
+          );
+        } else {
+          trackAnalytics('profile_selected', { selected_profile_id: selectedProfileId });
+        }
+        if (directSwitch && previousProfileId && switchedOperation) {
+          trackAnalytics(
+            'profile_switched',
+            {
+              previous_profile_id: previousProfileId,
+              selected_profile_id: selectedProfileId,
+            },
+            { ...switchedOperation, timestamp: occurredAt },
+          );
+        }
         setOpen(false);
         resetActor(selectedProfileId);
       },
@@ -346,6 +393,10 @@ export function ProfileSwitcher({
       onError ?? ((message: string) => setOperationError(operationVersion, message));
     setFieldError(null);
     setOperationErrorState(null);
+    const analyticsAccountId = status === 'valid' ? accountId : null;
+    const creationOperation = analyticsAccountId
+      ? createAnalyticsCaptureOptions(analyticsAccountId)
+      : null;
     commitCreate({
       variables: { handle: normalized },
       onCompleted: (response, errors) => {
@@ -364,12 +415,27 @@ export function ProfileSwitcher({
           return;
         }
 
-        trackAnalytics('profile_created', {
-          selected_profile_id: response.createProfile.profile.id,
-        });
+        const occurredAt = new Date();
+        if (analyticsAccountId) {
+          observeAction({ accountId: analyticsAccountId, occurredAt });
+        }
+        const captureOptions = creationOperation
+          ? { ...creationOperation, timestamp: occurredAt }
+          : undefined;
+        if (captureOptions) {
+          trackAnalytics(
+            'profile_created',
+            { selected_profile_id: response.createProfile.profile.id },
+            captureOptions,
+          );
+        } else {
+          trackAnalytics('profile_created', {
+            selected_profile_id: response.createProfile.profile.id,
+          });
+        }
         setHandle('');
         setCreating(false);
-        commitProfileSelection(response.createProfile.profile.id, operationVersion, onError);
+        commitProfileSelection(response.createProfile.profile.id, operationVersion, onError, 'auto');
       },
       onError: (cause) => {
         const source = isRecord(cause) ? cause.source : undefined;

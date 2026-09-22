@@ -68,6 +68,49 @@ import type { PostDetailThreadIdentityStoryQuery } from './__generated__/PostDet
 import type { PostsProductionComposerAdapterStoryQuery } from './__generated__/PostsProductionComposerAdapterStoryQuery.graphql';
 import type { PostsStoriesQuery as PostsStoriesQueryType } from './__generated__/PostsStoriesQuery.graphql';
 
+function getColorContrastRatio(foreground: string, background: string) {
+  const relativeLuminance = (color: string) => {
+    const hex = /^#([\da-f]{6})$/i.exec(color)?.[1];
+    const channels = hex
+      ? [0, 2, 4].map((index) => Number.parseInt(hex.slice(index, index + 2), 16))
+      : color
+          .match(/[\d.]+/g)
+          ?.slice(0, 3)
+          .map(Number);
+    if (!channels || channels.length !== 3) {
+      throw new Error(`RGB color를 해석할 수 없습니다: ${color}`);
+    }
+    const [red, green, blue] = channels.map((channel) => {
+      const normalized = channel! / 255;
+      return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * red! + 0.7152 * green! + 0.0722 * blue!;
+  };
+
+  const foregroundLuminance = relativeLuminance(foreground);
+  const backgroundLuminance = relativeLuminance(background);
+  return (
+    (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) /
+    (Math.min(foregroundLuminance, backgroundLuminance) + 0.05)
+  );
+}
+
+function expectCaptureOptions(options: unknown): void {
+  if (!options || typeof options !== 'object') {
+    throw new Error('Expected analytics capture options.');
+  }
+
+  const captureOptions = options as {
+    accountId?: unknown;
+    timestamp?: unknown;
+    uuid?: unknown;
+  };
+  expect(captureOptions.accountId).toBe('account-story');
+  expect(typeof captureOptions.uuid).toBe('string');
+  expect(captureOptions.uuid).not.toBe('');
+  expect(typeof (captureOptions.timestamp as Date | undefined)?.getTime).toBe('function');
+}
+
 const postMediaImageUri = ogDefaultUrl;
 
 const storyShareOrigin = () => window.location.origin;
@@ -7021,10 +7064,10 @@ export const ComposerVisibilityAndSubmitInteraction: Story = {
     );
     expect(canvas.getByRole('button', { name: '공개 범위: 조용한 공개' })).toBeVisible();
     expect(trackAnalytics).toHaveBeenCalledOnce();
-    expect(trackAnalytics).toHaveBeenCalledWith('post_created', {
-      selected_profile_id: composerProfile.id,
-      visibility: 'PUBLIC',
-    });
+    const call = mocked(trackAnalytics).mock.calls[0];
+    expect(call?.[0]).toBe('post_created');
+    expect(call?.[1]).toEqual({ selected_profile_id: composerProfile.id, visibility: 'PUBLIC' });
+    expectCaptureOptions(call?.[2]);
   },
   render: () => <ComposerStory />,
 };

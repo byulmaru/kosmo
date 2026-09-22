@@ -1,5 +1,19 @@
 export type AnalyticsEventProperties = {
   profile_view_succeeded: Record<string, never>;
+  multi_profile_context_observed:
+    | {
+        observation_kind: 'screen';
+        multi_profile_eligible: boolean;
+        selected_profile_id?: string;
+      }
+    | {
+        observation_kind: 'eligibility';
+        multi_profile_eligible: boolean;
+      };
+  profile_switched: {
+    previous_profile_id: string;
+    selected_profile_id: string;
+  };
   profile_created: { selected_profile_id: string };
   profile_selected: { selected_profile_id: string };
   post_created: {
@@ -30,6 +44,16 @@ export type AnalyticsEventProperties = {
 
 export type AnalyticsEventName = keyof AnalyticsEventProperties;
 
+export type AnalyticsCaptureOptions = {
+  accountId?: string;
+  uuid?: string;
+  timestamp?: Date;
+};
+
 export type AnalyticsEventArgs = {
-  [Name in AnalyticsEventName]: [name: Name, properties: AnalyticsEventProperties[Name]];
+  [Name in AnalyticsEventName]: [
+    name: Name,
+    properties: AnalyticsEventProperties[Name],
+    options?: AnalyticsCaptureOptions,
+  ];
 }[AnalyticsEventName];

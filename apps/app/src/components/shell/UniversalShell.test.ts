@@ -127,6 +127,9 @@ mockModule('@/components/ui/useSafeAreaPadding', {
   useSafeAreaPadding: () => ({}),
 });
 mockModule('@/relay/RelayActorProvider', { RelayActorBoundary: PassThrough });
+mockModule('@/session/SessionProvider', {
+  useSession: () => ({ accountId: null, status: 'guest' }),
+});
 mockModule('@/theme/ThemeProvider', {
   useElevation: () => ({ overlay: {} }),
   useTheme: () => ({

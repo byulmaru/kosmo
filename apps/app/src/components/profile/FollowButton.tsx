@@ -1,6 +1,8 @@
 import { StyleSheet, View } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
+import { useMultiProfileAnalytics } from '@/analytics/MultiProfileAnalyticsProvider';
+import { beginAnalyticsOperation, completeAnalyticsOperation } from '@/analytics/multiProfileUsage';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useSession } from '@/session/SessionProvider';
@@ -106,7 +108,8 @@ const getSelectedProfile = (store: RecordSourceSelectorProxy) =>
   store.getRoot().getLinkedRecord('currentSession')?.getLinkedRecord('selectedProfile');
 
 export function FollowButton({ profile, style }: FollowButtonProps) {
-  const { selectedProfileId } = useSession();
+  const { accountId, selectedProfileId, status } = useSession();
+  const { observeAction } = useMultiProfileAnalytics();
   const { showToast } = useToast();
   const data = useFragment(followButtonProfileFragment, profile);
   const [commitFollow, following] =
@@ -191,6 +194,10 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
         variables: { id: viewerState.followRequest.id },
       });
     } else {
+      const actorProfileId = selectedProfileId;
+      const analyticsAccountId = status === 'valid' ? accountId : null;
+      const followOperation =
+        analyticsAccountId && actorProfileId ? beginAnalyticsOperation(analyticsAccountId) : null;
       commitFollow({
         onCompleted: (response, errors) => {
           const failed = Boolean(errors?.length);
@@ -198,17 +205,29 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
             showFailureToast();
             return;
           }
-          if (!selectedProfileId) {
+          if (!actorProfileId) {
             return;
           }
 
-          trackAnalytics('follow_succeeded', {
+          const occurredAt = new Date();
+          if (analyticsAccountId) {
+            observeAction({ accountId: analyticsAccountId, occurredAt });
+          }
+          const followCaptureOptions = followOperation
+            ? completeAnalyticsOperation(followOperation, occurredAt)
+            : undefined;
+          const properties = {
             result:
               response.followProfile.result.__typename === 'ProfileFollowRequest'
-                ? 'request'
-                : 'follow',
-            selected_profile_id: selectedProfileId,
-          });
+                ? ('request' as const)
+                : ('follow' as const),
+            selected_profile_id: actorProfileId,
+          };
+          if (followCaptureOptions) {
+            trackAnalytics('follow_succeeded', properties, followCaptureOptions);
+          } else {
+            trackAnalytics('follow_succeeded', properties);
+          }
         },
         onError: showFailureToast,
         optimisticUpdater: (store) => {
