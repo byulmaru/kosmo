@@ -30,6 +30,22 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { GuardedNavigationAction } from '@/components/shell/NavigationGuardContext';
 import type { ShellStoriesQuery as ShellStoriesQueryType } from './__generated__/ShellStoriesQuery.graphql';
 
+function expectCaptureOptions(options: unknown): void {
+  if (!options || typeof options !== 'object') {
+    throw new Error('Expected analytics capture options.');
+  }
+
+  const captureOptions = options as {
+    accountId?: unknown;
+    timestamp?: unknown;
+    uuid?: unknown;
+  };
+  expect(captureOptions.accountId).toBe('account-story');
+  expect(typeof captureOptions.uuid).toBe('string');
+  expect(captureOptions.uuid).not.toBe('');
+  expect(typeof (captureOptions.timestamp as Date | undefined)?.getTime).toBe('function');
+}
+
 const selectedAvatarUrl = appleTouchIconUrl;
 const selectedHeaderUrl = ogDefaultUrl;
 const secondAvatarUrl = appIconUrl;
@@ -1451,10 +1467,18 @@ export const ProfileSwitcherSelectTracksAnalytics: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
     const list = await canvas.findByLabelText('전환할 프로필 목록');
     await userEvent.click(within(list).getAllByRole('button')[1]!);
-    expect(trackAnalytics).toHaveBeenCalledOnce();
-    expect(trackAnalytics).toHaveBeenCalledWith('profile_selected', {
+    expect(trackAnalytics).toHaveBeenCalledTimes(2);
+    const selectCall = mocked(trackAnalytics).mock.calls[0];
+    const switchCall = mocked(trackAnalytics).mock.calls[1];
+    expect(selectCall?.[0]).toBe('profile_selected');
+    expect(selectCall?.[1]).toEqual({ selected_profile_id: secondProfile.id });
+    expectCaptureOptions(selectCall?.[2]);
+    expect(switchCall?.[0]).toBe('profile_switched');
+    expect(switchCall?.[1]).toEqual({
+      previous_profile_id: selectedProfile.id,
       selected_profile_id: secondProfile.id,
     });
+    expectCaptureOptions(switchCall?.[2]);
   },
   render: () => <ProfileSwitcherStory />,
 };
@@ -1480,11 +1504,17 @@ export const ProfileSwitcherApprovedSelectRunsOnce: Story = {
     expect(trackAnalytics).not.toHaveBeenCalled();
 
     await userEvent.click(body.getByRole('button', { name: '버리기' }));
-    await waitFor(() =>
-      expect(trackAnalytics).toHaveBeenCalledWith('profile_selected', {
-        selected_profile_id: secondProfile.id,
-      }),
+    await waitFor(() => {
+      const selectCall = mocked(trackAnalytics).mock.calls.find(
+        ([eventName]) => eventName === 'profile_selected',
+      );
+      expect(selectCall?.[0]).toBe('profile_selected');
+      expect(selectCall?.[1]).toEqual({ selected_profile_id: secondProfile.id });
+    });
+    const selectCall = mocked(trackAnalytics).mock.calls.find(
+      ([eventName]) => eventName === 'profile_selected',
     );
+    expectCaptureOptions(selectCall?.[2]);
     await waitFor(() =>
       expect(
         canvasElement.ownerDocument.querySelector(
@@ -1567,12 +1597,14 @@ export const ProfileSwitcherCreateTracksAnalytics: Story = {
     await userEvent.type(canvas.getByRole('textbox', { name: '프로필 핸들' }), 'administrator_dev');
     await userEvent.click(canvas.getByRole('button', { name: '만들기' }));
     await waitFor(() => expect(trackAnalytics).toHaveBeenCalledTimes(2));
-    expect(trackAnalytics).toHaveBeenNthCalledWith(1, 'profile_created', {
-      selected_profile_id: secondProfile.id,
-    });
-    expect(trackAnalytics).toHaveBeenNthCalledWith(2, 'profile_selected', {
-      selected_profile_id: secondProfile.id,
-    });
+    const createdCall = mocked(trackAnalytics).mock.calls[0];
+    const selectedCall = mocked(trackAnalytics).mock.calls[1];
+    expect(createdCall?.[0]).toBe('profile_created');
+    expect(createdCall?.[1]).toEqual({ selected_profile_id: secondProfile.id });
+    expectCaptureOptions(createdCall?.[2]);
+    expect(selectedCall?.[0]).toBe('profile_selected');
+    expect(selectedCall?.[1]).toEqual({ selected_profile_id: secondProfile.id });
+    expectCaptureOptions(selectedCall?.[2]);
   },
   render: () => <FirstProfileSwitcherStory />,
 };

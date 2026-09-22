@@ -195,6 +195,7 @@ mockModule('react-relay', {
 });
 mockModule(new URL('../analytics/client.ts', import.meta.url), {
   initializeAnalytics: () => undefined,
+  trackAnalytics: () => undefined,
 });
 mockModule(new URL('../analytics/AnalyticsSessionBridge.tsx', import.meta.url), {
   AnalyticsSessionBridge: () => null,

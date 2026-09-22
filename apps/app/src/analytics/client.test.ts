@@ -3,7 +3,11 @@ import { after, beforeEach, describe, it, mock } from 'node:test';
 import type { CaptureResult, PostHogConfig } from 'posthog-js';
 import type * as AnalyticsModule from './client.web';
 
-type Call = { event: string; properties?: Record<string, unknown> };
+type Call = {
+  event: string;
+  properties?: Record<string, unknown>;
+  options?: { uuid?: string; timestamp?: Date };
+};
 
 class FakePostHog {
   constructor(readonly config: Partial<PostHogConfig>) {}
@@ -27,7 +31,11 @@ class FakePostHog {
   distinctId = 'anonymous-id';
   userId: string | undefined;
 
-  capture(event: string, properties?: Record<string, unknown>, options?: { timestamp?: Date }) {
+  capture(
+    event: string,
+    properties?: Record<string, unknown>,
+    options?: { uuid?: string; timestamp?: Date },
+  ) {
     this.captureAttempts += 1;
     if (this.captureFails) {
       throw new Error('capture failure');
@@ -41,7 +49,7 @@ class FakePostHog {
     const result = {
       event,
       properties: { ...properties, $session_id: this.sessionId },
-      uuid: 'test',
+      uuid: options?.uuid ?? 'test',
       timestamp: options?.timestamp ?? new Date(),
     } as CaptureResult;
     const filtered =
@@ -49,7 +57,7 @@ class FakePostHog {
     if (!filtered) {
       return undefined;
     }
-    this.calls.push({ event, properties });
+    this.calls.push({ event, properties, ...(options ? { options } : {}) });
     assert.ok(filtered.timestamp);
     this.timestamps.push(filtered.timestamp);
     return filtered;
@@ -182,6 +190,138 @@ describe('PostHog Web client', () => {
     analytics.clearAnalytics();
     const instance = instances[0];
     assert.ok(instance);
+    const properties = {
+      selected_profile_id: 'profile-id',
+      visibility: 'DIRECT' as const,
+    };
+    analytics.trackAnalytics('post_created', properties);
+
+    assert.equal(instance.calls[0]?.properties, properties);
+    assert.deepEqual(instance.calls, [{ event: 'post_created', properties }]);
+  });
+
+  it('event별 typed payload를 전송한다', () => {
+    analytics.clearAnalytics();
+    const instance = instances[0];
+    assert.ok(instance);
+
+    analytics.trackAnalytics('profile_created', { selected_profile_id: 'profile-id' });
+    analytics.trackAnalytics('profile_selected', { selected_profile_id: 'profile-id' });
+    analytics.trackAnalytics('post_created', {
+      selected_profile_id: 'profile-id',
+      visibility: 'DIRECT',
+    });
+    analytics.trackAnalytics('follow_succeeded', {
+      selected_profile_id: 'profile-id',
+      result: 'request',
+    });
+    analytics.trackAnalytics('search_submitted', { tab: 'people', source: 'keyboard' });
+    analytics.trackAnalytics('search_results_loaded', { tab: 'people', has_results: true });
+    analytics.trackAnalytics('search_result_selected', { tab: 'people' });
+    analytics.trackAnalytics('multi_profile_context_observed', {
+      observation_kind: 'screen',
+      multi_profile_eligible: true,
+      selected_profile_id: 'profile-id',
+    });
+    analytics.trackAnalytics('multi_profile_context_observed', {
+      observation_kind: 'eligibility',
+      multi_profile_eligible: true,
+    });
+
+    assert.deepEqual(instance.calls, [
+      { event: 'profile_created', properties: { selected_profile_id: 'profile-id' } },
+      { event: 'profile_selected', properties: { selected_profile_id: 'profile-id' } },
+      {
+        event: 'post_created',
+        properties: { selected_profile_id: 'profile-id', visibility: 'DIRECT' },
+      },
+      {
+        event: 'follow_succeeded',
+        properties: { selected_profile_id: 'profile-id', result: 'request' },
+      },
+      {
+        event: 'search_submitted',
+        properties: { tab: 'people', source: 'keyboard' },
+      },
+      {
+        event: 'search_results_loaded',
+        properties: { tab: 'people', has_results: true },
+      },
+      { event: 'search_result_selected', properties: { tab: 'people' } },
+      {
+        event: 'multi_profile_context_observed',
+        properties: {
+          observation_kind: 'screen',
+          multi_profile_eligible: true,
+          selected_profile_id: 'profile-id',
+        },
+      },
+      {
+        event: 'multi_profile_context_observed',
+        properties: {
+          observation_kind: 'eligibility',
+          multi_profile_eligible: true,
+        },
+      },
+    ]);
+  });
+
+  it('capture options에는 Account identity를 제외하고 UUID와 timestamp만 전달한다', () => {
+    analytics.clearAnalytics();
+    const instance = instances[0];
+    assert.ok(instance);
+    analytics.identifyAnalytics('account-a');
+    const timestamp = new Date('2026-09-22T00:00:00.000Z');
+
+    analytics.trackAnalytics(
+      'profile_created',
+      { selected_profile_id: 'profile-id' },
+      { accountId: 'account-a', uuid: 'event-uuid', timestamp },
+    );
+
+    assert.deepEqual(instance.calls, [
+      {
+        event: 'profile_created',
+        properties: { selected_profile_id: 'profile-id' },
+        options: { uuid: 'event-uuid', timestamp },
+      },
+    ]);
+  });
+
+  it('captured Account identity가 현재 PostHog identity와 다르면 event를 생략한다', () => {
+    analytics.clearAnalytics();
+    const instance = instances[0];
+    assert.ok(instance);
+    analytics.identifyAnalytics('account-a');
+
+    analytics.trackAnalytics(
+      'profile_created',
+      { selected_profile_id: 'profile-id' },
+      { accountId: 'account-b', uuid: 'event-uuid', timestamp: new Date() },
+    );
+
+    assert.equal(instance.captureAttempts, 0);
+    assert.deepEqual(instance.calls, []);
+  });
+
+  it('capture 실패는 product flow를 차단하지 않는다', () => {
+    analytics.clearAnalytics();
+    const instance = instances[0];
+    assert.ok(instance);
+    instance.captureFails = true;
+
+    assert.doesNotThrow(() =>
+      analytics.trackAnalytics('profile_created', { selected_profile_id: 'profile-id' }),
+    );
+    assert.equal(instance.captureAttempts, 1);
+    assert.deepEqual(instance.calls, []);
+  });
+
+  it('typed event properties를 변형하지 않고 PostHog에 전달한다', () => {
+    analytics.clearAnalytics();
+    const instance = instances[0];
+    assert.ok(instance);
+
     const properties = {
       selected_profile_id: 'profile-id',
       visibility: 'DIRECT' as const,

@@ -10,6 +10,22 @@ import { Catalog, Row, Section } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { FollowButtonStoriesQuery as FollowButtonStoriesQueryType } from './__generated__/FollowButtonStoriesQuery.graphql';
 
+function expectCaptureOptions(options: unknown): void {
+  if (!options || typeof options !== 'object') {
+    throw new Error('Expected analytics capture options.');
+  }
+
+  const captureOptions = options as {
+    accountId?: unknown;
+    timestamp?: unknown;
+    uuid?: unknown;
+  };
+  expect(captureOptions.accountId).toBe('account-story');
+  expect(typeof captureOptions.uuid).toBe('string');
+  expect(captureOptions.uuid).not.toBe('');
+  expect(typeof (captureOptions.timestamp as Date | undefined)?.getTime).toBe('function');
+}
+
 const followable = profile({
   avatar: { id: 'follow-button-avatar', url: '/profile-followable-avatar.png' },
   id: 'follow-button-followable',
@@ -295,10 +311,10 @@ export const FollowSuccess: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '팔로우' }));
     await expect(canvas.findByRole('button', { name: '팔로잉' })).resolves.toBeEnabled();
     expect(trackAnalytics).toHaveBeenCalledOnce();
-    expect(trackAnalytics).toHaveBeenCalledWith('follow_succeeded', {
-      result: 'follow',
-      selected_profile_id: 'profile-viewer',
-    });
+    const call = mocked(trackAnalytics).mock.calls[0];
+    expect(call?.[0]).toBe('follow_succeeded');
+    expect(call?.[1]).toEqual({ result: 'follow', selected_profile_id: 'profile-viewer' });
+    expectCaptureOptions(call?.[2]);
   },
 };
 
