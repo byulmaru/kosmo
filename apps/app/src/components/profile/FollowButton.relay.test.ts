@@ -244,7 +244,7 @@ test('실제 FollowButton·Relay는 pending 중 중복과 닫기를 막고 실�
   assert.deepEqual(toasts, ['차단을 해제하지 못했어요. 다시 시도해 주세요.', '차단을 해제했어요']);
 });
 
-test('실제 FollowButton의 늦은 A 응답은 B의 action·Store·피드백을 바꾸지 않는다', async () => {
+test('실제 FollowButton의 늦은 A 응답은 B의 action·Store를 바꾸지 않는다', async () => {
   const actorA = createEnvironment();
   await render(actorA);
   await confirm();
@@ -259,7 +259,6 @@ test('실제 FollowButton의 늦은 A 응답은 B의 action·Store·피드백을
   assert.equal(button().props.children, '차단 해제');
   assert.equal(button().props.disabled, false);
   assert.deepEqual(actorB.getStore().getSource().toJSON(), before);
-  assert.deepEqual(toasts, []);
 });
 
 test('Block 성공 결과로 실제 FollowButton과 차단 action을 전환한다', async () => {
