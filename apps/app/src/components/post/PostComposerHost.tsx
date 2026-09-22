@@ -179,6 +179,7 @@ export function PostComposerHost({
   const elevation = useElevation();
   const [submitting, setSubmitting] = useState(false);
   const web = Platform.OS === 'web';
+  const nativeMobile = !web && mode === 'mobile';
   const overlayVisible = mode !== 'rail' && open;
   const safeAreaStyle = useSafeAreaPadding(mode === 'mobile' ? 0 : spacing.lg);
   const {
@@ -237,7 +238,7 @@ export function PostComposerHost({
       role={overlayVisible ? 'dialog' : undefined}
       style={[
         styles.dialog,
-        mode !== 'rail' && elevation.overlay,
+        mode !== 'rail' && !nativeMobile && elevation.overlay,
         mode === 'rail'
           ? styles.railDialog
           : mode === 'mobile'
@@ -265,19 +266,29 @@ export function PostComposerHost({
         animationType="fade"
         onRequestClose={requestNativeBack}
         navigationBarTranslucent
+        presentationStyle={mode === 'mobile' ? 'fullScreen' : undefined}
         role="dialog"
         statusBarTranslucent
-        transparent
+        transparent={mode !== 'mobile'}
         visible={overlayVisible}
       >
-        <Pressable
-          onPress={() => requestClose()}
-          style={[styles.nativeBackdrop, safeAreaStyle, { backgroundColor: theme.overlayScrim }]}
-        >
-          <Pressable onPress={(event) => event.stopPropagation()} style={styles.nativeDialogWrap}>
+        {mode === 'mobile' ? (
+          <View
+            style={[styles.nativeMobileSurface, safeAreaStyle, { backgroundColor: theme.card }]}
+          >
             {dialog}
+          </View>
+        ) : (
+          <Pressable
+            onPress={() => requestClose()}
+            style={[styles.nativeBackdrop, safeAreaStyle, { backgroundColor: theme.overlayScrim }]}
+            testID="post-composer-backdrop"
+          >
+            <Pressable onPress={(event) => event.stopPropagation()} style={styles.nativeDialogWrap}>
+              {dialog}
+            </Pressable>
           </Pressable>
-        </Pressable>
+        )}
       </Modal>
     );
   }
@@ -322,6 +333,7 @@ const styles = StyleSheet.create({
   hiddenHost: { display: 'none' },
   nativeBackdrop: { flex: 1, justifyContent: 'center' },
   nativeDialogWrap: { flex: 1, justifyContent: 'center' },
+  nativeMobileSurface: { flex: 1 },
   dialog: { minHeight: 0, overflow: 'hidden' },
   railDialog: { borderWidth: 0, width: '100%' },
   overlayDialog: {

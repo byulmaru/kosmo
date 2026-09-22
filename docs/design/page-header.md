@@ -1,10 +1,11 @@
 # 공용 Page Header
 
-주요 화면의 상단 chrome은 `PageHeader`를 사용해 높이, 구분선, 제목 위계와 leading action 배치를 통일한다. 공용 헤더의 기본 시각 최소 높이는 `64px`이며 Android/iOS safe-area inset은 헤더가 아니라 모바일 셸이 바깥에서 추가한다.
+주요 화면의 상단 chrome은 `PageHeader`를 사용해 높이, 구분선, 제목 위계와 leading action 배치를 통일한다. 공용 헤더의 기본 시각 최소 높이는 `64px`이다. Web에서는 route 본문에 렌더링하고 Android/iOS에서는 같은 선언을 현재 Native Stack header에 렌더링해 safe area를 함께 처리한다.
 
 ## Variant
 
 - `text`: `알림`, `북마크`, `글쓰기`, `게시글`처럼 현재 화면을 설명하는 텍스트 제목을 표시한다. 제목은 하나의 heading으로 노출한다.
+- `text`의 제목이 비어 있으면 같은 chrome과 최소 높이를 유지하되 의미 없는 빈 semantic heading은 렌더링하지 않는다. Profile loading·missing처럼 route 제목을 아직 확정할 수 없는 상태가 이 형태를 사용한다.
 - `text` 제목은 leading action 다음의 가용 폭 안에서 줄어들고 여러 줄로 reflow한다. `64px`은 고정 높이가
   아니라 최소 높이이므로, 좁은 화면이나 font scaling에서 제목을 한 줄로 자르거나 header 밖으로 넘기지 않는다.
 - 동적 Profile 표시 이름처럼 화면 chrome 높이를 한 줄로 유지해야 하는 소비처는 Figma `TextEllipsis`와 같은
@@ -20,8 +21,8 @@
 
 ### 알림 모두 읽음
 
-- 모든 플랫폼의 `/notifications` trailing action은 기존 공용 `Button`의 secondary 표현(흰 배경과 `border` 색상 테두리)으로 `모두 읽음` 텍스트를 표시한다. `<768px` 모바일 Web에서는 `UniversalShell`이, compact/full Web과 Android/iOS에서는 알림 route가 소유한 `PageHeader`가 렌더링한다.
-- Shell app bar의 header·menu 위치와 layout은 `UniversalShell`이 계속 소유하고, 목록 query·pagination은 알림 목록이 소유한다.
+- 모든 플랫폼의 `/notifications` trailing action은 기존 공용 `Button`의 secondary 표현(흰 배경과 `border` 색상 테두리)으로 `모두 읽음` 텍스트를 표시한다. `<768px` 모바일 Web에서는 `UniversalShell`이, compact/full Web과 Android/iOS에서는 알림 route가 소유한 `PageHeader`가 렌더링한다. Native에서는 이 route header가 Stack header의 메뉴·제목·trailing을 한 줄에 표시한다.
+- 모바일 Web shell app bar의 위치와 layout은 `UniversalShell`이 소유한다. Native drawer 상태는 `UniversalShell`이 제공하고 route `PageHeader`가 그 trigger를 Stack header에 배치한다. 목록 query·pagination은 알림 목록이 소유한다.
 - `모두 읽음` action은 mutation·pending·error·retry를 소유하며, 현재 loaded unread ID snapshot만 최소 Context bridge로 전달받는다.
 - action은 클릭 시점에 현재 Relay connection에 로드된 unread Notification ID만 처리하며, 아직 로드하지 않았거나 요청 이후 새로 도착한 Notification을 처리하기 위해 추가 page를 먼저 가져오지 않는다.
 - 현재 로드된 unread item이 없거나 요청 중이면 action을 disabled 처리하고 접근성 상태에도 반영한다.
@@ -37,7 +38,7 @@
   새로 로드된 current ID로 실행한다. actor 변경으로 lifetime이 끝나면 이전 ID snapshot·pending·retry를
   새 actor에 이어가지 않는다.
 
-## Web 검색 헤더
+## 검색 헤더
 
 Web `/search`는 모든 breakpoint에서 중앙 컬럼 최상단에 높이 `64px`의 검색 도구막대를 사용한다. 검색 입력은
 모든 Web breakpoint에서 높이 `48px`와 위·아래 `8px` 여백을 사용한다. 도구막대 위나 바깥에 별도 여백을 두지
@@ -57,7 +58,7 @@ Web `/search`는 모든 breakpoint에서 중앙 컬럼 최상단에 높이 `64px
   leading action과 지우기 action의 target을 줄이지 않는다.
 - 햄버거와 검색 뒤로가기는 각각 실제 동작에 맞는 접근 가능한 이름과 `44×44px` target을 제공한다.
 - 검색 상태에서도 셸의 왼쪽 가장자리 스와이프가 drawer를 열 수 있어야 한다.
-- Android/iOS 검색 헤더는 이 계약의 적용 대상이 아니다.
+- Android/iOS에서는 같은 검색 상태와 입력을 Native Stack header의 단일 `PageHeader`에 렌더링한다. 별도의 menu-only shell header나 route 본문 검색 bar를 추가하지 않는다.
 
 ## 소유권
 
@@ -72,24 +73,23 @@ Web `/search`는 모든 breakpoint에서 중앙 컬럼 최상단에 높이 `64px
   더보기는 모든 레이아웃에서 Hero의 Follow 왼쪽 `16px` 간격에 `40×40` 원형 버튼으로 배치한다. 자세한 메뉴
   배치는 `profile-hero.md`를 따른다.
 
-- 모바일 Web과 Android/iOS `/home`·`/local`: `UniversalShell`이 메뉴 버튼, 비상호작용 브랜드 마크와 native
-  safe-area를 소유한다. route는 헤더를 중복 렌더링하지 않는다.
+- 모바일 Web `/home`·`/local`: `UniversalShell`이 메뉴 버튼과 비상호작용 브랜드 마크를 소유한다. Android/iOS에서는 route의 같은 `PageHeader` 선언이 Native Stack header에 메뉴 버튼과 브랜드 마크를 렌더링한다.
 - Web `/search`: 검색 route가 모든 breakpoint의 `64px` 검색 도구막대와 검색 상태를 소유한다. 모바일 Web
   `< compact`에서 `UniversalShell`은 기본 메뉴 전용 헤더 대신 drawer action과 가장자리 스와이프만 제공한다.
 - `<768px` 모바일 Web `/notifications`와 `/settings` root: `UniversalShell`이 메뉴 버튼과 텍스트 제목을 하나의 app bar로 렌더링한다. `/notifications`에서는 같은 app bar가 `모두 읽음` trailing action도 소유하고, Settings 내부 category·detail destination에서는 같은 위치에 뒤로가기와 현재 destination 제목을 렌더링한다. route의 loading, error, empty와 content 상태는 셸 헤더 아래에서 전환하며 자체 PageHeader를 렌더링하지 않는다.
 - `<768px` 모바일 Web 게시글 상세: `UniversalShell`이 기존 `router.back()` 동작을 사용하는 뒤로가기 버튼과 `게시글` 제목을 하나의 app bar로 렌더링한다. route는 별도 sticky PageHeader와 그 offset을 만들지 않는다.
-- Android/iOS의 알림·글쓰기·게시글 상세와 compact/full Web: 모바일 Web 셸 헤더가 없으므로 route 또는 화면의 최상위 scroll content가 기존 텍스트·뒤로가기 헤더를 소유한다. `/notifications`는 같은 위치에 `모두 읽음` trailing action도 소유한다. Native 게시글 상세에서는 `PostDetailFrame`이 첫 번째 sticky child를 계속 소유한다.
+- Android/iOS의 알림·게시글 상세·프로필·설정과 compact/full Web: route가 기존 텍스트·뒤로가기 `PageHeader`를 소유한다. Web에서는 본문 chrome으로, Android/iOS에서는 Native Stack header로 렌더링하며 `UniversalShell`은 별도 menu-only header를 추가하지 않는다. leading을 지정하지 않은 Native header는 drawer trigger를 기본으로 사용하고, route가 뒤로가기를 지정하면 그 action을 유지한다. `/notifications`는 같은 Native header에 `모두 읽음` trailing action도 소유한다.
 - Mobile/compact/full Web과 Android/iOS의 `/[profileHandle]/followers`·`following`은 각 독립 route가
   `~님의 팔로워`·`~님의 팔로잉` PageHeader와 바로 아래 관계 TabList를 소유하며 ProfileHero를 표시하지 않는다.
   뒤로가기는 같은 Profile 홈으로, 탭 선택은 같은 Profile의 다른 관계 목록으로 이동한다. Mobile Web에서는
   `UniversalShell`의 메뉴 전용 header를 중복하지 않는다.
-- Android/iOS와 compact Web의 `/settings` root·category·detail destination: settings route가 현재 화면의 text header를 scroll content의 첫 heading으로 소유한다. category·detail header는 뒤로가기를 제공하고 Native safe area는 모바일 셸이 바깥에서 소유한다.
+- Android/iOS와 compact Web의 `/settings` root·category·detail destination: settings route가 현재 화면의 text header를 소유한다. Web에서는 scroll content의 첫 heading으로, Native에서는 Stack header로 표시한다. category·detail header는 뒤로가기를 제공한다.
 - full Web의 settings route family: Settings master pane이 `설정` heading을, detail pane이 현재 설정 heading을 소유한다. 일반 route `PageHeader`와 `RightRail`을 중복하지 않는다.
 - 북마크 등 이 변경에 포함되지 않은 PageHeader 소비 화면은 기존 route 소유권을 유지한다.
 - compact/full Web `/home`·`/local`: 모바일 셸 헤더가 없으므로 각 route가 브랜드 헤더를 소유한다. 브랜드
   control을 현재 문서에서 실행하면 document top으로 이동하고 현재 선택된 타임라인을 다시 요청한다. 실제
   link 대상은 `/home`으로 유지해 새 탭·modifier 활성화의 홈 진입 의미를 보존한다.
 
-`PageHeader` 자체는 safe-area, sticky 위치, scroll container 또는 route 상태를 소유하지 않는다. 따라서 새로운 화면도 헤더를 scroll/sticky 구조의 올바른 위치에 배치하고, 화면 상태별로 별도 헤더를 복제하지 않는다.
+`PageHeader`의 공용 view는 safe-area, sticky 위치, scroll container 또는 route 상태를 소유하지 않는다. Web route는 올바른 scroll/sticky 위치에 배치하고, Native route는 플랫폼 구현이 현재 Stack header에 연결한다. 화면 상태별로 별도 헤더를 복제하지 않는다.
 
 홈 타임라인은 헤더 바로 다음에서 시작하며 타임라인 wrapper에 상하 여백을 추가하지 않는다. 게시글 열의 기존 좌우 여백은 유지한다.

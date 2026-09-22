@@ -103,7 +103,8 @@ function HomeFrame({
   onBrandCurrentNavigate,
 }: PropsWithChildren<{ onBrandCurrentNavigate?: () => void }>) {
   const { width } = useWindowDimensions();
-  const routeOwnsHeader = getShellLayout(Platform.OS === 'web', width) !== 'mobile';
+  const routeOwnsHeader =
+    Platform.OS !== 'web' || getShellLayout(Platform.OS === 'web', width) !== 'mobile';
 
   return (
     <View style={styles.root}>

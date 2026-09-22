@@ -369,7 +369,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
           { borderColor: theme.borderSubtle },
         ]}
       >
-        {mobile && !routeOwnsMobileHeader ? (
+        {mobile && web && !routeOwnsMobileHeader ? (
           <View
             style={[
               styles.mobileChrome,

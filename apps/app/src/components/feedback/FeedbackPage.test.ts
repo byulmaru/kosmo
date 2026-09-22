@@ -45,6 +45,7 @@ test('native feedback page scroll keeps the focused field above the keyboard', a
     assert.ok(renderer);
     const scroll = renderer.root.find((node) => (node.type as unknown) === 'ScrollView');
     assert.equal(scroll.props.automaticallyAdjustKeyboardInsets, true);
+    assert.equal(renderer.root.findByType('PageHeader' as never).props.title, '피드백 보내기');
   } finally {
     await act(async () => renderer?.unmount());
     renderer = null;
