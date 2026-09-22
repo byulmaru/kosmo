@@ -91,6 +91,8 @@ Account 요청에서 Profile이 주체인 행동의 `Account.Active`는 해당 P
 - [Admin Console Read Policy](./policies/admin-console-read.md): Admin Console Viewer의 Account, Profile,
   Account-Profile Membership 교차 객체 조회 범위와 필드.
 
+- [Profile Hashtag 탐색 지표](./policies/profile-hashtag-exploration-analytics.md): 탐색 사용률·결과 선택률·Empty·Error의 집계와 개인정보 경계.
+
 ## 결정과 기록
 
 - [ADR 0001: Core Ubiquitous Language](./decisions/0001-core-ubiquitous-language.md)
