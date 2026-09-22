@@ -3,7 +3,6 @@ import '@kosmo/core/polyfill';
 import { Block } from '@fedify/vocab';
 import { ConflictError, NotFoundError, ValidationError } from '@kosmo/core/error';
 import {
-  ensureProfileBlockProtocolActivity,
   finalizeProfileBlockProtocolUndo,
   loadProfileBlockProtocolActivity,
   prepareProfileBlockProtocolUndo,
@@ -148,28 +147,6 @@ export const handleInboundBlock = async (
         actorUri,
         objectUri,
         reasonCode: 'profile_block_admission_rejected',
-      });
-      return;
-    }
-    throw error;
-  }
-
-  try {
-    await ensureProfileBlockProtocolActivity({
-      activityUri: activityUri.href,
-      actorUri: actorUri.href,
-      objectUri: objectUri.href,
-      origin: 'INBOUND',
-      ownerProfileId: remoteActor.profile.id,
-      profileBlockId: result.profileBlockId,
-      targetProfileId: localRecipient.id,
-    });
-  } catch (error) {
-    if (isExpectedAdmissionRejection(error)) {
-      observeRejectedBlock({
-        actorUri,
-        objectUri,
-        reasonCode: 'profile_block_protocol_rejected',
       });
       return;
     }

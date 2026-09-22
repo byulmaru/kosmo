@@ -130,7 +130,7 @@ test(
       transitionReleased.resolve();
       const [firstResult, existingResult] = await Promise.all([first, existing]);
       assert.equal(firstResult.created, true);
-      assert.deepEqual(existingResult, firstResult);
+      assert.deepEqual(existingResult, { ...firstResult, created: false });
       const rows = await db
         .select()
         .from(ProfileBlocks)

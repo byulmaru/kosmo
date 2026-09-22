@@ -10,6 +10,10 @@ import {
 } from '@kosmo/core/db';
 import { InstanceKind, InstanceState, NotificationKind } from '@kosmo/core/enums';
 import { ConflictError, KosmoError, NotFoundError } from '@kosmo/core/error';
+import {
+  ensureProfileBlockProtocolActivityInTransaction,
+  loadProfileBlockProtocolActivity,
+} from '@kosmo/core/services';
 import { and, eq, inArray, or, sql } from 'drizzle-orm';
 import type {
   ProfileBlockInput,
@@ -80,6 +84,16 @@ export const executeProfileBlockTransitionActivity = async (
         throw new NotFoundError('Profile not found');
       }
 
+      if (input.protocolActivity) {
+        const existing = await loadProfileBlockProtocolActivity(
+          input.protocolActivity.activityUri,
+          tx,
+        );
+        if (existing && existing.state !== 'ACTIVE') {
+          throw new ConflictError({ message: 'Profile Block activity has already been closed' });
+        }
+      }
+
       const inserted = await tx
         .insert(ProfileBlocks)
         .values({
@@ -106,6 +120,16 @@ export const executeProfileBlockTransitionActivity = async (
           .then(first));
       if (!profileBlock) {
         throw new Error('Profile Block not found after insert conflict');
+      }
+
+      if (input.protocolActivity) {
+        const protocol = await ensureProfileBlockProtocolActivityInTransaction(
+          { ...input.protocolActivity, profileBlockId: profileBlock.id },
+          tx,
+        );
+        if (protocol.state !== 'ACTIVE') {
+          throw new ConflictError({ message: 'Profile Block activity has already been closed' });
+        }
       }
 
       const unfollowInputs: ProfileBlockUnfollowInput[] = [];

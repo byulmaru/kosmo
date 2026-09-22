@@ -19,6 +19,7 @@ export { assertProfilePairIsNotBlocked, ProfilePairBlockedError } from './profil
 export type { ProfileBlockProtocolActivityInput } from './profile-block-protocol';
 export {
   ensureProfileBlockProtocolActivity,
+  ensureProfileBlockProtocolActivityInTransaction,
   finalizeProfileBlockProtocolUndo,
   loadProfileBlockProtocolActivity,
   loadProfileBlockProtocolActivityByProfileBlockId,
