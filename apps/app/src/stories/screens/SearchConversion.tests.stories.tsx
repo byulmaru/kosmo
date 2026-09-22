@@ -39,6 +39,7 @@ const followResponse = (request = false) => ({
       ...target,
       viewerState: {
         isSelf: false,
+        profileBlock: null,
         follow: request ? null : follow,
         followRequest: request ? { id: 'conversion-request' } : null,
       },
