@@ -65,7 +65,47 @@
 - Alternatives: 종료 시점이 속한 주에 집계하는 안은 선택하지 않았다.
 - Consequences: 첫 실패·종료가 서로 다른 주인 합성 자료를 추가한다. retry 성공 시 성공 결과를 우선하는 기존 규칙을 유지한다.
 
+### Profile Tag 탐색 session과 공용 Hashtag identity
+
+- Date: 2026-09-22
+- Authority / Provenance: 현재 사용자의 Review Packet 수정 요청 1·2·3, ADR 0020과 Hashtag 객체 계약.
+- Decision Date: 2026-09-22
+- Decision Class: Upstream privacy and event contract change
+- Status: Active
+- Choice: session property는 `profile_tag_exploration_session_id`, 대상의 안정적인 opaque Hashtag identity는 `hashtag_id`로 수집한다. 값은 TagChip이 이미 받은 GraphQL `Hashtag.id`다.
+- Reason: Profile Tag는 공용 Hashtag를 참조하는 관계다. session은 탐색 단위, Hashtag ID는 여러 탐색을 같은 주제로 묶는 단위이므로 구분한다. Hashtag별 탐색량·도달/사용·전환·Empty/Error·추세 분석용 원천 자료가 필요하다.
+- Alternatives: 일반적인 session 이름, 별도 Profile Tag identity, 이름·slug·이름의 인코딩/hash, DB UUID 중복 수집은 선택하지 않는다.
+- Consequences: Hashtag ID custom property 금지를 이번 목적의 opaque identity 허용으로 변경한다. ID만으로 익명성을 보장할 수 없고 Account의 관심 주제를 연결할 수 있으므로 raw 이름·Profile 정보 금지와 수집 필요성을 함께 기록한다. 계측·검증은 PROD-556 책임이며 breakdown Insight 범위는 별도 결정 대기다.
+
+### SDK 식별 실패의 검증과 한계
+
+- Date: 2026-09-22
+- Authority / Provenance: Review Packet P1과 현재 사용자 수정 요청 4, 기존 Web adapter·FakePostHog 테스트.
+- Decision Date: 2026-09-22
+- Decision Class: Approved verification boundary
+- Status: Active
+- Choice: reset·identify 실패는 mock/stub/fault injection으로 재현하고 capture 당시 SDK identity를 직접 확인한다.
+- Reason: session 분리만으로 SDK 귀속을 증명할 수 없으며 현재 adapter는 식별 실패 뒤에도 capture를 허용한다.
+- Alternatives: production 장애 유발, fail-open 강화, 별도 identity recovery system은 추가하지 않는다.
+- Consequences: 보장할 수 없는 귀속과 지표 영향을 명시한다. 기존 코드 조사와 향후 실행 검증을 구분하며 성공 결과를 미리 주장하지 않는다.
+
+### 기존 승인 계약과의 차이
+
+| 항목              | 이전                                                    | 이번 변경                                                                 |
+| ----------------- | ------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Session property  | `exploration_session_id`                                | `profile_tag_exploration_session_id`                                      |
+| Custom allowlist  | 무작위 session ID와 고정 분류값만 허용, Hashtag ID 금지 | 확인된 opaque `hashtag_id` 추가. raw 이름·검색어·Profile 정보는 계속 금지 |
+| 수집 목적         | 전체 네 비율                                            | 전체 네 비율과 향후 Hashtag별 분석 원천 자료 보존                         |
+| ID 계측·검증 책임 | Hashtag ID 수집 없음                                    | PROD-556이 소유                                                           |
+| Account 식별 실패 | 일반 fail-open·전환 순서 검증                           | capture 당시 identity의 fault injection 검증과 한계 보고 추가             |
+| 주 경계 scenario  | 최종 오류와 retry 성공을 한 scenario에 기술             | 두 독립 scenario로 분리. 첫 오류 주·성공 주 계약은 유지                   |
+| Hashtag별 Insight | 승인된 전체 dashboard 외 명시 없음                      | 소유 이슈 미확인, 이번 포함 또는 후속 분리 결정 대기                      |
+
+기존 사용률·선택률·WAA·Empty/Error 공식, 제외·중복·주차 규칙, 표준 SDK metadata·Account identify/reset·
+Replay 책임과 fail-open은 유지한다. 위 수집 변경을 수정 산출물의 최종 승인이나 구현·배포 승인으로 해석하지 않는다.
+
 ## Unresolved Questions
 
-- 새로 남은 제품 결정은 없다. 오류 주차는 2026-09-22 사용자 답변으로 확정했다.
+- Hashtag별 Insight·dashboard의 PROD-556 포함 여부만 사용자 결정 대기다. Linear 검색에서 별도 소유 이슈를 찾지 못했으며 선택지·근거는 design에 기록했다.
+- session 명명·opaque Hashtag ID 수집·계측 검증 책임은 이번 요청으로, 오류 주차는 앞선 사용자 답변으로 확정했다.
 - 현재 산출물의 사용자 최종 승인과 구현·운영 검증도 남아 있다.

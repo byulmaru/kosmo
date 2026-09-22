@@ -24,9 +24,9 @@
 
 ### Requirement: 탐색 session의 경계
 
-시스템은 TagChip의 특정 Hashtag 탐색 진입부터 이탈까지를 한 session으로 관측해야 한다(MUST).
+시스템은 Profile Tag의 TagChip에서 특정 Hashtag의 관련 Profile 탐색에 진입한 때부터 이탈까지를 `profile_tag_exploration_session_id`로 연결하는 하나의 session으로 관측해야 한다(MUST).
 
-**Source Context:** PROD-556의 session 승인과 canonical의 탐색 session과 결과.
+**Source Context:** PROD-556의 session 승인, 2026-09-22 사용자의 session 명명 요청과 canonical의 탐색 session과 결과.
 
 #### Scenario: retry와 추가 로드
 
@@ -106,7 +106,11 @@
 
 - **WHEN** 일요일에 첫 initial 오류가 발생한 뒤 성공하지 못하고 월요일에 탐색을 이탈한다
 - **THEN** 최종 `error`는 첫 오류가 발생한 주에 귀속한다
-- **AND** 같은 session에서 retry가 성공하면 오류 대신 성공 결과가 발생한 주에 귀속한다
+
+#### Scenario: 주 경계를 넘는 retry 성공
+
+- **WHEN** 일요일에 첫 initial 오류가 발생한 뒤 같은 session에서 월요일 retry가 성공한다
+- **THEN** 오류 대신 `has_results` 또는 `empty`로 분류하고 월요일의 성공 결과가 발생한 주에 귀속한다
 
 #### Scenario: 공통 분모
 
@@ -122,13 +126,30 @@
 
 시스템은 custom event의 최소 식별·분류 범위와 기존 SDK·Replay 책임 경계를 유지해야 한다(MUST).
 
-**Source Context:** PROD-556의 custom property 제한, PR #955와 PROD-741의 최신 Replay 결정.
+**Source Context:** 2026-09-22 사용자의 session 명명·opaque Hashtag identity 수집 변경, canonical의 개인정보와 수집 경계, PR #955와 PROD-741의 최신 Replay 결정.
 
 #### Scenario: custom payload
 
 - **WHEN** Hashtag 탐색 custom event를 보낸다
-- **THEN** 불투명 session 식별자와 필요한 고정 분류값만 추가한다
-- **AND** raw Hashtag·검색어·Hashtag ID·대상 Profile ID·이름·handle·오류 원문·URL·pathname·Account ID 중복 property를 넣지 않는다
+- **THEN** `profile_tag_exploration_session_id`, 확인된 GraphQL Hashtag Node ID인 `hashtag_id`와 필요한 고정 분류값만 추가한다
+- **AND** raw Hashtag text·Canonical/Display Hashtag Name·검색어·Profile ID·이름·handle·오류 원문·URL·pathname·Account ID 중복 property를 넣지 않는다
+
+#### Scenario: 안정적인 Hashtag identity
+
+- **WHEN** 같은 Hashtag를 여러 Account·session에서 탐색하고 retry·pagination·선택·종료를 관측한다
+- **THEN** 각 session의 `profile_tag_exploration_session_id`는 분리하되 같은 `hashtag_id`를 유지한다
+- **AND** 다른 Hashtag는 다른 `hashtag_id`를 사용하며 이름·slug·URL·이름의 인코딩 또는 hash로 대체하지 않는다
+
+#### Scenario: 확인된 identity의 not-found
+
+- **WHEN** 확인된 Hashtag Node ID로 TagChip 탐색에 진입한 뒤 not-found가 발생한다
+- **THEN** 진입 때 확인한 같은 `hashtag_id`를 유지한다
+
+#### Scenario: 확인되지 않은 identity
+
+- **WHEN** 탐색 관측에 연결할 확인된 Hashtag Node ID가 없다
+- **THEN** `hashtag_id`를 생략하고 원문·임의 route 입력을 대신 보내지 않으며 수집 누락을 검증 결과에 남긴다
+- **AND** ID 누락만으로 해당 session을 기존 전체 오류 집계에서 제외하지 않는다
 
 #### Scenario: 표준 metadata와 Replay
 
@@ -140,12 +161,25 @@
 
 시스템은 기존 탐색 계약을 유지하고 분석 실패가 제품 동작을 방해하지 않도록 해야 한다(MUST).
 
-**Source Context:** PROD-556의 완료 조건, ADR 0021과 탐색 디자인.
+**Source Context:** PROD-556의 완료 조건, ADR 0021과 탐색 디자인, 2026-09-22 사용자의 식별 실패 검증·fail-open 유지 요청.
 
 #### Scenario: 분석 실패
 
 - **WHEN** 분석 초기화·session ID 생성·event 전송이 실패한다
 - **THEN** 탐색·retry·추가 로드·Profile 선택이 계속 동작한다
+
+#### Scenario: Account 전환 중 reset 실패
+
+- **WHEN** mock/stub에서 A→B 전환의 reset이 상태 변경 전에 throw하고 새 탐색 capture가 호출된다
+- **THEN** capture 당시 SDK distinct identity와 `$user_id`를 테스트 관측값으로 확인하고 A 식별자가 남는 귀속 한계를 기록한다
+- **AND** 기존 fail-open과 제품 동작을 유지하며 B 귀속 보장이나 production 검증 성공으로 보고하지 않는다
+
+#### Scenario: Account 전환 중 identify 실패
+
+- **WHEN** mock/stub에서 A→B 전환의 reset은 성공하고 identify가 throw한 뒤 탐색 capture가 호출된다
+- **THEN** capture 당시 익명 identity와 인증 WAA 판정의 한계를 기록한다
+- **AND** 이후 기존 identify 호출이 성공하면 이후 capture의 B 귀속을 대조하고 실패 중 event의 소급 교정을 추정하지 않는다
+- **AND** 별도 identity recovery system이나 분석 성공을 기다리는 제품 차단을 추가하지 않는다
 
 #### Scenario: 기존 탐색 경계
 
@@ -168,4 +202,5 @@
 
 - **WHEN** 구현 결과의 완료를 판단한다
 - **THEN** 합성 자료의 기대값과 실제 집계를 대조하고 PROD-795의 실제 선행 증거를 확인한 뒤 production 수집 인수를 마친다
+- **AND** opaque Hashtag identity의 안정성·원문 비포함·수집 누락을 PROD-556에서 검증한다
 - **AND** PROD-741과 PROD-575의 책임을 이 이슈의 완료로 대신하지 않는다
