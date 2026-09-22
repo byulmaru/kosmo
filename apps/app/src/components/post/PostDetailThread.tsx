@@ -93,6 +93,7 @@ export function PostDetailThread({
   currentPostReplySurfaceId,
   header,
   identity,
+  onReply,
   onReplyCreated,
   onPostDeleted,
   post: postKey,
@@ -104,6 +105,7 @@ export function PostDetailThread({
   header: ReactNode;
   identity: string;
   onReplyCreated?: (post: PostComposerCreatedPost) => void;
+  onReply?: () => void;
   onPostDeleted?: () => void;
   post: PostDetailThread_post$key;
   presentation?: 'route' | 'viewer';
@@ -115,6 +117,7 @@ export function PostDetailThread({
       currentPostReplySurfaceId={currentPostReplySurfaceId}
       header={header}
       key={identity}
+      onReply={onReply}
       onReplyCreated={onReplyCreated}
       onPostDeleted={onPostDeleted}
       post={postKey}
@@ -129,6 +132,7 @@ function PostDetailThreadContent({
   currentPostReplySurfaceId,
   header,
   onReplyCreated,
+  onReply,
   onPostDeleted,
   post: postKey,
   presentation,
@@ -138,6 +142,7 @@ function PostDetailThreadContent({
   currentPostReplySurfaceId?: string;
   header: ReactNode;
   onReplyCreated?: (post: PostComposerCreatedPost) => void;
+  onReply?: () => void;
   onPostDeleted?: () => void;
   post: PostDetailThread_post$key;
   presentation: 'route' | 'viewer';
@@ -205,6 +210,7 @@ function PostDetailThreadContent({
                 contentWarningPresentation={presentation === 'viewer' ? 'revealed' : 'default'}
                 mediaPresentation={presentation === 'viewer' ? 'hidden' : 'default'}
                 onDeleted={onPostDeleted}
+                onReply={onReply}
                 post={requireThreadFragment(item.post.detail, 'current detail')}
                 replyAvailable={currentPostReplyAvailable}
                 replySurfacePostId={currentPostReplySurfaceId}

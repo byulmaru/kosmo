@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
+import { ErrorBoundary } from 'react-error-boundary';
 import { act, create } from 'react-test-renderer';
 import type { PropsWithChildren, ReactElement, RefObject } from 'react';
 import type { View as NativeView } from 'react-native';
@@ -23,6 +24,7 @@ let animationFrames: FrameRequestCallback[] = [];
 let focusCalls: Array<{ fallback?: unknown; primary: unknown }> = [];
 let activeElement: unknown = null;
 let queriedSurfacePostId: string | null = null;
+let queryError: Error | null = null;
 let queryPosts = new Map<string, ReturnType<typeof hostPost>>();
 let replyPostIds: string[] = [];
 let navigationListeners = new Set<() => void>();
@@ -56,6 +58,7 @@ mock.module('expo-router', {
 
 mock.module('react-native', {
   exports: {
+    Animated: { View: 'AnimatedView' },
     Image: 'Image',
     Modal: 'Modal',
     PanResponder: { create: () => ({ panHandlers: {} }) },
@@ -79,6 +82,9 @@ mock.module('react-relay', {
     graphql: () => ({}),
     useFragment: (_fragment: unknown, key: unknown) => key,
     useLazyLoadQuery: (_query: unknown, variables: { surfacePostId: string }) => {
+      if (queryError) {
+        throw queryError;
+      }
       queriedSurfacePostId = variables.surfacePostId;
       return queryPosts.get(variables.surfacePostId) ?? { surface: null };
     },
@@ -96,7 +102,21 @@ mock.module(require.resolve('lucide-react-native'), {
 
 mock.module('@/components/RouteBoundary', {
   exports: {
-    RouteBoundary: ({ children }: { children?: unknown }) => children,
+    RouteBoundary: ({
+      children,
+      error,
+    }: {
+      children?: ReactElement;
+      error?: (reset: () => void) => ReactElement;
+    }) =>
+      createElement(
+        ErrorBoundary,
+        {
+          fallbackRender: ({ resetErrorBoundary }: { resetErrorBoundary: () => void }) =>
+            error?.(resetErrorBoundary) ?? null,
+        },
+        children,
+      ),
     useRouteBoundary: () => ({ fetchKey: 0, refetch: () => undefined }),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
@@ -129,6 +149,8 @@ mock.module('@/relay/RelayActorProvider', {
 
 mock.module('@/theme/ThemeProvider', {
   exports: {
+    useElevation: () => ({ floating: {} }),
+    useReducedMotion: () => false,
     useTheme: () => ({
       background: '#ffffff',
       backgroundCanvas: '#ffffff',
@@ -138,6 +160,15 @@ mock.module('@/theme/ThemeProvider', {
       surface: '#111111',
       text: '#111111',
       textSecondary: '#666666',
+    }),
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+
+mock.module('@/theme/useOverlayMotion', {
+  exports: {
+    useToastMotion: (visible: boolean) => ({
+      mounted: visible,
+      progress: { interpolate: () => 1 },
     }),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
@@ -256,6 +287,7 @@ afterEach(async () => {
   focusCalls = [];
   activeElement = null;
   queriedSurfacePostId = null;
+  queryError = null;
   queryPosts = new Map();
   replyPostIds = [];
   navigationListeners = new Set();
@@ -451,14 +483,14 @@ describe('Post Media Viewer Host production wiring', () => {
     assert.notEqual(screenFallback.current.isConnected, false);
   });
 
-  it('같은 Content unavailable 복구는 state를 유지하고 다른 revision은 original index로 reset한다', async () => {
+  it('같은 Content unavailable 복구는 index를 유지하고 Media 오류는 reload하며 다른 revision은 original index로 reset한다', async () => {
     const post = storyPost('revision-post', 'content-1');
     queryPosts.set(post.id, hostPost(post));
     await renderHost(createElement(PostLayout, { post: asLayoutKey(post) }));
     await openFromBody({ current: { focus: () => undefined } });
     await act(async () => pressable('다음 이미지').props.onPress());
     await act(async () => currentImage().props.onError());
-    assert.ok(byTestId('post-media-viewer-error-media-content-1-2'));
+    assert.ok(byTestId('post-media-viewer-error-toast'));
 
     queryPosts.set(post.id, hostPost({ ...post, content: null }));
     await updateHost(createElement(PostLayout, { post: asLayoutKey(post) }));
@@ -466,13 +498,47 @@ describe('Post Media Viewer Host production wiring', () => {
 
     queryPosts.set(post.id, hostPost(post));
     await updateHost(createElement(PostLayout, { post: asLayoutKey(post) }));
-    assert.ok(byTestId('post-media-viewer-error-media-content-1-2'));
+    assert.equal(findByTestId('post-media-viewer-error-toast').length, 0);
+    assert.equal(currentImage().props.source.uri, 'https://media.example/content-1-2.webp');
 
     const nextRevision = storyPost('revision-post', 'content-2');
     queryPosts.set(post.id, hostPost(nextRevision));
     await updateHost(createElement(PostLayout, { post: asLayoutKey(nextRevision) }));
     assert.equal(currentImage().props.source.uri, 'https://media.example/content-2-1.webp');
-    assert.equal(findByTestId('post-media-viewer-error-media-content-1-2').length, 0);
+    assert.equal(findByTestId('post-media-viewer-error-toast').length, 0);
+  });
+
+  it('RouteBoundary error fallback unmount 뒤 같은 Content 복구는 Media를 reload한다', async () => {
+    const originalConsoleError = console.error;
+    console.error = () => undefined;
+    try {
+      const post = storyPost('route-error-post', 'content-1');
+      queryPosts.set(post.id, hostPost(post));
+      await renderHost(createElement(PostLayout, { post: asLayoutKey(post) }));
+      await openFromBody({ current: { focus: () => undefined } });
+      await act(async () => currentImage().props.onError());
+      assert.equal(findByTestId('post-media-viewer-error-toast').length, 1);
+
+      queryError = new Error('route query failed');
+      await updateHost(createElement(PostLayout, { post: asLayoutKey(post) }));
+      assert.equal(findByTestId('post-media-viewer-error').length, 1);
+      assert.equal(findByTestId('post-media-viewer-image').length, 0);
+
+      queryError = null;
+      await act(async () => pressable('다시 시도').props.onPress());
+      assert.equal(findByTestId('post-media-viewer-error-toast').length, 0);
+      assert.equal(currentImage().props.source.uri, 'https://media.example/content-1-1.webp');
+      assert.equal(currentImage().props.accessibilityState.busy, true);
+
+      await act(async () => currentImage().props.onError());
+      assert.equal(findByTestId('post-media-viewer-error-toast').length, 1);
+      await closeViewer();
+      await openFromBody({ current: { focus: () => undefined } });
+      assert.equal(currentImage().props.source.uri, 'https://media.example/content-1-1.webp');
+      assert.equal(findByTestId('post-media-viewer-error-toast').length, 0);
+    } finally {
+      console.error = originalConsoleError;
+    }
   });
 
   it('Compact PostLayout은 긴 원문만 펼치고 Action Bar 밖의 본문만 scroll한다', async () => {

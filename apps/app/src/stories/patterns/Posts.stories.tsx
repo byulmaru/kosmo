@@ -2634,19 +2634,23 @@ function ProductionPostListItemStory({
   postId: string;
   presentation: 'mobile' | 'wide';
 }) {
-  const { posts } = usePostsStoryData();
+  const { posts, replyComposerProfile } = usePostsStoryData();
 
   return (
-    <Catalog>
-      <StoryPathname testID="presentation-story-pathname" />
-      <PostListItem
-        post={requireFragment(
-          requirePostById(posts, postId).listItem,
-          `production post list item ${postId}`,
-        )}
-        presentation={presentation}
-      />
-    </Catalog>
+    <PostComposerCoordinatorProvider owner="list" profile={replyComposerProfile}>
+      <PostMediaViewerHostProvider>
+        <Catalog>
+          <StoryPathname testID="presentation-story-pathname" />
+          <PostListItem
+            post={requireFragment(
+              requirePostById(posts, postId).listItem,
+              `production post list item ${postId}`,
+            )}
+            presentation={presentation}
+          />
+        </Catalog>
+      </PostMediaViewerHostProvider>
+    </PostComposerCoordinatorProvider>
   );
 }
 
@@ -4632,7 +4636,12 @@ export const PostMediaViewerCompact: Story = {
     expect(viewer.queryByRole('button', { name: /다운로드|저장/ })).toBeNull();
 
     await userEvent.click(await viewer.findByRole('button', { name: '원문 더 보기' }));
-    expect(viewer.getByTestId('post-media-viewer-body-scroll')).toBeVisible();
+    const expandedBody = viewer.getByTestId('post-media-viewer-body-scroll');
+    expect(expandedBody).toBeVisible();
+    expect(expandedBody).toHaveAttribute('aria-label', '펼친 원문');
+    expect(expandedBody).toHaveAttribute('tabindex', '0');
+    expandedBody.focus();
+    expect(expandedBody).toHaveFocus();
     expect(viewer.getByTestId('post-media-viewer-action-bar')).toBeVisible();
 
     await userEvent.keyboard('{Escape}');
@@ -4672,9 +4681,9 @@ export const PostMediaViewerWide: Story = {
     const viewer = within(dialog);
     expect(dialog).toHaveAttribute('aria-modal', 'true');
     expect(viewer.getByTestId('post-media-viewer-layout')).toHaveStyle({ flexDirection: 'row' });
-    const wideDetail = await viewer.findByTestId('post-media-viewer-wide-detail');
+    const thread = await viewer.findByTestId('post-thread');
+    const wideDetail = viewer.getByTestId('post-media-viewer-context-rail');
     expect(wideDetail.getBoundingClientRect().width).toBe(320);
-    const thread = await within(wideDetail).findByTestId('post-thread');
     const rows = Array.from(thread.children) as HTMLElement[];
     expect(rows.map((row) => row.getAttribute('data-testid'))).toEqual([
       'post-thread-item-route-root',
@@ -4703,8 +4712,6 @@ export const PostMediaViewerWide: Story = {
 
     const currentActionBar = currentRow.getByRole('toolbar', { name: '액션 바' });
     expect(currentActionBar.scrollWidth).toBeLessThanOrEqual(currentActionBar.clientWidth);
-    await userEvent.click(within(currentActionBar).getByRole('button', { name: '답글' }));
-    expect(currentRow.getByRole('textbox', { name: '답글 본문' })).toBeVisible();
 
     const threadScroll = within(wideDetail).getByTestId('post-media-viewer-thread-scroll');
     expect(getComputedStyle(threadScroll).overflowY).toBe('auto');
@@ -4746,6 +4753,13 @@ export const PostMediaViewerWide: Story = {
     await waitFor(() => expect(screen.getAllByTestId('post-media-viewer-dialog')).toHaveLength(1));
     expect(screen.getByRole('dialog')).toBe(dialog);
     expect(nestedOrigin).toHaveFocus();
+
+    await userEvent.click(within(currentActionBar).getByRole('button', { name: '답글' }));
+    const replyDialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+    expect(screen.queryByTestId('post-media-viewer-dialog')).toBeNull();
+    await waitFor(() =>
+      expect(within(replyDialog).getByRole('textbox', { name: '답글 본문' })).toHaveFocus(),
+    );
   },
   render: () => (
     <ProductionPostListItemStory postId="post-media-viewer-quote" presentation="wide" />
@@ -4771,8 +4785,12 @@ export const PostMediaViewerWideThreadLoading: Story = {
     );
 
     const viewer = within(await screen.findByRole('dialog'));
-    const wideDetail = await viewer.findByTestId('post-media-viewer-wide-detail');
-    expect(await within(wideDetail).findByText('답글을 불러오는 중입니다.')).toBeVisible();
+    const loadingState = await viewer.findByText('답글을 불러오는 중입니다.');
+    const wideDetail = viewer
+      .getAllByTestId('post-media-viewer-context-rail')
+      .find((rail) => rail.contains(loadingState));
+    expect(wideDetail).toBeDefined();
+    expect(loadingState).toBeVisible();
     expect(viewer.getByTestId('post-media-viewer-image')).toBeVisible();
     expect(viewer.getByRole('button', { name: '이미지 뷰어 닫기' })).toBeEnabled();
   },
@@ -4802,8 +4820,12 @@ export const PostMediaViewerWideThreadErrorRetry: Story = {
     );
 
     const viewer = within(await screen.findByRole('dialog'));
-    const wideDetail = await viewer.findByTestId('post-media-viewer-wide-detail');
-    expect(await within(wideDetail).findByText('답글을 불러오지 못했어요')).toBeVisible();
+    const errorState = await viewer.findByText('답글을 불러오지 못했어요');
+    const wideDetail = viewer
+      .getAllByTestId('post-media-viewer-context-rail')
+      .find((rail) => rail.contains(errorState));
+    expect(wideDetail).toBeDefined();
+    expect(errorState).toBeVisible();
     expect(viewer.getByTestId('post-media-viewer-image')).toBeVisible();
     await userEvent.click(viewer.getByRole('button', { name: '답글 다시 불러오기' }));
     await expect(viewer.findByTestId('post-thread')).resolves.toBeVisible();
@@ -4832,7 +4854,7 @@ export const PostMediaViewerHostLoading: Story = {
     );
 
     const viewer = within(await screen.findByRole('dialog'));
-    expect(await viewer.findByText('게시글을 불러오는 중입니다.')).toBeVisible();
+    expect(await viewer.findByText('미디어를 불러오는 중')).toBeVisible();
     expect(viewer.getByRole('button', { name: '이미지 뷰어 닫기' })).toBeEnabled();
   },
   render: () => (
@@ -4860,8 +4882,8 @@ export const PostMediaViewerHostErrorRetry: Story = {
     );
 
     const viewer = within(await screen.findByRole('dialog'));
-    expect(await viewer.findByText('게시글을 불러오지 못했습니다.')).toBeVisible();
-    await userEvent.click(viewer.getByRole('button', { name: '게시글 다시 불러오기' }));
+    expect(await viewer.findByText('미디어를 불러오지 못했어요')).toBeVisible();
+    await userEvent.click(viewer.getByRole('button', { name: '다시 시도' }));
     await expect(viewer.findByTestId('post-media-viewer-image')).resolves.toBeVisible();
   },
   render: () => (
@@ -4884,7 +4906,7 @@ export const PostMediaViewerHostUnavailable: Story = {
     );
 
     const viewer = within(await screen.findByRole('dialog'));
-    expect(await viewer.findByText('이미지를 더 이상 표시할 수 없습니다.')).toBeVisible();
+    expect(await viewer.findByText('이 미디어를 볼 수 없어요')).toBeVisible();
     expect(viewer.getByRole('button', { name: '이미지 뷰어 닫기' })).toBeEnabled();
   },
   render: () => (
@@ -4967,13 +4989,11 @@ export const PostMediaViewerLoadingAndError: Story = {
     const viewer = within(dialog);
     expect(viewer.getByTestId('post-media-viewer-counter')).toHaveTextContent('2 / 3');
     expect(viewer.getByTestId('post-media-viewer-action-bar')).toBeVisible();
-    const retry = await viewer.findByRole('button', { name: '오른쪽 실패 이미지 다시 시도' });
+    const retry = await viewer.findByRole('button', { name: '다시 시도' });
     expect(retry).toBeVisible();
     expect(dialog.textContent).not.toContain('data:image');
     await userEvent.click(retry);
-    await expect(
-      viewer.findByRole('button', { name: '오른쪽 실패 이미지 다시 시도' }),
-    ).resolves.toBeVisible();
+    await waitFor(() => expect(viewer.getByRole('button', { name: '다시 시도' })).toBeVisible());
   },
   render: () => <DirectPostMediaViewerStory postId="media-load-error-three" selectedIndex={1} />,
 };

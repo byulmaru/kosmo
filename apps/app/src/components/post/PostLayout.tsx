@@ -74,6 +74,7 @@ export function PostLayout({
   contentWarningPresentation = 'default',
   mediaPresentation = 'default',
   onDeleted,
+  onReply,
   post: postKey,
   presentation = 'default',
   replyAvailable,
@@ -82,6 +83,7 @@ export function PostLayout({
   contentWarningPresentation?: PostContentWarningPresentation;
   mediaPresentation?: 'default' | 'hidden';
   onDeleted?: () => void;
+  onReply?: () => void;
   post: PostLayout_post$key;
   presentation?: 'compact' | 'default';
   replyAvailable?: boolean;
@@ -325,7 +327,7 @@ export function PostLayout({
             onDeleted={handleDeleted}
             onQuote={openQuote}
             reactionSummaryStyle={compact ? styles.compactReactionSummary : undefined}
-            reply={reply}
+            reply={reply ? { ...reply, onPress: onReply ?? reply.onPress } : undefined}
             socialActionTarget={socialActionTarget!}
           />
         </View>

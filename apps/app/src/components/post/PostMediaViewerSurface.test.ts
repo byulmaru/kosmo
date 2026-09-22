@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
-import { createElement } from 'react';
+import { createElement, forwardRef, useImperativeHandle } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ComponentType, ReactNode } from 'react';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
@@ -15,6 +15,18 @@ const require = createRequire(import.meta.url);
 const mockPlatform: { OS: string } = { OS: 'web' };
 let mockWindowHeight = 844;
 let mockReducedMotion = false;
+const scrollCalls: Array<{ animated?: boolean; x?: number; y?: number }> = [];
+const MockImage = Object.assign((props: Record<string, unknown>) => createElement('Image', props), {
+  getSize: (_url: string, onSuccess: (width: number, height: number) => void) =>
+    onSuccess(1600, 900),
+});
+const MockScrollView = forwardRef<
+  { scrollTo: (options: { animated?: boolean; x?: number; y?: number }) => void },
+  Record<string, unknown>
+>((props, ref) => {
+  useImperativeHandle(ref, () => ({ scrollTo: (options) => scrollCalls.push(options) }), []);
+  return createElement('ScrollView', props, props.children as ReactNode);
+});
 const getToast = () =>
   renderer?.root.findAll((node) => typeof node.type === 'function' && node.type.name === 'Toast')[0]
     ?.props ?? null;
@@ -32,7 +44,7 @@ mock.module('react-native', {
   exports: {
     ActivityIndicator: 'ActivityIndicator',
     Animated: { View: 'AnimatedView' },
-    Image: 'Image',
+    Image: MockImage,
     Platform: mockPlatform,
     Pressable: (props: Record<string, unknown>) => {
       const children = props.children;
@@ -42,6 +54,7 @@ mock.module('react-native', {
         typeof children === 'function' ? children({ pressed: false }) : (children as ReactNode),
       );
     },
+    ScrollView: MockScrollView,
     StyleSheet: {
       absoluteFillObject: {
         bottom: 0,
@@ -89,10 +102,12 @@ type SurfaceProps = Readonly<{
   currentIndex: number;
   media: readonly PostMediaItem[];
   onClose: () => void;
+  onIndexChange: (index: number) => void;
   onNext: () => void;
   onPrevious: () => void;
   onRetry: () => void;
   presentation: 'compact' | 'wide';
+  style?: Record<string, unknown>;
   viewState: 'ready' | 'loading' | 'error' | 'unavailable';
 }>;
 
@@ -108,6 +123,7 @@ afterEach(async () => {
   mockPlatform.OS = 'web';
   mockWindowHeight = 844;
   mockReducedMotion = false;
+  scrollCalls.length = 0;
   if (renderer) {
     await act(async () => renderer?.unmount());
     renderer = null;
@@ -115,7 +131,54 @@ afterEach(async () => {
 });
 
 describe('PostMediaViewerSurface', () => {
-  it('Ready 이미지 실패는 persistent Danger Toast로 재시도하고 오래된 요청을 무시한다', async () => {
+  it('Native image stage uses horizontal paging and reports the snapped index', async () => {
+    mockPlatform.OS = 'ios';
+    const indexes: number[] = [];
+    await render({ currentIndex: 1, onIndexChange: (index) => indexes.push(index) });
+
+    await act(async () =>
+      byTestId('post-media-viewer-media-viewport').props.onLayout({
+        nativeEvent: { layout: { width: 390, height: 600 } },
+      }),
+    );
+
+    const pager = byTestId('post-media-viewer-native-pager');
+    assert.equal(pager.props.horizontal, true);
+    assert.equal(pager.props.pagingEnabled, true);
+    assert.deepEqual(pager.props.contentOffset, { x: 390, y: 0 });
+
+    await act(async () =>
+      pager.props.onMomentumScrollEnd({
+        nativeEvent: {
+          contentOffset: { x: 780, y: 0 },
+          layoutMeasurement: { width: 390, height: 600 },
+        },
+      }),
+    );
+
+    assert.deepEqual(indexes, [2]);
+
+    await render({ currentIndex: 2 });
+    assert.equal(scrollCalls.length, 0, 'momentum snap must not animate back to the same page');
+
+    await render({ currentIndex: 3 });
+    assert.deepEqual(scrollCalls.at(-1), { animated: true, x: 1170 });
+    mockReducedMotion = true;
+    await render({ currentIndex: 2 });
+    assert.deepEqual(scrollCalls.at(-1), { animated: false, x: 780 });
+
+    await act(async () =>
+      byTestId('post-media-viewer-media-viewport').props.onLayout({
+        nativeEvent: { layout: { width: 400, height: 600 } },
+      }),
+    );
+    assert.deepEqual(scrollCalls.at(-1), { animated: false, x: 800 });
+
+    await render({ viewState: 'error' });
+    assert.equal(queryByTestId('post-media-viewer-native-pager'), null);
+  });
+
+  it('Ready 이미지 실패는 현재 이미지 retry와 stale callback을 유지하고 다시 방문하면 reload한다', async () => {
     await render({ currentIndex: 0 });
     const first = image();
     const oldFailure = first.props.onError;
@@ -155,24 +218,39 @@ describe('PostMediaViewerSurface', () => {
     assert.equal(byTestId('post-media-viewer-position').children.join(''), '2 / 4');
     await act(async () => image().props.onError());
     await render({ currentIndex: 0 });
-    assert.ok(getToast(), 'A로 돌아오면 실패 상태와 retry를 보존한다');
-    assert.equal(image().props.source, undefined, '명시적인 retry 전에는 A를 자동 요청하지 않는다');
+    assert.equal(getToast(), null, 'A로 돌아오면 이전 오류 이력 없이 다시 요청한다');
+    assert.equal(image().props.source.uri, 'https://media.example/1.webp');
+    assert.equal(image().props.accessibilityState.busy, true);
     await act(async () => {
+      oldFailure();
       oldLoad();
       oldLoadStart();
     });
-    assert.ok(getToast(), '이전 mount callback은 보존된 실패를 지우지 않는다');
-    await act(async () => getToastRetry()?.());
-    assert.equal(getToast(), null);
-    assert.ok(image().props.source?.uri);
+    assert.equal(getToast(), null, '이전 mount callback은 현재 요청을 변경하지 않는다');
+    assert.equal(image().props.accessibilityState.busy, true);
     await render({ currentIndex: 1 });
-    assert.ok(getToast(), 'A retry는 B의 실패를 초기화하지 않는다');
+    assert.equal(getToast(), null, 'B로 돌아오면 이전 오류 이력 없이 다시 요청한다');
+    assert.equal(image().props.source.uri, 'https://media.example/2.webp');
+    assert.equal(image().props.accessibilityState.busy, true);
+
+    const replacementMedia = [
+      { ...media(1, '첫 번째 이미지'), url: 'https://media.example/1-replacement.webp' },
+      media(2, '두 번째 이미지'),
+      media(3, null),
+      media(4, null),
+    ];
+    await render({ currentIndex: 1, media: replacementMedia });
+    assert.equal(getToast(), null, '다른 이미지 URL 변경은 현재 이미지 상태를 바꾸지 않는다');
+    await render({ currentIndex: 0, media: replacementMedia });
+    assert.equal(image().props.source.uri, 'https://media.example/1-replacement.webp');
+    assert.equal(image().props.accessibilityState.busy, true);
+
     await render({ viewState: 'unavailable' });
     assert.equal(getToast(), null);
     assert.equal(queryByTestId('post-media-viewer-image'), null);
   });
 
-  it('Content revision 변경만 Media 오류를 초기화하고 close를 유지한다', async () => {
+  it('Content revision과 query fallback은 Media 오류 이력을 초기화하고 close를 유지한다', async () => {
     await render();
     const close = findByLabel('이미지 뷰어 닫기');
     const oldError = image().props.onError;
@@ -181,7 +259,8 @@ describe('PostMediaViewerSurface', () => {
 
     await render({ contentRevisionId: null, viewState: 'unavailable' });
     await render();
-    assert.equal(image().props.source, undefined, '같은 revision 복구는 실패 상태를 보존한다');
+    assert.equal(image().props.source.uri, 'https://media.example/2.webp');
+    assert.equal(queryByTestId('post-media-viewer-error-toast'), null);
 
     await render({ contentRevisionId: 'content-b' });
     assert.ok(image().props.source?.uri, '같은 Media를 재사용하는 새 revision은 다시 로드한다');
@@ -201,6 +280,7 @@ describe('PostMediaViewerSurface', () => {
       currentIndex: 0,
       media: [] as const,
       onClose: () => undefined,
+      onIndexChange: () => undefined,
       onNext: () => undefined,
       onPrevious: () => undefined,
       onRetry: () => undefined,
@@ -292,6 +372,29 @@ describe('PostMediaViewerSurface', () => {
     assert.equal(byTestId('post-media-viewer-position').children.join(''), '2 / 4');
   });
 
+  it('Web media pane 빈 stage만 닫고 Native에서는 기존 backdrop semantics를 유지한다', async () => {
+    const args: unknown[][] = [];
+    await render({ onClose: (...values: unknown[]) => args.push(values) });
+
+    const dismissTarget = byTestId('post-media-viewer-media-pane-dismiss');
+    assert.equal(dismissTarget.props.accessible, false);
+    assert.equal(dismissTarget.props.focusable, false);
+    assert.equal(dismissTarget.props.tabIndex, -1);
+    assert.deepEqual(flattenStyle(dismissTarget.props.style), {
+      bottom: 0,
+      left: 0,
+      position: 'absolute',
+      right: 0,
+      top: 0,
+    });
+    dismissTarget.props.onPress({ type: 'press' });
+    assert.deepEqual(args, [[]]);
+
+    mockPlatform.OS = 'ios';
+    await render();
+    assert.equal(queryByTestId('post-media-viewer-media-pane-dismiss'), null);
+  });
+
   it('Ready image는 contain, trimmed alt name 또는 document fallback을 사용한다', async () => {
     await render({ currentIndex: 0, media: [media(1, '  Trimmed alt  ')] });
     assert.equal(image().props.accessibilityLabel, 'Trimmed alt');
@@ -300,6 +403,28 @@ describe('PostMediaViewerSurface', () => {
 
     await render({ currentIndex: 2, media: [media(1, null), media(2, null), media(3, null)] });
     assert.equal(image().props.accessibilityLabel, '3번째 첨부 이미지');
+  });
+
+  it('intrinsic 비율로 stage를 최대한 채우고 실제 image bounds만 hit area로 둔다', async () => {
+    await render({ presentation: 'wide' });
+
+    const viewport = byTestId('post-media-viewer-media-viewport');
+    assert.equal(viewport.props.pointerEvents, 'box-none');
+    await act(async () =>
+      viewport.props.onLayout({ nativeEvent: { layout: { height: 600, width: 1000 } } }),
+    );
+    await act(async () => image().props.onLoad());
+
+    const frame = image().parent;
+    assert.ok(frame);
+    assert.deepEqual(pick(flattenStyle(frame.props.style), ['height', 'width']), {
+      height: 562.5,
+      width: 1000,
+    });
+    assert.deepEqual(
+      flattenStyle(byTestId('post-media-viewer-image-privacy-boundary').props.style),
+      {},
+    );
   });
 
   it('상태 action은 104x40 visual을 플랫폼별 accessible target 안에 둔다', async () => {
@@ -332,22 +457,19 @@ describe('PostMediaViewerSurface', () => {
     }
   });
 
-  it('390 Compact와 1024·1440 Wide의 canonical frame·secondary geometry를 사용한다', async () => {
+  it('Compact와 Wide에서 rail·detail을 제외한 전체 stage를 image viewport로 사용한다', async () => {
     await render({
       compactDetail: createElement('CompactDetailContent'),
       contextRail: createElement('ContextRailContent'),
       presentation: 'compact',
     });
     assert.deepEqual(flattenStyle(byTestId('post-media-viewer-media-viewport').props.style), {
+      alignSelf: 'stretch',
       alignItems: 'center',
-      borderRadius: 8,
-      bottom: 16,
+      flex: 1,
       justifyContent: 'center',
-      left: 16,
-      overflow: 'hidden',
-      position: 'absolute',
-      right: 16,
-      top: 80,
+      minHeight: 0,
+      minWidth: 0,
     });
     assert.ok(byTestId('post-media-viewer-compact-detail'));
     assert.equal(flattenStyle(findByLabel('이미지 뷰어 닫기').props.style).right, 16);
@@ -359,14 +481,12 @@ describe('PostMediaViewerSurface', () => {
       presentation: 'wide',
     });
     assert.deepEqual(flattenStyle(byTestId('post-media-viewer-media-viewport').props.style), {
+      alignSelf: 'stretch',
       alignItems: 'center',
-      aspectRatio: 4 / 3,
-      borderRadius: 8,
+      flex: 1,
       justifyContent: 'center',
-      maxHeight: 420,
-      maxWidth: 560,
-      overflow: 'hidden',
-      width: '100%',
+      minHeight: 0,
+      minWidth: 0,
     });
     assert.equal(flattenStyle(byTestId('post-media-viewer-context-rail').props.style).width, 346);
     assert.equal(flattenStyle(findByLabel('이미지 뷰어 닫기').props.style).left, 16);
@@ -484,6 +604,12 @@ describe('PostMediaViewerSurface', () => {
     const status = byRole('status');
     assert.equal(status.parent?.props.testID, 'post-media-viewer-media-pane');
     assert.equal(flattenStyle(status.props.style).backgroundColor, undefined);
+
+    await render({ style: { backgroundColor: 'transparent' } });
+    assert.equal(
+      flattenStyle(byTestId('post-media-viewer-surface').props.style).backgroundColor,
+      'transparent',
+    );
   });
 
   it('viewer control은 48 target·30/2.5 fixed-white icon과 interaction state를 사용한다', async () => {
@@ -539,7 +665,30 @@ describe('PostMediaViewerSurface', () => {
       ]),
       { outlineColor: '#ffffff', outlineOffset: -2, outlineStyle: 'solid', outlineWidth: 2 },
     );
-    assert.equal(resolveStyle(findByLabel('이전 이미지').props.visualStyle).opacity, 0.35);
+    const disabledNavigationVisual = findByLabel('이전 이미지').props.visualStyle;
+    assert.equal(resolveStyle(disabledNavigationVisual).opacity, 0.35);
+    assert.equal(
+      resolveStyle(disabledNavigationVisual, { hovered: true, pressed: true }).opacity,
+      0.35,
+    );
+
+    const navigationVisual = findByLabel('다음 이미지').props.visualStyle;
+    assert.equal(resolveStyle(navigationVisual, { hovered: true }).backgroundColor, 'transparent');
+    assert.equal(resolveStyle(navigationVisual, { pressed: true }).backgroundColor, 'transparent');
+    assert.equal(resolveStyle(navigationVisual).opacity, 1);
+    assert.equal(resolveStyle(navigationVisual, { hovered: true }).opacity, 0.8);
+    assert.equal(resolveStyle(navigationVisual, { pressed: true }).opacity, 0.6);
+    assert.equal(resolveStyle(navigationVisual).boxShadow, undefined);
+    assert.equal(resolveStyle(navigationVisual).filter, undefined);
+    assert.deepEqual(
+      pick(resolveStyle(navigationVisual, { focused: true }), [
+        'outlineColor',
+        'outlineOffset',
+        'outlineStyle',
+        'outlineWidth',
+      ]),
+      { outlineColor: '#ffffff', outlineOffset: -2, outlineStyle: 'solid', outlineWidth: 2 },
+    );
   });
 
   it('viewer control halo는 플랫폼에서 지원되는 shadow를 사용한다', async () => {
@@ -547,7 +696,7 @@ describe('PostMediaViewerSurface', () => {
       mockPlatform.OS = platform;
       await render({ currentIndex: 0 });
 
-      for (const label of ['이미지 뷰어 닫기', '이전 이미지', '다음 이미지']) {
+      for (const label of ['이미지 뷰어 닫기']) {
         const visualStyle = resolveStyle(findByLabel(label).props.visualStyle);
         assert.equal(
           visualStyle.boxShadow,
@@ -557,6 +706,12 @@ describe('PostMediaViewerSurface', () => {
           visualStyle.filter,
           platform === 'web' ? 'drop-shadow(0 1px 2px rgba(0, 0, 0, 0.9))' : undefined,
         );
+      }
+
+      for (const label of ['이전 이미지', '다음 이미지']) {
+        const visualStyle = resolveStyle(findByLabel(label).props.visualStyle);
+        assert.equal(visualStyle.boxShadow, undefined);
+        assert.equal(visualStyle.filter, undefined);
       }
     }
   });
@@ -568,6 +723,7 @@ function baseProps(overrides: Partial<SurfaceProps> = {}): SurfaceProps {
     currentIndex: 1,
     media: [media(1, '첫 번째 이미지'), media(2, '두 번째 이미지'), media(3, null), media(4, null)],
     onClose: () => undefined,
+    onIndexChange: () => undefined,
     onNext: () => undefined,
     onPrevious: () => undefined,
     onRetry: () => undefined,
