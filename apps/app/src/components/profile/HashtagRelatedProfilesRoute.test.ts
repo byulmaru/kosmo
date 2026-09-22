@@ -17,6 +17,12 @@ type HashtagNode =
   | { __typename: 'Profile'; id: string }
   | null;
 type QueryMode = 'error' | 'loading' | 'success';
+type ExplorationSession = { sessionId: string; hashtagId?: string };
+type ListTrackingProps = {
+  onInitialResults?: (hasResults: boolean) => void;
+  onPaginationFailure?: () => void;
+  onResultSelected?: () => void;
+};
 
 const pending = new Promise<never>(() => undefined);
 const queryHistory: Array<{ fetchKey: number; variables: { id: string } }> = [];
@@ -29,6 +35,16 @@ let hashtagNode: HashtagNode = {
 };
 let queryMode: QueryMode = 'success';
 let renderer: ReactTestRenderer | null = null;
+let pendingExploration: ExplorationSession | null = null;
+let listTrackingProps: ListTrackingProps | undefined;
+const consumedExplorations: string[] = [];
+const explorationTrackerCalls = {
+  end: 0,
+  initialFailure: 0,
+  initialResults: [] as boolean[],
+  paginationFailure: 0,
+  resultSelected: 0,
+};
 
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, {
@@ -58,11 +74,16 @@ mockModule('react-relay', {
   },
 });
 mockModule(new URL('./HashtagRelatedProfileList.tsx', import.meta.url), {
-  HashtagRelatedProfileList: ({ hashtag }: { hashtag: { id: string; name: string } }) =>
-    createElement('HashtagRelatedProfileList', {
+  HashtagRelatedProfileList: ({
+    hashtag,
+    ...tracking
+  }: { hashtag: { id: string; name: string } } & ListTrackingProps) => {
+    listTrackingProps = tracking;
+    return createElement('HashtagRelatedProfileList', {
       identity: hashtag.id,
       name: hashtag.name,
-    }),
+    });
+  },
   HashtagRelatedProfileListState: ({ onRetry, state }: { onRetry?: () => void; state: string }) =>
     createElement('HashtagRelatedProfileListState', { onRetry, state }),
 });
@@ -71,6 +92,31 @@ mockModule(new URL('../../observability/UnexpectedErrorContext.ts', import.meta.
 });
 mockModule(new URL('../../relay/RelayActorProvider.tsx', import.meta.url), {
   useRelayActorLifecycleKey: () => 'actor-a',
+});
+mockModule(new URL('../../analytics/profileHashtagExploration.ts', import.meta.url), {
+  consumeProfileHashtagExploration: (id: string) => {
+    consumedExplorations.push(id);
+    const session = pendingExploration;
+    pendingExploration = null;
+    return session;
+  },
+  createProfileHashtagExplorationTracker: () => ({
+    end: () => {
+      explorationTrackerCalls.end += 1;
+    },
+    recordInitialFailure: () => {
+      explorationTrackerCalls.initialFailure += 1;
+    },
+    recordInitialResults: (hasResults: boolean) => {
+      explorationTrackerCalls.initialResults.push(hasResults);
+    },
+    recordPaginationFailure: () => {
+      explorationTrackerCalls.paginationFailure += 1;
+    },
+    recordResultSelected: () => {
+      explorationTrackerCalls.resultSelected += 1;
+    },
+  }),
 });
 mockModule(new URL('../ui/StateView.tsx', import.meta.url), {
   StateView: (props: object) => createElement('StateView', props),
@@ -99,6 +145,14 @@ afterEach(async () => {
   };
   queryHistory.length = 0;
   queryMode = 'success';
+  pendingExploration = null;
+  listTrackingProps = undefined;
+  consumedExplorations.length = 0;
+  explorationTrackerCalls.end = 0;
+  explorationTrackerCalls.initialFailure = 0;
+  explorationTrackerCalls.initialResults.length = 0;
+  explorationTrackerCalls.paginationFailure = 0;
+  explorationTrackerCalls.resultSelected = 0;
 });
 
 async function renderScreen() {
@@ -138,6 +192,22 @@ describe('hashtag related profiles route identity and lifecycle', () => {
       identity: 'hashtag-global-a',
       name: 'Fediverse',
     });
+  });
+
+  it('accepted entry의 session을 결과/선택 callback에 연결하고 route 종료 시 닫는다', async () => {
+    pendingExploration = { hashtagId: 'hashtag-global-a', sessionId: 'session-a' };
+    await renderScreen();
+
+    assert.deepEqual(consumedExplorations, ['hashtag-global-a']);
+    assert.ok(listTrackingProps);
+    await act(async () => listTrackingProps?.onInitialResults?.(true));
+    await act(async () => listTrackingProps?.onResultSelected?.());
+    await act(async () => renderer?.unmount());
+    renderer = null;
+
+    assert.deepEqual(explorationTrackerCalls.initialResults, [true]);
+    assert.equal(explorationTrackerCalls.resultSelected, 1);
+    assert.equal(explorationTrackerCalls.end, 1);
   });
 
   it('첫 요청 중에는 관련 Profile 맥락을 유지한다', async () => {

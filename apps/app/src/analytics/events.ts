@@ -20,6 +20,21 @@ export type AnalyticsEventProperties = {
   search_result_selected: {
     tab: 'popular' | 'latest' | 'media' | 'people';
   };
+  profile_hashtag_exploration_started: ProfileHashtagExplorationProperties;
+  profile_hashtag_results_loaded: ProfileHashtagExplorationProperties & {
+    result: 'has_results' | 'empty';
+    stage: 'initial' | 'pagination';
+  };
+  profile_hashtag_results_failed: ProfileHashtagExplorationProperties & {
+    stage: 'initial' | 'pagination';
+  };
+  profile_hashtag_result_selected: ProfileHashtagExplorationProperties;
+  profile_hashtag_exploration_ended: ProfileHashtagExplorationProperties;
+};
+
+type ProfileHashtagExplorationProperties = {
+  profile_tag_exploration_session_id: string;
+  hashtag_id?: string;
 };
 
 export type AnalyticsEventName = keyof AnalyticsEventProperties;

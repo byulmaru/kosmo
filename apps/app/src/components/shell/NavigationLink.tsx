@@ -16,6 +16,7 @@ type Props = Omit<LinkProps, 'asChild' | 'children' | 'href' | 'onPress'> & {
   current?: boolean;
   navigationMode?: 'push' | 'switch';
   onCurrentNavigate?: () => void;
+  onExternalNavigate?: () => void;
   onNavigate?: () => void;
   primary?: boolean;
 };
@@ -28,6 +29,7 @@ export function NavigationLink({
   href,
   navigationMode: requestedNavigationMode = 'push',
   onCurrentNavigate,
+  onExternalNavigate,
   onNavigate,
   primary = false,
   ...props
@@ -50,6 +52,9 @@ export function NavigationLink({
   const handlePress: NonNullable<LinkProps['onPress']> = (event) => {
     children.props.onPress?.(event);
     if (!shouldHandleNavigation(event)) {
+      if (!event.defaultPrevented) {
+        onExternalNavigate?.();
+      }
       return;
     }
     const targetPathname = getHrefPathname(href);

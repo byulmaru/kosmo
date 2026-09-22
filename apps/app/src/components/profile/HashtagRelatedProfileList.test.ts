@@ -8,6 +8,7 @@ import type { ReactTestRenderer } from 'react-test-renderer';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 let renderer: ReactTestRenderer | null = null;
+let paginationCompletion: ((error?: Error | null) => void) | undefined;
 
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, {
@@ -34,15 +35,17 @@ mockModule('react-relay', {
     },
     hasNext: true,
     isLoadingNext: false,
-    loadNext: () => undefined,
+    loadNext: (_count: number, options: { onComplete?: (error?: Error | null) => void }) => {
+      paginationCompletion = options.onComplete;
+    },
   }),
 });
 mockModule(new URL('../PageHeader.tsx', import.meta.url), {
   PageHeader: (props: object) => createElement('PageHeader', props),
 });
 mockModule(new URL('./ProfileListItem.tsx', import.meta.url), {
-  ProfileListItem: ({ profile }: { profile: { id: string } }) =>
-    createElement('ProfileListItem', { identity: profile.id }),
+  ProfileListItem: ({ onPress, profile }: { onPress?: () => void; profile: { id: string } }) =>
+    createElement('ProfileListItem', { identity: profile.id, onPress }),
 });
 mockModule(new URL('../ui/Button.tsx', import.meta.url), {
   Button: ({ children, ...props }: { children: string }) =>
@@ -55,13 +58,16 @@ mockModule(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
   useTheme: () => ({ border: '#ddd', text: '#111', textSecondary: '#666' }),
 });
 
-let HashtagRelatedProfileList: ComponentType<{ hashtag: unknown }>;
+let HashtagRelatedProfileList: ComponentType<{
+  hashtag: unknown;
+  onInitialResults?: (hasResults: boolean) => void;
+  onPaginationFailure?: () => void;
+  onResultSelected?: () => void;
+}>;
 
 before(async () => {
   const module = await import('./HashtagRelatedProfileList');
-  HashtagRelatedProfileList = module.HashtagRelatedProfileList as ComponentType<{
-    hashtag: unknown;
-  }>;
+  HashtagRelatedProfileList = module.HashtagRelatedProfileList as typeof HashtagRelatedProfileList;
 });
 
 afterEach(async () => {
@@ -69,6 +75,7 @@ afterEach(async () => {
     await act(async () => renderer?.unmount());
     renderer = null;
   }
+  paginationCompletion = undefined;
 });
 
 describe('Hashtag 관련 Profile 목록 viewport', () => {
@@ -86,5 +93,39 @@ describe('Hashtag 관련 Profile 목록 viewport', () => {
       ['profile-a', 'profile-b'],
     );
     assert.equal(scrollView.findAll((node) => (node.type as unknown) === 'Button').length, 1);
+  });
+
+  it('첫 결과, 항목 선택, pagination 실패를 각각 계측 callback으로 전달한다', async () => {
+    const onInitialResults = mock.fn();
+    const onPaginationFailure = mock.fn();
+    const onResultSelected = mock.fn();
+
+    await act(async () => {
+      renderer = create(
+        createElement(HashtagRelatedProfileList, {
+          hashtag: {},
+          onInitialResults,
+          onPaginationFailure,
+          onResultSelected,
+        }),
+      );
+    });
+    assert.ok(renderer);
+
+    const scrollView = renderer.root.find((node) => (node.type as unknown) === 'ScrollView');
+    assert.equal(onInitialResults.mock.callCount(), 1);
+    assert.equal(onInitialResults.mock.calls[0]?.arguments[0], true);
+
+    const firstProfile = scrollView.findAll(
+      (node) => (node.type as unknown) === 'ProfileListItem',
+    )[0];
+    await act(async () => firstProfile?.props.onPress());
+    assert.equal(onResultSelected.mock.callCount(), 1);
+
+    await act(async () => {
+      scrollView.find((node) => (node.type as unknown) === 'Button').props.onPress();
+      paginationCompletion?.(new Error('pagination failed'));
+    });
+    assert.equal(onPaginationFailure.mock.callCount(), 1);
   });
 });
