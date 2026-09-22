@@ -5,6 +5,7 @@ import baseMeta, {
   UniversalFullComposerLifecycle as universalFullComposerLifecycle,
   UniversalMobile as universalMobile,
   UniversalMobileComposerLifecycle as universalMobileComposerLifecycle,
+  UniversalMobileLongProfilePickerScroll as universalMobileLongProfilePickerScroll,
 } from './Shell.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
@@ -191,5 +192,57 @@ export const UniversalMobileProfilePickerDismissesInsideDrawer: Story = {
     await waitFor(() => expect(page.queryByRole('navigation', { name: '주요 메뉴' })).toBeNull());
     expect(page.queryByRole('menu', { name: '프로필 전환' })).toBeNull();
     await waitFor(() => expect(canvas.getByRole('button', { name: '메뉴 열기' })).toHaveFocus());
+  },
+};
+
+export const UniversalMobileCombinedDrawerScroll: Story = {
+  ...universalMobileLongProfilePickerScroll,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const ownerDocument = canvasElement.ownerDocument;
+    const page = within(ownerDocument.body);
+    const previousBodyStyle = {
+      left: ownerDocument.body.style.left,
+      overflow: ownerDocument.body.style.overflow,
+      position: ownerDocument.body.style.position,
+      right: ownerDocument.body.style.right,
+      top: ownerDocument.body.style.top,
+      width: ownerDocument.body.style.width,
+    };
+    await userEvent.click(canvas.getByRole('button', { name: '메뉴 열기' }));
+
+    const drawer = await page.findByRole('navigation', { name: '주요 메뉴' });
+    const drawerScroll = page.getByTestId('mobile-sidebar-scroll');
+    await userEvent.click(within(drawer).getByRole('button', { name: '설정 및 기타' }));
+    const feedback = within(drawer).getByRole('button', { name: '피드백 보내기' });
+    const settings = within(drawer).getByRole('link', { name: '설정' });
+    const logout = within(drawer).getByRole('button', { name: '로그아웃' });
+    drawerScroll.scrollTop = 0;
+    await waitFor(() => expect(drawerScroll.scrollTop).toBe(0));
+    const scrollDelta = Math.min(24, drawerScroll.scrollHeight - drawerScroll.clientHeight);
+    const beforeFooterPositions = [feedback, settings, logout].map(
+      (control) => control.getBoundingClientRect().top,
+    );
+
+    expect(scrollDelta).toBeGreaterThan(0);
+    drawerScroll.scrollTop = scrollDelta;
+    await waitFor(() => expect(drawerScroll.scrollTop).toBe(scrollDelta));
+    const afterFooterPositions = [feedback, settings, logout].map(
+      (control) => control.getBoundingClientRect().top,
+    );
+    for (const [index, position] of afterFooterPositions.entries()) {
+      expect(beforeFooterPositions[index] - position).toBeCloseTo(scrollDelta, 0);
+    }
+    drawerScroll.scrollTop = drawerScroll.scrollHeight;
+    await waitFor(() => expect(drawerScroll.scrollTop).toBeGreaterThan(0));
+    const drawerScrollBounds = drawerScroll.getBoundingClientRect();
+    const logoutBounds = logout.getBoundingClientRect();
+    expect(logoutBounds.top).toBeGreaterThanOrEqual(drawerScrollBounds.top);
+    expect(logoutBounds.bottom).toBeLessThanOrEqual(drawerScrollBounds.bottom);
+    await userEvent.click(page.getByRole('button', { name: '사이드바 닫기' }));
+    await waitFor(() => {
+      expect(ownerDocument.getElementById('mobile-sidebar')).toBeNull();
+      expect(ownerDocument.body.style).toMatchObject(previousBodyStyle);
+    });
   },
 };

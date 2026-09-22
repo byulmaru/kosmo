@@ -225,13 +225,11 @@ React Native Web의 `(tabs)` 셸은 document/window scroll을 기본 scroll owne
 KOSMO가 직접 소유하는 Web vertical scroller는 semantic `borderStrong` thumb와 투명 track을 사용하는 얇은 scrollbar를 기본으로 한다. Overlay 내부 scroller는 stable gutter도 예약해 scrollbar가 content 위를 덮지 않게 한다. Rail은 header와 본문의 좌우 기준선을 유지하도록 gutter를 추가하지 않는다. document와 sticky rail 같은 바깥 scroll owner에도 gutter를 추가하지 않는다. 기능별로 시각적 scrollbar를 숨기는 horizontal gallery·tab scroller는 기존 navigation·swipe·keyboard 도달 계약과 함께 예외로 유지한다.
 
 - `< compact`에서는 64px 모바일 header가 document scroll 위의 sticky chrome으로 동작하고, 하단 탭 바는 safe-area를 포함한 fixed bottom chrome으로 유지된다. 콘텐츠는 하단 탭 높이와 safe-area를 고려한 bottom padding 또는 scroll padding으로 겹침을 피한다.
-- Current `< compact` mobile drawer는 `mobile-sidebar-scroll` 하나가 primary navigation과 `피드백 보내기`·로그아웃
-  footer를 함께 스크롤한다. `설정`은 primary navigation 항목이며, profile picker를 열면 프로필 목록만 picker
-  안에서 다시 스크롤한다. drawer 바깥의 document/body scroll은 잠근다.
-- Figma Target에서는 profile summary 아래의 primary navigation만 남은 높이를 채우는 세로 internal scroll owner가
-  된다. 하단 divider와 `피드백 보내기`·`설정 및 기타` footer는 drawer 아래에 고정하고, 메뉴가 늘어나거나
-  `설정 및 기타`가 열리면 primary navigation의 가시 영역만 줄여 footer 위쪽으로 펼친다. profile picker의 목록과
-  새 프로필 추가 행도 scroll/fixed 영역을 나눈다. 이 구조는 Product/runtime 이관 전까지 Current 계약을 대체하지 않는다.
+- `< compact` Web과 Android/iOS의 mobile drawer는 `mobile-sidebar-scroll` 하나가 primary navigation과
+  `피드백 보내기`·`설정 및 기타`·`로그아웃` footer actions를 함께 스크롤한다. `설정 및 기타`를 열어 `설정`과
+  `로그아웃` 하위 행이 추가되어도 같은 흐름을 유지한다. Profile summary는 drawer chrome으로 유지하고, profile
+  picker를 열면 프로필 목록만 picker 안에서 스크롤하며 새 프로필 추가 행과 form은 고정한다. Web에서는 drawer
+  바깥의 document/body scroll을 잠그고, Android/iOS에서는 platform drawer scroll lifecycle을 유지한다.
 - `compact`~`full`에서는 아이콘 레일이 layout flow 안에서 sticky viewport column으로 고정된다. 레일 자체가 스크롤 가능한 콘텐츠를 갖지 않는 한 wheel 입력은 document scroll로 이어진다.
 - `compact`~`full` profile picker가 열렸을 때는 overlay drawer 안의 프로필 목록만 internal scroll owner가 된다.
   drawer 밖의 wheel 입력은 기존 document scroll 흐름을 유지한다.

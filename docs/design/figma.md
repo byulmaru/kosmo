@@ -275,10 +275,14 @@ DSN-51의 플랫폼별 완료 판정은 다음처럼 Figma 확인과 runtime 검
   Repost·More·Full Picker도 같은 Viewer를 유지한다. Delete confirmation
   Light/Dark는 기존 공용 confirmation evidence로 분리해 유지한다.
 - [`ProfileSwitcher overlay lifecycle`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6773-11566)는
-  Drawer의 ProfileSwitcher OpenLong을 기존 host·scrim·drawer 안에서 교체한 Target이다. picker 목록과 새 프로필
-  추가 행은 scroll/fixed 영역을 나누고, Drawer의 primary navigation만 남은 높이를 채워 스크롤하며 divider 아래
-  footer는 바닥에 고정한다. Feedback Error는 Web exception section으로 이동했다. 차단 관계의 Profile route 표시
-  계약은 [Profile Mute·Block 디자인 계약](profile-mute-block.md#차단-관계의-직접-profile)을 따른다.
+  Drawer의 ProfileSwitcher OpenLong을 기존 host·scrim·drawer 안에서 교체한 Target이다. Mobile Web과 Android/iOS
+  drawer는 primary navigation과 `피드백 보내기`·`설정 및 기타`·`로그아웃` footer actions를 하나의 세로 scroll
+  owner로 함께 사용하며, `설정 및 기타`를 펼친 뒤 추가되는 `설정`·`로그아웃` 행도 같은 흐름을 따른다. Profile
+  summary는 drawer chrome으로 유지하고 picker 목록만 picker 안에서 별도로 스크롤하며 새 프로필 추가 행과 form은
+  고정한다. Web에서는 drawer 바깥의 document/body scroll을 잠그고 Android/iOS에서는 platform drawer scroll
+  lifecycle을 유지한다.
+  Feedback Error는 Web exception section으로 이동했다. 차단 관계의 Profile route 표시 계약은 [Profile Mute·Block
+  디자인 계약](profile-mute-block.md#차단-관계의-직접-profile)을 따른다.
   Mobile [`6774:12067`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6774-12067),
   Compact [`7371:19453`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7371-19453),
   Full [`7380:20771`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7380-20771) Target은 당시
