@@ -2,8 +2,8 @@ import { and, eq, exists, inArray, isNotNull, isNull, ne, not, or, sql } from 'd
 import { alias } from 'drizzle-orm/pg-core';
 import { Instances, Posts, ProfileBlocks, ProfileFollows, ProfileMutes, Profiles } from '../db';
 import { PostState, PostVisibility } from '../enums';
-import { profileBlockVisibilityWhere } from './profile-block';
 import { visibleProfileWhere } from './profile';
+import { profileBlockVisibilityWhere } from './profile-block';
 import type { SQL, SQLWrapper } from 'drizzle-orm';
 import type { DatabaseHandle } from '../db';
 
@@ -219,9 +219,5 @@ export const profilePostListAccessWhere = ({
       ),
   );
 
-  return sql<boolean>`${and(
-    postVisible,
-    directSourceAccessible,
-    not(directSourceExcluded),
-  )!}`;
+  return sql<boolean>`${and(postVisible, directSourceAccessible, not(directSourceExcluded))!}`;
 };
