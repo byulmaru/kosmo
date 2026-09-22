@@ -54,13 +54,12 @@ mockModule('react-relay', {
       mutationCalls.push(options.variables);
       if (mutationError) {
         options.onError(mutationError);
-        return { dispose: () => {} };
+        return;
       }
       options.onCompleted({
         blockProfile: { profileBlock: { id: 'profile-block-created' }, success: true },
         unblockProfile: { profileBlockId: options.variables.id, success: true },
       });
-      return { dispose: () => {} };
     },
     false,
   ],

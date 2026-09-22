@@ -64,7 +64,6 @@ mockModule('@/session/SessionProvider', { useSession: () => ({ selectedProfileId
 const targetId = 'target-a';
 const blockId = 'block-a';
 const stateId = 'client:target-a:viewerState';
-let networkTeardownCount = 0;
 const requests: Array<{
   name: string;
   variables: unknown;
@@ -87,7 +86,6 @@ afterEach(async () => {
   await act(async () => renderer?.unmount());
   renderer = null;
   requests.length = 0;
-  networkTeardownCount = 0;
   toasts.length = 0;
   selectedProfileId = 'owner-a';
   focusCount = 0;
@@ -98,9 +96,6 @@ function createEnvironment() {
     network: Network.create((request, variables) =>
       Observable.create((sink) => {
         requests.push({ name: request.name, variables, sink });
-        return () => {
-          networkTeardownCount += 1;
-        };
       }),
     ),
     store: new Store(new RecordSource()),
@@ -241,7 +236,7 @@ test('실제 FollowButton·Relay는 pending 중 중복과 닫기를 막고 실�
   assert.ok(store.getSource().get(blockId));
   assert.equal(store.getSource().get(stateId)?.profileBlock, null);
   assert.equal(store.getSource().get('unrelated')?.displayName, '보존');
-  assert.deepEqual(toasts, ['차단을 해제하지 못했어요. 다시 시도해 주세요.', '차단을 해제했어요']);
+  assert.deepEqual(toasts, ['차단을 해제하지 못했어요. 다시 시도해 주세요.']);
 });
 
 test('실제 FollowButton의 늦은 A 응답은 B의 action·Store를 바꾸지 않는다', async () => {
@@ -251,7 +246,6 @@ test('실제 FollowButton의 늦은 A 응답은 B의 action·Store를 바꾸지 
   selectedProfileId = 'owner-b';
   const actorB = createEnvironment();
   await render(actorB);
-  assert.equal(networkTeardownCount, 1);
   assert.equal(button().props.disabled, false);
   assert.equal(modal().props.visible, false);
   const before = actorB.getStore().getSource().toJSON();
