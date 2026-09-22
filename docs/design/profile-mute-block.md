@@ -76,6 +76,9 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
   하나의 혼합 목록이나 filter로 만들지 않는다.
 - 각 목록은 자기 heading, loading, error·retry, empty, pagination과 해제 action을 소유한다. 한 목록의 상태나
   action이 다른 목록의 항목을 바꾸지 않는다.
+- 차단 목록에서 해제에 성공하면 현재 행을 유지하고 action을 `차단 해제`에서 `차단`으로 전환한다. 실수로
+  해제한 사용자가 같은 위치에서 곧바로 다시 차단할 수 있게 하며, 확인창이 닫힌 뒤 focus는 해당 action으로
+  복원한다. 해제 성공만으로 행을 즉시 제거하거나 목록 제목으로 focus를 이동하지 않는다.
 - 같은 Target에 Mute와 Block이 모두 적용돼도 두 관리 관계는 각각의 목록·관계 Node·해제 경로에 남는다. Active
   Block은 일반 Profile 조회를 숨기지 않는다. Profile identity는 기존 lifecycle·membership 정책을 따르며, Block은
   콘텐츠·상호작용·알림 surface와 Mute/Block 관리 관계에 각각 명시된 정책으로 적용된다. 따라서 Block의 콘텐츠 제한을

@@ -41,7 +41,7 @@
 - **AND** 확인창에서 해제를 확정하기 전에는 해제 mutation을 실행하지 않는다
 - **WHEN** Owner가 확인창의 `차단 해제`를 확정한다
 - **THEN** 시스템은 해당 Target의 정확한 Profile Block ID를 사용해 해제 mutation을 실행한다
-- **AND** 성공한 Target은 현재 Block 목록에서 제거되고 다른 목록 항목의 상태는 바꾸지 않는다
+- **AND** 성공 시 해당 Target의 서버 확정 차단 상태를 반영하고 다른 목록 항목의 상태는 바꾸지 않는다
 
 #### Scenario: 차단 해제 확인을 취소하거나 요청에 실패한다
 
@@ -53,13 +53,11 @@
 - **AND** 실패하면 기존 차단 상태와 목록을 유지하고 확인창을 닫은 뒤 원래 trigger focus를 복원하고 공용 오류 Toast를 표시한다
 - **AND** 같은 해제 action을 다시 열어 재시도할 수 있다
 
-#### Scenario: 관리 목록 조회 실패와 성공 제거 후 focus
+#### Scenario: 관리 목록 조회 실패 후 재시도
 
 - **WHEN** 최초 또는 추가 목록 조회가 실패한다
 - **THEN** 시스템은 공용 danger Toast와 `다시 시도` action을 제공한다
 - **AND** Toast가 사라져도 본문에 최초 `다시 시도` 또는 추가 `더 불러오기`를 유지한다
-- **WHEN** 차단 해제 성공 feedback으로 목록 행을 제거한다
-- **THEN** 목록 제목으로 focus를 이동한다
 
 ### Requirement: Profile Block direct route presents basic Profile and content state
 
