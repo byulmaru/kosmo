@@ -53,17 +53,44 @@
 
 ### Recommended Approach
 
-인증 shell 쿼리를 소비하는 단일 관측 컴포넌트를 shell 최상위에 둔다. Web에서 Account 식별자와 쿼리가
-준비된 뒤 route가 바뀌거나 selected Profile·선택 가능 Profile 집합이 바뀌면
-`multi_profile_context_observed`를 보낸다. 속성은 다음 두 개로 제한한다.
+인증 shell 쿼리를 소비하는 단일 관측 컴포넌트를 shell 최상위에 둔다. 현재 Account의 `me.profiles`와
+선택 Profile을 같은 인증 상태에서 읽고, 실제 인증 화면 조회와 자격 확인을 `multi_profile_context_observed`로
+구분해 보낸다. 이벤트 종류는 늘리지 않고 다음 custom 속성으로 관측 목적을 표현한다.
 
-- `selected_profile_id`: 선택 Profile의 opaque ID 또는 선택 없음
-- `multi_profile_eligible`: 현재 선택 가능한 Profile이 2개 이상인지 나타내는 boolean
+- `observation_kind`: 실제 화면 조회는 `screen`, 행동·상태 변화에 따른 자격 확인만 있으면 `eligibility`
+- `multi_profile_eligible`: 현재 선택 가능한 서로 다른 Profile이 2개 이상인지 나타내는 boolean
+- `selected_profile_id`: `screen`에서만 선택 Profile의 opaque ID 또는 선택 없음. `eligibility`에서는 생략한다.
 
-선택 가능 수는 `me.profiles`의 현재 결과로 계산한다. 이 목록은 Membership과 조회 가능 조건을 이미 반영한다.
-관측 컴포넌트는 같은 shell 상태에서 중복 effect가 실행돼도 한 번만 보내고, 실제 route 이동 뒤 같은 경로로
-돌아온 경우에는 새 화면 조회로 보낸다. ProfileSwitcher 안에서는 이 이벤트를 보내지 않는다. 앱 소유
-속성에 pathname을 복제하지 않고 표준 SDK metadata는 그대로 둔다.
+자격은 Membership과 조회 가능 조건을 반영한 `me.profiles`의 현재 결과로 계산한다. 관측 컴포넌트는 같은
+화면의 중복 effect를 막되 실제 route 이동 후 재방문은 새 `screen` 관측으로 보낸다. 화면 조회 없이 목록만
+바뀌면 `eligibility`로 기록한다. 선택 성공은 기존 선택 이벤트가 사용 Profile을 증명하며 자격 확인을 화면
+조회로 바꾸지 않는다. responsive ProfileSwitcher마다 관측자를 만들지 않고, pathname과 Profile 목록을
+custom 속성으로 복제하지 않는다. SDK standard metadata는 그대로 유지한다.
+
+#### 동일 화면의 주차 변경을 다루는 관측 전략
+
+1. 단일 shell 관측자가 준비된 현재 Account·Profile 목록의 스냅샷과 마지막 자격 관측의 Account·KST 주차·자격
+   상태를 메모리에 유지한다. 별도 저장소, 영속 상태나 타이머는 추가하지 않는다.
+2. 기존 typed analytics 호출 경계에서 Profile 생성·선택·Post 생성·Follow 실행 성공, 검색 제출·결과 로드·결과
+   선택이 관측되면 이 관측자에게 인증 Account와 행동 발생 시각을 전달한다. mutation은 최초 성공 시각을,
+   검색은 제출·첫 결과 표시·선택 시각을 사용한다. SDK 자동 이벤트와 자격 확인 이벤트 자체는 이 경로를
+   다시 호출하지 않는다.
+3. 해당 행동의 Account·KST 주차에 자격 관측이 없거나 현재 자격 상태가 달라졌다면, 준비된 `me.profiles`
+   스냅샷으로 `eligibility` 관측을 함께 보낸다. 실제 `screen` 관측이 해당 주의 같은 자격을 이미 확인했다면
+   반복하지 않는다. 같은 주의 반복 행동은 기존 WAA·행동 이벤트를 유지하고 불필요한 자격 관측만 생략한다.
+4. 자격 관측은 원인이 된 행동의 시각과 Account를 보존한다. 재전송은 최초 관측의 자격 스냅샷·시각·UUID를
+   재사용하고, 늦게 도착했다는 이유로 수신 주차나 이후 목록으로 다시 판정하지 않는다. 다음 주의 실제 새
+   행동은 새 주차에서 자격을 확인한다. 행동 없이 주차만 바뀌면 관측을 만들지 않는다.
+5. `eligibility`는 자격 집합에만 쓰고 WAA나 사용 Profile의 독립 근거로 쓰지 않는다. WAA는 원래 행동으로,
+   Profile 사용은 승인된 화면·선택·Post·Follow 관측으로만 계산한다. 검색에 따른 자격 확인이 선택 Profile을
+   사용한 것으로 집계되지 않도록 typed payload와 쿼리 양쪽에서 구분한다.
+
+일요일부터 유지한 검색 화면에서 월요일에 동일 검색을 다시 제출하면 route가 그대로여도 `search_submitted`와
+새 주의 `eligibility`가 연결된다. 새 주 WAA와 대상 WAA는 각각 1이며, 다른 사용 관측이 없다면 사용 Profile
+수는 0이다. 모든 WAA 포함 호출부가 이 경계를 통과하는지 브라우저 검증으로 확인한다. 일반적인 동일 화면
+경로에서 스냅샷 연결이 빠지는 것은 허용하지 않는다. 인증·쿼리 오류로 현재 자격을 확인할 수 없는 경우에는
+이전 Account나 이전 주의 자격을 추정하지 않고 기존 분석 실패 경계의 수집 한계로 기록한다. 자격 관측을
+위해 mutation·검색 결과를 지연시키거나 전용 API·재시도 큐를 추가하지 않는다.
 
 기존 `profile_selected`는 모든 성공한 선택의 도착 Profile 관측으로 유지한다. 직접 선택을 시작할 때 출발
 Profile, 도착 Profile과 선택 원인을 콜백 closure에 고정한다. 직접 선택이고 두 ID가 다를 때만 별도
@@ -88,15 +115,32 @@ Profile, 도착 Profile과 선택 원인을 콜백 closure에 고정한다. 직�
 
 PostHog에는 Account·주차 단위의 저장 HogQL 쿼리를 둔다. 쿼리는 다음 순서로 계산한다.
 
-1. 승인된 화면·생성·선택·Post·Follow·검색 이벤트의 합집합에서 WAA를 만든다.
-2. `multi_profile_context_observed.multi_profile_eligible = true`가 한 번 이상인 Account를 멀티 Profile 대상
-   WAA로 표시한다.
-3. 문맥, `profile_selected`, `post_created`, `follow_succeeded`의 행동 주체 또는 선택 Profile ID를 합쳐
-   Account별 distinct 사용 Profile 수를 센다.
+1. `observation_kind = screen`인 문맥 관측과 승인된 생성·선택·Post·Follow·검색 이벤트의 합집합에서 WAA를
+   만든다. `eligibility`만 있는 Account를 WAA로 만들지 않는다.
+2. 같은 Account·KST 주차의 `multi_profile_context_observed.multi_profile_eligible = true` 관측을 WAA와
+   교차해 대상 WAA를 만든다. 자격은 `screen`과 `eligibility` 양쪽에서 확인할 수 있다.
+3. `screen` 문맥, `profile_selected`, `post_created`, `follow_succeeded`의 행동 주체 또는 선택 Profile ID를
+   합쳐 Account별 distinct 사용 Profile 수를 센다. `eligibility`는 이 합집합에 넣지 않는다.
 4. 대상 WAA이면서 사용 Profile 수가 2 이상인 Account를 멀티 Profile 활성 Account로 표시한다.
 5. 같은 주간 Account 집합에서 활성 사용률과 도달률을 계산하고 세 집단의 절대 수를 함께 반환한다.
 
+집계는 같은 제외 목록을 적용하고 Account·이벤트 종류·UUID로 중복 제거한 관측에서 시작한다. HogQL의 CTE나
+서브쿼리로 Account × KST week의 자격·사용 Profile 수·생성·전환 횟수를 결합한 뒤 최종 지표를 계산한다.
+생성·전환 횟수는 각각 Account·주차별로 먼저 집계해 결합 시 관측 행이 곱해지지 않게 한다.
+이는 조회 중 계산하는 결과이며 별도 영속 DB나 materialized table을 만드는 결정이 아니다. 여러 독립 Trends의
+최종 수치를 사후 조합하는 방식을 핵심 계산으로 사용하지 않는다.
+
 전환은 `profile_switched`, 생성은 `profile_created`, 핵심 행동은 `post_created`와 `follow_succeeded`를 사용한다.
+
+- Profile 생성 총횟수: 해당 주의 중복 제거된 `profile_created` 수
+- distinct 생성 Account 수: 해당 주의 Profile 생성 횟수가 1 이상인 Account 수. 새 Account 생성 이벤트는 없음
+- 직접 전환 총횟수: 해당 주의 중복 제거된 `profile_switched` 수
+- 활성 Account당 평균 직접 전환 횟수: 멀티 Profile 활성 Account 집단의 직접 전환 합계 / 해당 집단의
+  Account 수. 활성 Account 행에 전환 집계를 left join하고 누락 횟수는 0으로 계산한다. 빈 집단은 계산 불가다.
+
+Account A의 Profile 생성 2회는 총횟수 2·생성 Account 1이 된다. 활성 Account A/B의 직접 전환 2회·0회는
+다른 전환이 없을 때 총횟수 2·평균 1이 된다. 전체 직접 전환 총횟수와 활성 집단의 평균 분자를 구분한다.
+
 Follow `result`로 관계 성립과 요청 생성을 나눈다. 처음 멀티 Profile 활성 Account가 된 주는 주간 집합의 첫
 등장으로 계산하고 W+1·W+4 기능 리텐션과 대상 Account 제품 리텐션을 별도 저장 쿼리로 만든다.
 
@@ -104,16 +148,12 @@ Follow `result`로 관계 성립과 요청 생성을 나눈다. 처음 멀티 Pr
 저장 쿼리는 한 버전만 참조한다. 대시보드 설명과 쿼리 결과에는 계산 규칙 버전, 제외 목록 버전,
 Asia/Seoul 관측 기간과 실행 시각을 함께 표시한다. 최신 제외 목록을 과거 주에도 적용한다.
 
-### Allowed Alternatives
+### Implementation Boundaries
 
-새 `profile_switched` 대신 기존 `profile_selected`에 선택 원인과 출발 Profile을 추가할 수 있다. 다만 새
-속성이 있는 관측만 전환 후보로 사용하고, 기존 관측과 생성 자동 선택을 섞지 않으며, 동일한 합성·브라우저
-인수 검증을 통과해야 한다. 기존 시계열의 의미가 넓고 쿼리 실수 가능성이 커서 별도 이벤트를 기본안으로
-권장한다.
-
-자격 집계는 저장 HogQL 쿼리 대신 같은 결과를 내는 PostHog cohort와 Insight 조합으로 만들 수 있다. 주간
-Account 집합, distinct Profile 수, 최신 제외 목록의 과거 적용과 실행 metadata를 같은 방식으로 검증할 수
-있어야 한다.
+기존 선택 이벤트에 원인·출발 Profile을 추가하는 안과 독립 Trends 조합도 검토했지만, 현재 승인된 구조는
+별도 직접 전환 이벤트와 Account × KST week HogQL 집계다. 이 구조 안에서 관측 컴포넌트의 파일 위치나
+쿼리의 CTE 분할은 구현자가 정한다. 별도 자격 API·영속 집계 테이블·타이머를 만드는 대신 기존 데이터와
+행동 호출 경계를 재사용한다.
 
 ### Known Traps
 
@@ -126,14 +166,17 @@ Account 집합, distinct Profile 수, 최신 제외 목록의 과거 적용과 �
   않는다.
 - PostHog의 일반 test-account filter와 PROD-555의 버전별 제외 목록을 혼용하지 않는다.
 - 진행 중인 주, 미도래 리텐션과 분모 0을 0%로 바꾸지 않는다.
+- `eligibility`를 화면 조회·사용 Profile로 세거나 이전 주의 자격을 새 주로 자동 이월하지 않는다.
+- 개인정보 금지 검사는 PROD-555의 application-defined/custom properties에 한정한다. 기존 승인 계약의
+  URL·referrer 등 SDK standard metadata는 제거·필터링하지 않고 보존 여부를 별도로 확인한다.
 
 ## Risks / Trade-offs
 
 - [Relay cache가 짧은 시간 동안 이전 Profile 목록을 보여줄 수 있음] → 네트워크 갱신 뒤 상태 변화도 다시
   관측하고, 실제 production 인수 검증에서 서버 응답과 전송 이벤트를 맞춰 본다. 오래된 자격 관측이
   확인되면 관측 컴포넌트만 네트워크 응답이 확인된 쿼리 경계로 좁힌다.
-- [화면마다 문맥 이벤트가 하나 늘어 이벤트 양이 증가함] → route별 한 번으로 제한하고 별도 pathname과
-  Profile 목록을 속성으로 보내지 않는다.
+- [화면·새 주의 첫 행동·자격 변경에 문맥 관측이 추가됨] → 같은 Account·KST 주차·자격의 반복 확인은
+  메모리에서 생략한다. remount 뒤 재관측은 주간 집합의 distinct 집계로 흡수하고 영속 중복 방지 상태는 두지 않는다.
 - [식별자가 바뀐 동안 끝난 mutation 이벤트가 누락될 수 있음] → 다른 Account로 잘못 귀속하는 것보다 누락을
   택하고, 인수 검증에서 누락 경계를 기록한다.
 - [늦게 도착한 이벤트와 최신 제외 목록으로 과거 수치가 바뀜] → 완료 주를 고정값으로 표현하지 않고 실행 시각과
@@ -147,7 +190,7 @@ Account 집합, distinct Profile 수, 최신 제외 목록의 과거 적용과 �
 
 1. 타입이 정해진 이벤트와 호출부 검증을 추가하고 합성 페이로드로 선택 원인, 자격, 주체 고정과 UUID 재사용을 확인한다.
 2. 브라우저 인수 검증에서 인증 화면, Profile 0·1·2개, 직접 전환, 생성 자동 선택, Account 전환과 전송 실패를
-   확인한다.
+   확인한다. 같은 화면의 KST 주차 전환과 반복 행동, 자격 확인에 따른 사용 Profile 증가가 없음을 포함한다.
 3. production 배포 전에 운영 제외 목록 첫 버전과 계산 규칙 버전을 만든다.
 4. PROD-795 통합 검증 뒤 production 실수집 페이로드를 개인정보 없는 증거로 대조한다.
 5. 관측 시작점을 기록하고 저장 쿼리, Insight, 대시보드와 주간 점검 절차를 연다.
@@ -197,9 +240,10 @@ Account 집합, distinct Profile 수, 최신 제외 목록의 과거 적용과 �
 ### 구현 세션의 focused validation
 
 - 분석 adapter·이벤트 타입·Native no-op unit 검증과 `pnpm --filter @kosmo/app check`
-- Shell/ProfileSwitcher/PostComposer/FollowButton의 Storybook 실제 상호작용 검증
+- Shell/ProfileSwitcher/PostComposer/FollowButton/Search의 Storybook 실제 상호작용 검증
 - `apps/web/e2e/analytics.e2e.ts`에서 SDK 전송을 가로채 identity·Profile·UUID·시각·선택 분류 대조
-- 동일한 합성 입력에 대한 독립 기대표와 실제 저장 쿼리의 출력 비교
+- 동일한 합성 입력에 대한 독립 기대표와 실제 저장 쿼리의 출력 비교. 생성 총횟수 2·distinct 생성 Account 1,
+  직접 전환 총횟수 2·활성 Account당 평균 1과 빈 집단을 각각 검증한다.
 - 이슈 범위의 앱 build·lint와 production 수집 대조. Spec 단계에서는 실행 코드 테스트를 수행하지 않는다.
 
 ## Open Questions
