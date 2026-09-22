@@ -1183,7 +1183,7 @@ describe('profile route parameter lifecycle', () => {
     ]) {
       profileBlockStatus = status;
       for (const relation of ['followers', 'following']) {
-        await renderRoute('@blocked', `/profile/@blocked/${relation}`);
+        await renderRoute('@blocked', `/@blocked/${relation}`);
         assert.deepEqual(identities('ProfileConnectionList'), ['blocked']);
         assert.equal(requireRendered('ProfileConnectionList').props.kind, relation);
         assert.equal(rendered('StateView').length, 0);

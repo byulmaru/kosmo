@@ -142,7 +142,6 @@ export default function ProfileLayout() {
         backButton={backButton}
         connectionKind={connectionKind}
         handle={handle}
-        pathname={pathname}
         scrollKey={scrollKey}
         showPageHeader={isProfileHome}
       />
@@ -154,14 +153,12 @@ function ProfileLayoutContent({
   backButton,
   connectionKind,
   handle,
-  pathname,
   scrollKey,
   showPageHeader,
 }: {
   backButton: ReactNode;
   connectionKind: ProfileConnectionKind | null;
   handle: string;
-  pathname: string;
   scrollKey: string;
   showPageHeader: boolean;
 }) {
@@ -249,9 +246,9 @@ function ProfileLayoutContent({
     </>
   );
 
-  const relationshipRoute = pathname.endsWith('/followers') || pathname.endsWith('/following');
-  const blockedProfileContent =
-    relationshipRoute || !blockedBy ? null : <StateView title="이 프로필을 볼 수 없습니다" />;
+  const blockedProfileContent = !blockedBy ? null : (
+    <StateView title="이 프로필을 볼 수 없습니다" />
+  );
   const blockedProfileRoute = blockedProfileContent ? (
     <ProfileRouteContainer scrollKey={scrollKey}>
       {chrome}

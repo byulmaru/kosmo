@@ -207,13 +207,16 @@ ESLint·Prettier를 실행한다. 기존 Mute·Follow·Post visibility·Notifica
   route가 있다는 사실을 Block destination의 data·action 완료 증거로 사용하지 않는다.
 - `memory/frontend-react-native.md`는 selected Profile 전환 시 새 Relay Environment·Store와 현재 route 재실행을 요구한다.
   이 경계를 유지하며 Block 전용 actor cache나 별도 route tree를 만들지 않는다.
-- 직접 Profile route는 `profileBlockStatus`와 `profileByHandle`을 같은 operation에서 조회하고, selected Profile auth scope를 충족하지 못하면
-  API가 nullable `null`을 반환한다. App은 selected Profile kind나 조건부 GraphQL 변수로 권한을 예측하지 않는다. 기존
-  `profileByHandle` 조회 결과가 있으면 차단 관계와 함께 기본 Profile 정보·방향성 콘텐츠 상태를 표시하고, Profile 조회 결과가
-  없으면 기존 unavailable 결과를 유지하고 Block 전용 identity·관계 상태·관리 action을 복구하지 않는다.
-- client는 기존 `Profile` global ID와 `ProfileBlock` 관계 ID 및 해제 payload의 의미를 구분한다. `targetProfile`은 별도 typename·ID 없이
-  기존 Profile cache로 정규화하고, 반환된 non-null `profileBlockId`가 요청한 관계 ID와 정확히 같을 때만 해제 성공으로 처리한다.
-  `null`·불일치·오류 또는 partial 결과는 실패로 처리하고 기존 상태를 보존한다.
+- 직접 Profile route와 ProfileHero는 `node(id:)`·`profileByHandle` 결과의 normalized `Profile.viewerState.profileBlock`과
+  `blockedBy`에서 viewer-relative Block 상태를 파생한다. 별도 root 상태 조회·필드는 요구하지 않는다. selected Profile auth
+  scope를 충족하지 못하면 API는 `Profile.viewerState`를 nullable `null`로 반환한다. App은 selected Profile kind나 조건부 GraphQL 변수로
+  권한을 예측하지 않는다. 기존 직접 조회 결과가 있으면 차단 관계와 함께 기본 Profile 정보·방향성 콘텐츠 상태를 표시하고, Profile 조회
+  결과가 없으면 기존 unavailable 결과를 유지하고 Block 전용 identity·관계 상태·관리 action을 복구하지 않는다.
+- client는 기존 `Profile` global ID와 `ProfileBlock` 관계 ID 및 mutation payload의 의미를 구분한다. Block/Unblock mutation payload의
+  `targetProfile`은 기존 normalized `Profile` record와 `viewerState.profileBlock`·`blockedBy`를 갱신해 route·ProfileHero·관리 목록이
+  같은 viewer-relative 상태를 소비하도록 수렴한다. `targetProfile`은 별도 typename·ID 없이 기존 Profile cache로 정규화하고, 반환된
+  non-null `profileBlockId`가 요청한 관계 ID와 정확히 같을 때만 해제 성공으로 처리한다. `null`·불일치·오류 또는 partial 결과는 실패로
+  처리하고 기존 상태를 보존한다.
 
 ### PROD-823 Recommended Approach
 
