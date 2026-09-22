@@ -22,7 +22,7 @@ const databaseUrl =
   defaultDatabaseUrl;
 const apiOrigin = `http://${host}:${apiPort}`;
 const webOrigin = `http://${host}:${webPort}`;
-const prodAnalyticsWebOrigin = `http://${host}:${prodAnalyticsWebPort}`;
+const prodAnalyticsWebOrigin = 'https://analytics.e2e.test';
 const oidcOrigin = `http://${host}:${oidcPort}`;
 const oidcClientId = process.env.PUBLIC_OIDC_CLIENT_ID ?? 'kosmo-e2e-client';
 const oidcClientSecret = process.env.OIDC_CLIENT_SECRET ?? 'kosmo-e2e-secret';
@@ -169,7 +169,7 @@ export default defineConfig({
       },
       reuseExistingServer: false,
       timeout: 120_000,
-      url: `${prodAnalyticsWebOrigin}/health`,
+      url: `http://${host}:${prodAnalyticsWebPort}/health`,
     },
   ],
 });

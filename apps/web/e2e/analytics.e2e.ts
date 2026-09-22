@@ -11,7 +11,8 @@ import { expect, test } from './fixtures';
 import { toGlobalId } from './graphql';
 
 const posthogRoute = /https:\/\/(?:us|us-assets)\.i\.posthog\.com\/.*/u;
-const prodAnalyticsOrigin = `http://127.0.0.1:${4174 + Number(process.env.KOSMO_TEST_PORT_OFFSET ?? 0)}`;
+const prodAnalyticsOrigin = 'https://analytics.e2e.test';
+const prodAnalyticsLocalOrigin = `http://127.0.0.1:${4174 + Number(process.env.KOSMO_TEST_PORT_OFFSET ?? 0)}`;
 
 const replayRemoteConfigBody = JSON.stringify({
   autocapture_opt_out: false,
@@ -87,8 +88,22 @@ function readReplaySnapshots(payloads: PostHogPayload[]): ReplaySnapshot[] {
     });
 }
 
-test.beforeEach(async () => {
+test.beforeEach(async ({ context }) => {
   await resetE2EDatabase();
+  // Preserve the production HTTPS contract without contacting an external host.
+  await context.route(`${prodAnalyticsOrigin}/**`, async (route) => {
+    const request = route.request();
+    const response = await route.fetch({
+      headers: {
+        ...(await request.allHeaders()),
+        // Interception precedes Chromium's fetch metadata used by the BFF SPA fallback.
+        ...(request.isNavigationRequest() ? { 'sec-fetch-mode': 'navigate' } : {}),
+      },
+      url: request.url().replace(prodAnalyticsOrigin, prodAnalyticsLocalOrigin),
+      maxRedirects: 0,
+    });
+    await route.fulfill({ response });
+  });
 });
 
 test('dev channel Web runtime은 analytics 요청 없이 정상 렌더링된다', async ({ page }) => {
@@ -450,7 +465,7 @@ test('prod channel Web runtime은 Account identity를 A→guest→B로 분리하
       status: 200,
     });
   });
-  await setE2ESessionCookie(context, viewer.token);
+  await setE2ESessionCookie(context, viewer.token, prodAnalyticsOrigin);
   await page.goto(`${prodAnalyticsOrigin}/home`);
 
   const mainNavigation = page.getByRole('navigation', { name: '주요 메뉴' });
@@ -494,7 +509,7 @@ test('prod channel Web runtime은 Account identity를 A→guest→B로 분리하
     (payload) => payload.event === '$pageview' && payload.properties?.$pathname === '/privacy',
   );
 
-  await setE2ESessionCookie(context, nextViewer.token);
+  await setE2ESessionCookie(context, nextViewer.token, prodAnalyticsOrigin);
   await page.goto(`${prodAnalyticsOrigin}/home`);
   await utilityMenu.click();
   await expect(logout).toBeVisible();
