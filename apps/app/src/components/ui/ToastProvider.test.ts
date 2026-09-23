@@ -307,11 +307,13 @@ test('action toast follows the Figma source auto-layout contract', async () => {
   await act(async () => renderer?.unmount());
 });
 
-test('action toast invokes its callback once while the toast is leaving', async () => {
+test('action toast invokes once and its stale callbacks do not dismiss a replacement', async () => {
   assert.ok(toastProviderModule);
   const { ToastProvider, useToast } = toastProviderModule;
   let api: ReturnType<typeof useToast> | undefined;
   let actionCalls = 0;
+  let dismissOriginal: (() => void) | undefined;
+  let dismissReplacement: (() => void) | undefined;
   function Harness() {
     api = useToast();
     return null;
@@ -322,8 +324,14 @@ test('action toast invokes its callback once while the toast is leaving', async 
     renderer = create(createElement(ToastProvider, null, createElement(Harness)));
   });
   await act(async () => {
-    api?.showToast('다시 시도해 주세요.', {
-      action: { label: '다시 시도', onPress: () => actionCalls++ },
+    dismissOriginal = api?.showToast('다시 시도해 주세요.', {
+      action: {
+        label: '다시 시도',
+        onPress: () => {
+          actionCalls++;
+          dismissReplacement = api?.showToast('새 알림', { tone: 'info' });
+        },
+      },
       persistent: true,
       tone: 'danger',
     });
@@ -337,8 +345,16 @@ test('action toast invokes its callback once while the toast is leaving', async 
   await act(async () => {
     onPress();
     onPress();
+    dismissOriginal?.();
   });
   assert.equal(actionCalls, 1);
+  assert.equal(
+    renderer?.root.findAllByType(TextHost).some((node) => node.props.children === '새 알림'),
+    true,
+  );
+
+  await act(async () => dismissReplacement?.());
+  assert.equal(renderer?.root.findAllByType('AnimatedView' as ElementType).length, 0);
 
   await act(async () => renderer?.unmount());
 });

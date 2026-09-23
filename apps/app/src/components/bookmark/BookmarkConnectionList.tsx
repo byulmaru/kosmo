@@ -41,7 +41,6 @@ export function BookmarkConnectionList({ profile }: BookmarkConnectionListProps)
     itemCount: items.length,
     loadNext: pagination.loadNext,
     pageSize: 20,
-    requestKey: pagination.data.id,
     webScrollTarget: 'container',
   });
   return (
