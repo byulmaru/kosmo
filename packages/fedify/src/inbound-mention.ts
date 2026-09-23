@@ -6,7 +6,6 @@ import { isHttpUri } from './activitypub-uri';
 import type { Note } from '@fedify/vocab';
 
 export type InboundMentionCandidate = {
-  readonly name: string | null;
   readonly profileId: string;
   readonly targetHref: string;
 };
@@ -18,7 +17,7 @@ const noNetworkDocumentLoader = async (): Promise<never> => {
 export const collectInboundMentionCandidates = async (
   note: Note,
 ): Promise<InboundMentionCandidate[]> => {
-  const namesByTargetHref = new Map<string, Set<string | null>>();
+  const targetHrefs = new Set<string>();
 
   for await (const tag of note.getTags({
     contextLoader: noNetworkDocumentLoader,
@@ -30,12 +29,10 @@ export const collectInboundMentionCandidates = async (
       continue;
     }
 
-    const names = namesByTargetHref.get(tag.href.href) ?? new Set<string | null>();
-    names.add(tag.name?.toString() ?? null);
-    namesByTargetHref.set(tag.href.href, names);
+    targetHrefs.add(tag.href.href);
   }
 
-  if (namesByTargetHref.size === 0) {
+  if (targetHrefs.size === 0) {
     return [];
   }
 
@@ -52,7 +49,7 @@ export const collectInboundMentionCandidates = async (
     .from(ActivityPubActors)
     .innerJoin(Profiles, eq(Profiles.id, ActivityPubActors.profileId))
     .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .where(inArray(ActivityPubActors.uri, [...namesByTargetHref.keys()]));
+    .where(inArray(ActivityPubActors.uri, [...targetHrefs]));
 
   return profileRows.flatMap((profile) => {
     const verifiedHrefs = [profile.actorHref];
@@ -84,13 +81,9 @@ export const collectInboundMentionCandidates = async (
       }
     }
 
-    const names = namesByTargetHref.get(profile.actorHref) ?? new Set([null]);
-    return [...new Set(verifiedHrefs)].flatMap((verifiedHref) =>
-      [...names].map((name) => ({
-        name,
-        profileId: profile.profileId,
-        targetHref: verifiedHref,
-      })),
-    );
+    return [...new Set(verifiedHrefs)].map((targetHref) => ({
+      profileId: profile.profileId,
+      targetHref,
+    }));
   });
 };

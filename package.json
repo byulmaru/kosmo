@@ -24,6 +24,7 @@
     "local-dev:wait-temporal": "env -u DATABASE_URL -u FEDIFY_QUEUE_DATABASE_PASSWORD -u FEDIFY_QUEUE_DATABASE_URL -u LOCAL_POSTGRES_ADMIN_PASSWORD -u LOCAL_POSTGRES_OWNER_PASSWORD -u PGDATABASE -u PGHOST -u PGPASSWORD -u PGPORT -u PGUSER node scripts/local-development.mjs wait-temporal",
     "local-dev:worker": "pnpm local-dev:wait-temporal && pnpm --filter @kosmo/worker dev",
     "prepare": "husky || true",
+    "ops:refresh-legacy-remote-profile-aliases": "pnpm --filter @kosmo/worker exec node --import tsx src/refresh-legacy-remote-profile-aliases.ts",
     "test": "pnpm test:eslint && pnpm --recursive --workspace-concurrency=1 --if-present test",
     "test:eslint": "node --test scripts/eslint-no-class-component.test.mjs scripts/local-development.test.mjs",
     "test:e2e": "node scripts/test-db.mjs run -- pnpm test:e2e:database",

@@ -45,6 +45,7 @@ import type { findPostByActivityPubUri as findPostByActivityPubUriType } from '.
 import type { handleInboundCreate as handleInboundCreateType } from './inbound-create';
 import type { materializeHydratedRemoteNote as materializeHydratedRemoteNoteType } from './inbound-create-note';
 import type { ensureDrizzleLocalProfileActor as ensureDrizzleLocalProfileActorType } from './local-actor-store';
+import type * as Materialization from './remote-actor-materialization';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
@@ -76,6 +77,7 @@ let Profiles: typeof CoreDb.Profiles;
 let createPost: typeof CoreServices.createPost;
 let findPostByActivityPubUri: typeof findPostByActivityPubUriType;
 let handleInboundCreate: typeof handleInboundCreateType;
+let materializeRemoteProfileActor: typeof Materialization.materializeRemoteProfileActor;
 let materializeHydratedRemoteNote: typeof materializeHydratedRemoteNoteType;
 let ensureDrizzleLocalProfileActor: typeof ensureDrizzleLocalProfileActorType;
 let localInstanceId: string;
@@ -106,6 +108,7 @@ describe('inbound Create dispatch', () => {
     ({ findPostByActivityPubUri } = await import('./activitypub-post-uri'));
     ({ handleInboundCreate } = await import('./inbound-create'));
     ({ materializeHydratedRemoteNote } = await import('./inbound-create-note'));
+    ({ materializeRemoteProfileActor } = await import('./remote-actor-materialization'));
     ({ ensureDrizzleLocalProfileActor } = await import('./local-actor-store'));
     const { localInstance } = await seedDatabase({ publicOrigin });
     localInstanceId = localInstance.id;
@@ -159,74 +162,66 @@ describe('inbound Create dispatch', () => {
     assert.equal(postContentDocumentToText(content.document), 'Hello');
   });
 
-  test('projects a typed Mention through inbound Create into the revision-owned relation', async () => {
+  test('uses a refreshed Profile URL alias for new Notes without changing older Content', async () => {
     const profileUrl = 'https://profile.example/@alice';
-    const profile = await createStoredRemoteActor({ profileUrl });
-    const objectUri = new URL('https://remote.example/notes/mention');
-    const note = new Note({
-      attribution: remoteActorUri,
-      content: `<p>Hello <a href="${profileUrl}">@alice</a></p>`,
-      id: objectUri,
-      mediaType: 'text/html',
-      tags: [
-        new Mention({
-          href: remoteActorUri,
-          name: '@alice',
-        }),
-      ],
-      to: PUBLIC_COLLECTION,
-    });
+    const profile = await createStoredRemoteActor({ profileUrl: null });
+    const createMentionNote = (objectUri: URL) =>
+      new Note({
+        attribution: remoteActorUri,
+        content: `<p>Hello <a href="${profileUrl}">@alice</a></p>`,
+        id: objectUri,
+        mediaType: 'text/html',
+        tags: [new Mention({ href: remoteActorUri, name: '@alice' })],
+        to: PUBLIC_COLLECTION,
+      });
+    const originalObjectUri = new URL('https://remote.example/notes/mention-before-refresh');
 
     await handleInboundCreate(
       createContext(),
-      new Create({ actor: remoteActorUri, object: note }),
+      new Create({ actor: remoteActorUri, object: createMentionNote(originalObjectUri) }),
       receivedAt,
     );
 
-    const { content, post } = await getMaterializedPost(objectUri);
-    assert.ok(post.currentContentId);
-    assert.deepEqual(content.document.body.content, [
+    const original = await getMaterializedPost(originalObjectUri);
+    assert.deepEqual(original.content.document.body.content, [
       {
         type: 'paragraph',
         content: [
           { text: 'Hello ', type: 'text' },
-          {
-            attrs: { profileId: profile.id },
-            type: 'mention',
-          },
+          { marks: [{ attrs: { href: profileUrl }, type: 'link' }], text: '@alice', type: 'text' },
         ],
       },
     ]);
-    assert.deepEqual(await db.select().from(PostMentions), [
-      { postContentId: content.id, profileId: profile.id },
-    ]);
-  });
 
-  test('uses the typed Mention name when a NULL profile URL alias differs from the body anchor', async () => {
-    const profile = await createStoredRemoteActor({ profileUrl: null });
-    const objectUri = new URL('https://remote.example/notes/name-hint-mention');
-    const note = new Note({
-      attribution: remoteActorUri,
-      content: '<p>Hello <a href="https://profile.example/@alice">@alice</a></p>',
-      id: objectUri,
-      mediaType: 'text/html',
-      tags: [
-        new Mention({
-          href: remoteActorUri,
-          name: '@alice',
-        }),
-      ],
-      to: PUBLIC_COLLECTION,
+    await materializeRemoteProfileActor({
+      actorUri: remoteActorUri,
+      context: {
+        lookupObject: async () =>
+          new Person({
+            id: remoteActorUri,
+            preferredUsername: 'alice',
+            url: new URL(profileUrl),
+          }),
+      } as unknown as Parameters<typeof materializeRemoteProfileActor>[0]['context'],
+      now: receivedAt.add({ seconds: 1 }),
     });
 
+    const refreshedActor = await db
+      .select({ profileUrl: ActivityPubActors.profileUrl })
+      .from(ActivityPubActors)
+      .where(eq(ActivityPubActors.profileId, profile.id))
+      .then(firstOrThrow);
+    assert.equal(refreshedActor.profileUrl, profileUrl);
+
+    const newObjectUri = new URL('https://remote.example/notes/mention-after-refresh');
     await handleInboundCreate(
       createContext(),
-      new Create({ actor: remoteActorUri, object: note }),
-      receivedAt,
+      new Create({ actor: remoteActorUri, object: createMentionNote(newObjectUri) }),
+      receivedAt.add({ seconds: 2 }),
     );
 
-    const { content } = await getMaterializedPost(objectUri);
-    assert.deepEqual(content.document.body.content, [
+    const createdAfterRefresh = await getMaterializedPost(newObjectUri);
+    assert.deepEqual(createdAfterRefresh.content.document.body.content, [
       {
         type: 'paragraph',
         content: [
@@ -235,9 +230,69 @@ describe('inbound Create dispatch', () => {
         ],
       },
     ]);
+
+    const originalAfterRefresh = await getMaterializedPost(originalObjectUri);
+    assert.deepEqual(originalAfterRefresh.content.document, original.content.document);
+    assert.deepEqual(
+      (await db.select().from(PostMentions)).sort((left, right) =>
+        left.postContentId.localeCompare(right.postContentId),
+      ),
+      [
+        { postContentId: original.content.id, profileId: profile.id },
+        { postContentId: createdAfterRefresh.content.id, profileId: profile.id },
+      ].sort((left, right) => left.postContentId.localeCompare(right.postContentId)),
+    );
+  });
+
+  test('keeps a name-matching untrusted body URL as a safe link and stores the typed relation', async () => {
+    const profile = await createStoredRemoteActor({ profileUrl: null });
+    const untrustedUrl = 'https://evil.example/login';
+    const objectUri = new URL('https://remote.example/notes/untrusted-mention-link');
+    const note = new Note({
+      attribution: remoteActorUri,
+      content: `<p>Hello <a href="${untrustedUrl}">@alice</a></p>`,
+      id: objectUri,
+      mediaType: 'text/html',
+      tags: [
+        new Mention({
+          href: remoteActorUri,
+          name: '@alice',
+        }),
+      ],
+      to: PUBLIC_COLLECTION,
+    });
+    const fetchMock = mock.method(globalThis, 'fetch', async () => {
+      throw new Error('Mention receipt must not fetch the untrusted anchor');
+    });
+
+    try {
+      await handleInboundCreate(
+        createContext(),
+        new Create({ actor: remoteActorUri, object: note }),
+        receivedAt,
+      );
+    } finally {
+      fetchMock.mock.restore();
+    }
+
+    const { content } = await getMaterializedPost(objectUri);
+    assert.deepEqual(content.document.body.content, [
+      {
+        type: 'paragraph',
+        content: [
+          { text: 'Hello ', type: 'text' },
+          {
+            marks: [{ attrs: { href: untrustedUrl }, type: 'link' }],
+            text: '@alice',
+            type: 'text',
+          },
+        ],
+      },
+    ]);
     assert.deepEqual(await db.select().from(PostMentions), [
       { postContentId: content.id, profileId: profile.id },
     ]);
+    assert.equal(fetchMock.mock.callCount(), 0);
   });
 
   test('falls back to the actor URI when a stored profile URL alias is malformed', async () => {

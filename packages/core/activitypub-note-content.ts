@@ -23,7 +23,6 @@ export interface RemoteNoteContentInput {
 }
 
 export interface RemoteNoteMentionCandidate {
-  readonly name?: string | null;
   readonly targetHref: string;
   readonly profileId: string;
 }
@@ -66,24 +65,16 @@ function htmlToBodyDocument(
 
     return [
       {
-        name: typeof candidate.name === 'string' ? candidate.name : null,
         profileId,
         targetHref,
       },
     ];
   });
   const profileIdsByTargetHref = new Map<string, Set<string>>();
-  const profileIdsByName = new Map<string, Set<string>>();
   for (const candidate of normalizedCandidates) {
     const profileIds = profileIdsByTargetHref.get(candidate.targetHref) ?? new Set<string>();
     profileIds.add(candidate.profileId);
     profileIdsByTargetHref.set(candidate.targetHref, profileIds);
-
-    if (candidate.name !== null && candidate.name.trim().length > 0) {
-      const nameProfileIds = profileIdsByName.get(candidate.name) ?? new Set<string>();
-      nameProfileIds.add(candidate.profileId);
-      profileIdsByName.set(candidate.name, nameProfileIds);
-    }
   }
 
   const remoteNoteDOMParser = new ProseMirrorDOMParser(postContentSchema, [
@@ -107,19 +98,7 @@ function htmlToBodyDocument(
 
           return { profileId: profileIds.values().next().value };
         }
-
-        const anchorSlice = schemaDOMParser.parseSlice(element);
-        const anchorText = anchorSlice.content.textBetween(0, anchorSlice.content.size, '\n', '\n');
-        if (anchorText.trim().length === 0) {
-          return false;
-        }
-
-        const nameProfileIds = profileIdsByName.get(anchorText);
-        if (!nameProfileIds || nameProfileIds.size !== 1) {
-          return false;
-        }
-
-        return { profileId: nameProfileIds.values().next().value };
+        return false;
       },
     },
     ...schemaDOMParser.rules,

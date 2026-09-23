@@ -438,16 +438,14 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
 - 현재 document V1은 paragraph, text, hard break, 안전한 HTTP(S) link와 Media node를 지원하며, 검증된 inbound
   typed Mention은 V1에 additive한 node로 보존한다. Mention node는 저장된 Profile stable identity인 `profileId`만
   attrs로 가진다. inbound typed `Mention.href`는 이미 저장된 ActivityPub actor/Profile mapping으로 알려진 Profile stable
-  identity인지 본문 변환과 독립적으로 확인하고, 확인된 identity를 Mentioned Profile 관계 입력으로 보존한다. 본문 anchor가 typed
-  href 또는 기존 정상 actor materialization·refresh가 저장한 Profile URL alias에 대응하면 `profileId` node로 표현할 수 있다. URL이
-  다르더라도 verified typed `Mention.name`과 parser가 산출한 anchor visible text가 exact match하고 해당 label이 정확히 하나의
-  Profile candidate로 해석될 때에만 같은 node로 표현하며, 그 외에는 본문을 안전한 일반 link 또는 표시 text로 보존한다. body anchor 불일치와 관계 저장은 독립적이다. 일반
-  link/text와 `to`/`cc` audience는 Mention 관계를 만들지 않는다. Local Profile의 trusted human URL은 actor URI와 다른 표현으로
-  사용할 수 있다. Remote Profile URL alias가 없으면 이미 알려진 actor URI만 사용하며 Mention 수신 중 fetch·신규
+  identity인지 본문 변환과 독립적으로 확인하고, 확인된 identity를 Mentioned Profile 관계 입력으로 보존한다. 본문 anchor href가 확인된
+  actor URI, 기존 정상 actor materialization·refresh가 저장한 Profile URL alias 또는 Local Profile의 trusted human URL과
+  일치할 때만 `profileId` node로 표현할 수 있다. 알 수 없거나 불일치한 anchor는 tag `name`, handle 또는 visible label과 관계없이
+  안전한 일반 link 또는 표시 text로 보존하며, body anchor 불일치와 관계 저장은 독립적이다. 일반 link/text와 `to`/`cc` audience는
+  Mention 관계를 만들지 않는다. Remote Profile URL alias가 없으면 이미 알려진 actor URI만 사용하며 Mention 수신 중 fetch·신규
   materialization·backfill을 수행하지 않는다. 누락·malformed alias는 기존 정상 refresh가 제거·갱신하고 Mention receipt가 refresh를
-  새로 트리거하지 않는다. tag `name`·handle과 본문 visible label의 문자열 일치로 identity를 확정하거나 거부하지 않으며, 기존 글
-  자동 보정은 수행하지 않는다. 원문 anchor의 표시 문자열은 수신 중 resource budget 계산에만 사용하고 저장하지 않는다. renderer는
-  같은 revision의 Profile `relativeHandle`에서 표시 문자열을 파생하며, Profile을 조회할 수 없으면 비링크
+  새로 트리거하지 않는다. 기존 글 자동 보정은 수행하지 않는다. 원문 anchor의 표시 문자열은 수신 중 resource budget 계산에만 사용하고
+  저장하지 않는다. renderer는 같은 revision의 Profile `relativeHandle`에서 표시 문자열을 파생하며, Profile을 조회할 수 없으면 비링크
   `@알 수 없는 사용자`를 표시한다. `pre`와 일반 rich-text editor는 지원하지 않는다.
 - Mentioned Profiles audience와 ActivityPub outbound Mention projection·custom emoji는 후속
   계약에서 정의한다. inbound Note의 typed Mention 보존은 별도 수신 계약을 따른다.
