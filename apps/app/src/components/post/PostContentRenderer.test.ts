@@ -20,7 +20,10 @@ mockModule('react-native', {
   Linking: { openURL: async () => undefined },
   Platform: { OS: 'android' },
   Pressable: 'Pressable',
-  StyleSheet: { create: (styles: object) => styles },
+  StyleSheet: {
+    create: (styles: object) => styles,
+    flatten: (styles: Array<Record<string, unknown>>) => Object.assign({}, ...styles),
+  },
   Text: 'Text',
   View: 'View',
 });
