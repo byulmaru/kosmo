@@ -612,7 +612,6 @@ export function PostComposer({
             testID="post-composer-scroll"
           >
             {beforeEditor}
-            <View style={styles.authorLayer}>{author}</View>
             {editor}
           </ScrollView>
           {visibilityControl}
