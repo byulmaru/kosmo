@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
+import { trackAnalytics } from '@/analytics/client';
 import { useSession } from '@/session/SessionProvider';
 import type { ReactionToggleIntent } from '@/components/reaction/ReactionSelector';
 import type { PostReactionController_post$key } from './__generated__/PostReactionController_post.graphql';
@@ -165,7 +166,13 @@ export function usePostReactionController(
           ? (response as PostReactionControllerAddReactionMutation['response'] | null)?.addReaction
           : (response as PostReactionControllerDeleteReactionMutation['response'] | null)
               ?.deleteReaction;
-        finish(Boolean(payload));
+        const succeeded = Boolean(payload);
+        if (succeeded) {
+          trackAnalytics(nextSelected ? 'reaction_added' : 'reaction_removed', {
+            reaction_type: optionId === '❤️' ? 'default' : 'custom',
+          });
+        }
+        finish(succeeded);
       };
 
       if (nextSelected) {

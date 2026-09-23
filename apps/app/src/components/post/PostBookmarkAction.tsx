@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
 import { ConnectionHandler } from 'relay-runtime';
+import { trackAnalytics } from '@/analytics/client';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useSession } from '@/session/SessionProvider';
 import type { PostBookmarkAction_post$key } from './__generated__/PostBookmarkAction_post.graphql';
@@ -119,9 +120,15 @@ export function usePostBookmarkAction(
     };
     const callbacks = {
       onCompleted: (
-        _response: unknown,
+        response: unknown,
         errors: ReadonlyArray<{ message: string }> | null | undefined,
       ) => {
+        if (
+          (response as PostBookmarkActionCreateBookmarkMutation['response'] | null)?.createBookmark
+            ?.bookmark?.id
+        ) {
+          trackAnalytics('bookmark_added', {});
+        }
         if (errors?.[0]) {
           finishWithError(new Error(errors[0].message));
           return;
@@ -138,6 +145,7 @@ export function usePostBookmarkAction(
       commitDelete({
         onCompleted: (response, errors) => {
           if (response?.deleteBookmark?.requestedBookmarkId === activeBookmarkId) {
+            trackAnalytics('bookmark_removed', {});
             finish();
             return;
           }

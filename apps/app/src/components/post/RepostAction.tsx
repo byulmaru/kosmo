@@ -1,6 +1,7 @@
 import { Quote, Repeat2 } from 'lucide-react-native';
 import { useCallback, useEffect, useRef } from 'react';
 import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
+import { trackAnalytics } from '@/analytics/client';
 import { ActionMenu } from '@/components/ui/ActionMenu';
 import { useTheme } from '@/theme/ThemeProvider';
 import { PostActionControl } from './PostActionControl';
@@ -121,9 +122,22 @@ export function RepostAction({
       };
       const callbacks = {
         onCompleted: (
-          _response: unknown,
+          response: unknown,
           errors: ReadonlyArray<{ message: string }> | null | undefined,
         ) => {
+          const mutationConfirmed =
+            action === 'create'
+              ? Boolean(
+                  (response as RepostActionRepostPostMutation['response'] | null)?.repostPost
+                    ?.repost?.id,
+                )
+              : (response as RepostActionDeletePostMutation['response'] | null)?.deletePost
+                  ?.postId === activeRepostId;
+          if (mutationConfirmed) {
+            trackAnalytics('repost_succeeded', {
+              result: action === 'create' ? 'created' : 'removed',
+            });
+          }
           if (errors?.[0]) {
             finishWithError(new Error(errors[0].message));
             return;

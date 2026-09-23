@@ -149,6 +149,20 @@ describe('PostHog Web client', () => {
     assert.equal(initCalls[0]?.config.mask_personal_data_properties, false);
   });
 
+  it('typed event properties를 변형하지 않고 PostHog에 전달한다', () => {
+    analytics.clearAnalytics();
+    const instance = instances[0];
+    assert.ok(instance);
+    const properties = {
+      selected_profile_id: 'profile-id',
+      visibility: 'DIRECT' as const,
+    };
+    analytics.trackAnalytics('post_created', properties);
+
+    assert.equal(instance.calls[0]?.properties, properties);
+    assert.deepEqual(instance.calls, [{ event: 'post_created', properties }]);
+  });
+
   it('Account identity는 같은 ID를 SDK에 위임하고 전환·guest에서 reset 후 분리한다', () => {
     analytics.clearAnalytics();
     const instance = instances[0];
