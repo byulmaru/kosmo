@@ -1,6 +1,5 @@
 import { sql } from 'drizzle-orm';
 import {
-  bigint,
   check,
   index,
   integer,
@@ -552,13 +551,8 @@ export const ProfilePins = pgTable(
     postId: uuid('post_id')
       .notNull()
       .references(() => Posts.id, { onDelete: 'cascade' }),
-    orderKey: bigint('order_key', { mode: 'bigint' }).notNull(),
   },
-  (table) => [
-    unique().on(table.profileId, table.postId),
-    unique().on(table.profileId, table.orderKey),
-    index().on(table.profileId, table.orderKey, table.id),
-  ],
+  (table) => [unique().on(table.profileId, table.postId), index().on(table.profileId, table.id)],
 );
 
 export const Reactions = pgTable(

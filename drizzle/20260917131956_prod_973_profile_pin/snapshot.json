@@ -2383,19 +2383,6 @@
       "table": "profile_pin"
     },
     {
-      "type": "bigint",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "order_key",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "profile_pin"
-    },
-    {
       "type": "uuid",
       "typeSchema": null,
       "notNull": true,
@@ -3527,13 +3514,6 @@
           "opclass": null
         },
         {
-          "value": "order_key",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        },
-        {
           "value": "id",
           "isExpression": false,
           "asc": true,
@@ -3546,7 +3526,7 @@
       "with": "",
       "method": "btree",
       "concurrently": false,
-      "name": "profile_pin_profile_id_order_key_id_index",
+      "name": "profile_pin_profile_id_id_index",
       "entityType": "indexes",
       "schema": "public",
       "table": "profile_pin"
@@ -4781,15 +4761,6 @@
       "columns": ["profile_id", "post_id"],
       "nullsNotDistinct": false,
       "name": "profile_pin_profile_id_post_id_unique",
-      "entityType": "uniques",
-      "schema": "public",
-      "table": "profile_pin"
-    },
-    {
-      "nameExplicit": false,
-      "columns": ["profile_id", "order_key"],
-      "nullsNotDistinct": false,
-      "name": "profile_pin_profile_id_order_key_unique",
       "entityType": "uniques",
       "schema": "public",
       "table": "profile_pin"
