@@ -75,18 +75,16 @@ export function usePostBookmarkAction(
 ): BookmarkActionConfig | undefined {
   const data = useFragment(postBookmarkActionFragment, post);
   const environment = useRelayEnvironment();
-  const { accountId, selectedProfileId } = useSession();
+  const { selectedProfileId } = useSession();
   const [commitCreate, isCreating] =
     useMutation<PostBookmarkActionCreateBookmarkMutation>(createBookmarkMutation);
   const [commitDelete, isDeleting] =
     useMutation<PostBookmarkActionDeleteBookmarkMutation>(deleteBookmarkMutation);
   const inFlight = useRef(false);
   const currentEnvironment = useRef(environment);
-  const currentAccountId = useRef(accountId);
   const processing = isCreating || isDeleting;
 
   currentEnvironment.current = environment;
-  currentAccountId.current = accountId;
 
   useEffect(() => {
     inFlight.current = false;
@@ -108,7 +106,6 @@ export function usePostBookmarkAction(
     const action: BookmarkActionKind = activeBookmarkId ? 'cancel' : 'create';
     inFlight.current = true;
     const requestEnvironment = environment;
-    const requestAccountId = accountId;
     const finish = () => {
       if (currentEnvironment.current === requestEnvironment) {
         inFlight.current = false;
@@ -128,9 +125,7 @@ export function usePostBookmarkAction(
       ) => {
         if (
           (response as PostBookmarkActionCreateBookmarkMutation['response'] | null)?.createBookmark
-            ?.bookmark?.id &&
-          requestAccountId &&
-          currentAccountId.current === requestAccountId
+            ?.bookmark?.id
         ) {
           trackAnalytics('bookmark_added', {});
         }
@@ -150,9 +145,7 @@ export function usePostBookmarkAction(
       commitDelete({
         onCompleted: (response, errors) => {
           if (response?.deleteBookmark?.requestedBookmarkId === activeBookmarkId) {
-            if (requestAccountId && currentAccountId.current === requestAccountId) {
-              trackAnalytics('bookmark_removed', {});
-            }
+            trackAnalytics('bookmark_removed', {});
             finish();
             return;
           }
@@ -177,7 +170,6 @@ export function usePostBookmarkAction(
   }, [
     commitCreate,
     commitDelete,
-    accountId,
     data,
     environment,
     execution,

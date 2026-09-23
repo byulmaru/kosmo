@@ -151,65 +151,10 @@ describe('PostHog Web client', () => {
     });
   });
 
-  it('event별 typed payload를 전송한다', () => {
-    analytics.clearAnalytics();
-    const instance = instances[0];
-    assert.ok(instance);
-    analytics.identifyAnalytics('account-id');
-
-    analytics.trackAnalytics('profile_created', { selected_profile_id: 'profile-id' });
-    analytics.trackAnalytics('profile_selected', { selected_profile_id: 'profile-id' });
-    analytics.trackAnalytics('post_created', {
-      selected_profile_id: 'profile-id',
-      visibility: 'DIRECT',
-    });
-    analytics.trackAnalytics('repost_succeeded', { result: 'created' });
-    analytics.trackAnalytics('reaction_added', { reaction_type: 'default' });
-    analytics.trackAnalytics('reaction_removed', { reaction_type: 'custom' });
-    analytics.trackAnalytics('bookmark_added', {});
-    analytics.trackAnalytics('bookmark_removed', {});
-    analytics.trackAnalytics('follow_succeeded', {
-      selected_profile_id: 'profile-id',
-      result: 'request',
-    });
-    analytics.trackAnalytics('search_submitted', { tab: 'people', source: 'keyboard' });
-    analytics.trackAnalytics('search_results_loaded', { tab: 'people', has_results: true });
-    analytics.trackAnalytics('search_result_selected', { tab: 'people' });
-
-    assert.deepEqual(instance.calls, [
-      { event: 'profile_created', properties: { selected_profile_id: 'profile-id' } },
-      { event: 'profile_selected', properties: { selected_profile_id: 'profile-id' } },
-      {
-        event: 'post_created',
-        properties: { selected_profile_id: 'profile-id', visibility: 'DIRECT' },
-      },
-      { event: 'repost_succeeded', properties: { result: 'created' } },
-      { event: 'reaction_added', properties: { reaction_type: 'default' } },
-      { event: 'reaction_removed', properties: { reaction_type: 'custom' } },
-      { event: 'bookmark_added', properties: {} },
-      { event: 'bookmark_removed', properties: {} },
-      {
-        event: 'follow_succeeded',
-        properties: { selected_profile_id: 'profile-id', result: 'request' },
-      },
-      {
-        event: 'search_submitted',
-        properties: { tab: 'people', source: 'keyboard' },
-      },
-      {
-        event: 'search_results_loaded',
-        properties: { tab: 'people', has_results: true },
-      },
-      { event: 'search_result_selected', properties: { tab: 'people' } },
-    ]);
-  });
-
   it('typed event properties를 변형하지 않고 PostHog에 전달한다', () => {
     analytics.clearAnalytics();
     const instance = instances[0];
     assert.ok(instance);
-    analytics.identifyAnalytics('account-id');
-
     const properties = {
       selected_profile_id: 'profile-id',
       visibility: 'DIRECT' as const,
@@ -268,7 +213,7 @@ describe('PostHog Web client', () => {
     assert.equal(instance.resets, 2);
   });
 
-  it('A에서 B로 전환하는 reset 실패 동안 capture를 막고 복구 뒤 재개한다', () => {
+  it('A에서 B로 전환하는 reset 실패에도 직접 capture를 허용한다', () => {
     analytics.clearAnalytics();
     const instance = instances[0];
     assert.ok(instance);
@@ -278,20 +223,10 @@ describe('PostHog Web client', () => {
     analytics.identifyAnalytics('account-b');
     analytics.trackAnalytics('profile_created', { selected_profile_id: 'profile-id' });
 
-    instance.resetFails = false;
-    analytics.identifyAnalytics('account-b');
-    analytics.trackAnalytics('profile_created', { selected_profile_id: 'after-recovery' });
-
-    assert.deepEqual(instance.identities, ['account-a', 'account-b']);
-    assert.deepEqual(instance.actions, [
-      'identify:account-a',
-      'reset',
-      'reset',
-      'identify:account-b',
-      'capture:profile_created',
-    ]);
+    assert.deepEqual(instance.identities, ['account-a']);
+    assert.deepEqual(instance.actions, ['identify:account-a', 'reset', 'capture:profile_created']);
     assert.deepEqual(instance.calls, [
-      { event: 'profile_created', properties: { selected_profile_id: 'after-recovery' } },
+      { event: 'profile_created', properties: { selected_profile_id: 'profile-id' } },
     ]);
   });
 
@@ -313,15 +248,17 @@ describe('PostHog Web client', () => {
     assert.deepEqual(instance.actions, [
       'identify:account-a',
       'reset',
+      'capture:profile_created',
       'identify:account-b',
       'capture:profile_created',
     ]);
     assert.deepEqual(instance.calls, [
+      { event: 'profile_created', properties: { selected_profile_id: 'before-recovery' } },
       { event: 'profile_created', properties: { selected_profile_id: 'after-recovery' } },
     ]);
   });
 
-  it('A에서 guest로 전환하는 reset 실패 뒤에도 이전 Account capture를 막는다', () => {
+  it('A에서 guest로 전환하는 reset 실패에도 직접 capture를 허용한다', () => {
     analytics.clearAnalytics();
     const instance = instances[0];
     assert.ok(instance);
@@ -332,11 +269,13 @@ describe('PostHog Web client', () => {
     analytics.trackAnalytics('profile_created', { selected_profile_id: 'profile-id' });
 
     assert.deepEqual(instance.identities, ['account-a']);
-    assert.deepEqual(instance.actions, ['identify:account-a', 'reset']);
-    assert.deepEqual(instance.calls, []);
+    assert.deepEqual(instance.actions, ['identify:account-a', 'reset', 'capture:profile_created']);
+    assert.deepEqual(instance.calls, [
+      { event: 'profile_created', properties: { selected_profile_id: 'profile-id' } },
+    ]);
   });
 
-  it('identify 자체 throw 동안 capture를 막고 복구 뒤 재개한다', () => {
+  it('identify 자체 throw에도 직접 capture를 허용한다', () => {
     analytics.clearAnalytics();
     const instance = instances[0];
     assert.ok(instance);
@@ -345,13 +284,16 @@ describe('PostHog Web client', () => {
     analytics.identifyAnalytics('account-a');
     analytics.trackAnalytics('profile_created', { selected_profile_id: 'profile-id' });
 
-    assert.deepEqual(instance.calls, []);
+    assert.deepEqual(instance.calls, [
+      { event: 'profile_created', properties: { selected_profile_id: 'profile-id' } },
+    ]);
 
     instance.identifyFails = false;
     analytics.identifyAnalytics('account-a');
     analytics.trackAnalytics('profile_created', { selected_profile_id: 'profile-id' });
 
     assert.deepEqual(instance.calls, [
+      { event: 'profile_created', properties: { selected_profile_id: 'profile-id' } },
       { event: 'profile_created', properties: { selected_profile_id: 'profile-id' } },
     ]);
   });
@@ -367,7 +309,6 @@ describe('PostHog Web client', () => {
     analytics.clearAnalytics();
     const instance = instances[0];
     assert.ok(instance);
-    analytics.identifyAnalytics('account-id');
     instance.captureFails = true;
     instance.identifyFails = true;
     instance.resetFails = true;

@@ -88,24 +88,11 @@
 - Consequences: 명시적 속성 검증과 SDK 표준 수집·마스킹 검증을 구분한다. 대상·콘텐츠·직접 식별 정보를 custom property로 넣지 않는 제한은 그대로다.
 - Confirmation / Follow-up: typed contract와 실제 capture 인자를 확인하고 SDK metadata가 유지되는지도 검증한다.
 
-### Account 전환 중 늦은 완료 결과는 현재 Account와 비교해 귀속한다
-
-- Decision Date: 2026-09-18
-- Decision Class: Implementation Boundary
-- Authority / Provenance: [PROD-539](https://linear.app/byulmaru/issue/PROD-539)의 Account 귀속·success-only 계약과 현재 SessionProvider
-- Status: Resolved
-- Context / Problem: mutation callback은 Account 또는 Profile 전환 뒤 늦게 완료될 수 있다.
-- Decision Outcome: 요청 시작 시 Account ID를 보관하고 callback 시 현재 Account ID와 같을 때만 event를 보낸다. 같은 Account의 Profile 전환은 허용하고, 다른 Account·guest 전환 뒤의 늦은 결과는 버린다. Account ID는 event property에 넣지 않는다.
-- Alternatives Considered: 모든 늦은 callback을 차단하면 같은 Account의 성공 행동을 잃고, 현재 identity를 확인하지 않으면 이전 Account를 새 Account에 귀속할 수 있다.
-- Consequences: 공용 analytics adapter나 mutation 결과를 변경하지 않고 호출부에서 귀속 경계를 보장한다. SDK identity 전환 실패는 기존 fail-open 계약을 따른다.
-- Confirmation / Follow-up: 실제 Repost callback Account 전환 회귀와 Reaction·Bookmark의 성공 payload 회귀를 확인했다.
-
 ## Remaining Decisions
 
 - 현재 구현 범위에 필요한 새 제품 결정은 없다.
 - PROD-795·819는 Done이고 main에 runtime이 있다. 다만 수집 중단 상태와 미완료 실제 수집 검증은 남아 있다. 이 상태를 구현 자체의 새 승인 gate로 바꾸거나 수집 완료로 간주하지 않는다.
 - Canceled PROD-520의 대체 집계 owner는 확인되지 않았다. 집계식·가입 이벤트는 제외 범위이며 이 change의 규범 요구사항이나 task로 추가하지 않는다.
-- Account 전환 중 늦은 완료 결과는 위 구현 경계에서 현재 Account와 비교하며, 같은 Account의 Profile 전환은 수집하고 다른 Account·guest 전환은 수집하지 않는다.
 
 ## Superseded Decisions
 

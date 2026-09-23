@@ -3,7 +3,6 @@ import { useCallback, useEffect, useRef } from 'react';
 import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
 import { ActionMenu } from '@/components/ui/ActionMenu';
-import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { PostActionControl } from './PostActionControl';
 import type { RepostAction_post$key } from './__generated__/RepostAction_post.graphql';
@@ -81,19 +80,16 @@ export function RepostAction({
   const theme = useTheme();
   const data = useFragment(repostActionPostFragment, post);
   const environment = useRelayEnvironment();
-  const { accountId } = useSession();
   const [commitRepost, isReposting] =
     useMutation<RepostActionRepostPostMutation>(repostPostMutation);
   const [commitDelete, isDeleting] =
     useMutation<RepostActionDeletePostMutation>(deletePostMutation);
   const inFlight = useRef(false);
   const currentEnvironment = useRef(environment);
-  const currentAccountId = useRef(accountId);
   const restoreFocusRef = useRef<() => void>(() => undefined);
   const processing = isReposting || isDeleting;
 
   currentEnvironment.current = environment;
-  currentAccountId.current = accountId;
 
   useEffect(() => {
     inFlight.current = false;
@@ -112,7 +108,6 @@ export function RepostAction({
 
       inFlight.current = true;
       const requestEnvironment = environment;
-      const requestAccountId = accountId;
       const finish = () => {
         if (currentEnvironment.current === requestEnvironment) {
           inFlight.current = false;
@@ -138,11 +133,7 @@ export function RepostAction({
                 )
               : (response as RepostActionDeletePostMutation['response'] | null)?.deletePost
                   ?.postId === activeRepostId;
-          if (
-            mutationConfirmed &&
-            requestAccountId &&
-            currentAccountId.current === requestAccountId
-          ) {
+          if (mutationConfirmed) {
             trackAnalytics('repost_succeeded', {
               result: action === 'create' ? 'created' : 'removed',
             });
@@ -173,7 +164,6 @@ export function RepostAction({
       data.viewerRepost?.id,
       environment,
       execution.kind,
-      accountId,
       onError,
       processing,
     ],

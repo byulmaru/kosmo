@@ -44,7 +44,7 @@ PROD-795·819는 Done이지만 실제 수집은 중단된 상태다. `apps/app/s
 
 “정확히 한 번”은 앱이 mutation 성공 결과 하나에 capture를 한 번 호출한다는 뜻이다. 클릭·메뉴 열기·optimistic state·재렌더링에서 호출하지 않고 분석 완료를 기다리지 않는다. PostHog 수신을 보장하는 분산 exactly-once 전송 계약을 추가하지 않는다.
 
-Account identity는 `AnalyticsSessionBridge`와 공용 adapter를 재사용한다. Profile 전환에 따른 Relay Environment 교체와 Account 전환은 구분한다. UI의 이전 actor callback 차단을 그대로 analytics 차단으로 복사하면 같은 Account의 완료 행동을 누락할 수 있다. 반대로 Account 전환 뒤 늦은 결과를 새 Account로 수집해서도 안 된다. 실제 세션 전환 테스트로 확인하고, 기존 계약 안에서 해결할 수 없다면 그 경계에서 사용자에게 결정이 필요한 내용을 제시한다. 임의 재식별이나 ID property 추가로 우회하지 않는다.
+Account identity는 `AnalyticsSessionBridge`와 공용 adapter를 재사용한다. action callback은 성공 payload를 확인한 뒤 공용 `trackAnalytics`만 호출하며, identity를 다시 판정하거나 ID property를 추가하지 않는다.
 
 기존 action 단위 테스트는 주로 Relay Store를 검증하며 실제 컴포넌트의 analytics 호출까지 증명하지 않는다. 실제 컴포넌트·hook을 실행하는 테스트를 보완하고 analytics 전송 경계만 mock한다. 기존 Repost·Reaction·Bookmark Story를 활용할 수 있다. UI 성공·실패와 Relay Store가 유지되는지도 함께 관찰한다.
 
@@ -65,7 +65,6 @@ Account identity는 `AnalyticsSessionBridge`와 공용 adapter를 재사용한�
 
 ## Risks / Trade-offs
 
-- [Account 전환 중 늦은 결과] → 요청 주체와 현재 SDK identity를 함께 실행 검증한다. 귀속 정책의 새 결정이 필요하면 그 경계에서 멈춘다.
 - [현재 실제 수집 불가] → 자동 테스트와 브라우저 outbound 검증, 실제 PostHog 수신을 별도 증거로 기록한다. 수신이 확인되지 않은 완료 조건은 pending으로 남긴다.
 - [운영 문서 공백] → 이번 이벤트와 검증 범위만 문서화하고 PROD-795·839·575의 책임을 인수하지 않는다.
 - [집계 기준 공백] → PROD-520은 Canceled다. WAA·제외 계정·기간·순사용과 가입 funnel을 승인된 것으로 취급하지 않는다.
@@ -82,4 +81,3 @@ Account identity는 `AnalyticsSessionBridge`와 공용 adapter를 재사용한�
 
 - 이벤트 taxonomy·분류·개인정보 범위에서 새로 정할 제품 계약은 없다.
 - 수집 재개 시점과 실제 검증 환경은 미확인이다. 현재 설정과 최신 운영 근거를 다시 확인한 뒤 실제 수집 검증을 진행한다.
-- Account 전환 중 늦은 callback의 정확한 실행 결과는 구현 검증에서 확인할 항목이다. Spec 단계에서는 실행하지 않았다.

@@ -6,7 +6,6 @@ import type { AnalyticsEventArgs } from './events';
 const POSTHOG_USER_ID = '$user_id';
 
 let client: PostHog | null | undefined;
-let expectedAccountId: string | null = null;
 
 function initializeAnalytics(): PostHog | null {
   if (client !== undefined) {
@@ -36,17 +35,7 @@ function initializeAnalytics(): PostHog | null {
 
 export function trackAnalytics(...args: AnalyticsEventArgs): void {
   try {
-    const analyticsClient = initializeAnalytics();
-    if (
-      !analyticsClient ||
-      !expectedAccountId ||
-      getPostHogAccountId(analyticsClient) !== expectedAccountId ||
-      analyticsClient.get_distinct_id() !== expectedAccountId
-    ) {
-      return;
-    }
-
-    analyticsClient.capture(args[0], args[1] as Parameters<PostHog['capture']>[1]);
+    initializeAnalytics()?.capture(args[0], args[1] as Parameters<PostHog['capture']>[1]);
   } catch {
     // Analytics is best-effort and must not affect the product flow.
   }
@@ -61,8 +50,6 @@ export function identifyAnalytics(accountId: string): void {
   if (!accountId) {
     return;
   }
-
-  expectedAccountId = accountId;
 
   try {
     const analyticsClient = initializeAnalytics();
@@ -85,8 +72,6 @@ export function identifyAnalytics(accountId: string): void {
 }
 
 export function clearAnalytics(): void {
-  expectedAccountId = null;
-
   try {
     const analyticsClient = initializeAnalytics();
     if (!analyticsClient || !getPostHogAccountId(analyticsClient)) {

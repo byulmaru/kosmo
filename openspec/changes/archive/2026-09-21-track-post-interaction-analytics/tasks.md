@@ -45,18 +45,18 @@ task 1의 이벤트를 실제 mutation 성공 결과마다 한 번 호출한다.
 - mutation 연결, Relay 정규화, actor 격리, pending·오류 처리와 성공 의미를 유지한다.
 - Reaction의 부분 오류·멱등 성공, Bookmark 삭제의 요청 대상 확인 판정을 보존한다.
 - 메뉴 열기·클릭·차단된 입력·optimistic state·재렌더링은 성공 이벤트가 아니다.
-- 같은 Account의 Profile 전환과 다른 Account의 세션 전환을 구분한다. 이벤트 property로 identity를 우회하지 않는다.
+- 공용 analytics identity 수명주기를 재구현하거나 이벤트 property로 identity를 우회하지 않는다.
 
 **Verification**
 
 - 실제 action·hook을 실행해 여섯 성공 동작의 이름·속성·호출 횟수와 Relay Store·UI 결과를 관찰한다.
 - null payload, 잘못된 삭제 대상, GraphQL·network 오류, 도달 가능한 부분 응답, Reaction 멱등 삭제와 SDK 실패를 재현한다.
-- 중복 입력·재렌더링과 actor A→B 전환 후 늦은 응답, 같은 Account의 Profile 전환·다른 Account 전환을 검증한다.
+- 중복 입력·재렌더링과 actor A→B 전환 후 UI·Store 격리를 검증한다.
 
 - [x] 2.1 재게시 생성·취소 성공에 대응 result를 가진 이벤트를 연결한다.
 - [x] 2.2 반응 추가·삭제 성공에 Type 분류만 담은 이벤트를 연결한다.
 - [x] 2.3 북마크 추가·삭제 성공에 무속성 이벤트를 연결한다.
-- [x] 2.4 실제 호출부의 성공·실패·중복·부분 응답·Account 귀속과 UI·Store 회귀를 검증한다.
+- [x] 2.4 실제 호출부의 성공·실패·중복·부분 응답과 UI·Store 회귀를 검증한다.
 
 ## 3. PROD-539 문서와 기능별 수집 검증
 

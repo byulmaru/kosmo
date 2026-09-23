@@ -81,8 +81,6 @@ export function usePostReactionController(
   const data = useFragment(postReactionControllerFragment, post);
   const environment = useRelayEnvironment();
   const session = useSession();
-  const currentAccountId = useRef(session.accountId);
-  currentAccountId.current = session.accountId;
   const resolvedEnabled =
     enabled ?? (session.status === 'valid' && session.selectedProfileId !== null);
   const [commitAdd] = useMutation<PostReactionControllerAddReactionMutation>(addReactionMutation);
@@ -129,7 +127,6 @@ export function usePostReactionController(
       }
 
       const requestIdentity = identity.current;
-      const requestAccountId = session.accountId;
       inFlightTypes.current.add(optionId);
       setPendingTypes((current) => new Set(current).add(optionId));
       setErrorTypes((current) => {
@@ -166,7 +163,7 @@ export function usePostReactionController(
           : (response as PostReactionControllerDeleteReactionMutation['response'] | null)
               ?.deleteReaction;
         const succeeded = Boolean(payload);
-        if (succeeded && requestAccountId && currentAccountId.current === requestAccountId) {
+        if (succeeded) {
           trackAnalytics(nextSelected ? 'reaction_added' : 'reaction_removed', {
             reaction_type: optionId === '❤️' ? 'default' : 'custom',
           });
@@ -188,7 +185,7 @@ export function usePostReactionController(
         });
       }
     },
-    [commitAdd, commitDelete, isCurrentIdentity, postId, resolvedEnabled, session.accountId],
+    [commitAdd, commitDelete, isCurrentIdentity, postId, resolvedEnabled],
   );
 
   return {

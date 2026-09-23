@@ -23,13 +23,11 @@ type MutationRequest = {
 };
 
 type Session = {
-  accountId: string | null;
   selectedProfileId: string | null;
   status: 'guest' | 'valid';
 };
 
 const session: Session = {
-  accountId: 'account-a',
   selectedProfileId: 'profile-a',
   status: 'valid',
 };
@@ -157,7 +155,6 @@ before(async () => {
 });
 
 beforeEach(() => {
-  session.accountId = 'account-a';
   session.selectedProfileId = 'profile-a';
   session.status = 'valid';
   analyticsCalls.length = 0;
@@ -216,7 +213,7 @@ describe('Post interaction analytics callbacks', () => {
     ]);
   });
 
-  it('재게시의 실패·success payload 누락·Account 전환 뒤 응답은 기록하지 않는다', async () => {
+  it('재게시의 success payload 누락은 기록하지 않는다', async () => {
     fragmentData = { content: null, id: 'post-id', repostCount: 0, viewerRepost: null };
 
     await act(async () => {
@@ -226,14 +223,6 @@ describe('Post interaction analytics callbacks', () => {
     await act(async () => menu.props.items[0].onSelect());
     const missingPayloadRequest = lastMutationRequest();
     await act(async () => missingPayloadRequest.onCompleted?.({ repostPost: null }));
-
-    await act(async () => menu.props.items[0].onSelect());
-    session.accountId = 'account-b';
-    await act(async () => renderer?.update(createElement(RepostAction, { post: {} as never })));
-    const staleRequest = lastMutationRequest();
-    await act(async () =>
-      staleRequest.onCompleted?.({ repostPost: { repost: { id: 'stale-repost-id' } } }),
-    );
 
     assert.deepEqual(analyticsCalls, []);
   });
@@ -260,8 +249,6 @@ describe('Post interaction analytics callbacks', () => {
         ],
       ),
     );
-
-    assert.deepEqual(analyticsCalls, [['bookmark_added', {}]]);
 
     fragmentData = { id: 'post-id', viewerBookmark: { id: 'bookmark-id' } };
     await act(async () => renderer?.update(createElement(BookmarkHarness)));
@@ -365,55 +352,6 @@ describe('Post interaction analytics callbacks', () => {
       reactionController.toggleReaction({ nextSelected: true, optionId: '❤️' }),
     );
     await act(async () => lastMutationRequest().onError?.(new Error('network failure')));
-
-    assert.deepEqual(analyticsCalls, []);
-  });
-
-  it('같은 Account의 Profile 전환은 유지하고 다른 Account의 늦은 응답은 버린다', async () => {
-    fragmentData = { id: 'post-id', viewerBookmark: null };
-    await act(async () => {
-      renderer = create(createElement(BookmarkHarness));
-    });
-    let bookmarkConfig = renderer!.root.findByType('BookmarkHarness' as never).props;
-    await act(async () => bookmarkConfig.onPress());
-    const sameAccountRequest = lastMutationRequest();
-    session.selectedProfileId = 'profile-b';
-    await act(async () => renderer?.update(createElement(BookmarkHarness)));
-    await act(async () =>
-      sameAccountRequest.onCompleted?.({ createBookmark: { bookmark: { id: 'bookmark-a' } } }),
-    );
-    assert.deepEqual(analyticsCalls, [['bookmark_added', {}]]);
-
-    analyticsCalls.length = 0;
-    bookmarkConfig = renderer!.root.findByType('BookmarkHarness' as never).props;
-    await act(async () => bookmarkConfig.onPress());
-    const staleBookmarkRequest = lastMutationRequest();
-    session.accountId = 'account-b';
-    await act(async () => renderer?.update(createElement(BookmarkHarness)));
-    await act(async () =>
-      staleBookmarkRequest.onCompleted?.({
-        createBookmark: { bookmark: { id: 'stale-bookmark' } },
-      }),
-    );
-
-    fragmentData = {
-      id: 'post-id',
-      profile: { relativeHandle: '@author@example.test' },
-      reactionCounts: [],
-      viewerReactions: [],
-    };
-    session.accountId = 'account-a';
-    await act(async () => renderer?.update(createElement(ReactionHarness)));
-    const reactionController = renderer!.root.findByType('ReactionHarness' as never).props;
-    await act(async () =>
-      reactionController.toggleReaction({ nextSelected: true, optionId: '🎉' }),
-    );
-    const staleReactionRequest = lastMutationRequest();
-    session.accountId = 'account-b';
-    await act(async () => renderer?.update(createElement(ReactionHarness)));
-    await act(async () =>
-      staleReactionRequest.onCompleted?.(reactionAddResponse('🎉', 'reaction-party')),
-    );
 
     assert.deepEqual(analyticsCalls, []);
   });
