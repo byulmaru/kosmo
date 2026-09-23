@@ -1,9 +1,10 @@
 import { ContentReportTargetType } from '@kosmo/core/enums';
 import { Slot, Stack, useGlobalSearchParams, usePathname, useRouter } from 'expo-router';
 import { ArrowLeft, ChevronLeftIcon } from 'lucide-react-native';
+import { useEffect } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
-import { ProfileViewAnalytics } from '@/analytics/ProfileViewAnalytics';
+import { trackAnalytics } from '@/analytics/client';
 import { useContentReportMenuItem } from '@/components/content-report/ContentReportContext';
 import { PageHeader } from '@/components/PageHeader';
 import { FollowButton } from '@/components/profile/FollowButton';
@@ -316,6 +317,13 @@ function ProfileConnectionChrome({
       </TabList>
     </>
   );
+}
+
+function ProfileViewAnalytics() {
+  useEffect(() => {
+    trackAnalytics('profile_view_succeeded', {});
+  }, []);
+  return null;
 }
 
 const styles = StyleSheet.create({

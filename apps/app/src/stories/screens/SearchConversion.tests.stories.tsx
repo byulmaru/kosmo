@@ -1,5 +1,5 @@
 import { Text } from 'react-native';
-import { expect, mocked, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fireEvent, mocked, userEvent, waitFor, within } from 'storybook/test';
 import { AnalyticsSessionBridge } from '@/analytics/AnalyticsSessionBridge';
 import { trackAnalytics } from '@/analytics/client';
 import ProfileLayout from '@/app/(tabs)/(profile)/[profileHandle]/_layout';
@@ -141,6 +141,16 @@ export const DirectProfileHasNoSearchSelection: Story = {
   play: async ({ canvasElement }) => {
     await expect(within(canvasElement).findByText('프로필 콘텐츠')).resolves.toBeVisible();
     await waitFor(() => expect(events()).toEqual([['profile_view_succeeded', {}]]));
+  },
+};
+
+export const ModifiedSelectionHasNoSearchSelection: Story = {
+  play: async ({ canvasElement }) => {
+    const link = await within(canvasElement).findByRole('link', { name: /@conversion / });
+    fireEvent.click(link, { ctrlKey: true });
+    fireEvent.click(link, { metaKey: true });
+    fireEvent.click(link, { shiftKey: true });
+    expect(events().map(([name]) => name)).not.toContain('search_result_selected');
   },
 };
 

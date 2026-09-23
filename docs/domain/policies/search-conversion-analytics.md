@@ -8,7 +8,7 @@
 
 ## 계산 계약
 
-- 분모: 선택한 Asia/Seoul 기간에 `people` 검색 결과의 유효한 Profile 링크를 한 번 이상 명시적으로 선택한 distinct PostHog person 수. 검색 제출·결과 로드·결과의 Follow 버튼 클릭만으로는 분모를 만들지 않는다.
+- 분모: 선택한 Asia/Seoul 기간에 `people` 검색 결과의 유효한 Profile 링크를 웹의 기본 탐색으로 한 번 이상 선택한 distinct PostHog person 수. 새 탭이나 수정키를 사용한 선택은 포함하지 않는다. 검색 제출·결과 로드·결과의 Follow 버튼 클릭만으로는 분모를 만들지 않는다.
 - 전체 분자: 각 분모 person이 첫 유효 선택 이후 30분 안에 어느 유효한 Profile이든 화면에 표시했거나 실제 Follow Relationship의 성공 응답을 받은 사람 수. Profile 조회와 Follow를 모두 해도 한 번만 센다.
 - 같은 person의 여러 결과 선택은 기간 안에서 분모를 늘리지 않는다. 선택이 없는 시간 경과·계정 상태 변화만으로 분모를 새로 만들지 않는다.
 - 성공은 선택보다 나중에 발생해야 한다. Profile 조회는 유효한 데이터가 실제 화면에 표시된 경우다. route 진입, 자동 pageview, loading, 오류, 대상 없음은 제외한다. Follow는 [Follow Relationship](../objects/follow-relationship.md)이 응답으로 확인된 경우만 포함하고 [Follow Request](../objects/follow-request.md)는 제외한다. 이후 승인·원격 Accept는 이번 범위 밖이다.

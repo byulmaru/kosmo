@@ -2,7 +2,7 @@
 
 ### Requirement: Person 단위 검색 결과 선택 전환
 
-시스템은 `people` 검색 결과의 유효한 Profile 링크를 명시적으로 선택한 person을 분모로 세고, 선택 후 30분 안에 어느 유효한 Profile이든 실제 표시되거나 Follow Relationship 성공 응답을 받은 person을 전환으로 세어야 한다(MUST). 동일 person의 여러 대상 선택은 분모를 늘리지 않으며 대상 일치는 요구하지 않는다.
+시스템은 `people` 검색 결과의 유효한 Profile 링크를 웹의 기본 탐색으로 선택한 person을 분모로 세고, 선택 후 30분 안에 어느 유효한 Profile이든 실제 표시되거나 Follow Relationship 성공 응답을 받은 person을 전환으로 세어야 한다(MUST). 새 탭이나 수정키를 사용한 선택은 분모에서 제외한다. 동일 person의 여러 대상 선택은 분모를 늘리지 않으며 대상 일치는 요구하지 않는다.
 
 #### Scenario: 여러 대상 선택 뒤 일부 성공
 
