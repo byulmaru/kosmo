@@ -156,6 +156,7 @@ export const RepeatedTargetsLight: Story = {
     ]);
     expect(links[0]).toHaveAccessibleName('@second-profile, Second Profile, 프로필 보기');
     expect(links[1]).toHaveAccessibleName('@first-profile, First Profile, 프로필 보기');
+    expect(links[0]).toHaveStyle({ color: '#4F46E5', textDecorationLine: 'underline' });
 
     await userEvent.click(links[0]);
     expect(route).toHaveTextContent('/@second-profile');
@@ -171,6 +172,7 @@ export const RepeatedTargetsDark: Story = {
     const route = canvas.getByTestId('post-content-mention-route');
     const links = canvas.getAllByRole('link');
     expect(links).toHaveLength(3);
+    expect(links[1]).toHaveStyle({ color: '#A5B4FC', textDecorationLine: 'underline' });
     links[1]?.focus();
     await userEvent.keyboard('{Enter}');
     expect(route).toHaveTextContent('/@first-profile');

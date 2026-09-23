@@ -14,7 +14,10 @@ const mockModule = (specifier: string | URL, exports: object) =>
   } as unknown as Parameters<typeof mock.module>[1]);
 
 mockModule('react-native', {
-  StyleSheet: { create: <T>(styles: T) => styles },
+  StyleSheet: {
+    create: <T>(styles: T) => styles,
+    flatten: (styles: Array<Record<string, unknown>>) => Object.assign({}, ...styles),
+  },
   Text: 'Text',
 });
 mockModule('react-relay', {

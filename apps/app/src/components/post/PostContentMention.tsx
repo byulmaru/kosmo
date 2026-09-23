@@ -42,7 +42,7 @@ export function PostContentMention({
         accessibilityLabel={`${data.relativeHandle}, ${data.displayName}, 프로필 보기`}
         accessibilityRole="link"
         onPress={(event) => event.stopPropagation()}
-        style={[styles.link, styles.mentionLink, { color: linkColor }]}
+        style={StyleSheet.flatten([styles.link, styles.mentionLink, { color: linkColor }])}
       >
         {data.relativeHandle}
       </Text>
