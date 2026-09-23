@@ -68,7 +68,6 @@ mockModule('react-relay', {
   useRelayEnvironment: () => relayEnvironment,
 });
 mockModule('@/analytics/client', {
-  captureSearchProfileAnalytics: () => null,
   trackAnalytics: () => {},
 });
 mockModule('@/components/ui/ToastProvider', {

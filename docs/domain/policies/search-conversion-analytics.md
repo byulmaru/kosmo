@@ -1,102 +1,22 @@
 # Search Conversion Analytics Policy
 
-## 목적과 근거
+## 목적과 결정 기록
 
-검색 결과 선택이 실제 Profile 조회 또는 Follow로 이어지는 비율을 같은 탐색 단위로 계산한다.
-[PROD-557](https://linear.app/byulmaru/issue/PROD-557)의 2026-09-03 승인 댓글
-`ccb6d7a3-1d3e-48f8-a556-dfbf38638d21`이 계산 계약과 소유권의 근거다.
-2026-09-22 현재 작업의 사용자 지시에 따라 귀속 속성 이름을 `search_profile_journey_id`로 정하고,
-HogQL을 canonical 집계로 사용한다. 사람 수가 아닌 탐색별 결과를 재현하기 위한 결정이다.
-이 정책은 취소된 PROD-520의 전체 북극성 지표나 WAA를 정의하지 않는다.
+이 지표는 **검색 결과에서 Profile을 선택한 사람 중 30분 안에 유효한 Profile을 조회하거나 실제 Follow Relationship을 만든 사람의 비율**을 묻는다. 집계 단위는 PostHog person이다. 검색에서 선택한 대상과 이후 행동한 대상이 같을 필요는 없다. 같은 사람이 A·B·C를 선택하고 A·C에서 행동했다면 분모 1명·전환 1명이다. A 선택 뒤 A에서 실패하고 B를 조회해도 그 사람은 전환한 것으로 센다. 이 값으로 개별 검색 결과 선택의 품질이나 대상별 성공률을 해석하지 않는다.
 
-## 분석 질문과 집계 단위의 이유
+[PROD-557](https://linear.app/byulmaru/issue/PROD-557)의 2026-09-03 승인 댓글 `ccb6d7a3-1d3e-48f8-a556-dfbf38638d21`은 대상 Profile별 journey와 동일 대상 성공 귀속을 명시적으로 승인했다. 2026-09-23 사용자는 PR #998의 리뷰를 검토한 뒤 person 단위 전환율이면 충분하다고 결정해 그 계산 계약을 변경했다. 과거 승인을 person 단위 승인으로 소급하지 않는다. Profile이 Account에 속한다는 관계만으로 검색 대상 간 귀속 문제가 사라지는 것은 아니지만, 현재 제품 질문에는 대상별 귀속이 필요하지 않다.
 
-이 지표가 답하는 질문은 **검색 결과에서 선택한 각 Profile이 실제로 그 Profile의 조회 또는 Follow로 이어졌는가**이다.
-한 Account가 같은 검색 결과에서 A·B·C를 각각 선택하고 A와 C에서만 해당 행동에 성공했다면,
-선택 journey는 3개이고 전체 전환은 2개다. 같은 활성 journey에서 같은 대상을 반복 선택한 횟수는 더하지 않는다.
-A를 선택했지만 A에서는 실패하고 이어 선택한 B에서 조회가 성공한 경우 A의 전환은 0, B의 전환은 1이다.
-대상별 journey는 검색 결과 **선택 단위의 품질**을 측정하고,
-선택한 대상에 대한 downstream 행동의 귀속을 보존한다.
+## 계산 계약
 
-동일 person을 단위로 한 PostHog Funnel은 한 사람의 여러 대상 선택을 합치므로 다른 질문에 답한다.
-선택 대상과 성공 대상의 일치를 확인하지 않으면 B에서 발생한 성공을 앞선 A 선택의 전환으로 해석할 수도 있다.
-person 단위 전환율로 대체하려면 현재 승인된 계산 단위를 변경하는 별도 제품 결정이 필요하다.
-2026-09-03 승인 댓글은 대상별 journey와 같은 journey·대상의 성공 귀속을 명시하지만, 이 분석 질문과 반례를
-제품적 이유로 상세히 기록하지는 않았다. 이 설명은 승인된 계약의 이유를 명확히 하며 계산식을 바꾸지 않는다.
+- 분모: 선택한 Asia/Seoul 기간에 `people` 검색 결과의 유효한 Profile 링크를 한 번 이상 명시적으로 선택한 distinct PostHog person 수. 검색 제출·결과 로드·결과의 Follow 버튼 클릭만으로는 분모를 만들지 않는다.
+- 전체 분자: 각 분모 person이 첫 유효 선택 이후 30분 안에 어느 유효한 Profile이든 화면에 표시했거나 실제 Follow Relationship의 성공 응답을 받은 사람 수. Profile 조회와 Follow를 모두 해도 한 번만 센다.
+- 같은 person의 여러 결과 선택은 기간 안에서 분모를 늘리지 않는다. 선택이 없는 시간 경과·계정 상태 변화만으로 분모를 새로 만들지 않는다.
+- 성공은 선택보다 나중에 발생해야 한다. Profile 조회는 유효한 데이터가 실제 화면에 표시된 경우다. route 진입, 자동 pageview, loading, 오류, 대상 없음은 제외한다. Follow는 [Follow Relationship](../objects/follow-relationship.md)이 응답으로 확인된 경우만 포함하고 [Follow Request](../objects/follow-request.md)는 제외한다. 이후 승인·원격 Accept는 이번 범위 밖이다.
 
-## 계산 단위
+PostHog Funnel의 1단계는 `search_result_selected` 중 `tab = people`, 2단계는 유효한 Profile 표시 이벤트 또는 `follow_succeeded` 중 `result = follow`의 OR 조건이다. person 기준, 순차 전환, 30분 conversion window를 적용한다. 결과 기간은 첫 단계 발생 시점으로 묶고 timezone은 PROD-820의 Asia/Seoul을 따른다. 관측 window가 끝나기 전 수치는 잠정치이며 분모가 0이면 데이터 없음으로 표시한다.
 
-- 분모는 같은 검색 결과 맥락에서 선택한 대상 [Profile](../objects/profile.md)별 journey다.
-- 같은 journey의 수명 안에서는 같은 대상의 재선택과 뒤로가기를 중복 제거하고, 다른 대상 선택은 별도 journey로 센다.
-- Account·선택 Profile·인증 상태·PostHog session 변경으로 기존 journey가 종료된 뒤 같은 검색 결과 맥락에서
-  같은 대상을 다시 명시적으로 선택하면 새 `search_profile_journey_id`로 새 journey를 시작한다.
-- 전체 전환 분자는 최초 선택 후 30분 이내 같은 journey·대상의 조회 또는 Follow가 성공한 journey 수다.
-- 조회와 Follow가 모두 성공해도 전체 전환은 한 번이다. 조회 전환율과 Follow 전환율은 같은 분모로 따로 계산한다.
+## 수집·범위
 
-## 성공 조건
+Profile 표시 이벤트는 유효한 Profile chrome이 표시될 때만 수집한다. 대상별 journey ID, 대상 Profile ID, 검색어, 이름, handle 또는 이들의 파생값을 새 custom 속성으로 보내지 않는다. 기존 SDK의 Account 기반 identify와 표준 Search `q`·click/referrer/session metadata 계약은 유지한다. 인증 사용자의 PostHog person은 Account identity를 사용하며 선택 Profile은 별도 집계 단위가 아니다.
 
-Profile 조회는 유효한 Profile 데이터를 실제 화면에 표시했을 때 성공이다. route 진입, URL 변경, 자동 pageview,
-loading, 조회 실패나 대상 없음은 성공이 아니다. 검색에 실패해 결과를 선택하지 못하면 journey 분모도 생기지 않는다.
-
-Follow는 실제 [Follow Relationship](../objects/follow-relationship.md)이 응답으로 확인된 경우만 성공이다.
-[Follow Request](../objects/follow-request.md)는 승인 대기이므로 성공에 포함하지 않는다. 이후 수신자 승인이나
-원격 Accept를 따로 추적해 검색 전환에 귀속하는 것은 현재 범위에서 제외한다.
-
-## 귀속 기간과 종료
-
-최초 선택 후 정확히 30분인 성공까지 포함한다. 30분 경과만으로 같은 검색·대상의 새 journey를 시작하거나 최초 선택 시각을
-연장하지 않는다. 탭 종료·전체 reload 뒤에도 journey를 복원하지 않는다.
-같은 journey의 재선택으로 최초 선택 시각이나 관측 기간을 연장하지 않는다.
-아래 경계 중 먼저 발생한 시점에 기존 journey의 귀속 수명이 끝나며, 그 시점 이후의 성공은 기존 journey에 귀속하지 않는다.
-
-- 최초 선택 후 30분 경과.
-- 새 검색.
-- Account, 선택 Profile 또는 인증 상태 변경.
-- PostHog session 변경.
-- 탭 종료 또는 전체 reload.
-
-종료 전에 기록한 분모와 성공은 유지한다. 종료 뒤 도착한 늦은 응답은 이전 또는 새 journey에 연결하지 않는다.
-Account·선택 Profile·인증 상태·PostHog session 변경 자체만으로 새 journey를 만들지 않는다. 이 네 경계 중 하나로 기존 journey가
-종료된 뒤 같은 검색 결과 맥락에서 같은 대상을 유효하게 다시 명시적으로 선택한 경우에만 새 `search_profile_journey_id`와 분모를
-만들며, 재선택이 없으면 새 journey도 만들지 않는다. 같은 journey 안의 재선택 중복 제거 상태가 이 네 경계 이후의 재선택을
-막지 않는다.
-앱의 인증 [Session](../objects/session.md)과 PostHog session은 별도 경계로 다룬다.
-탭 간 journey 공유와 reload 뒤 복원은 하지 않으며, 선택 맥락을 전달받지 않은 새 탭·별도 navigation은 기존
-journey에 연결하지 않는다.
-
-## 집계 기간과 표시
-
-journey 시작 시점을 기준으로 기간을 묶고, timezone은 PROD-820이 정한 Asia/Seoul을 따른다. 성공이 다음 날짜에
-발생해도 귀속 기간 안이면 시작 날짜의 journey에 포함한다. 마지막 journey의 관측 window가 끝나기 전 결과는
-잠정치로 표시한다. 분모가 0이면 데이터 없음으로 표시한다.
-
-## 기준 집계와 acceptance
-
-이 지표의 canonical 집계는 HogQL이다. 집계 단위는 person이 아닌 `search_profile_journey_id`이며,
-같은 Account의 여러 journey도 각각 계산한다.
-
-- 분모: 대상 기간에 시작한 distinct `search_profile_journey_id` 수.
-- 전체 분자: 분모의 journey 중 귀속 기간 안에 Profile 조회 또는 Follow가 성공한 distinct `search_profile_journey_id` 수.
-- Profile 조회 분자: 분모의 journey 중 귀속 기간 안에 Profile 조회가 성공한 distinct `search_profile_journey_id` 수.
-- Follow 분자: 분모의 journey 중 귀속 기간 안에 Follow가 성공한 distinct `search_profile_journey_id` 수.
-
-각 전환율은 해당 분자를 같은 분모로 나눈 비율이다. 위 성공·종료 조건, 정확히 30분 포함,
-시작 시점 기준 Asia/Seoul 기간 귀속, 잠정치와 분모 0 표시를 그대로 적용한다.
-정의된 6개 journey fixture에서 HogQL 결과가 분모 6·전체 분자 4·Profile 조회 분자 3·Follow 분자 2를
-정확히 재현해야 acceptance를 충족한다. query와 기대값·실제값을 다시 확인할 수 있는 증거를 남긴다.
-PostHog Funnel과 dashboard는 필요할 때 시각화·교차검증에 사용하는 보조 수단이며 기준 집계를 대체하지 않는다.
-
-## 수집 경계
-
-귀속 속성 `search_profile_journey_id`의 값은 Account·Profile·검색어에서 파생하지 않은 불투명 식별자다. custom 귀속 속성으로 raw 검색어,
-이름, handle, 대상 Profile ID를 보내지 않으며, 대상 ID의 hash나 암호화 대체값도 보내지 않는다.
-기존 SDK identity 계약을 유지한다.
-
-PROD-819·820이 승인한 PostHog 표준 Search `q`, 기본 click ID, referrer·session에서 파생되는 검색·캠페인
-metadata 수집은 별도 계약으로 유지한다. custom 속성 제한을 표준 metadata 전체 차단으로 확대하지 않는다.
-
-## 범위와 책임
-
-PROD-557은 이 계산 정의, 탐색 귀속 계측, 단위·회귀 검증과 HogQL 기준 집계·fixture 재현을 소유한다.
-검색·Profile·Follow UX, 추천·랭킹·개인화, 이전 이벤트명·property 호환성, 전체 북극성 지표와 다른 제품 지표는
-포함하지 않는다. 공통 PostHog 개인정보·운영 전환은 PROD-795와 그 인계를 받은 이슈의 책임이다.
+현재 수집·Funnel은 웹을 대상으로 한다. PROD-557은 이 계산 정의, 필요한 표시 계측, Funnel 설정과 검증을 소유한다. 검색·Profile·Follow UX, 추천·랭킹·개인화, 이전 이벤트명·property 호환성, 전체 북극성 지표는 포함하지 않는다. 공통 PostHog 개인정보·운영 전환은 PROD-795와 그 후속 이슈의 책임이다.

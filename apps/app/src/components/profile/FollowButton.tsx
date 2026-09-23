@@ -1,9 +1,6 @@
-import { useContext } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
-import { SearchProfileJourneyContext } from '@/analytics/SearchProfileAttribution';
-import { searchProfileJourneys } from '@/analytics/searchProfileJourneys';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useSession } from '@/session/SessionProvider';
@@ -110,7 +107,6 @@ const getSelectedProfile = (store: RecordSourceSelectorProxy) =>
 
 export function FollowButton({ profile, style }: FollowButtonProps) {
   const { selectedProfileId } = useSession();
-  const getSearchJourney = useContext(SearchProfileJourneyContext);
   const { showToast } = useToast();
   const data = useFragment(followButtonProfileFragment, profile);
   const [commitFollow, following] =
@@ -195,7 +191,6 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
         variables: { id: viewerState.followRequest.id },
       });
     } else {
-      const searchJourney = getSearchJourney?.() ?? null;
       commitFollow({
         onCompleted: (response, errors) => {
           const failed = Boolean(errors?.length);
@@ -205,10 +200,6 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
           }
           if (!selectedProfileId) {
             return;
-          }
-
-          if (response.followProfile.result.__typename === 'ProfileFollow') {
-            searchProfileJourneys.succeed(searchJourney, data.id, 'follow');
           }
 
           trackAnalytics('follow_succeeded', {

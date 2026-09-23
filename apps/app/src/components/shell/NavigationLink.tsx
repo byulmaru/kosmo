@@ -1,7 +1,6 @@
 import { Link, usePathname, useRouter } from 'expo-router';
 import { cloneElement } from 'react';
 import { Platform } from 'react-native';
-import { searchProfileJourneys } from '@/analytics/searchProfileJourneys';
 import { useNavigationGuard } from './NavigationGuardContext';
 import { usePrimaryNavigationScroll } from './PrimaryNavigationScrollContext';
 import type { Href, LinkProps } from 'expo-router';
@@ -56,14 +55,12 @@ export function NavigationLink({
     const targetPathname = getHrefPathname(href);
     if (onCurrentNavigate && (current || targetPathname === pathname)) {
       event.preventDefault();
-      searchProfileJourneys.beginNavigation();
       onNavigate?.();
       onCurrentNavigate();
       return;
     }
     const navigate = () => {
       recordPrimaryNavigation();
-      searchProfileJourneys.beginNavigation();
       onNavigate?.();
       if (navigationMode === 'push') {
         router.push(href);
@@ -77,7 +74,6 @@ export function NavigationLink({
       event.preventDefault();
       return;
     }
-    searchProfileJourneys.beginNavigation();
     onNavigate?.();
     recordPrimaryNavigation();
   };

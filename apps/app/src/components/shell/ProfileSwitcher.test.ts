@@ -168,7 +168,6 @@ mockModule(require.resolve('lucide-react-native'), {
   PlusIcon: 'PlusIcon',
 });
 mockModule('@/analytics/client', {
-  captureSearchProfileAnalytics: () => null,
   trackAnalytics: () => undefined,
 });
 mockModule('@/components/profile/ProfilePicker', {

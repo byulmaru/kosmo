@@ -1,28 +1,5 @@
-export type SearchProfileEventProperties = {
-  search_profile_journey_started: {
-    search_profile_journey_id: string;
-    source: 'search_people';
-  };
-  search_profile_view_succeeded: {
-    search_profile_journey_id: string;
-    source: 'search_people';
-    elapsed_ms: number;
-  };
-  search_profile_follow_succeeded: {
-    search_profile_journey_id: string;
-    source: 'search_people';
-    elapsed_ms: number;
-  };
-};
-
-export type SearchProfileEventArgs = {
-  [Name in keyof SearchProfileEventProperties]: [
-    name: Name,
-    properties: SearchProfileEventProperties[Name],
-  ];
-}[keyof SearchProfileEventProperties];
-
-export type AnalyticsEventProperties = SearchProfileEventProperties & {
+export type AnalyticsEventProperties = {
+  profile_view_succeeded: Record<string, never>;
   profile_created: { selected_profile_id: string };
   profile_selected: { selected_profile_id: string };
   post_created: {

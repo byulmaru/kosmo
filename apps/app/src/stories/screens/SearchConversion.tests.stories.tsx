@@ -1,12 +1,7 @@
 import { Text } from 'react-native';
-import { expect, fireEvent, mocked, userEvent, waitFor, within } from 'storybook/test';
+import { expect, mocked, userEvent, waitFor, within } from 'storybook/test';
 import { AnalyticsSessionBridge } from '@/analytics/AnalyticsSessionBridge';
-import {
-  captureSearchProfileAnalytics,
-  observeAnalyticsSession,
-  trackAnalytics,
-} from '@/analytics/client';
-import { searchProfileJourneys } from '@/analytics/searchProfileJourneys';
+import { trackAnalytics } from '@/analytics/client';
 import ProfileLayout from '@/app/(tabs)/(profile)/[profileHandle]/_layout';
 import SearchScreen from '@/app/(tabs)/(protected)/search';
 import { useProfileRoute } from '@/components/profile/ProfileRouteShell';
@@ -103,8 +98,10 @@ function SearchConversionFixture({ startPath = '/search' }: { startPath?: string
   );
 }
 
-const emissions = () => mocked(captureSearchProfileAnalytics).mock.calls.map(([args]) => args);
-const successes = () => emissions().filter(([event]) => event.endsWith('_succeeded'));
+const events = () =>
+  mocked(trackAnalytics).mock.calls.filter(([name]) =>
+    ['search_result_selected', 'profile_view_succeeded', 'follow_succeeded'].includes(name),
+  );
 const selectResult = async (element: HTMLElement) => {
   await userEvent.click(await within(element).findByRole('link', { name: /@conversion / }));
 };
@@ -113,19 +110,8 @@ const meta = {
   title: 'KOSMO/Screens/SearchConversion/Tests',
   component: SearchConversionFixture,
   beforeEach: () => {
-    searchProfileJourneys.setSearch('reset-story');
     mocked(trackAnalytics).mockReset();
-    mocked(captureSearchProfileAnalytics).mockReset().mockReturnValue('conversion-sdk-session');
-    mocked(observeAnalyticsSession).mockImplementation((listener) => {
-      listener('conversion-sdk-session');
-      return () => undefined;
-    });
-    return () => {
-      searchProfileJourneys.end();
-      mocked(captureSearchProfileAnalytics).mockReset();
-      mocked(observeAnalyticsSession).mockReset();
-      mocked(trackAnalytics).mockReset();
-    };
+    return () => mocked(trackAnalytics).mockReset();
   },
   parameters: {
     relay: { data, mutationResponse: followResponse() },
@@ -135,107 +121,26 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const ViewFollowAndReselect: Story = {
+export const SelectedProfileVisible: Story = {
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
     await selectResult(canvasElement);
-    await expect(canvas.findByText('프로필 콘텐츠')).resolves.toBeVisible();
+    await expect(within(canvasElement).findByText('프로필 콘텐츠')).resolves.toBeVisible();
     await waitFor(() =>
-      expect(successes().map(([event]) => event)).toEqual(['search_profile_view_succeeded']),
+      expect(events().map(([name]) => name)).toEqual([
+        'search_result_selected',
+        'profile_view_succeeded',
+      ]),
     );
-    await userEvent.click(canvas.getByRole('button', { name: '팔로우' }));
-    await expect(canvas.findByRole('button', { name: '팔로잉' })).resolves.toBeEnabled();
-    await userEvent.click(canvas.getByRole('button', { name: '검색으로 돌아가기' }));
-    await selectResult(canvasElement);
-    await expect(canvas.findByText('프로필 콘텐츠')).resolves.toBeVisible();
-    expect(emissions().map(([event]) => event)).toEqual([
-      'search_profile_journey_started',
-      'search_profile_view_succeeded',
-      'search_profile_follow_succeeded',
-    ]);
-    expect(new Set(emissions().map(([, props]) => props.search_profile_journey_id)).size).toBe(1);
-    for (const [event, props] of emissions()) {
-      expect(Object.keys(props).sort()).toEqual(
-        event.endsWith('_started')
-          ? ['search_profile_journey_id', 'source']
-          : ['elapsed_ms', 'search_profile_journey_id', 'source'],
-      );
-      expect(props.search_profile_journey_id).toMatch(/^[0-9a-f-]{36}$/);
-    }
+    expect(events()[0]?.[1]).toEqual({ tab: 'people' });
+    expect(events()[1]?.[1]).toEqual({});
   },
 };
 
-export const FollowWithoutSelection: Story = {
+export const DirectProfileHasNoSearchSelection: Story = {
+  args: { startPath: '/@conversion' },
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(await canvas.findByRole('button', { name: '팔로우' }));
-    await expect(canvas.findByRole('button', { name: '팔로잉' })).resolves.toBeEnabled();
-    expect(emissions()).toEqual([]);
-  },
-};
-
-export const ModifierSelection: Story = {
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const link = await canvas.findByRole('link', { name: /@conversion / });
-    fireEvent.click(link, { ctrlKey: true });
-    expect(link).toBeVisible();
-    expect(emissions()).toEqual([]);
-    fireEvent.click(link, { metaKey: true });
-    expect(emissions()).toEqual([]);
-  },
-};
-
-export const PendingIsNotSuccess: Story = {
-  parameters: { relay: { mutationLoading: true } },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await selectResult(canvasElement);
-    await userEvent.click(await canvas.findByRole('button', { name: '팔로우' }));
-    await expect(canvas.findByRole('button', { name: '팔로잉' })).resolves.toBeDisabled();
-    expect(successes().map(([event]) => event)).toEqual(['search_profile_view_succeeded']);
-  },
-};
-
-export const RequestIsNotSuccess: Story = {
-  parameters: { relay: { mutationResponse: followResponse(true) } },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await selectResult(canvasElement);
-    await userEvent.click(await canvas.findByRole('button', { name: '팔로우' }));
-    await expect(canvas.findByRole('button', { name: '요청됨' })).resolves.toBeEnabled();
-    expect(successes().map(([event]) => event)).toEqual(['search_profile_view_succeeded']);
-  },
-};
-
-export const FollowFailure: Story = {
-  parameters: { relay: { mutationGraphQLErrors: ['follow failed'] } },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await selectResult(canvasElement);
-    await userEvent.click(await canvas.findByRole('button', { name: '팔로우' }));
-    await expect(
-      within(canvasElement.ownerDocument.body).findByRole('alert'),
-    ).resolves.toHaveTextContent('팔로우 상태를 변경하지 못했습니다.');
-    expect(successes().map(([event]) => event)).toEqual(['search_profile_view_succeeded']);
-  },
-};
-
-export const PagehideBeforeFollowResponse: Story = {
-  parameters: {
-    relay: {
-      operationResponses: {
-        FollowButtonFollowProfileMutation: { data: followResponse(), delayMs: 300 },
-      },
-    },
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await selectResult(canvasElement);
-    await userEvent.click(await canvas.findByRole('button', { name: '팔로우' }));
-    window.dispatchEvent(new Event('pagehide'));
-    await waitFor(() => expect(canvas.getByRole('button', { name: '팔로잉' })).toBeEnabled());
-    expect(successes().map(([event]) => event)).toEqual(['search_profile_view_succeeded']);
+    await expect(within(canvasElement).findByText('프로필 콘텐츠')).resolves.toBeVisible();
+    await waitFor(() => expect(events()).toEqual([['profile_view_succeeded', {}]]));
   },
 };
 
@@ -249,26 +154,22 @@ export const ProfileLoadingThenVisible: Story = {
   },
   play: async ({ canvasElement }) => {
     await selectResult(canvasElement);
-    expect(successes()).toEqual([]);
+    expect(events().map(([name]) => name)).toEqual(['search_result_selected']);
     await expect(within(canvasElement).findByText('프로필 콘텐츠')).resolves.toBeVisible();
-    await waitFor(() => expect(successes().length).toBe(1));
+    await waitFor(() => expect(events().map(([name]) => name)).toContain('profile_view_succeeded'));
   },
 };
 
 export const ProfileMissing: Story = {
   parameters: {
-    relay: {
-      operationResponses: {
-        ProfileLayoutQuery: { data: { profileByHandle: null } },
-      },
-    },
+    relay: { operationResponses: { ProfileLayoutQuery: { data: { profileByHandle: null } } } },
   },
   play: async ({ canvasElement }) => {
     await selectResult(canvasElement);
     await expect(
       within(canvasElement).findByText('프로필을 찾을 수 없어요'),
     ).resolves.toBeVisible();
-    expect(successes()).toEqual([]);
+    expect(events().map(([name]) => name)).toEqual(['search_result_selected']);
   },
 };
 
@@ -281,74 +182,45 @@ export const ProfileFailure: Story = {
     await expect(
       within(canvasElement).findByText('프로필을 불러오지 못했어요'),
     ).resolves.toBeVisible();
-    expect(successes()).toEqual([]);
+    expect(events().map(([name]) => name)).toEqual(['search_result_selected']);
   },
 };
 
-export const DirectProfileHasNoJourney: Story = {
-  args: { startPath: '/@conversion' },
+export const FollowRequestExcluded: Story = {
+  parameters: { relay: { mutationResponse: followResponse(true) } },
   play: async ({ canvasElement }) => {
-    await expect(within(canvasElement).findByText('프로필 콘텐츠')).resolves.toBeVisible();
-    expect(emissions()).toEqual([]);
-  },
-};
-
-export const NewSearchBeforeFollowResponse: Story = {
-  parameters: {
-    relay: {
-      operationResponses: {
-        FollowButtonFollowProfileMutation: { data: followResponse(), delayMs: 800 },
-      },
-    },
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
     await selectResult(canvasElement);
-    await expect(canvas.findByText('프로필 콘텐츠')).resolves.toBeVisible();
-    await userEvent.click(canvas.getByRole('button', { name: '검색으로 돌아가기' }));
+    const canvas = within(canvasElement);
     await userEvent.click(await canvas.findByRole('button', { name: '팔로우' }));
-    const input = canvas.getByRole('textbox', { name: '검색어' });
-    await userEvent.clear(input);
-    await userEvent.type(input, 'another{Enter}');
-    await waitFor(() => expect(canvas.getByRole('button', { name: '팔로잉' })).toBeEnabled());
-    expect(successes().map(([event]) => event)).toEqual(['search_profile_view_succeeded']);
+    await expect(canvas.findByRole('button', { name: '요청됨' })).resolves.toBeEnabled();
+    await waitFor(() => expect(events().map(([name]) => name)).toContain('follow_succeeded'));
+    expect(events().find(([name]) => name === 'follow_succeeded')?.[1]).toMatchObject({
+      result: 'request',
+    });
   },
 };
 
-export const SessionRotatesOnReselection: Story = {
+export const FollowRelationshipIncluded: Story = {
   play: async ({ canvasElement }) => {
+    await selectResult(canvasElement);
     const canvas = within(canvasElement);
-    await selectResult(canvasElement);
-    await waitFor(() => expect(successes().length).toBe(1));
-    const firstId = emissions()[0]![1].search_profile_journey_id;
-    await userEvent.click(canvas.getByRole('button', { name: '검색으로 돌아가기' }));
-    const onSession = mocked(observeAnalyticsSession).mock.calls.at(-1)?.[0];
-    expect(onSession).toBeDefined();
-    let rotate = true;
-    mocked(trackAnalytics).mockImplementation((...args: Parameters<typeof trackAnalytics>) => {
-      if (args[0] === 'search_result_selected' && rotate) {
-        rotate = false;
-        mocked(captureSearchProfileAnalytics).mockReturnValue('next-sdk-session');
-        onSession!('next-sdk-session');
-      }
+    await userEvent.click(await canvas.findByRole('button', { name: '팔로우' }));
+    await expect(canvas.findByRole('button', { name: '팔로잉' })).resolves.toBeEnabled();
+    await waitFor(() => expect(events().map(([name]) => name)).toContain('follow_succeeded'));
+    expect(events().find(([name]) => name === 'follow_succeeded')?.[1]).toMatchObject({
+      result: 'follow',
     });
+  },
+};
 
+export const FollowFailure: Story = {
+  parameters: { relay: { mutationGraphQLErrors: ['follow failed'] } },
+  play: async ({ canvasElement }) => {
     await selectResult(canvasElement);
-    await expect(canvas.findByText('프로필 콘텐츠')).resolves.toBeVisible();
-    await waitFor(() => expect(successes().length).toBe(2));
-    expect(emissions().map(([event]) => event)).toEqual([
-      'search_profile_journey_started',
-      'search_profile_view_succeeded',
-      'search_profile_journey_started',
-      'search_profile_view_succeeded',
-    ]);
-    const nextId = emissions()[2]![1].search_profile_journey_id;
-    expect(nextId).not.toBe(firstId);
-    expect(emissions().map(([, properties]) => properties.search_profile_journey_id)).toEqual([
-      firstId,
-      firstId,
-      nextId,
-      nextId,
-    ]);
+    await userEvent.click(await within(canvasElement).findByRole('button', { name: '팔로우' }));
+    await expect(
+      within(canvasElement.ownerDocument.body).findByRole('alert'),
+    ).resolves.toHaveTextContent('팔로우 상태를 변경하지 못했습니다.');
+    expect(events().map(([name]) => name)).not.toContain('follow_succeeded');
   },
 };

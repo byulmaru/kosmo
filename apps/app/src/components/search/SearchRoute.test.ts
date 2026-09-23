@@ -44,7 +44,6 @@ mockModule('react-native', {
 });
 mockModule('react-relay', { graphql: () => ({}), useFragment: () => ({}) });
 mockModule('@/analytics/client', {
-  captureSearchProfileAnalytics: () => null,
   trackAnalytics: () => undefined,
 });
 mockModule('@/components/PageHeader', {

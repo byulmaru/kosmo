@@ -55,7 +55,6 @@ mockModule('@/components/ui/Button', { Button: 'Button' });
 mockModule('@/components/ui/ConfirmationContent', { ConfirmationContent: 'ConfirmationContent' });
 mockModule('@/components/ui/ModalSheet', { ModalSheet: 'ModalSheet' });
 mockModule('@/analytics/client', {
-  captureSearchProfileAnalytics: () => null,
   trackAnalytics: () => {},
 });
 const toasts: string[] = [];

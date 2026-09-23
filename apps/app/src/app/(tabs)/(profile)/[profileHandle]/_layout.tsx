@@ -3,11 +3,7 @@ import { Slot, Stack, useGlobalSearchParams, usePathname, useRouter } from 'expo
 import { ArrowLeft, ChevronLeftIcon } from 'lucide-react-native';
 import { Platform, StyleSheet, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
-import {
-  SearchProfileJourneyContext,
-  SearchProfileView,
-} from '@/analytics/SearchProfileAttribution';
-import { searchProfileJourneys } from '@/analytics/searchProfileJourneys';
+import { ProfileViewAnalytics } from '@/analytics/ProfileViewAnalytics';
 import { useContentReportMenuItem } from '@/components/content-report/ContentReportContext';
 import { PageHeader } from '@/components/PageHeader';
 import { FollowButton } from '@/components/profile/FollowButton';
@@ -234,15 +230,11 @@ function ProfileLayoutContent({
       </Button>
     </NavigationLink>
   ) : blockedBy && !blocking ? undefined : (
-    <SearchProfileJourneyContext.Provider
-      value={() => searchProfileJourneys.forRoute(scrollKey, profile.id)}
-    >
-      <FollowButton profile={profile} />
-    </SearchProfileJourneyContext.Provider>
+    <FollowButton profile={profile} />
   );
   const chrome = (
     <>
-      <SearchProfileView path={scrollKey} targetId={profile.id} />
+      <ProfileViewAnalytics key={profile.id} />
       {showPageHeader ? (
         <PageHeader leading={backButton} title={profile.displayName} titleLines={1} />
       ) : null}
