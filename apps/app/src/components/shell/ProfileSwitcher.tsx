@@ -247,7 +247,7 @@ export function ProfileSwitcher({
   }, [open, redesignedWeb]);
 
   useEffect(() => {
-    if (Platform.OS !== 'web' || !open || surface === 'drawer') {
+    if (Platform.OS !== 'web' || !open) {
       return;
     }
 

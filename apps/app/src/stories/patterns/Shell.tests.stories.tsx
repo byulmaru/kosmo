@@ -141,11 +141,12 @@ export const UniversalMobileProfilePickerDismissesInsideDrawer: Story = {
 
     const drawer = await page.findByRole('navigation', { name: '주요 메뉴' });
     const trigger = page.getByRole('button', { name: '프로필 목록' });
+    const profileSummary = page.getByLabelText('활성 프로필');
+    const summaryAvatar = within(profileSummary).getByLabelText('코스모 작가 프로필 이미지');
     await userEvent.click(trigger);
     await page.findByLabelText('프로필 전환');
 
-    const profileSummary = page.getByLabelText('활성 프로필');
-    await userEvent.click(within(profileSummary).getByLabelText('코스모 작가 프로필 이미지'));
+    await userEvent.click(summaryAvatar);
     await waitFor(() => expect(page.queryByLabelText('프로필 전환')).toBeNull());
     expect(drawer).toBeVisible();
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
