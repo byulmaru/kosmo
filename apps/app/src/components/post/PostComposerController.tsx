@@ -421,25 +421,25 @@ function PostComposerContents({
           sensitiveMedia,
         }) => {
           const productionAuthor = (
-              <View style={styles.productionAuthor}>
-                {pickerProfiles.length > 1 ? (
-                  <PostComposerProfileSwitcher
-                    disabled={submitting || items.some((item) => item.state === 'uploading')}
-                    onDismissChange={onProfilePickerDismissChange}
-                    onSelectionSuccess={() => editor.current?.focus()}
-                    onSelectProfile={onSelectProfile}
-                    profiles={pickerProfiles}
-                    selectedProfileId={profile.id}
-                    surface={presentation === 'rail' ? 'rail' : 'overlay'}
-                  />
-                ) : (
-                  <>
-                    <Avatar imageUri={profile.avatar?.url} label={profile.displayName} size={40} />
-                    <ProfileNameBlock profile={profile} />
-                  </>
-                )}
-              </View>
-            );
+            <View style={styles.productionAuthor}>
+              {pickerProfiles.length > 1 ? (
+                <PostComposerProfileSwitcher
+                  disabled={submitting || items.some((item) => item.state === 'uploading')}
+                  onDismissChange={onProfilePickerDismissChange}
+                  onSelectionSuccess={() => editor.current?.focus()}
+                  onSelectProfile={onSelectProfile}
+                  profiles={pickerProfiles}
+                  selectedProfileId={profile.id}
+                  surface={presentation === 'rail' ? 'rail' : 'overlay'}
+                />
+              ) : (
+                <>
+                  <Avatar imageUri={profile.avatar?.url} label={profile.displayName} size={40} />
+                  <ProfileNameBlock profile={profile} />
+                </>
+              )}
+            </View>
+          );
           const mediaEditorContent = mediaEditor ? (
             <ComposerMediaEditor
               fillContainer

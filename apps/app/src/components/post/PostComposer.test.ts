@@ -116,6 +116,7 @@ mockModule('@/components/profile/ProfilePicker', { ProfilePicker: 'ProfilePicker
 mockModule('@/components/ui/Avatar', { Avatar: 'Avatar' });
 mockModule('@/components/ui/Button', { Button: 'Button' });
 mockModule('@/components/ui/Form', { Form: 'Form' });
+mockModule('@/components/ui/ToastProvider', { useToast: () => ({ showToast: () => undefined }) });
 mockModule('@/components/ui/TextField', { TextArea: 'TextArea', TextField: 'TextField' });
 mockModule('@/relay/RelayEnvironmentBoundary', { useRelayEnvironmentGeneration: () => null });
 mockModule('@/theme/ThemeProvider', {
