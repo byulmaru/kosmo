@@ -38,6 +38,7 @@ const webFullPickerBounds = {
 const webDrawerPickerBounds = {
   maxHeight: 'min(430px, calc(100vh - 206px))',
 } as unknown as ViewStyle;
+const nativePickerBounds: ViewStyle = { maxHeight: '100%' };
 
 export function ProfilePicker({
   busy = false,
@@ -55,7 +56,7 @@ export function ProfilePicker({
   const redesignedWeb = Platform.OS === 'web' && surface !== 'drawer';
   const scrollableWebPicker = Platform.OS === 'web';
   const surfaceBounds = !scrollableWebPicker
-    ? undefined
+    ? nativePickerBounds
     : surface === 'compact'
       ? webCompactPickerBounds
       : surface === 'drawer'
@@ -126,18 +127,14 @@ export function ProfilePicker({
         role={Platform.OS === 'web' && !redesignedWeb ? 'menu' : undefined}
         style={scrollableWebPicker ? styles.redesignedMenuRegion : styles.menuItems}
       >
-        {scrollableWebPicker ? (
-          <ScrollView
-            accessibilityLabel="전환할 프로필 목록"
-            contentContainerStyle={styles.profileListContent}
-            role="group"
-            style={styles.profileList}
-          >
-            {profileOptions}
-          </ScrollView>
-        ) : (
-          profileOptions
-        )}
+        <ScrollView
+          accessibilityLabel={scrollableWebPicker ? '전환할 프로필 목록' : undefined}
+          contentContainerStyle={styles.profileListContent}
+          role={scrollableWebPicker ? 'group' : undefined}
+          style={styles.profileList}
+        >
+          {profileOptions}
+        </ScrollView>
         {showDivider ? (
           <View
             accessibilityRole={Platform.OS === 'web' ? undefined : 'none'}
@@ -156,14 +153,15 @@ const styles = StyleSheet.create({
   menu: {
     borderRadius: 14,
     borderWidth: 1,
+    flexShrink: 1,
     padding: 6,
     width: 280,
   },
   redesignedMenu: { overflow: 'hidden' },
-  menuItems: { gap: space[0] },
+  menuItems: { flexShrink: 1, gap: space[0], minHeight: 0 },
   redesignedMenuRegion: { flexShrink: 1, minHeight: 0 },
   pickerFooter: { flexShrink: 0 },
-  profileList: { flexShrink: 1, minHeight: 0 },
+  profileList: { flexGrow: 0, flexShrink: 1, minHeight: 0 },
   profileListContent: { gap: space[0] },
   profile: {
     alignItems: 'center',
