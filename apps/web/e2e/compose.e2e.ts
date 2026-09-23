@@ -81,14 +81,16 @@ test('목록의 재게시 메뉴에서 Quote Composer를 연다', async ({ conte
   expect(
     Math.abs(titleBox!.x + titleBox!.width / 2 - (dialogBox!.x + dialogBox!.width / 2)),
   ).toBeLessThanOrEqual(1);
-  const author = composer.getByTestId('post-composer-author');
+  const scroll = composer.getByTestId('post-composer-scroll');
   const visibility = composer.getByRole('button', { name: /^공개 범위:/ });
-  const authorBox = await author.boundingBox();
+  const footer = composer.getByTestId('post-composer-footer');
   const visibilityBox = await visibility.boundingBox();
-  expect(authorBox).not.toBeNull();
+  const footerBox = await footer.boundingBox();
+  await expect(scroll.getByTestId('post-composer-author')).toBeVisible();
+  await expect(scroll.getByRole('button', { name: /^공개 범위:/ })).toHaveCount(0);
   expect(visibilityBox).not.toBeNull();
-  expect(authorBox!.x + authorBox!.width).toBeLessThanOrEqual(visibilityBox!.x);
-  await expect(composer.getByTestId('post-composer-footer')).toBeVisible();
+  expect(footerBox).not.toBeNull();
+  expect(visibilityBox!.y + visibilityBox!.height).toBeCloseTo(footerBox!.y, 0);
   await expect(composer.getByTestId('post-composer-editor')).toHaveCSS('border-width', '0px');
 });
 
