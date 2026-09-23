@@ -19,6 +19,7 @@ import { ProfileSwitcherUnreadIndicator } from '@/components/profile/ProfileSwit
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { TextField } from '@/components/ui/TextField';
+import { useToast } from '@/components/ui/ToastProvider';
 import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -164,6 +165,8 @@ type Props = {
   triggerRef?: RefObject<View | null>;
 };
 
+type OperationErrorHandler = (message: string) => void;
+
 export function ProfileSwitcher({
   onNavigate,
   onOpenChange,
@@ -178,6 +181,7 @@ export function ProfileSwitcher({
   const data = useFragment(ProfileSwitcherFragment, query);
   const { resetActor } = useRelayActor();
   const { request: requestNavigation } = useNavigationGuard();
+  const { showToast } = useToast();
   const [internalOpen, setInternalOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [handle, setHandle] = useState('');
@@ -226,6 +230,9 @@ export function ProfileSwitcher({
     if (!redesignedWeb || version === dismissalVersionRef.current) {
       setOperationErrorState(message);
     }
+  };
+  const showDrawerOperationError: OperationErrorHandler = (message) => {
+    showToast(message, { tone: 'danger' });
   };
 
   useEffect(() => {
@@ -283,14 +290,21 @@ export function ProfileSwitcher({
     };
   }, [open, surface]);
 
-  const commitProfileSelection = (id: string, operationVersion = dismissalVersionRef.current) => {
+  const commitProfileSelection = (
+    id: string,
+    operationVersion = dismissalVersionRef.current,
+    onError?: OperationErrorHandler,
+  ) => {
+    const reportError =
+      onError ?? ((message: string) => setOperationError(operationVersion, message));
     setFieldError(null);
     setOperationErrorState(null);
     commitSelect({
       variables: { id },
       onCompleted: (response, errors) => {
         if (errors?.length) {
-          setOperationError(operationVersion, '프로필을 전환하지 못했습니다.');
+          const message = '프로필을 전환하지 못했습니다.';
+          reportError(message);
           return;
         }
 
@@ -299,21 +313,37 @@ export function ProfileSwitcher({
         setOpen(false);
         resetActor(selectedProfileId);
       },
-      onError: (cause) =>
-        setOperationError(operationVersion, cause.message || '프로필을 전환하지 못했습니다.'),
+      onError: (cause) => {
+        const message = cause.message || '프로필을 전환하지 못했습니다.';
+        reportError(message);
+      },
     });
   };
 
   const selectProfile = (id: string, operationVersion = dismissalVersionRef.current) => {
     const action = () => commitProfileSelection(id, operationVersion);
-    if (requestNavigation(action)) {
+    const deferredAction = mobileWebDrawer
+      ? () => commitProfileSelection(id, operationVersion, showDrawerOperationError)
+      : action;
+    const navigationResult = requestNavigation(deferredAction);
+    if (navigationResult) {
+      if (mobileWebDrawer && navigationResult === 'deferred') {
+        dismissPicker();
+        onNavigate?.();
+      }
       return;
     }
 
     action();
   };
 
-  const commitProfileCreation = (normalized: string, operationVersion: number) => {
+  const commitProfileCreation = (
+    normalized: string,
+    operationVersion: number,
+    onError?: OperationErrorHandler,
+  ) => {
+    const reportError =
+      onError ?? ((message: string) => setOperationError(operationVersion, message));
     setFieldError(null);
     setOperationErrorState(null);
     commitCreate({
@@ -322,11 +352,14 @@ export function ProfileSwitcher({
         if (errors?.length) {
           const error = profileCreationFieldError(errors);
           if (error) {
-            if (!redesignedWeb || operationVersion === dismissalVersionRef.current) {
+            if (onError) {
+              onError(error);
+            } else if (!redesignedWeb || operationVersion === dismissalVersionRef.current) {
               setFieldError(error);
             }
           } else {
-            setOperationError(operationVersion, '프로필을 생성하지 못했습니다.');
+            const message = '프로필을 생성하지 못했습니다.';
+            reportError(message);
           }
           return;
         }
@@ -336,7 +369,7 @@ export function ProfileSwitcher({
         });
         setHandle('');
         setCreating(false);
-        commitProfileSelection(response.createProfile.profile.id, operationVersion);
+        commitProfileSelection(response.createProfile.profile.id, operationVersion, onError);
       },
       onError: (cause) => {
         const source = isRecord(cause) ? cause.source : undefined;
@@ -344,13 +377,16 @@ export function ProfileSwitcher({
           isRecord(source) && Array.isArray(source.errors) ? source.errors : undefined,
         );
         if (error) {
-          if (!redesignedWeb || operationVersion === dismissalVersionRef.current) {
+          if (onError) {
+            onError(error);
+          } else if (!redesignedWeb || operationVersion === dismissalVersionRef.current) {
             setFieldError(error);
           }
           return;
         }
 
-        setOperationError(operationVersion, '프로필을 생성하지 못했습니다.');
+        const message = '프로필을 생성하지 못했습니다.';
+        reportError(message);
       },
     });
   };
@@ -373,7 +409,15 @@ export function ProfileSwitcher({
 
     const operationVersion = dismissalVersionRef.current;
     const action = () => commitProfileCreation(normalized, operationVersion);
-    if (requestNavigation(action)) {
+    const deferredAction = mobileWebDrawer
+      ? () => commitProfileCreation(normalized, operationVersion, showDrawerOperationError)
+      : action;
+    const navigationResult = requestNavigation(deferredAction);
+    if (navigationResult) {
+      if (mobileWebDrawer && navigationResult === 'deferred') {
+        dismissPicker();
+        onNavigate?.();
+      }
       return;
     }
 

@@ -185,6 +185,9 @@ mockModule('@/components/ui/TextField', {
 mockModule('@/components/ui/useSafeAreaPadding', {
   useSafeAreaPadding: () => ({ padding: 8 }),
 });
+mockModule('@/components/ui/ToastProvider', {
+  useToast: () => ({ showToast: () => undefined }),
+});
 mockModule('@/relay/RelayActorProvider', {
   useRelayActor: () => ({ resetActor }),
 });

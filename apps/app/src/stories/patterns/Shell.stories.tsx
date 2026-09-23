@@ -1,6 +1,6 @@
 import { profileHandlePolicyErrorMessage } from '@kosmo/core/validation';
 import { Slot } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { graphql, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
 import { commitLocalUpdate } from 'relay-runtime';
@@ -325,7 +325,7 @@ function NavigationGuardRegistrar({
     () =>
       register((action) => {
         onPending(action);
-        return true;
+        return 'deferred' as const;
       }),
     [onPending, register],
   );
@@ -1872,10 +1872,14 @@ function UniversalShellStory() {
 
 function GuardedUniversalShellStory() {
   const [pending, setPending] = useState<GuardedNavigationAction | null>(null);
+  const profileEditHeadingRef = useRef<Text>(null);
   return (
     <SessionProvider>
       <UniversalShell>
         <NavigationGuardRegistrar onPending={(action) => setPending(() => action)} />
+        <Text accessibilityRole="header" ref={profileEditHeadingRef} {...{ tabIndex: -1 }}>
+          프로필 수정
+        </Text>
         <Slot />
         <ProfileEditDiscardDialog
           onContinue={() => setPending(null)}
@@ -1884,6 +1888,7 @@ function GuardedUniversalShellStory() {
             setPending(null);
             action?.();
           }}
+          returnFocusRef={profileEditHeadingRef}
           visible={pending !== null}
         />
       </UniversalShell>

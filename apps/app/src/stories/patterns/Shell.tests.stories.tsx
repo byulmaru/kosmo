@@ -1,4 +1,4 @@
-import { expect, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { spacing } from '@/theme/tokens';
 import baseMeta, {
   UniversalCompactComposerLifecycle as universalCompactComposerLifecycle,
@@ -19,6 +19,8 @@ const meta = {
 
 export default meta;
 type Story = StoryObj<typeof meta>;
+
+const profileSwitcherMutationRequestObserver = fn();
 
 export const UniversalCompactComposerLifecycle: Story = {
   ...universalCompactComposerLifecycle,
@@ -342,45 +344,100 @@ export const UniversalMobileProfilePickerKeyboard: Story = {
   },
 };
 
-export const ProfileSwitcherDrawerNestedDialogEscape: Story = {
+export const ProfileSwitcherDrawerGuardedNavigation: Story = {
   ...universalMobileGuardedProfilePicker,
   parameters: {
     ...universalMobileGuardedProfilePicker.parameters,
     controls: { disable: true },
+    relay: {
+      ...universalMobileGuardedProfilePicker.parameters?.relay,
+      mutationResponse: {
+        selectProfile: {
+          profile: { id: 'profile-remote' },
+        },
+      },
+      mutationRequestObserver: profileSwitcherMutationRequestObserver,
+    },
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const page = within(canvasElement.ownerDocument.body);
     const menuButton = canvas.getByRole('button', { name: '메뉴 열기' });
-    await userEvent.click(menuButton);
-    const drawer = await page.findByRole('navigation', { name: '주요 메뉴' });
-    const menuModal = page.getByLabelText('메뉴');
-    expect(menuModal).toHaveAttribute('role', 'dialog');
-    const profileTrigger = within(menuModal).getByRole('button', { name: '프로필 목록' });
-    await userEvent.click(profileTrigger);
-    const picker = await page.findByLabelText('프로필 전환');
-    const options = within(picker).getAllByRole('button');
+    const editHeading = canvas.getByRole('heading', { name: '프로필 수정' });
+    profileSwitcherMutationRequestObserver.mockClear();
+    const openGuardDialog = async () => {
+      await userEvent.click(menuButton);
+      await page.findByRole('navigation', { name: '주요 메뉴' });
+      await userEvent.click(page.getByRole('button', { name: '프로필 목록' }));
+      const picker = await page.findByLabelText('프로필 전환');
+      await userEvent.click(within(picker).getAllByRole('button')[1]!);
+      const discardDialog = await page.findByRole('dialog', { name: '변경사항을 버릴까요?' });
+      expect(discardDialog).toBeVisible();
+      await waitFor(() => expect(page.queryByRole('navigation', { name: '주요 메뉴' })).toBeNull());
+      await waitFor(() => expect(page.queryByLabelText('프로필 전환')).toBeNull());
+      expect(profileSwitcherMutationRequestObserver).not.toHaveBeenCalled();
+    };
 
-    await userEvent.click(options[1]!);
-    const discardDialog = await page.findByRole('dialog', { name: '변경사항을 버릴까요?' });
-    expect(discardDialog).toBeVisible();
-    expect(menuModal).not.toHaveAttribute('role', 'dialog');
+    await openGuardDialog();
     await userEvent.keyboard('{Escape}');
-
     await waitFor(() =>
       expect(page.queryByRole('dialog', { name: '변경사항을 버릴까요?' })).toBeNull(),
     );
-    await waitFor(() => expect(menuModal).toHaveAttribute('role', 'dialog'));
-    expect(drawer).toBeVisible();
-    expect(page.getByLabelText('프로필 전환')).toBeVisible();
+    await waitFor(() => expect(editHeading).toHaveFocus());
+    expect(page.queryByRole('navigation', { name: '주요 메뉴' })).toBeNull();
+    expect(page.queryByLabelText('프로필 전환')).toBeNull();
 
-    await userEvent.keyboard('{Escape}');
-    await waitFor(() => expect(page.queryByLabelText('프로필 전환')).toBeNull());
-    expect(drawer).toBeVisible();
-    expect(profileTrigger).toHaveFocus();
+    await openGuardDialog();
+    await userEvent.click(page.getByRole('button', { name: '계속 편집' }));
+    await waitFor(() =>
+      expect(page.queryByRole('dialog', { name: '변경사항을 버릴까요?' })).toBeNull(),
+    );
+    await waitFor(() => expect(editHeading).toHaveFocus());
+    expect(page.queryByRole('navigation', { name: '주요 메뉴' })).toBeNull();
+    expect(page.queryByLabelText('프로필 전환')).toBeNull();
 
-    await userEvent.keyboard('{Escape}');
-    await waitFor(() => expect(page.queryByRole('navigation', { name: '주요 메뉴' })).toBeNull());
-    expect(menuButton).toHaveFocus();
+    await openGuardDialog();
+    await userEvent.click(page.getByRole('button', { name: '버리기' }));
+    await waitFor(() => expect(profileSwitcherMutationRequestObserver).toHaveBeenCalledOnce());
+  },
+};
+
+export const ProfileSwitcherDrawerGuardedErrors: Story = {
+  ...universalMobileGuardedProfilePicker,
+  parameters: {
+    ...universalMobileGuardedProfilePicker.parameters,
+    relay: {
+      ...universalMobileGuardedProfilePicker.parameters?.relay,
+      mutationResponse: null,
+      mutationError: '프로필 요청 실패',
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    for (const operation of ['select', 'create']) {
+      await userEvent.click(canvas.getByRole('button', { name: '메뉴 열기' }));
+      await userEvent.click(await page.findByRole('button', { name: '프로필 목록' }));
+      const picker = within(await page.findByLabelText('프로필 전환'));
+      if (operation === 'select') {
+        await userEvent.click(picker.getAllByRole('button')[1]!);
+      } else {
+        await userEvent.click(picker.getByRole('button', { name: '새 프로필 추가' }));
+        await userEvent.type(page.getByRole('textbox', { name: '프로필 핸들' }), 'new_profile');
+        await userEvent.click(page.getByRole('button', { name: '만들기' }));
+      }
+      const dialog = await page.findByRole('dialog', { name: '변경사항을 버릴까요?' });
+      expect(page.queryByRole('navigation', { name: '주요 메뉴' })).toBeNull();
+      expect(page.queryByLabelText('프로필 전환')).toBeNull();
+      await userEvent.click(within(dialog).getByRole('button', { name: '버리기' }));
+      await expect(
+        page.findByText(
+          operation === 'select' ? '프로필 요청 실패' : '프로필을 생성하지 못했습니다.',
+        ),
+      ).resolves.toBeVisible();
+      await waitFor(() =>
+        expect(canvas.getByRole('heading', { name: '프로필 수정' })).toHaveFocus(),
+      );
+    }
   },
 };

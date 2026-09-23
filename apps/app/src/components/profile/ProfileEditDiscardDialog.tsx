@@ -1,17 +1,22 @@
-import { Modal, StyleSheet, Text, View } from 'react-native';
+import { Modal, Platform, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, layoutRecipes, radii, spacing, typography } from '@/theme/tokens';
 import { Button } from '../ui/Button';
+import type { RefObject } from 'react';
+
+type FocusableRef = RefObject<{ focus: () => void } | null>;
 
 type ProfileEditDiscardDialogProps = {
   onContinue: () => void;
   onDiscard: () => void;
+  returnFocusRef?: FocusableRef;
   visible: boolean;
 };
 
 export function ProfileEditDiscardDialog({
   onContinue,
   onDiscard,
+  returnFocusRef,
   visible,
 }: ProfileEditDiscardDialogProps) {
   const theme = useTheme();
@@ -20,6 +25,7 @@ export function ProfileEditDiscardDialog({
     <Modal
       accessibilityLabel="변경사항을 버릴까요?"
       animationType="fade"
+      onDismiss={Platform.OS === 'web' ? () => returnFocusRef?.current?.focus() : undefined}
       onRequestClose={onContinue}
       role="dialog"
       transparent
