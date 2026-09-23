@@ -11,11 +11,11 @@ import {
 } from 'react-native';
 import { graphql, usePaginationFragment } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
+import { PaginationSurface } from '@/components/pagination/PaginationSurface';
 import { PostActionAuthenticationProvider } from '@/components/post/PostActionAuthentication';
 import { PostComposerCoordinatorProvider } from '@/components/post/PostComposerCoordinator';
 import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHost';
 import { getWebMobileShellHeader } from '@/components/shell/shellLayout';
-import { Button } from '@/components/ui/Button';
 import { Skeleton, StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
@@ -159,31 +159,26 @@ export function NotificationList({ profile }: NotificationListProps) {
                 title="아직 알림이 없어요"
               />
             )}
-            {pagination.hasNext || loadError ? (
-              loadError ? (
+            <PaginationSurface
+              error={loadError}
+              hasNext={pagination.hasNext}
+              isLoading={pagination.isLoadingNext}
+              loadMoreLabel="더 불러오기"
+              loadingLabel="불러오는 중"
+              onLoadMore={loadMore}
+              onRetry={loadMore}
+              retryLabel="다시 시도"
+              retryTone="primary"
+              style={[styles.pagination, { borderColor: theme.border }]}
+            >
+              {loadError ? (
                 <StateView
-                  actionLabel="다시 시도"
                   alert
-                  onAction={loadMore}
-                  style={[styles.pagination, { borderColor: theme.border }]}
+                  style={styles.paginationCopy}
                   title="알림을 더 불러오지 못했어요"
                 />
-              ) : (
-                <View style={[styles.pagination, { borderColor: theme.border }]}>
-                  <Button
-                    accessibilityState={{
-                      busy: pagination.isLoadingNext,
-                      disabled: pagination.isLoadingNext,
-                    }}
-                    disabled={pagination.isLoadingNext}
-                    onPress={loadMore}
-                    tone="secondary"
-                  >
-                    {pagination.isLoadingNext ? '불러오는 중' : '더 불러오기'}
-                  </Button>
-                </View>
-              )
-            ) : null}
+              ) : null}
+            </PaginationSurface>
           </ScrollView>
         </PostMediaViewerHostProvider>
       </PostComposerCoordinatorProvider>
@@ -267,6 +262,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xxxl,
   },
   pagination: { alignItems: 'center', borderTopWidth: 1, gap: spacing.md, padding: spacing.lg },
+  paginationCopy: { gap: spacing.md, padding: 0 },
   skeletonItem: {
     alignItems: 'flex-start',
     borderBottomWidth: 1,

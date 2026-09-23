@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { graphql, usePaginationFragment } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
+import { PaginationSurface } from '@/components/pagination/PaginationSurface';
 import { ProfileListItem } from '@/components/profile/ProfileListItem';
-import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, spacing, typography } from '@/theme/tokens';
@@ -63,37 +63,33 @@ export function HashtagRelatedProfileList({
           title="관련 프로필이 없어요"
         />
       )}
-      {pagination.hasNext || loadError ? (
-        <View style={[styles.pagination, { borderColor: theme.border }]}>
-          {loadError ? (
-            <>
-              <Text accessibilityRole="alert" style={[styles.stateTitle, { color: theme.text }]}>
-                관련 프로필을 더 불러오지 못했어요
-              </Text>
-              <Text style={[styles.stateDescription, { color: theme.textSecondary }]}>
-                잠시 후 다시 시도해주세요.
-              </Text>
-            </>
-          ) : null}
-          <Button
-            accessibilityState={{
-              busy: pagination.isLoadingNext,
-              disabled: pagination.isLoadingNext,
-            }}
-            disabled={pagination.isLoadingNext}
-            onPress={loadMore}
-            style={styles.paginationAction}
-            tone="secondary"
-          >
-            {pagination.isLoadingNext ? '불러오는 중' : loadError ? '다시 시도' : '더 불러오기'}
-          </Button>
-          {pagination.isLoadingNext ? (
-            <Text accessibilityLiveRegion="polite" style={styles.srOnly}>
-              관련 프로필을 더 불러오는 중입니다.
+      <PaginationSurface
+        error={loadError}
+        hasNext={pagination.hasNext}
+        isLoading={pagination.isLoadingNext}
+        loadMoreLabel="더 불러오기"
+        loadingLabel="불러오는 중"
+        onLoadMore={loadMore}
+        onRetry={loadMore}
+        retryLabel="다시 시도"
+        style={[styles.pagination, { borderColor: theme.border }]}
+        actionStyle={styles.paginationAction}
+      >
+        {loadError ? (
+          <>
+            <Text accessibilityRole="alert" style={[styles.stateTitle, { color: theme.text }]}>
+              관련 프로필을 더 불러오지 못했어요
             </Text>
-          ) : null}
-        </View>
-      ) : null}
+            <Text style={[styles.stateDescription, { color: theme.textSecondary }]}>
+              잠시 후 다시 시도해주세요.
+            </Text>
+          </>
+        ) : pagination.isLoadingNext ? (
+          <Text accessibilityLiveRegion="polite" style={styles.srOnly}>
+            관련 프로필을 더 불러오는 중입니다.
+          </Text>
+        ) : null}
+      </PaginationSurface>
     </ScrollView>
   );
 }

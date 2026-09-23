@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { graphql, usePaginationFragment } from 'react-relay';
-import { Button } from '@/components/ui/Button';
+import { PaginationSurface } from '@/components/pagination/PaginationSurface';
 import { Skeleton, StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
 import { layoutRecipes, spacing } from '@/theme/tokens';
@@ -207,35 +207,32 @@ function ConnectionList({ hasNext, isLoadingNext, kind, loadNext, profiles }: Co
           title={text.emptyTitle}
         />
       )}
-      {hasNext || loadError ? (
-        loadError ? (
+      <PaginationSurface
+        error={loadError}
+        hasNext={hasNext}
+        isLoading={isLoadingNext}
+        loadMoreLabel="더 불러오기"
+        loadingLabel="불러오는 중"
+        onLoadMore={loadMore}
+        onRetry={loadMore}
+        retryLabel="다시 시도"
+        retryTone="primary"
+        style={[styles.pagination, { borderColor: theme.border }]}
+        actionStyle={loadError ? styles.paginationErrorAction : styles.paginationAction}
+      >
+        {loadError ? (
           <StateView
-            actionLabel="다시 시도"
             alert
             description="잠시 후 다시 시도해주세요."
-            onAction={loadMore}
-            style={[styles.pagination, { borderColor: theme.border }]}
+            style={styles.paginationCopy}
             title={text.loadError}
           />
-        ) : (
-          <View style={[styles.pagination, { borderColor: theme.border }]}>
-            <Button
-              accessibilityState={{ busy: isLoadingNext, disabled: isLoadingNext }}
-              disabled={isLoadingNext}
-              onPress={loadMore}
-              style={styles.paginationAction}
-              tone="secondary"
-            >
-              {isLoadingNext ? '불러오는 중' : '더 불러오기'}
-            </Button>
-            {isLoadingNext ? (
-              <Text accessibilityLiveRegion="polite" style={styles.srOnly}>
-                {text.loadingNextLabel}
-              </Text>
-            ) : null}
-          </View>
-        )
-      ) : null}
+        ) : isLoadingNext ? (
+          <Text accessibilityLiveRegion="polite" style={styles.srOnly}>
+            {text.loadingNextLabel}
+          </Text>
+        ) : null}
+      </PaginationSurface>
     </View>
   );
 }
@@ -247,6 +244,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xxxl,
   },
   pagination: { alignItems: 'center', borderTopWidth: 1, padding: spacing.lg },
+  paginationCopy: { padding: 0 },
+  paginationErrorAction: { marginTop: spacing.sm },
   paginationAction: { marginTop: spacing.md },
   skeletonItem: {
     ...layoutRecipes.listRow,

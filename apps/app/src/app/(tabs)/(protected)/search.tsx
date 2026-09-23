@@ -15,13 +15,13 @@ import {
 import { graphql, useLazyLoadQuery, usePaginationFragment } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
 import { PageHeader } from '@/components/PageHeader';
+import { PaginationSurface } from '@/components/pagination/PaginationSurface';
 import { ProfileListItem } from '@/components/profile/ProfileListItem';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { usePrimaryNavigationScroll } from '@/components/shell/PrimaryNavigationScrollContext';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { getShellLayout } from '@/components/shell/shellLayout';
-import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { RouteTabList } from '@/components/ui/RouteTabList';
 import { SearchToolbar } from '@/components/ui/SearchToolbar';
@@ -151,23 +151,25 @@ function SearchPeopleResults({
           profile={node}
         />
       ))}
-      {pagination.hasNext || loadError ? (
-        <View style={styles.pagination}>
-          {loadError ? (
-            <Text accessibilityRole="alert" style={[styles.paginationError, { color: theme.text }]}>
-              다음 검색 결과를 불러오지 못했어요. 다시 시도해 주세요.
-            </Text>
-          ) : null}
-          <Button
-            accessibilityLabel={loadError ? '다음 검색 결과 다시 불러오기' : '검색 결과 더 보기'}
-            loading={pagination.isLoadingNext}
-            onPress={loadNext}
-            tone="secondary"
-          >
-            {loadError ? '다시 시도' : '더 보기'}
-          </Button>
-        </View>
-      ) : null}
+      <PaginationSurface
+        actionAccessibilityLabel={loadError ? '다음 검색 결과 다시 불러오기' : '검색 결과 더 보기'}
+        error={loadError}
+        hasNext={pagination.hasNext}
+        isLoading={pagination.isLoadingNext}
+        loadMoreLabel="더 보기"
+        loadingIndicator
+        loadingLabel="불러오는 중"
+        onLoadMore={loadNext}
+        onRetry={loadNext}
+        retryLabel="다시 시도"
+        style={styles.pagination}
+      >
+        {loadError ? (
+          <Text accessibilityRole="alert" style={[styles.paginationError, { color: theme.text }]}>
+            다음 검색 결과를 불러오지 못했어요. 다시 시도해 주세요.
+          </Text>
+        ) : null}
+      </PaginationSurface>
     </View>
   );
 }

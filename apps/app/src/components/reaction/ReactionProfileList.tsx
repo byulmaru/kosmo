@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AccessibilityInfo, Platform, StyleSheet, Text, View } from 'react-native';
+import { PaginationSurface } from '@/components/pagination/PaginationSurface';
 import { ProfileListItem } from '@/components/profile/ProfileListItem';
-import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, spacing, typography } from '@/theme/tokens';
@@ -61,14 +61,6 @@ export function ReactionProfileList({
       AccessibilityInfo.announceForAccessibilityWithOptions(status, { queue: true });
     }
   }, [status]);
-  const showPagination = Boolean(onLoadMore && (hasNext || loadMoreError));
-  const loadMore = () => {
-    if (isLoadingMore) {
-      return;
-    }
-
-    onLoadMore?.();
-  };
 
   return (
     <View style={styles.root}>
@@ -108,33 +100,32 @@ export function ReactionProfileList({
                 />
               </View>
             ))}
-            {showPagination ? (
-              <View style={[styles.pagination, { borderColor: theme.border }]}>
-                {loadMoreError ? (
-                  <>
-                    <Text
-                      accessibilityRole="alert"
-                      style={[styles.stateTitle, { color: theme.text }]}
-                    >
-                      {copy.loadErrorTitle}
-                    </Text>
-                    <Text style={[styles.stateDescription, { color: theme.textSecondary }]}>
-                      {copy.errorDescription}
-                    </Text>
-                  </>
-                ) : null}
-                <Button
-                  accessibilityState={{ busy: isLoadingMore, disabled: isLoadingMore }}
-                  aria-busy={isLoadingMore}
-                  disabled={isLoadingMore}
-                  onPress={loadMore}
-                  style={styles.paginationAction}
-                  tone="secondary"
-                >
-                  {isLoadingMore ? '불러오는 중' : loadMoreError ? '다시 시도' : '더 불러오기'}
-                </Button>
-              </View>
-            ) : null}
+            <PaginationSurface
+              error={loadMoreError}
+              hasNext={Boolean(hasNext)}
+              isLoading={Boolean(isLoadingMore)}
+              loadMoreLabel="더 불러오기"
+              loadingLabel="불러오는 중"
+              onLoadMore={onLoadMore}
+              onRetry={onLoadMore}
+              retryLabel="다시 시도"
+              style={[styles.pagination, { borderColor: theme.border }]}
+              actionStyle={styles.paginationAction}
+            >
+              {loadMoreError ? (
+                <>
+                  <Text
+                    accessibilityRole="alert"
+                    style={[styles.stateTitle, { color: theme.text }]}
+                  >
+                    {copy.loadErrorTitle}
+                  </Text>
+                  <Text style={[styles.stateDescription, { color: theme.textSecondary }]}>
+                    {copy.errorDescription}
+                  </Text>
+                </>
+              ) : null}
+            </PaginationSurface>
           </>
         ) : (
           <StateView description={copy.emptyDescription} title={copy.emptyTitle} />

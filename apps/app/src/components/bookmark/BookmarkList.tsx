@@ -1,15 +1,16 @@
 import { Platform, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { PageHeader } from '@/components/PageHeader';
+import { PaginationSurface } from '@/components/pagination/PaginationSurface';
 import { PostActionAuthenticationProvider } from '@/components/post/PostActionAuthentication';
 import { PostComposerCoordinatorProvider } from '@/components/post/PostComposerCoordinator';
 import { PostListItem } from '@/components/post/PostListItem';
 import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHost';
 import { getShellLayout } from '@/components/shell/shellLayout';
-import { Button } from '@/components/ui/Button';
 import { Skeleton, StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import type { ReactNode } from 'react';
+import type { StyleProp, ViewStyle } from 'react-native';
 import type { PostListItem_post$key } from '@/components/post/__generated__/PostListItem_post.graphql';
 import type { ReplyComposerSurface_profile$key } from '@/components/post/__generated__/ReplyComposerSurface_profile.graphql';
 import type { PostListPresentation } from '@/components/post/postListMetrics';
@@ -76,31 +77,28 @@ export function BookmarkList({
         {items.map((item) => (
           <PostListItem key={item.id} post={item.post} presentation={postListPresentation} />
         ))}
-        {error ? (
-          <BookmarkListState
-            alert
-            description="기존 북마크는 그대로 유지돼요."
-            onRetry={onRetry}
-            title="북마크를 더 불러오지 못했어요"
-          />
-        ) : hasNext && onLoadMore ? (
-          <View style={styles.pagination}>
-            <Button
-              aria-busy={isLoadingMore}
-              accessibilityState={{ busy: isLoadingMore, disabled: isLoadingMore }}
-              disabled={isLoadingMore}
-              onPress={() => {
-                if (!isLoadingMore) {
-                  onLoadMore();
-                }
-              }}
-              style={styles.actionButton}
-              tone="secondary"
-            >
-              {isLoadingMore ? '불러오는 중' : '더 불러오기'}
-            </Button>
-          </View>
-        ) : null}
+        <PaginationSurface
+          error={error}
+          hasNext={hasNext}
+          isLoading={isLoadingMore}
+          loadMoreLabel="더 불러오기"
+          loadingLabel="불러오는 중"
+          onLoadMore={onLoadMore}
+          onRetry={onRetry}
+          retryLabel="다시 시도"
+          retryTone="primary"
+          style={error ? styles.state : styles.pagination}
+          actionStyle={styles.actionButton}
+        >
+          {error ? (
+            <BookmarkListState
+              alert
+              description="기존 북마크는 그대로 유지돼요."
+              style={styles.paginationCopy}
+              title="북마크를 더 불러오지 못했어요"
+            />
+          ) : null}
+        </PaginationSurface>
       </>
     );
   }
@@ -157,11 +155,13 @@ function BookmarkListState({
   alert = false,
   description,
   onRetry,
+  style,
   title,
 }: {
   alert?: boolean;
   description: string;
   onRetry?: () => void;
+  style?: StyleProp<ViewStyle>;
   title: string;
 }) {
   return (
@@ -171,7 +171,7 @@ function BookmarkListState({
       alert={alert}
       description={description}
       onAction={onRetry}
-      style={styles.state}
+      style={style ?? styles.state}
       title={title}
     />
   );
@@ -195,5 +195,6 @@ const styles = StyleSheet.create({
   state: { alignItems: 'center', gap: spacing.sm, padding: spacing.xxxl },
   actionButton: { minHeight: 44 },
   pagination: { alignItems: 'center', padding: spacing.lg },
+  paginationCopy: { gap: spacing.sm, padding: 0 },
   srOnly: { height: 1, left: 0, overflow: 'hidden', position: 'absolute', top: 0, width: 1 },
 });
