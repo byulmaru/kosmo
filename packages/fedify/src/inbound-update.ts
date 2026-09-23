@@ -1,10 +1,12 @@
 import '@kosmo/core/polyfill';
 
-import { isActor } from '@fedify/vocab';
+import { isActor, Note } from '@fedify/vocab';
 import { ProfileState } from '@kosmo/core/enums';
 import { ConflictError } from '@kosmo/core/error';
+import { findPostByActivityPubUri } from './activitypub-post-uri';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
 import { observeInbound } from './inbound-observability';
+import { handleInboundQuote, hasInboundQuote } from './inbound-quote';
 import {
   findStoredRemoteProfileActorByUri,
   materializeRemoteProfileActor,
@@ -18,7 +20,7 @@ const noNetworkDocumentLoader = async (url: string) => {
 };
 
 export const handleInboundUpdate = async (
-  _context: InboxContext<void>,
+  context: InboxContext<void>,
   update: Update,
   receivedAt: Temporal.Instant = Temporal.Now.instant(),
 ): Promise<void> => {
@@ -27,7 +29,7 @@ export const handleInboundUpdate = async (
   const actorUri = actorHref ? new URL(actorHref) : null;
   const objectUri = objectHref ? new URL(objectHref) : null;
 
-  if (!isHttpUri(actorUri) || !isHttpUri(objectUri) || actorUri.href !== objectUri.href) {
+  if (!isHttpUri(actorUri) || !isHttpUri(objectUri)) {
     observeInbound({
       outcome: 'rejected',
       activityType: 'Update',
@@ -40,12 +42,73 @@ export const handleInboundUpdate = async (
     return;
   }
 
-  const object = await update.getObject({
+  const object =
+    actorUri.href !== objectUri.href
+      ? await update.getObject({
+          crossOrigin: 'trust',
+          documentLoader: noNetworkDocumentLoader,
+          suppressError: true,
+        })
+      : null;
+
+  if (object instanceof Note && (await hasInboundQuote({ context, note: object }))) {
+    if (object.id?.href !== objectUri.href || uniqueHref(object.attributionIds) !== actorUri.href) {
+      observeInbound({
+        outcome: 'rejected',
+        activityType: 'Update',
+        actorOrigin: actorUri.origin,
+        handler: 'update',
+        objectOrigin: objectUri.origin,
+        phase: 'protocol',
+        reasonCode: 'quote_update_object_mismatch',
+      });
+      return;
+    }
+
+    const postId = await findPostByActivityPubUri(context, objectUri);
+    if (!postId) {
+      observeInbound({
+        outcome: 'noop',
+        activityType: 'Update',
+        actorOrigin: actorUri.origin,
+        handler: 'update',
+        objectOrigin: objectUri.origin,
+        phase: 'projection',
+        reasonCode: 'quote_update_target_missing',
+      });
+      return;
+    }
+
+    await handleInboundQuote({
+      authorizationUpdate: true,
+      actorUri: actorUri.href,
+      context,
+      note: object,
+      postId,
+      receivedAt,
+    });
+    return;
+  }
+
+  if (actorUri.href !== objectUri.href) {
+    observeInbound({
+      outcome: 'rejected',
+      activityType: 'Update',
+      actorOrigin: actorUri.origin,
+      handler: 'update',
+      objectOrigin: objectUri.origin,
+      phase: 'validation',
+      reasonCode: 'update_actor_object_mismatch',
+    });
+    return;
+  }
+
+  const actorObject = await update.getObject({
     crossOrigin: 'trust',
     documentLoader: noNetworkDocumentLoader,
     suppressError: true,
   });
-  if (object === null) {
+  if (actorObject === null) {
     observeInbound({
       outcome: 'external_failure',
       activityType: 'Update',
@@ -58,7 +121,7 @@ export const handleInboundUpdate = async (
     return;
   }
 
-  if (!isActor(object) || object.id?.href !== actorUri.href) {
+  if (!isActor(actorObject) || actorObject.id?.href !== actorUri.href) {
     observeInbound({
       outcome: 'rejected',
       activityType: 'Update',
@@ -88,7 +151,7 @@ export const handleInboundUpdate = async (
   try {
     await materializeRemoteProfileActor({
       context: {
-        lookupObject: async (): Promise<ActivityPubObject> => object,
+        lookupObject: async (): Promise<ActivityPubObject> => actorObject,
       },
       actorUri,
       now: receivedAt,

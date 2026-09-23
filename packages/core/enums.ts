@@ -30,6 +30,20 @@ export const ActivityPubActorKeyKind = {
 } as const;
 export type ActivityPubActorKeyKind = keyof typeof ActivityPubActorKeyKind;
 
+export const ActivityPubQuoteFormat = {
+  FEP_044F: 'FEP_044F',
+  LEGACY: 'LEGACY',
+} as const;
+export type ActivityPubQuoteFormat = keyof typeof ActivityPubQuoteFormat;
+
+export const ActivityPubQuoteStatus = {
+  PENDING: 'PENDING',
+  APPROVED: 'APPROVED',
+  REVOKED: 'REVOKED',
+  INVALID: 'INVALID',
+} as const;
+export type ActivityPubQuoteStatus = keyof typeof ActivityPubQuoteStatus;
+
 export const ApplicationState = {
   ACTIVE: 'ACTIVE',
   DISABLED: 'DISABLED',
