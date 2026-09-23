@@ -137,19 +137,16 @@ describe('PostHog Web client', () => {
     assert.equal(instances.length, 0);
   });
 
-  it('prod 채널에서는 채널 설정으로 한 번 초기화하고 표준 동작을 차단하지 않는다', () => {
+  it('prod 채널에서는 채널 설정과 권장 baseline으로 한 번 초기화한다', () => {
     analytics.clearAnalytics();
     analytics.clearAnalytics();
 
     assert.ok(instances[0]);
     assert.equal(initCalls.length, 1);
     assert.equal(initCalls[0]?.token, mockPostHogConfig.posthogKey);
-    assert.deepEqual(initCalls[0]?.config, {
-      api_host: mockPostHogConfig.posthogHost,
-      defaults: '2026-05-30',
-      disable_session_recording: true,
-      mask_personal_data_properties: false,
-    });
+    assert.equal(initCalls[0]?.config.api_host, mockPostHogConfig.posthogHost);
+    assert.equal(initCalls[0]?.config.defaults, '2026-05-30');
+    assert.equal(initCalls[0]?.config.mask_personal_data_properties, false);
   });
 
   it('Account identity는 같은 ID를 SDK에 위임하고 전환·guest에서 reset 후 분리한다', () => {

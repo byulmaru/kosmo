@@ -1,5 +1,7 @@
 ## ADDED Requirements
 
+현재 PROD-741 세션은 아래 Replay 재활성화·acceptance 예시를 사용한다. 다른 이슈의 과거 수집 중단·cleanup 시나리오는 해당 시점의 범위이며 PR #955 이후 활성화된 Product Analytics를 다시 중단하는 지시가 아니다. 현재 요구사항의 권위는 Linear와 `docs/operations/posthog-replay.md`다.
+
 ### Requirement: 공개 설정 기반 PostHog Web 초기화
 
 **Authority / Provenance:** `PROD-819`, `PROD-820`, `PROD-891`의 채널별 공개 설정 계약 — Kosmo Web은 선택된 채널의 공개 PostHog project key와 Cloud US ingestion host가 모두 제공될 때만 PostHog client를 초기화해야 한다(MUST). 둘 중 하나라도 없으면 분석 client와 network 전송은 생성되지 않아야 하며(MUST), OpenPanel client 또는 endpoint를 함께 초기화하지 않아야 한다(MUST).
@@ -27,7 +29,7 @@
 
 - **WHEN** 유효한 공개 설정으로 PostHog Web client가 생성된다
 - **THEN** init config는 공개 `api_host`와 `defaults: '2026-05-30'`을 사용한다
-- **AND** 표준 자동 수집·metadata·persistence·remote config를 비활성화하는 option을 전달하지 않는다
+- **AND** 표준 자동 수집·metadata·persistence·remote config를 유지한다. Replay는 아래 재활성화 조건 충족 전까지 비활성 상태를 유지한다
 
 #### Scenario: browser history가 바뀐다
 
@@ -136,24 +138,98 @@
 
 ### Requirement: Session Replay Cloud privacy controls
 
-**Authority / Provenance:** `PROD-820`, `PROD-741`, `PROD-795`, `PROD-575` — production Web SDK 배포 전에 `Kosmo Production`은 Session Replay 10% sampling, production canonical origin 제한, input·textarea와 canonical Post Content masking, 30일 retention을 적용해야 한다(MUST). Standard event metadata 수집은 이 Replay 계약과 별도로 적용한다(MUST). PROD-741은 이 설정을 처음 활성화하지 않고 실제 replay 품질·masking·fail-open을 acceptance 해야 한다(MUST).
+**Authority / Provenance:** `docs/operations/posthog-replay.md`, `PROD-741`의 2026-09-22 범위 결정·Spec 보강 요청, `PROD-820`의 Cloud 보호 계약과 수용된 main privacy baseline — PROD-741은 privacy baseline 수용, Cloud 실제 값과 코드·배포 준비를 입력으로 production Replay 재활성화 가능 여부를 판단하는 Replay Rollout Gate를 사용해야 한다(MUST). Spec Gate PASS와 구분하며 Replay Rollout Gate가 pending이면 실제 Replay를 켜지 않아야 한다(MUST NOT). Session Replay 10% sampling, production canonical origin, Normal input masking과 30일 retention은 Human-required 절차로 실제 값을 확인해야 한다(MUST). 조건 충족 후 재활성화와 실제 replay·masking·제품 장애 격리 acceptance를 별도로 수행해야 한다(MUST). Standard event metadata 수집 계약은 보존해야 한다(MUST).
 
-#### Scenario: production Session Replay 설정을 조회한다
+#### Scenario: 확정된 privacy baseline과 Viewer를 사용한다
 
-- **WHEN** `Kosmo Production`의 Web recording 조건을 확인한다
-- **THEN** sampling은 10%이고 URL 조건은 production canonical origin만 허용한다
-- **AND** retention은 30일이다
+- **WHEN** PROD-741의 구현·검증 범위를 적용한다
+- **THEN** 2026-09-22 현재 사용자 결정에 따라 당시 main의 개인정보처리방침을 완료된 privacy baseline으로 사용하며 과거 동일 결정의 존재를 blocker로 두지 않는다
+- **AND** 법적 완결성을 새로 판단하거나 PROD-795의 정책·고지 책임을 재감사·수정하지 않는다
+- **AND** 사용자가 직접 확인한 `Post Media Viewer Compact` / `Post Media Viewer Wide`를 검증 대상으로 사용하며 사전 시각 확인을 다시 요구하지 않는다
 
-#### Scenario: 사용자가 입력하거나 Post Content를 본다
+#### Scenario: Spec Gate만 통과했다
 
-- **WHEN** recording 대상 session에 input·textarea 값 또는 canonical Post Content가 렌더된다
-- **THEN** input은 Cloud privacy mode로 mask되고 Post Content root는 PostHog 표준 `ph-mask ph-no-capture` marker를 제공한다
-- **AND** `ph-mask`는 Replay text를 mask하고 `ph-no-capture`는 Post Content subtree의 autocapture를 제외한다
+- **WHEN** Spec Gate는 PASS하고 privacy baseline은 수용됐지만 Cloud 실제 값·사전 검증·코드/배포/rollback 준비 중 미확인 입력이 남아 있다
+- **THEN** Replay Rollout Gate는 pending이며 실제 Replay 비활성화를 유지한다
+- **AND** 이 Gate를 PostHog 기능명 또는 사람이 Cloud를 설정하는 단계 하나로 해석하지 않는다
 
-#### Scenario: Post Media Viewer replay를 검증한다
+#### Scenario: Implement의 코드와 자동 검증을 완료한다
 
-- **WHEN** PROD-741이 Viewer navigation과 화면 전환을 acceptance 한다
-- **THEN** 보호 설정은 유지되고 replay failure는 Viewer와 제품 흐름에 영향을 주지 않는다
+- **WHEN** A. Implement가 Luna Max로 runtime 구현과 앱 소유 config·identity·동기 fail-open·Post Content marker 자동 테스트, typecheck/lint/build를 완료한다
+- **THEN** 코드·자동 검증 결과·대상 버전·남은 운영 항목을 B. Operational Verification에 인계하고 운영 검증을 기다리지 않고 종료한다
+- **AND** A는 Cloud screenshot·실제 설정값·Replay Rollout Gate 최종 판정·실제 Replay 재활성화·실제 재생 시각 검증을 수행하지 않는다
+- **AND** SDK recorder의 내부 bundle·payload·rrweb 형식과 기본 masking은 자동 테스트로 재검증하지 않으며 실제 recorder·masking·장애 격리는 B가 확인한다
+- **AND** 남은 운영·실환경 검증과 PROD-741 최종 acceptance는 B가 소유하며 추가 필수 세션이나 PROD-575 후속 검증·archive에 의존하지 않는다
+
+#### Scenario: Human-required Cloud screenshot을 확인한다
+
+- **WHEN** B. Operational Verification 세션이 실제 Replay 재활성화 직전에 도달한다
+- **THEN** Codex는 멈추고 해당 시점의 Cloud sampling·전체 origin/trigger 조건·privacy/masking·Data retention 화면과 캡처 범위를 사용자에게 안내한다
+- **AND** 사용자가 제공한 저장된 설정 screenshot을 Codex가 직접 읽어 10%·production canonical origin만 허용·Normal·30일과 각각 대조한다
+- **AND** PROD-820 Done·문서·기본값·과거 기록만으로 실제 설정 충족을 간주하지 않는다
+
+#### Scenario: Cloud 값이 다르거나 화면으로 확인할 수 없다
+
+- **WHEN** screenshot의 실제 값이 기대값과 다르거나 값·조건 전체를 판독할 수 없다
+- **THEN** 현재 값 또는 미확인 이유, 기대값, 사람이 해야 할 조치, 미조치 시 pending인 Replay Rollout Gate 입력을 보고한다
+- **AND** 추가 화면 또는 관련 필드만 남긴 실제 저장 설정 API 응답·관리자 내보내기를 요청한다. retention은 서버 설정으로 확인한다
+- **AND** 사람의 수정·저장과 새 증거 대조 전까지 임의로 충족 처리하거나 실제 Replay를 켜지 않는다
+
+#### Scenario: Human-required 조치가 필요하다
+
+- **WHEN** B. Operational Verification에서 설정·재활성화·배포·복구 등에 사람의 조치가 필요하다
+- **THEN** 정확한 대상·행위·기대 결과를 요청하고 사용자가 수행하거나 명시적으로 승인하기 전에 실행·완료 처리하지 않는다
+- **AND** 승인 후에도 실제 실행·검증 증거를 확인하며 승인 자체를 성공 증거로 삼지 않는다
+
+#### Scenario: 재활성화 조건을 충족했다
+
+- **WHEN** 수용된 privacy baseline·Cloud 네 실제 값·사전 보호/장애 검증·코드/배포/rollback 준비로 Replay Rollout Gate가 PASS하고 기존 release 절차를 충족한다
+- **THEN** B. Operational Verification에서 필요한 Human-required 조치를 충족한 뒤 Replay를 재활성화하고 대상·적용 시점을 기록한다
+- **AND** 활성화 후 실제 Replay acceptance는 별도로 검증하며 Product Analytics의 기존 표준 수집과 제품 기능을 유지한다
+
+#### Scenario: recording 비대상 origin에서 사용한다
+
+- **WHEN** production canonical origin 외 환경에서 Web을 사용한다
+- **THEN** 해당 환경의 실제 Replay는 전송되지 않는다
+- **AND** 앱 소유 config·DOM marker 단위 검증이나 dev 무전송 smoke를 production 외 origin의 실제 수집 승인으로 해석하지 않는다
+
+#### Scenario: 일반 route navigation과 Viewer를 함께 기록한다
+
+- **WHEN** 합성 데이터로 일반 route navigation과 compact·wide Viewer 열기·이미지 전환·닫기를 수행한다
+- **THEN** 하나의 실제 session replay에서 해당 journey가 정상적으로 기록·재생된다
+- **AND** SDK의 기존 pageview·pageleave·autocapture가 같은 journey에 연결되는지 실제 Replay와 이벤트 결과로 확인한다
+- **AND** Viewer 내부 이미지 전환은 route navigation이 아니므로 이를 위한 별도 pageview나 앱 소유 analytics emitter를 추가하지 않는다
+
+#### Scenario: synthetic 입력과 canonical Post Content 보호를 검증한다
+
+- **WHEN** synthetic input·textarea에 테스트 문자열을 입력하고 합성 canonical Post Content를 표시한다
+- **THEN** 실제 Replay에서 input·textarea 내용이 masking되고 recorder 전송에 원문이 노출되지 않는다
+- **AND** `ph-mask`의 Post Content 보호를 실제 Replay·전송 결과에서, `ph-no-capture`의 subtree 제외를 실제 autocapture 결과에서 각각 확인한다
+- **AND** DOM marker 존재만으로 통과하지 않으며 실제 사용자 개인정보·실제 사용자 콘텐츠는 테스트에 사용하지 않는다
+
+#### Scenario: analytics 또는 Replay가 실패한다
+
+- **WHEN** Replay initialization·recorder load·upload 실패와 analytics 전송 실패를 각각 재현한다
+- **THEN** 각 실패 발생을 확인하면서 Viewer 열기·이미지 전환·닫기, route navigation과 관련 제품 기능의 정상 동작을 별도 acceptance로 검증한다
+- **AND** PostHog 성공을 제품 기능의 성공 조건으로 삼지 않으며 analytics/replay 실패가 제품의 실패·차단·대기로 전파되지 않는다
+
+#### Scenario: 보호 실패가 발견된다
+
+- **WHEN** masking 또는 recording 보호 조건이 충족되지 않는다
+- **THEN** acceptance를 완료하지 않고 Replay 비활성 상태를 유지하거나 기존 release 절차로 회복한다
+
+#### Scenario: 배포된 opt-out을 선택한다
+
+- **WHEN** PROD-540 opt-out 기능이 배포돼 있고 사용자가 수집 거부를 선택했다
+- **THEN** 해당 사용자의 Replay는 전송되지 않는다
+
+#### Scenario: PROD-741 최종 acceptance 증거를 정리한다
+
+- **WHEN** B. Operational Verification이 PROD-741 최종 acceptance를 판정한다
+- **THEN** privacy baseline·Viewer 결정, A의 코드/자동 검증, Cloud 실제 값·비교 시점, Rollout Gate, 실제 재활성화·배포·표본 재생·장애 격리와 Human-required 실행 증거를 PROD-741에 정리한다
+- **AND** 필수 결과가 미확인·실패면 완료하지 않으며 PROD-575 후속 인계·최종 acceptance·공유 OpenSpec archive를 완료 조건으로 두지 않는다
+- **AND** 실제 Account ID·프로젝트 키·사용자 콘텐츠·raw recording payload를 기록하지 않는다
+- **AND** 작은 표본의 녹화 비율로 10% 설정을 추정하거나 설정 screenshot만으로 실제 Replay acceptance를 완료하지 않는다
 
 ### Requirement: 분석 장애 격리
 
@@ -187,7 +263,7 @@
 
 ### Requirement: 전환 완료 후 OpenPanel 운영 설정 정리
 
-**Authority / Provenance:** [Linear `PROD-839`](https://linear.app/byulmaru/issue/PROD-839)의 포함·제외 범위, 선행·후행 관계, 완료 조건과 2026-09-08 Issue Gate 정렬 승인; `PROD-819`의 runtime 전환, `PROD-820`의 전환기 주입, `PROD-891`의 현재 채널 설정, `PROD-833`과 `docs/operations/production-release.md`의 SHA 이미지 승격, `PROD-795`의 인계 계약 — PROD-819·PROD-820 결과가 같은 지원 release line에 포함되고 지원 canonical build·수동 SHA release·rollback 대상에 OpenPanel 소비가 없음을 확인한 뒤에만 남은 OpenPanel 전용 설정을 제거해야 한다(MUST). 지원되는 canonical rebuild가 있으면 그 대상도 확인해야 한다(MUST). 근거가 부족하면 남은 설정을 제거하지 않아야 하며(MUST NOT), 이미 사라진 주입을 복구하지 않아야 한다(MUST NOT). GitHub repository·사용 중인 environment variables, 활성 runtime configuration source·운영 설정 저장소의 참조와 제거 전후 이름·범위·환경·존재 여부를 기록해야 한다(MUST). 실제 값·credential·사용자 데이터를 기록하지 않아야 한다(MUST NOT). 현재 채널 설정, SHA digest 승격, prod 수집 중단과 기존 metadata·identity·privacy·Replay 계약을 보존해야 한다(MUST). 정리 결과와 남은 production 확인 사항은 PROD-795에 인계하고 PROD-575의 최종 acceptance 입력으로 식별해야 한다(MUST).
+**Authority / Provenance:** [Linear `PROD-839`](https://linear.app/byulmaru/issue/PROD-839)의 포함·제외 범위, 선행·후행 관계, 완료 조건과 2026-09-08 Issue Gate 정렬 승인; `PROD-819`의 runtime 전환, `PROD-820`의 전환기 주입, `PROD-891`의 현재 채널 설정, `PROD-833`과 `docs/operations/production-release.md`의 SHA 이미지 승격, `PROD-795`의 인계 계약 — PROD-819·PROD-820 결과가 같은 지원 release line에 포함되고 지원 canonical build·수동 SHA release·rollback 대상에 OpenPanel 소비가 없음을 확인한 뒤에만 남은 OpenPanel 전용 설정을 제거해야 한다(MUST). 지원되는 canonical rebuild가 있으면 그 대상도 확인해야 한다(MUST). 근거가 부족하면 남은 설정을 제거하지 않아야 하며(MUST NOT), 이미 사라진 주입을 복구하지 않아야 한다(MUST NOT). GitHub repository·사용 중인 environment variables, 활성 runtime configuration source·운영 설정 저장소의 참조와 제거 전후 이름·범위·환경·존재 여부를 기록해야 한다(MUST). 실제 값·credential·사용자 데이터를 기록하지 않아야 한다(MUST NOT). 현재 채널 설정, SHA digest 승격, prod 수집 중단과 기존 metadata·identity·privacy·Replay 계약을 보존해야 한다(MUST). 정리 결과와 남은 production 확인 사항은 PROD-795에 인계해야 한다(MUST). 과거 PROD-575 최종 acceptance 입력 계획은 현재 후속 의존성이 아니다.
 
 #### Scenario: 정리 조건이나 근거가 부족하다
 
