@@ -1,6 +1,6 @@
 import { Link, useRouter } from 'expo-router';
 import { MessageCircle, Pin } from 'lucide-react-native';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
@@ -353,11 +353,10 @@ function PostListItemCard({
   style: StyleProp<ViewStyle>;
 }) {
   const theme = useTheme();
-  const { handlers, hovered, pressed } = usePostSurfaceFeedback({
+  const { handlers, hovered, pressed, setSurfaceHoverSuppressed } = usePostSurfaceFeedback({
     hover: true,
     press: true,
   });
-  const [warningHovered, setWarningHovered] = useState(false);
 
   return (
     <View
@@ -374,14 +373,14 @@ function PostListItemCard({
           {
             backgroundColor: pressed
               ? theme.statePressedSubtle
-              : hovered && !warningHovered
+              : hovered
                 ? theme.stateHover
                 : undefined,
           },
         ]}
         testID="post-list-item-feedback"
       />
-      <PostSurfaceHoverSuppressionContext.Provider value={setWarningHovered}>
+      <PostSurfaceHoverSuppressionContext.Provider value={setSurfaceHoverSuppressed}>
         {children}
       </PostSurfaceHoverSuppressionContext.Provider>
     </View>

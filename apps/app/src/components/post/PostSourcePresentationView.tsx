@@ -1,5 +1,4 @@
 import { Link, useRouter } from 'expo-router';
-import { useContext, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
@@ -223,12 +222,10 @@ export function PostSourcePreview({
   style?: StyleProp<ViewStyle>;
 }): ReactNode {
   const theme = useTheme();
-  const { handlers, hovered } = usePostSurfaceFeedback({
+  const { handlers, hovered, setSurfaceHoverSuppressed } = usePostSurfaceFeedback({
     hover: interactive,
     press: false,
   });
-  const setParentHoverSuppressed = useContext(PostSurfaceHoverSuppressionContext);
-  const [warningHovered, setWarningHovered] = useState(false);
   const source = useFragment(PostSourcePreviewFragment, sourceKey);
   const sourceProfileHref = `/${source.profile.relativeHandle}` as Href;
   const sourcePostHref = `/${source.profile.relativeHandle}/${source.id}` as Href;
@@ -291,18 +288,13 @@ export function PostSourcePreview({
         styles.preview,
         style,
         {
-          backgroundColor: hovered && !warningHovered ? theme.stateHover : undefined,
+          backgroundColor: hovered ? theme.stateHover : undefined,
           borderColor: theme.borderDefault,
         },
       ]}
       testID="source-post-preview"
     >
-      <PostSurfaceHoverSuppressionContext.Provider
-        value={(suppressed) => {
-          setWarningHovered(suppressed);
-          setParentHoverSuppressed?.(suppressed);
-        }}
-      >
+      <PostSurfaceHoverSuppressionContext.Provider value={setSurfaceHoverSuppressed}>
         {content}
       </PostSurfaceHoverSuppressionContext.Provider>
     </View>

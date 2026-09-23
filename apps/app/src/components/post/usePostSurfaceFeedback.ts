@@ -1,4 +1,4 @@
-import { createContext, useState } from 'react';
+import { createContext, useContext, useState } from 'react';
 import { Platform } from 'react-native';
 import type { PointerEvent, ViewProps } from 'react-native';
 
@@ -25,8 +25,14 @@ type SurfaceFeedbackHandlers = Pick<
 
 export function usePostSurfaceFeedback({ hover, press }: SurfaceFeedbackOptions) {
   const [hovered, setHovered] = useState(false);
+  const [hoverSuppressed, setHoverSuppressed] = useState(false);
   const [pressed, setPressed] = useState(false);
+  const setParentHoverSuppressed = useContext(PostSurfaceHoverSuppressionContext);
   const hoverEnabled = hover && Platform.OS === 'web';
+  const setSurfaceHoverSuppressed = (suppressed: boolean) => {
+    setHoverSuppressed(suppressed);
+    setParentHoverSuppressed?.(suppressed);
+  };
   const handlers: SurfaceFeedbackHandlers = {
     onPointerEnter: hoverEnabled
       ? (event: PointerEvent) =>
@@ -55,5 +61,10 @@ export function usePostSurfaceFeedback({ hover, press }: SurfaceFeedbackOptions)
         : {}),
   };
 
-  return { handlers, hovered, pressed } as const;
+  return {
+    handlers,
+    hovered: hovered && !hoverSuppressed,
+    pressed,
+    setSurfaceHoverSuppressed,
+  } as const;
 }
