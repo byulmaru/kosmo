@@ -295,8 +295,9 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   Repost 실패 callback을 action별 한국어 toast로 연결한다. 외부 toast 의존성은 추가하지 않는다.
 - 생성 실패 문구는 `재게시하지 못했습니다. 잠시 후 다시 시도해 주세요.`다.
 - 취소 실패 문구는 `재게시를 취소하지 못했습니다. 잠시 후 다시 시도해 주세요.`다.
-- toast는 화면 하단에서 safe area와 고정 탭 바 위에 표시하고 약 3초 뒤 자동으로 사라진다. 새 toast가 오면
-  기존 toast를 교체하고 dismiss timer를 다시 시작하며 queue, 닫기 control과 toast 내부 재시도 control은 두지 않는다.
+- 일반 toast는 화면 하단에서 safe area와 고정 탭 바 위에 표시하고 약 3초 뒤 자동으로 사라진다. 새 toast가 오면
+  기존 toast를 교체하고 dismiss timer를 다시 시작하며 일반 toast queue와 닫기 control은 두지 않는다.
+  추가 페이지 실패처럼 지속되는 재시도 toast는 일반 toast가 잠시 가린 뒤 다시 표시하고, 요청 성공이나 화면 이탈 시 정리한다.
 - 오류 toast는 보조 기술이 즉시 인식할 수 있는 alert semantics를 제공한다. 활성 toast와 같은 문구가 다시
   발생해도 새 alert instance로 교체해 보조 기술이 반복된 실패를 다시 인식할 수 있어야 한다.
 - Repost 실패 Toast는 Danger tone의 semantic `feedback/danger/subtle` 배경과 `feedback/danger/on-subtle` 전경,

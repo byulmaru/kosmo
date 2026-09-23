@@ -100,6 +100,47 @@ test('a child can show an error toast on initial mount', async () => {
   }
 });
 
+test('다른 토스트가 잠시 표시된 뒤 지속 재시도 토스트를 복원하고 정리할 수 있다', async () => {
+  assert.ok(toastProviderModule);
+  const { ToastProvider, useToast } = toastProviderModule;
+  let api: ReturnType<typeof useToast> | undefined;
+  function Harness() {
+    api = useToast();
+    return null;
+  }
+  let renderer!: ReactTestRenderer;
+  await act(async () => {
+    renderer = create(createElement(ToastProvider, null, createElement(Harness)));
+  });
+  const hasMessage = (message: string) =>
+    renderer.root.findAllByType(TextHost).some((node) => node.props.children === message);
+
+  let dismissPersistent: (() => void) | undefined;
+  let dismissTemporary: (() => void) | undefined;
+  await act(async () => {
+    dismissPersistent = api?.showToast('페이지 재시도', {
+      action: { label: '다시 시도', onPress: () => undefined },
+      persistent: true,
+      tone: 'danger',
+    });
+    dismissTemporary = api?.showToast('북마크 실패', { tone: 'danger' });
+  });
+  assert.equal(hasMessage('북마크 실패'), true);
+  await act(async () => dismissTemporary?.());
+  assert.equal(hasMessage('페이지 재시도'), true);
+  await act(async () => dismissPersistent?.());
+  assert.equal(renderer.root.findAllByType('AnimatedView' as ElementType).length, 0);
+
+  await act(async () => {
+    dismissPersistent = api?.showToast('이전 화면 재시도', { persistent: true, tone: 'danger' });
+    dismissTemporary = api?.showToast('다른 알림', { tone: 'info' });
+  });
+  await act(async () => dismissPersistent?.());
+  await act(async () => dismissTemporary?.());
+  assert.equal(renderer.root.findAllByType('AnimatedView' as ElementType).length, 0);
+  await act(async () => renderer.unmount());
+});
+
 test('toast dwell timer starts after its enter motion finishes', async () => {
   assert.ok(toastProviderModule);
   const { ToastProvider, useToast } = toastProviderModule;

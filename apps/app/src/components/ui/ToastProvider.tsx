@@ -29,8 +29,10 @@ type ToastState = Readonly<{
 
 export function ToastProvider({ children }: PropsWithChildren): ReactNode {
   const [toast, setToast] = useState<ToastState | null>(null);
+  const toastRef = useRef<ToastState | null>(null);
   const [toastVisible, setToastVisible] = useState(false);
   const activeToastId = useRef<number | null>(null);
+  const suspendedPersistentToast = useRef<ToastState | null>(null);
   const nextToastId = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const insets = useSafeAreaInsets();
@@ -43,6 +45,10 @@ export function ToastProvider({ children }: PropsWithChildren): ReactNode {
   const toastMotion = useToastMotion(toastVisible);
 
   const dismissToast = useCallback((id?: number) => {
+    if (id !== undefined && suspendedPersistentToast.current?.id === id) {
+      suspendedPersistentToast.current = null;
+      return;
+    }
     if (id !== undefined && activeToastId.current !== id) {
       return;
     }
@@ -50,8 +56,16 @@ export function ToastProvider({ children }: PropsWithChildren): ReactNode {
       clearTimeout(timer.current);
       timer.current = null;
     }
-    activeToastId.current = null;
-    setToastVisible(false);
+    if (suspendedPersistentToast.current) {
+      const restored = suspendedPersistentToast.current;
+      suspendedPersistentToast.current = null;
+      activeToastId.current = restored.id;
+      toastRef.current = restored;
+      setToast(restored);
+    } else {
+      activeToastId.current = null;
+      setToastVisible(false);
+    }
   }, []);
 
   const showToast = useCallback(
@@ -60,14 +74,21 @@ export function ToastProvider({ children }: PropsWithChildren): ReactNode {
         clearTimeout(timer.current);
       }
       const id = nextToastId.current++;
+      if (options.persistent) {
+        suspendedPersistentToast.current = null;
+      } else if (activeToastId.current !== null && toastRef.current?.persistent) {
+        suspendedPersistentToast.current = toastRef.current;
+      }
       activeToastId.current = id;
-      setToast({
+      const nextToast = {
         action: options.action,
         id,
         message: nextMessage,
         persistent: options.persistent,
         tone: options.tone,
-      });
+      };
+      toastRef.current = nextToast;
+      setToast(nextToast);
       setToastVisible(true);
       return () => dismissToast(id);
     },
