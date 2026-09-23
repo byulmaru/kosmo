@@ -242,18 +242,15 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   Web menu는 `18`/`primary`, Native menu는 `24`/`primary`를 사용하며 삭제의 `danger` 색은 유지한다.
 - 고정 Post는 Profile 목록에만 우선 표시하고 Home timeline 순서는 변경하지 않는다.
 - 저장·API projection은 ordered 0..N collection이다. 현재 Local first-party UI는 server-authoritative order의 첫 visible
-  pinned Post만 렌더하고 관리한다. 기본 Local pin mutation은 ordered set에 추가하고 지정한 Post만 해제하며, 현재 UI가 관리하는
-  slot을 다른 Post로 교체할 때만 canonical `ModalSheet`의 confirmation과 expected-current 보호를 사용한다. 교체 대상에도 아래
-  일반 고정 action과 같은 Profile 상태·작성자·Post lifecycle·Content·Visibility 자격을 적용한다. 같은 Post 재고정과 이미 해제된
-  Post 해제는 안전한 no-op으로 처리하며, 단순 고정·해제에는 확인을 표시하지 않는다.
+  pinned Post만 렌더하고 관리한다. 기본 Local pin mutation은 ordered set에 추가하고 지정한 Post만 해제한다. 같은 Post 재고정과
+  이미 해제된 Post 해제는 안전한 no-op으로 처리한다.
 - 추가 Local pin은 현재 UI에서 고정 attribution이나 관리 대상으로 렌더하지 않는다. pin 관계는 기존 Profile chronology의
   후보·순서·pagination을 바꾸지 않으므로, 첫 visible pin도 기존 chronology 후보라면 pinned segment와 원래 위치에 모두 표시된다.
 - 고정 action은 현재 Local Profile이 작성한 Active Content Post·Reply·Quote 중 Public·Unlisted·Followers Only인
   대상에만 연결한다. Mentioned Profiles, Content 없는 pure Repost와 다른 Profile 작성 Post는 제외한다. Remote Profile의
   `featured` 수신 결과는 검증된 Featured collection 전체를 순서대로 표시하며 Local first-visible UI 제한을 적용하지 않는다.
 - persistence/API·pagination·mutation·동시성은 PROD-973, ActivityPub federation은 PROD-974가 소유하고 PROD-809는
-  cross-slice 통합·archive를 소유한다. Storybook fixture의 모의
-  요청은 이 서버 계약이나 stale confirmation 보호를 증명하지 않는다.
+  cross-slice 통합·archive를 소유한다. Storybook fixture의 모의 요청은 이 서버 계약을 증명하지 않는다.
 
 ### Storybook 이관 · PROD-863
 
@@ -277,8 +274,7 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - `KOSMO/Patterns/Profile/Pin Action`의 Playground는 수동 Controls·Actions용이며 자동 조작은 Controls가
   비활성화된 `Tests`에 둔다. Controls는 owner/visitor, pin/unpin, 본문과 요청 success/pending/error를 제공한다.
 - 2026-09-08 PROD-863 범위 확정에 따라 empty·removed·unavailable·loading·error 전용 상태 카드와
-  presentation Control은 이 이관에서 제외한다. PROD-809의 canonical 교체 확인은 기존 ModalSheet content swap을
-  사용하며, 이 이관은 해당 공개 API나 persistence 계약을 선점하지 않는다.
+  presentation Control은 이 이관에서 제외한다. 이 이관은 향후 reorder UI나 공개 persistence 계약을 선점하지 않는다.
 - 2026-09-09 리뷰 답변과 사용자 승인에 따라 기존 callback 기반 실행 계약을 위의 fixture 기반 표시
   검증으로 변경했다. `ProfilePinAction` production controller를 제거하며 요청 수명과 결과 반영은
   실제 mutation 구현 시 다시 검증한다.
@@ -355,7 +351,7 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   presentation migration, Web 단일 `alertdialog`·`aria-modal` surface, canonical `420px` shell과
   focus·dismiss·pending 회귀 검증을 소유한다.
 - `PROD-809`는 Profile 고정의 최대 수·대상 자격·권한·lifecycle·pagination·persistence/API·ActivityPub과
-  교체 mutation·동시성·실패 처리 정책, 실제 Production·runtime 검증을 소유한다.
+  동시성·실패 처리 정책, 실제 Production·runtime 검증을 소유한다.
 - `PROD-425`는 pure Repost Reply의 바깥 contentless Post binding과 disabled 상태를 소유한다.
 - `PROD-936`은 Home·Local·Profile·Bookmarks·상세/스레드의 공용 presentation 재사용 확인, 실제 Web 데이터·액션
   회귀 검증과 Native target·목록 inset 적용을 소유한다. Media Viewer·Notification 자체 이관과 Clipboard
@@ -435,7 +431,7 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   검증한다.
 - Storybook에서 고정·해제 모의 상태에 따른 표시 전환, pending의 busy·disabled UI, 실패 표시 유지·한국어
   toast·재시도와 메뉴 keyboard·dismiss·trigger focus return을 검증한다. fixture 없는 production 메뉴에
-  고정 action이 추가되지 않는지도 검증한다. 실제 요청 수명·결과 반영과 교체 확인·전용 상태 화면은
+  고정 action이 추가되지 않는지도 검증한다. 실제 요청 수명·결과 반영과 전용 상태 화면은
   PROD-973의 mutation·정책 구현과 PROD-975의 Production UI 연결 범위에서 검증한다.
 
 ## 인용 동의와 원문 표시

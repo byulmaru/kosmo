@@ -1,6 +1,6 @@
 ## Why
 
-Profile 목록의 고정 Post 계약이 공용 UI 표본에만 남아 있어 Local Profile의 교체·동시성·자격과 Remote Profile의
+Profile 목록의 고정 Post 계약이 공용 UI 표본에만 남아 있어 Local Profile의 동시성·자격과 Remote Profile의
 ActivityPub `featured` 동기화가 일관되게 구현될 수 없다. PROD-809는 이 durable 제품 계약을 canonical 문서와
 구현·검증 task로 연결하고, 별도 pinned presentation과 기존 Profile chronology의 독립성 및 접근 제어를 확정한다.
 
@@ -8,10 +8,8 @@ ActivityPub `featured` 동기화가 일관되게 구현될 수 없다. PROD-809�
 
 - Profile pin 저장·API projection은 ordered 0..N collection으로 정의한다. Local pin은 ordered set에 추가하고 unpin은 지정한
   Post만 제거한다. 현재 Local first-party frontend는 server-authoritative order의 첫 visible Post만 관리·렌더한다.
-- 현재 UI가 관리하는 Post를 다른 Post로 교체할 때만 canonical ModalSheet confirmation과 expected-current 검증을 사용해
-  일반 pin과 같은 Profile·대상 자격을 재검증하고 해당 UI slot을 원자적으로 교체한다. 이 rollout 정책은 저장·API cardinality를
-  제한하지 않으며, expected-current 불일치는 저장 상태를 보존한 stale/conflict 결과로 반환한다. 같은 Post 재고정과 이미 없는
-  Post 해제는 idempotent no-op으로 정규화한다.
+- 같은 Post 재고정과 이미 없는 Post 해제는 idempotent no-op으로 정규화한다. 임의 삽입·재정렬·current-slot replacement는
+  reorder UI 계약이 생길 때 별도 도입한다.
 - Remote Profile은 검증된 ActivityPub `featured` collection의 지원 Post 전체를 원격 순서로 보존·표시하며 Local
   first-visible UI 제한을 적용하지 않는다.
 - Outbound Actor의 `featured` advertisement, Public/Unlisted 공개와 Followers Only signed fetch authorization, commit 후
@@ -48,7 +46,7 @@ ActivityPub `featured` 동기화가 일관되게 구현될 수 없다. PROD-809�
 ## Impact
 
 - Domain canonical: Profile/Post object, Post List Policy와 Post Action Bar design 문서
-- Server/domain: pin eligibility, additive add/unpin, current UI slot의 atomic replacement/no-op, ordered pin projection과 lifecycle 정리
+- Server/domain: pin eligibility, additive add/unpin, ordered pin projection과 lifecycle 정리
 - API/Relay: Profile 목록의 ordered pinned presentation과 기존 chronology·pagination 불변 계약
 - ActivityPub/Fedify: Actor `featured` advertisement, Featured collection authorization, inbound page traversal, Note
   materialization과 Profile Update(Person) delivery

@@ -78,7 +78,7 @@ Author Profile/Repost Source 조합에는 Lifecycle State가 Active이고 Conten
 - Local Profile pin mutation이 소비하는 Post state는 해당 Post가 Active이고 Current Content가 있으며 Visibility가
   Public, Unlisted 또는 Followers Only인지와 Author Profile 관계를 제공한다.
 - Mentioned Profiles Visibility, Content 없는 pure Repost와 다른 Profile이 작성한 Post는 Local Profile 고정 대상이
-  아니다. 고정 cardinality·Member 권한·expected-current·mutation 결과는 [Profile 객체](./profile.md)의 행동 표가
+  아니다. 고정 cardinality·Member 권한·mutation 결과는 [Profile 객체](./profile.md)의 행동 표가
   소유하며, 이 문서는 Post eligibility 사실만 정의한다.
 
 ## 행동
@@ -352,7 +352,7 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
   established Follower의 signed fetch에서만 collection membership과 Note를 제공하며, 인증되지 않은 요청·비팔로워
   요청·Mentioned Profiles Post(ActivityPub Direct projection)는 제공하지 않는다. Post의 존재나 private membership을 URI, count 또는 빈 collection 외의 오류로
   추론할 수 있게 해서는 안 된다.
-- Local pin/unpin/replacement commit 뒤에는 최신 `featured` 표현을 반영하는 Profile Update(Person) delivery를 예약한다.
+- Local pin/unpin commit 뒤에는 최신 `featured` 표현을 반영하는 Profile Update(Person) delivery를 예약한다.
   연속된 commit은 최신 current representation delivery로 병합할 수 있으며 commit별 1:1 delivery나 완료 시간 SLA를
   요구하지 않는다. delivery 수단은 이 계약에서 고정하지 않으며, 실패가 이미 commit된 Local 고정 상태를 되돌리지는 않는다.
 - Remote Featured collection은 원격 ActivityPub Profile이 광고한 collection을 page traversal로 동기화한다. 각 Note의 canonical

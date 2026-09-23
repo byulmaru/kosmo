@@ -9,32 +9,25 @@
 
 **Deliverable**
 
-Local pin API가 승인된 Post를 ordered set에 추가하고 지정한 Post만 해제하며, current first-party UI slot 교체의 stale confirmation이
-다른 pin을 훼손하지 않는다.
+Local pin API가 승인된 Post를 ordered set에 추가하고 지정한 Post만 해제한다. 임의 삽입·재정렬·current-slot replacement는
+reorder UI 계약 이후 별도 도입한다.
 
 **Guardrails**
 
 - Active이며 Current Content가 있는 자기 작성 Post·Reply·Quote와 Public·Unlisted·Followers Only만 허용한다.
 - Mentioned Profiles, Content 없는 pure Repost와 타인 작성 Post는 거부한다.
 - 기본 pin은 기존 관계를 지우지 않고 추가하며 unpin은 지정한 관계만 제거한다.
-- 새 pin은 기존 pin의 상대 순서를 보존한 한 위치에 저장하고 관계 변경·idempotent no-op이 없으면 order를 유지한다.
-- 현재 first-party UI는 slot 교체 전에 ModalSheet 확인을 수행하고, 서버는 이 UI event를 신뢰하거나 검증하지 않은 채 일반
-  pin과 같은 Profile·대상 자격과 전달받은 current expected value를 교체와 함께 검증한 원자적 결과를 만든다. 내부 수단은
-  transaction, conditional write 또는 compare-and-swap 중 기존 persistence 경계에 맞게 선택한다.
-- 교체 대상이 이미 다른 위치에 pinned면 대상 관계를 current slot으로 이동하고 기존 current 관계를 제거하되 중복 없이 나머지
-  관계의 상대 순서를 보존한다.
-- replacement expected-current 불일치는 저장 상태를 보존한 stale/conflict 결과여야 한다.
+- 새 pin은 관계 ID가 정하는 server-authoritative 위치에 저장하고 관계 변경·idempotent no-op이 없으면 순서를 유지한다.
 - 동일 pin과 이미 없는 target unpin은 idempotent no-op이어야 하며 다른 pin을 제거하지 않는다.
 
 **Verification**
 
-- DB/core/API 테스트로 권한·자격, additive ordered collection projection, 지정 항목 unpin, current UI slot atomic replacement,
-  이미 pinned인 replacement target 이동, ineligible replacement 거부, stale concurrent request, same-pin/unpin no-op을 입력·결과·저장 상태로 검증한다. replacement
-  stale/conflict 결과가 idempotent success와 구별되고 저장 상태를 보존하는지도 검증한다.
+- DB/core/API 테스트로 권한·자격, additive ordered collection projection, 지정 항목 unpin, same-pin/unpin no-op과 동시 pin을
+  입력·결과·저장 상태로 검증한다.
 
 - [x] 1.1 Local Profile pin/unpin의 eligibility, Member 권한과 ordered add/remove semantics를 구현한다.
-- [x] 1.2 current first-party UI slot 교체에서만 expected value를 검증하고 원자성·idempotent no-op을 보장한다.
-- [x] 1.3 current UI slot replacement 확인과 실패·동시성 결과를 API 계약에 연결하고 focused DB/core 테스트를 통과시킨다.
+- [x] 1.2 Not needed — current-slot replacement는 reorder UI 계약이 생길 때 별도 도입한다.
+- [x] 1.3 Not needed — production caller 없는 replacement API와 focused replacement 테스트는 제거한다.
 
 ## 2. PROD-973 Profile pinned presentation
 
@@ -95,7 +88,7 @@ collection을 제공하며 pin commit 뒤 Profile Update(Person) lifecycle을 �
 
 - ActivityPub/Fedify integration으로 Actor `featured` advertisement, ordered items, Public/Unlisted fetch,
   Followers Only signed author/follower fetch와 unsigned/non-follower/Mentioned Profiles denial을 검증한다.
-- pin/unpin/replacement commit 뒤 Profile Update delivery, 연속 commit의 최신 표현 반영과 delivery failure 보존을 관측한다.
+- pin/unpin commit 뒤 Profile Update delivery, 연속 commit의 최신 표현 반영과 delivery failure 보존을 관측한다.
 
 - [ ] 3.1 Local Actor의 `featured` advertisement와 ordered collection projection을 구현한다.
 - [ ] 3.2 기존 Note visibility authorization을 Featured membership과 Note 역참조에 연결한다.
