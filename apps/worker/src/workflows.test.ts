@@ -1535,6 +1535,7 @@ test(
           await effectReleased;
           throw ApplicationFailure.nonRetryable('ActivityPub effect failed');
         },
+        sendProfileBlockActivity: async () => undefined,
       },
       connection: environment.nativeConnection,
       namespace: environment.namespace,
@@ -1582,7 +1583,7 @@ test(
 
         releaseEffect();
         const handle = await startWorkflowOperation.workflowHandle();
-        await handle.result();
+        await assert.rejects(handle.result());
       } finally {
         releaseEffect();
       }
@@ -1646,6 +1647,7 @@ test(
         ownerProfileId: input.ownerProfileId,
         targetProfileId: input.targetProfileId,
         profileBlockId: input.profileBlockId,
+        origin: 'LOCAL',
       });
       const handle = await startWorkflowOperation.workflowHandle();
       await handle.result();

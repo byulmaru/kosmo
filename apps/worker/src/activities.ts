@@ -49,3 +49,7 @@ export {
   sendReactionUndo as sendReactionUndoActivity,
 } from '@kosmo/fedify';
 export { sendLocalProfileUpdate as sendLocalProfileUpdateActivity } from '@kosmo/fedify';
+export {
+  sendProfileBlock as sendProfileBlockActivity,
+  sendProfileBlockUndo as sendProfileBlockUndoActivity,
+} from '@kosmo/fedify';

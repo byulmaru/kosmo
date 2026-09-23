@@ -150,6 +150,40 @@ async function waitForE2ETemporalWorkflows() {
 async function waitForE2EWorkflow({ runId, type, workflowId }: WorkflowInfo) {
   const handle = temporalClient.workflow.getHandle(workflowId, runId);
 
+  if (type === 'profileBlockWorkflow' || type === 'profileUnblockWorkflow') {
+    // These tests verify the committed local transition. Synthetic remote
+    // recipients have no deliverable inbox, so their retrying effect is ended
+    // before the next test truncates the database.
+    const deadline = Date.now() + 30_000;
+    let description = await handle.describe();
+    while (
+      description.status.name === 'RUNNING' &&
+      (description.raw.pendingWorkflowTask != null ||
+        (description.raw.pendingActivities ?? []).some(
+          ({ activityType }) =>
+            activityType?.name !== 'sendProfileBlockActivity' &&
+            activityType?.name !== 'sendProfileBlockUndoActivity',
+        ))
+    ) {
+      if (Date.now() >= deadline) {
+        throw new Error(`Timed out waiting for E2E Profile Block transition: ${workflowId}`);
+      }
+      await delay(25);
+      description = await handle.describe();
+    }
+    if (description.status.name === 'RUNNING') {
+      try {
+        await handle.terminate('E2E database reset');
+      } catch (error) {
+        if ((await handle.describe()).status.name === 'RUNNING') {
+          throw error;
+        }
+      }
+    }
+    await handle.result().catch(() => undefined);
+    return;
+  }
+
   if (type !== profileFollowPairWorkflowType) {
     await handle.result();
     return;

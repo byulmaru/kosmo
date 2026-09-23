@@ -16,6 +16,14 @@ type StoredRecipient = {
   readonly uri: string;
 };
 
+export type ActivityPubDispatchResult =
+  | { readonly status: 'SETTLED'; readonly recipientCount: number }
+  | {
+      readonly status: 'PENDING';
+      readonly recipientCount: 0;
+      readonly reason: 'recipient_unavailable';
+    };
+
 const parseHttpUri = (value: string): URL | null => {
   try {
     const uri = new URL(value);
@@ -49,12 +57,17 @@ export const dispatchActivityPubActivity = async ({
   actorProfileId,
   context,
   directProfileIds,
+  directOnly,
+  orderingKey,
 }: {
   readonly activity: Activity;
   readonly actorProfileId: string;
   readonly context: Context<LocalOutboundContextData>;
   readonly directProfileIds: readonly string[];
-}): Promise<void> => {
+  /** Preserve the historical direct-plus-followers audience unless explicit. */
+  readonly directOnly?: boolean;
+  readonly orderingKey?: string;
+}): Promise<ActivityPubDispatchResult> => {
   const directActors =
     directProfileIds.length === 0
       ? []
@@ -76,25 +89,27 @@ export const dispatchActivityPubActivity = async ({
               isNotNull(ActivityPubActors.inboxUri),
             ),
           );
-  const followerActors = await db
-    .select({
-      inboxUri: ActivityPubActors.inboxUri,
-      sharedInboxUri: ActivityPubActors.sharedInboxUri,
-      uri: ActivityPubActors.uri,
-    })
-    .from(ProfileFollows)
-    .innerJoin(FollowerProfiles, eq(FollowerProfiles.id, ProfileFollows.followerProfileId))
-    .innerJoin(FollowerInstances, eq(FollowerInstances.id, FollowerProfiles.instanceId))
-    .innerJoin(ActivityPubActors, eq(ActivityPubActors.profileId, FollowerProfiles.id))
-    .where(
-      and(
-        eq(ProfileFollows.followeeProfileId, actorProfileId),
-        eq(FollowerProfiles.state, ProfileState.ACTIVE),
-        eq(FollowerInstances.kind, InstanceKind.ACTIVITYPUB),
-        eq(FollowerInstances.state, InstanceState.ACTIVE),
-        isNotNull(ActivityPubActors.inboxUri),
-      ),
-    );
+  const followerActors = directOnly
+    ? []
+    : await db
+        .select({
+          inboxUri: ActivityPubActors.inboxUri,
+          sharedInboxUri: ActivityPubActors.sharedInboxUri,
+          uri: ActivityPubActors.uri,
+        })
+        .from(ProfileFollows)
+        .innerJoin(FollowerProfiles, eq(FollowerProfiles.id, ProfileFollows.followerProfileId))
+        .innerJoin(FollowerInstances, eq(FollowerInstances.id, FollowerProfiles.instanceId))
+        .innerJoin(ActivityPubActors, eq(ActivityPubActors.profileId, FollowerProfiles.id))
+        .where(
+          and(
+            eq(ProfileFollows.followeeProfileId, actorProfileId),
+            eq(FollowerProfiles.state, ProfileState.ACTIVE),
+            eq(FollowerInstances.kind, InstanceKind.ACTIVITYPUB),
+            eq(FollowerInstances.state, InstanceState.ACTIVE),
+            isNotNull(ActivityPubActors.inboxUri),
+          ),
+        );
 
   const recipientsByActor = new Map<string, Recipient>();
   for (const actor of [...directActors, ...followerActors]) {
@@ -105,10 +120,12 @@ export const dispatchActivityPubActivity = async ({
   }
   const recipients = [...recipientsByActor.values()];
   if (recipients.length === 0) {
-    return;
+    return { reason: 'recipient_unavailable', recipientCount: 0, status: 'PENDING' };
   }
 
   await context.sendActivity({ identifier: actorProfileId }, recipients, activity, {
     preferSharedInbox: true,
+    ...(orderingKey === undefined ? {} : { orderingKey }),
   });
+  return { recipientCount: recipients.length, status: 'SETTLED' };
 };
