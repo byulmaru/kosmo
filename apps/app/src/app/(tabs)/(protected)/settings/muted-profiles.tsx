@@ -2,11 +2,11 @@ import { useRouter } from 'expo-router';
 import { ChevronLeftIcon } from 'lucide-react-native';
 import { StyleSheet } from 'react-native';
 import { PageHeader } from '@/components/PageHeader';
+import { PaginationScrollView } from '@/components/pagination/PaginationScrollView';
 import { SettingsMutedProfiles } from '@/components/settings/SettingsMutedProfiles';
 import { returnToSettingsParent } from '@/components/settings/settingsNavigation';
 import { useSettingsDetailHeaderMode } from '@/components/settings/SettingsRouteContext';
 import { IconButton } from '@/components/ui/IconButton';
-import { RouteScrollContainer } from '@/components/ui/RouteScrollContainer';
 import { useTheme } from '@/theme/ThemeProvider';
 
 export default function SettingsMutedProfilesRoute() {
@@ -26,7 +26,7 @@ export default function SettingsMutedProfilesRoute() {
     ) : undefined;
 
   return (
-    <RouteScrollContainer
+    <PaginationScrollView
       nativeScrollProps={{
         contentContainerStyle: styles.nativeContent,
         style: styles.nativeRoot,
@@ -37,7 +37,7 @@ export default function SettingsMutedProfilesRoute() {
         <PageHeader leading={backButton} title="뮤트한 프로필" />
       ) : null}
       <SettingsMutedProfiles />
-    </RouteScrollContainer>
+    </PaginationScrollView>
   );
 }
 

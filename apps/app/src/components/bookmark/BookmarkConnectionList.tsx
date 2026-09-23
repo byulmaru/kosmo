@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import { graphql, usePaginationFragment } from 'react-relay';
 import { useAutomaticPagination } from '@/components/pagination/useAutomaticPagination';
 import { BookmarkList } from './BookmarkList';
@@ -36,19 +35,15 @@ export function BookmarkConnectionList({ profile }: BookmarkConnectionListProps)
   const items = pagination.data.bookmarks.edges.flatMap(({ node }) =>
     node.post?.listItem ? [{ id: node.id, post: node.post.listItem }] : [],
   );
-  const { endRef, loadError, loadNextPage, nativeScrollProps, resetError } = useAutomaticPagination(
-    {
-      hasNext: pagination.hasNext,
-      isLoadingNext: pagination.isLoadingNext,
-      itemCount: items.length,
-      loadNext: pagination.loadNext,
-      pageSize: 20,
-      requestKey: pagination.data.id,
-      webScrollTarget: 'container',
-    },
-  );
-  useEffect(() => resetError(), [pagination.data.id, resetError]);
-
+  const { endRef, loadError, loadNextPage, nativeScrollProps } = useAutomaticPagination({
+    hasNext: pagination.hasNext,
+    isLoadingNext: pagination.isLoadingNext,
+    itemCount: items.length,
+    loadNext: pagination.loadNext,
+    pageSize: 20,
+    requestKey: pagination.data.id,
+    webScrollTarget: 'container',
+  });
   return (
     <BookmarkList
       error={loadError}

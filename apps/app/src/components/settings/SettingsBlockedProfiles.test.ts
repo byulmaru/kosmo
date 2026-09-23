@@ -15,6 +15,7 @@ const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
 const toastCalls: Array<{ message: string; tone: string }> = [];
 const loadNext = mock.fn();
+let scrollProps: { onScroll: (event: object) => void } | null = null;
 let selectedProfile: object | null = { id: 'owner' };
 type PaginationState = {
   data: { profileBlocks: { edges: Array<{ cursor: string; node: object }> } | null };
@@ -30,11 +31,20 @@ let pagination: PaginationState = {
 };
 
 mockModule('react-native', {
+  Platform: { OS: 'ios' },
   ScrollView: ({ children, ...props }: { children?: ReactNode }) =>
     createElement('ScrollView', props, children),
   StyleSheet: { create: <T>(styles: T) => styles },
   View: ({ children, ...props }: { children?: ReactNode }) =>
     createElement('View', props, children),
+});
+mockModule(new URL('../pagination/PaginationScrollView.tsx', import.meta.url), {
+  usePaginationScrollRegistration: (props: typeof scrollProps) => {
+    scrollProps = props;
+  },
+});
+mockModule(new URL('../pagination/PaginationSurface.tsx', import.meta.url), {
+  PaginationSurface: (props: object) => createElement('PaginationSurface', props),
 });
 mockModule('react-relay', {
   graphql: (parts: TemplateStringsArray) => parts.join(''),
@@ -112,6 +122,7 @@ afterEach(async () => {
   renderer = null;
   toastCalls.length = 0;
   loadNext.mock.resetCalls();
+  scrollProps = null;
   selectedProfile = { id: 'owner' };
   pagination = {
     data: { profileBlocks: { edges: [] } },
@@ -175,13 +186,23 @@ describe('차단한 프로필 목록', () => {
 
     assert.equal(find('ProfileListItemContent')?.props.relativeHandle, '@star');
     assert.equal(find('Button')?.props.profileBlockId, 'block-star');
-    await act(async () => find('PaginationButton')?.props.onPress());
+    assert.equal(find('PaginationSurface')?.props.hasNext, true);
+    assert.ok(scrollProps);
+    await act(async () =>
+      scrollProps?.onScroll({
+        nativeEvent: {
+          contentOffset: { y: 200 },
+          contentSize: { height: 1000 },
+          layoutMeasurement: { height: 800 },
+        },
+      }),
+    );
     assert.equal(pagination.loadNext.mock.callCount(), 1);
 
     await act(async () => onComplete?.(new Error('network')));
-    const retry = find('PaginationButton');
-    assert.equal(retry?.props.children, '더 불러오기');
-    await act(async () => retry?.props.onPress());
+    const retry = find('PaginationSurface');
+    assert.equal(retry?.props.error, true);
+    await act(async () => retry?.props.onRetry());
     assert.equal(pagination.loadNext.mock.callCount(), 2);
   });
 
@@ -234,9 +255,9 @@ describe('차단한 프로필 목록', () => {
       );
     });
     assert.equal(findAll('ProfileListItemContent').length, 1);
-    const error = find('PaginationButton');
-    assert.equal(error?.props.children, '더 불러오기');
-    await act(async () => error?.props.onPress());
+    const error = find('PaginationSurface');
+    assert.equal(error?.props.error, true);
+    await act(async () => error?.props.onRetry());
     assert.equal(retries, 1);
   });
 

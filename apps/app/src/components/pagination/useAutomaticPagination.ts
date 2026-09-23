@@ -133,6 +133,10 @@ export function useAutomaticPagination({
     setLoadError(false);
   }, []);
 
+  useEffect(() => {
+    resetError();
+  }, [requestKey, resetError]);
+
   const onEndReached = useCallback(() => {
     if (nativePagination !== 'endReached' || pageErrorRef.current || loadError) {
       return;

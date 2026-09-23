@@ -1,6 +1,7 @@
-import { useCallback, useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { graphql, useFragment, useLazyLoadQuery, usePaginationFragment } from 'react-relay';
+import { usePaginationScrollRegistration } from '@/components/pagination/PaginationScrollView';
+import { useAutomaticPagination } from '@/components/pagination/useAutomaticPagination';
 import { BlockedProfileList } from '@/components/profile/BlockedProfileList';
 import { ProfileBlockAction } from '@/components/profile/ProfileBlockAction';
 import { ProfileListItemContent } from '@/components/profile/ProfileListItemContent';
@@ -63,12 +64,17 @@ type BlockedProfile = Readonly<{
 type Pagination =
   | { status: 'end' }
   | { status: 'loading' }
-  | { status: 'more'; onLoadMore: () => void }
+  | { status: 'more' }
   | { status: 'error'; onRetry: () => void };
 type BlockedProfilesState =
   | { status: 'loading' }
   | { status: 'error'; onRetry: () => void }
-  | { status: 'loaded'; profiles: readonly BlockedProfile[]; pagination: Pagination };
+  | {
+      status: 'loaded';
+      profiles: readonly BlockedProfile[];
+      pagination: Pagination;
+      paginationEndRef?: ReturnType<typeof useAutomaticPagination>['endRef'];
+    };
 
 export function SettingsBlockedProfiles() {
   return (
@@ -95,15 +101,16 @@ function SettingsBlockedProfilesContent() {
     SettingsBlockedProfilesNextPageQuery,
     SettingsBlockedProfiles_profile$key
   >(SettingsBlockedProfilesFragment, profile?.profileBlocksFragment ?? null);
-  const [loadError, setLoadError] = useState(false);
   const edges = pagination.data?.profileBlocks?.edges ?? [];
-  const loadMore = useCallback(() => {
-    if (!pagination.hasNext || pagination.isLoadingNext) {
-      return;
-    }
-    setLoadError(false);
-    pagination.loadNext(20, { onComplete: (error) => setLoadError(Boolean(error)) });
-  }, [pagination.hasNext, pagination.isLoadingNext, pagination.loadNext]);
+  const { endRef, loadError, loadNextPage, nativeScrollProps } = useAutomaticPagination({
+    hasNext: pagination.hasNext,
+    isLoadingNext: pagination.isLoadingNext,
+    itemCount: edges.length,
+    loadNext: pagination.loadNext,
+    pageSize: 20,
+    requestKey: profile?.id,
+  });
+  usePaginationScrollRegistration(nativeScrollProps);
 
   if (!profile || !pagination.data?.profileBlocks) {
     return (
@@ -118,12 +125,13 @@ function SettingsBlockedProfilesContent() {
     <BlockedProfilesView
       state={{
         pagination: loadError
-          ? { onRetry: loadMore, status: 'error' }
+          ? { onRetry: loadNextPage, status: 'error' }
           : pagination.isLoadingNext
             ? { status: 'loading' }
             : pagination.hasNext
-              ? { onLoadMore: loadMore, status: 'more' }
+              ? { status: 'more' }
               : { status: 'end' },
+        paginationEndRef: endRef,
         profiles: edges.map((edge) => ({
           key: edge.cursor,
           profileBlock: edge.node,
@@ -148,7 +156,12 @@ export function BlockedProfilesView({ state }: { state: BlockedProfilesState }) 
         ? state
         : state.profiles.length === 0 && state.pagination.status === 'end'
           ? ({ status: 'empty' } as const)
-          : ({ children, pagination: state.pagination, status: 'loaded' } as const);
+          : ({
+              children,
+              pagination: state.pagination,
+              paginationEndRef: state.paginationEndRef,
+              status: 'loaded',
+            } as const);
 
   return <BlockedProfileList state={listState} />;
 }

@@ -25,11 +25,25 @@ type Request = {
 const require = createRequire(import.meta.url);
 const generation = { current: 0 };
 const triggerFocus = mock.fn();
-const toastCalls: Array<{ message: string; tone: string }> = [];
-const showToast = (message: string, options: { tone: string }) => {
-  toastCalls.push({ message, tone: options.tone });
+const toastCalls: Array<{
+  message: string;
+  tone: string;
+  persistent?: boolean;
+  action?: { label: string; onPress: () => void };
+}> = [];
+const showToast = (
+  message: string,
+  options: { tone: string; persistent?: boolean; action?: { label: string; onPress: () => void } },
+) => {
+  toastCalls.push({
+    message,
+    tone: options.tone,
+    persistent: options.persistent,
+    action: options.action,
+  });
   return () => undefined;
 };
+let scrollProps: { onScroll: (event: object) => void } | null = null;
 let selectedProfileId = 'owner-a';
 let requests: Request[] = [];
 let renderer: ReactTestRenderer | null = null;
@@ -49,8 +63,19 @@ mockModule('react-relay', {
   },
 });
 mockModule('react-native', {
+  ActivityIndicator: 'ActivityIndicator',
+  Platform: { OS: 'ios' },
+  Text: 'Text',
   View: 'View',
   StyleSheet: { create: <T>(styles: T) => styles },
+});
+mockModule(new URL('../pagination/PaginationScrollView.tsx', import.meta.url), {
+  usePaginationScrollRegistration: (props: typeof scrollProps) => {
+    scrollProps = props;
+  },
+});
+mockModule(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
+  useTheme: () => ({ foregroundSecondary: 'secondary' }),
 });
 mockModule(new URL('../profile/ProfileListItemContent.tsx', import.meta.url), {
   ProfileListItemContent: ({ children, ...props }: { children?: ReactNode }) =>
@@ -116,6 +141,7 @@ afterEach(async () => {
   generation.current = 0;
   triggerFocus.mock.resetCalls();
   toastCalls.length = 0;
+  scrollProps = null;
 });
 
 function createEnvironment() {
@@ -242,6 +268,19 @@ async function respond(request: Request, data: Record<string, unknown>) {
 
 const handles = () => all('ProfileRow').map((row) => row.props.relativeHandle);
 
+async function reachEnd() {
+  assert.ok(scrollProps);
+  await act(async () =>
+    scrollProps?.onScroll({
+      nativeEvent: {
+        contentOffset: { y: 200 },
+        contentSize: { height: 1000 },
+        layoutMeasurement: { height: 800 },
+      },
+    }),
+  );
+}
+
 describe('Settings Block consumer with real Relay', () => {
   it('최초 query 실패를 같은 route에서 재시도하고 빈 목록으로 수렴한다', async (t) => {
     t.mock.method(console, 'error', () => undefined);
@@ -263,15 +302,19 @@ describe('Settings Block consumer with real Relay', () => {
     assert.equal(one('StateView').props.loading, true);
     await respond(latestRequest('SettingsBlockedProfilesQuery'), firstPage(['one'], true));
     assert.deepEqual(handles(), ['@one']);
-    await act(async () => button('더 불러오기').props.onPress());
+    await reachEnd();
     const next = latestRequest('SettingsBlockedProfilesNextPageQuery');
     assert.deepEqual(next.variables, { count: 20, cursor: 'cursor-one', id: 'owner-a' });
-    assert.equal(one('StateView').props.title, '프로필을 더 불러오는 중입니다.');
+    assert.equal(all('ActivityIndicator').length, 1);
+    await reachEnd();
+    assert.equal(requests.filter((request) => request.name === next.name).length, 1);
     assert.equal(all('Button').filter((node) => node.props.children === '더 불러오기').length, 0);
     await act(async () => next.sink.error(new Error('offline')));
     assert.deepEqual(handles(), ['@one']);
-    assert.equal(toastCalls.at(-1)?.tone, 'danger');
-    await act(async () => button('더 불러오기').props.onPress());
+    assert.equal(toastCalls.at(-1)?.persistent, true);
+    await reachEnd();
+    assert.equal(requests.filter((request) => request.name === next.name).length, 1);
+    await act(async () => toastCalls.at(-1)?.action?.onPress());
     const retry = latestRequest('SettingsBlockedProfilesNextPageQuery');
     assert.deepEqual(retry.variables, next.variables);
     await respond(retry, {
@@ -342,7 +385,7 @@ describe('Settings Block consumer with real Relay', () => {
       const environmentA = createEnvironment();
       await render(environmentA);
       await respond(latestRequest('SettingsBlockedProfilesQuery'), firstPage(['one'], true));
-      await act(async () => button('더 불러오기').props.onPress());
+      await reachEnd();
       const pendingA = latestRequest('SettingsBlockedProfilesNextPageQuery');
       selectedProfileId = 'owner-b';
       generation.current += 1;

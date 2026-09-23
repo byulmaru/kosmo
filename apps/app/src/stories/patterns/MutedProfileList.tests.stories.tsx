@@ -181,14 +181,7 @@ export const RetryContract: Story = {
 export const PaginationContract: Story = {
   ...pagination,
   play: async ({ args, canvasElement }) => {
-    args.onLoadMore.mockClear();
-    await userEvent.click(within(canvasElement).getByRole('button', { name: '더 불러오기' }));
-    expect(args.onLoadMore).toHaveBeenCalledTimes(1);
-    await waitFor(() =>
-      expect(
-        within(canvasElement).queryByText('프로필을 더 불러오는 중입니다.'),
-      ).not.toBeInTheDocument(),
-    );
+    expect(within(canvasElement).getByLabelText('프로필을 더 불러오는 중')).toBeVisible();
     expect(
       within(canvasElement).queryByRole('button', { name: '더 불러오기' }),
     ).not.toBeInTheDocument();
@@ -197,14 +190,11 @@ export const PaginationContract: Story = {
 };
 
 export const LoadMoreFailureContract: Story = {
-  args: { state: 'loaded', outcome: 'error' },
+  args: { state: 'loadMoreError', outcome: 'error' },
   play: async ({ args, canvasElement }) => {
     args.onRetry.mockClear();
-    args.onLoadMore.mockClear();
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
-    await userEvent.click(canvas.getByRole('button', { name: '더 불러오기' }));
-    expect(args.onLoadMore).toHaveBeenCalledTimes(1);
     const toast = await body.findByRole('alert');
     await waitFor(() =>
       expect(within(toast).getByText('프로필을 더 불러오지 못했어요')).toBeVisible(),
@@ -221,7 +211,7 @@ export const LoadMoreFailureContract: Story = {
     await waitFor(() =>
       expect(within(repeated).getByText('프로필을 더 불러오지 못했어요')).toBeVisible(),
     );
-    await userEvent.click(canvas.getByRole('button', { name: '더 불러오기' }));
+    await userEvent.click(within(repeated).getByRole('button', { name: '다시 시도' }));
     expect(args.onRetry).toHaveBeenCalledTimes(2);
     expect(canvas.getByText(args.displayName)).toBeVisible();
   },

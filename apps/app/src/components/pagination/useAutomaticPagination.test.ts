@@ -189,6 +189,8 @@ describe('useAutomaticPagination', () => {
     assert.equal(currentResult().loadError, false);
     await completeRequest(1, new Error('current profile failed'));
     assert.equal(currentResult().loadError, true);
+    await updateHook(options({ requestKey: 'profile-c', webScrollTarget: 'container' }));
+    assert.equal(currentResult().loadError, false);
   });
 
   it('Web near-end에서 한 번 요청하고 짧은 성공 page 뒤 다시 측정한다', async () => {

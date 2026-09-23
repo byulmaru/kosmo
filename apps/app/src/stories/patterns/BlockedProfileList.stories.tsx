@@ -19,10 +19,9 @@ type Props = {
   displayName: string;
   onSelectAction: (profileId: string) => void;
   onRetry: () => void;
-  onLoadMore: () => void;
 };
 
-function Fixture({ state, displayName, onSelectAction, onRetry, onLoadMore }: Props) {
+function Fixture({ state, displayName, onSelectAction, onRetry }: Props) {
   const [loaded, setLoaded] = useState(false);
   useEffect(() => setLoaded(false), [state]);
   const theme = useTheme();
@@ -82,13 +81,7 @@ function Fixture({ state, displayName, onSelectAction, onRetry, onLoadMore }: Pr
                       ? { status: 'loading' }
                       : visibleState === 'loadMoreError'
                         ? { status: 'error', onRetry: retry }
-                        : {
-                            status: 'more',
-                            onLoadMore: () => {
-                              onLoadMore();
-                              setLoaded(true);
-                            },
-                          },
+                        : { status: 'end' },
                 }
         }
       />
@@ -102,7 +95,6 @@ const meta = {
     displayName: '코스모 작가',
     onSelectAction: fn<(profileId: string) => void>(),
     onRetry: fn(),
-    onLoadMore: fn(),
   },
   argTypes: {
     state: {

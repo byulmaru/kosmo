@@ -1,4 +1,4 @@
-import { expect, userEvent, waitFor, within } from 'storybook/test';
+import { expect, userEvent, within } from 'storybook/test';
 import baseMeta from './BlockedProfileList.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
@@ -44,12 +44,9 @@ export const PaginationRetryAfterToast: Story = {
     args.onRetry.mockClear();
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
-    await body.findByRole('alert');
-    await waitFor(() => expect(body.queryByRole('alert')).not.toBeInTheDocument(), {
-      timeout: 5000,
-    });
+    const toast = await body.findByRole('alert');
     expect(canvas.getByText(args.displayName)).toBeVisible();
-    await userEvent.click(canvas.getByRole('button', { name: '더 불러오기' }));
+    await userEvent.click(within(toast).getByRole('button', { name: '다시 시도' }));
     expect(args.onRetry).toHaveBeenCalledTimes(1);
     expect(canvas.queryByRole('button', { name: '더 불러오기' })).not.toBeInTheDocument();
     expect(canvas.getByText('은하 관측자')).toBeVisible();
@@ -57,11 +54,10 @@ export const PaginationRetryAfterToast: Story = {
 };
 
 export const LoadMore: Story = {
-  play: async ({ args, canvasElement }) => {
-    args.onLoadMore.mockClear();
+  args: { state: 'loadingMore' },
+  play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: '더 불러오기' }));
-    expect(args.onLoadMore).toHaveBeenCalledTimes(1);
+    expect(canvas.getByLabelText('프로필을 더 불러오는 중')).toBeVisible();
     expect(canvas.queryByRole('button', { name: '더 불러오기' })).not.toBeInTheDocument();
   },
 };
