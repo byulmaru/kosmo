@@ -11,6 +11,7 @@ import type { GraphQLResponse } from 'relay-runtime';
 import type { PostQuotePolicyEditor as Editor } from './PostQuotePolicyEditor';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+(globalThis as { __DEV__?: boolean }).__DEV__ = false;
 
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
@@ -27,6 +28,7 @@ mockModule('expo-secure-store', {
 mockModule('@/components/Splash', { Splash: () => null });
 mockModule('@/components/ui/ModalSheet', { ModalSheet: 'ModalSheet' });
 mockModule('@/components/ui/RadioGroup', { RadioGroup: 'RadioGroup', RadioOption: 'RadioOption' });
+mockModule('@/observability/sentry', { captureHandledMessage: () => undefined });
 mockModule('@/theme/ThemeProvider', { useTheme: () => ({}) });
 
 let PostQuotePolicyEditor: typeof Editor;
