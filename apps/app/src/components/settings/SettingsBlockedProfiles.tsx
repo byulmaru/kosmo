@@ -108,7 +108,6 @@ function SettingsBlockedProfilesContent() {
     itemCount: edges.length,
     loadNext: pagination.loadNext,
     pageSize: 20,
-    requestKey: profile?.id,
   });
   usePaginationScrollRegistration(nativeScrollProps);
 
