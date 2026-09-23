@@ -156,6 +156,7 @@ function SearchPeopleResults({
           linked
           onPress={() => trackAnalytics('search_result_selected', { tab: 'people' })}
           profile={node}
+          showBio
         />
       ))}
       <PaginationSurface

@@ -2,6 +2,7 @@ import { expect, userEvent, within } from 'storybook/test';
 import baseMeta, {
   LayoutContract as layoutContract,
   ListMobileGeometryContract as listMobileGeometryContract,
+  longBio,
 } from './ProfileListItem.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
@@ -17,6 +18,18 @@ type Story = StoryObj<typeof meta>;
 
 export const LayoutContract: Story = layoutContract;
 export const ListMobileGeometryContract: Story = listMobileGeometryContract;
+
+export const BioVisibilityContract: Story = {
+  args: { showBio: false },
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    expect(canvas.queryByText(longBio)).not.toBeInTheDocument();
+    expect(canvas.getByText('긴 소개 프로필')).toBeVisible();
+    expect(canvas.getByText('@with-bio')).toBeVisible();
+    expect(canvas.getByRole('link')).toHaveAttribute('href', '/@with-bio');
+    expect(canvas.getByRole('button', { name: '팔로우' })).toBeVisible();
+  },
+};
 
 export const HitAreaContract: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoFull' } },

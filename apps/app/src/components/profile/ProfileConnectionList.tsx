@@ -199,7 +199,9 @@ function ConnectionList({ hasNext, isLoadingNext, kind, loadNext, profiles }: Co
   return (
     <View>
       {profiles.length ? (
-        profiles.map((item) => <ProfileListItem key={item.cursor} linked profile={item.profile} />)
+        profiles.map((item) => (
+          <ProfileListItem key={item.cursor} linked profile={item.profile} showBio />
+        ))
       ) : (
         <StateView
           description={text.emptyDescription}
