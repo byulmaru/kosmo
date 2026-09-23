@@ -77,8 +77,8 @@ alias가 있을 때만 그 alias를 추가 허용 URI로 사용한다. 본문 an
 
 Remote Profile alias가 없으면 이미 알려진 actor URI만 사용하며 Mention 수신 중 URL을 fetch하거나 새 Profile을 materialize하지
 않는다. actor Profile URL이 빠지거나 malformed인 경우에는 기존 정상 materialization·refresh가 기존 alias를 제거하고, Mention
-receipt가 refresh를 새로 트리거하지 않는다. 별도의 정상 actor refresh는 legacy Profile URL alias를 채울 수 있지만, Mention 수신 중
-기존 Profile을 backfill하거나 이미 저장된 Post Content를 자동 보정하지 않는다. typed href에서 확인된 Mentioned Profile 관계는 본문
+receipt가 refresh를 새로 트리거하거나 기존 Profile을 backfill하지 않으며, 이미 저장된 Post Content를 자동 보정하지 않는다. typed
+href에서 확인된 Mentioned Profile 관계는 본문
 anchor 불일치와 독립적으로 유지한다. actor URI·저장된 alias와 원문 표시 문자열은 Content
 Document에 저장하지 않는다. `post_mentions` row는 Post Content revision과 Profile을 foreign keys로 가리키며 body node와 별도로
 typed identity 집합에서 투영한다. column, index와 primary key의 구체 shape는 이 문서에서 고정하지 않는다. 새 revision은 새
