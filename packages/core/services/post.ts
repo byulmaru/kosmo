@@ -31,10 +31,12 @@ import {
 import { temporalClient } from '../temporal/client';
 import { KOSMO_TASK_QUEUE } from '../temporal/task-queue';
 import { postVisibilityCondition } from '../visibility/post';
+import { noPostCommit, oncePostCommit } from './post-commit';
 import { validatePostStructure } from './post-structure';
 import { assertProfilePairIsNotBlocked } from './profile-block-policy';
 import type { Transaction } from '../db';
 import type { PostContentDocumentV1 } from '../post-content';
+import type { PostCommit } from './post-commit';
 
 type LocalPostInput = {
   accountId?: string;
@@ -100,6 +102,10 @@ type CreatedPost = {
 };
 
 type DuplicatePost = { created: false };
+
+export type CreatePostTransactionResult =
+  | (CreatedPost & { postCommit: PostCommit })
+  | { created: false; postCommit: PostCommit; postId: string };
 
 const isActivityPubPostUriConflict = (error: unknown): boolean => {
   if (!isUniqueViolation(error) || !error || typeof error !== 'object' || !('cause' in error)) {
@@ -568,14 +574,12 @@ export async function repostPost(input: RepostInput): Promise<RepostResult> {
 
   return result;
 }
-export function createPost(input: LocalPostInput): Promise<CreatedPost>;
-export function createPost(input: ActivityPubPostInput): Promise<CreatedPost | DuplicatePost>;
-export async function createPost(
+export const createPostInTransaction = async (
   input: LocalPostInput | ActivityPubPostInput,
-): Promise<CreatedPost | DuplicatePost> {
-  let result: CreatedPost;
+  tx: Transaction,
+): Promise<CreatePostTransactionResult> => {
   try {
-    result = await db.transaction(async (tx) => {
+    return await tx.transaction(async (savepoint) => {
       let document =
         input.origin === 'LOCAL'
           ? validateLocalPostContentDocument(input.document)
@@ -609,7 +613,7 @@ export async function createPost(
           if (!input.accountId) {
             throw new ValidationError('Media cannot be attached', { field: 'media' });
           }
-          const attachableMedia = await tx
+          const attachableMedia = await savepoint
             .select({ id: Media.id })
             .from(Media)
             .where(
@@ -624,7 +628,7 @@ export async function createPost(
             throw new ValidationError('Media cannot be attached', { field: 'media' });
           }
           for (const { altText, mediaId } of media) {
-            await tx.update(Media).set({ altText }).where(eq(Media.id, mediaId));
+            await savepoint.update(Media).set({ altText }).where(eq(Media.id, mediaId));
           }
         }
       }
@@ -632,11 +636,11 @@ export async function createPost(
       if (input.replyParentId !== undefined) {
         const parent =
           input.origin === 'LOCAL'
-            ? await findVisiblePost(tx, {
+            ? await findVisiblePost(savepoint, {
                 actorProfileId: input.profileId,
                 postId: input.replyParentId,
               })
-            : await tx
+            : await savepoint
                 .select({
                   currentContentId: Posts.currentContentId,
                   id: Posts.id,
@@ -649,7 +653,7 @@ export async function createPost(
         if (!parent) {
           throw new NotFoundError('Post not found');
         }
-        await assertProfilePairIsNotBlocked(tx, {
+        await assertProfilePairIsNotBlocked(savepoint, {
           notFoundMessage: 'Post not found',
           firstProfileId: input.profileId,
           secondProfileId: parent.profileId,
@@ -662,7 +666,7 @@ export async function createPost(
       }
 
       if (input.origin === 'LOCAL' && input.repostSourceId !== undefined) {
-        await validateQuoteSource(tx, {
+        await validateQuoteSource(savepoint, {
           actorProfileId: input.profileId,
           postId: input.repostSourceId,
         });
@@ -677,7 +681,7 @@ export async function createPost(
             ? input.receivedAt
             : undefined;
       if (input.origin === 'ACTIVITYPUB') {
-        const media = await materializeRemoteMedia(tx, {
+        const media = await materializeRemoteMedia(savepoint, {
           candidates: input.media ?? [],
           profileId: input.profileId,
         });
@@ -698,7 +702,7 @@ export async function createPost(
         }
       }
 
-      const content = await tx
+      const content = await savepoint
         .insert(PostContents)
         .values({
           createdAt: input.origin === 'ACTIVITYPUB' ? input.receivedAt : undefined,
@@ -708,7 +712,7 @@ export async function createPost(
         .returning()
         .then(firstOrThrow);
 
-      const post = await tx
+      const post = await savepoint
         .insert(Posts)
         .values({
           createdAt,
@@ -722,7 +726,7 @@ export async function createPost(
         .then(firstOrThrow);
 
       if (input.origin === 'ACTIVITYPUB') {
-        await tx.insert(ActivityPubPosts).values({
+        await savepoint.insert(ActivityPubPosts).values({
           postId: post.id,
           publishedAt: input.publishedAt,
           receivedAt: input.receivedAt,
@@ -742,7 +746,7 @@ export async function createPost(
             ),
       );
       if (mentionProfileIds.size > 0) {
-        await tx.insert(PostMentions).values(
+        await savepoint.insert(PostMentions).values(
           [...mentionProfileIds].map((profileId) => ({
             postContentId: content.id,
             profileId,
@@ -760,47 +764,73 @@ export async function createPost(
       const linkedPost =
         input.replyParentId === undefined
           ? post
-          : await tx
+          : await savepoint
               .update(Posts)
               .set({ replyParentId: input.replyParentId })
               .where(eq(Posts.id, post.id))
               .returning()
               .then(firstOrThrow);
-      const linkedContent = await tx
+      const linkedContent = await savepoint
         .update(PostContents)
         .set({ postId: post.id })
         .where(eq(PostContents.id, content.id))
         .returning()
         .then(firstOrThrow);
 
-      return { content: linkedContent, created: true, post: linkedPost };
+      return {
+        content: linkedContent,
+        created: true,
+        post: linkedPost,
+        postCommit: oncePostCommit(async () => {
+          const workflowInput = { postId: linkedPost.id, origin: input.origin };
+          try {
+            await temporalClient.withDeadline(Date.now() + 5_000, () =>
+              temporalClient.workflow.start('postCreateEffectsWorkflow', {
+                args: [workflowInput],
+                taskQueue: KOSMO_TASK_QUEUE,
+                workflowId: `post-create-effects:${workflowInput.postId}`,
+                workflowIdConflictPolicy: 'USE_EXISTING',
+                workflowIdReusePolicy: 'REJECT_DUPLICATE',
+              }),
+            );
+          } catch (error) {
+            console.error('Post Create effects Workflow start failed', {
+              error,
+              origin: input.origin,
+              postId: linkedPost.id,
+            });
+          }
+        }),
+      };
     });
   } catch (error) {
     if (input.origin !== 'ACTIVITYPUB' || !isActivityPubPostUriConflict(error)) {
       throw error;
     }
 
+    const existing = await tx
+      .select({ postId: ActivityPubPosts.postId })
+      .from(ActivityPubPosts)
+      .where(eq(ActivityPubPosts.uri, input.objectUri))
+      .limit(1)
+      .then(first);
+    if (!existing) {
+      throw error;
+    }
+    return { created: false, postCommit: noPostCommit, postId: existing.postId };
+  }
+};
+
+export function createPost(input: LocalPostInput): Promise<CreatedPost>;
+export function createPost(input: ActivityPubPostInput): Promise<CreatedPost | DuplicatePost>;
+export async function createPost(
+  input: LocalPostInput | ActivityPubPostInput,
+): Promise<CreatedPost | DuplicatePost> {
+  const result = await db.transaction((tx) => createPostInTransaction(input, tx));
+  await result.postCommit();
+  if (!result.created) {
     return { created: false };
   }
 
-  try {
-    const workflowInput = { postId: result.post.id, origin: input.origin };
-    await temporalClient.withDeadline(Date.now() + 5_000, () =>
-      temporalClient.workflow.start('postCreateEffectsWorkflow', {
-        args: [workflowInput],
-        taskQueue: KOSMO_TASK_QUEUE,
-        workflowId: `post-create-effects:${workflowInput.postId}`,
-        workflowIdConflictPolicy: 'USE_EXISTING',
-        workflowIdReusePolicy: 'REJECT_DUPLICATE',
-      }),
-    );
-  } catch (error) {
-    console.error('Post Create effects Workflow start failed', {
-      error,
-      origin: input.origin,
-      postId: result.post.id,
-    });
-  }
-
-  return result;
+  return { content: result.content, created: true, post: result.post };
 }
