@@ -3,6 +3,10 @@ import '@kosmo/core/polyfill';
 export { deleteAccountActivity } from './activities/account-deletion';
 export { cleanupUnavailableNotificationsActivity } from './activities/cleanup-unavailable-notifications';
 export {
+  executeProfileBlockTransitionActivity,
+  executeProfileUnblockTransitionActivity,
+} from './activities/profile-block';
+export {
   lookupRemoteActorUriActivity,
   materializeRemoteProfileActorActivity,
   refreshRemoteProfileActorActivity,

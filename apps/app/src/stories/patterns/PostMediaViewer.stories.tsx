@@ -5,9 +5,9 @@ import { PostActionAuthenticationProvider } from '@/components/post/PostActionAu
 import { PostComposerCoordinatorProvider } from '@/components/post/PostComposerCoordinator';
 import { PostLayout } from '@/components/post/PostLayout';
 import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHost';
+import { PostMediaViewerSurface } from '@/components/post/PostMediaViewerSurface';
 import { PostMediaViewerThread } from '@/components/post/PostMediaViewerThread';
 import { ActionMenuPresentationProvider } from '@/components/ui/ActionMenu';
-import { PostMediaViewerSurface } from '@/patterns/post-media-viewer/PostMediaViewerSurface';
 import { SessionProvider } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import appleTouchImage from '../../../public/apple-touch-icon.png?url';
@@ -134,6 +134,7 @@ export function PostMediaViewerCatalog({
     currentIndex: clampedIndex,
     media,
     onClose,
+    onIndexChange: fn(),
     onNext,
     onPrevious,
     onRetry,

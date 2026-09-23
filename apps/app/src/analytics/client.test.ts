@@ -147,6 +147,7 @@ describe('PostHog Web client', () => {
     assert.deepEqual(initCalls[0]?.config, {
       api_host: mockPostHogConfig.posthogHost,
       defaults: '2026-05-30',
+      disable_session_recording: true,
       mask_personal_data_properties: false,
     });
   });

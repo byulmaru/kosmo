@@ -1,6 +1,5 @@
-import { useState } from 'react';
 import { View } from 'react-native';
-import { ReactionProfilesModal } from './ReactionProfilesModal';
+import { getReactionPeopleHref } from './reactionPeopleRoute';
 import { ReactionSummary } from './ReactionSummary';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { PostReactionController } from '@/components/post/PostReactionController';
@@ -11,31 +10,22 @@ type PostReactionSummaryProps = {
 };
 
 export function PostReactionSummary({ controller, style }: PostReactionSummaryProps) {
-  const [profilesOpen, setProfilesOpen] = useState(false);
-
-  if (controller.reactionCounts.length === 0) {
+  if (!controller.reactionCounts.some(({ count }) => count > 0)) {
     return null;
   }
 
+  const peopleHref = getReactionPeopleHref(controller.relativeHandle, controller.postId);
   return (
     <View style={style}>
       <ReactionSummary
         disabled={controller.disabled}
         entries={controller.reactionCounts}
         errorTypeIds={controller.errorTypeIds}
-        onMore={() => setProfilesOpen(true)}
         onToggle={controller.toggleReaction}
         pendingTypeIds={controller.pendingTypeIds}
+        peopleHref={peopleHref}
         selectedTypeIds={controller.selectedTypeIds}
       />
-      {profilesOpen ? (
-        <ReactionProfilesModal
-          key={controller.postId}
-          onClose={() => setProfilesOpen(false)}
-          postId={controller.postId}
-          reactionCounts={controller.reactionCounts}
-        />
-      ) : null}
     </View>
   );
 }

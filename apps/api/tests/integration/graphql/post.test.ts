@@ -53,6 +53,7 @@ let Instances: typeof CoreDb.Instances;
 let Media: typeof CoreDb.Media;
 let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
+let PostMentions: typeof CoreDb.PostMentions;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
 let Posts: typeof CoreDb.Posts;
 let Profiles: typeof CoreDb.Profiles;
@@ -80,6 +81,7 @@ describe('Post Reply GraphQL 경계', () => {
       Media,
       pg,
       PostContents,
+      PostMentions,
       ProfileFollows,
       Posts,
       Profiles,
@@ -143,6 +145,55 @@ describe('Post Reply GraphQL 경계', () => {
     assert.equal(stored.replyParentId, null);
     assert.equal(stored.repostSourceId, null);
     assert.equal(content.document.summary, '통합 검증 경고');
+  });
+
+  test('명시한 같은 계정 Profile로 작성하고 active session Profile은 유지한다', async () => {
+    const auth = await createAuthenticatedSession();
+    const composerProfile = await createProfile('composer-author');
+    await db.insert(AccountProfiles).values({
+      accountId: auth.account.id,
+      profileId: composerProfile.id,
+      role: AccountProfileRole.MEMBER,
+    });
+
+    const result = await requestGraphQL<{
+      createPost: { post: { id: string; profile: { id: string } } };
+    }>(
+      `mutation CreatePost($input: CreatePostInput!) {
+        createPost(input: $input) { post { id profile { id } } }
+      }`,
+      {
+        input: {
+          bodyText: '명시 Profile 작성',
+          actorProfileId: encodeGlobalId('Profile', composerProfile.id),
+          visibility: PostVisibility.FOLLOWERS,
+        },
+      },
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.equal(
+      result.data?.createPost.post.profile.id,
+      encodeGlobalId('Profile', composerProfile.id),
+    );
+    assert.equal(
+      (await db.select().from(Sessions).where(eq(Sessions.token, auth.token)).then(firstOrThrow))
+        .activeProfileId,
+      auth.profile.id,
+    );
+
+    const other = await createAuthenticatedSession();
+    const denied = await requestCreatePost(
+      {
+        bodyText: '교차 계정 작성',
+        actorProfileId: encodeGlobalId('Profile', other.profile.id),
+        visibility: PostVisibility.PUBLIC,
+      },
+      auth.token,
+    );
+    assert.equal(denied.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
+    assert.equal((await db.select().from(Posts)).length, 1);
   });
 
   test('repostSourceId는 기존 CreatePost mutation으로 자체 Content와 Source를 함께 저장하고 다시 조회한다', async () => {
@@ -291,12 +342,13 @@ describe('Post Reply GraphQL 경계', () => {
 
   test('Mention-bearing PostContent의 bodyText·Content Warning·Media와 canonical document를 조회한다', async () => {
     const auth = await createAuthenticatedSession();
+    const mentionedProfile = await createProfile('mentioned-profile');
     const media = await createReadyMedia(auth.account.id, auth.profile.id);
     const projectedDocument = projectRemoteNoteContent({
       content: '<p>앞쪽 <a href="https://remote.example/users/mentioned">@mentioned</a> 뒤쪽</p>',
       mentions: [
         {
-          profileId: auth.profile.id,
+          profileId: mentionedProfile.id,
           targetHref: 'https://remote.example/users/mentioned',
         },
       ],
@@ -323,6 +375,10 @@ describe('Post Reply GraphQL 경계', () => {
       .update(PostContents)
       .set({ document })
       .where(eq(PostContents.id, post.currentContentId));
+    await db.insert(PostMentions).values({
+      postContentId: post.currentContentId,
+      profileId: mentionedProfile.id,
+    });
 
     const result = await requestPostContent(encodeGlobalId('Post', post.id), auth.token);
 
@@ -352,7 +408,7 @@ describe('Post Reply GraphQL 경계', () => {
     assert.equal(returnedDocument.body.attrs?.sensitiveMedia, true);
     assert.equal(returnedDocument.body.content[0]?.content?.[1]?.type, 'mention');
     assert.deepEqual(returnedDocument.body.content[0]?.content?.[1]?.attrs, {
-      profileId: auth.profile.id,
+      profileId: encodeGlobalId('Profile', mentionedProfile.id),
     });
     assert.deepEqual(returnedDocument.body.content[1]?.attrs, {
       mediaId: encodeGlobalId('Media', media.id),
@@ -365,6 +421,26 @@ describe('Post Reply GraphQL 경계', () => {
         url: media.url,
       },
     ]);
+    assert.deepEqual(content.mentionedProfiles, [
+      {
+        id: encodeGlobalId('Profile', mentionedProfile.id),
+        displayName: mentionedProfile.displayName,
+        relativeHandle: `@${mentionedProfile.handle}`,
+      },
+    ]);
+
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.DISABLED })
+      .where(eq(Profiles.id, mentionedProfile.id));
+    const unavailable = await requestPostContent(encodeGlobalId('Post', post.id), auth.token);
+    assertNoGraphQLErrors(unavailable);
+    assert.deepEqual(unavailable.data?.node?.content?.mentionedProfiles, []);
+    const unavailableDocument = unavailable.data?.node?.content
+      ?.document as typeof returnedDocument;
+    assert.deepEqual(unavailableDocument.body.content[0]?.content?.[1]?.attrs, {
+      profileId: encodeGlobalId('Profile', mentionedProfile.id),
+    });
   });
 
   test('여러 PostContent의 Media를 함께 조회한다', async () => {
@@ -398,6 +474,49 @@ describe('Post Reply GraphQL 경계', () => {
     assert.deepEqual(
       result.data?.nodes.map((node) => node?.content.media?.[0]?.altText),
       ['첫 번째', '두 번째'],
+    );
+  });
+
+  test('여러 PostContent의 mentionedProfiles를 각각의 relation으로 조회한다', async () => {
+    const auth = await createAuthenticatedSession();
+    const firstMentioned = await createProfile('batch-mentioned-first');
+    const secondMentioned = await createProfile('batch-mentioned-second');
+    const firstPost = await createContentfulPost(auth.profile.id, { bodyText: '첫 번째 본문' });
+    const secondPost = await createContentfulPost(auth.profile.id, { bodyText: '두 번째 본문' });
+    const firstContentId = firstPost.currentContentId;
+    const secondContentId = secondPost.currentContentId;
+    assert.ok(firstContentId);
+    assert.ok(secondContentId);
+
+    await db.insert(PostMentions).values([
+      { postContentId: firstContentId, profileId: firstMentioned.id },
+      { postContentId: secondContentId, profileId: secondMentioned.id },
+    ]);
+
+    const result = await requestPostContents([
+      encodeGlobalId('Post', firstPost.id),
+      encodeGlobalId('Post', secondPost.id),
+    ]);
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(
+      result.data?.nodes.map((node) =>
+        node?.content.mentionedProfiles.map(({ id, relativeHandle }) => ({ id, relativeHandle })),
+      ),
+      [
+        [
+          {
+            id: encodeGlobalId('Profile', firstMentioned.id),
+            relativeHandle: `@${firstMentioned.handle}`,
+          },
+        ],
+        [
+          {
+            id: encodeGlobalId('Profile', secondMentioned.id),
+            relativeHandle: `@${secondMentioned.handle}`,
+          },
+        ],
+      ],
     );
   });
 
@@ -1330,6 +1449,11 @@ type PostContentNode = {
       mediaType: string | null;
       url: string;
     }> | null;
+    mentionedProfiles: Array<{
+      displayName: string;
+      id: string;
+      relativeHandle: string;
+    }>;
   };
 };
 
@@ -1396,6 +1520,7 @@ const requestPostContent = (postId: string, token?: string) =>
             contentWarning
             document
             media { altText id mediaType url }
+            mentionedProfiles { displayName id relativeHandle }
           }
         }
       }
@@ -1410,7 +1535,10 @@ const requestPostContents = (postIds: string[]) =>
       nodes(ids: $postIds) {
         ... on Post {
           content {
+            bodyText
+            document
             media { altText id mediaType url }
+            mentionedProfiles { displayName id relativeHandle }
           }
         }
       }
@@ -1534,6 +1662,7 @@ const requestCreatePost = (
     bodyText: string;
     contentWarning?: string | null;
     media?: Array<{ altText: string | null; mediaId: string }>;
+    actorProfileId?: string;
     replyParentId?: string;
     sensitiveMedia?: boolean;
     visibility: PostVisibility;

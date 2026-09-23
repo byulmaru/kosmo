@@ -67,6 +67,7 @@ export const semanticColors = {
     stateFocusRing: '#4F46E5',
     stateHover: 'rgba(0, 0, 0, 0.04)',
     statePressed: 'rgba(0, 0, 0, 0.08)',
+    statePressedSubtle: 'rgba(0, 0, 0, 0.06)',
     stateSelectedBorder: '#AE8512',
     stateSelectedSurface: '#FFF9E6',
   },
@@ -134,6 +135,7 @@ export const semanticColors = {
     stateFocusRing: '#A5B4FC',
     stateHover: 'rgba(255, 255, 255, 0.08)',
     statePressed: 'rgba(255, 255, 255, 0.12)',
+    statePressedSubtle: 'rgba(255, 255, 255, 0.10)',
     stateSelectedBorder: '#FFE597',
     stateSelectedSurface: '#3A331A',
   },
@@ -262,6 +264,13 @@ export const layoutRecipes = {
     gap: space[4],
   },
 } satisfies Record<string, ViewStyle>;
+
+export const webScrollbarStyle = (thumbColor: string, reserveGutter = false) =>
+  ({
+    scrollbarColor: `${thumbColor} transparent`,
+    ...(reserveGutter ? { scrollbarGutter: 'stable' } : null),
+    scrollbarWidth: 'thin',
+  }) as unknown as ViewStyle;
 
 /** @deprecated Use numeric `radius` tokens for new work. */
 export const radii = {

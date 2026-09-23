@@ -90,6 +90,8 @@ export function useRouter() {
   );
 }
 
+export const unstable_navigationEvents = { addListener: () => () => undefined };
+
 export function Link({
   asChild,
   children,

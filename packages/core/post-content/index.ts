@@ -165,7 +165,7 @@ function isMentionAttrs(value: unknown): value is PostContentMentionNode['attrs'
   return (
     isRecordWithKeys(value, ['profileId']) &&
     typeof value.profileId === 'string' &&
-    postContentProfileIdSchema.safeParse(value.profileId).success
+    value.profileId.length > 0
   );
 }
 

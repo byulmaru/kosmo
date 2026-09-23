@@ -40,6 +40,7 @@ export type WebMobileShellHeader = Readonly<{
     | '게시물 기본 공개 범위'
     | '뮤트 및 차단'
     | '뮤트한 프로필'
+    | '차단한 프로필'
     | '설정'
     | '개발 정보'
     | '알림'
@@ -52,6 +53,10 @@ export function isSettingsRoute(pathname: string) {
 
 export function isTimelineRoute(pathname: string) {
   return pathname === '/home' || pathname === '/local';
+}
+
+export function isNativeDrawerSwipeEnabled(pathname: string) {
+  return isTimelineRoute(pathname) || pathname === '/search' || pathname === '/notifications';
 }
 
 export function getShellRoutePresentation(web: boolean, width: number, pathname: string) {
@@ -90,6 +95,9 @@ export function getWebMobileShellHeader(
   }
   if (pathname === '/settings/muted-profiles') {
     return { leading: 'back', title: '뮤트한 프로필' };
+  }
+  if (pathname === '/settings/blocked-profiles') {
+    return { leading: 'back', title: '차단한 프로필' };
   }
   if (pathname === '/settings/info') {
     return { leading: 'back', title: '정보' };

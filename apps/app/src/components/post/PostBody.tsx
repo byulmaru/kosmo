@@ -12,6 +12,10 @@ const PostBodyFragment = graphql`
       document
       bodyText
       contentWarning
+      mentionedProfiles {
+        id
+        ...PostContentMention_profile
+      }
       media {
         id
         altText
@@ -64,6 +68,7 @@ export function PostBody({
             })) ?? null)
       }
       mediaPresentation={mediaPresentation}
+      mentionedProfiles={content.mentionedProfiles}
       numberOfLines={numberOfLines}
       onBodyPress={onBodyPress}
       onMediaOpen={mediaPresentation === 'hidden' ? undefined : onMediaOpen}

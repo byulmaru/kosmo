@@ -7,6 +7,11 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
 
 ## Profile action과 완료 피드백
 
+- Block 생성·해제와 관리 action은 [ADR 0019](../domain/decisions/0019-selected-profile-authorization-boundary.md)에 따라
+  Membership으로 인증된 selected Profile이 Owner일 때만 제공한다. Block 읽기 필드는 selected Profile auth scope를
+  충족하지 못하면 nullable `null`을 반환하며, App은 Profile kind를 Session capability나 조건부 GraphQL 변수로
+  중복 검사하지 않고 서버 결과에 따라 관계 상태와 action을 표시한다. Remote Owner의 Block/Undo ingress는
+  `PROD-818`이 소유한다.
 - Mute는 `이 프로필을 뮤트할까요?` 확인을 거친 뒤 실행한다. 취소하면 Profile과 관계 상태를 바꾸지 않는다.
 - Mute 해제도 `이 프로필을 뮤트 해제할까요?` 확인을 거친다. `{표시 이름} 님의 게시물이 홈과 로컬 타임라인에 다시
 표시돼요. 팔로우 관계는 유지돼요.`를 안내하고 `취소`·`뮤트 해제`를 제공한다.
@@ -23,7 +28,7 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
   차단 항목의 패턴 합성은 2026-09-08 사용자 검토에 따른다.
   Profile/Post 합성 메뉴는 기존 차단·뮤트 메뉴와 같은 ActionMenu·ProfileMoreButton 및 Web 최소 폭 160px을 사용한다.
   차단 상태에서도 Hero의 기존 액션 영역(차단 해제 버튼 옆)에 더보기 진입점을 유지한다. header로 옮기지 않는다.
-  Hero의 팔로우·차단 해제 버튼은 동일한 size를 사용한다: medium `96×40`, compact `72×32`.
+  Hero의 팔로우·차단 해제 버튼은 동일한 Default `96×40` size를 사용한다.
   같은 ProfileMoreMenu에 링크 복사와 차단 해제를 표시하며, 메뉴와 Hero 버튼 모두 기존 확인 처리를 사용한다.
 - Mute가 성공하면 기존 공용 Toast에 `{표시 이름} 님이 뮤트되었어요`를 표시하고 Mute 관리 action을
   `뮤트 해제`로 전환한다. `ProfileHero` 상단 Action SLOT의 관계 action은 바꾸지 않으며, 성공 전에 상태나
@@ -61,6 +66,13 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
   사용한다. 2026-09-09 [현재 Block 정책](../domain/objects/profile-block.md)에 맞춰
   Figma [`4595:6482`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4595-6482)의
   설명도 같은 문구로 갱신했다. 기존 리액션은 삭제하지 않는다. 현재 Storybook은 메뉴·목록 presentation을 검증하며 차단·해제 요청과 관계·리액션 정리를 구현하지 않는다.
+- 조회 가능한 Profile의 공통 관계 action은 기존 `FollowButton`이 소유한다. 내가 차단한 경우 플랫폼과
+  pointer 상태에 관계없이 고정 `차단 해제` label을 표시하고, Web click과 Native tap은 같은 해제 확인창을
+  연다. 상대만 나를 차단한 경우 부모 surface는 관계 action을 숨긴다. 서로 차단한 경우에는 내 `차단 해제`
+  action을 유지하고, 내 관계를 해제한 뒤 서버의 현재 결과가 `blockedBy`만 남으면 action을 숨긴다.
+  이 action은 Profile·ProfileBlock 상태 fragment, mutation, pending·실패와 Relay 수렴을 소유한다. Profile
+  route와 차단 관리 목록은 노출 여부와 목록 조회·pagination을 조합한다. 관리 목록은 해제 성공 뒤 현재 행을
+  유지하고 Target Profile의 최신 Block 상태에 따라 action과 focus target을 `차단`으로 전환하며 이전 Follow 상태를 복구하지 않는다.
 - pending에는 같은 action의 중복 입력과 dismiss를 막고 busy 상태를 전달한다. 실패하면 기존 서버 확정 상태를
   유지하고 제품의 기존 오류 피드백을 사용한다.
 
@@ -69,8 +81,19 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
 - Settings root에는 `뮤트 및 차단` 진입점 하나를 제공한다.
 - 진입점 안에는 `뮤트한 프로필`과 `차단한 프로필`을 이 순서의 별도 destination으로 제공한다. 두 상태를
   하나의 혼합 목록이나 filter로 만들지 않는다.
+- 공통 Settings source는 `PROD-814`·`PROD-823` 중 실제로 먼저 구현한 이슈가 소유하고, 후행 이슈는 그 source를
+  재사용한다. 완성된 destination부터 공개하며, Block은 route·data·action 연결과 검증을 마친 뒤 추가한다.
+  미완성 destination의 disabled item·placeholder·연결되지 않은 route는 노출하지 않는다. 두 destination이
+  모두 완성되면 `뮤트한 프로필 → 차단한 프로필` 순서를 유지한다.
 - 각 목록은 자기 heading, loading, error·retry, empty, pagination과 해제 action을 소유한다. 한 목록의 상태나
   action이 다른 목록의 항목을 바꾸지 않는다.
+- 차단 목록에서 해제에 성공하면 현재 행을 유지하고 action을 `차단 해제`에서 `차단`으로 전환한다. 실수로
+  해제한 사용자가 같은 위치에서 곧바로 다시 차단할 수 있게 하며, 확인창이 닫힌 뒤 focus는 해당 action으로
+  복원한다. 해제 성공만으로 행을 즉시 제거하거나 목록 제목으로 focus를 이동하지 않는다.
+- 같은 Target에 Mute와 Block이 모두 적용돼도 두 관리 관계는 각각의 목록·관계 Node·해제 경로에 남는다. Active
+  Block은 일반 Profile 조회를 숨기지 않는다. Profile identity는 기존 lifecycle·membership 정책을 따르며, Block은
+  콘텐츠·상호작용·알림 surface와 Mute/Block 관리 관계에 각각 명시된 정책으로 적용된다. 따라서 Block의 콘텐츠 제한을
+  Mute 관리 connection에 적용해 저장된 Mute를 숨기지 않는다.
 - full Web은 기존 Settings master/detail 문법을, compact Web·mobile Web·Android·iOS는 기존 한 화면 이동
   문법을 사용한다. Mute·Block 때문에 새 Settings shell이나 navigation pattern을 만들지 않는다.
 - Target screen evidence는 [`05 Screens - Web`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6312-16233)의
@@ -83,13 +106,22 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
 
 ## 차단 관계의 직접 Profile
 
-- 차단 관계의 direct Profile route는 [Profile Block 조회 정책](../domain/objects/profile-block.md#조회-정책)과
-  [Profile 조회 정책](../domain/objects/profile.md#조회-정책)에 따라 기존 공개 기본 Profile 정보와 콘텐츠 상태를
-  함께 표시한다. `blocking`과 `blockedBy` 모두 Profile Node·handle route·일반 Profile 검색과 같은 기본 Profile
-  정보 범위를 사용한다.
+- 차단 관계의 direct Profile route는 GraphQL `node(id:)`·`profileByHandle` 직접 조회를 통해
+  [Profile Block 조회 정책](../domain/objects/profile-block.md#조회-정책)과 [Profile 조회 정책](../domain/objects/profile.md#조회-정책)에
+  따른 기존 공개 기본 Profile 정보와 콘텐츠 상태를 함께 표시한다. `blocking`과 `blockedBy` 모두 이 두 직접 조회 endpoint와
+  같은 기본 Profile 정보 범위를 사용한다. `searchProfiles`의 exact-match/partial-match 후보는
+  양방향 Active Block 관계인 Profile을 후보에서 제외하며, 이 제외는 pagination·cursor·limit 전에 적용한다.
+- 유효한 Account에 selected Profile이 있으면 그 Profile을 `searchProfiles`의 viewer로 사용한다. selected Profile이
+  없으면 기존 Account 인증과 공개 후보 결과를 유지하며 Profile Block predicate나 selected Profile을 새로 요구하지
+  않는다. 임의 입력 actor나 이전 selected Profile·client cache를 viewer로 재사용하지 않는다.
+- 정상적인 GraphQL `node(id:)`·`profileByHandle` 직접 route 진입·새로고침은 기본 Profile 정보, viewer 방향별 콘텐츠 상태와
+  현재 Owner 범위의 정확한 unblock 관계 ID를 확인한다. Profile 자체가 기존 lifecycle 정책으로 조회 불가하면
+  Block 전용 identity나 관계 상태를 복구하지 않고 기존 unavailable 결과를 유지한다.
 - `blocking` 화면에서는 Target Profile의 Post List·Post detail·첨부 Media를 기존 Post·Media 조회 정책으로
-  제공한다. Profile route는 콘텐츠 경고를 먼저 표시하고, 사용자가 확인한 뒤 해당 결과를 표시한다. 경고의
-  구체적인 문구와 표시 기간은 후속 디자인 계약에서 정한다.
+  제공한다. Profile Post List page는 자신의 query 결과에 따라 `차단한 프로필의 게시물입니다` 경고와 `게시물 보기` action을 먼저 표시하고,
+  사용자가 action을 실행한 뒤 해당 결과를 표시한다. 경고는 현재 Profile handle과 selected actor lifecycle마다
+  다시 적용하며, 사용자가 명시적으로 확인하기 전에는 시간 경과만으로 콘텐츠를 표시하지 않는다. 상위 Profile layout은
+  이 경고 상태를 소유하지 않고 nested route의 `Slot`을 유지한다.
 - `blockedBy` 화면에서는 Owner Profile의 기본 Profile 정보를 유지하면서 Post·Media 콘텐츠 차단 상태를 표시한다.
   양방향 Block이면 양쪽 화면에서 콘텐츠 차단 상태를 적용하며, Profile route와 다른 API 표면은 같은 콘텐츠 정책을
   사용한다. 차단 해제의 data와 lifecycle은 적용 Product/OpenSpec/runtime 범위다.
@@ -144,9 +176,9 @@ viewer 방향별 콘텐츠 정책은 위 계약을 따르며, 실제 route의 �
 - Button, ActionMenu, ModalSheet, Toast, SettingsItem, SettingsNavigationList, ProfileHero, StateView와
   Profile shell의 기존 production source를 재사용한다. 이 흐름만을 위한 새 Toast나 범용 safety component를
   만들지 않는다.
-- Mobile Muted·Blocked 목록의 loaded action은 `64px` ProfileListItem 안에서 공용 Default Secondary button을
-  `88×40px` visual로 유지하고 투명 `88×48dp` wrapper 가운데 배치한다. 공용 Button source와 Web compact
-  geometry는 변경하지 않는다.
+- Muted·Blocked 관리 목록의 loaded action은 `64px` ProfileListItem 안에서 공용 Default Secondary button을
+  `96×40px` Web visual로 사용한다. 별도 wrapper나 hitSlop을 추가하지 않으며 Native는 공용 Button의
+  iOS `44pt`·Android `48dp` 최소 높이를 그대로 사용한다.
 - 확인은 공용 [`ConfirmationContent`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5103-15173)를
   사용한다. Mute는 `Tone=Primary`, Block·Unblock은 `Tone=Danger`이며 각 action의 `Idle|Pending`에서 같은 제목·설명·action
   label을 유지한다.
@@ -190,7 +222,7 @@ viewer 방향별 콘텐츠 정책은 위 계약을 따르며, 실제 route의 �
   Profile 상태나 mutation callback은 받지 않는다. 실제 요청과 확인창 lifecycle은 항목을 제공하는 action 소유다.
 - `BlockedProfileList`는 loading·error·empty·pagination과 전달된 행 `children`을 표시한다.
   실제 action을 포함한 행은 기존 `ProfileListItemContent.children`으로 합성하며 목록은 mutation이나 성공 feedback을 받지 않는다.
-- PROD-814·823은 실제 action의 Profile fragment·mutation·pending·실패·Relay/cache 갱신·actor 격리를 구현하고
+- PROD-814·823은 실제 action의 관계별 fragment·mutation·pending·실패·Relay 갱신·actor 격리를 구현하고
   해당 코드·인터페이스·검증 증거를 인계한다. 메뉴·버튼은 같은 요청 처리를 재사용한다.
 - PROD-917은 인계된 실제 action으로 신규 UI를 연결하고 실제 action과 mock Relay 응답으로 조합을 검증한다.
   임시 callback 화면을 보존하기 위해 mutation 구현을 신규 UI 교체 작업으로 넘기지 않는다.
@@ -208,7 +240,7 @@ viewer 방향별 콘텐츠 정책은 위 계약을 따르며, 실제 route의 �
 공유하는 `ProfileListItemContent`를 사용한다. 화면과 Storybook은 목록 밖의 heading·scroll container와
 해제 성공 후 heading focus를 소유한다.
 Relay 행은 `identity`로 기존 `ProfileNameBlock`을 전달하고, 관리 목록은 이름·핸들 기본 표시를 사용한다.
-행의 action은 `children`으로 합성하며, FollowButton의 Web·Native 크기 선택은 Relay wrapper가 유지한다.
+행의 action은 `children`으로 합성하며, FollowButton은 viewport와 무관하게 Default `96×40`을 소유한다.
 `ProfileHero.mute.muted`에는 서버 확정 상태를 전달하고, loading에서는 메뉴·상태행을 표시하지 않는다.
 
 - 요청 callback은 성공할 때 resolve하고 실패할 때 reject한다. 성공 feedback이 전달되기 전에는 낙관적으로
@@ -251,9 +283,9 @@ Web 최소 폭 160px과 키보드·focus 처리를 재사용하고, 목록은 �
 - loaded 대표는 [Mobile 390](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-8089),
   [Compact 1024](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-25102),
   [Full 1440](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-25582)을 참고한다.
-  행은 64px, 표시 이름은 `UI/Label/L`이며 해제 버튼은 Mobile Web `88×40`, Desktop Web `72×32`다.
-  2026-09-09 결정에 따라 Native는 폭 88과 공용 Button 자체의 최소 높이 iOS 44pt·Android 48dp를 사용한다.
-  별도 wrapper·hitSlop 보정은 두지 않는다. Figma의 40px visual 원본은 미수정이다.
+  행은 64px, 표시 이름은 `UI/Label/L`이며 해제 버튼은 모든 Web viewport에서 `96×40`이다.
+  Native는 폭 96과 공용 Button 자체의 최소 높이 iOS 44pt·Android 48dp를 사용한다.
+  별도 wrapper·hitSlop 보정은 두지 않는다. Figma 정렬은 리뷰어가 후속으로 진행한다.
 - `ProfileBlockAction`, Block을 결합한 Hero·Post props와 해당 fixture·Tests, `Screens/Profile Block`은 제거했다.
   실제 action을 전제로 하는 확인·성공·실패·pending·focus lifecycle 검증은 PROD-823의 action 구현과 함께 완료한다.
   Profile·Settings 신규 UI 조립과 교체 회귀는 PROD-917이 소유한다.
@@ -267,3 +299,16 @@ Web 최소 폭 160px과 키보드·focus 처리를 재사용하고, 목록은 �
 네이티브 앱 자체가 별도 이슈/PR에서 아직 작업 중이므로 iOS·Android runtime·접근성 검증은
 앱 작업 완료 후 수행한다. 이는 미실행 후속 검증이며 Native 제품 계약이나 지원 대상의 삭제가 아니다.
 PROD-814 담당자가 후속 검증 추적을 소유한다. OpenSpec archive는 Native 검증 통과나 PR 머지를 뜻하지 않는다.
+
+## 기존 UI 구현과 후속 교체
+
+2026-09-08 `PROD-823`·`PROD-813`·`PROD-917`의 확정 범위에 따라, 기존 UI의 기능 구현과 신규 UI 교체를 나누어
+진행한다. `PROD-823`은 기존 레거시 컴포넌트를 조합해 실제 Profile·Settings의 차단 화면과 관리 진입점을
+연결하고, 조회·생성·해제·pagination·재시도·pending·성공 피드백을 구현·검증한다. 기존 UI에서도 위 제품 행동,
+접근성과 기본 Profile 정보·viewer 방향별 콘텐츠 계약을 지킨다.
+
+`PROD-858`·`PROD-861`의 신규 공용 UI·Storybook 확정이나 `PROD-917`의 교체 완료를 기다리지 않는다.
+`PROD-823`은 기존 화면·데이터·action 연결 코드와 인터페이스, 상태·접근성·cache·프로필 전환 검증 증거를
+인계하고, `PROD-813`은 기존 UI 기준 차단 종단 간 통합 검증과 `add-profile-block` archive를 소유한다.
+`PROD-917`은 Storybook 확정 뒤 신규 UI로 교체하고 교체에 따른 회귀를 검증한다. 교체 작업자의 수신 확인과
+신규 UI 교체 완료는 기존 기능의 완료나 archive 조건이 아니다.

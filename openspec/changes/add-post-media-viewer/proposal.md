@@ -11,7 +11,7 @@ Post의 이미지가 gallery 안에서 crop되어 보이지만 원본 비율로 
 - Wide Web detail은 원본 Post의 전체 원문·기존 Action Bar, Reply Composer와 reply descendants를 기존 Post 상세 표현과 interaction으로 제공하고, 원본 Media는 왼쪽 image surface에만 표시한다.
 - Wide Web detail 전체는 image surface와 독립적으로 scroll하고 기존 reply loading·error·retry·pagination을 유지한다.
 - Modal shell·close·focus fallback을 Post query의 Suspense·error boundary 밖에 유지하고 cache hit·loading·error·retry·null Post·Content·Media 상태를 안전하게 표시한다.
-- 같은 Content revision의 일시 unavailable·복구는 탐색·원문·Media 상태를 유지하고, 다른 revision은 원래 선택 index에서 초기화하며 해당 index가 없으면 unavailable을 표시한다. Relay actor/environment가 바뀌면 Viewer를 닫고 이전 query를 폐기한다.
+- 같은 Content revision의 일시 unavailable·복구는 탐색·원문 상태를 유지하고 이미지는 새로 로드하며, 다른 revision은 원래 선택 index에서 초기화하며 해당 index가 없으면 unavailable을 표시한다. Relay actor/environment가 바뀌면 Viewer를 닫고 이전 query를 폐기한다.
 - Modal close, keyboard arrow, Native swipe, Screen Reader 위치 안내와 focus 복귀를 플랫폼별로 지원하고 Viewer open·탐색·close 중 route와 browser history를 유지한다.
 - Media 파일 공유·다운로드·기기 저장, zoom·pan, route·deep link와 Media 전용 action은 제외한다.
 

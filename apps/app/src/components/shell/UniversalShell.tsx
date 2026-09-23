@@ -35,6 +35,7 @@ import { ShellChromeProvider } from './ShellChromeContext';
 import {
   getShellRoutePresentation,
   getWebMobileShellHeader,
+  isNativeDrawerSwipeEnabled,
   isSettingsRoute,
   isTimelineRoute,
   isWebMobileRouteOwnedHeader,
@@ -50,6 +51,7 @@ import type { HomeReselectionHandler } from './ShellChromeContext';
 const ShellQuery = graphql`
   query UniversalShellQuery {
     ...SidebarNavigation_query
+    ...RightRail_query
     currentSession {
       id
       selectedProfile {
@@ -142,6 +144,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
   );
   const profile = data.currentSession?.selectedProfile ?? null;
   const web = Platform.OS === 'web';
+  const nativeDrawerSwipeEnabled = !web && isNativeDrawerSwipeEnabled(pathname);
   // Web keeps the shell root out of the tab order. Native View#focus() requires an explicit
   // focusable host target; tabIndex={-1} maps to focusable=false on Native.
   const screenFallbackFocusProps = web ? { tabIndex: -1 as const } : { focusable: true };
@@ -367,7 +370,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
           { borderColor: theme.borderSubtle },
         ]}
       >
-        {mobile && !routeOwnsMobileHeader ? (
+        {mobile && web && !routeOwnsMobileHeader ? (
           <View
             style={[
               styles.mobileChrome,
@@ -447,6 +450,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
               onRequestClose={closeComposer}
               open={composerVisible}
               profile={profile}
+              query={data}
               triggerFocusRef={composerTriggerFocusRef}
               {...(composerMode === 'rail'
                 ? { mode: composerMode, onExpand: openComposer }
@@ -485,6 +489,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
         onSwitcherOpenChange={setSwitcherOpen}
         query={data}
         switcherOpen={switcherOpen}
+        swipeEnabled={nativeDrawerSwipeEnabled}
       >
         {shellContent}
       </NativeNavigationDrawer>

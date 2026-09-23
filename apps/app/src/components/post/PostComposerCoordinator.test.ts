@@ -119,6 +119,41 @@ describe('PostComposerCoordinator', () => {
     assert.equal(binding('b')?.expanded, true);
   });
 
+  it('Viewer Reply가 owner를 일시적으로 목록으로 바꾸고 닫힌 뒤 상세 기본값으로 복귀한다', async () => {
+    await renderCoordinator({ owner: 'detail' });
+
+    await act(async () => binding('a')?.onPress('list'));
+    assert.equal(binding('a')?.owner, 'list');
+    assert.equal(binding('b')?.owner, 'detail');
+
+    await act(async () => binding('a')?.onRequestClose());
+    assert.equal(binding('a')?.expanded, false);
+
+    await act(async () => binding('a')?.onPress());
+    assert.equal(binding('a')?.owner, 'detail');
+  });
+
+  it('같은 active Reply도 Viewer owner override가 다르면 close 뒤 목록 composer로 전환한다', async () => {
+    await renderCoordinator({ owner: 'detail' });
+    await act(async () => binding('a')?.onPress());
+
+    const activeSurfaceRef = binding('a')?.surfaceRef;
+    assert.ok(activeSurfaceRef);
+    let closeContinuation: (() => void) | undefined;
+    activeSurfaceRef.current = {
+      requestClose: (onClosed) => {
+        closeContinuation = onClosed;
+      },
+    };
+
+    await act(async () => binding('a')?.onPress('list'));
+    assert.equal(binding('a')?.owner, 'detail');
+    assert.ok(closeContinuation);
+
+    await act(async () => closeContinuation?.());
+    assert.equal(binding('a')?.owner, 'list');
+  });
+
   it('같은 Post의 Reply와 Quote를 하나의 discard lifecycle로 전환한다', async () => {
     await renderCoordinator({ owner: 'list' });
     const pressQuote = binding('a', 'quote')?.onPress;

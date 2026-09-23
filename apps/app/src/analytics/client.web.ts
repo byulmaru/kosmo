@@ -8,6 +8,16 @@ const POSTHOG_USER_ID = '$user_id';
 let client: PostHog | null | undefined;
 
 function initializeAnalytics(): PostHog | null {
+  const browserHostname = typeof window === 'undefined' ? undefined : window.location.hostname;
+  if (
+    browserHostname === 'localhost' ||
+    browserHostname === '127.0.0.1' ||
+    browserHostname === '[::1]'
+  ) {
+    client = null;
+    return client;
+  }
+
   if (client !== undefined) {
     return client;
   }
@@ -24,6 +34,7 @@ function initializeAnalytics(): PostHog | null {
     client = posthogClient.init(configuredApiKey, {
       api_host: configuredApiHost,
       defaults: '2026-05-30',
+      disable_session_recording: true,
       mask_personal_data_properties: false,
     } satisfies Partial<PostHogConfig>);
   } catch {

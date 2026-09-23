@@ -1,11 +1,12 @@
 import { isPostContentDocumentV1 } from '@kosmo/core/post-content';
 import { Fragment } from 'react';
-import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, Text } from 'react-native';
 import { match } from 'ts-pattern';
-import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/theme/ThemeProvider';
-import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
+import { fontFamilies, spacing, typography } from '@/theme/tokens';
+import { PostContentMention } from './PostContentMention';
 import { PostContentPrivacyBoundary } from './PostContentPrivacyBoundary';
+import { PostContentWarning } from './PostContentWarning';
 import { usePostContentWarningReveal } from './PostContentWarningRevealContext';
 import { PostMediaGallery } from './PostMediaGallery';
 import type {
@@ -16,6 +17,7 @@ import type {
 } from '@kosmo/core/post-content';
 import type { Key, ReactNode } from 'react';
 import type { StyleProp, TextStyle } from 'react-native';
+import type { PostContentMentionProfile } from './PostContentMention';
 import type { PostMediaItem } from './PostMediaGallery';
 import type { PostMediaOpenHandler } from './PostMediaImage';
 
@@ -25,6 +27,7 @@ interface RenderContext {
   readonly bodyStyle: StyleProp<TextStyle>;
   readonly interactive: boolean;
   readonly linkColor: string;
+  readonly mentionedProfiles: ReadonlyMap<string, PostContentMentionProfile>;
   readonly numberOfLines?: number;
 }
 
@@ -38,6 +41,7 @@ export function PostContentRenderer({
   interactive = true,
   media,
   mediaPresentation = 'default',
+  mentionedProfiles,
   numberOfLines,
   onBodyPress,
   onMediaOpen,
@@ -51,6 +55,7 @@ export function PostContentRenderer({
   interactive?: boolean;
   media: ReadonlyArray<PostMediaItem> | null;
   mediaPresentation?: 'default' | 'hidden';
+  mentionedProfiles: ReadonlyArray<PostContentMentionProfile>;
   numberOfLines?: number;
   onBodyPress?: () => void;
   onMediaOpen?: PostMediaOpenHandler;
@@ -69,6 +74,7 @@ export function PostContentRenderer({
     size === 'lg' ? typography.lg : typography.md,
     { color: theme.text },
   ];
+  const mentionedProfilesById = new Map(mentionedProfiles.map((profile) => [profile.id, profile]));
 
   const body = !contentVisible ? null : !bodyText ? null : !document ? (
     <Text numberOfLines={numberOfLines} style={bodyStyle}>
@@ -79,6 +85,7 @@ export function PostContentRenderer({
       bodyStyle,
       interactive,
       linkColor: theme.actionLinkBase,
+      mentionedProfiles: mentionedProfilesById,
       numberOfLines,
     })
   );
@@ -108,27 +115,12 @@ export function PostContentRenderer({
   return (
     <PostContentPrivacyBoundary style={styles.root}>
       {showContentWarning ? (
-        <View
-          accessibilityLiveRegion="polite"
-          style={[styles.warning, { backgroundColor: theme.surface, borderColor: theme.border }]}
-          testID="post-content-warning"
-        >
-          <Text style={[styles.warningLabel, { color: theme.text }]}>내용 경고</Text>
-          <Text style={[styles.warningText, { color: theme.textSecondary }]}>{contentWarning}</Text>
-          <Button
-            accessibilityLabel={revealed ? '내용 다시 가리기' : '내용 보기'}
-            accessibilityState={{ expanded: revealed }}
-            aria-expanded={revealed}
-            onPress={(event) => {
-              event.stopPropagation();
-              toggle();
-            }}
-            style={styles.warningButton}
-            testID="post-content-warning-toggle"
-          >
-            {revealed ? '다시 가리기' : '내용 보기'}
-          </Button>
-        </View>
+        <PostContentWarning
+          imageCount={media === null ? null : media.length}
+          onPress={toggle}
+          revealed={revealed}
+          summary={contentWarning ?? ''}
+        />
       ) : null}
       {bodyContent}
       {contentVisible && showMedia ? (
@@ -168,6 +160,17 @@ function renderNode(node: PostContentNode, key: Key, context: RenderContext): Re
     ))
     .with({ type: 'text' }, (text) => renderMarks(text, key, context))
     .with({ type: 'hard_break' }, () => '\n')
+    .with({ type: 'mention' }, (mention) => {
+      const profile = context.mentionedProfiles.get(mention.attrs.profileId);
+      return (
+        <PostContentMention
+          key={key}
+          interactive={context.interactive}
+          linkColor={context.linkColor}
+          profile={profile}
+        />
+      );
+    })
     .otherwise(() => null);
 }
 
@@ -212,18 +215,4 @@ const styles = StyleSheet.create({
   root: { gap: spacing.sm, minWidth: 0 },
   body: { fontFamily: fontFamilies.content },
   link: { textDecorationLine: 'underline' },
-  warning: {
-    alignItems: 'flex-start',
-    borderRadius: radii.md,
-    borderWidth: 1,
-    gap: spacing.xs,
-    padding: spacing.md,
-  },
-  warningLabel: { fontFamily: fontFamilies.ui, fontWeight: '700', ...typography.sm },
-  warningText: { fontFamily: fontFamilies.ui, ...typography.sm },
-  warningButton: {
-    marginTop: spacing.xs,
-    minHeight: Platform.OS === 'android' ? 48 : 44,
-    minWidth: 0,
-  },
 });

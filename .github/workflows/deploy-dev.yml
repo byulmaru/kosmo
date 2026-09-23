@@ -153,6 +153,7 @@ jobs:
     with:
       artifact_name: ${{ needs.export_android.outputs.artifact_name }}
       channel: dev
+      expo_client_path: expo-client.json
       keyid: 2026-09
       platform: android
       project: kosmo-native
@@ -172,6 +173,7 @@ jobs:
     with:
       artifact_name: ${{ needs.export_ios.outputs.artifact_name }}
       channel: dev
+      expo_client_path: expo-client.json
       keyid: 2026-09
       platform: ios
       project: kosmo-native

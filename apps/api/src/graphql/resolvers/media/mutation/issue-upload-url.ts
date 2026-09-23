@@ -2,6 +2,8 @@ import { db, firstOrThrowWith, Media as MediaTable } from '@kosmo/core/db';
 import { AccountProfileRole, MediaSource, MediaState } from '@kosmo/core/enums';
 import { z } from 'zod';
 import { builder } from '@/graphql/builder';
+import { resolveComposerProfileId } from '@/profile/authorization';
+import { Profile } from '../../profile/ref';
 import { Media } from '../ref';
 
 const uploadResponseSchema = z.object({
@@ -13,7 +15,7 @@ const uploadResponseSchema = z.object({
 const MEDIA_STORAGE_REQUEST_TIMEOUT_MS = 10_000;
 
 builder.mutationField('issueMediaUploadUrl', (t) =>
-  t.withAuth({ profileRole: AccountProfileRole.MEMBER }).field({
+  t.withAuth({ profileRole: AccountProfileRole.MEMBER }).fieldWithInput({
     type: builder.simpleObject('IssueMediaUploadUrlPayload', {
       fields: (field) => ({
         media: field.field({ type: Media }),
@@ -21,7 +23,14 @@ builder.mutationField('issueMediaUploadUrl', (t) =>
         expiresAt: field.field({ type: 'DateTime' }),
       }),
     }),
-    resolve: async (_, __, ctx) => {
+    argOptions: {
+      required: false,
+    },
+    input: {
+      actorProfileId: t.input.globalID({ for: Profile, required: false }),
+    },
+    resolve: async (_, { input }, ctx) => {
+      const composerProfileId = await resolveComposerProfileId(ctx, input?.actorProfileId?.id);
       const mediaStorageOrigin = process.env.MEDIA_STORAGE_SERVICE_ORIGIN;
       const mediaStorageApiKey = process.env.MEDIA_STORAGE_SERVICE_API_KEY;
       if (!mediaStorageOrigin || !mediaStorageApiKey) {
@@ -56,7 +65,7 @@ builder.mutationField('issueMediaUploadUrl', (t) =>
           source: MediaSource.LOCAL,
           state: MediaState.UPLOADING,
           accountId: ctx.session.accountId,
-          profileId: ctx.session.profile.id,
+          profileId: composerProfileId,
           storageReference: upload.data.id,
           uploadExpiresAt: expiresAt,
         })

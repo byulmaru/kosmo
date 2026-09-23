@@ -14,6 +14,7 @@ export type PostReactionController = Readonly<{
   errorTypeIds: ReadonlyArray<string>;
   pendingTypeIds: ReadonlyArray<string>;
   postId: string;
+  relativeHandle: string;
   reactionCounts: ReadonlyArray<ReactionCount>;
   selectedTypeIds: ReadonlyArray<string>;
   toggleReaction: (intent: ReactionToggleIntent) => void;
@@ -22,6 +23,9 @@ export type PostReactionController = Readonly<{
 const postReactionControllerFragment = graphql`
   fragment PostReactionController_post on Post {
     id
+    profile {
+      relativeHandle
+    }
     viewerReactions {
       id
       type
@@ -193,6 +197,7 @@ export function usePostReactionController(
     errorTypeIds: [...errorTypes],
     pendingTypeIds: [...pendingTypes],
     postId,
+    relativeHandle: data.profile.relativeHandle,
     reactionCounts: data.reactionCounts,
     selectedTypeIds: data.viewerReactions.map(({ type }) => type),
     toggleReaction,

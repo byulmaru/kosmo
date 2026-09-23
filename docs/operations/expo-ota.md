@@ -6,6 +6,11 @@ platform export가 Argo 배포와 병렬로 시작하고, 각 publish는 Argo �
 성공한 뒤 시작한다. Native module, SDK, entitlement, permission 또는 그 밖의 native
 설정이 바뀐 release는 OTA가 아니라 새 Store binary 경로를 사용한다.
 
+`runtimeVersion`은 자동 계산이 아닌 수동 호환성 세대다. 현재 승인된 세대는 `"0.3"`이며,
+JavaScript/assets-only OTA는 현재 세대를 유지한다. Native compatibility가 바뀌면 세대를 증가시키고
+새 Android/iOS Store binary를 만든 뒤 그 세대에 호환되는 OTA만 publish한다. 새 binary와 증가한 세대
+없이 호환되지 않는 OTA를 publish하지 않으며, `EXPO_UPDATES_FINGERPRINT_OVERRIDE`는 사용하지 않는다.
+
 Native Store binary의 기본 OTA channel은 `prod`다. 인증된 Native Settings의 `설정 → 정보 → 개발 정보`에서만 `dev`·`prod`를 선택해
 API origin·OIDC 로그인 환경과 OTA channel을 함께 전환한다. 로그인 화면에는 channel selector나 복구 진입점을 두지 않으며,
 로그인하지 못한 사용자는 앱 내부에서 channel을 되돌릴 수 없다. Web channel과 `/settings/info` policy link는 이 전환의
@@ -27,7 +32,7 @@ static delivery에는 private key나 publish credential을 넣지 않는다.
 | project        | `kosmo-native`                           |
 | platform       | `android` 또는 `ios`                     |
 | OTA channel    | caller가 선택한 안전한 단일 path segment |
-| runtimeVersion | Expo fingerprint lowercase hash          |
+| runtimeVersion | 수동 호환성 세대 (현재 `0.3`)            |
 | keyid          | 등록된 signing key identifier            |
 
 채널은 비어 있지 않고 영문 대소문자, 숫자, `.`, `_`, `-`만 포함하는 단일 path segment여야
@@ -91,10 +96,17 @@ ref로 사용한다. reusable workflow가 최신 `main`을 다시 선택하거�
 않는다. Production Release의 기존 `prod` Environment 승인과 canonical Docker Build 확인이
 OTA 호출에 선행한다. OTA에 별도의 두 번째 production approval을 두지 않는다.
 
-Android와 iOS export job은 각각 `pnpm exec expo-updates runtimeversion:resolve`로 해당
-platform의 `runtimeVersion`을 얻고, `pnpm exec expo export --clear`로 artifact를 만든다.
-각 platform publish job은 자신의 export가 성공하고 caller의 배포 gate를 통과하면 해당
-artifact와 runtimeVersion을 public publisher reusable workflow에 전달한다. Publisher는 Expo Metro
+Android와 iOS export job은 `apps/app/app.config.ts`에 명시한 수동 `runtimeVersion`(현재 `"0.3"`)을
+resolve해 사용한다. Workflow는 resolve한 값이 비어 있지 않은 안전한 단일 path segment
+(`[A-Za-z0-9._-]+`, `.`·`..` 제외)인지 검증한 뒤 `pnpm exec expo export --clear`로 artifact를
+만든다. Export가 성공하면 같은 `apps/app` workspace와 환경에서 `pnpm exec expo config --type public --json`의
+전체 결과를 export root의 `expo-client.json`으로 저장하고, scheme `kosmo`와 Android/iOS platform
+identifier를 검증한다. 이 public config는 Expo SDK 호환성에 필요한 client metadata를 publisher에
+전달하기 위한 것으로, secret이나 publish credential을 포함하지 않는다. `expo-client.json`은
+export artifact에 포함된다. 자동 runtime 계산이나 `EXPO_UPDATES_FINGERPRINT_OVERRIDE`로 runtime을
+계산하지 않는다. 각 platform publish job은 자신의 export가 성공하고 caller의 배포 gate를 통과하면 해당
+artifact와 runtimeVersion, export root 기준 `expo_client_path: expo-client.json`을 public publisher
+reusable workflow에 전달한다. Publisher는 Expo Metro
 `metadata.json`과 참조된 파일을 읽어 export를 검증하고, 실제 bundle과 asset bytes를
 hashing한 뒤 사전 계산한 SHA-256 표준 Base64를 각 R2 `PutObject`에 전달해 서버 검증을 수행하며 signed immutable release를 R2에 기록한다.
 
@@ -139,7 +151,7 @@ certificate source는 [`apps/app/certs/certificate.pem`](../../apps/app/certs/ce
 일치를 확인한 뒤 GitHub에 전달했으며, 등록 결과는 secret 이름과 `updatedAt`으로 확인했다.
 GitHub에 저장된 값의 재조회나 실제 OTA 발행 검증을 수행한 것은 아니다.
 
-Rotation은 새 certificate, 새 runtimeVersion과 새 Android/iOS Store binary를 함께 기록하는
+Rotation은 새 certificate, 증가한 수동 runtime generation과 새 Android/iOS Store binary를 함께 기록하는
 명시적 전환이다. Vault 값과 Kosmo repository secret을 함께 갱신하고, 새 keyid를 publisher에
 등록하고 public certificate를 새 binary에 bundle한 뒤 새 runtime의 dev publish 결과와 device
 evidence를 완료한다. 기존 runtime은
@@ -151,7 +163,7 @@ trust를 추가하지 않는다.
 자동 release 완료를 기록할 때 workflow 로그와 publisher 결과에서 다음 값을 확인한다.
 
 - workflow run ID, caller workflow ref와 source SHA
-- project, platform, OTA channel, runtimeVersion과 keyid
+- project, platform, OTA channel, 수동 runtime generation(`runtimeVersion`, 현재 `0.3`)과 keyid
 - publisher의 R2 upload SHA-256 검증 결과와 publish job 결과
 - production release의 Environment 승인과 동일한 source SHA
 

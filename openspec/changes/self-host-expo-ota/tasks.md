@@ -43,6 +43,7 @@ Android·iOS Expo SDK 56 release binary가 static update service에서 `kosmo-na
 
 - Deploy mapping의 논리 `dev`/`prod`와 Native public-config `dev|prod`를 별도 축으로 유지한다. Approved handoff의 OTA channel은 이름 목록을 제한하지 않으며 release/delivery contract가 안전한 단일 path segment 형식을 검증한다. Client bootstrap은 별도 native prebuild 입력 검증을 추가하지 않고, Store release binary의 OTA consumer channel과 Native public-config는 모두 `prod`로 고정한다.
 - runtimeVersion만으로 project를 식별하지 않고 project/platform/channel/runtime을 함께 검증한다.
+- `runtimeVersion`은 자동 fingerprint가 아닌 수동 호환성 세대이며 초기값은 문자열 `"0.2"`이다. Native compatibility가 바뀔 때마다 세대를 올리고 새 Android/iOS native binary를 만든다. JS/assets-only OTA는 현재 세대를 유지하며, 호환되지 않는 OTA는 새 binary와 새 generation 없이는 publish하지 않는다. `EXPO_UPDATES_FINGERPRINT_OVERRIDE`는 사용하지 않는다.
 - `multipart/mixed` manifest JSON part의 signature와 asset hash를 bundled public certificate로 확인하며 native module·SDK·native code 변경은 OTA로 적용하지 않는다.
 
 **Verification**
@@ -51,7 +52,7 @@ Android·iOS Expo SDK 56 release binary가 static update service에서 `kosmo-na
 - Android OTA-enabled seed binary가 completed PROD-886 Google Play Alpha 경로로 배포되고 artifact/version/runtime metadata가 기록된다.
 - iOS OTA-enabled seed binary가 completed PROD-876 TestFlight 경로로 배포되고 artifact/version/runtime metadata가 기록된다.
 
-- [x] 2.1 Expo SDK 56 client bootstrap과 build metadata를 update service tuple 및 code-signing contract에 연결하고 Native public-config 선택과 분리한다. Evidence: fixed update service URL, fingerprint runtimeVersion, OTA channel metadata, `2026-09` Vault key registration, and `apps/app/certs/certificate.pem` public certificate source are recorded across the client/build configuration and credential evidence. 인증서 validity는 2026-09-10~2027-09-10(KST)이며 첫 rotation 예정일은 2027-03-10이다.
+- [x] 2.1 Expo SDK 56 client bootstrap과 build metadata를 update service tuple 및 code-signing contract에 연결하고 Native public-config 선택과 분리한다. Evidence: fixed update service URL, manually assigned runtime generation `"0.2"`, OTA channel metadata, `2026-09` Vault key registration, and `apps/app/certs/certificate.pem` public certificate source are recorded across the client/build configuration and credential evidence. Native compatibility changes increment the generation and require a new native binary; JS/assets-only OTA keeps the current generation; `EXPO_UPDATES_FINGERPRINT_OVERRIDE` is not used. 인증서 validity는 2026-09-10~2027-09-10(KST)이며 첫 rotation 예정일은 2027-03-10이다.
 - [ ] 2.2 compatible update 적용, runtime/namespace/signature/hash rejection, offline/fallback 동작을 검증한다.
 - [ ] 2.3 PROD-886 Android와 PROD-876 iOS 경로에서 OTA-enabled seed binary를 새로 빌드·배포하고 immutable artifact identity와 runtime metadata를 기록한다.
 
@@ -114,7 +115,7 @@ Kosmo repository의 approved app export와 deploy channel handoff가 Kosmo repos
 - Deploy Dev의 `workflow_run.head_sha`, Deploy Production의 approved target SHA와 `prod` Environment approval, native Store workflow와의 분리 evidence를 확인한다. promotion/recovery evidence는 보류한다.
 - Kosmo caller의 Vault 원본과 repository secret `EXPO_OTA_SIGNING_PRIVATE_KEY` 등록·동기화, top caller→local workflow→public publisher의 required `signing_private_key` input forwarding, 1년 signing certificate validity, 6개월 rotation 경계와 새 runtime·Store binary 및 구 runtime certificate 유지 evidence가 runbook에 기록된다. 초기 `2026-09` Vault key registration과 public certificate validity evidence, 2026-09-10 10:06:24 UTC의 repository secret 등록 및 인증서 일치는 확인했다. workflow forwarding 실행·rotation 동기화·seed binary·device proof는 남은 작업이다.
 
-- [ ] 4.1 signed immutable artifact의 complete-release 검증과 safe channel segment 형식 검증을 구현하고 native code/module/SDK 요구 artifact를 새 Store binary 경로로 보낸다.
+- [ ] 4.1 signed immutable artifact의 complete-release 검증과 safe channel segment 형식 검증을 구현하고 native code/module/SDK 요구 artifact를 incremented runtime generation의 새 Store binary 경로로 보낸다. 호환되지 않는 OTA는 새 binary와 generation 없이는 publish하지 않는다.
 - [ ] 4.2 Deploy Dev의 `workflow_run.head_sha`와 Deploy Production의 approved target SHA를 각각 `dev`/`prod` channel publish handoff에 연결하고 native Store upload과 분리한다. promotion은 보류한다.
 - [ ] 4.3 Vault/Kosmo repository-secret credential 경계와 rotation synchronization runbook, channel publish/failure evidence를 완성한다. known-good recovery reissue와 recovery evidence는 보류한다.
 

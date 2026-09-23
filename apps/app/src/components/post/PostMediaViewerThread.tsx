@@ -33,6 +33,7 @@ const PostMediaViewerThreadOperation = graphql`
 type Props = Readonly<{
   contentId: string;
   mediaOwnerPostId: string;
+  onReply?: () => void;
   onPostDeleted?: () => void;
   replyAvailable: boolean;
   replySurfacePostId: string;
@@ -53,6 +54,7 @@ export function PostMediaViewerThread(props: Props) {
 function PostMediaViewerThreadContent({
   contentId,
   mediaOwnerPostId,
+  onReply,
   onPostDeleted,
   replyAvailable,
   replySurfacePostId,
@@ -74,6 +76,7 @@ function PostMediaViewerThreadContent({
       identity={queryIdentity}
       currentPostReplyAvailable={replyAvailable}
       currentPostReplySurfaceId={replySurfacePostId}
+      onReply={onReply}
       onPostDeleted={onPostDeleted}
       onReplyCreated={refetch}
       post={thread}

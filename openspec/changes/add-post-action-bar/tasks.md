@@ -358,8 +358,9 @@ Native는 기존 공용 control에서 28px visual과 iOS 44pt·Android 48dp targ
 - [x] 9.4 App·Storybook·lint·OpenSpec 검증과 Figma 최종 대조를 완료하고 실제 Native 실행 결과·미검증 항목을 기록한다.
 - [x] 9.5 승인된 Web 목록 위12·아래8과 상세 frame 상하12 여백을 기존 surface 경계에 적용하고 Native 기존 여백·target을 보존한다.
 - [x] 9.6 기존 geometry Storybook·앱 검증과 390/1024/1440 Web 시각·상호작용 QA를 통과시키고, Figma Center 목록4종·상세3종의 승인·동기화 상태를 기록한다.
-- [x] 9.7 목록·current connector를 당시 Web x=32·Native x=40 계약에 맞추는 실제 렌더 회귀를 추가한다. 이후 9.9에서 shell presentation 공용 metric으로 대체한다.
-- [x] 9.9 Post list inset·thread connector를 shell presentation 기반 공용 metric으로 정렬한다.
+- [x] 9.7 목록·current connector를 당시 Web x=32·Native x=40 계약에 맞추는 실제 렌더 회귀를 추가한다. 이후 9.8에서 shell presentation 공용 metric으로 대체한다.
+- [x] 9.8 Post list inset·thread connector를 shell presentation 기반 공용 metric으로 정렬한다.
+- [x] 9.9 `PostListItem`·`PostLayout` root에 semantic `backgroundCanvas`를 직접 적용하고 Web·iOS·Android renderer 회귀와 canonical 문서·OpenSpec을 동기화한다.
 
 **Web Spacing Verification Record (2026-09-12)**
 
@@ -383,4 +384,26 @@ Native는 기존 공용 control에서 28px visual과 iOS 44pt·Android 48dp targ
 - `PostThreadLayout` 실제 renderer test가 당시 Web 목록·current connector `left=32`, iOS·Android 목록·current connector `left=40`를 style props로 검증했다. 2026-09-16 후속 검증은 Web mobile을 `left=40`으로 정렬한다.
 - 후속 회귀는 `PostListItem`과 current content의 shell presentation별 left inset 및 list/current connector 축 정렬을 확인하며, Yoga layout·실제 Native touch·VoiceOver·TalkBack은 검증하지 않는다.
 - 사용자 승인 후 Figma `PostThreadLayout` canonical composition 5개 상태의 목록·current Avatar 중심과 connector를 x=40으로 동기화했다. 기존 Mobile `PostLayout`의 40px Avatar는 current inset 20px, production Native의 48px Avatar는 inset 16px을 사용해 같은 중심축을 만들며 readback과 대표 screenshot으로 확인했다.
-- shell `mobile`은 Web 390/767과 Native tablet까지 inset16·connector x40을 사용하고, Web 768/900/1400의 `compact`·`full`은 inset8·connector x32를 사용하는 회귀를 추가했다.
+
+## 10. PROD-977 PostListItem surface feedback
+
+**Authority / Provenance**
+
+- `PROD-977`
+- `docs/design/colors.md`, `docs/design/post-action-bar.md`
+- 2026-09-14 KST 사용자 플랫폼 전반 적용 승인과 2026-09-16 KST PR 분리 승인
+
+- [x] 10.1 `PostListItem` Text·Media·PureRepost·Quote root에 Web hover와 전 플랫폼 pressed state overlay를 적용하고 기존 nested action·navigation을 보존한 채 코드·Figma·검증 기록을 동기화한다.
+- [x] 10.2 surface feedback을 pointer 능력과 Native touch lifecycle로 분리하고 feedback overlay에 `radius/md`를 적용한다.
+
+**PostListItem surface feedback verification record (2026-09-14)**
+
+- Text·Media·PureRepost·Quote의 공용 root `View`에 Web hover와 Web·iOS·Android pressed surface를 연결하고, 새 navigation target이나 accessibility role 없이 기존 nested action·navigation을 유지했다.
+- focused unit 8개와 Posts Storybook interaction 105개, app check, scoped ESLint·Prettier, OpenSpec strict와 diff check를 통과했다.
+- Figma `PostListItem` component set `1924:1992`를 Default·Hover·Pressed 24개 variant로 동기화하고 hover와 넓은 surface용 pressed-subtle color variable binding, Hover·Pressed 16개 variant의 `radius/12` binding과 component properties를 readback했다. 실제 Native touch·VoiceOver·TalkBack은 release gate로 남긴다.
+
+**Review follow-up verification record (2026-09-16)**
+
+- Web mouse·pen hover와 touch hover 제외, Web pointer release·cancel·leave, iOS·Android touch start·end·cancel을 공용 raw-surface hook의 실제 consumer renderer로 검증했다.
+- feedback fill은 `radius/md`인 pointer-inert overlay로 분리해 둥글게 처리하고 기존 직선 row divider와 nested action 입력을 유지했다.
+- 새 `Pressable`·navigation target·접근성 role은 추가하지 않았다. 실제 iOS·Android touch 및 보조 기술 관찰은 release gate에 유지한다.

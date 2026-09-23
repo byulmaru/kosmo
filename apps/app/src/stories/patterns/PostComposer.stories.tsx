@@ -163,10 +163,13 @@ const meta = {
     'MobilePlaygroundContract',
     'MobileRuntimeAltEditorContract',
     'MobileFlexLayoutContract',
+    'OverlayGeometryContract',
     'OverlayProgressRingContract',
     'PendingMediaContract',
     'ProgressRingToneContract',
     'RailProgressRingContract',
+    'RailBodyMaxHeightContract',
+    'RailFocusBoundaryContract',
     'SubmittingSpinnerContract',
     'SubmittingPickerContract',
     'SubmittingVisibilityContract',
@@ -553,52 +556,54 @@ function InteractiveComposer({
           visibility={visibility}
         />
       ) : (
-        <PostComposerTarget
-          {...composerProps}
-          body={body}
-          contentWarning={contentWarning}
-          contentWarningExpanded={contentWarningExpanded}
-          items={items}
-          remaining={remaining}
-          onBodyChange={(value) => {
-            props.onBodyChange(value);
-            setBody(value);
-          }}
-          onContentWarningChange={(value) => {
-            props.onContentWarningChange(value);
-            setContentWarning(value);
-          }}
-          onContentWarningToggle={() => {
-            props.onContentWarningToggle();
-            setContentWarningExpanded((expanded) => !expanded);
-          }}
-          onEmojiAction={togglePicker}
-          onExpand={() => {
-            props.onExpand();
-            setOverlayOpen(true);
-          }}
-          onMediaEdit={(key, tool) => {
-            props.onMediaEdit(key, tool);
-            setEditor({
-              key,
-              mobileState: tool === 'alt' ? 'altKeyboard' : 'sensitive',
-              tool,
-            });
-            setOverlayOpen(true);
-          }}
-          onMediaRemove={(key) => {
-            props.onMediaRemove(key);
-            setItems((current) => current.filter((item) => item.key !== key));
-          }}
-          onMediaRetry={(key) => props.onMediaRetry(key)}
-          onVisibilityChange={(value) => {
-            props.onVisibilityChange(value);
-            setVisibility(value);
-          }}
-          sensitiveMedia={sensitiveMedia}
-          surface={props.surface}
-          visibility={visibility}
-        />
+        <View style={props.surface === 'rail' ? styles.railTarget : styles.overlayTarget}>
+          <PostComposerTarget
+            {...composerProps}
+            body={body}
+            contentWarning={contentWarning}
+            contentWarningExpanded={contentWarningExpanded}
+            items={items}
+            remaining={remaining}
+            onBodyChange={(value) => {
+              props.onBodyChange(value);
+              setBody(value);
+            }}
+            onContentWarningChange={(value) => {
+              props.onContentWarningChange(value);
+              setContentWarning(value);
+            }}
+            onContentWarningToggle={() => {
+              props.onContentWarningToggle();
+              setContentWarningExpanded((expanded) => !expanded);
+            }}
+            onEmojiAction={togglePicker}
+            onExpand={() => {
+              props.onExpand();
+              setOverlayOpen(true);
+            }}
+            onMediaEdit={(key, tool) => {
+              props.onMediaEdit(key, tool);
+              setEditor({
+                key,
+                mobileState: tool === 'alt' ? 'altKeyboard' : 'sensitive',
+                tool,
+              });
+              setOverlayOpen(true);
+            }}
+            onMediaRemove={(key) => {
+              props.onMediaRemove(key);
+              setItems((current) => current.filter((item) => item.key !== key));
+            }}
+            onMediaRetry={(key) => props.onMediaRetry(key)}
+            onVisibilityChange={(value) => {
+              props.onVisibilityChange(value);
+              setVisibility(value);
+            }}
+            sensitiveMedia={sensitiveMedia}
+            surface={props.surface}
+            visibility={visibility}
+          />
+        </View>
       )}
       {!mobile && overlayOpen ? (
         <ComposerOverlayFixture
@@ -747,11 +752,27 @@ export const InteractionContract: Story = {
     expect(args.onBodyChange).toHaveBeenLastCalledWith(
       '오늘의 코스모 이야기를 나눠보세요. 오버레이',
     );
+    const focusedBody = getComputedStyle(body);
+    const bodyBorderWidth = focusedBody.borderWidth;
+    expect(bodyBorderWidth).toBe('0px');
+    expect(focusedBody.outlineWidth).toBe('0px');
 
     await userEvent.click(within(dialog).getByRole('button', { name: '콘텐츠 경고 켜기' }));
+    await waitFor(() => expect(body).not.toHaveFocus());
+    expect(getComputedStyle(body).borderWidth).toBe(bodyBorderWidth);
+    expect(getComputedStyle(body).outlineWidth).toBe('0px');
     expect(args.onContentWarningToggle).toHaveBeenCalledOnce();
-    await userEvent.type(within(dialog).getByRole('textbox', { name: '콘텐츠 경고' }), '스포일러');
+    const contentWarning = within(dialog).getByRole('textbox', { name: '콘텐츠 경고' });
+    await userEvent.type(contentWarning, '스포일러');
     expect(args.onContentWarningChange).toHaveBeenLastCalledWith('스포일러');
+    const focusedContentWarning = getComputedStyle(contentWarning);
+    const contentWarningBorderWidth = focusedContentWarning.borderWidth;
+    expect(contentWarningBorderWidth).toBe('1px');
+    expect(focusedContentWarning.outlineWidth).toBe('0px');
+    await userEvent.click(body);
+    await waitFor(() => expect(contentWarning).not.toHaveFocus());
+    expect(getComputedStyle(contentWarning).borderWidth).toBe(contentWarningBorderWidth);
+    expect(getComputedStyle(contentWarning).outlineWidth).toBe('0px');
 
     await userEvent.click(within(dialog).getByRole('button', { name: '첨부 이미지 2 편집' }));
     expect(args.onMediaEdit).toHaveBeenLastCalledWith('ready', 'alt');
@@ -843,6 +864,21 @@ export const MobileFlexLayoutContract: Story = {
     expect(body).toHaveStyle({ gap: '8px' });
     expect(getComputedStyle(body).overflow).toBe('visible');
     expect(getComputedStyle(editor).flexGrow).toBe('1');
+
+    await userEvent.click(editor);
+    await waitFor(() => expect(editor).toHaveFocus());
+    await userEvent.type(editor, '모바일 입력');
+    const focusedStyle = getComputedStyle(editor);
+    const borderWidth = focusedStyle.borderWidth;
+    expect(borderWidth).toBe('0px');
+    expect(focusedStyle.outlineStyle).toBe('solid');
+    expect(focusedStyle.outlineWidth).toBe('0px');
+
+    await userEvent.click(canvas.getByRole('button', { name: '글쓰기 닫기' }));
+    await waitFor(() => expect(editor).not.toHaveFocus());
+    expect(getComputedStyle(editor).borderWidth).toBe(borderWidth);
+    expect(getComputedStyle(editor).outlineWidth).toBe('0px');
+    expect(editor).toHaveValue('모바일 입력');
   },
 };
 
@@ -857,7 +893,7 @@ export const MobilePlaygroundContract: Story = {
     const menu = canvas.getByRole('radiogroup', { name: '공개 범위 선택' });
     const trigger = canvas.getByRole('button', { name: '공개 범위: 조용한 공개' });
     expect(within(menu).getAllByRole('radio')).toHaveLength(3);
-    expect(menu.getBoundingClientRect().right).toBe(trigger.getBoundingClientRect().right);
+    expect(menu.getBoundingClientRect().right).toBe(trigger.getBoundingClientRect().right - 16);
 
     await userEvent.click(within(menu).getByRole('radio', { name: '공개' }));
     expect(args.onVisibilityChange).toHaveBeenLastCalledWith('PUBLIC');
@@ -926,6 +962,165 @@ export const OverlayProgressRingContract: Story = {
     expect(ring.querySelectorAll('circle')).toHaveLength(2);
     expect(ring.querySelectorAll('circle')[1]).toHaveAttribute('stroke', '#AE8512');
     expect(ring.parentElement?.lastElementChild).toBe(submit);
+  },
+};
+
+export const OverlayGeometryContract: Story = {
+  ...Playground,
+  args: {
+    body: '오버레이 외곽 높이를 유지할 본문',
+    contentWarning: '',
+    contentWarningExpanded: false,
+    items: readyComposerMedia.slice(0, 1),
+    remaining: 500,
+    surface: 'overlay',
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const target = canvas.getByTestId('post-composer-target');
+    const visibilityTrigger = canvas.getByRole('button', { name: '공개 범위: 조용한 공개' });
+    const submit = canvas.getByRole('button', { name: '게시' });
+    const scroll = canvas.getByTestId('post-composer-scroll');
+    const body = canvas.getByRole('textbox', { name: '게시물 내용' });
+    const gallery = canvas.getByLabelText('첨부 이미지 갤러리, 1개');
+    const galleryShell = gallery.parentElement!;
+    const content = galleryShell.parentElement!;
+    const initialTargetHeight = target.getBoundingClientRect().height;
+    const initialTargetTop = target.getBoundingClientRect().top;
+    const initialVisibilityTop = visibilityTrigger.getBoundingClientRect().top;
+    const initialSubmitTop = submit.getBoundingClientRect().top;
+
+    expect(initialTargetHeight).toBeLessThan(560);
+    expect(body.getBoundingClientRect().height).toBe(100);
+    expect(gallery.getBoundingClientRect().top).toBeCloseTo(
+      body.getBoundingClientRect().bottom + space[12],
+      0,
+    );
+    expect(content.getBoundingClientRect().height).toBeCloseTo(
+      body.getBoundingClientRect().height + space[12] + galleryShell.getBoundingClientRect().height,
+      0,
+    );
+    expect(scroll.scrollHeight).toBe(scroll.clientHeight);
+    scroll.scrollTop = 1;
+    expect(scroll.scrollTop).toBe(0);
+
+    await userEvent.click(canvas.getByRole('button', { name: '콘텐츠 경고 켜기' }));
+    const contentWarning = canvas.getByRole('textbox', { name: '콘텐츠 경고' });
+    const contentWarningTop = contentWarning.getBoundingClientRect().top;
+
+    expect(target.getBoundingClientRect().height).toBeGreaterThan(initialTargetHeight);
+    expect(scroll.scrollTop).toBe(0);
+    expect(scroll.scrollHeight).toBe(scroll.clientHeight);
+    expect(contentWarningTop).toBeGreaterThan(visibilityTrigger.getBoundingClientRect().bottom);
+    expect(getComputedStyle(scroll).overflowY).toBe('auto');
+    scroll.scrollTop = 0;
+
+    await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 1 제거' }));
+
+    expect(target.getBoundingClientRect().top).toBe(initialTargetTop);
+    expect(target.getBoundingClientRect().height).toBeLessThan(initialTargetHeight);
+    expect(visibilityTrigger.getBoundingClientRect().top).toBe(initialVisibilityTop);
+    expect(submit.getBoundingClientRect().top).toBeLessThan(initialSubmitTop);
+    expect(contentWarning.getBoundingClientRect().top).toBe(contentWarningTop);
+    expect(scroll.scrollHeight).toBe(scroll.clientHeight);
+
+    await userEvent.click(body);
+    await userEvent.clear(body);
+    expect(scroll.scrollHeight).toBe(scroll.clientHeight);
+    await userEvent.click(canvas.getByRole('button', { name: '콘텐츠 경고 끄기' }));
+    expect(scroll.scrollHeight).toBe(scroll.clientHeight);
+  },
+};
+
+export const RailGeometryContract: Story = {
+  ...Playground,
+  args: {
+    body: '레일 외곽 높이를 유지할 본문',
+    contentWarning: '경고 문구',
+    contentWarningExpanded: true,
+    items: readyComposerMedia.slice(0, 1),
+    surface: 'rail',
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const target = canvas.getByTestId('post-composer-target');
+    const scroll = canvas.getByTestId('post-composer-scroll');
+    const body = canvas.getByRole('textbox', { name: '게시물 내용' });
+    const expand = canvas.getByRole('button', { name: 'Composer 확장' });
+    const visibility = canvas.getByRole('button', { name: '공개 범위: 조용한 공개' });
+    const gallery = canvas.getByLabelText('첨부 이미지 갤러리, 1개');
+    const initialTargetHeight = target.getBoundingClientRect().height;
+    const visibilityTop = visibility.getBoundingClientRect().top;
+    const submitTop = canvas.getByRole('button', { name: '게시' }).getBoundingClientRect().top;
+
+    expect(body.getBoundingClientRect().height).toBe(100);
+    expect(initialTargetHeight).toBeGreaterThan(420);
+    expect(gallery.getBoundingClientRect().height).toBe(112);
+    expect(scroll.contains(gallery)).toBe(false);
+    expect(gallery.getBoundingClientRect().top).toBeGreaterThanOrEqual(
+      scroll.getBoundingClientRect().bottom,
+    );
+    expect(scroll.scrollHeight).toBe(scroll.clientHeight);
+    scroll.scrollTop = 1;
+    expect(scroll.scrollTop).toBe(0);
+    expect(visibility.getBoundingClientRect().left).toBeCloseTo(
+      body.getBoundingClientRect().left,
+      0,
+    );
+    expect(expand.firstElementChild?.getBoundingClientRect().right).toBeCloseTo(
+      body.getBoundingClientRect().right,
+      0,
+    );
+    const contentWarning = canvas.getByRole('textbox', { name: '콘텐츠 경고' });
+    expect(contentWarning.getBoundingClientRect().top).toBeCloseTo(
+      visibility.getBoundingClientRect().bottom + space[12],
+      0,
+    );
+
+    await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 1 제거' }));
+    await userEvent.click(canvas.getByRole('button', { name: '콘텐츠 경고 끄기' }));
+
+    expect(target.getBoundingClientRect().height).toBeLessThan(initialTargetHeight);
+    expect(
+      canvas.getByRole('button', { name: '공개 범위: 조용한 공개' }).getBoundingClientRect().top,
+    ).toBe(visibilityTop);
+    expect(canvas.getByRole('button', { name: '게시' }).getBoundingClientRect().top).toBeLessThan(
+      submitTop,
+    );
+  },
+};
+
+export const RailFocusBoundaryContract: Story = {
+  ...RailEmptyPublic,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = canvas.getByRole('textbox', { name: '게시물 내용' });
+    const editor = canvas.getByTestId('post-composer-editor');
+    const baselineBorderColor = getComputedStyle(editor).borderColor;
+
+    await userEvent.click(body);
+    await waitFor(() => expect(body).toHaveFocus());
+    expect(getComputedStyle(editor).borderColor).toBe('rgb(252, 231, 154)');
+
+    body.blur();
+    await waitFor(() => expect(body).not.toHaveFocus());
+    expect(getComputedStyle(editor).borderColor).toBe(baselineBorderColor);
+  },
+};
+
+export const RailBodyMaxHeightContract: Story = {
+  ...RailEmptyPublic,
+  args: { ...RailEmptyPublic.args, body: '긴 본문\n'.repeat(40) },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = canvas.getByRole('textbox', { name: '게시물 내용' });
+    const scroll = canvas.getByTestId('post-composer-scroll');
+
+    await waitFor(() => expect(body.getBoundingClientRect().height).toBe(300));
+    expect(body.scrollHeight).toBeGreaterThan(body.clientHeight);
+    expect(scroll.scrollHeight).toBe(scroll.clientHeight);
+    scroll.scrollTop = 1;
+    expect(scroll.scrollTop).toBe(0);
   },
 };
 
@@ -1048,6 +1243,21 @@ export const MobileKeyboardCWEditorGeometryContract: Story = {
   },
   play: async ({ canvasElement }) => {
     expectMobileEditorFitsMediaShelf(canvasElement);
+    const canvas = within(canvasElement);
+    const contentWarning = canvas.getByRole('textbox', { name: '콘텐츠 경고' });
+    await userEvent.click(contentWarning);
+    await waitFor(() => expect(contentWarning).toHaveFocus());
+    await userEvent.type(contentWarning, ' 추가');
+    const focusedStyle = getComputedStyle(contentWarning);
+    const borderWidth = focusedStyle.borderWidth;
+    expect(borderWidth).toBe('1px');
+    expect(focusedStyle.outlineWidth).toBe('0px');
+
+    await userEvent.click(canvas.getByRole('textbox', { name: '게시물 내용' }));
+    await waitFor(() => expect(contentWarning).not.toHaveFocus());
+    expect(getComputedStyle(contentWarning).borderWidth).toBe(borderWidth);
+    expect(getComputedStyle(contentWarning).outlineWidth).toBe('0px');
+    expect(contentWarning).toHaveValue('스포일러가 포함되어 있어요. 추가');
   },
 };
 
@@ -1098,7 +1308,9 @@ const styles = StyleSheet.create({
   },
   pickerPanel: { position: 'absolute', zIndex: 1 },
   mobilePickerPanel: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
+  railTarget: { maxWidth: 326, width: '100%' },
   railMediaFixture: { maxWidth: 326, width: '100%' },
+  overlayTarget: { maxWidth: 600, width: '100%' },
   overlayContent: { width: '100%' },
   overlayHeader: {
     alignItems: 'center',

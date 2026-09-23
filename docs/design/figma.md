@@ -247,7 +247,9 @@ DSN-51의 플랫폼별 완료 판정은 다음처럼 Figma 확인과 runtime 검
 - Mobile 검색의 Initial은 탭 없이 유지한다. Loading·No results·Initial error·Cached error·People success와
   Popular·Latest·Media 미구현 상태는 실제 Android `TabList`의 `인기 / 최신 / 미디어 / 사람` 4탭을 사용한다.
   People 상태는 `사람`을 선택하고 `ProfileListItem`·64px Profile skeleton만 표시하며, 나머지 세 탭은 임의 결과 대신
-  `Product not implemented`를 유지한다. iOS 결과 consumer도 같은 4탭의 iOS `TabList`를 사용한다.
+  `Product not implemented`를 유지한다. iOS 결과 consumer도 같은 4탭의 iOS `TabList`를 사용한다. Production에서
+  Search와 Home/Local처럼 route 상태를 고르는 consumer는 공용 visual source 위의 `RouteTabList` binding을 사용한다.
+  Web은 canonical URL로 이동하고 Android/iOS는 현재 route 파라미터와 콘텐츠만 바꿔 Stack 전환을 만들지 않는다.
 - Mobile [`followers`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1943-1852)·[`following`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1943-1998)은
   ProfileHero 없이 `~님의 팔로워`·`~님의 팔로잉` PageHeader와 Android `팔로워 / 팔로잉` TabList를 가진 독립 route다.
   이 화면 구조는 PROD-785가 공용 Expo Web·Android·iOS route에 이관하며, Relay connection·pagination lifecycle은
@@ -289,8 +291,8 @@ DSN-51의 플랫폼별 완료 판정은 다음처럼 Figma 확인과 runtime 검
 - 같은 section의 Mobile [`blocking 7580:14180`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7580-14180)은
   기존 Android Dark Profile route chrome 안의 identity-free `StateView`와 Secondary `차단 해제` 조립을 물리적 참고
   자료로 유지한다. Full Web [`4592:16216`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4592-16216)도
-  같은 참고 범위다. Profile route의 콘텐츠 경고 문구·기간은 후속 디자인 계약에서 정하며, 차단 해제의 data와
-  lifecycle은 Product 후속 범위다.
+  같은 참고 범위다. Profile route의 콘텐츠 경고는 `차단한 프로필의 게시물입니다`와 `게시물 보기`를 사용하고,
+  현재 Profile handle·selected actor lifecycle에서 사용자가 명시적으로 확인하기 전까지 유지한다. 차단 해제의 data와 lifecycle은 Product 후속 범위다.
 - 같은 section의 Mobile muted direct Profile Target [`7541:14061`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7541-14061)은
   기존 Android baseline Profile shell과 `ProfileHero.Muted=true` 상태·해제 action의 배치 근거로만 사용한다.
   이 Target에 남아 있는 `PostContent.CW=MutedCollapsed`와 Mute disclosure는 [Profile Mute 조회 정책](../domain/objects/profile-mute.md#조회-정책)과
@@ -343,6 +345,30 @@ route shell 안의 current row를 `PostLayout`으로 조립해 Collapsed
 중첩 `PostContent`의 `CW`만 교체하며 세로 Auto Layout이 `PostActionBar`와 후속 row를 다시 배치한다. 기존 canonical
 화면과 Dark consumer는 변경하지 않았고, disclosure interaction·공유 reveal state·VoiceOver·TalkBack·실제 hit area는
 runtime 검증 범위다.
+
+공용 Content Warning의 Production 표현은 [PROD-989](https://linear.app/byulmaru/issue/PROD-989)가
+다음 계약으로 이관한다.
+
+- 경고 행 전체가 하나의 disclosure button이다. 장식용 `EyeOff` 20px, 작성자 summary와 content meta,
+  오른쪽 `보기`·`다시 가리기`를 배치하고 현재 공개 여부를 expanded 상태로 전달한다.
+- summary와 action은 `UI/Label/M`, meta는 `UI/Copy/S`를 사용한다. summary는 긴 문구를 줄바꿈하고
+  action은 한 줄을 유지한다. 실제 서비스에서는 SUIT·Pretendard를 사용한다.
+- 배경은 `backgroundSurface`, radius는 16, 수평·수직 padding은 24·8이다. 아이콘과 copy 간격은 16,
+  copy와 action 간격은 8, summary와 meta 간격은 4다. 행의 최소 높이 56은 Web·iOS·Android의 입력 target 기준을 충족하며
+  긴 summary와 글자 확대에 따라 높이가 늘어난다. 공개된 content는 경고 행 아래 8px에 배치한다.
+  실제 화면 검토를 반영해 Figma의 수평 padding 12px은 24px로, 아이콘과 copy 간격 8px은 16px로,
+  radius 8px은 16px로 조정한다.
+- meta는 `본문` 또는 `본문 · 이미지 N개`로, 해당 Post의 첨부 이미지 수를 표시한다.
+- 같은 canonical `Post.id`의 공개·다시 가리기는 지원 surface에서 공유한다. Profile·session 전환 시
+  초기화하며 Sensitive Media의 공개 상태는 별도로 유지한다. `Reason=Muted`는 이관 대상이 아니다.
+- Quote는 기존 Post별 가림 범위를 유지한다. 바깥 Post의 CW를 접어도 인용 원문 카드는 남으며,
+  원문의 CW는 원문 `Post.id`로 독립 적용한다. Figma의 Quote 전체 가림 조합은 이번 이관에서 적용하지 않는다.
+- Storybook은 실제 공용 UI와 `PostListItem`·`PostLayout` 소비를 렌더링한다. Playground는 수동
+  Controls·Actions, Tests는 공개·다시 가리기와 keyboard·focus·접근성 상태 검증을 소유한다.
+
+실제 Home·Local·Profile·Bookmark·상세·Thread 및 source surface의 연결과 Web·iOS·Android runtime,
+VoiceOver·TalkBack·Native touch target 검증은 후속 [PROD-990](https://linear.app/byulmaru/issue/PROD-990)가
+소유한다. Storybook과 코드 수준의 target 검증은 이 runtime 완료 판정을 대신하지 않는다.
 
 2026-09-03에는 공용 [`PostContentWarning`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5001-14786)에
 `Reason=ContentWarning|Muted`를 추가했다. 기존 `Reason=ContentWarning`의 `EyeOff`, 입력 가능한 summary와
@@ -536,9 +562,11 @@ documentation·state specimen을 두 번째 행에 둔다.
   편집은 선택 attachment에, Sensitive는 Post 전체에 적용한다. Rail에서 편집을 시작해도 같은 Overlay의 editor
   view로 직접 전환한다.
 - `< compact` Web과 Android/iOS는 별도 fullscreen editor를 사용한다. 모바일의 가로로 긴 preview는 잘라내지 않고
-  가용 폭 안에 `contain`한다. scrim, focus trap·restore, Escape,
-  discard confirmation, viewport max-height·body scroll, safe area와 mobile keyboard avoidance lifecycle은
-  Product의 상위 Overlay 구현이 소유한다.
+  가용 폭 안에 `contain`한다. scrim, focus trap·restore, Escape, viewport max-height·body scroll, safe area와
+  mobile keyboard avoidance lifecycle은 Product의 상위 Overlay 구현이 소유한다. Overlay close는 같은 Profile
+  lifecycle의 draft를 보존하므로 별도 discard confirmation을 표시하지 않는다. Web의 dirty draft는 새로고침·탭 닫기
+  같은 문서 unload에서만 브라우저 기본 확인으로 보호하며, Android·iOS 강제 종료 전 확인과 종료 후 draft 영속화는
+  이 계약에 포함하지 않는다.
 - `12 Exploration`에 남긴 기존 `600×624`·`SquarePen` PC editor는 `Superseded` decision history다. 새 consumer는
   만들지 않으며 현재 PC 계약은 `__ComposerMediaItem`의 `Pen`과 `ComposerMediaEditor` `920×678` source만 따른다.
 - 현재 Typography line-height FLOAT 변수는 `115`·`130`·`150` 같은 백분율 값이지만 Plugin API binding에서는 px로

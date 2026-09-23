@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { graphql, useLazyLoadQuery, usePaginationFragment } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
+import { PageHeader } from '@/components/PageHeader';
 import { ProfileListItem } from '@/components/profile/ProfileListItem';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { NavigationLink } from '@/components/shell/NavigationLink';
@@ -22,9 +23,10 @@ import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { getShellLayout } from '@/components/shell/shellLayout';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
+import { RouteTabList } from '@/components/ui/RouteTabList';
 import { SearchToolbar } from '@/components/ui/SearchToolbar';
 import { StateView } from '@/components/ui/StateView';
-import { Tab, TabList } from '@/components/ui/Tabs';
+import { Tab } from '@/components/ui/Tabs';
 import { addRecentSearch, readRecentSearches, writeRecentSearches } from '@/lib/recentSearches';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
@@ -365,23 +367,19 @@ export default function SearchScreen() {
   const isCurrentSearchTarget = (nextQuery: string, nextTab: SearchTab) =>
     nextQuery.trim() === query && nextTab === activeTab;
 
-  const navigate = (
-    nextQuery: string,
-    tab: SearchTab = activeTab,
-    source: 'keyboard' | 'tab' = 'keyboard',
-  ) => {
+  const navigate = (nextQuery: string) => {
     const normalized = nextQuery.trim();
     if (normalized) {
       remember(normalized);
-      trackAnalytics('search_submitted', { source, tab });
+      trackAnalytics('search_submitted', { source: 'keyboard', tab: activeTab });
     }
-    if (isCurrentSearchTarget(normalized, tab)) {
+    if (isCurrentSearchTarget(normalized, activeTab)) {
       setFocused(false);
       return;
     }
     preserveQueryNavigationPosition();
     setFocused(false);
-    router.push(searchHref(normalized, tab));
+    router.push(searchHref(normalized, activeTab));
   };
 
   const clearSearch = () => {
@@ -406,11 +404,87 @@ export default function SearchScreen() {
     return <NavigationLink href={searchHref('', activeTab)}>{linkControl}</NavigationLink>;
   };
 
+  const nativeSearchHeader = !web ? (
+    <PageHeader>
+      <View
+        accessibilityLabel="검색"
+        onBlur={leaveSearchFocus}
+        onFocus={keepSearchFocused}
+        style={styles.nativeSearchHeader}
+      >
+        {phase === 'before' ? (
+          <IconButton
+            aria-controls={shellChrome?.navigationDrawerOpen ? 'mobile-sidebar' : undefined}
+            accessibilityLabel="메뉴 열기"
+            accessibilityState={{ expanded: shellChrome?.navigationDrawerOpen ?? false }}
+            controlRef={shellChrome?.navigationDrawerTriggerRef}
+            feedback="opacity"
+            onFocus={(event) => event.stopPropagation()}
+            onPress={shellChrome?.openNavigationDrawer}
+            style={styles.iconButton}
+            targetSize={44}
+            visualSize={44}
+          >
+            <Menu color={theme.text} size={24} strokeWidth={2} />
+          </IconButton>
+        ) : (
+          <NavigationLink href={searchHref('', activeTab)}>
+            <Pressable
+              accessibilityLabel="뒤로"
+              accessibilityRole="link"
+              onPress={() => {
+                preserveQueryNavigationPosition(false);
+                setInput('');
+                setFocused(false);
+              }}
+              onPressIn={keepSearchFocused}
+              style={styles.iconButton}
+            >
+              <ArrowLeft color={theme.textSecondary} size={20} strokeWidth={2} />
+            </Pressable>
+          </NavigationLink>
+        )}
+        <View
+          style={[styles.inputShell, { backgroundColor: theme.surface }]}
+          testID="search-input-shell"
+        >
+          <SearchIcon color={theme.textSecondary} size={20} strokeWidth={2} />
+          <TextInput
+            ref={inputRef}
+            accessibilityLabel="검색어"
+            autoCapitalize="none"
+            autoCorrect={false}
+            onChangeText={setInput}
+            onSubmitEditing={() => navigate(input)}
+            placeholder="검색어를 입력하세요"
+            placeholderTextColor={theme.textSecondary}
+            returnKeyType="search"
+            style={[styles.input, { color: theme.text }]}
+            value={input}
+          />
+          {input ? (
+            <IconButton
+              accessibilityLabel="검색 지우기"
+              onPress={clearSearch}
+              onPressIn={keepSearchFocused}
+              style={styles.clearButton}
+              targetSize={44}
+              visualSize={44}
+            >
+              <X color={theme.textSecondary} size={18} strokeWidth={2} />
+            </IconButton>
+          ) : null}
+        </View>
+      </View>
+    </PageHeader>
+  ) : null;
+
   return (
     <ScrollView
-      contentContainerStyle={[styles.root, web && styles.webRoot]}
+      contentContainerStyle={[styles.root, web ? styles.webRoot : styles.nativeRoot]}
       keyboardShouldPersistTaps="handled"
     >
+      {nativeSearchHeader}
       <View onBlur={leaveSearchFocus} onFocus={keepSearchFocused}>
         {web ? (
           <SearchToolbar
@@ -434,80 +508,7 @@ export default function SearchScreen() {
             renderLeadingControl={renderLeadingControl}
             value={input}
           />
-        ) : (
-          <View
-            accessibilityLabel="검색"
-            style={[styles.searchBar, { backgroundColor: theme.card, borderColor: theme.border }]}
-          >
-            {phase === 'before' && mobileWeb ? (
-              <IconButton
-                aria-controls={shellChrome?.navigationDrawerOpen ? 'mobile-sidebar' : undefined}
-                accessibilityLabel="메뉴 열기"
-                accessibilityState={{ expanded: shellChrome?.navigationDrawerOpen ?? false }}
-                controlRef={shellChrome?.navigationDrawerTriggerRef}
-                feedback="opacity"
-                onFocus={(event) => event.stopPropagation()}
-                onPress={shellChrome?.openNavigationDrawer}
-                style={styles.iconButton}
-                targetSize={44}
-                visualSize={44}
-              >
-                <Menu color={theme.text} size={24} strokeWidth={2} />
-              </IconButton>
-            ) : phase !== 'before' ? (
-              <NavigationLink href={searchHref('', activeTab)}>
-                <Pressable
-                  accessibilityLabel="뒤로"
-                  accessibilityRole="link"
-                  onPress={() => {
-                    preserveQueryNavigationPosition(false);
-                    setInput('');
-                    setFocused(false);
-                  }}
-                  onPressIn={keepSearchFocused}
-                  style={styles.iconButton}
-                >
-                  <ArrowLeft color={theme.textSecondary} size={20} strokeWidth={2} />
-                </Pressable>
-              </NavigationLink>
-            ) : null}
-            <View
-              style={[
-                styles.inputShell,
-                web && styles.webInputShell,
-                { backgroundColor: theme.surface },
-              ]}
-              testID="search-input-shell"
-            >
-              <SearchIcon color={theme.textSecondary} size={20} strokeWidth={2} />
-              <TextInput
-                ref={inputRef}
-                accessibilityLabel="검색어"
-                autoCapitalize="none"
-                autoCorrect={false}
-                onChangeText={setInput}
-                onSubmitEditing={() => navigate(input)}
-                placeholder="검색어를 입력하세요"
-                placeholderTextColor={theme.textSecondary}
-                returnKeyType="search"
-                style={[styles.input, { color: theme.text }]}
-                value={input}
-              />
-              {input ? (
-                <IconButton
-                  accessibilityLabel="검색 지우기"
-                  onPress={clearSearch}
-                  onPressIn={keepSearchFocused}
-                  style={styles.clearButton}
-                  targetSize={44}
-                  visualSize={44}
-                >
-                  <X color={theme.textSecondary} size={18} strokeWidth={2} />
-                </IconButton>
-              ) : null}
-            </View>
-          </View>
-        )}
+        ) : null}
 
         {phase === 'input' ? (
           <View style={[styles.recent, web && styles.webContent]}>
@@ -567,20 +568,26 @@ export default function SearchScreen() {
 
       {phase === 'results' ? (
         <View style={web && styles.webContent}>
-          <TabList
+          <RouteTabList
             accessibilityLabel="검색 결과 유형"
+            href={(tab) => searchHref(query, tab)}
+            param="tab"
             onValueChange={(tab) => {
-              if (tab !== activeTab) {
-                navigate(query, tab, 'tab');
+              if (query) {
+                remember(query);
+                trackAnalytics('search_submitted', { source: 'tab', tab });
               }
+              preserveQueryNavigationPosition();
+              setFocused(false);
             }}
             value={activeTab}
             variant="underline"
+            webAction="push"
           >
             {tabs.map((tab) => (
               <Tab key={tab.value} option={tab} />
             ))}
-          </TabList>
+          </RouteTabList>
           {activeTab === SearchTab.PEOPLE ? (
             <PeopleResults handle={query} />
           ) : (
@@ -612,19 +619,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
     paddingVertical: 0,
   },
+  nativeRoot: { paddingTop: 0 },
   webContent: {
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.xxl,
   },
-  searchBar: {
+  nativeSearchHeader: {
     alignItems: 'center',
-    borderBottomWidth: 1,
+    flex: 1,
     flexDirection: 'row',
     gap: spacing.sm,
-    height: 56,
-    paddingHorizontal: spacing.lg,
   },
-  webSearchBar: { height: 64 },
   iconButton: { alignItems: 'center', height: 44, justifyContent: 'center', width: 44 },
   inputShell: {
     alignItems: 'center',
@@ -634,7 +639,6 @@ const styles = StyleSheet.create({
     height: 44,
     paddingLeft: spacing.lg,
   },
-  webInputShell: { height: 48 },
   input: {
     flex: 1,
     fontFamily: fontFamilies.ui,

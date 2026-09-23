@@ -163,21 +163,21 @@ Docker와 GitHub production release가 같은 공개 PostHog key·host를 Web bu
 - [x] 5.2 GitHub production release workflow가 같은 repository variables를 Docker build에 주입하고 OpenPanel 전환 순서를 유지한다.
 - [x] 5.3 가짜 공개 설정 production-equivalent build와 image inspection으로 공개 설정·credential 경계를 검증한다.
 
-## 9. PROD-839 OpenPanel 운영 설정 정리 (PR Ready·merge 비차단 follow-up)
+## 9. PROD-839 OpenPanel 운영 설정 정리 (완료)
 
 **Authority / Provenance:** [Linear `PROD-839`](https://linear.app/byulmaru/issue/PROD-839), PROD-891의 채널 설정, PROD-833과 `docs/operations/production-release.md`의 SHA 이미지 승격·rollback 계약.
 
 **Deliverable:** 지원 build·release·rollback 경로가 OpenPanel 없이 동작하고 불필요한 외부 설정이 남지 않는 상태와 값 없는 전후 증거를 PROD-795에 인계한다.
 
-**Guardrail:** 지원 대상의 비의존을 확인하기 전에는 설정을 제거하지 않으며, 미확인 범위를 부재로 처리하거나 실제 값·credential·사용자 데이터를 기록하지 않는다. 현재 채널 설정·SHA 승격·prod 수집 중단과 다른 provider 설정을 보존한다.
+**Guardrail:** 지원 대상의 비의존을 확인하기 전에는 설정을 제거하지 않으며, 미확인 범위를 부재로 처리하거나 실제 값·credential·사용자 데이터를 기록하지 않는다. 현재 채널 설정·SHA 승격과 다른 provider 설정을 보존한다. PR #955 이후 무전송 확인 대상은 OpenPanel이며 PostHog Product Analytics 요청은 실패로 취급하지 않는다.
 
-**Progress (2026-09-18):** `af50250ef`에서 source 주입이 이미 제거됐고 repository·5개 environment의 names-only inventory를 완료했다. Repository scope의 `EXPO_PUBLIC_OPENPANEL_CLIENT_ID`는 남아 있으며 지원 artifact별 비의존, 삭제 후 증거, 실행 검증과 PROD-795 인계는 post-merge operational/delivery follow-up으로 Pending이다. 명시된 pre-merge acceptance가 아니므로 이 Pending 상태만으로 PR Ready·승인·merge를 막지 않는다.
+**Progress (2026-09-22):** `af50250ef`의 source 주입 제거, 식별된 세 artifact의 비의존, production-equivalent·내부 production 실행 검증을 확인했다. 사용자 수동 삭제 후 18:23:41 KST names-only API로 repository scope의 `EXPO_PUBLIC_OPENPANEL_CLIENT_ID` 부재와 5개 environment의 OpenPanel 변수 부재를 재확인했다. 전후 목록·source SHA·build/release run·digest·실행 결과를 [PROD-795에 인계했다](https://linear.app/byulmaru/issue/PROD-795#comment-61cf8b63-7ce8-414f-9ce4-0666a6e6693f). 고정 rollback 지원 집합은 기존 결정이 없으므로 새 정책이나 과거 artifact 전체 검증을 요구하지 않는다. 공개 `https://kos.moe` Network와 문서·고지 잔여 참조는 미확인/후속 범위로 인계했으며 완료로 간주하지 않는다. PR #733의 과거 Ready·merge gate는 재개하지 않는다.
 
-- [ ] 9.1 같은 지원 release line과 지원 canonical build·SHA release·rollback 및 지원되는 canonical rebuild의 source SHA·build run·digest별 OpenPanel 비의존을 확인하고 설정 범위·미확인 항목을 목록화한다.
-- [ ] 9.2 이미 제거된 주입의 선행 SHA·현재 상태를 기록하고, gate 충족 후 남은 source 참조만 정리한다. 현재 채널 설정·SHA 승격·prod 수집 중단을 보존한다.
-- [ ] 9.3 gate와 대상 범위를 재확인한 뒤 실제 남은 외부 OpenPanel 전용 설정을 제거하고 이름·환경·범위·존재 여부만 전후 기록에 남긴다.
-- [ ] 9.4 격리된 가짜 설정의 활성화·누락 no-op, 현재 prod 무전송, production-equivalent Web export·image inspection과 지원 release·rollback 검증으로 OpenPanel 비의존을 입증한다.
-- [ ] 9.5 제거 전후 목록·환경·검증 결과·문서 잔여 참조·남은 production 확인 사항을 실제 값 없이 PROD-795에 인계하고 PROD-575의 acceptance 입력을 식별한다.
+- [x] 9.1 같은 지원 release line과 지원 canonical build·SHA release·rollback 및 지원되는 canonical rebuild의 source SHA·build run·digest별 OpenPanel 비의존을 확인하고 설정 범위·미확인 항목을 목록화한다.
+- [x] 9.2 이미 제거된 주입의 선행 SHA·현재 상태를 기록하고, gate 충족 후 남은 source 참조만 정리한다. 현재 채널 설정·SHA 승격과 PostHog 설정을 보존한다.
+- [x] 9.3 gate와 대상 범위를 재확인한 뒤 실제 남은 외부 OpenPanel 전용 설정을 제거하고 이름·환경·범위·존재 여부만 전후 기록에 남긴다.
+- [x] 9.4 격리된 가짜 설정의 활성화·누락 no-op, 현재 prod OpenPanel 무전송, production-equivalent Web export·image inspection과 지원 release·rollback 검증으로 OpenPanel 비의존을 입증한다.
+- [x] 9.5 제거 전후 목록·환경·검증 결과·문서 잔여 참조·남은 production 확인 사항을 실제 값 없이 PROD-795에 인계하고 PROD-575의 acceptance 입력을 식별한다.
 
 ## 6. PROD-795 개인정보·운영 통합
 

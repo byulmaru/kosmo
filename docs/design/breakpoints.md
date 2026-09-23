@@ -15,7 +15,7 @@ KOSMO 웹의 메인 3분할 레이아웃은 트위터/X처럼 화면 폭에 따�
 - **`compact`(768px, 기존 `md`)** = 모바일 ↔ 데스크톱 경계. 미만은 하단 탭 바 + 드로어 사이드바, 이상은 사이드바가 항상 보인다.
 - **`full`(1280px, 기존 `xl`)** = 좌측 풀 사이드바(프로필 헤더 + 라벨)와 우측 컴포저(우측 레일)가 함께 등장해 풀 3분할이 된다. `compact`~`full`는 좌측이 아이콘 전용 레일이고 우측 레일이 없다.
 
-모바일 셸의 화면 헤더 높이는 `64px`이며 Android/iOS safe-area inset은 이 높이 바깥에서 셸이 추가한다. `< compact` Web에서 `/home`은 메뉴 버튼과 중앙 브랜드 마크를, `/notifications`는 메뉴 버튼과 화면 제목을 같은 app bar에 표시한다. 게시글 상세는 같은 위치에서 메뉴 대신 뒤로가기를 표시하고 `게시글` 제목을 함께 렌더링한다. 공개 Profile Home은 resolved·loading·query error·missing 상태 모두 route가 표시 이름 또는 빈 제목을 가진 공용 PageHeader를 소유하므로 셸 헤더를 중복 렌더링하지 않는다. 북마크 등 다른 route의 PageHeader 정책은 유지한다. Android/iOS에서는 `/home`만 셸이 헤더를 소유하고 다른 route는 기존 헤더를 유지한다. `compact`와 `full` Web에서는 모바일 셸 헤더가 없으므로 각 route가 기존 브랜드·텍스트·뒤로가기 헤더를 소유한다.
+모바일 셸의 화면 헤더 높이는 `64px`이다. `< compact` Web에서 `/home`은 메뉴 버튼과 중앙 브랜드 마크를, `/notifications`는 메뉴 버튼과 화면 제목을 같은 app bar에 표시한다. 게시글 상세는 같은 위치에서 메뉴 대신 뒤로가기를 표시하고 `게시글` 제목을 함께 렌더링한다. 공개 Profile Home은 resolved·loading·query error·missing 상태 모두 route가 표시 이름 또는 빈 제목을 가진 공용 PageHeader를 소유하므로 셸 헤더를 중복 렌더링하지 않는다. 북마크 등 다른 route의 PageHeader 정책은 유지한다. Android/iOS에서는 route의 같은 `PageHeader` 선언을 Native Stack header에 표시하고 Native `PageHeader` wrapper가 safe area를 처리한다. leading이 없는 화면은 drawer trigger를 기본으로 사용하고, 프로필·게시글·설정 detail처럼 뒤로가기를 지정한 화면은 그 action을 유지한다. `UniversalShell`은 별도 menu-only header를 추가하지 않으므로 Native에서도 헤더가 한 줄만 존재한다. Native drawer의 leading-edge 열기 gesture는 `/home`, `/local`, `/search`, `/notifications`에서만 활성화하며, Profile Home, Post detail, Profile followers/following 및 하위 route, settings와 기타 pushed/detail route에서는 비활성화한다. 이 제한은 leading-edge gesture에만 적용하고, 모든 route에서 명시적으로 실행한 메뉴·context·profile-switcher 열기는 유지하며 gesture 비활성화 route로 전환해도 이미 열린 drawer를 자동으로 닫지 않는다. `compact`와 `full` Web에서는 모바일 셸 헤더가 없으므로 각 route가 기존 브랜드·텍스트·뒤로가기 헤더를 소유한다.
 
 각 컬럼 폭(풀 사이드바 `320px` / 아이콘 레일 `80px`, 중앙 최대 `600px`, 우측 `320px`)을 더하면 `full`(1280px) 경계에서 풀 3분할(`320`+`600`+`320` = `1240px`)이 중앙 피드를 `600px`로 확보한 채 들어맞는다. 풀 3분할 등장을 1024px가 아닌 1280px로 둬, 1024~1279px 구간에서는 중앙 피드를 비좁게 누르는 대신 아이콘 레일 단계로 폭을 확보한다.
 
@@ -30,12 +30,12 @@ PostComposer presentation은 `Rail`과 `Overlay`만 사용한다. 중앙 timelin
 
 Desktop Rail·Overlay의 본문 입력은 텍스트 줄 수에 따라 자동으로 늘어나고 Media·CW도 같은 content-flow에 합류한다. Overlay는 viewport 상·하 `48px` gutter를 외곽 최대 높이로 사용하며, 상한에 닿으면 외곽은 더 늘어나지 않고 body·Media 영역만 scroll한다. Rail에는 외곽 최대 높이를 두지 않고 본문 TextInput만 `300px`에서 내부 scroll로 전환한다.
 
-- `< compact`: 하단 탭 바의 글쓰기가 유일한 shell-level 진입점이며 mobile fullscreen Overlay를 연다. 게시 성공 뒤에는 timeline으로 돌아간다. mobile drawer에는 중복 글쓰기 버튼을 표시하지 않는다.
+- `< compact`: 하단 탭 바의 글쓰기가 유일한 shell-level 진입점이며 mobile fullscreen Overlay를 연다. Native fullscreen은 safe area를 포함한 불투명 composer surface로 화면을 채우고 scrim·overlay elevation·backdrop dismiss를 사용하지 않는다. 게시 성공 뒤에는 timeline으로 돌아간다. mobile drawer에는 중복 글쓰기 버튼을 표시하지 않는다.
 - `compact`~`full`: 우측 레일이 없으므로 아이콘 레일의 글쓰기 버튼이 desktop modal Overlay를 연다.
 - `≥ full`: 우측 레일의 embedded PostComposer가 기본 작성 surface다. 별도 큰 글쓰기 CTA를 추가하지 않고 composer header의 Expand action으로 desktop modal Overlay를 연다. 사이드바와 mobile drawer에는 중복 글쓰기 버튼을 표시하지 않는다.
-- `Surface=Overlay`에서는 composer-level Expand를 숨기고 `Surface=Rail`에서만 표시한다. Modal의 close·focus·Escape·backdrop, desktop 가운데 content scroll, mobile keyboard avoidance와 게시 후 복귀는 consumer/runtime가 소유한다. 내부 close는 같은 Profile lifecycle의 draft를 보존하므로 별도 폐기 확인을 표시하지 않는다. Web은 본문·CW·Media(업로드 중·실패 상태 포함) 또는 기본값과 다른 공개 범위가 남아 있을 때만 `beforeunload`를 연결해 새로고침·탭 닫기 같은 문서 unload에서 브라우저 기본 확인을 표시하고, clean 상태가 되면 즉시 해제한다. Android·iOS 강제 종료 전 확인이나 종료 후 draft 영속화는 이 계약에 포함하지 않는다.
+- `Surface=Overlay`에서는 composer-level Expand를 숨기고 `Surface=Rail`에서만 표시한다. Modal의 close·focus·Escape, desktop backdrop과 가운데 content scroll, mobile keyboard avoidance·platform back·게시 후 복귀는 consumer/runtime가 소유한다. Native mobile fullscreen은 backdrop tap으로 닫지 않는다. 내부 close는 같은 Profile lifecycle의 draft를 보존하므로 별도 폐기 확인을 표시하지 않는다. Web은 본문·CW·Media(업로드 중·실패 상태 포함) 또는 기본값과 다른 공개 범위가 남아 있을 때만 `beforeunload`를 연결해 새로고침·탭 닫기 같은 문서 unload에서 브라우저 기본 확인을 표시하고, clean 상태가 되면 즉시 해제한다. Android·iOS 강제 종료 전 확인이나 종료 후 draft 영속화는 이 계약에 포함하지 않는다.
 
-PROD-797에서 Full Rail·compact Overlay·mobile fullscreen의 shell 진입을 Production에 연결했다. Web component·Storybook interaction으로 진입, draft 보존, dirty draft의 unload 보호, 닫기와 focus 복귀를 확인했으며 Android/iOS의 keyboard·back·safe area·touch/focus는 실제 runtime 검증 전이다.
+PROD-797에서 Full Rail·compact Overlay·mobile fullscreen의 shell 진입을 Production에 연결했다. Web component·Storybook interaction으로 진입, draft 보존, dirty draft의 unload 보호, 닫기와 focus 복귀를 확인했다. PROD-965에서 iOS fullscreen surface와 safe area는 확인했으며 Android/iOS의 keyboard·back·touch/focus는 실제 runtime 검증 전이다.
 
 ## Web 검색 상단바
 
@@ -50,7 +50,7 @@ PROD-797에서 Full Rail·compact Overlay·mobile fullscreen의 shell 진입을 
 - 검색 초기화 뒤로가기는 현재 `tab`을 유지하면서 검색어와 `q`를 비우고 포커스를 해제한다. 입력 내부 지우기는
   포커스를 유지하며, browser history 뒤로가기와 `q`·`tab` deep link는 기존 동작을 유지한다.
 - 모바일 검색 상태에서도 왼쪽 가장자리 스와이프로 drawer를 열 수 있어야 한다.
-- Android/iOS에는 이 검색 상단바 통합을 적용하지 않는다.
+- Android/iOS에서는 같은 검색 상태와 입력을 단일 Native Stack PageHeader에 표시하고, 본문에 검색 도구막대를 중복 렌더링하지 않는다.
 
 ## 공개 정책 문서 진입
 
@@ -185,8 +185,12 @@ Web profile picker는 breakpoint별 사이드바 구조에 맞는 surface를 사
   trigger 재실행, full·compact 바깥 pointer close 또는 `Escape`처럼 사용자가 명시적으로 닫으면 `open=false`,
   `creating=false`, 빈 handle과 오류 없음으로 초기화한다. 바깥 pointer close는 이벤트 기본 동작을 막지 않아
   pointer 대상의 브라우저 기본 focus를 따른다. `Escape`는 trigger focus를 복원한다. Target도 상위 modal 내부
-  pointer 이벤트와 modal이 떠 있는 동안의 `Escape`로 picker를 닫거나 trigger로 focus를 옮기지 않는다. mobile Web drawer의
-  chevron 표시 외 close transition과 Android/iOS의 기존 상태 동작은 이 계약으로 바꾸지 않는다.
+  pointer 이벤트와 modal이 떠 있는 동안의 `Escape`로 picker를 닫거나 trigger로 focus를 옮기지 않는다. mobile Web drawer에서는
+  drawer를 소유한 modal 안의 picker 바깥 pointer가 picker만 닫으며, picker 내부와 trigger pointer는
+  제외한다. 이 pointer도 기본 동작과 대상 focus를 유지한다. drawer와 별개의 modal에서 발생한 pointer와
+  `Escape`는 picker가 처리하지 않으며, drawer의 backdrop·navigation close와 focus 복귀는 부모 shell이 소유한다.
+  이 pointer close는 drawer 자체의 close transition과 기존 picker의 draft/error reset 정책을 추가로 변경하지 않으며,
+  Android/iOS의 기존 상태 동작은 이 계약으로 바꾸지 않는다.
 
 ### Profile별 Unread 표시
 
@@ -240,9 +244,9 @@ KOSMO가 직접 소유하는 Web vertical scroller는 semantic `borderStrong` th
   route의 document scroll offset을 대상 route에 노출하지 않는다.
 - 프로필 레이아웃은 Profile Home에서는 PageHeader·Hero·Slot을, 팔로워·팔로잉 독립 route에서는
   PageHeader·관계 TabList·Slot을 같은 바깥 scroll 구성으로 렌더링한다. Home PageHeader는 표시 이름을
-  한 줄 tail ellipsis로 표시하며 없는 프로필에서도 빈 제목 chrome을 유지한다. Native에서는 하나의
-  `PaginationScrollView`가 이 chrome과 leaf body를 함께 스크롤하고, 게시물 `InfiniteList`는 outer metric에
-  등록해 목록 body를 비스크롤 `View`로 렌더링한다. 팔로워·팔로잉 leaf는 별도 scroll owner를 만들지 않고
+  한 줄 tail ellipsis로 표시하며 없는 프로필에서도 빈 제목 chrome을 유지한다. Native PageHeader는 Stack
+  header에 고정하고 하나의 `PaginationScrollView`가 Hero·TabList와 leaf body를 스크롤한다. 게시물
+  `InfiniteList`는 outer metric에 등록해 목록 body를 비스크롤 `View`로 렌더링한다. 팔로워·팔로잉 leaf는 별도 scroll owner를 만들지 않고
   기존 `더 불러오기`와 실패 후 수동 재시도를 유지한다. Web에서는 leaf 목록이 document/window scroll 계약을 유지한다.
 - 브라우저 뒤로/앞으로 history traversal은 browser scroll restoration을 유지한다. 검색 화면의 query-only
   `router.push`/`setParams` 이동은 현재 document scroll과 입력 focus를 보존한다.

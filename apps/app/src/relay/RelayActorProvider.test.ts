@@ -35,6 +35,9 @@ const mockModule = (specifier: string | URL, exports: object) =>
 mockModule('react-native', {
   Platform: { OS: 'native' },
 });
+mockModule('@/observability/sentry', {
+  captureHandledMessage: () => undefined,
+});
 mockModule('expo-secure-store', {
   AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY: 'after-first-unlock-this-device-only',
   deleteItemAsync: async () => {

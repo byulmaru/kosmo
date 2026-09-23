@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
@@ -13,6 +14,7 @@ const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, {
     exports,
   } as unknown as Parameters<typeof mock.module>[1]);
+const require = createRequire(import.meta.url);
 
 mockModule('react-native', {
   Linking: { openURL: async () => undefined },
@@ -22,11 +24,26 @@ mockModule('react-native', {
   Text: 'Text',
   View: 'View',
 });
+mockModule('lucide-react-native', {
+  EyeOff: (props: Record<string, unknown>) => createElement('EyeOff', props),
+});
+mockModule(require.resolve('lucide-react-native'), {
+  EyeOff: (props: Record<string, unknown>) => createElement('EyeOff', props),
+});
+mockModule('react-relay', {
+  graphql: () => ({}),
+  useFragment: (_fragment: unknown, key: unknown) => key,
+});
+mockModule('@/components/shell/NavigationLink', {
+  NavigationLink: ({ children, href }: { children: ReactNode; href: unknown }) =>
+    createElement('NavigationLink', { href }, children),
+});
 mockModule(new URL('../../session/SessionProvider.tsx', import.meta.url), {
   useSession: () => ({ selectedProfileId: null, sessionId: null }),
 });
 mockModule(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
   useTheme: () => ({
+    actionLinkBase: '#00f',
     border: '#ddd',
     primary: '#ff0',
     primaryHover: '#ee0',
@@ -45,22 +62,28 @@ type RendererProps = {
   contentWarningPresentation?: 'default' | 'revealed';
   contentWarning: string | null | undefined;
   document: unknown;
+  interactive?: boolean;
   media: ReadonlyArray<PostMediaItem> | null;
   mediaPresentation?: 'default' | 'hidden';
+  mentionedProfiles: ReadonlyArray<{
+    readonly displayName: string;
+    readonly id: string;
+    readonly relativeHandle: string;
+  }>;
   numberOfLines?: number;
+  onBodyPress?: () => void;
   onMediaOpen?: PostMediaOpenHandler;
   postId: string;
 };
 
 let PostContentRenderer: ComponentType<RendererProps>;
 let PostContentWarningRevealProvider: ComponentType<{ children?: ReactNode }>;
-let Button: ComponentType<Record<string, unknown>>;
 let renderer: ReactTestRenderer | null = null;
 
 before(async () => {
-  ({ PostContentRenderer } = await import('./PostContentRenderer'));
+  const imported = await import('./PostContentRenderer');
+  PostContentRenderer = imported.PostContentRenderer as unknown as ComponentType<RendererProps>;
   ({ PostContentWarningRevealProvider } = await import('./PostContentWarningRevealContext'));
-  ({ Button } = await import('@/components/ui/Button'));
 });
 
 afterEach(async () => {
@@ -72,28 +95,82 @@ afterEach(async () => {
 });
 
 describe('PostContentRenderer', () => {
-  it('content warning reveal uses Button and forwards expanded state', async () => {
+  it('content warning row exposes its summary, metadata, action, and expanded state', async () => {
     await render({
       bodyText: '원문 본문',
       contentWarning: '민감한 내용',
       document: null,
       media: [],
+      mentionedProfiles: [],
       postId: 'post-warning-button',
     });
 
+    const toggle = rendered('Pressable').find(
+      (node) => node.props.testID === 'post-content-warning',
+    );
+    assert.ok(toggle);
     assert.deepEqual(
-      renderer?.root.findAllByType(Button).map(({ props }) => ({
-        accessibilityLabel: props.accessibilityLabel,
-        accessibilityState: props.accessibilityState,
-        ariaExpanded: props['aria-expanded'],
-      })),
-      [
-        {
-          accessibilityLabel: '내용 보기',
-          accessibilityState: { expanded: false },
-          ariaExpanded: false,
-        },
+      {
+        accessibilityLabel: toggle.props.accessibilityLabel,
+        accessibilityRole: toggle.props.accessibilityRole,
+        accessibilityState: toggle.props.accessibilityState,
+        ariaExpanded: toggle.props['aria-expanded'],
+      },
+      {
+        accessibilityLabel: '민감한 내용, 본문, 보기',
+        accessibilityRole: 'button',
+        accessibilityState: { expanded: false },
+        ariaExpanded: false,
+      },
+    );
+    assert.equal(
+      rendered('Text').some((node) => node.props.children === '본문'),
+      true,
+    );
+    assert.equal(
+      rendered('Text').some((node) => node.props.children === '보기'),
+      true,
+    );
+    const warningStyle = toggle.props.style({ pressed: false, hovered: false })[0];
+    assert.deepEqual(
+      {
+        borderRadius: warningStyle.borderRadius,
+        gap: warningStyle.gap,
+        minHeight: warningStyle.minHeight,
+        paddingHorizontal: warningStyle.paddingHorizontal,
+        paddingVertical: warningStyle.paddingVertical,
+      },
+      {
+        borderRadius: 16,
+        gap: 8,
+        minHeight: 56,
+        paddingHorizontal: 24,
+        paddingVertical: 8,
+      },
+    );
+  });
+
+  it('content warning metadata counts only the canonical post media passed to the renderer', async () => {
+    await render({
+      bodyText: '원문 본문',
+      contentWarning: '긴 경고 요약',
+      document: null,
+      media: [
+        { altText: null, id: 'media-1', url: 'https://media.example/1.webp' },
+        { altText: null, id: 'media-2', url: 'https://media.example/2.webp' },
       ],
+      mentionedProfiles: [],
+      postId: 'post-warning-metadata',
+    });
+
+    assert.equal(
+      rendered('Text').some((node) => node.props.children === '본문 · 이미지 2개'),
+      true,
+    );
+    assert.equal(
+      rendered('Pressable').find((node) => node.props.testID === 'post-content-warning')?.props
+        .accessibilityLabel,
+      '긴 경고 요약, 본문 · 이미지 2개, 보기',
     );
   });
 
@@ -104,6 +181,7 @@ describe('PostContentRenderer', () => {
       contentWarning: null,
       document: null,
       media: [{ altText: null, id: 'media-1', url: 'https://media.example/1.webp' }],
+      mentionedProfiles: [],
       onMediaOpen,
       postId: 'post-viewer-callbacks',
     });
@@ -121,6 +199,7 @@ describe('PostContentRenderer', () => {
       document: null,
       media: null,
       mediaPresentation: 'hidden',
+      mentionedProfiles: [],
       postId: 'post-viewer-hidden',
     });
 
@@ -136,13 +215,14 @@ describe('PostContentRenderer', () => {
       contentWarning: '민감한 내용',
       document: null,
       media,
+      mentionedProfiles: [],
       postId: 'post-1',
     });
 
     const contentRoot = byTestId('post-content-renderer');
     assert.equal(rendered('PostMediaGallery').length, 0);
     const toggle = rendered('Pressable').find(
-      (node) => node.props.testID === 'post-content-warning-toggle',
+      (node) => node.props.testID === 'post-content-warning',
     );
     assert.ok(toggle);
     assert.equal(
@@ -150,11 +230,15 @@ describe('PostContentRenderer', () => {
       false,
     );
 
+    let stopped = false;
     await act(async () =>
       toggle.props.onPress({
-        stopPropagation: () => undefined,
+        stopPropagation: () => {
+          stopped = true;
+        },
       }),
     );
+    assert.equal(stopped, true);
 
     const galleries = rendered('PostMediaGallery');
     assert.equal(galleries.length, 1);
@@ -177,11 +261,12 @@ describe('PostContentRenderer', () => {
       document: null,
       media: [],
       mediaPresentation: 'hidden',
+      mentionedProfiles: [],
       postId: 'post-viewer-warning',
     });
 
     assert.equal(
-      rendered('Pressable').some((node) => node.props.testID === 'post-content-warning-toggle'),
+      rendered('Pressable').some((node) => node.props.testID === 'post-content-warning'),
       false,
     );
     assert.equal(
@@ -197,6 +282,7 @@ describe('PostContentRenderer', () => {
       contentWarning: null,
       document: null,
       media: [],
+      mentionedProfiles: [],
       numberOfLines: 3,
       postId: 'post-line-limit',
     });
@@ -219,6 +305,7 @@ describe('PostContentRenderer', () => {
         version: 1,
       },
       media: [],
+      mentionedProfiles: [],
       numberOfLines: 3,
       postId: 'post-document-line-limit',
     });
@@ -235,6 +322,7 @@ describe('PostContentRenderer', () => {
       contentWarning: '민감한 내용',
       document: null,
       media: [],
+      mentionedProfiles: [],
       postId: 'post-2',
     });
 
@@ -245,7 +333,7 @@ describe('PostContentRenderer', () => {
     );
 
     const toggle = rendered('Pressable').find(
-      (node) => node.props.testID === 'post-content-warning-toggle',
+      (node) => node.props.testID === 'post-content-warning',
     );
     assert.ok(toggle);
     await act(async () =>
@@ -262,6 +350,161 @@ describe('PostContentRenderer', () => {
       contentRoot.findAll((node) => (node.type as unknown) === 'PostMediaGallery').length,
       1,
     );
+  });
+
+  it('matches Mention nodes by projected Profile ID and renders the Profile relative handle', async () => {
+    const firstProfileId = 'UHJvZmlsZS0x';
+    const secondProfileId = 'UHJvZmlsZS0y';
+    const onBodyPress = () => undefined;
+    await render({
+      bodyText: '@first-profile @second-profile @알 수 없는 사용자',
+      contentWarning: null,
+      document: {
+        version: 1,
+        summary: null,
+        body: {
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                { type: 'mention', attrs: { profileId: firstProfileId } },
+                { type: 'text', text: ' ' },
+                { type: 'mention', attrs: { profileId: secondProfileId } },
+                { type: 'text', text: ' ' },
+                { type: 'mention', attrs: { profileId: 'UHJvZmlsZS1taXNzaW5n' } },
+              ],
+            },
+          ],
+        },
+      },
+      media: [],
+      mentionedProfiles: [
+        {
+          displayName: 'Second Profile',
+          id: secondProfileId,
+          relativeHandle: '@second-profile',
+        },
+        {
+          displayName: 'First Profile',
+          id: firstProfileId,
+          relativeHandle: '@first-profile',
+        },
+      ],
+      onBodyPress,
+      postId: 'post-mention-id-match',
+    });
+
+    assert.deepEqual(
+      rendered('NavigationLink').map(({ props }) => props.href),
+      ['/@first-profile', '/@second-profile'],
+    );
+    assert.equal(
+      rendered('Text').filter((node) => renderedText(node) === '@first-profile').length,
+      1,
+    );
+    assert.equal(
+      rendered('Text').filter((node) => renderedText(node) === '@second-profile').length,
+      1,
+    );
+    assert.equal(
+      rendered('Text').filter((node) => renderedText(node) === '@알 수 없는 사용자').length,
+      1,
+    );
+    assert.equal(
+      rendered('Text').some((node) => renderedText(node) === '@missing'),
+      false,
+    );
+  });
+
+  it('keeps repeated Mention occurrences in document order while matching by Profile ID', async () => {
+    const firstProfileId = 'profile-first';
+    const secondProfileId = 'profile-second';
+    await render({
+      bodyText: '@first-profile / @first-profile / @second-profile',
+      contentWarning: null,
+      document: {
+        version: 1,
+        summary: null,
+        body: {
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                { type: 'mention', attrs: { profileId: firstProfileId } },
+                { type: 'text', text: ' / ' },
+                { type: 'mention', attrs: { profileId: firstProfileId } },
+                { type: 'text', text: ' / ' },
+                { type: 'mention', attrs: { profileId: secondProfileId } },
+              ],
+            },
+          ],
+        },
+      },
+      media: [],
+      mentionedProfiles: [
+        {
+          displayName: 'Second Profile',
+          id: secondProfileId,
+          relativeHandle: '@second-profile',
+        },
+        {
+          displayName: 'First Profile',
+          id: firstProfileId,
+          relativeHandle: '@first-profile',
+        },
+      ],
+      postId: 'post-mention-repeated-order',
+    });
+
+    assert.deepEqual(
+      rendered('NavigationLink').map(({ props }) => props.href),
+      ['/@first-profile', '/@first-profile', '/@second-profile'],
+    );
+  });
+
+  it('keeps a matched Mention inline while the post body remains the parent target', async () => {
+    await render({
+      bodyText: '본문 @profile',
+      contentWarning: null,
+      document: {
+        version: 1,
+        summary: null,
+        body: {
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                { type: 'text', text: '본문 ' },
+                { type: 'mention', attrs: { profileId: 'profile-inline' } },
+              ],
+            },
+          ],
+        },
+      },
+      media: [],
+      mentionedProfiles: [
+        {
+          displayName: 'Inline Profile',
+          id: 'profile-inline',
+          relativeHandle: '@profile',
+        },
+      ],
+      onBodyPress: () => undefined,
+      postId: 'post-mention-inline',
+    });
+
+    assert.deepEqual(
+      rendered('Pressable').map(({ props }) => props.testID),
+      ['post-list-row-body'],
+    );
+    assert.deepEqual(
+      rendered('NavigationLink').map(({ props }) => props.href),
+      ['/@profile'],
+    );
+    assert.equal(rendered('Text').filter((node) => renderedText(node) === '@profile').length, 1);
   });
 });
 
@@ -296,4 +539,15 @@ function rendered(type: string): ReactTestInstance[] {
 function byTestId(testID: string): ReactTestInstance {
   assert.ok(renderer);
   return renderer.root.findByProps({ testID });
+}
+
+function renderedText(instance: ReactTestInstance): string {
+  return instance.children
+    .map((child) => {
+      if (typeof child === 'string' || typeof child === 'number') {
+        return String(child);
+      }
+      return renderedText(child as ReactTestInstance);
+    })
+    .join('');
 }

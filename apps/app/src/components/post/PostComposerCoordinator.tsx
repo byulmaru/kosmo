@@ -17,13 +17,14 @@ export type PostComposerMode = 'quote' | 'reply';
 
 type ActivePostComposer = {
   mode: PostComposerMode;
+  owner?: PostComposerOwner;
   postId: string;
 };
 
 export type PostComposerBinding = {
   expanded: boolean;
   onPostCreated: ((post: PostComposerCreatedPost) => void) | undefined;
-  onPress: () => void;
+  onPress: (owner?: PostComposerOwner) => void;
   onRequestClose: () => void;
   owner: PostComposerOwner;
   profile: ReplyComposerSurface_profile$key | null;
@@ -36,7 +37,7 @@ type PostComposerCoordinatorValue = {
   close: () => void;
   onPostCreated: ((post: PostComposerCreatedPost) => void) | undefined;
   owner: PostComposerOwner;
-  press: (postId: string, mode: PostComposerMode) => void;
+  press: (postId: string, mode: PostComposerMode, owner?: PostComposerOwner) => void;
   profile: ReplyComposerSurface_profile$key | null;
 };
 
@@ -69,8 +70,8 @@ export function PostComposerCoordinatorProvider({
 
   const close = useCallback(() => setActiveComposer(null), []);
   const press = useCallback(
-    (postId: string, mode: PostComposerMode) => {
-      const nextComposer = { mode, postId };
+    (postId: string, mode: PostComposerMode, ownerOverride?: PostComposerOwner) => {
+      const nextComposer = { mode, owner: ownerOverride, postId };
       const currentComposer = activeComposerRef.current;
       if (currentComposer === null) {
         setActiveComposer(nextComposer);
@@ -79,7 +80,8 @@ export function PostComposerCoordinatorProvider({
 
       const sameComposer =
         currentComposer.postId === nextComposer.postId &&
-        currentComposer.mode === nextComposer.mode;
+        currentComposer.mode === nextComposer.mode &&
+        (currentComposer.owner ?? owner) === (nextComposer.owner ?? owner);
       const activeSurface = activeSurfaceRef.current;
       if (!activeSurface) {
         if (owner === 'list') {
@@ -117,13 +119,13 @@ export function usePostComposerBinding(
   return {
     expanded,
     onPostCreated: coordinator.onPostCreated,
-    onPress: () => {
+    onPress: (ownerOverride?: PostComposerOwner) => {
       if (coordinator.profile) {
-        coordinator.press(postId, mode);
+        coordinator.press(postId, mode, ownerOverride);
       }
     },
     onRequestClose: coordinator.close,
-    owner: coordinator.owner,
+    owner: expanded ? (coordinator.activeComposer?.owner ?? coordinator.owner) : coordinator.owner,
     profile: coordinator.profile,
     ...(expanded ? { surfaceRef: coordinator.activeSurfaceRef } : {}),
   };

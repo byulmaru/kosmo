@@ -1,5 +1,4 @@
 import { Link, useRouter } from 'expo-router';
-import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
@@ -8,10 +7,12 @@ import { formatTimelineTimestamp } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
 import { PostContentRenderer } from './PostContentRenderer';
+import { usePostSurfaceFeedback } from './usePostSurfaceFeedback';
 import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { ProfileNameBlock_profile$key } from '@/components/profile/__generated__/ProfileNameBlock_profile.graphql';
+import type { PostContentMention_profile$key } from './__generated__/PostContentMention_profile.graphql';
 import type { PostSourcePresentationView_post$key } from './__generated__/PostSourcePresentationView_post.graphql';
 import type { PostSourcePreview_source$key } from './__generated__/PostSourcePreview_source.graphql';
 import type { PostMediaItem, PostMediaOpenHandler } from './PostMediaImage';
@@ -28,6 +29,10 @@ type AuthorProfile = ProfileNameBlock_profile$key & {
   readonly handle: string;
 };
 
+type MentionedProfile = PostContentMention_profile$key & {
+  readonly id: string;
+};
+
 type PresentationContent = {
   readonly bodyText: string;
   readonly contentWarning: string | null | undefined;
@@ -40,6 +45,7 @@ type PresentationContent = {
       }>
     | null
     | undefined;
+  readonly mentionedProfiles: ReadonlyArray<MentionedProfile>;
 };
 
 const PostSourcePreviewFragment = graphql`
@@ -50,6 +56,10 @@ const PostSourcePreviewFragment = graphql`
       bodyText
       contentWarning
       document
+      mentionedProfiles {
+        id
+        ...PostContentMention_profile
+      }
       media {
         id
         altText
@@ -77,6 +87,10 @@ const PostSourcePresentationViewFragment = graphql`
       bodyText
       contentWarning
       document
+      mentionedProfiles {
+        id
+        ...PostContentMention_profile
+      }
       media {
         id
         altText
@@ -205,9 +219,11 @@ export function PostSourcePreview({
   style?: StyleProp<ViewStyle>;
 }): ReactNode {
   const theme = useTheme();
-  const [hovered, setHovered] = useState(false);
+  const { handlers, hovered } = usePostSurfaceFeedback({
+    hover: interactive,
+    press: false,
+  });
   const source = useFragment(PostSourcePreviewFragment, sourceKey);
-  const webInteractive = interactive && Platform.OS === 'web';
   const sourceProfileHref = `/${source.profile.relativeHandle}` as Href;
   const sourcePostHref = `/${source.profile.relativeHandle}/${source.id}` as Href;
   const content = (
@@ -253,6 +269,7 @@ export function PostSourcePreview({
             document={source.content.document}
             interactive={false}
             media={presentationMedia(source.content.media)}
+            mentionedProfiles={source.content.mentionedProfiles}
             postId={source.id}
             size="md"
           />
@@ -263,13 +280,12 @@ export function PostSourcePreview({
 
   return (
     <View
-      onPointerEnter={webInteractive ? () => setHovered(true) : undefined}
-      onPointerLeave={webInteractive ? () => setHovered(false) : undefined}
+      {...handlers}
       style={[
         styles.preview,
         style,
         {
-          backgroundColor: webInteractive && hovered ? theme.stateHover : undefined,
+          backgroundColor: hovered ? theme.stateHover : undefined,
           borderColor: theme.borderDefault,
         },
       ]}
@@ -333,6 +349,7 @@ function PostBodyPressTarget({
         contentWarning={content.contentWarning}
         document={content.document}
         media={presentationMedia(content.media)}
+        mentionedProfiles={content.mentionedProfiles}
         onMediaOpen={onMediaOpen}
         postId={postId}
         size="md"

@@ -9,9 +9,9 @@ import {
   Store,
 } from 'relay-runtime';
 import { expect, spyOn, userEvent, waitFor, within } from 'storybook/test';
-import HomePageQueryNode from '@/app/(tabs)/(protected)/__generated__/HomePageQuery.graphql';
 import HomeScreen from '@/app/(tabs)/(protected)/home';
 import { ShellChromeProvider } from '@/components/shell/ShellChromeContext';
+import HomePageQueryNode from '@/components/timeline/__generated__/HomePageQuery.graphql';
 import { RelayActorProvider } from '@/relay/RelayActorProvider';
 import { post, profile, shellQuery, timeline } from '../fixtures';
 import type { Meta, StoryObj } from '@storybook/react-vite';

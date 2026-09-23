@@ -12,7 +12,7 @@ export function FeedbackPage() {
       contentContainerStyle={web ? styles.webRoot : styles.nativeRoot}
       keyboardShouldPersistTaps="handled"
     >
-      {web ? <PageHeader title="피드백 보내기" /> : null}
+      <PageHeader title="피드백 보내기" />
       {web ? (
         <View style={styles.webContent}>
           <FeedbackForm />

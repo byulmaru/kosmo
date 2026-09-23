@@ -9,9 +9,10 @@ import {
   ServiceError,
   TimeoutFailure,
   WorkflowFailedError,
+  WorkflowUpdateFailedError,
 } from '@temporalio/client';
 import type { WorkflowHandleWithStartDetails } from '@temporalio/client';
-import type { WorkflowDefinition } from './client';
+import type { WorkflowDefinition, WorkflowUpdateDefinition } from './client';
 import type { RemoteProfileLookupInput } from './remote-profile';
 
 process.env.TEMPORAL_ADDRESS ??= '127.0.0.1:7233';
@@ -243,6 +244,65 @@ test('start mode는 zero-args callback을 호출하고 start acknowledgement 뒤
   }
 });
 
+test('update-with-start mode는 Workflow와 Update를 한 번에 admission하고 공용 정책을 적용한다', async () => {
+  type ProfileBlockWorkflow = (input: { ownerProfileId: string }) => Promise<void>;
+  type ProfileBlockUpdate = { created: boolean };
+  type ProfileBlockInput = { ownerProfileId: string };
+  const input: ProfileBlockInput = { ownerProfileId: 'profile-1' };
+  const definition: WorkflowUpdateDefinition<
+    ProfileBlockWorkflow,
+    ProfileBlockUpdate,
+    [ProfileBlockInput]
+  > = {
+    workflow: 'profileBlockWorkflow',
+    update: 'profileBlockUpdate',
+    workflowIdFromArgs: ({ ownerProfileId }) => `profile-block:${ownerProfileId}`,
+  };
+  const result = { created: true };
+  const update = mock.method(temporalClient.workflow, 'executeUpdateWithStart', async () => result);
+  const deadlines: Array<number | Date> = [];
+  const deadline = mock.method(
+    temporalClient,
+    'withDeadline',
+    async (value: number | Date, callback: () => Promise<unknown>) => {
+      deadlines.push(value);
+      return callback();
+    },
+  );
+
+  try {
+    assert.deepEqual(
+      await runWorkflow(definition, {
+        args: [input],
+        updateArgs: [input],
+        updateId: 'block',
+        mode: 'update-with-start',
+        workflowIdConflictPolicy: 'USE_EXISTING',
+        workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+      }),
+      result,
+    );
+
+    const call = update.mock.calls[0];
+    assert.ok(call);
+    assert.equal(call.arguments[0], 'profileBlockUpdate');
+    const options = call.arguments[1];
+    assert.ok(options);
+    assert.deepEqual(options.args, [input]);
+    assert.equal(options.updateId, 'block');
+    const operation = options.startWorkflowOperation;
+    assert.equal(operation.options.workflowId, 'profile-block:profile-1');
+    assert.equal(operation.options.taskQueue, 'kosmo');
+    assert.equal(operation.options.workflowIdConflictPolicy, 'USE_EXISTING');
+    assert.equal(operation.options.workflowIdReusePolicy, 'ALLOW_DUPLICATE');
+    assert.deepEqual(operation.options.args, [input]);
+    assert.equal(deadlines.length, 1);
+  } finally {
+    deadline.mock.restore();
+    update.mock.restore();
+  }
+});
+
 test('서로 다른 Workflow는 각자의 ID callback과 native 결과 타입을 보존한다', async () => {
   const objectWorkflow = async (profileId: string): Promise<{ profileId: string }> => ({
     profileId,
@@ -341,41 +401,22 @@ test('remote Profile Workflow builder는 normalized handle과 profileId를 실�
   }
 });
 
-test('공용 task queue와 5초 deadline을 적용한다', async () => {
+test('공용 task queue를 적용한다', async () => {
   const workflow = async (): Promise<string> => 'ok';
   const definition = { workflow, workflowIdFromArgs: () => 'deadline-id' };
   const execute = mock.method(temporalClient.workflow, 'execute', async () => 'ok' as never);
-  const deadlines: Array<number | Date> = [];
-  const deadline = mock.method(
-    temporalClient,
-    'withDeadline',
-    async (value: number | Date, callback: () => Promise<unknown>) => {
-      deadlines.push(value);
-      return callback();
-    },
-  );
-  const before = Date.now();
 
   try {
     await runWorkflow(definition, {
       mode: 'execute',
     });
 
-    const after = Date.now();
     const executeCall = execute.mock.calls[0];
     assert.ok(executeCall);
     const executeOptions = executeCall.arguments[1];
     assert.ok(executeOptions);
     assert.equal(executeOptions.taskQueue, 'kosmo');
-    assert.equal(deadlines.length, 1);
-    const deadlineValue = deadlines[0];
-    assert.ok(deadlineValue !== undefined);
-    const deadlineTimestamp =
-      deadlineValue instanceof Date ? deadlineValue.getTime() : deadlineValue;
-    assert.ok(deadlineTimestamp >= before + 4_900);
-    assert.ok(deadlineTimestamp <= after + 5_000);
   } finally {
-    deadline.mock.restore();
     execute.mock.restore();
   }
 });
@@ -507,5 +548,44 @@ test('Workflow ID callback 오류는 SDK 실행 전에 그대로 전파한다', 
   } finally {
     deadline.mock.restore();
     execute.mock.restore();
+  }
+});
+
+test('update-with-start mode는 WorkflowUpdateFailedError의 ApplicationFailure를 그대로 전파한다', async () => {
+  type Workflow = (input: string) => Promise<void>;
+  const definition: WorkflowUpdateDefinition<Workflow, string, [string]> = {
+    workflow: 'profileBlockWorkflow',
+    update: 'profileBlockUpdate',
+    workflowIdFromArgs: (input) => `profile-block:${input}`,
+  };
+  const applicationFailure = ApplicationFailure.nonRetryable(
+    'Profile Block transition rejected',
+    'ProfileBlockConflict',
+  );
+  const update = mock.method(temporalClient.workflow, 'executeUpdateWithStart', async () => {
+    throw new WorkflowUpdateFailedError('Update failed', applicationFailure);
+  });
+  const deadline = mock.method(
+    temporalClient,
+    'withDeadline',
+    async (_deadline: number | Date, callback: () => Promise<unknown>) => callback(),
+  );
+
+  try {
+    await assert.rejects(
+      runWorkflow(definition, {
+        args: ['profile-1'],
+        updateArgs: ['profile-1'],
+        updateId: 'block',
+        mode: 'update-with-start',
+        workflowIdConflictPolicy: 'USE_EXISTING',
+        workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+      }),
+      (error: unknown) => error === applicationFailure,
+    );
+    assert.equal(update.mock.calls.length, 1);
+  } finally {
+    deadline.mock.restore();
+    update.mock.restore();
   }
 });

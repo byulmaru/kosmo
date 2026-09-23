@@ -1,1 +1,1 @@
-export { captureHandledError } from './sentry-browser';
+export { captureHandledError, captureHandledMessage } from './sentry-browser';

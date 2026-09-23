@@ -16,6 +16,7 @@ import { radii, spacing, textStyles } from '@/theme/tokens';
 import { PostComposer } from './PostComposer';
 import type { RefObject } from 'react';
 import type { PostComposer_profile$key } from './__generated__/PostComposer_profile.graphql';
+import type { PostComposerProfileCandidate } from './PostComposer';
 
 export type PostComposerHostMode = 'mobile' | 'overlay' | 'rail';
 export type PostComposerHostCloseReason = 'created' | 'dismiss';
@@ -25,6 +26,7 @@ type PostComposerHostProps = {
   onRequestClose: (reason: PostComposerHostCloseReason) => void;
   open: boolean;
   profile: PostComposer_profile$key;
+  profiles?: readonly PostComposerProfileCandidate[];
   triggerFocusRef?: RefObject<HTMLElement | null>;
 } & ({ mode: 'rail'; onExpand: () => void } | { mode: 'mobile' | 'overlay'; onExpand?: never });
 
@@ -119,7 +121,11 @@ function usePostComposerOverlayLifecycle({
     const dialog = dialogRef.current as unknown as HTMLElement | null;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        if (dialog?.querySelector('[role="menu"], [role="radiogroup"]')) {
+        if (
+          dialog?.querySelector(
+            '[role="menu"], [role="radiogroup"], [data-testid="post-composer-profile-picker"]',
+          )
+        ) {
           return;
         }
         event.preventDefault();
@@ -173,12 +179,14 @@ export function PostComposerHost({
   onRequestClose,
   open,
   profile,
+  profiles,
   triggerFocusRef,
 }: PostComposerHostProps) {
   const theme = useTheme();
   const elevation = useElevation();
   const [submitting, setSubmitting] = useState(false);
   const web = Platform.OS === 'web';
+  const nativeMobile = !web && mode === 'mobile';
   const overlayVisible = mode !== 'rail' && open;
   const safeAreaStyle = useSafeAreaPadding(mode === 'mobile' ? 0 : spacing.lg);
   const {
@@ -202,6 +210,7 @@ export function PostComposerHost({
       onPostCreated={() => requestClose('created')}
       onSubmittingChange={setSubmitting}
       profile={profile}
+      profiles={profiles}
       registerNativeBackHandler={registerNativeBackHandler}
       {...(mode === 'rail'
         ? { onExpand, onRequestClose: requestClose, presentation: mode }
@@ -237,7 +246,7 @@ export function PostComposerHost({
       role={overlayVisible ? 'dialog' : undefined}
       style={[
         styles.dialog,
-        mode !== 'rail' && elevation.overlay,
+        mode !== 'rail' && !nativeMobile && elevation.overlay,
         mode === 'rail'
           ? styles.railDialog
           : mode === 'mobile'
@@ -250,7 +259,7 @@ export function PostComposerHost({
       {header}
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.composerFrame}
+        style={[styles.composerFrame, mode === 'mobile' ? styles.composerFrameFill : null]}
       >
         {composer}
       </KeyboardAvoidingView>
@@ -265,19 +274,29 @@ export function PostComposerHost({
         animationType="fade"
         onRequestClose={requestNativeBack}
         navigationBarTranslucent
+        presentationStyle={mode === 'mobile' ? 'fullScreen' : undefined}
         role="dialog"
         statusBarTranslucent
-        transparent
+        transparent={mode !== 'mobile'}
         visible={overlayVisible}
       >
-        <Pressable
-          onPress={() => requestClose()}
-          style={[styles.nativeBackdrop, safeAreaStyle, { backgroundColor: theme.overlayScrim }]}
-        >
-          <Pressable onPress={(event) => event.stopPropagation()} style={styles.nativeDialogWrap}>
+        {mode === 'mobile' ? (
+          <View
+            style={[styles.nativeMobileSurface, safeAreaStyle, { backgroundColor: theme.card }]}
+          >
             {dialog}
+          </View>
+        ) : (
+          <Pressable
+            onPress={() => requestClose()}
+            style={[styles.nativeBackdrop, safeAreaStyle, { backgroundColor: theme.overlayScrim }]}
+            testID="post-composer-backdrop"
+          >
+            <Pressable onPress={(event) => event.stopPropagation()} style={styles.nativeDialogWrap}>
+              {dialog}
+            </Pressable>
           </Pressable>
-        </Pressable>
+        )}
       </Modal>
     );
   }
@@ -309,7 +328,7 @@ const styles = StyleSheet.create({
   webOverlayHost: {
     alignItems: 'center',
     bottom: 0,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     left: 0,
     padding: spacing.lg,
     position: 'fixed' as never,
@@ -322,12 +341,15 @@ const styles = StyleSheet.create({
   hiddenHost: { display: 'none' },
   nativeBackdrop: { flex: 1, justifyContent: 'center' },
   nativeDialogWrap: { flex: 1, justifyContent: 'center' },
+  nativeMobileSurface: { flex: 1 },
   dialog: { minHeight: 0, overflow: 'hidden' },
   railDialog: { borderWidth: 0, width: '100%' },
   overlayDialog: {
     borderRadius: radii.lg,
-    maxHeight: '85dvh' as never,
-    width: 600,
+    marginTop: spacing.xxl,
+    maxWidth: 640,
+    maxHeight: 'calc(100dvh - 96px)' as never,
+    width: '100%',
   },
   mobileDialog: { borderRadius: 0, borderWidth: 0, height: '100%', width: '100%' },
   header: {
@@ -338,5 +360,6 @@ const styles = StyleSheet.create({
   },
   closeButton: { position: 'absolute', right: spacing.lg, top: spacing.md },
   title: textStyles.uiHeadingS,
-  composerFrame: { flex: 1, minHeight: 0 },
+  composerFrame: { flexShrink: 1, minHeight: 0 },
+  composerFrameFill: { flex: 1 },
 });

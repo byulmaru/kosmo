@@ -42,6 +42,15 @@ type ApproveProfileFollowRequestPayload {
   profileFollowRequestId: ID!
 }
 
+input BlockProfileInput {
+  id: ID!
+}
+
+type BlockProfilePayload {
+  profileBlock: ProfileBlock!
+  success: Boolean!
+}
+
 type Bookmark implements Node {
   createdAt: DateTime!
   id: ID!
@@ -104,6 +113,7 @@ type CreateBookmarkPayload {
 }
 
 input CreatePostInput {
+  actorProfileId: ID
   bodyText: String!
   contentWarning: String
   media: [CreatePostMediaInput!]
@@ -228,6 +238,10 @@ enum InstanceKind {
   LOCAL
 }
 
+input IssueMediaUploadUrlInput {
+  actorProfileId: ID
+}
+
 type IssueMediaUploadUrlPayload {
   expiresAt: DateTime!
   media: Media!
@@ -260,6 +274,7 @@ enum MediaState {
 type Mutation {
   addReaction(input: AddReactionInput!): AddReactionPayload!
   approveProfileFollowRequest(input: ApproveProfileFollowRequestInput!): ApproveProfileFollowRequestPayload!
+  blockProfile(input: BlockProfileInput!): BlockProfilePayload!
   cancelProfileFollowRequest(input: CancelProfileFollowRequestInput!): CancelProfileFollowRequestPayload!
   completeMediaUpload(input: CompleteMediaUploadInput!): CompleteMediaUploadPayload!
   createBookmark(input: CreateBookmarkInput!): CreateBookmarkPayload!
@@ -272,7 +287,7 @@ type Mutation {
   deleteReaction(input: DeleteReactionInput!): DeleteReactionPayload!
   exchangeNativeOidcSession(input: ExchangeNativeOidcSessionInput!): ExchangeNativeOidcSessionPayload!
   followProfile(input: FollowProfileInput!): FollowProfilePayload!
-  issueMediaUploadUrl: IssueMediaUploadUrlPayload!
+  issueMediaUploadUrl(input: IssueMediaUploadUrlInput): IssueMediaUploadUrlPayload!
   markNotificationRead(input: MarkNotificationReadInput!): MarkNotificationReadPayload!
   muteProfile(input: MuteProfileInput!): MuteProfilePayload!
   registerProfileMigrationSource(input: RegisterProfileMigrationSourceInput!): RegisterProfileMigrationSourcePayload!
@@ -283,6 +298,7 @@ type Mutation {
   selectProfile(input: SelectProfileInput!): SelectProfilePayload!
   submitContentReport(input: SubmitContentReportInput!): SubmitContentReportPayload!
   submitFeedback(input: SubmitFeedbackInput!): SubmitFeedbackPayload!
+  unblockProfile(input: UnblockProfileInput!): UnblockProfilePayload!
   unfollowProfile(input: UnfollowProfileInput!): UnfollowProfilePayload!
   unmuteProfile(input: UnmuteProfileInput!): UnmuteProfilePayload!
   unregisterPushInstallation(input: UnregisterPushInstallationInput!): UnregisterPushInstallationPayload!
@@ -361,6 +377,7 @@ type PostContent implements Node {
   document: PostContentDocument!
   id: ID!
   media: [Media!]
+  mentionedProfiles: [Profile!]!
 }
 
 """Kosmo versioned PostContent document JSON"""
@@ -399,11 +416,28 @@ type Profile implements Node {
   outgoingProfileFollowRequests(after: String, before: String, first: Int, last: Int): ProfileOutgoingProfileFollowRequestsConnection
   posts(after: String, before: String, first: Int, last: Int): PostConnection!
   private: ProfilePrivate
+  profileBlocks(after: String, before: String, first: Int, last: Int): ProfileBlockConnection
   profileMutes(after: String, before: String, first: Int, last: Int): ProfileMuteConnection!
   relativeHandle: String!
   tags: [Hashtag!]!
   unreadNotificationCount: Int
   viewerState: ProfileViewerState
+}
+
+type ProfileBlock implements Node {
+  createdAt: DateTime!
+  id: ID!
+  targetProfile: Profile!
+}
+
+type ProfileBlockConnection {
+  edges: [ProfileBlockConnectionEdge!]!
+  pageInfo: PageInfo!
+}
+
+type ProfileBlockConnectionEdge {
+  cursor: String!
+  node: ProfileBlock!
 }
 
 type ProfileConnection {
@@ -508,10 +542,12 @@ enum ProfileState {
 }
 
 type ProfileViewerState {
+  blockedBy: Boolean!
   follow: ProfileFollow
   followRequest: ProfileFollowRequest
   isSelf: Boolean!
   membership: AccountProfile
+  profileBlock: ProfileBlock
   profileMute: ProfileMute
 }
 
@@ -638,6 +674,16 @@ input SubmitFeedbackInput {
 
 type SubmitFeedbackPayload {
   completed: Boolean!
+}
+
+input UnblockProfileInput {
+  id: ID!
+}
+
+type UnblockProfilePayload {
+  profileBlockId: ID
+  success: Boolean!
+  targetProfile: Profile
 }
 
 input UnfollowProfileInput {

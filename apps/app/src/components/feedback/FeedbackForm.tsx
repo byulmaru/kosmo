@@ -110,11 +110,6 @@ export function FeedbackForm({ onStateChange }: Props) {
       ]}
     >
       <View style={styles.header}>
-        {web ? null : (
-          <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>
-            피드백 보내기
-          </Text>
-        )}
         <Text style={[styles.description, { color: theme.textSecondary }]}>
           KOSMO를 더 좋게 만들 수 있도록 의견을 들려주세요.
         </Text>
@@ -192,7 +187,6 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
   },
   header: { gap: spacing.xs },
-  title: { fontFamily: fontFamilies.ui, fontSize: 24, fontWeight: '700', lineHeight: 32 },
   description: { fontFamily: fontFamilies.ui, ...typography.md },
   webOptions: { gap: 0 },
   nativeOptions: { gap: spacing.sm },

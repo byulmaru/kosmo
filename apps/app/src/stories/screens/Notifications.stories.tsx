@@ -737,7 +737,11 @@ export const ReplyContentAndProtectedActions: Story = {
     const canvas = within(canvasElement);
 
     await expect(canvas.findByTestId('post-content-warning')).resolves.toBeVisible();
-    await userEvent.click(canvas.getByRole('button', { name: '내용 보기' }));
+    await userEvent.click(
+      canvas.getByRole('button', {
+        name: '답글 내용에 주의가 필요합니다., 본문 · 이미지 1개, 보기',
+      }),
+    );
     await expect(
       canvas.findByText('알림에서 바로 확인할 수 있는 답글 본문입니다.'),
     ).resolves.toBeVisible();
@@ -783,7 +787,11 @@ export const ReplyAuthorActivationReadsOnce: Story = {
   play: async ({ canvasElement }) => {
     notificationMutationRequest.mockClear();
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: '내용 보기' }));
+    await userEvent.click(
+      canvas.getByRole('button', {
+        name: '답글 내용에 주의가 필요합니다., 본문 · 이미지 1개, 보기',
+      }),
+    );
     await expect(
       canvas.findByText('알림에서 바로 확인할 수 있는 답글 본문입니다.'),
     ).resolves.toBeVisible();

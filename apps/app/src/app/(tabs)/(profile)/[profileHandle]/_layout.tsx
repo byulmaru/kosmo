@@ -44,9 +44,13 @@ const ProfileLayoutQuery = graphql`
         kind
       }
       viewerState {
+        blockedBy
         isSelf
         membership {
           role
+        }
+        profileBlock {
+          id
         }
       }
       ...ProfileHero_profile
@@ -74,7 +78,7 @@ export default function ProfileLayout() {
   const backButton = (
     <IconButton
       accessibilityLabel="뒤로 가기"
-      onPress={() => router.back()}
+      onPress={() => (router.canGoBack() ? router.back() : router.replace('/home'))}
       style={styles.back}
       targetSize={44}
       visualSize={44}
@@ -171,6 +175,9 @@ function ProfileLayoutContent({
     kind: ContentReportTargetType.PROFILE,
     label: profile?.relativeHandle ?? '',
   });
+  const blocking = Boolean(profile?.viewerState?.profileBlock);
+  const blockedBy = Boolean(profile?.viewerState?.blockedBy);
+
   if (!profile) {
     const missingState = (
       <StateView
@@ -215,17 +222,15 @@ function ProfileLayoutContent({
     profile.instance.kind === 'LOCAL' &&
     profile.viewerState?.isSelf === true &&
     profile.viewerState.membership?.role === 'OWNER';
-  const canMute = Boolean(selectedProfileId && profile.viewerState && !profile.viewerState.isSelf);
   const relationshipAction = canEdit ? (
     <NavigationLink href={'/profile-edit' as Href}>
       <Button accessibilityLabel="프로필 편집" tone="secondary">
         편집
       </Button>
     </NavigationLink>
-  ) : (
+  ) : blockedBy && !blocking ? undefined : (
     <FollowButton profile={profile} />
   );
-
   const chrome = (
     <>
       {showPageHeader ? (
@@ -237,20 +242,30 @@ function ProfileLayoutContent({
         heading={!showPageHeader}
         moreItems={sessionId ? [reportItem] : undefined}
         profile={profile}
-        showMuteAction={canMute}
       />
     </>
   );
 
+  const blockedProfileContent = !blockedBy ? null : (
+    <StateView title="이 프로필을 볼 수 없습니다" />
+  );
+  const blockedProfileRoute = blockedProfileContent ? (
+    <ProfileRouteContainer scrollKey={scrollKey}>
+      {chrome}
+      {blockedProfileContent}
+    </ProfileRouteContainer>
+  ) : null;
+
   return (
     <ProfileRouteProvider chrome={chrome} scrollKey={scrollKey}>
-      {Platform.OS === 'web' ? (
-        <Slot />
-      ) : (
-        <View style={styles.nativeRoute}>
-          <Stack screenOptions={{ headerShown: false }} />
-        </View>
-      )}
+      {blockedProfileRoute ??
+        (Platform.OS === 'web' ? (
+          <Slot />
+        ) : (
+          <View style={styles.nativeRoute}>
+            <Stack screenOptions={{ headerShown: false }} />
+          </View>
+        ))}
     </ProfileRouteProvider>
   );
 }

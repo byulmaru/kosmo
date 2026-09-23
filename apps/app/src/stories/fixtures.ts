@@ -33,9 +33,14 @@ export type StoryProfile = {
   tags: Array<{ id: string; name: string }>;
   unreadNotificationCount: number;
   viewerState: {
+    blockedBy?: boolean;
     follow: { follower?: { followingCount: number; id: string } | null; id: string } | null;
     followRequest: { id: string } | null;
     isSelf: boolean;
+    profileBlock?: {
+      id: string;
+      targetProfile: Pick<StoryProfile, 'displayName' | 'id' | 'relativeHandle'>;
+    } | null;
     profileMute?: { id: string } | null;
     membership?: { role: 'MEMBER' | 'OWNER' } | null;
   } | null;
@@ -62,11 +67,20 @@ export function profile(overrides: Partial<StoryProfile> = {}): StoryProfile {
     overrides.defaultPostVisibility === undefined ? 'UNLISTED' : overrides.defaultPostVisibility;
   const viewerState =
     overrides.viewerState === undefined
-      ? { follow: null, followRequest: null, isSelf: false, profileMute: null }
+      ? {
+          blockedBy: false,
+          follow: null,
+          followRequest: null,
+          isSelf: false,
+          profileBlock: null,
+          profileMute: null,
+        }
       : overrides.viewerState === null
         ? null
         : {
             ...overrides.viewerState,
+            blockedBy: overrides.viewerState.blockedBy ?? false,
+            profileBlock: overrides.viewerState.profileBlock ?? null,
             profileMute: overrides.viewerState.profileMute ?? null,
           };
   return {
@@ -127,6 +141,7 @@ export type StoryPost = {
     };
     id: string;
     media: StoryMedia[] | null;
+    mentionedProfiles: StoryProfile[];
   } | null;
   createdAt: string;
   id: string;
@@ -186,6 +201,7 @@ export function post({
             contentWarning,
             id: `content-${id}`,
             media,
+            mentionedProfiles: [],
           },
     createdAt,
     id,

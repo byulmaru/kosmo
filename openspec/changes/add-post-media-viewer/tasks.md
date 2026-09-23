@@ -2,6 +2,8 @@
 
 > Checked items in Sections 1–5 preserve PROD-650 historical completion. Unchecked consumer integration, platform runtime and archive work remains owned by PROD-849 as marked below.
 
+현재 이미지 상태 계약은 `docs/design/post-media-viewer.md`를 따른다. 이미지 재방문·query 복구 때 새로 로드하도록 단순화했으며, 아래 historical 완료 기록의 이미지별 오류 보존·null 복구 보존은 현재 요구사항이 아니다.
+
 **Authority / Provenance**
 
 - `docs/domain/objects/post-content.md`
@@ -19,13 +21,13 @@
 - Stable surface-level Host가 `{surfacePostId, mediaOwnerPostId, selectedIndex, originControl}` session과 기존 `node(surfacePostId)` query·Action/Reply/thread composition을 소유하고 Media owner가 surface 또는 direct Source인지 검증한다.
 - 일반·Quote는 surface Post를 Media owner로 사용한다. Pure Repost는 direct Source를 Media·본문·Profile과 Repost·Reaction·Bookmark·More의 owner로 사용하되 Reply는 바깥 contentless Repost 기준으로 disabled이며 Wide Source Composer를 열지 않는다.
 - Modal shell·close·origin 또는 screen fallback focus는 query의 Suspense·error boundary 밖에 유지한다. Sensitive 가림 상태와 `interactive=false` Reply 부모 preview에는 Viewer 진입을 제공하지 않는다.
-- 같은 Content의 일시 unavailable·복구 상태는 유지하고 다른 revision은 original selected index에서 초기화하며, 해당 index가 없으면 unavailable을 표시한다. Actor/environment가 바뀌면 Viewer를 닫고 이전 query를 폐기한다.
+- 같은 Content의 일시 unavailable·복구 시 탐색·원문 상태를 유지하고 이미지는 새로 로드하며 다른 revision은 original selected index에서 초기화하며, 해당 index가 없으면 unavailable을 표시한다. Actor/environment가 바뀌면 Viewer를 닫고 이전 query를 폐기한다.
 - 별도 Media query·authorization을 추가하거나 이전 byte·URL 또는 다른 Post·Profile·revision의 Media를 섞지 않는다.
 - PROD-626의 gallery geometry·Sensitive·retry 동작을 복제하거나 회귀시키지 않는다.
 
 **Verification**
 
-- Component test로 정상 tile의 surface Post ID·선택 index, pure Repost의 direct Source Media owner·disabled Reply·Source social target, 주변 Post navigation 전파 차단, Sensitive·retry control 격리, Reply preview 비대화형 경계, query cache hit·loading·error·retry·null Post·Content·Media의 shell 유지, 같은 Content 복구 상태 보존, 다른 revision reset·original index unavailable, URL·actor 전환, 명시적 dismiss·Viewer 삭제 action·surface unmount와 focus 복귀를 검증한다.
+- Component test로 정상 tile의 surface Post ID·선택 index, pure Repost의 direct Source Media owner·disabled Reply·Source social target, 주변 Post navigation 전파 차단, Sensitive·retry control 격리, Reply preview 비대화형 경계, query cache hit·loading·error·retry·null Post·Content·Media의 shell 유지, 같은 Content 복구 시 탐색·원문 상태 유지와 이미지 새 로드, 다른 revision reset·original index unavailable, URL·actor 전환, 명시적 dismiss·Viewer 삭제 action·surface unmount와 focus 복귀를 검증한다.
 - PROD-626 baseline의 1·2·3·4장, Sensitive와 error·retry test를 함께 통과시킨다.
 
 - [x] 1.1 목록·상세의 기존 provider 아래 stable `PostMediaViewerHost`와 `{surfacePostId, mediaOwnerPostId, selectedIndex, originControl}` session을 두고 기존 `node(surfacePostId)` visibility·authorization query를 연결한다.
@@ -54,19 +56,19 @@
 - Viewer 이미지는 `contain`을 사용하고 gallery의 `cover` geometry를 변경하지 않는다.
 - 첫·마지막 경계에서 반대편으로 순환하지 않고 범위를 벗어나는 control을 disabled로 전달한다.
 - 다중 Media에만 시각 counter를 표시하며 Screen Reader 위치 정보는 단일 Media에도 제공하고, nullable Alt Text 또는 document 순서 fallback을 image accessible name으로 별도 유지한다.
-- Loading·error·retry는 Media identity별로 격리하고 raw URL·내부 오류·권한 세부 정보를 노출하지 않는다.
+- Loading·error·retry는 현재 선택 이미지에만 두고 raw URL·내부 오류·권한 세부 정보를 노출하지 않는다.
 
 **Verification**
 
 - Component test로 선택 index, 1장·첫·중간·마지막, button·keyboard·swipe 이동, 비순환 경계, Alt Text·fallback과 counter·announcement를 검증한다.
-- 각 Media의 loading·error·retry가 현재 index와 다른 Media 상태를 변경하지 않는지 검증한다.
+- 현재 이미지의 retry는 index를 유지하고 이미지 재방문·query 복구는 새로 로드하며, 이전 요청 callback이 현재 이미지를 변경하지 않는지 검증한다.
 
 - [x] 2.1 Modal image surface에 선택 Media의 `contain` 표시와 identity별 loading·error·retry 상태를 제공한다.
 - [x] 2.2 이전·다음 control, 비순환 index 전이, nullable Alt Text·fallback과 단일·다중 counter·Screen Reader 위치 정보를 구현한다.
 - [x] 2.3 Web arrow key와 vertical scroll을 침범하지 않는 Native 수평 swipe를 같은 탐색 결과에 연결한다.
 - [x] 2.4 탐색·상태·오류 격리의 focused component test를 추가하고 통과시킨다.
 - [x] 2.5 PROD-853 shared Surface의 실제 이미지 실패를 persistent Danger Action Toast·이미지 재시도에 연결하고 이전 요청 callback 격리를 검증한다.
-- [x] 2.6 Viewer Surface와 전용 테스트를 `src/patterns/post-media-viewer`에 배치하고 기존 Post component와 Production Host·Thread 연결 경계를 유지한다.
+- [x] 2.6 Viewer Surface와 전용 테스트를 `src/components/post`에 배치하고 기존 Post component와 Production Host·Thread 연결 경계를 유지한다.
 - [x] 2.7 PROD-853 Media별 오류 보존·전역 알림과 retry 격리·Compact stage Toast geometry를 검증하고, 자동 interaction 구현은 Tests story 파일이 소유한다.
 - [x] 2.8 PROD-853 Surface에 필수 Content revision identity를 전달하고 같은 revision의 null 복구 보존·새 revision의 동일 Media 초기화·stale callback 격리·close focus 유지를 검증한다.
 

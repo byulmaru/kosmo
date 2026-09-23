@@ -409,6 +409,23 @@ const repostAuthor = profile({
   id: 'profile-repost-author',
   relativeHandle: '@reposter',
 });
+const contentWarningQuoteSourcePost = post({
+  bodyText: '인용 원문의 가림 해제 뒤 표시되는 본문입니다.',
+  contentWarning: '인용 원문 자체 경고',
+  id: 'content-warning-quote-source',
+  profile: sourceAuthor,
+});
+const contentWarningQuotePost = {
+  ...post({
+    bodyText: '인용 게시글의 가림 해제 뒤 표시되는 본문입니다.',
+    contentWarning: '인용 게시글 바깥 경고',
+    id: 'content-warning-quote-outer',
+    profile: repostAuthor,
+    repostSource: contentWarningQuoteSourcePost,
+  }),
+  repostCount: 1,
+  viewerRepost: null,
+};
 const sourcePost = {
   ...post({
     bodyText: '원문 작성자의 긴 본문과 줄바꿈을 표시합니다.\n두 번째 줄입니다.',
@@ -847,6 +864,8 @@ const storyPosts = [
   mediaTextPost,
   mediaOnlyPost,
   contentWarningPost,
+  contentWarningQuoteSourcePost,
+  contentWarningQuotePost,
   contentWarningSourcePreviewPost,
   sensitiveTwoMediaPost,
   threeMediaPost,
@@ -1930,6 +1949,55 @@ function ProductionComposerAdapterStory() {
   );
 }
 
+function ProductionComposerDefaultVisibilityUpdateStory() {
+  const environment = useRelayEnvironment();
+  return (
+    <>
+      <ProductionComposerAdapterStory />
+      {(['PUBLIC', 'FOLLOWERS'] as const).map((visibility) => (
+        <Pressable
+          accessibilityRole="button"
+          key={visibility}
+          onPress={() =>
+            commitLocalUpdate(environment, (store) => {
+              store
+                .get('profile-composer')
+                ?.getLinkedRecord('private')
+                ?.setValue(visibility, 'defaultPostVisibility');
+            })
+          }
+        >
+          <Text>설정에서 기본 공개 범위를 {visibility}(으)로 저장</Text>
+        </Pressable>
+      ))}
+    </>
+  );
+}
+
+function ComposerRailMediaFocusStory() {
+  const [presentation, setPresentation] = useState<'overlay' | 'rail'>('rail');
+  const profile = usePostsStoryData().composerProfile;
+
+  return (
+    <View style={{ width: presentation === 'rail' ? 350 : 640 }}>
+      {presentation === 'rail' ? (
+        <PostComposer
+          onExpand={() => setPresentation('overlay')}
+          onRequestClose={() => setPresentation('rail')}
+          presentation="rail"
+          profile={profile}
+        />
+      ) : (
+        <PostComposer
+          onRequestClose={() => setPresentation('rail')}
+          presentation="overlay"
+          profile={profile}
+        />
+      )}
+    </View>
+  );
+}
+
 function ContentWarningRevealStory() {
   return (
     <Catalog>
@@ -1944,6 +2012,7 @@ function ContentWarningRevealStory() {
             url: postMediaImageUri,
           },
         ]}
+        mentionedProfiles={[]}
         postId="content-warning-story-post"
       />
     </Catalog>
@@ -1973,8 +2042,28 @@ function ContentWarningConsumerIntegrationStory() {
           presentation="wide"
         />
       </View>
-      <View testID="content-warning-body-surface">
-        <PostBody post={requireFragment(post.body, 'Content Warning body consumer')} size="lg" />
+      <View testID="content-warning-layout-surface">
+        <PostLayout post={requireFragment(post.layout, 'Content Warning PostLayout consumer')} />
+      </View>
+    </Catalog>
+  );
+}
+
+function ContentWarningQuoteIndependentLifecycleStory() {
+  const post = requirePostById(usePostsStoryData().posts, contentWarningQuotePost.id);
+
+  return (
+    <Catalog>
+      <View testID="content-warning-quote-list-surface">
+        <PostListItem
+          post={requireFragment(post.listItem, 'Content Warning Quote list item consumer')}
+          presentation="wide"
+        />
+      </View>
+      <View testID="content-warning-quote-layout-surface">
+        <PostLayout
+          post={requireFragment(post.layout, 'Content Warning Quote PostLayout consumer')}
+        />
       </View>
     </Catalog>
   );
@@ -2545,19 +2634,23 @@ function ProductionPostListItemStory({
   postId: string;
   presentation: 'mobile' | 'wide';
 }) {
-  const { posts } = usePostsStoryData();
+  const { posts, replyComposerProfile } = usePostsStoryData();
 
   return (
-    <Catalog>
-      <StoryPathname testID="presentation-story-pathname" />
-      <PostListItem
-        post={requireFragment(
-          requirePostById(posts, postId).listItem,
-          `production post list item ${postId}`,
-        )}
-        presentation={presentation}
-      />
-    </Catalog>
+    <PostComposerCoordinatorProvider owner="list" profile={replyComposerProfile}>
+      <PostMediaViewerHostProvider>
+        <Catalog>
+          <StoryPathname testID="presentation-story-pathname" />
+          <PostListItem
+            post={requireFragment(
+              requirePostById(posts, postId).listItem,
+              `production post list item ${postId}`,
+            )}
+            presentation={presentation}
+          />
+        </Catalog>
+      </PostMediaViewerHostProvider>
+    </PostComposerCoordinatorProvider>
   );
 }
 
@@ -2609,6 +2702,7 @@ function PostMediaViewerRevisionStory() {
               );
               contentRecord.setValue('content-post-media-viewer-quote-revision', 'id');
               contentRecord.setValue(longBody, 'bodyText');
+              contentRecord.setLinkedRecords([], 'mentionedProfiles');
               contentRecord.setLinkedRecords(
                 originalContent.media!.map((media, index) => {
                   const mediaRecord = store.create(`viewer-revision-media-${index}`, 'Media');
@@ -2899,7 +2993,14 @@ const meta = {
     resetImagePickerMock();
   },
   component: PostCatalog,
-  excludeStories: ['LinkedSourceQuoteInteraction'],
+  excludeStories: [
+    'ComposerBeforeUnloadContract',
+    'ContentWarningProductionConsumersShareRevealStateInteraction',
+    'ContentWarningQuoteIndependentLifecycleInteraction',
+    'ContentWarningRevealInteraction',
+    'ContentWarningSourcePreviewRevealInteraction',
+    'LinkedSourceQuoteInteraction',
+  ],
   decorators: [
     (Story) => (
       <SessionProvider>
@@ -4535,7 +4636,12 @@ export const PostMediaViewerCompact: Story = {
     expect(viewer.queryByRole('button', { name: /다운로드|저장/ })).toBeNull();
 
     await userEvent.click(await viewer.findByRole('button', { name: '원문 더 보기' }));
-    expect(viewer.getByTestId('post-media-viewer-body-scroll')).toBeVisible();
+    const expandedBody = viewer.getByTestId('post-media-viewer-body-scroll');
+    expect(expandedBody).toBeVisible();
+    expect(expandedBody).toHaveAttribute('aria-label', '펼친 원문');
+    expect(expandedBody).toHaveAttribute('tabindex', '0');
+    expandedBody.focus();
+    expect(expandedBody).toHaveFocus();
     expect(viewer.getByTestId('post-media-viewer-action-bar')).toBeVisible();
 
     await userEvent.keyboard('{Escape}');
@@ -4575,9 +4681,9 @@ export const PostMediaViewerWide: Story = {
     const viewer = within(dialog);
     expect(dialog).toHaveAttribute('aria-modal', 'true');
     expect(viewer.getByTestId('post-media-viewer-layout')).toHaveStyle({ flexDirection: 'row' });
-    const wideDetail = await viewer.findByTestId('post-media-viewer-wide-detail');
+    const thread = await viewer.findByTestId('post-thread');
+    const wideDetail = viewer.getByTestId('post-media-viewer-context-rail');
     expect(wideDetail.getBoundingClientRect().width).toBe(320);
-    const thread = await within(wideDetail).findByTestId('post-thread');
     const rows = Array.from(thread.children) as HTMLElement[];
     expect(rows.map((row) => row.getAttribute('data-testid'))).toEqual([
       'post-thread-item-route-root',
@@ -4606,8 +4712,6 @@ export const PostMediaViewerWide: Story = {
 
     const currentActionBar = currentRow.getByRole('toolbar', { name: '액션 바' });
     expect(currentActionBar.scrollWidth).toBeLessThanOrEqual(currentActionBar.clientWidth);
-    await userEvent.click(within(currentActionBar).getByRole('button', { name: '답글' }));
-    expect(currentRow.getByRole('textbox', { name: '답글 본문' })).toBeVisible();
 
     const threadScroll = within(wideDetail).getByTestId('post-media-viewer-thread-scroll');
     expect(getComputedStyle(threadScroll).overflowY).toBe('auto');
@@ -4649,6 +4753,13 @@ export const PostMediaViewerWide: Story = {
     await waitFor(() => expect(screen.getAllByTestId('post-media-viewer-dialog')).toHaveLength(1));
     expect(screen.getByRole('dialog')).toBe(dialog);
     expect(nestedOrigin).toHaveFocus();
+
+    await userEvent.click(within(currentActionBar).getByRole('button', { name: '답글' }));
+    const replyDialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+    expect(screen.queryByTestId('post-media-viewer-dialog')).toBeNull();
+    await waitFor(() =>
+      expect(within(replyDialog).getByRole('textbox', { name: '답글 본문' })).toHaveFocus(),
+    );
   },
   render: () => (
     <ProductionPostListItemStory postId="post-media-viewer-quote" presentation="wide" />
@@ -4674,8 +4785,12 @@ export const PostMediaViewerWideThreadLoading: Story = {
     );
 
     const viewer = within(await screen.findByRole('dialog'));
-    const wideDetail = await viewer.findByTestId('post-media-viewer-wide-detail');
-    expect(await within(wideDetail).findByText('답글을 불러오는 중입니다.')).toBeVisible();
+    const loadingState = await viewer.findByText('답글을 불러오는 중입니다.');
+    const wideDetail = viewer
+      .getAllByTestId('post-media-viewer-context-rail')
+      .find((rail) => rail.contains(loadingState));
+    expect(wideDetail).toBeDefined();
+    expect(loadingState).toBeVisible();
     expect(viewer.getByTestId('post-media-viewer-image')).toBeVisible();
     expect(viewer.getByRole('button', { name: '이미지 뷰어 닫기' })).toBeEnabled();
   },
@@ -4705,8 +4820,12 @@ export const PostMediaViewerWideThreadErrorRetry: Story = {
     );
 
     const viewer = within(await screen.findByRole('dialog'));
-    const wideDetail = await viewer.findByTestId('post-media-viewer-wide-detail');
-    expect(await within(wideDetail).findByText('답글을 불러오지 못했어요')).toBeVisible();
+    const errorState = await viewer.findByText('답글을 불러오지 못했어요');
+    const wideDetail = viewer
+      .getAllByTestId('post-media-viewer-context-rail')
+      .find((rail) => rail.contains(errorState));
+    expect(wideDetail).toBeDefined();
+    expect(errorState).toBeVisible();
     expect(viewer.getByTestId('post-media-viewer-image')).toBeVisible();
     await userEvent.click(viewer.getByRole('button', { name: '답글 다시 불러오기' }));
     await expect(viewer.findByTestId('post-thread')).resolves.toBeVisible();
@@ -4735,7 +4854,7 @@ export const PostMediaViewerHostLoading: Story = {
     );
 
     const viewer = within(await screen.findByRole('dialog'));
-    expect(await viewer.findByText('게시글을 불러오는 중입니다.')).toBeVisible();
+    expect(await viewer.findByText('미디어를 불러오는 중')).toBeVisible();
     expect(viewer.getByRole('button', { name: '이미지 뷰어 닫기' })).toBeEnabled();
   },
   render: () => (
@@ -4763,8 +4882,8 @@ export const PostMediaViewerHostErrorRetry: Story = {
     );
 
     const viewer = within(await screen.findByRole('dialog'));
-    expect(await viewer.findByText('게시글을 불러오지 못했습니다.')).toBeVisible();
-    await userEvent.click(viewer.getByRole('button', { name: '게시글 다시 불러오기' }));
+    expect(await viewer.findByText('미디어를 불러오지 못했어요')).toBeVisible();
+    await userEvent.click(viewer.getByRole('button', { name: '다시 시도' }));
     await expect(viewer.findByTestId('post-media-viewer-image')).resolves.toBeVisible();
   },
   render: () => (
@@ -4787,7 +4906,7 @@ export const PostMediaViewerHostUnavailable: Story = {
     );
 
     const viewer = within(await screen.findByRole('dialog'));
-    expect(await viewer.findByText('이미지를 더 이상 표시할 수 없습니다.')).toBeVisible();
+    expect(await viewer.findByText('이 미디어를 볼 수 없어요')).toBeVisible();
     expect(viewer.getByRole('button', { name: '이미지 뷰어 닫기' })).toBeEnabled();
   },
   render: () => (
@@ -4870,13 +4989,11 @@ export const PostMediaViewerLoadingAndError: Story = {
     const viewer = within(dialog);
     expect(viewer.getByTestId('post-media-viewer-counter')).toHaveTextContent('2 / 3');
     expect(viewer.getByTestId('post-media-viewer-action-bar')).toBeVisible();
-    const retry = await viewer.findByRole('button', { name: '오른쪽 실패 이미지 다시 시도' });
+    const retry = await viewer.findByRole('button', { name: '다시 시도' });
     expect(retry).toBeVisible();
     expect(dialog.textContent).not.toContain('data:image');
     await userEvent.click(retry);
-    await expect(
-      viewer.findByRole('button', { name: '오른쪽 실패 이미지 다시 시도' }),
-    ).resolves.toBeVisible();
+    await waitFor(() => expect(viewer.getByRole('button', { name: '다시 시도' })).toBeVisible());
   },
   render: () => <DirectPostMediaViewerStory postId="media-load-error-three" selectedIndex={1} />,
 };
@@ -6142,15 +6259,51 @@ export const ProductionComposerMediaEditorFocus: Story = {
   render: () => <ProductionComposerAdapterStory />,
 };
 
+export const ProductionComposerDefaultVisibilityUpdate: Story = {
+  ...ProductionComposerAdapterSuccess,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const dispatchBeforeUnload = () => {
+      const event = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(event);
+      return event;
+    };
+
+    expect(dispatchBeforeUnload().defaultPrevented).toBe(false);
+    await userEvent.click(
+      canvas.getByRole('button', { name: '설정에서 기본 공개 범위를 PUBLIC(으)로 저장' }),
+    );
+    await waitFor(() =>
+      expect(canvas.getByRole('button', { name: '공개 범위: 공개' })).toBeVisible(),
+    );
+    expect(dispatchBeforeUnload().defaultPrevented).toBe(false);
+
+    await userEvent.type(canvas.getByRole('textbox', { name: '게시물 내용' }), '보존할 draft');
+    await waitFor(() => expect(dispatchBeforeUnload().defaultPrevented).toBe(true));
+    await userEvent.click(
+      canvas.getByRole('button', { name: '설정에서 기본 공개 범위를 FOLLOWERS(으)로 저장' }),
+    );
+    expect(canvas.getByRole('button', { name: '공개 범위: 공개' })).toBeVisible();
+    expect(dispatchBeforeUnload().defaultPrevented).toBe(true);
+  },
+  render: () => <ProductionComposerDefaultVisibilityUpdateStory />,
+};
+
 export const ContentWarningReveal: Story = {
+  render: () => <ContentWarningRevealStory />,
+};
+
+export const ContentWarningRevealInteraction: Story = {
+  ...ContentWarningReveal,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     expect(canvas.queryByText('가림 해제 뒤 표시되는 원문 본문입니다.')).not.toBeInTheDocument();
     expect(canvas.queryByTestId('post-media-gallery')).not.toBeInTheDocument();
 
-    const toggle = canvas.getByRole('button', { name: '내용 보기' });
-    const toggleLabel = within(toggle).getByText('내용 보기');
-    expect(getComputedStyle(toggle).justifyContent).toBe('center');
+    const toggle = canvas.getByRole('button', {
+      name: /민감한 내용이 포함되어 있습니다\., 본문 · 이미지 1개, 보기/,
+    });
+    const toggleLabel = within(toggle).getByText('보기');
     const toggleBox = toggle.getBoundingClientRect();
     const toggleLabelBox = toggleLabel.getBoundingClientRect();
     expect(
@@ -6169,10 +6322,14 @@ export const ContentWarningReveal: Story = {
     expect(canvas.queryByText('가림 해제 뒤 표시되는 원문 본문입니다.')).not.toBeInTheDocument();
     expect(canvas.queryByTestId('post-media-gallery')).not.toBeInTheDocument();
   },
-  render: () => <ContentWarningRevealStory />,
 };
 
 export const ContentWarningSourcePreviewReveal: Story = {
+  render: () => <ContentWarningSourcePreviewStory />,
+};
+
+export const ContentWarningSourcePreviewRevealInteraction: Story = {
+  ...ContentWarningSourcePreviewReveal,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     expect(
@@ -6180,31 +6337,102 @@ export const ContentWarningSourcePreviewReveal: Story = {
     ).not.toBeInTheDocument();
     expect(canvas.queryByTestId('post-media-gallery')).not.toBeInTheDocument();
 
-    await userEvent.click(canvas.getByRole('button', { name: '내용 보기' }));
+    await userEvent.click(
+      canvas.getByRole('button', { name: /원문 프리뷰 경고, 본문 · 이미지 1개, 보기/ }),
+    );
 
     expect(canvas.getByText('가림 해제 뒤 표시되는 원문 프리뷰 본문입니다.')).toBeVisible();
     expect(canvas.getByTestId('post-media-gallery')).toBeVisible();
     expect(canvas.getByLabelText('가림 해제 뒤 표시되는 원문 프리뷰 이미지')).toBeVisible();
   },
-  render: () => <ContentWarningSourcePreviewStory />,
 };
 
 export const ContentWarningProductionConsumersShareRevealState: Story = {
+  render: () => <ContentWarningConsumerIntegrationStory />,
+};
+
+export const ContentWarningProductionConsumersShareRevealStateInteraction: Story = {
+  ...ContentWarningProductionConsumersShareRevealState,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const listSurface = within(canvas.getByTestId('content-warning-list-surface'));
-    const bodySurface = within(canvas.getByTestId('content-warning-body-surface'));
+    const layoutSurface = within(canvas.getByTestId('content-warning-layout-surface'));
     expect(canvas.queryByText(contentWarningPost.content!.bodyText)).not.toBeInTheDocument();
 
-    await userEvent.click(listSurface.getByRole('button', { name: '내용 보기' }));
+    await userEvent.click(
+      listSurface.getByRole('button', {
+        name: /실제 Post 소비자 통합 검증 경고, 본문, 보기/,
+      }),
+    );
     expect(canvas.getAllByText(contentWarningPost.content!.bodyText)).toHaveLength(2);
-    expect(bodySurface.getByRole('button', { name: '내용 다시 가리기' })).toBeVisible();
+    expect(
+      layoutSurface.getByRole('button', {
+        name: /실제 Post 소비자 통합 검증 경고, 본문, 다시 가리기/,
+      }),
+    ).toBeVisible();
 
-    await userEvent.click(bodySurface.getByRole('button', { name: '내용 다시 가리기' }));
+    await userEvent.click(
+      layoutSurface.getByRole('button', {
+        name: /실제 Post 소비자 통합 검증 경고, 본문, 다시 가리기/,
+      }),
+    );
     expect(canvas.queryByText(contentWarningPost.content!.bodyText)).not.toBeInTheDocument();
-    expect(listSurface.getByRole('button', { name: '내용 보기' })).toBeVisible();
+    expect(
+      listSurface.getByRole('button', { name: /실제 Post 소비자 통합 검증 경고, 본문, 보기/ }),
+    ).toBeVisible();
   },
-  render: () => <ContentWarningConsumerIntegrationStory />,
+};
+
+export const ContentWarningQuoteIndependentLifecycle: Story = {
+  render: () => <ContentWarningQuoteIndependentLifecycleStory />,
+};
+
+export const ContentWarningQuoteIndependentLifecycleInteraction: Story = {
+  ...ContentWarningQuoteIndependentLifecycle,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const listSurface = within(canvas.getByTestId('content-warning-quote-list-surface'));
+    const layoutSurface = within(canvas.getByTestId('content-warning-quote-layout-surface'));
+    const outerBody = '인용 게시글의 가림 해제 뒤 표시되는 본문입니다.';
+    const sourceBody = '인용 원문의 가림 해제 뒤 표시되는 본문입니다.';
+    const outerWarning = /인용 게시글 바깥 경고, 본문, 보기/;
+    const sourceWarning = /인용 원문 자체 경고, 본문, 보기/;
+
+    expect(listSurface.getByTestId('source-post-preview')).toBeVisible();
+    expect(listSurface.getByRole('button', { name: outerWarning })).toBeVisible();
+    expect(listSurface.getByRole('button', { name: sourceWarning })).toBeVisible();
+    expect(listSurface.queryByText(outerBody)).not.toBeInTheDocument();
+    expect(listSurface.queryByText(sourceBody)).not.toBeInTheDocument();
+    expect(layoutSurface.queryByText(outerBody)).not.toBeInTheDocument();
+    expect(layoutSurface.queryByText(sourceBody)).not.toBeInTheDocument();
+
+    await userEvent.click(listSurface.getByRole('button', { name: outerWarning }));
+    expect(listSurface.getByText(outerBody)).toBeVisible();
+    expect(listSurface.queryByText(sourceBody)).not.toBeInTheDocument();
+    expect(layoutSurface.getByText(outerBody)).toBeVisible();
+    expect(layoutSurface.queryByText(sourceBody)).not.toBeInTheDocument();
+
+    await userEvent.click(listSurface.getByRole('button', { name: sourceWarning }));
+    expect(listSurface.getByText(sourceBody)).toBeVisible();
+    expect(layoutSurface.getByText(sourceBody)).toBeVisible();
+
+    await userEvent.click(
+      listSurface.getByRole('button', { name: /인용 게시글 바깥 경고, 본문, 다시 가리기/ }),
+    );
+    expect(listSurface.queryByText(outerBody)).not.toBeInTheDocument();
+    expect(listSurface.getByTestId('source-post-preview')).toBeVisible();
+    expect(listSurface.getByText(sourceBody)).toBeVisible();
+    expect(layoutSurface.queryByText(outerBody)).not.toBeInTheDocument();
+    expect(layoutSurface.getByText(sourceBody)).toBeVisible();
+
+    await userEvent.click(
+      listSurface.getByRole('button', { name: /인용 원문 자체 경고, 본문, 다시 가리기/ }),
+    );
+    expect(listSurface.queryByText(outerBody)).not.toBeInTheDocument();
+    expect(listSurface.queryByText(sourceBody)).not.toBeInTheDocument();
+    expect(layoutSurface.queryByText(outerBody)).not.toBeInTheDocument();
+    expect(layoutSurface.queryByText(sourceBody)).not.toBeInTheDocument();
+  },
 };
 
 export const ComposerMediaStates: Story = {
@@ -6319,6 +6547,94 @@ export const ComposerMediaUploadInteraction: Story = {
     }
   },
   render: () => <ComposerStory />,
+};
+
+export const ComposerBeforeUnloadContract: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostComposerCompleteMediaUploadMutation: {
+          data: {
+            completeMediaUpload: {
+              media: { id: 'media-before-unload', state: 'READY' },
+            },
+          },
+        },
+        PostComposerIssueMediaUploadUrlMutation: {
+          data: {
+            issueMediaUploadUrl: {
+              media: { id: 'media-before-unload' },
+              uploadUrl: 'https://upload.example/before-unload',
+            },
+          },
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = canvas.getByRole('textbox', { name: '게시물 내용' });
+    let finishUpload!: (response: Response) => void;
+    let putCount = 0;
+    const { originalFetch } = installImageUploadFetch(async () => {
+      putCount += 1;
+      if (putCount === 1) {
+        return new Promise<Response>((resolve) => {
+          finishUpload = resolve;
+        });
+      }
+      return new Response(null, { status: 200 });
+    });
+    const dispatchBeforeUnload = () => {
+      const event = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(event);
+      return event;
+    };
+
+    setNextImagePickerResult({
+      assets: [createComposerPickerAsset('before-unload-uploading.svg')],
+      canceled: false,
+    });
+
+    try {
+      expect(dispatchBeforeUnload().defaultPrevented).toBe(false);
+
+      await userEvent.type(body, '새로고침 전에 보호할 draft');
+      await waitFor(() => expect(dispatchBeforeUnload().defaultPrevented).toBe(true));
+
+      await userEvent.clear(body);
+      await waitFor(() => expect(dispatchBeforeUnload().defaultPrevented).toBe(false));
+
+      await userEvent.click(canvas.getByRole('button', { name: '이미지 추가' }));
+      await waitFor(() => {
+        expect(canvas.getByLabelText('첨부 이미지 1, 업로드 중')).toBeVisible();
+      });
+      await waitFor(() => expect(putCount).toBe(1));
+      expect(dispatchBeforeUnload().defaultPrevented).toBe(true);
+
+      finishUpload(new Response(null, { status: 500 }));
+      await waitFor(() => {
+        expect(canvas.getByLabelText('첨부 이미지 1, 업로드 실패')).toBeVisible();
+      });
+      expect(canvas.getByLabelText('1번째 이미지 업로드 다시 시도')).toBeVisible();
+      expect(dispatchBeforeUnload().defaultPrevented).toBe(true);
+
+      await userEvent.click(canvas.getByLabelText('1번째 이미지 업로드 다시 시도'));
+      await waitFor(() => {
+        expect(canvas.getByLabelText('첨부 이미지 1, 업로드 완료')).toBeVisible();
+      });
+      expect(dispatchBeforeUnload().defaultPrevented).toBe(true);
+
+      await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 1 제거' }));
+      await waitFor(() => {
+        expect(canvas.queryByLabelText('첨부 이미지 1, 업로드 완료')).not.toBeInTheDocument();
+      });
+      await waitFor(() => expect(dispatchBeforeUnload().defaultPrevented).toBe(false));
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  },
+  render: () => <ComposerRailMediaFocusStory />,
 };
 
 export const ComposerClipboardPasteInteraction: Story = {

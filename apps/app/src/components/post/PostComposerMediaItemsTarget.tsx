@@ -25,6 +25,7 @@ import type { ComposerMediaItem } from './PostComposerMediaControls';
 type PostComposerMediaEditTool = 'alt' | 'sensitive';
 
 export type PostComposerMediaItemsTargetProps = {
+  readonly compact?: boolean;
   readonly disabled: boolean;
   readonly media: readonly ComposerMediaItem[];
   readonly onEdit: (key: string, tool: PostComposerMediaEditTool) => void;
@@ -39,6 +40,7 @@ const statusVisualHeight = 28;
 const statusTargetHeight = Platform.select({ android: 48, ios: 44, default: statusVisualHeight });
 
 export function PostComposerMediaItemsTarget({
+  compact = false,
   disabled,
   media,
   onEdit,
@@ -55,12 +57,13 @@ export function PostComposerMediaItemsTarget({
     return null;
   }
 
-  const contentWidth = media.length * itemSize + Math.max(0, media.length - 1) * space[8];
+  const resolvedItemSize = compact ? 112 : itemSize;
+  const contentWidth = media.length * resolvedItemSize + Math.max(0, media.length - 1) * space[8];
   const maxScrollOffset = Math.max(0, contentWidth - galleryWidth);
   const showNavigation =
     Platform.OS === 'web' && media.length > 2 && (galleryWidth === 0 || maxScrollOffset > 0);
   const scrollGallery = (direction: -1 | 1) => {
-    const step = itemSize + space[8];
+    const step = resolvedItemSize + space[8];
     const nextOffset = Math.max(0, Math.min(maxScrollOffset, scrollOffset + direction * step));
 
     galleryRef.current?.scrollTo({ animated: false, x: nextOffset });
@@ -68,7 +71,7 @@ export function PostComposerMediaItemsTarget({
   };
 
   return (
-    <View style={styles.galleryShell}>
+    <View style={[styles.galleryShell, { height: resolvedItemSize }]}>
       <ScrollView
         accessibilityLabel={`첨부 이미지 갤러리, ${media.length}개`}
         contentContainerStyle={styles.galleryContent}
@@ -78,7 +81,7 @@ export function PostComposerMediaItemsTarget({
         ref={galleryRef}
         scrollEventThrottle={16}
         showsHorizontalScrollIndicator={false}
-        style={styles.gallery}
+        style={[styles.gallery, { height: resolvedItemSize }]}
       >
         {media.map((item, index) => {
           const itemNumber = index + 1;
@@ -93,6 +96,7 @@ export function PostComposerMediaItemsTarget({
               key={item.key}
               style={[
                 styles.item,
+                { height: resolvedItemSize, width: resolvedItemSize },
                 {
                   backgroundColor: failed ? theme.feedbackDangerSubtle : theme.backgroundElevated,
                   borderColor: failed ? theme.feedbackDangerBorder : theme.borderSubtle,
@@ -303,16 +307,14 @@ function StatusButton({
 }
 
 const styles = StyleSheet.create({
-  galleryShell: { height: itemSize, position: 'relative', width: '100%' },
-  gallery: { height: itemSize, width: '100%' },
+  galleryShell: { position: 'relative', width: '100%' },
+  gallery: { width: '100%' },
   galleryContent: { gap: space[8] },
   item: {
     borderRadius: radius[12],
     borderWidth: borderWidths[1],
-    height: itemSize,
     overflow: 'hidden',
     position: 'relative',
-    width: itemSize,
   },
   previewTarget: { height: '100%', width: '100%' },
   preview: { height: '100%', width: '100%' },

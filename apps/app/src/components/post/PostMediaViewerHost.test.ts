@@ -34,6 +34,19 @@ type PendingRequest = {
 let actorRevision = 0;
 let activeRequests: PendingRequest[] = [];
 let renderer: ReactTestRenderer | null = null;
+let viewportWidth = 1280;
+let replyExecutionKind: 'disabled' | 'enabled' | 'resolution-required' = 'disabled';
+let replyResolveCalls = 0;
+let replyPressOwners: Array<'detail' | 'list' | undefined> = [];
+let replyBinding: {
+  expanded: boolean;
+  onPostCreated?: () => void;
+  onPress: (owner?: 'detail' | 'list') => void;
+  onRequestClose: () => void;
+  owner: 'detail' | 'list';
+  profile: object | null;
+} | null = null;
+const platform = { OS: 'web' as 'ios' | 'web' };
 
 Object.assign(globalThis, {
   cancelAnimationFrame: () => undefined,
@@ -45,8 +58,16 @@ Object.assign(globalThis, {
 
 mock.module('react-native', {
   exports: {
+    Platform: platform,
     StyleSheet: { create: <T>(styles: T) => styles },
+    useWindowDimensions: () => ({ width: viewportWidth }),
     View: 'View',
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+
+mock.module('expo-router', {
+  exports: {
+    unstable_navigationEvents: { addListener: () => () => undefined },
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 
@@ -74,8 +95,10 @@ mock.module('@/relay/RelayActorProvider', {
 mock.module('./PostActionAuthentication', {
   exports: {
     usePostActionAuthentication: () => ({
-      execution: { kind: 'disabled' },
-      resolve: () => undefined,
+      execution: { kind: replyExecutionKind },
+      resolve: () => {
+        replyResolveCalls += 1;
+      },
     }),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
@@ -125,7 +148,7 @@ mock.module('./PostMediaViewerThread', {
 } as unknown as Parameters<typeof mock.module>[1]);
 
 mock.module('./PostComposerCoordinator', {
-  exports: { usePostComposerBinding: () => null },
+  exports: { usePostComposerBinding: () => replyBinding },
 } as unknown as Parameters<typeof mock.module>[1]);
 
 mock.module('./replySurface', {
@@ -155,6 +178,12 @@ afterEach(async () => {
   }
   actorRevision = 0;
   activeRequests = [];
+  viewportWidth = 1280;
+  replyExecutionKind = 'disabled';
+  replyResolveCalls = 0;
+  replyPressOwners = [];
+  replyBinding = null;
+  platform.OS = 'web';
 });
 
 describe('PostMediaViewerHost Relay lifecycle', () => {
@@ -166,6 +195,78 @@ describe('PostMediaViewerHost Relay lifecycle', () => {
     assert.ok(byTestId('post-media-viewer-content'));
     assert.equal(optionalByTestId('post-media-viewer-query-loading'), null);
     assert.equal(relay.requests.length, 1);
+  });
+
+  it('compact Viewer의 인증된 Reply는 Viewer를 닫고 list owner로 background composer를 연다', async () => {
+    viewportWidth = 1024;
+    replyExecutionKind = 'enabled';
+    replyBinding = {
+      expanded: false,
+      onPress: (owner) => replyPressOwners.push(owner),
+      onRequestClose: () => undefined,
+      owner: 'detail',
+      profile: {},
+    };
+    const relay = createEnvironment(hostPayload());
+    await renderHost(relay.environment);
+    await openViewer();
+
+    const actionBar = byTestId('post-media-viewer-content').props.actionBar as {
+      props: { reply?: { onPress: () => void } };
+    };
+    assert.ok(actionBar.props.reply);
+    await act(async () => actionBar.props.reply?.onPress());
+
+    assert.deepEqual(replyPressOwners, ['list']);
+    assert.equal(optionalByTestId('post-media-viewer-dialog'), null);
+  });
+
+  it('인증 해석이 필요한 Viewer Reply는 owner press 없이 해석 경로를 유지한다', async () => {
+    viewportWidth = 1024;
+    replyExecutionKind = 'resolution-required';
+    replyBinding = {
+      expanded: false,
+      onPress: (owner) => replyPressOwners.push(owner),
+      onRequestClose: () => undefined,
+      owner: 'detail',
+      profile: {},
+    };
+    const relay = createEnvironment(hostPayload());
+    await renderHost(relay.environment);
+    await openViewer();
+
+    const actionBar = byTestId('post-media-viewer-content').props.actionBar as {
+      props: { reply?: { onPress: () => void } };
+    };
+    assert.ok(actionBar.props.reply);
+    await act(async () => actionBar.props.reply?.onPress());
+
+    assert.equal(replyResolveCalls, 1);
+    assert.deepEqual(replyPressOwners, []);
+  });
+
+  it('Native Viewer Reply는 viewport 폭과 무관하게 list owner를 사용한다', async () => {
+    platform.OS = 'ios';
+    viewportWidth = 1600;
+    replyExecutionKind = 'enabled';
+    replyBinding = {
+      expanded: false,
+      onPress: (owner) => replyPressOwners.push(owner),
+      onRequestClose: () => undefined,
+      owner: 'detail',
+      profile: {},
+    };
+    const relay = createEnvironment(hostPayload());
+    await renderHost(relay.environment);
+    await openViewer();
+
+    const actionBar = byTestId('post-media-viewer-content').props.actionBar as {
+      props: { reply?: { onPress: () => void } };
+    };
+    assert.ok(actionBar.props.reply);
+    await act(async () => actionBar.props.reply?.onPress());
+
+    assert.deepEqual(replyPressOwners, ['list']);
   });
 
   it('pending query가 완료되어도 같은 modal shell을 유지한다', async () => {

@@ -1,5 +1,6 @@
 import { db, Instances, ProfileHashtags, Profiles } from '@kosmo/core/db';
 import { ValidationError } from '@kosmo/core/error';
+import { profileBlockVisibilityWhere } from '@kosmo/core/visibility';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, eq, getColumns, gt } from 'drizzle-orm';
 import { parse as parseUuid } from 'uuid';
@@ -35,8 +36,24 @@ builder.objectField(Hashtag, 'relatedProfiles', (t) =>
       first: t.arg.int({ required: false }),
       after: t.arg.string({ required: false }),
     },
-    resolve: (hashtag, args) =>
-      resolveCursorConnection<Promise<ProfileRow[]>>(
+    resolve: (hashtag, args, ctx) => {
+      const selectedProfileId = ctx.session?.profile?.id;
+      const selectedProfileBlockWhere = selectedProfileId
+        ? and(
+            profileBlockVisibilityWhere({
+              database: db,
+              ownerProfileId: selectedProfileId,
+              targetProfileId: Profiles.id,
+            }),
+            profileBlockVisibilityWhere({
+              database: db,
+              ownerProfileId: Profiles.id,
+              targetProfileId: selectedProfileId,
+            }),
+          )
+        : undefined;
+
+      return resolveCursorConnection<Promise<ProfileRow[]>>(
         {
           args,
           defaultSize: 20,
@@ -53,6 +70,7 @@ builder.objectField(Hashtag, 'relatedProfiles', (t) =>
               and(
                 eq(ProfileHashtags.hashtagId, hashtag.id),
                 visibleProfileWhere({ profile: Profiles, instance: Instances }),
+                selectedProfileBlockWhere,
                 after !== null && after !== undefined
                   ? gt(Profiles.id, decodeRelatedProfileCursor(after))
                   : undefined,
@@ -60,6 +78,7 @@ builder.objectField(Hashtag, 'relatedProfiles', (t) =>
             )
             .orderBy(asc(Profiles.id))
             .limit(limit),
-      ),
+      );
+    },
   }),
 );

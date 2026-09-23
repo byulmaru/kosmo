@@ -178,7 +178,7 @@ export function ProfileSwitcher({
     useMutation<ProfileSwitcherCreateProfileMutation>(CreateProfileMutation);
   const active = data.currentSession?.selectedProfile ?? null;
   const canEditSelectedProfile =
-    active?.instance.kind === 'LOCAL' && active.viewerState?.membership?.role === 'OWNER';
+    active?.instance?.kind === 'LOCAL' && active.viewerState?.membership?.role === 'OWNER';
   const profiles = data.me?.profiles ?? [];
   const otherHasUnread = profiles.some(
     (profile) => profile.id !== active?.id && (profile.unreadNotificationCount ?? 0) > 0,
@@ -225,17 +225,21 @@ export function ProfileSwitcher({
   }, [open, redesignedWeb]);
 
   useEffect(() => {
-    if (Platform.OS !== 'web' || !open || surface === 'drawer') {
+    if (Platform.OS !== 'web' || !open) {
       return;
     }
 
     const picker = pickerRef.current as unknown as HTMLElement | null;
     const trigger = triggerRef.current as unknown as HTMLElement | null;
+    const ownerModal = surface === 'drawer' ? trigger?.closest('[aria-modal="true"]') : null;
     const eventComesFromModal = (event: Event) =>
       event
         .composedPath()
         .some(
-          (target) => target instanceof Element && target.getAttribute('aria-modal') === 'true',
+          (target) =>
+            target instanceof Element &&
+            target.getAttribute('aria-modal') === 'true' &&
+            target !== ownerModal,
         );
     const modalIsPresent = () => document.querySelector('[aria-modal="true"]') !== null;
     const onPointerDown = (event: PointerEvent) => {
@@ -248,7 +252,7 @@ export function ProfileSwitcher({
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        if (modalIsPresent()) {
+        if (surface === 'drawer' || modalIsPresent()) {
           return;
         }
         event.preventDefault();

@@ -14,7 +14,7 @@ import {
   SessionState,
 } from '@kosmo/core/enums';
 import { normalizeHandle } from '@kosmo/core/utils';
-import { ne } from 'drizzle-orm';
+import { eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type { TestContext } from 'node:test';
 import type * as CoreDb from '@kosmo/core/db';
@@ -126,6 +126,66 @@ describe('Local Media upload GraphQL 경계', () => {
       state: 'UPLOADING',
     });
     assert.equal(await requestMediaNode(firstMediaId, other.token), null);
+  });
+
+  test('명시한 같은 계정 Profile로 업로드를 발급하고 active session Profile은 유지한다', async (t) => {
+    const issuedStorage = mockUploadIssuance(t);
+    const auth = await createAuthenticatedSession();
+    const composerProfile = await createProfile(`composer-${crypto.randomUUID()}`);
+    await db.insert(AccountProfiles).values({
+      accountId: auth.account.id,
+      profileId: composerProfile.id,
+      role: AccountProfileRole.MEMBER,
+    });
+
+    const issuedResult = await requestIssueMediaUploadUrl(
+      auth.token,
+      encodeGlobalId('Profile', composerProfile.id),
+    );
+    assertNoGraphQLErrors(issuedResult);
+    const stored = await db
+      .select()
+      .from(Media)
+      .then((rows) => rows.find((media) => media.profileId === composerProfile.id));
+    assert.ok(stored);
+    assert.equal(stored.accountId, auth.account.id);
+    assert.equal(
+      (await db.select().from(Sessions).where(eq(Sessions.token, auth.token)).then(firstOrThrow))
+        .activeProfileId,
+      auth.profile.id,
+    );
+
+    const other = await createAuthenticatedSession();
+    const denied = await requestIssueMediaUploadUrl(
+      auth.token,
+      encodeGlobalId('Profile', other.profile.id),
+    );
+    assert.equal(denied.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
+    assert.equal(issuedStorage.length, 1);
+  });
+
+  test('upload input 생략·null·빈 객체는 active session Profile로 fallback한다', async (t) => {
+    const issuedStorage = mockUploadIssuance(t);
+    const auth = await createAuthenticatedSession();
+
+    const results = await Promise.all([
+      requestIssueMediaUploadUrl(auth.token),
+      requestIssueMediaUploadUrl(auth.token, undefined, 'null'),
+      requestIssueMediaUploadUrl(auth.token, undefined, 'empty'),
+    ]);
+
+    for (const result of results) {
+      assertNoGraphQLErrors(result);
+      assert.equal(result.data?.issueMediaUploadUrl.media.state, MediaState.UPLOADING);
+    }
+
+    const stored = await db.select().from(Media);
+    assert.equal(stored.length, 3);
+    assert.deepEqual(
+      stored.map((media) => media.profileId),
+      [auth.profile.id, auth.profile.id, auth.profile.id],
+    );
+    assert.equal(issuedStorage.length, 3);
   });
 
   test(
@@ -499,14 +559,31 @@ type CompleteMediaUploadData = {
   };
 };
 
-const requestIssueMediaUploadUrl = (token?: string) =>
-  requestGraphQL<IssueMediaUploadUrlData>(
-    `mutation IssueMediaUploadUrl {
-      issueMediaUploadUrl { media { id state } uploadUrl expiresAt }
+const requestIssueMediaUploadUrl = (
+  token?: string,
+  actorProfileId?: string,
+  inputMode: 'none' | 'null' | 'empty' = actorProfileId === undefined ? 'none' : 'empty',
+) => {
+  if (actorProfileId === undefined && inputMode === 'none') {
+    return requestGraphQL<IssueMediaUploadUrlData>(
+      `mutation IssueMediaUploadUrl {
+        issueMediaUploadUrl { media { id state } uploadUrl expiresAt }
+      }`,
+      {},
+      token,
+    );
+  }
+
+  return requestGraphQL<IssueMediaUploadUrlData>(
+    `mutation IssueMediaUploadUrl($input: IssueMediaUploadUrlInput) {
+      issueMediaUploadUrl(input: $input) { media { id state } uploadUrl expiresAt }
     }`,
-    {},
+    {
+      input: inputMode === 'null' ? null : actorProfileId ? { actorProfileId } : {},
+    },
     token,
   );
+};
 
 const requestCompleteMediaUpload = (id: string, token?: string) =>
   requestGraphQL<CompleteMediaUploadData>(

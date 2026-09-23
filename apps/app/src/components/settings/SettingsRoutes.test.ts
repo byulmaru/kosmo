@@ -132,6 +132,15 @@ mock.module(new URL('./SettingsMutedProfiles.tsx', import.meta.url), {
     SettingsMutedProfiles: () => createElement('SettingsMutedProfiles'),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('./SettingsBlockedProfiles.tsx', import.meta.url), {
+  exports: {
+    SettingsBlockedProfiles: (props: Record<string, unknown>) =>
+      createElement('SettingsBlockedProfiles', props),
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('../shell/ShellChromeContext.tsx', import.meta.url), {
+  exports: { useShellChrome: () => ({}) },
+} as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
   exports: { useTheme: () => ({ border: '#333333', text: '#111111' }) },
 } as unknown as Parameters<typeof mock.module>[1]);
@@ -147,6 +156,7 @@ mock.module(new URL('../../session/SessionProvider.tsx', import.meta.url), {
 let SettingsDefaultPostVisibilityRoute: ComponentType;
 let SettingsMuteAndBlockRoute: ComponentType;
 let SettingsMutedProfilesRoute: ComponentType;
+let SettingsBlockedProfilesRoute: ComponentType;
 let SettingsLayout: ComponentType;
 let SettingsRoute: ComponentType;
 let SettingsInfoRoute: ComponentType;
@@ -169,6 +179,8 @@ before(async () => {
     await import('../../app/(tabs)/(protected)/settings/mute-and-block'));
   ({ default: SettingsMutedProfilesRoute } =
     await import('../../app/(tabs)/(protected)/settings/muted-profiles'));
+  ({ default: SettingsBlockedProfilesRoute } =
+    await import('../../app/(tabs)/(protected)/settings/blocked-profiles'));
   ({ default: ProtectedLayout } = await import('../../app/(tabs)/(protected)/_layout'));
 });
 
@@ -297,6 +309,41 @@ describe('Settings routes', () => {
     await act(async () => back.props.onPress());
     assert.equal(backCalls, 0);
     assert.deepEqual(replacedPaths, ['/settings/mute-and-block']);
+  });
+
+  it('Native blocked profile detail은 header와 목록을 하나의 vertical ScrollView에 표시한다', async () => {
+    platform = 'android';
+    await renderRoute('/settings/blocked-profiles', SettingsBlockedProfilesRoute);
+
+    const scrollView = rendered('ScrollView')[0];
+    assert.ok(scrollView);
+    assert.equal(scrollView.findAll((node) => (node.type as unknown) === 'PageHeader').length, 1);
+    assert.equal(
+      scrollView.findAll((node) => (node.type as unknown) === 'SettingsBlockedProfiles').length,
+      1,
+    );
+  });
+
+  it('full Web blocked profile deep link도 공통 master의 mute category를 선택한다', async () => {
+    await renderRoute('/settings/blocked-profiles', SettingsBlockedProfilesRoute);
+
+    assert.deepEqual(
+      rendered('PageHeader').map((node) => node.props.title),
+      ['설정', '차단한 프로필'],
+    );
+    assert.equal(rendered('SettingsNavigationList').length, 0);
+    assert.equal(rendered('SettingsMuteAndBlockNavigation').length, 1);
+    assert.equal(rendered('SettingsMuteAndBlockNavigation')[0].props.selected, 'blocked-profiles');
+    assert.equal(rendered('SettingsBlockedProfiles').length, 1);
+    assert.equal('headingRef' in rendered('SettingsBlockedProfiles')[0].props, false);
+  });
+
+  it('mobile Web blocked profile은 별도 heading focus 계약 없이 목록을 표시한다', async () => {
+    width = 390;
+    await renderRoute('/settings/blocked-profiles', SettingsBlockedProfilesRoute);
+
+    assert.equal(rendered('PageHeader').length, 0);
+    assert.equal('headingRef' in rendered('SettingsBlockedProfiles')[0].props, false);
   });
 
   it('compact Web root는 선택 없는 root 목록부터 표시한다', async () => {

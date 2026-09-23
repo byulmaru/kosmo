@@ -150,9 +150,11 @@ Recipient Profile은 Related Post의 direct Repost Source Author Profile이다. 
   delivery는 모든 API 표면에서 숨기는 것으로 이 간격을 격리한다.
 - Recipient Profile 자체가 일시적으로 조회 불가인 경우에도 item은 숨기되, 복구 가능한 Recipient Profile의
   일시 비활성화·정지만으로는 Notification을 비동기 제거하지 않는다.
-- Mute가 나중에 생성되어도 기존 Notification의 존재와 Read State는 바꾸지 않는다. Profile Block은 제거된
-  Follow 객체를 직접 원인으로 가진 Notification을 제거하고, 그 밖에 pair 정책 또는 Related Post/Profile 조회
-  조건을 충족하지 않는 item은 위 숨김·비동기 제거 정책을 따른다.
+- Mute가 나중에 생성되어도 기존 Notification의 존재와 Read State는 바꾸지 않는다. Profile Block transaction은 새 Profile Block
+  관계를 만드는 경우에만 같은 transaction에서 제거한 Follow 객체를 직접 원인으로 가진 Notification을 제거하고, 그 밖에 pair 정책
+  또는 Related Post/Profile 조회 조건을 충족하지 않는 item은 위 숨김·비동기 제거 정책을 따른다. 이미 Profile Block 관계가 존재한 뒤
+  동시성이나 후속 경로로 뒤늦게 관찰되는 item은 Active Block pair 정책으로 숨기며, duplicate Block 관찰이나 Unblock의 보상 cleanup으로
+  처리하지 않는다. commit 뒤 별도 effect의 성공·실패는 이미 성공한 Profile Block 관계와 그 transaction 결과를 바꾸지 않는다.
 
 ### Quote Notification
 

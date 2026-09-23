@@ -15,8 +15,12 @@ import type { PostThreadLayout as PostThreadLayoutExport } from './PostThreadLay
 const platform = { OS: 'web' };
 let windowWidth = 1_024;
 const theme = {
+  backgroundCanvas: 'canvas',
   borderSubtle: 'border',
   primary: 'primary',
+  stateHover: 'hover',
+  statePressed: 'pressed',
+  statePressedSubtle: 'pressed-subtle',
   textSecondary: 'secondary',
 };
 const require = createRequire(import.meta.url);
@@ -93,7 +97,7 @@ mockModule('@/theme/ThemeProvider', { useTheme: () => theme });
 mockModule('@/theme/tokens', {
   fontFamilies: { ui: 'ui' },
   breakpoints: { compact: 768, full: 1_280 },
-  radii: { full: 999 },
+  radii: { full: 999, md: 12 },
   spacing: { lg: 16, md: 12, sm: 8, xs: 4, xxl: 32, xxxl: 48 },
   typography: { md: { fontSize: 16 }, sm: { fontSize: 14, lineHeight: 20 } },
 });
@@ -370,6 +374,71 @@ test('PostListItem uses the supplied list presentation', async () => {
     });
     const card = root.findByProps({ role: 'article' });
     assert.equal(flattenStyle(card.props.style).paddingHorizontal, expectedPadding);
+  }
+});
+
+test('PostListItem uses Web pointer hover and Native touch pressed feedback', async () => {
+  platform.OS = 'web';
+  let root = await renderListItem({
+    post: {} as never,
+    presentation: 'wide',
+    showDivider: false,
+  });
+  let card = findByTestID(root, 'post-list-item-card');
+  let feedback = findByTestID(root, 'post-list-item-feedback');
+
+  assert.equal(flattenStyle(card.props.style).backgroundColor, 'canvas');
+  assert.equal(flattenStyle(feedback.props.style).borderRadius, 12);
+  assert.equal(flattenStyle(feedback.props.style).pointerEvents, 'none');
+
+  await act(async () => card.props.onPointerEnter({ nativeEvent: { pointerType: 'touch' } }));
+  assert.equal(flattenStyle(feedback.props.style).backgroundColor, undefined);
+  await act(async () => card.props.onPointerEnter({ nativeEvent: { pointerType: '' } }));
+  assert.equal(flattenStyle(feedback.props.style).backgroundColor, undefined);
+
+  for (const pointerType of ['mouse', 'pen']) {
+    await act(async () => card.props.onPointerEnter({ nativeEvent: { pointerType } }));
+    assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'hover');
+
+    await act(async () => card.props.onPointerDown());
+    assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'pressed-subtle');
+
+    await act(async () => card.props.onPointerUp());
+    assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'hover');
+
+    await act(async () => card.props.onPointerLeave());
+    assert.equal(flattenStyle(feedback.props.style).backgroundColor, undefined);
+  }
+
+  await act(async () => card.props.onPointerDown());
+  await act(async () => card.props.onPointerCancel());
+  assert.equal(flattenStyle(feedback.props.style).backgroundColor, undefined);
+  await act(async () => card.props.onPointerDown());
+  await act(async () => card.props.onPointerLeave());
+  assert.equal(flattenStyle(feedback.props.style).backgroundColor, undefined);
+
+  for (const os of ['ios', 'android'] as const) {
+    platform.OS = os;
+    root = await renderListItem({
+      post: {} as never,
+      presentation: 'wide',
+      showDivider: false,
+    });
+    card = findByTestID(root, 'post-list-item-card');
+    feedback = findByTestID(root, 'post-list-item-feedback');
+
+    assert.equal(card.props.onPointerEnter, undefined);
+    assert.equal(card.props.onPointerLeave, undefined);
+
+    await act(async () => card.props.onTouchStart());
+    assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'pressed-subtle');
+
+    await act(async () => card.props.onTouchEnd());
+    assert.equal(flattenStyle(feedback.props.style).backgroundColor, undefined);
+
+    await act(async () => card.props.onTouchStart());
+    await act(async () => card.props.onTouchCancel());
+    assert.equal(flattenStyle(feedback.props.style).backgroundColor, undefined);
   }
 });
 

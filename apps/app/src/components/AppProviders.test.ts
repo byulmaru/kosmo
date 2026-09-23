@@ -58,6 +58,13 @@ type MockRelayActorValue = {
 };
 
 const MockRelayActorContext = createContext<MockRelayActorValue | null>(null);
+const MockNavigationThemeContext = createContext({
+  colors: { background: 'rgb(242, 242, 242)' },
+});
+const mockDefaultNavigationTheme = {
+  colors: { background: 'rgb(242, 242, 242)' },
+  dark: false,
+};
 
 function MockRelayActorProvider({ children }: PropsWithChildren) {
   useEffect(() => {
@@ -138,6 +145,13 @@ mockModule('react-native', {
   View: 'View',
 });
 mockModule('expo-router', {
+  DefaultTheme: mockDefaultNavigationTheme,
+  ThemeProvider: ({
+    children,
+    value,
+  }: PropsWithChildren<{ value: typeof mockDefaultNavigationTheme }>) =>
+    createElement(MockNavigationThemeContext.Provider, { value }, children),
+  useTheme: () => useContext(MockNavigationThemeContext),
   usePathname: () => '/home',
   useRouter: () => ({ replace: () => undefined }),
   useSegments: () => [],
@@ -169,7 +183,10 @@ mockModule('react-relay', {
     }
     if (query === 'SessionProviderQuery') {
       return {
-        currentSession: { id: 'session-1', selectedProfile: { id: 'profile-a' } },
+        currentSession: {
+          id: 'session-1',
+          selectedProfile: { id: 'profile-a' },
+        },
         me: { id: 'account-1', name: 'Account' },
       };
     }
@@ -356,6 +373,13 @@ function RootRuntimeProbe() {
   return createElement('RootRuntimeProbe');
 }
 
+function NavigationThemeProbe() {
+  const navigationTheme = useContext(MockNavigationThemeContext);
+  return createElement('NavigationThemeProbe', {
+    background: navigationTheme.colors.background,
+  });
+}
+
 function findTag(tag: string) {
   assert.ok(renderer);
   const node = renderer.root.findAll((candidate) => String(candidate.type) === tag)[0];
@@ -369,6 +393,14 @@ function findByTestId(testID: string) {
 }
 
 describe('AppProviders runtime composition', () => {
+  it('uses the app canvas for the Native navigation background', async () => {
+    await act(async () => {
+      renderer = create(createElement(AppProviders, null, createElement(NavigationThemeProbe)));
+    });
+
+    assert.equal(findTag('NavigationThemeProbe').props.background, '#fff');
+  });
+
   it('root fallback remounts the complete app runtime after its action', async () => {
     const originalConsoleError = console.error;
     console.error = () => undefined;
@@ -434,7 +466,11 @@ describe('AppProviders runtime composition', () => {
         sessionId: initial.props.sessionId,
         status: initial.props.status,
       },
-      { selectedProfileId: 'profile-a', sessionId: 'session-1', status: 'valid' },
+      {
+        selectedProfileId: 'profile-a',
+        sessionId: 'session-1',
+        status: 'valid',
+      },
     );
     queryModes.SessionProviderQuery = 'pending';
 

@@ -18,22 +18,21 @@ geometry를 유지하도록 한다. 이 문서는 Profile 편집 화면의 heade
 
 ## Follow action 소비처별 크기
 
-- `FollowButton`은 기존 공용 `Button`의 시각·상태 스타일을 재사용한다. 크기는 아래 소비처 기준으로 선택하며,
-  `Compact`를 Mobile의 동의어로 사용하지 않는다. 별도 Mobile 시각 variant나 `72×40` 크기는 추가하지 않는다.
+- `FollowButton`은 기존 공용 `Button`의 시각·상태 스타일을 재사용한다. 모든 소비처는 공용 기본 높이와
+  `96px` 폭을 사용하며 별도 관계 action 크기 variant를 만들지 않는다.
 
-| 소비처                                                                        | FollowButton 크기 | 시각 영역 |
-| ----------------------------------------------------------------------------- | ----------------- | --------- |
-| Web 프로필 목록: 검색, 해시태그, 팔로워·팔로잉, Post Activity·Reaction People | Medium            | `96×40`   |
-| Web Profile Hero 상단 관계 action                                             | Medium            | `96×40`   |
-| Mobile Web·iOS·Android의 Profile Hero와 위 프로필 목록                        | Medium            | `96×40`   |
+| 소비처                                                                        | FollowButton 크기 | Web 시각 영역 |
+| ----------------------------------------------------------------------------- | ----------------- | ------------- |
+| Web 프로필 목록: 검색, 해시태그, 팔로워·팔로잉, Post Activity·Reaction People | Default           | `96×40`       |
+| Web Profile Hero 상단 관계 action                                             | Default           | `96×40`       |
+| Mobile Web·iOS·Android의 Profile Hero와 위 프로필 목록                        | Default           | `96×40`       |
 
-- Web 목록 기준은 Compact Web 1024와 Full Web 1440에 모두 적용한다. `72×40` 중간 variant를 추가하지 않고
-  기존 Medium을 재사용하며 목록 행 높이는 `64px`로 유지한다. FollowButton의 Compact variant는 현재
-  ProfileListItem 소비처에서 사용하지 않는다.
+- 위 기준은 Mobile Web, Compact Web 1024, Full Web 1440에 모두 적용한다. Native는 공용 Button의
+  iOS `44pt`·Android `48dp` 최소 높이를 사용하며 별도 hitSlop을 더하지 않는다.
 
 ## Profile 더보기 배치
 
-- Mobile Web·iOS·Android·Compact·Full Web 모두 Medium Follow 왼쪽 `16px` 간격에 `40×40` 원형
+- Mobile Web·iOS·Android·Compact·Full Web 모두 Default `96×40` FollowButton 왼쪽 `16px` 간격에 `40×40` 원형
   더보기 버튼을 둔다. `20px` 가로 Ellipsis와 `color/border/default`의 `1px` 안쪽 테두리를 사용한다.
   두 버튼의 위·아래 경계를 맞추고 커버 이미지에는 겹치지 않는다. Mobile 공통 상단 바에는 더보기를 두지 않는다.
 - Native 입력 target은 visual box 중심을 유지하며 iOS 최소 `44pt`, Android 최소 `48dp`로 확장한다.
@@ -51,8 +50,8 @@ geometry를 유지하도록 한다. 이 문서는 Profile 편집 화면의 heade
 - 프로필 팝오버 메뉴는 오른쪽 위 모서리를 더보기 trigger의 오른쪽 위에 맞춘다. 간격 없이 trigger와
   겹치며 왼쪽·아래로 펼쳐진다. viewport 밖으로 나가면 경계 안으로 보정하고 아래 공간이 부족하면 방향을
   전환한다. 메뉴 항목과 dismiss·focus 복귀 계약은 유지한다.
-- 로딩 중이거나 프로필 action을 사용할 수 없는 상태에서는 더보기를 숨긴다. `blockedBy`의 최소 정보
-  화면에도 더보기를 노출하지 않는다.
+- 로딩 중이거나 사용할 수 있는 프로필 action이 없으면 더보기를 숨긴다. `blockedBy`에서는 뮤트·차단 생성
+  action을 숨기지만, 조회 가능한 Profile의 신고 진입점은 아래 신고 조립 계약을 따른다.
 - 2026-09-07 승인된 Figma 계약을 `ProfileMoreButton`·`ProfileHero`·`ActionMenu`에 반영했다.
   Storybook Tests에서 40px 원형·16px 간격, hover·pressed·focus 조합, 메뉴 겹침·viewport 보정과
   dismiss 후 trigger 복귀를 검증한다. Native 44/48 입력 target과 disabled·reduced motion은 단위
@@ -102,9 +101,8 @@ geometry를 유지하도록 한다. 이 문서는 Profile 편집 화면의 heade
 
 ## PROD-851 이관 상태와 Figma 정렬
 
-- 공용 source는 Medium `96×40`을 기본으로 사용한다. `ProfileListItem`도 breakpoint와 관계없이 Medium을
-  사용해 Web·Mobile Web·Native 목록의 시각 크기를 통일한다. 목록 행은 `64px`를 유지하며 Native 입력
-  여백·부모 공간은 공용 source와 자동 테스트에서 검증한다.
+- PROD-851의 공용 source는 Default `96×40`을 사용한다. `ProfileListItem`도 viewport와 무관하게 같은
+  관계 action 크기를 사용한다. Native 입력 여백·부모 공간은 공용 source와 자동 테스트에서 검증한다.
 - 2026-09-05 Figma 재점검에서 `04 Screens - Mobile`의 Follow action 44개는 모두 Medium `96×40`이었다.
   대표 근거는 [Mobile Profile Hero](https://www.figma.com/design/Erj975S6vVP8PlHQius801?node-id=1943-1708)와
   [Mobile 검색 결과](https://www.figma.com/design/Erj975S6vVP8PlHQius801?node-id=1938-1511)다.
@@ -114,11 +112,9 @@ geometry를 유지하도록 한다. 이 문서는 Profile 편집 화면의 heade
   [Post Activity · Mobile Reposts](https://www.figma.com/design/Erj975S6vVP8PlHQius801?node-id=5314-46151)(11개)는
   총 32개 인스턴스도 같은 날 Medium `96×40`으로 정렬했다. Follow·Following·Requested 및 Busy·Error
   속성을 보존했으며, 행 높이 `64`와 간격 `12`를 유지하고 Light·Dark 배치를 시각 확인했다.
-- [FollowButton Source](https://www.figma.com/design/Erj975S6vVP8PlHQius801?node-id=1901-1050)와
-  `ProfileListItem` source의 Web 목록 action도 Medium으로 정렬했다. Native 입력 target은 시각 영역과
-  별개임을 명시했다.
-- 위 Mobile Screens·Patterns와 Source 설명의 Figma 정렬 및 공용 코드의 소비처별 크기 선택을 반영했다.
-  Native 실제 touch·focus 검증은 별도 출시 gate로 남아 있다.
+- [FollowButton Source](https://www.figma.com/design/Erj975S6vVP8PlHQius801?node-id=1901-1050)의 Figma 정렬은
+  후속으로 진행한다. 코드와 문서는 최신 결정에 따라 모든 소비처를 Default `96×40`으로 먼저 통일했다.
+  Native 입력 target은 시각 영역과 별개이며 실제 touch·focus 검증은 별도 출시 gate로 남아 있다.
 
 ## 출시와 검증 범위
 
@@ -128,3 +124,12 @@ geometry를 유지하도록 한다. 이 문서는 Profile 편집 화면의 heade
   검증 범위에서 제외하고 Native 출시 gate에서 별도로 수행한다.
 - Web 자동화나 공용 source·단위 테스트 결과를 Native runtime 완료 증거로 사용하지 않는다. Native 출시
   전에는 실제 환경에서 비율, 중앙 cover crop, avatar overlap과 profile action 배치를 다시 검증한다.
+
+## 신고와 관계 action 조립 · 2026-09-15
+
+- #857의 신고와 #772의 차단 UI를 함께 반영하며, 더보기 trigger 하나에 링크 복사·뮤트·차단 또는 차단 해제·신고를
+  해당 action의 노출 조건에 따라 합성한다. 신고용 두 번째 trigger를 만들지 않는다.
+- 신고는 [신고 계약](content-reporting.md)의 로그인한 Account 조건을 유지한다. selected Profile이 없거나
+  차단 관계여도 조회 가능한 Profile 화면의 신고 진입점은 유지한다. 차단 방향에 따른 콘텐츠·관계 action 제한과
+  신고 eligibility를 합치지 않는다.
+- 뮤트·차단 action의 pending과 포커스 연결은 같은 메뉴를 통해 유지한다.

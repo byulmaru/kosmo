@@ -1,6 +1,8 @@
 import type { ExpoConfig } from 'expo/config';
 
 const otaBaseUrl = 'https://expo-ota.byulmaru.co/releases/kosmo-native';
+const googleServicesJson = process.env.KOSMO_ANDROID_GOOGLE_SERVICES_FILE;
+const googleServiceInfoPlist = process.env.KOSMO_IOS_GOOGLE_SERVICES_FILE;
 function androidVersionCode(): number {
   const configured = process.env.KOSMO_ANDROID_VERSION_CODE;
   if (configured === undefined) {
@@ -45,6 +47,7 @@ const config: ExpoConfig = {
     infoPlist: {
       LSApplicationCategoryType: 'public.app-category.social-networking',
     },
+    ...(googleServiceInfoPlist ? { googleServicesFile: googleServiceInfoPlist } : {}),
   },
   android: {
     adaptiveIcon: {
@@ -54,14 +57,13 @@ const config: ExpoConfig = {
     package: 'moe.kos',
     versionCode: androidVersionCode(),
     predictiveBackGestureEnabled: true,
+    ...(googleServicesJson ? { googleServicesFile: googleServicesJson } : {}),
   },
   web: {
     favicon: './public/favicon-32x32.png',
     output: 'single',
   },
-  runtimeVersion: {
-    policy: 'fingerprint',
-  },
+  runtimeVersion: '0.3',
   updates: {
     checkAutomatically: 'ON_LOAD',
     codeSigningCertificate: './certs/certificate.pem',
@@ -76,6 +78,26 @@ const config: ExpoConfig = {
   plugins: [
     'expo-router',
     'expo-secure-store',
+    'expo-notifications',
+    // RNFirebase SPM is incompatible with static frameworks; use CocoaPods for static RNFB linkage.
+    [
+      '@react-native-firebase/app',
+      {
+        ios: {
+          disableSPM: true,
+        },
+      },
+    ],
+    '@react-native-firebase/messaging',
+    [
+      'expo-build-properties',
+      {
+        ios: {
+          useFrameworks: 'static',
+          forceStaticLinking: ['RNFBApp', 'RNFBMessaging'],
+        },
+      },
+    ],
     [
       '@sentry/react-native/expo',
       {
