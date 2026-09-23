@@ -407,8 +407,7 @@ export const ConnectionNextPageLoadingInteraction: Story = {
   parameters: { relay: { paginationLoading: true } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: '더 불러오기' }));
-    await expect(canvas.findByRole('button', { name: '불러오는 중' })).resolves.toBeDisabled();
+    await expect(canvas.findByLabelText('팔로워를 더 불러오는 중입니다.')).resolves.toBeVisible();
   },
   render: () => <FollowersWithNextPage />,
 };
@@ -416,9 +415,8 @@ export const ConnectionNextPageLoadingInteraction: Story = {
 export const ConnectionNextPageErrorInteraction: Story = {
   parameters: { relay: { paginationError: true } },
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: '더 불러오기' }));
-    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+    const page = within(canvasElement.ownerDocument.body);
+    await expect(page.findByRole('alert')).resolves.toHaveTextContent(
       '팔로워를 더 불러오지 못했어요',
     );
   },

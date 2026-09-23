@@ -11,6 +11,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import type { ReactNode } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
+import type { UseAutomaticPaginationResult } from '@/components/pagination/useAutomaticPagination';
 import type { PostListItem_post$key } from '@/components/post/__generated__/PostListItem_post.graphql';
 import type { ReplyComposerSurface_profile$key } from '@/components/post/__generated__/ReplyComposerSurface_profile.graphql';
 import type { PostListPresentation } from '@/components/post/postListMetrics';
@@ -19,26 +20,28 @@ export type BookmarkListEntry = { id: string; post: PostListItem_post$key };
 
 export type BookmarkListProps = {
   error?: boolean;
+  endRef?: UseAutomaticPaginationResult['endRef'];
   hasNext?: boolean;
   isLoadingMore?: boolean;
   items?: ReadonlyArray<BookmarkListEntry>;
   loading?: boolean;
-  onLoadMore?: () => void;
   onRetry?: () => void;
   profileRequired?: boolean;
   replyProfile?: ReplyComposerSurface_profile$key | null;
+  scrollProps?: UseAutomaticPaginationResult['nativeScrollProps'];
 };
 
 export function BookmarkList({
   error = false,
+  endRef,
   hasNext = false,
   isLoadingMore = false,
   items = [],
   loading = false,
-  onLoadMore,
   onRetry,
   profileRequired = false,
   replyProfile,
+  scrollProps,
 }: BookmarkListProps): React.JSX.Element {
   const { width } = useWindowDimensions();
   const postListPresentation: PostListPresentation =
@@ -78,27 +81,15 @@ export function BookmarkList({
           <PostListItem key={item.id} post={item.post} presentation={postListPresentation} />
         ))}
         <PaginationSurface
+          endRef={endRef}
           error={error}
+          errorMessage="북마크를 더 불러오지 못했어요"
           hasNext={hasNext}
           isLoading={isLoadingMore}
-          loadMoreLabel="더 불러오기"
-          loadingLabel="불러오는 중"
-          onLoadMore={onLoadMore}
+          loadingLabel="북마크를 더 불러오는 중"
           onRetry={onRetry}
-          retryLabel="다시 시도"
-          retryTone="primary"
-          style={error ? styles.state : styles.pagination}
-          actionStyle={styles.actionButton}
-        >
-          {error ? (
-            <BookmarkListState
-              alert
-              description="기존 북마크는 그대로 유지돼요."
-              style={styles.paginationCopy}
-              title="북마크를 더 불러오지 못했어요"
-            />
-          ) : null}
-        </PaginationSurface>
+          style={styles.pagination}
+        />
       </>
     );
   }
@@ -107,7 +98,11 @@ export function BookmarkList({
     <PostActionAuthenticationProvider>
       <PostComposerCoordinatorProvider owner="list" profile={replyProfile ?? null}>
         <PostMediaViewerHostProvider>
-          <ScrollView contentContainerStyle={styles.root} testID="bookmark-list-scroll">
+          <ScrollView
+            {...scrollProps}
+            contentContainerStyle={styles.root}
+            testID="bookmark-list-scroll"
+          >
             <PageHeader title="북마크" />
             {content}
           </ScrollView>
@@ -195,6 +190,5 @@ const styles = StyleSheet.create({
   state: { alignItems: 'center', gap: spacing.sm, padding: spacing.xxxl },
   actionButton: { minHeight: 44 },
   pagination: { alignItems: 'center', padding: spacing.lg },
-  paginationCopy: { gap: spacing.sm, padding: 0 },
   srOnly: { height: 1, left: 0, overflow: 'hidden', position: 'absolute', top: 0, width: 1 },
 });

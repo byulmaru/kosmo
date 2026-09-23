@@ -49,6 +49,7 @@ mockModule('@/components/PageHeader', {
     createElement('NativeStackHeader', null, children),
 });
 mockModule('@/components/profile/ProfileListItem', { ProfileListItem: () => null });
+mockModule('@/components/pagination/PaginationSurface', { PaginationSurface: () => null });
 mockModule('@/components/RouteBoundary', {
   RouteBoundary: ({ children }: { children: ReactNode }) => children,
   useRouteBoundary: () => ({ fetchKey: 0 }),

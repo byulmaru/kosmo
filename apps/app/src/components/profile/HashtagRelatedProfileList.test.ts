@@ -44,9 +44,16 @@ mockModule(new URL('./ProfileListItem.tsx', import.meta.url), {
   ProfileListItem: ({ profile }: { profile: { id: string } }) =>
     createElement('ProfileListItem', { identity: profile.id }),
 });
-mockModule(new URL('../ui/Button.tsx', import.meta.url), {
-  Button: ({ children, ...props }: { children: string }) =>
-    createElement('Button', props, children),
+mockModule(new URL('../pagination/PaginationSurface.tsx', import.meta.url), {
+  PaginationSurface: (props: object) => createElement('PaginationSurface', props),
+});
+mockModule(new URL('../pagination/useAutomaticPagination.ts', import.meta.url), {
+  useAutomaticPagination: () => ({
+    endRef: { current: null },
+    loadError: false,
+    loadNextPage: () => undefined,
+    nativeScrollProps: { onScroll: () => undefined },
+  }),
 });
 mockModule(new URL('../ui/StateView.tsx', import.meta.url), {
   StateView: (props: object) => createElement('StateView', props),
@@ -72,7 +79,7 @@ afterEach(async () => {
 });
 
 describe('Hashtag 관련 Profile 목록 viewport', () => {
-  it('목록 항목과 pagination action을 같은 ScrollView 안에 렌더한다', async () => {
+  it('목록 항목과 자동 pagination 표식을 같은 ScrollView 안에 렌더한다', async () => {
     await act(async () => {
       renderer = create(createElement(HashtagRelatedProfileList, { hashtag: {} }));
     });
@@ -85,6 +92,10 @@ describe('Hashtag 관련 Profile 목록 viewport', () => {
         .map((node) => node.props.identity),
       ['profile-a', 'profile-b'],
     );
-    assert.equal(scrollView.findAll((node) => (node.type as unknown) === 'Button').length, 1);
+    assert.equal(typeof scrollView.props.onScroll, 'function');
+    assert.equal(
+      scrollView.findAll((node) => (node.type as unknown) === 'PaginationSurface').length,
+      1,
+    );
   });
 });

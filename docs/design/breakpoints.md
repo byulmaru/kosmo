@@ -244,8 +244,9 @@ KOSMO가 직접 소유하는 Web vertical scroller는 semantic `borderStrong` th
   PageHeader·관계 TabList·Slot을 같은 바깥 scroll 구성으로 렌더링한다. Home PageHeader는 표시 이름을
   한 줄 tail ellipsis로 표시하며 없는 프로필에서도 빈 제목 chrome을 유지한다. Native PageHeader는 Stack
   header에 고정하고 하나의 `PaginationScrollView`가 Hero·TabList와 leaf body를 스크롤한다. 게시물
-  `InfiniteList`는 outer metric에 등록해 목록 body를 비스크롤 `View`로 렌더링한다. 팔로워·팔로잉 leaf는 별도 scroll owner를 만들지 않고
-  기존 `더 불러오기`와 실패 후 수동 재시도를 유지한다. Web에서는 leaf 목록이 document/window scroll 계약을 유지한다.
+  `InfiniteList`는 outer metric에 등록해 목록 body를 비스크롤 `View`로 렌더링한다. 팔로워·팔로잉 leaf도 별도 scroll owner를 만들지 않고
+  바깥 스크롤의 끝에 가까워지면 다음 페이지를 자동으로 불러온다. 로딩 중에는 목록 하단 스피너를 표시하고,
+  추가 조회 실패 시 기존 항목을 유지하며 지속 토스트에서 수동 재시도한다. Web에서는 leaf 목록이 document/window scroll 계약을 유지한다.
 - 브라우저 뒤로/앞으로 history traversal은 browser scroll restoration을 유지한다. 검색 화면의 query-only
   `router.push`/`setParams` 이동은 현재 document scroll과 입력 focus를 보존한다.
 - Web shell의 홈 navigation 항목은 Home/Local 타임라인 화면군의 진입 control이다. 다른 route에서 실행하면

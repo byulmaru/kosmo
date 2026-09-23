@@ -6,6 +6,7 @@ import { StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import type React from 'react';
+import type { UseAutomaticPaginationResult } from '@/components/pagination/useAutomaticPagination';
 
 export type ReactionProfileListEntry = Readonly<{
   id: string;
@@ -21,6 +22,7 @@ export type ReactionProfileListProps = {
   loading?: boolean;
   onLoadMore?: () => void;
   onRetry?: () => void;
+  paginationEndRef?: UseAutomaticPaginationResult['endRef'];
   presentation?: 'modal' | 'route';
   reactionType: string;
 };
@@ -43,6 +45,7 @@ export function ReactionProfileList({
   loading,
   onLoadMore,
   onRetry,
+  paginationEndRef,
   presentation = 'modal',
   reactionType,
 }: ReactionProfileListProps): React.ReactElement {
@@ -101,31 +104,15 @@ export function ReactionProfileList({
               </View>
             ))}
             <PaginationSurface
-              error={loadMoreError}
+              endRef={paginationEndRef}
+              error={Boolean(loadMoreError)}
+              errorMessage={copy.loadErrorTitle}
               hasNext={Boolean(hasNext)}
               isLoading={Boolean(isLoadingMore)}
-              loadMoreLabel="더 불러오기"
-              loadingLabel="불러오는 중"
-              onLoadMore={onLoadMore}
+              loadingLabel="반응한 프로필을 더 불러오는 중"
               onRetry={onLoadMore}
-              retryLabel="다시 시도"
               style={[styles.pagination, { borderColor: theme.border }]}
-              actionStyle={styles.paginationAction}
-            >
-              {loadMoreError ? (
-                <>
-                  <Text
-                    accessibilityRole="alert"
-                    style={[styles.stateTitle, { color: theme.text }]}
-                  >
-                    {copy.loadErrorTitle}
-                  </Text>
-                  <Text style={[styles.stateDescription, { color: theme.textSecondary }]}>
-                    {copy.errorDescription}
-                  </Text>
-                </>
-              ) : null}
-            </PaginationSurface>
+            />
           </>
         ) : (
           <StateView description={copy.emptyDescription} title={copy.emptyTitle} />
@@ -156,12 +143,4 @@ const styles = StyleSheet.create({
   itemSeparator: { borderBottomWidth: 1 },
   profileItem: { borderBottomWidth: 0, flex: 1, minWidth: 0 },
   pagination: { borderTopWidth: 1, gap: spacing.sm, paddingTop: spacing.md },
-  paginationAction: { minHeight: 44 },
-  stateTitle: {
-    fontFamily: fontFamilies.ui,
-    fontWeight: '700',
-    textAlign: 'center',
-    ...typography.md,
-  },
-  stateDescription: { fontFamily: fontFamilies.ui, textAlign: 'center', ...typography.sm },
 });

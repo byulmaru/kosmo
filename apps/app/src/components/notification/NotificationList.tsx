@@ -1,5 +1,5 @@
 import { usePathname, useSegments } from 'expo-router';
-import { useEffect, useState, useTransition } from 'react';
+import { useEffect, useTransition } from 'react';
 import {
   Platform,
   RefreshControl,
@@ -12,6 +12,7 @@ import {
 import { graphql, usePaginationFragment } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
 import { PaginationSurface } from '@/components/pagination/PaginationSurface';
+import { useAutomaticPagination } from '@/components/pagination/useAutomaticPagination';
 import { PostActionAuthenticationProvider } from '@/components/post/PostActionAuthentication';
 import { PostComposerCoordinatorProvider } from '@/components/post/PostComposerCoordinator';
 import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHost';
@@ -75,9 +76,18 @@ export function NotificationList({ profile }: NotificationListProps) {
     NotificationList_profile$key
   >(notificationListFragment, profile);
   const { publishUnreadIds } = useNotificationReadAll();
-  const [loadError, setLoadError] = useState(false);
   const [refreshing, startTransition] = useTransition();
   const { edges } = pagination.data.notifications;
+  const { endRef, loadError, loadNextPage, nativeScrollProps, resetError } = useAutomaticPagination(
+    {
+      hasNext: pagination.hasNext,
+      isLoadingNext: pagination.isLoadingNext,
+      itemCount: edges.length,
+      loadNext: pagination.loadNext,
+      pageSize: 20,
+      webScrollTarget: 'container',
+    },
+  );
 
   useEffect(
     () => publishUnreadIds(edges.flatMap(({ node }) => (node.readAt === null ? [node.id] : []))),
@@ -102,15 +112,6 @@ export function NotificationList({ profile }: NotificationListProps) {
     return [];
   });
 
-  const loadMore = () => {
-    if (pagination.isLoadingNext) {
-      return;
-    }
-
-    setLoadError(false);
-    pagination.loadNext(20, { onComplete: (error) => setLoadError(Boolean(error)) });
-  };
-
   const refresh = () => {
     if (refreshing) {
       return;
@@ -122,7 +123,9 @@ export function NotificationList({ profile }: NotificationListProps) {
         {
           fetchPolicy: 'network-only',
           onComplete: (error) => {
-            setLoadError((current) => (error ? current : false));
+            if (!error) {
+              resetError();
+            }
           },
         },
       );
@@ -138,6 +141,7 @@ export function NotificationList({ profile }: NotificationListProps) {
       >
         <PostMediaViewerHostProvider>
           <ScrollView
+            {...nativeScrollProps}
             contentContainerStyle={styles.root}
             refreshControl={
               Platform.OS === 'web' ? undefined : (
@@ -160,25 +164,15 @@ export function NotificationList({ profile }: NotificationListProps) {
               />
             )}
             <PaginationSurface
+              endRef={endRef}
               error={loadError}
+              errorMessage="알림을 더 불러오지 못했어요"
               hasNext={pagination.hasNext}
               isLoading={pagination.isLoadingNext}
-              loadMoreLabel="더 불러오기"
-              loadingLabel="불러오는 중"
-              onLoadMore={loadMore}
-              onRetry={loadMore}
-              retryLabel="다시 시도"
-              retryTone="primary"
+              loadingLabel="알림을 더 불러오는 중"
+              onRetry={loadNextPage}
               style={[styles.pagination, { borderColor: theme.border }]}
-            >
-              {loadError ? (
-                <StateView
-                  alert
-                  style={styles.paginationCopy}
-                  title="알림을 더 불러오지 못했어요"
-                />
-              ) : null}
-            </PaginationSurface>
+            />
           </ScrollView>
         </PostMediaViewerHostProvider>
       </PostComposerCoordinatorProvider>
@@ -262,7 +256,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xxxl,
   },
   pagination: { alignItems: 'center', borderTopWidth: 1, gap: spacing.md, padding: spacing.lg },
-  paginationCopy: { gap: spacing.md, padding: 0 },
   skeletonItem: {
     alignItems: 'flex-start',
     borderBottomWidth: 1,

@@ -444,8 +444,7 @@ export const NextPageLoading: Story = {
   parameters: { relay: { paginationLoading: true } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: '더 불러오기' }));
-    await expect(canvas.findByRole('button', { name: '불러오는 중' })).resolves.toBeDisabled();
+    await expect(canvas.findByLabelText('알림을 더 불러오는 중')).resolves.toBeVisible();
   },
   render: () => <PaginationList />,
 };
@@ -454,8 +453,8 @@ export const NextPageFailureAndRetry: Story = {
   parameters: { relay: { paginationError: true } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: '더 불러오기' }));
-    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+    const page = within(canvasElement.ownerDocument.body);
+    await expect(page.findByRole('alert')).resolves.toHaveTextContent(
       '알림을 더 불러오지 못했어요',
     );
     expect(canvas.getByRole('link', { name: /별빛 여행자님이 팔로우했습니다/ })).toBeVisible();
@@ -972,15 +971,17 @@ export const ActorResetClearsPaginationError: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: '더 불러오기' }));
-    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+    const page = within(canvasElement.ownerDocument.body);
+    await expect(page.findByRole('alert')).resolves.toHaveTextContent(
       '알림을 더 불러오지 못했어요',
     );
 
     await userEvent.click(canvas.getByRole('button', { name: '프로필 전환' }));
 
-    await expect(canvas.findByRole('button', { name: '더 불러오기' })).resolves.toBeVisible();
-    expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
+    await expect(
+      canvas.findByRole('link', { name: /별빛 여행자님이 팔로우했습니다/ }),
+    ).resolves.toBeVisible();
+    expect(page.queryByRole('alert')).not.toBeInTheDocument();
   },
   render: () => <ActorResetNotificationScreen />,
 };

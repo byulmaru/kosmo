@@ -344,14 +344,14 @@ export const NextPageFailureRetrySucceeds: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: '검색 결과 더 보기' }));
-    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+    const page = within(canvasElement.ownerDocument.body);
+    await expect(page.findByRole('alert')).resolves.toHaveTextContent(
       '다음 검색 결과를 불러오지 못했어요',
     );
     expect(canvas.queryByText('별마루 운영')).not.toBeInTheDocument();
-    await userEvent.click(canvas.getByRole('button', { name: '다음 검색 결과 다시 불러오기' }));
+    await userEvent.click(page.getByRole('button', { name: '다시 시도' }));
     await expect(canvas.findByText('별마루 운영')).resolves.toBeVisible();
-    expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
+    expect(page.queryByRole('alert')).not.toBeInTheDocument();
   },
 };
 
@@ -365,9 +365,7 @@ export const NextPageLoading: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const button = canvas.getByRole('button', { name: '검색 결과 더 보기' });
-    await userEvent.click(button);
-    await expect(button).toBeDisabled();
+    await expect(canvas.findByLabelText('검색 결과를 더 불러오는 중')).resolves.toBeVisible();
   },
 };
 

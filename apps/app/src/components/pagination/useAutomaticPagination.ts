@@ -5,6 +5,8 @@ import {
   isScrollNearEnd,
   resumeNativePagination,
 } from './nativeScrollPagination';
+import type { RefObject } from 'react';
+import type { View } from 'react-native';
 import type { ScrollMetrics } from './nativeScrollPagination';
 
 export type LoadNext = (
@@ -23,10 +25,12 @@ export type UseAutomaticPaginationOptions = {
 };
 
 export type UseAutomaticPaginationResult = {
+  endRef: RefObject<View | null>;
   loadError: boolean;
   loadNextPage: () => void;
   nativeScrollProps: ReturnType<typeof createNativeScrollHandlers>;
   onEndReached: () => void;
+  resetError: () => void;
 };
 
 export function useAutomaticPagination({
@@ -39,6 +43,7 @@ export function useAutomaticPagination({
   webScrollTarget = 'document',
 }: UseAutomaticPaginationOptions): UseAutomaticPaginationResult {
   const [loadError, setLoadError] = useState(false);
+  const endRef = useRef<View>(null);
   const [containerPageRevision, setContainerPageRevision] = useState(0);
   const handledContainerPageRevisionRef = useRef(0);
   const requestInFlightRef = useRef(false);
@@ -103,6 +108,11 @@ export function useAutomaticPagination({
     });
   }, []);
 
+  const resetError = useCallback(() => {
+    pageErrorRef.current = false;
+    setLoadError(false);
+  }, []);
+
   const onEndReached = useCallback(() => {
     if (nativePagination !== 'endReached' || pageErrorRef.current || loadError) {
       return;
@@ -163,5 +173,28 @@ export function useAutomaticPagination({
     };
   }, [itemCount, maybeLoadNextPage, webScrollTarget]);
 
-  return { loadError, loadNextPage, nativeScrollProps, onEndReached };
+  useEffect(() => {
+    if (
+      Platform.OS !== 'web' ||
+      !endRef.current ||
+      !hasNext ||
+      isLoadingNext ||
+      loadError ||
+      typeof IntersectionObserver === 'undefined'
+    ) {
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && !pageErrorRef.current) {
+          loadNextPage();
+        }
+      },
+      { rootMargin: '100% 0px' },
+    );
+    observer.observe(endRef.current as unknown as Element);
+    return () => observer.disconnect();
+  }, [hasNext, isLoadingNext, itemCount, loadError, loadNextPage]);
+
+  return { endRef, loadError, loadNextPage, nativeScrollProps, onEndReached, resetError };
 }

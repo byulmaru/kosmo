@@ -5,7 +5,6 @@ import { cloneElement, useEffect, useLayoutEffect, useRef, useState } from 'reac
 import {
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -15,7 +14,12 @@ import {
 import { graphql, useLazyLoadQuery, usePaginationFragment } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
 import { PageHeader } from '@/components/PageHeader';
+import {
+  PaginationScrollView,
+  usePaginationScrollRegistration,
+} from '@/components/pagination/PaginationScrollView';
 import { PaginationSurface } from '@/components/pagination/PaginationSurface';
+import { useAutomaticPagination } from '@/components/pagination/useAutomaticPagination';
 import { ProfileListItem } from '@/components/profile/ProfileListItem';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { NavigationLink } from '@/components/shell/NavigationLink';
@@ -90,7 +94,14 @@ function PeopleResultsContent({ handle }: { handle: string }) {
     { fetchKey, fetchPolicy: 'store-and-network' },
   );
 
-  return <SearchPeopleResults fetchKey={fetchKey} handle={handle} query={data} />;
+  return (
+    <SearchPeopleResults
+      fetchKey={fetchKey}
+      handle={handle}
+      key={`${handle}:${fetchKey}`}
+      query={data}
+    />
+  );
 }
 
 function SearchPeopleResults({
@@ -102,15 +113,22 @@ function SearchPeopleResults({
   handle: string;
   query: SearchPeopleResults_query$key;
 }) {
-  const theme = useTheme();
   const pagination = usePaginationFragment<
     SearchPeopleResultsNextPageQuery,
     SearchPeopleResults_query$key
   >(SearchPeopleResultsFragment, query);
-  const [loadError, setLoadError] = useState(false);
   const trackedFetchKeyRef = useRef<number | null>(null);
   const edges = pagination.data.searchProfiles.edges;
   const hasResults = edges.length > 0;
+  const { endRef, loadError, loadNextPage, nativeScrollProps } = useAutomaticPagination({
+    hasNext: pagination.hasNext,
+    isLoadingNext: pagination.isLoadingNext,
+    itemCount: edges.length,
+    loadNext: pagination.loadNext,
+    pageSize: 20,
+    webScrollTarget: 'container',
+  });
+  usePaginationScrollRegistration(nativeScrollProps);
 
   useEffect(() => {
     if (trackedFetchKeyRef.current === fetchKey) {
@@ -130,17 +148,6 @@ function SearchPeopleResults({
     );
   }
 
-  const loadNext = () => {
-    if (pagination.isLoadingNext) {
-      return;
-    }
-
-    setLoadError(false);
-    pagination.loadNext(20, {
-      onComplete: (error) => setLoadError(Boolean(error)),
-    });
-  };
-
   return (
     <View>
       {edges.map(({ cursor, node }) => (
@@ -152,24 +159,15 @@ function SearchPeopleResults({
         />
       ))}
       <PaginationSurface
-        actionAccessibilityLabel={loadError ? '다음 검색 결과 다시 불러오기' : '검색 결과 더 보기'}
+        endRef={endRef}
         error={loadError}
+        errorMessage="다음 검색 결과를 불러오지 못했어요."
         hasNext={pagination.hasNext}
         isLoading={pagination.isLoadingNext}
-        loadMoreLabel="더 보기"
-        loadingIndicator
-        loadingLabel="불러오는 중"
-        onLoadMore={loadNext}
-        onRetry={loadNext}
-        retryLabel="다시 시도"
+        loadingLabel="검색 결과를 더 불러오는 중"
+        onRetry={loadNextPage}
         style={styles.pagination}
-      >
-        {loadError ? (
-          <Text accessibilityRole="alert" style={[styles.paginationError, { color: theme.text }]}>
-            다음 검색 결과를 불러오지 못했어요. 다시 시도해 주세요.
-          </Text>
-        ) : null}
-      </PaginationSurface>
+      />
     </View>
   );
 }
@@ -482,9 +480,12 @@ export default function SearchScreen() {
   ) : null;
 
   return (
-    <ScrollView
-      contentContainerStyle={[styles.root, web ? styles.webRoot : styles.nativeRoot]}
-      keyboardShouldPersistTaps="handled"
+    <PaginationScrollView
+      nativeScrollProps={{
+        contentContainerStyle: [styles.root, web ? styles.webRoot : styles.nativeRoot],
+        keyboardShouldPersistTaps: 'handled',
+      }}
+      webScrollable
     >
       {nativeSearchHeader}
       <View onBlur={leaveSearchFocus} onFocus={keepSearchFocused}>
@@ -607,7 +608,7 @@ export default function SearchScreen() {
           />
         </View>
       ) : null}
-    </ScrollView>
+    </PaginationScrollView>
   );
 }
 
@@ -688,10 +689,5 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.xl,
-  },
-  paginationError: {
-    fontFamily: fontFamilies.ui,
-    textAlign: 'center',
-    ...typography.xsm,
   },
 });

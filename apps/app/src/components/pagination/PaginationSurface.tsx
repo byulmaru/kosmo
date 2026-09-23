@@ -1,70 +1,63 @@
-import { View } from 'react-native';
-import { Button } from '@/components/ui/Button';
-import type { ReactNode } from 'react';
-import type { StyleProp, ViewStyle } from 'react-native';
+import { useEffect } from 'react';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { useToast } from '@/components/ui/ToastProvider';
+import { useTheme } from '@/theme/ThemeProvider';
+import type { RefObject } from 'react';
+import type { StyleProp, View as NativeView, ViewStyle } from 'react-native';
 
 type PaginationSurfaceProps = {
-  actionStyle?: StyleProp<ViewStyle>;
-  actionAccessibilityLabel?: string;
-  children?: ReactNode;
-  error?: boolean;
+  endRef?: RefObject<NativeView | null>;
+  error: boolean;
+  errorMessage: string;
   hasNext: boolean;
-  isLoading?: boolean;
-  loadMoreLabel: string;
-  loadingIndicator?: boolean;
+  isLoading: boolean;
   loadingLabel: string;
-  onLoadMore?: () => void;
   onRetry?: () => void;
-  retryLabel: string;
-  retryTone?: 'primary' | 'secondary';
   style?: StyleProp<ViewStyle>;
 };
 
 export function PaginationSurface({
-  actionAccessibilityLabel,
-  actionStyle,
-  children,
-  error = false,
+  endRef,
+  error,
+  errorMessage,
   hasNext,
-  isLoading = false,
-  loadingIndicator = false,
-  loadMoreLabel,
+  isLoading,
   loadingLabel,
-  onLoadMore,
   onRetry,
-  retryLabel,
-  retryTone,
   style,
 }: PaginationSurfaceProps) {
-  const action = error ? onRetry : onLoadMore;
-  if (!error && (!hasNext || !action)) {
+  const theme = useTheme();
+  const { showToast } = useToast();
+
+  useEffect(() => {
+    if (!error || !onRetry) {
+      return;
+    }
+    return showToast(errorMessage, {
+      action: { label: '다시 시도', onPress: onRetry },
+      persistent: true,
+      tone: 'danger',
+    });
+  }, [error, errorMessage, onRetry, showToast]);
+
+  if (!hasNext) {
     return null;
   }
-
-  const label = error ? retryLabel : isLoading ? loadingLabel : loadMoreLabel;
-  const handlePress = () => {
-    if (!isLoading) {
-      action?.();
-    }
-  };
+  if (!isLoading) {
+    return <View ref={endRef} style={styles.sentinel} />;
+  }
 
   return (
-    <View style={style}>
-      {children}
-      {action ? (
-        <Button
-          accessibilityLabel={actionAccessibilityLabel}
-          accessibilityState={{ busy: isLoading, disabled: isLoading }}
-          aria-busy={isLoading}
-          disabled={isLoading}
-          loading={isLoading && loadingIndicator}
-          onPress={handlePress}
-          style={actionStyle}
-          tone={error ? (retryTone ?? 'secondary') : 'secondary'}
-        >
-          {label}
-        </Button>
-      ) : null}
+    <View ref={endRef} style={style}>
+      <ActivityIndicator accessibilityLabel={loadingLabel} color={theme.foregroundSecondary} />
+      <Text accessibilityLiveRegion="polite" style={styles.srOnly}>
+        {loadingLabel}
+      </Text>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  sentinel: { height: 1 },
+  srOnly: { height: 1, left: 0, overflow: 'hidden', position: 'absolute', top: 0, width: 1 },
+});
