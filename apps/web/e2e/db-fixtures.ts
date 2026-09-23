@@ -150,6 +150,18 @@ async function waitForE2ETemporalWorkflows() {
 async function waitForE2EWorkflow({ runId, type, workflowId }: WorkflowInfo) {
   const handle = temporalClient.workflow.getHandle(workflowId, runId);
 
+  if (type === 'profileBlockWorkflow' || type === 'profileUnblockWorkflow') {
+    // These tests verify the committed local transition. Synthetic remote
+    // recipients have no deliverable inbox, so their retrying effect is ended
+    // before the next test truncates the database.
+    const description = await handle.describe();
+    if (description.status.name === 'RUNNING') {
+      await handle.terminate('E2E database reset');
+    }
+    await handle.result().catch(() => undefined);
+    return;
+  }
+
   if (type !== profileFollowPairWorkflowType) {
     await handle.result();
     return;
