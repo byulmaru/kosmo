@@ -10,13 +10,16 @@ export type InboundMentionCandidate = {
   readonly targetHref: string;
 };
 
+export type StoredInboundMentionCandidates = {
+  readonly candidates: InboundMentionCandidate[];
+  readonly knownActorHrefs: string[];
+};
+
 const noNetworkDocumentLoader = async (): Promise<never> => {
   throw new TypeError('Remote Mention lookup is disabled');
 };
 
-export const collectInboundMentionCandidates = async (
-  note: Note,
-): Promise<InboundMentionCandidate[]> => {
+export const collectInboundMentionTargetHrefs = async (note: Note): Promise<string[]> => {
   const targetHrefs = new Set<string>();
 
   for await (const tag of note.getTags({
@@ -32,8 +35,14 @@ export const collectInboundMentionCandidates = async (
     targetHrefs.add(tag.href.href);
   }
 
-  if (targetHrefs.size === 0) {
-    return [];
+  return [...targetHrefs];
+};
+
+export const resolveStoredInboundMentionCandidates = async (
+  targetHrefs: readonly string[],
+): Promise<StoredInboundMentionCandidates> => {
+  if (targetHrefs.length === 0) {
+    return { candidates: [], knownActorHrefs: [] };
   }
 
   const profileRows = await db
@@ -51,7 +60,7 @@ export const collectInboundMentionCandidates = async (
     .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
     .where(inArray(ActivityPubActors.uri, [...targetHrefs]));
 
-  return profileRows.flatMap((profile) => {
+  const candidates = profileRows.flatMap((profile) => {
     const verifiedHrefs = [profile.actorHref];
     if (profile.profileUrl !== null) {
       try {
@@ -86,4 +95,9 @@ export const collectInboundMentionCandidates = async (
       targetHref,
     }));
   });
+
+  return {
+    candidates,
+    knownActorHrefs: profileRows.map(({ actorHref }) => actorHref),
+  };
 };

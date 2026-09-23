@@ -3,7 +3,7 @@ import '@kosmo/core/polyfill';
 import assert from 'node:assert/strict';
 import { mock, test } from 'node:test';
 import { Link, Mention, Note } from '@fedify/vocab';
-import { collectInboundMentionCandidates } from './inbound-mention';
+import { collectInboundMentionTargetHrefs } from './inbound-mention';
 
 test('filters non-HTTP Mentions and ordinary Links without fetching', async () => {
   const note = new Note({
@@ -21,7 +21,7 @@ test('filters non-HTTP Mentions and ordinary Links without fetching', async () =
     ],
   });
 
-  assert.deepEqual(await collectInboundMentionCandidates(note), []);
+  assert.deepEqual(await collectInboundMentionTargetHrefs(note), []);
 });
 
 test('does not fetch URL-only tags while collecting typed Mentions', async () => {
@@ -35,7 +35,7 @@ test('does not fetch URL-only tags while collecting typed Mentions', async () =>
       tags: [new URL('https://remote.example/users/unresolved')],
     });
 
-    assert.deepEqual(await collectInboundMentionCandidates(note), []);
+    assert.deepEqual(await collectInboundMentionTargetHrefs(note), []);
     assert.equal(fetchMock.mock.callCount(), 0);
   } finally {
     fetchMock.mock.restore();

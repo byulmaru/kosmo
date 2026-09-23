@@ -35,7 +35,7 @@ import {
   postContentDocumentToText,
 } from '@kosmo/core/post-content/server';
 import { temporalClient } from '@kosmo/core/temporal/client';
-import { eq, ne } from 'drizzle-orm';
+import { eq, inArray, ne } from 'drizzle-orm';
 import { setInboundObservabilityReporter } from './inbound-observability';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
@@ -175,9 +175,13 @@ describe('inbound Create dispatch', () => {
         to: PUBLIC_COLLECTION,
       });
     const originalObjectUri = new URL('https://remote.example/notes/mention-before-refresh');
+    let mentionLookupCount = 0;
 
     await handleInboundCreate(
-      createContext(),
+      createContext(undefined, null, async () => {
+        mentionLookupCount += 1;
+        return null;
+      }),
       new Create({ actor: remoteActorUri, object: createMentionNote(originalObjectUri) }),
       receivedAt,
     );
@@ -192,6 +196,13 @@ describe('inbound Create dispatch', () => {
         ],
       },
     ]);
+    assert.equal(mentionLookupCount, 0);
+    const unrefreshedActor = await db
+      .select({ profileUrl: ActivityPubActors.profileUrl })
+      .from(ActivityPubActors)
+      .where(eq(ActivityPubActors.profileId, profile.id))
+      .then(firstOrThrow);
+    assert.equal(unrefreshedActor.profileUrl, null);
 
     await materializeRemoteProfileActor({
       actorUri: remoteActorUri,
@@ -403,6 +414,7 @@ describe('inbound Create dispatch', () => {
     });
 
     const objectUri = new URL('https://remote.example/notes/local-mention');
+    let mentionLookupCount = 0;
     const note = new Note({
       attribution: remoteActorUri,
       content:
@@ -420,7 +432,10 @@ describe('inbound Create dispatch', () => {
     });
 
     await handleInboundCreate(
-      createContext(),
+      createContext(undefined, null, async () => {
+        mentionLookupCount += 1;
+        return null;
+      }),
       new Create({ actor: remoteActorUri, object: note }),
       receivedAt,
     );
@@ -440,6 +455,386 @@ describe('inbound Create dispatch', () => {
     ]);
     assert.deepEqual(await db.select().from(PostMentions), [
       { postContentId: content.id, profileId: target.id },
+    ]);
+    assert.equal(mentionLookupCount, 0);
+  });
+
+  test('materializes an unknown remote Mention and verifies its actor URI before matching the advertised URL', async () => {
+    const profileUrl = new URL('https://profiles.example/@bob');
+    const mentionActorUri = new URL('https://mentions.example/users/bob');
+    const objectUri = new URL('https://remote.example/notes/materialized-mention');
+    const lookupHrefs: string[] = [];
+    const note = new Note({
+      attribution: remoteActorUri,
+      content: `<p><a href="${profileUrl.href}">@Bob</a></p>`,
+      id: objectUri,
+      mediaType: 'text/html',
+      tags: [new Mention({ href: mentionActorUri, name: '@ignored-name' })],
+      to: PUBLIC_COLLECTION,
+    });
+
+    await createStoredRemoteActor();
+    await handleInboundCreate(
+      createContext(undefined, null, async (actorUri) => {
+        lookupHrefs.push(actorUri.href);
+        return new Person({
+          id: actorUri,
+          name: 'Bob Remote',
+          preferredUsername: 'bob',
+          url: profileUrl,
+        });
+      }),
+      new Create({ actor: remoteActorUri, object: note }),
+      receivedAt,
+    );
+
+    const { content } = await getMaterializedPost(objectUri);
+    const storedActor = await db
+      .select({ actor: ActivityPubActors, profile: Profiles })
+      .from(ActivityPubActors)
+      .innerJoin(Profiles, eq(Profiles.id, ActivityPubActors.profileId))
+      .where(eq(ActivityPubActors.uri, mentionActorUri.href))
+      .then(firstOrThrow);
+
+    assert.deepEqual(lookupHrefs, [mentionActorUri.href]);
+    assert.equal(storedActor.actor.uri, mentionActorUri.href);
+    assert.equal(storedActor.actor.profileUrl, profileUrl.href);
+    assert.deepEqual(content.document.body.content, [
+      {
+        type: 'paragraph',
+        content: [{ attrs: { profileId: storedActor.profile.id }, type: 'mention' }],
+      },
+    ]);
+    assert.deepEqual(await db.select().from(PostMentions), [
+      { postContentId: content.id, profileId: storedActor.profile.id },
+    ]);
+  });
+
+  test('materializes unknown Mention targets with bounded overlapping lookups and stable matching', async () => {
+    const mentionActorUris = Array.from(
+      { length: 5 },
+      (_, index) => new URL(`https://mentions.example/users/parallel-${index}`),
+    );
+    const objectUri = new URL('https://remote.example/notes/parallel-mention-materialization');
+    let activeLookups = 0;
+    let maxActiveLookups = 0;
+    let lookupCount = 0;
+    let releaseLookups!: () => void;
+    const lookupsReleased = new Promise<void>((resolve) => {
+      releaseLookups = resolve;
+    });
+    let releaseFallback: ReturnType<typeof setTimeout> | undefined;
+    const note = new Note({
+      attribution: remoteActorUri,
+      content: `<p>${mentionActorUris
+        .map((actorUri, index) => `<a href="${actorUri.href}">@parallel-${index}</a>`)
+        .join(' ')}</p>`,
+      id: objectUri,
+      mediaType: 'text/html',
+      tags: mentionActorUris.map((href, index) => new Mention({ href, name: `@ignored-${index}` })),
+      to: PUBLIC_COLLECTION,
+    });
+
+    try {
+      await createStoredRemoteActor();
+      await handleInboundCreate(
+        createContext(undefined, null, async (actorUri, options) => {
+          assert.ok(options?.signal);
+          lookupCount += 1;
+          if (lookupCount === 1) {
+            releaseFallback = setTimeout(releaseLookups, 1_000);
+          }
+          activeLookups += 1;
+          maxActiveLookups = Math.max(maxActiveLookups, activeLookups);
+          if (activeLookups === 4) {
+            if (releaseFallback) {
+              clearTimeout(releaseFallback);
+            }
+            releaseLookups();
+          }
+          await lookupsReleased;
+          activeLookups -= 1;
+          return new Person({
+            id: actorUri,
+            preferredUsername: actorUri.pathname.split('/').at(-1) ?? 'parallel',
+          });
+        }),
+        new Create({ actor: remoteActorUri, object: note }),
+        receivedAt,
+      );
+    } finally {
+      if (releaseFallback) {
+        clearTimeout(releaseFallback);
+      }
+    }
+
+    const { content } = await getMaterializedPost(objectUri);
+    const actorRows = await db
+      .select({ profileId: ActivityPubActors.profileId, uri: ActivityPubActors.uri })
+      .from(ActivityPubActors)
+      .where(
+        inArray(
+          ActivityPubActors.uri,
+          mentionActorUris.map(({ href }) => href),
+        ),
+      );
+    const profileIdsByUri = new Map(actorRows.map(({ profileId, uri }) => [uri, profileId]));
+
+    assert.equal(lookupCount, mentionActorUris.length);
+    assert.ok(maxActiveLookups > 1);
+    assert.ok(maxActiveLookups <= 4);
+    assert.deepEqual(content.document.body.content, [
+      {
+        type: 'paragraph',
+        content: mentionActorUris.flatMap((actorUri, index) => [
+          {
+            attrs: { profileId: profileIdsByUri.get(actorUri.href) },
+            type: 'mention',
+          },
+          ...(index < mentionActorUris.length - 1 ? [{ text: ' ', type: 'text' }] : []),
+        ]),
+      },
+    ]);
+    assert.deepEqual(
+      (await db.select().from(PostMentions)).map(({ profileId }) => profileId).sort(),
+      mentionActorUris.map((actorUri) => profileIdsByUri.get(actorUri.href)).sort(),
+    );
+  });
+
+  test('aborts the shared Mention lookup budget and preserves unprocessed actor links', async () => {
+    const mentionActorUris = Array.from(
+      { length: 5 },
+      (_, index) => new URL(`https://mentions.example/users/aborted-${index}`),
+    );
+    const objectUri = new URL('https://remote.example/notes/aborted-mention-materialization');
+    const abortController = new AbortController();
+    const lookupHrefs: string[] = [];
+    const timeoutMock = mock.method(AbortSignal, 'timeout', () => abortController.signal);
+    const restoreReporter = setInboundObservabilityReporter({ log: () => undefined });
+    const note = new Note({
+      attribution: remoteActorUri,
+      content: `<p>${mentionActorUris
+        .map((actorUri, index) => `<a href="${actorUri.href}">@aborted-${index}</a>`)
+        .join(' ')}</p>`,
+      id: objectUri,
+      mediaType: 'text/html',
+      tags: mentionActorUris.map((href, index) => new Mention({ href, name: `@ignored-${index}` })),
+      to: PUBLIC_COLLECTION,
+    });
+
+    try {
+      await createStoredRemoteActor();
+      await handleInboundCreate(
+        createContext(undefined, null, async (actorUri, options) => {
+          lookupHrefs.push(actorUri.href);
+          assert.equal(options?.signal, abortController.signal);
+          abortController.abort();
+          throw new DOMException('Mention actor lookup exceeded the budget', 'AbortError');
+        }),
+        new Create({ actor: remoteActorUri, object: note }),
+        receivedAt,
+      );
+    } finally {
+      timeoutMock.mock.restore();
+      restoreReporter();
+    }
+
+    const { content } = await getMaterializedPost(objectUri);
+    assert.equal(lookupHrefs.length, 4);
+    assert.deepEqual(content.document.body.content, [
+      {
+        type: 'paragraph',
+        content: mentionActorUris.flatMap((actorUri, index) => [
+          {
+            marks: [{ attrs: { href: actorUri.href }, type: 'link' }],
+            text: `@aborted-${index}`,
+            type: 'text',
+          },
+          ...(index < mentionActorUris.length - 1 ? [{ text: ' ', type: 'text' }] : []),
+        ]),
+      },
+    ]);
+    assert.deepEqual(await db.select().from(PostMentions), []);
+  });
+
+  test('keeps failed and mismatched unknown Mentions as links while continuing with other targets', async () => {
+    const failedActorUri = new URL('https://mentions.example/users/failed');
+    const mismatchedActorUri = new URL('https://mentions.example/users/mismatched');
+    const returnedActorUri = new URL('https://mentions.example/users/other');
+    const validActorUri = new URL('https://mentions.example/users/valid');
+    const profileUrl = new URL('https://profiles.example/@valid');
+    const objectUri = new URL('https://remote.example/notes/partial-mention-materialization');
+    const lookupHrefs: string[] = [];
+    const observations: unknown[] = [];
+    const restoreReporter = setInboundObservabilityReporter({
+      captureException: () => undefined,
+      log: (observation) => observations.push(observation),
+    });
+    const note = new Note({
+      attribution: remoteActorUri,
+      content:
+        `<p><a href="${failedActorUri.href}">@failed</a> ` +
+        `<a href="${mismatchedActorUri.href}">@mismatched</a> ` +
+        `<a href="${profileUrl.href}">@valid</a></p>`,
+      id: objectUri,
+      mediaType: 'text/html',
+      tags: [
+        new Mention({ href: failedActorUri, name: '@ignored-failure' }),
+        new Mention({ href: mismatchedActorUri, name: '@ignored-mismatch' }),
+        new Mention({ href: validActorUri, name: '@ignored-valid' }),
+      ],
+      to: PUBLIC_COLLECTION,
+    });
+
+    try {
+      await createStoredRemoteActor();
+      await handleInboundCreate(
+        createContext(undefined, null, async (actorUri) => {
+          lookupHrefs.push(actorUri.href);
+          if (actorUri.href === failedActorUri.href) {
+            throw new Error('Remote lookup failed');
+          }
+          if (actorUri.href === mismatchedActorUri.href) {
+            return new Person({ id: returnedActorUri, preferredUsername: 'invalid' });
+          }
+          return new Person({
+            id: actorUri,
+            preferredUsername: 'valid',
+            url: profileUrl,
+          });
+        }),
+        new Create({ actor: remoteActorUri, object: note }),
+        receivedAt,
+      );
+    } finally {
+      restoreReporter();
+    }
+
+    const { content } = await getMaterializedPost(objectUri);
+    const validProfile = await db
+      .select({ id: Profiles.id })
+      .from(ActivityPubActors)
+      .innerJoin(Profiles, eq(Profiles.id, ActivityPubActors.profileId))
+      .where(eq(ActivityPubActors.uri, validActorUri.href))
+      .then(firstOrThrow);
+
+    assert.deepEqual(lookupHrefs, [
+      failedActorUri.href,
+      mismatchedActorUri.href,
+      validActorUri.href,
+    ]);
+    assert.deepEqual(content.document.body.content, [
+      {
+        type: 'paragraph',
+        content: [
+          {
+            marks: [{ attrs: { href: failedActorUri.href }, type: 'link' }],
+            text: '@failed',
+            type: 'text',
+          },
+          { text: ' ', type: 'text' },
+          {
+            marks: [{ attrs: { href: mismatchedActorUri.href }, type: 'link' }],
+            text: '@mismatched',
+            type: 'text',
+          },
+          { text: ' ', type: 'text' },
+          { attrs: { profileId: validProfile.id }, type: 'mention' },
+        ],
+      },
+    ]);
+    assert.deepEqual(await db.select().from(PostMentions), [
+      { postContentId: content.id, profileId: validProfile.id },
+    ]);
+    assert.deepEqual(observations, [
+      {
+        activityType: 'Create',
+        handler: 'create',
+        objectOrigin: objectUri.origin,
+        outcome: 'internal_failure',
+        phase: 'actor_lookup',
+        reasonCode: 'remote_mention_materialization_rejected',
+      },
+      {
+        activityType: 'Create',
+        handler: 'create',
+        objectOrigin: objectUri.origin,
+        outcome: 'external_failure',
+        phase: 'actor_lookup',
+        reasonCode: 'remote_mention_materialization_rejected',
+      },
+    ]);
+  });
+
+  test('limits unknown remote Mention lookups to 32 unique targets and keeps the remaining links', async () => {
+    const mentionActorUris = Array.from(
+      { length: 33 },
+      (_, index) => new URL(`https://mentions.example/users/target-${index}`),
+    );
+    const knownActorUri = new URL('https://mentions.example/users/known');
+    const objectUri = new URL('https://remote.example/notes/mention-lookup-budget');
+    const lookupHrefs: string[] = [];
+    const restoreReporter = setInboundObservabilityReporter({ log: () => undefined });
+    let knownProfileId: string | undefined;
+    const note = new Note({
+      attribution: remoteActorUri,
+      content: `<p>${mentionActorUris
+        .map((actorUri, index) => `<a href="${actorUri.href}">@target-${index}</a>`)
+        .join(' ')} <a href="${knownActorUri.href}">@known</a></p>`,
+      id: objectUri,
+      mediaType: 'text/html',
+      tags: [
+        new Mention({ href: mentionActorUris[0]!, name: '@duplicate-one' }),
+        new Mention({ href: mentionActorUris[0]!, name: '@duplicate-two' }),
+        ...mentionActorUris.slice(1).map((href) => new Mention({ href, name: '@target' })),
+        new Mention({ href: knownActorUri, name: '@known' }),
+      ],
+      to: PUBLIC_COLLECTION,
+    });
+
+    try {
+      await createStoredRemoteActor();
+      knownProfileId = (await createStoredRemoteActor({ actorUri: knownActorUri, handle: 'known' }))
+        .id;
+      await handleInboundCreate(
+        createContext(undefined, null, async (actorUri) => {
+          lookupHrefs.push(actorUri.href);
+          return null;
+        }),
+        new Create({ actor: remoteActorUri, object: note }),
+        receivedAt,
+      );
+    } finally {
+      restoreReporter();
+    }
+
+    const { content } = await getMaterializedPost(objectUri);
+    const paragraph = content.document.body.content[0];
+
+    assert.equal(lookupHrefs.length, 32);
+    assert.equal(new Set(lookupHrefs).size, 32);
+    assert.deepEqual(
+      lookupHrefs,
+      mentionActorUris.slice(0, 32).map(({ href }) => href),
+    );
+    assert.equal(paragraph?.type, 'paragraph');
+    assert.equal(
+      paragraph?.type === 'paragraph'
+        ? (paragraph.content?.filter((node) => node.type === 'mention').length ?? -1)
+        : -1,
+      1,
+    );
+    assert.equal(
+      paragraph?.type === 'paragraph'
+        ? (paragraph.content?.filter(
+            (node) => node.type === 'text' && node.marks?.some((mark) => mark.type === 'link'),
+          ).length ?? -1)
+        : -1,
+      33,
+    );
+    assert.ok(knownProfileId);
+    assert.deepEqual(await db.select().from(PostMentions), [
+      { postContentId: content.id, profileId: knownProfileId },
     ]);
   });
 
@@ -648,7 +1043,8 @@ describe('inbound Create dispatch', () => {
     }
   });
 
-  test('rejects unsupported, empty, and invalid originals before author discovery', async () => {
+  test('rejects unsupported, empty, and invalid originals before Mention or author discovery', async () => {
+    const invalidImageMentionActorUri = new URL('https://mentions.example/users/invalid-image');
     const lookupObject = mock.fn(
       async () => new Person({ id: remoteActorUri, preferredUsername: 'alice' }),
     );
@@ -724,6 +1120,7 @@ describe('inbound Create dispatch', () => {
           attribution: remoteActorUri,
           content: 'Invalid image',
           id: new URL('https://objects.example/notes/invalid-media'),
+          tags: [new Mention({ href: invalidImageMentionActorUri, name: '@ignored' })],
           to: PUBLIC_COLLECTION,
         }),
       },
@@ -748,6 +1145,50 @@ describe('inbound Create dispatch', () => {
     assert.equal(await db.$count(Profiles), 0);
     assert.equal(await db.$count(Posts), 0);
     assert.equal(await db.$count(Media), 0);
+  });
+
+  test('preserves a resolved empty anchor Mention when deciding whether a hydrated Note is empty', async () => {
+    await createStoredRemoteActor();
+    const mentionActorUri = new URL('https://mentions.example/users/empty-anchor');
+    const objectUri = new URL('https://objects.example/notes/empty-anchor-mention');
+    const lookupHrefs: string[] = [];
+    const result = await materializeHydratedRemoteNote({
+      context: createContext(undefined, null, async (actorUri) => {
+        lookupHrefs.push(actorUri.href);
+        return new Person({ id: actorUri, preferredUsername: 'bob' });
+      }),
+      note: new Note({
+        attribution: remoteActorUri,
+        content: `<p><a href="${mentionActorUri.href}"></a></p>`,
+        id: objectUri,
+        mediaType: 'text/html',
+        tags: [new Mention({ href: mentionActorUri, name: '@ignored' })],
+        to: PUBLIC_COLLECTION,
+      }),
+      objectUri,
+      observation: createObservation,
+      receivedAt,
+    });
+
+    const { content } = await getMaterializedPost(objectUri);
+    const mentionProfile = await db
+      .select({ id: Profiles.id })
+      .from(ActivityPubActors)
+      .innerJoin(Profiles, eq(Profiles.id, ActivityPubActors.profileId))
+      .where(eq(ActivityPubActors.uri, mentionActorUri.href))
+      .then(firstOrThrow);
+
+    assert.equal(result.status, 'created');
+    assert.deepEqual(lookupHrefs, [mentionActorUri.href]);
+    assert.deepEqual(content.document.body.content, [
+      {
+        type: 'paragraph',
+        content: [{ attrs: { profileId: mentionProfile.id }, type: 'mention' }],
+      },
+    ]);
+    assert.deepEqual(await db.select().from(PostMentions), [
+      { postContentId: content.id, profileId: mentionProfile.id },
+    ]);
   });
 
   test('materializes an unknown attributed author before an attachment-only original', async () => {
@@ -1442,6 +1883,8 @@ describe('inbound Create dispatch', () => {
 
   test('rejects a Note atomically when one of the selected Images has an invalid URL', async () => {
     await createStoredRemoteActor();
+    const mentionActorUri = new URL('https://mentions.example/users/invalid-image');
+    let mentionLookupCount = 0;
     const cases = [
       [new Image({ name: 'missing URL' })],
       [
@@ -1458,7 +1901,10 @@ describe('inbound Create dispatch', () => {
     for (const [index, attachments] of cases.entries()) {
       const objectUri = new URL(`https://remote.example/notes/invalid-image-${index}`);
       await handleInboundCreate(
-        createContext(),
+        createContext(undefined, null, async () => {
+          mentionLookupCount += 1;
+          return null;
+        }),
         new Create({
           actor: remoteActorUri,
           object: new Note({
@@ -1466,6 +1912,7 @@ describe('inbound Create dispatch', () => {
             attribution: remoteActorUri,
             content: 'must not persist',
             id: objectUri,
+            tags: [new Mention({ href: mentionActorUri, name: '@ignored' })],
             to: PUBLIC_COLLECTION,
           }),
         }),
@@ -1473,6 +1920,7 @@ describe('inbound Create dispatch', () => {
       );
     }
 
+    assert.equal(mentionLookupCount, 0);
     assert.equal((await db.select().from(Media)).length, 0);
     assert.equal((await db.select().from(ActivityPubPosts)).length, 0);
     assert.equal((await db.select().from(Posts)).length, 0);
@@ -2357,6 +2805,7 @@ describe('inbound Create dispatch', () => {
                 mediaType: 'image/webp',
                 url: new URL('https://remote.example/media/over-limit.webp'),
               }),
+              new Image({ name: 'malformed attachment without URL' }),
             ],
             attribution: remoteActorUri,
             content: 'a'.repeat(10_001),
@@ -2584,6 +3033,40 @@ describe('inbound Create dispatch', () => {
     assert.equal(await db.$count(Posts), 4);
     assert.equal(await db.$count(PostContents), 4);
     assert.equal(await db.$count(ActivityPubPosts), 4);
+  });
+
+  test('rejects over-budget Note content before resolving typed Mention targets', async () => {
+    const mentionActorUri = new URL('https://mentions.example/users/over-budget');
+    const objectUri = new URL('https://remote.example/notes/over-budget-mention');
+    let mentionLookupCount = 0;
+    const restoreReporter = setInboundObservabilityReporter({ log: () => undefined });
+
+    try {
+      await createStoredRemoteActor();
+      await handleInboundCreate(
+        createContext(undefined, null, async () => {
+          mentionLookupCount += 1;
+          return null;
+        }),
+        new Create({
+          actor: remoteActorUri,
+          object: new Note({
+            attribution: remoteActorUri,
+            content: 'a'.repeat(10_001),
+            id: objectUri,
+            mediaType: 'text/plain',
+            tags: [new Mention({ href: mentionActorUri, name: '@ignored' })],
+            to: PUBLIC_COLLECTION,
+          }),
+        }),
+        receivedAt,
+      );
+    } finally {
+      restoreReporter();
+    }
+
+    assert.equal(mentionLookupCount, 0);
+    assert.equal(await db.$count(Posts), 0);
   });
 
   test('converges unsaved Actor and Post identity for concurrent hydrated materialization without loser Media', async () => {
@@ -2862,10 +3345,12 @@ const createContext = (
     throw new Error(`Unexpected document URL: ${url}`);
   },
   recipient: string | null = null,
+  lookupObject?: (actorUri: URL, options?: { signal?: AbortSignal }) => Promise<unknown>,
 ) =>
   ({
     canonicalOrigin: publicOrigin,
     documentLoader,
+    ...(lookupObject ? { lookupObject } : {}),
     parseUri: (uri: URL | null) => uriContext.parseUri(uri),
     recipient,
   }) as unknown as InboxContext<void>;

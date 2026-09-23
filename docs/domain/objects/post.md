@@ -310,7 +310,8 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
 - Public marker와 author canonical followers marker가 모두 없으면 actor-only ActivityPub Direct/limited audience와 foreign
   followers-looking URI만 있는 audience는 지원하지 않으며 Post side effect 없이 건너뛴다. 이런 추가 actor URI와
   spoofed-looking URI 자체로 Mentioned Profile 관계, Notification, DIRECT/limited recipient authorization 또는
-  viewer access를 만들지 않는다. body/tag Mention 보존과 파싱은 이 수신 계약에 포함하지 않는다.
+  viewer access를 만들지 않는다. 여기서 정한 audience 분류는 body/tag Mention identity 보존과 별개이며, audience URI만으로 Mention
+  관계를 만들지 않는다.
 - actor·object·attribution과 top-level Note의 기본 검증은 여전히 materialization 전에 통과해야 한다. 이 검증은
   audience marker가 인식된 Note의 추가 actor URI를 근거 없이 거부하기 위한 검사가 아니라 저장할 Post Visibility와
   local 수신 관련성을 결정하기 위한 경계다.
@@ -437,16 +438,20 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
 - 본문의 canonical 표현은 schema version이 식별된 document다. Plain Text는 작성 입력과 읽기·검색·접근성 projection이며 별도 canonical 저장값이 아니다.
 - 현재 document V1은 paragraph, text, hard break, 안전한 HTTP(S) link와 Media node를 지원하며, 검증된 inbound
   typed Mention은 V1에 additive한 node로 보존한다. Mention node는 저장된 Profile stable identity인 `profileId`만
-  attrs로 가진다. inbound typed `Mention.href`는 이미 저장된 ActivityPub actor/Profile mapping으로 알려진 Profile stable
-  identity인지 본문 변환과 독립적으로 확인하고, 확인된 identity를 Mentioned Profile 관계 입력으로 보존한다. 본문 anchor href가 확인된
-  actor URI, 기존 정상 actor materialization·refresh가 저장한 Profile URL alias 또는 Local Profile의 trusted human URL과
-  일치할 때만 `profileId` node로 표현할 수 있다. 알 수 없거나 불일치한 anchor는 tag `name`, handle 또는 visible label과 관계없이
-  안전한 일반 link 또는 표시 text로 보존하며, body anchor 불일치와 관계 저장은 독립적이다. 일반 link/text와 `to`/`cc` audience는
-  Mention 관계를 만들지 않는다. Remote Profile URL alias가 없으면 이미 알려진 actor URI만 사용하며 Mention 수신 중 fetch·신규
-  materialization·backfill을 수행하지 않는다. 누락·malformed alias는 기존 정상 refresh가 제거·갱신하고 Mention receipt가 refresh를
-  새로 트리거하지 않는다. 기존 글 자동 보정은 수행하지 않는다. 원문 anchor의 표시 문자열은 수신 중 resource budget 계산에만 사용하고
-  저장하지 않는다. renderer는 같은 revision의 Profile `relativeHandle`에서 표시 문자열을 파생하며, Profile을 조회할 수 없으면 비링크
-  `@알 수 없는 사용자`를 표시한다. `pre`와 일반 rich-text editor는 지원하지 않는다.
+  attrs로 가진다. inbound typed `Mention.href`는 기존 ActivityPub actor/Profile mapping을 먼저 확인하며, 알려진 Local/Remote
+  Profile은 기존 mapping을 그대로 사용한다. 알려지지 않은 remote actor target은 Note당 최대 32개의 고유 remote actor URI까지 typed href로
+  resolve해 materialize할 수 있으며, 미확인 remote actor lookup 총 제한은 Note당 30초다. 제한시간이 끝나면 진행 중인 actor 조회를 중단하고
+  추가 미확인 조회를 시작하지 않는다. 아직 시작하지 않은 target은 건너뛴다. 이미 시작한 remote Profile 저장은 제한시간 뒤에도 완료될 수 있다.
+  이미 확인된 Mentioned Profile 관계와 Note 전체는 유지한다. 한도를 넘거나 개별 resolve가 실패한 target도 건너뛴다. 본문 anchor href나
+  `Mention.name`은 actor identity lookup/fetch 입력이 아니다. 확인된 typed identity는 본문 변환과 독립적으로 Mentioned Profile 관계
+  입력으로 보존한다. 본문 anchor href가 확인된 actor URI, 기존 정상 actor materialization·refresh가 저장한 Profile URL alias 또는
+  Local Profile의 trusted human URL과 정확히 일치할 때만 `profileId` node로 표현할 수 있다. 알 수 없거나 불일치한 anchor는 tag `name`,
+  handle 또는 visible label과 관계없이 안전한 일반 link 또는 표시 text로 보존하며, body anchor 불일치와 관계 저장은 독립적이다. 일반
+  link/text와 `to`/`cc` audience는 Mention 관계를 만들지 않는다. 이미 알려진 Remote Profile URL alias가 없으면 body matching은 actor URI만
+  사용하며 Mention receipt는 그 actor를 다시 fetch/refresh해 cached `profileUrl`을 채우지 않는다. 별도의 기존 정상 refresh는 alias를
+  갱신·제거할 수 있다. 기존 Post Content 수정, 운영자 또는 일괄 backfill은 수행하지 않는다. 원문 anchor의 표시 문자열은 수신 중 resource
+  budget 계산에만 사용하고 저장하지 않는다. renderer는 같은 revision의 Profile `relativeHandle`에서 표시 문자열을 파생하며, Profile을
+  조회할 수 없으면 비링크 `@알 수 없는 사용자`를 표시한다. `pre`와 일반 rich-text editor는 지원하지 않는다.
 - Mentioned Profiles audience와 ActivityPub outbound Mention projection·custom emoji는 후속
   계약에서 정의한다. inbound Note의 typed Mention 보존은 별도 수신 계약을 따른다.
 - Quote 정책은 [ADR 0029](../decisions/0029-quote-consent-and-federation.md)과
