@@ -52,7 +52,7 @@ export function ProfilePicker({
 }: Props) {
   const theme = useTheme();
   const elevation = useElevation();
-  const redesignedWeb = Platform.OS === 'web' && surface !== 'drawer';
+  const desktopWebSurface = Platform.OS === 'web' && surface !== 'drawer';
   const scrollableWebPicker = Platform.OS === 'web';
   const surfaceBounds = !scrollableWebPicker
     ? undefined
@@ -67,17 +67,21 @@ export function ProfilePicker({
 
     return (
       <Pressable
-        aria-checked={Platform.OS === 'web' && !redesignedWeb ? selected : undefined}
-        aria-pressed={redesignedWeb ? selected : undefined}
+        aria-checked={Platform.OS === 'web' && !desktopWebSurface ? selected : undefined}
+        aria-pressed={desktopWebSurface ? selected : undefined}
         accessibilityLabel={`${profile.displayName}, ${profile.relativeHandle}${hasUnread ? ', 읽지 않은 알림 있음' : ''}`}
-        accessibilityRole={redesignedWeb ? 'button' : Platform.OS === 'web' ? undefined : 'radio'}
+        accessibilityRole={
+          desktopWebSurface ? 'button' : Platform.OS === 'web' ? undefined : 'radio'
+        }
         accessibilityState={
-          redesignedWeb ? { disabled: busy } : { checked: selected, disabled: busy }
+          desktopWebSurface ? { disabled: busy } : { checked: selected, disabled: busy }
         }
         disabled={busy}
         key={profile.id}
         onPress={() => onSelect(profile.id)}
-        role={Platform.OS === 'web' && !redesignedWeb ? ('menuitemradio' as 'radio') : undefined}
+        role={
+          Platform.OS === 'web' && !desktopWebSurface ? ('menuitemradio' as 'radio') : undefined
+        }
         style={({ pressed }) => [
           styles.profile,
           !selected ? styles.unselectedProfile : undefined,
@@ -123,7 +127,7 @@ export function ProfilePicker({
       <View
         accessibilityLabel="프로필 전환"
         accessibilityRole={Platform.OS === 'web' ? undefined : 'menu'}
-        role={Platform.OS === 'web' && !redesignedWeb ? 'menu' : undefined}
+        role={Platform.OS === 'web' && !desktopWebSurface ? 'menu' : undefined}
         style={scrollableWebPicker ? styles.redesignedMenuRegion : styles.menuItems}
       >
         {scrollableWebPicker ? (

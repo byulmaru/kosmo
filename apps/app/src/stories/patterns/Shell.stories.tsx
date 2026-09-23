@@ -1668,35 +1668,6 @@ export const ProfileSwitcherCreateServerNonPolicyValidationErrorStaysGeneric: St
   render: () => <ProfileSwitcherStory />,
 };
 
-export const ProfileSwitcherLateErrorAfterDismissal: Story = {
-  parameters: {
-    relay: {
-      operationResponses: {
-        ProfileSwitcherSelectProfileMutation: {
-          delayMs: 100,
-          error: '지연된 프로필 전환 실패',
-        },
-      },
-    },
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const trigger = canvas.getByRole('button', { name: '프로필 목록' });
-    await userEvent.click(trigger);
-    await canvas.findByLabelText('프로필 전환');
-    const list = canvas.getByLabelText('전환할 프로필 목록');
-    await userEvent.click(within(list).getAllByRole('button')[1]!);
-    await userEvent.click(trigger);
-    const responseDeadline = Date.now() + 120;
-    await waitFor(() => expect(Date.now()).toBeGreaterThanOrEqual(responseDeadline));
-
-    await userEvent.click(trigger);
-    await canvas.findByLabelText('프로필 전환');
-    expect(canvas.queryByRole('alert')).toBeNull();
-  },
-  render: () => <ProfileSwitcherStory />,
-};
-
 export const ProfileSwitcherSelectGraphQLError: Story = {
   parameters: {
     relay: {
