@@ -352,7 +352,7 @@ test('Composer 프로필 선택은 draft와 공개 범위를 유지하고 선택
   expect(initialHomeBody.errors, JSON.stringify(initialHomeBody, null, 2)).toBeUndefined();
   expect(initialHomeBody.data?.currentSession?.selectedProfile?.id).toBe(sessionProfileId);
 
-  const input = composer.getByRole('textbox', { name: '게시물 내용', exact: true });
+  const input = composer.getByRole('textbox', { name: '게시글 본문', exact: true });
   await input.fill(body);
   await composer.getByRole('button', { name: '콘텐츠 경고 켜기', exact: true }).click();
   const contentWarningInput = composer.getByRole('textbox', {
@@ -363,8 +363,8 @@ test('Composer 프로필 선택은 draft와 공개 범위를 유지하고 선택
 
   const visibilityTrigger = composer.getByRole('button', { name: /^공개 범위:/ });
   await visibilityTrigger.click();
-  const visibilityMenu = page.getByRole('radiogroup', { name: '공개 범위 선택' });
-  await visibilityMenu.getByRole('radio', { name: '팔로워만', exact: true }).click();
+  const visibilityMenu = page.getByRole('menu', { name: '공개 범위 선택' });
+  await visibilityMenu.getByRole('menuitemradio', { name: '팔로워만', exact: true }).click();
 
   await composer.getByRole('button', { name: '작성 프로필', exact: true }).click();
   const profilePicker = composer.getByLabel('프로필 전환');
@@ -651,7 +651,7 @@ test('Composer 프로필 전환은 첨부 이미지 편집 상태와 draft를 �
   });
 
   const composer = await openComposer(page);
-  const input = composer.getByRole('textbox', { name: '게시물 내용' });
+  const input = composer.getByRole('textbox', { name: '게시글 본문' });
   await input.fill(body);
   const issueMediaResponse = waitForGraphQLOperation(
     page,

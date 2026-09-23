@@ -384,7 +384,7 @@ export const PendingSelectionContract: Story = {
     args.onSelectProfile?.mockClear();
     const canvas = within(canvasElement);
     const trigger = canvas.getByRole('button', { name: '작성 프로필' });
-    const body = canvas.getByRole('textbox', { name: '게시물 내용' });
+    const body = canvas.getByRole('textbox', { name: '게시글 본문' });
 
     await userEvent.click(trigger);
     const remote = await canvas.findByRole('button', { name: '먼 우주의 사용자, @remote' });
