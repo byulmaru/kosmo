@@ -95,13 +95,13 @@
       "schema": "public"
     },
     {
-      "values": ["ACTIVE", "CLOSING", "CLOSED"],
+      "values": ["ACTIVE", "CLOSED"],
       "name": "profile_block_activity_state",
       "entityType": "enums",
       "schema": "public"
     },
     {
-      "values": ["NONE", "PENDING", "SETTLED"],
+      "values": ["NONE", "SETTLED"],
       "name": "profile_block_delivery_state",
       "entityType": "enums",
       "schema": "public"
@@ -3225,7 +3225,7 @@
       "table": "post"
     },
     {
-      "nameExplicit": false,
+      "nameExplicit": true,
       "columns": [
         {
           "value": "owner_profile_id",
@@ -3240,21 +3240,14 @@
           "asc": true,
           "nullsFirst": false,
           "opclass": null
-        },
-        {
-          "value": "state",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
         }
       ],
-      "isUnique": false,
-      "where": null,
+      "isUnique": true,
+      "where": "\"profile_block_activity\".\"state\" = 'ACTIVE'",
       "with": "",
       "method": "btree",
       "concurrently": false,
-      "name": "profile_block_activity_owner_profile_id_target_profile_id_state_index",
+      "name": "profile_block_activity_active_pair_unique",
       "entityType": "indexes",
       "schema": "public",
       "table": "profile_block_activity"

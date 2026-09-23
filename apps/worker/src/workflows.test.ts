@@ -1583,7 +1583,7 @@ test(
 
         releaseEffect();
         const handle = await startWorkflowOperation.workflowHandle();
-        await handle.result();
+        await assert.rejects(handle.result());
       } finally {
         releaseEffect();
       }

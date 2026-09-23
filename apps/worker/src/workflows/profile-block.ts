@@ -9,6 +9,7 @@ import {
 } from '@temporalio/workflow';
 import { z } from 'zod';
 import { workflowActivityOptions } from './activity-options';
+import { settleEffects } from './settle-effects';
 import type {
   ProfileBlockInput,
   ProfileBlockTransitionResult,
@@ -137,5 +138,5 @@ export async function profileBlockWorkflow(input: ProfileBlockInput): Promise<vo
       ? [sendProfileBlockActivity(execution.result.profileBlockId, { createIfMissing: true })]
       : []),
   ];
-  await Promise.allSettled(effects);
+  await settleEffects(effects);
 }

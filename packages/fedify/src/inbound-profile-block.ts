@@ -3,9 +3,7 @@ import '@kosmo/core/polyfill';
 import { Block } from '@fedify/vocab';
 import { ConflictError, NotFoundError, ValidationError } from '@kosmo/core/error';
 import {
-  finalizeProfileBlockProtocolUndo,
   loadProfileBlockProtocolActivity,
-  prepareProfileBlockProtocolUndo,
   recordProfileBlockProtocolTombstone,
 } from '@kosmo/core/services';
 import { runWorkflow } from '@kosmo/core/temporal/client';
@@ -207,7 +205,7 @@ export const handleInboundUndoBlock = async ({
     return true;
   }
 
-  const stored = await loadProfileBlockProtocolActivity(activityUri.href);
+  let stored = await loadProfileBlockProtocolActivity(activityUri.href);
   const originalActorHref = uniqueHref(embeddedBlock.actorIds);
   const originalActorUri = originalActorHref ? new URL(originalActorHref) : null;
   const originalObjectUri = embeddedBlock.objectId;
@@ -258,6 +256,31 @@ export const handleInboundUndoBlock = async ({
     return true;
   }
 
+  if (!stored) {
+    // Undo may race with the first Block. The tombstone insert returns the
+    // winning ACTIVE original when Block committed first.
+    stored = await recordProfileBlockProtocolTombstone({
+      activityUri: activityUri.href,
+      actorUri: actorUri.href,
+      objectUri: originalObjectUri.href,
+      origin: 'INBOUND',
+      ownerProfileId: remoteActorProfileId,
+      targetProfileId: localRecipient.id,
+    });
+    if (stored.state === 'CLOSED') {
+      observeInbound({
+        activityType: 'Undo',
+        actorOrigin: actorUri.origin,
+        handler: 'undo',
+        objectOrigin: originalObjectUri.origin,
+        outcome: 'noop',
+        phase: 'projection',
+        reasonCode: 'block_undo_before_block_tombstone',
+      });
+      return true;
+    }
+  }
+
   if (stored) {
     if (
       stored.origin !== 'INBOUND' ||
@@ -277,28 +300,6 @@ export const handleInboundUndoBlock = async ({
       });
       return true;
     }
-  } else {
-    // Preserve a verified Undo-before-Block tombstone. The candidate is not
-    // attached to any existing product relation; it only prevents the late
-    // Block with the same Activity ID from creating one.
-    await recordProfileBlockProtocolTombstone({
-      activityUri: activityUri.href,
-      actorUri: actorUri.href,
-      objectUri: originalObjectUri.href,
-      origin: 'INBOUND',
-      ownerProfileId: remoteActorProfileId,
-      targetProfileId: localRecipient.id,
-    });
-    observeInbound({
-      activityType: 'Undo',
-      actorOrigin: actorUri.origin,
-      handler: 'undo',
-      objectOrigin: originalObjectUri.origin,
-      outcome: 'noop',
-      phase: 'projection',
-      reasonCode: 'block_undo_before_block_tombstone',
-    });
-    return true;
   }
 
   if (stored.state === 'CLOSED' || !stored.profileBlockId) {
@@ -310,28 +311,6 @@ export const handleInboundUndoBlock = async ({
       outcome: 'noop',
       phase: 'projection',
       reasonCode: 'closed_block_undo_noop',
-    });
-    return true;
-  }
-
-  const preparation = await prepareProfileBlockProtocolUndo({
-    activityUri: stored.activityUri,
-    expectedProfileBlockId: stored.profileBlockId,
-    ownerProfileId: stored.ownerProfileId,
-    targetProfileId: stored.targetProfileId,
-  });
-  if (preparation.kind !== 'REMOVE') {
-    observeInbound({
-      activityType: 'Undo',
-      actorOrigin: actorUri.origin,
-      handler: 'undo',
-      objectOrigin: originalObjectUri.origin,
-      outcome: 'noop',
-      phase: 'projection',
-      reasonCode:
-        preparation.kind === 'CLOSE_ONLY'
-          ? 'block_undo_protocol_original_closed'
-          : 'block_undo_missing_or_repeated',
     });
     return true;
   }
@@ -351,12 +330,6 @@ export const handleInboundUndoBlock = async ({
     workflowIdConflictPolicy: 'USE_EXISTING',
     workflowIdReusePolicy: 'ALLOW_DUPLICATE',
   }).catch(rethrowProfileBlockWorkflowFailure);
-  await finalizeProfileBlockProtocolUndo({
-    activityUri: stored.activityUri,
-    ownerProfileId: stored.ownerProfileId,
-    profileBlockId: stored.profileBlockId,
-    targetProfileId: stored.targetProfileId,
-  });
   if (!result.removed) {
     observeInbound({
       activityType: 'Undo',

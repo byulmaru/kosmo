@@ -1,4 +1,4 @@
-import { and, eq, inArray, ne, sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { db, first, getDatabaseConnection, ProfileBlockActivities } from '../db';
 import { ConflictError, ValidationError } from '../error';
 import type { DatabaseHandle, Transaction } from '../db';
@@ -15,25 +15,16 @@ export type ProfileBlockProtocolActivityInput = {
   readonly ownerProfileId: string;
   readonly targetProfileId: string;
   readonly origin: ProfileBlockActivityOrigin;
+  /** A reconstructed original after its product relation was removed. */
+  readonly state?: ProfileBlockActivityState;
   /** Candidate or already-created product relation identity. */
   readonly profileBlockId?: string;
 };
 
 export type ProfileBlockProtocolActivityRow = typeof ProfileBlockActivities.$inferSelect;
 
-export type ProfileBlockProtocolUndoPreparation =
-  | { readonly kind: 'NOOP'; readonly profileBlockId: string | null }
-  | { readonly kind: 'CLOSE_ONLY'; readonly profileBlockId: string | null }
-  | { readonly kind: 'REMOVE'; readonly profileBlockId: string };
-
 const protocolActivityCondition = (activityUri: string) =>
   eq(ProfileBlockActivities.activityUri, activityUri);
-
-const protocolPairCondition = (ownerProfileId: string, targetProfileId: string) =>
-  and(
-    eq(ProfileBlockActivities.ownerProfileId, ownerProfileId),
-    eq(ProfileBlockActivities.targetProfileId, targetProfileId),
-  );
 
 const assertProtocolActivityMatches = (
   existing: ProfileBlockProtocolActivityRow,
@@ -63,6 +54,44 @@ const loadProtocolActivityInTransaction = async (
     .limit(1)
     .then(first);
 
+const reconcileProtocolActivityInTransaction = async (
+  existing: ProfileBlockProtocolActivityRow,
+  input: ProfileBlockProtocolActivityInput,
+  tx: Transaction,
+): Promise<ProfileBlockProtocolActivityRow> => {
+  assertProtocolActivityMatches(existing, input);
+  if (
+    input.profileBlockId !== undefined &&
+    existing.profileBlockId !== null &&
+    existing.profileBlockId !== input.profileBlockId
+  ) {
+    throw new ValidationError(
+      'Profile Block activity generation conflicts with its first observation',
+    );
+  }
+  if (existing.profileBlockId === null && input.profileBlockId !== undefined) {
+    const [updated] = await tx
+      .update(ProfileBlockActivities)
+      .set({
+        profileBlockId: input.profileBlockId,
+        ...(input.state === 'CLOSED' ? { state: 'CLOSED' as const, closedAt: sql`now()` } : {}),
+        updatedAt: sql`now()`,
+      })
+      .where(protocolActivityCondition(input.activityUri))
+      .returning();
+    return updated ?? existing;
+  }
+  if (input.state === 'CLOSED' && existing.state !== 'CLOSED') {
+    const [updated] = await tx
+      .update(ProfileBlockActivities)
+      .set({ state: 'CLOSED', closedAt: sql`now()`, updatedAt: sql`now()` })
+      .where(protocolActivityCondition(input.activityUri))
+      .returning();
+    return updated ?? existing;
+  }
+  return existing;
+};
+
 /**
  * Inserts one protocol identity without overwriting a first observation. The
  * caller owns the surrounding transaction when relation and identity must
@@ -78,17 +107,7 @@ export const ensureProfileBlockProtocolActivityInTransaction = async (
 
   const existing = await loadProtocolActivityInTransaction(input.activityUri, tx);
   if (existing) {
-    assertProtocolActivityMatches(existing, input);
-    if (existing.profileBlockId === null && input.profileBlockId !== undefined) {
-      return tx
-        .update(ProfileBlockActivities)
-        .set({ profileBlockId: input.profileBlockId, updatedAt: sql`now()` })
-        .where(protocolActivityCondition(input.activityUri))
-        .returning()
-        .then(first)
-        .then((row) => row ?? existing);
-    }
-    return existing;
+    return reconcileProtocolActivityInTransaction(existing, input, tx);
   }
 
   const inserted = await tx
@@ -101,6 +120,8 @@ export const ensureProfileBlockProtocolActivityInTransaction = async (
       ownerProfileId: input.ownerProfileId,
       targetProfileId: input.targetProfileId,
       ...(input.profileBlockId === undefined ? {} : { profileBlockId: input.profileBlockId }),
+      ...(input.state === undefined ? {} : { state: input.state }),
+      ...(input.state === 'CLOSED' ? { closedAt: sql`now()` } : {}),
     })
     .onConflictDoNothing({ target: ProfileBlockActivities.activityUri })
     .returning()
@@ -113,8 +134,7 @@ export const ensureProfileBlockProtocolActivityInTransaction = async (
   if (!raced) {
     throw new Error('Profile Block activity disappeared after conflict handling');
   }
-  assertProtocolActivityMatches(raced, input);
-  return raced;
+  return reconcileProtocolActivityInTransaction(raced, input, tx);
 };
 
 export const ensureProfileBlockProtocolActivity = async (
@@ -144,7 +164,7 @@ export const recordProfileBlockProtocolTombstone = async (
       return existing;
     }
 
-    return tx
+    const inserted = await tx
       .insert(ProfileBlockActivities)
       .values({
         activityUri: input.activityUri,
@@ -157,121 +177,18 @@ export const recordProfileBlockProtocolTombstone = async (
         state: 'CLOSED',
         closedAt: sql`now()`,
       })
+      .onConflictDoNothing({ target: ProfileBlockActivities.activityUri })
       .returning()
-      .then(first)
-      .then((row) => {
-        if (!row) {
-          throw new Error('Profile Block Undo tombstone was not created');
-        }
-        return row;
-      });
-  });
-
-const activeProtocolStates = ['ACTIVE', 'CLOSING'] as const;
-
-/**
- * Claims one verified protocol original for Undo. A relation can be removed
- * only when this is the last active original for the directed pair.
- */
-export const prepareProfileBlockProtocolUndo = async ({
-  activityUri,
-  ownerProfileId,
-  targetProfileId,
-  expectedProfileBlockId,
-}: {
-  readonly activityUri: string;
-  readonly ownerProfileId: string;
-  readonly targetProfileId: string;
-  readonly expectedProfileBlockId?: string;
-}): Promise<ProfileBlockProtocolUndoPreparation> =>
-  db.transaction(async (tx) => {
-    const activity = await loadProtocolActivityInTransaction(activityUri, tx);
-    if (!activity) {
-      return { kind: 'NOOP', profileBlockId: null };
-    }
-    if (
-      activity.ownerProfileId !== ownerProfileId ||
-      activity.targetProfileId !== targetProfileId
-    ) {
-      throw new ValidationError('Profile Block Undo pair does not match its original activity');
-    }
-    if (
-      expectedProfileBlockId !== undefined &&
-      activity.profileBlockId !== expectedProfileBlockId
-    ) {
-      throw new ValidationError(
-        'Profile Block Undo generation does not match its original activity',
-      );
-    }
-    if (activity.state === 'CLOSED') {
-      return { kind: 'NOOP', profileBlockId: activity.profileBlockId };
-    }
-    if (activity.profileBlockId === null) {
-      await tx
-        .update(ProfileBlockActivities)
-        .set({ closedAt: sql`now()`, state: 'CLOSED', updatedAt: sql`now()` })
-        .where(protocolActivityCondition(activityUri));
-      return { kind: 'NOOP', profileBlockId: null };
-    }
-    if (activity.state === 'CLOSING') {
-      return { kind: 'REMOVE', profileBlockId: activity.profileBlockId };
-    }
-
-    const otherActive = await tx
-      .select({ id: ProfileBlockActivities.id })
-      .from(ProfileBlockActivities)
-      .where(
-        and(
-          protocolPairCondition(ownerProfileId, targetProfileId),
-          ne(ProfileBlockActivities.activityUri, activityUri),
-          inArray(ProfileBlockActivities.state, activeProtocolStates),
-        ),
-      )
-      .limit(1)
       .then(first);
-
-    if (otherActive) {
-      await tx
-        .update(ProfileBlockActivities)
-        .set({ closedAt: sql`now()`, state: 'CLOSED', updatedAt: sql`now()` })
-        .where(protocolActivityCondition(activityUri));
-      return { kind: 'CLOSE_ONLY', profileBlockId: activity.profileBlockId };
+    if (inserted) {
+      return inserted;
     }
-
-    await tx
-      .update(ProfileBlockActivities)
-      .set({ state: 'CLOSING', updatedAt: sql`now()` })
-      .where(protocolActivityCondition(activityUri));
-    return { kind: 'REMOVE', profileBlockId: activity.profileBlockId };
-  });
-
-/** Closes the claimed protocol original after its exact product relation was removed. */
-export const finalizeProfileBlockProtocolUndo = async ({
-  activityUri,
-  ownerProfileId,
-  targetProfileId,
-  profileBlockId,
-}: {
-  readonly activityUri: string;
-  readonly ownerProfileId: string;
-  readonly targetProfileId: string;
-  readonly profileBlockId: string;
-}): Promise<boolean> =>
-  db.transaction(async (tx) => {
-    const closed = await tx
-      .update(ProfileBlockActivities)
-      .set({ closedAt: sql`now()`, state: 'CLOSED', updatedAt: sql`now()` })
-      .where(
-        and(
-          protocolActivityCondition(activityUri),
-          eq(ProfileBlockActivities.ownerProfileId, ownerProfileId),
-          eq(ProfileBlockActivities.targetProfileId, targetProfileId),
-          eq(ProfileBlockActivities.profileBlockId, profileBlockId),
-        ),
-      )
-      .returning({ id: ProfileBlockActivities.id })
-      .then(first);
-    return closed !== undefined;
+    const raced = await loadProtocolActivityInTransaction(input.activityUri, tx);
+    if (!raced) {
+      throw new Error('Profile Block Undo original disappeared after conflict handling');
+    }
+    assertProtocolActivityMatches(raced, input);
+    return raced;
   });
 
 export const loadProfileBlockProtocolActivityByProfileBlockId = async (
@@ -283,15 +200,6 @@ export const loadProfileBlockProtocolActivityByProfileBlockId = async (
     .where(eq(ProfileBlockActivities.profileBlockId, profileBlockId))
     .limit(1)
     .then(first);
-
-export const markProfileBlockProtocolDeliveryPending = async (
-  activityUri: string,
-): Promise<void> => {
-  await db
-    .update(ProfileBlockActivities)
-    .set({ deliveryState: 'PENDING', updatedAt: sql`now()` })
-    .where(protocolActivityCondition(activityUri));
-};
 
 export const markProfileBlockProtocolDeliverySettled = async (
   activityUri: string,
@@ -305,24 +213,7 @@ export const markProfileBlockProtocolDeliverySettled = async (
 export const markProfileBlockProtocolUndoSettled = async (activityUri: string): Promise<void> => {
   await db
     .update(ProfileBlockActivities)
-    .set({
-      closedAt: sql`now()`,
-      state: 'CLOSED',
-      undoDeliveryState: 'SETTLED',
-      updatedAt: sql`now()`,
-    })
-    .where(
-      and(
-        protocolActivityCondition(activityUri),
-        inArray(ProfileBlockActivities.state, ['ACTIVE', 'CLOSING']),
-      ),
-    );
-};
-
-export const markProfileBlockProtocolUndoPending = async (activityUri: string): Promise<void> => {
-  await db
-    .update(ProfileBlockActivities)
-    .set({ undoDeliveryState: 'PENDING', updatedAt: sql`now()` })
+    .set({ undoDeliveryState: 'SETTLED', updatedAt: sql`now()` })
     .where(protocolActivityCondition(activityUri));
 };
 

@@ -9,6 +9,7 @@ import {
 } from '@temporalio/workflow';
 import { z } from 'zod';
 import { workflowActivityOptions } from './activity-options';
+import { settleEffects } from './settle-effects';
 import type {
   ProfileUnblockInput,
   ProfileUnblockTransitionResult,
@@ -107,7 +108,7 @@ export async function profileUnblockWorkflow(input: ProfileUnblockInput): Promis
     throw profileUnblockTransitionFailure(settled.value.error);
   }
   if (settled.value.result.removed && (transitionOrigin ?? input.origin) !== 'ACTIVITYPUB') {
-    await Promise.allSettled([
+    await settleEffects([
       sendProfileBlockUndoActivity({
         ownerProfileId: settled.value.result.ownerProfileId,
         profileBlockId: settled.value.result.profileBlockId ?? input.profileBlockId,

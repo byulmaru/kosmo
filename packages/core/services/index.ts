@@ -20,14 +20,10 @@ export type { ProfileBlockProtocolActivityInput } from './profile-block-protocol
 export {
   ensureProfileBlockProtocolActivity,
   ensureProfileBlockProtocolActivityInTransaction,
-  finalizeProfileBlockProtocolUndo,
   loadProfileBlockProtocolActivity,
   loadProfileBlockProtocolActivityByProfileBlockId,
-  markProfileBlockProtocolDeliveryPending,
   markProfileBlockProtocolDeliverySettled,
-  markProfileBlockProtocolUndoPending,
   markProfileBlockProtocolUndoSettled,
-  prepareProfileBlockProtocolUndo,
   recordProfileBlockProtocolTombstone,
 } from './profile-block-protocol';
 export { followProfile, unfollowProfile } from './profile-follow';

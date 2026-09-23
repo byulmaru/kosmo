@@ -21,11 +21,7 @@ import {
   ProfileFollowPolicy,
   ProfileState,
 } from '@kosmo/core/enums';
-import {
-  finalizeProfileBlockProtocolUndo,
-  prepareProfileBlockProtocolUndo,
-  recordProfileBlockProtocolTombstone,
-} from '@kosmo/core/services';
+import { recordProfileBlockProtocolTombstone } from '@kosmo/core/services';
 import { and, eq, inArray, or } from 'drizzle-orm';
 import {
   executeProfileBlockTransitionActivity,
@@ -483,7 +479,7 @@ test('Block rejects self-blocking in the service and the database check', async 
   );
 });
 
-test('inbound Block originals share one relation and only the final Undo removes it', async () => {
+test('inbound duplicate Block keeps one active original and Undo closes its exact relation', async () => {
   const { profile: owner } = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
   const { profile: target } = await createProfile();
   const protocolActivity = (activityUri: string) => ({
@@ -520,53 +516,116 @@ test('inbound Block originals share one relation and only the final Undo removes
   assert.equal(second.result.profileBlockId, first.result.profileBlockId);
   assert.deepEqual(
     await db
-      .select({
-        activityUri: ProfileBlockActivities.activityUri,
-        profileBlockId: ProfileBlockActivities.profileBlockId,
-      })
+      .select({ activityUri: ProfileBlockActivities.activityUri })
       .from(ProfileBlockActivities)
-      .where(
-        inArray(ProfileBlockActivities.activityUri, [
-          firstActivity.activityUri,
-          secondActivity.activityUri,
-        ]),
-      )
-      .then((rows) => rows.sort((a, b) => a.activityUri.localeCompare(b.activityUri))),
-    [firstActivity, secondActivity]
-      .map(({ activityUri }) => ({ activityUri, profileBlockId: first.result.profileBlockId }))
-      .sort((a, b) => a.activityUri.localeCompare(b.activityUri)),
+      .where(eq(ProfileBlockActivities.state, 'ACTIVE')),
+    [{ activityUri: firstActivity.activityUri }],
   );
-
-  assert.deepEqual(
-    await prepareProfileBlockProtocolUndo({
-      activityUri: firstActivity.activityUri,
-      ownerProfileId: owner.id,
-      targetProfileId: target.id,
+  await assert.rejects(
+    db.insert(ProfileBlockActivities).values({
+      ...secondActivity,
+      profileBlockId: first.result.profileBlockId,
     }),
-    { kind: 'CLOSE_ONLY', profileBlockId: first.result.profileBlockId },
   );
+  const duplicateOriginal = await recordProfileBlockProtocolTombstone(firstActivity);
+  assert.equal(duplicateOriginal.state, 'ACTIVE');
+  assert.equal(duplicateOriginal.profileBlockId, first.result.profileBlockId);
+  await recordProfileBlockProtocolTombstone(secondActivity);
   assert.equal(await currentProfileBlockId(owner.id, target.id), first.result.profileBlockId);
-  assert.deepEqual(
-    await prepareProfileBlockProtocolUndo({
-      activityUri: secondActivity.activityUri,
-      ownerProfileId: owner.id,
-      targetProfileId: target.id,
-    }),
-    { kind: 'REMOVE', profileBlockId: first.result.profileBlockId },
-  );
   const unblock = await executeProfileUnblockTransitionActivity({
     ownerProfileId: owner.id,
     targetProfileId: target.id,
     profileBlockId: first.result.profileBlockId,
+    protocolActivityUri: firstActivity.activityUri,
   });
   assert.equal(unblock.ok && unblock.result.removed, true);
-  await finalizeProfileBlockProtocolUndo({
-    activityUri: secondActivity.activityUri,
+  assert.equal(await currentProfileBlockId(owner.id, target.id), null);
+  const originals = await db
+    .select({
+      activityUri: ProfileBlockActivities.activityUri,
+      closedAt: ProfileBlockActivities.closedAt,
+      state: ProfileBlockActivities.state,
+    })
+    .from(ProfileBlockActivities)
+    .where(
+      inArray(ProfileBlockActivities.activityUri, [
+        firstActivity.activityUri,
+        secondActivity.activityUri,
+      ]),
+    );
+  assert.equal(originals.length, 2);
+  assert.ok(originals.every((original) => original.state === 'CLOSED' && original.closedAt));
+
+  const third = await block(
+    protocolActivity(`https://remote.example/activities/${crypto.randomUUID()}`),
+  );
+  assert.equal(third.ok && third.result.created, true);
+  const retriedUndo = await executeProfileUnblockTransitionActivity({
     ownerProfileId: owner.id,
     targetProfileId: target.id,
     profileBlockId: first.result.profileBlockId,
+    protocolActivityUri: firstActivity.activityUri,
   });
-  assert.equal(await currentProfileBlockId(owner.id, target.id), null);
+  assert.equal(retriedUndo.ok && retriedUndo.result.removed, false);
+  if (third.ok) {
+    assert.equal(await currentProfileBlockId(owner.id, target.id), third.result.profileBlockId);
+  }
+});
+
+test('local Unblock closes the old original before reblock and old Undo retry', async () => {
+  const { profile: owner } = await createProfile();
+  const { profile: target } = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
+  const original = await executeProfileBlockTransitionActivity({
+    ownerProfileId: owner.id,
+    targetProfileId: target.id,
+    origin: 'LOCAL',
+  });
+  assert.equal(original.ok, true);
+  if (!original.ok) {
+    return;
+  }
+
+  const oldActivityUri = `https://local.example/activities/${crypto.randomUUID()}`;
+  await db.insert(ProfileBlockActivities).values({
+    activityUri: oldActivityUri,
+    actorUri: `https://local.example/ap/actor/${owner.id}`,
+    objectUri: `https://remote.example/users/${target.id}`,
+    origin: 'OUTBOUND',
+    ownerProfileId: owner.id,
+    targetProfileId: target.id,
+    profileBlockId: original.result.profileBlockId,
+  });
+
+  const unblock = await executeProfileUnblockTransitionActivity({
+    ownerProfileId: owner.id,
+    targetProfileId: target.id,
+    profileBlockId: original.result.profileBlockId,
+  });
+  assert.equal(unblock.ok && unblock.result.removed, true);
+  assert.deepEqual(
+    await db
+      .select({ state: ProfileBlockActivities.state })
+      .from(ProfileBlockActivities)
+      .where(eq(ProfileBlockActivities.activityUri, oldActivityUri)),
+    [{ state: 'CLOSED' }],
+  );
+
+  const replacement = await executeProfileBlockTransitionActivity({
+    ownerProfileId: owner.id,
+    targetProfileId: target.id,
+    origin: 'LOCAL',
+  });
+  assert.equal(replacement.ok && replacement.result.created, true);
+  if (!replacement.ok) {
+    return;
+  }
+  const staleUndo = await executeProfileUnblockTransitionActivity({
+    ownerProfileId: owner.id,
+    targetProfileId: target.id,
+    profileBlockId: original.result.profileBlockId,
+  });
+  assert.equal(staleUndo.ok && staleUndo.result.removed, false);
+  assert.equal(await currentProfileBlockId(owner.id, target.id), replacement.result.profileBlockId);
 });
 
 test('inbound Undo tombstone prevents a late Block without creating a relation', async () => {

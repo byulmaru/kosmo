@@ -144,6 +144,66 @@ test('Block과 Undo는 직접 target만 수신하고 관계 삭제 뒤에도 sta
   assert.equal(settledActivity?.undoDeliveryState, 'SETTLED');
 });
 
+test('recipient 부재는 같은 Block과 Undo identity의 재시도를 허용한다', async () => {
+  const fixture = await createFixture();
+  const relation = await db
+    .insert(ProfileBlocks)
+    .values({ ownerProfileId: fixture.localProfileId, targetProfileId: fixture.remoteProfileId })
+    .returning()
+    .then(firstOrThrow);
+  const contextFixture = createContextFixture();
+  mock.method(localOutboundFederation, 'createContext', () => contextFixture.context);
+
+  await db
+    .update(ActivityPubActors)
+    .set({ inboxUri: null })
+    .where(eq(ActivityPubActors.profileId, fixture.remoteProfileId));
+  await assert.rejects(sendProfileBlock(relation.id, { createIfMissing: true }));
+  const originalUri = `${publicOrigin}/ap/block/${relation.id}`;
+  const pendingBlock = await db
+    .select()
+    .from(ProfileBlockActivities)
+    .where(eq(ProfileBlockActivities.activityUri, originalUri))
+    .then((rows) => rows[0]);
+  assert.equal(pendingBlock?.deliveryState, 'NONE');
+  assert.equal(contextFixture.calls.length, 0);
+
+  await db
+    .update(ActivityPubActors)
+    .set({ inboxUri: `${fixture.remoteActorUri}/inbox` })
+    .where(eq(ActivityPubActors.profileId, fixture.remoteProfileId));
+  assert.deepEqual(await sendProfileBlock(relation.id, { createIfMissing: true }), {
+    status: 'SETTLED',
+  });
+  assert.equal(contextFixture.calls[0]?.activity.id?.href, originalUri);
+
+  await db.delete(ProfileBlocks).where(eq(ProfileBlocks.id, relation.id));
+  await db
+    .update(ActivityPubActors)
+    .set({ inboxUri: null })
+    .where(eq(ActivityPubActors.profileId, fixture.remoteProfileId));
+  const undoInput = {
+    ownerProfileId: fixture.localProfileId,
+    profileBlockId: relation.id,
+    targetProfileId: fixture.remoteProfileId,
+  };
+  await assert.rejects(sendProfileBlockUndo(undoInput));
+  const pendingUndo = await db
+    .select()
+    .from(ProfileBlockActivities)
+    .where(eq(ProfileBlockActivities.activityUri, originalUri))
+    .then((rows) => rows[0]);
+  assert.equal(pendingUndo?.undoDeliveryState, 'NONE');
+  assert.equal(contextFixture.calls.length, 1);
+
+  await db
+    .update(ActivityPubActors)
+    .set({ inboxUri: `${fixture.remoteActorUri}/inbox` })
+    .where(eq(ActivityPubActors.profileId, fixture.remoteProfileId));
+  assert.deepEqual(await sendProfileBlockUndo(undoInput), { status: 'SETTLED' });
+  assert.equal(contextFixture.calls[1]?.activity.id?.href, `${originalUri}/undo`);
+});
+
 type SendActivityCall = {
   readonly activity: Activity;
   readonly options: { readonly orderingKey?: string; readonly preferSharedInbox?: boolean };
