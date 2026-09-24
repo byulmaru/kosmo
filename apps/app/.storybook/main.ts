@@ -14,6 +14,7 @@ const config: StorybookConfig = {
     ...(storybookAllowedHost ? { allowedHosts: [storybookAllowedHost] } : {}),
   },
   framework: { name: '@storybook/react-vite', options: {} },
+  staticDirs: [{ from: '../public/reaction-emoji', to: '/reaction-emoji' }],
   stories: ['../src/**/*.stories.@(ts|tsx)'],
   viteFinal: (viteConfig) => ({
     ...viteConfig,

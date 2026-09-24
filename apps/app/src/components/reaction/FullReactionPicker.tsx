@@ -117,6 +117,7 @@ export function FullReactionPicker({
         mobile
           ? { height: Math.min(state === 'browse' ? 480 : 720, viewportHeight) }
           : elevation.overlay,
+        !mobile && { height: Math.min(624, Math.max(0, viewportHeight - 2 * space[8])) },
         { backgroundColor: theme.backgroundElevated, borderColor: theme.borderDefault },
       ]}
       testID={mobile ? 'full-reaction-picker-sheet' : undefined}
@@ -461,10 +462,9 @@ const styles = StyleSheet.create({
     borderRadius: radius[16],
     borderWidth: borderWidths[1],
     gap: space[16],
-    height: 624,
-    maxHeight: '100%',
     padding: space[16],
-    width: 360,
+    maxWidth: 360,
+    width: '100%',
   },
   webGrid: { gap: space[8] },
   webReaction: { height: 32, width: 32 },
