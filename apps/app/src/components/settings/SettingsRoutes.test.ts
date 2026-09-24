@@ -9,13 +9,11 @@ import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const require = createRequire(import.meta.url);
-const originalLocation = Object.getOwnPropertyDescriptor(globalThis, 'location');
 
 let platform: 'android' | 'ios' | 'web' = 'web';
 let width = 1_280;
 let backCalls = 0;
 let replacedPaths: string[] = [];
-let locationReplacements: string[] = [];
 let pathname = '/settings';
 let SlotRoute: ComponentType = () => null;
 let sessionStatus: 'error' | 'guest' | 'valid' = 'guest';
@@ -189,7 +187,6 @@ afterEach(async () => {
   width = 1_280;
   backCalls = 0;
   replacedPaths = [];
-  locationReplacements = [];
   pathname = '/settings';
   SlotRoute = () => null;
   sessionStatus = 'guest';
@@ -205,11 +202,6 @@ afterEach(async () => {
   if (renderer) {
     await act(async () => renderer?.unmount());
     renderer = null;
-  }
-  if (originalLocation) {
-    Object.defineProperty(globalThis, 'location', originalLocation);
-  } else {
-    Reflect.deleteProperty(globalThis, 'location');
   }
 });
 
@@ -292,13 +284,9 @@ describe('Settings routes', () => {
 
     const back = rendered('PageHeader')[0].props.leading;
     assert.equal(back.props.accessibilityLabel, '뮤트 및 차단으로 돌아가기');
-    Object.defineProperty(globalThis, 'location', {
-      configurable: true,
-      value: { replace: (href: string) => locationReplacements.push(href) },
-    });
     await act(async () => back.props.onPress());
     assert.equal(backCalls, 0);
-    assert.deepEqual(locationReplacements, ['/settings/mute-and-block']);
+    assert.deepEqual(replacedPaths, ['/settings/mute-and-block']);
   });
 
   it('Native muted profile detail은 parent label과 replace navigation을 사용한다', async () => {
@@ -428,13 +416,9 @@ describe('Settings routes', () => {
     assert.equal(header.props.title, '게시물 기본 공개 범위');
     const back = header.props.leading;
     assert.equal(back.props.accessibilityLabel, '설정으로 돌아가기');
-    Object.defineProperty(globalThis, 'location', {
-      configurable: true,
-      value: { replace: (href: string) => locationReplacements.push(href) },
-    });
     await act(async () => back.props.onPress());
     assert.equal(backCalls, 0);
-    assert.deepEqual(locationReplacements, ['/settings']);
+    assert.deepEqual(replacedPaths, ['/settings']);
   });
 
   it('Android detail back action은 44dp layout과 hit slop으로 48dp target을 제공한다', async () => {
@@ -488,12 +472,8 @@ describe('Settings routes', () => {
     assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'info');
     const back = rendered('PageHeader')[1].props.leading;
     assert.equal(back.props.accessibilityLabel, '정보로 돌아가기');
-    Object.defineProperty(globalThis, 'location', {
-      configurable: true,
-      value: { replace: (href: string) => locationReplacements.push(href) },
-    });
     await act(async () => back.props.onPress());
-    assert.deepEqual(locationReplacements, ['/settings/info']);
+    assert.deepEqual(replacedPaths, ['/settings/info']);
   });
 
   it('Web 개발 정보는 public channel만 표시하고 Native channel·OTA 행은 표시하지 않는다', async () => {

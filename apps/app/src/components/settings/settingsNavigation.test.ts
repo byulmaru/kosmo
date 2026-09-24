@@ -30,19 +30,21 @@ afterEach(() => {
 });
 
 describe('Settings detail back navigation', () => {
-  it('Web은 document location을 Settings root로 replace한다', () => {
+  it('Web은 문서를 새로 열지 않고 Settings root로 replace한다', () => {
     const replaced: string[] = [];
+    const documentReplacements: string[] = [];
 
     Object.defineProperty(globalThis, 'location', {
       configurable: true,
-      value: { replace: (href: string) => replaced.push(href) },
+      value: { replace: (href: string) => documentReplacements.push(href) },
     });
 
     returnToSettingsParent('/settings/mute-and-block', {
-      replace: () => {},
+      replace: (href) => replaced.push(String(href)),
     });
 
     assert.deepEqual(replaced, ['/settings']);
+    assert.deepEqual(documentReplacements, []);
   });
 
   it('Native는 이전 history와 무관하게 Settings root를 연다', () => {
@@ -67,13 +69,14 @@ describe('Settings detail back navigation', () => {
     assert.deepEqual(replaced, ['/settings/mute-and-block']);
   });
 
-  it('Mute와 Block 관리 shell back은 바로 위 category를 연다', () => {
+  it('Mute와 Block 관리 shell back은 문서 이동 없이 바로 위 category를 연다', () => {
     for (const pathname of ['/settings/muted-profiles', '/settings/blocked-profiles']) {
       const replaced: string[] = [];
+      const documentReplacements: string[] = [];
 
       Object.defineProperty(globalThis, 'location', {
         configurable: true,
-        value: { replace: (href: string) => replaced.push(href) },
+        value: { replace: (href: string) => documentReplacements.push(href) },
       });
 
       returnToSettingsParent(pathname, {
@@ -81,6 +84,7 @@ describe('Settings detail back navigation', () => {
       });
 
       assert.deepEqual(replaced, ['/settings/mute-and-block']);
+      assert.deepEqual(documentReplacements, []);
     }
   });
 });

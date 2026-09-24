@@ -204,7 +204,8 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
 - 모든 내부 category·detail destination은 명시적인 parent를 가진다. back action은 이전 navigation stack의
   화면과 무관하게 해당 parent를 명시적으로 연다. root의 직접 진입점이 여는 1단계 destination의 parent는
   `/settings` root이고, 중첩 destination의 parent는 바로 위 category다. 따라서 `/settings/developer`의
-  parent는 `/settings/info`다. direct·deep link로 연 경우에도 같은 parent를 사용한다.
+  parent는 `/settings/info`다. direct·deep link로 연 경우에도 같은 parent를 사용한다. Web에서는
+  앱 내부 이동으로 돌아가며 문서와 세션을 다시 로드하지 않는다.
 - `< compact` mobile Web의 root에서는 `UniversalShell`이 메뉴 action과 `설정` heading을 가진 공용
   [PageHeader](./page-header.md)를 렌더링한다. 내부 category·detail destination에서는 shell이 back action과
   현재 destination heading을 렌더링하고 route 본문은 같은 heading을 복제하지 않는다.
