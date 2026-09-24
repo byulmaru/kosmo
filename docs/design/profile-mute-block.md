@@ -239,7 +239,8 @@ viewer 방향별 콘텐츠 정책은 위 계약을 따르며, 실제 route의 �
 관리 목록은 본문·상태·행·pagination을 소유하는 `MutedProfileList`, 행 표시는 기존 Relay `ProfileListItem`과
 공유하는 `ProfileListItemContent`를 사용한다. 화면과 Storybook은 목록 밖의 heading·scroll container와
 해제 성공 후 heading focus를 소유한다.
-Relay 행은 `identity`로 기존 `ProfileNameBlock`을 전달하고, 관리 목록은 이름·핸들 기본 표시를 사용한다.
+Relay 행은 `identity`로 기존 `ProfileNameBlock`을 전달한다. 관리 목록은 Figma loaded 화면에 맞춰
+아바타와 `UI/Label/L` 표시 이름 한 줄만 보여주고 핸들은 표시하지 않는다.
 행의 action은 `children`으로 합성하며, FollowButton은 viewport와 무관하게 Default `96×40`을 소유한다.
 `ProfileHero.mute.muted`에는 서버 확정 상태를 전달하고, loading에서는 메뉴·상태행을 표시하지 않는다.
 
@@ -272,7 +273,8 @@ Relay 행은 `identity`로 기존 `ProfileNameBlock`을 전달하고, 관리 목
 
 현재 범위는 `ProfileMoreMenu`와 `BlockedProfileList` presentation이다. 메뉴는 공용 `ProfileMoreButton`·ActionMenu의
 Web 최소 폭 160px과 키보드·focus 처리를 재사용하고, 목록은 제목·loading·empty·오류 Toast·재시도·pagination을 제공한다.
-행은 기존 `ProfileListItemContent`를 children으로 합성한다. Mute와 목록 상태를 공유하거나 합치지 않는다.
+행은 기존 `ProfileListItemContent`를 children으로 합성하고 아바타와 `UI/Label/L` 표시 이름 한 줄만
+보여주며 핸들은 표시하지 않는다. Mute와 목록 상태를 공유하거나 합치지 않는다.
 
 - `KOSMO/Patterns/Profile/More Menu`는 차단·해제 모두 [아이콘 정본](icons.md#profile-차단해제--2026-09-09-결정)의 `Ban`을 표시한다.
   Playground는 수동 Controls·Actions, Tests는 선택·닫힘·focus 복귀를 검증한다. 실제 요청은 실행하지 않는다.
