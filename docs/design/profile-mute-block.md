@@ -94,10 +94,11 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
   Block은 일반 Profile 조회를 숨기지 않는다. Profile identity는 기존 lifecycle·membership 정책을 따르며, Block은
   콘텐츠·상호작용·알림 surface와 Mute/Block 관리 관계에 각각 명시된 정책으로 적용된다. 따라서 Block의 콘텐츠 제한을
   Mute 관리 connection에 적용해 저장된 Mute를 숨기지 않는다.
-- full Web은 기존 Settings master/detail 문법을, compact Web·mobile Web·Android·iOS는 기존 한 화면 이동
-  문법을 사용한다. Mute·Block 때문에 새 Settings shell이나 navigation pattern을 만들지 않는다.
+- full Web은 Settings root 목록을 master에 고정하고, `뮤트 및 차단` category와 두 destination을 detail pane에서
+  단계적으로 표시한다. 각 detail heading은 부모로 돌아가는 action을 제공한다. compact Web·mobile
+  Web·Android·iOS는 기존 한 화면 이동 문법을 사용한다.
 - Target screen evidence는 [`05 Screens - Web`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6312-16233)의
-  Full·Compact loaded destination 4개, Full Settings master의 두 destination 하위 목록, Compact category
+  Full·Compact loaded destination 4개, Full Settings master의 root 목록, Compact category
   [`6338:1641`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6338-1641)과
   [`04 Screens - Mobile`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-8075)의
   Mobile category [`6393:8193`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6393-8193) 및

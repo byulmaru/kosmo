@@ -84,7 +84,7 @@ Web `/search`는 모든 breakpoint에서 중앙 컬럼 최상단에 높이 `64px
   뒤로가기는 같은 Profile 홈으로, 탭 선택은 같은 Profile의 다른 관계 목록으로 이동한다. Mobile Web에서는
   `UniversalShell`의 메뉴 전용 header를 중복하지 않는다.
 - Android/iOS와 compact Web의 `/settings` root·category·detail destination: settings route가 현재 화면의 text header를 소유한다. Web에서는 scroll content의 첫 heading으로, Native에서는 Stack header로 표시한다. category·detail header는 뒤로가기를 제공한다.
-- full Web의 settings route family: Settings master pane이 `설정` heading을, detail pane이 현재 설정 heading을 소유한다. 일반 route `PageHeader`와 `RightRail`을 중복하지 않는다.
+- full Web의 settings route family: Settings master pane이 `설정` heading을, detail pane이 현재 설정 heading을 소유한다. 내부 category·detail heading에는 부모로 돌아가는 action을 표시하고 `/settings`의 기본 detail에는 표시하지 않는다. 일반 route `PageHeader`와 `RightRail`을 중복하지 않는다.
 - 북마크 등 이 변경에 포함되지 않은 PageHeader 소비 화면은 기존 route 소유권을 유지한다.
 - compact/full Web `/home`·`/local`: 모바일 셸 헤더가 없으므로 각 route가 브랜드 헤더를 소유한다. 브랜드
   control을 현재 문서에서 실행하면 document top으로 이동하고 현재 선택된 타임라인을 다시 요청한다. 실제
