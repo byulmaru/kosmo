@@ -3472,10 +3472,10 @@ export const ProductionRepostQuoteListIntegration: Story = {
     const quoteSourcePreview = within(quoteRow!).getByTestId('source-post-preview');
     const quoteSourceBody = within(quoteSourcePreview).getByTestId('source-post-body');
     const quoteReactionSummary = await within(quoteCard).findByRole('button', {
-      name: '파티 반응 3개',
+      name: '🎉 반응 3개',
     });
     const ordinaryReactionSummary = within(ordinaryCard).getByRole('button', {
-      name: '빨간색 하트 반응 2개',
+      name: '❤️ 반응 2개',
     });
     const replyActionBar = within(replyRow!).getByRole('toolbar', { name: '액션 바' });
     const replyBody = within(replyRow!).getByTestId('post-list-row-body');
@@ -3728,9 +3728,9 @@ export const ProductionReactionMutationTargets: Story = {
       .closest<HTMLElement>('[role="article"]')!.parentElement!.parentElement!;
     const pureRepostRoot = pureRepostActionBar.closest<HTMLElement>('[role="article"]')!;
     const detailTargets = [
-      ['production-detail-ordinary', '빨간색 하트 반응 2개'],
-      ['production-detail-quote', '파티 반응 3개'],
-      ['production-detail-pure-repost', '왕눈이 눈알 반응 4개'],
+      ['production-detail-ordinary', '❤️ 반응 2개'],
+      ['production-detail-quote', '🎉 반응 3개'],
+      ['production-detail-pure-repost', '👀 반응 4개'],
     ] as const;
 
     for (const [testId, summaryLabel] of detailTargets) {
@@ -3740,7 +3740,7 @@ export const ProductionReactionMutationTargets: Story = {
     }
     expect(
       within(canvas.getByTestId('production-detail-pure-repost')).queryByRole('button', {
-        name: '무지개 반응 99개',
+        name: '🌈 반응 99개',
       }),
     ).toBeNull();
 
@@ -3748,17 +3748,17 @@ export const ProductionReactionMutationTargets: Story = {
       {
         actionBar: ordinaryActionBar,
         root: ordinaryRoot,
-        summaryLabel: '빨간색 하트 반응 2개',
+        summaryLabel: '❤️ 반응 2개',
       },
       {
         actionBar: quoteActionBar,
         root: quoteRoot,
-        summaryLabel: '파티 반응 3개',
+        summaryLabel: '🎉 반응 3개',
       },
       {
         actionBar: pureRepostActionBar,
         root: pureRepostRoot,
-        summaryLabel: '왕눈이 눈알 반응 4개',
+        summaryLabel: '👀 반응 4개',
       },
     ];
 
@@ -5044,7 +5044,7 @@ export const ProductionPureRepostLongAuthorMobile: Story = {
 export const PostLayoutOwnsReactionSummary: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const reactionSummary = await canvas.findByRole('button', { name: '빨간색 하트 반응 2개' });
+    const reactionSummary = await canvas.findByRole('button', { name: '❤️ 반응 2개' });
     const actionBar = canvas.getByRole('toolbar', { name: '액션 바' });
     const engagement = canvas.getByTestId('post-layout-engagement');
     const actionBarFrame = actionBar.parentElement!;
@@ -5299,7 +5299,7 @@ export const PostDetailThreadRoute: Story = {
       ).borderBottomWidth,
     ).toBe('0px');
     expect(canvas.getByText('Reply+Quote 자체 Content')).toBeVisible();
-    const reactionButton = await canvas.findByRole('button', { name: '빨간색 하트 반응 2개' });
+    const reactionButton = await canvas.findByRole('button', { name: '❤️ 반응 2개' });
     expect(reactionButton).toBeVisible();
     const currentRow = canvas.getByTestId('post-thread-current-route-current');
     const currentActionBar = within(currentRow).getByRole('toolbar', { name: '액션 바' });

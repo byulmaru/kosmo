@@ -7,7 +7,6 @@ import { getInteractionTargetSize } from '@/components/ui/interactionTarget';
 import { StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, radii, spacing } from '@/theme/tokens';
-import { getReactionEmojiLabel, ReactionEmojiImage } from './ReactionEmojiImage';
 import { getReactionSummaryLayout } from './reactionSummaryLayout';
 import type { Href } from 'expo-router';
 import type React from 'react';
@@ -199,12 +198,11 @@ export function ReactionSummary({
           const pending = pendingTypes.has(entry.type);
           const selected = selectedTypes.has(entry.type);
           const entryDisabled = disabled || pending || onToggle === undefined;
-          const label = getReactionEmojiLabel(entry.type);
           const accessibilityLabel = entryError
-            ? `${label} 반응 ${entry.count}개, 오류, 다시 시도`
+            ? `${entry.type} 반응 ${entry.count}개, 오류, 다시 시도`
             : pending
-              ? `${label} 반응 ${entry.count}개, 처리 중`
-              : `${label} 반응 ${entry.count}개`;
+              ? `${entry.type} 반응 ${entry.count}개, 처리 중`
+              : `${entry.type} 반응 ${entry.count}개`;
 
           return (
             <Pressable
@@ -239,7 +237,7 @@ export function ReactionSummary({
                       testID="reaction-summary-selected-background"
                     />
                   ) : null}
-                  <ReactionEmojiImage size={20} type={entry.type} />
+                  <Text style={[styles.entryEmoji, { color: theme.text }]}>{entry.type}</Text>
                   <Text style={[styles.entryCount, { color: theme.text }]}>{entry.count}</Text>
                 </>
               )}
@@ -262,7 +260,7 @@ export function ReactionSummary({
               onLayout={onEntryLayout(entryKeys[index]!)}
               style={styles.entry}
             >
-              <ReactionEmojiImage size={20} type={entry.type} />
+              <Text style={[styles.entryEmoji, { color: theme.text }]}>{entry.type}</Text>
               <Text style={[styles.entryCount, { color: theme.text }]}>{entry.count}</Text>
             </View>
           ))}
@@ -322,6 +320,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     lineHeight: 20,
   },
+  entryEmoji: { fontSize: 20, lineHeight: 24 },
   ellipsisControl: { width: summaryControlSize },
   measurementLayer: {
     flexDirection: 'row',

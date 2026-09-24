@@ -27,10 +27,7 @@ export const HeaderFilterAndProfileRows: Story = {
     expect(canvas.getAllByRole('heading', { name: '반응한 사람' })).toHaveLength(1);
     expect(canvas.getByRole('tablist', { name: '반응 유형' })).toBeVisible();
     expect(canvas.getAllByRole('tab')).toHaveLength(6);
-    expect(canvas.getByRole('tab', { name: /빨간색 하트/ })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    );
+    expect(canvas.getByRole('tab', { name: /❤️/ })).toHaveAttribute('aria-selected', 'true');
     const canvasRect = canvasElement.getBoundingClientRect();
     const tablistRect = canvas.getByRole('tablist', { name: '반응 유형' }).getBoundingClientRect();
     const firstTabRect = canvas.getAllByRole('tab')[0]!.getBoundingClientRect();
@@ -83,7 +80,7 @@ export const TypeChangeDoesNotReusePreviousRows: Story = {
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
     expect(await canvas.findByText('별빛 여행자')).toBeVisible();
-    const partyTab = canvas.getByRole('tab', { name: /파티/ });
+    const partyTab = canvas.getByRole('tab', { name: /🎉/ });
     await userEvent.click(partyTab);
     expect(args.onTypeChange).toHaveBeenCalledWith('🎉');
     expect(partyTab).toHaveFocus();

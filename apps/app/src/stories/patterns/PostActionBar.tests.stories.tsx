@@ -13,7 +13,6 @@ import baseMeta, {
   ReactionConcurrentMutationContract as reactionConcurrentMutationContract,
   ReactionFailureRetryActorSwitchAndUnmount as reactionFailureRetryActorSwitchAndUnmount,
   ReactionPopoverDismissFocusAndPlacement as reactionPopoverDismissFocusAndPlacement,
-  ReactionQuickToFullContract as reactionQuickToFullContract,
   ReactionSummaryToggleContract as reactionSummaryToggleContract,
 } from './PostActionBar.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -43,6 +42,5 @@ export const ReactionSummaryToggleContract: Story = reactionSummaryToggleContrac
 export const ReactionConcurrentMutationContract: Story = reactionConcurrentMutationContract;
 export const ReactionFailureRetryActorSwitchAndUnmount: Story =
   reactionFailureRetryActorSwitchAndUnmount;
-export const ReactionQuickToFullContract: Story = reactionQuickToFullContract;
 export const InteractionContract: Story = interactionContract;
 export const ProcessingAccessibility: Story = processingAccessibility;

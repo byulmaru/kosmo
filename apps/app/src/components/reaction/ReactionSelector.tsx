@@ -1,7 +1,6 @@
-import { Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing } from '@/theme/tokens';
-import { ReactionEmojiImage } from './ReactionEmojiImage';
 import { ReactionPendingSpinner } from './ReactionPendingSpinner';
 import type React from 'react';
 
@@ -90,11 +89,9 @@ export function ReactionSelector({
                   ]}
                   testID={selected ? 'reaction-selected-background' : undefined}
                 />
-                <ReactionEmojiImage
-                  size={Platform.OS === 'web' ? 20 : 24}
-                  testID="reaction-emoji"
-                  type={option.emoji}
-                />
+                <Text style={styles.emoji} testID="reaction-emoji">
+                  {option.emoji}
+                </Text>
                 {pending ? (
                   <View accessibilityElementsHidden aria-hidden style={styles.pendingOverlay}>
                     <ReactionPendingSpinner />
@@ -138,6 +135,10 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
   },
+  emoji: Platform.select({
+    default: { fontSize: 24, lineHeight: 32 },
+    web: { fontSize: 20, lineHeight: 24 },
+  }),
   pendingOverlay: {
     alignItems: 'center',
     bottom: 0,
