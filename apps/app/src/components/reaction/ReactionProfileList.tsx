@@ -5,7 +5,7 @@ import { ProfileListItem } from '@/components/profile/ProfileListItem';
 import { StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, spacing, typography } from '@/theme/tokens';
-import { ReactionEmojiImage } from './ReactionEmojiImage';
+import { getReactionEmojiLabel, ReactionEmojiImage } from './ReactionEmojiImage';
 import type React from 'react';
 import type { UseAutomaticPaginationResult } from '@/components/pagination/useAutomaticPagination';
 
@@ -95,7 +95,7 @@ export function ReactionProfileList({
               >
                 <View
                   accessible
-                  accessibilityLabel={`${reactionType} 반응`}
+                  accessibilityLabel={`${getReactionEmojiLabel(reactionType)} 반응`}
                   accessibilityRole="image"
                   style={styles.itemReaction}
                 >

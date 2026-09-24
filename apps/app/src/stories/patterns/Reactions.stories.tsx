@@ -372,11 +372,11 @@ export const ProfileListStates: Story = {
     expect(fallbackAvatar.querySelector('img')?.getAttribute('src')).toMatch(
       /\/assets\/avatar\/default-avatar\.png$/,
     );
-    expect(canvas.getAllByRole('img', { name: '❤️ 반응' })).toHaveLength(9);
+    expect(canvas.getAllByRole('img', { name: '빨간색 하트 반응' })).toHaveLength(9);
     const populatedRows = populatedSection
-      .getAllByLabelText('❤️ 반응')
+      .getAllByLabelText('빨간색 하트 반응')
       .map((reaction) => reaction.parentElement!);
-    const singleProfileRow = singleProfileSection.getByLabelText('❤️ 반응').parentElement!;
+    const singleProfileRow = singleProfileSection.getByLabelText('빨간색 하트 반응').parentElement!;
     expect(getComputedStyle(populatedRows[0]!).borderBottomWidth).toBe('1px');
     expect(getComputedStyle(populatedRows[1]!).borderBottomWidth).toBe('0px');
     expect(getComputedStyle(singleProfileRow).borderBottomWidth).toBe('0px');

@@ -4,7 +4,7 @@ import { getInteractionTargetSize } from '@/components/ui/interactionTarget';
 import { Tab, TabList } from '@/components/ui/Tabs';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, fontFamilies, radius, space, textStyles } from '@/theme/tokens';
-import { ReactionEmojiImage } from './ReactionEmojiImage';
+import { getReactionEmojiLabel, ReactionEmojiImage } from './ReactionEmojiImage';
 import type React from 'react';
 import type { ReactionSummaryEntry } from './ReactionSummary';
 
@@ -54,7 +54,7 @@ export function ReactionPeopleFilter({
               <Tab
                 key={entry.type}
                 option={{
-                  accessibilityLabel: `${entry.type} 반응 ${entry.count}개`,
+                  accessibilityLabel: `${getReactionEmojiLabel(entry.type)} 반응 ${entry.count}개`,
                   leading: <ReactionEmojiImage size={16} type={entry.type} />,
                   label: `${entry.count}`,
                   value: entry.type,

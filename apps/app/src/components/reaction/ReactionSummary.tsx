@@ -7,7 +7,7 @@ import { getInteractionTargetSize } from '@/components/ui/interactionTarget';
 import { StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, radii, spacing } from '@/theme/tokens';
-import { ReactionEmojiImage } from './ReactionEmojiImage';
+import { getReactionEmojiLabel, ReactionEmojiImage } from './ReactionEmojiImage';
 import { getReactionSummaryLayout } from './reactionSummaryLayout';
 import type { Href } from 'expo-router';
 import type React from 'react';
@@ -199,11 +199,12 @@ export function ReactionSummary({
           const pending = pendingTypes.has(entry.type);
           const selected = selectedTypes.has(entry.type);
           const entryDisabled = disabled || pending || onToggle === undefined;
+          const label = getReactionEmojiLabel(entry.type);
           const accessibilityLabel = entryError
-            ? `${entry.type} 반응 ${entry.count}개, 오류, 다시 시도`
+            ? `${label} 반응 ${entry.count}개, 오류, 다시 시도`
             : pending
-              ? `${entry.type} 반응 ${entry.count}개, 처리 중`
-              : `${entry.type} 반응 ${entry.count}개`;
+              ? `${label} 반응 ${entry.count}개, 처리 중`
+              : `${label} 반응 ${entry.count}개`;
 
           return (
             <Pressable
