@@ -1,11 +1,11 @@
 import baseMeta, {
+  FlagAssetContract as flagAssetContract,
   InteractionContract as interactionContract,
   LoadingContract as loadingContract,
   MobileBrowseGeometryContract as mobileBrowseGeometryContract,
   MobileExpandedGeometryContract as mobileExpandedGeometryContract,
   MobileGridGeometryContract as mobileGridGeometryContract,
-  MobileRecentGridContract as mobileRecentGridContract,
-  RecentGridContract as recentGridContract,
+  VirtualizedCatalogContract as virtualizedCatalogContract,
   WebGridGeometryContract as webGridGeometryContract,
 } from './FullReactionPicker.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -20,10 +20,10 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const InteractionContract: Story = interactionContract;
+export const FlagAssetContract: Story = flagAssetContract;
 export const LoadingContract: Story = loadingContract;
 export const MobileGridGeometryContract: Story = mobileGridGeometryContract;
 export const MobileBrowseGeometryContract: Story = mobileBrowseGeometryContract;
 export const MobileExpandedGeometryContract: Story = mobileExpandedGeometryContract;
-export const MobileRecentGridContract: Story = mobileRecentGridContract;
-export const RecentGridContract: Story = recentGridContract;
+export const VirtualizedCatalogContract: Story = virtualizedCatalogContract;
 export const WebGridGeometryContract: Story = webGridGeometryContract;

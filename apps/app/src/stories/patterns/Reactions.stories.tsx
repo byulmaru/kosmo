@@ -372,7 +372,7 @@ export const ProfileListStates: Story = {
     expect(fallbackAvatar.querySelector('img')?.getAttribute('src')).toMatch(
       /\/assets\/avatar\/default-avatar\.png$/,
     );
-    expect(canvas.getAllByText('❤️')).toHaveLength(9);
+    expect(canvas.getAllByRole('img', { name: '❤️ 반응' })).toHaveLength(9);
     const populatedRows = populatedSection
       .getAllByLabelText('❤️ 반응')
       .map((reaction) => reaction.parentElement!);
@@ -441,13 +441,13 @@ export const QuickPickerInteraction: Story = {
     const canvas = within(canvasElement);
     const buttons = canvas.getAllByRole('button');
 
-    expect(buttons.map((button) => button.textContent)).toEqual([
-      '🥹',
-      '❤️',
-      '🎉',
-      '👀',
-      '☘️',
-      '🌈',
+    expect(buttons.map((button) => button.getAttribute('aria-label'))).toEqual([
+      '🥹 반응',
+      '❤️ 반응',
+      '🎉 반응',
+      '👀 반응',
+      '☘️ 반응',
+      '🌈 반응',
     ]);
 
     const firstOptionStyle = getComputedStyle(buttons[0]!);
@@ -470,7 +470,7 @@ export const QuickPickerInteraction: Story = {
     expect(getComputedStyle(heartBackground!).opacity).toBe('0.7');
     expect(heartEmoji).not.toBeNull();
     expect(getComputedStyle(heartEmoji!).opacity).toBe('1');
-    expect(getComputedStyle(heartEmoji!).fontSize).toBe('20px');
+    expect(getComputedStyle(heartEmoji!).width).toBe('20px');
     expect(party.querySelector('[data-testid="reaction-selected-background"]')).toBeNull();
 
     expect(heart).toHaveAttribute('aria-pressed', 'true');
@@ -504,13 +504,13 @@ export const QuickPickerStates: Story = {
     expect(pendingHeart).toBeDisabled();
     expect(pendingHeart).toHaveAttribute('aria-busy', 'true');
     expect(pendingHeart).toHaveAttribute('aria-pressed', 'true');
-    expect(pendingHeart).toHaveTextContent('❤️');
-    const pendingOverlay = pendingHeart.querySelector('[aria-hidden="true"]');
+    expect(pendingHeart.querySelector('img[src$="/emoji_u2764.png"]')).not.toBeNull();
+    const spinner = pendingHeart.querySelector('[data-testid="reaction-pending-spinner"]');
+    expect(spinner).not.toBeNull();
+    const pendingOverlay = spinner!.closest('[aria-hidden="true"]');
     expect(pendingOverlay).not.toBeNull();
     expect(pendingOverlay!.getBoundingClientRect().width).toBe(32);
     expect(pendingOverlay!.getBoundingClientRect().height).toBe(32);
-    const spinner = pendingOverlay!.querySelector('[data-testid="reaction-pending-spinner"]');
-    expect(spinner).not.toBeNull();
     expect(getComputedStyle(spinner!).width).toBe('16px');
     expect(getComputedStyle(spinner!).height).toBe('16px');
 
