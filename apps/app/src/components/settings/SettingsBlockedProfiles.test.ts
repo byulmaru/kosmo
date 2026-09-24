@@ -35,6 +35,7 @@ mockModule('react-native', {
   ScrollView: ({ children, ...props }: { children?: ReactNode }) =>
     createElement('ScrollView', props, children),
   StyleSheet: { create: <T>(styles: T) => styles },
+  Text: 'Text',
   View: ({ children, ...props }: { children?: ReactNode }) =>
     createElement('View', props, children),
 });
@@ -140,6 +141,7 @@ const profile = (id: string, displayName = '별마루'): BlockedProfile => ({
       displayName,
       id: `profile-${id}`,
       relativeHandle: `@${id}`,
+      avatar: { id: `avatar-${id}`, url: `https://media.example/${id}.png` },
       viewerState: { profileBlock: { id: `block-${id}` } },
     },
   } as never,
@@ -164,6 +166,7 @@ describe('차단한 프로필 목록', () => {
                   displayName: '별마루',
                   id: 'profile-star',
                   relativeHandle: '@star',
+                  avatar: { id: 'avatar-star', url: 'https://media.example/star.png' },
                   viewerState: { profileBlock: { id: 'block-star' } },
                 },
               },
@@ -184,7 +187,9 @@ describe('차단한 프로필 목록', () => {
       renderer = create(createElement(SettingsBlockedProfiles));
     });
 
-    assert.equal(find('ProfileListItemContent')?.props.relativeHandle, '@star');
+    assert.equal(find('ProfileListItemContent')?.props.avatarUri, 'https://media.example/star.png');
+    assert.equal(find('ProfileListItemContent')?.props.relativeHandle, undefined);
+    assert.equal(find('ProfileListItemContent')?.props.identity.props.children, '별마루');
     assert.equal(find('Button')?.props.profileBlockId, 'block-star');
     assert.equal(find('PaginationSurface')?.props.hasNext, true);
     assert.ok(scrollProps);
@@ -236,7 +241,9 @@ describe('차단한 프로필 목록', () => {
         }),
       );
     });
-    assert.equal(find('ProfileListItemContent')?.props.relativeHandle, '@star');
+    assert.equal(find('ProfileListItemContent')?.props.avatarUri, 'https://media.example/star.png');
+    assert.equal(find('ProfileListItemContent')?.props.relativeHandle, undefined);
+    assert.equal(find('ProfileListItemContent')?.props.identity.props.children, '별마루');
     assert.equal(find('Button')?.props.profileBlockId, 'block-star');
     assert.equal(find('Button')?.props.children, '차단 해제');
   });
