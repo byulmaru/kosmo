@@ -149,7 +149,7 @@ export function PostActionSurface({
       )}
       {canEditQuotePolicy && target.quotePolicy && quotePolicyEditorOpen ? (
         <PostQuotePolicyEditor
-          key={target.id}
+          key={`${target.id}:${target.quotePolicy}`}
           onClose={() => setQuotePolicyEditorOpen(false)}
           policy={target.quotePolicy as PostQuotePolicy}
           postId={target.id}

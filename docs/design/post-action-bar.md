@@ -498,10 +498,9 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - Web에서는 radio group 이름·현재 값·keyboard 이동과 Escape·focus 복귀를, Native에서는 기존 Modal·touch
   target 계약을 유지한다. 범위를 선택하자마자 닫혀 인용 정책을 조작할 수 없는 메뉴로 만들지 않는다.
 
-## 기존 Local Quote 표시 전환 (2026-09-17)
+## 기존 Local Quote 표시 전환 (2026-09-22)
 
-- PROD-924 도입 전 확인된 Local Quote 2건은 새 승인 상태·QuoteAuthorization을 backfill하지 않고 기존
-  데이터 예외로 Source 표시를 유지한다. 승인 기록이 없다는 이유만으로 승인 대기 UI를 표시하거나 Source 카드를
-  숨기지 않는다. 새 승인으로 간주하지 않으며 신규 Quote의 승인 누락에도 적용하지 않는다.
-- 기존 Source 조회·방향별 차단·삭제 제한은 유지한다. Source를 조회할 수 없으면 Source만 숨기고 Quote 자체
-  본문은 그 Post의 기존 조회 정책에 따라 표시한다. PROD-959의 작성 진입점 임시 숨김은 별도로 유지한다.
+- 기존 Local Quote 2건의 Source 표시 예외는 폐기됐다. 새 인용 동의 정책을 적용하며, 승인 기록이 없어
+  Source가 표시되지 않더라도 허용한다. 기존 데이터의 backfill은 범위 밖이다.
+- Source를 조회할 수 없으면 Source만 숨기고 Quote 본문은 그 Post의 조회 정책에 따라 표시한다.
+  PROD-959의 작성 진입점 임시 숨김은 별도로 유지한다.

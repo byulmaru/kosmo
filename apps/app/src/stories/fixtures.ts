@@ -1,4 +1,5 @@
 import { Temporal } from 'temporal-polyfill';
+import type { PostQuotePolicy } from '@kosmo/core/enums';
 import type { PostContentBodyDocumentV1 } from '@kosmo/core/post-content';
 
 export type StoryProfile = {
@@ -146,7 +147,7 @@ export type StoryPost = {
   createdAt: string;
   id: string;
   profile: StoryProfile;
-  quotePolicy: 'EVERYONE' | 'FOLLOWERS' | 'SELF_ONLY';
+  quotePolicy: PostQuotePolicy;
   reactionCounts: Array<{ count: number; type: string }>;
   repostCount: number;
   replyParent: StoryReplyParentReference | null;
