@@ -422,7 +422,19 @@ export const VirtualizedCatalogContract: Story = {
 export const FlagAssetContract: Story = {
   args: { options: [flagOption] },
   play: async ({ canvasElement }) => {
-    expect(canvasElement.querySelector(`img[src$="${flagOption.assetPath}"]`)).not.toBeNull();
+    const image = canvasElement.querySelector<HTMLImageElement>(
+      `img[src$="${flagOption.assetPath}"]`,
+    );
+    expect(image).not.toBeNull();
+    image?.dispatchEvent(new Event('error'));
+    const fallback = await within(canvasElement).findByLabelText(flagOption.label);
+    expect(fallback).toHaveTextContent('?');
+    expect(fallback).toBeVisible();
+    expect(
+      within(canvasElement).getByRole('button', {
+        name: `${flagOption.label} ${flagOption.emoji}`,
+      }),
+    ).toBeVisible();
   },
 };
 

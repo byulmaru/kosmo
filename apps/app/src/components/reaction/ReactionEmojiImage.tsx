@@ -10,11 +10,15 @@ export type ReactionEmojiImageProps = Readonly<{
   type: string;
 }>;
 
+export function getReactionEmojiLabel(type: string): string {
+  return reactionEmojiCatalog.find((option) => option.id === type)?.label ?? type;
+}
+
 export function ReactionEmojiImage({ size, testID, type }: ReactionEmojiImageProps) {
   const asset = getReactionEmojiAsset(type);
   const uri = asset ? `${getPublicWebOrigin()}${asset.path}` : null;
   const [failedUri, setFailedUri] = useState<string | null>(null);
-  const fallback = reactionEmojiCatalog.find((option) => option.id === type)?.label ?? type;
+  const fallback = getReactionEmojiLabel(type);
 
   useEffect(() => {
     setFailedUri(null);
@@ -22,15 +26,9 @@ export function ReactionEmojiImage({ size, testID, type }: ReactionEmojiImagePro
 
   if (asset === null || uri === null || failedUri === uri) {
     return (
-      <View
-        accessibilityElementsHidden
-        aria-hidden
-        importantForAccessibility="no-hide-descendants"
-        style={[styles.fallback, { height: size, width: size }]}
-        testID={testID}
-      >
-        <Text numberOfLines={1} style={[styles.fallbackText, { fontSize: Math.min(12, size / 2) }]}>
-          {fallback}
+      <View style={[styles.fallback, { height: size, width: size }]} testID={testID}>
+        <Text accessibilityLabel={fallback} style={[styles.fallbackText, { fontSize: size }]}>
+          ?
         </Text>
       </View>
     );
@@ -65,6 +63,6 @@ export function ReactionEmojiImage({ size, testID, type }: ReactionEmojiImagePro
 }
 
 const styles = StyleSheet.create({
-  fallback: { alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  fallback: { alignItems: 'center', justifyContent: 'center' },
   fallbackText: { textAlign: 'center' },
 });
