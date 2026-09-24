@@ -112,6 +112,7 @@ test('첨부가 있으면 Slack 파일을 모두 업로드한 뒤 한 번 게시
     const request = new Request(input, init);
     requests.push(request);
     if (request.url.endsWith('/files.getUploadURLExternal')) {
+      assert.equal(request.headers.get('content-type'), 'application/x-www-form-urlencoded');
       const fileId = `F${++uploadIndex}`;
       return new Response(
         JSON.stringify({
@@ -126,7 +127,7 @@ test('첨부가 있으면 Slack 파일을 모두 업로드한 뒤 한 번 게시
       return new Response(null, { status: 200 });
     }
     assert.equal(request.url, 'https://slack.com/api/files.completeUploadExternal');
-    const payload = await request.clone().json();
+    const payload = Object.fromEntries(await request.clone().formData());
     const valid = typeof payload.blocks === 'string' && Array.isArray(JSON.parse(payload.blocks));
     return new Response(
       JSON.stringify(valid ? { ok: true } : { ok: false, error: 'invalid_arguments' }),
@@ -146,23 +147,23 @@ test('첨부가 있으면 Slack 파일을 모두 업로드한 뒤 한 번 게시
   });
 
   assert.equal(requests.length, 5);
-  assert.deepEqual(await requests[0]?.json(), {
+  assert.deepEqual(Object.fromEntries(await requests[0]!.formData()), {
     filename: 'feedback-1.png',
-    length: 4,
+    length: '4',
   });
   assert.deepEqual(
     await requests[1]?.arrayBuffer(),
     new Uint8Array([0x89, 0x50, 0x4e, 0x47]).buffer,
   );
-  assert.deepEqual(await requests[2]?.json(), {
+  assert.deepEqual(Object.fromEntries(await requests[2]!.formData()), {
     filename: 'feedback-2.jpg',
-    length: 4,
+    length: '4',
   });
   assert.deepEqual(
     await requests[3]?.arrayBuffer(),
     new Uint8Array([0xff, 0xd8, 0xff, 0xd9]).buffer,
   );
-  assert.deepEqual(await requests[4]?.json(), {
+  assert.deepEqual(Object.fromEntries(await requests[4]!.formData()), {
     blocks: JSON.stringify([
       { text: { text: '새 피드백', type: 'plain_text' }, type: 'header' },
       {
@@ -178,10 +179,10 @@ test('첨부가 있으면 Slack 파일을 모두 업로드한 뒤 한 번 게시
       { text: { text: validFeedback.body, type: 'plain_text' }, type: 'section' },
     ]),
     channel_id: 'C123',
-    files: [{ id: 'F1' }, { id: 'F2' }],
+    files: JSON.stringify([{ id: 'F1' }, { id: 'F2' }]),
   });
   assert.equal(requests[4]?.headers.get('authorization'), 'Bearer xoxb-test');
-  assert.equal(requests[4]?.headers.get('content-type'), 'application/json');
+  assert.equal(requests[4]?.headers.get('content-type'), 'application/x-www-form-urlencoded');
 });
 
 test('첨부 중간 실패 시 complete 호출 없이 오류를 반환한다', async (t) => {
