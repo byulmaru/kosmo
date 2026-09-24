@@ -1,8 +1,9 @@
 import { Search } from 'lucide-react-native';
 import { useEffect, useRef } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
+import { ReactionEmojiImage } from './ReactionEmojiImage';
 import { ReactionPendingSpinner } from './ReactionPendingSpinner';
 import type React from 'react';
 
@@ -42,10 +43,6 @@ export function FullReactionPicker({
   const elevation = useElevation();
   const mobile = presentation === 'mobile';
   const pickerRef = useRef<View>(null);
-  const categories = Array.from(
-    new Map(options.map((option) => [option.category, option.categoryLabel])).entries(),
-    ([id, label]) => ({ id, label }),
-  );
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const searchResults = options.filter((option) =>
     [option.emoji, option.label, ...(option.keywords ?? [])]
@@ -129,55 +126,48 @@ export function FullReactionPicker({
           </Text>
         </View>
       ) : (
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          testID={mobile ? 'full-reaction-picker-scroll' : undefined}
-        >
-          {state === 'searchResults' ? (
-            <>
+        <FlatList<ReactionGridItem>
+          data={
+            state === 'searchResults'
+              ? createGridItems('results', '반응', searchResults, mobile ? 7 : 8)
+              : createBrowseItems(options, mobile ? 7 : 8)
+          }
+          initialNumToRender={mobile ? 12 : 10}
+          keyExtractor={(item) => item.id}
+          ListHeaderComponent={
+            state === 'searchResults' ? (
               <Text style={[styles.resultCount, { color: theme.foregroundSecondary }]}>
                 ‘{query}’ 검색 결과 {searchResults.length}개
               </Text>
-              <ReactionSection
+            ) : null
+          }
+          maxToRenderPerBatch={mobile ? 12 : 10}
+          renderItem={({ item }) =>
+            item.kind === 'heading' ? (
+              <View style={styles.section} testID={item.testID}>
+                <Text
+                  accessibilityRole="header"
+                  style={[styles.sectionTitle, { color: theme.foregroundPrimary }]}
+                >
+                  {item.title}
+                </Text>
+              </View>
+            ) : (
+              <ReactionGridRow
                 mobile={mobile}
                 onSelect={onSelect}
-                options={searchResults}
+                options={item.options}
+                rowIndex={item.rowIndex}
+                sectionId={item.sectionId}
                 selectedValues={selectedValues}
-                title="반응"
               />
-            </>
-          ) : (
-            <>
-              <ReactionSection
-                mobile={mobile}
-                onSelect={onSelect}
-                options={options.filter((option) => option.quick)}
-                selectedValues={selectedValues}
-                title="빠른 반응"
-              />
-              <ReactionSection
-                mobile={mobile}
-                onSelect={onSelect}
-                options={options.filter((option) => option.recent).slice(0, mobile ? 14 : 16)}
-                selectedValues={selectedValues}
-                testID="full-reaction-section-recent"
-                title="최근 사용"
-              />
-              {categories.map((category) => (
-                <ReactionSection
-                  key={category.id}
-                  mobile={mobile}
-                  onSelect={onSelect}
-                  options={options.filter((option) => option.category === category.id)}
-                  selectedValues={selectedValues}
-                  testID={`full-reaction-section-${category.id}`}
-                  title={category.label}
-                />
-              ))}
-            </>
-          )}
-        </ScrollView>
+            )
+          }
+          showsVerticalScrollIndicator={false}
+          testID="full-reaction-picker-scroll"
+          windowSize={5}
+          contentContainerStyle={styles.scrollContent}
+        />
       )}
     </View>
   );
@@ -215,83 +205,123 @@ function SearchField({ onChange, value }: { onChange: (value: string) => void; v
   );
 }
 
-function ReactionSection({
+type ReactionGridItem =
+  | Readonly<{ id: string; kind: 'heading'; testID: string; title: string }>
+  | Readonly<{
+      id: string;
+      kind: 'row';
+      options: ReadonlyArray<FullReactionPickerOption>;
+      rowIndex: number;
+      sectionId: string;
+    }>;
+
+function createGridItems(
+  sectionId: string,
+  title: string,
+  options: ReadonlyArray<FullReactionPickerOption>,
+  columns: number,
+): ReactionGridItem[] {
+  if (options.length === 0) {
+    return [];
+  }
+
+  return [
+    {
+      id: `${sectionId}-heading`,
+      kind: 'heading',
+      testID: `full-reaction-section-${sectionId}`,
+      title,
+    },
+    ...Array.from({ length: Math.ceil(options.length / columns) }, (_, rowIndex) => ({
+      id: `${sectionId}-row-${rowIndex}`,
+      kind: 'row' as const,
+      options: options.slice(rowIndex * columns, (rowIndex + 1) * columns),
+      rowIndex,
+      sectionId,
+    })),
+  ];
+}
+
+function createBrowseItems(
+  options: ReadonlyArray<FullReactionPickerOption>,
+  columns: number,
+): ReactionGridItem[] {
+  const categories = Array.from(
+    new Map(options.map((option) => [option.category, option.categoryLabel])).entries(),
+    ([id, title]) => ({ id, options: options.filter((option) => option.category === id), title }),
+  );
+  return [
+    ...createGridItems(
+      'quick',
+      '빠른 반응',
+      options.filter((option) => option.quick),
+      columns,
+    ),
+    ...categories.flatMap(({ id, options: categoryOptions, title }) =>
+      createGridItems(id, title, categoryOptions, columns),
+    ),
+  ];
+}
+
+function ReactionGridRow({
   mobile,
   onSelect,
   options,
+  rowIndex,
+  sectionId,
   selectedValues,
-  testID,
-  title,
 }: {
   mobile: boolean;
   onSelect: (option: FullReactionPickerOption) => void;
   options: ReadonlyArray<FullReactionPickerOption>;
+  rowIndex: number;
+  sectionId: string;
   selectedValues: ReadonlyArray<string>;
-  testID?: string;
-  title: string;
 }) {
   const theme = useTheme();
   const columns = mobile ? 7 : 8;
-  const rows = Array.from({ length: Math.ceil(options.length / columns) }, (_, index) =>
-    options.slice(index * columns, (index + 1) * columns),
-  );
   return (
-    <View style={styles.section} testID={testID}>
-      <Text
-        accessibilityRole="header"
-        style={[styles.sectionTitle, { color: theme.foregroundPrimary }]}
-      >
-        {title}
-      </Text>
-      <View style={[styles.grid, mobile ? styles.mobileGrid : styles.webGrid]}>
-        {rows.map((row, rowIndex) => (
-          <View
-            key={rowIndex}
-            style={[
-              styles.gridRow,
-              mobile ? styles.mobileGrid : styles.webGrid,
-              row.length === columns ? styles.fullGridRow : styles.partialGridRow,
-            ]}
-            testID={testID ? `${testID}-row-${rowIndex}` : undefined}
+    <View
+      style={[
+        styles.gridRow,
+        mobile ? styles.mobileGrid : styles.webGrid,
+        options.length === columns ? styles.fullGridRow : styles.partialGridRow,
+      ]}
+      testID={`full-reaction-section-${sectionId}-row-${rowIndex}`}
+    >
+      {options.map((option) => {
+        const selected = selectedValues.includes(option.id);
+        return (
+          <Pressable
+            accessibilityLabel={`${option.label} ${option.emoji}`}
+            accessibilityRole="button"
+            accessibilityState={{ selected }}
+            aria-pressed={selected}
+            key={option.id}
+            onPress={() => onSelect(option)}
+            style={mobile ? styles.mobileReactionTarget : styles.webReactionTarget}
           >
-            {row.map((option) => {
-              const selected = selectedValues.includes(option.id);
-              return (
-                <Pressable
-                  accessibilityLabel={`${option.label} ${option.emoji}`}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected }}
-                  aria-pressed={selected}
-                  key={option.id}
-                  onPress={() => onSelect(option)}
-                  style={mobile ? styles.mobileReactionTarget : styles.webReactionTarget}
-                >
-                  {({ pressed }) => (
-                    <View
-                      style={[
-                        styles.reaction,
-                        mobile ? styles.mobileReaction : styles.webReaction,
-                        {
-                          backgroundColor: selected
-                            ? theme.stateSelectedSurface
-                            : pressed
-                              ? theme.statePressed
-                              : 'transparent',
-                          borderColor: selected ? theme.stateSelectedBorder : 'transparent',
-                        },
-                      ]}
-                    >
-                      <Text style={mobile ? styles.mobileEmoji : styles.webEmoji}>
-                        {option.emoji}
-                      </Text>
-                    </View>
-                  )}
-                </Pressable>
-              );
-            })}
-          </View>
-        ))}
-      </View>
+            {({ pressed }) => (
+              <View
+                style={[
+                  styles.reaction,
+                  mobile ? styles.mobileReaction : styles.webReaction,
+                  {
+                    backgroundColor: selected
+                      ? theme.stateSelectedSurface
+                      : pressed
+                        ? theme.statePressed
+                        : 'transparent',
+                    borderColor: selected ? theme.stateSelectedBorder : 'transparent',
+                  },
+                ]}
+              >
+                <ReactionEmojiImage size={mobile ? 24 : 20} type={option.emoji} />
+              </View>
+            )}
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
@@ -301,9 +331,7 @@ const styles = StyleSheet.create({
   emptyDescription: textStyles.uiCopyM,
   emptyTitle: textStyles.uiLabelL,
   fullGridRow: { justifyContent: 'space-between' },
-  grid: { flexDirection: 'column' },
   gridRow: { flexDirection: 'row' },
-  mobileEmoji: { fontSize: 24, lineHeight: 32 },
   mobileGrid: { gap: 0 },
   mobileReaction: { height: 44, width: 44 },
   mobileReactionTarget: { alignItems: 'center', height: 48, justifyContent: 'center', width: 48 },
@@ -352,7 +380,6 @@ const styles = StyleSheet.create({
     padding: space[16],
     width: 360,
   },
-  webEmoji: { fontSize: 20, lineHeight: 24 },
   webGrid: { gap: space[8] },
   webReaction: { height: 32, width: 32 },
   webReactionTarget: { height: 32, width: 32 },

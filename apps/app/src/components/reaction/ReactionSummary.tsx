@@ -7,6 +7,7 @@ import { getInteractionTargetSize } from '@/components/ui/interactionTarget';
 import { StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, radii, spacing } from '@/theme/tokens';
+import { ReactionEmojiImage } from './ReactionEmojiImage';
 import { getReactionSummaryLayout } from './reactionSummaryLayout';
 import type { Href } from 'expo-router';
 import type React from 'react';
@@ -236,7 +237,7 @@ export function ReactionSummary({
                       testID="reaction-summary-selected-background"
                     />
                   ) : null}
-                  <Text style={[styles.entryEmoji, { color: theme.text }]}>{entry.type}</Text>
+                  <ReactionEmojiImage size={20} type={entry.type} />
                   <Text style={[styles.entryCount, { color: theme.text }]}>{entry.count}</Text>
                 </>
               )}
@@ -259,7 +260,7 @@ export function ReactionSummary({
               onLayout={onEntryLayout(entryKeys[index]!)}
               style={styles.entry}
             >
-              <Text style={[styles.entryEmoji, { color: theme.text }]}>{entry.type}</Text>
+              <ReactionEmojiImage size={20} type={entry.type} />
               <Text style={[styles.entryCount, { color: theme.text }]}>{entry.count}</Text>
             </View>
           ))}
@@ -319,7 +320,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     lineHeight: 20,
   },
-  entryEmoji: { fontSize: 20, lineHeight: 24 },
   ellipsisControl: { width: summaryControlSize },
   measurementLayer: {
     flexDirection: 'row',
