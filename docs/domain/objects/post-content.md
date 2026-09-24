@@ -68,8 +68,8 @@ renderer 입력으로 저장하지 않는다. renderer는 같은 revision의 관
 
 inbound typed `Mention.href`는 기존 `ActivityPubActor`·Profile mapping으로 stable Profile identity를 먼저 확인하며, 이 identity
 확인은 본문 HTML 변환과 독립적이다. 이미 알려진 Local/Remote Profile은 기존 mapping을 그대로 사용한다. 알려지지 않은 remote actor
-target은 Note당 최대 32개의 고유 remote actor URI까지 typed href로 resolve해 materialize할 수 있으며, 미확인 remote actor lookup 총 제한은
-Note당 30초다. 제한시간이 끝나면 진행 중인 actor 조회를 중단하고 추가 미확인 조회를 시작하지 않는다. 아직 시작하지 않은 target은 건너뛴다.
+target은 Note당 최대 32개의 고유 remote actor URI까지 typed href로 resolve해 materialize할 수 있다. 한도 내 target의 remote actor 조회는
+모두 동시에 시작하며, 각 조회는 Note별 하나의 공통 30초 제한을 공유한다. 제한시간이 끝나면 진행 중인 actor 조회를 중단한다.
 이미 시작한 remote Profile 저장은 제한시간 뒤에도 완료될 수 있다. 이미 확인된 Mentioned Profile 관계와 Note 전체는 유지한다. 한도를 넘거나
 개별 resolve가 실패한 target도 건너뛴다. body anchor href와 `Mention.name`은 actor identity lookup이나 fetch 입력으로 사용하지 않는다. Local
 Profile은 `Instances.kind=LOCAL`인 active Instance의 trusted `canonicalOrigin`과 기존 `createLocalProfilePerson`의
@@ -100,12 +100,9 @@ rollback해 partial relation을 남기지 않는다.
 바뀌면 새 Post Content를 만든다. 이미지 교체는 먼저 새 Local Media를 Ready로 만든 다음 그 Media를 참조하는 새
 revision을 만드는 행동이다. 이전 revision은 이전 Media 참조를 그대로 보존한다.
 
-ActivityPub `tag`의 typed `Mention`은 기존 mapping으로 확인되거나 typed `Mention.href`를 통해 제한적으로 resolve한 Local/Remote Profile
-identity가 Mentioned Profile 관계의 입력이 된다. 알려지지 않은 remote target은 Note당 최대 32개의 고유 remote actor URI까지 resolve할 수 있으며,
-미확인 remote actor lookup 총 제한은 Note당 30초다. 제한시간이 끝나면 진행 중인 actor 조회를 중단하고 추가 미확인 조회를 시작하지 않는다.
-아직 시작하지 않은 target은 건너뛴다. 이미 시작한 remote Profile 저장은 제한시간 뒤에도 완료될 수 있다. 이미 확인된 Mentioned Profile 관계와 Note
-전체는 유지한다. 한도를 넘거나 개별 resolve가 실패하면 해당 target만 건너뛴다. 이 검증은 본문 anchor URL이나 body parser 결과와
-독립적이다. body Mention node는 anchor href가 확인된 actor URI, 기존 actor materialization·refresh로 저장한 Profile URL alias 또는
+ActivityPub `tag`의 typed `Mention`은 앞서 정의한 `Mention.href` identity 확인으로 알려진 Local/Remote Profile을 Mentioned Profile
+관계 입력으로 삼는다. 확인된 identity는 본문 anchor URL이나 body parser 결과와 독립적이다. body Mention node는 anchor href가 확인된 actor URI,
+기존 actor materialization·refresh로 저장한 Profile URL alias 또는
 Local Profile의 trusted human Profile URL과 정확히 일치할 때만 만든다. 이 URL들이 일치하지 않으면 anchor는 안전한 일반 link 또는 표시
 text로 보존한다. tag `name`, handle, 본문 표시 문자열은 actor identity lookup/fetch나 body Mention 생성을 위한 fallback이 아니다.
 일반 link/text와 `to`/`cc` audience는 Mention 관계 입력이 아니다. body anchor가 일치하지 않아도 typed identity에서 확인한 Profile 관계는

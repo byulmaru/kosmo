@@ -43,7 +43,6 @@ const noNetworkDocumentLoader = async (): Promise<never> => {
 };
 
 const maxUnknownRemoteMentionLookups = 32;
-const maxConcurrentRemoteMentionLookups = 4;
 const remoteMentionLookupTimeoutMs = 30_000;
 
 const isImageAttachment = (attachment: Document): boolean => {
@@ -133,52 +132,41 @@ const projectRemoteNote = async (
     unknownRemoteActorHrefs.length > 0
       ? AbortSignal.timeout(remoteMentionLookupTimeoutMs)
       : undefined;
-  const materializedActorHrefs: string[] = [];
-
-  if (mentionLookupSignal) {
-    for (
-      let offset = 0;
-      offset < unknownRemoteActorHrefs.length && !mentionLookupSignal.aborted;
-      offset += maxConcurrentRemoteMentionLookups
-    ) {
-      const lookupHrefs = unknownRemoteActorHrefs.slice(
-        offset,
-        offset + maxConcurrentRemoteMentionLookups,
-      );
-      const materializedInChunk = await Promise.all(
-        lookupHrefs.map(async (targetHref) => {
-          try {
-            await findOrMaterializeRemoteProfileActorByUri({
-              actorUri: new URL(targetHref),
-              context,
-              now: receivedAt,
-              signal: mentionLookupSignal,
-            });
-            return targetHref;
-          } catch (error) {
-            observeInbound({
-              activityType,
-              handler: 'create',
-              phase: 'actor_lookup',
-              outcome:
-                isExternalInboundError(error) ||
-                error instanceof ConflictError ||
-                error instanceof NotFoundError
-                  ? 'external_failure'
-                  : 'internal_failure',
-              reasonCode: 'remote_mention_materialization_rejected',
-              objectOrigin: note.id?.origin,
-              error,
-            });
-            return undefined;
-          }
+  const mentionLookupResults = mentionLookupSignal
+    ? await Promise.allSettled(
+        unknownRemoteActorHrefs.map(async (targetHref) => {
+          await findOrMaterializeRemoteProfileActorByUri({
+            actorUri: new URL(targetHref),
+            context,
+            now: receivedAt,
+            signal: mentionLookupSignal,
+          });
+          return targetHref;
         }),
-      );
-      materializedActorHrefs.push(
-        ...materializedInChunk.filter((actorHref): actorHref is string => actorHref !== undefined),
-      );
+      )
+    : [];
+  const materializedActorHrefs = mentionLookupResults.flatMap((result) => {
+    if (result.status === 'fulfilled') {
+      return [result.value];
     }
-  }
+
+    const error = result.reason;
+    observeInbound({
+      activityType,
+      handler: 'create',
+      phase: 'actor_lookup',
+      outcome:
+        isExternalInboundError(error) ||
+        error instanceof ConflictError ||
+        error instanceof NotFoundError
+          ? 'external_failure'
+          : 'internal_failure',
+      reasonCode: 'remote_mention_materialization_rejected',
+      objectOrigin: note.id?.origin,
+      error,
+    });
+    return [];
+  });
 
   if (materializedActorHrefs.length > 0) {
     const { candidates } = await resolveStoredInboundMentionCandidates(materializedActorHrefs);

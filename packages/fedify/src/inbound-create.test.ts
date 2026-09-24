@@ -510,98 +510,108 @@ describe('inbound Create dispatch', () => {
     ]);
   });
 
-  test('materializes unknown Mention targets with bounded overlapping lookups and stable matching', async () => {
-    const mentionActorUris = Array.from(
-      { length: 5 },
-      (_, index) => new URL(`https://mentions.example/users/parallel-${index}`),
-    );
-    const objectUri = new URL('https://remote.example/notes/parallel-mention-materialization');
-    let activeLookups = 0;
-    let maxActiveLookups = 0;
-    let lookupCount = 0;
-    let releaseLookups!: () => void;
-    const lookupsReleased = new Promise<void>((resolve) => {
-      releaseLookups = resolve;
-    });
-    let releaseFallback: ReturnType<typeof setTimeout> | undefined;
-    const note = new Note({
-      attribution: remoteActorUri,
-      content: `<p>${mentionActorUris
-        .map((actorUri, index) => `<a href="${actorUri.href}">@parallel-${index}</a>`)
-        .join(' ')}</p>`,
-      id: objectUri,
-      mediaType: 'text/html',
-      tags: mentionActorUris.map((href, index) => new Mention({ href, name: `@ignored-${index}` })),
-      to: PUBLIC_COLLECTION,
-    });
-
-    try {
-      await createStoredRemoteActor();
-      await handleInboundCreate(
-        createContext(undefined, null, async (actorUri, options) => {
-          assert.ok(options?.signal);
-          lookupCount += 1;
-          if (lookupCount === 1) {
-            releaseFallback = setTimeout(releaseLookups, 1_000);
-          }
-          activeLookups += 1;
-          maxActiveLookups = Math.max(maxActiveLookups, activeLookups);
-          if (activeLookups === 4) {
-            if (releaseFallback) {
-              clearTimeout(releaseFallback);
-            }
-            releaseLookups();
-          }
-          await lookupsReleased;
-          activeLookups -= 1;
-          return new Person({
-            id: actorUri,
-            preferredUsername: actorUri.pathname.split('/').at(-1) ?? 'parallel',
-          });
-        }),
-        new Create({ actor: remoteActorUri, object: note }),
-        receivedAt,
+  test(
+    'materializes all unknown Mention targets concurrently with stable matching',
+    { timeout: 30_000 },
+    async () => {
+      const mentionActorUris = Array.from(
+        { length: 5 },
+        (_, index) => new URL(`https://mentions.example/users/parallel-${index}`),
       );
-    } finally {
-      if (releaseFallback) {
-        clearTimeout(releaseFallback);
-      }
-    }
-
-    const { content } = await getMaterializedPost(objectUri);
-    const actorRows = await db
-      .select({ profileId: ActivityPubActors.profileId, uri: ActivityPubActors.uri })
-      .from(ActivityPubActors)
-      .where(
-        inArray(
-          ActivityPubActors.uri,
-          mentionActorUris.map(({ href }) => href),
+      const objectUri = new URL('https://remote.example/notes/parallel-mention-materialization');
+      const lookupHrefs: string[] = [];
+      const lookupSignals: (AbortSignal | undefined)[] = [];
+      let activeLookups = 0;
+      let maxActiveLookups = 0;
+      let releaseLookups!: () => void;
+      let releaseFallback: ReturnType<typeof setTimeout> | undefined;
+      const lookupsReleased = new Promise<void>((resolve) => {
+        releaseLookups = resolve;
+      });
+      const note = new Note({
+        attribution: remoteActorUri,
+        content: `<p>${mentionActorUris
+          .map((actorUri, index) => `<a href="${actorUri.href}">@parallel-${index}</a>`)
+          .join(' ')}</p>`,
+        id: objectUri,
+        mediaType: 'text/html',
+        tags: mentionActorUris.map(
+          (href, index) => new Mention({ href, name: `@ignored-${index}` }),
         ),
+        to: PUBLIC_COLLECTION,
+      });
+
+      try {
+        await createStoredRemoteActor();
+        await handleInboundCreate(
+          createContext(undefined, null, async (actorUri, options) => {
+            lookupHrefs.push(actorUri.href);
+            lookupSignals.push(options?.signal);
+            activeLookups += 1;
+            maxActiveLookups = Math.max(maxActiveLookups, activeLookups);
+            if (lookupHrefs.length === 1) {
+              releaseFallback = setTimeout(releaseLookups, 5_000);
+            }
+            if (lookupHrefs.length === mentionActorUris.length) {
+              if (releaseFallback) {
+                clearTimeout(releaseFallback);
+                releaseFallback = undefined;
+              }
+              releaseLookups();
+            }
+            await lookupsReleased;
+            activeLookups -= 1;
+            return new Person({
+              id: actorUri,
+              preferredUsername: actorUri.pathname.split('/').at(-1) ?? 'parallel',
+            });
+          }),
+          new Create({ actor: remoteActorUri, object: note }),
+          receivedAt,
+        );
+      } finally {
+        if (releaseFallback) {
+          clearTimeout(releaseFallback);
+        }
+      }
+
+      const { content } = await getMaterializedPost(objectUri);
+      const actorRows = await db
+        .select({ profileId: ActivityPubActors.profileId, uri: ActivityPubActors.uri })
+        .from(ActivityPubActors)
+        .where(
+          inArray(
+            ActivityPubActors.uri,
+            mentionActorUris.map(({ href }) => href),
+          ),
+        );
+      const profileIdsByUri = new Map(actorRows.map(({ profileId, uri }) => [uri, profileId]));
+
+      assert.deepEqual([...lookupHrefs].sort(), mentionActorUris.map(({ href }) => href).sort());
+      assert.ok(
+        lookupSignals.every((signal) => signal !== undefined && signal === lookupSignals[0]),
       );
-    const profileIdsByUri = new Map(actorRows.map(({ profileId, uri }) => [uri, profileId]));
+      assert.equal(maxActiveLookups, mentionActorUris.length);
+      assert.deepEqual(content.document.body.content, [
+        {
+          type: 'paragraph',
+          content: mentionActorUris.flatMap((actorUri, index) => [
+            {
+              attrs: { profileId: profileIdsByUri.get(actorUri.href) },
+              type: 'mention',
+            },
+            ...(index < mentionActorUris.length - 1 ? [{ text: ' ', type: 'text' }] : []),
+          ]),
+        },
+      ]);
+      assert.deepEqual(
+        (await db.select().from(PostMentions)).map(({ profileId }) => profileId).sort(),
+        mentionActorUris.map((actorUri) => profileIdsByUri.get(actorUri.href)).sort(),
+      );
+    },
+  );
 
-    assert.equal(lookupCount, mentionActorUris.length);
-    assert.ok(maxActiveLookups > 1);
-    assert.ok(maxActiveLookups <= 4);
-    assert.deepEqual(content.document.body.content, [
-      {
-        type: 'paragraph',
-        content: mentionActorUris.flatMap((actorUri, index) => [
-          {
-            attrs: { profileId: profileIdsByUri.get(actorUri.href) },
-            type: 'mention',
-          },
-          ...(index < mentionActorUris.length - 1 ? [{ text: ' ', type: 'text' }] : []),
-        ]),
-      },
-    ]);
-    assert.deepEqual(
-      (await db.select().from(PostMentions)).map(({ profileId }) => profileId).sort(),
-      mentionActorUris.map((actorUri) => profileIdsByUri.get(actorUri.href)).sort(),
-    );
-  });
-
-  test('aborts the shared Mention lookup budget and preserves unprocessed actor links', async () => {
+  test('passes one aborted lookup signal to all capped Mention targets and preserves actor links', async () => {
     const mentionActorUris = Array.from(
       { length: 5 },
       (_, index) => new URL(`https://mentions.example/users/aborted-${index}`),
@@ -640,7 +650,9 @@ describe('inbound Create dispatch', () => {
     }
 
     const { content } = await getMaterializedPost(objectUri);
-    assert.equal(lookupHrefs.length, 4);
+    assert.deepEqual([...lookupHrefs].sort(), mentionActorUris.map(({ href }) => href).sort());
+    assert.equal(timeoutMock.mock.callCount(), 1);
+    assert.equal(timeoutMock.mock.calls[0]?.arguments[0], 30_000);
     assert.deepEqual(content.document.body.content, [
       {
         type: 'paragraph',
@@ -718,11 +730,10 @@ describe('inbound Create dispatch', () => {
       .where(eq(ActivityPubActors.uri, validActorUri.href))
       .then(firstOrThrow);
 
-    assert.deepEqual(lookupHrefs, [
-      failedActorUri.href,
-      mismatchedActorUri.href,
-      validActorUri.href,
-    ]);
+    assert.deepEqual(
+      [...lookupHrefs].sort(),
+      [failedActorUri.href, mismatchedActorUri.href, validActorUri.href].sort(),
+    );
     assert.deepEqual(content.document.body.content, [
       {
         type: 'paragraph',
@@ -746,24 +757,40 @@ describe('inbound Create dispatch', () => {
     assert.deepEqual(await db.select().from(PostMentions), [
       { postContentId: content.id, profileId: validProfile.id },
     ]);
-    assert.deepEqual(observations, [
-      {
-        activityType: 'Create',
-        handler: 'create',
-        objectOrigin: objectUri.origin,
-        outcome: 'internal_failure',
-        phase: 'actor_lookup',
-        reasonCode: 'remote_mention_materialization_rejected',
-      },
-      {
-        activityType: 'Create',
-        handler: 'create',
-        objectOrigin: objectUri.origin,
-        outcome: 'external_failure',
-        phase: 'actor_lookup',
-        reasonCode: 'remote_mention_materialization_rejected',
-      },
-    ]);
+    assert.deepEqual(
+      observations
+        .map((observation) => {
+          const { activityType, handler, objectOrigin, outcome, phase, reasonCode } =
+            observation as {
+              activityType: 'Create';
+              handler: 'create';
+              objectOrigin: string;
+              outcome: 'external_failure' | 'internal_failure';
+              phase: 'actor_lookup';
+              reasonCode: 'remote_mention_materialization_rejected';
+            };
+          return { activityType, handler, objectOrigin, outcome, phase, reasonCode };
+        })
+        .sort((left, right) => left.outcome.localeCompare(right.outcome)),
+      [
+        {
+          activityType: 'Create',
+          handler: 'create',
+          objectOrigin: objectUri.origin,
+          outcome: 'external_failure',
+          phase: 'actor_lookup',
+          reasonCode: 'remote_mention_materialization_rejected',
+        },
+        {
+          activityType: 'Create',
+          handler: 'create',
+          objectOrigin: objectUri.origin,
+          outcome: 'internal_failure',
+          phase: 'actor_lookup',
+          reasonCode: 'remote_mention_materialization_rejected',
+        },
+      ],
+    );
   });
 
   test('limits unknown remote Mention lookups to 32 unique targets and keeps the remaining links', async () => {
@@ -811,11 +838,12 @@ describe('inbound Create dispatch', () => {
     const { content } = await getMaterializedPost(objectUri);
     const paragraph = content.document.body.content[0];
 
-    assert.equal(lookupHrefs.length, 32);
-    assert.equal(new Set(lookupHrefs).size, 32);
     assert.deepEqual(
-      lookupHrefs,
-      mentionActorUris.slice(0, 32).map(({ href }) => href),
+      [...lookupHrefs].sort(),
+      mentionActorUris
+        .slice(0, 32)
+        .map(({ href }) => href)
+        .sort(),
     );
     assert.equal(paragraph?.type, 'paragraph');
     assert.equal(
@@ -1110,6 +1138,18 @@ describe('inbound Create dispatch', () => {
           attribution: remoteActorUri,
           content: 'x'.repeat(10_001),
           id: new URL('https://objects.example/notes/oversized'),
+          to: PUBLIC_COLLECTION,
+        }),
+      },
+      {
+        expected: { reason: 'note_content_length_exceeded', status: 'rejected' },
+        note: new Note({
+          attachments: [new Image({ url: new URL('data:image/png;base64,AA==') })],
+          attribution: remoteActorUri,
+          content: 'x'.repeat(10_001),
+          id: new URL('https://objects.example/notes/oversized-invalid-media'),
+          mediaType: 'text/plain',
+          tags: [new Mention({ href: invalidImageMentionActorUri, name: '@ignored' })],
           to: PUBLIC_COLLECTION,
         }),
       },

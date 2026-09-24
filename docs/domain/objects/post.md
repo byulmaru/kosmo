@@ -440,8 +440,8 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
   typed Mention은 V1에 additive한 node로 보존한다. Mention node는 저장된 Profile stable identity인 `profileId`만
   attrs로 가진다. inbound typed `Mention.href`는 기존 ActivityPub actor/Profile mapping을 먼저 확인하며, 알려진 Local/Remote
   Profile은 기존 mapping을 그대로 사용한다. 알려지지 않은 remote actor target은 Note당 최대 32개의 고유 remote actor URI까지 typed href로
-  resolve해 materialize할 수 있으며, 미확인 remote actor lookup 총 제한은 Note당 30초다. 제한시간이 끝나면 진행 중인 actor 조회를 중단하고
-  추가 미확인 조회를 시작하지 않는다. 아직 시작하지 않은 target은 건너뛴다. 이미 시작한 remote Profile 저장은 제한시간 뒤에도 완료될 수 있다.
+  resolve해 materialize할 수 있다. 한도 내 target의 remote actor 조회는 모두 동시에 시작하며, 각 조회는 Note별 하나의 공통 30초 제한을
+  공유한다. 제한시간이 끝나면 진행 중인 actor 조회를 중단한다. 이미 시작한 remote Profile 저장은 제한시간 뒤에도 완료될 수 있다.
   이미 확인된 Mentioned Profile 관계와 Note 전체는 유지한다. 한도를 넘거나 개별 resolve가 실패한 target도 건너뛴다. 본문 anchor href나
   `Mention.name`은 actor identity lookup/fetch 입력이 아니다. 확인된 typed identity는 본문 변환과 독립적으로 Mentioned Profile 관계
   입력으로 보존한다. 본문 anchor href가 확인된 actor URI, 기존 정상 actor materialization·refresh가 저장한 Profile URL alias 또는
