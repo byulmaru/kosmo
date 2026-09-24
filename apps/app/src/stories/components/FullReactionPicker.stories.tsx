@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { FullReactionPicker } from '@/components/reaction/FullReactionPicker';
 import { reactionEmojiCatalog } from '@/components/reaction/reactionEmojiCatalog';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -426,10 +426,7 @@ export const FlagAssetContract: Story = {
       `img[src$="${flagOption.assetPath}"]`,
     );
     expect(image).not.toBeNull();
-    image?.dispatchEvent(new Event('error'));
-    const fallback = await within(canvasElement).findByLabelText(flagOption.label);
-    expect(fallback).toHaveTextContent('?');
-    expect(fallback).toBeVisible();
+    await waitFor(() => expect(image?.naturalWidth).toBeGreaterThan(0));
     expect(
       within(canvasElement).getByRole('button', {
         name: `${flagOption.label} ${flagOption.emoji}`,

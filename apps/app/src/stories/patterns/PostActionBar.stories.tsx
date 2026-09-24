@@ -1567,6 +1567,13 @@ export const ReactionQuickToFullContract: Story = {
     await userEvent.click(within(quick).getByRole('button', { name: '전체 반응' }));
 
     const full = await screen.findByRole('dialog', { name: '반응 선택' });
+    await waitFor(() => {
+      const bounds = full.getBoundingClientRect();
+      expect(bounds.top).toBeGreaterThanOrEqual(0);
+      expect(bounds.bottom).toBeLessThanOrEqual(window.innerHeight);
+      expect(bounds.left).toBeGreaterThanOrEqual(0);
+      expect(bounds.right).toBeLessThanOrEqual(window.innerWidth);
+    });
     const search = within(full).getByRole('searchbox', { name: '반응 검색' });
     await userEvent.type(search, 'heart hands');
     const option = await within(full).findByRole('button', { name: '손 하트 🫶' });

@@ -105,11 +105,17 @@ export function FullReactionOverlay({
   const availableWidth = Math.max(0, maxRight - minLeft);
   const shellWidth = Math.min(content?.width ?? 360, availableWidth);
   const left = anchor ? Math.min(Math.max(anchor.x, minLeft), maxRight - shellWidth) : minLeft;
-  const top = anchor
+  const requestedTop = anchor
     ? placement === 'bottom'
       ? anchor.y + anchor.height + spacing.xs
       : anchor.y - (content?.height ?? 0) - spacing.xs
     : insets.top + spacing.sm;
+  const minTop = insets.top + spacing.sm;
+  const maxTop = Math.max(
+    minTop,
+    viewportHeight - insets.bottom - (content?.height ?? 0) - spacing.sm,
+  );
+  const top = Math.min(Math.max(requestedTop, minTop), maxTop);
   const webPlacementProps: Record<string, unknown> = { dataSet: { placement } };
   const picker = (
     <View onLayout={onContentLayout} ref={contentRef}>
