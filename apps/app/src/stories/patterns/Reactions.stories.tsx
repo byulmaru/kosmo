@@ -40,7 +40,7 @@ const storyProfiles = [
       id: 'reaction-profile-starlight-avatar',
       url: appleTouchIconUrl,
     },
-    bio: '기존 modal 목록에 표시되는 소개입니다.',
+    bio: '소개 숨김 검증용 fixture 텍스트',
     displayName: '별빛 반응 프로필',
     id: 'reaction-profile-starlight',
     relativeHandle: '@starlight',
@@ -152,7 +152,13 @@ function ReactionProfileConnectionStory() {
   if (data.node?.__typename !== 'Post' || !data.node.reactionProfileConnection) {
     throw new Error('Missing Reaction Profile connection Post fixture.');
   }
-  return <ReactionProfileConnection post={data.node.reactionProfileConnection} reactionType="❤️" />;
+  return (
+    <ReactionProfileConnection
+      post={data.node.reactionProfileConnection}
+      presentation="route"
+      reactionType="❤️"
+    />
+  );
 }
 
 function PostReactionSummaryStory({ postId = 'reaction-post' }: { postId?: string }) {
@@ -180,31 +186,32 @@ function ReactionProfileListCatalog() {
   return (
     <Catalog>
       <Section title="Loading">
-        <ReactionProfileList loading reactionType="❤️" />
+        <ReactionProfileList loading presentation="route" reactionType="❤️" />
       </Section>
       <Section title="Initial error and retry">
         <ReactionProfileList
           error
           loading
           onRetry={() => setInitialRetryCount((count) => count + 1)}
+          presentation="route"
           reactionType="❤️"
         />
         <Text>{`초기 재시도: ${initialRetryCount}`}</Text>
       </Section>
       <Section title="Idle without data">
-        <ReactionProfileList loading={false} reactionType="❤️" />
+        <ReactionProfileList loading={false} presentation="route" reactionType="❤️" />
       </Section>
       <Section title="Empty">
-        <ReactionProfileList items={[]} loading reactionType="❤️" />
+        <ReactionProfileList items={[]} loading presentation="route" reactionType="❤️" />
       </Section>
       <Section title="Populated">
-        <ReactionProfileList items={items} loading reactionType="❤️" />
+        <ReactionProfileList items={items} loading presentation="route" reactionType="❤️" />
       </Section>
       <Section title="Single profile">
-        <ReactionProfileList items={items.slice(0, 1)} reactionType="❤️" />
+        <ReactionProfileList items={items.slice(0, 1)} presentation="route" reactionType="❤️" />
       </Section>
       <Section title="Pagination">
-        <ReactionProfileList hasNext items={items} reactionType="❤️" />
+        <ReactionProfileList hasNext items={items} presentation="route" reactionType="❤️" />
         <Text>{`더 불러오기: ${loadMoreCount}`}</Text>
       </Section>
       <Section title="Pagination error retry">
@@ -213,11 +220,18 @@ function ReactionProfileListCatalog() {
           items={items}
           loadMoreError
           onLoadMore={() => setLoadMoreCount((count) => count + 1)}
+          presentation="route"
           reactionType="❤️"
         />
       </Section>
       <Section title="Loading more">
-        <ReactionProfileList hasNext isLoadingMore items={items} reactionType="❤️" />
+        <ReactionProfileList
+          hasNext
+          isLoadingMore
+          items={items}
+          presentation="route"
+          reactionType="❤️"
+        />
       </Section>
     </Catalog>
   );
@@ -348,8 +362,8 @@ export const ProfileListStates: Story = {
     expect(canvas.getAllByText(profileCopy.emptyTitle)).toHaveLength(2);
     expect(canvasElement.querySelector('a[href="/@starlight"]')).toBeInTheDocument();
     expect(canvasElement.querySelector('a[href="/@milky-way"]')).toBeInTheDocument();
-    expect(populatedSection.getByRole('heading', { name: '반응한 사람' })).toBeVisible();
-    expect(populatedSection.getByText('기존 modal 목록에 표시되는 소개입니다.')).toBeVisible();
+    expect(canvas.queryAllByRole('heading', { name: '반응한 사람' })).toHaveLength(0);
+    expect(canvas.queryByText('소개 숨김 검증용 fixture 텍스트')).not.toBeInTheDocument();
     const imageAvatar = populatedSection.getByLabelText('별빛 반응 프로필 프로필 이미지');
     const fallbackAvatar = populatedSection.getByLabelText('은하수 반응 프로필 프로필 이미지');
     await waitFor(() =>
@@ -391,6 +405,7 @@ export const ProfilePaginationFailurePreservesRows: Story = {
     const canvas = within(canvasElement);
     const page = within(canvasElement.ownerDocument.body);
     expect(canvas.getAllByRole('link')).toHaveLength(2);
+    expect(canvas.queryByText('소개 숨김 검증용 fixture 텍스트')).not.toBeInTheDocument();
     await expect(page.findByRole('alert')).resolves.toHaveTextContent(
       '반응한 프로필을 더 불러오지 못했어요',
     );

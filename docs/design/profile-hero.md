@@ -66,9 +66,41 @@ geometry를 유지하도록 한다. 이 문서는 Profile 편집 화면의 heade
   Hero의 action 부모와 목록의 기존 음수 margin은 이 높이를 수용하며 중심축·기본 행 높이 `64`를 유지한다.
   Figma의 40px visual 원본은 아직 수정하지 않았다.
 - 관계 action 실패는 행 밖의 공용 오류 토스트로 전달하고 Hero의 avatar/action 행 높이는 유지한다.
-  목록 행 높이는 하단 divider까지 포함해 `64`로 맞춘다.
+  Bio가 없는 목록 행 높이는 하단 divider까지 포함해 `64`로 맞춘다.
 - 로딩 중 전달된 실제 action도 같은 slot에 표시하고 접근성 트리에 유지한다. 접근성 제외는 장식용
   cover·avatar·본문 skeleton에만 적용하며 로딩 안내는 별도로 전달한다.
+
+## 프로필 목록의 Bio 표시 정책
+
+사람을 발견하고 구분하는 목록에서는 자기소개를 제공하고, 행동 참여자 확인이나 내 프로필 선택에서는
+간결한 식별 정보를 제공한다. Web·Mobile Web·iOS·Android에 같은 표시 정책을 적용한다.
+
+| 사용처                         | Bio 표시 | 목적                                       |
+| ------------------------------ | -------- | ------------------------------------------ |
+| 팔로워·팔로잉                  | 최대 3줄 | 관계망에서 사람을 발견하고 구분한다.       |
+| 사람 검색·해시태그 관련 프로필 | 최대 3줄 | 이름·핸들 외에 관심사와 정체성을 확인한다. |
+| 반응한 사람·재게시 참여자 목록 | 숨김     | 해당 행동에 참여한 사람을 빠르게 확인한다. |
+| 내 프로필 선택·전환            | 숨김     | 이미 아는 프로필을 빠르게 선택한다.        |
+
+- 표시 대상이라도 Bio가 비어 있으면 해당 영역과 빈 여백을 만들지 않는다. 긴 Bio는 최대 3줄에서
+  말줄임하며 행 내부에 별도의 펼치기 동작을 추가하지 않는다.
+- Bio가 있는 행은 내용에 따라 높이가 늘어나며 Avatar와 Follow action은 상단에 정렬한다. Bio가 없는
+  기본 행은 `64px`이고, 두 경우 모두 같은 상하 padding과 하단 divider를 유지한다.
+- Bio 표시 여부는 프로필 이동·Follow action·선택 상태와 키보드 focus 동작을 바꾸지 않는다.
+- 사용자가 전역 밀도 설정을 선택하거나 breakpoint에 따라 Bio 표시 정책이 달라지는 동작은 제공하지 않는다.
+
+### 결정 근거
+
+2026-09-22 PROD-218에서 승인했다. 공식 소스 조사에서 Bluesky와 Misskey는 팔로워·팔로잉과 사람 검색에
+Bio를 최대 3줄 표시하고, Mastodon 웹은 같은 목록에서 숨겼다. 조사한 세 서비스의 멘션 자동완성은
+Bio를 숨겼다. 서비스 공통 규칙으로 단정하지 않고, KOSMO의 사람 발견 목적과 기존 정보량을 유지하는
+정책을 선택했다. X는 로그인 전 화면과 공식 도움말만으로 현재 목록의 Bio 표시 규칙을 확인하지 못했다.
+
+- [Bluesky 프로필 카드](https://github.com/bluesky-social/social-app/blob/085584d68c814eaafc894a23b4f5e9fc503fbeaf/src/components/ProfileCard.tsx)
+- [Mastodon 팔로워 목록](https://github.com/mastodon/mastodon/blob/4d818a63dbddeaadc3957e0996b5ff4a6c5c142f/app/javascript/mastodon/features/followers/components/list.tsx)
+- [Misskey 팔로우 목록](https://github.com/misskey-dev/misskey/blob/b16acdcd1c1c7ef72ac5f8a48b7aefb23fd3b506/packages/frontend/src/pages/user/follow-list.vue)·[사용자 카드](https://github.com/misskey-dev/misskey/blob/b16acdcd1c1c7ef72ac5f8a48b7aefb23fd3b506/packages/frontend/src/components/MkUserInfo.vue)
+
+이 근거는 해당 커밋의 정적 소스 조사이며 실제 배포 화면·Native runtime·사용성 실험의 증거가 아니다.
 
 ## ProfileListItem 클릭 영역
 

@@ -8,7 +8,7 @@ import { Catalog, Section } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { ProfileListItemStoriesQuery as ProfileListItemStoriesQueryType } from './__generated__/ProfileListItemStoriesQuery.graphql';
 
-const longBio =
+export const longBio =
   '우주와 사람을 잇는 코스모 프로필입니다. 서로 다른 행성과 인스턴스의 이야기를 천천히 나눠요.';
 const withBio = profile({
   avatar: { id: 'profile-list-item-avatar', url: appleTouchIconUrl },
@@ -91,10 +91,12 @@ function ProfileListItemFixture({
   linked = true,
   onPress,
   profileId = withBio.id,
+  showBio = true,
 }: {
   linked?: boolean;
   onPress?: () => void;
   profileId?: string;
+  showBio?: boolean;
 }) {
   const profiles = useStoryProfiles();
   const target = requireProfile(profiles, profileId);
@@ -102,7 +104,12 @@ function ProfileListItemFixture({
   return (
     <SessionProvider>
       <Catalog>
-        <ProfileListItem linked={linked} onPress={onPress} profile={target.listItem} />
+        <ProfileListItem
+          linked={linked}
+          onPress={onPress}
+          profile={target.listItem}
+          showBio={showBio}
+        />
       </Catalog>
     </SessionProvider>
   );
@@ -129,14 +136,15 @@ function ProfileListItemCatalog() {
 }
 
 const meta = {
-  args: { linked: true, onPress: fn(), profileId: withBio.id },
+  args: { linked: true, onPress: fn(), profileId: withBio.id, showBio: true },
   argTypes: {
     linked: { control: 'boolean' },
     onPress: { action: 'profilePress', control: false, table: { disable: true } },
     profileId: { control: 'select', options: storyProfileIds },
+    showBio: { control: 'boolean' },
   },
   component: ProfileListItemFixture,
-  excludeStories: ['LayoutContract', 'ListMobileGeometryContract'],
+  excludeStories: ['LayoutContract', 'ListMobileGeometryContract', 'longBio'],
   parameters: {
     layout: 'padded',
     relay: {
@@ -158,7 +166,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Playground: Story = {
   parameters: {
-    controls: { disable: false, include: ['profileId', 'linked'] },
+    controls: { disable: false, include: ['profileId', 'linked', 'showBio'] },
   },
 };
 

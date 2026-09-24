@@ -53,7 +53,9 @@ export function HashtagRelatedProfileList({
     <ScrollView {...nativeScrollProps} contentContainerStyle={styles.root}>
       <PageHeader title={`#${pagination.data.name} 관련 프로필`} />
       {profiles.length ? (
-        profiles.map((edge) => <ProfileListItem key={edge.cursor} linked profile={edge.node} />)
+        profiles.map((edge) => (
+          <ProfileListItem key={edge.cursor} linked profile={edge.node} showBio />
+        ))
       ) : (
         <StateView
           description="이 해시태그를 사용하는 공개 프로필이 생기면 여기에 표시돼요."
