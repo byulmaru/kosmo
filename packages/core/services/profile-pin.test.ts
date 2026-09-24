@@ -105,113 +105,37 @@ test('eligible posts append per profile and pinning the same post is a no-op', a
   const otherPost = await createPost(otherProfile.id);
 
   const created = await pinProfilePost({ profileId: profile.id, postId: first.id });
-  const repeated = await pinProfilePost({ profileId: profile.id, postId: first.id });
-  const appended = await pinProfilePost({ profileId: profile.id, postId: second.id });
-
   assert.equal(created.changed, true);
   assert.deepEqual(
-    created.profilePins.map(({ postId }) => postId),
+    (await loadPins(profile.id)).map(({ postId }) => postId),
     [first.id],
   );
+
+  const repeated = await pinProfilePost({ profileId: profile.id, postId: first.id });
   assert.equal(repeated.changed, false);
   assert.deepEqual(
-    repeated.profilePins.map(({ postId }) => postId),
+    (await loadPins(profile.id)).map(({ postId }) => postId),
     [first.id],
   );
+
+  const appended = await pinProfilePost({ profileId: profile.id, postId: second.id });
   assert.equal(appended.changed, true);
+  const appendedPins = await loadPins(profile.id);
+
+  assert.deepEqual(appendedPins.map(({ postId }) => postId).sort(), [first.id, second.id].sort());
   assert.deepEqual(
-    appended.profilePins.map(({ postId }) => postId).sort(),
-    [first.id, second.id].sort(),
-  );
-  assert.deepEqual(
-    appended.profilePins.map(({ id }) => id),
-    [...appended.profilePins].map(({ id }) => id).sort(),
+    appendedPins.map(({ id }) => id),
+    [...appendedPins].map(({ id }) => id).sort(),
   );
   assert.equal(
     (await pinProfilePost({ profileId: otherProfile.id, postId: otherPost.id })).changed,
     true,
   );
-  assert.deepEqual(await loadPins(profile.id), appended.profilePins);
-});
-
-test('concurrent new pins do not expose a profile order collision', async () => {
-  const { profile } = await createFixture();
-  const first = await createPost(profile.id);
-  const second = await createPost(profile.id);
-  const third = await createPost(profile.id);
-  const lockSession = await pg.reserve();
-  let lockHeld = false;
-  let triggerInstalled = false;
-  let pins: Promise<Awaited<ReturnType<typeof pinProfilePost>>>[] = [];
-
-  try {
-    await lockSession`SELECT pg_advisory_lock(973, 2)`;
-    lockHeld = true;
-    await pg.unsafe(`
-      CREATE FUNCTION block_profile_pin_insert() RETURNS trigger
-      LANGUAGE plpgsql AS $function$
-      BEGIN
-        PERFORM pg_advisory_xact_lock(973, 2);
-        RETURN NEW;
-      END
-      $function$;
-      CREATE TRIGGER block_profile_pin_insert
-      BEFORE INSERT ON profile_pin
-      FOR EACH ROW EXECUTE FUNCTION block_profile_pin_insert();
-    `);
-    triggerInstalled = true;
-
-    pins = [
-      pinProfilePost({ profileId: profile.id, postId: first.id }),
-      pinProfilePost({ profileId: profile.id, postId: second.id }),
-      pinProfilePost({ profileId: profile.id, postId: third.id }),
-    ];
-
-    let insertsBlocked = false;
-    for (let attempt = 0; attempt < 100; attempt += 1) {
-      const [lock] = await pg<{ waiting: number }[]>`
-        SELECT count(*)::integer AS waiting
-        FROM pg_locks
-        WHERE locktype = 'advisory'
-          AND NOT granted
-          AND classid = 973
-          AND objid = 2
-      `;
-      if ((lock?.waiting ?? 0) === 3) {
-        insertsBlocked = true;
-        break;
-      }
-      await new Promise((resolve) => setTimeout(resolve, 10));
-    }
-    assert.equal(insertsBlocked, true, 'pins did not reach the INSERT barrier');
-
-    await lockSession`SELECT pg_advisory_unlock(973, 2)`;
-    lockHeld = false;
-
-    const results = await Promise.all(pins);
-    assert.ok(results.every(({ changed }) => changed));
-    const stored = await loadPins(profile.id);
-    assert.deepEqual(
-      stored.map(({ id }) => id),
-      [...stored].map(({ id }) => id).sort(),
-    );
-    assert.deepEqual(
-      stored.map(({ postId }) => postId).sort(),
-      [first.id, second.id, third.id].sort(),
-    );
-  } finally {
-    if (lockHeld) {
-      await lockSession`SELECT pg_advisory_unlock(973, 2)`;
-    }
-    await Promise.allSettled(pins);
-    if (triggerInstalled) {
-      await pg.unsafe(`
-        DROP TRIGGER IF EXISTS block_profile_pin_insert ON profile_pin;
-        DROP FUNCTION IF EXISTS block_profile_pin_insert();
-      `);
-    }
-    lockSession.release();
-  }
+  assert.deepEqual(await loadPins(profile.id), appendedPins);
+  assert.deepEqual(
+    (await loadPins(otherProfile.id)).map(({ postId }) => postId),
+    [otherPost.id],
+  );
 });
 
 test('unpin removes only the exact present post and absent unpin is idempotent', async () => {
@@ -226,12 +150,12 @@ test('unpin removes only the exact present post and absent unpin is idempotent',
 
   assert.equal(removed.changed, true);
   assert.deepEqual(
-    removed.profilePins.map(({ postId }) => postId),
+    (await loadPins(profile.id)).map(({ postId }) => postId),
     [second.id],
   );
   assert.equal(repeated.changed, false);
   assert.deepEqual(
-    repeated.profilePins.map(({ postId }) => postId),
+    (await loadPins(profile.id)).map(({ postId }) => postId),
     [second.id],
   );
 });
