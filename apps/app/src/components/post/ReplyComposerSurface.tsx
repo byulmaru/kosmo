@@ -14,9 +14,11 @@ import {
 import { graphql, useFragment, useRelayEnvironment } from 'react-relay';
 import { getDataIDsFromFragment, getFragment } from 'relay-runtime';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
+import { useNavigationGuard } from '@/components/shell/NavigationGuardContext';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
+import { OverlayBackdrop, useOverlayLifecycle } from '@/components/ui/Overlay';
 import { ToastProvider, useToast } from '@/components/ui/ToastProvider';
 import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { formatTimelineTimestamp } from '@/lib/date';
@@ -31,6 +33,7 @@ import { getReplySurfacePresentation } from './replySurface';
 import type { Href } from 'expo-router';
 import type { ForwardedRef, RefObject } from 'react';
 import type { TextInput, View as NativeView } from 'react-native';
+import type { OverlayCloseReason } from '@/components/ui/Overlay';
 import type { ReplyComposerSurface_parent$key } from './__generated__/ReplyComposerSurface_parent.graphql';
 import type { ReplyComposerSurface_profile$key } from './__generated__/ReplyComposerSurface_profile.graphql';
 import type { PostComposerCreatedPost } from './PostComposerController';
@@ -142,6 +145,7 @@ function ReplyComposerSurfaceContents({
   const theme = useTheme();
   const elevation = useElevation();
   const router = useRouter();
+  const { register: registerNavigationGuard } = useNavigationGuard();
   const { showToast } = useToast();
   const { width } = useWindowDimensions();
   const parent = useFragment(ReplyComposerSurfaceParentFragment, parentKey);
@@ -150,7 +154,6 @@ function ReplyComposerSurfaceContents({
   const composerName = quoteMode ? '인용 게시글' : '답글';
   const [submitting, setSubmitting] = useState(false);
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
-  const dialogRef = useRef<NativeView>(null);
   const discardConfirmRef = useRef<NativeView>(null);
   const editorRef = useRef<TextInput>(null);
   const nativeBackHandlerRef = useRef<(() => void) | null>(null);
@@ -191,8 +194,31 @@ function ReplyComposerSurfaceContents({
     },
     [discardConfirmOpen, submitting],
   );
-  const requestCloseRef = useRef(requestClose);
-  requestCloseRef.current = requestClose;
+  const requestNavigation = useCallback(
+    (action: () => void) => {
+      if (submitting) {
+        return true;
+      }
+      if (nativeBackHandlerRef.current) {
+        nativeBackHandlerRef.current();
+        return true;
+      }
+      if (discardConfirmOpen) {
+        return true;
+      }
+      requestClose(action);
+      return true;
+    },
+    [discardConfirmOpen, requestClose, submitting],
+  );
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    return registerNavigationGuard(requestNavigation);
+  }, [open, registerNavigationGuard, requestNavigation]);
+
   useImperativeHandle(surfaceRef, () => ({ requestClose }), [requestClose]);
 
   const requestNativeBack = useCallback(() => {
@@ -215,6 +241,24 @@ function ReplyComposerSurfaceContents({
     requestAnimationFrame(() => editorRef.current?.focus());
   }, []);
 
+  const handleOverlayRequestClose = useCallback(
+    (reason: OverlayCloseReason) => {
+      if (reason === 'escape' && discardConfirmOpen) {
+        continueEditing();
+        return;
+      }
+      requestClose();
+    },
+    [continueEditing, discardConfirmOpen, requestClose],
+  );
+  const { dialogRef } = useOverlayLifecycle({
+    focusScopeRef: discardConfirmOpen ? discardConfirmRef : undefined,
+    onRequestClose: handleOverlayRequestClose,
+    open: webOverlayOpen,
+    shouldRestoreFocus: () => restoreTriggerFocusRef.current,
+    triggerFocusRef: triggerRef as unknown as RefObject<HTMLElement | null> | undefined,
+  });
+
   const handlePostCreated = useCallback(
     (post: PostComposerCreatedPost) => {
       closeImmediately();
@@ -229,75 +273,6 @@ function ReplyComposerSurfaceContents({
     },
     [closeImmediately, composerName, onPostCreated, profile.relativeHandle, router, showToast],
   );
-
-  useEffect(() => {
-    if (!webOverlayOpen) {
-      return;
-    }
-
-    const previousFocus = document.activeElement as HTMLElement | null;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      if (restoreTriggerFocusRef.current) {
-        requestAnimationFrame(() => {
-          const trigger = triggerRef?.current as unknown as HTMLElement | null;
-          (trigger ?? previousFocus)?.focus();
-        });
-      }
-    };
-  }, [triggerRef, webOverlayOpen]);
-
-  useEffect(() => {
-    if (!open || Platform.OS !== 'web') {
-      return;
-    }
-
-    const dialog = dialogRef.current as unknown as HTMLElement | null;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        if (!discardConfirmOpen && dialog?.querySelector('[role="menu"]')) {
-          return;
-        }
-        event.preventDefault();
-        if (discardConfirmOpen) {
-          continueEditing();
-          return;
-        }
-        requestCloseRef.current();
-        return;
-      }
-      if (event.key !== 'Tab') {
-        return;
-      }
-
-      const focusRoot = discardConfirmOpen
-        ? (discardConfirmRef.current as unknown as HTMLElement | null)
-        : dialog;
-      const focusable = Array.from(
-        focusRoot?.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), textarea:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
-        ) ?? [],
-      ).filter((element) => element.getAttribute('aria-hidden') !== 'true');
-      if (focusable.length === 0) {
-        return;
-      }
-
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last?.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first?.focus();
-      }
-    };
-
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [continueEditing, discardConfirmOpen, open, presentation]);
 
   useEffect(() => {
     if (!discardConfirmOpen || Platform.OS !== 'web') {
@@ -364,9 +339,9 @@ function ReplyComposerSurfaceContents({
       visible
     >
       <ToastProvider>
-        <Pressable
+        <OverlayBackdrop
           accessible={false}
-          onPress={() => requestClose()}
+          onRequestClose={handleOverlayRequestClose}
           style={[
             styles.backdrop,
             presentation === 'fullscreen' ? styles.fullscreenBackdrop : null,
@@ -513,7 +488,7 @@ function ReplyComposerSurfaceContents({
               {discardConfirm}
             </View>
           </Pressable>
-        </Pressable>
+        </OverlayBackdrop>
       </ToastProvider>
     </Modal>
   );
