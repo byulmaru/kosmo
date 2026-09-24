@@ -153,6 +153,7 @@ mockModule('expo-router', {
     createElement(MockNavigationThemeContext.Provider, { value }, children),
   useTheme: () => useContext(MockNavigationThemeContext),
   usePathname: () => '/home',
+  useRootNavigationState: () => null,
   useRouter: () => ({ replace: () => undefined }),
   useSegments: () => [],
 });
