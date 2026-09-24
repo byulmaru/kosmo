@@ -24,15 +24,33 @@ import type { ComposerMediaItem } from './PostComposerMediaControls';
 
 type PostComposerMediaEditTool = 'alt' | 'sensitive';
 
-export type PostComposerMediaItemsTargetProps = {
+type PostComposerMediaItemsTargetBaseProps = {
   readonly compact?: boolean;
   readonly disabled: boolean;
-  readonly media: readonly ComposerMediaItem[];
-  readonly onEdit: (key: string, tool: PostComposerMediaEditTool) => void;
   readonly onRemove: (key: string) => void;
-  readonly onRetry: (item: ComposerMediaItem) => void;
   readonly sensitiveMedia: boolean;
 };
+
+export type PostComposerSelectedMediaItem = Omit<ComposerMediaItem, 'state'> & {
+  readonly state: 'selected';
+};
+
+export type PostComposerUploadedMediaItemsTargetProps = PostComposerMediaItemsTargetBaseProps & {
+  readonly media: readonly ComposerMediaItem[];
+  readonly onEdit: (key: string, tool: PostComposerMediaEditTool) => void;
+  readonly onRetry: (item: ComposerMediaItem) => void;
+};
+
+type SelectedMediaItemsTargetProps = PostComposerMediaItemsTargetBaseProps & {
+  readonly media: readonly PostComposerSelectedMediaItem[];
+  readonly onEdit?: never;
+  readonly onRetry?: never;
+  readonly sensitiveMedia: false;
+};
+
+export type PostComposerMediaItemsTargetProps =
+  | PostComposerUploadedMediaItemsTargetProps
+  | SelectedMediaItemsTargetProps;
 
 const itemSize = 156;
 const actionVisualSize = 32;
@@ -91,7 +109,13 @@ export function PostComposerMediaItemsTarget({
           return (
             <View
               accessibilityLabel={`첨부 이미지 ${itemNumber}, ${
-                item.state === 'uploading' ? '업로드 중' : ready ? '업로드 완료' : '업로드 실패'
+                item.state === 'uploading'
+                  ? '업로드 중'
+                  : ready
+                    ? '업로드 완료'
+                    : failed
+                      ? '업로드 실패'
+                      : '선택됨'
               }`}
               key={item.key}
               style={[
@@ -103,7 +127,7 @@ export function PostComposerMediaItemsTarget({
                 },
               ]}
             >
-              {ready ? (
+              {ready && onEdit ? (
                 <Pressable
                   accessibilityLabel={`첨부 이미지 ${itemNumber} 대체 텍스트 편집`}
                   accessibilityRole="button"
@@ -126,7 +150,10 @@ export function PostComposerMediaItemsTarget({
                   accessibilityLabel={`첨부 이미지 ${itemNumber} 미리보기`}
                   accessibilityRole="image"
                   source={{ uri: item.asset.uri }}
-                  style={[styles.preview, styles.pendingPreview]}
+                  style={[
+                    styles.preview,
+                    item.state === 'uploading' ? styles.pendingPreview : null,
+                  ]}
                 />
               )}
 
@@ -145,7 +172,7 @@ export function PostComposerMediaItemsTarget({
                 <XIcon color={theme.foregroundPrimary} size={iconSizes[20]} />
               </IconButton>
 
-              {ready ? (
+              {ready && onEdit ? (
                 <IconButton
                   accessibilityLabel={`첨부 이미지 ${itemNumber} 편집`}
                   disabled={disabled}
@@ -169,7 +196,7 @@ export function PostComposerMediaItemsTarget({
                     color={theme.foregroundPrimary}
                   />
                 </View>
-              ) : (
+              ) : failed && onRetry ? (
                 <IconButton
                   accessibilityLabel={`${itemNumber}번째 이미지 업로드 다시 시도`}
                   disabled={disabled}
@@ -184,7 +211,7 @@ export function PostComposerMediaItemsTarget({
                 >
                   <RefreshCwIcon color={theme.foregroundPrimary} size={iconSizes[20]} />
                 </IconButton>
-              )}
+              ) : null}
 
               {ready && (item.altText.trim() || sensitiveMedia) ? (
                 <View style={styles.statuses}>
@@ -192,7 +219,7 @@ export function PostComposerMediaItemsTarget({
                     <StatusButton
                       accessibilityLabel={`첨부 이미지 ${itemNumber} ALT 편집`}
                       disabled={disabled}
-                      onPress={() => onEdit(item.key, 'alt')}
+                      onPress={() => onEdit?.(item.key, 'alt')}
                     >
                       <Text style={[styles.statusText, { color: theme.foregroundPrimary }]}>
                         ALT
@@ -203,7 +230,7 @@ export function PostComposerMediaItemsTarget({
                     <StatusButton
                       accessibilityLabel={`첨부 이미지 ${itemNumber} 민감한 이미지 설정 편집`}
                       disabled={disabled}
-                      onPress={() => onEdit(item.key, 'sensitive')}
+                      onPress={() => onEdit?.(item.key, 'sensitive')}
                     >
                       <FlagIcon color={theme.foregroundPrimary} size={iconSizes[16]} />
                       <Text style={[styles.statusText, { color: theme.foregroundPrimary }]}>

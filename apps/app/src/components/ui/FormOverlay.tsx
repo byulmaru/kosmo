@@ -31,6 +31,7 @@ type Props = {
   bodyPadding?: number;
   closeAccessibilityLabel?: string;
   continueEditingFocusSelector?: string;
+  desktopPlacement?: 'center' | 'top';
   discardConfirmLabel: string;
   discardTitle: string;
   fallbackFocusRef?: RefObject<NativeView | null>;
@@ -49,6 +50,7 @@ export function FormOverlay({
   bodyPadding = spacing.xl,
   closeAccessibilityLabel,
   continueEditingFocusSelector = 'textarea',
+  desktopPlacement = 'center',
   discardConfirmLabel,
   discardTitle,
   fallbackFocusRef,
@@ -74,6 +76,7 @@ export function FormOverlay({
   const surfaceRef = useRef<NativeView>(null);
   const wasVisibleRef = useRef(visible);
   const mobile = width < breakpoints.compact;
+  const topAligned = Platform.OS === 'web' && !mobile && desktopPlacement === 'top';
   const nativeMaxHeight = Platform.OS === 'web' || !limitNativeHeight ? null : height * 0.85;
   const safeAreaStyle = useSafeAreaPadding(mobile ? 0 : spacing.lg);
   const resolvedCloseAccessibilityLabel = closeAccessibilityLabel ?? `${title} 닫기`;
@@ -284,6 +287,7 @@ export function FormOverlay({
           Platform.OS === 'web' ? styles.webBackdrop : null,
           mobile ? styles.mobileBackdrop : null,
           safeAreaStyle,
+          topAligned ? styles.topBackdrop : null,
           { backgroundColor: theme.overlayScrim },
         ]}
       >
@@ -295,6 +299,7 @@ export function FormOverlay({
             elevation.overlay,
             nativeMaxHeight === null ? null : { maxHeight: nativeMaxHeight },
             mobile ? styles.mobileSurface : null,
+            topAligned ? styles.topSurface : null,
             mobile && nativeMaxHeight !== null ? { height: nativeMaxHeight } : null,
             { backgroundColor: theme.card, borderColor: theme.border },
           ]}
@@ -389,6 +394,11 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
   },
   webBackdrop: { width: '100vw' as never },
+  topBackdrop: { justifyContent: 'flex-start' },
+  topSurface: {
+    marginTop: spacing.xxl,
+    maxHeight: 'calc(100dvh - 96px)' as never,
+  },
   surface: {
     borderRadius: radii.lg,
     borderWidth: 1,
