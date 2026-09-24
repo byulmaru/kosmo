@@ -11,7 +11,7 @@ This directory contains the pinned static assets used by KOSMO reactions. Runtim
   - SHA-256: `33533684f537a6679c1720f37bdc6780f4b74f35b1e7ae2e1fe771be01b263e2`
 - Noto Emoji v2.051: <https://github.com/googlefonts/noto-emoji/releases/tag/v2.051>
   - Archive URL: <https://github.com/googlefonts/noto-emoji/archive/refs/tags/v2.051.zip>
-  - SHA-256: `44c570143422dfa029e829163b711a7a57b640dc3f31489947e4e0eea1771646`
+  - SHA-256: `8bf6ee50a5ae5873880a9541be3d532f9db10673013892084a04673c8c1e580b`
 
 ## Included files
 
