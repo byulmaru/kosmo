@@ -258,7 +258,7 @@ export function PostComposerHost({
     >
       {header}
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="height"
         style={[styles.composerFrame, mode === 'mobile' ? styles.composerFrameFill : null]}
       >
         {composer}
@@ -336,7 +336,7 @@ const styles = StyleSheet.create({
     top: 0,
     zIndex: 100,
   },
-  webMobileHost: { padding: 0 },
+  webMobileHost: { height: '100dvh' as never, padding: 0 },
   webBackdrop: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
   hiddenHost: { display: 'none' },
   nativeBackdrop: { flex: 1, justifyContent: 'center' },

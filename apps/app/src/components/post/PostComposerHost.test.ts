@@ -103,6 +103,47 @@ describe('PostComposerHost', () => {
     );
   });
 
+  it('KeyboardAvoidingView는 키보드 높이에 맞춰 surface를 줄인다', async () => {
+    platform.OS = 'ios';
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposerHost, {
+          mode: 'mobile',
+          onRequestClose: () => undefined,
+          open: true,
+          profile: {} as never,
+        }),
+      );
+    });
+
+    const keyboardAvoidingView = renderer?.root.findByType('KeyboardAvoidingView' as ElementType);
+    assert.equal(keyboardAvoidingView?.props.behavior, 'height');
+  });
+
+  it('모바일 Web surface는 safe-area host의 dynamic viewport 높이를 사용한다', async () => {
+    platform.OS = 'web';
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposerHost, {
+          mode: 'mobile',
+          onRequestClose: () => undefined,
+          open: true,
+          profile: {} as never,
+        }),
+      );
+    });
+
+    const host = renderer?.root.findAllByType('View' as ElementType).find((view) => {
+      const styles = (
+        Array.isArray(view.props.style) ? view.props.style.flat(Infinity) : [view.props.style]
+      ) as Array<{ position?: unknown }>;
+      return styles.some((style) => style?.position === 'fixed');
+    });
+    assert.ok(host);
+    const hostStyles = (host?.props.style.flat(Infinity) ?? []) as Array<{ height?: unknown }>;
+    assert.ok(hostStyles.some((style) => style?.height === '100dvh'));
+  });
+
   it('닫힌 Overlay를 modal로 노출하지 않는다', async () => {
     await act(async () => {
       renderer = create(
