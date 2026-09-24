@@ -246,11 +246,11 @@ Relay 행은 `identity`로 기존 `ProfileNameBlock`을 전달하고, 관리 목
 - 요청 callback은 성공할 때 resolve하고 실패할 때 reject한다. 성공 feedback이 전달되기 전에는 낙관적으로
   상태를 전환하거나 목록 항목을 제거하지 않는다. `onFeedback`은 요청의 성공/실패를 관찰하며 성공 이후의
   확정 표시 갱신에도 사용할 수 있다. pending target 교체 시 이전 completion의 UI feedback은 폐기한다.
-- 목록은 loading/error/loaded와 pagination의 more/loading/error/end를 구분한다. 최초·추가 조회 실패는
-  inline 오류 대신 공용 danger Toast와 `다시 시도` action으로 안내한다. 추가 실패에도 기존 목록은 유지한다.
-  Toast가 사라지거나 다른 알림으로 교체되어도 재시도할 수 있도록 최초 실패에는 `다시 시도`, 추가 실패에는
-  `더 불러오기` 버튼을 본문에 유지한다. 오류 해소·화면 이탈 시 해당 Toast를 정리한다. 초기/추가 요청과
-  실제 Relay connection·cursor·cache 연결은 PROD-814 소유다.
+- 목록은 loading/error/loaded와 pagination의 more/loading/error/end를 구분한다. 최초 조회 실패는
+  공용 danger Toast와 본문의 `다시 시도` action으로 안내한다. 추가 페이지는 스크롤 끝에 가까워지면
+  자동 요청하고 하단 스피너를 표시한다. 추가 실패에도 기존 목록을 유지하며 수동 `다시 시도` action이
+  있는 지속 Toast를 표시하고 자동 재요청을 멈춘다. 다른 알림이 잠시 가린 뒤에도 재시도 Toast를 복원하며,
+  성공하거나 화면을 떠나면 정리한다. 최초 오류 화면과 실제 Relay connection·cursor·cache 계약은 유지한다.
 - 직접 확인하는 loaded 화면은 [Mobile](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-8075),
   [Compact](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-24942),
   [Full](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-25436)이다.
@@ -278,8 +278,9 @@ Web 최소 폭 160px과 키보드·focus 처리를 재사용하고, 목록은 �
   Playground는 수동 Controls·Actions, Tests는 선택·닫힘·focus 복귀를 검증한다. 실제 요청은 실행하지 않는다.
 - `KOSMO/Patterns/Profile/Blocked Profiles`는 행·버튼 선택과 loading/error/empty/pagination을 검증한다.
   해제 버튼은 기존 Button의 presentation이며 선택을 Actions에 기록한다. 성공 Toast·행 삭제·가짜 Promise 요청은 없다.
-- 최초·추가 조회 실패는 공용 danger Toast와 `다시 시도`로 알리고, Toast가 사라진 뒤에도 본문의 최초 `다시 시도`·추가
-  `더 불러오기`를 유지한다. retry·pagination fixture는 목록 표시 상태만 전환한다.
+- 최초 조회 실패는 공용 danger Toast와 본문의 `다시 시도`를 유지한다. 추가 조회는 목록 끝에서 자동으로
+  시작하고, 실패 시 기존 행을 유지한 채 지속 Toast의 `다시 시도`를 제공한다. retry·pagination fixture는
+  목록 표시 상태만 전환한다.
 - loaded 대표는 [Mobile 390](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-8089),
   [Compact 1024](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-25102),
   [Full 1440](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-25582)을 참고한다.

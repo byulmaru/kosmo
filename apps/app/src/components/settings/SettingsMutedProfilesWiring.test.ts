@@ -57,6 +57,19 @@ mock.module('@/components/profile/MutedProfileList', {
     },
   },
 } as unknown as Parameters<typeof mock.module>[1]);
+mock.module('@/components/pagination/useAutomaticPagination', {
+  exports: {
+    useAutomaticPagination: () => ({
+      endRef: { current: null },
+      loadError: false,
+      loadNextPage: () => undefined,
+      nativeScrollProps: {},
+    }),
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module('@/components/pagination/PaginationScrollView', {
+  exports: { usePaginationScrollRegistration: () => undefined },
+} as unknown as Parameters<typeof mock.module>[1]);
 mock.module('@/components/RouteBoundary', {
   exports: {
     RouteBoundary: ({ children }: { children: unknown }) => children,

@@ -1,5 +1,5 @@
 import { usePathname, useSegments } from 'expo-router';
-import { useEffect, useState, useTransition } from 'react';
+import { useEffect, useTransition } from 'react';
 import {
   Platform,
   RefreshControl,
@@ -11,11 +11,12 @@ import {
 } from 'react-native';
 import { graphql, usePaginationFragment } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
+import { PaginationSurface } from '@/components/pagination/PaginationSurface';
+import { useAutomaticPagination } from '@/components/pagination/useAutomaticPagination';
 import { PostActionAuthenticationProvider } from '@/components/post/PostActionAuthentication';
 import { PostComposerCoordinatorProvider } from '@/components/post/PostComposerCoordinator';
 import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHost';
 import { getWebMobileShellHeader } from '@/components/shell/shellLayout';
-import { Button } from '@/components/ui/Button';
 import { Skeleton, StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
@@ -75,9 +76,18 @@ export function NotificationList({ profile }: NotificationListProps) {
     NotificationList_profile$key
   >(notificationListFragment, profile);
   const { publishUnreadIds } = useNotificationReadAll();
-  const [loadError, setLoadError] = useState(false);
   const [refreshing, startTransition] = useTransition();
   const { edges } = pagination.data.notifications;
+  const { endRef, loadError, loadNextPage, nativeScrollProps, resetError } = useAutomaticPagination(
+    {
+      hasNext: pagination.hasNext,
+      isLoadingNext: pagination.isLoadingNext,
+      itemCount: edges.length,
+      loadNext: pagination.loadNext,
+      pageSize: 20,
+      webScrollTarget: 'container',
+    },
+  );
 
   useEffect(
     () => publishUnreadIds(edges.flatMap(({ node }) => (node.readAt === null ? [node.id] : []))),
@@ -102,15 +112,6 @@ export function NotificationList({ profile }: NotificationListProps) {
     return [];
   });
 
-  const loadMore = () => {
-    if (pagination.isLoadingNext) {
-      return;
-    }
-
-    setLoadError(false);
-    pagination.loadNext(20, { onComplete: (error) => setLoadError(Boolean(error)) });
-  };
-
   const refresh = () => {
     if (refreshing) {
       return;
@@ -122,7 +123,9 @@ export function NotificationList({ profile }: NotificationListProps) {
         {
           fetchPolicy: 'network-only',
           onComplete: (error) => {
-            setLoadError((current) => (error ? current : false));
+            if (!error) {
+              resetError();
+            }
           },
         },
       );
@@ -138,6 +141,7 @@ export function NotificationList({ profile }: NotificationListProps) {
       >
         <PostMediaViewerHostProvider>
           <ScrollView
+            {...nativeScrollProps}
             contentContainerStyle={styles.root}
             refreshControl={
               Platform.OS === 'web' ? undefined : (
@@ -159,31 +163,16 @@ export function NotificationList({ profile }: NotificationListProps) {
                 title="아직 알림이 없어요"
               />
             )}
-            {pagination.hasNext || loadError ? (
-              loadError ? (
-                <StateView
-                  actionLabel="다시 시도"
-                  alert
-                  onAction={loadMore}
-                  style={[styles.pagination, { borderColor: theme.border }]}
-                  title="알림을 더 불러오지 못했어요"
-                />
-              ) : (
-                <View style={[styles.pagination, { borderColor: theme.border }]}>
-                  <Button
-                    accessibilityState={{
-                      busy: pagination.isLoadingNext,
-                      disabled: pagination.isLoadingNext,
-                    }}
-                    disabled={pagination.isLoadingNext}
-                    onPress={loadMore}
-                    tone="secondary"
-                  >
-                    {pagination.isLoadingNext ? '불러오는 중' : '더 불러오기'}
-                  </Button>
-                </View>
-              )
-            ) : null}
+            <PaginationSurface
+              endRef={endRef}
+              error={loadError}
+              errorMessage="알림을 더 불러오지 못했어요"
+              hasNext={pagination.hasNext}
+              isLoading={pagination.isLoadingNext}
+              loadingLabel="알림을 더 불러오는 중"
+              onRetry={loadNextPage}
+              style={[styles.pagination, { borderColor: theme.border }]}
+            />
           </ScrollView>
         </PostMediaViewerHostProvider>
       </PostComposerCoordinatorProvider>

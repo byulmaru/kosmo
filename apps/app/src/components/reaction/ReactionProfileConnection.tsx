@@ -1,5 +1,6 @@
-import { useState } from 'react';
 import { graphql, usePaginationFragment } from 'react-relay';
+import { usePaginationScrollRegistration } from '@/components/pagination/PaginationScrollView';
+import { useAutomaticPagination } from '@/components/pagination/useAutomaticPagination';
 import { ReactionProfileList } from './ReactionProfileList';
 import type { ReactionProfileConnection_post$key } from './__generated__/ReactionProfileConnection_post.graphql';
 import type { ReactionProfileConnectionNextPageQuery } from './__generated__/ReactionProfileConnectionNextPageQuery.graphql';
@@ -41,31 +42,27 @@ export function ReactionProfileConnection({
     ReactionProfileConnectionNextPageQuery,
     ReactionProfileConnection_post$key
   >(reactionProfileConnectionFragment, post);
-  const [loadMoreError, setLoadMoreError] = useState(false);
-
-  const loadMore = () => {
-    if (pagination.isLoadingNext) {
-      return;
-    }
-
-    setLoadMoreError(false);
-    pagination.loadNext(20, {
-      onComplete: (error) => setLoadMoreError(Boolean(error)),
-    });
-  };
-
   const items = pagination.data.reactionProfiles.edges.map(({ cursor, node }) => ({
     id: cursor,
     profile: node,
   }));
+  const { endRef, loadError, loadNextPage, nativeScrollProps } = useAutomaticPagination({
+    hasNext: pagination.hasNext,
+    isLoadingNext: pagination.isLoadingNext,
+    itemCount: items.length,
+    loadNext: pagination.loadNext,
+    pageSize: 20,
+  });
+  usePaginationScrollRegistration(nativeScrollProps);
 
   return (
     <ReactionProfileList
       hasNext={pagination.hasNext}
+      paginationEndRef={endRef}
       isLoadingMore={pagination.isLoadingNext}
       items={items}
-      loadMoreError={loadMoreError}
-      onLoadMore={loadMore}
+      loadMoreError={loadError}
+      onLoadMore={loadNextPage}
       presentation={presentation}
       reactionType={reactionType}
     />

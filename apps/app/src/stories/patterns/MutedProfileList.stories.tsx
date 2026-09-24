@@ -18,18 +18,9 @@ type Props = {
   displayName: string;
   onUnmute: (id: string) => Promise<void>;
   onRetry: () => void;
-  onLoadMore: () => void;
   onFeedback: (event: { profileId: string; muted: boolean; status: 'success' | 'error' }) => void;
 };
-function Fixture({
-  state,
-  outcome,
-  displayName,
-  onUnmute,
-  onRetry,
-  onLoadMore,
-  onFeedback,
-}: Props) {
+function Fixture({ state, outcome, displayName, onUnmute, onRetry, onFeedback }: Props) {
   const theme = useTheme();
   const headingRef = useRef<View>(null);
   const focusAfterRemoval = useRef(false);
@@ -122,19 +113,13 @@ function Fixture({
                   status: 'loaded',
                   profiles: visibleState === 'empty' ? [] : items,
                   pagination:
-                    visibleState === 'empty' || visibleState === 'end'
+                    visibleState === 'empty' || visibleState === 'end' || visibleState === 'loaded'
                       ? { status: 'end' }
                       : visibleState === 'loadingMore'
                         ? { status: 'loading' }
                         : visibleState === 'loadMoreError'
                           ? { status: 'error', onRetry: retry }
-                          : {
-                              status: 'more',
-                              onLoadMore: () => {
-                                onLoadMore();
-                                setRequestState('loadingMore');
-                              },
-                            },
+                          : { status: 'end' },
                 }
         }
       />
@@ -154,7 +139,6 @@ const meta = {
     displayName: '코스모 작가',
     onUnmute: fn<(id: string) => Promise<void>>().mockResolvedValue(undefined),
     onRetry: fn(),
-    onLoadMore: fn(),
     onFeedback: fn(),
   },
   argTypes: {
@@ -201,4 +185,4 @@ export const UnmuteContract: Story = {};
 export const FailureContract: Story = { args: { outcome: 'error' } };
 export const PendingContract: Story = { args: { outcome: 'pending' } };
 export const RetryContract: Story = { args: { state: 'error' } };
-export const PaginationContract: Story = {};
+export const PaginationContract: Story = { args: { state: 'loadingMore' } };

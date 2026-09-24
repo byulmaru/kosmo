@@ -1,45 +1,41 @@
 import { useEffect, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
+import { PaginationSurface } from '@/components/pagination/PaginationSurface';
 import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
 import { useToast } from '@/components/ui/ToastProvider';
 import { space } from '@/theme/tokens';
 import type { ReactNode } from 'react';
+import type { UseAutomaticPaginationResult } from '@/components/pagination/useAutomaticPagination';
 
 type Pagination =
   | { status: 'end' }
   | { status: 'loading' }
-  | { status: 'more'; onLoadMore: () => void }
+  | { status: 'more' }
   | { status: 'error'; onRetry: () => void };
 export type BlockedProfileListState =
   | { status: 'loading' }
   | { status: 'error'; onRetry: () => void }
-  | { status: 'loaded'; children: ReactNode; pagination: Pagination }
+  | {
+      status: 'loaded';
+      children: ReactNode;
+      pagination: Pagination;
+      paginationEndRef?: UseAutomaticPaginationResult['endRef'];
+    }
   | { status: 'empty' };
 type Props = { state: BlockedProfileListState };
 
 /** The action owner composes rows; this list does not execute relationship mutations. */
 export function BlockedProfileList({ state }: Props) {
   const { showToast } = useToast();
-  const loadError =
-    state.status === 'error'
-      ? state
-      : state.status === 'loaded' && state.pagination.status === 'error'
-        ? state.pagination
-        : null;
-  const errorMessage = loadError
-    ? state.status === 'error'
-      ? '차단한 프로필을 불러오지 못했어요'
-      : '프로필을 더 불러오지 못했어요'
-    : null;
-  const retry = loadError?.onRetry;
+  const retry = state.status === 'error' ? state.onRetry : undefined;
   const retryRef = useRef(retry);
   useEffect(() => {
     retryRef.current = retry;
   }, [retry]);
   useEffect(() => {
-    if (errorMessage) {
-      return showToast(errorMessage, {
+    if (state.status === 'error') {
+      return showToast('차단한 프로필을 불러오지 못했어요', {
         tone: 'danger',
         action: {
           label: '다시 시도',
@@ -47,7 +43,7 @@ export function BlockedProfileList({ state }: Props) {
         },
       });
     }
-  }, [errorMessage, showToast]);
+  }, [showToast, state.status]);
   return (
     <View style={styles.root}>
       {state.status === 'loading' ? (
@@ -63,21 +59,16 @@ export function BlockedProfileList({ state }: Props) {
       ) : (
         <>
           {state.children}
-          {state.pagination.status === 'error' ? (
-            <View style={styles.pagination}>
-              <Button onPress={state.pagination.onRetry} tone="secondary">
-                더 불러오기
-              </Button>
-            </View>
-          ) : state.pagination.status === 'loading' ? (
-            <StateView loading title="프로필을 더 불러오는 중입니다." />
-          ) : state.pagination.status === 'more' ? (
-            <View style={styles.pagination}>
-              <Button onPress={state.pagination.onLoadMore} tone="secondary">
-                더 불러오기
-              </Button>
-            </View>
-          ) : null}
+          <PaginationSurface
+            endRef={state.paginationEndRef}
+            error={state.pagination.status === 'error'}
+            errorMessage="프로필을 더 불러오지 못했어요"
+            hasNext={state.pagination.status !== 'end'}
+            isLoading={state.pagination.status === 'loading'}
+            loadingLabel="프로필을 더 불러오는 중"
+            onRetry={state.pagination.status === 'error' ? state.pagination.onRetry : undefined}
+            style={styles.pagination}
+          />
         </>
       )}
     </View>

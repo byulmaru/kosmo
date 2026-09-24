@@ -360,26 +360,21 @@ function StateCatalog() {
 function InteractionCatalog() {
   const items = useBookmarkItems();
   const [retryCount, setRetryCount] = useState(0);
-  const [loadCount, setLoadCount] = useState(0);
   return (
     <Catalog>
       <Text testID="bookmark-retry-count">retry:{retryCount}</Text>
       <BookmarkList error onRetry={() => setRetryCount((count) => count + 1)} />
-      <Text testID="bookmark-load-count">load:{loadCount}</Text>
-      <BookmarkList hasNext items={items} onLoadMore={() => setLoadCount((count) => count + 1)} />
+      <BookmarkList hasNext items={items} />
     </Catalog>
   );
 }
 
 function LoadingMoreCatalog() {
-  return (
-    <BookmarkList hasNext isLoadingMore items={useBookmarkItems()} onLoadMore={() => undefined} />
-  );
+  return <BookmarkList hasNext isLoadingMore items={useBookmarkItems()} />;
 }
 
 function ScrollableListCatalog() {
   const items = useBookmarkItems();
-  const [loadCount, setLoadCount] = useState(0);
   const longItems = Array.from({ length: 12 }, (_, index) => ({
     id: `bookmark-scroll-${index}`,
     post: items[index % items.length]!.post,
@@ -387,12 +382,7 @@ function ScrollableListCatalog() {
 
   return (
     <View style={{ height: 320 }}>
-      <Text testID="bookmark-scroll-load-count">load:{loadCount}</Text>
-      <BookmarkList
-        hasNext
-        items={longItems}
-        onLoadMore={() => setLoadCount((count) => count + 1)}
-      />
+      <BookmarkList hasNext isLoadingMore items={longItems} />
     </View>
   );
 }
@@ -435,23 +425,19 @@ export const StatesAndCanonicalLinks: Story = {
   },
 };
 
-export const RetryAndPaginationCallbacks: Story = {
+export const InitialRetryCallback: Story = {
   render: () => <InteractionCatalog />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: '다시 시도' }));
     expect(canvas.getByTestId('bookmark-retry-count')).toHaveTextContent('retry:1');
-    await userEvent.click(canvas.getByRole('button', { name: '더 불러오기' }));
-    expect(canvas.getByTestId('bookmark-load-count')).toHaveTextContent('load:1');
   },
 };
 
 export const NextPageLoading: Story = {
   render: () => <LoadingMoreCatalog />,
   play: ({ canvasElement }) => {
-    const button = within(canvasElement).getByRole('button', { name: '불러오는 중' });
-    expect(button).toBeDisabled();
-    expect(button).toHaveAttribute('aria-busy', 'true');
+    expect(within(canvasElement).getByLabelText('북마크를 더 불러오는 중')).toBeVisible();
   },
 };
 
@@ -464,8 +450,7 @@ export const LongListScrollsToPagination: Story = {
     expect(scroller.scrollHeight).toBeGreaterThan(scroller.clientHeight);
     scroller.scrollTop = scroller.scrollHeight;
     expect(scroller.scrollTop).toBeGreaterThan(0);
-    await userEvent.click(canvas.getByRole('button', { name: '더 불러오기' }));
-    expect(canvas.getByTestId('bookmark-scroll-load-count')).toHaveTextContent('load:1');
+    expect(canvas.getByLabelText('북마크를 더 불러오는 중')).toBeVisible();
   },
 };
 
@@ -483,14 +468,14 @@ export const ConnectionNextPageFailureRetrySucceeds: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     expect(canvas.getAllByRole('article')).toHaveLength(2);
-    await userEvent.click(canvas.getByRole('button', { name: '더 불러오기' }));
-    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+    const page = within(canvasElement.ownerDocument.body);
+    await expect(page.findByRole('alert')).resolves.toHaveTextContent(
       '북마크를 더 불러오지 못했어요',
     );
     expect(canvas.getAllByRole('article')).toHaveLength(2);
-    await userEvent.click(canvas.getByRole('button', { name: '다시 시도' }));
+    await userEvent.click(page.getByRole('button', { name: '다시 시도' }));
     await expect(canvas.findAllByRole('article')).resolves.toHaveLength(3);
-    expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
+    expect(page.queryByRole('alert')).not.toBeInTheDocument();
   },
 };
 
@@ -504,13 +489,12 @@ export const ConnectionProfileSwitchClearsPaginationError: Story = {
   render: () => <BookmarkConnectionProfileSwitchStory />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: '더 불러오기' }));
-    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+    const page = within(canvasElement.ownerDocument.body);
+    await expect(page.findByRole('alert')).resolves.toHaveTextContent(
       '북마크를 더 불러오지 못했어요',
     );
     await userEvent.click(canvas.getByRole('button', { name: 'B 프로필로 전환' }));
-    expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
-    expect(canvas.getByRole('button', { name: '더 불러오기' })).toBeVisible();
+    expect(page.queryByRole('alert')).not.toBeInTheDocument();
   },
 };
 

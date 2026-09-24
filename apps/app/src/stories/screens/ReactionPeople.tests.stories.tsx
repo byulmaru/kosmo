@@ -111,16 +111,16 @@ export const PaginationFailureKeepsRowsAndRetries: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(await canvas.findByRole('button', { name: '더 불러오기' }));
-    expect(await canvas.findByRole('alert')).toHaveTextContent(
+    const page = within(canvasElement.ownerDocument.body);
+    expect(await page.findByRole('alert')).toHaveTextContent(
       '반응한 프로필을 더 불러오지 못했어요',
     );
     expect(canvas.getByText('별빛 여행자')).toBeVisible();
-    await userEvent.click(canvas.getByRole('button', { name: '다시 시도' }));
+    await userEvent.click(page.getByRole('button', { name: '다시 시도' }));
     expect(await canvas.findByText('축하하는 혜성')).toBeVisible();
     expect(canvas.getAllByText('별빛 여행자')).toHaveLength(1);
     expect(canvas.getAllByText('축하하는 혜성')).toHaveLength(1);
-    expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
+    expect(page.queryByRole('alert')).not.toBeInTheDocument();
   },
 };
 

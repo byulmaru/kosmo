@@ -337,9 +337,6 @@ test('부분 handle 검색은 다음 페이지를 중복 없이 누적한다', a
 
   await page.goto('/search?q=e2e-page-&tab=people');
 
-  await expect(page.getByRole('link', { name: /E2E 페이지 결과/ })).toHaveCount(20);
-  await expect(page.getByText('E2E 페이지 결과 20')).toHaveCount(0);
-  await page.getByRole('button', { name: '검색 결과 더 보기' }).click();
   await expect(page.getByRole('link', { name: /E2E 페이지 결과/ })).toHaveCount(21);
   await expect(page.getByText('E2E 페이지 결과 20')).toBeVisible();
   await expect(page.getByRole('button', { name: '검색 결과 더 보기' })).toHaveCount(0);

@@ -204,16 +204,12 @@ function ReactionProfileListCatalog() {
         <ReactionProfileList items={items.slice(0, 1)} reactionType="❤️" />
       </Section>
       <Section title="Pagination">
-        <ReactionProfileList
-          hasNext
-          items={items}
-          onLoadMore={() => setLoadMoreCount((count) => count + 1)}
-          reactionType="❤️"
-        />
+        <ReactionProfileList hasNext items={items} reactionType="❤️" />
         <Text>{`더 불러오기: ${loadMoreCount}`}</Text>
       </Section>
       <Section title="Pagination error retry">
         <ReactionProfileList
+          hasNext
           items={items}
           loadMoreError
           onLoadMore={() => setLoadMoreCount((count) => count + 1)}
@@ -221,13 +217,7 @@ function ReactionProfileListCatalog() {
         />
       </Section>
       <Section title="Loading more">
-        <ReactionProfileList
-          hasNext
-          isLoadingMore
-          items={items}
-          onLoadMore={() => setLoadMoreCount((count) => count + 1)}
-          reactionType="❤️"
-        />
+        <ReactionProfileList hasNext isLoadingMore items={items} reactionType="❤️" />
       </Section>
     </Catalog>
   );
@@ -380,16 +370,8 @@ export const ProfileListStates: Story = {
     await userEvent.click(canvas.getAllByRole('button', { name: '다시 시도' })[0]!);
     expect(canvas.getByText('초기 재시도: 1')).toBeVisible();
 
-    const loadMoreButtons = canvas.getAllByRole('button', { name: '더 불러오기' });
-    await userEvent.click(loadMoreButtons[0]!);
-    expect(canvas.getByText('더 불러오기: 1')).toBeVisible();
-
-    await userEvent.click(canvas.getAllByRole('button', { name: '다시 시도' })[1]!);
-    expect(canvas.getByText('더 불러오기: 2')).toBeVisible();
-
-    const loadingMoreButton = canvas.getByRole('button', { name: '불러오는 중' });
-    expect(loadingMoreButton).toBeDisabled();
-    expect(loadingMoreButton).toHaveAttribute('aria-busy', 'true');
+    expect(canvas.queryByRole('button', { name: '더 불러오기' })).not.toBeInTheDocument();
+    expect(canvas.getByLabelText('반응한 프로필을 더 불러오는 중')).toBeVisible();
   },
   render: () => <ReactionProfileListCatalog />,
 };
@@ -407,15 +389,15 @@ export const ProfilePaginationFailurePreservesRows: Story = {
   render: () => <ReactionProfileConnectionStory />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
     expect(canvas.getAllByRole('link')).toHaveLength(2);
-    await userEvent.click(canvas.getByRole('button', { name: '더 불러오기' }));
-    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+    await expect(page.findByRole('alert')).resolves.toHaveTextContent(
       '반응한 프로필을 더 불러오지 못했어요',
     );
     expect(canvas.getAllByRole('link')).toHaveLength(2);
-    await userEvent.click(canvas.getByRole('button', { name: '다시 시도' }));
+    await userEvent.click(page.getByRole('button', { name: '다시 시도' }));
     await expect(canvas.findAllByRole('link')).resolves.toHaveLength(3);
-    expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
+    expect(page.queryByRole('alert')).not.toBeInTheDocument();
   },
 };
 

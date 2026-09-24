@@ -215,37 +215,32 @@ export const NextPageFailurePreservesRowsAndRetrySucceeds: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: '더 불러오기' }));
-    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+    const page = within(canvasElement.ownerDocument.body);
+    await expect(page.findByRole('alert')).resolves.toHaveTextContent(
       '관련 프로필을 더 불러오지 못했어요',
     );
     expect(canvas.getByText('별빛 여행자')).toBeVisible();
 
-    await userEvent.click(canvas.getByRole('button', { name: '다시 시도' }));
+    await userEvent.click(page.getByRole('button', { name: '다시 시도' }));
     await expect(canvas.findByText('우주 관찰자')).resolves.toBeVisible();
     expect(canvas.getAllByText('우주 관찰자')).toHaveLength(1);
-    expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
+    expect(page.queryByRole('alert')).not.toBeInTheDocument();
     expect(canvas.queryByRole('button', { name: '더 불러오기' })).not.toBeInTheDocument();
   },
   render: () => <PaginationList />,
 };
 
-export const NextPageLoadingDisablesDuplicateActivation: Story = {
+export const NextPageLoadingRequestsOnce: Story = {
   parameters: { relay: { paginationLoading: true, paginationRequestObserver } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const button = canvas.getByRole('button', { name: '더 불러오기' });
-    await userEvent.click(button);
+    await expect(canvas.findByLabelText('관련 프로필을 더 불러오는 중')).resolves.toBeVisible();
     expect(paginationRequestObserver).toHaveBeenCalledOnce();
     expect(paginationRequestObserver).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'HashtagRelatedProfilesNextPageQuery' }),
       expect.objectContaining({ count: 20 }),
     );
-    await expect(button).toBeDisabled();
-    await expect(canvas.findByText('관련 프로필을 더 불러오는 중입니다.')).resolves.toBeVisible();
     expect(canvas.getByText('별빛 여행자')).toBeVisible();
-
-    button.click();
     expect(paginationRequestObserver).toHaveBeenCalledOnce();
   },
   render: () => <PaginationList />,

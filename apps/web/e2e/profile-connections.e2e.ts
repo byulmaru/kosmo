@@ -410,14 +410,11 @@ for (const scenario of [
     }
 
     await setE2ESessionCookie(context, viewer.token);
+    const nextPageResponse = waitForGraphQLOperation(page, scenario.nextOperation);
     await page.goto(`/@${target.handle}/${scenario.kind}`);
 
     const connectionLinks = page.getByRole('link', { name: new RegExp(`@${scenario.prefix}-`) });
     await expect(page.getByText(scenario.label, { exact: true }).last()).toBeVisible();
-    await expect(connectionLinks).toHaveCount(20);
-
-    const nextPageResponse = waitForGraphQLOperation(page, scenario.nextOperation);
-    await page.getByRole('button', { name: '더 불러오기' }).click();
     const response = await nextPageResponse;
     const operation = readGraphQLOperation(response.request().postData());
 

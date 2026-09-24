@@ -1,5 +1,6 @@
-import { useCallback, useState } from 'react';
 import { graphql, useLazyLoadQuery, usePaginationFragment } from 'react-relay';
+import { usePaginationScrollRegistration } from '@/components/pagination/PaginationScrollView';
+import { useAutomaticPagination } from '@/components/pagination/useAutomaticPagination';
 import { MutedProfileList } from '@/components/profile/MutedProfileList';
 import { ProfileMuteAction } from '@/components/profile/ProfileMuteAction';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
@@ -76,14 +77,15 @@ function SettingsMutedProfilesContent() {
     SettingsMutedProfiles_profile$key
   >(SettingsMutedProfilesFragment, profile ?? null);
   const edges = pagination.data?.profileMutes.edges ?? [];
-  const [loadError, setLoadError] = useState(false);
-  const loadMore = useCallback(() => {
-    if (!pagination.hasNext || pagination.isLoadingNext) {
-      return;
-    }
-    setLoadError(false);
-    pagination.loadNext(20, { onComplete: (error) => setLoadError(Boolean(error)) });
-  }, [pagination.hasNext, pagination.isLoadingNext, pagination.loadNext]);
+  const { endRef, loadError, loadNextPage, nativeScrollProps } = useAutomaticPagination({
+    hasNext: pagination.hasNext,
+    isLoadingNext: pagination.isLoadingNext,
+    itemCount: edges.length,
+    loadNext: pagination.loadNext,
+    pageSize: 20,
+    requestKey: profile?.id,
+  });
+  usePaginationScrollRegistration(nativeScrollProps);
   if (!profile || profile.instance.kind !== 'LOCAL') {
     return (
       <StateView
@@ -96,12 +98,13 @@ function SettingsMutedProfilesContent() {
 
   const listState = {
     pagination: loadError
-      ? { onRetry: loadMore, status: 'error' as const }
+      ? { onRetry: loadNextPage, status: 'error' as const }
       : pagination.isLoadingNext
         ? { status: 'loading' as const }
         : pagination.hasNext
-          ? { onLoadMore: loadMore, status: 'more' as const }
+          ? { status: 'more' as const }
           : { status: 'end' as const },
+    paginationEndRef: endRef,
     profiles: edges.map((edge) => ({
       action: <ProfileMuteAction profile={edge.node.targetProfile} surface="button" />,
       avatarUri: edge.node.targetProfile.avatar?.url,

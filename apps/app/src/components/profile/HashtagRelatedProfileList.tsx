@@ -1,12 +1,12 @@
-import { useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { graphql, usePaginationFragment } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
+import { PaginationSurface } from '@/components/pagination/PaginationSurface';
+import { useAutomaticPagination } from '@/components/pagination/useAutomaticPagination';
 import { ProfileListItem } from '@/components/profile/ProfileListItem';
-import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
-import { fontFamilies, spacing, typography } from '@/theme/tokens';
+import { spacing } from '@/theme/tokens';
 import type { HashtagRelatedProfileList_hashtag$key } from './__generated__/HashtagRelatedProfileList_hashtag.graphql';
 import type { HashtagRelatedProfilesNextPageQuery } from './__generated__/HashtagRelatedProfilesNextPageQuery.graphql';
 
@@ -39,21 +39,18 @@ export function HashtagRelatedProfileList({
     HashtagRelatedProfileList_hashtag$key
   >(hashtagRelatedProfileListFragment, hashtag);
   const theme = useTheme();
-  const [loadError, setLoadError] = useState(false);
   const profiles = pagination.data.relatedProfiles.edges;
-  const loadMore = () => {
-    if (!pagination.hasNext || pagination.isLoadingNext) {
-      return;
-    }
-
-    setLoadError(false);
-    pagination.loadNext(20, {
-      onComplete: (error) => setLoadError(Boolean(error)),
-    });
-  };
+  const { endRef, loadError, loadNextPage, nativeScrollProps } = useAutomaticPagination({
+    hasNext: pagination.hasNext,
+    isLoadingNext: pagination.isLoadingNext,
+    itemCount: profiles.length,
+    loadNext: pagination.loadNext,
+    pageSize: 20,
+    webScrollTarget: 'container',
+  });
 
   return (
-    <ScrollView contentContainerStyle={styles.root}>
+    <ScrollView {...nativeScrollProps} contentContainerStyle={styles.root}>
       <PageHeader title={`#${pagination.data.name} 관련 프로필`} />
       {profiles.length ? (
         profiles.map((edge) => <ProfileListItem key={edge.cursor} linked profile={edge.node} />)
@@ -63,37 +60,16 @@ export function HashtagRelatedProfileList({
           title="관련 프로필이 없어요"
         />
       )}
-      {pagination.hasNext || loadError ? (
-        <View style={[styles.pagination, { borderColor: theme.border }]}>
-          {loadError ? (
-            <>
-              <Text accessibilityRole="alert" style={[styles.stateTitle, { color: theme.text }]}>
-                관련 프로필을 더 불러오지 못했어요
-              </Text>
-              <Text style={[styles.stateDescription, { color: theme.textSecondary }]}>
-                잠시 후 다시 시도해주세요.
-              </Text>
-            </>
-          ) : null}
-          <Button
-            accessibilityState={{
-              busy: pagination.isLoadingNext,
-              disabled: pagination.isLoadingNext,
-            }}
-            disabled={pagination.isLoadingNext}
-            onPress={loadMore}
-            style={styles.paginationAction}
-            tone="secondary"
-          >
-            {pagination.isLoadingNext ? '불러오는 중' : loadError ? '다시 시도' : '더 불러오기'}
-          </Button>
-          {pagination.isLoadingNext ? (
-            <Text accessibilityLiveRegion="polite" style={styles.srOnly}>
-              관련 프로필을 더 불러오는 중입니다.
-            </Text>
-          ) : null}
-        </View>
-      ) : null}
+      <PaginationSurface
+        endRef={endRef}
+        error={loadError}
+        errorMessage="관련 프로필을 더 불러오지 못했어요"
+        hasNext={pagination.hasNext}
+        isLoading={pagination.isLoadingNext}
+        loadingLabel="관련 프로필을 더 불러오는 중"
+        onRetry={loadNextPage}
+        style={[styles.pagination, { borderColor: theme.border }]}
+      />
     </ScrollView>
   );
 }
@@ -131,25 +107,4 @@ export function HashtagRelatedProfileListState({
 const styles = StyleSheet.create({
   root: { flexGrow: 1, paddingBottom: spacing.xxxl },
   pagination: { alignItems: 'center', borderTopWidth: 1, padding: spacing.lg },
-  paginationAction: { marginTop: spacing.md },
-  stateTitle: {
-    fontFamily: fontFamilies.ui,
-    fontWeight: '700',
-    textAlign: 'center',
-    ...typography.md,
-  },
-  stateDescription: {
-    fontFamily: fontFamilies.ui,
-    marginTop: spacing.xs,
-    textAlign: 'center',
-    ...typography.sm,
-  },
-  srOnly: {
-    height: 1,
-    left: 0,
-    overflow: 'hidden',
-    position: 'absolute',
-    top: 0,
-    width: 1,
-  },
 });

@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef } from 'react';
-import { Platform } from 'react-native';
+import { Platform, ScrollView } from 'react-native';
 import { RouteScrollContainer } from '@/components/ui/RouteScrollContainer';
 import type { ScrollViewProps } from 'react-native';
 import type {
@@ -25,7 +25,11 @@ const PaginationScrollContext = createContext<Register | null>(null);
 
 type PaginationScrollViewProps = {
   children?: ScrollViewProps['children'];
-  nativeScrollProps?: Pick<ScrollViewProps, 'contentContainerStyle' | 'style'>;
+  nativeScrollProps?: Pick<
+    ScrollViewProps,
+    'contentContainerStyle' | 'keyboardShouldPersistTaps' | 'style'
+  >;
+  webScrollable?: boolean;
   webStyle?: RouteScrollContainerProps['webStyle'];
 };
 
@@ -54,6 +58,7 @@ function snapshotScrollEvent(event: NativeScrollEvent): NativeScrollEvent {
 export function PaginationScrollView({
   children,
   nativeScrollProps: callerNativeScrollProps,
+  webScrollable = false,
   webStyle,
 }: PaginationScrollViewProps) {
   const registrationRef = useRef<Registration | null>(null);
@@ -118,9 +123,13 @@ export function PaginationScrollView({
 
   return (
     <PaginationScrollContext.Provider value={register}>
-      <RouteScrollContainer nativeScrollProps={nativeScrollProps} webStyle={webStyle}>
-        {children}
-      </RouteScrollContainer>
+      {webScrollable && Platform.OS === 'web' ? (
+        <ScrollView {...nativeScrollProps}>{children}</ScrollView>
+      ) : (
+        <RouteScrollContainer nativeScrollProps={nativeScrollProps} webStyle={webStyle}>
+          {children}
+        </RouteScrollContainer>
+      )}
     </PaginationScrollContext.Provider>
   );
 }
@@ -134,7 +143,7 @@ export function usePaginationScrollRegistration(props: NativeScrollProps | null)
   const id = useRef(Symbol('pagination-scroll-registration'));
 
   useEffect(() => {
-    if (!register || !props || Platform.OS === 'web') {
+    if (!register || !props) {
       return;
     }
 

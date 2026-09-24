@@ -1,15 +1,17 @@
 import { Platform, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { PageHeader } from '@/components/PageHeader';
+import { PaginationSurface } from '@/components/pagination/PaginationSurface';
 import { PostActionAuthenticationProvider } from '@/components/post/PostActionAuthentication';
 import { PostComposerCoordinatorProvider } from '@/components/post/PostComposerCoordinator';
 import { PostListItem } from '@/components/post/PostListItem';
 import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHost';
 import { getShellLayout } from '@/components/shell/shellLayout';
-import { Button } from '@/components/ui/Button';
 import { Skeleton, StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import type { ReactNode } from 'react';
+import type { StyleProp, ViewStyle } from 'react-native';
+import type { UseAutomaticPaginationResult } from '@/components/pagination/useAutomaticPagination';
 import type { PostListItem_post$key } from '@/components/post/__generated__/PostListItem_post.graphql';
 import type { ReplyComposerSurface_profile$key } from '@/components/post/__generated__/ReplyComposerSurface_profile.graphql';
 import type { PostListPresentation } from '@/components/post/postListMetrics';
@@ -18,26 +20,28 @@ export type BookmarkListEntry = { id: string; post: PostListItem_post$key };
 
 export type BookmarkListProps = {
   error?: boolean;
+  endRef?: UseAutomaticPaginationResult['endRef'];
   hasNext?: boolean;
   isLoadingMore?: boolean;
   items?: ReadonlyArray<BookmarkListEntry>;
   loading?: boolean;
-  onLoadMore?: () => void;
   onRetry?: () => void;
   profileRequired?: boolean;
   replyProfile?: ReplyComposerSurface_profile$key | null;
+  scrollProps?: UseAutomaticPaginationResult['nativeScrollProps'];
 };
 
 export function BookmarkList({
   error = false,
+  endRef,
   hasNext = false,
   isLoadingMore = false,
   items = [],
   loading = false,
-  onLoadMore,
   onRetry,
   profileRequired = false,
   replyProfile,
+  scrollProps,
 }: BookmarkListProps): React.JSX.Element {
   const { width } = useWindowDimensions();
   const postListPresentation: PostListPresentation =
@@ -76,31 +80,16 @@ export function BookmarkList({
         {items.map((item) => (
           <PostListItem key={item.id} post={item.post} presentation={postListPresentation} />
         ))}
-        {error ? (
-          <BookmarkListState
-            alert
-            description="기존 북마크는 그대로 유지돼요."
-            onRetry={onRetry}
-            title="북마크를 더 불러오지 못했어요"
-          />
-        ) : hasNext && onLoadMore ? (
-          <View style={styles.pagination}>
-            <Button
-              aria-busy={isLoadingMore}
-              accessibilityState={{ busy: isLoadingMore, disabled: isLoadingMore }}
-              disabled={isLoadingMore}
-              onPress={() => {
-                if (!isLoadingMore) {
-                  onLoadMore();
-                }
-              }}
-              style={styles.actionButton}
-              tone="secondary"
-            >
-              {isLoadingMore ? '불러오는 중' : '더 불러오기'}
-            </Button>
-          </View>
-        ) : null}
+        <PaginationSurface
+          endRef={endRef}
+          error={error}
+          errorMessage="북마크를 더 불러오지 못했어요"
+          hasNext={hasNext}
+          isLoading={isLoadingMore}
+          loadingLabel="북마크를 더 불러오는 중"
+          onRetry={onRetry}
+          style={styles.pagination}
+        />
       </>
     );
   }
@@ -109,7 +98,11 @@ export function BookmarkList({
     <PostActionAuthenticationProvider>
       <PostComposerCoordinatorProvider owner="list" profile={replyProfile ?? null}>
         <PostMediaViewerHostProvider>
-          <ScrollView contentContainerStyle={styles.root} testID="bookmark-list-scroll">
+          <ScrollView
+            {...scrollProps}
+            contentContainerStyle={styles.root}
+            testID="bookmark-list-scroll"
+          >
             <PageHeader title="북마크" />
             {content}
           </ScrollView>
@@ -157,11 +150,13 @@ function BookmarkListState({
   alert = false,
   description,
   onRetry,
+  style,
   title,
 }: {
   alert?: boolean;
   description: string;
   onRetry?: () => void;
+  style?: StyleProp<ViewStyle>;
   title: string;
 }) {
   return (
@@ -171,7 +166,7 @@ function BookmarkListState({
       alert={alert}
       description={description}
       onAction={onRetry}
-      style={styles.state}
+      style={style ?? styles.state}
       title={title}
     />
   );

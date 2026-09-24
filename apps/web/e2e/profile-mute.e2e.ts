@@ -480,9 +480,10 @@ test('Settings Mute 목록은 pagination 실패를 retry하고 다음 page를 �
   await page.getByRole('link', { name: '뮤트한 프로필 관리 열기' }).click();
   const rows = page.getByRole('button', { name: /E2E Pagination Mute \d{2} 뮤트 해제/u });
   await expect(rows).toHaveCount(20);
-  await page.getByRole('button', { name: '더 불러오기' }).click();
+  await expect.poll(() => nextPageAttempts).toBe(1);
+  await expect(page.getByRole('button', { name: '더 불러오기' })).toHaveCount(0);
   await expect(page.getByRole('alert')).toContainText('프로필을 더 불러오지 못했어요');
-  await page.getByRole('button', { name: '다시 시도' }).click();
+  await page.getByRole('alert').getByRole('button', { name: '다시 시도' }).click();
   await expect.poll(() => nextPageAttempts).toBe(2);
   await expect(rows).toHaveCount(21);
   await expect(page.getByText('E2E Pagination Mute 20', { exact: true })).toBeVisible();

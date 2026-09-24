@@ -1,7 +1,8 @@
-import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { graphql, usePaginationFragment } from 'react-relay';
-import { Button } from '@/components/ui/Button';
+import { usePaginationScrollRegistration } from '@/components/pagination/PaginationScrollView';
+import { PaginationSurface } from '@/components/pagination/PaginationSurface';
+import { useAutomaticPagination } from '@/components/pagination/useAutomaticPagination';
 import { Skeleton, StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
 import { layoutRecipes, spacing } from '@/theme/tokens';
@@ -185,16 +186,15 @@ type ConnectionListProps = {
 
 function ConnectionList({ hasNext, isLoadingNext, kind, loadNext, profiles }: ConnectionListProps) {
   const theme = useTheme();
-  const [loadError, setLoadError] = useState(false);
   const text = copy[kind];
-  const loadMore = () => {
-    if (isLoadingNext) {
-      return;
-    }
-
-    setLoadError(false);
-    loadNext(20, { onComplete: (error) => setLoadError(Boolean(error)) });
-  };
+  const { endRef, loadError, loadNextPage, nativeScrollProps } = useAutomaticPagination({
+    hasNext,
+    isLoadingNext,
+    itemCount: profiles.length,
+    loadNext,
+    pageSize: 20,
+  });
+  usePaginationScrollRegistration(nativeScrollProps);
 
   return (
     <View>
@@ -207,35 +207,16 @@ function ConnectionList({ hasNext, isLoadingNext, kind, loadNext, profiles }: Co
           title={text.emptyTitle}
         />
       )}
-      {hasNext || loadError ? (
-        loadError ? (
-          <StateView
-            actionLabel="다시 시도"
-            alert
-            description="잠시 후 다시 시도해주세요."
-            onAction={loadMore}
-            style={[styles.pagination, { borderColor: theme.border }]}
-            title={text.loadError}
-          />
-        ) : (
-          <View style={[styles.pagination, { borderColor: theme.border }]}>
-            <Button
-              accessibilityState={{ busy: isLoadingNext, disabled: isLoadingNext }}
-              disabled={isLoadingNext}
-              onPress={loadMore}
-              style={styles.paginationAction}
-              tone="secondary"
-            >
-              {isLoadingNext ? '불러오는 중' : '더 불러오기'}
-            </Button>
-            {isLoadingNext ? (
-              <Text accessibilityLiveRegion="polite" style={styles.srOnly}>
-                {text.loadingNextLabel}
-              </Text>
-            ) : null}
-          </View>
-        )
-      ) : null}
+      <PaginationSurface
+        endRef={endRef}
+        error={loadError}
+        errorMessage={text.loadError}
+        hasNext={hasNext}
+        isLoading={isLoadingNext}
+        loadingLabel={text.loadingNextLabel}
+        onRetry={loadNextPage}
+        style={[styles.pagination, { borderColor: theme.border }]}
+      />
     </View>
   );
 }
@@ -247,7 +228,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xxxl,
   },
   pagination: { alignItems: 'center', borderTopWidth: 1, padding: spacing.lg },
-  paginationAction: { marginTop: spacing.md },
   skeletonItem: {
     ...layoutRecipes.listRow,
     borderBottomWidth: 1,

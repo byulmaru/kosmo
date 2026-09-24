@@ -101,7 +101,7 @@ Full Reaction Picker는 Quick Picker를 폐기하지 않고, Unicode emoji를 �
 - 각 pill은 emoji와 count, selected 상태를 표시한다. 각 Profile row 왼쪽에는 해당 Profile이 남긴 Reaction Type을 식별할 수 있는 emoji를 표시하고, Profile 정보 영역은 기존 `ProfileListItem`의 `Bio=False, Action=Follow` 계약을 재사용한다. Follow action은 관계에 따라 `팔로우`, `팔로잉`, `요청됨` 상태를 표시한다.
 - Profile row의 border는 인접한 Profile 사이에만 표시한다. 마지막 row 뒤에는 표시하지 않으므로 Profile이 한 명이면 separator가 없다. pagination 영역의 별도 상단 border는 유지한다.
 - Profile 목록의 최초 조회가 실패하면 header와 filter를 유지한 route content 안에 오류와 다시 시도 동작을 표시한다.
-- 추가 page 조회가 실패하면 이미 표시한 Profile을 유지하고 목록 내부에 오류와 다시 시도 동작을 표시한다. 이 조회 오류에 snackbar나 toast를 사용하지 않는다.
+- 목록 끝에 가까워지면 추가 page를 자동으로 불러오고 하단 스피너를 표시한다. 추가 조회가 실패하면 이미 표시한 Profile을 유지하고 지속 토스트의 `다시 시도`로 수동 재요청한다. 성공하거나 화면을 떠나면 해당 토스트를 정리한다.
 - 같은 Type의 route를 다시 방문할 때 cache된 Profile을 먼저 표시하고 background에서 최신 목록을 조회한다. Profile 전환 뒤에는 이전 actor의 cache를 재사용하지 않는다.
 - token toggle의 mutation 오류와 Profile 조회 오류는 서로 독립적이다. 한쪽 오류가 다른쪽 interaction을 막지 않는다.
 - Figma는 route의 시각 구조만 확정한다. 실제 URL, history가 없는 직접 진입의 Back fallback, sticky·scroll restoration·focus와 empty/error/pagination 동작은 연결된 Production 이슈와 runtime QA가 소유한다.

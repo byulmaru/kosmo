@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { AccessibilityInfo, Platform, StyleSheet, Text, View } from 'react-native';
+import { PaginationSurface } from '@/components/pagination/PaginationSurface';
 import { ProfileListItem } from '@/components/profile/ProfileListItem';
-import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import type React from 'react';
+import type { UseAutomaticPaginationResult } from '@/components/pagination/useAutomaticPagination';
 
 export type ReactionProfileListEntry = Readonly<{
   id: string;
@@ -21,6 +22,7 @@ export type ReactionProfileListProps = {
   loading?: boolean;
   onLoadMore?: () => void;
   onRetry?: () => void;
+  paginationEndRef?: UseAutomaticPaginationResult['endRef'];
   presentation?: 'modal' | 'route';
   reactionType: string;
 };
@@ -43,6 +45,7 @@ export function ReactionProfileList({
   loading,
   onLoadMore,
   onRetry,
+  paginationEndRef,
   presentation = 'modal',
   reactionType,
 }: ReactionProfileListProps): React.ReactElement {
@@ -61,14 +64,6 @@ export function ReactionProfileList({
       AccessibilityInfo.announceForAccessibilityWithOptions(status, { queue: true });
     }
   }, [status]);
-  const showPagination = Boolean(onLoadMore && (hasNext || loadMoreError));
-  const loadMore = () => {
-    if (isLoadingMore) {
-      return;
-    }
-
-    onLoadMore?.();
-  };
 
   return (
     <View style={styles.root}>
@@ -108,33 +103,16 @@ export function ReactionProfileList({
                 />
               </View>
             ))}
-            {showPagination ? (
-              <View style={[styles.pagination, { borderColor: theme.border }]}>
-                {loadMoreError ? (
-                  <>
-                    <Text
-                      accessibilityRole="alert"
-                      style={[styles.stateTitle, { color: theme.text }]}
-                    >
-                      {copy.loadErrorTitle}
-                    </Text>
-                    <Text style={[styles.stateDescription, { color: theme.textSecondary }]}>
-                      {copy.errorDescription}
-                    </Text>
-                  </>
-                ) : null}
-                <Button
-                  accessibilityState={{ busy: isLoadingMore, disabled: isLoadingMore }}
-                  aria-busy={isLoadingMore}
-                  disabled={isLoadingMore}
-                  onPress={loadMore}
-                  style={styles.paginationAction}
-                  tone="secondary"
-                >
-                  {isLoadingMore ? '불러오는 중' : loadMoreError ? '다시 시도' : '더 불러오기'}
-                </Button>
-              </View>
-            ) : null}
+            <PaginationSurface
+              endRef={paginationEndRef}
+              error={Boolean(loadMoreError)}
+              errorMessage={copy.loadErrorTitle}
+              hasNext={Boolean(hasNext)}
+              isLoading={Boolean(isLoadingMore)}
+              loadingLabel="반응한 프로필을 더 불러오는 중"
+              onRetry={onLoadMore}
+              style={[styles.pagination, { borderColor: theme.border }]}
+            />
           </>
         ) : (
           <StateView description={copy.emptyDescription} title={copy.emptyTitle} />
@@ -165,12 +143,4 @@ const styles = StyleSheet.create({
   itemSeparator: { borderBottomWidth: 1 },
   profileItem: { borderBottomWidth: 0, flex: 1, minWidth: 0 },
   pagination: { borderTopWidth: 1, gap: spacing.sm, paddingTop: spacing.md },
-  paginationAction: { minHeight: 44 },
-  stateTitle: {
-    fontFamily: fontFamilies.ui,
-    fontWeight: '700',
-    textAlign: 'center',
-    ...typography.md,
-  },
-  stateDescription: { fontFamily: fontFamilies.ui, textAlign: 'center', ...typography.sm },
 });
