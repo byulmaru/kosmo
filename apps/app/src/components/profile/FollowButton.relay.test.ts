@@ -54,7 +54,9 @@ mockModule('react-native', { StyleSheet: { create: (styles: object) => styles },
 mockModule('@/components/ui/Button', { Button: 'Button' });
 mockModule('@/components/ui/ConfirmationContent', { ConfirmationContent: 'ConfirmationContent' });
 mockModule('@/components/ui/ModalSheet', { ModalSheet: 'ModalSheet' });
-mockModule('@/analytics/client', { trackAnalytics: () => {} });
+mockModule('@/analytics/client', {
+  trackAnalytics: () => {},
+});
 const toasts: string[] = [];
 mockModule('@/components/ui/ToastProvider', {
   useToast: () => ({ showToast: (message: string) => toasts.push(message) }),

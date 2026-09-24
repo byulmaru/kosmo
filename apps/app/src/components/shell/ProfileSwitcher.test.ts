@@ -167,7 +167,9 @@ mockModule(require.resolve('lucide-react-native'), {
   ChevronUpIcon: 'ChevronUpIcon',
   PlusIcon: 'PlusIcon',
 });
-mockModule('@/analytics/client', { trackAnalytics: () => undefined });
+mockModule('@/analytics/client', {
+  trackAnalytics: () => undefined,
+});
 mockModule('@/components/profile/ProfilePicker', {
   ProfilePicker: MockProfilePicker,
 });

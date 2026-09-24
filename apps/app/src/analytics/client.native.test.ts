@@ -9,5 +9,6 @@ describe('Native analytics client', () => {
     );
     assert.doesNotThrow(() => identifyAnalytics('account-id'));
     assert.doesNotThrow(() => clearAnalytics());
+    assert.doesNotThrow(() => trackAnalytics('profile_view_succeeded', {}));
   });
 });

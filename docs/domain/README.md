@@ -91,6 +91,8 @@ Account 요청에서 Profile이 주체인 행동의 `Account.Active`는 해당 P
 - [Admin Console Read Policy](./policies/admin-console-read.md): Admin Console Viewer의 Account, Profile,
   Account-Profile Membership 교차 객체 조회 범위와 필드.
 
+- [Search Conversion Analytics Policy](./policies/search-conversion-analytics.md): 검색 선택부터 Profile 조회·Follow까지의 탐색 전환 계산.
+
 ## 결정과 기록
 
 - [ADR 0001: Core Ubiquitous Language](./decisions/0001-core-ubiquitous-language.md)
@@ -134,3 +136,4 @@ Account 요청에서 Profile이 주체인 행동의 `Account.Active`는 해당 P
 - [2026-06-29 상태 기계와 Instance 상태 결정 기록](./records/2026-06-29-state-moderation-followup.md)
 - [2026-06-29 명세 경계와 상태 후속 결정 기록](./records/2026-06-29-spec-boundary-state-followup.md)
 - [2026-06-29 관계와 신고 상태 제외 결정 기록](./records/2026-06-29-relationship-moderation-state-exclusions.md)
+- [2026-08-31 탐색 전환 정의와 승인 기록](./records/2026-08-31-search-conversion-definition.md)

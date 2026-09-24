@@ -42,8 +42,10 @@ mockModule('react-native', {
   useWindowDimensions: () => ({ height: 844, width: 390 }),
   View: 'View',
 });
-mockModule('react-relay', { graphql: () => ({}) });
-mockModule('@/analytics/client', { trackAnalytics: () => undefined });
+mockModule('react-relay', { graphql: () => ({}), useFragment: () => ({}) });
+mockModule('@/analytics/client', {
+  trackAnalytics: () => undefined,
+});
 mockModule('@/components/PageHeader', {
   PageHeader: ({ children }: { children: ReactNode }) =>
     createElement('NativeStackHeader', null, children),

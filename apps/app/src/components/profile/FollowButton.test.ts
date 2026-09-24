@@ -67,7 +67,9 @@ mockModule('react-relay', {
   ],
   useRelayEnvironment: () => relayEnvironment,
 });
-mockModule('@/analytics/client', { trackAnalytics: () => {} });
+mockModule('@/analytics/client', {
+  trackAnalytics: () => {},
+});
 mockModule('@/components/ui/ToastProvider', {
   useToast: () => ({
     showToast: (message: string, options: { tone: string }) =>

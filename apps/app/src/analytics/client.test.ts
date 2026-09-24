@@ -1,12 +1,22 @@
 import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it, mock } from 'node:test';
-import type { PostHogConfig } from 'posthog-js';
+import type { CaptureResult, PostHogConfig } from 'posthog-js';
 import type * as AnalyticsModule from './client.web';
 
 type Call = { event: string; properties?: Record<string, unknown> };
 
 class FakePostHog {
+  constructor(readonly config: Partial<PostHogConfig>) {}
+  sessionId = 'session-a';
+  rotateOnCapture = false;
+  sessionListeners = new Set<(sessionId: string, windowId: string) => void>();
+  onSessionId(callback: (sessionId: string, windowId: string) => void) {
+    this.sessionListeners.add(callback);
+    callback(this.sessionId, 'window');
+    return () => this.sessionListeners.delete(callback);
+  }
   readonly calls: Call[] = [];
+  readonly timestamps: Date[] = [];
   readonly identities: string[] = [];
   readonly actions: string[] = [];
   captureAttempts = 0;
@@ -17,13 +27,32 @@ class FakePostHog {
   distinctId = 'anonymous-id';
   userId: string | undefined;
 
-  capture(event: string, properties?: Record<string, unknown>) {
+  capture(event: string, properties?: Record<string, unknown>, options?: { timestamp?: Date }) {
     this.captureAttempts += 1;
     if (this.captureFails) {
       throw new Error('capture failure');
     }
     this.actions.push(`capture:${event}`);
+    if (this.rotateOnCapture) {
+      this.sessionId = 'session-b';
+      this.sessionListeners.forEach((listener) => listener(this.sessionId, 'window'));
+      this.rotateOnCapture = false;
+    }
+    const result = {
+      event,
+      properties: { ...properties, $session_id: this.sessionId },
+      uuid: 'test',
+      timestamp: options?.timestamp ?? new Date(),
+    } as CaptureResult;
+    const filtered =
+      typeof this.config.before_send === 'function' ? this.config.before_send(result) : result;
+    if (!filtered) {
+      return undefined;
+    }
     this.calls.push({ event, properties });
+    assert.ok(filtered.timestamp);
+    this.timestamps.push(filtered.timestamp);
+    return filtered;
   }
 
   identify(accountId: string) {
@@ -93,7 +122,7 @@ mock.module('posthog-js', {
         }
 
         initCalls.push({ token, config });
-        const instance = new FakePostHog();
+        const instance = new FakePostHog(config);
         instances.push(instance);
         return instance;
       },

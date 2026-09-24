@@ -1,6 +1,6 @@
 import posthogClient from 'posthog-js';
 import { getPublicConfig } from '@/config/public';
-import type { PostHog, PostHogConfig } from 'posthog-js';
+import type { PostHog } from 'posthog-js';
 import type { AnalyticsEventArgs } from './events';
 
 const POSTHOG_USER_ID = '$user_id';
@@ -35,7 +35,7 @@ function initializeAnalytics(): PostHog | null {
       api_host: configuredApiHost,
       defaults: '2026-05-30',
       mask_personal_data_properties: false,
-    } satisfies Partial<PostHogConfig>);
+    });
   } catch {
     client = null;
   }

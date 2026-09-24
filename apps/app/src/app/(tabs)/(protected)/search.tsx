@@ -11,7 +11,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { graphql, useLazyLoadQuery, usePaginationFragment } from 'react-relay';
+import { graphql, useFragment, useLazyLoadQuery, usePaginationFragment } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
 import { PageHeader } from '@/components/PageHeader';
 import {
@@ -40,6 +40,7 @@ import type { SearchToolbarRenderLeadingControlProps } from '@/components/ui/Sea
 import type { SearchPeopleByHandlePageQuery } from './__generated__/SearchPeopleByHandlePageQuery.graphql';
 import type { SearchPeopleResults_query$key } from './__generated__/SearchPeopleResults_query.graphql';
 import type { SearchPeopleResultsNextPageQuery } from './__generated__/SearchPeopleResultsNextPageQuery.graphql';
+import type { SearchResultProfile_profile$key } from './__generated__/SearchResultProfile_profile.graphql';
 
 const tabs = [
   { label: '인기', value: SearchTab.POPULAR },
@@ -67,7 +68,7 @@ const SearchPeopleResultsFragment = graphql`
       edges {
         cursor
         node {
-          ...ProfileListItem_profile
+          ...SearchResultProfile_profile
         }
       }
     }
@@ -151,13 +152,7 @@ function SearchPeopleResults({
   return (
     <View>
       {edges.map(({ cursor, node }) => (
-        <ProfileListItem
-          key={cursor}
-          linked
-          onPress={() => trackAnalytics('search_result_selected', { tab: 'people' })}
-          profile={node}
-          showBio
-        />
+        <SearchResultProfile key={cursor} profile={node} />
       ))}
       <PaginationSurface
         endRef={endRef}
@@ -170,6 +165,25 @@ function SearchPeopleResults({
         style={styles.pagination}
       />
     </View>
+  );
+}
+
+function SearchResultProfile({ profile }: { profile: SearchResultProfile_profile$key }) {
+  const data = useFragment(
+    graphql`
+      fragment SearchResultProfile_profile on Profile {
+        ...ProfileListItem_profile
+      }
+    `,
+    profile,
+  );
+  return (
+    <ProfileListItem
+      linked
+      onNavigate={() => trackAnalytics('search_result_selected', { tab: 'people' })}
+      profile={data}
+      showBio
+    />
   );
 }
 

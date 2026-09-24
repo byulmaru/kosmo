@@ -17,6 +17,7 @@ type RouterContextValue = {
   pathname: string;
   segments: readonly string[];
   setPathname: (href: Href) => void;
+  slot?: ReactNode;
   slotLabel: string;
 };
 
@@ -44,19 +45,21 @@ export function RouterMockProvider({
   params = {},
   pathname: initialPathname = '/home',
   segments = [],
+  slot,
   slotLabel = '현재 라우트 콘텐츠',
 }: PropsWithChildren<{
   params?: Record<string, string | undefined>;
   pathname?: string;
   segments?: readonly string[];
+  slot?: ReactNode;
   slotLabel?: string;
 }>) {
   const [pathname, setCurrentPathname] = useState(initialPathname);
   const setPathname = (href: Href) =>
     setCurrentPathname(typeof href === 'string' ? href : href.pathname);
   const value = useMemo(
-    () => ({ params, pathname, segments, setPathname, slotLabel }),
-    [params, pathname, segments, slotLabel],
+    () => ({ params, pathname, segments, setPathname, slot, slotLabel }),
+    [params, pathname, segments, slot, slotLabel],
   );
 
   return <RouterContext.Provider value={value}>{children}</RouterContext.Provider>;
@@ -134,8 +137,8 @@ function shouldHandleNavigation(event: LinkPressEvent) {
 }
 
 export function Slot() {
-  const { slotLabel } = useContext(RouterContext);
-  return <Text>{slotLabel}</Text>;
+  const { slot, slotLabel } = useContext(RouterContext);
+  return slot ?? <Text>{slotLabel}</Text>;
 }
 
 function StackRoot({ children }: PropsWithChildren) {
