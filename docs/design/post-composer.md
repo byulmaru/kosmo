@@ -185,9 +185,9 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
 - 업로드·게시 중에는 작성 Profile 전환을 잠그고 요청이 끝나면 다시 허용한다. 실패한 첨부와 draft는 유지한다.
 - 전역 Profile과 다른 작성 Profile로 게시하면 성공 ID만 확인하고 현재 화면의 목록과 캐시에는 작성자 관점의
   Post 내용을 넣지 않는다. 작성자가 전역 Profile과 같으면 기존 목록 갱신을 유지한다.
-- 제출 성공 뒤 같은 Composer가 초기화될 때의 Visibility는 성공 callback을 만든 render가 캡처한 Profile
-  Fragment 값을 best-effort seed로 사용한다. 제출 중 별도 render에서 갱신된 최신 Profile 기본값까지 보장하지
-  않는다.
+- 제출 성공 뒤 같은 Composer가 초기화되면 작성 Profile을 전역 선택 Profile로 되돌린다. Visibility는 성공
+  callback을 만든 render가 캡처한 전역 선택 Profile Fragment 값을 best-effort seed로 사용한다. 제출 중 별도
+  render에서 갱신된 최신 Profile 기본값까지 보장하지 않는다.
 - 제출 성공 시 modal을 닫고 원래 Reply action으로 focus를 복원한 뒤 `답글을 게시했어요` 성공 snackbar와
   `보기` action을 표시한다. 이 snackbar는 기존 공용 toast처럼 약 3초 뒤 자동으로 사라지며, 표시 중 사용자가
   `보기`를 활성화할 때만 생성된 Reply 상세로 이동하고 자동으로 route를 바꾸지 않는다.
