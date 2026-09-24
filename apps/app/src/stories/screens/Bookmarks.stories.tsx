@@ -281,7 +281,7 @@ function BookmarkConnectionProfileSwitchStory() {
       <Button onPress={() => setSelectedProfile('second')} tone="secondary">
         B 프로필로 전환
       </Button>
-      <BookmarkConnectionList profile={profile.bookmarkConnection} />
+      <BookmarkConnectionList key={selectedProfile} profile={profile.bookmarkConnection} />
     </>
   );
 }
