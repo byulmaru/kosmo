@@ -13,6 +13,7 @@ export type MutedProfile = {
   action: ReactNode;
   id: string;
   displayName: string;
+  relativeHandle?: string;
   avatarUri?: string | null;
 };
 type Pagination =
@@ -73,6 +74,7 @@ export function MutedProfileList({ state }: Props) {
               avatarLabel={profile.displayName}
               avatarUri={profile.avatarUri}
               displayName={profile.displayName}
+              relativeHandle={profile.relativeHandle}
               style={styles.row}
             >
               {profile.action}

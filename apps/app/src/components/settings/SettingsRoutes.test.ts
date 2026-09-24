@@ -32,6 +32,7 @@ let otaIsUpdatePending = false;
 let otaCheckError: Error | null = null;
 let otaDownloadError: Error | null = null;
 let publicChannel: 'dev' | 'prod' = 'prod';
+let muteHeadingFocusCalls = 0;
 
 mock.module('expo-router', {
   exports: {
@@ -137,7 +138,8 @@ mock.module(new URL('./SettingsMuteAndBlockNavigation.tsx', import.meta.url), {
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('./SettingsMutedProfiles.tsx', import.meta.url), {
   exports: {
-    SettingsMutedProfiles: () => createElement('SettingsMutedProfiles'),
+    SettingsMutedProfiles: (props: Record<string, unknown>) =>
+      createElement('SettingsMutedProfiles', props),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('./SettingsBlockedProfiles.tsx', import.meta.url), {
@@ -212,6 +214,7 @@ afterEach(async () => {
   otaCheckError = null;
   otaDownloadError = null;
   publicChannel = 'prod';
+  muteHeadingFocusCalls = 0;
   if (renderer) {
     await act(async () => renderer?.unmount());
     renderer = null;
@@ -300,6 +303,17 @@ describe('Settings routes', () => {
     await act(async () => back.props.onPress());
     assert.equal(backCalls, 1);
     assert.deepEqual(replacedPaths, []);
+  });
+
+  it('mobile Web 뮤트 해제 성공은 숨겨진 detail 제목으로 focus를 옮긴다', async () => {
+    width = 390;
+    await renderRoute('/settings/muted-profiles', SettingsMutedProfilesRoute);
+
+    assert.equal(rendered('PageHeader').length, 0);
+    const list = rendered('SettingsMutedProfiles')[0];
+    assert.ok(list);
+    await act(async () => list.props.onUnmuteSuccess());
+    assert.equal(muteHeadingFocusCalls, 1);
   });
 
   it('Native muted profile detail은 parent label과 replace navigation을 사용한다', async () => {
@@ -619,7 +633,12 @@ async function renderRoute(nextPathname: string, Route: ComponentType) {
   };
   SlotRoute = Route;
   await act(async () => {
-    renderer = create(createElement(SettingsLayout));
+    renderer = create(createElement(SettingsLayout), {
+      createNodeMock: ({ props }) =>
+        (props as { testID?: string }).testID === 'mute-heading-focus'
+          ? { focus: () => (muteHeadingFocusCalls += 1) }
+          : null,
+    });
   });
   assert.ok(renderer);
 }
