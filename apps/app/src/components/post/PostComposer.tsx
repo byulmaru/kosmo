@@ -794,6 +794,7 @@ export function MobileFullscreenComposerShellCandidate({
           setBodyContentHeight(Math.ceil(event.nativeEvent.contentSize.height))
         }
         onPressIn={scrollToBody}
+        {...(Platform.OS === 'web' ? { onPointerDown: scrollToBody } : {})}
         onFocus={() => {
           setBodyFocused(true);
           scrollToBody();

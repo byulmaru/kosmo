@@ -3,7 +3,7 @@ import { postBodyMaxLength } from '@kosmo/core/validation/post-policy';
 import { XIcon } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fireEvent, fn, userEvent, waitFor, within } from 'storybook/test';
 import { ComposerMediaEditor } from '@/components/post/ComposerMediaEditor';
 import {
   MobileFullscreenComposerShellCandidate,
@@ -878,17 +878,23 @@ export const MobileReplyShellContract: Story = {
   ...MobileEmpty,
   args: { ...MobileEmpty.args, body: '', items: [], mode: 'reply' },
   render: (args) => {
+    const [body, setBody] = useState(args.body);
     const [parentResized, setParentResized] = useState(false);
     return (
       <>
         <MobileFullscreenComposerShellCandidate
           {...args}
+          body={body}
           beforeEditor={
             <View style={{ height: parentResized ? 260 : 180 }} testID="mobile-reply-parent">
               <Text>부모 게시글</Text>
             </View>
           }
           mode="reply"
+          onBodyChange={(value) => {
+            args.onBodyChange(value);
+            setBody(value);
+          }}
           onOverlayClose={onMobileClose}
           replyContext={<Text testID="mobile-reply-context">@reply-target님에게 답글</Text>}
         />
@@ -923,6 +929,8 @@ export const MobileReplyShellContract: Story = {
         scroll.getBoundingClientRect().top + 1,
       ),
     );
+    await userEvent.type(body, '첫 번째 초안{Enter}두 번째 초안');
+    expect(body).toHaveValue('첫 번째 초안\n두 번째 초안');
     scroll.scrollTop = 0;
     scroll.dispatchEvent(new Event('scroll'));
     await waitFor(() =>
@@ -930,10 +938,16 @@ export const MobileReplyShellContract: Story = {
         scroll.getBoundingClientRect().top - 1,
       ),
     );
+    expect(body).toHaveFocus();
+    fireEvent.pointerDown(body, { buttons: 1, pointerId: 1 });
+    fireEvent.pointerUp(body, { buttons: 0, pointerId: 1 });
+    await waitFor(() =>
+      expect(parent.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+        scroll.getBoundingClientRect().top + 1,
+      ),
+    );
     expect(body).toHaveAttribute('placeholder', '무슨 일이 일어나고 있나요?');
-    expect(canvas.queryByTestId('mobile-reply-context')).toBeNull();
-
-    await userEvent.click(body);
+    expect(body).toHaveValue('첫 번째 초안\n두 번째 초안');
     expect(canvas.getByTestId('mobile-reply-context')).toHaveTextContent(
       '@reply-target님에게 답글',
     );
