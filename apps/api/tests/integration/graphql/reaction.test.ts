@@ -143,7 +143,7 @@ describe('GraphQL Reaction', () => {
     assert.equal(await db.$count(Notifications), 0);
   });
 
-  test('Unicode 17의 새 Type을 GraphQL에서 추가하고 삭제한다', async () => {
+  test('Emoji 16의 Quick Picker 밖 Type을 GraphQL에서 추가하고 삭제한다', async () => {
     const auth = await createAuthenticatedSession();
     const post = await createPost(auth.profile.id);
 

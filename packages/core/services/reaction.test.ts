@@ -122,7 +122,7 @@ test('여섯 built-in Type을 정확한 Unicode 문자열로 저장하고 서로
   assert.equal(await countReactions(input.postId), reactionTypes.length);
 });
 
-test('Unicode 17의 Quick Picker 밖 Type도 저장하고 삭제한다', async () => {
+test('Emoji 16의 Quick Picker 밖 Type도 저장하고 삭제한다', async () => {
   const { input } = await createFixture();
 
   const added = await addReaction({ ...input, type: '🫶' });

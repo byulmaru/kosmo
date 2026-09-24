@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
-import * as ReactNativeSvg from 'react-native-svg';
 import { getPublicWebOrigin } from '@/config/origin';
 import { getReactionEmojiAsset, reactionEmojiCatalog } from './reactionEmojiCatalog';
 
@@ -35,19 +34,7 @@ export function ReactionEmojiImage({ size, testID, type }: ReactionEmojiImagePro
   }
 
   const imageStyle = { height: size, width: size };
-  const SvgUri = ReactNativeSvg.SvgUri;
-  return asset.format === 'svg' && SvgUri ? (
-    <SvgUri
-      accessibilityElementsHidden
-      aria-hidden
-      height={size}
-      importantForAccessibility="no-hide-descendants"
-      onError={() => setFailedUri(uri)}
-      testID={testID}
-      uri={uri}
-      width={size}
-    />
-  ) : (
+  return (
     <Image
       accessibilityElementsHidden
       accessibilityRole="image"
