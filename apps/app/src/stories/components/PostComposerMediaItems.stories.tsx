@@ -6,7 +6,7 @@ import ogImage from '../../../public/og-default.png?url';
 import { ComposerOverlayFixture } from '../fixtures/ComposerOverlayFixture';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { ComposerMediaItem } from '@/components/post/PostComposerMediaControls';
-import type { PostComposerMediaItemsTargetProps } from '@/components/post/PostComposerMediaItemsTarget';
+import type { PostComposerUploadedMediaItemsTargetProps } from '@/components/post/PostComposerMediaItemsTarget';
 
 const mediaAsset = { height: 156, uri: ogImage, width: 156 };
 
@@ -65,7 +65,9 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Playground: Story = {
-  render: (args) => <InteractiveMediaItems {...args} />,
+  render: (args) => (
+    <InteractiveMediaItems {...(args as PostComposerUploadedMediaItemsTargetProps)} />
+  ),
 };
 
 export const Uploading: Story = {
@@ -80,7 +82,7 @@ export const Failed: Story = {
   args: { media: [mixedMedia[2]], sensitiveMedia: false },
 };
 
-function InteractiveMediaItems(props: PostComposerMediaItemsTargetProps) {
+function InteractiveMediaItems(props: PostComposerUploadedMediaItemsTargetProps) {
   const [media, setMedia] = useState(props.media);
   const [sensitiveMedia, setSensitiveMedia] = useState(props.sensitiveMedia);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -142,9 +144,9 @@ function InteractiveMediaItems(props: PostComposerMediaItemsTargetProps) {
 
 export const InteractionContract: Story = {
   play: async ({ args, canvasElement }) => {
-    args.onEdit.mockClear();
+    args.onEdit?.mockClear();
     args.onRemove.mockClear();
-    args.onRetry.mockClear();
+    args.onRetry?.mockClear();
     const canvas = within(canvasElement);
     const page = within(canvasElement.ownerDocument.body);
 
@@ -200,5 +202,7 @@ export const InteractionContract: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 1 제거' }));
     expect(args.onRemove).toHaveBeenLastCalledWith('uploading');
   },
-  render: (args) => <InteractiveMediaItems {...args} />,
+  render: (args) => (
+    <InteractiveMediaItems {...(args as PostComposerUploadedMediaItemsTargetProps)} />
+  ),
 };

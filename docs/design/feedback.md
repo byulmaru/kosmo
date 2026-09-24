@@ -4,6 +4,7 @@
 집중된 폼을 제공한다. 제출 계약은 [PROD-487](https://linear.app/byulmaru/issue/PROD-487)에 따르고,
 [PROD-547](https://linear.app/byulmaru/issue/PROD-547)은 Web page surface를,
 [PROD-594](https://linear.app/byulmaru/issue/PROD-594)는 Web shell overlay를 소유한다.
+선택적 이미지 첨부는 [PROD-1006](https://linear.app/byulmaru/issue/PROD-1006)이 소유한다.
 
 ## 현재 계약과 overlay-only Target
 
@@ -17,9 +18,12 @@
 ## 정보 위계
 
 - 현재 호환 `/feedback` route는 공용 `PageHeader`의 `text` variant로 `피드백 보내기` 제목을 한 번 표시한다.
-- 폼은 제목을 다시 표시하지 않고 설명, 피드백 종류, 피드백 내용, 제출 상태, primary action 순으로 배치한다.
+- 폼은 제목을 다시 표시하지 않고 설명, 피드백 종류, 피드백 내용, 선택적 이미지 첨부, 제출 상태, primary action 순으로 배치한다.
 - 피드백 종류는 공용 `RadioOption`의 20px indicator와 10px inner dot, label 및 semantic state visual을 사용하고, 선택된 row 전체 fill이나 consumer 전용 option divider·card를 추가하지 않는다.
 - 피드백 내용은 공용 `TextField`의 multiline 입력을 사용한다.
+- 본문 아래에 `이미지로 상황을 더 알려주세요 (선택)` 안내와 기존 컴포저 이미지 추가 버튼을 같은 줄에 배치한다.
+- 선택한 이미지는 안내 아래에 기존 컴포저의 compact 미리보기와 제거 action으로 표시한다. 새 피드백 전용
+  버튼·갤러리 디자인을 만들지 않으며 작은 미리보기에서도 제거 action의 플랫폼별 터치 영역을 유지한다.
 - `피드백 보내기` primary action은 폼의 전체 너비를 사용한다.
 - 색상, 간격, 반경, typography와 breakpoint는 공용 token을 사용한다.
 
@@ -35,7 +39,7 @@
 
 피드백 form은 입력, 검증, 제출과 결과 상태를 소유하되 자신이 page인지 popup인지 판단하지 않는다.
 
-- form 소유: 종류와 본문 draft, radio group 배치, validation, `submitFeedback`, pending 입력 차단, 성공·실패 표시, 성공 시 초기화,
+- form 소유: 종류·본문·선택한 이미지 draft, radio group 배치, validation, `submitFeedback`, pending 입력 차단, 성공·실패 표시, 성공 시 초기화,
   실패 시 draft 유지
 - 공용 `RadioOption` 소유: 각 option의 indicator·content·내부 spacing과 selected·hover·pressed·disabled·focus visual
 - 현재 호환 page 소유: `PageHeader`, page padding, document scroll, 중앙 콘텐츠 폭
@@ -57,15 +61,15 @@ Form은 `{dirty, submitting}` 상태만 presentation에 알리고 overlay, navig
   덮고 기존 route tree와 document scroll을 배경에 유지한다.
 - 현재 `/feedback` 직접 URL 접근과 새로고침은 기존 보호 route fallback을 유지하며 그 위에 overlay를 중복
   표시하지 않는다.
-- 종류나 본문이 초기값에서 바뀐 dirty 상태에서 닫기 버튼, backdrop 또는 `Escape`를 실행하면 draft 폐기
+- 종류나 본문이 초기값에서 바뀌었거나 이미지가 첨부된 dirty 상태에서 닫기 버튼, backdrop 또는 `Escape`를 실행하면 draft 폐기
   확인을 표시한다. 취소는 overlay와 draft를 유지하고, 폐기는 overlay를 닫는다.
 - 제출 중에는 닫기 버튼, backdrop과 `Escape`를 차단한다.
 - browser Back/Forward, reload, 주소 이동과 tab close는 overlay close contract에 포함하지 않는다. 따라서 이
   경로에서 dirty draft 보존이나 제출 중 이탈 차단은 보장하지 않는다.
 - 성공 후에는 성공 문구와 초기화된 form을 overlay 안에 유지해 연속 제출을 허용한다. 실패 후에는 오류,
   재시도와 draft를 유지한다.
-- `<768px` Web은 viewport 아래 bottom sheet, `>=768px` Web은 최대 약 `600px` 너비와 `85dvh` 높이의 중앙
-  dialog를 사용한다. 두 surface 모두 form body만 내부 scroll한다.
+- `<768px` Web은 viewport 아래 bottom sheet, `>=768px` Web은 최대 약 `600px` 너비의 중앙
+  dialog를 사용한다. 중앙 dialog는 글쓰기 모달처럼 상단 48px에서 시작하며, 내용이 늘어나면 상단 위치를 유지한 채 아래로 확장한다. 최대 높이는 viewport 높이에서 96px를 뺀 값이며, 이를 넘으면 form body만 내부 scroll한다. Mobile sheet의 높이·배치는 유지한다.
 - Mobile Target evidence는 기존 [`Idle bottom sheet`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6665-56255)와
   [`Error · Draft retained`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6773-11567)이다.
   두 frame은 `04 Screens - Mobile`의 `01 Mobile Web exceptions`에 격리하며 Native baseline으로 세지 않는다.
@@ -80,15 +84,31 @@ Form은 `{dirty, submitting}` 상태만 presentation에 알리고 overlay, navig
 ## 상태와 동작 불변조건
 
 - idle은 기본 `좋아요` 종류와 빈 본문으로 시작하며 유효한 본문 전에는 제출을 비활성화한다.
-- pending은 종류, 본문과 제출 action의 중복 입력을 차단한다.
-- 성공은 기존 성공 문구를 표시하고 종류와 본문을 초기화한다.
-- delivery failure와 GraphQL failure는 기존 오류, 재시도 action, 종류와 본문을 유지한다.
-- `submitFeedback` mutation, Slack payload, route와 인증 경계, radio·status·busy semantics는 변경하지 않는다.
+- pending은 종류, 본문, 이미지 선택·제거와 제출 action의 중복 입력을 차단한다.
+- 성공은 기존 성공 문구를 표시하고 종류·본문·첨부를 초기화한다.
+- delivery failure와 GraphQL failure는 기존 오류, 재시도 action, 종류·본문·첨부를 유지한다.
+- route와 인증 경계, radio·status·busy semantics를 유지한다. 첨부 없는 피드백의 전달 계약은 유지한다.
 - 재현 환경은 별도 필드나 자동 감지 metadata로 수집하지 않는다.
+
+## 선택적 이미지 첨부
+
+- 본문은 계속 필수이며 이미지만 제출하지 않는다. 이미지는 없어도 되고 최대 3장까지 선택한다.
+- JPEG·PNG·WebP 정적 이미지를 장당 5MB, 합계 15MB까지 받는다. MB는 1,000,000바이트이다.
+  HEIC/HEIF·GIF·SVG·문서는 지원하지 않는다. 지원 형식과 용량 초과 오류를 첨부 영역에 표시한다.
+- 스크린샷의 글자를 보존하기 위해 자동 축소·손실 변환 없이 선택한 파일을 전달한다.
+- 이미지 선택창 취소는 기존 draft를 보존한다. 선택만으로 전송하지 않고 피드백 제출 시 본문과 함께 전달한다.
+- 제출 전 이미지는 선택된 상태이며 업로드 완료로 표시하거나 읽히지 않는다. 피드백에는 컴포저의
+  ALT·민감 이미지 편집 기능을 노출하지 않는다. 미리보기의 접근 가능한 이름과 제거 action은 제공한다.
+- KOSMO DB와 미디어 저장소에 첨부를 영속 저장하지 않는다. Slack 전달 실패 시 화면에 draft를 남기고
+  명시적 재시도를 제공한다. 일부 이미지 전송 실패를 본문만의 성공으로 바꾸지 않는다.
+- 서버는 자동 재전송하지 않는다. Slack 응답이 유실된 뒤 사용자가 재시도하면 중복 게시될 수 있다는
+  기존 피드백 계약을 유지한다.
 
 ## 검증
 
 - Storybook에서 idle, validation, pending, success, failure와 실패 후 입력 유지를 확인한다.
+- 이미지 0장·3장, 초과 개수·용량·형식, 선택 취소·제거, 첨부만 있는 dirty 확인, 실패 후 첨부 유지와
+  성공 초기화를 확인한다. 기존 컴포저의 미리보기·편집·재시도 동작도 함께 검증한다.
 - Web E2E에서 shell 버튼 open/close 동안 URL 불변, `feedback=open` 직접 query 무시, `/feedback` fallback,
   guest 비노출, dirty 확인, submitting 차단, success 연속 제출, focus·scroll 복원을 검증한다.
 - overlay-only migration에서는 Web 직접 URL·새로고침과 Android·iOS 기존 route 진입이 새 overlay/sheet 계약으로
