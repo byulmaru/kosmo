@@ -143,6 +143,20 @@ describe('GraphQL Reaction', () => {
     assert.equal(await db.$count(Notifications), 0);
   });
 
+  test('Unicode 17의 새 Type을 GraphQL에서 추가하고 삭제한다', async () => {
+    const auth = await createAuthenticatedSession();
+    const post = await createPost(auth.profile.id);
+
+    const added = await requestAddReaction(post.id, '🫶', auth.token);
+    const deleted = await requestDeleteReaction(post.id, '🫶', auth.token);
+
+    assertNoGraphQLErrors(added);
+    assertNoGraphQLErrors(deleted);
+    assert.equal(added.data?.addReaction.reaction.type, '🫶');
+    assert.equal(deleted.data?.deleteReaction.reactionId, added.data?.addReaction.reaction.id);
+    assert.equal(await db.$count(Reactions), 0);
+  });
+
   test('Notification은 Reaction commit에 포함되지 않는다', async () => {
     const auth = await createAuthenticatedSession();
     const recipient = await createProfile(`recipient-${crypto.randomUUID()}`);
@@ -275,7 +289,7 @@ describe('GraphQL Reaction', () => {
     const auth = await createAuthenticatedSession();
     const post = await createPost(auth.profile.id);
 
-    const result = await requestAddReaction(post.id, '👍', auth.token);
+    const result = await requestAddReaction(post.id, 'custom', auth.token);
 
     assert.equal(result.errors?.[0]?.extensions?.code, 'VALIDATION');
     assert.equal(result.errors?.[0]?.extensions?.field, 'type');
@@ -746,7 +760,7 @@ describe('GraphQL Reaction', () => {
     assert.equal(result.data?.node, null);
 
     const publicPost = await createPost(viewer.profile.id);
-    const invalidType = await requestReactionProfiles(publicPost.id, '👍', { first: 1 });
+    const invalidType = await requestReactionProfiles(publicPost.id, 'custom', { first: 1 });
     assert.equal(invalidType.errors?.[0]?.extensions?.code, 'VALIDATION');
     assert.equal(invalidType.errors?.[0]?.extensions?.field, 'type');
   });

@@ -184,7 +184,7 @@ test('저장된 Remote Post URI와 서로 다른 Type을 같은 actor에 materia
   const post = await createRemotePost(author.profile.id, objectUri);
 
   const results = await Promise.all(
-    ['🥹', '🌈'].map((type) =>
+    ['🥹', '🫶'].map((type) =>
       materializeInboundReaction({
         activityUri: `https://${actor.instance.domain}/activities/${crypto.randomUUID()}`,
         actorUri: actor.actorUri,
@@ -207,7 +207,7 @@ test('저장된 Remote Post URI와 서로 다른 Type을 같은 actor에 materia
     )
       .map(({ type }) => type)
       .sort(),
-    ['🌈', '🥹'].sort(),
+    ['🥹', '🫶'].sort(),
   );
 });
 
