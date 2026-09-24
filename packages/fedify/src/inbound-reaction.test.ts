@@ -105,9 +105,10 @@ test('Like와 EmojiReact의 supported·missing·unsupported content를 공통 �
   const actor = await createProfile(InstanceKind.ACTIVITYPUB);
   const cases = [
     { Activity: Like, content: '👀', expected: '👀' },
+    { Activity: EmojiReact, content: '🫶', expected: '🫶' },
     { Activity: EmojiReact, content: undefined, expected: '❤️' },
     { Activity: EmojiReact, content: ':blobcat:', expected: '❤️' },
-    { Activity: Like, content: '👍', expected: '❤️' },
+    { Activity: Like, content: ':blobcat:', expected: '❤️' },
   ] as const;
 
   for (const { Activity, content, expected } of cases) {

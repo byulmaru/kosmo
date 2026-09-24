@@ -80,7 +80,7 @@ describe('Reaction delivery', () => {
     await pg.end();
   });
 
-  test('여섯 Type을 저장 projection에서 stable identity의 Like 또는 EmojiReact로 직렬화한다', async () => {
+  test('Quick와 Full Type을 저장 projection에서 stable identity의 Like 또는 EmojiReact로 직렬화한다', async () => {
     const target = await createDeliveryFixture();
     const context = createContextFixture();
     mock.method(federation, 'createContext', () => context.context);
@@ -91,6 +91,7 @@ describe('Reaction delivery', () => {
       { activityClass: EmojiReact, id: '019f6f67-2222-7777-8888-123456789a04', type: '👀' },
       { activityClass: EmojiReact, id: '019f6f67-2222-7777-8888-123456789a05', type: '☘️' },
       { activityClass: EmojiReact, id: '019f6f67-2222-7777-8888-123456789a06', type: '🌈' },
+      { activityClass: EmojiReact, id: '019f6f67-2222-7777-8888-123456789a07', type: '🫶' },
     ] as const;
 
     for (const reaction of cases) {
@@ -265,7 +266,7 @@ describe('Reaction delivery', () => {
         id: crypto.randomUUID(),
         postId: unsupported.postId,
         profileId: unsupported.senderProfileId,
-        type: '👍',
+        type: 'custom',
       }),
       /Unsupported outbound/,
     );
