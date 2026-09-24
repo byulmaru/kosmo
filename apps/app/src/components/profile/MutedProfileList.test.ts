@@ -13,6 +13,7 @@ const mockModule = (specifier: string | URL, exports: object) =>
 
 mockModule('react-native', {
   StyleSheet: { create: <T>(styles: T) => styles },
+  Text: 'Text',
   View: ({ children, ...props }: { children?: ReactNode }) =>
     createElement('View', props, children),
 });
@@ -29,11 +30,15 @@ mockModule(new URL('../ui/StateView.tsx', import.meta.url), {
 mockModule(new URL('../ui/ToastProvider.tsx', import.meta.url), {
   useToast: () => ({ showToast: () => () => undefined }),
 });
+mockModule(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
+  useTheme: () => ({ foregroundPrimary: 'foreground' }),
+});
 mockModule(new URL('./ProfileListItemContent.tsx', import.meta.url), {
   ProfileListItemContent: ({ children, ...props }: { children?: ReactNode }) =>
     createElement('ProfileRow', props, children),
 });
-mockModule('../../theme/tokens', { space: { 16: 16 } });
+const labelStyle = { fontSize: 16 };
+mockModule('../../theme/tokens', { space: { 16: 16 }, textStyles: { uiLabelL: labelStyle } });
 
 let MutedProfileList: typeof MutedProfileListExport;
 let renderer: ReactTestRenderer | null = null;
@@ -48,7 +53,7 @@ afterEach(async () => {
 });
 
 describe('MutedProfileList', () => {
-  it('loaded row renders the profile relative handle with the existing action', async () => {
+  it('loaded row renders the Figma name-only identity with the existing action', async () => {
     await act(async () => {
       renderer = create(
         createElement(MutedProfileList, {
@@ -60,7 +65,6 @@ describe('MutedProfileList', () => {
                 avatarUri: 'https://media.example/avatar.png',
                 displayName: '별마루',
                 id: 'profile-star',
-                relativeHandle: '@star',
               },
             ],
             status: 'loaded',
@@ -71,7 +75,9 @@ describe('MutedProfileList', () => {
 
     const row = renderer?.root.find((node) => (node.type as unknown) === 'ProfileRow');
     assert.equal(row?.props.displayName, '별마루');
-    assert.equal(row?.props.relativeHandle, '@star');
+    assert.equal(row?.props.relativeHandle, undefined);
     assert.equal(row?.props.avatarUri, 'https://media.example/avatar.png');
+    assert.equal(row?.props.identity.props.children, '별마루');
+    assert.equal(row?.props.identity.props.style[0], labelStyle);
   });
 });
