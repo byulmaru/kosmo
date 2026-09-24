@@ -61,7 +61,7 @@ Full Reaction Picker는 Quick Picker를 폐기하지 않고, Emoji 16의 완전 
 
 ## Post Action Bar 통합
 
-- 실제 Post Action Bar의 Reaction action은 현재 여섯 Type을 zero-count 여부와 무관하게 client catalog에서 공급하고, selected Profile의 `viewerReactions`를 선택 상태로 사용한다.
+- 실제 Post Action Bar의 Quick Reaction action은 여섯 Type을 zero-count 여부와 무관하게 공급하고, Full Picker 진입에서는 Emoji 16의 완전 수식 3,781개 Type을 사용한다. 선택 상태는 selected Profile의 `viewerReactions`를 사용한다.
 - Reaction trigger는 Web·iOS·Android 모두에서 trigger에 붙은 작은 floating popover를 열며 같은 trigger를 다시 누르면 닫힌다. 화면 공간에 따라 위·아래로 전환하고 viewport와 safe area 안으로 수평 위치를 제한한다. option row의 고유 너비가 가용 너비보다 크면 target 크기를 줄이지 않고 feature-local `ScrollView` shell 안에서 수평 scroll을 허용한다.
 - PostMediaViewer의 390×844 Mobile Target은 reaction trigger 위 공간이 충분하므로 같은 adaptive 규칙이 위쪽 배치를
   선택한다. Viewer 전용 `alwaysAbove` 예외를 만들지 않는다.
