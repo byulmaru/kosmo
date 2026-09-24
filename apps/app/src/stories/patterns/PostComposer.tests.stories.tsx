@@ -30,6 +30,7 @@ import baseMeta, {
   SubmittingPickerContract as submittingPickerContract,
   SubmittingSpinnerContract as submittingSpinnerContract,
   SubmittingVisibilityContract as submittingVisibilityContract,
+  WebModalLayoutContract as webModalLayoutContract,
 } from './PostComposer.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
@@ -83,6 +84,10 @@ export const MobilePlaygroundContract: Story = mobilePlaygroundContract;
 export const MobileRuntimeAltEditorContract: Story = mobileRuntimeAltEditorContract;
 export const MobileFlexLayoutContract: Story = mobileFlexLayoutContract;
 export const OverlayGeometryContract: Story = overlayGeometryContract;
+export const WebModalLayoutContract: Story = {
+  ...webModalLayoutContract,
+  parameters: { controls: { disable: true } },
+};
 export const OverlayProgressRingContract: Story = overlayProgressRingContract;
 export const PendingMediaContract: Story = pendingMediaContract;
 export const ProgressRingToneContract: Story = progressRingToneContract;
@@ -104,7 +109,18 @@ export const ReplyModeContract: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    expect(canvas.getByTestId('reply-context-preview')).toBeVisible();
+    const parent = canvas.getByTestId('reply-context-preview');
+    const scroll = canvas.getByTestId('post-composer-scroll');
+    const visibility = canvas.getByRole('button', { name: '공개 범위: 조용한 공개' });
+    const footer = canvas.getByTestId('post-composer-footer');
+    expect(parent).toBeVisible();
+    expect(scroll.contains(parent)).toBe(true);
+    expect(scroll.contains(visibility)).toBe(false);
+    expect(within(visibility).getByText('공개 범위')).toBeVisible();
+    expect(visibility.getBoundingClientRect().bottom).toBeCloseTo(
+      footer.getBoundingClientRect().top,
+      0,
+    );
     expect(canvas.getByRole('textbox', { name: '답글 본문' })).toHaveAttribute(
       'placeholder',
       '무슨 일이 일어나고 있나요?',
@@ -350,6 +366,9 @@ export const ShortViewportContract: Story = {
     const visibility = within(dialog).getByRole('button', { name: '공개 범위: 조용한 공개' });
     const contentWarning = within(dialog).getByRole('textbox', { name: '콘텐츠 경고' });
     const submit = within(dialog).getByRole('button', { name: '게시' });
+    expect(scroll.contains(contentWarning)).toBe(true);
+    expect(scroll.contains(visibility)).toBe(false);
+    scroll.scrollTop = 0;
     const visibilityTop = visibility.getBoundingClientRect().top;
     const contentWarningTop = contentWarning.getBoundingClientRect().top;
     const submitTop = submit.getBoundingClientRect().top;
@@ -357,7 +376,7 @@ export const ShortViewportContract: Story = {
     scroll.scrollTop = scroll.scrollHeight;
     expect(scroll.scrollTop).toBeGreaterThan(0);
     expect(visibility.getBoundingClientRect().top).toBe(visibilityTop);
-    expect(contentWarning.getBoundingClientRect().top).toBe(contentWarningTop);
+    expect(contentWarning.getBoundingClientRect().top).toBeLessThan(contentWarningTop);
     expect(submit.getBoundingClientRect().top).toBe(submitTop);
 
     await userEvent.click(within(dialog).getByRole('button', { name: '이모지 추가' }));

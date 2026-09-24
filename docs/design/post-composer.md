@@ -33,6 +33,7 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   유지하며, Reply/Quote surface만 modal로 분리한다.
 - Current runtime과 OpenSpec은 Web `< compact`와 Android/iOS의 목록 surface에서 같은 관계 맥락을 전체 화면
   작성기로 연다. Reply Parent는 editor 앞에, Quote Source는 본문 아래에 표시한다.
+- Web `< compact`의 Reply 연결선도 Parent와 작성 Profile의 Avatar에서 각각 `4px` 띄운다.
 - Figma Target의 Focused/Keyboard는 입력과 keyboard를 우선하고 `@kosmo님에게 답글` 같은 최소 맥락만 표시한다.
 - Figma Target의 비키보드 Initial anchor에서도 direct Parent는 작성 영역 아래로 내려오지 않으며 기본
   viewport에 표시하지 않는다.
@@ -51,15 +52,18 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
 
 - modal 너비는 `600px`이고 높이는 Parent, editor, Content Warning, media 내용에 맞춰
   자동으로 늘고 줄어든다.
-- 최대 높이는 `min(720px, 85dvh)`로 제한한다.
-- header와 footer는 modal 안에 고정하고, 제한 높이를 넘는 Parent와 editor만 하나의 중앙 scroll 영역에서
-  함께 스크롤한다. Parent만 별도 스크롤하는 nested scroll은 만들지 않는다.
+- Web `≥ compact` modal의 최대 높이는 일반 Post Overlay와 동일하게 viewport 상·하 `48px` 여백을
+  제외한 `calc(100dvh - 96px)`이다. Android/iOS modal은 기존 `min(720px, 85dvh)`를 유지한다.
+- Web `≥ compact` Reply·Quote modal은 일반 Post Overlay와 같은 viewport 상단 `48px`에서 시작해 아래로
+  확장한다. Web `< compact` fullscreen과 Android/iOS modal의 기존 정렬은 유지한다.
+- header·공개 범위 행·footer는 modal 안에 고정하고, 제한 높이를 넘는 Parent와 editor만 하나의 중앙 scroll
+  영역에서 함께 스크롤한다. Parent만 별도 스크롤하는 nested scroll은 만들지 않는다.
 - card surface, semantic `border`, `radius/lg` 16px과 기존 modal backdrop을 사용한다. 배경 document는 modal이
   열린 동안 스크롤되지 않는다.
 
 ### header
 
-- 일반·Reply·Quote 구분 없이 좌측에 `글쓰기` 제목을 표시한다.
+- 일반·Reply·Quote 구분 없이 중앙에 `글쓰기` 제목을 표시한다.
 - 우측에는 텍스트가 아닌 `X` 아이콘 닫기 버튼을 둔다. accessible name은 `닫기`다.
 - 닫기 버튼의 visual box와 interactive target은 과거의 고정 44x44 가정을 복사하지 않는다. Web·Native별
   최신 승인 접근성 지침을 확인한 뒤 해당 surface의 target을 정한다.
@@ -75,7 +79,7 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
 - Parent 본문은 줄 수로 생략하지 않는다. 제한 높이를 넘을 때 중앙 영역의 단일 scroll로 접근한다.
 - Parent에 Content Warning이 있으면 warning과 공용 reveal control을 표시한다. Parent 본문과 Media는 해당
   Post identity의 공용 reveal 상태를 따르며, 이 control은 작성 상태나 route를 변경하지 않는다.
-- Parent Avatar 아래의 thread connector를 Reply 작성 Profile의 Avatar까지 이어 기존 Reply 표시 구조와 같은
+- Parent Avatar 아래의 thread connector는 양쪽 Avatar에서 각각 `4px` 띄워 기존 Reply 표시 구조와 같은
   대화 관계를 표현한다.
 - Parent 영역은 작성 맥락 확인을 위한 비대화형 presentation이다. 작성자·Source·본문을 활성화해 modal 작성
   상태를 잃는 route 이동을 만들지 않는다.
@@ -85,11 +89,11 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
 
 ### editor와 고정 footer
 
-- 중앙 editor는 기존 Composer의 작성 Profile, TextArea와 error 표현을 사용한다. Web TextArea의 브라우저
-  기본 사각 outline은 중복 표시하지 않고, semantic `focus` token을 적용한 둥근 editor surface border 하나를
-  focus indicator로 사용한다. 이 focus 경계는 인접 editor background와 3:1 이상의 대비를 유지한다. 오류
-  상태에서는 같은 경계를 semantic danger border로 바꾼다. placeholder는 일반 Post, Reply, Quote 모두
-  `무슨 일이 일어나고 있나요?`를 사용한다.
+- 중앙 작성 영역의 첫 행에는 원본 작성 Profile 정보만 표시한다. Profile 정보는
+  정적 표시이며 switcher나 action이 아니다. Web TextArea의
+  브라우저 기본 사각 outline과 중첩 editor border는 표시하지 않는다. modal/card surface의 semantic border는
+  유지하고 입력 위치는 caret·selection으로 표시한다. placeholder는 일반 Post, Reply, Quote 모두 `무슨 일이 일어나고 있나요?`를
+  사용한다.
 - editor는 기존 Composer의 nullable Plain Text Content Warning 입력을 함께 제공한다. surface가 새 Parent
   문맥으로 초기화될 때 direct Parent의 `contentWarning`이 있으면 그 값을 Reply Content Warning의 초기값으로
   한 번 복사하고, 없으면 빈 초기값을 사용한다. 복사 뒤에는 Parent와 연결된 값으로 취급하지 않으며 사용자는
@@ -100,8 +104,10 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   `본문 → Quote Source → Media`다. 선택한 이미지의 미리보기, 업로드 상태,
   제거·재시도, nullable Alt Text와 Sensitive Media control이 늘어나면 Parent와 editor가 공유하는 중앙 영역에서
   함께 스크롤하고 고정 footer를 밀어내지 않는다.
-- footer 좌측에는 Visibility control을 둔다.
-- footer 우측에는 남은 글자 수와 공용 `게시` primary button을 이 순서로 둔다.
+- Visibility control은 중앙 scroll 영역과 footer 사이의 고정된 전체 폭 행에 둔다. 모바일과 같이
+  `공개 범위` label은 좌측, 현재 값과 펼침 아이콘은 우측에 표시하며 행의 위·아래 경계로 구분한다.
+- footer는 modal 바닥에 고정한다. 좌측에는 기존 작성 도구를, 우측에는 남은 글자 수와 공용 `게시` primary
+  button을 이 순서로 둔다.
 - 남은 글자 수는 trim·normalize한 Content Warning과 본문 Plain Text의 합계를 500에서 차감해 항상 표시하며
   초과 시 semantic danger 상태로 표시한다.
 - trim한 본문과 업로드를 완료한 Media가 모두 없거나, Content Warning과 본문 Plain Text의 합계가 500자를

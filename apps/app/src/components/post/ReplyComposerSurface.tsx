@@ -368,6 +368,7 @@ function ReplyComposerSurfaceContents({
           style={[
             styles.backdrop,
             presentation === 'fullscreen' ? styles.fullscreenBackdrop : null,
+            Platform.OS === 'web' && presentation === 'modal' ? styles.webModalBackdrop : null,
             safeAreaStyle,
             { backgroundColor: theme.overlayScrim },
           ]}
@@ -380,6 +381,7 @@ function ReplyComposerSurfaceContents({
               styles.dialog,
               elevation.overlay,
               presentation === 'fullscreen' ? styles.fullscreen : styles.modal,
+              Platform.OS === 'web' && presentation === 'modal' ? styles.webModal : null,
               {
                 backgroundColor: theme.card,
                 borderColor: theme.border,
@@ -404,7 +406,14 @@ function ReplyComposerSurfaceContents({
                       disabled={submitting}
                       hitSlop={4}
                       onPress={() => requestClose()}
-                      style={{ height: closeControlSize, width: closeControlSize }}
+                      style={[
+                        styles.closeButton,
+                        {
+                          height: closeControlSize,
+                          transform: [{ translateY: -closeControlSize / 2 }],
+                          width: closeControlSize,
+                        },
+                      ]}
                       targetSize={closeControlSize}
                       visualSize={closeControlSize}
                       visualStyle={({ pressed }) => [
@@ -426,7 +435,13 @@ function ReplyComposerSurfaceContents({
                   <PostComposerController
                     beforeEditor={
                       quoteMode ? undefined : (
-                        <View style={styles.parent} testID="reply-parent">
+                        <View
+                          style={[
+                            styles.parent,
+                            presentation === 'modal' ? styles.modalParent : null,
+                          ]}
+                          testID="reply-parent"
+                        >
                           <View style={styles.parentAvatarColumn}>
                             <Avatar
                               imageUri={parent.profile.avatar?.url}
@@ -434,7 +449,13 @@ function ReplyComposerSurfaceContents({
                               size={40}
                             />
                             <PostThreadConnector
-                              style={styles.parentConnector}
+                              style={[
+                                styles.parentConnector,
+                                presentation === 'modal' ? styles.modalParentConnector : null,
+                                Platform.OS === 'web' && presentation === 'fullscreen'
+                                  ? styles.webFullscreenParentConnector
+                                  : null,
+                              ]}
                               testID="reply-parent-thread-connector"
                             />
                           </View>
@@ -460,7 +481,7 @@ function ReplyComposerSurfaceContents({
                     contextGuard={contextGuard}
                     editorRef={editorRef}
                     focusOnMount
-                    onRequestClose={requestClose}
+                    onRequestClose={() => requestClose()}
                     initialContentWarning={quoteMode ? undefined : parent.content?.contentWarning}
                     presentation={presentation === 'fullscreen' ? 'mobile' : 'overlay'}
                     onPostCreated={handlePostCreated}
@@ -495,6 +516,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: spacing.lg,
   },
+  webModalBackdrop: { justifyContent: 'flex-start' },
   fullscreenBackdrop: { padding: 0 },
   dialog: {
     borderWidth: 1,
@@ -505,6 +527,11 @@ const styles = StyleSheet.create({
     borderRadius: radii.lg,
     maxHeight: 'min(720px, 85dvh)' as never,
     width: 600,
+  },
+  webModal: {
+    marginTop: spacing.xxl,
+    maxHeight: 'calc(100dvh - 96px)' as never,
+    overflow: 'clip' as never,
   },
   fullscreen: {
     borderRadius: 0,
@@ -521,13 +548,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderBottomWidth: 1,
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     minHeight: 56,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
+    position: 'relative',
     width: '100%',
   },
   title: { fontFamily: fontFamilies.ui, fontWeight: '800', ...typography.lg },
+  closeButton: { position: 'absolute', right: spacing.lg, top: '50%' },
   close: { alignItems: 'center', borderRadius: radii.full, justifyContent: 'center' },
   parent: {
     alignItems: 'stretch',
@@ -535,6 +564,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingBottom: spacing.lg,
   },
+  modalParent: { zIndex: 1 },
   parentAvatarColumn: { position: 'relative', width: 40 },
   parentConnector: {
     bottom: -spacing.md,
@@ -542,6 +572,8 @@ const styles = StyleSheet.create({
     top: 40 + spacing.xs,
     transform: [{ translateX: -1 }],
   },
+  modalParentConnector: { bottom: -(spacing.md + spacing.xxl - spacing.xs) },
+  webFullscreenParentConnector: { bottom: -(spacing.xl - 2) },
   parentContent: { flex: 1, gap: spacing.md, minWidth: 0 },
   parentIdentity: { flex: 1, minWidth: 0 },
   timestamp: { fontFamily: fontFamilies.ui, marginTop: spacing.xs, ...typography.xsm },

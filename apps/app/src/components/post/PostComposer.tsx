@@ -37,7 +37,7 @@ import {
 import { PostComposerMediaItemsTarget } from './PostComposerMediaItemsTarget';
 import { postVisibilityPresentation } from './postVisibilityPresentation';
 import type { ReactNode, RefObject } from 'react';
-import type { TextStyle } from 'react-native';
+import type { TextStyle, ViewStyle } from 'react-native';
 import type { ComposerMediaItem } from './PostComposerMediaControls';
 
 const postComposerTargetVisibilityValues = [
@@ -284,12 +284,13 @@ export function PostComposer({
       sensitiveMedia={sensitiveMedia}
     />
   );
-  const unifiedOverlayScroll = surface === 'overlay' && beforeEditor !== undefined;
+  const unifiedOverlayScroll = surface === 'overlay';
   const editorContent = (
     <View
       style={[
         styles.content,
         items.length === 0 && !hasTrailingContent ? styles.textContent : null,
+        surface === 'overlay' ? styles.overlayContent : null,
       ]}
     >
       <TextArea
@@ -322,6 +323,9 @@ export function PostComposer({
               ? styles.mediaBody
               : styles.textBody,
           surface === 'rail' ? styles.railBody : null,
+          surface === 'overlay' && items.length === 0 && !hasTrailingContent
+            ? styles.overlayTextBody
+            : null,
           bodyContentHeight > 0 ? { height: bodyContentHeight } : null,
           { backgroundColor: theme.backgroundElevated, color: theme.foregroundPrimary },
           composerBodyFocusStyle,
@@ -332,9 +336,100 @@ export function PostComposer({
       {surface === 'overlay' ? mediaGallery : null}
     </View>
   );
+  const visibilityControl = (
+    <View
+      ref={controlRef}
+      style={[
+        styles.visibilityControl,
+        surface === 'overlay' ? styles.overlayVisibilityControl : null,
+      ]}
+    >
+      <Pressable
+        ref={triggerRef}
+        aria-expanded={visibilityOpen && !submitting}
+        accessibilityLabel={`공개 범위: ${selectedVisibility.label}`}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: visibilityOpen && !submitting }}
+        disabled={submitting}
+        onPress={() => setVisibilityOpen((open) => !open)}
+        style={({ pressed }) =>
+          surface === 'overlay'
+            ? [
+                styles.mobileVisibility,
+                {
+                  backgroundColor: pressed ? theme.statePressed : theme.backgroundElevated,
+                  borderColor: theme.borderSubtle,
+                },
+              ]
+            : [
+                styles.visibilityTrigger,
+                {
+                  backgroundColor: pressed ? theme.statePressed : theme.backgroundSurface,
+                  borderColor: theme.borderDefault,
+                },
+              ]
+        }
+      >
+        {surface === 'overlay' ? (
+          <>
+            <Text style={[styles.mobileVisibilityCaption, { color: theme.foregroundSecondary }]}>
+              공개 범위
+            </Text>
+            <View style={styles.mobileVisibilityValue}>
+              <Text style={[styles.visibilityOptionLabel, { color: theme.foregroundPrimary }]}>
+                {selectedVisibility.label}
+              </Text>
+              <ChevronDownIcon
+                color={theme.foregroundPrimary}
+                size={iconSizes[16]}
+                strokeWidth={2}
+              />
+            </View>
+          </>
+        ) : (
+          <>
+            <SelectedVisibilityIcon
+              color={theme.foregroundPrimary}
+              size={iconSizes[16]}
+              strokeWidth={2}
+            />
+            <Text
+              numberOfLines={1}
+              style={[styles.visibilityLabel, { color: theme.foregroundPrimary }]}
+            >
+              {selectedVisibility.label}
+            </Text>
+          </>
+        )}
+      </Pressable>
+      {visibilityOpen && !submitting ? (
+        <VisibilityMenu
+          alignRight={surface === 'overlay'}
+          openAbove={surface === 'overlay'}
+          menuRef={menuRef}
+          triggerRef={triggerRef}
+          onDismiss={() => setVisibilityOpen(false)}
+          onChange={(value) => {
+            onVisibilityChange(value);
+            setVisibilityOpen(false);
+            triggerRef.current?.focus();
+          }}
+          value={visibility}
+        />
+      ) : null}
+    </View>
+  );
   const editorFooter = (
     <View
-      style={[styles.footer, { backgroundColor: theme.backgroundElevated }]}
+      style={[
+        styles.footer,
+        surface === 'overlay' ? styles.overlayFooter : null,
+        {
+          backgroundColor: theme.backgroundElevated,
+          borderTopColor: theme.borderSubtle,
+          borderTopWidth: surface === 'overlay' ? borderWidths[0] : borderWidths[1],
+        },
+      ]}
       testID="post-composer-footer"
     >
       <View style={styles.tools}>
@@ -426,6 +521,7 @@ export function PostComposer({
       style={[
         styles.editor,
         styles.desktopEditor,
+        surface === 'overlay' ? styles.overlayEditor : null,
         {
           backgroundColor: theme.backgroundElevated,
           borderColor: surface === 'rail' && bodyFocused ? theme.primary : theme.borderDefault,
@@ -433,50 +529,13 @@ export function PostComposer({
       ]}
       testID="post-composer-editor"
     >
-      <View style={styles.header}>
-        <View ref={controlRef} style={styles.visibilityControl}>
-          <Pressable
-            ref={triggerRef}
-            aria-expanded={visibilityOpen && !submitting}
-            accessibilityLabel={`공개 범위: ${selectedVisibility.label}`}
-            accessibilityRole="button"
-            accessibilityState={{ expanded: visibilityOpen && !submitting }}
-            disabled={submitting}
-            onPress={() => setVisibilityOpen((open) => !open)}
-            style={({ pressed }) => [
-              styles.visibilityTrigger,
-              {
-                backgroundColor: pressed ? theme.statePressed : theme.backgroundSurface,
-                borderColor: theme.borderDefault,
-              },
-            ]}
-          >
-            <SelectedVisibilityIcon
-              color={theme.foregroundPrimary}
-              size={iconSizes[16]}
-              strokeWidth={2}
-            />
-            <Text
-              numberOfLines={1}
-              style={[styles.visibilityLabel, { color: theme.foregroundPrimary }]}
-            >
-              {selectedVisibility.label}
-            </Text>
-          </Pressable>
-          {visibilityOpen && !submitting ? (
-            <VisibilityMenu
-              menuRef={menuRef}
-              triggerRef={triggerRef}
-              onDismiss={() => setVisibilityOpen(false)}
-              onChange={(value) => {
-                onVisibilityChange(value);
-                setVisibilityOpen(false);
-                triggerRef.current?.focus();
-              }}
-              value={visibility}
-            />
-          ) : null}
-        </View>
+      <View style={[styles.header, surface === 'overlay' ? styles.overlayHeader : null]}>
+        {surface === 'overlay' ? (
+          <View style={styles.overlayAuthor} testID="post-composer-author">
+            {author}
+          </View>
+        ) : null}
+        {surface === 'rail' ? visibilityControl : null}
         {surface === 'rail' ? (
           <IconButton
             accessibilityLabel="Composer 확장"
@@ -510,12 +569,10 @@ export function PostComposer({
       ) : (
         <ScrollView
           keyboardShouldPersistTaps="handled"
-          scrollEnabled={surface === 'overlay'}
+          scrollEnabled={false}
           style={[
             styles.desktopScroll,
-            Platform.OS === 'web'
-              ? webScrollbarStyle(theme.borderStrong, surface === 'overlay')
-              : null,
+            Platform.OS === 'web' ? webScrollbarStyle(theme.borderStrong, false) : null,
           ]}
           testID="post-composer-scroll"
         >
@@ -537,6 +594,7 @@ export function PostComposer({
       style={[
         styles.root,
         surface === 'rail' ? styles.rail : styles.overlay,
+        surface === 'overlay' ? styles.overlayRoot : null,
         surface === 'overlay' && Platform.OS === 'web' ? styles.webOverlay : null,
         { backgroundColor: theme.backgroundCanvas },
       ]}
@@ -554,9 +612,9 @@ export function PostComposer({
             testID="post-composer-scroll"
           >
             {beforeEditor}
-            <View style={styles.authorLayer}>{author}</View>
             {editor}
           </ScrollView>
+          {visibilityControl}
           {editorFooter}
         </>
       ) : (
@@ -609,23 +667,32 @@ export function MobileFullscreenComposerShellCandidate({
   const bodyInputRef = useRef<TextInput>(null);
   const [bodyContentHeight, setBodyContentHeight] = useState(0);
   const hasTrailingContent = children !== undefined && children !== null;
+  const shouldAutoSizeBody = Platform.OS === 'web' && (hasTrailingContent || mode === 'reply');
+  const bodyUsesTrailingContentLayout =
+    hasTrailingContent || (shouldAutoSizeBody && bodyContentHeight > 0);
+  const webReplyShellStyle =
+    Platform.OS === 'web' && mode === 'reply'
+      ? ({ overflow: 'clip' } as unknown as ViewStyle)
+      : null;
   const { controlRef, menuRef, setVisibilityOpen, triggerRef, visibilityOpen } = useVisibilityMenu(
     submitting,
     onVisibilityChange,
   );
   useEffect(() => {
-    if (Platform.OS !== 'web' || !hasTrailingContent) {
+    if (!shouldAutoSizeBody || bodyContentHeight > 0) {
       return;
     }
     const input = (bodyRef ?? bodyInputRef).current as unknown as HTMLTextAreaElement | null;
     if (!input) {
       return;
     }
+    const availableHeight = input.clientHeight;
     input.style.height = '0px';
     const height = input.scrollHeight;
-    input.style.height = `${height}px`;
-    setBodyContentHeight(height);
-  }, [body, bodyRef, hasTrailingContent]);
+    const overflowing = height > availableHeight;
+    input.style.height = overflowing ? `${height}px` : 'auto';
+    setBodyContentHeight(overflowing ? height : 0);
+  }, [body, bodyContentHeight, bodyRef, shouldAutoSizeBody]);
   const selectedVisibility =
     visibilityOptions.find((option) => option.value === visibility) ?? visibilityOptions[1];
   const disabled =
@@ -639,6 +706,7 @@ export function MobileFullscreenComposerShellCandidate({
       style={[
         styles.mobileShell,
         fillContainer ? styles.mobileShellFill : null,
+        webReplyShellStyle,
         { backgroundColor: theme.backgroundCanvas },
       ]}
       testID="mobile-fullscreen-composer-candidate"
@@ -722,6 +790,7 @@ export function MobileFullscreenComposerShellCandidate({
         contentContainerStyle={styles.mobileScrollContent}
         keyboardShouldPersistTaps="handled"
         style={styles.mobileScroll}
+        testID="mobile-fullscreen-composer-scroll"
       >
         <View style={styles.mobileComposerBody} testID="mobile-composer-body">
           {beforeEditor}
@@ -743,12 +812,14 @@ export function MobileFullscreenComposerShellCandidate({
             editable={!submitting}
             multiline
             onChange={(event) => {
-              if (Platform.OS === 'web' && hasTrailingContent) {
+              if (shouldAutoSizeBody) {
                 const input = event.currentTarget as unknown as HTMLTextAreaElement;
+                const availableHeight = input.clientHeight;
                 input.style.height = '0px';
                 const height = input.scrollHeight;
-                input.style.height = `${height}px`;
-                setBodyContentHeight(height);
+                const overflowing = height > availableHeight;
+                input.style.height = overflowing ? `${height}px` : 'auto';
+                setBodyContentHeight(overflowing ? height : 0);
               }
             }}
             onChangeText={onBodyChange}
@@ -762,8 +833,10 @@ export function MobileFullscreenComposerShellCandidate({
             }
             style={[
               styles.mobileBody,
-              hasTrailingContent ? styles.mobileTrailingContentBody : null,
-              hasTrailingContent && bodyContentHeight > 0 ? { height: bodyContentHeight } : null,
+              bodyUsesTrailingContentLayout ? styles.mobileTrailingContentBody : null,
+              bodyUsesTrailingContentLayout && bodyContentHeight > 0
+                ? { height: bodyContentHeight }
+                : null,
               {
                 backgroundColor: theme.backgroundCanvas,
                 color: theme.foregroundPrimary,
@@ -938,6 +1011,7 @@ function IllustrativeKeyboard() {
 
 function VisibilityMenu({
   alignRight = false,
+  openAbove = false,
   menuRef,
   onChange,
   onDismiss,
@@ -945,6 +1019,7 @@ function VisibilityMenu({
   value,
 }: {
   alignRight?: boolean;
+  openAbove?: boolean;
   menuRef: RefObject<View | null>;
   onChange: (value: PostComposerVisibility) => void;
   onDismiss: () => void;
@@ -989,6 +1064,7 @@ function VisibilityMenu({
             ? styles.visibilityMenuRight
             : styles.visibilityMenuLeft
           : styles.nativeVisibilityMenu,
+        Platform.OS === 'web' && openAbove ? styles.visibilityMenuAbove : null,
         elevation.floating,
         { backgroundColor: theme.backgroundElevated, borderColor: theme.borderDefault },
       ]}
@@ -1101,6 +1177,14 @@ const styles = StyleSheet.create({
   contentWarning: { paddingBottom: space[12] },
   contentWarningField: { borderRadius: radius[0] },
   editor: { borderRadius: radius[12], borderWidth: borderWidths[1], overflow: 'visible' },
+  overlayAuthor: { flex: 1, minWidth: 0 },
+  overlayContent: { minHeight: 0 },
+  overlayEditor: { borderWidth: borderWidths[0] },
+  overlayFooter: { borderTopWidth: borderWidths[1], marginHorizontal: -space[16] },
+  overlayHeader: { paddingHorizontal: space[0] },
+  overlayRoot: { gap: space[0], paddingBottom: space[0] },
+  overlayVisibilityControl: { marginHorizontal: -space[16] },
+  overlayTextBody: { minHeight: 80 },
   footer: {
     alignItems: 'center',
     borderBottomLeftRadius: radius[12],
@@ -1194,7 +1278,7 @@ const styles = StyleSheet.create({
   desktopScroll: { flexGrow: 0, flexShrink: 1, minHeight: 0 },
   overlay: { flexShrink: 1, maxWidth: 640, minHeight: 0, width: '100%' },
   overlayScroll: { flexGrow: 0, flexShrink: 1, minHeight: 0 },
-  overlayScrollContent: { gap: space[16] },
+  overlayScrollContent: { gap: space[16], paddingBottom: space[16] },
   progressRing: { height: 20, width: 20 },
   rail: { width: '100%' },
   railBody: { maxHeight: railBodyMaxHeight },
@@ -1219,6 +1303,7 @@ const styles = StyleSheet.create({
     top: 44,
     width: 240,
   },
+  visibilityMenuAbove: { bottom: 48, top: 'auto' },
   visibilityMenuLeft: { left: 0 },
   visibilityMenuRight: { right: space[16] },
   webOverlay: { maxHeight: 'calc(100dvh - 160px)' as never },

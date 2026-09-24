@@ -589,12 +589,14 @@ documentation·state specimen을 두 번째 행에 둔다.
   presentation, Media gallery/editor와 shell 진입점을 연결한다. Poll·Emoji와 `Image Edit`는 숨기며 Composer 진입은
   shell의 Rail·Overlay·Mobile action만 사용한다. Web component·Storybook interaction 검증은 완료했고 Android/iOS 실제 keyboard·back·safe
   area·touch/focus 검증은 별도로 남아 있다.
-- Production Host의 일반 Web Overlay는 `640px` 폭으로 viewport 상단 `48px`에 배치한다. 2026-09-16 사용자
-  결정에 따라 Desktop Rail·Overlay 외곽은 본문·Media·CW content를 따라 늘어난다. Rail에는 외곽 최대 높이를 두지
-  않고 본문 TextInput만 `300px`에서 내부 scroll로 전환하며, `112px` Media gallery는 본문 scroller 밖 별도 영역에
-  두고 footer는 항상 표시한다. Overlay는 상·하 `48px` gutter를 제외한 viewport 높이를 상한으로 사용한다. 상한 이후
-  author·editor header·CW·footer를 유지하고 body·Media만 가운데 영역에서 scroll하며 Media용 min-height를 예약하지 않는다. 모바일은 header·공개 범위·footer를
-  고정하고 body와 media shelf가 남은 높이를 채우되 짧은 viewport에서 함께 scroll한다. Media editor는 같은 제한 높이 안에서
+- Production Host의 일반 Web Overlay는 `640px` 폭으로 viewport 상단 `48px`에 배치한다. Desktop Rail·Overlay
+  외곽은 본문·Media·CW content를 따라 늘어난다. Rail에는 외곽 최대 높이를 두지 않고 본문 TextInput만 `300px`에서
+  내부 scroll로 전환하며, `112px` Media gallery는 본문 scroller 밖 별도 영역에 두고 footer는 항상 표시한다.
+  2026-09-21 PROD-994의 Web Overlay는 중첩 editor border를 제거한다. 원래의 정적 작성 Profile 정보와 공개 범위
+  control을 작성 영역 첫 행 좌우에 두고, Reply Parent·Quote source·CW·본문·Media는 한 중앙 영역에서 함께 scroll한다.
+  짧은 글의 본문 최소 높이를 줄이고 footer는 modal 바닥에 고정한다. Overlay는 상·하 `48px` gutter를 제외한
+  viewport 높이를 상한으로 사용한다. 모바일은 header·공개 범위·footer를 고정하고 body와 media shelf가 남은 높이를
+  채우되 짧은 viewport에서 함께 scroll한다. Media editor는 같은 제한 높이 안에서
   별도 내부 scroll을 사용한다.
   editor 전환 시 composer와 upload owner를 유지해 복귀 focus와 breakpoint 전환 뒤 paste 경로를 보존한다.
   Figma `RightRail` source의 Composer editor outline과 개인정보 처리방침은 Rail 왼쪽에서 16px인 같은 기준선을
