@@ -133,7 +133,9 @@ function ProfileHeroFixture({
           action={
             showAction ? (
               actionKind === 'edit' ? (
-                <Button tone="secondary">편집</Button>
+                <Button style={{ minWidth: 96, width: 96 }} tone="secondary">
+                  편집
+                </Button>
               ) : (
                 <FollowButton profile={target.followButton} />
               )

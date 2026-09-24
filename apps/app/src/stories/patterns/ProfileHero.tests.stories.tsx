@@ -96,9 +96,11 @@ export const MobileEditActionDoesNotOverlapMore: Story = {
     const canvas = within(canvasElement);
     const moreButton = canvas.getByRole('button', { name: '더보기' });
     const editButton = canvas.getByRole('button', { name: '편집' });
+    expect(editButton.getBoundingClientRect().width).toBe(96);
+    expect(editButton.getBoundingClientRect().height).toBe(40);
     expect(
       editButton.getBoundingClientRect().left - moreButton.getBoundingClientRect().right,
-    ).toBeGreaterThanOrEqual(0);
+    ).toBeCloseTo(16, 0);
   },
 };
 

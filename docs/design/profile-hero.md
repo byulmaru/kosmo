@@ -29,6 +29,8 @@ geometry를 유지하도록 한다. 이 문서는 Profile 편집 화면의 heade
 
 - 위 기준은 Mobile Web, Compact Web 1024, Full Web 1440에 모두 적용한다. Native는 공용 Button의
   iOS `44pt`·Android `48dp` 최소 높이를 사용하며 별도 hitSlop을 더하지 않는다.
+- 본인 Profile Hero의 `편집` action도 같은 `96×40` 시각 영역을 사용한다. 공용 Button의 Secondary 스타일과
+  Native 최소 입력 높이는 유지한다. Figma ProfileHero의 `96×40` action slot에 맞춘 production 소비처 결정이다.
 
 ## Profile 더보기 배치
 
