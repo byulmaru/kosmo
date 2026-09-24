@@ -31,8 +31,8 @@ export function createRelayEnvironment(token: string | null): Environment {
   };
 
   return new Environment({
-    network: Network.create((request, variables) =>
-      executeGraphQLRequest(request, variables, token),
+    network: Network.create((request, variables, _cacheConfig, uploadables) =>
+      executeGraphQLRequest(request, variables, token, fetch, uploadables),
     ),
     relayFieldLogger,
     store: new Store(new RecordSource()),

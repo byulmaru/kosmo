@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { executeGraphQLRequest, formatGraphQLError } from './network';
 import { RelayTransportError } from './transportError';
+import type { UploadableMap } from 'relay-runtime';
 
 const request = {
   cacheID: 'test',
@@ -74,6 +75,48 @@ describe('Relay 네트워크', () => {
         Reflect.deleteProperty(globalThis, 'window');
       }
     }
+  });
+
+  it('uploadables가 있으면 GraphQL multipart operations map과 파일을 보낸다', async () => {
+    let captured: RequestInit | undefined;
+    const fakeFetch = async (_input: RequestInfo | URL, init?: RequestInit) => {
+      captured = init;
+      return new Response(JSON.stringify({ data: { submitFeedback: { completed: true } } }), {
+        headers: { 'content-type': 'application/json' },
+        status: 200,
+      });
+    };
+    const uploadables: UploadableMap = {
+      'input.attachments.0': new Blob(['image'], { type: 'image/png' }),
+    };
+    const restoreNavigator = stubNavigatorProduct('ReactNative');
+
+    try {
+      await executeGraphQLRequest(
+        { ...request, name: 'SubmitFeedbackMutation' },
+        { input: { body: 'body', kind: 'POSITIVE', attachments: [null] } },
+        'native-token',
+        fakeFetch,
+        uploadables,
+      );
+    } finally {
+      restoreNavigator();
+    }
+
+    assert.equal((captured?.headers as Record<string, string>)['content-type'], undefined);
+    const formData = captured?.body as FormData;
+    assert.deepEqual(JSON.parse(String(formData.get('operations'))), {
+      operationName: 'SubmitFeedbackMutation',
+      query: request.text,
+      variables: { input: { body: 'body', kind: 'POSITIVE', attachments: [null] } },
+    });
+    assert.deepEqual(JSON.parse(String(formData.get('map'))), {
+      '0': ['variables.input.attachments.0'],
+    });
+    const file = formData.get('0');
+    assert.ok(file instanceof Blob);
+    assert.equal(file.type, 'image/png');
+    assert.equal(await file.text(), 'image');
   });
 
   it('fetch rejection을 원인과 함께 Relay transport 오류로 표시한다', async () => {

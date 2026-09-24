@@ -35,6 +35,10 @@ export const builder = new SchemaBuilder<{
       Input: never;
       Output: PostContentDocumentV1;
     };
+    Upload: {
+      Input: File;
+      Output: never;
+    };
   };
 }>({
   plugins: [
@@ -109,5 +113,19 @@ builder.scalarType('PostContentDocument', {
   serialize: (value) => value,
   parseValue: () => {
     throw new Error('PostContentDocument is output-only');
+  },
+});
+
+builder.scalarType('Upload', {
+  description: 'A multipart uploaded file',
+  parseValue: (value) => {
+    if (value instanceof File) {
+      return value;
+    }
+
+    throw new Error('Upload must be a file');
+  },
+  serialize: () => {
+    throw new Error('Upload is input-only');
   },
 });

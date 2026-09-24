@@ -3,6 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gunzipSync, gzipSync } from 'node:zlib';
+import { feedbackMultipartMaxBytes } from '@kosmo/core/validation';
 import { parse } from 'hono/utils/cookie';
 import { Configuration, enableNonRepudiationChecks } from 'openid-client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
@@ -469,6 +470,64 @@ describe('GraphQL proxy', () => {
 
     expect(response.status).toBe(400);
     expect(await response.text()).toBe('Authorization header must use Bearer');
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  test('rejects cross-site multipart cookie requests before forwarding', async () => {
+    const response = await app.request('https://kos.moe/graphql', {
+      body: new FormData(),
+      headers: {
+        cookie: 'kosmo_session=cookie-token',
+        origin: 'https://evil.example',
+      },
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(403);
+    expect(await response.text()).toBe('Forbidden');
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  test('allows cross-site multipart Bearer requests and forwards same multipart body', async () => {
+    fetch = vi.fn<typeof globalThis.fetch>(async (_input, init) => {
+      expect(new Headers(init?.headers).get('authorization')).toBe('Bearer native-token');
+      expect(new Headers(init?.headers).get('content-type')).toContain('multipart/form-data');
+      expect(await new Response(init?.body, { headers: init?.headers }).formData()).toBeInstanceOf(
+        FormData,
+      );
+      return new Response('{}', { status: 200 });
+    });
+    vi.stubGlobal('fetch', fetch);
+    const formData = new FormData();
+    formData.append('operations', '{}');
+    formData.append('map', '{}');
+    formData.append('0', new Blob(['image'], { type: 'image/png' }));
+
+    const response = await app.request('https://kos.moe/graphql', {
+      body: formData,
+      headers: {
+        authorization: 'Bearer native-token',
+        origin: 'https://evil.example',
+      },
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(200);
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
+  test('rejects multipart bodies above the transport limit before forwarding', async () => {
+    const response = await app.request('https://kos.moe/graphql', {
+      body: new Uint8Array(0),
+      headers: {
+        authorization: 'Bearer native-token',
+        'content-length': String(feedbackMultipartMaxBytes + 1),
+        'content-type': 'multipart/form-data; boundary=test',
+      },
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(413);
     expect(fetch).not.toHaveBeenCalled();
   });
 });

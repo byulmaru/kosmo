@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { graphql, isEnumType, isInputObjectType, isObjectType } from 'graphql';
+import { graphql, isEnumType, isInputObjectType, isObjectType, isScalarType } from 'graphql';
 import { schema } from '../../graphql/schema';
 
 const webhookUrl = 'https://hooks.slack.com/services/T000/B000/secret';
@@ -32,9 +32,10 @@ test('schema에 login-scoped feedback mutation contract를 제공한다', () => 
   assert.ok(mutationFields?.submitFeedback);
   assert.equal(String(mutationFields.submitFeedback.type), 'SubmitFeedbackPayload!');
   assert.ok(isInputObjectType(input));
-  assert.deepEqual(Object.keys(input.getFields()).sort(), ['body', 'kind']);
+  assert.deepEqual(Object.keys(input.getFields()).sort(), ['attachments', 'body', 'kind']);
   assert.equal(String(input.getFields().body.type), 'String!');
   assert.equal(String(input.getFields().kind.type), 'FeedbackKind!');
+  assert.equal(String(input.getFields().attachments.type), '[Upload!]');
   assert.ok(isObjectType(payload));
   assert.equal(String(payload.getFields().completed.type), 'Boolean!');
   assert.ok(isEnumType(kind));
@@ -45,6 +46,7 @@ test('schema에 login-scoped feedback mutation contract를 제공한다', () => 
       .sort(),
     ['BUG_REPORT', 'FEATURE_REQUEST', 'NEGATIVE', 'POSITIVE'],
   );
+  assert.ok(isScalarType(schema.getType('Upload')));
 });
 
 test('선택 Profile이 없는 login session도 feedback을 제출할 수 있다', async (t) => {
@@ -88,5 +90,26 @@ test('anonymous와 invalid body는 Slack 전에 거부한다', async (t) => {
   });
   assert.equal(anonymous.errors?.length, 1);
   assert.equal(empty.errors?.length, 1);
+  assert.equal(calls, 0);
+});
+
+test('JSON 객체로 위장한 Upload는 Slack 전에 거부한다', async (t) => {
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls += 1;
+    return new Response(null, { status: 200 });
+  });
+
+  const result = await graphql({
+    contextValue: { session: { accountId, id: 'session-1', profile: null } },
+    schema,
+    source: mutation,
+    variableValues: {
+      input: { attachments: [{}], body: 'body', kind: 'POSITIVE' },
+    },
+  });
+
+  assert.equal(result.data, undefined);
+  assert.equal(result.errors?.length, 1);
   assert.equal(calls, 0);
 });
