@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { graphql, usePaginationFragment } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
@@ -30,9 +30,15 @@ const hashtagRelatedProfileListFragment = graphql`
 `;
 
 export function HashtagRelatedProfileList({
+  onInitialResults,
+  onPaginationFailure,
+  onResultSelected,
   hashtag,
 }: {
   hashtag: HashtagRelatedProfileList_hashtag$key;
+  onInitialResults?: (hasResults: boolean) => void;
+  onPaginationFailure?: () => void;
+  onResultSelected?: () => void;
 }) {
   const pagination = usePaginationFragment<
     HashtagRelatedProfilesNextPageQuery,
@@ -41,6 +47,10 @@ export function HashtagRelatedProfileList({
   const theme = useTheme();
   const [loadError, setLoadError] = useState(false);
   const profiles = pagination.data.relatedProfiles.edges;
+  useEffect(() => {
+    onInitialResults?.(profiles.length > 0);
+  }, [onInitialResults, profiles.length]);
+
   const loadMore = () => {
     if (!pagination.hasNext || pagination.isLoadingNext) {
       return;
@@ -48,7 +58,12 @@ export function HashtagRelatedProfileList({
 
     setLoadError(false);
     pagination.loadNext(20, {
-      onComplete: (error) => setLoadError(Boolean(error)),
+      onComplete: (error) => {
+        if (error) {
+          onPaginationFailure?.();
+        }
+        setLoadError(Boolean(error));
+      },
     });
   };
 
@@ -56,7 +71,14 @@ export function HashtagRelatedProfileList({
     <ScrollView contentContainerStyle={styles.root}>
       <PageHeader title={`#${pagination.data.name} 관련 프로필`} />
       {profiles.length ? (
-        profiles.map((edge) => <ProfileListItem key={edge.cursor} linked profile={edge.node} />)
+        profiles.map((edge) => (
+          <ProfileListItem
+            key={edge.cursor}
+            linked
+            onPress={onResultSelected}
+            profile={edge.node}
+          />
+        ))
       ) : (
         <StateView
           description="이 해시태그를 사용하는 공개 프로필이 생기면 여기에 표시돼요."

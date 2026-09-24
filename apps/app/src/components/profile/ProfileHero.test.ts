@@ -27,6 +27,7 @@ type ProfileData = {
 };
 
 let fragmentData: ProfileData;
+const beginExploration = mock.fn();
 const platformSelections: Array<Record<string, number>> = [];
 let renderer: ReactTestRenderer | null = null;
 let windowWidth = 1280;
@@ -47,10 +48,17 @@ mockModule(new URL('../shell/NavigationLink.tsx', import.meta.url), {
   NavigationLink: ({
     children,
     href,
+    onExternalNavigate,
+    onNavigate,
   }: {
     children: ReturnType<typeof createElement>;
     href: unknown;
-  }) => createElement('NavigationLink', { href }, children),
+    onExternalNavigate?: () => void;
+    onNavigate?: () => void;
+  }) => createElement('NavigationLink', { href, onExternalNavigate, onNavigate }, children),
+});
+mockModule('@/analytics/profileHashtagExploration', {
+  beginProfileHashtagExploration: beginExploration,
 });
 mockModule('react-native', {
   Image: 'Image',
@@ -129,6 +137,7 @@ afterEach(async () => {
     renderer = null;
   }
   platformSelections.length = 0;
+  beginExploration.mock.resetCalls();
   windowWidth = 1280;
   platform.OS = 'web';
 });
@@ -479,6 +488,11 @@ describe('ProfileHero Profile Tag presentation', () => {
         },
       ],
     );
+    assert.ok(links.every((node) => node.props.onNavigate !== node.props.onExternalNavigate));
+    links[0]?.props.onNavigate?.();
+    assert.equal(beginExploration.mock.callCount(), 1);
+    links[0]?.props.onExternalNavigate?.();
+    assert.equal(beginExploration.mock.callCount(), 2);
     assert.deepEqual(
       targets.map((node) => ({
         label: node.props.accessibilityLabel,

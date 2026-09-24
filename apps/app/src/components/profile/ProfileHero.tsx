@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
+import { beginProfileHashtagExploration } from '@/analytics/profileHashtagExploration';
 import { setStringAsync } from '@/components/post/postClipboard';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { Avatar } from '@/components/ui/Avatar';
@@ -348,9 +349,16 @@ function ProfileTagLink({ id, name }: { id: string; name: string }) {
     params: { hashtagId: id },
     pathname: '/hashtags/[hashtagId]/profiles',
   } as const;
+  const beginExploration = () => beginProfileHashtagExploration(id);
+  const beginExternalExploration = () =>
+    beginProfileHashtagExploration(id, { persistForExternal: true });
 
   return (
-    <NavigationLink href={href}>
+    <NavigationLink
+      href={href}
+      onExternalNavigate={beginExternalExploration}
+      onNavigate={beginExploration}
+    >
       <Pressable
         accessibilityLabel={`#${name} 관련 프로필 보기`}
         accessibilityRole="link"
