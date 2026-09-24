@@ -56,7 +56,8 @@ mock.module(new URL('../shell/NavigationLink.tsx', import.meta.url), {
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('./SettingsItem.tsx', import.meta.url), {
   exports: {
-    SettingsItem: (props: Record<string, unknown>) => createElement('SettingsItem', props),
+    SettingsItem: (props: Record<string, unknown>) =>
+      createElement('SettingsItem', props, createElement('Text', null, props.label as string)),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
