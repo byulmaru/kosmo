@@ -74,11 +74,14 @@ test('목록에서 People로 이동하고 Type과 프로필 방문 후 원래 �
   await expect(heading).toBeFocused();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByRole('navigation', { name: '하단 탐색', exact: true })).toBeVisible();
-  await expect(page.getByRole('tab', { name: /❤️/ })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tab', { name: /빨간색 하트 반응/ })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
   await expect(page.getByText('하트 사용자', { exact: true })).toBeVisible();
-  await page.getByRole('tab', { name: /🎉/ }).click();
+  await page.getByRole('tab', { name: /파티 반응/ }).click();
   await expect.poll(() => new URL(page.url()).searchParams.get('type')).toBe('🎉');
-  await expect(page.getByRole('tab', { name: /🎉/ })).toBeFocused();
+  await expect(page.getByRole('tab', { name: /파티 반응/ })).toBeFocused();
   await expect(page.getByText('하트 사용자', { exact: true })).toHaveCount(0);
   const partyLink = page.locator('a[href="/@e2e-party"]');
   await partyLink.scrollIntoViewIfNeeded();
@@ -88,7 +91,10 @@ test('목록에서 People로 이동하고 Type과 프로필 방문 후 원래 �
   await expect.poll(() => decodeURIComponent(new URL(page.url()).pathname)).toBe('/@e2e-party');
   await page.goBack();
   await expect(heading).toBeVisible();
-  await expect(page.getByRole('tab', { name: /🎉/ })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tab', { name: /파티 반응/ })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
   await expect(page.getByText('축하 사용자', { exact: true })).toBeVisible();
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeCloseTo(peopleScroll, 0);
 
