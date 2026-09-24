@@ -1031,12 +1031,8 @@ describe('GraphQL remote profile boundary', () => {
     });
   });
 
-  test('profile pin mutations require the selected profile membership and concrete Relay IDs', async () => {
+  test('profile pin mutations use the selected profile and concrete Post Relay IDs', async () => {
     const auth = await createAuthenticatedSession();
-    const otherProfile = await createProfile({
-      handle: 'pin-other-profile',
-      instanceId: localInstanceId,
-    });
     const post = await createContentfulPost({ profileId: auth.profile.id });
 
     const anonymous = await requestGraphQL(
@@ -1045,41 +1041,11 @@ describe('GraphQL remote profile boundary', () => {
       }`,
       {
         input: {
-          profileId: globalId('Profile', auth.profile.id),
           postId: globalId('Post', post.id),
         },
       },
     );
     assertGraphQLErrorCode(anonymous, 'PERMISSION_DENIED');
-
-    const otherProfileMutation = await requestGraphQL(
-      `mutation PinOtherProfile($input: PinProfilePostInput!) {
-        pinProfilePost(input: $input) { changed }
-      }`,
-      {
-        input: {
-          profileId: globalId('Profile', otherProfile.id),
-          postId: globalId('Post', post.id),
-        },
-      },
-      auth.token,
-    );
-    assertGraphQLErrorCode(otherProfileMutation, 'PERMISSION_DENIED');
-
-    const wrongProfileType = await requestGraphQL(
-      `mutation PinWrongProfileType($input: PinProfilePostInput!) {
-        pinProfilePost(input: $input) { changed }
-      }`,
-      {
-        input: {
-          profileId: globalId('Post', post.id),
-          postId: globalId('Post', post.id),
-        },
-      },
-      auth.token,
-    );
-    assert.equal(wrongProfileType.data, null);
-    assert.ok(wrongProfileType.errors?.[0]);
 
     const wrongPostType = await requestGraphQL(
       `mutation PinWrongPostType($input: PinProfilePostInput!) {
@@ -1087,7 +1053,6 @@ describe('GraphQL remote profile boundary', () => {
       }`,
       {
         input: {
-          profileId: globalId('Profile', auth.profile.id),
           postId: globalId('Profile', auth.profile.id),
         },
       },
@@ -1104,7 +1069,6 @@ describe('GraphQL remote profile boundary', () => {
       }`,
       {
         input: {
-          profileId: globalId('Profile', auth.profile.id),
           postId: globalId('Post', post.id),
         },
       },
@@ -1137,7 +1101,6 @@ describe('GraphQL remote profile boundary', () => {
         }`,
         {
           input: {
-            profileId: globalId('Profile', auth.profile.id),
             postId: globalId('Post', postId),
           },
         },
@@ -1337,7 +1300,6 @@ describe('GraphQL remote profile boundary', () => {
   test('profile members can pin and unpin posts with idempotent payloads', async () => {
     const auth = await createAuthenticatedSession({ role: AccountProfileRole.MEMBER });
     const current = await createContentfulPost({ profileId: auth.profile.id });
-    const profileId = globalId('Profile', auth.profile.id);
     const postId = (id: string) => globalId('Post', id);
 
     const pin = (id: string) =>
@@ -1345,7 +1307,7 @@ describe('GraphQL remote profile boundary', () => {
         `mutation Pin($input: PinProfilePostInput!) {
           pinProfilePost(input: $input) { changed profile { id } }
         }`,
-        { input: { profileId, postId: postId(id) } },
+        { input: { postId: postId(id) } },
         auth.token,
       );
     const firstPin = await pin(current.id);
@@ -1360,7 +1322,7 @@ describe('GraphQL remote profile boundary', () => {
         `mutation Unpin($input: UnpinProfilePostInput!) {
           unpinProfilePost(input: $input) { changed profile { id } }
         }`,
-        { input: { profileId, postId: postId(id) } },
+        { input: { postId: postId(id) } },
         auth.token,
       );
     const firstUnpin = await unpin(current.id);
