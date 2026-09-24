@@ -159,7 +159,11 @@ async function deliverFeedbackWithAttachments(
     await slackApiRequest(
       'files.completeUploadExternal',
       token,
-      { blocks: createPayload(input, identity).blocks, channel_id: channelId, files },
+      {
+        blocks: JSON.stringify(createPayload(input, identity).blocks),
+        channel_id: channelId,
+        files,
+      },
       deadline.signal,
     );
   } finally {

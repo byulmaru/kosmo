@@ -125,10 +125,16 @@ test('첨부가 있으면 Slack 파일을 모두 업로드한 뒤 한 번 게시
     if (request.url.startsWith('https://files.slack.com/upload/v1/')) {
       return new Response(null, { status: 200 });
     }
-    return new Response(JSON.stringify({ ok: true }), {
-      headers: { 'content-type': 'application/json' },
-      status: 200,
-    });
+    assert.equal(request.url, 'https://slack.com/api/files.completeUploadExternal');
+    const payload = await request.clone().json();
+    const valid = typeof payload.blocks === 'string' && Array.isArray(JSON.parse(payload.blocks));
+    return new Response(
+      JSON.stringify(valid ? { ok: true } : { ok: false, error: 'invalid_arguments' }),
+      {
+        headers: { 'content-type': 'application/json' },
+        status: 200,
+      },
+    );
   });
 
   await deliverFeedback(feedbackIdentity(), {
@@ -157,7 +163,7 @@ test('첨부가 있으면 Slack 파일을 모두 업로드한 뒤 한 번 게시
     new Uint8Array([0xff, 0xd8, 0xff, 0xd9]).buffer,
   );
   assert.deepEqual(await requests[4]?.json(), {
-    blocks: [
+    blocks: JSON.stringify([
       { text: { text: '새 피드백', type: 'plain_text' }, type: 'header' },
       {
         fields: [
@@ -170,7 +176,7 @@ test('첨부가 있으면 Slack 파일을 모두 업로드한 뒤 한 번 게시
         type: 'section',
       },
       { text: { text: validFeedback.body, type: 'plain_text' }, type: 'section' },
-    ],
+    ]),
     channel_id: 'C123',
     files: [{ id: 'F1' }, { id: 'F2' }],
   });
