@@ -174,16 +174,21 @@ async function deliverFeedbackWithAttachments(
 async function slackApiRequest<T>(
   method: string,
   token: string,
-  body: unknown,
+  body: Record<string, unknown>,
   signal: AbortSignal,
 ): Promise<T> {
   const payload = await fetchJsonWithTimeout<T>(
     `${slackApiOrigin}/${method}`,
     {
-      body: JSON.stringify(body),
+      body: new URLSearchParams(
+        Object.entries(body).map(([key, value]) => [
+          key,
+          typeof value === 'string' ? value : JSON.stringify(value),
+        ]),
+      ),
       headers: {
         authorization: `Bearer ${token}`,
-        'content-type': 'application/json',
+        'content-type': 'application/x-www-form-urlencoded',
       },
       method: 'POST',
       redirect: 'error',

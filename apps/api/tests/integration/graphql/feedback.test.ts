@@ -216,7 +216,7 @@ test('multipart 첨부 3장은 Slack 파일 업로드 뒤 한 번 게시된다',
   assert.equal(requests[2]?.url, 'https://slack.com/api/files.getUploadURLExternal');
   assert.equal(requests[4]?.url, 'https://slack.com/api/files.getUploadURLExternal');
   assert.equal(requests[6]?.url, 'https://slack.com/api/files.completeUploadExternal');
-  assert.deepEqual(((await requests[6]?.json()) as { files: unknown }).files, [
+  assert.deepEqual(JSON.parse(String((await requests[6]!.formData()).get('files'))), [
     { id: 'F1' },
     { id: 'F2' },
     { id: 'F3' },
