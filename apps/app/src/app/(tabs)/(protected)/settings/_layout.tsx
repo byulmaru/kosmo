@@ -1,7 +1,6 @@
 import { Slot, Stack, usePathname } from 'expo-router';
 import { Platform, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { PageHeader } from '@/components/PageHeader';
-import { SettingsMuteAndBlockNavigation } from '@/components/settings/SettingsMuteAndBlockNavigation';
 import { SettingsNavigationList } from '@/components/settings/SettingsNavigationList';
 import { SettingsRouteProvider } from '@/components/settings/SettingsRouteContext';
 import { getShellLayout } from '@/components/shell/shellLayout';
@@ -28,16 +27,18 @@ export function SettingsRouteLayout({ children }: { children?: ReactNode }) {
   const web = Platform.OS === 'web';
   const layout = getShellLayout(web, width);
   const root = pathname === '/settings' || pathname === '/settings/';
-  const muteAndBlockDetail =
-    pathname === '/settings/muted-profiles' || pathname === '/settings/blocked-profiles';
   const selected =
     root || pathname === '/settings/default-post-visibility'
       ? 'default-post-visibility'
-      : pathname === '/settings/info' || pathname === '/settings/developer'
-        ? 'info'
-        : undefined;
+      : pathname === '/settings/mute-and-block' ||
+          pathname === '/settings/muted-profiles' ||
+          pathname === '/settings/blocked-profiles'
+        ? 'mute-and-block'
+        : pathname === '/settings/info' || pathname === '/settings/developer'
+          ? 'info'
+          : undefined;
   const detailHeaderMode: SettingsDetailHeaderMode =
-    layout === 'full' ? 'plain' : web && layout === 'mobile' ? 'hidden' : 'back';
+    layout === 'full' ? (root ? 'plain' : 'back') : web && layout === 'mobile' ? 'hidden' : 'back';
 
   if (layout === 'full') {
     return (
@@ -48,15 +49,7 @@ export function SettingsRouteLayout({ children }: { children?: ReactNode }) {
             testID="settings-master-pane"
           >
             <PageHeader title="설정" />
-            {muteAndBlockDetail ? (
-              <SettingsMuteAndBlockNavigation
-                selected={
-                  pathname === '/settings/blocked-profiles' ? 'blocked-profiles' : 'muted-profiles'
-                }
-              />
-            ) : (
-              <SettingsNavigationList selected={selected} />
-            )}
+            <SettingsNavigationList selected={selected} />
           </View>
           <View style={styles.detailPane} testID="settings-detail-pane">
             {children}

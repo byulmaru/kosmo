@@ -229,11 +229,12 @@ describe('Settings routes', () => {
       rendered('PageHeader').map((node) => node.props.title),
       ['설정', '게시물 기본 공개 범위'],
     );
+    assert.equal(rendered('PageHeader')[1].props.leading, undefined);
     assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'default-post-visibility');
     assert.equal(rendered('SettingsProfileDetail').length, 1);
   });
 
-  it('full Web detail은 공통 master와 back action 없는 detail heading을 표시한다', async () => {
+  it('full Web detail은 공통 root master와 설정으로 돌아가는 back action을 표시한다', async () => {
     await renderRoute('/settings/default-post-visibility', SettingsDefaultPostVisibilityRoute);
 
     assert.ok(byTestId('settings-workspace'));
@@ -242,19 +243,26 @@ describe('Settings routes', () => {
       ['설정', '게시물 기본 공개 범위'],
     );
     assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'default-post-visibility');
-    assert.equal(rendered('Pressable').length, 0);
+    assert.equal(
+      rendered('PageHeader')[1].props.leading.props.accessibilityLabel,
+      '설정으로 돌아가기',
+    );
     assert.equal(rendered('SettingsProfileDetail').length, 1);
   });
 
-  it('full Web mute category는 데이터 연결 전에 master entry를 선택하지 않는다', async () => {
+  it('full Web mute category는 root master의 진입점을 선택한다', async () => {
     await renderRoute('/settings/mute-and-block', SettingsMuteAndBlockRoute);
 
     assert.deepEqual(
       rendered('PageHeader').map((node) => node.props.title),
       ['설정', '뮤트 및 차단'],
     );
-    assert.equal(rendered('SettingsNavigationList')[0].props.selected, undefined);
+    assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'mute-and-block');
     assert.equal(rendered('SettingsMuteAndBlockNavigation').length, 1);
+    assert.equal(
+      rendered('PageHeader')[1].props.leading.props.accessibilityLabel,
+      '설정으로 돌아가기',
+    );
   });
 
   it('full Web muted profile detail은 공통 master의 mute category를 선택한다', async () => {
@@ -264,14 +272,14 @@ describe('Settings routes', () => {
       rendered('PageHeader').map((node) => node.props.title),
       ['설정', '뮤트한 프로필'],
     );
-    assert.equal(rendered('SettingsNavigationList').length, 0);
-    assert.equal(rendered('SettingsMuteAndBlockNavigation').length, 1);
-    assert.equal(rendered('SettingsMuteAndBlockNavigation')[0].props.selected, 'muted-profiles');
+    assert.equal(rendered('SettingsNavigationList').length, 1);
+    assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'mute-and-block');
+    assert.equal(rendered('SettingsMuteAndBlockNavigation').length, 0);
     assert.equal(
       byTestId('settings-master-pane').findAll(
         (node) => (node.type as unknown) === 'SettingsMuteAndBlockNavigation',
       ).length,
-      1,
+      0,
     );
     assert.equal(
       byTestId('settings-detail-pane').findAll(
@@ -280,6 +288,14 @@ describe('Settings routes', () => {
       1,
     );
     assert.equal(rendered('SettingsMutedProfiles').length, 1);
+    const back = rendered('PageHeader')[1].props.leading;
+    assert.equal(back.props.accessibilityLabel, '뮤트 및 차단으로 돌아가기');
+    Object.defineProperty(globalThis, 'location', {
+      configurable: true,
+      value: { replace: (href: string) => locationReplacements.push(href) },
+    });
+    await act(async () => back.props.onPress());
+    assert.deepEqual(locationReplacements, ['/settings/mute-and-block']);
   });
 
   it('compact Web muted profile detail은 parent으로 돌아가는 caller label과 navigation을 사용한다', async () => {
@@ -331,11 +347,15 @@ describe('Settings routes', () => {
       rendered('PageHeader').map((node) => node.props.title),
       ['설정', '차단한 프로필'],
     );
-    assert.equal(rendered('SettingsNavigationList').length, 0);
-    assert.equal(rendered('SettingsMuteAndBlockNavigation').length, 1);
-    assert.equal(rendered('SettingsMuteAndBlockNavigation')[0].props.selected, 'blocked-profiles');
+    assert.equal(rendered('SettingsNavigationList').length, 1);
+    assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'mute-and-block');
+    assert.equal(rendered('SettingsMuteAndBlockNavigation').length, 0);
     assert.equal(rendered('SettingsBlockedProfiles').length, 1);
     assert.equal('headingRef' in rendered('SettingsBlockedProfiles')[0].props, false);
+    assert.equal(
+      rendered('PageHeader')[1].props.leading.props.accessibilityLabel,
+      '뮤트 및 차단으로 돌아가기',
+    );
   });
 
   it('mobile Web blocked profile은 별도 heading focus 계약 없이 목록을 표시한다', async () => {
@@ -468,6 +488,11 @@ describe('Settings routes', () => {
     platform = 'web';
     await renderRoute('/settings/info', SettingsInfoRoute);
 
+    assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'info');
+    assert.equal(
+      rendered('PageHeader')[1].props.leading.props.accessibilityLabel,
+      '설정으로 돌아가기',
+    );
     assert.ok(
       rendered('SettingsLinkRow').some((node) => node.props.href === '/settings/developer'),
     );
@@ -480,6 +505,11 @@ describe('Settings routes', () => {
     publicChannel = 'dev';
     await renderRoute('/settings/developer', SettingsDeveloperRoute);
 
+    assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'info');
+    assert.equal(
+      rendered('PageHeader')[1].props.leading.props.accessibilityLabel,
+      '정보로 돌아가기',
+    );
     assert.equal(settingsItems().length, 1);
     assert.equal(settingsItem('채널').props.description, 'dev');
     assert.equal(rendered('NativeChannelSettings').length, 0);
