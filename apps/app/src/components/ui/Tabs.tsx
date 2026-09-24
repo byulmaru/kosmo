@@ -2,7 +2,7 @@ import { Children, createContext, useContext, useEffect, useRef, useState } from
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
-import type { ReactElement, ReactNode, RefObject } from 'react';
+import type { ReactElement, RefObject } from 'react';
 import type { ViewStyle } from 'react-native';
 
 export type TabVariant = 'pill' | 'underline';
@@ -10,7 +10,6 @@ export type TabVariant = 'pill' | 'underline';
 export type TabOption<Value extends string> = Readonly<{
   accessibilityLabel?: string;
   disabled?: boolean;
-  leading?: ReactNode;
   label: string;
   value: Value;
 }>;
@@ -282,26 +281,20 @@ export function Tab<Value extends string>({ option }: TabProps<Value>) {
             },
           ]}
         >
-          <View style={styles.tabContent}>
-            {option.leading ? <View style={styles.leading}>{option.leading}</View> : null}
-            <Text style={[styles.pillLabel, { color: theme.text }]}>{option.label}</Text>
-          </View>
+          <Text style={[styles.pillLabel, { color: theme.text }]}>{option.label}</Text>
         </View>
       ) : (
-        <View style={styles.tabContent}>
-          {option.leading ? <View style={styles.leading}>{option.leading}</View> : null}
-          <Text
-            style={[
-              context.variant === 'pill' ? styles.pillLabel : styles.underlineLabel,
-              {
-                color:
-                  context.variant === 'underline' && !selected ? theme.textSecondary : theme.text,
-              },
-            ]}
-          >
-            {option.label}
-          </Text>
-        </View>
+        <Text
+          style={[
+            context.variant === 'pill' ? styles.pillLabel : styles.underlineLabel,
+            {
+              color:
+                context.variant === 'underline' && !selected ? theme.textSecondary : theme.text,
+            },
+          ]}
+        >
+          {option.label}
+        </Text>
       )}
       {context.variant === 'underline' && selected && !disabled ? (
         <View style={[styles.tabIndicator, { backgroundColor: theme.actionPrimaryBase }]} />
@@ -357,8 +350,6 @@ const styles = StyleSheet.create({
   },
   pillFlush: { paddingHorizontal: 0, paddingTop: 0 },
   pillWrap: { flexWrap: 'wrap' },
-  tabContent: { alignItems: 'center', flexDirection: 'row', gap: space[4] },
-  leading: { alignItems: 'center', justifyContent: 'center' },
   pillTab: {
     alignItems: 'center',
     borderRadius: Platform.OS === 'web' ? radius[8] : 0,
