@@ -504,7 +504,7 @@ export const QuickPickerStates: Story = {
     expect(pendingHeart).toBeDisabled();
     expect(pendingHeart).toHaveAttribute('aria-busy', 'true');
     expect(pendingHeart).toHaveAttribute('aria-pressed', 'true');
-    expect(pendingHeart.querySelector('img[src$="/emoji_u2764.png"]')).not.toBeNull();
+    expect(pendingHeart.querySelector('img[src$="/2764-fe0f.png"]')).not.toBeNull();
     const spinner = pendingHeart.querySelector('[data-testid="reaction-pending-spinner"]');
     expect(spinner).not.toBeNull();
     const pendingOverlay = spinner!.closest('[aria-hidden="true"]');
