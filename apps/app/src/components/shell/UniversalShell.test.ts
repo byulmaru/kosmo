@@ -59,6 +59,7 @@ function PassThrough({ children }: PropsWithChildren): ReactNode {
 mockModule('expo-router', {
   Slot: () => null,
   usePathname: () => pathname,
+  useRootNavigationState: () => ({ index: 0, routes: [{ name: pathname.slice(1) }] }),
   useRouter: () => router,
   useSegments: () => [],
 });

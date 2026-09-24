@@ -1,5 +1,5 @@
-import { Slot, Stack, usePathname } from 'expo-router';
-import { Platform, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Slot, Stack, usePathname, useRootNavigationState } from 'expo-router';
+import { Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { PageHeader } from '@/components/PageHeader';
 import { SettingsNavigationList } from '@/components/settings/SettingsNavigationList';
 import { SettingsRouteProvider } from '@/components/settings/SettingsRouteContext';
@@ -22,6 +22,7 @@ export default function SettingsLayout() {
 
 export function SettingsRouteLayout({ children }: { children?: ReactNode }) {
   const pathname = usePathname();
+  const navigationState = useRootNavigationState();
   const theme = useTheme();
   const { width } = useWindowDimensions();
   const web = Platform.OS === 'web';
@@ -42,7 +43,7 @@ export function SettingsRouteLayout({ children }: { children?: ReactNode }) {
 
   if (layout === 'full') {
     return (
-      <SettingsRouteProvider detailHeaderMode={detailHeaderMode}>
+      <SettingsRouteProvider detailHeaderMode={detailHeaderMode} navigationState={navigationState}>
         <View style={styles.workspace} testID="settings-workspace">
           <View
             style={[styles.masterPane, { borderColor: theme.border }]}
@@ -59,28 +60,12 @@ export function SettingsRouteLayout({ children }: { children?: ReactNode }) {
     );
   }
 
-  const content = root ? (
-    <>
-      {!web || layout !== 'mobile' ? <PageHeader title="설정" /> : null}
-      <SettingsNavigationList />
-    </>
-  ) : (
-    children
-  );
-
   return (
-    <SettingsRouteProvider detailHeaderMode={detailHeaderMode}>
+    <SettingsRouteProvider detailHeaderMode={detailHeaderMode} navigationState={navigationState}>
       {web ? (
-        <View style={styles.onePane}>{content}</View>
-      ) : root ? (
-        <ScrollView
-          contentContainerStyle={styles.nativeOnePaneContent}
-          style={styles.nativeOnePaneScroll}
-        >
-          {content}
-        </ScrollView>
+        <View style={styles.onePane}>{children}</View>
       ) : (
-        <View style={styles.nativeOnePane}>{content}</View>
+        <View style={styles.nativeOnePane}>{children}</View>
       )}
     </SettingsRouteProvider>
   );
@@ -92,6 +77,4 @@ const styles = StyleSheet.create({
   detailPane: { flex: 1, minWidth: 0 },
   onePane: { minHeight: '100%', minWidth: 0, width: '100%' },
   nativeOnePane: { flex: 1, minWidth: 0, width: '100%' },
-  nativeOnePaneScroll: { flex: 1, minWidth: 0, width: '100%' },
-  nativeOnePaneContent: { flexGrow: 1, minWidth: 0, width: '100%' },
 });

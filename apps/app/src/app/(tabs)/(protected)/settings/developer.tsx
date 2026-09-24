@@ -6,7 +6,10 @@ import { PageHeader } from '@/components/PageHeader';
 import { NativeChannelSettings } from '@/components/settings/NativeChannelSettings';
 import { SettingsItem } from '@/components/settings/SettingsItem';
 import { returnToSettingsParent } from '@/components/settings/settingsNavigation';
-import { useSettingsDetailHeaderMode } from '@/components/settings/SettingsRouteContext';
+import {
+  useSettingsDetailHeaderMode,
+  useSettingsNavigationState,
+} from '@/components/settings/SettingsRouteContext';
 import { IconButton } from '@/components/ui/IconButton';
 import { RouteScrollContainer } from '@/components/ui/RouteScrollContainer';
 import { getPublicConfig } from '@/config/public';
@@ -17,11 +20,12 @@ export default function SettingsDeveloperRoute() {
   const router = useRouter();
   const theme = useTheme();
   const detailHeaderMode = useSettingsDetailHeaderMode();
+  const navigationState = useSettingsNavigationState();
   const backButton =
     detailHeaderMode === 'back' ? (
       <IconButton
         accessibilityLabel="정보로 돌아가기"
-        onPress={() => returnToSettingsParent('/settings/developer', router)}
+        onPress={() => returnToSettingsParent('/settings/developer', router, navigationState)}
         style={styles.backButton}
         targetSize={44}
       >

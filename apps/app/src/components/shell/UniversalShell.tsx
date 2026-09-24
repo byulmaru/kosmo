@@ -1,4 +1,4 @@
-import { usePathname, useRouter, useSegments } from 'expo-router';
+import { usePathname, useRootNavigationState, useRouter, useSegments } from 'expo-router';
 import { ChevronLeftIcon, Menu } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -111,6 +111,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
+  const navigationState = useRootNavigationState();
   const routeSegments = useSegments();
   const router = useRouter();
   const { width } = useWindowDimensions();
@@ -309,7 +310,9 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
     <IconButton
       accessibilityLabel="뒤로 가기"
       onPress={() =>
-        isSettingsRoute(pathname) ? returnToSettingsParent(pathname, router) : router.back()
+        isSettingsRoute(pathname)
+          ? returnToSettingsParent(pathname, router, navigationState)
+          : router.back()
       }
       style={styles.menuButton}
       targetSize={44}

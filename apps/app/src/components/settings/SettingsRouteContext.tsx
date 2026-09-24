@@ -1,30 +1,48 @@
 import { createContext, useContext } from 'react';
 import type { ReactNode } from 'react';
+import type { SettingsNavigationState } from './settingsNavigation';
 
 export type SettingsDetailHeaderMode = 'back' | 'hidden' | 'plain';
 
-const SettingsRouteContext = createContext<SettingsDetailHeaderMode | null>(null);
+const SettingsRouteContext = createContext<{
+  detailHeaderMode: SettingsDetailHeaderMode;
+  navigationState: SettingsNavigationState | null;
+} | null>(null);
 
 export function SettingsRouteProvider({
   children,
   detailHeaderMode,
+  navigationState,
 }: {
   children: ReactNode;
   detailHeaderMode: SettingsDetailHeaderMode;
+  navigationState?: SettingsNavigationState | null;
 }) {
   return (
-    <SettingsRouteContext.Provider value={detailHeaderMode}>
+    <SettingsRouteContext.Provider
+      value={{ detailHeaderMode, navigationState: navigationState ?? null }}
+    >
       {children}
     </SettingsRouteContext.Provider>
   );
 }
 
 export function useSettingsDetailHeaderMode() {
-  const mode = useContext(SettingsRouteContext);
+  const context = useContext(SettingsRouteContext);
 
-  if (!mode) {
+  if (!context) {
     throw new Error('Settings detail routes must render inside the Settings route layout.');
   }
 
-  return mode;
+  return context.detailHeaderMode;
+}
+
+export function useSettingsNavigationState() {
+  const context = useContext(SettingsRouteContext);
+
+  if (!context) {
+    throw new Error('Settings detail routes must render inside the Settings route layout.');
+  }
+
+  return context.navigationState;
 }

@@ -5,7 +5,10 @@ import { PageHeader } from '@/components/PageHeader';
 import { PaginationScrollView } from '@/components/pagination/PaginationScrollView';
 import { SettingsBlockedProfiles } from '@/components/settings/SettingsBlockedProfiles';
 import { returnToSettingsParent } from '@/components/settings/settingsNavigation';
-import { useSettingsDetailHeaderMode } from '@/components/settings/SettingsRouteContext';
+import {
+  useSettingsDetailHeaderMode,
+  useSettingsNavigationState,
+} from '@/components/settings/SettingsRouteContext';
 import { IconButton } from '@/components/ui/IconButton';
 import { useTheme } from '@/theme/ThemeProvider';
 
@@ -13,11 +16,14 @@ export default function SettingsBlockedProfilesRoute() {
   const router = useRouter();
   const theme = useTheme();
   const detailHeaderMode = useSettingsDetailHeaderMode();
+  const navigationState = useSettingsNavigationState();
   const backButton =
     detailHeaderMode === 'back' ? (
       <IconButton
         accessibilityLabel="뮤트 및 차단으로 돌아가기"
-        onPress={() => returnToSettingsParent('/settings/blocked-profiles', router)}
+        onPress={() =>
+          returnToSettingsParent('/settings/blocked-profiles', router, navigationState)
+        }
         style={styles.backButton}
         targetSize={44}
       >

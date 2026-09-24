@@ -13,9 +13,14 @@ const require = createRequire(import.meta.url);
 let platform: 'android' | 'ios' | 'web' = 'web';
 let width = 1_280;
 let backCalls = 0;
-let canGoBack = false;
+let pushedPaths: string[] = [];
+let dismissedToPaths: string[] = [];
 let replacedPaths: string[] = [];
 let pathname = '/settings';
+let navigationState: { index: number; routes: { name: string }[] } = {
+  index: 0,
+  routes: [{ name: 'index' }],
+};
 let SlotRoute: ComponentType = () => null;
 let sessionStatus: 'error' | 'guest' | 'valid' = 'guest';
 let otaUpdateId: string | null = null;
@@ -35,9 +40,12 @@ mock.module('expo-router', {
     usePathname: () => pathname,
     useRouter: () => ({
       back: () => (backCalls += 1),
-      canGoBack: () => canGoBack,
+      dismiss: () => undefined,
+      dismissTo: (href: string) => dismissedToPaths.push(href),
+      push: (href: string) => pushedPaths.push(href),
       replace: (href: string) => replacedPaths.push(href),
     }),
+    useRootNavigationState: () => navigationState,
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module('expo-updates', {
@@ -188,9 +196,11 @@ afterEach(async () => {
   platform = 'web';
   width = 1_280;
   backCalls = 0;
-  canGoBack = false;
+  pushedPaths = [];
+  dismissedToPaths = [];
   replacedPaths = [];
   pathname = '/settings';
+  navigationState = { index: 0, routes: [{ name: 'index' }] };
   SlotRoute = () => null;
   sessionStatus = 'guest';
   otaUpdateId = null;
@@ -288,8 +298,8 @@ describe('Settings routes', () => {
     const back = rendered('PageHeader')[0].props.leading;
     assert.equal(back.props.accessibilityLabel, '뮤트 및 차단으로 돌아가기');
     await act(async () => back.props.onPress());
-    assert.equal(backCalls, 0);
-    assert.deepEqual(replacedPaths, ['/settings/mute-and-block']);
+    assert.equal(backCalls, 1);
+    assert.deepEqual(replacedPaths, []);
   });
 
   it('Native muted profile detail은 parent label과 replace navigation을 사용한다', async () => {
@@ -413,7 +423,6 @@ describe('Settings routes', () => {
 
   it('compact Web detail은 route-owned back header로 Settings root를 연다', async () => {
     width = 768;
-    canGoBack = true;
     await renderRoute('/settings/default-post-visibility', SettingsDefaultPostVisibilityRoute);
 
     const header = rendered('PageHeader')[0];
@@ -477,7 +486,9 @@ describe('Settings routes', () => {
     const back = rendered('PageHeader')[1].props.leading;
     assert.equal(back.props.accessibilityLabel, '정보로 돌아가기');
     await act(async () => back.props.onPress());
-    assert.deepEqual(replacedPaths, ['/settings/info']);
+    assert.deepEqual(pushedPaths, ['/settings/info']);
+    assert.deepEqual(dismissedToPaths, []);
+    assert.deepEqual(replacedPaths, []);
   });
 
   it('Web 개발 정보는 public channel만 표시하고 Native channel·OTA 행은 표시하지 않는다', async () => {
@@ -596,6 +607,16 @@ describe('Protected layout session guard', () => {
 
 async function renderRoute(nextPathname: string, Route: ComponentType) {
   pathname = nextPathname;
+  const routeNames =
+    nextPathname === '/settings'
+      ? ['index']
+      : nextPathname === '/settings/muted-profiles' || nextPathname === '/settings/blocked-profiles'
+        ? ['index', 'mute-and-block', nextPathname.slice('/settings/'.length)]
+        : ['index', nextPathname.slice('/settings/'.length)];
+  navigationState = {
+    index: routeNames.length - 1,
+    routes: routeNames.map((name) => ({ name })),
+  };
   SlotRoute = Route;
   await act(async () => {
     renderer = create(createElement(SettingsLayout));
