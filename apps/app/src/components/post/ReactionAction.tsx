@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, Text } from 'react-native';
+import { Platform, Pressable, Text } from 'react-native';
 import { useRelayEnvironment } from 'react-relay';
 import { reactionEmojiCatalog } from '@/components/reaction/reactionEmojiCatalog';
 import { ReactionSelector } from '@/components/reaction/ReactionSelector';
@@ -16,8 +16,10 @@ import type { PostReactionController } from './PostReactionController';
 const reactionOptions = ['🥹', '❤️', '🎉', '👀', '☘️', '🌈'].map((type) => ({
   emoji: type,
   id: type,
-  label: type,
+  label: reactionEmojiCatalog.find((option) => option.id === type)?.label ?? type,
 })) satisfies ReadonlyArray<ReactionOption>;
+
+const fullEntrySize = Platform.OS === 'web' ? 32 : Platform.OS === 'android' ? 48 : 44;
 
 export type ReactionActionTriggerRenderProps = Readonly<{
   disabled: boolean;
@@ -108,7 +110,12 @@ export function ReactionAction({
             accessibilityLabel="전체 반응"
             accessibilityRole="button"
             onPress={openFull}
-            style={{ alignItems: 'center', height: 32, justifyContent: 'center', width: 32 }}
+            style={{
+              alignItems: 'center',
+              height: fullEntrySize,
+              justifyContent: 'center',
+              width: fullEntrySize,
+            }}
           >
             <Text style={{ color: theme.foregroundPrimary }}>＋</Text>
           </Pressable>
