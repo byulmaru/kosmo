@@ -11,7 +11,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing } from '@/theme/tokens';
-import type { ReactNode, Ref } from 'react';
+import type { ReactNode } from 'react';
 import type { LayoutChangeEvent, LayoutRectangle, View as ViewType } from 'react-native';
 
 export type ReactionPopoverProps = Readonly<{
@@ -20,14 +20,12 @@ export type ReactionPopoverProps = Readonly<{
   disabled?: boolean;
   onOpenChange: (open: boolean) => void;
   open: boolean;
-  renderTrigger: (props: {
-    expanded: boolean;
-    onPress: () => void;
-    ref: Ref<ViewType>;
-  }) => ReactNode;
+  triggerRef?: TriggerRef;
+  renderTrigger: (props: { expanded: boolean; onPress: () => void; ref: TriggerRef }) => ReactNode;
 }>;
 
 type Anchor = Pick<LayoutRectangle, 'height' | 'width' | 'x' | 'y'>;
+export type TriggerRef = { current: ViewType | null };
 
 export function ReactionPopover({
   accessibilityLabel,
@@ -35,13 +33,15 @@ export function ReactionPopover({
   disabled = false,
   onOpenChange,
   open,
+  triggerRef: providedTriggerRef,
   renderTrigger,
 }: ReactionPopoverProps): ReactNode {
   const theme = useTheme();
   const elevation = useElevation();
   const insets = useSafeAreaInsets();
   const { height: viewportHeight, width: viewportWidth } = useWindowDimensions();
-  const triggerRef = useRef<ViewType>(null);
+  const internalTriggerRef = useRef<ViewType>(null);
+  const triggerRef = providedTriggerRef ?? internalTriggerRef;
   const contentRef = useRef<ViewType>(null);
   const [anchor, setAnchor] = useState<Anchor | null>(null);
   const [content, setContent] = useState<Pick<LayoutRectangle, 'height' | 'width'> | null>(null);

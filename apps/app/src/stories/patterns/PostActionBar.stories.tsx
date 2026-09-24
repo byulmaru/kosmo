@@ -1559,6 +1559,40 @@ export const ReactionConcurrentMutationContract: Story = {
   render: () => <ReactionContractHarness />,
 };
 
+export const ReactionQuickToFullContract: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole('button', { name: '반응' }));
+    const quick = await screen.findByRole('dialog', { name: '반응 선택' });
+    await userEvent.click(within(quick).getByRole('button', { name: '전체 반응' }));
+
+    const full = await screen.findByRole('dialog', { name: '반응 선택' });
+    const search = within(full).getByRole('searchbox', { name: '반응 검색' });
+    await userEvent.type(search, 'heart hands');
+    const option = await within(full).findByRole('button', { name: '손 하트 🫶' });
+    await userEvent.click(option);
+    await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(1));
+    expect(readReactionRequests(canvas)[0]!.type).toBe('🫶');
+    const pending = await within(full).findByRole('button', {
+      name: '손 하트 반응, 처리 중 🫶',
+    });
+    expect(pending).toBeDisabled();
+    expect(readReactionRequests(canvas)).toHaveLength(1);
+    expect(screen.getByRole('dialog', { name: '반응 선택' })).toBeVisible();
+
+    canvas.getByRole('button', { name: '요청 1 payload-error' }).click();
+    const retry = await within(full).findByRole('button', {
+      name: '손 하트 반응, 오류, 다시 시도 🫶',
+    });
+    await userEvent.click(retry);
+    await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(2));
+
+    canvas.getByRole('button', { name: 'Reaction actor 전환' }).click();
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull());
+  },
+  render: () => <ReactionContractHarness />,
+};
+
 export const ReactionFailureRetryActorSwitchAndUnmount: Story = {
   beforeEach: () => {
     reactionLifecycleConsoleErrors.length = 0;

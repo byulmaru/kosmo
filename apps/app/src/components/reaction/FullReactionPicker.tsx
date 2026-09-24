@@ -6,6 +6,7 @@ import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/toke
 import { ReactionEmojiImage } from './ReactionEmojiImage';
 import { ReactionPendingSpinner } from './ReactionPendingSpinner';
 import type React from 'react';
+import type { GestureResponderEvent } from 'react-native';
 
 export type FullReactionPickerOption = Readonly<{
   category: string;
@@ -19,6 +20,7 @@ export type FullReactionPickerOption = Readonly<{
 }>;
 
 export type FullReactionPickerProps = {
+  onBackdropPress?: () => void;
   onClose: () => void;
   onQueryChange: (query: string) => void;
   onSelect: (option: FullReactionPickerOption) => void;
@@ -26,10 +28,13 @@ export type FullReactionPickerProps = {
   presentation?: 'mobile' | 'web';
   query: string;
   selectedValues?: ReadonlyArray<string>;
+  pendingOptionIds?: ReadonlyArray<string>;
+  errorOptionIds?: ReadonlyArray<string>;
   loading?: boolean;
 };
 
 export function FullReactionPicker({
+  onBackdropPress,
   onClose,
   onQueryChange,
   onSelect,
@@ -37,12 +42,15 @@ export function FullReactionPicker({
   presentation = 'web',
   query,
   selectedValues = [],
+  pendingOptionIds = [],
+  errorOptionIds = [],
   loading = false,
 }: FullReactionPickerProps): React.ReactElement {
   const theme = useTheme();
   const elevation = useElevation();
   const mobile = presentation === 'mobile';
   const pickerRef = useRef<View>(null);
+  const dragStartY = useRef<number | null>(null);
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const searchResults = options.filter((option) =>
     [option.emoji, option.label, ...(option.keywords ?? [])]
@@ -77,6 +85,16 @@ export function FullReactionPicker({
     ownerDocument.addEventListener('keyup', onKeyUp, true);
     return () => ownerDocument.removeEventListener('keyup', onKeyUp, true);
   }, [mobile, onClose]);
+  const onDragStart = (event: GestureResponderEvent) => {
+    dragStartY.current = event.nativeEvent.pageY;
+  };
+  const onDragEnd = (event: GestureResponderEvent) => {
+    const startY = dragStartY.current;
+    dragStartY.current = null;
+    if (startY !== null && event.nativeEvent.pageY - startY > 80) {
+      onClose();
+    }
+  };
   const picker = (
     <View
       accessibilityLabel="반응 선택"
@@ -93,7 +111,13 @@ export function FullReactionPicker({
     >
       {mobile ? (
         <>
-          <View style={[styles.dragHandle, { backgroundColor: theme.borderStrong }]} />
+          <View
+            onStartShouldSetResponder={() => true}
+            onTouchEnd={onDragEnd}
+            onTouchStart={onDragStart}
+            style={[styles.dragHandle, { backgroundColor: theme.borderStrong }]}
+            testID="full-reaction-picker-drag-handle"
+          />
           <Text
             accessibilityRole="header"
             style={[styles.mobileTitle, { color: theme.foregroundPrimary }]}
@@ -160,6 +184,8 @@ export function FullReactionPicker({
                 rowIndex={item.rowIndex}
                 sectionId={item.sectionId}
                 selectedValues={selectedValues}
+                pendingValues={pendingOptionIds}
+                errorValues={errorOptionIds}
               />
             )
           }
@@ -173,7 +199,18 @@ export function FullReactionPicker({
   );
 
   return mobile ? (
-    <View style={[styles.mobileRoot, { backgroundColor: theme.overlayScrim }]}>{picker}</View>
+    <View
+      onResponderRelease={(event) => {
+        if (event.target === event.currentTarget) {
+          onBackdropPress?.();
+        }
+      }}
+      onStartShouldSetResponder={(event) => event.target === event.currentTarget}
+      style={[styles.mobileRoot, { backgroundColor: theme.overlayScrim }]}
+      testID="full-reaction-picker-backdrop"
+    >
+      {picker}
+    </View>
   ) : (
     picker
   );
@@ -270,6 +307,8 @@ function ReactionGridRow({
   rowIndex,
   sectionId,
   selectedValues,
+  pendingValues,
+  errorValues,
 }: {
   mobile: boolean;
   onSelect: (option: FullReactionPickerOption) => void;
@@ -277,6 +316,8 @@ function ReactionGridRow({
   rowIndex: number;
   sectionId: string;
   selectedValues: ReadonlyArray<string>;
+  pendingValues: ReadonlyArray<string>;
+  errorValues: ReadonlyArray<string>;
 }) {
   const theme = useTheme();
   const columns = mobile ? 7 : 8;
@@ -291,12 +332,21 @@ function ReactionGridRow({
     >
       {options.map((option) => {
         const selected = selectedValues.includes(option.id);
+        const pending = pendingValues.includes(option.id);
+        const error = errorValues.includes(option.id);
+        const accessibilityLabel = error
+          ? `${option.label} 반응, 오류, 다시 시도 ${option.emoji}`
+          : pending
+            ? `${option.label} 반응, 처리 중 ${option.emoji}`
+            : `${option.label} ${option.emoji}`;
         return (
           <Pressable
-            accessibilityLabel={`${option.label} ${option.emoji}`}
+            accessibilityLabel={accessibilityLabel}
             accessibilityRole="button"
-            accessibilityState={{ selected }}
+            accessibilityState={{ busy: pending, disabled: pending, selected }}
+            aria-busy={pending}
             aria-pressed={selected}
+            disabled={pending}
             key={option.id}
             onPress={() => onSelect(option)}
             style={mobile ? styles.mobileReactionTarget : styles.webReactionTarget}
@@ -317,6 +367,11 @@ function ReactionGridRow({
                 ]}
               >
                 <ReactionEmojiImage size={mobile ? 24 : 20} type={option.emoji} />
+                {pending ? (
+                  <View accessibilityElementsHidden aria-hidden style={styles.pendingOverlay}>
+                    <ReactionPendingSpinner />
+                  </View>
+                ) : null}
               </View>
             )}
           </Pressable>
@@ -350,6 +405,16 @@ const styles = StyleSheet.create({
   mobileSpinner: { transform: [{ scale: 1.5 }] },
   mobileTitle: { textAlign: 'left', ...textStyles.uiLabelL },
   partialGridRow: { justifyContent: 'flex-start' },
+  pendingOverlay: {
+    alignItems: 'center',
+    bottom: 0,
+    justifyContent: 'center',
+    left: 0,
+    pointerEvents: 'none',
+    position: 'absolute',
+    right: 0,
+    top: 0,
+  },
   reaction: {
     alignItems: 'center',
     borderRadius: radius[12],

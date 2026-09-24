@@ -87,13 +87,14 @@ function commitAdd(
   respond: (payload: unknown) => void,
   payload: unknown,
   errors?: ReadonlyArray<{ message: string }>,
+  type = 'PARTY',
 ) {
   return new Promise<void>((resolve, reject) => {
     commitMutation<PostReactionControllerAddReactionMutation>(environment, {
       mutation: AddReactionMutation,
       onCompleted: () => resolve(),
       onError: reject,
-      variables: { postId, type: 'PARTY' },
+      variables: { postId, type },
     });
     respond({ data: payload, ...(errors ? { errors } : {}) });
   });
@@ -134,6 +135,31 @@ const addPayload = {
 };
 
 describe('PostReactionController Relay cache contract', () => {
+  it('normalizes a fully qualified Full Picker emoji from the server payload', async () => {
+    const { environment, respond } = createEnvironment();
+
+    await commitAdd(
+      environment,
+      respond,
+      {
+        addReaction: {
+          post: {
+            __typename: 'Post',
+            id: postId,
+            reactionCounts: [{ __typename: 'ReactionCount', count: 2, type: '🫶' }],
+            viewerReactions: [{ __typename: 'Reaction', id: 'reaction-heart-hands', type: '🫶' }],
+          },
+          reaction: { __typename: 'Reaction', id: 'reaction-heart-hands', type: '🫶' },
+        },
+      },
+      undefined,
+      '🫶',
+    );
+
+    assert.deepEqual(viewerReactionIds(environment), ['reaction-heart-hands']);
+    assert.deepEqual(reactionCounts(environment), [{ count: 2, type: '🫶' }]);
+  });
+
   it('normalizes the authoritative viewer state, count, and server order after add', async () => {
     const { environment, respond } = createEnvironment();
 
