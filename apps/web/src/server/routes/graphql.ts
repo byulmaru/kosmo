@@ -1,4 +1,5 @@
 import { sessionName } from '@kosmo/core';
+import { feedbackMultipartMaxBytes, readRequestBodyWithinLimit } from '@kosmo/core/validation';
 import { Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { OidcAuthError } from '../auth';
@@ -17,6 +18,14 @@ graphqlRoutes.post('/graphql', async (c) => {
   const accept = c.req.header('accept');
   const explicitAuthorization = c.req.header('authorization');
   const sessionToken = getCookie(c, sessionName);
+  const isMultipart = c.req.header('content-type')?.toLowerCase().startsWith('multipart/form-data');
+
+  if (isMultipart && !explicitAuthorization && sessionToken) {
+    const publicOrigin = new URL(process.env.PUBLIC_ORIGIN ?? new URL(c.req.url).origin);
+    if (c.req.header('origin') !== publicOrigin.origin) {
+      return c.text('Forbidden', 403);
+    }
+  }
 
   headers.set('content-type', c.req.header('content-type') ?? 'application/json');
   if (accept) {
@@ -32,8 +41,15 @@ graphqlRoutes.post('/graphql', async (c) => {
     headers.set('authorization', `Bearer ${sessionToken}`);
   }
 
+  const body = isMultipart
+    ? await readRequestBodyWithinLimit(c.req.raw, feedbackMultipartMaxBytes)
+    : undefined;
+  if (isMultipart && body === null) {
+    return c.text('Request body too large', 413);
+  }
+
   const requestInit: StreamingRequestInit = {
-    body: c.req.raw.body,
+    body: isMultipart ? body : c.req.raw.body,
     duplex: 'half',
     headers,
     method: 'POST',

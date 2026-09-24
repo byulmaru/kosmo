@@ -676,6 +676,7 @@ type SubmitContentReportPayload {
 }
 
 input SubmitFeedbackInput {
+  attachments: [Upload!]
   body: String!
   kind: FeedbackKind!
 }
@@ -744,3 +745,6 @@ input UpdatePushInstallationInput {
 type UpdatePushInstallationPayload {
   completed: Boolean!
 }
+
+"""A multipart uploaded file"""
+scalar Upload
