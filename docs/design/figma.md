@@ -391,6 +391,10 @@ Collapsed·Revealed 시각은 유지한다. 새 `Reason=Muted`는 canonical `Vol
 사용해 작성자·시간·Action Bar를 유지하고 본문만 기본 접힘 처리하도록 조립돼 있다. 이 조립은 2026-09-04의
 직접 Profile 정상 표시 결정으로 대체됐으며 현재 Target이나 runtime 구현 근거로 사용하지 않는다.
 
+2026-09-21 PROD-990의 실제 GraphQL Local·Remote Home 경고와 Local Home↔detail 상태 공유, Web Light
+390·1024·1440 검증 결과는 `add-local-content-warning` task에 기록한다. Production `AppProviders`는
+`mode='light'`이므로 Production Dark는 결정 대기다. Native runtime과 실제 federation 수신은 미검증이다.
+
 Search Popular·Media, Profile edit, Profile Replies·Media처럼 `Candidate`·`Product not implemented`로 이미
 inventory에 등록된 항목은 누락 화면으로 다시 세지 않는다. canonical route family의 광범위한 공백은 찾지
 않았다. Mobile `blocking`·`blockedBy`는 기존 identity-free StateView 조립의 물리 참고 자료로 유지하며, 현재 차단

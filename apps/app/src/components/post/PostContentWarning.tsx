@@ -1,8 +1,9 @@
 import { EyeOff } from 'lucide-react-native';
-import { useState } from 'react';
+import { useContext, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
+import { PostSurfaceHoverSuppressionContext } from './usePostSurfaceFeedback';
 import type { ViewStyle } from 'react-native';
 
 export type PostContentWarningProps = Readonly<{
@@ -20,6 +21,7 @@ export function PostContentWarning({
 }: PostContentWarningProps) {
   const theme = useTheme();
   const [focusVisible, setFocusVisible] = useState(false);
+  const setCardHoverSuppressed = useContext(PostSurfaceHoverSuppressionContext);
   const metadata = imageCount ? `본문 · 이미지 ${imageCount}개` : '본문';
   const action = revealed ? '다시 가리기' : '보기';
 
@@ -30,6 +32,8 @@ export function PostContentWarning({
       accessibilityState={{ expanded: revealed }}
       aria-expanded={revealed}
       onBlur={() => setFocusVisible(false)}
+      onHoverIn={Platform.OS === 'web' ? () => setCardHoverSuppressed?.(true) : undefined}
+      onHoverOut={Platform.OS === 'web' ? () => setCardHoverSuppressed?.(false) : undefined}
       onFocus={(event) => {
         const target = event.currentTarget as unknown as {
           matches?: (selector: string) => boolean;

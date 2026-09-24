@@ -7,7 +7,10 @@ import { formatTimelineTimestamp } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
 import { PostContentRenderer } from './PostContentRenderer';
-import { usePostSurfaceFeedback } from './usePostSurfaceFeedback';
+import {
+  PostSurfaceHoverSuppressionContext,
+  usePostSurfaceFeedback,
+} from './usePostSurfaceFeedback';
 import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
@@ -219,7 +222,7 @@ export function PostSourcePreview({
   style?: StyleProp<ViewStyle>;
 }): ReactNode {
   const theme = useTheme();
-  const { handlers, hovered } = usePostSurfaceFeedback({
+  const { handlers, hovered, setSurfaceHoverSuppressed } = usePostSurfaceFeedback({
     hover: interactive,
     press: false,
   });
@@ -291,7 +294,9 @@ export function PostSourcePreview({
       ]}
       testID="source-post-preview"
     >
-      {content}
+      <PostSurfaceHoverSuppressionContext.Provider value={setSurfaceHoverSuppressed}>
+        {content}
+      </PostSurfaceHoverSuppressionContext.Provider>
     </View>
   );
 }

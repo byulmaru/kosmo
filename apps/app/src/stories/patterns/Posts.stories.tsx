@@ -2996,6 +2996,7 @@ const meta = {
   excludeStories: [
     'ComposerBeforeUnloadContract',
     'ContentWarningProductionConsumersShareRevealStateInteraction',
+    'ContentWarningCardHoverIsolationInteraction',
     'ContentWarningQuoteIndependentLifecycleInteraction',
     'ContentWarningRevealInteraction',
     'ContentWarningSourcePreviewRevealInteraction',
@@ -6383,6 +6384,32 @@ export const ContentWarningProductionConsumersShareRevealStateInteraction: Story
   },
 };
 
+export const ContentWarningCardHoverIsolationInteraction: Story = {
+  ...ContentWarningProductionConsumersShareRevealState,
+  parameters: { controls: { disable: true } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const listSurface = canvas.getByTestId('content-warning-list-surface');
+    const card = within(listSurface).getByTestId('post-list-item-card');
+    const feedback = within(card).getByTestId('post-list-item-feedback');
+    const warning = within(card).getByRole('button', {
+      name: /실제 Post 소비자 통합 검증 경고, 본문, 보기/,
+    });
+
+    await userEvent.hover(canvas.getByTestId('content-warning-layout-surface'));
+    const restingCardColor = getComputedStyle(feedback).backgroundColor;
+    const restingWarningColor = getComputedStyle(warning).backgroundColor;
+
+    await userEvent.hover(warning);
+    expect(getComputedStyle(feedback).backgroundColor).toBe(restingCardColor);
+    expect(getComputedStyle(warning).backgroundColor).not.toBe(restingWarningColor);
+
+    await userEvent.unhover(warning);
+    await userEvent.hover(within(card).getAllByRole('link')[0]!);
+    expect(getComputedStyle(feedback).backgroundColor).not.toBe(restingCardColor);
+  },
+};
+
 export const ContentWarningQuoteIndependentLifecycle: Story = {
   render: () => <ContentWarningQuoteIndependentLifecycleStory />,
 };
@@ -6397,6 +6424,13 @@ export const ContentWarningQuoteIndependentLifecycleInteraction: Story = {
     const sourceBody = '인용 원문의 가림 해제 뒤 표시되는 본문입니다.';
     const outerWarning = /인용 게시글 바깥 경고, 본문, 보기/;
     const sourceWarning = /인용 원문 자체 경고, 본문, 보기/;
+    const card = listSurface.getByTestId('post-list-item-card');
+    const cardFeedback = within(card).getByTestId('post-list-item-feedback');
+    const sourcePreview = listSurface.getByTestId('source-post-preview');
+    const sourceWarningButton = listSurface.getByRole('button', { name: sourceWarning });
+    const sourcePreviewLink = within(sourcePreview).getByRole('link', {
+      name: '원문 게시글 보기',
+    });
 
     expect(listSurface.getByTestId('source-post-preview')).toBeVisible();
     expect(listSurface.getByRole('button', { name: outerWarning })).toBeVisible();
@@ -6405,6 +6439,27 @@ export const ContentWarningQuoteIndependentLifecycleInteraction: Story = {
     expect(listSurface.queryByText(sourceBody)).not.toBeInTheDocument();
     expect(layoutSurface.queryByText(outerBody)).not.toBeInTheDocument();
     expect(layoutSurface.queryByText(sourceBody)).not.toBeInTheDocument();
+
+    await userEvent.hover(sourcePreview);
+    const hoveredCardColor = getComputedStyle(cardFeedback).backgroundColor;
+    const hoveredPreviewColor = getComputedStyle(sourcePreview).backgroundColor;
+    await userEvent.unhover(sourcePreview);
+    const restingCardColor = getComputedStyle(cardFeedback).backgroundColor;
+    const restingPreviewColor = getComputedStyle(sourcePreview).backgroundColor;
+    const restingWarningColor = getComputedStyle(sourceWarningButton).backgroundColor;
+
+    expect(hoveredCardColor).not.toBe(restingCardColor);
+    expect(hoveredPreviewColor).not.toBe(restingPreviewColor);
+
+    await userEvent.hover(sourceWarningButton);
+    expect(getComputedStyle(cardFeedback).backgroundColor).toBe(restingCardColor);
+    expect(getComputedStyle(sourcePreview).backgroundColor).toBe(restingPreviewColor);
+    expect(getComputedStyle(sourceWarningButton).backgroundColor).not.toBe(restingWarningColor);
+
+    await userEvent.unhover(sourceWarningButton);
+    await userEvent.hover(sourcePreviewLink);
+    expect(getComputedStyle(cardFeedback).backgroundColor).toBe(hoveredCardColor);
+    expect(getComputedStyle(sourcePreview).backgroundColor).toBe(hoveredPreviewColor);
 
     await userEvent.click(listSurface.getByRole('button', { name: outerWarning }));
     expect(listSurface.getByText(outerBody)).toBeVisible();

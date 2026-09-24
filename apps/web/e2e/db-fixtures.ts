@@ -92,6 +92,7 @@ type CreateE2EFollowOptions = {
 type CreateE2EPostOptions = {
   body?: string;
   content?: boolean;
+  contentWarning?: string;
   createdAt?: string;
   media?: readonly Readonly<{ altText?: string; url: string }>[];
   profileId: string;
@@ -499,8 +500,10 @@ export async function createE2EPost(options: CreateE2EPostOptions) {
       ? postContentDocumentFromTextAndMedia(
           bodyText,
           media.map(({ id }) => ({ mediaId: id })),
+          false,
+          options.contentWarning ?? null,
         )
-      : postContentDocumentFromText(bodyText);
+      : postContentDocumentFromText(bodyText, options.contentWarning ?? null);
     const content = await tx
       .insert(PostContents)
       .values({

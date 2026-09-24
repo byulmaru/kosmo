@@ -17,7 +17,10 @@ import { usePostMediaViewerHost } from './PostMediaViewerHost';
 import { usePostReplySurface } from './PostReplySurface';
 import { PostSourcePresentationView } from './PostSourcePresentationView';
 import { ReplyComposerSurface } from './ReplyComposerSurface';
-import { usePostSurfaceFeedback } from './usePostSurfaceFeedback';
+import {
+  PostSurfaceHoverSuppressionContext,
+  usePostSurfaceFeedback,
+} from './usePostSurfaceFeedback';
 import type { ReactNode } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { PostListItem_post$key } from './__generated__/PostListItem_post.graphql';
@@ -350,7 +353,7 @@ function PostListItemCard({
   style: StyleProp<ViewStyle>;
 }) {
   const theme = useTheme();
-  const { handlers, hovered, pressed } = usePostSurfaceFeedback({
+  const { handlers, hovered, pressed, setSurfaceHoverSuppressed } = usePostSurfaceFeedback({
     hover: true,
     press: true,
   });
@@ -377,7 +380,9 @@ function PostListItemCard({
         ]}
         testID="post-list-item-feedback"
       />
-      {children}
+      <PostSurfaceHoverSuppressionContext.Provider value={setSurfaceHoverSuppressed}>
+        {children}
+      </PostSurfaceHoverSuppressionContext.Provider>
     </View>
   );
 }
