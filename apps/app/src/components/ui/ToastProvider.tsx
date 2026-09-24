@@ -31,7 +31,6 @@ export function ToastProvider({ children }: PropsWithChildren): ReactNode {
   const [toast, setToast] = useState<ToastState | null>(null);
   const toastRef = useRef<ToastState | null>(null);
   const [toastVisible, setToastVisible] = useState(false);
-  const activeToastId = useRef<number | null>(null);
   const suspendedPersistentToast = useRef<ToastState | null>(null);
   const nextToastId = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -49,7 +48,7 @@ export function ToastProvider({ children }: PropsWithChildren): ReactNode {
       suspendedPersistentToast.current = null;
       return;
     }
-    if (id !== undefined && activeToastId.current !== id) {
+    if (id !== undefined && toastRef.current?.id !== id) {
       return;
     }
     if (timer.current) {
@@ -59,11 +58,10 @@ export function ToastProvider({ children }: PropsWithChildren): ReactNode {
     if (suspendedPersistentToast.current) {
       const restored = suspendedPersistentToast.current;
       suspendedPersistentToast.current = null;
-      activeToastId.current = restored.id;
       toastRef.current = restored;
       setToast(restored);
     } else {
-      activeToastId.current = null;
+      toastRef.current = null;
       setToastVisible(false);
     }
   }, []);
@@ -76,10 +74,9 @@ export function ToastProvider({ children }: PropsWithChildren): ReactNode {
       const id = nextToastId.current++;
       if (options.persistent) {
         suspendedPersistentToast.current = null;
-      } else if (activeToastId.current !== null && toastRef.current?.persistent) {
+      } else if (toastRef.current?.persistent) {
         suspendedPersistentToast.current = toastRef.current;
       }
-      activeToastId.current = id;
       const nextToast = {
         action: options.action,
         id,
@@ -111,7 +108,7 @@ export function ToastProvider({ children }: PropsWithChildren): ReactNode {
   }, [dismissToast, toast, toastMotion.entered, toastVisible]);
 
   useEffect(() => {
-    if (!toastVisible && !toastMotion.mounted && activeToastId.current === null) {
+    if (!toastVisible && !toastMotion.mounted && toastRef.current === null) {
       setToast(null);
     }
   }, [toastMotion.mounted, toastVisible]);
@@ -148,7 +145,7 @@ export function ToastProvider({ children }: PropsWithChildren): ReactNode {
                 ? {
                     label: toast.action.label,
                     onPress: () => {
-                      if (activeToastId.current !== toast.id) {
+                      if (toastRef.current?.id !== toast.id) {
                         return;
                       }
                       dismissToast(toast.id);

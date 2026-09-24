@@ -10,7 +10,6 @@ import { Skeleton, StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import type { ReactNode } from 'react';
-import type { StyleProp, ViewStyle } from 'react-native';
 import type { UseAutomaticPaginationResult } from '@/components/pagination/useAutomaticPagination';
 import type { PostListItem_post$key } from '@/components/post/__generated__/PostListItem_post.graphql';
 import type { ReplyComposerSurface_profile$key } from '@/components/post/__generated__/ReplyComposerSurface_profile.graphql';
@@ -150,13 +149,11 @@ function BookmarkListState({
   alert = false,
   description,
   onRetry,
-  style,
   title,
 }: {
   alert?: boolean;
   description: string;
   onRetry?: () => void;
-  style?: StyleProp<ViewStyle>;
   title: string;
 }) {
   return (
@@ -166,7 +163,7 @@ function BookmarkListState({
       alert={alert}
       description={description}
       onAction={onRetry}
-      style={style ?? styles.state}
+      style={styles.state}
       title={title}
     />
   );
