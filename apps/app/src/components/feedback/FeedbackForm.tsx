@@ -16,8 +16,8 @@ import { RadioGroup, RadioOption } from '@/components/ui/RadioGroup';
 import { TextArea } from '@/components/ui/TextField';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, layoutRecipes, radii, spacing, typography } from '@/theme/tokens';
+import { createFeedbackUploadables, getFeedbackAssetContentType } from './feedbackAttachments';
 import type { FeedbackKind } from '@kosmo/core/enums';
-import type { UploadableMap } from 'relay-runtime';
 import type { PostComposerSelectedMediaItem } from '@/components/post/PostComposerMediaItemsTarget';
 import type { FeedbackFormSubmitFeedbackMutation } from './__generated__/FeedbackFormSubmitFeedbackMutation.graphql';
 
@@ -39,7 +39,6 @@ type Props = {
   onStateChange?: (state: FeedbackFormState) => void;
 };
 
-type NativeUploadable = { readonly name: string; readonly type: string; readonly uri: string };
 type FeedbackMediaItem = PostComposerSelectedMediaItem;
 
 const SubmitFeedbackMutation = graphql`
@@ -109,7 +108,9 @@ export function FeedbackForm({ onStateChange }: Props) {
       if (result.canceled) {
         return;
       }
-      const supported = result.assets.filter((asset) => isSupportedFeedbackAsset(asset));
+      const supported = result.assets.filter(
+        (asset) => getFeedbackAssetContentType(asset) !== null,
+      );
       if (supported.length !== result.assets.length) {
         setAttachmentError('정적 JPEG, PNG, WebP 이미지만 첨부할 수 있어요.');
       }
@@ -323,27 +324,3 @@ const styles = StyleSheet.create({
   webActions: { width: '100%' },
   nativeActions: { alignItems: 'flex-start' },
 });
-
-function isSupportedFeedbackAsset(asset: ImagePicker.ImagePickerAsset): boolean {
-  const contentType = (asset.mimeType ?? asset.file?.type ?? '').toLowerCase();
-  return (
-    contentType === 'image/jpeg' || contentType === 'image/png' || contentType === 'image/webp'
-  );
-}
-
-function createFeedbackUploadables(items: readonly FeedbackMediaItem[]): UploadableMap {
-  const uploadables = Object.fromEntries(
-    items.map((item, index) => {
-      const contentType = (item.asset.mimeType ?? item.asset.file?.type ?? '').toLowerCase();
-      const extension =
-        contentType === 'image/jpeg' ? 'jpg' : contentType === 'image/webp' ? 'webp' : 'png';
-      const uploadable: Blob | NativeUploadable = item.asset.file ?? {
-        name: `feedback-${index + 1}.${extension}`,
-        type: contentType,
-        uri: item.asset.uri,
-      };
-      return [`input.attachments.${index}`, uploadable];
-    }),
-  );
-  return uploadables as unknown as UploadableMap;
-}
