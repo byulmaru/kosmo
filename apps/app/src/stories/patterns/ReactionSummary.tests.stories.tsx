@@ -24,7 +24,7 @@ export const WidthFitAndPeopleLink: Story = {
     const canvas = within(canvasElement);
     const row = canvas.getByTestId('reaction-summary-row');
     const peopleLink = await canvas.findByRole('link', { name: /반응한 프로필 보기/ });
-    await canvas.findByRole('button', { name: /❤️ 반응 18개/ });
+    await canvas.findByRole('button', { name: /빨간색 하트 반응 18개/ });
     const reactionButtons = canvas
       .getAllByRole('button')
       .filter((button) => /반응 \d+개/.test(button.getAttribute('aria-label') ?? ''));
@@ -43,7 +43,7 @@ export const WidthFitAndPeopleLink: Story = {
     const wasSelected = firstReaction.getAttribute('aria-pressed') === 'true';
     await userEvent.click(firstReaction);
     expect(firstReaction).toHaveAttribute('aria-pressed', wasSelected ? 'false' : 'true');
-    expect(canvas.queryByRole('button', { name: '🌈 반응 3개' })).not.toBeInTheDocument();
+    expect(canvas.queryByRole('button', { name: '무지개 반응 3개' })).not.toBeInTheDocument();
   },
 };
 
@@ -66,7 +66,7 @@ export const ConsumerWidthsKeepOneCompleteRow: Story = {
     for (const width of [298, 524, 390, 600]) {
       const container = canvas.getByTestId(`summary-width-${width}`);
       const scope = within(container);
-      await scope.findByRole('button', { name: '🥹 반응 24개' });
+      await scope.findByRole('button', { name: '눈물을 참는 얼굴 반응 24개' });
       const tokens = scope.getAllByRole('button');
       const people = scope.getByRole('link', { name: /반응한 프로필 보기/ });
       const hiddenCount = canonicalReactionEntries.length - tokens.length;
@@ -92,11 +92,13 @@ export const StateAccessibility: Story = {
   render: () => <StateCases />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const selected = (await canvas.findAllByRole('button', { name: '❤️ 반응 18개' })).find(
+    const selected = (await canvas.findAllByRole('button', { name: '빨간색 하트 반응 18개' })).find(
       (button) => button.getAttribute('aria-pressed') === 'true',
     );
-    const pending = await canvas.findByRole('button', { name: '🎉 반응 12개, 처리 중' });
-    const error = await canvas.findByRole('button', { name: '👀 반응 9개, 오류, 다시 시도' });
+    const pending = await canvas.findByRole('button', { name: '파티 반응 12개, 처리 중' });
+    const error = await canvas.findByRole('button', {
+      name: '왕눈이 눈알 반응 9개, 오류, 다시 시도',
+    });
 
     expect(selected).toBeDefined();
     if (!selected) {

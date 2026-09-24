@@ -20,7 +20,7 @@ import {
 } from 'react-native';
 import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, motion, radius, space, textStyles } from '@/theme/tokens';
-import type { ReactElement, RefObject } from 'react';
+import type { ReactElement, ReactNode, RefObject } from 'react';
 import type { ViewStyle } from 'react-native';
 
 export type TabVariant = 'pill' | 'underline';
@@ -28,6 +28,7 @@ export type TabVariant = 'pill' | 'underline';
 export type TabOption<Value extends string> = Readonly<{
   accessibilityLabel?: string;
   disabled?: boolean;
+  leading?: ReactNode;
   label: string;
   value: Value;
 }>;
@@ -405,26 +406,29 @@ export function Tab<Value extends string>({ option }: TabProps<Value>) {
                 ]}
               >
                 {feedback}
-                <Text style={[styles.pillLabel, { color: theme.foregroundPrimary }]}>
-                  {option.label}
-                </Text>
+                <View style={styles.tabContent}>
+                  {option.leading ? <View style={styles.leading}>{option.leading}</View> : null}
+                  <Text style={[styles.pillLabel, { color: theme.foregroundPrimary }]}>
+                    {option.label}
+                  </Text>
+                </View>
               </View>
             ) : (
               <>
                 {feedback}
-                <Text
-                  style={[
-                    styles.underlineLabel,
-                    {
-                      color:
-                        context.variant === 'underline' && !selected
-                          ? theme.foregroundSecondary
-                          : theme.foregroundPrimary,
-                    },
-                  ]}
-                >
-                  {option.label}
-                </Text>
+                <View style={styles.tabContent}>
+                  {option.leading ? <View style={styles.leading}>{option.leading}</View> : null}
+                  <Text
+                    style={[
+                      styles.underlineLabel,
+                      {
+                        color: selected ? theme.foregroundPrimary : theme.foregroundSecondary,
+                      },
+                    ]}
+                  >
+                    {option.label}
+                  </Text>
+                </View>
               </>
             )}
           </>
@@ -481,6 +485,8 @@ const styles = StyleSheet.create({
   },
   pillFlush: { paddingHorizontal: 0, paddingTop: 0 },
   pillWrap: { flexWrap: 'wrap' },
+  tabContent: { alignItems: 'center', flexDirection: 'row', gap: space[4] },
+  leading: { alignItems: 'center', justifyContent: 'center' },
   pillTab: {
     alignItems: 'center',
     borderRadius: Platform.OS === 'web' ? radius[8] : 0,
