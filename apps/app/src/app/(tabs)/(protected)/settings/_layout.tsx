@@ -9,7 +9,7 @@ import type { ReactNode } from 'react';
 import type { SettingsDetailHeaderMode } from '@/components/settings/SettingsRouteContext';
 
 export const unstable_settings = {
-  initialRouteName: 'index',
+  initialRouteName: Platform.OS === 'web' ? undefined : 'index',
 };
 
 export default function SettingsLayout() {

@@ -30,7 +30,8 @@ afterEach(() => {
 });
 
 describe('Settings detail back navigation', () => {
-  it('Web은 문서를 새로 열지 않고 Settings root로 replace한다', () => {
+  it('Web은 이전 설정 화면이 있으면 문서 재로딩 없이 back한다', () => {
+    let backCalls = 0;
     const replaced: string[] = [];
     const documentReplacements: string[] = [];
 
@@ -40,11 +41,24 @@ describe('Settings detail back navigation', () => {
     });
 
     returnToSettingsParent('/settings/mute-and-block', {
+      back: () => (backCalls += 1),
+      canGoBack: () => true,
       replace: (href) => replaced.push(String(href)),
     });
 
-    assert.deepEqual(replaced, ['/settings']);
+    assert.equal(backCalls, 1);
+    assert.deepEqual(replaced, []);
     assert.deepEqual(documentReplacements, []);
+  });
+
+  it('Web direct detail은 이전 설정 화면이 없으면 parent를 연다', () => {
+    const replaced: string[] = [];
+    returnToSettingsParent('/settings/blocked-profiles', {
+      back: () => assert.fail('direct detail에는 뒤로 갈 화면이 없어야 한다'),
+      canGoBack: () => false,
+      replace: (href) => replaced.push(String(href)),
+    });
+    assert.deepEqual(replaced, ['/settings/mute-and-block']);
   });
 
   it('Native는 이전 history와 무관하게 Settings root를 연다', () => {
@@ -52,6 +66,8 @@ describe('Settings detail back navigation', () => {
     const replaced: string[] = [];
 
     returnToSettingsParent('/settings/default-post-visibility', {
+      back: () => assert.fail('Native는 back하지 않는다'),
+      canGoBack: () => false,
       replace: (href) => replaced.push(String(href)),
     });
 
@@ -63,6 +79,8 @@ describe('Settings detail back navigation', () => {
     const replaced: string[] = [];
 
     returnToSettingsParent('/settings/muted-profiles', {
+      back: () => assert.fail('Native는 back하지 않는다'),
+      canGoBack: () => false,
       replace: (href) => replaced.push(String(href)),
     });
 
@@ -80,6 +98,8 @@ describe('Settings detail back navigation', () => {
       });
 
       returnToSettingsParent(pathname, {
+        back: () => assert.fail('직접 진입 화면에서는 back하지 않는다'),
+        canGoBack: () => false,
         replace: (href) => replaced.push(String(href)),
       });
 

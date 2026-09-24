@@ -115,7 +115,7 @@ export function SettingsLinkRow({
   }
 
   return (
-    <NavigationLink href={href} onNavigate={onNavigate} primary={primary}>
+    <NavigationLink href={href} onNavigate={onNavigate} primary={primary} push>
       {row}
     </NavigationLink>
   );

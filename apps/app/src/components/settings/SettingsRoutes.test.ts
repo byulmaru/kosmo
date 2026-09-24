@@ -13,6 +13,7 @@ const require = createRequire(import.meta.url);
 let platform: 'android' | 'ios' | 'web' = 'web';
 let width = 1_280;
 let backCalls = 0;
+let canGoBack = false;
 let replacedPaths: string[] = [];
 let pathname = '/settings';
 let SlotRoute: ComponentType = () => null;
@@ -34,6 +35,7 @@ mock.module('expo-router', {
     usePathname: () => pathname,
     useRouter: () => ({
       back: () => (backCalls += 1),
+      canGoBack: () => canGoBack,
       replace: (href: string) => replacedPaths.push(href),
     }),
   },
@@ -186,6 +188,7 @@ afterEach(async () => {
   platform = 'web';
   width = 1_280;
   backCalls = 0;
+  canGoBack = false;
   replacedPaths = [];
   pathname = '/settings';
   SlotRoute = () => null;
@@ -206,8 +209,8 @@ afterEach(async () => {
 });
 
 describe('Settings routes', () => {
-  it('detail deep link의 route-owned back을 위해 root index를 anchor로 둔다', () => {
-    assert.equal(settingsInitialRouteName, 'index');
+  it('Web detail deep link는 synthetic root anchor 없이 route-owned parent를 사용한다', () => {
+    assert.equal(settingsInitialRouteName, undefined);
   });
 
   it('full Web root는 320px master와 flexible Profile detail을 함께 표시한다', async () => {
@@ -410,6 +413,7 @@ describe('Settings routes', () => {
 
   it('compact Web detail은 route-owned back header로 Settings root를 연다', async () => {
     width = 768;
+    canGoBack = true;
     await renderRoute('/settings/default-post-visibility', SettingsDefaultPostVisibilityRoute);
 
     const header = rendered('PageHeader')[0];
@@ -417,8 +421,8 @@ describe('Settings routes', () => {
     const back = header.props.leading;
     assert.equal(back.props.accessibilityLabel, '설정으로 돌아가기');
     await act(async () => back.props.onPress());
-    assert.equal(backCalls, 0);
-    assert.deepEqual(replacedPaths, ['/settings']);
+    assert.equal(backCalls, 1);
+    assert.deepEqual(replacedPaths, []);
   });
 
   it('Android detail back action은 44dp layout과 hit slop으로 48dp target을 제공한다', async () => {

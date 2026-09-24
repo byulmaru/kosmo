@@ -1,6 +1,7 @@
+import { Platform } from 'react-native';
 import type { ImperativeRouter } from 'expo-router';
 
-type SettingsNavigationRouter = Pick<ImperativeRouter, 'replace'>;
+type SettingsNavigationRouter = Pick<ImperativeRouter, 'back' | 'canGoBack' | 'replace'>;
 
 export function returnToSettingsParent(pathname: string, router: SettingsNavigationRouter) {
   const parentPath =
@@ -10,5 +11,13 @@ export function returnToSettingsParent(pathname: string, router: SettingsNavigat
         ? '/settings/info'
         : '/settings';
 
-  router.replace(parentPath);
+  if (Platform.OS === 'web') {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace(parentPath);
+    }
+  } else {
+    router.replace(parentPath);
+  }
 }
