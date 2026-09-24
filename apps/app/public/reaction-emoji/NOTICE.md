@@ -9,4 +9,4 @@ The picker and server allow the 3,781 fully-qualified emoji represented by that 
 - Package data and code: MIT license (`emoji-datasource-google/LICENSE`)
 - Noto images: Apache License 2.0 (see the package README image-source section and the Noto repository `LICENSE`)
 
-Korean names and search words are preserved in `reactionEmojiCatalog.data.json` from CLDR 48 annotations. Unicode emoji data and CLDR annotations are Copyright © Unicode, Inc. and governed by the [Unicode Terms of Use](https://www.unicode.org/copyright.html).
+Korean and English names and search words come from `emojibase-data@17.0.0` CLDR annotations. Unicode emoji data and CLDR annotations are Copyright © Unicode, Inc. and governed by the [Unicode Terms of Use](https://www.unicode.org/copyright.html).

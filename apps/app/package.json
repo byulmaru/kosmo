@@ -38,6 +38,7 @@
     "@sentry/react-native": "^8.24.0",
     "@sun-typeface/suit": "^2.0.5",
     "emoji-datasource-google": "16.0.0",
+    "emojibase-data": "17.0.0",
     "expo": "~56.0.14",
     "expo-auth-session": "~56.0.15",
     "expo-build-properties": "~56.0.27",
