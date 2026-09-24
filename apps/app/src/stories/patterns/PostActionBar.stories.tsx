@@ -1392,7 +1392,10 @@ export const ReactionPopoverDismissFocusAndPlacement: Story = {
     const dialog = await screen.findByRole('dialog', { name: '반응 선택' });
     let position = screen.getByTestId('reaction-popover-position');
     await waitFor(() => expect(position).toHaveAttribute('data-placement', 'bottom'));
-    expect(canvasElement.ownerDocument.activeElement).toHaveAttribute('aria-label', '🥹 반응');
+    expect(canvasElement.ownerDocument.activeElement).toHaveAttribute(
+      'aria-label',
+      '눈물을 참는 얼굴 반응',
+    );
     expect(position.getBoundingClientRect().left).toBeGreaterThanOrEqual(0);
 
     const shell = screen.getByTestId('reaction-popover-scroll');
@@ -1505,8 +1508,8 @@ export const ReactionConcurrentMutationContract: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(await canvas.findByRole('button', { name: '반응' }));
-    const heart = await screen.findByRole('button', { name: '❤️ 반응' });
-    const party = screen.getByRole('button', { name: '🎉 반응' });
+    const heart = await screen.findByRole('button', { name: '빨간색 하트 반응' });
+    const party = screen.getByRole('button', { name: '파티 반응' });
 
     unstable_batchedUpdates(() => {
       heart.click();
@@ -1517,30 +1520,30 @@ export const ReactionConcurrentMutationContract: Story = {
     let requests = readReactionRequests(canvas);
     expect(requests.filter((request) => request.type === '❤️')).toHaveLength(1);
     expect(requests.filter((request) => request.type === '🎉')).toHaveLength(1);
-    expect(screen.getByRole('button', { name: '❤️ 반응, 처리 중' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: '🎉 반응, 처리 중' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '빨간색 하트 반응, 처리 중' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '파티 반응, 처리 중' })).toBeDisabled();
 
     const partyRequest = requests.find((request) => request.type === '🎉')!;
     canvas.getByRole('button', { name: `요청 ${partyRequest.id} success` }).click();
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: '🎉 반응' })).toHaveAttribute(
+      expect(screen.getByRole('button', { name: '파티 반응' })).toHaveAttribute(
         'aria-pressed',
         'true',
       ),
     );
-    expect(screen.getByRole('button', { name: '❤️ 반응, 처리 중' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '빨간색 하트 반응, 처리 중' })).toBeDisabled();
 
     const heartRequest = requests.find((request) => request.type === '❤️')!;
     canvas.getByRole('button', { name: `요청 ${heartRequest.id} success` }).click();
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: '❤️ 반응' })).toHaveAttribute(
+      expect(screen.getByRole('button', { name: '빨간색 하트 반응' })).toHaveAttribute(
         'aria-pressed',
         'true',
       ),
     );
     expect(screen.getByRole('dialog', { name: '반응 선택' })).toBeVisible();
 
-    await userEvent.click(screen.getByRole('button', { name: '❤️ 반응' }));
+    await userEvent.click(screen.getByRole('button', { name: '빨간색 하트 반응' }));
     await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(3));
     requests = readReactionRequests(canvas);
     const deleteHeart = requests.find(
@@ -1548,12 +1551,15 @@ export const ReactionConcurrentMutationContract: Story = {
     )!;
     canvas.getByRole('button', { name: `요청 ${deleteHeart.id} success` }).click();
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: '❤️ 반응' })).toHaveAttribute(
+      expect(screen.getByRole('button', { name: '빨간색 하트 반응' })).toHaveAttribute(
         'aria-pressed',
         'false',
       ),
     );
-    expect(screen.getByRole('button', { name: '🎉 반응' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: '파티 반응' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
     expect(screen.getByRole('dialog', { name: '반응 선택' })).toBeVisible();
   },
   render: () => <ReactionContractHarness />,
@@ -1647,25 +1653,29 @@ export const ReactionFailureRetryActorSwitchAndUnmount: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(await canvas.findByRole('button', { name: '반응' }));
-    await userEvent.click(await screen.findByRole('button', { name: '❤️ 반응' }));
+    await userEvent.click(await screen.findByRole('button', { name: '빨간색 하트 반응' }));
     await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(1));
     canvas.getByRole('button', { name: '요청 1 payload-error' }).click();
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: '❤️ 반응, 오류, 다시 시도' })).toBeVisible(),
+      expect(
+        screen.getByRole('button', { name: '빨간색 하트 반응, 오류, 다시 시도' }),
+      ).toBeVisible(),
     );
     expect(
       canvas.getByRole('button', { name: '빨간색 하트 반응 12개, 오류, 다시 시도' }),
     ).toBeVisible();
-    expect(screen.getByRole('button', { name: '🎉 반응' })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: '파티 반응' })).not.toBeDisabled();
 
-    await userEvent.click(screen.getByRole('button', { name: '❤️ 반응, 오류, 다시 시도' }));
+    await userEvent.click(
+      screen.getByRole('button', { name: '빨간색 하트 반응, 오류, 다시 시도' }),
+    );
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: '❤️ 반응, 처리 중' })).toBeDisabled(),
+      expect(screen.getByRole('button', { name: '빨간색 하트 반응, 처리 중' })).toBeDisabled(),
     );
     await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(2));
     canvas.getByRole('button', { name: '요청 2 data-errors-success' }).click();
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: '❤️ 반응' })).toHaveAttribute(
+      expect(screen.getByRole('button', { name: '빨간색 하트 반응' })).toHaveAttribute(
         'aria-pressed',
         'true',
       ),
@@ -1673,8 +1683,8 @@ export const ReactionFailureRetryActorSwitchAndUnmount: Story = {
     expect(screen.queryByRole('button', { name: /오류, 다시 시도/ })).toBeNull();
 
     unstable_batchedUpdates(() => {
-      screen.getByRole('button', { name: '🎉 반응' }).click();
-      screen.getByRole('button', { name: '☘️ 반응' }).click();
+      screen.getByRole('button', { name: '파티 반응' }).click();
+      screen.getByRole('button', { name: '토끼풀 반응' }).click();
     });
     await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(4));
     const oldActorRequests = readReactionRequests(canvas).slice(2, 4);
@@ -1685,24 +1695,24 @@ export const ReactionFailureRetryActorSwitchAndUnmount: Story = {
     await waitFor(() => expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull());
 
     await userEvent.click(await canvas.findByRole('button', { name: '반응' }));
-    await userEvent.click(await screen.findByRole('button', { name: '👀 반응' }));
+    await userEvent.click(await screen.findByRole('button', { name: '왕눈이 눈알 반응' }));
     await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(5));
     const currentActorRequest = readReactionRequests(canvas)[4]!;
     canvas.getByRole('button', { name: `요청 ${oldActorRequests[0]!.id} success` }).click();
     canvas.getByRole('button', { name: `요청 ${oldActorRequests[1]!.id} network-error` }).click();
-    expect(screen.getByRole('button', { name: '👀 반응, 처리 중' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '왕눈이 눈알 반응, 처리 중' })).toBeDisabled();
     expect(screen.queryByRole('button', { name: /오류, 다시 시도/ })).toBeNull();
 
     canvas.getByRole('button', { name: `요청 ${currentActorRequest.id} success` }).click();
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: '👀 반응' })).toHaveAttribute(
+      expect(screen.getByRole('button', { name: '왕눈이 눈알 반응' })).toHaveAttribute(
         'aria-pressed',
         'true',
       ),
     );
     unstable_batchedUpdates(() => {
-      screen.getByRole('button', { name: '🌈 반응' }).click();
-      screen.getByRole('button', { name: '🥹 반응' }).click();
+      screen.getByRole('button', { name: '무지개 반응' }).click();
+      screen.getByRole('button', { name: '눈물을 참는 얼굴 반응' }).click();
     });
     await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(7));
     const unmountedRequests = readReactionRequests(canvas).slice(5, 7);
