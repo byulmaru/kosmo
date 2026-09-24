@@ -516,7 +516,7 @@ describe('inbound Create dispatch', () => {
     async () => {
       const mentionActorUris = Array.from(
         { length: 5 },
-        (_, index) => new URL(`https://mentions.example/users/parallel-${index}`),
+        (_, index) => new URL(`https://mentions.example/users/parallel${index}`),
       );
       const objectUri = new URL('https://remote.example/notes/parallel-mention-materialization');
       const lookupHrefs: string[] = [];
