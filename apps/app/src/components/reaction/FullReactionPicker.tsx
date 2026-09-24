@@ -400,7 +400,7 @@ const styles = StyleSheet.create({
   dragHandleHitArea: {
     alignItems: 'center',
     alignSelf: 'center',
-    height: 28,
+    height: 48,
     justifyContent: 'center',
     width: 56,
   },
