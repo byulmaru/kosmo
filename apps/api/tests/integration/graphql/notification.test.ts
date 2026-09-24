@@ -560,6 +560,203 @@ describe('Notification GraphQL Node boundary', () => {
     );
   });
 
+  test('resolves Quote notifications through Node, list, unread count and Read', async () => {
+    const auth = await createAuthenticatedSession();
+    const recipient = await createProfile('quote-recipient');
+    const quoteAuthor = await createProfile('quote-author');
+    await addMembership(auth.account.id, recipient.id, AccountProfileRole.OWNER);
+    const source = await createContentPost(recipient.id);
+    const quote = await db
+      .insert(Posts)
+      .values({
+        profileId: quoteAuthor.id,
+        repostSourceId: source.id,
+        state: PostState.ACTIVE,
+        visibility: PostVisibility.PUBLIC,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const quoteContent = await db
+      .insert(PostContents)
+      .values({ document: postContentDocumentFromText('quote'), postId: quote.id })
+      .returning()
+      .then(firstOrThrow);
+    await db.update(Posts).set({ currentContentId: quoteContent.id }).where(eq(Posts.id, quote.id));
+    const notification = await db
+      .insert(Notifications)
+      .values({
+        kind: NotificationKind.QUOTE,
+        recipientProfileId: recipient.id,
+        sourceId: quote.id,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const notificationId = encodeGlobalId('QuoteNotification', notification.id);
+    const recipientId = encodeGlobalId('Profile', recipient.id);
+    const quoteId = encodeGlobalId('Post', quote.id);
+    const quoteAuthorId = encodeGlobalId('Profile', quoteAuthor.id);
+
+    const result = await requestGraphQL<{
+      node: NotificationNode | null;
+      profile: {
+        unreadNotificationCount: number;
+        notifications: { edges: Array<{ node: NotificationNode }> };
+      } | null;
+    }>(
+      `query QuoteNotification($notificationId: ID!, $profileId: ID!) {
+        node(id: $notificationId) {
+          __typename
+          ... on QuoteNotification { post { id } profile { id } }
+        }
+        profile: node(id: $profileId) {
+          ... on Profile {
+            unreadNotificationCount
+            notifications(first: 10) {
+              edges { node { __typename ... on QuoteNotification { post { id } profile { id } } } }
+            }
+          }
+        }
+      }`,
+      { notificationId, profileId: recipientId },
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.node, {
+      __typename: 'QuoteNotification',
+      post: { id: quoteId },
+      profile: { id: quoteAuthorId },
+    });
+    assert.equal(result.data?.profile?.unreadNotificationCount, 1);
+    assert.deepEqual(result.data?.profile?.notifications.edges[0]?.node, {
+      __typename: 'QuoteNotification',
+      post: { id: quoteId },
+      profile: { id: quoteAuthorId },
+    });
+
+    const read = await markNotificationRead([notificationId], auth.token);
+    assertNoGraphQLErrors(read);
+    assert.equal(read.data?.markNotificationRead.notifications[0]?.id, notificationId);
+    assert.equal(read.data?.markNotificationRead.notifications[0]?.post?.id, quoteId);
+    assert.equal(read.data?.markNotificationRead.notifications[0]?.profile?.id, quoteAuthorId);
+    assert.equal(read.data?.markNotificationRead.recipientProfiles[0]?.unreadNotificationCount, 0);
+  });
+
+  test('hides a Quote notification when its direct Source is unavailable', async () => {
+    const auth = await createAuthenticatedSession();
+    const recipient = await createProfile('quote-hidden-recipient');
+    const quoteAuthor = await createProfile('quote-hidden-author');
+    await addMembership(auth.account.id, recipient.id, AccountProfileRole.OWNER);
+    const source = await createContentPost(recipient.id);
+    const quote = await db
+      .insert(Posts)
+      .values({
+        profileId: quoteAuthor.id,
+        repostSourceId: source.id,
+        state: PostState.ACTIVE,
+        visibility: PostVisibility.PUBLIC,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const content = await db
+      .insert(PostContents)
+      .values({ document: postContentDocumentFromText('hidden quote'), postId: quote.id })
+      .returning()
+      .then(firstOrThrow);
+    await db.update(Posts).set({ currentContentId: content.id }).where(eq(Posts.id, quote.id));
+    const notification = await db
+      .insert(Notifications)
+      .values({
+        kind: NotificationKind.QUOTE,
+        recipientProfileId: recipient.id,
+        sourceId: quote.id,
+      })
+      .returning()
+      .then(firstOrThrow);
+    await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, source.id));
+
+    const notificationId = encodeGlobalId('QuoteNotification', notification.id);
+    const recipientId = encodeGlobalId('Profile', recipient.id);
+    assert.deepEqual(await loadNodes([notificationId], auth.token), [null]);
+    const connection = await loadNotificationConnection(recipientId, auth.token, { first: 10 });
+    assertNoGraphQLErrors(connection);
+    assert.deepEqual(connection.data?.node?.notifications.edges, []);
+    const count = await loadUnreadNotificationCounts([recipientId], auth.token);
+    assertNoGraphQLErrors(count);
+    assert.equal(count.data?.nodes[0]?.unreadNotificationCount, 0);
+    const read = await markNotificationRead([notificationId], auth.token);
+    assertNoGraphQLErrors(read);
+    assert.deepEqual(read.data?.markNotificationRead, {
+      notifications: [],
+      recipientProfiles: [],
+    });
+    assert.equal(await notificationReadAt(notification.id), null);
+  });
+
+  test('rechecks Quote Post access through the Post loader', async () => {
+    const auth = await createAuthenticatedSession();
+    const recipient = await createProfile('quote-loader-recipient');
+    const quoteAuthor = await createProfile('quote-loader-author');
+    await addMembership(auth.account.id, recipient.id, AccountProfileRole.OWNER);
+    await createFollow(quoteAuthor.id, recipient.id);
+
+    const source = await createContentPost(recipient.id);
+    const quote = await db
+      .insert(Posts)
+      .values({
+        profileId: quoteAuthor.id,
+        repostSourceId: source.id,
+        state: PostState.ACTIVE,
+        visibility: PostVisibility.FOLLOWERS,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const content = await db
+      .insert(PostContents)
+      .values({ document: postContentDocumentFromText('loader quote'), postId: quote.id })
+      .returning()
+      .then(firstOrThrow);
+    await db.update(Posts).set({ currentContentId: content.id }).where(eq(Posts.id, quote.id));
+    const notification = await db
+      .insert(Notifications)
+      .values({
+        kind: NotificationKind.QUOTE,
+        recipientProfileId: recipient.id,
+        sourceId: quote.id,
+      })
+      .returning()
+      .then(firstOrThrow);
+
+    const result = await requestGraphQL<{
+      node: {
+        notifications: { edges: Array<{ node: { post: { id: string } | null } }> };
+      } | null;
+      notification: { post: { id: string } | null } | null;
+    }>(
+      `query QuoteNotificationPostAccess($notificationId: ID!, $profileId: ID!) {
+        notification: node(id: $notificationId) {
+          ... on QuoteNotification { post { id } }
+        }
+        node(id: $profileId) {
+          ... on Profile {
+            notifications(first: 10) {
+              edges { node { ... on QuoteNotification { post { id } } } }
+            }
+          }
+        }
+      }`,
+      {
+        notificationId: encodeGlobalId('QuoteNotification', notification.id),
+        profileId: encodeGlobalId('Profile', recipient.id),
+      },
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.equal(result.data?.notification?.post, null);
+    assert.deepEqual(result.data?.node?.notifications.edges, [{ node: { post: null } }]);
+  });
+
   test('Reply Notification row를 GraphQL source로 읽는다', async () => {
     const author = await createAuthenticatedSession();
     const recipient = await createProfile('reply-create-recipient');
@@ -1865,6 +2062,7 @@ const loadNotificationConnection = (
                 ... on FollowNotification { profile { id } }
                 ... on ReactionNotification { type profile { id } post { id } }
                 ... on RepostNotification { profile { id } post { id } }
+                ... on QuoteNotification { profile { id } post { id } }
                 ... on ReplyNotification { profile { id } post { id } }
               }
             }
@@ -1893,6 +2091,7 @@ const markNotificationRead = (ids: string[], token?: string) =>
           ... on FollowRequestNotification { profile { id } followRequest { id } }
           ... on ReactionNotification { type profile { id } post { id } }
           ... on RepostNotification { profile { id } post { id } }
+          ... on QuoteNotification { profile { id } post { id } }
           ... on ReplyNotification { profile { id } post { id } }
         }
         recipientProfiles { id unreadNotificationCount }

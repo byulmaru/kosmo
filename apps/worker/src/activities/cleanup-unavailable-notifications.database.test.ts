@@ -22,6 +22,7 @@ process.env.DATABASE_URL ??= 'postgres://kosmo:kosmo@localhost:54329/kosmo_test'
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
+let NotificationQuoteJudgments: typeof CoreDb.NotificationQuoteJudgments;
 let Notifications: typeof CoreDb.Notifications;
 let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
@@ -37,6 +38,7 @@ before(async () => {
     db,
     firstOrThrow,
     Instances,
+    NotificationQuoteJudgments,
     Notifications,
     pg,
     PostContents,
@@ -51,6 +53,7 @@ before(async () => {
 });
 
 beforeEach(async () => {
+  await db.delete(NotificationQuoteJudgments);
   await db.delete(Notifications);
   await db.delete(ProfileFollows);
   await db.delete(ProfileFollowRequests);
@@ -187,6 +190,60 @@ test('cleanup evaluates every source kind while preserving valid source projecti
       ),
     );
   assert.deepEqual(remaining.map(({ id }) => id).sort(), available.map(({ id }) => id).sort());
+});
+
+test('cleanup evaluates Quote source and preserves only recipient-only inactivity', async () => {
+  const recipient = await createProfile();
+  const quoteAuthor = await createProfile();
+  const recipientOnlyInactive = await createProfile();
+  const availableSource = await createPost({ profileId: recipient.id });
+  const availableQuote = await createPost({
+    profileId: quoteAuthor.id,
+    repostSourceId: availableSource.id,
+  });
+  const unavailableSource = await createPost({ profileId: recipient.id });
+  const unavailableQuote = await createPost({
+    profileId: quoteAuthor.id,
+    repostSourceId: unavailableSource.id,
+  });
+  const recipientOnlySource = await createPost({ profileId: recipientOnlyInactive.id });
+  const recipientOnlyQuote = await createPost({
+    profileId: quoteAuthor.id,
+    repostSourceId: recipientOnlySource.id,
+  });
+
+  const available = await createNotification({
+    kind: NotificationKind.QUOTE,
+    recipientProfileId: recipient.id,
+    sourceId: availableQuote.id,
+  });
+  const unavailable = await createNotification({
+    kind: NotificationKind.QUOTE,
+    recipientProfileId: recipient.id,
+    sourceId: unavailableQuote.id,
+  });
+  const recipientOnly = await createNotification({
+    kind: NotificationKind.QUOTE,
+    recipientProfileId: recipientOnlyInactive.id,
+    sourceId: recipientOnlyQuote.id,
+  });
+
+  await db
+    .update(Posts)
+    .set({ state: PostState.DELETED })
+    .where(eq(Posts.id, unavailableSource.id));
+  await db
+    .update(Profiles)
+    .set({ state: ProfileState.DISABLED })
+    .where(eq(Profiles.id, recipientOnlyInactive.id));
+
+  await runCleanup();
+
+  const remaining = await db
+    .select({ id: Notifications.id })
+    .from(Notifications)
+    .where(inArray(Notifications.id, [available.id, unavailable.id, recipientOnly.id]));
+  assert.deepEqual(remaining.map(({ id }) => id).sort(), [available.id, recipientOnly.id].sort());
 });
 
 test('cleanup converges across bounded Activity invocations and preserves available notifications', async () => {

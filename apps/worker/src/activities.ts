@@ -28,6 +28,7 @@ export {
   deleteFollowRequestNotification as deleteFollowRequestNotificationActivity,
 } from '@kosmo/core/services';
 export { createReplyNotification as createReplyNotificationActivity } from '@kosmo/core/services';
+export { createQuoteNotification as createQuoteNotificationActivity } from '@kosmo/core/services';
 export {
   createReactionNotification as createReactionNotificationActivity,
   deleteReactionNotification as deleteReactionNotificationActivity,
