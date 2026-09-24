@@ -66,7 +66,7 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
 - Figma Target evidence에서 Full loaded 화면
   [`뮤트한 프로필`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-25436)과
   [`차단한 프로필`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-25582)은 Settings
-  master에 이 하위 목록을 표시하고, Compact는 category 화면
+  root 설정 목록을 master에 유지하고 선택된 관리 화면을 detail에 표시한다. Compact는 category 화면
   [`6338:1641`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6338-1641)에서 같은 순서로
   destination을 제공한다. Mobile category 화면
   [`6393:8193`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6393-8193)도 기존 loaded
@@ -191,8 +191,9 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
   개인정보 처리방침 링크를 표시하지 않는다.
 - 기존 중앙 column과 우측 rail이 사용하던 영역을 Settings 전용 wide workspace로 사용한다. workspace는
   약 `320px` master pane과 남은 폭을 채우는 detail pane으로 나누고 theme border로 경계를 표시한다.
-- master pane은 `설정` heading과 root 또는 선택된 category의 진입점 목록을 소유한다. detail pane은 선택된
-  하위 목록 또는 설정 화면과 그 heading을 소유한다.
+- master pane은 모든 내부 설정 경로에서 `설정` heading과 root 진입점 목록을 유지하고 현재 category를 선택한다.
+  detail pane은 선택된 category의 하위 목록 또는 설정 화면과 그 heading을 소유한다. root 기본 detail을 제외한
+  내부 경로의 detail heading은 명시적인 부모로 돌아가는 action을 제공한다.
 - 두 pane은 Web document scroll을 계속 사용한다. 중앙 content만의 별도 app-style internal scroller를
   만들거나 settings 때문에 전역 sidebar 폭과 `full=1280` breakpoint를 바꾸지 않는다.
 
@@ -213,7 +214,7 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
 - Android·iOS one-pane route는 `PageHeader`부터 root·category·detail content 전체를 하나의 platform vertical
   `ScrollView`에 둔다. compact·mobile·full Web은 기존 document scroll을 계속 사용한다.
 - full Web에서는 master pane의 `설정` heading과 detail pane의 현재 화면 heading을 각각 노출한다. 같은 pane
-  안에 중복 heading을 만들지 않는다.
+  안에 중복 heading을 만들지 않으며, 내부 경로에서는 detail heading에서 바로 위 부모로 돌아간다.
 - 모든 layout은 기존 `compact=768`, `full=1280` breakpoint를 사용한다. text scaling과 reflow에서도 행의
   label·description·trailing action이 잘리거나 불필요한 가로 scroll에 의존하지 않게 한다.
 
