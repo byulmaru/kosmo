@@ -89,7 +89,7 @@ export function ReactionAction({
               : onPress;
           return renderTrigger({
             disabled: triggerDisabled,
-            expanded: execution.kind === 'enabled' ? expanded : false,
+            expanded: execution.kind === 'enabled' ? expanded || fullOpen : false,
             hasReacted: controller.selectedTypeIds.length > 0,
             onPress: triggerPress,
             ref,
