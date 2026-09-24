@@ -384,9 +384,10 @@ function PostComposerContents({
 
   const productionSurface: PostComposerVisibility = visibility;
   const composerMode: PostComposerMode = quoteMode ? 'quote' : replyMode ? 'reply' : 'post';
-  const pickerProfiles = selectedProfileKey && !profiles.includes(selectedProfileKey)
-    ? [...profiles, selectedProfileKey]
-    : profiles;
+  const pickerProfiles =
+    selectedProfileKey && !profiles.includes(selectedProfileKey)
+      ? [...profiles, selectedProfileKey]
+      : profiles;
 
   return (
     <Form
