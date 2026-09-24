@@ -16,7 +16,7 @@ import { radii, spacing, textStyles } from '@/theme/tokens';
 import { PostComposer } from './PostComposer';
 import type { RefObject } from 'react';
 import type { PostComposer_profile$key } from './__generated__/PostComposer_profile.graphql';
-import type { PostComposerProfileCandidate } from './PostComposer';
+import type { PostComposerProfileRef } from './PostComposerProfileSwitcher';
 
 export type PostComposerHostMode = 'mobile' | 'overlay' | 'rail';
 export type PostComposerHostCloseReason = 'created' | 'dismiss';
@@ -26,7 +26,7 @@ type PostComposerHostProps = {
   onRequestClose: (reason: PostComposerHostCloseReason) => void;
   open: boolean;
   profile: PostComposer_profile$key;
-  profiles?: readonly PostComposerProfileCandidate[];
+  profiles?: readonly PostComposerProfileRef[];
   triggerFocusRef?: RefObject<HTMLElement | null>;
 } & ({ mode: 'rail'; onExpand: () => void } | { mode: 'mobile' | 'overlay'; onExpand?: never });
 

@@ -4,6 +4,7 @@ import { createElement, useEffect, useState } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { PostComposer as PostComposerComponent } from './PostComposer';
+import type { PostComposerProfileRef } from './PostComposerProfileSwitcher';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -22,8 +23,8 @@ let switcherProps:
   | {
       disabled?: boolean;
       onSelectionSuccess?: () => void;
-      onSelectProfile: (id: string) => void | Promise<void>;
-      profiles: readonly { id: string }[];
+      onSelectProfile: (id: string, profile: PostComposerProfileRef) => void | Promise<void>;
+      profiles: readonly PostComposerProfileRef[];
       selectedProfileId: string;
     }
   | undefined;
@@ -47,31 +48,30 @@ let mutationCalls: Array<{
 let renderer: ReactTestRenderer | null = null;
 
 const profileA = {
+  ' $fragmentSpreads': {
+    PostComposerProfileSwitcher_profiles: true,
+    PostComposer_profile: true,
+  } as const,
   avatar: { id: 'avatar-a', url: 'https://example.com/a.png' },
   displayName: '프로필 A',
   handle: 'profile-a',
   id: 'profile-a',
   private: { defaultPostVisibility: 'UNLISTED' },
+  relativeHandle: '@profile-a',
 };
 const profileB = {
+  ' $fragmentSpreads': {
+    PostComposerProfileSwitcher_profiles: true,
+    PostComposer_profile: true,
+  } as const,
   avatar: { id: 'avatar-b', url: 'https://example.com/b.png' },
   displayName: '프로필 B',
   handle: 'profile-b',
   id: 'profile-b',
   private: { defaultPostVisibility: 'PUBLIC' },
+  relativeHandle: '@profile-b',
 };
-const candidates = [
-  {
-    id: profileA.id,
-    pickerProfile: { ...profileA, relativeHandle: '@profile-a' },
-    profileKey: profileA,
-  },
-  {
-    id: profileB.id,
-    pickerProfile: { ...profileB, relativeHandle: '@profile-b' },
-    profileKey: profileB,
-  },
-];
+const candidates = [profileA, profileB] satisfies readonly PostComposerProfileRef[];
 
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, {
@@ -242,7 +242,7 @@ describe('PostComposer local author', () => {
     await act(async () => refreshMedia?.());
     assert.equal(switcherProps?.disabled, false);
 
-    await act(async () => switcherProps?.onSelectProfile(profileB.id));
+    await act(async () => switcherProps?.onSelectProfile(profileB.id, profileB));
     await act(async () => switcherProps?.onSelectionSuccess?.());
     assert.equal(switcherProps?.selectedProfileId, profileB.id);
     assert.equal(editorFocusCount, 1);
@@ -258,7 +258,7 @@ describe('PostComposer local author', () => {
         }),
       );
     });
-    assert.ok(switcherProps?.profiles.some((candidate) => candidate.id === profileB.id));
+    assert.ok(switcherProps?.profiles.some((candidate) => candidate === profileB));
     assert.equal(targetProps?.body, '보존할 본문');
     assert.equal(targetProps?.contentWarning, '보존할 CW');
     assert.equal(
@@ -309,7 +309,7 @@ describe('PostComposer local author', () => {
       });
       await act(async () => undefined);
 
-      await act(async () => switcherProps?.onSelectProfile(profileA.id));
+      await act(async () => switcherProps?.onSelectProfile(profileA.id, profileA));
       await act(async () => switcherProps?.onSelectionSuccess?.());
       assert.equal(editorFocusCount, 1);
 

@@ -2,6 +2,7 @@ import { normalizePostContentPlainText } from '@kosmo/core/post-content';
 import { postBodyMaxLength } from '@kosmo/core/validation/post-policy';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
+import { graphql, useLazyLoadQuery } from 'react-relay';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { PostComposerProfileSwitcher } from '@/components/post/PostComposerProfileSwitcher';
 import { PostComposerTarget } from '@/components/post/PostComposerTarget';
@@ -12,6 +13,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { TextInput } from 'react-native';
 import type { ComposerMediaItem } from '@/components/post/PostComposerMediaControls';
 import type { ProfilePickerProfile } from '@/components/profile/ProfilePicker';
+import type { PostComposerProfileSwitcherStoriesQuery as PostComposerProfileSwitcherStoriesQueryType } from './__generated__/PostComposerProfileSwitcherStoriesQuery.graphql';
 
 export const composerProfiles: readonly ProfilePickerProfile[] = [
   {
@@ -27,6 +29,30 @@ export const composerProfiles: readonly ProfilePickerProfile[] = [
     relativeHandle: '@remote',
   },
 ];
+
+const PostComposerProfileSwitcherStoriesQuery = graphql`
+  query PostComposerProfileSwitcherStoriesQuery {
+    me {
+      profiles {
+        ...PostComposer_profile
+        ...PostComposerProfileSwitcher_profiles
+      }
+    }
+  }
+`;
+
+const profileSwitcherStoryData = {
+  me: {
+    __typename: 'Account',
+    id: 'account-profile-switcher-story',
+    profiles: composerProfiles.map((profile) => ({
+      __typename: 'Profile',
+      handle: profile.relativeHandle.slice(1),
+      private: { defaultPostVisibility: 'UNLISTED' },
+      ...profile,
+    })),
+  },
+};
 
 const draftMedia = [composerMedia[1]] as readonly ComposerMediaItem[];
 const globalProfile = composerProfiles[0]!;
@@ -70,6 +96,10 @@ export function ComposerProfileFixture({
   surface,
   switching,
 }: ComposerProfileFixtureProps) {
+  const data = useLazyLoadQuery<PostComposerProfileSwitcherStoriesQueryType>(
+    PostComposerProfileSwitcherStoriesQuery,
+    {},
+  );
   const theme = useTheme();
   const switchingRef = useRef(switching);
   const resolveSelectionRef = useRef<(() => void) | null>(null);
@@ -137,7 +167,7 @@ export function ComposerProfileFixture({
           <PostComposerProfileSwitcher
             onSelectionSuccess={() => bodyRef.current?.focus()}
             onSelectProfile={selectProfile}
-            profiles={composerProfiles}
+            profiles={data.me?.profiles ?? []}
             selectedProfileId={initialSelectedProfileId}
             surface={surface}
           />
@@ -236,7 +266,11 @@ const meta = {
     'InteractionContract',
     'PendingSelectionContract',
   ],
-  parameters: { controls: { disable: true }, layout: 'centered' },
+  parameters: {
+    controls: { disable: true },
+    layout: 'centered',
+    relay: { data: profileSwitcherStoryData },
+  },
   title: 'KOSMO/Patterns/Post Composer Profile Switcher',
 } satisfies Meta<typeof ComposerProfileFixture>;
 

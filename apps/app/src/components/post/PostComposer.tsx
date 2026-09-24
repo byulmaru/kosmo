@@ -30,10 +30,10 @@ import { MobileFullscreenComposerShellCandidate, PostComposerTarget } from './Po
 import { postVisibilityPresentation } from './postVisibilityPresentation';
 import type { ReactNode, RefObject } from 'react';
 import type { TextInput } from 'react-native';
-import type { ProfilePickerProfile } from '@/components/profile/ProfilePicker';
 import type { PostComposer_profile$key } from './__generated__/PostComposer_profile.graphql';
 import type { PostComposerCreatePostMutation } from './__generated__/PostComposerCreatePostMutation.graphql';
 import type { PostComposerMediaValue } from './PostComposerMediaControls';
+import type { PostComposerProfileRef } from './PostComposerProfileSwitcher';
 import type { PostComposerTargetVisibility } from './PostComposerTarget';
 
 // TODO(PROD-462): Mentioned Profile recipient 입력·저장과 DIRECT 조회 권한이 구현되면
@@ -49,12 +49,6 @@ const visibilityOptions = postComposerVisibilityValues.map((value) => ({
 }));
 type Visibility = (typeof postComposerVisibilityValues)[number];
 export type PostComposerCreatedPost = Readonly<{ id: string }>;
-
-export type PostComposerProfileCandidate = Readonly<{
-  id: string;
-  pickerProfile: ProfilePickerProfile;
-  profileKey: PostComposer_profile$key;
-}>;
 
 const PostComposerFragment = graphql`
   fragment PostComposer_profile on Profile {
@@ -97,7 +91,7 @@ type PostComposerBaseProps = {
   onPostCreated?: (post: PostComposerCreatedPost) => void;
   onSubmittingChange?: (submitting: boolean) => void;
   profile: PostComposer_profile$key;
-  profiles?: readonly PostComposerProfileCandidate[];
+  profiles?: readonly PostComposerProfileRef[];
   registerNativeBackHandler?: (handler: (() => void) | null) => void;
   scrollable?: boolean;
   surface?: boolean;
@@ -181,7 +175,7 @@ type PostComposerContentsProps = Omit<PostComposerBaseProps, 'profile'> &
     presentation?: 'mobile' | 'overlay' | 'rail';
     globalProfileId: string;
     profileKey: PostComposer_profile$key;
-    profiles: readonly PostComposerProfileCandidate[];
+    profiles: readonly PostComposerProfileRef[];
   };
 
 function PostComposerContents({
@@ -207,30 +201,11 @@ function PostComposerContents({
   scrollable = false,
   surface = false,
 }: PostComposerContentsProps) {
-  const globalProfile = useFragment(PostComposerFragment, profileKey);
-  const fallbackProfile = {
-    id: globalProfile.id,
-    pickerProfile: {
-      avatar: globalProfile.avatar,
-      displayName: globalProfile.displayName,
-      id: globalProfile.id,
-      relativeHandle: `@${globalProfile.handle}`,
-    },
-    profileKey,
-  } satisfies PostComposerProfileCandidate;
-  const [selectedProfile, setSelectedProfile] = useState<PostComposerProfileCandidate>(
-    () => profiles.find((candidate) => candidate.id === globalProfile.id) ?? fallbackProfile,
-  );
-  const profile = useFragment(PostComposerFragment, selectedProfile.profileKey);
-  const onSelectProfile = useCallback(
-    (id: string) => {
-      const candidate = profiles.find((entry) => entry.id === id);
-      if (candidate) {
-        setSelectedProfile(candidate);
-      }
-    },
-    [profiles],
-  );
+  const [selectedProfileKey, setSelectedProfileKey] = useState<PostComposerProfileRef | null>(null);
+  const profile = useFragment(PostComposerFragment, selectedProfileKey ?? profileKey);
+  const onSelectProfile = useCallback((_id: string, profileRef: PostComposerProfileRef) => {
+    setSelectedProfileKey(profileRef);
+  }, []);
   const theme = useTheme();
   const elevation = useElevation();
   const internalEditorRef = useRef<TextInput>(null);
@@ -564,9 +539,10 @@ function PostComposerContents({
 
   if (presentation) {
     const productionSurface: PostComposerTargetVisibility = visibility;
-    const pickerProfiles = profiles.some((candidate) => candidate.id === profile.id)
-      ? profiles
-      : [...profiles, selectedProfile];
+    const pickerProfiles =
+      selectedProfileKey && !profiles.includes(selectedProfileKey)
+        ? [...profiles, selectedProfileKey]
+        : profiles;
 
     return (
       <Form
@@ -603,7 +579,7 @@ function PostComposerContents({
                     onDismissChange={onProfilePickerDismissChange}
                     onSelectionSuccess={() => editor.current?.focus()}
                     onSelectProfile={onSelectProfile}
-                    profiles={pickerProfiles.map((candidate) => candidate.pickerProfile)}
+                    profiles={pickerProfiles}
                     selectedProfileId={profile.id}
                     surface={presentation === 'rail' ? 'rail' : 'overlay'}
                   />
