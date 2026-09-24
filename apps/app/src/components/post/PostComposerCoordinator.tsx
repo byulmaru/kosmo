@@ -9,7 +9,7 @@ import {
 } from 'react';
 import type { PropsWithChildren, RefObject } from 'react';
 import type { ReplyComposerSurface_profile$key } from './__generated__/ReplyComposerSurface_profile.graphql';
-import type { PostComposerCreatedPost } from './PostComposer';
+import type { PostComposerCreatedPost } from './PostComposerController';
 import type { ReplyComposerSurfaceHandle } from './ReplyComposerSurface';
 
 export type PostComposerOwner = 'detail' | 'list';

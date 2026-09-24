@@ -122,11 +122,12 @@ Post 상세에서 조회 가능한 Reply 조상 경로, 현재 Post와 하위 Re
 - **THEN** 클라이언트는 같은 Parent·Composer 계약을 전체 화면 작성 surface로 연다
 - **AND** platform의 safe area, keyboard와 back action을 따른다
 
-#### Scenario: 상세 thread의 행별 inline composer
+#### Scenario: 목록·상세의 responsive Reply surface
 
-- **WHEN** Post 상세의 current·ancestor·descendant 행에서 Reply action을 활성화한다
-- **THEN** thread owner는 해당 direct Parent 하나를 active 상태로 제어하고 그 행에 기존 Composer를 inline으로 펼친다
-- **AND** 같은 `PostListItem`이 목록에서도 사용된다는 이유로 modal이나 전체 화면 shell을 열지 않는다
+- **WHEN** Post 목록 또는 상세의 current·ancestor·descendant 행에서 Reply action을 활성화한다
+- **THEN** Web `≥ compact`에서는 direct Parent를 포함한 modal dialog를 연다
+- **AND** Web `< compact`와 Android/iOS에서는 같은 계약의 fullscreen surface를 연다
+- **AND** 상세 thread 행 안에는 inline Composer를 만들지 않는다
 
 #### Scenario: direct Parent presentation
 
@@ -140,13 +141,12 @@ Post 상세에서 조회 가능한 Reply 조상 경로, 현재 Post와 하위 Re
 
 **Authority / Provenance:** `docs/design/reply-composer.md`, `PROD-425` Reply surface는 작성 상태에 따라 close·focus·error lifecycle을 일관되게 제어해야 한다(MUST).
 
-#### Scenario: pristine과 dirty close
+#### Scenario: direct Parent를 포함한 close
 
-- **WHEN** 초기 본문과 Visibility가 유지된 surface를 `X`, backdrop 또는 `Escape`로 닫는다
-- **THEN** 클라이언트는 즉시 닫고 원래 Reply action으로 focus를 복원한다
-- **BUT WHEN** 본문 또는 Visibility가 초기값에서 바뀌었다
-- **THEN** 클라이언트는 `답글 작성을 취소할까요?` 확인에서 `계속 작성` 또는 `작성 취소`를 선택하게 한다
-- **AND** 상세 inline surface의 현재 Reply action 재활성화와 다른 Parent Reply action 선택도 같은 확인 lifecycle을 사용한다
+- **WHEN** direct Parent가 포함된 surface를 `X`, backdrop, `Escape` 또는 platform back으로 닫는다
+- **THEN** 본문·Visibility 변경 여부와 관계없이 클라이언트는 `답글 작성을 취소할까요?` 확인에서 `계속 작성` 또는 `작성 취소`를 선택하게 한다
+- **AND** 작성 취소 뒤 원래 Reply action으로 focus를 복원한다
+- **AND** modal/fullscreen surface의 현재 Reply action 재활성화와 다른 Parent Reply action 선택도 같은 확인 lifecycle을 사용한다
 
 #### Scenario: pending close 차단
 

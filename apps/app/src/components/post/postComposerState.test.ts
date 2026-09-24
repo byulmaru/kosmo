@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import type { PostComposerProps } from './PostComposer';
+import type { PostComposerControllerProps as PostComposerProps } from './PostComposerController';
 
 const typecheckPostComposerRelationships = () => {
   const profile = {} as PostComposerProps['profile'];

@@ -454,7 +454,7 @@ async function createPost(page: Page, body: string) {
   const composer = page.getByLabel('게시글 작성', { exact: true });
   await expect(composer).toBeVisible();
 
-  await composer.getByRole('textbox', { name: '게시물 내용' }).fill(body);
+  await composer.getByRole('textbox', { name: '게시글 본문' }).fill(body);
   await composer.getByRole('button', { name: '게시', exact: true }).click();
   await createPostResponse;
 }

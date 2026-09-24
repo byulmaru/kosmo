@@ -13,6 +13,7 @@ const mockModule = (specifier: string | URL, exports: object) =>
 
 let entered = false;
 let platformOS: 'android' | 'ios' | 'web' = 'web';
+let windowWidth = 1400;
 const PressableHost = 'Pressable' as unknown as ElementType;
 const TextHost = 'Text' as unknown as ElementType;
 const ViewHost = 'View' as unknown as ElementType;
@@ -31,7 +32,7 @@ mockModule('react-native', {
   Pressable: PressableHost,
   StyleSheet: { absoluteFill: {}, create: <T>(styles: T) => styles },
   Text: 'Text',
-  useWindowDimensions: () => ({ width: 1400 }),
+  useWindowDimensions: () => ({ width: windowWidth }),
   View: 'View',
 });
 mockModule('react-native-safe-area-context', { useSafeAreaInsets: () => ({ bottom: 0 }) });
@@ -305,6 +306,33 @@ test('action toast follows the Figma source auto-layout contract', async () => {
   );
 
   await act(async () => renderer?.unmount());
+});
+
+test('toast fills a mobile viewport with 16px side margins', async () => {
+  assert.ok(toastProviderModule);
+  const { ToastProvider, useToast } = toastProviderModule;
+  let api: ReturnType<typeof useToast> | undefined;
+  function Harness() {
+    api = useToast();
+    return null;
+  }
+
+  windowWidth = 390;
+  let renderer!: ReactTestRenderer;
+  try {
+    await act(async () => {
+      renderer = create(createElement(ToastProvider, null, createElement(Harness)));
+    });
+    await act(async () => {
+      api?.showToast('위험 알림', { tone: 'danger' });
+    });
+
+    const surface = renderer.root.findByType(ViewHost);
+    assert.equal(flattenStyle(surface.props.style).maxWidth, 358);
+  } finally {
+    windowWidth = 1400;
+    await act(async () => renderer.unmount());
+  }
 });
 
 test('action toast invokes its callback once while the toast is leaving', async () => {

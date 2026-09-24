@@ -60,5 +60,5 @@ const styles = StyleSheet.create({
     overflow: 'hidden' as never,
     width: '100%',
   },
-  scroll: { maxHeight: '85dvh' as never, overflow: 'auto' as never, width: '100%' },
+  scroll: { maxHeight: '85dvh' as never, overflow: 'hidden' as never, width: '100%' },
 });

@@ -1,6 +1,6 @@
 import { Text, View } from 'react-native';
 import { expect, fn, userEvent, within } from 'storybook/test';
-import { PostComposerTarget } from '@/components/post/PostComposerTarget';
+import { PostComposer } from '@/components/post/PostComposer';
 import baseMeta, {
   InteractionContract as interactionContract,
   mixedMedia,
@@ -21,7 +21,7 @@ export const InteractionContract: Story = interactionContract;
 export const HorizontalReachabilityContract: Story = {
   render: () => (
     <View style={{ width: 320 }}>
-      <PostComposerTarget
+      <PostComposer
         author={<Text>테스트 작성자</Text>}
         body=""
         contentWarning=""
@@ -49,9 +49,9 @@ export const HorizontalReachabilityContract: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const gallery = canvas.getByLabelText('첨부 이미지 갤러리, 4개');
-    expect(
-      canvas.getByText('3번째 이미지를 업로드하지 못했어요. 잠시 후 다시 시도해 주세요.'),
-    ).toBeVisible();
+    expect(canvas.queryByRole('alert')).toBeNull();
+    expect(canvas.getByLabelText('첨부 이미지 3, 업로드 실패')).toBeVisible();
+    expect(canvas.getByRole('button', { name: '3번째 이미지 업로드 다시 시도' })).toBeVisible();
     const firstAction = within(gallery).getByRole('button', { name: '첨부 이미지 1 제거' });
     const laterItemAction = within(gallery).getByRole('button', {
       name: '첨부 이미지 4 편집',

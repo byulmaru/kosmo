@@ -1,6 +1,7 @@
 import { useState } from 'react';
+import { Text, View } from 'react-native';
 import { expect, userEvent, waitFor, within } from 'storybook/test';
-import { PostComposerTarget } from '@/components/post/PostComposerTarget';
+import { PostComposer } from '@/components/post/PostComposer';
 import baseMeta, {
   ActionSemanticsContract as actionSemanticsContract,
   Error as errorStory,
@@ -35,7 +36,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 const meta = {
   ...baseMeta,
   excludeStories: [],
-  title: 'KOSMO/Patterns/Post Composer Target/Tests',
+  title: 'KOSMO/Patterns/Post Composer/Tests',
 } satisfies Meta;
 
 export default meta;
@@ -46,6 +47,33 @@ export const InteractionContract: Story = interactionContract;
 export const MobileKeyboardMediaFooterGeometryContract: Story =
   mobileKeyboardMediaFooterGeometryContract;
 export const MobileCandidateContract: Story = mobileCandidateContract;
+export const MobileQuoteFlowContract: Story = {
+  ...mobilePlaygroundStory,
+  args: {
+    ...mobilePlaygroundStory.args,
+    body: '',
+    children: (
+      <View testID="mobile-quote-context-preview">
+        <Text>인용 원문</Text>
+      </View>
+    ),
+    items: [],
+    mode: 'quote',
+    remaining: 500,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = canvas.getByRole('textbox', { name: '인용 게시글 본문' });
+    const quote = canvas.getByTestId('mobile-quote-context-preview');
+    const initialBodyBounds = body.getBoundingClientRect();
+    const initialQuoteTop = quote.getBoundingClientRect().top;
+
+    expect(initialBodyBounds.height).toBeLessThanOrEqual(60);
+    expect(initialQuoteTop - initialBodyBounds.bottom).toBeLessThanOrEqual(16);
+    await userEvent.type(body, '첫째 줄{Enter}둘째 줄{Enter}셋째 줄');
+    await waitFor(() => expect(quote.getBoundingClientRect().top).toBeGreaterThan(initialQuoteTop));
+  },
+};
 export const MobileKeyboardContract: Story = mobileKeyboardContract;
 export const MobileKeyboardCWEditorGeometryContract: Story = mobileKeyboardCWEditorGeometryContract;
 export const MobileKeyboardMediaEditorGeometryContract: Story =
@@ -63,6 +91,55 @@ export const RailBodyMaxHeightContract: Story = railBodyMaxHeightContract;
 export const RailFocusBoundaryContract: Story = railFocusBoundaryContract;
 export const RailProgressRingContract: Story = railProgressRingContract;
 
+export const ReplyModeContract: Story = {
+  ...playgroundContract,
+  args: {
+    ...playgroundContract.args,
+    body: '',
+    beforeEditor: <Text testID="reply-context-preview">Parent preview</Text>,
+    items: [],
+    mode: 'reply',
+    remaining: 500,
+    surface: 'overlay',
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    expect(canvas.getByTestId('reply-context-preview')).toBeVisible();
+    expect(canvas.getByRole('textbox', { name: '답글 본문' })).toHaveAttribute(
+      'placeholder',
+      '무슨 일이 일어나고 있나요?',
+    );
+    const submit = canvas.getByRole('button', { name: '답글 게시' });
+    expect(submit).toHaveTextContent(/^게시$/);
+    expect(submit).toBeDisabled();
+  },
+};
+
+export const QuoteModeContract: Story = {
+  ...ReplyModeContract,
+  args: {
+    ...ReplyModeContract.args,
+    beforeEditor: undefined,
+    mode: 'quote',
+  },
+  render: (args) => (
+    <PostComposer {...args}>
+      <View testID="quote-context-preview" />
+    </PostComposer>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = canvas.getByRole('textbox', { name: '인용 게시글 본문' });
+    const quote = canvas.getByTestId('quote-context-preview');
+    expect(quote).toBeVisible();
+    expect(body.compareDocumentPosition(quote) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+    expect(body).toHaveAttribute('placeholder', '무슨 일이 일어나고 있나요?');
+    const submit = canvas.getByRole('button', { name: '인용 게시' });
+    expect(submit).toHaveTextContent(/^게시$/);
+    expect(submit).toBeDisabled();
+  },
+};
+
 export const ProgrammaticBodyResetHeightContract: Story = {
   ...playgroundContract,
   args: {
@@ -75,7 +152,7 @@ export const ProgrammaticBodyResetHeightContract: Story = {
   render: (args) => {
     const [body, setBody] = useState(args.body);
     return (
-      <PostComposerTarget
+      <PostComposer
         {...args}
         body={body}
         onBodyChange={setBody}
@@ -88,7 +165,7 @@ export const ProgrammaticBodyResetHeightContract: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const body = canvas.getByRole('textbox', { name: '게시물 내용' });
+    const body = canvas.getByRole('textbox', { name: '게시글 본문' });
     await waitFor(() => expect(body.getBoundingClientRect().height).toBe(300));
 
     await userEvent.click(canvas.getByRole('button', { name: '게시' }));
@@ -100,14 +177,13 @@ export const SubmittingPickerContract: Story = submittingPickerContract;
 export const SubmittingSpinnerContract: Story = submittingSpinnerContract;
 export const SubmittingVisibilityContract: Story = submittingVisibilityContract;
 
-export const MediaFailureAnnouncementContract: Story = {
+export const MediaFailureRecoveryContract: Story = {
   ...errorStory,
   play: async ({ canvasElement }) => {
-    const alerts = within(canvasElement).getAllByRole('alert');
-    expect(alerts).toHaveLength(1);
-    expect(alerts[0]).toHaveTextContent(
-      '1번째 이미지를 업로드하지 못했어요. 잠시 후 다시 시도해 주세요.',
-    );
+    const canvas = within(canvasElement);
+    expect(canvas.queryByRole('alert')).toBeNull();
+    expect(canvas.getByLabelText('첨부 이미지 1, 업로드 실패')).toBeVisible();
+    expect(canvas.getByRole('button', { name: '1번째 이미지 업로드 다시 시도' })).toBeVisible();
   },
 };
 
@@ -265,7 +341,7 @@ export const ShortViewportContract: Story = {
       0,
     );
     expect(getComputedStyle(scroll).overflowY).toBe('auto');
-    expect(outerScroll.scrollHeight).toBe(outerScroll.clientHeight);
+    expect(getComputedStyle(outerScroll).overflow).toBe('hidden');
     expect(scroll.scrollHeight).toBeGreaterThan(scroll.clientHeight);
     scroll.scrollTop = scroll.scrollHeight;
     expect(scroll.scrollTop).toBeGreaterThan(0);

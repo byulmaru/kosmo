@@ -1,6 +1,6 @@
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
-import { radius, space, textStyles } from '@/theme/tokens';
+import { breakpoints, radius, space, textStyles } from '@/theme/tokens';
 
 export type ToastProps = Readonly<{
   message: string;
@@ -11,6 +11,7 @@ export type ToastProps = Readonly<{
 export function Toast({ message, action, tone }: ToastProps) {
   const theme = useTheme();
   const elevation = useElevation();
+  const { width } = useWindowDimensions();
   const toastColors = getToastColors(theme, tone);
   return (
     <View
@@ -22,6 +23,7 @@ export function Toast({ message, action, tone }: ToastProps) {
           backgroundColor: toastColors?.background,
           borderLeftColor: toastColors?.border,
           borderLeftWidth: toastColors?.border ? 4 : undefined,
+          maxWidth: width < breakpoints.compact ? Math.max(0, width - space[16] * 2) : 360,
         },
       ]}
     >
@@ -93,7 +95,6 @@ const styles = StyleSheet.create({
     borderRadius: radius[12],
     flexDirection: 'row',
     gap: space[12],
-    maxWidth: 360,
     paddingHorizontal: space[16],
     paddingVertical: space[12],
     pointerEvents: 'auto',

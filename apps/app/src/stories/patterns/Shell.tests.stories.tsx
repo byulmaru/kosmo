@@ -32,25 +32,28 @@ export const UniversalCompactComposerLifecycle: Story = {
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
     await userEvent.click(trigger);
     expect(trigger).toHaveAttribute('aria-expanded', 'true');
-    const menu = within(dialog.getByRole('radiogroup', { name: '공개 범위 선택' }));
-    expect(menu.getByRole('radio', { name: '조용한 공개' })).toHaveAttribute(
+    const menu = within(dialog.getByRole('menu', { name: '공개 범위 선택' }));
+    expect(menu.getByRole('menuitemradio', { name: '조용한 공개' })).toHaveAttribute(
       'aria-checked',
       'true',
     );
-    expect(menu.getByRole('radio', { name: '조용한 공개' })).toHaveFocus();
+    expect(menu.getByRole('menuitemradio', { name: '조용한 공개' })).toHaveFocus();
     await userEvent.keyboard('{End}');
-    expect(menu.getByRole('radio', { name: '팔로워만' })).toHaveFocus();
-    expect(menu.getByRole('radio', { name: '팔로워만' })).toHaveAttribute('aria-checked', 'true');
+    expect(menu.getByRole('menuitemradio', { name: '팔로워만' })).toHaveFocus();
+    expect(menu.getByRole('menuitemradio', { name: '팔로워만' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
     await userEvent.keyboard('{Home}{Shift>}{Tab}{/Shift}');
     expect(trigger).toHaveFocus();
     await userEvent.keyboard('{Escape}');
-    expect(dialog.queryByRole('radiogroup')).toBeNull();
+    expect(dialog.queryByRole('menu')).toBeNull();
     expect(trigger).toHaveFocus();
     expect(page.getByRole('dialog', { name: '글쓰기' })).toBeVisible();
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
     await userEvent.click(trigger);
-    await userEvent.click(dialog.getByRole('textbox', { name: '게시물 내용' }));
-    expect(dialog.queryByRole('radiogroup')).toBeNull();
+    await userEvent.click(dialog.getByRole('textbox', { name: '게시글 본문' }));
+    expect(dialog.queryByRole('menu')).toBeNull();
   },
 };
 export const UniversalCompactOverlayGeometry: Story = {
@@ -64,7 +67,7 @@ export const UniversalCompactOverlayGeometry: Story = {
     const initialHeight = dialog.getBoundingClientRect().height;
     expect(initialHeight).toBeLessThan(maxHeight);
 
-    const body = within(dialog).getByRole('textbox', { name: '게시물 내용' });
+    const body = within(dialog).getByRole('textbox', { name: '게시글 본문' });
     await userEvent.type(body, '\n추가 본문'.repeat(10));
     await waitFor(() =>
       expect(dialog.getBoundingClientRect().height).toBeGreaterThan(initialHeight),
@@ -97,7 +100,7 @@ export const UniversalFullComposerLifecycle: Story = {
     expect(dialog.getBoundingClientRect().height).toBeGreaterThan(railHeight);
     expect(dialog.getBoundingClientRect().top).toBe(48);
     expect(dialog.getBoundingClientRect().width).toBe(640);
-    const overlayBody = within(dialog).getByRole('textbox', { name: '게시물 내용' });
+    const overlayBody = within(dialog).getByRole('textbox', { name: '게시글 본문' });
     const initialDialogHeight = dialog.getBoundingClientRect().height;
     await userEvent.type(overlayBody, '\n추가 본문'.repeat(10));
     await waitFor(() =>
@@ -127,7 +130,7 @@ export const UniversalMobileComposerLifecycle: Story = {
     );
     expect(footer.getBoundingClientRect().height).toBe(64);
     expect(
-      dialog.getByRole('textbox', { name: '게시물 내용' }).getBoundingClientRect().height,
+      dialog.getByRole('textbox', { name: '게시글 본문' }).getBoundingClientRect().height,
     ).toBeGreaterThan(400);
   },
 };

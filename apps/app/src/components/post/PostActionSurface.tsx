@@ -43,6 +43,7 @@ const postActionSurfaceFragment = graphql`
 export function PostActionSurface({
   actionBarStyle,
   onDeleted,
+  onQuote,
   reactionSummaryStyle,
   reply,
   socialActionTarget,
@@ -79,13 +80,13 @@ export function PostActionSurface({
 
   const renderActions = (more?: MoreActionConfig) => (
     <View style={actionBarStyle}>
-      {/* PROD-959: Keep the Quote implementation, but temporarily hide its production entry point. */}
       <PostActionBar
         execution={authentication.execution}
         more={more}
         moreItems={moreItems}
         onBookmarkError={onBookmarkError}
         onDeleted={onDeleted}
+        onQuote={onQuote}
         onRepostError={onRepostError}
         onResolutionRequired={authentication.resolve}
         post={target.actionBar}

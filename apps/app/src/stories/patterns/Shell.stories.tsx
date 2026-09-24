@@ -2479,7 +2479,7 @@ export const UniversalCompactComposerLifecycle: Story = {
     expect(within(dialog).queryByRole('button', { name: '투표 추가' })).toBeNull();
     expect(within(dialog).queryByRole('button', { name: '이모지 추가' })).toBeNull();
     await userEvent.type(
-      within(dialog).getByRole('textbox', { name: '게시물 내용' }),
+      within(dialog).getByRole('textbox', { name: '게시글 본문' }),
       'compact draft',
     );
     await userEvent.click(within(dialog).getByRole('button', { name: '글쓰기 닫기' }));
@@ -2487,7 +2487,7 @@ export const UniversalCompactComposerLifecycle: Story = {
     await waitFor(() => expect(trigger).toHaveFocus());
 
     await userEvent.click(trigger);
-    expect(await page.findByRole('textbox', { name: '게시물 내용' })).toHaveValue('compact draft');
+    expect(await page.findByRole('textbox', { name: '게시글 본문' })).toHaveValue('compact draft');
   },
 };
 
@@ -2539,14 +2539,14 @@ export const UniversalMobileComposerLifecycle: Story = {
     expect(within(dialog).getAllByRole('heading', { name: '글쓰기' })).toHaveLength(1);
     expect(within(dialog).queryByTestId('illustrative-system-keyboard')).toBeNull();
     await userEvent.type(
-      within(dialog).getByRole('textbox', { name: '게시물 내용' }),
+      within(dialog).getByRole('textbox', { name: '게시글 본문' }),
       'mobile draft',
     );
     await userEvent.click(within(dialog).getByRole('button', { name: '글쓰기 닫기' }));
     await waitFor(() => expect(page.queryByRole('dialog', { name: '글쓰기' })).toBeNull());
 
     await userEvent.click(trigger);
-    expect(await page.findByRole('textbox', { name: '게시물 내용' })).toHaveValue('mobile draft');
+    expect(await page.findByRole('textbox', { name: '게시글 본문' })).toHaveValue('mobile draft');
   },
   render: () => (
     <View style={{ height: 844 }}>
@@ -2796,7 +2796,7 @@ export const UniversalFullComposerLifecycle: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const page = within(canvasElement.ownerDocument.body);
-    const body = canvas.getByRole('textbox', { name: '게시물 내용' });
+    const body = canvas.getByRole('textbox', { name: '게시글 본문' });
 
     await userEvent.type(body, 'rail draft');
     await userEvent.click(canvas.getByRole('button', { name: '콘텐츠 경고 켜기' }));
@@ -2804,14 +2804,14 @@ export const UniversalFullComposerLifecycle: Story = {
     await userEvent.click(canvas.getByRole('button', { name: 'Composer 확장' }));
 
     const dialog = await page.findByRole('dialog', { name: '글쓰기' });
-    expect(within(dialog).getByRole('textbox', { name: '게시물 내용' })).toHaveValue('rail draft');
+    expect(within(dialog).getByRole('textbox', { name: '게시글 본문' })).toHaveValue('rail draft');
     expect(within(dialog).getByRole('textbox', { name: '콘텐츠 경고' })).toHaveValue('CW draft');
     await userEvent.click(within(dialog).getByRole('button', { name: '글쓰기 닫기' }));
     await waitFor(() => expect(page.queryByRole('dialog', { name: '글쓰기' })).toBeNull());
     await waitFor(() =>
       expect(canvas.getByRole('button', { name: 'Composer 확장' })).toHaveFocus(),
     );
-    expect(canvas.getByRole('textbox', { name: '게시물 내용' })).toHaveValue('rail draft');
+    expect(canvas.getByRole('textbox', { name: '게시글 본문' })).toHaveValue('rail draft');
   },
 };
 
@@ -2820,7 +2820,7 @@ export const UniversalFullComposerHeightTransition: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const page = within(canvasElement.ownerDocument.body);
-    const railBody = canvas.getByRole('textbox', { name: '게시물 내용' });
+    const railBody = canvas.getByRole('textbox', { name: '게시글 본문' });
     const draft =
       'Rail에서 Overlay로 확장할 때 본문 높이를 다시 계산하는지 확인하는 문장입니다. '.repeat(6);
 
@@ -2830,7 +2830,7 @@ export const UniversalFullComposerHeightTransition: Story = {
 
     await userEvent.click(canvas.getByRole('button', { name: 'Composer 확장' }));
     const dialog = await page.findByRole('dialog', { name: '글쓰기' });
-    const overlayBody = within(dialog).getByRole('textbox', { name: '게시물 내용' });
+    const overlayBody = within(dialog).getByRole('textbox', { name: '게시글 본문' });
     expect(overlayBody).toHaveValue(draft);
     await waitFor(() =>
       expect(overlayBody.getBoundingClientRect().height).toBeLessThan(railHeight),

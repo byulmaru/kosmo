@@ -20,7 +20,7 @@ KOSMO의 UI/프로덕트 디자인 결정을 기록하고 공유하는 문서 �
 - [post-action-bar.md](./post-action-bar.md) — Post Action Bar의 28px geometry, 배치, Repost 메뉴와 오류 toast 계약
 - [post-media-gallery.md](./post-media-gallery.md) — Post 첨부 이미지 1~4장의 surface, Sensitive·오류·상호작 경계
 - [post-media-viewer.md](./post-media-viewer.md) — 선택한 Post 이미지의 modal 탐색, 원문 panel과 Action Bar 배치 계약
-- [reply-composer.md](./reply-composer.md) — Web modal·Full thread rail·좁은 화면 전체 작성기의 Reply Composer 계약
+- [post-composer.md](./post-composer.md) — 일반 Post·Reply·Quote가 공유하는 Composer와 관계형 modal·fullscreen 계약
 - [post-thread.md](./post-thread.md) — Post 상세 thread의 renderer·connector·row boundary 소유권과 geometry
 - [post-content-mentions.md](./post-content-mentions.md) — canonical Mention 표시, 기존 Profile route 이동, fallback과 플랫폼 접근성 계약
 - [media-upload-errors.md](./media-upload-errors.md) — Post Composer·Profile 편집의 공통 이미지 업로드 오류 분류와 복구 안내

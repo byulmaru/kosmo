@@ -186,7 +186,7 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - 현재 Profile이 Source를 Repost하지 않았으면 메뉴에 `재게시하기`, 이미 Repost했으면 `재게시 취소`를
   표시한다. 항목을 선택하고 메뉴가 닫힌 뒤 해당 mutation을 시작한다.
 - PROD-959 (2026-09-11): frontend `PostActionSurface`는 `onQuote`를 임시로 전달하지 않아 Repost 메뉴의
-  `인용하기` 진입점을 숨긴다. Quote Composer·기존 Quote 표시·API/schema/backend 계약은 유지하며, 기존
+  `인용하기` 진입점을 숨긴다. Post Composer의 Quote mode·기존 Quote 표시·API/schema/backend 계약은 유지하며, 기존
   eligibility 계산과 `onQuote` 전달을 복원해 다시 노출한다.
 - Web은 scroll container 밖의 overlay layer에 trigger 근처의 anchored menu를 렌더링한다. 첫 action item은
   trigger의 pointer 지점을 덮어 첫 활성화로 menu를 연 뒤 포인터를 움직이지 않은 두 번째 활성화가 실제
@@ -468,14 +468,15 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 
 ## 인용 작성 범위
 
-- `인용하기`는 현재 action 대상 Post를 direct Source로 선택해 공용 Composer를 연다. Source 자체가 Quote여도
+- 인용 작성 UI의 공통 입력·배치·검증·Media·오류·draft lifecycle은
+  [Post Composer](./post-composer.md)를 정본으로 사용한다. 이 절은 Action Bar의 진입 대상과 인용 관계 정책만
+  정의한다.
+- `인용하기`는 현재 action 대상 Post를 direct Source로 선택해 Post Composer의 Quote mode를 연다. Source 자체가 Quote여도
   그 Source의 Source로 대상을 바꾸지 않는다. 작성 중 preview는 한 단계만 표시한다.
-- 상세 화면의 inline Quote Composer는 자체 닫기 control을 제공하고, 기존 폐기 확인을 거쳐 닫힌 뒤
-  `인용하기`를 선택한 Repost trigger로 keyboard focus를 복귀한다.
+- 닫기·폐기 확인과 trigger focus 복귀는 공통 관계형 Composer surface 계약을 따른다.
 - PROD-924의 pending·QuoteRequest lifecycle이 연결되기 전에는 현재 core가 거부하는 ActivityPub Source에
   `인용하기`를 노출하지 않는다. Local Source 작성 경로는 유지한다.
-- 본문·Visibility·Content Warning·Sensitive Media·Media, pending·폐기·실패 복구는 기존 Composer를 재사용한다.
-  Source preview만으로 유효한 작성 Content를 만들지 않는다.
+- Source preview만으로 유효한 작성 Content를 만들지 않는다.
 - 로컬 Quote 작성에는 Reply Parent를 추가하지 않는다. Reply+Quote 작성 UI·API와 본문 링크의 인용 카드
   전환은 2026-09-09 PROD-431 사용자 지시로 제외했다. 기존 Reply 작성과 저장된 관계의 표시 계약은 유지한다.
 - 게시 전의 Source preview와 게시 후 승인에 따른 Source 표시는 구분한다. 작성 성공은 요청한 selected Profile의

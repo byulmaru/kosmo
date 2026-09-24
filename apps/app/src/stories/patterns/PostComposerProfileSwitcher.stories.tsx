@@ -4,8 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
+import { PostComposer } from '@/components/post/PostComposer';
 import { PostComposerProfileSwitcher } from '@/components/post/PostComposerProfileSwitcher';
-import { PostComposerTarget } from '@/components/post/PostComposerTarget';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import { composerMedia } from './PostComposer.stories';
@@ -162,7 +162,7 @@ export function ComposerProfileFixture({
           {globalProfile.displayName} {globalProfile.relativeHandle}
         </Text>
       </View>
-      <PostComposerTarget
+      <PostComposer
         author={
           <PostComposerProfileSwitcher
             onSelectionSuccess={() => bodyRef.current?.focus()}
@@ -322,7 +322,7 @@ export const InteractionContract: Story = {
     const canvas = within(canvasElement);
     const trigger = canvas.getByRole('button', { name: '작성 프로필' });
     const target = canvas.getByTestId('post-composer-target');
-    const body = canvas.getByRole('textbox', { name: '게시물 내용' });
+    const body = canvas.getByRole('textbox', { name: '게시글 본문' });
     const contentWarning = canvas.getByRole('textbox', { name: '콘텐츠 경고' });
 
     expect(target.getBoundingClientRect().width).toBeCloseTo(326, 0);
@@ -384,7 +384,7 @@ export const PendingSelectionContract: Story = {
     args.onSelectProfile?.mockClear();
     const canvas = within(canvasElement);
     const trigger = canvas.getByRole('button', { name: '작성 프로필' });
-    const body = canvas.getByRole('textbox', { name: '게시물 내용' });
+    const body = canvas.getByRole('textbox', { name: '게시글 본문' });
 
     await userEvent.click(trigger);
     const remote = await canvas.findByRole('button', { name: '먼 우주의 사용자, @remote' });
@@ -415,7 +415,7 @@ export const FailureAndCancelContract: Story = {
       600,
       0,
     );
-    const body = canvas.getByRole('textbox', { name: '게시물 내용' });
+    const body = canvas.getByRole('textbox', { name: '게시글 본문' });
 
     await userEvent.click(trigger);
     const picker = await canvas.findByLabelText('프로필 전환');
@@ -450,7 +450,7 @@ export const CancelSelectionContract: Story = {
     args.onSelectProfile?.mockClear();
     const canvas = within(canvasElement);
     const trigger = canvas.getByRole('button', { name: '작성 프로필' });
-    const body = canvas.getByRole('textbox', { name: '게시물 내용' });
+    const body = canvas.getByRole('textbox', { name: '게시글 본문' });
     const contentWarning = canvas.getByRole('textbox', { name: '콘텐츠 경고' });
 
     await userEvent.click(trigger);

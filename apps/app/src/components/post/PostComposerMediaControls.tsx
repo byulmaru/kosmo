@@ -24,6 +24,7 @@ import {
   IconButton,
 } from '@/components/ui/IconButton';
 import { TextField } from '@/components/ui/TextField';
+import { useToast } from '@/components/ui/ToastProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { colors, fontFamilies, layoutRecipes, radii, spacing, typography } from '@/theme/tokens';
 import {
@@ -57,7 +58,6 @@ export type PostComposerMediaValue = {
 };
 
 export type PostComposerMediaControlsRenderProps = {
-  readonly error: string | null;
   readonly items: readonly ComposerMediaItem[];
   readonly onAltTextChange: (key: string, altText: string) => void;
   readonly onMediaAction: () => void;
@@ -98,10 +98,10 @@ export function PostComposerMediaControls({
   readonly render?: (props: PostComposerMediaControlsRenderProps) => ReactNode;
 }) {
   const theme = useTheme();
+  const { showToast } = useToast();
   const [media, setMedia] = useState<ComposerMediaItem[]>([]);
   const mediaRef = useRef<readonly ComposerMediaItem[]>(media);
   const [sensitiveMedia, setSensitiveMedia] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const mounted = useRef(true);
   const removedMediaKeys = useRef(new Set<string>());
   const selectingMedia = useRef(false);
@@ -188,13 +188,14 @@ export function PostComposerMediaControls({
       if (!mounted.current || removedMediaKeys.current.has(key)) {
         return;
       }
+      const failure = asImageUploadError(error, 'transfer').failure;
+      const itemNumber = mediaRef.current.findIndex((item) => item.key === key) + 1;
       updateMedia((items) =>
-        items.map((item) =>
-          item.key === key
-            ? { ...item, failure: asImageUploadError(error, 'transfer').failure, state: 'failed' }
-            : item,
-        ),
+        items.map((item) => (item.key === key ? { ...item, failure, state: 'failed' } : item)),
       );
+      showToast(formatImageUploadFailureMessage(`${itemNumber}번째 이미지`, failure), {
+        tone: 'danger',
+      });
     }
   };
 
@@ -213,7 +214,6 @@ export function PostComposerMediaControls({
       return;
     }
 
-    setError(null);
     updateMedia((items) => [...items, ...selected]);
     for (const item of selected) {
       void uploadMedia(item.key, item.asset);
@@ -268,8 +268,6 @@ export function PostComposerMediaControls({
       return;
     }
     selectingMedia.current = true;
-    setError(null);
-
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         allowsMultipleSelection: true,
@@ -284,7 +282,7 @@ export function PostComposerMediaControls({
       addMediaAssets(takeAvailableComposerMedia(result.assets, mediaRef.current.length));
     } catch {
       if (mounted.current) {
-        setError('이미지를 선택하지 못했습니다.');
+        showToast('이미지를 선택하지 못했습니다.', { tone: 'danger' });
       }
     } finally {
       selectingMedia.current = false;
@@ -331,7 +329,6 @@ export function PostComposerMediaControls({
 
   if (render) {
     return render({
-      error,
       items: media,
       onAltTextChange: (key, altText) =>
         updateMedia((items) =>
@@ -360,11 +357,6 @@ export function PostComposerMediaControls({
         onSensitiveMediaChange={setSensitiveMedia}
         sensitiveMedia={sensitiveMedia}
       />
-      {error ? (
-        <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>
-          {error}
-        </Text>
-      ) : null}
       <View style={styles.footer}>
         <IconButton
           accessibilityLabel={`이미지 추가, ${postComposerMediaLimit - media.length}개 더 선택 가능`}
@@ -479,16 +471,6 @@ export function PostComposerMediaItems({
               />
             </View>
           ) : null}
-          {item.state === 'failed' ? (
-            <View style={styles.mediaItemBody}>
-              <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>
-                {formatImageUploadFailureMessage(
-                  `${index + 1}번째 이미지`,
-                  item.failure ?? { reason: 'transient', stage: 'transfer' },
-                )}
-              </Text>
-            </View>
-          ) : null}
         </View>
       ))}
       {media.length > 0 ? (
@@ -514,7 +496,6 @@ export function PostComposerMediaItems({
 
 const styles = StyleSheet.create({
   mediaSection: { gap: spacing.md },
-  error: { fontFamily: fontFamilies.ui, ...typography.sm },
   footer: {
     alignItems: 'center',
     flexDirection: 'row',

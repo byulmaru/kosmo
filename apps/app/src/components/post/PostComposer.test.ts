@@ -3,7 +3,7 @@ import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement, useEffect, useState } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
-import type { PostComposer as PostComposerComponent } from './PostComposer';
+import type { PostComposerController as PostComposerComponent } from './PostComposerController';
 import type { PostComposerProfileRef } from './PostComposerProfileSwitcher';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -116,6 +116,7 @@ mockModule('@/components/profile/ProfilePicker', { ProfilePicker: 'ProfilePicker
 mockModule('@/components/ui/Avatar', { Avatar: 'Avatar' });
 mockModule('@/components/ui/Button', { Button: 'Button' });
 mockModule('@/components/ui/Form', { Form: 'Form' });
+mockModule('@/components/ui/ToastProvider', { useToast: () => ({ showToast: () => undefined }) });
 mockModule('@/components/ui/TextField', { TextArea: 'TextArea', TextField: 'TextField' });
 mockModule('@/relay/RelayEnvironmentBoundary', { useRelayEnvironmentGeneration: () => null });
 mockModule('@/theme/ThemeProvider', {
@@ -179,9 +180,9 @@ mockModule('./PostComposerMediaControls', {
     });
   },
 });
-mockModule('./PostComposerTarget', {
+mockModule('./PostComposer', {
   MobileFullscreenComposerShellCandidate: 'MobileFullscreenComposerShellCandidate',
-  PostComposerTarget: (props: typeof targetProps) => {
+  PostComposer: (props: typeof targetProps) => {
     targetProps = props;
     return createElement(
       'PostComposerTarget',
@@ -194,7 +195,7 @@ mockModule('./PostComposerTarget', {
 let PostComposer: typeof PostComposerComponent;
 
 before(async () => {
-  ({ PostComposer } = await import('./PostComposer'));
+  ({ PostComposerController: PostComposer } = await import('./PostComposerController'));
 });
 
 afterEach(async () => {
