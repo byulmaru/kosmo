@@ -132,6 +132,18 @@ export function FullReactionOverlay({
     <Modal animationType="none" onRequestClose={close} transparent visible>
       {web ? (
         <View style={styles.webRoot}>
+          {anchor ? (
+            <Pressable
+              accessible={false}
+              aria-hidden
+              onPress={close}
+              style={[
+                styles.triggerDismiss,
+                { height: anchor.height, left: anchor.x, top: anchor.y, width: anchor.width },
+              ]}
+              testID="full-reaction-overlay-trigger-dismiss"
+            />
+          ) : null}
           <View
             {...webPlacementProps}
             style={[styles.webPosition, { left, top, width: shellWidth }, elevation.floating]}
@@ -158,6 +170,7 @@ export function FullReactionOverlay({
 const styles = StyleSheet.create({
   nativePicker: { flex: 1 },
   nativeRoot: { flex: 1 },
+  triggerDismiss: { position: 'absolute' },
   webPosition: { position: 'absolute' },
   webRoot: { flex: 1 },
 });

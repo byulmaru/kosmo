@@ -1,6 +1,15 @@
 import { Search } from 'lucide-react-native';
 import { useEffect, useRef } from 'react';
-import { FlatList, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  FlatList,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
 import { ReactionEmojiImage } from './ReactionEmojiImage';
@@ -48,6 +57,7 @@ export function FullReactionPicker({
 }: FullReactionPickerProps): React.ReactElement {
   const theme = useTheme();
   const elevation = useElevation();
+  const { height: viewportHeight } = useWindowDimensions();
   const mobile = presentation === 'mobile';
   const pickerRef = useRef<View>(null);
   const dragStartY = useRef<number | null>(null);
@@ -104,7 +114,9 @@ export function FullReactionPicker({
       role={Platform.OS === 'web' ? 'dialog' : undefined}
       style={[
         mobile ? styles.mobileSheet : styles.webDialog,
-        mobile ? { height: state === 'browse' ? 480 : 720 } : elevation.overlay,
+        mobile
+          ? { height: Math.min(state === 'browse' ? 480 : 720, viewportHeight) }
+          : elevation.overlay,
         { backgroundColor: theme.backgroundElevated, borderColor: theme.borderDefault },
       ]}
       testID={mobile ? 'full-reaction-picker-sheet' : undefined}
@@ -115,9 +127,11 @@ export function FullReactionPicker({
             onStartShouldSetResponder={() => true}
             onTouchEnd={onDragEnd}
             onTouchStart={onDragStart}
-            style={[styles.dragHandle, { backgroundColor: theme.borderStrong }]}
+            style={styles.dragHandleHitArea}
             testID="full-reaction-picker-drag-handle"
-          />
+          >
+            <View style={[styles.dragHandle, { backgroundColor: theme.borderStrong }]} />
+          </View>
           <Text
             accessibilityRole="header"
             style={[styles.mobileTitle, { color: theme.foregroundPrimary }]}
@@ -382,7 +396,14 @@ function ReactionGridRow({
 }
 
 const styles = StyleSheet.create({
-  dragHandle: { alignSelf: 'center', borderRadius: radius.full, height: 4, width: 32 },
+  dragHandle: { borderRadius: radius.full, height: 4, width: 32 },
+  dragHandleHitArea: {
+    alignItems: 'center',
+    alignSelf: 'center',
+    height: 28,
+    justifyContent: 'center',
+    width: 56,
+  },
   emptyDescription: textStyles.uiCopyM,
   emptyTitle: textStyles.uiLabelL,
   fullGridRow: { justifyContent: 'space-between' },
@@ -390,7 +411,7 @@ const styles = StyleSheet.create({
   mobileGrid: { gap: 0 },
   mobileReaction: { height: 44, width: 44 },
   mobileReactionTarget: { alignItems: 'center', height: 48, justifyContent: 'center', width: 48 },
-  mobileRoot: { flex: 1, justifyContent: 'flex-end', minHeight: 844 },
+  mobileRoot: { flex: 1, justifyContent: 'flex-end', minHeight: 0 },
   mobileSheet: {
     borderTopLeftRadius: radius[24],
     borderTopRightRadius: radius[24],

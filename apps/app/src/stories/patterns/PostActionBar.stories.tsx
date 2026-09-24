@@ -1580,15 +1580,42 @@ export const ReactionQuickToFullContract: Story = {
     expect(readReactionRequests(canvas)).toHaveLength(1);
     expect(screen.getByRole('dialog', { name: '반응 선택' })).toBeVisible();
 
-    canvas.getByRole('button', { name: '요청 1 payload-error' }).click();
+    canvas.getByRole('button', { name: '요청 1 success' }).click();
+    await waitFor(() =>
+      expect(within(full).getByRole('button', { name: '손 하트 🫶' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      ),
+    );
+    expect(screen.getByRole('dialog', { name: '반응 선택' })).toBeVisible();
+    expect(canvas.getByRole('button', { name: '반응' })).toHaveAttribute('aria-expanded', 'true');
+
+    await userEvent.click(within(full).getByRole('button', { name: '손 하트 🫶' }));
+    await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(2));
+    canvas.getByRole('button', { name: '요청 2 payload-error' }).click();
     const retry = await within(full).findByRole('button', {
       name: '손 하트 반응, 오류, 다시 시도 🫶',
     });
     await userEvent.click(retry);
-    await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(2));
+    await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(3));
+    const previousActorRequest = readReactionRequests(canvas)[2]!;
 
     canvas.getByRole('button', { name: 'Reaction actor 전환' }).click();
     await waitFor(() => expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull());
+    canvas.getByRole('button', { name: `요청 ${previousActorRequest.id} success` }).click();
+
+    await userEvent.click(await canvas.findByRole('button', { name: '반응' }));
+    const nextQuick = await screen.findByRole('dialog', { name: '반응 선택' });
+    await userEvent.click(within(nextQuick).getByRole('button', { name: '전체 반응' }));
+    const nextFull = await screen.findByRole('dialog', { name: '반응 선택' });
+    const nextSearch = within(nextFull).getByRole('searchbox', { name: '반응 검색' });
+    await userEvent.type(nextSearch, 'heart hands');
+    await expect(
+      within(nextFull).findByRole('button', { name: '손 하트 🫶' }),
+    ).resolves.toHaveAttribute('aria-pressed', 'false');
+
+    await userEvent.click(screen.getByTestId('full-reaction-overlay-trigger-dismiss'));
+    expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull();
   },
   render: () => <ReactionContractHarness />,
 };
