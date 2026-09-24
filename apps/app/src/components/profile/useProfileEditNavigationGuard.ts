@@ -28,7 +28,7 @@ export function useProfileEditNavigationGuard({ dirty, saving }: Options) {
 
       pendingAction.current = action;
       setDialogVisible(true);
-      return true;
+      return 'deferred' as const;
     },
     [dirty, navigationAllowed, saving],
   );

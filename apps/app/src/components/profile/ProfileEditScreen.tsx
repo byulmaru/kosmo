@@ -7,6 +7,7 @@ import { IconButton } from '../ui/IconButton';
 import { RouteScrollContainer } from '../ui/RouteScrollContainer';
 import { ProfileEditForm } from './ProfileEditForm';
 import { canSubmitProfileEdit, validateProfileEditDraft } from './profileEditState';
+import type { RefObject } from 'react';
 import type { ViewStyle } from 'react-native';
 import type { ProfileEditFormProps } from './ProfileEditForm';
 import type {
@@ -16,6 +17,7 @@ import type {
 } from './profileEditState';
 
 export type ProfileEditScreenProps = ProfileEditFormProps & {
+  headingRef?: RefObject<Text | null>;
   initialValue: ProfileEditDraft;
   onBack?: () => void;
   onSubmit?: (draft: ProfileEditDraft) => void;
@@ -60,6 +62,7 @@ function SubmitStatus({ state }: { state: ProfileEditSubmitState }) {
 
 export function ProfileEditScreen({
   disabled = false,
+  headingRef,
   initialValue,
   onAvatarEdit,
   onAvatarRemove,
@@ -138,7 +141,12 @@ export function ProfileEditScreen({
           ) : null}
         </View>
 
-        <Text accessibilityRole="header" style={[styles.title, { color: theme.foregroundPrimary }]}>
+        <Text
+          accessibilityRole="header"
+          ref={headingRef}
+          {...(Platform.OS === 'web' ? { tabIndex: -1 } : {})}
+          style={[styles.title, { color: theme.foregroundPrimary }]}
+        >
           프로필 수정
         </Text>
 

@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { Modal, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Drawer } from 'react-native-drawer-layout';
 import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
@@ -40,13 +41,23 @@ export function WebNavigationDrawer({
   const elevation = useElevation();
   const drawerSafeAreaStyle = useSafeAreaPadding();
   const theme = useTheme();
+  // The drawer owns this ref so nested picker dismissal can restore trigger focus.
+  const profileTriggerRef = useRef<View>(null);
+  const handleRequestClose = () => {
+    if (switcherOpen) {
+      onSwitcherOpenChange(false);
+      profileTriggerRef.current?.focus();
+      return;
+    }
+    onClose();
+  };
 
   return (
     <Modal
       accessibilityLabel="메뉴"
       animationType="none"
       navigationBarTranslucent
-      onRequestClose={onClose}
+      onRequestClose={handleRequestClose}
       role="dialog"
       statusBarTranslucent
       transparent
@@ -68,6 +79,7 @@ export function WebNavigationDrawer({
             onHomeReselect={onHomeReselect}
             onNavigate={onClose}
             onSwitcherOpenChange={onSwitcherOpenChange}
+            profileTriggerRef={profileTriggerRef}
             query={query}
             surface="drawer"
             switcherOpen={switcherOpen}

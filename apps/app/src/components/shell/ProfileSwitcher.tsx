@@ -19,6 +19,7 @@ import { ProfileSwitcherUnreadIndicator } from '@/components/profile/ProfileSwit
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { TextField } from '@/components/ui/TextField';
+import { useToast } from '@/components/ui/ToastProvider';
 import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -39,6 +40,7 @@ import {
   getProfileEditActionTargetMetrics,
   profileEditActionLabelColor,
 } from './shellLayout';
+import type { RefObject } from 'react';
 import type { ViewStyle } from 'react-native';
 import type { ProfileSwitcher_query$key } from './__generated__/ProfileSwitcher_query.graphql';
 import type { ProfileSwitcherCreateProfileMutation } from './__generated__/ProfileSwitcherCreateProfileMutation.graphql';
@@ -160,7 +162,10 @@ type Props = {
   open?: boolean;
   query: ProfileSwitcher_query$key;
   surface: ProfileSwitcherSurface;
+  triggerRef?: RefObject<View | null>;
 };
+
+type OperationErrorHandler = (message: string) => void;
 
 export function ProfileSwitcher({
   onNavigate,
@@ -168,6 +173,7 @@ export function ProfileSwitcher({
   open: controlledOpen,
   query,
   surface,
+  triggerRef: forwardedTriggerRef,
 }: Props) {
   const theme = useTheme();
   const safeAreaStyle = useSafeAreaPadding(spacing.lg);
@@ -175,13 +181,15 @@ export function ProfileSwitcher({
   const data = useFragment(ProfileSwitcherFragment, query);
   const { resetActor } = useRelayActor();
   const { request: requestNavigation } = useNavigationGuard();
+  const { showToast } = useToast();
   const [internalOpen, setInternalOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [handle, setHandle] = useState('');
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [operationError, setOperationErrorState] = useState<string | null>(null);
   const pickerRef = useRef<View>(null);
-  const triggerRef = useRef<View>(null);
+  const fallbackTriggerRef = useRef<View>(null);
+  const triggerRef = forwardedTriggerRef ?? fallbackTriggerRef;
   const dismissalVersionRef = useRef(0);
   const [commitSelect, selecting] =
     useMutation<ProfileSwitcherSelectProfileMutation>(SelectProfileMutation);
@@ -222,6 +230,9 @@ export function ProfileSwitcher({
     if (!redesignedWeb || version === dismissalVersionRef.current) {
       setOperationErrorState(message);
     }
+  };
+  const showDrawerOperationError: OperationErrorHandler = (message) => {
+    showToast(message, { tone: 'danger' });
   };
 
   useEffect(() => {
@@ -271,7 +282,6 @@ export function ProfileSwitcher({
         trigger?.focus();
       }
     };
-
     document.addEventListener('pointerdown', onPointerDown);
     document.addEventListener('keydown', onKeyDown);
     return () => {
@@ -280,14 +290,21 @@ export function ProfileSwitcher({
     };
   }, [open, surface]);
 
-  const commitProfileSelection = (id: string, operationVersion = dismissalVersionRef.current) => {
+  const commitProfileSelection = (
+    id: string,
+    operationVersion = dismissalVersionRef.current,
+    onError?: OperationErrorHandler,
+  ) => {
+    const reportError =
+      onError ?? ((message: string) => setOperationError(operationVersion, message));
     setFieldError(null);
     setOperationErrorState(null);
     commitSelect({
       variables: { id },
       onCompleted: (response, errors) => {
         if (errors?.length) {
-          setOperationError(operationVersion, '프로필을 전환하지 못했습니다.');
+          const message = '프로필을 전환하지 못했습니다.';
+          reportError(message);
           return;
         }
 
@@ -296,21 +313,37 @@ export function ProfileSwitcher({
         setOpen(false);
         resetActor(selectedProfileId);
       },
-      onError: (cause) =>
-        setOperationError(operationVersion, cause.message || '프로필을 전환하지 못했습니다.'),
+      onError: (cause) => {
+        const message = cause.message || '프로필을 전환하지 못했습니다.';
+        reportError(message);
+      },
     });
   };
 
   const selectProfile = (id: string, operationVersion = dismissalVersionRef.current) => {
     const action = () => commitProfileSelection(id, operationVersion);
-    if (requestNavigation(action)) {
+    const deferredAction = mobileWebDrawer
+      ? () => commitProfileSelection(id, operationVersion, showDrawerOperationError)
+      : action;
+    const navigationResult = requestNavigation(deferredAction);
+    if (navigationResult) {
+      if (mobileWebDrawer && navigationResult === 'deferred') {
+        dismissPicker();
+        onNavigate?.();
+      }
       return;
     }
 
     action();
   };
 
-  const commitProfileCreation = (normalized: string, operationVersion: number) => {
+  const commitProfileCreation = (
+    normalized: string,
+    operationVersion: number,
+    onError?: OperationErrorHandler,
+  ) => {
+    const reportError =
+      onError ?? ((message: string) => setOperationError(operationVersion, message));
     setFieldError(null);
     setOperationErrorState(null);
     commitCreate({
@@ -319,11 +352,14 @@ export function ProfileSwitcher({
         if (errors?.length) {
           const error = profileCreationFieldError(errors);
           if (error) {
-            if (!redesignedWeb || operationVersion === dismissalVersionRef.current) {
+            if (onError) {
+              onError(error);
+            } else if (!redesignedWeb || operationVersion === dismissalVersionRef.current) {
               setFieldError(error);
             }
           } else {
-            setOperationError(operationVersion, '프로필을 생성하지 못했습니다.');
+            const message = '프로필을 생성하지 못했습니다.';
+            reportError(message);
           }
           return;
         }
@@ -333,7 +369,7 @@ export function ProfileSwitcher({
         });
         setHandle('');
         setCreating(false);
-        commitProfileSelection(response.createProfile.profile.id, operationVersion);
+        commitProfileSelection(response.createProfile.profile.id, operationVersion, onError);
       },
       onError: (cause) => {
         const source = isRecord(cause) ? cause.source : undefined;
@@ -341,13 +377,16 @@ export function ProfileSwitcher({
           isRecord(source) && Array.isArray(source.errors) ? source.errors : undefined,
         );
         if (error) {
-          if (!redesignedWeb || operationVersion === dismissalVersionRef.current) {
+          if (onError) {
+            onError(error);
+          } else if (!redesignedWeb || operationVersion === dismissalVersionRef.current) {
             setFieldError(error);
           }
           return;
         }
 
-        setOperationError(operationVersion, '프로필을 생성하지 못했습니다.');
+        const message = '프로필을 생성하지 못했습니다.';
+        reportError(message);
       },
     });
   };
@@ -370,7 +409,15 @@ export function ProfileSwitcher({
 
     const operationVersion = dismissalVersionRef.current;
     const action = () => commitProfileCreation(normalized, operationVersion);
-    if (requestNavigation(action)) {
+    const deferredAction = mobileWebDrawer
+      ? () => commitProfileCreation(normalized, operationVersion, showDrawerOperationError)
+      : action;
+    const navigationResult = requestNavigation(deferredAction);
+    if (navigationResult) {
+      if (mobileWebDrawer && navigationResult === 'deferred') {
+        dismissPicker();
+        onNavigate?.();
+      }
       return;
     }
 
@@ -428,14 +475,13 @@ export function ProfileSwitcher({
         !creating ? (
           <Pressable
             accessibilityLabel="새 프로필 추가"
-            accessibilityRole={redesignedWeb || Platform.OS !== 'web' ? 'button' : undefined}
+            accessibilityRole="button"
             disabled={busy}
             onPress={() => {
               setCreating(true);
               setFieldError(null);
               setOperationErrorState(null);
             }}
-            role={Platform.OS === 'web' && !redesignedWeb ? 'menuitem' : undefined}
             style={({ pressed }) => [
               styles.addProfile,
               {
@@ -522,7 +568,7 @@ export function ProfileSwitcher({
         >
           <Pressable
             accessibilityRole="link"
-            onFocus={fullWeb && open ? dismissPicker : undefined}
+            onFocus={(fullWeb || mobileWebDrawer) && open ? dismissPicker : undefined}
             style={styles.countLink}
           >
             <Text style={[styles.count, { color: theme.text }]}>
@@ -537,7 +583,7 @@ export function ProfileSwitcher({
         >
           <Pressable
             accessibilityRole="link"
-            onFocus={fullWeb && open ? dismissPicker : undefined}
+            onFocus={(fullWeb || mobileWebDrawer) && open ? dismissPicker : undefined}
             style={styles.countLink}
           >
             <Text style={[styles.count, { color: theme.text }]}>
@@ -555,6 +601,10 @@ export function ProfileSwitcher({
   );
   const fullWebPicker =
     fullWeb && open ? (
+      <View style={[styles.webMenu, styles.fullOverlayPosition]}>{pickerContent}</View>
+    ) : null;
+  const drawerWebPicker =
+    mobileWebDrawer && open ? (
       <View style={[styles.webMenu, styles.fullOverlayPosition]}>{pickerContent}</View>
     ) : null;
   const triggerSurface = !compact ? (
@@ -599,6 +649,7 @@ export function ProfileSwitcher({
       >
         {trigger}
         {fullWebPicker}
+        {drawerWebPicker}
         {profileDetails}
       </View>
       {canEditSelectedProfile ? (
@@ -646,7 +697,7 @@ export function ProfileSwitcher({
       {triggerSurface}
 
       {Platform.OS === 'web' ? (
-        open && !fullWeb ? (
+        open && !fullWeb && !mobileWebDrawer ? (
           <View
             style={[
               styles.webMenu,

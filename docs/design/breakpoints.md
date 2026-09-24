@@ -171,6 +171,16 @@ Web profile picker는 breakpoint별 사이드바 구조에 맞는 surface를 사
   수직 중심에 두고 이름 행 아래에는 같은 `-8px` 보정을 적용한다. trigger hitbox, picker anchor와 navigation
   geometry는 바꾸지 않으며, chevron 자체는 별도 focus target이 아니다.
 - trigger는 열린 상태를 accessibility `expanded` 상태로 노출한다.
+- mobile Web drawer의 프로필 피커는 일반 버튼과 기본 `Tab` 순서를 사용한다. 열어도 focus는 trigger에
+  유지하며, 프로필 버튼과 새 프로필 추가·생성 control, 프로필 요약 링크 순으로 `Tab`·`Shift+Tab`으로 탐색한다. 현재 프로필은
+  `aria-current`로 표시하고, focus 이동만으로 전환하지 않는다. `Enter`·`Space`로 focus된 버튼을 실행한다.
+  요약 링크로 focus가 이동하면 피커를 닫고 해당 링크의 focus를 유지해 피커에 가려지지 않게 한다.
+  피커가 열려 있을 때 `Escape`는 피커만 닫고 프로필 trigger로 focus를 돌린다. 피커가 닫힌 상태에서
+  다시 `Escape`를 누르면 부모 drawer를 닫고 메인 `메뉴 열기` 버튼으로 focus를 돌린다. 생성 폼에서도
+  같은 닫기 순서를 적용한다. 프로필 전환·생성이 편집 내용 이탈 확인으로 보류되면 피커와 drawer를 닫고
+  확인창만 표시한다. 확인창에서 `Escape` 또는 `계속 편집`은 초안을 유지한 채 편집 화면 제목으로 focus를 돌리며
+  피커와 drawer를 다시 열지 않는다. `버리기`만 보류된 작업을 실행하고, 실패하면 편집 화면에 토스트로
+  알린다. drawer 내부의 목록 바깥 클릭 동작은 이 키보드 계약으로 변경하지 않는다.
 - 프로필이 많을 때는 프로필 목록 영역만 제한된 높이 안에서 스크롤한다. 새 프로필 추가 액션과 생성 폼은
   목록 아래의 고정 영역에 두며, 생성 폼이 열리면 목록이 남은 높이에 맞게 줄어든다. mobile drawer 안에서도
   picker 목록과 새 프로필 추가 행은 각각 scroll/fixed 영역을 유지하며 drawer navigation을 함께 밀어내지 않는다. full·compact Web picker의

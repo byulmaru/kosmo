@@ -1,6 +1,6 @@
 import { profileHandlePolicyErrorMessage } from '@kosmo/core/validation';
 import { Slot } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { graphql, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
 import { commitLocalUpdate } from 'relay-runtime';
@@ -325,7 +325,7 @@ function NavigationGuardRegistrar({
     () =>
       register((action) => {
         onPending(action);
-        return true;
+        return 'deferred' as const;
       }),
     [onPending, register],
   );
@@ -386,6 +386,7 @@ const meta = {
     'UniversalCompactComposerLifecycle',
     'UniversalFullComposerLifecycle',
     'UniversalMobileComposerLifecycle',
+    'UniversalMobileGuardedProfilePicker',
   ],
   parameters: {
     relay: { data: query },
@@ -1327,7 +1328,7 @@ export const ProfileSwitcherDrawerUnreadPresence: Story = {
     await userEvent.click(trigger);
 
     const list = await canvas.findByLabelText('전환할 프로필 목록');
-    const unreadOption = within(list).getByRole('menuitemradio', {
+    const unreadOption = within(list).getByRole('button', {
       name: `${secondProfile.displayName}, ${secondProfile.relativeHandle}, 읽지 않은 알림 있음`,
     });
     expect(within(unreadOption).getByTestId('profile-switcher-unread-count')).toHaveTextContent(
@@ -1869,6 +1870,32 @@ function UniversalShellStory() {
   );
 }
 
+function GuardedUniversalShellStory() {
+  const [pending, setPending] = useState<GuardedNavigationAction | null>(null);
+  const profileEditHeadingRef = useRef<Text>(null);
+  return (
+    <SessionProvider>
+      <UniversalShell>
+        <NavigationGuardRegistrar onPending={(action) => setPending(() => action)} />
+        <Text accessibilityRole="header" ref={profileEditHeadingRef} {...{ tabIndex: -1 }}>
+          프로필 수정
+        </Text>
+        <Slot />
+        <ProfileEditDiscardDialog
+          onContinue={() => setPending(null)}
+          onDiscard={() => {
+            const action = pending;
+            setPending(null);
+            action?.();
+          }}
+          returnFocusRef={profileEditHeadingRef}
+          visible={pending !== null}
+        />
+      </UniversalShell>
+    </SessionProvider>
+  );
+}
+
 function RemountableUniversalShellStory() {
   const [visible, setVisible] = useState(true);
 
@@ -2108,6 +2135,16 @@ export const UniversalMobile: Story = {
   ),
 };
 
+export const UniversalMobileGuardedProfilePicker: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: universalParameters,
+  render: () => (
+    <View style={{ height: 844 }}>
+      <GuardedUniversalShellStory />
+    </View>
+  ),
+};
+
 export const UniversalMobileLongProfilePickerScroll: Story = {
   globals: { viewport: { isRotated: false, value: 'shellMobileShort' } },
   parameters: {
@@ -2169,9 +2206,9 @@ export const UniversalMobileLongProfilePickerScroll: Story = {
 
     await userEvent.click(profileTrigger);
     const list = await page.findByLabelText('전환할 프로필 목록');
-    const picker = await page.findByRole('menu', { name: '프로필 전환' });
-    const options = within(list).getAllByRole('menuitemradio');
-    const addProfile = within(picker).getByRole('menuitem', { name: '새 프로필 추가' });
+    const picker = await page.findByLabelText('프로필 전환');
+    const options = within(list).getAllByRole('button');
+    const addProfile = within(picker).getByRole('button', { name: '새 프로필 추가' });
 
     expect(picker).toBeVisible();
     expect(options).toHaveLength(12);
@@ -2196,10 +2233,10 @@ export const UniversalMobileLongProfilePickerScroll: Story = {
 
     await userEvent.type(handle, 'drawer_draft');
     await userEvent.click(profileTrigger);
-    await waitFor(() => expect(page.queryByRole('menu', { name: '프로필 전환' })).toBeNull());
+    await waitFor(() => expect(page.queryByLabelText('프로필 전환')).toBeNull());
     await userEvent.click(profileTrigger);
-    const reopenedPicker = await page.findByRole('menu', { name: '프로필 전환' });
-    await userEvent.click(within(reopenedPicker).getByRole('menuitem', { name: '새 프로필 추가' }));
+    const reopenedPicker = await page.findByLabelText('프로필 전환');
+    await userEvent.click(within(reopenedPicker).getByRole('button', { name: '새 프로필 추가' }));
     expect(page.getByRole('textbox', { name: '프로필 핸들' })).toHaveValue('drawer_draft');
 
     await userEvent.click(page.getByRole('button', { name: '사이드바 닫기' }));

@@ -54,6 +54,7 @@ export function ProfilePicker({
   const theme = useTheme();
   const elevation = useElevation();
   const redesignedWeb = Platform.OS === 'web' && surface !== 'drawer';
+  const drawerWeb = Platform.OS === 'web' && surface === 'drawer';
   const scrollableWebPicker = Platform.OS === 'web';
   const surfaceBounds = !scrollableWebPicker
     ? nativePickerBounds
@@ -68,17 +69,16 @@ export function ProfilePicker({
 
     return (
       <Pressable
-        aria-checked={Platform.OS === 'web' && !redesignedWeb ? selected : undefined}
+        aria-current={drawerWeb && selected ? true : undefined}
         aria-pressed={redesignedWeb ? selected : undefined}
         accessibilityLabel={`${profile.displayName}, ${profile.relativeHandle}${hasUnread ? ', 읽지 않은 알림 있음' : ''}`}
-        accessibilityRole={redesignedWeb ? 'button' : Platform.OS === 'web' ? undefined : 'radio'}
+        accessibilityRole={Platform.OS === 'web' ? 'button' : 'radio'}
         accessibilityState={
-          redesignedWeb ? { disabled: busy } : { checked: selected, disabled: busy }
+          Platform.OS === 'web' ? { disabled: busy } : { checked: selected, disabled: busy }
         }
         disabled={busy}
         key={profile.id}
         onPress={() => onSelect(profile.id)}
-        role={Platform.OS === 'web' && !redesignedWeb ? ('menuitemradio' as 'radio') : undefined}
         style={({ pressed }) => [
           styles.profile,
           !selected ? styles.unselectedProfile : undefined,
@@ -124,7 +124,6 @@ export function ProfilePicker({
       <View
         accessibilityLabel="프로필 전환"
         accessibilityRole={Platform.OS === 'web' ? undefined : 'menu'}
-        role={Platform.OS === 'web' && !redesignedWeb ? 'menu' : undefined}
         style={scrollableWebPicker ? styles.redesignedMenuRegion : styles.menuItems}
       >
         <ScrollView

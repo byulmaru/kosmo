@@ -22,6 +22,7 @@ import { ProfileEditScreen } from './ProfileEditScreen';
 import { isProfileEditDraftDirty } from './profileEditState';
 import { useProfileEditNavigationGuard } from './useProfileEditNavigationGuard';
 import type { Href } from 'expo-router';
+import type { Text } from 'react-native';
 import type { ProfileEditRouteCompleteMediaUploadMutation } from './__generated__/ProfileEditRouteCompleteMediaUploadMutation.graphql';
 import type { ProfileEditRouteIssueMediaUploadUrlMutation } from './__generated__/ProfileEditRouteIssueMediaUploadUrlMutation.graphql';
 import type { ProfileEditRouteQuery } from './__generated__/ProfileEditRouteQuery.graphql';
@@ -188,6 +189,8 @@ function EditableProfileRoute({
   const { showToast } = useToast();
   const initialAvatar = createProfileEditRouteImage(profile.avatar);
   const initialHeader = createProfileEditRouteImage(profile.header);
+  // The picker trigger can unmount before confirmation closes; the editor remains a focus target.
+  const headingRef = useRef<Text>(null);
   const initialValue: ProfileEditDraft = {
     avatar: initialAvatar.presentation,
     bio: profile.bio ?? '',
@@ -437,6 +440,7 @@ function EditableProfileRoute({
   return (
     <>
       <ProfileEditScreen
+        headingRef={headingRef}
         initialValue={cleanValue}
         onAvatarEdit={() => selectImage('avatar')}
         onAvatarRemove={() => removeImage('avatar')}
@@ -453,7 +457,7 @@ function EditableProfileRoute({
         submitState={submitState}
         value={{ ...value, avatar: avatar.presentation, header: header.presentation }}
       />
-      <ProfileEditDiscardDialog {...dialogProps} />
+      <ProfileEditDiscardDialog {...dialogProps} returnFocusRef={headingRef} />
     </>
   );
 }

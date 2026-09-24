@@ -14,6 +14,7 @@ const mockModule = (specifier: string | URL, exports: object) =>
 
 mockModule('react-native', {
   Modal: (props: object) => createElement('Modal', props),
+  Platform: { OS: 'web' },
   StyleSheet: { create: (styles: object) => styles },
   Text: (props: object) => createElement('Text', props),
   View: (props: object) => createElement('View', props),
