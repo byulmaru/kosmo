@@ -91,27 +91,28 @@ export const dispatchActivityPubActivity = async ({
               isNotNull(ActivityPubActors.inboxUri),
             ),
           );
-  const followerActors = directOnly || !includeFollowers
-    ? []
-    : await db
-        .select({
-          inboxUri: ActivityPubActors.inboxUri,
-          sharedInboxUri: ActivityPubActors.sharedInboxUri,
-          uri: ActivityPubActors.uri,
-        })
-        .from(ProfileFollows)
-        .innerJoin(FollowerProfiles, eq(FollowerProfiles.id, ProfileFollows.followerProfileId))
-        .innerJoin(FollowerInstances, eq(FollowerInstances.id, FollowerProfiles.instanceId))
-        .innerJoin(ActivityPubActors, eq(ActivityPubActors.profileId, FollowerProfiles.id))
-        .where(
-          and(
-            eq(ProfileFollows.followeeProfileId, actorProfileId),
-            eq(FollowerProfiles.state, ProfileState.ACTIVE),
-            eq(FollowerInstances.kind, InstanceKind.ACTIVITYPUB),
-            eq(FollowerInstances.state, InstanceState.ACTIVE),
-            isNotNull(ActivityPubActors.inboxUri),
-          ),
-        );
+  const followerActors =
+    directOnly || !includeFollowers
+      ? []
+      : await db
+          .select({
+            inboxUri: ActivityPubActors.inboxUri,
+            sharedInboxUri: ActivityPubActors.sharedInboxUri,
+            uri: ActivityPubActors.uri,
+          })
+          .from(ProfileFollows)
+          .innerJoin(FollowerProfiles, eq(FollowerProfiles.id, ProfileFollows.followerProfileId))
+          .innerJoin(FollowerInstances, eq(FollowerInstances.id, FollowerProfiles.instanceId))
+          .innerJoin(ActivityPubActors, eq(ActivityPubActors.profileId, FollowerProfiles.id))
+          .where(
+            and(
+              eq(ProfileFollows.followeeProfileId, actorProfileId),
+              eq(FollowerProfiles.state, ProfileState.ACTIVE),
+              eq(FollowerInstances.kind, InstanceKind.ACTIVITYPUB),
+              eq(FollowerInstances.state, InstanceState.ACTIVE),
+              isNotNull(ActivityPubActors.inboxUri),
+            ),
+          );
 
   const recipientsByActor = new Map<string, Recipient>();
   for (const actor of [...directActors, ...followerActors]) {
