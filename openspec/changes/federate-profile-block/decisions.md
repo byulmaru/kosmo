@@ -39,24 +39,23 @@
   orderingKey 전달을 준비하고 기존 caller의 audience를 보존한다.
 - Confirmation / Follow-up: 실제 Mastodon 버전을 기록한 상호운용과 대상 외 수신자 0건을 검증한다.
 
-### D3. 원본별 인과 관계와 정확한 row identity를 보존한다
+### D3. 수신 Undo를 검증된 pair와 정확한 row identity에 적용한다
 
 - Decision Date: 2026-09-08
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/domain/objects/profile-block.md`의 pair uniqueness·Owner 해제,
   `docs/domain/decisions/0031-profile-block-federation.md`의 관계 재사용, PROD-818의 검증·멱등성·순서 역전·상태 보존 범위.
 - Status: Active
-- Context / Problem: pair 하나나 마지막 도착 ID만 기억하면 지연 Block·Undo가 재차단을 지우거나 종료된 원본을 부활시킨다.
-- Decision Outcome: 원본 Block IRI와 actor·Target·정확한 domain row의 대응, 원본 종료 증거와 미완료 효과를
-  Block 전용 protocol metadata로 보존한다. 같은 pair의 서로 다른 원본은 개별 Undo로 종료하며 마지막 미해제
-  원본이 없어질 때 canonical 해제를 실행한다. 검증 가능한 Undo가 먼저 오면 원본 종료 증거를 먼저 남긴다.
+- Context / Problem: 원격 Block URI만으로 Undo를 연결하면 검증된 pair의 해제가 누락된다.
+- Decision Outcome: Undo actor·embedded Block actor·Local Target을 검증한 뒤 현재 방향 pair의 정확한
+  domain row를 해제한다. 원본 Block IRI와 Undo identity는 중복·재전달 관찰을 위해 protocol metadata로
+  보존한다. 검증 가능한 Undo가 먼저 오면 원본 종료 증거를 먼저 남긴다.
 - Alternatives Considered: 원격 published 또는 도착 시각 기반 last-write-wins는 전역 순서를 증명하지 못한다.
-  현재 pair 전체 삭제와 단기 queue dedupe만으로는 지연 Undo·장기 replay에 대응할 수 없다.
+  저장된 원본 URI의 일치만 요구하면 유효한 pair 해제를 놓친다.
 - Consequences: 제품 관계는 pair당 하나로 유지한다. 필요한 최소 protocol identity만 저장하고 범용 command ledger는
   만들지 않는다. 이번 change에서는 종료 증거를 임의 TTL로 삭제하지 않으며, 테이블 이름과 세부 구조는 고정하지 않는다.
   원본·Undo 검증 실패와 동일 ID의 내용 충돌은 기존 상태를 덮어쓰지 않는다.
-- Confirmation / Follow-up: B1·Undo B1·B2의 도착 순서 조합, 여러 미해제 원본, 중복, completion loss와 history 보존
-  기간에 의존하지 않는 재전달을 검증한다. 여러 원본 중 일부 Undo만 온 경우 Block이 남는 결과를 상호운용에서 확인한다.
+- Confirmation / Follow-up: URI가 다른 Undo, 원본 ID가 없는 embedded Block, 중복 Undo와 새 row 뒤 재전달을 검증한다.
 
 ### D4. durable 효과와 Fedify delivery 경계를 분리한다
 

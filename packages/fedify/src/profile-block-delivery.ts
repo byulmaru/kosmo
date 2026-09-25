@@ -1,16 +1,24 @@
 import { Block, Undo } from '@fedify/vocab';
 import { ActivityPubActors, db, first, Instances, ProfileBlocks, Profiles } from '@kosmo/core/db';
-import { InstanceKind } from '@kosmo/core/enums';
+import { InstanceKind, InstanceState, ProfileState } from '@kosmo/core/enums';
 import {
   ensureProfileBlockProtocolActivity,
   loadProfileBlockProtocolActivityByProfileBlockId,
+  markProfileBlockProtocolDeliveryPending,
   markProfileBlockProtocolDeliverySettled,
+  markProfileBlockProtocolUndoPending,
   markProfileBlockProtocolUndoSettled,
 } from '@kosmo/core/services';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNotNull } from 'drizzle-orm';
 import { localOutboundFederation } from './local-outbound-federation';
 import { dispatchActivityPubActivity } from './outbound-recipient-dispatch';
-import type { ActivityPubDispatchResult } from './outbound-recipient-dispatch';
+import {
+  materializeRemoteProfileActor,
+  RemoteActorMaterializationError,
+} from './remote-actor-materialization';
+import type { Context } from '@fedify/fedify';
+import type { Activity } from '@fedify/vocab';
+import type { LocalOutboundContextData } from './local-outbound-federation';
 
 export type ProfileBlockDeliveryResult =
   | { readonly status: 'SETTLED' }
@@ -53,7 +61,15 @@ const loadOutboundProfileBlockParticipants = async ({
     })
     .from(Profiles)
     .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .where(and(eq(Profiles.id, ownerProfileId), eq(Instances.kind, InstanceKind.LOCAL)))
+    .where(
+      and(
+        eq(Profiles.id, ownerProfileId),
+        eq(Profiles.state, ProfileState.ACTIVE),
+        eq(Instances.kind, InstanceKind.LOCAL),
+        eq(Instances.state, InstanceState.ACTIVE),
+        isNotNull(Instances.canonicalOrigin),
+      ),
+    )
     .limit(1)
     .then(first)
     .then(async (source) => {
@@ -98,9 +114,48 @@ const loadOutboundProfileBlockSource = async (
   return loadOutboundProfileBlockParticipants(relation);
 };
 
-const assertDispatched = (result: ActivityPubDispatchResult): void => {
-  if (result.status === 'PENDING') {
-    throw new Error('Profile Block recipient is unavailable');
+const dispatchProfileBlockActivity = async ({
+  activity,
+  actorProfileId,
+  context,
+  objectUri,
+  onPending,
+  orderingKey,
+  targetProfileId,
+}: {
+  readonly activity: Activity;
+  readonly actorProfileId: string;
+  readonly context: Context<LocalOutboundContextData>;
+  readonly objectUri: URL;
+  readonly onPending: () => Promise<void>;
+  readonly orderingKey: string;
+  readonly targetProfileId: string;
+}): Promise<void> => {
+  const dispatch = () =>
+    dispatchActivityPubActivity({
+      activity,
+      actorProfileId,
+      context,
+      directOnly: true,
+      directProfileIds: [targetProfileId],
+      orderingKey,
+    });
+
+  if ((await dispatch()).status === 'SETTLED') {
+    return;
+  }
+
+  await onPending();
+  await materializeRemoteProfileActor({
+    actorUri: objectUri,
+    context,
+    reactivateUnresponsive: true,
+  });
+
+  if ((await dispatch()).status === 'PENDING') {
+    throw new RemoteActorMaterializationError(
+      'Materialized Profile Block recipient is unavailable.',
+    );
   }
 };
 
@@ -124,7 +179,7 @@ export const sendProfileBlock = async (
     return { reason: 'not_remote_target', status: 'SKIPPED' };
   }
   if (!source.canonicalOrigin || !source.targetActorUri) {
-    throw new Error('Profile Block recipient or canonical origin is unavailable');
+    throw new RemoteActorMaterializationError('Profile Block recipient actor URI is unavailable.');
   }
 
   const context = localOutboundFederation.createContext(new URL(source.canonicalOrigin), {
@@ -135,7 +190,7 @@ export const sendProfileBlock = async (
   try {
     objectUri = existing ? new URL(existing.objectUri) : new URL(source.targetActorUri);
   } catch {
-    throw new Error('Profile Block recipient URI is invalid');
+    throw new RemoteActorMaterializationError('Profile Block recipient actor URI is invalid.');
   }
   if (existing?.origin !== undefined && existing.origin !== 'OUTBOUND') {
     return { reason: 'stale_source', status: 'SKIPPED' };
@@ -162,20 +217,21 @@ export const sendProfileBlock = async (
     targetProfileId: source.targetProfileId,
   });
 
-  const result = await dispatchActivityPubActivity({
-    activity: new Block({
-      actor: outboundActorUri,
-      id: activityUri,
-      object: objectUri,
-      tos: [objectUri],
-    }),
+  const activity = new Block({
+    actor: outboundActorUri,
+    id: activityUri,
+    object: objectUri,
+    tos: [objectUri],
+  });
+  await dispatchProfileBlockActivity({
+    activity,
     actorProfileId: source.ownerProfileId,
     context,
-    directOnly: true,
-    directProfileIds: [source.targetProfileId],
+    objectUri,
+    onPending: () => markProfileBlockProtocolDeliveryPending(activityUri.href),
     orderingKey: getProfileBlockOrderingKey(outboundActorUri, objectUri),
+    targetProfileId: source.targetProfileId,
   });
-  assertDispatched(result);
   await markProfileBlockProtocolDeliverySettled(activityUri.href);
   return { status: 'SETTLED' };
 };
@@ -193,8 +249,10 @@ export const sendProfileBlockUndo = async ({
   if (protocol?.origin !== undefined && protocol.origin !== 'OUTBOUND') {
     return { reason: 'stale_source', status: 'SKIPPED' };
   }
-  if (protocol?.undoDeliveryState === 'SETTLED') {
-    return { status: 'SETTLED' };
+  if (protocol?.state === 'CLOSING' || protocol?.state === 'CLOSED') {
+    if (protocol.state === 'CLOSED' || protocol.undoDeliveryState === 'SETTLED') {
+      return { status: 'SETTLED' };
+    }
   }
   if (
     protocol !== undefined &&
@@ -216,7 +274,7 @@ export const sendProfileBlockUndo = async ({
     return { reason: 'not_remote_target', status: 'SKIPPED' };
   }
   if (!source?.canonicalOrigin) {
-    throw new Error('Profile Block canonical origin is unavailable');
+    throw new RemoteActorMaterializationError('Profile Block sender origin is unavailable.');
   }
 
   const context = localOutboundFederation.createContext(new URL(source.canonicalOrigin), {
@@ -225,7 +283,9 @@ export const sendProfileBlockUndo = async ({
   const defaultActorUri = context.getActorUri(ownerProfileId);
   if (protocol === undefined) {
     if (!source.targetActorUri) {
-      throw new Error('Profile Block recipient is unavailable');
+      throw new RemoteActorMaterializationError(
+        'Profile Block Undo recipient actor URI is unavailable.',
+      );
     }
     protocol = await ensureProfileBlockProtocolActivity({
       activityUri: getProfileBlockActivityUri(context.canonicalOrigin, profileBlockId).href,
@@ -234,7 +294,6 @@ export const sendProfileBlockUndo = async ({
       origin: 'OUTBOUND',
       ownerProfileId,
       profileBlockId,
-      state: 'CLOSED',
       targetProfileId,
     });
   }
@@ -242,20 +301,21 @@ export const sendProfileBlockUndo = async ({
   const objectUri = new URL(protocol.objectUri);
   const blockUri = new URL(protocol.activityUri);
   const undoUri = new URL(`${blockUri.href}/undo`);
-  const result = await dispatchActivityPubActivity({
-    activity: new Undo({
-      actor: actorUri,
-      id: undoUri,
-      object: new Block({ actor: actorUri, id: blockUri, object: objectUri }),
-      tos: [objectUri],
-    }),
+  const activity = new Undo({
+    actor: actorUri,
+    id: undoUri,
+    object: new Block({ actor: actorUri, id: blockUri, object: objectUri }),
+    tos: [objectUri],
+  });
+  await dispatchProfileBlockActivity({
+    activity,
     actorProfileId: ownerProfileId,
     context,
-    directOnly: true,
-    directProfileIds: [targetProfileId],
+    objectUri,
+    onPending: () => markProfileBlockProtocolUndoPending(protocol.activityUri),
     orderingKey: getProfileBlockOrderingKey(actorUri, objectUri),
+    targetProfileId,
   });
-  assertDispatched(result);
   await markProfileBlockProtocolUndoSettled(protocol.activityUri);
   return { status: 'SETTLED' };
 };

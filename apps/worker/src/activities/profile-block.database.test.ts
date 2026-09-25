@@ -479,7 +479,7 @@ test('Block rejects self-blocking in the service and the database check', async 
   );
 });
 
-test('inbound duplicate Block keeps one active original and Undo closes its exact relation', async () => {
+test('inbound Block 원본이 여러 개여도 Undo는 현재 pair의 정확한 관계만 닫는다', async () => {
   const { profile: owner } = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
   const { profile: target } = await createProfile();
   const protocolActivity = (activityUri: string) => ({
@@ -521,12 +521,10 @@ test('inbound duplicate Block keeps one active original and Undo closes its exac
       .where(eq(ProfileBlockActivities.state, 'ACTIVE')),
     [{ activityUri: firstActivity.activityUri }],
   );
-  await assert.rejects(
-    db.insert(ProfileBlockActivities).values({
-      ...secondActivity,
-      profileBlockId: first.result.profileBlockId,
-    }),
-  );
+  await db.insert(ProfileBlockActivities).values({
+    ...secondActivity,
+    profileBlockId: first.result.profileBlockId,
+  });
   const duplicateOriginal = await recordProfileBlockProtocolTombstone(firstActivity);
   assert.equal(duplicateOriginal.state, 'ACTIVE');
   assert.equal(duplicateOriginal.profileBlockId, first.result.profileBlockId);
@@ -536,7 +534,6 @@ test('inbound duplicate Block keeps one active original and Undo closes its exac
     ownerProfileId: owner.id,
     targetProfileId: target.id,
     profileBlockId: first.result.profileBlockId,
-    protocolActivityUri: firstActivity.activityUri,
   });
   assert.equal(unblock.ok && unblock.result.removed, true);
   assert.equal(await currentProfileBlockId(owner.id, target.id), null);
@@ -564,7 +561,6 @@ test('inbound duplicate Block keeps one active original and Undo closes its exac
     ownerProfileId: owner.id,
     targetProfileId: target.id,
     profileBlockId: first.result.profileBlockId,
-    protocolActivityUri: firstActivity.activityUri,
   });
   assert.equal(retriedUndo.ok && retriedUndo.result.removed, false);
   if (third.ok) {

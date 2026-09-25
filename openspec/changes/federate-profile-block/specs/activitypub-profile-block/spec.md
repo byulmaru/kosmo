@@ -27,14 +27,14 @@
 
 #### Scenario: Remote Owner가 자신의 Block을 해제한다
 
-- **WHEN** 검증된 Undo가 해당 Remote Owner의 현재 Block에 대한 마지막 미해제 원본을 정확히 가리킨다
+- **WHEN** 검증된 Undo의 actor와 embedded Block actor·Local Target이 현재 방향 pair와 일치한다
 - **THEN** 입력한 exact Profile Block ID의 해당 방향 관계만 제거한다
 - **AND** Follow·Request·Notification을 추가로 정리하거나 차단 생성 때 제거된 Follow를 복구하지 않는다
 - **AND** 반대 방향 Local Owner의 Block은 유지하며 제거된 Follow는 복구하지 않는다
 
 ### Requirement: 인증된 actor와 정확한 대상 검증
 
-**Authority / Provenance:** `docs/domain/objects/profile-block.md`의 ingress 경계·Owner 권한, `docs/domain/objects/profile.md`의 Origin, `docs/domain/decisions/0031-profile-block-federation.md`, `PROD-818`의 verified inbound 검증·보안 범위와 2026-09-17 리뷰 결정. Protocol 근거: W3C ActivityPub §6.10·§7.12의 Undo actor 일치. 시스템은 기존 Fedify 인증 ingress를 거친 Activity에 대해 Remote actor, Block object인 Local Target, 수신 inbox와 canonical actor URI의 일치를 검증한 뒤 mutation해야 한다(MUST). Undo의 embedded object가 실제 `Block`일 때만 Profile Block Undo 경로에서 처리하고(MUST), Undo actor와 embedded 원본 Block의 actor가 같고 원본 identity·pair가 일치함을 확인해야 한다(MUST). URI-only object나 embedded `Like`·`Follow` 등 non-Block Activity를 저장된 protocol URI 일치만으로 Block이라고 추론해서는 안 되며(MUST NOT), 기존 해당 Undo 처리기로 넘겨야 한다(MUST). 서명 또는 actor/object/recipient 검증 실패는 domain mutation과 outbound echo를 만들지 않아야 한다(MUST NOT). 차단으로 콘텐츠 조회가 제한된다는 이유만으로 검증된 Owner의 embedded Block 해제를 막아서는 안 된다(MUST NOT). 원본 Block은 식별 가능한 절대 Activity IRI를 가져야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/profile-block.md`의 ingress 경계·Owner 권한, `docs/domain/objects/profile.md`의 Origin, `docs/domain/decisions/0031-profile-block-federation.md`, `PROD-818`의 verified inbound 검증·보안 범위와 2026-09-17 리뷰 결정. Protocol 근거: W3C ActivityPub §6.10·§7.12의 Undo actor 일치. 시스템은 기존 Fedify 인증 ingress를 거친 Activity에 대해 Remote actor, Block object인 Local Target, 수신 inbox와 canonical actor URI의 일치를 검증한 뒤 mutation해야 한다(MUST). Undo의 embedded object가 실제 `Block`일 때만 Profile Block Undo 경로에서 처리하고(MUST), Undo actor와 embedded Block actor 및 현재 방향 pair가 일치함을 확인해야 한다(MUST). 원격 Block URI가 저장된 원본과 달라도 검증된 pair의 해제를 누락해서는 안 된다(MUST NOT). URI-only object나 embedded `Like`·`Follow` 등 non-Block Activity를 저장된 protocol URI 일치만으로 Block이라고 추론해서는 안 되며(MUST NOT), 기존 해당 Undo 처리기로 넘겨야 한다(MUST). 서명 또는 actor/object/recipient 검증 실패는 domain mutation과 outbound echo를 만들지 않아야 한다(MUST NOT). 차단으로 콘텐츠 조회가 제한된다는 이유만으로 검증된 Owner의 embedded Block 해제를 막아서는 안 된다(MUST NOT).
 
 #### Scenario: 타인의 Block을 해제하려 한다
 
@@ -60,7 +60,7 @@
 #### Scenario: 원본 식별자가 없거나 원격 조회가 허용되지 않는다
 
 - **WHEN** 원본 Block에 유효한 Activity IRI가 없거나 Undo 원본 조회가 기존 안전·admission 경계를 통과하지 못한다
-- **THEN** 입력을 검증된 입력으로 취급하지 않고 Profile Block이나 cleanup을 변경하지 않는다
+- **THEN** 원격 조회 없이 embedded Block의 actor·Local Target·방향 pair를 검증해 현재 관계를 해제한다
 
 #### Scenario: URI-only 또는 non-Block 원본을 전달한다
 
@@ -70,7 +70,7 @@
 
 ### Requirement: 중복과 순서 역전에서 identity 보존
 
-**Authority / Provenance:** `docs/domain/objects/profile-block.md`의 pair uniqueness·Owner 해제, `PROD-818`의 duplicate·out-of-order·retry 및 로컬 상태 보존 범위. 시스템은 Activity identity와 방향 pair를 구분하여 중복 수신·재시도·Worker restart에도 동일한 Block을 중복 생성하거나 다른 세대의 Block을 해제하지 않아야 한다(MUST NOT). 검증된 Undo로 이미 종료된 원본 Block의 지연 재전달은 관계를 부활시키지 않아야 한다(MUST NOT). 동일 Activity ID에 다른 actor·object를 붙인 입력은 기존 identity를 덮어쓰지 않아야 한다(MUST NOT). 해석에 필요한 원본을 검증할 수 없으면 추측으로 pair 전체를 삭제하지 않아야 한다(MUST NOT). 서로 다른 유효 원본이 같은 방향 pair에 관측되면 각각의 Undo는 참조한 원본만 종료해야 한다(MUST). 다른 미해제 원본이 남아 있는 동안 그 pair의 Profile Block을 제거해서는 안 된다(MUST NOT). 이 원본별 처리 증거는 protocol metadata이며 별도 제품 차단 상태로 노출해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/profile-block.md`의 pair uniqueness·Owner 해제, `PROD-818`의 duplicate·out-of-order·retry 및 로컬 상태 보존 범위. 시스템은 검증된 actor·Local Target의 현재 방향 pair에 Undo를 적용해야 한다(MUST). 원격 Block URI 불일치만으로 해제를 누락해서는 안 된다(MUST NOT). 동일 Activity ID에 다른 actor·object를 붙인 입력은 기존 identity를 덮어쓰지 않아야 한다(MUST NOT). 같은 Undo의 재전달이나 이미 종료된 원본의 Undo로 나중에 생성된 관계를 해제해서는 안 된다(MUST NOT). 이를 구분할 유효한 HTTP(S) 최상위 Undo Activity ID가 없으면 관계를 변경해서는 안 된다(MUST NOT). 원본 및 Undo identity는 재전달 관찰과 중복 처리를 위해 보존하되 별도 제품 차단 상태로 노출해서는 안 된다(MUST NOT).
 
 #### Scenario: 같은 Block을 재전달한다
 
@@ -79,29 +79,29 @@
 
 #### Scenario: 과거 Undo가 재차단 뒤 도착한다
 
-- **WHEN** 과거 Block B1에 대한 Undo가 별도 Block B2로 성립된 현재 관계 뒤에 도착한다
-- **THEN** B1의 처리만 정산하고 B2의 관계는 제거하지 않는다
+- **WHEN** 과거 Block B1에 대한 아직 처리하지 않은 Undo가 별도 Block B2로 성립된 현재 관계 뒤에 도착하고 actor·Target·pair가 검증된다
+- **THEN** 현재 방향 pair의 관계를 해제한다
 
 #### Scenario: 검증된 Undo가 원본보다 먼저 도착한다
 
 - **WHEN** 원본 ID·actor·Target을 검증할 수 있는 Undo B1을 먼저 수신하고 같은 B1이 나중에 도착한다
 - **THEN** B1이 종료됐다는 protocol identity를 보존해 지연 B1로 차단을 새로 만들지 않는다
 
-#### Scenario: 원본을 검증할 수 없다
+#### Scenario: actor 또는 Target을 검증할 수 없다
 
-- **WHEN** Undo가 가리키는 원본을 안전하게 확인할 수 없거나 같은 ID에 담긴 내용이 충돌한다
-- **THEN** 임의의 현재 Block을 해제하거나 검증되지 않은 Owner·Target 관계를 만들지 않는다
+- **WHEN** Undo actor와 embedded Block actor가 다르거나 embedded Block의 Target이 Local recipient와 다르다
+- **THEN** 현재 Block을 해제하거나 검증되지 않은 Owner·Target 관계를 만들지 않는다
 
 #### Scenario: 새 Block이 과거 Block보다 먼저 도착한다
 
 - **WHEN** 같은 pair의 서로 다른 원본 B2와 B1이 순서대로 관측된 뒤 Undo B1을 수신한다
-- **THEN** B1만 종료하고 미해제 원본 B2가 지지하는 한 개의 Profile Block을 유지한다
-- **AND** 도착 순서나 원격 published 시각만으로 B2를 과거 원본으로 취급하지 않는다
+- **THEN** 검증된 Undo B1을 현재 방향 pair에 적용해 Profile Block을 해제한다
+- **AND** 도착 순서나 원격 published 시각만으로 actor·Target 검증을 생략하지 않는다
 
-#### Scenario: 모든 관측 원본을 해제한다
+#### Scenario: 여러 원본이 관측된 pair를 해제한다
 
-- **WHEN** 같은 pair의 B1과 B2에 대한 검증된 Undo가 모두 적용된다
-- **THEN** 마지막 미해제 원본을 종료할 때 해당 exact Profile Block ID를 제거한다
+- **WHEN** 같은 pair의 B1과 B2가 관측된 뒤 해당 pair의 검증된 Undo가 적용된다
+- **THEN** 현재 exact Profile Block ID를 제거한다
 - **AND** Follow·Request·Notification을 추가로 정리하거나 차단 생성 때 제거된 Follow를 복구하지 않는다
 - **AND** 이후 같은 B1·B2의 재전달이나 중복 Undo로 관계가 부활하지 않는다
 

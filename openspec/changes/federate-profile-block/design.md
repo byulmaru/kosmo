@@ -53,17 +53,15 @@ PROD-822·PROD-823 In Review다. 이슈 상태와 실제 병합·통합 검증 �
 
 ### Recommended Approach
 
-1. **Ingress와 공통 action:** 기존 Fedify 인증을 통과한 Activity의 Remote actor, 절대 원본 IRI, Local Target과
+1. **Ingress와 공통 action:** 기존 Fedify 인증을 통과한 Activity의 Remote actor, embedded Block 타입, Local Target과
    personal/shared inbox를 검증한다. 새 원격 조회는 기존 안전한 loader·Instance admission을 사용한다. 검증된
    identity와 ActivityPub-origin만 공통 Block action 경계에 전달하며 GraphQL session 타입을 core로 넘기지 않는다.
-2. **원본별 처리 증거:** Block IRI, Owner/Target, 정확한 domain row identity, 원본 해제 여부와 미완료 효과를 작은
-   Block 전용 protocol metadata로 보존한다. 같은 pair의 아직 해제되지 않은 서로 다른 원본을 구분하며, 하나의 Undo는 참조한
-   원본만 종료한다. 같은 pair의 미해제 원본은 하나의 현재 exact row에 연결한다. 마지막 원본 해제와 경합한 새
-   원본이 있으면 row 전체를 삭제하지 않도록 같은 원자적 경계에서 판정한다. 제품 관계는 여전히 pair당 하나이며,
-   과거 cleanup은 이후 성립한 새 row를 대상으로 삼지 않는다.
-3. **순서 역전:** 검증 가능한 Undo가 먼저 오면 해당 원본의 종료 증거를 남긴다. B2→B1→Undo B1처럼 도착해도 B2를
-   유지한다. 도착 시각이나 원격 published로 최신 의도를 추측하지 않는다. 저장된 원본 또는 검증된 embedded 원본을
-   우선 사용하고, URI-only 원본을 확인할 수 없으면 mutation 없이 관측 가능한 미검증 결과로 처리한다.
+2. **수신 Undo 처리 증거:** Block IRI, Owner/Target, 정확한 domain row identity와 Undo identity를 작은
+   Block 전용 protocol metadata로 보존한다. 인증된 actor·Local Target·pair를 기준으로 현재 exact row를
+   해제하며, 원격 Block URI가 달라도 해제를 누락하지 않는다. 제품 관계는 pair당 하나이고 이전 Undo의
+   재전달은 이후 성립한 새 row를 대상으로 삼지 않는다.
+3. **순서 역전:** 검증 가능한 Undo가 먼저 오면 해당 원본의 종료 증거를 남긴다. 도착 시각이나 원격
+   published로 최신 의도를 추측하지 않는다. URI-only 원본은 mutation 없이 기존 Undo 처리기로 넘긴다.
 4. **원자성과 복구:** protocol admission·원본 결과와 domain transition의 원자적 경계를 PROD-813 action에 맞춘다.
    외부 orchestration 단계는 exact row와 보존한 effect plan으로 재개한다. commit 뒤 completion loss에도 현재 pair의
    다른 row를 이번 결과로 추정하지 않는다. 단일 durable pair 조정과 DB uniqueness·exact-row 조건을 조합하고,

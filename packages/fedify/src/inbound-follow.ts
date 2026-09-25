@@ -365,6 +365,7 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
       embedded,
       objectUri,
       remoteActorProfileId: remoteActor.profile.id,
+      undoUri: undo.id,
     })
   ) {
     return;
