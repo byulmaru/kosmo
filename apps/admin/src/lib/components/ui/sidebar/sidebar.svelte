@@ -71,7 +71,7 @@
     <div
       data-slot="sidebar-gap"
       class={cn(
-        'transition-[width] duration-200 ease-linear relative w-(--sidebar-width) bg-transparent',
+        'transition-[width] duration-200 ease-linear relative w-(--sidebar-width) shrink-0 bg-transparent',
         'group-data-[collapsible=offcanvas]:w-0',
         'group-data-[side=right]:rotate-180',
         variant === 'floating' || variant === 'inset'
