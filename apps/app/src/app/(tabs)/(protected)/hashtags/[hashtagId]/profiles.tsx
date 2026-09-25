@@ -10,8 +10,8 @@ import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { IconButton } from '@/components/ui/IconButton';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
-import type { HashtagRelatedProfilesPageQuery } from './__generated__/HashtagRelatedProfilesPageQuery.graphql';
 import type { ReactNode } from 'react';
+import type { HashtagRelatedProfilesPageQuery } from './__generated__/HashtagRelatedProfilesPageQuery.graphql';
 
 const HashtagRelatedProfilesQuery = graphql`
   query HashtagRelatedProfilesPageQuery($id: ID!) {

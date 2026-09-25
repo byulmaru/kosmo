@@ -7,9 +7,9 @@ import { ProfileListItem } from '@/components/profile/ProfileListItem';
 import { StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
+import type { ReactNode } from 'react';
 import type { HashtagRelatedProfileList_hashtag$key } from './__generated__/HashtagRelatedProfileList_hashtag.graphql';
 import type { HashtagRelatedProfilesNextPageQuery } from './__generated__/HashtagRelatedProfilesNextPageQuery.graphql';
-import type { ReactNode } from 'react';
 
 const hashtagRelatedProfileListFragment = graphql`
   fragment HashtagRelatedProfileList_hashtag on Hashtag

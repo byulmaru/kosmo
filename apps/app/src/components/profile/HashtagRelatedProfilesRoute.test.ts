@@ -105,8 +105,7 @@ mockModule(new URL('./HashtagRelatedProfileList.tsx', import.meta.url), {
     leading?: unknown;
     onRetry?: () => void;
     state: string;
-  }) =>
-    createElement('HashtagRelatedProfileListState', { leading, onRetry, state }),
+  }) => createElement('HashtagRelatedProfileListState', { leading, onRetry, state }),
 });
 mockModule(new URL('../../observability/UnexpectedErrorContext.ts', import.meta.url), {
   useUnexpectedErrorReporter: () => undefined,

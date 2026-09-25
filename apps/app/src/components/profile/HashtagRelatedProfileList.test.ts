@@ -94,13 +94,19 @@ describe('Hashtag 관련 Profile 목록 viewport', () => {
       renderer = create(createElement(HashtagRelatedProfileList, { hashtag: {}, leading }));
     });
     assert.ok(renderer);
-    assert.equal(renderer.root.findByType('PageHeader').props.leading, leading);
+    assert.equal(
+      renderer.root.find((node) => (node.type as unknown) === 'PageHeader').props.leading,
+      leading,
+    );
 
     for (const state of ['loading', 'error', 'notFound'] as const) {
       await act(async () => {
         renderer?.update(createElement(HashtagRelatedProfileListState, { leading, state }));
       });
-      assert.equal(renderer.root.findByType('PageHeader').props.leading, leading);
+      assert.equal(
+        renderer.root.find((node) => (node.type as unknown) === 'PageHeader').props.leading,
+        leading,
+      );
     }
   });
 
