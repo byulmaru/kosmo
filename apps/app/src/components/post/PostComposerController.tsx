@@ -4,15 +4,12 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { Platform, StyleSheet, View } from 'react-native';
 import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
 import { ConnectionHandler, ROOT_ID } from 'relay-runtime';
-import { trackAnalytics } from '@/analytics/client';
-import { useMultiProfileAnalytics } from '@/analytics/MultiProfileAnalyticsProvider';
-import { createAnalyticsCaptureOptions } from '@/analytics/multiProfileUsage';
+import { useBeginMultiProfileAnalyticsAction } from '@/analytics/MultiProfileAnalyticsProvider';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
 import { Form } from '@/components/ui/Form';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
-import { useSession } from '@/session/SessionProvider';
 import { spacing } from '@/theme/tokens';
 import { ComposerMediaEditor } from './ComposerMediaEditor';
 import { MobileFullscreenComposerShellCandidate, PostComposer } from './PostComposer';
@@ -221,8 +218,7 @@ function PostComposerContents({
   const [mediaGeneration, setMediaGeneration] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [commit] = useMutation<PostComposerCreatePostMutation>(CreatePostMutation);
-  const { accountId, status } = useSession();
-  const { observeAction } = useMultiProfileAnalytics();
+  const beginAnalyticsAction = useBeginMultiProfileAnalyticsAction();
   const { showToast } = useToast();
   const replyMode = Boolean(replyParentId);
   const quoteMode = Boolean(repostSourceId);
@@ -299,10 +295,7 @@ function PostComposerContents({
     setSubmitting(true);
     const submissionProfileId = profile.id;
     const submissionVisibility = visibility;
-    const analyticsAccountId = status === 'valid' ? accountId : null;
-    const postOperation = analyticsAccountId
-      ? createAnalyticsCaptureOptions(analyticsAccountId)
-      : null;
+    const postOperation = beginAnalyticsAction();
     const submissionGeneration = contextGenerationRef.current;
     const submissionEnvironmentGeneration = environmentGenerationRef?.current;
     const submissionGuardGeneration = contextGuard?.current;
@@ -332,16 +325,13 @@ function PostComposerContents({
         const createdPost = response.createPost?.post;
         if (createdPost) {
           const occurredAt = new Date();
-          if (analyticsAccountId) {
-            observeAction({ accountId: analyticsAccountId, occurredAt });
-          }
-          trackAnalytics(
+          postOperation.trackProfile(
             'post_created',
             {
               selected_profile_id: submissionProfileId,
               visibility: submissionVisibility,
             },
-            postOperation ? { ...postOperation, timestamp: occurredAt } : undefined,
+            occurredAt,
           );
         }
 

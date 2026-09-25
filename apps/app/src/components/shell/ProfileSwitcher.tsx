@@ -13,12 +13,8 @@ import {
   View,
 } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
-import { trackAnalytics } from '@/analytics/client';
-import { useMultiProfileAnalytics } from '@/analytics/MultiProfileAnalyticsProvider';
-import {
-  createAnalyticsCaptureOptions,
-  isDirectProfileSwitch,
-} from '@/analytics/multiProfileUsage';
+import { useBeginMultiProfileAnalyticsAction } from '@/analytics/MultiProfileAnalyticsProvider';
+import { isDirectProfileSwitch } from '@/analytics/multiProfileUsage';
 import { ProfilePicker } from '@/components/profile/ProfilePicker';
 import { ProfileSwitcherUnreadIndicator } from '@/components/profile/ProfileSwitcherUnread';
 import { Avatar } from '@/components/ui/Avatar';
@@ -27,7 +23,6 @@ import { TextField } from '@/components/ui/TextField';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { useRelayActor } from '@/relay/RelayActorProvider';
-import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import {
   fontFamilies,
@@ -187,8 +182,7 @@ export function ProfileSwitcher({
   const pathname = usePathname();
   const data = useFragment(ProfileSwitcherFragment, query);
   const { resetActor } = useRelayActor();
-  const { accountId, status } = useSession();
-  const { observeAction } = useMultiProfileAnalytics();
+  const beginAnalyticsAction = useBeginMultiProfileAnalyticsAction();
   const { request: requestNavigation } = useNavigationGuard();
   const { showToast } = useToast();
   const [internalOpen, setInternalOpen] = useState(false);
@@ -310,17 +304,13 @@ export function ProfileSwitcher({
     setFieldError(null);
     setOperationErrorState(null);
     const previousProfileId = active?.id ?? null;
-    const analyticsAccountId = status === 'valid' ? accountId : null;
-    const selectedOperation = analyticsAccountId
-      ? createAnalyticsCaptureOptions(analyticsAccountId)
-      : null;
+    const selectedOperation = beginAnalyticsAction();
     const directSwitch = isDirectProfileSwitch({
       cause,
       previousProfileId,
       selectedProfileId: id,
     });
-    const switchedOperation =
-      analyticsAccountId && directSwitch ? createAnalyticsCaptureOptions(analyticsAccountId) : null;
+    const switchedOperation = directSwitch ? beginAnalyticsAction() : null;
     commitSelect({
       variables: { id },
       onCompleted: (response, errors) => {
@@ -332,25 +322,16 @@ export function ProfileSwitcher({
 
         const selectedProfileId = response.selectProfile.profile.id;
         const occurredAt = new Date();
-        if (analyticsAccountId) {
-          observeAction({ accountId: analyticsAccountId, occurredAt });
-        }
-        const selectedCaptureOptions = selectedOperation
-          ? { ...selectedOperation, timestamp: occurredAt }
-          : undefined;
-        trackAnalytics(
+        selectedOperation.trackProfile(
           'profile_selected',
           { selected_profile_id: selectedProfileId },
-          selectedCaptureOptions,
+          occurredAt,
         );
         if (directSwitch && previousProfileId && switchedOperation) {
-          trackAnalytics(
+          switchedOperation.trackProfile(
             'profile_switched',
-            {
-              previous_profile_id: previousProfileId,
-              selected_profile_id: selectedProfileId,
-            },
-            { ...switchedOperation, timestamp: occurredAt },
+            { previous_profile_id: previousProfileId, selected_profile_id: selectedProfileId },
+            occurredAt,
           );
         }
         setOpen(false);
@@ -389,10 +370,7 @@ export function ProfileSwitcher({
       onError ?? ((message: string) => setOperationError(operationVersion, message));
     setFieldError(null);
     setOperationErrorState(null);
-    const analyticsAccountId = status === 'valid' ? accountId : null;
-    const creationOperation = analyticsAccountId
-      ? createAnalyticsCaptureOptions(analyticsAccountId)
-      : null;
+    const creationOperation = beginAnalyticsAction();
     commitCreate({
       variables: { handle: normalized },
       onCompleted: (response, errors) => {
@@ -412,16 +390,10 @@ export function ProfileSwitcher({
         }
 
         const occurredAt = new Date();
-        if (analyticsAccountId) {
-          observeAction({ accountId: analyticsAccountId, occurredAt });
-        }
-        const captureOptions = creationOperation
-          ? { ...creationOperation, timestamp: occurredAt }
-          : undefined;
-        trackAnalytics(
+        creationOperation.trackProfile(
           'profile_created',
           { selected_profile_id: response.createProfile.profile.id },
-          captureOptions,
+          occurredAt,
         );
         setHandle('');
         setCreating(false);

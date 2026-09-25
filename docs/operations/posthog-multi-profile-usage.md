@@ -10,7 +10,7 @@ PostHog 증거를 확인한 뒤에만 시작한다.
 - 수집 범위: production Web의 인증 Account 이벤트
 - 주차: `Asia/Seoul` 기준 월요일 00:00 이상, 다음 월요일 00:00 미만
 - 중복 기준: `Account × event × capture UUID`; 같은 UUID의 재전송은 가장 이른 행동 시각 하나만 유지
-- 집계 결과 metadata: 관측 기간, `calculated_at`, 계산 규칙 버전, 접근 제한 제외 목록 버전, 주차 상태
+- 집계 결과 metadata: 관측 기간, `calculated_at`, 계산 규칙 버전, 접근 제한 제외 목록 버전, 주차 상태, 잘못된 행동 시각으로 건너뛴 입력 건수 (`skippedInvalidTimestampCount`)
 - 진행 중인 주의 상태는 `partial`이다. 완료된 주는 같은 입력과 최신 제외 목록으로 다시 계산할 수 있다.
 
 익명·development·test 관측과 내부·테스트·알려진 봇/자동화 Account는 운영에서 제외한다. 실제 Account
@@ -43,7 +43,7 @@ typed no-op이다. PostHog SDK가 관리하는 URL·referrer 같은 standard met
 
 ## 집계 규칙
 
-1. 입력에서 production Web, 인증된 Account, 운영 제외 목록을 먼저 적용한다.
+1. 입력에서 production Web, 인증된 Account, 운영 제외 목록을 먼저 적용한다. 행동 시각이 없거나 유효하지 않은 입력은 건너뛰고 `skippedInvalidTimestampCount`에 합산한다. 이 건수는 제외 목록 적용 뒤의 원본 행 기준이며, 나머지 행의 집계는 계속한다.
 2. `Account × event × uuid`로 deduplicate하고, 같은 키가 여러 번 들어오면 가장 이른 행동 시각을 사용한다.
 3. 행동 시각을 KST 주차로 변환한다. 수신 시각이나 집계 실행 시각으로 주차를 바꾸지 않는다.
 4. `eligibility` 관측만 있는 Account는 WAA가 아니다. `screen`과 승인된 행동 이벤트만 WAA를 만든다.

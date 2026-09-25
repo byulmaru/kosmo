@@ -333,6 +333,41 @@ describe('multi-profile analytics', () => {
     assert.equal(result.calculatedAt.toISOString(), '2026-09-22T00:05:00.000Z');
   });
 
+  it('잘못된 행동 시각은 해당 행만 건너뛰고 건수를 기록한다', () => {
+    const events = [
+      usageEvent(
+        'account-a',
+        'profile_selected',
+        { selected_profile_id: 'profile-a' },
+        '2026-09-22T00:00:00.000Z',
+        'valid',
+      ),
+      usageEvent(
+        'account-a',
+        'profile_selected',
+        { selected_profile_id: 'profile-b' },
+        'invalid',
+        'bad',
+      ),
+      usageEvent(
+        'account-b',
+        'profile_selected',
+        { selected_profile_id: 'profile-c' },
+        'invalid',
+        'excluded',
+      ),
+    ];
+    const result = calculateMultiProfileUsage(events, {
+      now: new Date('2026-09-29T00:00:00.000Z'),
+      excludedAccountIds: new Set(['account-b']),
+    });
+
+    assert.equal(result.skippedInvalidTimestampCount, 1);
+    assert.equal(result.weeks.length, 1);
+    assert.equal(result.weeks[0]?.waaCount, 1);
+    assert.equal(result.weeks[0]?.weekKey, '2026-09-21');
+  });
+
   it('분모 0은 null이고 최신 제외 목록은 Account 전체에 적용된다', () => {
     const events = [
       usageEvent(

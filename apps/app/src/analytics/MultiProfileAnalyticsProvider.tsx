@@ -17,12 +17,14 @@ export type MultiProfileAnalyticsAction = {
 type MultiProfileAnalyticsContextValue = {
   accountId: string | null;
   observeAction: (action: MultiProfileAnalyticsAction) => void;
+  selectedProfileId: string | null;
   status: 'error' | 'guest' | 'valid';
 };
 
 const noOpContextValue: MultiProfileAnalyticsContextValue = {
   accountId: null,
   observeAction: () => undefined,
+  selectedProfileId: null,
   status: 'guest',
 };
 const MultiProfileAnalyticsContext =
@@ -123,8 +125,8 @@ export function MultiProfileAnalyticsProvider({
   }, [accountId, enabled, eligible, status]);
 
   const value = useMemo<MultiProfileAnalyticsContextValue>(
-    () => ({ accountId, observeAction, status }),
-    [accountId, observeAction, status],
+    () => ({ accountId, observeAction, selectedProfileId, status }),
+    [accountId, observeAction, selectedProfileId, status],
   );
 
   return (
@@ -138,20 +140,65 @@ export function useMultiProfileAnalytics(): MultiProfileAnalyticsContextValue {
   return useContext(MultiProfileAnalyticsContext);
 }
 
-export function useTrackMultiProfileAnalytics() {
-  const { accountId, observeAction, status } = useMultiProfileAnalytics();
+type ProfileActionName =
+  | 'profile_created'
+  | 'profile_selected'
+  | 'profile_switched'
+  | 'post_created'
+  | 'follow_succeeded';
 
-  return useCallback(
-    <Name extends AnalyticsEventName>(name: Name, properties: AnalyticsEventProperties[Name]) => {
-      const occurredAt = new Date();
-      if (status === 'valid' && accountId) {
-        observeAction({ accountId, occurredAt });
-        trackAnalytics(name, properties, createAnalyticsCaptureOptions(accountId, occurredAt));
+type ProfileActionProperties<Name extends ProfileActionName> = Omit<
+  AnalyticsEventProperties[Name],
+  'selected_profile_id'
+> & { selected_profile_id?: string };
+
+export function useBeginMultiProfileAnalyticsAction() {
+  const { accountId, observeAction, selectedProfileId, status } = useMultiProfileAnalytics();
+
+  return useCallback(() => {
+    const operationAccountId = status === 'valid' ? accountId : null;
+    const captureOptions = operationAccountId
+      ? createAnalyticsCaptureOptions(operationAccountId)
+      : null;
+    const track = <Name extends AnalyticsEventName>(
+      name: Name,
+      properties: AnalyticsEventProperties[Name],
+      occurredAt = new Date(),
+    ) => {
+      if (operationAccountId) {
+        observeAction({ accountId: operationAccountId, occurredAt });
+      }
+      trackAnalytics(
+        name,
+        properties,
+        captureOptions ? { ...captureOptions, timestamp: occurredAt } : undefined,
+      );
+    };
+    const trackProfile = <Name extends ProfileActionName>(
+      name: Name,
+      properties: ProfileActionProperties<Name>,
+      occurredAt = new Date(),
+    ) => {
+      const profileId = properties.selected_profile_id ?? selectedProfileId;
+      if (!profileId) {
         return;
       }
+      track(
+        name,
+        { ...properties, selected_profile_id: profileId } as AnalyticsEventProperties[Name],
+        occurredAt,
+      );
+    };
+    return { track, trackProfile };
+  }, [accountId, observeAction, selectedProfileId, status]);
+}
 
-      trackAnalytics(name, properties);
+export function useTrackMultiProfileAnalytics() {
+  const beginAction = useBeginMultiProfileAnalyticsAction();
+  return useCallback(
+    <Name extends AnalyticsEventName>(name: Name, properties: AnalyticsEventProperties[Name]) => {
+      beginAction().track(name, properties);
     },
-    [accountId, observeAction, status],
+    [beginAction],
   );
 }

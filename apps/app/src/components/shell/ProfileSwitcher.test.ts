@@ -177,11 +177,19 @@ mockModule('@/analytics/client', {
   },
 });
 mockModule('@/analytics/MultiProfileAnalyticsProvider', {
-  useMultiProfileAnalytics: () => ({
-    observeAction: (action: { accountId: string; occurredAt?: Date }) => {
-      observedActionCalls.push(action);
-    },
-  }),
+  useBeginMultiProfileAnalyticsAction: () => () => {
+    const uuid = globalThis.crypto.randomUUID();
+    return {
+      trackProfile: (name: string, properties: Record<string, unknown>, occurredAt: Date) => {
+        observedActionCalls.push({ accountId: 'account-1', occurredAt });
+        analyticsCalls.push([
+          name,
+          properties,
+          { accountId: 'account-1', timestamp: occurredAt, uuid },
+        ]);
+      },
+    };
+  },
 });
 mockModule('@/session/SessionProvider', {
   useSession: () => ({ accountId: 'account-1', status: 'valid' }),
