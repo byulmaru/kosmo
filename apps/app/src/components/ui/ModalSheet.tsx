@@ -118,6 +118,7 @@ export function ModalSheet({
               <IconButton
                 accessibilityLabel="닫기"
                 disabled={dismissDisabled}
+                feedback="opacity-hover"
                 onPress={onClose}
                 style={styles.close}
                 targetSize={44}

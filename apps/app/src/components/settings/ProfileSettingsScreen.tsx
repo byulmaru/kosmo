@@ -111,6 +111,7 @@ function ProfileSettingsSurface({ profile, children, lifecycle }: Props) {
               <IconButton
                 accessibilityLabel="취소하고 프로필 설정으로 돌아가기"
                 disabled={pending}
+                feedback="opacity-hover"
                 onPress={cancel}
                 targetSize={48}
                 visualSize={44}

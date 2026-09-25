@@ -296,7 +296,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
       accessibilityLabel="메뉴 열기"
       accessibilityState={{ expanded: drawerOpen }}
       controlRef={menuButtonRef}
-      feedback="opacity"
+      feedback="opacity-hover"
       onPress={openNavigationDrawer}
       style={styles.menuButton}
       targetSize={44}
@@ -308,6 +308,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
   const backButton = (
     <IconButton
       accessibilityLabel="뒤로 가기"
+      feedback="opacity-hover"
       onPress={() =>
         isSettingsRoute(pathname) ? returnToSettingsParent(pathname, router) : router.back()
       }
