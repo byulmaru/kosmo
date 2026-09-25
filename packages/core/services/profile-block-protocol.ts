@@ -340,12 +340,7 @@ export const markProfileBlockProtocolUndoSettled = async (activityUri: string): 
       undoDeliveryState: 'SETTLED',
       updatedAt: sql`now()`,
     })
-    .where(
-      and(
-        protocolActivityCondition(activityUri),
-        inArray(ProfileBlockActivities.state, ['ACTIVE', 'CLOSING']),
-      ),
-    );
+    .where(protocolActivityCondition(activityUri));
 };
 
 export const markProfileBlockProtocolUndoPending = async (activityUri: string): Promise<void> => {

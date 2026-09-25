@@ -46,13 +46,16 @@ type OutboundProfileBlockSource = {
   readonly targetProfileId: string;
 };
 
-const loadOutboundProfileBlockParticipants = async ({
-  ownerProfileId,
-  targetProfileId,
-}: {
-  readonly ownerProfileId: string;
-  readonly targetProfileId: string;
-}): Promise<OutboundProfileBlockSource | undefined> =>
+const loadOutboundProfileBlockParticipants = async (
+  {
+    ownerProfileId,
+    targetProfileId,
+  }: {
+    readonly ownerProfileId: string;
+    readonly targetProfileId: string;
+  },
+  requireActiveOwner = true,
+): Promise<OutboundProfileBlockSource | undefined> =>
   db
     .select({
       canonicalOrigin: Instances.canonicalOrigin,
@@ -64,10 +67,11 @@ const loadOutboundProfileBlockParticipants = async ({
     .where(
       and(
         eq(Profiles.id, ownerProfileId),
-        eq(Profiles.state, ProfileState.ACTIVE),
         eq(Instances.kind, InstanceKind.LOCAL),
-        eq(Instances.state, InstanceState.ACTIVE),
         isNotNull(Instances.canonicalOrigin),
+        ...(requireActiveOwner
+          ? [eq(Profiles.state, ProfileState.ACTIVE), eq(Instances.state, InstanceState.ACTIVE)]
+          : []),
       ),
     )
     .limit(1)
@@ -249,10 +253,8 @@ export const sendProfileBlockUndo = async ({
   if (protocol?.origin !== undefined && protocol.origin !== 'OUTBOUND') {
     return { reason: 'stale_source', status: 'SKIPPED' };
   }
-  if (protocol?.state === 'CLOSING' || protocol?.state === 'CLOSED') {
-    if (protocol.state === 'CLOSED' || protocol.undoDeliveryState === 'SETTLED') {
-      return { status: 'SETTLED' };
-    }
+  if (protocol?.undoDeliveryState === 'SETTLED') {
+    return { status: 'SETTLED' };
   }
   if (
     protocol !== undefined &&
@@ -263,7 +265,7 @@ export const sendProfileBlockUndo = async ({
 
   const source =
     (await loadOutboundProfileBlockSource(profileBlockId)) ??
-    (await loadOutboundProfileBlockParticipants({ ownerProfileId, targetProfileId }));
+    (await loadOutboundProfileBlockParticipants({ ownerProfileId, targetProfileId }, false));
   if (!source) {
     return { reason: 'stale_source', status: 'SKIPPED' };
   }

@@ -534,6 +534,7 @@ test('inbound Block 원본이 여러 개여도 Undo는 현재 pair의 정확한 
     ownerProfileId: owner.id,
     targetProfileId: target.id,
     profileBlockId: first.result.profileBlockId,
+    origin: 'ACTIVITYPUB',
   });
   assert.equal(unblock.ok && unblock.result.removed, true);
   assert.equal(await currentProfileBlockId(owner.id, target.id), null);
@@ -561,6 +562,7 @@ test('inbound Block 원본이 여러 개여도 Undo는 현재 pair의 정확한 
     ownerProfileId: owner.id,
     targetProfileId: target.id,
     profileBlockId: first.result.profileBlockId,
+    origin: 'ACTIVITYPUB',
   });
   assert.equal(retriedUndo.ok && retriedUndo.result.removed, false);
   if (third.ok) {
@@ -568,7 +570,7 @@ test('inbound Block 원본이 여러 개여도 Undo는 현재 pair의 정확한 
   }
 });
 
-test('local Unblock closes the old original before reblock and old Undo retry', async () => {
+test('local Unblock은 원본을 전송 대기 상태로 두고 재차단과 오래된 해제를 구분한다', async () => {
   const { profile: owner } = await createProfile();
   const { profile: target } = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
   const original = await executeProfileBlockTransitionActivity({
@@ -603,7 +605,7 @@ test('local Unblock closes the old original before reblock and old Undo retry', 
       .select({ state: ProfileBlockActivities.state })
       .from(ProfileBlockActivities)
       .where(eq(ProfileBlockActivities.activityUri, oldActivityUri)),
-    [{ state: 'CLOSED' }],
+    [{ state: 'CLOSING' }],
   );
 
   const replacement = await executeProfileBlockTransitionActivity({
