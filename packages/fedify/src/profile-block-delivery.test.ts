@@ -8,6 +8,7 @@ import {
   InstanceKind,
   InstanceState,
   ProfileFollowPolicy,
+  ProfileState,
 } from '@kosmo/core/enums';
 import { eq, inArray } from 'drizzle-orm';
 import type { Context } from '@fedify/fedify';
@@ -110,7 +111,21 @@ test('Block과 Undo는 직접 target만 수신하고 관계 삭제 뒤에도 sta
     .then((rows) => rows[0]);
   assert.equal(storedActivity?.deliveryState, 'SETTLED');
 
-  await db.delete(ProfileBlocks).where(eq(ProfileBlocks.id, profileBlock.id));
+  const { executeProfileUnblockTransitionActivity } =
+    await import('../../../apps/worker/src/activities/profile-block');
+  const transition = await executeProfileUnblockTransitionActivity({
+    ownerProfileId: fixture.localProfileId,
+    profileBlockId: profileBlock.id,
+    targetProfileId: fixture.remoteProfileId,
+  });
+  assert.equal(transition.ok && transition.result.removed, true);
+  assert.deepEqual(
+    await db
+      .select({ state: ProfileBlockActivities.state })
+      .from(ProfileBlockActivities)
+      .where(eq(ProfileBlockActivities.profileBlockId, profileBlock.id)),
+    [{ state: 'CLOSING' }],
+  );
 
   assert.deepEqual(
     await sendProfileBlockUndo({
@@ -142,6 +157,54 @@ test('Block과 Undo는 직접 target만 수신하고 관계 삭제 뒤에도 sta
     .where(eq(ProfileBlockActivities.activityUri, `${publicOrigin}/ap/block/${profileBlock.id}`))
     .then((rows) => rows[0]);
   assert.equal(settledActivity?.undoDeliveryState, 'SETTLED');
+  assert.equal(settledActivity?.state, 'CLOSED');
+});
+
+test('커밋된 Undo는 Owner와 Local Instance 상태 변경 뒤에도 전송한다', async (t) => {
+  const fixture = await createFixture();
+  const profileBlock = await db
+    .insert(ProfileBlocks)
+    .values({ ownerProfileId: fixture.localProfileId, targetProfileId: fixture.remoteProfileId })
+    .returning()
+    .then(firstOrThrow);
+  const contextFixture = createContextFixture();
+  mock.method(localOutboundFederation, 'createContext', () => contextFixture.context);
+  await sendProfileBlock(profileBlock.id, { createIfMissing: true });
+
+  const { executeProfileUnblockTransitionActivity } =
+    await import('../../../apps/worker/src/activities/profile-block');
+  const transition = await executeProfileUnblockTransitionActivity({
+    ownerProfileId: fixture.localProfileId,
+    profileBlockId: profileBlock.id,
+    targetProfileId: fixture.remoteProfileId,
+  });
+  assert.equal(transition.ok && transition.result.removed, true);
+
+  t.after(async () => {
+    await db
+      .update(Instances)
+      .set({ state: InstanceState.ACTIVE })
+      .where(eq(Instances.id, localInstanceId));
+  });
+  await db
+    .update(Profiles)
+    .set({ state: ProfileState.SUSPENDED })
+    .where(eq(Profiles.id, fixture.localProfileId));
+  await db
+    .update(Instances)
+    .set({ state: InstanceState.SUSPENDED })
+    .where(eq(Instances.id, localInstanceId));
+
+  assert.deepEqual(
+    await sendProfileBlockUndo({
+      ownerProfileId: fixture.localProfileId,
+      profileBlockId: profileBlock.id,
+      targetProfileId: fixture.remoteProfileId,
+    }),
+    { status: 'SETTLED' },
+  );
+  assert.equal(contextFixture.calls.length, 2);
+  assert.ok(contextFixture.calls[1]?.activity instanceof Undo);
 });
 
 test('Block 전달은 누락된 recipient projection을 복원한 뒤 queue에 인계한다', async () => {
