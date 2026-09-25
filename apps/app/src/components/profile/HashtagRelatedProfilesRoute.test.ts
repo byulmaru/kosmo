@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
@@ -19,6 +20,7 @@ type HashtagNode =
 type QueryMode = 'error' | 'loading' | 'success';
 
 const pending = new Promise<never>(() => undefined);
+const require = createRequire(import.meta.url);
 const queryHistory: Array<{ fetchKey: number; variables: { id: string } }> = [];
 let hashtagId: string | string[] | undefined = 'hashtag-global-a';
 let hashtagNode: HashtagNode = {
@@ -29,6 +31,9 @@ let hashtagNode: HashtagNode = {
 };
 let queryMode: QueryMode = 'success';
 let renderer: ReactTestRenderer | null = null;
+let routerCanGoBack = true;
+let routerBackCount = 0;
+const routerReplacements: string[] = [];
 
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, {
@@ -37,6 +42,28 @@ const mockModule = (specifier: string | URL, exports: object) =>
 
 mockModule('expo-router', {
   useLocalSearchParams: () => ({ hashtagId }),
+  useRouter: () => ({
+    back: () => {
+      routerBackCount += 1;
+    },
+    canGoBack: () => routerCanGoBack,
+    replace: (href: string) => routerReplacements.push(href),
+  }),
+});
+mockModule('lucide-react-native', {
+  ChevronLeftIcon: 'ChevronLeftIcon',
+});
+mockModule('react-native', {
+  StyleSheet: { create: <T>(styles: T) => styles },
+});
+mockModule(require.resolve('lucide-react-native'), {
+  ChevronLeftIcon: 'ChevronLeftIcon',
+});
+mockModule('@/components/ui/IconButton', {
+  IconButton: (props: object) => createElement('IconButton', props),
+});
+mockModule('@/theme/ThemeProvider', {
+  useTheme: () => ({ foregroundPrimary: 'foreground' }),
 });
 mockModule('react-relay', {
   graphql: (parts: TemplateStringsArray) => {
@@ -58,13 +85,28 @@ mockModule('react-relay', {
   },
 });
 mockModule(new URL('./HashtagRelatedProfileList.tsx', import.meta.url), {
-  HashtagRelatedProfileList: ({ hashtag }: { hashtag: { id: string; name: string } }) =>
+  HashtagRelatedProfileList: ({
+    hashtag,
+    leading,
+  }: {
+    hashtag: { id: string; name: string };
+    leading?: unknown;
+  }) =>
     createElement('HashtagRelatedProfileList', {
       identity: hashtag.id,
+      leading,
       name: hashtag.name,
     }),
-  HashtagRelatedProfileListState: ({ onRetry, state }: { onRetry?: () => void; state: string }) =>
-    createElement('HashtagRelatedProfileListState', { onRetry, state }),
+  HashtagRelatedProfileListState: ({
+    leading,
+    onRetry,
+    state,
+  }: {
+    leading?: unknown;
+    onRetry?: () => void;
+    state: string;
+  }) =>
+    createElement('HashtagRelatedProfileListState', { leading, onRetry, state }),
 });
 mockModule(new URL('../../observability/UnexpectedErrorContext.ts', import.meta.url), {
   useUnexpectedErrorReporter: () => undefined,
@@ -99,6 +141,9 @@ afterEach(async () => {
   };
   queryHistory.length = 0;
   queryMode = 'success';
+  routerBackCount = 0;
+  routerCanGoBack = true;
+  routerReplacements.length = 0;
 });
 
 async function renderScreen() {
@@ -126,7 +171,50 @@ function requireRendered(type: string) {
   return node;
 }
 
+function assertBackButton(leading: { type: unknown; props: Record<string, unknown> }) {
+  assert.equal(leading.props.accessibilityLabel, '뒤로 가기');
+  assert.equal(leading.props.targetSize, 44);
+  assert.equal(leading.props.visualSize, 44);
+  assert.equal(typeof leading.props.onPress, 'function');
+  assert.equal((leading.props.children as { type: unknown }).type, 'ChevronLeftIcon');
+}
+
 describe('hashtag related profiles route identity and lifecycle', () => {
+  it('모든 상태에 뒤로가기 action을 전달하고 history가 없으면 홈으로 이동한다', async () => {
+    await renderScreen();
+
+    const successLeading = requireRendered('HashtagRelatedProfileList').props.leading;
+    assertBackButton(successLeading);
+    successLeading.props.onPress();
+    assert.equal(routerBackCount, 1);
+
+    queryMode = 'loading';
+    await renderScreen();
+    const loadingLeading = requireRendered('HashtagRelatedProfileListState').props.leading;
+    assertBackButton(loadingLeading);
+
+    queryMode = 'error';
+    const originalConsoleError = console.error;
+    console.error = () => undefined;
+    try {
+      await renderScreen();
+      const errorLeading = requireRendered('HashtagRelatedProfileListState').props.leading;
+      assertBackButton(errorLeading);
+    } finally {
+      console.error = originalConsoleError;
+    }
+
+    queryMode = 'success';
+    hashtagNode = null;
+    await renderScreen();
+    const notFoundLeading = requireRendered('HashtagRelatedProfileListState').props.leading;
+    assertBackButton(notFoundLeading);
+
+    routerCanGoBack = false;
+    notFoundLeading.props.onPress();
+    assert.deepEqual(routerReplacements, ['/home']);
+  });
+
   it('path의 exact Hashtag ID만 Node query와 목록에 전달한다', async () => {
     await renderScreen();
 
@@ -134,10 +222,10 @@ describe('hashtag related profiles route identity and lifecycle', () => {
       fetchKey: 0,
       variables: { id: 'hashtag-global-a' },
     });
-    assert.deepEqual(requireRendered('HashtagRelatedProfileList').props, {
-      identity: 'hashtag-global-a',
-      name: 'Fediverse',
-    });
+    const list = requireRendered('HashtagRelatedProfileList');
+    assert.equal(list.props.identity, 'hashtag-global-a');
+    assert.equal(list.props.name, 'Fediverse');
+    assertBackButton(list.props.leading);
   });
 
   it('첫 요청 중에는 관련 Profile 맥락을 유지한다', async () => {
@@ -183,7 +271,9 @@ describe('hashtag related profiles route identity and lifecycle', () => {
     await renderScreen();
 
     assert.deepEqual(queryHistory, []);
-    assert.equal(requireRendered('HashtagRelatedProfileListState').props.state, 'notFound');
+    const state = requireRendered('HashtagRelatedProfileListState');
+    assert.equal(state.props.state, 'notFound');
+    assertBackButton(state.props.leading);
   });
 
   it('Hashtag ID가 바뀌면 이전 retry state를 재사용하지 않는다', async () => {

@@ -62,12 +62,21 @@ mockModule(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
   useTheme: () => ({ border: '#ddd', text: '#111', textSecondary: '#666' }),
 });
 
-let HashtagRelatedProfileList: ComponentType<{ hashtag: unknown }>;
+let HashtagRelatedProfileList: ComponentType<{ hashtag: unknown; leading?: unknown }>;
+let HashtagRelatedProfileListState: ComponentType<{
+  leading?: unknown;
+  state: 'error' | 'loading' | 'notFound';
+}>;
 
 before(async () => {
   const module = await import('./HashtagRelatedProfileList');
   HashtagRelatedProfileList = module.HashtagRelatedProfileList as ComponentType<{
     hashtag: unknown;
+    leading?: unknown;
+  }>;
+  HashtagRelatedProfileListState = module.HashtagRelatedProfileListState as ComponentType<{
+    leading?: unknown;
+    state: 'error' | 'loading' | 'notFound';
   }>;
 });
 
@@ -79,6 +88,22 @@ afterEach(async () => {
 });
 
 describe('Hashtag 관련 Profile 목록 viewport', () => {
+  it('성공과 상태 화면에 같은 leading action을 전달한다', async () => {
+    const leading = createElement('BackButton');
+    await act(async () => {
+      renderer = create(createElement(HashtagRelatedProfileList, { hashtag: {}, leading }));
+    });
+    assert.ok(renderer);
+    assert.equal(renderer.root.findByType('PageHeader').props.leading, leading);
+
+    for (const state of ['loading', 'error', 'notFound'] as const) {
+      await act(async () => {
+        renderer?.update(createElement(HashtagRelatedProfileListState, { leading, state }));
+      });
+      assert.equal(renderer.root.findByType('PageHeader').props.leading, leading);
+    }
+  });
+
   it('목록 항목과 자동 pagination 표식을 같은 ScrollView 안에 렌더한다', async () => {
     await act(async () => {
       renderer = create(createElement(HashtagRelatedProfileList, { hashtag: {} }));
