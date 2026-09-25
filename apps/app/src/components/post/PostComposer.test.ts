@@ -113,7 +113,15 @@ mockModule('@/analytics/MultiProfileAnalyticsProvider', {
   useMultiProfileAnalytics: () => ({ observeAction: () => undefined }),
 });
 mockModule('@/analytics/multiProfileUsage', {
-  createAnalyticsCaptureOptions: () => ({ distinctId: 'account-1', timestamp: new Date() }),
+  createAnalyticsCaptureOptions: (
+    accountId: string,
+    timestamp = new Date(),
+    uuid = 'test-uuid',
+  ) => ({
+    accountId,
+    timestamp,
+    uuid,
+  }),
 });
 mockModule('@/components/profile/ProfileNameBlock', {
   ProfileNameBlock: () => createElement('ProfileNameBlock'),
