@@ -158,8 +158,9 @@ function useVisibilityMenu(
       }
       const activeItem = document.activeElement as HTMLElement;
       const group = activeItem.closest<HTMLElement>('[role="group"]');
+      const currentItems = Array.from(menu.querySelectorAll<HTMLElement>('[role="menuitemradio"]'));
       const groupItems = group
-        ? items.filter((item) => item.closest('[role="group"]') === group)
+        ? currentItems.filter((item) => item.closest('[role="group"]') === group)
         : [];
       const index = groupItems.indexOf(activeItem);
       if ([' ', 'Enter'].includes(event.key) && index >= 0) {
