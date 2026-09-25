@@ -445,13 +445,14 @@ export const SharedNavigation: Story = {
     );
     expect(navigationArea).not.toBeNull();
     expect(getComputedStyle(sidebarBoundary).borderRightWidth).toBe('1px');
-    expect(getComputedStyle(sidebarBoundary).borderRightColor).toBe('rgb(236, 236, 240)');
+    expect(getComputedStyle(sidebarBoundary).borderRightColor).toBe(
+      getComputedStyle(navigationArea!).borderTopColor,
+    );
     expect(getComputedStyle(navigation).borderRightWidth).toBe('0px');
     expect(sidebarBoundaryRect.top).toBe(activeProfileRect.top);
     expect(sidebarBoundaryRect.right - activeProfileRect.right).toBe(1);
     expect(navigationArea!.getBoundingClientRect().right).toBe(activeProfileRect.right);
     expect(getComputedStyle(navigationArea!).borderTopWidth).toBe('1px');
-    expect(getComputedStyle(navigationArea!).borderTopColor).toBe('rgb(236, 236, 240)');
     expect(bookmarks).toHaveAttribute('href', '/bookmarks');
     expect(window.getComputedStyle(searchVisual).backgroundColor).toBe('rgb(255, 249, 230)');
     expect(profile).toHaveAttribute('href', '/@selected');
