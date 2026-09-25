@@ -106,9 +106,11 @@ const meta = {
     onMediaRemove: fn(),
     onMediaRetry: fn(),
     onPollAction: fn(),
+    onQuotePolicyChange: fn(),
     onSubmit: fn(),
     onVisibilityChange: fn(),
     remaining: 450,
+    quotePolicy: 'EVERYONE',
     sensitiveMedia: false,
     showCWAction: true,
     showEmojiAction: true,
@@ -135,6 +137,7 @@ const meta = {
     onMediaRemove: { action: 'mediaRemove', control: false },
     onMediaRetry: { action: 'mediaRetry', control: false },
     onPollAction: { action: 'pollAction', control: false },
+    onQuotePolicyChange: { action: 'quotePolicyChange', control: false },
     onSubmit: { action: 'submit', control: false },
     onVisibilityChange: { action: 'visibilityChange', control: false },
     remaining: { control: false },
@@ -345,6 +348,7 @@ function InteractiveComposer({
   );
   const [items, setItems] = useState(props.items);
   const [visibility, setVisibility] = useState(props.visibility);
+  const [quotePolicy, setQuotePolicy] = useState(props.quotePolicy ?? 'EVERYONE');
   const [sensitiveMedia, setSensitiveMedia] = useState(props.sensitiveMedia);
   const [overlayOpen, setOverlayOpen] = useState(false);
   const [editor, setEditor] = useState<{
@@ -385,6 +389,7 @@ function InteractiveComposer({
   );
   useEffect(() => setItems(props.items), [props.items]);
   useEffect(() => setVisibility(props.visibility), [props.visibility]);
+  useEffect(() => setQuotePolicy(props.quotePolicy ?? 'EVERYONE'), [props.quotePolicy]);
   useEffect(() => setSensitiveMedia(props.sensitiveMedia), [props.sensitiveMedia]);
   useEffect(() => {
     if (props.submitting) {
@@ -571,6 +576,11 @@ function InteractiveComposer({
             props.onVisibilityChange(value);
             setVisibility(value);
           }}
+          onQuotePolicyChange={(value) => {
+            props.onQuotePolicyChange?.(value);
+            setQuotePolicy(value);
+          }}
+          quotePolicy={quotePolicy}
           sensitiveMedia={sensitiveMedia}
           visibility={visibility}
         />
@@ -618,6 +628,11 @@ function InteractiveComposer({
               props.onVisibilityChange(value);
               setVisibility(value);
             }}
+            onQuotePolicyChange={(value) => {
+              props.onQuotePolicyChange?.(value);
+              setQuotePolicy(value);
+            }}
+            quotePolicy={quotePolicy}
             sensitiveMedia={sensitiveMedia}
             surface={props.surface}
             visibility={visibility}
@@ -905,18 +920,24 @@ export const MobilePlaygroundContract: Story = {
   ...MobilePlayground,
   play: async ({ args, canvasElement }) => {
     args.onVisibilityChange.mockClear();
+    args.onQuotePolicyChange?.mockClear();
     const canvas = within(canvasElement);
 
     await userEvent.click(canvas.getByRole('button', { name: '공개 범위: 조용한 공개' }));
 
     const menu = canvas.getByRole('menu', { name: '공개 범위 선택' });
     const trigger = canvas.getByRole('button', { name: '공개 범위: 조용한 공개' });
-    expect(within(menu).getAllByRole('menuitemradio')).toHaveLength(3);
+    const visibilityGroup = within(menu).getByRole('group', { name: '공개 범위' });
+    const quoteGroup = within(menu).getByRole('group', { name: '인용 허용 정책' });
+    expect(within(visibilityGroup).getAllByRole('menuitemradio')).toHaveLength(3);
+    expect(within(quoteGroup).getAllByRole('menuitemradio')).toHaveLength(3);
     expect(menu.getBoundingClientRect().right).toBe(trigger.getBoundingClientRect().right - 16);
 
     await userEvent.click(within(menu).getByRole('menuitemradio', { name: '공개' }));
     expect(args.onVisibilityChange).toHaveBeenLastCalledWith('PUBLIC');
     expect(canvas.getByRole('button', { name: '공개 범위: 공개' })).toBeVisible();
+    await userEvent.click(within(quoteGroup).getByRole('menuitemradio', { name: /^팔로워:/ }));
+    expect(args.onQuotePolicyChange).toHaveBeenLastCalledWith('FOLLOWERS');
     expect(canvas.queryByRole('menu', { name: '공개 범위 선택' })).toBeNull();
 
     await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 1 편집' }));

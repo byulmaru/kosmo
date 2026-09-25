@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Text, View } from 'react-native';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import { PostComposer } from '@/components/post/PostComposer';
@@ -5,6 +6,7 @@ import baseMeta, {
   InteractionContract as interactionContract,
   mixedMedia,
 } from './PostComposerMediaItems.stories';
+import type { PostQuotePolicy } from '@kosmo/core/enums';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 const meta = {
@@ -86,50 +88,19 @@ export const HorizontalReachabilityContract: Story = {
 };
 
 export const QuotePolicyKeyboardContract: Story = {
-  render: () => {
-    const onQuotePolicyChange = fn();
-    const onVisibilityChange = fn();
-    return (
-      <View style={{ width: 420 }}>
-        <PostComposerTarget
-          author={<Text>테스트 작성자</Text>}
-          body=""
-          contentWarning=""
-          contentWarningExpanded={false}
-          items={[]}
-          onBodyChange={fn()}
-          onContentWarningChange={fn()}
-          onContentWarningToggle={fn()}
-          onEmojiAction={fn()}
-          onExpand={fn()}
-          onMediaAction={fn()}
-          onMediaEdit={fn()}
-          onMediaRemove={fn()}
-          onMediaRetry={fn()}
-          onPollAction={fn()}
-          onQuotePolicyChange={onQuotePolicyChange}
-          onSubmit={fn()}
-          onVisibilityChange={onVisibilityChange}
-          remaining={500}
-          sensitiveMedia={false}
-          surface="rail"
-          visibility="PUBLIC"
-        />
-      </View>
-    );
-  },
+  render: () => <QuotePolicyKeyboardFixture />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: '공개 범위: 공개' }));
 
-    const quotePolicyGroup = canvas.getByRole('radiogroup', { name: '인용 허용 정책' });
-    const policyOptions = within(quotePolicyGroup).getAllByRole('radio');
+    const quotePolicyGroup = canvas.getByRole('group', { name: '인용 허용 정책' });
+    const policyOptions = within(quotePolicyGroup).getAllByRole('menuitemradio');
     policyOptions[0]?.focus();
     await userEvent.keyboard('{ArrowDown}');
 
     expect(policyOptions[1]).toHaveFocus();
     expect(
-      within(quotePolicyGroup).getByRole('radio', {
+      within(quotePolicyGroup).getByRole('menuitemradio', {
         name: '팔로워: 나를 팔로우하는 사람이 인용할 수 있어요.',
       }),
     ).toHaveAttribute('aria-checked', 'true');
@@ -139,3 +110,36 @@ export const QuotePolicyKeyboardContract: Story = {
     );
   },
 };
+
+function QuotePolicyKeyboardFixture() {
+  const [quotePolicy, setQuotePolicy] = useState<PostQuotePolicy>('EVERYONE');
+  return (
+    <View style={{ width: 420 }}>
+      <PostComposer
+        author={<Text>테스트 작성자</Text>}
+        body=""
+        contentWarning=""
+        contentWarningExpanded={false}
+        items={[]}
+        onBodyChange={fn()}
+        onContentWarningChange={fn()}
+        onContentWarningToggle={fn()}
+        onEmojiAction={fn()}
+        onExpand={fn()}
+        onMediaAction={fn()}
+        onMediaEdit={fn()}
+        onMediaRemove={fn()}
+        onMediaRetry={fn()}
+        onPollAction={fn()}
+        onQuotePolicyChange={setQuotePolicy}
+        onSubmit={fn()}
+        onVisibilityChange={fn()}
+        quotePolicy={quotePolicy}
+        remaining={500}
+        sensitiveMedia={false}
+        surface="rail"
+        visibility="PUBLIC"
+      />
+    </View>
+  );
+}
