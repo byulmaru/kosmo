@@ -438,7 +438,8 @@ export const SharedNavigation: Story = {
     expect(getComputedStyle(sidebarBoundary).borderRightWidth).toBe('1px');
     expect(getComputedStyle(sidebarBoundary).borderRightColor).toBe('rgb(236, 236, 240)');
     expect(sidebarBoundaryRect.top).toBe(activeProfileRect.top);
-    expect(sidebarBoundaryRect.right).toBe(activeProfileRect.right);
+    expect(sidebarBoundaryRect.right - activeProfileRect.right).toBe(1);
+    expect(navigationArea!.getBoundingClientRect().right).toBe(activeProfileRect.right);
     expect(getComputedStyle(navigationArea!).borderTopWidth).toBe('1px');
     expect(getComputedStyle(navigationArea!).borderTopColor).toBe('rgb(236, 236, 240)');
     expect(bookmarks).toHaveAttribute('href', '/bookmarks');
