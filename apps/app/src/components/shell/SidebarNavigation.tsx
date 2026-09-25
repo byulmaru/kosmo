@@ -203,6 +203,7 @@ export function SidebarNavigation({
               : null
           }
           renderControl={renderControl}
+          showRightBorder={surface === 'drawer'}
           showFeedback={data.currentSession !== null}
           unreadNotificationCount={unreadNotificationCount}
         />
@@ -248,7 +249,7 @@ const styles = StyleSheet.create({
   fullRoot: { width: '100%' },
   nativeDrawerRoot: { width: '100%' },
   navigationArea: { flex: 1, minHeight: 0 },
-  compactNavigationArea: { marginTop: space[8] },
+  compactNavigationArea: { marginTop: space[8], width: '100%' },
   wideNavigationArea: { borderTopWidth: borderWidths[1] },
   navigationContent: { flexGrow: 1, width: '100%' },
 });

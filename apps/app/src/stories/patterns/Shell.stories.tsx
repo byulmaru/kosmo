@@ -446,6 +446,7 @@ export const SharedNavigation: Story = {
     expect(navigationArea).not.toBeNull();
     expect(getComputedStyle(sidebarBoundary).borderRightWidth).toBe('1px');
     expect(getComputedStyle(sidebarBoundary).borderRightColor).toBe('rgb(236, 236, 240)');
+    expect(getComputedStyle(navigation).borderRightWidth).toBe('0px');
     expect(sidebarBoundaryRect.top).toBe(activeProfileRect.top);
     expect(sidebarBoundaryRect.right - activeProfileRect.right).toBe(1);
     expect(navigationArea!.getBoundingClientRect().right).toBe(activeProfileRect.right);
@@ -615,6 +616,10 @@ export const CompactSidebar: Story = {
 
     expect(navigationArea).not.toBeNull();
     expect(sidebarRoot).not.toBeNull();
+    expect(getComputedStyle(navigation).borderRightWidth).toBe('0px');
+    expect(navigation.getBoundingClientRect().right).toBe(
+      sidebarRoot!.getBoundingClientRect().right,
+    );
     expect(
       sidebarBoundary.getBoundingClientRect().right - sidebarRoot!.getBoundingClientRect().right,
     ).toBe(1);

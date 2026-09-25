@@ -39,6 +39,7 @@ export type SidebarNavigationProps = {
   presentation?: SidebarPresentation;
   profile?: NavigationProfile | null;
   renderControl?: (props: SidebarNavigationRenderControlProps) => ReactElement;
+  showRightBorder?: boolean;
   showFeedback?: boolean;
   unreadNotificationCount?: number | null;
 };
@@ -284,6 +285,7 @@ export function SidebarNavigation({
   presentation = 'full',
   profile = null,
   renderControl,
+  showRightBorder = true,
   showFeedback = true,
   unreadNotificationCount = null,
 }: SidebarNavigationProps) {
@@ -334,6 +336,7 @@ export function SidebarNavigation({
           backgroundColor:
             presentation === 'drawer' ? theme.backgroundElevated : theme.backgroundCanvas,
           borderColor: theme.borderSubtle,
+          borderRightWidth: showRightBorder ? borderWidths[1] : borderWidths[0],
         },
       ]}
     >
@@ -504,11 +507,10 @@ export function SidebarNavigation({
 
 const styles = StyleSheet.create({
   root: {
-    borderRightWidth: borderWidths[1],
     flex: 1,
     paddingVertical: space[16],
   },
-  compactRoot: { alignItems: 'center', width: 80 },
+  compactRoot: { alignItems: 'center', width: '100%' },
   wideRoot: {
     maxWidth: 320,
     paddingLeft: space[16],
