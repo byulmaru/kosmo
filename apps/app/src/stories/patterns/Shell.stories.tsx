@@ -238,8 +238,17 @@ function BottomNavigationProfileUnavailableStory() {
 }
 
 function CompactSidebarStory() {
+  const theme = useTheme();
   return (
-    <View style={{ height: 560, width: 80 }}>
+    <View
+      style={{
+        borderColor: theme.borderSubtle,
+        borderRightWidth: borderWidths[1],
+        height: 560,
+        width: 80,
+      }}
+      testID="compact-sidebar-boundary"
+    >
       <SidebarNavigation compact query={useShellStoryData().query} />
     </View>
   );
@@ -602,9 +611,13 @@ export const CompactSidebar: Story = {
     const logoutRect = logout.getBoundingClientRect();
     const feedbackRect = feedback.getBoundingClientRect();
     const sidebarRoot = trigger.parentElement?.parentElement;
+    const sidebarBoundary = canvas.getByTestId('compact-sidebar-boundary');
 
     expect(navigationArea).not.toBeNull();
     expect(sidebarRoot).not.toBeNull();
+    expect(
+      sidebarBoundary.getBoundingClientRect().right - sidebarRoot!.getBoundingClientRect().right,
+    ).toBe(1);
     expect(triggerRect.top - sidebarRoot!.getBoundingClientRect().top).toBe(24);
     expect(navigationArea!.getBoundingClientRect().top - triggerRect.bottom).toBe(8);
     expect(getComputedStyle(navigationArea!).borderTopWidth).toBe('0px');

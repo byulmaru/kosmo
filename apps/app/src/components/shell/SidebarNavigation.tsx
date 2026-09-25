@@ -244,7 +244,7 @@ function getCurrentDestination(
 
 const styles = StyleSheet.create({
   root: { flex: 1, minHeight: 0 },
-  compactRoot: { alignItems: 'center', paddingTop: space[24], width: 80 },
+  compactRoot: { alignItems: 'center', paddingTop: space[24], width: '100%' },
   fullRoot: { width: '100%' },
   nativeDrawerRoot: { width: '100%' },
   navigationArea: { flex: 1, minHeight: 0 },
