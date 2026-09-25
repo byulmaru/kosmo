@@ -38,7 +38,7 @@ type IconButtonProps = {
   children: ReactNode | ((state: { pressed: boolean }) => ReactNode);
   controlRef?: unknown;
   disabled?: boolean;
-  feedback?: 'none' | 'opacity';
+  feedback?: 'none' | 'opacity' | 'opacity-hover';
   hitSlop?: number;
   onPressIn?: () => void;
   style?: unknown;
@@ -348,27 +348,64 @@ test('a navigation adapter can preserve link semantics', () => {
   assert.equal(link.props.accessibilityRole, 'link');
 });
 
-test('visual feedback is opt-in and explicit opacity feedback preserves prior states', () => {
+test('visual feedback is opt-in and opacity feedback preserves press-only semantics', () => {
   const defaultButton = renderIconButton({
     accessibilityLabel: '닫기',
     children: '×',
     disabled: true,
   });
   const defaultStyle = flattenStyle(
-    (defaultButton.props.style as (state: { pressed: boolean }) => unknown)({ pressed: true }),
+    (defaultButton.props.style as (state: { hovered: boolean; pressed: boolean }) => unknown)({
+      hovered: true,
+      pressed: true,
+    }),
   );
   const opacityButton = renderIconButton({
     accessibilityLabel: '닫기',
     children: '×',
-    disabled: true,
     feedback: 'opacity',
   });
+  const opacityHoverButton = renderIconButton({
+    accessibilityLabel: '닫기',
+    children: '×',
+    feedback: 'opacity-hover',
+  });
+  const disabledButton = renderIconButton({
+    accessibilityLabel: '닫기',
+    children: '×',
+    disabled: true,
+    feedback: 'opacity-hover',
+  });
   const opacityStyle = flattenStyle(
-    (opacityButton.props.style as (state: { pressed: boolean }) => unknown)({ pressed: true }),
+    (opacityButton.props.style as (state: { hovered: boolean; pressed: boolean }) => unknown)({
+      hovered: true,
+      pressed: true,
+    }),
+  );
+  const hoverStyle = flattenStyle(
+    (opacityHoverButton.props.style as (state: { hovered: boolean; pressed: boolean }) => unknown)({
+      hovered: true,
+      pressed: false,
+    }),
+  );
+  const opacityHoverStyle = flattenStyle(
+    (opacityButton.props.style as (state: { hovered: boolean; pressed: boolean }) => unknown)({
+      hovered: true,
+      pressed: false,
+    }),
+  );
+  const disabledStyle = flattenStyle(
+    (disabledButton.props.style as (state: { hovered: boolean; pressed: boolean }) => unknown)({
+      hovered: true,
+      pressed: true,
+    }),
   );
 
   assert.equal(defaultStyle.opacity, undefined);
-  assert.equal(opacityStyle.opacity, 0.45);
+  assert.equal(opacityStyle.opacity, 0.7);
+  assert.equal(opacityHoverStyle.opacity, 1);
+  assert.equal(hoverStyle.opacity, 0.85);
+  assert.equal(disabledStyle.opacity, 0.45);
 });
 
 test('default target has a bounded square size in a stretching parent', () => {

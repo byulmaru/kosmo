@@ -96,7 +96,7 @@ export type IconButtonProps = Omit<
   accessibilityRole?: 'button' | 'link';
   children: PressableProps['children'];
   controlRef?: Ref<View>;
-  feedback?: 'none' | 'opacity';
+  feedback?: 'none' | 'opacity' | 'opacity-hover';
   visualStyle?: PressableProps['style'];
 } & IconButtonSizeProps;
 
@@ -145,8 +145,16 @@ export function IconButton({
       style={(state) => [
         styles.target,
         { height: minimumTargetSize, width: minimumTargetSize },
-        feedback === 'opacity'
-          ? { opacity: buttonDisabled ? 0.45 : state.pressed ? 0.7 : 1 }
+        feedback === 'opacity' || feedback === 'opacity-hover'
+          ? {
+              opacity: buttonDisabled
+                ? 0.45
+                : state.pressed
+                  ? 0.7
+                  : feedback === 'opacity-hover' && (state as { hovered?: boolean }).hovered
+                    ? 0.85
+                    : 1,
+            }
           : undefined,
         typeof style === 'function' ? style(state) : style,
         { minHeight: minimumTargetSize, minWidth: minimumTargetSize },
