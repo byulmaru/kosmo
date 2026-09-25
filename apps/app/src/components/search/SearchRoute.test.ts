@@ -133,10 +133,11 @@ test('Native 검색은 헤더에 입력 하나를 두고 최초·결과·포커�
   header = renderer!.root.findByType(host('NativeStackHeader'));
   assert.equal(
     header
-      .findAllByType(host('Pressable'))
+      .findAllByType(host('IconButton'))
       .filter(({ props }) => props.accessibilityLabel === '뒤로').length,
     1,
   );
+  assert.equal(header.findByProps({ accessibilityLabel: '뒤로' }).props.feedback, 'opacity-hover');
 
   await act(async () => renderer?.unmount());
   searchParams.q = 'kosmo';
@@ -149,7 +150,7 @@ test('Native 검색은 헤더에 입력 하나를 두고 최초·결과·포커�
   assert.equal(header.findAllByType(host('TextInput')).length, 1);
   assert.equal(
     header
-      .findAllByType(host('Pressable'))
+      .findAllByType(host('IconButton'))
       .filter(({ props }) => props.accessibilityLabel === '뒤로').length,
     1,
   );
@@ -158,6 +159,10 @@ test('Native 검색은 헤더에 입력 하나를 두고 최초·결과·포커�
       .findAllByType(host('IconButton'))
       .filter(({ props }) => props.accessibilityLabel === '검색 지우기').length,
     1,
+  );
+  assert.equal(
+    header.findByProps({ accessibilityLabel: '검색 지우기' }).props.feedback,
+    'opacity-hover',
   );
   await act(async () => renderer?.unmount());
 });
