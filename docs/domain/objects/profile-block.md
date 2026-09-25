@@ -51,7 +51,9 @@ Profile Block과 연합 기능은 함께 사용 가능해졌으므로 protocol �
 legacy 상태로 취급하지 않는다. 발신 대상인 모든 Local Owner → Remote Target 해제는 exact `profileBlockId`로
 안정적인 원본 identity를 구성해 `Undo(Block)`만 전달한다. metadata 부재를 이유로 선행 `Block`을 만들거나 해제를
 생략하지 않으며, 상대 서버가 원본을 모르는 경우 Undo no-op을 허용한다. inbound Undo는 embedded object가 실제
-`Block`일 때만 이 관계를 변경하며 URI-only와 non-Block Activity는 URI 일치만으로 Block으로 추론하지 않는다.
+`Block`이고 인증된 actor·Local Target·방향 pair가 일치할 때 현재 관계를 해제한다. 원격 Block URI가 달라도
+해제를 누락하지 않으며, URI-only와 non-Block Activity는 URI 일치만으로 Block으로 추론하지 않는다.
+재전달된 Undo가 새 관계를 해제하지 않도록 최상위 Undo Activity ID가 유효한 HTTP(S) URI일 때만 관계를 변경한다.
 
 ## 권한
 

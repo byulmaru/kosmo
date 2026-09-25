@@ -94,9 +94,8 @@ export async function profileBlockWorkflow(input: ProfileBlockInput): Promise<vo
       }
       transitionOrigin = parsedCommand.origin;
       const promise =
-        transitionPromise === undefined
-          ? (transitionPromise = executeProfileBlockTransitionActivity(parsedCommand))
-          : executeProfileBlockTransitionActivity(parsedCommand);
+        transitionPromise ??
+        (transitionPromise = executeProfileBlockTransitionActivity(parsedCommand));
       const execution = await promise;
       if (!execution.ok) {
         throw profileBlockTransitionFailure(execution.error);

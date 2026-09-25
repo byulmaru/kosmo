@@ -105,6 +105,7 @@ test('인증된 inbound Block과 embedded Undo는 같은 원본으로 기존 관
   const undoHandled = await handleInboundUndoBlock({
     context: createContext(fixture.localProfile.id),
     actorUri: fixture.remoteActorUri,
+    undoUri: new URL(`https://${fixture.remoteActorUri.hostname}/activities/undo-block-1`),
     embedded: new Block({
       actor: fixture.remoteActorUri,
       id: block.id,
@@ -116,7 +117,10 @@ test('인증된 inbound Block과 embedded Undo는 같은 원본으로 기존 관
   assert.equal(undoHandled, true);
   assert.equal((await db.select().from(ProfileBlocks)).length, 0);
   assert.deepEqual(
-    await db.select({ state: ProfileBlockActivities.state }).from(ProfileBlockActivities),
+    await db
+      .select({ state: ProfileBlockActivities.state })
+      .from(ProfileBlockActivities)
+      .where(eq(ProfileBlockActivities.activityUri, block.id!.href)),
     [{ state: 'CLOSED' }],
   );
 
@@ -124,6 +128,7 @@ test('인증된 inbound Block과 embedded Undo는 같은 원본으로 기존 관
     await handleInboundUndoBlock({
       context: createContext(fixture.localProfile.id),
       actorUri: fixture.remoteActorUri,
+      undoUri: new URL(`https://${fixture.remoteActorUri.hostname}/activities/undo-block-1`),
       embedded: new Block({
         actor: fixture.remoteActorUri,
         id: block.id,
@@ -135,6 +140,226 @@ test('인증된 inbound Block과 embedded Undo는 같은 원본으로 기존 관
     true,
   );
   assert.equal((await db.select().from(ProfileBlocks)).length, 0);
+});
+
+test('원본 URI가 달라도 검증된 pair의 현재 차단을 해제하고 같은 Undo 재전달은 새 차단을 유지한다', async () => {
+  const fixture = await createFixture();
+  const first = new Block({
+    actor: fixture.remoteActorUri,
+    id: new URL(`https://${fixture.remoteActorUri.hostname}/activities/block-first`),
+    object: fixture.localActorUri,
+  });
+  const second = new Block({
+    actor: fixture.remoteActorUri,
+    id: new URL(`https://${fixture.remoteActorUri.hostname}/activities/block-second`),
+    object: fixture.localActorUri,
+  });
+  await handleInboundBlock(createContext(fixture.localProfile.id), first);
+  await handleInboundBlock(createContext(fixture.localProfile.id), second);
+
+  const undo = {
+    context: createContext(fixture.localProfile.id),
+    actorUri: fixture.remoteActorUri,
+    embedded: new Block({
+      actor: fixture.remoteActorUri,
+      id: new URL(`https://${fixture.remoteActorUri.hostname}/activities/alternate-block-uri`),
+      object: fixture.localActorUri,
+    }),
+    objectUri: first.id,
+    remoteActorProfileId: fixture.remoteProfile.id,
+    undoUri: new URL(`https://${fixture.remoteActorUri.hostname}/activities/undo-alternate`),
+  };
+  assert.equal(await handleInboundUndoBlock(undo), true);
+  assert.equal((await db.select().from(ProfileBlocks)).length, 0);
+  assert.deepEqual(
+    await db
+      .select({ state: ProfileBlockActivities.state })
+      .from(ProfileBlockActivities)
+      .where(inArray(ProfileBlockActivities.activityUri, [first.id!.href, second.id!.href])),
+    [{ state: 'CLOSED' }, { state: 'CLOSED' }],
+  );
+
+  const replacement = new Block({
+    actor: fixture.remoteActorUri,
+    id: new URL(`https://${fixture.remoteActorUri.hostname}/activities/block-replacement`),
+    object: fixture.localActorUri,
+  });
+  await handleInboundBlock(createContext(fixture.localProfile.id), replacement);
+  assert.equal(await handleInboundUndoBlock(undo), true);
+  assert.equal((await db.select().from(ProfileBlocks)).length, 1);
+});
+
+test('종료된 과거 Block URI를 담은 새로운 Undo도 현재 pair를 해제한다', async () => {
+  const fixture = await createFixture();
+  const first = new Block({
+    actor: fixture.remoteActorUri,
+    id: new URL(`https://${fixture.remoteActorUri.hostname}/activities/old-block`),
+    object: fixture.localActorUri,
+  });
+  await handleInboundBlock(createContext(fixture.localProfile.id), first);
+  const input = {
+    context: createContext(fixture.localProfile.id),
+    actorUri: fixture.remoteActorUri,
+    embedded: first,
+    objectUri: first.id,
+    remoteActorProfileId: fixture.remoteProfile.id,
+  };
+  assert.equal(
+    await handleInboundUndoBlock({
+      ...input,
+      undoUri: new URL(`https://${fixture.remoteActorUri.hostname}/activities/undo-old`),
+    }),
+    true,
+  );
+  await handleInboundBlock(
+    createContext(fixture.localProfile.id),
+    new Block({
+      actor: fixture.remoteActorUri,
+      id: new URL(`https://${fixture.remoteActorUri.hostname}/activities/new-block`),
+      object: fixture.localActorUri,
+    }),
+  );
+  assert.equal((await db.select().from(ProfileBlocks)).length, 1);
+
+  assert.equal(
+    await handleInboundUndoBlock({
+      ...input,
+      undoUri: new URL(`https://${fixture.remoteActorUri.hostname}/activities/new-undo`),
+    }),
+    true,
+  );
+  assert.equal((await db.select().from(ProfileBlocks)).length, 0);
+});
+
+test('embedded Block 원본 ID가 없어도 Undo ID와 검증된 pair로 해제한다', async () => {
+  const fixture = await createFixture();
+  await handleInboundBlock(
+    createContext(fixture.localProfile.id),
+    new Block({
+      actor: fixture.remoteActorUri,
+      id: new URL(`https://${fixture.remoteActorUri.hostname}/activities/block-idless-undo`),
+      object: fixture.localActorUri,
+    }),
+  );
+
+  assert.equal(
+    await handleInboundUndoBlock({
+      context: createContext(fixture.localProfile.id),
+      actorUri: fixture.remoteActorUri,
+      embedded: new Block({
+        actor: fixture.remoteActorUri,
+        object: fixture.localActorUri,
+      }),
+      objectUri: null,
+      remoteActorProfileId: fixture.remoteProfile.id,
+      undoUri: new URL(`https://${fixture.remoteActorUri.hostname}/activities/undo-idless`),
+    }),
+    true,
+  );
+  assert.equal((await db.select().from(ProfileBlocks)).length, 0);
+});
+
+test('차단보다 먼저 온 원본 ID 없는 Undo의 재전달은 새 차단을 해제하지 않는다', async () => {
+  const fixture = await createFixture();
+  const input = {
+    context: createContext(fixture.localProfile.id),
+    actorUri: fixture.remoteActorUri,
+    embedded: new Block({
+      actor: fixture.remoteActorUri,
+      object: fixture.localActorUri,
+    }),
+    objectUri: null,
+    remoteActorProfileId: fixture.remoteProfile.id,
+    undoUri: new URL(`https://${fixture.remoteActorUri.hostname}/activities/undo-before-block`),
+  };
+  assert.equal(await handleInboundUndoBlock(input), true);
+  await handleInboundBlock(
+    createContext(fixture.localProfile.id),
+    new Block({
+      actor: fixture.remoteActorUri,
+      id: new URL(`https://${fixture.remoteActorUri.hostname}/activities/block-after-undo`),
+      object: fixture.localActorUri,
+    }),
+  );
+  assert.equal(await handleInboundUndoBlock(input), true);
+  assert.equal((await db.select().from(ProfileBlocks)).length, 1);
+});
+
+test('Undo Activity ID가 없으면 원본 Block ID가 있어도 관계를 변경하지 않는다', async () => {
+  const fixture = await createFixture();
+  const block = new Block({
+    actor: fixture.remoteActorUri,
+    id: new URL(`https://${fixture.remoteActorUri.hostname}/activities/block-without-undo-id`),
+    object: fixture.localActorUri,
+  });
+  await handleInboundBlock(createContext(fixture.localProfile.id), block);
+  const input = {
+    context: createContext(fixture.localProfile.id),
+    actorUri: fixture.remoteActorUri,
+    embedded: block,
+    objectUri: block.id,
+    remoteActorProfileId: fixture.remoteProfile.id,
+  };
+  assert.equal(await handleInboundUndoBlock(input), true);
+  assert.equal((await db.select().from(ProfileBlocks)).length, 1);
+  assert.equal(
+    await handleInboundUndoBlock({
+      ...input,
+      undoUri: new URL(`https://${fixture.remoteActorUri.hostname}/activities/valid-undo`),
+    }),
+    true,
+  );
+  await handleInboundBlock(
+    createContext(fixture.localProfile.id),
+    new Block({
+      actor: fixture.remoteActorUri,
+      id: new URL(`https://${fixture.remoteActorUri.hostname}/activities/replacement-block`),
+      object: fixture.localActorUri,
+    }),
+  );
+  assert.equal(await handleInboundUndoBlock(input), true);
+  assert.equal((await db.select().from(ProfileBlocks)).length, 1);
+});
+
+test('Block actor 또는 Local Target이 다른 Undo는 URI가 달라도 현재 pair를 해제하지 않는다', async () => {
+  const fixture = await createFixture();
+  const block = new Block({
+    actor: fixture.remoteActorUri,
+    id: new URL(`https://${fixture.remoteActorUri.hostname}/activities/block-guard`),
+    object: fixture.localActorUri,
+  });
+  await handleInboundBlock(createContext(fixture.localProfile.id), block);
+
+  for (const embedded of [
+    new Block({
+      actor: new URL(`https://${fixture.remoteActorUri.hostname}/users/another-actor`),
+      object: fixture.localActorUri,
+    }),
+    new Block({
+      actor: fixture.remoteActorUri,
+      object: new URL(`/ap/actor/${crypto.randomUUID()}`, publicOrigin),
+    }),
+  ]) {
+    assert.equal(
+      await handleInboundUndoBlock({
+        context: createContext(fixture.localProfile.id),
+        actorUri: fixture.remoteActorUri,
+        embedded,
+        objectUri: null,
+        remoteActorProfileId: fixture.remoteProfile.id,
+        undoUri: new URL(`https://${fixture.remoteActorUri.hostname}/activities/undo-invalid`),
+      }),
+      true,
+    );
+  }
+  assert.equal((await db.select().from(ProfileBlocks)).length, 1);
+  assert.deepEqual(
+    await db
+      .select({ state: ProfileBlockActivities.state })
+      .from(ProfileBlockActivities)
+      .where(eq(ProfileBlockActivities.activityUri, block.id!.href)),
+    [{ state: 'ACTIVE' }],
+  );
 });
 
 test('Block URI를 재사용한 다른 타입의 embedded Undo는 Block 해제로 소비하지 않는다', async () => {
@@ -203,6 +428,7 @@ test('검증된 embedded Undo가 먼저 오면 tombstone이 늦은 Block을 막�
     await handleInboundUndoBlock({
       context: createContext(fixture.localProfile.id),
       actorUri: fixture.remoteActorUri,
+      undoUri: new URL(`https://${fixture.remoteActorUri.hostname}/activities/undo-before-block`),
       embedded: block,
       objectUri: block.id,
       remoteActorProfileId: fixture.remoteProfile.id,
@@ -213,7 +439,10 @@ test('검증된 embedded Undo가 먼저 오면 tombstone이 늦은 Block을 막�
 
   assert.equal((await db.select().from(ProfileBlocks)).length, 0);
   assert.deepEqual(
-    await db.select({ state: ProfileBlockActivities.state }).from(ProfileBlockActivities),
+    await db
+      .select({ state: ProfileBlockActivities.state })
+      .from(ProfileBlockActivities)
+      .where(eq(ProfileBlockActivities.activityUri, block.id!.href)),
     [{ state: 'CLOSED' }],
   );
 });
