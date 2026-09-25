@@ -425,7 +425,12 @@ export function ProfileSwitcher({
         );
         setHandle('');
         setCreating(false);
-        commitProfileSelection(response.createProfile.profile.id, operationVersion, onError, 'auto');
+        commitProfileSelection(
+          response.createProfile.profile.id,
+          operationVersion,
+          onError,
+          'auto',
+        );
       },
       onError: (cause) => {
         const source = isRecord(cause) ? cause.source : undefined;
