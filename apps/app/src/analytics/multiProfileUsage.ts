@@ -184,6 +184,7 @@ export type MultiProfileUsageAggregation = Readonly<{
   exclusionListVersion: string;
   observedThrough: Date;
   rulesVersion: string;
+  skippedInvalidTimestampCount: number;
   weeks: ReadonlyArray<MultiProfileUsageWeek>;
 }>;
 
@@ -265,12 +266,16 @@ function isWaaEvent(event: MultiProfileUsageEvent): boolean {
 function deduplicateUsageEvents(
   events: ReadonlyArray<MultiProfileUsageEvent>,
   excludedAccountIds: ReadonlySet<string>,
-): ReadonlyArray<MultiProfileUsageEvent> {
+): { events: ReadonlyArray<MultiProfileUsageEvent>; skippedInvalidTimestampCount: number } {
   const uniqueEvents = new Map<string, MultiProfileUsageEvent>();
+  let skippedInvalidTimestampCount = 0;
 
   for (const event of events) {
-    assertValidDate(event.occurredAt, 'Event timestamp');
     if (!event.accountId || excludedAccountIds.has(event.accountId)) {
+      continue;
+    }
+    if (!(event.occurredAt instanceof Date) || !Number.isFinite(event.occurredAt.getTime())) {
+      skippedInvalidTimestampCount += 1;
       continue;
     }
 
@@ -281,7 +286,7 @@ function deduplicateUsageEvents(
     }
   }
 
-  return [...uniqueEvents.values()];
+  return { events: [...uniqueEvents.values()], skippedInvalidTimestampCount };
 }
 
 function addWeeks(weekKey: string, weeks: number): string {
@@ -346,7 +351,10 @@ export function calculateMultiProfileUsage(
 
   const currentWeekKey = getKstWeekKey(now);
   const weeklyStates = new Map<string, WeeklyState>();
-  const uniqueEvents = deduplicateUsageEvents(events, options.excludedAccountIds ?? new Set());
+  const { events: uniqueEvents, skippedInvalidTimestampCount } = deduplicateUsageEvents(
+    events,
+    options.excludedAccountIds ?? new Set(),
+  );
 
   for (const event of uniqueEvents) {
     const weekKey = getKstWeekKey(event.occurredAt);
@@ -491,6 +499,7 @@ export function calculateMultiProfileUsage(
     exclusionListVersion: options.exclusionListVersion ?? DEFAULT_EXCLUSION_LIST_VERSION,
     observedThrough,
     rulesVersion: options.rulesVersion ?? MULTI_PROFILE_USAGE_RULES_VERSION,
+    skippedInvalidTimestampCount,
     weeks,
   };
 }

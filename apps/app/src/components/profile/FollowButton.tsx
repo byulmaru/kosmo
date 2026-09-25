@@ -1,8 +1,6 @@
 import { StyleSheet, View } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
-import { trackAnalytics } from '@/analytics/client';
-import { useMultiProfileAnalytics } from '@/analytics/MultiProfileAnalyticsProvider';
-import { createAnalyticsCaptureOptions } from '@/analytics/multiProfileUsage';
+import { useBeginMultiProfileAnalyticsAction } from '@/analytics/MultiProfileAnalyticsProvider';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useSession } from '@/session/SessionProvider';
@@ -108,8 +106,8 @@ const getSelectedProfile = (store: RecordSourceSelectorProxy) =>
   store.getRoot().getLinkedRecord('currentSession')?.getLinkedRecord('selectedProfile');
 
 export function FollowButton({ profile, style }: FollowButtonProps) {
-  const { accountId, selectedProfileId, status } = useSession();
-  const { observeAction } = useMultiProfileAnalytics();
+  const { selectedProfileId } = useSession();
+  const beginAnalyticsAction = useBeginMultiProfileAnalyticsAction();
   const { showToast } = useToast();
   const data = useFragment(followButtonProfileFragment, profile);
   const [commitFollow, following] =
@@ -195,11 +193,7 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
       });
     } else {
       const actorProfileId = selectedProfileId;
-      const analyticsAccountId = status === 'valid' ? accountId : null;
-      const followOperation =
-        analyticsAccountId && actorProfileId
-          ? createAnalyticsCaptureOptions(analyticsAccountId)
-          : null;
+      const followOperation = beginAnalyticsAction();
       commitFollow({
         onCompleted: (response, errors) => {
           const failed = Boolean(errors?.length);
@@ -212,12 +206,6 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
           }
 
           const occurredAt = new Date();
-          if (analyticsAccountId) {
-            observeAction({ accountId: analyticsAccountId, occurredAt });
-          }
-          const followCaptureOptions = followOperation
-            ? { ...followOperation, timestamp: occurredAt }
-            : undefined;
           const properties = {
             result:
               response.followProfile.result.__typename === 'ProfileFollowRequest'
@@ -225,7 +213,7 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
                 : ('follow' as const),
             selected_profile_id: actorProfileId,
           };
-          trackAnalytics('follow_succeeded', properties, followCaptureOptions);
+          followOperation.trackProfile('follow_succeeded', properties, occurredAt);
         },
         onError: showFailureToast,
         optimisticUpdater: (store) => {

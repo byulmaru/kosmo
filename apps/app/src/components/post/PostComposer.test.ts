@@ -111,7 +111,7 @@ mockModule('relay-runtime', {
 });
 mockModule('@/analytics/client', { trackAnalytics: () => undefined });
 mockModule('@/analytics/MultiProfileAnalyticsProvider', {
-  useMultiProfileAnalytics: () => ({ observeAction: () => undefined }),
+  useBeginMultiProfileAnalyticsAction: () => () => ({ trackProfile: () => undefined }),
 });
 mockModule('@/analytics/multiProfileUsage', {
   createAnalyticsCaptureOptions: (
