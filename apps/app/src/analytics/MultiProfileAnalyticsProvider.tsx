@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef } from 'react';
+import { useSession } from '@/session/SessionProvider';
 import { trackAnalytics } from './client';
 import {
   createAnalyticsCaptureOptions,
@@ -153,10 +154,13 @@ type ProfileActionProperties<Name extends ProfileActionName> = Omit<
 > & { selected_profile_id?: string };
 
 export function useBeginMultiProfileAnalyticsAction() {
-  const { accountId, observeAction, selectedProfileId, status } = useMultiProfileAnalytics();
+  const { accountId, observeAction, selectedProfileId } = useMultiProfileAnalytics();
+  const session = useSession();
 
   return useCallback(() => {
-    const operationAccountId = status === 'valid' ? accountId : null;
+    const operationAccountId = session.status === 'valid' ? session.accountId : null;
+    const operationProfileId =
+      accountId === operationAccountId ? selectedProfileId : session.selectedProfileId;
     const captureOptions = operationAccountId
       ? createAnalyticsCaptureOptions(operationAccountId)
       : null;
@@ -168,18 +172,18 @@ export function useBeginMultiProfileAnalyticsAction() {
       if (operationAccountId) {
         observeAction({ accountId: operationAccountId, occurredAt });
       }
-      trackAnalytics(
-        name,
-        properties,
-        captureOptions ? { ...captureOptions, timestamp: occurredAt } : undefined,
-      );
+      if (captureOptions) {
+        trackAnalytics(name, properties, { ...captureOptions, timestamp: occurredAt });
+      } else {
+        trackAnalytics(name, properties);
+      }
     };
     const trackProfile = <Name extends ProfileActionName>(
       name: Name,
       properties: ProfileActionProperties<Name>,
       occurredAt = new Date(),
     ) => {
-      const profileId = properties.selected_profile_id ?? selectedProfileId;
+      const profileId = properties.selected_profile_id ?? operationProfileId;
       if (!profileId) {
         return;
       }
@@ -190,7 +194,14 @@ export function useBeginMultiProfileAnalyticsAction() {
       );
     };
     return { track, trackProfile };
-  }, [accountId, observeAction, selectedProfileId, status]);
+  }, [
+    accountId,
+    observeAction,
+    selectedProfileId,
+    session.accountId,
+    session.selectedProfileId,
+    session.status,
+  ]);
 }
 
 export function useTrackMultiProfileAnalytics() {

@@ -16,6 +16,11 @@ type Captured = [
   { accountId?: string; timestamp?: Date; uuid?: string }?,
 ];
 const captures: Captured[] = [];
+mock.module('@/session/SessionProvider', {
+  exports: {
+    useSession: () => ({ accountId: 'account-a', selectedProfileId: 'profile-a', status: 'valid' }),
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
 mock.module('./client', {
   exports: { trackAnalytics: (...args: unknown[]) => captures.push(args as Captured) },
 } as unknown as Parameters<typeof mock.module>[1]);
