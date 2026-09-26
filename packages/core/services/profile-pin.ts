@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNotNull } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull } from 'drizzle-orm';
 import { db, first, Instances, Posts, ProfilePins, Profiles } from '../db';
 import { InstanceKind, PostVisibility } from '../enums';
 import { NotFoundError } from '../error';
@@ -13,15 +13,7 @@ type ProfilePinInput = {
 
 export type ProfilePinResult = {
   readonly changed: boolean;
-  readonly profilePins: readonly (typeof ProfilePins.$inferSelect)[];
 };
-
-const loadOrderedPins = (tx: Transaction, profileId: string) =>
-  tx
-    .select()
-    .from(ProfilePins)
-    .where(eq(ProfilePins.profileId, profileId))
-    .orderBy(asc(ProfilePins.id));
 
 const eligiblePostWhere = (profileId: string) =>
   and(
@@ -93,10 +85,7 @@ export const pinProfilePost = async ({
       .returning()
       .then(first);
 
-    return {
-      changed: inserted !== undefined,
-      profilePins: await loadOrderedPins(tx, profileId),
-    };
+    return { changed: inserted !== undefined };
   });
 };
 
@@ -113,8 +102,5 @@ export const unpinProfilePost = async ({
       .returning()
       .then(first);
 
-    return {
-      changed: deleted !== undefined,
-      profilePins: await loadOrderedPins(tx, profileId),
-    };
+    return { changed: deleted !== undefined };
   });
