@@ -38,7 +38,6 @@ const SettingsMutedProfilesFragment = graphql`
           targetProfile {
             id
             displayName
-            relativeHandle
             ...ProfileMuteAction_profile
             avatar {
               id
@@ -51,19 +50,19 @@ const SettingsMutedProfilesFragment = graphql`
   }
 `;
 
-export function SettingsMutedProfiles() {
+export function SettingsMutedProfiles({ onUnmuteSuccess }: { onUnmuteSuccess?: () => void }) {
   return (
     <RouteBoundary
       error={(retry) => <MutedProfileList state={{ onRetry: retry, status: 'error' }} />}
       loading={<MutedProfileList state={{ status: 'loading' }} />}
       title="뮤트한 프로필을 불러오지 못했어요"
     >
-      <SettingsMutedProfilesContent />
+      <SettingsMutedProfilesContent onUnmuteSuccess={onUnmuteSuccess} />
     </RouteBoundary>
   );
 }
 
-function SettingsMutedProfilesContent() {
+function SettingsMutedProfilesContent({ onUnmuteSuccess }: { onUnmuteSuccess?: () => void }) {
   const shellChrome = useShellChrome();
   const { fetchKey } = useRouteBoundary();
   const data = useLazyLoadQuery<SettingsMutedProfilesQuery>(
@@ -106,11 +105,20 @@ function SettingsMutedProfilesContent() {
           : { status: 'end' as const },
     paginationEndRef: endRef,
     profiles: edges.map((edge) => ({
-      action: <ProfileMuteAction profile={edge.node.targetProfile} surface="button" />,
+      action: (
+        <ProfileMuteAction
+          onFeedback={(feedback) => {
+            if (feedback.status === 'success' && !feedback.muted) {
+              onUnmuteSuccess?.();
+            }
+          }}
+          profile={edge.node.targetProfile}
+          surface="button"
+        />
+      ),
       avatarUri: edge.node.targetProfile.avatar?.url,
       displayName: edge.node.targetProfile.displayName,
       id: edge.node.targetProfile.id,
-      relativeHandle: edge.node.targetProfile.relativeHandle,
     })),
     status: 'loaded' as const,
   };

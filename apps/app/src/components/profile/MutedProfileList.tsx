@@ -1,10 +1,11 @@
 import { useEffect, useRef } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { PaginationSurface } from '@/components/pagination/PaginationSurface';
 import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
 import { useToast } from '@/components/ui/ToastProvider';
-import { space } from '@/theme/tokens';
+import { useTheme } from '@/theme/ThemeProvider';
+import { space, textStyles } from '@/theme/tokens';
 import { ProfileListItemContent } from './ProfileListItemContent';
 import type { ReactNode } from 'react';
 import type { UseAutomaticPaginationResult } from '@/components/pagination/useAutomaticPagination';
@@ -35,6 +36,7 @@ type Props = {
 
 export function MutedProfileList({ state }: Props) {
   const { showToast } = useToast();
+  const theme = useTheme();
   const retry = state.status === 'error' ? state.onRetry : undefined;
   const retryRef = useRef(retry);
   useEffect(() => {
@@ -73,6 +75,14 @@ export function MutedProfileList({ state }: Props) {
               avatarLabel={profile.displayName}
               avatarUri={profile.avatarUri}
               displayName={profile.displayName}
+              identity={
+                <Text
+                  numberOfLines={1}
+                  style={[textStyles.uiLabelL, { color: theme.foregroundPrimary }]}
+                >
+                  {profile.displayName}
+                </Text>
+              }
               style={styles.row}
             >
               {profile.action}
