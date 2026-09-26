@@ -199,6 +199,19 @@ try {
     'Representative final schema columns must exist.',
   );
 
+  const [{ profilePinIndex }] = await sql<{ profilePinIndex: string | null }[]>`
+    SELECT indexname AS "profilePinIndex"
+    FROM pg_indexes
+    WHERE schemaname = 'public'
+      AND tablename = 'profile_pinned_post'
+      AND indexname = 'profile_pinned_post_profile_id_id_index'
+  `;
+  assert.equal(
+    profilePinIndex,
+    'profile_pinned_post_profile_id_id_index',
+    'Profile pin ordering must use the profile and pin id index.',
+  );
+
   await assertRuntimeAcl(sql);
 } finally {
   await sql.end({ timeout: 5 });

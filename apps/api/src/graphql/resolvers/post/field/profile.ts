@@ -1,9 +1,9 @@
 import { db, Instances, Posts, Profiles } from '@kosmo/core/db';
+import { profilePostListAccessWhere } from '@kosmo/core/visibility';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, getColumns, gt, isNull, lt } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/resolvers/profile';
-import { directPostAccessWhere } from '../access';
 import { Post, PostConnection } from '../ref';
 
 type PostRow = typeof Posts.$inferSelect;
@@ -29,9 +29,10 @@ builder.objectFields(Profile, (t) => ({
               .where(
                 and(
                   eq(Posts.profileId, profile.id),
-                  directPostAccessWhere({
-                    ctx,
-                    profileMute: { excludeExcept: profile.id },
+                  profilePostListAccessWhere({
+                    db,
+                    visitedProfileId: profile.id,
+                    viewerProfileId: ctx.session?.profile?.id,
                   }),
                   isNull(Posts.replyParentId),
                   before ? gt(Posts.id, before) : undefined,

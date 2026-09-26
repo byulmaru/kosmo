@@ -615,6 +615,20 @@ export const ProfileMutes = pgTable(
   ],
 );
 
+export const ProfilePinnedPosts = pgTable(
+  'profile_pinned_post',
+  {
+    id: id(),
+    profileId: uuid('profile_id')
+      .notNull()
+      .references(() => Profiles.id, { onDelete: 'cascade' }),
+    postId: uuid('post_id')
+      .notNull()
+      .references(() => Posts.id, { onDelete: 'cascade' }),
+  },
+  (table) => [unique().on(table.profileId, table.postId), index().on(table.profileId, table.id)],
+);
+
 export const Reactions = pgTable(
   'reaction',
   {
