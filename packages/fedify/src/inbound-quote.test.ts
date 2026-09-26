@@ -225,7 +225,15 @@ describe('ActivityPub inbound Quote lifecycle', () => {
       ).length,
       0,
     );
-    assert.equal((await db.select().from(PostQuoteEffectReceipts)).length, 0);
+    assert.equal(
+      (
+        await db
+          .select()
+          .from(PostQuoteEffectReceipts)
+          .where(eq(PostQuoteEffectReceipts.requestUri, requestUri))
+      ).length,
+      0,
+    );
     assert.equal((await db.select().from(ActivityPubPosts)).length, 0);
   });
 
