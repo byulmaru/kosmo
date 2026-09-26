@@ -287,9 +287,17 @@ describe('PostComposerHost', () => {
         }
       },
     };
+    const previousRequestAnimationFrame = globalThis.requestAnimationFrame;
     Object.defineProperty(globalThis, 'document', {
       configurable: true,
       value: documentMock,
+    });
+    Object.defineProperty(globalThis, 'requestAnimationFrame', {
+      configurable: true,
+      value: (callback: FrameRequestCallback) => {
+        callback(0);
+        return 0;
+      },
     });
 
     try {
@@ -338,6 +346,10 @@ describe('PostComposerHost', () => {
       Object.defineProperty(globalThis, 'document', {
         configurable: true,
         value: previousDocument,
+      });
+      Object.defineProperty(globalThis, 'requestAnimationFrame', {
+        configurable: true,
+        value: previousRequestAnimationFrame,
       });
     }
   });
