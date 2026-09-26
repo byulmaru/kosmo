@@ -63,7 +63,12 @@ function htmlToBodyDocument(
       return [];
     }
 
-    return [{ targetHref, profileId }];
+    return [
+      {
+        profileId,
+        targetHref,
+      },
+    ];
   });
   const profileIdsByTargetHref = new Map<string, Set<string>>();
   for (const candidate of normalizedCandidates) {
@@ -86,11 +91,14 @@ function htmlToBodyDocument(
         }
 
         const profileIds = profileIdsByTargetHref.get(href);
-        if (!profileIds || profileIds.size !== 1) {
-          return false;
-        }
+        if (profileIds) {
+          if (profileIds.size !== 1) {
+            return false;
+          }
 
-        return { profileId: profileIds.values().next().value };
+          return { profileId: profileIds.values().next().value };
+        }
+        return false;
       },
     },
     ...schemaDOMParser.rules,

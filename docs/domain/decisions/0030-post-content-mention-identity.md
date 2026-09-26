@@ -17,22 +17,27 @@ Accepted
 
 ## 결정
 
-- inbound typed `Mention.href`는 이미 저장된 ActivityPub actor/Profile mapping으로 알려진 Profile stable identity인지
-  먼저 확인한다. `tag.name`, handle과 본문 표시 문자열의 일치로 identity를 만들거나 거부하지 않는다.
-- typed identity 확인과 본문 HTML 변환은 독립된 경계다. 본문 anchor가 typed href 또는 기존 정상 refresh로 저장된
-  Profile URL alias에 대응하면 `profileId`만 가진 canonical Mention node로 표현할 수 있다. URL이 다르거나 anchor가 없으면
-  본문은 안전한 일반 link 또는 표시 text로 보존한다. body conversion이 fallback이 되어도 typed href에서 확인한 Profile 관계는
-  유지한다.
+- inbound typed `Mention.href`는 먼저 기존 ActivityPub actor/Profile mapping을 확인한다. 이미 알려진 Local/Remote Profile은
+  현재 mapping을 그대로 사용한다. 알려지지 않은 remote actor target은 Note당 최대 32개의 고유 remote actor URI까지 typed href를 통해
+  resolve하고 materialize할 수 있다. 한도 내 target의 remote actor 조회는 모두 동시에 시작하며, 각 조회는 Note별 하나의 공통 30초 제한을
+  공유한다. 제한시간이 끝나면 진행 중인 actor 조회를 중단한다. 이미 시작한 remote Profile 저장은 제한시간 뒤에도 완료될 수 있다.
+  이미 확인된 Mentioned Profile 관계와 Note 전체는 유지한다. 한도를 넘거나 개별 resolve가 실패한 target도 건너뛴다. 본문 anchor나
+  `Mention.name`은 actor를 찾거나 fetch하는 입력으로 사용하지 않는다. 본문 anchor href가 확인된 Profile의 actor URI, 저장된 Profile
+  URL alias 또는 기존 trusted local human URL과 정확히 일치할 때만 `profileId` Mention node로 표현할 수 있다. 알 수 없거나 일치하지
+  않는 anchor는 `tag.name`, handle 또는 표시 문자열과 관계없이 안전한 일반 link 또는 표시 text로 보존한다.
+- typed identity 확인과 본문 HTML 변환은 독립된 경계다. 본문 URL이 확인되지 않아 안전한 일반 link/text로 남더라도
+  typed href에서 확인한 Profile 관계는 유지한다.
 - Mentioned Profile 관계는 canonical node의 body conversion과 독립된 typed identity 집합에서 파생한다. 일반 link, `to`/`cc`
-  audience와 알려지지 않은 typed target은 관계 입력이 아니다. 서로 다른 Profile이 같은 Profile URL alias를 공유하면 해당
-  body anchor는 first match 없이 일반 link/text로 낮추지만 각 typed href의 알려진 Profile 관계는 유지한다.
+  audience와 제한된 resolve 후에도 확인되지 않은 typed target은 관계 입력이 아니다. 서로 다른 Profile이 같은 Profile URL alias를
+  공유하면 해당 body anchor는 first match 없이 일반 link/text로 낮추지만 각 typed href의 확인된 Profile 관계는 유지한다.
 - canonical Mention node에는 `profileId`만 저장한다. 원문 anchor의 표시 문자열은 수신 중 loose resource/length budget 계산에
   필요한 동안만 사용하고 canonical document, 관계, GraphQL 응답 또는 renderer 입력으로 저장하지 않는다. renderer는 같은
   revision의 Profile `relativeHandle`에서 표시 문자열을 파생하며, 관계가 없거나 Profile을 조회할 수 없으면 Profile 이동 없는
   `@알 수 없는 사용자`를 표시한다.
-- Remote Profile URL alias가 비어 있거나 malformed이면 Mention 수신 중 fetch, 새 materialization, backfill을 수행하지 않는다.
-  기존 정상 actor materialization·refresh가 alias를 채우거나 제거하며, Mention receipt가 refresh를 새로 트리거하지 않는다. 새
-  migration이나 live DB 변경을 이 계약에 추가하지 않는다. 이미 저장된 Post Content를 alias 학습 뒤 자동 보정하지 않는다.
+- 이미 알려진 Remote Profile의 URL alias가 비어 있거나 malformed이면 Mention receipt가 그 actor를 다시 fetch하거나 refresh하지 않으며,
+  cached `profileUrl`을 채우지 않는다. 별도의 기존 actor materialization·refresh 경로는 alias를 갱신할 수 있다. typed `Mention.href`로
+  제한적으로 resolve한 미확인 remote actor target만 새로 materialize할 수 있고, body anchor href나 `Mention.name` fetch, 기존 글의 자동
+  수정, 운영자 또는 일괄 backfill은 수행하지 않는다. 새 migration이나 live DB 변경을 이 계약에 추가하지 않는다.
 
 ## 결과와 후속 범위
 

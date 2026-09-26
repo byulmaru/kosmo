@@ -339,6 +339,33 @@ describe('projectRemoteNoteContent', () => {
     ]);
   });
 
+  it('keeps a Mention anchor with an unmatched URL as a safe link', () => {
+    const result = projectRemoteNoteContent({
+      content: '<p><a href="https://evil.example/login">@alice</a></p>',
+      mentions: [
+        {
+          profileId: aliceProfileId,
+          targetHref: 'https://remote.example/users/alice',
+        },
+      ],
+      summary: null,
+      mediaType: 'text/html',
+    });
+
+    assert.deepEqual(result.body.content, [
+      {
+        type: 'paragraph',
+        content: [
+          {
+            marks: [{ attrs: { href: 'https://evil.example/login' }, type: 'link' }],
+            text: '@alice',
+            type: 'text',
+          },
+        ],
+      },
+    ]);
+  });
+
   it('keeps microformats h-card anchors as ordinary links without typed candidates', () => {
     const result = projectRemoteNoteContent({
       content:
@@ -444,7 +471,7 @@ describe('projectRemoteNoteContent', () => {
     ]);
   });
 
-  it('keeps malformed candidates safe and does not use verified Mention anchor text', () => {
+  it('keeps malformed candidates safe while projecting an exact identity URL', () => {
     const result = projectRemoteNoteContent({
       content:
         '<p><a href="https://remote.example/users/alice"></a> ' +
