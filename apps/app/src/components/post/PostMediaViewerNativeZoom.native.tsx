@@ -1,12 +1,3 @@
-import {
-  ArrowDownIcon,
-  ArrowLeftIcon,
-  ArrowRightIcon,
-  ArrowUpIcon,
-  MinusIcon,
-  PlusIcon,
-  RotateCcwIcon,
-} from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -16,19 +7,26 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
-import { IconButton } from '@/components/ui/IconButton';
 import { useReducedMotion } from '@/theme/ThemeProvider';
-import { iconSizes, motion, radius, space } from '@/theme/tokens';
+import { motion, space } from '@/theme/tokens';
 import {
   clampNativeZoomOffset,
   fitImageSize,
   focalNativeZoomOffset,
 } from './PostMediaViewerNativeZoomModel';
-import type { ReactElement } from 'react';
 import type { NativeZoomImageProps, NativeZoomPosition } from './PostMediaViewerNativeZoomModel';
 
 const AnimatedView = Animated.View;
 type NativeZoomImageSize = Readonly<{ height: number; width: number }>;
+const nativeZoomAccessibilityActions = {
+  panDown: { label: '아래쪽으로 이동', name: 'panDown' },
+  panLeft: { label: '왼쪽으로 이동', name: 'panLeft' },
+  panRight: { label: '오른쪽으로 이동', name: 'panRight' },
+  panUp: { label: '위쪽으로 이동', name: 'panUp' },
+  resetZoom: { label: '확대 초기화', name: 'resetZoom' },
+  zoomIn: { label: '확대', name: 'zoomIn' },
+  zoomOut: { label: '축소', name: 'zoomOut' },
+} as const;
 
 export function NativeZoomImage({
   accessibilityLabel,
@@ -67,7 +65,6 @@ export function NativeZoomImage({
         viewportSize,
       )
     : { x: 0, y: 0 };
-
   const syncZoomState = useCallback(
     (nextScale: number, nextOffset: NativeZoomPosition) => {
       setDisplayScale(nextScale);
@@ -127,6 +124,80 @@ export function NativeZoomImage({
     },
     [displayOffset, displayScale, imageSize, offsetX, offsetY, syncZoomState, viewportSize],
   );
+
+  const handleAccessibilityAction = useCallback(
+    (event: { nativeEvent: { actionName: string } }) => {
+      switch (event.nativeEvent.actionName) {
+        case 'zoomIn':
+          if (displayScale < 4) {
+            applyZoom(displayScale + 1);
+          }
+          break;
+        case 'zoomOut':
+          if (displayScale > 1) {
+            applyZoom(displayScale - 1);
+          }
+          break;
+        case 'resetZoom':
+          if (displayScale > 1 || displayOffset.x !== 0 || displayOffset.y !== 0) {
+            reset();
+          }
+          break;
+        case 'panLeft':
+          if (displayScale > 1 && displayOffset.x > -maxOffset.x) {
+            moveBy(-space[48], 0);
+          }
+          break;
+        case 'panRight':
+          if (displayScale > 1 && displayOffset.x < maxOffset.x) {
+            moveBy(space[48], 0);
+          }
+          break;
+        case 'panUp':
+          if (displayScale > 1 && displayOffset.y > -maxOffset.y) {
+            moveBy(0, -space[48]);
+          }
+          break;
+        case 'panDown':
+          if (displayScale > 1 && displayOffset.y < maxOffset.y) {
+            moveBy(0, space[48]);
+          }
+          break;
+      }
+    },
+    [applyZoom, displayOffset, displayScale, maxOffset, moveBy, reset],
+  );
+
+  const interactive = status === 'ready';
+  const accessibilityActions = useMemo(() => {
+    if (!interactive) {
+      return undefined;
+    }
+
+    const actions: Array<{ label: string; name: string }> = [];
+    if (displayScale < 4) {
+      actions.push(nativeZoomAccessibilityActions.zoomIn);
+    }
+    if (displayScale > 1) {
+      actions.push(nativeZoomAccessibilityActions.zoomOut);
+      if (displayScale > 1 || displayOffset.x !== 0 || displayOffset.y !== 0) {
+        actions.push(nativeZoomAccessibilityActions.resetZoom);
+      }
+      if (displayOffset.x > -maxOffset.x) {
+        actions.push(nativeZoomAccessibilityActions.panLeft);
+      }
+      if (displayOffset.x < maxOffset.x) {
+        actions.push(nativeZoomAccessibilityActions.panRight);
+      }
+      if (displayOffset.y > -maxOffset.y) {
+        actions.push(nativeZoomAccessibilityActions.panUp);
+      }
+      if (displayOffset.y < maxOffset.y) {
+        actions.push(nativeZoomAccessibilityActions.panDown);
+      }
+    }
+    return actions;
+  }, [displayOffset, displayScale, interactive, maxOffset]);
 
   const pinch = useMemo(
     () =>
@@ -269,28 +340,32 @@ export function NativeZoomImage({
   );
 
   const scaleLabel = Number(displayScale.toFixed(1)).toString();
-  const interactive = status === 'ready';
   const viewportFrameStyle = { height: viewportSize.height, width: viewportSize.width };
   return (
     <GestureHandlerRootView style={[styles.root, viewportFrameStyle]}>
-      <View
-        accessibilityValue={{ text: `${scaleLabel}배` }}
-        style={[styles.root, viewportFrameStyle]}
-        testID="post-media-viewer-native-zoom"
-      >
+      <View style={[styles.root, viewportFrameStyle]} testID="post-media-viewer-native-zoom">
         <GestureDetector gesture={gesture}>
           <View style={[styles.imageViewport, viewportFrameStyle]}>
             <AnimatedView style={[styles.imageFrame, imageSize, animatedImageStyle]}>
               <Image
+                accessibilityActions={accessibilityActions}
+                accessible
                 accessibilityLabel={accessibilityLabel}
                 accessibilityRole="image"
                 accessibilityState={{ busy: status === 'loading' }}
+                accessibilityValue={{
+                  max: 4,
+                  min: 1,
+                  now: displayScale,
+                  text: `${scaleLabel}배`,
+                }}
                 onError={() => {
                   reset();
                   onStatus('error');
                 }}
                 onLoad={handleLoad}
                 onLoadStart={() => onStatus('loading')}
+                onAccessibilityAction={interactive ? handleAccessibilityAction : undefined}
                 resizeMode="contain"
                 source={status === 'error' ? undefined : { uri: url }}
                 style={styles.image}
@@ -299,84 +374,8 @@ export function NativeZoomImage({
             </AnimatedView>
           </View>
         </GestureDetector>
-        {interactive ? (
-          <View style={styles.controls} accessibilityLiveRegion="polite">
-            <ZoomControl
-              accessibilityLabel={`확대 (현재 ${scaleLabel}배)`}
-              disabled={displayScale >= 4}
-              onPress={() => applyZoom(displayScale + 1)}
-              icon={<PlusIcon color="#ffffff" size={iconSizes[24]} strokeWidth={2.5} />}
-            />
-            <ZoomControl
-              accessibilityLabel={`축소 (현재 ${scaleLabel}배)`}
-              disabled={displayScale <= 1}
-              onPress={() => applyZoom(displayScale - 1)}
-              icon={<MinusIcon color="#ffffff" size={iconSizes[24]} strokeWidth={2.5} />}
-            />
-            <ZoomControl
-              accessibilityLabel={`확대 초기화 (현재 ${scaleLabel}배)`}
-              disabled={displayScale <= 1 && displayOffset.x === 0 && displayOffset.y === 0}
-              onPress={reset}
-              icon={<RotateCcwIcon color="#ffffff" size={iconSizes[24]} strokeWidth={2.5} />}
-            />
-            <View style={styles.directionRow}>
-              <ZoomControl
-                accessibilityLabel={`왼쪽으로 이동 (현재 ${scaleLabel}배)`}
-                disabled={displayOffset.x <= -maxOffset.x}
-                onPress={() => moveBy(-space[48], 0)}
-                icon={<ArrowLeftIcon color="#ffffff" size={iconSizes[24]} strokeWidth={2.5} />}
-              />
-              <ZoomControl
-                accessibilityLabel={`오른쪽으로 이동 (현재 ${scaleLabel}배)`}
-                disabled={displayOffset.x >= maxOffset.x}
-                onPress={() => moveBy(space[48], 0)}
-                icon={<ArrowRightIcon color="#ffffff" size={iconSizes[24]} strokeWidth={2.5} />}
-              />
-              <ZoomControl
-                accessibilityLabel={`위쪽으로 이동 (현재 ${scaleLabel}배)`}
-                disabled={displayOffset.y <= -maxOffset.y}
-                onPress={() => moveBy(0, -space[48])}
-                icon={<ArrowUpIcon color="#ffffff" size={iconSizes[24]} strokeWidth={2.5} />}
-              />
-              <ZoomControl
-                accessibilityLabel={`아래쪽으로 이동 (현재 ${scaleLabel}배)`}
-                disabled={displayOffset.y >= maxOffset.y}
-                onPress={() => moveBy(0, space[48])}
-                icon={<ArrowDownIcon color="#ffffff" size={iconSizes[24]} strokeWidth={2.5} />}
-              />
-            </View>
-          </View>
-        ) : null}
       </View>
     </GestureHandlerRootView>
-  );
-}
-
-function ZoomControl({
-  accessibilityLabel,
-  disabled,
-  icon,
-  onPress,
-}: Readonly<{
-  accessibilityLabel: string;
-  disabled: boolean;
-  icon: ReactElement;
-  onPress: () => void;
-}>) {
-  return (
-    <IconButton
-      accessibilityLabel={accessibilityLabel}
-      accessibilityState={{ disabled }}
-      disabled={disabled}
-      feedback="opacity"
-      onPress={onPress}
-      style={[styles.control, disabled ? styles.disabledControl : undefined]}
-      targetSize={space[48]}
-      visualSize={space[48]}
-      visualStyle={styles.controlVisual}
-    >
-      {icon}
-    </IconButton>
   );
 }
 
@@ -391,24 +390,4 @@ const styles = StyleSheet.create({
   },
   imageFrame: { overflow: 'hidden' },
   image: { height: '100%', width: '100%' },
-  controls: {
-    alignItems: 'flex-end',
-    bottom: space[16],
-    gap: space[4],
-    position: 'absolute',
-    right: space[16],
-  },
-  directionRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: space[4],
-    justifyContent: 'flex-end',
-    maxWidth: space[48] * 4 + space[4] * 3,
-  },
-  control: { alignItems: 'center', justifyContent: 'center' },
-  controlVisual: {
-    backgroundColor: 'rgba(0, 0, 0, 0.56)',
-    borderRadius: radius.full,
-  },
-  disabledControl: { opacity: 0.35 },
 });

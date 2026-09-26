@@ -168,15 +168,8 @@ const icon = (type: string) => (props: Record<string, unknown>) => createElement
 
 mock.module(require.resolve('lucide-react-native'), {
   exports: {
-    ArrowDownIcon: icon('ArrowDownIcon'),
-    ArrowLeftIcon: icon('ArrowLeftIcon'),
-    ArrowRightIcon: icon('ArrowRightIcon'),
-    ArrowUpIcon: icon('ArrowUpIcon'),
     ChevronLeftIcon: icon('ChevronLeftIcon'),
     ChevronRightIcon: icon('ChevronRightIcon'),
-    MinusIcon: icon('MinusIcon'),
-    PlusIcon: icon('PlusIcon'),
-    RotateCcwIcon: icon('RotateCcwIcon'),
     XIcon: icon('XIcon'),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
@@ -267,7 +260,7 @@ describe('PostMediaViewerSurface', () => {
     assert.equal(queryByTestId('post-media-viewer-native-pager'), null);
   });
 
-  it('Native 확대 controls expose the 1~4x range and lock paging while zoomed', async () => {
+  it('Native image accessibility actions expose zoom and lock paging while zoomed', async () => {
     mockPlatform.OS = 'ios';
     await render({ currentIndex: 0 });
     await act(async () =>
@@ -278,29 +271,111 @@ describe('PostMediaViewerSurface', () => {
     await act(async () => image().props.onLoad());
     await act(async () => image().props.onLoadStart());
 
+    assert.equal(image().props.accessibilityRole, 'image');
+    assert.equal(image().props.accessibilityLabel, '첫 번째 이미지');
+    assert.deepEqual(image().props.accessibilityValue, {
+      max: 4,
+      min: 1,
+      now: 1,
+      text: '1배',
+    });
+    assert.deepEqual(image().props.accessibilityActions, [{ label: '확대', name: 'zoomIn' }]);
     const pager = byTestId('post-media-viewer-native-pager');
     assert.equal(pager.props.scrollEnabled, true);
-    const zoomIn = findZoomControlByLabel('확대 (현재 1배)');
-    await act(async () => zoomIn.props.onPress());
-    const zoomedIn = findZoomControlByLabel('확대 (현재 2배)');
-    assert.deepEqual(zoomedIn.props.accessibilityState, { disabled: false });
+    const action = (name: string) =>
+      act(async () => image().props.onAccessibilityAction({ nativeEvent: { actionName: name } }));
+    await action('zoomIn');
+    assert.equal(image().props.accessibilityValue.now, 2);
+    assert.deepEqual(image().props.accessibilityActions, [
+      { label: '확대', name: 'zoomIn' },
+      { label: '축소', name: 'zoomOut' },
+      { label: '확대 초기화', name: 'resetZoom' },
+      { label: '왼쪽으로 이동', name: 'panLeft' },
+      { label: '오른쪽으로 이동', name: 'panRight' },
+    ]);
     assert.equal(byTestId('post-media-viewer-native-pager').props.scrollEnabled, false);
-
-    await act(async () => findZoomControlByLabel('확대 (현재 2배)').props.onPress());
-    await act(async () => findZoomControlByLabel('확대 (현재 3배)').props.onPress());
-    await act(async () => findZoomControlByLabel('확대 (현재 4배)').props.onPress());
-    assert.equal(findZoomControlByLabel('확대 (현재 4배)').props.accessibilityState.disabled, true);
-    assert.equal(
-      findZoomControlByLabel('축소 (현재 4배)').props.accessibilityState.disabled,
-      false,
-    );
-
-    await act(async () => findZoomControlByLabel('확대 초기화 (현재 4배)').props.onPress());
-    assert.equal(
-      findZoomControlByLabel('확대 (현재 1배)').props.accessibilityState.disabled,
-      false,
-    );
+    await action('zoomOut');
+    assert.equal(image().props.accessibilityValue.now, 1);
     assert.equal(byTestId('post-media-viewer-native-pager').props.scrollEnabled, true);
+    await action('zoomIn');
+    assert.equal(image().props.accessibilityValue.now, 2);
+    await action('panRight');
+    assert.deepEqual(flattenStyle(image().parent?.props.style).transform, [
+      { translateX: 48 },
+      { translateY: 0 },
+      { scale: 2 },
+    ]);
+    assert.deepEqual(pick(flattenStyle(pager.props.style), ['height', 'width']), {
+      height: 600,
+      width: 390,
+    });
+
+    await action('zoomIn');
+    await action('zoomIn');
+    await action('zoomIn');
+    assert.equal(image().props.accessibilityValue.now, 4);
+    assert.equal(
+      image().props.accessibilityActions.some(({ name }: { name: string }) => name === 'zoomIn'),
+      false,
+    );
+    const maxZoomTransform = flattenStyle(image().parent?.props.style).transform;
+    await act(async () =>
+      image().props.onAccessibilityAction({ nativeEvent: { actionName: 'zoomIn' } }),
+    );
+    assert.deepEqual(flattenStyle(image().parent?.props.style).transform, maxZoomTransform);
+
+    for (let index = 0; index < 13; index += 1) {
+      await action('panLeft');
+    }
+    assert.equal(
+      image().props.accessibilityActions.some(({ name }: { name: string }) => name === 'panLeft'),
+      false,
+    );
+    const maxHorizontalTransform = flattenStyle(image().parent?.props.style).transform;
+    await act(async () =>
+      image().props.onAccessibilityAction({ nativeEvent: { actionName: 'panLeft' } }),
+    );
+    assert.deepEqual(flattenStyle(image().parent?.props.style).transform, maxHorizontalTransform);
+
+    await action('resetZoom');
+    assert.equal(image().props.accessibilityValue.now, 1);
+    assert.equal(byTestId('post-media-viewer-native-pager').props.scrollEnabled, true);
+
+    await render({ contentRevisionId: 'portrait' });
+    await act(async () =>
+      image().props.onLoad({ nativeEvent: { source: { height: 1600, width: 300 } } }),
+    );
+    await action('zoomIn');
+    const portraitActions = image().props.accessibilityActions.map(
+      ({ name }: { name: string }) => name,
+    );
+    assert.equal(portraitActions.includes('panLeft'), false);
+    assert.equal(portraitActions.includes('panRight'), false);
+    assert.equal(portraitActions.includes('panUp'), true);
+    assert.equal(portraitActions.includes('panDown'), true);
+    const imageTranslateY = () =>
+      (flattenStyle(image().parent?.props.style).transform as Array<{ translateY?: number }>)[1]
+        ?.translateY;
+    await action('panDown');
+    assert.equal(imageTranslateY(), 48);
+    await action('panUp');
+    assert.equal(imageTranslateY(), 0);
+    for (let index = 0; index < 7; index += 1) {
+      await action('panUp');
+    }
+    assert.equal(
+      image().props.accessibilityActions.some(({ name }: { name: string }) => name === 'panUp'),
+      false,
+    );
+    const maxVerticalTransform = flattenStyle(image().parent?.props.style).transform;
+    await act(async () =>
+      image().props.onAccessibilityAction({ nativeEvent: { actionName: 'panUp' } }),
+    );
+    assert.deepEqual(flattenStyle(image().parent?.props.style).transform, maxVerticalTransform);
+
+    await act(async () => image().props.onError());
+    assert.equal(image().props.accessibilityActions, undefined);
+    assert.equal(image().props.onAccessibilityAction, undefined);
   });
 
   it('Native 확대는 더블탭을 누른 위치에 맞추고 pan 이동을 stage 안으로 제한한다', async () => {
@@ -1003,14 +1078,6 @@ function image(): ReactTestInstance {
 function findByLabel(label: string): ReactTestInstance {
   const result = queryByLabel(label);
   assert.ok(result, `element with accessibilityLabel ${label} must exist`);
-  return result;
-}
-
-function findZoomControlByLabel(label: string): ReactTestInstance {
-  const result = renderer?.root.findAll(
-    (node) => String(node.type) === 'IconButton' && node.props.accessibilityLabel === label,
-  )[0];
-  assert.ok(result, `IconButton with accessibilityLabel ${label} must exist`);
   return result;
 }
 
