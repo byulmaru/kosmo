@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { FullReactionPicker } from '@/components/reaction/FullReactionPicker';
+import { reactionEmojiCatalog } from '@/components/reaction/reactionEmojiCatalog';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type {
   FullReactionPickerOption,
@@ -25,7 +26,6 @@ export const reactionOptions: readonly FullReactionPickerOption[] = [
     keywords: ['하트', '사랑'],
     label: '빨간 하트',
     quick: true,
-    recent: true,
   },
   {
     category: 'activities',
@@ -70,7 +70,6 @@ export const reactionOptions: readonly FullReactionPickerOption[] = [
     id: 'laugh',
     keywords: ['웃음'],
     label: '웃음',
-    recent: true,
   },
   {
     category: 'nature',
@@ -79,7 +78,6 @@ export const reactionOptions: readonly FullReactionPickerOption[] = [
     id: 'fire',
     keywords: ['불꽃'],
     label: '불꽃',
-    recent: true,
   },
   {
     category: 'gestures',
@@ -88,7 +86,6 @@ export const reactionOptions: readonly FullReactionPickerOption[] = [
     id: 'clap',
     keywords: ['박수'],
     label: '박수',
-    recent: true,
   },
   {
     category: 'symbols',
@@ -97,7 +94,6 @@ export const reactionOptions: readonly FullReactionPickerOption[] = [
     id: 'sparkles',
     keywords: ['반짝임'],
     label: '반짝임',
-    recent: true,
   },
   {
     category: 'symbols',
@@ -106,7 +102,6 @@ export const reactionOptions: readonly FullReactionPickerOption[] = [
     id: 'hundred',
     keywords: ['최고'],
     label: '최고',
-    recent: true,
   },
   {
     category: 'expressions',
@@ -115,7 +110,6 @@ export const reactionOptions: readonly FullReactionPickerOption[] = [
     id: 'heart-eyes',
     keywords: ['하트', '사랑'],
     label: '하트 눈',
-    recent: true,
   },
   {
     category: 'symbols',
@@ -247,17 +241,7 @@ export const reactionOptions: readonly FullReactionPickerOption[] = [
   },
 ];
 
-export const recentLimitOptions: readonly FullReactionPickerOption[] = Array.from(
-  { length: 18 },
-  (_, index) => ({
-    category: 'symbols',
-    categoryLabel: '기호',
-    emoji: '😀',
-    id: `recent-${index + 1}`,
-    label: `최근 ${index + 1}`,
-    recent: true,
-  }),
-);
+const flagOption = reactionEmojiCatalog.find((option) => option.category === 'flags')!;
 
 const meta = {
   args: {
@@ -285,13 +269,12 @@ const meta = {
     'InteractionContract',
     'LoadingContract',
     'MobileGridGeometryContract',
-    'MobileRecentGridContract',
     'MobileBrowseGeometryContract',
     'MobileExpandedGeometryContract',
-    'RecentGridContract',
     'WebGridGeometryContract',
     'reactionOptions',
-    'recentLimitOptions',
+    'VirtualizedCatalogContract',
+    'FlagAssetContract',
   ],
   parameters: { layout: 'centered' },
   title: 'KOSMO/Components/Full Reaction Picker',
@@ -342,28 +325,10 @@ export const MobileLoading: Story = {
   parameters: mobileParameters,
 };
 
-export const RecentGridContract: Story = {
-  args: { options: recentLimitOptions },
-  play: async ({ canvasElement }) => {
-    const section = within(canvasElement).getByTestId('full-reaction-section-recent');
-    expect(within(section).getAllByRole('button')).toHaveLength(16);
-  },
-};
-
-export const MobileRecentGridContract: Story = {
-  ...MobileBrowse,
-  args: { options: recentLimitOptions, presentation: 'mobile' },
-  play: async ({ canvasElement }) => {
-    const section = within(canvasElement).getByTestId('full-reaction-section-recent');
-    expect(within(section).getAllByRole('button')).toHaveLength(14);
-  },
-};
-
 export const MobileGridGeometryContract: Story = {
   ...MobileBrowse,
   play: async ({ canvasElement }) => {
-    const section = within(canvasElement).getByTestId('full-reaction-section-symbols');
-    const rows = within(section).getAllByTestId(/^full-reaction-section-symbols-row-/);
+    const rows = within(canvasElement).getAllByTestId(/^full-reaction-section-symbols-row-/);
     expect(rows).toHaveLength(2);
     for (const row of rows) {
       expect(getComputedStyle(row).justifyContent).toBe('space-between');
@@ -373,8 +338,7 @@ export const MobileGridGeometryContract: Story = {
 
 export const WebGridGeometryContract: Story = {
   play: async ({ canvasElement }) => {
-    const section = within(canvasElement).getByTestId('full-reaction-section-symbols');
-    const rows = within(section).getAllByTestId(/^full-reaction-section-symbols-row-/);
+    const rows = within(canvasElement).getAllByTestId(/^full-reaction-section-symbols-row-/);
     expect(rows).toHaveLength(2);
     expect(getComputedStyle(rows[0]).justifyContent).toBe('space-between');
     expect(getComputedStyle(rows[1]).justifyContent).toBe('flex-start');
@@ -421,7 +385,6 @@ export const InteractionContract: Story = {
       width: '360px',
     });
     expect(canvas.getByRole('heading', { name: '빠른 반응' })).toBeVisible();
-    expect(canvas.getByRole('heading', { name: '최근 사용' })).toBeVisible();
     expect(canvas.getByRole('heading', { name: '표정과 감정' })).toBeVisible();
     expect(canvas.queryByRole('button', { name: /category 보기/ })).not.toBeInTheDocument();
 
@@ -445,6 +408,31 @@ export const InteractionContract: Story = {
     expect(canvas.getByText('다른 이름이나 이모지로 검색해 보세요.')).toBeVisible();
   },
   render: (args) => <InteractivePicker {...args} />,
+};
+
+export const VirtualizedCatalogContract: Story = {
+  args: { options: reactionEmojiCatalog },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    expect(canvas.getAllByRole('button', { name: /활짝 웃는 얼굴/ }).length).toBeGreaterThan(0);
+    expect(canvas.getAllByRole('button').length).toBeLessThan(reactionEmojiCatalog.length);
+  },
+};
+
+export const FlagAssetContract: Story = {
+  args: { options: [flagOption] },
+  play: async ({ canvasElement }) => {
+    const image = canvasElement.querySelector<HTMLImageElement>(
+      `img[src$="${flagOption.assetPath}"]`,
+    );
+    expect(image).not.toBeNull();
+    await waitFor(() => expect(image?.naturalWidth).toBeGreaterThan(0));
+    expect(
+      within(canvasElement).getByRole('button', {
+        name: `${flagOption.label} ${flagOption.emoji}`,
+      }),
+    ).toBeVisible();
+  },
 };
 
 export const LoadingContract: Story = {

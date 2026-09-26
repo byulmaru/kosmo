@@ -11,8 +11,8 @@ import {
   Reactions,
 } from '@kosmo/core/db';
 import { InstanceKind, InstanceState, ProfileState } from '@kosmo/core/enums';
-import { reactionTypes, reactionTypeSchema } from '@kosmo/core/validation';
-import { and, count, desc, eq, inArray, isNotNull, lt, ne, or, sql } from 'drizzle-orm';
+import { reactionEmojiValues, reactionTypeSchema } from '@kosmo/core/validation';
+import { and, count, desc, eq, isNotNull, lt, ne, or, sql } from 'drizzle-orm';
 import { isCanonicalPostId } from './activitypub-post-uri';
 import { loadLocalPostNote } from './local-post-note';
 import type { PageItems, RequestContext } from '@fedify/fedify';
@@ -82,7 +82,7 @@ const httpUriWhere = (column: SQLWrapper) =>
 const eligibleReactionWhere = (postId: string) =>
   and(
     eq(Reactions.postId, postId),
-    inArray(Reactions.type, reactionTypes),
+    sql`${Reactions.type} = ANY(${sql.param([...reactionEmojiValues])}::text[])`,
     eq(Profiles.state, ProfileState.ACTIVE),
     or(
       and(

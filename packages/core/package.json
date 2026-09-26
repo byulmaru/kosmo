@@ -35,6 +35,7 @@
     "@temporalio/client": "^1.22.0",
     "core-js": "^3.49.0",
     "drizzle-orm": "1.0.0-beta.22",
+    "emoji-datasource-google": "16.0.0",
     "jsdom": "^29.1.1",
     "postgres": "^3.4.9",
     "prosemirror-model": "^1.25.10",
