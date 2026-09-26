@@ -384,7 +384,7 @@ test('default feedback owns a circular surface while preserving state and geomet
     }),
   );
 
-  assert.equal(rootStyle.opacity, 1);
+  assert.equal(rootStyle.opacity, undefined);
   assert.equal(surfaceStyle({ hovered: false, pressed: false }).backgroundColor, 'transparent');
   assert.equal(surfaceStyle({ hovered: false, pressed: false }).borderRadius, 999);
   assert.equal(surfaceStyle({ hovered: false, pressed: false }).height, undefined);
@@ -407,6 +407,7 @@ test('disabled feedback keeps the common opacity and hides the surface', () => {
     accessibilityLabel: '닫기',
     children: '×',
     disabled: true,
+    style: { opacity: 0.7 },
     targetSize: 44,
   });
   const rootStyle = flattenStyle(
@@ -423,6 +424,21 @@ test('disabled feedback keeps the common opacity and hides the surface', () => {
 
   assert.equal(rootStyle.opacity, 0.45);
   assert.equal(flattenStyle(views[1].props.style).backgroundColor, 'transparent');
+});
+
+test('enabled feedback preserves static and state-dependent caller opacity', () => {
+  for (const style of [
+    { opacity: 0.6 },
+    ({ pressed }: { pressed: boolean }) => ({ opacity: pressed ? 0.7 : 0.9 }),
+  ]) {
+    const button = renderIconButton({ accessibilityLabel: '닫기', children: '×', style });
+    for (const pressed of [false, true]) {
+      const rootStyle = flattenStyle(
+        (button.props.style as (state: { pressed: boolean }) => unknown)({ pressed }),
+      );
+      assert.equal(rootStyle.opacity, typeof style === 'function' ? (pressed ? 0.7 : 0.9) : 0.6);
+    }
+  }
 });
 
 test('inverse feedback uses the media contrast while reduced motion is instant', () => {

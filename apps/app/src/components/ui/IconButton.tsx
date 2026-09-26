@@ -149,7 +149,7 @@ export function IconButton({
         styles.target,
         { height: minimumTargetSize, width: minimumTargetSize },
         typeof style === 'function' ? style(state) : style,
-        { opacity: buttonDisabled ? 0.45 : 1 },
+        buttonDisabled ? { opacity: 0.45 } : undefined,
         { minHeight: minimumTargetSize, minWidth: minimumTargetSize },
       ]}
     >
