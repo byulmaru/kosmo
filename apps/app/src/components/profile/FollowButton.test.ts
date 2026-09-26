@@ -14,8 +14,6 @@ let renderer: ReactTestRenderer | null = null;
 const mutationCalls: Array<{ id: string }> = [];
 const toastCalls: Array<{ message: string; tone: string }> = [];
 let mutationError: Error | null = null;
-const relayEnvironment = {};
-const environmentGenerationRef = { current: 0 };
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
 
@@ -65,7 +63,6 @@ mockModule('react-relay', {
     },
     false,
   ],
-  useRelayEnvironment: () => relayEnvironment,
 });
 mockModule('@/analytics/client', {
   trackAnalytics: () => {},
@@ -78,9 +75,6 @@ mockModule('@/components/ui/ToastProvider', {
 });
 mockModule('@/session/SessionProvider', {
   useSession: () => ({ selectedProfileId: 'viewer' }),
-});
-mockModule('@/relay/RelayEnvironmentBoundary', {
-  useRelayEnvironmentGeneration: () => environmentGenerationRef,
 });
 mockModule('@/theme/ThemeProvider', { useTheme: () => ({}) });
 mockModule('@/components/ui/Button', { Button: 'Button' });
