@@ -190,7 +190,7 @@ describe('PostMediaViewer', () => {
     await render({ selectedIndex: 0 });
 
     const closeControl = renderer?.root.findAllByType(IconButton)[0];
-    assert.equal(closeControl?.props.feedback, 'opacity');
+    assert.equal(closeControl?.props.feedbackTone, 'inverse');
     assert.equal(typeof closeControl?.props.visualStyle, 'function');
 
     assert.deepEqual(

@@ -4,7 +4,7 @@ import { mock, test } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
 import { semanticColors } from '../../theme/tokens';
-import type { ElementType } from 'react';
+import type { ElementType, ReactElement } from 'react';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const host = 'Pressable' as unknown as ElementType;
@@ -13,6 +13,7 @@ const flatten = (style: unknown): Record<string, unknown> =>
   Object.assign({}, ...(Array.isArray(style) ? style.flat(Infinity) : [style]).filter(Boolean));
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
+type VisualElement = ReactElement<{ children?: VisualElement[]; color?: string; style?: unknown }>;
 mockModule('react-native', {
   Platform: platform,
   Pressable: host,
@@ -44,17 +45,23 @@ test('profile more keeps a 40px visual with full Native targets and independent 
       );
     });
     const control = () => renderer.root.findByType(host);
-    const visual = (state: object) => control().props.children(state);
+    const visual = (state: object) => control().props.children(state) as VisualElement;
     assert.equal(flatten(control().props.style({ pressed: false })).width, target);
     assert.equal(flatten(control().props.style({ pressed: false })).height, target);
     assert.equal(flatten(visual({ pressed: false }).props.style).width, 40);
     assert.equal(flatten(visual({ pressed: false }).props.style).height, 40);
+    const feedback = (state: object) => {
+      const layer = visual(state).props.children?.[0];
+      assert.ok(layer);
+      return layer;
+    };
+    assert.equal(flatten(visual({ hovered: true }).props.style).backgroundColor, 'transparent');
     assert.equal(
-      flatten(visual({ hovered: true }).props.style).backgroundColor,
-      semanticColors.light.stateHover,
+      flatten(feedback({ pressed: false, hovered: true }).props.style).backgroundColor,
+      os === 'web' ? semanticColors.light.stateHover : 'transparent',
     );
     assert.equal(
-      flatten(visual({ pressed: true, hovered: true }).props.style).backgroundColor,
+      flatten(feedback({ pressed: true, hovered: true }).props.style).backgroundColor,
       semanticColors.light.statePressed,
     );
     if (os === 'web') {
@@ -63,7 +70,7 @@ test('profile more keeps a 40px visual with full Native targets and independent 
       assert.equal(focused.outlineWidth, 2);
       assert.equal(focused.outlineOffset, 2);
       assert.equal(focused.outlineStyle, 'solid');
-      assert.equal(focused.backgroundColor, semanticColors.light.stateHover);
+      assert.equal(focused.backgroundColor, 'transparent');
       assert.equal(focused.transitionDuration, '0ms');
     }
     await act(async () =>
@@ -78,7 +85,14 @@ test('profile more keeps a 40px visual with full Native targets and independent 
       flatten(disabled.props.style).backgroundColor,
       semanticColors.light.stateDisabledSurface,
     );
-    assert.equal(disabled.props.children.props.color, semanticColors.light.stateDisabledForeground);
+    assert.equal(
+      flatten(feedback({ pressed: true, hovered: true }).props.style).backgroundColor,
+      'transparent',
+    );
+    assert.equal(
+      (disabled.props.children as VisualElement[])[1].props.color,
+      semanticColors.light.stateDisabledForeground,
+    );
     if (os === 'web') {
       assert.equal(flatten(disabled.props.style).outlineStyle, 'none');
     }

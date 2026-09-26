@@ -15,7 +15,7 @@
 - Overlay: black 70% `color/overlay/media-viewer`
 - Compact: `390×844` 대표 canvas에서 상단 `654px` image stage와 그 아래 semantic canvas Post detail panel을 세로로 배치한다. Figma의 좌우 16px·상단 80px·하단 16px Media frame은 DSN-63 disconnected Target의 historical reference이며, runtime Surface는 detail을 제외한 전체 image stage를 사용한다.
 - Wide: `560×420` Media frame을 image stage 가운데 배치한 값은 DSN-63 disconnected Target의 historical reference다. Runtime Surface는 오른쪽 `346px` full-height context rail을 제외한 나머지 image stage를 사용하며, Production responsive clamp는 PROD-849가 별도로 검증한다.
-- Controls: 48×48 interaction target, 30px icon, 2.5 stroke, fixed white, dark halo, Hover·Pressed state layer, 2px inside FocusVisible ring과 Disabled opacity
+- Controls: 48×48 interaction target, 30px icon, 2.5 stroke, fixed white, dark halo, 공용 inverse 원형 Hover·Pressed state layer, 2px inside FocusVisible ring과 공통 Disabled opacity
 - Ready: Media, 다중 navigation·상단 counter와 presentation별 secondary surface
 - Loading: 상태 설명과 일반 motion의 spinner 또는 reduced-motion의 정적 `···`를 표시하고 navigation·counter를 숨긴다. Compact detail과 Wide rail은 유지한다.
 - Error: 상태 설명·`다시 시도` action을 표시하고 navigation·counter를 숨긴다. Compact detail과 Wide rail은 유지한다.
@@ -90,7 +90,7 @@ Wide Web의 오른쪽 thread rail은 fullscreen modal 안의 별도 elevation su
 - Web은 이전·다음 control과 `ArrowLeft`·`ArrowRight` keyboard 입력을 제공한다.
 - iOS·Android는 이전·다음 control과 수평 swipe를 제공한다. Gesture가 성립하지 않으면 현재 이미지에 머문다.
 - Native image stage는 플랫폼의 수평 paging을 사용한다. 이미지는 손가락을 따라 움직이고 손을 놓으면 페이지에 안착하며 첫·마지막에서 순환하지 않는다. 이전·다음 버튼도 같은 페이지 이동을 사용하고, reduced motion에서는 버튼 이동 애니메이션을 생략한다. 최초 선택 위치와 화면 폭 변경은 애니메이션 없이 정렬한다. 수평 paging은 image stage에만 적용해 원문의 세로 스크롤을 유지한다.
-- 이전·다음 control은 48×48 hit target과 keyboard focus ring을 유지하며, idle·press 상태에 보이는 원형 배경·테두리·그림자·가장자리를 표시하지 않는다. 화살표 자체는 idle `1`, hover `0.8`, press `0.6`, disabled `0.35` opacity로 상태 피드백을 제공한다.
+- 이전·다음 control은 48×48 hit target과 keyboard focus ring을 유지하며, 공용 inverse 원형 surface로 hover·pressed 상태를 표시한다. 화살표 glyph는 idle·hover·pressed에서 opacity `1`을 유지하고, disabled에서는 공통 disabled opacity를 사용한다. 기존 control의 shadow와 focus 표시를 유지한다.
 - 현재 이미지가 바뀌어도 작성자·원문과 Action Bar의 surface routing은 바뀌지 않는다. Pure Repost에서는 Reply만 바깥 contentless Repost identity를 유지하고 나머지 표시·social action은 direct Source를 대상으로 한다.
 - Viewer open과 Media 탐색은 route나 browser history를 변경하지 않는다.
 

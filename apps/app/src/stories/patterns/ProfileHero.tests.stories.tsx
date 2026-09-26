@@ -18,6 +18,12 @@ function getTriggerVisual(trigger: HTMLElement) {
   return visual as HTMLElement;
 }
 
+function getTriggerFeedback(trigger: HTMLElement) {
+  const feedback = getTriggerVisual(trigger).firstElementChild;
+  expect(feedback).toBeInstanceOf(HTMLElement);
+  return feedback as HTMLElement;
+}
+
 export const MobileFollowError: Story = {
   args: { containerWidth: 390 },
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
@@ -202,6 +208,7 @@ export const MoreButtonInteraction: Story = {
     const canvas = within(canvasElement);
     const trigger = canvas.getByRole('button', { name: '더보기' });
     const visual = getTriggerVisual(trigger);
+    const feedback = getTriggerFeedback(trigger);
     const serializeColor = (color: string) => {
       const probe = canvasElement.ownerDocument.createElement('div');
       probe.style.color = color;
@@ -211,9 +218,9 @@ export const MoreButtonInteraction: Story = {
     const pressedColor = serializeColor(semanticColors.light.statePressed);
 
     await userEvent.hover(trigger);
-    await waitFor(() => expect(getComputedStyle(visual).backgroundColor).toBe(hoverColor));
+    await waitFor(() => expect(getComputedStyle(feedback).backgroundColor).toBe(hoverColor));
     await userEvent.pointer({ keys: '[MouseLeft>]', target: trigger });
-    await waitFor(() => expect(getComputedStyle(visual).backgroundColor).toBe(pressedColor));
+    await waitFor(() => expect(getComputedStyle(feedback).backgroundColor).toBe(pressedColor));
     await userEvent.pointer({ keys: '[/MouseLeft]', target: trigger });
     await userEvent.keyboard('{Escape}');
 
@@ -222,7 +229,7 @@ export const MoreButtonInteraction: Story = {
     await waitFor(() => expect(trigger).toHaveFocus());
     await waitFor(() => {
       const style = getComputedStyle(visual);
-      expect(style.backgroundColor).toBe(hoverColor);
+      expect(style.backgroundColor).toBe('rgba(0, 0, 0, 0)');
       expect(style.outlineStyle).toBe('solid');
       expect(style.outlineWidth).toBe('2px');
     });

@@ -228,7 +228,6 @@ export function PostComposerHost({
         <IconButton
           accessibilityLabel="글쓰기 닫기"
           disabled={submitting}
-          feedback="opacity"
           onPress={() => requestClose()}
           style={styles.closeButton}
           targetSize={40}

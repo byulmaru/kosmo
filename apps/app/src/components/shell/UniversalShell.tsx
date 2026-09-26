@@ -296,7 +296,6 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
       accessibilityLabel="메뉴 열기"
       accessibilityState={{ expanded: drawerOpen }}
       controlRef={menuButtonRef}
-      feedback="opacity"
       onPress={openNavigationDrawer}
       style={styles.menuButton}
       targetSize={44}

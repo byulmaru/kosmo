@@ -276,6 +276,7 @@ export function PostMediaViewerSurface({
           {showCloseControl ? (
             <IconButton
               accessibilityLabel="이미지 뷰어 닫기"
+              feedbackTone="inverse"
               onPress={() => onClose()}
               style={[
                 styles.closeButton,
@@ -283,7 +284,7 @@ export function PostMediaViewerSurface({
               ]}
               targetSize={48}
               visualSize={48}
-              visualStyle={controlVisualStyle(false)}
+              visualStyle={controlVisualStyle()}
             >
               <XIcon color="#ffffff" size={30} strokeWidth={2.5} />
             </IconButton>
@@ -295,6 +296,7 @@ export function PostMediaViewerSurface({
                 accessibilityLabel="이전 이미지"
                 accessibilityState={{ disabled: previousDisabled }}
                 disabled={previousDisabled}
+                feedbackTone="inverse"
                 onPress={() => {
                   if (!previousDisabled) {
                     onPrevious();
@@ -303,7 +305,7 @@ export function PostMediaViewerSurface({
                 style={[styles.navigationButton, styles.previousButton]}
                 targetSize={48}
                 visualSize={48}
-                visualStyle={controlVisualStyle(previousDisabled, false)}
+                visualStyle={controlVisualStyle(false)}
               >
                 <ChevronLeftIcon color="#ffffff" size={30} strokeWidth={2.5} />
               </IconButton>
@@ -311,6 +313,7 @@ export function PostMediaViewerSurface({
                 accessibilityLabel="다음 이미지"
                 accessibilityState={{ disabled: nextDisabled }}
                 disabled={nextDisabled}
+                feedbackTone="inverse"
                 onPress={() => {
                   if (!nextDisabled) {
                     onNext();
@@ -319,7 +322,7 @@ export function PostMediaViewerSurface({
                 style={[styles.navigationButton, styles.nextButton]}
                 targetSize={48}
                 visualSize={48}
-                visualStyle={controlVisualStyle(nextDisabled, false)}
+                visualStyle={controlVisualStyle(false)}
               >
                 <ChevronRightIcon color="#ffffff" size={30} strokeWidth={2.5} />
               </IconButton>
@@ -673,37 +676,20 @@ function StatusAction({
   );
 }
 
-function controlVisualStyle(disabled: boolean, showDecoration = true) {
+function controlVisualStyle(showDecoration = true) {
   return (state: PressableStateCallbackType): ViewStyle[] => {
     const webState = state as PressableStateCallbackType & {
       focused?: boolean;
-      hovered?: boolean;
     };
 
     return [
       styles.controlVisual,
       {
-        backgroundColor: showDecoration
-          ? state.pressed
-            ? 'rgba(255, 255, 255, 0.24)'
-            : webState.hovered
-              ? 'rgba(255, 255, 255, 0.16)'
-              : 'transparent'
-          : 'transparent',
         ...(showDecoration
           ? Platform.OS === 'web'
             ? ({ filter: 'drop-shadow(0 1px 2px rgba(0, 0, 0, 0.9))' } as unknown as ViewStyle)
             : { boxShadow: '0 1px 2px rgba(0, 0, 0, 0.9)' }
           : undefined),
-        opacity: disabled
-          ? 0.35
-          : showDecoration
-            ? 1
-            : state.pressed
-              ? 0.6
-              : webState.hovered
-                ? 0.8
-                : 1,
         ...(Platform.OS === 'web' && webState.focused
           ? ({
               outlineColor: '#ffffff',

@@ -132,7 +132,6 @@ export function ProfileEditScreen({
             <IconButton
               accessibilityLabel="프로필 편집 닫기"
               disabled={saving}
-              feedback="opacity"
               onPress={onBack}
               style={styles.backAction}
             >

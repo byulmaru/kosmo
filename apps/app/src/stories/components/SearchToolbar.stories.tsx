@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { SearchToolbar } from '@/components/ui/SearchToolbar';
+import { colors } from '@/theme/tokens';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { SearchToolbarLeadingAction, SearchToolbarProps } from '@/components/ui/SearchToolbar';
 
@@ -110,7 +111,9 @@ function expectIcon(element: HTMLElement, size: number) {
 }
 
 function getControlVisual(control: HTMLElement) {
-  const visual = control.firstElementChild;
+  const surface = control.firstElementChild;
+  expect(surface).toBeInstanceOf(HTMLElement);
+  const visual = surface?.firstElementChild;
   expect(visual).toBeInstanceOf(HTMLElement);
   return visual as HTMLElement;
 }
@@ -215,7 +218,7 @@ export const InteractionContract: Story = {
       await userEvent.pointer({ keys: '[MouseLeft>]', target: leading });
       const visual = getControlVisual(leading);
       await waitFor(() =>
-        expect(getComputedStyle(visual).transform).toBe('matrix(0.98, 0, 0, 0.98, 0, 0)'),
+        expect(getComputedStyle(visual).backgroundColor).toBe(colors.light.statePressed),
       );
       expect(getComputedStyle(visual).transitionDuration).toBe('0.12s');
       expect(getComputedStyle(leading).transform).toBe('none');
@@ -280,7 +283,9 @@ export const ReducedMotionContract: Story = {
     const visual = getControlVisual(menu);
 
     await userEvent.pointer({ keys: '[MouseLeft>]', target: menu });
-    expect(getComputedStyle(visual).transform).toBe('none');
+    await waitFor(() =>
+      expect(getComputedStyle(visual).backgroundColor).toBe(colors.light.statePressed),
+    );
     expect(getComputedStyle(visual).transitionDuration).toBe('0s');
     expect(getComputedStyle(menu).transform).toBe('none');
     expectTarget(menu, 44);
