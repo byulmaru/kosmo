@@ -144,6 +144,7 @@ export async function profileFollowPairWorkflow(input: ProfileFollowPair): Promi
   let lifecycleState: ProfileFollowPairLifecycleState = 'INITIAL';
   let updateReceived = false;
   let inFlight = false;
+  let inFlightFollowUpdate: Promise<ProfileFollowPairTransitionOutcome> | undefined;
   let transitionFailure: string | undefined;
   let pendingRequestId: string | undefined;
   const effectQueue: ProfileFollowPairEffect[] = [];
@@ -154,24 +155,26 @@ export async function profileFollowPairWorkflow(input: ProfileFollowPair): Promi
       PROFILE_FOLLOW_PAIR_UPDATE_NAME,
     ),
     async (command) => {
+      const parsedCommand = parseProfileFollowPairCommand(command);
       if (inFlight) {
+        if (
+          parsedCommand.kind === 'FOLLOW' &&
+          inFlightFollowUpdate !== undefined
+        ) {
+          return inFlightFollowUpdate;
+        }
         throw pairConflict('Profile Follow pair transition is already in flight');
+      }
+      if (isTerminalState(lifecycleState)) {
+        throw pairConflict('Profile Follow pair lifecycle is already terminal');
+      }
+      if (transitionFailure !== undefined) {
+        throw pairConflict('Profile Follow pair transition previously failed');
       }
       inFlight = true;
       updateReceived = true;
 
-      try {
-        const parsedCommand = parseProfileFollowPairCommand(command);
-        if (isTerminalState(lifecycleState)) {
-          throw pairConflict('Profile Follow pair lifecycle is already terminal');
-        }
-        if (transitionFailure !== undefined) {
-          throw pairConflict('Profile Follow pair transition previously failed');
-        }
-        if (lifecycleState === 'PENDING' && parsedCommand.kind === 'FOLLOW') {
-          throw pairConflict('Profile Follow pair already has a pending request');
-        }
-
+      const transition = (async (): Promise<ProfileFollowPairTransitionOutcome> => {
         try {
           if (lifecycleState === 'INITIAL' && parsedCommand.kind === 'FOLLOW') {
             // A run can be lazily bootstrapped for a request created before this
@@ -220,20 +223,32 @@ export async function profileFollowPairWorkflow(input: ProfileFollowPair): Promi
           transitionFailure = errorMessage(error);
           throw error;
         }
+      })();
+      if (parsedCommand.kind === 'FOLLOW') {
+        inFlightFollowUpdate = transition;
+      }
+
+      try {
+        return await transition;
       } finally {
         inFlight = false;
+        if (inFlightFollowUpdate === transition) {
+          inFlightFollowUpdate = undefined;
+        }
       }
     },
     {
       validator: (command) => {
-        parseProfileFollowPairCommand(command);
-        if (isTerminalState(lifecycleState)) {
+        const parsedCommand = parseProfileFollowPairCommand(command);
+        const duplicateFollowInFlight =
+          parsedCommand.kind === 'FOLLOW' && inFlightFollowUpdate !== undefined;
+        if (isTerminalState(lifecycleState) && !duplicateFollowInFlight) {
           throw pairConflict('Profile Follow pair lifecycle is already terminal');
         }
         if (transitionFailure !== undefined) {
           throw pairConflict('Profile Follow pair transition previously failed');
         }
-        if (inFlight) {
+        if (inFlight && !duplicateFollowInFlight) {
           throw pairConflict('Profile Follow pair transition is already in flight');
         }
       },

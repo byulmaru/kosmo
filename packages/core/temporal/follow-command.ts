@@ -69,10 +69,8 @@ export const executeProfileFollowPairTransition = async (
       () =>
         temporalClient.workflow.executeUpdateWithStart(PROFILE_FOLLOW_PAIR_UPDATE_NAME, {
           args: [input.command],
-          // Update IDs are transport-level deduplication metadata only. Keep
-          // the initial Follow admission deduplicated; let Temporal assign a
-          // fresh ID to terminal attempts so a prior PENDING no-op can retry.
-          updateId: input.command.kind === 'FOLLOW' ? 'follow' : undefined,
+          // Leave Update IDs to the SDK: one call's RPC retries share an ID,
+          // while each distinct Follow attempt reaches the Workflow afresh.
           startWorkflowOperation: new WithStartWorkflowOperation(
             PROFILE_FOLLOW_PAIR_WORKFLOW_TYPE,
             {

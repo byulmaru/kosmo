@@ -24,7 +24,7 @@ const followCommand = {
   origin: 'LOCAL' as const,
 };
 
-test('pair transition caller uses deterministic UWS identity and active-run policies', async () => {
+test('pair transition caller uses fresh SDK Update IDs and active-run policies', async () => {
   const execution = {
     ok: false as const,
     error: { code: 'CONFLICT' as const, message: 'already followed' },
@@ -42,32 +42,36 @@ test('pair transition caller uses deterministic UWS identity and active-run poli
   );
 
   try {
-    await assert.rejects(
-      executeProfileFollowPairTransition({ pair, command: followCommand }),
-      (error: unknown) => error instanceof ConflictError && error.message === 'already followed',
-    );
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await assert.rejects(
+        executeProfileFollowPairTransition({ pair, command: followCommand }),
+        (error: unknown) => error instanceof ConflictError && error.message === 'already followed',
+      );
+    }
 
-    const call = update.mock.calls[0];
-    assert.ok(call);
-    const [updateName, options] = call.arguments;
-    assert.ok(options);
-    assert.equal(updateName, 'profileFollowPairUpdate');
-    assert.equal(options.updateId, 'follow');
-    assert.deepEqual(options.args, [followCommand]);
+    assert.equal(update.mock.calls.length, 2);
+    for (const call of update.mock.calls) {
+      const [updateName, options] = call.arguments;
+      assert.ok(options);
+      assert.equal(updateName, 'profileFollowPairUpdate');
+      assert.equal('updateId' in options, false);
+      assert.deepEqual(options.args, [followCommand]);
 
-    const operation = options.startWorkflowOperation;
-    assert.equal(operation.options.workflowId, profileFollowPairWorkflowId(pair));
-    assert.equal(operation.options.taskQueue, 'kosmo');
-    assert.equal(operation.options.workflowIdConflictPolicy, 'USE_EXISTING');
-    assert.equal(operation.options.workflowIdReusePolicy, 'ALLOW_DUPLICATE');
-    assert.deepEqual(operation.options.args, [pair]);
-    const deadlineCall = deadline.mock.calls[0];
-    assert.ok(deadlineCall);
-    const deadlineValue = deadlineCall.arguments[0];
-    const deadlineTimestamp =
-      deadlineValue instanceof Date ? deadlineValue.getTime() : deadlineValue;
-    assert.ok(deadlineTimestamp >= before + 4_900);
-    assert.ok(deadlineTimestamp <= Date.now() + 5_000);
+      const operation = options.startWorkflowOperation;
+      assert.equal(operation.options.workflowId, profileFollowPairWorkflowId(pair));
+      assert.equal(operation.options.taskQueue, 'kosmo');
+      assert.equal(operation.options.workflowIdConflictPolicy, 'USE_EXISTING');
+      assert.equal(operation.options.workflowIdReusePolicy, 'ALLOW_DUPLICATE');
+      assert.deepEqual(operation.options.args, [pair]);
+    }
+    assert.equal(deadline.mock.calls.length, 2);
+    for (const deadlineCall of deadline.mock.calls) {
+      const deadlineValue = deadlineCall.arguments[0];
+      const deadlineTimestamp =
+        deadlineValue instanceof Date ? deadlineValue.getTime() : deadlineValue;
+      assert.ok(deadlineTimestamp >= before + 4_900);
+      assert.ok(deadlineTimestamp <= Date.now() + 5_000);
+    }
   } finally {
     deadline.mock.restore();
     update.mock.restore();
@@ -93,7 +97,7 @@ test('terminal pair transition lets Temporal assign a fresh Update ID per attemp
     assert.ok(call);
     const options = call.arguments[1];
     assert.ok(options);
-    assert.equal(options.updateId, undefined);
+    assert.equal('updateId' in options, false);
     assert.equal(
       options.startWorkflowOperation.options.workflowId,
       profileFollowPairWorkflowId(pair),

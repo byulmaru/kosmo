@@ -362,6 +362,8 @@ test('terminal request removal reconstructs a lost commit from pendingRequestId'
     return;
   }
   assert.equal(rejected.result.changed, true);
+  const hydrated = await hydrateProfileFollowPairTransition(rejected.result);
+  assert.equal(hydrated.profileFollowRequest, undefined);
   assert.deepEqual(rejected.effectPlan, [
     {
       kind: 'DELETE',
@@ -802,7 +804,7 @@ test('guarded removal does not reconstruct an effect while the expected row rema
   ]);
 });
 
-test('hydration does not carry a deleted row snapshot across the Temporal boundary', async () => {
+test('hydration fails when a committed Follow row is missing', async () => {
   const follower = await createProfile();
   const followee = await createProfile();
   const committed = await executeProfileFollowPairTransition({
@@ -820,7 +822,36 @@ test('hydration does not carry a deleted row snapshot across the Temporal bounda
   assert.ok(committed.result.profileFollowId);
   const profileFollowId = committed.result.profileFollowId;
   await db.delete(ProfileFollows).where(eq(ProfileFollows.id, profileFollowId));
-  const hydrated = await hydrateProfileFollowPairTransition(committed.result);
-  assert.equal(hydrated.profileFollow, undefined);
-  assert.equal(hydrated.followerProfile.id, follower.id);
+  await assert.rejects(
+    hydrateProfileFollowPairTransition(committed.result),
+    (error) =>
+      error instanceof Error &&
+      error.message === 'Committed Follow relation is missing during hydration',
+  );
+});
+
+test('hydration fails when a committed Follow request row is missing', async () => {
+  const follower = await createProfile();
+  const followee = await createProfile(ProfileFollowPolicy.APPROVAL_REQUIRED);
+  const committed = await executeProfileFollowPairTransition({
+    pair: { followerProfileId: follower.id, followeeProfileId: followee.id },
+    command: { kind: 'FOLLOW', origin: 'LOCAL' },
+  });
+  assert.equal(committed.ok, true);
+  if (!committed.ok) {
+    return;
+  }
+  assert.equal(committed.result.commandKind, 'FOLLOW');
+  assert.equal(committed.result.kind, 'PENDING');
+  assert.ok(committed.result.profileFollowRequestId);
+  await db
+    .delete(ProfileFollowRequests)
+    .where(eq(ProfileFollowRequests.id, committed.result.profileFollowRequestId));
+
+  await assert.rejects(
+    hydrateProfileFollowPairTransition(committed.result),
+    (error) =>
+      error instanceof Error &&
+      error.message === 'Committed Follow request is missing during hydration',
+  );
 });

@@ -2345,6 +2345,11 @@ describe('GraphQL remote profile boundary', () => {
     );
     assertNoGraphQLErrors(established);
     assert.equal(established.data?.followProfile.result.__typename, 'ProfileFollow');
+    const initialOpenFollowId = established.data!.followProfile.result.id;
+    const openPairWorkflowId =
+      `profile-follow-pair:${followerAuth.profile.id}:${openFolloweeAuth.profile.id}`;
+    await temporalClient.workflow.getHandle(openPairWorkflowId).result();
+
     const establishedAgain = await requestGraphQL<{
       followProfile: { result: { __typename: string; id: string } };
     }>(
@@ -2361,6 +2366,41 @@ describe('GraphQL remote profile boundary', () => {
       establishedAgain.data?.followProfile.result,
       established.data?.followProfile.result,
     );
+    await temporalClient.workflow.getHandle(openPairWorkflowId).result();
+
+    const unfollowed = await requestGraphQL<{
+      unfollowProfile: { profileFollowId: string };
+    }>(
+      `mutation UnfollowOpenProfile($id: ID!) {
+        unfollowProfile(input: { id: $id }) { profileFollowId }
+      }`,
+      { id: globalId('Profile', openFolloweeAuth.profile.id) },
+      followerAuth.token,
+    );
+    assertNoGraphQLErrors(unfollowed);
+    assert.equal(unfollowed.data?.unfollowProfile.profileFollowId, initialOpenFollowId);
+    assert.equal(await countRows(ProfileFollows), 0);
+    await temporalClient.workflow
+      .getHandle(
+        `profile-follow-unfollow:${followerAuth.profile.id}:${openFolloweeAuth.profile.id}:${decodeGlobalId(initialOpenFollowId).id}`,
+      )
+      .result();
+
+    const refollowed = await requestGraphQL<{
+      followProfile: { result: { __typename: string; id: string } };
+    }>(
+      `mutation RefollowOpenProfile($id: ID!) {
+        followProfile(input: { id: $id }) {
+          result { __typename ... on ProfileFollow { id } }
+        }
+      }`,
+      { id: globalId('Profile', openFolloweeAuth.profile.id) },
+      followerAuth.token,
+    );
+    assertNoGraphQLErrors(refollowed);
+    assert.equal(refollowed.data?.followProfile.result.__typename, 'ProfileFollow');
+    assert.notEqual(refollowed.data?.followProfile.result.id, initialOpenFollowId);
+    assert.equal(await countRows(ProfileFollows), 1);
 
     const followeeAuth = await createAuthenticatedSession();
     await db
@@ -2401,7 +2441,7 @@ describe('GraphQL remote profile boundary', () => {
     assert.equal(await countRows(ProfileFollowRequests), 1);
     assert.equal(await countRows(ProfileFollows), 1);
 
-    const requestId = followed.data!.followProfile.result.id;
+    const firstRequestId = followed.data!.followProfile.result.id;
     const requestedAgain = await requestGraphQL<{
       followProfile: { result: { __typename: string; id: string } };
     }>(
@@ -2416,8 +2456,43 @@ describe('GraphQL remote profile boundary', () => {
     assertNoGraphQLErrors(requestedAgain);
     assert.deepEqual(requestedAgain.data?.followProfile.result, {
       __typename: 'ProfileFollowRequest',
-      id: requestId,
+      id: firstRequestId,
     });
+
+    const cancelledFirstRequest = await requestGraphQL<{
+      cancelProfileFollowRequest: { profileFollowRequestId: string };
+    }>(
+      `mutation CancelFirstFollowRequest($id: ID!) {
+        cancelProfileFollowRequest(input: { id: $id }) { profileFollowRequestId }
+      }`,
+      { id: firstRequestId },
+      followerAuth.token,
+    );
+    assertNoGraphQLErrors(cancelledFirstRequest);
+    assert.deepEqual(cancelledFirstRequest.data?.cancelProfileFollowRequest, {
+      profileFollowRequestId: firstRequestId,
+    });
+    assert.equal(await countRows(ProfileFollowRequests), 0);
+
+    const requestPairWorkflowId =
+      `profile-follow-pair:${followerAuth.profile.id}:${followeeAuth.profile.id}`;
+    await temporalClient.workflow.getHandle(requestPairWorkflowId).result();
+    const reRequested = await requestGraphQL<{
+      followProfile: { result: { __typename: string; id: string } };
+    }>(
+      `mutation RequestFollowAfterCancel($id: ID!) {
+        followProfile(input: { id: $id }) {
+          result { __typename ... on ProfileFollowRequest { id } }
+        }
+      }`,
+      { id: globalId('Profile', followeeAuth.profile.id) },
+      followerAuth.token,
+    );
+    assertNoGraphQLErrors(reRequested);
+    assert.equal(reRequested.data?.followProfile.result.__typename, 'ProfileFollowRequest');
+    const requestId = reRequested.data!.followProfile.result.id;
+    assert.notEqual(requestId, firstRequestId);
+    assert.equal(await countRows(ProfileFollowRequests), 1);
 
     const unauthorizedApproval = await requestGraphQL(
       `mutation UnauthorizedApproveFollowRequest($id: ID!) {
