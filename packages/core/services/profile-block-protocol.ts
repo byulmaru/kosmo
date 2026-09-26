@@ -212,6 +212,9 @@ export const prepareProfileBlockProtocolUndo = async ({
           ownerProfileId,
           targetProfileId,
         });
+        if (original.state === 'CLOSED') {
+          return { kind: 'NOOP' };
+        }
       } else {
         await tx.insert(ProfileBlockActivities).values({
           activityUri: originalActivityUri,
