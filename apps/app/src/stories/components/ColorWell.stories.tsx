@@ -100,7 +100,8 @@ export const InteractionContract: Story = {
     expect(button.getBoundingClientRect().width).toBe(48);
     expect(button.getBoundingClientRect().height).toBe(48);
     const surface = button.firstElementChild as HTMLElement;
-    const swatch = surface.firstElementChild as HTMLElement;
+    const feedback = surface.firstElementChild as HTMLElement;
+    const swatch = surface.lastElementChild as HTMLElement;
     expect(surface.getBoundingClientRect().width).toBe(40);
     expect(swatch.getBoundingClientRect().width).toBe(32);
     expect(swatch).toHaveStyle({ backgroundColor: '#347AC2' });
@@ -116,13 +117,13 @@ export const InteractionContract: Story = {
     await user.unhover(button);
     await user.hover(button);
     await user.pointer({ target: button, keys: '[MouseLeft>]' });
-    await waitFor(() => expect(surface).toHaveStyle({ backgroundColor: theme.statePressed }));
+    await waitFor(() => expect(feedback).toHaveStyle({ backgroundColor: theme.statePressed }));
     await user.pointer({ target: button, keys: '[/MouseLeft]' });
-    await waitFor(() => expect(surface).toHaveStyle({ backgroundColor: theme.stateHover }));
+    await waitFor(() => expect(feedback).toHaveStyle({ backgroundColor: theme.stateHover }));
     await user.click(button);
     expect(args.onPress).toHaveBeenCalledTimes(3);
     expect(disabled).toHaveAttribute('aria-disabled', 'true');
-    expect(disabled.firstElementChild?.firstElementChild).toHaveStyle({
+    expect(disabled.firstElementChild?.lastElementChild).toHaveStyle({
       backgroundColor: '#347AC2',
     });
     await fireEvent.click(disabled);

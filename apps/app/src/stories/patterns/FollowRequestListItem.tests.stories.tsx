@@ -1,4 +1,5 @@
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
+import { colors } from '@/theme/tokens';
 import appleTouchIconUrl from '../../../public/apple-touch-icon.png?url';
 import baseMeta, {
   RepresentativeStates as representativeStates,
@@ -173,19 +174,26 @@ export const ActionPressedFeedback: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const pointerUser = userEvent.setup();
+    const pressedColor = colors.light.statePressed;
 
     for (const label of ['승인', '거절']) {
       const button = canvas.getByRole('button', {
         name: `별빛 여행자 팔로우 요청 ${label}`,
       });
 
+      const feedback = button.firstElementChild?.firstElementChild;
+      expect(feedback).toBeInstanceOf(HTMLElement);
       await pointerUser.pointer({ keys: '[MouseLeft>]', target: button });
-      await waitFor(() => expect(getComputedStyle(button).opacity).toBe('0.7'));
+      await waitFor(() =>
+        expect(getComputedStyle(feedback as HTMLElement).backgroundColor).toBe(pressedColor),
+      );
       await pointerUser.pointer({ target: canvasElement });
       await pointerUser.pointer({ keys: '[/MouseLeft]', target: canvasElement });
 
       expect(button).toBeEnabled();
-      await waitFor(() => expect(getComputedStyle(button).opacity).toBe('1'));
+      await waitFor(() =>
+        expect(getComputedStyle(feedback as HTMLElement).backgroundColor).toBe('rgba(0, 0, 0, 0)'),
+      );
     }
   },
 };
