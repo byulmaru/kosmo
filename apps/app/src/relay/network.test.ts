@@ -119,6 +119,36 @@ describe('Relay 네트워크', () => {
     assert.equal(await file.text(), 'image');
   });
 
+  it('prototype 관련 업로드 경로는 객체 변경이나 전송 전에 거부한다', async () => {
+    const marker = '__feedbackPrototypeProbe';
+    for (const path of [
+      `__proto__.${marker}`,
+      `variables.input.__proto__.${marker}`,
+      `constructor.prototype.${marker}`,
+      'input.constructor',
+      'input.prototype',
+      'input.__proto__',
+    ]) {
+      try {
+        await assert.rejects(
+          executeGraphQLRequest(
+            request,
+            { input: {} },
+            null,
+            async () => {
+              assert.fail('unsafe upload must not be sent');
+            },
+            { [path]: new Blob(['image']) },
+          ),
+          /Invalid upload variable path/u,
+        );
+        assert.equal(Object.hasOwn(Object.prototype, marker), false);
+      } finally {
+        Reflect.deleteProperty(Object.prototype, marker);
+      }
+    }
+  });
+
   it('fetch rejection을 원인과 함께 Relay transport 오류로 표시한다', async () => {
     const cause = new TypeError('fetch failed');
 
