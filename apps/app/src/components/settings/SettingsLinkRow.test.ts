@@ -46,15 +46,17 @@ mock.module(new URL('../shell/NavigationLink.tsx', import.meta.url), {
       href,
       onNavigate,
       primary,
+      push,
     }: {
       children: ReactElement<{ href?: string }>;
       href: string;
       onNavigate?: () => void;
       primary?: boolean;
+      push?: boolean;
     }) =>
       createElement(
         'NavigationLink',
-        { href, onNavigate, primary },
+        { href, onNavigate, primary, push },
         cloneElement(children, { href }),
       ),
   },
@@ -108,6 +110,7 @@ describe('SettingsLinkRow', () => {
     const navigationLink = rendered('NavigationLink')[0];
     assert.equal(navigationLink.props.href, '/settings/default-post-visibility');
     assert.equal(navigationLink.props.primary, true);
+    assert.equal(navigationLink.props.push, true);
     assert.equal(row.props.href, '/settings/default-post-visibility');
     assert.equal(row.props.accessibilityRole, 'link');
     assert.equal(row.props.accessibilityLabel, '게시물 기본 공개 범위 설정 열기');

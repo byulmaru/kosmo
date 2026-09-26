@@ -69,6 +69,10 @@ export function usePathname() {
   return useContext(RouterContext).pathname;
 }
 
+export function useRootNavigationState() {
+  return null;
+}
+
 export function useSegments() {
   return useContext(RouterContext).segments;
 }

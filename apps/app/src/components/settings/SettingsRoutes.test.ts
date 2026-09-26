@@ -9,14 +9,18 @@ import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const require = createRequire(import.meta.url);
-const originalLocation = Object.getOwnPropertyDescriptor(globalThis, 'location');
 
 let platform: 'android' | 'ios' | 'web' = 'web';
 let width = 1_280;
 let backCalls = 0;
+let pushedPaths: string[] = [];
+let dismissedToPaths: string[] = [];
 let replacedPaths: string[] = [];
-let locationReplacements: string[] = [];
 let pathname = '/settings';
+let navigationState: { index: number; routes: { name: string }[] } = {
+  index: 0,
+  routes: [{ name: 'index' }],
+};
 let SlotRoute: ComponentType = () => null;
 let sessionStatus: 'error' | 'guest' | 'valid' = 'guest';
 let otaUpdateId: string | null = null;
@@ -36,8 +40,12 @@ mock.module('expo-router', {
     usePathname: () => pathname,
     useRouter: () => ({
       back: () => (backCalls += 1),
+      dismiss: () => undefined,
+      dismissTo: (href: string) => dismissedToPaths.push(href),
+      push: (href: string) => pushedPaths.push(href),
       replace: (href: string) => replacedPaths.push(href),
     }),
+    useRootNavigationState: () => navigationState,
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module('expo-updates', {
@@ -188,9 +196,11 @@ afterEach(async () => {
   platform = 'web';
   width = 1_280;
   backCalls = 0;
+  pushedPaths = [];
+  dismissedToPaths = [];
   replacedPaths = [];
-  locationReplacements = [];
   pathname = '/settings';
+  navigationState = { index: 0, routes: [{ name: 'index' }] };
   SlotRoute = () => null;
   sessionStatus = 'guest';
   otaUpdateId = null;
@@ -206,16 +216,11 @@ afterEach(async () => {
     await act(async () => renderer?.unmount());
     renderer = null;
   }
-  if (originalLocation) {
-    Object.defineProperty(globalThis, 'location', originalLocation);
-  } else {
-    Reflect.deleteProperty(globalThis, 'location');
-  }
 });
 
 describe('Settings routes', () => {
-  it('detail deep link의 route-owned back을 위해 root index를 anchor로 둔다', () => {
-    assert.equal(settingsInitialRouteName, 'index');
+  it('Web detail deep link는 synthetic root anchor 없이 route-owned parent를 사용한다', () => {
+    assert.equal(settingsInitialRouteName, undefined);
   });
 
   it('full Web root는 320px master와 flexible Profile detail을 함께 표시한다', async () => {
@@ -233,7 +238,7 @@ describe('Settings routes', () => {
     assert.equal(rendered('SettingsProfileDetail').length, 1);
   });
 
-  it('full Web detail은 공통 master와 back action 없는 detail heading을 표시한다', async () => {
+  it('full Web detail은 공통 master와 명시적인 parent back을 표시한다', async () => {
     await renderRoute('/settings/default-post-visibility', SettingsDefaultPostVisibilityRoute);
 
     assert.ok(byTestId('settings-workspace'));
@@ -242,19 +247,26 @@ describe('Settings routes', () => {
       ['설정', '게시물 기본 공개 범위'],
     );
     assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'default-post-visibility');
-    assert.equal(rendered('Pressable').length, 0);
+    assert.equal(
+      rendered('PageHeader')[1].props.leading.props.accessibilityLabel,
+      '설정으로 돌아가기',
+    );
     assert.equal(rendered('SettingsProfileDetail').length, 1);
   });
 
-  it('full Web mute category는 데이터 연결 전에 master entry를 선택하지 않는다', async () => {
+  it('full Web mute category는 master 진입점을 선택하고 상세에 하위 목록을 표시한다', async () => {
     await renderRoute('/settings/mute-and-block', SettingsMuteAndBlockRoute);
 
     assert.deepEqual(
       rendered('PageHeader').map((node) => node.props.title),
       ['설정', '뮤트 및 차단'],
     );
-    assert.equal(rendered('SettingsNavigationList')[0].props.selected, undefined);
+    assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'mute-and-block');
     assert.equal(rendered('SettingsMuteAndBlockNavigation').length, 1);
+    assert.equal(
+      rendered('PageHeader')[1].props.leading.props.accessibilityLabel,
+      '설정으로 돌아가기',
+    );
   });
 
   it('full Web muted profile detail은 공통 master의 mute category를 선택한다', async () => {
@@ -264,14 +276,11 @@ describe('Settings routes', () => {
       rendered('PageHeader').map((node) => node.props.title),
       ['설정', '뮤트한 프로필'],
     );
-    assert.equal(rendered('SettingsNavigationList').length, 0);
-    assert.equal(rendered('SettingsMuteAndBlockNavigation').length, 1);
-    assert.equal(rendered('SettingsMuteAndBlockNavigation')[0].props.selected, 'muted-profiles');
+    assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'mute-and-block');
+    assert.equal(rendered('SettingsMuteAndBlockNavigation').length, 0);
     assert.equal(
-      byTestId('settings-master-pane').findAll(
-        (node) => (node.type as unknown) === 'SettingsMuteAndBlockNavigation',
-      ).length,
-      1,
+      rendered('PageHeader')[1].props.leading.props.accessibilityLabel,
+      '뮤트 및 차단으로 돌아가기',
     );
     assert.equal(
       byTestId('settings-detail-pane').findAll(
@@ -288,13 +297,9 @@ describe('Settings routes', () => {
 
     const back = rendered('PageHeader')[0].props.leading;
     assert.equal(back.props.accessibilityLabel, '뮤트 및 차단으로 돌아가기');
-    Object.defineProperty(globalThis, 'location', {
-      configurable: true,
-      value: { replace: (href: string) => locationReplacements.push(href) },
-    });
     await act(async () => back.props.onPress());
-    assert.equal(backCalls, 0);
-    assert.deepEqual(locationReplacements, ['/settings/mute-and-block']);
+    assert.equal(backCalls, 1);
+    assert.deepEqual(replacedPaths, []);
   });
 
   it('Native muted profile detail은 parent label과 replace navigation을 사용한다', async () => {
@@ -331,9 +336,12 @@ describe('Settings routes', () => {
       rendered('PageHeader').map((node) => node.props.title),
       ['설정', '차단한 프로필'],
     );
-    assert.equal(rendered('SettingsNavigationList').length, 0);
-    assert.equal(rendered('SettingsMuteAndBlockNavigation').length, 1);
-    assert.equal(rendered('SettingsMuteAndBlockNavigation')[0].props.selected, 'blocked-profiles');
+    assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'mute-and-block');
+    assert.equal(rendered('SettingsMuteAndBlockNavigation').length, 0);
+    assert.equal(
+      rendered('PageHeader')[1].props.leading.props.accessibilityLabel,
+      '뮤트 및 차단으로 돌아가기',
+    );
     assert.equal(rendered('SettingsBlockedProfiles').length, 1);
     assert.equal('headingRef' in rendered('SettingsBlockedProfiles')[0].props, false);
   });
@@ -421,13 +429,9 @@ describe('Settings routes', () => {
     assert.equal(header.props.title, '게시물 기본 공개 범위');
     const back = header.props.leading;
     assert.equal(back.props.accessibilityLabel, '설정으로 돌아가기');
-    Object.defineProperty(globalThis, 'location', {
-      configurable: true,
-      value: { replace: (href: string) => locationReplacements.push(href) },
-    });
     await act(async () => back.props.onPress());
-    assert.equal(backCalls, 0);
-    assert.deepEqual(locationReplacements, ['/settings']);
+    assert.equal(backCalls, 1);
+    assert.deepEqual(replacedPaths, []);
   });
 
   it('Android detail back action은 44dp layout과 hit slop으로 48dp target을 제공한다', async () => {
@@ -473,6 +477,18 @@ describe('Settings routes', () => {
     );
     assert.equal(rendered('NativeChannelSettings').length, 0);
     assert.equal(rendered('SettingsItem').length, 0);
+  });
+
+  it('full Web 개발 정보는 기본 정보 진입점을 유지하고 바로 위 정보 화면으로 돌아간다', async () => {
+    await renderRoute('/settings/developer', SettingsDeveloperRoute);
+
+    assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'info');
+    const back = rendered('PageHeader')[1].props.leading;
+    assert.equal(back.props.accessibilityLabel, '정보로 돌아가기');
+    await act(async () => back.props.onPress());
+    assert.deepEqual(pushedPaths, ['/settings/info']);
+    assert.deepEqual(dismissedToPaths, []);
+    assert.deepEqual(replacedPaths, []);
   });
 
   it('Web 개발 정보는 public channel만 표시하고 Native channel·OTA 행은 표시하지 않는다', async () => {
@@ -591,6 +607,16 @@ describe('Protected layout session guard', () => {
 
 async function renderRoute(nextPathname: string, Route: ComponentType) {
   pathname = nextPathname;
+  const routeNames =
+    nextPathname === '/settings'
+      ? ['index']
+      : nextPathname === '/settings/muted-profiles' || nextPathname === '/settings/blocked-profiles'
+        ? ['index', 'mute-and-block', nextPathname.slice('/settings/'.length)]
+        : ['index', nextPathname.slice('/settings/'.length)];
+  navigationState = {
+    index: routeNames.length - 1,
+    routes: routeNames.map((name) => ({ name })),
+  };
   SlotRoute = Route;
   await act(async () => {
     renderer = create(createElement(SettingsLayout));
