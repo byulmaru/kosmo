@@ -37,18 +37,18 @@ Block 원본과 해제를 구분하며 중복·completion loss에도 같은 doma
 
 **Guardrails**
 
-- D1·D3·D4·D5: pair당 제품 관계는 하나, 여러 원본은 protocol metadata, 마지막 미해제 원본만 canonical 해제로 연결한다.
+- D1·D3·D4·D5: pair당 제품 관계는 하나, 검증된 inbound Undo는 현재 pair의 exact row 해제로 연결한다.
 - 기존 action·cleanup을 복제하지 않고 exact row를 보존한다. generic ledger·임의 TTL·새 exactly-once framework는 제외한다.
 - 저장 변경은 구버전과 호환되는 additive 변경으로 한정하고 기존 migration을 수정하지 않는다.
 
 **Verification**
 
-- 실제 DB에서 원본 중복·ID 내용 충돌·Undo 선행·B2→B1→Undo B1·마지막 원본 해제·반대 방향 Block을 검증한다.
+- 실제 DB에서 원본 중복·ID 내용 충돌·Undo 선행·URI 불일치·B2→B1→Undo B1·반대 방향 Block을 검증한다.
 - domain commit 직후 응답 유실과 새 row 생성 후 과거 효과 재시도를 주입해 관계와 effect 결과를 확인한다.
 - 저장 변경이 있으면 구버전 read/write·기존 row 유지·forward migration 재실행 결과를 검증한다.
 
 - [x] 2.1 검증 원본·종료 증거·exact row와 미완료 효과를 보존하는 최소 경계를 구현한다.
-- [x] 2.2 원본별 종료와 마지막 원본의 exact Profile Block row 삭제를 연결하고 completion-loss 복구를 검증한다. Unblock에서 Follow·Request·Notification cleanup은 수행하지 않는다.
+- [x] 2.2 검증된 inbound Undo를 현재 pair의 exact Profile Block row 삭제에 연결하고 completion-loss 복구를 검증한다. Unblock에서 Follow·Request·Notification cleanup은 수행하지 않는다.
 - [x] 2.3 필요한 additive migration과 old/new 호환 검증을 수행한다. 저장 변경이 없으면 그 근거를 남긴다.
 
 ## 3. PROD-818 verified inbound Block·Undo

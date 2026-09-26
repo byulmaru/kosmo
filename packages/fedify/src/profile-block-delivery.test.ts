@@ -2,12 +2,13 @@ import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
 import { after, afterEach, before, mock, test } from 'node:test';
-import { Block, Undo } from '@fedify/vocab';
+import { Block, Endpoints, Person, Undo } from '@fedify/vocab';
 import {
   ActivityPubActorType,
   InstanceKind,
   InstanceState,
   ProfileFollowPolicy,
+  ProfileState,
 } from '@kosmo/core/enums';
 import { eq, inArray } from 'drizzle-orm';
 import type { Context } from '@fedify/fedify';
@@ -110,7 +111,21 @@ test('Block과 Undo는 직접 target만 수신하고 관계 삭제 뒤에도 sta
     .then((rows) => rows[0]);
   assert.equal(storedActivity?.deliveryState, 'SETTLED');
 
-  await db.delete(ProfileBlocks).where(eq(ProfileBlocks.id, profileBlock.id));
+  const { executeProfileUnblockTransitionActivity } =
+    await import('../../../apps/worker/src/activities/profile-block');
+  const transition = await executeProfileUnblockTransitionActivity({
+    ownerProfileId: fixture.localProfileId,
+    profileBlockId: profileBlock.id,
+    targetProfileId: fixture.remoteProfileId,
+  });
+  assert.equal(transition.ok && transition.result.removed, true);
+  assert.deepEqual(
+    await db
+      .select({ state: ProfileBlockActivities.state })
+      .from(ProfileBlockActivities)
+      .where(eq(ProfileBlockActivities.profileBlockId, profileBlock.id)),
+    [{ state: 'CLOSING' }],
+  );
 
   assert.deepEqual(
     await sendProfileBlockUndo({
@@ -142,66 +157,193 @@ test('Block과 Undo는 직접 target만 수신하고 관계 삭제 뒤에도 sta
     .where(eq(ProfileBlockActivities.activityUri, `${publicOrigin}/ap/block/${profileBlock.id}`))
     .then((rows) => rows[0]);
   assert.equal(settledActivity?.undoDeliveryState, 'SETTLED');
+  assert.equal(settledActivity?.state, 'CLOSED');
 });
 
-test('recipient 부재는 같은 Block과 Undo identity의 재시도를 허용한다', async () => {
+test('커밋된 Undo는 Owner와 Local Instance 상태 변경 뒤에도 전송한다', async (t) => {
   const fixture = await createFixture();
-  const relation = await db
+  const profileBlock = await db
     .insert(ProfileBlocks)
     .values({ ownerProfileId: fixture.localProfileId, targetProfileId: fixture.remoteProfileId })
     .returning()
     .then(firstOrThrow);
   const contextFixture = createContextFixture();
   mock.method(localOutboundFederation, 'createContext', () => contextFixture.context);
+  await sendProfileBlock(profileBlock.id, { createIfMissing: true });
 
+  const { executeProfileUnblockTransitionActivity } =
+    await import('../../../apps/worker/src/activities/profile-block');
+  const transition = await executeProfileUnblockTransitionActivity({
+    ownerProfileId: fixture.localProfileId,
+    profileBlockId: profileBlock.id,
+    targetProfileId: fixture.remoteProfileId,
+  });
+  assert.equal(transition.ok && transition.result.removed, true);
+
+  t.after(async () => {
+    await db
+      .update(Instances)
+      .set({ state: InstanceState.ACTIVE })
+      .where(eq(Instances.id, localInstanceId));
+  });
+  await db
+    .update(Profiles)
+    .set({ state: ProfileState.SUSPENDED })
+    .where(eq(Profiles.id, fixture.localProfileId));
+  await db
+    .update(Instances)
+    .set({ state: InstanceState.SUSPENDED })
+    .where(eq(Instances.id, localInstanceId));
+
+  assert.deepEqual(
+    await sendProfileBlockUndo({
+      ownerProfileId: fixture.localProfileId,
+      profileBlockId: profileBlock.id,
+      targetProfileId: fixture.remoteProfileId,
+    }),
+    { status: 'SETTLED' },
+  );
+  assert.equal(contextFixture.calls.length, 2);
+  assert.ok(contextFixture.calls[1]?.activity instanceof Undo);
+});
+
+test('Block 전달은 누락된 recipient projection을 복원한 뒤 queue에 인계한다', async () => {
+  const fixture = await createFixture();
+  const profileBlock = await db
+    .insert(ProfileBlocks)
+    .values({ ownerProfileId: fixture.localProfileId, targetProfileId: fixture.remoteProfileId })
+    .returning()
+    .then(firstOrThrow);
   await db
     .update(ActivityPubActors)
-    .set({ inboxUri: null })
+    .set({ inboxUri: null, sharedInboxUri: null })
     .where(eq(ActivityPubActors.profileId, fixture.remoteProfileId));
-  await assert.rejects(sendProfileBlock(relation.id, { createIfMissing: true }));
-  const originalUri = `${publicOrigin}/ap/block/${relation.id}`;
-  const pendingBlock = await db
-    .select()
-    .from(ProfileBlockActivities)
-    .where(eq(ProfileBlockActivities.activityUri, originalUri))
-    .then((rows) => rows[0]);
-  assert.equal(pendingBlock?.deliveryState, 'NONE');
-  assert.equal(contextFixture.calls.length, 0);
 
-  await db
-    .update(ActivityPubActors)
-    .set({ inboxUri: `${fixture.remoteActorUri}/inbox` })
-    .where(eq(ActivityPubActors.profileId, fixture.remoteProfileId));
-  assert.deepEqual(await sendProfileBlock(relation.id, { createIfMissing: true }), {
+  const contextFixture = createContextFixture({
+    lookupObject: async () =>
+      new Person({
+        endpoints: new Endpoints({
+          sharedInbox: new URL(`${new URL(fixture.remoteActorUri).origin}/inbox`),
+        }),
+        id: new URL(fixture.remoteActorUri),
+        inbox: new URL(`${fixture.remoteActorUri}/inbox`),
+        preferredUsername: 'alice',
+      }),
+  });
+  mock.method(localOutboundFederation, 'createContext', () => contextFixture.context);
+
+  assert.deepEqual(await sendProfileBlock(profileBlock.id, { createIfMissing: true }), {
     status: 'SETTLED',
   });
-  assert.equal(contextFixture.calls[0]?.activity.id?.href, originalUri);
+  assert.equal(contextFixture.calls.length, 1);
+  assert.deepEqual(
+    contextFixture.calls[0]?.recipients.map((recipient) => recipient.inboxId?.href),
+    [`${fixture.remoteActorUri}/inbox`],
+  );
+});
 
-  await db.delete(ProfileBlocks).where(eq(ProfileBlocks.id, relation.id));
+test('Block 전달은 recipient projection을 복원하지 못하면 실패로 남겨 retry된다', async () => {
+  const fixture = await createFixture();
+  const profileBlock = await db
+    .insert(ProfileBlocks)
+    .values({ ownerProfileId: fixture.localProfileId, targetProfileId: fixture.remoteProfileId })
+    .returning()
+    .then(firstOrThrow);
   await db
     .update(ActivityPubActors)
-    .set({ inboxUri: null })
+    .set({ inboxUri: null, sharedInboxUri: null })
     .where(eq(ActivityPubActors.profileId, fixture.remoteProfileId));
-  const undoInput = {
-    ownerProfileId: fixture.localProfileId,
-    profileBlockId: relation.id,
-    targetProfileId: fixture.remoteProfileId,
-  };
-  await assert.rejects(sendProfileBlockUndo(undoInput));
-  const pendingUndo = await db
+
+  const contextFixture = createContextFixture({ lookupObject: async () => null });
+  mock.method(localOutboundFederation, 'createContext', () => contextFixture.context);
+
+  await assert.rejects(
+    sendProfileBlock(profileBlock.id, { createIfMissing: true }),
+    /Remote lookup did not return an actor/,
+  );
+  assert.equal(contextFixture.calls.length, 0);
+  const pendingActivity = await db
     .select()
     .from(ProfileBlockActivities)
-    .where(eq(ProfileBlockActivities.activityUri, originalUri))
+    .where(eq(ProfileBlockActivities.profileBlockId, profileBlock.id))
     .then((rows) => rows[0]);
-  assert.equal(pendingUndo?.undoDeliveryState, 'NONE');
-  assert.equal(contextFixture.calls.length, 1);
+  assert.equal(pendingActivity?.deliveryState, 'PENDING');
+});
 
+test('Undo 전달도 누락된 recipient projection을 복원한 뒤 queue에 인계한다', async () => {
+  const fixture = await createFixture();
+  const profileBlock = await db
+    .insert(ProfileBlocks)
+    .values({ ownerProfileId: fixture.localProfileId, targetProfileId: fixture.remoteProfileId })
+    .returning()
+    .then(firstOrThrow);
+  const contextFixture = createContextFixture({
+    lookupObject: async () =>
+      new Person({
+        endpoints: new Endpoints({
+          sharedInbox: new URL(`${new URL(fixture.remoteActorUri).origin}/inbox`),
+        }),
+        id: new URL(fixture.remoteActorUri),
+        inbox: new URL(`${fixture.remoteActorUri}/inbox`),
+        preferredUsername: 'alice',
+      }),
+  });
+  mock.method(localOutboundFederation, 'createContext', () => contextFixture.context);
+
+  await sendProfileBlock(profileBlock.id, { createIfMissing: true });
+  await db.delete(ProfileBlocks).where(eq(ProfileBlocks.id, profileBlock.id));
   await db
     .update(ActivityPubActors)
-    .set({ inboxUri: `${fixture.remoteActorUri}/inbox` })
+    .set({ inboxUri: null, sharedInboxUri: null })
     .where(eq(ActivityPubActors.profileId, fixture.remoteProfileId));
-  assert.deepEqual(await sendProfileBlockUndo(undoInput), { status: 'SETTLED' });
-  assert.equal(contextFixture.calls[1]?.activity.id?.href, `${originalUri}/undo`);
+
+  assert.deepEqual(
+    await sendProfileBlockUndo({
+      ownerProfileId: fixture.localProfileId,
+      profileBlockId: profileBlock.id,
+      targetProfileId: fixture.remoteProfileId,
+    }),
+    { status: 'SETTLED' },
+  );
+  assert.equal(contextFixture.calls.length, 2);
+  assert.deepEqual(
+    contextFixture.calls[1]?.recipients.map((recipient) => recipient.inboxId?.href),
+    [`${fixture.remoteActorUri}/inbox`],
+  );
+});
+
+test('Undo 전달은 recipient projection을 복원하지 못하면 PENDING으로 남겨 retry된다', async () => {
+  const fixture = await createFixture();
+  const profileBlock = await db
+    .insert(ProfileBlocks)
+    .values({ ownerProfileId: fixture.localProfileId, targetProfileId: fixture.remoteProfileId })
+    .returning()
+    .then(firstOrThrow);
+  const contextFixture = createContextFixture({ lookupObject: async () => null });
+  mock.method(localOutboundFederation, 'createContext', () => contextFixture.context);
+
+  await sendProfileBlock(profileBlock.id, { createIfMissing: true });
+  await db.delete(ProfileBlocks).where(eq(ProfileBlocks.id, profileBlock.id));
+  await db
+    .update(ActivityPubActors)
+    .set({ inboxUri: null, sharedInboxUri: null })
+    .where(eq(ActivityPubActors.profileId, fixture.remoteProfileId));
+
+  await assert.rejects(
+    sendProfileBlockUndo({
+      ownerProfileId: fixture.localProfileId,
+      profileBlockId: profileBlock.id,
+      targetProfileId: fixture.remoteProfileId,
+    }),
+    /Remote lookup did not return an actor/,
+  );
+  assert.equal(contextFixture.calls.length, 1);
+  const pendingActivity = await db
+    .select()
+    .from(ProfileBlockActivities)
+    .where(eq(ProfileBlockActivities.activityUri, `${publicOrigin}/ap/block/${profileBlock.id}`))
+    .then((rows) => rows[0]);
+  assert.equal(pendingActivity?.undoDeliveryState, 'PENDING');
 });
 
 type SendActivityCall = {
@@ -210,11 +352,16 @@ type SendActivityCall = {
   readonly recipients: Recipient[];
 };
 
-const createContextFixture = () => {
+const createContextFixture = ({
+  lookupObject = async () => null,
+}: {
+  readonly lookupObject?: Context<void>['lookupObject'];
+} = {}) => {
   const calls: SendActivityCall[] = [];
   const context = {
     canonicalOrigin: publicOrigin,
     getActorUri: (identifier: string) => new URL(`/ap/actor/${identifier}`, publicOrigin),
+    lookupObject,
     sendActivity: async (
       _sender: { identifier: string },
       recipients: Recipient | Recipient[],

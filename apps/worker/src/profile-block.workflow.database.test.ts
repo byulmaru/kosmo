@@ -130,7 +130,7 @@ test(
       transitionReleased.resolve();
       const [firstResult, existingResult] = await Promise.all([first, existing]);
       assert.equal(firstResult.created, true);
-      assert.deepEqual(existingResult, { ...firstResult, created: false });
+      assert.deepEqual(existingResult, firstResult);
       const rows = await db
         .select()
         .from(ProfileBlocks)
@@ -144,6 +144,9 @@ test(
         rows.map(({ id }) => id),
         [firstResult.profileBlockId],
       );
+      await environment.client.workflow
+        .getHandle(profileBlockWorkflow.workflowIdFromArgs(input))
+        .result();
       const duplicate = await runBlock(input, `${PROFILE_BLOCK_UPDATE_ID}:duplicate`);
       assert.deepEqual(duplicate, { ...firstResult, created: false });
     } finally {

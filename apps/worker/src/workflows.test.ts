@@ -10,6 +10,7 @@ import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
 import { ApplicationFailure, WithStartWorkflowOperation } from '@temporalio/client';
 import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
+import { settleEffects } from './workflows/settle-effects';
 import type {
   ProfileFollowPairCommand,
   ProfileFollowPairTransitionExecution,
@@ -72,6 +73,26 @@ const reactionDeleteInput = (id: string, origin: ReactionDeleteEffectsInput['ori
   type: '❤️',
   createdAt: '2026-08-18T00:00:00.000Z',
   origin,
+});
+
+test('settleEffects는 실패 뒤에도 모든 sibling effect 정산을 기다린다', async () => {
+  let releaseEffect!: () => void;
+  const heldEffect = new Promise<void>((resolve) => {
+    releaseEffect = resolve;
+  });
+  let settled = false;
+  const result = settleEffects([Promise.reject(new Error('effect failed')), heldEffect]).finally(
+    () => {
+      settled = true;
+    },
+  );
+
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.equal(settled, false);
+
+  releaseEffect();
+  await assert.rejects(result, /effect failed/);
+  assert.equal(settled, true);
 });
 
 test(
@@ -1622,7 +1643,11 @@ test(
           await effectReleased;
           throw ApplicationFailure.nonRetryable('ActivityPub effect failed');
         },
-        sendProfileBlockActivity: async () => undefined,
+        sendProfileBlockActivity: async (profileBlockId: string, options: unknown) => {
+          assert.equal(profileBlockId, execution.result.profileBlockId);
+          assert.deepEqual(options, { createIfMissing: true });
+          calls.push('block:' + profileBlockId);
+        },
       },
       connection: environment.nativeConnection,
       namespace: environment.namespace,
@@ -1650,7 +1675,7 @@ test(
 
         await effectStartedPromise;
         assert.deepEqual(await updateResultPromise, execution.result);
-        assert.deepEqual(calls, ['undo:' + JSON.stringify(effectInput)]);
+        assert.ok(calls.includes('undo:' + JSON.stringify(effectInput)));
 
         const conflictingInput = { ...input, origin: 'ACTIVITYPUB' as const };
         const conflictingStart = new WithStartWorkflowOperation('profileBlockWorkflow', {
@@ -1671,6 +1696,13 @@ test(
         releaseEffect();
         const handle = await startWorkflowOperation.workflowHandle();
         await assert.rejects(handle.result());
+        assert.deepEqual(
+          new Set(calls),
+          new Set([
+            'undo:' + JSON.stringify(effectInput),
+            'block:' + execution.result.profileBlockId,
+          ]),
+        );
       } finally {
         releaseEffect();
       }
@@ -1738,6 +1770,63 @@ test(
       });
       const handle = await startWorkflowOperation.workflowHandle();
       await handle.result();
+    });
+  },
+);
+
+test(
+  'Profile Unblock Update는 committed result를 반환하고 Undo effect 실패는 Workflow 실패로 남긴다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+
+    const taskQueue = KOSMO_TASK_QUEUE + '-profile-unblock-effect-failure-' + process.pid;
+    const input = {
+      ownerProfileId: '00000000-0000-8000-8000-000000000811',
+      targetProfileId: '00000000-0000-8000-8000-000000000812',
+      profileBlockId: '00000000-0000-8000-8000-000000000813',
+    };
+    const result = {
+      removed: true,
+      profileBlockId: input.profileBlockId,
+      ownerProfileId: input.ownerProfileId,
+      targetProfileId: input.targetProfileId,
+    };
+
+    const worker = await Worker.create({
+      activities: {
+        executeProfileUnblockTransitionActivity: async () => ({ ok: true as const, result }),
+        sendProfileBlockUndoActivity: async () => {
+          throw ApplicationFailure.nonRetryable('Undo effect failed');
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      const startWorkflowOperation = new WithStartWorkflowOperation('profileUnblockWorkflow', {
+        args: [input],
+        taskQueue,
+        workflowId: 'profile-unblock-test:' + process.pid + ':effect-failure',
+        workflowIdConflictPolicy: 'USE_EXISTING',
+        workflowIdReusePolicy: 'REJECT_DUPLICATE',
+      });
+      assert.deepEqual(
+        await environment.client.workflow.executeUpdateWithStart(PROFILE_UNBLOCK_UPDATE_NAME, {
+          args: [input],
+          updateId: PROFILE_UNBLOCK_UPDATE_ID_PREFIX + input.profileBlockId,
+          startWorkflowOperation,
+        }),
+        result,
+      );
+      const handle = await startWorkflowOperation.workflowHandle();
+      await assert.rejects(handle.result());
     });
   },
 );

@@ -142,12 +142,14 @@ export type ProfileBlockActivityOrigin = keyof typeof ProfileBlockActivityOrigin
 
 export const ProfileBlockActivityState = {
   ACTIVE: 'ACTIVE',
+  CLOSING: 'CLOSING',
   CLOSED: 'CLOSED',
 } as const;
 export type ProfileBlockActivityState = keyof typeof ProfileBlockActivityState;
 
 export const ProfileBlockDeliveryState = {
   NONE: 'NONE',
+  PENDING: 'PENDING',
   SETTLED: 'SETTLED',
 } as const;
 export type ProfileBlockDeliveryState = keyof typeof ProfileBlockDeliveryState;
