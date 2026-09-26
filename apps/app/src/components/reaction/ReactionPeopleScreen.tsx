@@ -94,7 +94,7 @@ export function ReactionPeopleHeader({ onBack }: { onBack: () => void }): ReactE
         leading={
           <IconButton
             accessibilityLabel="뒤로 가기"
-            feedback="opacity-hover"
+            feedback="surface"
             onPress={onBack}
             style={styles.back}
             targetSize={44}

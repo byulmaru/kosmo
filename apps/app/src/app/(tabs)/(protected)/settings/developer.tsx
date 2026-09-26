@@ -21,7 +21,7 @@ export default function SettingsDeveloperRoute() {
     detailHeaderMode === 'back' ? (
       <IconButton
         accessibilityLabel="정보로 돌아가기"
-        feedback="opacity-hover"
+        feedback="surface"
         onPress={() => returnToSettingsParent('/settings/developer', router)}
         style={styles.backButton}
         targetSize={44}

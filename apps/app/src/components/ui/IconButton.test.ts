@@ -8,6 +8,8 @@ const mockModule = (specifier: string | URL, exports: object) =>
   } as unknown as Parameters<typeof mock.module>[1]);
 
 const mockPlatform: { OS: string } = { OS: 'web' };
+let reducedMotion = false;
+const theme = { stateHover: 'hover', statePressed: 'pressed' };
 
 mockModule('react-native', {
   Platform: mockPlatform,
@@ -17,6 +19,17 @@ mockModule('react-native', {
     flatten: (style: unknown) => flattenStyle(style),
   },
   View: 'View',
+});
+mockModule('@/theme/ThemeProvider', {
+  useReducedMotion: () => reducedMotion,
+  useTheme: () => theme,
+});
+mockModule('@/theme/tokens', {
+  motion: {
+    duration: { fast: 120, instant: 0 },
+    easing: { standard: 'standard-easing' },
+  },
+  radius: { full: 999 },
 });
 
 type TestElementProps = {
@@ -38,7 +51,7 @@ type IconButtonProps = {
   children: ReactNode | ((state: { pressed: boolean }) => ReactNode);
   controlRef?: unknown;
   disabled?: boolean;
-  feedback?: 'none' | 'opacity' | 'opacity-hover';
+  feedback?: 'none' | 'opacity' | 'surface';
   hitSlop?: number;
   onPressIn?: () => void;
   style?: unknown;
@@ -348,7 +361,7 @@ test('a navigation adapter can preserve link semantics', () => {
   assert.equal(link.props.accessibilityRole, 'link');
 });
 
-test('visual feedback is opt-in and opacity feedback preserves press-only semantics', () => {
+test('visual feedback preserves none and legacy opacity while surface owns state backgrounds', () => {
   const defaultButton = renderIconButton({
     accessibilityLabel: '닫기',
     children: '×',
@@ -360,32 +373,38 @@ test('visual feedback is opt-in and opacity feedback preserves press-only semant
       pressed: true,
     }),
   );
+  const defaultChildren =
+    typeof defaultButton.props.children === 'function'
+      ? defaultButton.props.children({ pressed: false })
+      : defaultButton.props.children;
   const opacityButton = renderIconButton({
     accessibilityLabel: '닫기',
     children: '×',
     feedback: 'opacity',
   });
-  const opacityHoverButton = renderIconButton({
+  const disabledOpacityButton = renderIconButton({
     accessibilityLabel: '닫기',
     children: '×',
-    feedback: 'opacity-hover',
+    disabled: true,
+    feedback: 'opacity',
+  });
+  const surfaceButton = renderIconButton({
+    accessibilityLabel: '닫기',
+    children: '×',
+    feedback: 'surface',
+    targetSize: 44,
   });
   const disabledButton = renderIconButton({
     accessibilityLabel: '닫기',
     children: '×',
     disabled: true,
-    feedback: 'opacity-hover',
+    feedback: 'surface',
+    targetSize: 44,
   });
   const opacityStyle = flattenStyle(
     (opacityButton.props.style as (state: { hovered: boolean; pressed: boolean }) => unknown)({
       hovered: true,
       pressed: true,
-    }),
-  );
-  const hoverStyle = flattenStyle(
-    (opacityHoverButton.props.style as (state: { hovered: boolean; pressed: boolean }) => unknown)({
-      hovered: true,
-      pressed: false,
     }),
   );
   const opacityHoverStyle = flattenStyle(
@@ -394,18 +413,94 @@ test('visual feedback is opt-in and opacity feedback preserves press-only semant
       pressed: false,
     }),
   );
-  const disabledStyle = flattenStyle(
+  const disabledOpacityStyle = flattenStyle(
+    (
+      disabledOpacityButton.props.style as (state: {
+        hovered: boolean;
+        pressed: boolean;
+      }) => unknown
+    )({
+      hovered: true,
+      pressed: true,
+    }),
+  );
+  const surfaceStyle = (button: TestElement, state: { hovered: boolean; pressed: boolean }) => {
+    const children = button.props.children as (state: {
+      hovered: boolean;
+      pressed: boolean;
+    }) => ReactNode;
+    const visual = findElements(children(state), 'View')[0];
+    assert.ok(visual);
+    return flattenStyle(visual.props.style);
+  };
+  const surfaceRootStyle = flattenStyle(
+    (surfaceButton.props.style as (state: { hovered: boolean; pressed: boolean }) => unknown)({
+      hovered: false,
+      pressed: false,
+    }),
+  );
+  const disabledRootStyle = flattenStyle(
     (disabledButton.props.style as (state: { hovered: boolean; pressed: boolean }) => unknown)({
       hovered: true,
       pressed: true,
     }),
   );
+  const restingSurfaceStyle = surfaceStyle(surfaceButton, { hovered: false, pressed: false });
+  const hoveredSurfaceStyle = surfaceStyle(surfaceButton, { hovered: true, pressed: false });
+  const pressedSurfaceStyle = surfaceStyle(surfaceButton, { hovered: true, pressed: true });
+  const disabledSurfaceStyle = surfaceStyle(disabledButton, { hovered: true, pressed: true });
 
   assert.equal(defaultStyle.opacity, undefined);
+  assert.equal(findElements(defaultChildren, 'View').length, 0);
   assert.equal(opacityStyle.opacity, 0.7);
   assert.equal(opacityHoverStyle.opacity, 1);
-  assert.equal(hoverStyle.opacity, 0.85);
-  assert.equal(disabledStyle.opacity, 0.45);
+  assert.equal(disabledOpacityStyle.opacity, 0.45);
+  assert.equal(surfaceRootStyle.opacity, 1);
+  assert.equal(disabledRootStyle.opacity, 0.45);
+  assert.equal(restingSurfaceStyle.backgroundColor, 'transparent');
+  assert.equal(restingSurfaceStyle.borderRadius, 999);
+  assert.equal(restingSurfaceStyle.opacity, undefined);
+  assert.equal(restingSurfaceStyle.height, 44);
+  assert.equal(restingSurfaceStyle.width, 44);
+  assert.equal(restingSurfaceStyle.transitionDuration, '120ms');
+  assert.equal(hoveredSurfaceStyle.backgroundColor, 'hover');
+  assert.equal(pressedSurfaceStyle.backgroundColor, 'pressed');
+  assert.equal(disabledSurfaceStyle.backgroundColor, 'transparent');
+  assert.equal(disabledSurfaceStyle.opacity, undefined);
+
+  mockPlatform.OS = 'ios';
+  try {
+    const nativeSurfaceButton = renderIconButton({
+      accessibilityLabel: '닫기',
+      children: '×',
+      feedback: 'surface',
+      targetSize: 44,
+    });
+    const nativePressedSurfaceStyle = surfaceStyle(nativeSurfaceButton, {
+      hovered: true,
+      pressed: true,
+    });
+    assert.equal(nativePressedSurfaceStyle.backgroundColor, 'pressed');
+    assert.equal(nativePressedSurfaceStyle.transitionDuration, undefined);
+  } finally {
+    mockPlatform.OS = 'web';
+  }
+
+  reducedMotion = true;
+  try {
+    const reducedMotionButton = renderIconButton({
+      accessibilityLabel: '닫기',
+      children: '×',
+      feedback: 'surface',
+      targetSize: 44,
+    });
+    assert.equal(
+      surfaceStyle(reducedMotionButton, { hovered: false, pressed: false }).transitionDuration,
+      '0ms',
+    );
+  } finally {
+    reducedMotion = false;
+  }
 });
 
 test('default target has a bounded square size in a stretching parent', () => {

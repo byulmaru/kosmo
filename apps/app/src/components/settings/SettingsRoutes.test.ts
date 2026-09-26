@@ -142,7 +142,10 @@ mock.module(new URL('../shell/ShellChromeContext.tsx', import.meta.url), {
   exports: { useShellChrome: () => ({}) },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
-  exports: { useTheme: () => ({ border: '#333333', text: '#111111' }) },
+  exports: {
+    useReducedMotion: () => false,
+    useTheme: () => ({ border: '#333333', text: '#111111' }),
+  },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../Splash.tsx', import.meta.url), {
   exports: {

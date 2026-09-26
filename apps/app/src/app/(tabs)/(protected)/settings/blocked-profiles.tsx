@@ -17,7 +17,7 @@ export default function SettingsBlockedProfilesRoute() {
     detailHeaderMode === 'back' ? (
       <IconButton
         accessibilityLabel="뮤트 및 차단으로 돌아가기"
-        feedback="opacity-hover"
+        feedback="surface"
         onPress={() => returnToSettingsParent('/settings/blocked-profiles', router)}
         style={styles.backButton}
         targetSize={44}

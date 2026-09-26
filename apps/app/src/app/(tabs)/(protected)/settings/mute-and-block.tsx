@@ -17,7 +17,7 @@ export default function SettingsMuteAndBlockRoute() {
     detailHeaderMode === 'back' ? (
       <IconButton
         accessibilityLabel="설정으로 돌아가기"
-        feedback="opacity-hover"
+        feedback="surface"
         onPress={() => returnToSettingsParent('/settings/mute-and-block', router)}
         style={styles.backButton}
         targetSize={44}

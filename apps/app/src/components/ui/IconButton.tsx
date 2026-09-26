@@ -1,7 +1,9 @@
 import { Platform, Pressable, StyleSheet, View } from 'react-native';
+import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
+import { motion, radius } from '@/theme/tokens';
 import { getInteractionTargetSize } from './interactionTarget';
 import type { ReactNode, Ref } from 'react';
-import type { PressableProps } from 'react-native';
+import type { PressableProps, ViewStyle } from 'react-native';
 
 export function getIconButtonHitSlop(
   renderedTargetSize: number,
@@ -96,7 +98,7 @@ export type IconButtonProps = Omit<
   accessibilityRole?: 'button' | 'link';
   children: PressableProps['children'];
   controlRef?: Ref<View>;
-  feedback?: 'none' | 'opacity' | 'opacity-hover';
+  feedback?: 'none' | 'opacity' | 'surface';
   visualStyle?: PressableProps['style'];
 } & IconButtonSizeProps;
 
@@ -115,6 +117,8 @@ export function IconButton({
   visualStyle,
   ...props
 }: IconButtonProps): ReactNode {
+  const theme = useTheme();
+  const reducedMotion = useReducedMotion();
   const buttonDisabled = disabled === true;
   const flattenedStyle =
     targetSize === undefined && visualSize === undefined && typeof style !== 'function'
@@ -132,6 +136,7 @@ export function IconButton({
     requestedTargetSize,
     visualSize,
   );
+  const surfaceFeedback = feedback === 'surface';
 
   return (
     <Pressable
@@ -145,17 +150,13 @@ export function IconButton({
       style={(state) => [
         styles.target,
         { height: minimumTargetSize, width: minimumTargetSize },
-        feedback === 'opacity' || feedback === 'opacity-hover'
+        feedback === 'opacity'
           ? {
-              opacity: buttonDisabled
-                ? 0.45
-                : state.pressed
-                  ? 0.7
-                  : feedback === 'opacity-hover' && (state as { hovered?: boolean }).hovered
-                    ? 0.85
-                    : 1,
+              opacity: buttonDisabled ? 0.45 : state.pressed ? 0.7 : 1,
             }
-          : undefined,
+          : surfaceFeedback
+            ? { opacity: buttonDisabled ? 0.45 : 1 }
+            : undefined,
         typeof style === 'function' ? style(state) : style,
         { minHeight: minimumTargetSize, minWidth: minimumTargetSize },
       ]}
@@ -163,7 +164,30 @@ export function IconButton({
       {(state) => {
         const content = typeof children === 'function' ? children(state) : children;
 
-        return visualSize === undefined && visualStyle === undefined ? (
+        const hovered = Platform.OS === 'web' && Boolean((state as { hovered?: boolean }).hovered);
+        const surfaceStyle = surfaceFeedback
+          ? [
+              styles.surface,
+              Platform.OS === 'web'
+                ? ({
+                    transitionDuration: `${reducedMotion ? motion.duration.instant : motion.duration.fast}ms`,
+                    transitionProperty: 'background-color',
+                    transitionTimingFunction: motion.easing.standard,
+                  } as unknown as ViewStyle)
+                : undefined,
+              {
+                backgroundColor: buttonDisabled
+                  ? 'transparent'
+                  : state.pressed
+                    ? theme.statePressed
+                    : hovered
+                      ? theme.stateHover
+                      : 'transparent',
+              },
+            ]
+          : undefined;
+
+        return visualSize === undefined && visualStyle === undefined && !surfaceFeedback ? (
           content
         ) : (
           <View
@@ -171,7 +195,15 @@ export function IconButton({
             importantForAccessibility="no-hide-descendants"
             style={[
               styles.visual,
-              visualSize === undefined ? undefined : { height: visualSize, width: visualSize },
+              surfaceFeedback
+                ? {
+                    height: visualSize ?? requestedTargetSize,
+                    width: visualSize ?? requestedTargetSize,
+                  }
+                : visualSize === undefined
+                  ? undefined
+                  : { height: visualSize, width: visualSize },
+              surfaceStyle,
               typeof visualStyle === 'function' ? visualStyle(state) : visualStyle,
             ]}
           >
@@ -193,4 +225,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     pointerEvents: 'none',
   },
+  surface: { borderRadius: radius.full },
 });

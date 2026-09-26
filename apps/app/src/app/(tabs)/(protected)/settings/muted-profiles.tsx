@@ -17,7 +17,7 @@ export default function SettingsMutedProfilesRoute() {
     detailHeaderMode === 'back' ? (
       <IconButton
         accessibilityLabel="뮤트 및 차단으로 돌아가기"
-        feedback="opacity-hover"
+        feedback="surface"
         onPress={() => returnToSettingsParent('/settings/muted-profiles', router)}
         style={styles.backButton}
         targetSize={44}
