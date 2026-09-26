@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ChevronLeftIcon } from 'lucide-react-native';
+import { ArrowLeftIcon } from 'lucide-react-native';
 import { StyleSheet } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import {
@@ -41,7 +41,7 @@ export default function HashtagRelatedProfilesScreen() {
       targetSize={44}
       visualSize={44}
     >
-      <ChevronLeftIcon color={theme.foregroundPrimary} size={20} />
+      <ArrowLeftIcon color={theme.foregroundPrimary} size={20} />
     </IconButton>
   );
 

@@ -51,13 +51,13 @@ mockModule('expo-router', {
   }),
 });
 mockModule('lucide-react-native', {
-  ChevronLeftIcon: 'ChevronLeftIcon',
+  ArrowLeftIcon: 'ArrowLeftIcon',
 });
 mockModule('react-native', {
   StyleSheet: { create: <T>(styles: T) => styles },
 });
 mockModule(require.resolve('lucide-react-native'), {
-  ChevronLeftIcon: 'ChevronLeftIcon',
+  ArrowLeftIcon: 'ArrowLeftIcon',
 });
 mockModule('@/components/ui/IconButton', {
   IconButton: (props: object) => createElement('IconButton', props),
@@ -175,7 +175,7 @@ function assertBackButton(leading: { type: unknown; props: Record<string, unknow
   assert.equal(leading.props.targetSize, 44);
   assert.equal(leading.props.visualSize, 44);
   assert.equal(typeof leading.props.onPress, 'function');
-  assert.equal((leading.props.children as { type: unknown }).type, 'ChevronLeftIcon');
+  assert.equal((leading.props.children as { type: unknown }).type, 'ArrowLeftIcon');
 }
 
 describe('hashtag related profiles route identity and lifecycle', () => {
