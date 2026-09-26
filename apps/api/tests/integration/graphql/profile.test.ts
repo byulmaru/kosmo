@@ -1081,6 +1081,55 @@ describe('GraphQL remote profile boundary', () => {
     });
   });
 
+  test('profile pin mutations cannot change another profile pin', async () => {
+    const auth = await createAuthenticatedSession();
+    const otherProfile = await createProfile({
+      handle: 'other-pinned-profile',
+      instanceId: localInstanceId,
+    });
+    const otherPost = await createContentfulPost({ profileId: otherProfile.id });
+    await db.insert(ProfilePinnedPosts).values({
+      profileId: otherProfile.id,
+      postId: otherPost.id,
+    });
+
+    const pin = await requestGraphQL(
+      `mutation PinOtherProfilePost($input: PinProfilePostInput!) {
+        pinProfilePost(input: $input) { changed }
+      }`,
+      { input: { postId: globalId('Post', otherPost.id) } },
+      auth.token,
+    );
+    assertGraphQLErrorCode(pin, 'NOT_FOUND');
+
+    const unpin = await requestGraphQL<{
+      unpinProfilePost: { changed: boolean; profile: { id: string } };
+    }>(
+      `mutation UnpinOtherProfilePost($input: UnpinProfilePostInput!) {
+        unpinProfilePost(input: $input) { changed profile { id } }
+      }`,
+      { input: { postId: globalId('Post', otherPost.id) } },
+      auth.token,
+    );
+    assertNoGraphQLErrors(unpin);
+    assert.deepEqual(unpin.data?.unpinProfilePost, {
+      changed: false,
+      profile: { id: globalId('Profile', auth.profile.id) },
+    });
+
+    const preservedPin = await db
+      .select({ postId: ProfilePinnedPosts.postId })
+      .from(ProfilePinnedPosts)
+      .where(
+        and(
+          eq(ProfilePinnedPosts.profileId, otherProfile.id),
+          eq(ProfilePinnedPosts.postId, otherPost.id),
+        ),
+      )
+      .then(firstOrThrow);
+    assert.equal(preservedPin.postId, otherPost.id);
+  });
+
   test('profile pinnedPosts uses pin id cursors, visibility, and reply/quote rows', async () => {
     const auth = await createAuthenticatedSession();
     const first = await createContentfulPost({ profileId: auth.profile.id });
