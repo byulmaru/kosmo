@@ -7,6 +7,7 @@ import { ProfileListItem } from '@/components/profile/ProfileListItem';
 import { StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
+import type { ReactNode } from 'react';
 import type { HashtagRelatedProfileList_hashtag$key } from './__generated__/HashtagRelatedProfileList_hashtag.graphql';
 import type { HashtagRelatedProfilesNextPageQuery } from './__generated__/HashtagRelatedProfilesNextPageQuery.graphql';
 
@@ -31,8 +32,10 @@ const hashtagRelatedProfileListFragment = graphql`
 
 export function HashtagRelatedProfileList({
   hashtag,
+  leading,
 }: {
   hashtag: HashtagRelatedProfileList_hashtag$key;
+  leading?: ReactNode;
 }) {
   const pagination = usePaginationFragment<
     HashtagRelatedProfilesNextPageQuery,
@@ -51,7 +54,7 @@ export function HashtagRelatedProfileList({
 
   return (
     <ScrollView {...nativeScrollProps} contentContainerStyle={styles.root}>
-      <PageHeader title={`#${pagination.data.name} 관련 프로필`} />
+      <PageHeader leading={leading} title={`#${pagination.data.name} 관련 프로필`} />
       {profiles.length ? (
         profiles.map((edge) => (
           <ProfileListItem key={edge.cursor} linked profile={edge.node} showBio />
@@ -77,15 +80,17 @@ export function HashtagRelatedProfileList({
 }
 
 export function HashtagRelatedProfileListState({
+  leading,
   onRetry,
   state,
 }: {
+  leading?: ReactNode;
   onRetry?: () => void;
   state: 'error' | 'loading' | 'notFound';
 }) {
   return (
     <View>
-      <PageHeader title="관련 프로필" />
+      <PageHeader leading={leading} title="관련 프로필" />
       {state === 'loading' ? (
         <StateView loading title="관련 프로필을 불러오는 중입니다." />
       ) : state === 'error' ? (
