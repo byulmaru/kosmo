@@ -491,3 +491,48 @@ describe('multi-profile analytics', () => {
     assert.equal(last.featureRetentionW1, null);
   });
 });
+
+it('검색의 서로 다른 선택 Profile은 WAA에만 포함하고 활성 사용으로 세지 않는다', () => {
+  const occurredAt = '2026-09-15T00:00:00.000Z';
+  const events = [
+    usageEvent(
+      'account-a',
+      'multi_profile_context_observed',
+      { observation_kind: 'eligibility', multi_profile_eligible: true },
+      occurredAt,
+    ),
+    usageEvent(
+      'account-a',
+      'search_submitted',
+      { tab: 'people', source: 'keyboard', selected_profile_id: 'profile-a' },
+      occurredAt,
+    ),
+    usageEvent(
+      'account-a',
+      'search_results_loaded',
+      { tab: 'people', has_results: true, selected_profile_id: 'profile-b' },
+      occurredAt,
+    ),
+    usageEvent(
+      'account-a',
+      'search_result_selected',
+      { tab: 'people', selected_profile_id: 'profile-c' },
+      occurredAt,
+    ),
+  ];
+  const options = { now: new Date('2026-09-22T00:00:00.000Z') };
+  const week = calculateMultiProfileUsage(events, options).weeks[0];
+  assert.ok(week);
+  assert.equal(week.waaCount, 1);
+  assert.equal(week.targetWaaCount, 1);
+  assert.equal(week.activeAccountCount, 0);
+  // 검색 Profile이 하나라도 사용으로 계산됐다면 이 한 번의 선택으로 활성 Account가 된다.
+  const withSelection = calculateMultiProfileUsage(
+    [
+      ...events,
+      usageEvent('account-a', 'profile_selected', { selected_profile_id: 'profile-d' }, occurredAt),
+    ],
+    options,
+  ).weeks[0];
+  assert.equal(withSelection?.activeAccountCount, 0);
+});

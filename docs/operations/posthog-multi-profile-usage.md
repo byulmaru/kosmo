@@ -32,9 +32,11 @@ Post Content, 검색 원문, Follow 대상 Profile ID도 수집하지 않는다.
 | `profile_switched`                               | `previous_profile_id`, `selected_profile_id`                                 | 포함             | 도착 Profile 포함                        |
 | `post_created`                                   | `selected_profile_id`, `visibility`                                          | 포함             | 행동 주체 Profile 포함                   |
 | `follow_succeeded`                               | `selected_profile_id`, `result` (`follow`/`request`)                         | 포함             | 행동 주체 Profile 포함                   |
-| `search_submitted`                               | `tab`, `source`                                                              | 포함             | 해당 없음                                |
-| `search_results_loaded`                          | `tab`, `has_results`                                                         | 포함             | 해당 없음                                |
-| `search_result_selected`                         | `tab`                                                                        | 포함             | 해당 없음                                |
+| `search_submitted`                               | `tab`, `source`, 선택적인 `selected_profile_id`                              | 포함             | 해당 없음                                |
+| `search_results_loaded`                          | `tab`, `has_results`, 선택적인 `selected_profile_id`                         | 포함             | 해당 없음                                |
+| `search_result_selected`                         | `tab`, 선택적인 `selected_profile_id`                                        | 포함             | 해당 없음                                |
+
+검색 이벤트의 `selected_profile_id`는 행동 시작 시 선택 Profile 문맥이며, 속성이 있어도 사용 Profile 수에는 포함하지 않는다. 선택 Profile이 없으면 속성을 생략한다.
 
 `uuid`와 행동 시각은 custom property가 아니라 PostHog capture options로 전달한다. Web client는 capture
 직전에 options의 Account identity가 현재 SDK identity와 다르면 이벤트를 생략하고, Native client는 항상
