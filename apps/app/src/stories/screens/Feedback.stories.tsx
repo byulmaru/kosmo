@@ -191,7 +191,7 @@ export const OverlayFocusLifecycle: Story = {
     expect(ownerDocument.body.style.overflow).toBe('hidden');
     await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
     await waitFor(() =>
-      expect(within(dialog).getByRole('textbox', { name: '피드백 내용' })).toHaveFocus(),
+      expect(within(dialog).getByRole('button', { name: '이미지 추가' })).toHaveFocus(),
     );
     await userEvent.keyboard('{Tab}');
     await waitFor(() => expect(close).toHaveFocus());
@@ -244,7 +244,8 @@ export const OverlayFullDialogGeometry: Story = {
     const bounds = page.getByTestId('feedback-overlay-surface').getBoundingClientRect();
 
     expect(bounds.width).toBe(600);
-    expect(bounds.height).toBeLessThanOrEqual((view?.innerHeight ?? 0) * 0.85 + 1);
+    expect(bounds.top).toBe(48);
+    expect(bounds.height).toBeLessThanOrEqual((view?.innerHeight ?? 0) - 96 + 1);
     expect(bounds.left + bounds.width / 2).toBeCloseTo((view?.innerWidth ?? 0) / 2, 0);
   },
 };

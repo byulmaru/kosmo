@@ -103,6 +103,122 @@ test('선택 Profile이 없으면 Account ID와 Profile 부재만 전달한다',
   });
 });
 
+test('첨부가 있으면 Slack 파일을 모두 업로드한 뒤 한 번 게시한다', async (t) => {
+  process.env.SLACK_FEEDBACK_BOT_TOKEN = 'xoxb-test';
+  process.env.SLACK_FEEDBACK_CHANNEL_ID = 'C123';
+  const requests: Request[] = [];
+  let uploadIndex = 0;
+  t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+    const request = new Request(input, init);
+    requests.push(request);
+    if (request.url.endsWith('/files.getUploadURLExternal')) {
+      assert.equal(request.headers.get('content-type'), 'application/x-www-form-urlencoded');
+      const fileId = `F${++uploadIndex}`;
+      return new Response(
+        JSON.stringify({
+          file_id: fileId,
+          ok: true,
+          upload_url: `https://files.slack.com/upload/v1/${fileId}`,
+        }),
+        { headers: { 'content-type': 'application/json' }, status: 200 },
+      );
+    }
+    if (request.url.startsWith('https://files.slack.com/upload/v1/')) {
+      return new Response(null, { status: 200 });
+    }
+    assert.equal(request.url, 'https://slack.com/api/files.completeUploadExternal');
+    const payload = Object.fromEntries(await request.clone().formData());
+    const valid = typeof payload.blocks === 'string' && Array.isArray(JSON.parse(payload.blocks));
+    return new Response(
+      JSON.stringify(valid ? { ok: true } : { ok: false, error: 'invalid_arguments' }),
+      {
+        headers: { 'content-type': 'application/json' },
+        status: 200,
+      },
+    );
+  });
+
+  await deliverFeedback(feedbackIdentity(), {
+    ...validFeedback,
+    attachments: [
+      { bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47]), contentType: 'image/png' },
+      { bytes: new Uint8Array([0xff, 0xd8, 0xff, 0xd9]), contentType: 'image/jpeg' },
+    ],
+  });
+
+  assert.equal(requests.length, 5);
+  assert.deepEqual(Object.fromEntries(await requests[0]!.formData()), {
+    filename: 'feedback-1.png',
+    length: '4',
+  });
+  assert.deepEqual(
+    await requests[1]?.arrayBuffer(),
+    new Uint8Array([0x89, 0x50, 0x4e, 0x47]).buffer,
+  );
+  assert.deepEqual(Object.fromEntries(await requests[2]!.formData()), {
+    filename: 'feedback-2.jpg',
+    length: '4',
+  });
+  assert.deepEqual(
+    await requests[3]?.arrayBuffer(),
+    new Uint8Array([0xff, 0xd8, 0xff, 0xd9]).buffer,
+  );
+  assert.deepEqual(Object.fromEntries(await requests[4]!.formData()), {
+    blocks: JSON.stringify([
+      { text: { text: '새 피드백', type: 'plain_text' }, type: 'header' },
+      {
+        fields: [
+          { text: '종류: 필요한 점', type: 'plain_text' },
+          { text: `Account ID: ${accountId}`, type: 'plain_text' },
+          { text: '닉네임: 혜주', type: 'plain_text' },
+          { text: 'Profile ID: profile-1', type: 'plain_text' },
+          { text: 'Profile: @hyeju', type: 'plain_text' },
+        ],
+        type: 'section',
+      },
+      { text: { text: validFeedback.body, type: 'plain_text' }, type: 'section' },
+    ]),
+    channel_id: 'C123',
+    files: JSON.stringify([{ id: 'F1' }, { id: 'F2' }]),
+  });
+  assert.equal(requests[4]?.headers.get('authorization'), 'Bearer xoxb-test');
+  assert.equal(requests[4]?.headers.get('content-type'), 'application/x-www-form-urlencoded');
+});
+
+test('첨부 중간 실패 시 complete 호출 없이 오류를 반환한다', async (t) => {
+  process.env.SLACK_FEEDBACK_BOT_TOKEN = 'xoxb-test';
+  process.env.SLACK_FEEDBACK_CHANNEL_ID = 'C123';
+  const requests: Request[] = [];
+  t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+    const request = new Request(input, init);
+    requests.push(request);
+    if (request.url.endsWith('/files.getUploadURLExternal')) {
+      return new Response(
+        JSON.stringify({
+          file_id: `F${requests.length}`,
+          ok: true,
+          upload_url: 'https://files.slack.com/upload/v1/F',
+        }),
+        { headers: { 'content-type': 'application/json' }, status: 200 },
+      );
+    }
+    return new Response(null, { status: 503 });
+  });
+
+  await assert.rejects(
+    deliverFeedback(feedbackIdentity(), {
+      ...validFeedback,
+      attachments: [{ bytes: new Uint8Array([1]), contentType: 'image/png' }],
+    }),
+    /피드백을 전달하지 못했어요/u,
+  );
+  assert.equal(requests.length, 2);
+  assert.equal(
+    requests.some((request) => request.url.endsWith('/files.completeUploadExternal')),
+    false,
+  );
+});
+
 test('webhook 설정이 없거나 Slack 전달이 실패하면 안전한 오류를 반환한다', async (t) => {
   let calls = 0;
   const fetch = async () => {

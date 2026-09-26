@@ -13,6 +13,7 @@ export function FeedbackOverlay({ fallbackFocusRef, onRequestClose, visible }: P
   return (
     <FormOverlay
       closeAccessibilityLabel="피드백 닫기"
+      desktopPlacement="top"
       discardConfirmLabel="피드백 버리기"
       discardTitle="작성 중인 피드백을 버릴까요?"
       fallbackFocusRef={fallbackFocusRef}

@@ -1137,7 +1137,7 @@ function VisibilityMenu({
   );
 }
 
-function ComposerTool({
+export function ComposerTool({
   accessibilityLabel,
   children,
   disabled,

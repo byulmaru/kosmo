@@ -10,6 +10,7 @@
     "PostContentDocument": {
       "name": "PostContentDocumentV1",
       "path": "@kosmo/core/post-content"
-    }
+    },
+    "Upload": "Blob"
   }
 }

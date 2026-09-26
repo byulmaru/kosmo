@@ -142,12 +142,11 @@ test('keyboard trap, Escape와 clean backdrop을 한 close 경계로 처리한�
   await feedbackButton.click();
   const dialog = page.getByRole('dialog', { name: '피드백 보내기' });
   const close = dialog.getByRole('button', { name: '피드백 닫기' });
-  const body = dialog.getByRole('textbox', { name: '피드백 내용' });
 
   await expect(page.getByTestId('universal-shell-root')).toHaveAttribute('aria-hidden', 'true');
   await expect(close).toBeFocused();
   await page.keyboard.press('Shift+Tab');
-  await expect(body).toBeFocused();
+  await expect(dialog.getByRole('button', { name: '이미지 추가', exact: true })).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(close).toBeFocused();
   await page.keyboard.press('Escape');
@@ -238,7 +237,103 @@ test('390px sheet와 900px·1400px dialog geometry를 실제 Web runtime에서 �
     expect(desktopBox).not.toBeNull();
     expect(desktopBox!.width).toBeCloseTo(600, 0);
     expect(desktopBox!.x + desktopBox!.width / 2).toBeCloseTo(viewport.width / 2, 0);
-    expect(desktopBox!.height).toBeLessThanOrEqual(viewport.height * 0.85 + 1);
+    expect(desktopBox!.y).toBe(48);
+    expect(desktopBox!.height).toBeLessThanOrEqual(viewport.height - 96 + 1);
     await page.getByRole('button', { name: '피드백 닫기' }).click();
   }
+});
+
+test('첨부만 있는 draft를 보호하고 3장 multipart 실패 후 재시도와 성공 초기화를 유지한다', async ({
+  context,
+  page,
+}) => {
+  const viewer = await createE2ESession({ profile: false });
+  await setE2ESessionCookie(context, viewer.token);
+  const png = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGNwLLgEAAJ5AYRVsdfUAAAAAElFTkSuQmCC',
+    'base64',
+  );
+  const images = [1, 2, 3].map((index) => ({
+    buffer: png,
+    mimeType: 'image/png',
+    name: `feedback-${index}.png`,
+  }));
+  let submissions = 0;
+  let releaseRetry!: () => void;
+  const retryGate = new Promise<void>((resolve) => {
+    releaseRetry = resolve;
+  });
+  await page.route('**/graphql', async (route) => {
+    const contentType = route.request().headers()['content-type'];
+    if (!contentType?.startsWith('multipart/form-data')) {
+      await route.continue();
+      return;
+    }
+    const form = await new Response(route.request().postDataBuffer(), {
+      headers: { 'content-type': contentType },
+    }).formData();
+    const operation = JSON.parse(String(form.get('operations')));
+    expect(operation.operationName).toBe('FeedbackFormSubmitFeedbackMutation');
+    expect(operation.variables.input.body).toBe('이미지 첨부 피드백');
+    const fileEntries = [...form.values()].filter((value) => typeof value !== 'string');
+    expect(fileEntries).toHaveLength(3);
+    for (const file of fileEntries) {
+      expect(Buffer.from(await file.arrayBuffer())).toEqual(png);
+    }
+    submissions += 1;
+    if (submissions > 1) {
+      await retryGate;
+    }
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify(
+        submissions === 1
+          ? { errors: [{ message: '첨부 전달 테스트 실패' }] }
+          : { data: { submitFeedback: { completed: true } } },
+      ),
+    });
+  });
+
+  await page.goto('/home');
+  await page
+    .getByTestId('universal-shell-root')
+    .getByRole('button', { name: '피드백 보내기' })
+    .click();
+  const dialog = page.getByRole('dialog', { name: '피드백 보내기' });
+  const addImages = dialog.getByRole('button', { name: '이미지 추가', exact: true });
+  const chooserPromise = page.waitForEvent('filechooser');
+  await addImages.click();
+  await (await chooserPromise).setFiles(images);
+  const removeImages = dialog.getByRole('button', { name: /^첨부 이미지 \d 제거$/u });
+  await expect(removeImages).toHaveCount(3);
+  await expect(dialog.getByRole('button', { name: '피드백 보내기' })).toBeDisabled();
+  await dialog.getByRole('button', { name: '피드백 닫기' }).click();
+  const confirm = page.getByRole('alertdialog', { name: '작성 중인 피드백을 버릴까요?' });
+  await expect(confirm).toBeVisible();
+  await confirm.getByRole('button', { name: '계속 작성' }).click();
+  await expect(removeImages).toHaveCount(3);
+
+  await removeImages.last().click();
+  await expect(removeImages).toHaveCount(2);
+  const replacementChooser = page.waitForEvent('filechooser');
+  await addImages.click();
+  await (await replacementChooser).setFiles(images[2]);
+  await expect(removeImages).toHaveCount(3);
+  const body = dialog.getByRole('textbox', { name: '피드백 내용' });
+  await body.fill('이미지 첨부 피드백');
+  await dialog.getByRole('button', { name: '피드백 보내기' }).click();
+  await expect(dialog.getByRole('alert')).toBeVisible();
+  await expect(body).toHaveValue('이미지 첨부 피드백');
+  await expect(removeImages).toHaveCount(3);
+  await dialog.getByRole('button', { name: '피드백 다시 시도' }).click();
+  await expect(body).not.toBeEditable();
+  await expect(addImages).toBeDisabled();
+  for (const remove of await removeImages.all()) {
+    await expect(remove).toBeDisabled();
+  }
+  releaseRetry();
+  await expect(dialog.getByText('피드백을 전달했습니다. 감사합니다!')).toBeVisible();
+  await expect(body).toHaveValue('');
+  await expect(removeImages).toHaveCount(0);
+  expect(submissions).toBe(2);
 });

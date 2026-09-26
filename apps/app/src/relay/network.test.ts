@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { executeGraphQLRequest, formatGraphQLError } from './network';
 import { RelayTransportError } from './transportError';
+import type { UploadableMap } from 'relay-runtime';
 
 const request = {
   cacheID: 'test',
@@ -72,6 +73,78 @@ describe('Relay 네트워크', () => {
         Object.defineProperty(globalThis, 'window', windowDescriptor);
       } else {
         Reflect.deleteProperty(globalThis, 'window');
+      }
+    }
+  });
+
+  it('uploadables가 있으면 GraphQL multipart operations map과 파일을 보낸다', async () => {
+    let captured: RequestInit | undefined;
+    const fakeFetch = async (_input: RequestInfo | URL, init?: RequestInit) => {
+      captured = init;
+      return new Response(JSON.stringify({ data: { submitFeedback: { completed: true } } }), {
+        headers: { 'content-type': 'application/json' },
+        status: 200,
+      });
+    };
+    const uploadables: UploadableMap = {
+      'input.attachments.0': new Blob(['image'], { type: 'image/png' }),
+    };
+    const restoreNavigator = stubNavigatorProduct('ReactNative');
+
+    try {
+      await executeGraphQLRequest(
+        { ...request, name: 'SubmitFeedbackMutation' },
+        { input: { body: 'body', kind: 'POSITIVE', attachments: [null] } },
+        'native-token',
+        fakeFetch,
+        uploadables,
+      );
+    } finally {
+      restoreNavigator();
+    }
+
+    assert.equal((captured?.headers as Record<string, string>)['content-type'], undefined);
+    const formData = captured?.body as FormData;
+    assert.deepEqual(JSON.parse(String(formData.get('operations'))), {
+      operationName: 'SubmitFeedbackMutation',
+      query: request.text,
+      variables: { input: { body: 'body', kind: 'POSITIVE', attachments: [null] } },
+    });
+    assert.deepEqual(JSON.parse(String(formData.get('map'))), {
+      '0': ['variables.input.attachments.0'],
+    });
+    const file = formData.get('0');
+    assert.ok(file instanceof Blob);
+    assert.equal(file.type, 'image/png');
+    assert.equal(await file.text(), 'image');
+  });
+
+  it('prototype 관련 업로드 경로는 객체 변경이나 전송 전에 거부한다', async () => {
+    const marker = '__feedbackPrototypeProbe';
+    for (const path of [
+      `__proto__.${marker}`,
+      `variables.input.__proto__.${marker}`,
+      `constructor.prototype.${marker}`,
+      'input.constructor',
+      'input.prototype',
+      'input.__proto__',
+    ]) {
+      try {
+        await assert.rejects(
+          executeGraphQLRequest(
+            request,
+            { input: {} },
+            null,
+            async () => {
+              assert.fail('unsafe upload must not be sent');
+            },
+            { [path]: new Blob(['image']) },
+          ),
+          /Invalid upload variable path/u,
+        );
+        assert.equal(Object.hasOwn(Object.prototype, marker), false);
+      } finally {
+        Reflect.deleteProperty(Object.prototype, marker);
       }
     }
   });

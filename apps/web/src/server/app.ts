@@ -17,6 +17,13 @@ setInboundObservabilityReporter({
 const app = new Hono();
 
 app.use('*', async (c, next) => {
+  if (
+    c.req.path === '/graphql' &&
+    c.req.header('content-type')?.toLowerCase().startsWith('multipart/form-data')
+  ) {
+    return next();
+  }
+
   const fallThrough = async () => {
     await next();
     return new Response(c.res.body, c.res);
