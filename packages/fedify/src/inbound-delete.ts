@@ -15,6 +15,7 @@ import { deletePost } from '@kosmo/core/services';
 import { and, eq, isNotNull } from 'drizzle-orm';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
 import { observeInbound } from './inbound-observability';
+import { handleInboundQuoteRevocation } from './inbound-quote';
 import type { InboxContext } from '@fedify/fedify';
 import type { Delete } from '@fedify/vocab';
 
@@ -23,7 +24,7 @@ const noNetworkDocumentLoader = async (url: string) => {
 };
 
 export const handleInboundDelete = async (
-  _context: InboxContext<void>,
+  context: InboxContext<void>,
   activity: Delete,
 ): Promise<void> => {
   const actorHref = uniqueHref(activity.actorIds);
@@ -39,6 +40,10 @@ export const handleInboundDelete = async (
       phase: 'validation',
       reasonCode: 'invalid_activity_identity',
     });
+    return;
+  }
+
+  if (await handleInboundQuoteRevocation(context, activity)) {
     return;
   }
 

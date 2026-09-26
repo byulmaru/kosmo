@@ -7,12 +7,13 @@
 
 **Deliverable**
 
-새 글과 기존 글의 인용 허용 정책을 게시글별로 조회·변경하고 요청에 적용할 수 있다. 구체적인 GraphQL
-field·mutation 이름, payload와 오류 shape는 이 공개 행동을 지키는 범위에서 PROD-924가 구현 시 확정한다.
+기존 공개 범위 설정 UI에 새 인용 허용 정책 선택 UI를 추가해 새 글과 함께 저장할 수 있다. 게시 후에도 게시글별로 정책을 조회·변경하고 요청에 적용할 수 있다. 구체적인 GraphQL
+field·mutation·payload와 오류는 이번 `quote-consent`의 공개 API 계약을 따르며 같은 Post를 갱신한다.
 
 **Guardrails**
 
-- 모두·팔로워·본인만, 초기값 모두와 기존 승인 비소급을 유지한다.
+- 모두·팔로워·본인만, 입력 생략·null의 기본값 모두와 기존 승인 비소급을 유지한다.
+- 기존 공개 범위 UI의 Public·Unlisted에서만 인용 설정을 표시한다. Profile 기본값·본문/visibility 편집·사용자용 개별 철회는 추가하지 않는다.
 - Local Note `canQuote.automaticApproval`은 모두=Public, 팔로워=followers collection+Author Actor,
   본인만=Author Actor로 표현하고 `manualApproval`은 제공하지 않는다.
 - Active Account와 Post Author 권한을 확인한다. Profile 기본값·건별 수동 승인 UI는 포함하지 않는다.
@@ -22,12 +23,17 @@ field·mutation 이름, payload와 오류 shape는 이 공개 행동을 지키�
 
 - 새/기존 Post 초기값, 정책 변경 권한과 selected Profile 격리, 기존 승인 보존을 검증한다.
 - 세 정책의 최초 Local Note projection, 정책 변경 뒤 같은 identity Update와 manual 대상 비포함을 payload로 검증한다.
+- 기존 2건의 migration/backfill·Source 표시 보존은 범위 밖이다. legacy 예외 없이 일반 승인·조회·차단·삭제 guard와 본문 보존을 검증한다.
 - 실제 schema diff와 migration/backfill, rollback 후 Source 접근 보호, 확정한 GraphQL 계약을 구현 PR에 기록한다.
 
-- [ ] 1.1 새 글과 기존 글의 정책 조회·초기화 및 정책 변경을 연결한다.
-- [ ] 1.2 작성자가 게시글별 정책을 변경하는 사용자 조작과 오류 복구를 제공한다.
-- [ ] 1.3 초기값·권한·변경 비소급·기존 데이터 보존을 검증한다.
-- [ ] 1.4 PROD-924가 정책 API 형태와 저장 schema를 확정하고 기존 Local Post를 `모두`로 초기화하는 migration/backfill 및 rollback 접근 보호를 검증한다.
+- [x] 1.1 새 글과 기존 글의 정책 조회·초기화 및 정책 변경을 연결하고 optional `CreatePostInput.quotePolicy`를 작성 transaction에 저장한다.
+- [x] 1.2 기존 공개 범위 설정 UI의 Public·Unlisted에 새 인용 허용 정책 선택 UI를 추가하고 게시 후 본인 글의 인용 설정에도 재사용한다. draft 수명·중복 제출 방지·오류 복구를 연결한다.
+- [x] 1.3 초기값·권한·변경 비소급·기존 데이터 보존을 검증한다.
+- [x] 1.4 정책 저장을 additive로 도입하고 기존 Local Post의 `모두` 초기화·재실행·이미 지정한 정책 보존을 검증한다. 기존 2건의 migration/backfill·표시 보존은 수행하지 않으며, 해당 2건을 위한 identity 확인이나 배포 검증은 추가하지 않는다.
+- [x] 1.5 정책 enum·mutation·payload·권한 필드를 실제 API 요청과 readback으로 검증하고 SDL·Relay를 동기화한다.
+- [x] 1.6 세 정책의 최초 Note·동일 identity Update와 기존 승인 비소급을 실제 serialized payload·DB 상태로 검증한다.
+
+- [ ] 1.7 정책 선택·공개 범위 전환·create payload·게시 후 저장·오류 복구·actor 격리·Web keyboard/focus를 실행해 검증한다. Native Modal 검증 여부를 구분한다.
 
 ## 2. PROD-431 기본 Quote 작성 API와 core
 
@@ -104,7 +110,7 @@ field·mutation 이름, payload와 오류 shape는 이 공개 행동을 지키�
 통과하면 PROD-431과 PR #817은 완료할 수 있다. 1번과 4~7번의 미완료, 즉 PROD-924의 정책·federation
 lifecycle·전체 change archive는 PROD-431의 Draft 또는 완료 blocker가 아니다.
 
-## 4. PROD-924 Kosmo 원문의 자동 승인과 명시적 철회
+## 4. PROD-924 Kosmo 원문의 자동 승인과 삭제 시 승인 정리
 
 **Authority / Provenance**
 
@@ -113,7 +119,7 @@ lifecycle·전체 change archive는 PROD-431의 Draft 또는 완료 blocker가 �
 
 **Deliverable**
 
-Kosmo 원문이 요청을 정책대로 자동 승인·거절하고 작성자가 기존 승인을 명시적으로 철회할 수 있다.
+Kosmo 원문이 요청을 정책대로 자동 승인·거절하고 Source 삭제 시 발급한 승인을 무효화해 원격에 전달한다.
 
 **Guardrails**
 
@@ -121,21 +127,24 @@ Kosmo 원문이 요청을 정책대로 자동 승인·거절하고 작성자가 
 - 요청 Profile·Quote·Source·승인 발급자 대응을 검증한다. 정책 변경·차단은 기존 승인을 자동 철회하지 않는다.
 - QuoteAuthorization dispatcher는 Source 조회 권한을 적용하고 `interactingObject`를 embed하지 않는다.
   요청자의 Source 조회 권한이 없거나 이를 확인할 수 없으면 승인 객체 자체를 제공하지 않는다.
-- 명시적 철회는 Source만 숨기고 Quote 자체 본문을 보존한다. 철회 `Delete`의 `object`와 `target`에는
+- 사용자용 개별 승인 철회 UI·API는 제공하지 않는다. Source 삭제는 Source만 숨기고 Quote 자체 본문을 보존한다. 철회 `Delete`의 `object`와 `target`에는
   객체를 embed하지 않고 URI 참조만 제공한다.
 
 **Verification**
 
-- 정상·위조·차단·정책상 거부 요청, 중복 승인, 작성자 철회 권한, 제3자 비노출과 본문 보존을 검증한다.
+- 정상·위조·차단·정책상 거부 요청, 중복 승인, Source 삭제 후 승인 무효화, 제3자 비노출과 본문 보존을 검증한다.
 - 권한별 QuoteAuthorization dispatcher/readback, 무권한·권한 미확인 응답의 승인 객체 비제공과
   `interactingObject` embed 제한을 검증한다.
-- 원문 작성자 철회 `Delete`의 `object`·`target` URI 참조와 객체 비포함을 payload로 검증한다.
+- Source 삭제에 따른 승인 철회 `Delete`의 `object`·`target` URI 참조와 객체 비포함을 payload로 검증한다.
 
-- [ ] 4.1 Kosmo 원문 QuoteRequest의 검증·자동 Accept/Reject·승인 발급과 권한 기반 QuoteAuthorization dispatcher를 연결한다.
-- [ ] 4.2 작성자의 명시적 승인 철회 조작과 승인 무효화·객체를 embed하지 않는 원격 철회 전달을 연결한다.
-- [ ] 4.3 무관계·pending Follow Request 요청은 Reject하고 established Follower·Source Author 요청은 Accept하는지,
-      각 결과의 승인 발급·Source 노출 post-state와 중복·철회 권한, 승인 객체 readback·무권한 비제공 및
-      차단/명시적 철회의 다른 결과를 검증한다.
+- [x] 4.1 Kosmo 원문 QuoteRequest의 검증·자동 Accept/Reject·승인 발급과 권한 기반 QuoteAuthorization dispatcher를 연결한다.
+- [x] 4.2 기존 Local Source 삭제에 발급 승인 무효화와 객체를 embed하지 않는 원격 철회 전달을 연결한다. 삭제·전달 재시도에도 자체 Content를 보존하고 승인을 되살리지 않는다.
+- [ ] 4.3 팔로워 정책에서 무관계·pending Follow Request 요청은 Reject하고 established Follower·Source Author 요청은 Accept하는지,
+      각 결과의 승인 발급·Source 노출 post-state와 중복 요청, 승인 객체 readback·무권한 비제공 및
+      차단/Source 삭제의 다른 결과를 검증한다.
+
+- [x] 4.4 원격 Quote가 아직 materialize되지 않은 유효한 요청의 identity 결속·승인 발급·역참조를 검증하고 PROD-792의 수신 상태와 중복 소유하지 않는다.
+- [x] 4.5 같은 승인 URI의 valid/forged Delete, 무권한 역참조와 requester별 Source 접근을 검증한다.
 
 ## 5. PROD-924 로컬 Quote 발신과 원격 승인 결과
 
@@ -169,10 +178,14 @@ QuoteRequest와 유효한 QuoteAuthorization을 통해 같은 Quote의 Source �
 - Local Source 삭제에서 일반 `Delete(Note)` audience 밖의 Quote Author/소유 서버도 승인 철회를 받고,
   Quote audience까지 Source 비노출로 수렴하는 recipient 경로를 검증한다.
 
-- [ ] 5.1 승인된 Quote projection과 pending 본문 선발신·원격 요청을 연결한다.
-- [ ] 5.2 로컬 Quote의 원격 Accept/Reject·승인 철회를 검증해 Source·필요한 Update와 객체를 embed하지 않는 기존 Quote audience 철회 전달을 연결한다.
-- [ ] 5.3 일반 Post·Reply·Repost identity/audience 회귀와 승인 전 Source 비노출을 검증한다.
-- [ ] 5.4 자기 인용의 요청 생략과 원격 타인 원문의 정책별 QuoteRequest·pending·승인 증거 경계를 검증한다.
+- [x] 5.1 승인된 Quote projection과 pending 본문 선발신·원격 요청을 연결한다.
+- [x] 5.2 로컬 Quote의 원격 Accept/Reject·승인 철회를 검증해 Source·필요한 Update와 객체를 embed하지 않는 기존 Quote audience 철회 전달을 연결한다.
+- [x] 5.3 일반 Post·Reply·Repost identity/audience 회귀와 승인 전 Source 비노출을 검증한다.
+- [x] 5.4 자기 인용의 요청 생략과 원격 타인 원문의 정책별 QuoteRequest·pending·승인 증거 경계를 검증한다.
+
+- [x] 5.5 PROD-431의 Remote Source 거부와 승인 미구현에 따른 eligibility 제한을 실제 pending 작성 경로에 연결하고 본문·Source FK·승인 결속의 transaction rollback 및 성공 readback을 검증한다.
+- [x] 5.6 일반 Note와 요청 전용 instrument·역참조를 분리하고 Quote 본문 audience가 Source Author를 포함하는 경우와 포함하지 않는 경우의 접근 보존을 검증한다.
+- [ ] 5.7 Local Source 삭제가 일반 Delete audience 밖의 Quote Author까지 승인 철회를 전달하고 Quote audience에서 본문만 남는지 검증한다.
 
 ## 6. PROD-924 레거시 발신과 재전달 수렴
 
@@ -195,10 +208,14 @@ QuoteRequest와 유효한 QuoteAuthorization을 통해 같은 Quote의 Source �
 - 승인 후 세 속성·원문 링크, 철회 후 자동 표현 제거, 직접 쓴 동일 URL 보존을 payload로 확인한다.
 - 중복 요청·승인, 동시 철회, 늦은 Accept, 일시 실패·재전달의 상태 수렴과 실패 관찰을 검증한다.
 
-- [ ] 6.1 승인 조건에 따른 세 호환 속성과 발신 본문 fallback을 연결한다.
+- [ ] 6.1 승인 조건에 따른 세 호환 속성과 발신 본문 fallback을 연결한다. 유효한 승인 없이 승인 객체나 승인된 자동 발신 표현을 생성하지 않는지 검증한다.
 - [ ] 6.2 중복·동시·역순 응답 및 delivery 실패·재시도를 최신 상태에 수렴시킨다.
 - [ ] 6.3 공식 구현에 근거한 compatibility fixture와 상태·본문 보존 회귀를 검증한다. 잘못된 FEP payload와
       `quoteUrl` 등 legacy 속성이 동시에 있는 fixture가 승인 관계를 만들지 않고 Source를 계속 비노출하는지 포함한다.
+
+- [ ] 6.4 실제 registry의 Activity retry·completion 유실·Worker 재시작·commit/start gap과 동일 receipt replay를 실행해 중복 effect와 Source 부활이 없음을 검증한다.
+- [ ] 6.5 과거 요청 Accept/Reject, 철회 선도착, fetch 중 철회, 정책/승인 Update 교차와 queue 역순 전달의 최종 상태를 검증한다.
+- [ ] 6.6 PROD-792의 exact Fedify pin·compatibility 증거를 재사용하거나 같은 조건으로 검증하고, 선택한 세트에서 Quote helper와 기존 Follow·Like·EmojiReact·Announce·Note·queue 회귀를 확인한다. 실패하면 수동 검증기로 우회하지 않는다.
 
 ## 7. PROD-924 전체 연합 통합 검증과 change 완료
 
@@ -215,18 +232,20 @@ PROD-431·924의 작성·정책·승인·발신 결과가 하나의 사용자 �
 **Guardrails**
 
 - 1~6번 전체 task 완료와 인접 PROD-792 수신 경계 연동 증거가 필요하다.
+- 현재 명세는 조사 시점의 main 기준이다. 구현 시 PROD-431 미병합 코드를 소비하면 `main → PROD-431 → PROD-924` Stack으로 정렬하고, 이미 병합됐다면 최신 main에서 진행한다.
+- D15는 기존 Local Quote 2건의 예외 제거로 확정됐다. 해당 2건의 ID·Source 결속 확인, 표시 보존이나 별도 배포 gate는 요구하지 않는다.
 - PROD-793의 기존 signed fetch 계약을 축소하지 않는다. PROD-925는 현재 완료 조건이 아니다.
 - 일부 PR 완료만으로 archive하지 않으며 다른 이슈의 독립 change도 대신 archive하지 않는다.
 
 **Verification**
 
-- 작성→pending 게시·전달→Accept→Source 표시→명시적 철회→Quote audience 철회 전달→제3자 Source 비노출과
+- 작성→pending 게시·전달→Accept→Source 표시→원격 승인 철회 또는 Local Source 삭제→Quote audience 철회 전달→제3자 Source 비노출과
   자체 Content 보존을 확인한다.
 - 타인 Followers Only 거부·자기 인용 접근, 새 요청의 양방향 차단과 기존 승인 Source의 단방향·역방향·상호
   차단 조회 결과, 제3자 차이, 원문 삭제와 legacy 수신을 통합 확인한다.
 - 실제 schema diff의 초기화·기존 승인 보존·배포 순서와 rollback 시 Source 접근 보호를 확인한다.
 
 - [ ] 7.1 PROD-431 작성과 승인·발신·원격 수신·철회 audience forwarding 경계를 연결하는 연합 통합 검증을 수행한다.
-- [ ] 7.2 기존 데이터·승인 보존, 출시·복구 시 접근 보호와 플랫폼별 필요한 release 증거를 확인한다.
-- [ ] 7.3 최신 canonical·Linear·OpenSpec과 전체 구현 결과를 대조하고 미완료 범위가 없음을 확인한다.
+- [ ] 7.2 기존 데이터·승인 보존, legacy 예외 없는 신규 승인 누락 비노출·정책 backfill, API/Worker/consumer 선배포, 새 작성 중단과 승인 조회·철회 처리가 남는 호환 rollback을 확인한다.
+- [ ] 7.3 최신 canonical·Linear·OpenSpec과 전체 구현 결과를 대조하고 각 owner의 commit·명령·결과를 연결한다. 필요한 Web 공개 범위·인용 설정 E2E와 접근성·actor 격리, Native release 미검증 범위를 구분한다.
 - [ ] 7.4 전체 선언 task 완료 후 delta spec 동기화·archive와 archive 후 validation을 수행한다.

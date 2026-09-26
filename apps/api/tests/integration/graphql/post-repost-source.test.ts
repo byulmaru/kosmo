@@ -2,7 +2,13 @@ import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, test } from 'node:test';
-import { PostState, PostVisibility, ProfileFollowPolicy, ProfileState } from '@kosmo/core/enums';
+import {
+  PostQuoteConsentStatus,
+  PostState,
+  PostVisibility,
+  ProfileFollowPolicy,
+  ProfileState,
+} from '@kosmo/core/enums';
 import { encodeGlobalId as globalId } from '@kosmo/core/global-id';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { normalizeHandle } from '@kosmo/core/utils';
@@ -21,6 +27,7 @@ let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
 let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
+let PostQuoteConsents: typeof CoreDb.PostQuoteConsents;
 let Posts: typeof CoreDb.Posts;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
 let Profiles: typeof CoreDb.Profiles;
@@ -42,6 +49,7 @@ describe('GraphQL Post Repost Source', () => {
       Instances,
       pg,
       PostContents,
+      PostQuoteConsents,
       Posts,
       ProfileFollows,
       Profiles,
@@ -64,7 +72,7 @@ describe('GraphQL Post Repost Source', () => {
   });
 
   beforeEach(async () => {
-    await db.update(Posts).set({ currentContentId: null });
+    await db.update(Posts).set({ currentContentId: null, state: PostState.DELETED });
     await db.delete(PostContents);
     await db.delete(Posts);
     await db.delete(ProfileFollows);
@@ -102,6 +110,8 @@ describe('GraphQL Post Repost Source', () => {
       replyParentId: normal.id,
       repostSourceId: source.id,
     });
+    await approveQuote(source.id, quote.id, quoteProfile.id, profile.id);
+    await approveQuote(source.id, replyQuote.id, replyQuoteProfile.id, profile.id);
     const root = await insertPost({ bodyText: 'root', profileId: profile.id });
     const intermediate = await insertPost({
       bodyText: 'intermediate',
@@ -202,6 +212,12 @@ describe('GraphQL Post Repost Source', () => {
       profileId: profile.id,
       repostSourceId: indirectSource.id,
     });
+    await approveQuote(
+      indirectSource.id,
+      indirectTombstoneOuter.id,
+      profile.id,
+      indirectProfile.id,
+    );
     const directSource = await insertPost({
       bodyText: 'direct source',
       profileId: profile.id,
@@ -291,6 +307,84 @@ describe('GraphQL Post Repost Source', () => {
       },
     ]);
   });
+
+  test('Quote 목록과 alias는 Source 판정을 묶고 반복 identity를 중복 조회하지 않는다', async () => {
+    const author = await insertProfile();
+    const quoteAuthor = await insertProfile();
+    const source = await insertPost({ bodyText: 'shared source', profileId: author.id });
+    const quotes: Array<Awaited<ReturnType<typeof insertPost>>> = [];
+    for (let index = 0; index < 20; index += 1) {
+      const quote = await insertPost({
+        bodyText: `quote ${index}`,
+        profileId: quoteAuthor.id,
+        repostSourceId: source.id,
+      });
+      if (index % 2 === 0) {
+        await approveQuote(source.id, quote.id, quoteAuthor.id, author.id);
+      }
+      quotes.push(quote);
+    }
+
+    const query = `query BatchedSources($ids: [ID!]!) {
+      nodes(ids: $ids) { ... on Post {
+        id content { id }
+        first: repostSource { id }
+        second: repostSource { id }
+      } }
+    }`;
+    type Result = {
+      nodes: Array<{
+        id: string;
+        content: { id: string };
+        first: { id: string } | null;
+        second: { id: string } | null;
+      }>;
+    };
+    const originalDebug = pg.options.debug;
+    const queries: Array<{ sql: string; parameters: unknown[] }> = [];
+    pg.options.debug = (_connection, sql, parameters) => {
+      if (sql.startsWith('select')) {
+        queries.push({ sql, parameters });
+      }
+    };
+    try {
+      await requestGraphQL<Result>(query, { ids: [globalId('Post', quotes[0]!.id)] });
+      const singleCount = queries.length;
+      queries.length = 0;
+      const result = await requestGraphQL<Result>(query, {
+        ids: quotes.map((quote) => globalId('Post', quote.id)),
+      });
+      assert.equal(result.errors, undefined, JSON.stringify(result.errors));
+      assert.deepEqual(
+        result.data?.nodes,
+        quotes.map((quote, index) => ({
+          id: globalId('Post', quote.id),
+          content: { id: globalId('PostContent', quote.currentContentId!) },
+          first: index % 2 === 0 ? { id: globalId('Post', source.id) } : null,
+          second: index % 2 === 0 ? { id: globalId('Post', source.id) } : null,
+        })),
+      );
+      assert.ok(singleCount > 0);
+      assert.equal(queries.length, singleCount, 'query count must not grow with the Quote list');
+      const identityQuery = queries.find(
+        ({ parameters }) => parameters.includes(source.id) && parameters.includes(quotes[0]!.id),
+      );
+      assert.ok(identityQuery);
+      assert.equal(identityQuery.parameters.filter((id) => id === source.id).length, 1);
+      assert.equal(identityQuery.parameters.filter((id) => id === quotes[0]!.id).length, 1);
+
+      // A later request must observe revocation, not a process-wide cached approval.
+      await db
+        .update(PostQuoteConsents)
+        .set({ status: PostQuoteConsentStatus.REVOKED })
+        .where(eq(PostQuoteConsents.quotePostId, quotes[0]!.id));
+      const next = await requestGraphQL<Result>(query, { ids: [globalId('Post', quotes[0]!.id)] });
+      assert.equal(next.data?.nodes[0]?.first, null);
+      assert.equal(next.data?.nodes[0]?.second, null);
+    } finally {
+      pg.options.debug = originalDebug;
+    }
+  });
 });
 
 const insertProfile = ({ instanceId = localInstanceId }: { instanceId?: string } = {}) => {
@@ -307,6 +401,26 @@ const insertProfile = ({ instanceId = localInstanceId }: { instanceId?: string }
     })
     .returning()
     .then(firstOrThrow);
+};
+
+const approveQuote = async (
+  sourcePostId: string,
+  quotePostId: string,
+  quoteAuthorProfileId: string,
+  sourceAuthorProfileId: string,
+) => {
+  await db.insert(PostQuoteConsents).values({
+    approvalUri: `${publicOrigin}/ap/quote-authorization/${quotePostId}`,
+    quoteAuthorActorUri: `${publicOrigin}/ap/actor/${quoteAuthorProfileId}`,
+    quoteAuthorProfileId,
+    quotePostId,
+    quoteUri: `${publicOrigin}/ap/note/${quotePostId}`,
+    requestUri: `${publicOrigin}/ap/quote-request/${quotePostId}`,
+    sourceAuthorActorUri: `${publicOrigin}/ap/actor/${sourceAuthorProfileId}`,
+    sourcePostId,
+    sourceUri: `${publicOrigin}/ap/note/${sourcePostId}`,
+    status: PostQuoteConsentStatus.APPROVED,
+  });
 };
 
 const insertPost = async ({

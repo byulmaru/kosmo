@@ -34,8 +34,10 @@ let targetProps:
       contentWarning: string;
       onBodyChange: (value: string) => void;
       onContentWarningChange: (value: string) => void;
+      onQuotePolicyChange: (value: 'EVERYONE' | 'FOLLOWERS' | 'AUTHOR') => void;
       onSubmit: () => void;
       onVisibilityChange: (value: 'FOLLOWERS' | 'PUBLIC' | 'UNLISTED') => void;
+      quotePolicy: 'EVERYONE' | 'FOLLOWERS' | 'AUTHOR';
     }
   | undefined;
 let mutationCalls: Array<{
@@ -213,6 +215,17 @@ afterEach(async () => {
 });
 
 describe('PostComposer local author', () => {
+  it('선택한 인용 정책을 게시 mutation에 포함한다', async () => {
+    await act(async () => {
+      renderer = create(createElement(PostComposer, { profile: profileA as never }));
+    });
+    await act(async () => targetProps?.onBodyChange('인용 설정 게시글'));
+    await act(async () => targetProps?.onQuotePolicyChange('AUTHOR'));
+    assert.equal(targetProps?.quotePolicy, 'AUTHOR');
+    await act(async () => targetProps?.onSubmit());
+    assert.equal(mutationCalls[0]?.variables.input.quotePolicy, 'AUTHOR');
+  });
+
   it('preserves the draft while switching author, sends the local id, isolates home, and unlocks failed media', async () => {
     let editorFocusCount = 0;
     const editorRef = { current: { focus: () => editorFocusCount++ } };

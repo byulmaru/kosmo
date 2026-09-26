@@ -117,6 +117,7 @@ input CreatePostInput {
   bodyText: String!
   contentWarning: String
   media: [CreatePostMediaInput!]
+  quotePolicy: PostQuotePolicy
   replyParentId: ID
   repostSourceId: ID
   sensitiveMedia: Boolean
@@ -302,6 +303,7 @@ type Mutation {
   unfollowProfile(input: UnfollowProfileInput!): UnfollowProfilePayload!
   unmuteProfile(input: UnmuteProfileInput!): UnmuteProfilePayload!
   unregisterPushInstallation(input: UnregisterPushInstallationInput!): UnregisterPushInstallationPayload!
+  updatePostQuotePolicy(input: UpdatePostQuotePolicyInput!): UpdatePostQuotePolicyPayload!
   updateProfile(input: UpdateProfileInput!): UpdateProfilePayload!
   updatePushInstallation(input: UpdatePushInstallationInput!): UpdatePushInstallationPayload!
 }
@@ -346,6 +348,7 @@ type Post implements Node {
   createdAt: DateTime!
   id: ID!
   profile: Profile!
+  quotePolicy: PostQuotePolicy
   reactionCounts: [ReactionCount!]!
   reactionProfiles(after: String, before: String, first: Int, last: Int, type: String!): ProfileConnection!
   replyAncestors: [Post!]!
@@ -355,6 +358,7 @@ type Post implements Node {
   repostSource: Post
   state: PostState!
   viewerBookmark: Bookmark
+  viewerCanUpdateQuotePolicy: Boolean!
   viewerReactions: [Reaction!]!
   viewerRepost: Post
   visibility: PostVisibility!
@@ -382,6 +386,12 @@ type PostContent implements Node {
 
 """Kosmo versioned PostContent document JSON"""
 scalar PostContentDocument
+
+enum PostQuotePolicy {
+  AUTHOR
+  EVERYONE
+  FOLLOWERS
+}
 
 enum PostState {
   ACTIVE
@@ -719,6 +729,15 @@ input UnregisterPushInstallationInput {
 
 type UnregisterPushInstallationPayload {
   completed: Boolean!
+}
+
+input UpdatePostQuotePolicyInput {
+  id: ID!
+  quotePolicy: PostQuotePolicy!
+}
+
+type UpdatePostQuotePolicyPayload {
+  post: Post!
 }
 
 input UpdateProfileInput {

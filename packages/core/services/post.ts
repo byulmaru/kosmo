@@ -9,6 +9,7 @@ import {
   Media,
   PostContents,
   PostMentions,
+  PostQuotePolicies,
   Posts,
   ProfileBlocks,
   ProfileFollows,
@@ -19,6 +20,8 @@ import {
   InstanceState,
   MediaSource,
   MediaState,
+  PostQuoteConsentStatus,
+  PostQuoteEffectKind,
   PostState,
   PostVisibility,
   ProfileState,
@@ -31,9 +34,21 @@ import {
 import { temporalClient } from '../temporal/client';
 import { KOSMO_TASK_QUEUE } from '../temporal/task-queue';
 import { postVisibilityCondition } from '../visibility/post';
+import {
+  assertPostQuotePolicy,
+  createPostQuoteConsent,
+  createPostQuoteEffectReceipt,
+  defaultPostQuotePolicy,
+  isLocalQuoteAllowedByPolicy,
+  loadQuotePostIdentity,
+  loadQuoteSourceIdentity,
+  revokePostQuoteConsentsForSource,
+  startPostQuoteEffect,
+} from './post-quote-consent';
 import { validatePostStructure } from './post-structure';
 import { assertProfilePairIsNotBlocked } from './profile-block-policy';
 import type { Transaction } from '../db';
+import type { PostQuotePolicy } from '../enums';
 import type { PostContentDocumentV1 } from '../post-content';
 
 type LocalPostInput = {
@@ -47,6 +62,7 @@ type LocalPostInput = {
   profileId: string;
   replyParentId?: string;
   repostSourceId?: string;
+  quotePolicy?: PostQuotePolicy | null;
   visibility: PostVisibility;
 };
 
@@ -97,6 +113,10 @@ type CreatedPost = {
   content: typeof PostContents.$inferSelect;
   created: true;
   post: typeof Posts.$inferSelect;
+};
+
+type CreatedPostWithQuoteEffect = CreatedPost & {
+  quoteRequestReceiptId: string | null;
 };
 
 type DuplicatePost = { created: false };
@@ -215,6 +235,7 @@ const findVisibleQuoteSource = async (
       ),
     )
     .limit(1)
+    .for('update', { of: Posts })
     .then(first);
 
 const validateQuoteSource = async (
@@ -234,10 +255,16 @@ const validateQuoteSource = async (
   if (source.visibility === PostVisibility.DIRECT) {
     throw new ValidationError('Post cannot be quoted', { field: 'repostSourceId' });
   }
-  if (source.instanceKind === InstanceKind.ACTIVITYPUB) {
-    throw new ValidationError('Quote approval is not available', {
-      field: 'repostSourceId',
-    });
+  if (
+    source.instanceKind === InstanceKind.LOCAL &&
+    source.profileId !== actorProfileId &&
+    !(await isLocalQuoteAllowedByPolicy(tx, {
+      actorProfileId,
+      sourceAuthorProfileId: source.profileId,
+      sourcePostId: source.id,
+    }))
+  ) {
+    throw new ValidationError('Post cannot be quoted', { field: 'repostSourceId' });
   }
   return source;
 };
@@ -438,7 +465,7 @@ export const deletePost = async ({
   readonly origin: PostOrigin;
   readonly postId: string;
 }): Promise<{ readonly postId: string; readonly sourcePostId: string | null }> => {
-  const { deleted, result } = await db.transaction(async (tx) => {
+  const { deleted, result, quoteRevocationReceiptIds } = await db.transaction(async (tx) => {
     const post = await tx
       .select({
         currentContentId: Posts.currentContentId,
@@ -473,9 +500,14 @@ export const deletePost = async ({
       })
       .then(first);
 
+    const quoteRevocationReceiptIds =
+      deleted && post.currentContentId !== null
+        ? await revokePostQuoteConsentsForSource(tx, postId)
+        : [];
+
     const sourcePostId =
       post.currentContentId === null && post.replyParentId === null ? post.repostSourceId : null;
-    return { deleted, result: { postId, sourcePostId } };
+    return { deleted, quoteRevocationReceiptIds, result: { postId, sourcePostId } };
   });
 
   if (deleted) {
@@ -505,6 +537,18 @@ export const deletePost = async ({
         origin,
         postId: deleted.id,
       });
+    }
+
+    for (const receiptId of quoteRevocationReceiptIds) {
+      try {
+        await startPostQuoteEffect(receiptId);
+      } catch (error) {
+        console.error('Post Quote Revocation Workflow start failed', {
+          error,
+          postId: deleted.id,
+          receiptId,
+        });
+      }
     }
   }
 
@@ -573,9 +617,16 @@ export function createPost(input: ActivityPubPostInput): Promise<CreatedPost | D
 export async function createPost(
   input: LocalPostInput | ActivityPubPostInput,
 ): Promise<CreatedPost | DuplicatePost> {
-  let result: CreatedPost;
+  const localQuotePolicy =
+    input.origin === 'LOCAL'
+      ? input.quotePolicy == null
+        ? defaultPostQuotePolicy
+        : assertPostQuotePolicy(input.quotePolicy)
+      : undefined;
+  let result: CreatedPostWithQuoteEffect;
   try {
     result = await db.transaction(async (tx) => {
+      let quoteSource: Awaited<ReturnType<typeof validateQuoteSource>> | undefined;
       let document =
         input.origin === 'LOCAL'
           ? validateLocalPostContentDocument(input.document)
@@ -662,7 +713,7 @@ export async function createPost(
       }
 
       if (input.origin === 'LOCAL' && input.repostSourceId !== undefined) {
-        await validateQuoteSource(tx, {
+        quoteSource = await validateQuoteSource(tx, {
           actorProfileId: input.profileId,
           postId: input.repostSourceId,
         });
@@ -773,7 +824,62 @@ export async function createPost(
         .returning()
         .then(firstOrThrow);
 
-      return { content: linkedContent, created: true, post: linkedPost };
+      if (input.origin === 'LOCAL') {
+        await tx.insert(PostQuotePolicies).values({
+          policy: localQuotePolicy ?? defaultPostQuotePolicy,
+          postId: linkedPost.id,
+        });
+      }
+
+      let quoteRequestReceiptId: string | null = null;
+      if (quoteSource && quoteSource.profileId !== input.profileId) {
+        const [sourceIdentity, quoteIdentity] = await Promise.all([
+          loadQuoteSourceIdentity(tx, quoteSource.id),
+          loadQuotePostIdentity(tx, linkedPost.id),
+        ]);
+        if (!sourceIdentity?.sourceUri || !quoteIdentity?.requestUri) {
+          throw new ValidationError('Post cannot be quoted', { field: 'repostSourceId' });
+        }
+
+        const approved = sourceIdentity.instanceKind === InstanceKind.LOCAL;
+        const consent = await createPostQuoteConsent(tx, {
+          approvalUri: approved
+            ? new URL(`/ap/quote-authorization/${linkedPost.id}`, sourceIdentity.sourceUri).href
+            : undefined,
+          quoteAuthorActorUri: quoteIdentity.authorActorUri,
+          quoteAuthorProfileId: input.profileId,
+          quotePostId: linkedPost.id,
+          quoteUri: quoteIdentity.quoteUri,
+          requestUri: quoteIdentity.requestUri,
+          sourceAuthorActorUri: sourceIdentity.authorActorUri,
+          sourcePostId: quoteSource.id,
+          sourceUri: sourceIdentity.sourceUri,
+          status: approved ? PostQuoteConsentStatus.APPROVED : PostQuoteConsentStatus.PENDING,
+        });
+        if (!approved) {
+          const receipt = await createPostQuoteEffectReceipt(tx, {
+            consentId: consent.id,
+            effectKey: `post-quote-request:${consent.id}:${consent.revision}`,
+            effectKind: PostQuoteEffectKind.QUOTE_REQUEST,
+            postId: linkedPost.id,
+            quoteAuthorActorUri: consent.quoteAuthorActorUri,
+            quoteUri: consent.quoteUri,
+            requestUri: consent.requestUri,
+            revision: consent.revision,
+            sourceAuthorActorUri: consent.sourceAuthorActorUri,
+            sourcePostId: consent.sourcePostId,
+            sourceUri: consent.sourceUri,
+          });
+          quoteRequestReceiptId = receipt.id;
+        }
+      }
+
+      return {
+        content: linkedContent,
+        created: true,
+        post: linkedPost,
+        quoteRequestReceiptId,
+      };
     });
   } catch (error) {
     if (input.origin !== 'ACTIVITYPUB' || !isActivityPubPostUriConflict(error)) {
@@ -802,5 +908,17 @@ export async function createPost(
     });
   }
 
-  return result;
+  if (result.quoteRequestReceiptId) {
+    try {
+      await startPostQuoteEffect(result.quoteRequestReceiptId);
+    } catch (error) {
+      console.error('Post Quote Request Workflow start failed', {
+        error,
+        postId: result.post.id,
+        receiptId: result.quoteRequestReceiptId,
+      });
+    }
+  }
+
+  return { content: result.content, created: true, post: result.post };
 }

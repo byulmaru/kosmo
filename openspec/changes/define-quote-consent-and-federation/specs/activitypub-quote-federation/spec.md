@@ -1,5 +1,70 @@
 ## ADDED Requirements
 
+### Requirement: 승인 요청 표현과 일반 Note의 분리
+
+**Authority / Provenance:** 이 요구사항은 반드시 준수해야 한다(MUST). 근거: `docs/domain/objects/post.md`, `docs/domain/decisions/0029-quote-consent-and-federation.md`,
+PROD-902·PROD-924의 pending 본문 선게시·별도 QuoteRequest 계약. 프로토콜 근거:
+[FEP-044f QuoteRequest](https://fediverse.codeberg.page/fep/fep/044f/#quoterequest-request-activity).
+
+일반 pending `Create(Note)`와 Note 역참조에서는 Source·승인·자동 호환 표현을 숨겨야 한다(MUST).
+별도 QuoteRequest는 `object`로 Source URI를, `instrument`로 같은 Quote identity를 제공해야 한다(MUST).
+요청 검증용 후보 Source 표현은 요청 대상 Source Author에게 한정해야 하며(MUST), 이를 일반 Note의 승인된
+인용 표현으로 재사용해서는 안 된다(MUST NOT). 요청을 보내기 위해 Quote 자체 Content의 기존 공개 범위를
+넓혀서는 안 된다(MUST NOT). 재전송은 동일 요청 identity와 검증된 Author inbox를 사용해야 한다(MUST).
+
+#### Scenario: 일반 audience와 요청 대상의 서로 다른 표현
+
+- **WHEN** 원격 타인 Source에 대해 pending Quote를 게시한다
+- **THEN** 일반 audience와 Note dispatcher에는 자체 Content만 제공하고 자동 Source 표현을 숨긴다
+- **AND** Source Author에게 보낸 별도 QuoteRequest는 정확한 Source·Quote·Author 결속을 검증할 수 있다
+- **AND** 요청에 넣는 정보는 Quote 본문의 공개 범위를 확대하지 않는다
+
+#### Scenario: 요청 재전송과 역참조 권한
+
+- **WHEN** QuoteRequest 전달을 재시도하거나 다른 요청자가 요청 전용 표현을 역참조한다
+- **THEN** retry는 같은 요청 URI를 사용하고 Source Author inbox로만 전달한다
+- **AND** 권한 없는 요청자에게 후보 Source 표현을 제공하지 않는다
+
+### Requirement: 승인 전이와 전달 실패의 독립적인 복구
+
+**Authority / Provenance:** 이 요구사항은 반드시 준수해야 한다(MUST). 근거: `docs/domain/objects/post.md`, `docs/domain/decisions/0029-quote-consent-and-federation.md`,
+`memory/temporal-workflows.md`, PROD-924의 중복·동시·stale·transient 수렴 계약.
+
+승인 상태 전이는 요청 URI·승인 URI·Source·Quote·발급자 결속과 현재 revision을 검증해야 한다(MUST).
+원격 시각이나 Source FK만으로 승인 순서를 결정해서는 안 된다(MUST NOT). commit과 Workflow start 사이의
+장애, Activity completion 유실과 Worker 재시작 후에도 확정된 효과를 같은 identity로 복구할 수 있어야 한다(MUST).
+재시도 소진은 실패로 기록하되 승인이나 영구 거절로 바꾸어서는 안 된다(MUST NOT).
+
+#### Scenario: commit 뒤 Workflow start 전에 종료
+
+- **WHEN** 승인·철회 상태와 전달 복구 정보가 commit된 뒤 Workflow start 전에 프로세스가 종료된다
+- **THEN** 재시작 또는 운영 replay가 같은 transition identity로 미완료 전달을 재개한다
+- **AND** 새 승인·요청·Post·Content를 생성하거나 확정 상태를 되돌리지 않는다
+
+#### Scenario: 과거 요청의 응답과 승인 fetch 중 철회
+
+- **WHEN** 과거 요청의 Accept/Reject가 도착하거나 승인 fetch 중 현재 승인이 철회된다
+- **THEN** 저장 직전 현재 요청·revision·철회 결과를 재확인해 오래된 결과를 적용하지 않는다
+- **AND** Source 비노출과 자체 Content를 유지한다
+
+#### Scenario: 현재 승인보다 먼저 처리된 유효한 철회
+
+- **WHEN** 정확한 결속을 검증할 수 있는 승인 철회를 Accept 적용보다 먼저 처리한다
+- **THEN** 그 승인 URI의 철회 사실을 보존한다
+- **AND** 뒤늦은 Accept나 승인 fetch가 해당 Source를 승인 상태로 복구하지 않는다
+
+#### Scenario: 정책 변경 Update와 승인 Update의 교차 실행
+
+- **WHEN** 같은 Note에 정책 변경과 승인/철회 Update가 교차 실행된다
+- **THEN** 각 발신은 현재 정책과 현재 승인 상태를 함께 투영한다
+- **AND** 같은 Note identity·본문·visibility를 유지하고 오래된 작업으로 승인 또는 정책을 되돌리지 않는다
+
+#### Scenario: 전달 일부 실패와 기존 Follow routing
+
+- **WHEN** 철회 전달 대상 일부가 실패하거나 기존 Follow의 Accept/Reject가 들어온다
+- **THEN** 철회 상태와 성공한 대상의 효과를 보존하고 실패 대상은 관찰·재시도한다
+- **AND** Follow activity는 기존 handler가 처리하며 Quote handler가 중복 소비하지 않는다
+
 ### Requirement: Local Note의 인용 정책 광고
 
 **Authority / Provenance:** 이 요구사항은 반드시 준수해야 한다(MUST). 근거: `docs/domain/objects/post.md`,
@@ -149,8 +214,8 @@ Kosmo 원문에 들어오는 QuoteRequest는 요청 Profile·인용 Post·Source
 `docs/domain/decisions/0029-quote-consent-and-federation.md`, PROD-902, PROD-924.
 
 로컬 Quote에 대한 유효한 Reject 또는 승인 철회는 자체 Content를 유지한 채 Source를 비노출로 수렴시켜야
-한다(MUST). Kosmo 원문 작성자의 명시적 철회는 승인을 무효화하고 `Delete(QuoteAuthorization)`를 전달해야
-한다(MUST). 수신된 철회는 주체와 대상 승인의 대응을 검증해야 한다(MUST). 수신자가 Quote의 소유 서버라면
+한다(MUST). Local Source 삭제는 발급 승인을 무효화하고 `Delete(QuoteAuthorization)`를 전달해야
+한다(MUST). 사용자용 개별 승인 철회 UI·API는 현재 범위에서 제공해서는 안 된다(MUST NOT). 수신된 철회는 주체와 대상 승인의 대응을 검증해야 한다(MUST). 수신자가 Quote의 소유 서버라면
 검증된 `Delete(QuoteAuthorization)`을 기존 Quote audience에 전달해야 한다(MUST). Source 삭제와 Quote 자체
 삭제를 혼동하여 다른 작성자의 Content를 삭제해서는 안 된다(MUST NOT). 발신하거나 전달하는 철회 `Delete`는
 `object`와 `target`에 객체를 embed해서는 안 된다(MUST NOT). 두 속성은 URI 참조만 제공해야 한다(MUST).
@@ -167,13 +232,6 @@ Kosmo 원문에 들어오는 QuoteRequest는 요청 Profile·인용 Post·Source
 - **THEN** 해당 Source를 비노출로 전환하고 기존 Quote audience에 철회를 전달한다
 - **AND** 전달하는 `Delete`의 `object`와 `target`에는 객체를 embed하지 않고 URI 참조만 제공한다
 - **AND** 전달 대상별 실패가 검증된 로컬 철회 상태와 Quote 자체 Content를 되돌리지 않는다
-
-#### Scenario: Kosmo 원문 작성자의 철회
-
-- **WHEN** 원문 작성자가 자신의 Source에 발급한 기존 승인을 철회한다
-- **THEN** 해당 승인을 무효화하고 철회 신호를 원격에 전달한다
-- **AND** `Delete`의 `object`와 `target`에는 객체를 embed하지 않고 URI 참조만 제공한다
-- **AND** 차단만으로 같은 철회 신호를 자동 생성하지 않는다
 
 #### Scenario: Local Source 삭제의 원격 Quote 수렴
 
@@ -246,3 +304,18 @@ PROD-902, PROD-924. 기존 원격 수신 경계: PROD-792.
 - **WHEN** 승인된 인용이 철회되어 갱신된 표현을 전달한다
 - **THEN** 세 호환 속성과 자동 생성한 원문 링크 fallback을 비노출한다
 - **AND** 작성자가 직접 쓴 동일한 URL이나 본문은 삭제하지 않는다
+
+### Requirement: 승인 없는 Quote의 발신 표현
+
+**Authority / Provenance:** 이 요구사항은 반드시 준수해야 한다(MUST). 근거: `docs/domain/objects/post.md`,
+`docs/domain/decisions/0029-quote-consent-and-federation.md`, 2026-09-22 사용자 결정과 갱신된 D15.
+
+기존 Local Quote 2건을 위한 발신 예외를 두어서는 안 된다(MUST NOT). 타인 Quote의 유효한 승인 없이
+QuoteAuthorization이나 승인된 FEP·자동 legacy 발신 표현을 생성해서는 안 된다(MUST NOT).
+일반 Content 발신과 직접 작성한 본문은 기존 계약을 유지해야 한다(MUST).
+
+#### Scenario: 승인 기록 없는 타인 Quote의 발신 표현
+
+- **WHEN** 유효한 승인이 없는 타인 Quote의 발신 표현을 생성한다
+- **THEN** QuoteAuthorization과 승인된 자동 Source 표현을 추가하지 않는다
+- **AND** 직접 작성한 본문은 유지한다

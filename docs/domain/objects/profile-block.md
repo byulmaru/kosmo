@@ -91,7 +91,8 @@ legacy 상태로 취급하지 않는다. 발신 대상인 모든 Local Owner →
   별도 양방향 제한을 만들지 않고 위의 방향별 Post 조회 정책을 그대로 적용한다. 따라서 Owner가 Target을
   차단한 경우 Owner의 Target Source 직접 조회는 허용될 수 있지만, Target이 Owner를 차단했거나 상호 차단한
   경우 Owner에게 Source를 제공하지 않는다. 차단 자체로 기존 QuoteAuthorization을 자동 철회하지 않으며,
-  제3자에게도 Source를 숨기려면 [Post](./post.md)의 명시적 인용 승인 철회를 사용한다.
+  제3자의 Source를 일괄 숨기지 않는다. [Post](./post.md)의 원격 승인 철회 수신·Source 삭제 lifecycle은
+  유지하며 Author의 개별 승인 철회는 현재 제공하지 않는다.
 - 이번 Block transaction에서 제거한 Follow Request/Relationship을 원인으로 가진 Notification도 같은 transaction에서 함께 제거한다.
   다른 기존 Notification Item과 Read State는 Block action에서 변경하지 않으며, Notification 조회는 Recipient·Related
   Profile pair 정책과 Recipient 기준 Related Post/Profile 조회 정책을 적용한다. commit 뒤 별도 effect가 실패해도

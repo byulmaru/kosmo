@@ -2,21 +2,30 @@
 
 Kosmo에는 Quote 저장·표시 기반이 있지만, 로컬 작성과 원문 작성자의 동의, 외부 서버에 전달한 뒤의 승인·철회가
 하나의 계약으로 연결되어 있지 않다. PROD-902에서 확정한 제품 정책을 OpenSpec으로 남겨 작성과 federation
-구현이 같은 Source 노출·본문 보존 규칙을 따르게 한다.
+구현에 같은 Source 노출·본문 보존 규칙을 적용한다.
 
 ## What Changes
 
+2026-09-11 PROD-924 보강은 승인된 공유 계약의 구현 명세를 구체화한다. 계약·스펙 owner는 계속 PROD-902이며,
+PROD-431 tasks 2~3의 작성 범위를 다시 소유하지 않는다. 2026-09-17 정정은 실제 main의 공개 범위 UI를
+근거로 새 선택 UI의 범위를 명확히 한다. 2026-09-22 결정은 기존 Local Quote 2건의 표시 예외를 제거한다(D15).
+
 - 기존 `createPost`에 Source 입력을 추가하고 Repost 메뉴에서 공용 Composer로 기본 Quote를 작성한다.
   Reply+Quote 작성 UI·API와 링크의 인용 카드 전환은 제외한다.
-- 게시글별 인용 허용 정책 `모두 | 팔로워 | 본인만`을 제공한다. 새 글과 기존 Local Post는 `모두`로 시작하며
+- 기존 게시글 공개 범위 설정 UI를 재사용하고, 그 안에 새 인용 허용 정책 선택 UI `모두 | 팔로워 | 본인만`을 추가한다.
+  공개·조용한 공개에서 선택하고 작성과 함께 저장하며 게시 후 정책도 변경할 수 있다. 별도 선택이 없는 새 글과 기존 Local Post는 `모두`로 시작하며
   기존 승인에는 소급 적용하지 않는다.
+- 신규 Quote consent 정책을 기존 2건을 위한 예외 없이 적용한다. 두 Quote의 migration/backfill·Source 표시
+  보존과 production ID·Source 결속 확인, 이를 위한 preflight·deployment validation은 범위 밖이다.
+  새 정책으로 기존 Source가 비노출되거나 접근할 수 없게 되어도 허용한다.
 - 타인의 Public·Unlisted Source와 접근 범위를 넓히지 않는 자기 Followers Only 인용을 지원한다.
 - 자기 인용을 제외한 원격 타인 원문에는 `interactionPolicy`의 automatic/manual 광고나 부재·해석 실패와
   관계없이 QuoteRequest를 보내고, 유효한 QuoteAuthorization으로 실제 승인을 확인한다.
 - 원격 승인 대기 중 자체 Content를 먼저 게시·전달하고, 승인 후 Source 연결·Update, 거절·철회·원문 삭제 후
   본문 유지·Source 비노출을 보장한다. `interactionPolicy`는 작성 UI와 예상 eligibility의 힌트로만 사용한다.
-- FEP-044f 요청·승인 결과·명시적 철회와 레거시 상호운용을 연결한다.
-- 차단의 당사자 간 접근 제한과 제3자에게도 Source를 숨기는 명시적 승인 철회를 구분한다.
+- FEP-044f 요청·승인 결과·원격 철회 수신·Source 삭제에 따른 철회 전달과 레거시 상호운용을 연결한다.
+- 차단의 당사자 간 접근 제한과 연합 철회·원문 삭제를 구분한다. 사용자용 개별 승인 철회 UI·API는
+  2026-09-11 사용자 지시로 현재 범위에서 제외한다.
 - PROD-902가 계약과 이 OpenSpec을 소유한다. PROD-431은 작성·Composer, PROD-924는 게시글별 정책과
   federation 구현·연합 통합 검증을 맡는다. 전체 선언 task 완료 후 archive는 PROD-924가 수행한다.
 - PROD-431은 안전한 Source 경계를 포함한 tasks 2~3으로 독립 완료한다. PROD-924는 `interactionPolicy`의
@@ -55,7 +64,10 @@ Kosmo에는 Quote 저장·표시 기반이 있지만, 로컬 작성과 원문 �
 
 ## Impact
 
-Core의 Post 작성·정책·승인 행동, API의 작성 입력과 정책·철회 조작, Composer와 게시된 Source 표시,
+PROD-924는 게시글별 정책 GraphQL 계약, 승인 기록과 Source 조회 보호, 요청·승인·철회 delivery의 멱등성,
+기존 공개 범위 설정 UI 연동과 migration/rollback 검증을 보강한다. 최종 Spec Gate는 이 수정본의 검토 뒤 기록한다.
+
+Core의 Post 작성·정책·승인 행동, API의 작성 입력과 정책 조작, Composer와 게시된 Source 표시,
 Fedify의 Local Note 표현·inbox·dispatcher, effects Workflow와 통합 검증에 영향을 준다.
 실제 API 이름·저장 구조는 기존 계약을 확인한 구현 설계에서 선택하며 이 제안이 새 durable 객체를 정의하지 않는다.
 

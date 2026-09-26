@@ -1,4 +1,5 @@
 import { Temporal } from 'temporal-polyfill';
+import type { PostQuotePolicy } from '@kosmo/core/enums';
 import type { PostContentBodyDocumentV1 } from '@kosmo/core/post-content';
 
 export type StoryProfile = {
@@ -146,12 +147,14 @@ export type StoryPost = {
   createdAt: string;
   id: string;
   profile: StoryProfile;
+  quotePolicy: PostQuotePolicy;
   reactionCounts: Array<{ count: number; type: string }>;
   repostCount: number;
   replyParent: StoryReplyParentReference | null;
   repostSource: StoryPost | null;
   state: 'ACTIVE';
   viewerBookmark: { __typename: 'Bookmark'; id: string } | null;
+  viewerCanUpdateQuotePolicy: boolean;
   viewerRepost: StoryPostReference | null;
   visibility: 'DIRECT' | 'FOLLOWERS' | 'PUBLIC' | 'UNLISTED';
 };
@@ -164,11 +167,13 @@ export function post({
   id = 'post-1',
   media = [],
   profile: author = profile(),
+  quotePolicy = 'EVERYONE',
   reactionCounts = [],
   repostCount = 0,
   replyParent = null,
   repostSource = null,
   viewerRepost = null,
+  viewerCanUpdateQuotePolicy = false,
   visibility = 'UNLISTED',
 }: {
   bodyDocument?: PostContentBodyDocumentV1;
@@ -178,11 +183,13 @@ export function post({
   id?: string;
   media?: StoryMedia[] | null;
   profile?: StoryProfile;
+  quotePolicy?: StoryPost['quotePolicy'];
   reactionCounts?: StoryPost['reactionCounts'];
   repostCount?: number;
   replyParent?: StoryReplyParentReference | null;
   repostSource?: StoryPost | null;
   viewerRepost?: StoryPostReference | null;
+  viewerCanUpdateQuotePolicy?: boolean;
   visibility?: StoryPost['visibility'];
 } = {}): StoryPost {
   return {
@@ -206,12 +213,14 @@ export function post({
     createdAt,
     id,
     profile: author,
+    quotePolicy,
     reactionCounts,
     repostCount,
     replyParent,
     repostSource,
     state: 'ACTIVE',
     viewerBookmark: null,
+    viewerCanUpdateQuotePolicy,
     viewerRepost,
     visibility,
   };

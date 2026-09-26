@@ -17,8 +17,21 @@ export {
   withInboundObservability,
 } from './src/inbound-observability';
 export { handleInboundBlock, handleInboundUndoBlock } from './src/inbound-profile-block';
-export { sendLocalPostCreate, sendLocalPostDelete } from './src/local-post-delivery';
+export {
+  sendLocalPostConsentUpdate,
+  sendLocalPostCreate,
+  sendLocalPostDelete,
+  sendLocalPostQuoteDecision,
+  sendLocalPostQuoteRequest,
+  sendLocalPostQuoteRevocation,
+  sendLocalPostQuoteRevocations,
+  sendLocalPostUpdate,
+} from './src/local-post-delivery';
 export { sendLocalProfileUpdate } from './src/local-profile-update-delivery';
+export {
+  authorizeLocalQuoteAuthorization,
+  dispatchLocalQuoteAuthorization,
+} from './src/local-quote-authorization';
 export {
   getProfileBlockActivityUri,
   getProfileBlockOrderingKey,

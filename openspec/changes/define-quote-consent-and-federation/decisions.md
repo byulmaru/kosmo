@@ -1,8 +1,11 @@
 ## Context
 
 2026-09-08 PROD-902 최신 본문, canonical 문서와 현재 대화의 명시적 선택을 독립 확인했다.
-아래 기록은 상위 계약을 다시 정리한 Derived Contract이며 새 내부 구현 수단을 강제하지 않는다.
+D1~D9은 상위 계약에서 파생한 기록이다. 2026-09-11 PROD-924 보강은 최신 canonical·Linear와
+사용자 확인을 다시 읽고 공개 API·상태 수렴·rollout의 Implementation Choice를 추가한다.
 Spec Gate 최종 승인은 별도이며 이 기록의 Active가 제품 구현 승인을 뜻하지 않는다.
+
+D15는 2026-09-22 사용자 결정으로 갱신됐다. 기존 2건을 위한 표시 보존 예외는 폐기한다.
 
 ## Decision Records
 
@@ -13,7 +16,7 @@ Spec Gate 최종 승인은 별도이며 이 기록의 Active가 제품 구현 �
 - Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/objects/profile.md`, `docs/domain/decisions/0029-quote-consent-and-federation.md`, PROD-902, PROD-924.
 - Status: Active
 - Context / Problem: 설정 단위·기존 글 초기값과 기존 승인의 처리 기준이 필요했다.
-- Decision Outcome: 게시글별 모두·팔로워·본인만 자동 승인을 사용하고 새 글·기존 Local Post 모두 초기값을 모두로 한다. 사용자가 이번 사이클 범위를 게시글별로 선택했다.
+- Decision Outcome: 게시글별 모두·팔로워·본인만 자동 승인을 사용하고 새 글·기존 Local Post의 기본값을 모두로 한다. 사용자가 이번 사이클 범위를 게시글별로 선택했다. 2026-09-11 D10에 따라 새 글에서 명시한 정책은 작성과 함께 저장하며, 모두 기본값은 별도 선택이 없을 때 적용한다.
 - Alternatives Considered: Profile 기본값은 별도 Backlog로 분리했다. 기존 글을 본인만으로 초기화하거나 기존 승인을 일괄 철회하는 방안은 선택하지 않았다.
 - Consequences: 정책 변경은 이후 요청에만 적용한다. Profile 기본값 PROD-925는 현재 완료 조건이 아니다.
 - Confirmation / Follow-up: 새/기존 글 초기값, 권한, Follow와 Follow Request 구분, 기존 승인 비소급을 검증한다.
@@ -47,12 +50,14 @@ Spec Gate 최종 승인은 별도이며 이 기록의 Active가 제품 구현 �
 - Decision Date: 2026-09-08
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/objects/profile-block.md`, `docs/domain/decisions/0029-quote-consent-and-federation.md`, PROD-902, PROD-924.
-- Status: Active
+- Status: Superseded
 - Context / Problem: 원문 제어가 Quote 작성자의 본문과 제3자 조회에 미치는 범위를 정해야 했다.
 - Decision Outcome: 삭제·거절·철회 후 본문을 유지하고 Source를 숨긴다. 차단은 당사자 접근·새 요청을 막되 기존 승인을 자동 철회하지 않는다. 제3자 Source 비노출은 명시적 철회이며, 로컬 Quote가 수신한 유효한 철회는 기존 Quote audience에도 전달한다.
 - Alternatives Considered: 정책 변경·차단에 따른 일괄 자동 철회와 Source 삭제에 따른 Quote 전체 삭제는 채택하지 않았다.
 - Consequences: 기존 승인으로 차단을 우회할 수 없고, 명시적 철회는 해당 승인을 무효화해 원격에 전달한다.
 - Confirmation / Follow-up: 당사자와 제3자의 차이, 명시적 철회, Quote audience 전달, 원문 삭제, 본문 보존을 검증한다.
+
+2026-09-11 현재 출시의 사용자용 개별 승인 철회를 제외한 D14가 이 결정을 대체한다. 위 D4 내용은 당시 결정의 이력이다.
 
 ### D5 FEP 승인과 레거시 발신 표현
 
@@ -119,13 +124,87 @@ Spec Gate 최종 승인은 별도이며 이 기록의 Active가 제품 구현 �
   역방향 Stack의 근거로 사용하지 않는다.
 - Confirmation / Follow-up: PROD-924는 승인 상태 없이 Source FK를 승인 증거로 사용하지 않고, 최종 sync/archive를 소유한다.
 
+### D10 게시글 Node와 기존 공개 범위 UI에서 정책 제어
+
+- Decision Date: 2026-09-11
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/domain/objects/post.md`의 정책 변경 Mutation, `docs/design/post-action-bar.md`, `memory/graphql-style.md`, `memory/coding-style.md`, PROD-902, PROD-924의 2026-09-09 API 구체화 위임과 2026-09-11 공개 범위 UI 통합 결정.
+- Status: Active
+- Context / Problem: 기존 UI는 공개 범위 선택 메뉴다. 인용 정책 선택 UI는 아직 없으므로 PROD-924에서 그 메뉴 안에 새로 추가하고 게시 후에도 같은 설정 표현으로 변경해야 한다.
+- Decision Outcome: `PostQuotePolicy`와 `Post.quotePolicy`, `viewerCanUpdateQuotePolicy`를 제공한다. optional `CreatePostInput.quotePolicy`를 같은 작성 transaction에 저장하고 생략·null은 `EVERYONE`으로 처리한다. `updatePostQuotePolicy`는 Post ID·정책을 받아 변경된 `post: Post!`를 반환한다. UI는 Public·Unlisted에서만 인용 정책을 표시하며 게시 후에는 기존 visibility를 읽기 전용으로 둔다.
+- Alternatives Considered: 별도 설정 페이지, 새 Quote/승인 Node와 관리 목록, Profile 기본 정책을 추가하지 않는다.
+- Consequences: 같은 actor Environment에서 Post를 갱신하고 기존 concrete global ID와 domain error를 재사용한다. 공개 범위 선택 직후 메뉴를 닫지 않아 인용 설정에도 접근할 수 있게 한다. 생성 입력·UI 확장은 PROD-924가 맡으며 PROD-431 tasks 2~3의 완료 조건을 확대하지 않는다.
+- Confirmation / Follow-up: create·mutation·readback, selected Profile 변경, 권한 실패, 선택값 유지·오류 복구·접근성을 검증한다. 공개 schema·Relay·OpenSpec을 함께 갱신한다.
+
+### D11 요청·승인 identity와 revision으로 재전달을 수렴
+
+- Decision Date: 2026-09-11
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/decisions/0029-quote-consent-and-federation.md`, `memory/temporal-workflows.md`, PROD-924의 중복·동시·stale delivery 검증 책임.
+- Status: Active
+- Context / Problem: 중복 요청·지연된 승인과 commit 뒤 효과 전달 실패가 다른 승인 또는 새 Content를 만들 수 있다.
+- Decision Outcome: 요청·승인·Quote·Source 결속과 조건부 revision을 확인한다. 확정 transition과 최소 전달 복구 정보를 같은 transaction에 남기고 현재 공통 Activity 설정의 최대 10회·시도당 1분을 사용한다. 재시도 소진은 승인·거절 상태와 분리한다.
+- Alternatives Considered: 원격 시각에 따른 last-write-wins, retry마다 새 요청 ID, 장수명 승인 대기 Workflow와 명시적 비관적 DB 락은 사용하지 않는다.
+- Consequences: 오래된 결과와 삭제된 Source/Quote를 복원하지 않는다. receipt는 해당 인용 효과 복구에만 사용하며 범용 ledger·exactly-once 보장으로 확장하지 않는다. 이미 queue에 들어간 메시지의 순서를 보장한다고 주장하지 않는다.
+- Confirmation / Follow-up: commit/start gap, completion 유실, Worker restart, 승인 fetch와 철회 race, 대상별 실패와 stale queue delivery를 실행해 검증한다.
+
+### D12 승인 요청 전용 표현과 본문 보존
+
+- Decision Date: 2026-09-11
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/decisions/0029-quote-consent-and-federation.md`, PROD-902·924의 별도 요청·승인 전 비노출·본문 보존 계약. 기술 근거: [FEP-044f](https://fediverse.codeberg.page/fep/fep/044f/).
+- Status: Active
+- Context / Problem: 일반 pending Note가 Source를 숨기면서도 원문 서버에서는 QuoteRequest의 Source·Quote 결속을 검증해야 한다.
+- Decision Outcome: 일반 Note와 요청 전용 instrument를 분리한다. 후보 Source 관계는 Source Author에게 보내는 요청에만 포함하고 일반 Note에는 노출하지 않는다. 승인 후 fallback은 발신 projection에만 추가하며 저장된 PostContent는 수정하지 않는다.
+- Alternatives Considered: pending Note를 이미 승인된 Quote로 역참조하거나 본문에서 URL 문자열을 찾아 철회 때 삭제하는 방식은 사용하지 않는다.
+- Consequences: 요청 표현에도 Quote 본문의 기존 접근 범위를 적용한다. 실제 helper·Mastodon/Hackers’ Pub fixture로 최소 instrument와 역참조를 검증한다. 권한을 넓혀 compatibility 실패를 우회하지 않는다.
+- Confirmation / Follow-up: 일반 audience/Source Author/무권한 요청자의 표현, 동일 URL을 직접 쓴 본문, FEP와 invalid legacy 혼합, 철회 후 자동 표현 제거를 검증한다.
+
+### D13 기존 Local Quote 0건 전제 폐기
+
+- Decision Date: 2026-09-11
+- Decision Class: Implementation Choice
+- Authority / Provenance: 당시 PROD-924 Spec 대화의 데이터 전제. 2026-09-17 사용자 정정과 D15가 대체한다.
+- Status: Superseded
+- Context / Problem: 이전 초안은 기존 Local Quote가 없다고 잘못 전제했다.
+- Decision Outcome: 이 전제와 이를 근거로 한 활성화 조건은 폐기한다. 기존 2건을 위한 예외 제거와 표시 보존 제외는 갱신된 D15를 따른다.
+- Alternatives Considered: 과거 전제를 현재 계약으로 유지하지 않는다.
+- Consequences: 기존 Local Post 정책 초기화와 이미 발급된 승인 보존은 바꾸지 않는다.
+- Confirmation / Follow-up: 기존 2건의 identity 확인이나 표시 보존 검증은 요구하지 않는다.
+
+### D14 개별 승인 철회 도입 제외와 연합 lifecycle 유지
+
+- Decision Date: 2026-09-11
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/objects/profile-block.md`, `docs/domain/decisions/0029-quote-consent-and-federation.md`, `docs/design/post-action-bar.md`, PROD-902·924의 2026-09-11 범위 정정; 현재 대화의 사용자 답변 “개별 승인 철회는 현재 도입하지 않음”.
+- Status: Active
+- Context / Problem: Mastodon의 인용별 철회 조작을 조사한 뒤 현재 출시에서의 제공 여부를 정해야 했다.
+- Decision Outcome: 사용자용 개별 승인 철회 UI·API·권한 필드를 제공하지 않는다. 유효한 원격 `Delete(QuoteAuthorization)` 수신과 Local Source 삭제에 따른 승인 무효화·원격 전달은 유지한다. Quote 소유 서버는 기존 Quote audience에 검증된 철회를 전달하고 Source만 숨기며 자체 Content는 보존한다.
+- Alternatives Considered: 상대 인용글 더보기의 확인 후 철회, 복구·재승인 UX는 현재 도입하지 않는다. 원격 철회 수신과 삭제 처리를 함께 제거하는 방안도 채택하지 않았다.
+- Consequences: D4의 개별 철회 제공 범위를 대체한다. 정책 변경·차단은 기존 승인을 자동 철회하지 않으며 차단된 당사자의 Source 조회에는 기존 방향별 정책을 적용한다. PROD-924의 tasks 4~7은 연합 철회·삭제 검증을 유지한다.
+- Confirmation / Follow-up: 원격 유효·위조 철회, Local Source 삭제, Quote audience 전달·재시도, 제3자 비노출과 자체 Content 보존을 실행해 검증한다.
+
+### D15 기존 Local Quote 2건의 legacy exception 제거
+
+- Decision Date: 2026-09-22
+- Decision Class: Derived Contract
+- Authority / Provenance: PROD-924 Review 대화의 명시적 사용자 결정; `docs/domain/objects/post.md`, `docs/domain/decisions/0029-quote-consent-and-federation.md`.
+- Status: Active
+- Context / Problem: 2026-09-17의 두 Quote 표시 보존 예외는 별도 identity 설정과 배포 검증을 요구했다. 사용자가 해당 예외와 보존 요구를 폐기했다.
+- Decision Outcome: 신규 Quote consent 정책을 legacy 2건을 위한 예외 없이 적용한다. 두 Quote의 migration/backfill·Source 표시 보존은 범위 밖이며 수행하지 않는다. 새 정책으로 기존 Source가 비노출되거나 접근할 수 없게 되어도 허용한다.
+- Alternatives Considered: 두 identity allowlist와 compatibility path, 이를 위한 production 조회·preflight·deployment gate는 채택하지 않는다.
+- Consequences: 기존 Local Post의 정책 초기화, 이미 발급된 승인 보존, 자기 인용 계약과 PROD-431 완료 범위는 유지한다. D15 설정 오류를 원인으로 한 P1은 예외 제거로 해결하며 별도 운영·사람 확인 항목으로 남기지 않는다.
+- Confirmation / Follow-up: 예외 설정·코드·문서 요구를 제거하고 일반 승인·Source 접근 판정 회귀를 검증한다. production ID를 추측하거나 요청하지 않는다.
+
 ## Remaining Decisions
 
-- 현재 범위의 미결정 제품 정책은 없다. Profile 기본값은 현재 계약의 승인 근거가 아닌 PROD-925 Backlog다.
-- 내부 저장 표현·API 이름·UI 배치·재시도 수는 design의 비규범 가이드와 기존 계약을 만족하는 범위에서 정한다.
-  공개 동작·권한·데이터·호환성에 영향을 주는 추가 선택이 드러나면 상위 결정부터 갱신한다.
+- 현재 범위의 미결정 제품 정책은 없다. 기존 두 Quote의 표시 예외 제거는 갱신된 D15로 결정됐다.
+- UI 진입점은 D10, 개별 승인 철회 제외는 D14를 따른다. 수정본 전체 Spec Gate는 승인 대기다.
+- Fedify exact version은 PROD-792의 조건부 채택 방침에 따라 실제 compatibility 검증 후 기록한다. 설치 성공이나 이 spec의 작성 완료를 채택 증거로 사용하지 않는다.
+- 두 Quote identity·Source 결속 확인과 이를 위한 배포 검증은 요구하지 않는다. 공개 API·권한·상태·복구의 나머지 계약은 유지한다.
 
 ## Superseded Decisions
 
-- OpenSpec 안에서 대체된 기존 결정은 없다. 작성 전의 ‘PROD-902는 OpenSpec 제외, PROD-924에서 스펙 작성’
-  해석은 사용자 정정과 Linear 갱신으로 폐기했다. 현재 결정은 D6이며 당시 기록은 조사 record에 보존한다.
+- D4는 2026-09-11 D14로 대체됐다. 사용자용 개별 승인 철회 도입을 제외하고 연합 철회·삭제 lifecycle은 유지한다.
+- D13의 기존 Local Quote 0건 전제는 2026-09-17 사용자 정정으로 폐기됐고 D15가 대체한다. 2026-09-17 D15의 표시 보존 예외는 2026-09-22 사용자 결정으로 폐기됐다.
+- 작성 전의 ‘PROD-902는 OpenSpec 제외, PROD-924에서 스펙 작성’ 해석은 사용자 정정과 Linear 갱신으로 폐기했다. 현재 결정은 D6이며 당시 기록은 조사 record에 보존한다.

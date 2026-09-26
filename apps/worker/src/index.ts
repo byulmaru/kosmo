@@ -1,6 +1,7 @@
 import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { pg } from '@kosmo/core/db';
+import { replayPendingPostQuoteEffects } from '@kosmo/core/services';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
 import { closeFedifyQueue } from '@kosmo/fedify';
 import { NativeConnection, Worker } from '@temporalio/worker';
@@ -42,6 +43,20 @@ if (import.meta.main) {
       });
       const running = worker.run();
       process.off('SIGTERM', terminateDuringStartup);
+      void replayPendingPostQuoteEffects()
+        .then((count) => {
+          if (count > 0) {
+            console.log(JSON.stringify({ event: 'post_quote_effect_receipts_replayed', count }));
+          }
+        })
+        .catch((error) => {
+          console.error(
+            JSON.stringify({
+              event: 'post_quote_effect_receipts_replay_failed',
+              error: error instanceof Error ? error.message : String(error),
+            }),
+          );
+        });
       void runSchedules(connection, namespace)
         .then((schedules) => {
           console.log(JSON.stringify({ event: 'temporal_schedules_registered', schedules }));

@@ -87,18 +87,22 @@ test(
   async () => {
     await truncateDatabase();
     const input = await createFixture();
-    const runBlock = (value: typeof input, updateId: string) =>
-      environment.client.workflow.executeUpdateWithStart(PROFILE_BLOCK_UPDATE_NAME, {
+    const blockOptions = (value: typeof input, updateId: string) => ({
+      args: [value],
+      updateId,
+      startWorkflowOperation: new WithStartWorkflowOperation(profileBlockWorkflow.workflow, {
         args: [value],
-        updateId,
-        startWorkflowOperation: new WithStartWorkflowOperation(profileBlockWorkflow.workflow, {
-          args: [value],
-          taskQueue: KOSMO_TASK_QUEUE,
-          workflowId: profileBlockWorkflow.workflowIdFromArgs(value),
-          workflowIdConflictPolicy: 'USE_EXISTING',
-          workflowIdReusePolicy: 'ALLOW_DUPLICATE',
-        }),
-      }) as Promise<ProfileBlockTransitionResult>;
+        taskQueue: KOSMO_TASK_QUEUE,
+        workflowId: profileBlockWorkflow.workflowIdFromArgs(value),
+        workflowIdConflictPolicy: 'USE_EXISTING',
+        workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+      }),
+    });
+    const runBlock = (value: typeof input, updateId: string) =>
+      environment.client.workflow.executeUpdateWithStart(
+        PROFILE_BLOCK_UPDATE_NAME,
+        blockOptions(value, updateId),
+      ) as Promise<ProfileBlockTransitionResult>;
     const transitionStarted = Promise.withResolvers<void>();
     const transitionReleased = Promise.withResolvers<void>();
     let holdFirstTransition = true;
@@ -126,9 +130,12 @@ test(
     try {
       const first = runBlock(input, `${PROFILE_BLOCK_UPDATE_ID}:first`);
       await transitionStarted.promise;
-      const existing = runBlock(input, `${PROFILE_BLOCK_UPDATE_ID}:existing`);
+      const existingHandle = await environment.client.workflow.startUpdateWithStart(
+        PROFILE_BLOCK_UPDATE_NAME,
+        { ...blockOptions(input, `${PROFILE_BLOCK_UPDATE_ID}:existing`), waitForStage: 'ACCEPTED' },
+      );
       transitionReleased.resolve();
-      const [firstResult, existingResult] = await Promise.all([first, existing]);
+      const [firstResult, existingResult] = await Promise.all([first, existingHandle.result()]);
       assert.equal(firstResult.created, true);
       assert.deepEqual(existingResult, { ...firstResult, created: false });
       const rows = await db
@@ -144,6 +151,9 @@ test(
         rows.map(({ id }) => id),
         [firstResult.profileBlockId],
       );
+      await environment.client.workflow
+        .getHandle(profileBlockWorkflow.workflowIdFromArgs(input))
+        .result();
       const duplicate = await runBlock(input, `${PROFILE_BLOCK_UPDATE_ID}:duplicate`);
       assert.deepEqual(duplicate, { ...firstResult, created: false });
     } finally {
