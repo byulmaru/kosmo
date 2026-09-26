@@ -189,7 +189,7 @@ test('원본 URI가 달라도 검증된 pair의 현재 차단을 해제하고 �
   assert.equal((await db.select().from(ProfileBlocks)).length, 1);
 });
 
-test('종료된 과거 Block URI를 담은 새로운 Undo도 현재 pair를 해제한다', async () => {
+test('종료된 과거 Block URI를 담은 새로운 Undo는 새 차단을 유지한다', async () => {
   const fixture = await createFixture();
   const first = new Block({
     actor: fixture.remoteActorUri,
@@ -219,16 +219,27 @@ test('종료된 과거 Block URI를 담은 새로운 Undo도 현재 pair를 해�
       object: fixture.localActorUri,
     }),
   );
-  assert.equal((await db.select().from(ProfileBlocks)).length, 1);
+  const blocksBeforeUndo = await db.select().from(ProfileBlocks);
+  const activitiesBeforeUndo = await db
+    .select()
+    .from(ProfileBlockActivities)
+    .orderBy(ProfileBlockActivities.activityUri);
+  assert.equal(blocksBeforeUndo.length, 1);
 
-  assert.equal(
-    await handleInboundUndoBlock({
-      ...input,
-      undoUri: new URL(`https://${fixture.remoteActorUri.hostname}/activities/new-undo`),
-    }),
-    true,
-  );
-  assert.equal((await db.select().from(ProfileBlocks)).length, 0);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    assert.equal(
+      await handleInboundUndoBlock({
+        ...input,
+        undoUri: new URL(`https://${fixture.remoteActorUri.hostname}/activities/new-undo`),
+      }),
+      true,
+    );
+    assert.deepEqual(await db.select().from(ProfileBlocks), blocksBeforeUndo);
+    assert.deepEqual(
+      await db.select().from(ProfileBlockActivities).orderBy(ProfileBlockActivities.activityUri),
+      activitiesBeforeUndo,
+    );
+  }
 });
 
 test('embedded Block 원본 ID가 없어도 Undo ID와 검증된 pair로 해제한다', async () => {
