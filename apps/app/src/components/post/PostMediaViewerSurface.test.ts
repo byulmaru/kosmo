@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
-import { createElement, forwardRef, useImperativeHandle } from 'react';
+import { createElement, forwardRef, useImperativeHandle, useRef } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ComponentType, ReactNode } from 'react';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
@@ -27,6 +27,57 @@ const MockScrollView = forwardRef<
   useImperativeHandle(ref, () => ({ scrollTo: (options) => scrollCalls.push(options) }), []);
   return createElement('ScrollView', props, props.children as ReactNode);
 });
+type GestureCallback = (...args: unknown[]) => void;
+type FakeGesture = {
+  enabled: (value: boolean) => FakeGesture;
+  enabledValue?: boolean;
+  gestures?: FakeGesture[];
+  maxDuration: (value: number) => FakeGesture;
+  maxPointers: (value: number) => FakeGesture;
+  maxPointersValue?: number;
+  name: string;
+  numberOfTaps: (value: number) => FakeGesture;
+  onEnd: (callback: GestureCallback) => FakeGesture;
+  onFinalize: (callback: GestureCallback) => FakeGesture;
+  onStart: (callback: GestureCallback) => FakeGesture;
+  onUpdate: (callback: GestureCallback) => FakeGesture;
+  onEndCallback?: GestureCallback;
+  onFinalizeCallback?: GestureCallback;
+  onStartCallback?: GestureCallback;
+  onUpdateCallback?: GestureCallback;
+};
+function fakeGesture(name: string): FakeGesture {
+  const gesture = {
+    enabled: (value: boolean) => {
+      gesture.enabledValue = value;
+      return gesture;
+    },
+    maxDuration: () => gesture,
+    maxPointers: (value: number) => {
+      gesture.maxPointersValue = value;
+      return gesture;
+    },
+    name,
+    numberOfTaps: () => gesture,
+    onEnd: (callback: GestureCallback) => {
+      gesture.onEndCallback = callback;
+      return gesture;
+    },
+    onFinalize: (callback: GestureCallback) => {
+      gesture.onFinalizeCallback = callback;
+      return gesture;
+    },
+    onStart: (callback: GestureCallback) => {
+      gesture.onStartCallback = callback;
+      return gesture;
+    },
+    onUpdate: (callback: GestureCallback) => {
+      gesture.onUpdateCallback = callback;
+      return gesture;
+    },
+  } as FakeGesture;
+  return gesture;
+}
 const getToast = () =>
   renderer?.root.findAll((node) => typeof node.type === 'function' && node.type.name === 'Toast')[0]
     ?.props ?? null;
@@ -85,12 +136,47 @@ mock.module('@/theme/ThemeProvider', {
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 
+mock.module('react-native-reanimated', {
+  exports: {
+    default: { View: 'AnimatedView' },
+    runOnJS: (callback: GestureCallback) => callback,
+    useAnimatedStyle: (callback: () => unknown) => callback(),
+    useSharedValue: <T>(value: T) => useRef({ value }).current,
+    withTiming: <T>(value: T) => value,
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+
+mock.module('react-native-gesture-handler', {
+  exports: {
+    Gesture: {
+      Pan: () => fakeGesture('pan'),
+      Pinch: () => fakeGesture('pinch'),
+      Simultaneous: (...gestures: FakeGesture[]) => ({
+        ...fakeGesture('simultaneous'),
+        gestures,
+      }),
+      Tap: () => fakeGesture('tap'),
+    },
+    GestureDetector: (props: Record<string, unknown>) =>
+      createElement('GestureDetector', props, props.children as ReactNode),
+    GestureHandlerRootView: (props: Record<string, unknown>) =>
+      createElement('GestureHandlerRootView', props, props.children as ReactNode),
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+
 const icon = (type: string) => (props: Record<string, unknown>) => createElement(type, props);
 
 mock.module(require.resolve('lucide-react-native'), {
   exports: {
+    ArrowDownIcon: icon('ArrowDownIcon'),
+    ArrowLeftIcon: icon('ArrowLeftIcon'),
+    ArrowRightIcon: icon('ArrowRightIcon'),
+    ArrowUpIcon: icon('ArrowUpIcon'),
     ChevronLeftIcon: icon('ChevronLeftIcon'),
     ChevronRightIcon: icon('ChevronRightIcon'),
+    MinusIcon: icon('MinusIcon'),
+    PlusIcon: icon('PlusIcon'),
+    RotateCcwIcon: icon('RotateCcwIcon'),
     XIcon: icon('XIcon'),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
@@ -115,6 +201,10 @@ let PostMediaViewerSurface: ComponentType<SurfaceProps> | undefined;
 let renderer: ReactTestRenderer | null = null;
 
 before(async () => {
+  const nativeZoom = await import('./PostMediaViewerNativeZoom.native');
+  mock.module(new URL('./PostMediaViewerNativeZoom.tsx', import.meta.url), {
+    exports: { NativeZoomImage: nativeZoom.NativeZoomImage },
+  } as unknown as Parameters<typeof mock.module>[1]);
   PostMediaViewerSurface = (await import('./PostMediaViewerSurface'))
     .PostMediaViewerSurface as ComponentType<SurfaceProps>;
 });
@@ -141,7 +231,6 @@ describe('PostMediaViewerSurface', () => {
         nativeEvent: { layout: { width: 390, height: 600 } },
       }),
     );
-
     const pager = byTestId('post-media-viewer-native-pager');
     assert.equal(pager.props.horizontal, true);
     assert.equal(pager.props.pagingEnabled, true);
@@ -178,6 +267,159 @@ describe('PostMediaViewerSurface', () => {
     assert.equal(queryByTestId('post-media-viewer-native-pager'), null);
   });
 
+  it('Native 확대 controls expose the 1~4x range and lock paging while zoomed', async () => {
+    mockPlatform.OS = 'ios';
+    await render({ currentIndex: 0 });
+    await act(async () =>
+      byTestId('post-media-viewer-media-viewport').props.onLayout({
+        nativeEvent: { layout: { width: 390, height: 600 } },
+      }),
+    );
+    await act(async () => image().props.onLoad());
+    await act(async () => image().props.onLoadStart());
+
+    const pager = byTestId('post-media-viewer-native-pager');
+    assert.equal(pager.props.scrollEnabled, true);
+    const zoomIn = findZoomControlByLabel('확대 (현재 1배)');
+    await act(async () => zoomIn.props.onPress());
+    const zoomedIn = findZoomControlByLabel('확대 (현재 2배)');
+    assert.deepEqual(zoomedIn.props.accessibilityState, { disabled: false });
+    assert.equal(byTestId('post-media-viewer-native-pager').props.scrollEnabled, false);
+
+    await act(async () => findZoomControlByLabel('확대 (현재 2배)').props.onPress());
+    await act(async () => findZoomControlByLabel('확대 (현재 3배)').props.onPress());
+    await act(async () => findZoomControlByLabel('확대 (현재 4배)').props.onPress());
+    assert.equal(findZoomControlByLabel('확대 (현재 4배)').props.accessibilityState.disabled, true);
+    assert.equal(
+      findZoomControlByLabel('축소 (현재 4배)').props.accessibilityState.disabled,
+      false,
+    );
+
+    await act(async () => findZoomControlByLabel('확대 초기화 (현재 4배)').props.onPress());
+    assert.equal(
+      findZoomControlByLabel('확대 (현재 1배)').props.accessibilityState.disabled,
+      false,
+    );
+    assert.equal(byTestId('post-media-viewer-native-pager').props.scrollEnabled, true);
+  });
+
+  it('Native 확대는 더블탭을 누른 위치에 맞추고 pan 이동을 stage 안으로 제한한다', async () => {
+    mockPlatform.OS = 'ios';
+    await render({ currentIndex: 0 });
+    await act(async () =>
+      byTestId('post-media-viewer-media-viewport').props.onLayout({
+        nativeEvent: { layout: { width: 390, height: 600 } },
+      }),
+    );
+
+    const detector = renderer?.root.findAll((node) => String(node.type) === 'GestureDetector')[0];
+    assert.ok(detector);
+    assert.deepEqual(
+      pick(flattenStyle(byTestId('post-media-viewer-native-zoom').props.style), [
+        'height',
+        'width',
+      ]),
+      {
+        height: 600,
+        width: 390,
+      },
+    );
+    assert.deepEqual(
+      pick(flattenStyle(detector.findAll((node) => String(node.type) === 'View')[0].props.style), [
+        'height',
+        'width',
+      ]),
+      { height: 600, width: 390 },
+    );
+    const imageNode = image();
+    await act(async () => imageNode.props.onLoad());
+    const imageFrame = () => flattenStyle(image().parent?.props.style);
+    const gestures = renderer?.root.findAll((node) => String(node.type) === 'GestureDetector')[0]
+      .props.gesture.gestures as FakeGesture[];
+    const pinch = gestures.find((gesture) => gesture.name === 'pinch');
+    const pan = gestures.find((gesture) => gesture.name === 'pan');
+    const doubleTap = gestures.find((gesture) => gesture.name === 'tap');
+    assert.ok(pinch);
+    assert.ok(pan);
+    assert.ok(doubleTap);
+    assert.equal(pan.maxPointersValue, 1);
+    await act(async () => pinch.onStartCallback?.({ focalX: 195, focalY: 300 }));
+    assert.equal(byTestId('post-media-viewer-native-pager').props.scrollEnabled, false);
+    await act(async () => pinch.onFinalizeCallback?.({}, false));
+    assert.equal(byTestId('post-media-viewer-native-pager').props.scrollEnabled, true);
+    await act(async () => {
+      doubleTap.onEndCallback?.({ x: 350, y: 300 }, true);
+    });
+    assert.deepEqual(imageFrame().transform, [
+      { translateX: -155 },
+      { translateY: 0 },
+      { scale: 2 },
+    ]);
+
+    await act(async () => {
+      pan.onStartCallback?.({});
+      pan.onUpdateCallback?.({ translationX: 9999, translationY: -9999 });
+    });
+    assert.deepEqual(imageFrame().transform, [
+      { translateX: 195 },
+      { translateY: 0 },
+      { scale: 2 },
+    ]);
+
+    await act(async () => {
+      doubleTap.onEndCallback?.({ x: 40, y: 80 }, true);
+    });
+    assert.deepEqual(imageFrame().transform, [{ translateX: 0 }, { translateY: 0 }, { scale: 1 }]);
+
+    const updatedGestures = renderer?.root.findAll(
+      (node) => String(node.type) === 'GestureDetector',
+    )[0].props.gesture.gestures as FakeGesture[];
+    const updatedPinch = updatedGestures.find((gesture) => gesture.name === 'pinch');
+    assert.ok(updatedPinch);
+    await act(async () => {
+      updatedPinch.onStartCallback?.({ focalX: 295, focalY: 300 });
+      updatedPinch.onUpdateCallback?.({ focalX: 295, focalY: 300, scale: 2 });
+    });
+    assert.deepEqual(imageFrame().transform, [
+      { translateX: -100 },
+      { translateY: 0 },
+      { scale: 2 },
+    ]);
+    await act(async () => updatedPinch.onFinalizeCallback?.({}, true));
+    const secondGestures = renderer?.root.findAll(
+      (node) => String(node.type) === 'GestureDetector',
+    )[0].props.gesture.gestures as FakeGesture[];
+    const secondPinch = secondGestures.find((gesture) => gesture.name === 'pinch');
+    assert.ok(secondPinch);
+    await act(async () => {
+      secondPinch.onStartCallback?.({ focalX: 295, focalY: 300 });
+      secondPinch.onUpdateCallback?.({ focalX: 295, focalY: 300, scale: 1.5 });
+    });
+    await render({ currentIndex: 0 });
+    assert.deepEqual(imageFrame().transform, [
+      { translateX: -200 },
+      { translateY: 0 },
+      { scale: 3 },
+    ]);
+    await act(async () => secondPinch.onFinalizeCallback?.({}, true));
+
+    await act(async () => image().props.onError());
+    const errorGestures = renderer?.root.findAll(
+      (node) => String(node.type) === 'GestureDetector',
+    )[0].props.gesture.gestures as FakeGesture[];
+    for (const name of ['pinch', 'pan', 'tap']) {
+      assert.equal(errorGestures.find((gesture) => gesture.name === name)?.enabledValue, false);
+    }
+    assert.equal(byTestId('post-media-viewer-native-pager').props.scrollEnabled, true);
+
+    await render({ contentRevisionId: 'content-b', currentIndex: 0 });
+    assert.deepEqual(flattenStyle(image().parent?.props.style).transform, [
+      { translateX: 0 },
+      { translateY: 0 },
+      { scale: 1 },
+    ]);
+  });
+
   it('Ready 이미지 실패는 현재 이미지 retry와 stale callback을 유지하고 다시 방문하면 reload한다', async () => {
     await render({ currentIndex: 0 });
     const first = image();
@@ -201,6 +443,8 @@ describe('PostMediaViewerSurface', () => {
     await act(async () => oldFailure());
     assert.equal(getToast(), null);
     await act(async () => image().props.onLoad());
+    assert.equal(image().props.accessibilityState.busy, false);
+    await act(async () => image().props.onLoadStart());
     assert.equal(image().props.accessibilityState.busy, false);
 
     const retriedFailure = image().props.onError;
@@ -759,6 +1003,14 @@ function image(): ReactTestInstance {
 function findByLabel(label: string): ReactTestInstance {
   const result = queryByLabel(label);
   assert.ok(result, `element with accessibilityLabel ${label} must exist`);
+  return result;
+}
+
+function findZoomControlByLabel(label: string): ReactTestInstance {
+  const result = renderer?.root.findAll(
+    (node) => String(node.type) === 'IconButton' && node.props.accessibilityLabel === label,
+  )[0];
+  assert.ok(result, `IconButton with accessibilityLabel ${label} must exist`);
   return result;
 }
 

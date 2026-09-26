@@ -18,6 +18,8 @@ import { Toast } from '@/components/ui/Toast';
 import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, radius, space, textStyles } from '@/theme/tokens';
 import { useToastMotion } from '@/theme/useOverlayMotion';
+import { NativeZoomImage } from './PostMediaViewerNativeZoom';
+import { fitImageSize } from './PostMediaViewerNativeZoomModel';
 import type { ReactElement } from 'react';
 import type {
   ImageLoadEvent,
@@ -97,6 +99,7 @@ export function PostMediaViewerSurface({
   const reducedMotion = useReducedMotion();
   const { height: viewportHeight } = useWindowDimensions();
   const [mediaViewportSize, setMediaViewportSize] = useState<ImageSize | null>(null);
+  const [zoomed, setZoomed] = useState(false);
   const navigable = viewState === 'ready';
   const multiple = navigable && media.length > 1;
   const currentMedia = media[currentIndex];
@@ -139,7 +142,8 @@ export function PostMediaViewerSurface({
         if (
           current.generation !== generation ||
           current.status === 'error' ||
-          current.status === nextStatus
+          current.status === nextStatus ||
+          (current.status === 'ready' && nextStatus === 'loading')
         ) {
           return previous;
         }
@@ -210,13 +214,17 @@ export function PostMediaViewerSurface({
                     currentIndex={currentIndex}
                     media={media}
                     onIndexChange={onIndexChange}
+                    onZoomedChange={setZoomed}
                     reducedMotion={reducedMotion}
                     viewportSize={mediaViewportSize}
+                    zoomed={zoomed}
                   >
-                    <ViewerImage
+                    <NativeZoomImage
                       key={JSON.stringify([identity, token])}
                       accessibilityLabel={imageName}
                       onStatus={settle}
+                      onZoomedChange={setZoomed}
+                      resetKey={JSON.stringify([identity, token])}
                       viewportSize={mediaViewportSize}
                       status={request.status}
                       url={currentMedia.url}
@@ -394,15 +402,19 @@ function NativeMediaPager({
   currentIndex,
   media,
   onIndexChange,
+  onZoomedChange,
   reducedMotion,
   viewportSize,
+  zoomed,
 }: Readonly<{
   children: ReactElement;
   currentIndex: number;
   media: readonly PostMediaItem[];
   onIndexChange: (index: number) => void;
+  onZoomedChange: (zoomed: boolean) => void;
   reducedMotion: boolean;
   viewportSize: ImageSize;
+  zoomed: boolean;
 }>) {
   const scroll = useRef<ScrollView>(null);
   const active = useRef(true);
@@ -434,7 +446,7 @@ function NativeMediaPager({
       bounces={false}
       directionalLockEnabled
       disableIntervalMomentum
-      scrollEnabled={media.length > 1}
+      scrollEnabled={media.length > 1 && !zoomed}
       showsHorizontalScrollIndicator={false}
       contentOffset={initialOffset.current}
       onMomentumScrollEnd={(event) => {
@@ -447,6 +459,7 @@ function NativeMediaPager({
         );
         position.current = { index, width };
         if (index !== currentIndex) {
+          onZoomedChange(false);
           onIndexChange(index);
         }
       }}
@@ -555,31 +568,6 @@ function ViewerImage({
 }
 
 type ImageSize = Readonly<{ height: number; width: number }>;
-
-function fitImageSize(
-  viewportSize: ImageSize | null,
-  intrinsicSize: ImageSize | null,
-): ImageSize | null {
-  if (
-    !viewportSize ||
-    !intrinsicSize ||
-    viewportSize.height <= 0 ||
-    viewportSize.width <= 0 ||
-    intrinsicSize.height <= 0 ||
-    intrinsicSize.width <= 0
-  ) {
-    return null;
-  }
-
-  const scale = Math.min(
-    viewportSize.width / intrinsicSize.width,
-    viewportSize.height / intrinsicSize.height,
-  );
-  return {
-    height: intrinsicSize.height * scale,
-    width: intrinsicSize.width * scale,
-  };
-}
 
 function ViewerErrorToast({
   onRetry,
