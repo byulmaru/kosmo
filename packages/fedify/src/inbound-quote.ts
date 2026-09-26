@@ -33,6 +33,7 @@ import {
 import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import { findPostByActivityPubUri } from './activitypub-post-uri';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
+import { materializeHydratedRemoteNote } from './inbound-create-note';
 import { resolveInboundLocalRecipient } from './inbound-local-recipient';
 import { observeInbound } from './inbound-observability';
 import {
@@ -111,11 +112,12 @@ const requestMatchesConsent = (request: QuoteRequest, consent: PostQuoteConsentR
 const loadVerifiedQuoteRequest = async (
   context: InboxContext<void>,
   request: QuoteRequest,
+  receivedAt: Temporal.Instant,
 ): Promise<{
   readonly actorUri: URL;
   readonly instrument: Note;
   readonly instrumentUri: URL;
-  readonly quotePostId: string | null;
+  readonly quotePostId: string;
   readonly requestUri: URL;
   readonly sourcePostId: string;
   readonly sourceUri: URL;
@@ -208,7 +210,7 @@ const loadVerifiedQuoteRequest = async (
     !(instrument instanceof Note) ||
     instrument.id?.href !== instrumentUri.href ||
     instrument.quoteId?.href !== sourceUri.href ||
-    instrument.quoteUrl?.href !== sourceUri.href
+    (instrument.quoteUrl !== null && instrument.quoteUrl.href !== sourceUri.href)
   ) {
     observeQuoteValidation({
       activityType: 'QuoteRequest',
@@ -232,38 +234,56 @@ const loadVerifiedQuoteRequest = async (
     return null;
   }
 
-  const quotePostId = await findPostByActivityPubUri(context, instrumentUri);
-  if (quotePostId) {
-    const quotePost = await coreDb
-      .select({
-        currentContentId: Posts.currentContentId,
-        profileState: Profiles.state,
-        state: Posts.state,
-      })
-      .from(Posts)
-      .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
-      .where(eq(Posts.id, quotePostId))
-      .limit(1)
-      .then(first);
-    const quoteIdentity = await loadQuotePostIdentity(coreDb, quotePostId);
-    if (
-      !quotePost ||
-      quotePost.state !== PostState.ACTIVE ||
-      quotePost.currentContentId === null ||
-      quotePost.profileState !== ProfileState.ACTIVE ||
-      !quoteIdentity ||
-      quoteIdentity.quoteUri !== instrumentUri.href ||
-      quoteIdentity.authorActorUri !== actorUri.href
-    ) {
+  let quotePostId = await findPostByActivityPubUri(context, instrumentUri);
+  if (!quotePostId) {
+    const materialized = await materializeHydratedRemoteNote({
+      context,
+      note: instrument,
+      objectUri: instrumentUri,
+      observation: { activityType: 'QuoteRequest', handler: 'quote' },
+      receivedAt,
+    });
+    if (materialized.status === 'rejected') {
       observeQuoteValidation({
         activityType: 'QuoteRequest',
         actorOrigin: actorUri.origin,
         handler: 'quote',
         objectOrigin: instrumentUri.origin,
-        reasonCode: 'quote_request_quote_identity_mismatch',
+        reasonCode: 'quote_request_materialization_failed',
       });
       return null;
     }
+    quotePostId = materialized.postId;
+  }
+  const quotePost = await coreDb
+    .select({
+      currentContentId: Posts.currentContentId,
+      profileState: Profiles.state,
+      state: Posts.state,
+    })
+    .from(Posts)
+    .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
+    .where(eq(Posts.id, quotePostId))
+    .limit(1)
+    .then(first);
+  const quoteIdentity = await loadQuotePostIdentity(coreDb, quotePostId);
+  if (
+    !quotePost ||
+    quotePost.state !== PostState.ACTIVE ||
+    quotePost.currentContentId === null ||
+    quotePost.profileState !== ProfileState.ACTIVE ||
+    !quoteIdentity ||
+    quoteIdentity.quoteUri !== instrumentUri.href ||
+    quoteIdentity.authorActorUri !== actorUri.href
+  ) {
+    observeQuoteValidation({
+      activityType: 'QuoteRequest',
+      actorOrigin: actorUri.origin,
+      handler: 'quote',
+      objectOrigin: instrumentUri.origin,
+      reasonCode: 'quote_request_quote_identity_mismatch',
+    });
+    return null;
   }
 
   return {
@@ -271,7 +291,7 @@ const loadVerifiedQuoteRequest = async (
     instrument,
     instrumentUri,
     requestUri,
-    quotePostId: quotePostId ?? null,
+    quotePostId,
     sourcePostId,
     sourceUri,
     sourceAuthorProfileId: source.authorProfileId,
@@ -327,7 +347,7 @@ export const handleInboundQuoteRequest = async (
   request: QuoteRequest,
   receivedAt: Temporal.Instant = Temporal.Now.instant(),
 ): Promise<void> => {
-  const verified = await loadVerifiedQuoteRequest(context, request);
+  const verified = await loadVerifiedQuoteRequest(context, request, receivedAt);
   if (!verified) {
     return;
   }
@@ -363,7 +383,7 @@ export const handleInboundQuoteRequest = async (
     approvalUri: quoteAuthorizationUri(verified.sourceCanonicalOrigin, verified.requestUri.href),
     quoteAuthorActorUri: verified.actorUri.href,
     quoteAuthorProfileId: remoteActor.profile.id,
-    quotePostId: verified.quotePostId ?? null,
+    quotePostId: verified.quotePostId,
     quoteUri: verified.instrumentUri.href,
     requestUri: verified.requestUri.href,
     sourceAuthorActorUri: verified.sourceAuthorActorUri.href,
@@ -684,8 +704,8 @@ export const handleInboundQuoteRevocation = async (
   if (
     consent.sourceAuthorActorUri !== actorUri.href ||
     approvalUri.origin !== actorUri.origin ||
-    targetHrefs.length !== 1 ||
-    targetHrefs[0] !== consent.sourceUri ||
+    (targetHrefs.length > 0 &&
+      (targetHrefs.length !== 1 || targetHrefs[0] !== consent.sourceUri)) ||
     (embedded !== null &&
       (!(embedded instanceof QuoteAuthorization) ||
         embedded.id?.href !== approvalUri.href ||

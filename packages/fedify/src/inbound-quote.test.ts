@@ -2,7 +2,15 @@ import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, mock, test } from 'node:test';
-import { Accept, Delete, Note, QuoteAuthorization, QuoteRequest, Reject } from '@fedify/vocab';
+import {
+  Accept,
+  Delete,
+  Note,
+  PUBLIC_COLLECTION,
+  QuoteAuthorization,
+  QuoteRequest,
+  Reject,
+} from '@fedify/vocab';
 import {
   ActivityPubActors,
   ActivityPubPosts,
@@ -77,7 +85,7 @@ describe('ActivityPub inbound Quote lifecycle', () => {
     await pg.end();
   });
 
-  test('검증된 QuoteRequest는 원격 Quote를 materialize하지 않아도 승인하고 QuoteAuthorization을 발급한다', async () => {
+  test('검증된 QuoteRequest는 원격 Quote를 먼저 저장하고 QuoteAuthorization을 발급한다', async () => {
     const source = await createLocalSource();
     const remote = await createRemoteActor('https://quote-author.example/users/alice');
     const quoteUri = 'https://quote-author.example/notes/quote-1';
@@ -106,7 +114,20 @@ describe('ActivityPub inbound Quote lifecycle', () => {
       .where(eq(PostQuoteConsents.requestUri, requestUri))
       .then(firstOrThrow);
     assert.equal(consent.status, PostQuoteConsentStatus.APPROVED);
-    assert.equal(consent.quotePostId, null);
+    assert.ok(consent.quotePostId);
+    const storedQuote = await db
+      .select()
+      .from(Posts)
+      .where(eq(Posts.id, consent.quotePostId))
+      .then(firstOrThrow);
+    assert.equal(storedQuote.profileId, remote.profileId);
+    assert.ok(storedQuote.currentContentId);
+    const remotePost = await db
+      .select()
+      .from(ActivityPubPosts)
+      .where(eq(ActivityPubPosts.postId, storedQuote.id))
+      .then(firstOrThrow);
+    assert.equal(remotePost.uri, quoteUri);
     assert.equal(consent.approvalUri, source.approvalUri(requestUri));
     assert.equal(sent.length, 1);
     assert.ok(sent[0]?.activity instanceof Accept);
@@ -129,6 +150,83 @@ describe('ActivityPub inbound Quote lifecycle', () => {
       .then(firstOrThrow);
     assert.equal(receipt.effectKind, PostQuoteEffectKind.QUOTE_DECISION);
     assert.equal(receipt.status, PostQuoteEffectReceiptStatus.COMPLETED);
+  });
+
+  test('FEP quote만 있는 요청을 승인하고 충돌하는 legacy quoteUrl은 거부한다', async () => {
+    const source = await createLocalSource();
+    const remote = await createRemoteActor('https://quote-author.example/users/fep');
+    const sent: SentActivity[] = [];
+    const context = createContext({
+      sendActivity: async (_sender, recipients, activity) => {
+        sent.push({ activity, recipients: toRecipients(recipients) });
+      },
+    });
+    for (const legacy of [null, new URL('https://other.example/notes/source')]) {
+      const requestUri = `https://quote-author.example/requests/${legacy ? 'conflict' : 'fep'}`;
+      await handleInboundQuoteRequest(
+        context,
+        new QuoteRequest({
+          actor: remote.actorUri,
+          id: new URL(requestUri),
+          object: new URL(source.sourceUri),
+          instrument: new Note({
+            attribution: remote.actorUri,
+            id: new URL(`https://quote-author.example/notes/${legacy ? 'conflict' : 'fep'}`),
+            content: 'remote quote',
+            to: PUBLIC_COLLECTION,
+            quote: new URL(source.sourceUri),
+            quoteUrl: legacy,
+          }),
+        }),
+        receivedAt,
+      );
+      const consents = await db
+        .select()
+        .from(PostQuoteConsents)
+        .where(eq(PostQuoteConsents.requestUri, requestUri));
+      assert.equal(consents.length, legacy ? 0 : 1);
+      if (!legacy) assert.equal(consents[0]?.status, PostQuoteConsentStatus.APPROVED);
+    }
+    assert.equal(sent.length, 1);
+    assert.ok(sent[0]?.activity instanceof Accept);
+  });
+
+  test('Quote 본문 저장에 실패하면 동의나 승인 응답을 만들지 않는다', async () => {
+    const source = await createLocalSource();
+    const remote = await createRemoteActor('https://quote-author.example/users/empty');
+    const requestUri = 'https://quote-author.example/requests/empty';
+    const sent: SentActivity[] = [];
+    await handleInboundQuoteRequest(
+      createContext({
+        sendActivity: async (_sender, recipients, activity) => {
+          sent.push({ activity, recipients: toRecipients(recipients) });
+        },
+      }),
+      new QuoteRequest({
+        actor: remote.actorUri,
+        id: new URL(requestUri),
+        object: new URL(source.sourceUri),
+        instrument: new Note({
+          attribution: remote.actorUri,
+          id: new URL('https://quote-author.example/notes/empty'),
+          to: PUBLIC_COLLECTION,
+          quote: new URL(source.sourceUri),
+        }),
+      }),
+      receivedAt,
+    );
+    assert.equal(sent.length, 0);
+    assert.equal(
+      (
+        await db
+          .select()
+          .from(PostQuoteConsents)
+          .where(eq(PostQuoteConsents.requestUri, requestUri))
+      ).length,
+      0,
+    );
+    assert.equal((await db.select().from(PostQuoteEffectReceipts)).length, 0);
+    assert.equal((await db.select().from(ActivityPubPosts)).length, 0);
   });
 
   test('정책상 허용되지 않는 QuoteRequest는 Reject하고 승인 receipt를 만들지 않는다', async () => {
@@ -381,6 +479,39 @@ describe('ActivityPub inbound Quote lifecycle', () => {
     assert.equal(forwarded.length, 1);
   });
 
+  test('target 없는 승인 철회는 적용하고 잘못된 target은 거부한다', async () => {
+    const fixture = await createRemoteSourceAndPendingQuote({ approved: true });
+    mock.method(temporalClient.workflow, 'start', async () => undefined as never);
+    let forwards = 0;
+    const context = createContext({
+      forwardActivity: async () => {
+        forwards += 1;
+      },
+    });
+    await handleInboundQuoteRevocation(
+      context,
+      new Delete({
+        actor: fixture.sourceActorUri,
+        object: fixture.approvalUri,
+        target: new URL('https://remote-source.example/notes/wrong'),
+      }),
+    );
+    const loadConsent = () =>
+      db
+        .select()
+        .from(PostQuoteConsents)
+        .where(eq(PostQuoteConsents.id, fixture.consentId))
+        .then(firstOrThrow);
+    assert.equal((await loadConsent()).status, PostQuoteConsentStatus.APPROVED);
+    assert.equal(forwards, 0);
+    const revocation = new Delete({ actor: fixture.sourceActorUri, object: fixture.approvalUri });
+    assert.equal(await handleInboundQuoteRevocation(context, revocation), true);
+    assert.equal((await loadConsent()).status, PostQuoteConsentStatus.REVOKED);
+    assert.equal(forwards, 1);
+    await handleInboundQuoteRevocation(context, revocation);
+    assert.equal(forwards, 1);
+  });
+
   test('동시에 중복 수신한 철회는 팔로워에게 한 번만 전달한다', async () => {
     const fixture = await createRemoteSourceAndPendingQuote({ approved: true });
     mock.method(temporalClient.workflow, 'start', async () => undefined as never);
@@ -564,6 +695,8 @@ const createQuoteRequest = ({
     instrument: new Note({
       attribution: actorUri,
       id: new URL(quoteUri),
+      content: 'remote quote',
+      to: PUBLIC_COLLECTION,
       quote: new URL(sourceUri),
       quoteUrl: new URL(sourceUri),
     }),
