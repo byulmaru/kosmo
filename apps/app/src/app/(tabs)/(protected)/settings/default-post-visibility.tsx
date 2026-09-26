@@ -17,7 +17,6 @@ export default function SettingsDefaultPostVisibilityRoute() {
     detailHeaderMode === 'back' ? (
       <IconButton
         accessibilityLabel="설정으로 돌아가기"
-        feedback="surface"
         onPress={() => returnToSettingsParent('/settings/default-post-visibility', router)}
         style={styles.backButton}
         targetSize={44}

@@ -37,18 +37,12 @@ export function ColorWell({
       style={Platform.OS === 'web' ? { outlineStyle: 'solid', outlineWidth: 0 } : undefined}
       targetSize={48}
       visualSize={40}
-      visualStyle={(state) => ({
-        backgroundColor: disabled
-          ? theme.stateDisabledSurface
-          : state.pressed
-            ? theme.statePressed
-            : (state as { hovered?: boolean }).hovered
-              ? theme.stateHover
-              : 'transparent',
+      visualStyle={{
+        backgroundColor: disabled ? theme.stateDisabledSurface : 'transparent',
         borderColor: !disabled && focusVisible ? theme.stateFocusRing : 'transparent',
         borderRadius: radius[8],
         borderWidth: borderWidths[2],
-      })}
+      }}
     >
       <View
         style={[

@@ -94,7 +94,9 @@ library에 종속하지 않고 icon, glyph, 짧은 기호 문자 또는 loading 
   `hitSlop`만으로 Web floor 충족을 주장하지 않는다. 기존 `hitSlop` 기반 target을 공용 target으로 옮길 때는
   effective input region을 줄이거나 이중 확장하지 않는다.
 - pressed, disabled, pending, busy, expanded 상태와 focus ref, `onPressIn` 같은 event handler는 각 action의
-  기존 제품 동작을 유지하도록 전달한다. 공통 컴포넌트가 모든 surface에 하나의 visual feedback을 강제하지 않는다.
+  기존 제품 동작을 유지하도록 전달한다. 공통 `IconButton`은 원형 state surface로 Web hover와 Web·Native pressed를
+  표시하고, disabled에서는 surface를 숨기며 공통 disabled opacity를 사용한다. 기존 selected·base background,
+  border·shadow·focus 표시와 target geometry는 보존한다.
 - Outer `style`이 press state를 받는 함수라면 Native layout과 `hitSlop` 계산에 사용할 안정적인 크기로
   `targetSize` 또는 `visualSize`를 반드시 제공한다. 정적 square `style`은 width·height가 같을 때만 layout 크기를
   추론할 수 있으며, 함수형 style callback을 미리 실행해 크기를 추측하지 않는다.

@@ -647,15 +647,13 @@ describe('PostMediaViewerSurface', () => {
       ],
     );
 
+    assert.equal(findByLabel('이미지 뷰어 닫기').props.feedbackTone, 'inverse');
+    assert.equal(findByLabel('이전 이미지').props.feedbackTone, 'inverse');
+    assert.equal(findByLabel('다음 이미지').props.feedbackTone, 'inverse');
+
     const closeVisual = findByLabel('이미지 뷰어 닫기').props.visualStyle;
-    assert.equal(
-      resolveStyle(closeVisual, { hovered: true }).backgroundColor,
-      'rgba(255, 255, 255, 0.16)',
-    );
-    assert.equal(
-      resolveStyle(closeVisual, { pressed: true }).backgroundColor,
-      'rgba(255, 255, 255, 0.24)',
-    );
+    assert.equal(resolveStyle(closeVisual, { hovered: true }).backgroundColor, undefined);
+    assert.equal(resolveStyle(closeVisual, { pressed: true }).backgroundColor, undefined);
     assert.deepEqual(
       pick(resolveStyle(closeVisual, { focused: true }), [
         'outlineColor',
@@ -666,18 +664,13 @@ describe('PostMediaViewerSurface', () => {
       { outlineColor: '#ffffff', outlineOffset: -2, outlineStyle: 'solid', outlineWidth: 2 },
     );
     const disabledNavigationVisual = findByLabel('이전 이미지').props.visualStyle;
-    assert.equal(resolveStyle(disabledNavigationVisual).opacity, 0.35);
-    assert.equal(
-      resolveStyle(disabledNavigationVisual, { hovered: true, pressed: true }).opacity,
-      0.35,
-    );
+    assert.equal(findByLabel('이전 이미지').props.disabled, true);
+    assert.equal(resolveStyle(disabledNavigationVisual).opacity, undefined);
 
     const navigationVisual = findByLabel('다음 이미지').props.visualStyle;
-    assert.equal(resolveStyle(navigationVisual, { hovered: true }).backgroundColor, 'transparent');
-    assert.equal(resolveStyle(navigationVisual, { pressed: true }).backgroundColor, 'transparent');
-    assert.equal(resolveStyle(navigationVisual).opacity, 1);
-    assert.equal(resolveStyle(navigationVisual, { hovered: true }).opacity, 0.8);
-    assert.equal(resolveStyle(navigationVisual, { pressed: true }).opacity, 0.6);
+    assert.equal(resolveStyle(navigationVisual, { hovered: true }).backgroundColor, undefined);
+    assert.equal(resolveStyle(navigationVisual, { pressed: true }).backgroundColor, undefined);
+    assert.equal(resolveStyle(navigationVisual).opacity, undefined);
     assert.equal(resolveStyle(navigationVisual).boxShadow, undefined);
     assert.equal(resolveStyle(navigationVisual).filter, undefined);
     assert.deepEqual(

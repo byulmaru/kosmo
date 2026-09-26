@@ -137,7 +137,7 @@ test('Native 검색은 헤더에 입력 하나를 두고 최초·결과·포커�
       .filter(({ props }) => props.accessibilityLabel === '뒤로').length,
     1,
   );
-  assert.equal(header.findByProps({ accessibilityLabel: '뒤로' }).props.feedback, 'surface');
+  assert.equal(header.findByProps({ accessibilityLabel: '뒤로' }).props.feedbackTone, undefined);
 
   await act(async () => renderer?.unmount());
   searchParams.q = 'kosmo';
@@ -160,6 +160,9 @@ test('Native 검색은 헤더에 입력 하나를 두고 최초·결과·포커�
       .filter(({ props }) => props.accessibilityLabel === '검색 지우기').length,
     1,
   );
-  assert.equal(header.findByProps({ accessibilityLabel: '검색 지우기' }).props.feedback, 'surface');
+  assert.equal(
+    header.findByProps({ accessibilityLabel: '검색 지우기' }).props.feedbackTone,
+    undefined,
+  );
   await act(async () => renderer?.unmount());
 });

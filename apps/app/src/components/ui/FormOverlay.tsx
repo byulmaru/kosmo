@@ -316,13 +316,7 @@ export function FormOverlay({
                 controlRef={closeRef}
                 disabled={formState.submitting}
                 onPress={requestClose}
-                style={({ pressed }) => [
-                  styles.close,
-                  {
-                    backgroundColor: pressed ? theme.surface : 'transparent',
-                    opacity: formState.submitting ? 0.45 : 1,
-                  },
-                ]}
+                style={styles.close}
                 targetSize={36}
               >
                 <XIcon color={theme.text} size={20} strokeWidth={2} />

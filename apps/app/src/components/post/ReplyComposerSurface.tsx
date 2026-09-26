@@ -419,13 +419,7 @@ function ReplyComposerSurfaceContents({
                       ]}
                       targetSize={closeControlSize}
                       visualSize={closeControlSize}
-                      visualStyle={({ pressed }) => [
-                        styles.close,
-                        {
-                          backgroundColor: pressed ? theme.surface : 'transparent',
-                          opacity: submitting ? 0.45 : 1,
-                        },
-                      ]}
+                      visualStyle={styles.close}
                     >
                       <XIcon color={theme.text} size={20} strokeWidth={2} />
                     </IconButton>

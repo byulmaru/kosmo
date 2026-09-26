@@ -231,7 +231,7 @@ export function PostMediaViewer({
           <IconButton
             accessibilityLabel="이미지 뷰어 닫기"
             controlRef={closeRef}
-            feedback="opacity"
+            feedbackTone="inverse"
             onPress={requestClose}
             style={[
               styles.stableClose,
@@ -545,17 +545,11 @@ function containsTarget(dialog: RefObject<NativeView | null>, target: EventTarge
 function stableCloseVisualStyle(state: PressableStateCallbackType): ViewStyle[] {
   const webState = state as PressableStateCallbackType & {
     focused?: boolean;
-    hovered?: boolean;
   };
 
   return [
     styles.stableCloseVisual,
     {
-      backgroundColor: state.pressed
-        ? 'rgba(255, 255, 255, 0.24)'
-        : webState.hovered
-          ? 'rgba(255, 255, 255, 0.16)'
-          : 'transparent',
       ...(Platform.OS === 'web'
         ? ({ filter: 'drop-shadow(0 1px 2px rgba(0, 0, 0, 0.9))' } as unknown as ViewStyle)
         : { boxShadow: '0 1px 2px rgba(0, 0, 0, 0.9)' }),

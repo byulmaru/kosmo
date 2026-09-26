@@ -105,7 +105,6 @@ function PostDetailHeader() {
       leading={
         <IconButton
           accessibilityLabel="뒤로 가기"
-          feedback="surface"
           onPress={() => router.back()}
           style={styles.back}
           targetSize={44}

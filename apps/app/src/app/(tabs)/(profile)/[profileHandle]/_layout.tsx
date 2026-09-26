@@ -80,7 +80,6 @@ export default function ProfileLayout() {
   const backButton = (
     <IconButton
       accessibilityLabel="뒤로 가기"
-      feedback="surface"
       onPress={() => (router.canGoBack() ? router.back() : router.replace('/home'))}
       style={styles.back}
       targetSize={44}
@@ -293,7 +292,6 @@ function ProfileConnectionChrome({
         leading={
           <IconButton
             accessibilityLabel="프로필로 돌아가기"
-            feedback="surface"
             onPress={() => router.replace(profileHref)}
             targetSize={44}
             visualSize={44}

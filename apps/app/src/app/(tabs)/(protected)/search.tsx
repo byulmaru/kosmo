@@ -433,7 +433,6 @@ export default function SearchScreen() {
             accessibilityLabel="메뉴 열기"
             accessibilityState={{ expanded: shellChrome?.navigationDrawerOpen ?? false }}
             controlRef={shellChrome?.navigationDrawerTriggerRef}
-            feedback="surface"
             onFocus={(event) => event.stopPropagation()}
             onPress={shellChrome?.openNavigationDrawer}
             style={styles.iconButton}
@@ -447,7 +446,6 @@ export default function SearchScreen() {
             <IconButton
               accessibilityLabel="뒤로"
               accessibilityRole="link"
-              feedback="surface"
               onPress={() => {
                 preserveQueryNavigationPosition(false);
                 setInput('');
@@ -483,7 +481,6 @@ export default function SearchScreen() {
           {input ? (
             <IconButton
               accessibilityLabel="검색 지우기"
-              feedback="surface"
               onPress={clearSearch}
               onPressIn={keepSearchFocused}
               style={styles.clearButton}
@@ -577,7 +574,6 @@ export default function SearchScreen() {
                   </NavigationLink>
                   <IconButton
                     accessibilityLabel={`최근 검색 '${term}' 삭제`}
-                    feedback="surface"
                     onPress={() => {
                       const next = recent.filter((item) => item !== term);
                       setRecent(next);

@@ -14,7 +14,6 @@ export function NavigationDrawerTrigger() {
       accessibilityLabel="메뉴 열기"
       accessibilityState={{ expanded: shellChrome?.navigationDrawerOpen ?? false }}
       controlRef={shellChrome?.navigationDrawerTriggerRef}
-      feedback="surface"
       onPress={shellChrome?.openNavigationDrawer}
       style={styles.button}
       targetSize={44}
