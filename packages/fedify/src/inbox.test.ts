@@ -9,9 +9,7 @@ import {
 import { CryptographicKey, EmojiReact, Follow, Like, Person } from '@fedify/vocab';
 import { getDocumentLoader } from '@fedify/vocab-runtime';
 import {
-  hasInboundErrorBeenObserved,
-  isExternalInboundError,
-  observeInbound,
+  observeUnhandledInboundListenerError,
   setInboundObservabilityReporter,
   withInboundObservability,
 } from './inbound-observability';
@@ -173,6 +171,48 @@ describe('Fedify inbox routes', () => {
     }
   });
 
+  test('does not capture an unobserved pre-dispatch connection reset', async () => {
+    const captures: unknown[] = [];
+    const logs: unknown[] = [];
+    const restore = setInboundObservabilityReporter({
+      captureException: (error) => captures.push(error),
+      log: (observation) => logs.push(observation),
+    });
+
+    try {
+      const error = Object.assign(new Error('aborted'), { code: 'ECONNRESET' });
+      const fixture = await createInboxFixture(() => undefined);
+      const requestInit = {
+        body: new ReadableStream({
+          start(controller) {
+            controller.error(error);
+          },
+        }),
+        duplex: 'half' as const,
+        headers: { 'content-type': 'application/activity+json' },
+        method: 'POST',
+      } satisfies RequestInit & { duplex: 'half' };
+      const response = await fixture.federation.fetch(
+        new Request(new URL('/inbox', 'https://kos.moe'), requestInit),
+        { contextData: undefined },
+      );
+
+      assert.equal(response.status, 400);
+      assert.equal(captures.length, 0);
+      assert.deepEqual(logs, [
+        {
+          activityType: 'Unknown',
+          handler: 'listener',
+          outcome: 'external_failure',
+          phase: 'listener',
+          reasonCode: 'external_listener_error',
+        },
+      ]);
+    } finally {
+      restore();
+    }
+  });
+
   test('does not capture a remote listener failure', async () => {
     const captures: unknown[] = [];
     const logs: unknown[] = [];
@@ -273,21 +313,7 @@ const createInboxFixture = async (onFollow: FollowHandler) => {
   federation
     .setInboxListeners('/ap/actor/{identifier}/inbox', '/inbox')
     .on(Follow, withInboundObservability('follow', onFollow))
-    .onError((_context, error) => {
-      if (hasInboundErrorBeenObserved(error)) {
-        return;
-      }
-
-      const external = error instanceof SyntaxError || isExternalInboundError(error);
-      observeInbound({
-        activityType: 'Unknown',
-        error,
-        handler: 'listener',
-        outcome: external ? 'external_failure' : 'internal_failure',
-        phase: 'listener',
-        reasonCode: external ? 'external_listener_error' : 'unexpected_listener_error',
-      });
-    });
+    .onError((_context, error) => observeUnhandledInboundListenerError(error));
 
   const createSignedFollowRequest = async (path: string, id: string): Promise<Request> => {
     const activity = new Follow({

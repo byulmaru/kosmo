@@ -241,6 +241,32 @@ export const isExternalInboundError = (error: unknown, seen = new Set<object>())
   return false;
 };
 
+const isUnobservedPreDispatchConnectionReset = (error: unknown): boolean =>
+  error instanceof Error &&
+  Object.prototype.hasOwnProperty.call(error, 'code') &&
+  (error as Error & { code?: unknown }).code === 'ECONNRESET';
+
+export const observeUnhandledInboundListenerError = (error: unknown): void => {
+  if (hasInboundErrorBeenObserved(error)) {
+    return;
+  }
+
+  // Fedify invokes this boundary for failures that happen before a typed
+  // listener receives an Activity (for example, malformed request JSON).
+  const external =
+    error instanceof SyntaxError ||
+    isUnobservedPreDispatchConnectionReset(error) ||
+    isExternalInboundError(error);
+  observeInbound({
+    activityType: 'Unknown',
+    error,
+    handler: 'listener',
+    outcome: external ? 'external_failure' : 'internal_failure',
+    phase: 'listener',
+    reasonCode: external ? 'external_listener_error' : 'unexpected_listener_error',
+  });
+};
+
 export const withInboundObservability =
   <TContextData, TActivity extends object>(
     handler: InboundHandler,

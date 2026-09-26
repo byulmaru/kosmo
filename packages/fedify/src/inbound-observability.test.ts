@@ -163,7 +163,7 @@ describe('inbound ActivityPub observability', () => {
     }
   });
 
-  test('listener wrapper reports internal errors once and rethrows', async () => {
+  test('keeps typed handler connection resets internal and rethrows once', async () => {
     const captures: unknown[] = [];
     const restore = setInboundObservabilityReporter({
       log: () => undefined,
@@ -171,7 +171,7 @@ describe('inbound ActivityPub observability', () => {
     });
 
     try {
-      const error = new Error('database failed');
+      const error = Object.assign(new Error('aborted'), { code: 'ECONNRESET' });
       const listener = withInboundObservability('create', async () => {
         throw error;
       });
@@ -198,9 +198,9 @@ describe('inbound ActivityPub observability', () => {
     assert.equal(hasInboundErrorBeenObserved(error), true);
   });
 
-  test('does not infer a remote failure from a generic socket code', () => {
-    const error = Object.assign(new Error('connection refused'), {
-      code: 'ECONNREFUSED',
+  test('does not infer a remote failure from a generic connection reset code', () => {
+    const error = Object.assign(new Error('aborted'), {
+      code: 'ECONNRESET',
     });
 
     assert.equal(isExternalInboundError(error), false);
