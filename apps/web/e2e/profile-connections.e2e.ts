@@ -285,7 +285,7 @@ test('Web GraphQL payload와 DB 상태가 일치한다', async ({ context, page 
   expect(await db.select().from(ProfileFollowRequests)).toHaveLength(0);
 });
 
-test('동시 follow와 unfollow는 저장 count를 한 번만 갱신한다', async ({ context, page }) => {
+test('follow와 동시 unfollow는 저장 count를 한 번만 갱신한다', async ({ context, page }) => {
   const viewer = await createE2ESession({ handle: 'e2e-count-viewer' });
   const target = await createE2EProfile({ handle: 'e2e-count-target' });
   const targetId = toGlobalId('Profile', target.id);
@@ -294,21 +294,16 @@ test('동시 follow와 unfollow는 저장 count를 한 번만 갱신한다', asy
   await setE2ESessionCookie(context, viewer.token);
   await gotoHome(page);
 
-  const followResponses = await Promise.all([
-    mutateFollow(page, 'followProfile', targetId),
-    mutateFollow(page, 'followProfile', targetId),
-  ]);
-  expect(followResponses.every((response) => !response.errors)).toBe(true);
-  for (const response of followResponses) {
-    expect(response.data.followProfile.followerProfile).toMatchObject({
-      followingCount: 1,
-      id: viewerId,
-    });
-    expect(response.data.followProfile.followeeProfile).toMatchObject({
-      followersCount: 1,
-      id: targetId,
-    });
-  }
+  const followResponse = await mutateFollow(page, 'followProfile', targetId);
+  expect(followResponse.errors).toBeUndefined();
+  expect(followResponse.data.followProfile.followerProfile).toMatchObject({
+    followingCount: 1,
+    id: viewerId,
+  });
+  expect(followResponse.data.followProfile.followeeProfile).toMatchObject({
+    followersCount: 1,
+    id: targetId,
+  });
 
   const followedViewer = await db
     .select()

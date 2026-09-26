@@ -11,6 +11,7 @@ import {
   InstanceState,
   ProfileFollowPolicy,
 } from '@kosmo/core/enums';
+import { ConflictError } from '@kosmo/core/error';
 import { temporalClient } from '@kosmo/core/temporal/client';
 import { eq, ne } from 'drizzle-orm';
 import { setInboundObservabilityReporter, withInboundObservability } from './inbound-observability';
@@ -401,7 +402,13 @@ describe('inbound Follow and Undo', () => {
     const fixture = await createFixture();
     const context = createContext({ recipient: localProfileId });
     const follow = new Follow({ actor: remoteActorUri, object: localActorUri });
-    await Promise.all([handleInboundFollow(context, follow), handleInboundFollow(context, follow)]);
+    const results = await Promise.allSettled([
+      handleInboundFollow(context, follow),
+      handleInboundFollow(context, follow),
+    ]);
+    const failures = results.filter((result) => result.status === 'rejected');
+    assert.ok(results.some((result) => result.status === 'fulfilled'));
+    assert.ok(failures.every((result) => result.reason instanceof ConflictError));
 
     await waitForProfileFollowWorkflows();
     const relation = await db.select().from(ProfileFollows).limit(1).then(firstOrThrow);
@@ -553,7 +560,7 @@ describe('inbound Follow and Undo', () => {
     ]);
   });
 
-  test('deduplicates a repeated pending Follow without logging a second noop', async () => {
+  test('logs a repeated pending Follow noop without duplicating its projection or Notification', async () => {
     await createFixture({ followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED });
     const logs: unknown[] = [];
     const restore = setInboundObservabilityReporter({
@@ -565,9 +572,31 @@ describe('inbound Follow and Undo', () => {
       await handleInboundFollow(createContext({ recipient: null }), follow);
       await handleInboundFollow(createContext({ recipient: null }), follow);
 
-      // The same pair and Follow Update ID are deduplicated by Temporal, so
-      // the second request does not enter the handler.
-      assert.deepEqual(logs, []);
+      await waitForProfileFollowWorkflows();
+
+      const [request] = await db.select().from(ProfileFollowRequests);
+      assert.ok(request);
+      assert.equal((await db.select().from(ProfileFollowRequests)).length, 1);
+      assert.equal((await db.select().from(ProfileFollows)).length, 0);
+      assert.equal(
+        await db
+          .select()
+          .from(Notifications)
+          .where(eq(Notifications.sourceId, request.id))
+          .then((rows) => rows.length),
+        1,
+      );
+      assert.deepEqual(logs, [
+        {
+          activityType: 'Follow',
+          actorOrigin: remoteActorUri.origin,
+          handler: 'follow',
+          objectOrigin: localActorUri.origin,
+          outcome: 'noop',
+          phase: 'projection',
+          reasonCode: 'duplicate_pending_follow_noop',
+        },
+      ]);
     } finally {
       restore();
     }
