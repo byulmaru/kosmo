@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it, mock } from 'node:test';
+import { GraphQLHttpError } from '@/relay/network';
 import { RelayTransportError } from '@/relay/transportError';
 import type { ErrorInfo } from 'react';
 
@@ -120,6 +121,27 @@ describe('Native app Sentry configuration', () => {
       mechanism: { handled: true, type: 'auto.function.react.error_boundary' },
     });
     assert.deepEqual(captureCalls[0]?.context, { componentStack: '\n    at Screen' });
+  });
+
+  it('adds GraphQL HTTP metadata to captured React errors', async () => {
+    process.env.EXPO_PUBLIC_SENTRY_RELEASE = 'kosmo@abc123';
+    const { captureReactError } = await import(`${sentryModule}?graphql-http`);
+    const cause = new GraphQLHttpError('server unavailable', {
+      operationName: 'ViewerQuery',
+      status: 503,
+      elapsedMs: 42,
+    });
+
+    captureReactError(cause, { componentStack: '\n    at Screen' } as ErrorInfo);
+
+    assert.equal(captureCalls.length, 1);
+    assert.equal(captureCalls[0]?.cause, cause);
+    assert.deepEqual(captureCalls[0]?.context, { componentStack: '\n    at Screen' });
+    assert.deepEqual(captureCalls[0]?.extras, {
+      operationName: 'ViewerQuery',
+      status: 503,
+      elapsedMs: 42,
+    });
   });
 
   it('skips Relay transport errors from React error boundaries', async () => {

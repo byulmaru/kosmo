@@ -1,6 +1,7 @@
 import { serve } from '@hono/node-server';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { Hono } from 'hono';
+import { logger } from 'hono/logger';
 import { deriveContext } from './context';
 import { yoga } from './graphql';
 import { reportError } from './sentry';
@@ -15,6 +16,16 @@ app.onError((cause, c) => {
   console.error('Unhandled API error');
   return c.text('Internal Server Error', 500);
 });
+
+app.use(
+  '/graphql',
+  logger((message) => {
+    const [prefix, method, requestTarget, ...details] = message.split(' ');
+    const path = requestTarget?.split('?')[0];
+
+    console.log([prefix, method, path, ...details].join(' '));
+  }),
+);
 
 app.get('/health', (c) => {
   return c.json({ status: 'ok' });
