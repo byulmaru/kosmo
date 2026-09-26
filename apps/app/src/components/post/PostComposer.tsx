@@ -88,7 +88,12 @@ export type MobileFullscreenComposerShellCandidateProps = Omit<
   PostComposerProps,
   'onExpand' | 'showSubmit' | 'surface'
 > &
-  Readonly<{ fillContainer?: boolean; keyboard?: boolean; onOverlayClose: () => void }>;
+  Readonly<{
+    fillContainer?: boolean;
+    keyboard?: boolean;
+    onOverlayClose: () => void;
+    replyContext?: ReactNode;
+  }>;
 
 const visibilityOptions = postComposerTargetVisibilityValues.map((value) => ({
   ...postVisibilityPresentation[value],
@@ -651,6 +656,7 @@ export function MobileFullscreenComposerShellCandidate({
   onPollAction,
   onSubmit,
   onVisibilityChange,
+  replyContext,
   remaining,
   sensitiveMedia,
   showCWAction = true,
@@ -665,8 +671,18 @@ export function MobileFullscreenComposerShellCandidate({
   const copy = composerCopy[mode];
   const remainingDescriptionId = useId();
   const bodyInputRef = useRef<TextInput>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const initialScrollFrameRef = useRef<number | null>(null);
+  const initialScrollPendingRef = useRef(
+    mode === 'reply' && beforeEditor !== undefined && beforeEditor !== null,
+  );
+  const parentOffsetRef = useRef<number | null>(null);
   const [bodyContentHeight, setBodyContentHeight] = useState(0);
+  const [bodyFocused, setBodyFocused] = useState(false);
+  const [scrollViewportHeight, setScrollViewportHeight] = useState(0);
   const hasTrailingContent = children !== undefined && children !== null;
+  const hasParent = beforeEditor !== undefined && beforeEditor !== null;
+  const isReplyShell = mode === 'reply' && hasParent;
   const shouldAutoSizeBody = Platform.OS === 'web' && (hasTrailingContent || mode === 'reply');
   const bodyUsesTrailingContentLayout =
     hasTrailingContent || (shouldAutoSizeBody && bodyContentHeight > 0);
@@ -700,6 +716,152 @@ export function MobileFullscreenComposerShellCandidate({
     items.some((item) => item.state !== 'ready') ||
     (body.trim().length === 0 && items.length === 0) ||
     remaining < 0;
+  const scrollToBody = () => {
+    if (isReplyShell && parentOffsetRef.current !== null) {
+      scrollRef.current?.scrollTo({ animated: false, y: parentOffsetRef.current });
+    }
+  };
+  const scheduleInitialScroll = () => {
+    if (initialScrollFrameRef.current !== null) {
+      cancelAnimationFrame(initialScrollFrameRef.current);
+    }
+    initialScrollFrameRef.current = requestAnimationFrame(() => {
+      initialScrollFrameRef.current = null;
+      const offset = parentOffsetRef.current;
+      if (initialScrollPendingRef.current && offset !== null) {
+        scrollRef.current?.scrollTo({ animated: false, y: offset });
+      }
+    });
+  };
+  const handleParentLayout = (event: {
+    nativeEvent: { layout: { height: number; y: number } };
+  }) => {
+    if (!hasParent) {
+      return;
+    }
+    const offset = event.nativeEvent.layout.y + event.nativeEvent.layout.height;
+    parentOffsetRef.current = offset;
+    if (initialScrollPendingRef.current) {
+      scheduleInitialScroll();
+    }
+  };
+  const bodySection = (
+    <View
+      style={[
+        styles.mobileComposerBody,
+        isReplyShell ? { minHeight: Math.max(160, scrollViewportHeight) } : null,
+      ]}
+      testID="mobile-composer-body"
+    >
+      {!isReplyShell ? beforeEditor : null}
+      <View style={styles.authorLayer}>{author}</View>
+      {bodyFocused && mode === 'reply' && replyContext ? (
+        <View style={styles.mobileReplyContext}>{replyContext}</View>
+      ) : null}
+      {contentWarningExpanded ? (
+        <TextField
+          accessibilityLabel="콘텐츠 경고"
+          editable={!submitting}
+          onChangeText={onContentWarningChange}
+          placeholder="경고 문구를 입력하세요"
+          style={[styles.mobileContentWarning, composerFieldFocusStyle]}
+          value={contentWarning}
+        />
+      ) : null}
+      <TextInput
+        ref={bodyRef ?? bodyInputRef}
+        aria-describedby={Platform.OS === 'web' ? remainingDescriptionId : undefined}
+        accessibilityLabel={copy.bodyLabel}
+        editable={!submitting}
+        multiline
+        onBlur={() => {
+          setBodyFocused(false);
+        }}
+        onChange={(event) => {
+          if (shouldAutoSizeBody) {
+            const input = event.currentTarget as unknown as HTMLTextAreaElement;
+            const availableHeight = input.clientHeight;
+            input.style.height = '0px';
+            const height = input.scrollHeight;
+            const overflowing = height > availableHeight;
+            input.style.height = overflowing ? `${height}px` : 'auto';
+            setBodyContentHeight(overflowing ? height : 0);
+          }
+        }}
+        onChangeText={onBodyChange}
+        onContentSizeChange={(event) =>
+          hasTrailingContent &&
+          setBodyContentHeight(Math.ceil(event.nativeEvent.contentSize.height))
+        }
+        onPressIn={scrollToBody}
+        {...(Platform.OS === 'web' ? { onPointerDown: scrollToBody } : {})}
+        onFocus={() => {
+          setBodyFocused(true);
+          scrollToBody();
+        }}
+        placeholder={composerPlaceholder}
+        placeholderTextColor={submitting ? theme.stateDisabledForeground : theme.foregroundMuted}
+        style={[
+          styles.mobileBody,
+          bodyUsesTrailingContentLayout ? styles.mobileTrailingContentBody : null,
+          bodyUsesTrailingContentLayout && bodyContentHeight > 0
+            ? { height: bodyContentHeight }
+            : null,
+          {
+            backgroundColor: theme.backgroundCanvas,
+            color: theme.foregroundPrimary,
+            ...composerBodyFocusStyle,
+          },
+        ]}
+        value={body}
+      />
+      {children}
+    </View>
+  );
+  const visibilityControl = (
+    <View ref={controlRef} style={styles.mobileVisibilityControl}>
+      <Pressable
+        ref={triggerRef}
+        aria-expanded={visibilityOpen && !submitting}
+        accessibilityLabel={`공개 범위: ${selectedVisibility.label}`}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: visibilityOpen && !submitting }}
+        disabled={submitting}
+        onPress={() => setVisibilityOpen((open) => !open)}
+        style={({ pressed }) => [
+          styles.mobileVisibility,
+          {
+            backgroundColor: pressed ? theme.statePressed : theme.backgroundCanvas,
+            borderColor: theme.borderSubtle,
+          },
+        ]}
+      >
+        <Text style={[styles.mobileVisibilityCaption, { color: theme.foregroundSecondary }]}>
+          공개 범위
+        </Text>
+        <View style={styles.mobileVisibilityValue}>
+          <Text style={[styles.visibilityOptionLabel, { color: theme.foregroundPrimary }]}>
+            {selectedVisibility.label}
+          </Text>
+          <ChevronDownIcon color={theme.foregroundPrimary} size={iconSizes[16]} strokeWidth={2} />
+        </View>
+      </Pressable>
+      {visibilityOpen && !submitting ? (
+        <VisibilityMenu
+          alignRight
+          menuRef={menuRef}
+          triggerRef={triggerRef}
+          onDismiss={() => setVisibilityOpen(false)}
+          onChange={(value) => {
+            onVisibilityChange(value);
+            setVisibilityOpen(false);
+            triggerRef.current?.focus();
+          }}
+          value={visibility}
+        />
+      ) : null}
+    </View>
+  );
   return (
     <View
       accessibilityLabel={copy.title}
@@ -717,7 +879,7 @@ export function MobileFullscreenComposerShellCandidate({
             accessibilityLabel={`${copy.title} 닫기`}
             disabled={submitting}
             feedback="opacity"
-            onPress={onOverlayClose}
+            onPress={() => onOverlayClose()}
             targetSize={44}
           >
             <XIcon color={theme.foregroundPrimary} size={iconSizes[24]} strokeWidth={2} />
@@ -743,110 +905,43 @@ export function MobileFullscreenComposerShellCandidate({
         </View>
       </View>
 
-      <View ref={controlRef} style={styles.mobileVisibilityControl}>
-        <Pressable
-          ref={triggerRef}
-          aria-expanded={visibilityOpen && !submitting}
-          accessibilityLabel={`공개 범위: ${selectedVisibility.label}`}
-          accessibilityRole="button"
-          accessibilityState={{ expanded: visibilityOpen && !submitting }}
-          disabled={submitting}
-          onPress={() => setVisibilityOpen((open) => !open)}
-          style={({ pressed }) => [
-            styles.mobileVisibility,
-            {
-              backgroundColor: pressed ? theme.statePressed : theme.backgroundCanvas,
-              borderColor: theme.borderSubtle,
-            },
-          ]}
-        >
-          <Text style={[styles.mobileVisibilityCaption, { color: theme.foregroundSecondary }]}>
-            공개 범위
-          </Text>
-          <View style={styles.mobileVisibilityValue}>
-            <Text style={[styles.visibilityOptionLabel, { color: theme.foregroundPrimary }]}>
-              {selectedVisibility.label}
-            </Text>
-            <ChevronDownIcon color={theme.foregroundPrimary} size={iconSizes[16]} strokeWidth={2} />
-          </View>
-        </Pressable>
-        {visibilityOpen && !submitting ? (
-          <VisibilityMenu
-            alignRight
-            menuRef={menuRef}
-            triggerRef={triggerRef}
-            onDismiss={() => setVisibilityOpen(false)}
-            onChange={(value) => {
-              onVisibilityChange(value);
-              setVisibilityOpen(false);
-              triggerRef.current?.focus();
-            }}
-            value={visibility}
-          />
-        ) : null}
-      </View>
-
+      {!isReplyShell ? visibilityControl : null}
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={styles.mobileScrollContent}
         keyboardShouldPersistTaps="handled"
+        onContentSizeChange={() => {
+          if (initialScrollPendingRef.current) {
+            scheduleInitialScroll();
+          }
+        }}
+        onLayout={(event) => {
+          const { height } = event.nativeEvent.layout;
+          setScrollViewportHeight(height);
+          if (initialScrollPendingRef.current) {
+            scheduleInitialScroll();
+          }
+        }}
+        onScroll={(event) => {
+          const offset = parentOffsetRef.current;
+          if (
+            initialScrollPendingRef.current &&
+            offset !== null &&
+            Math.abs(event.nativeEvent.contentOffset.y - offset) > 1
+          ) {
+            initialScrollPendingRef.current = false;
+          }
+        }}
         style={styles.mobileScroll}
         testID="mobile-fullscreen-composer-scroll"
       >
-        <View style={styles.mobileComposerBody} testID="mobile-composer-body">
-          {beforeEditor}
-          <View style={styles.authorLayer}>{author}</View>
-          {contentWarningExpanded ? (
-            <TextField
-              accessibilityLabel="콘텐츠 경고"
-              editable={!submitting}
-              onChangeText={onContentWarningChange}
-              placeholder="경고 문구를 입력하세요"
-              style={[styles.mobileContentWarning, composerFieldFocusStyle]}
-              value={contentWarning}
-            />
-          ) : null}
-          <TextInput
-            ref={bodyRef ?? bodyInputRef}
-            aria-describedby={Platform.OS === 'web' ? remainingDescriptionId : undefined}
-            accessibilityLabel={copy.bodyLabel}
-            editable={!submitting}
-            multiline
-            onChange={(event) => {
-              if (shouldAutoSizeBody) {
-                const input = event.currentTarget as unknown as HTMLTextAreaElement;
-                const availableHeight = input.clientHeight;
-                input.style.height = '0px';
-                const height = input.scrollHeight;
-                const overflowing = height > availableHeight;
-                input.style.height = overflowing ? `${height}px` : 'auto';
-                setBodyContentHeight(overflowing ? height : 0);
-              }
-            }}
-            onChangeText={onBodyChange}
-            onContentSizeChange={(event) =>
-              hasTrailingContent &&
-              setBodyContentHeight(Math.ceil(event.nativeEvent.contentSize.height))
-            }
-            placeholder={composerPlaceholder}
-            placeholderTextColor={
-              submitting ? theme.stateDisabledForeground : theme.foregroundMuted
-            }
-            style={[
-              styles.mobileBody,
-              bodyUsesTrailingContentLayout ? styles.mobileTrailingContentBody : null,
-              bodyUsesTrailingContentLayout && bodyContentHeight > 0
-                ? { height: bodyContentHeight }
-                : null,
-              {
-                backgroundColor: theme.backgroundCanvas,
-                color: theme.foregroundPrimary,
-                ...composerBodyFocusStyle,
-              },
-            ]}
-            value={body}
-          />
-          {children}
-        </View>
+        {isReplyShell ? (
+          <View onLayout={handleParentLayout} style={styles.mobileParentContainer}>
+            {beforeEditor}
+          </View>
+        ) : null}
+        {isReplyShell ? visibilityControl : null}
+        {bodySection}
 
         {items.length > 0 ? (
           <View style={styles.mobileMediaShelf} testID="mobile-composer-media-shelf">
@@ -1228,6 +1323,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: space[16],
     paddingTop: space[16],
   },
+  mobileParentContainer: { flexShrink: 0 },
+  mobileReplyContext: { minHeight: 24 },
   mobileContentWarning: { borderRadius: radius[0], minHeight: 44 },
   mobileScroll: { flex: 1, minHeight: 0 },
   mobileScrollContent: { flexGrow: 1 },

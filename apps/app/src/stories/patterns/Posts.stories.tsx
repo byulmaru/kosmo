@@ -8156,16 +8156,16 @@ export const ReplyFullscreenPresentation: Story = {
     const title = within(dialog).getByText('글쓰기');
     const visibility = within(dialog).getByRole('button', { name: '공개 범위: 조용한 공개' });
     const footer = within(dialog).getByTestId('mobile-composer-footer');
-    const composerAvatar = within(dialog).getAllByLabelText(/프로필 이미지$/)[1]!;
     const bounds = surface.getBoundingClientRect();
     const documentElement = canvasElement.ownerDocument.documentElement;
 
     expect(bounds.width).toBe(documentElement.clientWidth);
     expect(bounds.height).toBe(documentElement.clientHeight);
     expect(getComputedStyle(surface).borderRadius).toBe('0px');
-    expect(
-      composerAvatar.getBoundingClientRect().top - connector.getBoundingClientRect().bottom,
-    ).toBeCloseTo(4, 0);
+    expect(connector.getBoundingClientRect().bottom).toBeCloseTo(
+      visibility.getBoundingClientRect().top,
+      0,
+    );
     await userEvent.type(body, '짧은 답글');
     expect(body.getBoundingClientRect().height).toBeGreaterThan(200);
     await userEvent.clear(body);
@@ -8192,7 +8192,7 @@ export const ReplyFullscreenPresentation: Story = {
     expect(body.scrollTop).toBe(0);
     expect(body.scrollHeight).toBeLessThanOrEqual(body.clientHeight + 1);
     expect(title.getBoundingClientRect().top).toBe(initialTitleTop);
-    expect(visibility.getBoundingClientRect().top).toBe(initialVisibilityTop);
+    expect(visibility.getBoundingClientRect().top).toBeLessThan(initialVisibilityTop);
     expect(footer.getBoundingClientRect().bottom).toBe(initialFooterBottom);
   },
   render: () => <ReplyModalPresentationStory />,

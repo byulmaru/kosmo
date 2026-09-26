@@ -87,16 +87,19 @@ type PostComposerPresentationProps =
       onExpand?: never;
       onRequestClose?: () => void;
       presentation?: undefined;
+      replyContext?: never;
     }
   | {
       onExpand: () => void;
       onRequestClose: () => void;
       presentation: 'rail';
+      replyContext?: never;
     }
   | {
       onExpand?: never;
       onRequestClose: () => void;
       presentation: 'mobile' | 'overlay';
+      replyContext?: ReactNode;
     };
 
 type PostComposerRelationshipProps =
@@ -161,6 +164,7 @@ type PostComposerContentsProps = Omit<PostComposerBaseProps, 'profile'> &
     globalProfileId: string;
     profileKey: PostComposer_profile$key;
     profiles: readonly PostComposerProfileRef[];
+    replyContext?: ReactNode;
   };
 
 function PostComposerContents({
@@ -181,6 +185,7 @@ function PostComposerContents({
   globalProfileId,
   profileKey,
   profiles,
+  replyContext,
   registerNativeBackHandler,
   replyParentId,
   repostSourceId,
@@ -485,6 +490,7 @@ function PostComposerContents({
             onEmojiAction: () => undefined,
             beforeEditor,
             mode: composerMode,
+            replyContext,
             onMediaAction,
             onMediaEdit: openMediaEditor,
             onMediaRemove,

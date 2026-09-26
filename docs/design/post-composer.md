@@ -31,19 +31,20 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   Composer-open을 별도 frame으로 중복 만들지 않는다.
 - Web `≥ compact`의 Post 상세도 목록과 같은 Reply modal을 연다. 일반 Post Composer의 Full Web right rail은
   유지하며, Reply/Quote surface만 modal로 분리한다.
-- Current runtime과 OpenSpec은 Web `< compact`와 Android/iOS의 목록 surface에서 같은 관계 맥락을 전체 화면
-  작성기로 연다. Reply Parent는 editor 앞에, Quote Source는 본문 아래에 표시한다.
-- Web `< compact`의 Reply 연결선도 Parent와 작성 Profile의 Avatar에서 각각 `4px` 띄운다.
-- Figma Target의 Focused/Keyboard는 입력과 keyboard를 우선하고 `@kosmo님에게 답글` 같은 최소 맥락만 표시한다.
-- Figma Target의 비키보드 Initial anchor에서도 direct Parent는 작성 영역 아래로 내려오지 않으며 기본
+- Web `< compact`와 Android/iOS의 목록·상세 surface는 같은 공용 전체 화면 작성기를 사용한다.
+  Reply Parent는 공개 범위 행 위에, Quote Source는 본문 아래에 표시한다.
+- Reply 연결선은 Parent Avatar 아래에서 `4px` 띄워 시작하고 공개 범위 행의 위 border까지 이어진다.
+- Focused/Keyboard는 입력과 keyboard를 우선하고 `@kosmo님에게 답글` 같은 최소 맥락을 표시한다.
+- 비키보드 Initial anchor에서도 direct Parent는 작성 영역 아래로 내려오지 않으며 기본
   viewport에 표시하지 않는다.
   사용자가 위로 스크롤했을 때만 공개 범위 행 위에 기존 `PostListItem` 기반의 비대화형 Parent가 나타난다.
   Parent Action Bar와 Post menu는 숨기고, Avatar 아래 thread line을 공개 범위 행의 위 border까지 연결해 답글
   대상임을 표시한다. Figma reveal consumer의 Parent와 line은 각각 [`7392:28076`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7392-28076),
   [`7392:28091`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7392-28091)이다.
   Parent의 목록용 하단 divider는 끄고, 공개 범위 행의 위 border만 Parent와 Composer의 경계로 유지한다.
-  실제 upward-scroll origin·threshold, keyboard 전환, safe area와 focus 이동은 Product runtime 계약이며 Figma
-  정적 consumer만으로 완료를 주장하지 않는다.
+  본문 입력으로 focus를 옮기면 작성 영역으로 돌아오고, 원문 확인은 같은 중앙 영역을 위로 스크롤한다.
+  keyboard 전환, safe area와 focus 이동은 각 플랫폼 runtime에서 검증하며 Figma 정적 consumer나 Web
+  자동화만으로 Native 검증 완료를 주장하지 않는다.
 - 어느 surface에서도 Reply 전용 mutation, 별도 입력 상태 또는 Post kind를 만들지 않는다.
 
 ## Web 관계형 Composer modal
