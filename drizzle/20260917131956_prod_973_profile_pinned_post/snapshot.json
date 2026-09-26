@@ -274,7 +274,7 @@
     },
     {
       "isRlsEnabled": false,
-      "name": "profile_pin",
+      "name": "profile_pinned_post",
       "entityType": "tables",
       "schema": "public"
     },
@@ -2354,7 +2354,7 @@
       "name": "id",
       "entityType": "columns",
       "schema": "public",
-      "table": "profile_pin"
+      "table": "profile_pinned_post"
     },
     {
       "type": "uuid",
@@ -2367,7 +2367,7 @@
       "name": "profile_id",
       "entityType": "columns",
       "schema": "public",
-      "table": "profile_pin"
+      "table": "profile_pinned_post"
     },
     {
       "type": "uuid",
@@ -2380,7 +2380,7 @@
       "name": "post_id",
       "entityType": "columns",
       "schema": "public",
-      "table": "profile_pin"
+      "table": "profile_pinned_post"
     },
     {
       "type": "uuid",
@@ -3526,10 +3526,10 @@
       "with": "",
       "method": "btree",
       "concurrently": false,
-      "name": "profile_pin_profile_id_id_index",
+      "name": "profile_pinned_post_profile_id_id_index",
       "entityType": "indexes",
       "schema": "public",
-      "table": "profile_pin"
+      "table": "profile_pinned_post"
     },
     {
       "nameExplicit": true,
@@ -4232,10 +4232,10 @@
       "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
-      "name": "profile_pin_profile_id_profile_id_fkey",
+      "name": "profile_pinned_post_profile_id_profile_id_fkey",
       "entityType": "fks",
       "schema": "public",
-      "table": "profile_pin"
+      "table": "profile_pinned_post"
     },
     {
       "nameExplicit": false,
@@ -4245,10 +4245,10 @@
       "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
-      "name": "profile_pin_post_id_post_id_fkey",
+      "name": "profile_pinned_post_post_id_post_id_fkey",
       "entityType": "fks",
       "schema": "public",
-      "table": "profile_pin"
+      "table": "profile_pinned_post"
     },
     {
       "nameExplicit": false,
@@ -4557,9 +4557,9 @@
     {
       "columns": ["id"],
       "nameExplicit": false,
-      "name": "profile_pin_pkey",
+      "name": "profile_pinned_post_pkey",
       "schema": "public",
-      "table": "profile_pin",
+      "table": "profile_pinned_post",
       "entityType": "pks"
     },
     {
@@ -4760,10 +4760,10 @@
       "nameExplicit": false,
       "columns": ["profile_id", "post_id"],
       "nullsNotDistinct": false,
-      "name": "profile_pin_profile_id_post_id_unique",
+      "name": "profile_pinned_post_profile_id_post_id_unique",
       "entityType": "uniques",
       "schema": "public",
-      "table": "profile_pin"
+      "table": "profile_pinned_post"
     },
     {
       "nameExplicit": false,

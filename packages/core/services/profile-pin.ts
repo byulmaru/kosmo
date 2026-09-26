@@ -1,5 +1,5 @@
 import { and, asc, eq, inArray, isNotNull } from 'drizzle-orm';
-import { db, first, Instances, Posts, ProfilePins, Profiles } from '../db';
+import { db, first, Instances, Posts, ProfilePinnedPosts, Profiles } from '../db';
 import { InstanceKind, PostVisibility } from '../enums';
 import { NotFoundError } from '../error';
 import { postVisibilityCondition } from '../visibility/post';
@@ -13,15 +13,15 @@ type ProfilePinInput = {
 
 export type ProfilePinResult = {
   readonly changed: boolean;
-  readonly profilePins: readonly (typeof ProfilePins.$inferSelect)[];
+  readonly profilePins: readonly (typeof ProfilePinnedPosts.$inferSelect)[];
 };
 
 const loadOrderedPins = (tx: Transaction, profileId: string) =>
   tx
     .select()
-    .from(ProfilePins)
-    .where(eq(ProfilePins.profileId, profileId))
-    .orderBy(asc(ProfilePins.id));
+    .from(ProfilePinnedPosts)
+    .where(eq(ProfilePinnedPosts.profileId, profileId))
+    .orderBy(asc(ProfilePinnedPosts.id));
 
 const eligiblePostWhere = (profileId: string) =>
   and(
@@ -87,9 +87,9 @@ export const pinProfilePost = async ({
     await ensureEligiblePost(tx, { profileId, postId });
 
     const inserted = await tx
-      .insert(ProfilePins)
+      .insert(ProfilePinnedPosts)
       .values({ profileId, postId })
-      .onConflictDoNothing({ target: [ProfilePins.profileId, ProfilePins.postId] })
+      .onConflictDoNothing({ target: [ProfilePinnedPosts.profileId, ProfilePinnedPosts.postId] })
       .returning()
       .then(first);
 
@@ -108,8 +108,10 @@ export const unpinProfilePost = async ({
     await ensureLocalProfile(tx, profileId);
 
     const deleted = await tx
-      .delete(ProfilePins)
-      .where(and(eq(ProfilePins.profileId, profileId), eq(ProfilePins.postId, postId)))
+      .delete(ProfilePinnedPosts)
+      .where(
+        and(eq(ProfilePinnedPosts.profileId, profileId), eq(ProfilePinnedPosts.postId, postId)),
+      )
       .returning()
       .then(first);
 

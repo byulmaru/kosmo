@@ -4,5 +4,6 @@ import './follow';
 import './follow-request';
 import './instance';
 import './mute';
+import './pinned-posts';
 import './private';
 import './tags';

@@ -541,8 +541,8 @@ export const ProfileMutes = pgTable(
   ],
 );
 
-export const ProfilePins = pgTable(
-  'profile_pin',
+export const ProfilePinnedPosts = pgTable(
+  'profile_pinned_post',
   {
     id: id(),
     profileId: uuid('profile_id')

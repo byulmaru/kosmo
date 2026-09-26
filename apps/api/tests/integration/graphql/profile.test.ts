@@ -59,7 +59,7 @@ let ProfileHashtags: typeof CoreDb.ProfileHashtags;
 let ProfileMedia: typeof CoreDb.ProfileMedia;
 let ProfileBlocks: typeof CoreDb.ProfileBlocks;
 let ProfileMutes: typeof CoreDb.ProfileMutes;
-let ProfilePins: typeof CoreDb.ProfilePins;
+let ProfilePinnedPosts: typeof CoreDb.ProfilePinnedPosts;
 let Profiles: typeof CoreDb.Profiles;
 let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
@@ -100,7 +100,7 @@ describe('GraphQL remote profile boundary', () => {
       ProfileMedia,
       ProfileBlocks,
       ProfileMutes,
-      ProfilePins,
+      ProfilePinnedPosts,
       Profiles,
       PostContents,
       Posts,
@@ -1112,10 +1112,10 @@ describe('GraphQL remote profile boundary', () => {
     }
     await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, hidden.id));
     const orderedPinnedPostIds = await db
-      .select({ postId: ProfilePins.postId })
-      .from(ProfilePins)
-      .where(eq(ProfilePins.profileId, auth.profile.id))
-      .orderBy(asc(ProfilePins.id));
+      .select({ postId: ProfilePinnedPosts.postId })
+      .from(ProfilePinnedPosts)
+      .where(eq(ProfilePinnedPosts.profileId, auth.profile.id))
+      .orderBy(asc(ProfilePinnedPosts.id));
     const visiblePinnedPostIds = orderedPinnedPostIds
       .map(({ postId }) => postId)
       .filter((postId) => postId !== hidden.id);
@@ -1176,11 +1176,13 @@ describe('GraphQL remote profile boundary', () => {
       visiblePinnedPostIds.slice(0, 2).map((id) => globalId('Post', id)),
     );
     const firstVisiblePin = await db
-      .select({ id: ProfilePins.id })
-      .from(ProfilePins)
-      .innerJoin(Posts, eq(Posts.id, ProfilePins.postId))
-      .where(and(eq(ProfilePins.profileId, auth.profile.id), ne(Posts.state, PostState.DELETED)))
-      .orderBy(asc(ProfilePins.id))
+      .select({ id: ProfilePinnedPosts.id })
+      .from(ProfilePinnedPosts)
+      .innerJoin(Posts, eq(Posts.id, ProfilePinnedPosts.postId))
+      .where(
+        and(eq(ProfilePinnedPosts.profileId, auth.profile.id), ne(Posts.state, PostState.DELETED)),
+      )
+      .orderBy(asc(ProfilePinnedPosts.id))
       .limit(1);
     assert.equal(firstPage.data?.node?.pinnedPosts.edges[0]?.cursor, firstVisiblePin[0]?.id);
     assert.equal(firstPage.data?.node?.pinnedPosts.pageInfo.hasNextPage, true);
@@ -1264,7 +1266,7 @@ describe('GraphQL remote profile boundary', () => {
       ownerProfileId: visited.profile.id,
       targetProfileId: viewer.profile.id,
     });
-    await db.insert(ProfilePins).values({
+    await db.insert(ProfilePinnedPosts).values({
       postId: pinned.id,
       profileId: visited.profile.id,
     });

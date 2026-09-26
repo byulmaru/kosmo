@@ -1,7 +1,16 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
 import { asc, eq } from 'drizzle-orm';
-import { db, firstOrThrow, Instances, pg, PostContents, Posts, ProfilePins, Profiles } from '../db';
+import {
+  db,
+  firstOrThrow,
+  Instances,
+  pg,
+  PostContents,
+  Posts,
+  ProfilePinnedPosts,
+  Profiles,
+} from '../db';
 import {
   InstanceKind,
   InstanceState,
@@ -87,9 +96,9 @@ const createPost = async (
 const loadPins = (profileId: string) =>
   db
     .select()
-    .from(ProfilePins)
-    .where(eq(ProfilePins.profileId, profileId))
-    .orderBy(asc(ProfilePins.id));
+    .from(ProfilePinnedPosts)
+    .where(eq(ProfilePinnedPosts.profileId, profileId))
+    .orderBy(asc(ProfilePinnedPosts.id));
 
 const createFixture = async () => {
   const instance = await createInstance();
@@ -148,16 +157,16 @@ test('concurrent new pins do not expose a profile order collision', async () => 
     await lockSession`SELECT pg_advisory_lock(973, 2)`;
     lockHeld = true;
     await pg.unsafe(`
-      CREATE FUNCTION block_profile_pin_insert() RETURNS trigger
+      CREATE FUNCTION block_profile_pinned_post_insert() RETURNS trigger
       LANGUAGE plpgsql AS $function$
       BEGIN
         PERFORM pg_advisory_xact_lock(973, 2);
         RETURN NEW;
       END
       $function$;
-      CREATE TRIGGER block_profile_pin_insert
-      BEFORE INSERT ON profile_pin
-      FOR EACH ROW EXECUTE FUNCTION block_profile_pin_insert();
+      CREATE TRIGGER block_profile_pinned_post_insert
+      BEFORE INSERT ON profile_pinned_post
+      FOR EACH ROW EXECUTE FUNCTION block_profile_pinned_post_insert();
     `);
     triggerInstalled = true;
 
@@ -206,8 +215,8 @@ test('concurrent new pins do not expose a profile order collision', async () => 
     await Promise.allSettled(pins);
     if (triggerInstalled) {
       await pg.unsafe(`
-        DROP TRIGGER IF EXISTS block_profile_pin_insert ON profile_pin;
-        DROP FUNCTION IF EXISTS block_profile_pin_insert();
+        DROP TRIGGER IF EXISTS block_profile_pinned_post_insert ON profile_pinned_post;
+        DROP FUNCTION IF EXISTS block_profile_pinned_post_insert();
       `);
     }
     lockSession.release();

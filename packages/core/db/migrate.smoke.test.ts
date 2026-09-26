@@ -178,12 +178,12 @@ try {
     SELECT indexname AS "profilePinIndex"
     FROM pg_indexes
     WHERE schemaname = 'public'
-      AND tablename = 'profile_pin'
-      AND indexname = 'profile_pin_profile_id_id_index'
+      AND tablename = 'profile_pinned_post'
+      AND indexname = 'profile_pinned_post_profile_id_id_index'
   `;
   assert.equal(
     profilePinIndex,
-    'profile_pin_profile_id_id_index',
+    'profile_pinned_post_profile_id_id_index',
     'Profile pin ordering must use the profile and pin id index.',
   );
 
