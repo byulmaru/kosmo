@@ -157,10 +157,7 @@ export async function profileFollowPairWorkflow(input: ProfileFollowPair): Promi
     async (command) => {
       const parsedCommand = parseProfileFollowPairCommand(command);
       if (inFlight) {
-        if (
-          parsedCommand.kind === 'FOLLOW' &&
-          inFlightFollowUpdate !== undefined
-        ) {
+        if (parsedCommand.kind === 'FOLLOW' && inFlightFollowUpdate !== undefined) {
           return inFlightFollowUpdate;
         }
         throw pairConflict('Profile Follow pair transition is already in flight');

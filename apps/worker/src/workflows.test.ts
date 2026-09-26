@@ -478,8 +478,7 @@ test(
       new WithStartWorkflowOperation('profileFollowPairWorkflow', {
         args: [pair],
         taskQueue,
-        workflowId:
-          'profile-follow-pair:' + pair.followerProfileId + ':' + pair.followeeProfileId,
+        workflowId: 'profile-follow-pair:' + pair.followerProfileId + ':' + pair.followeeProfileId,
         workflowIdConflictPolicy: 'USE_EXISTING',
         workflowIdReusePolicy: 'ALLOW_DUPLICATE',
       });

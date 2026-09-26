@@ -2346,8 +2346,7 @@ describe('GraphQL remote profile boundary', () => {
     assertNoGraphQLErrors(established);
     assert.equal(established.data?.followProfile.result.__typename, 'ProfileFollow');
     const initialOpenFollowId = established.data!.followProfile.result.id;
-    const openPairWorkflowId =
-      `profile-follow-pair:${followerAuth.profile.id}:${openFolloweeAuth.profile.id}`;
+    const openPairWorkflowId = `profile-follow-pair:${followerAuth.profile.id}:${openFolloweeAuth.profile.id}`;
     await temporalClient.workflow.getHandle(openPairWorkflowId).result();
 
     const establishedAgain = await requestGraphQL<{
@@ -2474,8 +2473,7 @@ describe('GraphQL remote profile boundary', () => {
     });
     assert.equal(await countRows(ProfileFollowRequests), 0);
 
-    const requestPairWorkflowId =
-      `profile-follow-pair:${followerAuth.profile.id}:${followeeAuth.profile.id}`;
+    const requestPairWorkflowId = `profile-follow-pair:${followerAuth.profile.id}:${followeeAuth.profile.id}`;
     await temporalClient.workflow.getHandle(requestPairWorkflowId).result();
     const reRequested = await requestGraphQL<{
       followProfile: { result: { __typename: string; id: string } };
