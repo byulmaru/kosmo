@@ -106,6 +106,11 @@ function createMultipartBody(
 
 function setVariablePath(variables: Variables, path: string, value: null): void {
   const segments = path.split('.');
+  for (const segment of segments) {
+    if (segment === '__proto__' || segment === 'constructor' || segment === 'prototype') {
+      throw new Error('Invalid upload variable path.');
+    }
+  }
   const last = segments.pop();
   if (!last || segments.length === 0) {
     return;
