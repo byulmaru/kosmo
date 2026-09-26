@@ -1,0 +1,36 @@
+{{- if eq .Values.env "prod" }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: kosmo-public
+  labels:
+    helm.sh/chart: {{ include "kosmo.chart" . }}
+    app.kubernetes.io/name: monitoring
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/version: {{ .Values.version | quote }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  groups:
+    - name: kosmo.public
+      rules:
+        - alert: KosmoPublicEndpointDown
+          expr: (avg_over_time(probe_success{job="kosmo-public"}[5m]) < 0.9 and on (target, instance) count_over_time(probe_success{job="kosmo-public"}[5m]) >= 6) or absent_over_time(probe_success{job="kosmo-public", target="kosmo-web"}[5m]) or absent_over_time(probe_success{job="kosmo-public", target="kosmo-api"}[5m])
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: Kosmo public endpoint is unavailable
+            description: The {{ "{{ $labels.target }}" }} health endpoint has had less than 90% successful probes over the last 5 minutes from the AWS Prometheus blackbox probe (at least 6 samples). Confirm the public URL from a second location, then inspect Cloudflare, the Kosmo ingress/origin, and the in-cluster probe.
+            owner: Platform/SRE
+            runbook_url: https://github.com/byulmaru/kubernetes/blob/main/docs/operations.md#alertmanager-slack-notifications
+        - alert: KosmoPublicEndpointHighLatency
+          expr: (avg_over_time(probe_duration_seconds{job="kosmo-public"}[5m]) > 2 and on (target, instance) count_over_time(probe_duration_seconds{job="kosmo-public"}[5m]) >= 3 and on (target, instance) min_over_time(probe_success{job="kosmo-public"}[5m]) == 1)
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            summary: Kosmo public endpoint latency is high
+            description: The {{ "{{ $labels.target }}" }} health endpoint has averaged more than 2 seconds from the AWS Prometheus blackbox probe for approximately 5 minutes. Confirm the public URL from a second location, then inspect Cloudflare, the Kosmo ingress/origin, and the in-cluster probe.
+            owner: Platform/SRE
+            runbook_url: https://github.com/byulmaru/kubernetes/blob/main/docs/operations.md#alertmanager-slack-notifications
+{{- end }}
