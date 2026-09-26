@@ -11,6 +11,7 @@ import {
   InstanceState,
   ProfileFollowPolicy,
 } from '@kosmo/core/enums';
+import { ConflictError } from '@kosmo/core/error';
 import { temporalClient } from '@kosmo/core/temporal/client';
 import { eq, ne } from 'drizzle-orm';
 import { setInboundObservabilityReporter, withInboundObservability } from './inbound-observability';
@@ -401,7 +402,13 @@ describe('inbound Follow and Undo', () => {
     const fixture = await createFixture();
     const context = createContext({ recipient: localProfileId });
     const follow = new Follow({ actor: remoteActorUri, object: localActorUri });
-    await Promise.all([handleInboundFollow(context, follow), handleInboundFollow(context, follow)]);
+    const results = await Promise.allSettled([
+      handleInboundFollow(context, follow),
+      handleInboundFollow(context, follow),
+    ]);
+    const failures = results.filter((result) => result.status === 'rejected');
+    assert.ok(results.some((result) => result.status === 'fulfilled'));
+    assert.ok(failures.every((result) => result.reason instanceof ConflictError));
 
     await waitForProfileFollowWorkflows();
     const relation = await db.select().from(ProfileFollows).limit(1).then(firstOrThrow);

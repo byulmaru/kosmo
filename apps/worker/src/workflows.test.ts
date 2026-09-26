@@ -7,10 +7,7 @@ import {
   PROFILE_UNBLOCK_UPDATE_NAME,
 } from '@kosmo/core/temporal/profile-block';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
-import {
-  ApplicationFailure,
-  WithStartWorkflowOperation,
-} from '@temporalio/client';
+import { ApplicationFailure, WithStartWorkflowOperation } from '@temporalio/client';
 import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
 import type {
