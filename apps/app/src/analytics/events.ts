@@ -30,14 +30,17 @@ export type AnalyticsEventProperties = {
     result: 'follow' | 'request';
   };
   search_submitted: {
+    selected_profile_id?: string;
     tab: 'popular' | 'latest' | 'media' | 'people';
     source: 'keyboard' | 'tab' | 'recent';
   };
   search_results_loaded: {
+    selected_profile_id?: string;
     tab: 'popular' | 'latest' | 'media' | 'people';
     has_results: boolean;
   };
   search_result_selected: {
+    selected_profile_id?: string;
     tab: 'popular' | 'latest' | 'media' | 'people';
   };
 };

@@ -169,13 +169,20 @@ export function useBeginMultiProfileAnalyticsAction() {
       properties: AnalyticsEventProperties[Name],
       occurredAt = new Date(),
     ) => {
+      const eventProperties =
+        operationProfileId &&
+        (name === 'search_submitted' ||
+          name === 'search_results_loaded' ||
+          name === 'search_result_selected')
+          ? { selected_profile_id: operationProfileId, ...properties }
+          : properties;
       if (operationAccountId) {
         observeAction({ accountId: operationAccountId, occurredAt });
       }
       if (captureOptions) {
-        trackAnalytics(name, properties, { ...captureOptions, timestamp: occurredAt });
+        trackAnalytics(name, eventProperties, { ...captureOptions, timestamp: occurredAt });
       } else {
-        trackAnalytics(name, properties);
+        trackAnalytics(name, eventProperties);
       }
     };
     const trackProfile = <Name extends ProfileActionName>(
