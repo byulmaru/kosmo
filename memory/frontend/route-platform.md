@@ -11,7 +11,7 @@ Read this entire file when working on Expo Router routes, the shared Web/Native 
 ## Route And Platform Boundaries
 
 - canonical route는 `apps/app/src/app`의 Expo Router file route로 정의한다. 같은 화면을 web 전용 route tree에 다시 만들지 않는다.
-- 공용 화면과 컴포넌트는 Expo Router와 React Native primitive 및 framework 기본 동작을 우선 사용한다. `Platform.OS` 분기와 `.web.tsx`/`.native.tsx`는 현재 도달 가능한 호출자에게 구체적인 플랫폼 API·기능 차이나 관찰 가능한 사용자 동작 계약 차이가 있고, 이를 공용 구현으로 충족할 수 없을 때만 사용하며 분기 구현은 그 차이에 한정한다. 기존 구조나 추측성 호환성만으로는 근거가 되지 않으며, 플랫폼 분기를 두면 해당 플랫폼 동작을 검증한다.
+- 공용 화면과 컴포넌트는 Expo Router와 React Native primitive 및 framework 기본 동작으로 공통 UX를 우선한다. 플랫폼별 요구사항부터 전제하지 않는다. 현재 사용자 흐름에서 필요한 상호작용 차이나 플랫폼 API·기능 제약으로 공통 구현이 불가능하다는 구체적 근거가 있을 때만 요구사항과 구현을 분기한다. 기존 구조나 추측성 호환성은 근거가 아니며, `Platform.OS`와 `.web.tsx`/`.native.tsx`는 그 차이에 한정하고 영향받는 플랫폼 동작을 검증한다.
 - route component는 URL parameter와 top-level query를 소유한다. loading/error/success를 포함한 entry focus의 복원도 route 경계에서 책임진다. 표시 컴포넌트는 Expo Router parameter나 navigation singleton을 직접 읽지 않고 필요한 callback 또는 fragment ref를 받는다.
 - 뒤로가기·fallback·scroll은 기존 navigation 경계를 재사용한다. callback identity를 기억하는 전역 WeakSet이나 기능별 history/popstate stack을 추가하지 않으며, 별도 history 계약이 승인된 경우에만 예외를 둔다.
 - 프로필 route에는 표시용 `relativeHandle`과 lookup용 bare/federated handle을 혼동하지 않는다. URL을 만들 때는 `relativeHandle`, GraphQL lookup/validation에는 정규화한 route parameter를 사용한다.
