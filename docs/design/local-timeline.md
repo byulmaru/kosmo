@@ -16,9 +16,9 @@ Home과 Local은 같은 타임라인 화면군이며 각각 `/home`, `/local` ca
 - 목록의 색상, 간격과 typography는 기존 semantic token을 사용한다. 현재 앱 설정과 전역 Provider가 Light로
   고정되어 있으므로 Local은 별도 theme 전환을 추가하지 않으며, Dark 실화면 검증은 앱 전역 theme 활성화 뒤
   수행한다.
-- 현재 완료 검증은 배포·실행 가능한 Web Light를 대상으로 한다. Android/iOS 공용 route와 component는 유지하되
-  인증된 Native runtime 증거가 없는 상태를 미검증으로 기록하고 이 change의 완료 blocker로 사용하지 않는다.
-  Native 전달·QA가 재개되면 해당 시점의 지원 범위와 runtime 검증 책임을 다시 정한다.
+- 기존 Local 화면의 완료 검증은 Web Light를 대상으로 한다. Native 당겨서 새로고침(PROD-1005)은 별도로
+  iOS·Android에서 홈·로컬 각각 성공·실패·재시도와 페이지 읽기의 공존을 검증해야 하며, 인증된 Native runtime
+  증거가 없으면 해당 검증을 미완료로 기록한다.
 - Local route에서 게시글 작성자와 카드를 선택하면 기존 Profile 및 Post detail route로 이동한다.
 
 ## 상호작용
@@ -43,7 +43,7 @@ Home과 Local은 같은 타임라인 화면군이며 각각 `/home`, `/local` ca
 | 최초 로딩               | 공용 `StateView` loading으로 `로컬 타임라인을 불러오는 중입니다.`를 표시하고 보조 기술에 알린다                                                                                                              |
 | 빈 목록                 | `아직 게시글이 없어요` / `첫 게시글이 올라오면 여기에 표시돼요.`                                                                                                                                             |
 | 최초 오류 · Current     | 성공 목록을 렌더링한 적이 없으면 Web은 빈 목록 영역을, Android/iOS Native는 공통 2행 목록 skeleton을 표시하고 두 플랫폼군 모두 `로컬 타임라인을 불러오지 못했어요` / `다시 시도` persistent toast를 표시한다 |
-| 새로고침 중             | Relay의 `store-and-network` 조회 상태를 따른다. 별도 상단 spinner는 표시하지 않는다                                                                                                                          |
+| 새로고침 중             | Web은 별도 상단 spinner를 표시하지 않는다. Android/iOS Native는 목록의 기본 당겨서 새로고침 진행 표시를 사용한다                                                                                             |
 | 새로고침 오류 · Current | 마지막 성공 목록을 유지하고 `로컬 타임라인을 불러오지 못했어요` / `다시 시도` persistent toast를 표시한다                                                                                                    |
 | 추가 로딩               | 기존 목록 아래 spinner와 `게시글을 더 불러오는 중입니다.` live status                                                                                                                                        |
 | 추가 오류 · Target      | 기존 목록을 유지하고 `더 불러오지 못했어요` toast와 `다시 시도` action                                                                                                                                       |
@@ -51,13 +51,14 @@ Home과 Local은 같은 타임라인 화면군이며 각각 `/home`, `/local` ca
 
 추가 로딩 spinner는 공용 secondary 전경 색상(`theme.foregroundSecondary`)을 사용한다.
 
-Local 탭 재선택의 hard refresh는 기존 Relay query·environment를 재사용한다. 성공 payload는 동일 store에 적용하고,
-hard transport error에서는 마지막 성공 목록과 scroll position을 유지한 채 persistent retry toast를 표시한다.
+Local 탭 재선택과 Native pull-to-refresh의 hard refresh는 기존 Relay query·environment를 재사용한다. 성공 payload는
+동일 store에 적용하고, hard transport error에서는 마지막 성공 목록과 scroll position을 유지한 채 persistent retry
+toast를 표시한다. Native refresh 입력은 진행 중인 요청이 끝날 때까지 한 번만 처리한다.
 refresh token을 사용하고 `onComplete` 오류를 공용 Relay fail-open boundary로 전달해 Toast를 열며, route
 이탈·selected Profile 전환 때 stale toast를 정리한다.
 목록은 refetch 오류 경계 밖에서 동일한 Relay store를 계속 읽는다. 실패·재시도 때 경계는 refetch와 Toast만
-교체하며, 목록과 열린 답글 작성창·입력 내용은 재마운트하지 않는다. 요청 중복 제어·Disposable 저장·명령형
-refetch 등록은 추가하지 않고 요청 lifecycle은 Relay에 맡긴다.
+교체하며, 목록과 열린 답글 작성창·입력 내용은 재마운트하지 않는다. Relay refetch lifecycle을 사용하며
+Native pull-to-refresh의 중복 입력은 현재 화면의 pending lifecycle에서 무시한다.
 이 사용자가 다시 시도할 수 있는 hard refresh 오류는 unexpected-error reporter에 별도 보고하지 않는다.
 HTTP 200의 `data + errors`는 Relay가 처리하며 사용 가능한 부분 데이터를 적용한다. `localTimeline: null`이면 목록의
 빈 상태를 표시할 수 있다. query·cursor·filtering 정책과 추가 페이지 로딩 동작은 유지한다.
@@ -74,7 +75,8 @@ Storybook의 오류·재시도 검증은 실제 Web·Native network/runtime QA �
 - 최초 Home query가 완전한 Relay timeline data 없이 실패하면 blocking 오류 화면과 `다시 시도` action을 표시하고,
   프로필 onboarding으로 대체하지 않는다. 이 오류는 기존 unexpected-error reporter에 한 번만 보고한다.
 - 이미 표시 중인 Home timeline을 새로고침하거나 재검증하는 query가 실패하면 현재 timeline 내용을 유지하고 Home
-  오류 toast만 표시한다. blocking 오류 화면이나 별도 inline 오류·재시도 상태로 교체하지 않는다.
+  오류 toast를 표시한다. Android/iOS Native에서는 persistent toast와 `다시 시도` action을 사용하고, Web은 기존
+  toast 동작을 유지한다. blocking 오류 화면이나 별도 inline 오류·재시도 상태로 교체하지 않는다.
 - 이 Home 결정은 위 표의 최초·새로고침 `Target` 표현보다 우선한다. Local의 해당 상태와 Figma Target 승격 범위는
   기존 계약을 유지한다.
 
