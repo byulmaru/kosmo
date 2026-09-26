@@ -2267,7 +2267,8 @@ describe('GraphQL remote profile boundary', () => {
           { id: globalId('Profile', remote.id) },
           auth.token,
         );
-      const [first, duplicate] = await Promise.all([follow(), follow()]);
+      const first = await follow();
+      const duplicate = await follow();
       assertNoGraphQLErrors(first);
       assertNoGraphQLErrors(duplicate);
       assert.deepEqual(duplicate.data?.followProfile.result, first.data?.followProfile.result);

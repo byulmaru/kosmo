@@ -15,16 +15,17 @@
   반환하고, 선언된 순서의 effects를 FIFO로 drain한 뒤 Workflow를 종료한다. terminal effect failure는 commit을
   rollback하지 않으며, drain이 끝난 뒤 Workflow 결과에 기록해 성공/실패를 관찰할 수 있게 한다.
 - 각 distinct `FOLLOW` 호출은 명시적 Update ID를 주지 않아 SDK가 호출별 ID를 배정하게 한다. 같은 호출의 RPC retry는
-  같은 ID를 유지하고 별도 Follow 호출은 새 Update로 실행된다. Workflow는 동시 중복 Follow를 합치고 PENDING의 후속
-  Follow는 DB idempotency 결과를 반환해 관계·요청이나 effects를 중복 생성하지 않는다. terminal command에도 명시적
+  같은 ID를 유지하고 별도 Follow 호출은 새 Update로 실행된다. lifecycle transition이 in-flight인 동안 시작된 별도
+  Follow는 pair conflict를 반환할 수 있다. PENDING의 후속 Follow는 DB idempotency 결과를 반환해 관계·요청이나 effects를
+  중복 생성하지 않는다. terminal command에도 명시적
   Update ID를 주지 않아 같은 exact-row command의 별도 호출이 다시 실행되며, 이 transport ID는 domain
   `operationId`가 아니다.
 - Pending 동안 Request create effect가 terminal failure가 되어도 그 실패를 Workflow state에 기록하고 Pending
   command 대기를 계속한다. 이후 terminal command는 이전 effect failure에 막히지 않고 자신의 transaction과 queued
   effects를 처리하며, 마지막 drain 뒤 누적된 terminal failure를 결과에 반영한다.
-- 한 pair Workflow는 동시에 서로 다른 lifecycle command를 처리하지 않는다. Update handler는 command를 시작할 때
-  in-flight guard를 세우고, 동시 duplicate Follow만 합치며 다른 command는 conflict로 거부한다. DB unique constraint와
-  exact-row 조건은 Workflow 밖에서 발생하는 race의 최종 방어선이다.
+- 한 pair Workflow는 동시에 lifecycle command를 처리하지 않는다. Update handler는 command를 시작할 때 in-flight guard를
+  세우고 동시 command를 conflict로 거부한다. DB unique constraint와 exact-row 조건은 Workflow 밖에서 발생하는 race의
+  최종 방어선이다.
 
 - Terminal Update가 DB commit 결과를 반환한 뒤에도 기존 run은 effects를 drain하는 동안 잠시 실행 중일 수 있다.
   이 창에서 같은 pair의 새 Follow attempt가 들어오면 active terminal run이 이를 재시도 가능한 충돌로 거부할 수
