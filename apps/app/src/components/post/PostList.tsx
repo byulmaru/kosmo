@@ -83,8 +83,10 @@ type Props = {
   local?: PostList_local$key | null;
   loading?: boolean;
   onRetry?: () => void;
+  onRefresh?: () => void;
   profile?: PostList_profile$key | null;
   replyProfile?: ReplyComposerSurface_profile$key | null;
+  refreshing?: boolean;
 };
 
 export function PostList({
@@ -94,8 +96,10 @@ export function PostList({
   local: localKey,
   loading = false,
   onRetry,
+  onRefresh,
   profile: profileKey,
   replyProfile,
+  refreshing = false,
 }: Props) {
   const theme = useTheme();
   const { width } = useWindowDimensions();
@@ -207,6 +211,7 @@ export function PostList({
             keyExtractor={(edge) => edge.node.id}
             loadNext={loadNext}
             onLoadErrorChange={handleLoadErrorChange}
+            onRefresh={onRefresh}
             pageSize={20}
             footer={
               isLoadingNext ? (
@@ -224,6 +229,7 @@ export function PostList({
             renderItem={({ item }) => (
               <PostListItem post={item.node} presentation={postListPresentation} />
             )}
+            refreshing={refreshing}
             style={styles.root}
           />
         </PostMediaViewerHostProvider>
