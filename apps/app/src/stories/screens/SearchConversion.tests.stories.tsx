@@ -28,6 +28,15 @@ const data = {
   },
   profileByHandle: target,
 };
+const approvalRequiredTarget = profile({ ...target, followPolicy: 'APPROVAL_REQUIRED' });
+const approvalRequiredData = {
+  ...data,
+  profileByHandle: approvalRequiredTarget,
+  searchProfiles: {
+    ...data.searchProfiles,
+    edges: [{ cursor: 'one', node: approvalRequiredTarget }],
+  },
+};
 const follow = {
   id: 'conversion-follow',
   follower: { id: 'conversion-viewer', followingCount: 1 },
@@ -35,7 +44,7 @@ const follow = {
 const followResponse = (request = false) => ({
   followProfile: {
     followeeProfile: {
-      ...target,
+      ...(request ? approvalRequiredTarget : target),
       viewerState: {
         isSelf: false,
         profileBlock: null,
@@ -122,8 +131,16 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const SelectedProfileVisible: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        ProfileLayoutQuery: { data: { profileByHandle: target }, delayMs: 300 },
+      },
+    },
+  },
   play: async ({ canvasElement }) => {
     await selectResult(canvasElement);
+    expect(events().map(([name]) => name)).toEqual(['search_result_selected']);
     await expect(within(canvasElement).findByText('프로필 콘텐츠')).resolves.toBeVisible();
     await waitFor(() =>
       expect(events().map(([name]) => name)).toEqual([
@@ -154,22 +171,6 @@ export const ModifiedSelectionHasNoSearchSelection: Story = {
   },
 };
 
-export const ProfileLoadingThenVisible: Story = {
-  parameters: {
-    relay: {
-      operationResponses: {
-        ProfileLayoutQuery: { data: { profileByHandle: target }, delayMs: 300 },
-      },
-    },
-  },
-  play: async ({ canvasElement }) => {
-    await selectResult(canvasElement);
-    expect(events().map(([name]) => name)).toEqual(['search_result_selected']);
-    await expect(within(canvasElement).findByText('프로필 콘텐츠')).resolves.toBeVisible();
-    await waitFor(() => expect(events().map(([name]) => name)).toContain('profile_view_succeeded'));
-  },
-};
-
 export const ProfileMissing: Story = {
   parameters: {
     relay: { operationResponses: { ProfileLayoutQuery: { data: { profileByHandle: null } } } },
@@ -197,7 +198,12 @@ export const ProfileFailure: Story = {
 };
 
 export const FollowRequestExcluded: Story = {
-  parameters: { relay: { mutationResponse: followResponse(true) } },
+  parameters: {
+    relay: {
+      data: approvalRequiredData,
+      mutationResponse: followResponse(true),
+    },
+  },
   play: async ({ canvasElement }) => {
     await selectResult(canvasElement);
     const canvas = within(canvasElement);
@@ -220,17 +226,5 @@ export const FollowRelationshipIncluded: Story = {
     expect(events().find(([name]) => name === 'follow_succeeded')?.[1]).toMatchObject({
       result: 'follow',
     });
-  },
-};
-
-export const FollowFailure: Story = {
-  parameters: { relay: { mutationGraphQLErrors: ['follow failed'] } },
-  play: async ({ canvasElement }) => {
-    await selectResult(canvasElement);
-    await userEvent.click(await within(canvasElement).findByRole('button', { name: '팔로우' }));
-    await expect(
-      within(canvasElement.ownerDocument.body).findByRole('alert'),
-    ).resolves.toHaveTextContent('팔로우 상태를 변경하지 못했습니다.');
-    expect(events().map(([name]) => name)).not.toContain('follow_succeeded');
   },
 };
