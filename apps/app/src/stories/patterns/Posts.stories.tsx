@@ -68,6 +68,22 @@ import type { PostDetailThreadIdentityStoryQuery } from './__generated__/PostDet
 import type { PostsProductionComposerAdapterStoryQuery } from './__generated__/PostsProductionComposerAdapterStoryQuery.graphql';
 import type { PostsStoriesQuery as PostsStoriesQueryType } from './__generated__/PostsStoriesQuery.graphql';
 
+function expectCaptureOptions(options: unknown): void {
+  if (!options || typeof options !== 'object') {
+    throw new Error('Expected analytics capture options.');
+  }
+
+  const captureOptions = options as {
+    accountId?: unknown;
+    timestamp?: unknown;
+    uuid?: unknown;
+  };
+  expect(captureOptions.accountId).toBe('account-story');
+  expect(typeof captureOptions.uuid).toBe('string');
+  expect(captureOptions.uuid).not.toBe('');
+  expect(typeof (captureOptions.timestamp as Date | undefined)?.getTime).toBe('function');
+}
+
 const postMediaImageUri = ogDefaultUrl;
 
 const storyShareOrigin = () => window.location.origin;
@@ -7021,10 +7037,10 @@ export const ComposerVisibilityAndSubmitInteraction: Story = {
     );
     expect(canvas.getByRole('button', { name: '공개 범위: 조용한 공개' })).toBeVisible();
     expect(trackAnalytics).toHaveBeenCalledOnce();
-    expect(trackAnalytics).toHaveBeenCalledWith('post_created', {
-      selected_profile_id: composerProfile.id,
-      visibility: 'PUBLIC',
-    });
+    const call = mocked(trackAnalytics).mock.calls[0];
+    expect(call?.[0]).toBe('post_created');
+    expect(call?.[1]).toEqual({ selected_profile_id: composerProfile.id, visibility: 'PUBLIC' });
+    expectCaptureOptions(call?.[2]);
   },
   render: () => <ComposerStory />,
 };

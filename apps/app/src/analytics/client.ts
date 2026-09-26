@@ -1,7 +1,17 @@
-import type { AnalyticsEventArgs } from './events';
+import type {
+  AnalyticsCaptureOptions,
+  AnalyticsEventName,
+  AnalyticsEventProperties,
+} from './events';
 
-export function trackAnalytics(...args: AnalyticsEventArgs): void {
-  void args;
+export function trackAnalytics<Name extends AnalyticsEventName>(
+  name: Name,
+  properties: AnalyticsEventProperties[Name],
+  options?: AnalyticsCaptureOptions,
+): void {
+  void name;
+  void properties;
+  void options;
 }
 
 export function identifyAnalytics(accountId: string): void {

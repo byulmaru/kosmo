@@ -13,7 +13,8 @@ import {
   View,
 } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
-import { trackAnalytics } from '@/analytics/client';
+import { useBeginMultiProfileAnalyticsAction } from '@/analytics/MultiProfileAnalyticsProvider';
+import { isDirectProfileSwitch } from '@/analytics/multiProfileUsage';
 import { ProfilePicker } from '@/components/profile/ProfilePicker';
 import { ProfileSwitcherUnreadIndicator } from '@/components/profile/ProfileSwitcherUnread';
 import { Avatar } from '@/components/ui/Avatar';
@@ -42,6 +43,7 @@ import {
 } from './shellLayout';
 import type { RefObject } from 'react';
 import type { ViewStyle } from 'react-native';
+import type { ProfileSelectionCause } from '@/analytics/multiProfileUsage';
 import type { ProfileSwitcher_query$key } from './__generated__/ProfileSwitcher_query.graphql';
 import type { ProfileSwitcherCreateProfileMutation } from './__generated__/ProfileSwitcherCreateProfileMutation.graphql';
 import type { ProfileSwitcherSelectProfileMutation } from './__generated__/ProfileSwitcherSelectProfileMutation.graphql';
@@ -180,6 +182,7 @@ export function ProfileSwitcher({
   const pathname = usePathname();
   const data = useFragment(ProfileSwitcherFragment, query);
   const { resetActor } = useRelayActor();
+  const beginAnalyticsAction = useBeginMultiProfileAnalyticsAction();
   const { request: requestNavigation } = useNavigationGuard();
   const { showToast } = useToast();
   const [internalOpen, setInternalOpen] = useState(false);
@@ -294,11 +297,20 @@ export function ProfileSwitcher({
     id: string,
     operationVersion = dismissalVersionRef.current,
     onError?: OperationErrorHandler,
+    cause: ProfileSelectionCause = 'direct',
   ) => {
     const reportError =
       onError ?? ((message: string) => setOperationError(operationVersion, message));
     setFieldError(null);
     setOperationErrorState(null);
+    const previousProfileId = active?.id ?? null;
+    const selectedOperation = beginAnalyticsAction();
+    const directSwitch = isDirectProfileSwitch({
+      cause,
+      previousProfileId,
+      selectedProfileId: id,
+    });
+    const switchedOperation = directSwitch ? beginAnalyticsAction() : null;
     commitSelect({
       variables: { id },
       onCompleted: (response, errors) => {
@@ -309,7 +321,19 @@ export function ProfileSwitcher({
         }
 
         const selectedProfileId = response.selectProfile.profile.id;
-        trackAnalytics('profile_selected', { selected_profile_id: selectedProfileId });
+        const occurredAt = new Date();
+        selectedOperation.trackProfile(
+          'profile_selected',
+          { selected_profile_id: selectedProfileId },
+          occurredAt,
+        );
+        if (directSwitch && previousProfileId && switchedOperation) {
+          switchedOperation.trackProfile(
+            'profile_switched',
+            { previous_profile_id: previousProfileId, selected_profile_id: selectedProfileId },
+            occurredAt,
+          );
+        }
         setOpen(false);
         resetActor(selectedProfileId);
       },
@@ -346,6 +370,7 @@ export function ProfileSwitcher({
       onError ?? ((message: string) => setOperationError(operationVersion, message));
     setFieldError(null);
     setOperationErrorState(null);
+    const creationOperation = beginAnalyticsAction();
     commitCreate({
       variables: { handle: normalized },
       onCompleted: (response, errors) => {
@@ -364,12 +389,20 @@ export function ProfileSwitcher({
           return;
         }
 
-        trackAnalytics('profile_created', {
-          selected_profile_id: response.createProfile.profile.id,
-        });
+        const occurredAt = new Date();
+        creationOperation.trackProfile(
+          'profile_created',
+          { selected_profile_id: response.createProfile.profile.id },
+          occurredAt,
+        );
         setHandle('');
         setCreating(false);
-        commitProfileSelection(response.createProfile.profile.id, operationVersion, onError);
+        commitProfileSelection(
+          response.createProfile.profile.id,
+          operationVersion,
+          onError,
+          'auto',
+        );
       },
       onError: (cause) => {
         const source = isRecord(cause) ? cause.source : undefined;
