@@ -16,8 +16,10 @@ export type InfiniteListProps<Item> = Readonly<{
   keyExtractor: (item: Item, index: number) => string;
   loadNext: LoadNext;
   onLoadErrorChange?: (loadError: boolean, onRetry: () => void) => void;
+  onRefresh?: () => void;
   pageSize: number;
   renderItem: (params: { index: number; item: Item }) => ReactElement | null;
+  refreshing?: boolean;
   style?: StyleProp<ViewStyle>;
   footer?: ReactElement | null;
   empty?: ReactElement | null;
@@ -31,9 +33,11 @@ export function InfiniteList<Item>({
   keyExtractor,
   loadNext,
   onLoadErrorChange,
+  onRefresh,
   pageSize,
   footer,
   renderItem,
+  refreshing,
   style,
 }: InfiniteListProps<Item>) {
   const hasPaginationScrollContext = usePaginationScrollContext();
@@ -73,7 +77,9 @@ export function InfiniteList<Item>({
       ListFooterComponent={footer}
       onEndReached={onEndReached}
       onEndReachedThreshold={1}
+      onRefresh={onRefresh}
       renderItem={({ index, item }) => renderItem({ index, item })}
+      refreshing={refreshing}
       style={[style, styles.nativeList]}
     />
   );

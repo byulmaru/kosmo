@@ -60,14 +60,24 @@ export default function LocalScreen() {
   const registerHomeReselection = shellChrome?.registerHomeReselection;
   const hasSuccessfulLocalRef = useRef(false);
   const routeBoundaryRef = useRef<RouteBoundaryHandle>(null);
-  const [refreshVersion, setRefreshVersion] = useState(0);
+  const [refreshState, setRefreshState] = useState({ refreshVersion: 0, refreshing: false });
+  const completeRefresh = useCallback(() => {
+    setRefreshState((state) => ({ ...state, refreshing: false }));
+  }, []);
   const refresh = useCallback(() => {
     if (hasSuccessfulLocalRef.current) {
-      setRefreshVersion((version) => version + 1);
+      if (Platform.OS !== 'web' && refreshState.refreshing) {
+        return;
+      }
+
+      setRefreshState((state) => ({
+        refreshVersion: state.refreshVersion + 1,
+        refreshing: true,
+      }));
     } else {
       routeBoundaryRef.current?.refetch();
     }
-  }, []);
+  }, [refreshState.refreshing]);
   const reselectFromShell = useCallback(() => {
     if (Platform.OS === 'web') {
       window.scrollTo({ behavior: 'auto', left: 0, top: 0 });
@@ -106,7 +116,9 @@ export default function LocalScreen() {
         <LocalContent
           hasSuccessfulLocalRef={hasSuccessfulLocalRef}
           onRefresh={refresh}
-          refreshVersion={refreshVersion}
+          onRefreshComplete={completeRefresh}
+          refreshVersion={refreshState.refreshVersion}
+          refreshing={refreshState.refreshing}
         />
       </RouteBoundary>
     </LocalFrame>
@@ -158,11 +170,15 @@ function LocalFrame({
 function LocalContent({
   hasSuccessfulLocalRef,
   onRefresh,
+  onRefreshComplete,
   refreshVersion,
+  refreshing,
 }: {
   hasSuccessfulLocalRef: MutableRefObject<boolean>;
   onRefresh: () => void;
+  onRefreshComplete: () => void;
   refreshVersion: number;
+  refreshing: boolean;
 }) {
   const { fetchKey } = useRouteBoundary();
   const queryData = useLazyLoadQuery<LocalPageQuery>(
@@ -178,14 +194,18 @@ function LocalContent({
 
   return (
     <>
-      <LocalContentView data={data} />
+      <LocalContentView data={data} onRefresh={onRefresh} refreshing={refreshing} />
       <RelayFailOpenBoundary
         fallback={<LocalRefreshErrorFallback onRetry={onRefresh} />}
         reportUnexpectedErrors={false}
         resetKey={refreshVersion}
       >
         <Suspense fallback={null}>
-          <LocalRefetchContent fragmentRef={queryData} refreshVersion={refreshVersion} />
+          <LocalRefetchContent
+            fragmentRef={queryData}
+            onRefreshComplete={onRefreshComplete}
+            refreshVersion={refreshVersion}
+          />
         </Suspense>
       </RelayFailOpenBoundary>
     </>
@@ -194,9 +214,11 @@ function LocalContent({
 
 function LocalRefetchContent({
   fragmentRef,
+  onRefreshComplete,
   refreshVersion,
 }: {
   fragmentRef: LocalContent_query$key;
+  onRefreshComplete: () => void;
   refreshVersion: number;
 }) {
   const [, refetch] = useRefetchableFragment<LocalContentRefetchQuery, LocalContent_query$key>(
@@ -215,13 +237,14 @@ function LocalRefetchContent({
       {
         fetchPolicy: 'store-and-network',
         onComplete: (error) => {
+          onRefreshComplete();
           if (error) {
             showBoundary(error);
           }
         },
       },
     );
-  }, [refetch, refreshVersion, showBoundary]);
+  }, [onRefreshComplete, refetch, refreshVersion, showBoundary]);
 
   return null;
 }
@@ -242,7 +265,15 @@ function LocalRefreshErrorFallback({ onRetry }: { onRetry: () => void }) {
   return null;
 }
 
-function LocalContentView({ data }: { data: LocalContent_query$data }) {
+function LocalContentView({
+  data,
+  onRefresh,
+  refreshing,
+}: {
+  data: LocalContent_query$data;
+  onRefresh: () => void;
+  refreshing: boolean;
+}) {
   const theme = useTheme();
   const shellChrome = useShellChrome();
   const selectedProfile = data.currentSession?.selectedProfile ?? null;
@@ -274,7 +305,9 @@ function LocalContentView({ data }: { data: LocalContent_query$data }) {
       <PostList
         identityKey={`local:${selectedProfile.id}`}
         local={data}
+        onRefresh={onRefresh}
         replyProfile={selectedProfile}
+        refreshing={refreshing}
       />
     </View>
   );

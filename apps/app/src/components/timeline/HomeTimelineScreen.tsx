@@ -90,6 +90,7 @@ export default function HomeScreen() {
         title="홈을 불러오지 못했어요"
       >
         <HomeRouteContent
+          onRefresh={handleHomeReselection}
           registerHomeRefresh={registerHomeRefresh}
           revalidateCachedHome={revalidateCachedHome}
         />
@@ -131,9 +132,11 @@ function HomeFrame({
 }
 
 function HomeRouteContent({
+  onRefresh,
   registerHomeRefresh,
   revalidateCachedHome,
 }: {
+  onRefresh: () => void;
   registerHomeRefresh: (refresh: (() => void) | null) => void;
   revalidateCachedHome: boolean;
 }) {
@@ -142,6 +145,7 @@ function HomeRouteContent({
   return (
     <HomeContent
       fetchKey={fetchKey}
+      onRefresh={onRefresh}
       registerHomeRefresh={registerHomeRefresh}
       revalidateCachedHome={revalidateCachedHome}
     />
@@ -150,10 +154,12 @@ function HomeRouteContent({
 
 function HomeContent({
   fetchKey,
+  onRefresh,
   registerHomeRefresh,
   revalidateCachedHome,
 }: {
   fetchKey: number;
+  onRefresh: () => void;
   registerHomeRefresh: (refresh: (() => void) | null) => void;
   revalidateCachedHome: boolean;
 }) {
@@ -164,16 +170,19 @@ function HomeContent({
     {},
     { fetchKey, fetchPolicy: 'store-or-network' },
   );
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     let refreshInFlight = false;
     let subscription: { unsubscribe: () => void } | null = null;
+    let refreshToastCleanup: (() => void) | null = null;
     const refresh = () => {
       if (refreshInFlight) {
         return;
       }
 
       refreshInFlight = true;
+      setRefreshing(true);
       subscription = fetchQuery(
         environment,
         HomeQuery,
@@ -182,10 +191,22 @@ function HomeContent({
       ).subscribe({
         complete: () => {
           refreshInFlight = false;
+          setRefreshing(false);
+          refreshToastCleanup?.();
+          refreshToastCleanup = null;
         },
         error: () => {
           refreshInFlight = false;
-          showToast('홈을 새로 불러오지 못했어요.', { tone: 'danger' });
+          setRefreshing(false);
+          if (Platform.OS === 'web') {
+            showToast('홈을 새로 불러오지 못했어요.', { tone: 'danger' });
+          } else {
+            refreshToastCleanup = showToast('홈을 새로 불러오지 못했어요.', {
+              action: { label: '다시 시도', onPress: refresh },
+              persistent: true,
+              tone: 'danger',
+            });
+          }
         },
       });
     };
@@ -197,13 +218,22 @@ function HomeContent({
     return () => {
       registerHomeRefresh(null);
       subscription?.unsubscribe();
+      refreshToastCleanup?.();
     };
   }, [environment, registerHomeRefresh, revalidateCachedHome, showToast]);
 
-  return <HomeContentView data={data} />;
+  return <HomeContentView data={data} onRefresh={onRefresh} refreshing={refreshing} />;
 }
 
-function HomeContentView({ data }: { data: HomePageQuery$data }) {
+function HomeContentView({
+  data,
+  onRefresh,
+  refreshing,
+}: {
+  data: HomePageQuery$data;
+  onRefresh: () => void;
+  refreshing: boolean;
+}) {
   const theme = useTheme();
   const shellChrome = useShellChrome();
   const selectedProfile = data.currentSession?.selectedProfile ?? null;
@@ -235,7 +265,9 @@ function HomeContentView({ data }: { data: HomePageQuery$data }) {
       <PostList
         home={data}
         identityKey={`home:${selectedProfile.id}`}
+        onRefresh={onRefresh}
         replyProfile={selectedProfile}
+        refreshing={refreshing}
       />
     </View>
   );
