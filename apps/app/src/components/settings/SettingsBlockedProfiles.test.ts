@@ -188,8 +188,8 @@ describe('차단한 프로필 목록', () => {
     });
 
     assert.equal(find('ProfileListItemContent')?.props.avatarUri, 'https://media.example/star.png');
-    assert.equal(find('ProfileListItemContent')?.props.relativeHandle, undefined);
-    assert.equal(find('ProfileListItemContent')?.props.identity.props.children, '별마루');
+    assert.equal(find('ProfileListItemContent')?.props.relativeHandle, '@star');
+    assert.equal(find('ProfileListItemContent')?.props.identity, undefined);
     assert.equal(find('Button')?.props.profileBlockId, 'block-star');
     assert.equal(find('PaginationSurface')?.props.hasNext, true);
     assert.ok(scrollProps);
@@ -242,8 +242,8 @@ describe('차단한 프로필 목록', () => {
       );
     });
     assert.equal(find('ProfileListItemContent')?.props.avatarUri, 'https://media.example/star.png');
-    assert.equal(find('ProfileListItemContent')?.props.relativeHandle, undefined);
-    assert.equal(find('ProfileListItemContent')?.props.identity.props.children, '별마루');
+    assert.equal(find('ProfileListItemContent')?.props.relativeHandle, '@star');
+    assert.equal(find('ProfileListItemContent')?.props.identity, undefined);
     assert.equal(find('Button')?.props.profileBlockId, 'block-star');
     assert.equal(find('Button')?.props.children, '차단 해제');
   });

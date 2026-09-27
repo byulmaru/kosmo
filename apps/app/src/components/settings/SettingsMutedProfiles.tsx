@@ -38,6 +38,7 @@ const SettingsMutedProfilesFragment = graphql`
           targetProfile {
             id
             displayName
+            relativeHandle
             ...ProfileMuteAction_profile
             avatar {
               id
@@ -117,6 +118,7 @@ function SettingsMutedProfilesContent({ onUnmuteSuccess }: { onUnmuteSuccess?: (
       ),
       avatarUri: edge.node.targetProfile.avatar?.url,
       displayName: edge.node.targetProfile.displayName,
+      relativeHandle: edge.node.targetProfile.relativeHandle,
       id: edge.node.targetProfile.id,
     })),
     status: 'loaded' as const,

@@ -13,6 +13,7 @@ const mockModule = (specifier: string | URL, exports: object) =>
 
 mockModule('react-native', {
   StyleSheet: { create: <T>(styles: T) => styles },
+  Pressable: 'Pressable',
   Text: 'Text',
   View: ({ children, ...props }: { children?: ReactNode }) =>
     createElement('View', props, children),
@@ -33,12 +34,12 @@ mockModule(new URL('../ui/ToastProvider.tsx', import.meta.url), {
 mockModule(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
   useTheme: () => ({ foregroundPrimary: 'foreground' }),
 });
-mockModule(new URL('./ProfileListItemContent.tsx', import.meta.url), {
-  ProfileListItemContent: ({ children, ...props }: { children?: ReactNode }) =>
-    createElement('ProfileRow', props, children),
+mockModule(new URL('../ui/Avatar.tsx', import.meta.url), {
+  Avatar: (props: object) => createElement('Avatar', props),
 });
-const labelStyle = { fontSize: 16 };
-mockModule('../../theme/tokens', { space: { 16: 16 }, textStyles: { uiLabelL: labelStyle } });
+mockModule(new URL('../shell/NavigationLink.tsx', import.meta.url), {
+  NavigationLink: ({ children }: { children?: ReactNode }) => children,
+});
 
 let MutedProfileList: typeof MutedProfileListExport;
 let renderer: ReactTestRenderer | null = null;
@@ -53,7 +54,7 @@ afterEach(async () => {
 });
 
 describe('MutedProfileList', () => {
-  it('loaded row renders the Figma name-only identity with the existing action', async () => {
+  it('same-name rows render distinct handles through the shared profile row', async () => {
     await act(async () => {
       renderer = create(
         createElement(MutedProfileList, {
@@ -65,6 +66,13 @@ describe('MutedProfileList', () => {
                 avatarUri: 'https://media.example/avatar.png',
                 displayName: '별마루',
                 id: 'profile-star',
+                relativeHandle: '@star',
+              },
+              {
+                action: createElement('Button'),
+                displayName: '별마루',
+                id: 'profile-other',
+                relativeHandle: '@other@example.org',
               },
             ],
             status: 'loaded',
@@ -73,11 +81,14 @@ describe('MutedProfileList', () => {
       );
     });
 
-    const row = renderer?.root.find((node) => (node.type as unknown) === 'ProfileRow');
-    assert.equal(row?.props.displayName, '별마루');
-    assert.equal(row?.props.relativeHandle, undefined);
-    assert.equal(row?.props.avatarUri, 'https://media.example/avatar.png');
-    assert.equal(row?.props.identity.props.children, '별마루');
-    assert.equal(row?.props.identity.props.style[0], labelStyle);
+    const labels = renderer?.root
+      .findAll((node) => (node.type as unknown) === 'Text')
+      .map((node) => node.props.children);
+    assert.deepEqual(labels, ['별마루', '@star', '별마루', '@other@example.org']);
+    assert.equal(renderer?.root.findAll((node) => (node.type as unknown) === 'Button').length, 2);
+    assert.equal(
+      renderer?.root.findAll((node) => (node.type as unknown) === 'Avatar')[0]?.props.imageUri,
+      'https://media.example/avatar.png',
+    );
   });
 });

@@ -100,12 +100,14 @@ describe('SettingsMutedProfiles mute wiring', () => {
         profiles: Array<{
           action: ReactElement<{ profile: unknown; surface: string }>;
           id: string;
+          relativeHandle: string;
         }>;
       };
     };
     assert.ok(list);
     const { state } = list;
     assert.equal(state.profiles[0]?.id, targetProfile.id);
+    assert.equal(state.profiles[0]?.relativeHandle, targetProfile.relativeHandle);
     assert.equal(state.profiles[0]?.action.type, ProfileMuteAction);
     assert.equal(state.profiles[0]?.action.props.profile, targetProfile);
     assert.equal(state.profiles[0]?.action.props.surface, 'button');

@@ -1,4 +1,4 @@
-import { StyleSheet, Text } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { graphql, useFragment, useLazyLoadQuery, usePaginationFragment } from 'react-relay';
 import { usePaginationScrollRegistration } from '@/components/pagination/PaginationScrollView';
 import { useAutomaticPagination } from '@/components/pagination/useAutomaticPagination';
@@ -8,8 +8,6 @@ import { ProfileListItemContent } from '@/components/profile/ProfileListItemCont
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { StateView } from '@/components/ui/StateView';
-import { useTheme } from '@/theme/ThemeProvider';
-import { textStyles } from '@/theme/tokens';
 import type { SettingsBlockedProfileRow_profileBlock$key } from './__generated__/SettingsBlockedProfileRow_profileBlock.graphql';
 import type { SettingsBlockedProfiles_profile$key } from './__generated__/SettingsBlockedProfiles_profile.graphql';
 import type { SettingsBlockedProfilesNextPageQuery } from './__generated__/SettingsBlockedProfilesNextPageQuery.graphql';
@@ -52,6 +50,7 @@ const SettingsBlockedProfileRowFragment = graphql`
         url
       }
       displayName
+      relativeHandle
       ...ProfileBlockAction_profile
       viewerState {
         profileBlock {
@@ -178,18 +177,13 @@ function SettingsBlockedProfileRow({
   const data = useFragment(SettingsBlockedProfileRowFragment, profileBlock);
   const targetProfile = data.targetProfile;
   const currentProfileBlock = targetProfile.viewerState?.profileBlock ?? null;
-  const theme = useTheme();
 
   return (
     <ProfileListItemContent
       avatarLabel={targetProfile.displayName}
       avatarUri={targetProfile.avatar?.url}
       displayName={targetProfile.displayName}
-      identity={
-        <Text numberOfLines={1} style={[textStyles.uiLabelL, { color: theme.foregroundPrimary }]}>
-          {targetProfile.displayName}
-        </Text>
-      }
+      relativeHandle={targetProfile.relativeHandle}
       style={styles.row}
     >
       <ProfileBlockAction
