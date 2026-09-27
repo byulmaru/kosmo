@@ -99,7 +99,12 @@ export function FullReactionOverlay({
 
   const below = anchor ? viewportHeight - insets.bottom - (anchor.y + anchor.height) : 0;
   const above = anchor ? anchor.y - insets.top : 0;
-  const placement = below >= (content?.height ?? 0) || below >= above ? 'bottom' : 'top';
+  const preferredHeight = Math.min(624, Math.max(0, viewportHeight - 2 * spacing.sm));
+  const placement = below >= preferredHeight + spacing.xs || below >= above ? 'bottom' : 'top';
+  const webHeight = Math.min(
+    preferredHeight,
+    Math.max(0, (placement === 'bottom' ? below : above) - spacing.xs - spacing.sm),
+  );
   const minLeft = insets.left + spacing.sm;
   const maxRight = viewportWidth - insets.right - spacing.sm;
   const availableWidth = Math.max(0, maxRight - minLeft);
@@ -130,6 +135,7 @@ export function FullReactionOverlay({
         presentation={web ? 'web' : 'mobile'}
         query={query}
         selectedValues={selectedValues}
+        webHeight={web ? webHeight : undefined}
       />
     </View>
   );

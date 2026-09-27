@@ -1573,8 +1573,13 @@ export const ReactionQuickToFullContract: Story = {
     await userEvent.click(within(quick).getByRole('button', { name: '전체 반응' }));
 
     const full = await screen.findByRole('dialog', { name: '반응 선택' });
+    expect(within(full).getByRole('heading', { name: '빠른 반응' })).toBeVisible();
     await waitFor(() => {
       const bounds = full.getBoundingClientRect();
+      const trigger = canvas.getByRole('button', { name: '반응' }).getBoundingClientRect();
+      expect(
+        Math.min(Math.abs(bounds.top - trigger.bottom), Math.abs(trigger.top - bounds.bottom)),
+      ).toBeLessThanOrEqual(spacing.xs + 1);
       expect(bounds.top).toBeGreaterThanOrEqual(0);
       expect(bounds.bottom).toBeLessThanOrEqual(window.innerHeight);
       expect(bounds.left).toBeGreaterThanOrEqual(0);

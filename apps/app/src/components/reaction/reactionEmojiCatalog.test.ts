@@ -13,4 +13,11 @@ test('Noto catalog provides the same 3,781 selectable values with localized sear
   assert.equal(heart?.keywords.includes('red heart'), true);
   assert.equal(getReactionEmojiAsset('❤️')?.path, '/reaction-emoji/emoji-16/2764-fe0f.png');
   assert.equal(getReactionEmojiAsset('custom:party'), null);
+  assert.deepEqual(
+    reactionEmojiCatalog
+      .filter((option) => option.quick)
+      .sort((left, right) => left.quickOrder! - right.quickOrder!)
+      .map((option) => option.emoji),
+    ['🥹', '❤️', '🎉', '👀', '☘️', '🌈'],
+  );
 });

@@ -1,3 +1,4 @@
+import { reactionTypes } from '@kosmo/core/validation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, Text } from 'react-native';
 import { useRelayEnvironment } from 'react-relay';
@@ -13,7 +14,7 @@ import type { ReactionOption } from '@/components/reaction/ReactionSelector';
 import type { PostActionExecution, PostActionResolutionReason } from './postActionAvailability';
 import type { PostReactionController } from './PostReactionController';
 
-const reactionOptions = ['🥹', '❤️', '🎉', '👀', '☘️', '🌈'].map((type) => ({
+const reactionOptions = reactionTypes.map((type) => ({
   emoji: type,
   id: type,
   label: reactionEmojiCatalog.find((option) => option.id === type)?.label ?? type,
