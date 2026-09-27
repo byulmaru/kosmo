@@ -1,6 +1,6 @@
 # PostHog 제품 분석 운영
 
-Kosmo Web의 PostHog client는 prod 채널에서 공개 posthogKey와 posthogHost가 모두 주입된 경우에만 초기화한다. dev 채널과 설정이 없는 build에는 client와 분석 요청이 없어야 한다. 현재 production 수집·Dashboard 설정은 일시 중지 상태다. 이 문서는 앱의 event 계약과 수집 재개 후 확인 절차를 기록하며, Cloud 설정이나 수집 재개를 승인하지 않는다.
+Kosmo Web의 PostHog client는 prod 채널에서 공개 posthogKey와 posthogHost가 모두 주입된 경우에만 초기화한다. dev 채널과 설정이 없는 build에는 client와 분석 요청이 없어야 한다. 이 문서는 앱의 event 계약과 배포 후 확인 절차를 기록한다. 실제 수집 상태와 Session Replay 설정은 PostHog production project에서 확인한다. 이 문서를 바꾸는 것만으로 Cloud 설정이나 배포 상태를 변경하지 않는다.
 
 ## Identity와 개인정보 경계
 
@@ -11,6 +11,7 @@ Kosmo Web의 PostHog client는 prod 채널에서 공개 posthogKey와 posthogHos
 - 허용 집합은 canonical reactionTypeSchema가 제공하는 전체 Emoji 16 Unicode sequence다. 허용된 값에는 emoji_kind: unicode와 reaction_emoji_key를 함께 보낸다. key는 unicode: 다음에 완전한 code point sequence를 소문자 16진수와 하이픈으로 이어 붙인다. variation selector, modifier, regional indicator, zero-width joiner를 정규화하거나 제거하지 않는다.
 - key는 사용한 Reaction 종류를 드러내는 분석 정보이며 익명화가 아니다. 원문 emoji, Reaction DB ID, 사용자 정의 이모지 ID·이름·shortcode·asset은 보내지 않는다. 검증되지 않은 값에는 기존 reaction_type만 기록하고 emoji_kind와 key를 생략한다.
 - PostHog SDK의 표준 metadata·자동 이벤트·Session Replay 동작은 별도 contract다. 이 변경은 해당 수집 surface, SDK 설정, masking 또는 retention을 바꾸지 않는다.
+- 이번 PR은 기존 2026년 9월 9일 시행 개인정보 처리방침을 유지한다. 새 Reaction 종류 key의 공개 고지와 개정 시행일이 확정되기 전에는 이 계측 변경을 production에 배포하지 않는다.
 
 ## 명시적 event allowlist
 
@@ -79,9 +80,9 @@ Saved event-backed views: [production database counts dashboard](https://us.post
 
 쿼리는 식별된 Web 이벤트만 집계하며 전체 제품 사용량, 노출을 통제한 선호도, 또는 현재 남아 있는 Reaction 수를 뜻하지 않는다. key 없는 과거 이벤트와 수집 중단 기간을 특정 종류에 배분하거나 backfill하지 않는다. PostHog Cloud Insight를 만들거나 설정을 바꾸는 일은 이 변경 범위에 포함하지 않는다.
 
-## 수집 재개 후 확인
+## 배포·설정 변경 후 확인
 
-수집을 재개하는 별도 승인 뒤 production build와 PostHog project 설정을 같은 배포 경계에서 확인한다. 실제 사용자 식별자나 콘텐츠를 ticket·스크린샷에 복사하지 않는다.
+수집 설정이나 앱 배포가 변경되면 production build와 PostHog project 설정을 같은 배포 경계에서 확인한다. 실제 사용자 식별자나 콘텐츠를 ticket·스크린샷에 복사하지 않는다.
 
 1. 설정이 없는 dev build에서 PostHog 요청이 없는지 확인한다.
 2. production Web에서 로그인 후 Account ID 하나의 identify가 발생하는지 확인한다. 이름·handle·email·Profile ID가 payload에 없는지 확인한다.
@@ -91,4 +92,5 @@ Saved event-backed views: [production database counts dashboard](https://us.post
 6. 위 조건을 확인한 뒤 Reaction 종류별 쿼리를 승인된 project에서 실행하고 결과 해석을 기록한다.
 
 실제 PostHog Cloud 수집·Dashboard 설정, collection restart, production deployment와 production acceptance는 별도 책임이다.
+
 Web event의 집계 Dashboard, funnel 정의, native analytics는 Worker 스냅샷과 별도 범위다. Web 수집을 재개하거나 event taxonomy를 바꿀 때는 이 문서와 canonical product contract를 함께 갱신한다.
