@@ -201,7 +201,6 @@ function EditorHeader({
       <IconButton
         accessibilityLabel="미디어 편집에서 뒤로"
         controlRef={backRef}
-        feedback="opacity"
         onPress={onBack}
         targetSize={44}
         visualSize={32}
@@ -224,7 +223,6 @@ function EditorHeader({
       ) : (
         <IconButton
           accessibilityLabel="미디어 편집 닫기"
-          feedback="opacity"
           onPress={onClose}
           targetSize={44}
           visualSize={32}
@@ -613,7 +611,6 @@ function MobileToolButton({
     <IconButton
       accessibilityLabel={label}
       accessibilityState={{ selected }}
-      feedback="opacity"
       onPress={onPress}
       targetSize={44}
       visualSize={44}

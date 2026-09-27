@@ -365,13 +365,7 @@ export function PostComposerMediaControls({
           onPress={() => void selectMedia()}
           style={styles.addMediaTarget}
           visualSize={mediaAddVisualSize}
-          visualStyle={({ pressed }) => [
-            styles.addMediaVisual,
-            {
-              backgroundColor: pressed ? theme.surface : 'transparent',
-              opacity: disabled || media.length >= postComposerMediaLimit ? 0.45 : 1,
-            },
-          ]}
+          visualStyle={styles.addMediaVisual}
         >
           <ImagePlusIcon color={theme.primary} size={24} />
         </IconButton>
@@ -448,14 +442,12 @@ export function PostComposerMediaItems({
             <IconButton
               accessibilityLabel={`첨부 이미지 ${index + 1} 제거`}
               disabled={disabled}
+              feedbackTone="inverse"
               onPress={() => onRemove(item.key)}
               style={styles.mediaRemoveTarget}
               targetSize={mediaRemoveGeometry.targetSize}
               visualSize={mediaRemoveVisualSize}
-              visualStyle={({ pressed }) => [
-                styles.mediaRemoveVisual,
-                { opacity: disabled ? 0.45 : pressed ? 0.75 : 1 },
-              ]}
+              visualStyle={styles.mediaRemoveVisual}
             >
               <XIcon color={colors.light.background} size={18} />
             </IconButton>

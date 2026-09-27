@@ -187,7 +187,6 @@ function FollowRequestActionButton({
       accessibilityLabel={`${name} 팔로우 요청 ${label}`}
       accessibilityState={{ busy: pending, disabled: busy }}
       disabled={busy}
-      feedback="opacity"
       onPress={onPress}
       targetSize={targetSize}
     >

@@ -1,11 +1,11 @@
 import { ArrowLeft, Menu, Search, X } from 'lucide-react-native';
 import { useRef, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
-import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
-import { borderWidths, iconSizes, motion, radius, space, textStyles } from '@/theme/tokens';
+import { useTheme } from '@/theme/ThemeProvider';
+import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
 import { IconButton } from './IconButton';
 import type { ReactElement, RefObject } from 'react';
-import type { PressableStateCallbackType, View as NativeView, ViewStyle } from 'react-native';
+import type { View as NativeView, ViewStyle } from 'react-native';
 import type { NavigationChromePlatform } from './navigationChrome';
 
 export type SearchToolbarLeadingAction = 'back' | 'menu' | 'none';
@@ -52,7 +52,6 @@ export function SearchToolbar({
   value,
 }: SearchToolbarProps) {
   const theme = useTheme();
-  const reducedMotion = useReducedMotion();
   const internalInputRef = useRef<TextInput>(null);
   const resolvedInputRef = inputRef ?? internalInputRef;
   const [inputFocused, setInputFocused] = useState(false);
@@ -79,33 +78,6 @@ export function SearchToolbar({
         : undefined,
     ];
   };
-  const controlVisualStyle = (controlDisabled: boolean, state: PressableStateCallbackType) => {
-    const webState = state as PressableStateCallbackType & {
-      hovered?: boolean;
-    };
-    const hovered = platform === 'web' && Boolean(webState.hovered);
-
-    return [
-      styles.controlVisual,
-      platform === 'web'
-        ? ({
-            transitionDuration: `${reducedMotion ? motion.duration.instant : motion.duration.fast}ms`,
-            transitionProperty: 'background-color, transform',
-            transitionTimingFunction: motion.easing.standard,
-          } as unknown as ViewStyle)
-        : undefined,
-      {
-        backgroundColor: controlDisabled
-          ? 'transparent'
-          : state.pressed
-            ? theme.statePressed
-            : hovered
-              ? theme.stateHover
-              : 'transparent',
-        transform: reducedMotion ? undefined : [{ scale: state.pressed ? 0.98 : 1 }],
-      },
-    ];
-  };
   const backControl = showBack ? (
     <IconButton
       accessibilityLabel="뒤로"
@@ -123,7 +95,7 @@ export function SearchToolbar({
       style={StyleSheet.flatten(controlStyle('leading'))}
       targetSize={targetSize}
       visualSize={targetSize}
-      visualStyle={(state) => controlVisualStyle(leadingDisabled, state)}
+      visualStyle={styles.controlVisual}
     >
       <ArrowLeft color={leadingIconColor} size={iconSizes[20]} strokeWidth={2} />
     </IconButton>
@@ -162,7 +134,7 @@ export function SearchToolbar({
           style={StyleSheet.flatten(controlStyle('leading'))}
           targetSize={targetSize}
           visualSize={targetSize}
-          visualStyle={(state) => controlVisualStyle(leadingDisabled, state)}
+          visualStyle={styles.controlVisual}
         >
           <Menu color={leadingIconColor} size={iconSizes[24]} strokeWidth={2} />
         </IconButton>
@@ -238,7 +210,7 @@ export function SearchToolbar({
             style={StyleSheet.flatten(controlStyle('clear'))}
             targetSize={targetSize}
             visualSize={targetSize}
-            visualStyle={(state) => controlVisualStyle(disabled, state)}
+            visualStyle={styles.controlVisual}
           >
             <X color={iconColor} size={iconSizes[18]} strokeWidth={2} />
           </IconButton>

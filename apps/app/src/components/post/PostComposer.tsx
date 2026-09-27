@@ -546,7 +546,6 @@ export function PostComposer({
             accessibilityLabel="Composer 확장"
             controlRef={expandControlRef}
             disabled={submitting}
-            feedback="opacity"
             onPress={onExpand}
             targetSize={40}
             visualSize={40}
@@ -878,7 +877,6 @@ export function MobileFullscreenComposerShellCandidate({
           <IconButton
             accessibilityLabel={`${copy.title} 닫기`}
             disabled={submitting}
-            feedback="opacity"
             onPress={() => onOverlayClose()}
             targetSize={44}
           >
@@ -1252,7 +1250,6 @@ function ComposerTool({
       accessibilityState={selected === undefined ? undefined : { selected }}
       aria-pressed={selected}
       disabled={disabled}
-      feedback="opacity"
       onPress={onPress}
       visualSize={32}
       visualStyle={[
