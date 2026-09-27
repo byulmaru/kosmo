@@ -15,13 +15,13 @@ Web에서 지원되는 Unicode Reaction 종류별로 사용 Account 수, 추가�
 ## Non-Goals
 
 - PROD-942의 Reaction catalog, 허용 범위, Picker, mutation 또는 Unicode 동일성 계약을 다시 정의하지 않는다.
-- 사용자 정의 emoji의 개별 식별 정보 수집, Native 계측, 과거 데이터 backfill, PostHog production 수집 재개와 배포를 다루지 않는다.
+- 사용자 정의 emoji의 개별 식별 정보 수집, Native 계측, 과거 데이터 backfill, PostHog Cloud 설정 변경과 production 배포를 다루지 않는다.
 
 ## Constraints
 
-- PROD-942 PR #1023·#1025를 선행 Stack으로 사용한다. 선행 계약이 바뀌면 의존하는 analytics 경계만 다시 검증한다.
+- PROD-942 선행 PR #1023·#1051·#1025가 병합됐다. 최신 main의 Reaction 계약에 맞춰 이 analytics 경계를 검증한다.
 - PROD-539의 기존 이벤트·성공 경계와 PROD-795의 Account identity·SDK 경계를 따른다. 별도 중복 이벤트와 금지된 사용자·콘텐츠 property를 추가하지 않는다.
-- PR #1023·#1025가 미병합인 동안 PROD-986 PR을 Draft로 유지한다.
+- 사용자의 요청에 따라 PROD-986 PR은 Draft로 유지한다.
 
 ## Verification
 
