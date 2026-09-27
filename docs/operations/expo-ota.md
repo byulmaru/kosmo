@@ -98,23 +98,44 @@ OTA 호출에 선행한다. OTA에 별도의 두 번째 production approval을 �
 
 Android와 iOS export job은 `apps/app/app.config.ts`에 명시한 수동 `runtimeVersion`(현재 `"0.3"`)을
 resolve해 사용한다. Workflow는 resolve한 값이 비어 있지 않은 안전한 단일 path segment
-(`[A-Za-z0-9._-]+`, `.`·`..` 제외)인지 검증한 뒤 `pnpm exec expo export --clear`로 artifact를
-만든다. Export가 성공하면 같은 `apps/app` workspace와 환경에서 `pnpm exec expo config --type public --json`의
+(`[A-Za-z0-9._-]+`, `.`·`..` 제외)인지 검증한다. Native bundle의 `EXPO_PUBLIC_SENTRY_RELEASE`는
+caller가 승인한 full 40-character `source_sha`를 release 값으로 사용한다. Export job은 secret 없이
+`pnpm exec expo export --clear --platform "$PLATFORM" --source-maps external`로 artifact를 만든다.
+Export가 성공하면 같은 `apps/app` workspace와 환경에서 `pnpm exec expo config --type public --json`의
 전체 결과를 export root의 `expo-client.json`으로 저장하고, scheme `kosmo`와 Android/iOS platform
 identifier를 검증한다. 이 public config는 Expo SDK 호환성에 필요한 client metadata를 publisher에
 전달하기 위한 것으로, secret이나 publish credential을 포함하지 않는다. `expo-client.json`은
-export artifact에 포함된다. 자동 runtime 계산이나 `EXPO_UPDATES_FINGERPRINT_OVERRIDE`로 runtime을
-계산하지 않는다. 각 platform publish job은 자신의 export가 성공하고 caller의 배포 gate를 통과하면 해당
-artifact와 runtimeVersion, export root 기준 `expo_client_path: expo-client.json`을 public publisher
-reusable workflow에 전달한다. Publisher는 Expo Metro
-`metadata.json`과 참조된 파일을 읽어 export를 검증하고, 실제 bundle과 asset bytes를
-hashing한 뒤 사전 계산한 SHA-256 표준 Base64를 각 R2 `PutObject`에 전달해 서버 검증을 수행하며 signed immutable release를 R2에 기록한다.
+export artifact에 포함된다. 각 platform은 한 개의 `expo-ota-${platform}-${run_id}-export`
+GitHub Actions artifact를 만들고 90일 보관한다. 이 artifact에는 외부 source map `.map` 파일을 포함한
+원본 Expo export가 그대로 들어가며, 별도 helper나 단계가 map을 제거하거나 bundle의
+`sourceMappingURL`을 지우지 않는다. Repository read access가 있는 signed-in 사용자는 이 artifact를
+다운로드할 수 있다.
+
+자동 runtime 계산이나 `EXPO_UPDATES_FINGERPRINT_OVERRIDE`로 runtime을 계산하지 않는다. 각 platform
+publish job은 자신의 export가 성공하고 caller의 기존 배포 gate를 통과하면 같은 artifact 이름과
+runtimeVersion, export root 기준 `expo_client_path: expo-client.json`을 public publisher reusable workflow에
+전달한다. Publisher는 해당 platform의 Expo `metadata.json`이 선택한 bundle과 asset만 R2 upload allowlist에
+넣으므로 `.map` 파일은 R2에 기록되지 않는다.
+
+각 export에는 Android 또는 iOS Sentry upload sibling job이 같은 90일 artifact를 사용한다. 이 job은 local
+`.github/workflows/expo-ota-sentry.yml`을 호출하고 대응하는 export job을 기다린다. Production에서는
+preflight가 확정한 `source_sha`를 전달하기 위해 `canonical_preflight`도 dependency에 둔다. Sentry token을
+설정하기 전에 Expo `metadata.json`이 지정한 실제 platform bundle 경로를 찾아 sibling `.map`을 검증하고,
+map JSON과 `sourcesContent`가 유효한지 preflight한다. `SENTRY_AUTH_TOKEN`은 uploader step에만 전달한다.
+Uploader는 `SENTRY_ORG`, `SENTRY_PROJECT`, caller의 bare full `source_sha`를 `SENTRY_RELEASE`로,
+`https://sentry.io/`를 `SENTRY_URL`로 사용한다. Upload 실패는 uploader job과 전체 workflow run에 표시되지만,
+기존 publish job의 `needs`와 condition에는 uploader가 포함되지 않아 OTA publish를 막지 않는다.
+
+Publisher는 Expo Metro `metadata.json`과 참조된 파일을 읽어 export를 검증하고, 실제 bundle과 asset
+bytes를 hashing한 뒤 사전 계산한 SHA-256 표준 Base64를 각 R2 `PutObject`에 전달해 서버 검증을 수행하며
+signed immutable release를 R2에 기록한다.
 
 Publisher의 R2 upload SHA-256 서버 검증, manifest signing 또는 R2 write가 실패하면
 해당 OTA workflow가 실패한다. 이 workflow는 별도의 provenance 파일을 만들거나 publish
 후 public edge를 다시 조회하지 않는다. Static host가 실제로 응답하는지와 Store binary가
 device에서 update, rejection, offline fallback을 수행하는지는 별도 운영 evidence로
 확인한다.
+Sentry upload job의 성공은 실제 Native event의 OTA JavaScript symbolication 증거와 구분한다.
 
 ## Native에서 channel 전환
 
@@ -164,6 +185,9 @@ trust를 추가하지 않는다.
 
 - workflow run ID, caller workflow ref와 source SHA
 - project, platform, OTA channel, 수동 runtime generation(`runtimeVersion`, 현재 `0.3`)과 keyid
+- platform별 90일 GitHub Actions export artifact 이름, `.map` 포함 여부와 repository reader 접근 경계
+- Sentry upload job 결과, bare SHA `SENTRY_RELEASE`, metadata-selected bundle/map preflight 결과
+- Publisher upload allowlist가 `.map` 파일을 제외하고 R2에 기록하지 않는 결과
 - publisher의 R2 upload SHA-256 검증 결과와 publish job 결과
 - production release의 Environment 승인과 동일한 source SHA
 

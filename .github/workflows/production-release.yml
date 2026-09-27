@@ -172,6 +172,32 @@ jobs:
       platform: ios
       source_sha: ${{ needs.canonical_preflight.outputs.target_sha }}
 
+  upload_sentry_android:
+    name: Upload Production Android OTA Source Maps to Sentry
+    needs: [canonical_preflight, export_android]
+    permissions:
+      actions: read
+    uses: ./.github/workflows/expo-ota-sentry.yml
+    with:
+      artifact_name: ${{ needs.export_android.outputs.artifact_name }}
+      platform: android
+      source_sha: ${{ needs.canonical_preflight.outputs.target_sha }}
+    secrets:
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+
+  upload_sentry_ios:
+    name: Upload Production iOS OTA Source Maps to Sentry
+    needs: [canonical_preflight, export_ios]
+    permissions:
+      actions: read
+    uses: ./.github/workflows/expo-ota-sentry.yml
+    with:
+      artifact_name: ${{ needs.export_ios.outputs.artifact_name }}
+      platform: ios
+      source_sha: ${{ needs.canonical_preflight.outputs.target_sha }}
+    secrets:
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+
   publish_android:
     name: Publish Production Android OTA
     needs: [canonical_preflight, production_deploy, export_android]
