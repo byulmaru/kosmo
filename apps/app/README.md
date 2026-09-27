@@ -31,7 +31,7 @@ Expo SDK 56's `expo-modules-jsi` is locked to 56.0.13, which includes the [expli
 
 The local `withIosResourceBundleDeploymentTarget` config plugin raises explicitly lower Pod resource bundle deployment targets to the existing Expo SDK 56 minimum, iOS 16.4. Xcode 27 rejects the old iOS 12–13 targets left by some Pods; the app's deployment target alone does not update those resource bundles. Higher, inherited, and unset values remain unchanged.
 
-Run its focused regression check with `node apps/app/plugins/withIosResourceBundleDeploymentTarget.test.cjs` from the repository root (Ruby must be on `PATH`, or set `KOSMO_RUBY`). It executes the generated Podfile hook and checks repeat application and target preservation.
+Run its focused regression check with `pnpm --filter @kosmo/app test:config-plugins` (Ruby must be on `PATH`, or set `KOSMO_RUBY`). The app's `test` command also runs it in CI. It executes the generated Podfile hook and checks repeat application and target preservation.
 
 For a reproducible SDK 56 clean project, specify the matching template: `pnpm --filter @kosmo/app exec expo prebuild --clean --platform ios --template expo-template-bare-minimum@56.0.36`. The installed Expo 56.0.14 tarball's bundled template identifies itself as SDK 57, so an implicit template does not provide the same validation baseline.
 
