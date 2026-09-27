@@ -3,10 +3,7 @@ import { ChevronLeftIcon } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
 import { PageHeader } from '@/components/PageHeader';
 import { returnToSettingsParent } from '@/components/settings/settingsNavigation';
-import {
-  useSettingsDetailHeaderMode,
-  useSettingsNavigationState,
-} from '@/components/settings/SettingsRouteContext';
+import { useSettingsDetailHeaderMode } from '@/components/settings/SettingsRouteContext';
 import { IconButton } from '@/components/ui/IconButton';
 import { RadioGroup, RadioOption } from '@/components/ui/RadioGroup';
 import { RouteScrollContainer } from '@/components/ui/RouteScrollContainer';
@@ -21,12 +18,11 @@ export default function SettingsThemeRoute() {
   const preference = useThemePreference();
   const setPreference = useSetThemePreference();
   const detailHeaderMode = useSettingsDetailHeaderMode();
-  const navigationState = useSettingsNavigationState();
   const backButton =
     detailHeaderMode === 'back' ? (
       <IconButton
         accessibilityLabel="설정으로 돌아가기"
-        onPress={() => returnToSettingsParent('/settings/theme', router, navigationState)}
+        onPress={() => returnToSettingsParent('/settings/theme', router)}
         style={styles.backButton}
         targetSize={44}
       >
