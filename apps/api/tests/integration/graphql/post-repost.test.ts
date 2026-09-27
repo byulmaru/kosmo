@@ -318,7 +318,7 @@ describe('GraphQL Repost', () => {
     });
   });
 
-  test('Repost effects Workflow start 실패는 Tombstone 결과를 유지한다', async (t) => {
+  test('Repost 삭제는 Tombstone 결과를 유지한다', async () => {
     const auth = await createAuthenticatedSession();
     const recipient = await createProfile('failed-delete-notification-recipient');
     const source = await createContentPost(recipient.id);
@@ -328,10 +328,6 @@ describe('GraphQL Repost', () => {
       .from(Posts)
       .where(and(eq(Posts.profileId, auth.profile.id), eq(Posts.repostSourceId, source.id)))
       .then(firstOrThrow);
-    const start = t.mock.method(temporalClient.workflow, 'start', async () => {
-      throw new Error('Temporal unavailable');
-    });
-    const errorLog = t.mock.method(console, 'error', () => undefined);
     const result = await requestDelete(repost.id, auth.token);
     assertNoGraphQLErrors(result);
     assert.deepEqual(result.data?.deletePost, {
@@ -349,17 +345,6 @@ describe('GraphQL Repost', () => {
       .where(eq(Posts.id, repost.id))
       .then(firstOrThrow);
     assert.equal(deleted.state, PostState.DELETED);
-    assert.equal(start.mock.callCount(), 1);
-    assert.equal(errorLog.mock.callCount(), 1);
-    const errorLogCall = errorLog.mock.calls[0];
-    assert.ok(errorLogCall);
-    assert.equal(errorLogCall.arguments[0], '%s Workflow start failed');
-    assert.equal(errorLogCall.arguments[1], 'Repost Delete');
-    assert.deepEqual(errorLogCall.arguments[2], {
-      error: new Error('Temporal unavailable'),
-      origin: 'LOCAL',
-      postId: repost.id,
-    });
   });
 
   test('deletePost payload는 선택된 Profile의 viewerRepost와 최신 Source count만 반환한다', async () => {

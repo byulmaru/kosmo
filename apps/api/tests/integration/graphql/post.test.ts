@@ -898,29 +898,21 @@ describe('Post Reply GraphQL 경계', () => {
     assert.equal(createContext.mock.callCount(), 0);
   });
 
-  test('Root Post Delete Workflow start 실패는 commit된 Tombstone과 GraphQL 성공을 바꾸지 않는다', async (t) => {
+  test('Root Post Delete Workflow admission 실패는 Tombstone을 남기지 않는다', async (t) => {
     const auth = await createAuthenticatedSession();
     const post = await createContentPost(auth.profile.id);
-    const start = t.mock.method(temporalClient.workflow, 'start', async () => {
+    const update = t.mock.method(temporalClient.workflow, 'executeUpdateWithStart', async () => {
       throw new Error('Temporal unavailable');
     });
-    const errorLog = t.mock.method(console, 'error', () => undefined);
 
     const result = await requestDeletePost(post.id, auth.token);
 
-    assertNoGraphQLErrors(result);
-    assert.equal(result.data?.deletePost.postId, encodeGlobalId('Post', post.id));
-    assert.equal(start.mock.callCount(), 1);
-    assert.equal(errorLog.mock.callCount(), 1);
-    const errorLogCall = errorLog.mock.calls[0];
-    assert.ok(errorLogCall);
-    assert.equal(errorLogCall.arguments[0], '%s Workflow start failed');
-    assert.equal(errorLogCall.arguments[1], 'Post Delete');
-    assert.deepEqual(errorLogCall.arguments[2], {
-      error: new Error('Temporal unavailable'),
-      origin: 'LOCAL',
-      postId: post.id,
-    });
+    assert.equal(result.errors?.[0]?.extensions?.code, 'INTERNAL_SERVER_ERROR');
+    assert.equal(update.mock.callCount(), 1);
+    assert.equal(
+      (await db.select().from(Posts).where(eq(Posts.id, post.id)).then(firstOrThrow)).state,
+      PostState.ACTIVE,
+    );
   });
 
   test('Reply 삭제 transaction 실패는 ActivityPub delivery를 호출하지 않는다', async (t) => {
@@ -945,7 +937,7 @@ describe('Post Reply GraphQL 경계', () => {
     assert.equal(stored.deletedAt, null);
   });
 
-  test('모든 최초 Content Tombstone은 Post Delete Workflow를 한 번만 시작한다', async (t) => {
+  test('모든 최초 Content Tombstone은 반복 삭제에도 보존된다', async (t) => {
     const auth = await createAuthenticatedSession();
     const replyParent = await createContentPost(auth.profile.id);
     const reply = await createContentPost(auth.profile.id, { replyParentId: replyParent.id });
@@ -965,13 +957,13 @@ describe('Post Reply GraphQL 경계', () => {
       assertNoGraphQLErrors(result);
     }
 
-    assert.deepEqual(
-      starts.map((options) => (options as { args: unknown[] }).args[0]),
-      [
-        { origin: 'LOCAL', postId: reply.id },
-        { origin: 'LOCAL', postId: rootPost.id },
-      ],
-    );
+    assert.deepEqual(starts, []);
+    for (const post of [reply, rootPost]) {
+      assert.equal(
+        (await db.select().from(Posts).where(eq(Posts.id, post.id)).then(firstOrThrow)).state,
+        PostState.DELETED,
+      );
+    }
   });
 
   test('Content 없는 Repost Parent는 replyParentId VALIDATION으로 거부하고 rollback한다', async () => {

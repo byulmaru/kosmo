@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { db, firstOrThrow, Posts } from '@kosmo/core/db';
 import { AccountProfileRole, PostQuotePolicy, PostVisibility } from '@kosmo/core/enums';
 import { normalizePostContentPlainText } from '@kosmo/core/post-content';
 import { postContentDocumentFromTextAndMedia } from '@kosmo/core/post-content/server';
@@ -6,6 +7,7 @@ import { runWorkflow } from '@kosmo/core/temporal/client';
 import { postCreateWorkflow, unwrapPostTransition } from '@kosmo/core/temporal/post';
 import { postBodyMaxLength, postBodyTextOrEmptySchema } from '@kosmo/core/validation';
 import { z } from 'zod';
+import { eq } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { resolveComposerProfileId } from '@/profile/authorization';
 import { Media } from '../../media/ref';
@@ -105,7 +107,12 @@ builder.mutationField('createPost', (t) =>
         }),
       );
 
-      return { post: result.postId };
+      const post = await db
+        .select()
+        .from(Posts)
+        .where(eq(Posts.id, result.postId))
+        .then(firstOrThrow);
+      return { post };
     },
   }),
 );

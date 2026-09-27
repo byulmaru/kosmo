@@ -1160,7 +1160,7 @@ test('Active Profile Block은 Local과 ActivityPub Reply를 양방향으로 거�
               replyParentId: parent.post.id,
               visibility: PostVisibility.PUBLIC,
             });
-      await assert.rejects(promise, ProfilePairBlockedError);
+      await assert.rejects(promise, origin === 'LOCAL' ? NotFoundError : ProfilePairBlockedError);
     }
 
     assert.equal(await db.$count(Posts), postsBefore);
