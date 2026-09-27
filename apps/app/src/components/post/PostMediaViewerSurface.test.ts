@@ -16,6 +16,13 @@ const mockPlatform: { OS: string } = { OS: 'web' };
 let mockWindowHeight = 844;
 let mockReducedMotion = false;
 const scrollCalls: Array<{ animated?: boolean; x?: number; y?: number }> = [];
+const zoomToCalls: Array<{
+  animated?: boolean;
+  height: number;
+  width: number;
+  x: number;
+  y: number;
+}> = [];
 const MockImage = Object.assign((props: Record<string, unknown>) => createElement('Image', props), {
   getSize: (_url: string, onSuccess: (width: number, height: number) => void) =>
     onSuccess(1600, 900),
@@ -23,7 +30,16 @@ const MockImage = Object.assign((props: Record<string, unknown>) => createElemen
 const MockScrollView = forwardRef<
   {
     scrollTo: (options: { animated?: boolean; x?: number; y?: number }) => void;
-    setNativeProps: (props: Record<string, unknown>) => void;
+    scrollResponderZoomTo: (
+      rect: {
+        animated?: boolean;
+        height: number;
+        width: number;
+        x: number;
+        y: number;
+      },
+      animated?: boolean,
+    ) => void;
   },
   Record<string, unknown>
 >((props, ref) => {
@@ -31,7 +47,7 @@ const MockScrollView = forwardRef<
     ref,
     () => ({
       scrollTo: (options) => scrollCalls.push(options),
-      setNativeProps: () => undefined,
+      scrollResponderZoomTo: (rect, animated) => zoomToCalls.push({ ...rect, animated }),
     }),
     [],
   );
@@ -104,12 +120,16 @@ type FakeGesture = {
   maxPointers: (value: number) => FakeGesture;
   maxPointersValue?: number;
   name: string;
+  numberOfTaps: (value: number) => FakeGesture;
+  numberOfTapsValue?: number;
+  onEnd: (callback: GestureCallback) => FakeGesture;
   onTouchesDown: (callback: GestureCallback) => FakeGesture;
   onFinalize: (callback: GestureCallback) => FakeGesture;
   onStart: (callback: GestureCallback) => FakeGesture;
   onUpdate: (callback: GestureCallback) => FakeGesture;
   simultaneousWithExternalGesture: (...gestures: FakeGesture[]) => FakeGesture;
   onFinalizeCallback?: GestureCallback;
+  onEndCallback?: GestureCallback;
   onTouchesDownCallback?: GestureCallback;
   onStartCallback?: GestureCallback;
   onUpdateCallback?: GestureCallback;
@@ -124,11 +144,19 @@ function fakeGesture(name: string): FakeGesture {
       gesture.maxPointersValue = value;
       return gesture;
     },
+    numberOfTaps: (value: number) => {
+      gesture.numberOfTapsValue = value;
+      return gesture;
+    },
     simultaneousWithExternalGesture: (...gestures: FakeGesture[]) => {
       gesture.externalGestures = gestures;
       return gesture;
     },
     name,
+    onEnd: (callback: GestureCallback) => {
+      gesture.onEndCallback = callback;
+      return gesture;
+    },
     onTouchesDown: (callback: GestureCallback) => {
       gesture.onTouchesDownCallback = callback;
       return gesture;
@@ -154,6 +182,7 @@ mock.module('react-native-gesture-handler', {
     Gesture: {
       Pan: () => fakeGesture('pan'),
       Pinch: () => fakeGesture('pinch'),
+      Tap: () => fakeGesture('tap'),
       Native: () => fakeGesture('native'),
       Simultaneous: (...gestures: FakeGesture[]) => ({
         ...fakeGesture('simultaneous'),
@@ -205,8 +234,24 @@ type SurfaceProps = Readonly<{
 let PostMediaViewerSurface: ComponentType<SurfaceProps> | undefined;
 let AndroidZoomImage: ComponentType<Record<string, unknown>> | undefined;
 let AndroidPagerGesture: ComponentType<Record<string, unknown>> | undefined;
+let IOSDoubleTap: ComponentType<Record<string, unknown>> | undefined;
+type IOSDoubleTapTestProps = {
+  children?: ReactNode;
+  enabled: boolean;
+  onDoubleTap: (point: { x: number; y: number }) => void;
+};
+let iosDoubleTapProps: IOSDoubleTapTestProps | undefined;
 let renderer: ReactTestRenderer | null = null;
 let androidRenderer: ReactTestRenderer | null = null;
+
+mock.module(require.resolve('./PostMediaViewerIOSDoubleTap.tsx'), {
+  exports: {
+    IOSDoubleTap: (props: IOSDoubleTapTestProps) => {
+      iosDoubleTapProps = props;
+      return props.children ?? null;
+    },
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
 
 before(async () => {
   PostMediaViewerSurface = (await import('./PostMediaViewerSurface'))
@@ -216,6 +261,9 @@ before(async () => {
   AndroidPagerGesture = androidZoomModule.AndroidPagerGesture as ComponentType<
     Record<string, unknown>
   >;
+  IOSDoubleTap = (await import('./PostMediaViewerIOSDoubleTap.ios')).IOSDoubleTap as ComponentType<
+    Record<string, unknown>
+  >;
 });
 
 afterEach(async () => {
@@ -223,6 +271,8 @@ afterEach(async () => {
   mockWindowHeight = 844;
   mockReducedMotion = false;
   scrollCalls.length = 0;
+  zoomToCalls.length = 0;
+  iosDoubleTapProps = undefined;
   if (renderer) {
     await act(async () => renderer?.unmount());
     renderer = null;
@@ -286,8 +336,11 @@ describe('PostMediaViewerSurface', () => {
     assert.deepEqual(zoomedChanges, [true]);
 
     const pan = () => gestures()?.find((gesture) => gesture.name === 'pan');
+    const tap = () => gestures()?.find((gesture) => gesture.name === 'tap');
     assert.equal(pan()?.maxPointersValue, 1);
     assert.equal(pan()?.enabledValue, true);
+    assert.equal(tap()?.numberOfTapsValue, 2);
+    assert.equal(tap()?.externalGestures?.[0]?.name, 'native');
     await act(async () => pan()?.onStartCallback?.({}));
     await act(async () => pan()?.onUpdateCallback?.({ translationX: 9999, translationY: -9999 }));
     const animatedStyle = image.props.style[1] as () => {
@@ -298,6 +351,13 @@ describe('PostMediaViewerSurface', () => {
       { translateY: -285 },
       { scale: 2 },
     ]);
+    await act(async () => tap()?.onEndCallback?.({ x: 300, y: 100 }, true));
+    assert.deepEqual(animatedStyle().transform, [
+      { translateX: 0 },
+      { translateY: 0 },
+      { scale: 1 },
+    ]);
+    assert.deepEqual(zoomedChanges, [true, false]);
 
     await act(async () => {
       nativeRenderer.update(
@@ -329,6 +389,14 @@ describe('PostMediaViewerSurface', () => {
     );
     await act(async () => resetPinch()?.onFinalizeCallback?.({}, false));
     assert.deepEqual(zoomedChanges.at(-1), false);
+    const resetTap = () =>
+      detector()?.props.gesture.gestures.find((gesture: FakeGesture) => gesture.name === 'tap');
+    await act(async () => resetTap()?.onEndCallback?.({ x: 300, y: 100 }, true));
+    assert.deepEqual(
+      (resetImage.props.style[1] as () => { transform: Array<Record<string, number>> })().transform,
+      [{ translateX: -105 }, { translateY: 200 }, { scale: 2 }],
+    );
+    assert.deepEqual(zoomedChanges.at(-1), true);
   });
 
   it('Android image stage keeps horizontal paging without iOS zoom', async () => {
@@ -378,6 +446,31 @@ describe('PostMediaViewerSurface', () => {
     assert.equal(queryByTestId('post-media-viewer-native-pager'), null);
   });
 
+  it('iOS double-tap platform boundary forwards the native focal point', async () => {
+    const NativeDoubleTap = IOSDoubleTap;
+    assert.ok(NativeDoubleTap);
+    const points: Array<{ x: number; y: number }> = [];
+    await act(async () => {
+      renderer = create(
+        createElement(
+          NativeDoubleTap,
+          { enabled: true, onDoubleTap: (point: { x: number; y: number }) => points.push(point) },
+          createElement('View'),
+        ),
+      );
+    });
+    const detector = renderer?.root.find((node) => String(node.type) === 'GestureDetector');
+    assert.ok(detector);
+    const tap = detector.props.gesture as FakeGesture;
+    assert.equal(tap.enabledValue, true);
+    assert.equal(tap.numberOfTapsValue, 2);
+    await act(async () => tap.onEndCallback?.({ x: 120, y: 240 }, true));
+    assert.deepEqual(points, [{ x: 120, y: 240 }]);
+    await act(async () => tap.onEndCallback?.({ x: 10, y: 20 }, false));
+    assert.deepEqual(points, [{ x: 120, y: 240 }]);
+    assert.ok(renderer?.root.find((node) => String(node.type) === 'GestureHandlerRootView'));
+  });
+
   it('iOS image zoom uses the native ScrollView and locks pager while zoomed', async () => {
     mockPlatform.OS = 'ios';
     await render({ currentIndex: 0 });
@@ -400,7 +493,27 @@ describe('PostMediaViewerSurface', () => {
       minHeight: 600,
       minWidth: 390,
     });
+    assert.equal(iosDoubleTapProps?.enabled, true);
     assert.equal(pager.props.scrollEnabled, true);
+
+    await act(async () => iosDoubleTapProps?.onDoubleTap({ x: 100, y: 200 }));
+    assert.deepEqual(zoomToCalls.at(-1), {
+      animated: true,
+      height: 300,
+      width: 195,
+      x: 2.5,
+      y: 50,
+    });
+    assert.equal(byTestId('post-media-viewer-native-pager').props.scrollEnabled, false);
+    await act(async () => iosDoubleTapProps?.onDoubleTap({ x: 100, y: 200 }));
+    assert.deepEqual(zoomToCalls.at(-1), {
+      animated: true,
+      height: 600,
+      width: 390,
+      x: 0,
+      y: 0,
+    });
+    assert.equal(byTestId('post-media-viewer-native-pager').props.scrollEnabled, true);
 
     await act(async () => zoom.props.onScroll({ nativeEvent: { zoomScale: 2 } }));
     assert.equal(pager.props.scrollEnabled, false);

@@ -19,6 +19,7 @@ import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, radius, space, textStyles } from '@/theme/tokens';
 import { useToastMotion } from '@/theme/useOverlayMotion';
 import { AndroidPagerGesture, AndroidZoomImage } from './PostMediaViewerAndroidZoom';
+import { IOSDoubleTap } from './PostMediaViewerIOSDoubleTap';
 import type { ReactElement } from 'react';
 import type {
   ImageLoadEvent,
@@ -241,6 +242,8 @@ export function PostMediaViewerSurface({
                         accessibilityLabel={imageName}
                         onStatus={settle}
                         onZoomedChange={setZoomed}
+                        reducedMotion={reducedMotion}
+                        zoomed={zoomed}
                         viewportSize={mediaViewportSize}
                         status={request.status}
                         url={currentMedia.url}
@@ -459,8 +462,7 @@ function NativeMediaPager({
 }>) {
   const scroll = useRef<ScrollView>(null);
   const active = useRef(true);
-  const position = useRef({ index: currentIndex, width: viewportSize.width });
-  const initialOffset = useRef({ x: currentIndex * viewportSize.width, y: 0 });
+  const position = useRef({ index: currentIndex, width: viewportSize.width, zoomed });
   const { width, height } = viewportSize;
   useEffect(() => {
     active.current = true;
@@ -470,14 +472,14 @@ function NativeMediaPager({
   }, []);
   useEffect(() => {
     const previous = position.current;
-    if (previous.index !== currentIndex || previous.width !== width) {
+    if (previous.index !== currentIndex || previous.width !== width || previous.zoomed !== zoomed) {
       scroll.current?.scrollTo({
         x: currentIndex * width,
         animated: previous.width === width && !reducedMotion,
       });
     }
-    position.current = { index: currentIndex, width };
-  }, [currentIndex, reducedMotion, width]);
+    position.current = { index: currentIndex, width, zoomed };
+  }, [currentIndex, reducedMotion, width, zoomed]);
 
   const pager = (
     <ScrollView
@@ -489,7 +491,7 @@ function NativeMediaPager({
       disableIntervalMomentum
       scrollEnabled={media.length > 1 && !zoomed}
       showsHorizontalScrollIndicator={false}
-      contentOffset={initialOffset.current}
+      contentOffset={{ x: currentIndex * width, y: 0 }}
       onMomentumScrollEnd={(event) => {
         if (!active.current || event.nativeEvent.layoutMeasurement.width !== width || width <= 0) {
           return;
@@ -498,7 +500,7 @@ function NativeMediaPager({
           0,
           Math.min(media.length - 1, Math.round(event.nativeEvent.contentOffset.x / width)),
         );
-        position.current = { index, width };
+        position.current = { index, width, zoomed };
         if (index !== currentIndex) {
           onZoomedChange?.(false);
           onIndexChange(index);
@@ -538,22 +540,35 @@ function IOSNativeZoomImage({
   accessibilityLabel,
   onStatus,
   onZoomedChange,
+  reducedMotion,
   status,
   url,
   viewportSize,
+  zoomed,
 }: Readonly<{
   accessibilityLabel: string;
   onStatus: (status: ImageRequest['status']) => void;
   onZoomedChange: (zoomed: boolean) => void;
+  reducedMotion: boolean;
   status: ImageRequest['status'];
   url: string;
   viewportSize: ImageSize;
+  zoomed: boolean;
 }>) {
   const scroll = useRef<ScrollView>(null);
   const resetZoom = useCallback(() => {
-    scroll.current?.setNativeProps({ zoomScale: 1 });
+    scroll.current?.scrollResponderZoomTo(
+      {
+        animated: !reducedMotion,
+        height: viewportSize.height,
+        width: viewportSize.width,
+        x: 0,
+        y: 0,
+      },
+      !reducedMotion,
+    );
     onZoomedChange(false);
-  }, [onZoomedChange]);
+  }, [onZoomedChange, reducedMotion, viewportSize]);
   const handleScroll = useCallback(
     (event: { nativeEvent: { zoomScale?: number } }) => {
       onZoomedChange(status === 'ready' && (event.nativeEvent.zoomScale ?? 1) > 1);
@@ -569,37 +584,63 @@ function IOSNativeZoomImage({
     },
     [onStatus, resetZoom],
   );
+  const handleDoubleTap = useCallback(
+    (point: { x: number; y: number }) => {
+      if (zoomed) {
+        resetZoom();
+        return;
+      }
+      const width = viewportSize.width / 2;
+      const height = viewportSize.height / 2;
+      const x = Math.max(0, Math.min(viewportSize.width - width, point.x - width / 2));
+      const y = Math.max(0, Math.min(viewportSize.height - height, point.y - height / 2));
+      scroll.current?.scrollResponderZoomTo(
+        {
+          animated: !reducedMotion,
+          x,
+          y,
+          width,
+          height,
+        },
+        !reducedMotion,
+      );
+      onZoomedChange(true);
+    },
+    [onZoomedChange, reducedMotion, resetZoom, viewportSize, zoomed],
+  );
   return (
-    <ScrollView
-      bounces={false}
-      bouncesZoom={false}
-      centerContent
-      contentContainerStyle={{
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: viewportSize.height,
-        minWidth: viewportSize.width,
-      }}
-      maximumZoomScale={4}
-      minimumZoomScale={1}
-      onScroll={handleScroll}
-      pinchGestureEnabled={status === 'ready'}
-      ref={scroll}
-      scrollEventThrottle={16}
-      showsHorizontalScrollIndicator={false}
-      showsVerticalScrollIndicator={false}
-      style={viewportSize}
-      testID="post-media-viewer-ios-zoom"
-      zoomScale={1}
-    >
-      <ViewerImage
-        accessibilityLabel={accessibilityLabel}
-        onStatus={handleStatus}
-        status={status}
-        url={url}
-        viewportSize={viewportSize}
-      />
-    </ScrollView>
+    <IOSDoubleTap enabled={status === 'ready'} onDoubleTap={handleDoubleTap}>
+      <ScrollView
+        bounces={false}
+        bouncesZoom={false}
+        centerContent
+        contentContainerStyle={{
+          alignItems: 'center',
+          justifyContent: 'center',
+          minHeight: viewportSize.height,
+          minWidth: viewportSize.width,
+        }}
+        maximumZoomScale={4}
+        minimumZoomScale={1}
+        onScroll={handleScroll}
+        pinchGestureEnabled={status === 'ready'}
+        ref={scroll}
+        scrollEventThrottle={16}
+        showsHorizontalScrollIndicator={false}
+        showsVerticalScrollIndicator={false}
+        style={viewportSize}
+        testID="post-media-viewer-ios-zoom"
+        zoomScale={1}
+      >
+        <ViewerImage
+          accessibilityLabel={accessibilityLabel}
+          onStatus={handleStatus}
+          status={status}
+          url={url}
+          viewportSize={viewportSize}
+        />
+      </ScrollView>
+    </IOSDoubleTap>
   );
 }
 

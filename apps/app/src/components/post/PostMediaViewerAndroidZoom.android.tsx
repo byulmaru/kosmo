@@ -201,7 +201,45 @@ export function AndroidZoomImage({
     ],
   );
 
-  const gesture = useMemo(() => Gesture.Simultaneous(pinch, pan), [pan, pinch]);
+  const tap = useMemo(
+    () =>
+      Gesture.Tap()
+        .simultaneousWithExternalGesture(...(pagerGesture ? [pagerGesture] : []))
+        .enabled(status === 'ready')
+        .numberOfTaps(2)
+        .onEnd((event, success) => {
+          'worklet';
+          if (!success) {
+            return;
+          }
+          if (scale.value > 1) {
+            scale.value = 1;
+            offsetX.value = 0;
+            offsetY.value = 0;
+            runOnJS(syncZoomed)(false);
+            return;
+          }
+          if (!imageSize) {
+            return;
+          }
+          const nextScale = 2;
+          const focalX = event.x - viewportSize.width / 2;
+          const focalY = event.y - viewportSize.height / 2;
+          const nextOffset = clampZoomOffset(
+            { x: focalX * (1 - nextScale), y: focalY * (1 - nextScale) },
+            nextScale,
+            imageSize,
+            viewportSize,
+          );
+          scale.value = nextScale;
+          offsetX.value = nextOffset.x;
+          offsetY.value = nextOffset.y;
+          runOnJS(syncZoomed)(true);
+        }),
+    [imageSize, offsetX, offsetY, pagerGesture, scale, status, syncZoomed, viewportSize],
+  );
+
+  const gesture = useMemo(() => Gesture.Simultaneous(pinch, pan, tap), [pan, pinch, tap]);
   const animatedImageStyle = useAnimatedStyle(() => ({
     transform: [
       { translateX: offsetX.value },
