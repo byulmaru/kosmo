@@ -16,19 +16,13 @@ Featured, Profile 목록과 federation lifecycle 선택을 추적한다.
   전체 표시와 향후 Local 확장을 막는다. 기본 pin이 기존 항목을 지우거나 unpin이 다른 항목을 지우면 ordered set 계약도 깨진다.
 - Decision Outcome: pin 저장·API projection은 ordered 0..N additive collection으로 두고, eligible한 자기 작성 Active Content
   Post·Reply·Quote를 pin하면 ordered set에 추가하며 unpin은 지정한 Post만 제거한다. 현재 Local first-party UI는 server-authoritative
-  order의 첫 visible 항목만 렌더·관리한다. UI slot 교체에는 일반 pin과 같은 Profile·대상 자격과 확인 당시 current pin 기대값을
-  교체와 함께 검증한 원자적 replace를 적용하며, 이 rollout 정책은 API·저장 cardinality를 제한하지 않는다. 내부 저장 수단은
-  transaction, conditional write 또는 compare-and-swap 중 기존 persistence 경계에 맞는 방식을 선택한다. 같은 pin과 이미 없는 unpin은 idempotent success no-op이고,
-  UI slot expected-current 불일치는 저장 상태를 바꾸지 않는 stale/conflict 결과다. 교체 대상이 다른 위치에 이미 pinned면 그
-  관계를 current slot으로 이동하고 기존 current 관계를 제거하며, 중복 없이 나머지 관계의 상대 순서를 보존한다. 새 pin에는 기존 pin의 상대 순서를 보존한 한
-  위치를 원자적으로 부여하고 관계 변경이 없으면 같은 authoritative order를 반환한다. 새 pin의 앞·뒤 배치와 별도 재정렬 UX는
-  현재 범위에서 고정하지 않는다.
-- Alternatives Considered: UI confirmation만 신뢰하는 방식은 stale 요청 보호가 없으므로 선택하지 않는다. 저장·API를 Local
-  단일 scalar로 고정하거나 기본 pin을 replacement로 정의하는 방식은 ordered additive collection 계약과 달라 선택하지 않는다.
+  order의 첫 visible 항목만 렌더·관리한다. 같은 pin과 이미 없는 unpin은 idempotent success no-op이다. 임의 삽입·재정렬·current-slot
+  replacement는 reorder UI 계약이 생길 때 별도 도입한다.
+- Alternatives Considered: 저장·API를 Local 단일 scalar로 고정하거나 기본 pin을 replacement로 정의하는 방식은 ordered additive
+  collection 계약과 달라 선택하지 않는다.
 - Consequences: add/unpin mutation은 지정한 관계만 변경하고 Mentioned Profiles·pure Repost·타인 작성 Post는 저장 경계 전에
-  거부해야 한다. UI slot replace도 같은 자격을 재검증하고 current expected value와 transaction 경계를 보존해야 한다.
-- Confirmation / Follow-up: 구현 PR의 DB/core/API 검증에서 additive multi-pin, 지정 항목 unpin, UI slot replacement, stale
-  confirmation과 idempotent no-op을 증명한다.
+  거부해야 한다.
+- Confirmation / Follow-up: 구현 PR의 DB/core/API 검증에서 additive multi-pin, 지정 항목 unpin, 동시 pin과 idempotent no-op을 증명한다.
 
 ### Remote Profile은 검증된 Featured collection의 ordered set을 보존한다
 
@@ -90,7 +84,7 @@ Featured, Profile 목록과 federation lifecycle 선택을 추적한다.
 - Context / Problem: Featured collection을 새 visibility·delivery 경계로 만들면 Local Note와 Followers Only authorization이
   분기되고 pin commit과 Actor update가 서로 다른 lifecycle을 갖게 된다.
 - Decision Outcome: Featured collection membership과 Note는 기존 Local Note projection·authorization을 재사용하고, Local
-  pin/unpin/replacement commit 이후 기존 Profile Update(Person) delivery lifecycle을 호출한다. 연속된 commit은 최신 current
+  pin/unpin commit 이후 기존 Profile Update(Person) delivery lifecycle을 호출한다. 연속된 commit은 최신 current
   representation delivery로 병합할 수 있고 commit별 1:1 delivery나 완료 시간 SLA는 요구하지 않는다. 구체 file, function,
   GraphQL shape와 persistence schema는 고정하지 않는다.
 - Alternatives Considered: Featured 전용 Note serializer·권한 predicate·delivery pipeline을 새로 만드는 방식은 중복된
@@ -105,4 +99,9 @@ Featured, Profile 목록과 federation lifecycle 선택을 추적한다.
 
 ## Superseded Decisions
 
-- 없음.
+### current first-visible slot expected-current replacement API
+
+- Superseded Date: 2026-09-23
+- Superseded By: 사용자 승인 및 PROD-973 계약 갱신
+- Reason: production caller가 없고 reorder UI 계약이 정해지지 않아 additive pin/unpin만 유지한다. 임의 삽입·재정렬·replacement는
+  해당 UI 계약이 생길 때 별도 결정한다.
