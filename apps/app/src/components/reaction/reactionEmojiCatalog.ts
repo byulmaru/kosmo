@@ -90,6 +90,11 @@ export const reactionEmojiCatalog: readonly ReactionEmojiCatalogOption[] = emoji
     });
   });
 
+const baseEmojiValues = new Set(emojiData.map((entry) => toEmoji(entry.unified)));
+export const reactionEmojiPickerOptions = reactionEmojiCatalog.filter(({ id }) =>
+  baseEmojiValues.has(id),
+);
+
 const reactionEmojiAssets = new Map<string, ReactionEmojiAsset>(
   reactionEmojiCatalog.map(({ assetFormat, assetPath, id }) => [
     id,

@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { FullReactionPicker } from '@/components/reaction/FullReactionPicker';
-import { reactionEmojiCatalog } from '@/components/reaction/reactionEmojiCatalog';
+import {
+  reactionEmojiCatalog,
+  reactionEmojiPickerOptions,
+} from '@/components/reaction/reactionEmojiCatalog';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type {
   FullReactionPickerOption,
@@ -411,11 +414,11 @@ export const InteractionContract: Story = {
 };
 
 export const VirtualizedCatalogContract: Story = {
-  args: { options: reactionEmojiCatalog },
+  args: { options: reactionEmojiPickerOptions },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     expect(canvas.getAllByRole('button', { name: /활짝 웃는 얼굴/ }).length).toBeGreaterThan(0);
-    expect(canvas.getAllByRole('button').length).toBeLessThan(reactionEmojiCatalog.length);
+    expect(canvas.getAllByRole('button').length).toBeLessThan(reactionEmojiPickerOptions.length);
   },
 };
 
