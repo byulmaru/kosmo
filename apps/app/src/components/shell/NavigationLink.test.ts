@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement, useEffect } from 'react';
 import { act, create } from 'react-test-renderer';
@@ -38,6 +39,11 @@ type RenderedLinkProps = {
   onPress?: LinkPress;
 };
 
+const require = createRequire(import.meta.url);
+const { Slot } = createRequire(require.resolve('expo-router/build/ui/Slot'))(
+  '@radix-ui/react-slot',
+);
+
 const navigations: string[] = [];
 const routerActions: Array<{ href: string; mode: 'navigate' | 'push' | 'replace' }> = [];
 const platform: { OS: 'web' | 'ios' } = { OS: 'web' };
@@ -65,7 +71,7 @@ mockModule('expo-router', {
       }
     };
     rootLinkPress = props.onPress;
-    return createElement('Link', props, props.children);
+    return createElement(Slot, { href: props.href, style: undefined }, props.children);
   },
   useRouter: () => ({
     navigate: (href: string) => {
@@ -151,6 +157,7 @@ const renderLink = async (
   handler: NavigationRequestHandler,
   onNavigate?: () => void,
   options: {
+    child?: Parameters<typeof NavigationLinkExport>[0]['children'];
     current?: boolean;
     href?: Href;
     navigationMode?: 'push' | 'switch';
@@ -170,7 +177,7 @@ const renderLink = async (
           createElement(GuardRegistrar, { handler }),
           createElement(NavigationLink, {
             current: options.current,
-            children: createElement(TestPressable),
+            children: options.child ?? createElement(TestPressable),
             href: options.href ?? '/timeline',
             navigationMode: options.navigationMode,
             onNavigate,
@@ -187,6 +194,27 @@ const renderLink = async (
 };
 
 describe('NavigationLink', () => {
+  it('실제 Slot을 거친 링크도 자식의 기본·pressed 스타일을 유지한다', async () => {
+    await renderLink(() => false, undefined, {
+      child: createElement('Pressable', {
+        style: ({ pressed }: { pressed: boolean }) => ({
+          backgroundColor: '#141414',
+          borderWidth: 1,
+          opacity: pressed ? 0.85 : 1,
+        }),
+      }),
+    });
+    const control = renderer!.root.findAll((node) => (node.type as unknown) === 'Pressable')[0]!;
+    assert.equal(control.props.href, '/timeline');
+    for (const pressed of [false, true]) {
+      assert.deepEqual(Object.assign({}, ...control.props.style({ pressed })), {
+        backgroundColor: '#141414',
+        borderWidth: 1,
+        opacity: pressed ? 0.85 : 1,
+      });
+    }
+  });
+
   it('guard가 이탈을 보류하면 기본 Link를 막고 승인된 action만 실행한다', async () => {
     let pendingAction: GuardedNavigationAction | null = null;
     const onNavigate = mock.fn();
