@@ -1,12 +1,4 @@
-import {
-  copyFile,
-  lstat,
-  mkdir,
-  readdir,
-  readFile,
-  rm,
-  writeFile,
-} from 'node:fs/promises';
+import { copyFile, lstat, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 
@@ -21,8 +13,7 @@ const uploadDirectory = path.resolve(uploadPath);
 const isWithin = (parent, child) => {
   const relativePath = path.relative(parent, child);
   return (
-    relativePath === '' ||
-    (!relativePath.startsWith(`..${path.sep}`) && relativePath !== '..')
+    relativePath === '' || (!relativePath.startsWith(`..${path.sep}`) && relativePath !== '..')
   );
 };
 
@@ -55,9 +46,7 @@ const walkFiles = async (directory) => {
 };
 
 const exportFiles = await walkFiles(exportDirectory);
-const bundlePaths = exportFiles
-  .filter((filePath) => /\.(?:js|hbc)$/.test(filePath))
-  .sort();
+const bundlePaths = exportFiles.filter((filePath) => /\.(?:js|hbc)$/.test(filePath)).sort();
 const mapPaths = exportFiles.filter((filePath) => filePath.endsWith('.map')).sort();
 
 if (bundlePaths.length === 0) {
