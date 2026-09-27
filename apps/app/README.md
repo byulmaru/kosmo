@@ -23,6 +23,22 @@ After a successful callback, native login sends only the authorization code, PKC
 
 Native projects are generated with `expo prebuild --clean`; they are not source-of-truth files.
 
+### iOS build tools
+
+Use Ruby 3.4 (the CI version) and the CocoaPods 1.17.0 version locked in `Gemfile.lock` via `bundle exec pod install`. macOS's system Ruby is not the CI toolchain. Run `xcodebuild -version` and `swift --version` when reporting a native build failure: the `macos-26` CI runner does not pin an Xcode version.
+
+Expo SDK 56's `expo-modules-jsi` is locked to 56.0.13, which includes the [explicit C setter pointer fix](https://github.com/expo/expo/pull/46736) needed for the observed Xcode 27 / Swift 6.4 compilation failure. Install with `pnpm install --frozen-lockfile`; do not patch generated iOS files or `node_modules` to apply that fix.
+
+The local `withIosResourceBundleDeploymentTarget` config plugin raises explicitly lower Pod resource bundle deployment targets to the existing Expo SDK 56 minimum, iOS 16.4. Xcode 27 rejects the old iOS 12–13 targets left by some Pods; the app's deployment target alone does not update those resource bundles. Higher, inherited, and unset values remain unchanged.
+
+Run its focused regression check with `node apps/app/plugins/withIosResourceBundleDeploymentTarget.test.cjs` from the repository root (Ruby must be on `PATH`, or set `KOSMO_RUBY`). It executes the generated Podfile hook and checks repeat application and target preservation.
+
+For a reproducible SDK 56 clean project, specify the matching template: `pnpm --filter @kosmo/app exec expo prebuild --clean --platform ios --template expo-template-bare-minimum@56.0.36`. The installed Expo 56.0.14 tarball's bundled template identifies itself as SDK 57, so an implicit template does not provide the same validation baseline.
+
+A normal iOS prebuild also requires `KOSMO_IOS_GOOGLE_SERVICES_FILE` to point to the Firebase plist. A build that temporarily excludes Firebase only validates that reduced configuration, not the production app. The successful 2026-09-22 [Release/device CI build](https://github.com/byulmaru/kosmo/actions/runs/35740298451/job/106787998544) used Xcode 26.6; it does not establish Xcode 27 Debug/simulator compatibility.
+
+On 2026-09-27, the Firebase-excluded configuration passed a clean SDK 56 prebuild and Debug simulator build with Xcode 27.0 (27A266a), Swift 6.4, and CocoaPods 1.17.0 running on Homebrew Ruby 4.0.6. The separate QA app installed and launched on iOS 26.5 without a command-line deployment-target override. This does not verify the Firebase-enabled app, Release/device build, UI behavior, or the CI Ruby 3.4 toolchain.
+
 ## Android Google Play internal and closed testing (Alpha)
 
 `Native Store Distribution`의 Android job은 `main`에서 수동 실행하는 protected workflow의 일부다. 하나의 dispatch가 Android와 iOS job을 함께 시작하며 두 job은 서로 독립적으로 실행된다. 매 실행마다 clean CNG Android project를 만들고, Fastlane이 upload key로 서명한 Release AAB를 한 번 빌드·업로드한 뒤 첫 Play edit에서 반환된 versionCode를 Google Play internal track에 지정하고 commit한다. 이어서 새 Play edit에서 같은 versionCode를 closed testing의 Alpha track에 지정하고 commit한다. Play가 package name, versionCode, upload certificate를 검증한다. versionCode는 고정 기준값 `210579434`에 GitHub Actions `run_number`를 더해 계산하므로 새 workflow run마다 증가하고, 같은 run의 재실행에서는 같은 값을 유지한다. 결과는 양의 정수이며 Android signed 32-bit 범위 안에 있다. 이미 업로드에 성공한 run을 재실행하면 같은 versionCode를 다시 사용하므로 새 AAB를 업로드할 수 없다. 새 versionCode가 필요하면 새 workflow run을 시작한다. Play API를 미리 조회하거나 장기 credential을 저장하지 않는다.

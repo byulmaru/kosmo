@@ -98,6 +98,7 @@ const config: ExpoConfig = {
         },
       },
     ],
+    './plugins/withIosResourceBundleDeploymentTarget',
     [
       '@sentry/react-native/expo',
       {
