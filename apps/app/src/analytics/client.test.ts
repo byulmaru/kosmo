@@ -325,6 +325,29 @@ describe('PostHog Web client', () => {
     ]);
   });
 
+  it('Reaction event는 PostHog Account identity가 정확히 일치할 때만 capture한다', () => {
+    analytics.clearAnalytics();
+    const instance = instances[0];
+    assert.ok(instance);
+    instance.setPersistedIdentity('account-a');
+    const properties = {
+      reaction_type: 'default' as const,
+      emoji_kind: 'unicode' as const,
+      reaction_emoji_key: 'unicode:2764-fe0f',
+    };
+
+    analytics.trackAnalyticsForAccount('account-a', 'reaction_added', properties);
+    analytics.trackAnalyticsForAccount('account-b', 'reaction_added', properties);
+    instance.distinctId = 'stale-distinct-id';
+    analytics.trackAnalyticsForAccount('account-a', 'reaction_removed', properties);
+    instance.distinctId = 'account-a';
+    instance.userId = undefined;
+    analytics.trackAnalyticsForAccount('account-a', 'reaction_removed', properties);
+
+    assert.deepEqual(instance.calls, [{ event: 'reaction_added', properties }]);
+    assert.equal(instance.captureAttempts, 1);
+  });
+
   it('초기화·capture·identity 실패를 제품 흐름으로 전파하지 않는다', async () => {
     constructorFails = true;
     assert.doesNotThrow(() => analytics.clearAnalytics());

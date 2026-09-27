@@ -23,17 +23,19 @@ type MutationRequest = {
 };
 
 type Session = {
+  accountId: string | null;
   selectedProfileId: string | null;
   status: 'guest' | 'valid';
 };
 
 const session: Session = {
+  accountId: 'account-a',
   selectedProfileId: 'profile-a',
   status: 'valid',
 };
 const analyticsCalls: unknown[][] = [];
 const mutationRequests: MutationRequest[] = [];
-const relayEnvironment = {};
+let relayEnvironment = {};
 let fragmentData: unknown;
 let renderer: ReactTestRenderer | null = null;
 
@@ -103,6 +105,8 @@ mockModule('relay-runtime', {
 });
 mockModule('@/analytics/client', {
   trackAnalytics: (...args: unknown[]) => analyticsCalls.push(args),
+  trackAnalyticsForAccount: (accountId: string, ...args: unknown[]) =>
+    analyticsCalls.push([accountId, ...args]),
 });
 mockModule('@/components/ui/ActionMenu', { ActionMenu: MockActionMenu });
 mockModule('@/components/ui/ToastProvider', {
@@ -156,8 +160,10 @@ before(async () => {
 });
 
 beforeEach(() => {
+  session.accountId = 'account-a';
   session.selectedProfileId = 'profile-a';
   session.status = 'valid';
+  relayEnvironment = {};
   analyticsCalls.length = 0;
   mutationRequests.length = 0;
   fragmentData = undefined;
@@ -307,11 +313,115 @@ describe('Post interaction analytics callbacks', () => {
       ]),
     );
 
+    await act(async () =>
+      controller.toggleReaction({ nextSelected: true, optionId: 'custom:party' }),
+    );
+    const unmappedRequest = lastMutationRequest();
+    await act(async () =>
+      unmappedRequest.onCompleted?.(reactionAddResponse('custom:party', 'reaction-custom')),
+    );
+
     assert.deepEqual(analyticsCalls, [
-      ['reaction_added', { reaction_type: 'default' }],
-      ['reaction_added', { reaction_type: 'custom' }],
-      ['reaction_removed', { reaction_type: 'default' }],
+      [
+        'account-a',
+        'reaction_added',
+        {
+          reaction_type: 'default',
+          emoji_kind: 'unicode',
+          reaction_emoji_key: 'unicode:2764-fe0f',
+        },
+      ],
+      [
+        'account-a',
+        'reaction_added',
+        {
+          reaction_type: 'custom',
+          emoji_kind: 'unicode',
+          reaction_emoji_key: 'unicode:1f389',
+        },
+      ],
+      [
+        'account-a',
+        'reaction_removed',
+        {
+          reaction_type: 'default',
+          emoji_kind: 'unicode',
+          reaction_emoji_key: 'unicode:2764-fe0f',
+        },
+      ],
+      ['account-a', 'reaction_added', { reaction_type: 'custom' }],
     ]);
+  });
+
+  it('Profile이 바뀌어도 같은 Account의 늦은 성공 응답을 기록한다', async () => {
+    fragmentData = {
+      id: 'post-id',
+      profile: { relativeHandle: '@author@example.test' },
+      reactionCounts: [],
+      viewerReactions: [],
+    };
+
+    await act(async () => {
+      renderer = create(createElement(ReactionHarness));
+    });
+    const controller = renderer!.root.findByType('ReactionHarness' as never).props;
+    await act(async () => controller.toggleReaction({ nextSelected: true, optionId: '🎉' }));
+    const request = lastMutationRequest();
+
+    session.selectedProfileId = 'profile-b';
+    relayEnvironment = {};
+    await act(async () => renderer?.update(createElement(ReactionHarness)));
+    await act(async () => request.onCompleted?.(reactionAddResponse('🎉', 'reaction-party')));
+
+    assert.deepEqual(analyticsCalls, [
+      [
+        'account-a',
+        'reaction_added',
+        { reaction_type: 'custom', emoji_kind: 'unicode', reaction_emoji_key: 'unicode:1f389' },
+      ],
+    ]);
+  });
+
+  it('Account 전환 뒤 이전 요청의 성공 응답을 새 Account 이벤트로 기록하지 않는다', async () => {
+    fragmentData = {
+      id: 'post-id',
+      profile: { relativeHandle: '@author@example.test' },
+      reactionCounts: [],
+      viewerReactions: [],
+    };
+
+    await act(async () => {
+      renderer = create(createElement(ReactionHarness));
+    });
+    const controller = renderer!.root.findByType('ReactionHarness' as never).props;
+    await act(async () => controller.toggleReaction({ nextSelected: true, optionId: '❤️' }));
+    const request = lastMutationRequest();
+
+    session.accountId = 'account-b';
+    session.selectedProfileId = 'profile-b';
+    relayEnvironment = {};
+    await act(async () => renderer?.update(createElement(ReactionHarness)));
+    await act(async () => request.onCompleted?.(reactionAddResponse('❤️', 'reaction-heart')));
+
+    assert.deepEqual(analyticsCalls, []);
+  });
+
+  it('Reaction 성공 payload가 없으면 이벤트를 기록하지 않는다', async () => {
+    fragmentData = {
+      id: 'post-id',
+      profile: { relativeHandle: '@author@example.test' },
+      reactionCounts: [],
+      viewerReactions: [],
+    };
+
+    await act(async () => {
+      renderer = create(createElement(ReactionHarness));
+    });
+    const controller = renderer!.root.findByType('ReactionHarness' as never).props;
+    await act(async () => controller.toggleReaction({ nextSelected: true, optionId: '❤️' }));
+    await act(async () => lastMutationRequest().onCompleted?.({ addReaction: null }));
+
+    assert.deepEqual(analyticsCalls, []);
   });
 
   it('network 오류와 성공 payload 누락·불일치는 이벤트를 기록하지 않는다', async () => {
