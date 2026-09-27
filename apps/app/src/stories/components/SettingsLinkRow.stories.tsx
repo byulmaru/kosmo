@@ -8,6 +8,7 @@ function SettingsLinkRowComparison() {
     <View style={{ width: '100%' }}>
       <SettingsLinkRow
         accessibilityLabel="긴 레이블 설정 열기"
+        currentPage={false}
         href="/settings/default-post-visibility"
         label="게시물 기본 공개 범위를 아주 긴 설정 레이블로 확인하기"
         primary
@@ -110,7 +111,8 @@ export const RepresentativeStates: Story = {
     });
 
     await expect(selected).toHaveAttribute('href', '/settings/default-post-visibility');
-    await expect(selected).toHaveAttribute('aria-current', 'page');
+    await expect(selected).toHaveAttribute('aria-selected', 'true');
+    await expect(selected).not.toHaveAttribute('aria-current');
     await expect(external).toHaveAttribute('href', 'https://id.byulmaru.co');
     await expect(external).not.toHaveAttribute('aria-current');
   },

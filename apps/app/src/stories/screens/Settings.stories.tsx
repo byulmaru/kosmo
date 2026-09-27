@@ -63,7 +63,8 @@ export const FullMasterDetail: Story = {
     expect(canvas.getByRole('heading', { name: '게시물 기본 공개 범위' })).toBeVisible();
     expect(account).toHaveAttribute('href', BYULMARU_ID_ACCOUNT_SETTINGS_URL);
     expect(profileEntry).toHaveAttribute('href', '/settings/default-post-visibility');
-    expect(profileEntry).toHaveAttribute('aria-current', 'page');
+    expect(profileEntry).toHaveAttribute('aria-selected', 'true');
+    expect(profileEntry).not.toHaveAttribute('aria-current');
     expect(
       canvas.getByRole('radiogroup', {
         name: 'Kosmo 내부 Profile 현재 Profile @settings-owner 기본 게시 공개 범위',
