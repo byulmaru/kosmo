@@ -4,10 +4,7 @@ import { StyleSheet, View } from 'react-native';
 import { PageHeader } from '@/components/PageHeader';
 import { SettingsLinkRow } from '@/components/settings/SettingsLinkRow';
 import { returnToSettingsParent } from '@/components/settings/settingsNavigation';
-import {
-  useSettingsDetailHeaderMode,
-  useSettingsNavigationState,
-} from '@/components/settings/SettingsRouteContext';
+import { useSettingsDetailHeaderMode } from '@/components/settings/SettingsRouteContext';
 import { IconButton } from '@/components/ui/IconButton';
 import { RouteScrollContainer } from '@/components/ui/RouteScrollContainer';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -17,12 +14,11 @@ export default function SettingsInfoRoute() {
   const router = useRouter();
   const theme = useTheme();
   const detailHeaderMode = useSettingsDetailHeaderMode();
-  const navigationState = useSettingsNavigationState();
   const backButton =
     detailHeaderMode === 'back' ? (
       <IconButton
         accessibilityLabel="설정으로 돌아가기"
-        onPress={() => returnToSettingsParent('/settings/info', router, navigationState)}
+        onPress={() => returnToSettingsParent('/settings/info', router)}
         style={styles.backButton}
         targetSize={44}
       >

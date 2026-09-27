@@ -69,10 +69,6 @@ export function usePathname() {
   return useContext(RouterContext).pathname;
 }
 
-export function useRootNavigationState() {
-  return null;
-}
-
 export function useSegments() {
   return useContext(RouterContext).segments;
 }
@@ -90,6 +86,7 @@ export function useRouter() {
   return useMemo(
     () => ({
       back: () => undefined,
+      dismissTo: setPathname,
       push: setPathname,
       replace: setPathname,
     }),

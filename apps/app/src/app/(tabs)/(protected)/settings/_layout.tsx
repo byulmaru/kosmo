@@ -1,4 +1,4 @@
-import { Slot, Stack, usePathname, useRootNavigationState } from 'expo-router';
+import { Slot, Stack, usePathname } from 'expo-router';
 import { Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { PageHeader } from '@/components/PageHeader';
 import { SettingsNavigationList } from '@/components/settings/SettingsNavigationList';
@@ -22,7 +22,6 @@ export default function SettingsLayout() {
 
 export function SettingsRouteLayout({ children }: { children?: ReactNode }) {
   const pathname = usePathname();
-  const navigationState = useRootNavigationState();
   const theme = useTheme();
   const { width } = useWindowDimensions();
   const web = Platform.OS === 'web';
@@ -43,14 +42,14 @@ export function SettingsRouteLayout({ children }: { children?: ReactNode }) {
 
   if (layout === 'full') {
     return (
-      <SettingsRouteProvider detailHeaderMode={detailHeaderMode} navigationState={navigationState}>
+      <SettingsRouteProvider detailHeaderMode={detailHeaderMode}>
         <View style={styles.workspace} testID="settings-workspace">
           <View
             style={[styles.masterPane, { borderColor: theme.border }]}
             testID="settings-master-pane"
           >
             <PageHeader title="설정" />
-            <SettingsNavigationList selected={selected} />
+            <SettingsNavigationList pathname={pathname} selected={selected} />
           </View>
           <View style={styles.detailPane} testID="settings-detail-pane">
             {children}
@@ -61,7 +60,7 @@ export function SettingsRouteLayout({ children }: { children?: ReactNode }) {
   }
 
   return (
-    <SettingsRouteProvider detailHeaderMode={detailHeaderMode} navigationState={navigationState}>
+    <SettingsRouteProvider detailHeaderMode={detailHeaderMode}>
       {web ? (
         <View style={styles.onePane}>{children}</View>
       ) : (

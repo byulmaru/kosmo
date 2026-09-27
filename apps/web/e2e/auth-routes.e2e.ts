@@ -622,6 +622,9 @@ test.describe('로그인 사용자 보호 라우트', () => {
     await expect(page).toHaveURL(/\/settings\/?$/);
     await expect(page.getByRole('heading', { name: '게시물 기본 공개 범위' })).toHaveCount(0);
 
+    await page.goBack();
+    await expect(page).toHaveURL(/\/home$/);
+
     await page.goto('/settings');
     await expect(page).toHaveURL(/\/settings\/?$/);
     await expect(page.getByRole('heading', { name: '설정' })).toBeVisible();
@@ -647,6 +650,7 @@ test.describe('로그인 사용자 보호 라우트', () => {
   test('900px direct Settings nested back은 category를 거쳐 root로 돌아간다', async ({ page }) => {
     await page.setViewportSize({ height: 900, width: 900 });
 
+    await page.goto('/home');
     await page.goto('/settings/blocked-profiles');
     await expect(page).toHaveURL(/\/settings\/blocked-profiles$/);
 
@@ -656,6 +660,9 @@ test.describe('로그인 사용자 보호 라우트', () => {
     await page.getByRole('button', { name: '설정으로 돌아가기' }).click();
     await expect(page).toHaveURL(/\/settings\/?$/);
     await expect(page.getByRole('heading', { name: '설정' })).toBeVisible();
+
+    await page.goBack();
+    await expect(page).toHaveURL(/\/home$/);
   });
 
   test('full Web Settings cross-master back은 root로 돌아가고 두 단계 forward로 상세를 복원한다', async ({

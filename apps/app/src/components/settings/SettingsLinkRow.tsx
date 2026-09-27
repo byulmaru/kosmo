@@ -11,6 +11,7 @@ import type { ViewStyle } from 'react-native';
 
 export type SettingsLinkRowProps = {
   accessibilityLabel: string;
+  currentPage?: boolean;
   description?: string;
   external?: boolean;
   href: Href;
@@ -23,6 +24,7 @@ export type SettingsLinkRowProps = {
 
 export function SettingsLinkRow({
   accessibilityLabel,
+  currentPage = false,
   description,
   external = false,
   href,
@@ -42,7 +44,7 @@ export function SettingsLinkRow({
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="link"
       accessibilityState={{ selected }}
-      aria-current={selected ? 'page' : undefined}
+      aria-current={currentPage ? 'page' : undefined}
       onBlur={() => setFocusVisible(false)}
       onFocus={(event) => {
         if (!web) {

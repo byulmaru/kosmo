@@ -5,9 +5,13 @@ import { SettingsLinkRow } from './SettingsLinkRow';
 
 type SettingsDestination = 'default-post-visibility' | 'mute-and-block' | 'info';
 
-export function SettingsNavigationList({ selected }: { selected?: SettingsDestination }) {
-  const current = selected === 'default-post-visibility';
-
+export function SettingsNavigationList({
+  pathname,
+  selected,
+}: {
+  pathname?: string;
+  selected?: SettingsDestination;
+}) {
   return (
     <View
       accessibilityLabel="설정 목록"
@@ -20,13 +24,15 @@ export function SettingsNavigationList({ selected }: { selected?: SettingsDestin
         href="/settings/default-post-visibility"
         label="게시물 기본 공개 범위"
         primary
-        selected={current}
+        currentPage={pathname === '/settings/default-post-visibility'}
+        selected={selected === 'default-post-visibility'}
       />
       <SettingsLinkRow
         accessibilityLabel="뮤트 및 차단 설정 열기"
         href="/settings/mute-and-block"
         label="뮤트 및 차단"
         primary
+        currentPage={pathname === '/settings/mute-and-block'}
         selected={selected === 'mute-and-block'}
       />
       <SettingsLinkRow
@@ -34,6 +40,7 @@ export function SettingsNavigationList({ selected }: { selected?: SettingsDestin
         href="/settings/info"
         label="정보"
         primary
+        currentPage={pathname === '/settings/info'}
         selected={selected === 'info'}
       />
     </View>
