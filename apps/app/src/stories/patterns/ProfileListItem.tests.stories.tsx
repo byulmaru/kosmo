@@ -31,6 +31,23 @@ export const BioVisibilityContract: Story = {
   },
 };
 
+export const BioPrivacyContract: Story = {
+  args: { showBio: true },
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const boundary = canvas.getByTestId('profile-bio-privacy');
+    expect(boundary).toHaveClass('ph-mask', 'ph-no-capture');
+    expect(boundary).toHaveStyle({ display: 'contents' });
+    expect(within(boundary).getByText(longBio)).toBeVisible();
+    expect(boundary).not.toHaveTextContent('긴 소개 프로필');
+    expect(boundary).not.toHaveTextContent('@with-bio');
+    expect(canvas.getByText('긴 소개 프로필')).toBeVisible();
+    expect(canvas.getByText('@with-bio')).toBeVisible();
+    expect(canvas.getByRole('link')).toHaveAttribute('href', '/@with-bio');
+    expect(canvas.getByRole('button', { name: '팔로우' })).toBeVisible();
+  },
+};
+
 export const HitAreaContract: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
   parameters: { relay: { mutationError: 'Follow action contract check' } },
