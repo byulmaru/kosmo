@@ -20,7 +20,10 @@ const exportDirectory = path.resolve(exportPath);
 const uploadDirectory = path.resolve(uploadPath);
 const isWithin = (parent, child) => {
   const relativePath = path.relative(parent, child);
-  return relativePath === '' || (!relativePath.startsWith(`..${path.sep}`) && relativePath !== '..');
+  return (
+    relativePath === '' ||
+    (!relativePath.startsWith(`..${path.sep}`) && relativePath !== '..')
+  );
 };
 
 if (isWithin(exportDirectory, uploadDirectory) || isWithin(uploadDirectory, exportDirectory)) {
