@@ -2,9 +2,12 @@ import { View } from 'react-native';
 import { expect, spyOn, userEvent, within } from 'storybook/test';
 import SettingsRoute from '@/app/(tabs)/(protected)/settings';
 import { SettingsRouteLayout } from '@/app/(tabs)/(protected)/settings/_layout';
+import SettingsThemeRoute from '@/app/(tabs)/(protected)/settings/theme';
 import { BYULMARU_ID_ACCOUNT_SETTINGS_URL } from '@/components/settings/ByulmaruIdAccountSettingsEntry';
 import { SettingsProfileDetail } from '@/components/settings/SettingsProfileDetail';
 import { colors } from '@/theme/tokens';
+import { ThemePreferenceProvider } from '@/theme/ThemePreferenceProvider';
+import { useTheme } from '@/theme/ThemeProvider';
 import { profile } from '../fixtures';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
@@ -110,6 +113,31 @@ export const CompactRootFirst: Story = {
     ).not.toHaveAttribute('aria-current');
   },
 };
+
+export const ThemeDetail: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: {
+    controls: { disable: true },
+    router: { pathname: '/settings/theme' },
+  },
+  render: () => (
+    <ThemePreferenceProvider>
+      <ThemeStoryCanvas />
+    </ThemePreferenceProvider>
+  ),
+};
+
+function ThemeStoryCanvas() {
+  const theme = useTheme();
+
+  return (
+    <View style={{ backgroundColor: theme.backgroundCanvas, flex: 1, minHeight: '100%' }}>
+      <SettingsRouteLayout>
+        <SettingsThemeRoute />
+      </SettingsRouteLayout>
+    </View>
+  );
+}
 
 export const NoSelectedProfile: Story = {
   parameters: {

@@ -688,6 +688,85 @@ test.describe('로그인 사용자 보호 라우트', () => {
     await expect(page.getByRole('heading', { name: '정보' })).toBeVisible();
   });
 
+  test('테마 설정은 라디오 선택과 저장된 resolved theme을 유지한다', async ({ page }) => {
+    await page.setViewportSize({ height: 900, width: 768 });
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.goto('/settings/theme');
+    await page.evaluate(() => localStorage.removeItem('kosmo.theme-preference'));
+    await page.reload();
+
+    await expect(page).toHaveURL(/\/settings\/theme$/);
+    await expect(page.getByRole('heading', { exact: true, name: '테마' })).toBeVisible();
+    await expect(page.getByRole('radio')).toHaveCount(3);
+    await expect(
+      page.getByRole('radio', { name: '시스템: 기기 색상 모드를 따라요.' }),
+    ).toBeChecked();
+    await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#FFFFFF');
+
+    await page.getByRole('radio', { name: '다크' }).click();
+    await expect(page.getByRole('radio', { name: '다크' })).toBeChecked();
+    await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#000000');
+
+    await page.goto('/settings');
+    await expect(page.getByRole('link', { name: '테마 설정 열기' })).toContainText('다크');
+    await page.reload();
+    await expect(page.getByRole('link', { name: '테마 설정 열기' })).toContainText('다크');
+    await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#000000');
+
+    await page.getByRole('link', { name: '테마 설정 열기' }).click();
+    await page.getByRole('radio', { name: '시스템: 기기 색상 모드를 따라요.' }).click();
+    await expect(
+      page.getByRole('radio', { name: '시스템: 기기 색상 모드를 따라요.' }),
+    ).toBeChecked();
+    await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#FFFFFF');
+
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await expect
+      .poll(() => page.locator('meta[name="theme-color"]').getAttribute('content'))
+      .toBe('#000000');
+
+    await page.getByRole('button', { name: '설정으로 돌아가기' }).click();
+    await expect(page).toHaveURL(/\/settings\/?$/);
+    await page.goForward();
+    await expect(page).toHaveURL(/\/settings\/theme$/);
+    await expect(page.getByRole('heading', { exact: true, name: '테마' })).toBeVisible();
+  });
+
+  test('테마 설정 저장소 오류는 Toast를 보이고 현재 선택을 유지한다', async ({ page }) => {
+    await page.addInitScript(() => {
+      const storageKey = 'kosmo.theme-preference';
+      const getItem = Storage.prototype.getItem;
+      const setItem = Storage.prototype.setItem;
+
+      Storage.prototype.getItem = function (key) {
+        if (key === storageKey) {
+          throw new Error('theme read failed');
+        }
+        return getItem.call(this, key);
+      };
+      Storage.prototype.setItem = function (key, value) {
+        if (key === storageKey) {
+          throw new Error('theme write failed');
+        }
+        return setItem.call(this, key, value);
+      };
+    });
+
+    await page.goto('/settings/theme');
+    await expect(
+      page.getByRole('radio', { name: '시스템: 기기 색상 모드를 따라요.' }),
+    ).toBeChecked();
+    await expect(page.getByRole('alert')).toContainText(
+      '테마 설정을 불러오지 못했어요. 시스템 설정으로 시작합니다.',
+    );
+
+    await page.getByRole('radio', { name: '다크' }).click();
+    await expect(page.getByRole('radio', { name: '다크' })).toBeChecked();
+    await expect(page.getByRole('alert')).toContainText(
+      '테마 설정을 저장하지 못했어요. 현재 선택은 유지됩니다.',
+    );
+  });
+
   for (const route of protectedHeadingRoutes) {
     test(`${route.path}에서 보호 shell과 페이지 heading을 본다`, async ({ page }) => {
       await page.goto(route.path);
