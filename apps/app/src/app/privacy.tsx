@@ -192,9 +192,10 @@ export default function PrivacyScreen() {
           </PolicyBullet>
           <PolicyBullet>
             Session replay: 세션의 10%에서 화면 전환, 클릭, 스크롤과 렌더링 상태를 기록합니다. 모든
-            input·textarea 값은 마스킹하고 게시글 본문 영역은 기록에서 제외합니다. Web의 프로필 상세와
-            프로필 목록에 표시되는 bio는 Session Replay에서 마스킹하고 자동 수집에서 제외합니다. 이 보호는
-            새 Web 기록에 적용되며 표시명, handle과 그 밖의 화면 텍스트는 계속 보일 수 있습니다.
+            input·textarea 값은 마스킹하고 게시글 본문 영역은 기록에서 제외합니다. Web의 프로필
+            상세와 프로필 목록에 표시되는 bio는 Session Replay에서 마스킹하고 자동 수집에서
+            제외합니다. 이 보호는 새 Web 기록에 적용되며 표시명, handle과 그 밖의 화면 텍스트는
+            계속 보일 수 있습니다.
           </PolicyBullet>
           <PolicyBullet>
             방법과 통제: Web SDK로 자동 수집하며 맞춤형 광고나 제3자 광고 제공에 사용하지 않습니다.
