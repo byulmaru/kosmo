@@ -347,7 +347,12 @@ export const findOrMaterializeRemoteProfileActorByUri = async ({
     return stored;
   }
 
-  await materializeRemoteProfileActor({ context, actorUri, now, reactivateUnresponsive: true });
+  await materializeRemoteProfileActor({
+    context,
+    actorUri,
+    now,
+    reactivateUnresponsive: true,
+  });
 
   const materialized = await findStoredRemoteProfileActorByUri(actorUri);
 
@@ -379,9 +384,12 @@ export const materializeRemoteProfileActor = async (options: RemoteActorMaterial
   const existingRequestedRemoteInstance = await findAvailableRemoteInstance(targetActorDomain, {
     allowUnresponsive: reactivateUnresponsive,
   });
+  const lookupOptions = options.documentLoader
+    ? { documentLoader: options.documentLoader }
+    : undefined;
   const actor = (await context.lookupObject(
     options.actorUri,
-    options.documentLoader ? { documentLoader: options.documentLoader } : undefined,
+    lookupOptions,
   )) as ActivityPubObject | null;
 
   if (!isActor(actor)) {
