@@ -10,6 +10,7 @@ Kosmo Web·Native의 PostHog client는 `prod` 채널에서 공개 `posthogKey`�
 - `reaction_type`의 기존 의미를 유지한다. `❤️`는 `default`이고, 그 밖의 허용된 Unicode Reaction은 `custom`으로 분류될 수 있다. 여기서 `custom`은 사용자 정의 이모지를 뜻하지 않는다.
 - Web의 허용 집합은 canonical `reactionTypeSchema`가 제공하는 전체 Emoji 16 Unicode sequence다. 허용된 값에는 `emoji_kind: unicode`와 `reaction_emoji_key`를 함께 보낸다. key는 `unicode:` 다음에 완전한 code point sequence를 소문자 16진수와 하이픈으로 이어 붙인다. variation selector, modifier, regional indicator, zero-width joiner를 정규화하거나 제거하지 않는다.
 - key는 사용한 Reaction 종류를 드러내는 분석 정보이며 익명화가 아니다. 원문 emoji, Reaction DB ID, 사용자 정의 이모지 ID·이름·shortcode·asset은 보내지 않는다. 검증되지 않은 값에는 기존 `reaction_type`만 기록하고 `emoji_kind`와 key를 생략한다. Native는 기존 `reaction_type`만 보낸다.
+- 현재 공개 중인 2026년 10월 13일 시행 개인정보 처리방침은 이 PR에서 변경하지 않는다. 해당 방침이 `reaction_emoji_key` 수집을 충분히 고지하는지 production 배포 전에 판단한다. 추가 공개 고지가 필요하면 내용과 시행일을 확정·공개한 뒤 배포한다.
 - PostHog SDK의 identity/session metadata는 SDK 경계에서 관리하며, 애플리케이션 event property allowlist와 혼동하지 않는다. 이 변경은 SDK의 자동 이벤트·Session Replay 설정이나 masking·retention을 바꾸지 않는다.
 
 ## 명시적 event allowlist
