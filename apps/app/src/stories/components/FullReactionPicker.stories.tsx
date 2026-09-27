@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { FullReactionPicker } from '@/components/reaction/FullReactionPicker';
-import { reactionEmojiCatalog } from '@/components/reaction/reactionEmojiCatalog';
+import { reactionEmojiPickerOptions } from '@/components/reaction/reactionEmojiCatalog';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type {
   FullReactionPickerOption,
@@ -447,7 +447,7 @@ export const InteractionContract: Story = {
 };
 
 export const SequentialKeyboardBrowseContract: Story = {
-  args: { options: reactionEmojiCatalog },
+  args: { options: reactionEmojiPickerOptions },
   render: (args) => <InteractivePicker {...args} />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -456,21 +456,20 @@ export const SequentialKeyboardBrowseContract: Story = {
     const search = canvas.getByRole('searchbox', { name: '반응 검색' });
     const scroll = canvas.getByTestId('full-reaction-picker-scroll') as HTMLElement;
     await waitFor(() => expect(search).toHaveFocus());
-
     await userEvent.tab();
     const firstOption = canvas.getByRole('button', {
-      name: `${reactionEmojiCatalog[0]?.label} ${reactionEmojiCatalog[0]?.emoji}`,
+      name: `${reactionEmojiPickerOptions[0]?.label} ${reactionEmojiPickerOptions[0]?.emoji}`,
     });
     expect(firstOption).toHaveFocus();
     await userEvent.tab();
     const secondOption = canvas.getByRole('button', {
-      name: `${reactionEmojiCatalog[1]?.label} ${reactionEmojiCatalog[1]?.emoji}`,
+      name: `${reactionEmojiPickerOptions[1]?.label} ${reactionEmojiPickerOptions[1]?.emoji}`,
     });
     expect(secondOption).toHaveFocus();
     await userEvent.tab({ shift: true });
     expect(firstOption).toHaveFocus();
 
-    const finalCatalogOption = reactionEmojiCatalog[reactionEmojiCatalog.length - 1];
+    const finalCatalogOption = reactionEmojiPickerOptions.at(-1);
     const tailOption = canvas.getByRole('button', {
       name: `${finalCatalogOption?.label} ${finalCatalogOption?.emoji}`,
     });

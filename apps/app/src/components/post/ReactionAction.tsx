@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRelayEnvironment } from 'react-relay';
-import { reactionEmojiCatalog } from '@/components/reaction/reactionEmojiCatalog';
+import { reactionEmojiPickerOptions } from '@/components/reaction/reactionEmojiCatalog';
 import { FullReactionOverlay } from './FullReactionOverlay';
 import type { ReactNode, Ref } from 'react';
 import type { View } from 'react-native';
@@ -76,7 +76,7 @@ export function ReactionAction({
         onQueryChange={setQuery}
         onSelect={selectFull}
         open={fullOpen}
-        options={reactionEmojiCatalog}
+        options={reactionEmojiPickerOptions}
         pendingOptionIds={controller.pendingTypeIds}
         errorOptionIds={controller.errorTypeIds}
         query={query}

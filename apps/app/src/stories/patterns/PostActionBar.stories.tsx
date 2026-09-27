@@ -1579,6 +1579,9 @@ export const ReactionDirectFullContract: Story = {
       expect(bounds.right).toBeLessThanOrEqual(window.innerWidth);
     });
     const search = within(full).getByRole('searchbox', { name: '반응 검색' });
+    await userEvent.type(search, '👋🏽');
+    expect(within(full).getByText('검색 결과가 없어요')).toBeVisible();
+    await userEvent.clear(search);
     await userEvent.type(search, 'heart hands');
     const option = await within(full).findByRole('button', { name: '손 하트 🫶' });
     await userEvent.click(option);
