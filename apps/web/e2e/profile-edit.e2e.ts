@@ -17,6 +17,39 @@ test.beforeEach(async () => {
   await resetE2EDatabase();
 });
 
+test('프로필 편집의 Browser Back은 변경사항 확인 후 원래 프로필로 이동한다', async ({
+  context,
+  page,
+}) => {
+  const handle = 'prod797-profile-back';
+  const session = await createE2ESession({ handle });
+  expect(session.profile).not.toBeNull();
+  await setE2ESessionCookie(context, session.token);
+
+  await page.goto(`/@${handle}`);
+  const activeProfile = page.getByLabel('활성 프로필', { exact: true });
+  await activeProfile.getByRole('link', { name: '프로필 편집' }).click();
+  await expect(page).toHaveURL(/\/profile-edit$/);
+
+  await page.getByRole('textbox', { name: '소개' }).fill('PROD-797 profile back draft');
+  const discardDialog = page.getByRole('dialog', { name: '변경사항을 버릴까요?' });
+
+  await page.evaluate(() => window.history.back());
+  await expect(page).toHaveURL(/\/profile-edit$/);
+  await expect(discardDialog).toBeVisible();
+  await discardDialog.getByRole('button', { name: '계속 편집' }).click();
+  await expect(page).toHaveURL(/\/profile-edit$/);
+  await expect(page.getByRole('textbox', { name: '소개' })).toHaveValue(
+    'PROD-797 profile back draft',
+  );
+
+  await page.evaluate(() => window.history.back());
+  await expect(discardDialog).toBeVisible();
+  await discardDialog.getByRole('button', { name: '버리기' }).click();
+  await expect(page).toHaveURL(new RegExp(`@${handle}$`));
+  await expect(activeProfile.getByRole('link', { name: '프로필 편집' })).toBeVisible();
+});
+
 test('text-only 저장은 Ready avatar/header payload를 끝내고 Profile로 replace한다', async ({
   context,
   page,

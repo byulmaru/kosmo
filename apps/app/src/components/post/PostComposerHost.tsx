@@ -1,5 +1,5 @@
 import { XIcon } from 'lucide-react-native';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Modal,
@@ -10,12 +10,14 @@ import {
   View,
 } from 'react-native';
 import { IconButton } from '@/components/ui/IconButton';
+import { OverlayBackdrop, useOverlayLifecycle } from '@/components/ui/Overlay';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, textStyles } from '@/theme/tokens';
 import { PostComposerController } from './PostComposerController';
 import type { RefObject } from 'react';
+import type { OverlayCloseReason } from '@/components/ui/Overlay';
 import type { PostComposer_profile$key } from './__generated__/PostComposer_profile.graphql';
 import type { PostComposerProfileRef } from './PostComposerProfileSwitcher';
 
@@ -31,147 +33,7 @@ type PostComposerHostProps = {
   triggerFocusRef?: RefObject<HTMLElement | null>;
 } & ({ mode: 'rail'; onExpand: () => void } | { mode: 'mobile' | 'overlay'; onExpand?: never });
 
-function usePostComposerOverlayLifecycle({
-  fallbackFocusRef,
-  onRequestClose,
-  open,
-  submitting,
-  triggerFocusRef,
-}: Pick<PostComposerHostProps, 'fallbackFocusRef' | 'onRequestClose' | 'triggerFocusRef'> & {
-  open: boolean;
-  submitting: boolean;
-}) {
-  const dialogRef = useRef<View>(null);
-  const expandControlRef = useRef<View>(null);
-  const nativeBackHandlerRef = useRef<(() => void) | null>(null);
-  const restoreFocusRef = useRef<HTMLElement | null>(null);
-  const wasOpenRef = useRef(false);
-  const hasWebDocument = Platform.OS === 'web' && typeof document !== 'undefined';
-
-  const requestClose = useCallback(
-    (reason: PostComposerHostCloseReason = 'dismiss') => {
-      if (reason === 'dismiss' && submitting) {
-        return;
-      }
-      onRequestClose(reason);
-    },
-    [onRequestClose, submitting],
-  );
-  const requestNativeBack = useCallback(() => {
-    if (submitting) {
-      return;
-    }
-    if (nativeBackHandlerRef.current) {
-      nativeBackHandlerRef.current();
-      return;
-    }
-    onRequestClose('dismiss');
-  }, [onRequestClose, submitting]);
-  const registerNativeBackHandler = useCallback((handler: (() => void) | null) => {
-    nativeBackHandlerRef.current = handler;
-  }, []);
-
-  useEffect(() => {
-    if (!hasWebDocument) {
-      return;
-    }
-
-    if (open && !wasOpenRef.current) {
-      restoreFocusRef.current = document.activeElement as HTMLElement | null;
-    }
-    if (!open && wasOpenRef.current) {
-      requestAnimationFrame(() => {
-        const railTrigger = expandControlRef.current as unknown as HTMLElement | null;
-        const triggerFocus =
-          railTrigger && document.contains(railTrigger) ? railTrigger : triggerFocusRef?.current;
-        const restoredFocus = restoreFocusRef.current;
-        const fallbackFocus = fallbackFocusRef?.current;
-        const previousFocus =
-          triggerFocus && document.contains(triggerFocus)
-            ? triggerFocus
-            : restoredFocus !== document.body &&
-                restoredFocus !== null &&
-                document.contains(restoredFocus)
-              ? restoredFocus
-              : fallbackFocus;
-        if (previousFocus && document.contains(previousFocus)) {
-          previousFocus.focus();
-        }
-      });
-    }
-    wasOpenRef.current = open;
-  }, [fallbackFocusRef, hasWebDocument, open, triggerFocusRef]);
-
-  useEffect(() => {
-    if (!hasWebDocument || !open) {
-      return;
-    }
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [hasWebDocument, open]);
-
-  useEffect(() => {
-    if (!hasWebDocument || !open) {
-      return;
-    }
-
-    const dialog = dialogRef.current as unknown as HTMLElement | null;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        if (
-          dialog?.querySelector(
-            '[role="menu"], [role="radiogroup"], [data-testid="post-composer-profile-picker"]',
-          )
-        ) {
-          return;
-        }
-        event.preventDefault();
-        requestClose();
-        return;
-      }
-      if (event.key !== 'Tab') {
-        return;
-      }
-
-      const focusable = Array.from(
-        dialog?.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), textarea:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
-        ) ?? [],
-      ).filter((element) => element.getClientRects().length > 0);
-      if (focusable.length === 0) {
-        return;
-      }
-
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (!dialog?.contains(document.activeElement)) {
-        event.preventDefault();
-        first?.focus();
-      } else if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last?.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first?.focus();
-      }
-    };
-
-    document.addEventListener('keydown', onKeyDown, true);
-    return () => document.removeEventListener('keydown', onKeyDown, true);
-  }, [hasWebDocument, open, requestClose]);
-
-  return {
-    dialogRef,
-    expandControlRef,
-    registerNativeBackHandler,
-    requestClose,
-    requestNativeBack,
-  };
-}
+type PostComposerRequestCloseReason = PostComposerHostCloseReason | OverlayCloseReason;
 
 export function PostComposerHost({
   fallbackFocusRef,
@@ -190,17 +52,35 @@ export function PostComposerHost({
   const nativeMobile = !web && mode === 'mobile';
   const overlayVisible = mode !== 'rail' && open;
   const safeAreaStyle = useSafeAreaPadding(mode === 'mobile' ? 0 : spacing.lg);
-  const {
-    dialogRef,
-    expandControlRef,
-    registerNativeBackHandler,
-    requestClose,
-    requestNativeBack,
-  } = usePostComposerOverlayLifecycle({
+  const expandControlRef = useRef<View>(null);
+  const nativeBackHandlerRef = useRef<(() => void) | null>(null);
+  const requestClose = useCallback(
+    (reason: PostComposerRequestCloseReason = 'dismiss') => {
+      if (reason !== 'created' && submitting) {
+        return;
+      }
+      onRequestClose(reason === 'created' ? 'created' : 'dismiss');
+    },
+    [onRequestClose, submitting],
+  );
+  const requestNativeBack = useCallback(() => {
+    if (submitting) {
+      return;
+    }
+    if (nativeBackHandlerRef.current) {
+      nativeBackHandlerRef.current();
+      return;
+    }
+    requestClose('native-back');
+  }, [requestClose, submitting]);
+  const registerNativeBackHandler = useCallback((handler: (() => void) | null) => {
+    nativeBackHandlerRef.current = handler;
+  }, []);
+  const { dialogRef } = useOverlayLifecycle({
     fallbackFocusRef,
-    onRequestClose,
+    onRequestClose: requestClose,
     open: overlayVisible,
-    submitting,
+    preferredFocusRef: expandControlRef,
     triggerFocusRef,
   });
 
@@ -290,15 +170,15 @@ export function PostComposerHost({
             {dialog}
           </View>
         ) : (
-          <Pressable
-            onPress={() => requestClose()}
+          <OverlayBackdrop
+            onRequestClose={requestClose}
             style={[styles.nativeBackdrop, safeAreaStyle, { backgroundColor: theme.overlayScrim }]}
             testID="post-composer-backdrop"
           >
             <Pressable onPress={(event) => event.stopPropagation()} style={styles.nativeDialogWrap}>
               {dialog}
             </Pressable>
-          </Pressable>
+          </OverlayBackdrop>
         )}
       </Modal>
     );
@@ -319,7 +199,7 @@ export function PostComposerHost({
       ]}
     >
       {mode !== 'rail' ? (
-        <Pressable onPress={() => requestClose()} style={styles.webBackdrop} />
+        <OverlayBackdrop onRequestClose={requestClose} style={styles.webBackdrop} />
       ) : null}
       {dialog}
     </View>
