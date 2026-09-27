@@ -11,4 +11,11 @@ test('Emoji 16 catalog provides 3,781 selectable values with localized search', 
   assert.equal(heart?.labelEn, 'red heart');
   assert.equal(heart?.keywords.includes('하트'), true);
   assert.equal(heart?.keywords.includes('red heart'), true);
+  assert.deepEqual(
+    reactionEmojiCatalog
+      .filter((option) => option.quick)
+      .sort((left, right) => left.quickOrder! - right.quickOrder!)
+      .map((option) => option.emoji),
+    ['🥹', '❤️', '🎉', '👀', '☘️', '🌈'],
+  );
 });

@@ -24,6 +24,8 @@ export type FullReactionPickerOption = Readonly<{
   keywords?: ReadonlyArray<string>;
   label: string;
   quick?: boolean;
+  quickOrder?: number;
+  recent?: boolean;
 }>;
 
 export type FullReactionPickerProps = {
@@ -38,6 +40,7 @@ export type FullReactionPickerProps = {
   pendingOptionIds?: ReadonlyArray<string>;
   errorOptionIds?: ReadonlyArray<string>;
   loading?: boolean;
+  webHeight?: number;
 };
 
 export function FullReactionPicker({
@@ -52,6 +55,7 @@ export function FullReactionPicker({
   pendingOptionIds = [],
   errorOptionIds = [],
   loading = false,
+  webHeight,
 }: FullReactionPickerProps): React.ReactElement {
   const theme = useTheme();
   const elevation = useElevation();
@@ -122,7 +126,9 @@ export function FullReactionPicker({
         mobile
           ? { height: Math.min(state === 'browse' ? 480 : 720, viewportHeight) }
           : elevation.overlay,
-        !mobile && { height: Math.min(624, Math.max(0, viewportHeight - 2 * space[8])) },
+        !mobile && {
+          height: webHeight ?? Math.min(624, Math.max(0, viewportHeight - 2 * space[8])),
+        },
         { backgroundColor: theme.backgroundElevated, borderColor: theme.borderDefault },
       ]}
       testID={mobile ? 'full-reaction-picker-sheet' : undefined}
@@ -276,7 +282,13 @@ function createBrowseSections(
   );
   return [
     ...(options.some((option) => option.quick)
-      ? [{ id: 'quick', title: '빠른 반응', options: options.filter((option) => option.quick) }]
+      ? [{
+          id: 'quick',
+          title: '빠른 반응',
+          options: options
+            .filter((option) => option.quick)
+            .sort((left, right) => (left.quickOrder ?? 0) - (right.quickOrder ?? 0)),
+        }]
       : []),
     ...categories,
   ];
