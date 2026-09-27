@@ -610,7 +610,10 @@ export function ProfileSwitcher({
   const triggerSurface = !compact ? (
     <View
       accessibilityLabel="활성 프로필"
-      style={[styles.profileHeader, nativeDrawerSurface && styles.nativeDrawerProfileHeader]}
+      style={[
+        styles.profileHeader,
+        (fullWeb || nativeDrawerSurface) && styles.stretchedProfileHeader,
+      ]}
     >
       <View
         style={[
@@ -770,7 +773,7 @@ const styles = StyleSheet.create({
   drawerMenuPosition: { left: 0, top: 190 },
   fullOverlayPosition: { left: -space[16], top: 50 },
   profileHeader: { height: 260, position: 'relative', width: 320, zIndex: 20 },
-  nativeDrawerProfileHeader: { width: '100%' },
+  stretchedProfileHeader: { width: '100%' },
   cover: { height: 104, left: 0, overflow: 'hidden', position: 'absolute', right: 0, top: 0 },
   coverImage: { height: '100%', width: '100%' },
   largeAvatar: { left: space[24], position: 'absolute', top: 54 },

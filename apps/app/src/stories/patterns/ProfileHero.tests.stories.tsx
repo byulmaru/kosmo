@@ -89,6 +89,21 @@ export const MobileGeometryContract: Story = {
   },
 };
 
+export const MobileEditActionDoesNotOverlapMore: Story = {
+  args: { actionKind: 'edit', containerWidth: 390 },
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const moreButton = canvas.getByRole('button', { name: '더보기' });
+    const editButton = canvas.getByRole('button', { name: '편집' });
+    expect(editButton.getBoundingClientRect().width).toBe(96);
+    expect(editButton.getBoundingClientRect().height).toBe(40);
+    expect(
+      editButton.getBoundingClientRect().left - moreButton.getBoundingClientRect().right,
+    ).toBeCloseTo(16, 0);
+  },
+};
+
 export const LoadingGeometryContract: Story = {
   args: { loading: true, showAction: true },
   globals: { viewport: { isRotated: false, value: 'kosmoFull' } },

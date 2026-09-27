@@ -47,6 +47,7 @@ const ReplyComposerSurfaceParentFragment = graphql`
     profile {
       displayName
       handle
+      relativeHandle
       avatar {
         id
         url
@@ -364,6 +365,7 @@ function ReplyComposerSurfaceContents({
     >
       <ToastProvider>
         <Pressable
+          accessible={false}
           onPress={() => requestClose()}
           style={[
             styles.backdrop,
@@ -374,6 +376,7 @@ function ReplyComposerSurfaceContents({
           ]}
         >
           <Pressable
+            accessible={false}
             accessibilityViewIsModal
             onPress={(event) => event.stopPropagation()}
             ref={dialogRef}
@@ -452,8 +455,8 @@ function ReplyComposerSurfaceContents({
                               style={[
                                 styles.parentConnector,
                                 presentation === 'modal' ? styles.modalParentConnector : null,
-                                Platform.OS === 'web' && presentation === 'fullscreen'
-                                  ? styles.webFullscreenParentConnector
+                                presentation === 'fullscreen'
+                                  ? styles.fullscreenParentConnector
                                   : null,
                               ]}
                               testID="reply-parent-thread-connector"
@@ -476,6 +479,13 @@ function ReplyComposerSurfaceContents({
                             ) : null}
                           </View>
                         </View>
+                      )
+                    }
+                    replyContext={
+                      quoteMode ? undefined : (
+                        <Text style={[styles.replyContext, { color: theme.textSecondary }]}>
+                          {parent.profile.relativeHandle}님에게 답글
+                        </Text>
                       )
                     }
                     contextGuard={contextGuard}
@@ -573,11 +583,12 @@ const styles = StyleSheet.create({
     transform: [{ translateX: -1 }],
   },
   modalParentConnector: { bottom: -(spacing.md + spacing.xxl - spacing.xs) },
-  webFullscreenParentConnector: { bottom: -(spacing.xl - 2) },
+  fullscreenParentConnector: { bottom: -spacing.lg },
   parentContent: { flex: 1, gap: spacing.md, minWidth: 0 },
   parentIdentity: { flex: 1, minWidth: 0 },
   timestamp: { fontFamily: fontFamilies.ui, marginTop: spacing.xs, ...typography.xsm },
   quoteSource: { marginBottom: spacing.sm },
+  replyContext: { fontFamily: fontFamilies.ui, ...typography.sm },
   source: { marginTop: spacing.sm },
   confirmBackdrop: {
     bottom: 0,

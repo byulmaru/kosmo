@@ -665,6 +665,16 @@ export const hydrateProfileFollowPairTransition = async (
           .limit(1)
           .then(first)
       : undefined;
+
+  if (result.commandKind === 'FOLLOW') {
+    if (result.kind === 'ESTABLISHED' && profileFollow === undefined) {
+      throw new Error('Committed Follow relation is missing during hydration');
+    }
+    if (result.kind === 'PENDING' && profileFollowRequest === undefined) {
+      throw new Error('Committed Follow request is missing during hydration');
+    }
+  }
+
   return {
     result,
     followerProfile,

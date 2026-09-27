@@ -91,6 +91,9 @@ test('목록의 재게시 메뉴에서 Quote Composer를 연다', async ({ conte
   expect(visibilityBox).not.toBeNull();
   expect(footerBox).not.toBeNull();
   expect(visibilityBox!.y + visibilityBox!.height).toBeCloseTo(footerBox!.y, 0);
+  expect(Math.abs(visibilityBox!.x - footerBox!.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs(visibilityBox!.width - footerBox!.width)).toBeLessThanOrEqual(1);
+  await expect(footer).toBeVisible();
   await expect(composer.getByTestId('post-composer-editor')).toHaveCSS('border-width', '0px');
 });
 

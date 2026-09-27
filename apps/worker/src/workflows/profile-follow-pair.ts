@@ -168,9 +168,6 @@ export async function profileFollowPairWorkflow(input: ProfileFollowPair): Promi
         if (transitionFailure !== undefined) {
           throw pairConflict('Profile Follow pair transition previously failed');
         }
-        if (lifecycleState === 'PENDING' && parsedCommand.kind === 'FOLLOW') {
-          throw pairConflict('Profile Follow pair already has a pending request');
-        }
 
         try {
           if (lifecycleState === 'INITIAL' && parsedCommand.kind === 'FOLLOW') {

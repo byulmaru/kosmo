@@ -379,7 +379,7 @@ const styles = StyleSheet.create({
   avatarSkeleton: {
     borderWidth: space[4],
   },
-  action: { alignItems: 'flex-end', justifyContent: 'center', width: 96 },
+  action: { alignItems: 'flex-end', justifyContent: 'center' },
   identity: { flex: -1 },
   bio: { marginTop: space[12], ...textStyles.uiCopyL },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: space[8], marginTop: space[12] },
