@@ -18,12 +18,6 @@ function getTriggerVisual(trigger: HTMLElement) {
   return visual as HTMLElement;
 }
 
-function getTriggerFeedback(trigger: HTMLElement) {
-  const feedback = getTriggerVisual(trigger).firstElementChild;
-  expect(feedback).toBeInstanceOf(HTMLElement);
-  return feedback as HTMLElement;
-}
-
 export const MobileFollowError: Story = {
   args: { containerWidth: 390 },
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
@@ -208,7 +202,8 @@ export const MoreButtonInteraction: Story = {
     const canvas = within(canvasElement);
     const trigger = canvas.getByRole('button', { name: '더보기' });
     const visual = getTriggerVisual(trigger);
-    const feedback = getTriggerFeedback(trigger);
+    const feedback = visual.firstElementChild as HTMLElement;
+    expect(feedback).toBeInstanceOf(HTMLElement);
     const serializeColor = (color: string) => {
       const probe = canvasElement.ownerDocument.createElement('div');
       probe.style.color = color;
