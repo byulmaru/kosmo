@@ -872,10 +872,9 @@ describe('Post Reply GraphQL 경계', () => {
     assert.equal(createContext.mock.callCount(), 0);
   });
 
-  test('Root Post Create effects Workflow start 실패는 commit된 Post와 GraphQL 성공을 바꾸지 않는다', async (t) => {
+  test('Root Post Create Workflow admission 실패는 Post를 저장하지 않는다', async (t) => {
     const auth = await createAuthenticatedSession();
-    const createContext = t.mock.method(localOutboundFederation, 'createContext');
-    t.mock.method(temporalClient.workflow, 'start', async () => {
+    const update = t.mock.method(temporalClient.workflow, 'executeUpdateWithStart', async () => {
       throw new Error('Temporal unavailable');
     });
 
@@ -887,15 +886,9 @@ describe('Post Reply GraphQL 경계', () => {
       auth.token,
     );
 
-    assertNoGraphQLErrors(result);
-
-    const committed = await db
-      .select({ currentContentId: Posts.currentContentId, state: Posts.state })
-      .from(Posts)
-      .then(firstOrThrow);
-    assert.equal(committed.state, PostState.ACTIVE);
-    assert.ok(committed.currentContentId);
-    assert.equal(createContext.mock.callCount(), 0);
+    assert.equal(result.errors?.[0]?.extensions?.code, 'INTERNAL_SERVER_ERROR');
+    assert.equal(update.mock.callCount(), 1);
+    assert.equal(await db.$count(Posts), 0);
   });
 
   test('Root Post Delete Workflow admission 실패는 Tombstone을 남기지 않는다', async (t) => {
