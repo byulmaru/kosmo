@@ -32,7 +32,7 @@ async function main() {
 
 contents = ENV.fetch('KOSMO_PODFILE')
 
-configuration = Struct.new(:build_settings)
+configuration = Struct.new(:build_settings, keyword_init: false)
 bundle_target = Struct.new(:product_type, :build_configurations)
 aggregate_target = Struct.new(:name)
 project = Struct.new(:targets).new([
