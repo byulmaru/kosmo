@@ -577,6 +577,7 @@ describe('inbound Create dispatch', () => {
 
       try {
         await createStoredRemoteActor();
+        const mentionInstance = await createStoredRemoteInstance(mentionActorUris[0]!);
         const executeMock = mockRemoteProfileRefresh(async (actorUri) => {
           lookupHrefs.push(actorUri);
           activeLookups += 1;
@@ -596,6 +597,7 @@ describe('inbound Create dispatch', () => {
           const profile = await createStoredRemoteActor({
             actorUri: new URL(actorUri),
             handle: new URL(actorUri).pathname.split('/').at(-1) ?? 'parallel',
+            instanceId: mentionInstance.id,
           });
           profileIdsByUri.set(actorUri, profile.id);
           return profile.id;
@@ -640,14 +642,19 @@ describe('inbound Create dispatch', () => {
     const objectUri = new URL('https://remote.example/notes/mention-workflow-deadline');
     let deadlineDurationMs: number | undefined;
     const executeMock = mockRemoteProfileRefresh(async () => new Promise<string>(() => {}));
+    const originalWithDeadline = temporalClient.withDeadline.bind(temporalClient);
     const deadlineMock = mock.method(
       temporalClient,
       'withDeadline',
       async (deadline: number | Date, execute: () => Promise<unknown>) => {
         const deadlineAt = deadline instanceof Date ? deadline.getTime() : deadline;
-        deadlineDurationMs = deadlineAt - Date.now();
-        void execute().catch(() => undefined);
-        throw new Error('Temporal client deadline exceeded');
+        const remainingMs = deadlineAt - Date.now();
+        if (remainingMs > 25_000) {
+          deadlineDurationMs = remainingMs;
+          void execute().catch(() => undefined);
+          throw new Error('Temporal client deadline exceeded');
+        }
+        return originalWithDeadline(deadline, execute);
       },
     );
     const restoreReporter = setInboundObservabilityReporter({ log: () => undefined });
@@ -723,9 +730,11 @@ describe('inbound Create dispatch', () => {
 
     try {
       await createStoredRemoteActor();
+      const mentionInstance = await createStoredRemoteInstance(failedActorUri);
       const returnedProfile = await createStoredRemoteActor({
         actorUri: returnedActorUri,
         handle: 'other',
+        instanceId: mentionInstance.id,
       });
       const executeMock = mockRemoteProfileRefresh(async (actorUri) => {
         lookupHrefs.push(actorUri);
@@ -739,6 +748,7 @@ describe('inbound Create dispatch', () => {
           actorUri: new URL(actorUri),
           handle: 'valid',
           profileUrl: profileUrl.href,
+          instanceId: mentionInstance.id,
         });
         return profile.id;
       });
@@ -3448,22 +3458,14 @@ const createRemoteCreate = ({ objectUri, replyTarget }: { objectUri: URL; replyT
     }),
   });
 
-const createStoredRemoteActor = async ({
-  actorUri = remoteActorUri,
-  handle = 'alice',
-  instanceKind = InstanceKind.ACTIVITYPUB,
-  instanceState = InstanceState.ACTIVE,
-  profileUrl,
-  profileState = ProfileState.ACTIVE,
-}: {
-  actorUri?: URL;
-  handle?: string;
-  instanceKind?: InstanceKind;
-  instanceState?: InstanceState;
-  profileUrl?: string | null;
-  profileState?: ProfileState;
-} = {}) => {
-  const instance = await db
+const createStoredRemoteInstance = async (
+  actorUri: URL,
+  {
+    instanceKind = InstanceKind.ACTIVITYPUB,
+    instanceState = InstanceState.ACTIVE,
+  }: { instanceKind?: InstanceKind; instanceState?: InstanceState } = {},
+) =>
+  db
     .insert(Instances)
     .values({
       canonicalOrigin: actorUri.origin,
@@ -3473,13 +3475,33 @@ const createStoredRemoteActor = async ({
     })
     .returning()
     .then(firstOrThrow);
+
+const createStoredRemoteActor = async ({
+  actorUri = remoteActorUri,
+  handle = 'alice',
+  instanceKind = InstanceKind.ACTIVITYPUB,
+  instanceState = InstanceState.ACTIVE,
+  instanceId,
+  profileUrl,
+  profileState = ProfileState.ACTIVE,
+}: {
+  actorUri?: URL;
+  handle?: string;
+  instanceKind?: InstanceKind;
+  instanceState?: InstanceState;
+  instanceId?: string;
+  profileUrl?: string | null;
+  profileState?: ProfileState;
+} = {}) => {
+  const profileInstanceId =
+    instanceId ?? (await createStoredRemoteInstance(actorUri, { instanceKind, instanceState })).id;
   const profile = await db
     .insert(Profiles)
     .values({
       displayName: handle,
       followPolicy: ProfileFollowPolicy.OPEN,
       handle,
-      instanceId: instance.id,
+      instanceId: profileInstanceId,
       normalizedHandle: handle,
       state: profileState,
     })
