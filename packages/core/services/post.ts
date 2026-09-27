@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { and, eq, inArray, isNotNull, isNull, ne, notExists, or, sql } from 'drizzle-orm';
 import {
   ActivityPubPosts,
@@ -9,7 +10,6 @@ import {
   Media,
   PostContents,
   PostMentions,
-  PostQuotePolicies,
   Posts,
   ProfileBlocks,
   ProfileFollows,
@@ -21,7 +21,6 @@ import {
   MediaSource,
   MediaState,
   PostQuoteConsentStatus,
-  PostQuoteEffectKind,
   PostState,
   PostVisibility,
   ProfileState,
@@ -31,19 +30,22 @@ import {
   canonicalizePostContentDocument,
   validateLocalPostContentDocument,
 } from '../post-content/server';
-import { temporalClient } from '../temporal/client';
+import { runWorkflow, temporalClient } from '../temporal/client';
+import {
+  postCreateWorkflow,
+  postDeleteMutationWorkflow,
+  unwrapPostTransition,
+} from '../temporal/post';
 import { KOSMO_TASK_QUEUE } from '../temporal/task-queue';
 import { postVisibilityCondition } from '../visibility/post';
 import {
   assertPostQuotePolicy,
   createPostQuoteConsent,
-  createPostQuoteEffectReceipt,
   defaultPostQuotePolicy,
   isLocalQuoteAllowedByPolicy,
   loadQuotePostIdentity,
   loadQuoteSourceIdentity,
   revokePostQuoteConsentsForSource,
-  startPostQuoteEffect,
 } from './post-quote-consent';
 import { validatePostStructure } from './post-structure';
 import { assertProfilePairIsNotBlocked } from './profile-block-policy';
@@ -51,7 +53,7 @@ import type { Transaction } from '../db';
 import type { PostQuotePolicy } from '../enums';
 import type { PostContentDocumentV1 } from '../post-content';
 
-type LocalPostInput = {
+export type LocalPostInput = {
   accountId?: string;
   document: PostContentDocumentV1;
   media?: readonly {
@@ -113,10 +115,6 @@ type CreatedPost = {
   content: typeof PostContents.$inferSelect;
   created: true;
   post: typeof Posts.$inferSelect;
-};
-
-type CreatedPostWithQuoteEffect = CreatedPost & {
-  quoteRequestReceiptId: string | null;
 };
 
 type DuplicatePost = { created: false };
@@ -456,16 +454,15 @@ const materializeRemoteMedia = async (
   return materialized;
 };
 
-export const deletePost = async ({
+export const deletePostPersisted = async ({
   actorProfileId,
-  origin,
   postId,
 }: {
   readonly actorProfileId: string;
   readonly origin: PostOrigin;
   readonly postId: string;
-}): Promise<{ readonly postId: string; readonly sourcePostId: string | null }> => {
-  const { deleted, result, quoteRevocationReceiptIds } = await db.transaction(async (tx) => {
+}) => {
+  return db.transaction(async (tx) => {
     const post = await tx
       .select({
         currentContentId: Posts.currentContentId,
@@ -500,59 +497,34 @@ export const deletePost = async ({
       })
       .then(first);
 
-    const quoteRevocationReceiptIds =
-      deleted && post.currentContentId !== null
-        ? await revokePostQuoteConsentsForSource(tx, postId)
-        : [];
+    if (deleted && post.currentContentId !== null) {
+      await revokePostQuoteConsentsForSource(tx, postId);
+    }
 
     const sourcePostId =
       post.currentContentId === null && post.replyParentId === null ? post.repostSourceId : null;
-    return { deleted, quoteRevocationReceiptIds, result: { postId, sourcePostId } };
+    return { deleted, result: { postId, sourcePostId } };
   });
+};
 
-  if (deleted) {
-    const workflowInput = { postId: deleted.id, origin };
-    const isRepostDelete = result.sourcePostId !== null;
-    try {
-      await temporalClient.withDeadline(Date.now() + 5_000, () =>
-        isRepostDelete
-          ? temporalClient.workflow.start('repostDeleteWorkflow', {
-              args: [workflowInput],
-              taskQueue: KOSMO_TASK_QUEUE,
-              workflowId: `repost-delete:${workflowInput.postId}`,
-              workflowIdConflictPolicy: 'USE_EXISTING',
-              workflowIdReusePolicy: 'REJECT_DUPLICATE',
-            })
-          : temporalClient.workflow.start('postDeleteWorkflow', {
-              args: [workflowInput],
-              taskQueue: KOSMO_TASK_QUEUE,
-              workflowId: `post-delete:${workflowInput.postId}`,
-              workflowIdConflictPolicy: 'USE_EXISTING',
-              workflowIdReusePolicy: 'REJECT_DUPLICATE',
-            }),
-      );
-    } catch (error) {
-      console.error('%s Workflow start failed', isRepostDelete ? 'Repost Delete' : 'Post Delete', {
-        error,
-        origin,
-        postId: deleted.id,
-      });
-    }
-
-    for (const receiptId of quoteRevocationReceiptIds) {
-      try {
-        await startPostQuoteEffect(receiptId);
-      } catch (error) {
-        console.error('Post Quote Revocation Workflow start failed', {
-          error,
-          postId: deleted.id,
-          receiptId,
-        });
-      }
-    }
-  }
-
-  return result;
+export const deletePost = async ({
+  actorProfileId,
+  origin,
+  postId,
+}: {
+  readonly actorProfileId: string;
+  readonly origin: PostOrigin;
+  readonly postId: string;
+}): Promise<{ readonly postId: string; readonly sourcePostId: string | null }> => {
+  return unwrapPostTransition(
+    await runWorkflow(postDeleteMutationWorkflow, {
+      args: [{ actorProfileId, origin, postId }],
+      mode: 'update-with-start',
+      updateId: 'delete',
+      workflowIdConflictPolicy: 'USE_EXISTING',
+      workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+    }),
+  );
 };
 
 export function repostPost(input: LocalRepostInput): Promise<RepostResult>;
@@ -612,10 +584,13 @@ export async function repostPost(input: RepostInput): Promise<RepostResult> {
 
   return result;
 }
-export function createPost(input: LocalPostInput): Promise<CreatedPost>;
-export function createPost(input: ActivityPubPostInput): Promise<CreatedPost | DuplicatePost>;
-export async function createPost(
+export function createPostPersisted(input: LocalPostInput, postId?: string): Promise<CreatedPost>;
+export function createPostPersisted(
+  input: ActivityPubPostInput,
+): Promise<CreatedPost | DuplicatePost>;
+export async function createPostPersisted(
   input: LocalPostInput | ActivityPubPostInput,
+  postId?: string,
 ): Promise<CreatedPost | DuplicatePost> {
   const localQuotePolicy =
     input.origin === 'LOCAL'
@@ -623,9 +598,23 @@ export async function createPost(
         ? defaultPostQuotePolicy
         : assertPostQuotePolicy(input.quotePolicy)
       : undefined;
-  let result: CreatedPostWithQuoteEffect;
+  let result: CreatedPost;
   try {
     result = await db.transaction(async (tx) => {
+      if (postId) {
+        const existing = await tx.select().from(Posts).where(eq(Posts.id, postId)).then(first);
+        if (existing) {
+          if (existing.profileId !== input.profileId || !existing.currentContentId) {
+            throw new PermissionDeniedError('Post create identity does not match');
+          }
+          const content = await tx
+            .select()
+            .from(PostContents)
+            .where(eq(PostContents.id, existing.currentContentId))
+            .then(firstOrThrow);
+          return { created: true as const, post: existing, content };
+        }
+      }
       let quoteSource: Awaited<ReturnType<typeof validateQuoteSource>> | undefined;
       let document =
         input.origin === 'LOCAL'
@@ -763,7 +752,9 @@ export async function createPost(
         .insert(Posts)
         .values({
           createdAt,
+          id: postId,
           currentContentId: content.id,
+          quotePolicy: localQuotePolicy,
           profileId: input.profileId,
           repostSourceId: input.origin === 'LOCAL' ? (input.repostSourceId ?? null) : undefined,
           state: PostState.ACTIVE,
@@ -824,14 +815,6 @@ export async function createPost(
         .returning()
         .then(firstOrThrow);
 
-      if (input.origin === 'LOCAL') {
-        await tx.insert(PostQuotePolicies).values({
-          policy: localQuotePolicy ?? defaultPostQuotePolicy,
-          postId: linkedPost.id,
-        });
-      }
-
-      let quoteRequestReceiptId: string | null = null;
       if (quoteSource && quoteSource.profileId !== input.profileId) {
         const [sourceIdentity, quoteIdentity] = await Promise.all([
           loadQuoteSourceIdentity(tx, quoteSource.id),
@@ -842,7 +825,7 @@ export async function createPost(
         }
 
         const approved = sourceIdentity.instanceKind === InstanceKind.LOCAL;
-        const consent = await createPostQuoteConsent(tx, {
+        await createPostQuoteConsent(tx, {
           approvalUri: approved
             ? new URL(`/ap/quote-authorization/${linkedPost.id}`, sourceIdentity.sourceUri).href
             : undefined,
@@ -856,29 +839,12 @@ export async function createPost(
           sourceUri: sourceIdentity.sourceUri,
           status: approved ? PostQuoteConsentStatus.APPROVED : PostQuoteConsentStatus.PENDING,
         });
-        if (!approved) {
-          const receipt = await createPostQuoteEffectReceipt(tx, {
-            consentId: consent.id,
-            effectKey: `post-quote-request:${consent.id}:${consent.revision}`,
-            effectKind: PostQuoteEffectKind.QUOTE_REQUEST,
-            postId: linkedPost.id,
-            quoteAuthorActorUri: consent.quoteAuthorActorUri,
-            quoteUri: consent.quoteUri,
-            requestUri: consent.requestUri,
-            revision: consent.revision,
-            sourceAuthorActorUri: consent.sourceAuthorActorUri,
-            sourcePostId: consent.sourcePostId,
-            sourceUri: consent.sourceUri,
-          });
-          quoteRequestReceiptId = receipt.id;
-        }
       }
 
       return {
         content: linkedContent,
         created: true,
         post: linkedPost,
-        quoteRequestReceiptId,
       };
     });
   } catch (error) {
@@ -889,6 +855,36 @@ export async function createPost(
     return { created: false };
   }
 
+  return result;
+}
+
+export function createPost(input: LocalPostInput): Promise<CreatedPost>;
+export function createPost(input: ActivityPubPostInput): Promise<CreatedPost | DuplicatePost>;
+export async function createPost(
+  input: LocalPostInput | ActivityPubPostInput,
+): Promise<CreatedPost | DuplicatePost> {
+  if (input.origin === 'LOCAL') {
+    const { postId } = unwrapPostTransition(
+      await runWorkflow(postCreateWorkflow, {
+        args: [{ ...input, admissionId: randomUUID() }],
+        mode: 'update-with-start',
+        updateId: 'create',
+        workflowIdConflictPolicy: 'USE_EXISTING',
+        workflowIdReusePolicy: 'REJECT_DUPLICATE',
+      }),
+    );
+    const post = await db.select().from(Posts).where(eq(Posts.id, postId)).then(firstOrThrow);
+    const content = await db
+      .select()
+      .from(PostContents)
+      .where(eq(PostContents.id, post.currentContentId!))
+      .then(firstOrThrow);
+    return { created: true, post, content };
+  }
+  const result = await createPostPersisted(input);
+  if (!result.created) {
+    return result;
+  }
   try {
     const workflowInput = { postId: result.post.id, origin: input.origin };
     await temporalClient.withDeadline(Date.now() + 5_000, () =>
@@ -906,18 +902,6 @@ export async function createPost(
       origin: input.origin,
       postId: result.post.id,
     });
-  }
-
-  if (result.quoteRequestReceiptId) {
-    try {
-      await startPostQuoteEffect(result.quoteRequestReceiptId);
-    } catch (error) {
-      console.error('Post Quote Request Workflow start failed', {
-        error,
-        postId: result.post.id,
-        receiptId: result.quoteRequestReceiptId,
-      });
-    }
   }
 
   return { content: result.content, created: true, post: result.post };

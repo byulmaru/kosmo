@@ -19,12 +19,11 @@ Accepted
 - Content가 있는 Local Post마다 `모두`, `팔로워`, `본인만` 인용 허용 정책을 제공한다. 새 Post와 기존
   Post의 기본값은 `모두`다. Public·Unlisted 새 글에서는 공개 범위 설정 UI에서 게시글별 정책을 함께 선택할 수 있다. `팔로워`는 established Follower와 본인, `본인만`은 본인만 허용한다.
   허용된 요청도 Source 조회와 차단 조건을 통과해야 한다.
-- 정책 변경은 이후 요청에만 적용한다. 기존 QuoteAuthorization을 자동 철회하지 않는다.
+- 정책은 작성 시 선택하며 게시 후 변경은 후속 범위로 분리한다. 기존 QuoteAuthorization은 유지한다.
 - Kosmo 원문은 정책에 따라 자동 승인·거절한다. Kosmo 자체의 건별 수동 승인 UI는 제공하지 않는다.
 - Local Note의 `interactionPolicy.canQuote.automaticApproval`은 `모두`를 ActivityStreams Public,
   `팔로워`를 Author의 followers collection과 Author Actor, `본인만`을 Author Actor로 광고한다. 첫 출시에는
-  건별 수동 승인 기능이 없으므로 `manualApproval`은 제공하지 않는다. 최초 Note와 정책 변경 뒤 같은 identity의
-  Update에 이 projection을 적용하되, 광고 자체는 개별 승인 증거로 사용하지 않는다.
+  건별 수동 승인 기능이 없으므로 `manualApproval`은 제공하지 않는다. 최초 Note에 이 projection을 적용하되, 광고 자체는 개별 승인 증거로 사용하지 않는다.
 - 자기 인용은 QuoteRequest 없이 허용한다. 타인의 원격 원문을 인용할 때는 `interactionPolicy`의
   `automaticApproval`·`manualApproval` 여부, 정책 부재 또는 해석 실패와 관계없이 QuoteRequest를 보낸다.
   `interactionPolicy`는 작성 전 UI·정책 힌트일 뿐 승인 근거가 아니며, 실제 승인은 원문 작성자가 발급한
@@ -111,7 +110,7 @@ PROD-902 Spec 대화에서 사용자가 원격 `interactionPolicy`의 automatic/
 
 PROD-924 Spec 대화에서 인용 허용 설정을 기존 공개 범위 설정 UI에 추가하고 Public·Unlisted 선택
 시 표시하도록 결정했다. 새 글의 초기 선택은 `모두`이며 해당 글에서 선택한 정책을 함께 저장한다. 게시 후
-정책 변경도 같은 설정 표현을 재사용하되 Post Visibility 변경 기능을 추가하지 않는다. Profile 기본값은 제외한다.
+정책 변경은 아래 2026-09-27 정정에 따라 후속 범위로 분리한다. Profile 기본값은 제외한다.
 
 이어서 “개별 승인 철회는 현재 도입하지 않음”으로 범위가 정정됐다. 원문 작성자의 개별 철회 UI·API를
 이번 출시와 PROD-924 완료 조건에서 제외한다. 원격 Delete(QuoteAuthorization) 검증·수신, Local Source 삭제에
@@ -130,3 +129,11 @@ path, preflight·deployment validation과 별도 배포 gate를 두지 않는다
 
 UI는 기존 게시글 공개 범위 설정 UI 안에 새로운 인용 허용 정책 선택 UI를 추가한다. PROD-431 완료 범위와
 자기 인용 계약은 변경하지 않는다.
+
+## 게시 후 인용 정책 변경 분리 (2026-09-27)
+
+PR #940 리뷰 대응에서 사용자가 게시 후 정책 변경을 이번 출시에서 제외하는 데 동의했다. PROD-924는
+작성 시 정책 선택·저장, 최초 Note의 정책 광고와 인용 동의 lifecycle을 제공한다. 이미 게시한 글의
+정책 편집과 정책 변경 전달은 후속 범위이며 PROD-924 완료 조건에 포함하지 않는다. 후속 기능 도입 전에는
+게시 후 인용 정책을 변경할 수 없다. 이 결정은 앞선 게시 후 변경 포함 결정을 대체한다. 기존 Local Post의
+`모두` 초기값, 기존 승인 유지, 차단·삭제·원격 승인 철회와 D15 백필 제외 결정은 유지한다.

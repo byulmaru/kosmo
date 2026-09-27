@@ -8,7 +8,6 @@ import {
   Instances,
   Media,
   PostContents,
-  PostQuotePolicies,
   Posts,
   ProfileBlocks,
   ProfileFollows,
@@ -51,7 +50,6 @@ type LocalPostNote = {
   readonly quoteAuthorizationUri: string | null;
   readonly quoteProtocolEnabled: boolean;
   readonly quotePolicy: PostQuotePolicy;
-  readonly quotePolicyRevision: number;
   readonly quoteSourceUri: string | null;
   readonly replyParentId: string | null;
   readonly summary: string | null;
@@ -91,8 +89,6 @@ const loadLocalPostNoteRow = async (
     .select({
       contentDocument: PostContents.document,
       instanceCanonicalOrigin: Instances.canonicalOrigin,
-      quotePolicy: PostQuotePolicies.policy,
-      quotePolicyRevision: PostQuotePolicies.revision,
       post: Posts,
       profile: Profiles,
     })
@@ -100,7 +96,6 @@ const loadLocalPostNoteRow = async (
     .innerJoin(PostContents, eq(PostContents.id, Posts.currentContentId))
     .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
     .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .leftJoin(PostQuotePolicies, eq(PostQuotePolicies.postId, Posts.id))
     .where(
       and(
         eq(Posts.id, postId),
@@ -156,8 +151,7 @@ export const loadLocalPostNote = async (
     mediaAttachments,
     quoteAuthorizationUri: quote.quoteAuthorizationUri,
     quoteProtocolEnabled: quote.quoteProtocolEnabled,
-    quotePolicy: row.quotePolicy ?? defaultPostQuotePolicy,
-    quotePolicyRevision: row.quotePolicyRevision ?? 1,
+    quotePolicy: row.post.quotePolicy ?? defaultPostQuotePolicy,
     quoteSourceUri: quote.quoteSourceUri,
     replyParentId: row.post.replyParentId,
     sensitiveMedia: row.contentDocument.body.attrs?.sensitiveMedia ?? false,

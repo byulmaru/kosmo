@@ -61,7 +61,6 @@ let localInstanceId: string;
 let Media: typeof CoreDb.Media;
 let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
-let PostQuoteConsents: typeof CoreDb.PostQuoteConsents;
 let Posts: typeof CoreDb.Posts;
 let ProfileFollowRequests: typeof CoreDb.ProfileFollowRequests;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
@@ -90,7 +89,7 @@ describe('ActivityPub Local Post Note', () => {
       Media,
       pg,
       PostContents,
-      PostQuoteConsents,
+
       Posts,
       ProfileFollowRequests,
       ProfileFollows,
@@ -251,18 +250,20 @@ describe('ActivityPub Local Post Note', () => {
     const sourceUri = `${publicOrigin}/ap/note/${source.id}`;
     const quoteUri = `${publicOrigin}/ap/note/${approvedQuote.id}`;
     const approvalUri = `${publicOrigin}/ap/quote-authorization/${approvedQuote.id}`;
-    await db.insert(PostQuoteConsents).values({
-      approvalUri,
-      quoteAuthorActorUri: `${publicOrigin}/ap/actor/${quoteAuthor.id}`,
-      quoteAuthorProfileId: quoteAuthor.id,
-      quotePostId: approvedQuote.id,
-      quoteUri,
-      requestUri: `${publicOrigin}/ap/quote-request/${approvedQuote.id}`,
-      sourceAuthorActorUri: `${publicOrigin}/ap/actor/${sourceAuthor.id}`,
-      sourcePostId: source.id,
-      sourceUri,
-      status: PostQuoteConsentStatus.APPROVED,
-    });
+    await db
+      .update(Posts)
+      .set({
+        quoteConsentApprovalUri: approvalUri,
+        quoteConsentQuoteAuthorActorUri: `${publicOrigin}/ap/actor/${quoteAuthor.id}`,
+        quoteConsentQuoteUri: quoteUri,
+        quoteConsentRequestUri: `${publicOrigin}/ap/quote-request/${approvedQuote.id}`,
+        quoteConsentSourceAuthorActorUri: `${publicOrigin}/ap/actor/${sourceAuthor.id}`,
+        quoteConsentSourcePostId: source.id,
+        quoteConsentSourceUri: sourceUri,
+        quoteConsentStatus: PostQuoteConsentStatus.APPROVED,
+        quoteConsentRevision: 1,
+      })
+      .where(eq(Posts.id, approvedQuote.id));
 
     const approvedNote = await dispatchLocalPostNote(createContext(), { id: approvedQuote.id });
     assert.ok(approvedNote);
@@ -287,7 +288,7 @@ describe('ActivityPub Local Post Note', () => {
     assert.equal(unapprovedNote.content?.toString(), '<p>body</p>');
   });
 
-  test('serves an approved QuoteAuthorization before the remote Quote is materialized', async () => {
+  test('serves a materialized remote Quote authorization and rejects mismatched identities', async () => {
     const fixtureId = crypto.randomUUID();
     const sourceAuthor = await createProfile({
       handle: `authorization-source-${fixtureId}`,
@@ -298,17 +299,28 @@ describe('ActivityPub Local Post Note', () => {
     const approvalUri = `${publicOrigin}/ap/quote-authorization/${encodeURIComponent(requestUri)}`;
     const quoteUri = `https://quote-author.example/notes/${fixtureId}`;
     const sourceUri = `${publicOrigin}/ap/note/${source.id}`;
-    await db.insert(PostQuoteConsents).values({
-      approvalUri,
-      quoteAuthorActorUri: `https://quote-author.example/users/${fixtureId}`,
-      quotePostId: null,
-      quoteUri,
-      requestUri,
-      sourceAuthorActorUri: `${publicOrigin}/ap/actor/${sourceAuthor.id}`,
-      sourcePostId: source.id,
-      sourceUri,
-      status: PostQuoteConsentStatus.APPROVED,
+    const quoteAuthor = await createProfile({ handle: `quote-author-${fixtureId}` });
+    const quote = await createPost(quoteAuthor.id);
+    await db.insert(ActivityPubActors).values({
+      profileId: quoteAuthor.id,
+      type: ActivityPubActorType.PERSON,
+      uri: `https://quote-author.example/users/${fixtureId}`,
     });
+    await db.insert(ActivityPubPosts).values({ postId: quote.id, uri: quoteUri });
+    await db
+      .update(Posts)
+      .set({
+        quoteConsentApprovalUri: approvalUri,
+        quoteConsentQuoteAuthorActorUri: `https://quote-author.example/users/${fixtureId}`,
+        quoteConsentQuoteUri: quoteUri,
+        quoteConsentRequestUri: requestUri,
+        quoteConsentSourceAuthorActorUri: `${publicOrigin}/ap/actor/${sourceAuthor.id}`,
+        quoteConsentSourcePostId: source.id,
+        quoteConsentSourceUri: sourceUri,
+        quoteConsentStatus: PostQuoteConsentStatus.APPROVED,
+        quoteConsentRevision: 1,
+      })
+      .where(eq(Posts.id, quote.id));
 
     const authorization = await dispatchLocalQuoteAuthorization(createContext(approvalUri));
 
@@ -316,6 +328,18 @@ describe('ActivityPub Local Post Note', () => {
     assert.equal(authorization.id?.href, approvalUri);
     assert.equal(authorization.interactingObjectId?.href, quoteUri);
     assert.equal(authorization.interactionTargetId?.href, sourceUri);
+
+    await db
+      .update(ActivityPubPosts)
+      .set({ uri: `${quoteUri}-mismatch` })
+      .where(eq(ActivityPubPosts.postId, quote.id));
+    assert.equal(await dispatchLocalQuoteAuthorization(createContext(approvalUri)), null);
+    await db
+      .update(ActivityPubPosts)
+      .set({ uri: quoteUri })
+      .where(eq(ActivityPubPosts.postId, quote.id));
+    await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, quote.id));
+    assert.equal(await dispatchLocalQuoteAuthorization(createContext(approvalUri)), null);
   });
 
   test('projects stored ordered Ready Local Media as Image attachments without HTML duplication or network reads', async () => {

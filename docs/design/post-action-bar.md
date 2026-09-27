@@ -454,8 +454,8 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   QuoteAuthorization을 받은 뒤 Source를 표시한다. 거절·철회·원문 삭제 후에는 자체 본문을 유지한 채 Source를 숨긴다.
 - `interactionPolicy`는 작성 전 UI·eligibility 힌트로만 사용한다. 현재 작성자가 automatic/manual 어느 쪽에도
   포함되지 않으면 승인이 예상되지 않는다고 안내할 수 있지만, 정책 자체를 승인 증거로 사용하지 않는다.
-- Kosmo 자체의 건별 수동 승인 UI와 사용자용 개별 승인 철회 UI·API는 제공하지 않는다. 작성자는 자기 글의
-  인용 정책을 변경할 수 있으며 정책 변경과 차단만으로 기존 승인을 자동 철회하지 않는다.
+- Kosmo 자체의 건별 수동 승인 UI와 사용자용 개별 승인 철회 UI·API는 제공하지 않는다. 작성자는 글 작성 시
+  인용 정책을 선택한다. 게시 후 변경은 후속 범위이며 차단만으로 기존 승인을 자동 철회하지 않는다.
 - 새 QuoteRequest와 새 인용 승인은 양방향 차단 관계에서 막는다. 기존 승인 Source는 기존 방향별 Post 조회
   정책을 적용하므로 Viewer가 Source Author를 차단한 방향만 존재하면 직접 조회 조건에 따라 표시할 수 있고,
   Source Author가 Viewer를 차단했거나 상호 차단한 경우에는 숨긴다. 차단만으로 제3자의 Source를 숨기지 않는다.
@@ -491,10 +491,9 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   숨기되 기존 Source 공개 범위 제한은 그대로 적용한다. 제한 공개 글의 정책을 숨긴 UI 때문에 본인만으로 강제하지 않는다.
 - 선택한 정책은 해당 새 글의 작성과 함께 저장한다. Parent나 인용 Source의 정책, 다른 Profile의 draft 정책을
   복사하지 않는다. Profile 기본 인용 정책은 PROD-925의 별도 범위다.
-- 게시된 본인 Public·Unlisted 글의 더보기에서 `인용 설정`을 열면 같은 설정 표현을 사용한다. 기존 공개 범위는
-  읽기 전용으로 보여 주고 인용 정책만 저장한다. Post Visibility 편집이나 본문 편집을 추가하지 않는다.
-- 작성 중에는 draft만 변경하고 게시 후에는 저장 성공 payload를 반영한다. 제출 중 중복 조작을 막고 실패 시
-  선택값을 유지해 다시 저장할 수 있게 한다. selected Profile 변경 뒤 늦은 응답은 새 draft·다른 actor Store에 반영하지 않는다.
+- 게시 후 정책 변경은 후속 범위다. 게시된 글의 더보기에는 인용 정책 편집 메뉴를 제공하지 않는다.
+- 작성 중에는 draft만 변경한다. 게시 중 중복 조작을 막고 실패 시 선택값을 유지해 다시 제출할 수 있게 한다.
+  selected Profile 변경 뒤 늦은 응답은 새 draft·다른 actor Store에 반영하지 않는다.
 - Web에서는 radio group 이름·현재 값·keyboard 이동과 Escape·focus 복귀를, Native에서는 기존 Modal·touch
   target 계약을 유지한다. 범위를 선택하자마자 닫혀 인용 정책을 조작할 수 없는 메뉴로 만들지 않는다.
 

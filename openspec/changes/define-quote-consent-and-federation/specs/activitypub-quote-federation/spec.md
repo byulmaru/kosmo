@@ -31,14 +31,14 @@ PROD-902·PROD-924의 pending 본문 선게시·별도 QuoteRequest 계약. 프�
 `memory/temporal-workflows.md`, PROD-924의 중복·동시·stale·transient 수렴 계약.
 
 승인 상태 전이는 요청 URI·승인 URI·Source·Quote·발급자 결속과 현재 revision을 검증해야 한다(MUST).
-원격 시각이나 Source FK만으로 승인 순서를 결정해서는 안 된다(MUST NOT). commit과 Workflow start 사이의
-장애, Activity completion 유실과 Worker 재시작 후에도 확정된 효과를 같은 identity로 복구할 수 있어야 한다(MUST).
+원격 시각이나 Source FK만으로 승인 순서를 결정해서는 안 된다(MUST NOT). 명령은 상태 전이 전에 Workflow에 접수되어야 하고,
+Activity completion 유실과 Worker 재시작 후에도 확정된 효과를 같은 identity로 복구할 수 있어야 한다(MUST).
 재시도 소진은 실패로 기록하되 승인이나 영구 거절로 바꾸어서는 안 된다(MUST NOT).
 
-#### Scenario: commit 뒤 Workflow start 전에 종료
+#### Scenario: Workflow 접수와 Activity 응답 유실
 
-- **WHEN** 승인·철회 상태와 전달 복구 정보가 commit된 뒤 Workflow start 전에 프로세스가 종료된다
-- **THEN** 재시작 또는 운영 replay가 같은 transition identity로 미완료 전달을 재개한다
+- **WHEN** 승인·철회 명령 접수 후 Activity가 상태를 commit하고 완료 응답을 잃는다
+- **THEN** 같은 Workflow의 재시도가 기존 transition 결과를 확인하고 필요한 전달을 계속한다
 - **AND** 새 승인·요청·Post·Content를 생성하거나 확정 상태를 되돌리지 않는다
 
 #### Scenario: 과거 요청의 응답과 승인 fetch 중 철회
@@ -52,12 +52,6 @@ PROD-902·PROD-924의 pending 본문 선게시·별도 QuoteRequest 계약. 프�
 - **WHEN** 정확한 결속을 검증할 수 있는 승인 철회를 Accept 적용보다 먼저 처리한다
 - **THEN** 그 승인 URI의 철회 사실을 보존한다
 - **AND** 뒤늦은 Accept나 승인 fetch가 해당 Source를 승인 상태로 복구하지 않는다
-
-#### Scenario: 정책 변경 Update와 승인 Update의 교차 실행
-
-- **WHEN** 같은 Note에 정책 변경과 승인/철회 Update가 교차 실행된다
-- **THEN** 각 발신은 현재 정책과 현재 승인 상태를 함께 투영한다
-- **AND** 같은 Note identity·본문·visibility를 유지하고 오래된 작업으로 승인 또는 정책을 되돌리지 않는다
 
 #### Scenario: 전달 일부 실패와 기존 Follow routing
 
@@ -74,8 +68,7 @@ PROD-902·PROD-924의 pending 본문 선게시·별도 QuoteRequest 계약. 프�
 시스템은 Content가 있는 Local Post의 인용 허용 정책을 Local Note의 `interactionPolicy.canQuote`에 광고해야
 한다(MUST). `모두`의 `automaticApproval`은 ActivityStreams Public collection, `팔로워`는 Author의
 followers collection과 Author Actor, `본인만`은 Author Actor여야 한다(MUST). 세 정책 모두
-`manualApproval`을 제공해서는 안 된다(MUST NOT). 최초 Note projection과 정책 변경 뒤 같은 Note identity의
-갱신 표현에 현재 정책을 반영해야 한다(MUST).
+`manualApproval`을 제공해서는 안 된다(MUST NOT). 최초 Note projection에 작성 시 저장한 정책을 반영해야 한다(MUST).
 
 #### Scenario: 모두 정책의 최초 Note projection
 
@@ -88,12 +81,6 @@ followers collection과 Author Actor, `본인만`은 Author Actor여야 한다(M
 - **WHEN** Local Post 정책이 `팔로워` 또는 `본인만`이다
 - **THEN** `팔로워`는 Author의 followers collection과 Author Actor를 automatic 대상으로 제공한다
 - **AND** `본인만`은 Author Actor만 automatic 대상으로 제공하고 두 정책 모두 manual 대상을 제공하지 않는다
-
-#### Scenario: 정책 변경 뒤 Note 갱신
-
-- **WHEN** Author가 Local Post의 인용 허용 정책을 변경한다
-- **THEN** 같은 Note identity의 갱신된 `canQuote` projection을 기존 Post audience에 전달한다
-- **AND** 이미 발급한 QuoteAuthorization은 변경하거나 철회하지 않는다
 
 ### Requirement: FEP Quote 표현과 승인 검증
 
@@ -150,7 +137,7 @@ Kosmo 원문에 들어오는 QuoteRequest는 요청 Profile·인용 Post·Source
 - **THEN** 원문 작성자가 해당 Source와 Quote에 대해 발급한 승인을 Accept에 연결한다
 - **AND** 다른 Quote나 Source의 승인을 재사용하지 않는다
 
-#### Scenario: 정책 변경 또는 차단 이후 요청
+#### Scenario: 현재 정책 또는 차단으로 거절되는 요청
 
 - **WHEN** 새 요청이 현재 정책에 맞지 않거나 두 Profile 사이에 차단이 있다
 - **THEN** 승인하지 않고 Reject로 대응한다

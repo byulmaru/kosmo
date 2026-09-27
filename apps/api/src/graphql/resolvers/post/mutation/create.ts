@@ -1,7 +1,9 @@
+import { randomUUID } from 'node:crypto';
 import { AccountProfileRole, PostQuotePolicy, PostVisibility } from '@kosmo/core/enums';
 import { normalizePostContentPlainText } from '@kosmo/core/post-content';
 import { postContentDocumentFromTextAndMedia } from '@kosmo/core/post-content/server';
-import { createPost } from '@kosmo/core/services';
+import { runWorkflow } from '@kosmo/core/temporal/client';
+import { postCreateWorkflow, unwrapPostTransition } from '@kosmo/core/temporal/post';
 import { postBodyMaxLength, postBodyTextOrEmptySchema } from '@kosmo/core/validation';
 import { z } from 'zod';
 import { builder } from '@/graphql/builder';
@@ -70,29 +72,40 @@ builder.mutationField('createPost', (t) =>
       const contentWarning = normalizePostContentPlainText(input.contentWarning ?? '');
       const profileId = await resolveComposerProfileId(ctx, input.actorProfileId?.id);
 
-      const result = await createPost({
-        accountId: ctx.session.accountId,
-        document: postContentDocumentFromTextAndMedia(
-          input.bodyText,
-          media.map(({ mediaId }) => ({
-            mediaId: mediaId.id,
-          })),
-          input.sensitiveMedia ?? false,
-          contentWarning || null,
-        ),
-        media: media.map(({ altText, mediaId }) => ({
-          altText: altText ?? null,
-          mediaId: mediaId.id,
-        })),
-        origin: 'LOCAL',
-        profileId,
-        replyParentId: input.replyParentId?.id,
-        repostSourceId: input.repostSourceId?.id,
-        quotePolicy: input.quotePolicy ?? undefined,
-        visibility: input.visibility,
-      });
+      const result = unwrapPostTransition(
+        await runWorkflow(postCreateWorkflow, {
+          args: [
+            {
+              admissionId: randomUUID(),
+              accountId: ctx.session.accountId,
+              document: postContentDocumentFromTextAndMedia(
+                input.bodyText,
+                media.map(({ mediaId }) => ({
+                  mediaId: mediaId.id,
+                })),
+                input.sensitiveMedia ?? false,
+                contentWarning || null,
+              ),
+              media: media.map(({ altText, mediaId }) => ({
+                altText: altText ?? null,
+                mediaId: mediaId.id,
+              })),
+              origin: 'LOCAL',
+              profileId,
+              replyParentId: input.replyParentId?.id,
+              repostSourceId: input.repostSourceId?.id,
+              quotePolicy: input.quotePolicy ?? undefined,
+              visibility: input.visibility,
+            },
+          ],
+          mode: 'update-with-start',
+          updateId: 'create',
+          workflowIdConflictPolicy: 'USE_EXISTING',
+          workflowIdReusePolicy: 'REJECT_DUPLICATE',
+        }),
+      );
 
-      return { post: result.post };
+      return { post: result.postId };
     },
   }),
 );

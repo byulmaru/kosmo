@@ -1,3 +1,5 @@
+> 2026-09-27 작업 메모: 게시 후 정책 변경·별도 정책 테이블·효과 영수증을 사용한 아래 구현안은 대체됐다. 현재 범위는 ADR 0029와 PROD-924의 최신 정정을 따른다. 작성 시 정책은 Post에 저장하고, 새 인용 명령은 Workflow admission 뒤 Activity가 상태 전이를 수행한다. 과거 설계는 추가 구현 요구사항이 아니다.
+
 ## Context
 
 2026-09-08 PROD-902 최신 본문, canonical 문서와 현재 대화의 명시적 선택을 독립 확인했다.
@@ -129,7 +131,7 @@ D15는 2026-09-22 사용자 결정으로 갱신됐다. 기존 2건을 위한 표
 - Decision Date: 2026-09-11
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/domain/objects/post.md`의 정책 변경 Mutation, `docs/design/post-action-bar.md`, `memory/graphql-style.md`, `memory/coding-style.md`, PROD-902, PROD-924의 2026-09-09 API 구체화 위임과 2026-09-11 공개 범위 UI 통합 결정.
-- Status: Active
+- Status: Superseded
 - Context / Problem: 기존 UI는 공개 범위 선택 메뉴다. 인용 정책 선택 UI는 아직 없으므로 PROD-924에서 그 메뉴 안에 새로 추가하고 게시 후에도 같은 설정 표현으로 변경해야 한다.
 - Decision Outcome: `PostQuotePolicy`와 `Post.quotePolicy`, `viewerCanUpdateQuotePolicy`를 제공한다. optional `CreatePostInput.quotePolicy`를 같은 작성 transaction에 저장하고 생략·null은 `EVERYONE`으로 처리한다. `updatePostQuotePolicy`는 Post ID·정책을 받아 변경된 `post: Post!`를 반환한다. UI는 Public·Unlisted에서만 인용 정책을 표시하며 게시 후에는 기존 visibility를 읽기 전용으로 둔다.
 - Alternatives Considered: 별도 설정 페이지, 새 Quote/승인 Node와 관리 목록, Profile 기본 정책을 추가하지 않는다.
@@ -141,7 +143,7 @@ D15는 2026-09-22 사용자 결정으로 갱신됐다. 기존 2건을 위한 표
 - Decision Date: 2026-09-11
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/decisions/0029-quote-consent-and-federation.md`, `memory/temporal-workflows.md`, PROD-924의 중복·동시·stale delivery 검증 책임.
-- Status: Active
+- Status: Superseded
 - Context / Problem: 중복 요청·지연된 승인과 commit 뒤 효과 전달 실패가 다른 승인 또는 새 Content를 만들 수 있다.
 - Decision Outcome: 요청·승인·Quote·Source 결속과 조건부 revision을 확인한다. 확정 transition과 최소 전달 복구 정보를 같은 transaction에 남기고 현재 공통 Activity 설정의 최대 10회·시도당 1분을 사용한다. 재시도 소진은 승인·거절 상태와 분리한다.
 - Alternatives Considered: 원격 시각에 따른 last-write-wins, retry마다 새 요청 ID, 장수명 승인 대기 Workflow와 명시적 비관적 DB 락은 사용하지 않는다.

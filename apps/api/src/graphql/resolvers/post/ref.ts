@@ -33,14 +33,6 @@ Post.implement({
         return row ? (row.policy ?? PostQuotePolicy.EVERYONE) : null;
       },
     }),
-    viewerCanUpdateQuotePolicy: t.boolean({
-      resolve: async (post, _, ctx) => {
-        if (ctx.session?.profile?.id !== post.profileId) {
-          return false;
-        }
-        return (await postQuotePolicyLoader(ctx).load(post.id)) !== null;
-      },
-    }),
   }),
 });
 

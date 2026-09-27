@@ -9,16 +9,7 @@ import {
   Reject,
   Update,
 } from '@fedify/vocab';
-import {
-  ActivityPubActors,
-  db,
-  first,
-  Instances,
-  PostQuoteConsents,
-  PostQuotePolicies,
-  Posts,
-  Profiles,
-} from '@kosmo/core/db';
+import { ActivityPubActors, db, first, Instances, Posts, Profiles } from '@kosmo/core/db';
 import {
   InstanceKind,
   InstanceState,
@@ -27,6 +18,7 @@ import {
   PostVisibility,
   ProfileState,
 } from '@kosmo/core/enums';
+import { postQuoteConsentColumns } from '@kosmo/core/services';
 import { and, eq, inArray, isNotNull, ne, or } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { localOutboundFederation } from './local-outbound-federation';
@@ -40,6 +32,7 @@ const ReplyParentInstances = alias(Instances, 'local_post_delivery_reply_parent_
 const QuoteAuthorProfiles = alias(Profiles, 'local_post_delivery_quote_author_profile');
 const QuoteAuthorInstances = alias(Instances, 'local_post_delivery_quote_author_instance');
 const QuoteAuthorActors = alias(ActivityPubActors, 'local_post_delivery_quote_author_actor');
+const SourcePosts = alias(Posts, 'local_post_delivery_source_post');
 const SourceActors = alias(ActivityPubActors, 'local_post_delivery_source_actor');
 
 const noteUri = (canonicalOrigin: string | URL, postId: string): URL =>
@@ -113,67 +106,6 @@ export const sendLocalPostCreate = async (postId: string): Promise<void> => {
   });
 };
 
-export const sendLocalPostUpdate = async ({
-  postId,
-  revision,
-}: {
-  readonly postId: string;
-  readonly revision: number;
-}): Promise<void> => {
-  const source = await db
-    .select({
-      canonicalOrigin: Instances.canonicalOrigin,
-      localInstanceId: Instances.id,
-      quotePolicyRevision: PostQuotePolicies.revision,
-    })
-    .from(Posts)
-    .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
-    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .innerJoin(PostQuotePolicies, eq(PostQuotePolicies.postId, Posts.id))
-    .where(
-      and(
-        eq(Posts.id, postId),
-        eq(PostQuotePolicies.revision, revision),
-        eq(Posts.state, PostState.ACTIVE),
-        isNotNull(Posts.currentContentId),
-        ne(Posts.visibility, PostVisibility.DIRECT),
-        eq(Instances.kind, InstanceKind.LOCAL),
-        eq(Instances.state, InstanceState.ACTIVE),
-        isNotNull(Instances.canonicalOrigin),
-        eq(Profiles.state, ProfileState.ACTIVE),
-      ),
-    )
-    .limit(1)
-    .then(first);
-  if (!source?.canonicalOrigin || source.quotePolicyRevision !== revision) {
-    return;
-  }
-
-  const context = localOutboundFederation.createContext(new URL(source.canonicalOrigin), {
-    localInstanceId: source.localInstanceId,
-  });
-  const projection = await projectLocalPostNote(context, postId);
-  if (!projection || projection.quotePolicyRevision !== revision) {
-    return;
-  }
-
-  const objectUri = noteUri(projection.canonicalOrigin, postId);
-  const activity = new Update({
-    actor: context.getActorUri(projection.authorProfileId),
-    ccs: projection.object.ccIds,
-    id: new URL(`#quote-policy-${revision}`, objectUri),
-    object: projection.object,
-    published: projection.createdAt,
-    tos: projection.object.toIds,
-  });
-  await dispatchActivityPubActivity({
-    activity,
-    actorProfileId: projection.authorProfileId,
-    context,
-    directProfileIds: [],
-  });
-};
-
 export const sendLocalPostConsentUpdate = async ({
   consentId,
   postId,
@@ -187,25 +119,24 @@ export const sendLocalPostConsentUpdate = async ({
     .select({
       canonicalOrigin: Instances.canonicalOrigin,
       localInstanceId: Instances.id,
-      consentRevision: PostQuoteConsents.revision,
-      consentStatus: PostQuoteConsents.status,
+      consentRevision: postQuoteConsentColumns.revision,
+      consentStatus: postQuoteConsentColumns.status,
     })
-    .from(PostQuoteConsents)
-    .innerJoin(Posts, eq(Posts.id, PostQuoteConsents.quotePostId))
+    .from(Posts)
     .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
     .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
     .where(
       and(
-        eq(PostQuoteConsents.id, consentId),
-        eq(PostQuoteConsents.quotePostId, postId),
-        eq(PostQuoteConsents.revision, revision),
+        eq(Posts.id, consentId),
+        eq(Posts.id, postId),
+        eq(Posts.quoteConsentRevision, revision),
         eq(Posts.state, PostState.ACTIVE),
         isNotNull(Posts.currentContentId),
         ne(Posts.visibility, PostVisibility.DIRECT),
         eq(Instances.kind, InstanceKind.LOCAL),
         isNotNull(Instances.canonicalOrigin),
         or(
-          eq(PostQuoteConsents.status, PostQuoteConsentStatus.REVOKED),
+          eq(Posts.quoteConsentStatus, PostQuoteConsentStatus.REVOKED),
           and(eq(Instances.state, InstanceState.ACTIVE), eq(Profiles.state, ProfileState.ACTIVE)),
         ),
       ),
@@ -256,41 +187,38 @@ export const sendLocalPostQuoteRequest = async ({
 }): Promise<void> => {
   const consent = await db
     .select({
-      quoteAuthorActorUri: PostQuoteConsents.quoteAuthorActorUri,
+      quoteAuthorActorUri: postQuoteConsentColumns.quoteAuthorActorUri,
       quoteAuthorProfileId: QuoteAuthorProfiles.id,
-      quoteUri: PostQuoteConsents.quoteUri,
-      requestUri: PostQuoteConsents.requestUri,
-      sourceUri: PostQuoteConsents.sourceUri,
+      quoteUri: postQuoteConsentColumns.quoteUri,
+      requestUri: postQuoteConsentColumns.requestUri,
+      sourceUri: postQuoteConsentColumns.sourceUri,
       sourceAuthorProfileId: Profiles.id,
       sourceInboxUri: SourceActors.inboxUri,
       sourceActorUri: SourceActors.uri,
     })
-    .from(PostQuoteConsents)
-    .innerJoin(Posts, eq(Posts.id, PostQuoteConsents.sourcePostId))
-    .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
+    .from(Posts)
+    .innerJoin(SourcePosts, eq(SourcePosts.id, Posts.quoteConsentSourcePostId))
+    .innerJoin(Profiles, eq(Profiles.id, SourcePosts.profileId))
     .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
     .leftJoin(
       SourceActors,
       and(
         eq(SourceActors.profileId, Profiles.id),
-        eq(SourceActors.uri, PostQuoteConsents.sourceAuthorActorUri),
+        eq(SourceActors.uri, Posts.quoteConsentSourceAuthorActorUri),
       ),
     )
-    .innerJoin(
-      QuoteAuthorProfiles,
-      eq(QuoteAuthorProfiles.id, PostQuoteConsents.quoteAuthorProfileId),
-    )
+    .innerJoin(QuoteAuthorProfiles, eq(QuoteAuthorProfiles.id, Posts.profileId))
     .innerJoin(QuoteAuthorInstances, eq(QuoteAuthorInstances.id, QuoteAuthorProfiles.instanceId))
     .where(
       and(
-        eq(PostQuoteConsents.id, consentId),
-        eq(PostQuoteConsents.quotePostId, postId),
-        eq(PostQuoteConsents.revision, revision),
-        eq(PostQuoteConsents.status, PostQuoteConsentStatus.PENDING),
+        eq(Posts.id, consentId),
+        eq(Posts.id, postId),
+        eq(Posts.quoteConsentRevision, revision),
+        eq(Posts.quoteConsentStatus, PostQuoteConsentStatus.PENDING),
         eq(Instances.kind, InstanceKind.ACTIVITYPUB),
         eq(Instances.state, InstanceState.ACTIVE),
-        eq(Posts.state, PostState.ACTIVE),
-        isNotNull(Posts.currentContentId),
+        eq(SourcePosts.state, PostState.ACTIVE),
+        isNotNull(SourcePosts.currentContentId),
         eq(Profiles.state, ProfileState.ACTIVE),
         eq(QuoteAuthorInstances.kind, InstanceKind.LOCAL),
         eq(QuoteAuthorInstances.state, InstanceState.ACTIVE),
@@ -372,46 +300,44 @@ export const sendLocalPostQuoteDecision = async ({
 }): Promise<void> => {
   const decision = await db
     .select({
-      approvalUri: PostQuoteConsents.approvalUri,
+      approvalUri: Posts.quoteConsentApprovalUri,
       quoteAuthorActorUri: QuoteAuthorActors.uri,
       quoteAuthorProfileId: QuoteAuthorProfiles.id,
-      quoteUri: PostQuoteConsents.quoteUri,
-      requestUri: PostQuoteConsents.requestUri,
-      revision: PostQuoteConsents.revision,
-      sourceAuthorActorUri: PostQuoteConsents.sourceAuthorActorUri,
+      quoteUri: postQuoteConsentColumns.quoteUri,
+      requestUri: postQuoteConsentColumns.requestUri,
+      revision: postQuoteConsentColumns.revision,
+      sourceAuthorActorUri: postQuoteConsentColumns.sourceAuthorActorUri,
       sourceAuthorProfileId: Profiles.id,
       sourceCanonicalOrigin: Instances.canonicalOrigin,
       sourceInstanceId: Instances.id,
-      sourceUri: PostQuoteConsents.sourceUri,
-      status: PostQuoteConsents.status,
+      sourceInstanceKind: Instances.kind,
+      sourceUri: postQuoteConsentColumns.sourceUri,
+      status: postQuoteConsentColumns.status,
     })
-    .from(PostQuoteConsents)
-    .innerJoin(Posts, eq(Posts.id, PostQuoteConsents.sourcePostId))
-    .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
+    .from(Posts)
+    .innerJoin(SourcePosts, eq(SourcePosts.id, Posts.quoteConsentSourcePostId))
+    .innerJoin(Profiles, eq(Profiles.id, SourcePosts.profileId))
     .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .innerJoin(
-      QuoteAuthorProfiles,
-      eq(QuoteAuthorProfiles.id, PostQuoteConsents.quoteAuthorProfileId),
-    )
+    .innerJoin(QuoteAuthorProfiles, eq(QuoteAuthorProfiles.id, Posts.profileId))
     .innerJoin(QuoteAuthorInstances, eq(QuoteAuthorInstances.id, QuoteAuthorProfiles.instanceId))
     .innerJoin(
       QuoteAuthorActors,
       and(
         eq(QuoteAuthorActors.profileId, QuoteAuthorProfiles.id),
-        eq(QuoteAuthorActors.uri, PostQuoteConsents.quoteAuthorActorUri),
+        eq(QuoteAuthorActors.uri, Posts.quoteConsentQuoteAuthorActorUri),
       ),
     )
     .where(
       and(
-        eq(PostQuoteConsents.id, consentId),
-        eq(PostQuoteConsents.revision, revision),
-        eq(PostQuoteConsents.sourcePostId, sourcePostId),
-        inArray(PostQuoteConsents.status, [
+        eq(Posts.id, consentId),
+        eq(Posts.quoteConsentRevision, revision),
+        eq(Posts.quoteConsentSourcePostId, sourcePostId),
+        inArray(Posts.quoteConsentStatus, [
           PostQuoteConsentStatus.APPROVED,
           PostQuoteConsentStatus.REJECTED,
         ]),
-        eq(Posts.state, PostState.ACTIVE),
-        isNotNull(Posts.currentContentId),
+        eq(SourcePosts.state, PostState.ACTIVE),
+        isNotNull(SourcePosts.currentContentId),
         eq(Profiles.state, ProfileState.ACTIVE),
         eq(Instances.kind, InstanceKind.LOCAL),
         eq(Instances.state, InstanceState.ACTIVE),
@@ -494,6 +420,7 @@ type LocalPostQuoteRevocation = {
   readonly sourceAuthorProfileId: string;
   readonly sourceCanonicalOrigin: string | null;
   readonly sourceInstanceId: string;
+  readonly sourceInstanceKind: InstanceKind;
   readonly sourceUri: string;
 };
 
@@ -504,45 +431,43 @@ const loadLocalPostQuoteRevocation = async (
 ): Promise<LocalPostQuoteRevocation | null> =>
   db
     .select({
-      approvalUri: PostQuoteConsents.approvalUri,
-      id: PostQuoteConsents.id,
+      approvalUri: Posts.quoteConsentApprovalUri,
+      id: Posts.id,
       quoteAuthorActorRecordUri: QuoteAuthorActors.uri,
       quoteAuthorInboxUri: QuoteAuthorActors.inboxUri,
-      quoteAuthorActorUri: PostQuoteConsents.quoteAuthorActorUri,
+      quoteAuthorActorUri: postQuoteConsentColumns.quoteAuthorActorUri,
       quoteAuthorInstanceKind: QuoteAuthorInstances.kind,
       quoteAuthorProfileId: QuoteAuthorProfiles.id,
-      quotePostId: PostQuoteConsents.quotePostId,
+      quotePostId: Posts.id,
       quoteAuthorSharedInboxUri: QuoteAuthorActors.sharedInboxUri,
-      revision: PostQuoteConsents.revision,
+      revision: postQuoteConsentColumns.revision,
       sourceAuthorProfileId: Profiles.id,
       sourceCanonicalOrigin: Instances.canonicalOrigin,
       sourceInstanceId: Instances.id,
-      sourceUri: PostQuoteConsents.sourceUri,
+      sourceInstanceKind: Instances.kind,
+      sourceUri: postQuoteConsentColumns.sourceUri,
     })
-    .from(PostQuoteConsents)
-    .innerJoin(Posts, eq(Posts.id, PostQuoteConsents.sourcePostId))
-    .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
+    .from(Posts)
+    .innerJoin(SourcePosts, eq(SourcePosts.id, Posts.quoteConsentSourcePostId))
+    .innerJoin(Profiles, eq(Profiles.id, SourcePosts.profileId))
     .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .innerJoin(
-      QuoteAuthorProfiles,
-      eq(QuoteAuthorProfiles.id, PostQuoteConsents.quoteAuthorProfileId),
-    )
+    .innerJoin(QuoteAuthorProfiles, eq(QuoteAuthorProfiles.id, Posts.profileId))
     .innerJoin(QuoteAuthorInstances, eq(QuoteAuthorInstances.id, QuoteAuthorProfiles.instanceId))
     .leftJoin(
       QuoteAuthorActors,
       and(
         eq(QuoteAuthorActors.profileId, QuoteAuthorProfiles.id),
-        eq(QuoteAuthorActors.uri, PostQuoteConsents.quoteAuthorActorUri),
+        eq(QuoteAuthorActors.uri, Posts.quoteConsentQuoteAuthorActorUri),
       ),
     )
     .where(
       and(
-        eq(PostQuoteConsents.id, consentId),
-        eq(PostQuoteConsents.sourcePostId, sourcePostId),
-        eq(PostQuoteConsents.revision, revision),
-        eq(PostQuoteConsents.status, PostQuoteConsentStatus.REVOKED),
-        isNotNull(PostQuoteConsents.approvalUri),
-        eq(Posts.state, PostState.DELETED),
+        eq(Posts.id, consentId),
+        eq(Posts.quoteConsentSourcePostId, sourcePostId),
+        eq(Posts.quoteConsentRevision, revision),
+        eq(Posts.quoteConsentStatus, PostQuoteConsentStatus.REVOKED),
+        isNotNull(Posts.quoteConsentApprovalUri),
+        eq(SourcePosts.state, PostState.DELETED),
         eq(Instances.kind, InstanceKind.LOCAL),
         isNotNull(Instances.canonicalOrigin),
         inArray(QuoteAuthorInstances.kind, [InstanceKind.LOCAL, InstanceKind.ACTIVITYPUB]),
@@ -555,6 +480,16 @@ const loadLocalPostQuoteRevocation = async (
 const dispatchLocalPostQuoteRevocation = async (
   consent: LocalPostQuoteRevocation,
 ): Promise<void> => {
+  if (consent.sourceInstanceKind === InstanceKind.ACTIVITYPUB) {
+    if (consent.quoteAuthorInstanceKind === InstanceKind.LOCAL && consent.quotePostId) {
+      await sendLocalPostConsentUpdate({
+        consentId: consent.id,
+        postId: consent.quotePostId,
+        revision: consent.revision,
+      });
+    }
+    return;
+  }
   if (!consent.approvalUri || !consent.sourceCanonicalOrigin) {
     return;
   }
@@ -614,45 +549,45 @@ export const sendLocalPostQuoteRevocation = async ({
 export const sendLocalPostQuoteRevocations = async (sourcePostId: string): Promise<void> => {
   const source = await db
     .select({
-      approvalUri: PostQuoteConsents.approvalUri,
-      id: PostQuoteConsents.id,
+      approvalUri: Posts.quoteConsentApprovalUri,
+      id: Posts.id,
       quoteAuthorActorRecordUri: QuoteAuthorActors.uri,
       quoteAuthorInboxUri: QuoteAuthorActors.inboxUri,
-      quoteAuthorActorUri: PostQuoteConsents.quoteAuthorActorUri,
+      quoteAuthorActorUri: postQuoteConsentColumns.quoteAuthorActorUri,
       quoteAuthorInstanceKind: QuoteAuthorInstances.kind,
       quoteAuthorProfileId: QuoteAuthorProfiles.id,
-      quotePostId: PostQuoteConsents.quotePostId,
+      quotePostId: Posts.id,
       quoteAuthorSharedInboxUri: QuoteAuthorActors.sharedInboxUri,
-      revision: PostQuoteConsents.revision,
+      revision: postQuoteConsentColumns.revision,
       sourceAuthorProfileId: Profiles.id,
       sourceCanonicalOrigin: Instances.canonicalOrigin,
       sourceInstanceId: Instances.id,
-      sourceUri: PostQuoteConsents.sourceUri,
+      sourceInstanceKind: Instances.kind,
+      sourceUri: postQuoteConsentColumns.sourceUri,
     })
-    .from(PostQuoteConsents)
-    .innerJoin(Posts, eq(Posts.id, PostQuoteConsents.sourcePostId))
-    .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
+    .from(Posts)
+    .innerJoin(SourcePosts, eq(SourcePosts.id, Posts.quoteConsentSourcePostId))
+    .innerJoin(Profiles, eq(Profiles.id, SourcePosts.profileId))
     .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .innerJoin(
-      QuoteAuthorProfiles,
-      eq(QuoteAuthorProfiles.id, PostQuoteConsents.quoteAuthorProfileId),
-    )
+    .innerJoin(QuoteAuthorProfiles, eq(QuoteAuthorProfiles.id, Posts.profileId))
     .innerJoin(QuoteAuthorInstances, eq(QuoteAuthorInstances.id, QuoteAuthorProfiles.instanceId))
     .leftJoin(
       QuoteAuthorActors,
       and(
         eq(QuoteAuthorActors.profileId, QuoteAuthorProfiles.id),
-        eq(QuoteAuthorActors.uri, PostQuoteConsents.quoteAuthorActorUri),
+        eq(QuoteAuthorActors.uri, Posts.quoteConsentQuoteAuthorActorUri),
       ),
     )
     .where(
       and(
-        eq(PostQuoteConsents.sourcePostId, sourcePostId),
-        eq(PostQuoteConsents.status, PostQuoteConsentStatus.REVOKED),
-        isNotNull(PostQuoteConsents.approvalUri),
-        eq(Posts.state, PostState.DELETED),
-        eq(Instances.kind, InstanceKind.LOCAL),
-        isNotNull(Instances.canonicalOrigin),
+        eq(Posts.quoteConsentSourcePostId, sourcePostId),
+        eq(Posts.quoteConsentStatus, PostQuoteConsentStatus.REVOKED),
+        or(eq(Instances.kind, InstanceKind.ACTIVITYPUB), isNotNull(Posts.quoteConsentApprovalUri)),
+        eq(SourcePosts.state, PostState.DELETED),
+        or(
+          eq(Instances.kind, InstanceKind.ACTIVITYPUB),
+          and(eq(Instances.kind, InstanceKind.LOCAL), isNotNull(Instances.canonicalOrigin)),
+        ),
         inArray(QuoteAuthorInstances.kind, [InstanceKind.LOCAL, InstanceKind.ACTIVITYPUB]),
       ),
     );

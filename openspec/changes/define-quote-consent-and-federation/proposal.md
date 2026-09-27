@@ -13,7 +13,7 @@ PROD-431 tasks 2~3의 작성 범위를 다시 소유하지 않는다. 2026-09-17
 - 기존 `createPost`에 Source 입력을 추가하고 Repost 메뉴에서 공용 Composer로 기본 Quote를 작성한다.
   Reply+Quote 작성 UI·API와 링크의 인용 카드 전환은 제외한다.
 - 기존 게시글 공개 범위 설정 UI를 재사용하고, 그 안에 새 인용 허용 정책 선택 UI `모두 | 팔로워 | 본인만`을 추가한다.
-  공개·조용한 공개에서 선택하고 작성과 함께 저장하며 게시 후 정책도 변경할 수 있다. 별도 선택이 없는 새 글과 기존 Local Post는 `모두`로 시작하며
+  공개·조용한 공개에서 선택하고 작성과 함께 저장한다. 게시 후 정책 변경은 후속 범위로 분리한다. 별도 선택이 없는 새 글과 기존 Local Post는 `모두`로 시작하며
   기존 승인에는 소급 적용하지 않는다.
 - 신규 Quote consent 정책을 기존 2건을 위한 예외 없이 적용한다. 두 Quote의 migration/backfill·Source 표시
   보존과 production ID·Source 결속 확인, 이를 위한 preflight·deployment validation은 범위 밖이다.

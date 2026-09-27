@@ -154,7 +154,6 @@ export type StoryPost = {
   repostSource: StoryPost | null;
   state: 'ACTIVE';
   viewerBookmark: { __typename: 'Bookmark'; id: string } | null;
-  viewerCanUpdateQuotePolicy: boolean;
   viewerRepost: StoryPostReference | null;
   visibility: 'DIRECT' | 'FOLLOWERS' | 'PUBLIC' | 'UNLISTED';
 };
@@ -173,7 +172,6 @@ export function post({
   replyParent = null,
   repostSource = null,
   viewerRepost = null,
-  viewerCanUpdateQuotePolicy = false,
   visibility = 'UNLISTED',
 }: {
   bodyDocument?: PostContentBodyDocumentV1;
@@ -189,7 +187,6 @@ export function post({
   replyParent?: StoryReplyParentReference | null;
   repostSource?: StoryPost | null;
   viewerRepost?: StoryPostReference | null;
-  viewerCanUpdateQuotePolicy?: boolean;
   visibility?: StoryPost['visibility'];
 } = {}): StoryPost {
   return {
@@ -220,7 +217,6 @@ export function post({
     repostSource,
     state: 'ACTIVE',
     viewerBookmark: null,
-    viewerCanUpdateQuotePolicy,
     viewerRepost,
     visibility,
   };

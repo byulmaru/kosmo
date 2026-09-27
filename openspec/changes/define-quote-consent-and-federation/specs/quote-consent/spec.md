@@ -2,25 +2,17 @@
 
 ### Requirement: 게시글 인용 정책 GraphQL 계약
 
-**Authority / Provenance:** 이 요구사항은 반드시 준수해야 한다(MUST). 근거: `docs/domain/objects/post.md`의 게시글별 정책·정책 변경 Mutation,
+**Authority / Provenance:** 이 요구사항은 반드시 준수해야 한다(MUST). 근거: `docs/domain/objects/post.md`의 게시글별 작성 시 정책,
 `docs/design/post-action-bar.md`, `memory/graphql-style.md`, PROD-902,
 PROD-924의 2026-09-09 API 구체화 위임과 2026-09-11 공개 범위 UI 통합·개별 철회 제외 결정.
 
 API는 `PostQuotePolicy`의 `EVERYONE`, `FOLLOWERS`, `AUTHOR`를 각각 모두·팔로워·본인만으로 제공해야
 한다(MUST). 조회 가능한 Content 있는 Local Post의 `Post.quotePolicy`는 이 enum을 반환하고, 원격 Post와
-Content 없는 Repost에서는 null을 반환해야 한다(MUST). `viewerCanUpdateQuotePolicy: Boolean!`는 현재
-selected Profile의 정책 변경 권한을 반영해야 한다(MUST).
+Content 없는 Repost에서는 null을 반환해야 한다(MUST).
 
 `CreatePostInput.quotePolicy: PostQuotePolicy`는 optional이며 생략·null일 때 `EVERYONE`으로 시작해야
 한다(MUST). 명시적으로 선택한 값은 Post·Content와 같은 transaction에 저장해야 한다(MUST).
-`updatePostQuotePolicy(input: UpdatePostQuotePolicyInput!): UpdatePostQuotePolicyPayload!`는 `id: ID!`와
-`quotePolicy: PostQuotePolicy!`를 받아 변경한 `post: Post!`를 반환해야 한다(MUST). ID는 concrete Post
-global ID이며 actor는 세션에서 결정해야 한다(MUST).
-
-정책 변경은 Active Account·member인 selected Profile이 해당 Active Local Post의 Author일 때만 허용해야
-한다(MUST). mutation은 메뉴용 권한 플래그를 신뢰하지 않고 저장 시 다시 권한을 검증해야 한다(MUST).
-조회 불가 대상은 존재를 노출하지 않는 `NotFoundError`, 확인 가능한 대상의 권한 부족은 기존
-`PermissionDeniedError`, 잘못된 입력은 기존 `ValidationError`와 GraphQL 입력 검증으로 처리해야 한다(MUST).
+게시 후 정책 변경은 2026-09-27 사용자 결정에 따라 후속 범위로 분리한다.
 사용자용 개별 승인 철회 mutation·권한 필드·UI를 이번 범위에서 제공해서는 안 된다(MUST NOT).
 
 #### Scenario: 새 글에 선택한 정책 저장
@@ -29,23 +21,10 @@ global ID이며 actor는 세션에서 결정해야 한다(MUST).
 - **THEN** Post·Content와 같은 transaction에 정책을 저장하고 payload에서 같은 Post의 정책을 조회할 수 있다
 - **AND** rollback 시 부분 정책 row를 남기지 않으며 기존 클라이언트의 입력 생략은 `EVERYONE`으로 처리한다
 
-#### Scenario: 정책 변경과 같은 Post readback
-
-- **WHEN** 권한 있는 작성자가 자신의 Post ID와 `AUTHOR`를 제출한다
-- **THEN** `updatePostQuotePolicy`는 같은 Post ID와 변경된 `quotePolicy`를 반환한다
-- **AND** 기존 승인·Content·visibility는 유지하고 후속 요청만 새 정책으로 판단한다
-
 #### Scenario: 지원 대상과 selected Profile별 정책 조회
 
 - **WHEN** Local content-bearing Post, 원격 Post, Content 없는 Repost를 서로 다른 selected Profile로 조회한다
 - **THEN** Local content-bearing Post만 정책 enum을 반환하고 나머지는 null이다
-- **AND** 정책 변경 권한은 요청별 actor로 계산하며 다른 actor cache의 권한을 재사용하지 않는다
-
-#### Scenario: 잘못된 ID와 권한 우회
-
-- **WHEN** raw DB UUID·다른 Node type·null 변경 정책을 입력하거나 다른 selected Profile의 권한으로 변경을 시도한다
-- **THEN** 정책과 승인·Source 상태를 변경하지 않는다
-- **AND** 조회 불가 대상과 그 Source·승인 존재를 오류에 노출하지 않는다
 
 ### Requirement: 기존 공개 범위 UI 안의 인용 정책 선택
 
@@ -55,20 +34,13 @@ global ID이며 actor는 세션에서 결정해야 한다(MUST).
 기존 게시글 공개 범위 설정 UI를 재사용하고 그 안에 새로운 인용 허용 정책 선택 UI를 추가해야 한다(MUST). 현재 draft가 `PUBLIC` 또는
 `UNLISTED`일 때만 모두·팔로워·본인만 선택을 표시하고, 제한 공개에서는 해당 설정을 숨겨야 한다(MUST).
 새 draft는 모두로 시작하며 해당 글에서 선택한 값을 저장해야 한다(MUST). Parent/Source의 정책 또는 다른 actor의
-정책을 상속해서는 안 된다(MUST NOT). 게시 후 본인 Public·Unlisted 글의 정책 변경은 같은 설정 표현을
-재사용하되 기존 visibility는 읽기 전용이며 Post Visibility 편집을 추가해서는 안 된다(MUST NOT).
+정책을 상속해서는 안 된다(MUST NOT). 게시 후 인용 정책 변경 UI는 이번 범위에서 제공하지 않는다.
 
 #### Scenario: 공개·조용한 공개와 제한 공개 전환
 
 - **WHEN** 작성자가 기존 공개 범위 UI에서 공개 또는 조용한 공개를 선택한다
 - **THEN** 같은 UI 안에서 인용 허용 값을 선택할 수 있고 두 공개 값 사이 전환은 선택값을 유지한다
 - **AND** 팔로워 공개를 선택하면 설정을 숨기며 기존 Source 인용 가능 범위는 바뀌지 않는다
-
-#### Scenario: 게시 후 정책 변경
-
-- **WHEN** 작성자가 게시된 본인 Public·Unlisted 글의 인용 설정을 연다
-- **THEN** 기존 공개 범위를 읽기 전용으로 보여 주고 인용 정책만 변경·저장한다
-- **AND** 기존 승인에는 소급하지 않는다는 설명을 제공하고 일반 본문·visibility 편집은 제공하지 않는다
 
 #### Scenario: 실패 복구와 요청 수명
 
@@ -109,27 +81,6 @@ Source 조회 권한을 부여해서는 안 된다(MUST NOT).
 - **WHEN** Source 정책이 `본인만`이고 다른 Profile이 인용을 요청한다
 - **THEN** 자동 승인하지 않고 요청을 거절한다
 - **AND** Kosmo 원문용 건별 수동 승인 대기나 승인 UI를 만들지 않는다
-
-### Requirement: 작성자의 정책 변경과 비소급 적용
-
-**Authority / Provenance:** 이 요구사항은 반드시 준수해야 한다(MUST). 근거: `docs/domain/objects/post.md`, `docs/design/post-action-bar.md`,
-`docs/domain/decisions/0029-quote-consent-and-federation.md`, PROD-902, PROD-924.
-
-인증된 Account 요청은 `Account.Active`와 행동 Profile의 `Post.Author` 사실을 확인한 뒤 Content가 있는
-Active Local Post의 정책 변경을 허용해야 한다(MUST). 새 정책은 이후 요청·승인 판단에만 적용하고 기존
-승인을 자동 철회해서는 안 된다(MUST NOT). 이번 범위에서 Profile 기본값 설정을 제공해서는 안 된다(MUST NOT).
-
-#### Scenario: 모두에서 본인만으로 변경
-
-- **WHEN** 권한이 있는 작성자가 게시글 정책을 `모두`에서 `본인만`으로 변경한다
-- **THEN** 이후 타인 요청은 새 정책으로 거절한다
-- **AND** 기존에 발급한 승인과 그 승인을 가진 Quote는 일괄 철회하지 않는다
-
-#### Scenario: 다른 Profile의 정책 변경 시도
-
-- **WHEN** 행동 Profile이 대상 Post의 Author가 아니거나 Account가 Active가 아니다
-- **THEN** 정책을 변경하지 않는다
-- **AND** 다른 selected Profile의 권한이나 설정을 재사용하지 않는다
 
 ### Requirement: Quote Source의 인용 가능 범위
 

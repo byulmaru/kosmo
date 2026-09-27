@@ -1,6 +1,6 @@
 import '@kosmo/core/polyfill';
 
-import { Accept, Note, QuoteAuthorization, Reject } from '@fedify/vocab';
+import { Note, QuoteAuthorization } from '@fedify/vocab';
 import {
   db as coreDb,
   first,
@@ -12,25 +12,21 @@ import {
 import {
   InstanceKind,
   InstanceState,
-  PostQuoteConsentStatus,
   PostState,
   PostVisibility,
   ProfileState,
 } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError } from '@kosmo/core/error';
 import {
-  applyInboundQuoteAccept,
-  applyInboundQuoteReject,
-  applyInboundQuoteRevocation,
-  completePostQuoteEffectReceipt,
   loadPendingQuoteConsentByBinding,
   loadQuoteConsentByApprovalUri,
   loadQuoteConsentByRequestUri,
   loadQuotePostIdentity,
   loadQuoteSourceIdentity,
-  recordInboundQuoteRequest,
 } from '@kosmo/core/services';
-import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
+import { runWorkflow } from '@kosmo/core/temporal/client';
+import { postQuoteCommandWorkflow } from '@kosmo/core/temporal/workflows';
+import { and, eq, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import { findPostByActivityPubUri } from './activitypub-post-uri';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
 import { materializeHydratedRemoteNote } from './inbound-create-note';
@@ -41,7 +37,7 @@ import {
   RemoteActorMaterializationError,
 } from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
-import type { Delete, QuoteRequest } from '@fedify/vocab';
+import type { Accept, Delete, QuoteRequest, Reject } from '@fedify/vocab';
 import type { PostQuoteConsentRow } from '@kosmo/core/services';
 
 const noNetworkDocumentLoader = async (url: string): Promise<never> => {
@@ -50,32 +46,6 @@ const noNetworkDocumentLoader = async (url: string): Promise<never> => {
 
 const isUsableHttpUri = (value: URL | null | undefined): value is URL =>
   value !== null && value !== undefined && isHttpUri(value);
-
-const remoteRecipient = (actor: {
-  readonly inboxUri: string | null;
-  readonly sharedInboxUri: string | null;
-  readonly uri: string;
-}) => {
-  if (!actor.inboxUri) {
-    return null;
-  }
-
-  try {
-    const id = new URL(actor.uri);
-    const inboxId = new URL(actor.inboxUri);
-    if (!isHttpUri(id) || !isHttpUri(inboxId)) {
-      return null;
-    }
-    const sharedInbox = actor.sharedInboxUri ? new URL(actor.sharedInboxUri) : null;
-    return {
-      endpoints: sharedInbox && isHttpUri(sharedInbox) ? { sharedInbox } : null,
-      id,
-      inboxId,
-    };
-  } catch {
-    return null;
-  }
-};
 
 const quoteAuthorizationUri = (canonicalOrigin: string, requestUri: string): string =>
   new URL(`/ap/quote-authorization/${encodeURIComponent(requestUri)}`, canonicalOrigin).href;
@@ -258,6 +228,8 @@ const loadVerifiedQuoteRequest = async (
   const quotePost = await coreDb
     .select({
       currentContentId: Posts.currentContentId,
+      repostSourceId: Posts.repostSourceId,
+      consentSourcePostId: Posts.quoteConsentSourcePostId,
       profileState: Profiles.state,
       state: Posts.state,
     })
@@ -271,6 +243,8 @@ const loadVerifiedQuoteRequest = async (
     !quotePost ||
     quotePost.state !== PostState.ACTIVE ||
     quotePost.currentContentId === null ||
+    (quotePost.repostSourceId !== null && quotePost.repostSourceId !== sourcePostId) ||
+    (quotePost.consentSourcePostId !== null && quotePost.consentSourcePostId !== sourcePostId) ||
     quotePost.profileState !== ProfileState.ACTIVE ||
     !quoteIdentity ||
     quoteIdentity.quoteUri !== instrumentUri.href ||
@@ -298,48 +272,6 @@ const loadVerifiedQuoteRequest = async (
     sourceAuthorActorUri: new URL(source.authorActorUri),
     sourceCanonicalOrigin: source.canonicalOrigin,
   };
-};
-
-const sendQuoteDecision = async ({
-  context,
-  decision,
-  localProfileId,
-  quoteAuthorization,
-  quoteRequest,
-  recipient,
-}: {
-  readonly context: InboxContext<void>;
-  readonly decision: 'accept' | 'reject';
-  readonly localProfileId: string;
-  readonly quoteAuthorization?: QuoteAuthorization;
-  readonly quoteRequest: QuoteRequest;
-  readonly recipient: NonNullable<ReturnType<typeof remoteRecipient>>;
-}): Promise<void> => {
-  const actor = context.getActorUri(localProfileId);
-  const activity =
-    decision === 'accept'
-      ? new Accept({
-          actor,
-          object: quoteRequest,
-          result: quoteAuthorization,
-          tos: [recipient.id],
-        })
-      : new Reject({ actor, object: quoteRequest, tos: [recipient.id] });
-
-  try {
-    await context.sendActivity({ identifier: localProfileId }, recipient, activity);
-  } catch (error) {
-    observeInbound({
-      activityType: 'QuoteRequest',
-      actorOrigin: recipient.id.origin,
-      handler: 'quote',
-      objectOrigin: quoteRequest.objectId?.origin,
-      outcome: 'external_failure',
-      phase: 'delivery',
-      reasonCode: `${decision}_quote_delivery_failed`,
-    });
-    throw error;
-  }
 };
 
 export const handleInboundQuoteRequest = async (
@@ -379,66 +311,29 @@ export const handleInboundQuoteRequest = async (
     throw error;
   }
 
-  const decision = await recordInboundQuoteRequest({
-    approvalUri: quoteAuthorizationUri(verified.sourceCanonicalOrigin, verified.requestUri.href),
-    quoteAuthorActorUri: verified.actorUri.href,
-    quoteAuthorProfileId: remoteActor.profile.id,
-    quotePostId: verified.quotePostId,
-    quoteUri: verified.instrumentUri.href,
-    requestUri: verified.requestUri.href,
-    sourceAuthorActorUri: verified.sourceAuthorActorUri.href,
-    sourcePostId: verified.sourcePostId,
-    sourceUri: verified.sourceUri.href,
+  await runWorkflow(postQuoteCommandWorkflow, {
+    args: [
+      {
+        kind: 'request',
+        approvalUri: quoteAuthorizationUri(
+          verified.sourceCanonicalOrigin,
+          verified.requestUri.href,
+        ),
+        quoteAuthorActorUri: verified.actorUri.href,
+        quoteAuthorProfileId: remoteActor.profile.id,
+        quotePostId: verified.quotePostId,
+        quoteUri: verified.instrumentUri.href,
+        requestUri: verified.requestUri.href,
+        sourceAuthorActorUri: verified.sourceAuthorActorUri.href,
+        sourcePostId: verified.sourcePostId,
+        sourceUri: verified.sourceUri.href,
+      },
+    ],
+    mode: 'update-with-start',
+    updateId: 'command',
+    workflowIdConflictPolicy: 'USE_EXISTING',
+    workflowIdReusePolicy: 'ALLOW_DUPLICATE',
   });
-  const { consent } = decision;
-
-  const recipient = remoteRecipient(remoteActor.actor);
-  if (!recipient) {
-    if (decision.receiptId) {
-      await completePostQuoteEffectReceipt(decision.receiptId);
-    }
-    observeInbound({
-      activityType: 'QuoteRequest',
-      actorOrigin: verified.actorUri.origin,
-      handler: 'quote',
-      objectOrigin: verified.sourceUri.origin,
-      outcome: 'noop',
-      phase: 'delivery',
-      reasonCode: 'quote_request_actor_inbox_missing',
-    });
-    return;
-  }
-
-  if (decision.accepted && consent.approvalUri) {
-    await sendQuoteDecision({
-      context,
-      decision: 'accept',
-      localProfileId: verified.sourceAuthorProfileId,
-      quoteAuthorization: new QuoteAuthorization({
-        attribution: verified.sourceAuthorActorUri,
-        id: new URL(consent.approvalUri),
-        interactingObject: verified.instrumentUri,
-        interactionTarget: verified.sourceUri,
-      }),
-      quoteRequest: request,
-      recipient,
-    });
-    if (decision.receiptId) {
-      await completePostQuoteEffectReceipt(decision.receiptId);
-    }
-    return;
-  }
-
-  await sendQuoteDecision({
-    context,
-    decision: 'reject',
-    localProfileId: verified.sourceAuthorProfileId,
-    quoteRequest: request,
-    recipient,
-  });
-  if (decision.receiptId) {
-    await completePostQuoteEffectReceipt(decision.receiptId);
-  }
 };
 
 const observeResponseMismatch = (
@@ -459,10 +354,6 @@ const forwardQuoteRevocation = async (
   context: InboxContext<void>,
   consent: PostQuoteConsentRow,
 ): Promise<void> => {
-  if (!consent.quotePostId) {
-    return;
-  }
-
   const quote = await coreDb
     .select({ profileId: Profiles.id })
     .from(Posts)
@@ -493,8 +384,27 @@ const forwardClaimedQuoteRevocation = async (
   context: InboxContext<void>,
   consent: PostQuoteConsentRow,
   approvalUri: string,
-  forwardingAt: Temporal.Instant,
 ): Promise<void> => {
+  const claim = await coreDb
+    .update(PostQuoteRevocations)
+    .set({ forwardingAt: sql`now()` })
+    .where(
+      and(
+        eq(PostQuoteRevocations.approvalUri, approvalUri),
+        eq(PostQuoteRevocations.forwardEligible, true),
+        isNull(PostQuoteRevocations.forwardedAt),
+        or(
+          isNull(PostQuoteRevocations.forwardingAt),
+          sql`${PostQuoteRevocations.forwardingAt} < now() - interval '5 minutes'`,
+        ),
+      ),
+    )
+    .returning({ forwardingAt: PostQuoteRevocations.forwardingAt })
+    .then(first);
+  if (!claim?.forwardingAt) {
+    return;
+  }
+  const { forwardingAt } = claim;
   try {
     await forwardQuoteRevocation(context, consent);
     await coreDb
@@ -585,12 +495,21 @@ export const handleInboundQuoteAccept = async ({
     return;
   }
 
-  await applyInboundQuoteAccept({
-    approvalUri: resultUri.href,
-    quoteUri: consent.quoteUri,
-    requestUri: consent.requestUri,
-    sourceAuthorActorUri: actorUri.href,
-    sourceUri: consent.sourceUri,
+  await runWorkflow(postQuoteCommandWorkflow, {
+    args: [
+      {
+        kind: 'accept',
+        approvalUri: resultUri.href,
+        quoteUri: consent.quoteUri,
+        requestUri: consent.requestUri,
+        sourceAuthorActorUri: actorUri.href,
+        sourceUri: consent.sourceUri,
+      },
+    ],
+    mode: 'update-with-start',
+    updateId: 'command',
+    workflowIdConflictPolicy: 'USE_EXISTING',
+    workflowIdReusePolicy: 'ALLOW_DUPLICATE',
   });
 };
 
@@ -636,9 +555,12 @@ export const handleInboundQuoteReject = async ({
     return;
   }
 
-  await applyInboundQuoteReject({
-    requestUri: consent.requestUri,
-    sourceAuthorActorUri: actorUri.href,
+  await runWorkflow(postQuoteCommandWorkflow, {
+    args: [{ kind: 'reject', requestUri: consent.requestUri, sourceAuthorActorUri: actorUri.href }],
+    mode: 'update-with-start',
+    updateId: 'command',
+    workflowIdConflictPolicy: 'USE_EXISTING',
+    workflowIdReusePolicy: 'ALLOW_DUPLICATE',
   });
 };
 
@@ -683,20 +605,24 @@ export const handleInboundQuoteRevocation = async (
     if (!pendingConsent) {
       return false;
     }
-    const revocation = await applyInboundQuoteRevocation({
-      approvalUri: approvalUri.href,
-      consentId: pendingConsent.id,
-      quoteUri: embeddedQuoteUri ?? pendingConsent.quoteUri,
-      sourceAuthorActorUri: actorUri.href,
-      sourceUri,
+    const revocation = await runWorkflow(postQuoteCommandWorkflow, {
+      args: [
+        {
+          kind: 'revoke',
+          approvalUri: approvalUri.href,
+          consentId: pendingConsent.id,
+          quoteUri: embeddedQuoteUri ?? pendingConsent.quoteUri,
+          sourceAuthorActorUri: actorUri.href,
+          sourceUri,
+        },
+      ],
+      mode: 'update-with-start',
+      updateId: 'command',
+      workflowIdConflictPolicy: 'USE_EXISTING',
+      workflowIdReusePolicy: 'ALLOW_DUPLICATE',
     });
-    if (revocation?.forwardingAt) {
-      await forwardClaimedQuoteRevocation(
-        context,
-        revocation.consent,
-        approvalUri.href,
-        revocation.forwardingAt,
-      );
+    if (revocation?.forwardEligible) {
+      await forwardClaimedQuoteRevocation(context, pendingConsent, approvalUri.href);
     }
     return revocation !== null;
   }
@@ -723,23 +649,23 @@ export const handleInboundQuoteRevocation = async (
     return true;
   }
 
-  const revocation = await applyInboundQuoteRevocation({
-    approvalUri: approvalUri.href,
-    quoteUri: consent.quoteUri,
-    sourceAuthorActorUri: actorUri.href,
-    sourceUri: consent.sourceUri,
+  const revocation = await runWorkflow(postQuoteCommandWorkflow, {
+    args: [
+      {
+        kind: 'revoke',
+        approvalUri: approvalUri.href,
+        quoteUri: consent.quoteUri,
+        sourceAuthorActorUri: actorUri.href,
+        sourceUri: consent.sourceUri,
+      },
+    ],
+    mode: 'update-with-start',
+    updateId: 'command',
+    workflowIdConflictPolicy: 'USE_EXISTING',
+    workflowIdReusePolicy: 'ALLOW_DUPLICATE',
   });
-  if (
-    revocation?.forwardingAt &&
-    (consent.status === PostQuoteConsentStatus.APPROVED ||
-      consent.status === PostQuoteConsentStatus.REVOKED)
-  ) {
-    await forwardClaimedQuoteRevocation(
-      context,
-      revocation.consent,
-      approvalUri.href,
-      revocation.forwardingAt,
-    );
+  if (revocation?.forwardEligible) {
+    await forwardClaimedQuoteRevocation(context, consent, approvalUri.href);
   }
   return true;
 };

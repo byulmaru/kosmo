@@ -1741,3 +1741,129 @@ test(
     });
   },
 );
+
+test(
+  'Quote command는 commit 결과를 먼저 반환하고 delivery 실패를 Workflow에서 재시도한다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+    const taskQueue = `${KOSMO_TASK_QUEUE}-quote-command-${process.pid}`;
+    const result = { consentId: 'consent', postId: 'quote', sourcePostId: 'source', revision: 2 };
+    let transitions = 0;
+    let deliveries = 0;
+    let releaseDelivery: () => void = () => {};
+    const deliveryGate = new Promise<void>((resolve) => {
+      releaseDelivery = resolve;
+    });
+    const worker = await Worker.create({
+      activities: {
+        executePostQuoteCommandActivity: async () => {
+          transitions += 1;
+          return result;
+        },
+        sendLocalPostConsentUpdateActivity: async (input: unknown) => {
+          assert.deepEqual(input, result);
+          deliveries += 1;
+          await deliveryGate;
+          if (deliveries === 1) {
+            throw new Error('temporary delivery failure');
+          }
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+    await worker.runUntil(async () => {
+      const start = new WithStartWorkflowOperation('postQuoteCommandWorkflow', {
+        args: [
+          {
+            kind: 'reject',
+            requestUri: 'https://quote.example/request',
+            sourceAuthorActorUri: 'https://source.example/actor',
+          },
+        ],
+        taskQueue,
+        workflowId: `quote-command-test-${process.pid}`,
+        workflowIdConflictPolicy: 'USE_EXISTING',
+      });
+      const committed = await environment.client.workflow.executeUpdateWithStart(
+        'postQuoteCommand',
+        {
+          args: [],
+          updateId: 'command',
+          startWorkflowOperation: start,
+        },
+      );
+      assert.deepEqual(committed, result);
+      assert.equal(transitions, 1);
+      releaseDelivery();
+      await (await start.workflowHandle()).result();
+      assert.equal(deliveries, 2);
+      assert.equal(transitions, 1);
+    });
+  },
+);
+
+test(
+  'Quote command는 transaction Activity retry exhaustion을 Update와 Workflow 실패로 남긴다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+    const taskQueue = `${KOSMO_TASK_QUEUE}-quote-command-failure-${process.pid}`;
+    let transitionAttempts = 0;
+    let effectCalls = 0;
+    const worker = await Worker.create({
+      activities: {
+        executePostQuoteCommandActivity: async () => {
+          transitionAttempts += 1;
+          throw ApplicationFailure.create({
+            message: 'quote transaction unavailable',
+            nextRetryDelay: '1ms',
+          });
+        },
+        sendLocalPostConsentUpdateActivity: async () => {
+          effectCalls += 1;
+        },
+        sendLocalPostQuoteDecisionActivity: async () => {
+          effectCalls += 1;
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+    await worker.runUntil(async () => {
+      const operation = new WithStartWorkflowOperation('postQuoteCommandWorkflow', {
+        args: [
+          {
+            kind: 'reject',
+            requestUri: 'https://quote.example/request-failure',
+            sourceAuthorActorUri: 'https://source.example/actor',
+          },
+        ],
+        taskQueue,
+        workflowId: `quote-command-failure-test-${process.pid}`,
+        workflowIdConflictPolicy: 'USE_EXISTING',
+      });
+      const update = environment.client.workflow.executeUpdateWithStart('postQuoteCommand', {
+        args: [],
+        updateId: 'command',
+        startWorkflowOperation: operation,
+      });
+      const handle = await operation.workflowHandle();
+      await assert.rejects(update);
+      await assert.rejects(handle.result());
+      assert.equal(transitionAttempts, 10);
+      assert.equal(effectCalls, 0);
+    });
+  },
+);

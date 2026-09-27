@@ -87,24 +87,6 @@
       "schema": "public"
     },
     {
-      "values": [
-        "QUOTE_REQUEST",
-        "CONSENT_UPDATE",
-        "POLICY_UPDATE",
-        "SOURCE_REVOCATION",
-        "QUOTE_DECISION"
-      ],
-      "name": "post_quote_effect_kind",
-      "entityType": "enums",
-      "schema": "public"
-    },
-    {
-      "values": ["PENDING", "COMPLETED"],
-      "name": "post_quote_effect_receipt_status",
-      "entityType": "enums",
-      "schema": "public"
-    },
-    {
       "values": ["EVERYONE", "FOLLOWERS", "AUTHOR"],
       "name": "post_quote_policy_value",
       "entityType": "enums",
@@ -251,24 +233,6 @@
     {
       "isRlsEnabled": false,
       "name": "post_mentions",
-      "entityType": "tables",
-      "schema": "public"
-    },
-    {
-      "isRlsEnabled": false,
-      "name": "post_quote_consent",
-      "entityType": "tables",
-      "schema": "public"
-    },
-    {
-      "isRlsEnabled": false,
-      "name": "post_quote_effect_receipt",
-      "entityType": "tables",
-      "schema": "public"
-    },
-    {
-      "isRlsEnabled": false,
-      "name": "post_quote_policy",
       "entityType": "tables",
       "schema": "public"
     },
@@ -1895,188 +1859,6 @@
       "name": "id",
       "entityType": "columns",
       "schema": "public",
-      "table": "post_quote_consent"
-    },
-    {
-      "type": "uuid",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "source_post_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_consent"
-    },
-    {
-      "type": "uuid",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "quote_post_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_consent"
-    },
-    {
-      "type": "uuid",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "quote_author_profile_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_consent"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "quote_author_actor_uri",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_consent"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "source_author_actor_uri",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_consent"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "source_uri",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_consent"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "quote_uri",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_consent"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "request_uri",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_consent"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "approval_uri",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_consent"
-    },
-    {
-      "type": "post_quote_consent_status",
-      "typeSchema": "public",
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "status",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_consent"
-    },
-    {
-      "type": "integer",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "1",
-      "generated": null,
-      "identity": null,
-      "name": "revision",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_consent"
-    },
-    {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "now()",
-      "generated": null,
-      "identity": null,
-      "name": "created_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_consent"
-    },
-    {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "now()",
-      "generated": null,
-      "identity": null,
-      "name": "updated_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_consent"
-    },
-    {
-      "type": "uuid",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "uuidv7()",
-      "generated": null,
-      "identity": null,
-      "name": "id",
-      "entityType": "columns",
-      "schema": "public",
       "table": "post_quote_revocation"
     },
     {
@@ -2171,316 +1953,17 @@
       "table": "post_quote_revocation"
     },
     {
-      "type": "uuid",
+      "type": "boolean",
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
-      "default": "uuidv7()",
+      "default": "false",
       "generated": null,
       "identity": null,
-      "name": "id",
+      "name": "forward_eligible",
       "entityType": "columns",
       "schema": "public",
-      "table": "post_quote_effect_receipt"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "effect_key",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_effect_receipt"
-    },
-    {
-      "type": "post_quote_effect_kind",
-      "typeSchema": "public",
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "effect_kind",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_effect_receipt"
-    },
-    {
-      "type": "uuid",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "consent_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_effect_receipt"
-    },
-    {
-      "type": "uuid",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "post_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_effect_receipt"
-    },
-    {
-      "type": "uuid",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "source_post_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_effect_receipt"
-    },
-    {
-      "type": "integer",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "revision",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_effect_receipt"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "request_uri",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_effect_receipt"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "approval_uri",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_effect_receipt"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "source_uri",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_effect_receipt"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "quote_uri",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_effect_receipt"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "source_author_actor_uri",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_effect_receipt"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "quote_author_actor_uri",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_effect_receipt"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "target_inbox_uri",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_effect_receipt"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "target_shared_inbox_uri",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_effect_receipt"
-    },
-    {
-      "type": "post_quote_effect_receipt_status",
-      "typeSchema": "public",
-      "notNull": true,
-      "dimensions": 0,
-      "default": "'PENDING'",
-      "generated": null,
-      "identity": null,
-      "name": "status",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_effect_receipt"
-    },
-    {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "now()",
-      "generated": null,
-      "identity": null,
-      "name": "created_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_effect_receipt"
-    },
-    {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "now()",
-      "generated": null,
-      "identity": null,
-      "name": "updated_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_effect_receipt"
-    },
-    {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "completed_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_effect_receipt"
-    },
-    {
-      "type": "uuid",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "post_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_policy"
-    },
-    {
-      "type": "post_quote_policy_value",
-      "typeSchema": "public",
-      "notNull": true,
-      "dimensions": 0,
-      "default": "'EVERYONE'",
-      "generated": null,
-      "identity": null,
-      "name": "policy",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_policy"
-    },
-    {
-      "type": "integer",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "1",
-      "generated": null,
-      "identity": null,
-      "name": "revision",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_policy"
-    },
-    {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "now()",
-      "generated": null,
-      "identity": null,
-      "name": "created_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_policy"
-    },
-    {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "now()",
-      "generated": null,
-      "identity": null,
-      "name": "updated_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_policy"
+      "table": "post_quote_revocation"
     },
     {
       "type": "uuid",
@@ -3432,6 +2915,136 @@
       "table": "session"
     },
     {
+      "type": "post_quote_policy_value",
+      "typeSchema": "public",
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "quote_policy",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "post"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "quote_consent_source_post_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "post"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "quote_consent_source_uri",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "post"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "quote_consent_source_author_actor_uri",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "post"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "quote_consent_quote_uri",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "post"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "quote_consent_quote_author_actor_uri",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "post"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "quote_consent_request_uri",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "post"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "quote_consent_approval_uri",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "post"
+    },
+    {
+      "type": "post_quote_consent_status",
+      "typeSchema": "public",
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "quote_consent_status",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "post"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "quote_consent_revision",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "post"
+    },
+    {
       "nameExplicit": false,
       "columns": [
         {
@@ -3836,139 +3449,6 @@
       "entityType": "indexes",
       "schema": "public",
       "table": "post_mentions"
-    },
-    {
-      "nameExplicit": false,
-      "columns": [
-        {
-          "value": "source_post_id",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "post_quote_consent_source_post_id_index",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "post_quote_consent"
-    },
-    {
-      "nameExplicit": false,
-      "columns": [
-        {
-          "value": "status",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        },
-        {
-          "value": "source_author_actor_uri",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        },
-        {
-          "value": "source_uri",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        },
-        {
-          "value": "quote_uri",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "post_quote_consent_binding_index",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "post_quote_consent"
-    },
-    {
-      "nameExplicit": false,
-      "columns": [
-        {
-          "value": "quote_post_id",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "post_quote_consent_quote_post_id_index",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "post_quote_consent"
-    },
-    {
-      "nameExplicit": false,
-      "columns": [
-        {
-          "value": "status",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        },
-        {
-          "value": "created_at",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "post_quote_effect_receipt_status_created_at_index",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "post_quote_effect_receipt"
-    },
-    {
-      "nameExplicit": false,
-      "columns": [
-        {
-          "value": "consent_id",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "post_quote_effect_receipt_consent_id_index",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "post_quote_effect_receipt"
     },
     {
       "nameExplicit": false,
@@ -4391,6 +3871,69 @@
       "table": "session"
     },
     {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "quote_consent_source_post_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "post_quote_consent_source_post_id_index",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "post"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "quote_consent_status",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "quote_consent_source_author_actor_uri",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "quote_consent_source_uri",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "quote_consent_quote_uri",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "post_quote_consent_binding_index",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "post"
+    },
+    {
       "nameExplicit": false,
       "columns": ["account_id"],
       "schemaTo": "public",
@@ -4701,97 +4244,6 @@
       "entityType": "fks",
       "schema": "public",
       "table": "post_mentions"
-    },
-    {
-      "nameExplicit": false,
-      "columns": ["source_post_id"],
-      "schemaTo": "public",
-      "tableTo": "post",
-      "columnsTo": ["id"],
-      "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
-      "name": "post_quote_consent_source_post_id_post_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "post_quote_consent"
-    },
-    {
-      "nameExplicit": false,
-      "columns": ["quote_post_id"],
-      "schemaTo": "public",
-      "tableTo": "post",
-      "columnsTo": ["id"],
-      "onUpdate": "NO ACTION",
-      "onDelete": "SET NULL",
-      "name": "post_quote_consent_quote_post_id_post_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "post_quote_consent"
-    },
-    {
-      "nameExplicit": false,
-      "columns": ["quote_author_profile_id"],
-      "schemaTo": "public",
-      "tableTo": "profile",
-      "columnsTo": ["id"],
-      "onUpdate": "NO ACTION",
-      "onDelete": "SET NULL",
-      "name": "post_quote_consent_quote_author_profile_id_profile_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "post_quote_consent"
-    },
-    {
-      "nameExplicit": false,
-      "columns": ["consent_id"],
-      "schemaTo": "public",
-      "tableTo": "post_quote_consent",
-      "columnsTo": ["id"],
-      "onUpdate": "NO ACTION",
-      "onDelete": "SET NULL",
-      "name": "post_quote_effect_receipt_consent_id_post_quote_consent_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "post_quote_effect_receipt"
-    },
-    {
-      "nameExplicit": false,
-      "columns": ["post_id"],
-      "schemaTo": "public",
-      "tableTo": "post",
-      "columnsTo": ["id"],
-      "onUpdate": "NO ACTION",
-      "onDelete": "SET NULL",
-      "name": "post_quote_effect_receipt_post_id_post_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "post_quote_effect_receipt"
-    },
-    {
-      "nameExplicit": false,
-      "columns": ["source_post_id"],
-      "schemaTo": "public",
-      "tableTo": "post",
-      "columnsTo": ["id"],
-      "onUpdate": "NO ACTION",
-      "onDelete": "SET NULL",
-      "name": "post_quote_effect_receipt_source_post_id_post_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "post_quote_effect_receipt"
-    },
-    {
-      "nameExplicit": false,
-      "columns": ["post_id"],
-      "schemaTo": "public",
-      "tableTo": "post",
-      "columnsTo": ["id"],
-      "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
-      "name": "post_quote_policy_post_id_post_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "post_quote_policy"
     },
     {
       "nameExplicit": false,
@@ -5132,6 +4584,19 @@
       "table": "session"
     },
     {
+      "nameExplicit": false,
+      "columns": ["quote_consent_source_post_id"],
+      "schemaTo": "public",
+      "tableTo": "post",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "name": "post_quote_consent_source_post_id_post_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "post"
+    },
+    {
       "columns": ["post_content_id", "profile_id"],
       "nameExplicit": false,
       "name": "post_mentions_pkey",
@@ -5265,30 +4730,6 @@
       "name": "post_content_pkey",
       "schema": "public",
       "table": "post_content",
-      "entityType": "pks"
-    },
-    {
-      "columns": ["id"],
-      "nameExplicit": false,
-      "name": "post_quote_consent_pkey",
-      "schema": "public",
-      "table": "post_quote_consent",
-      "entityType": "pks"
-    },
-    {
-      "columns": ["id"],
-      "nameExplicit": false,
-      "name": "post_quote_effect_receipt_pkey",
-      "schema": "public",
-      "table": "post_quote_effect_receipt",
-      "entityType": "pks"
-    },
-    {
-      "columns": ["post_id"],
-      "nameExplicit": false,
-      "name": "post_quote_policy_pkey",
-      "schema": "public",
-      "table": "post_quote_policy",
       "entityType": "pks"
     },
     {
@@ -5487,15 +4928,6 @@
     },
     {
       "nameExplicit": false,
-      "columns": ["source_post_id", "quote_uri", "quote_author_actor_uri"],
-      "nullsNotDistinct": false,
-      "name": "post_quote_consent_source_post_id_quote_uri_quote_author_actor_uri_unique",
-      "entityType": "uniques",
-      "schema": "public",
-      "table": "post_quote_consent"
-    },
-    {
-      "nameExplicit": false,
       "columns": ["owner_profile_id", "target_profile_id"],
       "nullsNotDistinct": false,
       "name": "profile_block_owner_profile_id_target_profile_id_unique",
@@ -5658,33 +5090,6 @@
     },
     {
       "nameExplicit": false,
-      "columns": ["request_uri"],
-      "nullsNotDistinct": false,
-      "name": "post_quote_consent_request_uri_key",
-      "schema": "public",
-      "table": "post_quote_consent",
-      "entityType": "uniques"
-    },
-    {
-      "nameExplicit": false,
-      "columns": ["approval_uri"],
-      "nullsNotDistinct": false,
-      "name": "post_quote_consent_approval_uri_key",
-      "schema": "public",
-      "table": "post_quote_consent",
-      "entityType": "uniques"
-    },
-    {
-      "nameExplicit": false,
-      "columns": ["effect_key"],
-      "nullsNotDistinct": false,
-      "name": "post_quote_effect_receipt_effect_key_key",
-      "schema": "public",
-      "table": "post_quote_effect_receipt",
-      "entityType": "uniques"
-    },
-    {
-      "nameExplicit": false,
       "columns": ["approval_uri"],
       "nullsNotDistinct": false,
       "name": "post_quote_revocation_approval_uri_key",
@@ -5699,6 +5104,24 @@
       "name": "session_token_key",
       "schema": "public",
       "table": "session",
+      "entityType": "uniques"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["quote_consent_request_uri"],
+      "nullsNotDistinct": false,
+      "name": "post_quote_consent_request_uri_key",
+      "schema": "public",
+      "table": "post",
+      "entityType": "uniques"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["quote_consent_approval_uri"],
+      "nullsNotDistinct": false,
+      "name": "post_quote_consent_approval_uri_key",
+      "schema": "public",
+      "table": "post",
       "entityType": "uniques"
     },
     {
@@ -5721,6 +5144,13 @@
       "entityType": "checks",
       "schema": "public",
       "table": "profile_block"
+    },
+    {
+      "value": "(\"quote_consent_status\" IS NULL AND \"quote_consent_source_post_id\" IS NULL AND \"quote_consent_source_uri\" IS NULL AND \"quote_consent_source_author_actor_uri\" IS NULL AND \"quote_consent_quote_uri\" IS NULL AND \"quote_consent_quote_author_actor_uri\" IS NULL AND \"quote_consent_request_uri\" IS NULL AND \"quote_consent_approval_uri\" IS NULL AND \"quote_consent_revision\" IS NULL) OR (\"quote_consent_status\" IS NOT NULL AND \"quote_consent_source_post_id\" IS NOT NULL AND \"quote_consent_source_uri\" IS NOT NULL AND \"quote_consent_source_author_actor_uri\" IS NOT NULL AND \"quote_consent_quote_uri\" IS NOT NULL AND \"quote_consent_quote_author_actor_uri\" IS NOT NULL AND \"quote_consent_request_uri\" IS NOT NULL AND \"quote_consent_revision\" IS NOT NULL AND \"quote_consent_revision\" > 0)",
+      "name": "post_quote_consent_complete",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "post"
     }
   ],
   "renames": []

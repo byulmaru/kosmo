@@ -7,7 +7,6 @@ import type { ReactTestRenderer } from 'react-test-renderer';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const actionBarType = 'PostActionBar' as ElementType;
-const editorType = 'PostQuotePolicyEditor' as ElementType;
 
 type Target = {
   content: { id: string };
@@ -20,7 +19,6 @@ type Target = {
     viewerState: { profileMute: { id: string } | null };
   };
   quotePolicy?: 'EVERYONE' | 'FOLLOWERS' | 'AUTHOR' | null;
-  viewerCanUpdateQuotePolicy?: boolean;
   visibility: 'PUBLIC' | 'UNLISTED' | 'FOLLOWERS';
   actionBar: object;
   reactionController: object;
@@ -112,11 +110,6 @@ mock.module('./PostBookmarkAction', {
 mock.module('./PostMoreMenu', {
   exports: { usePostMoreMenuItem: () => ({ key: 'copy-link', label: '링크 복사' }) },
 } as unknown as Parameters<typeof mock.module>[1]);
-mock.module('./PostQuotePolicyEditor', {
-  exports: {
-    PostQuotePolicyEditor: (props: object) => createElement('PostQuotePolicyEditor', props),
-  },
-} as unknown as Parameters<typeof mock.module>[1]);
 mock.module('./PostReactionController', {
   exports: { usePostReactionController: () => ({}) },
 } as unknown as Parameters<typeof mock.module>[1]);
@@ -173,68 +166,22 @@ describe('PostActionSurface mute wiring', () => {
   });
 });
 
-describe('PostActionSurface Quote policy menu', () => {
-  for (const visibility of ['PUBLIC', 'UNLISTED'] as const) {
-    it(`${visibility} 작성자의 정책 메뉴는 현재 Post의 편집기를 열고 닫는다`, async () => {
-      selectedProfileId = target.profile.id;
-      await act(async () => {
-        renderer = create(
-          createElement(PostActionSurface, {
-            socialActionTarget: {
-              ...target,
-              quotePolicy: 'FOLLOWERS',
-              viewerCanUpdateQuotePolicy: true,
-              visibility,
-            } as never,
-          }),
-        );
-      });
-      const root = renderer!.root;
-      assert.equal(root.findAllByType(editorType).length, 0);
-      const items = root.findByType(actionBarType).props.moreItems as {
-        key: string;
-        onSelect: () => void;
-      }[];
-      const policyItem = items.find(({ key }) => key === 'quote-policy');
-      assert.ok(policyItem);
-      await act(async () => policyItem.onSelect());
-      const editor = root.findByType(editorType);
-      assert.equal(editor.props.postId, 'post:1');
-      assert.equal(editor.props.policy, 'FOLLOWERS');
-      assert.equal(editor.props.visibility, visibility);
-      await act(async () => editor.props.onClose());
-      assert.equal(root.findAllByType(editorType).length, 0);
-    });
-  }
-
-  for (const [name, overrides] of [
-    ['수정 권한 없음', { viewerCanUpdateQuotePolicy: false }],
-    ['Followers 게시물', { visibility: 'FOLLOWERS' }],
-    ['원격 게시물처럼 Local 정책 없음', { quotePolicy: null }],
-  ] as const) {
-    it(`${name}이면 Quote 정책 메뉴를 제공하지 않는다`, async () => {
-      selectedProfileId = target.profile.id;
-      await act(async () => {
-        renderer = create(
-          createElement(PostActionSurface, {
-            socialActionTarget: {
-              ...target,
-              quotePolicy: 'EVERYONE',
-              viewerCanUpdateQuotePolicy: true,
-              ...overrides,
-            } as never,
-          }),
-        );
-      });
-      const root = renderer!.root;
-      const items = root.findByType(actionBarType).props.moreItems as { key: string }[];
-      assert.equal(
-        items.some(({ key }) => key === 'quote-policy'),
-        false,
+describe('PostActionSurface published policy', () => {
+  it('자신의 게시물에도 인용 정책 편집 메뉴를 제공하지 않는다', async () => {
+    selectedProfileId = target.profile.id;
+    await act(async () => {
+      renderer = create(
+        createElement(PostActionSurface, {
+          socialActionTarget: { ...target, quotePolicy: 'FOLLOWERS' } as never,
+        }),
       );
-      assert.equal(root.findAllByType(editorType).length, 0);
     });
-  }
+    const items = renderer!.root.findByType(actionBarType).props.moreItems as { key: string }[];
+    assert.deepEqual(
+      items.map(({ key }) => key),
+      ['copy-link'],
+    );
+  });
 });
 
 afterEach(async () => {

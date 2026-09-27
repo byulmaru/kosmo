@@ -136,6 +136,7 @@ try {
       'public.post_quote_consent',
       'public.post_quote_effect_receipt',
       'public.post_quote_policy',
+      'public.post_quote_revocation',
       'public.media',
       'public.profile_media',
       'public.profile_mute',
@@ -149,9 +150,10 @@ try {
       'account',
       'profile',
       'post',
-      'post_quote_consent',
-      'post_quote_effect_receipt',
-      'post_quote_policy',
+      null,
+      null,
+      null,
+      'post_quote_revocation',
       'media',
       'profile_media',
       'profile_mute',
@@ -179,11 +181,12 @@ try {
       FROM information_schema.columns
       WHERE table_schema = 'public'
         AND (
-          (table_name = 'post' AND column_name IN ('reply_parent_id', 'repost_source_id'))
+          (table_name = 'post' AND column_name IN ('reply_parent_id', 'repost_source_id', 'quote_policy', 'quote_consent_source_post_id', 'quote_consent_source_uri', 'quote_consent_source_author_actor_uri', 'quote_consent_quote_uri', 'quote_consent_quote_author_actor_uri', 'quote_consent_request_uri', 'quote_consent_approval_uri', 'quote_consent_status', 'quote_consent_revision'))
           OR (
             table_name = 'media'
             AND column_name IN ('source', 'state', 'storage_reference', 'media_type', 'url', 'ready_at', 'alt_text')
           )
+          OR (table_name = 'post_quote_revocation' AND column_name = 'forward_eligible')
           OR (
             table_name = 'profile_mute'
             AND column_name IN ('created_at', 'expires_at', 'owner_profile_id', 'target_profile_id')
@@ -203,8 +206,19 @@ try {
       { tableName: 'media', columnName: 'state' },
       { tableName: 'media', columnName: 'storage_reference' },
       { tableName: 'media', columnName: 'url' },
+      { tableName: 'post', columnName: 'quote_consent_approval_uri' },
+      { tableName: 'post', columnName: 'quote_consent_quote_author_actor_uri' },
+      { tableName: 'post', columnName: 'quote_consent_quote_uri' },
+      { tableName: 'post', columnName: 'quote_consent_request_uri' },
+      { tableName: 'post', columnName: 'quote_consent_revision' },
+      { tableName: 'post', columnName: 'quote_consent_source_author_actor_uri' },
+      { tableName: 'post', columnName: 'quote_consent_source_post_id' },
+      { tableName: 'post', columnName: 'quote_consent_source_uri' },
+      { tableName: 'post', columnName: 'quote_consent_status' },
+      { tableName: 'post', columnName: 'quote_policy' },
       { tableName: 'post', columnName: 'reply_parent_id' },
       { tableName: 'post', columnName: 'repost_source_id' },
+      { tableName: 'post_quote_revocation', columnName: 'forward_eligible' },
       { tableName: 'profile_mute', columnName: 'created_at' },
       { tableName: 'profile_mute', columnName: 'expires_at' },
       { tableName: 'profile_mute', columnName: 'owner_profile_id' },

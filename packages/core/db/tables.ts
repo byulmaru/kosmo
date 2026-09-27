@@ -348,6 +348,18 @@ export const Posts = pgTable(
       .notNull()
       .references(() => Profiles.id),
     visibility: Enum.postVisibility('visibility').notNull(),
+    quotePolicy: Enum.postQuotePolicy('quote_policy'),
+    quoteConsentSourcePostId: uuid('quote_consent_source_post_id').references(
+      (): AnyPgColumn => Posts.id,
+    ),
+    quoteConsentSourceUri: text('quote_consent_source_uri'),
+    quoteConsentSourceAuthorActorUri: text('quote_consent_source_author_actor_uri'),
+    quoteConsentQuoteUri: text('quote_consent_quote_uri'),
+    quoteConsentQuoteAuthorActorUri: text('quote_consent_quote_author_actor_uri'),
+    quoteConsentRequestUri: text('quote_consent_request_uri').unique(),
+    quoteConsentApprovalUri: text('quote_consent_approval_uri').unique(),
+    quoteConsentStatus: Enum.postQuoteConsentStatus('quote_consent_status'),
+    quoteConsentRevision: integer('quote_consent_revision'),
     state: Enum.postState('state').notNull(),
     currentContentId: uuid('current_content_id').references((): AnyPgColumn => PostContents.id),
     replyParentId: uuid('reply_parent_id').references((): AnyPgColumn => Posts.id, {
@@ -362,6 +374,17 @@ export const Posts = pgTable(
       'post_reply_parent_not_self',
       sql`${table.replyParentId} IS NULL OR ${table.replyParentId} <> ${table.id}`,
     ),
+    check(
+      'post_quote_consent_complete',
+      sql`(${table.quoteConsentStatus} IS NULL AND ${table.quoteConsentSourcePostId} IS NULL AND ${table.quoteConsentSourceUri} IS NULL AND ${table.quoteConsentSourceAuthorActorUri} IS NULL AND ${table.quoteConsentQuoteUri} IS NULL AND ${table.quoteConsentQuoteAuthorActorUri} IS NULL AND ${table.quoteConsentRequestUri} IS NULL AND ${table.quoteConsentApprovalUri} IS NULL AND ${table.quoteConsentRevision} IS NULL) OR (${table.quoteConsentStatus} IS NOT NULL AND ${table.quoteConsentSourcePostId} IS NOT NULL AND ${table.quoteConsentSourceUri} IS NOT NULL AND ${table.quoteConsentSourceAuthorActorUri} IS NOT NULL AND ${table.quoteConsentQuoteUri} IS NOT NULL AND ${table.quoteConsentQuoteAuthorActorUri} IS NOT NULL AND ${table.quoteConsentRequestUri} IS NOT NULL AND ${table.quoteConsentRevision} IS NOT NULL AND ${table.quoteConsentRevision} > 0)`,
+    ),
+    index('post_quote_consent_source_post_id_index').on(table.quoteConsentSourcePostId),
+    index('post_quote_consent_binding_index').on(
+      table.quoteConsentStatus,
+      table.quoteConsentSourceAuthorActorUri,
+      table.quoteConsentSourceUri,
+      table.quoteConsentQuoteUri,
+    ),
     index().on(table.profileId, table.id.desc()),
     index('post_reply_parent_id_index')
       .on(table.replyParentId)
@@ -374,96 +397,17 @@ export const Posts = pgTable(
   ],
 );
 
-export const PostQuotePolicies = pgTable('post_quote_policy', {
-  postId: uuid('post_id')
-    .primaryKey()
-    .references((): AnyPgColumn => Posts.id, { onDelete: 'cascade' }),
-  policy: Enum.postQuotePolicy('policy').notNull().default('EVERYONE'),
-  revision: integer('revision').notNull().default(1),
-  createdAt: createdAt(),
-  updatedAt: updatedAt(),
-});
-
-export const PostQuoteConsents = pgTable(
-  'post_quote_consent',
-  {
-    id: id(),
-    sourcePostId: uuid('source_post_id')
-      .notNull()
-      .references((): AnyPgColumn => Posts.id, { onDelete: 'cascade' }),
-    quotePostId: uuid('quote_post_id').references((): AnyPgColumn => Posts.id, {
-      onDelete: 'set null',
-    }),
-    quoteAuthorProfileId: uuid('quote_author_profile_id').references(
-      (): AnyPgColumn => Profiles.id,
-      {
-        onDelete: 'set null',
-      },
-    ),
-    quoteAuthorActorUri: text('quote_author_actor_uri').notNull(),
-    sourceAuthorActorUri: text('source_author_actor_uri').notNull(),
-    sourceUri: text('source_uri').notNull(),
-    quoteUri: text('quote_uri').notNull(),
-    requestUri: text('request_uri').notNull().unique(),
-    approvalUri: text('approval_uri').unique(),
-    status: Enum.postQuoteConsentStatus('status').notNull(),
-    revision: integer('revision').notNull().default(1),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
-  },
-  (table) => [
-    unique().on(table.sourcePostId, table.quoteUri, table.quoteAuthorActorUri),
-    index().on(table.sourcePostId),
-    index().on(table.quotePostId),
-    index('post_quote_consent_binding_index').on(
-      table.status,
-      table.sourceAuthorActorUri,
-      table.sourceUri,
-      table.quoteUri,
-    ),
-  ],
-);
-
 export const PostQuoteRevocations = pgTable('post_quote_revocation', {
   id: id(),
   approvalUri: text('approval_uri').notNull().unique(),
   sourceAuthorActorUri: text('source_author_actor_uri').notNull(),
   sourceUri: text('source_uri').notNull(),
   quoteUri: text('quote_uri'),
+  forwardEligible: boolean('forward_eligible').notNull().default(false),
   forwardingAt: datetime('forwarding_at'),
   forwardedAt: datetime('forwarded_at'),
   createdAt: createdAt(),
 });
-
-export const PostQuoteEffectReceipts = pgTable(
-  'post_quote_effect_receipt',
-  {
-    id: id(),
-    effectKey: text('effect_key').notNull().unique(),
-    effectKind: Enum.postQuoteEffectKind('effect_kind').notNull(),
-    consentId: uuid('consent_id').references(() => PostQuoteConsents.id, {
-      onDelete: 'set null',
-    }),
-    postId: uuid('post_id').references((): AnyPgColumn => Posts.id, { onDelete: 'set null' }),
-    sourcePostId: uuid('source_post_id').references((): AnyPgColumn => Posts.id, {
-      onDelete: 'set null',
-    }),
-    revision: integer('revision').notNull(),
-    requestUri: text('request_uri'),
-    approvalUri: text('approval_uri'),
-    sourceUri: text('source_uri'),
-    quoteUri: text('quote_uri'),
-    sourceAuthorActorUri: text('source_author_actor_uri'),
-    quoteAuthorActorUri: text('quote_author_actor_uri'),
-    targetInboxUri: text('target_inbox_uri'),
-    targetSharedInboxUri: text('target_shared_inbox_uri'),
-    status: Enum.postQuoteEffectReceiptStatus('status').notNull().default('PENDING'),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
-    completedAt: datetime('completed_at'),
-  },
-  (table) => [index().on(table.status, table.createdAt), index().on(table.consentId)],
-);
 
 export const PostContents = pgTable(
   'post_content',

@@ -27,7 +27,6 @@ let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
 let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
-let PostQuoteConsents: typeof CoreDb.PostQuoteConsents;
 let Posts: typeof CoreDb.Posts;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
 let Profiles: typeof CoreDb.Profiles;
@@ -49,7 +48,7 @@ describe('GraphQL Post Repost Source', () => {
       Instances,
       pg,
       PostContents,
-      PostQuoteConsents,
+
       Posts,
       ProfileFollows,
       Profiles,
@@ -375,9 +374,9 @@ describe('GraphQL Post Repost Source', () => {
 
       // A later request must observe revocation, not a process-wide cached approval.
       await db
-        .update(PostQuoteConsents)
-        .set({ status: PostQuoteConsentStatus.REVOKED })
-        .where(eq(PostQuoteConsents.quotePostId, quotes[0]!.id));
+        .update(Posts)
+        .set({ quoteConsentStatus: PostQuoteConsentStatus.REVOKED })
+        .where(eq(Posts.id, quotes[0]!.id));
       const next = await requestGraphQL<Result>(query, { ids: [globalId('Post', quotes[0]!.id)] });
       assert.equal(next.data?.nodes[0]?.first, null);
       assert.equal(next.data?.nodes[0]?.second, null);
@@ -409,18 +408,20 @@ const approveQuote = async (
   quoteAuthorProfileId: string,
   sourceAuthorProfileId: string,
 ) => {
-  await db.insert(PostQuoteConsents).values({
-    approvalUri: `${publicOrigin}/ap/quote-authorization/${quotePostId}`,
-    quoteAuthorActorUri: `${publicOrigin}/ap/actor/${quoteAuthorProfileId}`,
-    quoteAuthorProfileId,
-    quotePostId,
-    quoteUri: `${publicOrigin}/ap/note/${quotePostId}`,
-    requestUri: `${publicOrigin}/ap/quote-request/${quotePostId}`,
-    sourceAuthorActorUri: `${publicOrigin}/ap/actor/${sourceAuthorProfileId}`,
-    sourcePostId,
-    sourceUri: `${publicOrigin}/ap/note/${sourcePostId}`,
-    status: PostQuoteConsentStatus.APPROVED,
-  });
+  await db
+    .update(Posts)
+    .set({
+      quoteConsentApprovalUri: `${publicOrigin}/ap/quote-authorization/${quotePostId}`,
+      quoteConsentQuoteAuthorActorUri: `${publicOrigin}/ap/actor/${quoteAuthorProfileId}`,
+      quoteConsentQuoteUri: `${publicOrigin}/ap/note/${quotePostId}`,
+      quoteConsentRequestUri: `${publicOrigin}/ap/quote-request/${quotePostId}`,
+      quoteConsentSourceAuthorActorUri: `${publicOrigin}/ap/actor/${sourceAuthorProfileId}`,
+      quoteConsentSourcePostId: sourcePostId,
+      quoteConsentSourceUri: `${publicOrigin}/ap/note/${sourcePostId}`,
+      quoteConsentStatus: PostQuoteConsentStatus.APPROVED,
+      quoteConsentRevision: 1,
+    })
+    .where(eq(Posts.id, quotePostId));
 };
 
 const insertPost = async ({

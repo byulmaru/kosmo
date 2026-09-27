@@ -25,7 +25,6 @@ export {
   sendLocalPostQuoteRequest,
   sendLocalPostQuoteRevocation,
   sendLocalPostQuoteRevocations,
-  sendLocalPostUpdate,
 } from './src/local-post-delivery';
 export { sendLocalProfileUpdate } from './src/local-profile-update-delivery';
 export {

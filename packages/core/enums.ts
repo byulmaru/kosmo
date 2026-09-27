@@ -143,21 +143,6 @@ export const PostQuoteConsentStatus = {
 } as const;
 export type PostQuoteConsentStatus = keyof typeof PostQuoteConsentStatus;
 
-export const PostQuoteEffectKind = {
-  QUOTE_REQUEST: 'QUOTE_REQUEST',
-  CONSENT_UPDATE: 'CONSENT_UPDATE',
-  POLICY_UPDATE: 'POLICY_UPDATE',
-  SOURCE_REVOCATION: 'SOURCE_REVOCATION',
-  QUOTE_DECISION: 'QUOTE_DECISION',
-} as const;
-export type PostQuoteEffectKind = keyof typeof PostQuoteEffectKind;
-
-export const PostQuoteEffectReceiptStatus = {
-  PENDING: 'PENDING',
-  COMPLETED: 'COMPLETED',
-} as const;
-export type PostQuoteEffectReceiptStatus = keyof typeof PostQuoteEffectReceiptStatus;
-
 export const ProfileFollowPolicy = {
   OPEN: 'OPEN',
   APPROVAL_REQUIRED: 'APPROVAL_REQUIRED',

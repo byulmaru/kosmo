@@ -13,7 +13,6 @@ import {
   pg,
   PostContents,
   PostMentions,
-  PostQuoteConsents,
   Posts,
   ProfileBlocks,
   ProfileFollows,
@@ -40,6 +39,7 @@ import {
 } from '../post-content/server';
 import { temporalClient } from '../temporal/client';
 import { createPost } from './post';
+import { postQuoteConsentColumns } from './post-quote-consent';
 import { ProfilePairBlockedError } from './profile-block-policy';
 
 after(async () => pg.end());
@@ -199,9 +199,9 @@ test('createPost는 ActivityPub Source Quote를 pending consent로 생성한다'
   });
 
   const consent = await db
-    .select()
-    .from(PostQuoteConsents)
-    .where(eq(PostQuoteConsents.quotePostId, quote.post.id))
+    .select(postQuoteConsentColumns)
+    .from(Posts)
+    .where(eq(Posts.id, quote.post.id))
     .then(firstOrThrow);
   assert.equal(consent.sourcePostId, source.post.id);
   assert.equal(consent.status, PostQuoteConsentStatus.PENDING);

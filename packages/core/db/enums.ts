@@ -29,11 +29,6 @@ export const postQuoteConsentStatus = createPgEnum(
   'post_quote_consent_status',
   Enum.PostQuoteConsentStatus,
 );
-export const postQuoteEffectKind = createPgEnum('post_quote_effect_kind', Enum.PostQuoteEffectKind);
-export const postQuoteEffectReceiptStatus = createPgEnum(
-  'post_quote_effect_receipt_status',
-  Enum.PostQuoteEffectReceiptStatus,
-);
 export const profileFollowPolicy = createPgEnum('profile_follow_policy', Enum.ProfileFollowPolicy);
 export const profileBlockActivityOrigin = createPgEnum(
   'profile_block_activity_origin',

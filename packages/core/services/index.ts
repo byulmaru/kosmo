@@ -13,21 +13,21 @@ export {
   deleteReactionNotification,
   deleteRepostNotification,
 } from './notification';
-export { createPost, deletePost, repostPost } from './post';
-export type {
-  PostQuoteConsentRow,
-  PostQuoteEffectReceiptRow,
-  QuoteSource,
-} from './post-quote-consent';
+export {
+  createPost,
+  createPostPersisted,
+  deletePost,
+  deletePostPersisted,
+  repostPost,
+} from './post';
+export type { PostQuoteConsentRow, QuoteSource } from './post-quote-consent';
 export {
   applyInboundQuoteAccept,
   applyInboundQuoteReject,
   applyInboundQuoteRevocation,
   assertPostQuotePolicy,
   canDisplayQuoteSource,
-  completePostQuoteEffectReceipt,
   createPostQuoteConsent,
-  createPostQuoteEffectReceipt,
   defaultPostQuotePolicy,
   isLocalQuoteAllowedByPolicy,
   loadPendingQuoteConsentByBinding,
@@ -36,11 +36,9 @@ export {
   loadQuoteConsentForPost,
   loadQuotePostIdentity,
   loadQuoteSourceIdentity,
+  postQuoteConsentColumns,
   recordInboundQuoteRequest,
-  replayPendingPostQuoteEffects,
   revokePostQuoteConsentsForSource,
-  startPostQuoteEffect,
-  updatePostQuotePolicy,
   visibleQuoteSources,
 } from './post-quote-consent';
 export { disableProfile } from './profile';
