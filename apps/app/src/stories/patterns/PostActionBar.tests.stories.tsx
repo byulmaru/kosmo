@@ -11,9 +11,9 @@ import baseMeta, {
   PlaygroundInteraction as playgroundInteraction,
   ProcessingAccessibility as processingAccessibility,
   ReactionConcurrentMutationContract as reactionConcurrentMutationContract,
+  ReactionDirectFullContract as reactionDirectFullContract,
   ReactionFailureRetryActorSwitchAndUnmount as reactionFailureRetryActorSwitchAndUnmount,
-  ReactionPopoverDismissFocusAndPlacement as reactionPopoverDismissFocusAndPlacement,
-  ReactionQuickToFullContract as reactionQuickToFullContract,
+  ReactionFullDismissFocusAndPlacement as reactionFullDismissFocusAndPlacement,
   ReactionSummaryToggleContract as reactionSummaryToggleContract,
 } from './PostActionBar.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -36,13 +36,12 @@ export const AuthorPostDeletionPending: Story = authorPostDeletionPending;
 export const AuthorPostDeletionFailureRetry: Story = authorPostDeletionFailureRetry;
 export const AuthorPostDeletionGraphQLErrorRetry: Story = authorPostDeletionGraphQLErrorRetry;
 export const ControlledReply: Story = controlledReply;
-export const ReactionPopoverDismissFocusAndPlacement: Story =
-  reactionPopoverDismissFocusAndPlacement;
+export const ReactionFullDismissFocusAndPlacement: Story = reactionFullDismissFocusAndPlacement;
 export const NoSelectedProfileDisablesReaction: Story = noSelectedProfileDisablesReaction;
 export const ReactionSummaryToggleContract: Story = reactionSummaryToggleContract;
 export const ReactionConcurrentMutationContract: Story = reactionConcurrentMutationContract;
 export const ReactionFailureRetryActorSwitchAndUnmount: Story =
   reactionFailureRetryActorSwitchAndUnmount;
-export const ReactionQuickToFullContract: Story = reactionQuickToFullContract;
+export const ReactionDirectFullContract: Story = reactionDirectFullContract;
 export const InteractionContract: Story = interactionContract;
 export const ProcessingAccessibility: Story = processingAccessibility;

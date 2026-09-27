@@ -7,7 +7,6 @@ import { spacing } from '@/theme/tokens';
 import type React from 'react';
 import type { LayoutChangeEvent, LayoutRectangle, View as ViewType } from 'react-native';
 import type { FullReactionPickerOption } from '@/components/reaction/FullReactionPicker';
-import type { TriggerRef } from './ReactionPopover';
 
 export type FullReactionOverlayProps = Readonly<{
   options: ReadonlyArray<FullReactionPickerOption>;
@@ -23,6 +22,7 @@ export type FullReactionOverlayProps = Readonly<{
 }>;
 
 type Anchor = Pick<LayoutRectangle, 'height' | 'width' | 'x' | 'y'>;
+type TriggerRef = { current: ViewType | null };
 
 export function FullReactionOverlay({
   onClose,
@@ -54,7 +54,7 @@ export function FullReactionOverlay({
   );
   const close = useCallback(() => {
     onClose();
-    triggerRef.current?.focus();
+    requestAnimationFrame(() => triggerRef.current?.focus());
   }, [onClose, triggerRef]);
   const onContentLayout = useCallback((event: LayoutChangeEvent) => {
     const { height, width } = event.nativeEvent.layout;
@@ -141,7 +141,13 @@ export function FullReactionOverlay({
   );
 
   return (
-    <Modal animationType="none" onRequestClose={close} transparent visible>
+    <Modal
+      accessibilityLabel="반응 선택 창"
+      animationType="none"
+      onRequestClose={close}
+      transparent
+      visible
+    >
       {web ? (
         <View style={styles.webRoot}>
           {anchor ? (
@@ -159,6 +165,7 @@ export function FullReactionOverlay({
           <View
             {...webPlacementProps}
             style={[styles.webPosition, { left, top, width: shellWidth }, elevation.floating]}
+            testID="full-reaction-overlay-position"
           >
             {picker}
           </View>

@@ -1,26 +1,12 @@
-import { reactionTypes } from '@kosmo/core/validation';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Platform, Pressable, Text } from 'react-native';
 import { useRelayEnvironment } from 'react-relay';
 import { reactionEmojiCatalog } from '@/components/reaction/reactionEmojiCatalog';
-import { ReactionSelector } from '@/components/reaction/ReactionSelector';
-import { useTheme } from '@/theme/ThemeProvider';
 import { FullReactionOverlay } from './FullReactionOverlay';
-import { ReactionPopover } from './ReactionPopover';
 import type { ReactNode, Ref } from 'react';
 import type { View } from 'react-native';
 import type { FullReactionPickerOption } from '@/components/reaction/FullReactionPicker';
-import type { ReactionOption } from '@/components/reaction/ReactionSelector';
 import type { PostActionExecution, PostActionResolutionReason } from './postActionAvailability';
 import type { PostReactionController } from './PostReactionController';
-
-const reactionOptions = reactionTypes.map((type) => ({
-  emoji: type,
-  id: type,
-  label: reactionEmojiCatalog.find((option) => option.id === type)?.label ?? type,
-})) satisfies ReadonlyArray<ReactionOption>;
-
-const fullEntrySize = Platform.OS === 'web' ? 32 : Platform.OS === 'android' ? 48 : 44;
 
 export type ReactionActionTriggerRenderProps = Readonly<{
   disabled: boolean;
@@ -44,25 +30,24 @@ export function ReactionAction({
   renderTrigger,
 }: ReactionActionProps): ReactNode {
   const environment = useRelayEnvironment();
-  const theme = useTheme();
-  const [open, setOpen] = useState(false);
   const [fullOpen, setFullOpen] = useState(false);
   const [query, setQuery] = useState('');
   const triggerRef = useRef<View | null>(null);
-  const pickerDisabled = execution.kind !== 'enabled' || controller.disabled;
   const triggerDisabled =
     execution.kind === 'disabled' || (execution.kind === 'enabled' && controller.disabled);
 
   useEffect(() => {
-    setOpen(false);
     setFullOpen(false);
     setQuery('');
   }, [controller.disabled, controller.postId, environment, execution.kind]);
 
-  const openFull = useCallback(() => {
-    setOpen(false);
-    setFullOpen(true);
-  }, []);
+  const toggleFull = useCallback(() => {
+    if (execution.kind === 'resolution-required') {
+      onResolutionRequired?.(execution.reason);
+    } else if (execution.kind === 'enabled' && !controller.disabled) {
+      setFullOpen((current) => !current);
+    }
+  }, [controller.disabled, execution, onResolutionRequired]);
   const closeFull = useCallback(() => setFullOpen(false), []);
   const selectFull = useCallback(
     (option: FullReactionPickerOption) => {
@@ -79,49 +64,13 @@ export function ReactionAction({
 
   return (
     <>
-      <ReactionPopover
-        accessibilityLabel="반응 선택"
-        disabled={pickerDisabled}
-        onOpenChange={setOpen}
-        open={open}
-        triggerRef={triggerRef}
-        renderTrigger={({ expanded, onPress, ref }) => {
-          const triggerPress =
-            execution.kind === 'resolution-required'
-              ? () => onResolutionRequired?.(execution.reason)
-              : onPress;
-          return renderTrigger({
-            disabled: triggerDisabled,
-            expanded: execution.kind === 'enabled' ? expanded || fullOpen : false,
-            hasReacted: controller.selectedTypeIds.length > 0,
-            onPress: triggerPress,
-            ref,
-          });
-        }}
-      >
-        <>
-          <ReactionSelector
-            errorOptionIds={controller.errorTypeIds}
-            onToggle={controller.toggleReaction}
-            options={reactionOptions}
-            pendingOptionIds={controller.pendingTypeIds}
-            selectedOptionIds={controller.selectedTypeIds}
-          />
-          <Pressable
-            accessibilityLabel="전체 반응"
-            accessibilityRole="button"
-            onPress={openFull}
-            style={{
-              alignItems: 'center',
-              height: fullEntrySize,
-              justifyContent: 'center',
-              width: fullEntrySize,
-            }}
-          >
-            <Text style={{ color: theme.foregroundPrimary }}>＋</Text>
-          </Pressable>
-        </>
-      </ReactionPopover>
+      {renderTrigger({
+        disabled: triggerDisabled,
+        expanded: execution.kind === 'enabled' && fullOpen,
+        hasReacted: controller.selectedTypeIds.length > 0,
+        onPress: toggleFull,
+        ref: triggerRef,
+      })}
       <FullReactionOverlay
         onClose={closeFull}
         onQueryChange={setQuery}
