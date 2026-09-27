@@ -1,6 +1,10 @@
 import PostHog from 'posthog-react-native';
 import { getPublicConfig } from '@/config/public';
-import type { AnalyticsEventName, AnalyticsEventProperties } from './events';
+import type {
+  AnalyticsEventName,
+  AnalyticsEventProperties,
+  ReactionAnalyticsEventArgs,
+} from './events';
 
 type PostHogClient = InstanceType<typeof PostHog>;
 
@@ -45,6 +49,18 @@ export function trackAnalytics<Name extends AnalyticsEventName>(
   } catch {
     // Analytics is best-effort and must not affect the product flow.
   }
+}
+
+export function trackAnalyticsForAccount(
+  accountId: string,
+  ...[eventName, properties]: ReactionAnalyticsEventArgs
+): void {
+  if (!accountId) {
+    return;
+  }
+
+  // Emoji-level analytics is Web-only; preserve Native's existing event properties.
+  trackAnalytics(eventName, { reaction_type: properties.reaction_type });
 }
 
 export function identifyAnalytics(accountId: string, availableProfileCount?: number): void {
