@@ -12,7 +12,7 @@
 - 내부·테스트 Account와 bot을 식별하는 검증된 목록·규칙이 없어 제외하지 않는다. 결과에 이 조건을 그대로 표시한다.
 - key 없는 과거 이벤트, 수집 비활성 기간, Native 동작은 이 결과에 넣거나 추정·backfill하지 않는다.
 
-PostHog의 [HogQL 문서](https://posthog.com/docs/hogql)는 SQL editor 실행 방법을 설명한다. 아래 쿼리는 템플릿이며 이번 변경에서 실제 PostHog Cloud dataset에 실행하지 않았다. 수집 재개 후 날짜를 정하고 project에서 검증한다.
+PostHog의 [HogQL 문서](https://posthog.com/docs/hogql)는 SQL editor 실행 방법을 설명한다. 아래 쿼리는 템플릿이며 이번 변경에서 실제 PostHog Cloud dataset에 실행하지 않았다. 새 Reaction 종류 key의 공개 고지와 시행일을 확정해 production에 배포한 뒤 관측 기간을 정하고 project에서 검증한다.
 
 ## Account 수와 이벤트 횟수
 

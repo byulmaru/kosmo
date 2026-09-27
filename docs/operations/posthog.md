@@ -5,7 +5,7 @@ Kosmo Web의 PostHog client는 prod 채널에서 공개 posthogKey와 posthogHos
 ## Identity와 개인정보 경계
 
 - 로그인 후 identity는 내부 immutable Account ID로 `identify`한다. Profile ID를 Account identity로 사용하지 않는다.
-- Account 이름·handle·email과 같은 trait, 게시글 본문·미디어·대상 Post ID·대상/선택 Profile ID는 명시적 event property로 보내지 않는다.
+- Account 이름·handle·email과 같은 identity trait, 게시글 본문·미디어·대상 Post ID는 앱이 추가하는 명시적 event property에 넣지 않는다. `selected_profile_id`는 Profile 생성·선택, 게시, 팔로우 event의 기존 허용 property이며 Reaction event에는 넣지 않는다.
 - 프로필 bio는 명시적 event property로 보내지 않는다. Web에서 렌더링되는 프로필 상세와 공유 프로필 목록의 bio DOM 영역은 Session Replay에서 마스킹하고 autocapture에서 제외한다. 표시명·handle과 나머지 화면은 기존 수집 동작을 유지한다.
 - reaction_type의 기존 의미를 유지한다. ❤️는 default이고, 그 밖의 허용된 Unicode Reaction은 custom으로 분류될 수 있다. 여기서 custom은 사용자 정의 이모지를 뜻하지 않는다.
 - 허용 집합은 canonical reactionTypeSchema가 제공하는 전체 Emoji 16 Unicode sequence다. 허용된 값에는 emoji_kind: unicode와 reaction_emoji_key를 함께 보낸다. key는 unicode: 다음에 완전한 code point sequence를 소문자 16진수와 하이픈으로 이어 붙인다. variation selector, modifier, regional indicator, zero-width joiner를 정규화하거나 제거하지 않는다.
@@ -85,7 +85,7 @@ Saved event-backed views: [production database counts dashboard](https://us.post
 수집 설정이나 앱 배포가 변경되면 production build와 PostHog project 설정을 같은 배포 경계에서 확인한다. 실제 사용자 식별자나 콘텐츠를 ticket·스크린샷에 복사하지 않는다.
 
 1. 설정이 없는 dev build에서 PostHog 요청이 없는지 확인한다.
-2. production Web에서 로그인 후 Account ID 하나의 identify가 발생하는지 확인한다. 이름·handle·email·Profile ID가 payload에 없는지 확인한다.
+2. production Web에서 로그인 후 Account ID 하나의 identify가 발생하는지 확인한다. 이름·handle·email이 identity trait에 없는지 확인하고 선택 Profile ID는 해당 event allowlist와 대조한다.
 3. 재게시 생성·취소, Reaction 추가·삭제, 북마크 추가·취소에서 allowlist event와 property만 확인한다. Reaction의 Unicode 변형별 key가 달라지고 원문 Reaction과 Post·Profile 식별자가 없는지 확인한다.
 4. 각 동작의 network error·실패 응답·payload 누락과 Account 전환 뒤 늦은 Reaction callback에서 성공 event가 발생하지 않고 UI 오류 처리가 유지되는지 확인한다.
 5. PostHog endpoint를 차단한 상태에서도 재게시·Reaction·북마크가 동일하게 완료되는지 확인한다.

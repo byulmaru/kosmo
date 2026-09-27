@@ -15,7 +15,7 @@ Web에서 지원되는 Unicode Reaction 종류별로 사용 Account 수, 추가�
 ## Non-Goals
 
 - PROD-942의 Reaction catalog, 허용 범위, Picker, mutation 또는 Unicode 동일성 계약을 다시 정의하지 않는다.
-- 사용자 정의 emoji의 개별 식별 정보 수집, Native 계측, 과거 데이터 backfill, PostHog production 수집 재개와 배포를 다루지 않는다.
+- 사용자 정의 emoji의 개별 식별 정보 수집, Native 계측, 과거 데이터 backfill, PostHog Cloud 설정 변경과 production 배포를 다루지 않는다.
 
 ## Constraints
 
