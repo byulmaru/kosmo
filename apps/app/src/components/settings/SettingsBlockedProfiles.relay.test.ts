@@ -75,7 +75,7 @@ mockModule(new URL('../pagination/PaginationScrollView.tsx', import.meta.url), {
   },
 });
 mockModule(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
-  useTheme: () => ({ foregroundSecondary: 'secondary' }),
+  useTheme: () => ({ foregroundPrimary: 'primary', foregroundSecondary: 'secondary' }),
 });
 mockModule(new URL('../profile/ProfileListItemContent.tsx', import.meta.url), {
   ProfileListItemContent: ({ children, ...props }: { children?: ReactNode }) =>
@@ -205,6 +205,7 @@ function connection(ids: string[], hasNextPage = false) {
           id: `profile-${id}`,
           displayName: '별마루',
           relativeHandle: `@${id}`,
+          avatar: { id: `avatar-${id}`, url: `https://media.example/${id}.png` },
           viewerState: {
             profileBlock: {
               __typename: 'ProfileBlock',
@@ -266,7 +267,7 @@ async function respond(request: Request, data: Record<string, unknown>) {
   });
 }
 
-const handles = () => all('ProfileRow').map((row) => row.props.relativeHandle);
+const avatars = () => all('ProfileRow').map((row) => row.props.avatarUri);
 
 async function reachEnd() {
   assert.ok(scrollProps);
@@ -294,14 +295,18 @@ describe('Settings Block consumer with real Relay', () => {
     assert.equal(one('StateView').props.loading, true);
     await respond(latestRequest('SettingsBlockedProfilesQuery'), firstPage([]));
     assert.equal(one('StateView').props.title, '차단한 프로필이 없어요');
-    assert.deepEqual(handles(), []);
+    assert.deepEqual(avatars(), []);
   });
 
   it('실제 connection pagination은 pending 중 중복을 막고 실패한 cursor를 재시도한다', async () => {
     await render(createEnvironment());
     assert.equal(one('StateView').props.loading, true);
     await respond(latestRequest('SettingsBlockedProfilesQuery'), firstPage(['one'], true));
-    assert.deepEqual(handles(), ['@one']);
+    assert.deepEqual(avatars(), ['https://media.example/one.png']);
+    const row = all('ProfileRow')[0]!;
+    assert.equal(row.props.avatarUri, 'https://media.example/one.png');
+    assert.equal(row.props.relativeHandle, '@one');
+    assert.equal(row.props.identity, undefined);
     await reachEnd();
     const next = latestRequest('SettingsBlockedProfilesNextPageQuery');
     assert.deepEqual(next.variables, { count: 20, cursor: 'cursor-one', id: 'owner-a' });
@@ -310,7 +315,7 @@ describe('Settings Block consumer with real Relay', () => {
     assert.equal(requests.filter((request) => request.name === next.name).length, 1);
     assert.equal(all('Button').filter((node) => node.props.children === '더 불러오기').length, 0);
     await act(async () => next.sink.error(new Error('offline')));
-    assert.deepEqual(handles(), ['@one']);
+    assert.deepEqual(avatars(), ['https://media.example/one.png']);
     assert.equal(toastCalls.at(-1)?.persistent, true);
     await reachEnd();
     assert.equal(requests.filter((request) => request.name === next.name).length, 1);
@@ -324,7 +329,7 @@ describe('Settings Block consumer with real Relay', () => {
         profileBlocks: connection(['two']),
       },
     });
-    assert.deepEqual(handles(), ['@one', '@two']);
+    assert.deepEqual(avatars(), ['https://media.example/one.png', 'https://media.example/two.png']);
     assert.equal(all('Button').filter((node) => node.props.children === '더 불러오기').length, 0);
   });
 
@@ -341,7 +346,7 @@ describe('Settings Block consumer with real Relay', () => {
     await act(async () => one('ConfirmationContent', row).props.onCancel());
     await act(async () => one('ModalSheet', row).props.onDismiss());
     assert.equal(requests.length, 1);
-    assert.deepEqual(handles(), ['@one', '@two']);
+    assert.deepEqual(avatars(), ['https://media.example/one.png', 'https://media.example/two.png']);
     assert.equal(triggerFocus.mock.callCount(), 1);
 
     await act(async () => one('Button', row).props.onPress());
@@ -358,7 +363,7 @@ describe('Settings Block consumer with real Relay', () => {
     assert.equal(one('Button', row).props.accessibilityState.busy, true);
     await act(async () => failed.sink.error(new Error('offline')));
     await act(async () => one('ModalSheet', row).props.onDismiss());
-    assert.deepEqual(handles(), ['@one', '@two']);
+    assert.deepEqual(avatars(), ['https://media.example/one.png', 'https://media.example/two.png']);
     assert.equal(toastCalls.at(-1)?.tone, 'danger');
 
     await act(async () => one('Button', row).props.onPress());
@@ -371,7 +376,7 @@ describe('Settings Block consumer with real Relay', () => {
       },
     });
     await act(async () => Promise.resolve());
-    assert.deepEqual(handles(), ['@one', '@two']);
+    assert.deepEqual(avatars(), ['https://media.example/one.png', 'https://media.example/two.png']);
     const updatedRow = all('ProfileRow')[0]!;
     assert.equal(one('Button', updatedRow).props.children, '차단');
     await act(async () => one('ModalSheet', updatedRow).props.onDismiss());
@@ -390,7 +395,7 @@ describe('Settings Block consumer with real Relay', () => {
       selectedProfileId = 'owner-b';
       generation.current += 1;
       await render(createEnvironment());
-      assert.deepEqual(handles(), []);
+      assert.deepEqual(avatars(), []);
       await respond(latestRequest('SettingsBlockedProfilesQuery'), firstPage(['other']));
       if (outcome === 'error') {
         await act(async () => pendingA.sink.error(new Error('old actor')));
@@ -403,7 +408,7 @@ describe('Settings Block consumer with real Relay', () => {
           },
         });
       }
-      assert.deepEqual(handles(), ['@other']);
+      assert.deepEqual(avatars(), ['https://media.example/other.png']);
       assert.deepEqual(toastCalls, []);
     });
   }
@@ -427,7 +432,7 @@ describe('Settings Block consumer with real Relay', () => {
         targetProfile: unblockedTargetProfile('one'),
       },
     });
-    assert.deepEqual(handles(), ['@other']);
+    assert.deepEqual(avatars(), ['https://media.example/other.png']);
     assert.deepEqual(environmentB.getStore().getSource().toJSON(), before);
     assert.deepEqual(toastCalls, []);
     assert.equal(one('Button').props.accessibilityState.busy, false);

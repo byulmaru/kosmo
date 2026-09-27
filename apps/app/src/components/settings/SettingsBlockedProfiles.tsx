@@ -45,6 +45,10 @@ const SettingsBlockedProfileRowFragment = graphql`
   fragment SettingsBlockedProfileRow_profileBlock on ProfileBlock {
     ...ProfileBlockAction_profileBlock
     targetProfile {
+      avatar {
+        id
+        url
+      }
       displayName
       relativeHandle
       ...ProfileBlockAction_profile
@@ -177,6 +181,7 @@ function SettingsBlockedProfileRow({
   return (
     <ProfileListItemContent
       avatarLabel={targetProfile.displayName}
+      avatarUri={targetProfile.avatar?.url}
       displayName={targetProfile.displayName}
       relativeHandle={targetProfile.relativeHandle}
       style={styles.row}

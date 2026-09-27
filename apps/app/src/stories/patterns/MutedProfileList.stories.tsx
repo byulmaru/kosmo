@@ -9,8 +9,18 @@ import appleTouchIconUrl from '../../../public/apple-touch-icon.png?url';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 const profiles = [
-  { id: 'kosmo', displayName: '코스모 작가', avatarUri: appleTouchIconUrl },
-  { id: 'galaxy', displayName: '은하 관측자', avatarUri: appleTouchIconUrl },
+  {
+    id: 'kosmo',
+    displayName: '코스모 작가',
+    relativeHandle: '@kosmo',
+    avatarUri: appleTouchIconUrl,
+  },
+  {
+    id: 'galaxy',
+    displayName: '은하 관측자',
+    relativeHandle: '@galaxy',
+    avatarUri: appleTouchIconUrl,
+  },
 ];
 type Props = {
   state: 'loaded' | 'loading' | 'error' | 'empty' | 'loadingMore' | 'loadMoreError';
