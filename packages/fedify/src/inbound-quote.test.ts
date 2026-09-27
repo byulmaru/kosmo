@@ -724,10 +724,27 @@ describe('ActivityPub inbound Quote lifecycle', () => {
     });
 
     const first = handleInboundQuoteRevocation(context, revocation);
-    await forwardObserved;
-    await handleInboundQuoteRevocation(context, revocation);
-    releaseForward();
-    await first;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        forwardObserved,
+        first.then(() => {
+          throw new Error('Quote revocation completed without forwarding');
+        }),
+        new Promise<never>((_, reject) => {
+          timeout = setTimeout(
+            () => reject(new Error('Quote revocation forwarding did not start')),
+            10_000,
+          );
+        }),
+      ]);
+      const second = handleInboundQuoteRevocation(context, revocation);
+      releaseForward();
+      await Promise.all([first, second]);
+    } finally {
+      clearTimeout(timeout);
+      releaseForward();
+    }
 
     assert.equal(forwardAttempts, 1);
   });
@@ -908,7 +925,7 @@ const createRemoteSourceAndPendingQuote = async ({ approved = false } = {}) => {
   await db.update(Posts).set({ repostSourceId: sourcePost.id }).where(eq(Posts.id, quotePost.id));
   const quoteUri = new URL(`/ap/note/${quotePost.id}`, publicOrigin).href;
   const requestUri = new URL(`/ap/quote-request/${quotePost.id}`, publicOrigin).href;
-  const approvalUri = 'https://remote-source.example/quote-authorizations/quote-1';
+  const approvalUri = `https://remote-source.example/quote-authorizations/${quotePost.id}`;
   const consent = await db
     .update(Posts)
     .set({
