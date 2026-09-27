@@ -18,6 +18,7 @@ import { Toast } from '@/components/ui/Toast';
 import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, radius, space, textStyles } from '@/theme/tokens';
 import { useToastMotion } from '@/theme/useOverlayMotion';
+import { AndroidPagerGesture, AndroidZoomImage } from './PostMediaViewerAndroidZoom';
 import type { ReactElement } from 'react';
 import type {
   ImageLoadEvent,
@@ -227,10 +228,12 @@ export function PostMediaViewerSurface({
                     currentIndex={currentIndex}
                     media={media}
                     onIndexChange={onIndexChange}
-                    onZoomedChange={Platform.OS === 'ios' ? setZoomed : undefined}
+                    onZoomedChange={
+                      Platform.OS === 'ios' || Platform.OS === 'android' ? setZoomed : undefined
+                    }
                     reducedMotion={reducedMotion}
                     viewportSize={mediaViewportSize}
-                    zoomed={Platform.OS === 'ios' && zoomed}
+                    zoomed={Platform.OS === 'ios' || Platform.OS === 'android' ? zoomed : false}
                   >
                     {Platform.OS === 'ios' ? (
                       <IOSNativeZoomImage
@@ -242,6 +245,21 @@ export function PostMediaViewerSurface({
                         status={request.status}
                         url={currentMedia.url}
                       />
+                    ) : Platform.OS === 'android' ? (
+                      <AndroidZoomImage
+                        key={zoomKey}
+                        onZoomedChange={setZoomed}
+                        status={request.status}
+                        viewportSize={mediaViewportSize}
+                      >
+                        <ViewerImage
+                          accessibilityLabel={imageName}
+                          onStatus={settle}
+                          viewportSize={mediaViewportSize}
+                          status={request.status}
+                          url={currentMedia.url}
+                        />
+                      </AndroidZoomImage>
                     ) : (
                       <ViewerImage
                         key={zoomKey}
@@ -461,7 +479,7 @@ function NativeMediaPager({
     position.current = { index: currentIndex, width };
   }, [currentIndex, reducedMotion, width]);
 
-  return (
+  const pager = (
     <ScrollView
       ref={scroll}
       horizontal
@@ -512,6 +530,8 @@ function NativeMediaPager({
       ))}
     </ScrollView>
   );
+
+  return Platform.OS === 'android' ? <AndroidPagerGesture>{pager}</AndroidPagerGesture> : pager;
 }
 
 function IOSNativeZoomImage({

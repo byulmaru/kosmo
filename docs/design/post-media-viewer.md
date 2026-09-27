@@ -97,8 +97,8 @@ Wide Web의 오른쪽 thread rail은 fullscreen modal 안의 별도 elevation su
 ## Native 확대·이동 (PROD-1004)
 
 - iOS는 화면 맞춤 1배에서 4배까지 기본 이미지 핀치 확대를 제공한다. 별도 double-tap, custom zoom·pan gesture, zoom button, custom accessibility zoom action은 제공하지 않으며 기본 이미지 Alt Text와 close·이전·다음 접근성은 유지한다.
-- iOS 확대 중에는 외부 수평 paging을 잠그고 1배에서 다시 연다. 이미지·Content revision 변경, 이미지 재시도, 닫기·재진입에서는 zoom을 1배로 초기화하고 기존 오류·재시도 동작을 유지한다.
-- Android는 기존 `ViewerImage`와 수평 paging을 유지하며 확대는 후속 범위다. Web 확대는 이 범위에 포함하지 않는다. iOS 기본 ScrollView zoom과 close·재진입은 별도 runtime 결과로 기록한다.
+- iOS·Android 확대 중에는 외부 수평 paging을 잠그고 1배에서 다시 연다. 이미지·Content revision 변경, 이미지 재시도, 닫기·재진입에서는 zoom을 1배로 초기화하고 기존 오류·재시도 동작을 유지한다.
+- Android도 1~4배 핀치 확대와 확대 중 한 손 드래그 이동을 제공한다. iOS·Android 모두 별도 double-tap, zoom button, custom zoom·pan accessibility action은 제공하지 않으며 기본 이미지 Alt Text와 close·이전·다음 접근성은 유지한다. Web 확대는 이 범위에 포함하지 않는다.
 
 ## Post Action Bar
 

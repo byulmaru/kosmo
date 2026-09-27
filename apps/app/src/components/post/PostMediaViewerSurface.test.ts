@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
-import { createElement, forwardRef, useImperativeHandle } from 'react';
+import { createElement, forwardRef, useImperativeHandle, useRef } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ComponentType, ReactNode } from 'react';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
@@ -95,6 +95,87 @@ mock.module('@/theme/ThemeProvider', {
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 
+type GestureCallback = (...args: unknown[]) => void;
+type FakeGesture = {
+  enabled: (value: boolean) => FakeGesture;
+  enabledValue?: boolean;
+  gestures?: FakeGesture[];
+  externalGestures?: FakeGesture[];
+  maxPointers: (value: number) => FakeGesture;
+  maxPointersValue?: number;
+  name: string;
+  onTouchesDown: (callback: GestureCallback) => FakeGesture;
+  onFinalize: (callback: GestureCallback) => FakeGesture;
+  onStart: (callback: GestureCallback) => FakeGesture;
+  onUpdate: (callback: GestureCallback) => FakeGesture;
+  simultaneousWithExternalGesture: (...gestures: FakeGesture[]) => FakeGesture;
+  onFinalizeCallback?: GestureCallback;
+  onTouchesDownCallback?: GestureCallback;
+  onStartCallback?: GestureCallback;
+  onUpdateCallback?: GestureCallback;
+};
+function fakeGesture(name: string): FakeGesture {
+  const gesture = {
+    enabled: (value: boolean) => {
+      gesture.enabledValue = value;
+      return gesture;
+    },
+    maxPointers: (value: number) => {
+      gesture.maxPointersValue = value;
+      return gesture;
+    },
+    simultaneousWithExternalGesture: (...gestures: FakeGesture[]) => {
+      gesture.externalGestures = gestures;
+      return gesture;
+    },
+    name,
+    onTouchesDown: (callback: GestureCallback) => {
+      gesture.onTouchesDownCallback = callback;
+      return gesture;
+    },
+    onFinalize: (callback: GestureCallback) => {
+      gesture.onFinalizeCallback = callback;
+      return gesture;
+    },
+    onStart: (callback: GestureCallback) => {
+      gesture.onStartCallback = callback;
+      return gesture;
+    },
+    onUpdate: (callback: GestureCallback) => {
+      gesture.onUpdateCallback = callback;
+      return gesture;
+    },
+  } as FakeGesture;
+  return gesture;
+}
+
+mock.module('react-native-gesture-handler', {
+  exports: {
+    Gesture: {
+      Pan: () => fakeGesture('pan'),
+      Pinch: () => fakeGesture('pinch'),
+      Native: () => fakeGesture('native'),
+      Simultaneous: (...gestures: FakeGesture[]) => ({
+        ...fakeGesture('simultaneous'),
+        gestures,
+      }),
+    },
+    GestureDetector: (props: Record<string, unknown>) =>
+      createElement('GestureDetector', props, props.children as ReactNode),
+    GestureHandlerRootView: (props: Record<string, unknown>) =>
+      createElement('GestureHandlerRootView', props, props.children as ReactNode),
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+
+mock.module('react-native-reanimated', {
+  exports: {
+    default: { View: 'AnimatedView' },
+    runOnJS: (callback: GestureCallback) => callback,
+    useAnimatedStyle: (callback: () => unknown) => callback,
+    useSharedValue: <T>(value: T) => useRef({ value }).current,
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+
 const icon = (type: string) => (props: Record<string, unknown>) => createElement(type, props);
 
 mock.module(require.resolve('lucide-react-native'), {
@@ -122,11 +203,19 @@ type SurfaceProps = Readonly<{
 }>;
 
 let PostMediaViewerSurface: ComponentType<SurfaceProps> | undefined;
+let AndroidZoomImage: ComponentType<Record<string, unknown>> | undefined;
+let AndroidPagerGesture: ComponentType<Record<string, unknown>> | undefined;
 let renderer: ReactTestRenderer | null = null;
+let androidRenderer: ReactTestRenderer | null = null;
 
 before(async () => {
   PostMediaViewerSurface = (await import('./PostMediaViewerSurface'))
     .PostMediaViewerSurface as ComponentType<SurfaceProps>;
+  const androidZoomModule = await import('./PostMediaViewerAndroidZoom.android');
+  AndroidZoomImage = androidZoomModule.AndroidZoomImage as ComponentType<Record<string, unknown>>;
+  AndroidPagerGesture = androidZoomModule.AndroidPagerGesture as ComponentType<
+    Record<string, unknown>
+  >;
 });
 
 afterEach(async () => {
@@ -138,9 +227,110 @@ afterEach(async () => {
     await act(async () => renderer?.unmount());
     renderer = null;
   }
+  if (androidRenderer) {
+    await act(async () => androidRenderer?.unmount());
+    androidRenderer = null;
+  }
 });
 
 describe('PostMediaViewerSurface', () => {
+  it('Android native zoom locks paging, clamps one-pointer pan, and releases on reset', async () => {
+    const NativeZoom = AndroidZoomImage;
+    const PagerGesture = AndroidPagerGesture;
+    assert.ok(NativeZoom);
+    assert.ok(PagerGesture);
+    const zoomedChanges: boolean[] = [];
+    const props = {
+      children: createElement('View', { style: { height: 585, width: 390 } }),
+      onZoomedChange: (zoomed: boolean) => zoomedChanges.push(zoomed),
+      status: 'ready' as const,
+      viewportSize: { height: 600, width: 390 },
+    };
+    await act(async () => {
+      androidRenderer = create(createElement(PagerGesture, null, createElement(NativeZoom, props)));
+    });
+    const nativeRenderer = androidRenderer;
+    assert.ok(nativeRenderer);
+    assert.equal(
+      nativeRenderer.root
+        .findAll((node) => String(node.type) === 'GestureDetector')
+        .some((node) => node.props.gesture.name === 'native'),
+      true,
+    );
+    const image = nativeRenderer.root.findAll((node) => String(node.type) === 'AnimatedView')[0];
+    assert.ok(image);
+    await act(async () =>
+      image.props.onLayout({ nativeEvent: { layout: { height: 585, width: 390 } } }),
+    );
+
+    const detector = () =>
+      nativeRenderer.root
+        .findAll((node) => String(node.type) === 'GestureDetector')
+        .find((node) => Array.isArray(node.props.gesture?.gestures));
+    const gestures = () => detector()?.props.gesture.gestures as FakeGesture[];
+    const pinch = () => gestures()?.find((gesture) => gesture.name === 'pinch');
+    assert.equal(pinch()?.externalGestures?.[0]?.name, 'native');
+    await act(async () => pinch()?.onTouchesDownCallback?.({ numberOfTouches: 1 }));
+    assert.deepEqual(zoomedChanges, []);
+    await act(async () => pinch()?.onTouchesDownCallback?.({ numberOfTouches: 2 }));
+    assert.deepEqual(zoomedChanges, [true]);
+    await act(async () => pinch()?.onStartCallback?.({ focalX: 195, focalY: 300 }));
+    assert.deepEqual(zoomedChanges, [true]);
+    await act(async () => pinch()?.onUpdateCallback?.({ focalX: 195, focalY: 300, scale: 99 }));
+    const maxScaleStyle = image.props.style[1] as () => {
+      transform: Array<Record<string, number>>;
+    };
+    assert.equal(maxScaleStyle().transform[2]?.scale, 4);
+    await act(async () => pinch()?.onUpdateCallback?.({ focalX: 195, focalY: 300, scale: 2 }));
+    await act(async () => pinch()?.onFinalizeCallback?.({}, false));
+    assert.deepEqual(zoomedChanges, [true]);
+
+    const pan = () => gestures()?.find((gesture) => gesture.name === 'pan');
+    assert.equal(pan()?.maxPointersValue, 1);
+    assert.equal(pan()?.enabledValue, true);
+    await act(async () => pan()?.onStartCallback?.({}));
+    await act(async () => pan()?.onUpdateCallback?.({ translationX: 9999, translationY: -9999 }));
+    const animatedStyle = image.props.style[1] as () => {
+      transform: Array<Record<string, number>>;
+    };
+    assert.deepEqual(animatedStyle().transform, [
+      { translateX: 195 },
+      { translateY: -285 },
+      { scale: 2 },
+    ]);
+
+    await act(async () => {
+      nativeRenderer.update(
+        createElement(
+          PagerGesture,
+          null,
+          createElement(NativeZoom, { ...props, status: 'loading' as const }),
+        ),
+      );
+    });
+    assert.deepEqual(zoomedChanges.at(-1), false);
+
+    await act(async () => {
+      nativeRenderer.update(createElement(PagerGesture, null, createElement(NativeZoom, props)));
+    });
+    const resetPinch = () =>
+      detector()?.props.gesture.gestures.find((gesture: FakeGesture) => gesture.name === 'pinch');
+    await act(async () => resetPinch()?.onStartCallback?.({ focalX: 195, focalY: 300 }));
+    await act(async () =>
+      resetPinch()?.onUpdateCallback?.({ focalX: 195, focalY: 300, scale: 0.25 }),
+    );
+    const resetImage = nativeRenderer.root.findAll(
+      (node) => String(node.type) === 'AnimatedView',
+    )[0];
+    assert.equal(
+      (resetImage.props.style[1] as () => { transform: Array<Record<string, number>> })()
+        .transform[2]?.scale,
+      1,
+    );
+    await act(async () => resetPinch()?.onFinalizeCallback?.({}, false));
+    assert.deepEqual(zoomedChanges.at(-1), false);
+  });
+
   it('Android image stage keeps horizontal paging without iOS zoom', async () => {
     mockPlatform.OS = 'android';
     const indexes: number[] = [];
