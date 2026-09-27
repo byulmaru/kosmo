@@ -11,8 +11,8 @@ export type AnalyticsEventProperties = {
     visibility: 'PUBLIC' | 'UNLISTED' | 'FOLLOWERS' | 'DIRECT';
   };
   repost_succeeded: { result: 'created' | 'removed' };
-  reaction_added: { reaction_type: 'default' | 'custom' };
-  reaction_removed: { reaction_type: 'default' | 'custom' };
+  reaction_added: ReactionEventProperties;
+  reaction_removed: ReactionEventProperties;
   bookmark_added: Record<string, never>;
   bookmark_removed: Record<string, never>;
   follow_succeeded: {
@@ -32,8 +32,25 @@ export type AnalyticsEventProperties = {
   };
 };
 
+export type ReactionEventProperties =
+  | {
+      reaction_type: 'default' | 'custom';
+      emoji_kind: 'unicode';
+      reaction_emoji_key: string;
+    }
+  | {
+      reaction_type: 'default' | 'custom';
+      emoji_kind?: never;
+      reaction_emoji_key?: never;
+    };
+
 export type AnalyticsEventName = keyof AnalyticsEventProperties;
 
 export type AnalyticsEventArgs = {
   [Name in AnalyticsEventName]: [name: Name, properties: AnalyticsEventProperties[Name]];
 }[AnalyticsEventName];
+
+export type ReactionAnalyticsEventArgs = [
+  name: 'reaction_added' | 'reaction_removed',
+  properties: ReactionEventProperties,
+];

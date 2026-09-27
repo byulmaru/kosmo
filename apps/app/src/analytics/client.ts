@@ -1,4 +1,8 @@
-import type { AnalyticsEventName, AnalyticsEventProperties } from './events';
+import type {
+  AnalyticsEventName,
+  AnalyticsEventProperties,
+  ReactionAnalyticsEventArgs,
+} from './events';
 
 export function trackAnalytics<Name extends AnalyticsEventName>(
   name: Name,
@@ -6,6 +10,14 @@ export function trackAnalytics<Name extends AnalyticsEventName>(
 ): void {
   void name;
   void properties;
+}
+
+export function trackAnalyticsForAccount(
+  accountId: string,
+  ...args: ReactionAnalyticsEventArgs
+): void {
+  void accountId;
+  void args;
 }
 
 export function identifyAnalytics(accountId: string, availableProfileCount?: number): void {
