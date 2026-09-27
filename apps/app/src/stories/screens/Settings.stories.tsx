@@ -5,9 +5,9 @@ import { SettingsRouteLayout } from '@/app/(tabs)/(protected)/settings/_layout';
 import SettingsThemeRoute from '@/app/(tabs)/(protected)/settings/theme';
 import { BYULMARU_ID_ACCOUNT_SETTINGS_URL } from '@/components/settings/ByulmaruIdAccountSettingsEntry';
 import { SettingsProfileDetail } from '@/components/settings/SettingsProfileDetail';
-import { colors } from '@/theme/tokens';
 import { ThemePreferenceProvider } from '@/theme/ThemePreferenceProvider';
 import { useTheme } from '@/theme/ThemeProvider';
+import { colors } from '@/theme/tokens';
 import { profile } from '../fixtures';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
