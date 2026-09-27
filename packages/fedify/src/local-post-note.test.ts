@@ -306,7 +306,11 @@ describe('ActivityPub Local Post Note', () => {
       type: ActivityPubActorType.PERSON,
       uri: `https://quote-author.example/users/${fixtureId}`,
     });
-    await db.insert(ActivityPubPosts).values({ postId: quote.id, uri: quoteUri });
+    await db.insert(ActivityPubPosts).values({
+      postId: quote.id,
+      receivedAt: Temporal.Instant.from('2026-09-27T00:00:00Z'),
+      uri: quoteUri,
+    });
     await db
       .update(Posts)
       .set({

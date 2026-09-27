@@ -411,16 +411,21 @@ describe('ActivityPub inbound Quote lifecycle', () => {
       temporalClient.workflow,
     );
     let acceptedBetweenReadAndTransition = false;
-    t.mock.method(temporalClient.workflow, 'executeUpdateWithStart', async (update, options) => {
-      const command = options.startWorkflowOperation.options.args?.[0] as
-        | { kind?: string }
-        | undefined;
-      if (command?.kind === 'revoke' && !acceptedBetweenReadAndTransition) {
-        acceptedBetweenReadAndTransition = true;
-        await handleInboundQuoteAccept({ accept, context: createContext(), request });
-      }
-      return executeUpdate(update, options);
-    });
+    t.mock.method(
+      temporalClient.workflow,
+      'executeUpdateWithStart',
+      async (...args: Parameters<typeof executeUpdate>) => {
+        const [update, options] = args;
+        const command = options.startWorkflowOperation.options.args?.[0] as
+          | { kind?: string }
+          | undefined;
+        if (command?.kind === 'revoke' && !acceptedBetweenReadAndTransition) {
+          acceptedBetweenReadAndTransition = true;
+          await handleInboundQuoteAccept({ accept, context: createContext(), request });
+        }
+        return executeUpdate(update, options);
+      },
+    );
     let forwarded = 0;
     const context = createContext({
       forwardActivity: async () => {
