@@ -105,27 +105,26 @@ Export가 성공하면 같은 `apps/app` workspace와 환경에서 `pnpm exec ex
 전체 결과를 export root의 `expo-client.json`으로 저장하고, scheme `kosmo`와 Android/iOS platform
 identifier를 검증한다. 이 public config는 Expo SDK 호환성에 필요한 client metadata를 publisher에
 전달하기 위한 것으로, secret이나 publish credential을 포함하지 않는다. `expo-client.json`은
-export artifact에 포함된다. 자동 runtime 계산이나 `EXPO_UPDATES_FINGERPRINT_OVERRIDE`로 runtime을
-계산하지 않는다. 각 platform publish job은 자신의 export가 성공하고 caller의 배포 gate를 통과하면 해당
-source-map-free publisher artifact와 runtimeVersion, export root 기준 `expo_client_path: expo-client.json`을
-public publisher reusable workflow에 전달한다. `scripts/prepare-expo-ota-sourcemaps.mjs`는 기존
-90일 publisher artifact에서 `.map` 파일을 제거하고 `sourceMappingURL`을 지운다. 이 helper는 각
-`.js`·`.hbc` bundle에 parseable sibling `.map`과 `sourcesContent`가 있는지 검사한 뒤 상대 경로를 유지해
-정확한 bundle/map pair만 별도의 Sentry upload artifact로 복사한다. 이 transient artifact는
-`expo-ota-${platform}-${run_id}-sourcemaps` 이름으로 1일 보관한다.
+export artifact에 포함된다. 각 platform은 한 개의 `expo-ota-${platform}-${run_id}-export`
+GitHub Actions artifact를 만들고 90일 보관한다. 이 artifact에는 외부 source map `.map` 파일을 포함한
+원본 Expo export가 그대로 들어가며, 별도 helper나 단계가 map을 제거하거나 bundle의
+`sourceMappingURL`을 지우지 않는다. Repository read access가 있는 signed-in 사용자는 이 artifact를
+다운로드할 수 있다.
 
-별도 fresh Sentry upload job은 checkout, OIDC와 OTA signing key 없이 이 1일 artifact를 받는다. Token을
-설정하기 전에 pinned `@sentry/expo-upload-sourcemaps@8.24.0` uploader와 `@sentry/cli@3.6.2`를
-`$RUNNER_TEMP/kosmo-sentry-uploader`에 설치하고 bundle/map preflight를 실행한다. 별도 uploader step만
-`SENTRY_AUTH_TOKEN`을 받아 다음 명령으로 업로드한다.
+자동 runtime 계산이나 `EXPO_UPDATES_FINGERPRINT_OVERRIDE`로 runtime을 계산하지 않는다. 각 platform
+publish job은 자신의 export가 성공하고 caller의 기존 배포 gate를 통과하면 같은 artifact 이름과
+runtimeVersion, export root 기준 `expo_client_path: expo-client.json`을 public publisher reusable workflow에
+전달한다. Publisher는 해당 platform의 Expo `metadata.json`이 선택한 bundle과 asset만 R2 upload allowlist에
+넣으므로 `.map` 파일은 R2에 기록되지 않는다.
 
-```sh
-node "$RUNNER_TEMP/kosmo-sentry-uploader/node_modules/@sentry/expo-upload-sourcemaps/cli.js" "$RUNNER_TEMP/kosmo-ota-upload"
-```
-
-Uploader는 `SENTRY_ORG`, `SENTRY_PROJECT`, caller의 full `source_sha`를 `SENTRY_RELEASE`로,
-`https://sentry.io/`를 `SENTRY_URL`로 사용한다. 설정 누락, map pair 검사 실패 또는 Sentry upload 실패는
-OTA workflow를 실패시키고 public publish를 막는다.
+각 export에는 Android 또는 iOS Sentry upload sibling job이 같은 90일 artifact를 사용한다. 이 job은 local
+`.github/workflows/expo-ota-sentry.yml`을 호출하고 대응하는 export job을 기다린다. Production에서는
+preflight가 확정한 `source_sha`를 전달하기 위해 `canonical_preflight`도 dependency에 둔다. Sentry token을
+설정하기 전에 Expo `metadata.json`이 지정한 실제 platform bundle 경로를 찾아 sibling `.map`을 검증하고,
+map JSON과 `sourcesContent`가 유효한지 preflight한다. `SENTRY_AUTH_TOKEN`은 uploader step에만 전달한다.
+Uploader는 `SENTRY_ORG`, `SENTRY_PROJECT`, caller의 bare full `source_sha`를 `SENTRY_RELEASE`로,
+`https://sentry.io/`를 `SENTRY_URL`로 사용한다. Upload 실패는 uploader job과 전체 workflow run에 표시되지만,
+기존 publish job의 `needs`와 condition에는 uploader가 포함되지 않아 OTA publish를 막지 않는다.
 
 Publisher는 Expo Metro `metadata.json`과 참조된 파일을 읽어 export를 검증하고, 실제 bundle과 asset
 bytes를 hashing한 뒤 사전 계산한 SHA-256 표준 Base64를 각 R2 `PutObject`에 전달해 서버 검증을 수행하며
@@ -186,8 +185,9 @@ trust를 추가하지 않는다.
 
 - workflow run ID, caller workflow ref와 source SHA
 - project, platform, OTA channel, 수동 runtime generation(`runtimeVersion`, 현재 `0.3`)과 keyid
-- 1일 Sentry upload artifact 이름, 업로드 job 결과, bare SHA `SENTRY_RELEASE`와 bundle/map preflight 결과
-- 90일 public publisher artifact에 `.map` 파일과 `sourceMappingURL`이 없는 결과
+- platform별 90일 GitHub Actions export artifact 이름, `.map` 포함 여부와 repository reader 접근 경계
+- Sentry upload job 결과, bare SHA `SENTRY_RELEASE`, metadata-selected bundle/map preflight 결과
+- Publisher upload allowlist가 `.map` 파일을 제외하고 R2에 기록하지 않는 결과
 - publisher의 R2 upload SHA-256 검증 결과와 publish job 결과
 - production release의 Environment 승인과 동일한 source SHA
 

@@ -115,7 +115,7 @@ Sentry의 기본 개인정보 전송은 활성화하지 않지만, SDK event에�
 
 하나의 `Native Store Distribution` `workflow_dispatch`가 Android/iOS job을 함께 시작하며, 두 job은 `main`에서 각각 `prod` Environment 승인을 받은 뒤 clean Expo prebuild와 Release build를 독립적으로 수행한다. 한 job의 실패가 다른 job을 취소하거나 성공으로 숨기지 않는다. 두 job은 `SENTRY_ORG`·`SENTRY_PROJECT`와 full `GITHUB_SHA` 기반의 `SENTRY_RELEASE`·`EXPO_PUBLIC_SENTRY_RELEASE`를 전달하고, `SENTRY_AUTH_TOKEN`은 실제 Gradle/Xcode Release build step 환경 변수로만 전달한다. `@sentry/react-native`가 생성한 build hook이 JavaScript source map과 native debug symbol을 해당 release에 업로드하며, build 후 generated native project와 signing material을 cleanup한다. Android Gradle과 iOS source-map hook은 upload CLI의 nonzero를 Release build 실패로 전파한다. iOS Fastlane은 `build_app` 성공 직후 동일 archive의 `dSYMs`를 `pnpm exec sentry-cli debug-files upload --type dsym --wait`로 명시적으로 업로드하고 CLI nonzero를 lane 실패로 전파한다. Xcode hook의 중복 debug symbol 업로드는 Sentry debug ID dedupe에 맡긴다. token은 앱 bundle·repository·배포 artifact에 포함되지 않는다.
 
-Native OTA는 caller가 승인한 full source SHA를 Sentry release로 사용해 JavaScript source map을 업로드한다. Export·artifact·credential 경계와 release evidence는 [Expo OTA 운영](./expo-ota.md)을 따른다.
+Native OTA는 caller가 승인한 bare full source SHA를 Sentry release로 사용해 JavaScript source map을 별도의 upload job에서 전송한다. 이 job은 Expo metadata가 선택한 실제 bundle의 map을 먼저 검증하며, artifact·credential 경계와 publish 분리는 [Expo OTA 운영](./expo-ota.md)을 따른다.
 
 로컬에서 artifact 보안 경계를 확인한다.
 
