@@ -158,6 +158,8 @@ jobs:
       channel: prod
       platform: android
       source_sha: ${{ needs.canonical_preflight.outputs.target_sha }}
+    secrets:
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
 
   export_ios:
     name: Export Production iOS OTA
@@ -171,6 +173,8 @@ jobs:
       channel: prod
       platform: ios
       source_sha: ${{ needs.canonical_preflight.outputs.target_sha }}
+    secrets:
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
 
   publish_android:
     name: Publish Production Android OTA

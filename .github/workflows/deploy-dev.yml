@@ -128,6 +128,8 @@ jobs:
       channel: dev
       platform: android
       source_sha: ${{ github.event.workflow_run.head_sha }}
+    secrets:
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
 
   export_ios:
     name: Export Dev iOS OTA
@@ -140,6 +142,8 @@ jobs:
       channel: dev
       platform: ios
       source_sha: ${{ github.event.workflow_run.head_sha }}
+    secrets:
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
 
   publish_android:
     name: Publish Dev Android OTA
