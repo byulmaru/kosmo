@@ -6,10 +6,14 @@ platform export가 Argo 배포와 병렬로 시작하고, 각 publish는 Argo �
 성공한 뒤 시작한다. Native module, SDK, entitlement, permission 또는 그 밖의 native
 설정이 바뀐 release는 OTA가 아니라 새 Store binary 경로를 사용한다.
 
-`runtimeVersion`은 자동 계산이 아닌 수동 호환성 세대다. 현재 승인된 세대는 `"0.3"`이며,
+`runtimeVersion`은 자동 계산이 아닌 수동 호환성 세대다. 현재 source의 세대는 `"0.4"`이며,
 JavaScript/assets-only OTA는 현재 세대를 유지한다. Native compatibility가 바뀌면 세대를 증가시키고
 새 Android/iOS Store binary를 만든 뒤 그 세대에 호환되는 OTA만 publish한다. 새 binary와 증가한 세대
 없이 호환되지 않는 OTA를 publish하지 않으며, `EXPO_UPDATES_FINGERPRINT_OVERRIDE`는 사용하지 않는다.
+
+PROD-812의 `userInterfaceStyle: automatic`은 새 Native binary에 포함되어야 한다. 테마의 `시스템`
+선택을 Light 고정인 기존 `0.3` binary에 OTA로 전달하지 않도록 `0.4`로 분리하며, Android/iOS 새 binary와
+OS 모드 전환 검증을 완료한 뒤 해당 세대를 출시한다. 이 source 변경 자체는 Store 배포 완료를 뜻하지 않는다.
 
 Native Store binary의 기본 OTA channel은 `prod`다. 인증된 Native Settings의 `설정 → 정보 → 개발 정보`에서만 `dev`·`prod`를 선택해
 API origin·OIDC 로그인 환경과 OTA channel을 함께 전환한다. 로그인 화면에는 channel selector나 복구 진입점을 두지 않으며,
@@ -32,7 +36,7 @@ static delivery에는 private key나 publish credential을 넣지 않는다.
 | project        | `kosmo-native`                           |
 | platform       | `android` 또는 `ios`                     |
 | OTA channel    | caller가 선택한 안전한 단일 path segment |
-| runtimeVersion | 수동 호환성 세대 (현재 `0.3`)            |
+| runtimeVersion | 수동 호환성 세대 (현재 `0.4`)            |
 | keyid          | 등록된 signing key identifier            |
 
 채널은 비어 있지 않고 영문 대소문자, 숫자, `.`, `_`, `-`만 포함하는 단일 path segment여야
@@ -96,7 +100,7 @@ ref로 사용한다. reusable workflow가 최신 `main`을 다시 선택하거�
 않는다. Production Release의 기존 `prod` Environment 승인과 canonical Docker Build 확인이
 OTA 호출에 선행한다. OTA에 별도의 두 번째 production approval을 두지 않는다.
 
-Android와 iOS export job은 `apps/app/app.config.ts`에 명시한 수동 `runtimeVersion`(현재 `"0.3"`)을
+Android와 iOS export job은 `apps/app/app.config.ts`에 명시한 수동 `runtimeVersion`(현재 `"0.4"`)을
 resolve해 사용한다. Workflow는 resolve한 값이 비어 있지 않은 안전한 단일 path segment
 (`[A-Za-z0-9._-]+`, `.`·`..` 제외)인지 검증한다. Native bundle의 `EXPO_PUBLIC_SENTRY_RELEASE`는
 caller가 승인한 full 40-character `source_sha`를 release 값으로 사용한다. Export job은 secret 없이
@@ -184,7 +188,7 @@ trust를 추가하지 않는다.
 자동 release 완료를 기록할 때 workflow 로그와 publisher 결과에서 다음 값을 확인한다.
 
 - workflow run ID, caller workflow ref와 source SHA
-- project, platform, OTA channel, 수동 runtime generation(`runtimeVersion`, 현재 `0.3`)과 keyid
+- project, platform, OTA channel, 수동 runtime generation(`runtimeVersion`, 현재 `0.4`)과 keyid
 - platform별 90일 GitHub Actions export artifact 이름, `.map` 포함 여부와 repository reader 접근 경계
 - Sentry upload job 결과, bare SHA `SENTRY_RELEASE`, metadata-selected bundle/map preflight 결과
 - Publisher upload allowlist가 `.map` 파일을 제외하고 R2에 기록하지 않는 결과

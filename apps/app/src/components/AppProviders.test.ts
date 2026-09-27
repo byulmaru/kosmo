@@ -141,8 +141,12 @@ mockModule('react-native', {
   Platform: { OS: 'web' },
   Pressable: 'Pressable',
   StyleSheet: { create: <T>(styles: T) => styles },
+  useColorScheme: () => 'light',
   useWindowDimensions: () => ({ height: 900, width: 1024 }),
   View: 'View',
+});
+mockModule('@react-native-async-storage/async-storage', {
+  default: { getItem: async () => null, setItem: async () => undefined },
 });
 mockModule('expo-router', {
   DefaultTheme: mockDefaultNavigationTheme,
@@ -240,10 +244,12 @@ mockModule(new URL('../theme/ThemeProvider.tsx', import.meta.url), {
     foregroundPrimary: '#111',
     overlayScrim: '#0008',
   }),
+  useThemeMode: () => 'light',
   ThemeProvider: ({ children }: PropsWithChildren) => children,
 });
 mockModule(new URL('../components/ui/ToastProvider.tsx', import.meta.url), {
   ToastProvider: ({ children }: PropsWithChildren) => children,
+  useToast: () => ({ showToast: () => undefined }),
 });
 mockModule(new URL('./shell/BottomTabBar.tsx', import.meta.url), {
   BottomTabBar: () => null,
