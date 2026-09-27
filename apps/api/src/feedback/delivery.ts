@@ -3,6 +3,8 @@ import { parseSlackWebhookUrl, postSlackWebhook } from '@/slack/webhook';
 import type { FeedbackKind } from '@kosmo/core/enums';
 import type { FeedbackAttachment } from './attachments';
 
+export class FeedbackDeliveryError extends ValidationError {}
+
 export type FeedbackInput = {
   body: string;
   kind: FeedbackKind;
@@ -75,10 +77,10 @@ const claimDelivery = (accountId: string) => {
 export const deliverFeedback = async (identity: FeedbackIdentity, input: FeedbackInput) => {
   if (!input.attachments?.length) {
     if (!parseSlackWebhookUrl(process.env.SLACK_FEEDBACK_WEBHOOK_URL)) {
-      throw new ValidationError('피드백을 전달할 수 없어요. 잠시 후 다시 시도해주세요.');
+      throw new FeedbackDeliveryError('피드백을 전달할 수 없어요. 잠시 후 다시 시도해주세요.');
     }
   } else if (!process.env.SLACK_FEEDBACK_BOT_TOKEN || !process.env.SLACK_FEEDBACK_CHANNEL_ID) {
-    throw new ValidationError('피드백을 전달할 수 없어요. 잠시 후 다시 시도해주세요.');
+    throw new FeedbackDeliveryError('피드백을 전달할 수 없어요. 잠시 후 다시 시도해주세요.');
   }
 
   claimDelivery(identity.accountId);
@@ -98,7 +100,7 @@ export const deliverFeedback = async (identity: FeedbackIdentity, input: Feedbac
       });
     }
   } catch {
-    throw new ValidationError('피드백을 전달하지 못했어요. 다시 시도해주세요.');
+    throw new FeedbackDeliveryError('피드백을 전달하지 못했어요. 다시 시도해주세요.');
   } finally {
     inFlightFeedbackDeliveries.delete(identity.accountId);
   }
@@ -114,7 +116,7 @@ async function deliverFeedbackWithAttachments(
   const token = process.env.SLACK_FEEDBACK_BOT_TOKEN;
   const channelId = process.env.SLACK_FEEDBACK_CHANNEL_ID;
   if (!token || !channelId) {
-    throw new ValidationError('피드백을 전달할 수 없어요. 잠시 후 다시 시도해주세요.');
+    throw new FeedbackDeliveryError('피드백을 전달할 수 없어요. 잠시 후 다시 시도해주세요.');
   }
 
   const deadline = new AbortController();

@@ -2,7 +2,10 @@
 
 PROD-487의 첨부 없는 피드백은 API 서버가 Slack Incoming Webhook으로 전달한다.
 PROD-1006의 이미지 첨부 피드백은 API 서버가 Slack 파일 업로드 API로 본문과 이미지를 함께 전달한다.
-Web·Android·iOS는 같은 인증된 피드백 경계를 사용한다. 클라이언트 번들, Relay 요청, 브라우저 쿠키,
+첨부 없는 제출은 기존 `submitFeedback` GraphQL mutation을 사용한다. 첨부가 있으면
+`POST /feedback/attachments`에 본문·종류·이미지를 한 번에 전송한다. Web은 같은 origin의 BFF를,
+Android·iOS는 API를 직접 호출하며 같은 서버 인증·파일 검증·Slack 전달 경계를 사용한다.
+공용 GraphQL 경로는 파일 업로드를 받지 않는다. 클라이언트 번들, 피드백 요청, 브라우저 쿠키,
 API 로그에는 Slack Webhook URL·Bot Token·업로드 URL을 포함하지 않는다.
 
 ## 배포 Secret 구성
@@ -41,6 +44,9 @@ Web·Expo process까지 전달되지만 Web·Expo 애플리케이션이나 brows
 ## 첨부 전달과 보관
 
 - 최대 3장, 장당 5MB, 합계 15MB의 JPEG·PNG·WebP 정적 이미지를 받는다. MB는 1,000,000바이트이다.
+- 첨부 요청은 인증과 Web cookie 요청의 Origin 검사 후 처리하며, BFF·API에서 실제 요청 본문을 각각
+  16MB까지 제한한다. 한도 내 본문은 요청 메모리에서 처리하므로 이 제한이 서버 전체 메모리 한도를
+  보장하지는 않는다.
 - KOSMO DB나 미디어 저장소에 첨부를 영속 저장하지 않는다. 저장되는 파일은 Slack의 접근·보관 정책을 따른다.
 - 서버가 `files.getUploadURLExternal`로 파일별 URL을 받아 이미지 바이트를 전송하고, 모두 성공한 뒤
   `files.completeUploadExternal`에 파일 목록과 본문을 함께 전달한다. 중간 실패하면 게시 완료를 호출하지 않는다.

@@ -5,6 +5,8 @@
 [PROD-547](https://linear.app/byulmaru/issue/PROD-547)은 Web page surface를,
 [PROD-594](https://linear.app/byulmaru/issue/PROD-594)는 Web shell overlay를 소유한다.
 선택적 이미지 첨부는 [PROD-1006](https://linear.app/byulmaru/issue/PROD-1006)이 소유한다.
+Discord 커뮤니티 운영 여부와 관계없이 앱·웹 안에서 본문과 스크린샷으로 피드백을 보낼 수 있어야 한다.
+별도 커뮤니티 가입이나 공개 타임라인 게시를 피드백 접수의 필수 단계로 요구하지 않는다.
 
 ## 현재 계약과 overlay-only Target
 
@@ -39,7 +41,7 @@
 
 피드백 form은 입력, 검증, 제출과 결과 상태를 소유하되 자신이 page인지 popup인지 판단하지 않는다.
 
-- form 소유: 종류·본문·선택한 이미지 draft, radio group 배치, validation, `submitFeedback`, pending 입력 차단, 성공·실패 표시, 성공 시 초기화,
+- form 소유: 종류·본문·선택한 이미지 draft, radio group 배치, validation, 피드백 제출, pending 입력 차단, 성공·실패 표시, 성공 시 초기화,
   실패 시 draft 유지
 - 공용 `RadioOption` 소유: 각 option의 indicator·content·내부 spacing과 selected·hover·pressed·disabled·focus visual
 - 현재 호환 page 소유: `PageHeader`, page padding, document scroll, 중앙 콘텐츠 폭
@@ -86,7 +88,7 @@ Form은 `{dirty, submitting}` 상태만 presentation에 알리고 overlay, navig
 - idle은 기본 `좋아요` 종류와 빈 본문으로 시작하며 유효한 본문 전에는 제출을 비활성화한다.
 - pending은 종류, 본문, 이미지 선택·제거와 제출 action의 중복 입력을 차단한다.
 - 성공은 기존 성공 문구를 표시하고 종류·본문·첨부를 초기화한다.
-- delivery failure와 GraphQL failure는 기존 오류, 재시도 action, 종류·본문·첨부를 유지한다.
+- 전송 실패는 기존 오류, 재시도 action, 종류·본문·첨부를 유지한다.
 - route와 인증 경계, radio·status·busy semantics를 유지한다. 첨부 없는 피드백의 전달 계약은 유지한다.
 - 재현 환경은 별도 필드나 자동 감지 metadata로 수집하지 않는다.
 

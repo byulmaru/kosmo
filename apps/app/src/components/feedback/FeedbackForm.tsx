@@ -14,9 +14,10 @@ import { PostComposerMediaItemsTarget } from '@/components/post/PostComposerMedi
 import { Button } from '@/components/ui/Button';
 import { RadioGroup, RadioOption } from '@/components/ui/RadioGroup';
 import { TextArea } from '@/components/ui/TextField';
+import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, layoutRecipes, radii, spacing, typography } from '@/theme/tokens';
-import { createFeedbackUploadables, getFeedbackAssetContentType } from './feedbackAttachments';
+import { getFeedbackAssetContentType, submitFeedbackWithAttachments } from './feedbackAttachments';
 import type { FeedbackKind } from '@kosmo/core/enums';
 import type { PostComposerSelectedMediaItem } from '@/components/post/PostComposerMediaItemsTarget';
 import type { FeedbackFormSubmitFeedbackMutation } from './__generated__/FeedbackFormSubmitFeedbackMutation.graphql';
@@ -59,12 +60,16 @@ export function FeedbackForm({ onStateChange }: Props) {
   const [attachments, setAttachments] = useState<FeedbackMediaItem[]>([]);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [selecting, setSelecting] = useState(false);
+  const [attachmentSubmitting, setAttachmentSubmitting] = useState(false);
   const attachmentsRef = useRef<readonly FeedbackMediaItem[]>(attachments);
+  const attachmentSubmittingRef = useRef(false);
   const selectingRef = useRef(false);
   const nextAttachmentKey = useRef(0);
-  const [commit, submitting] =
+  const [commit, relaySubmitting] =
     useMutation<FeedbackFormSubmitFeedbackMutation>(SubmitFeedbackMutation);
+  const { nativeToken } = useRelayActor();
   attachmentsRef.current = attachments;
+  const submitting = relaySubmitting || attachmentSubmitting;
   const dirty = kind !== 'POSITIVE' || body.length > 0 || attachments.length > 0;
   const latestStateRef = useRef<FeedbackFormState>({ dirty, submitting });
   latestStateRef.current = { dirty, submitting };
@@ -89,6 +94,26 @@ export function FeedbackForm({ onStateChange }: Props) {
   useEffect(() => {
     onStateChange?.(latestStateRef.current);
   }, [dirty, onStateChange, submitting]);
+
+  const completeSubmission = () => {
+    reportState({ dirty: false, submitting: false });
+    setKind('POSITIVE');
+    setBody('');
+    for (const item of attachmentsRef.current) {
+      if (Platform.OS === 'web') {
+        releaseImagePreview(item.asset.uri);
+      }
+    }
+    setAttachments([]);
+    setAttachmentError(null);
+    setBodyTouched(false);
+    setStatus('success');
+  };
+
+  const failSubmission = () => {
+    reportState({ dirty, submitting: false });
+    setStatus('error');
+  };
 
   const selectMedia = async () => {
     const available = feedbackAttachmentLimit - attachmentsRef.current.length;
@@ -160,41 +185,47 @@ export function FeedbackForm({ onStateChange }: Props) {
       return;
     }
 
+    if (attachments.length > 0) {
+      if (attachmentSubmittingRef.current) {
+        return;
+      }
+      attachmentSubmittingRef.current = true;
+      setAttachmentSubmitting(true);
+      reportState({ dirty, submitting: true });
+      setStatus('idle');
+      void submitFeedbackWithAttachments({
+        body: parsedBody.data,
+        items: attachments,
+        kind,
+        native: Platform.OS !== 'web',
+        nativeToken,
+      })
+        .then(completeSubmission, failSubmission)
+        .finally(() => {
+          attachmentSubmittingRef.current = false;
+          setAttachmentSubmitting(false);
+        });
+      return;
+    }
+
     reportState({ dirty, submitting: true });
     setStatus('idle');
     commit({
       variables: {
         input: {
-          attachments: attachments.map(() => null) as unknown as Blob[],
           body: parsedBody.data,
           kind,
         },
       },
-      uploadables: createFeedbackUploadables(attachments),
       onCompleted: (response, errors) => {
         if (errors?.length || !response.submitFeedback?.completed) {
-          reportState({ dirty, submitting: false });
-          setStatus('error');
+          failSubmission();
           return;
         }
 
-        reportState({ dirty: false, submitting: false });
-        setKind('POSITIVE');
-        setBody('');
-        for (const item of attachmentsRef.current) {
-          if (Platform.OS === 'web') {
-            releaseImagePreview(item.asset.uri);
-          }
-        }
-        setAttachments([]);
-        setAttachmentError(null);
-        setBodyTouched(false);
-        setStatus('success');
+        completeSubmission();
       },
-      onError: () => {
-        reportState({ dirty, submitting: false });
-        setStatus('error');
-      },
+      onError: failSubmission,
     });
   };
 

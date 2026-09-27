@@ -15,6 +15,7 @@ import { Hono } from 'hono';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type { deriveContext as DeriveContext, Env } from '../../../src/context';
+import type { feedback as FeedbackRouter } from '../../../src/feedback/route';
 import type { yoga as YogaRouter } from '../../../src/graphql';
 
 const publicOrigin = 'http://127.0.0.1:4173';
@@ -42,6 +43,7 @@ let Sessions: typeof CoreDb.Sessions;
 let seedDatabase: typeof CoreSeed.seedDatabase;
 let deriveContext: typeof DeriveContext;
 let yoga: typeof YogaRouter;
+let feedback: typeof FeedbackRouter;
 let app: Hono<Env>;
 let localInstanceId: string;
 
@@ -64,6 +66,7 @@ before(async () => {
   ({ seedDatabase } = await import('@kosmo/core/db/seed'));
   ({ deriveContext } = await import('../../../src/context'));
   ({ yoga } = await import('../../../src/graphql'));
+  ({ feedback } = await import('../../../src/feedback/route'));
 
   await truncateDatabase();
   localInstanceId = (await seedDatabase({ publicOrigin })).localInstance.id;
@@ -74,6 +77,7 @@ before(async () => {
     return next();
   });
   app.route('/graphql', yoga);
+  app.route('/feedback', feedback);
 });
 
 after(async () => {
@@ -168,7 +172,7 @@ test('anonymous와 invalid body는 Slack POST 없이 거부된다', async (t) =>
   assert.equal(calls, 0);
 });
 
-test('multipart 첨부 3장은 Slack 파일 업로드 뒤 한 번 게시된다', async (t) => {
+test('전용 multipart 첨부 3장은 Slack 파일 업로드 뒤 한 번 게시된다', async (t) => {
   const auth = await createAuthenticatedSession();
   process.env.SLACK_FEEDBACK_BOT_TOKEN = 'xoxb-test';
   process.env.SLACK_FEEDBACK_CHANNEL_ID = 'C123';
@@ -197,7 +201,7 @@ test('multipart 첨부 3장은 Slack 파일 업로드 뒤 한 번 게시된다',
     });
   });
 
-  const result = await requestMultipart(
+  const result = await requestFeedbackAttachments(
     {
       body: '원본 이미지 첨부',
       kind: 'BUG_REPORT',
@@ -210,7 +214,8 @@ test('multipart 첨부 3장은 Slack 파일 업로드 뒤 한 번 게시된다',
     auth.token,
   );
 
-  assert.deepEqual(result, { data: { submitFeedback: { completed: true } } });
+  assert.equal(result.status, 200);
+  assert.equal(result.completed, true);
   assert.equal(requests.length, 7);
   assert.equal(requests[0]?.url, 'https://slack.com/api/files.getUploadURLExternal');
   assert.equal(requests[2]?.url, 'https://slack.com/api/files.getUploadURLExternal');
@@ -223,7 +228,7 @@ test('multipart 첨부 3장은 Slack 파일 업로드 뒤 한 번 게시된다',
   ]);
 });
 
-test('multipart fake file와 4장은 Slack 전에 거부된다', async (t) => {
+test('전용 multipart의 fake file와 4장은 Slack 전에 거부된다', async (t) => {
   const auth = await createAuthenticatedSession();
   let calls = 0;
   t.mock.method(globalThis, 'fetch', async () => {
@@ -231,13 +236,16 @@ test('multipart fake file와 4장은 Slack 전에 거부된다', async (t) => {
     return new Response(JSON.stringify({ ok: true }), { status: 200 });
   });
 
-  const fake = await requestGraphQL(
-    mutation,
-    { input: { body: 'fake', kind: 'POSITIVE', attachments: [{}] } },
-    auth.token,
-    400,
-  );
-  const tooMany = await requestMultipart(
+  const fakeForm = new FormData();
+  fakeForm.append('body', 'fake');
+  fakeForm.append('kind', 'POSITIVE');
+  fakeForm.append('attachments', '[object Object]');
+  const fakeResponse = await app.request('/feedback/attachments', {
+    body: fakeForm,
+    headers: { authorization: `Bearer ${auth.token}` },
+    method: 'POST',
+  });
+  const tooMany = await requestFeedbackAttachments(
     {
       body: 'too many',
       kind: 'POSITIVE',
@@ -248,17 +256,17 @@ test('multipart fake file와 4장은 Slack 전에 거부된다', async (t) => {
     auth.token,
   );
 
-  assert.equal(fake.data == null, true);
-  assert.equal(fake.errors?.length, 1);
-  assert.equal(tooMany.data, null);
-  assert.equal(tooMany.errors?.length, 1);
+  assert.equal(fakeResponse.status, 400);
+  assert.equal(tooMany.status, 400);
   assert.equal(calls, 0);
 });
 
-test('API multipart transport limit은 GraphQL parser 전에 적용된다', async () => {
-  const response = await app.request('/graphql', {
+test('API multipart transport limit은 parser 전에 적용된다', async () => {
+  const auth = await createAuthenticatedSession();
+  const response = await app.request('/feedback/attachments', {
     body: new Uint8Array(0),
     headers: {
+      authorization: `Bearer ${auth.token}`,
       'content-length': String(feedbackMultipartMaxBytes + 1),
       'content-type': 'multipart/form-data; boundary=test',
     },
@@ -266,6 +274,86 @@ test('API multipart transport limit은 GraphQL parser 전에 적용된다', asyn
   });
 
   assert.equal(response.status, 413);
+});
+
+test('GraphQL multipart는 전용 endpoint로 이동되어 거부된다', async () => {
+  const response = await app.request('/graphql', {
+    body: new FormData(),
+    method: 'POST',
+  });
+
+  assert.equal(response.status, 415);
+});
+
+test('전용 feedback multipart는 인증과 알 수 없는 필드를 거부한다', async () => {
+  const unauthenticated = await app.request('/feedback/attachments', {
+    body: new FormData(),
+    method: 'POST',
+  });
+  assert.equal(unauthenticated.status, 401);
+
+  const auth = await createAuthenticatedSession();
+  const formData = new FormData();
+  formData.append('body', 'body');
+  formData.append('kind', 'POSITIVE');
+  formData.append('unexpected', 'value');
+  formData.append('attachments', new File([tinyPng], 'one.png', { type: 'image/png' }));
+  const invalid = await app.request('/feedback/attachments', {
+    body: formData,
+    headers: { authorization: `Bearer ${auth.token}` },
+    method: 'POST',
+  });
+
+  assert.equal(invalid.status, 400);
+
+  const createFormData = (body: string, kind: string) => {
+    const formData = new FormData();
+    formData.append('body', body);
+    formData.append('kind', kind);
+    formData.append('attachments', new File([tinyPng], 'one.png', { type: 'image/png' }));
+    return formData;
+  };
+  const invalidBody = await app.request('/feedback/attachments', {
+    body: createFormData('   ', 'POSITIVE'),
+    headers: { authorization: `Bearer ${auth.token}` },
+    method: 'POST',
+  });
+  assert.equal(invalidBody.status, 400);
+
+  const invalidKind = await app.request('/feedback/attachments', {
+    body: createFormData('body', 'UNKNOWN'),
+    headers: { authorization: `Bearer ${auth.token}` },
+    method: 'POST',
+  });
+  assert.equal(invalidKind.status, 400);
+
+  const duplicateBody = createFormData('body', 'POSITIVE');
+  duplicateBody.append('body', 'second body');
+  const duplicate = await app.request('/feedback/attachments', {
+    body: duplicateBody,
+    headers: { authorization: `Bearer ${auth.token}` },
+    method: 'POST',
+  });
+  assert.equal(duplicate.status, 400);
+});
+
+test('전용 feedback multipart의 Slack 전달 실패는 안전한 503을 반환한다', async (t) => {
+  const auth = await createAuthenticatedSession();
+  process.env.SLACK_FEEDBACK_BOT_TOKEN = 'xoxb-test';
+  process.env.SLACK_FEEDBACK_CHANNEL_ID = 'C123';
+  t.mock.method(globalThis, 'fetch', async () => new Response(null, { status: 503 }));
+
+  const result = await requestFeedbackAttachments(
+    {
+      body: '전달 실패',
+      kind: 'POSITIVE',
+      attachments: [new File([tinyPng], 'one.png', { type: 'image/png' })],
+    },
+    auth.token,
+  );
+
+  assert.equal(result.status, 503);
+  assert.equal(result.message, '피드백을 전달하지 못했어요. 다시 시도해주세요.');
 });
 
 const requestGraphQL = async <TData = Record<string, unknown>>(
@@ -287,49 +375,32 @@ const requestGraphQL = async <TData = Record<string, unknown>>(
   return (await response.json()) as GraphQLResult<TData>;
 };
 
-const requestMultipart = async (
+const requestFeedbackAttachments = async (
   input: {
     body: string;
     kind: string;
     attachments: File[];
   },
   token?: string,
-): Promise<GraphQLResult<{ submitFeedback: { completed: boolean } }>> => {
+): Promise<{ status: number; completed?: boolean; message?: string }> => {
   const formData = new FormData();
-  formData.append(
-    'operations',
-    JSON.stringify({
-      query: mutation,
-      variables: {
-        input: {
-          attachments: input.attachments.map(() => null),
-          body: input.body,
-          kind: input.kind,
-        },
-      },
-    }),
-  );
-  formData.append(
-    'map',
-    JSON.stringify(
-      Object.fromEntries(
-        input.attachments.map((_attachment, index) => [
-          String(index),
-          [`variables.input.attachments.${index}`],
-        ]),
-      ),
-    ),
-  );
-  input.attachments.forEach((attachment, index) => formData.append(String(index), attachment));
+  formData.append('body', input.body);
+  formData.append('kind', input.kind);
+  input.attachments.forEach((attachment) => formData.append('attachments', attachment));
   const headers = new Headers();
   if (token) {
     headers.set('authorization', `Bearer ${token}`);
   }
-  const response = await app.request('/graphql', { body: formData, headers, method: 'POST' });
-  assert.equal(response.status, 200);
-  return (await response.json()) as GraphQLResult<{
-    submitFeedback: { completed: boolean };
-  }>;
+  const response = await app.request('/feedback/attachments', {
+    body: formData,
+    headers,
+    method: 'POST',
+  });
+  return { status: response.status, ...(await response.json()) } as {
+    status: number;
+    completed?: boolean;
+    message?: string;
+  };
 };
 
 const createAuthenticatedSession = async () => {

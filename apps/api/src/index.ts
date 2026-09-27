@@ -2,6 +2,7 @@ import { serve } from '@hono/node-server';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { Hono } from 'hono';
 import { deriveContext } from './context';
+import { feedback } from './feedback/route';
 import { yoga } from './graphql';
 import { reportError } from './sentry';
 import type { Env } from './context';
@@ -28,6 +29,7 @@ app.use('*', async (c, next) => {
 });
 
 app.route('/graphql', yoga);
+app.route('/feedback', feedback);
 
 serve({
   fetch: app.fetch,

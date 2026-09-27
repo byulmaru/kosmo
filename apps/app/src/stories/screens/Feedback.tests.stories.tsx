@@ -20,6 +20,8 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+let feedbackAttachmentRequest: RequestInit | undefined;
+
 export const SelectedImages: Story = {
   beforeEach: () => {
     resetImagePickerMock();
@@ -57,6 +59,58 @@ export const SelectedImages: Story = {
     });
     await userEvent.click(canvas.getByRole('button', { name: '이미지 추가' }));
     expect(canvas.getAllByRole('button', { name: /^첨부 이미지 \d 제거$/u })).toHaveLength(3);
+  },
+};
+
+export const SelectedImagesSubmission: Story = {
+  beforeEach: () => {
+    resetImagePickerMock();
+    feedbackAttachmentRequest = undefined;
+    setNextImagePickerResult({
+      assets: [
+        {
+          file: new File(['feedback image'], 'feedback.png', { type: '' }),
+          fileName: 'feedback.png',
+          fileSize: 1024,
+          height: 630,
+          mimeType: '',
+          uri: ogImage,
+          width: 1200,
+        },
+      ],
+      canceled: false,
+    });
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input, init) => {
+      if (String(input).endsWith('/feedback/attachments')) {
+        feedbackAttachmentRequest = init;
+        return new Response(JSON.stringify({ completed: true }), { status: 200 });
+      }
+      return originalFetch(input, init);
+    };
+
+    return () => {
+      globalThis.fetch = originalFetch;
+      resetImagePickerMock();
+    };
+  },
+  render: () => <FeedbackPage />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.type(
+      canvas.getByRole('textbox', { name: '피드백 내용' }),
+      '이미지 첨부 피드백',
+    );
+    await userEvent.click(canvas.getByRole('button', { name: '이미지 추가' }));
+    await expect(canvas.findByLabelText('첨부 이미지 1, 선택됨')).resolves.toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: '피드백 보내기' }));
+    await expect(canvas.findByText('피드백을 전달했습니다. 감사합니다!')).resolves.toBeVisible();
+
+    expect(feedbackAttachmentRequest?.credentials).toBe('include');
+    const formData = feedbackAttachmentRequest?.body as FormData;
+    expect(formData.get('body')).toBe('이미지 첨부 피드백');
+    expect(formData.get('kind')).toBe('POSITIVE');
+    expect(formData.getAll('attachments')).toHaveLength(1);
   },
 };
 

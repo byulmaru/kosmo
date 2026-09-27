@@ -263,7 +263,7 @@ test('첨부만 있는 draft를 보호하고 3장 multipart 실패 후 재시도
   const retryGate = new Promise<void>((resolve) => {
     releaseRetry = resolve;
   });
-  await page.route('**/graphql', async (route) => {
+  await page.route('**/feedback/attachments', async (route) => {
     const contentType = route.request().headers()['content-type'];
     if (!contentType?.startsWith('multipart/form-data')) {
       await route.continue();
@@ -272,9 +272,9 @@ test('첨부만 있는 draft를 보호하고 3장 multipart 실패 후 재시도
     const form = await new Response(route.request().postDataBuffer(), {
       headers: { 'content-type': contentType },
     }).formData();
-    const operation = JSON.parse(String(form.get('operations')));
-    expect(operation.operationName).toBe('FeedbackFormSubmitFeedbackMutation');
-    expect(operation.variables.input.body).toBe('이미지 첨부 피드백');
+    expect(form.get('body')).toBe('이미지 첨부 피드백');
+    expect(form.get('kind')).toBe('POSITIVE');
+    expect(form.has('operations')).toBe(false);
     const fileEntries = [...form.values()].filter((value) => typeof value !== 'string');
     expect(fileEntries).toHaveLength(3);
     for (const file of fileEntries) {
@@ -286,10 +286,9 @@ test('첨부만 있는 draft를 보호하고 3장 multipart 실패 후 재시도
     }
     await route.fulfill({
       contentType: 'application/json',
+      status: submissions === 1 ? 502 : 200,
       body: JSON.stringify(
-        submissions === 1
-          ? { errors: [{ message: '첨부 전달 테스트 실패' }] }
-          : { data: { submitFeedback: { completed: true } } },
+        submissions === 1 ? { error: '첨부 전달 테스트 실패' } : { completed: true },
       ),
     });
   });
