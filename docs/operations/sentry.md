@@ -6,13 +6,13 @@ Kosmo는 API, Web BFF, Web browser와 Android·iOS Native의 처리되지 않은
 
 브라우저의 공개 Sentry DSN은 코드 공개 설정표로 관리하고, 선택된 `dev`·`prod` 채널의 Sentry environment와 함께 사용한다. API와 Web BFF의 server runtime은 기존 일반 Vault 객체와 `env` Kubernetes Secret의 `EXPO_PUBLIC_SENTRY_DSN`을 계속 사용한다. 두 경계는 같은 공개 ingest DSN을 사용할 수 있지만 client bundle 설정과 server runtime Secret의 수명·전달 경계는 분리한다. API, Web BFF, Web browser와 Android·iOS Native는 Sentry의 `kosmo` project 하나를 공유하고 `runtime` tag로 구분하며 Native platform context를 함께 기록한다. `main` push의 canonical Docker Build가 `sha-<full SHA>` tag와 동일한 full commit SHA release의 Web image와 source map을 한 번 생성·업로드한다. Native Store release workflow는 build의 full `GITHUB_SHA`를 release로 사용해 JavaScript source map과 native debug symbol을 업로드한다. Native OTA는 caller가 승인한 full source SHA를 release로 사용해 JavaScript source map을 별도 upload job에서 업로드한다. `byulmaru/kosmo`의 `main` ref `workflow_dispatch` production release는 성공한 main push Docker Build run을 확인한 뒤 GHCR SHA tag digest를 preflight에서 조회·고정하고, `prod` Environment 승인 뒤 그 digest만 배포한다. Production release에서 target image를 다시 build하거나 Web source map을 다시 upload·tag/digest를 재조회하지 않는다. SHA tag가 재빌드되면 Dev와 Production의 조회 digest가 달라질 수 있지만, Production은 preflight digest를 유지한다. `target_sha`를 입력하면 해당 SHA를, 비워 두면 preflight가 확정한 최신 `main` SHA를 target으로 사용한다. 승인 전에는 production source checkout·credential 접근·build를 하지 않으며, tag push와 `production` branch push는 production release를 선택하지 않는다. Web source map upload metadata와 token은 canonical Docker Build에, Native Store source map/debug symbol metadata와 token은 Android·iOS Release build에, Native OTA source map metadata와 token은 별도 Sentry upload job에 workflow가 접근할 수 있는 GitHub Actions variables와 repository secret으로 주입한다.
 
-| 이름                     | 저장 위치                                                      | 용도                                            |
-| ------------------------ | -------------------------------------------------------------- | ----------------------------------------------- |
-| `SENTRY_ORG`             | workflow에서 사용되는 GitHub Actions variable (scope 미확인)   | Sentry organization slug                        |
-| `SENTRY_PROJECT`         | GitHub repository variable                                     | Web·Native source map/debug symbol project slug |
-| browser Sentry DSN       | 코드 공개 설정표의 공용값                                      | Web bundle의 공개 ingest DSN                    |
-| `EXPO_PUBLIC_SENTRY_DSN` | 기존 환경별 Vault 객체와 `env` Secret                          | API/Web BFF server runtime ingest DSN           |
-| `SENTRY_AUTH_TOKEN`      | GitHub repository secret                                       | Web·Native source map/debug symbol 업로드용 organization token |
+| 이름                     | 저장 위치                             | 용도                                            |
+| ------------------------ | ------------------------------------- | ----------------------------------------------- |
+| `SENTRY_ORG`             | GitHub Actions variable               | Sentry organization slug                        |
+| `SENTRY_PROJECT`         | GitHub repository variable            | Web·Native source map/debug symbol project slug |
+| browser Sentry DSN       | 코드 공개 설정표의 공용값             | Web bundle의 공개 ingest DSN                    |
+| `EXPO_PUBLIC_SENTRY_DSN` | 기존 환경별 Vault 객체와 `env` Secret | API/Web BFF server runtime ingest DSN           |
+| `SENTRY_AUTH_TOKEN`      | GitHub repository secret              | Web·Native map/debug symbol 업로드 token        |
 
 Canonical Docker Build와 Native Store Release workflow는 공개 client 설정을 Vault나 GitHub Variables에서 읽거나 Docker build arg로 주입하지 않는다. 코드 설정표가 Web bundle과 Native bundle에 포함되고, GitHub Actions variables의 `SENTRY_ORG`·`SENTRY_PROJECT`는 source map/debug symbol upload metadata로 사용한다. `SENTRY_PROJECT`는 repository variable이며, `SENTRY_ORG`의 GitHub Actions variable scope는 확인되지 않았다. Web Docker build의 `SENTRY_AUTH_TOKEN`은 canonical `secret-envs`를 통한 BuildKit secret으로, Native Store token은 실제 Release build step에서만 전달하며, OTA token은 별도 Sentry upload job의 uploader step에서만 전달한다. 브라우저·Native DSN은 공개 ingest endpoint이므로 bundle에 포함될 수 있지만 client secret이나 upload credential은 포함하지 않는다.
 
