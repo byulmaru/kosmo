@@ -48,7 +48,6 @@ export type RemoteActorMaterializationOptions = {
   context: RemoteActorLookupContext;
   actorUri: URL;
   documentLoader?: DocumentLoader;
-  signal?: AbortSignal;
   now?: Temporal.Instant;
   reactivateUnresponsive?: boolean;
 };
@@ -337,11 +336,9 @@ export const findOrMaterializeRemoteProfileActorByUri = async ({
   actorUri,
   context,
   now = getNow(),
-  signal,
 }: {
   actorUri: URL;
   context: RemoteActorLookupContext;
-  signal?: AbortSignal;
   now?: Temporal.Instant;
 }) => {
   const stored = await findUsableStoredRemoteProfileActorByUri(actorUri);
@@ -355,7 +352,6 @@ export const findOrMaterializeRemoteProfileActorByUri = async ({
     actorUri,
     now,
     reactivateUnresponsive: true,
-    signal,
   });
 
   const materialized = await findStoredRemoteProfileActorByUri(actorUri);
@@ -388,13 +384,12 @@ export const materializeRemoteProfileActor = async (options: RemoteActorMaterial
   const existingRequestedRemoteInstance = await findAvailableRemoteInstance(targetActorDomain, {
     allowUnresponsive: reactivateUnresponsive,
   });
-  const lookupOptions = {
-    ...(options.documentLoader ? { documentLoader: options.documentLoader } : {}),
-    ...(options.signal ? { signal: options.signal } : {}),
-  };
+  const lookupOptions = options.documentLoader
+    ? { documentLoader: options.documentLoader }
+    : undefined;
   const actor = (await context.lookupObject(
     options.actorUri,
-    Object.keys(lookupOptions).length > 0 ? lookupOptions : undefined,
+    lookupOptions,
   )) as ActivityPubObject | null;
 
   if (!isActor(actor)) {

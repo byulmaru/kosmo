@@ -19,9 +19,11 @@ Accepted
 
 - inbound typed `Mention.href`는 먼저 기존 ActivityPub actor/Profile mapping을 확인한다. 이미 알려진 Local/Remote Profile은
   현재 mapping을 그대로 사용한다. 알려지지 않은 remote actor target은 Note당 최대 32개의 고유 remote actor URI까지 typed href를 통해
-  resolve하고 materialize할 수 있다. 한도 내 target의 remote actor 조회는 모두 동시에 시작하며, 각 조회는 Note별 하나의 공통 30초 제한을
-  공유한다. 제한시간이 끝나면 진행 중인 actor 조회를 중단한다. 이미 시작한 remote Profile 저장은 제한시간 뒤에도 완료될 수 있다.
-  이미 확인된 Mentioned Profile 관계와 Note 전체는 유지한다. 한도를 넘거나 개별 resolve가 실패한 target도 건너뛴다. 본문 anchor나
+  resolve하고 materialize할 수 있다. 한도 내 target의 remote actor 조회는 모두 동시에 시작하며, 각 조회는 기존 actor URI 기반 Temporal
+  Workflow로 처리한다. 호출자는 각 조회 결과를 공용 `runWorkflow`의 기본 client deadline인 최대 30초 동안 기다린다. deadline 안에
+  결과를 받지 못하거나 조회가 실패하면 그 Mention만 건너뛴다. 이 deadline은 caller의 대기 한도이며 Workflow를 명시적으로 취소하지 않고,
+  별도 keepalive도 하지 않는다. caller가 대기를 멈춘 뒤 Workflow가 계속 실행되거나 완료되는지는 보장하지 않는다. 다른 Mention의 확인 결과와
+  Note 전체는 유지한다. 한도를 넘은 target도 건너뛴다. 본문 anchor나
   `Mention.name`은 actor를 찾거나 fetch하는 입력으로 사용하지 않는다. 본문 anchor href가 확인된 Profile의 actor URI, 저장된 Profile
   URL alias 또는 기존 trusted local human URL과 정확히 일치할 때만 `profileId` Mention node로 표현할 수 있다. 알 수 없거나 일치하지
   않는 anchor는 `tag.name`, handle 또는 표시 문자열과 관계없이 안전한 일반 link 또는 표시 text로 보존한다.

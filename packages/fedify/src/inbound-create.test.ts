@@ -35,7 +35,8 @@ import {
   postContentDocumentToText,
 } from '@kosmo/core/post-content/server';
 import { temporalClient } from '@kosmo/core/temporal/client';
-import { eq, inArray, ne } from 'drizzle-orm';
+import { remoteProfileRefreshWorkflow } from '@kosmo/core/temporal/workflows';
+import { eq, ne } from 'drizzle-orm';
 import { setInboundObservabilityReporter } from './inbound-observability';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
@@ -58,6 +59,35 @@ const createObservation = { activityType: 'Create', handler: 'create' } as const
 const uriFederation = createFederation<void>({ kv: new MemoryKvStore() });
 uriFederation.setObjectDispatcher(Note, '/ap/note/{id}', () => null);
 const uriContext = uriFederation.createContext(new URL(publicOrigin), undefined);
+
+type RemoteProfileRefreshOptions = {
+  args?: readonly { actorUri: string }[];
+  workflowId?: string;
+  workflowIdConflictPolicy?: string;
+  workflowIdReusePolicy?: string;
+};
+
+const assertRemoteProfileRefreshCall = (workflow: unknown, options: unknown, actorUri: string) => {
+  assert.equal(workflow, remoteProfileRefreshWorkflow.workflow);
+  assert.ok(options && typeof options === 'object');
+  const workflowOptions = options as RemoteProfileRefreshOptions;
+  assert.deepEqual(workflowOptions.args, [{ actorUri }]);
+  assert.equal(
+    workflowOptions.workflowId,
+    remoteProfileRefreshWorkflow.workflowIdFromArgs({ actorUri }),
+  );
+  assert.equal(workflowOptions.workflowIdConflictPolicy, 'USE_EXISTING');
+  assert.equal(workflowOptions.workflowIdReusePolicy, 'ALLOW_DUPLICATE');
+};
+
+const mockRemoteProfileRefresh = (execute: (actorUri: string) => Promise<string>) =>
+  mock.method(temporalClient.workflow, 'execute', async (workflow: unknown, options: unknown) => {
+    assert.ok(options && typeof options === 'object');
+    const actorUri = (options as RemoteProfileRefreshOptions).args?.[0]?.actorUri;
+    assert.ok(typeof actorUri === 'string');
+    assertRemoteProfileRefreshCall(workflow, options, actorUri);
+    return execute(actorUri);
+  });
 
 let ActivityPubActors: typeof CoreDb.ActivityPubActors;
 let ActivityPubPosts: typeof CoreDb.ActivityPubPosts;
@@ -175,13 +205,12 @@ describe('inbound Create dispatch', () => {
         to: PUBLIC_COLLECTION,
       });
     const originalObjectUri = new URL('https://remote.example/notes/mention-before-refresh');
-    let mentionLookupCount = 0;
+    const mentionWorkflow = mockRemoteProfileRefresh(async () => {
+      throw new Error('Known Mention must not start a remote profile Workflow');
+    });
 
     await handleInboundCreate(
-      createContext(undefined, null, async () => {
-        mentionLookupCount += 1;
-        return null;
-      }),
+      createContext(),
       new Create({ actor: remoteActorUri, object: createMentionNote(originalObjectUri) }),
       receivedAt,
     );
@@ -196,7 +225,7 @@ describe('inbound Create dispatch', () => {
         ],
       },
     ]);
-    assert.equal(mentionLookupCount, 0);
+    assert.equal(mentionWorkflow.mock.callCount(), 0);
     const unrefreshedActor = await db
       .select({ profileUrl: ActivityPubActors.profileUrl })
       .from(ActivityPubActors)
@@ -253,6 +282,8 @@ describe('inbound Create dispatch', () => {
         { postContentId: createdAfterRefresh.content.id, profileId: profile.id },
       ].sort((left, right) => left.postContentId.localeCompare(right.postContentId)),
     );
+    assert.equal(mentionWorkflow.mock.callCount(), 0);
+    mentionWorkflow.mock.restore();
   });
 
   test('keeps a name-matching untrusted body URL as a safe link and stores the typed relation', async () => {
@@ -414,7 +445,9 @@ describe('inbound Create dispatch', () => {
     });
 
     const objectUri = new URL('https://remote.example/notes/local-mention');
-    let mentionLookupCount = 0;
+    const mentionWorkflow = mockRemoteProfileRefresh(async () => {
+      throw new Error('Known local Mention must not start a remote profile Workflow');
+    });
     const note = new Note({
       attribution: remoteActorUri,
       content:
@@ -432,10 +465,7 @@ describe('inbound Create dispatch', () => {
     });
 
     await handleInboundCreate(
-      createContext(undefined, null, async () => {
-        mentionLookupCount += 1;
-        return null;
-      }),
+      createContext(),
       new Create({ actor: remoteActorUri, object: note }),
       receivedAt,
     );
@@ -456,10 +486,11 @@ describe('inbound Create dispatch', () => {
     assert.deepEqual(await db.select().from(PostMentions), [
       { postContentId: content.id, profileId: target.id },
     ]);
-    assert.equal(mentionLookupCount, 0);
+    assert.equal(mentionWorkflow.mock.callCount(), 0);
+    mentionWorkflow.mock.restore();
   });
 
-  test('materializes an unknown remote Mention and verifies its actor URI before matching the advertised URL', async () => {
+  test('matches an unknown Mention by actor URI after a successful remote profile Workflow', async () => {
     const profileUrl = new URL('https://profiles.example/@bob');
     const mentionActorUri = new URL('https://mentions.example/users/bob');
     const objectUri = new URL('https://remote.example/notes/materialized-mention');
@@ -474,19 +505,22 @@ describe('inbound Create dispatch', () => {
     });
 
     await createStoredRemoteActor();
+    const executeMock = mockRemoteProfileRefresh(async (actorUri) => {
+      lookupHrefs.push(actorUri);
+      return (
+        await createStoredRemoteActor({
+          actorUri: new URL(actorUri),
+          handle: 'bob',
+          profileUrl: profileUrl.href,
+        })
+      ).id;
+    });
     await handleInboundCreate(
-      createContext(undefined, null, async (actorUri) => {
-        lookupHrefs.push(actorUri.href);
-        return new Person({
-          id: actorUri,
-          name: 'Bob Remote',
-          preferredUsername: 'bob',
-          url: profileUrl,
-        });
-      }),
+      createContext(),
       new Create({ actor: remoteActorUri, object: note }),
       receivedAt,
     );
+    executeMock.mock.restore();
 
     const { content } = await getMaterializedPost(objectUri);
     const storedActor = await db
@@ -511,7 +545,7 @@ describe('inbound Create dispatch', () => {
   });
 
   test(
-    'materializes all unknown Mention targets concurrently with stable matching',
+    'runs all unknown Mention Workflows concurrently with stable matching',
     { timeout: 30_000 },
     async () => {
       const mentionActorUris = Array.from(
@@ -520,7 +554,7 @@ describe('inbound Create dispatch', () => {
       );
       const objectUri = new URL('https://remote.example/notes/parallel-mention-materialization');
       const lookupHrefs: string[] = [];
-      const lookupSignals: (AbortSignal | undefined)[] = [];
+      const profileIdsByUri = new Map<string, string>();
       let activeLookups = 0;
       let maxActiveLookups = 0;
       let releaseLookups!: () => void;
@@ -543,32 +577,35 @@ describe('inbound Create dispatch', () => {
 
       try {
         await createStoredRemoteActor();
+        const executeMock = mockRemoteProfileRefresh(async (actorUri) => {
+          lookupHrefs.push(actorUri);
+          activeLookups += 1;
+          maxActiveLookups = Math.max(maxActiveLookups, activeLookups);
+          if (lookupHrefs.length === 1) {
+            releaseFallback = setTimeout(releaseLookups, 5_000);
+          }
+          if (lookupHrefs.length === mentionActorUris.length) {
+            if (releaseFallback) {
+              clearTimeout(releaseFallback);
+              releaseFallback = undefined;
+            }
+            releaseLookups();
+          }
+          await lookupsReleased;
+          activeLookups -= 1;
+          const profile = await createStoredRemoteActor({
+            actorUri: new URL(actorUri),
+            handle: new URL(actorUri).pathname.split('/').at(-1) ?? 'parallel',
+          });
+          profileIdsByUri.set(actorUri, profile.id);
+          return profile.id;
+        });
         await handleInboundCreate(
-          createContext(undefined, null, async (actorUri, options) => {
-            lookupHrefs.push(actorUri.href);
-            lookupSignals.push(options?.signal);
-            activeLookups += 1;
-            maxActiveLookups = Math.max(maxActiveLookups, activeLookups);
-            if (lookupHrefs.length === 1) {
-              releaseFallback = setTimeout(releaseLookups, 5_000);
-            }
-            if (lookupHrefs.length === mentionActorUris.length) {
-              if (releaseFallback) {
-                clearTimeout(releaseFallback);
-                releaseFallback = undefined;
-              }
-              releaseLookups();
-            }
-            await lookupsReleased;
-            activeLookups -= 1;
-            return new Person({
-              id: actorUri,
-              preferredUsername: actorUri.pathname.split('/').at(-1) ?? 'parallel',
-            });
-          }),
+          createContext(),
           new Create({ actor: remoteActorUri, object: note }),
           receivedAt,
         );
+        executeMock.mock.restore();
       } finally {
         if (releaseFallback) {
           clearTimeout(releaseFallback);
@@ -576,21 +613,8 @@ describe('inbound Create dispatch', () => {
       }
 
       const { content } = await getMaterializedPost(objectUri);
-      const actorRows = await db
-        .select({ profileId: ActivityPubActors.profileId, uri: ActivityPubActors.uri })
-        .from(ActivityPubActors)
-        .where(
-          inArray(
-            ActivityPubActors.uri,
-            mentionActorUris.map(({ href }) => href),
-          ),
-        );
-      const profileIdsByUri = new Map(actorRows.map(({ profileId, uri }) => [uri, profileId]));
 
       assert.deepEqual([...lookupHrefs].sort(), mentionActorUris.map(({ href }) => href).sort());
-      assert.ok(
-        lookupSignals.every((signal) => signal !== undefined && signal === lookupSignals[0]),
-      );
       assert.equal(maxActiveLookups, mentionActorUris.length);
       assert.deepEqual(content.document.body.content, [
         {
@@ -611,65 +635,64 @@ describe('inbound Create dispatch', () => {
     },
   );
 
-  test('passes one aborted lookup signal to all capped Mention targets and preserves actor links', async () => {
-    const mentionActorUris = Array.from(
-      { length: 5 },
-      (_, index) => new URL(`https://mentions.example/users/aborted-${index}`),
+  test('omits a remote Mention when the default Temporal client deadline expires', async () => {
+    const mentionActorUri = new URL('https://mentions.example/users/deadline');
+    const objectUri = new URL('https://remote.example/notes/mention-workflow-deadline');
+    let deadlineDurationMs: number | undefined;
+    const executeMock = mockRemoteProfileRefresh(async () => new Promise<string>(() => {}));
+    const deadlineMock = mock.method(
+      temporalClient,
+      'withDeadline',
+      async (deadline: number | Date, execute: () => Promise<unknown>) => {
+        const deadlineAt = deadline instanceof Date ? deadline.getTime() : deadline;
+        deadlineDurationMs = deadlineAt - Date.now();
+        void execute().catch(() => undefined);
+        throw new Error('Temporal client deadline exceeded');
+      },
     );
-    const objectUri = new URL('https://remote.example/notes/aborted-mention-materialization');
-    const abortController = new AbortController();
-    const lookupHrefs: string[] = [];
-    const timeoutMock = mock.method(AbortSignal, 'timeout', () => abortController.signal);
     const restoreReporter = setInboundObservabilityReporter({ log: () => undefined });
     const note = new Note({
       attribution: remoteActorUri,
-      content: `<p>${mentionActorUris
-        .map((actorUri, index) => `<a href="${actorUri.href}">@aborted-${index}</a>`)
-        .join(' ')}</p>`,
+      content: `<p><a href="${mentionActorUri.href}">@deadline</a></p>`,
       id: objectUri,
       mediaType: 'text/html',
-      tags: mentionActorUris.map((href, index) => new Mention({ href, name: `@ignored-${index}` })),
+      tags: [new Mention({ href: mentionActorUri, name: '@ignored' })],
       to: PUBLIC_COLLECTION,
     });
 
     try {
       await createStoredRemoteActor();
       await handleInboundCreate(
-        createContext(undefined, null, async (actorUri, options) => {
-          lookupHrefs.push(actorUri.href);
-          assert.equal(options?.signal, abortController.signal);
-          abortController.abort();
-          throw new DOMException('Mention actor lookup exceeded the budget', 'AbortError');
-        }),
+        createContext(),
         new Create({ actor: remoteActorUri, object: note }),
         receivedAt,
       );
     } finally {
-      timeoutMock.mock.restore();
+      deadlineMock.mock.restore();
+      executeMock.mock.restore();
       restoreReporter();
     }
 
     const { content } = await getMaterializedPost(objectUri);
-    assert.deepEqual([...lookupHrefs].sort(), mentionActorUris.map(({ href }) => href).sort());
-    assert.equal(timeoutMock.mock.callCount(), 1);
-    assert.equal(timeoutMock.mock.calls[0]?.arguments[0], 30_000);
+    assert.equal(executeMock.mock.callCount(), 1);
+    assert.ok(deadlineDurationMs !== undefined && deadlineDurationMs >= 29_900);
+    assert.ok(deadlineDurationMs !== undefined && deadlineDurationMs <= 30_000);
     assert.deepEqual(content.document.body.content, [
       {
         type: 'paragraph',
-        content: mentionActorUris.flatMap((actorUri, index) => [
+        content: [
           {
-            marks: [{ attrs: { href: actorUri.href }, type: 'link' }],
-            text: `@aborted-${index}`,
+            marks: [{ attrs: { href: mentionActorUri.href }, type: 'link' }],
+            text: '@deadline',
             type: 'text',
           },
-          ...(index < mentionActorUris.length - 1 ? [{ text: ' ', type: 'text' }] : []),
-        ]),
+        ],
       },
     ]);
     assert.deepEqual(await db.select().from(PostMentions), []);
   });
 
-  test('keeps failed and mismatched unknown Mentions as links while continuing with other targets', async () => {
+  test('keeps failed and unresolved unknown Mentions as links while continuing with other targets', async () => {
     const failedActorUri = new URL('https://mentions.example/users/failed');
     const mismatchedActorUri = new URL('https://mentions.example/users/mismatched');
     const returnedActorUri = new URL('https://mentions.example/users/other');
@@ -700,24 +723,31 @@ describe('inbound Create dispatch', () => {
 
     try {
       await createStoredRemoteActor();
+      const returnedProfile = await createStoredRemoteActor({
+        actorUri: returnedActorUri,
+        handle: 'other',
+      });
+      const executeMock = mockRemoteProfileRefresh(async (actorUri) => {
+        lookupHrefs.push(actorUri);
+        if (actorUri === failedActorUri.href) {
+          throw new Error('Remote lookup failed');
+        }
+        if (actorUri === mismatchedActorUri.href) {
+          return returnedProfile.id;
+        }
+        const profile = await createStoredRemoteActor({
+          actorUri: new URL(actorUri),
+          handle: 'valid',
+          profileUrl: profileUrl.href,
+        });
+        return profile.id;
+      });
       await handleInboundCreate(
-        createContext(undefined, null, async (actorUri) => {
-          lookupHrefs.push(actorUri.href);
-          if (actorUri.href === failedActorUri.href) {
-            throw new Error('Remote lookup failed');
-          }
-          if (actorUri.href === mismatchedActorUri.href) {
-            return new Person({ id: returnedActorUri, preferredUsername: 'invalid' });
-          }
-          return new Person({
-            id: actorUri,
-            preferredUsername: 'valid',
-            url: profileUrl,
-          });
-        }),
+        createContext(),
         new Create({ actor: remoteActorUri, object: note }),
         receivedAt,
       );
+      executeMock.mock.restore();
     } finally {
       restoreReporter();
     }
@@ -777,14 +807,6 @@ describe('inbound Create dispatch', () => {
           activityType: 'Create',
           handler: 'create',
           objectOrigin: objectUri.origin,
-          outcome: 'external_failure',
-          phase: 'actor_lookup',
-          reasonCode: 'remote_mention_materialization_rejected',
-        },
-        {
-          activityType: 'Create',
-          handler: 'create',
-          objectOrigin: objectUri.origin,
           outcome: 'internal_failure',
           phase: 'actor_lookup',
           reasonCode: 'remote_mention_materialization_rejected',
@@ -793,7 +815,7 @@ describe('inbound Create dispatch', () => {
     );
   });
 
-  test('limits unknown remote Mention lookups to 32 unique targets and keeps the remaining links', async () => {
+  test('limits unknown remote Mention Workflows to 32 unique targets and keeps the remaining links', async () => {
     const mentionActorUris = Array.from(
       { length: 33 },
       (_, index) => new URL(`https://mentions.example/users/target-${index}`),
@@ -823,14 +845,16 @@ describe('inbound Create dispatch', () => {
       await createStoredRemoteActor();
       knownProfileId = (await createStoredRemoteActor({ actorUri: knownActorUri, handle: 'known' }))
         .id;
+      const executeMock = mockRemoteProfileRefresh(async (actorUri) => {
+        lookupHrefs.push(actorUri);
+        throw new Error('Remote profile lookup failed');
+      });
       await handleInboundCreate(
-        createContext(undefined, null, async (actorUri) => {
-          lookupHrefs.push(actorUri.href);
-          return null;
-        }),
+        createContext(),
         new Create({ actor: remoteActorUri, object: note }),
         receivedAt,
       );
+      executeMock.mock.restore();
     } finally {
       restoreReporter();
     }
@@ -904,6 +928,9 @@ describe('inbound Create dispatch', () => {
     const fetchMock = mock.method(globalThis, 'fetch', async () => {
       throw new Error('Unresolved Mention must not trigger remote lookup');
     });
+    const executeMock = mockRemoteProfileRefresh(async () => {
+      throw new Error('Remote profile lookup failed');
+    });
 
     try {
       await handleInboundCreate(
@@ -913,6 +940,7 @@ describe('inbound Create dispatch', () => {
       );
     } finally {
       fetchMock.mock.restore();
+      executeMock.mock.restore();
     }
 
     const { content } = await getMaterializedPost(objectUri);
@@ -949,6 +977,7 @@ describe('inbound Create dispatch', () => {
     assert.equal((await db.select().from(ActivityPubActors)).length, actorCount);
     assert.equal((await db.select().from(Instances)).length, instanceCount);
     assert.equal(fetchMock.mock.callCount(), 0);
+    assert.equal(executeMock.mock.callCount(), 1);
   });
 
   test('preserves Mention, Content Warning, and an attached Image in one inbound Post', async () => {
@@ -1073,6 +1102,9 @@ describe('inbound Create dispatch', () => {
 
   test('rejects unsupported, empty, and invalid originals before Mention or author discovery', async () => {
     const invalidImageMentionActorUri = new URL('https://mentions.example/users/invalid-image');
+    const mentionWorkflow = mockRemoteProfileRefresh(async () => {
+      throw new Error('Rejected Note must not start a remote profile Workflow');
+    });
     const lookupObject = mock.fn(
       async () => new Person({ id: remoteActorUri, preferredUsername: 'alice' }),
     );
@@ -1181,6 +1213,8 @@ describe('inbound Create dispatch', () => {
     }
 
     assert.equal(lookupObject.mock.calls.length, 0);
+    assert.equal(mentionWorkflow.mock.callCount(), 0);
+    mentionWorkflow.mock.restore();
     assert.equal(await db.$count(ActivityPubActors), 0);
     assert.equal(await db.$count(Profiles), 0);
     assert.equal(await db.$count(Posts), 0);
@@ -1192,11 +1226,17 @@ describe('inbound Create dispatch', () => {
     const mentionActorUri = new URL('https://mentions.example/users/empty-anchor');
     const objectUri = new URL('https://objects.example/notes/empty-anchor-mention');
     const lookupHrefs: string[] = [];
+    const executeMock = mockRemoteProfileRefresh(async (actorUri) => {
+      lookupHrefs.push(actorUri);
+      return (
+        await createStoredRemoteActor({
+          actorUri: new URL(actorUri),
+          handle: 'bob',
+        })
+      ).id;
+    });
     const result = await materializeHydratedRemoteNote({
-      context: createContext(undefined, null, async (actorUri) => {
-        lookupHrefs.push(actorUri.href);
-        return new Person({ id: actorUri, preferredUsername: 'bob' });
-      }),
+      context: createContext(),
       note: new Note({
         attribution: remoteActorUri,
         content: `<p><a href="${mentionActorUri.href}"></a></p>`,
@@ -1209,6 +1249,7 @@ describe('inbound Create dispatch', () => {
       observation: createObservation,
       receivedAt,
     });
+    executeMock.mock.restore();
 
     const { content } = await getMaterializedPost(objectUri);
     const mentionProfile = await db
@@ -1924,7 +1965,9 @@ describe('inbound Create dispatch', () => {
   test('rejects a Note atomically when one of the selected Images has an invalid URL', async () => {
     await createStoredRemoteActor();
     const mentionActorUri = new URL('https://mentions.example/users/invalid-image');
-    let mentionLookupCount = 0;
+    const mentionWorkflow = mockRemoteProfileRefresh(async () => {
+      throw new Error('Invalid image must be rejected before remote profile lookup');
+    });
     const cases = [
       [new Image({ name: 'missing URL' })],
       [
@@ -1941,10 +1984,7 @@ describe('inbound Create dispatch', () => {
     for (const [index, attachments] of cases.entries()) {
       const objectUri = new URL(`https://remote.example/notes/invalid-image-${index}`);
       await handleInboundCreate(
-        createContext(undefined, null, async () => {
-          mentionLookupCount += 1;
-          return null;
-        }),
+        createContext(),
         new Create({
           actor: remoteActorUri,
           object: new Note({
@@ -1960,7 +2000,8 @@ describe('inbound Create dispatch', () => {
       );
     }
 
-    assert.equal(mentionLookupCount, 0);
+    assert.equal(mentionWorkflow.mock.callCount(), 0);
+    mentionWorkflow.mock.restore();
     assert.equal((await db.select().from(Media)).length, 0);
     assert.equal((await db.select().from(ActivityPubPosts)).length, 0);
     assert.equal((await db.select().from(Posts)).length, 0);
@@ -3078,16 +3119,15 @@ describe('inbound Create dispatch', () => {
   test('rejects over-budget Note content before resolving typed Mention targets', async () => {
     const mentionActorUri = new URL('https://mentions.example/users/over-budget');
     const objectUri = new URL('https://remote.example/notes/over-budget-mention');
-    let mentionLookupCount = 0;
+    const mentionWorkflow = mockRemoteProfileRefresh(async () => {
+      throw new Error('Over-budget content must be rejected before remote profile lookup');
+    });
     const restoreReporter = setInboundObservabilityReporter({ log: () => undefined });
 
     try {
       await createStoredRemoteActor();
       await handleInboundCreate(
-        createContext(undefined, null, async () => {
-          mentionLookupCount += 1;
-          return null;
-        }),
+        createContext(),
         new Create({
           actor: remoteActorUri,
           object: new Note({
@@ -3105,7 +3145,8 @@ describe('inbound Create dispatch', () => {
       restoreReporter();
     }
 
-    assert.equal(mentionLookupCount, 0);
+    assert.equal(mentionWorkflow.mock.callCount(), 0);
+    mentionWorkflow.mock.restore();
     assert.equal(await db.$count(Posts), 0);
   });
 
@@ -3385,7 +3426,7 @@ const createContext = (
     throw new Error(`Unexpected document URL: ${url}`);
   },
   recipient: string | null = null,
-  lookupObject?: (actorUri: URL, options?: { signal?: AbortSignal }) => Promise<unknown>,
+  lookupObject?: (actorUri: URL) => Promise<unknown>,
 ) =>
   ({
     canonicalOrigin: publicOrigin,

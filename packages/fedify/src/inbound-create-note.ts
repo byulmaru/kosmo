@@ -11,6 +11,8 @@ import { InstanceKind, InstanceState, PostVisibility, ProfileState } from '@kosm
 import { ConflictError, NotFoundError, ValidationError } from '@kosmo/core/error';
 import { postContentDocumentToText } from '@kosmo/core/post-content/server';
 import { createPost, ProfilePairBlockedError } from '@kosmo/core/services';
+import { runWorkflow } from '@kosmo/core/temporal/client';
+import { remoteProfileRefreshWorkflow } from '@kosmo/core/temporal/workflows';
 import { and, eq } from 'drizzle-orm';
 import { findPostByActivityPubUri } from './activitypub-post-uri';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
@@ -43,7 +45,6 @@ const noNetworkDocumentLoader = async (): Promise<never> => {
 };
 
 const maxUnknownRemoteMentionLookups = 32;
-const remoteMentionLookupTimeoutMs = 30_000;
 
 const isImageAttachment = (attachment: Document): boolean => {
   if (attachment instanceof Image) {
@@ -104,7 +105,6 @@ const projectRemoteNote = async (
   context: RemoteNoteMaterializationContext,
   note: Note,
   activityType: 'Create' | 'Unknown',
-  receivedAt: Temporal.Instant,
 ) => {
   const noteContent = {
     content: note.content?.toString() ?? null,
@@ -128,23 +128,17 @@ const projectRemoteNote = async (
       return new URL(targetHref).origin !== localOrigin;
     })
     .slice(0, maxUnknownRemoteMentionLookups);
-  const mentionLookupSignal =
-    unknownRemoteActorHrefs.length > 0
-      ? AbortSignal.timeout(remoteMentionLookupTimeoutMs)
-      : undefined;
-  const mentionLookupResults = mentionLookupSignal
-    ? await Promise.allSettled(
-        unknownRemoteActorHrefs.map(async (targetHref) => {
-          await findOrMaterializeRemoteProfileActorByUri({
-            actorUri: new URL(targetHref),
-            context,
-            now: receivedAt,
-            signal: mentionLookupSignal,
-          });
-          return targetHref;
-        }),
-      )
-    : [];
+  const mentionLookupResults = await Promise.allSettled(
+    unknownRemoteActorHrefs.map(async (targetHref) => {
+      await runWorkflow(remoteProfileRefreshWorkflow, {
+        args: [{ actorUri: targetHref }],
+        mode: 'execute',
+        workflowIdConflictPolicy: 'USE_EXISTING',
+        workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+      });
+      return targetHref;
+    }),
+  );
   const materializedActorHrefs = mentionLookupResults.flatMap((result) => {
     if (result.status === 'fulfilled') {
       return [result.value];
@@ -406,7 +400,6 @@ const materializeRemoteNote = async ({
       context,
       note,
       source.kind === 'create' ? 'Create' : 'Unknown',
-      receivedAt,
     );
   } catch (error) {
     if (error instanceof RemoteNoteContentLengthExceededError) {
