@@ -55,7 +55,14 @@ mockModule('@/lib/date', { formatTimelineTimestamp: () => '방금 전' });
 mockModule('@/relay/RelayEnvironmentBoundary', { useRelayEnvironmentGeneration: () => null });
 mockModule('@/theme/ThemeProvider', {
   useElevation: () => ({ overlay: {} }),
-  useTheme: () => ({ border: '#ddd', card: '#fff', overlayScrim: '#000', text: '#111' }),
+  useTheme: () => ({
+    backgroundElevated: '#elevated',
+    backgroundSurface: '#surface',
+    borderDefault: '#border',
+    foregroundPrimary: '#primary',
+    foregroundSecondary: '#secondary',
+    overlayScrim: '#scrim',
+  }),
 });
 mockModule('@/theme/tokens', {
   fontFamilies: { ui: 'ui' },
@@ -106,6 +113,9 @@ test('미디어 편집 중 Native back은 작성 surface 대신 편집기만 닫
       }),
     );
   });
+  const surface = renderer?.root.findByProps({ testID: 'quote-composer-dialog-surface' });
+  assert.equal(surface?.props.style.at(-1).backgroundColor, '#elevated');
+  assert.equal(surface?.props.style.at(-1).borderColor, '#border');
   await act(async () => composerProps?.registerNativeBackHandler?.(() => editorBackCount++));
 
   const modal = renderer?.root.findByType('Modal' as ElementType);

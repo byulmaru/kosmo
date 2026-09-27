@@ -195,14 +195,12 @@ mockModule('@/relay/RelayActorProvider', {
 });
 mockModule('@/theme/ThemeProvider', {
   useTheme: () => ({
-    border: '#dddddd',
-    card: '#ffffff',
-    danger: '#cc0000',
-    primary: '#000000',
-    stateDisabledForeground: '#777777',
-    surface: '#eeeeee',
-    text: '#111111',
-    textSecondary: '#555555',
+    actionPrimaryBase: '#ffe597',
+    actionPrimaryOnBase: '#1a1a1a',
+    backgroundSurface: '#fafafb',
+    feedbackDangerOnSubtle: '#7a271a',
+    foregroundPrimary: '#1a1a1a',
+    foregroundSecondary: '#64646f',
     overlayScrim: '#00000088',
   }),
 });
@@ -214,7 +212,6 @@ mockModule('./shellLayout', {
     ariaCurrent: undefined,
   }),
   getProfileEditActionTargetMetrics: () => undefined,
-  profileEditActionLabelColor: '#ffffff',
 });
 
 before(async () => {

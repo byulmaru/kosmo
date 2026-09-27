@@ -32,12 +32,20 @@ export function ProfileEditDiscardDialog({
       visible={visible}
     >
       <View style={[styles.backdrop, { backgroundColor: theme.overlayScrim }]}>
-        <View style={[styles.surface, { backgroundColor: theme.card, borderColor: theme.border }]}>
+        <View
+          style={[
+            styles.surface,
+            { backgroundColor: theme.backgroundElevated, borderColor: theme.borderDefault },
+          ]}
+        >
           <View style={styles.copy}>
-            <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>
+            <Text
+              accessibilityRole="header"
+              style={[styles.title, { color: theme.foregroundPrimary }]}
+            >
               변경사항을 버릴까요?
             </Text>
-            <Text style={[styles.description, { color: theme.textSecondary }]}>
+            <Text style={[styles.description, { color: theme.foregroundSecondary }]}>
               저장하지 않은 변경사항이 사라져요.
             </Text>
           </View>

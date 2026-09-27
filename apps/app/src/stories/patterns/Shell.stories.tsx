@@ -20,7 +20,7 @@ import { SidebarNavigation } from '@/components/shell/SidebarNavigation';
 import { UniversalShell } from '@/components/shell/UniversalShell';
 import { SessionProvider } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
-import { borderWidths, colors, elevations, semanticColors, spacing } from '@/theme/tokens';
+import { borderWidths, elevations, semanticColors, spacing } from '@/theme/tokens';
 import appleTouchIconUrl from '../../../public/apple-touch-icon.png?url';
 import appIconUrl from '../../../public/icon-192.png?url';
 import ogDefaultUrl from '../../../public/og-default.png?url';
@@ -474,7 +474,7 @@ export const SharedNavigation: Story = {
     expect(profileEditRect.top - activeProfileRect.top).toBe(158);
     expect(activeProfileRect.right - profileEditRect.right).toBe(20);
     expect(profileEditVisual).toHaveStyle({
-      backgroundColor: 'rgb(252, 231, 154)',
+      backgroundColor: semanticColors.light.actionPrimaryBase,
       borderRadius: '8px',
       height: '32px',
       width: '72px',
@@ -709,7 +709,7 @@ export const ProfileEditNavigationCurrentState: Story = {
     expect(link).toHaveAttribute('href', '/profile-edit');
     expect(link).toHaveAttribute('aria-current', 'page');
     expect(within(link).getByTestId('profile-edit-action-visual')).toHaveStyle({
-      backgroundColor: 'rgb(252, 231, 154)',
+      backgroundColor: semanticColors.light.actionPrimaryBase,
     });
   },
   render: () => <FeedbackNavigationFullStory />,
@@ -1398,7 +1398,7 @@ export const ProfileSwitcherImagePresentation: Story = {
     const activeSurface = canvas.getByLabelText('활성 프로필');
     const cover = activeSurface.firstElementChild as HTMLElement;
     expect(cover.contains(headerImage)).toBe(true);
-    expect(cover).toHaveStyle({ backgroundColor: colors.light.primary });
+    expect(cover).toHaveStyle({ backgroundColor: semanticColors.light.actionPrimaryBase });
     expect(getComputedStyle(cover).filter).toBe('none');
 
     await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
