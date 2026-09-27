@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
-import { createElement, forwardRef, useImperativeHandle, useRef } from 'react';
+import { createElement, forwardRef, useImperativeHandle } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ComponentType, ReactNode } from 'react';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
@@ -21,63 +21,22 @@ const MockImage = Object.assign((props: Record<string, unknown>) => createElemen
     onSuccess(1600, 900),
 });
 const MockScrollView = forwardRef<
-  { scrollTo: (options: { animated?: boolean; x?: number; y?: number }) => void },
+  {
+    scrollTo: (options: { animated?: boolean; x?: number; y?: number }) => void;
+    setNativeProps: (props: Record<string, unknown>) => void;
+  },
   Record<string, unknown>
 >((props, ref) => {
-  useImperativeHandle(ref, () => ({ scrollTo: (options) => scrollCalls.push(options) }), []);
+  useImperativeHandle(
+    ref,
+    () => ({
+      scrollTo: (options) => scrollCalls.push(options),
+      setNativeProps: () => undefined,
+    }),
+    [],
+  );
   return createElement('ScrollView', props, props.children as ReactNode);
 });
-type GestureCallback = (...args: unknown[]) => void;
-type FakeGesture = {
-  enabled: (value: boolean) => FakeGesture;
-  enabledValue?: boolean;
-  gestures?: FakeGesture[];
-  maxDuration: (value: number) => FakeGesture;
-  maxPointers: (value: number) => FakeGesture;
-  maxPointersValue?: number;
-  name: string;
-  numberOfTaps: (value: number) => FakeGesture;
-  onEnd: (callback: GestureCallback) => FakeGesture;
-  onFinalize: (callback: GestureCallback) => FakeGesture;
-  onStart: (callback: GestureCallback) => FakeGesture;
-  onUpdate: (callback: GestureCallback) => FakeGesture;
-  onEndCallback?: GestureCallback;
-  onFinalizeCallback?: GestureCallback;
-  onStartCallback?: GestureCallback;
-  onUpdateCallback?: GestureCallback;
-};
-function fakeGesture(name: string): FakeGesture {
-  const gesture = {
-    enabled: (value: boolean) => {
-      gesture.enabledValue = value;
-      return gesture;
-    },
-    maxDuration: () => gesture,
-    maxPointers: (value: number) => {
-      gesture.maxPointersValue = value;
-      return gesture;
-    },
-    name,
-    numberOfTaps: () => gesture,
-    onEnd: (callback: GestureCallback) => {
-      gesture.onEndCallback = callback;
-      return gesture;
-    },
-    onFinalize: (callback: GestureCallback) => {
-      gesture.onFinalizeCallback = callback;
-      return gesture;
-    },
-    onStart: (callback: GestureCallback) => {
-      gesture.onStartCallback = callback;
-      return gesture;
-    },
-    onUpdate: (callback: GestureCallback) => {
-      gesture.onUpdateCallback = callback;
-      return gesture;
-    },
-  } as FakeGesture;
-  return gesture;
-}
 const getToast = () =>
   renderer?.root.findAll((node) => typeof node.type === 'function' && node.type.name === 'Toast')[0]
     ?.props ?? null;
@@ -136,34 +95,6 @@ mock.module('@/theme/ThemeProvider', {
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 
-mock.module('react-native-reanimated', {
-  exports: {
-    default: { View: 'AnimatedView' },
-    runOnJS: (callback: GestureCallback) => callback,
-    useAnimatedStyle: (callback: () => unknown) => callback(),
-    useSharedValue: <T>(value: T) => useRef({ value }).current,
-    withTiming: <T>(value: T) => value,
-  },
-} as unknown as Parameters<typeof mock.module>[1]);
-
-mock.module('react-native-gesture-handler', {
-  exports: {
-    Gesture: {
-      Pan: () => fakeGesture('pan'),
-      Pinch: () => fakeGesture('pinch'),
-      Simultaneous: (...gestures: FakeGesture[]) => ({
-        ...fakeGesture('simultaneous'),
-        gestures,
-      }),
-      Tap: () => fakeGesture('tap'),
-    },
-    GestureDetector: (props: Record<string, unknown>) =>
-      createElement('GestureDetector', props, props.children as ReactNode),
-    GestureHandlerRootView: (props: Record<string, unknown>) =>
-      createElement('GestureHandlerRootView', props, props.children as ReactNode),
-  },
-} as unknown as Parameters<typeof mock.module>[1]);
-
 const icon = (type: string) => (props: Record<string, unknown>) => createElement(type, props);
 
 mock.module(require.resolve('lucide-react-native'), {
@@ -194,10 +125,6 @@ let PostMediaViewerSurface: ComponentType<SurfaceProps> | undefined;
 let renderer: ReactTestRenderer | null = null;
 
 before(async () => {
-  const nativeZoom = await import('./PostMediaViewerNativeZoom.native');
-  mock.module(new URL('./PostMediaViewerNativeZoom.tsx', import.meta.url), {
-    exports: { NativeZoomImage: nativeZoom.NativeZoomImage },
-  } as unknown as Parameters<typeof mock.module>[1]);
   PostMediaViewerSurface = (await import('./PostMediaViewerSurface'))
     .PostMediaViewerSurface as ComponentType<SurfaceProps>;
 });
@@ -214,8 +141,8 @@ afterEach(async () => {
 });
 
 describe('PostMediaViewerSurface', () => {
-  it('Native image stage uses horizontal paging and reports the snapped index', async () => {
-    mockPlatform.OS = 'ios';
+  it('Android image stage keeps horizontal paging without iOS zoom', async () => {
+    mockPlatform.OS = 'android';
     const indexes: number[] = [];
     await render({ currentIndex: 1, onIndexChange: (index) => indexes.push(index) });
 
@@ -225,6 +152,7 @@ describe('PostMediaViewerSurface', () => {
       }),
     );
     const pager = byTestId('post-media-viewer-native-pager');
+    assert.equal(queryByTestId('post-media-viewer-ios-zoom'), null);
     assert.equal(pager.props.horizontal, true);
     assert.equal(pager.props.pagingEnabled, true);
     assert.deepEqual(pager.props.contentOffset, { x: 390, y: 0 });
@@ -260,7 +188,7 @@ describe('PostMediaViewerSurface', () => {
     assert.equal(queryByTestId('post-media-viewer-native-pager'), null);
   });
 
-  it('Native image accessibility actions expose zoom and lock paging while zoomed', async () => {
+  it('iOS image zoom uses the native ScrollView and locks pager while zoomed', async () => {
     mockPlatform.OS = 'ios';
     await render({ currentIndex: 0 });
     await act(async () =>
@@ -269,230 +197,46 @@ describe('PostMediaViewerSurface', () => {
       }),
     );
     await act(async () => image().props.onLoad());
-    await act(async () => image().props.onLoadStart());
 
-    assert.equal(image().props.accessibilityRole, 'image');
-    assert.equal(image().props.accessibilityLabel, '첫 번째 이미지');
-    assert.deepEqual(image().props.accessibilityValue, {
-      max: 4,
-      min: 1,
-      now: 1,
-      text: '1배',
-    });
-    assert.deepEqual(image().props.accessibilityActions, [{ label: '확대', name: 'zoomIn' }]);
     const pager = byTestId('post-media-viewer-native-pager');
+    const zoom = byTestId('post-media-viewer-ios-zoom');
+    assert.equal(zoom.props.minimumZoomScale, 1);
+    assert.equal(zoom.props.maximumZoomScale, 4);
+    assert.equal(zoom.props.pinchGestureEnabled, true);
+    assert.equal(zoom.props.centerContent, true);
+    assert.deepEqual(zoom.props.contentContainerStyle, {
+      alignItems: 'center',
+      justifyContent: 'center',
+      minHeight: 600,
+      minWidth: 390,
+    });
     assert.equal(pager.props.scrollEnabled, true);
-    const action = (name: string) =>
-      act(async () => image().props.onAccessibilityAction({ nativeEvent: { actionName: name } }));
-    await action('zoomIn');
-    assert.equal(image().props.accessibilityValue.now, 2);
-    assert.deepEqual(image().props.accessibilityActions, [
-      { label: '확대', name: 'zoomIn' },
-      { label: '축소', name: 'zoomOut' },
-      { label: '확대 초기화', name: 'resetZoom' },
-      { label: '왼쪽으로 이동', name: 'panLeft' },
-      { label: '오른쪽으로 이동', name: 'panRight' },
-    ]);
+
+    await act(async () => zoom.props.onScroll({ nativeEvent: { zoomScale: 2 } }));
+    assert.equal(pager.props.scrollEnabled, false);
+    await act(async () => zoom.props.onScroll({ nativeEvent: { zoomScale: 1 } }));
+    assert.equal(pager.props.scrollEnabled, true);
+
+    await act(async () => zoom.props.onScroll({ nativeEvent: { zoomScale: 2 } }));
     assert.equal(byTestId('post-media-viewer-native-pager').props.scrollEnabled, false);
-    await action('zoomOut');
-    assert.equal(image().props.accessibilityValue.now, 1);
+    const previousImage = image();
+    await render({ contentRevisionId: 'content-b' });
+    assert.notEqual(image(), previousImage);
+    assert.equal(byTestId('post-media-viewer-ios-zoom').props.zoomScale, 1);
     assert.equal(byTestId('post-media-viewer-native-pager').props.scrollEnabled, true);
-    await action('zoomIn');
-    assert.equal(image().props.accessibilityValue.now, 2);
-    await action('panRight');
-    assert.deepEqual(flattenStyle(image().parent?.props.style).transform, [
-      { translateX: 48 },
-      { translateY: 0 },
-      { scale: 2 },
-    ]);
-    assert.deepEqual(pick(flattenStyle(pager.props.style), ['height', 'width']), {
-      height: 600,
-      width: 390,
-    });
-
-    await action('zoomIn');
-    await action('zoomIn');
-    await action('zoomIn');
-    assert.equal(image().props.accessibilityValue.now, 4);
-    assert.equal(
-      image().props.accessibilityActions.some(({ name }: { name: string }) => name === 'zoomIn'),
-      false,
-    );
-    const maxZoomTransform = flattenStyle(image().parent?.props.style).transform;
-    await act(async () =>
-      image().props.onAccessibilityAction({ nativeEvent: { actionName: 'zoomIn' } }),
-    );
-    assert.deepEqual(flattenStyle(image().parent?.props.style).transform, maxZoomTransform);
-
-    for (let index = 0; index < 13; index += 1) {
-      await action('panLeft');
-    }
-    assert.equal(
-      image().props.accessibilityActions.some(({ name }: { name: string }) => name === 'panLeft'),
-      false,
-    );
-    const maxHorizontalTransform = flattenStyle(image().parent?.props.style).transform;
-    await act(async () =>
-      image().props.onAccessibilityAction({ nativeEvent: { actionName: 'panLeft' } }),
-    );
-    assert.deepEqual(flattenStyle(image().parent?.props.style).transform, maxHorizontalTransform);
-
-    await action('resetZoom');
-    assert.equal(image().props.accessibilityValue.now, 1);
-    assert.equal(byTestId('post-media-viewer-native-pager').props.scrollEnabled, true);
-
-    await render({ contentRevisionId: 'portrait' });
-    await act(async () =>
-      image().props.onLoad({ nativeEvent: { source: { height: 1600, width: 300 } } }),
-    );
-    await action('zoomIn');
-    const portraitActions = image().props.accessibilityActions.map(
-      ({ name }: { name: string }) => name,
-    );
-    assert.equal(portraitActions.includes('panLeft'), false);
-    assert.equal(portraitActions.includes('panRight'), false);
-    assert.equal(portraitActions.includes('panUp'), true);
-    assert.equal(portraitActions.includes('panDown'), true);
-    const imageTranslateY = () =>
-      (flattenStyle(image().parent?.props.style).transform as Array<{ translateY?: number }>)[1]
-        ?.translateY;
-    await action('panDown');
-    assert.equal(imageTranslateY(), 48);
-    await action('panUp');
-    assert.equal(imageTranslateY(), 0);
-    for (let index = 0; index < 7; index += 1) {
-      await action('panUp');
-    }
-    assert.equal(
-      image().props.accessibilityActions.some(({ name }: { name: string }) => name === 'panUp'),
-      false,
-    );
-    const maxVerticalTransform = flattenStyle(image().parent?.props.style).transform;
-    await act(async () =>
-      image().props.onAccessibilityAction({ nativeEvent: { actionName: 'panUp' } }),
-    );
-    assert.deepEqual(flattenStyle(image().parent?.props.style).transform, maxVerticalTransform);
 
     await act(async () => image().props.onError());
-    assert.equal(image().props.accessibilityActions, undefined);
-    assert.equal(image().props.onAccessibilityAction, undefined);
-  });
-
-  it('Native 확대는 더블탭을 누른 위치에 맞추고 pan 이동을 stage 안으로 제한한다', async () => {
-    mockPlatform.OS = 'ios';
-    await render({ currentIndex: 0 });
+    assert.equal(byTestId('post-media-viewer-ios-zoom').props.pinchGestureEnabled, false);
+    assert.equal(byTestId('post-media-viewer-native-pager').props.scrollEnabled, true);
     await act(async () =>
-      byTestId('post-media-viewer-media-viewport').props.onLayout({
-        nativeEvent: { layout: { width: 390, height: 600 } },
-      }),
+      byTestId('post-media-viewer-ios-zoom').props.onScroll({ nativeEvent: { zoomScale: 2 } }),
     );
-
-    const detector = renderer?.root.findAll((node) => String(node.type) === 'GestureDetector')[0];
-    assert.ok(detector);
-    assert.deepEqual(
-      pick(flattenStyle(byTestId('post-media-viewer-native-zoom').props.style), [
-        'height',
-        'width',
-      ]),
-      {
-        height: 600,
-        width: 390,
-      },
-    );
-    assert.deepEqual(
-      pick(flattenStyle(detector.findAll((node) => String(node.type) === 'View')[0].props.style), [
-        'height',
-        'width',
-      ]),
-      { height: 600, width: 390 },
-    );
-    const imageNode = image();
-    await act(async () => imageNode.props.onLoad());
-    const imageFrame = () => flattenStyle(image().parent?.props.style);
-    const gestures = renderer?.root.findAll((node) => String(node.type) === 'GestureDetector')[0]
-      .props.gesture.gestures as FakeGesture[];
-    const pinch = gestures.find((gesture) => gesture.name === 'pinch');
-    const pan = gestures.find((gesture) => gesture.name === 'pan');
-    const doubleTap = gestures.find((gesture) => gesture.name === 'tap');
-    assert.ok(pinch);
-    assert.ok(pan);
-    assert.ok(doubleTap);
-    assert.equal(pan.maxPointersValue, 1);
-    await act(async () => pinch.onStartCallback?.({ focalX: 195, focalY: 300 }));
-    assert.equal(byTestId('post-media-viewer-native-pager').props.scrollEnabled, false);
-    await act(async () => pinch.onFinalizeCallback?.({}, false));
     assert.equal(byTestId('post-media-viewer-native-pager').props.scrollEnabled, true);
-    await act(async () => {
-      doubleTap.onEndCallback?.({ x: 350, y: 300 }, true);
-    });
-    assert.deepEqual(imageFrame().transform, [
-      { translateX: -155 },
-      { translateY: 0 },
-      { scale: 2 },
-    ]);
-
-    await act(async () => {
-      pan.onStartCallback?.({});
-      pan.onUpdateCallback?.({ translationX: 9999, translationY: -9999 });
-    });
-    assert.deepEqual(imageFrame().transform, [
-      { translateX: 195 },
-      { translateY: 0 },
-      { scale: 2 },
-    ]);
-
-    await act(async () => {
-      doubleTap.onEndCallback?.({ x: 40, y: 80 }, true);
-    });
-    assert.deepEqual(imageFrame().transform, [{ translateX: 0 }, { translateY: 0 }, { scale: 1 }]);
-
-    const updatedGestures = renderer?.root.findAll(
-      (node) => String(node.type) === 'GestureDetector',
-    )[0].props.gesture.gestures as FakeGesture[];
-    const updatedPinch = updatedGestures.find((gesture) => gesture.name === 'pinch');
-    assert.ok(updatedPinch);
-    await act(async () => {
-      updatedPinch.onStartCallback?.({ focalX: 295, focalY: 300 });
-      updatedPinch.onUpdateCallback?.({ focalX: 295, focalY: 300, scale: 2 });
-    });
-    assert.deepEqual(imageFrame().transform, [
-      { translateX: -100 },
-      { translateY: 0 },
-      { scale: 2 },
-    ]);
-    await act(async () => updatedPinch.onFinalizeCallback?.({}, true));
-    const secondGestures = renderer?.root.findAll(
-      (node) => String(node.type) === 'GestureDetector',
-    )[0].props.gesture.gestures as FakeGesture[];
-    const secondPinch = secondGestures.find((gesture) => gesture.name === 'pinch');
-    assert.ok(secondPinch);
-    await act(async () => {
-      secondPinch.onStartCallback?.({ focalX: 295, focalY: 300 });
-      secondPinch.onUpdateCallback?.({ focalX: 295, focalY: 300, scale: 1.5 });
-    });
-    await render({ currentIndex: 0 });
-    assert.deepEqual(imageFrame().transform, [
-      { translateX: -200 },
-      { translateY: 0 },
-      { scale: 3 },
-    ]);
-    await act(async () => secondPinch.onFinalizeCallback?.({}, true));
-
-    await act(async () => image().props.onError());
-    const errorGestures = renderer?.root.findAll(
-      (node) => String(node.type) === 'GestureDetector',
-    )[0].props.gesture.gestures as FakeGesture[];
-    for (const name of ['pinch', 'pan', 'tap']) {
-      assert.equal(errorGestures.find((gesture) => gesture.name === name)?.enabledValue, false);
-    }
+    const retry = getToastRetry();
+    assert.ok(retry);
+    await act(async () => retry?.());
+    assert.equal(byTestId('post-media-viewer-ios-zoom').props.pinchGestureEnabled, false);
     assert.equal(byTestId('post-media-viewer-native-pager').props.scrollEnabled, true);
-
-    await render({ contentRevisionId: 'content-b', currentIndex: 0 });
-    assert.deepEqual(flattenStyle(image().parent?.props.style).transform, [
-      { translateX: 0 },
-      { translateY: 0 },
-      { scale: 1 },
-    ]);
   });
 
   it('Ready 이미지 실패는 현재 이미지 retry와 stale callback을 유지하고 다시 방문하면 reload한다', async () => {

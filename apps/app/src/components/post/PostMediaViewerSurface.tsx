@@ -18,8 +18,6 @@ import { Toast } from '@/components/ui/Toast';
 import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, radius, space, textStyles } from '@/theme/tokens';
 import { useToastMotion } from '@/theme/useOverlayMotion';
-import { NativeZoomImage } from './PostMediaViewerNativeZoom';
-import { fitImageSize } from './PostMediaViewerNativeZoomModel';
 import type { ReactElement } from 'react';
 import type {
   ImageLoadEvent,
@@ -99,7 +97,10 @@ export function PostMediaViewerSurface({
   const reducedMotion = useReducedMotion();
   const { height: viewportHeight } = useWindowDimensions();
   const [mediaViewportSize, setMediaViewportSize] = useState<ImageSize | null>(null);
-  const [zoomed, setZoomed] = useState(false);
+  const [zoomState, setZoomState] = useState<Readonly<{ key: string; zoomed: boolean }>>({
+    key: '',
+    zoomed: false,
+  });
   const navigable = viewState === 'ready';
   const multiple = navigable && media.length > 1;
   const currentMedia = media[currentIndex];
@@ -118,6 +119,18 @@ export function PostMediaViewerSurface({
       : null;
   const request = imageState.identity === identity ? imageState.request : initialRequest;
   const token = imageState.identity === identity ? imageState.token : imageState.token + 1;
+  const zoomKey = JSON.stringify([identity, token]);
+  const zoomed = zoomState.key === zoomKey && zoomState.zoomed;
+  const setZoomed = useCallback(
+    (nextZoomed: boolean) => {
+      setZoomState((previous) =>
+        previous.key === zoomKey && previous.zoomed === nextZoomed
+          ? previous
+          : { key: zoomKey, zoomed: nextZoomed },
+      );
+    },
+    [zoomKey],
+  );
 
   useEffect(() => {
     setImageState((current) =>
@@ -214,25 +227,35 @@ export function PostMediaViewerSurface({
                     currentIndex={currentIndex}
                     media={media}
                     onIndexChange={onIndexChange}
-                    onZoomedChange={setZoomed}
+                    onZoomedChange={Platform.OS === 'ios' ? setZoomed : undefined}
                     reducedMotion={reducedMotion}
                     viewportSize={mediaViewportSize}
-                    zoomed={zoomed}
+                    zoomed={Platform.OS === 'ios' && zoomed}
                   >
-                    <NativeZoomImage
-                      key={JSON.stringify([identity, token])}
-                      accessibilityLabel={imageName}
-                      onStatus={settle}
-                      onZoomedChange={setZoomed}
-                      resetKey={JSON.stringify([identity, token])}
-                      viewportSize={mediaViewportSize}
-                      status={request.status}
-                      url={currentMedia.url}
-                    />
+                    {Platform.OS === 'ios' ? (
+                      <IOSNativeZoomImage
+                        key={zoomKey}
+                        accessibilityLabel={imageName}
+                        onStatus={settle}
+                        onZoomedChange={setZoomed}
+                        viewportSize={mediaViewportSize}
+                        status={request.status}
+                        url={currentMedia.url}
+                      />
+                    ) : (
+                      <ViewerImage
+                        key={zoomKey}
+                        accessibilityLabel={imageName}
+                        onStatus={settle}
+                        viewportSize={mediaViewportSize}
+                        status={request.status}
+                        url={currentMedia.url}
+                      />
+                    )}
                   </NativeMediaPager>
                 ) : (
                   <ViewerImage
-                    key={JSON.stringify([identity, token])}
+                    key={zoomKey}
                     accessibilityLabel={imageName}
                     onStatus={settle}
                     viewportSize={mediaViewportSize}
@@ -411,7 +434,7 @@ function NativeMediaPager({
   currentIndex: number;
   media: readonly PostMediaItem[];
   onIndexChange: (index: number) => void;
-  onZoomedChange: (zoomed: boolean) => void;
+  onZoomedChange?: (zoomed: boolean) => void;
   reducedMotion: boolean;
   viewportSize: ImageSize;
   zoomed: boolean;
@@ -459,7 +482,7 @@ function NativeMediaPager({
         );
         position.current = { index, width };
         if (index !== currentIndex) {
-          onZoomedChange(false);
+          onZoomedChange?.(false);
           onIndexChange(index);
         }
       }}
@@ -487,6 +510,75 @@ function NativeMediaPager({
           ) : null}
         </View>
       ))}
+    </ScrollView>
+  );
+}
+
+function IOSNativeZoomImage({
+  accessibilityLabel,
+  onStatus,
+  onZoomedChange,
+  status,
+  url,
+  viewportSize,
+}: Readonly<{
+  accessibilityLabel: string;
+  onStatus: (status: ImageRequest['status']) => void;
+  onZoomedChange: (zoomed: boolean) => void;
+  status: ImageRequest['status'];
+  url: string;
+  viewportSize: ImageSize;
+}>) {
+  const scroll = useRef<ScrollView>(null);
+  const resetZoom = useCallback(() => {
+    scroll.current?.setNativeProps({ zoomScale: 1 });
+    onZoomedChange(false);
+  }, [onZoomedChange]);
+  const handleScroll = useCallback(
+    (event: { nativeEvent: { zoomScale?: number } }) => {
+      onZoomedChange(status === 'ready' && (event.nativeEvent.zoomScale ?? 1) > 1);
+    },
+    [onZoomedChange, status],
+  );
+  const handleStatus = useCallback(
+    (nextStatus: ImageRequest['status']) => {
+      if (nextStatus === 'error') {
+        resetZoom();
+      }
+      onStatus(nextStatus);
+    },
+    [onStatus, resetZoom],
+  );
+  return (
+    <ScrollView
+      bounces={false}
+      bouncesZoom={false}
+      centerContent
+      contentContainerStyle={{
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: viewportSize.height,
+        minWidth: viewportSize.width,
+      }}
+      maximumZoomScale={4}
+      minimumZoomScale={1}
+      onScroll={handleScroll}
+      pinchGestureEnabled={status === 'ready'}
+      ref={scroll}
+      scrollEventThrottle={16}
+      showsHorizontalScrollIndicator={false}
+      showsVerticalScrollIndicator={false}
+      style={viewportSize}
+      testID="post-media-viewer-ios-zoom"
+      zoomScale={1}
+    >
+      <ViewerImage
+        accessibilityLabel={accessibilityLabel}
+        onStatus={handleStatus}
+        status={status}
+        url={url}
+        viewportSize={viewportSize}
+      />
     </ScrollView>
   );
 }
@@ -568,6 +660,31 @@ function ViewerImage({
 }
 
 type ImageSize = Readonly<{ height: number; width: number }>;
+
+function fitImageSize(
+  viewportSize: ImageSize | null,
+  intrinsicSize: ImageSize | null,
+): ImageSize | null {
+  if (
+    !viewportSize ||
+    !intrinsicSize ||
+    viewportSize.height <= 0 ||
+    viewportSize.width <= 0 ||
+    intrinsicSize.height <= 0 ||
+    intrinsicSize.width <= 0
+  ) {
+    return null;
+  }
+
+  const scale = Math.min(
+    viewportSize.width / intrinsicSize.width,
+    viewportSize.height / intrinsicSize.height,
+  );
+  return {
+    height: intrinsicSize.height * scale,
+    width: intrinsicSize.width * scale,
+  };
+}
 
 function ViewerErrorToast({
   onRetry,

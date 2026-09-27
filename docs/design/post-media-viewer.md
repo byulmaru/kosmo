@@ -96,12 +96,9 @@ Wide Web의 오른쪽 thread rail은 fullscreen modal 안의 별도 elevation su
 
 ## Native 확대·이동 (PROD-1004)
 
-- iOS·Android에서 화면 맞춤 크기를 1배로 하며, 핀치로 1~4배까지 확대·축소한다. 더블탭은 누른 위치를 중심으로 2배 확대하고, 확대된 상태에서 다시 더블탭하면 1배와 중앙 위치로 돌아간다. 이미지의 끝에서는 빈 공간이 노출되지 않도록 이동 범위를 제한한다.
-- 1배에서는 기존 수평 paging을 유지한다. 확대 중 드래그는 이미지 안의 영역 이동에 사용하고 수평 paging은 잠근다. 이전·다음 버튼은 확대 중에도 사용할 수 있고 기존 비순환 경계를 유지한다.
-- 별도 확대·축소·이동 시각 버튼은 제공하지 않는다. 제스처와 동등한 보조기술 조작은 이미지 자체의 React Native `accessibilityActions`로 제공한다. Ready 이미지에는 가능한 확대·축소·초기화·방향 이동 custom action과 현재 배율 `accessibilityValue`, 기존 Alt Text accessible label을 노출한다. Action은 1~4배 및 실제 이미지 bounds 경계에서만 노출하며 이미지 transform에만 적용한다. Loading·Error·Unavailable에서는 확대 action을 노출하지 않는다. Close와 이전·다음 control의 기존 48×48 target과 geometry는 유지한다.
-- 이미지·Content revision 변경, 이미지 재시도, 닫기·재진입에서 배율과 이동 위치를 초기화한다. 이미지 오류·조회 차단 중에는 확대 조작을 제공하지 않는다. 기존 오류·재시도, close focus와 Post detail 동작은 유지한다.
-- OS reduced-motion 설정에서는 자동 확대·이동 transition을 생략하고 사용자가 조작한 결과를 즉시 표시한다. 손가락을 직접 따라가는 핀치·이동 기능은 유지한다.
-- Web 확대는 이 범위에 포함하지 않는다. 자동화는 배율·이동 제한, 탐색 잠금과 초기화를 검증하며 iOS·Android의 실제 제스처, VoiceOver·TalkBack, 닫기·재진입은 별도 runtime 결과로 기록한다.
+- iOS는 화면 맞춤 1배에서 4배까지 기본 이미지 핀치 확대를 제공한다. 별도 double-tap, custom zoom·pan gesture, zoom button, custom accessibility zoom action은 제공하지 않으며 기본 이미지 Alt Text와 close·이전·다음 접근성은 유지한다.
+- iOS 확대 중에는 외부 수평 paging을 잠그고 1배에서 다시 연다. 이미지·Content revision 변경, 이미지 재시도, 닫기·재진입에서는 zoom을 1배로 초기화하고 기존 오류·재시도 동작을 유지한다.
+- Android는 기존 `ViewerImage`와 수평 paging을 유지하며 확대는 후속 범위다. Web 확대는 이 범위에 포함하지 않는다. iOS 기본 ScrollView zoom과 close·재진입은 별도 runtime 결과로 기록한다.
 
 ## Post Action Bar
 
