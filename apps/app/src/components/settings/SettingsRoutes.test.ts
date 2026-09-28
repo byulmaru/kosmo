@@ -326,7 +326,10 @@ describe('Settings routes', () => {
     );
     assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'account-deletion');
     assert.equal(rendered('AccountDeletionScreen').length, 1);
-    assert.equal(rendered('Pressable').length, 0);
+    assert.equal(
+      rendered('PageHeader')[1].props.leading.props.accessibilityLabel,
+      '설정으로 돌아가기',
+    );
   });
 
   it('full Web muted profile detail은 공통 master의 mute category를 선택한다', async () => {

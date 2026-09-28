@@ -38,7 +38,7 @@ export function SettingsRouteLayout({ children }: { children?: ReactNode }) {
           ? 'mute-and-block'
           : pathname === '/settings/account-deletion'
             ? 'account-deletion'
-          : undefined;
+            : undefined;
   const detailHeaderMode: SettingsDetailHeaderMode =
     web && layout === 'mobile' ? 'hidden' : root ? 'plain' : 'back';
 
