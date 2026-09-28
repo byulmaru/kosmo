@@ -118,6 +118,13 @@ library에 종속하지 않고 icon, glyph, 짧은 기호 문자 또는 loading 
 - `onAccessibilityEscape`는 `dismissDisabled`가 false일 때만 `onClose`로 이어진다. backdrop, 닫기 button과
   platform back도 같은 dismiss 경계를 사용하며 pending 중에는 닫히지 않는다.
 
+### Native 하단 시트
+
+- Reaction Full Picker와 Repost·Quote ActionMenu는 공용 하단 시트 손잡이를 사용한다. 손잡이는 이름이 있는 버튼이며,
+  피커에서는 펼치기·접기, ActionMenu에서는 닫기를 제공한다. 두 시트 모두 손잡이를 아래로 끌어 닫을 수 있다.
+- 피커를 펼친 상태에서 손잡이를 아래로 끌면 먼저 초기 높이로 접는다. 목록 스크롤은 손잡이 제스처와 분리한다.
+  VoiceOver·TalkBack의 실제 포커스 순서, 제스처와 닫은 뒤 trigger 복귀는 Native runtime에서 확인한다.
+
 ### Post Action Bar의 플랫폼별 target
 
 Post Action Bar는 모든 플랫폼에서 28 logical unit visual row를 공유한다. Web actual target은 visual row를 위아래 4px씩 확장한다. PROD-936의 Native 적용은 이전 28pt·28dp 임시 target을 iOS 44pt·Android 48dp로 대체한다. exact geometry는 [post-action-bar.md](./post-action-bar.md)가 소유한다.
