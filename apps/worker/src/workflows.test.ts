@@ -1571,7 +1571,7 @@ test(
 );
 
 test(
-  'Profile Block Update는 held post-commit effect보다 먼저 committed relation을 반환한다',
+  'Profile Block Update는 effect 실패 시 accepted duplicate handler 완료까지 Workflow를 유지한다',
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
@@ -1609,11 +1609,20 @@ test(
     const effectStartedPromise = new Promise<void>((resolve) => {
       effectStarted = resolve;
     });
+    const duplicateTransitionExecuted = Promise.withResolvers<void>();
+    const duplicateTransitionReleased = Promise.withResolvers<void>();
+    let holdDuplicateTransition = false;
 
     const worker = await Worker.create({
       activities: {
         executeProfileBlockTransitionActivity: async (value: unknown) => {
           assert.deepEqual(value, input);
+          if (holdDuplicateTransition) {
+            holdDuplicateTransition = false;
+            duplicateTransitionExecuted.resolve();
+            await duplicateTransitionReleased.promise;
+            return { ...execution, result: { ...execution.result, created: false } };
+          }
           return execution;
         },
         sendProfileUnfollowActivity: async (value: unknown) => {
@@ -1632,10 +1641,11 @@ test(
 
     await worker.runUntil(async () => {
       try {
+        const workflowId = 'profile-block-test:' + process.pid + ':effect-failure';
         const startWorkflowOperation = new WithStartWorkflowOperation('profileBlockWorkflow', {
           args: [input],
           taskQueue,
-          workflowId: 'profile-block-test:' + process.pid + ':success',
+          workflowId,
           workflowIdConflictPolicy: 'USE_EXISTING',
           workflowIdReusePolicy: 'ALLOW_DUPLICATE',
         });
@@ -1656,7 +1666,7 @@ test(
         const conflictingStart = new WithStartWorkflowOperation('profileBlockWorkflow', {
           args: [conflictingInput],
           taskQueue,
-          workflowId: 'profile-block-test:' + process.pid + ':success',
+          workflowId,
           workflowIdConflictPolicy: 'USE_EXISTING',
           workflowIdReusePolicy: 'ALLOW_DUPLICATE',
         });
@@ -1668,11 +1678,61 @@ test(
           }),
         );
 
+        holdDuplicateTransition = true;
+        const duplicate = await environment.client.workflow.startUpdateWithStart(
+          PROFILE_BLOCK_UPDATE_NAME,
+          {
+            args: [input],
+            updateId: PROFILE_BLOCK_UPDATE_ID + ':duplicate',
+            waitForStage: 'ACCEPTED',
+            startWorkflowOperation: new WithStartWorkflowOperation('profileBlockWorkflow', {
+              args: [input],
+              taskQueue,
+              workflowId,
+              workflowIdConflictPolicy: 'USE_EXISTING',
+              workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+            }),
+          },
+        );
+        await duplicateTransitionExecuted.promise;
+
         releaseEffect();
-        const handle = await startWorkflowOperation.workflowHandle();
+        const handle = environment.client.workflow.getHandle(workflowId, duplicate.workflowRunId);
+        for (;;) {
+          const events = (await handle.fetchHistory()).events ?? [];
+          const effectScheduledEventId = events
+            .find(
+              (event) =>
+                event.activityTaskScheduledEventAttributes?.activityType?.name ===
+                'sendProfileUnfollowActivity',
+            )
+            ?.eventId?.toString();
+          const effectFailedEvent = events.find(
+            (event) =>
+              effectScheduledEventId !== undefined &&
+              event.activityTaskFailedEventAttributes?.scheduledEventId?.toString() ===
+                effectScheduledEventId,
+          );
+          if (
+            effectFailedEvent?.eventId != null &&
+            events.some(
+              (event) =>
+                event.workflowTaskCompletedEventAttributes != null &&
+                event.eventId != null &&
+                BigInt(event.eventId.toString()) > BigInt(effectFailedEvent.eventId!.toString()),
+            )
+          ) {
+            break;
+          }
+        }
+
+        assert.equal((await handle.describe()).status.name, 'RUNNING');
+        duplicateTransitionReleased.resolve();
+        assert.deepEqual(await duplicate.result(), { ...execution.result, created: false });
         await assert.rejects(handle.result());
       } finally {
         releaseEffect();
+        duplicateTransitionReleased.resolve();
       }
     });
   },

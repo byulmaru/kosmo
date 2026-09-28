@@ -138,5 +138,9 @@ export async function profileBlockWorkflow(input: ProfileBlockInput): Promise<vo
       ? [sendProfileBlockActivity(execution.result.profileBlockId, { createIfMissing: true })]
       : []),
   ];
-  await settleEffects(effects);
+  try {
+    await settleEffects(effects);
+  } finally {
+    await condition(allHandlersFinished);
+  }
 }
