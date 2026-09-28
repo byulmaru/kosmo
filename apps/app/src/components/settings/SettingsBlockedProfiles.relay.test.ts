@@ -204,6 +204,7 @@ function connection(ids: string[], hasNextPage = false) {
           __typename: 'Profile',
           id: `profile-${id}`,
           displayName: '별마루',
+          handle: id,
           relativeHandle: `@${id}`,
           avatar: { id: `avatar-${id}`, url: `https://media.example/${id}.png` },
           viewerState: {
@@ -331,6 +332,45 @@ describe('Settings Block consumer with real Relay', () => {
     });
     assert.deepEqual(avatars(), ['https://media.example/one.png', 'https://media.example/two.png']);
     assert.equal(all('Button').filter((node) => node.props.children === '더 불러오기').length, 0);
+  });
+
+  it('공통 Relay Profile 행이 차단 프로필의 표시 정보를 Store 변경에 맞춰 갱신한다', async () => {
+    const environment = createEnvironment();
+    await render(environment);
+    await respond(latestRequest('SettingsBlockedProfilesQuery'), firstPage(['one']));
+
+    let row = all('ProfileRow')[0]!;
+    assert.equal(row.props.avatarLabel, '별마루');
+    assert.equal(row.props.avatarUri, 'https://media.example/one.png');
+    assert.equal(row.props.displayName, '별마루');
+    assert.equal(row.props.relativeHandle, '@one');
+
+    await act(async () => {
+      environment.commitUpdate((store) => {
+        const target = store.get('profile-one');
+        assert.ok(target);
+        target.setValue('변경된 이름', 'displayName');
+        target.setValue('@updated', 'relativeHandle');
+        const avatar = target.getLinkedRecord('avatar');
+        assert.ok(avatar);
+        avatar.setValue('https://media.example/updated.png', 'url');
+      });
+    });
+
+    row = all('ProfileRow')[0]!;
+    assert.equal(row.props.avatarLabel, '변경된 이름');
+    assert.equal(row.props.avatarUri, 'https://media.example/updated.png');
+    assert.equal(row.props.displayName, '변경된 이름');
+    assert.equal(row.props.relativeHandle, '@updated');
+
+    await act(async () => {
+      environment.commitUpdate((store) => {
+        const target = store.get('profile-one');
+        assert.ok(target);
+        target.setValue('', 'displayName');
+      });
+    });
+    assert.equal(all('ProfileRow')[0]?.props.avatarLabel, 'one');
   });
 
   it('실제 해제 action은 취소·pending·실패 후 재시도를 거쳐 같은 행을 차단 action으로 전환한다', async () => {

@@ -73,21 +73,9 @@ mockModule(require.resolve('lucide-react-native'), {
   Volume2: 'Volume2',
   VolumeOff: 'VolumeOff',
 });
-mockModule('@/components/profile/MutedProfileList', {
-  MutedProfileList: ({
-    state,
-  }: {
-    state: { status: string; profiles?: Array<{ id: string; action: ReactNode }> };
-  }) =>
-    createElement(
-      'MutedProfileList',
-      { status: state.status },
-      state.status === 'loaded'
-        ? state.profiles?.map((profile) =>
-            createElement('ProfileRow', { id: profile.id, key: profile.id }, profile.action),
-          )
-        : null,
-    ),
+mockModule(new URL('../profile/ProfileListItemContent.tsx', import.meta.url), {
+  ProfileListItemContent: ({ children, ...props }: { children?: ReactNode }) =>
+    createElement('ProfileRow', props, children),
 });
 mockModule('@/components/pagination/PaginationScrollView', {
   usePaginationScrollRegistration: () => undefined,
@@ -149,6 +137,7 @@ mockModule('@/theme/ThemeProvider', {
     actionLinkBase: 'action-link',
     actionLinkHover: 'action-link-hover',
     actionLinkPressed: 'action-link-pressed',
+    foregroundSecondary: 'secondary',
     stateFocusRing: 'focus-ring',
   }),
 });
@@ -236,6 +225,7 @@ function firstPage() {
                   __typename: 'Profile',
                   id: targetProfileId,
                   displayName: '뮤트 대상',
+                  handle: 'target',
                   relativeHandle: '@target',
                   avatar: { id: 'avatar:target', url: 'https://media.example/target.png' },
                   viewerState: {
@@ -266,11 +256,50 @@ async function respond(request: Request, data: Record<string, unknown>) {
 }
 
 describe('SettingsMutedProfiles with the real ProfileMuteAction', () => {
+  it('공통 Relay Profile 행이 뮤트 프로필의 표시 정보를 Store 변경에 맞춰 갱신한다', async () => {
+    const environment = createEnvironment();
+    await render(environment);
+    await respond(latestRequest('SettingsMutedProfilesQuery'), firstPage());
+
+    let row = one('ProfileRow');
+    assert.equal(row.props.avatarLabel, '뮤트 대상');
+    assert.equal(row.props.avatarUri, 'https://media.example/target.png');
+    assert.equal(row.props.displayName, '뮤트 대상');
+    assert.equal(row.props.relativeHandle, '@target');
+
+    await act(async () => {
+      environment.commitUpdate((store) => {
+        const target = store.get(targetProfileId);
+        assert.ok(target);
+        target.setValue('변경된 이름', 'displayName');
+        target.setValue('@updated', 'relativeHandle');
+        const avatar = target.getLinkedRecord('avatar');
+        assert.ok(avatar);
+        avatar.setValue('https://media.example/updated.png', 'url');
+      });
+    });
+
+    row = one('ProfileRow');
+    assert.equal(row.props.avatarLabel, '변경된 이름');
+    assert.equal(row.props.avatarUri, 'https://media.example/updated.png');
+    assert.equal(row.props.displayName, '변경된 이름');
+    assert.equal(row.props.relativeHandle, '@updated');
+
+    await act(async () => {
+      environment.commitUpdate((store) => {
+        const target = store.get(targetProfileId);
+        assert.ok(target);
+        target.setValue('', 'displayName');
+      });
+    });
+    assert.equal(one('ProfileRow').props.avatarLabel, 'target');
+  });
+
   it('실제 뮤트 해제 버튼의 pending·실패·성공을 거쳐 Relay normalized 상태를 갱신한다', async () => {
     const environment = createEnvironment();
     const onUnmuteSuccess = mock.fn();
     await render(environment, onUnmuteSuccess);
-    assert.equal(one('MutedProfileList').props.status, 'loading');
+    assert.equal(one('StateView').props.loading, true);
 
     await respond(latestRequest('SettingsMutedProfilesQuery'), firstPage());
     assert.equal(all('ProfileRow').length, 1);

@@ -5,16 +5,15 @@ import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
 import { useToast } from '@/components/ui/ToastProvider';
 import { space } from '@/theme/tokens';
-import { ProfileListItemContent } from './ProfileListItemContent';
+import { ProfileListItemRow } from './ProfileListItemRow';
 import type { ReactNode } from 'react';
 import type { UseAutomaticPaginationResult } from '@/components/pagination/useAutomaticPagination';
+import type { ProfileListItemRow_profile$key } from './__generated__/ProfileListItemRow_profile.graphql';
 
 export type MutedProfile = {
   action: ReactNode;
   id: string;
-  displayName: string;
-  relativeHandle: string;
-  avatarUri?: string | null;
+  profile: ProfileListItemRow_profile$key;
 };
 type Pagination =
   | { status: 'end' }
@@ -69,16 +68,9 @@ export function MutedProfileList({ state }: Props) {
       ) : (
         <>
           {state.profiles.map((profile) => (
-            <ProfileListItemContent
-              key={profile.id}
-              avatarLabel={profile.displayName}
-              avatarUri={profile.avatarUri}
-              displayName={profile.displayName}
-              relativeHandle={profile.relativeHandle}
-              style={styles.row}
-            >
+            <ProfileListItemRow key={profile.id} profile={profile.profile} style={styles.row}>
               {profile.action}
-            </ProfileListItemContent>
+            </ProfileListItemRow>
           ))}
           <PaginationSurface
             endRef={state.paginationEndRef}
