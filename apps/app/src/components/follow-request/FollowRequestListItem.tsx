@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
 import { ProfileListItemContent } from '@/components/profile/ProfileListItemContent';
-import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
+import { ProfileListItemRow } from '@/components/profile/ProfileListItemRow';
 import { IconButton } from '@/components/ui/IconButton';
 import { getInteractionTargetSize } from '@/components/ui/interactionTarget';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -26,14 +26,10 @@ const followRequestListItemFragment = graphql`
     id
     follower {
       id
-      avatar {
-        id
-        url
-      }
       displayName
       handle
       relativeHandle
-      ...ProfileNameBlock_profile
+      ...ProfileListItemRow_profile
     }
   }
 `;
@@ -129,37 +125,38 @@ export function FollowRequestListItem({ connectionId, request }: FollowRequestLi
     });
   };
 
-  return (
-    <ProfileListItemContent
-      avatarLabel={name}
-      avatarUri={follower?.avatar?.url}
-      displayName={name}
-      href={follower ? (`/${follower.relativeHandle}` as Href) : undefined}
-      identity={
-        follower ? (
-          <ProfileNameBlock profile={follower} style={{ flex: 0 }} variant="compact" />
-        ) : undefined
-      }
-      linkAccessibilityLabel={follower ? `${name} 프로필로 이동` : undefined}
-    >
-      <View style={styles.actions}>
-        {follower ? (
-          <FollowRequestActionButton
-            action="approve"
-            busy={busy}
-            name={name}
-            onPress={() => commit('approve')}
-            pending={pendingAction === 'approve'}
-          />
-        ) : null}
+  const actions = (
+    <View style={styles.actions}>
+      {follower ? (
         <FollowRequestActionButton
-          action="reject"
+          action="approve"
           busy={busy}
           name={name}
-          onPress={() => commit('reject')}
-          pending={pendingAction === 'reject'}
+          onPress={() => commit('approve')}
+          pending={pendingAction === 'approve'}
         />
-      </View>
+      ) : null}
+      <FollowRequestActionButton
+        action="reject"
+        busy={busy}
+        name={name}
+        onPress={() => commit('reject')}
+        pending={pendingAction === 'reject'}
+      />
+    </View>
+  );
+
+  return follower ? (
+    <ProfileListItemRow
+      href={`/${follower.relativeHandle}` as Href}
+      linkAccessibilityLabel={`${name} 프로필로 이동`}
+      profile={follower}
+    >
+      {actions}
+    </ProfileListItemRow>
+  ) : (
+    <ProfileListItemContent avatarLabel={name} displayName={name}>
+      {actions}
     </ProfileListItemContent>
   );
 }

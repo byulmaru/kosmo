@@ -236,10 +236,11 @@ viewer 방향별 콘텐츠 정책은 위 계약을 따르며, 실제 route의 �
 `ProfileMuteAction`은 기존 ModalSheet·ConfirmationContent·ToastProvider를 재사용한다. Profile/Post 소비자가
 요청을 모르는 `ProfileMoreMenu`를 소유하고, 뮤트 액션이 제공하는 메뉴 항목을 다른 항목과 합성한다.
 확인과 pending/dismiss, 오류 피드백은 공용 UI 경계에서 제공하며 실제 요청은 callback으로 전달한다.
-관리 목록은 본문·상태·행·pagination을 소유하는 `MutedProfileList`, 행 표시는 기존 Relay `ProfileListItem`과
-공유하는 `ProfileListItemContent`를 사용한다. 화면과 Storybook은 목록 밖의 heading·scroll container와
+관리 목록은 본문·상태·행·pagination을 소유하는 `MutedProfileList`를 사용한다. Relay 행은
+`ProfileListItemRow`의 Profile fragment에서 아바타·표시 이름·핸들을 읽고, 순수 표현 컴포넌트인
+`ProfileListItemContent`에 action을 children으로 합성한다. 화면과 Storybook은 목록 밖의 heading·scroll container와
 해제 성공 후 heading focus를 소유한다.
-Relay 행은 `identity`로 기존 `ProfileNameBlock`을 전달한다. 관리 목록은 동명이인을 구분할 수 있도록 공용 행의 기본 이름·핸들 표시를 사용한다.
+관리 목록은 동명이인을 구분할 수 있도록 공용 행의 기본 이름·핸들 표시를 사용한다.
 표시 이름은 `UI/Label/M`, 핸들은 `UI/Copy/S`이며 `Profile.relativeHandle`을 표시한다.
 2026-09-27 사용자 결정으로 기존 Figma loaded 화면의 이름 한 줄 표시를 변경한다.
 행의 action은 `children`으로 합성하며, FollowButton은 viewport와 무관하게 Default `96×40`을 소유한다.
@@ -274,8 +275,9 @@ Relay 행은 `identity`로 기존 `ProfileNameBlock`을 전달한다. 관리 목
 
 현재 범위는 `ProfileMoreMenu`와 `BlockedProfileList` presentation이다. 메뉴는 공용 `ProfileMoreButton`·ActionMenu의
 Web 최소 폭 160px과 키보드·focus 처리를 재사용하고, 목록은 제목·loading·empty·오류 Toast·재시도·pagination을 제공한다.
-행은 기존 `ProfileListItemContent`를 children으로 합성하고 아바타와 기본 이름·핸들 두 줄을
-표시한다. Mute 관리 목록과 동일하게 `Profile.relativeHandle`을 사용한다. Mute와 목록 상태를 공유하거나 합치지 않는다.
+정적 Storybook 행은 순수 `ProfileListItemContent`를 사용하고 아바타와 기본 이름·핸들 두 줄을 표시한다.
+Relay 설정 행은 `ProfileListItemRow` fragment가 identity를 소유하고 같은 표현 컴포넌트에 action을 합성한다.
+Mute 관리 목록과 동일하게 `Profile.relativeHandle`을 사용한다. Mute와 목록 상태를 공유하거나 합치지 않는다.
 
 - `KOSMO/Patterns/Profile/More Menu`는 차단·해제 모두 [아이콘 정본](icons.md#profile-차단해제--2026-09-09-결정)의 `Ban`을 표시한다.
   Playground는 수동 Controls·Actions, Tests는 선택·닫힘·focus 복귀를 검증한다. 실제 요청은 실행하지 않는다.
