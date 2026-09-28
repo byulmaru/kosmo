@@ -704,6 +704,7 @@ const meta = {
     'ReactionFailureRetryActorSwitchAndUnmount',
     'ReactionFullDismissFocusAndPlacement',
     'ReactionMobileWebTabClearance',
+    'ReactionRecentUseContract',
     'ReactionSummaryToggleContract',
   ],
   parameters: { controls: { disable: true } },
@@ -1584,7 +1585,11 @@ export const ReactionDirectFullContract: Story = {
     await userEvent.click(await canvas.findByRole('button', { name: '반응' }));
     const full = await screen.findByRole('dialog', { name: '반응 선택' });
     expect(within(full).getByRole('heading', { name: '빠른 반응' })).toBeVisible();
-    expect(within(full).getByRole('button', { name: '빨간색 하트 ❤️' })).toBeVisible();
+    expect(
+      within(within(full).getByTestId('full-reaction-section-quick-row-0')).getByRole('button', {
+        name: '빨간색 하트 ❤️',
+      }),
+    ).toBeVisible();
     expect(within(full).queryByRole('button', { name: '전체 반응' })).toBeNull();
     await waitFor(() => {
       const bounds = full.getBoundingClientRect();
@@ -1647,6 +1652,39 @@ export const ReactionDirectFullContract: Story = {
 
     await userEvent.click(screen.getByTestId('full-reaction-overlay-trigger-dismiss'));
     expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull();
+  },
+  render: () => <ReactionContractHarness />,
+};
+
+export const ReactionRecentUseContract: Story = {
+  play: async ({ canvasElement }) => {
+    const key = 'kosmo:recent-reactions:profile-1';
+    globalThis.localStorage?.removeItem(key);
+    try {
+      const canvas = within(canvasElement);
+      await userEvent.click(await canvas.findByRole('button', { name: '반응' }));
+      const dialog = await screen.findByRole('dialog', { name: '반응 선택' });
+      const search = within(dialog).getByRole('searchbox', { name: '반응 검색' });
+      await userEvent.type(search, 'heart hands');
+      await userEvent.click(await within(dialog).findByRole('button', { name: '손 하트 🫶' }));
+      await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(1));
+      canvas.getByRole('button', { name: '요청 1 success' }).click();
+      await waitFor(() =>
+        expect(JSON.parse(globalThis.localStorage?.getItem(key) ?? '[]')).toEqual(['🫶']),
+      );
+      await userEvent.keyboard('{Escape}');
+      await userEvent.click(canvas.getByRole('button', { name: '반응' }));
+      const reopened = await screen.findByRole('dialog', { name: '반응 선택' });
+      expect(within(reopened).getByRole('searchbox', { name: '반응 검색' })).toHaveValue('');
+      expect(
+        within(await within(reopened).findByTestId('full-reaction-section-recent-row-0')).getByRole(
+          'button',
+          { name: '손 하트 🫶' },
+        ),
+      ).toBeVisible();
+    } finally {
+      globalThis.localStorage?.removeItem(key);
+    }
   },
   render: () => <ReactionContractHarness />,
 };

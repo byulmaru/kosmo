@@ -27,7 +27,6 @@ export type FullReactionPickerOption = Readonly<{
   label: string;
   quick?: boolean;
   quickOrder?: number;
-  recent?: boolean;
 }>;
 
 export type FullReactionPickerProps = {
@@ -38,6 +37,7 @@ export type FullReactionPickerProps = {
   options: ReadonlyArray<FullReactionPickerOption>;
   presentation?: 'mobile' | 'web';
   query: string;
+  recentValues?: ReadonlyArray<string>;
   selectedValues?: ReadonlyArray<string>;
   pendingOptionIds?: ReadonlyArray<string>;
   errorOptionIds?: ReadonlyArray<string>;
@@ -53,6 +53,7 @@ export function FullReactionPicker({
   options,
   presentation = 'web',
   query,
+  recentValues = [],
   selectedValues = [],
   pendingOptionIds = [],
   errorOptionIds = [],
@@ -156,7 +157,7 @@ export function FullReactionPicker({
           data={
             state === 'searchResults'
               ? createGridItems('results', '반응', searchResults, columns)
-              : createBrowseItems(options, columns)
+              : createBrowseItems(options, columns, recentValues)
           }
           initialNumToRender={mobile ? 12 : 10}
           keyExtractor={(item) => item.id}
@@ -295,6 +296,7 @@ function createGridItems(
 function createBrowseItems(
   options: ReadonlyArray<FullReactionPickerOption>,
   columns: number,
+  recentValues: ReadonlyArray<string>,
 ): ReactionGridItem[] {
   const categories = Array.from(
     new Map(options.map((option) => [option.category, option.categoryLabel])).entries(),
@@ -307,6 +309,12 @@ function createBrowseItems(
       options
         .filter((option) => option.quick)
         .sort((left, right) => (left.quickOrder ?? 0) - (right.quickOrder ?? 0)),
+      columns,
+    ),
+    ...createGridItems(
+      'recent',
+      '최근 사용',
+      recentValues.flatMap((id) => options.find((option) => option.id === id) ?? []),
       columns,
     ),
     ...categories.flatMap(({ id, options: categoryOptions, title }) =>

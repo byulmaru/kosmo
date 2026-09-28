@@ -25,6 +25,7 @@ export type FullReactionOverlayProps = Readonly<{
   onSelect: (option: FullReactionPickerOption) => void;
   open: boolean;
   query: string;
+  recentValues?: ReadonlyArray<string>;
   pendingOptionIds?: ReadonlyArray<string>;
   errorOptionIds?: ReadonlyArray<string>;
   selectedValues: ReadonlyArray<string>;
@@ -43,6 +44,7 @@ export function FullReactionOverlay({
   pendingOptionIds = [],
   errorOptionIds = [],
   query,
+  recentValues = [],
   selectedValues,
   triggerRef,
 }: FullReactionOverlayProps): React.ReactElement | null {
@@ -169,6 +171,7 @@ export function FullReactionOverlay({
         errorOptionIds={errorOptionIds}
         presentation={web ? 'web' : 'mobile'}
         query={query}
+        recentValues={recentValues}
         selectedValues={selectedValues}
         webHeight={web ? webHeight : undefined}
       />

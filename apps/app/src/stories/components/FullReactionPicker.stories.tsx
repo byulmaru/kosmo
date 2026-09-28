@@ -254,6 +254,7 @@ const meta = {
     options: reactionOptions,
     presentation: 'web',
     query: '',
+    recentValues: [],
     selectedValues: [],
     loading: false,
   },
@@ -265,6 +266,7 @@ const meta = {
     presentation: { control: 'inline-radio', options: ['web', 'mobile'] },
     query: { control: 'text' },
     selectedValues: { control: 'object' },
+    recentValues: { control: 'object' },
     loading: { control: 'boolean' },
   },
   component: FullReactionPicker,
@@ -277,6 +279,7 @@ const meta = {
     'MobileExpandedGeometryContract',
     'WebGridGeometryContract',
     'WebMobileGridGeometryContract',
+    'RecentSectionContract',
     'reactionOptions',
     'VirtualizedCatalogContract',
     'FlagAssetContract',
@@ -293,6 +296,7 @@ export const WebBrowse: Story = {};
 export const WebSearchResults: Story = { args: { query: '하트' } };
 export const WebEmpty: Story = { args: { query: '존재하지않음' } };
 export const WebLoading: Story = { args: { loading: true } };
+export const WebRecent: Story = { args: { recentValues: ['fire', 'laugh'] } };
 
 const mobileGlobals = { viewport: { isRotated: false, value: 'kosmoMobile' } } as const;
 const mobileParameters = { layout: 'fullscreen' } as const;
@@ -329,6 +333,10 @@ export const MobileLoading: Story = {
   globals: mobileGlobals,
   parameters: mobileParameters,
 };
+export const MobileRecent: Story = {
+  ...MobileBrowse,
+  args: { presentation: 'mobile', recentValues: ['fire', 'laugh'] },
+};
 
 export const MobileGridGeometryContract: Story = {
   ...MobileBrowse,
@@ -359,6 +367,22 @@ export const WebMobileGridGeometryContract: Story = {
     );
     expect(grid).toHaveLength(6);
     expectQuickColumnsToAlign(canvasElement);
+  },
+};
+
+export const RecentSectionContract: Story = {
+  args: { recentValues: ['fire', 'laugh'] },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    expect(canvas.getByRole('heading', { name: '최근 사용' })).toBeVisible();
+    expect(canvas.getByTestId('full-reaction-section-recent-row-0')).toBeVisible();
+    const recent = within(canvas.getByTestId('full-reaction-section-recent-row-0')).getAllByRole(
+      'button',
+    );
+    expect(recent.map((button) => button.getAttribute('aria-label'))).toEqual([
+      '불꽃 🔥',
+      '웃음 😂',
+    ]);
   },
 };
 
