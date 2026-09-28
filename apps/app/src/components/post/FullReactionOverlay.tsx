@@ -1,9 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Modal, Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import {
+  Animated,
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FullReactionPicker } from '@/components/reaction/FullReactionPicker';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
+import { useOverlayMotion } from '@/theme/useOverlayMotion';
 import type React from 'react';
 import type { LayoutChangeEvent, LayoutRectangle, View as ViewType } from 'react-native';
 import type { FullReactionPickerOption } from '@/components/reaction/FullReactionPicker';
@@ -41,9 +50,11 @@ export function FullReactionOverlay({
   const insets = useSafeAreaInsets();
   const { height: viewportHeight, width: viewportWidth } = useWindowDimensions();
   const web = Platform.OS === 'web';
+  const overlayMotion = useOverlayMotion(web ? false : open);
   const [anchor, setAnchor] = useState<Anchor | null>(null);
   const [content, setContent] = useState<Pick<LayoutRectangle, 'height' | 'width'> | null>(null);
   const contentRef = useRef<ViewType>(null);
+  const wasNativeMounted = useRef(false);
 
   const measureAnchor = useCallback(
     () =>
@@ -54,8 +65,22 @@ export function FullReactionOverlay({
   );
   const close = useCallback(() => {
     onClose();
-    requestAnimationFrame(() => triggerRef.current?.focus());
-  }, [onClose, triggerRef]);
+    if (web) {
+      requestAnimationFrame(() => triggerRef.current?.focus());
+    }
+  }, [onClose, triggerRef, web]);
+
+  useEffect(() => {
+    if (web) {
+      return;
+    }
+    if (overlayMotion.mounted) {
+      wasNativeMounted.current = true;
+    } else if (wasNativeMounted.current) {
+      wasNativeMounted.current = false;
+      triggerRef.current?.focus();
+    }
+  }, [overlayMotion.mounted, triggerRef, web]);
   const onContentLayout = useCallback((event: LayoutChangeEvent) => {
     const { height, width } = event.nativeEvent.layout;
     setContent((current) =>
@@ -93,7 +118,7 @@ export function FullReactionOverlay({
     };
   }, [close, measureAnchor, open, triggerRef, web]);
 
-  if (!open) {
+  if (web ? !open : !overlayMotion.mounted) {
     return null;
   }
 
@@ -171,7 +196,14 @@ export function FullReactionOverlay({
           </View>
         </View>
       ) : (
-        <View style={[styles.nativeRoot, { backgroundColor: theme.overlayScrim }]}>
+        <View style={styles.nativeRoot}>
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              StyleSheet.absoluteFill,
+              { backgroundColor: theme.overlayScrim, opacity: overlayMotion.progress },
+            ]}
+          />
           <Pressable
             accessibilityElementsHidden
             aria-hidden
@@ -179,7 +211,25 @@ export function FullReactionOverlay({
             style={StyleSheet.absoluteFill}
             testID="full-reaction-overlay-backdrop"
           />
-          <View style={styles.nativePicker}>{picker}</View>
+          <Animated.View
+            pointerEvents={open ? 'auto' : 'none'}
+            style={[
+              styles.nativePicker,
+              {
+                opacity: overlayMotion.progress,
+                transform: [
+                  {
+                    translateY: overlayMotion.progress.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [24, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            {picker}
+          </Animated.View>
         </View>
       )}
     </Modal>
