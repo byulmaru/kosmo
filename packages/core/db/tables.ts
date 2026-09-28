@@ -78,11 +78,16 @@ export const ActivityPubActors = pgTable(
     followersUri: text('followers_uri'),
     followingUri: text('following_uri'),
     sharedInboxUri: text('shared_inbox_uri'),
+    featuredUri: text('featured_uri'),
+    featuredRevision: integer('featured_revision').notNull().default(0),
     lastFetchedAt: datetime('last_fetched_at'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (table) => [unique().on(table.profileId)],
+  (table) => [
+    unique().on(table.profileId),
+    check('activitypub_actor_featured_revision_nonnegative', sql`${table.featuredRevision} >= 0`),
+  ],
 );
 
 export const ActivityPubActorKeys = pgTable(
@@ -625,8 +630,17 @@ export const ProfilePinnedPosts = pgTable(
     postId: uuid('post_id')
       .notNull()
       .references(() => Posts.id, { onDelete: 'cascade' }),
+    position: integer('position'),
   },
-  (table) => [unique().on(table.profileId, table.postId), index().on(table.profileId, table.id)],
+  (table) => [
+    unique().on(table.profileId, table.postId),
+    unique().on(table.profileId, table.position),
+    index().on(table.profileId, table.id),
+    check(
+      'profile_pinned_post_position_nonnegative',
+      sql`${table.position} IS NULL OR ${table.position} >= 0`,
+    ),
+  ],
 );
 
 export const Reactions = pgTable(

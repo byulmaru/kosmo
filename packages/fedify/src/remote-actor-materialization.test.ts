@@ -9,6 +9,8 @@ import {
   InstanceState,
   MediaSource,
   MediaState,
+  PostState,
+  PostVisibility,
   ProfileFollowPolicy,
   ProfileMediaKind,
   ProfileState,
@@ -19,6 +21,7 @@ import type { Object as ActivityPubObject } from '@fedify/vocab';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type * as Materialization from './remote-actor-materialization';
+import type * as Snapshot from './remote-featured-snapshot';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
@@ -33,12 +36,15 @@ let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
 let Media: typeof CoreDb.Media;
 let pg: typeof CoreDb.pg;
+let Posts: typeof CoreDb.Posts;
 let ProfileMedia: typeof CoreDb.ProfileMedia;
+let ProfilePinnedPosts: typeof CoreDb.ProfilePinnedPosts;
 let Profiles: typeof CoreDb.Profiles;
 let seedDatabase: typeof CoreSeed.seedDatabase;
 let findOrMaterializeRemoteProfileActorByUri: typeof Materialization.findOrMaterializeRemoteProfileActorByUri;
 let materializeRemoteProfileActor: typeof Materialization.materializeRemoteProfileActor;
 let RemoteActorMaterializationError: typeof Materialization.RemoteActorMaterializationError;
+let replaceRemoteFeaturedSnapshot: typeof Snapshot.replaceRemoteFeaturedSnapshot;
 
 describe('remote actor materialization', () => {
   let localInstanceId: string;
@@ -47,14 +53,26 @@ describe('remote actor materialization', () => {
     process.env.DATABASE_URL = databaseUrl;
     process.env.PUBLIC_ORIGIN = publicOrigin;
 
-    ({ ActivityPubActors, db, first, firstOrThrow, Instances, Media, pg, ProfileMedia, Profiles } =
-      await import('@kosmo/core/db'));
+    ({
+      ActivityPubActors,
+      db,
+      first,
+      firstOrThrow,
+      Instances,
+      Media,
+      pg,
+      Posts,
+      ProfileMedia,
+      ProfilePinnedPosts,
+      Profiles,
+    } = await import('@kosmo/core/db'));
     ({ seedDatabase } = await import('@kosmo/core/db/seed'));
     ({
       findOrMaterializeRemoteProfileActorByUri,
       materializeRemoteProfileActor,
       RemoteActorMaterializationError,
     } = await import('./remote-actor-materialization'));
+    ({ replaceRemoteFeaturedSnapshot } = await import('./remote-featured-snapshot'));
 
     await truncateDatabase();
     const { localInstance } = await seedDatabase({ publicOrigin });
@@ -62,6 +80,8 @@ describe('remote actor materialization', () => {
   });
 
   beforeEach(async () => {
+    await db.delete(ProfilePinnedPosts);
+    await db.delete(Posts);
     await db.delete(ProfileMedia);
     await db.delete(Media);
     await db.delete(Profiles);
@@ -1114,6 +1134,116 @@ describe('remote actor materialization', () => {
     ]);
   });
 
+  test('atomically replaces, rejects stale, rolls back, and clears remote Featured pins', async () => {
+    const stored = await createStoredRemoteActor();
+    const featuredUri = 'https://remote.example/users/alice/featured';
+    const posts = await db
+      .insert(Posts)
+      .values([
+        {
+          profileId: stored.profile.id,
+          state: PostState.ACTIVE,
+          visibility: PostVisibility.PUBLIC,
+        },
+        {
+          profileId: stored.profile.id,
+          state: PostState.ACTIVE,
+          visibility: PostVisibility.PUBLIC,
+        },
+        {
+          profileId: stored.profile.id,
+          state: PostState.ACTIVE,
+          visibility: PostVisibility.PUBLIC,
+        },
+      ])
+      .returning();
+
+    await db
+      .update(ActivityPubActors)
+      .set({ featuredRevision: 1, featuredUri })
+      .where(eq(ActivityPubActors.id, stored.actor.id));
+
+    const readPins = () =>
+      db
+        .select({ position: ProfilePinnedPosts.position, postId: ProfilePinnedPosts.postId })
+        .from(ProfilePinnedPosts)
+        .where(eq(ProfilePinnedPosts.profileId, stored.profile.id))
+        .orderBy(ProfilePinnedPosts.position, ProfilePinnedPosts.id);
+
+    assert.equal(
+      await replaceRemoteFeaturedSnapshot({
+        actorUri: stored.actor.uri,
+        featuredUri,
+        postIds: [posts[0]!.id, posts[1]!.id],
+        profileId: stored.profile.id,
+        revision: 1,
+      }),
+      true,
+    );
+    assert.deepEqual(
+      (await readPins()).map(({ position, postId }) => [position, postId]),
+      [
+        [0, posts[0]!.id],
+        [1, posts[1]!.id],
+      ],
+    );
+
+    await assert.rejects(
+      replaceRemoteFeaturedSnapshot({
+        actorUri: stored.actor.uri,
+        featuredUri,
+        postIds: [posts[2]!.id, posts[2]!.id],
+        profileId: stored.profile.id,
+        revision: 1,
+      }),
+    );
+    assert.deepEqual(
+      (await readPins()).map(({ position, postId }) => [position, postId]),
+      [
+        [0, posts[0]!.id],
+        [1, posts[1]!.id],
+      ],
+    );
+
+    await db
+      .update(ActivityPubActors)
+      .set({ featuredRevision: 2 })
+      .where(eq(ActivityPubActors.id, stored.actor.id));
+    assert.equal(
+      await replaceRemoteFeaturedSnapshot({
+        actorUri: stored.actor.uri,
+        featuredUri,
+        postIds: [posts[2]!.id],
+        profileId: stored.profile.id,
+        revision: 1,
+      }),
+      false,
+    );
+    assert.deepEqual(
+      (await readPins()).map(({ position, postId }) => [position, postId]),
+      [
+        [0, posts[0]!.id],
+        [1, posts[1]!.id],
+      ],
+    );
+
+    await db
+      .update(ActivityPubActors)
+      .set({ featuredRevision: 3, featuredUri: null })
+      .where(eq(ActivityPubActors.id, stored.actor.id));
+    assert.equal(
+      await replaceRemoteFeaturedSnapshot({
+        actorUri: stored.actor.uri,
+        featuredUri: null,
+        postIds: [],
+        profileId: stored.profile.id,
+        revision: 3,
+      }),
+      true,
+    );
+    assert.deepEqual(await readPins(), []);
+  });
+
   test('matches the remote actor Drizzle schema in PostgreSQL', async () => {
     const columns = await pg<
       Array<{ column_name: string; is_nullable: 'YES' | 'NO' }>
@@ -1126,6 +1256,8 @@ describe('remote actor materialization', () => {
           'outbox_uri',
           'followers_uri',
           'following_uri',
+          'featured_revision',
+          'featured_uri',
           'shared_inbox_uri',
           'last_fetched_at',
           'profile_url'
@@ -1135,6 +1267,8 @@ describe('remote actor materialization', () => {
     assert.deepEqual(
       columns.map((column) => [column.column_name, column.is_nullable]),
       [
+        ['featured_revision', 'NO'],
+        ['featured_uri', 'YES'],
         ['followers_uri', 'YES'],
         ['following_uri', 'YES'],
         ['inbox_uri', 'YES'],
