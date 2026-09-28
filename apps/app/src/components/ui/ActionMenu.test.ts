@@ -288,7 +288,7 @@ test('shared bottom sheet follows an upward drag, then collapses and dismisses o
   assert.equal(sheetHeight(), 580);
   await act(async () => panResponderConfig?.onPanResponderRelease?.(null, { dy: -100, vy: -1 }));
   assert.equal(sheetHeight(), 844);
-  await act(async () => panResponderConfig?.onPanResponderRelease?.(null, { dy: 100, vy: 1 }));
+  await act(async () => panResponderConfig?.onPanResponderRelease?.(null, { dy: 420, vy: 1 }));
   assert.equal(sheetHeight(), 480);
   await act(async () => panResponderConfig?.onPanResponderMove?.(null, { dy: 100 }));
   await act(async () => panResponderConfig?.onPanResponderRelease?.(null, { dy: 100, vy: 1 }));
