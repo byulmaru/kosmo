@@ -206,7 +206,7 @@ export function FullReactionPicker({
         }
       }}
       onStartShouldSetResponder={(event) => event.target === event.currentTarget}
-      style={[styles.mobileRoot, { backgroundColor: theme.overlayScrim }]}
+      style={[styles.mobileRoot, !onBackdropPress && { backgroundColor: theme.overlayScrim }]}
       testID="full-reaction-picker-backdrop"
     >
       <BottomSheetSurface
