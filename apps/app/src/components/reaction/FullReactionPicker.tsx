@@ -400,6 +400,16 @@ function ReactionGridRow({
           </Pressable>
         );
       })}
+      {!mobile && sectionId === 'quick'
+        ? Array.from({ length: Math.max(0, columns - options.length) }, (_, index) => (
+            <View
+              accessible={false}
+              aria-hidden
+              key={`empty-${index}`}
+              style={styles.webReactionTarget}
+            />
+          ))
+        : null}
     </View>
   );
 }

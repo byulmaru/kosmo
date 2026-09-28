@@ -332,11 +332,7 @@ export const MobileLoading: Story = {
 export const MobileGridGeometryContract: Story = {
   ...MobileBrowse,
   play: async ({ canvasElement }) => {
-    const rows = within(canvasElement).getAllByTestId(/^full-reaction-section-symbols-row-/);
-    expect(rows).toHaveLength(2);
-    for (const row of rows) {
-      expect(getComputedStyle(row).justifyContent).toBe('space-between');
-    }
+    expectQuickColumnsToAlign(canvasElement);
   },
 };
 
@@ -346,8 +342,27 @@ export const WebGridGeometryContract: Story = {
     expect(rows).toHaveLength(2);
     expect(getComputedStyle(rows[0]).justifyContent).toBe('space-between');
     expect(getComputedStyle(rows[1]).justifyContent).toBe('flex-start');
+    expectQuickColumnsToAlign(canvasElement);
   },
 };
+
+function expectQuickColumnsToAlign(canvasElement: HTMLElement) {
+  const canvas = within(canvasElement);
+  const quick = within(canvas.getByTestId('full-reaction-section-quick-row-0')).getAllByRole(
+    'button',
+  );
+  const grid = within(canvas.getByTestId('full-reaction-section-symbols-row-0')).getAllByRole(
+    'button',
+  );
+  expect(quick).toHaveLength(6);
+  for (let column = 0; column < quick.length; column += 1) {
+    expect(
+      Math.abs(
+        quick[column].getBoundingClientRect().left - grid[column].getBoundingClientRect().left,
+      ),
+    ).toBeLessThan(1);
+  }
+}
 
 function InteractivePicker(props: FullReactionPickerProps) {
   const [query, setQuery] = useState(props.query);
