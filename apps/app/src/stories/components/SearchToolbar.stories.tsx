@@ -111,9 +111,7 @@ function expectIcon(element: HTMLElement, size: number) {
 }
 
 function getControlVisual(control: HTMLElement) {
-  const surface = control.firstElementChild;
-  expect(surface).toBeInstanceOf(HTMLElement);
-  const visual = surface?.firstElementChild;
+  const visual = control.firstElementChild?.firstElementChild;
   expect(visual).toBeInstanceOf(HTMLElement);
   return visual as HTMLElement;
 }
