@@ -63,9 +63,9 @@ export function FullReactionPicker({
   const elevation = useElevation();
   const { height: viewportHeight, width: viewportWidth, fontScale } = useWindowDimensions();
   const mobile = presentation === 'mobile';
-  const { columns, targetSize } = mobile
+  const { columns, columnGap, targetSize } = mobile
     ? getMobileReactionGridLayout(viewportWidth - 2 * (space[16] + borderWidths[1]), fontScale)
-    : { columns: 8, targetSize: 32 };
+    : { columns: 8, columnGap: 0, targetSize: 32 };
   const pickerRef = useRef<View>(null);
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const searchResults = options.filter((option) =>
@@ -176,6 +176,7 @@ export function FullReactionPicker({
               </View>
             ) : (
               <ReactionGridRow
+                columnGap={columnGap}
                 columns={columns}
                 mobile={mobile}
                 onSelect={onSelect}
@@ -311,6 +312,7 @@ function createBrowseItems(
 }
 
 function ReactionGridRow({
+  columnGap,
   columns,
   mobile,
   onSelect,
@@ -322,6 +324,7 @@ function ReactionGridRow({
   pendingValues,
   errorValues,
 }: {
+  columnGap: number;
   columns: number;
   mobile: boolean;
   onSelect: (option: FullReactionPickerOption) => void;
@@ -338,10 +341,11 @@ function ReactionGridRow({
     <View
       style={[
         styles.gridRow,
-        mobile ? styles.mobileGrid : styles.webGrid,
-        options.length === columns || sectionId === 'quick'
-          ? styles.fullGridRow
-          : styles.partialGridRow,
+        mobile ? { columnGap } : styles.webGrid,
+        !mobile &&
+          (options.length === columns || sectionId === 'quick'
+            ? styles.fullGridRow
+            : styles.partialGridRow),
       ]}
       testID={`full-reaction-section-${sectionId}-row-${rowIndex}`}
     >
@@ -405,7 +409,6 @@ const styles = StyleSheet.create({
   emptyTitle: textStyles.uiLabelL,
   fullGridRow: { justifyContent: 'space-between' },
   gridRow: { flexDirection: 'row' },
-  mobileGrid: { gap: 0 },
   mobileReactionTarget: { alignItems: 'center', justifyContent: 'center' },
   mobileRoot: { flex: 1, justifyContent: 'flex-end', minHeight: 0 },
   mobileSheetContent: {
