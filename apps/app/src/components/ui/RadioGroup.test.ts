@@ -49,6 +49,7 @@ mockModule('react-native', {
   Text: TextHost,
   View: ViewHost,
 });
+mockModule('react-native-svg', { Svg: 'Svg', Circle: 'Circle' });
 mockModule('@/theme/ThemeProvider', {
   useTheme: () => ({
     borderDisabled: 'disabled-border',
@@ -176,26 +177,21 @@ function radioStyle(renderer: ReactTestRenderer, label: string, state: Pressable
 test('RadioOption owns canonical presentation and semantic visual states', () => {
   const renderer = renderGroup({ value: 'email' });
   const selected = radioByLabel(renderer, '이메일');
-  const indicator = selected
-    .findAllByType(ViewHost)
-    .find((node) => flattenStyle(node.props.style).width === 20);
-  assert.ok(indicator);
-  const indicatorStyle = flattenStyle(indicator.props.style);
-  assert.equal(indicatorStyle.height, 20);
-  assert.equal(indicatorStyle.width, 20);
-  assert.equal(indicatorStyle.borderWidth, 2);
-  assert.equal(indicatorStyle.borderRadius, 999);
-
-  const dot = indicator
-    .findAllByType(ViewHost)
-    .find((node) => flattenStyle(node.props.style).width === 10);
-  assert.ok(dot);
-  const dotStyle = flattenStyle(dot.props.style);
-  assert.equal(dotStyle.height, 10);
-  assert.equal(dotStyle.width, 10);
-  assert.equal(dotStyle.borderRadius, 999);
-  assert.equal(indicatorStyle.borderColor, 'selected-border');
-  assert.equal(dotStyle.backgroundColor, 'selected-border');
+  const indicator = selected.findByType('Svg' as ElementType);
+  assert.equal(indicator.props.height, 20);
+  assert.equal(indicator.props.width, 20);
+  assert.equal(indicator.props.viewBox, '0 0 20 20');
+  assert.equal(indicator.props.accessible, undefined);
+  assert.equal(indicator.props.focusable, false);
+  assert.equal(indicator.props['aria-hidden'], true);
+  const [ring, dot] = indicator.findAllByType('Circle' as ElementType);
+  assert.deepEqual([ring.props.cx, ring.props.cy, dot.props.cx, dot.props.cy], [10, 10, 10, 10]);
+  assert.equal(ring.props.r, 9);
+  assert.equal(ring.props.strokeWidth, 2);
+  assert.equal(ring.props.stroke, 'selected-border');
+  assert.equal(ring.props.fill, 'none');
+  assert.equal(dot.props.r, 5);
+  assert.equal(dot.props.fill, 'selected-border');
 
   const content = selected
     .findAllByType(ViewHost)
@@ -215,16 +211,9 @@ test('RadioOption owns canonical presentation and semantic visual states', () =>
   assert.equal(resting.gap, 12);
   assert.equal(resting.borderRadius, 12);
   assert.equal(resting.backgroundColor, undefined);
-  assert.equal(
-    flattenStyle(
-      radioByLabel(renderer, '문자')
-        .findAllByType(ViewHost)
-        .find((node) => {
-          return flattenStyle(node.props.style).width === 20;
-        })?.props.style,
-    ).borderColor,
-    'secondary',
-  );
+  const uncheckedCircles = radioByLabel(renderer, '문자').findAllByType('Circle' as ElementType);
+  assert.equal(uncheckedCircles.length, 1);
+  assert.equal(uncheckedCircles[0].props.stroke, 'secondary');
   assert.equal(
     radioStyle(renderer, '문자', { hovered: true, pressed: false }).backgroundColor,
     'hover',
@@ -240,17 +229,9 @@ test('RadioOption owns canonical presentation and semantic visual states', () =>
 
   const disabledSelected = renderGroup({ value: 'push' });
   const disabledRadio = radioByLabel(disabledSelected, '푸시');
-  const disabledIndicator = disabledRadio
-    .findAllByType(ViewHost)
-    .find((node) => flattenStyle(node.props.style).width === 20);
-  assert.ok(disabledIndicator);
-  const disabledIndicatorStyle = flattenStyle(disabledIndicator.props.style);
-  assert.equal(disabledIndicatorStyle.borderColor, 'disabled-foreground');
-  const disabledDot = disabledIndicator
-    .findAllByType(ViewHost)
-    .find((node) => flattenStyle(node.props.style).width === 10);
-  assert.ok(disabledDot);
-  assert.equal(flattenStyle(disabledDot.props.style).backgroundColor, 'disabled-foreground');
+  const [disabledRing, disabledDot] = disabledRadio.findAllByType('Circle' as ElementType);
+  assert.equal(disabledRing.props.stroke, 'disabled-foreground');
+  assert.equal(disabledDot.props.fill, 'disabled-foreground');
   assert.equal(
     radioStyle(disabledSelected, '푸시', { hovered: true, pressed: true }).backgroundColor,
     'disabled-surface',
