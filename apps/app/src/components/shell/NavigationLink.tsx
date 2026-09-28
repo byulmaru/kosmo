@@ -4,10 +4,11 @@ import { Platform } from 'react-native';
 import { useNavigationGuard } from './NavigationGuardContext';
 import { usePrimaryNavigationScroll } from './PrimaryNavigationScrollContext';
 import type { Href, LinkProps } from 'expo-router';
-import type { ReactElement } from 'react';
-import type { PressableProps } from 'react-native';
+import type { ReactElement, Ref } from 'react';
+import type { PressableProps, View } from 'react-native';
 
 type ChildProps = {
+  ref?: Ref<View>;
   onPress?: NonNullable<LinkProps['onPress']>;
   style?: PressableProps['style'];
 };
@@ -91,7 +92,7 @@ export function NavigationLink({
       asChild
       href={href}
     >
-      <NavigationLinkChild element={children} onPress={handlePress} />
+      <NavigationLinkChild ref={children.props.ref} element={children} onPress={handlePress} />
     </Link>
   );
 }

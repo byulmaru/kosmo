@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
-import { createElement, useEffect } from 'react';
+import { createElement, createRef, useEffect, useImperativeHandle } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { Href, LinkProps } from 'expo-router';
-import type { ReactElement, ReactNode } from 'react';
+import type { ReactElement, ReactNode, Ref } from 'react';
+import type { View } from 'react-native';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type {
   GuardedNavigationAction,
@@ -194,6 +195,24 @@ const renderLink = async (
 };
 
 describe('NavigationLink', () => {
+  it('Slot을 거쳐도 자식 ref로 포커스를 복원하고 unmount 시 해제한다', async () => {
+    const focus = mock.fn();
+    const childRef = createRef<View>();
+    function FocusableChild(props: { ref?: Ref<View>; onPress?: LinkPress }) {
+      useImperativeHandle(props.ref, () => ({ focus }) as unknown as View, []);
+      return createElement('Pressable', { onPress: props.onPress });
+    }
+    await renderLink(() => false, undefined, {
+      child: createElement(FocusableChild, { ref: childRef }),
+    });
+    assert.ok(childRef.current);
+    childRef.current.focus();
+    assert.equal(focus.mock.callCount(), 1);
+    await act(async () => renderer!.unmount());
+    renderer = null;
+    assert.equal(childRef.current, null);
+  });
+
   it('실제 Slot을 거친 링크도 자식의 기본·pressed 스타일을 유지한다', async () => {
     await renderLink(() => false, undefined, {
       child: createElement('Pressable', {
