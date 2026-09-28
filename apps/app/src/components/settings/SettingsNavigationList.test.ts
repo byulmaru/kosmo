@@ -366,6 +366,7 @@ describe('SettingsNavigationList', () => {
   it('테마 경로의 메뉴는 현재 페이지와 선택 상태를 표시한다', async () => {
     await render({ pathname: '/settings/theme', selected: 'theme' });
     const theme = rendered('Pressable').find((link) => link.props.href === '/settings/theme')!;
+    assert.equal(theme.props.accessibilityLabel, '테마 설정 열기, 시스템');
     assert.equal(theme.props['aria-current'], 'page');
     assert.deepEqual(theme.props.accessibilityState, { selected: true });
   });

@@ -708,12 +708,16 @@ test.describe('로그인 사용자 보호 라우트', () => {
     await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#000000');
 
     await page.goto('/settings');
-    await expect(page.getByRole('link', { name: '테마 설정 열기' })).toContainText('다크');
+    await expect(
+      page.getByRole('link', { name: '테마 설정 열기, 다크', exact: true }),
+    ).toContainText('다크');
     await page.reload();
-    await expect(page.getByRole('link', { name: '테마 설정 열기' })).toContainText('다크');
+    await expect(
+      page.getByRole('link', { name: '테마 설정 열기, 다크', exact: true }),
+    ).toContainText('다크');
     await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#000000');
 
-    await page.getByRole('link', { name: '테마 설정 열기' }).click();
+    await page.getByRole('link', { name: '테마 설정 열기, 다크', exact: true }).click();
     await page.getByRole('radio', { name: '시스템: 기기 색상 모드를 따라요.' }).click();
     await expect(
       page.getByRole('radio', { name: '시스템: 기기 색상 모드를 따라요.' }),

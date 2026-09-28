@@ -45,7 +45,7 @@ export function SettingsNavigationList({
       />
       {Platform.OS !== 'web' ? <NativeNotificationSettingsAction /> : null}
       <SettingsLinkRow
-        accessibilityLabel="테마 설정 열기"
+        accessibilityLabel={`테마 설정 열기, ${getThemePreferenceLabel(themePreference)}`}
         description={getThemePreferenceLabel(themePreference)}
         href="/settings/theme"
         label="테마"
