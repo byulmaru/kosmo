@@ -1,5 +1,6 @@
 import { Children, createContext, useContext, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Circle, Svg } from 'react-native-svg';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, layoutRecipes, radius, space, textStyles } from '@/theme/tokens';
 import type { PropsWithChildren, ReactElement, RefObject } from 'react';
@@ -212,9 +213,25 @@ export function RadioOption<Value extends string>({
           } as WebRadioProps)
         : undefined)}
     >
-      <View style={[styles.indicator, { borderColor: indicatorColor }]}>
-        {checked ? <View style={[styles.dot, { backgroundColor: indicatorColor }]} /> : null}
-      </View>
+      <Svg
+        accessible={web ? undefined : false}
+        aria-hidden
+        focusable={false}
+        style={styles.indicator}
+        height={iconSizes[20]}
+        width={iconSizes[20]}
+        viewBox="0 0 20 20"
+      >
+        <Circle
+          cx={10}
+          cy={10}
+          r={9}
+          fill="none"
+          stroke={indicatorColor}
+          strokeWidth={borderWidths[2]}
+        />
+        {checked ? <Circle cx={10} cy={10} r={5} fill={indicatorColor} /> : null}
+      </Svg>
       {children ?? (
         <View style={styles.content}>
           <Text
@@ -249,15 +266,7 @@ const styles = StyleSheet.create({
     gap: space[12],
     padding: space[12],
   },
-  indicator: {
-    alignItems: 'center',
-    borderRadius: radius.full,
-    borderWidth: borderWidths[2],
-    height: iconSizes[20],
-    justifyContent: 'center',
-    width: iconSizes[20],
-  },
-  dot: { borderRadius: radius.full, height: 10, width: 10 },
+  indicator: { flexShrink: 0 },
   content: { ...layoutRecipes.labelSupportStack, flex: 1 },
   label: textStyles.uiLabelL,
   description: textStyles.uiCopyM,
