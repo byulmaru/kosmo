@@ -110,11 +110,7 @@ export function ProfileHero({
   if (loading) {
     return (
       <View style={styles.root}>
-        <View
-          accessibilityElementsHidden
-          importantForAccessibility="no-hide-descendants"
-          style={[styles.cover, { backgroundColor: theme.backgroundSurface }]}
-        />
+        <Skeleton borderRadius={0} height="auto" style={styles.cover} />
         <View
           style={[styles.avatarRow, { minHeight: avatarRowHeight, paddingHorizontal: space[16] }]}
         >

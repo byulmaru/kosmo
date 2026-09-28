@@ -14,10 +14,62 @@ const mockModule = (specifier: string | URL, exports: object) =>
 const TextHost = 'Text' as unknown as ElementType;
 const ViewHost = 'View' as unknown as ElementType;
 const ButtonHost = 'Button' as unknown as ElementType;
+const AnimatedViewHost = 'AnimatedView' as unknown as ElementType;
+const DefsHost = 'Defs' as unknown as ElementType;
+const LinearGradientHost = 'LinearGradient' as unknown as ElementType;
+const RectHost = 'Rect' as unknown as ElementType;
+const StopHost = 'Stop' as unknown as ElementType;
+const SvgHost = 'Svg' as unknown as ElementType;
 let platform = 'web';
+let themeMode = 'light';
+let reducedMotion = false;
+let animationStarts = 0;
+let animationStops = 0;
+const timingCalls: Array<Record<string, unknown>> = [];
+const delayCalls: number[] = [];
+
+class MockAnimatedValue {
+  constructor(public value: number) {}
+
+  interpolate(config: Record<string, unknown>) {
+    return { config, type: 'interpolation' };
+  }
+
+  setValue(value: number) {
+    this.value = value;
+  }
+}
+
+const Animated = {
+  Easing: { linear: 'linear' },
+  View: AnimatedViewHost,
+  Value: MockAnimatedValue,
+  loop: (animation: { start: () => void; stop: () => void }) => animation,
+  delay: (duration: number) => {
+    delayCalls.push(duration);
+    return { start: () => undefined, stop: () => undefined };
+  },
+  sequence: (animations: Array<{ start: () => void; stop: () => void }>) => ({
+    start: () => animations[0]?.start(),
+    stop: () => animations[0]?.stop(),
+  }),
+  timing: (_value: MockAnimatedValue, config: Record<string, unknown>) => {
+    timingCalls.push(config);
+    return {
+      start: () => {
+        animationStarts += 1;
+      },
+      stop: () => {
+        animationStops += 1;
+      },
+    };
+  },
+};
 
 mockModule('react-native', {
   ActivityIndicator: 'ActivityIndicator',
+  Animated,
+  Easing: Animated.Easing,
   Platform: {
     get OS() {
       return platform;
@@ -27,9 +79,18 @@ mockModule('react-native', {
   Text: TextHost,
   View: ViewHost,
 });
+mockModule('react-native-svg', {
+  Defs: DefsHost,
+  LinearGradient: LinearGradientHost,
+  Rect: RectHost,
+  Stop: StopHost,
+  Svg: SvgHost,
+});
 mockModule('@/theme/ThemeProvider', {
-  useReducedMotion: () => false,
+  useReducedMotion: () => reducedMotion,
+  useThemeMode: () => themeMode,
   useTheme: () => ({
+    fixedWhite: '#FFFFFF',
     feedbackDangerOnSubtle: 'danger-on-subtle',
     feedbackDangerSubtle: 'danger-subtle',
     foregroundPrimary: 'foreground',
@@ -40,6 +101,7 @@ mockModule('@/theme/ThemeProvider', {
 mockModule('@/theme/tokens', {
   radius: { 8: 8, 12: 12, full: 999 },
   space: { 8: 8, 16: 16, 32: 32 },
+  motion: { duration: { skeletonWave: 2000 } },
   textStyles: { uiCopyM: {}, uiLabelL: {} },
 });
 mockModule('./Button', { Button: ButtonHost });
@@ -52,6 +114,12 @@ before(async () => {
 
 afterEach(() => {
   platform = 'web';
+  themeMode = 'light';
+  reducedMotion = false;
+  animationStarts = 0;
+  animationStops = 0;
+  timingCalls.length = 0;
+  delayCalls.length = 0;
 });
 
 test('alert StateView keeps the host surface with danger copy and primary recovery action', async () => {
@@ -109,5 +177,96 @@ test('circular Skeleton keeps consumer border and margin before primitive semant
     height: 40,
     width: 40,
   });
+  await act(async () => renderer?.unmount());
+});
+
+test('Skeleton renders and starts the restrained wave after measuring its width', async () => {
+  assert.ok(stateViewModule);
+  const { Skeleton } = stateViewModule;
+  let renderer: ReactTestRenderer | undefined;
+  await act(async () => {
+    renderer = create(createElement(Skeleton, { height: 20, width: 160 }));
+  });
+
+  const skeleton = renderer?.root.findByType(ViewHost);
+  assert.ok(skeleton);
+  assert.equal(renderer?.root.findAllByType(AnimatedViewHost).length, 0);
+
+  await act(async () => {
+    skeleton.props.onLayout({ nativeEvent: { layout: { width: 160 } } });
+  });
+
+  assert.equal(renderer?.root.findAllByType(AnimatedViewHost).length, 1);
+  assert.equal(renderer?.root.findAllByType(LinearGradientHost).length, 1);
+  assert.equal(renderer?.root.findAllByType(RectHost).length, 1);
+  const waveStyle = renderer?.root.findByType(AnimatedViewHost).props.style[1];
+  const [start, end] = waveStyle.transform[0].translateX.config.outputRange;
+  assert.ok(start + waveStyle.width <= 0, 'wave starts entirely outside the left edge');
+  assert.ok(end >= 160, 'wave ends entirely outside the right edge');
+  assert.equal(renderer?.root.findAllByType(StopHost)[1]?.props.stopColor, '#FFFFFF');
+  assert.equal(renderer?.root.findAllByType(StopHost)[1]?.props.stopOpacity, '0.7');
+  assert.equal(animationStarts, 1);
+  assert.deepEqual(timingCalls[0], {
+    duration: 2000,
+    easing: 'linear',
+    toValue: 1,
+    useNativeDriver: false,
+  });
+  assert.deepEqual(delayCalls, [2000]);
+  themeMode = 'dark';
+  await act(async () => renderer?.update(createElement(Skeleton, { height: 20, width: 160 })));
+  assert.equal(renderer?.root.findAllByType(StopHost)[1]?.props.stopOpacity, '0.16');
+  await act(async () => renderer?.unmount());
+});
+
+test('Skeleton keeps a static placeholder with reduced motion and stops on unmount', async () => {
+  assert.ok(stateViewModule);
+  const { Skeleton } = stateViewModule;
+  reducedMotion = true;
+  let renderer: ReactTestRenderer | undefined;
+  await act(async () => {
+    renderer = create(createElement(Skeleton, { height: 20, width: 160 }));
+  });
+
+  const skeleton = renderer?.root.findByType(ViewHost);
+  assert.ok(skeleton);
+  await act(async () => {
+    skeleton.props.onLayout({ nativeEvent: { layout: { width: 160 } } });
+  });
+  assert.equal(renderer?.root.findAllByType(AnimatedViewHost).length, 0);
+  assert.equal(animationStarts, 0);
+
+  reducedMotion = false;
+  await act(async () => {
+    renderer?.update(createElement(Skeleton, { height: 20, width: 160 }));
+  });
+  const updatedSkeleton = renderer?.root.findAllByType(ViewHost)[0];
+  await act(async () => {
+    updatedSkeleton?.props.onLayout({ nativeEvent: { layout: { width: 160 } } });
+  });
+  assert.equal(animationStarts, 1);
+  await act(async () => renderer?.unmount());
+  assert.equal(animationStops, 1);
+});
+
+test('Skeleton stops its wave when reduced motion becomes enabled', async () => {
+  assert.ok(stateViewModule);
+  const { Skeleton } = stateViewModule;
+  let renderer: ReactTestRenderer | undefined;
+  await act(async () => {
+    renderer = create(createElement(Skeleton, { height: 20, width: 160 }));
+  });
+  const skeleton = renderer?.root.findByType(ViewHost);
+  assert.ok(skeleton);
+  await act(async () => {
+    skeleton.props.onLayout({ nativeEvent: { layout: { width: 160 } } });
+  });
+
+  reducedMotion = true;
+  await act(async () => {
+    renderer?.update(createElement(Skeleton, { height: 20, width: 160 }));
+  });
+  assert.equal(renderer?.root.findAllByType(AnimatedViewHost).length, 0);
+  assert.equal(animationStops, 1);
   await act(async () => renderer?.unmount());
 });

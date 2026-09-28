@@ -366,6 +366,7 @@ export const motion = {
     instant: 0,
     loadingCycle: 800,
     reaction: 300,
+    skeletonWave: 2000,
     standard: 200,
   },
   easing: {

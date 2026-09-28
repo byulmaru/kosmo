@@ -82,7 +82,12 @@ mockModule(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
   }),
 });
 mockModule(new URL('../ui/StateView.tsx', import.meta.url), {
-  Skeleton: (props: object) => createElement('Skeleton', props),
+  Skeleton: (props: object) =>
+    createElement('Skeleton', {
+      accessibilityElementsHidden: true,
+      importantForAccessibility: 'no-hide-descendants',
+      ...props,
+    }),
 });
 mockModule(new URL('../post/postClipboard.ts', import.meta.url), {
   setStringAsync: async () => true,
@@ -157,11 +162,10 @@ const baseProfile: ProfileData = {
 const findCoverStyle = () => {
   const cover = renderer!.root.find(
     (node) =>
-      (node.type as unknown) === 'View' &&
-      Array.isArray(node.props.style) &&
-      node.props.style[0]?.width === '100%',
+      ['View', 'Skeleton'].includes(node.type as string) &&
+      (Array.isArray(node.props.style) ? node.props.style[0] : node.props.style)?.aspectRatio === 3,
   );
-  return cover.props.style[0];
+  return Array.isArray(cover.props.style) ? cover.props.style[0] : cover.props.style;
 };
 
 for (const [os, targetHeight, inset] of [
@@ -209,16 +213,13 @@ for (const [os, targetHeight, inset] of [
         }
 
         const cover = renderer.root.find(
-          (node) =>
-            (node.type as unknown) === 'View' &&
-            Array.isArray(node.props.style) &&
-            node.props.style[0]?.width === '100%',
+          (node) => (node.type as unknown) === 'Skeleton' && node.props.style?.aspectRatio === 3,
         );
         assert.equal(cover.props.accessibilityElementsHidden, true);
         assert.equal(cover.props.importantForAccessibility, 'no-hide-descendants');
 
         const skeletons = renderer.root.findAll((node) => (node.type as unknown) === 'Skeleton');
-        assert.equal(skeletons.length, 4);
+        assert.equal(skeletons.length, 5);
         for (const skeleton of skeletons) {
           let hidden = false;
           for (
@@ -257,23 +258,21 @@ describe('ProfileHero cover geometry', () => {
     assert.deepEqual(findCoverStyle(), { aspectRatio: 3, width: '100%' });
   });
 
-  it('loading branch uses the semantic surface and canvas roles', async () => {
+  it('loading branch uses the shared Skeleton and canvas role', async () => {
     await act(async () => {
       renderer = create(createElement(ProfileHero, { loading: true }));
     });
     assert.ok(renderer);
 
     const cover = renderer.root.find(
-      (node) =>
-        (node.type as unknown) === 'View' &&
-        Array.isArray(node.props.style) &&
-        node.props.style[0]?.width === '100%',
+      (node) => (node.type as unknown) === 'Skeleton' && node.props.style?.aspectRatio === 3,
     );
     const avatar = renderer.root.find(
       (node) => (node.type as unknown) === 'Skeleton' && node.props.circular === true,
     );
 
-    assert.equal(cover.props.style[1].backgroundColor, '#semantic-surface');
+    assert.equal(cover.props.height, 'auto');
+    assert.equal(cover.props.borderRadius, 0);
     assert.equal(avatar.props.style[1].borderColor, '#semantic-canvas');
   });
 
