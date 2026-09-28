@@ -194,7 +194,9 @@ Web profile picker는 breakpoint별 사이드바 구조에 맞는 surface를 사
 - full·compact Web에서 프로필 선택·생성 실패는 picker와 오류를 유지하고 생성 실패는 입력값도 유지한다.
   trigger 재실행, full·compact 바깥 pointer close 또는 `Escape`처럼 사용자가 명시적으로 닫으면 `open=false`,
   `creating=false`, 빈 handle과 오류 없음으로 초기화한다. 바깥 pointer close는 이벤트 기본 동작을 막지 않아
-  pointer 대상의 브라우저 기본 focus를 따른다. `Escape`는 trigger focus를 복원한다. Target도 상위 modal 내부
+  pointer 대상의 브라우저 기본 focus를 따른다. 이미 시작된 mutation 결과를 별도로 폐기하지 않으므로, 닫은 뒤
+  도착한 실패는 picker를 다시 열었을 때 표시될 수 있다. `Escape`는 trigger
+  focus를 복원한다. Target도 상위 modal 내부
   pointer 이벤트와 modal이 떠 있는 동안의 `Escape`로 picker를 닫거나 trigger로 focus를 옮기지 않는다. mobile Web drawer에서는
   drawer를 소유한 modal 안의 picker 바깥 pointer가 picker만 닫으며, picker 내부와 trigger pointer는
   제외한다. 이 pointer도 기본 동작과 대상 focus를 유지한다. drawer와 별개의 modal에서 발생한 pointer와
