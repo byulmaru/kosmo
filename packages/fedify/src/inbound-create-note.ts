@@ -212,7 +212,15 @@ type RemoteNoteMaterializationSource =
       recipient?: string | null;
       storedActor: StoredRemoteProfileActor;
     }
-  | { kind: 'hydrated' };
+  | {
+      audience?: HydratedRemoteNoteAudience;
+      kind: 'hydrated';
+    };
+
+type HydratedRemoteNoteAudience = {
+  advertisingActorUri: string | URL;
+  followerProfileId: string;
+};
 
 type RemoteNoteMaterializationRejectionReason =
   | 'empty_note'
@@ -368,7 +376,17 @@ const materializeRemoteNote = async ({
   }
 
   const attributionHref = uniqueHref(note.attributionIds);
-  if (!attributionHref || (source.kind === 'create' && attributionHref !== source.actorUri)) {
+  if (!attributionHref) {
+    return { reason: 'note_attribution_mismatch', status: 'rejected' };
+  }
+  if (source.kind === 'create' && attributionHref !== source.actorUri) {
+    return { reason: 'note_attribution_mismatch', status: 'rejected' };
+  }
+  if (
+    source.kind === 'hydrated' &&
+    source.audience &&
+    attributionHref !== source.audience.advertisingActorUri.toString()
+  ) {
     return { reason: 'note_attribution_mismatch', status: 'rejected' };
   }
   const attributionUri = new URL(attributionHref);
@@ -376,19 +394,44 @@ const materializeRemoteNote = async ({
     return { reason: 'note_attribution_mismatch', status: 'rejected' };
   }
 
+  let storedActor: StoredRemoteProfileActor | undefined;
+  if (source.kind === 'hydrated' && source.audience) {
+    try {
+      storedActor =
+        (await findUsableStoredRemoteProfileActorByUri(attributionUri)) ??
+        (await findOrMaterializeRemoteProfileActorByUri({
+          actorUri: attributionUri,
+          context,
+          now: receivedAt,
+        }));
+    } catch (error) {
+      if (
+        error instanceof RemoteActorMaterializationError ||
+        error instanceof ConflictError ||
+        error instanceof NotFoundError
+      ) {
+        return { reason: 'unusable_author', status: 'rejected' };
+      }
+      throw error;
+    }
+  }
+
   const visibility = resolveNoteVisibility(
     note,
-    source.kind === 'create' ? source.storedActor.actor.followersUri : undefined,
+    source.kind === 'create'
+      ? source.storedActor.actor.followersUri
+      : storedActor?.actor.followersUri,
   );
   if (!visibility) {
     return { reason: 'unsupported_note_visibility', status: 'rejected' };
   }
   if (
-    source.kind === 'create' &&
     visibility === PostVisibility.FOLLOWERS &&
     !(await hasEstablishedFollower({
-      followerProfileId: source.recipient,
-      followeeProfileId: source.storedActor.profile.id,
+      followerProfileId:
+        source.kind === 'create' ? source.recipient : source.audience?.followerProfileId,
+      followeeProfileId:
+        source.kind === 'create' ? source.storedActor.profile.id : storedActor!.profile.id,
     }))
   ) {
     return { reason: 'followers_visibility_without_follow', status: 'rejected' };
@@ -419,10 +462,9 @@ const materializeRemoteNote = async ({
     return { reason: 'empty_note', status: 'rejected' };
   }
 
-  let storedActor;
   if (source.kind === 'create') {
     storedActor = source.storedActor;
-  } else {
+  } else if (!storedActor) {
     try {
       storedActor =
         (await findUsableStoredRemoteProfileActorByUri(attributionUri)) ??
@@ -458,12 +500,14 @@ const materializeRemoteNote = async ({
 };
 
 export const materializeHydratedRemoteNote = async ({
+  audience,
   context,
   note,
   objectUri,
   observation,
   receivedAt,
 }: {
+  audience?: HydratedRemoteNoteAudience;
   context: RemoteNoteMaterializationContext;
   note: Note;
   objectUri: URL;
@@ -475,7 +519,7 @@ export const materializeHydratedRemoteNote = async ({
     note,
     objectUri,
     receivedAt,
-    source: { kind: 'hydrated' },
+    source: { audience, kind: 'hydrated' },
   });
   if (result.status === 'rejected') {
     if (result.reason === 'note_content_length_exceeded') {

@@ -1071,6 +1071,92 @@ describe('inbound Create dispatch', () => {
     assert.equal(postContentDocumentToText(materialized.content.document), 'Original');
   });
 
+  test('materializes a Followers Only hydrated original for the selected local follower', async () => {
+    const profile = await createStoredRemoteActor();
+    const follower = await createLocalFollowerProfile('hydrated-follower');
+    await db.insert(ProfileFollows).values({
+      followerProfileId: follower.id,
+      followeeProfileId: profile.id,
+    });
+    const objectUri = new URL('https://objects.example/notes/hydrated-followers');
+
+    const result = await materializeHydratedRemoteNote({
+      audience: {
+        advertisingActorUri: remoteActorUri,
+        followerProfileId: follower.id,
+      },
+      context: createContext(),
+      note: new Note({
+        attribution: remoteActorUri,
+        content: 'Followers only original',
+        id: objectUri,
+        to: new URL('https://remote.example/users/alice/followers'),
+      }),
+      objectUri,
+      observation: createObservation,
+      receivedAt,
+    });
+
+    const materialized = await getMaterializedPost(objectUri);
+    assert.deepEqual(result, { postId: materialized.post.id, status: 'created' });
+    assert.equal(materialized.post.profileId, profile.id);
+    assert.equal(materialized.post.visibility, PostVisibility.FOLLOWERS);
+  });
+
+  test('does not choose another local follower and requires the advertised actor URI', async () => {
+    const profile = await createStoredRemoteActor();
+    const establishedFollower = await createLocalFollowerProfile('established-follower');
+    const selectedFollower = await createLocalFollowerProfile('selected-follower');
+    await db.insert(ProfileFollows).values({
+      followerProfileId: establishedFollower.id,
+      followeeProfileId: profile.id,
+    });
+    const objectUri = new URL('https://objects.example/notes/hydrated-followers-rejected');
+
+    const unselectedResult = await materializeHydratedRemoteNote({
+      audience: {
+        advertisingActorUri: remoteActorUri,
+        followerProfileId: selectedFollower.id,
+      },
+      context: createContext(),
+      note: new Note({
+        attribution: remoteActorUri,
+        content: 'Wrong follower identity',
+        id: objectUri,
+        to: new URL('https://remote.example/users/alice/followers'),
+      }),
+      objectUri,
+      observation: createObservation,
+      receivedAt,
+    });
+
+    assert.deepEqual(unselectedResult, { reason: 'invalid_note', status: 'rejected' });
+    assert.equal(await db.$count(Posts), 0);
+
+    const mismatchedObjectUri = new URL(
+      'https://objects.example/notes/hydrated-advertiser-mismatch',
+    );
+    const mismatchedResult = await materializeHydratedRemoteNote({
+      audience: {
+        advertisingActorUri: new URL('https://remote.example/users/mallory'),
+        followerProfileId: establishedFollower.id,
+      },
+      context: createContext(),
+      note: new Note({
+        attribution: remoteActorUri,
+        content: 'Wrong advertising actor',
+        id: mismatchedObjectUri,
+        to: new URL('https://remote.example/users/alice/followers'),
+      }),
+      objectUri: mismatchedObjectUri,
+      observation: createObservation,
+      receivedAt,
+    });
+
+    assert.deepEqual(mismatchedResult, { reason: 'invalid_note', status: 'rejected' });
+    assert.equal(await db.$count(Posts), 0);
+  });
+
   test('rejects a mismatched discovered author without persisting the actor or Post', async () => {
     const objectUri = new URL('https://objects.example/notes/mismatched-author');
     const lookupObject = mock.fn(
