@@ -10,8 +10,9 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FullReactionPicker } from '@/components/reaction/FullReactionPicker';
+import { getBottomTabBarContentHeight } from '@/components/ui/navigationChrome';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
-import { spacing } from '@/theme/tokens';
+import { breakpoints, spacing } from '@/theme/tokens';
 import { useOverlayMotion } from '@/theme/useOverlayMotion';
 import type React from 'react';
 import type { LayoutChangeEvent, LayoutRectangle, View as ViewType } from 'react-native';
@@ -50,6 +51,7 @@ export function FullReactionOverlay({
   const insets = useSafeAreaInsets();
   const { height: viewportHeight, width: viewportWidth } = useWindowDimensions();
   const web = Platform.OS === 'web';
+  const compactWeb = web && viewportWidth < breakpoints.compact;
   const overlayMotion = useOverlayMotion(web ? false : open);
   const [anchor, setAnchor] = useState<Anchor | null>(null);
   const [content, setContent] = useState<Pick<LayoutRectangle, 'height' | 'width'> | null>(null);
@@ -122,9 +124,17 @@ export function FullReactionOverlay({
     return null;
   }
 
-  const below = anchor ? viewportHeight - insets.bottom - (anchor.y + anchor.height) : 0;
+  const below = anchor
+    ? viewportHeight -
+      insets.bottom -
+      (compactWeb ? getBottomTabBarContentHeight('web') : 0) -
+      (anchor.y + anchor.height)
+    : 0;
   const above = anchor ? anchor.y - insets.top : 0;
-  const preferredHeight = Math.min(624, Math.max(0, viewportHeight - 2 * spacing.sm));
+  const preferredHeight = Math.min(
+    compactWeb ? 420 : 624,
+    Math.max(0, viewportHeight - 2 * spacing.sm),
+  );
   const placement = below >= preferredHeight + spacing.xs || below >= above ? 'bottom' : 'top';
   const webHeight = Math.min(
     preferredHeight,
@@ -133,7 +143,7 @@ export function FullReactionOverlay({
   const minLeft = insets.left + spacing.sm;
   const maxRight = viewportWidth - insets.right - spacing.sm;
   const availableWidth = Math.max(0, maxRight - minLeft);
-  const shellWidth = Math.min(content?.width ?? 360, availableWidth);
+  const shellWidth = Math.min(content?.width ?? (compactWeb ? 288 : 360), availableWidth);
   const left = anchor ? Math.min(Math.max(anchor.x, minLeft), maxRight - shellWidth) : minLeft;
   const requestedTop = anchor
     ? placement === 'bottom'

@@ -276,6 +276,7 @@ const meta = {
     'MobileHandleExpansionContract',
     'MobileExpandedGeometryContract',
     'WebGridGeometryContract',
+    'WebMobileGridGeometryContract',
     'reactionOptions',
     'VirtualizedCatalogContract',
     'FlagAssetContract',
@@ -342,6 +343,21 @@ export const WebGridGeometryContract: Story = {
     expect(rows).toHaveLength(2);
     expect(getComputedStyle(rows[0]).justifyContent).toBe('space-between');
     expect(getComputedStyle(rows[1]).justifyContent).toBe('flex-start');
+    expectQuickColumnsToAlign(canvasElement);
+  },
+};
+
+export const WebMobileGridGeometryContract: Story = {
+  globals: mobileGlobals,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const dialog = canvas.getByRole('dialog', { name: '반응 선택' });
+    expect(dialog.getBoundingClientRect().width).toBeLessThanOrEqual(288);
+    expect(dialog.getBoundingClientRect().height).toBeLessThanOrEqual(420);
+    const grid = within(canvas.getByTestId('full-reaction-section-symbols-row-0')).getAllByRole(
+      'button',
+    );
+    expect(grid).toHaveLength(6);
     expectQuickColumnsToAlign(canvasElement);
   },
 };

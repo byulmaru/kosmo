@@ -8,6 +8,7 @@ import baseMeta, {
   MobileHandleExpansionContract as mobileHandleExpansionContract,
   VirtualizedCatalogContract as virtualizedCatalogContract,
   WebGridGeometryContract as webGridGeometryContract,
+  WebMobileGridGeometryContract as webMobileGridGeometryContract,
 } from './FullReactionPicker.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
@@ -29,3 +30,4 @@ export const MobileExpandedGeometryContract: Story = mobileExpandedGeometryContr
 export const MobileHandleExpansionContract: Story = mobileHandleExpansionContract;
 export const VirtualizedCatalogContract: Story = virtualizedCatalogContract;
 export const WebGridGeometryContract: Story = webGridGeometryContract;
+export const WebMobileGridGeometryContract: Story = webMobileGridGeometryContract;
