@@ -11,7 +11,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FullReactionPicker } from '@/components/reaction/FullReactionPicker';
 import { getBottomTabBarContentHeight } from '@/components/ui/navigationChrome';
-import { useElevation, useTheme } from '@/theme/ThemeProvider';
+import { useTheme } from '@/theme/ThemeProvider';
 import { breakpoints, spacing } from '@/theme/tokens';
 import { useOverlayMotion } from '@/theme/useOverlayMotion';
 import type React from 'react';
@@ -49,7 +49,6 @@ export function FullReactionOverlay({
   triggerRef,
 }: FullReactionOverlayProps): React.ReactElement | null {
   const theme = useTheme();
-  const elevation = useElevation();
   const insets = useSafeAreaInsets();
   const { height: viewportHeight, width: viewportWidth } = useWindowDimensions();
   const web = Platform.OS === 'web';
@@ -202,7 +201,7 @@ export function FullReactionOverlay({
           ) : null}
           <View
             {...webPlacementProps}
-            style={[styles.webPosition, { left, top, width: shellWidth }, elevation.floating]}
+            style={[styles.webPosition, { left, top, width: shellWidth }]}
             testID="full-reaction-overlay-position"
           >
             {picker}
