@@ -51,8 +51,8 @@ Figma variable의 code syntax가 개발 target 이름이다.
 | Semantic token               | Light     | Dark      | 용도                        |
 | ---------------------------- | --------- | --------- | --------------------------- |
 | `color/background/canvas`    | `#FFFFFF` | `#000000` | 앱의 최하단 배경            |
-| `color/background/surface`   | `#FAFAFB` | `#141414` | 기본 제품 surface           |
-| `color/background/elevated`  | `#FFFFFF` | `#262626` | modal, card 등 상승 표면    |
+| `color/background/surface`   | `#FAFAFB` | `#18181B` | 기본 제품 surface           |
+| `color/background/elevated`  | `#FFFFFF` | `#000000` | modal, card 등 상승 표면    |
 | `color/background/inverse`   | `#1A1A1A` | `#FAFAFB` | tooltip, badge 등 역상 표면 |
 | `color/foreground/primary`   | `#1A1A1A` | `#E0E0E0` | 본문과 핵심 아이콘          |
 | `color/foreground/secondary` | `#64646F` | `#A3A3A3` | 설명과 메타데이터           |
@@ -65,7 +65,9 @@ Figma variable의 code syntax가 개발 target 이름이다.
 | `color/border/focus`         | `#4F46E5` | `#A5B4FC` | keyboard focus 경계         |
 | `color/border/disabled`      | `#F4F4F5` | `#262626` | 비활성 경계                 |
 
-Dark `color/border/subtle`은 `background/elevated #262626` 위 divider가 표면과 같아지지 않도록 `ink/750 #303030`으로 분리한다.
+Dark `color/border/subtle`은 `ink/750 #303030`을 유지하며 검정 elevated 위 divider를 구분한다.
+
+Light와 Dark 모두 canvas와 elevated는 각 모드의 같은 기준색을 사용한다. Dark의 canvas·elevated는 `fixed/black #000000`, surface는 기존 Neutral 팔레트의 가장 어두운 `neutral/950 #18181B`를 참조한다. Elevated라는 이름은 상승 표면의 역할을 유지하며 명도 차이를 강제하지 않는다. Modal·card·menu는 border·scrim·elevation으로 구분한다. Primitive 값과 action·disabled 역할은 변경하지 않는다.
 
 Light의 route canvas는 순백색을 사용한다. 기본 입력과 내부 preview는 `neutral/0`을 참조하는 `background/surface`로 구분하고, 독립 modal·card·menu는 같은 순백색 위에 border 또는 elevation을 함께 사용한다. `fixed/white`는 Success/Danger `on-base`, fullscreen media와 mask처럼 테마 비종속 흰색이 필요한 경우에만 사용한다.
 
@@ -90,7 +92,7 @@ Secondary Button은 중립 surface 역할을 직접 소비하지 않고 아래 a
 
 | Token                            | 같은 값을 사용하는 기존 역할                           | 용도                       |
 | -------------------------------- | ------------------------------------------------------ | -------------------------- |
-| `color/action/secondary/base`    | `color/background/surface`                             | 기본 Secondary action 표면 |
+| `color/action/secondary/base`    | Light surface; Dark `#141414`                          | 기본 Secondary action 표면 |
 | `color/action/secondary/on-base` | `color/foreground/primary`                             | label과 icon               |
 | `color/action/secondary/border`  | `color/border/default`                                 | 기본 경계                  |
 | `color/action/secondary/hover`   | `color/state/hover` (Light); opaque `#262626` (Dark)   | Button hover fill          |
@@ -107,7 +109,7 @@ Focus와 Disabled는 Secondary 전용 색상을 추가하지 않고 공용 `colo
 
 Repost는 미선택 default에서 중립 `color/foreground/secondary`를 사용하고, hover glyph·background와
 selected glyph·count에서 제품 action 의미색을 사용한다. 전역 `color/feedback/success/base`와 분리하며 Dark의
-`green/500 #409667`은 canvas `#000000`에서 `5.78:1`, surface `#141414`에서 `5.07:1` 대비를
+`green/500 #409667`은 canvas `#000000`에서 `5.78:1`, surface `#18181B`에서 `4.87:1` 대비를
 유지한다. 전역 Success는 Light·Dark 모두 기존 `green/600 #16794A`를 유지한다.
 
 ### Link Indigo
@@ -168,16 +170,16 @@ Secondary action의 Dark hover/pressed처럼 Button fill을 교체하는 opaque 
 | Link Light / Surface            |  `6.03:1` |
 | Link Dark / Canvas              | `10.53:1` |
 | Light Muted / Canvas            |  `4.83:1` |
-| Dark Muted / Elevated           |  `5.12:1` |
-| Dark Focus / Elevated           |  `7.59:1` |
-| Dark Strong Border / Surface    |  `3.81:1` |
+| Dark Muted / Elevated           |  `7.10:1` |
+| Dark Focus / Elevated           | `10.53:1` |
+| Dark Strong Border / Surface    |  `3.67:1` |
 | Dark Primary / Canvas           | `15.91:1` |
 | Light Selected Border / Surface |  `3.24:1` |
 | Light Info Border / Subtle      |  `3.24:1` |
 | Light Warning Border / Subtle   |  `3.25:1` |
 | Light Warning Border / Surface  |  `3.42:1` |
 | Dark Repost / Canvas            |  `5.78:1` |
-| Dark Repost / Surface           |  `5.07:1` |
+| Dark Repost / Surface           |  `4.87:1` |
 
 ## Component usage mapping
 
