@@ -268,6 +268,7 @@ const meta = {
     'LoadingContract',
     'MobileGridGeometryContract',
     'MobileBrowseGeometryContract',
+    'MobileHandleExpansionContract',
     'MobileExpandedGeometryContract',
     'WebGridGeometryContract',
     'reactionOptions',
@@ -514,5 +515,16 @@ export const MobileExpandedGeometryContract: Story = {
     expect(within(canvasElement).getByTestId('full-reaction-picker-sheet')).toHaveStyle({
       height: '720px',
     });
+  },
+};
+
+export const MobileHandleExpansionContract: Story = {
+  ...MobileBrowse,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const sheet = canvas.getByTestId('full-reaction-picker-sheet');
+    expect(sheet).toHaveStyle({ height: '480px' });
+    await userEvent.click(canvas.getByTestId('full-reaction-picker-drag-handle'));
+    await waitFor(() => expect(parseFloat(getComputedStyle(sheet).height)).toBeGreaterThan(480));
   },
 };
