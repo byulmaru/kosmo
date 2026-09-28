@@ -1307,6 +1307,80 @@ describe('GraphQL remote profile boundary', () => {
     );
   });
 
+  test('profile pinnedPosts uses remote positions for same-millisecond cursor order', async () => {
+    const remoteInstance = await createRemoteInstance();
+    const remote = await createProfile({ handle: 'remote-pinned', instanceId: remoteInstance.id });
+    await db.insert(ActivityPubActors).values({
+      profileId: remote.id,
+      type: ActivityPubActorType.PERSON,
+      uri: `https://${remoteDomain}/users/remote-pinned`,
+    });
+    const first = await db
+      .insert(Posts)
+      .values({
+        id: '0192e6a0-0000-7000-8000-000000000002',
+        profileId: remote.id,
+        state: PostState.ACTIVE,
+        visibility: PostVisibility.PUBLIC,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const second = await db
+      .insert(Posts)
+      .values({
+        id: '0192e6a0-0000-7000-8000-000000000001',
+        profileId: remote.id,
+        state: PostState.ACTIVE,
+        visibility: PostVisibility.PUBLIC,
+      })
+      .returning()
+      .then(firstOrThrow);
+    await db.insert(ProfilePinnedPosts).values([
+      { position: 0, postId: first.id, profileId: remote.id },
+      { position: 1, postId: second.id, profileId: remote.id },
+    ]);
+
+    const query = `query RemotePinnedPosts($profileId: ID!, $after: String) {
+      node(id: $profileId) {
+        ... on Profile {
+          pinnedPosts(first: 1, after: $after) {
+            edges { cursor node { id } }
+            pageInfo { endCursor hasNextPage }
+          }
+        }
+      }
+    }`;
+    type Page = {
+      node: {
+        pinnedPosts: {
+          edges: Array<{ cursor: string; node: { id: string } }>;
+          pageInfo: { endCursor: string | null; hasNextPage: boolean };
+        };
+      } | null;
+    };
+    const variables = { profileId: globalId('Profile', remote.id) };
+
+    const firstPage = await requestGraphQL<Page>(query, { ...variables, after: null });
+    assertNoGraphQLErrors(firstPage);
+    assert.deepEqual(
+      firstPage.data?.node?.pinnedPosts.edges.map(({ node }) => node.id),
+      [globalId('Post', first.id)],
+    );
+    assert.ok(firstPage.data?.node?.pinnedPosts.edges[0]?.cursor);
+    assert.equal(firstPage.data?.node?.pinnedPosts.pageInfo.hasNextPage, true);
+
+    const secondPage = await requestGraphQL<Page>(query, {
+      ...variables,
+      after: firstPage.data?.node?.pinnedPosts.pageInfo.endCursor,
+    });
+    assertNoGraphQLErrors(secondPage);
+    assert.deepEqual(
+      secondPage.data?.node?.pinnedPosts.edges.map(({ node }) => node.id),
+      [globalId('Post', second.id)],
+    );
+    assert.equal(secondPage.data?.node?.pinnedPosts.pageInfo.hasNextPage, false);
+  });
+
   test('profile pinnedPosts excludes posts when the visited profile blocks the viewer', async () => {
     const viewer = await createAuthenticatedSession();
     const visited = await createAuthenticatedSession();
