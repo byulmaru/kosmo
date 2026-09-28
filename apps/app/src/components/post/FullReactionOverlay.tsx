@@ -123,7 +123,7 @@ export function FullReactionOverlay({
   const top = Math.min(Math.max(requestedTop, minTop), maxTop);
   const webPlacementProps: Record<string, unknown> = { dataSet: { placement } };
   const picker = (
-    <View onLayout={onContentLayout} ref={contentRef}>
+    <View onLayout={onContentLayout} ref={contentRef} style={!web && styles.nativeContent}>
       <FullReactionPicker
         onBackdropPress={close}
         onClose={close}
@@ -187,6 +187,7 @@ export function FullReactionOverlay({
 }
 
 const styles = StyleSheet.create({
+  nativeContent: { flex: 1 },
   nativePicker: { flex: 1 },
   nativeRoot: { flex: 1 },
   triggerDismiss: { position: 'absolute' },

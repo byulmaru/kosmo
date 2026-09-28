@@ -13,6 +13,7 @@ import {
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
 import { ReactionEmojiImage } from './ReactionEmojiImage';
+import { getMobileReactionGridLayout } from './reactionGridLayout';
 import { ReactionPendingSpinner } from './ReactionPendingSpinner';
 import type React from 'react';
 import type { GestureResponderEvent } from 'react-native';
@@ -60,8 +61,11 @@ export function FullReactionPicker({
 }: FullReactionPickerProps): React.ReactElement {
   const theme = useTheme();
   const elevation = useElevation();
-  const { height: viewportHeight } = useWindowDimensions();
+  const { height: viewportHeight, width: viewportWidth, fontScale } = useWindowDimensions();
   const mobile = presentation === 'mobile';
+  const { columns, targetSize } = mobile
+    ? getMobileReactionGridLayout(viewportWidth - 2 * (space[16] + borderWidths[1]), fontScale)
+    : { columns: 8, targetSize: 32 };
   const pickerRef = useRef<View>(null);
   const dragStartY = useRef<number | null>(null);
   const normalizedQuery = query.trim().toLocaleLowerCase();
@@ -173,8 +177,8 @@ export function FullReactionPicker({
         <FlatList<ReactionGridItem>
           data={
             state === 'searchResults'
-              ? createGridItems('results', '반응', searchResults, mobile ? 7 : 8)
-              : createBrowseItems(options, mobile ? 7 : 8)
+              ? createGridItems('results', '반응', searchResults, columns)
+              : createBrowseItems(options, columns)
           }
           initialNumToRender={mobile ? 12 : 10}
           keyExtractor={(item) => item.id}
@@ -198,11 +202,13 @@ export function FullReactionPicker({
               </View>
             ) : (
               <ReactionGridRow
+                columns={columns}
                 mobile={mobile}
                 onSelect={onSelect}
                 options={item.options}
                 rowIndex={item.rowIndex}
                 sectionId={item.sectionId}
+                targetSize={targetSize}
                 selectedValues={selectedValues}
                 pendingValues={pendingOptionIds}
                 errorValues={errorOptionIds}
@@ -323,32 +329,37 @@ function createBrowseItems(
 }
 
 function ReactionGridRow({
+  columns,
   mobile,
   onSelect,
   options,
   rowIndex,
   sectionId,
+  targetSize,
   selectedValues,
   pendingValues,
   errorValues,
 }: {
+  columns: number;
   mobile: boolean;
   onSelect: (option: FullReactionPickerOption) => void;
   options: ReadonlyArray<FullReactionPickerOption>;
   rowIndex: number;
   sectionId: string;
+  targetSize: number;
   selectedValues: ReadonlyArray<string>;
   pendingValues: ReadonlyArray<string>;
   errorValues: ReadonlyArray<string>;
 }) {
   const theme = useTheme();
-  const columns = mobile ? 7 : 8;
   return (
     <View
       style={[
         styles.gridRow,
         mobile ? styles.mobileGrid : styles.webGrid,
-        options.length === columns ? styles.fullGridRow : styles.partialGridRow,
+        options.length === columns || sectionId === 'quick'
+          ? styles.fullGridRow
+          : styles.partialGridRow,
       ]}
       testID={`full-reaction-section-${sectionId}-row-${rowIndex}`}
     >
@@ -371,13 +382,17 @@ function ReactionGridRow({
             disabled={pending}
             key={option.id}
             onPress={() => onSelect(option)}
-            style={mobile ? styles.mobileReactionTarget : styles.webReactionTarget}
+            style={
+              mobile
+                ? [styles.mobileReactionTarget, { height: targetSize, width: targetSize }]
+                : styles.webReactionTarget
+            }
           >
             {({ pressed }) => (
               <View
                 style={[
                   styles.reaction,
-                  mobile ? styles.mobileReaction : styles.webReaction,
+                  mobile ? { height: targetSize - 4, width: targetSize - 4 } : styles.webReaction,
                   {
                     backgroundColor: selected
                       ? theme.stateSelectedSurface
@@ -388,7 +403,7 @@ function ReactionGridRow({
                   },
                 ]}
               >
-                <ReactionEmojiImage size={mobile ? 24 : 20} type={option.emoji} />
+                <ReactionEmojiImage size={mobile ? targetSize / 2 : 20} type={option.emoji} />
                 {pending ? (
                   <View accessibilityElementsHidden aria-hidden style={styles.pendingOverlay}>
                     <ReactionPendingSpinner />
@@ -417,15 +432,13 @@ const styles = StyleSheet.create({
   fullGridRow: { justifyContent: 'space-between' },
   gridRow: { flexDirection: 'row' },
   mobileGrid: { gap: 0 },
-  mobileReaction: { height: 44, width: 44 },
-  mobileReactionTarget: { alignItems: 'center', height: 48, justifyContent: 'center', width: 48 },
+  mobileReactionTarget: { alignItems: 'center', justifyContent: 'center' },
   mobileRoot: { flex: 1, justifyContent: 'flex-end', minHeight: 0 },
   mobileSheet: {
     borderTopLeftRadius: radius[24],
     borderTopRightRadius: radius[24],
     borderWidth: borderWidths[1],
     gap: space[12],
-    maxWidth: 390,
     paddingBottom: space[24],
     paddingHorizontal: space[16],
     paddingTop: space[12],
