@@ -27,7 +27,6 @@ export type FullReactionPickerOption = Readonly<{
   label: string;
   quick?: boolean;
   quickOrder?: number;
-  recent?: boolean;
 }>;
 
 export type FullReactionPickerProps = {
@@ -38,6 +37,7 @@ export type FullReactionPickerProps = {
   options: ReadonlyArray<FullReactionPickerOption>;
   presentation?: 'mobile' | 'web';
   query: string;
+  recentValues?: ReadonlyArray<string>;
   selectedValues?: ReadonlyArray<string>;
   pendingOptionIds?: ReadonlyArray<string>;
   errorOptionIds?: ReadonlyArray<string>;
@@ -53,6 +53,7 @@ export function FullReactionPicker({
   options,
   presentation = 'web',
   query,
+  recentValues = [],
   selectedValues = [],
   pendingOptionIds = [],
   errorOptionIds = [],
@@ -86,7 +87,7 @@ export function FullReactionPicker({
     state === 'searchResults'
       ? [{ id: 'results', title: '반응', options: searchResults }]
       : state === 'browse'
-        ? createBrowseSections(options)
+        ? createBrowseSections(options, recentValues)
         : [];
   useEffect(() => {
     if (mobile) {
@@ -268,11 +269,13 @@ type ReactionGridSection = Readonly<{
 
 function createBrowseSections(
   options: ReadonlyArray<FullReactionPickerOption>,
+  recentValues: ReadonlyArray<string>,
 ): ReactionGridSection[] {
   const categories = Array.from(
     new Map(options.map((option) => [option.category, option.categoryLabel])).entries(),
     ([id, title]) => ({ id, options: options.filter((option) => option.category === id), title }),
   );
+  const recentOptions = recentValues.flatMap((id) => options.find((option) => option.id === id) ?? []);
   return [
     ...(options.some((option) => option.quick)
       ? [{
@@ -282,6 +285,9 @@ function createBrowseSections(
             .filter((option) => option.quick)
             .sort((left, right) => (left.quickOrder ?? 0) - (right.quickOrder ?? 0)),
         }]
+      : []),
+    ...(recentOptions.length > 0
+      ? [{ id: 'recent', title: '최근 사용', options: recentOptions }]
       : []),
     ...categories,
   ];
