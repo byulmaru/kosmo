@@ -87,7 +87,7 @@ export function BottomSheetSurface({
               setExpanded(true);
             }
           } else if (gesture.dy > 56 || gesture.vy > 0.5) {
-            if (expanded && gesture.dy < maxHeight - collapsedHeight + 56) {
+            if (expanded) {
               setDragY(0);
               setExpanded(false);
             } else {
