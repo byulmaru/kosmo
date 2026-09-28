@@ -5,6 +5,7 @@ import baseMeta, {
   MobileBrowseGeometryContract as mobileBrowseGeometryContract,
   MobileExpandedGeometryContract as mobileExpandedGeometryContract,
   MobileGridGeometryContract as mobileGridGeometryContract,
+  MobileHandleExpansionContract as mobileHandleExpansionContract,
   VirtualizedCatalogContract as virtualizedCatalogContract,
   WebGridGeometryContract as webGridGeometryContract,
 } from './FullReactionPicker.stories';
@@ -25,5 +26,6 @@ export const LoadingContract: Story = loadingContract;
 export const MobileGridGeometryContract: Story = mobileGridGeometryContract;
 export const MobileBrowseGeometryContract: Story = mobileBrowseGeometryContract;
 export const MobileExpandedGeometryContract: Story = mobileExpandedGeometryContract;
+export const MobileHandleExpansionContract: Story = mobileHandleExpansionContract;
 export const VirtualizedCatalogContract: Story = virtualizedCatalogContract;
 export const WebGridGeometryContract: Story = webGridGeometryContract;

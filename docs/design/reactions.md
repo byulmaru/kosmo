@@ -50,12 +50,12 @@ Full Reaction Picker는 Emoji 16의 완전 수식 emoji 중 기본형 1,906개�
 
 - Figma source는 `Presentation=Web | Mobile`과 `State=Browse | SearchResults | Empty | Loading`을 조합한 8 variants다. `Browse`는 검색, 빠른 반응, category heading과 전체 emoji grid를 표시하고, `SearchResults`는 검색 결과만, `Empty`는 검색 결과 없음만, `Loading`은 spinner만 표시한다. Browse에는 category shortcut control이나 최근 사용 section을 두지 않는다. Web은 한 행에 8개를 배치한다. Mobile Figma 표본은 7열이며, runtime은 화면 너비와 시스템 글자 크기에 따라 48pt 이상의 터치 영역이 들어가는 열 수를 사용한다. 가득 찬 행과 빠른 반응 행은 좌우 가장자리를 맞추고, 마지막 덜 찬 category 행은 왼쪽 정렬한다. Picker 전체 `Error` variant는 만들지 않는다.
 - Web은 trigger에 붙는 non-modal dialog를 사용한다. 열릴 때 검색 field로 focus를 옮기고 같은 trigger, `Escape`, 바깥 클릭으로 닫은 뒤 focus를 trigger에 복원한다.
-- Mobile은 modal bottom sheet를 사용한다. `Browse`의 initial height는 480, `SearchResults`·`Empty`·`Loading`의 expanded height는 720이다. `Scrolled`는 expanded sheet의 runtime scroll 위치 표본이지 별도 source variant가 아니다.
+- Mobile은 modal bottom sheet를 사용한다. `Browse`의 initial height는 480, `SearchResults`·`Empty`·`Loading`의 initial height는 720이다. 손잡이를 위로 끌거나 활성화하면 상단 safe area까지 펼치고, 펼친 상태에서 아래로 끌면 초기 높이로 접으며, 접힌 상태에서 아래로 끌면 닫는다. `Scrolled`는 sheet의 runtime scroll 위치 표본이지 별도 source variant가 아니다.
 - Mobile Screens의 [`Post action overlays and picker`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6772-10989)는
   Quick Picker Light/Dark와 Full Picker Browse Light/Dark를 실제 PostMediaViewer Open 위 child overlay로 조립한
   이전 Target evidence다. 현재 게시글 reaction trigger는 Viewer 위 Full Picker Mobile sheet를 바로 연다.
   다른 Full Picker source state를 늘리거나 runtime focus·dismiss·keyboard 동작 완료를 뜻하지 않는다.
-- Mobile은 열릴 때 software keyboard를 자동으로 띄우지 않고 sheet title부터 탐색한다. backdrop tap, drag dismiss, Android back으로 닫고 focus를 원래 trigger로 복원한다.
+- Mobile은 열릴 때 software keyboard를 자동으로 띄우지 않고 sheet title부터 탐색한다. backdrop tap, 손잡이 drag dismiss, Android back으로 닫고 focus를 원래 trigger로 복원한다. 목록 scroll은 손잡이 drag와 독립적으로 동작한다.
 - dialog의 접근성 이름은 `반응 선택`이다. 검색 field, category heading과 Reaction button은 식별 가능한 이름을 제공하고, Reaction button은 selected 상태를 제공한다. 결과 영역은 Loading에서 busy 상태와 시각적으로 숨긴 `반응을 불러오는 중` 문구를 함께 노출한다.
 - spinner는 `motion/duration/loading-cycle` 800ms마다 linear하게 회전한다. reduced motion에서는 회전을 제거하고 정적인 `···`로 대체한다.
 - sticky header·category, grid scroll, safe area, software keyboard, Web keyboard, VoiceOver·TalkBack의 실제 focus·dismiss·reflow는 Production runtime QA에서 검증한다.
