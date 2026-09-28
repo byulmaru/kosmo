@@ -708,6 +708,7 @@ const meta = {
     'ReactionConcurrentMutationContract',
     'ReactionFailureRetryActorSwitchAndUnmount',
     'ReactionFullDismissFocusAndPlacement',
+    'ReactionMobileWebTabClearance',
     'ReactionSummaryToggleContract',
   ],
   parameters: { controls: { disable: true } },
@@ -1404,6 +1405,8 @@ export const ReactionFullDismissFocusAndPlacement: Story = {
     expect(position.getBoundingClientRect().right).toBeLessThanOrEqual(
       canvasElement.ownerDocument.documentElement.clientWidth - spacing.sm,
     );
+    expect(position.getBoundingClientRect().width).toBeLessThanOrEqual(288);
+    expect(position.getBoundingClientRect().height).toBeLessThanOrEqual(420);
     expect(within(dialog).getByRole('heading', { name: '빠른 반응' })).toBeVisible();
 
     await userEvent.click(screen.getByTestId('full-reaction-overlay-trigger-dismiss'));
@@ -1433,6 +1436,27 @@ export const ReactionFullDismissFocusAndPlacement: Story = {
         <PostActionBarFixture />
       </View>
       <View style={styles.bottomRightAction}>
+        <PostActionBarFixture />
+      </View>
+    </View>
+  ),
+};
+
+export const ReactionMobileWebTabClearance: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: { layout: 'fullscreen' },
+  play: async ({ canvasElement }) => {
+    const trigger = within(canvasElement).getByRole('button', { name: '반응' });
+    await userEvent.click(trigger);
+    const position = await screen.findByTestId('full-reaction-overlay-position');
+    await waitFor(() => expect(position).toHaveAttribute('data-placement', 'top'));
+    expect(position.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+      trigger.getBoundingClientRect().top,
+    );
+  },
+  render: () => (
+    <View style={styles.mobileMidFixture}>
+      <View style={styles.mobileMidAction}>
         <PostActionBarFixture />
       </View>
     </View>
@@ -1941,6 +1965,8 @@ const styles = {
     position: 'relative',
     width: '100%',
   } satisfies ViewStyle,
+  mobileMidAction: { position: 'absolute', right: 0, top: 380, width: 88 } satisfies ViewStyle,
+  mobileMidFixture: { height: 844, position: 'relative', width: '100%' } satisfies ViewStyle,
   topLeftAction: {
     left: -44,
     position: 'absolute',

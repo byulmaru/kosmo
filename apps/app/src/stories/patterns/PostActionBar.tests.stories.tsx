@@ -14,6 +14,7 @@ import baseMeta, {
   ReactionDirectFullContract as reactionDirectFullContract,
   ReactionFailureRetryActorSwitchAndUnmount as reactionFailureRetryActorSwitchAndUnmount,
   ReactionFullDismissFocusAndPlacement as reactionFullDismissFocusAndPlacement,
+  ReactionMobileWebTabClearance as reactionMobileWebTabClearance,
   ReactionSummaryToggleContract as reactionSummaryToggleContract,
 } from './PostActionBar.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -37,6 +38,7 @@ export const AuthorPostDeletionFailureRetry: Story = authorPostDeletionFailureRe
 export const AuthorPostDeletionGraphQLErrorRetry: Story = authorPostDeletionGraphQLErrorRetry;
 export const ControlledReply: Story = controlledReply;
 export const ReactionFullDismissFocusAndPlacement: Story = reactionFullDismissFocusAndPlacement;
+export const ReactionMobileWebTabClearance: Story = reactionMobileWebTabClearance;
 export const NoSelectedProfileDisablesReaction: Story = noSelectedProfileDisablesReaction;
 export const ReactionSummaryToggleContract: Story = reactionSummaryToggleContract;
 export const ReactionConcurrentMutationContract: Story = reactionConcurrentMutationContract;

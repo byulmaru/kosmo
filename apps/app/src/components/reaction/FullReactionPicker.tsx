@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { BottomSheetSurface } from '@/components/ui/BottomSheetSurface';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
-import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
+import { borderWidths, breakpoints, iconSizes, radius, space, textStyles } from '@/theme/tokens';
 import { ReactionEmojiImage } from './ReactionEmojiImage';
 import { getMobileReactionGridLayout } from './reactionGridLayout';
 import { ReactionPendingSpinner } from './ReactionPendingSpinner';
@@ -63,9 +63,10 @@ export function FullReactionPicker({
   const elevation = useElevation();
   const { height: viewportHeight, width: viewportWidth, fontScale } = useWindowDimensions();
   const mobile = presentation === 'mobile';
+  const compactWeb = !mobile && viewportWidth < breakpoints.compact;
   const { columns, columnGap, targetSize } = mobile
     ? getMobileReactionGridLayout(viewportWidth - 2 * (space[16] + borderWidths[1]), fontScale)
-    : { columns: 8, columnGap: 0, targetSize: 32 };
+    : { columns: compactWeb ? 6 : 8, columnGap: 0, targetSize: 32 };
   const pickerRef = useRef<View>(null);
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const searchResults = options.filter((option) =>
@@ -117,7 +118,10 @@ export function FullReactionPicker({
         mobile ? styles.mobileSheetContent : styles.webDialog,
         !mobile && elevation.overlay,
         !mobile && {
-          height: webHeight ?? Math.min(624, Math.max(0, viewportHeight - 2 * space[8])),
+          height:
+            webHeight ??
+            Math.min(compactWeb ? 420 : 624, Math.max(0, viewportHeight - 2 * space[8])),
+          maxWidth: compactWeb ? 288 : 360,
         },
         !mobile && { backgroundColor: theme.backgroundElevated, borderColor: theme.borderDefault },
       ]}

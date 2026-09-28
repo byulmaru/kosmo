@@ -271,6 +271,7 @@ const meta = {
     'MobileHandleExpansionContract',
     'MobileExpandedGeometryContract',
     'WebGridGeometryContract',
+    'WebMobileGridGeometryContract',
     'reactionOptions',
     'SequentialKeyboardBrowseContract',
   ],
@@ -367,6 +368,21 @@ export const WebGridGeometryContract: Story = {
     expect(
       expressionsHeading.getBoundingClientRect().top - quickRow.getBoundingClientRect().bottom,
     ).toBeCloseTo(16, 0);
+    expectQuickColumnsToAlign(canvasElement);
+  },
+};
+
+export const WebMobileGridGeometryContract: Story = {
+  globals: mobileGlobals,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const dialog = canvas.getByRole('dialog', { name: '반응 선택' });
+    expect(dialog.getBoundingClientRect().width).toBeLessThanOrEqual(288);
+    expect(dialog.getBoundingClientRect().height).toBeLessThanOrEqual(420);
+    const grid = within(canvas.getByTestId('full-reaction-section-symbols-row-0')).getAllByRole(
+      'button',
+    );
+    expect(grid).toHaveLength(6);
     expectQuickColumnsToAlign(canvasElement);
   },
 };
