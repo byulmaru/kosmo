@@ -82,6 +82,7 @@ test('Update(Person)는 canonical actor 표현과 안정적인 activity identity
   const object = await first.activity.getObject();
   assert.ok(object instanceof Person);
   assert.equal(object.id?.href, fixture.actorUri.href);
+  assert.equal(object.featuredId?.href, `${fixture.actorUri.href}/featured`);
   assert.equal(object.name?.toString(), local.profile.displayName);
   assert.equal(object.summary?.toString(), local.profile.bio);
   assert.equal(object.manuallyApprovesFollowers, true);
@@ -180,6 +181,7 @@ const createContextFixture = async (local: LocalFixture, fail = false) => {
     canonicalOrigin: actual.canonicalOrigin,
     getActorKeyPairs: async () => keyPairs,
     getActorUri: actual.getActorUri.bind(actual),
+    getFeaturedUri: actual.getFeaturedUri.bind(actual),
     getFollowersUri: actual.getFollowersUri.bind(actual),
     getFollowingUri: actual.getFollowingUri.bind(actual),
     sendActivity: async (

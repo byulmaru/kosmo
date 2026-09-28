@@ -36,21 +36,24 @@ import type { RequestContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type * as PostUriModule from './activitypub-post-uri';
+import type * as FederationModule from './federation';
 import type * as LocalPostNoteModule from './local-post-note';
 import type * as LocalPostReactionCollectionModule from './local-post-reaction-collection';
+import type * as LocalProfileFeaturedModule from './local-profile-featured';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 const remoteActorUri = new URL('https://prod-494.remote.example/users/follower');
-const remoteKeyUri = new URL('#main-key', remoteActorUri);
 
 let ActivityPubActors: typeof CoreDb.ActivityPubActors;
 let ActivityPubReactions: typeof CoreDb.ActivityPubReactions;
 let Accounts: typeof CoreDb.Accounts;
 let ActivityPubPosts: typeof CoreDb.ActivityPubPosts;
 let authorizeLocalPostNote: typeof LocalPostNoteModule.authorizeLocalPostNote;
+let authorizeLocalProfileFeatured: typeof LocalProfileFeaturedModule.authorizeLocalProfileFeatured;
 let db: typeof CoreDb.db;
 let dispatchLocalPostNote: typeof LocalPostNoteModule.dispatchLocalPostNote;
+let dispatchLocalProfileFeatured: typeof LocalProfileFeaturedModule.dispatchLocalProfileFeatured;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let isCanonicalPostId: typeof PostUriModule.isCanonicalPostId;
 let Instances: typeof CoreDb.Instances;
@@ -61,12 +64,16 @@ let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
 let ProfileFollowRequests: typeof CoreDb.ProfileFollowRequests;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
+let ProfilePinnedPosts: typeof CoreDb.ProfilePinnedPosts;
 let Profiles: typeof CoreDb.Profiles;
 let Reactions: typeof CoreDb.Reactions;
 let resolveActivityPubPostUri: typeof PostUriModule.resolveActivityPubPostUri;
 let countLocalPostEmojiReactions: typeof LocalPostReactionCollectionModule.countLocalPostEmojiReactions;
 let dispatchLocalPostEmojiReactions: typeof LocalPostReactionCollectionModule.dispatchLocalPostEmojiReactions;
 let firstLocalPostEmojiReactionsCursor: typeof LocalPostReactionCollectionModule.firstLocalPostEmojiReactionsCursor;
+let countLocalProfileFeatured: typeof LocalProfileFeaturedModule.countLocalProfileFeatured;
+let firstLocalProfileFeaturedCursor: typeof LocalProfileFeaturedModule.firstLocalProfileFeaturedCursor;
+let productionFederation: typeof FederationModule.federation;
 let testInstanceIds: string[] = [];
 let testAccountIds: string[] = [];
 let testProfileIds: string[] = [];
@@ -89,12 +96,20 @@ describe('ActivityPub Local Post Note', () => {
       Posts,
       ProfileFollowRequests,
       ProfileFollows,
+      ProfilePinnedPosts,
       Profiles,
       Reactions,
     } = await import('@kosmo/core/db'));
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
     ({ isCanonicalPostId, resolveActivityPubPostUri } = await import('./activitypub-post-uri'));
     ({ authorizeLocalPostNote, dispatchLocalPostNote } = await import('./local-post-note'));
+    ({
+      authorizeLocalProfileFeatured,
+      countLocalProfileFeatured,
+      dispatchLocalProfileFeatured,
+      firstLocalProfileFeaturedCursor,
+    } = await import('./local-profile-featured'));
+    ({ federation: productionFederation } = await import('./federation'));
     ({
       countLocalPostEmojiReactions,
       dispatchLocalPostEmojiReactions,
@@ -873,6 +888,181 @@ describe('ActivityPub Local Post Note', () => {
       .where(eq(Instances.id, remoteFollower.instanceId));
     assert.equal((await fetchCollection()).status, 404);
   });
+
+  test('advertises and serves an ordered Featured collection with per-Note visibility', async () => {
+    const author = await createProfile({ kind: InstanceKind.LOCAL });
+    const publicPost = await createPost(author.id, { visibility: PostVisibility.PUBLIC });
+    const unlistedPost = await createPost(author.id, { visibility: PostVisibility.UNLISTED });
+    const followersPost = await createPost(author.id, { visibility: PostVisibility.FOLLOWERS });
+    const directPost = await createPost(author.id, { visibility: PostVisibility.DIRECT });
+    await db.insert(ProfilePinnedPosts).values([
+      { profileId: author.id, postId: publicPost.id },
+      { profileId: author.id, postId: unlistedPost.id },
+      { profileId: author.id, postId: followersPost.id },
+      { profileId: author.id, postId: directPost.id },
+    ]);
+
+    const federation = createFeaturedFederation();
+    const request = (url: string) =>
+      new Request(url, { headers: { accept: 'application/activity+json' } });
+    const actorUri = `${publicOrigin}/ap/actor/${author.id}`;
+    const featuredUri = `${actorUri}/featured`;
+    const actorResponse = await federation.fetch(request(actorUri), { contextData: undefined });
+    assert.equal(actorResponse.status, 200);
+    assert.equal((await actorResponse.json()).featured, featuredUri);
+    const productionActorResponse = await productionFederation.fetch(request(actorUri), {
+      contextData: undefined,
+    });
+    assert.equal(productionActorResponse.status, 200);
+    assert.equal((await productionActorResponse.json()).featured, featuredUri);
+
+    const collectionResponse = await federation.fetch(request(featuredUri), {
+      contextData: undefined,
+    });
+    assert.equal(collectionResponse.status, 200);
+    const collection = (await collectionResponse.json()) as {
+      first?: string;
+      totalItems?: number;
+    };
+    assert.equal(collection.totalItems, 2);
+    assert.ok(collection.first);
+
+    const pageResponse = await federation.fetch(request(collection.first), {
+      contextData: undefined,
+    });
+    assert.equal(pageResponse.status, 200);
+    const page = (await pageResponse.json()) as { orderedItems?: { id?: string }[] };
+    assert.deepEqual(
+      page.orderedItems?.map((item) => item.id),
+      [publicPost.id, unlistedPost.id].map((id) => `${publicOrigin}/ap/note/${id}`),
+    );
+
+    const unsignedPrivateNote = await federation.fetch(
+      request(`${publicOrigin}/ap/note/${followersPost.id}`),
+      {
+        contextData: undefined,
+        onUnauthorized: () => new Response('Not found', { status: 404 }),
+      },
+    );
+    assert.equal(unsignedPrivateNote.status, 404);
+
+    const nonFollowerActorUri = new URL('https://prod-494.remote.example/users/non-follower');
+    const signedNonFollower = await createSignedFederation({ actorUri: nonFollowerActorUri });
+    const nonFollowerCollectionResponse = await signedNonFollower.fetchFeatured(author.id);
+    assert.equal(nonFollowerCollectionResponse.status, 200);
+    const nonFollowerCollection = (await nonFollowerCollectionResponse.json()) as {
+      first?: string;
+      totalItems?: number;
+    };
+    assert.equal(nonFollowerCollection.totalItems, 2);
+    assert.ok(nonFollowerCollection.first);
+    const nonFollowerPageResponse = await signedNonFollower.fetchFeaturedPage(
+      nonFollowerCollection.first,
+    );
+    const nonFollowerPageJson = await nonFollowerPageResponse.text();
+    assert.equal(nonFollowerPageResponse.status, 200);
+    assert.equal(
+      nonFollowerPageJson.includes(`${publicOrigin}/ap/note/${followersPost.id}`),
+      false,
+    );
+    assert.equal((await signedNonFollower.fetch(followersPost.id)).status, 404);
+
+    const remoteFollower = await createProfile({ domain: 'remote.example' });
+    await db.insert(ActivityPubActors).values({
+      profileId: remoteFollower.id,
+      type: ActivityPubActorType.PERSON,
+      uri: remoteActorUri.href,
+    });
+    await db.insert(ProfileFollows).values({
+      followeeProfileId: author.id,
+      followerProfileId: remoteFollower.id,
+    });
+
+    const signedFixture = await createSignedFederation();
+    const signedCollectionResponse = await signedFixture.fetchFeatured(author.id);
+    assert.equal(signedCollectionResponse.status, 200);
+    const signedCollection = (await signedCollectionResponse.json()) as {
+      first?: string;
+      totalItems?: number;
+    };
+    assert.equal(signedCollection.totalItems, 3);
+    assert.ok(signedCollection.first);
+    const signedPageResponse = await signedFixture.fetchFeaturedPage(signedCollection.first);
+    const signedPage = (await signedPageResponse.json()) as { orderedItems?: { id?: string }[] };
+    assert.deepEqual(
+      signedPage.orderedItems?.map((item) => item.id),
+      [publicPost.id, unlistedPost.id, followersPost.id].map(
+        (id) => `${publicOrigin}/ap/note/${id}`,
+      ),
+    );
+    assert.equal((await signedFixture.fetch(followersPost.id)).status, 200);
+
+    await db
+      .update(Instances)
+      .set({ state: InstanceState.SUSPENDED })
+      .where(eq(Instances.id, remoteFollower.instanceId));
+    const suspendedCollectionResponse = await signedFixture.fetchFeatured(author.id);
+    assert.equal(suspendedCollectionResponse.status, 200);
+    assert.equal(
+      ((await suspendedCollectionResponse.json()) as { totalItems?: number }).totalItems,
+      2,
+    );
+
+    const signedAuthor = await createSignedFederation({
+      actorUri: new URL(`${publicOrigin}/ap/actor/${author.id}`),
+    });
+    const signedAuthorCollection = await signedAuthor.fetchFeatured(author.id);
+    assert.equal(signedAuthorCollection.status, 200);
+    assert.equal(((await signedAuthorCollection.json()) as { totalItems?: number }).totalItems, 3);
+    assert.equal((await signedAuthor.fetch(followersPost.id)).status, 200);
+
+    const boundaryAuthor = await createProfile({
+      handle: 'featured-boundary',
+      kind: InstanceKind.LOCAL,
+    });
+    const boundaryPins: { id: string; postId: string; profileId: string }[] = [];
+    for (let index = 0; index < 50; index++) {
+      const post = await createPost(boundaryAuthor.id, {
+        visibility: PostVisibility.FOLLOWERS,
+      });
+      boundaryPins.push({
+        id: `00000000-0000-7000-8000-${String(index).padStart(12, '0')}`,
+        postId: post.id,
+        profileId: boundaryAuthor.id,
+      });
+    }
+    const boundaryVisiblePost = await createPost(boundaryAuthor.id, {
+      visibility: PostVisibility.PUBLIC,
+    });
+    boundaryPins.push({
+      id: '00000000-0000-7000-8000-000000000050',
+      postId: boundaryVisiblePost.id,
+      profileId: boundaryAuthor.id,
+    });
+    await db.insert(ProfilePinnedPosts).values(boundaryPins);
+    const boundaryCollectionResponse = await federation.fetch(
+      request(`${publicOrigin}/ap/actor/${boundaryAuthor.id}/featured`),
+      { contextData: undefined },
+    );
+    assert.equal(boundaryCollectionResponse.status, 200);
+    const boundaryCollection = (await boundaryCollectionResponse.json()) as {
+      first?: string;
+      totalItems?: number;
+    };
+    assert.equal(boundaryCollection.totalItems, 1);
+    assert.ok(boundaryCollection.first);
+    const boundaryPageResponse = await federation.fetch(request(boundaryCollection.first), {
+      contextData: undefined,
+    });
+    assert.equal(boundaryPageResponse.status, 200);
+    const boundaryPage = (await boundaryPageResponse.json()) as {
+      orderedItems?: { id?: string }[];
+    };
+    assert.deepEqual(
+      boundaryPage.orderedItems?.map((item) => item.id),
+      [`${publicOrigin}/ap/note/${boundaryVisiblePost.id}`],
+    );
+  });
 });
 
 const createContext = (): RequestContext<void> => {
@@ -906,17 +1096,39 @@ const createUnsignedCollectionFederation = () => {
   return federation;
 };
 
-const createSignedFederation = async () => {
+const createFeaturedFederation = () => {
+  const federation = createFederation<void>({ kv: new MemoryKvStore(), origin: publicOrigin });
+  federation.setActorDispatcher(
+    '/ap/actor/{identifier}',
+    (context, identifier) =>
+      new Person({
+        id: context.getActorUri(identifier),
+        featured: context.getFeaturedUri(identifier),
+      }),
+  );
+  federation
+    .setObjectDispatcher(Note, '/ap/note/{id}', dispatchLocalPostNote)
+    .authorize(authorizeLocalPostNote);
+  federation
+    .setFeaturedDispatcher('/ap/actor/{identifier}/featured', dispatchLocalProfileFeatured)
+    .setCounter(countLocalProfileFeatured)
+    .setFirstCursor(firstLocalProfileFeaturedCursor)
+    .authorize(authorizeLocalProfileFeatured);
+  return federation;
+};
+
+const createSignedFederation = async ({ actorUri = remoteActorUri }: { actorUri?: URL } = {}) => {
+  const keyUri = new URL('#main-key', actorUri);
   const remoteKeyPair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
   const remoteKey = new CryptographicKey({
-    id: remoteKeyUri,
-    owner: remoteActorUri,
+    id: keyUri,
+    owner: actorUri,
     publicKey: remoteKeyPair.publicKey,
   });
-  const remoteActor = new Person({ id: remoteActorUri, publicKey: remoteKey });
+  const remoteActor = new Person({ id: actorUri, publicKey: remoteKey });
   const documents = new Map<string, unknown>([
-    [remoteActorUri.href, await remoteActor.toJsonLd({ format: 'expand' })],
-    [remoteKeyUri.href, await remoteKey.toJsonLd({ format: 'expand' })],
+    [actorUri.href, await remoteActor.toJsonLd({ format: 'expand' })],
+    [keyUri.href, await remoteKey.toJsonLd({ format: 'expand' })],
   ]);
   const documentLoader = async (url: string) => ({
     contextUrl: null,
@@ -932,7 +1144,11 @@ const createSignedFederation = async () => {
   });
   federation.setActorDispatcher(
     '/ap/actor/{identifier}',
-    (context, identifier) => new Person({ id: context.getActorUri(identifier) }),
+    (context, identifier) =>
+      new Person({
+        id: context.getActorUri(identifier),
+        featured: context.getFeaturedUri(identifier),
+      }),
   );
   federation
     .setObjectDispatcher(Note, '/ap/note/{id}', dispatchLocalPostNote)
@@ -947,6 +1163,11 @@ const createSignedFederation = async () => {
     .setCounter(countLocalPostEmojiReactions)
     .setFirstCursor(firstLocalPostEmojiReactionsCursor)
     .authorize((context, values) => authorizeLocalPostNote(context, { id: values.id ?? '' }));
+  federation
+    .setFeaturedDispatcher('/ap/actor/{identifier}/featured', dispatchLocalProfileFeatured)
+    .setCounter(countLocalProfileFeatured)
+    .setFirstCursor(firstLocalProfileFeaturedCursor)
+    .authorize(authorizeLocalProfileFeatured);
 
   const createRequest = (postId: string) =>
     signRequest(
@@ -954,7 +1175,7 @@ const createSignedFederation = async () => {
         headers: { accept: 'application/activity+json' },
       }),
       remoteKeyPair.privateKey,
-      remoteKeyUri,
+      keyUri,
     );
   const fetch = async (postId: string) => {
     const request = await createRequest(postId);
@@ -969,7 +1190,7 @@ const createSignedFederation = async () => {
         headers: { accept: 'application/activity+json' },
       }),
       remoteKeyPair.privateKey,
-      remoteKeyUri,
+      keyUri,
     );
     return federation.fetch(request, {
       contextData: undefined,
@@ -977,7 +1198,33 @@ const createSignedFederation = async () => {
       onNotFound: () => new Response('Not found', { status: 404 }),
     });
   };
-  return { createRequest, federation, fetch, fetchCollection };
+  const fetchFeatured = async (profileId: string) => {
+    const request = await signRequest(
+      new Request(`${publicOrigin}/ap/actor/${profileId}/featured`, {
+        headers: { accept: 'application/activity+json' },
+      }),
+      remoteKeyPair.privateKey,
+      keyUri,
+    );
+    return federation.fetch(request, {
+      contextData: undefined,
+      onUnauthorized: () => new Response('Not found', { status: 404 }),
+      onNotFound: () => new Response('Not found', { status: 404 }),
+    });
+  };
+  const fetchFeaturedPage = async (url: string) => {
+    const request = await signRequest(
+      new Request(url, { headers: { accept: 'application/activity+json' } }),
+      remoteKeyPair.privateKey,
+      keyUri,
+    );
+    return federation.fetch(request, {
+      contextData: undefined,
+      onUnauthorized: () => new Response('Not found', { status: 404 }),
+      onNotFound: () => new Response('Not found', { status: 404 }),
+    });
+  };
+  return { createRequest, federation, fetch, fetchCollection, fetchFeatured, fetchFeaturedPage };
 };
 
 const createProfile = async ({

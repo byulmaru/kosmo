@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { after, test } from 'node:test';
+import { after, afterEach, mock, test } from 'node:test';
 import { asc, eq } from 'drizzle-orm';
 import {
   db,
@@ -20,10 +20,16 @@ import {
   ProfileState,
 } from '../enums';
 import { NotFoundError } from '../error';
+import { temporalClient } from '../temporal/client';
+import { KOSMO_TASK_QUEUE } from '../temporal/task-queue';
 import { pinProfilePost, unpinProfilePost } from './profile-pin';
 
 after(async () => {
   await pg.end();
+});
+
+afterEach(() => {
+  mock.restoreAll();
 });
 
 const createInstance = async (
@@ -219,6 +225,69 @@ test('pin accepts Unlisted, Followers Only, Reply, and Quote posts', async () =>
   assert.deepEqual(
     (await loadPins(profile.id)).map(({ postId }) => postId),
     [unlisted.id, followersOnly.id, reply.id, quote.id],
+  );
+});
+
+test('changed pin and unpin start Profile Update effects once with unique update IDs', async () => {
+  const { profile } = await createFixture();
+  const post = await createPost(profile.id);
+  const start = mock.method(temporalClient.workflow, 'start', async () => undefined as never);
+
+  const pinned = await pinProfilePost({ profileId: profile.id, postId: post.id });
+  const repeatedPin = await pinProfilePost({ profileId: profile.id, postId: post.id });
+  const unpinned = await unpinProfilePost({ profileId: profile.id, postId: post.id });
+  const repeatedUnpin = await unpinProfilePost({ profileId: profile.id, postId: post.id });
+
+  assert.equal(pinned.changed, true);
+  assert.equal(repeatedPin.changed, false);
+  assert.equal(unpinned.changed, true);
+  assert.equal(repeatedUnpin.changed, false);
+  assert.equal(start.mock.callCount(), 2);
+
+  const firstStart = start.mock.calls[0];
+  const secondStart = start.mock.calls[1];
+  assert.ok(firstStart);
+  assert.ok(secondStart);
+  assert.equal(firstStart.arguments[0], 'profileUpdateEffectsWorkflow');
+  assert.equal(secondStart.arguments[0], 'profileUpdateEffectsWorkflow');
+  const firstOptions = firstStart.arguments[1];
+  const secondOptions = secondStart.arguments[1];
+  assert.ok(firstOptions);
+  assert.ok(secondOptions);
+  assert.equal(firstOptions.taskQueue, KOSMO_TASK_QUEUE);
+  assert.equal(secondOptions.taskQueue, KOSMO_TASK_QUEUE);
+  assert.notEqual(firstOptions.workflowId, secondOptions.workflowId);
+  assert.deepEqual(firstOptions.args, [
+    { profileId: profile.id, updateId: firstOptions.workflowId },
+  ]);
+  assert.deepEqual(secondOptions.args, [
+    { profileId: profile.id, updateId: secondOptions.workflowId },
+  ]);
+});
+
+test('Profile Update effects start failure preserves committed pin changes', async () => {
+  const { profile } = await createFixture();
+  const post = await createPost(profile.id);
+  const start = mock.method(temporalClient.workflow, 'start', async () => {
+    throw new Error('Temporal unavailable');
+  });
+  const errorLog = mock.method(console, 'error', () => undefined);
+
+  const pinned = await pinProfilePost({ profileId: profile.id, postId: post.id });
+  assert.equal(pinned.changed, true);
+  assert.deepEqual(
+    (await loadPins(profile.id)).map(({ postId }) => postId),
+    [post.id],
+  );
+
+  const unpinned = await unpinProfilePost({ profileId: profile.id, postId: post.id });
+  assert.equal(unpinned.changed, true);
+  assert.deepEqual(await loadPins(profile.id), []);
+  assert.equal(start.mock.callCount(), 2);
+  assert.equal(errorLog.mock.callCount(), 2);
+  assert.equal(
+    errorLog.mock.calls[0]?.arguments[0],
+    'Profile Update effects Workflow start failed',
   );
 });
 

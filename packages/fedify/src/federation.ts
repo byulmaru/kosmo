@@ -46,6 +46,12 @@ import {
   firstLocalPostEmojiReactionsCursor,
 } from './local-post-reaction-collection';
 import { isCanonicalLocalProfileId } from './local-profile-actor';
+import {
+  authorizeLocalProfileFeatured,
+  countLocalProfileFeatured,
+  dispatchLocalProfileFeatured,
+  firstLocalProfileFeaturedCursor,
+} from './local-profile-featured';
 import { dispatchLocalProfileFollow } from './local-profile-follow';
 import { createLocalProfilePerson } from './local-profile-person';
 import { fedifyQueue } from './queue';
@@ -166,6 +172,12 @@ federation
   .setCounter(async (context, identifier) =>
     findActiveLocalProfile(context, identifier).then((profile) => profile?.followingCount ?? null),
   );
+
+federation
+  .setFeaturedDispatcher('/ap/actor/{identifier}/featured', dispatchLocalProfileFeatured)
+  .setCounter(countLocalProfileFeatured)
+  .setFirstCursor(firstLocalProfileFeaturedCursor)
+  .authorize(authorizeLocalProfileFeatured);
 
 federation
   .setObjectDispatcher(Note, '/ap/note/{id}', dispatchLocalPostNote)

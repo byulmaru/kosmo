@@ -46,6 +46,7 @@ export const createLocalProfilePerson = <TContextData>({
   const actorPathname = actorUri.pathname.replace(/\/$/, '');
   const inboxUri = new URL(`${actorPathname}/inbox`, actorUri);
   const outboxUri = new URL(`${actorPathname}/outbox`, actorUri);
+  const featuredUri = context.getFeaturedUri(profile.id);
   const sharedInboxUri = new URL('/inbox', context.canonicalOrigin);
   const profileUri = new URL(`/@${encodeURIComponent(profile.handle)}`, context.canonicalOrigin);
   const migrationSourceAliases = profile.migrationSourceUri
@@ -65,6 +66,7 @@ export const createLocalProfilePerson = <TContextData>({
     outbox: outboxUri,
     followers: context.getFollowersUri(profile.id),
     following: context.getFollowingUri(profile.id),
+    featured: featuredUri,
     publicKey: rsaKeyPair.cryptographicKey,
     assertionMethods: ed25519KeyPairs.map((keyPair) => keyPair.multikey),
     manuallyApprovesFollowers: profile.followPolicy === ProfileFollowPolicy.APPROVAL_REQUIRED,
