@@ -25,7 +25,6 @@ export {
   loadProfileBlockProtocolActivityByProfileBlockId,
   markProfileBlockProtocolDeliveryPending,
   markProfileBlockProtocolDeliverySettled,
-  markProfileBlockProtocolUndoPending,
   markProfileBlockProtocolUndoSettled,
   prepareProfileBlockProtocolUndo,
   recordProfileBlockProtocolTombstone,

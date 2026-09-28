@@ -312,14 +312,27 @@ test('Undo 전달도 누락된 recipient projection을 복원한 뒤 queue에 �
   );
 });
 
-test('Undo 전달은 recipient projection을 복원하지 못하면 PENDING으로 남겨 retry된다', async () => {
+test('Undo 전달 실패 후에도 같은 identity로 다시 queue에 인계한다', async () => {
   const fixture = await createFixture();
   const profileBlock = await db
     .insert(ProfileBlocks)
     .values({ ownerProfileId: fixture.localProfileId, targetProfileId: fixture.remoteProfileId })
     .returning()
     .then(firstOrThrow);
-  const contextFixture = createContextFixture({ lookupObject: async () => null });
+  let canMaterialize = false;
+  const contextFixture = createContextFixture({
+    lookupObject: async () =>
+      canMaterialize
+        ? new Person({
+            endpoints: new Endpoints({
+              sharedInbox: new URL(`${new URL(fixture.remoteActorUri).origin}/inbox`),
+            }),
+            id: new URL(fixture.remoteActorUri),
+            inbox: new URL(`${fixture.remoteActorUri}/inbox`),
+            preferredUsername: 'alice',
+          })
+        : null,
+  });
   mock.method(localOutboundFederation, 'createContext', () => contextFixture.context);
 
   await sendProfileBlock(profileBlock.id, { createIfMissing: true });
@@ -343,7 +356,27 @@ test('Undo 전달은 recipient projection을 복원하지 못하면 PENDING으�
     .from(ProfileBlockActivities)
     .where(eq(ProfileBlockActivities.activityUri, `${publicOrigin}/ap/block/${profileBlock.id}`))
     .then((rows) => rows[0]);
-  assert.equal(pendingActivity?.undoDeliveryState, 'PENDING');
+  assert.equal(pendingActivity?.undoDeliveryState, 'NONE');
+  canMaterialize = true;
+  assert.deepEqual(
+    await sendProfileBlockUndo({
+      ownerProfileId: fixture.localProfileId,
+      profileBlockId: profileBlock.id,
+      targetProfileId: fixture.remoteProfileId,
+    }),
+    { status: 'SETTLED' },
+  );
+  assert.equal(contextFixture.calls.length, 2);
+  assert.equal(
+    contextFixture.calls[1]?.activity.id?.href,
+    `${publicOrigin}/ap/block/${profileBlock.id}/undo`,
+  );
+  const settledActivity = await db
+    .select()
+    .from(ProfileBlockActivities)
+    .where(eq(ProfileBlockActivities.activityUri, `${publicOrigin}/ap/block/${profileBlock.id}`))
+    .then((rows) => rows[0]);
+  assert.equal(settledActivity?.undoDeliveryState, 'SETTLED');
 });
 
 type SendActivityCall = {

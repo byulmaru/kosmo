@@ -9,7 +9,7 @@ import {
   InstanceState,
   ProfileFollowPolicy,
 } from '@kosmo/core/enums';
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import type { InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
@@ -456,6 +456,79 @@ test('검증된 embedded Undo가 먼저 오면 tombstone이 늦은 Block을 막�
       .where(eq(ProfileBlockActivities.activityUri, block.id!.href)),
     [{ state: 'CLOSED' }],
   );
+});
+
+test('동시 Undo가 같은 미등록 원본 tombstone을 기록해도 수신 실패 없이 멱등 처리한다', async () => {
+  const fixture = await createFixture();
+  const block = new Block({
+    actor: fixture.remoteActorUri,
+    id: new URL(`https://${fixture.remoteActorUri.hostname}/activities/concurrent-block`),
+    object: fixture.localActorUri,
+  });
+  const inserted = Promise.withResolvers<number>();
+  const release = Promise.withResolvers<void>();
+  const firstUndo = db.transaction(async (tx) => {
+    const [connection] = await tx.execute<{ pid: number }>(
+      sql`SELECT pg_backend_pid()::int AS pid`,
+    );
+    assert.ok(connection);
+    await tx.insert(ProfileBlockActivities).values({
+      activityUri: block.id!.href,
+      actorUri: fixture.remoteActorUri.href,
+      objectUri: fixture.localActorUri.href,
+      origin: 'INBOUND',
+      ownerProfileId: fixture.remoteProfile.id,
+      targetProfileId: fixture.localProfile.id,
+      state: 'CLOSED',
+      closedAt: sql`now()`,
+    });
+    inserted.resolve(connection.pid);
+    await release.promise;
+  });
+  let secondUndo: ReturnType<typeof handleInboundUndoBlock> | undefined;
+
+  try {
+    const blockingPid = await inserted.promise;
+    secondUndo = handleInboundUndoBlock({
+      context: createContext(fixture.localProfile.id),
+      actorUri: fixture.remoteActorUri,
+      undoUri: new URL(`https://${fixture.remoteActorUri.hostname}/activities/concurrent-undo`),
+      embedded: block,
+      objectUri: block.id,
+      remoteActorProfileId: fixture.remoteProfile.id,
+    });
+    let blocked = false;
+    for (let attempt = 0; attempt < 250; attempt++) {
+      const [activity] = await db.execute<{ blocked: boolean }>(sql`
+        SELECT EXISTS (
+          SELECT 1 FROM pg_stat_activity WHERE ${blockingPid} = ANY(pg_blocking_pids(pid))
+        ) AS blocked
+      `);
+      if (activity?.blocked) {
+        blocked = true;
+        break;
+      }
+      await new Promise<void>((resolve) => setTimeout(resolve, 20));
+    }
+    assert.equal(blocked, true, 'second Undo should wait on the first tombstone insert');
+    release.resolve();
+    await firstUndo;
+    assert.equal(await secondUndo, true);
+    assert.equal(
+      (
+        await db
+          .select()
+          .from(ProfileBlockActivities)
+          .where(eq(ProfileBlockActivities.activityUri, block.id!.href))
+      ).length,
+      1,
+    );
+    await handleInboundBlock(createContext(fixture.localProfile.id), block);
+    assert.equal((await db.select().from(ProfileBlocks)).length, 0);
+  } finally {
+    release.resolve();
+    await Promise.allSettled([firstUndo, ...(secondUndo ? [secondUndo] : [])]);
+  }
 });
 
 const createFixture = async () => {

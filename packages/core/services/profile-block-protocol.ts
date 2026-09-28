@@ -166,6 +166,35 @@ export const recordProfileBlockProtocolTombstone = async (
       });
   });
 
+const insertUndoProtocolActivityInTransaction = async (
+  input: ProfileBlockProtocolActivityInput,
+  state: 'CLOSED' | 'CLOSING',
+  tx: Transaction,
+): Promise<{ row: ProfileBlockProtocolActivityRow; inserted: boolean }> => {
+  const inserted = await tx
+    .insert(ProfileBlockActivities)
+    .values({
+      activityUri: input.activityUri,
+      actorUri: input.actorUri,
+      objectUri: input.objectUri,
+      origin: 'INBOUND',
+      ownerProfileId: input.ownerProfileId,
+      targetProfileId: input.targetProfileId,
+      ...(input.profileBlockId === undefined ? {} : { profileBlockId: input.profileBlockId }),
+      state,
+      ...(state === 'CLOSED' ? { closedAt: sql`now()` } : {}),
+    })
+    .onConflictDoNothing({ target: ProfileBlockActivities.activityUri })
+    .returning()
+    .then(first);
+  const row = inserted ?? (await loadProtocolActivityInTransaction(input.activityUri, tx));
+  if (!row) {
+    throw new Error('Profile Block Undo activity disappeared after conflict handling');
+  }
+  assertProtocolActivityMatches(row, input);
+  return { row, inserted: inserted !== undefined };
+};
+
 /**
  * Claims the current directed pair. The Undo identity records a retry against
  * the same product row, even if another Block is created before it completes.
@@ -216,16 +245,21 @@ export const prepareProfileBlockProtocolUndo = async ({
           return { kind: 'NOOP' };
         }
       } else {
-        await tx.insert(ProfileBlockActivities).values({
-          activityUri: originalActivityUri,
-          actorUri,
-          objectUri,
-          origin: 'INBOUND',
-          ownerProfileId,
-          targetProfileId,
-          state: 'CLOSED',
-          closedAt: sql`now()`,
-        });
+        const { row, inserted } = await insertUndoProtocolActivityInTransaction(
+          {
+            activityUri: originalActivityUri,
+            actorUri,
+            objectUri,
+            origin: 'INBOUND',
+            ownerProfileId,
+            targetProfileId,
+          },
+          'CLOSED',
+          tx,
+        );
+        if (!inserted && row.state === 'CLOSED') {
+          return { kind: 'NOOP' };
+        }
       }
     }
 
@@ -241,17 +275,21 @@ export const prepareProfileBlockProtocolUndo = async ({
       .limit(1)
       .then(first);
     if (!current) {
-      await tx.insert(ProfileBlockActivities).values({
-        activityUri: undoActivityUri,
-        actorUri,
-        objectUri,
-        origin: 'INBOUND',
-        ownerProfileId,
-        targetProfileId,
-        state: 'CLOSED',
-        closedAt: sql`now()`,
-      });
-      return { kind: 'NOOP' };
+      const { row } = await insertUndoProtocolActivityInTransaction(
+        {
+          activityUri: undoActivityUri,
+          actorUri,
+          objectUri,
+          origin: 'INBOUND',
+          ownerProfileId,
+          targetProfileId,
+        },
+        'CLOSED',
+        tx,
+      );
+      return row.state === 'CLOSING' && row.profileBlockId
+        ? { kind: 'REMOVE', profileBlockId: row.profileBlockId }
+        : { kind: 'NOOP' };
     }
 
     await tx
@@ -265,17 +303,22 @@ export const prepareProfileBlockProtocolUndo = async ({
           inArray(ProfileBlockActivities.state, ['ACTIVE', 'CLOSING']),
         ),
       );
-    await tx.insert(ProfileBlockActivities).values({
-      activityUri: undoActivityUri,
-      actorUri,
-      objectUri,
-      origin: 'INBOUND',
-      ownerProfileId,
-      targetProfileId,
-      profileBlockId: current.id,
-      state: 'CLOSING',
-    });
-    return { kind: 'REMOVE', profileBlockId: current.id };
+    const { row } = await insertUndoProtocolActivityInTransaction(
+      {
+        activityUri: undoActivityUri,
+        actorUri,
+        objectUri,
+        origin: 'INBOUND',
+        ownerProfileId,
+        targetProfileId,
+        profileBlockId: current.id,
+      },
+      'CLOSING',
+      tx,
+    );
+    return row.state === 'CLOSING' && row.profileBlockId
+      ? { kind: 'REMOVE', profileBlockId: row.profileBlockId }
+      : { kind: 'NOOP' };
   });
 
 /** Closes the claimed pair generation after its exact product relation was removed. */
@@ -343,13 +386,6 @@ export const markProfileBlockProtocolUndoSettled = async (activityUri: string): 
       undoDeliveryState: 'SETTLED',
       updatedAt: sql`now()`,
     })
-    .where(protocolActivityCondition(activityUri));
-};
-
-export const markProfileBlockProtocolUndoPending = async (activityUri: string): Promise<void> => {
-  await db
-    .update(ProfileBlockActivities)
-    .set({ undoDeliveryState: 'PENDING', updatedAt: sql`now()` })
     .where(protocolActivityCondition(activityUri));
 };
 
