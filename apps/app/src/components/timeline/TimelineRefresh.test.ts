@@ -13,6 +13,7 @@ const mockModule = (specifier: string | URL, exports: object) =>
 const require = createRequire(import.meta.url);
 
 const platform = { OS: 'ios' };
+const originalWindowDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'window');
 let activeProfileId = 'profile-a';
 let renderer: ReactTestRenderer | null = null;
 let HomeTimelineScreen: ComponentType;
@@ -29,6 +30,7 @@ const toasts: Array<{
   message: string;
   options: {
     action?: { label: string; onPress: () => void };
+    persistent?: boolean;
   };
 }> = [];
 let toastCleanupCount = 0;
@@ -147,40 +149,56 @@ afterEach(async () => {
   toastCleanupCount = 0;
   activeProfileId = 'profile-a';
   platform.OS = 'ios';
+  if (originalWindowDescriptor) {
+    Object.defineProperty(globalThis, 'window', originalWindowDescriptor);
+  } else {
+    Reflect.deleteProperty(globalThis, 'window');
+  }
 });
 
-describe('Native timeline refresh', () => {
-  it('Home refresh owner는 pending 중 중복을 막고 실패 retry를 연결한다', async () => {
-    await act(async () => {
-      renderer = create(createElement(HomeTimelineScreen));
+describe('Timeline refresh', () => {
+  for (const os of ['ios', 'web'] as const) {
+    it(`Home refresh owner (${os})는 pending 중 중복을 막고 실패 retry를 연결한다`, async () => {
+      platform.OS = os;
+      if (os === 'web') {
+        Object.defineProperty(globalThis, 'window', {
+          configurable: true,
+          value: { scrollTo: () => undefined },
+        });
+      }
+
+      await act(async () => {
+        renderer = create(createElement(HomeTimelineScreen));
+      });
+
+      let postList = renderer?.root.findByType(MockPostList);
+      assert.equal(postList?.props.refreshing, false);
+
+      await act(async () => {
+        postList?.props.onRefresh();
+        postList?.props.onRefresh();
+      });
+
+      assert.equal(homeRequests.length, 1);
+      postList = renderer?.root.findByType(MockPostList);
+      assert.equal(postList?.props.refreshing, true);
+
+      await act(async () => homeRequests[0]?.error?.(new Error('network')));
+
+      assert.equal(renderer?.root.findAllByType(MockPostList).length, 1);
+      assert.equal(renderer?.root.findByType(MockPostList).props.refreshing, false);
+      assert.equal(toasts.at(-1)?.options.action?.label, '다시 시도');
+      assert.equal(toasts.at(-1)?.options.persistent, true);
+
+      await act(async () => toasts.at(-1)?.options.action?.onPress());
+      assert.equal(homeRequests.length, 2);
+      assert.equal(renderer?.root.findByType(MockPostList).props.refreshing, true);
+
+      await act(async () => homeRequests[1]?.complete?.());
+      assert.equal(renderer?.root.findByType(MockPostList).props.refreshing, false);
+      assert.equal(toastCleanupCount, 1);
     });
-
-    let postList = renderer?.root.findByType(MockPostList);
-    assert.equal(postList?.props.refreshing, false);
-
-    await act(async () => {
-      postList?.props.onRefresh();
-      postList?.props.onRefresh();
-    });
-
-    assert.equal(homeRequests.length, 1);
-    postList = renderer?.root.findByType(MockPostList);
-    assert.equal(postList?.props.refreshing, true);
-
-    await act(async () => homeRequests[0]?.error?.(new Error('network')));
-
-    assert.equal(renderer?.root.findAllByType(MockPostList).length, 1);
-    assert.equal(renderer?.root.findByType(MockPostList).props.refreshing, false);
-    assert.equal(toasts.at(-1)?.options.action?.label, '다시 시도');
-
-    await act(async () => toasts.at(-1)?.options.action?.onPress());
-    assert.equal(homeRequests.length, 2);
-    assert.equal(renderer?.root.findByType(MockPostList).props.refreshing, true);
-
-    await act(async () => homeRequests[1]?.complete?.());
-    assert.equal(renderer?.root.findByType(MockPostList).props.refreshing, false);
-    assert.equal(toastCleanupCount, 1);
-  });
+  }
 
   it('Local refresh owner는 실패 retry 중에도 목록 owner와 profile identity를 유지한다', async () => {
     await act(async () => {

@@ -198,15 +198,11 @@ function HomeContent({
         error: () => {
           refreshInFlight = false;
           setRefreshing(false);
-          if (Platform.OS === 'web') {
-            showToast('홈을 새로 불러오지 못했어요.', { tone: 'danger' });
-          } else {
-            refreshToastCleanup = showToast('홈을 새로 불러오지 못했어요.', {
-              action: { label: '다시 시도', onPress: refresh },
-              persistent: true,
-              tone: 'danger',
-            });
-          }
+          refreshToastCleanup = showToast('홈을 새로 불러오지 못했어요.', {
+            action: { label: '다시 시도', onPress: refresh },
+            persistent: true,
+            tone: 'danger',
+          });
         },
       });
     };
