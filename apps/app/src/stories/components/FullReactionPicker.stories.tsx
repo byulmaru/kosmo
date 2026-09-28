@@ -275,6 +275,9 @@ const meta = {
     'WebGridGeometryContract',
     'WebMobileGridGeometryContract',
     'RecentSectionContract',
+    'RecentTwoRowsWebContract',
+    'RecentTwoRowsMobileWebContract',
+    'RecentTwoRowsNativeContract',
     'reactionOptions',
     'SequentialKeyboardBrowseContract',
   ],
@@ -408,6 +411,37 @@ export const RecentSectionContract: Story = {
       '불꽃 🔥',
       '웃음 😂',
     ]);
+  },
+};
+
+const fullRecentValues = reactionOptions.map((option) => option.id);
+
+export const RecentTwoRowsWebContract: Story = {
+  args: { recentValues: fullRecentValues },
+  play: async ({ canvasElement }) => {
+    const rows = within(canvasElement).getAllByTestId(/^full-reaction-section-recent-row-/);
+    expect(rows).toHaveLength(2);
+    expect(rows.map((row) => within(row).getAllByRole('button').length)).toEqual([8, 8]);
+  },
+};
+
+export const RecentTwoRowsMobileWebContract: Story = {
+  args: { recentValues: fullRecentValues },
+  globals: mobileGlobals,
+  play: async ({ canvasElement }) => {
+    const rows = within(canvasElement).getAllByTestId(/^full-reaction-section-recent-row-/);
+    expect(rows).toHaveLength(2);
+    expect(rows.map((row) => within(row).getAllByRole('button').length)).toEqual([6, 6]);
+  },
+};
+
+export const RecentTwoRowsNativeContract: Story = {
+  ...MobileBrowse,
+  args: { presentation: 'mobile', recentValues: fullRecentValues },
+  play: async ({ canvasElement }) => {
+    const rows = within(canvasElement).getAllByTestId(/^full-reaction-section-recent-row-/);
+    expect(rows).toHaveLength(2);
+    expect(rows.map((row) => within(row).getAllByRole('button').length)).toEqual([7, 7]);
   },
 };
 

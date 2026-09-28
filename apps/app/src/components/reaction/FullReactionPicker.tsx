@@ -87,7 +87,7 @@ export function FullReactionPicker({
     state === 'searchResults'
       ? [{ id: 'results', title: '반응', options: searchResults }]
       : state === 'browse'
-        ? createBrowseSections(options, recentValues)
+        ? createBrowseSections(options, recentValues, columns)
         : [];
   useEffect(() => {
     if (mobile) {
@@ -270,12 +270,15 @@ type ReactionGridSection = Readonly<{
 function createBrowseSections(
   options: ReadonlyArray<FullReactionPickerOption>,
   recentValues: ReadonlyArray<string>,
+  columns: number,
 ): ReactionGridSection[] {
   const categories = Array.from(
     new Map(options.map((option) => [option.category, option.categoryLabel])).entries(),
     ([id, title]) => ({ id, options: options.filter((option) => option.category === id), title }),
   );
-  const recentOptions = recentValues.flatMap((id) => options.find((option) => option.id === id) ?? []);
+  const recentOptions = recentValues
+    .flatMap((id) => options.find((option) => option.id === id) ?? [])
+    .slice(0, columns * 2);
   return [
     ...(options.some((option) => option.quick)
       ? [{

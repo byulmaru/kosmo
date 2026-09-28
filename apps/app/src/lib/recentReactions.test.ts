@@ -22,21 +22,21 @@ before(async () => {
 });
 beforeEach(() => values.clear());
 
-test('최근 반응은 프로필별로 중복 없이 최신 8개만 보관하며 빠른 연속 선택도 순서대로 저장한다', async () => {
+test('최근 반응은 프로필별로 중복 없이 최신 16개만 보관하며 빠른 연속 선택도 순서대로 저장한다', async () => {
   await Promise.all(
-    Array.from({ length: 10 }, (_, index) => recordRecentReaction('profile-a', `emoji-${index}`)),
+    Array.from({ length: 18 }, (_, index) => recordRecentReaction('profile-a', `emoji-${index}`)),
   );
   assert.deepEqual(
     await readRecentReactions('profile-a'),
-    Array.from({ length: 8 }, (_, index) => `emoji-${9 - index}`),
+    Array.from({ length: 16 }, (_, index) => `emoji-${17 - index}`),
   );
 
   await recordRecentReaction('profile-a', 'emoji-5');
   await recordRecentReaction('profile-b', 'emoji-other');
   assert.deepEqual((await readRecentReactions('profile-a')).slice(0, 3), [
     'emoji-5',
-    'emoji-9',
-    'emoji-8',
+    'emoji-17',
+    'emoji-16',
   ]);
   assert.deepEqual(await readRecentReactions('profile-b'), ['emoji-other']);
 });
