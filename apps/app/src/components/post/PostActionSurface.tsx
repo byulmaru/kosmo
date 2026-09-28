@@ -43,7 +43,7 @@ const postActionSurfaceFragment = graphql`
 export function PostActionSurface({
   actionBarStyle,
   onDeleted,
-  onQuote,
+  // onQuote,
   reactionSummaryStyle,
   reply,
   socialActionTarget,
@@ -86,7 +86,7 @@ export function PostActionSurface({
         moreItems={moreItems}
         onBookmarkError={onBookmarkError}
         onDeleted={onDeleted}
-        onQuote={onQuote}
+        onQuote={undefined /* onQuote */}
         onRepostError={onRepostError}
         onResolutionRequired={authentication.resolve}
         post={target.actionBar}

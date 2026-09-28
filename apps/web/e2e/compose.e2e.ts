@@ -48,6 +48,8 @@ test.beforeEach(async () => {
   await resetE2EDatabase();
 });
 
+/*
+ * PROD-959 temporarily hides the Quote menu entry.
 test('목록의 재게시 메뉴에서 Quote Composer를 연다', async ({ context, page }) => {
   const sourceBody = 'E2E Quote direct source body';
   const viewer = await createE2ESession({
@@ -96,8 +98,9 @@ test('목록의 재게시 메뉴에서 Quote Composer를 연다', async ({ conte
   await expect(footer).toBeVisible();
   await expect(composer.getByTestId('post-composer-editor')).toHaveCSS('border-width', '0px');
 });
+*/
 
-for (const mode of ['reply', 'quote'] as const) {
+for (const mode of ['reply' /* 'quote' temporarily hidden by PROD-959 */] as const) {
   test(`390px ${mode === 'reply' ? 'Reply' : 'Quote'}의 Escape·닫기·Browser Back/Forward는 초안을 보호한다`, async ({
     context,
     page,
