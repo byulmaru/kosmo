@@ -52,6 +52,7 @@ mock.module('expo-router', {
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module('react-native', {
   exports: {
+    ScrollView: 'ScrollView',
     StyleSheet: { create: <T>(styles: T) => styles },
   },
 } as unknown as Parameters<typeof mock.module>[1]);

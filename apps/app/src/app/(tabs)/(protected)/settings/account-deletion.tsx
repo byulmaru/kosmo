@@ -10,6 +10,7 @@ import { returnToSettingsParent } from '@/components/settings/settingsNavigation
 import { useSettingsDetailHeaderMode } from '@/components/settings/SettingsRouteContext';
 import { useNavigationGuard } from '@/components/shell/NavigationGuardContext';
 import { IconButton } from '@/components/ui/IconButton';
+import { RouteScrollContainer } from '@/components/ui/RouteScrollContainer';
 import { StateView } from '@/components/ui/StateView';
 import { useAccountDeletionCleanup } from '@/session/logout';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -64,7 +65,13 @@ export default function SettingsAccountDeletionRoute() {
     ) : undefined;
 
   return (
-    <>
+    <RouteScrollContainer
+      nativeScrollProps={{
+        contentContainerStyle: styles.nativeContent,
+        style: styles.nativeRoot,
+      }}
+      webStyle={styles.webRoot}
+    >
       {detailHeaderMode !== 'hidden' ? (
         <PageHeader leading={backButton} title="코스모 탈퇴" />
       ) : null}
@@ -75,7 +82,7 @@ export default function SettingsAccountDeletionRoute() {
       >
         <SettingsAccountDeletionContent onCancel={navigateBack} onPendingChange={setPending} />
       </RouteBoundary>
-    </>
+    </RouteScrollContainer>
   );
 }
 
@@ -185,4 +192,7 @@ const styles = StyleSheet.create({
     minHeight: 44,
     width: 44,
   },
+  nativeContent: { flexGrow: 1, minWidth: 0, width: '100%' },
+  nativeRoot: { flex: 1, minWidth: 0, width: '100%' },
+  webRoot: { minWidth: 0, width: '100%' },
 });
