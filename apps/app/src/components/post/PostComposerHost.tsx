@@ -141,7 +141,7 @@ export function PostComposerHost({
             : mode === 'mobile'
               ? styles.mobileDialog
               : styles.overlayDialog,
-          { backgroundColor: composerSurface },
+          { backgroundColor: composerSurface, borderColor: theme.borderDefault },
         ]}
         testID={mode === 'rail' ? 'post-composer-rail' : 'post-composer-dialog'}
       >
@@ -241,6 +241,7 @@ const styles = StyleSheet.create({
   railDialog: { borderWidth: 0, width: '100%' },
   overlayDialog: {
     borderRadius: radii.lg,
+    borderWidth: 1,
     marginTop: spacing.xxl,
     maxWidth: 640,
     maxHeight: 'calc(100dvh - 96px)' as never,
