@@ -258,14 +258,61 @@ async function respond(request: Request, data: Record<string, unknown>) {
 describe('SettingsMutedProfiles with the real ProfileMuteAction', () => {
   it('공통 Relay Profile 행이 뮤트 프로필의 표시 정보를 Store 변경에 맞춰 갱신한다', async () => {
     const environment = createEnvironment();
-    await render(environment);
-    await respond(latestRequest('SettingsMutedProfilesQuery'), firstPage());
+    const page = firstPage();
+    const edges = page.currentSession.selectedProfile.profileMutes.edges;
+    const firstTarget = edges[0]!.node.targetProfile;
+    firstTarget.displayName = '같은 이름';
 
-    let row = one('ProfileRow');
-    assert.equal(row.props.avatarLabel, '뮤트 대상');
-    assert.equal(row.props.avatarUri, 'https://media.example/target.png');
-    assert.equal(row.props.displayName, '뮤트 대상');
-    assert.equal(row.props.relativeHandle, '@target');
+    const secondTargetProfileId = 'profile:other';
+    const secondProfileMuteId = 'profile-mute:other';
+    edges.push({
+      cursor: 'cursor-other',
+      node: {
+        __typename: 'ProfileMute',
+        id: secondProfileMuteId,
+        targetProfile: {
+          __typename: 'Profile',
+          id: secondTargetProfileId,
+          displayName: '같은 이름',
+          handle: 'other',
+          relativeHandle: '@other@example.org',
+          avatar: { id: 'avatar:other', url: 'https://media.example/other.png' },
+          viewerState: {
+            __typename: 'ProfileViewerState',
+            profileMute: { __typename: 'ProfileMute', id: secondProfileMuteId },
+          },
+        },
+      },
+    });
+    page.currentSession.selectedProfile.profileMutes.pageInfo.endCursor = 'cursor-other';
+
+    await render(environment);
+    await respond(latestRequest('SettingsMutedProfilesQuery'), page);
+
+    let rows = all('ProfileRow');
+    assert.equal(rows.length, 2);
+    assert.deepEqual(
+      rows.map((row) => ({
+        avatarLabel: row.props.avatarLabel,
+        avatarUri: row.props.avatarUri,
+        displayName: row.props.displayName,
+        relativeHandle: row.props.relativeHandle,
+      })),
+      [
+        {
+          avatarLabel: '같은 이름',
+          avatarUri: 'https://media.example/target.png',
+          displayName: '같은 이름',
+          relativeHandle: '@target',
+        },
+        {
+          avatarLabel: '같은 이름',
+          avatarUri: 'https://media.example/other.png',
+          displayName: '같은 이름',
+          relativeHandle: '@other@example.org',
+        },
+      ],
+    );
 
     await act(async () => {
       environment.commitUpdate((store) => {
@@ -279,11 +326,29 @@ describe('SettingsMutedProfiles with the real ProfileMuteAction', () => {
       });
     });
 
-    row = one('ProfileRow');
-    assert.equal(row.props.avatarLabel, '변경된 이름');
-    assert.equal(row.props.avatarUri, 'https://media.example/updated.png');
-    assert.equal(row.props.displayName, '변경된 이름');
-    assert.equal(row.props.relativeHandle, '@updated');
+    rows = all('ProfileRow');
+    assert.deepEqual(
+      rows.map((row) => ({
+        avatarLabel: row.props.avatarLabel,
+        avatarUri: row.props.avatarUri,
+        displayName: row.props.displayName,
+        relativeHandle: row.props.relativeHandle,
+      })),
+      [
+        {
+          avatarLabel: '변경된 이름',
+          avatarUri: 'https://media.example/updated.png',
+          displayName: '변경된 이름',
+          relativeHandle: '@updated',
+        },
+        {
+          avatarLabel: '같은 이름',
+          avatarUri: 'https://media.example/other.png',
+          displayName: '같은 이름',
+          relativeHandle: '@other@example.org',
+        },
+      ],
+    );
 
     await act(async () => {
       environment.commitUpdate((store) => {
@@ -292,7 +357,9 @@ describe('SettingsMutedProfiles with the real ProfileMuteAction', () => {
         target.setValue('', 'displayName');
       });
     });
-    assert.equal(one('ProfileRow').props.avatarLabel, 'target');
+    rows = all('ProfileRow');
+    assert.equal(rows[0]?.props.avatarLabel, 'target');
+    assert.equal(rows[1]?.props.avatarLabel, '같은 이름');
   });
 
   it('실제 뮤트 해제 버튼의 pending·실패·성공을 거쳐 Relay normalized 상태를 갱신한다', async () => {
