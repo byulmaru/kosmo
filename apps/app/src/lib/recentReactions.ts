@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export const RECENT_REACTION_LIMIT = 8;
+export const RECENT_REACTION_LIMIT = 16;
 const pendingWrites = new Map<string, Promise<string[]>>();
 
 const storageKey = (profileId: string) => `kosmo:recent-reactions:${profileId}`;

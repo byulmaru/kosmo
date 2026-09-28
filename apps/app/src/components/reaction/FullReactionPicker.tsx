@@ -314,7 +314,9 @@ function createBrowseItems(
     ...createGridItems(
       'recent',
       '최근 사용',
-      recentValues.flatMap((id) => options.find((option) => option.id === id) ?? []),
+      recentValues
+        .flatMap((id) => options.find((option) => option.id === id) ?? [])
+        .slice(0, columns * 2),
       columns,
     ),
     ...categories.flatMap(({ id, options: categoryOptions, title }) =>
