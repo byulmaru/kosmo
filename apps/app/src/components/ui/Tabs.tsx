@@ -224,7 +224,7 @@ export function Tab<Value extends string>({ option }: TabProps<Value>) {
         context.onValueChange(option.value);
       }}
       ref={optionRef}
-      style={(state) => [
+      style={[
         context.variant === 'pill' ? styles.pillTab : styles.underlineTab,
         {
           backgroundColor:
@@ -243,7 +243,7 @@ export function Tab<Value extends string>({ option }: TabProps<Value>) {
                   : theme.border
                 : 'transparent'
               : theme.border,
-          opacity: disabled ? 0.45 : (web ? webPressed : state.pressed) ? 0.85 : 1,
+          opacity: disabled ? 0.45 : 1,
           ...(focusVisible
             ? {
                 outlineColor: theme.stateFocusRing,
@@ -271,39 +271,71 @@ export function Tab<Value extends string>({ option }: TabProps<Value>) {
           } as WebTabProps)
         : undefined)}
     >
-      {context.variant === 'pill' && !web ? (
-        <View
-          style={[
-            styles.pillSurface,
-            {
-              backgroundColor: selected ? theme.background : theme.card,
-              borderColor: selected ? theme.primary : theme.border,
-            },
-          ]}
-        >
-          <Text style={[styles.pillLabel, { color: theme.text }]}>{option.label}</Text>
-        </View>
-      ) : (
-        <Text
-          style={[
-            context.variant === 'pill' ? styles.pillLabel : styles.underlineLabel,
-            {
-              color:
-                context.variant === 'underline' && !selected ? theme.textSecondary : theme.text,
-            },
-          ]}
-        >
-          {option.label}
-        </Text>
-      )}
-      {context.variant === 'underline' && selected && !disabled ? (
-        <View style={[styles.tabIndicator, { backgroundColor: theme.actionPrimaryBase }]} />
-      ) : null}
+      {(state) => {
+        const feedbackColor = disabled
+          ? 'transparent'
+          : (web ? webPressed || state.pressed : state.pressed)
+            ? theme.statePressed
+            : web && (state as { hovered?: boolean }).hovered
+              ? theme.stateHover
+              : 'transparent';
+        const feedback = (
+          <View
+            pointerEvents="none"
+            style={[
+              styles.feedbackSurface,
+              context.variant === 'pill' && styles.pillFeedback,
+              { backgroundColor: feedbackColor },
+            ]}
+          />
+        );
+
+        return (
+          <>
+            {context.variant === 'pill' && !web ? (
+              <View
+                style={[
+                  styles.pillSurface,
+                  {
+                    backgroundColor: selected ? theme.background : theme.card,
+                    borderColor: selected ? theme.primary : theme.border,
+                  },
+                ]}
+              >
+                {feedback}
+                <Text style={[styles.pillLabel, { color: theme.text }]}>{option.label}</Text>
+              </View>
+            ) : (
+              <>
+                {feedback}
+                <Text
+                  style={[
+                    context.variant === 'pill' ? styles.pillLabel : styles.underlineLabel,
+                    {
+                      color:
+                        context.variant === 'underline' && !selected
+                          ? theme.textSecondary
+                          : theme.text,
+                    },
+                  ]}
+                >
+                  {option.label}
+                </Text>
+              </>
+            )}
+            {context.variant === 'underline' && selected && !disabled ? (
+              <View style={[styles.tabIndicator, { backgroundColor: theme.actionPrimaryBase }]} />
+            ) : null}
+          </>
+        );
+      }}
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
+  feedbackSurface: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
+  pillFeedback: { borderRadius: radius[8] },
   underlineList: {
     borderBottomWidth: Platform.OS === 'android' ? 0 : borderWidths[1],
     flexDirection: 'row',

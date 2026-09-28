@@ -90,6 +90,8 @@ export const UnderlineInteractionContract: Story = {
     const latest = within(group).getByRole('tab', { name: latestText });
     const media = within(group).getByRole('tab', { name: mediaText });
     const popularLabel = within(popular).getByText(popularText);
+    const popularFeedback = popular.firstElementChild;
+    const mediaFeedback = media.firstElementChild;
     const indicator = popular.lastElementChild;
 
     await step('기본 상태와 접근성 확인', async () => {
@@ -104,6 +106,7 @@ export const UnderlineInteractionContract: Story = {
         borderBottomWidth: '1px',
       });
       expect(getComputedStyle(popular).backgroundColor).toBe('rgba(0, 0, 0, 0)');
+      expect(getComputedStyle(popularFeedback as Element).backgroundColor).toBe('rgba(0, 0, 0, 0)');
       expect(popularLabel).toHaveStyle({
         fontFamily: fontFamilies.ui,
         fontSize: '14px',
@@ -144,9 +147,19 @@ export const UnderlineInteractionContract: Story = {
     });
 
     await step('포인터 선택과 hover 상태 확인', async () => {
+      await userEvent.hover(popular);
+      expect(getComputedStyle(popularFeedback as Element).backgroundColor).toBe(
+        'rgba(0, 0, 0, 0.04)',
+      );
+      await userEvent.hover(media);
+      expect(getComputedStyle(mediaFeedback as Element).backgroundColor).toBe(
+        'rgba(0, 0, 0, 0.04)',
+      );
       await userEvent.pointer({ keys: '[MouseLeft>]', target: media });
       await new Promise((resolve) => setTimeout(resolve, 50));
-      expect(getComputedStyle(media).opacity).toBe('0.85');
+      expect(getComputedStyle(mediaFeedback as Element).backgroundColor).toBe(
+        'rgba(0, 0, 0, 0.08)',
+      );
       await userEvent.click(media);
       expect(media).toHaveFocus();
       expect(media).toHaveAttribute('aria-selected', 'true');
@@ -173,6 +186,7 @@ export const PillInteractionContract: Story = {
     const group = canvas.getByRole('tablist', { name: '검색 결과 유형' });
     const popular = within(group).getByRole('tab', { name: '인기' });
     const latest = within(group).getByRole('tab', { name: '최신' });
+    const feedback = popular.firstElementChild;
 
     await step('Pill 상태와 포커스 확인', async () => {
       expect(popular).toHaveAttribute('aria-selected', 'true');
@@ -189,9 +203,11 @@ export const PillInteractionContract: Story = {
     });
 
     await step('Pill 탭 선택과 비활성 상태 확인', async () => {
+      await userEvent.hover(popular);
+      expect(getComputedStyle(feedback as Element).backgroundColor).toBe('rgba(0, 0, 0, 0.04)');
       await userEvent.pointer({ keys: '[MouseLeft>]', target: popular });
       await new Promise((resolve) => setTimeout(resolve, 50));
-      expect(getComputedStyle(popular).opacity).toBe('0.85');
+      expect(getComputedStyle(feedback as Element).backgroundColor).toBe('rgba(0, 0, 0, 0.08)');
       await userEvent.click(popular);
       expect(args.onValueChange).toHaveBeenCalledTimes(1);
       expect(args.onValueChange).toHaveBeenLastCalledWith('popular');
