@@ -6,7 +6,6 @@ import {
   loadProfileBlockProtocolActivityByProfileBlockId,
   markProfileBlockProtocolDeliveryPending,
   markProfileBlockProtocolDeliverySettled,
-  markProfileBlockProtocolUndoPending,
   markProfileBlockProtocolUndoSettled,
 } from '@kosmo/core/services';
 import { and, eq, isNotNull } from 'drizzle-orm';
@@ -131,7 +130,7 @@ const dispatchProfileBlockActivity = async ({
   readonly actorProfileId: string;
   readonly context: Context<LocalOutboundContextData>;
   readonly objectUri: URL;
-  readonly onPending: () => Promise<void>;
+  readonly onPending?: () => Promise<void>;
   readonly orderingKey: string;
   readonly targetProfileId: string;
 }): Promise<void> => {
@@ -149,7 +148,7 @@ const dispatchProfileBlockActivity = async ({
     return;
   }
 
-  await onPending();
+  await onPending?.();
   await materializeRemoteProfileActor({
     actorUri: objectUri,
     context,
@@ -314,7 +313,6 @@ export const sendProfileBlockUndo = async ({
     actorProfileId: ownerProfileId,
     context,
     objectUri,
-    onPending: () => markProfileBlockProtocolUndoPending(protocol.activityUri),
     orderingKey: getProfileBlockOrderingKey(actorUri, objectUri),
     targetProfileId,
   });
