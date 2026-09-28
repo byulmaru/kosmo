@@ -1,7 +1,10 @@
+import { randomUUID } from 'node:crypto';
 import { and, eq, inArray, isNotNull } from 'drizzle-orm';
 import { db, first, Instances, Posts, ProfilePinnedPosts, Profiles } from '../db';
 import { InstanceKind, PostVisibility } from '../enums';
 import { NotFoundError } from '../error';
+import { temporalClient } from '../temporal/client';
+import { KOSMO_TASK_QUEUE } from '../temporal/task-queue';
 import { postVisibilityCondition } from '../visibility/post';
 import { visibleProfileWhere } from '../visibility/profile';
 import type { Transaction } from '../db';
@@ -70,11 +73,29 @@ const ensureEligiblePost = async (tx: Transaction, { profileId, postId }: Profil
   }
 };
 
+const startProfileUpdateEffects = async (profileId: string, updateId: string): Promise<void> => {
+  try {
+    await temporalClient.withDeadline(Date.now() + 5_000, () =>
+      temporalClient.workflow.start('profileUpdateEffectsWorkflow', {
+        args: [{ profileId, updateId }],
+        taskQueue: KOSMO_TASK_QUEUE,
+        workflowId: updateId,
+      }),
+    );
+  } catch (error) {
+    console.error('Profile Update effects Workflow start failed', {
+      error,
+      profileId,
+      updateId,
+    });
+  }
+};
+
 export const pinProfilePost = async ({
   profileId,
   postId,
 }: ProfilePinInput): Promise<ProfilePinResult> => {
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     await ensureLocalProfile(tx, profileId);
     await ensureEligiblePost(tx, { profileId, postId });
 
@@ -85,15 +106,24 @@ export const pinProfilePost = async ({
       .returning()
       .then(first);
 
-    return { changed: inserted !== undefined };
+    return {
+      changed: inserted !== undefined,
+      updateId: inserted ? randomUUID() : undefined,
+    };
   });
+
+  if (result.updateId) {
+    await startProfileUpdateEffects(profileId, result.updateId);
+  }
+
+  return { changed: result.changed };
 };
 
 export const unpinProfilePost = async ({
   profileId,
   postId,
-}: ProfilePinInput): Promise<ProfilePinResult> =>
-  db.transaction(async (tx) => {
+}: ProfilePinInput): Promise<ProfilePinResult> => {
+  const result = await db.transaction(async (tx) => {
     await ensureLocalProfile(tx, profileId);
 
     const deleted = await tx
@@ -104,5 +134,15 @@ export const unpinProfilePost = async ({
       .returning()
       .then(first);
 
-    return { changed: deleted !== undefined };
+    return {
+      changed: deleted !== undefined,
+      updateId: deleted ? randomUUID() : undefined,
+    };
   });
+
+  if (result.updateId) {
+    await startProfileUpdateEffects(profileId, result.updateId);
+  }
+
+  return { changed: result.changed };
+};
