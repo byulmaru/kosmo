@@ -705,6 +705,7 @@ function ViewerImage({
   return (
     <View style={frameSize ? [styles.imageFrame, frameSize] : styles.imageFrameFallback}>
       <Image
+        accessible
         accessibilityLabel={accessibilityLabel}
         accessibilityRole="image"
         accessibilityState={{ busy: status === 'loading' }}

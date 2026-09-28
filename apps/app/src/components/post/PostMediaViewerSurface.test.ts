@@ -763,6 +763,7 @@ describe('PostMediaViewerSurface', () => {
 
   it('Ready image는 contain, trimmed alt name 또는 document fallback을 사용한다', async () => {
     await render({ currentIndex: 0, media: [media(1, '  Trimmed alt  ')] });
+    assert.equal(image().props.accessible, true);
     assert.equal(image().props.accessibilityLabel, 'Trimmed alt');
     assert.equal(image().props.accessibilityRole, 'image');
     assert.equal(image().props.resizeMode, 'contain');
