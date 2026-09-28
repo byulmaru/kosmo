@@ -6,6 +6,7 @@ Kosmo Web의 PostHog client는 `prod` 채널에서 공개 `posthogKey`와 `posth
 
 - 로그인 후 identity는 내부 immutable Account ID로 `identify`한다. Profile ID를 Account identity로 사용하지 않는다.
 - Account 이름·handle·email과 같은 trait, 게시글 본문·미디어·대상 Post ID·대상/선택 Profile ID는 명시적 event property로 보내지 않는다.
+- 프로필 bio는 명시적 event property로 보내지 않는다. Web에서 렌더링되는 프로필 상세와 공유 프로필 목록의 bio DOM 영역은 Session Replay에서 마스킹하고 autocapture에서 제외한다. 표시명·handle과 나머지 화면은 기존 수집 동작을 유지한다.
 - Reaction은 `❤️`만 `default`, `🥹`, `🎉`, `👀`, `☘️`, `🌈`와 앞으로 승인되지 않은 값은 `custom`으로 분류한다. 원문 emoji, ID, 이름, shortcode는 보내지 않는다.
 - PostHog SDK의 identity/session metadata는 SDK 경계에서 관리하며, 애플리케이션 event property allowlist와 혼동하지 않는다.
 

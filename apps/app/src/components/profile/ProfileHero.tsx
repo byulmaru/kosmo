@@ -18,6 +18,7 @@ import { useToast } from '@/components/ui/ToastProvider';
 import { getPublicWebOrigin } from '@/config/origin';
 import { useTheme } from '@/theme/ThemeProvider';
 import { breakpoints, radius, space, textStyles } from '@/theme/tokens';
+import { ProfileBioPrivacyBoundary } from './ProfileBioPrivacyBoundary';
 import { ProfileBlockAction } from './ProfileBlockAction';
 import { ProfileMoreMenu } from './ProfileMoreMenu';
 import { ProfileMuteAction } from './ProfileMuteAction';
@@ -287,7 +288,9 @@ export function ProfileHero({
       <View style={styles.body}>
         <ProfileNameBlock heading={heading} profile={data} style={styles.identity} variant="hero" />
         {data.bio ? (
-          <Text style={[styles.bio, { color: theme.foregroundPrimary }]}>{data.bio}</Text>
+          <ProfileBioPrivacyBoundary>
+            <Text style={[styles.bio, { color: theme.foregroundPrimary }]}>{data.bio}</Text>
+          </ProfileBioPrivacyBoundary>
         ) : null}
         {data.tags.length ? (
           <View style={styles.tags} testID="profile-tag-list">

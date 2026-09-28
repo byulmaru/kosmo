@@ -24,6 +24,12 @@ const imageProfile = profile({
   id: 'profile-hero-images',
   relativeHandle: '@images',
 });
+const bioProfile = profile({
+  bio: 'Synthetic bio for Web Replay masking: river comet 47.',
+  displayName: '소개 있는 프로필',
+  id: 'profile-hero-bio-privacy',
+  relativeHandle: '@bio-privacy',
+});
 const taggedProfile = profile({
   displayName: '태그 프로필',
   id: 'profile-hero-tags',
@@ -66,6 +72,7 @@ const mutedProfile = profile({
 
 const storyProfiles = [
   defaultProfile,
+  bioProfile,
   imageProfile,
   taggedProfile,
   longTaggedProfile,
