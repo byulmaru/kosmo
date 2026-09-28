@@ -20,6 +20,7 @@ const TextHost = 'Text' as unknown as ElementType;
 const ViewHost = 'View' as unknown as ElementType;
 let exitMounted = false;
 let platformOS: 'ios' | 'web' = 'ios';
+let dismissAnimationTarget: number | undefined;
 let panResponderConfig:
   | {
       onMoveShouldSetPanResponder?: (
@@ -35,8 +36,23 @@ function flattenStyle(style: unknown) {
   return Object.assign({}, ...(Array.isArray(style) ? style : [style]).filter(Boolean));
 }
 
+class AnimatedValueMock {
+  constructor(public value: number) {}
+  setValue(value: number) {
+    this.value = value;
+  }
+}
+
 mockModule('react-native', {
-  Animated: { View: 'AnimatedView' },
+  Animated: {
+    Value: AnimatedValueMock,
+    View: 'AnimatedView',
+    timing: (_value: AnimatedValueMock, config: { toValue: number }) => {
+      dismissAnimationTarget = config.toValue;
+      return { start() {}, stop() {} };
+    },
+  },
+  Easing: { bezier: () => () => 0 },
   Modal: 'Modal',
   PanResponder: {
     create: (config: typeof panResponderConfig) => {
@@ -65,6 +81,7 @@ mockModule('@/components/ui/ActionMenuPortal', {
 });
 mockModule('@/theme/ThemeProvider', {
   useElevation: () => ({ floating: {}, overlay: {} }),
+  useReducedMotion: () => false,
   useTheme: () => ({
     backgroundElevated: 'elevated',
     borderDefault: 'border',
@@ -99,6 +116,7 @@ mockModule('@/theme/tokens', {
   layoutRecipes: {
     actionMenuSurface: { flexDirection: 'column', gap: 0, padding: 4, borderRadius: 12 },
   },
+  motion: { duration: { standard: 200 }, easingPoints: { exit: [0.4, 0, 1, 1] } },
   radius: { 16: 16, full: 999 },
   space: { 4: 4, 8: 8, 12: 12 },
   textStyles: { uiLabelL: {} },
@@ -121,6 +139,7 @@ before(async () => {
 afterEach(() => {
   platformOS = 'ios';
   exitMounted = false;
+  dismissAnimationTarget = undefined;
   panResponderConfig = undefined;
   delete (globalThis as { window?: unknown }).window;
   delete (globalThis as { document?: unknown }).document;
@@ -271,8 +290,14 @@ test('shared bottom sheet follows an upward drag, then collapses and dismisses o
   assert.equal(sheetHeight(), 844);
   await act(async () => panResponderConfig?.onPanResponderRelease?.(null, { dy: 100, vy: 1 }));
   assert.equal(sheetHeight(), 480);
+  await act(async () => panResponderConfig?.onPanResponderMove?.(null, { dy: 100 }));
   await act(async () => panResponderConfig?.onPanResponderRelease?.(null, { dy: 100, vy: 1 }));
   assert.equal(closes, 1);
+  const releaseTranslation = flattenStyle(
+    renderer.root.findByProps({ accessibilityViewIsModal: true }).props.style,
+  ).transform[0].translateY;
+  assert.equal(releaseTranslation.value, 100);
+  assert.equal(dismissAnimationTarget, 844);
   await act(async () => renderer.unmount());
 });
 

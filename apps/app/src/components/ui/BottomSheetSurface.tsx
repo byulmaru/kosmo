@@ -1,8 +1,16 @@
-import { useMemo, useState } from 'react';
-import { PanResponder, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Animated,
+  Easing,
+  PanResponder,
+  Pressable,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme } from '@/theme/ThemeProvider';
-import { borderWidths, radius } from '@/theme/tokens';
+import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
+import { borderWidths, motion, radius } from '@/theme/tokens';
 import type { PropsWithChildren } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
 
@@ -25,13 +33,34 @@ export function BottomSheetSurface({
   testID,
 }: Props) {
   const theme = useTheme();
+  const reducedMotion = useReducedMotion();
   const { height: viewportHeight } = useWindowDimensions();
   const { top: topInset } = useSafeAreaInsets();
   const maxHeight = Math.max(0, viewportHeight - topInset);
   const collapsedHeight = Math.min(initialHeight ?? maxHeight, maxHeight);
   const [expanded, setExpanded] = useState(false);
   const [dragY, setDragY] = useState(0);
+  const [dismissing, setDismissing] = useState(false);
+  const dismissY = useRef(new Animated.Value(0)).current;
   const expandable = initialHeight !== undefined && collapsedHeight < maxHeight;
+  useEffect(() => {
+    if (!dismissing) {
+      return;
+    }
+    if (reducedMotion) {
+      dismissY.setValue(maxHeight);
+      return;
+    }
+    const points = motion.easingPoints.exit;
+    const animation = Animated.timing(dismissY, {
+      duration: motion.duration.standard,
+      easing: Easing.bezier(points[0], points[1], points[2], points[3]),
+      toValue: maxHeight,
+      useNativeDriver: true,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [dismissY, dismissing, maxHeight, reducedMotion]);
   const dismiss = () => {
     if (!closeDisabled) {
       onClose();
@@ -42,30 +71,47 @@ export function BottomSheetSurface({
       PanResponder.create({
         onMoveShouldSetPanResponder: (_event, gesture) =>
           !closeDisabled &&
+          !dismissing &&
           Math.abs(gesture.dy) > 8 &&
           Math.abs(gesture.dy) > Math.abs(gesture.dx) &&
           (expandable || gesture.dy > 0),
         onPanResponderMove: (_event, gesture) => setDragY(gesture.dy),
         onPanResponderRelease: (_event, gesture) => {
-          setDragY(0);
           if (closeDisabled) {
+            setDragY(0);
             return;
           }
           if (gesture.dy < -56 || gesture.vy < -0.5) {
+            setDragY(0);
             if (expandable) {
               setExpanded(true);
             }
           } else if (gesture.dy > 56 || gesture.vy > 0.5) {
             if (expanded && gesture.dy < maxHeight - collapsedHeight + 56) {
+              setDragY(0);
               setExpanded(false);
             } else {
+              dismissY.setValue(Math.max(0, gesture.dy));
+              setDismissing(true);
+              setDragY(0);
               onClose();
             }
+          } else {
+            setDragY(0);
           }
         },
         onPanResponderTerminate: () => setDragY(0),
       }),
-    [closeDisabled, collapsedHeight, expandable, expanded, maxHeight, onClose],
+    [
+      closeDisabled,
+      collapsedHeight,
+      dismissY,
+      dismissing,
+      expandable,
+      expanded,
+      maxHeight,
+      onClose,
+    ],
   );
   const height =
     initialHeight === undefined
@@ -73,10 +119,10 @@ export function BottomSheetSurface({
       : expanded
         ? Math.max(0, maxHeight - Math.max(0, dragY))
         : collapsedHeight + Math.max(0, -dragY);
-  const translateY = expanded ? 0 : Math.max(0, dragY);
+  const translateY = dismissing ? dismissY : expanded ? 0 : Math.max(0, dragY);
 
   return (
-    <View
+    <Animated.View
       accessibilityViewIsModal
       onAccessibilityEscape={dismiss}
       style={[
@@ -108,7 +154,7 @@ export function BottomSheetSurface({
         </Pressable>
       </View>
       {children}
-    </View>
+    </Animated.View>
   );
 }
 
