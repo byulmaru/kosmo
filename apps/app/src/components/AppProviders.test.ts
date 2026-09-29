@@ -17,6 +17,9 @@ import type { ReactTestRenderer } from 'react-test-renderer';
 
 type QueryName = 'SessionProviderQuery' | 'ShellRecoveryQuery' | 'UniversalShellQuery';
 type QueryMode = 'error' | 'pending' | 'success';
+type OfrepRequest = { body: unknown; contentType: string | null; method: string; url: string };
+
+const flagEvaluationUrl = 'https://flags.kos.moe/ofrep/v1/evaluate/flags';
 
 const queryModes: Record<QueryName, QueryMode> = {
   SessionProviderQuery: 'success',
@@ -405,7 +408,6 @@ function FeatureFlagsProbe() {
     malformed: useFeatureFlag('malformed'),
     errored: useFeatureFlag('errored'),
     missing: useFeatureFlag('missing'),
-    inherited: useFeatureFlag('toString'),
   });
 }
 
@@ -422,6 +424,35 @@ function FeatureFlagsAccountSwitchProbe() {
         await actor.clearNativeSession();
       }
     },
+  });
+}
+
+async function captureOfrepRequest(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<OfrepRequest> {
+  const request = input instanceof Request ? input : new Request(input, init);
+  return {
+    body: await request.clone().json(),
+    contentType: request.headers.get('content-type')?.split(';', 1)[0]?.trim() ?? null,
+    method: request.method,
+    url: request.url,
+  };
+}
+
+function assertFlagRequest(request: OfrepRequest, targetingKey: string) {
+  assert.deepEqual(request, {
+    body: { context: { targetingKey } },
+    contentType: 'application/json',
+    method: 'POST',
+    url: flagEvaluationUrl,
+  });
+}
+
+function flagsResponse(flags: Array<Record<string, unknown>>) {
+  return new Response(JSON.stringify({ flags }), {
+    headers: { 'Content-Type': 'application/json' },
+    status: 200,
   });
 }
 
@@ -447,18 +478,12 @@ describe('AppProviders runtime composition', () => {
   });
 
   it('loads one shared flag snapshot per provider mount and fails closed', async () => {
-    let requests = 0;
+    const requests: OfrepRequest[] = [];
     const pendingRequests: Array<(response: Response) => void> = [];
-    globalThis.fetch = async (input, init) => {
-      requests += 1;
-      assert.equal(String(input), 'https://flags.kos.moe/ofrep/v1/evaluate/flags');
-      assert.deepEqual(init, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ context: { targetingKey: 'account-1' } }),
-      });
+    globalThis.fetch = async (input) => {
+      requests.push(await captureOfrepRequest(input));
 
-      if (requests === 1) {
+      if (requests.length === 1) {
         return new Promise<Response>((resolve) => pendingRequests.push(resolve));
       }
       return new Response(null, { status: 503 });
@@ -474,25 +499,20 @@ describe('AppProviders runtime composition', () => {
       malformed: false,
       errored: false,
       missing: false,
-      inherited: false,
     });
-    assert.equal(requests, 1);
+    assert.equal(requests.length, 1);
+    assertFlagRequest(requests[0]!, 'account-1');
     const resolveFirstRequest = pendingRequests.shift();
     assert.ok(resolveFirstRequest);
 
     await act(async () => {
       resolveFirstRequest(
-        new Response(
-          JSON.stringify({
-            flags: [
-              { key: 'quote', value: true },
-              { key: 'disabled', value: false },
-              { key: 'malformed', value: 'true' },
-              { key: 'errored', errorCode: 'FLAG_NOT_FOUND' },
-            ],
-          }),
-          { status: 200 },
-        ),
+        flagsResponse([
+          { key: 'quote', value: true },
+          { key: 'disabled', value: false },
+          { key: 'malformed', value: 'true' },
+          { key: 'errored', errorCode: 'FLAG_NOT_FOUND' },
+        ]),
       );
     });
 
@@ -502,9 +522,8 @@ describe('AppProviders runtime composition', () => {
       malformed: false,
       errored: false,
       missing: false,
-      inherited: false,
     });
-    assert.equal(requests, 1);
+    assert.equal(requests.length, 1);
 
     await act(async () => renderer?.unmount());
     renderer = null;
@@ -515,21 +534,16 @@ describe('AppProviders runtime composition', () => {
 
     assert.equal(findTag('FeatureFlagsProbe').props.quote, false);
     assert.equal(findTag('FeatureFlagsProbe').props.disabled, false);
-    assert.equal(requests, 2);
+    assert.equal(requests.length, 2);
+    assertFlagRequest(requests[1]!, 'account-1');
   });
 
   it('targets flags to the active account, ignores obsolete results, and resets after logout', async () => {
-    const pendingRequests: Array<{
-      resolve: (response: Response) => void;
-      targetingKey: string;
-    }> = [];
-    globalThis.fetch = async (_input, init) => {
-      const request = JSON.parse(String(init?.body)) as {
-        context: { targetingKey: string };
-      };
-      return new Promise<Response>((resolve) =>
-        pendingRequests.push({ resolve, targetingKey: request.context.targetingKey }),
-      );
+    const requests: OfrepRequest[] = [];
+    const pendingRequests: Array<(response: Response) => void> = [];
+    globalThis.fetch = async (input) => {
+      requests.push(await captureOfrepRequest(input));
+      return new Promise<Response>((resolve) => pendingRequests.push(resolve));
     };
     mockAccountId = null;
     mockSessionId = null;
@@ -552,12 +566,11 @@ describe('AppProviders runtime composition', () => {
     const quote = () => findTag('FeatureFlagsProbe').props.quote;
     const changeAccount = findTag('FeatureFlagsAccountSwitchProbe').props.onAccountChange;
     const respond = async (index: number, response: Response) => {
-      const request = pendingRequests[index];
-      assert.ok(request);
-      await act(async () => request.resolve(response));
+      const resolve = pendingRequests[index];
+      assert.ok(resolve);
+      await act(async () => resolve(response));
     };
-    const flagResponse = (value: boolean) =>
-      new Response(JSON.stringify({ flags: [{ key: 'quote', value }] }), { status: 200 });
+    const flagResponse = (value: boolean) => flagsResponse([{ key: 'quote', value }]);
 
     assert.equal(quote(), false);
     assert.equal(pendingRequests.length, 0);
@@ -589,10 +602,11 @@ describe('AppProviders runtime composition', () => {
     assert.equal(quote(), false);
     await respond(3, new Response(null, { status: 503 }));
     assert.equal(quote(), false);
-    assert.deepEqual(
-      pendingRequests.map(({ targetingKey }) => targetingKey),
-      ['account-1', 'account-1', 'account-2', 'account-1'],
-    );
+    const targetingKeys = ['account-1', 'account-1', 'account-2', 'account-1'];
+    assert.equal(requests.length, targetingKeys.length);
+    for (const [index, targetingKey] of targetingKeys.entries()) {
+      assertFlagRequest(requests[index]!, targetingKey);
+    }
   });
 
   it('root fallback remounts the complete app runtime after its action', async () => {

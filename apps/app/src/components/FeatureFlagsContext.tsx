@@ -1,6 +1,11 @@
+import { OFREPWebProvider } from '@openfeature/ofrep-web-provider';
+import { OpenFeature } from '@openfeature/web-sdk';
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { useSession } from '@/session/SessionProvider';
+import type { Client } from '@openfeature/web-sdk';
 import type { PropsWithChildren } from 'react';
+
+const DOMAIN = 'kosmo';
 
 export const FeatureFlagsContext = createContext<(key: string) => boolean>(() => false);
 
@@ -8,7 +13,7 @@ export function FeatureFlagsProvider({ children }: PropsWithChildren) {
   const { accountId } = useSession();
   const [evaluation, setEvaluation] = useState<{
     accountId: string;
-    flags: Record<string, boolean>;
+    client: Client;
   } | null>(null);
 
   useEffect(() => {
@@ -19,47 +24,19 @@ export function FeatureFlagsProvider({ children }: PropsWithChildren) {
     }
 
     let active = true;
-    void fetch('https://flags.kos.moe/ofrep/v1/evaluate/flags', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ context: { targetingKey: accountId } }),
-    })
-      .then(async (response) => {
-        if (!response.ok) {
-          return {};
-        }
-
-        const result: unknown = await response.json();
-        if (
-          typeof result !== 'object' ||
-          result === null ||
-          !('flags' in result) ||
-          !Array.isArray(result.flags)
-        ) {
-          return {};
-        }
-
-        return Object.fromEntries(
-          result.flags.flatMap((flag) => {
-            if (
-              typeof flag !== 'object' ||
-              flag === null ||
-              !('key' in flag) ||
-              typeof flag.key !== 'string' ||
-              !('value' in flag) ||
-              typeof flag.value !== 'boolean' ||
-              'errorCode' in flag
-            ) {
-              return [];
-            }
-
-            return [[flag.key, flag.value]];
-          }),
-        );
-      })
-      .then((flags) => {
+    void OpenFeature.setProviderAndWait(
+      DOMAIN,
+      new OFREPWebProvider({
+        baseUrl: 'https://flags.kos.moe',
+        cacheMode: 'disabled',
+        changeDetection: 'none',
+        disableVisibilityRefresh: true,
+      }),
+      { targetingKey: accountId },
+    )
+      .then(() => {
         if (active) {
-          setEvaluation({ accountId, flags });
+          setEvaluation({ accountId, client: OpenFeature.getClient(DOMAIN) });
         }
       })
       .catch(() => undefined);
@@ -70,7 +47,8 @@ export function FeatureFlagsProvider({ children }: PropsWithChildren) {
   }, [accountId]);
 
   const isEnabled = useCallback(
-    (key: string) => evaluation?.accountId === accountId && evaluation.flags[key] === true,
+    (key: string) =>
+      evaluation?.accountId === accountId && evaluation.client.getBooleanValue(key, false),
     [accountId, evaluation],
   );
 
