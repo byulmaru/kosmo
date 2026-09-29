@@ -18,6 +18,7 @@ export {
 export {
   executeProfileMigrationMoveFollowerActivity,
   loadProfileMigrationMoveFollowerBatchActivity,
+  prepareProfileMigrationMoveActivity,
 } from './profile-migration-activities';
 export {
   executeProfileFollowPairTransition as executeProfileFollowPairTransitionActivity,

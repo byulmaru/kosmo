@@ -24,7 +24,8 @@ identity, `alsoKnownAs` 표현, Local·Remote Follow 정책과 기존 follower �
   aliases를 별도 사용자 입력이나 독립적인 Profile 속성으로 관리하지 않는다.
 - inbound `Move`는 인증된 ActivityPub actor와 object가 같은 canonical Actor URI일 때만 처리한다. target은 기존
   canonical Actor identity로 해석하고, target actor의 `alsoKnownAs`에는 exact source URI가 있어야 한다. 기존
-  Actor 종류를 사용하며 Person으로 한정하지 않는다.
+  Actor 종류를 사용하며 Person으로 한정하지 않는다. Inbox 처리는 Workflow의 durable admission이 성공한 뒤
+  완료하며, target 해석·거부와 follower 이전은 admission 뒤 비동기 수행한다.
 - inbound Move는 remote-to-local과 remote-to-remote target을 지원한다. 준비 관계가 있는 target Profile과
   remote-to-remote target은 각각 target Profile에 존재하는 Follow Approval Policy를 따른다.
 - Profile Migration source 지정은 Settings의 Profile detail에서 feature flag가 켜져 있을 때만 노출한다. flag가 꺼져

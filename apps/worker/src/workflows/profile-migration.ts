@@ -7,25 +7,50 @@ import type * as activities from '../activities';
 const PROFILE_MIGRATION_MOVE_BATCH_SIZE = 50;
 
 type ProfileMigrationMoveWorkflowState = ProfileMigrationMoveWorkflowInput & {
+  readonly prepared?: {
+    readonly sourceProfileId: string;
+    readonly targetProfileId: string;
+  };
   readonly afterSourceFollowId?: string;
 };
 
-const profileMigrationMoveInputSchema = z.strictObject({
-  sourceProfileId: z
-    .string({ error: 'Profile migration source Profile ID is required' })
-    .min(1, 'Profile migration source Profile ID is required'),
-  targetProfileId: z
-    .string({ error: 'Profile migration target Profile ID is required' })
-    .min(1, 'Profile migration target Profile ID is required'),
-  afterSourceFollowId: z
-    .string({ error: 'Profile migration source Follow cursor is invalid' })
-    .min(1, 'Profile migration source Follow cursor is invalid')
-    .optional(),
-}) satisfies z.ZodType<ProfileMigrationMoveWorkflowState>;
+const actorUriSchema = z.url().refine((value) => {
+  try {
+    const url = new URL(value);
+    return (
+      (url.protocol === 'http:' || url.protocol === 'https:') &&
+      url.hostname.length > 0 &&
+      url.href === value
+    );
+  } catch {
+    return false;
+  }
+}, 'Profile migration Actor URI must be a canonical HTTP(S) URL');
+
+const profileMigrationMoveInputSchema = z
+  .strictObject({
+    sourceActorUri: actorUriSchema,
+    targetActorUri: actorUriSchema,
+    prepared: z
+      .strictObject({
+        sourceProfileId: z.string().min(1, 'Profile migration source Profile ID is required'),
+        targetProfileId: z.string().min(1, 'Profile migration target Profile ID is required'),
+      })
+      .optional(),
+    afterSourceFollowId: z
+      .string({ error: 'Profile migration source Follow cursor is invalid' })
+      .min(1, 'Profile migration source Follow cursor is invalid')
+      .optional(),
+  })
+  .refine(
+    ({ sourceActorUri, targetActorUri }) => sourceActorUri !== targetActorUri,
+    'Profile migration source and target Actor URIs must differ',
+  ) satisfies z.ZodType<ProfileMigrationMoveWorkflowState>;
 
 const {
   executeProfileMigrationMoveFollowerActivity,
   loadProfileMigrationMoveFollowerBatchActivity,
+  prepareProfileMigrationMoveActivity,
 } = proxyActivities<typeof activities>(workflowActivityOptions);
 
 export async function profileMigrationMoveWorkflow(input: ProfileMigrationMoveWorkflowState) {
@@ -36,8 +61,20 @@ export async function profileMigrationMoveWorkflow(input: ProfileMigrationMoveWo
     );
   }
 
+  const { afterSourceFollowId, prepared, sourceActorUri, targetActorUri } = parsed.data;
+  const resolved =
+    prepared ??
+    (await prepareProfileMigrationMoveActivity({
+      sourceActorUri,
+      targetActorUri,
+    }));
+  if (!resolved) {
+    return;
+  }
+
   const followers = await loadProfileMigrationMoveFollowerBatchActivity({
-    ...parsed.data,
+    ...resolved,
+    ...(afterSourceFollowId === undefined ? {} : { afterSourceFollowId }),
     limit: PROFILE_MIGRATION_MOVE_BATCH_SIZE,
   });
   const lastFollower = followers.at(-1);
@@ -47,13 +84,15 @@ export async function profileMigrationMoveWorkflow(input: ProfileMigrationMoveWo
 
   for (const follower of followers) {
     await executeProfileMigrationMoveFollowerActivity({
-      ...parsed.data,
+      ...resolved,
       ...follower,
     });
   }
 
   await continueAsNew<typeof profileMigrationMoveWorkflow>({
-    ...parsed.data,
+    sourceActorUri,
+    targetActorUri,
+    prepared: resolved,
     afterSourceFollowId: lastFollower.sourceFollowId,
   });
 }

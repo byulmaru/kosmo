@@ -1,3 +1,4 @@
+import { isActor } from '@fedify/vocab';
 import {
   ActivityPubActors,
   db,
@@ -9,9 +10,19 @@ import {
   Profiles,
 } from '@kosmo/core/db';
 import { InstanceKind, InstanceState, ProfileState } from '@kosmo/core/enums';
+import { ConflictError, NotFoundError } from '@kosmo/core/error';
+import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { followProfile, profileFollowPairCondition } from '@kosmo/core/services';
 import { executeProfileFollowRemoval } from '@kosmo/core/temporal/follow-command';
+import {
+  federation,
+  findOrMaterializeRemoteProfileActorByUri,
+  findStoredRemoteProfileActorByUri,
+  observeInbound,
+  RemoteActorMaterializationError,
+} from '@kosmo/fedify';
 import { and, asc, eq, gt } from 'drizzle-orm';
+import type { ProfileMigrationMoveWorkflowInput } from '@kosmo/core/temporal/profile-migration';
 
 const PROFILE_MIGRATION_MOVE_BATCH_SIZE = 50;
 
@@ -32,6 +43,157 @@ type LoadProfileMigrationMoveFollowerBatchInput = ProfileMigrationMoveInput & {
 
 type ExecuteProfileMigrationMoveFollowerInput = ProfileMigrationMoveInput &
   ProfileMigrationMoveFollower;
+
+const observeMoveRejection = (
+  input: ProfileMigrationMoveWorkflowInput,
+  phase: 'validation' | 'protocol' | 'actor_lookup',
+  reasonCode: string,
+  error?: unknown,
+) => {
+  observeInbound({
+    activityType: 'Move',
+    handler: 'move',
+    outcome: 'rejected',
+    phase,
+    reasonCode,
+    actorOrigin: input.sourceActorUri,
+    objectOrigin: input.targetActorUri,
+    ...(error === undefined ? {} : { error }),
+  });
+};
+
+const isExpectedRemoteActorRejection = (error: unknown) =>
+  error instanceof RemoteActorMaterializationError ||
+  error instanceof NotFoundError ||
+  error instanceof ConflictError;
+
+/**
+ * Resolves a protocol-validated Move into durable Profile IDs before the follower transfer starts.
+ */
+export const prepareProfileMigrationMoveActivity = async (
+  input: ProfileMigrationMoveWorkflowInput,
+): Promise<{ sourceProfileId: string; targetProfileId: string } | null> => {
+  let sourceActorUri: URL;
+  let targetActorUri: URL;
+  try {
+    sourceActorUri = new URL(input.sourceActorUri);
+    targetActorUri = new URL(input.targetActorUri);
+  } catch {
+    observeMoveRejection(input, 'validation', 'move_actor_target_uri_invalid');
+    return null;
+  }
+
+  if (
+    (sourceActorUri.protocol !== 'http:' && sourceActorUri.protocol !== 'https:') ||
+    !sourceActorUri.hostname ||
+    (targetActorUri.protocol !== 'http:' && targetActorUri.protocol !== 'https:') ||
+    !targetActorUri.hostname ||
+    sourceActorUri.href === targetActorUri.href
+  ) {
+    observeMoveRejection(input, 'validation', 'move_actor_target_uri_invalid');
+    return null;
+  }
+
+  const localInstance = await resolveConfiguredLocalInstance();
+  const localOrigin = new URL(localInstance.canonicalOrigin).origin;
+  const storedSource = await findStoredRemoteProfileActorByUri(sourceActorUri);
+  let targetProfileId: string | undefined;
+
+  if (storedSource) {
+    const preparedTarget = await db
+      .select({
+        profileId: Profiles.id,
+      })
+      .from(ActivityPubActors)
+      .innerJoin(Profiles, eq(Profiles.id, ActivityPubActors.profileId))
+      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+      .where(
+        and(
+          eq(ActivityPubActors.uri, targetActorUri.href),
+          eq(Instances.kind, InstanceKind.LOCAL),
+          eq(Instances.state, InstanceState.ACTIVE),
+          eq(Profiles.state, ProfileState.ACTIVE),
+        ),
+      )
+      .limit(1)
+      .then(first);
+
+    if (preparedTarget) {
+      const migration = await db
+        .select({ id: ProfileMigrations.id })
+        .from(ProfileMigrations)
+        .where(
+          and(
+            eq(ProfileMigrations.sourceProfileId, storedSource.profile.id),
+            eq(ProfileMigrations.targetProfileId, preparedTarget.profileId),
+          ),
+        )
+        .limit(1)
+        .then(first);
+
+      if (migration) {
+        targetProfileId = preparedTarget.profileId;
+      }
+    }
+  }
+
+  if (targetProfileId === undefined && targetActorUri.origin === localOrigin) {
+    observeMoveRejection(input, 'validation', 'move_local_target_not_prepared');
+    return null;
+  }
+
+  const fedifyContext = federation.createContext(new URL(localInstance.canonicalOrigin), undefined);
+  const lookupObject = async (...args: Parameters<typeof fedifyContext.lookupObject>) => {
+    const actor = await fedifyContext.lookupObject(...args);
+    if (actor === null) {
+      throw new Error('Remote Move actor lookup returned no actor');
+    }
+    return actor;
+  };
+  const lookupContext = { lookupObject };
+
+  if (targetProfileId === undefined) {
+    const targetActor = await lookupContext.lookupObject(targetActorUri);
+
+    if (!isActor(targetActor) || targetActor.id?.href !== targetActorUri.href) {
+      observeMoveRejection(input, 'protocol', 'move_target_not_matching_actor');
+      return null;
+    }
+
+    if (!targetActor.aliasIds.some((alias) => alias.href === sourceActorUri.href)) {
+      observeMoveRejection(input, 'protocol', 'move_target_alias_missing');
+      return null;
+    }
+
+    try {
+      const target = await findOrMaterializeRemoteProfileActorByUri({
+        actorUri: targetActorUri,
+        context: lookupContext,
+      });
+      targetProfileId = target.profile.id;
+    } catch (error) {
+      if (!isExpectedRemoteActorRejection(error)) {
+        throw error;
+      }
+      observeMoveRejection(input, 'actor_lookup', 'move_target_materialization_rejected', error);
+      return null;
+    }
+  }
+
+  try {
+    const source = await findOrMaterializeRemoteProfileActorByUri({
+      actorUri: sourceActorUri,
+      context: lookupContext,
+    });
+    return { sourceProfileId: source.profile.id, targetProfileId };
+  } catch (error) {
+    if (!isExpectedRemoteActorRejection(error)) {
+      throw error;
+    }
+    observeMoveRejection(input, 'actor_lookup', 'move_source_materialization_rejected', error);
+    return null;
+  }
+};
 
 const findEligibleTarget = async ({
   sourceProfileId,
