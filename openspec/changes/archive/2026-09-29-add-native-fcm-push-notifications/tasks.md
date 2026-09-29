@@ -1,3 +1,6 @@
+> PR #916의 세션 기록이다. PROD-914 구현과 Android·iOS 기기 검증은 남아 있으며, archive는 이를 완료 처리하거나
+> PR #916의 review gate로 두지 않는다.
+
 ## 1. PROD-912 Account 설치 registration과 shared Domain/OpenSpec Gate
 
 **Authority / Provenance**
@@ -69,18 +72,14 @@ server 계약과 lifecycle을 제공한다.
 **Verification**
 
 - Local implementation과 lifecycle/storage·payload/settings·Relay focused checks는 완료된 것으로 기록한다.
-- Android·iOS signed build의 permission CTA, foreground/background/terminated 수신, cross-profile Push navigation과 logged-out tap은 별도 evidence로 확인한다.
-- Firebase service-file injection/prebuild와 iOS FCM–APNs provisioning/entitlement, 실제 device arrival evidence를 local checks와 분리한다.
-- AsyncStorage의 close·deny·update 억제 및 uninstall/reinstall·backup/restore 동작은 signed device에서 별도로 확인하며,
-  backup 복원 결과를 strict install-level once의 보장으로 일반화하지 않는다.
+- **미실행 device verification:** Android·iOS signed-device permission, delivery/tap, provisioning과 install-storage
+  persistence 검증을 실행하지 않았다.
 
 - [x] 2.1 현재 PROD-913 client implementation과 lifecycle/storage·payload/settings·Relay local checks를 실행하고 결과를 기록한다.
-- [ ] 2.2 Android·iOS signed build에서 permission CTA, foreground/background/terminated 수신과 Push tap 흐름을 확인한다.
-- [ ] 2.3 Firebase service-file injection/prebuild를 실제 native build에서 확인한다.
-- [ ] 2.4 iOS FCM–APNs provisioning/entitlement와 실제 Android·iOS device arrival evidence를 확인한다.
-- [ ] 2.5 AsyncStorage marker의 close·deny·update, uninstall/reinstall·backup/restore 동작을 signed device에서 확인한다.
 
-## 3. PROD-914 canonical Notification FCM 전달
+## 3. PROD-914 canonical Notification FCM 전달 (미구현 범위)
+
+아래 server delivery 동작은 PROD-914 범위이며 PR #916의 완료 범위가 아니다. 체크하지 않은 항목은 완료를 주장하지 않는다.
 
 **Authority / Provenance**
 
@@ -126,41 +125,7 @@ cleanup과 운영 관측을 제공한다.
 - [ ] 3.5 invalid/unregistered token 결과를 PROD-912 cleanup 경계로 연결하고 token·credential·private body 비노출 관측을 검증한다.
 - [ ] 3.6 Read State 독립성, Provider accepted/queued와 actual arrival 분리, 원본 commit 실패 격리를 실행 검증하고, 기존 source Workflow가 Notification materialization 전에 시작 실패하는 관측 경계를 별도로 기록한다.
 
-## 4. PROD-875 Android·iOS 종단 간 통합과 archive
+## 세션 종료 상태
 
-**Authority / Provenance**
-
-- `docs/domain/objects/notification.md`
-- `docs/domain/decisions/0029-native-push-notification-policy.md`
-- `docs/design/notifications.md`
-- `PROD-875`
-- `PROD-912`
-- `PROD-913`
-- `PROD-914`
-
-**Deliverable**
-
-세 child의 scoped validation을 하나의 Android·iOS signed-build 종단 간 결과로 통합하고, 전체 declared scope와
-OpenSpec requirements가 충족된 뒤 change archive를 소유한다.
-
-**Guardrails**
-
-- PROD-912 shared Gate 승인과 child별 결과를 선행 조건으로 확인한다.
-- Provider accepted·workflow success·actual device arrival·OS permission 상태를 하나의 성공 주장으로 합치지 않는다.
-- Push 실패가 canonical Notification 생성·조회·Read 또는 기존 in-app lifecycle을 rollback하지 않는다.
-- 현재 PROD-875 scope 밖의 Web Push, marketing broadcast, future generator·PROD-911 generator 자체 구현과 in-app preference를 검증 scope에 추가하지 않는다.
-- 개별 child 완료만으로 전체 change archive를 주장하지 않으며 PROD-875가 남은 cross-slice evidence와 archive를 소유한다.
-
-**Verification**
-
-- Android·iOS 각각에서 permission CTA·OS Settings·foreground/background/terminated·token refresh·logout/account switch를 확인한다.
-- all Profile·all eligible installation fan-out, body privacy, cross-profile·logged-out tap, expiry/best-effort registration/read independence를 확인한다.
-- Provider fake/accepted·retry·failure evidence와 실제 signed device arrival을 분리해 기록한다.
-- `openspec validate add-native-fcm-push-notifications --strict`와 repository의 관련 lint/type/test/build checks를 통과시킨다.
-- 전체 declared scope가 완료되고 canonical·Linear·OpenSpec 정합성이 재확인된 뒤에만 archive한다.
-
-- [ ] 4.1 PROD-912 Gate와 세 child의 implementation/scoped validation evidence를 기준 branch에서 수집한다.
-- [ ] 4.2 Android signed build에서 권한·token·foreground/background/terminated·tap·multi-profile/multi-installation 시나리오를 실행한다.
-- [ ] 4.3 iOS signed build에서 같은 시나리오와 iOS FCM–APNs/device arrival evidence를 실행한다.
-- [ ] 4.4 Provider accepted·workflow·arrival·privacy·failure evidence를 cross-slice 결과로 통합하고 기존 Notification lifecycle 회귀를 확인한다.
-- [ ] 4.5 전체 requirements와 task verification을 대조해 OpenSpec change를 archive할 completion package를 준비한다.
+완료 기록: PROD-912 installation lifecycle과 PR #916의 PROD-913 native client 로컬 검증.
+남음: PROD-914 server delivery와 Android·iOS signed-device 검증.

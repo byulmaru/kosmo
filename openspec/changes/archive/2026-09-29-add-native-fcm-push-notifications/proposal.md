@@ -30,7 +30,7 @@ FCM을 통한 OS Push 전달 경계가 없다. PROD-875와 세 child의 공통 �
   새 registration row에 영향을 주지 않도록 한다.
 - Account·Profile·설치·device·FCM token 등록 lifecycle, 비동기 Provider 전달, retry·dedup·invalid token
   cleanup과 원본 Notification commit 이후 실패 격리를 세 구현 slice의 책임으로 나누고, PROD-875가 Android·iOS
-  실제 기기 종단 간 검증과 최종 OpenSpec archive를 소유한다.
+  실제 기기 종단 간 검증을 소유한다. PR #916은 현재 세션 기록만 archive한다.
 
 ## Authority / Provenance
 
