@@ -194,7 +194,9 @@ describe('SettingsNavigationList', () => {
     const notification = rows[notificationIndex];
 
     assert.equal(notificationIndex, muteIndex + 1);
-    assert.equal(infoIndex, notificationIndex + 1);
+    const themeIndex = rows.findIndex((node) => node.props.href === '/settings/theme');
+    assert.equal(themeIndex, notificationIndex + 1);
+    assert.equal(infoIndex, themeIndex + 1);
     assert.equal(notification?.props.accessibilityLabel, 'OS 알림 설정 열기');
     assert.equal(notification?.props.accessibilityRole, 'button');
     const notificationItem = rendered('SettingsItem').find(
@@ -324,7 +326,11 @@ describe('SettingsNavigationList', () => {
       (node) => node.props.testID === 'native-notification-settings',
     );
     assert.equal(notification?.props.disabled, true);
-    assert.equal(rendered('SettingsItem').at(-2)?.props.trailing.type, 'ActivityIndicator');
+    assert.equal(
+      rendered('SettingsItem').find((node) => node.props.label === '알림 설정')?.props.trailing
+        .type,
+      'ActivityIndicator',
+    );
     await act(async () => notification?.props.onPress());
     assert.equal(requestPermissionAndSyncCalls, 1);
 
@@ -333,7 +339,10 @@ describe('SettingsNavigationList', () => {
       (node) => node.props.testID === 'native-notification-settings',
     );
     assert.equal(notification?.props.disabled, false);
-    assert.equal(rendered('SettingsItem').at(-2)?.props.trailing, null);
+    assert.equal(
+      rendered('SettingsItem').find((node) => node.props.label === '알림 설정')?.props.trailing,
+      null,
+    );
   });
 
   it('현재 path와 같은 root detail만 page-current 상태를 받는다', async () => {
