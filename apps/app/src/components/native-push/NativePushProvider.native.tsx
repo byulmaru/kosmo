@@ -1,26 +1,19 @@
-import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Modal, Platform, StyleSheet, Text, View } from 'react-native';
 import { graphql, useMutation } from 'react-relay';
 import { Button } from '@/components/ui/Button';
-import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import {
-  clearLastNativeNotificationResponse,
-  getLastNativeNotificationResponse,
   getNativeFcmToken,
   getNativeNotificationPermissionStatus,
   requestNativeNotificationPermission,
   subscribeToNativeFcmTokenRefresh,
-  subscribeToNativeNotificationResponses,
 } from './nativePushClient';
 import {
   syncPushInstallationToken,
   unregisterDeniedPushInstallation,
 } from './pushInstallationLifecycle';
-import { prepareNativePushNavigation } from './pushNavigation';
-import { nativePushResponseKey, parseNativePushTapTarget } from './pushPayload';
 import { acceptNativePushPrompt } from './pushPrompt';
 import {
   deletePushInstallationId,
@@ -29,9 +22,8 @@ import {
   readPushPromptComplete,
   writePushInstallationId,
 } from './pushStorage';
-import type { NotificationResponse } from 'expo-notifications';
+import { useNativePushNotificationResponses } from './useNativePushNotificationResponses.native';
 import type { NativePushRegisterInstallationMutation as NativePushRegisterInstallationMutationType } from './__generated__/NativePushRegisterInstallationMutation.graphql';
-import type { NativePushSelectProfileMutation as NativePushSelectProfileMutationType } from './__generated__/NativePushSelectProfileMutation.graphql';
 import type { NativePushUnregisterInstallationMutation as NativePushUnregisterInstallationMutationType } from './__generated__/NativePushUnregisterInstallationMutation.graphql';
 import type { NativePushUpdateInstallationMutation as NativePushUpdateInstallationMutationType } from './__generated__/NativePushUpdateInstallationMutation.graphql';
 
@@ -66,37 +58,15 @@ const NativePushUnregisterInstallationMutation = graphql`
   }
 `;
 
-const NativePushSelectProfileMutation = graphql`
-  mutation NativePushSelectProfileMutation($id: ID!) {
-    selectProfile(input: { id: $id }) {
-      profile {
-        id
-      }
-    }
-  }
-`;
-
-type RetryablePushError = Error & { retryable: true };
-
-const markRetryable = (error: Error): RetryablePushError =>
-  Object.assign(error, { retryable: true as const });
-
-const isRetryablePushError = (error: unknown): error is RetryablePushError =>
-  error instanceof Error && 'retryable' in error && error.retryable === true;
-
 const platform = Platform.OS === 'ios' ? ('IOS' as const) : ('ANDROID' as const);
 
 export function NativePushProvider() {
   const theme = useTheme();
-  const router = useRouter();
   const session = useSession();
-  const { resetActor } = useRelayActor();
   const sessionRef = useRef(session);
   sessionRef.current = session;
   const installationIdRef = useRef<string | null | undefined>(undefined);
   const tokenSyncQueueRef = useRef(Promise.resolve());
-  const tapQueueRef = useRef(Promise.resolve());
-  const handledResponseKeyRef = useRef<string | null>(null);
   const promptAttemptedRef = useRef(false);
   const [promptVisible, setPromptVisible] = useState(false);
   const [promptPending, setPromptPending] = useState(false);
@@ -109,9 +79,6 @@ export function NativePushProvider() {
   );
   const [commitUnregister] = useMutation<NativePushUnregisterInstallationMutationType>(
     NativePushUnregisterInstallationMutation,
-  );
-  const [commitSelectProfile] = useMutation<NativePushSelectProfileMutationType>(
-    NativePushSelectProfileMutation,
   );
 
   const registerInstallation = useCallback(
@@ -283,11 +250,17 @@ export function NativePushProvider() {
     const unsubscribe = subscribeToNativeFcmTokenRefresh((token) => {
       void syncPermissionAndToken(token).catch(() => undefined);
     });
+    const appStateSubscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        void syncPermissionAndToken().catch(() => undefined);
+      }
+    });
 
     void syncPermissionAndToken().catch(() => undefined);
 
     return () => {
       unsubscribe();
+      appStateSubscription.remove();
     };
   }, [session.status, syncPermissionAndToken]);
 
@@ -325,114 +298,7 @@ export function NativePushProvider() {
     }
   }, [promptPending, syncPermissionAndToken]);
 
-  const fallbackToNotifications = useCallback(() => {
-    router.replace('/notifications');
-  }, [router]);
-
-  const selectProfile = useCallback(
-    (id: string) =>
-      new Promise<string>((resolve, reject) => {
-        commitSelectProfile({
-          onCompleted: (response, errors) => {
-            if (errors?.length) {
-              reject(errors[0]);
-              return;
-            }
-
-            resolve(response.selectProfile.profile.id);
-          },
-          onError: (error) => reject(markRetryable(error)),
-          variables: { id },
-        });
-      }),
-    [commitSelectProfile],
-  );
-
-  const markResponseHandled = useCallback((response: NotificationResponse) => {
-    handledResponseKeyRef.current = nativePushResponseKey(response);
-    clearLastNativeNotificationResponse();
-  }, []);
-
-  const handleNotificationResponse = useCallback(
-    async (response: NotificationResponse) => {
-      const key = nativePushResponseKey(response);
-      if (key && key === handledResponseKeyRef.current) {
-        return;
-      }
-
-      const currentSession = sessionRef.current;
-      if (currentSession.status !== 'valid') {
-        markResponseHandled(response);
-        router.replace('/');
-        return;
-      }
-
-      const envelope = parseNativePushTapTarget(response.notification.request.content.data);
-      if (!envelope) {
-        markResponseHandled(response);
-        fallbackToNotifications();
-        return;
-      }
-
-      let targetHref: Awaited<ReturnType<typeof prepareNativePushNavigation>>;
-      try {
-        targetHref = await prepareNativePushNavigation({
-          href: envelope.href,
-          recipientProfileId: envelope.recipientProfileId,
-          resetActor,
-          selectProfile,
-          selectedProfileId: sessionRef.current.selectedProfileId,
-        });
-      } catch (error) {
-        if (isRetryablePushError(error)) {
-          return;
-        }
-
-        markResponseHandled(response);
-        fallbackToNotifications();
-        return;
-      }
-
-      markResponseHandled(response);
-      router.replace(targetHref);
-    },
-    [fallbackToNotifications, markResponseHandled, resetActor, router, selectProfile],
-  );
-
-  const enqueueNotificationResponse = useCallback(
-    (response: NotificationResponse) => {
-      const next = tapQueueRef.current.then(() => handleNotificationResponse(response));
-      tapQueueRef.current = next.catch(() => undefined);
-    },
-    [handleNotificationResponse],
-  );
-
-  useEffect(() => {
-    const unsubscribe = subscribeToNativeNotificationResponses(enqueueNotificationResponse);
-    void getLastNativeNotificationResponse().then((response) => {
-      if (response) {
-        enqueueNotificationResponse(response);
-      }
-    });
-
-    const appStateSubscription = AppState.addEventListener('change', (state) => {
-      if (state !== 'active') {
-        return;
-      }
-
-      void syncPermissionAndToken().catch(() => undefined);
-      void getLastNativeNotificationResponse().then((response) => {
-        if (response) {
-          enqueueNotificationResponse(response);
-        }
-      });
-    });
-
-    return () => {
-      unsubscribe();
-      appStateSubscription.remove();
-    };
-  }, [enqueueNotificationResponse, syncPermissionAndToken]);
+  useNativePushNotificationResponses();
 
   return (
     <Modal
