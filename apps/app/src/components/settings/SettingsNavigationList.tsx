@@ -3,7 +3,11 @@ import { layoutRecipes } from '@/theme/tokens';
 import { ByulmaruIdAccountSettingsEntry } from './ByulmaruIdAccountSettingsEntry';
 import { SettingsLinkRow } from './SettingsLinkRow';
 
-type SettingsDestination = 'default-post-visibility' | 'mute-and-block' | 'info';
+type SettingsDestination =
+  | 'default-post-visibility'
+  | 'mute-and-block'
+  | 'info'
+  | 'account-deletion';
 
 export function SettingsNavigationList({
   pathname,
@@ -42,6 +46,14 @@ export function SettingsNavigationList({
         primary
         currentPage={pathname === '/settings/info'}
         selected={selected === 'info'}
+      />
+      <SettingsLinkRow
+        accessibilityLabel="코스모 탈퇴 설정 열기"
+        href="/settings/account-deletion"
+        label="코스모 탈퇴"
+        primary
+        currentPage={pathname === '/settings/account-deletion'}
+        selected={selected === 'account-deletion'}
       />
     </View>
   );

@@ -36,7 +36,9 @@ export function SettingsRouteLayout({ children }: { children?: ReactNode }) {
             pathname === '/settings/muted-profiles' ||
             pathname === '/settings/blocked-profiles'
           ? 'mute-and-block'
-          : undefined;
+          : pathname === '/settings/account-deletion'
+            ? 'account-deletion'
+            : undefined;
   const detailHeaderMode: SettingsDetailHeaderMode =
     web && layout === 'mobile' ? 'hidden' : root ? 'plain' : 'back';
 
