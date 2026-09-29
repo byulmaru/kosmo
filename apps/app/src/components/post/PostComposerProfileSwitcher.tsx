@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
+import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { ProfilePicker } from '@/components/profile/ProfilePicker';
 import { Avatar } from '@/components/ui/Avatar';
 import { useTheme } from '@/theme/ThemeProvider';
-import { fontFamilies, spacing, typography } from '@/theme/tokens';
+import { fontFamilies, spacing, textStyles, typography } from '@/theme/tokens';
 import type { ProfilePickerProfile } from '@/components/profile/ProfilePicker';
 import type { PostComposer_profile$key } from './__generated__/PostComposer_profile.graphql';
 import type { PostComposerProfileSwitcher_profiles$key } from './__generated__/PostComposerProfileSwitcher_profiles.graphql';
@@ -19,6 +20,7 @@ const PostComposerProfileSwitcherFragment = graphql`
     id
     relativeHandle
     displayName
+    ...ProfileNameBlock_profile
     avatar {
       url
     }
@@ -219,19 +221,16 @@ export function PostComposerProfileSwitcher({
                 size={40}
               />
             </View>
-            <View style={styles.triggerCopy}>
-              <Text numberOfLines={1} style={[styles.triggerName, { color: theme.text }]}>
-                {selectedProfile?.displayName ?? '프로필 선택'}
+            {selectedProfile ? (
+              <ProfileNameBlock profile={selectedProfile} />
+            ) : (
+              <Text
+                numberOfLines={1}
+                style={[textStyles.uiLabelL, { color: theme.foregroundPrimary }]}
+              >
+                프로필 선택
               </Text>
-              {selectedProfile ? (
-                <Text
-                  numberOfLines={1}
-                  style={[styles.triggerHandle, { color: theme.textSecondary }]}
-                >
-                  {selectedProfile.relativeHandle}
-                </Text>
-              ) : null}
-            </View>
+            )}
           </>
         )}
       </Pressable>
@@ -267,9 +266,6 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
   },
   avatarTrigger: { borderRadius: 999 },
-  triggerCopy: { flex: 1, minWidth: 0 },
-  triggerName: { fontFamily: fontFamilies.ui, fontWeight: '700', ...typography.md },
-  triggerHandle: { fontFamily: fontFamilies.ui, ...typography.sm },
   pickerLayer: { left: 0, position: 'absolute', top: 48, zIndex: 30 },
   error: { fontFamily: fontFamilies.ui, padding: spacing.sm, ...typography.xsm },
 });
