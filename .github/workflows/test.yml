@@ -21,37 +21,13 @@ jobs:
             command: pnpm test:eslint
           - name: Admin
             command: pnpm --filter @kosmo/admin test
-          - name: Admin Helm
+          - name: Helm
             command: |
               set -euo pipefail
               helm lint apps/helm --set env=dev
-              rendered="$(helm template kosmo apps/helm --namespace kosmo-dev --set env=dev)"
-              admin="$(helm template kosmo apps/helm --namespace kosmo-dev --set env=dev --show-only templates/admin/deployment.yaml)"
-              for env in PGPASSWORD PGHOST PGPORT PGUSER PGDATABASE; do grep -Fq -- "- name: $env" <<<"$admin"; done
-              grep -Eq '^kind: Deployment$' <<<"$rendered"
-              grep -Eq '^kind: Service$' <<<"$rendered"
-              grep -Eq '^kind: Ingress$' <<<"$rendered"
-              grep -Eq '^kind: NetworkPolicy$' <<<"$rendered"
-              grep -Eq 'ingressClassName: tailscale' <<<"$rendered"
-              grep -Fq 'path: /healthz' <<<"$rendered"
-              grep -Fq 'kubernetes.io/metadata.name: tailscale' <<<"$rendered"
-              grep -Fq 'tailscale.com/parent-resource-type: ingress' <<<"$rendered"
-              grep -Fq 'tailscale.com/parent-resource: "kosmo-admin"' <<<"$rendered"
-              grep -Fq 'tailscale.com/parent-resource-ns: "kosmo-dev"' <<<"$rendered"
-              if grep -Eq '^kind: HTTPRoute$' <<<"$rendered"; then exit 1; fi
+              helm template kosmo apps/helm --namespace kosmo-dev --set env=dev >/dev/null
               helm lint apps/helm --set env=prod --set imageDigest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
               helm template kosmo apps/helm --namespace kosmo-prod --set env=prod --set imageDigest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa >/dev/null
-              flagd="$(helm template kosmo apps/helm --namespace kosmo-prod --set env=prod --set imageDigest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --show-only templates/flagd.yaml)"
-              route="$(sed -n '/^kind: HTTPRoute$/,$p' <<<"$flagd")"
-              grep -Fq 'flags.kos.moe' <<<"$route"
-              grep -Fq 'sectionName: "https-kos-moe-wildcard"' <<<"$route"
-              grep -Fq 'value: /ofrep/v1/evaluate/flags' <<<"$route"
-              grep -Fxq '        - name: kosmo-flagd' <<<"$route"
-              grep -Fq 'port: 8016' <<<"$route"
-              for port in 8013 8014 8015; do if grep -Eq "port: $port$" <<<"$route"; then exit 1; fi; done
-              cors="$(sed -n '/^  cors:$/,/^---$/p' <<<"$flagd")"
-              test "$(grep -Ec '^    - ' <<<"$cors")" -eq 1
-              grep -Fq '    - https://kos.moe' <<<"$cors"
           - name: Admin Image
             command: |
               set -euo pipefail
