@@ -766,7 +766,14 @@ test('current Home refresh error는 timeline을 유지하고 다음 activation�
   }
 
   await page.setViewportSize({ height: 360, width: 1440 });
-  await page.goto('/home');
+  // Enter Home from a mounted shell so initial-document cached revalidation cannot overlap this refresh.
+  await page.goto('/settings');
+  await expect(page.getByRole('heading', { name: '설정', exact: true }).first()).toBeVisible();
+  const entry = await homeEntry(page, 'navigation');
+  const initialHomeResponse = waitForGraphQLOperation(page, 'HomePageQuery');
+  await entry.click();
+  const initialHome = await initialHomeResponse;
+  await initialHome.finished();
   await expect(page.getByText('E2E Home reselection post 0')).toBeVisible();
   await scrollDocument(page);
 
@@ -780,7 +787,6 @@ test('current Home refresh error는 timeline을 유지하고 다음 activation�
     await route.abort('failed');
   });
 
-  const entry = await homeEntry(page, 'navigation');
   try {
     await entry.click();
     await expect.poll(() => refreshCount).toBe(1);
