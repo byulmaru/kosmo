@@ -34,6 +34,10 @@ export const RepresentativeStates: Story = {
   ),
 };
 
+export const ReducedMotion: Story = {
+  globals: { reduceMotion: true },
+};
+
 const styles = StyleSheet.create({
   catalog: { gap: space[8] },
 });

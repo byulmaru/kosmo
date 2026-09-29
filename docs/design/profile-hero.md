@@ -12,6 +12,7 @@ geometry를 유지하도록 한다. 이 문서는 Profile 편집 화면의 heade
   `600px` surface에서는 `600×200`, `390px` mobile에서는 `390×130`이다.
 - Profile 데이터가 로딩 중이거나 header 이미지가 없는 상태도 같은 `3:1` 영역을 유지한다. 상태에 따라 고정
   높이로 대체하거나 영역을 접지 않는다.
+- 로딩 중인 header 영역은 공용 `Skeleton`의 Wave와 reduced-motion 정적 표현을 사용한다.
 - 원본 이미지 비율이 다르면 `3:1` 경계 안에서 중앙 기준 cover crop으로 표시한다.
 - avatar overlap과 follow 등 profile action은 header 이미지 영역 밖의 hero layout이 소유한다. 이 요소의
   배치나 높이는 header 이미지의 `3:1` 계산에 포함하지 않는다.

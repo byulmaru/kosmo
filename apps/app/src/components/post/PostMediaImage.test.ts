@@ -32,10 +32,16 @@ mock.module('react-native', {
   exports: {
     Image: ImageMock,
     Pressable: 'Pressable',
-    StyleSheet: { create: <T>(styles: T) => styles },
+    StyleSheet: {
+      absoluteFill: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
+      create: <T>(styles: T) => styles,
+    },
     Text: 'Text',
     View: 'View',
   },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('../ui/StateView.tsx', import.meta.url), {
+  exports: { Skeleton: (props: object) => createElement('Skeleton', props) },
 } as unknown as Parameters<typeof mock.module>[1]);
 
 let PostMediaImage: ComponentType<{
@@ -60,6 +66,22 @@ afterEach(async () => {
 });
 
 describe('PostMediaImage', () => {
+  it('이미지 로딩 중에만 공용 Skeleton을 표시한다', async () => {
+    await render(0, media('landscape', '가로 이미지'));
+    assert.equal(rendered('Skeleton').length, 1);
+    assert.equal(rendered('Skeleton')[0]?.props.height, '100%');
+    assert.equal(rendered('Skeleton')[0]?.props.width, '100%');
+
+    await act(async () => image('landscape').props.onLoad());
+    assert.equal(rendered('Skeleton').length, 0);
+
+    await act(async () => image('landscape').props.onLoadStart());
+    assert.equal(rendered('Skeleton').length, 1);
+
+    await act(async () => image('landscape').props.onError());
+    assert.equal(rendered('Skeleton').length, 0);
+  });
+
   it('nullable Alt Text fallback과 원본 비율을 적용하되 세로 이미지는 정사각형으로 제한한다', async () => {
     await render(1, media('landscape', null));
 
