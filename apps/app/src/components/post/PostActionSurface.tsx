@@ -2,7 +2,6 @@ import { ContentReportTargetType } from '@kosmo/core/enums';
 import { View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { useContentReportMenuItem } from '@/components/content-report/ContentReportContext';
-import { useFeatureFlag } from '@/components/FeatureFlagsContext';
 import { ProfileMoreMenu } from '@/components/profile/ProfileMoreMenu';
 import { ProfileMuteAction } from '@/components/profile/ProfileMuteAction';
 import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
@@ -21,7 +20,6 @@ import type { MoreActionConfig, PostActionBarProps } from './PostActionBar';
 type Props = Readonly<{
   actionBarStyle?: StyleProp<ViewStyle>;
   onDeleted?: () => void;
-  onQuote?: (restoreFocus: () => void) => void;
   reactionSummaryStyle?: StyleProp<ViewStyle>;
   reply?: PostActionBarProps['reply'];
   socialActionTarget: PostActionSurface_post$key;
@@ -44,12 +42,10 @@ const postActionSurfaceFragment = graphql`
 export function PostActionSurface({
   actionBarStyle,
   onDeleted,
-  onQuote,
   reactionSummaryStyle,
   reply,
   socialActionTarget,
 }: Props) {
-  const quoteEnabled = useFeatureFlag('quote');
   const target = useFragment(postActionSurfaceFragment, socialActionTarget);
   const { sessionId } = useSession();
   const authentication = usePostActionAuthentication(true);
@@ -88,7 +84,6 @@ export function PostActionSurface({
         moreItems={moreItems}
         onBookmarkError={onBookmarkError}
         onDeleted={onDeleted}
-        onQuote={quoteEnabled ? onQuote : undefined}
         onRepostError={onRepostError}
         onResolutionRequired={authentication.resolve}
         post={target.actionBar}
