@@ -35,7 +35,10 @@ import {
   postContentDocumentToText,
 } from '@kosmo/core/post-content/server';
 import { temporalClient } from '@kosmo/core/temporal/client';
-import { remoteProfileRefreshWorkflow } from '@kosmo/core/temporal/workflows';
+import {
+  remoteProfileLookupWorkflow,
+  remoteProfileRefreshWorkflow,
+} from '@kosmo/core/temporal/workflows';
 import { eq, ne } from 'drizzle-orm';
 import { setInboundObservabilityReporter } from './inbound-observability';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
@@ -80,8 +83,17 @@ const assertRemoteProfileRefreshCall = (workflow: unknown, options: unknown, act
   assert.equal(workflowOptions.workflowIdReusePolicy, 'ALLOW_DUPLICATE');
 };
 
+const executeTemporalWorkflow = temporalClient.workflow.execute.bind(temporalClient.workflow) as (
+  workflow: string,
+  options: unknown,
+) => Promise<unknown>;
+
 const mockRemoteProfileRefresh = (execute: (actorUri: string) => Promise<string>) =>
   mock.method(temporalClient.workflow, 'execute', async (workflow: unknown, options: unknown) => {
+    if (workflow === remoteProfileLookupWorkflow.workflow) {
+      return executeTemporalWorkflow(workflow as string, options);
+    }
+
     assert.ok(options && typeof options === 'object');
     const actorUri = (options as RemoteProfileRefreshOptions).args?.[0]?.actorUri;
     assert.ok(typeof actorUri === 'string');
@@ -1120,6 +1132,33 @@ describe('inbound Create dispatch', () => {
     assert.equal(await db.$count(Posts), 0);
   });
 
+  test('a hydrated Note reference does not recover its stored UNRESPONSIVE attributed actor', async () => {
+    const profile = await createStoredRemoteActor({ instanceState: InstanceState.UNRESPONSIVE });
+    const objectUri = new URL('https://objects.example/notes/unresponsive-attribution');
+    const result = await materializeHydratedRemoteNote({
+      context: createContext(),
+      note: new Note({
+        attribution: remoteActorUri,
+        content: 'Referenced original',
+        id: objectUri,
+        to: PUBLIC_COLLECTION,
+      }),
+      objectUri,
+      observation: createObservation,
+      receivedAt,
+    });
+    const materialized = await getMaterializedPost(objectUri);
+    const instance = await db
+      .select()
+      .from(Instances)
+      .where(eq(Instances.id, profile.instanceId))
+      .then(firstOrThrow);
+
+    assert.deepEqual(result, { postId: materialized.post.id, status: 'created' });
+    assert.equal(materialized.post.profileId, profile.id);
+    assert.equal(instance.state, InstanceState.UNRESPONSIVE);
+  });
+
   test('rejects a mismatched discovered author without persisting the actor or Post', async () => {
     const objectUri = new URL('https://objects.example/notes/mismatched-author');
     const lookupObject = mock.fn(
@@ -1404,6 +1443,13 @@ describe('inbound Create dispatch', () => {
       BEFORE INSERT ON profile_media
       FOR EACH ROW EXECUTE FUNCTION fail_hydrated_author_profile_media_insert()
     `;
+    const actorDocumentWorkflowId = remoteProfileLookupWorkflow.workflowIdFromArgs({
+      actorJsonLd: {},
+      actorUri: remoteActorUri.href,
+      contextOrigin: publicOrigin,
+      kind: 'actor-document',
+      receivedAt: receivedAt.toString(),
+    });
 
     try {
       await assert.rejects(
@@ -1421,6 +1467,9 @@ describe('inbound Create dispatch', () => {
         }),
       );
     } finally {
+      const handle = temporalClient.workflow.getHandle(actorDocumentWorkflowId);
+      await handle.terminate('profile media failure fixture cleanup').catch(() => undefined);
+      await handle.result().catch(() => undefined);
       await pg`DROP TRIGGER fail_hydrated_author_profile_media_insert ON profile_media`;
       await pg`DROP FUNCTION fail_hydrated_author_profile_media_insert()`;
       fetchMock.mock.restore();

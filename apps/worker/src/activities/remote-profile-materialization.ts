@@ -14,7 +14,8 @@ import {
 import { ApplicationFailure } from '@temporalio/activity';
 import { and, eq } from 'drizzle-orm';
 import type {
-  RemoteProfileLookupInput,
+  RemoteProfileActorMaterializationInput,
+  RemoteProfileHandleLookupInput,
   RemoteProfileMaterializationInput,
 } from '@kosmo/core/temporal/workflows';
 
@@ -44,6 +45,61 @@ export type RemoteProfileMaterializationState = {
   readonly needsRefresh: boolean;
 };
 
+const rethrowRemoteProfileMaterializationError = (error: unknown): never => {
+  if (error instanceof RemoteActorMaterializationError) {
+    throw ApplicationFailure.nonRetryable(error.message, 'RemoteActorMaterializationError');
+  }
+
+  if (error instanceof ConflictError) {
+    throw ApplicationFailure.nonRetryable(error.message, 'ConflictError');
+  }
+
+  if (error instanceof NotFoundError) {
+    throw ApplicationFailure.nonRetryable(error.message, 'NotFoundError');
+  }
+
+  throw error;
+};
+
+type StoredRemoteProfileActor = NonNullable<
+  Awaited<ReturnType<typeof findStoredRemoteProfileActorByUri>>
+>;
+
+const requireUsableStoredRemoteProfileActor = (stored: StoredRemoteProfileActor) => {
+  if (
+    stored.profile.state !== ProfileState.ACTIVE ||
+    stored.instance.state === InstanceState.SUSPENDED
+  ) {
+    throw ApplicationFailure.nonRetryable('Profile not found', 'NotFoundError');
+  }
+
+  return stored;
+};
+
+const ensureMissingRemoteProfileLookupAllowed = async (actorUri: URL) => {
+  const localInstance = await resolveConfiguredLocalInstance();
+  if (actorUri.origin === localInstance.canonicalOrigin) {
+    throw new ConflictError({ message: 'Remote actor URI uses the local origin' });
+  }
+
+  const domain = `${actorUri.hostname.toLowerCase().replace(/\.$/, '')}${
+    actorUri.port ? `:${actorUri.port}` : ''
+  }`;
+  const instance = await db
+    .select()
+    .from(Instances)
+    .where(eq(Instances.domain, domain))
+    .limit(1)
+    .then(first);
+
+  if (
+    instance &&
+    (instance.kind !== InstanceKind.ACTIVITYPUB || instance.state === InstanceState.SUSPENDED)
+  ) {
+    throw new NotFoundError('Profile not found');
+  }
+};
+
 const findStoredRemoteProfileActorState = async (
   input: RemoteProfileMaterializationInput,
 ): Promise<RemoteProfileMaterializationState | null> => {
@@ -53,25 +109,19 @@ const findStoredRemoteProfileActorState = async (
     return null;
   }
 
-  if (
-    stored.profile.state !== ProfileState.ACTIVE ||
-    stored.instance.state === InstanceState.SUSPENDED
-  ) {
-    throw ApplicationFailure.nonRetryable('Profile not found', 'NotFoundError');
-  }
+  const usable = requireUsableStoredRemoteProfileActor(stored);
 
   return {
-    profileId: stored.profile.id,
+    profileId: usable.profile.id,
     needsRefresh:
-      stored.instance.state !== InstanceState.UNRESPONSIVE &&
-      (stored.actor.lastFetchedAt === null ||
-        stored.actor.lastFetchedAt.add(remoteActorRefreshTtl).epochNanoseconds <=
-          Temporal.Now.instant().epochNanoseconds),
+      usable.actor.lastFetchedAt === null ||
+      usable.actor.lastFetchedAt.add(remoteActorRefreshTtl).epochNanoseconds <=
+        Temporal.Now.instant().epochNanoseconds,
   };
 };
 
 export const lookupRemoteActorUriActivity = async (
-  input: RemoteProfileLookupInput,
+  input: RemoteProfileHandleLookupInput,
 ): Promise<string | null> => {
   const stored = await db
     .select({ actorUri: ActivityPubActors.uri })
@@ -220,6 +270,7 @@ export const refreshRemoteProfileActorActivity = async (
       actorUri: new URL(input.actorUri),
       documentLoader,
       now,
+      reactivateUnresponsive: true,
     }).catch(wrapRemoteProfileFetchError);
 
     return profile.id;
@@ -249,14 +300,82 @@ export const refreshRemoteProfileActorActivity = async (
 };
 
 export const materializeRemoteProfileActorActivity = async (
-  input: RemoteProfileMaterializationInput,
-): Promise<RemoteProfileMaterializationState> => {
-  const stored = await findStoredRemoteProfileActorState(input);
+  input: RemoteProfileActorMaterializationInput,
+): Promise<RemoteProfileMaterializationState | null> => {
+  try {
+    if ('kind' in input && input.kind === 'stored-actor') {
+      const stored = await findStoredRemoteProfileActorByUri(input.actorUri);
+      if (!stored) {
+        await ensureMissingRemoteProfileLookupAllowed(new URL(input.actorUri));
+        return null;
+      }
 
-  if (stored) {
+      const usable = requireUsableStoredRemoteProfileActor(stored);
+      const actor = input.receipt ? await reactivateStoredRemoteProfileActor(usable) : usable;
+      return { needsRefresh: false, profileId: actor.profile.id };
+    }
+
+    if ('kind' in input && (input.kind === 'actor-document' || input.kind === 'update')) {
+      if (input.kind === 'update') {
+        const stored = await findStoredRemoteProfileActorByUri(input.actorUri);
+        if (!stored) {
+          return null;
+        }
+
+        requireUsableStoredRemoteProfileActor(stored);
+      }
+
+      const context = federation.createContext(new URL(input.contextOrigin), undefined);
+      const profile = await materializeRemoteProfileActor({
+        actorJsonLd: input.actorJsonLd,
+        actorUri: new URL(input.actorUri),
+        context,
+        now: Temporal.Instant.from(input.receivedAt),
+        reactivateUnresponsive: true,
+      });
+      return { needsRefresh: false, profileId: profile.id };
+    }
+
+    const state = await findStoredRemoteProfileActorState(input);
+    if (state) {
+      return state;
+    }
+
+    const profileId = await refreshRemoteProfileActorActivity(input);
+    return { needsRefresh: false, profileId };
+  } catch (error) {
+    return rethrowRemoteProfileMaterializationError(error);
+  }
+};
+
+const reactivateStoredRemoteProfileActor = async (stored: StoredRemoteProfileActor) => {
+  if (stored.instance.state !== InstanceState.UNRESPONSIVE) {
     return stored;
   }
 
-  const profileId = await refreshRemoteProfileActorActivity(input);
-  return { needsRefresh: false, profileId };
+  const reactivated = await db
+    .update(Instances)
+    .set({ state: InstanceState.ACTIVE })
+    .where(
+      and(eq(Instances.id, stored.instance.id), eq(Instances.state, InstanceState.UNRESPONSIVE)),
+    )
+    .returning()
+    .then(first);
+
+  if (reactivated) {
+    return { ...stored, instance: reactivated };
+  }
+
+  const current = await db
+    .select()
+    .from(Instances)
+    .where(eq(Instances.id, stored.instance.id))
+    .limit(1)
+    .then(first);
+
+  if (!current || current.state !== InstanceState.ACTIVE) {
+    throw ApplicationFailure.nonRetryable('Profile not found', 'NotFoundError');
+  }
+
+  return { ...stored, instance: current };
 };

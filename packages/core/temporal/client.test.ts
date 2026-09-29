@@ -19,7 +19,8 @@ process.env.TEMPORAL_ADDRESS ??= '127.0.0.1:7233';
 process.env.TEMPORAL_NAMESPACE ??= 'test';
 
 const { runWorkflow, temporalClient } = await import('./client');
-const { remoteProfileLookupWorkflow } = await import('./remote-profile');
+const { remoteProfileLookupWorkflow, remoteProfileRefreshWorkflow } =
+  await import('./remote-profile');
 
 const importClient = (environment: NodeJS.ProcessEnv) =>
   spawnSync(
@@ -399,6 +400,78 @@ test('remote Profile Workflow builder는 normalized handle과 profileId를 실�
     deadline.mock.restore();
     execute.mock.restore();
   }
+});
+
+test('Remote Profile lookup 입력별 ID를 구분하고 같은 receipt는 재사용한다', () => {
+  const actorUri = 'https://remote.example/users/alice';
+  const contextOrigin = 'https://local.example';
+  const workflowIdFromArgs = remoteProfileLookupWorkflow.workflowIdFromArgs;
+  const inputs = [
+    {
+      domain: 'remote.example',
+      handle: 'alice',
+    },
+    {
+      actorUri,
+      kind: 'stored-actor',
+    },
+    {
+      actorUri,
+      kind: 'stored-actor',
+      receipt: {
+        activityUri: 'https://remote.example/activities/follow-1',
+        receivedAt: '2026-08-01T00:00:01Z',
+      },
+    },
+    {
+      actorJsonLd: { id: actorUri, type: 'Person' },
+      actorUri,
+      contextOrigin,
+      kind: 'actor-document',
+      receivedAt: '2026-08-01T00:00:01Z',
+    },
+    {
+      actorJsonLd: { id: actorUri, type: 'Person' },
+      activityUri: 'https://remote.example/activities/update-1',
+      actorUri,
+      contextOrigin,
+      kind: 'update',
+      receivedAt: '2026-08-01T00:00:02Z',
+    },
+  ] satisfies RemoteProfileLookupInput[];
+  const ids = inputs.map((input) => workflowIdFromArgs(input));
+
+  assert.equal(new Set(ids).size, inputs.length);
+  assert.equal(workflowIdFromArgs(inputs[2]!), ids[2]);
+  assert.notEqual(
+    workflowIdFromArgs({
+      ...inputs[2]!,
+      receipt: {
+        ...inputs[2]!.receipt!,
+        activityUri: 'https://remote.example/activities/follow-2',
+      },
+    }),
+    ids[2],
+  );
+  assert.notEqual(
+    workflowIdFromArgs({ ...inputs[4]!, receivedAt: '2026-08-01T00:00:03Z' }),
+    ids[4],
+  );
+});
+
+test('Remote Profile refresh ID는 기존 actor·profile identity를 유지한다', () => {
+  const actorUri = 'https://remote.example/users/alice';
+  const workflowIdFromArgs = remoteProfileRefreshWorkflow.workflowIdFromArgs;
+  const legacyId = workflowIdFromArgs({ actorUri });
+
+  assert.equal(
+    legacyId,
+    `${remoteProfileRefreshWorkflow.workflow}:["${actorUri}","configured-local"]`,
+  );
+  assert.notEqual(
+    workflowIdFromArgs({ actorUri, profileId: '00000000-0000-8000-8000-000000000001' }),
+    legacyId,
+  );
 });
 
 test('공용 task queue를 적용한다', async () => {

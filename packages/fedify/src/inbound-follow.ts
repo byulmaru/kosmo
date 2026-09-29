@@ -73,7 +73,11 @@ export const handleInboundFollow = async (
   let remoteActor: Awaited<ReturnType<typeof findOrMaterializeRemoteProfileActorByUri>>;
 
   try {
-    remoteActor = await findOrMaterializeRemoteProfileActorByUri({ actorUri, context, now });
+    remoteActor = await findOrMaterializeRemoteProfileActorByUri({
+      actorUri,
+      context,
+      receipt: { activityUri: follow.id, receivedAt: now },
+    });
   } catch (error) {
     if (isExpectedRemoteActorRejection(error)) {
       observeInbound({
@@ -247,7 +251,11 @@ const handleInboundUndoAnnounce = async (
   return 'deleted';
 };
 
-export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo): Promise<void> => {
+export const handleInboundUndo = async (
+  context: InboxContext<void>,
+  undo: Undo,
+  receivedAt: Temporal.Instant = Temporal.Now.instant(),
+): Promise<void> => {
   const actorHref = uniqueHref(undo.actorIds);
   const actorUri = actorHref ? new URL(actorHref) : null;
   if (!isHttpUri(actorUri)) {
@@ -309,7 +317,10 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
   let remoteActor: Awaited<ReturnType<typeof findUsableStoredRemoteProfileActorByUri>>;
 
   try {
-    remoteActor = await findUsableStoredRemoteProfileActorByUri(actorUri);
+    remoteActor = await findUsableStoredRemoteProfileActorByUri(actorUri, {
+      activityUri: undo.id,
+      receivedAt,
+    });
   } catch (error) {
     if (isExpectedRemoteActorRejection(error)) {
       observeInbound({
