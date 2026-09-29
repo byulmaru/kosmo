@@ -83,8 +83,6 @@ export default function PrivacyScreen() {
         있는 권리를 안내합니다.
       </PolicyParagraph>
 
-      <PolicyParagraph>Session Replay 적용 시점은 별도로 안내합니다.</PolicyParagraph>
-
       <PolicySection title="1. 개인정보 처리 목적·항목·보유기간 및 근거">
         <SubsectionTitle>동의를 받아 처리하는 개인정보</SubsectionTitle>
         <PolicyParagraph>별도의 동의를 받아 처리하는 항목은 없습니다.</PolicyParagraph>
@@ -119,7 +117,7 @@ export default function PrivacyScreen() {
           />
           <TableRow
             cells={[
-              '아래 7절의 PostHog 자동 수집 정보, opaque Account ID와 선택 Profile ID, 행동 이벤트와 Session Replay',
+              '아래 7절의 이용 정보와 화면 기록, 로그인한 경우 계정·프로필 식별자',
               '기능 이용 현황 파악, 사용자 흐름 개선, 품질 문제 확인과 제품 우선순위 결정',
               '일반 이벤트는 수집일부터 12개월간 보유하며, 보유 기간이 지나면 지체 없이 파기합니다. Session Replay는 수집일부터 30일입니다.',
               '개인정보 보호법 제15조 제1항 제6호(서비스 개선을 위한 정당한 이익). 국외 이전은 제28조의8 제1항 제3호 가목에 따른 계약 체결·이행에 필요한 처리위탁·보관으로 처리하며, 이 방침에 공개합니다.',
@@ -137,7 +135,7 @@ export default function PrivacyScreen() {
         <PolicyParagraph>
           별마루 ID 로그인과 Kosmo 이용 과정에서 이용자가 직접 입력하거나 서비스 동작으로 생성되는
           정보를 수집합니다. 문의를 보내는 경우 이메일을 통해 정보를 수집합니다. Web 분석 정보는
-          브라우저의 PostHog Web SDK가 자동으로 수집합니다.
+          PostHog가 자동으로 수집합니다.
         </PolicyParagraph>
       </PolicySection>
 
@@ -275,58 +273,25 @@ export default function PrivacyScreen() {
           <TableRow
             cells={[
               '수집 항목',
-              'pageview·pageleave·autocapture 등 표준 event, 페이지 URL·query·referrer·session metadata, 기기·OS·브라우저 정보, 접속 일시, 분석용 device/session ID',
+              '방문한 페이지 주소와 유입 경로, 검색어가 포함될 수 있는 URL, 클릭·스크롤 등 서비스 이용 기록, 기기·운영체제·브라우저 정보, 접속 일시, 분석용 식별자',
             ]}
           />
           <TableRow
             cells={[
-              '표준 metadata',
-              'query의 q, 기본 click ID, referrer·session에서 파생된 검색·캠페인 metadata와 utm_*가 포함될 수 있습니다. 앱의 명시적 검색 이벤트에는 검색 원문과 선택한 Profile ID를 넣지 않습니다.',
+              '로그인 연결',
+              '로그인한 경우 계정·프로필 식별자와 서비스 이용 기록을 연결합니다.',
             ]}
           />
           <TableRow
             cells={[
-              '로그인 후 연결 정보',
-              'opaque Account ID와 이벤트 발생 시 선택 Profile ID. 이메일, 이름과 handle은 identity trait로 보내지 않습니다.',
+              '화면 기록',
+              '서비스 이용 중 화면 내용과 클릭·스크롤 등을 세션의 10%에서 표본 기록합니다. 입력값과 게시물 본문 등은 가림 처리합니다.',
             ]}
           />
           <TableRow
             cells={[
-              '행동 이벤트',
-              'Profile 생성·선택, 게시, 팔로우, 검색 제출·결과 load·결과 선택 등 타입이 지정된 이벤트를 수집합니다. 앱이 보내는 검색 이벤트의 별도 속성에는 검색 원문을 추가하지 않습니다.',
-            ]}
-          />
-          <TableRow
-            cells={[
-              '검색 입력 위험',
-              'q는 자유 형식이어서 예상하지 못한 개인정보가 입력될 수 있습니다. 현재 검색 결과는 공개 Profile handle로 한정하며, 게시물·본문·전문 검색 등으로 범위를 넓히기 전에 수집 결정을 다시 검토합니다.',
-            ]}
-          />
-          <TableRow
-            cells={['원격 설정', 'feature flag와 remote config 요청이 발생할 수 있습니다.']}
-          />
-          <TableRow
-            cells={[
-              'Session Replay',
-              'Session Replay 적용 시 세션의 10%를 표본 수집하고 수집일부터 30일 보관합니다. Cloud Normal input masking은 input·textarea 값을 가리지만, 화면의 모든 텍스트·이미지를 가리는 것은 아닙니다.',
-            ]}
-          />
-          <TableRow
-            cells={[
-              'Web 프로필 bio 보호',
-              '프로필 상세와 프로필 목록 bio는 Session Replay에서 마스킹하고 자동 수집에서 제외합니다. 이 보호는 새 Web 기록에 적용되며 표시명, handle과 그 밖의 화면 텍스트는 계속 보일 수 있습니다.',
-            ]}
-          />
-          <TableRow
-            cells={[
-              '보호 경계',
-              '게시물 본문 보호 영역의 ph-mask는 Replay에서 해당 영역의 텍스트를 masking하고, ph-no-capture는 해당 DOM subtree를 autocapture에서 제외합니다. 두 marker는 화면 전체, URL metadata 또는 네트워크 요청 전체를 가리지 않습니다.',
-            ]}
-          />
-          <TableRow
-            cells={[
-              '방법과 통제',
-              'Web SDK로 자동 수집하며 맞춤형 광고나 제3자 광고 제공에 사용하지 않습니다. 브라우저 추적 차단 기능 또는 hello@byulmaru.co 요청으로 제한할 수 있습니다.',
+              '이용 목적',
+              '서비스 이용을 분석하고 제품을 개선하는 데 사용하며, 맞춤형 광고에는 사용하지 않습니다.',
             ]}
           />
         </PolicyTable>
