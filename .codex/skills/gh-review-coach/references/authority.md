@@ -4,8 +4,10 @@
 
 When a PR adds, changes, or relies on OpenSpec:
 
-- Read the applicable canonical `docs/domain` and `docs/design` files and fetch the
-  latest Linear issue bodies, relations, and contract-changing comments independently.
+- Read the applicable product-canonical `docs/domain` files and accepted ADRs, and fetch the
+  latest Linear issue bodies, relations, and contract-changing comments independently. Read
+  `docs/design` as the authority for visual structure/state/accessibility claims; its authority
+  does not extend to product policy, permissions, domain state transitions, or server behavior.
 - Treat OpenSpec as a downstream translation, never as evidence that an upstream
   requirement or approval exists.
 - Check every changed Requirement, Decision, task Deliverable, and Guardrail against
