@@ -6,7 +6,8 @@ Accepted — PROD-875 요구사항 정리에서 사용자가 권한 안내 시�
 표시와 본문 예외, foreground OS 배너, Account의 Profile 수신 범위, 안내 반복 억제, Push 탭의
 cross-profile 처리, 다중 설치 fan-out, Push 만료와 첫 릴리스의 in-app 설정 부재를 확정했다. PROD-912에서
 사용자가 해제·로그아웃·무효화된 installation row와 token의 즉시 삭제, 삭제 뒤 재등록의 신규 수신 시작
-시각과 동일 Account의 재설치 중복 정리를 확정했다.
+시각과 동일 Account의 재설치 중복 정리를 확정했다. 2026-09-29 사용자 승인으로 Push 목적지 lookup은
+Notification ID를 사용하고, registration 이후 전달 경계는 best-effort로 정리했다.
 
 ## 날짜
 
@@ -55,12 +56,12 @@ installation token lifecycle을 고정하므로 권한 안내 시점,
   row ID와 현재 token이 모두 일치하는 row만 즉시 삭제한다. 늦게 도착한 이전 token 결과는 갱신된 현재 token을
   삭제하지 않는다.
 - 이전 문서의 `현재 Account·Session` 일치 조건은 이 Account 소유권 및 lifecycle association 규칙으로 대체한다.
-- 삭제된 installation을 다시 등록하면 삭제 전 registration epoch나 unread Notification을 재사용하지 않고,
-  새 row ID와 새 수신 시작 시각을 기록한다. 이전에 반환된 ID는 재사용하지 않으며, 늦게 도착한 이전 ID의
-  unregister가 새 registration row를 삭제하지 않는다. 새 registration 시각 이전에 생성된 Notification은
-  backlog로 전달하지 않는다.
+- 삭제된 installation을 다시 등록하면 새 server-issued row ID를 사용한다. 이전 ID는 재사용하지 않으며, 늦게
+  도착한 이전 ID의 unregister가 새 registration row를 삭제하지 않는다. registration과 Notification 생성 시각의
+  엄격한 cut-off나 epoch recovery는 요구하지 않으며, 신규 수신은 일반 전달 flow에서 best-effort로 시작한다.
+  이미 생성된 unread Notification을 별도 backlog로 재생하지 않는다.
 - 같은 Account가 새 registration으로 현재 active token을 다시 등록하면 기존 중복 row를 같은 원자적 작업에서
-  삭제한 뒤 새 row ID와 새 registration epoch로 등록한다. 다른 Account가 소유한 active token은 삭제하거나
+  삭제한 뒤 새 row ID로 등록한다. 다른 Account가 소유한 active token은 삭제하거나
   탈취하지 않고 등록을 거부한다.
 - 첫 릴리스에는 전역·알림 유형별·Profile별 in-app Push enable/disable control이나 preference API를
   두지 않는다. Push 수신 여부는 OS 알림 설정으로 제어하며, 앱 설정은 OS 알림 설정으로 이동하는
@@ -72,17 +73,19 @@ installation token lifecycle을 고정하므로 권한 안내 시점,
   않는다.
 - 같은 설치에서 안내를 닫거나 OS 권한을 거부한 뒤에는 안내를 자동으로 다시 표시하지 않는다. 일반적인
   앱 업데이트 뒤에도 안내를 자동으로 다시 표시하지 않는다.
-- Push를 탭하면 현재 Account가 Recipient Profile에 접근할 수 있는지 다시 확인한다. 접근할 수 있으면
-  해당 Profile로 전환한 뒤 target을 열고, target이 삭제되었거나 접근할 수 없으면 접근 가능한 알림 목록만
-  연다. 이 fallback에서는 별도 toast·message를 표시하지 않는다. 로그인되지 않은 상태에서 Push를 탭하면
+- Push payload의 route data는 `notificationId`와 `recipientProfileId`를 사용한다. Push를 탭하면
+  `notificationId`로 목적지 정보를 조회한다. 현재 Account가 Recipient Profile에 접근할 수 있는지 다시 확인하고,
+  접근할 수 있으면 해당 Profile로 전환한 뒤 조회된 목적지로 기존 route를 사용한다. destination이 없거나 접근할 수 없는 경우에도
+  Push 전용 redirect를 추가하지 않으며, 목적지를 구성할 수 없을 때는 일반 알림 목록을 열 수 있다. 로그인되지
+  않은 상태에서 Push를 탭하면
   원래 target을 버리고 일반 로그인 흐름을 따르며, 로그인 뒤 Push target으로 자동 복귀하지 않는다.
 - Notification 생성 시각부터 24시간이 지나면 해당 Push의 전달을 시도하지 않는다. 이 24시간은 최초
   Notification 생성 시각을 기준으로 하며, 재시도나 token refresh로 연장하거나 다시 시작하지 않는다. 이
   만료는 원래 인앱 Notification lifecycle을 변경하지 않는다.
-- 최초 registration·새 device·OS 권한 허용으로 전달 대상을 등록할 때 registration을 받은 시점 이후에
-  생성된 Notification만 전달한다. 이미 생성된 unread Notification을 새 설치나 권한 허용 뒤에 backlog로
-  재생하지 않는다. OS 상태 변화의 정확한 감지 시점은 이 ADR에서 고정하지 않으며, client는 관찰 가능한
-  OS 상태를 동기화한다.
+- 최초 registration·새 device·OS 권한 허용 뒤 신규 Notification 전달은 일반 flow에서 best-effort로 시작한다.
+  registration 시각과 Notification 생성 시각의 엄격한 cut-off는 요구하지 않으며, 이미 생성된 unread Notification을
+  별도 backlog로 재생하지 않는다. OS 상태 변화의 정확한 감지 시점은 이 ADR에서 고정하지 않으며, client는
+  관찰 가능한 OS 상태를 동기화한다.
 - Notification이 현재 읽음 상태라는 이유만으로 Push 전송·재시도를 제외하거나 취소하지 않는다. 다른 표면에서
   읽어도 Push를 취소하지 않으며, 최초 Notification 생성 시각부터 24시간인 만료는 그대로 유지한다. Push
   전달 자체는 canonical read state를 변경하지 않는다.

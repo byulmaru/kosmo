@@ -83,12 +83,12 @@ composer control은 자체 동작만 수행한다. 모두 읽음, unread indicat
   Session도 해당 row를 관리할 수 있지만, 등록 당시 연결된 Session의 로그아웃·폐기와 Account 삭제에 따른 기존
   cleanup은 유지한다. Provider의 invalid·unregistered 결과는 Account, row ID와 현재 token이 모두 일치할 때만 row와
   token을 즉시 삭제하며, 늦은 이전 token 결과는 갱신된 token을 삭제하지 않는다.
-- 삭제 뒤 재등록은 이전에 반환된 ID를 재사용하지 않고 새 row ID와 새 수신 시작 시각을 기록한다. 늦게 도착한
-  이전 ID의 unregister가 새 registration row를 삭제하지 않으며, 삭제 전 registration epoch나 unread
-  Notification을 재사용하지 않는다. 새 registration 시각 이전에 생성된 Notification은 Push backlog로 전달하지
-  않는다.
+- 삭제 뒤 재등록은 이전 ID를 재사용하지 않고 새 row ID를 사용한다. 늦게 도착한 이전 ID의 unregister가 새
+  registration row를 삭제하지 않는다. registration과 Notification 생성 시각의 엄격한 cut-off나 epoch recovery는
+  요구하지 않으며, 신규 수신은 일반 전달 flow에서 best-effort로 시작한다. 이미 생성된 unread Notification은
+  별도 Push backlog로 재생하지 않는다.
 - 같은 Account가 새 registration으로 현재 active token을 다시 등록하면 기존 중복 row를 원자적으로 정리한 뒤
-  새 row ID와 새 registration epoch로 등록한다. 다른 Account가 소유한 active token은 등록하거나 삭제하지 않는다.
+  새 row ID로 등록한다. 다른 Account가 소유한 active token은 등록하거나 삭제하지 않는다.
 - 첫 릴리스에는 전역·알림 유형별·Profile별 in-app Push enable/disable control이나 preference API를
   두지 않는다. Push 수신 여부는 OS 알림 설정만으로 제어하며, 기존 Notification의 Mute·Block·visibility
   억제 정책은 계속 적용한다.
@@ -99,18 +99,19 @@ composer control은 자체 동작만 수행한다. 모두 읽음, unread indicat
   않는다.
 - 같은 설치에서 안내를 닫거나 OS 권한을 거부한 뒤에는 안내를 자동으로 다시 표시하지 않는다. 일반적인 앱
   업데이트 뒤에도 안내를 자동으로 다시 표시하지 않는다.
-- 앱 설정에서 OS 알림 설정으로 이동하는 action을 제공한다. Push 탭 시에는 현재 Account가 Recipient Profile에
-  접근할 수 있는지 다시 확인한 뒤,
-  접근할 수 있으면 해당 Profile로 전환해 target을 연다. target이 삭제되었거나 접근할 수 없으면 접근 가능한
-  알림 목록만 열고 별도 toast·message를 표시하지 않는다. 로그인되지 않은 상태에서 Push를 탭하면 원래
-  target을 버리고 일반 로그인 흐름을 따르며, 로그인 뒤 Push target으로 자동 복귀하지 않는다.
+- 앱 설정에서 OS 알림 설정으로 이동하는 action을 제공한다. Push payload의 route data는 `notificationId`와
+  `recipientProfileId`를 사용한다. Push를 탭하면 `notificationId`로 목적지 정보를 조회한다. 현재 Account가
+  Recipient Profile에 접근할 수 있는지 다시 확인하고, 접근할 수 있으면 해당 Profile로 전환한 뒤 조회된 목적지로
+  기존 route를 사용한다. destination이 없거나 접근할 수 없는 경우에도 Push 전용 redirect를 추가하지 않으며, 목적지를 구성할
+  수 없을 때는 일반 알림 목록을 열 수 있다. 로그인되지 않은 상태에서 Push를 탭하면 원래 target을 버리고 일반
+  로그인 흐름을 따르며, 로그인 뒤 Push target으로 자동 복귀하지 않는다.
 - Notification 생성 시각부터 24시간이 지나면 해당 Push의 전달을 시도하지 않는다. 이 24시간은 최초
   Notification 생성 시각을 기준으로 하며, 재시도나 token refresh로 연장하거나 다시 시작하지 않는다. 이
   만료는 원래 인앱 Notification lifecycle을 변경하지 않는다.
-- 최초 registration·새 device·OS 권한 허용으로 전달 대상을 등록할 때 registration을 받은 시점 이후에
-  생성된 Notification만 전달한다. 이미 생성된 unread Notification을 새 설치나 권한 허용 뒤에 backlog로
-  재생하지 않는다. OS 상태 변화의 정확한 감지 시점은 이 문서에서 고정하지 않으며, client는 관찰 가능한
-  OS 상태를 동기화한다.
+- 최초 registration·새 device·OS 권한 허용 뒤 신규 Notification 전달은 일반 flow에서 best-effort로 시작한다.
+  registration 시각과 Notification 생성 시각의 엄격한 cut-off는 요구하지 않으며, 이미 생성된 unread Notification을
+  별도 backlog로 재생하지 않는다. OS 상태 변화의 정확한 감지 시점은 이 문서에서 고정하지 않으며, client는
+  관찰 가능한 OS 상태를 동기화한다.
 - Notification이 현재 읽음 상태라는 이유만으로 Push 전송·재시도를 제외하거나 취소하지 않는다. 다른 표면에서
   읽어도 Push를 취소하지 않으며, 최초 Notification 생성 시각부터 24시간인 만료는 그대로 유지한다. Push
   전달 자체는 canonical read state를 변경하지 않는다.

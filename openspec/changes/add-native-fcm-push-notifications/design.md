@@ -89,10 +89,11 @@ Notification은 source lifecycle과 visibility 정책에 따라 post-commit effe
    OS 권한 요청을 시작한다. 권한 상태가 허용된 뒤 native FCM token을 등록·갱신하고, OS native notification
    surface가 foreground banner와 background·terminated 수신을 담당하도록 한다. 일반 앱 lifecycle과 logout/
    account switch를 registration lifecycle에 연결한다.
-3. **tap routing:** Push payload에는 Recipient Profile과 target을 다시 조회할 수 있는 최소 식별 정보를 둔다.
-   앱은 현재 Account 권한을 서버에서 재검증한 뒤 Profile 전환과 route 이동을 수행하고, 삭제·접근 불가 target은
-   접근 가능한 Notification 목록으로 수렴한다. logged-out tap은 일반 login으로 수렴하고 원래 target을 보존하지
-   않는다.
+3. **tap routing:** Push payload는 `notificationId`와 `recipientProfileId`를 제공한다. 앱은 `notificationId`로
+   목적지 정보를 조회한 뒤 현재 Account 권한을 서버에서 재검증하고, 접근 가능한 경우 Profile을 전환해 조회된
+   목적지로 기존 route를 사용한다.
+   destination의 missing·access·error 상태는 기존 destination 동작을 따르며, 목적지를 구성할 수 없으면 일반
+   Notification 목록을 fallback으로 사용할 수 있다. logged-out tap은 일반 login으로 수렴하고 원래 target을 보존하지 않는다.
 4. **공통 post-commit delivery flow:** canonical Notification materialization이 성공한 결과를 하나의 공통
    전달 lifecycle 경계로 넘겨 installation별 target 계산과 Provider 전달을 수행한다. 현재 source Workflow가 이
    flow를 호출할 수 있고, 향후 generator도 domain owner가 연결한 저장 성공 결과를 같은 flow로 넘긴다. 어떤
@@ -106,9 +107,10 @@ Notification은 source lifecycle과 visibility 정책에 따라 post-commit effe
    transaction을 바꾸지 않도록 한다. 정확한 API·workflow·activity shape는 고정하지 않으며, 기존 source
    Workflow start가 Notification materialization 전에 실패하면 현재 start-failure 관측 경계를 유지하고, 이
    change는 전역 repair/reconciliation을 보장하거나 새 범위로 확장하지 않는다.
-5. **증거 수집:** unit/integration 검증은 registration ownership, payload redaction, expiry, no backlog,
+5. **증거 수집:** unit/integration 검증은 registration ownership, payload redaction, expiry,
+   registration eligibility와 historical backlog 미재생,
    read independence, retry/dedup와 post-commit isolation을 확인한다. 별도 signed Android·iOS 검증은
-   permission CTA, foreground/background/terminated, cross-profile, inaccessible, logged-out, token refresh와
+   permission CTA, foreground/background/terminated, cross-profile Push navigation, logged-out, token refresh와
    실제 device arrival을 확인하고 Provider accepted evidence와 나란히 기록한다.
 
 ### Allowed Alternatives
@@ -132,7 +134,7 @@ Notification은 source lifecycle과 visibility 정책에 따라 post-commit effe
 ### Known Traps
 
 - selected Profile 또는 가장 최근 token 하나만 선택해 다른 Profile·설치의 Push를 누락시키는 것
-- 새 설치·권한 허용 뒤 기존 unread Notification을 backlog로 재생하는 것
+- 새 설치·권한 허용 뒤 historical unread Notification을 별도 backlog로 재생하는 것
 - 현재 Read State를 send/retry gate로 사용하거나 Push delivery에서 Read mutation을 실행하는 것
 - Provider accepted·queued를 실제 device arrival 또는 절대적 retract 증거로 저장하는 것
 - data-only payload를 사용해 terminated iOS 앱이 표시 직전에 서버에서 body를 fetch할 수 있다고 가정하는 것
@@ -144,7 +146,7 @@ Notification은 source lifecycle과 visibility 정책에 따라 post-commit effe
 - OS 권한을 앱 시작·로그인 완료 때 자동으로 요청하거나 foreground에 별도 custom in-app banner를 만드는 것
 - retry가 최초 Notification 생성 후 24시간을 넘기거나 Provider 호출을 원본 Notification transaction에 결합하는 것
 - 현재 runtime type 목록을 별도 whitelist로 복제하거나 PROD-911 Mention generator를 선행 구현하는 것
-- 삭제·접근 불가 target 외의 상태에서 임의의 old-valid/duplicate 자동 목록 fallback을 추가하는 것
+- destination의 ordinary missing/access/error handling을 Push 전용 redirect로 덮는 것
 
 ## Risks / Trade-offs
 
@@ -156,8 +158,8 @@ Notification은 source lifecycle과 visibility 정책에 따라 post-commit effe
   동기화하고 서버 registration 자격을 다시 평가한다.
 - [payload 개인정보와 유용성의 균형] body preview는 유용하지만 잠금 화면에 노출될 수 있다 → sensitive/CW
   redaction, Recipient 권한 확인과 로그·analytics 비기록을 함께 검증한다.
-- [no backlog 선택] 새 설치가 과거 unread를 받지 않는다 → registration 이후 생성 시각 경계를 명시적으로
-  관측하고 인앱 Notification lifecycle은 그대로 보존한다.
+- [historical backlog 미재생] 새 설치가 과거 unread를 별도 replay queue에서 받지 않는다 → 신규 전달은 일반
+  flow에서 best-effort로 시작하고 인앱 Notification lifecycle은 그대로 보존한다.
 
 ## Migration Plan
 

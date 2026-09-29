@@ -62,12 +62,10 @@ const ProfileLayoutQuery = graphql`
 `;
 
 export default function ProfileLayout() {
-  const { fromPush, profileHandle } = useGlobalSearchParams<{
-    fromPush?: string;
+  const { profileHandle } = useGlobalSearchParams<{
     profileHandle?: string | string[];
   }>();
   const handle = normalizeProfileHandle(profileHandle);
-  const openedFromPush = fromPush === '1';
   const pathname = usePathname();
   const connectionKind = getProfileConnectionKind(pathname);
   const scrollKey = pathname;
@@ -146,7 +144,6 @@ export default function ProfileLayout() {
         backButton={backButton}
         connectionKind={connectionKind}
         handle={handle}
-        openedFromPush={openedFromPush}
         scrollKey={scrollKey}
         showPageHeader={isProfileHome}
       />
@@ -158,20 +155,17 @@ function ProfileLayoutContent({
   backButton,
   connectionKind,
   handle,
-  openedFromPush,
   scrollKey,
   showPageHeader,
 }: {
   backButton: ReactNode;
   connectionKind: ProfileConnectionKind | null;
   handle: string;
-  openedFromPush: boolean;
   scrollKey: string;
   showPageHeader: boolean;
 }) {
   const { fetchKey } = useRouteBoundary();
   const { selectedProfileId, sessionId } = useSession();
-  const router = useRouter();
   const data = useLazyLoadQuery<ProfileLayoutQueryType>(
     ProfileLayoutQuery,
     { handle },
@@ -185,16 +179,6 @@ function ProfileLayoutContent({
   });
   const blocking = Boolean(profile?.viewerState?.profileBlock);
   const blockedBy = Boolean(profile?.viewerState?.blockedBy);
-
-  useEffect(() => {
-    if (openedFromPush && !profile) {
-      router.replace('/notifications');
-    }
-  }, [openedFromPush, profile, router]);
-
-  if (openedFromPush && !profile) {
-    return null;
-  }
 
   if (!profile) {
     const missingState = (

@@ -1,4 +1,4 @@
-import { markNativePushRoute, nativePushNotificationTargetHref } from './pushPayload';
+import { nativePushNotificationTargetHref } from './pushPayload';
 import type { Href } from 'expo-router';
 import type { NativePushNotificationTargetQuery$data } from './__generated__/NativePushNotificationTargetQuery.graphql';
 
@@ -33,5 +33,5 @@ export async function prepareNativePushNavigation({
     resetActor(nextProfileId);
   }
 
-  return markNativePushRoute(href);
+  return href;
 }

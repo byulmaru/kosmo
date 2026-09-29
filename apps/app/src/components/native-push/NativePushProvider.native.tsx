@@ -16,13 +16,12 @@ import {
   subscribeToNativeFcmTokenRefresh,
   subscribeToNativeNotificationResponses,
 } from './nativePushClient';
-import { unregisterDeniedPushInstallation } from './pushInstallationLifecycle';
-import { prepareNativePushNavigation } from './pushNavigation';
 import {
-  nativePushResponseKey,
-  notificationDataFromResponse,
-  parseNativePushTapTarget,
-} from './pushPayload';
+  syncPushInstallationToken,
+  unregisterDeniedPushInstallation,
+} from './pushInstallationLifecycle';
+import { prepareNativePushNavigation } from './pushNavigation';
+import { nativePushResponseKey, parseNativePushTapTarget } from './pushPayload';
 import { acceptNativePushPrompt } from './pushPrompt';
 import {
   deletePushInstallationId,
@@ -31,6 +30,7 @@ import {
   readPushPromptComplete,
   writePushInstallationId,
 } from './pushStorage';
+import type { NotificationResponse } from 'expo-notifications';
 import type { NativePushNotificationTargetQuery as NativePushNotificationTargetQueryType } from './__generated__/NativePushNotificationTargetQuery.graphql';
 import type { NativePushRegisterInstallationMutation as NativePushRegisterInstallationMutationType } from './__generated__/NativePushRegisterInstallationMutation.graphql';
 import type { NativePushSelectProfileMutation as NativePushSelectProfileMutationType } from './__generated__/NativePushSelectProfileMutation.graphql';
@@ -118,16 +118,13 @@ const NativePushNotificationTargetQuery = graphql`
   }
 `;
 
-type PushMutationFailure = Error & { retryable: boolean };
+type RetryablePushError = Error & { retryable: true };
 
-const makeMutationFailure = (message: string, retryable: boolean): PushMutationFailure => {
-  const error = new Error(message) as PushMutationFailure;
-  error.retryable = retryable;
-  return error;
-};
+const markRetryable = (error: Error): RetryablePushError =>
+  Object.assign(error, { retryable: true as const });
 
-const isPushMutationFailure = (error: unknown): error is PushMutationFailure =>
-  error instanceof Error && 'retryable' in error;
+const isRetryablePushError = (error: unknown): error is RetryablePushError =>
+  error instanceof Error && 'retryable' in error && error.retryable === true;
 
 const platform = Platform.OS === 'ios' ? ('IOS' as const) : ('ANDROID' as const);
 
@@ -139,12 +136,10 @@ export function NativePushProvider() {
   const { resetActor } = useRelayActor();
   const sessionRef = useRef(session);
   sessionRef.current = session;
-  const selectedProfileIdRef = useRef(session.selectedProfileId);
-  selectedProfileIdRef.current = session.selectedProfileId;
   const installationIdRef = useRef<string | null | undefined>(undefined);
   const tokenSyncQueueRef = useRef(Promise.resolve());
   const tapQueueRef = useRef(Promise.resolve());
-  const handledResponseKeysRef = useRef(new Set<string>());
+  const handledResponseKeyRef = useRef<string | null>(null);
   const promptAttemptedRef = useRef(false);
   const [promptVisible, setPromptVisible] = useState(false);
   const [promptPending, setPromptPending] = useState(false);
@@ -168,13 +163,13 @@ export function NativePushProvider() {
         commitRegister({
           onCompleted: (response, errors) => {
             if (errors?.length) {
-              reject(makeMutationFailure('Push installation register failed.', false));
+              reject(errors[0]);
               return;
             }
 
             resolve(response.registerPushInstallation.id);
           },
-          onError: (error) => reject(makeMutationFailure(error.message, true)),
+          onError: reject,
           variables: { platform, token },
         });
       }),
@@ -185,15 +180,15 @@ export function NativePushProvider() {
     (id: string, token: string) =>
       new Promise<void>((resolve, reject) => {
         commitUpdate({
-          onCompleted: (response, errors) => {
-            if (errors?.length || !response.updatePushInstallation.completed) {
-              reject(makeMutationFailure('Push installation update failed.', false));
+          onCompleted: (_response, errors) => {
+            if (errors?.length) {
+              reject(errors[0]);
               return;
             }
 
             resolve();
           },
-          onError: (error) => reject(makeMutationFailure(error.message, true)),
+          onError: reject,
           variables: { id, platform, token },
         });
       }),
@@ -205,14 +200,18 @@ export function NativePushProvider() {
       new Promise<void>((resolve, reject) => {
         commitUnregister({
           onCompleted: (response, errors) => {
-            if (errors?.length || !response.unregisterPushInstallation.completed) {
-              reject(makeMutationFailure('Push installation unregister failed.', false));
+            if (errors?.length) {
+              reject(errors[0]);
+              return;
+            }
+            if (!response.unregisterPushInstallation.completed) {
+              reject(new Error('Push installation unregister failed.'));
               return;
             }
 
             resolve();
           },
-          onError: (error) => reject(makeMutationFailure(error.message, true)),
+          onError: reject,
           variables: { id },
         });
       }),
@@ -230,20 +229,16 @@ export function NativePushProvider() {
       }
 
       const installationId = installationIdRef.current;
-      if (installationId) {
-        try {
-          await updateInstallation(installationId, token);
-          return;
-        } catch (error) {
-          if (isPushMutationFailure(error) && error.retryable) {
-            throw error;
-          }
-        }
+      const syncedId = await syncPushInstallationToken({
+        installationId,
+        registerInstallation,
+        token,
+        updateInstallation,
+      });
+      if (syncedId !== installationId) {
+        installationIdRef.current = syncedId;
+        await writePushInstallationId(syncedId);
       }
-
-      const registeredId = await registerInstallation(token);
-      installationIdRef.current = registeredId;
-      await writePushInstallationId(registeredId);
     },
     [registerInstallation, updateInstallation],
   );
@@ -383,13 +378,13 @@ export function NativePushProvider() {
         commitSelectProfile({
           onCompleted: (response, errors) => {
             if (errors?.length) {
-              reject(makeMutationFailure('Profile selection failed.', false));
+              reject(errors[0]);
               return;
             }
 
             resolve(response.selectProfile.profile.id);
           },
-          onError: (error) => reject(makeMutationFailure(error.message, true)),
+          onError: (error) => reject(markRetryable(error)),
           variables: { id },
         });
       }),
@@ -397,43 +392,31 @@ export function NativePushProvider() {
   );
 
   const revalidateNotificationTarget = useCallback(
-    (notificationId: string) =>
-      new Promise<NativePushNotificationTargetQueryType['response']['node']>((resolve, reject) => {
-        let result: NativePushNotificationTargetQueryType['response'] | undefined;
-        fetchQuery(
-          environment,
-          NativePushNotificationTargetQuery,
-          { notificationId },
-          { fetchPolicy: 'network-only' },
-        ).subscribe({
-          complete: () => {
-            if (result) {
-              resolve(result.node);
-            } else {
-              reject(new Error('Push notification target query returned no data.'));
-            }
-          },
-          error: reject,
-          next: (value) => {
-            result = value as NativePushNotificationTargetQueryType['response'];
-          },
-        });
-      }),
+    async (notificationId: string) => {
+      const result = await fetchQuery<NativePushNotificationTargetQueryType>(
+        environment,
+        NativePushNotificationTargetQuery,
+        { notificationId },
+        { fetchPolicy: 'network-only' },
+      ).toPromise();
+      if (!result) {
+        throw new Error('Push notification target query returned no data.');
+      }
+
+      return result.node;
+    },
     [environment],
   );
 
-  const markResponseHandled = useCallback((response: unknown) => {
-    const key = nativePushResponseKey(response);
-    if (key) {
-      handledResponseKeysRef.current.add(key);
-    }
+  const markResponseHandled = useCallback((response: NotificationResponse) => {
+    handledResponseKeyRef.current = nativePushResponseKey(response);
     clearLastNativeNotificationResponse();
   }, []);
 
   const handleNotificationResponse = useCallback(
-    async (response: unknown) => {
+    async (response: NotificationResponse) => {
       const key = nativePushResponseKey(response);
-      if (key && handledResponseKeysRef.current.has(key)) {
+      if (key && key === handledResponseKeyRef.current) {
         return;
       }
 
@@ -444,7 +427,7 @@ export function NativePushProvider() {
         return;
       }
 
-      const envelope = parseNativePushTapTarget(notificationDataFromResponse(response));
+      const envelope = parseNativePushTapTarget(response.notification.request.content.data);
       if (!envelope) {
         markResponseHandled(response);
         fallbackToNotifications();
@@ -471,10 +454,10 @@ export function NativePushProvider() {
           recipientProfileId: envelope.recipientProfileId,
           resetActor,
           selectProfile,
-          selectedProfileId: selectedProfileIdRef.current,
+          selectedProfileId: sessionRef.current.selectedProfileId,
         });
       } catch (error) {
-        if (isPushMutationFailure(error) && error.retryable) {
+        if (isRetryablePushError(error)) {
           return;
         }
 
@@ -503,7 +486,7 @@ export function NativePushProvider() {
   );
 
   const enqueueNotificationResponse = useCallback(
-    (response: unknown) => {
+    (response: NotificationResponse) => {
       const next = tapQueueRef.current.then(() => handleNotificationResponse(response));
       tapQueueRef.current = next.catch(() => undefined);
     },

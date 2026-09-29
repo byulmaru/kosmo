@@ -1,6 +1,50 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { unregisterDeniedPushInstallation } from './pushInstallationLifecycle';
+import {
+  syncPushInstallationToken,
+  unregisterDeniedPushInstallation,
+} from './pushInstallationLifecycle';
+
+describe('native push installation token sync', () => {
+  it('updates an existing installation without registering again', async () => {
+    const calls: string[] = [];
+
+    const installationId = await syncPushInstallationToken({
+      installationId: 'installation-id',
+      registerInstallation: async (token) => {
+        calls.push(`register:${token}`);
+        return 'registered-id';
+      },
+      token: 'token-refresh',
+      updateInstallation: async (id, token) => {
+        calls.push(`update:${id}:${token}`);
+      },
+    });
+
+    assert.equal(installationId, 'installation-id');
+    assert.deepEqual(calls, ['update:installation-id:token-refresh']);
+  });
+
+  it('registers a replacement when updating the stored ID fails', async () => {
+    const calls: string[] = [];
+
+    const installationId = await syncPushInstallationToken({
+      installationId: 'stale-id',
+      registerInstallation: async (token) => {
+        calls.push(`register:${token}`);
+        return 'replacement-id';
+      },
+      token: 'token-refresh',
+      updateInstallation: async (id, token) => {
+        calls.push(`update:${id}:${token}`);
+        throw new Error('installation unavailable');
+      },
+    });
+
+    assert.equal(installationId, 'replacement-id');
+    assert.deepEqual(calls, ['update:stale-id:token-refresh', 'register:token-refresh']);
+  });
+});
 
 describe('denied native push installation lifecycle', () => {
   it('unregisters and deletes the local ID when permission is denied', async () => {

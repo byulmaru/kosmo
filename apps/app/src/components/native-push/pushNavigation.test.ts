@@ -41,7 +41,7 @@ describe('native push target navigation', () => {
       selectedProfileId: 'profile-current',
     });
 
-    assert.equal(href, '/@recipient?fromPush=1');
+    assert.equal(href, '/@recipient');
     assert.deepEqual(calls, ['select:profile-recipient', 'reset:profile-recipient']);
   });
 });

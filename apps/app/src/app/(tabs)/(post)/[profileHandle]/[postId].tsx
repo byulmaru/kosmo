@@ -3,7 +3,6 @@ import { ChevronLeftIcon } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { Platform, StyleSheet, useWindowDimensions } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
-import { markNativePushRoute } from '@/components/native-push/pushPayload';
 import { PageHeader } from '@/components/PageHeader';
 import { PostDetailFrame, PostDetailThread } from '@/components/post/PostDetailThread';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
@@ -53,17 +52,12 @@ const PostQuery = graphql`
 `;
 
 export default function PostDetailScreen() {
-  const params = useLocalSearchParams<{
-    fromPush?: string;
-    postId: string;
-    profileHandle: string;
-  }>();
+  const params = useLocalSearchParams<{ postId: string; profileHandle: string }>();
   const pathname = usePathname();
   const routeSegments = useSegments();
   const { width } = useWindowDimensions();
   const postId = params.postId ?? '';
   const routeRelativeHandle = params.profileHandle ?? '';
-  const openedFromPush = params.fromPush === '1';
   const header = getWebMobileShellHeader(
     Platform.OS === 'web',
     width,
@@ -95,7 +89,6 @@ export default function PostDetailScreen() {
     >
       <PostDetailContent
         header={header}
-        openedFromPush={openedFromPush}
         postId={postId}
         routeRelativeHandle={routeRelativeHandle}
       />
@@ -127,12 +120,10 @@ function PostDetailHeader() {
 
 function PostDetailContent({
   header,
-  openedFromPush,
   postId,
   routeRelativeHandle,
 }: {
   header: ReactNode;
-  openedFromPush: boolean;
   postId: string;
   routeRelativeHandle: string;
 }) {
@@ -149,36 +140,20 @@ function PostDetailContent({
   const pureRepostSourceHref: Href | null = pureRepostSource
     ? `/${pureRepostSource.profile.relativeHandle}/${pureRepostSource.id}`
     : null;
-  const shouldFallbackToNotifications =
-    openedFromPush && (!post || post.state === 'DELETED' || locallyDeleted);
 
   useEffect(() => {
     setLocallyDeleted(false);
   }, [fetchKey]);
 
   useEffect(() => {
-    if (shouldFallbackToNotifications) {
-      router.replace('/notifications');
-    } else if (pureRepostSourceHref) {
-      router.replace(
-        openedFromPush ? markNativePushRoute(pureRepostSourceHref) : pureRepostSourceHref,
-      );
+    if (pureRepostSourceHref) {
+      router.replace(pureRepostSourceHref);
     } else if (post && post.profile.relativeHandle !== routeRelativeHandle) {
-      const canonicalHref = `/${post.profile.relativeHandle}/${postId}` as Href;
-      router.replace(openedFromPush ? markNativePushRoute(canonicalHref) : canonicalHref);
+      router.replace(`/${post.profile.relativeHandle}/${postId}`);
     }
-  }, [
-    locallyDeleted,
-    openedFromPush,
-    post,
-    postId,
-    pureRepostSourceHref,
-    routeRelativeHandle,
-    router,
-    shouldFallbackToNotifications,
-  ]);
+  }, [post, postId, pureRepostSourceHref, routeRelativeHandle, router]);
 
-  return shouldFallbackToNotifications ? null : pureRepostSourceHref ? null : locallyDeleted ? (
+  return pureRepostSourceHref ? null : locallyDeleted ? (
     <PostDetailFrame header={header}>
       <StateView description="작성자가 이 게시글을 삭제했어요." title="삭제된 게시글이에요" />
     </PostDetailFrame>

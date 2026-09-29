@@ -1,12 +1,11 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
-  markNativePushRoute,
   nativePushNotificationTargetHref,
   nativePushResponseKey,
-  notificationDataFromResponse,
   parseNativePushTapTarget,
 } from './pushPayload';
+import type { NotificationResponse } from 'expo-notifications';
 import type { NativePushNotificationTargetQuery$data } from './__generated__/NativePushNotificationTargetQuery.graphql';
 
 const targetNode = (value: unknown) => value as NativePushNotificationTargetQuery$data['node'];
@@ -94,44 +93,16 @@ describe('native push tap payloads', () => {
     );
   });
 
-  it('marks a derived direct route for deleted or inaccessible target fallback', () => {
-    assert.equal(markNativePushRoute('/@author/post:target'), '/@author/post:target?fromPush=1');
-    assert.equal(
-      markNativePushRoute('/@author/post:target?tab=thread'),
-      '/@author/post:target?tab=thread&fromPush=1',
-    );
-  });
-
-  it('preserves fromPush across pure repost and canonical handle redirects', () => {
-    const pureRepostRedirect = markNativePushRoute('/@source/post:source');
-    const canonicalHandleRedirect = markNativePushRoute('/@canonical/post:source');
-
-    assert.equal(pureRepostRedirect, '/@source/post:source?fromPush=1');
-    assert.equal(canonicalHandleRedirect, '/@canonical/post:source?fromPush=1');
-    assert.equal(markNativePushRoute(pureRepostRedirect), pureRepostRedirect);
-    assert.equal(markNativePushRoute(canonicalHandleRedirect), canonicalHandleRedirect);
-  });
-
-  it('reads Expo response data and provides a stable duplicate key', () => {
+  it('uses the Expo notification identifier and action for duplicate keys', () => {
     const response = {
       actionIdentifier: 'expo.modules.notifications.actions.DEFAULT',
       notification: {
         request: {
-          content: {
-            data: {
-              notificationId: 'notification-1',
-              recipientProfileId: 'profile-global-id',
-            },
-          },
           identifier: 'notification-1',
         },
       },
-    };
+    } as NotificationResponse;
 
-    assert.deepEqual(notificationDataFromResponse(response), {
-      notificationId: 'notification-1',
-      recipientProfileId: 'profile-global-id',
-    });
     assert.equal(
       nativePushResponseKey(response),
       'notification-1:expo.modules.notifications.actions.DEFAULT',

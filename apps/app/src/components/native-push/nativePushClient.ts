@@ -1,3 +1,4 @@
+import type { NotificationResponse } from 'expo-notifications';
 import type { NativeNotificationPermissionStatus } from './nativeNotificationPermission';
 
 export type { NativeNotificationPermissionStatus } from './nativeNotificationPermission';
@@ -20,13 +21,13 @@ export function subscribeToNativeFcmTokenRefresh(listener: (token: string) => vo
 }
 
 export function subscribeToNativeNotificationResponses(
-  listener: (response: unknown) => void,
+  listener: (response: NotificationResponse) => void,
 ): () => void {
   void listener;
   return () => undefined;
 }
 
-export async function getLastNativeNotificationResponse(): Promise<unknown | null> {
+export async function getLastNativeNotificationResponse(): Promise<NotificationResponse | null> {
   return null;
 }
 

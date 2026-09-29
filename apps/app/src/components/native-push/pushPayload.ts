@@ -1,3 +1,4 @@
+import type { NotificationResponse } from 'expo-notifications';
 import type { Href } from 'expo-router';
 import type { NativePushNotificationTargetQuery$data } from './__generated__/NativePushNotificationTargetQuery.graphql';
 
@@ -66,52 +67,7 @@ export function nativePushNotificationTargetHref(
   }
 }
 
-/**
- * Marks a direct route opened from a notification so route loaders can return to the
- * recipient's notification list when the target no longer exists or is inaccessible.
- */
-export function markNativePushRoute(href: Href): Href {
-  if (typeof href !== 'string') {
-    return href;
-  }
-
-  if (/(?:[?&])fromPush=1(?:&|$)/.test(href)) {
-    return href as Href;
-  }
-
-  return `${href}${href.includes('?') ? '&' : '?'}fromPush=1` as Href;
-}
-
-function notificationRequestFromResponse(response: RecordValue): RecordValue | null {
-  const notification = response.notification;
-  return isRecord(notification) && isRecord(notification.request) ? notification.request : null;
-}
-
-export function notificationDataFromResponse(response: unknown): unknown {
-  if (!isRecord(response)) {
-    return null;
-  }
-
-  const request = notificationRequestFromResponse(response);
-  if (!request) {
-    return null;
-  }
-
-  const content = request.content;
-  if (!isRecord(content)) {
-    return null;
-  }
-
-  return content.data;
-}
-
-export function nativePushResponseKey(response: unknown): string | null {
-  if (!isRecord(response)) {
-    return null;
-  }
-
-  const request = notificationRequestFromResponse(response);
-  const identifier = nonEmptyString(request?.identifier);
-  const actionIdentifier = nonEmptyString(response.actionIdentifier);
-  return identifier ? `${identifier}:${actionIdentifier ?? ''}` : null;
+export function nativePushResponseKey(response: NotificationResponse): string | null {
+  const identifier = nonEmptyString(response.notification.request.identifier);
+  return identifier ? `${identifier}:${response.actionIdentifier}` : null;
 }

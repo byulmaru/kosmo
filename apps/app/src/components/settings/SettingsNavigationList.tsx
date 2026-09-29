@@ -15,7 +15,6 @@ export function SettingsNavigationList({
   selected?: SettingsDestination;
 }) {
   const { showToast } = useToast();
-  const current = selected === 'default-post-visibility';
   return (
     <View
       accessibilityLabel="설정 목록"
@@ -29,7 +28,7 @@ export function SettingsNavigationList({
         label="게시물 기본 공개 범위"
         primary
         currentPage={pathname === '/settings/default-post-visibility'}
-        selected={current}
+        selected={selected === 'default-post-visibility'}
       />
       <SettingsLinkRow
         accessibilityLabel="뮤트 및 차단 설정 열기"
