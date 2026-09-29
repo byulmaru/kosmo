@@ -13,26 +13,26 @@ import type { PropsWithChildren } from 'react';
 
 export function AppProviders({ children }: PropsWithChildren) {
   return (
-    <FeatureFlagsProvider>
-      <ThemeProvider mode="light">
-        <NavigationThemeBoundary>
-          <ToastProvider>
-            <GraphQLErrorBoundary>
-              <RelayActorProvider>
-                <SessionProvider>
+    <ThemeProvider mode="light">
+      <NavigationThemeBoundary>
+        <ToastProvider>
+          <GraphQLErrorBoundary>
+            <RelayActorProvider>
+              <SessionProvider>
+                <FeatureFlagsProvider>
                   <AnalyticsSessionBridge />
                   <NativePushProvider>
                     <ContentReportProvider>
                       <PostContentWarningRevealProvider>{children}</PostContentWarningRevealProvider>
                     </ContentReportProvider>
                   </NativePushProvider>
-                </SessionProvider>
-              </RelayActorProvider>
-            </GraphQLErrorBoundary>
+                </FeatureFlagsProvider>
+              </SessionProvider>
+            </RelayActorProvider>
+          </GraphQLErrorBoundary>
           </ToastProvider>
         </NavigationThemeBoundary>
       </ThemeProvider>
-    </FeatureFlagsProvider>
   );
 }
 

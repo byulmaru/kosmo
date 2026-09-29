@@ -26,6 +26,8 @@ const queryModes: Record<QueryName, QueryMode> = {
 const queryHistory: Array<{ fetchKey: unknown; query: QueryName }> = [];
 const pendingSessionQueries: Array<() => void> = [];
 const pendingRootRenders: Array<() => void> = [];
+let mockAccountId: string | null = 'account-1';
+let mockSessionId: string | null = 'session-1';
 let navigationMounts = 0;
 let navigationUnmounts = 0;
 let relayActorMounts = 0;
@@ -42,7 +44,10 @@ let RouteBoundary: ComponentType<{
   title: string;
 }>;
 let useRouteBoundary: () => { fetchKey: number };
-let useRelayActor: () => Pick<MockRelayActorValue, 'nativeToken' | 'setNativeSession'>;
+let useRelayActor: () => Pick<
+  MockRelayActorValue,
+  'clearNativeSession' | 'nativeToken' | 'setNativeSession'
+>;
 let useSession: () => {
   selectedProfileId: string | null;
   sessionId: string | null;
@@ -185,11 +190,13 @@ mockModule('react-relay', {
     }
     if (query === 'SessionProviderQuery') {
       return {
-        currentSession: {
-          id: 'session-1',
-          selectedProfile: { id: 'profile-a' },
-        },
-        me: { id: 'account-1', name: 'Account' },
+        currentSession: mockSessionId
+          ? {
+              id: mockSessionId,
+              selectedProfile: { id: 'profile-a' },
+            }
+          : null,
+        me: mockAccountId ? { id: mockAccountId, name: 'Account' } : null,
       };
     }
     return { action: 'ready' };
@@ -301,6 +308,8 @@ beforeEach(() => {
   queryModes.SessionProviderQuery = 'success';
   queryModes.ShellRecoveryQuery = 'success';
   queryModes.UniversalShellQuery = 'success';
+  mockAccountId = 'account-1';
+  mockSessionId = 'session-1';
   queryHistory.length = 0;
   pendingSessionQueries.length = 0;
   navigationMounts = 0;
@@ -400,6 +409,22 @@ function FeatureFlagsProbe() {
   });
 }
 
+function FeatureFlagsAccountSwitchProbe() {
+  const actor = useRelayActor();
+
+  return createElement('FeatureFlagsAccountSwitchProbe', {
+    onAccountChange: async (accountId: string | null) => {
+      mockAccountId = accountId;
+      mockSessionId = accountId ? `session-${accountId}` : null;
+      if (accountId) {
+        await actor.setNativeSession(`token-${accountId}`);
+      } else {
+        await actor.clearNativeSession();
+      }
+    },
+  });
+}
+
 function findTag(tag: string) {
   assert.ok(renderer);
   const node = renderer.root.findAll((candidate) => String(candidate.type) === tag)[0];
@@ -430,7 +455,7 @@ describe('AppProviders runtime composition', () => {
       assert.deepEqual(init, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ context: { targetingKey: 'kosmo' } }),
+        body: JSON.stringify({ context: { targetingKey: 'account-1' } }),
       });
 
       if (requests === 1) {
@@ -491,6 +516,83 @@ describe('AppProviders runtime composition', () => {
     assert.equal(findTag('FeatureFlagsProbe').props.quote, false);
     assert.equal(findTag('FeatureFlagsProbe').props.disabled, false);
     assert.equal(requests, 2);
+  });
+
+  it('targets flags to the active account, ignores obsolete results, and resets after logout', async () => {
+    const pendingRequests: Array<{
+      resolve: (response: Response) => void;
+      targetingKey: string;
+    }> = [];
+    globalThis.fetch = async (_input, init) => {
+      const request = JSON.parse(String(init?.body)) as {
+        context: { targetingKey: string };
+      };
+      return new Promise<Response>((resolve) =>
+        pendingRequests.push({ resolve, targetingKey: request.context.targetingKey }),
+      );
+    };
+    mockAccountId = null;
+    mockSessionId = null;
+
+    await act(async () => {
+      renderer = create(
+        createElement(
+          AppProviders,
+          null,
+          createElement(
+            'FlagTestRoot',
+            null,
+            createElement(FeatureFlagsProbe),
+            createElement(FeatureFlagsAccountSwitchProbe),
+          ),
+        ),
+      );
+    });
+
+    const quote = () => findTag('FeatureFlagsProbe').props.quote;
+    const changeAccount = findTag('FeatureFlagsAccountSwitchProbe').props.onAccountChange;
+    const respond = async (index: number, response: Response) => {
+      const request = pendingRequests[index];
+      assert.ok(request);
+      await act(async () => request.resolve(response));
+    };
+    const flagResponse = (value: boolean) =>
+      new Response(JSON.stringify({ flags: [{ key: 'quote', value }] }), { status: 200 });
+
+    assert.equal(quote(), false);
+    assert.equal(pendingRequests.length, 0);
+
+    assert.equal(typeof changeAccount, 'function');
+
+    await act(async () => changeAccount('account-1'));
+    await respond(0, flagResponse(true));
+    assert.equal(quote(), true);
+
+    await act(async () => changeAccount(null));
+    assert.equal(pendingRequests.length, 1);
+    assert.equal(quote(), false);
+
+    await act(async () => changeAccount('account-1'));
+    assert.equal(quote(), false);
+    await act(async () => changeAccount('account-2'));
+    assert.equal(quote(), false);
+    await respond(2, flagResponse(true));
+    assert.equal(quote(), true);
+    await respond(1, flagResponse(false));
+    assert.equal(quote(), true);
+
+    await act(async () => changeAccount(null));
+    assert.equal(pendingRequests.length, 3);
+    assert.equal(quote(), false);
+
+    await act(async () => changeAccount('account-1'));
+    assert.equal(quote(), false);
+    await respond(3, new Response(null, { status: 503 }));
+    assert.equal(quote(), false);
+    assert.deepEqual(
+      pendingRequests.map(({ targetingKey }) => targetingKey),
+      ['account-1', 'account-1', 'account-2', 'account-1'],
+    );
   });
 
   it('root fallback remounts the complete app runtime after its action', async () => {
