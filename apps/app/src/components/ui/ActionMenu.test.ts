@@ -21,6 +21,7 @@ const ViewHost = 'View' as unknown as ElementType;
 let exitMounted = false;
 let platformOS: 'ios' | 'web' = 'ios';
 let dismissAnimationTarget: number | undefined;
+let stretchAnimationDuration = 0;
 type PanResponderConfig = {
   onMoveShouldSetPanResponder?: (_event: unknown, gesture: { dx: number; dy: number }) => boolean;
   onPanResponderMove?: (_event: unknown, gesture: { dy: number }) => void;
@@ -42,9 +43,20 @@ mockModule('react-native', {
   Animated: {
     Value: AnimatedValueMock,
     View: 'AnimatedView',
-    timing: (_value: AnimatedValueMock, config: { toValue: number }) => {
+    timing: (
+      _value: AnimatedValueMock,
+      config: { duration?: number; toValue: number; useNativeDriver?: boolean },
+    ) => {
       dismissAnimationTarget = config.toValue;
-      return { start() {}, stop() {} };
+      return {
+        start() {
+          if (!config.useNativeDriver) {
+            stretchAnimationDuration = config.duration ?? 0;
+            _value.setValue(config.toValue);
+          }
+        },
+        stop() {},
+      };
     },
   },
   Easing: { bezier: () => () => 0 },
@@ -114,7 +126,10 @@ mockModule('@/theme/tokens', {
   layoutRecipes: {
     actionMenuSurface: { flexDirection: 'column', gap: 0, padding: 4, borderRadius: 12 },
   },
-  motion: { duration: { standard: 200 }, easingPoints: { exit: [0.4, 0, 1, 1] } },
+  motion: {
+    duration: { standard: 200 },
+    easingPoints: { exit: [0.4, 0, 1, 1], standard: [0.17, 0.73, 0.14, 1] },
+  },
   radius: { 16: 16, full: 999 },
   space: { 4: 4, 8: 8, 12: 12 },
   textStyles: { uiLabelL: {} },
@@ -138,6 +153,7 @@ afterEach(() => {
   platformOS = 'ios';
   exitMounted = false;
   dismissAnimationTarget = undefined;
+  stretchAnimationDuration = 0;
   delete (globalThis as { window?: unknown }).window;
   delete (globalThis as { document?: unknown }).document;
 });
@@ -239,6 +255,7 @@ test('ActionMenu cannot be dismissed while disabled', async () => {
   const handle = renderer.root.findByProps({ accessibilityLabel: '시트 닫기' }).parent;
   assert.ok(handle);
   assert.equal(handle.props.onMoveShouldSetResponder(null, { dx: 0, dy: 100 }), false);
+  assert.equal(handle.props.onMoveShouldSetResponder(null, { dx: 0, dy: -100 }), false);
   await act(async () => handle.props.onResponderRelease(null, { dy: 100, vy: 1 }));
   assert.equal(modal.props.visible, true);
 
@@ -285,6 +302,37 @@ test('Native ActionMenu handle closes its sheet after a downward drag', async ()
   assert.equal(handle.props.onMoveShouldSetResponder(null, { dx: 0, dy: 100 }), true);
   await act(async () => handle.props.onResponderRelease(null, { dy: 100, vy: 1 }));
   assert.equal(renderer.root.findByType('Modal' as unknown as ElementType).props.visible, false);
+  await act(async () => renderer.unmount());
+});
+
+test('Native ActionMenu resists an upward drag and returns without closing', async () => {
+  assert.ok(actionMenuModule);
+  let renderer!: ReactTestRenderer;
+  await act(async () => {
+    renderer = create(
+      createElement(actionMenuModule!.ActionMenu, {
+        accessibilityLabel: '재게시 메뉴',
+        items: [{ key: 'repost', label: '재게시하기', onSelect() {} }],
+        renderTrigger: ({ onPress }: { onPress: () => void }) =>
+          createElement(PressableHost, { onPress, testID: 'trigger' }),
+      }),
+    );
+  });
+  await act(async () => renderer.root.findByProps({ testID: 'trigger' }).props.onPress());
+  const handle = renderer.root.findByProps({ accessibilityLabel: '시트 닫기' }).parent;
+  assert.ok(handle);
+  assert.equal(handle.props.onMoveShouldSetResponder(null, { dx: 0, dy: -200 }), true);
+  await act(async () => handle.props.onResponderMove(null, { dy: -200 }));
+  const stretch = renderer.root
+    .findAllByType('AnimatedView' as unknown as ElementType)
+    .map((node) => flattenStyle(node.props.style).paddingBottom)
+    .find((value) => value instanceof AnimatedValueMock) as AnimatedValueMock | undefined;
+  assert.ok(stretch);
+  assert.equal(stretch.value, 24);
+  await act(async () => handle.props.onResponderRelease(null, { dy: -200, vy: -1 }));
+  assert.equal(stretch.value, 0);
+  assert.ok(stretchAnimationDuration > 0);
+  assert.equal(renderer.root.findByType('Modal' as unknown as ElementType).props.visible, true);
   await act(async () => renderer.unmount());
 });
 
