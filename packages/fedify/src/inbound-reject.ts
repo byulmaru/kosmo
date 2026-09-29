@@ -12,6 +12,7 @@ import type { Reject } from '@fedify/vocab';
 export const handleInboundReject = async (
   context: InboxContext<void>,
   reject: Reject,
+  receivedAt: Temporal.Instant = Temporal.Now.instant(),
 ): Promise<void> => {
   const actorUri = reject.actorId;
   if (!isHttpUri(actorUri)) {
@@ -27,7 +28,10 @@ export const handleInboundReject = async (
 
   let remoteActor: Awaited<ReturnType<typeof findUsableStoredRemoteProfileActorByUri>>;
   try {
-    remoteActor = await findUsableStoredRemoteProfileActorByUri(actorUri);
+    remoteActor = await findUsableStoredRemoteProfileActorByUri(actorUri, {
+      activityUri: reject.id,
+      receivedAt,
+    });
   } catch (error) {
     if (error instanceof NotFoundError) {
       observeInbound({

@@ -93,7 +93,7 @@ export const handleInboundBlock = async (
     remoteActor = await findOrMaterializeRemoteProfileActorByUri({
       actorUri,
       context,
-      now,
+      receipt: { activityUri, receivedAt: now },
     });
   } catch (error) {
     if (isExpectedAdmissionRejection(error)) {

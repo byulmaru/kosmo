@@ -1,3 +1,5 @@
+import '@kosmo/core/polyfill';
+
 import { Follow } from '@fedify/vocab';
 import { NotFoundError } from '@kosmo/core/error';
 import { isHttpUri } from './activitypub-uri';
@@ -10,6 +12,7 @@ import type { Accept } from '@fedify/vocab';
 export const handleInboundAccept = async (
   context: InboxContext<void>,
   accept: Accept,
+  receivedAt: Temporal.Instant = Temporal.Now.instant(),
 ): Promise<void> => {
   const actorUri = accept.actorId;
   if (!isHttpUri(actorUri)) {
@@ -25,7 +28,10 @@ export const handleInboundAccept = async (
 
   let remoteActor: Awaited<ReturnType<typeof findUsableStoredRemoteProfileActorByUri>>;
   try {
-    remoteActor = await findUsableStoredRemoteProfileActorByUri(actorUri);
+    remoteActor = await findUsableStoredRemoteProfileActorByUri(actorUri, {
+      activityUri: accept.id,
+      receivedAt,
+    });
   } catch (error) {
     if (error instanceof NotFoundError) {
       observeInbound({

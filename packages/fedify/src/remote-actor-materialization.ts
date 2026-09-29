@@ -1,6 +1,6 @@
 import '@kosmo/core/polyfill';
 
-import { getActorTypeName, isActor, Link } from '@fedify/vocab';
+import { getActorTypeName, isActor, Link, Object as ActivityPubObject } from '@fedify/vocab';
 import { projectRemoteActivityPubHtmlToPlainText } from '@kosmo/core/activitypub-note-content/server';
 import {
   ActivityPubActors,
@@ -27,7 +27,10 @@ import {
 import { ConflictError, NotFoundError } from '@kosmo/core/error';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { runWorkflow } from '@kosmo/core/temporal/client';
-import { remoteProfileFeaturedWorkflow } from '@kosmo/core/temporal/workflows';
+import {
+  remoteProfileFeaturedWorkflow,
+  remoteProfileLookupWorkflow,
+} from '@kosmo/core/temporal/workflows';
 import { normalizeHandle } from '@kosmo/core/utils';
 import {
   profileBioSchema,
@@ -38,7 +41,10 @@ import { and, eq, getColumns, inArray, isNotNull, ne } from 'drizzle-orm';
 import { isHttpUri } from './activitypub-uri';
 import type { Context, DocumentLoader } from '@fedify/fedify';
 import type { Actor, Image, LanguageString, Object as ActivityPubObject } from '@fedify/vocab';
-import type { RemoteProfileFeaturedSyncInput } from '@kosmo/core/temporal/workflows';
+import type {
+  RemoteProfileFeaturedSyncInput,
+  RemoteProfileLookupInput,
+} from '@kosmo/core/temporal/workflows';
 
 export class RemoteActorMaterializationError extends Error {
   constructor(message: string) {
@@ -47,8 +53,10 @@ export class RemoteActorMaterializationError extends Error {
   }
 }
 
-type RemoteActorLookupContext = Pick<Context<void>, 'lookupObject'>;
+type RemoteActorLookupContext = Pick<Context<void>, 'lookupObject'> &
+  Partial<Pick<Context<void>, 'canonicalOrigin'>>;
 export type RemoteActorMaterializationOptions = {
+  actorJsonLd?: unknown;
   context: RemoteActorLookupContext;
   actorUri: URL;
   documentLoader?: DocumentLoader;
@@ -310,83 +318,156 @@ export const findStoredRemoteProfileActorByUri = async (actorUri: URL | string) 
     .limit(1)
     .then(first);
 
-const requireUsableStoredRemoteActor = async (
-  stored: NonNullable<Awaited<ReturnType<typeof findStoredRemoteProfileActorByUri>>>,
+type RemoteActorReceipt = {
+  activityUri?: URL | string | null;
+  receivedAt: Temporal.Instant;
+};
+
+type RemoteActorLookupOptions =
+  | {
+      actorUri: URL;
+      context: RemoteActorLookupContext;
+      now?: Temporal.Instant;
+      receipt?: RemoteActorReceipt;
+    }
+  | {
+      activityUri?: URL | string | null;
+      actorJsonLd: unknown;
+      actorUri: URL;
+      context: RemoteActorLookupContext;
+      receivedAt: Temporal.Instant;
+    };
+
+const serializeReceipt = (receipt: RemoteActorReceipt) => {
+  let activityUri: string | undefined;
+  if (receipt.activityUri) {
+    try {
+      const uri = new URL(receipt.activityUri.toString());
+      if (isHttpUri(uri) && uri.hostname) {
+        activityUri = uri.href;
+      }
+    } catch {
+      // Activity IDs are optional evidence; receivedAt remains the stable fallback.
+    }
+  }
+
+  return {
+    receivedAt: receipt.receivedAt.toString(),
+    ...(activityUri ? { activityUri } : {}),
+  };
+};
+
+const lookupRemoteProfileActor = async (input: RemoteProfileLookupInput) => {
+  try {
+    return await runWorkflow(remoteProfileLookupWorkflow, {
+      args: [input],
+      mode: 'execute',
+      workflowIdConflictPolicy: 'USE_EXISTING',
+      workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+    });
+  } catch (error) {
+    const failure = error as (Error & { type?: unknown }) | null;
+    if (failure?.name === 'ApplicationFailure' && typeof failure.type === 'string') {
+      switch (failure.type) {
+        case 'ConflictError':
+          throw new ConflictError({ message: failure.message });
+        case 'NotFoundError':
+          throw new NotFoundError(failure.message);
+        case 'RemoteActorMaterializationError':
+          throw new RemoteActorMaterializationError(failure.message);
+      }
+    }
+    throw error;
+  }
+};
+
+const getContextOrigin = async (context: RemoteActorLookupContext) =>
+  context.canonicalOrigin ?? (await resolveConfiguredLocalInstance()).canonicalOrigin;
+
+export const findUsableStoredRemoteProfileActorByUri = async (
+  actorUri: URL | string,
+  receipt?: RemoteActorReceipt,
 ) => {
-  if (stored.profile.state !== ProfileState.ACTIVE) {
-    throw new NotFoundError('Profile not found');
+  const input: RemoteProfileLookupInput = {
+    actorUri: actorUri.toString(),
+    kind: 'stored-actor',
+    ...(receipt ? { receipt: serializeReceipt(receipt) } : {}),
+  };
+  const profileId = await lookupRemoteProfileActor(input);
+
+  if (!profileId) {
+    return undefined;
   }
 
-  if (stored.instance.state === InstanceState.SUSPENDED) {
-    throw new NotFoundError('Profile not found');
-  }
-
-  if (stored.instance.state !== InstanceState.UNRESPONSIVE) {
-    return stored;
-  }
-
-  const reactivated = await db
-    .update(Instances)
-    .set({ state: InstanceState.ACTIVE })
-    .where(
-      and(eq(Instances.id, stored.instance.id), eq(Instances.state, InstanceState.UNRESPONSIVE)),
-    )
-    .returning()
-    .then(first);
-
-  if (reactivated) {
-    return { ...stored, instance: reactivated };
-  }
-
-  const current = await db
-    .select()
-    .from(Instances)
-    .where(eq(Instances.id, stored.instance.id))
-    .limit(1)
-    .then(firstOrThrow);
-
-  if (current.state !== InstanceState.ACTIVE) {
-    throw new NotFoundError('Profile not found');
-  }
-
-  return { ...stored, instance: current };
-};
-
-export const findUsableStoredRemoteProfileActorByUri = async (actorUri: URL | string) => {
   const stored = await findStoredRemoteProfileActorByUri(actorUri);
-
-  return stored ? requireUsableStoredRemoteActor(stored) : undefined;
+  return stored?.profile.id === profileId ? stored : undefined;
 };
 
-export const findOrMaterializeRemoteProfileActorByUri = async ({
-  actorUri,
-  context,
-  now = getNow(),
-}: {
-  actorUri: URL;
-  context: RemoteActorLookupContext;
-  now?: Temporal.Instant;
-}) => {
-  const stored = await findUsableStoredRemoteProfileActorByUri(actorUri);
+export const findOrMaterializeRemoteProfileActorByUri = async (
+  options: RemoteActorLookupOptions,
+) => {
+  const { actorUri, context } = options;
+  let input: RemoteProfileLookupInput;
 
-  if (stored) {
-    return stored;
+  if ('actorJsonLd' in options) {
+    input = {
+      actorJsonLd: options.actorJsonLd,
+      actorUri: actorUri.href,
+      contextOrigin: await getContextOrigin(context),
+      kind: 'update',
+      ...serializeReceipt({
+        activityUri: options.activityUri,
+        receivedAt: options.receivedAt,
+      }),
+    };
+  } else {
+    const stored = await findUsableStoredRemoteProfileActorByUri(actorUri, options.receipt);
+    if (stored) {
+      return stored;
+    }
+
+    // Keep the caller's Fedify lookup context so transport hooks and failures
+    // retain the behavior expected by existing callers.
+    const actor = (await context.lookupObject(actorUri)) as ActivityPubObject | null;
+    if (!actor || !isActor(actor)) {
+      throw new RemoteActorMaterializationError('Remote lookup did not return an actor.');
+    }
+
+    let actorJsonLd: unknown;
+    try {
+      actorJsonLd = await actor.toJsonLd({
+        contextLoader: noNetworkDocumentLoader,
+        format: 'expand',
+      });
+    } catch {
+      throw new RemoteActorMaterializationError('Remote actor JSON-LD could not be serialized.');
+    }
+
+    input = {
+      actorJsonLd,
+      actorUri: actorUri.href,
+      contextOrigin: await getContextOrigin(context),
+      kind: 'actor-document',
+      receivedAt: (options.now ?? getNow()).toString(),
+    };
   }
 
-  await materializeRemoteProfileActor({
-    context,
-    actorUri,
-    now,
-    reactivateUnresponsive: true,
-  });
+  const profileId = await lookupRemoteProfileActor(input);
+
+  if (!profileId) {
+    if ('actorJsonLd' in options) {
+      throw new NotFoundError('Profile not found');
+    }
+    throw new RemoteActorMaterializationError('Remote actor URI did not materialize a profile.');
+  }
 
   const materialized = await findStoredRemoteProfileActorByUri(actorUri);
 
-  if (!materialized) {
+  if (!materialized || materialized.profile.id !== profileId) {
     throw new RemoteActorMaterializationError('Materialized actor URI does not match.');
   }
 
-  return requireUsableStoredRemoteActor(materialized);
+  return materialized;
 };
 
 export const materializeRemoteProfileActor = async (options: RemoteActorMaterializationOptions) => {
@@ -413,10 +494,22 @@ export const materializeRemoteProfileActor = async (options: RemoteActorMaterial
   const lookupOptions = options.documentLoader
     ? { documentLoader: options.documentLoader }
     : undefined;
-  const actor = (await context.lookupObject(
-    options.actorUri,
-    lookupOptions,
-  )) as ActivityPubObject | null;
+  let actor: ActivityPubObject | null;
+  if (options.actorJsonLd === undefined) {
+    actor = (await context.lookupObject(
+      options.actorUri,
+      lookupOptions,
+    )) as ActivityPubObject | null;
+  } else {
+    try {
+      actor = await ActivityPubObject.fromJsonLd(options.actorJsonLd, {
+        contextLoader: noNetworkDocumentLoader,
+        documentLoader: noNetworkDocumentLoader,
+      });
+    } catch {
+      throw new RemoteActorMaterializationError('Remote actor JSON-LD could not be parsed.');
+    }
+  }
 
   if (!isActor(actor)) {
     throw new RemoteActorMaterializationError('Remote lookup did not return an actor.');
@@ -436,7 +529,15 @@ export const materializeRemoteProfileActor = async (options: RemoteActorMaterial
     throw new RemoteActorMaterializationError('Remote lookup returned a different actor URI.');
   }
 
-  const projection = await projectActor(actor as ActorWithKosmoFields);
+  let projection: ActorProjection;
+  try {
+    projection = await projectActor(actor as ActorWithKosmoFields);
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new RemoteActorMaterializationError('Remote actor profile projection was rejected.');
+    }
+    throw error;
+  }
   const endpoints = {
     followersUri: actor.followersId?.href ?? null,
     followingUri: actor.followingId?.href ?? null,

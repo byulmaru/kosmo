@@ -261,7 +261,7 @@ test('prepared Local Move target returns stored Profile IDs without remote looku
   assert.equal(await db.$count(Profiles), 2);
 });
 
-test('prepared Local Move still rejects unavailable source Profiles and reactivates unresponsive sources', async () => {
+test('prepared Local Move still rejects unavailable source Profiles and preserves unresponsive source state', async () => {
   const observations: Array<{ outcome: string; reasonCode: string }> = [];
   const restoreReporter = setInboundObservabilityReporter({
     log: ({ outcome, reasonCode }) => observations.push({ outcome, reasonCode }),
@@ -329,7 +329,7 @@ test('prepared Local Move still rejects unavailable source Profiles and reactiva
         .from(Instances)
         .where(eq(Instances.id, source.instance.id))
         .then((rows) => rows[0]?.state),
-      InstanceState.ACTIVE,
+      InstanceState.UNRESPONSIVE,
     );
   } finally {
     restoreReporter();
