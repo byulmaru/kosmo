@@ -384,25 +384,6 @@ const lookupRemoteProfileActor = async (input: RemoteProfileLookupInput) => {
 const getContextOrigin = async (context: RemoteActorLookupContext) =>
   context.canonicalOrigin ?? (await resolveConfiguredLocalInstance()).canonicalOrigin;
 
-export const findUsableStoredRemoteProfileActorByUri = async (
-  actorUri: URL | string,
-  receipt?: RemoteActorReceipt,
-) => {
-  const input: RemoteProfileLookupInput = {
-    actorUri: actorUri.toString(),
-    kind: 'stored-actor',
-    ...(receipt ? { receipt: serializeReceipt(receipt) } : {}),
-  };
-  const profileId = await lookupRemoteProfileActor(input);
-
-  if (!profileId) {
-    return undefined;
-  }
-
-  const stored = await findStoredRemoteProfileActorByUri(actorUri);
-  return stored?.profile.id === profileId ? stored : undefined;
-};
-
 export const findOrMaterializeRemoteProfileActorByUri = async (
   options: RemoteActorLookupOptions,
 ) => {
@@ -421,9 +402,16 @@ export const findOrMaterializeRemoteProfileActorByUri = async (
       }),
     };
   } else {
-    const stored = await findUsableStoredRemoteProfileActorByUri(actorUri, options.receipt);
-    if (stored) {
-      return stored;
+    const profileId = await lookupRemoteProfileActor({
+      actorUri: actorUri.toString(),
+      kind: 'stored-actor',
+      ...(options.receipt ? { receipt: serializeReceipt(options.receipt) } : {}),
+    });
+    if (profileId) {
+      const stored = await findStoredRemoteProfileActorByUri(actorUri);
+      if (stored?.profile.id === profileId) {
+        return stored;
+      }
     }
 
     // Keep the caller's Fedify lookup context so transport hooks and failures

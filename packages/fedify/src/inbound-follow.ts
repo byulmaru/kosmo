@@ -25,7 +25,6 @@ import { handleInboundUndoBlock } from './inbound-profile-block';
 import {
   findOrMaterializeRemoteProfileActorByUri,
   findStoredRemoteProfileActorByUri,
-  findUsableStoredRemoteProfileActorByUri,
   RemoteActorMaterializationError,
 } from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
@@ -313,13 +312,13 @@ export const handleInboundUndo = async (
     }
   }
 
-  // Undo never materializes or dereferences an unknown actor.
-  let remoteActor: Awaited<ReturnType<typeof findUsableStoredRemoteProfileActorByUri>>;
+  let remoteActor: Awaited<ReturnType<typeof findOrMaterializeRemoteProfileActorByUri>>;
 
   try {
-    remoteActor = await findUsableStoredRemoteProfileActorByUri(actorUri, {
-      activityUri: undo.id,
-      receivedAt,
+    remoteActor = await findOrMaterializeRemoteProfileActorByUri({
+      actorUri,
+      context,
+      receipt: { activityUri: undo.id, receivedAt },
     });
   } catch (error) {
     if (isExpectedRemoteActorRejection(error)) {
@@ -338,7 +337,7 @@ export const handleInboundUndo = async (
     throw error;
   }
 
-  if (!remoteActor || remoteActor.instance.state !== InstanceState.ACTIVE) {
+  if (remoteActor.instance.state !== InstanceState.ACTIVE) {
     observeInbound({
       outcome: 'noop',
       activityType: 'Undo',
