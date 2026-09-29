@@ -535,16 +535,17 @@ describe('remote actor materialization', () => {
           workflowOptions.workflowId,
           remoteProfileLookupWorkflow.workflowIdFromArgs(input),
         );
-        if ('kind' in input && input.kind === 'stored-actor') {
-          assert.equal(input.receipt, undefined);
+        if (!input.actorDocument) {
+          assert.deepEqual(input, { actorUri: actor.id!.href });
           return null;
         }
         assert.deepEqual(input, {
-          actorJsonLd,
           actorUri: actor.id!.href,
-          contextOrigin: publicOrigin,
-          kind: 'actor-document',
-          receivedAt: now.toString(),
+          actorDocument: {
+            jsonLd: actorJsonLd,
+            contextOrigin: publicOrigin,
+            receivedAt: now.toString(),
+          },
         });
         return storedProfile.id;
       },
@@ -574,7 +575,6 @@ describe('remote actor materialization', () => {
         const workflowOptions = options as { args?: unknown[]; workflowId?: string };
         const input = {
           actorUri: stored.actor.uri,
-          kind: 'stored-actor',
           receipt: { receivedAt: receivedAt.toString() },
         } as const;
         assert.deepEqual(workflowOptions.args, [input]);
@@ -596,6 +596,58 @@ describe('remote actor materialization', () => {
     });
 
     assert.equal(result.profile.id, stored.profile.id);
+    assert.equal(execute.mock.calls.length, 1);
+  });
+
+  test('sends an Update document and its nested receipt without fetching the supplied actor', async () => {
+    const stored = await createStoredRemoteActor();
+    const actor = createActor({
+      id: new URL(stored.actor.uri),
+      name: 'Updated Alice',
+    });
+    const actorJsonLd = await actor.toJsonLd({ format: 'expand' });
+    const receivedAt = Temporal.Instant.from('2026-08-01T00:00:00Z');
+    const activityUri = new URL('https://remote.example/activities/update-1');
+    const lookupObject = mock.fn(async () => {
+      throw new Error('A supplied Update document must not be fetched');
+    });
+    const execute = mock.method(
+      temporalClient.workflow,
+      'execute',
+      async (workflow: unknown, options: unknown) => {
+        assert.equal(workflow, remoteProfileLookupWorkflow.workflow);
+        assert.ok(options && typeof options === 'object');
+        const workflowOptions = options as { args?: unknown[]; workflowId?: string };
+        const input: RemoteProfileLookupInput = {
+          actorUri: stored.actor.uri,
+          actorDocument: {
+            jsonLd: actorJsonLd,
+            contextOrigin: publicOrigin,
+            receivedAt: receivedAt.toString(),
+          },
+          receipt: {
+            activityUri: activityUri.href,
+            receivedAt: receivedAt.toString(),
+          },
+        };
+        assert.deepEqual(workflowOptions.args, [input]);
+        assert.equal(
+          workflowOptions.workflowId,
+          remoteProfileLookupWorkflow.workflowIdFromArgs(input),
+        );
+        return stored.profile.id;
+      },
+    );
+
+    const result = await findOrMaterializeRemoteProfileActorByUri({
+      actorJsonLd,
+      actorUri: new URL(stored.actor.uri),
+      context: { canonicalOrigin: publicOrigin, lookupObject },
+      receipt: { activityUri, receivedAt },
+    });
+
+    assert.equal(result.profile.id, stored.profile.id);
+    assert.equal(lookupObject.mock.calls.length, 0);
     assert.equal(execute.mock.calls.length, 1);
   });
 
@@ -687,8 +739,7 @@ describe('remote actor materialization', () => {
       'execute',
       async (_workflow: unknown, options: unknown) => {
         const input = (options as { args: RemoteProfileLookupInput[] }).args[0]!;
-        assert.ok('kind' in input);
-        assert.equal(input.kind, 'stored-actor');
+        assert.deepEqual(input, { actorUri: actorUri.href });
         return null;
       },
     );

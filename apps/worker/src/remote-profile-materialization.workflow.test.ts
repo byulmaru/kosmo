@@ -184,11 +184,12 @@ test(
       workflowsPath,
     });
     const input: RemoteProfileLookupInput = {
-      actorJsonLd,
       actorUri: actorUri.href,
-      contextOrigin: publicOrigin,
-      kind: 'actor-document',
-      receivedAt: '2026-09-28T23:59:00Z',
+      actorDocument: {
+        jsonLd: actorJsonLd,
+        contextOrigin: publicOrigin,
+        receivedAt: '2026-09-28T23:59:00Z',
+      },
     };
 
     const profileId = await worker.runUntil(() =>
@@ -964,7 +965,7 @@ test('Remote Profile Activity는 exact actor URI 조회 성공 뒤 UNRESPONSIVE�
   assert.ok(recovered.actor.lastFetchedAt.epochNanoseconds > staleAt.epochNanoseconds);
 });
 
-test('stored-actor receipt만 기존 UNRESPONSIVE actor를 복구하고 cached lookup은 상태를 보존한다', async (t) => {
+test('Actor receipt만 UNRESPONSIVE actor를 복구하고 stale TTL을 유지한다', async (t) => {
   let contextCalls = 0;
   t.mock.method(federation, 'createContext', () => {
     contextCalls += 1;
@@ -984,7 +985,6 @@ test('stored-actor receipt만 기존 UNRESPONSIVE actor를 복구하고 cached l
   });
   const cached = await materializeRemoteProfileActorActivity({
     actorUri: cachedUri,
-    kind: 'stored-actor',
   });
   assert.equal(cached?.profileId, cachedProfile.id);
   assert.equal(
@@ -1005,26 +1005,24 @@ test('stored-actor receipt만 기존 UNRESPONSIVE actor를 복구하고 cached l
   });
   const received = await materializeRemoteProfileActorActivity({
     actorUri: receivedUri,
-    kind: 'stored-actor',
     receipt: {
       activityUri: 'https://stored-received.example/activities/follow-1',
       receivedAt: '2026-09-28T23:59:00Z',
     },
   });
-  assert.equal(received?.profileId, receivedProfile.id);
+  assert.deepEqual(received, { needsRefresh: true, profileId: receivedProfile.id });
   assert.equal((await readStoredProfile(receivedProfile.id)).instance.state, InstanceState.ACTIVE);
 
   assert.equal(
     await materializeRemoteProfileActorActivity({
       actorUri: 'https://stored-missing.example/users/alice',
-      kind: 'stored-actor',
     }),
     null,
   );
   assert.equal(contextCalls, 0);
 });
 
-test('stored-actor receipt cannot bypass DISABLED Profile or SUSPENDED Instance eligibility', async () => {
+test('Actor receipt cannot bypass DISABLED Profile or SUSPENDED Instance eligibility', async () => {
   const disabledUri = 'https://stored-disabled.example/users/alice';
   const disabledInstance = await createInstance({ domain: 'stored-disabled.example' });
   const disabledProfile = await createStoredProfile({
@@ -1052,7 +1050,6 @@ test('stored-actor receipt cannot bypass DISABLED Profile or SUSPENDED Instance 
     await assert.rejects(
       materializeRemoteProfileActorActivity({
         actorUri,
-        kind: 'stored-actor',
         receipt: { receivedAt: '2026-09-29T00:00:00Z' },
       }),
       (error: unknown) => {
@@ -1071,12 +1068,12 @@ test('stored-actor receipt cannot bypass DISABLED Profile or SUSPENDED Instance 
   );
 });
 
-test('stored-actor lookup rejects missing targets on SUSPENDED and local Instances', async () => {
+test('No-document lookup rejects missing targets on SUSPENDED and local Instances', async () => {
   const suspendedActorUri = 'https://suspended-missing.example/users/alice';
   await createInstance({ domain: 'suspended-missing.example', state: InstanceState.SUSPENDED });
 
   await assert.rejects(
-    materializeRemoteProfileActorActivity({ actorUri: suspendedActorUri, kind: 'stored-actor' }),
+    materializeRemoteProfileActorActivity({ actorUri: suspendedActorUri }),
     (error: unknown) => {
       assert.ok(error instanceof ApplicationFailure);
       assert.equal(error.nonRetryable, true);
@@ -1088,7 +1085,6 @@ test('stored-actor lookup rejects missing targets on SUSPENDED and local Instanc
   await assert.rejects(
     materializeRemoteProfileActorActivity({
       actorUri: `${publicOrigin}/ap/actor/missing`,
-      kind: 'stored-actor',
     }),
     (error: unknown) => {
       assert.ok(error instanceof ApplicationFailure);
@@ -1099,7 +1095,45 @@ test('stored-actor lookup rejects missing targets on SUSPENDED and local Instanc
   );
 });
 
-test('Remote Profile Update projection URI mismatch는 non-retryable 오류로 남고 저장 상태를 보존한다', async () => {
+test('Remote Profile Update는 저장된 actor가 없으면 network 없이 null을 반환한다', async (t) => {
+  const actorUri = new URL(`https://${remoteDomain}/users/missing-update`);
+  const actor = createActor({ id: actorUri });
+  const actorJsonLd = await actor.toJsonLd({ format: 'expand' });
+  let lookupCalls = 0;
+  t.mock.method(
+    federation,
+    'createContext',
+    () =>
+      ({
+        lookupObject: async () => {
+          lookupCalls += 1;
+          throw new Error('A supplied Update document must not be fetched');
+        },
+      }) as never,
+  );
+
+  assert.equal(
+    await materializeRemoteProfileActorActivity({
+      actorUri: actorUri.href,
+      actorDocument: {
+        jsonLd: actorJsonLd,
+        contextOrigin: publicOrigin,
+        receivedAt: '2026-09-29T00:00:00Z',
+      },
+      receipt: {
+        activityUri: 'https://remote.example/activities/update-missing',
+        receivedAt: '2026-09-29T00:00:00Z',
+      },
+    }),
+    null,
+  );
+
+  assert.equal(lookupCalls, 0);
+  assert.equal(await db.$count(Profiles), 0);
+  assert.equal(await db.$count(ActivityPubActors), 0);
+});
+
+test('Remote Profile Update projection URI mismatch는 non-retryable 오류로 남고 저장 상태를 보존한다', async (t) => {
   const actorUri = new URL(`https://${remoteDomain}/users/alice`);
   const mismatchedActorUri = new URL(`https://${remoteDomain}/users/mallory`);
   const remoteInstance = await createInstance({
@@ -1115,14 +1149,31 @@ test('Remote Profile Update projection URI mismatch는 non-retryable 오류로 �
   const before = await readStoredProfile(profile.id);
   const mismatchedActor = createActor({ id: mismatchedActorUri, name: 'Mallory' });
   const actorJsonLd = await mismatchedActor.toJsonLd({ format: 'expand' });
+  let lookupCalls = 0;
+  t.mock.method(
+    federation,
+    'createContext',
+    () =>
+      ({
+        lookupObject: async () => {
+          lookupCalls += 1;
+          throw new Error('A supplied Update document must not be fetched');
+        },
+      }) as never,
+  );
 
   await assert.rejects(
     materializeRemoteProfileActorActivity({
-      actorJsonLd,
       actorUri: actorUri.href,
-      contextOrigin: publicOrigin,
-      kind: 'update',
-      receivedAt: '2026-09-29T00:00:00Z',
+      actorDocument: {
+        jsonLd: actorJsonLd,
+        contextOrigin: publicOrigin,
+        receivedAt: '2026-09-29T00:00:00Z',
+      },
+      receipt: {
+        activityUri: 'https://remote.example/activities/update-1',
+        receivedAt: '2026-09-29T00:00:00Z',
+      },
     }),
     (error: unknown) => {
       assert.ok(error instanceof ApplicationFailure);
@@ -1138,6 +1189,7 @@ test('Remote Profile Update projection URI mismatch는 non-retryable 오류로 �
   assert.equal(after.profile.displayName, before.profile.displayName);
   assert.equal(after.actor.uri, before.actor.uri);
   assert.equal(after.actor.lastFetchedAt?.toString(), before.actor.lastFetchedAt?.toString());
+  assert.equal(lookupCalls, 0);
   assert.equal(await db.$count(Profiles), 1);
   assert.equal(await db.$count(ActivityPubActors), 1);
   assert.equal(
@@ -1618,14 +1670,15 @@ test(
 );
 
 test(
-  'Remote Profile Workflow는 missing Profile의 materialization 실패를 caller에게 전달한다',
+  'Remote Profile Workflow는 missing actor refresh 실패를 caller에게 전달한다',
   { timeout: 120_000 },
   async (t) => {
     const actorUri = new URL(`https://${remoteDomain}/users/missing-failure`);
-    const materializationFailure = ApplicationFailure.nonRetryable(
-      'missing materialization failed',
+    const refreshFailure = ApplicationFailure.nonRetryable(
+      'missing actor refresh failed',
       'RemoteActorMaterializationError',
     );
+    let refreshCalls = 0;
     const environment = await TestWorkflowEnvironment.createLocal({
       server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
     });
@@ -1634,10 +1687,11 @@ test(
     const worker = await Worker.create({
       activities: {
         lookupRemoteActorUriActivity: async () => actorUri.href,
-        materializeRemoteProfileActorActivity: async () => {
-          throw materializationFailure;
+        materializeRemoteProfileActorActivity,
+        refreshRemoteProfileActorActivity: async () => {
+          refreshCalls += 1;
+          throw refreshFailure;
         },
-        refreshRemoteProfileActorActivity,
       },
       connection: environment.nativeConnection,
       namespace: environment.namespace,
@@ -1664,12 +1718,13 @@ test(
           current = 'cause' in current ? current.cause : undefined;
         }
         assert.ok(
-          messages.some((message) => message.includes('missing materialization failed')),
+          messages.some((message) => message.includes('missing actor refresh failed')),
           messages.join(' -> '),
         );
         return true;
       },
     );
+    assert.equal(refreshCalls, 1);
     assert.equal(await db.$count(Profiles), 0);
     assert.equal(await db.$count(ActivityPubActors), 0);
   },
@@ -1706,11 +1761,12 @@ test(
       workflowsPath,
     });
     const input = {
-      actorJsonLd: { id: 'ftp://remote.example/users/alice', type: 'Person' },
       actorUri: 'ftp://remote.example/users/alice',
-      contextOrigin: publicOrigin,
-      kind: 'actor-document',
-      receivedAt: '2026-09-29T00:00:00Z',
+      actorDocument: {
+        jsonLd: { id: 'ftp://remote.example/users/alice', type: 'Person' },
+        contextOrigin: publicOrigin,
+        receivedAt: '2026-09-29T00:00:00Z',
+      },
     } as RemoteProfileLookupInput;
 
     await assert.rejects(

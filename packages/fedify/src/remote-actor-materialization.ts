@@ -37,7 +37,7 @@ import { and, eq, getColumns, inArray, ne } from 'drizzle-orm';
 import { isHttpUri } from './activitypub-uri';
 import type { Context, DocumentLoader } from '@fedify/fedify';
 import type { Actor, Image, LanguageString } from '@fedify/vocab';
-import type { RemoteProfileLookupInput } from '@kosmo/core/temporal/workflows';
+import type { RemoteProfileActorLookupInput } from '@kosmo/core/temporal/workflows';
 
 export class RemoteActorMaterializationError extends Error {
   constructor(message: string) {
@@ -294,20 +294,10 @@ type RemoteActorReceipt = {
   receivedAt: Temporal.Instant;
 };
 
-type RemoteActorLookupOptions =
-  | {
-      actorUri: URL;
-      context: RemoteActorLookupContext;
-      now?: Temporal.Instant;
-      receipt?: RemoteActorReceipt;
-    }
-  | {
-      activityUri?: URL | string | null;
-      actorJsonLd: unknown;
-      actorUri: URL;
-      context: RemoteActorLookupContext;
-      receivedAt: Temporal.Instant;
-    };
+type RemoteActorLookupOptions = { actorUri: URL; context: RemoteActorLookupContext } & (
+  | { actorJsonLd?: never; now?: Temporal.Instant; receipt?: RemoteActorReceipt }
+  | { actorJsonLd: unknown; receipt: RemoteActorReceipt }
+);
 
 const serializeReceipt = (receipt: RemoteActorReceipt) => {
   let activityUri: string | undefined;
@@ -328,7 +318,7 @@ const serializeReceipt = (receipt: RemoteActorReceipt) => {
   };
 };
 
-const lookupRemoteProfileActor = async (input: RemoteProfileLookupInput) => {
+const lookupRemoteProfileActor = async (input: RemoteProfileActorLookupInput) => {
   try {
     return await runWorkflow(remoteProfileLookupWorkflow, {
       args: [input],
@@ -359,23 +349,25 @@ export const findOrMaterializeRemoteProfileActorByUri = async (
   options: RemoteActorLookupOptions,
 ) => {
   const { actorUri, context } = options;
-  let input: RemoteProfileLookupInput;
+  let input: RemoteProfileActorLookupInput;
 
   if ('actorJsonLd' in options) {
+    if (options.actorJsonLd === undefined) {
+      throw new RemoteActorMaterializationError('Remote actor JSON-LD could not be serialized.');
+    }
+
     input = {
-      actorJsonLd: options.actorJsonLd,
       actorUri: actorUri.href,
-      contextOrigin: await getContextOrigin(context),
-      kind: 'update',
-      ...serializeReceipt({
-        activityUri: options.activityUri,
-        receivedAt: options.receivedAt,
-      }),
+      actorDocument: {
+        jsonLd: options.actorJsonLd,
+        contextOrigin: await getContextOrigin(context),
+        receivedAt: options.receipt.receivedAt.toString(),
+      },
+      receipt: serializeReceipt(options.receipt),
     };
   } else {
     const profileId = await lookupRemoteProfileActor({
-      actorUri: actorUri.toString(),
-      kind: 'stored-actor',
+      actorUri: actorUri.href,
       ...(options.receipt ? { receipt: serializeReceipt(options.receipt) } : {}),
     });
     if (profileId) {
@@ -403,11 +395,12 @@ export const findOrMaterializeRemoteProfileActorByUri = async (
     }
 
     input = {
-      actorJsonLd,
       actorUri: actorUri.href,
-      contextOrigin: await getContextOrigin(context),
-      kind: 'actor-document',
-      receivedAt: (options.now ?? getNow()).toString(),
+      actorDocument: {
+        jsonLd: actorJsonLd,
+        contextOrigin: await getContextOrigin(context),
+        receivedAt: (options.now ?? getNow()).toString(),
+      },
     };
   }
 

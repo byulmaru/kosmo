@@ -402,9 +402,10 @@ test('remote Profile Workflow builder는 normalized handle과 profileId를 실�
   }
 });
 
-test('Remote Profile lookup 입력별 ID를 구분하고 같은 receipt는 재사용한다', () => {
+test('Remote Profile 증거 shape별 ID를 기존 문자열로 유지한다', () => {
   const actorUri = 'https://remote.example/users/alice';
   const contextOrigin = 'https://local.example';
+  const receivedAt = '2026-08-01T00:00:01Z';
   const workflowIdFromArgs = remoteProfileLookupWorkflow.workflowIdFromArgs;
   const inputs = [
     {
@@ -413,35 +414,45 @@ test('Remote Profile lookup 입력별 ID를 구분하고 같은 receipt는 재�
     },
     {
       actorUri,
-      kind: 'stored-actor',
     },
     {
       actorUri,
-      kind: 'stored-actor',
       receipt: {
         activityUri: 'https://remote.example/activities/follow-1',
-        receivedAt: '2026-08-01T00:00:01Z',
+        receivedAt,
       },
     },
     {
-      actorJsonLd: { id: actorUri, type: 'Person' },
       actorUri,
-      contextOrigin,
-      kind: 'actor-document',
-      receivedAt: '2026-08-01T00:00:01Z',
+      actorDocument: {
+        jsonLd: { id: actorUri, type: 'Person' },
+        contextOrigin,
+        receivedAt,
+      },
     },
     {
-      actorJsonLd: { id: actorUri, type: 'Person' },
-      activityUri: 'https://remote.example/activities/update-1',
       actorUri,
-      contextOrigin,
-      kind: 'update',
-      receivedAt: '2026-08-01T00:00:02Z',
+      actorDocument: {
+        jsonLd: { id: actorUri, type: 'Person' },
+        contextOrigin,
+        receivedAt: '2026-08-01T00:00:02Z',
+      },
+      receipt: {
+        activityUri: 'https://remote.example/activities/update-1',
+        receivedAt: '2026-08-01T00:00:02Z',
+      },
     },
   ] satisfies RemoteProfileLookupInput[];
   const ids = inputs.map((input) => workflowIdFromArgs(input));
 
-  assert.equal(new Set(ids).size, inputs.length);
+  const workflowName = remoteProfileLookupWorkflow.workflow;
+  assert.deepEqual(ids, [
+    `${workflowName}:["remote.example","alice","configured-local"]`,
+    `${workflowName}:["stored-actor","${actorUri}","without-receipt"]`,
+    `${workflowName}:["stored-actor","${actorUri}","https://remote.example/activities/follow-1"]`,
+    `${workflowName}:["actor-document","${actorUri}","${receivedAt}"]`,
+    `${workflowName}:["update","${actorUri}","https://remote.example/activities/update-1","2026-08-01T00:00:02Z"]`,
+  ]);
   assert.equal(workflowIdFromArgs(inputs[2]!), ids[2]);
   assert.notEqual(
     workflowIdFromArgs({
@@ -454,7 +465,13 @@ test('Remote Profile lookup 입력별 ID를 구분하고 같은 receipt는 재�
     ids[2],
   );
   assert.notEqual(
-    workflowIdFromArgs({ ...inputs[4]!, receivedAt: '2026-08-01T00:00:03Z' }),
+    workflowIdFromArgs({
+      ...inputs[4]!,
+      actorDocument: {
+        ...inputs[4]!.actorDocument!,
+        receivedAt: '2026-08-01T00:00:03Z',
+      },
+    }),
     ids[4],
   );
 });
