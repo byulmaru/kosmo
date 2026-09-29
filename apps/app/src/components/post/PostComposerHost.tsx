@@ -9,6 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { IconButton } from '@/components/ui/IconButton';
 import { OverlayBackdrop, useOverlayLifecycle } from '@/components/ui/Overlay';
 import { ToastProvider } from '@/components/ui/ToastProvider';
@@ -47,6 +48,7 @@ export function PostComposerHost({
 }: PostComposerHostProps) {
   const theme = useTheme();
   const elevation = useElevation();
+  const insets = useSafeAreaInsets();
   const [submitting, setSubmitting] = useState(false);
   const web = Platform.OS === 'web';
   const nativeMobile = !web && mode === 'mobile';
@@ -139,7 +141,8 @@ export function PostComposerHost({
       >
         {header}
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior="height"
+          keyboardVerticalOffset={insets.top}
           style={[styles.composerFrame, mode === 'mobile' ? styles.composerFrameFill : null]}
         >
           {composer}
@@ -218,7 +221,7 @@ const styles = StyleSheet.create({
     top: 0,
     zIndex: 100,
   },
-  webMobileHost: { padding: 0 },
+  webMobileHost: { height: '100dvh' as never, padding: 0 },
   webBackdrop: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
   hiddenHost: { display: 'none' },
   nativeBackdrop: { flex: 1, justifyContent: 'center' },
