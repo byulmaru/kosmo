@@ -2,11 +2,9 @@ import { Block, Undo } from '@fedify/vocab';
 import { ActivityPubActors, db, first, Instances, ProfileBlocks, Profiles } from '@kosmo/core/db';
 import { InstanceKind, InstanceState, ProfileState } from '@kosmo/core/enums';
 import {
+  closeProfileBlockProtocolActivity,
   ensureProfileBlockProtocolActivity,
   loadProfileBlockProtocolActivityByProfileBlockId,
-  markProfileBlockProtocolDeliveryPending,
-  markProfileBlockProtocolDeliverySettled,
-  markProfileBlockProtocolUndoSettled,
 } from '@kosmo/core/services';
 import { and, eq, isNotNull } from 'drizzle-orm';
 import { localOutboundFederation } from './local-outbound-federation';
@@ -122,7 +120,6 @@ const dispatchProfileBlockActivity = async ({
   actorProfileId,
   context,
   objectUri,
-  onPending,
   orderingKey,
   targetProfileId,
 }: {
@@ -130,7 +127,6 @@ const dispatchProfileBlockActivity = async ({
   readonly actorProfileId: string;
   readonly context: Context<LocalOutboundContextData>;
   readonly objectUri: URL;
-  readonly onPending?: () => Promise<void>;
   readonly orderingKey: string;
   readonly targetProfileId: string;
 }): Promise<void> => {
@@ -148,7 +144,6 @@ const dispatchProfileBlockActivity = async ({
     return;
   }
 
-  await onPending?.();
   await materializeRemoteProfileActor({
     actorUri: objectUri,
     context,
@@ -201,10 +196,6 @@ export const sendProfileBlock = async (
   if (!existing && !createIfMissing) {
     return { reason: 'stale_source', status: 'SKIPPED' };
   }
-  if (existing?.origin === 'OUTBOUND' && existing.deliveryState === 'SETTLED') {
-    return { status: 'SETTLED' };
-  }
-
   const activityUri = existing
     ? new URL(existing.activityUri)
     : getProfileBlockActivityUri(context.canonicalOrigin, profileBlockId);
@@ -231,11 +222,9 @@ export const sendProfileBlock = async (
     actorProfileId: source.ownerProfileId,
     context,
     objectUri,
-    onPending: () => markProfileBlockProtocolDeliveryPending(activityUri.href),
     orderingKey: getProfileBlockOrderingKey(outboundActorUri, objectUri),
     targetProfileId: source.targetProfileId,
   });
-  await markProfileBlockProtocolDeliverySettled(activityUri.href);
   return { status: 'SETTLED' };
 };
 
@@ -251,9 +240,6 @@ export const sendProfileBlockUndo = async ({
   let protocol = await loadProfileBlockProtocolActivityByProfileBlockId(profileBlockId);
   if (protocol?.origin !== undefined && protocol.origin !== 'OUTBOUND') {
     return { reason: 'stale_source', status: 'SKIPPED' };
-  }
-  if (protocol?.undoDeliveryState === 'SETTLED') {
-    return { status: 'SETTLED' };
   }
   if (
     protocol !== undefined &&
@@ -316,6 +302,6 @@ export const sendProfileBlockUndo = async ({
     orderingKey: getProfileBlockOrderingKey(actorUri, objectUri),
     targetProfileId,
   });
-  await markProfileBlockProtocolUndoSettled(protocol.activityUri);
+  await closeProfileBlockProtocolActivity(protocol.activityUri);
   return { status: 'SETTLED' };
 };

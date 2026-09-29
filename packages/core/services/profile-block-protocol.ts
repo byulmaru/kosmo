@@ -2,11 +2,7 @@ import { and, eq, inArray, sql } from 'drizzle-orm';
 import { db, first, getDatabaseConnection, ProfileBlockActivities, ProfileBlocks } from '../db';
 import { ConflictError, ValidationError } from '../error';
 import type { DatabaseHandle, Transaction } from '../db';
-import type {
-  ProfileBlockActivityOrigin,
-  ProfileBlockActivityState,
-  ProfileBlockDeliveryState,
-} from '../enums';
+import type { ProfileBlockActivityOrigin, ProfileBlockActivityState } from '../enums';
 
 export type ProfileBlockProtocolActivityInput = {
   readonly activityUri: string;
@@ -359,34 +355,15 @@ export const loadProfileBlockProtocolActivityByProfileBlockId = async (
     .limit(1)
     .then(first);
 
-export const markProfileBlockProtocolDeliveryPending = async (
-  activityUri: string,
-): Promise<void> => {
-  await db
-    .update(ProfileBlockActivities)
-    .set({ deliveryState: 'PENDING', updatedAt: sql`now()` })
-    .where(protocolActivityCondition(activityUri));
-};
-
-export const markProfileBlockProtocolDeliverySettled = async (
-  activityUri: string,
-): Promise<void> => {
-  await db
-    .update(ProfileBlockActivities)
-    .set({ deliveryState: 'SETTLED', updatedAt: sql`now()` })
-    .where(protocolActivityCondition(activityUri));
-};
-
-export const markProfileBlockProtocolUndoSettled = async (activityUri: string): Promise<void> => {
+export const closeProfileBlockProtocolActivity = async (activityUri: string): Promise<void> => {
   await db
     .update(ProfileBlockActivities)
     .set({
       closedAt: sql`now()`,
       state: 'CLOSED',
-      undoDeliveryState: 'SETTLED',
       updatedAt: sql`now()`,
     })
     .where(protocolActivityCondition(activityUri));
 };
 
-export type { ProfileBlockActivityOrigin, ProfileBlockActivityState, ProfileBlockDeliveryState };
+export type { ProfileBlockActivityOrigin, ProfileBlockActivityState };

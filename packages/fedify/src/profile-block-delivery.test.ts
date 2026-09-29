@@ -104,13 +104,6 @@ test('Block과 Undo는 직접 target만 수신하고 관계 삭제 뒤에도 sta
     preferSharedInbox: true,
   });
 
-  const storedActivity = await db
-    .select()
-    .from(ProfileBlockActivities)
-    .where(eq(ProfileBlockActivities.profileBlockId, profileBlock.id))
-    .then((rows) => rows[0]);
-  assert.equal(storedActivity?.deliveryState, 'SETTLED');
-
   const { executeProfileUnblockTransitionActivity } =
     await import('../../../apps/worker/src/activities/profile-block');
   const transition = await executeProfileUnblockTransitionActivity({
@@ -156,7 +149,6 @@ test('Block과 Undo는 직접 target만 수신하고 관계 삭제 뒤에도 sta
     .from(ProfileBlockActivities)
     .where(eq(ProfileBlockActivities.activityUri, `${publicOrigin}/ap/block/${profileBlock.id}`))
     .then((rows) => rows[0]);
-  assert.equal(settledActivity?.undoDeliveryState, 'SETTLED');
   assert.equal(settledActivity?.state, 'CLOSED');
 });
 
@@ -262,12 +254,32 @@ test('Block 전달은 recipient projection을 복원하지 못하면 실패로 �
     /Remote lookup did not return an actor/,
   );
   assert.equal(contextFixture.calls.length, 0);
-  const pendingActivity = await db
-    .select()
-    .from(ProfileBlockActivities)
-    .where(eq(ProfileBlockActivities.profileBlockId, profileBlock.id))
-    .then((rows) => rows[0]);
-  assert.equal(pendingActivity?.deliveryState, 'PENDING');
+});
+
+test('Block queue 인계 실패는 같은 Activity ID로 재시도한다', async () => {
+  const fixture = await createFixture();
+  const profileBlock = await db
+    .insert(ProfileBlocks)
+    .values({ ownerProfileId: fixture.localProfileId, targetProfileId: fixture.remoteProfileId })
+    .returning()
+    .then(firstOrThrow);
+  const contextFixture = createContextFixture({ failSendOnce: true });
+  mock.method(localOutboundFederation, 'createContext', () => contextFixture.context);
+
+  await assert.rejects(
+    sendProfileBlock(profileBlock.id, { createIfMissing: true }),
+    /queue handoff failed/,
+  );
+  assert.equal(contextFixture.calls.length, 0);
+
+  assert.deepEqual(await sendProfileBlock(profileBlock.id, { createIfMissing: true }), {
+    status: 'SETTLED',
+  });
+  assert.equal(contextFixture.calls.length, 1);
+  assert.equal(
+    contextFixture.calls[0]?.activity.id?.href,
+    `${publicOrigin}/ap/block/${profileBlock.id}`,
+  );
 });
 
 test('Undo 전달도 누락된 recipient projection을 복원한 뒤 queue에 인계한다', async () => {
@@ -351,12 +363,13 @@ test('Undo 전달 실패 후에도 같은 identity로 다시 queue에 인계한�
     /Remote lookup did not return an actor/,
   );
   assert.equal(contextFixture.calls.length, 1);
-  const pendingActivity = await db
-    .select()
-    .from(ProfileBlockActivities)
-    .where(eq(ProfileBlockActivities.activityUri, `${publicOrigin}/ap/block/${profileBlock.id}`))
-    .then((rows) => rows[0]);
-  assert.equal(pendingActivity?.undoDeliveryState, 'NONE');
+  assert.deepEqual(
+    await db
+      .select({ state: ProfileBlockActivities.state })
+      .from(ProfileBlockActivities)
+      .where(eq(ProfileBlockActivities.activityUri, `${publicOrigin}/ap/block/${profileBlock.id}`)),
+    [{ state: 'ACTIVE' }],
+  );
   canMaterialize = true;
   assert.deepEqual(
     await sendProfileBlockUndo({
@@ -376,7 +389,7 @@ test('Undo 전달 실패 후에도 같은 identity로 다시 queue에 인계한�
     .from(ProfileBlockActivities)
     .where(eq(ProfileBlockActivities.activityUri, `${publicOrigin}/ap/block/${profileBlock.id}`))
     .then((rows) => rows[0]);
-  assert.equal(settledActivity?.undoDeliveryState, 'SETTLED');
+  assert.equal(settledActivity?.state, 'CLOSED');
 });
 
 type SendActivityCall = {
@@ -386,11 +399,14 @@ type SendActivityCall = {
 };
 
 const createContextFixture = ({
+  failSendOnce = false,
   lookupObject = async () => null,
 }: {
+  readonly failSendOnce?: boolean;
   readonly lookupObject?: Context<void>['lookupObject'];
 } = {}) => {
   const calls: SendActivityCall[] = [];
+  let sendAttempts = 0;
   const context = {
     canonicalOrigin: publicOrigin,
     getActorUri: (identifier: string) => new URL(`/ap/actor/${identifier}`, publicOrigin),
@@ -401,6 +417,9 @@ const createContextFixture = ({
       activity: Activity,
       options: { orderingKey?: string; preferSharedInbox?: boolean },
     ) => {
+      if (failSendOnce && sendAttempts++ === 0) {
+        throw new Error('queue handoff failed');
+      }
       calls.push({
         activity,
         options,
