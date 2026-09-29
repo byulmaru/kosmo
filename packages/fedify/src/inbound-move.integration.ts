@@ -140,8 +140,8 @@ test('준비한 source alias에서 inbound Move와 실제 Workflow가 Local foll
   await temporalClient.workflow
     .getHandle(
       profileMigrationWorkflowId({
-        sourceProfileId: source.profile.id,
-        targetProfileId: target.profile.id,
+        sourceActorUri: canonicalSourceUri,
+        targetActorUri: targetActorUri.href,
       }),
     )
     .result();
