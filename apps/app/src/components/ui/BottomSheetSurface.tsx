@@ -148,6 +148,28 @@ export function BottomSheetSurface({
         ? Math.max(0, maxHeight - Math.max(0, dragY))
         : collapsedHeight + Math.max(0, -dragY);
   const translateY = dismissing ? dismissY : expanded ? 0 : Math.max(0, dragY);
+  const handle = (
+    <View {...responder.panHandlers} style={styles.handleTarget}>
+      <Pressable
+        accessible
+        accessibilityLabel={expandable ? (expanded ? '시트 접기' : '시트 펼치기') : '시트 닫기'}
+        accessibilityRole="button"
+        disabled={closeDisabled}
+        importantForAccessibility="yes"
+        onPress={() => {
+          if (expandable) {
+            setExpanded((value) => !value);
+          } else {
+            dismiss();
+          }
+        }}
+        style={styles.handlePressable}
+        testID={handleTestID}
+      >
+        <View style={[styles.handle, { backgroundColor: theme.borderStrong }]} />
+      </Pressable>
+    </View>
+  );
 
   return (
     <Animated.View
@@ -161,31 +183,12 @@ export function BottomSheetSurface({
       ]}
       testID={testID}
     >
-      <View {...responder.panHandlers} style={styles.handleTarget}>
-        <Pressable
-          accessible
-          accessibilityLabel={expandable ? (expanded ? '시트 접기' : '시트 펼치기') : '시트 닫기'}
-          accessibilityRole="button"
-          disabled={closeDisabled}
-          importantForAccessibility="yes"
-          onPress={() => {
-            if (expandable) {
-              setExpanded((value) => !value);
-            } else {
-              dismiss();
-            }
-          }}
-          style={styles.handlePressable}
-          testID={handleTestID}
-        >
-          <View style={[styles.handle, { backgroundColor: theme.borderStrong }]} />
-        </Pressable>
-      </View>
       {stretchable ? (
-        <Animated.View style={{ paddingBottom: stretchY }}>{children}</Animated.View>
+        <Animated.View style={{ paddingBottom: stretchY }}>{handle}</Animated.View>
       ) : (
-        children
+        handle
       )}
+      {children}
     </Animated.View>
   );
 }
