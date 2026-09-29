@@ -30,7 +30,9 @@ export function SettingsRouteLayout({ children }: { children?: ReactNode }) {
   const selected =
     root || pathname === '/settings/default-post-visibility'
       ? 'default-post-visibility'
-      : pathname === '/settings/info' || pathname === '/settings/developer'
+      : pathname === '/settings/info' ||
+          pathname === '/settings/developer' ||
+          pathname === '/settings/open-source-licenses'
         ? 'info'
         : pathname === '/settings/mute-and-block' ||
             pathname === '/settings/muted-profiles' ||

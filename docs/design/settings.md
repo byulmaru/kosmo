@@ -17,6 +17,8 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
 포함한다. 이 정책 링크 범위와 별개로, 인증된 모든 플랫폼에서는 이 detail에 `개발 정보`의 nested destination을
 하나 더 제공하며 채널과 OTA 진단은 `/settings/developer`에서만 표시한다. 이 추가 진입점은 Byulmaru ID가
 소유하는 기존 `계정 설정` 외부 진입점과 결합하지 않는다.
+PROD-942에서는 같은 `정보` detail에 `오픈소스 라이선스` 진입점을 추가한다. 이 화면은 반응 이모지에
+사용한 Noto 이미지와 데이터 라이브러리의 저작권 고지 및 라이선스 전문을 보여 준다.
 비로그인 landing의 기존 개인정보 처리방침 링크와 full Web 우측 레일의 기존 개인정보 처리방침 링크는
 유지하고, Sidebar·mobile drawer에 정책 링크를 추가하지 않는다.
 
@@ -28,6 +30,8 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   `/settings/default-post-visibility`는 이 Target으로 이관할 구현 경로이지 별도 Target destination이 아니다.
 - 공개 정책 문서 진입점의 canonical Settings detail route는 `/settings/info`다. 이 route는 준비된 public
   `/privacy`, `/account-deletion`, `/child-safety`로 이동하는 링크를 제공하며 정책 문서 내용을 복제하지 않는다.
+- `/settings/open-source-licenses`는 `/settings/info`의 하위 화면이다. 공개 정책 문서나 Settings root의
+  별도 진입점으로 취급하지 않는다.
 - Mobile Target evidence는 [`Default`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6704-9409)와
   [`Profile required`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6704-9415) `390×844`
   consumer다. 이 조립 화면은 Product migration이나 실제 선택·저장 동작의 완료 증거가 아니다.
@@ -51,7 +55,7 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   root에 중복 노출하거나 항목 하나만 가진 `계정`·`화면 설정` 대분류를 만들지 않는다.
 - `정보`는 별도 category나 generic policy registry가 아닌 Settings root의 direct destination이다. `/settings/info`
   detail은 `개인정보 처리방침`, `계정 삭제 안내`, `아동 안전 정책`을 각각 public route로 여는 기존 Settings
-  link-row 문법을 사용한다. 모든 플랫폼의 `/settings/info`는 세 policy link와 `개발 정보` link row를
+  link-row 문법을 사용한다. 모든 플랫폼에서 세 policy link와 `오픈소스 라이선스`·`개발 정보` link row를
   제공하며 channel selector나 OTA 진단을 inline으로 표시하지 않는다. 정책 문서의 본문·시행일·이메일 처리와
   public route 간 cross-link는 각 정책 문서가 소유한다.
 - `/settings/developer`는 `/settings/info`를 명시적 parent로 갖는 nested detail destination이다. Web에서는
