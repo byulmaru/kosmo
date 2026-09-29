@@ -33,7 +33,10 @@ export function parseNativePushTapTarget(value: unknown): NativePushTapTarget | 
 }
 
 function postHref(
-  post: { readonly id: string; readonly profile: { readonly relativeHandle: string } } | null,
+  post:
+    | { readonly id: string; readonly profile: { readonly relativeHandle: string } }
+    | null
+    | undefined,
 ): Href | null {
   if (!post?.id || !post.profile.relativeHandle) {
     return null;
