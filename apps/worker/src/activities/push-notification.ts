@@ -23,6 +23,7 @@ import { ApplicationFailure } from '@temporalio/activity';
 import { and, eq } from 'drizzle-orm';
 import { applicationDefault, FirebaseError, getApps, initializeApp } from 'firebase-admin/app';
 import { getMessaging } from 'firebase-admin/messaging';
+import type { Message } from 'firebase-admin/messaging';
 
 const DAY_IN_MILLISECONDS = 24 * 60 * 60 * 1000;
 const PREVIEW_MAX_CODE_POINTS = 160;
@@ -44,18 +45,6 @@ const notificationMessages: Record<NotificationKind, string> = {
   REACTION: '이 게시글에 반응했습니다',
   REPLY: '회원님의 게시글에 답글을 달았습니다',
   REPOST: '이 게시글을 재게시했습니다',
-};
-
-type PushNotificationMessage = {
-  readonly notification: { readonly title: string; readonly body: string };
-  readonly data: {
-    readonly notificationId: string;
-    readonly recipientProfileId: string;
-    readonly href: string;
-  };
-  readonly android: { readonly ttl: number };
-  readonly apns: { readonly headers: { readonly 'apns-expiration': string } };
-  readonly token: string;
 };
 
 type NotificationSource = {
@@ -281,7 +270,7 @@ export const sendPushNotification = async (
     },
     notification: { body, title: actorName },
     token: installation.token,
-  } satisfies PushNotificationMessage;
+  } satisfies Message;
 
   const app =
     getApps().find(({ name }) => name === '[DEFAULT]') ??
