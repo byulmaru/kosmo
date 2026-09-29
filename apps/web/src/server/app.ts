@@ -2,7 +2,6 @@ import { federation, setInboundObservabilityReporter } from '@kosmo/fedify';
 import { Hono } from 'hono';
 import { routePath } from 'hono/route';
 import { OidcAuthError } from './auth';
-import feedbackRoutes from './routes/feedback';
 import graphqlRoutes from './routes/graphql';
 import loginRoutes from './routes/login';
 import logoutRoutes from './routes/logout';
@@ -24,10 +23,6 @@ app.use('*', async (c, next) => {
   ) {
     return c.text('GraphQL multipart is not supported', 415);
   }
-  if (c.req.path === '/feedback/attachments') {
-    return next();
-  }
-
   const fallThrough = async () => {
     await next();
     return new Response(c.res.body, c.res);
@@ -92,7 +87,6 @@ app.all('/channel.js', (c) => c.text('Method Not Allowed', 405, { Allow: 'GET' }
 app.route('/', loginRoutes);
 app.route('/', logoutRoutes);
 app.route('/', graphqlRoutes);
-app.route('/', feedbackRoutes);
 app.route('/', staticRoutes);
 
 export default app;

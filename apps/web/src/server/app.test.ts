@@ -3,7 +3,6 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gunzipSync, gzipSync } from 'node:zlib';
-import { feedbackMultipartMaxBytes } from '@kosmo/core/validation';
 import { parse } from 'hono/utils/cookie';
 import { Configuration, enableNonRepudiationChecks } from 'openid-client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
@@ -470,115 +469,6 @@ describe('GraphQL proxy', () => {
 
     expect(response.status).toBe(400);
     expect(await response.text()).toBe('Authorization header must use Bearer');
-    expect(fetch).not.toHaveBeenCalled();
-  });
-});
-
-describe('Feedback attachment proxy', () => {
-  test('rejects cross-site multipart cookie requests before forwarding', async () => {
-    const response = await app.request('https://kos.moe/feedback/attachments', {
-      body: new FormData(),
-      headers: {
-        cookie: 'kosmo_session=cookie-token',
-        origin: 'https://evil.example',
-      },
-      method: 'POST',
-    });
-
-    expect(response.status).toBe(403);
-    expect(await response.text()).toBe('Forbidden');
-    expect(fetch).not.toHaveBeenCalled();
-  });
-
-  test('allows cross-site multipart Bearer requests and forwards same multipart body', async () => {
-    fetch = vi.fn<typeof globalThis.fetch>(async (input, init) => {
-      expect(String(input)).toBe('https://api.example/feedback/attachments');
-      expect(new Headers(init?.headers).get('authorization')).toBe('Bearer native-token');
-      expect(new Headers(init?.headers).get('content-type')).toContain('multipart/form-data');
-      expect(await new Response(init?.body, { headers: init?.headers }).formData()).toBeInstanceOf(
-        FormData,
-      );
-      return new Response('{}', { status: 200 });
-    });
-    vi.stubGlobal('fetch', fetch);
-    const formData = new FormData();
-    formData.append('body', 'feedback');
-    formData.append('kind', 'BUG_REPORT');
-    formData.append('attachments', new Blob(['image'], { type: 'image/png' }));
-
-    const response = await app.request('https://kos.moe/feedback/attachments', {
-      body: formData,
-      headers: {
-        authorization: 'Bearer native-token',
-        origin: 'https://evil.example',
-      },
-      method: 'POST',
-    });
-
-    expect(response.status).toBe(200);
-    expect(fetch).toHaveBeenCalledOnce();
-  });
-
-  test('rejects multipart bodies above the transport limit before forwarding', async () => {
-    const response = await app.request('https://kos.moe/feedback/attachments', {
-      body: new Uint8Array(0),
-      headers: {
-        authorization: 'Bearer native-token',
-        'content-length': String(feedbackMultipartMaxBytes + 1),
-        'content-type': 'multipart/form-data; boundary=test',
-      },
-      method: 'POST',
-    });
-
-    expect(response.status).toBe(413);
-    expect(fetch).not.toHaveBeenCalled();
-  });
-
-  test('rejects feedback bodies exceeding the limit without a Content-Length header', async () => {
-    const response = await app.request('/feedback/attachments', {
-      method: 'POST',
-      headers: {
-        authorization: 'Bearer native-token',
-        'content-type': 'multipart/form-data; boundary=test',
-      },
-      body: new Uint8Array(feedbackMultipartMaxBytes + 1),
-    });
-    expect(response.status).toBe(413);
-    expect(fetch).not.toHaveBeenCalled();
-  });
-
-  test('forwards same-origin feedback cookies as Bearer without changing the files', async () => {
-    const form = new FormData();
-    form.append('body', 'feedback body');
-    form.append('kind', 'BUG_REPORT');
-    form.append('attachments', new Blob(['image bytes'], { type: 'image/png' }));
-    fetch.mockResolvedValue(new Response('{"completed":true}', { status: 200 }));
-    const response = await app.request('https://kos.moe/feedback/attachments', {
-      method: 'POST',
-      body: form,
-      headers: { cookie: 'kosmo_session=cookie-token', origin: 'https://kos.moe' },
-    });
-    expect(response.status).toBe(200);
-    const [url, init] = fetch.mock.calls[0];
-    expect(String(url)).toBe('https://api.example/feedback/attachments');
-    const headers = new Headers(init?.headers);
-    expect(headers.get('authorization')).toBe('Bearer cookie-token');
-    expect(headers.has('cookie')).toBe(false);
-    const forwarded = await new Response(init?.body, { headers }).formData();
-    expect(forwarded.get('body')).toBe('feedback body');
-    expect(await (forwarded.get('attachments') as File).text()).toBe('image bytes');
-    expect(federationFetch).not.toHaveBeenCalled();
-  });
-
-  test('rejects unauthenticated feedback and malformed Bearer before forwarding', async () => {
-    for (const authorization of [undefined, 'Basic invalid']) {
-      const response = await app.request('/feedback/attachments', {
-        method: 'POST',
-        body: new FormData(),
-        headers: authorization ? { authorization } : {},
-      });
-      expect(response.status).toBe(authorization ? 400 : 401);
-    }
     expect(fetch).not.toHaveBeenCalled();
   });
 

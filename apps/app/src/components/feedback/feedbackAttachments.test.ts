@@ -1,165 +1,176 @@
 import assert from 'node:assert/strict';
 import { mock, test } from 'node:test';
-import {
-  createFeedbackAttachmentFormData,
-  getFeedbackAssetContentType,
-  submitFeedbackWithAttachments,
-} from './feedbackAttachments';
+import { feedbackAttachmentLimit, feedbackAttachmentMaxBytes } from '@kosmo/core/validation';
+import { getFeedbackAssetContentType, prepareFeedbackAttachments } from './feedbackAttachments';
 
-test('지원 확장자를 MIME으로 추론하고 multipart 첨부를 반복 필드로 보낸다', async () => {
-  const items = [
-    {
-      asset: {
-        file: new File(['jpeg'], 'photo.JPG', { type: '' }),
-        fileName: 'photo.JPG',
-        mimeType: null,
-        uri: 'blob:jpeg',
-      },
-    },
-    {
-      asset: {
-        file: new File(['png'], 'screen.png', { type: '' }),
-        fileName: 'screen.png',
-        mimeType: null,
-        uri: 'blob:png',
-      },
-    },
-  ];
+const item = (file: File, extra: Record<string, unknown> = {}) => ({
+  asset: { file, fileName: file.name, mimeType: file.type, uri: `blob:${file.name}`, ...extra },
+});
 
-  assert.equal(getFeedbackAssetContentType(items[0].asset), 'image/jpeg');
-  const formData = createFeedbackAttachmentFormData({ body: 'body', items, kind: 'POSITIVE' });
-  assert.equal(formData.get('body'), 'body');
-  assert.equal(formData.get('kind'), 'POSITIVE');
-  assert.equal(formData.getAll('attachments').length, 2);
-  assert.deepEqual(
-    (formData.getAll('attachments') as File[]).map((file) => [file.name, file.type]),
+const pngBytes = (size = 45, animated = false) => {
+  const bytes = new Uint8Array(size);
+  bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  bytes.set([0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52], 8);
+  bytes.set([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 16);
+  if (animated) {
+    bytes.set([0, 0, 0, 0, 0x61, 0x63, 0x54, 0x4c, 0, 0, 0, 0], 33);
+    bytes.set([0, 0, 0, 0, 0x49, 0x45, 0x4e, 0x44, 0, 0, 0, 0], 45);
+    return bytes;
+  }
+  if (size === 45) {
+    bytes.set([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 29);
+    bytes.set([0, 0, 0, 0, 0x49, 0x45, 0x4e, 0x44, 0, 0, 0, 0], 33);
+    return bytes;
+  }
+  const fillerLength = size - 57;
+  bytes.set(
     [
-      ['photo.JPG', 'image/jpeg'],
-      ['screen.png', 'image/png'],
+      (fillerLength >>> 24) & 0xff,
+      (fillerLength >>> 16) & 0xff,
+      (fillerLength >>> 8) & 0xff,
+      fillerLength & 0xff,
+      0x49,
+      0x44,
+      0x41,
+      0x54,
+    ],
+    33,
+  );
+  bytes.set([0, 0, 0, 0, 0x49, 0x45, 0x4e, 0x44, 0, 0, 0, 0], size - 12);
+  return bytes;
+};
+
+const animatedWebpBytes = () => {
+  const bytes = new Uint8Array(20);
+  bytes.set([0x52, 0x49, 0x46, 0x46, 12, 0, 0, 0, 0x57, 0x45, 0x42, 0x50]);
+  bytes.set([0, 0, 0, 0, 0x41, 0x4e, 0x49, 0x4d], 12);
+  return bytes;
+};
+
+test('지원 확장자를 MIME으로 추론하고 Sentry 첨부 바이트와 고정 파일명을 준비한다', async () => {
+  const file = new File([new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0xff, 0xd9])], 'photo.JPG', {
+    type: '',
+  });
+  const prepared = await prepareFeedbackAttachments([
+    item(file, { mimeType: null }),
+    item(new File([pngBytes()], 'screen.png', { type: '' }), { mimeType: null }),
+  ]);
+
+  assert.equal(
+    getFeedbackAssetContentType({ file, fileName: file.name, mimeType: null, uri: file.name }),
+    'image/jpeg',
+  );
+  assert.deepEqual(
+    prepared.map(({ contentType, filename }) => [contentType, filename]),
+    [
+      ['image/jpeg', 'feedback-1.jpg'],
+      ['image/png', 'feedback-2.png'],
     ],
   );
+  assert.deepEqual([...prepared[0]!.data], [0xff, 0xd8, 0xff, 0xe0, 0xff, 0xd9]);
 });
 
-test('Web File MIME이 비어 있어도 추론한 타입으로 정규화하며 바이트를 유지한다', async () => {
-  const file = new File(['original bytes'], 'screen.png', { type: '' });
-  const formData = createFeedbackAttachmentFormData({
-    body: 'body',
-    items: [{ asset: { file, mimeType: '', uri: 'blob:preview' } }],
-    kind: 'POSITIVE',
-  });
-  const attachment = formData.get('attachments');
-
-  assert.ok(attachment instanceof File);
-  assert.equal(attachment.type, 'image/png');
-  assert.equal(attachment.name, 'screen.png');
-  assert.equal(await attachment.text(), 'original bytes');
-});
-
-test('알 수 없는 형식과 명시된 비지원 MIME은 거부한다', () => {
-  for (const asset of [
-    { uri: 'content://media/123', fileName: null },
-    { uri: 'file:///photo.heic' },
-    { uri: 'file:///photo.jpg', mimeType: 'image/heic' },
-    { uri: 'file:///photo.gif' },
-  ]) {
-    assert.equal(getFeedbackAssetContentType(asset), null);
-    assert.throws(
-      () =>
-        createFeedbackAttachmentFormData({ body: 'body', items: [{ asset }], kind: 'POSITIVE' }),
-      /Unsupported feedback image/u,
-    );
+test('Native URI 바이트도 읽되 실패 응답은 로컬 준비 오류로 처리한다', async () => {
+  const fetchMock = mock.method(globalThis, 'fetch', async () => new Response(pngBytes()));
+  try {
+    const prepared = await prepareFeedbackAttachments([
+      {
+        asset: {
+          file: undefined,
+          fileName: 'photo.png',
+          mimeType: 'image/png',
+          uri: 'content://photo',
+        },
+      },
+    ]);
+    assert.deepEqual([...prepared[0]!.data], [...pngBytes()]);
+    assert.equal(fetchMock.mock.calls[0]?.arguments[0], 'content://photo');
+  } finally {
+    fetchMock.mock.restore();
   }
-});
 
-test('Web 첨부 전송은 same-origin cookie만 사용하고 Native 첨부 전송은 bearer를 사용한다', async () => {
-  let capturedUrl: RequestInfo | URL | undefined;
-  let capturedInit: RequestInit | undefined;
-  const fetchMock = mock.method(
+  const failedFetch = mock.method(
     globalThis,
     'fetch',
-    async (input: RequestInfo | URL, init?: RequestInit) => {
-      capturedUrl = input;
-      capturedInit = init;
-      return new Response(JSON.stringify({ completed: true }), { status: 200 });
-    },
+    async () => new Response(null, { status: 404 }),
   );
-  const windowDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'window');
-  Object.defineProperty(globalThis, 'window', {
-    configurable: true,
-    value: { location: { origin: 'https://kos.moe' } },
-  });
-
   try {
-    await submitFeedbackWithAttachments({
-      body: 'web body',
-      items: [
+    await assert.rejects(
+      prepareFeedbackAttachments([
         {
           asset: {
-            file: new File(['image'], 'photo.png', { type: 'image/png' }),
-            uri: 'blob:preview',
+            file: undefined,
+            fileName: 'photo.png',
+            mimeType: 'image/png',
+            uri: 'content://missing',
           },
         },
-      ],
-      kind: 'POSITIVE',
-      native: false,
-      nativeToken: 'must-not-leave-web',
-    });
-    assert.equal(capturedUrl, 'https://kos.moe/feedback/attachments');
-    assert.equal(capturedInit?.credentials, 'include');
-    assert.equal((capturedInit?.headers as Record<string, string>).authorization, undefined);
-
-    await submitFeedbackWithAttachments({
-      body: 'native body',
-      items: [{ asset: { fileName: 'photo.png', mimeType: null, uri: 'content://photo' } }],
-      kind: 'NEGATIVE',
-      native: true,
-      nativeToken: 'native-token',
-    });
-    assert.equal(capturedUrl, 'https://api.kos.moe/feedback/attachments');
-    assert.equal(capturedInit?.credentials, 'omit');
-    assert.equal(
-      (capturedInit?.headers as Record<string, string>).authorization,
-      'Bearer native-token',
+      ]),
+      /이미지 파일을 읽을 수 없어요/u,
     );
   } finally {
-    fetchMock.mock.restore();
-    if (windowDescriptor) {
-      Object.defineProperty(globalThis, 'window', windowDescriptor);
-    } else {
-      Reflect.deleteProperty(globalThis, 'window');
-    }
+    failedFetch.mock.restore();
   }
 });
 
-test('첨부 전송은 non-2xx와 malformed 응답을 실패로 처리한다', async () => {
-  const responses = [
-    new Response(JSON.stringify({ completed: false }), { status: 200 }),
-    new Response(JSON.stringify({ error: 'failed' }), { status: 502 }),
-  ];
-  const fetchMock = mock.method(globalThis, 'fetch', async () => responses.shift()!);
+test('알 수 없는 형식과 빈 첨부 바이트를 거부한다', async () => {
+  assert.equal(
+    getFeedbackAssetContentType({
+      file: undefined,
+      fileName: 'photo.heic',
+      mimeType: null,
+      uri: 'file:///photo.heic',
+    }),
+    null,
+  );
+  await assert.rejects(
+    prepareFeedbackAttachments([
+      {
+        asset: {
+          file: undefined,
+          fileName: 'photo.heic',
+          mimeType: null,
+          uri: 'file:///photo.heic',
+        },
+      },
+    ]),
+    /정적 JPEG, PNG, WebP 이미지만 첨부할 수 있어요/u,
+  );
+  await assert.rejects(
+    prepareFeedbackAttachments([item(new File([], 'empty.png', { type: 'image/png' }))]),
+    /이미지 파일을 읽을 수 없어요/u,
+  );
+});
 
-  try {
-    await assert.rejects(
-      submitFeedbackWithAttachments({
-        body: 'body',
-        items: [{ asset: { fileName: 'photo.png', mimeType: null, uri: 'content://photo' } }],
-        kind: 'POSITIVE',
-        native: true,
-        nativeToken: null,
-      }),
-      /Invalid feedback response/u,
-    );
-    await assert.rejects(
-      submitFeedbackWithAttachments({
-        body: 'body',
-        items: [{ asset: { fileName: 'photo.png', mimeType: null, uri: 'content://photo' } }],
-        kind: 'POSITIVE',
-        native: true,
-        nativeToken: null,
-      }),
-      /HTTP 502/u,
-    );
-  } finally {
-    fetchMock.mock.restore();
-  }
+test('정적 이미지가 아닌 APNG와 Animated WebP를 거부한다', async () => {
+  await assert.rejects(
+    prepareFeedbackAttachments([
+      item(new File([pngBytes(57, true)], 'animated.png', { type: 'image/png' })),
+    ]),
+    /이미지 파일 형식을 확인해주세요/u,
+  );
+  await assert.rejects(
+    prepareFeedbackAttachments([
+      item(new File([animatedWebpBytes()], 'animated.webp', { type: 'image/webp' })),
+    ]),
+    /이미지 파일 형식을 확인해주세요/u,
+  );
+});
+
+test('첨부 개수·개별 크기·전체 크기 제한을 로컬에서 검증한다', async () => {
+  const small = () => item(new File(['x'], 'small.png', { type: 'image/png' }));
+  await assert.rejects(
+    prepareFeedbackAttachments(Array.from({ length: feedbackAttachmentLimit + 1 }, small)),
+    /이미지는 최대 3장까지 첨부할 수 있어요/u,
+  );
+  await assert.rejects(
+    prepareFeedbackAttachments([
+      item(
+        new File([new Uint8Array(feedbackAttachmentMaxBytes + 1)], 'large.png', {
+          type: 'image/png',
+        }),
+      ),
+    ]),
+    /이미지는 한 장당 5MB 이하로 첨부해주세요/u,
+  );
 });

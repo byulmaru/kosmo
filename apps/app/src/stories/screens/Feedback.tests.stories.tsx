@@ -1,6 +1,7 @@
 import { expect, fn, userEvent, within } from 'storybook/test';
 import { FeedbackOverlay } from '@/components/feedback/FeedbackOverlay';
 import { FeedbackPage } from '@/components/feedback/FeedbackPage';
+import { captureFeedback } from '@/observability/sentry.web';
 import {
   resetImagePickerMock,
   setNextImagePickerResult,
@@ -9,6 +10,14 @@ import ogImage from '../../../public/og-default.png?url';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 const meta = {
+  beforeEach: () => {
+    const captureFeedbackMock = captureFeedback as unknown as {
+      mockImplementation: (implementation: typeof captureFeedback) => void;
+      mockReset: () => void;
+    };
+    captureFeedbackMock.mockImplementation(() => 'storybook-feedback-event');
+    return () => captureFeedbackMock.mockReset();
+  },
   component: FeedbackPage,
   parameters: {
     controls: { disable: true },
@@ -19,8 +28,6 @@ const meta = {
 } satisfies Meta<typeof FeedbackPage>;
 export default meta;
 type Story = StoryObj<typeof meta>;
-
-let feedbackAttachmentRequest: RequestInit | undefined;
 
 export const SelectedImages: Story = {
   beforeEach: () => {
@@ -65,11 +72,9 @@ export const SelectedImages: Story = {
 export const SelectedImagesSubmission: Story = {
   beforeEach: () => {
     resetImagePickerMock();
-    feedbackAttachmentRequest = undefined;
     setNextImagePickerResult({
       assets: [
         {
-          file: new File(['feedback image'], 'feedback.png', { type: '' }),
           fileName: 'feedback.png',
           fileSize: 1024,
           height: 630,
@@ -80,17 +85,8 @@ export const SelectedImagesSubmission: Story = {
       ],
       canceled: false,
     });
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = async (input, init) => {
-      if (String(input).endsWith('/feedback/attachments')) {
-        feedbackAttachmentRequest = init;
-        return new Response(JSON.stringify({ completed: true }), { status: 200 });
-      }
-      return originalFetch(input, init);
-    };
 
     return () => {
-      globalThis.fetch = originalFetch;
       resetImagePickerMock();
     };
   },
@@ -106,11 +102,22 @@ export const SelectedImagesSubmission: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '피드백 보내기' }));
     await expect(canvas.findByText('피드백을 전달했습니다. 감사합니다!')).resolves.toBeVisible();
 
-    expect(feedbackAttachmentRequest?.credentials).toBe('include');
-    const formData = feedbackAttachmentRequest?.body as FormData;
-    expect(formData.get('body')).toBe('이미지 첨부 피드백');
-    expect(formData.get('kind')).toBe('POSITIVE');
-    expect(formData.getAll('attachments')).toHaveLength(1);
+    const captureFeedbackMock = captureFeedback as unknown as {
+      mock: { calls: unknown[][] };
+    };
+    const [message, kind, attachments] = captureFeedbackMock.mock.calls.at(-1) ?? [];
+    expect(message).toBe('이미지 첨부 피드백');
+    expect(kind).toBe('POSITIVE');
+    expect(attachments).toHaveLength(1);
+    expect(attachments).toSatisfy((value) => {
+      const attachment = (value as Array<Record<string, unknown>>)[0];
+      return (
+        attachment?.contentType === 'image/png' &&
+        attachment?.filename === 'feedback-1.png' &&
+        attachment?.data instanceof Uint8Array &&
+        attachment.data.byteLength > 0
+      );
+    });
   },
 };
 

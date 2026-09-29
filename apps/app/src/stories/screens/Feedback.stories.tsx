@@ -4,6 +4,7 @@ import { expect, fireEvent, userEvent, waitFor, within } from 'storybook/test';
 import { FeedbackForm } from '@/components/feedback/FeedbackForm';
 import { FeedbackOverlay } from '@/components/feedback/FeedbackOverlay';
 import { FeedbackPage } from '@/components/feedback/FeedbackPage';
+import { captureFeedback } from '@/observability/sentry.web';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { FeedbackFormState } from '@/components/feedback/FeedbackForm';
 
@@ -34,6 +35,14 @@ function FeedbackOverlayFixture({ initiallyVisible = false }: { initiallyVisible
 }
 
 const meta = {
+  beforeEach: () => {
+    const captureFeedbackMock = captureFeedback as unknown as {
+      mockImplementation: (implementation: typeof captureFeedback) => void;
+      mockReset: () => void;
+    };
+    captureFeedbackMock.mockImplementation(() => 'storybook-feedback-event');
+    return () => captureFeedbackMock.mockReset();
+  },
   component: FeedbackPage,
   parameters: {
     layout: 'fullscreen',
@@ -104,9 +113,6 @@ export const KeyboardNavigation: Story = {
 };
 
 export const TrimmedBodyBoundary: Story = {
-  parameters: {
-    relay: { mutationResponse: { submitFeedback: { completed: true } } },
-  },
   render: () => <FeedbackPage />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -132,7 +138,6 @@ export const BodyTooLong: Story = {
 };
 
 export const Pending: Story = {
-  parameters: { relay: { mutationLoading: true } },
   render: () => <FeedbackPage />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -144,16 +149,11 @@ export const Pending: Story = {
     );
     const submit = canvas.getByRole('button', { name: '피드백 보내기' });
     await userEvent.click(submit);
-    await expect(submit).toBeDisabled();
-    expect(submit).toHaveAttribute('aria-busy', 'true');
-    expect(bugReport).toHaveAttribute('aria-disabled', 'true');
-    fireEvent.click(canvas.getByRole('radio', { name: '좋아요' }));
-    expect(bugReport).toBeChecked();
+    await expect(canvas.getByText('피드백을 전달했습니다. 감사합니다!')).toBeVisible();
   },
 };
 
 export const StateSignal: Story = {
-  parameters: { relay: { mutationLoading: true } },
   render: () => <FeedbackFormStateProbe />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -167,7 +167,7 @@ export const StateSignal: Story = {
     await expect(state).toHaveTextContent('dirty idle');
 
     await userEvent.click(canvas.getByRole('button', { name: '피드백 보내기' }));
-    await expect(state).toHaveTextContent('dirty submitting');
+    await expect(state).toHaveTextContent('clean idle');
   },
 };
 
@@ -297,7 +297,6 @@ export const OverlayDirtyCloseGuard: Story = {
 
 export const OverlaySubmittingCloseGuard: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
-  parameters: { relay: { mutationLoading: true } },
   render: () => <FeedbackOverlayFixture />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -310,24 +309,15 @@ export const OverlaySubmittingCloseGuard: Story = {
       '전달 중인 피드백',
     );
     await userEvent.click(within(dialog).getByRole('button', { name: '피드백 보내기' }));
-    const close = within(dialog).getByRole('button', { name: '피드백 닫기' });
-    await waitFor(() => expect(close).toBeDisabled());
-
-    await userEvent.keyboard('{Escape}');
-    expect(page.getByRole('dialog', { name: '피드백 보내기' })).toBeVisible();
-    expect(page.queryByRole('alertdialog', { name: '작성 중인 피드백을 버릴까요?' })).toBeNull();
-
-    const surface = page.getByTestId('feedback-overlay-surface');
-    fireEvent.click(surface.parentElement!);
+    await expect(
+      within(dialog).findByText('피드백을 전달했습니다. 감사합니다!'),
+    ).resolves.toBeVisible();
     expect(page.getByRole('dialog', { name: '피드백 보내기' })).toBeVisible();
   },
 };
 
 export const OverlaySuccessStaysOpenForNextFeedback: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
-  parameters: {
-    relay: { mutationResponse: { submitFeedback: { completed: true } } },
-  },
   render: () => <FeedbackOverlayFixture />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -350,9 +340,6 @@ export const OverlaySuccessStaysOpenForNextFeedback: Story = {
 };
 
 export const Success: Story = {
-  parameters: {
-    relay: { mutationResponse: { submitFeedback: { completed: true } } },
-  },
   render: () => <FeedbackPage />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -366,13 +353,18 @@ export const Success: Story = {
   },
 };
 
-export const DeliveryFailureKeepsInput: Story = {
-  parameters: { relay: { mutationError: 'Slack delivery failed' } },
+export const CaptureFailureKeepsInput: Story = {
   render: () => <FeedbackPage />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const message = '다시 시도할 수 있어야 해요.';
     const body = canvas.getByRole('textbox', { name: '피드백 내용' });
+    const captureFeedbackMock = captureFeedback as unknown as {
+      mockImplementation: (implementation: typeof captureFeedback) => void;
+    };
+    captureFeedbackMock.mockImplementation(() => {
+      throw new Error('Sentry capture failed');
+    });
     await userEvent.type(body, message);
     await userEvent.click(canvas.getByRole('button', { name: '피드백 보내기' }));
     await expect(

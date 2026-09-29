@@ -4,6 +4,7 @@ import { after, beforeEach, describe, it, mock } from 'node:test';
 import * as Sentry from '@sentry/react';
 
 const capturedEvents: unknown[] = [];
+const capturedAttachments: unknown[] = [];
 const initializeSentry = Sentry.init;
 const sentryMock = {
   exports: {
@@ -15,8 +16,10 @@ const sentryMock = {
         transport: () => ({
           send: async ([, items]) => {
             for (const [header, payload] of items) {
-              if (header.type === 'event') {
+              if (header.type === 'event' || header.type === 'feedback') {
                 capturedEvents.push(payload);
+              } else if (header.type === 'attachment') {
+                capturedAttachments.push(payload);
               }
             }
             return { statusCode: 200 };
@@ -76,6 +79,7 @@ after(() => {
 describe('Web app Sentry configuration', { concurrency: false }, () => {
   beforeEach(() => {
     capturedEvents.length = 0;
+    capturedAttachments.length = 0;
     delete process.env.EXPO_PUBLIC_SENTRY_RELEASE;
     restoreRuntimeGlobals();
   });
@@ -114,6 +118,37 @@ describe('Web app Sentry configuration', { concurrency: false }, () => {
       tags: { runtime: 'web' },
       exception: { values: [{ type: 'Error', value: 'isolated Sentry test error' }] },
     });
+  });
+
+  it('captures feedback with the kind tag and attachment after initialization', async (context) => {
+    context.after(async () => {
+      await Sentry.close(0);
+    });
+    setBrowserRuntimeGlobals('prod');
+    process.env.EXPO_PUBLIC_SENTRY_RELEASE = 'kosmo@abc123';
+    const { captureFeedback } = await import(`${sentryModule}?feedback`);
+    const attachment = {
+      contentType: 'image/png',
+      data: new Uint8Array([1, 2, 3]),
+      filename: 'feedback-1.png',
+    };
+
+    assert.match(captureFeedback('피드백 본문', 'BUG_REPORT', [attachment]), /^[\da-f-]+$/u);
+    assert.equal(await Sentry.flush(1_000), true);
+    assert.equal(capturedAttachments.length, 1);
+    assert.partialDeepStrictEqual(capturedEvents[0], {
+      contexts: { feedback: { message: '피드백 본문' } },
+      tags: { feedback_kind: 'BUG_REPORT' },
+    });
+  });
+
+  it('fails closed when feedback capture is not initialized', async () => {
+    delete process.env.EXPO_PUBLIC_SENTRY_RELEASE;
+    const { captureFeedback } = await import(`${sentryModule}?feedback-disabled`);
+    assert.throws(
+      () => captureFeedback('피드백 본문', 'POSITIVE'),
+      /Sentry feedback is not initialized/u,
+    );
   });
 
   it('fails closed when an enabled runtime has an invalid deployment channel', async () => {

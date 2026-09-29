@@ -14,7 +14,6 @@ createEnumRef('AccountProfileRole');
 createEnumRef('ContentReportDeliveryStatus');
 createEnumRef('ContentReportReason');
 createEnumRef('ContentReportTargetType');
-createEnumRef('FeedbackKind');
 createEnumRef('MediaState');
 createEnumRef('PostState');
 createEnumRef('PostVisibility');

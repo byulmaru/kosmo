@@ -7,6 +7,7 @@ type E2EWorkerFixtures = {
 
 type E2ETestFixtures = {
   browserProfile: void;
+  sentryNetwork: void;
 };
 
 export const test = base.extend<E2ETestFixtures, E2EWorkerFixtures>({
@@ -35,6 +36,13 @@ export const test = base.extend<E2ETestFixtures, E2EWorkerFixtures>({
           });
         }
       });
+      await use();
+    },
+    { auto: true },
+  ],
+  sentryNetwork: [
+    async ({ page }, use) => {
+      await page.route('**sentry.io/**', (route) => route.fulfill({ status: 200, body: '{}' }));
       await use();
     },
     { auto: true },

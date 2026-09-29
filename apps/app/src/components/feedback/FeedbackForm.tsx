@@ -7,20 +7,18 @@ import * as ImagePicker from 'expo-image-picker';
 import { ImagePlusIcon } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
-import { graphql, useMutation } from 'react-relay';
 import { releaseImagePreview } from '@/components/media/imageUpload';
 import { ComposerTool } from '@/components/post/PostComposer';
 import { PostComposerMediaItemsTarget } from '@/components/post/PostComposerMediaItemsTarget';
 import { Button } from '@/components/ui/Button';
 import { RadioGroup, RadioOption } from '@/components/ui/RadioGroup';
 import { TextArea } from '@/components/ui/TextField';
-import { useRelayActor } from '@/relay/RelayActorProvider';
+import { captureFeedback } from '@/observability/sentry';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, layoutRecipes, radii, spacing, typography } from '@/theme/tokens';
-import { getFeedbackAssetContentType, submitFeedbackWithAttachments } from './feedbackAttachments';
+import { getFeedbackAssetContentType, prepareFeedbackAttachments } from './feedbackAttachments';
 import type { FeedbackKind } from '@kosmo/core/enums';
 import type { PostComposerSelectedMediaItem } from '@/components/post/PostComposerMediaItemsTarget';
-import type { FeedbackFormSubmitFeedbackMutation } from './__generated__/FeedbackFormSubmitFeedbackMutation.graphql';
 
 const feedbackOptions = [
   { label: '좋아요', value: 'POSITIVE' },
@@ -42,14 +40,6 @@ type Props = {
 
 type FeedbackMediaItem = PostComposerSelectedMediaItem;
 
-const SubmitFeedbackMutation = graphql`
-  mutation FeedbackFormSubmitFeedbackMutation($input: SubmitFeedbackInput!) {
-    submitFeedback(input: $input) {
-      completed
-    }
-  }
-`;
-
 export function FeedbackForm({ onStateChange }: Props) {
   const theme = useTheme();
   const web = Platform.OS === 'web';
@@ -60,16 +50,12 @@ export function FeedbackForm({ onStateChange }: Props) {
   const [attachments, setAttachments] = useState<FeedbackMediaItem[]>([]);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [selecting, setSelecting] = useState(false);
-  const [attachmentSubmitting, setAttachmentSubmitting] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const attachmentsRef = useRef<readonly FeedbackMediaItem[]>(attachments);
-  const attachmentSubmittingRef = useRef(false);
+  const submittingRef = useRef(false);
   const selectingRef = useRef(false);
   const nextAttachmentKey = useRef(0);
-  const [commit, relaySubmitting] =
-    useMutation<FeedbackFormSubmitFeedbackMutation>(SubmitFeedbackMutation);
-  const { nativeToken } = useRelayActor();
   attachmentsRef.current = attachments;
-  const submitting = relaySubmitting || attachmentSubmitting;
   const dirty = kind !== 'POSITIVE' || body.length > 0 || attachments.length > 0;
   const latestStateRef = useRef<FeedbackFormState>({ dirty, submitting });
   latestStateRef.current = { dirty, submitting };
@@ -96,6 +82,8 @@ export function FeedbackForm({ onStateChange }: Props) {
   }, [dirty, onStateChange, submitting]);
 
   const completeSubmission = () => {
+    submittingRef.current = false;
+    setSubmitting(false);
     reportState({ dirty: false, submitting: false });
     setKind('POSITIVE');
     setBody('');
@@ -111,6 +99,8 @@ export function FeedbackForm({ onStateChange }: Props) {
   };
 
   const failSubmission = () => {
+    submittingRef.current = false;
+    setSubmitting(false);
     reportState({ dirty, submitting: false });
     setStatus('error');
   };
@@ -181,52 +171,19 @@ export function FeedbackForm({ onStateChange }: Props) {
   }, []);
 
   const submit = () => {
-    if (!canSubmit || !parsedBody.success) {
+    if (!canSubmit || !parsedBody.success || submittingRef.current) {
       return;
     }
 
-    if (attachments.length > 0) {
-      if (attachmentSubmittingRef.current) {
-        return;
-      }
-      attachmentSubmittingRef.current = true;
-      setAttachmentSubmitting(true);
-      reportState({ dirty, submitting: true });
-      setStatus('idle');
-      void submitFeedbackWithAttachments({
-        body: parsedBody.data,
-        items: attachments,
-        kind,
-        native: Platform.OS !== 'web',
-        nativeToken,
-      })
-        .then(completeSubmission, failSubmission)
-        .finally(() => {
-          attachmentSubmittingRef.current = false;
-          setAttachmentSubmitting(false);
-        });
-      return;
-    }
-
+    submittingRef.current = true;
+    setSubmitting(true);
     reportState({ dirty, submitting: true });
     setStatus('idle');
-    commit({
-      variables: {
-        input: {
-          body: parsedBody.data,
-          kind,
-        },
-      },
-      onCompleted: (response, errors) => {
-        if (errors?.length || !response.submitFeedback?.completed) {
-          failSubmission();
-          return;
-        }
-
-        completeSubmission();
-      },
-      onError: failSubmission,
-    });
+    void prepareFeedbackAttachments(attachments)
+      .then((prepared) => {
+        captureFeedback(parsedBody.data, kind, prepared);
+      })
+      .then(completeSubmission, failSubmission);
   };
 
   return (
