@@ -13,6 +13,7 @@ import {
 } from '@kosmo/core/enums';
 import { ConflictError } from '@kosmo/core/error';
 import { temporalClient } from '@kosmo/core/temporal/client';
+import { profileFollowPairWorkflowId } from '@kosmo/core/temporal/follow-command';
 import { eq, ne } from 'drizzle-orm';
 import { setInboundObservabilityReporter, withInboundObservability } from './inbound-observability';
 import type { InboxContext } from '@fedify/fedify';
@@ -704,7 +705,14 @@ describe('inbound Follow and Undo', () => {
       }),
     );
 
-    await waitForProfileFollowWorkflows();
+    await temporalClient.workflow
+      .getHandle(
+        profileFollowPairWorkflowId({
+          followerProfileId: relation.followerProfileId,
+          followeeProfileId: relation.followeeProfileId,
+        }),
+      )
+      .result();
     assert.equal((await db.select().from(ProfileFollows)).length, 0);
     assert.equal(
       await db
@@ -732,7 +740,14 @@ describe('inbound Follow and Undo', () => {
       }),
     );
 
-    await waitForProfileFollowWorkflows();
+    await temporalClient.workflow
+      .getHandle(
+        profileFollowPairWorkflowId({
+          followerProfileId: request.followerProfileId,
+          followeeProfileId: request.followeeProfileId,
+        }),
+      )
+      .result();
     assert.equal((await db.select().from(ProfileFollowRequests)).length, 0);
     assert.equal((await db.select().from(Notifications)).length, 0);
     assert.equal(

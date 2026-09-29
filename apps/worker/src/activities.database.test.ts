@@ -878,6 +878,7 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
   const previousProjectId = process.env.FIREBASE_PROJECT_ID;
   process.env.FIREBASE_PROJECT_ID = 'kosmo-push-test';
   const fixture = await createAccountDeletionFixture({ profileStates: [ProfileState.ACTIVE] });
+  let postId: string | null = null;
 
   try {
     const recipient = fixture.profiles[0]!;
@@ -908,6 +909,7 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
       profileId: recipient.id,
       visibility: PostVisibility.PUBLIC,
     });
+    postId = post.id;
     const reaction = await db
       .insert(Reactions)
       .values({ postId: post.id, profileId: actor.id, type: '❤️' })
@@ -985,6 +987,11 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
     assert.equal(sent[2]?.notification?.body, '이 게시글에 반응했습니다');
     assert.equal(sent[2]?.notification?.body.includes('Read the article'), false);
   } finally {
+    if (postId) {
+      await db.update(Posts).set({ currentContentId: null }).where(eq(Posts.id, postId));
+      await db.delete(PostContents).where(eq(PostContents.postId, postId));
+      await db.delete(Posts).where(eq(Posts.id, postId));
+    }
     await cleanupAccountDeletionFixture(fixture);
     if (previousProjectId === undefined) {
       delete process.env.FIREBASE_PROJECT_ID;
@@ -998,6 +1005,7 @@ test('Push Notification Activity는 등록되지 않은 token만 정확히 제�
   const previousProjectId = process.env.FIREBASE_PROJECT_ID;
   process.env.FIREBASE_PROJECT_ID = 'kosmo-push-test';
   const fixture = await createAccountDeletionFixture({ profileStates: [ProfileState.ACTIVE] });
+  let postId: string | null = null;
 
   try {
     const recipient = fixture.profiles[0]!;
@@ -1008,6 +1016,7 @@ test('Push Notification Activity는 등록되지 않은 token만 정확히 제�
       profileId: recipient.id,
       visibility: PostVisibility.PUBLIC,
     });
+    postId = post.id;
     const reaction = await db
       .insert(Reactions)
       .values({ postId: post.id, profileId: actor.id, type: '❤️' })
@@ -1047,6 +1056,11 @@ test('Push Notification Activity는 등록되지 않은 token만 정확히 제�
       1,
     );
   } finally {
+    if (postId) {
+      await db.update(Posts).set({ currentContentId: null }).where(eq(Posts.id, postId));
+      await db.delete(PostContents).where(eq(PostContents.postId, postId));
+      await db.delete(Posts).where(eq(Posts.id, postId));
+    }
     await cleanupAccountDeletionFixture(fixture);
     if (previousProjectId === undefined) {
       delete process.env.FIREBASE_PROJECT_ID;
