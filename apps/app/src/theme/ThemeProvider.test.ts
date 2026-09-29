@@ -131,7 +131,7 @@ test('explicit Dark mode selects production semantic colors without activating i
       stateDisabledSurface: '#262626',
     },
   );
-  assert.equal(legacyBackground, '#111111');
+  assert.equal(legacyBackground, '#000000');
   assert.equal(reducedMotion, true);
   await act(async () => renderer?.unmount());
 });

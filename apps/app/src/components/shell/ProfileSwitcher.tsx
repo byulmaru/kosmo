@@ -35,11 +35,7 @@ import {
 } from '@/theme/tokens';
 import { useNavigationGuard } from './NavigationGuardContext';
 import { NavigationLink } from './NavigationLink';
-import {
-  getProfileEditActionCurrentState,
-  getProfileEditActionTargetMetrics,
-  profileEditActionLabelColor,
-} from './shellLayout';
+import { getProfileEditActionCurrentState, getProfileEditActionTargetMetrics } from './shellLayout';
 import type { RefObject } from 'react';
 import type { ViewStyle } from 'react-native';
 import type { ProfileSwitcher_query$key } from './__generated__/ProfileSwitcher_query.graphql';
@@ -431,13 +427,16 @@ export function ProfileSwitcher({
                   만들기
                 </Button>
               </View>
-              <Text style={[styles.help, { color: theme.textSecondary }]}>
+              <Text style={[styles.help, { color: theme.foregroundSecondary }]}>
                 영문, 숫자, 밑줄(_)만 사용할 수 있어요.
               </Text>
             </View>
           ) : null}
           {operationError ? (
-            <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>
+            <Text
+              accessibilityRole="alert"
+              style={[styles.error, { color: theme.feedbackDangerOnSubtle }]}
+            >
               {operationError}
             </Text>
           ) : null}
@@ -457,15 +456,17 @@ export function ProfileSwitcher({
             style={({ pressed }) => [
               styles.addProfile,
               {
-                backgroundColor: pressed ? theme.surface : 'transparent',
+                backgroundColor: pressed ? theme.backgroundSurface : 'transparent',
                 opacity: busy ? 0.5 : 1,
               },
             ]}
           >
             <View style={styles.addIcon}>
-              <PlusIcon color={theme.text} size={18} strokeWidth={2.25} />
+              <PlusIcon color={theme.foregroundPrimary} size={18} strokeWidth={2.25} />
             </View>
-            <Text style={[styles.addLabel, { color: theme.text }]}>새 프로필 추가</Text>
+            <Text style={[styles.addLabel, { color: theme.foregroundPrimary }]}>
+              새 프로필 추가
+            </Text>
           </Pressable>
         ) : null
       }
@@ -479,15 +480,15 @@ export function ProfileSwitcher({
 
   const triggerCopy = !compact ? (
     <>
-      <Text numberOfLines={1} style={[styles.triggerName, { color: theme.text }]}>
+      <Text numberOfLines={1} style={[styles.triggerName, { color: theme.foregroundPrimary }]}>
         {active?.displayName ?? (profiles.length ? '프로필 선택' : '프로필')}
       </Text>
       <View style={styles.chevron}>
         <ProfileSwitcherUnreadIndicator compact={false} visible={!open && otherHasUnread} />
         {webExpandedChevron ? (
-          <ChevronUpIcon color={theme.textSecondary} size={iconSizes[20]} />
+          <ChevronUpIcon color={theme.foregroundSecondary} size={iconSizes[20]} />
         ) : (
-          <ChevronDownIcon color={theme.textSecondary} size={iconSizes[20]} />
+          <ChevronDownIcon color={theme.foregroundSecondary} size={iconSizes[20]} />
         )}
       </View>
     </>
@@ -529,7 +530,7 @@ export function ProfileSwitcher({
       <Text
         accessibilityLabel="활성 프로필 핸들"
         numberOfLines={1}
-        style={[styles.profileHandle, { color: theme.textSecondary }]}
+        style={[styles.profileHandle, { color: theme.foregroundSecondary }]}
       >
         {active.relativeHandle}
       </Text>
@@ -543,10 +544,10 @@ export function ProfileSwitcher({
             onFocus={(fullWeb || mobileWebDrawer) && open ? dismissPicker : undefined}
             style={styles.countLink}
           >
-            <Text style={[styles.count, { color: theme.text }]}>
+            <Text style={[styles.count, { color: theme.foregroundPrimary }]}>
               {countFormatter.format(active.followingCount).toLowerCase()}
             </Text>
-            <Text style={[styles.countLabel, { color: theme.text }]}>팔로잉</Text>
+            <Text style={[styles.countLabel, { color: theme.foregroundPrimary }]}>팔로잉</Text>
           </Pressable>
         </NavigationLink>
         <NavigationLink
@@ -558,16 +559,16 @@ export function ProfileSwitcher({
             onFocus={(fullWeb || mobileWebDrawer) && open ? dismissPicker : undefined}
             style={styles.countLink}
           >
-            <Text style={[styles.count, { color: theme.text }]}>
+            <Text style={[styles.count, { color: theme.foregroundPrimary }]}>
               {countFormatter.format(active.followersCount).toLowerCase()}
             </Text>
-            <Text style={[styles.countLabel, { color: theme.text }]}>팔로워</Text>
+            <Text style={[styles.countLabel, { color: theme.foregroundPrimary }]}>팔로워</Text>
           </Pressable>
         </NavigationLink>
       </View>
     </>
   ) : (
-    <Text style={[styles.emptyProfile, { color: theme.textSecondary }]}>
+    <Text style={[styles.emptyProfile, { color: theme.foregroundSecondary }]}>
       {profiles.length ? '사용할 프로필을 선택해주세요.' : '새 프로필을 만들어 시작하세요.'}
     </Text>
   );
@@ -590,7 +591,7 @@ export function ProfileSwitcher({
       <View
         style={[
           styles.cover,
-          { backgroundColor: theme.primary },
+          { backgroundColor: theme.actionPrimaryBase },
           Platform.OS === 'web' && !active?.header?.url && webCover,
         ]}
       >
@@ -644,11 +645,11 @@ export function ProfileSwitcher({
               <View
                 style={[
                   styles.profileEditVisual,
-                  { backgroundColor: theme.primary, opacity: pressed ? 0.7 : 1 },
+                  { backgroundColor: theme.actionPrimaryBase, opacity: pressed ? 0.7 : 1 },
                 ]}
                 testID="profile-edit-action-visual"
               >
-                <Text style={[styles.profileEditLabel, { color: profileEditActionLabelColor }]}>
+                <Text style={[styles.profileEditLabel, { color: theme.actionPrimaryOnBase }]}>
                   편집
                 </Text>
               </View>

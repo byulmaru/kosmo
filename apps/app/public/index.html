@@ -1,7 +1,6 @@
 <!doctype html>
 <html lang="ko">
   <head>
-    <script src="/channel.js"></script>
     <meta charset="utf-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta
@@ -9,7 +8,29 @@
       content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover, interactive-widget=resizes-content"
     />
     <meta name="description" content="흩어진 타임라인을 한곳에서." />
-    <meta name="theme-color" content="#FEFEFE" />
+    <meta name="theme-color" content="#FFFFFF" />
+    <script id="theme-bootstrap">
+      (() => {
+        // Match ThemePreferenceProvider before the application bundle can paint.
+        let preference;
+        try {
+          preference = localStorage.getItem('kosmo.theme-preference');
+        } catch {
+          // The provider reports the read failure after hydration.
+        }
+        const mode =
+          preference === 'light' || preference === 'dark'
+            ? preference
+            : window.matchMedia('(prefers-color-scheme: dark)').matches
+              ? 'dark'
+              : 'light';
+        const background = mode === 'dark' ? '#000000' : '#FFFFFF';
+        document.documentElement.style.backgroundColor = background;
+        document.documentElement.style.colorScheme = mode;
+        document.querySelector('meta[name="theme-color"]').content = background;
+      })();
+    </script>
+    <script src="/channel.js"></script>
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="KOSMO" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -35,6 +56,7 @@
     <style id="expo-reset">
       html,
       body {
+        background-color: inherit;
         min-height: 100%;
       }
 

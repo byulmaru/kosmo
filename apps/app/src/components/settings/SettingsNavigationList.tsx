@@ -3,12 +3,14 @@ import { ActivityIndicator, Linking, Platform, Pressable, StyleSheet, View } fro
 import { getNativeNotificationPermissionStatus } from '@/components/native-push/nativePushClient';
 import { useRequestNativePushPermissionAndSync } from '@/components/native-push/nativePushPermissionContext';
 import { useToast } from '@/components/ui/ToastProvider';
+import { getThemePreferenceLabel } from '@/theme/themePreference';
+import { useThemePreference } from '@/theme/ThemePreferenceProvider';
 import { layoutRecipes } from '@/theme/tokens';
 import { ByulmaruIdAccountSettingsEntry } from './ByulmaruIdAccountSettingsEntry';
 import { SettingsItem } from './SettingsItem';
 import { SettingsLinkRow } from './SettingsLinkRow';
 
-type SettingsDestination = 'default-post-visibility' | 'mute-and-block' | 'info';
+type SettingsDestination = 'default-post-visibility' | 'mute-and-block' | 'theme' | 'info';
 
 export function SettingsNavigationList({
   pathname,
@@ -17,6 +19,7 @@ export function SettingsNavigationList({
   pathname?: string;
   selected?: SettingsDestination;
 }) {
+  const themePreference = useThemePreference();
   return (
     <View
       accessibilityLabel="설정 목록"
@@ -41,6 +44,15 @@ export function SettingsNavigationList({
         selected={selected === 'mute-and-block'}
       />
       {Platform.OS !== 'web' ? <NativeNotificationSettingsAction /> : null}
+      <SettingsLinkRow
+        accessibilityLabel={`테마 설정 열기, ${getThemePreferenceLabel(themePreference)}`}
+        description={getThemePreferenceLabel(themePreference)}
+        href="/settings/theme"
+        label="테마"
+        primary
+        currentPage={pathname === '/settings/theme'}
+        selected={selected === 'theme'}
+      />
       <SettingsLinkRow
         accessibilityLabel="정보 설정 열기"
         href="/settings/info"

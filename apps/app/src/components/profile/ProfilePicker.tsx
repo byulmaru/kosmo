@@ -83,7 +83,7 @@ export function ProfilePicker({
           styles.profile,
           !selected ? styles.unselectedProfile : undefined,
           {
-            backgroundColor: selected || pressed ? theme.surface : 'transparent',
+            backgroundColor: selected || pressed ? theme.backgroundSurface : 'transparent',
             opacity: busy ? 0.5 : 1,
           },
         ]}
@@ -94,15 +94,15 @@ export function ProfilePicker({
           size={selected ? 48 : 32}
         />
         <View style={styles.profileLabel}>
-          <Text numberOfLines={1} style={[styles.displayName, { color: theme.text }]}>
+          <Text numberOfLines={1} style={[styles.displayName, { color: theme.foregroundPrimary }]}>
             {profile.displayName}
           </Text>
-          <Text numberOfLines={1} style={[styles.handle, { color: theme.textSecondary }]}>
+          <Text numberOfLines={1} style={[styles.handle, { color: theme.foregroundSecondary }]}>
             {profile.relativeHandle}
           </Text>
         </View>
         {selected ? (
-          <CheckIcon color={theme.text} size={16} />
+          <CheckIcon color={theme.foregroundPrimary} size={16} />
         ) : (
           <ProfileSwitcherUnreadBadge count={profile.unreadNotificationCount} />
         )}
@@ -118,7 +118,7 @@ export function ProfilePicker({
         scrollableWebPicker ? styles.redesignedMenu : undefined,
         surfaceBounds,
         Platform.OS === 'web' ? elevation.floating : elevation.overlay,
-        { backgroundColor: theme.card, borderColor: theme.border },
+        { backgroundColor: theme.backgroundElevated, borderColor: theme.borderDefault },
       ]}
     >
       <View
@@ -138,7 +138,7 @@ export function ProfilePicker({
           <View
             accessibilityRole={Platform.OS === 'web' ? undefined : 'none'}
             role={Platform.OS === 'web' ? 'separator' : undefined}
-            style={[styles.divider, { backgroundColor: theme.border }]}
+            style={[styles.divider, { backgroundColor: theme.borderDefault }]}
           />
         ) : null}
         {menuFooter}

@@ -111,7 +111,7 @@ mock.module(new URL('../ui/ToastProvider.tsx', import.meta.url), {
 
 let SettingsNavigationList: ComponentType<{
   pathname?: string;
-  selected?: 'default-post-visibility' | 'mute-and-block' | 'info';
+  selected?: 'default-post-visibility' | 'mute-and-block' | 'theme' | 'info';
 }>;
 let SettingsMuteAndBlockNavigation: ComponentType<{
   selected?: 'blocked-profiles' | 'muted-profiles';
@@ -194,7 +194,9 @@ describe('SettingsNavigationList', () => {
     const notification = rows[notificationIndex];
 
     assert.equal(notificationIndex, muteIndex + 1);
-    assert.equal(infoIndex, notificationIndex + 1);
+    const themeIndex = rows.findIndex((node) => node.props.href === '/settings/theme');
+    assert.equal(themeIndex, notificationIndex + 1);
+    assert.equal(infoIndex, themeIndex + 1);
     assert.equal(notification?.props.accessibilityLabel, 'OS 알림 설정 열기');
     assert.equal(notification?.props.accessibilityRole, 'button');
     const notificationItem = rendered('SettingsItem').find(
@@ -324,7 +326,11 @@ describe('SettingsNavigationList', () => {
       (node) => node.props.testID === 'native-notification-settings',
     );
     assert.equal(notification?.props.disabled, true);
-    assert.equal(rendered('SettingsItem').at(-2)?.props.trailing.type, 'ActivityIndicator');
+    assert.equal(
+      rendered('SettingsItem').find((node) => node.props.label === '알림 설정')?.props.trailing
+        .type,
+      'ActivityIndicator',
+    );
     await act(async () => notification?.props.onPress());
     assert.equal(requestPermissionAndSyncCalls, 1);
 
@@ -333,7 +339,10 @@ describe('SettingsNavigationList', () => {
       (node) => node.props.testID === 'native-notification-settings',
     );
     assert.equal(notification?.props.disabled, false);
-    assert.equal(rendered('SettingsItem').at(-2)?.props.trailing, null);
+    assert.equal(
+      rendered('SettingsItem').find((node) => node.props.label === '알림 설정')?.props.trailing,
+      null,
+    );
   });
 
   it('현재 path와 같은 root detail만 page-current 상태를 받는다', async () => {
@@ -363,10 +372,18 @@ describe('SettingsNavigationList', () => {
     assert.deepEqual(muteAndBlock.props.accessibilityState, { selected: true });
   });
 
+  it('테마 경로의 메뉴는 현재 페이지와 선택 상태를 표시한다', async () => {
+    await render({ pathname: '/settings/theme', selected: 'theme' });
+    const theme = rendered('Pressable').find((link) => link.props.href === '/settings/theme')!;
+    assert.equal(theme.props.accessibilityLabel, '테마 설정 열기, 시스템');
+    assert.equal(theme.props['aria-current'], 'page');
+    assert.deepEqual(theme.props.accessibilityState, { selected: true });
+  });
+
   it('개발 정보 route에서도 정보 category는 선택 상태만 유지한다', async () => {
     await render({ pathname: '/settings/developer', selected: 'info' });
 
-    const info = rendered('Pressable')[3];
+    const info = rendered('Pressable').find((link) => link.props.href === '/settings/info')!;
     assert.equal(info.props['aria-current'], undefined);
     assert.deepEqual(info.props.accessibilityState, { selected: true });
   });
@@ -375,7 +392,7 @@ describe('SettingsNavigationList', () => {
 async function render(
   props: {
     pathname?: string;
-    selected?: 'default-post-visibility' | 'mute-and-block' | 'info';
+    selected?: 'default-post-visibility' | 'mute-and-block' | 'theme' | 'info';
   } = {},
 ) {
   await act(async () => {

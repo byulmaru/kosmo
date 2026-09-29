@@ -11,7 +11,6 @@ import {
   isSettingsRoute,
   isTimelineRoute,
   isWebMobileRouteOwnedHeader,
-  profileEditActionLabelColor,
 } from './shellLayout';
 
 describe('getShellLayout', () => {
@@ -36,10 +35,6 @@ describe('getShellLayout', () => {
       accessibilityState: { selected: false },
       ariaCurrent: undefined,
     });
-  });
-
-  it('keeps the yellow edit action label dark in every color scheme', () => {
-    assert.equal(profileEditActionLabelColor, '#111111');
   });
 
   it('applies compact and full breakpoints only on web', () => {
@@ -86,6 +81,10 @@ describe('getShellLayout', () => {
     assert.deepEqual(getWebMobileShellHeader(true, 390, '/settings/blocked-profiles', []), {
       leading: 'back',
       title: '차단한 프로필',
+    });
+    assert.deepEqual(getWebMobileShellHeader(true, 390, '/settings/theme', []), {
+      leading: 'back',
+      title: '테마',
     });
     assert.deepEqual(getWebMobileShellHeader(true, 390, '/settings/info', []), {
       leading: 'back',

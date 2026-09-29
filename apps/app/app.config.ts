@@ -33,7 +33,7 @@ const config: ExpoConfig = {
   version: '0.0.1',
   scheme: 'kosmo',
   orientation: 'default',
-  userInterfaceStyle: 'light',
+  userInterfaceStyle: 'automatic',
   icon: './assets/brand/app-icon-ios-light.png',
   ios: {
     appleTeamId: process.env.APPLE_DEVELOPER_TEAM_ID,
@@ -63,7 +63,7 @@ const config: ExpoConfig = {
     favicon: './public/favicon-32x32.png',
     output: 'single',
   },
-  runtimeVersion: '0.3',
+  runtimeVersion: '0.4',
   updates: {
     checkAutomatically: 'ON_LOAD',
     codeSigningCertificate: './certs/certificate.pem',

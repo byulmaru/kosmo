@@ -52,6 +52,12 @@ export function PostComposerHost({
   const [submitting, setSubmitting] = useState(false);
   const web = Platform.OS === 'web';
   const nativeMobile = !web && mode === 'mobile';
+  const composerSurface =
+    mode === 'rail'
+      ? theme.backgroundSurface
+      : mode === 'mobile'
+        ? theme.backgroundCanvas
+        : theme.backgroundElevated;
   const overlayVisible = mode !== 'rail' && open;
   const safeAreaStyle = useSafeAreaPadding(mode === 'mobile' ? 0 : spacing.lg);
   const expandControlRef = useRef<View>(null);
@@ -104,7 +110,7 @@ export function PostComposerHost({
   const header =
     mode === 'overlay' ? (
       <View style={[styles.header, { borderColor: theme.borderSubtle }]}>
-        <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>
+        <Text accessibilityRole="header" style={[styles.title, { color: theme.foregroundPrimary }]}>
           글쓰기
         </Text>
         <IconButton
@@ -114,7 +120,7 @@ export function PostComposerHost({
           style={styles.closeButton}
           targetSize={40}
         >
-          <XIcon color={theme.text} size={20} strokeWidth={2} />
+          <XIcon color={theme.foregroundPrimary} size={20} strokeWidth={2} />
         </IconButton>
       </View>
     ) : null;
@@ -135,7 +141,7 @@ export function PostComposerHost({
             : mode === 'mobile'
               ? styles.mobileDialog
               : styles.overlayDialog,
-          { backgroundColor: theme.card },
+          { backgroundColor: composerSurface, borderColor: theme.borderDefault },
         ]}
         testID={mode === 'rail' ? 'post-composer-rail' : 'post-composer-dialog'}
       >
@@ -167,7 +173,11 @@ export function PostComposerHost({
       >
         {mode === 'mobile' ? (
           <View
-            style={[styles.nativeMobileSurface, safeAreaStyle, { backgroundColor: theme.card }]}
+            style={[
+              styles.nativeMobileSurface,
+              safeAreaStyle,
+              { backgroundColor: theme.backgroundCanvas },
+            ]}
           >
             {dialog}
           </View>
@@ -231,6 +241,7 @@ const styles = StyleSheet.create({
   railDialog: { borderWidth: 0, width: '100%' },
   overlayDialog: {
     borderRadius: radii.lg,
+    borderWidth: 1,
     marginTop: spacing.xxl,
     maxWidth: 640,
     maxHeight: 'calc(100dvh - 96px)' as never,
