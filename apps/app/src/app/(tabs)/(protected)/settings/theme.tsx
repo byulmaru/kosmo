@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { ChevronLeftIcon } from 'lucide-react-native';
+import { ArrowLeftIcon } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
 import { PageHeader } from '@/components/PageHeader';
 import { returnToSettingsParent } from '@/components/settings/settingsNavigation';
@@ -26,7 +26,7 @@ export default function SettingsThemeRoute() {
         style={styles.backButton}
         targetSize={44}
       >
-        <ChevronLeftIcon color={theme.foregroundPrimary} size={20} strokeWidth={2} />
+        <ArrowLeftIcon color={theme.foregroundPrimary} size={20} strokeWidth={2} />
       </IconButton>
     ) : undefined;
 
