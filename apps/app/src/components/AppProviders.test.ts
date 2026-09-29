@@ -10,7 +10,7 @@ import {
   useState,
 } from 'react';
 import { act, create } from 'react-test-renderer';
-import type { ComponentType, PropsWithChildren, ReactNode } from 'react';
+import type { ComponentType, Context, PropsWithChildren, ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -33,6 +33,7 @@ let relayActorUnmounts = 0;
 let rootShouldThrow = false;
 let rootShouldSuspend = false;
 let AppProviders: ComponentType<PropsWithChildren>;
+let QuoteEnabledContext: Context<boolean>;
 let UniversalShell: ComponentType;
 let RouteBoundary: ComponentType<{
   children: ReactNode;
@@ -48,6 +49,7 @@ let useSession: () => {
   status: string;
 };
 let renderer: ReactTestRenderer | null = null;
+let originalFetch: typeof fetch;
 
 type MockRelayActorValue = {
   actorLifecycleKey: string;
@@ -286,6 +288,7 @@ mockModule(new URL('../relay/RelayActorProvider.tsx', import.meta.url), {
 
 before(async () => {
   ({ AppProviders } = await import('./AppProviders'));
+  ({ QuoteEnabledContext } = await import('./post/QuoteEnabledContext'));
   ({ UniversalShell } = await import('./shell/UniversalShell'));
   ({ RouteBoundary, useRouteBoundary } = await import('./RouteBoundary'));
   ({ useSession } = await import('../session/SessionProvider'));
@@ -293,6 +296,8 @@ before(async () => {
 });
 
 beforeEach(() => {
+  originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(null, { status: 503 });
   queryModes.SessionProviderQuery = 'success';
   queryModes.ShellRecoveryQuery = 'success';
   queryModes.UniversalShellQuery = 'success';
@@ -308,9 +313,13 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
-  if (renderer) {
-    await act(async () => renderer?.unmount());
-    renderer = null;
+  try {
+    if (renderer) {
+      await act(async () => renderer?.unmount());
+      renderer = null;
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
   }
 });
 
@@ -380,6 +389,10 @@ function NavigationThemeProbe() {
   });
 }
 
+function QuoteEnabledProbe() {
+  return createElement('QuoteEnabledProbe', { enabled: useContext(QuoteEnabledContext) });
+}
+
 function findTag(tag: string) {
   assert.ok(renderer);
   const node = renderer.root.findAll((candidate) => String(candidate.type) === tag)[0];
@@ -399,6 +412,51 @@ describe('AppProviders runtime composition', () => {
     });
 
     assert.equal(findTag('NavigationThemeProbe').props.background, '#fff');
+  });
+
+  it('starts disabled and evaluates one quote flag per provider mount', async () => {
+    let requests = 0;
+    const pendingRequests: Array<(response: Response) => void> = [];
+    globalThis.fetch = async (input, init) => {
+      requests += 1;
+      assert.equal(String(input), 'https://flags.kos.moe/ofrep/v1/evaluate/flags/quote');
+      assert.deepEqual(init, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ context: { targetingKey: 'kosmo' } }),
+      });
+
+      if (requests === 1) {
+        return new Promise<Response>((resolve) => pendingRequests.push(resolve));
+      }
+      return new Response(null, { status: 503 });
+    };
+
+    await act(async () => {
+      renderer = create(createElement(AppProviders, null, createElement(QuoteEnabledProbe)));
+    });
+
+    assert.equal(findTag('QuoteEnabledProbe').props.enabled, false);
+    assert.equal(requests, 1);
+    const resolveFirstRequest = pendingRequests.shift();
+    assert.ok(resolveFirstRequest);
+
+    await act(async () => {
+      resolveFirstRequest(new Response(JSON.stringify({ value: true }), { status: 200 }));
+    });
+
+    assert.equal(findTag('QuoteEnabledProbe').props.enabled, true);
+    assert.equal(requests, 1);
+
+    await act(async () => renderer?.unmount());
+    renderer = null;
+
+    await act(async () => {
+      renderer = create(createElement(AppProviders, null, createElement(QuoteEnabledProbe)));
+    });
+
+    assert.equal(findTag('QuoteEnabledProbe').props.enabled, false);
+    assert.equal(requests, 2);
   });
 
   it('root fallback remounts the complete app runtime after its action', async () => {

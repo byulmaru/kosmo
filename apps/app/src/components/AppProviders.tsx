@@ -7,29 +7,32 @@ import { SessionProvider } from '@/session/SessionProvider';
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 import { GraphQLErrorBoundary } from './GraphQLErrorBoundary';
 import { PostContentWarningRevealProvider } from './post/PostContentWarningRevealContext';
+import { QuoteEnabledProvider } from './post/QuoteEnabledContext';
 import { ToastProvider } from './ui/ToastProvider';
 import type { PropsWithChildren } from 'react';
 
 export function AppProviders({ children }: PropsWithChildren) {
   return (
-    <ThemeProvider mode="light">
-      <NavigationThemeBoundary>
-        <ToastProvider>
-          <GraphQLErrorBoundary>
-            <RelayActorProvider>
-              <SessionProvider>
-                <AnalyticsSessionBridge />
-                <NativePushProvider>
-                  <ContentReportProvider>
-                    <PostContentWarningRevealProvider>{children}</PostContentWarningRevealProvider>
-                  </ContentReportProvider>
-                </NativePushProvider>
-              </SessionProvider>
-            </RelayActorProvider>
-          </GraphQLErrorBoundary>
-        </ToastProvider>
-      </NavigationThemeBoundary>
-    </ThemeProvider>
+    <QuoteEnabledProvider>
+      <ThemeProvider mode="light">
+        <NavigationThemeBoundary>
+          <ToastProvider>
+            <GraphQLErrorBoundary>
+              <RelayActorProvider>
+                <SessionProvider>
+                  <AnalyticsSessionBridge />
+                  <NativePushProvider>
+                    <ContentReportProvider>
+                      <PostContentWarningRevealProvider>{children}</PostContentWarningRevealProvider>
+                    </ContentReportProvider>
+                  </NativePushProvider>
+                </SessionProvider>
+              </RelayActorProvider>
+            </GraphQLErrorBoundary>
+          </ToastProvider>
+        </NavigationThemeBoundary>
+      </ThemeProvider>
+    </QuoteEnabledProvider>
   );
 }
 

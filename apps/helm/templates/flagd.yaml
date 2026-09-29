@@ -12,7 +12,13 @@ metadata:
 {{ toYaml $labels | indent 4 }}
 spec:
   flagSpec:
-    flags: {}
+    flags:
+      quote:
+        state: ENABLED
+        variants:
+          'on': true
+          'off': false
+        defaultVariant: 'off'
 ---
 apiVersion: core.openfeature.dev/v1beta1
 kind: FeatureFlagSource
