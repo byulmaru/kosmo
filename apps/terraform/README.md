@@ -5,6 +5,7 @@
 ## 관리 범위
 
 - 기존 Firebase 활성화와 Android/iOS 앱 등록 (`moe.kos`)
+- Firebase Cloud Messaging API, 전용 keyless sender service account와 EKS Worker Workload Identity Federation
 - Google Play Developer API 활성화, Android Publisher 전용 service account와 최소 WIF 권한
 - Native Store Distribution이 Firebase Android/iOS client config를 빌드 시점에 읽을 수 있는 전용 service account와 최소 WIF 권한
 - 각 store workflow에 필요한 GitHub Actions Workload Identity Federation. Native Store Distribution의 Android job은 `main`의 정확한 workflow와 기존 `prod` Environment만 허용한다.
@@ -32,7 +33,7 @@ Terraform 실행 시에는 장기 credential 파일 대신 현재 `gcloud` 계�
 
 ## 검증과 적용
 
-최초 bootstrap에서는 Terraform state와 이 root가 소유하는 AWS 리소스만 관리할 수 있는 AWS OIDC role을 만든다. AWS backup bucket 또는 Pod Identity role 구성이 바뀌면 plan 전에 같은 스크립트를 다시 실행해 provisioning 권한을 동기화한다.
+최초 bootstrap에서는 Terraform state와 이 root가 소유하는 AWS 리소스만 관리할 수 있는 AWS OIDC role을 만든다. AWS backup bucket 또는 Pod Identity role 구성이 바뀌면 plan 전에 같은 스크립트를 다시 실행해 provisioning 권한을 동기화한다. Terraform plan/apply는 `byulmaru` EKS cluster의 OIDC issuer만 읽으므로 이 role에는 해당 cluster에 한정된 `eks:DescribeCluster` 권한도 필요하다.
 
 ```sh
 ./scripts/ensure-ci-aws-role.sh
@@ -85,6 +86,20 @@ Workflow는 위 identity로 인증한 뒤 Firebase Management API에서 Android 
 `GoogleService-Info.plist`를 실행 중 임시 경로에 조회해 Expo prebuild에 전달하고, job 종료 시 제거한다. Terraform은
 두 파일의 원문·data source·Secret Manager version·`local_file`·raw config output을 관리하지 않으며 해당 내용은 state나
 plan에 남기지 않는다.
+
+## Firebase Cloud Messaging Worker identity
+
+Terraform은 기존 `byulmaru` EKS cluster의 OIDC issuer를 읽어 `kosmo-dev/kosmo-worker`와
+`kosmo-prod/kosmo-worker` subject만 impersonate할 수 있는 `firebase-fcm-sender` identity를 구성한다.
+기존 GitHub Actions WIF pool과 Firebase native config identity는 별도 유지하며, 서비스 계정 key는 만들지 않는다.
+Sender에는 Firebase Cloud Messaging API Admin role을 부여한다. 이 role에는 FCM 메시지 전송과 FCM topic subscription
+관리 권한이 포함된다.
+
+Terraform은 각 Argo CD release의 Helm values에 Firebase project ID, WIF provider resource name과 service account email을
+전달한다. Helm은 `worker.fcm` 설정이 있을 때만 non-secret external-account ADC 설정을 ConfigMap으로 만들고,
+projected ServiceAccount JWT와 `GOOGLE_APPLICATION_CREDENTIALS`를 Worker에 연결한다. JWT audience는 WIF provider URL이며,
+ADC 설정과 projected token이 같은 provider를 가리킨다. 기본 Helm values에서는 FCM 설정을 비워 두고,
+Kubernetes의 기본 ServiceAccount token 자동 mount도 계속 비활성으로 둔다.
 
 그 뒤 `apps/terraform/**` 또는 Terraform workflow가 바뀐 PR에서는 GCP/Firebase/IAM/WIF plan을 실행해 PR comment와 artifact로 남긴다. Plan artifact는 저장소의 Actions 보존 기간만큼 유지하며 apply는 병합된 PR head와 일치하는 미만료 artifact만 선택한다.
 

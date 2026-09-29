@@ -1,3 +1,21 @@
+{{- $fcm := .Values.worker.fcm | default dict }}
+{{- $fcmConfigName := printf "%s-worker-fcm" .Release.Name | trunc 63 | trimSuffix "-" }}
+{{ if $fcm }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $fcmConfigName }}
+data:
+  credential-configuration.json: {{ dict
+    "type" "external_account"
+    "audience" (printf "//iam.googleapis.com/%s" (required "worker.fcm.workloadIdentityProvider is required" $fcm.workloadIdentityProvider))
+    "subject_token_type" "urn:ietf:params:oauth:token-type:jwt"
+    "token_url" "https://sts.googleapis.com/v1/token"
+    "service_account_impersonation_url" (printf "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/%s:generateAccessToken" (required "worker.fcm.serviceAccountEmail is required" $fcm.serviceAccountEmail))
+    "credential_source" (dict "file" "/var/run/service-account/token")
+    | toJson | quote }}
+---
+{{ end }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -90,6 +108,12 @@ spec:
                   key: password
             - name: FEDIFY_QUEUE_DATABASE_URL
               value: {{ printf "postgres://kosmo_fedify_queue@%s-rw:5432/kosmo_fedify_queue" (include "kosmo.postgresName" .) | quote }}
+{{ if $fcm }}
+            - name: FIREBASE_PROJECT_ID
+              value: {{ required "worker.fcm.projectId is required" $fcm.projectId | quote }}
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: /etc/google-cloud/credential-configuration.json
+{{ end }}
           envFrom:
             - secretRef:
                 name: env
@@ -99,6 +123,15 @@ spec:
               port: http
             periodSeconds: {{ .Values.startupProbe.periodSeconds }}
             failureThreshold: {{ .Values.startupProbe.failureThreshold }}
+{{ if $fcm }}
+          volumeMounts:
+            - name: fcm-service-account-token
+              mountPath: /var/run/service-account
+              readOnly: true
+            - name: fcm-credentials
+              mountPath: /etc/google-cloud
+              readOnly: true
+{{ end }}
           livenessProbe:
             httpGet:
               path: /health
@@ -113,3 +146,16 @@ spec:
             periodSeconds: 5
           resources:
 {{ toYaml .Values.worker.resources | indent 12 }}
+{{ if $fcm }}
+      volumes:
+        - name: fcm-service-account-token
+          projected:
+            sources:
+              - serviceAccountToken:
+                  audience: {{ printf "https://iam.googleapis.com/%s" $fcm.workloadIdentityProvider | quote }}
+                  expirationSeconds: 3600
+                  path: token
+        - name: fcm-credentials
+          configMap:
+            name: {{ $fcmConfigName }}
+{{ end }}

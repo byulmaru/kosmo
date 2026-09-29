@@ -7,6 +7,8 @@ startupProbe:
   periodSeconds: 10
   failureThreshold: 30
 worker:
+  # Populated by Terraform-managed Argo CD releases; omit to disable FCM identity wiring.
+  fcm: {}
   replicas:
     dev: 1
     prod: 2
