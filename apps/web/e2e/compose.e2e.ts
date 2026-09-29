@@ -9,7 +9,7 @@ import { expect, test } from './fixtures';
 import { readGraphQLOperation, toGlobalId, waitForGraphQLOperation } from './graphql';
 import type { Locator, Page } from '@playwright/test';
 
-const quoteFlagUrl = 'https://flags.kos.moe/ofrep/v1/evaluate/flags/quote';
+const quoteFlagUrl = 'https://flags.kos.moe/ofrep/v1/evaluate/flags';
 
 async function routeQuoteFlag(page: Page, response: { body: string; status?: number }) {
   await page.route(quoteFlagUrl, (route) =>
@@ -75,7 +75,7 @@ test('목록의 재게시 메뉴에서 Quote Composer를 연다', async ({ conte
   await setE2ESessionCookie(context, viewer.token);
   await page.setViewportSize({ width: 1024, height: 800 });
   await routeQuoteFlag(page, {
-    body: JSON.stringify({ key: 'quote', reason: 'STATIC', value: true, variant: 'on' }),
+    body: JSON.stringify({ flags: [{ key: 'quote', value: true }] }),
   });
   const quoteFlagResponse = waitForQuoteFlagResponse(page);
   await page.goto('/local');
@@ -120,10 +120,10 @@ for (const [state, response] of [
   [
     'off',
     {
-      body: JSON.stringify({ key: 'quote', reason: 'STATIC', value: false, variant: 'off' }),
+      body: JSON.stringify({ flags: [{ key: 'quote', value: false }] }),
     },
   ],
-  ['unconfigured', { body: '{"error":"flag not found"}', status: 404 }],
+  ['unconfigured', { body: '{"flags":[]}' }],
 ] as const) {
   test(`Quote flag ${state} hides Quote while Reply and Repost remain usable`, async ({
     context,
@@ -179,7 +179,7 @@ for (const mode of ['reply', 'quote'] as const) {
     await page.setViewportSize({ width: 390, height: 844 });
     if (mode === 'quote') {
       await routeQuoteFlag(page, {
-        body: JSON.stringify({ key: 'quote', reason: 'STATIC', value: true, variant: 'on' }),
+        body: JSON.stringify({ flags: [{ key: 'quote', value: true }] }),
       });
     }
     const quoteFlagResponse = mode === 'quote' ? waitForQuoteFlagResponse(page) : undefined;

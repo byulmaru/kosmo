@@ -38,7 +38,6 @@ import {
   PostSourcePreview,
 } from '@/components/post/PostSourcePresentationView';
 import { PostThreadLayout } from '@/components/post/PostThreadLayout';
-import { QuoteEnabledContext } from '@/components/post/QuoteEnabledContext';
 import { ReplyComposerSurface } from '@/components/post/ReplyComposerSurface';
 import { ShellChromeProvider } from '@/components/shell/ShellChromeContext';
 import { formatTimelineTimestamp } from '@/lib/date';
@@ -3221,7 +3220,7 @@ export const BodyTimeAndLayoutStates: Story = {
     await userEvent.click(within(detailActionBar).getByRole('button', { name: '재게시' }));
     const quoteMenu = await screen.findByRole('menu', { name: '재게시 메뉴' });
     expect(within(quoteMenu).getByRole('menuitem', { name: '재게시하기' })).toBeVisible();
-    expect(within(quoteMenu).queryByRole('menuitem', { name: '인용하기' })).not.toBeInTheDocument();
+    expect(within(quoteMenu).getByRole('menuitem', { name: '인용하기' })).toBeVisible();
   },
 };
 
@@ -4402,11 +4401,7 @@ export const QuoteComposerListIntegration: Story = {
     expect(trigger).toHaveFocus();
     expect(await screen.findByRole('alert')).toHaveTextContent('인용 게시글을 게시했어요');
   },
-  render: () => (
-    <QuoteEnabledContext.Provider value>
-      <QuoteListSurfaceStory />
-    </QuoteEnabledContext.Provider>
-  ),
+  render: () => <QuoteListSurfaceStory />,
 };
 
 export const QuoteReplyListCoordinatorIntegration: Story = {
@@ -4471,11 +4466,7 @@ export const QuoteReplyListCoordinatorIntegration: Story = {
     await waitFor(() => expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).toBeNull());
     expect(replyButton).toHaveFocus();
   },
-  render: () => (
-    <QuoteEnabledContext.Provider value>
-      <QuoteListSurfaceStory />
-    </QuoteEnabledContext.Provider>
-  ),
+  render: () => <QuoteListSurfaceStory />,
 };
 
 export const QuoteListItemAvatars: Story = {

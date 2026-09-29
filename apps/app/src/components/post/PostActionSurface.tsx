@@ -1,8 +1,8 @@
 import { ContentReportTargetType } from '@kosmo/core/enums';
-import { useContext } from 'react';
 import { View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { useContentReportMenuItem } from '@/components/content-report/ContentReportContext';
+import { useFeatureFlag } from '@/components/FeatureFlagsContext';
 import { ProfileMoreMenu } from '@/components/profile/ProfileMoreMenu';
 import { ProfileMuteAction } from '@/components/profile/ProfileMuteAction';
 import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
@@ -13,7 +13,6 @@ import { PostActionBar } from './PostActionBar';
 import { useBookmarkFailureToast } from './PostBookmarkAction';
 import { usePostMoreMenuItem } from './PostMoreMenu';
 import { usePostReactionController } from './PostReactionController';
-import { QuoteEnabledContext } from './QuoteEnabledContext';
 import { useRepostFailureToast } from './useRepostFailureToast';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { PostActionSurface_post$key } from './__generated__/PostActionSurface_post.graphql';
@@ -50,7 +49,7 @@ export function PostActionSurface({
   reply,
   socialActionTarget,
 }: Props) {
-  const quoteEnabled = useContext(QuoteEnabledContext);
+  const quoteEnabled = useFeatureFlag('quote');
   const target = useFragment(postActionSurfaceFragment, socialActionTarget);
   const { sessionId } = useSession();
   const authentication = usePostActionAuthentication(true);

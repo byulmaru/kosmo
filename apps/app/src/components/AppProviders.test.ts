@@ -10,7 +10,7 @@ import {
   useState,
 } from 'react';
 import { act, create } from 'react-test-renderer';
-import type { ComponentType, Context, PropsWithChildren, ReactNode } from 'react';
+import type { ComponentType, PropsWithChildren, ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -33,7 +33,7 @@ let relayActorUnmounts = 0;
 let rootShouldThrow = false;
 let rootShouldSuspend = false;
 let AppProviders: ComponentType<PropsWithChildren>;
-let QuoteEnabledContext: Context<boolean>;
+let useFeatureFlag: (key: string) => boolean;
 let UniversalShell: ComponentType;
 let RouteBoundary: ComponentType<{
   children: ReactNode;
@@ -288,7 +288,7 @@ mockModule(new URL('../relay/RelayActorProvider.tsx', import.meta.url), {
 
 before(async () => {
   ({ AppProviders } = await import('./AppProviders'));
-  ({ QuoteEnabledContext } = await import('./post/QuoteEnabledContext'));
+  ({ useFeatureFlag } = await import('./FeatureFlagsContext'));
   ({ UniversalShell } = await import('./shell/UniversalShell'));
   ({ RouteBoundary, useRouteBoundary } = await import('./RouteBoundary'));
   ({ useSession } = await import('../session/SessionProvider'));
@@ -389,8 +389,15 @@ function NavigationThemeProbe() {
   });
 }
 
-function QuoteEnabledProbe() {
-  return createElement('QuoteEnabledProbe', { enabled: useContext(QuoteEnabledContext) });
+function FeatureFlagsProbe() {
+  return createElement('FeatureFlagsProbe', {
+    quote: useFeatureFlag('quote'),
+    disabled: useFeatureFlag('disabled'),
+    malformed: useFeatureFlag('malformed'),
+    errored: useFeatureFlag('errored'),
+    missing: useFeatureFlag('missing'),
+    inherited: useFeatureFlag('toString'),
+  });
 }
 
 function findTag(tag: string) {
@@ -414,12 +421,12 @@ describe('AppProviders runtime composition', () => {
     assert.equal(findTag('NavigationThemeProbe').props.background, '#fff');
   });
 
-  it('starts disabled and evaluates one quote flag per provider mount', async () => {
+  it('loads one shared flag snapshot per provider mount and fails closed', async () => {
     let requests = 0;
     const pendingRequests: Array<(response: Response) => void> = [];
     globalThis.fetch = async (input, init) => {
       requests += 1;
-      assert.equal(String(input), 'https://flags.kos.moe/ofrep/v1/evaluate/flags/quote');
+      assert.equal(String(input), 'https://flags.kos.moe/ofrep/v1/evaluate/flags');
       assert.deepEqual(init, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -433,29 +440,56 @@ describe('AppProviders runtime composition', () => {
     };
 
     await act(async () => {
-      renderer = create(createElement(AppProviders, null, createElement(QuoteEnabledProbe)));
+      renderer = create(createElement(AppProviders, null, createElement(FeatureFlagsProbe)));
     });
 
-    assert.equal(findTag('QuoteEnabledProbe').props.enabled, false);
+    assert.deepEqual(findTag('FeatureFlagsProbe').props, {
+      quote: false,
+      disabled: false,
+      malformed: false,
+      errored: false,
+      missing: false,
+      inherited: false,
+    });
     assert.equal(requests, 1);
     const resolveFirstRequest = pendingRequests.shift();
     assert.ok(resolveFirstRequest);
 
     await act(async () => {
-      resolveFirstRequest(new Response(JSON.stringify({ value: true }), { status: 200 }));
+      resolveFirstRequest(
+        new Response(
+          JSON.stringify({
+            flags: [
+              { key: 'quote', value: true },
+              { key: 'disabled', value: false },
+              { key: 'malformed', value: 'true' },
+              { key: 'errored', errorCode: 'FLAG_NOT_FOUND' },
+            ],
+          }),
+          { status: 200 },
+        ),
+      );
     });
 
-    assert.equal(findTag('QuoteEnabledProbe').props.enabled, true);
+    assert.deepEqual(findTag('FeatureFlagsProbe').props, {
+      quote: true,
+      disabled: false,
+      malformed: false,
+      errored: false,
+      missing: false,
+      inherited: false,
+    });
     assert.equal(requests, 1);
 
     await act(async () => renderer?.unmount());
     renderer = null;
 
     await act(async () => {
-      renderer = create(createElement(AppProviders, null, createElement(QuoteEnabledProbe)));
+      renderer = create(createElement(AppProviders, null, createElement(FeatureFlagsProbe)));
     });
 
-    assert.equal(findTag('QuoteEnabledProbe').props.enabled, false);
+    assert.equal(findTag('FeatureFlagsProbe').props.quote, false);
+    assert.equal(findTag('FeatureFlagsProbe').props.disabled, false);
     assert.equal(requests, 2);
   });
 
