@@ -518,7 +518,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
         accountId={accountId}
         enabled={web}
         pathname={pathname}
-        profiles={data.me?.profiles ?? []}
+        profiles={data.me?.profiles ?? null}
         selectedProfileId={profile?.id ?? null}
         status={status}
       >

@@ -158,3 +158,65 @@ it('검색은 시작 시 선택 Profile을 보존하고 명시한 Profile을 우
     ],
   );
 });
+
+it('화면과 행동에서 가용 수를 사실로 보내고 목록 미확인은 0으로 바꾸지 않는다', async () => {
+  const tree = (profiles: { id: string }[] | null, pathname = '/home') =>
+    createElement(
+      Provider,
+      {
+        accountId: 'account-a',
+        enabled: true,
+        pathname,
+        profiles,
+        selectedProfileId: 'profile-a',
+        status: 'valid',
+      },
+      createElement(Probe),
+    );
+
+  await act(async () => {
+    renderer = create(tree(null));
+  });
+  assert.deepEqual(
+    captures.map(([, properties]) => properties),
+    [{ observation_kind: 'screen', selected_profile_id: 'profile-a' }],
+  );
+
+  await act(async () => {
+    renderer?.update(tree([{ id: 'profile-a' }, { id: 'profile-b' }]));
+  });
+  assert.deepEqual(captures.at(-1)?.[1], {
+    observation_kind: 'availability',
+    available_profile_count: 2,
+  });
+
+  await act(async () => {
+    renderer?.update(tree([{ id: 'profile-a' }, { id: 'profile-b' }], '/search'));
+  });
+  assert.deepEqual(captures.at(-1)?.[1], {
+    observation_kind: 'screen',
+    available_profile_count: 2,
+    selected_profile_id: 'profile-a',
+  });
+
+  beginAction().track('search_submitted', { tab: 'people', source: 'keyboard' });
+  assert.deepEqual(captures.at(-2)?.[1], {
+    observation_kind: 'availability',
+    available_profile_count: 2,
+  });
+  assert.equal(captures.at(-1)?.[0], 'search_submitted');
+
+  beginAction().track('search_submitted', { tab: 'people', source: 'keyboard' });
+  assert.deepEqual(captures.at(-2)?.[1], {
+    observation_kind: 'availability',
+    available_profile_count: 2,
+  });
+
+  await act(async () => {
+    renderer?.update(tree([], '/search'));
+  });
+  assert.deepEqual(captures.at(-1)?.[1], {
+    observation_kind: 'availability',
+    available_profile_count: 0,
+  });
+});

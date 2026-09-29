@@ -3,19 +3,19 @@ export type AnalyticsEventProperties = {
   multi_profile_context_observed:
     | {
         observation_kind: 'screen';
-        multi_profile_eligible: boolean;
+        available_profile_count?: number;
         selected_profile_id?: string;
       }
     | {
-        observation_kind: 'eligibility';
-        multi_profile_eligible: boolean;
+        observation_kind: 'availability';
+        available_profile_count: number;
       };
-  profile_switched: {
-    previous_profile_id: string;
-    selected_profile_id: string;
-  };
   profile_created: { selected_profile_id: string };
-  profile_selected: { selected_profile_id: string };
+  profile_selected: {
+    selected_profile_id: string;
+    selection_cause?: 'auto' | 'direct';
+    previous_profile_id?: string;
+  };
   post_created: {
     selected_profile_id: string;
     visibility: 'PUBLIC' | 'UNLISTED' | 'FOLLOWERS' | 'DIRECT';

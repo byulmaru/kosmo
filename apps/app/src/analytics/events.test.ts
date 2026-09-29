@@ -5,17 +5,17 @@ const typecheckOnly = () => {
     'multi_profile_context_observed',
     {
       observation_kind: 'screen',
-      multi_profile_eligible: true,
+      available_profile_count: 2,
       selected_profile_id: 'profile-id',
     },
     { accountId: 'account-id', uuid: 'event-uuid', timestamp: new Date() },
   ];
   void screenContext;
-  const eligibilityContext: AnalyticsEventArgs = [
+  const availabilityContext: AnalyticsEventArgs = [
     'multi_profile_context_observed',
-    { observation_kind: 'eligibility', multi_profile_eligible: false },
+    { observation_kind: 'availability', available_profile_count: 1 },
   ];
-  void eligibilityContext;
+  void availabilityContext;
   // @ts-expect-error unknown event는 공용 API 계약에 포함되지 않는다.
   const unknownEvent: AnalyticsEventArgs = ['unknown_event', {}];
   void unknownEvent;

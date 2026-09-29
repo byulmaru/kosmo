@@ -220,12 +220,12 @@ describe('PostHog Web client', () => {
     analytics.trackAnalytics('search_result_selected', { tab: 'people' });
     analytics.trackAnalytics('multi_profile_context_observed', {
       observation_kind: 'screen',
-      multi_profile_eligible: true,
+      available_profile_count: 2,
       selected_profile_id: 'profile-id',
     });
     analytics.trackAnalytics('multi_profile_context_observed', {
-      observation_kind: 'eligibility',
-      multi_profile_eligible: true,
+      observation_kind: 'availability',
+      available_profile_count: 2,
     });
 
     assert.deepEqual(instance.calls, [
@@ -252,15 +252,15 @@ describe('PostHog Web client', () => {
         event: 'multi_profile_context_observed',
         properties: {
           observation_kind: 'screen',
-          multi_profile_eligible: true,
+          available_profile_count: 2,
           selected_profile_id: 'profile-id',
         },
       },
       {
         event: 'multi_profile_context_observed',
         properties: {
-          observation_kind: 'eligibility',
-          multi_profile_eligible: true,
+          observation_kind: 'availability',
+          available_profile_count: 2,
         },
       },
     ]);

@@ -113,7 +113,7 @@ mockModule('@/analytics/client', { trackAnalytics: () => undefined });
 mockModule('@/analytics/MultiProfileAnalyticsProvider', {
   useBeginMultiProfileAnalyticsAction: () => () => ({ trackProfile: () => undefined }),
 });
-mockModule('@/analytics/multiProfileUsage', {
+mockModule('@/analytics/multiProfileContext', {
   createAnalyticsCaptureOptions: (
     accountId: string,
     timestamp = new Date(),

@@ -1467,18 +1467,15 @@ export const ProfileSwitcherSelectTracksAnalytics: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
     const list = await canvas.findByLabelText('전환할 프로필 목록');
     await userEvent.click(within(list).getAllByRole('button')[1]!);
-    expect(trackAnalytics).toHaveBeenCalledTimes(2);
+    expect(trackAnalytics).toHaveBeenCalledTimes(1);
     const selectCall = mocked(trackAnalytics).mock.calls[0];
-    const switchCall = mocked(trackAnalytics).mock.calls[1];
     expect(selectCall?.[0]).toBe('profile_selected');
-    expect(selectCall?.[1]).toEqual({ selected_profile_id: secondProfile.id });
-    expectCaptureOptions(selectCall?.[2]);
-    expect(switchCall?.[0]).toBe('profile_switched');
-    expect(switchCall?.[1]).toEqual({
+    expect(selectCall?.[1]).toEqual({
       previous_profile_id: selectedProfile.id,
       selected_profile_id: secondProfile.id,
+      selection_cause: 'direct',
     });
-    expectCaptureOptions(switchCall?.[2]);
+    expectCaptureOptions(selectCall?.[2]);
   },
   render: () => <ProfileSwitcherStory />,
 };
@@ -1509,7 +1506,11 @@ export const ProfileSwitcherApprovedSelectRunsOnce: Story = {
         ([eventName]) => eventName === 'profile_selected',
       );
       expect(selectCall?.[0]).toBe('profile_selected');
-      expect(selectCall?.[1]).toEqual({ selected_profile_id: secondProfile.id });
+      expect(selectCall?.[1]).toEqual({
+        previous_profile_id: selectedProfile.id,
+        selected_profile_id: secondProfile.id,
+        selection_cause: 'direct',
+      });
     });
     const selectCall = mocked(trackAnalytics).mock.calls.find(
       ([eventName]) => eventName === 'profile_selected',
@@ -1603,7 +1604,10 @@ export const ProfileSwitcherCreateTracksAnalytics: Story = {
     expect(createdCall?.[1]).toEqual({ selected_profile_id: secondProfile.id });
     expectCaptureOptions(createdCall?.[2]);
     expect(selectedCall?.[0]).toBe('profile_selected');
-    expect(selectedCall?.[1]).toEqual({ selected_profile_id: secondProfile.id });
+    expect(selectedCall?.[1]).toEqual({
+      selected_profile_id: secondProfile.id,
+      selection_cause: 'auto',
+    });
     expectCaptureOptions(selectedCall?.[2]);
   },
   render: () => <FirstProfileSwitcherStory />,

@@ -281,19 +281,17 @@ describe('ProfileSwitcher selection lifecycle', () => {
     assert.deepEqual(
       analyticsCalls.map(([event, properties]) => ({ event, properties })),
       [
-        { event: 'profile_selected', properties: { selected_profile_id: 'profile-b' } },
         {
-          event: 'profile_switched',
+          event: 'profile_selected',
           properties: {
             previous_profile_id: 'profile-a',
             selected_profile_id: 'profile-b',
+            selection_cause: 'direct',
           },
         },
       ],
     );
     assert.equal(analyticsCalls[0]?.[2]?.accountId, 'account-1');
-    assert.equal(analyticsCalls[1]?.[2]?.accountId, 'account-1');
-    assert.notEqual(analyticsCalls[0]?.[2]?.uuid, analyticsCalls[1]?.[2]?.uuid);
     assert.equal(observedActionCalls[0]?.accountId, 'account-1');
   });
 

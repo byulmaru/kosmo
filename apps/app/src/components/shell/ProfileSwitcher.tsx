@@ -14,7 +14,6 @@ import {
 } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
 import { useBeginMultiProfileAnalyticsAction } from '@/analytics/MultiProfileAnalyticsProvider';
-import { isDirectProfileSwitch } from '@/analytics/multiProfileUsage';
 import { ProfilePicker } from '@/components/profile/ProfilePicker';
 import { ProfileSwitcherUnreadIndicator } from '@/components/profile/ProfileSwitcherUnread';
 import { Avatar } from '@/components/ui/Avatar';
@@ -43,10 +42,11 @@ import {
 } from './shellLayout';
 import type { RefObject } from 'react';
 import type { ViewStyle } from 'react-native';
-import type { ProfileSelectionCause } from '@/analytics/multiProfileUsage';
 import type { ProfileSwitcher_query$key } from './__generated__/ProfileSwitcher_query.graphql';
 import type { ProfileSwitcherCreateProfileMutation } from './__generated__/ProfileSwitcherCreateProfileMutation.graphql';
 import type { ProfileSwitcherSelectProfileMutation } from './__generated__/ProfileSwitcherSelectProfileMutation.graphql';
+
+type ProfileSelectionCause = 'auto' | 'direct';
 
 const ProfileSwitcherFragment = graphql`
   fragment ProfileSwitcher_query on Query {
@@ -290,12 +290,6 @@ export function ProfileSwitcher({
     setOperationError(null);
     const previousProfileId = active?.id ?? null;
     const selectedOperation = beginAnalyticsAction();
-    const directSwitch = isDirectProfileSwitch({
-      cause,
-      previousProfileId,
-      selectedProfileId: id,
-    });
-    const switchedOperation = directSwitch ? beginAnalyticsAction() : null;
     commitSelect({
       variables: { id },
       onCompleted: (response, errors) => {
@@ -308,16 +302,13 @@ export function ProfileSwitcher({
         const occurredAt = new Date();
         selectedOperation.trackProfile(
           'profile_selected',
-          { selected_profile_id: selectedProfileId },
+          {
+            selected_profile_id: selectedProfileId,
+            selection_cause: cause,
+            ...(previousProfileId ? { previous_profile_id: previousProfileId } : {}),
+          },
           occurredAt,
         );
-        if (directSwitch && previousProfileId && switchedOperation) {
-          switchedOperation.trackProfile(
-            'profile_switched',
-            { previous_profile_id: previousProfileId, selected_profile_id: selectedProfileId },
-            occurredAt,
-          );
-        }
         setOpen(false);
         resetActor(selectedProfileId);
       },

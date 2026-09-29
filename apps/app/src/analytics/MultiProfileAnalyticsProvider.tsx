@@ -1,14 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef } from 'react';
 import { useSession } from '@/session/SessionProvider';
 import { trackAnalytics } from './client';
-import {
-  createAnalyticsCaptureOptions,
-  isMultiProfileEligible,
-  MultiProfileAnalyticsObserver,
-} from './multiProfileUsage';
+import { createAnalyticsCaptureOptions } from './multiProfileContext';
 import type { PropsWithChildren } from 'react';
 import type { AnalyticsEventName, AnalyticsEventProperties } from './events';
-import type { AnalyticsProfileSnapshot } from './multiProfileUsage';
+
+type AnalyticsProfileSnapshot = { id: string };
 
 export type MultiProfileAnalyticsAction = {
   accountId: string;
@@ -35,7 +32,7 @@ type Props = PropsWithChildren<{
   accountId: string | null;
   enabled: boolean;
   pathname: string;
-  profiles: ReadonlyArray<AnalyticsProfileSnapshot>;
+  profiles: ReadonlyArray<AnalyticsProfileSnapshot> | null;
   selectedProfileId: string | null;
   status: 'error' | 'guest' | 'valid';
 }>;
@@ -43,7 +40,7 @@ type Props = PropsWithChildren<{
 type CurrentSnapshot = {
   accountId: string | null;
   enabled: boolean;
-  profiles: ReadonlyArray<AnalyticsProfileSnapshot>;
+  profiles: ReadonlyArray<AnalyticsProfileSnapshot> | null;
   selectedProfileId: string | null;
   status: Props['status'];
 };
@@ -57,11 +54,7 @@ export function MultiProfileAnalyticsProvider({
   selectedProfileId,
   status,
 }: Props) {
-  const observerRef = useRef<MultiProfileAnalyticsObserver | null>(null);
-  if (!observerRef.current) {
-    observerRef.current = new MultiProfileAnalyticsObserver();
-  }
-
+  const lastAvailableCountRef = useRef<{ accountId: string; count: number } | null>(null);
   const snapshotRef = useRef<CurrentSnapshot>({
     accountId,
     enabled,
@@ -88,12 +81,13 @@ export function MultiProfileAnalyticsProvider({
       return;
     }
 
-    observerRef.current?.observeAction({
-      accountId: action.accountId,
-      observedAt: action.occurredAt ?? new Date(),
-      profiles: current.profiles,
-      selectedProfileId: current.selectedProfileId,
-    });
+    if (current.profiles) {
+      trackAnalytics(
+        'multi_profile_context_observed',
+        { observation_kind: 'availability', available_profile_count: current.profiles.length },
+        createAnalyticsCaptureOptions(action.accountId, action.occurredAt ?? new Date()),
+      );
+    }
   }, []);
 
   useEffect(() => {
@@ -102,28 +96,45 @@ export function MultiProfileAnalyticsProvider({
       return;
     }
 
-    observerRef.current?.observeScreen({
-      accountId: current.accountId,
-      observedAt: new Date(),
-      profiles: current.profiles,
-      selectedProfileId: current.selectedProfileId,
-    });
+    const count = current.profiles?.length;
+    trackAnalytics(
+      'multi_profile_context_observed',
+      {
+        observation_kind: 'screen',
+        ...(count === undefined ? {} : { available_profile_count: count }),
+        ...(current.selectedProfileId ? { selected_profile_id: current.selectedProfileId } : {}),
+      },
+      createAnalyticsCaptureOptions(current.accountId),
+    );
+    if (count !== undefined) {
+      lastAvailableCountRef.current = { accountId: current.accountId, count };
+    }
   }, [accountId, enabled, pathname, status]);
 
-  const eligible = isMultiProfileEligible(profiles);
+  const availableProfileCount = profiles?.length;
   useEffect(() => {
     const current = snapshotRef.current;
-    if (!current.enabled || current.status !== 'valid' || !current.accountId) {
+    if (
+      !current.enabled ||
+      current.status !== 'valid' ||
+      !current.accountId ||
+      availableProfileCount === undefined
+    ) {
       return;
     }
-
-    observerRef.current?.observeEligibility({
-      accountId: current.accountId,
-      observedAt: new Date(),
-      profiles: current.profiles,
-      selectedProfileId: current.selectedProfileId,
-    });
-  }, [accountId, enabled, eligible, status]);
+    if (
+      lastAvailableCountRef.current?.accountId === current.accountId &&
+      lastAvailableCountRef.current.count === availableProfileCount
+    ) {
+      return;
+    }
+    trackAnalytics(
+      'multi_profile_context_observed',
+      { observation_kind: 'availability', available_profile_count: availableProfileCount },
+      createAnalyticsCaptureOptions(current.accountId),
+    );
+    lastAvailableCountRef.current = { accountId: current.accountId, count: availableProfileCount };
+  }, [accountId, availableProfileCount, enabled, status]);
 
   const value = useMemo<MultiProfileAnalyticsContextValue>(
     () => ({ accountId, observeAction, selectedProfileId, status }),
@@ -144,7 +155,6 @@ export function useMultiProfileAnalytics(): MultiProfileAnalyticsContextValue {
 type ProfileActionName =
   | 'profile_created'
   | 'profile_selected'
-  | 'profile_switched'
   | 'post_created'
   | 'follow_succeeded';
 
