@@ -72,27 +72,9 @@ const isExpectedRemoteActorRejection = (error: unknown) =>
  */
 export const prepareProfileMigrationMoveActivity = async (
   input: ProfileMigrationMoveWorkflowInput,
-): Promise<{ sourceProfileId: string; targetProfileId: string } | null> => {
-  let sourceActorUri: URL;
-  let targetActorUri: URL;
-  try {
-    sourceActorUri = new URL(input.sourceActorUri);
-    targetActorUri = new URL(input.targetActorUri);
-  } catch {
-    observeMoveRejection(input, 'validation', 'move_actor_target_uri_invalid');
-    return null;
-  }
-
-  if (
-    (sourceActorUri.protocol !== 'http:' && sourceActorUri.protocol !== 'https:') ||
-    !sourceActorUri.hostname ||
-    (targetActorUri.protocol !== 'http:' && targetActorUri.protocol !== 'https:') ||
-    !targetActorUri.hostname ||
-    sourceActorUri.href === targetActorUri.href
-  ) {
-    observeMoveRejection(input, 'validation', 'move_actor_target_uri_invalid');
-    return null;
-  }
+): Promise<ProfileMigrationMoveInput | null> => {
+  const sourceActorUri = new URL(input.sourceActorUri);
+  const targetActorUri = new URL(input.targetActorUri);
 
   const localInstance = await resolveConfiguredLocalInstance();
   const localOrigin = new URL(localInstance.canonicalOrigin).origin;
@@ -107,6 +89,13 @@ export const prepareProfileMigrationMoveActivity = async (
       .from(ActivityPubActors)
       .innerJoin(Profiles, eq(Profiles.id, ActivityPubActors.profileId))
       .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+      .innerJoin(
+        ProfileMigrations,
+        and(
+          eq(ProfileMigrations.sourceProfileId, storedSource.profile.id),
+          eq(ProfileMigrations.targetProfileId, Profiles.id),
+        ),
+      )
       .where(
         and(
           eq(ActivityPubActors.uri, targetActorUri.href),
@@ -117,24 +106,7 @@ export const prepareProfileMigrationMoveActivity = async (
       )
       .limit(1)
       .then(first);
-
-    if (preparedTarget) {
-      const migration = await db
-        .select({ id: ProfileMigrations.id })
-        .from(ProfileMigrations)
-        .where(
-          and(
-            eq(ProfileMigrations.sourceProfileId, storedSource.profile.id),
-            eq(ProfileMigrations.targetProfileId, preparedTarget.profileId),
-          ),
-        )
-        .limit(1)
-        .then(first);
-
-      if (migration) {
-        targetProfileId = preparedTarget.profileId;
-      }
-    }
+    targetProfileId = preparedTarget?.profileId;
   }
 
   if (targetProfileId === undefined && targetActorUri.origin === localOrigin) {

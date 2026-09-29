@@ -213,27 +213,21 @@ const runPreparationActivity = async (
 };
 
 const createMoveActor = (actorUri: string, aliases: readonly string[] = []) => {
-  const actor = new Person({
-    id: new URL(actorUri),
-    preferredUsername: new URL(actorUri).pathname.split('/').at(-1) ?? 'profile',
+  const id = new URL(actorUri);
+  return new Person({
+    id,
+    preferredUsername: id.pathname.split('/').at(-1) ?? 'profile',
+    aliases: aliases.map((alias) => new URL(alias)),
   });
-  Object.defineProperty(actor, 'aliasIds', {
-    configurable: true,
-    value: aliases.map((alias) => new URL(alias)),
-  });
-  return actor;
 };
 
 const createMoveGroup = (actorUri: string, aliases: readonly string[] = []) => {
-  const group = new Group({
-    id: new URL(actorUri),
-    preferredUsername: new URL(actorUri).pathname.split('/').at(-1) ?? 'group',
+  const id = new URL(actorUri);
+  return new Group({
+    id,
+    preferredUsername: id.pathname.split('/').at(-1) ?? 'group',
+    aliases: aliases.map((alias) => new URL(alias)),
   });
-  Object.defineProperty(group, 'aliasIds', {
-    configurable: true,
-    value: aliases.map((alias) => new URL(alias)),
-  });
-  return group;
 };
 
 test('prepared Local Move target returns stored Profile IDs without remote lookup', async () => {
@@ -347,7 +341,7 @@ test('prepared Local Move still rejects unavailable source Profiles and reactiva
 test('unprepared same-origin Move target is rejected before source materialization', async () => {
   const sourceActorUri = 'https://source.example/users/missing';
   const targetActorUri = new URL('/ap/actor/unprepared', publicOrigin).href;
-  await createProfile({
+  const target = await createProfile({
     actorUri: targetActorUri,
     instanceId: localInstanceId,
     instanceKind: InstanceKind.LOCAL,
@@ -366,12 +360,28 @@ test('unprepared same-origin Move target is rejected before source materializati
       },
     );
     assert.equal(result, null);
+
+    const preparedSource = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
+    const differentSource = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
+    await db.insert(ProfileMigrations).values({
+      sourceProfileId: preparedSource.profile.id,
+      targetProfileId: target.profile.id,
+    });
+
+    const differentSourceResult = await runPreparationActivity(
+      { sourceActorUri: differentSource.actorUri!, targetActorUri },
+      async () => {
+        throw new Error('a Local target prepared for another source must not be fetched');
+      },
+    );
+    assert.equal(differentSourceResult, null);
   } finally {
     restoreReporter();
   }
 
-  assert.equal(await db.$count(Profiles), 1);
+  assert.equal(await db.$count(Profiles), 3);
   assert.deepEqual(observations, [
+    { outcome: 'rejected', reasonCode: 'move_local_target_not_prepared' },
     { outcome: 'rejected', reasonCode: 'move_local_target_not_prepared' },
   ]);
 });

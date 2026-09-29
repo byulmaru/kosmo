@@ -114,6 +114,10 @@ test('admits a canonical URI workflow without remote lookup or profile materiali
   const start = mock.method(temporalClient.workflow, 'start', async () => undefined as never);
   const sourceActor = createActor(sourceActorUri);
   const targetActor = createActor(targetActorUri);
+  const input = {
+    sourceActorUri: sourceActorUri.href,
+    targetActorUri: targetActorUri.href,
+  };
 
   try {
     await handleInboundMove(
@@ -132,19 +136,8 @@ test('admits a canonical URI workflow without remote lookup or profile materiali
   assert.equal(start.mock.calls.length, 1);
   const [workflowType, options] = start.mock.calls[0]?.arguments ?? [];
   assert.equal(workflowType, 'profileMigrationMoveWorkflow');
-  assert.deepEqual((options as { args: unknown[] }).args, [
-    {
-      sourceActorUri: sourceActorUri.href,
-      targetActorUri: targetActorUri.href,
-    },
-  ]);
-  assert.equal(
-    (options as { workflowId: string }).workflowId,
-    profileMigrationWorkflowId({
-      sourceActorUri: sourceActorUri.href,
-      targetActorUri: targetActorUri.href,
-    }),
-  );
+  assert.deepEqual((options as { args: unknown[] }).args, [input]);
+  assert.equal((options as { workflowId: string }).workflowId, profileMigrationWorkflowId(input));
   assert.equal((options as { taskQueue: string }).taskQueue, KOSMO_TASK_QUEUE);
   assert.equal(
     (options as { workflowIdConflictPolicy: string }).workflowIdConflictPolicy,
