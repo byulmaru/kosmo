@@ -83,11 +83,7 @@ export default function PrivacyScreen() {
         있는 권리를 안내합니다.
       </PolicyParagraph>
 
-      <PolicyParagraph>
-        PostHog 제품 분석은 별도로 공지하는 시행일부터 수집합니다. 제품 분석을 시작해도 Session
-        Replay는 기록하지 않습니다. 아래 Replay 관련 내용은 추후 활성화할 경우 적용할 처리 범위이며,
-        활성화 여부와 시행일은 별도로 안내합니다.
-      </PolicyParagraph>
+      <PolicyParagraph>Session Replay 적용 시점은 별도로 안내합니다.</PolicyParagraph>
 
       <PolicySection title="1. 개인정보 처리 목적·항목·보유기간 및 근거">
         <SubsectionTitle>동의를 받아 처리하는 개인정보</SubsectionTitle>
@@ -312,7 +308,7 @@ export default function PrivacyScreen() {
           <TableRow
             cells={[
               'Session Replay',
-              '현재 기록하지 않습니다. 추후 활성화하면 세션의 10%를 표본 수집하고 30일 보관합니다. Cloud Normal input masking으로 input·textarea 값을 가립니다. 화면의 모든 텍스트·이미지가 자동으로 masking된다는 의미는 아닙니다.',
+              'Session Replay 적용 시 세션의 10%를 표본 수집하고 수집일부터 30일 보관합니다. Cloud Normal input masking은 input·textarea 값을 가리지만, 화면의 모든 텍스트·이미지를 가리는 것은 아닙니다.',
             ]}
           />
           <TableRow
