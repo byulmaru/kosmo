@@ -9,13 +9,14 @@
 - Local Actor의 `alsoKnownAs` aliases를 준비 관계의 Remote source canonical Actor URI에서만 파생한다.
 - 인증된 inbound ActivityPub `Move`의 actor와 object가 같은 canonical source URI인지, target canonical Actor와 target의 exact source alias가 일치하는지 검증한다. remote-to-local과 remote-to-remote target을 모두 지원하고 기존 Actor 종류를 유지한다.
 - source가 아직 저장되지 않은 유효한 Move에서는 검증된 source Remote Profile을 materialize한다. remote-to-remote target은 Local 준비 관계를 요구하지 않으며, target Profile의 기존 Follow Approval Policy를 사용한다.
-- source를 Followee로 가진 기존 established Follow 중 Follower가 Local Profile인 관계만 target Follow 또는 Follow Request로 먼저 저장한 뒤 source 관계를 제거한다. target 저장 실패 시 source 관계를 제거하지 않는다.
-- 반복 수신과 중단 후 재개는 기존 Follow·Follow Request lifecycle의 멱등성 및 Temporal 재시도를 사용한다. 서버 간 receipt 순서와 동시 Follow/Unfollow에 대한 추가 보장은 만들지 않는다.
+- source를 Followee로 가진 기존 established Follow 중 Follower가 Local Profile인 관계만 이전한다. 실행 시작 시 target Follow 또는 Pending Follow Request가 없고 이번 target transition이 실제로 새 row를 생성한 경우에만 target을 먼저 저장한 뒤 source 관계를 제거한다. target 저장 실패나 concurrent transition의 `created: false` 결과에서는 source 관계를 제거하지 않는다. 실행 시작부터 target 관계 또는 Pending Request가 있으면 기존 target lifecycle에 수렴시키고 source 관계를 유지한다.
+- 반복 수신과 Temporal 재시도는 기존 Follow·Follow Request lifecycle의 멱등성을 사용해 중복 target row 없이 수렴한다. target 생성 뒤 source 제거 전에 중단된 재시도는 existing target을 관찰해 source를 남길 수 있으며, source cleanup 완료나 이를 복원하는 migration receipt·ledger를 보장하지 않는다. 서버 간 receipt 순서와 동시 Follow/Unfollow에 대한 추가 보장은 만들지 않는다.
 - **제외:** 운영자 CLI와 flag 관리 UI/CLI, outgoing Kosmo `Move`, 게시물·미디어·팔로잉을 포함한 전체 계정 이전, Follow 가져오기/내보내기, 실제 운영 계정의 이전 실행.
 
 ## Authority / Provenance
 
-- Canonical: `docs/domain/objects/profile.md`, `docs/domain/objects/follow-relationship.md`, `docs/domain/objects/follow-request.md`, `docs/domain/decisions/0027-profile-migration-inbound-move.md`, `docs/design/settings.md`
+- Product canonical: `docs/domain/objects/profile.md`, `docs/domain/objects/follow-relationship.md`, `docs/domain/objects/follow-request.md`, `docs/domain/decisions/0027-profile-migration-inbound-move.md`
+- Visual design source: `docs/design/settings.md` (visual structure, state presentation, and accessibility authority only)
 - Linear Contract: `PROD-743`
 - Linear Implementations: `PROD-743` (새 이슈 없이 3-layer 전체 계약·완료 책임을 유지한다.)
 

@@ -27,7 +27,8 @@
 <!-- Optional links to current canonical docs or Linear. Links provide context;
      this session brief does not copy or extend their requirements. -->
 
-- Canonical: 없음.
+- Product canonical: 없음. <!-- exact applicable docs/domain and accepted ADR paths -->
+- Visual design source: 없음. <!-- exact applicable docs/design paths. Its authority is limited to visual structure, state presentation, accessibility, and interaction presentation. -->
 - Linear: 없음.
 - User agreement: 없음.
 
