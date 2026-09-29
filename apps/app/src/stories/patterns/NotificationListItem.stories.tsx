@@ -591,6 +591,12 @@ export const ReplyActionsContract: Story = {
     await waitFor(() => expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).toBeNull());
     await expect(reply).toHaveFocus();
 
+    await userEvent.click(canvas.getByRole('button', { name: '재게시' }));
+    const repostMenu = await screen.findByRole('menu', { name: '재게시 메뉴' });
+    await expect(within(repostMenu).queryByRole('menuitem', { name: '인용하기' })).toBeNull();
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('menu', { name: '재게시 메뉴' })).toBeNull());
+
     resetClipboardMock();
     await userEvent.click(canvas.getByRole('button', { name: '더 보기' }));
     const menu = await screen.findByRole('menu', { name: '더 보기 메뉴' });

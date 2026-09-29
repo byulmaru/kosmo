@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { afterEach, before, describe, it, mock } from 'node:test';
-import { createElement } from 'react';
+import { createContext, createElement } from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
 import { act, create } from 'react-test-renderer';
 import type { PropsWithChildren, ReactElement, RefObject } from 'react';
@@ -16,6 +16,8 @@ import type {
   PostMediaViewerHostProvider as HostProviderComponent,
   PostMediaViewerScreenFallbackProvider as ScreenFallbackProviderComponent,
 } from './PostMediaViewerHost';
+
+const PostComposerCoordinatorContext = createContext(undefined);
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -221,6 +223,7 @@ const replyBinding = {
 
 mock.module('./PostComposerCoordinator', {
   exports: {
+    PostComposerCoordinatorContext,
     usePostComposerBinding: (postId: string) => {
       replyPostIds.push(postId);
       return replyBinding;

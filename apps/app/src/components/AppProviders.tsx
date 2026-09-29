@@ -1,6 +1,7 @@
 import { DefaultTheme, ThemeProvider as NavigationThemeProvider } from 'expo-router';
 import { AnalyticsSessionBridge } from '@/analytics/AnalyticsSessionBridge';
 import { ContentReportProvider } from '@/components/content-report/ContentReportContext';
+import { FeatureFlagsProvider } from '@/components/FeatureFlagsContext';
 import { NativePushProvider } from '@/components/native-push/NativePushProvider';
 import { RelayActorProvider } from '@/relay/RelayActorProvider';
 import { SessionProvider } from '@/session/SessionProvider';
@@ -18,12 +19,16 @@ export function AppProviders({ children }: PropsWithChildren) {
           <GraphQLErrorBoundary>
             <RelayActorProvider>
               <SessionProvider>
-                <AnalyticsSessionBridge />
-                <NativePushProvider>
-                  <ContentReportProvider>
-                    <PostContentWarningRevealProvider>{children}</PostContentWarningRevealProvider>
-                  </ContentReportProvider>
-                </NativePushProvider>
+                <FeatureFlagsProvider>
+                  <AnalyticsSessionBridge />
+                  <NativePushProvider>
+                    <ContentReportProvider>
+                      <PostContentWarningRevealProvider>
+                        {children}
+                      </PostContentWarningRevealProvider>
+                    </ContentReportProvider>
+                  </NativePushProvider>
+                </FeatureFlagsProvider>
               </SessionProvider>
             </RelayActorProvider>
           </GraphQLErrorBoundary>

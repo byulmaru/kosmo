@@ -31,6 +31,8 @@
     "@formatjs/intl-pluralrules": "^6.3.13",
     "@formatjs/intl-relativetimeformat": "^12.3.13",
     "@kosmo/core": "workspace:*",
+    "@openfeature/ofrep-web-provider": "^0.4.3",
+    "@openfeature/web-sdk": "^1.10.0",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-native-firebase/app": "26.4.0",
     "@react-native-firebase/messaging": "26.4.0",

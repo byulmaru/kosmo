@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { afterEach, before, describe, it, mock } from 'node:test';
-import { createElement } from 'react';
+import { createContext, createElement } from 'react';
 import * as ReactRelay from 'react-relay';
 import { act, create } from 'react-test-renderer';
 import {
@@ -19,6 +19,8 @@ import type {
   PostMediaViewerHostProvider as HostProviderComponent,
   usePostMediaViewerHost as UseHost,
 } from './PostMediaViewerHost';
+
+const PostComposerCoordinatorContext = createContext(undefined);
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -148,7 +150,10 @@ mock.module('./PostMediaViewerThread', {
 } as unknown as Parameters<typeof mock.module>[1]);
 
 mock.module('./PostComposerCoordinator', {
-  exports: { usePostComposerBinding: () => replyBinding },
+  exports: {
+    PostComposerCoordinatorContext,
+    usePostComposerBinding: () => replyBinding,
+  },
 } as unknown as Parameters<typeof mock.module>[1]);
 
 mock.module('./replySurface', {
@@ -212,10 +217,11 @@ describe('PostMediaViewerHost Relay lifecycle', () => {
     await openViewer();
 
     const actionBar = byTestId('post-media-viewer-content').props.actionBar as {
-      props: { reply?: { onPress: () => void } };
+      props: { children: { props: { reply?: { onPress: () => void } } } };
     };
-    assert.ok(actionBar.props.reply);
-    await act(async () => actionBar.props.reply?.onPress());
+    const reply = actionBar.props.children.props.reply;
+    assert.ok(reply);
+    await act(async () => reply.onPress());
 
     assert.deepEqual(replyPressOwners, ['list']);
     assert.equal(optionalByTestId('post-media-viewer-dialog'), null);
@@ -236,10 +242,11 @@ describe('PostMediaViewerHost Relay lifecycle', () => {
     await openViewer();
 
     const actionBar = byTestId('post-media-viewer-content').props.actionBar as {
-      props: { reply?: { onPress: () => void } };
+      props: { children: { props: { reply?: { onPress: () => void } } } };
     };
-    assert.ok(actionBar.props.reply);
-    await act(async () => actionBar.props.reply?.onPress());
+    const reply = actionBar.props.children.props.reply;
+    assert.ok(reply);
+    await act(async () => reply.onPress());
 
     assert.equal(replyResolveCalls, 1);
     assert.deepEqual(replyPressOwners, []);
@@ -261,10 +268,11 @@ describe('PostMediaViewerHost Relay lifecycle', () => {
     await openViewer();
 
     const actionBar = byTestId('post-media-viewer-content').props.actionBar as {
-      props: { reply?: { onPress: () => void } };
+      props: { children: { props: { reply?: { onPress: () => void } } } };
     };
-    assert.ok(actionBar.props.reply);
-    await act(async () => actionBar.props.reply?.onPress());
+    const reply = actionBar.props.children.props.reply;
+    assert.ok(reply);
+    await act(async () => reply.onPress());
 
     assert.deepEqual(replyPressOwners, ['list']);
   });

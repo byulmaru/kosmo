@@ -5,6 +5,7 @@ import { Suspense } from 'react';
 import { Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { sb } from 'storybook/test';
+import { FeatureFlagsContext } from '@/components/FeatureFlagsContext';
 import { PostContentWarningRevealProvider } from '@/components/post/PostContentWarningRevealContext';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
@@ -19,6 +20,11 @@ sb.mock(import('../src/buildVersion.ts'), { spy: true });
 
 const preview: Preview = {
   decorators: [
+    (Story) => (
+      <FeatureFlagsContext.Provider value={() => true}>
+        <Story />
+      </FeatureFlagsContext.Provider>
+    ),
     (Story, context) => {
       const router = context.parameters.router ?? {};
       const relay = context.parameters.relay ?? {};

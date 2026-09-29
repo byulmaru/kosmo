@@ -15,7 +15,7 @@ import { useRelayActorLifecycleKey } from '@/relay/RelayActorProvider';
 import { breakpoints } from '@/theme/tokens';
 import { usePostActionAuthentication } from './PostActionAuthentication';
 import { PostActionSurface } from './PostActionSurface';
-import { usePostComposerBinding } from './PostComposerCoordinator';
+import { PostComposerCoordinatorContext, usePostComposerBinding } from './PostComposerCoordinator';
 import {
   PostMediaViewer,
   PostMediaViewerContent,
@@ -241,12 +241,14 @@ function PostMediaViewerHostContent({
   const contentId = mediaOwner.content?.id ?? null;
   const actionBar =
     contentId && mediaOwner.actionSurface ? (
-      <PostActionSurface
-        onDeleted={onDeleted}
-        reactionSummaryStyle={styles.hiddenReactionSummary}
-        reply={viewerReply}
-        socialActionTarget={mediaOwner.actionSurface}
-      />
+      <PostComposerCoordinatorContext.Provider value={undefined}>
+        <PostActionSurface
+          onDeleted={onDeleted}
+          reactionSummaryStyle={styles.hiddenReactionSummary}
+          reply={viewerReply}
+          socialActionTarget={mediaOwner.actionSurface}
+        />
+      </PostComposerCoordinatorContext.Provider>
     ) : null;
   const wideDetail = contentId ? (
     <PostMediaViewerThread
