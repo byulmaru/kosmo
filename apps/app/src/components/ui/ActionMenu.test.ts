@@ -21,16 +21,11 @@ const ViewHost = 'View' as unknown as ElementType;
 let exitMounted = false;
 let platformOS: 'ios' | 'web' = 'ios';
 let dismissAnimationTarget: number | undefined;
-let panResponderConfig:
-  | {
-      onMoveShouldSetPanResponder?: (
-        _event: unknown,
-        gesture: { dx: number; dy: number },
-      ) => boolean;
-      onPanResponderMove?: (_event: unknown, gesture: { dy: number }) => void;
-      onPanResponderRelease?: (_event: unknown, gesture: { dy: number; vy: number }) => void;
-    }
-  | undefined;
+type PanResponderConfig = {
+  onMoveShouldSetPanResponder?: (_event: unknown, gesture: { dx: number; dy: number }) => boolean;
+  onPanResponderMove?: (_event: unknown, gesture: { dy: number }) => void;
+  onPanResponderRelease?: (_event: unknown, gesture: { dy: number; vy: number }) => void;
+};
 
 function flattenStyle(style: unknown) {
   return Object.assign({}, ...(Array.isArray(style) ? style : [style]).filter(Boolean));
@@ -55,10 +50,13 @@ mockModule('react-native', {
   Easing: { bezier: () => () => 0 },
   Modal: 'Modal',
   PanResponder: {
-    create: (config: typeof panResponderConfig) => {
-      panResponderConfig = config;
-      return { panHandlers: {} };
-    },
+    create: (config: PanResponderConfig) => ({
+      panHandlers: {
+        onMoveShouldSetResponder: config.onMoveShouldSetPanResponder,
+        onResponderMove: config.onPanResponderMove,
+        onResponderRelease: config.onPanResponderRelease,
+      },
+    }),
   },
   Platform: {
     get OS() {
@@ -140,7 +138,6 @@ afterEach(() => {
   platformOS = 'ios';
   exitMounted = false;
   dismissAnimationTarget = undefined;
-  panResponderConfig = undefined;
   delete (globalThis as { window?: unknown }).window;
   delete (globalThis as { document?: unknown }).document;
 });
@@ -239,6 +236,10 @@ test('ActionMenu cannot be dismissed while disabled', async () => {
   await act(async () =>
     renderer.root.findByProps({ accessibilityViewIsModal: true }).props.onAccessibilityEscape(),
   );
+  const handle = renderer.root.findByProps({ accessibilityLabel: '시트 닫기' }).parent;
+  assert.ok(handle);
+  assert.equal(handle.props.onMoveShouldSetResponder(null, { dx: 0, dy: 100 }), false);
+  await act(async () => handle.props.onResponderRelease(null, { dy: 100, vy: 1 }));
   assert.equal(modal.props.visible, true);
 
   await act(async () => renderer.unmount());
@@ -265,6 +266,28 @@ test('Native ActionMenu handle closes its sheet for assistive input', async () =
   await act(async () => renderer.unmount());
 });
 
+test('Native ActionMenu handle closes its sheet after a downward drag', async () => {
+  assert.ok(actionMenuModule);
+  let renderer!: ReactTestRenderer;
+  await act(async () => {
+    renderer = create(
+      createElement(actionMenuModule!.ActionMenu, {
+        accessibilityLabel: '재게시 메뉴',
+        items: [{ key: 'repost', label: '재게시하기', onSelect() {} }],
+        renderTrigger: ({ onPress }: { onPress: () => void }) =>
+          createElement(PressableHost, { onPress, testID: 'trigger' }),
+      }),
+    );
+  });
+  await act(async () => renderer.root.findByProps({ testID: 'trigger' }).props.onPress());
+  const handle = renderer.root.findByProps({ accessibilityLabel: '시트 닫기' }).parent;
+  assert.ok(handle);
+  assert.equal(handle.props.onMoveShouldSetResponder(null, { dx: 0, dy: 100 }), true);
+  await act(async () => handle.props.onResponderRelease(null, { dy: 100, vy: 1 }));
+  assert.equal(renderer.root.findByType('Modal' as unknown as ElementType).props.visible, false);
+  await act(async () => renderer.unmount());
+});
+
 test('shared bottom sheet follows an upward drag, then collapses and dismisses on downward drags', async () => {
   assert.ok(bottomSheetSurfaceModule);
   let closes = 0;
@@ -282,16 +305,18 @@ test('shared bottom sheet follows an upward drag, then collapses and dismisses o
   });
   const sheetHeight = () =>
     flattenStyle(renderer.root.findByProps({ accessibilityViewIsModal: true }).props.style).height;
+  const handle = renderer.root.findByProps({ accessibilityLabel: '시트 펼치기' }).parent;
+  assert.ok(handle);
   assert.equal(sheetHeight(), 480);
-  assert.equal(panResponderConfig?.onMoveShouldSetPanResponder?.(null, { dx: 0, dy: -100 }), true);
-  await act(async () => panResponderConfig?.onPanResponderMove?.(null, { dy: -100 }));
+  assert.equal(handle.props.onMoveShouldSetResponder(null, { dx: 0, dy: -100 }), true);
+  await act(async () => handle.props.onResponderMove(null, { dy: -100 }));
   assert.equal(sheetHeight(), 580);
-  await act(async () => panResponderConfig?.onPanResponderRelease?.(null, { dy: -100, vy: -1 }));
+  await act(async () => handle.props.onResponderRelease(null, { dy: -100, vy: -1 }));
   assert.equal(sheetHeight(), 844);
-  await act(async () => panResponderConfig?.onPanResponderRelease?.(null, { dy: 420, vy: 1 }));
+  await act(async () => handle.props.onResponderRelease(null, { dy: 420, vy: 1 }));
   assert.equal(sheetHeight(), 480);
-  await act(async () => panResponderConfig?.onPanResponderMove?.(null, { dy: 100 }));
-  await act(async () => panResponderConfig?.onPanResponderRelease?.(null, { dy: 100, vy: 1 }));
+  await act(async () => handle.props.onResponderMove(null, { dy: 100 }));
+  await act(async () => handle.props.onResponderRelease(null, { dy: 100, vy: 1 }));
   assert.equal(closes, 1);
   const releaseTranslation = flattenStyle(
     renderer.root.findByProps({ accessibilityViewIsModal: true }).props.style,
