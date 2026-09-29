@@ -23,16 +23,18 @@ export function AppProviders({ children }: PropsWithChildren) {
                   <AnalyticsSessionBridge />
                   <NativePushProvider>
                     <ContentReportProvider>
-                      <PostContentWarningRevealProvider>{children}</PostContentWarningRevealProvider>
+                      <PostContentWarningRevealProvider>
+                        {children}
+                      </PostContentWarningRevealProvider>
                     </ContentReportProvider>
                   </NativePushProvider>
                 </FeatureFlagsProvider>
               </SessionProvider>
             </RelayActorProvider>
           </GraphQLErrorBoundary>
-          </ToastProvider>
-        </NavigationThemeBoundary>
-      </ThemeProvider>
+        </ToastProvider>
+      </NavigationThemeBoundary>
+    </ThemeProvider>
   );
 }
 
