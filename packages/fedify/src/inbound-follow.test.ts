@@ -248,8 +248,7 @@ describe('inbound Follow and Undo', () => {
     const remoteActor = new Person({ id: remoteActorUri, publicKey: remoteKey });
     const remoteActorDocument = await remoteActor.toJsonLd({ format: 'expand' });
     const remoteKeyDocument = await remoteKey.toJsonLd({ format: 'expand' });
-    const fetchMock = mock.method(globalThis, 'fetch', async (input: string | URL | Request) => {
-      const url = input instanceof Request ? input.url : input.toString();
+    const documentLoader = async (url: string) => {
       const document =
         url === remoteActorUri.href
           ? remoteActorDocument
@@ -257,12 +256,20 @@ describe('inbound Follow and Undo', () => {
             ? remoteKeyDocument
             : undefined;
       if (!document) {
-        throw new Error(`Unexpected fetch URL: ${url}`);
+        throw new Error(`Unexpected document URL: ${url}`);
       }
-      return new Response(JSON.stringify(document), {
-        headers: { 'content-type': 'application/activity+json' },
-      });
-    });
+      return { contextUrl: null, document, documentUrl: url };
+    };
+    const loaderFactories = federation as unknown as {
+      documentLoaderFactory: () => typeof documentLoader;
+      authenticatedDocumentLoaderFactory: () => typeof documentLoader;
+    };
+    const loaderMock = mock.method(loaderFactories, 'documentLoaderFactory', () => documentLoader);
+    const authenticatedLoaderMock = mock.method(
+      loaderFactories,
+      'authenticatedDocumentLoaderFactory',
+      () => documentLoader,
+    );
     const contextLoader = getDocumentLoader();
     const createSignedRequest = async (activity: Follow | Undo) =>
       signRequest(
@@ -328,7 +335,8 @@ describe('inbound Follow and Undo', () => {
         0,
       );
     } finally {
-      fetchMock.mock.restore();
+      authenticatedLoaderMock.mock.restore();
+      loaderMock.mock.restore();
     }
   });
 
