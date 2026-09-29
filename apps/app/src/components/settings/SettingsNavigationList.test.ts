@@ -55,7 +55,8 @@ mock.module(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
 } as unknown as Parameters<typeof mock.module>[1]);
 
 let SettingsNavigationList: ComponentType<{
-  selected?: 'default-post-visibility';
+  pathname?: string;
+  selected?: 'default-post-visibility' | 'mute-and-block' | 'info';
 }>;
 let SettingsMuteAndBlockNavigation: ComponentType<{
   selected?: 'blocked-profiles' | 'muted-profiles';
@@ -109,18 +110,50 @@ describe('SettingsNavigationList', () => {
     assert.equal(links[2].props.href, '/settings/mute-and-block');
   });
 
-  it('full master가 표시한 내부 detail만 current destination으로 전달한다', async () => {
-    await render('default-post-visibility');
+  it('현재 path와 같은 root detail만 page-current 상태를 받는다', async () => {
+    await render({
+      pathname: '/settings/default-post-visibility',
+      selected: 'default-post-visibility',
+    });
 
     const internal = rendered('Pressable')[1];
     assert.equal(internal.props['aria-current'], 'page');
     assert.deepEqual(internal.props.accessibilityState, { selected: true });
   });
+
+  it('root detail을 visual selected로 표시해도 root path에서는 current page가 아니다', async () => {
+    await render({ pathname: '/settings', selected: 'default-post-visibility' });
+
+    const profileSettings = rendered('Pressable')[1];
+    assert.equal(profileSettings.props['aria-current'], undefined);
+    assert.deepEqual(profileSettings.props.accessibilityState, { selected: true });
+  });
+
+  it('차단 프로필 route에서도 뮤트 및 차단 category는 선택 상태만 유지한다', async () => {
+    await render({ pathname: '/settings/blocked-profiles', selected: 'mute-and-block' });
+
+    const muteAndBlock = rendered('Pressable')[2];
+    assert.equal(muteAndBlock.props['aria-current'], undefined);
+    assert.deepEqual(muteAndBlock.props.accessibilityState, { selected: true });
+  });
+
+  it('개발 정보 route에서도 정보 category는 선택 상태만 유지한다', async () => {
+    await render({ pathname: '/settings/developer', selected: 'info' });
+
+    const info = rendered('Pressable')[3];
+    assert.equal(info.props['aria-current'], undefined);
+    assert.deepEqual(info.props.accessibilityState, { selected: true });
+  });
 });
 
-async function render(selected?: 'default-post-visibility') {
+async function render(
+  props: {
+    pathname?: string;
+    selected?: 'default-post-visibility' | 'mute-and-block' | 'info';
+  } = {},
+) {
   await act(async () => {
-    renderer = create(createElement(SettingsNavigationList, { selected }));
+    renderer = create(createElement(SettingsNavigationList, props));
   });
   assert.ok(renderer);
 }

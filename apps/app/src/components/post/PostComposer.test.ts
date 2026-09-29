@@ -39,6 +39,7 @@ let targetProps:
     }
   | undefined;
 let mutationCalls: Array<{
+  onCompleted: (response: { createPost: { post: { id: string } } }) => void;
   onError: (error: Error) => void;
   variables: {
     connections: string[];
@@ -317,5 +318,39 @@ describe('PostComposer local author', () => {
       await act(async () => renderer?.unmount());
       renderer = null;
     }
+  });
+
+  it('restores the original author only after a successful post', async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposer, {
+          onExpand: () => undefined,
+          onRequestClose: () => undefined,
+          presentation: 'rail',
+          profile: profileA as never,
+          profiles: candidates as never,
+        }),
+      );
+    });
+    await act(async () => switcherProps?.onSelectProfile(profileB.id, profileB));
+    await act(async () => targetProps?.onBodyChange('첫 글'));
+    await act(async () => targetProps?.onSubmit());
+    await act(async () => mutationCalls[0]?.onError(new Error('실패')));
+    assert.equal(switcherProps?.selectedProfileId, profileB.id);
+
+    await act(async () => targetProps?.onSubmit());
+    await act(async () =>
+      mutationCalls[1]?.onCompleted({ createPost: { post: { id: 'post-1' } } }),
+    );
+    assert.equal(switcherProps?.selectedProfileId, profileA.id);
+    assert.equal(
+      renderer?.root.findByType('PostComposerTarget' as never).props.visibility,
+      'UNLISTED',
+    );
+
+    await act(async () => targetProps?.onBodyChange('다음 글'));
+    await act(async () => targetProps?.onSubmit());
+    assert.equal(mutationCalls[2]?.variables.input.actorProfileId, undefined);
+    assert.equal(mutationCalls[2]?.variables.input.visibility, 'UNLISTED');
   });
 });

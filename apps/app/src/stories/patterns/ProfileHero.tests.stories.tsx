@@ -34,6 +34,26 @@ export const MobileFollowError: Story = {
   },
 };
 
+export const BioPrivacyContract: Story = {
+  args: { profileId: 'profile-hero-bio-privacy' },
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const boundary = canvas.getByTestId('profile-bio-privacy');
+    expect(boundary).toHaveClass('ph-mask', 'ph-no-capture');
+    expect(boundary).toHaveStyle({ display: 'contents' });
+    expect(
+      within(boundary).getByText('Synthetic bio for Web Replay masking: river comet 47.'),
+    ).toBeVisible();
+    expect(boundary).not.toHaveTextContent('소개 있는 프로필');
+    expect(boundary).not.toHaveTextContent('@bio-privacy');
+    expect(canvas.getByText('소개 있는 프로필')).toBeVisible();
+    expect(canvas.getByText('@bio-privacy')).toBeVisible();
+    expect(canvas.getByRole('link', { name: /팔로잉/ })).toBeVisible();
+    expect(canvas.getByRole('link', { name: /팔로워/ })).toBeVisible();
+    expect(canvas.getByRole('button', { name: '팔로우' })).toBeVisible();
+  },
+};
+
 const maxLengthTag = '가'.repeat(20);
 
 export const CenterGeometryContract: Story = {
@@ -86,6 +106,21 @@ export const MobileGeometryContract: Story = {
     const handleRect = handle.getBoundingClientRect();
     const countsRect = canvas.getByRole('link', { name: /팔로잉/ }).getBoundingClientRect();
     expect(countsRect.top - handleRect.bottom).toBeCloseTo(12, 0);
+  },
+};
+
+export const MobileEditActionDoesNotOverlapMore: Story = {
+  args: { actionKind: 'edit', containerWidth: 390 },
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const moreButton = canvas.getByRole('button', { name: '더보기' });
+    const editButton = canvas.getByRole('button', { name: '편집' });
+    expect(editButton.getBoundingClientRect().width).toBe(96);
+    expect(editButton.getBoundingClientRect().height).toBe(40);
+    expect(
+      editButton.getBoundingClientRect().left - moreButton.getBoundingClientRect().right,
+    ).toBeCloseTo(16, 0);
   },
 };
 
@@ -187,6 +222,8 @@ export const MoreButtonInteraction: Story = {
     const canvas = within(canvasElement);
     const trigger = canvas.getByRole('button', { name: '더보기' });
     const visual = getTriggerVisual(trigger);
+    const feedback = visual.firstElementChild as HTMLElement;
+    expect(feedback).toBeInstanceOf(HTMLElement);
     const serializeColor = (color: string) => {
       const probe = canvasElement.ownerDocument.createElement('div');
       probe.style.color = color;
@@ -196,9 +233,9 @@ export const MoreButtonInteraction: Story = {
     const pressedColor = serializeColor(semanticColors.light.statePressed);
 
     await userEvent.hover(trigger);
-    await waitFor(() => expect(getComputedStyle(visual).backgroundColor).toBe(hoverColor));
+    await waitFor(() => expect(getComputedStyle(feedback).backgroundColor).toBe(hoverColor));
     await userEvent.pointer({ keys: '[MouseLeft>]', target: trigger });
-    await waitFor(() => expect(getComputedStyle(visual).backgroundColor).toBe(pressedColor));
+    await waitFor(() => expect(getComputedStyle(feedback).backgroundColor).toBe(pressedColor));
     await userEvent.pointer({ keys: '[/MouseLeft]', target: trigger });
     await userEvent.keyboard('{Escape}');
 
@@ -207,7 +244,7 @@ export const MoreButtonInteraction: Story = {
     await waitFor(() => expect(trigger).toHaveFocus());
     await waitFor(() => {
       const style = getComputedStyle(visual);
-      expect(style.backgroundColor).toBe(hoverColor);
+      expect(style.backgroundColor).toBe('rgba(0, 0, 0, 0)');
       expect(style.outlineStyle).toBe('solid');
       expect(style.outlineWidth).toBe('2px');
     });

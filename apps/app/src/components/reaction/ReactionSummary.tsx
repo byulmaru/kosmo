@@ -159,13 +159,12 @@ export function ReactionSummary({
         onPress={peopleHref ? undefined : onMore}
         targetSize={summaryControlSize}
         visualSize={summaryControlSize}
-        visualStyle={({ pressed }) => [
+        visualStyle={[
           styles.moreControl,
           styles.ellipsisControl,
           {
             backgroundColor: theme.card,
             borderColor: theme.border,
-            opacity: pressed ? 0.85 : 1,
           },
         ]}
       >

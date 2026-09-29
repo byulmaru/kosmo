@@ -2,6 +2,7 @@ import { View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { FollowButton } from '@/components/profile/FollowButton';
 import { ProfileHero } from '@/components/profile/ProfileHero';
+import { Button } from '@/components/ui/Button';
 import { SessionProvider } from '@/session/SessionProvider';
 import appleTouchIconUrl from '../../../public/apple-touch-icon.png?url';
 import ogDefaultUrl from '../../../public/og-default.png?url';
@@ -22,6 +23,12 @@ const imageProfile = profile({
   header: { id: 'profile-hero-image-header', url: ogDefaultUrl },
   id: 'profile-hero-images',
   relativeHandle: '@images',
+});
+const bioProfile = profile({
+  bio: 'Synthetic bio for Web Replay masking: river comet 47.',
+  displayName: '소개 있는 프로필',
+  id: 'profile-hero-bio-privacy',
+  relativeHandle: '@bio-privacy',
 });
 const taggedProfile = profile({
   displayName: '태그 프로필',
@@ -65,6 +72,7 @@ const mutedProfile = profile({
 
 const storyProfiles = [
   defaultProfile,
+  bioProfile,
   imageProfile,
   taggedProfile,
   longTaggedProfile,
@@ -114,11 +122,13 @@ function ProfileHeroFixture({
   loading = false,
   profileId = defaultProfile.id,
   showAction = true,
+  actionKind = 'follow',
 }: {
   containerWidth?: number;
   loading?: boolean;
   profileId?: string;
   showAction?: boolean;
+  actionKind?: 'follow' | 'edit';
 }) {
   const { profiles } = useStoryProfiles();
   const target = requireProfile(profiles, profileId);
@@ -127,7 +137,17 @@ function ProfileHeroFixture({
     <SessionProvider>
       <View style={{ width: containerWidth }} testID="profile-hero-surface">
         <ProfileHero
-          action={showAction ? <FollowButton profile={target.followButton} /> : undefined}
+          action={
+            showAction ? (
+              actionKind === 'edit' ? (
+                <Button style={{ minWidth: 96, width: 96 }} tone="secondary">
+                  편집
+                </Button>
+              ) : (
+                <FollowButton profile={target.followButton} />
+              )
+            ) : undefined
+          }
           loading={loading}
           profile={target.hero}
         />

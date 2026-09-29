@@ -505,7 +505,7 @@ const createContext = (
   documentLoader = async (url: string) => {
     throw new Error(`Unexpected document URL: ${url}`);
   },
-) => ({ documentLoader }) as unknown as InboxContext<void>;
+) => ({ canonicalOrigin: publicOrigin, documentLoader }) as unknown as InboxContext<void>;
 
 const createStoredRemoteActor = async (
   actorUri: URL,

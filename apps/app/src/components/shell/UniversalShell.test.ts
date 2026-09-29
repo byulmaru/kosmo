@@ -16,8 +16,10 @@ let layout: 'compact' | 'full' | 'mobile' = 'mobile';
 let pathname = '/home';
 let sessionProfile: Record<string, unknown> | null = null;
 let showRightRail = false;
+let dismissedToPaths: string[] = [];
 const router = {
   back: mock.fn(),
+  dismissTo: mock.fn((href: string) => dismissedToPaths.push(href)),
   push: mock.fn(),
   replace: mock.fn(),
 };
@@ -169,14 +171,17 @@ mockModule('./SidebarNavigation', {
   SidebarNavigation: MockSidebarNavigation,
 });
 mockModule('./shellLayout', {
-  getWebMobileShellHeader: () => null,
+  getWebMobileShellHeader: (_web: boolean, _width: number, route: string) =>
+    route === '/settings/default-post-visibility'
+      ? { leading: 'back', title: '게시물 기본 공개 범위' }
+      : null,
   getShellRoutePresentation: () => ({
     layout,
     settingsWorkspace: false,
     showRightRail,
   }),
   isNativeDrawerSwipeEnabled,
-  isSettingsRoute: () => false,
+  isSettingsRoute: (route: string) => route.startsWith('/settings/'),
   isTimelineRoute: (route: string) => route === '/home' || route === '/local',
   isWebMobileRouteOwnedHeader: () => false,
   webMobileShellHeaderHeight: 64,
@@ -198,12 +203,14 @@ afterEach(async () => {
   pathname = '/home';
   sessionProfile = null;
   showRightRail = false;
+  dismissedToPaths = [];
   bottomTabBarProps = undefined;
   rightRailProps = undefined;
   sidebarNavigationProps = undefined;
   shellChromeProps = undefined;
   rightRailFooterCount = 0;
   router.back.mock.resetCalls();
+  router.dismissTo.mock.resetCalls();
   router.push.mock.resetCalls();
   router.replace.mock.resetCalls();
   hardwareBackPressListener = null;
@@ -217,6 +224,20 @@ describe('UniversalShell screen fallback focus target', () => {
 
     assert.equal(root.props.tabIndex, -1);
     assert.equal('focusable' in root.props, false);
+  });
+
+  it('mobile Web Settings shell back은 명시한 parent route로 dismiss한다', async () => {
+    platform.OS = 'web';
+    layout = 'mobile';
+    pathname = '/settings/default-post-visibility';
+    await renderShell();
+
+    const back = renderer?.root.findByProps({ accessibilityLabel: '뒤로 가기' });
+    assert.ok(back);
+    await act(async () => back.props.onPress());
+
+    assert.deepEqual(dismissedToPaths, ['/settings']);
+    assert.equal(router.back.mock.callCount(), 0);
   });
 
   it('Native에서는 shell root를 실제 focusable 접근성 target으로 만든다', async () => {

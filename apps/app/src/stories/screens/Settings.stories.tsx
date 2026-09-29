@@ -4,6 +4,7 @@ import SettingsRoute from '@/app/(tabs)/(protected)/settings';
 import { SettingsRouteLayout } from '@/app/(tabs)/(protected)/settings/_layout';
 import { BYULMARU_ID_ACCOUNT_SETTINGS_URL } from '@/components/settings/ByulmaruIdAccountSettingsEntry';
 import { SettingsProfileDetail } from '@/components/settings/SettingsProfileDetail';
+import { colors } from '@/theme/tokens';
 import { profile } from '../fixtures';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
@@ -63,7 +64,11 @@ export const FullMasterDetail: Story = {
     expect(canvas.getByRole('heading', { name: '게시물 기본 공개 범위' })).toBeVisible();
     expect(account).toHaveAttribute('href', BYULMARU_ID_ACCOUNT_SETTINGS_URL);
     expect(profileEntry).toHaveAttribute('href', '/settings/default-post-visibility');
-    expect(profileEntry).toHaveAttribute('aria-current', 'page');
+    expect(profileEntry).toHaveStyle({
+      backgroundColor: colors.light.selectedSurface,
+      borderColor: colors.light.selectedBorder,
+    });
+    expect(profileEntry).not.toHaveAttribute('aria-current');
     expect(
       canvas.getByRole('radiogroup', {
         name: 'Kosmo 내부 Profile 현재 Profile @settings-owner 기본 게시 공개 범위',

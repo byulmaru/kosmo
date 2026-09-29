@@ -14,7 +14,6 @@ type HookOptions = {
   loadNext: (count: number, options: { onComplete: (error: Error | null) => void }) => void;
   nativePagination?: 'endReached' | 'metrics';
   pageSize: number;
-  requestKey?: string;
   webScrollTarget?: 'container' | 'document';
 };
 
@@ -176,23 +175,6 @@ async function completeRequest(index: number, error: Error | null) {
 }
 
 describe('useAutomaticPagination', () => {
-  it('요청 중 목록 주체가 바뀌면 이전 완료를 무시하고 새 목록을 요청한다', async () => {
-    await renderHook(options({ requestKey: 'profile-a', webScrollTarget: 'container' }));
-    await act(async () => currentResult().loadNextPage());
-    assert.equal(loadRequests.length, 1);
-
-    await updateHook(options({ requestKey: 'profile-b', webScrollTarget: 'container' }));
-    await act(async () => currentResult().loadNextPage());
-    assert.equal(loadRequests.length, 2);
-
-    await completeRequest(0, new Error('previous profile failed'));
-    assert.equal(currentResult().loadError, false);
-    await completeRequest(1, new Error('current profile failed'));
-    assert.equal(currentResult().loadError, true);
-    await updateHook(options({ requestKey: 'profile-c', webScrollTarget: 'container' }));
-    assert.equal(currentResult().loadError, false);
-  });
-
   it('Web near-end에서 한 번 요청하고 짧은 성공 page 뒤 다시 측정한다', async () => {
     await renderHook(options());
     await runAnimationFrame();

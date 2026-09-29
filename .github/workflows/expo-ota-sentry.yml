@@ -1,0 +1,194 @@
+name: Expo OTA Sentry Source Maps
+
+on:
+  workflow_call:
+    inputs:
+      platform:
+        description: Native platform whose Expo source maps to upload
+        required: true
+        type: string
+      source_sha:
+        description: Full source commit SHA used as the Sentry release
+        required: true
+        type: string
+      artifact_name:
+        description: Name of the map-bearing Expo export artifact from this run
+        required: true
+        type: string
+    secrets:
+      SENTRY_AUTH_TOKEN:
+        description: Sentry token authorized to upload Expo source maps
+        required: true
+
+jobs:
+  upload_sourcemaps:
+    name: Upload ${{ inputs.platform }} Expo source maps to Sentry
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      actions: read
+    steps:
+      - name: Validate Sentry upload configuration
+        shell: bash
+        env:
+          PLATFORM: ${{ inputs.platform }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+          SENTRY_RELEASE: ${{ inputs.source_sha }}
+        run: |
+          set -euo pipefail
+
+          case "${PLATFORM}" in
+            android|ios) ;;
+            *)
+              echo "::error::PLATFORM must be android or ios."
+              exit 1
+              ;;
+          esac
+          if [[ ! "${SENTRY_RELEASE}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::SENTRY_RELEASE must be the full source SHA."
+            exit 1
+          fi
+          for name in SENTRY_ORG SENTRY_PROJECT; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::${name} must be configured before Expo source maps can be uploaded."
+              exit 1
+            fi
+          done
+
+      - name: Download map-bearing Expo export artifact
+        uses: actions/download-artifact@0d2ec9d4cbcefe257d822f108de2a1f15f8da9f6 # v7.0.0
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: ${{ runner.temp }}/kosmo-ota-export
+
+      - name: Validate metadata-referenced bundle and source map
+        id: preflight
+        shell: bash
+        env:
+          PLATFORM: ${{ inputs.platform }}
+          EXPORT_DIRECTORY: ${{ runner.temp }}/kosmo-ota-export
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { appendFile, lstat, readFile } from 'node:fs/promises';
+          import path from 'node:path';
+
+          const exportDirectory = path.resolve(process.env.EXPORT_DIRECTORY);
+          const assertRegularArtifactFile = async (filePath) => {
+            const relativePath = path.relative(exportDirectory, filePath);
+            if (
+              relativePath.length === 0 ||
+              relativePath.startsWith(`..${path.sep}`) ||
+              path.isAbsolute(relativePath)
+            ) {
+              throw new Error(`Expo artifact path escapes the export directory: ${filePath}`);
+            }
+
+            let currentPath = exportDirectory;
+            const components = relativePath.split(path.sep);
+            for (const [index, component] of components.entries()) {
+              currentPath = path.join(currentPath, component);
+              const file = await lstat(currentPath);
+              if (file.isSymbolicLink()) {
+                throw new Error(`Expo export contains a symbolic link: ${currentPath}`);
+              }
+              if (index < components.length - 1 && !file.isDirectory()) {
+                throw new Error(`Expo artifact path contains a non-directory parent: ${currentPath}`);
+              }
+              if (index === components.length - 1 && (!file.isFile() || file.size === 0)) {
+                throw new Error(`Expo bundle or source map is not a non-empty regular file: ${currentPath}`);
+              }
+            }
+          };
+
+          const metadataPath = path.join(exportDirectory, 'metadata.json');
+          await assertRegularArtifactFile(metadataPath);
+          const metadata = JSON.parse(await readFile(metadataPath, 'utf8'));
+          const bundle = metadata?.fileMetadata?.[process.env.PLATFORM]?.bundle;
+          if (typeof bundle !== 'string' || bundle.length === 0) {
+            throw new Error(`metadata.json has no bundle path for ${process.env.PLATFORM}.`);
+          }
+          if (/[\u0000-\u001f\u007f]/.test(bundle) || bundle.includes('\\')) {
+            throw new Error('metadata.json contains an invalid bundle path.');
+          }
+
+          const relativeBundle = path.posix.normalize(bundle);
+          if (
+            path.posix.isAbsolute(bundle) ||
+            /^[A-Za-z]:/.test(bundle) ||
+            relativeBundle === '.' ||
+            relativeBundle === '..' ||
+            relativeBundle.startsWith('../')
+          ) {
+            throw new Error(`metadata.json bundle path escapes the Expo export: ${bundle}`);
+          }
+          if (relativeBundle === 'public/channel.js' || relativeBundle.endsWith('/public/channel.js')) {
+            throw new Error('public/channel.js is not an Expo JavaScript bundle.');
+          }
+
+          const bundlePath = path.resolve(exportDirectory, relativeBundle);
+          const mapPath = `${bundlePath}.map`;
+          await assertRegularArtifactFile(bundlePath);
+          await assertRegularArtifactFile(mapPath);
+
+          const sourceMap = JSON.parse(await readFile(mapPath, 'utf8'));
+          if (
+            !Array.isArray(sourceMap.sources) ||
+            sourceMap.sources.length === 0 ||
+            !Array.isArray(sourceMap.sourcesContent) ||
+            sourceMap.sourcesContent.length === 0 ||
+            !sourceMap.sourcesContent.some((source) => typeof source === 'string' && source.length > 0)
+          ) {
+            throw new Error(`Source map lacks source paths or embedded content: ${mapPath}`);
+          }
+
+          const bundleDirectory = path.dirname(bundlePath);
+          await appendFile(process.env.GITHUB_OUTPUT, `bundle_directory=${bundleDirectory}\n`);
+          NODE
+
+      - name: Set up Node.js for isolated source map upload
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+
+      - name: Set up pnpm for isolated source map upload
+        uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
+        with:
+          version: 11.22.0
+          run_install: false
+
+      - name: Install the pinned Sentry Expo uploader without credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          uploader_directory="${RUNNER_TEMP}/kosmo-sentry-uploader"
+          mkdir -p "${uploader_directory}"
+          cat > "${uploader_directory}/package.json" <<'JSON'
+          {
+            "name": "kosmo-sentry-uploader",
+            "private": true,
+            "version": "1.0.0",
+            "packageManager": "pnpm@11.22.0"
+          }
+          JSON
+          pnpm --dir "${uploader_directory}" add --save-exact \
+            @sentry/expo-upload-sourcemaps@8.24.0
+
+      - name: Upload source maps to Sentry
+        shell: bash
+        env:
+          BUNDLE_DIRECTORY: ${{ steps.preflight.outputs.bundle_directory }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+          SENTRY_RELEASE: ${{ inputs.source_sha }}
+          SENTRY_URL: https://sentry.io/
+        run: |
+          set -euo pipefail
+          if [[ -z "${SENTRY_AUTH_TOKEN}" ]]; then
+            echo "::error::SENTRY_AUTH_TOKEN must be configured to upload Expo source maps."
+            exit 1
+          fi
+          node "${RUNNER_TEMP}/kosmo-sentry-uploader/node_modules/@sentry/expo-upload-sourcemaps/cli.js" \
+            "${BUNDLE_DIRECTORY}"

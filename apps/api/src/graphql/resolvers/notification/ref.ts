@@ -9,6 +9,7 @@ import {
 import { NotificationKind } from '@kosmo/core/enums';
 import { and, eq, getColumns, inArray } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
+import { match } from 'ts-pattern';
 import { builder } from '@/graphql/builder';
 import { createObjectRef } from '@/graphql/utils';
 import {
@@ -241,20 +242,25 @@ export const getNotificationSource = async (
   notification: NotificationRow,
   ctx: UserContext,
 ): Promise<NotificationSource> => {
-  const source =
-    notification.kind === NotificationKind.FOLLOW
-      ? await followNotificationSourceLoader(ctx).load(notification.sourceId)
-      : notification.kind === NotificationKind.FOLLOW_REQUEST
-        ? 'followRequestSource' in notification
-          ? notification.followRequestSource
-          : await followRequestNotificationSourceLoader(ctx).load(notification.sourceId)
-        : notification.kind === NotificationKind.REACTION
-          ? await reactionNotificationSourceLoader(ctx).load(notification.sourceId)
-          : notification.kind === NotificationKind.QUOTE
-            ? await quoteNotificationSourceLoader(ctx).load(notification.sourceId)
-            : notification.kind === NotificationKind.REPLY
-              ? await replyNotificationSourceLoader(ctx).load(notification.sourceId)
-              : await repostNotificationSourceLoader(ctx).load(notification.sourceId);
+  const source = await match(notification.kind)
+    .with(NotificationKind.FOLLOW, () =>
+      followNotificationSourceLoader(ctx).load(notification.sourceId),
+    )
+    .with(NotificationKind.FOLLOW_REQUEST, () =>
+      'followRequestSource' in notification
+        ? notification.followRequestSource
+        : followRequestNotificationSourceLoader(ctx).load(notification.sourceId),
+    )
+    .with(NotificationKind.REACTION, () =>
+      reactionNotificationSourceLoader(ctx).load(notification.sourceId),
+    )
+    .with(NotificationKind.QUOTE, () =>
+      quoteNotificationSourceLoader(ctx).load(notification.sourceId),
+    )
+    .with(NotificationKind.REPLY, () =>
+      replyNotificationSourceLoader(ctx).load(notification.sourceId),
+    )
+    .otherwise(() => repostNotificationSourceLoader(ctx).load(notification.sourceId));
 
   if (!source) {
     throw new Error('Notification source not found');
@@ -264,34 +270,24 @@ export const getNotificationSource = async (
 };
 
 export const notificationNodeType = (kind: string) =>
-  kind === NotificationKind.FOLLOW
-    ? ('FollowNotification' as const)
-    : kind === NotificationKind.FOLLOW_REQUEST
-      ? ('FollowRequestNotification' as const)
-      : kind === NotificationKind.REACTION
-        ? ('ReactionNotification' as const)
-        : kind === NotificationKind.REPOST
-          ? ('RepostNotification' as const)
-          : kind === NotificationKind.QUOTE
-            ? ('QuoteNotification' as const)
-            : kind === NotificationKind.REPLY
-              ? ('ReplyNotification' as const)
-              : null;
+  match(kind)
+    .with(NotificationKind.FOLLOW, () => 'FollowNotification' as const)
+    .with(NotificationKind.FOLLOW_REQUEST, () => 'FollowRequestNotification' as const)
+    .with(NotificationKind.REACTION, () => 'ReactionNotification' as const)
+    .with(NotificationKind.REPOST, () => 'RepostNotification' as const)
+    .with(NotificationKind.QUOTE, () => 'QuoteNotification' as const)
+    .with(NotificationKind.REPLY, () => 'ReplyNotification' as const)
+    .otherwise(() => null);
 
 export const notificationKindForNodeType = (typename: string) =>
-  typename === 'FollowNotification'
-    ? NotificationKind.FOLLOW
-    : typename === 'FollowRequestNotification'
-      ? NotificationKind.FOLLOW_REQUEST
-      : typename === 'ReactionNotification'
-        ? NotificationKind.REACTION
-        : typename === 'RepostNotification'
-          ? NotificationKind.REPOST
-          : typename === 'QuoteNotification'
-            ? NotificationKind.QUOTE
-            : typename === 'ReplyNotification'
-              ? NotificationKind.REPLY
-              : null;
+  match(typename)
+    .with('FollowNotification', () => NotificationKind.FOLLOW)
+    .with('FollowRequestNotification', () => NotificationKind.FOLLOW_REQUEST)
+    .with('ReactionNotification', () => NotificationKind.REACTION)
+    .with('RepostNotification', () => NotificationKind.REPOST)
+    .with('QuoteNotification', () => NotificationKind.QUOTE)
+    .with('ReplyNotification', () => NotificationKind.REPLY)
+    .otherwise(() => null);
 
 export const Notification = builder.interfaceRef<NotificationRow>('Notification');
 

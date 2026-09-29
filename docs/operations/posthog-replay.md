@@ -2,6 +2,12 @@
 
 [PROD-741](https://linear.app/byulmaru/issue/PROD-741)은 조건 충족 후 Web Session Replay 재활성화와 Post Media Viewer 검증을 담당한다. PR #955 이후 Product Analytics는 활성화됐지만 Replay는 비활성 상태다. 2026-09-22 Spec 보강 요청은 아래 검증·인계 절차를 정하며 실제 활성화나 배포 승인이 아니다.
 
+## PROD-1017: Web profile bio 보호
+
+Web 프로필 상세와 팔로워·팔로잉·검색·해시태그 결과에서 공유하는 프로필 목록은 렌더링된 bio만 `ph-mask ph-no-capture` 경계에 둔다. 이 경계는 새 Session Replay에서 bio 텍스트를 마스킹하고 autocapture 대상에서 제외한다. 표시명, handle, 링크, follow 동작과 기존 Post Content 경계는 이 변경의 대상이 아니다. Native 표시와 과거 녹화도 바뀌지 않는다.
+
+Storybook은 실제 Web DOM의 경계와 bio 표시 여부를 검증하지만, marker 자체는 recorder payload나 autocapture 결과의 증거가 아니다. 실제 recorder·Replay와 autocapture에서 합성 bio가 보호되는지 별도 확인하고 그 결과를 기록해야 한다. 검증에는 synthetic bio만 사용하며 실제 사용자 콘텐츠를 사용하지 않는다.
+
 ## Spec Gate, PR Ready Gate와 Replay Rollout Gate
 
 `Spec Gate`는 요구사항·범위·미결정 사항이 정리돼 구현을 시작할 수 있는지 판단한다. `Replay Rollout Gate`는 **“production에서 Session Replay를 실제로 재활성화해도 되는가?”**를 판단하는 PROD-741의 rollout checkpoint다. PostHog의 기능명이 아니며 Cloud 값을 설정하는 작업 하나만 뜻하지 않는다.

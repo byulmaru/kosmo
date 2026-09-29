@@ -11,11 +11,16 @@ import { InstanceKind, InstanceState, PostVisibility, ProfileState } from '@kosm
 import { ConflictError, NotFoundError, ValidationError } from '@kosmo/core/error';
 import { postContentDocumentToText } from '@kosmo/core/post-content/server';
 import { createPost, ProfilePairBlockedError } from '@kosmo/core/services';
+import { runWorkflow } from '@kosmo/core/temporal/client';
+import { remoteProfileRefreshWorkflow } from '@kosmo/core/temporal/workflows';
 import { and, eq } from 'drizzle-orm';
 import { findPostByActivityPubUri } from './activitypub-post-uri';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
-import { collectInboundMentionCandidates } from './inbound-mention';
-import { observeInbound } from './inbound-observability';
+import {
+  collectInboundMentionTargetHrefs,
+  resolveStoredInboundMentionCandidates,
+} from './inbound-mention';
+import { isExternalInboundError, observeInbound } from './inbound-observability';
 import {
   findOrMaterializeRemoteProfileActorByUri,
   findUsableStoredRemoteProfileActorByUri,
@@ -38,6 +43,8 @@ type RemoteNoteMaterializationContext = Pick<
 const noNetworkDocumentLoader = async (): Promise<never> => {
   throw new TypeError('Remote attachment lookup is disabled');
 };
+
+const maxUnknownRemoteMentionLookups = 32;
 
 const isImageAttachment = (attachment: Document): boolean => {
   if (attachment instanceof Image) {
@@ -94,17 +101,78 @@ export const projectRemoteNoteMedia = async (note: Note) => {
   return candidates;
 };
 
-const projectRemoteNote = async (note: Note) => {
-  const mentionCandidates = await collectInboundMentionCandidates(note);
+const projectRemoteNote = async (
+  context: RemoteNoteMaterializationContext,
+  note: Note,
+  activityType: 'Create' | 'Unknown',
+) => {
+  const noteContent = {
+    content: note.content?.toString() ?? null,
+    mediaType: note.mediaType,
+    summary: note.summary?.toString() ?? null,
+  };
+  const targetHrefs = await collectInboundMentionTargetHrefs(note);
+  const { candidates: mentionCandidates, knownActorHrefs } =
+    await resolveStoredInboundMentionCandidates(targetHrefs);
+  let document = projectRemoteNoteContent({ ...noteContent, mentions: mentionCandidates });
+  const media = await projectRemoteNoteMedia(note);
+  const knownActorHrefSet = new Set(knownActorHrefs);
+  const localOrigin = new URL(context.canonicalOrigin).origin;
+
+  const unknownRemoteActorHrefs = targetHrefs
+    .filter((targetHref) => {
+      if (knownActorHrefSet.has(targetHref)) {
+        return false;
+      }
+
+      return new URL(targetHref).origin !== localOrigin;
+    })
+    .slice(0, maxUnknownRemoteMentionLookups);
+  const mentionLookupResults = await Promise.allSettled(
+    unknownRemoteActorHrefs.map(async (targetHref) => {
+      await runWorkflow(remoteProfileRefreshWorkflow, {
+        args: [{ actorUri: targetHref }],
+        mode: 'execute',
+        workflowIdConflictPolicy: 'USE_EXISTING',
+        workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+      });
+      return targetHref;
+    }),
+  );
+  const materializedActorHrefs = mentionLookupResults.flatMap((result) => {
+    if (result.status === 'fulfilled') {
+      return [result.value];
+    }
+
+    const error = result.reason;
+    observeInbound({
+      activityType,
+      handler: 'create',
+      phase: 'actor_lookup',
+      outcome:
+        isExternalInboundError(error) ||
+        error instanceof ConflictError ||
+        error instanceof NotFoundError
+          ? 'external_failure'
+          : 'internal_failure',
+      reasonCode: 'remote_mention_materialization_rejected',
+      objectOrigin: note.id?.origin,
+      error,
+    });
+    return [];
+  });
+
+  if (materializedActorHrefs.length > 0) {
+    const { candidates } = await resolveStoredInboundMentionCandidates(materializedActorHrefs);
+    if (candidates.length > 0) {
+      mentionCandidates.push(...candidates);
+      document = projectRemoteNoteContent({ ...noteContent, mentions: mentionCandidates });
+    }
+  }
 
   return {
-    document: projectRemoteNoteContent({
-      content: note.content?.toString() ?? null,
-      mediaType: note.mediaType,
-      mentions: mentionCandidates,
-      summary: note.summary?.toString() ?? null,
-    }),
-    media: await projectRemoteNoteMedia(note),
+    document,
+    media,
     mentionProfileIds: [...new Set(mentionCandidates.map(({ profileId }) => profileId))],
   };
 };
@@ -328,7 +396,11 @@ const materializeRemoteNote = async ({
 
   let projection;
   try {
-    projection = await projectRemoteNote(note);
+    projection = await projectRemoteNote(
+      context,
+      note,
+      source.kind === 'create' ? 'Create' : 'Unknown',
+    );
   } catch (error) {
     if (error instanceof RemoteNoteContentLengthExceededError) {
       return { reason: 'note_content_length_exceeded', status: 'rejected' };

@@ -433,7 +433,6 @@ export default function SearchScreen() {
             accessibilityLabel="메뉴 열기"
             accessibilityState={{ expanded: shellChrome?.navigationDrawerOpen ?? false }}
             controlRef={shellChrome?.navigationDrawerTriggerRef}
-            feedback="opacity"
             onFocus={(event) => event.stopPropagation()}
             onPress={shellChrome?.openNavigationDrawer}
             style={styles.iconButton}
@@ -444,7 +443,7 @@ export default function SearchScreen() {
           </IconButton>
         ) : (
           <NavigationLink href={searchHref('', activeTab)}>
-            <Pressable
+            <IconButton
               accessibilityLabel="뒤로"
               accessibilityRole="link"
               onPress={() => {
@@ -454,9 +453,11 @@ export default function SearchScreen() {
               }}
               onPressIn={keepSearchFocused}
               style={styles.iconButton}
+              targetSize={44}
+              visualSize={44}
             >
               <ArrowLeft color={theme.textSecondary} size={20} strokeWidth={2} />
-            </Pressable>
+            </IconButton>
           </NavigationLink>
         )}
         <View
@@ -550,7 +551,20 @@ export default function SearchScreen() {
                         trackAnalytics('search_submitted', { source: 'recent', tab: activeTab });
                       }}
                       onPressIn={keepSearchFocused}
-                      style={styles.recentTerm}
+                      style={(state) => {
+                        const hovered = (state as { hovered?: boolean }).hovered;
+                        return [
+                          styles.recentTerm,
+                          state.pressed || (Platform.OS === 'web' && hovered)
+                            ? {
+                                backgroundColor:
+                                  state.pressed || Platform.OS !== 'web'
+                                    ? theme.statePressed
+                                    : theme.stateHover,
+                              }
+                            : null,
+                        ];
+                      }}
                     >
                       <History color={theme.textSecondary} size={16} strokeWidth={2} />
                       <Text numberOfLines={1} style={[styles.recentText, { color: theme.text }]}>

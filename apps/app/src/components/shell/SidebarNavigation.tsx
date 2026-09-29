@@ -203,6 +203,7 @@ export function SidebarNavigation({
               : null
           }
           renderControl={renderControl}
+          showRightBorder={surface === 'drawer'}
           showFeedback={data.currentSession !== null}
           unreadNotificationCount={unreadNotificationCount}
         />
@@ -244,11 +245,11 @@ function getCurrentDestination(
 
 const styles = StyleSheet.create({
   root: { flex: 1, minHeight: 0 },
-  compactRoot: { alignItems: 'center', paddingTop: space[24], width: 80 },
-  fullRoot: { width: 320 },
+  compactRoot: { alignItems: 'center', paddingTop: space[24], width: '100%' },
+  fullRoot: { width: '100%' },
   nativeDrawerRoot: { width: '100%' },
   navigationArea: { flex: 1, minHeight: 0 },
-  compactNavigationArea: { marginTop: space[8] },
+  compactNavigationArea: { marginTop: space[8], width: '100%' },
   wideNavigationArea: { borderTopWidth: borderWidths[1] },
   navigationContent: { flexGrow: 1, width: '100%' },
 });

@@ -153,7 +153,7 @@ mockModule('expo-router', {
     createElement(MockNavigationThemeContext.Provider, { value }, children),
   useTheme: () => useContext(MockNavigationThemeContext),
   usePathname: () => '/home',
-  useRouter: () => ({ replace: () => undefined }),
+  useRouter: () => ({ dismissTo: () => undefined, replace: () => undefined }),
   useSegments: () => [],
 });
 mockModule(require.resolve('lucide-react-native'), {

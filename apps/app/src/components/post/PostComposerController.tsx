@@ -87,16 +87,19 @@ type PostComposerPresentationProps =
       onExpand?: never;
       onRequestClose?: () => void;
       presentation?: undefined;
+      replyContext?: never;
     }
   | {
       onExpand: () => void;
       onRequestClose: () => void;
       presentation: 'rail';
+      replyContext?: never;
     }
   | {
       onExpand?: never;
       onRequestClose: () => void;
       presentation: 'mobile' | 'overlay';
+      replyContext?: ReactNode;
     };
 
 type PostComposerRelationshipProps =
@@ -161,6 +164,7 @@ type PostComposerContentsProps = Omit<PostComposerBaseProps, 'profile'> &
     globalProfileId: string;
     profileKey: PostComposer_profile$key;
     profiles: readonly PostComposerProfileRef[];
+    replyContext?: ReactNode;
   };
 
 function PostComposerContents({
@@ -181,11 +185,13 @@ function PostComposerContents({
   globalProfileId,
   profileKey,
   profiles,
+  replyContext,
   registerNativeBackHandler,
   replyParentId,
   repostSourceId,
 }: PostComposerContentsProps) {
   const [selectedProfileKey, setSelectedProfileKey] = useState<PostComposerProfileRef | null>(null);
+  const globalProfile = useFragment(PostComposerFragment, profileKey);
   const profile = useFragment(PostComposerFragment, selectedProfileKey ?? profileKey);
   const onSelectProfile = useCallback((_id: string, profileRef: PostComposerProfileRef) => {
     setSelectedProfileKey(profileRef);
@@ -344,7 +350,8 @@ function PostComposerContents({
         }
         setMedia(emptyPostComposerMediaValue);
         setMediaGeneration((generation) => generation + 1);
-        setVisibility(resolvePostComposerVisibility(profile.private?.defaultPostVisibility));
+        setSelectedProfileKey(null);
+        setVisibility(resolvePostComposerVisibility(globalProfile.private?.defaultPostVisibility));
         editor.current?.focus();
         submittedCallback?.(createdPost);
       },
@@ -485,6 +492,7 @@ function PostComposerContents({
             onEmojiAction: () => undefined,
             beforeEditor,
             mode: composerMode,
+            replyContext,
             onMediaAction,
             onMediaEdit: openMediaEditor,
             onMediaRemove,

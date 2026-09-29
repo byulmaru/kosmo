@@ -31,19 +31,20 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   Composer-open을 별도 frame으로 중복 만들지 않는다.
 - Web `≥ compact`의 Post 상세도 목록과 같은 Reply modal을 연다. 일반 Post Composer의 Full Web right rail은
   유지하며, Reply/Quote surface만 modal로 분리한다.
-- Current runtime과 OpenSpec은 Web `< compact`와 Android/iOS의 목록 surface에서 같은 관계 맥락을 전체 화면
-  작성기로 연다. Reply Parent는 editor 앞에, Quote Source는 본문 아래에 표시한다.
-- Web `< compact`의 Reply 연결선도 Parent와 작성 Profile의 Avatar에서 각각 `4px` 띄운다.
-- Figma Target의 Focused/Keyboard는 입력과 keyboard를 우선하고 `@kosmo님에게 답글` 같은 최소 맥락만 표시한다.
-- Figma Target의 비키보드 Initial anchor에서도 direct Parent는 작성 영역 아래로 내려오지 않으며 기본
+- Web `< compact`와 Android/iOS의 목록·상세 surface는 같은 공용 전체 화면 작성기를 사용한다.
+  Reply Parent는 공개 범위 행 위에, Quote Source는 본문 아래에 표시한다.
+- Reply 연결선은 Parent Avatar 아래에서 `4px` 띄워 시작하고 공개 범위 행의 위 border까지 이어진다.
+- Focused/Keyboard는 입력과 keyboard를 우선하고 `@kosmo님에게 답글` 같은 최소 맥락을 표시한다.
+- 비키보드 Initial anchor에서도 direct Parent는 작성 영역 아래로 내려오지 않으며 기본
   viewport에 표시하지 않는다.
   사용자가 위로 스크롤했을 때만 공개 범위 행 위에 기존 `PostListItem` 기반의 비대화형 Parent가 나타난다.
   Parent Action Bar와 Post menu는 숨기고, Avatar 아래 thread line을 공개 범위 행의 위 border까지 연결해 답글
   대상임을 표시한다. Figma reveal consumer의 Parent와 line은 각각 [`7392:28076`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7392-28076),
   [`7392:28091`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7392-28091)이다.
   Parent의 목록용 하단 divider는 끄고, 공개 범위 행의 위 border만 Parent와 Composer의 경계로 유지한다.
-  실제 upward-scroll origin·threshold, keyboard 전환, safe area와 focus 이동은 Product runtime 계약이며 Figma
-  정적 consumer만으로 완료를 주장하지 않는다.
+  본문 입력으로 focus를 옮기면 작성 영역으로 돌아오고, 원문 확인은 같은 중앙 영역을 위로 스크롤한다.
+  keyboard 전환, safe area와 focus 이동은 각 플랫폼 runtime에서 검증하며 Figma 정적 consumer나 Web
+  자동화만으로 Native 검증 완료를 주장하지 않는다.
 - 어느 surface에서도 Reply 전용 mutation, 별도 입력 상태 또는 Post kind를 만들지 않는다.
 
 ## Web 관계형 Composer modal
@@ -153,18 +154,20 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
 ## lifecycle
 
 - modal을 열면 Reply action은 expanded 상태를 노출하고 본문 editor로 focus를 이동한다.
-- Web modal의 `X`·backdrop·`Escape`, modal close와 원래 Reply action focus restore는 modal에만 적용한다.
-  fullscreen은 보이는 header close와 Native platform back을 사용하고 backdrop dismiss를
+- Web modal은 `X`·backdrop·`Escape`로 닫기를 요청하고, 닫힌 뒤 원래 Reply action으로 focus를 복원한다.
+  fullscreen은 보이는 header close, Web `Escape`와 Native platform back을 사용하고 backdrop dismiss를
   제공하지 않는다. 폐기 확인은 두 surface가 공유한다.
-- 현재 Web 브라우저 뒤로가기·앞으로가기는 이 폐기 확인의 보호 범위에 포함하지 않는다. 페이지 전환으로
-  Reply/Quote Composer가 닫히면 작성 중인 초안이 유실될 수 있으며, Browser Back 보호는 후속 범위로 남긴다.
-  이를 위해 Composer를 열 때 브라우저 히스토리 항목을 추가하지 않는다. 저장되지 않은 작성 내용이 있을 때
+- Navigation API를 지원하는 Web 브라우저의 취소 가능한 동일 문서 뒤로가기·앞으로가기는 Reply/Quote의
+  같은 폐기 확인을 거친다. `계속 작성`은 현재 URL·surface·초안을 유지하고, `작성 취소`는 요청했던 기존
+  history 항목으로 이동한다. Composer를 열거나 이 이동을 보호하기 위해 히스토리 항목을 추가하지 않는다.
+- Navigation API 미지원 브라우저와 브라우저가 취소를 허용하지 않는 이동에는 이 보호를 보장하지 않는다.
+  이 경우 페이지 전환으로 Reply/Quote 초안이 유실될 수 있다. 저장되지 않은 작성 내용이 있을 때
   새로고침·탭 닫기에 사용하는 기존 브라우저 이탈 경고는 유지한다.
 - Reply/Quote surface는 Web `≥ compact`에서 backdrop modal이므로 위 dismiss 계약을 상속한다. 일반 Post
   Composer에만 남는 Full Web right rail은 이 Reply lifecycle의 대상이 아니다.
 - modal Reply surface를 여는 순간 direct Parent 맥락 자체를 dirty로 취급하므로, 본문·Content Warning·Visibility와
   Media가 초기값이어도 `X`, backdrop 또는 `Escape`로 닫을 때 확인을 표시한다. fullscreen도 같은 dirty
-  판정을 사용하되 header close 또는 Native platform back에서 확인한다.
+  판정을 사용하되 header close, Web `Escape` 또는 Native platform back에서 확인한다.
 - Reply 보호 정책은 Parent와 close lifecycle을 아는 surface가 직접 소유한다. modal·fullscreen surface는 입력별 dirty를
   다시 계산하지 않고 열린 동안 항상 폐기 확인 대상으로 취급하며, 공용 Post Composer에서는 제출 중 여부만
   전달받아 close 차단에 사용한다. 따라서 Parent에서 복사된 Content Warning을 그대로 두거나 수정·제거해도
@@ -191,9 +194,9 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
 - 업로드·게시 중에는 작성 Profile 전환을 잠그고 요청이 끝나면 다시 허용한다. 실패한 첨부와 draft는 유지한다.
 - 전역 Profile과 다른 작성 Profile로 게시하면 성공 ID만 확인하고 현재 화면의 목록과 캐시에는 작성자 관점의
   Post 내용을 넣지 않는다. 작성자가 전역 Profile과 같으면 기존 목록 갱신을 유지한다.
-- 제출 성공 뒤 같은 Composer가 초기화될 때의 Visibility는 성공 callback을 만든 render가 캡처한 Profile
-  Fragment 값을 best-effort seed로 사용한다. 제출 중 별도 render에서 갱신된 최신 Profile 기본값까지 보장하지
-  않는다.
+- 제출 성공 뒤 같은 Composer가 초기화되면 작성 Profile을 전역 선택 Profile로 되돌린다. Visibility는 성공
+  callback을 만든 render가 캡처한 전역 선택 Profile Fragment 값을 best-effort seed로 사용한다. 제출 중 별도
+  render에서 갱신된 최신 Profile 기본값까지 보장하지 않는다.
 - 제출 성공 시 modal을 닫고 원래 Reply action으로 focus를 복원한 뒤 `답글을 게시했어요` 성공 snackbar와
   `보기` action을 표시한다. 이 snackbar는 기존 공용 toast처럼 약 3초 뒤 자동으로 사라지며, 표시 중 사용자가
   `보기`를 활성화할 때만 생성된 Reply 상세로 이동하고 자동으로 route를 바꾸지 않는다.
@@ -260,8 +263,9 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   다시 계산해야 한다.
 - modal Reply-open dirty/pristine Post/pending/success close, 취소 확인, focus open/restore, 성공 snackbar의
   `보기` 이동과 자동 이동 없음, Media upload 중 dirty close를 확인한다. fullscreen은 backdrop 없이 header
-  close와 Native platform back에서 같은 dirty·pending 보호를 제공하는지 확인한다. Web 브라우저 Back 보호는
-  위의 알려진 제한에 따라 후속으로 검증한다. 두 surface 모두 selected
+  close, Web `Escape`와 Native platform back에서 같은 dirty·pending 보호를 제공하는지 확인한다.
+  Web 390px에서는 지원 브라우저의 Back·Forward, 계속 작성의 초안·URL 유지, 폐기 후 원래 목적지 이동과
+  history 항목 추가·반복 이동이 없음을 확인한다. 두 surface 모두 selected
   Profile·Parent·Relay Environment 전환의 첫 commit과 늦은 설정 조회·upload·mutation completion 격리를 확인한다.
 - Web `≥ compact` 목록·상세 modal과 Web `< compact` 전체 화면의 Parent·Composer 계약을 Storybook에서
   확인한다. 일반 Post Composer의 Full Web right rail은 유지하되 Reply/Quote에는 inline Composer wrapper가

@@ -5,17 +5,16 @@ import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ComponentType, ReactNode } from 'react';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
+import type { RouteScrollContainerProps } from '../ui/RouteScrollContainer';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const require = createRequire(import.meta.url);
-const originalLocation = Object.getOwnPropertyDescriptor(globalThis, 'location');
 
 let platform: 'android' | 'ios' | 'web' = 'web';
 let width = 1_280;
-let backCalls = 0;
+let dismissedToPaths: string[] = [];
 let replacedPaths: string[] = [];
-let locationReplacements: string[] = [];
 let pathname = '/settings';
 let SlotRoute: ComponentType = () => null;
 let sessionStatus: 'error' | 'guest' | 'valid' = 'guest';
@@ -28,6 +27,7 @@ let otaIsUpdatePending = false;
 let otaCheckError: Error | null = null;
 let otaDownloadError: Error | null = null;
 let publicChannel: 'dev' | 'prod' = 'prod';
+let muteHeadingFocusCalls = 0;
 
 mock.module('expo-router', {
   exports: {
@@ -35,7 +35,7 @@ mock.module('expo-router', {
     Stack: () => createElement('Stack', null, createElement(SlotRoute)),
     usePathname: () => pathname,
     useRouter: () => ({
-      back: () => (backCalls += 1),
+      dismissTo: (href: string) => dismissedToPaths.push(href),
       replace: (href: string) => replacedPaths.push(href),
     }),
   },
@@ -129,7 +129,8 @@ mock.module(new URL('./SettingsMuteAndBlockNavigation.tsx', import.meta.url), {
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('./SettingsMutedProfiles.tsx', import.meta.url), {
   exports: {
-    SettingsMutedProfiles: () => createElement('SettingsMutedProfiles'),
+    SettingsMutedProfiles: (props: Record<string, unknown>) =>
+      createElement('SettingsMutedProfiles', props),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('./SettingsBlockedProfiles.tsx', import.meta.url), {
@@ -142,7 +143,10 @@ mock.module(new URL('../shell/ShellChromeContext.tsx', import.meta.url), {
   exports: { useShellChrome: () => ({}) },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
-  exports: { useTheme: () => ({ border: '#333333', text: '#111111' }) },
+  exports: {
+    useReducedMotion: () => false,
+    useTheme: () => ({ border: '#333333', text: '#111111' }),
+  },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../Splash.tsx', import.meta.url), {
   exports: {
@@ -162,6 +166,7 @@ let SettingsRoute: ComponentType;
 let SettingsInfoRoute: ComponentType;
 let SettingsDeveloperRoute: ComponentType;
 let ProtectedLayout: ComponentType;
+let WebRouteScrollContainer: ComponentType<RouteScrollContainerProps>;
 let settingsInitialRouteName: string | undefined;
 let renderer: ReactTestRenderer | null = null;
 
@@ -169,6 +174,8 @@ before(async () => {
   const settingsLayoutModule = await import('../../app/(tabs)/(protected)/settings/_layout');
   SettingsLayout = settingsLayoutModule.default;
   settingsInitialRouteName = settingsLayoutModule.unstable_settings.initialRouteName;
+  ({ RouteScrollContainer: WebRouteScrollContainer } =
+    await import('../ui/RouteScrollContainer.web'));
   ({ default: SettingsRoute } = await import('../../app/(tabs)/(protected)/settings/index'));
   ({ default: SettingsInfoRoute } = await import('../../app/(tabs)/(protected)/settings/info'));
   ({ default: SettingsDeveloperRoute } =
@@ -187,9 +194,8 @@ before(async () => {
 afterEach(async () => {
   platform = 'web';
   width = 1_280;
-  backCalls = 0;
+  dismissedToPaths = [];
   replacedPaths = [];
-  locationReplacements = [];
   pathname = '/settings';
   SlotRoute = () => null;
   sessionStatus = 'guest';
@@ -202,20 +208,31 @@ afterEach(async () => {
   otaCheckError = null;
   otaDownloadError = null;
   publicChannel = 'prod';
+  muteHeadingFocusCalls = 0;
   if (renderer) {
     await act(async () => renderer?.unmount());
     renderer = null;
   }
-  if (originalLocation) {
-    Object.defineProperty(globalThis, 'location', originalLocation);
-  } else {
-    Reflect.deleteProperty(globalThis, 'location');
-  }
 });
 
 describe('Settings routes', () => {
-  it('detail deep link의 route-owned back을 위해 root index를 anchor로 둔다', () => {
-    assert.equal(settingsInitialRouteName, 'index');
+  it('RouteScrollContainer는 Web에서 style을 적용한 View를 렌더링한다', async () => {
+    const webStyle: RouteScrollContainerProps['webStyle'] = { minWidth: 0, width: '100%' };
+    await act(async () => {
+      renderer = create(
+        createElement(WebRouteScrollContainer, { webStyle }, createElement('RouteContent')),
+      );
+    });
+
+    const view = rendered('View')[0];
+    assert.ok(view);
+    assert.deepEqual(view.props.style, webStyle);
+    assert.equal(rendered('ScrollView').length, 0);
+    assert.equal(rendered('RouteContent').length, 1);
+  });
+
+  it('Web detail deep link는 synthetic root anchor 없이 route-owned parent를 사용한다', () => {
+    assert.equal(settingsInitialRouteName, undefined);
   });
 
   it('full Web root는 320px master와 flexible Profile detail을 함께 표시한다', async () => {
@@ -229,11 +246,24 @@ describe('Settings routes', () => {
       rendered('PageHeader').map((node) => node.props.title),
       ['설정', '게시물 기본 공개 범위'],
     );
+    const detailContainer = byTestId('settings-detail-pane')
+      .findAll(
+        (node) =>
+          (node.type as unknown) === 'View' &&
+          flattenStyle(node.props.style).minWidth === 0 &&
+          flattenStyle(node.props.style).width === '100%' &&
+          node.findAll((child) => (child.type as unknown) === 'PageHeader').length === 1 &&
+          node.findAll((child) => (child.type as unknown) === 'SettingsProfileDetail').length === 1,
+      )
+      .at(-1);
+    assert.ok(detailContainer);
+    assert.equal(flattenStyle(detailContainer.props.style).minWidth, 0);
+    assert.equal(flattenStyle(detailContainer.props.style).width, '100%');
     assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'default-post-visibility');
     assert.equal(rendered('SettingsProfileDetail').length, 1);
   });
 
-  it('full Web detail은 공통 master와 back action 없는 detail heading을 표시한다', async () => {
+  it('full Web detail은 공통 master와 명시적인 parent back을 표시한다', async () => {
     await renderRoute('/settings/default-post-visibility', SettingsDefaultPostVisibilityRoute);
 
     assert.ok(byTestId('settings-workspace'));
@@ -242,19 +272,26 @@ describe('Settings routes', () => {
       ['설정', '게시물 기본 공개 범위'],
     );
     assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'default-post-visibility');
-    assert.equal(rendered('Pressable').length, 0);
+    assert.equal(
+      rendered('PageHeader')[1].props.leading.props.accessibilityLabel,
+      '설정으로 돌아가기',
+    );
     assert.equal(rendered('SettingsProfileDetail').length, 1);
   });
 
-  it('full Web mute category는 데이터 연결 전에 master entry를 선택하지 않는다', async () => {
+  it('full Web mute category는 master 진입점을 선택하고 상세에 하위 목록을 표시한다', async () => {
     await renderRoute('/settings/mute-and-block', SettingsMuteAndBlockRoute);
 
     assert.deepEqual(
       rendered('PageHeader').map((node) => node.props.title),
       ['설정', '뮤트 및 차단'],
     );
-    assert.equal(rendered('SettingsNavigationList')[0].props.selected, undefined);
+    assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'mute-and-block');
     assert.equal(rendered('SettingsMuteAndBlockNavigation').length, 1);
+    assert.equal(
+      rendered('PageHeader')[1].props.leading.props.accessibilityLabel,
+      '설정으로 돌아가기',
+    );
   });
 
   it('full Web muted profile detail은 공통 master의 mute category를 선택한다', async () => {
@@ -264,14 +301,11 @@ describe('Settings routes', () => {
       rendered('PageHeader').map((node) => node.props.title),
       ['설정', '뮤트한 프로필'],
     );
-    assert.equal(rendered('SettingsNavigationList').length, 0);
-    assert.equal(rendered('SettingsMuteAndBlockNavigation').length, 1);
-    assert.equal(rendered('SettingsMuteAndBlockNavigation')[0].props.selected, 'muted-profiles');
+    assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'mute-and-block');
+    assert.equal(rendered('SettingsMuteAndBlockNavigation').length, 0);
     assert.equal(
-      byTestId('settings-master-pane').findAll(
-        (node) => (node.type as unknown) === 'SettingsMuteAndBlockNavigation',
-      ).length,
-      1,
+      rendered('PageHeader')[1].props.leading.props.accessibilityLabel,
+      '뮤트 및 차단으로 돌아가기',
     );
     assert.equal(
       byTestId('settings-detail-pane').findAll(
@@ -282,22 +316,28 @@ describe('Settings routes', () => {
     assert.equal(rendered('SettingsMutedProfiles').length, 1);
   });
 
-  it('compact Web muted profile detail은 parent으로 돌아가는 caller label과 navigation을 사용한다', async () => {
+  it('compact Web muted profile detail은 mute category parent로 dismiss한다', async () => {
     width = 768;
     await renderRoute('/settings/muted-profiles', SettingsMutedProfilesRoute);
 
     const back = rendered('PageHeader')[0].props.leading;
     assert.equal(back.props.accessibilityLabel, '뮤트 및 차단으로 돌아가기');
-    Object.defineProperty(globalThis, 'location', {
-      configurable: true,
-      value: { replace: (href: string) => locationReplacements.push(href) },
-    });
     await act(async () => back.props.onPress());
-    assert.equal(backCalls, 0);
-    assert.deepEqual(locationReplacements, ['/settings/mute-and-block']);
+    assert.deepEqual(dismissedToPaths, ['/settings/mute-and-block']);
   });
 
-  it('Native muted profile detail은 parent label과 replace navigation을 사용한다', async () => {
+  it('mobile Web 뮤트 해제 성공은 숨겨진 detail 제목으로 focus를 옮긴다', async () => {
+    width = 390;
+    await renderRoute('/settings/muted-profiles', SettingsMutedProfilesRoute);
+
+    assert.equal(rendered('PageHeader').length, 0);
+    const list = rendered('SettingsMutedProfiles')[0];
+    assert.ok(list);
+    await act(async () => list.props.onUnmuteSuccess());
+    assert.equal(muteHeadingFocusCalls, 1);
+  });
+
+  it('Native muted profile detail은 mute category parent로 dismiss한다', async () => {
     platform = 'android';
     width = 390;
     await renderRoute('/settings/muted-profiles', SettingsMutedProfilesRoute);
@@ -307,8 +347,7 @@ describe('Settings routes', () => {
     );
     assert.ok(back);
     await act(async () => back.props.onPress());
-    assert.equal(backCalls, 0);
-    assert.deepEqual(replacedPaths, ['/settings/mute-and-block']);
+    assert.deepEqual(dismissedToPaths, ['/settings/mute-and-block']);
   });
 
   it('Native blocked profile detail은 header와 목록을 하나의 vertical ScrollView에 표시한다', async () => {
@@ -331,9 +370,12 @@ describe('Settings routes', () => {
       rendered('PageHeader').map((node) => node.props.title),
       ['설정', '차단한 프로필'],
     );
-    assert.equal(rendered('SettingsNavigationList').length, 0);
-    assert.equal(rendered('SettingsMuteAndBlockNavigation').length, 1);
-    assert.equal(rendered('SettingsMuteAndBlockNavigation')[0].props.selected, 'blocked-profiles');
+    assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'mute-and-block');
+    assert.equal(rendered('SettingsMuteAndBlockNavigation').length, 0);
+    assert.equal(
+      rendered('PageHeader')[1].props.leading.props.accessibilityLabel,
+      '뮤트 및 차단으로 돌아가기',
+    );
     assert.equal(rendered('SettingsBlockedProfiles').length, 1);
     assert.equal('headingRef' in rendered('SettingsBlockedProfiles')[0].props, false);
   });
@@ -353,6 +395,18 @@ describe('Settings routes', () => {
     assert.equal(rendered('PageHeader')[0].props.title, '설정');
     assert.equal(rendered('SettingsNavigationList')[0].props.selected, undefined);
     assert.equal(rendered('SettingsProfileDetail').length, 0);
+    const rootContainer = rendered('View')
+      .filter(
+        (node) =>
+          flattenStyle(node.props.style).minWidth === 0 &&
+          flattenStyle(node.props.style).width === '100%' &&
+          node.findAll((child) => (child.type as unknown) === 'SettingsNavigationList').length ===
+            1,
+      )
+      .at(-1);
+    assert.ok(rootContainer);
+    assert.equal(flattenStyle(rootContainer.props.style).minWidth, 0);
+    assert.equal(flattenStyle(rootContainer.props.style).width, '100%');
   });
 
   it('mobile Web은 shell header를 중복하지 않고 root와 detail을 한 화면씩 표시한다', async () => {
@@ -409,8 +463,7 @@ describe('Settings routes', () => {
     );
 
     await act(async () => header.props.leading.props.onPress());
-    assert.equal(backCalls, 0);
-    assert.deepEqual(replacedPaths, ['/settings']);
+    assert.deepEqual(dismissedToPaths, ['/settings']);
   });
 
   it('compact Web detail은 route-owned back header로 Settings root를 연다', async () => {
@@ -421,13 +474,8 @@ describe('Settings routes', () => {
     assert.equal(header.props.title, '게시물 기본 공개 범위');
     const back = header.props.leading;
     assert.equal(back.props.accessibilityLabel, '설정으로 돌아가기');
-    Object.defineProperty(globalThis, 'location', {
-      configurable: true,
-      value: { replace: (href: string) => locationReplacements.push(href) },
-    });
     await act(async () => back.props.onPress());
-    assert.equal(backCalls, 0);
-    assert.deepEqual(locationReplacements, ['/settings']);
+    assert.deepEqual(dismissedToPaths, ['/settings']);
   });
 
   it('Android detail back action은 44dp layout과 hit slop으로 48dp target을 제공한다', async () => {
@@ -449,8 +497,7 @@ describe('Settings routes', () => {
     assert.equal(style.width, 44);
     assert.deepEqual(back.props.hitSlop, { bottom: 2, left: 2, right: 2, top: 2 });
     await act(async () => back.props.onPress());
-    assert.equal(backCalls, 0);
-    assert.deepEqual(replacedPaths, ['/settings']);
+    assert.deepEqual(dismissedToPaths, ['/settings']);
   });
 
   it('Native root는 route-owned 설정 heading을 표시한다', async () => {
@@ -462,6 +509,23 @@ describe('Settings routes', () => {
     assert.equal(rendered('SettingsNavigationList').length, 1);
     assert.equal(rendered('SettingsNavigationList')[0].props.selected, undefined);
     assert.equal(rendered('SettingsProfileDetail').length, 0);
+    const scrollView = rendered('ScrollView')[0];
+    assert.ok(scrollView);
+    assert.deepEqual(flattenStyle(scrollView.props.style), {
+      flex: 1,
+      minWidth: 0,
+      width: '100%',
+    });
+    assert.deepEqual(flattenStyle(scrollView.props.contentContainerStyle), {
+      flexGrow: 1,
+      minWidth: 0,
+      width: '100%',
+    });
+    assert.equal(scrollView.findAll((node) => (node.type as unknown) === 'PageHeader').length, 1);
+    assert.equal(
+      scrollView.findAll((node) => (node.type as unknown) === 'SettingsNavigationList').length,
+      1,
+    );
   });
 
   it('정보 화면은 정책 링크와 개발 정보 진입점만 표시하고 진단 행을 인라인하지 않는다', async () => {
@@ -473,6 +537,16 @@ describe('Settings routes', () => {
     );
     assert.equal(rendered('NativeChannelSettings').length, 0);
     assert.equal(rendered('SettingsItem').length, 0);
+  });
+
+  it('full Web 개발 정보는 정보 parent로 dismiss한다', async () => {
+    await renderRoute('/settings/developer', SettingsDeveloperRoute);
+
+    assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'info');
+    const back = rendered('PageHeader')[1].props.leading;
+    assert.equal(back.props.accessibilityLabel, '정보로 돌아가기');
+    await act(async () => back.props.onPress());
+    assert.deepEqual(dismissedToPaths, ['/settings/info']);
   });
 
   it('Web 개발 정보는 public channel만 표시하고 Native channel·OTA 행은 표시하지 않는다', async () => {
@@ -516,8 +590,8 @@ describe('Settings routes', () => {
     );
 
     await act(async () => header.props.leading.props.onPress());
-    assert.equal(backCalls, 0);
-    assert.deepEqual(replacedPaths, ['/settings/info']);
+    assert.deepEqual(dismissedToPaths, ['/settings/info']);
+    assert.deepEqual(replacedPaths, []);
   });
 
   it('Native 개발 정보는 현재 값이 없을 때 식별 불가를 표시하고 오류 행은 조건부로 표시한다', async () => {
@@ -593,7 +667,12 @@ async function renderRoute(nextPathname: string, Route: ComponentType) {
   pathname = nextPathname;
   SlotRoute = Route;
   await act(async () => {
-    renderer = create(createElement(SettingsLayout));
+    renderer = create(createElement(SettingsLayout), {
+      createNodeMock: ({ props }) =>
+        (props as { testID?: string }).testID === 'mute-heading-focus'
+          ? { focus: () => (muteHeadingFocusCalls += 1) }
+          : null,
+    });
   });
   assert.ok(renderer);
 }

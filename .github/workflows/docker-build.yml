@@ -5,7 +5,7 @@ on:
     branches: [main]
 
 env:
-  SENTRY_RELEASE: kosmo@${{ github.sha }}
+  SENTRY_RELEASE: ${{ github.sha }}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

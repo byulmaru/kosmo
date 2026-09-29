@@ -101,7 +101,12 @@ test(
       }) as Promise<ProfileBlockTransitionResult>;
     const transitionStarted = Promise.withResolvers<void>();
     const transitionReleased = Promise.withResolvers<void>();
+    const blockEffectStarted = Promise.withResolvers<void>();
+    const blockEffectReleased = Promise.withResolvers<void>();
+    const duplicateTransitionExecuted = Promise.withResolvers<void>();
+    const duplicateTransitionReleased = Promise.withResolvers<void>();
     let holdFirstTransition = true;
+    let holdNextTransition = false;
     worker = await Worker.create({
       activities: {
         ...activities,
@@ -113,7 +118,17 @@ test(
             transitionStarted.resolve();
             await transitionReleased.promise;
           }
-          return activities.executeProfileBlockTransitionActivity(value);
+          const execution = await activities.executeProfileBlockTransitionActivity(value);
+          if (holdNextTransition) {
+            holdNextTransition = false;
+            duplicateTransitionExecuted.resolve();
+            await duplicateTransitionReleased.promise;
+          }
+          return execution;
+        },
+        sendProfileBlockActivity: async () => {
+          blockEffectStarted.resolve();
+          await blockEffectReleased.promise;
         },
       },
       connection: environment.nativeConnection,
@@ -130,7 +145,27 @@ test(
       transitionReleased.resolve();
       const [firstResult, existingResult] = await Promise.all([first, existing]);
       assert.equal(firstResult.created, true);
-      assert.deepEqual(existingResult, firstResult);
+      assert.deepEqual(existingResult, { ...firstResult, created: false });
+      await blockEffectStarted.promise;
+
+      holdNextTransition = true;
+      const duplicate = await environment.client.workflow.startUpdateWithStart(
+        PROFILE_BLOCK_UPDATE_NAME,
+        {
+          args: [input],
+          updateId: `${PROFILE_BLOCK_UPDATE_ID}:duplicate`,
+          waitForStage: 'ACCEPTED',
+          startWorkflowOperation: new WithStartWorkflowOperation(profileBlockWorkflow.workflow, {
+            args: [input],
+            taskQueue: KOSMO_TASK_QUEUE,
+            workflowId: profileBlockWorkflow.workflowIdFromArgs(input),
+            workflowIdConflictPolicy: 'USE_EXISTING',
+            workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+          }),
+        },
+      );
+      await duplicateTransitionExecuted.promise;
+
       const rows = await db
         .select()
         .from(ProfileBlocks)
@@ -144,13 +179,49 @@ test(
         rows.map(({ id }) => id),
         [firstResult.profileBlockId],
       );
-      await environment.client.workflow
-        .getHandle(profileBlockWorkflow.workflowIdFromArgs(input))
-        .result();
-      const duplicate = await runBlock(input, `${PROFILE_BLOCK_UPDATE_ID}:duplicate`);
-      assert.deepEqual(duplicate, { ...firstResult, created: false });
+
+      blockEffectReleased.resolve();
+      const workflowId = profileBlockWorkflow.workflowIdFromArgs(input);
+      const workflowHandle = environment.client.workflow.getHandle(
+        workflowId,
+        duplicate.workflowRunId,
+      );
+      for (;;) {
+        const events = (await workflowHandle.fetchHistory()).events ?? [];
+        const blockActivityScheduledEventId = events
+          .find(
+            (event) =>
+              event.activityTaskScheduledEventAttributes?.activityType?.name ===
+              'sendProfileBlockActivity',
+          )
+          ?.eventId?.toString();
+        const blockActivityCompletedEvent = events.find(
+          (event) =>
+            blockActivityScheduledEventId !== undefined &&
+            event.activityTaskCompletedEventAttributes?.scheduledEventId?.toString() ===
+              blockActivityScheduledEventId,
+        );
+        if (
+          blockActivityCompletedEvent?.eventId != null &&
+          events.some(
+            (event) =>
+              event.workflowTaskCompletedEventAttributes != null &&
+              event.eventId != null &&
+              BigInt(event.eventId.toString()) >
+                BigInt(blockActivityCompletedEvent.eventId!.toString()),
+          )
+        ) {
+          break;
+        }
+      }
+
+      duplicateTransitionReleased.resolve();
+      assert.deepEqual(await duplicate.result(), { ...firstResult, created: false });
+      await workflowHandle.result();
     } finally {
       transitionReleased.resolve();
+      blockEffectReleased.resolve();
+      duplicateTransitionReleased.resolve();
     }
   },
 );

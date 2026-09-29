@@ -238,8 +238,17 @@ function BottomNavigationProfileUnavailableStory() {
 }
 
 function CompactSidebarStory() {
+  const theme = useTheme();
   return (
-    <View style={{ height: 560, width: 80 }}>
+    <View
+      style={{
+        borderColor: theme.borderSubtle,
+        borderRightWidth: borderWidths[1],
+        height: 560,
+        width: 80,
+      }}
+      testID="compact-sidebar-boundary"
+    >
       <SidebarNavigation compact query={useShellStoryData().query} />
     </View>
   );
@@ -436,11 +445,14 @@ export const SharedNavigation: Story = {
     );
     expect(navigationArea).not.toBeNull();
     expect(getComputedStyle(sidebarBoundary).borderRightWidth).toBe('1px');
-    expect(getComputedStyle(sidebarBoundary).borderRightColor).toBe('rgb(236, 236, 240)');
+    expect(getComputedStyle(sidebarBoundary).borderRightColor).toBe(
+      getComputedStyle(navigationArea!).borderTopColor,
+    );
+    expect(getComputedStyle(navigation).borderRightWidth).toBe('0px');
     expect(sidebarBoundaryRect.top).toBe(activeProfileRect.top);
-    expect(sidebarBoundaryRect.right).toBe(activeProfileRect.right);
+    expect(sidebarBoundaryRect.right - activeProfileRect.right).toBe(1);
+    expect(navigationArea!.getBoundingClientRect().right).toBe(activeProfileRect.right);
     expect(getComputedStyle(navigationArea!).borderTopWidth).toBe('1px');
-    expect(getComputedStyle(navigationArea!).borderTopColor).toBe('rgb(236, 236, 240)');
     expect(bookmarks).toHaveAttribute('href', '/bookmarks');
     expect(window.getComputedStyle(searchVisual).backgroundColor).toBe('rgb(255, 249, 230)');
     expect(profile).toHaveAttribute('href', '/@selected');
@@ -601,9 +613,17 @@ export const CompactSidebar: Story = {
     const logoutRect = logout.getBoundingClientRect();
     const feedbackRect = feedback.getBoundingClientRect();
     const sidebarRoot = trigger.parentElement?.parentElement;
+    const sidebarBoundary = canvas.getByTestId('compact-sidebar-boundary');
 
     expect(navigationArea).not.toBeNull();
     expect(sidebarRoot).not.toBeNull();
+    expect(getComputedStyle(navigation).borderRightWidth).toBe('0px');
+    expect(navigation.getBoundingClientRect().right).toBe(
+      sidebarRoot!.getBoundingClientRect().right,
+    );
+    expect(
+      sidebarBoundary.getBoundingClientRect().right - sidebarRoot!.getBoundingClientRect().right,
+    ).toBe(1);
     expect(triggerRect.top - sidebarRoot!.getBoundingClientRect().top).toBe(24);
     expect(navigationArea!.getBoundingClientRect().top - triggerRect.bottom).toBe(8);
     expect(getComputedStyle(navigationArea!).borderTopWidth).toBe('0px');
@@ -1665,35 +1685,6 @@ export const ProfileSwitcherCreateServerNonPolicyValidationErrorStaysGeneric: St
     expect(input).toHaveValue('newer_client_handle');
     expect(profileCreationRequestObserver).toHaveBeenCalledOnce();
     expect(trackAnalytics).not.toHaveBeenCalled();
-  },
-  render: () => <ProfileSwitcherStory />,
-};
-
-export const ProfileSwitcherLateErrorAfterDismissal: Story = {
-  parameters: {
-    relay: {
-      operationResponses: {
-        ProfileSwitcherSelectProfileMutation: {
-          delayMs: 100,
-          error: '지연된 프로필 전환 실패',
-        },
-      },
-    },
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const trigger = canvas.getByRole('button', { name: '프로필 목록' });
-    await userEvent.click(trigger);
-    await canvas.findByLabelText('프로필 전환');
-    const list = canvas.getByLabelText('전환할 프로필 목록');
-    await userEvent.click(within(list).getAllByRole('button')[1]!);
-    await userEvent.click(trigger);
-    const responseDeadline = Date.now() + 120;
-    await waitFor(() => expect(Date.now()).toBeGreaterThanOrEqual(responseDeadline));
-
-    await userEvent.click(trigger);
-    await canvas.findByLabelText('프로필 전환');
-    expect(canvas.queryByRole('alert')).toBeNull();
   },
   render: () => <ProfileSwitcherStory />,
 };

@@ -226,7 +226,7 @@ function ProfileLayoutContent({
     profile.viewerState.membership?.role === 'OWNER';
   const relationshipAction = canEdit ? (
     <NavigationLink href={'/profile-edit' as Href}>
-      <Button accessibilityLabel="프로필 편집" tone="secondary">
+      <Button accessibilityLabel="프로필 편집" style={styles.editButton} tone="secondary">
         편집
       </Button>
     </NavigationLink>
@@ -334,5 +334,6 @@ const styles = StyleSheet.create({
     marginLeft: -spacing.sm,
     width: 44,
   },
+  editButton: { minWidth: 96, width: 96 },
   nativeRoute: { flex: 1, minWidth: 0 },
 });
