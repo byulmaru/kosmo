@@ -84,7 +84,7 @@ Post는 Active이고 Current Content가 있어야 하며 작성자 Profile은 Ac
 #### Scenario: Feedback과 같은 Slack 연결 사용
 
 - **WHEN** 유효한 신고를 Slack으로 전송한다
-- **THEN** 기존 `SLACK_FEEDBACK_WEBHOOK_URL`과 공용 Secret 주입 경로를 재사용해 Feedback과 같은 봇·채널로 전송한다
+- **THEN** 기존 `SLACK_FEEDBACK_WEBHOOK_URL`과 공용 Secret 주입 경로를 content-report 전송에 재사용한다
 - **AND** API가 고정 `text`와 `plain_text` Block Kit으로 메시지를 구성하고 링크·media unfurl을 끈다
 - **AND** 신고 전용 환경 변수·Secret을 추가하거나 credential을 Web application·client bundle에 노출하지 않는다
 

@@ -60,7 +60,7 @@ background inert/aria-hidden, body scroll lock, initial focus, focus trap과 res
 2. query/history helper와 guard를 제거하고 shell state 버튼을 연결한다.
 3. Storybook, app unit/typecheck와 Web E2E를 검증한다.
 4. rollback은 Web button/overlay 조립을 제거하고 `/feedback` link로 되돌리며 데이터 migration은 없다.
-5. archive는 별도 완료 판단이며 `add-web-feedback-slack-delivery` 선행 조건을 유지한다.
+5. 기존 Slack 기반 feedback change는 2026-09-29 Sentry migration에서 archive되었으며, 이 overlay change는 현재 Sentry feedback 계약을 따른다.
 
 ## Open Questions
 
