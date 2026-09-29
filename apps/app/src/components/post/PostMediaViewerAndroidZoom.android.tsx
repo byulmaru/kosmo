@@ -1,4 +1,5 @@
 import {
+  cloneElement,
   createContext,
   useCallback,
   useContext,
@@ -9,10 +10,28 @@ import {
 } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
-import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+import Animated, {
+  runOnJS,
+  runOnUI,
+  useAnimatedStyle,
+  useSharedValue,
+} from 'react-native-reanimated';
+import { getZoomAccessibilityProps } from './PostMediaViewerZoomAccessibility';
 import type { ReactElement } from 'react';
 import type { GestureType } from 'react-native-gesture-handler';
 import type { AndroidZoomImageProps } from './PostMediaViewerAndroidZoom';
+import type {
+  ZoomAccessibilityActionName,
+  ZoomAccessibilityState,
+} from './PostMediaViewerZoomAccessibility';
+
+export {
+  getZoomAccessibilityProps,
+  type ZoomAccessibilityActionName,
+  type ZoomAccessibilityChildProps,
+  type ZoomAccessibilityProps,
+  type ZoomAccessibilityState,
+} from './PostMediaViewerZoomAccessibility';
 
 type ImageSize = Readonly<{ height: number; width: number }>;
 type ZoomPosition = Readonly<{ x: number; y: number }>;
@@ -58,6 +77,11 @@ export function AndroidZoomImage({
   const pagerGesture = useContext(PagerGestureContext);
   const [imageSize, setImageSize] = useState<ImageSize | null>(null);
   const [zoomed, setZoomed] = useState(false);
+  const [accessibilityZoom, setAccessibilityZoom] = useState({
+    offsetX: 0,
+    offsetY: 0,
+    scale: 1,
+  });
   const zoomedRef = useRef(false);
   const scale = useSharedValue(1);
   const offsetX = useSharedValue(0);
@@ -71,13 +95,13 @@ export function AndroidZoomImage({
   const panStartY = useSharedValue(0);
 
   const syncZoomed = useCallback(
-    (nextZoomed: boolean) => {
-      if (zoomedRef.current === nextZoomed) {
-        return;
+    (nextZoomed: boolean, nextScale: number, nextOffsetX: number, nextOffsetY: number) => {
+      setAccessibilityZoom({ offsetX: nextOffsetX, offsetY: nextOffsetY, scale: nextScale });
+      if (zoomedRef.current !== nextZoomed) {
+        zoomedRef.current = nextZoomed;
+        setZoomed(nextZoomed);
+        onZoomedChange(nextZoomed);
       }
-      zoomedRef.current = nextZoomed;
-      setZoomed(nextZoomed);
-      onZoomedChange(nextZoomed);
     },
     [onZoomedChange],
   );
@@ -85,7 +109,7 @@ export function AndroidZoomImage({
     scale.value = 1;
     offsetX.value = 0;
     offsetY.value = 0;
-    syncZoomed(false);
+    syncZoomed(false, 1, 0, 0);
   }, [offsetX, offsetY, scale, syncZoomed]);
 
   useEffect(() => {
@@ -101,6 +125,89 @@ export function AndroidZoomImage({
     }
   }, []);
 
+  const handleAccessibilityAction = useCallback(
+    (event: { nativeEvent: { actionName: string } }) => {
+      const actionName = event.nativeEvent.actionName as ZoomAccessibilityActionName;
+      runOnUI((name: ZoomAccessibilityActionName) => {
+        'worklet';
+        if (status !== 'ready') {
+          return;
+        }
+        const currentScale = scale.value;
+        if (name === 'reset') {
+          if (currentScale <= 1) {
+            return;
+          }
+          scale.value = 1;
+          offsetX.value = 0;
+          offsetY.value = 0;
+          runOnJS(syncZoomed)(false, 1, 0, 0);
+          return;
+        }
+        if (name === 'increment' || name === 'decrement') {
+          const nextScale =
+            name === 'increment'
+              ? currentScale < 2
+                ? 2
+                : currentScale < 4
+                  ? 4
+                  : 4
+              : currentScale > 2
+                ? 2
+                : currentScale > 1
+                  ? 1
+                  : 1;
+          if (nextScale === currentScale) {
+            return;
+          }
+          if (nextScale === 1) {
+            scale.value = 1;
+            offsetX.value = 0;
+            offsetY.value = 0;
+            runOnJS(syncZoomed)(false, 1, 0, 0);
+            return;
+          }
+          const nextOffset = clampZoomOffset({ x: 0, y: 0 }, nextScale, imageSize, viewportSize);
+          scale.value = nextScale;
+          offsetX.value = nextOffset.x;
+          offsetY.value = nextOffset.y;
+          runOnJS(syncZoomed)(true, nextScale, nextOffset.x, nextOffset.y);
+          return;
+        }
+        if (currentScale <= 1) {
+          return;
+        }
+        const step = {
+          x:
+            name === 'panLeft'
+              ? viewportSize.width / 2
+              : name === 'panRight'
+                ? -viewportSize.width / 2
+                : 0,
+          y:
+            name === 'panUp'
+              ? viewportSize.height / 2
+              : name === 'panDown'
+                ? -viewportSize.height / 2
+                : 0,
+        };
+        const nextOffset = clampZoomOffset(
+          { x: offsetX.value + step.x, y: offsetY.value + step.y },
+          currentScale,
+          imageSize,
+          viewportSize,
+        );
+        if (nextOffset.x === offsetX.value && nextOffset.y === offsetY.value) {
+          return;
+        }
+        offsetX.value = nextOffset.x;
+        offsetY.value = nextOffset.y;
+        runOnJS(syncZoomed)(true, currentScale, nextOffset.x, nextOffset.y);
+      })(actionName);
+    },
+    [imageSize, offsetX, offsetY, scale, status, syncZoomed, viewportSize],
+  );
+
   const pinch = useMemo(
     () =>
       Gesture.Pinch()
@@ -109,7 +216,7 @@ export function AndroidZoomImage({
         .onTouchesDown((event) => {
           'worklet';
           if (event.numberOfTouches > 1) {
-            runOnJS(syncZoomed)(true);
+            runOnJS(syncZoomed)(true, scale.value, offsetX.value, offsetY.value);
           }
         })
         .onStart((event) => {
@@ -143,7 +250,7 @@ export function AndroidZoomImage({
         })
         .onFinalize(() => {
           'worklet';
-          runOnJS(syncZoomed)(scale.value > 1);
+          runOnJS(syncZoomed)(scale.value > 1, scale.value, offsetX.value, offsetY.value);
         }),
     [
       imageSize,
@@ -186,6 +293,10 @@ export function AndroidZoomImage({
           );
           offsetX.value = nextOffset.x;
           offsetY.value = nextOffset.y;
+        })
+        .onFinalize(() => {
+          'worklet';
+          runOnJS(syncZoomed)(scale.value > 1, scale.value, offsetX.value, offsetY.value);
         }),
     [
       imageSize,
@@ -212,21 +323,26 @@ export function AndroidZoomImage({
           if (!success) {
             return;
           }
-          if (scale.value > 1) {
+          const currentScale = scale.value;
+          const nextScale = currentScale < 2 ? 2 : currentScale < 4 ? 4 : 1;
+          if (nextScale === 1) {
             scale.value = 1;
             offsetX.value = 0;
             offsetY.value = 0;
-            runOnJS(syncZoomed)(false);
+            runOnJS(syncZoomed)(false, 1, 0, 0);
             return;
           }
           if (!imageSize) {
             return;
           }
-          const nextScale = 2;
           const focalX = event.x - viewportSize.width / 2;
           const focalY = event.y - viewportSize.height / 2;
+          const ratio = nextScale / currentScale;
           const nextOffset = clampZoomOffset(
-            { x: focalX * (1 - nextScale), y: focalY * (1 - nextScale) },
+            {
+              x: focalX - (focalX - offsetX.value) * ratio,
+              y: focalY - (focalY - offsetY.value) * ratio,
+            },
             nextScale,
             imageSize,
             viewportSize,
@@ -234,7 +350,7 @@ export function AndroidZoomImage({
           scale.value = nextScale;
           offsetX.value = nextOffset.x;
           offsetY.value = nextOffset.y;
-          runOnJS(syncZoomed)(true);
+          runOnJS(syncZoomed)(true, nextScale, nextOffset.x, nextOffset.y);
         }),
     [imageSize, offsetX, offsetY, pagerGesture, scale, status, syncZoomed, viewportSize],
   );
@@ -248,6 +364,30 @@ export function AndroidZoomImage({
     ],
   }));
   const viewportFrameStyle = { height: viewportSize.height, width: viewportSize.width };
+  const zoomAccessibilityState: ZoomAccessibilityState = {
+    canPanDown: imageSize
+      ? accessibilityZoom.offsetY >
+        -Math.max(0, (imageSize.height * accessibilityZoom.scale - viewportSize.height) / 2) + 0.001
+      : false,
+    canPanLeft: imageSize
+      ? accessibilityZoom.offsetX <
+        Math.max(0, (imageSize.width * accessibilityZoom.scale - viewportSize.width) / 2) - 0.001
+      : false,
+    canPanRight: imageSize
+      ? accessibilityZoom.offsetX >
+        -Math.max(0, (imageSize.width * accessibilityZoom.scale - viewportSize.width) / 2) + 0.001
+      : false,
+    canPanUp: imageSize
+      ? accessibilityZoom.offsetY <
+        Math.max(0, (imageSize.height * accessibilityZoom.scale - viewportSize.height) / 2) - 0.001
+      : false,
+    scale: accessibilityZoom.scale,
+  };
+  const zoomAccessibility =
+    status === 'ready'
+      ? getZoomAccessibilityProps(zoomAccessibilityState, handleAccessibilityAction)
+      : undefined;
+  const accessibleChildren = cloneElement(children, { zoomAccessibility });
 
   return (
     <View style={[styles.root, viewportFrameStyle]} testID="post-media-viewer-android-zoom">
@@ -257,7 +397,7 @@ export function AndroidZoomImage({
             onLayout={handleImageLayout}
             style={[styles.imageContainer, animatedImageStyle]}
           >
-            {children}
+            {accessibleChildren}
           </Animated.View>
         </View>
       </GestureDetector>
