@@ -824,12 +824,15 @@ describe('inbound Follow and Undo', () => {
       .set({ followingCount: 1 })
       .where(eq(Profiles.id, fixture.remoteProfile.id));
 
+    const receivedAt = Temporal.Instant.from('2026-09-29T00:02:02Z');
     await handleInboundUndo(
       context,
       new Undo({
         actor: remoteActorUri,
+        id: new URL('https://remote.example/activities/undo-recovery'),
         object: new Follow({ actor: remoteActorUri, object: localActorUri }),
       }),
+      receivedAt,
     );
 
     assert.equal((await db.select().from(ProfileFollows)).length, 0);
