@@ -55,6 +55,11 @@ resource "argocd_application_set" "kosmo" {
               apiDomain: '{{apiDomain}}'
               image: '{{image}}'
               version: '{{version}}'
+              worker:
+                fcm:
+                  projectId: '${local.firebase_project_id}'
+                  workloadIdentityProvider: '${google_iam_workload_identity_pool_provider.kosmo_worker.name}'
+                  serviceAccountEmail: '${google_service_account.firebase_fcm_sender.email}'
             EOT
           }
         }
@@ -112,6 +117,11 @@ resource "argocd_application" "kosmo_prod" {
           apiDomain: 'api.kos.moe'
           image: 'ghcr.io/byulmaru/kosmo'
           version: '0.0.0'
+          worker:
+            fcm:
+              projectId: '${local.firebase_project_id}'
+              workloadIdentityProvider: '${google_iam_workload_identity_pool_provider.kosmo_worker.name}'
+              serviceAccountEmail: '${google_service_account.firebase_fcm_sender.email}'
         EOT
       }
     }

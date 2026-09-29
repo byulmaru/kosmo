@@ -7,6 +7,11 @@ locals {
   github_repository_id = "1207798099"
   github_owner_id      = "29172280"
 
+  firebase_fcm_sender_subjects = [
+    "system:serviceaccount:kosmo-dev:kosmo-worker",
+    "system:serviceaccount:kosmo-prod:kosmo-worker",
+  ]
+
   app_identifier        = "moe.kos"
   native_store_workflow = ".github/workflows/native-store-distribution.yml"
 
@@ -51,12 +56,17 @@ data "google_project" "firebase" {
   project_id = local.firebase_project_id
 }
 
+data "aws_eks_cluster" "kosmo" {
+  name = "byulmaru"
+}
+
 resource "google_project_service" "required" {
   provider = google-beta.no_user_project_override
   project  = local.firebase_project_id
   for_each = toset([
     "cloudresourcemanager.googleapis.com",
     "androidpublisher.googleapis.com",
+    "fcm.googleapis.com",
     "firebase.googleapis.com",
     # Required only by the deprecated Firebase App Distribution resources below.
     "firebaseappdistribution.googleapis.com",
@@ -238,6 +248,64 @@ resource "google_service_account_iam_member" "firebase_native_config" {
   member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github_actions.name}/attribute.credential/firebase-native-config"
 
   depends_on = [google_iam_workload_identity_pool_provider.firebase_native_config]
+}
+
+resource "google_iam_workload_identity_pool" "eks_kosmo" {
+  provider = google-beta
+  project  = local.firebase_project_id
+
+  workload_identity_pool_id = "kosmo-eks"
+  display_name              = "Kosmo EKS"
+  deletion_policy           = "PREVENT"
+
+  depends_on = [google_project_service.required]
+}
+
+resource "google_iam_workload_identity_pool_provider" "kosmo_worker" {
+  provider = google-beta
+  project  = local.firebase_project_id
+
+  workload_identity_pool_id          = google_iam_workload_identity_pool.eks_kosmo.workload_identity_pool_id
+  workload_identity_pool_provider_id = "kosmo-worker"
+  display_name                       = "Kosmo Worker"
+  deletion_policy                    = "PREVENT"
+
+  attribute_mapping = {
+    "google.subject" = "assertion.sub"
+  }
+  attribute_condition = "assertion.sub in ${jsonencode(local.firebase_fcm_sender_subjects)}"
+
+  oidc {
+    issuer_uri = data.aws_eks_cluster.kosmo.identity[0].oidc[0].issuer
+  }
+}
+
+resource "google_service_account" "firebase_fcm_sender" {
+  provider = google-beta
+  project  = local.firebase_project_id
+
+  account_id      = "firebase-fcm-sender"
+  display_name    = "Firebase Cloud Messaging sender from EKS"
+  deletion_policy = "PREVENT"
+
+  depends_on = [google_project_service.required]
+}
+
+resource "google_project_iam_member" "firebase_fcm_sender" {
+  provider = google-beta
+  project  = local.firebase_project_id
+  role     = "roles/firebasecloudmessaging.admin"
+  member   = "serviceAccount:${google_service_account.firebase_fcm_sender.email}"
+}
+
+resource "google_service_account_iam_member" "firebase_fcm_sender" {
+  provider           = google-beta
+  for_each           = toset(local.firebase_fcm_sender_subjects)
+  service_account_id = google_service_account.firebase_fcm_sender.name
+  role               = "roles/iam.workloadIdentityUser"
+  member             = "principal://iam.googleapis.com/${google_iam_workload_identity_pool.eks_kosmo.name}/subject/${each.value}"
+
+  depends_on = [google_iam_workload_identity_pool_provider.kosmo_worker]
 }
 
 resource "google_service_account" "terraform" {
