@@ -10,6 +10,7 @@ import type { PostComposerHost as PostComposerHostComponent } from './PostCompos
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const platform = { OS: 'web' };
+const safeAreaInsets = { bottom: 0, left: 0, right: 0, top: 0 };
 let composerProps:
   | {
       body: string;
@@ -36,6 +37,9 @@ mockModule('react-native', {
   StyleSheet: { create: <T>(styles: T) => styles },
   Text: 'Text',
   View: 'View',
+});
+mockModule('react-native-safe-area-context', {
+  useSafeAreaInsets: () => safeAreaInsets,
 });
 mockModule(require.resolve('./PostComposerController'), {
   PostComposerController: (
@@ -79,6 +83,7 @@ afterEach(async () => {
   }
   composerProps = undefined;
   platform.OS = 'web';
+  safeAreaInsets.top = 0;
   mock.restoreAll();
 });
 
@@ -108,8 +113,9 @@ describe('PostComposerHost', () => {
     );
   });
 
-  it('KeyboardAvoidingView는 키보드 높이에 맞춰 surface를 줄인다', async () => {
+  it('Native mobile KeyboardAvoidingView는 safe-area screen offset을 받는다', async () => {
     platform.OS = 'ios';
+    safeAreaInsets.top = 59;
     await act(async () => {
       renderer = create(
         createElement(PostComposerHost, {
@@ -123,6 +129,7 @@ describe('PostComposerHost', () => {
 
     const keyboardAvoidingView = renderer?.root.findByType('KeyboardAvoidingView' as ElementType);
     assert.equal(keyboardAvoidingView?.props.behavior, 'height');
+    assert.equal(keyboardAvoidingView?.props.keyboardVerticalOffset, 59);
   });
 
   it('모바일 Web surface는 safe-area host의 dynamic viewport 높이를 사용한다', async () => {
