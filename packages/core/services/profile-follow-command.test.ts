@@ -7,6 +7,7 @@ import {
   firstOrThrow,
   Instances,
   pg,
+  ProfileBlocks,
   ProfileFollowRequests,
   ProfileFollows,
   Profiles,
@@ -18,11 +19,14 @@ import {
   ProfileFollowPolicy,
   ProfileState,
 } from '../enums';
+import { NotFoundError } from '../error';
+import { ProfilePairBlockedError } from './profile-block-policy';
 import {
   executeProfileFollowPairTransition,
   executeProfileFollowRemoval,
   hydrateProfileFollowPairTransition,
   loadPendingFollowRequestId,
+  rehydrateProfileFollowFailure,
   verifyProfileFollowRemoval,
 } from './profile-follow-command';
 import type { ProfileFollowPairTransitionInput } from './profile-follow-command';
@@ -127,6 +131,45 @@ after(async () => {
     await db.delete(Instances).where(inArray(Instances.id, instanceIds));
   }
   await pg.end();
+});
+
+test('Follow failure serialization preserves the blocked subtype and leaves ordinary NOT_FOUND untagged', async () => {
+  const follower = await createProfile();
+  const blockedFollowee = await createProfile();
+  const command = { kind: 'FOLLOW', origin: 'LOCAL' } as const;
+  await db.insert(ProfileBlocks).values({
+    ownerProfileId: follower.id,
+    targetProfileId: blockedFollowee.id,
+  });
+
+  const blocked = await executeProfileFollowPairTransition({
+    pair: { followerProfileId: follower.id, followeeProfileId: blockedFollowee.id },
+    command,
+  });
+  assert.equal(blocked.ok, false);
+  if (blocked.ok) {
+    return;
+  }
+  assert.equal(blocked.error.code, 'NOT_FOUND');
+  assert.equal(blocked.error.reason, 'PROFILE_PAIR_BLOCKED');
+  const blockedError = rehydrateProfileFollowFailure(blocked.error);
+  assert.ok(blockedError instanceof ProfilePairBlockedError);
+  assert.equal(blockedError.code, blocked.error.code);
+  assert.equal(blockedError.message, blocked.error.message);
+
+  const missing = await executeProfileFollowPairTransition({
+    pair: { followerProfileId: follower.id, followeeProfileId: crypto.randomUUID() },
+    command,
+  });
+  assert.equal(missing.ok, false);
+  if (missing.ok) {
+    return;
+  }
+  assert.equal(missing.error.code, 'NOT_FOUND');
+  assert.equal('reason' in missing.error, false);
+  const missingError = rehydrateProfileFollowFailure(missing.error);
+  assert.ok(missingError instanceof NotFoundError);
+  assert.equal(missingError instanceof ProfilePairBlockedError, false);
 });
 
 test('open Follow uses the PostgreSQL-generated row ID and keeps duplicate retry effect-free', async () => {

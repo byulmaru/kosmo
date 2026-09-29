@@ -12,7 +12,11 @@ import {
 import { InstanceKind, InstanceState, ProfileState } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError } from '@kosmo/core/error';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
-import { followProfile, profileFollowPairCondition } from '@kosmo/core/services';
+import {
+  followProfile,
+  profileFollowPairCondition,
+  ProfilePairBlockedError,
+} from '@kosmo/core/services';
 import { executeProfileFollowRemoval } from '@kosmo/core/temporal/follow-command';
 import {
   federation,
@@ -298,7 +302,15 @@ export const executeProfileMigrationMoveFollowerActivity = async (
     return;
   }
 
-  const { created } = await followProfile(targetPair);
+  let created: boolean;
+  try {
+    ({ created } = await followProfile(targetPair));
+  } catch (error) {
+    if (error instanceof ProfilePairBlockedError) {
+      return;
+    }
+    throw error;
+  }
   if (!created) {
     return;
   }
