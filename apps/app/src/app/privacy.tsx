@@ -121,7 +121,7 @@ export default function PrivacyScreen() {
             cells={[
               '아래 7절의 PostHog 자동 수집 정보, opaque Account ID와 선택 Profile ID, 행동 이벤트와 Session Replay',
               '기능 이용 현황 파악, 사용자 흐름 개선, 품질 문제 확인과 제품 우선순위 결정',
-              '일반 이벤트의 보유·삭제 조건은 확인된 PostHog 정책과 적용 법령에 따릅니다. Session Replay는 수집일부터 30일입니다.',
+              '일반 이벤트는 수집일부터 12개월간 보유하며, 보유 기간이 지나면 지체 없이 파기합니다. Session Replay는 수집일부터 30일입니다.',
               '개인정보 보호법 제15조 제1항 제6호(서비스 개선을 위한 정당한 이익). 국외 이전은 제28조의8 제1항 제3호 가목에 따른 계약 체결·이행에 필요한 처리위탁·보관으로 처리하며, 이 방침에 공개합니다.',
             ]}
           />
@@ -217,7 +217,7 @@ export default function PrivacyScreen() {
               '미국',
               '7절의 제품 분석 및 Session Replay 정보의 제품 이용 분석과 Session Replay 제공',
               '서비스 이용 시 암호화된 네트워크로 지속적으로 전송',
-              '일반 이벤트의 보유·삭제 조건은 확인된 PostHog 정책과 적용 법령에 따릅니다. Session Replay는 수집일부터 30일입니다.',
+              '일반 이벤트는 수집일부터 12개월간 보유하며, 보유 기간이 지나면 지체 없이 파기합니다. Session Replay는 수집일부터 30일입니다.',
             ]}
           />
         </PolicyTable>
