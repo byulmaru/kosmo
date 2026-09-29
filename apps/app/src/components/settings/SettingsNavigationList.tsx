@@ -1,4 +1,7 @@
-import { Linking, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { useState } from 'react';
+import { ActivityIndicator, Linking, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { getNativeNotificationPermissionStatus } from '@/components/native-push/nativePushClient';
+import { useRequestNativePushPermissionAndSync } from '@/components/native-push/nativePushPermissionContext';
 import { useToast } from '@/components/ui/ToastProvider';
 import { layoutRecipes } from '@/theme/tokens';
 import { ByulmaruIdAccountSettingsEntry } from './ByulmaruIdAccountSettingsEntry';
@@ -14,7 +17,6 @@ export function SettingsNavigationList({
   pathname?: string;
   selected?: SettingsDestination;
 }) {
-  const { showToast } = useToast();
   return (
     <View
       accessibilityLabel="설정 목록"
@@ -38,25 +40,7 @@ export function SettingsNavigationList({
         currentPage={pathname === '/settings/mute-and-block'}
         selected={selected === 'mute-and-block'}
       />
-      {Platform.OS !== 'web' ? (
-        <Pressable
-          accessibilityLabel="OS 알림 설정 열기"
-          accessibilityRole="button"
-          onPress={() => {
-            void Linking.openSettings().catch(() => {
-              showToast('기기의 알림 설정을 열지 못했어요. 잠시 후 다시 시도해 주세요.', {
-                tone: 'danger',
-              });
-            });
-          }}
-          testID="native-notification-settings"
-        >
-          <SettingsItem
-            description="기기의 알림 설정에서 Push 알림을 관리할 수 있어요."
-            label="알림 설정"
-          />
-        </Pressable>
-      ) : null}
+      {Platform.OS !== 'web' ? <NativeNotificationSettingsAction /> : null}
       <SettingsLinkRow
         accessibilityLabel="정보 설정 열기"
         href="/settings/info"
@@ -66,6 +50,55 @@ export function SettingsNavigationList({
         selected={selected === 'info'}
       />
     </View>
+  );
+}
+
+function NativeNotificationSettingsAction() {
+  const { showToast } = useToast();
+  const requestPermissionAndSync = useRequestNativePushPermissionAndSync();
+  const [pending, setPending] = useState(false);
+
+  const handlePress = async () => {
+    if (pending) {
+      return;
+    }
+
+    setPending(true);
+    try {
+      const permission = await getNativeNotificationPermissionStatus();
+      if (permission.granted || permission.status === 'denied') {
+        await Linking.openSettings().catch(() => {
+          showToast('기기의 알림 설정을 열지 못했어요. 잠시 후 다시 시도해 주세요.', {
+            tone: 'danger',
+          });
+        });
+      } else {
+        await requestPermissionAndSync();
+      }
+    } catch {
+      showToast('알림 권한을 요청하지 못했어요. 잠시 후 다시 시도해 주세요.', {
+        tone: 'danger',
+      });
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <Pressable
+      accessibilityLabel="OS 알림 설정 열기"
+      accessibilityRole="button"
+      accessibilityState={{ disabled: pending }}
+      disabled={pending}
+      onPress={() => void handlePress()}
+      testID="native-notification-settings"
+    >
+      <SettingsItem
+        description="기기의 알림 설정에서 Push 알림을 관리할 수 있어요."
+        label="알림 설정"
+        trailing={pending ? <ActivityIndicator accessibilityLabel="알림 설정 중" /> : null}
+      />
+    </Pressable>
   );
 }
 

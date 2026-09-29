@@ -1,3 +1,5 @@
-export function NativePushProvider() {
-  return null;
+import type { PropsWithChildren } from 'react';
+
+export function NativePushProvider({ children }: PropsWithChildren) {
+  return children;
 }

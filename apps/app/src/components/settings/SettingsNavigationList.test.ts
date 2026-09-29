@@ -12,6 +12,15 @@ const require = createRequire(import.meta.url);
 let platform: 'android' | 'ios' | 'web' = 'web';
 let openSettingsCalls = 0;
 let openSettingsFailure = false;
+let permission: { granted: boolean; status?: 'denied' | 'granted' | 'undetermined' } = {
+  granted: true,
+  status: 'granted',
+};
+let permissionStatusCalls = 0;
+let requestPermissionAndSyncCalls = 0;
+let requestPermissionAndSync: () => Promise<void> = async () => {
+  requestPermissionAndSyncCalls += 1;
+};
 const toastCalls: Array<{ message: string; tone: string }> = [];
 
 mock.module('expo-router', {
@@ -30,6 +39,7 @@ mock.module('react-native', {
           : Promise.resolve();
       },
     },
+    ActivityIndicator: 'ActivityIndicator',
     Platform: {
       get OS() {
         return platform;
@@ -43,6 +53,19 @@ mock.module('react-native', {
     },
     Text: 'Text',
     View: 'View',
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('../native-push/nativePushClient.ts', import.meta.url), {
+  exports: {
+    getNativeNotificationPermissionStatus: () => {
+      permissionStatusCalls += 1;
+      return Promise.resolve(permission);
+    },
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('../native-push/nativePushPermissionContext.ts', import.meta.url), {
+  exports: {
+    useRequestNativePushPermissionAndSync: () => requestPermissionAndSync,
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(require.resolve('lucide-react-native'), {
@@ -123,6 +146,12 @@ afterEach(async () => {
   platform = 'web';
   openSettingsCalls = 0;
   openSettingsFailure = false;
+  permission = { granted: true, status: 'granted' };
+  permissionStatusCalls = 0;
+  requestPermissionAndSyncCalls = 0;
+  requestPermissionAndSync = async () => {
+    requestPermissionAndSyncCalls += 1;
+  };
   toastCalls.length = 0;
   if (renderer) {
     await act(async () => renderer?.unmount());
@@ -150,7 +179,7 @@ describe('SettingsNavigationList', () => {
     );
   });
 
-  it('Native는 뮤트 및 차단 뒤에 OS 알림 설정 action을 표시하고 OS 설정을 연다', async () => {
+  it('권한이 이미 허용됐으면 OS 알림 설정을 연다', async () => {
     platform = 'ios';
     await render();
 
@@ -179,11 +208,48 @@ describe('SettingsNavigationList', () => {
 
     await act(async () => notification?.props.onPress());
     assert.equal(openSettingsCalls, 1);
+    assert.equal(permissionStatusCalls, 1);
+    assert.equal(requestPermissionAndSyncCalls, 0);
+    assert.deepEqual(toastCalls, []);
+  });
+
+  it('권한이 거부됐으면 OS 알림 설정을 연다', async () => {
+    platform = 'android';
+    permission = { granted: false, status: 'denied' };
+    await render();
+
+    const notification = rendered('Pressable').find(
+      (node) => node.props.testID === 'native-notification-settings',
+    );
+    assert.ok(notification);
+
+    await act(async () => notification.props.onPress());
+
+    assert.equal(openSettingsCalls, 1);
+    assert.equal(requestPermissionAndSyncCalls, 0);
+  });
+
+  it('아직 권한을 묻지 않았으면 OS 권한 요청과 동기화를 시작한다', async () => {
+    platform = 'ios';
+    permission = { granted: false, status: 'undetermined' };
+    await render();
+
+    const notification = rendered('Pressable').find(
+      (node) => node.props.testID === 'native-notification-settings',
+    );
+    assert.ok(notification);
+
+    await act(async () => notification.props.onPress());
+
+    assert.equal(permissionStatusCalls, 1);
+    assert.equal(requestPermissionAndSyncCalls, 1);
+    assert.equal(openSettingsCalls, 0);
     assert.deepEqual(toastCalls, []);
   });
 
   it('OS 설정 열기가 실패하면 사용자에게 오류를 표시한다', async () => {
     platform = 'android';
+    permission = { granted: false, status: 'denied' };
     openSettingsFailure = true;
     await render();
 
@@ -201,6 +267,73 @@ describe('SettingsNavigationList', () => {
         tone: 'danger',
       },
     ]);
+  });
+
+  it('권한 요청 또는 token 동기화가 실패하면 재시도 안내를 표시한다', async () => {
+    platform = 'ios';
+    permission = { granted: false, status: 'undetermined' };
+    requestPermissionAndSync = async () => {
+      requestPermissionAndSyncCalls += 1;
+      throw new Error('token sync failed');
+    };
+    await render();
+
+    const notification = rendered('Pressable').find(
+      (node) => node.props.testID === 'native-notification-settings',
+    );
+    assert.ok(notification);
+
+    await act(async () => notification.props.onPress());
+
+    assert.equal(requestPermissionAndSyncCalls, 1);
+    assert.deepEqual(toastCalls, [
+      {
+        message: '알림 권한을 요청하지 못했어요. 잠시 후 다시 시도해 주세요.',
+        tone: 'danger',
+      },
+    ]);
+  });
+
+  it('권한 action이 pending인 동안 중복 press를 막고 진행 상태를 표시한다', async () => {
+    platform = 'ios';
+    permission = { granted: false, status: 'undetermined' };
+    let signalRequestStarted!: () => void;
+    let finishRequest!: () => void;
+    const requestStarted = new Promise<void>((resolve) => {
+      signalRequestStarted = resolve;
+    });
+    requestPermissionAndSync = () => {
+      requestPermissionAndSyncCalls += 1;
+      signalRequestStarted();
+      return new Promise<void>((resolve) => {
+        finishRequest = resolve;
+      });
+    };
+    await render();
+
+    let notification = rendered('Pressable').find(
+      (node) => node.props.testID === 'native-notification-settings',
+    );
+    assert.ok(notification);
+    await act(async () => {
+      notification?.props.onPress();
+      await requestStarted;
+    });
+
+    notification = rendered('Pressable').find(
+      (node) => node.props.testID === 'native-notification-settings',
+    );
+    assert.equal(notification?.props.disabled, true);
+    assert.equal(rendered('SettingsItem').at(-2)?.props.trailing.type, 'ActivityIndicator');
+    await act(async () => notification?.props.onPress());
+    assert.equal(requestPermissionAndSyncCalls, 1);
+
+    await act(async () => finishRequest());
+    notification = rendered('Pressable').find(
+      (node) => node.props.testID === 'native-notification-settings',
+    );
+    assert.equal(notification?.props.disabled, false);
+    assert.equal(rendered('SettingsItem').at(-2)?.props.trailing, null);
   });
 
   it('현재 path와 같은 root detail만 page-current 상태를 받는다', async () => {

@@ -2,12 +2,13 @@
 
 ## 상태
 
-Accepted — PROD-875 요구사항 정리에서 사용자가 권한 안내 시점, 현재 Push 대상 범위, 잠금 화면 기본
-표시와 본문 예외, foreground OS 배너, Account의 Profile 수신 범위, 안내 반복 억제, Push 탭의
-cross-profile 처리, 다중 설치 fan-out, Push 만료와 첫 릴리스의 in-app 설정 부재를 확정했다. PROD-912에서
+Accepted — PROD-875 요구사항 정리에서 사용자가 권한 요청 흐름, 현재 Push 대상 범위, 잠금 화면 기본 표시와
+본문 예외, foreground OS 배너, Account의 Profile 수신 범위, Push 탭의 cross-profile 처리, 다중 설치 fan-out,
+Push 만료와 첫 릴리스의 in-app 설정 부재를 확정했다. PROD-912에서
 사용자가 해제·로그아웃·무효화된 installation row와 token의 즉시 삭제, 삭제 뒤 재등록의 신규 수신 시작
-시각과 동일 Account의 재설치 중복 정리를 확정했다. 2026-09-29 사용자 승인으로 Push 탭은 payload의 내부 경로
-`href`로 직접 이동하도록 변경했고, registration 이후 전달 경계는 best-effort로 정리했다.
+시각과 동일 Account의 재설치 중복 정리를 확정했다. 2026-09-29 사용자 승인으로 사전 안내 모달을 제거하고 앱
+설정에서 OS 권한을 직접 요청하도록 변경했다. 2026-09-29 사용자 승인으로 Push 탭은 payload의 내부 경로 `href`로
+직접 이동하도록 변경했고, registration 이후 전달 경계는 best-effort로 정리했다.
 
 ## 날짜
 
@@ -18,17 +19,15 @@ cross-profile 처리, 다중 설치 fan-out, Push 만료와 첫 릴리스의 in-
 현재 Notification 도메인은 Profile 또는 Account를 Recipient로 하는 인앱 Notification의 생성, 조회와
 읽음 상태를 소유한다. FCM native push transport, device token lifecycle과 OS 권한 요청은 기존
 Notification 계약에 포함되어 있지 않다. PROD-875에서 FCM native push를 도입하고 PROD-912에서
-installation token lifecycle을 고정하므로 권한 안내 시점,
+installation token lifecycle을 고정하므로 앱 설정의 권한 처리와 token 동기화,
 잠금 화면 기본 정보, Account의 Profile 수신 범위와 첫 릴리스의 preference 경계를 별도의 제품 계약으로
 고정해야 한다.
 
 ## 결정
 
-- Android·iOS native 앱은 로그인된 상태의 첫 앱 실행에서 Push 알림 권한 안내를 표시한다. 새 로그인
-  완료 직후 또는 이미 로그인된 상태에서 앱을 실행하는 경우를 포함할 수 있으며, 안내를 위해
-  로그아웃·재로그인을 요구하지 않는다. 안내 표시는 OS 권한 대화상자를 여는 것과 분리한다.
-- OS 권한 대화상자는 앱 시작이나 로그인 완료 때 자동으로 열지 않는다. 사용자가 안내의 `알림 받기`
-  action을 활성화한 경우에만 OS 권한 요청을 시작한다.
+- 앱 시작이나 로그인 완료 때 OS 권한을 자동 요청하지 않는다. 앱 설정의 알림 action은 OS 권한이 미결정이면
+  OS 권한 요청을 시작하고, 이미 허용되거나 거부된 경우 OS 알림 설정을 연다. 허용된 로그인 세션은 로그인·앱
+  활성화 때 FCM token을 자동 동기화하고, 권한 요청이 허용된 직후에도 token을 즉시 동기화한다.
 - 기본 잠금 화면 FCM Push는 발신자, 알림 유형과 게시글 본문 미리보기를 포함한다.
 - Follow와 FollowRequest처럼 게시글 본문이 없는 알림은 본문 미리보기를 생략한다.
 - Push transport는 canonical Notification이 저장 성공한 결과를 받는 공통 전달 flow를 소유한다. 현재
@@ -64,15 +63,13 @@ installation token lifecycle을 고정하므로 권한 안내 시점,
   삭제한 뒤 새 row ID로 등록한다. 다른 Account가 소유한 active token은 삭제하거나
   탈취하지 않고 등록을 거부한다.
 - 첫 릴리스에는 전역·알림 유형별·Profile별 in-app Push enable/disable control이나 preference API를
-  두지 않는다. Push 수신 여부는 OS 알림 설정으로 제어하며, 앱 설정은 OS 알림 설정으로 이동하는
-  경로만 제공한다. 기존 Notification의 Mute·Block·visibility 억제 정책은 Push에도 적용한다.
+  두지 않는다. Push 수신 여부는 OS 알림 설정으로 제어하며, 기존 Notification의 Mute·Block·visibility
+  억제 정책은 Push에도 적용한다.
 - 잠금 화면 본문 미리보기는 sensitive 또는 Content Warning인 경우 가린다. 이 예외는 본문에만 적용하며,
   발신자·알림 유형·Recipient Profile 식별은 유지한다. 그 외에는 Recipient가 조회 권한을 가진 비공개
   본문을 미리보기에 포함한다.
 - 앱이 foreground인 경우에도 OS 알림 배너를 표시한다. 별도의 custom in-app Push banner를 추가하지
   않는다.
-- 같은 설치에서 안내를 닫거나 OS 권한을 거부한 뒤에는 안내를 자동으로 다시 표시하지 않는다. 일반적인
-  앱 업데이트 뒤에도 안내를 자동으로 다시 표시하지 않는다.
 - Push payload는 `notificationId`, `recipientProfileId`, 내부 앱 경로 문자열 `href`를 route data로 제공한다. Push를
   탭하면 native client가 `href`가 현재 프로필 경로(하위 경로 포함)와 `/follow-requests` 중 하나의 내부 경로인지 검증한다.
   `href`가 없거나 유효하지 않으면 Profile을 전환하지 않고
@@ -94,9 +91,9 @@ installation token lifecycle을 고정하므로 권한 안내 시점,
 - Provider의 accepted 응답은 기기 도착을 증명하지 않으며, Provider에 큐잉된 Push를 절대적으로 회수할 수
   있다는 보장도 없다. 이는 Provider·플랫폼의 관찰 가능한 경계다.
 - 이 결정은 공통 Push flow가 canonical Notification 저장 성공 결과부터 수신 대상 fan-out과 전달 lifecycle을
-  소유한다는 경계와, 권한 안내 시점, 현재 Push 대상 검증 범위, 기본 잠금 화면 정보와 본문 예외, foreground OS
-  배너, 안내 반복 억제, OS 설정 이동, cross-profile target 처리, 다중 설치 fan-out, Push 만료와 read state
-  독립성을 고정한다.
+  소유한다는 경계와, 앱 설정의 권한 상태별 동작, 현재 Push 대상 검증 범위, 기본 잠금 화면 정보와 본문 예외,
+  foreground OS 배너, OS 설정 이동과 token 동기화, cross-profile target 처리, 다중 설치 fan-out, Push 만료와
+  read state 독립성을 고정한다.
   PROD-912가 소유하는 installation token의 저장·폐기 lifecycle은 위와 같이 정한다. Provider SDK,
   전송 재시도·실패 처리와 route data 밖의 payload 구조는 이 ADR에서 정하지 않는다.
 
@@ -109,6 +106,6 @@ installation token lifecycle을 고정하므로 권한 안내 시점,
 ## 문서 반영
 
 - [Notification presentation](../../design/notifications.md#native-fcm-push-권한-요청과-잠금-화면-미리보기--prod-875)은
-  native 안내, 알림 대상 범위, 잠금 화면과 foreground OS 표시를 정의한다.
+  앱 설정의 권한 처리, 알림 대상 범위, 잠금 화면과 foreground OS 표시를 정의한다.
 - [Notification 객체](../objects/notification.md)는 Recipient와 인앱 Notification lifecycle을 계속 소유하며,
   native transport와 device token은 이 결정의 후속 구현 범위에서 별도로 다룬다.

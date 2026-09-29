@@ -19,10 +19,11 @@ export function AppProviders({ children }: PropsWithChildren) {
             <RelayActorProvider>
               <SessionProvider>
                 <AnalyticsSessionBridge />
-                <NativePushProvider />
-                <ContentReportProvider>
-                  <PostContentWarningRevealProvider>{children}</PostContentWarningRevealProvider>
-                </ContentReportProvider>
+                <NativePushProvider>
+                  <ContentReportProvider>
+                    <PostContentWarningRevealProvider>{children}</PostContentWarningRevealProvider>
+                  </ContentReportProvider>
+                </NativePushProvider>
               </SessionProvider>
             </RelayActorProvider>
           </GraphQLErrorBoundary>
