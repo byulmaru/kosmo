@@ -27,7 +27,9 @@
 - adapter는 input 변환, dependency composition, retry 경계에 필요한 validation 또는 Activity 고유 관찰처럼 실제 책임이 있을 때만 둔다.
 - Activity 이름은 Workflow history와 운영 조회에 남는 public runtime identity이므로 rename은 호환성 영향을 검토한다.
 
-- `materializeRemoteProfileActorActivity`는 stored/missing 판정과 현재 Profile/Instance state·actor TTL 확인을 소유하며 `{ profileId, needsRefresh }` non-null 최소 JSON-safe DTO를 반환한다. Activity 모듈의 private stored-state query에서 missing을 `null`로 관찰할 수 있지만, missing이면 refresh Activity의 fetch·persist를 ordinary call로 수행한 뒤 새 target ID를 `{ profileId: id, needsRefresh: false }` 의미로 반환한다. DTO의 `profileId`는 cached 또는 새로 생성한 target Profile ID이고 input의 optional `profileId`는 origin 선택용 행동 Profile ID다. 갱신 불필요 상태는 외부 fetch나 refresh child 없이 cached ID를 반환한다.
+- `materializeRemoteProfileActorActivity`는 handle lookup의 stored/missing 판정과 actor TTL 확인을 소유한다. Active/Unresponsive Instance 모두 같은 7일 TTL을 적용한다. Fresh cache는 그대로 반환하고 stale cache는 `{ profileId, needsRefresh: true }`로 반환해 기존 lookup Workflow가 background refresh를 시작하게 한다. Missing actor는 refresh Activity가 fetch·persist한 뒤 target Profile ID를 반환한다.
+- 같은 Activity의 `stored-actor` variant는 fetch 없이 stored Profile만 조회한다. Missing actor는 caller lookup 전에 local origin, Instance kind, Suspended state를 확인하며 Unresponsive Instance는 허용한다. Actor 존재만으로 Instance state를 바꾸지 않으며, exact top-level inbox sender receipt가 전달된 경우에만 stored Unresponsive Instance를 Active로 compare-and-set한다. `actor-document`는 caller context가 가져온 JSON-LD로 actor를 만들거나 갱신하고, `update`는 stored actor에 한해 같은 no-network Fedify projection primitive를 사용한다. 둘 다 `receivedAt`을 freshness timestamp로 쓴다.
+- Lookup Workflow의 strict Zod schema는 legacy handle, stored-actor, actor-document, Update 입력을 검증한다. Actor URI와 context origin은 HTTP(S), receipt/Update `receivedAt`은 ISO instant여야 한다. Known projection, conflict, not-found 오류는 non-retryable Activity failure로 변환하고 transient 오류는 그대로 전파한다. DTO의 `profileId`는 cached 또는 새로 생성한 target Profile ID이고 refresh input의 optional `profileId`는 legacy handle path에서 origin 선택용 행동 Profile ID다.
 
 ## Inputs And Identity
 

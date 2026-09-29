@@ -760,38 +760,21 @@ describe('inbound Follow and Undo', () => {
     assert.equal((await db.select().from(ProfileFollows)).length, 0);
   });
 
-  test('uses Fedify actor discovery failures and propagates object lookup outages', async () => {
+  test('propagates a retryable inbox Context lookup error unchanged', async () => {
     await createFixture();
     const unknownActorUri = new URL('https://unknown.example/users/mallory');
     const follow = new Follow({ actor: unknownActorUri, object: localActorUri });
-    const fetch = mock.method(globalThis, 'fetch', async () =>
-      Response.json({}, { status: 404, headers: { 'Content-Type': 'application/jrd+json' } }),
+    const lookupFailure = new Error('Actor lookup unavailable');
+    const lookupObject = mock.fn(async () => {
+      throw lookupFailure;
+    });
+
+    await assert.rejects(
+      handleInboundFollow(createContext({ lookupObject, recipient: localProfileId }), follow),
+      (error: unknown) => error === lookupFailure,
     );
 
-    try {
-      await handleInboundFollow(createContext({ recipient: localProfileId }), follow);
-
-      fetch.mock.mockImplementation(async () =>
-        Response.json(
-          { subject: 'acct:mallory@unknown.example' },
-          { headers: { 'Content-Type': 'application/jrd+json' } },
-        ),
-      );
-      await assert.rejects(
-        handleInboundFollow(
-          createContext({
-            lookupObject: mock.fn(async () => {
-              throw new Error('Actor lookup unavailable');
-            }),
-            recipient: localProfileId,
-          }),
-          follow,
-        ),
-        /Actor lookup unavailable/,
-      );
-    } finally {
-      fetch.mock.restore();
-    }
+    assert.equal(lookupObject.mock.calls.length, 1);
     assert.equal((await db.select().from(ProfileFollows)).length, 0);
   });
 

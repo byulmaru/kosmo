@@ -245,6 +245,35 @@ describe('inbound actor Update', () => {
     assert.equal(await countPair(ProfileFollows, firstLocalProfileId, fixture.profile.id), 0);
   });
 
+  test('keeps the newer actor projection when an older Update arrives later', async () => {
+    const fixture = await createRemoteActor(ProfileFollowPolicy.OPEN);
+    const newerReceivedAt = Temporal.Instant.from('2026-07-31T05:00:00Z');
+    const olderReceivedAt = newerReceivedAt.subtract({ seconds: 1 });
+
+    await handleInboundUpdate(
+      createContext(),
+      new Update({
+        actor: remoteActorUri,
+        id: new URL('https://remote.example/activities/update-newer'),
+        object: createActor({ name: 'Newer Alice' }),
+      }),
+      newerReceivedAt,
+    );
+    await handleInboundUpdate(
+      createContext(),
+      new Update({
+        actor: remoteActorUri,
+        id: new URL('https://remote.example/activities/update-older'),
+        object: createActor({ name: 'Older Alice' }),
+      }),
+      olderReceivedAt,
+    );
+
+    const stored = await readRemoteActor(fixture.profile.id);
+    assert.equal(stored.profile.displayName, 'Newer Alice');
+    assert.equal(stored.actor.lastFetchedAt?.toString(), newerReceivedAt.toString());
+  });
+
   test('preserves an established relation and applies refreshed policy to new Follow and Accept', async () => {
     const remote = await createRemoteActor(ProfileFollowPolicy.OPEN);
     const establishedLocal = await createLocalActor(firstLocalProfileId, 'established');

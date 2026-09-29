@@ -149,6 +149,67 @@ test(
 );
 
 test(
+  'actor-document Workflow는 supplied JSON-LD를 network lookup 없이 저장한다',
+  { timeout: 120_000 },
+  async (t) => {
+    const actorUri = new URL('https://actor-document.example/users/alice');
+    const actor = createActor({ id: actorUri, name: 'Document Alice' });
+    const actorJsonLd = await actor.toJsonLd({ format: 'expand' });
+    let actorLookupCalls = 0;
+    const origins: string[] = [];
+    t.mock.method(federation, 'createContext', (origin: URL) => {
+      origins.push(origin.href);
+      return {
+        lookupObject: async () => {
+          actorLookupCalls += 1;
+          throw new Error('actor-document must not fetch its supplied actor');
+        },
+      } as never;
+    });
+
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+    const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-actor-document-${process.pid}`;
+    const worker = await Worker.create({
+      activities: {
+        lookupRemoteActorUriActivity,
+        materializeRemoteProfileActorActivity,
+        refreshRemoteProfileActorActivity,
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+    const input: RemoteProfileLookupInput = {
+      actorJsonLd,
+      actorUri: actorUri.href,
+      contextOrigin: publicOrigin,
+      kind: 'actor-document',
+      receivedAt: '2026-09-28T23:59:00Z',
+    };
+
+    const profileId = await worker.runUntil(() =>
+      environment.client.workflow.execute(REMOTE_PROFILE_LOOKUP_WORKFLOW_TYPE, {
+        args: [input],
+        taskQueue,
+        workflowId: `${taskQueue}:actor-document`,
+      }),
+    );
+    const stored = await readStoredProfile(profileId as string);
+
+    assert.equal(actorLookupCalls, 0);
+    assert.deepEqual(origins, [new URL(publicOrigin).href]);
+    assert.equal(stored.actor.uri, actorUri.href);
+    assert.equal(stored.profile.displayName, 'Document Alice');
+    assert.equal(stored.instance.state, InstanceState.ACTIVE);
+    assert.equal(stored.actor.lastFetchedAt?.toString(), '2026-09-28T23:59:00Z');
+  },
+);
+
+test(
   'Remote Profile Workflow는 일시적인 lookup 오류를 Activity retry 후 한 번의 Profile identity로 저장한다',
   { timeout: 120_000 },
   async (t) => {
@@ -620,7 +681,7 @@ test('Remote Profile Activity는 stale actor 실행 시 현재 Profile·Instance
           .where(eq(Instances.id, instanceId));
       },
       domain: 'unresponsive-instance.example',
-      expected: 'return',
+      expected: 'refresh',
       name: 'UNRESPONSIVE Instance',
     },
   ] as const;
@@ -646,9 +707,9 @@ test('Remote Profile Activity는 stale actor 실행 시 현재 Profile·Instance
     const before = await readStoredProfile(profile.id);
     const input = { actorUri: `https://${scenario.domain}/users/alice` };
 
-    if (scenario.expected === 'return') {
+    if (scenario.expected === 'refresh') {
       assert.deepEqual(await materializeRemoteProfileActorActivity(input), {
-        needsRefresh: false,
+        needsRefresh: true,
         profileId: profile.id,
       });
     } else {
@@ -790,7 +851,10 @@ test('Remote Profile Activity는 lookup actor URI가 요청 URI와 다르면 저
       }) as never,
   );
 
-  const remoteInstance = await createInstance({ domain: remoteDomain });
+  const remoteInstance = await createInstance({
+    domain: remoteDomain,
+    state: InstanceState.UNRESPONSIVE,
+  });
   const profile = await createStoredProfile({
     actorUri: requestedActorUri.href,
     handle: 'alice',
@@ -810,7 +874,266 @@ test('Remote Profile Activity는 lookup actor URI가 요청 URI와 다르면 저
 
   assert.deepEqual(lookups.map(String), [requestedActorUri.href]);
   const after = await readStoredProfile(profile.id);
+  assert.equal(after.instance.state, InstanceState.UNRESPONSIVE);
   assert.equal(after.profile.id, before.profile.id);
+  assert.equal(after.profile.handle, before.profile.handle);
+  assert.equal(after.profile.displayName, before.profile.displayName);
+  assert.equal(after.actor.uri, before.actor.uri);
+  assert.equal(after.actor.lastFetchedAt?.toString(), before.actor.lastFetchedAt?.toString());
+  assert.equal(await db.$count(Profiles), 1);
+  assert.equal(await db.$count(ActivityPubActors), 1);
+  assert.equal(
+    await db.$count(ActivityPubActors, eq(ActivityPubActors.uri, mismatchedActorUri.href)),
+    0,
+  );
+});
+
+test('Remote Profile Activity는 actor lookup 실패 뒤 UNRESPONSIVE를 유지한다', async (t) => {
+  const actorUri = new URL(`https://${remoteDomain}/users/alice`);
+  const remoteInstance = await createInstance({
+    domain: remoteDomain,
+    state: InstanceState.UNRESPONSIVE,
+  });
+  const profile = await createStoredProfile({
+    actorUri: actorUri.href,
+    handle: 'alice',
+    instanceId: remoteInstance.id,
+    lastFetchedAt: Temporal.Now.instant().subtract({ hours: 24 * 8 }),
+  });
+  const before = await readStoredProfile(profile.id);
+  const lookupFailure = new Error('remote actor lookup failed');
+  let lookupCalls = 0;
+  t.mock.method(
+    federation,
+    'createContext',
+    () =>
+      ({
+        lookupObject: async () => {
+          lookupCalls += 1;
+          throw lookupFailure;
+        },
+      }) as never,
+  );
+
+  await assert.rejects(
+    refreshRemoteProfileActorActivity({ actorUri: actorUri.href }),
+    (error: unknown) => error === lookupFailure,
+  );
+
+  const after = await readStoredProfile(profile.id);
+  assert.equal(lookupCalls, 1);
+  assert.equal(after.instance.state, InstanceState.UNRESPONSIVE);
+  assert.equal(after.profile.state, before.profile.state);
+  assert.equal(after.actor.uri, before.actor.uri);
+  assert.equal(after.actor.lastFetchedAt?.toString(), before.actor.lastFetchedAt?.toString());
+});
+
+test('Remote Profile Activity는 exact actor URI 조회 성공 뒤 UNRESPONSIVE를 복구한다', async (t) => {
+  const actorUri = new URL(`https://${remoteDomain}/users/alice`);
+  const remoteInstance = await createInstance({
+    domain: remoteDomain,
+    state: InstanceState.UNRESPONSIVE,
+  });
+  const staleAt = Temporal.Now.instant().subtract({ hours: 24 * 8 });
+  const profile = await createStoredProfile({
+    actorUri: actorUri.href,
+    handle: 'alice',
+    instanceId: remoteInstance.id,
+    lastFetchedAt: staleAt,
+  });
+  const lookups: Array<string | URL> = [];
+  t.mock.method(
+    federation,
+    'createContext',
+    () =>
+      ({
+        lookupObject: async (identifier: string | URL) => {
+          lookups.push(identifier);
+          return createActor({ id: actorUri, name: 'Recovered Alice' });
+        },
+      }) as never,
+  );
+
+  assert.equal(await refreshRemoteProfileActorActivity({ actorUri: actorUri.href }), profile.id);
+
+  const recovered = await readStoredProfile(profile.id);
+  assert.deepEqual(lookups.map(String), [actorUri.href]);
+  assert.equal(recovered.instance.state, InstanceState.ACTIVE);
+  assert.equal(recovered.profile.displayName, 'Recovered Alice');
+  assert.ok(recovered.actor.lastFetchedAt);
+  assert.ok(recovered.actor.lastFetchedAt.epochNanoseconds > staleAt.epochNanoseconds);
+});
+
+test('stored-actor receipt만 기존 UNRESPONSIVE actor를 복구하고 cached lookup은 상태를 보존한다', async (t) => {
+  let contextCalls = 0;
+  t.mock.method(federation, 'createContext', () => {
+    contextCalls += 1;
+    throw new Error('Stored actor paths must not fetch');
+  });
+
+  const cachedUri = 'https://stored-cached.example/users/alice';
+  const cachedInstance = await createInstance({
+    domain: 'stored-cached.example',
+    state: InstanceState.UNRESPONSIVE,
+  });
+  const cachedProfile = await createStoredProfile({
+    actorUri: cachedUri,
+    handle: 'cached',
+    instanceId: cachedInstance.id,
+    lastFetchedAt: Temporal.Now.instant().subtract({ hours: 1 }),
+  });
+  const cached = await materializeRemoteProfileActorActivity({
+    actorUri: cachedUri,
+    kind: 'stored-actor',
+  });
+  assert.equal(cached?.profileId, cachedProfile.id);
+  assert.equal(
+    (await readStoredProfile(cachedProfile.id)).instance.state,
+    InstanceState.UNRESPONSIVE,
+  );
+
+  const receivedUri = 'https://stored-received.example/users/alice';
+  const receivedInstance = await createInstance({
+    domain: 'stored-received.example',
+    state: InstanceState.UNRESPONSIVE,
+  });
+  const receivedProfile = await createStoredProfile({
+    actorUri: receivedUri,
+    handle: 'received',
+    instanceId: receivedInstance.id,
+    lastFetchedAt: Temporal.Now.instant().subtract({ hours: 8 * 24 }),
+  });
+  const received = await materializeRemoteProfileActorActivity({
+    actorUri: receivedUri,
+    kind: 'stored-actor',
+    receipt: {
+      activityUri: 'https://stored-received.example/activities/follow-1',
+      receivedAt: '2026-09-28T23:59:00Z',
+    },
+  });
+  assert.equal(received?.profileId, receivedProfile.id);
+  assert.equal((await readStoredProfile(receivedProfile.id)).instance.state, InstanceState.ACTIVE);
+
+  assert.equal(
+    await materializeRemoteProfileActorActivity({
+      actorUri: 'https://stored-missing.example/users/alice',
+      kind: 'stored-actor',
+    }),
+    null,
+  );
+  assert.equal(contextCalls, 0);
+});
+
+test('stored-actor receipt cannot bypass DISABLED Profile or SUSPENDED Instance eligibility', async () => {
+  const disabledUri = 'https://stored-disabled.example/users/alice';
+  const disabledInstance = await createInstance({ domain: 'stored-disabled.example' });
+  const disabledProfile = await createStoredProfile({
+    actorUri: disabledUri,
+    handle: 'disabled',
+    instanceId: disabledInstance.id,
+  });
+  await db
+    .update(Profiles)
+    .set({ state: ProfileState.DISABLED })
+    .where(eq(Profiles.id, disabledProfile.id));
+
+  const suspendedUri = 'https://stored-suspended.example/users/alice';
+  const suspendedInstance = await createInstance({
+    domain: 'stored-suspended.example',
+    state: InstanceState.SUSPENDED,
+  });
+  const suspendedProfile = await createStoredProfile({
+    actorUri: suspendedUri,
+    handle: 'suspended',
+    instanceId: suspendedInstance.id,
+  });
+
+  for (const actorUri of [disabledUri, suspendedUri]) {
+    await assert.rejects(
+      materializeRemoteProfileActorActivity({
+        actorUri,
+        kind: 'stored-actor',
+        receipt: { receivedAt: '2026-09-29T00:00:00Z' },
+      }),
+      (error: unknown) => {
+        assert.ok(error instanceof ApplicationFailure);
+        assert.equal(error.nonRetryable, true);
+        assert.equal(error.type, 'NotFoundError');
+        return true;
+      },
+    );
+  }
+
+  assert.equal((await readStoredProfile(disabledProfile.id)).profile.state, ProfileState.DISABLED);
+  assert.equal(
+    (await readStoredProfile(suspendedProfile.id)).instance.state,
+    InstanceState.SUSPENDED,
+  );
+});
+
+test('stored-actor lookup rejects missing targets on SUSPENDED and local Instances', async () => {
+  const suspendedActorUri = 'https://suspended-missing.example/users/alice';
+  await createInstance({ domain: 'suspended-missing.example', state: InstanceState.SUSPENDED });
+
+  await assert.rejects(
+    materializeRemoteProfileActorActivity({ actorUri: suspendedActorUri, kind: 'stored-actor' }),
+    (error: unknown) => {
+      assert.ok(error instanceof ApplicationFailure);
+      assert.equal(error.nonRetryable, true);
+      assert.equal(error.type, 'NotFoundError');
+      return true;
+    },
+  );
+
+  await assert.rejects(
+    materializeRemoteProfileActorActivity({
+      actorUri: `${publicOrigin}/ap/actor/missing`,
+      kind: 'stored-actor',
+    }),
+    (error: unknown) => {
+      assert.ok(error instanceof ApplicationFailure);
+      assert.equal(error.nonRetryable, true);
+      assert.equal(error.type, 'ConflictError');
+      return true;
+    },
+  );
+});
+
+test('Remote Profile Update projection URI mismatch는 non-retryable 오류로 남고 저장 상태를 보존한다', async () => {
+  const actorUri = new URL(`https://${remoteDomain}/users/alice`);
+  const mismatchedActorUri = new URL(`https://${remoteDomain}/users/mallory`);
+  const remoteInstance = await createInstance({
+    domain: remoteDomain,
+    state: InstanceState.UNRESPONSIVE,
+  });
+  const profile = await createStoredProfile({
+    actorUri: actorUri.href,
+    handle: 'alice',
+    instanceId: remoteInstance.id,
+    lastFetchedAt: Temporal.Now.instant().subtract({ hours: 8 * 24 }),
+  });
+  const before = await readStoredProfile(profile.id);
+  const mismatchedActor = createActor({ id: mismatchedActorUri, name: 'Mallory' });
+  const actorJsonLd = await mismatchedActor.toJsonLd({ format: 'expand' });
+
+  await assert.rejects(
+    materializeRemoteProfileActorActivity({
+      actorJsonLd,
+      actorUri: actorUri.href,
+      contextOrigin: publicOrigin,
+      kind: 'update',
+      receivedAt: '2026-09-29T00:00:00Z',
+    }),
+    (error: unknown) => {
+      assert.ok(error instanceof ApplicationFailure);
+      assert.equal(error.nonRetryable, true);
+      assert.equal(error.type, 'RemoteActorMaterializationError');
+      return true;
+    },
+  );
+
+  const after = await readStoredProfile(profile.id);
+  assert.equal(after.instance.state, InstanceState.UNRESPONSIVE);
   assert.equal(after.profile.handle, before.profile.handle);
   assert.equal(after.profile.displayName, before.profile.displayName);
   assert.equal(after.actor.uri, before.actor.uri);
@@ -907,7 +1230,7 @@ test('Remote Profile Activity는 URI 기준으로 TTL과 Profile·Instance eligi
   assert.deepEqual(
     await materializeRemoteProfileActorActivity({ actorUri: unresponsiveUri.href }),
     {
-      needsRefresh: false,
+      needsRefresh: true,
       profileId: unresponsiveProfile.id,
     },
   );
@@ -915,14 +1238,17 @@ test('Remote Profile Activity는 URI 기준으로 TTL과 Profile·Instance eligi
   assert.equal(lookupCalls, 0);
 });
 
-test('Remote Profile state Activity는 fresh·stale·UNRESPONSIVE와 eligibility를 분류한다', async () => {
+test('Remote Profile state Activity는 7일 TTL과 UNRESPONSIVE·eligibility를 분류한다', async (t) => {
+  const now = Temporal.Instant.from('2026-09-29T00:00:00Z');
+  t.mock.method(Temporal.Now, 'instant', () => now);
+
   const freshUri = 'https://state-fresh.example/users/alice';
   const freshInstance = await createInstance({ domain: 'state-fresh.example' });
   const freshProfile = await createStoredProfile({
     actorUri: freshUri,
     handle: 'fresh',
     instanceId: freshInstance.id,
-    lastFetchedAt: Temporal.Now.instant().subtract({ hours: 1 }),
+    lastFetchedAt: now.subtract({ hours: 7 * 24 }).add({ nanoseconds: 1_000 }),
   });
   assert.deepEqual(await materializeRemoteProfileActorActivity({ actorUri: freshUri }), {
     needsRefresh: false,
@@ -935,7 +1261,7 @@ test('Remote Profile state Activity는 fresh·stale·UNRESPONSIVE와 eligibility
     actorUri: staleUri,
     handle: 'stale',
     instanceId: staleInstance.id,
-    lastFetchedAt: Temporal.Now.instant().subtract({ hours: 8 * 24 }),
+    lastFetchedAt: now.subtract({ hours: 7 * 24 }),
   });
   assert.deepEqual(await materializeRemoteProfileActorActivity({ actorUri: staleUri }), {
     needsRefresh: true,
@@ -964,12 +1290,28 @@ test('Remote Profile state Activity는 fresh·stale·UNRESPONSIVE와 eligibility
     actorUri: unresponsiveUri,
     handle: 'unresponsive',
     instanceId: unresponsiveInstance.id,
-    lastFetchedAt: Temporal.Now.instant().subtract({ hours: 8 * 24 }),
+    lastFetchedAt: now.subtract({ hours: 8 * 24 }),
   });
   assert.deepEqual(await materializeRemoteProfileActorActivity({ actorUri: unresponsiveUri }), {
-    needsRefresh: false,
+    needsRefresh: true,
     profileId: unresponsiveProfile.id,
   });
+
+  const freshUnresponsiveUri = 'https://state-fresh-unresponsive.example/users/alice';
+  const freshUnresponsiveInstance = await createInstance({
+    domain: 'state-fresh-unresponsive.example',
+    state: InstanceState.UNRESPONSIVE,
+  });
+  const freshUnresponsiveProfile = await createStoredProfile({
+    actorUri: freshUnresponsiveUri,
+    handle: 'fresh-unresponsive',
+    instanceId: freshUnresponsiveInstance.id,
+    lastFetchedAt: now.subtract({ hours: 1 }),
+  });
+  assert.deepEqual(
+    await materializeRemoteProfileActorActivity({ actorUri: freshUnresponsiveUri }),
+    { needsRefresh: false, profileId: freshUnresponsiveProfile.id },
+  );
 
   const disabledUri = 'https://state-disabled.example/users/alice';
   const disabledInstance = await createInstance({ domain: 'state-disabled.example' });
@@ -1014,7 +1356,7 @@ test('Remote Profile state Activity는 fresh·stale·UNRESPONSIVE와 eligibility
 });
 
 test(
-  'Remote Profile Workflow는 fresh와 UNRESPONSIVE Profile에서 refresh child를 시작하지 않는다',
+  'Remote Profile Workflow는 stale UNRESPONSIVE Profile을 즉시 반환하고 refresh child를 시작한다',
   { timeout: 120_000 },
   async (t) => {
     const freshUri = 'https://workflow-fresh.example/users/alice';
@@ -1037,6 +1379,10 @@ test(
       lastFetchedAt: Temporal.Now.instant().subtract({ hours: 8 * 24 }),
     });
     let refreshCalls = 0;
+    let markRefreshComplete!: () => void;
+    const refreshCompleted = new Promise<void>((resolve) => {
+      markRefreshComplete = resolve;
+    });
 
     const environment = await TestWorkflowEnvironment.createLocal({
       server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
@@ -1047,9 +1393,12 @@ test(
       activities: {
         lookupRemoteActorUriActivity,
         materializeRemoteProfileActorActivity,
-        refreshRemoteProfileActorActivity: async () => {
+        refreshRemoteProfileActorActivity: async (input: RemoteProfileMaterializationInput) => {
+          const { actorUri } = input;
           refreshCalls += 1;
-          throw new Error('fresh state must not refresh');
+          assert.equal(actorUri, unresponsiveUri);
+          markRefreshComplete();
+          return unresponsiveProfile.id;
         },
       },
       connection: environment.nativeConnection,
@@ -1077,9 +1426,10 @@ test(
         await execute('workflow-unresponsive.example', 'unresponsive', `${taskQueue}:unresponsive`),
         unresponsiveProfile.id,
       );
+      await refreshCompleted;
     });
 
-    assert.equal(refreshCalls, 0);
+    assert.equal(refreshCalls, 1);
   },
 );
 
@@ -1322,6 +1672,70 @@ test(
     );
     assert.equal(await db.$count(Profiles), 0);
     assert.equal(await db.$count(ActivityPubActors), 0);
+  },
+);
+
+test(
+  'Remote Profile Workflow는 sandbox 안에서 malformed 입력을 non-retryable로 거부한다',
+  { timeout: 120_000 },
+  async (t) => {
+    let activityCalls = 0;
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+    const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-materialization-invalid-input-${process.pid}`;
+    const worker = await Worker.create({
+      activities: {
+        lookupRemoteActorUriActivity: async () => {
+          activityCalls += 1;
+          return null;
+        },
+        materializeRemoteProfileActorActivity: async () => {
+          activityCalls += 1;
+          return null;
+        },
+        refreshRemoteProfileActorActivity: async () => {
+          activityCalls += 1;
+          return '';
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+    const input = {
+      actorJsonLd: { id: 'ftp://remote.example/users/alice', type: 'Person' },
+      actorUri: 'ftp://remote.example/users/alice',
+      contextOrigin: publicOrigin,
+      kind: 'actor-document',
+      receivedAt: '2026-09-29T00:00:00Z',
+    } as RemoteProfileLookupInput;
+
+    await assert.rejects(
+      worker.runUntil(() =>
+        environment.client.workflow.execute(REMOTE_PROFILE_LOOKUP_WORKFLOW_TYPE, {
+          args: [input],
+          taskQueue,
+          workflowId: `${taskQueue}:invalid-input`,
+        }),
+      ),
+      (error: unknown) => {
+        let current: unknown = error;
+        let foundNonRetryableFailure = false;
+        while (current && typeof current === 'object') {
+          if ('nonRetryable' in current && current.nonRetryable === true) {
+            foundNonRetryableFailure = true;
+          }
+          current = 'cause' in current ? current.cause : undefined;
+        }
+        assert.equal(foundNonRetryableFailure, true);
+        return true;
+      },
+    );
+
+    assert.equal(activityCalls, 0);
   },
 );
 
