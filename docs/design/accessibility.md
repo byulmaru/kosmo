@@ -122,6 +122,8 @@ library에 종속하지 않고 icon, glyph, 짧은 기호 문자 또는 loading 
 
 - Reaction Full Picker와 Repost·Quote ActionMenu는 공용 하단 시트 손잡이를 사용한다. 손잡이는 이름이 있는 버튼이며,
   피커에서는 펼치기·접기, ActionMenu에서는 닫기를 제공한다. 두 시트 모두 손잡이를 아래로 끌어 닫을 수 있다.
+- ActionMenu의 손잡이를 위로 끌면 시트가 최대 24pt 늘어나고, 놓으면 원래 높이로 돌아온다. 닫기가 비활성화된
+  동안에는 움직이지 않으며, reduced motion에서는 복귀 애니메이션을 생략한다.
 - 피커를 펼친 상태에서 손잡이를 아래로 끌면 먼저 초기 높이로 접는다. 목록 스크롤은 손잡이 제스처와 분리한다.
   VoiceOver·TalkBack의 실제 포커스 순서, 제스처와 닫은 뒤 trigger 복귀는 Native runtime에서 확인한다.
 

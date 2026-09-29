@@ -42,7 +42,9 @@ export function BottomSheetSurface({
   const [dragY, setDragY] = useState(0);
   const [dismissing, setDismissing] = useState(false);
   const dismissY = useRef(new Animated.Value(0)).current;
+  const stretchY = useRef(new Animated.Value(0)).current;
   const expandable = initialHeight !== undefined && collapsedHeight < maxHeight;
+  const stretchable = initialHeight === undefined;
   useEffect(() => {
     if (!dismissing) {
       return;
@@ -66,53 +68,79 @@ export function BottomSheetSurface({
       onClose();
     }
   };
-  const responder = useMemo(
-    () =>
-      PanResponder.create({
-        onMoveShouldSetPanResponder: (_event, gesture) =>
-          !closeDisabled &&
-          !dismissing &&
-          Math.abs(gesture.dy) > 8 &&
-          Math.abs(gesture.dy) > Math.abs(gesture.dx) &&
-          (expandable || gesture.dy > 0),
-        onPanResponderMove: (_event, gesture) => setDragY(gesture.dy),
-        onPanResponderRelease: (_event, gesture) => {
-          if (closeDisabled) {
-            setDragY(0);
-            return;
+  const responder = useMemo(() => {
+    const settleStretch = () => {
+      if (!stretchable) {
+        return;
+      }
+      if (reducedMotion) {
+        stretchY.setValue(0);
+        return;
+      }
+      const points = motion.easingPoints.standard;
+      Animated.timing(stretchY, {
+        duration: motion.duration.standard,
+        easing: Easing.bezier(points[0], points[1], points[2], points[3]),
+        toValue: 0,
+        useNativeDriver: false,
+      }).start();
+    };
+    return PanResponder.create({
+      onMoveShouldSetPanResponder: (_event, gesture) =>
+        !closeDisabled &&
+        !dismissing &&
+        Math.abs(gesture.dy) > 8 &&
+        Math.abs(gesture.dy) > Math.abs(gesture.dx) &&
+        (expandable || stretchable || gesture.dy > 0),
+      onPanResponderMove: (_event, gesture) => {
+        if (stretchable) {
+          stretchY.setValue(Math.min(24, Math.max(0, -gesture.dy) / 4));
+        }
+        setDragY(gesture.dy);
+      },
+      onPanResponderRelease: (_event, gesture) => {
+        settleStretch();
+        if (closeDisabled) {
+          setDragY(0);
+          return;
+        }
+        if (gesture.dy < -56 || gesture.vy < -0.5) {
+          setDragY(0);
+          if (expandable) {
+            setExpanded(true);
           }
-          if (gesture.dy < -56 || gesture.vy < -0.5) {
+        } else if (gesture.dy > 56 || gesture.vy > 0.5) {
+          if (expanded) {
             setDragY(0);
-            if (expandable) {
-              setExpanded(true);
-            }
-          } else if (gesture.dy > 56 || gesture.vy > 0.5) {
-            if (expanded) {
-              setDragY(0);
-              setExpanded(false);
-            } else {
-              dismissY.setValue(Math.max(0, gesture.dy));
-              setDismissing(true);
-              setDragY(0);
-              onClose();
-            }
+            setExpanded(false);
           } else {
+            dismissY.setValue(Math.max(0, gesture.dy));
+            setDismissing(true);
             setDragY(0);
+            onClose();
           }
-        },
-        onPanResponderTerminate: () => setDragY(0),
-      }),
-    [
-      closeDisabled,
-      collapsedHeight,
-      dismissY,
-      dismissing,
-      expandable,
-      expanded,
-      maxHeight,
-      onClose,
-    ],
-  );
+        } else {
+          setDragY(0);
+        }
+      },
+      onPanResponderTerminate: () => {
+        settleStretch();
+        setDragY(0);
+      },
+    });
+  }, [
+    closeDisabled,
+    collapsedHeight,
+    dismissY,
+    dismissing,
+    expandable,
+    expanded,
+    maxHeight,
+    onClose,
+    reducedMotion,
+    stretchY,
+    stretchable,
+  ]);
   const height =
     initialHeight === undefined
       ? undefined
@@ -153,7 +181,11 @@ export function BottomSheetSurface({
           <View style={[styles.handle, { backgroundColor: theme.borderStrong }]} />
         </Pressable>
       </View>
-      {children}
+      {stretchable ? (
+        <Animated.View style={{ paddingBottom: stretchY }}>{children}</Animated.View>
+      ) : (
+        children
+      )}
     </Animated.View>
   );
 }
