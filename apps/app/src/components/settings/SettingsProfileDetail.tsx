@@ -1,5 +1,6 @@
 import { StyleSheet, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
+import { useFeatureFlag } from '@/components/FeatureFlagsContext';
 import { ProfileDefaultPostVisibilityControl } from '@/components/profile/ProfileDefaultPostVisibilityControl';
 import { ProfileMigrationSourceControl } from '@/components/profile/ProfileMigrationSourceControl';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
@@ -11,9 +12,6 @@ import type { SettingsProfileDetailQuery } from './__generated__/SettingsProfile
 const SettingsProfileQuery = graphql`
   query SettingsProfileDetailQuery {
     currentSession {
-      account {
-        featureFlags
-      }
       selectedProfile {
         id
         instance {
@@ -50,10 +48,8 @@ function SettingsProfileDetailContents() {
     {},
     { fetchKey, fetchPolicy: 'store-and-network' },
   );
+  const migrationEnabled = useFeatureFlag('profile-migration');
   const profile = data.currentSession?.selectedProfile ?? null;
-  const migrationEnabled = Boolean(
-    data.currentSession?.account?.featureFlags?.includes('profile-migration'),
-  );
 
   if (!profile || profile.instance.kind !== 'LOCAL') {
     return (

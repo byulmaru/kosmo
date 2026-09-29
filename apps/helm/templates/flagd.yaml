@@ -19,6 +19,12 @@ spec:
           'on': true
           'off': false
         defaultVariant: 'off'
+      profile-migration:
+        state: ENABLED
+        variants:
+          'on': true
+          'off': false
+        defaultVariant: 'off'
 ---
 apiVersion: core.openfeature.dev/v1beta1
 kind: FeatureFlagSource
