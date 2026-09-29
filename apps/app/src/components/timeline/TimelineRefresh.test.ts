@@ -200,33 +200,47 @@ describe('Timeline refresh', () => {
     });
   }
 
-  it('Local refresh owner는 실패 retry 중에도 목록 owner와 profile identity를 유지한다', async () => {
-    await act(async () => {
-      renderer = create(createElement(LocalTimelineScreen));
+  for (const os of ['ios', 'web'] as const) {
+    it(`Local refresh owner (${os})는 pending 중 중복을 막고 실패 retry 뒤 새 refresh를 허용한다`, async () => {
+      platform.OS = os;
+      await act(async () => {
+        renderer = create(createElement(LocalTimelineScreen));
+      });
+
+      const postList = renderer?.root.findByType(MockPostList);
+      assert.equal(postList?.props.identityKey, 'local:profile-a');
+
+      await act(async () => postList?.props.onRefresh());
+
+      assert.equal(localRefetchRequests.length, 1);
+      assert.equal(renderer?.root.findByType(MockPostList).props.refreshing, true);
+
+      await act(async () => postList?.props.onRefresh());
+      assert.equal(localRefetchRequests.length, 1);
+
+      await act(async () => localRefetchRequests[0]?.onComplete?.(new Error('network')));
+
+      assert.equal(renderer?.root.findAllByType(MockPostList).length, 1);
+      assert.equal(renderer?.root.findByType(MockPostList).props.refreshing, false);
+      assert.equal(toasts.at(-1)?.options.action?.label, '다시 시도');
+
+      await act(async () => toasts.at(-1)?.options.action?.onPress());
+      assert.equal(localRefetchRequests.length, 2);
+      assert.equal(renderer?.root.findByType(MockPostList).props.refreshing, true);
+
+      await act(async () => localRefetchRequests[1]?.onComplete?.(null));
+      assert.equal(renderer?.root.findByType(MockPostList).props.refreshing, false);
+
+      await act(async () => renderer?.root.findByType(MockPostList).props.onRefresh());
+      assert.equal(localRefetchRequests.length, 3);
+      assert.equal(renderer?.root.findByType(MockPostList).props.refreshing, true);
+
+      await act(async () => localRefetchRequests[2]?.onComplete?.(null));
+      assert.equal(renderer?.root.findByType(MockPostList).props.refreshing, false);
+
+      activeProfileId = 'profile-b';
+      await act(async () => renderer?.update(createElement(LocalTimelineScreen)));
+      assert.equal(renderer?.root.findByType(MockPostList).props.identityKey, 'local:profile-b');
     });
-
-    const postList = renderer?.root.findByType(MockPostList);
-    assert.equal(postList?.props.identityKey, 'local:profile-a');
-
-    await act(async () => {
-      postList?.props.onRefresh();
-      postList?.props.onRefresh();
-    });
-
-    assert.equal(localRefetchRequests.length, 1);
-    assert.equal(renderer?.root.findByType(MockPostList).props.refreshing, true);
-
-    await act(async () => localRefetchRequests[0]?.onComplete?.(new Error('network')));
-
-    assert.equal(renderer?.root.findAllByType(MockPostList).length, 1);
-    assert.equal(renderer?.root.findByType(MockPostList).props.refreshing, false);
-    assert.equal(toasts.at(-1)?.options.action?.label, '다시 시도');
-
-    await act(async () => toasts.at(-1)?.options.action?.onPress());
-    assert.equal(localRefetchRequests.length, 2);
-
-    activeProfileId = 'profile-b';
-    await act(async () => renderer?.update(createElement(LocalTimelineScreen)));
-    assert.equal(renderer?.root.findByType(MockPostList).props.identityKey, 'local:profile-b');
-  });
+  }
 });

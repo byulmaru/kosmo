@@ -66,7 +66,7 @@ export default function LocalScreen() {
   }, []);
   const refresh = useCallback(() => {
     if (hasSuccessfulLocalRef.current) {
-      if (Platform.OS !== 'web' && refreshState.refreshing) {
+      if (refreshState.refreshing) {
         return;
       }
 
