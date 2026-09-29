@@ -99,12 +99,14 @@ composer control은 자체 동작만 수행한다. 모두 읽음, unread indicat
   않는다.
 - 같은 설치에서 안내를 닫거나 OS 권한을 거부한 뒤에는 안내를 자동으로 다시 표시하지 않는다. 일반적인 앱
   업데이트 뒤에도 안내를 자동으로 다시 표시하지 않는다.
-- 앱 설정에서 OS 알림 설정으로 이동하는 action을 제공한다. Push payload의 route data는 `notificationId`와
-  `recipientProfileId`를 사용한다. Push를 탭하면 `notificationId`로 목적지 정보를 조회한다. 현재 Account가
-  Recipient Profile에 접근할 수 있는지 다시 확인하고, 접근할 수 있으면 해당 Profile로 전환한 뒤 조회된 목적지로
-  기존 route를 사용한다. destination이 없거나 접근할 수 없는 경우에도 Push 전용 redirect를 추가하지 않으며, 목적지를 구성할
-  수 없을 때는 일반 알림 목록을 열 수 있다. 로그인되지 않은 상태에서 Push를 탭하면 원래 target을 버리고 일반
-  로그인 흐름을 따르며, 로그인 뒤 Push target으로 자동 복귀하지 않는다.
+- 앱 설정에서 OS 알림 설정으로 이동하는 action을 제공한다. Push payload는 `notificationId`,
+  `recipientProfileId`, 내부 앱 경로 문자열 `href`를 route data로 제공한다. Push를 탭하면 native client가 `href`가
+  현재 프로필 경로(하위 경로 포함)와 `/follow-requests` 중 하나의 내부 경로인지 검증한다. `href`가 없거나 유효하지 않으면
+  Profile을 전환하지 않고 일반 알림 목록을 연다. 유효하면
+  현재 선택된 Profile이 `recipientProfileId`와 다를 때 기존 Profile 전환 흐름에서 현재 Account의 Profile
+  membership를 확인해 전환한 뒤 `href`로 직접 이동한다. `notificationId`로 목적지를 조회하지 않는다.
+  실제 목적지가 없거나 삭제됐거나 접근할 수 없는 경우는 해당 화면의 기존 처리를 따른다. 로그인되지 않은 상태에서
+  Push를 탭하면 원래 target을 버리고 일반 로그인 흐름을 따르며, 로그인 뒤 Push target으로 자동 복귀하지 않는다.
 - Notification 생성 시각부터 24시간이 지나면 해당 Push의 전달을 시도하지 않는다. 이 24시간은 최초
   Notification 생성 시각을 기준으로 하며, 재시도나 token refresh로 연장하거나 다시 시작하지 않는다. 이
   만료는 원래 인앱 Notification lifecycle을 변경하지 않는다.

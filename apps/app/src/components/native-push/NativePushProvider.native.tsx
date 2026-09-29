@@ -1,8 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Modal, Platform, StyleSheet, Text, View } from 'react-native';
-import { graphql, useMutation, useRelayEnvironment } from 'react-relay';
-import { fetchQuery } from 'relay-runtime';
+import { graphql, useMutation } from 'react-relay';
 import { Button } from '@/components/ui/Button';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useSession } from '@/session/SessionProvider';
@@ -31,7 +30,6 @@ import {
   writePushInstallationId,
 } from './pushStorage';
 import type { NotificationResponse } from 'expo-notifications';
-import type { NativePushNotificationTargetQuery as NativePushNotificationTargetQueryType } from './__generated__/NativePushNotificationTargetQuery.graphql';
 import type { NativePushRegisterInstallationMutation as NativePushRegisterInstallationMutationType } from './__generated__/NativePushRegisterInstallationMutation.graphql';
 import type { NativePushSelectProfileMutation as NativePushSelectProfileMutationType } from './__generated__/NativePushSelectProfileMutation.graphql';
 import type { NativePushUnregisterInstallationMutation as NativePushUnregisterInstallationMutationType } from './__generated__/NativePushUnregisterInstallationMutation.graphql';
@@ -78,46 +76,6 @@ const NativePushSelectProfileMutation = graphql`
   }
 `;
 
-const NativePushNotificationTargetQuery = graphql`
-  query NativePushNotificationTargetQuery($notificationId: ID!) {
-    node(id: $notificationId) {
-      __typename
-      ... on FollowNotification {
-        profile {
-          relativeHandle
-        }
-      }
-      ... on FollowRequestNotification {
-        id
-      }
-      ... on ReactionNotification {
-        post {
-          id
-          profile {
-            relativeHandle
-          }
-        }
-      }
-      ... on RepostNotification {
-        post {
-          id
-          profile {
-            relativeHandle
-          }
-        }
-      }
-      ... on ReplyNotification {
-        post {
-          id
-          profile {
-            relativeHandle
-          }
-        }
-      }
-    }
-  }
-`;
-
 type RetryablePushError = Error & { retryable: true };
 
 const markRetryable = (error: Error): RetryablePushError =>
@@ -131,7 +89,6 @@ const platform = Platform.OS === 'ios' ? ('IOS' as const) : ('ANDROID' as const)
 export function NativePushProvider() {
   const theme = useTheme();
   const router = useRouter();
-  const environment = useRelayEnvironment();
   const session = useSession();
   const { resetActor } = useRelayActor();
   const sessionRef = useRef(session);
@@ -391,23 +348,6 @@ export function NativePushProvider() {
     [commitSelectProfile],
   );
 
-  const revalidateNotificationTarget = useCallback(
-    async (notificationId: string) => {
-      const result = await fetchQuery<NativePushNotificationTargetQueryType>(
-        environment,
-        NativePushNotificationTargetQuery,
-        { notificationId },
-        { fetchPolicy: 'network-only' },
-      ).toPromise();
-      if (!result) {
-        throw new Error('Push notification target query returned no data.');
-      }
-
-      return result.node;
-    },
-    [environment],
-  );
-
   const markResponseHandled = useCallback((response: NotificationResponse) => {
     handledResponseKeyRef.current = nativePushResponseKey(response);
     clearLastNativeNotificationResponse();
@@ -434,23 +374,10 @@ export function NativePushProvider() {
         return;
       }
 
-      let node: NativePushNotificationTargetQueryType['response']['node'];
-      try {
-        node = await revalidateNotificationTarget(envelope.notificationId);
-      } catch {
-        return;
-      }
-
-      if (sessionRef.current.status !== 'valid') {
-        markResponseHandled(response);
-        router.replace('/');
-        return;
-      }
-
       let targetHref: Awaited<ReturnType<typeof prepareNativePushNavigation>>;
       try {
         targetHref = await prepareNativePushNavigation({
-          node,
+          href: envelope.href,
           recipientProfileId: envelope.recipientProfileId,
           resetActor,
           selectProfile,
@@ -466,23 +393,10 @@ export function NativePushProvider() {
         return;
       }
 
-      if (!targetHref) {
-        markResponseHandled(response);
-        fallbackToNotifications();
-        return;
-      }
-
       markResponseHandled(response);
       router.replace(targetHref);
     },
-    [
-      fallbackToNotifications,
-      markResponseHandled,
-      revalidateNotificationTarget,
-      resetActor,
-      router,
-      selectProfile,
-    ],
+    [fallbackToNotifications, markResponseHandled, resetActor, router, selectProfile],
   );
 
   const enqueueNotificationResponse = useCallback(

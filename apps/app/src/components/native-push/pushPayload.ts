@@ -1,8 +1,8 @@
 import type { NotificationResponse } from 'expo-notifications';
 import type { Href } from 'expo-router';
-import type { NativePushNotificationTargetQuery$data } from './__generated__/NativePushNotificationTargetQuery.graphql';
 
 export type NativePushTapTarget = {
+  href: Href;
   notificationId: string;
   recipientProfileId: string;
 };
@@ -15,10 +15,22 @@ const isRecord = (value: unknown): value is RecordValue =>
 const nonEmptyString = (value: unknown): string | null =>
   typeof value === 'string' && value.trim() ? value.trim() : null;
 
-/**
- * Reads only the server-defined, non-sensitive tap envelope. Navigation is derived from the
- * revalidated Notification Node rather than from provider-controlled payload fields.
- */
+const hasControlCharacters = (value: string) =>
+  [...value].some((character) => {
+    const code = character.charCodeAt(0);
+    return code < 0x20 || code === 0x7f;
+  });
+
+const isInternalNotificationHref = (href: string) =>
+  (href === '/follow-requests' || /^\/@[^/]+(?:\/[^/]+)?$/.test(href)) &&
+  !/[\\?#%]/.test(href) &&
+  !hasControlCharacters(href) &&
+  !href
+    .slice(1)
+    .split('/')
+    .some((segment) => segment === '.' || segment === '..');
+
+/** Reads the tap envelope and accepts only current in-app notification routes. */
 export function parseNativePushTapTarget(value: unknown): NativePushTapTarget | null {
   if (!isRecord(value)) {
     return null;
@@ -26,45 +38,18 @@ export function parseNativePushTapTarget(value: unknown): NativePushTapTarget | 
 
   const notificationId = nonEmptyString(value.notificationId);
   const recipientProfileId = nonEmptyString(value.recipientProfileId);
-  if (!notificationId || !recipientProfileId) {
+  const href = value.href;
+  if (
+    !notificationId ||
+    !recipientProfileId ||
+    typeof href !== 'string' ||
+    href !== href.trim() ||
+    !isInternalNotificationHref(href)
+  ) {
     return null;
   }
 
-  return { notificationId, recipientProfileId };
-}
-
-function postHref(
-  post:
-    | { readonly id: string; readonly profile: { readonly relativeHandle: string } }
-    | null
-    | undefined,
-): Href | null {
-  if (!post?.id || !post.profile.relativeHandle) {
-    return null;
-  }
-
-  return `/${post.profile.relativeHandle}/${post.id}` as Href;
-}
-
-export function nativePushNotificationTargetHref(
-  node: NativePushNotificationTargetQuery$data['node'],
-): Href | null {
-  if (!node) {
-    return null;
-  }
-
-  switch (node.__typename) {
-    case 'FollowNotification':
-      return node.profile?.relativeHandle ? (`/${node.profile.relativeHandle}` as Href) : null;
-    case 'FollowRequestNotification':
-      return '/follow-requests';
-    case 'ReactionNotification':
-    case 'RepostNotification':
-    case 'ReplyNotification':
-      return postHref(node.post);
-    default:
-      return null;
-  }
+  return { href: href as Href, notificationId, recipientProfileId };
 }
 
 export function nativePushResponseKey(response: NotificationResponse): string | null {
