@@ -1444,11 +1444,12 @@ describe('inbound Create dispatch', () => {
       FOR EACH ROW EXECUTE FUNCTION fail_hydrated_author_profile_media_insert()
     `;
     const actorDocumentWorkflowId = remoteProfileLookupWorkflow.workflowIdFromArgs({
-      actorJsonLd: {},
       actorUri: remoteActorUri.href,
-      contextOrigin: publicOrigin,
-      kind: 'actor-document',
-      receivedAt: receivedAt.toString(),
+      actorDocument: {
+        jsonLd: {},
+        contextOrigin: publicOrigin,
+        receivedAt: receivedAt.toString(),
+      },
     });
 
     try {

@@ -94,8 +94,7 @@ export const handleInboundUpdate = async (
       actorJsonLd,
       actorUri,
       context,
-      receivedAt,
-      activityUri: update.id,
+      receipt: { activityUri: update.id, receivedAt },
     });
   } catch (error) {
     if (error instanceof NotFoundError) {
