@@ -11,13 +11,17 @@ import { z } from 'zod';
 import { workflowActivityOptions } from './activity-options';
 import { runChildWorkflow } from './child';
 import type {
+  RemoteProfileActorLookupInput,
   RemoteProfileLookupInput,
   RemoteProfileMaterializationInput,
 } from '@kosmo/core/temporal/workflows';
 import type * as activities from '../activities';
 
-const { lookupRemoteActorUriActivity, materializeRemoteProfileActorActivity } =
-  proxyActivities<typeof activities>(workflowActivityOptions);
+const {
+  lookupRemoteActorUriActivity,
+  materializeRemoteProfileActorActivity,
+  refreshRemoteProfileActorActivity,
+} = proxyActivities<typeof activities>(workflowActivityOptions);
 
 const httpUriSchema = z.url().refine((value) => {
   const uri = new URL(value);
@@ -29,6 +33,11 @@ const receiptSchema = z.strictObject({
   activityUri: activityUriSchema,
   receivedAt: z.iso.datetime(),
 });
+const actorDocumentSchema = z.strictObject({
+  jsonLd: z.json(),
+  contextOrigin: httpUriSchema,
+  receivedAt: z.iso.datetime(),
+});
 
 const remoteProfileLookupInputSchema = z.union([
   z.strictObject({
@@ -38,23 +47,9 @@ const remoteProfileLookupInputSchema = z.union([
   }),
   z.strictObject({
     actorUri: httpUriSchema,
-    kind: z.literal('stored-actor'),
+    profileId: z.string().min(1).optional(),
     receipt: receiptSchema.optional(),
-  }),
-  z.strictObject({
-    actorJsonLd: z.json(),
-    actorUri: httpUriSchema,
-    contextOrigin: httpUriSchema,
-    kind: z.literal('actor-document'),
-    receivedAt: z.iso.datetime(),
-  }),
-  z.strictObject({
-    actorJsonLd: z.json(),
-    actorUri: httpUriSchema,
-    activityUri: activityUriSchema,
-    contextOrigin: httpUriSchema,
-    kind: z.literal('update'),
-    receivedAt: z.iso.datetime(),
+    actorDocument: actorDocumentSchema.optional(),
   }),
 ]);
 
@@ -109,12 +104,14 @@ export async function remoteProfileLookupWorkflow(
       return null;
     }
 
-    const materializationInput: RemoteProfileMaterializationInput = {
+    const materializationInput: RemoteProfileActorLookupInput = {
       actorUri,
       ...(parsedInput.profileId ? { profileId: parsedInput.profileId } : {}),
     };
     const state = await materializeRemoteProfileActorActivity(materializationInput);
-    return state === null ? null : startRefreshIfNeeded(materializationInput, state);
+    return state === null
+      ? refreshRemoteProfileActorActivity(materializationInput)
+      : startRefreshIfNeeded(materializationInput, state);
   }
 
   const state = await materializeRemoteProfileActorActivity(parsedInput);

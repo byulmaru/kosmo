@@ -14,12 +14,16 @@ import {
 import { ApplicationFailure } from '@temporalio/activity';
 import { and, eq } from 'drizzle-orm';
 import type {
-  RemoteProfileActorMaterializationInput,
+  RemoteProfileActorLookupInput,
   RemoteProfileHandleLookupInput,
   RemoteProfileMaterializationInput,
 } from '@kosmo/core/temporal/workflows';
 
 const remoteActorRefreshTtl = Temporal.Duration.from({ hours: 7 * 24 });
+const needsRefresh = (lastFetchedAt: Temporal.Instant | null, now: Temporal.Instant) =>
+  lastFetchedAt === null ||
+  lastFetchedAt.add(remoteActorRefreshTtl).epochNanoseconds <= now.epochNanoseconds;
+
 const remoteProfileFetchErrorNames = new Set([
   'AbortError',
   'FetchError',
@@ -100,26 +104,6 @@ const ensureMissingRemoteProfileLookupAllowed = async (actorUri: URL) => {
   }
 };
 
-const findStoredRemoteProfileActorState = async (
-  input: RemoteProfileMaterializationInput,
-): Promise<RemoteProfileMaterializationState | null> => {
-  const stored = await findStoredRemoteProfileActorByUri(input.actorUri);
-
-  if (!stored) {
-    return null;
-  }
-
-  const usable = requireUsableStoredRemoteProfileActor(stored);
-
-  return {
-    profileId: usable.profile.id,
-    needsRefresh:
-      usable.actor.lastFetchedAt === null ||
-      usable.actor.lastFetchedAt.add(remoteActorRefreshTtl).epochNanoseconds <=
-        Temporal.Now.instant().epochNanoseconds,
-  };
-};
-
 export const lookupRemoteActorUriActivity = async (
   input: RemoteProfileHandleLookupInput,
 ): Promise<string | null> => {
@@ -196,10 +180,13 @@ export const refreshRemoteProfileActorActivity = async (
   const now = Temporal.Now.instant();
 
   try {
-    const stored = await findStoredRemoteProfileActorState(input);
+    const stored = await findStoredRemoteProfileActorByUri(input.actorUri);
 
-    if (stored && !stored.needsRefresh) {
-      return stored.profileId;
+    if (stored) {
+      const usable = requireUsableStoredRemoteProfileActor(stored);
+      if (!needsRefresh(usable.actor.lastFetchedAt, now)) {
+        return usable.profile.id;
+      }
     }
 
     let origin: string;
@@ -300,10 +287,11 @@ export const refreshRemoteProfileActorActivity = async (
 };
 
 export const materializeRemoteProfileActorActivity = async (
-  input: RemoteProfileActorMaterializationInput,
+  input: RemoteProfileActorLookupInput,
 ): Promise<RemoteProfileMaterializationState | null> => {
   try {
-    if ('kind' in input && input.kind === 'stored-actor') {
+    if (!input.actorDocument) {
+      const now = Temporal.Now.instant();
       const stored = await findStoredRemoteProfileActorByUri(input.actorUri);
       if (!stored) {
         await ensureMissingRemoteProfileLookupAllowed(new URL(input.actorUri));
@@ -312,37 +300,30 @@ export const materializeRemoteProfileActorActivity = async (
 
       const usable = requireUsableStoredRemoteProfileActor(stored);
       const actor = input.receipt ? await reactivateStoredRemoteProfileActor(usable) : usable;
-      return { needsRefresh: false, profileId: actor.profile.id };
+      return {
+        needsRefresh: needsRefresh(actor.actor.lastFetchedAt, now),
+        profileId: actor.profile.id,
+      };
     }
 
-    if ('kind' in input && (input.kind === 'actor-document' || input.kind === 'update')) {
-      if (input.kind === 'update') {
-        const stored = await findStoredRemoteProfileActorByUri(input.actorUri);
-        if (!stored) {
-          return null;
-        }
-
-        requireUsableStoredRemoteProfileActor(stored);
+    if (input.receipt) {
+      const stored = await findStoredRemoteProfileActorByUri(input.actorUri);
+      if (!stored) {
+        return null;
       }
 
-      const context = federation.createContext(new URL(input.contextOrigin), undefined);
-      const profile = await materializeRemoteProfileActor({
-        actorJsonLd: input.actorJsonLd,
-        actorUri: new URL(input.actorUri),
-        context,
-        now: Temporal.Instant.from(input.receivedAt),
-        reactivateUnresponsive: true,
-      });
-      return { needsRefresh: false, profileId: profile.id };
+      requireUsableStoredRemoteProfileActor(stored);
     }
 
-    const state = await findStoredRemoteProfileActorState(input);
-    if (state) {
-      return state;
-    }
-
-    const profileId = await refreshRemoteProfileActorActivity(input);
-    return { needsRefresh: false, profileId };
+    const context = federation.createContext(new URL(input.actorDocument.contextOrigin), undefined);
+    const profile = await materializeRemoteProfileActor({
+      actorJsonLd: input.actorDocument.jsonLd,
+      actorUri: new URL(input.actorUri),
+      context,
+      now: Temporal.Instant.from(input.actorDocument.receivedAt),
+      reactivateUnresponsive: true,
+    });
+    return { needsRefresh: false, profileId: profile.id };
   } catch (error) {
     return rethrowRemoteProfileMaterializationError(error);
   }
