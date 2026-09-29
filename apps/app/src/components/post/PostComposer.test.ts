@@ -110,20 +110,6 @@ mockModule('relay-runtime', {
   ROOT_ID: 'root',
 });
 mockModule('@/analytics/client', { trackAnalytics: () => undefined });
-mockModule('@/analytics/MultiProfileAnalyticsProvider', {
-  useBeginMultiProfileAnalyticsAction: () => () => ({ trackProfile: () => undefined }),
-});
-mockModule('@/analytics/multiProfileContext', {
-  createAnalyticsCaptureOptions: (
-    accountId: string,
-    timestamp = new Date(),
-    uuid = 'test-uuid',
-  ) => ({
-    accountId,
-    timestamp,
-    uuid,
-  }),
-});
 mockModule('@/components/profile/ProfileNameBlock', {
   ProfileNameBlock: () => createElement('ProfileNameBlock'),
 });
@@ -134,9 +120,6 @@ mockModule('@/components/ui/Form', { Form: 'Form' });
 mockModule('@/components/ui/ToastProvider', { useToast: () => ({ showToast: () => undefined }) });
 mockModule('@/components/ui/TextField', { TextArea: 'TextArea', TextField: 'TextField' });
 mockModule('@/relay/RelayEnvironmentBoundary', { useRelayEnvironmentGeneration: () => null });
-mockModule('@/session/SessionProvider', {
-  useSession: () => ({ accountId: 'account-1', status: 'valid' }),
-});
 mockModule('@/theme/ThemeProvider', {
   useElevation: () => ({ floating: {}, overlay: {} }),
   useTheme: () => ({

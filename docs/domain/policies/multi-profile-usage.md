@@ -44,11 +44,13 @@ WAA로 세지 않는다. 실패한 요청만 있는 경우도 마찬가지다. �
 현재 선택 가능 조건은 Profile이 `ACTIVE`이고 해당 Instance가 `SUSPENDED`가 아닌 것이다. Account에
 연결된 모든 Profile row를 조건 없이 세지 않는다.
 
-앱은 인증된 화면 조회, 사용 가능 Profile 수의 변화, 인증된 행동 성공 시점에 기존 제품 조회 결과에서
-`available_profile_count`를 관측한다. 이 값은 그 시점에 동시에 사용 가능한 Profile 수이며, 목록을 알 수
-없으면 속성을 생략하고 `0`으로 대체하지 않는다. 앱은 자격 boolean이나 주간 중복 제거·집계를 만들지 않는다.
-PostHog/HogQL은 같은 KST 주에 관측된 `available_profile_count >= 2`를 대상 WAA 판정에 사용한다.
-화면 조회 시 선택 Profile과 기존 선택·Post·Follow 성공 이벤트의 행동 Profile이 사용 근거다.
+앱은 인증된 Account의 기존 Profile 목록 조회에서 수가 처음 확인되거나 달라질 때, 당시 동시에 사용 가능한
+Profile 수를 `available_profile_count` Person 속성으로 갱신한다. 목록을 알 수 없으면 갱신하지 않고
+`0`으로 대체하지 않는다. 앱은 자격 boolean이나 주간 중복 제거·집계를 만들지 않는다.
+PostHog/HogQL은 이벤트에 보존된 과거 Person 속성으로 같은 KST 주에 관측된
+`available_profile_count >= 2`를 대상 WAA 판정에 사용한다. 현재 Person 속성으로 과거 주차를 판정하지
+않는다. 인증된 화면 조회 당시 선택 Profile과 기존 선택·Post·Follow 성공 이벤트의 행동 Profile이 사용
+근거다.
 
 멀티 Profile 대상 WAA는 해당 주 안의 한 시점 이상에서 서로 다른 사용 가능 Profile 2개 이상을 동시에 가진
 WAA다. 이 자격은 Profile 사용 횟수나 행동량과 무관하게 Membership과 조회 가능 상태로만 판단한다. 서로

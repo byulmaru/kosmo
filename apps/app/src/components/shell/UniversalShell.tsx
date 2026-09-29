@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { graphql, useLazyLoadQuery } from 'react-relay';
-import { MultiProfileAnalyticsProvider } from '@/analytics/MultiProfileAnalyticsProvider';
+import { identifyAnalytics } from '@/analytics/client';
 import { FeedbackOverlay } from '@/components/feedback/FeedbackOverlay';
 import {
   NotificationReadAllAction,
@@ -152,6 +152,12 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
   );
   const profile = data.currentSession?.selectedProfile ?? null;
   const web = Platform.OS === 'web';
+  const availableProfileCount = data.me?.profiles.length;
+  useEffect(() => {
+    if (web && status === 'valid' && accountId && availableProfileCount !== undefined) {
+      identifyAnalytics(accountId, availableProfileCount);
+    }
+  }, [accountId, availableProfileCount, status, web]);
   const nativeDrawerSwipeEnabled = !web && isNativeDrawerSwipeEnabled(pathname);
   // Web keeps the shell root out of the tab order. Native View#focus() requires an explicit
   // focusable host target; tabIndex={-1} maps to focusable=false on Native.
@@ -514,16 +520,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
       reselectHome={reselectHome}
     >
       <PrimaryNavigationScrollReset pathname={pathname} />
-      <MultiProfileAnalyticsProvider
-        accountId={accountId}
-        enabled={web}
-        pathname={pathname}
-        profiles={data.me?.profiles ?? null}
-        selectedProfileId={profile?.id ?? null}
-        status={status}
-      >
-        {nativeDrawer}
-      </MultiProfileAnalyticsProvider>
+      {nativeDrawer}
       <FeedbackOverlay
         fallbackFocusRef={menuButtonRef}
         onRequestClose={() => setFeedbackOpen(false)}

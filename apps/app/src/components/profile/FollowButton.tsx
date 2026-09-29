@@ -1,6 +1,6 @@
 import { StyleSheet, View } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
-import { useBeginMultiProfileAnalyticsAction } from '@/analytics/MultiProfileAnalyticsProvider';
+import { trackAnalytics } from '@/analytics/client';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useSession } from '@/session/SessionProvider';
@@ -107,7 +107,6 @@ const getSelectedProfile = (store: RecordSourceSelectorProxy) =>
 
 export function FollowButton({ profile, style }: FollowButtonProps) {
   const { selectedProfileId } = useSession();
-  const beginAnalyticsAction = useBeginMultiProfileAnalyticsAction();
   const { showToast } = useToast();
   const data = useFragment(followButtonProfileFragment, profile);
   const [commitFollow, following] =
@@ -192,8 +191,6 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
         variables: { id: viewerState.followRequest.id },
       });
     } else {
-      const actorProfileId = selectedProfileId;
-      const followOperation = beginAnalyticsAction();
       commitFollow({
         onCompleted: (response, errors) => {
           const failed = Boolean(errors?.length);
@@ -201,19 +198,17 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
             showFailureToast();
             return;
           }
-          if (!actorProfileId) {
+          if (!selectedProfileId) {
             return;
           }
 
-          const occurredAt = new Date();
-          const properties = {
+          trackAnalytics('follow_succeeded', {
             result:
               response.followProfile.result.__typename === 'ProfileFollowRequest'
-                ? ('request' as const)
-                : ('follow' as const),
-            selected_profile_id: actorProfileId,
-          };
-          followOperation.trackProfile('follow_succeeded', properties, occurredAt);
+                ? 'request'
+                : 'follow',
+            selected_profile_id: selectedProfileId,
+          });
         },
         onError: showFailureToast,
         optimisticUpdater: (store) => {

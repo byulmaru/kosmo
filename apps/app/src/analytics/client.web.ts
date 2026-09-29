@@ -1,15 +1,12 @@
 import posthogClient from 'posthog-js';
 import { getPublicConfig } from '@/config/public';
 import type { PostHog } from 'posthog-js';
-import type {
-  AnalyticsCaptureOptions,
-  AnalyticsEventName,
-  AnalyticsEventProperties,
-} from './events';
+import type { AnalyticsEventName, AnalyticsEventProperties } from './events';
 
 const POSTHOG_USER_ID = '$user_id';
 
 let client: PostHog | null | undefined;
+let selectedProfileContext: { accountId: string; profileId: string } | null = null;
 
 function initializeAnalytics(): PostHog | null {
   const browserHostname = typeof window === 'undefined' ? undefined : window.location.hostname;
@@ -39,6 +36,25 @@ function initializeAnalytics(): PostHog | null {
       api_host: configuredApiHost,
       defaults: '2026-05-30',
       mask_personal_data_properties: false,
+      before_send: (event) => {
+        if (
+          !event ||
+          event.event !== '$pageview' ||
+          !selectedProfileContext ||
+          !client ||
+          getPostHogAccountId(client) !== selectedProfileContext.accountId ||
+          client.get_distinct_id() !== selectedProfileContext.accountId
+        ) {
+          return event;
+        }
+        return {
+          ...event,
+          properties: {
+            ...event.properties,
+            selected_profile_id: selectedProfileContext.profileId,
+          },
+        };
+      },
     });
   } catch {
     client = null;
@@ -50,7 +66,6 @@ function initializeAnalytics(): PostHog | null {
 export function trackAnalytics<Name extends AnalyticsEventName>(
   eventName: Name,
   properties: AnalyticsEventProperties[Name],
-  options?: AnalyticsCaptureOptions,
 ): void {
   try {
     const analyticsClient = initializeAnalytics();
@@ -58,29 +73,13 @@ export function trackAnalytics<Name extends AnalyticsEventName>(
       return;
     }
 
-    if (
-      options?.accountId !== undefined &&
-      (getPostHogAccountId(analyticsClient) !== options.accountId ||
-        analyticsClient.get_distinct_id() !== options.accountId)
-    ) {
-      return;
-    }
-
-    const captureOptions =
-      options?.uuid !== undefined || options?.timestamp !== undefined
-        ? {
-            ...(options.uuid !== undefined ? { uuid: options.uuid } : {}),
-            ...(options.timestamp !== undefined ? { timestamp: options.timestamp } : {}),
-          }
-        : undefined;
-
-    if (captureOptions) {
-      analyticsClient.capture(
-        eventName,
-        properties as Parameters<PostHog['capture']>[1],
-        captureOptions,
-      );
-      return;
+    if (eventName === 'profile_selected') {
+      const accountId = getPostHogAccountId(analyticsClient);
+      const profileId = (properties as AnalyticsEventProperties['profile_selected'])
+        .selected_profile_id;
+      if (accountId && analyticsClient.get_distinct_id() === accountId) {
+        setAnalyticsSelectedProfile(accountId, profileId);
+      }
     }
 
     analyticsClient.capture(eventName, properties as Parameters<PostHog['capture']>[1]);
@@ -94,7 +93,15 @@ function getPostHogAccountId(analyticsClient: PostHog): string | null {
   return typeof userId === 'string' && userId ? userId : null;
 }
 
-export function identifyAnalytics(accountId: string): void {
+export function setAnalyticsSelectedProfile(
+  accountId: string | null,
+  selectedProfileId: string | null,
+): void {
+  selectedProfileContext =
+    accountId && selectedProfileId ? { accountId, profileId: selectedProfileId } : null;
+}
+
+export function identifyAnalytics(accountId: string, availableProfileCount?: number): void {
   if (!accountId) {
     return;
   }
@@ -113,13 +120,19 @@ export function identifyAnalytics(accountId: string): void {
       analyticsClient.reset();
     }
 
-    analyticsClient.identify(accountId);
+    analyticsClient.identify(
+      accountId,
+      availableProfileCount === undefined
+        ? undefined
+        : { available_profile_count: availableProfileCount },
+    );
   } catch {
     // Analytics is best-effort and must not affect the product flow.
   }
 }
 
 export function clearAnalytics(): void {
+  selectedProfileContext = null;
   try {
     const analyticsClient = initializeAnalytics();
     if (!analyticsClient || !getPostHogAccountId(analyticsClient)) {

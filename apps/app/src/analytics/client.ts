@@ -1,21 +1,24 @@
-import type {
-  AnalyticsCaptureOptions,
-  AnalyticsEventName,
-  AnalyticsEventProperties,
-} from './events';
+import type { AnalyticsEventName, AnalyticsEventProperties } from './events';
 
 export function trackAnalytics<Name extends AnalyticsEventName>(
   name: Name,
   properties: AnalyticsEventProperties[Name],
-  options?: AnalyticsCaptureOptions,
 ): void {
   void name;
   void properties;
-  void options;
 }
 
-export function identifyAnalytics(accountId: string): void {
+export function identifyAnalytics(accountId: string, availableProfileCount?: number): void {
   void accountId;
+  void availableProfileCount;
+}
+
+export function setAnalyticsSelectedProfile(
+  accountId: string | null,
+  selectedProfileId: string | null,
+): void {
+  void accountId;
+  void selectedProfileId;
 }
 
 export function clearAnalytics(): void {}

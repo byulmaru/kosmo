@@ -23,49 +23,49 @@ PostHog 증거를 확인한 뒤에만 시작한다.
 사용하며 custom property로 `account_id`를 복제하지 않는다. 화면 pathname, Profile 목록·이름·handle,
 Post Content, 검색 원문, Follow 대상 Profile ID도 수집하지 않는다.
 
-| 이벤트                                            | 허용 custom property                                                          | WAA              | 사용 Profile                             |
-| ------------------------------------------------- | ----------------------------------------------------------------------------- | ---------------- | ---------------------------------------- |
-| `multi_profile_context_observed` (`screen`)       | `observation_kind`, 선택적인 `available_profile_count`, `selected_profile_id` | 화면 조회로 포함 | 선택 Profile이 있으면 포함               |
-| `multi_profile_context_observed` (`availability`) | `observation_kind`, `available_profile_count`                                 | 단독으로 제외    | 단독으로 제외                            |
-| `profile_created`                                 | `selected_profile_id`                                                         | 포함             | 제외. 생성 성공만으로 사용으로 세지 않음 |
-| `profile_selected`                                | `selected_profile_id`, 선택적인 `selection_cause`, `previous_profile_id`      | 포함             | 선택한 Profile 포함                      |
-| `post_created`                                    | `selected_profile_id`, `visibility`                                           | 포함             | 행동 주체 Profile 포함                   |
-| `follow_succeeded`                                | `selected_profile_id`, `result` (`follow`/`request`)                          | 포함             | 행동 주체 Profile 포함                   |
-| `search_submitted`                                | `tab`, `source`, 선택적인 `selected_profile_id`                               | 포함             | 해당 없음                                |
-| `search_results_loaded`                           | `tab`, `has_results`, 선택적인 `selected_profile_id`                          | 포함             | 해당 없음                                |
-| `search_result_selected`                          | `tab`, 선택적인 `selected_profile_id`                                         | 포함             | 해당 없음                                |
+| 이벤트                   | 허용 custom property                                                     | WAA              | 사용 Profile                             |
+| ------------------------ | ------------------------------------------------------------------------ | ---------------- | ---------------------------------------- |
+| SDK `$pageview`          | 인증 화면이면 `selected_profile_id`                                      | 화면 조회로 포함 | 선택 Profile이 있으면 포함               |
+| SDK `$identify` / `$set` | Person `available_profile_count` 갱신. event property가 아님             | 단독으로 제외    | 단독으로 제외                            |
+| `profile_created`        | `selected_profile_id`                                                    | 포함             | 제외. 생성 성공만으로 사용으로 세지 않음 |
+| `profile_selected`       | `selected_profile_id`, 선택적인 `selection_cause`, `previous_profile_id` | 포함             | 선택한 Profile 포함                      |
+| `post_created`           | `selected_profile_id`, `visibility`                                      | 포함             | 행동 주체 Profile 포함                   |
+| `follow_succeeded`       | `selected_profile_id`, `result` (`follow`/`request`)                     | 포함             | 행동 주체 Profile 포함                   |
+| `search_submitted`       | `tab`, `source`                                                          | 포함             | 해당 없음                                |
+| `search_results_loaded`  | `tab`, `has_results`                                                     | 포함             | 해당 없음                                |
+| `search_result_selected` | `tab`                                                                    | 포함             | 해당 없음                                |
 
-검색 이벤트의 `selected_profile_id`는 행동 시작 시 선택 Profile 문맥이며, 속성이 있어도 사용 Profile 수에는 포함하지 않는다. 선택 Profile이 없으면 속성을 생략한다.
-
-`available_profile_count`는 해당 Account가 관측 당시 **동시에 선택할 수 있는** Profile의 수다. 기존
+`available_profile_count`는 해당 Account가 관측 당시 **동시에 선택할 수 있는** Profile의 수를 나타내는
+Person 속성이다. 기존
 `me.profiles` 조회와 `selectProfile`이 공유하는 조건대로 Account-Profile Membership이 있고, Profile이
 `ACTIVE`이며 Instance가 `SUSPENDED`가 아닌 Profile을 센다. Owner/Member와 Local/Remote를 모두
-포함한다. `UniversalShell`에서 인증 상태의 화면이 열리거나 pathname이 바뀔 때 `screen`으로 기록하고,
-같은 화면에서 조회 목록의 count가 바뀌면 `availability` 관측을 남긴다. 인증된 행동의 성공 callback
-시점에도 현재 제품 데이터 흐름의 목록에서 얻은 count를 관측한다. Relay
-`store-and-network`는 캐시 결과를 먼저 줄 수 있으므로 이 값은 강한 서버 시점 snapshot이 아니다. 목록을
-알 수 없을 때는 screen 관측의 count를 생략하고 availability 관측을 보내지 않는다. 앱은 `>= 2` 판정이나
-주간 중복 제거를 하지 않는다. Profile ID 목록과 Membership 상태는 별도 분석 속성으로 보내지 않는다.
+포함한다. `UniversalShell`의 기존 `me.profiles` Relay 조회에서 인증 Account의 목록이 처음 확인되거나
+count가 달라질 때 기존 `identify` 경로로 갱신한다. 알려진 `0`은 그대로 보내고 목록을 알 수 없으면
+갱신하지 않는다. Relay `store-and-network`는 캐시 결과를 먼저 줄 수 있으므로 이 값은 강한 서버 시점
+snapshot이 아니다. Profile ID 목록과 Membership 상태는 별도 분석 속성으로 보내지 않는다.
+PostHog SDK의 Person 갱신 `$set` 및 최초 `$identify`와 이후 이벤트의 과거 Person 속성을 자격 관측에
+사용한다. SDK의 `$pageview`에는 인증 Account의 조회 당시 선택 Profile ID만 공통 analytics 경계에서
+붙인다. 앱은 `>= 2` 판정이나 주간 중복 제거를 하지 않는다.
 
 `profile_selected`는 기존 성공 이벤트다. 직접 선택에는 `selection_cause=direct`를, 생성 직후 자동
 선택에는 `selection_cause=auto`를 붙인다. 선택 직전 Profile이 있으면 `previous_profile_id`를 붙인다.
 HogQL은 `direct`이고 이전 ID가 있으며 성공한 도착 ID와 다를 때만 직접 전환으로 센다. 기존
 `post_created`와 `follow_succeeded`도 성공 이벤트의 행동 Profile ID를 그대로 재사용한다.
 
-`uuid`와 행동 시각은 custom property가 아니라 PostHog capture options로 전달한다. Web client는 capture
-직전에 options의 Account identity가 현재 SDK identity와 다르면 이벤트를 생략하고, Native client는 항상
-typed no-op이다. PostHog SDK가 관리하는 URL·referrer 같은 standard metadata는 이 계약 때문에 제거하거나
-필터링하지 않는다.
+`uuid`와 capture 시각은 PostHog SDK가 생성한다. 성공 행동은 기존 main의 이벤트를 그대로 사용한다.
+Native client는 typed no-op이다. PostHog SDK가 관리하는 URL·referrer 같은 standard metadata는 이 계약
+때문에 제거하거나 필터링하지 않는다.
 
 ## 집계 규칙
 
-1. 입력에서 production Web, 인증된 Account, 운영 제외 목록을 먼저 적용한다. 유효한 행동 시각이 없는 행은 주차에 귀속하지 않는다.
+1. 입력에서 production Web, 이벤트 당시 인증된 Account, 운영 제외 목록을 먼저 적용한다. 유효한 행동 시각이 없는 행은 주차에 귀속하지 않는다.
 2. `Account × event × uuid`로 deduplicate하고, 같은 키가 여러 번 들어오면 가장 이른 행동 시각을 사용한다.
 3. 행동 시각을 KST 주차로 변환한다. 수신 시각이나 집계 실행 시각으로 주차를 바꾸지 않는다.
-4. `availability` 관측만 있는 Account는 WAA가 아니다. `screen`과 승인된 행동 이벤트만 WAA를 만든다.
-5. 대상 WAA는 같은 주의 WAA 중 `available_profile_count >= 2`가 한 번 이상 관측된 Account다. 이
-   threshold는 HogQL에서만 적용한다.
-6. 사용 Profile은 `screen`의 선택 Profile, 성공한 `profile_selected`, Post·Follow 행동 주체만
+4. Person 갱신 `$identify`/`$set`만 있는 Account는 WAA가 아니다. 인증 `$pageview`와 승인된 행동
+   이벤트만 WAA를 만든다.
+5. 대상 WAA는 같은 주의 WAA 중 이벤트에 보존된 과거 Person `available_profile_count >= 2`가 한 번
+   이상 관측된 Account다. Person 갱신 이벤트도 자격 관측에 포함하며 threshold는 HogQL에서만 적용한다.
+6. 사용 Profile은 `$pageview`의 선택 Profile, 성공한 `profile_selected`, Post·Follow 행동 주체만
    세고, 같은 Account·Profile 조합은 한 번만 센다.
 7. 활성 Account는 대상 WAA이면서 같은 주에 서로 다른 사용 Profile이 2개 이상인 Account다.
 8. 활성 사용률은 `활성 Account / 대상 WAA × 100`, 도달률은 `활성 Account / WAA × 100`이다. 분모 0은
@@ -94,17 +94,19 @@ WITH source AS (
         event,
         uuid,
         timestamp,
-        properties
+        properties,
+        poe.properties.available_profile_count AS available_profile_count
     FROM events
     WHERE timestamp >= {from}
       AND timestamp < {to}
       AND event IN (
-        'multi_profile_context_observed', 'profile_created', 'profile_selected',
+        '$pageview', '$identify', '$set', 'profile_created', 'profile_selected',
         'post_created', 'follow_succeeded', 'search_submitted',
         'search_results_loaded', 'search_result_selected'
       )
       AND {production_web_filter}
       AND account_id IS NOT NULL
+      AND nullIf(toString(properties['$user_id']), '') = account_id
       AND account_id NOT IN {managed_exclusion_accounts}
 ), deduplicated AS (
     SELECT
@@ -112,7 +114,8 @@ WITH source AS (
         event,
         uuid,
         min(timestamp) AS occurred_at,
-        argMin(properties, timestamp) AS properties
+        argMin(properties, timestamp) AS properties,
+        argMin(available_profile_count, timestamp) AS available_profile_count
     FROM source
     GROUP BY account_id, event, uuid
 ), weekly AS (
@@ -120,25 +123,26 @@ WITH source AS (
         toStartOfWeek(toTimeZone(occurred_at, 'Asia/Seoul'), 1) AS week_key,
         account_id,
         event,
-        properties
+        properties,
+        available_profile_count
     FROM deduplicated
 ), waa AS (
     SELECT DISTINCT week_key, account_id
     FROM weekly
-    WHERE event != 'multi_profile_context_observed'
-       OR properties['observation_kind'] = 'screen'
+    WHERE event IN (
+        '$pageview', 'profile_created', 'profile_selected', 'post_created',
+        'follow_succeeded', 'search_submitted', 'search_results_loaded',
+        'search_result_selected'
+    )
 ), available AS (
     SELECT DISTINCT week_key, account_id
     FROM weekly
-    WHERE event = 'multi_profile_context_observed'
-      AND toInt64OrNull(toString(properties['available_profile_count'])) >= 2
+    WHERE toInt64OrNull(toString(available_profile_count)) >= 2
 ), used_profiles AS (
     SELECT DISTINCT week_key, account_id,
         properties['selected_profile_id'] AS profile_id
     FROM weekly
-    WHERE ((event = 'multi_profile_context_observed'
-            AND properties['observation_kind'] = 'screen')
-           OR event IN ('profile_selected', 'post_created', 'follow_succeeded'))
+    WHERE event IN ('$pageview', 'profile_selected', 'post_created', 'follow_succeeded')
       AND nullIf(toString(properties['selected_profile_id']), '') IS NOT NULL
 ), target_waa AS (
     SELECT DISTINCT waa.week_key, waa.account_id
@@ -163,8 +167,11 @@ GROUP BY week_key
 ORDER BY week_key;
 ```
 
-`used_profiles`에는 생성 성공만 포함하지 않으며, Profile 목록의 가용성은 이벤트의
-`available_profile_count` 관측으로만 판단한다. 최종 Insight는 위 집합과 동일한 제외 목록·dedup을 사용해야
+`used_profiles`에는 생성 성공만 포함하지 않으며, Profile 목록의 가용성은
+Person 갱신 이벤트를 포함한 각 이벤트의 과거 Person 속성 관측으로만 판단한다.
+`poe.properties.available_profile_count`는 수집 처리 당시 이벤트에 보존된 값이다. 현재 Person 값으로
+과거 주차를 재분류하지 않는다. 앱 capture 시각과 서버 수집 시각이 다를 수 있으므로 주차 경계의 지연
+수집은 운영 대조 대상이다. 최종 Insight는 위 집합과 동일한 제외 목록·dedup을 사용해야
 한다. 현재 주는 `partial` badge를 표시하고, 과거 주 수치도 지연 도착 이벤트나 제외 목록 변경 시 다시
 계산한다. 별도 영속 DB, materialized table, 새 Account 생성 이벤트는 추가하지 않는다.
 
@@ -222,16 +229,26 @@ distinct Account 수가 분모다. 비교 주가 아직 완료되지 않았다�
 | 직접 전환 총횟수              |      2 |
 | 활성 Account당 평균 직접 전환 |      1 |
 
-같은 UUID 재전송, availability-only Account, Profile 생성 뒤 사용 제외, 전환 0회 활성 Account, 분모 0,
+같은 UUID 재전송, Person 갱신 이벤트만 있는 Account, Profile 생성 뒤 사용 제외, 전환 0회 활성 Account, 분모 0,
 KST 월요일 경계와 W+1/W+4 미도래를 함께 검증한다. 이 결과는 production 수집 인수나 대시보드 공개의
 증거가 아니다.
+
+Person 속성 방식의 합성 대조에는 다음 시간 순서를 포함한다. 이는 저장 쿼리의 read-back 전까지 기대
+사례이며, 특히 `$set` 이벤트에 갱신 후 count가 보존되는지는 실제 PostHog 수집으로 확인해야 한다.
+
+| 관측 순서                                                 | WAA  | 대상 WAA |
+| --------------------------------------------------------- | ---- | -------- |
+| 같은 주 count `1 → 2 → 1` 갱신 후 인증 화면 조회          | 포함 | 포함     |
+| 이전 주 count `2`, 이번 주 count 변화 없이 인증 화면 조회 | 포함 | 포함     |
+| count를 알 수 없는 상태에서 인증 화면만 조회              | 포함 | 제외     |
+| count `2` 갱신 이벤트만 있고 승인된 화면·행동 관측은 없음 | 제외 | 제외     |
 
 ## 주간 점검과 인수 gate
 
 완료된 직전 주를 점검할 때 담당자는 다음을 기록한다.
 
 1. 관측 기간과 집계 실행 시각, 규칙 버전, 최신 제외 목록 버전을 고정한다.
-2. 저장 쿼리의 중복 제거·KST 변환·availability-only 제외를 합성 기대표와 대조한다.
+2. 저장 쿼리의 중복 제거·KST 변환·Person 갱신 이벤트만 있는 Account 제외를 합성 기대표와 대조한다.
 3. 지연 이벤트가 이전 주에 반영됐는지와 부분 집계가 아닌지 확인한다.
 4. 개인정보 없는 PostHog schema/payload 증거에서 Account identity, 선택·행동 주체 Profile, 관측된 count,
    직접 전환, Post visibility, Follow result만 대조한다.

@@ -1,15 +1,5 @@
 export type AnalyticsEventProperties = {
   profile_view_succeeded: Record<string, never>;
-  multi_profile_context_observed:
-    | {
-        observation_kind: 'screen';
-        available_profile_count?: number;
-        selected_profile_id?: string;
-      }
-    | {
-        observation_kind: 'availability';
-        available_profile_count: number;
-      };
   profile_created: { selected_profile_id: string };
   profile_selected: {
     selected_profile_id: string;
@@ -30,33 +20,20 @@ export type AnalyticsEventProperties = {
     result: 'follow' | 'request';
   };
   search_submitted: {
-    selected_profile_id?: string;
     tab: 'popular' | 'latest' | 'media' | 'people';
     source: 'keyboard' | 'tab' | 'recent';
   };
   search_results_loaded: {
-    selected_profile_id?: string;
     tab: 'popular' | 'latest' | 'media' | 'people';
     has_results: boolean;
   };
   search_result_selected: {
-    selected_profile_id?: string;
     tab: 'popular' | 'latest' | 'media' | 'people';
   };
 };
 
 export type AnalyticsEventName = keyof AnalyticsEventProperties;
 
-export type AnalyticsCaptureOptions = {
-  accountId?: string;
-  uuid?: string;
-  timestamp?: Date;
-};
-
 export type AnalyticsEventArgs = {
-  [Name in AnalyticsEventName]: [
-    name: Name,
-    properties: AnalyticsEventProperties[Name],
-    options?: AnalyticsCaptureOptions,
-  ];
+  [Name in AnalyticsEventName]: [name: Name, properties: AnalyticsEventProperties[Name]];
 }[AnalyticsEventName];

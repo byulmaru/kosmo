@@ -1,21 +1,6 @@
 import type { AnalyticsEventArgs } from './events';
 
 const typecheckOnly = () => {
-  const screenContext: AnalyticsEventArgs = [
-    'multi_profile_context_observed',
-    {
-      observation_kind: 'screen',
-      available_profile_count: 2,
-      selected_profile_id: 'profile-id',
-    },
-    { accountId: 'account-id', uuid: 'event-uuid', timestamp: new Date() },
-  ];
-  void screenContext;
-  const availabilityContext: AnalyticsEventArgs = [
-    'multi_profile_context_observed',
-    { observation_kind: 'availability', available_profile_count: 1 },
-  ];
-  void availabilityContext;
   // @ts-expect-error unknown event는 공용 API 계약에 포함되지 않는다.
   const unknownEvent: AnalyticsEventArgs = ['unknown_event', {}];
   void unknownEvent;

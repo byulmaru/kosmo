@@ -20,8 +20,10 @@ class FakePostHog {
     return () => this.sessionListeners.delete(callback);
   }
   readonly calls: Call[] = [];
+  readonly sent: CaptureResult[] = [];
   readonly timestamps: Date[] = [];
   readonly identities: string[] = [];
+  readonly personProperties: Array<Record<string, unknown> | undefined> = [];
   readonly actions: string[] = [];
   captureAttempts = 0;
   resets = 0;
@@ -58,17 +60,19 @@ class FakePostHog {
       return undefined;
     }
     this.calls.push({ event, properties, ...(options ? { options } : {}) });
+    this.sent.push(filtered);
     assert.ok(filtered.timestamp);
     this.timestamps.push(filtered.timestamp);
     return filtered;
   }
 
-  identify(accountId: string) {
+  identify(accountId: string, properties?: Record<string, unknown>) {
     if (this.identifyFails) {
       throw new Error('identify failure');
     }
     this.actions.push(`identify:${accountId}`);
     this.identities.push(accountId);
+    this.personProperties.push(properties);
     this.distinctId = accountId;
     this.userId = accountId;
   }
@@ -200,110 +204,6 @@ describe('PostHog Web client', () => {
     assert.deepEqual(instance.calls, [{ event: 'post_created', properties }]);
   });
 
-  it('event별 typed payload를 전송한다', () => {
-    analytics.clearAnalytics();
-    const instance = instances[0];
-    assert.ok(instance);
-
-    analytics.trackAnalytics('profile_created', { selected_profile_id: 'profile-id' });
-    analytics.trackAnalytics('profile_selected', { selected_profile_id: 'profile-id' });
-    analytics.trackAnalytics('post_created', {
-      selected_profile_id: 'profile-id',
-      visibility: 'DIRECT',
-    });
-    analytics.trackAnalytics('follow_succeeded', {
-      selected_profile_id: 'profile-id',
-      result: 'request',
-    });
-    analytics.trackAnalytics('search_submitted', { tab: 'people', source: 'keyboard' });
-    analytics.trackAnalytics('search_results_loaded', { tab: 'people', has_results: true });
-    analytics.trackAnalytics('search_result_selected', { tab: 'people' });
-    analytics.trackAnalytics('multi_profile_context_observed', {
-      observation_kind: 'screen',
-      available_profile_count: 2,
-      selected_profile_id: 'profile-id',
-    });
-    analytics.trackAnalytics('multi_profile_context_observed', {
-      observation_kind: 'availability',
-      available_profile_count: 2,
-    });
-
-    assert.deepEqual(instance.calls, [
-      { event: 'profile_created', properties: { selected_profile_id: 'profile-id' } },
-      { event: 'profile_selected', properties: { selected_profile_id: 'profile-id' } },
-      {
-        event: 'post_created',
-        properties: { selected_profile_id: 'profile-id', visibility: 'DIRECT' },
-      },
-      {
-        event: 'follow_succeeded',
-        properties: { selected_profile_id: 'profile-id', result: 'request' },
-      },
-      {
-        event: 'search_submitted',
-        properties: { tab: 'people', source: 'keyboard' },
-      },
-      {
-        event: 'search_results_loaded',
-        properties: { tab: 'people', has_results: true },
-      },
-      { event: 'search_result_selected', properties: { tab: 'people' } },
-      {
-        event: 'multi_profile_context_observed',
-        properties: {
-          observation_kind: 'screen',
-          available_profile_count: 2,
-          selected_profile_id: 'profile-id',
-        },
-      },
-      {
-        event: 'multi_profile_context_observed',
-        properties: {
-          observation_kind: 'availability',
-          available_profile_count: 2,
-        },
-      },
-    ]);
-  });
-
-  it('capture options에는 Account identity를 제외하고 UUID와 timestamp만 전달한다', () => {
-    analytics.clearAnalytics();
-    const instance = instances[0];
-    assert.ok(instance);
-    analytics.identifyAnalytics('account-a');
-    const timestamp = new Date('2026-09-22T00:00:00.000Z');
-
-    analytics.trackAnalytics(
-      'profile_created',
-      { selected_profile_id: 'profile-id' },
-      { accountId: 'account-a', uuid: 'event-uuid', timestamp },
-    );
-
-    assert.deepEqual(instance.calls, [
-      {
-        event: 'profile_created',
-        properties: { selected_profile_id: 'profile-id' },
-        options: { uuid: 'event-uuid', timestamp },
-      },
-    ]);
-  });
-
-  it('captured Account identity가 현재 PostHog identity와 다르면 event를 생략한다', () => {
-    analytics.clearAnalytics();
-    const instance = instances[0];
-    assert.ok(instance);
-    analytics.identifyAnalytics('account-a');
-
-    analytics.trackAnalytics(
-      'profile_created',
-      { selected_profile_id: 'profile-id' },
-      { accountId: 'account-b', uuid: 'event-uuid', timestamp: new Date() },
-    );
-
-    assert.equal(instance.captureAttempts, 0);
-    assert.deepEqual(instance.calls, []);
-  });
-
   it('capture 실패는 product flow를 차단하지 않는다', () => {
     analytics.clearAnalytics();
     const instance = instances[0];
@@ -315,21 +215,6 @@ describe('PostHog Web client', () => {
     );
     assert.equal(instance.captureAttempts, 1);
     assert.deepEqual(instance.calls, []);
-  });
-
-  it('typed event properties를 변형하지 않고 PostHog에 전달한다', () => {
-    analytics.clearAnalytics();
-    const instance = instances[0];
-    assert.ok(instance);
-
-    const properties = {
-      selected_profile_id: 'profile-id',
-      visibility: 'DIRECT' as const,
-    };
-    analytics.trackAnalytics('post_created', properties);
-
-    assert.equal(instance.calls[0]?.properties, properties);
-    assert.deepEqual(instance.calls, [{ event: 'post_created', properties }]);
   });
 
   it('Account identity는 같은 ID를 SDK에 위임하고 전환·guest에서 reset 후 분리한다', () => {
@@ -352,6 +237,62 @@ describe('PostHog Web client', () => {
       'identify:account-b',
       'reset',
     ]);
+  });
+
+  it('알려진 Profile 수 0과 변경값만 Person 속성으로 전달하고 미확인 값은 생략한다', () => {
+    analytics.identifyAnalytics('account-a');
+    analytics.identifyAnalytics('account-a', 0);
+    analytics.identifyAnalytics('account-a', 2);
+    analytics.identifyAnalytics('account-a');
+    const instance = instances[0];
+    assert.ok(instance);
+    assert.deepEqual(instance.personProperties, [
+      undefined,
+      { available_profile_count: 0 },
+      { available_profile_count: 2 },
+      undefined,
+    ]);
+  });
+
+  it('Account 전환에는 reset 뒤 새 Account의 count를 identify로 전달한다', () => {
+    analytics.identifyAnalytics('account-a', 2);
+    analytics.identifyAnalytics('account-b', 1);
+    const instance = instances[0];
+    assert.ok(instance);
+    assert.deepEqual(instance.actions, ['identify:account-a', 'reset', 'identify:account-b']);
+    assert.deepEqual(instance.personProperties, [
+      { available_profile_count: 2 },
+      { available_profile_count: 1 },
+    ]);
+  });
+
+  it('인증된 pageview에만 조회 당시 선택 Profile을 붙이고 전환·guest에서 지운다', () => {
+    analytics.setAnalyticsSelectedProfile('account-a', 'profile-a');
+    analytics.identifyAnalytics('account-a');
+    const instance = instances[0];
+    assert.ok(instance);
+    instance.capture('$pageview', {});
+    analytics.trackAnalytics('bookmark_added', {});
+    analytics.trackAnalytics('profile_selected', { selected_profile_id: 'profile-b' });
+    instance.capture('$pageview', {});
+    analytics.setAnalyticsSelectedProfile('account-b', 'profile-c');
+    instance.capture('$pageview', {});
+    analytics.identifyAnalytics('account-b');
+    instance.capture('$pageview', {});
+    analytics.clearAnalytics();
+    instance.capture('$pageview', {});
+
+    assert.deepEqual(
+      instance.sent
+        .filter((event) => event.event === '$pageview')
+        .map((event) => event.properties?.selected_profile_id),
+      ['profile-a', 'profile-b', undefined, 'profile-c', undefined],
+    );
+    assert.equal(
+      instance.sent.find((event) => event.event === 'bookmark_added')?.properties
+        ?.selected_profile_id,
+      undefined,
+    );
   });
 
   it('reload 뒤 SDK에 남은 같은 Account는 reset하지 않는다', () => {

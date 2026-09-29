@@ -4,7 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { Platform, StyleSheet, View } from 'react-native';
 import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
 import { ConnectionHandler, ROOT_ID } from 'relay-runtime';
-import { useBeginMultiProfileAnalyticsAction } from '@/analytics/MultiProfileAnalyticsProvider';
+import { trackAnalytics } from '@/analytics/client';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
 import { Form } from '@/components/ui/Form';
@@ -224,7 +224,6 @@ function PostComposerContents({
   const [mediaGeneration, setMediaGeneration] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [commit] = useMutation<PostComposerCreatePostMutation>(CreatePostMutation);
-  const beginAnalyticsAction = useBeginMultiProfileAnalyticsAction();
   const { showToast } = useToast();
   const replyMode = Boolean(replyParentId);
   const quoteMode = Boolean(repostSourceId);
@@ -299,9 +298,6 @@ function PostComposerContents({
       return;
     }
     setSubmitting(true);
-    const submissionProfileId = profile.id;
-    const submissionVisibility = visibility;
-    const postOperation = beginAnalyticsAction();
     const submissionGeneration = contextGenerationRef.current;
     const submissionEnvironmentGeneration = environmentGenerationRef?.current;
     const submissionGuardGeneration = contextGuard?.current;
@@ -328,19 +324,6 @@ function PostComposerContents({
         },
       },
       onCompleted: (response) => {
-        const createdPost = response.createPost?.post;
-        if (createdPost) {
-          const occurredAt = new Date();
-          postOperation.trackProfile(
-            'post_created',
-            {
-              selected_profile_id: submissionProfileId,
-              visibility: submissionVisibility,
-            },
-            occurredAt,
-          );
-        }
-
         if (
           !mountedRef.current ||
           contextGenerationRef.current !== submissionGeneration ||
@@ -350,11 +333,16 @@ function PostComposerContents({
           return;
         }
         setSubmitting(false);
+        const createdPost = response.createPost?.post;
         if (!createdPost) {
           showToast(submitFailureMessage, { tone: 'danger' });
           return;
         }
 
+        trackAnalytics('post_created', {
+          selected_profile_id: profile.id,
+          visibility,
+        });
         setBody('');
         if (!submissionReplyMode) {
           setContentWarning('');

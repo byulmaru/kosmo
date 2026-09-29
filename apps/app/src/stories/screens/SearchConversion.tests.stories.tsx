@@ -148,7 +148,7 @@ export const SelectedProfileVisible: Story = {
         'profile_view_succeeded',
       ]),
     );
-    expect(events()[0]?.[1]).toEqual({ tab: 'people', selected_profile_id: 'conversion-viewer' });
+    expect(events()[0]?.[1]).toEqual({ tab: 'people' });
     expect(events()[1]?.[1]).toEqual({});
   },
 };

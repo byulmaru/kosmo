@@ -13,7 +13,7 @@ import {
   View,
 } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
-import { useBeginMultiProfileAnalyticsAction } from '@/analytics/MultiProfileAnalyticsProvider';
+import { trackAnalytics } from '@/analytics/client';
 import { ProfilePicker } from '@/components/profile/ProfilePicker';
 import { ProfileSwitcherUnreadIndicator } from '@/components/profile/ProfileSwitcherUnread';
 import { Avatar } from '@/components/ui/Avatar';
@@ -182,7 +182,6 @@ export function ProfileSwitcher({
   const pathname = usePathname();
   const data = useFragment(ProfileSwitcherFragment, query);
   const { resetActor } = useRelayActor();
-  const beginAnalyticsAction = useBeginMultiProfileAnalyticsAction();
   const { request: requestNavigation } = useNavigationGuard();
   const { showToast } = useToast();
   const [internalOpen, setInternalOpen] = useState(false);
@@ -289,7 +288,6 @@ export function ProfileSwitcher({
     setFieldError(null);
     setOperationError(null);
     const previousProfileId = active?.id ?? null;
-    const selectedOperation = beginAnalyticsAction();
     commitSelect({
       variables: { id },
       onCompleted: (response, errors) => {
@@ -299,16 +297,11 @@ export function ProfileSwitcher({
         }
 
         const selectedProfileId = response.selectProfile.profile.id;
-        const occurredAt = new Date();
-        selectedOperation.trackProfile(
-          'profile_selected',
-          {
-            selected_profile_id: selectedProfileId,
-            selection_cause: cause,
-            ...(previousProfileId ? { previous_profile_id: previousProfileId } : {}),
-          },
-          occurredAt,
-        );
+        trackAnalytics('profile_selected', {
+          selected_profile_id: selectedProfileId,
+          selection_cause: cause,
+          ...(previousProfileId ? { previous_profile_id: previousProfileId } : {}),
+        });
         setOpen(false);
         resetActor(selectedProfileId);
       },
@@ -339,7 +332,6 @@ export function ProfileSwitcher({
     const reportError = onError ?? setOperationError;
     setFieldError(null);
     setOperationError(null);
-    const creationOperation = beginAnalyticsAction();
     commitCreate({
       variables: { handle: normalized },
       onCompleted: (response, errors) => {
@@ -357,12 +349,9 @@ export function ProfileSwitcher({
           return;
         }
 
-        const occurredAt = new Date();
-        creationOperation.trackProfile(
-          'profile_created',
-          { selected_profile_id: response.createProfile.profile.id },
-          occurredAt,
-        );
+        trackAnalytics('profile_created', {
+          selected_profile_id: response.createProfile.profile.id,
+        });
         setHandle('');
         setCreating(false);
         commitProfileSelection(response.createProfile.profile.id, onError, 'auto');

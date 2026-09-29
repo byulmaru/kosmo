@@ -35,10 +35,7 @@ type PressableChildren = ReactNode | ((state: { pressed: boolean }) => ReactNode
 
 const platform: { OS: PlatformName } = { OS: 'ios' };
 const resetActorCalls: Array<string | null | undefined> = [];
-const analyticsCalls: Array<
-  [string, Record<string, unknown>, { accountId?: string; uuid?: string; timestamp?: Date }?]
-> = [];
-const observedActionCalls: Array<{ accountId: string; occurredAt?: Date }> = [];
+const analyticsCalls: Array<[string, Record<string, unknown>]> = [];
 const queryData = {
   currentSession: {
     id: 'session-1',
@@ -176,24 +173,6 @@ mockModule('@/analytics/client', {
     analyticsCalls.push(args as (typeof analyticsCalls)[number]);
   },
 });
-mockModule('@/analytics/MultiProfileAnalyticsProvider', {
-  useBeginMultiProfileAnalyticsAction: () => () => {
-    const uuid = globalThis.crypto.randomUUID();
-    return {
-      trackProfile: (name: string, properties: Record<string, unknown>, occurredAt: Date) => {
-        observedActionCalls.push({ accountId: 'account-1', occurredAt });
-        analyticsCalls.push([
-          name,
-          properties,
-          { accountId: 'account-1', timestamp: occurredAt, uuid },
-        ]);
-      },
-    };
-  },
-});
-mockModule('@/session/SessionProvider', {
-  useSession: () => ({ accountId: 'account-1', status: 'valid' }),
-});
 mockModule('@/components/profile/ProfilePicker', {
   ProfilePicker: MockProfilePicker,
 });
@@ -255,7 +234,6 @@ afterEach(async () => {
   pendingSelectMutation = null;
   resetActorCalls.length = 0;
   analyticsCalls.length = 0;
-  observedActionCalls.length = 0;
   mock.restoreAll();
 });
 
@@ -291,8 +269,6 @@ describe('ProfileSwitcher selection lifecycle', () => {
         },
       ],
     );
-    assert.equal(analyticsCalls[0]?.[2]?.accountId, 'account-1');
-    assert.equal(observedActionCalls[0]?.accountId, 'account-1');
   });
 
   it('GraphQL/network 실패와 단순 취소는 actor를 reset하지 않는다', async () => {
