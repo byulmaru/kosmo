@@ -40,8 +40,9 @@ Post Content, 검색 원문, Follow 대상 Profile ID도 수집하지 않는다.
 `available_profile_count`는 해당 Account가 관측 당시 **동시에 선택할 수 있는** Profile의 수다. 기존
 `me.profiles` 조회와 `selectProfile`이 공유하는 조건대로 Account-Profile Membership이 있고, Profile이
 `ACTIVE`이며 Instance가 `SUSPENDED`가 아닌 Profile을 센다. Owner/Member와 Local/Remote를 모두
-포함한다. 인증된 화면 조회 시점에 기록하고, 같은 화면에서 조회 목록의 count가 바뀌면 availability
-관측을 남긴다. 인증된 행동 성공 시점에도 현재 제품 데이터 흐름의 목록에서 얻은 count를 관측한다. Relay
+포함한다. `UniversalShell`에서 인증 상태의 화면이 열리거나 pathname이 바뀔 때 `screen`으로 기록하고,
+같은 화면에서 조회 목록의 count가 바뀌면 `availability` 관측을 남긴다. 인증된 행동의 성공 callback
+시점에도 현재 제품 데이터 흐름의 목록에서 얻은 count를 관측한다. Relay
 `store-and-network`는 캐시 결과를 먼저 줄 수 있으므로 이 값은 강한 서버 시점 snapshot이 아니다. 목록을
 알 수 없을 때는 screen 관측의 count를 생략하고 availability 관측을 보내지 않는다. 앱은 `>= 2` 판정이나
 주간 중복 제거를 하지 않는다. Profile ID 목록과 Membership 상태는 별도 분석 속성으로 보내지 않는다.
