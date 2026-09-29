@@ -1,7 +1,7 @@
 ## Context
 
 이 설계는 `proposal.md`와 `specs/activitypub-profile-block/spec.md`를 구체화한다. 상위 권위는
-`docs/domain/objects/profile-block.md`, `docs/domain/decisions/0029-profile-block-federation.md`와
+`docs/domain/objects/profile-block.md`, `docs/domain/decisions/0031-profile-block-federation.md`와
 PROD-818의 2026-09-08 발신·수신 및 기존 차단 rollout 결정과 2026-09-10 구두 결정 기록이다.
 
 최신 원격 main `32c281349444208aaddbe5aafe0d038a6e1fdaf4`과 현재 기준 `3906f2251e70a8b9bd39721c897493efbe83ff4a`를 대조했다. 적용되는 domain·Temporal·Fedify·기존 spec 경계에는 차이가 없다. Profile Block row는 존재하지만
