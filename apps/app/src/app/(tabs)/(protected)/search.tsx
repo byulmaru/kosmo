@@ -530,7 +530,7 @@ export default function SearchScreen() {
         ) : null}
 
         {phase === 'input' ? (
-          <View style={[styles.recent, web && styles.webContent]}>
+          <View style={styles.recent}>
             <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>최근 검색</Text>
             {recent.length ? (
               recent.map((term) => (
@@ -599,7 +599,7 @@ export default function SearchScreen() {
       </View>
 
       {phase === 'results' ? (
-        <View style={web && styles.webContent}>
+        <View>
           <RouteTabList
             accessibilityLabel="검색 결과 유형"
             href={(tab) => searchHref(query, tab)}
