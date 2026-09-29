@@ -7,6 +7,6 @@ The picker and server allow the 3,781 fully-qualified emoji represented by that 
 - Package source: <https://github.com/iamcal/emoji-data>
 - Noto source: <https://github.com/googlefonts/noto-emoji/releases/tag/v2.048>
 - Package data and code: MIT license (`emoji-datasource-google/LICENSE`)
-- Noto images: Apache License 2.0 (see the package README image-source section and the Noto repository `LICENSE`)
+- Noto images: Apache License 2.0 ([license copy](./LICENSE-APACHE-2.0.txt); see the package README image-source section)
 
-Korean and English names and search words come from `emojibase-data@17.0.0` CLDR annotations. Unicode emoji data and CLDR annotations are Copyright © Unicode, Inc. and governed by the [Unicode Terms of Use](https://www.unicode.org/copyright.html).
+Korean and English names and search words come from `emojibase-data@17.0.0` (MIT). The Noto and both package license texts are available in Settings → Info → Open-source licenses. Unicode emoji data and CLDR annotations are Copyright © Unicode, Inc. and governed by the [Unicode Terms of Use](https://www.unicode.org/copyright.html).
