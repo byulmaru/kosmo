@@ -1,11 +1,14 @@
 import '@kosmo/core/polyfill';
 
 import { Follow } from '@fedify/vocab';
-import { NotFoundError } from '@kosmo/core/error';
+import { ConflictError, NotFoundError } from '@kosmo/core/error';
 import { isHttpUri } from './activitypub-uri';
 import { handleInboundAcceptFollow } from './inbound-accept-follow';
 import { observeInbound } from './inbound-observability';
-import { findUsableStoredRemoteProfileActorByUri } from './remote-actor-materialization';
+import {
+  findOrMaterializeRemoteProfileActorByUri,
+  RemoteActorMaterializationError,
+} from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
 import type { Accept } from '@fedify/vocab';
 
@@ -26,11 +29,12 @@ export const handleInboundAccept = async (
     return;
   }
 
-  let remoteActor: Awaited<ReturnType<typeof findUsableStoredRemoteProfileActorByUri>>;
+  let remoteActor: Awaited<ReturnType<typeof findOrMaterializeRemoteProfileActorByUri>>;
   try {
-    remoteActor = await findUsableStoredRemoteProfileActorByUri(actorUri, {
-      activityUri: accept.id,
-      receivedAt,
+    remoteActor = await findOrMaterializeRemoteProfileActorByUri({
+      actorUri,
+      context,
+      receipt: { activityUri: accept.id, receivedAt },
     });
   } catch (error) {
     if (error instanceof NotFoundError) {
@@ -45,20 +49,21 @@ export const handleInboundAccept = async (
       });
       return;
     }
+    if (error instanceof RemoteActorMaterializationError || error instanceof ConflictError) {
+      observeInbound({
+        outcome: 'external_failure',
+        activityType: 'Accept',
+        actorOrigin: actorUri.origin,
+        error,
+        handler: 'accept',
+        objectOrigin: accept.objectId?.origin,
+        phase: 'actor_lookup',
+        reasonCode: 'remote_actor_lookup_rejected',
+      });
+      return;
+    }
     throw error;
   }
-  if (!remoteActor) {
-    observeInbound({
-      outcome: 'noop',
-      activityType: 'Accept',
-      actorOrigin: actorUri.origin,
-      handler: 'accept',
-      phase: 'actor_lookup',
-      reasonCode: 'remote_actor_missing',
-    });
-    return;
-  }
-
   const object = await accept.getObject({
     documentLoader: context.documentLoader,
     suppressError: true,
