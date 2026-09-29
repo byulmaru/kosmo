@@ -3,6 +3,7 @@ import {
   ApplicationFailure,
   condition,
   defineUpdate,
+  patched,
   proxyActivities,
   setHandler,
 } from '@temporalio/workflow';
@@ -10,6 +11,7 @@ import { match } from 'ts-pattern';
 import { z } from 'zod';
 import { workflowActivityOptions } from './activity-options';
 import { settleEffects } from './settle-effects';
+import { startPushNotificationWorkflow } from './start-push-notification';
 import type {
   ProfileFollowPair,
   ProfileFollowPairCommand,
@@ -241,6 +243,8 @@ export async function profileFollowPairWorkflow(input: ProfileFollowPair): Promi
     return;
   }
 
+  const pushNotificationDispatchEnabled = patched('profile-follow-pair-push-notification-v1');
+
   while (true) {
     await condition(allHandlersFinished);
 
@@ -282,7 +286,12 @@ export async function profileFollowPairWorkflow(input: ProfileFollowPair): Promi
             match(input.sourceKind)
               .with('FOLLOW', () => createFollowNotificationActivity(input.sourceId))
               .with('FOLLOW_REQUEST', () => createFollowRequestNotificationActivity(input.sourceId))
-              .exhaustive(),
+              .exhaustive()
+              .then((notificationId) =>
+                pushNotificationDispatchEnabled
+                  ? startPushNotificationWorkflow(notificationId)
+                  : undefined,
+              ),
             ...match(input)
               .with({ sendActivityPub: true }, () => [
                 sendProfileFollowActivity({

@@ -373,13 +373,15 @@ test('Follow 알림 생성과 삭제는 반복 및 동시 호출에 idempotent�
     }),
   );
 
-  await Promise.all([
+  const notificationIds = await Promise.all([
     createFollowNotification(profileFollow.id),
     createFollowNotification(profileFollow.id),
   ]);
-  assert.equal((await readNotifications(profileFollow.id)).length, 1);
+  const [notification] = await readNotifications(profileFollow.id);
+  assert.ok(notification);
+  assert.deepEqual(notificationIds, [notification.id, notification.id]);
 
-  await createFollowNotification(profileFollow.id);
+  assert.equal(await createFollowNotification(profileFollow.id), notification.id);
   assert.equal((await readNotifications(profileFollow.id)).length, 1);
 
   await deleteNotificationBySource(NotificationKind.FOLLOW, profileFollow.id);

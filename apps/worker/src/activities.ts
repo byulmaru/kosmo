@@ -11,6 +11,10 @@ export {
   executeProfileUnblockTransitionActivity,
 } from './activities/profile-block';
 export {
+  listPushNotificationInstallations as listPushNotificationInstallationsActivity,
+  sendPushNotification as sendPushNotificationActivity,
+} from './activities/push-notification';
+export {
   lookupRemoteActorUriActivity,
   materializeRemoteProfileActorActivity,
   refreshRemoteProfileActorActivity,

@@ -302,6 +302,135 @@ test(
 );
 
 test(
+  'Push delivery는 per-installation Activity를 재시도하고 확인된 형제 send를 다시 호출하지 않는다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+    const taskQueue = `${KOSMO_TASK_QUEUE}-push-delivery-retry-${process.pid}`;
+    const notificationId = '00000000-0000-8000-8000-000000000311';
+    const attempts = new Map<string, number>();
+    const worker = await Worker.create({
+      activities: {
+        listPushNotificationInstallationsActivity: async (id: string) => {
+          assert.equal(id, notificationId);
+          return ['installation-a', 'installation-b'];
+        },
+        sendPushNotificationActivity: async (id: string, installationId: string) => {
+          assert.equal(id, notificationId);
+          const nextAttempt = (attempts.get(installationId) ?? 0) + 1;
+          attempts.set(installationId, nextAttempt);
+          if (installationId === 'installation-a' && nextAttempt === 1) {
+            throw new Error('temporary provider failure');
+          }
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      await environment.client.workflow.execute('pushNotificationDeliveryWorkflow', {
+        args: [{ notificationId }],
+        taskQueue,
+        workflowId: `push-delivery-retry:${notificationId}`,
+      });
+    });
+
+    assert.deepEqual([...attempts.entries()].sort(), [
+      ['installation-a', 2],
+      ['installation-b', 1],
+    ]);
+  },
+);
+
+test(
+  'Notification child start is detached and a stable completed ID cannot reopen',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+    const taskQueue = `${KOSMO_TASK_QUEUE}-push-detached-${process.pid}`;
+    const notificationId = '00000000-0000-8000-8000-000000000312';
+    const installationId = 'installation-a';
+    let releaseSend!: () => void;
+    let sendStarted!: () => void;
+    const sendGate = new Promise<void>((resolve) => {
+      releaseSend = resolve;
+    });
+    const sendStartedPromise = new Promise<void>((resolve) => {
+      sendStarted = resolve;
+    });
+    let listCalls = 0;
+    let sendCalls = 0;
+    const worker = await Worker.create({
+      activities: {
+        createReactionNotificationActivity: async () => notificationId,
+        sendReactionActivity: async () => undefined,
+        listPushNotificationInstallationsActivity: async () => {
+          listCalls += 1;
+          return [installationId];
+        },
+        sendPushNotificationActivity: async () => {
+          sendCalls += 1;
+          sendStarted();
+          await sendGate;
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      try {
+        const firstParent = environment.client.workflow.execute('reactionCreateEffectsWorkflow', {
+          args: [{ reactionId: 'reaction-a', origin: 'LOCAL' }],
+          taskQueue,
+          workflowId: 'reaction-create-push-parent-a',
+        });
+        await sendStartedPromise;
+        const child = environment.client.workflow.getHandle(`push-notification:${notificationId}`);
+        assert.equal((await child.describe()).status.name, 'RUNNING');
+        assert.equal(
+          await Promise.race([
+            firstParent.then(() => true),
+            new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 3_000)),
+          ]),
+          true,
+        );
+
+        await environment.client.workflow.execute('reactionCreateEffectsWorkflow', {
+          args: [{ reactionId: 'reaction-b', origin: 'LOCAL' }],
+          taskQueue,
+          workflowId: 'reaction-create-push-parent-b',
+        });
+        releaseSend();
+        await child.result();
+
+        await environment.client.workflow.execute('reactionCreateEffectsWorkflow', {
+          args: [{ reactionId: 'reaction-c', origin: 'LOCAL' }],
+          taskQueue,
+          workflowId: 'reaction-create-push-parent-c',
+        });
+      } finally {
+        releaseSend();
+      }
+    });
+
+    assert.equal(listCalls, 1);
+    assert.equal(sendCalls, 1);
+  },
+);
+
+test(
   'Profile Update Effects Workflow는 production registry에서 stable input으로 Activity를 재시도한다',
   { timeout: 120_000 },
   async (t) => {

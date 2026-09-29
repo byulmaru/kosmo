@@ -1,7 +1,8 @@
-import { proxyActivities } from '@temporalio/workflow';
+import { patched, proxyActivities } from '@temporalio/workflow';
 import { match } from 'ts-pattern';
 import { workflowActivityOptions } from './activity-options';
 import { settleEffects } from './settle-effects';
+import { startPushNotificationWorkflow } from './start-push-notification';
 import type * as activities from '../activities';
 
 type ReactionCreateEffectsInput = {
@@ -16,8 +17,12 @@ export async function reactionCreateEffectsWorkflow({
   reactionId,
   origin,
 }: ReactionCreateEffectsInput): Promise<void> {
+  const pushNotificationDispatchEnabled = patched('reaction-create-effects-push-notification-v1');
+
   await settleEffects([
-    createReactionNotificationActivity(reactionId),
+    createReactionNotificationActivity(reactionId).then((notificationId) =>
+      pushNotificationDispatchEnabled ? startPushNotificationWorkflow(notificationId) : undefined,
+    ),
     ...match(origin)
       .with('LOCAL', () => [sendReactionActivity(reactionId)])
       .with('ACTIVITYPUB', () => [])

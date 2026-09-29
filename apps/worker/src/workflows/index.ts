@@ -9,6 +9,7 @@ export { profileFollowRemovalWorkflow } from './profile-follow-removal';
 export { profileMigrationMoveWorkflow } from './profile-migration';
 export { profileUnblockWorkflow } from './profile-unblock';
 export { profileUpdateEffectsWorkflow } from './profile-update';
+export { pushNotificationDeliveryWorkflow } from './push-notification';
 export { reactionCreateEffectsWorkflow } from './reaction-create';
 export { reactionDeleteEffectsWorkflow } from './reaction-delete';
 export { remoteProfileLookupWorkflow } from './remote-profile-lookup';

@@ -210,7 +210,10 @@ test('approved Local Quote notifies the Source Author once and keeps its first j
   const source = await createContentPost(sourceAuthor.id);
   const quote = await createContentPost(quoteAuthor.id, source.id);
 
-  await Promise.all([createQuoteNotification(quote.id), createQuoteNotification(quote.id)]);
+  const notificationIds = await Promise.all([
+    createQuoteNotification(quote.id),
+    createQuoteNotification(quote.id),
+  ]);
 
   const notifications = await db
     .select()
@@ -220,6 +223,7 @@ test('approved Local Quote notifies the Source Author once and keeps its first j
     );
   assert.equal(notifications.length, 1);
   assert.equal(notifications[0]?.recipientProfileId, sourceAuthor.id);
+  assert.deepEqual(notificationIds, [notifications[0]?.id, notifications[0]?.id]);
 
   const [judgment] = await db
     .select()

@@ -2,6 +2,7 @@ import { patched, proxyActivities } from '@temporalio/workflow';
 import { match } from 'ts-pattern';
 import { workflowActivityOptions } from './activity-options';
 import { settleEffects } from './settle-effects';
+import { startPushNotificationWorkflow } from './start-push-notification';
 import type * as activities from '../activities';
 
 type PostCreateEffectsInput = {
@@ -19,10 +20,19 @@ export async function postCreateEffectsWorkflow({
   postId,
   origin,
 }: PostCreateEffectsInput): Promise<void> {
+  const pushNotificationDispatchEnabled = patched('post-create-effects-push-notification-v1');
   await settleEffects([
-    createReplyNotificationActivity(postId),
+    createReplyNotificationActivity(postId).then((notificationId) =>
+      pushNotificationDispatchEnabled ? startPushNotificationWorkflow(notificationId) : undefined,
+    ),
     ...(patched('post-create-effects-quote-notification-v1')
-      ? [createQuoteNotificationActivity(postId)]
+      ? [
+          createQuoteNotificationActivity(postId).then((notificationId) =>
+            pushNotificationDispatchEnabled
+              ? startPushNotificationWorkflow(notificationId)
+              : undefined,
+          ),
+        ]
       : []),
     ...match(origin)
       .with('LOCAL', () => [sendLocalPostCreateActivity(postId)])
