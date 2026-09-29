@@ -1,3 +1,5 @@
+import '../polyfill';
+
 import { customType } from 'drizzle-orm/pg-core';
 
 export const datetime = customType<{ data: Temporal.Instant; driverData: string }>({
