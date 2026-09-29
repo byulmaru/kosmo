@@ -34,6 +34,7 @@ const [
     firstOrThrow,
     Instances,
     pg,
+    ProfileBlocks,
     ProfileFollowRequests,
     ProfileFollows,
     ProfileMigrations,
@@ -619,6 +620,43 @@ test('Move follower target 저장 실패는 source Follow를 보존한다', asyn
     [sourceFollow],
   );
   assert.equal(await countFollow(follower.profile.id, target.profile.id), 0);
+});
+
+test('Move Workflow는 target Block follower만 건너뛰고 다음 follower와 cursor 처리를 계속한다', async () => {
+  const source = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
+  const target = await createProfile({
+    actorUri: new URL('/ap/actor/' + randomUUID(), publicOrigin).href,
+    instanceId: localInstanceId,
+    instanceKind: InstanceKind.LOCAL,
+    withActor: true,
+  });
+  const followers = [await createProfile(), await createProfile()];
+  await db.insert(ProfileMigrations).values({
+    sourceProfileId: source.profile.id,
+    targetProfileId: target.profile.id,
+  });
+  await Promise.all(
+    followers.map(({ profile }) => createSourceFollow(profile.id, source.profile.id)),
+  );
+  const batch = await migrationActivities.loadProfileMigrationMoveFollowerBatchActivity({
+    sourceProfileId: source.profile.id,
+    targetProfileId: target.profile.id,
+  });
+  assert.equal(batch.length, 2);
+  const [blockedFollower, laterFollower] = batch;
+  assert.ok(blockedFollower);
+  assert.ok(laterFollower);
+  await db.insert(ProfileBlocks).values({
+    ownerProfileId: blockedFollower.followerProfileId,
+    targetProfileId: target.profile.id,
+  });
+
+  await runWithWorker(() => executeMoveWorkflow(source.actorUri!, target.actorUri!));
+
+  assert.equal(await countFollow(blockedFollower.followerProfileId, target.profile.id), 0);
+  assert.equal(await countFollow(blockedFollower.followerProfileId, source.profile.id), 1);
+  assert.equal(await countFollow(laterFollower.followerProfileId, target.profile.id), 1);
+  assert.equal(await countFollow(laterFollower.followerProfileId, source.profile.id), 0);
 });
 
 test('Move follower는 기존 target Follow가 있으면 source Follow를 보존한다', async () => {

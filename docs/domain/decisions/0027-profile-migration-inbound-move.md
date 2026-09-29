@@ -42,6 +42,8 @@ identity, `alsoKnownAs` 표현, Local·Remote Follow 정책과 기존 follower �
   유지한다. 이 경우 target 상태가 이번 이전 실행에서 생성됐는지 별도 receipt로 추적하지 않는다.
 - 단, Follower가 Local target Profile 자신인 관계는 target→target 관계를 만들 수 없으므로 inbound Move 이전 대상에서
   제외하고 기존 target→source Follow Relationship을 유지한다.
+- 양방향 Active Profile Block으로 target Follow가 거절되면 해당 follower는 source 관계를 유지한 채 이전에서 제외하며,
+  후속 follower/page 처리는 [Follow Relationship](../objects/follow-relationship.md) 계약을 따른다.
 - 반복 수신은 이미 존재하는 source·target identity와 기존 Follow/Follow Request lifecycle의 멱등성·재시도로
   수렴한다. target Follow 또는 Pending Follow Request가 수신·실행 시작 시 이미 있으면 source 관계를 유지하고,
   이번 실행이 target 관계 또는 요청을 새로 생성한 경우에만 생성 성공 뒤 source 관계를 제거한다. target 생성 뒤 source
