@@ -26,8 +26,8 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@fedify/fedify": "^2.3.0",
-    "@fedify/vocab": "2.3.0",
+    "@fedify/fedify": "^2.3.8",
+    "@fedify/vocab": "2.3.8",
     "@temporalio/testing": "^1.22.0"
   }
 }
