@@ -1,4 +1,13 @@
-import { Children, createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Children,
+  createContext,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   Animated,
   Easing,
@@ -94,7 +103,7 @@ export function TabList<Value extends string>({
   const selectedFrame =
     selectedOption && !selectedOption.disabled ? frames[selectedOption.value] : undefined;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (variant !== 'underline' || !selectedFrame) {
       return;
     }
