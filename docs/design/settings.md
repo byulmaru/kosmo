@@ -25,14 +25,12 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
 
 - Kosmo 설정 hub의 canonical route는 `/settings`다. 내부 설정 detail은 이 route 아래에서 열 수 있지만,
   Byulmaru ID Account 설정을 위한 Kosmo 내부 route나 form은 만들지 않는다.
-- Target의 Profile detail canonical route는 `/settings/profile`이다. 현재 runtime에 남은
-  `/settings/default-post-visibility`는 이 Target으로 이관할 구현 경로이지 별도 Target destination이 아니다.
+- Target의 Profile detail canonical route는 `/settings/profile`이다. 기존
+  `/settings/default-post-visibility`는 이 Target으로 이동하는 호환 경로이며 별도 편집 화면을 제공하지 않는다.
 - 다른 서비스에서 이전 detail의 canonical route는 `/settings/profile-migration`이며 명시적 parent는 `/settings`다.
   Target root에서는 `프로필 설정` 다음의 독립 destination으로 두며, `profile-migration` feature flag가 꺼져
   있거나 평가되지 않았으면 진입점과 destination control을 숨긴다. `팔로잉 가져오기`도 같은 flag가 켜진 경우에만
   진입점과 destination control을 표시한다.
-  현재 runtime의 legacy `게시물 기본 공개 범위` 행 바로 뒤에 migration 진입점을 배치하는 것은 구현 순서이며,
-  Target IA의 Profile destination을 변경하거나 별도 Profile 목적지를 추가하지 않는다.
 - 팔로잉 가져오기 detail의 canonical route는 `/settings/following-import`이며 명시적 parent는 `/settings`다.
   Root에서는 다른 서비스에서 이전 진입점 바로 뒤에 둔다.
 - 공개 정책 문서 진입점의 canonical Settings detail route는 `/settings/info`다. 이 route는 준비된 public
@@ -126,6 +124,20 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   Figma lifecycle은 실제 선택·저장·focus·dismiss 완료 증거가 아니다.
 - selected Profile이 없으면 Profile detail은 대상이 없음을 설명하고 기존 Profile 선택·생성 흐름으로 이동할
   수 있는 action을 제공한다. 다른 Profile의 마지막 설정값을 대신 표시하지 않는다.
+
+## Profile 게시 설정
+
+- `/settings/profile`은 선택된 Active/Normal Local Profile의 `게시물 기본 공개 범위`와
+  `팔로우 요청 자동 승인`을 함께 제공한다. 서버가 확인한 Owner만 편집할 수 있다.
+- 기본 공개 범위는 `전체 공개`·`조용한 공개`·`팔로워만` 중 선택한다. 자동 승인 Switch는 켜짐을 `OPEN`,
+  꺼짐을 `APPROVAL_REQUIRED`로 표시한다.
+- 각 항목은 변경 즉시 자동 저장하며 별도 `저장` 버튼을 두지 않는다. 바꾼 항목만 저장하고 저장 중에는
+  두 control을 잠가 중복 제출을 막는다. 실패하면 마지막 저장값으로 되돌리고 오류를 안내하며, 사용자가
+  다시 변경해 재시도할 수 있다. 성공 후에는 저장된 값을 표시하며 별도 성공 안내는 표시하지 않는다.
+- 대상 전환 시 이전 Profile의 입력과 저장 결과를 새 Profile의 값으로 표시하지 않는다.
+- Profile 편집은 표시 이름·소개·이미지·태그를 계속 소유하며, 자동 승인 제어와 저장을 중복 제공하지 않는다.
+  정책 변경은 기존 Pending Follow Request를 바꾸지 않으며, 기본 공개 범위는 이미 열린 Composer의 draft를
+  바꾸지 않는다. 도메인 보장은 [Profile](../domain/objects/profile.md)을 따른다.
 
 ## Profile 설정의 후속 lifecycle 조립
 
@@ -256,8 +268,7 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
   값처럼 표시하지 않는다. 세부 request 상태와 늦은 응답 격리는 PROD-667 Profile 기능이 소유한다.
 - 테마 선택에는 저장 버튼·dirty·saving·success 화면을 만들지 않는다. 초기 local hydration은 기존 Splash가,
   local persistence 실패 feedback은 기존 `Toast`가 소유한다.
-- 기본 게시 공개 범위의 inline option·dropdown·sheet·즉시 저장·명시적 저장 여부는 page shell 계약으로
-  고정하지 않는다.
+- Profile 게시 설정의 자동 저장 상태는 Profile detail이 소유하며 page shell로 끌어올리지 않는다.
 
 ## 접근성
 
@@ -304,6 +315,8 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
 - PROD-667은 Profile 선택 대상, 기본 게시 공개 범위의 저장·권한·상태와 Composer 연결 및 해당 기능 검증을
   소유한다. PROD-648은 Backend DB·GraphQL 계약을 소유한다.
 - PROD-743은 위 Profile Migration source control의 Settings 시각 조립과 UI 검증을 소유한다.
+- PROD-531은 두 게시 설정의 항목별 자동 저장, `/settings/profile` 연결과 Profile 편집의 Follow Approval 제어
+  이전 및 중복 저장 제거를 소유한다. 기존 PROD-667의 Composer 초기값 계약을 유지한다.
 - `뮤트 및 차단`의 Figma IA·source·대표 consumer는 DSN-53이 소유한다. runtime의 Mute 진입점·목록·통합
   검증은 PROD-814, Block 진입점·목록과 Relay 수렴은 PROD-823, Block의 종단 간 검증·archive는 PROD-813이
   소유한다. 이 범위를 완료된 PROD-685·PROD-684에 소급해 귀속하지 않는다.
@@ -333,16 +346,16 @@ Figma 이름마다 public component를 추가하지 않는다. Switch는 기존 
 SearchField는 Production `TextField`·`IconButton`을 합성한다. Playground의 얇은 consumer fixture가
 입력 상태와 clear 뒤 입력 focus 복귀를 소유하며, route·검색 결과·debounce 정책은 포함하지 않는다.
 
-| Figma source                                                                               | Production 구현·consumer                                   | Storybook 표면                                                                                                 |
-| ------------------------------------------------------------------------------------------ | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| [Switch](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=3324-22405)     | `react-native` Switch                                      | `KOSMO/Components/Switch` Playground·RepresentativeStates·Tests                                                |
-| 같은 Switch                                                                                | `ProfileEditForm.tsx`의 Follow Approval                    | `screens/ProfileEdit.stories.tsx`의 `FollowPolicySwitchSubmitsEnum`·`FollowPolicyApprovalRequiredInitialState` |
-| 같은 Switch                                                                                | `PostComposerMediaControls.tsx`의 `PostComposerMediaItems` | `patterns/Posts.stories.tsx`의 `ComposerMediaStates`·`ComposerReplyMediaMutationContract`                      |
-| [SearchField](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=3899-1389) | `ui/TextField.tsx`·`ui/IconButton.tsx` 합성                | `KOSMO/Patterns/Search Field` Playground·RepresentativeStates·Tests                                            |
+| Figma source                                                                               | Production 구현·consumer                                   | Storybook 표면                                                                            |
+| ------------------------------------------------------------------------------------------ | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| [Switch](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=3324-22405)     | `react-native` Switch                                      | `KOSMO/Components/Switch` Playground·RepresentativeStates·Tests                           |
+| 같은 Switch                                                                                | `ProfilePostingSettings.tsx`의 Follow Approval             | `screens/ProfileSettings.stories.tsx`의 게시 설정 조합                                    |
+| 같은 Switch                                                                                | `PostComposerMediaControls.tsx`의 `PostComposerMediaItems` | `patterns/Posts.stories.tsx`의 `ComposerMediaStates`·`ComposerReplyMediaMutationContract` |
+| [SearchField](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=3899-1389) | `ui/TextField.tsx`·`ui/IconButton.tsx` 합성                | `KOSMO/Patterns/Search Field` Playground·RepresentativeStates·Tests                       |
 
 - Switch는 Off/On·Disabled와 boolean `onValueChange`를 유지한다. Figma의 40×20은 의도 표현이며
   Web·iOS·Android의 native 렌더 크기·모양·색상 차이를 허용한다. `OPEN`/`APPROVAL_REQUIRED` 변환은
-  [ProfileEdit consumer](./profile-edit.md)의 계약이다. 민감한 이미지 Switch는 별도의 boolean 값을 전달한다.
+  Profile 게시 설정 consumer의 계약이다. 민감한 이미지 Switch는 별도의 boolean 값을 전달한다.
 - SearchField는 TextField의 44px 높이·테마·focus ring을 재사용하며 Empty/Filled와
   Default/Focused/Disabled를 표현한다. Filled라도 disabled이면 clear를 숨긴다. Focused는 실제 입력
   focus로 도달하며 테스트 전용 state prop을 추가하지 않는다. Web 입력은 `searchbox`, Native 입력은
@@ -400,10 +413,9 @@ touch·focus, 빠른 연속 입력의 중간 frame은 확인하지 않았으며 
 - Byulmaru ID Account Settings 페이지 자체와 Account 데이터 조회·입력·저장·관리 기능
 - 브라우저·OS가 소유하는 외부 navigation 결과와 URL 지원 확인·loading·error·retry·lock 상태
 - Profile 기본 게시 공개 범위의 DB, GraphQL, Relay와 Composer 계약
-- 공개 범위 control의 구체적인 선택·저장 UI
 - 홈 또는 다른 주요 route의 테마 toggle과 임시 진입점
 - 테마 선택값의 server·DB 저장, 계정 동기화와 기기 간 동기화
 - Primary Color 변경과 아직 필요하지 않은 `화면 설정`·`테마 설정` 중간 category
-- Follow Approval Policy와 아직 승인되지 않은 설정 category·placeholder
+- 아직 승인되지 않은 설정 category·placeholder
 - 미래 category 전체를 위한 범용 registry나 현재 승인되지 않은 destination route
 - settings 밖 기존 route의 전역 shell·RightRail 동작 변경

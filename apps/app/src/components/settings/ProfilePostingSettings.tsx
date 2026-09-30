@@ -11,9 +11,13 @@ export type ProfilePostingSettingsValue = {
 
 /** Field presentation only; the caller owns the draft and its persistence. */
 export function ProfilePostingSettings({
+  disabled = false,
+  editable = true,
   value,
   onChange,
 }: {
+  editable?: boolean;
+  disabled?: boolean;
   value: ProfilePostingSettingsValue;
   onChange: (value: ProfilePostingSettingsValue) => void;
 }) {
@@ -26,6 +30,7 @@ export function ProfilePostingSettings({
         description="새 게시물에 기본으로 적용됩니다."
         trailing={
           <ProfileVisibilitySelect
+            disabled={disabled || !editable}
             value={value.defaultPostVisibility}
             onChange={(defaultPostVisibility) => onChange({ ...value, defaultPostVisibility })}
           />
@@ -37,6 +42,7 @@ export function ProfilePostingSettings({
         trailing={
           <Switch
             accessibilityLabel="팔로우 요청 자동 승인"
+            disabled={disabled || !editable}
             value={value.followPolicy === 'OPEN'}
             onValueChange={(automaticApproval) =>
               onChange({ ...value, followPolicy: automaticApproval ? 'OPEN' : 'APPROVAL_REQUIRED' })
@@ -44,6 +50,11 @@ export function ProfilePostingSettings({
           />
         }
       />
+      {!editable ? (
+        <Text style={[textStyles.uiCopyM, { color: theme.foregroundSecondary }]}>
+          Profile Member는 조회만 할 수 있어요.
+        </Text>
+      ) : null}
     </View>
   );
 }

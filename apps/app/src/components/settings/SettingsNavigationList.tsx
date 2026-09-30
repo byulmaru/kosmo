@@ -12,7 +12,7 @@ import { SettingsItem } from './SettingsItem';
 import { SettingsLinkRow } from './SettingsLinkRow';
 
 type SettingsDestination =
-  | 'default-post-visibility'
+  | 'profile'
   | 'profile-migration'
   | 'following-import'
   | 'mute-and-block'
@@ -36,12 +36,12 @@ export function SettingsNavigationList({
     >
       <ByulmaruIdAccountSettingsEntry />
       <SettingsLinkRow
-        accessibilityLabel="게시물 기본 공개 범위 설정 열기"
-        href="/settings/default-post-visibility"
-        label="게시물 기본 공개 범위"
+        accessibilityLabel="프로필 설정 열기"
+        href="/settings/profile"
+        label="프로필 설정"
         primary
-        currentPage={pathname === '/settings/default-post-visibility'}
-        selected={selected === 'default-post-visibility'}
+        currentPage={pathname === '/settings/profile'}
+        selected={selected === 'profile'}
       />
       {migrationEnabled ? (
         <>

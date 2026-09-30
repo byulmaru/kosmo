@@ -239,7 +239,7 @@ test('로그인 후 Settings 정보에서 공개 정책 문서로 이동한다',
   await page.setViewportSize({ height: 900, width: 1440 });
 
   await page.goto('/settings');
-  await expect(page.getByRole('heading', { name: '설정' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '설정', exact: true })).toBeVisible();
 
   await page.getByRole('link', { name: '정보 설정 열기' }).click();
   await expect(page).toHaveURL(/\/settings\/info$/);
@@ -613,35 +613,35 @@ test.describe('로그인 사용자 보호 라우트', () => {
     await expect(page).toHaveURL(/\/home$/);
 
     await page.goto('/settings/default-post-visibility');
-    await expect(page).toHaveURL(/\/settings\/default-post-visibility$/);
-    await expect(page.getByRole('heading', { name: '게시물 기본 공개 범위' })).toHaveCount(1);
+    await expect(page).toHaveURL(/\/settings\/profile$/);
+    await expect(page.getByRole('heading', { name: '프로필 설정' })).toHaveCount(1);
     await expect(page.getByRole('button', { name: '설정으로 돌아가기' })).toBeVisible();
     await expect(page.getByRole('navigation', { name: '설정 목록' })).toHaveCount(0);
 
     await page.getByRole('button', { name: '설정으로 돌아가기' }).click();
     await expect(page).toHaveURL(/\/settings\/?$/);
-    await expect(page.getByRole('heading', { name: '게시물 기본 공개 범위' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: '프로필 설정' })).toHaveCount(0);
 
     await page.goBack();
     await expect(page).toHaveURL(/\/home$/);
 
     await page.goto('/settings');
     await expect(page).toHaveURL(/\/settings\/?$/);
-    await expect(page.getByRole('heading', { name: '설정' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: '게시물 기본 공개 범위' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: '설정', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '프로필 설정' })).toHaveCount(0);
     await expect(page.getByRole('radiogroup')).toHaveCount(0);
 
-    await page.getByRole('link', { name: '게시물 기본 공개 범위 설정 열기' }).click();
-    await expect(page).toHaveURL(/\/settings\/default-post-visibility$/);
-    await expect(page.getByRole('heading', { name: '게시물 기본 공개 범위' })).toHaveCount(1);
+    await page.getByRole('link', { name: '프로필 설정 열기' }).click();
+    await expect(page).toHaveURL(/\/settings\/profile$/);
+    await expect(page.getByRole('heading', { name: '프로필 설정' })).toHaveCount(1);
 
     await page.getByRole('button', { name: '설정으로 돌아가기' }).click();
     await expect(page).toHaveURL(/\/settings\/?$/);
-    await expect(page.getByRole('heading', { name: '게시물 기본 공개 범위' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: '프로필 설정' })).toHaveCount(0);
 
     await page.goForward();
-    await expect(page).toHaveURL(/\/settings\/default-post-visibility$/);
-    await expect(page.getByRole('heading', { name: '게시물 기본 공개 범위' })).toBeVisible();
+    await expect(page).toHaveURL(/\/settings\/profile$/);
+    await expect(page.getByRole('heading', { name: '프로필 설정' })).toBeVisible();
     await expect(page.getByText('앱을 불러오지 못했어요 잠시 후 다시 시도해주세요.')).toHaveCount(
       0,
     );
@@ -659,7 +659,7 @@ test.describe('로그인 사용자 보호 라우트', () => {
 
     await page.getByRole('button', { name: '설정으로 돌아가기' }).click();
     await expect(page).toHaveURL(/\/settings\/?$/);
-    await expect(page.getByRole('heading', { name: '설정' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '설정', exact: true })).toBeVisible();
 
     await page.goBack();
     await expect(page).toHaveURL(/\/home$/);
@@ -671,18 +671,18 @@ test.describe('로그인 사용자 보호 라우트', () => {
     await page.setViewportSize({ height: 900, width: 1440 });
     await page.goto('/settings');
 
-    await page.getByRole('link', { name: '게시물 기본 공개 범위 설정 열기' }).click();
-    await expect(page).toHaveURL(/\/settings\/default-post-visibility$/);
+    await page.getByRole('link', { name: '프로필 설정 열기' }).click();
+    await expect(page).toHaveURL(/\/settings\/profile$/);
     await page.getByRole('link', { name: '정보 설정 열기' }).click();
     await expect(page).toHaveURL(/\/settings\/info$/);
 
     await page.getByRole('button', { name: '설정으로 돌아가기' }).click();
     await expect(page).toHaveURL(/\/settings\/?$/);
-    await expect(page.getByRole('heading', { name: '설정' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '설정', exact: true })).toBeVisible();
 
     await page.goForward();
-    await expect(page).toHaveURL(/\/settings\/default-post-visibility$/);
-    await expect(page.getByRole('heading', { name: '게시물 기본 공개 범위' })).toBeVisible();
+    await expect(page).toHaveURL(/\/settings\/profile$/);
+    await expect(page.getByRole('heading', { name: '프로필 설정' })).toBeVisible();
     await page.goForward();
     await expect(page).toHaveURL(/\/settings\/info$/);
     await expect(page.getByRole('heading', { name: '정보' })).toBeVisible();

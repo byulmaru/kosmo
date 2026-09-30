@@ -7,7 +7,7 @@ import {
 } from './db-fixtures';
 import { expect, test } from './fixtures';
 import { readGraphQLOperation, toGlobalId, waitForGraphQLOperation } from './graphql';
-import type { Locator, Page } from '@playwright/test';
+import type { Locator, Page, Route } from '@playwright/test';
 
 const quoteFlagUrl = 'https://flags.kos.moe/ofrep/v1/evaluate/flags';
 
@@ -403,35 +403,92 @@ test('기본 공개 범위 저장부터 Local 재선택까지 production wiring�
   await setE2ESessionCookie(context, viewer.token);
 
   await page.goto('/settings/default-post-visibility');
-  const visibilityControl = page.getByTestId('profile-default-post-visibility-control');
-  const publicOption = visibilityControl.getByRole('radio', {
-    name: '공개: 모두가 볼 수 있어요.',
-  });
-  const saveButton = visibilityControl.getByRole('button', {
-    name: '기본 게시 공개 범위 저장',
-  });
+  await expect(page).toHaveURL(/\/settings\/profile$/);
+  const visibilityControl = page.getByRole('combobox', { name: '게시물 기본 공개 범위' });
+  const automaticApproval = page.getByRole('switch', { name: '팔로우 요청 자동 승인' });
 
-  await publicOption.click();
-  await expect(saveButton).toBeEnabled();
-  const settingsMutationResponse = waitForGraphQLOperation(
-    page,
-    'ProfileDefaultPostVisibilityControlMutation',
+  await expect(visibilityControl).toBeEnabled();
+  await expect(automaticApproval).toBeEnabled();
+  await expect(page.getByRole('button', { name: '프로필 게시 설정 저장' })).toHaveCount(0);
+
+  let abortFirstSettingsMutation = true;
+  const failFirstSettingsMutation = async (route: Route) => {
+    const operation = readGraphQLOperation(route.request().postData());
+    if (
+      abortFirstSettingsMutation &&
+      operation?.operationName === 'SettingsProfileDetailUpdateProfileMutation'
+    ) {
+      abortFirstSettingsMutation = false;
+      await route.abort('failed');
+      return;
+    }
+    await route.fallback();
+  };
+  await page.route('**/graphql', failFirstSettingsMutation);
+
+  await visibilityControl.selectOption('PUBLIC');
+  await expect(page.getByRole('alert')).toContainText(
+    '설정을 저장하지 못했어요. 다시 변경해주세요.',
   );
-  await saveButton.click();
-  const settingsResponse = await settingsMutationResponse;
-  const settingsBody = (await settingsResponse.json()) as {
+  await expect(visibilityControl).toHaveValue('UNLISTED');
+  await expect(visibilityControl).toBeEnabled();
+
+  const visibilityMutationResponse = waitForGraphQLOperation(
+    page,
+    'SettingsProfileDetailUpdateProfileMutation',
+  );
+  await visibilityControl.selectOption('PUBLIC');
+  const visibilityResponse = await visibilityMutationResponse;
+  const visibilityBody = (await visibilityResponse.json()) as {
     data?: {
       updateProfile?: {
-        profile?: { private?: { defaultPostVisibility?: string | null } | null } | null;
+        profile?: {
+          private?: { defaultPostVisibility?: string | null } | null;
+        } | null;
       } | null;
     };
     errors?: unknown[];
   };
 
-  expect(settingsResponse.ok(), JSON.stringify(settingsBody, null, 2)).toBe(true);
-  expect(settingsBody.errors, JSON.stringify(settingsBody, null, 2)).toBeUndefined();
-  expect(settingsBody.data?.updateProfile?.profile?.private?.defaultPostVisibility).toBe('PUBLIC');
-  await expect(visibilityControl.getByText('저장했어요.')).toBeVisible();
+  expect(visibilityResponse.ok(), JSON.stringify(visibilityBody, null, 2)).toBe(true);
+  expect(visibilityBody.errors, JSON.stringify(visibilityBody, null, 2)).toBeUndefined();
+  expect(visibilityBody.data?.updateProfile?.profile?.private?.defaultPostVisibility).toBe(
+    'PUBLIC',
+  );
+  expect(readGraphQLOperation(visibilityResponse.request().postData())?.variables).toEqual({
+    input: { defaultPostVisibility: 'PUBLIC' },
+  });
+  await expect(visibilityControl).toHaveValue('PUBLIC');
+  await expect(visibilityControl).toBeEnabled();
+
+  const followPolicyMutationResponse = waitForGraphQLOperation(
+    page,
+    'SettingsProfileDetailUpdateProfileMutation',
+  );
+  await automaticApproval.uncheck();
+  const followPolicyResponse = await followPolicyMutationResponse;
+  const followPolicyBody = (await followPolicyResponse.json()) as {
+    data?: {
+      updateProfile?: {
+        profile?: { followPolicy?: string } | null;
+      } | null;
+    };
+    errors?: unknown[];
+  };
+
+  expect(followPolicyResponse.ok(), JSON.stringify(followPolicyBody, null, 2)).toBe(true);
+  expect(followPolicyBody.errors, JSON.stringify(followPolicyBody, null, 2)).toBeUndefined();
+  expect(followPolicyBody.data?.updateProfile?.profile?.followPolicy).toBe('APPROVAL_REQUIRED');
+  expect(readGraphQLOperation(followPolicyResponse.request().postData())?.variables).toEqual({
+    input: { followPolicy: 'APPROVAL_REQUIRED' },
+  });
+  await expect(automaticApproval).not.toBeChecked();
+  await expect(automaticApproval).toBeEnabled();
+  await page.unroute('**/graphql', failFirstSettingsMutation);
+
+  await page.reload();
+  await expect(visibilityControl).toHaveValue('PUBLIC');
+  await expect(automaticApproval).not.toBeChecked();
 
   const body = 'E2E production wiring local body';
   const composer = await openComposer(page);
