@@ -3,6 +3,18 @@ import type { ExpoConfig } from 'expo/config';
 const otaBaseUrl = 'https://expo-ota.byulmaru.co/releases/kosmo-native';
 const googleServicesJson = process.env.KOSMO_ANDROID_GOOGLE_SERVICES_FILE;
 const googleServiceInfoPlist = process.env.KOSMO_IOS_GOOGLE_SERVICES_FILE;
+// Temporary Android workaround: expo-font 56 ignores requested weights for runtime-loaded variable fonts (SUIT defaults to 100).
+// Upstream fix: https://github.com/expo/expo/pull/48129
+// Remove this list and the Android expo-font plugin config after upgrading to an Expo SDK with the fix (expo-font >=58.0.0)
+// and verifying runtime-loaded SUIT/Pretendard weights in a new Android build without this registration.
+// Keep the existing useFonts fallback until then.
+const staticFontFaces = [
+  [400, 'Regular'],
+  [600, 'SemiBold'],
+  [700, 'Bold'],
+  [800, 'ExtraBold'],
+] as const;
+
 function androidVersionCode(): number {
   const configured = process.env.KOSMO_ANDROID_VERSION_CODE;
   if (configured === undefined) {
@@ -77,6 +89,29 @@ const config: ExpoConfig = {
   },
   plugins: [
     'expo-router',
+    [
+      'expo-font',
+      {
+        android: {
+          fonts: [
+            {
+              fontFamily: 'SUIT Variable',
+              fontDefinitions: staticFontFaces.map(([weight, face]) => ({
+                path: `@sun-typeface/suit/fonts/static/ttf/SUIT-${face}.ttf`,
+                weight,
+              })),
+            },
+            {
+              fontFamily: 'Pretendard Variable',
+              fontDefinitions: staticFontFaces.map(([weight, face]) => ({
+                path: `pretendard/dist/public/static/Pretendard-${face}.otf`,
+                weight,
+              })),
+            },
+          ],
+        },
+      },
+    ],
     'expo-secure-store',
     'expo-notifications',
     // RNFirebase SPM is incompatible with static frameworks; use CocoaPods for static RNFB linkage.

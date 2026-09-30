@@ -25,7 +25,9 @@ const fontAssets = Platform.select<Record<string, number>>({
     SUIT: suitAsset,
   },
   default: {
-    // Android and Web register the variable assets under the shared consumer names.
+    // Android and Web use the shared consumer names. Android config-plugin
+    // registrations are detected by expo-font, so this stays a fallback for
+    // binaries that predate the native registrations.
     [fontFamilies.content]: pretendardAsset,
     [fontFamilies.ui]: suitAsset,
   },

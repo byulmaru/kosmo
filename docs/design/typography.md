@@ -55,7 +55,7 @@
 
 ## Expo/React Native 구현 (`apps/app`)
 
-- 두 폰트는 **npm 패키지로 관리**한다(`pretendard`, `@sun-typeface/suit`). `apps/app/src/app/_layout.tsx`는 모든 플랫폼에서 package의 Variable TTF를 `expo-font` `useFonts`로 번들 로드한다. iOS loader key는 `Pretendard`와 `SUIT`로, Android/Web loader key와 공용 consumer family name은 각각 `Pretendard Variable`과 `SUIT Variable`로 유지한다. 외부 CDN 런타임 의존과 git에 복제한 폰트 binary는 두지 않는다.
+- 두 폰트는 **npm 패키지로 관리**한다(`pretendard`, `@sun-typeface/suit`). `apps/app/src/app/_layout.tsx`는 모든 플랫폼에서 package의 Variable TTF를 `expo-font` `useFonts`에 제공하며, Android에서는 config plugin이 같은 family name을 빌드 시 등록하므로 Expo가 runtime load를 건너뛴다. 플러그인 적용 전 Android 바이너리와 iOS/Web은 기존 runtime 로드를 유지한다. Android config plugin은 두 패키지의 400/600/700/800 정적 face를 등록한다. iOS loader key는 `Pretendard`와 `SUIT`로, Android/Web loader key와 공용 consumer family name은 각각 `Pretendard Variable`과 `SUIT Variable`로 유지한다. 외부 CDN 런타임 의존과 git에 복제한 폰트 binary는 두지 않는다.
 - iOS loader key(`Pretendard`, `SUIT`)는 등록용 namespace이며 component가 사용하는 family name이 아니다. component는 `apps/app/src/theme/tokens.ts`의 `fontFamilies.content`/`fontFamilies.ui`를 통해 `Pretendard Variable`/`SUIT Variable`을 사용한다. iOS key를 내부 family name과 분리해 `expo-font`의 UIKit alias 처리가 Variable family 조회를 가리지 않게 한다.
 - package 경로나 내부 font filename을 component style에 직접 사용하지 않는다.
 - React Native `Text`/`TextInput`은 CSS font 상속에 의존하지 않는다. 공용 primitive와 각 text style은 용도에 맞는 `fontFamily`를 명시한다.
