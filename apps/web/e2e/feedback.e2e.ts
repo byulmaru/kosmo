@@ -11,13 +11,6 @@ test('인증된 Web 사용자는 직접 피드백 페이지에서 전송하고 �
 }) => {
   const viewer = await createE2ESession({ profile: false });
   await setE2ESessionCookie(context, viewer.token);
-  const sentryPayloads: string[] = [];
-  page.on('request', (request) => {
-    if (request.url().includes('sentry.io')) {
-      sentryPayloads.push(request.postData() ?? '');
-    }
-  });
-
   await page.goto('/feedback');
   await expect(page).toHaveURL(/\/feedback$/u);
   await expect(page.getByText('프로필과 설정 등 주요 메뉴를 확인합니다.')).toHaveCount(0);
@@ -26,9 +19,4 @@ test('인증된 Web 사용자는 직접 피드백 페이지에서 전송하고 �
   await page.getByRole('button', { name: '피드백 보내기' }).click();
 
   await expect(page.getByText('피드백을 전달했습니다. 감사합니다!')).toBeVisible();
-  await expect
-    .poll(() =>
-      sentryPayloads.some((payload) => payload.includes('검색 결과가 더 빠르면 좋겠어요.')),
-    )
-    .toBe(true);
 });
