@@ -1,19 +1,14 @@
-import { Pin } from 'lucide-react-native';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { graphql, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
-import { commitLocalUpdate } from 'relay-runtime';
-import { useArgs } from 'storybook/preview-api';
+import { graphql, useLazyLoadQuery } from 'react-relay';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { PostActionAuthenticationProvider } from '@/components/post/PostActionAuthentication';
 import { PostComposerCoordinatorProvider } from '@/components/post/PostComposerCoordinator';
 import { PostListItem } from '@/components/post/PostListItem';
 import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHost';
 import { ActionMenuPresentationProvider } from '@/components/ui/ActionMenu';
-import { useToast } from '@/components/ui/ToastProvider';
 import { SessionProvider } from '@/session/SessionProvider';
 import { getCopiedStrings, resetClipboardMock } from '../../../.storybook/mocks/postClipboard';
-import { ProfilePinStoryContext } from '../../../.storybook/mocks/profilePinActionBar';
 import { RelayStoryProvider } from '../../../.storybook/mocks/react-relay';
 import { post } from '../fixtures';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -26,7 +21,6 @@ type ProfilePinOperation = 'pin' | 'unpin';
 
 type StoryArgs = {
   action: ProfilePinOperation;
-  bodyText: string;
   onDeleteRequest: (postId: string) => void;
   onPin: () => Promise<void>;
   onUnpin: () => Promise<void>;
@@ -41,6 +35,19 @@ const ProfilePinActionStoriesQuery = graphql`
       __typename
       ... on Post {
         id
+        profile {
+          id
+          instance {
+            kind
+          }
+          pinnedPosts(first: 20) @connection(key: "PostList_profile__pinnedPosts") {
+            edges {
+              node {
+                id
+              }
+            }
+          }
+        }
         ...PostListItem_post @alias(as: "listItem")
       }
     }
@@ -57,83 +64,13 @@ const storyPost = {
 
 function useStoryPost() {
   const data = useLazyLoadQuery<ProfilePinActionStoriesQueryType>(ProfilePinActionStoriesQuery, {});
-  return data.node?.__typename === 'Post' ? data.node.listItem : null;
+  return data.node?.__typename === 'Post' && data.node.listItem
+    ? { post: data.node.listItem, profile: data.node.profile }
+    : null;
 }
 
-function updateStoryBody(environment: ReturnType<typeof useRelayEnvironment>, bodyText: string) {
-  commitLocalUpdate(environment, (store) => {
-    const postRecord = store.get(storyPost.id);
-    const contentRecord = postRecord?.getLinkedRecord('content');
-    contentRecord?.setValue(bodyText, 'bodyText');
-    contentRecord?.setValue(null, 'document');
-  });
-}
-
-function Fixture({
-  action,
-  bodyText,
-  onPin,
-  onResult,
-  onUnpin,
-  outcome,
-  presentation,
-  viewer,
-}: StoryArgs & { onResult?: (action: ProfilePinOperation) => void }) {
+function Fixture({ presentation }: StoryArgs) {
   const postNode = useStoryPost();
-  const environment = useRelayEnvironment();
-  const [currentAction, setCurrentAction] = useState(action);
-  const [pending, setPending] = useState(false);
-  const { showToast } = useToast();
-  const inFlight = useRef(false);
-  const mounted = useRef(false);
-  const focusTrigger = useRef(() => {});
-  const restoreTriggerFocus = useRef(false);
-  const pinned = viewer === 'visitor' || currentAction === 'unpin';
-
-  useEffect(() => setCurrentAction(action), [action]);
-  useEffect(() => updateStoryBody(environment, bodyText), [bodyText, environment]);
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
-  useEffect(() => {
-    if (!pending && restoreTriggerFocus.current) {
-      restoreTriggerFocus.current = false;
-      focusTrigger.current();
-    }
-  }, [pending]);
-
-  const simulateRequest = async () => {
-    if (inFlight.current) {
-      return;
-    }
-    inFlight.current = true;
-    setPending(true);
-    let succeeded = false;
-    try {
-      await (currentAction === 'pin' ? onPin : onUnpin)();
-      if (outcome === 'pending') {
-        return;
-      }
-      succeeded = outcome === 'success';
-    } catch {
-      // Story Actions may reject too; never display the supplied error text.
-    }
-    if (!mounted.current) {
-      return;
-    }
-    inFlight.current = false;
-    restoreTriggerFocus.current = true;
-    setPending(false);
-    if (succeeded) {
-      setCurrentAction(currentAction === 'unpin' ? 'pin' : 'unpin');
-      onResult?.(currentAction);
-    } else {
-      showToast('고정 상태를 변경하지 못했어요. 다시 시도해 주세요.', { tone: 'danger' });
-    }
-  };
 
   if (!postNode) {
     return null;
@@ -141,42 +78,101 @@ function Fixture({
 
   return (
     <View style={styles.fixture}>
-      <ProfilePinStoryContext
-        value={{
-          moreItems:
-            viewer === 'owner'
-              ? [
-                  {
-                    key: 'pin',
-                    icon: Pin,
-                    label: currentAction === 'unpin' ? '프로필 고정 해제' : '프로필에 고정',
-                    onSelect: () => void simulateRequest(),
-                  },
-                ]
-              : [],
-          morePending: pending,
-          moreSheetIconSize: 24,
-          onMoreTriggerReady: (focus) => {
-            focusTrigger.current = focus;
-          },
+      <PostListItem
+        pinned={postNode.profile.pinnedPosts.edges.length > 0}
+        post={postNode.post}
+        presentation={presentation}
+        profilePin={{
+          firstPinnedPostId: postNode.profile.pinnedPosts.edges[0]?.node?.id ?? null,
+          profileIsLocal: postNode.profile.instance.kind === 'LOCAL',
         }}
-      >
-        <PostListItem pinned={pinned} post={postNode} presentation={presentation} />
-      </ProfilePinStoryContext>
+      />
     </View>
   );
 }
 
-const storyData = { node: storyPost };
+function createStoryData(action: ProfilePinOperation) {
+  return {
+    node: {
+      ...storyPost,
+      profile: {
+        ...storyPost.profile,
+        pinnedPosts: {
+          edges: action === 'unpin' ? [{ cursor: 'pin-cursor', node: storyPost }] : [],
+          pageInfo: {
+            endCursor: action === 'unpin' ? 'pin-cursor' : null,
+            hasNextPage: false,
+            hasPreviousPage: false,
+            startCursor: action === 'unpin' ? 'pin-cursor' : null,
+          },
+        },
+      },
+    },
+  };
+}
 const deletionResponse = { deletePost: { postId: storyPost.id } };
+const pinResponse = {
+  pinProfilePost: {
+    changed: true,
+    profile: {
+      id: storyPost.profile.id,
+      pinnedPosts: {
+        edges: [{ cursor: 'pin-cursor', node: storyPost }],
+        pageInfo: {
+          endCursor: 'pin-cursor',
+          hasNextPage: false,
+          hasPreviousPage: false,
+          startCursor: 'pin-cursor',
+        },
+      },
+    },
+  },
+};
+const unpinResponse = {
+  unpinProfilePost: {
+    changed: true,
+    profile: {
+      id: storyPost.profile.id,
+      pinnedPosts: {
+        edges: [],
+        pageInfo: {
+          endCursor: null,
+          hasNextPage: false,
+          hasPreviousPage: false,
+          startCursor: null,
+        },
+      },
+    },
+  },
+};
 
 function StoryProviders({
+  action,
   children,
+  outcome,
+  onPin,
+  onUnpin,
   viewer,
   onDeleteRequest,
-}: PropsWithChildren<Pick<StoryArgs, 'viewer' | 'onDeleteRequest'>>) {
-  const operationResponses = useMemo(
-    () => ({
+}: PropsWithChildren<
+  Pick<StoryArgs, 'outcome' | 'onPin' | 'onUnpin' | 'viewer' | 'onDeleteRequest'> & {
+    action: ProfilePinOperation;
+  }
+>) {
+  const operationResponses = useMemo(() => {
+    const pinOperationResponse =
+      outcome === 'pending'
+        ? { data: pinResponse, delayMs: 60_000 }
+        : outcome === 'error'
+          ? { error: 'pin failed' }
+          : { data: pinResponse };
+    const unpinOperationResponse =
+      outcome === 'pending'
+        ? { data: unpinResponse, delayMs: 60_000 }
+        : outcome === 'error'
+          ? { error: 'unpin failed' }
+          : { data: unpinResponse };
+    return {
       SessionProviderQuery: {
         data: {
           currentSession: {
@@ -190,21 +186,30 @@ function StoryProviders({
           me: { __typename: 'Account', id: 'account-story', name: 'Story' },
         },
       },
-    }),
-    [viewer],
-  );
+      ProfilePinActionPinProfilePostMutation: pinOperationResponse,
+      ProfilePinActionUnpinProfilePostMutation: unpinOperationResponse,
+    };
+  }, [outcome, viewer]);
   const observeMutation = useCallback(
     (request: RequestParameters, variables: Variables) => {
       if (request.name === 'PostDeletionActionDeletePostMutation') {
         onDeleteRequest(variables.id as string);
+        return;
+      }
+      const action = request.name.includes('Unpin') ? 'unpin' : 'pin';
+      if (
+        request.name === 'ProfilePinActionPinProfilePostMutation' ||
+        request.name === 'ProfilePinActionUnpinProfilePostMutation'
+      ) {
+        void (action === 'pin' ? onPin() : onUnpin());
       }
     },
-    [onDeleteRequest],
+    [onDeleteRequest, onPin, onUnpin],
   );
   return (
     <RelayStoryProvider
-      key={viewer}
-      queryData={storyData}
+      key={`${viewer}:${action}`}
+      queryData={createStoryData(action)}
       operationResponses={operationResponses}
       mutationResponse={deletionResponse}
       mutationRequestObserver={observeMutation}
@@ -224,7 +229,6 @@ function StoryProviders({
 const meta = {
   args: {
     action: 'pin',
-    bodyText: storyPost.content?.bodyText ?? '',
     onDeleteRequest: fn(),
     onPin: fn<() => Promise<void>>().mockResolvedValue(undefined),
     onUnpin: fn<() => Promise<void>>().mockResolvedValue(undefined),
@@ -234,26 +238,23 @@ const meta = {
   },
   argTypes: {
     action: { control: 'inline-radio', options: ['pin', 'unpin'] },
-    bodyText: { control: 'text' },
     outcome: { control: 'inline-radio', options: ['success', 'error', 'pending'] },
     viewer: { control: 'inline-radio', options: ['owner', 'visitor'] },
   },
   component: Fixture,
   decorators: [
-    (Story, { args }) => {
-      const [, updateArgs] = useArgs();
-      return (
-        <StoryProviders viewer={args.viewer} onDeleteRequest={args.onDeleteRequest}>
-          <Story
-            args={{
-              ...args,
-              onResult: (nextAction: ProfilePinOperation) =>
-                updateArgs({ action: nextAction === 'unpin' ? 'pin' : 'unpin' }),
-            }}
-          />
-        </StoryProviders>
-      );
-    },
+    (Story, { args }) => (
+      <StoryProviders
+        action={args.action}
+        onDeleteRequest={args.onDeleteRequest}
+        onPin={args.onPin}
+        onUnpin={args.onUnpin}
+        outcome={args.outcome}
+        viewer={args.viewer}
+      >
+        <Story args={args} />
+      </StoryProviders>
+    ),
   ],
   excludeStories: [
     'ErrorRecoveryFocus',
@@ -268,12 +269,12 @@ const meta = {
     docs: {
       description: {
         component:
-          '고정 요청과 상태 전환은 Storybook fixture의 모의 동작입니다. 실제 PostListItem·PostActionBar·메뉴·toast를 사용하지만 Pin mutation과 production 연결은 검증하지 않습니다.',
+          '실제 PostListItem·PostActionSurface·PostActionBar와 Relay pin/unpin mutation을 사용합니다. Storybook 네트워크 응답으로 성공·pending·실패 상태를 확인합니다.',
       },
     },
     controls: {
       disable: true,
-      include: ['viewer', 'action', 'bodyText', 'outcome'],
+      include: ['viewer', 'action', 'outcome'],
     },
     relay: { data: { node: storyPost } },
   },
@@ -337,8 +338,8 @@ export const OwnerMenuAndDirectActions: Story = {
     await userEvent.click(trigger);
     expect((await body.findAllByRole('menuitem')).map((item) => item.textContent)).toEqual([
       '링크 복사',
-      '신고',
       '프로필에 고정',
+      '신고',
       '삭제',
     ]);
     const pinMenu = body.getByRole('menu', { name: '더 보기 메뉴' });
@@ -468,7 +469,7 @@ export const ExistingDeletionFlow: Story = {
 export const ProductionWithoutPinFixture: Story = {
   render: function ProductionPost() {
     const postNode = useStoryPost();
-    return postNode ? <PostListItem pinned post={postNode} presentation="wide" /> : <></>;
+    return postNode ? <PostListItem pinned post={postNode.post} presentation="wide" /> : <></>;
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
