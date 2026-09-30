@@ -417,8 +417,7 @@ const materializeRemoteNote = async ({
     try {
       storedActor = await findOrMaterializeRemoteProfileActorByUri({
         actorUri: attributionUri,
-        context,
-        now: receivedAt,
+        contextOrigin: context.canonicalOrigin,
       });
     } catch (error) {
       if (

@@ -45,6 +45,7 @@ import type { DocumentLoader, InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type * as CoreServices from '@kosmo/core/services';
+import type { RemoteProfileLookupInput } from '@kosmo/core/temporal/workflows';
 import type { findPostByActivityPubUri as findPostByActivityPubUriType } from './activitypub-post-uri';
 import type { handleInboundCreate as handleInboundCreateType } from './inbound-create';
 import type { materializeHydratedRemoteNote as materializeHydratedRemoteNoteType } from './inbound-create-note';
@@ -83,23 +84,53 @@ const assertRemoteProfileRefreshCall = (workflow: unknown, options: unknown, act
   assert.equal(workflowOptions.workflowIdReusePolicy, 'ALLOW_DUPLICATE');
 };
 
-const executeTemporalWorkflow = temporalClient.workflow.execute.bind(temporalClient.workflow) as (
-  workflow: string,
-  options: unknown,
-) => Promise<unknown>;
+const mockRemoteProfileRefresh = (execute: (actorUri: string) => Promise<string>) => {
+  const executions = new Map<string, Promise<string>>();
 
-const mockRemoteProfileRefresh = (execute: (actorUri: string) => Promise<string>) =>
-  mock.method(temporalClient.workflow, 'execute', async (workflow: unknown, options: unknown) => {
-    if (workflow === remoteProfileLookupWorkflow.workflow) {
-      return executeTemporalWorkflow(workflow as string, options);
-    }
+  return mock.method(
+    temporalClient.workflow,
+    'execute',
+    async (workflow: unknown, options: unknown) => {
+      assert.ok(options && typeof options === 'object');
 
-    assert.ok(options && typeof options === 'object');
-    const actorUri = (options as RemoteProfileRefreshOptions).args?.[0]?.actorUri;
-    assert.ok(typeof actorUri === 'string');
-    assertRemoteProfileRefreshCall(workflow, options, actorUri);
-    return execute(actorUri);
-  });
+      if (workflow === remoteProfileLookupWorkflow.workflow) {
+        const workflowOptions = options as {
+          args?: readonly RemoteProfileLookupInput[];
+          workflowId?: string;
+        };
+        const input = workflowOptions.args?.[0];
+        assert.ok(input && 'actorUri' in input);
+        assert.equal(workflowOptions.args?.length, 1);
+        assert.equal(
+          workflowOptions.workflowId,
+          remoteProfileLookupWorkflow.workflowIdFromArgs(input),
+        );
+
+        const workflowId = workflowOptions.workflowId;
+        assert.ok(typeof workflowId === 'string');
+        let execution = executions.get(workflowId);
+        if (!execution) {
+          execution = Promise.resolve().then(async () => {
+            try {
+              return await execute(input.actorUri);
+            } finally {
+              if (executions.get(workflowId) === execution) {
+                executions.delete(workflowId);
+              }
+            }
+          });
+          executions.set(workflowId, execution);
+        }
+        return execution;
+      }
+
+      const actorUri = (options as RemoteProfileRefreshOptions).args?.[0]?.actorUri;
+      assert.ok(typeof actorUri === 'string');
+      assertRemoteProfileRefreshCall(workflow, options, actorUri);
+      return execute(actorUri);
+    },
+  );
+};
 
 let ActivityPubActors: typeof CoreDb.ActivityPubActors;
 let ActivityPubPosts: typeof CoreDb.ActivityPubPosts;
@@ -1168,34 +1199,33 @@ describe('inbound Create dispatch', () => {
           preferredUsername: 'alice',
         }),
     );
-    const fetchMock = mock.method(globalThis, 'fetch', async () =>
-      Response.json(
-        { subject: 'acct:alice@remote.example' },
-        { headers: { 'Content-Type': 'application/jrd+json' } },
-      ),
-    );
-
-    try {
-      const result = await materializeHydratedRemoteNote({
-        context: { ...createContext(), lookupObject } as unknown as InboxContext<void>,
-        note: new Note({
-          attribution: remoteActorUri,
-          content: 'Mismatched author',
-          id: objectUri,
-          to: PUBLIC_COLLECTION,
-        }),
-        objectUri,
-        observation: createObservation,
-        receivedAt,
+    const lookupWorkflow = mockRemoteProfileRefresh(async (actorUri) => {
+      const profile = await materializeRemoteProfileActor({
+        actorUri: new URL(actorUri),
+        context: { lookupObject },
       });
+      return profile.id;
+    });
 
-      assert.deepEqual(result, { reason: 'unusable_author', status: 'rejected' });
-      assert.equal(await db.$count(ActivityPubActors), 0);
-      assert.equal(await db.$count(Profiles), 0);
-      assert.equal(await db.$count(Posts), 0);
-    } finally {
-      fetchMock.mock.restore();
-    }
+    const result = await materializeHydratedRemoteNote({
+      context: { ...createContext(), lookupObject } as unknown as InboxContext<void>,
+      note: new Note({
+        attribution: remoteActorUri,
+        content: 'Mismatched author',
+        id: objectUri,
+        to: PUBLIC_COLLECTION,
+      }),
+      objectUri,
+      observation: createObservation,
+      receivedAt,
+    });
+    lookupWorkflow.mock.restore();
+
+    assert.deepEqual(result, { reason: 'unusable_author', status: 'rejected' });
+    assert.equal(lookupObject.mock.callCount(), 1);
+    assert.equal(await db.$count(ActivityPubActors), 0);
+    assert.equal(await db.$count(Profiles), 0);
+    assert.equal(await db.$count(Posts), 0);
   });
 
   test('rejects unsupported, empty, and invalid originals before Mention or author discovery', async () => {
@@ -1320,11 +1350,14 @@ describe('inbound Create dispatch', () => {
   });
 
   test('preserves a resolved empty anchor Mention when deciding whether a hydrated Note is empty', async () => {
-    await createStoredRemoteActor();
+    const authorProfile = await createStoredRemoteActor();
     const mentionActorUri = new URL('https://mentions.example/users/empty-anchor');
     const objectUri = new URL('https://objects.example/notes/empty-anchor-mention');
     const lookupHrefs: string[] = [];
     const executeMock = mockRemoteProfileRefresh(async (actorUri) => {
+      if (actorUri === remoteActorUri.href) {
+        return authorProfile.id;
+      }
       lookupHrefs.push(actorUri);
       return (
         await createStoredRemoteActor({
@@ -1376,12 +1409,13 @@ describe('inbound Create dispatch', () => {
     const lookupObject = mock.fn(
       async () => new Person({ id: remoteActorUri, preferredUsername: 'alice' }),
     );
-    const fetchMock = mock.method(globalThis, 'fetch', async () =>
-      Response.json(
-        { subject: 'acct:alice@remote.example' },
-        { headers: { 'Content-Type': 'application/jrd+json' } },
-      ),
-    );
+    const lookupWorkflow = mockRemoteProfileRefresh(async (actorUri) => {
+      const profile = await materializeRemoteProfileActor({
+        actorUri: new URL(actorUri),
+        context: { lookupObject },
+      });
+      return profile.id;
+    });
 
     try {
       const result = await materializeHydratedRemoteNote({
@@ -1408,7 +1442,7 @@ describe('inbound Create dispatch', () => {
       assert.equal(media?.mediaType, null);
       assert.equal(media?.altText, null);
     } finally {
-      fetchMock.mock.restore();
+      lookupWorkflow.mock.restore();
     }
   });
 
@@ -1443,14 +1477,29 @@ describe('inbound Create dispatch', () => {
       BEFORE INSERT ON profile_media
       FOR EACH ROW EXECUTE FUNCTION fail_hydrated_author_profile_media_insert()
     `;
-    const actorDocumentWorkflowId = remoteProfileLookupWorkflow.workflowIdFromArgs({
+    const lookupInput = {
       actorUri: remoteActorUri.href,
-      actorDocument: {
-        jsonLd: {},
-        contextOrigin: publicOrigin,
-        receivedAt: receivedAt.toString(),
+      contextOrigin: publicOrigin,
+    } satisfies RemoteProfileLookupInput;
+    const executeMock = mock.method(
+      temporalClient.workflow,
+      'execute',
+      async (workflow: unknown, options: unknown) => {
+        assert.equal(workflow, remoteProfileLookupWorkflow.workflow);
+        assert.ok(options && typeof options === 'object');
+        const workflowOptions = options as { args?: unknown[]; workflowId?: string };
+        assert.deepEqual(workflowOptions.args, [lookupInput]);
+        assert.equal(
+          workflowOptions.workflowId,
+          remoteProfileLookupWorkflow.workflowIdFromArgs(lookupInput),
+        );
+        const profile = await materializeRemoteProfileActor({
+          actorUri: remoteActorUri,
+          context: { lookupObject },
+        });
+        return profile.id;
       },
-    });
+    );
 
     try {
       await assert.rejects(
@@ -1467,10 +1516,10 @@ describe('inbound Create dispatch', () => {
           receivedAt,
         }),
       );
+      assert.equal(executeMock.mock.callCount(), 1);
+      assert.equal(lookupObject.mock.callCount(), 1);
     } finally {
-      const handle = temporalClient.workflow.getHandle(actorDocumentWorkflowId);
-      await handle.terminate('profile media failure fixture cleanup').catch(() => undefined);
-      await handle.result().catch(() => undefined);
+      executeMock.mock.restore();
       await pg`DROP TRIGGER fail_hydrated_author_profile_media_insert ON profile_media`;
       await pg`DROP FUNCTION fail_hydrated_author_profile_media_insert()`;
       fetchMock.mock.restore();
@@ -1491,12 +1540,13 @@ describe('inbound Create dispatch', () => {
     const lookupObject = mock.fn(
       async () => new Person({ id: remoteActorUri, preferredUsername: 'alice' }),
     );
-    const fetchMock = mock.method(globalThis, 'fetch', async () =>
-      Response.json(
-        { subject: 'acct:alice@remote.example' },
-        { headers: { 'Content-Type': 'application/jrd+json' } },
-      ),
-    );
+    const lookupWorkflow = mockRemoteProfileRefresh(async (actorUri) => {
+      const profile = await materializeRemoteProfileActor({
+        actorUri: new URL(actorUri),
+        context: { lookupObject },
+      });
+      return profile.id;
+    });
     await pg`
       create function fail_original_post_content() returns trigger
       language plpgsql as $function$
@@ -1530,7 +1580,7 @@ describe('inbound Create dispatch', () => {
     } finally {
       await pg`drop trigger fail_original_post_content on post_content`;
       await pg`drop function fail_original_post_content()`;
-      fetchMock.mock.restore();
+      lookupWorkflow.mock.restore();
     }
 
     assert.equal(await db.$count(ActivityPubActors), 1);
@@ -3160,25 +3210,14 @@ describe('inbound Create dispatch', () => {
     const objectUri = new URL('https://objects.example/notes/concurrent-new-materialization');
     const mediaUrl = new URL('https://remote.example/media/concurrent-new-materialization.webp');
     const actor = new Person({ id: remoteActorUri, preferredUsername: 'alice' });
-    let lookupCount = 0;
-    let releaseLookups!: () => void;
-    const bothLookupsStarted = new Promise<void>((resolve) => {
-      releaseLookups = resolve;
+    const lookupObject = mock.fn(async () => actor);
+    const lookupWorkflow = mockRemoteProfileRefresh(async (actorUri) => {
+      const profile = await materializeRemoteProfileActor({
+        actorUri: new URL(actorUri),
+        context: { lookupObject },
+      });
+      return profile.id;
     });
-    const lookupObject = mock.fn(async () => {
-      lookupCount += 1;
-      if (lookupCount === 2) {
-        releaseLookups();
-      }
-      await bothLookupsStarted;
-      return actor;
-    });
-    const fetchMock = mock.method(globalThis, 'fetch', async () =>
-      Response.json(
-        { subject: 'acct:alice@remote.example' },
-        { headers: { 'Content-Type': 'application/jrd+json' } },
-      ),
-    );
     const note = () =>
       new Note({
         attachments: [new Image({ mediaType: 'image/webp', url: mediaUrl })],
@@ -3208,6 +3247,7 @@ describe('inbound Create dispatch', () => {
       ]);
 
       assert.deepEqual(results.map((result) => result.status).sort(), ['created', 'duplicate']);
+      assert.equal(lookupObject.mock.callCount(), 1);
       const materialized = await getMaterializedPost(objectUri);
       assert.equal(await db.$count(ActivityPubActors), 1);
       assert.equal(await db.$count(Profiles), 1);
@@ -3223,7 +3263,7 @@ describe('inbound Create dispatch', () => {
         [(await db.select().from(Media))[0]?.id],
       );
     } finally {
-      fetchMock.mock.restore();
+      lookupWorkflow.mock.restore();
     }
   });
 

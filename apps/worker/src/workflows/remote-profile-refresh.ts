@@ -14,6 +14,7 @@ const httpUriSchema = z.url().refine((value) => {
 
 const refreshInputSchema = z.strictObject({
   actorUri: httpUriSchema,
+  contextOrigin: httpUriSchema.optional(),
   profileId: z.string().min(1).optional(),
 });
 
