@@ -2,6 +2,8 @@ import { View } from 'react-native';
 import { expect, spyOn, userEvent, within } from 'storybook/test';
 import SettingsRoute from '@/app/(tabs)/(protected)/settings';
 import { SettingsRouteLayout } from '@/app/(tabs)/(protected)/settings/_layout';
+import SettingsChildSafetyRoute from '@/app/(tabs)/(protected)/settings/child-safety';
+import SettingsPrivacyRoute from '@/app/(tabs)/(protected)/settings/privacy';
 import SettingsThemeRoute from '@/app/(tabs)/(protected)/settings/theme';
 import { BYULMARU_ID_ACCOUNT_SETTINGS_URL } from '@/components/settings/ByulmaruIdAccountSettingsEntry';
 import { SettingsProfileDetail } from '@/components/settings/SettingsProfileDetail';
@@ -138,6 +140,32 @@ function ThemeStoryCanvas() {
     </View>
   );
 }
+
+export const PrivacyDetail: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
+  parameters: {
+    controls: { disable: true },
+    router: { pathname: '/settings/privacy' },
+  },
+  render: () => (
+    <SettingsRouteLayout>
+      <SettingsPrivacyRoute />
+    </SettingsRouteLayout>
+  ),
+};
+
+export const ChildSafetyDetail: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
+  parameters: {
+    controls: { disable: true },
+    router: { pathname: '/settings/child-safety' },
+  },
+  render: () => (
+    <SettingsRouteLayout>
+      <SettingsChildSafetyRoute />
+    </SettingsRouteLayout>
+  ),
+};
 
 export const NoSelectedProfile: Story = {
   parameters: {

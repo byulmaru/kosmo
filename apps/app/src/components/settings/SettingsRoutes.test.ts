@@ -31,6 +31,7 @@ let muteHeadingFocusCalls = 0;
 
 mock.module('expo-router', {
   exports: {
+    Link: ({ children }: { children: ReactNode }) => children,
     Slot: () => createElement(SlotRoute),
     Stack: () => createElement('Stack', null, createElement(SlotRoute)),
     usePathname: () => pathname,
@@ -165,6 +166,8 @@ let SettingsLayout: ComponentType;
 let SettingsRoute: ComponentType;
 let SettingsInfoRoute: ComponentType;
 let SettingsDeveloperRoute: ComponentType;
+let SettingsPrivacyRoute: ComponentType;
+let SettingsChildSafetyRoute: ComponentType;
 let ProtectedLayout: ComponentType;
 let WebRouteScrollContainer: ComponentType<RouteScrollContainerProps>;
 let settingsInitialRouteName: string | undefined;
@@ -180,6 +183,10 @@ before(async () => {
   ({ default: SettingsInfoRoute } = await import('../../app/(tabs)/(protected)/settings/info'));
   ({ default: SettingsDeveloperRoute } =
     await import('../../app/(tabs)/(protected)/settings/developer'));
+  ({ default: SettingsPrivacyRoute } =
+    await import('../../app/(tabs)/(protected)/settings/privacy'));
+  ({ default: SettingsChildSafetyRoute } =
+    await import('../../app/(tabs)/(protected)/settings/child-safety'));
   ({ default: SettingsDefaultPostVisibilityRoute } =
     await import('../../app/(tabs)/(protected)/settings/default-post-visibility'));
   ({ default: SettingsMuteAndBlockRoute } =
@@ -532,11 +539,64 @@ describe('Settings routes', () => {
     platform = 'web';
     await renderRoute('/settings/info', SettingsInfoRoute);
 
+    assert.ok(rendered('SettingsLinkRow').some((node) => node.props.href === '/settings/privacy'));
+    assert.ok(
+      rendered('SettingsLinkRow').some((node) => node.props.href === '/settings/child-safety'),
+    );
+    assert.ok(rendered('SettingsLinkRow').some((node) => node.props.href === '/account-deletion'));
     assert.ok(
       rendered('SettingsLinkRow').some((node) => node.props.href === '/settings/developer'),
     );
     assert.equal(rendered('NativeChannelSettings').length, 0);
     assert.equal(rendered('SettingsItem').length, 0);
+  });
+
+  it('full Web 개인정보 처리방침은 정보 master 선택과 정보 parent back을 유지한다', async () => {
+    await renderRoute('/settings/privacy', SettingsPrivacyRoute);
+
+    assert.deepEqual(
+      rendered('PageHeader').map((node) => node.props.title),
+      ['설정', 'Kosmo 개인정보 처리방침'],
+    );
+    assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'info');
+    const back = rendered('PageHeader')[1].props.leading;
+    assert.equal(back.props.accessibilityLabel, '정보로 돌아가기');
+    await act(async () => back.props.onPress());
+    assert.deepEqual(dismissedToPaths, ['/settings/info']);
+    assert.ok(textNodes().some((node) => textContent(node).includes('시행일: 2026년 9월 9일')));
+    assert.ok(
+      textNodes().some(
+        (node) => node.props.children === '1. 개인정보의 처리 목적, 항목, 법적 근거와 보유 기간',
+      ),
+    );
+  });
+
+  it('mobile Web 아동 안전 정책은 shell heading만 사용하고 정보 parent로 돌아간다', async () => {
+    width = 390;
+    await renderRoute('/settings/child-safety', SettingsChildSafetyRoute);
+
+    assert.equal(rendered('PageHeader').length, 0);
+    assert.equal(rendered('ScrollView').length, 0);
+    const policyText = textNodes();
+    assert.ok(policyText.some((node) => textContent(node).includes('시행일: 2026년 9월 9일')));
+    assert.ok(policyText.some((node) => node.props.children === '우리의 원칙'));
+    assert.equal(dismissedToPaths.length, 0);
+  });
+
+  it('Native 아동 안전 정책은 header와 본문을 하나의 ScrollView에 표시한다', async () => {
+    platform = 'android';
+    width = 390;
+    await renderRoute('/settings/child-safety', SettingsChildSafetyRoute);
+
+    const scrollView = rendered('ScrollView')[0];
+    assert.ok(scrollView);
+    assert.equal(scrollView.findAll((node) => (node.type as unknown) === 'PageHeader').length, 1);
+    assert.equal(
+      scrollView
+        .findAll((node) => (node.type as unknown) === 'Text')
+        .some((node) => textContent(node).includes('시행일: 2026년 9월 9일')),
+      true,
+    );
   });
 
   it('full Web 개발 정보는 정보 parent로 dismiss한다', async () => {
@@ -704,6 +764,16 @@ function settingsItem(label: string): ReactTestInstance {
   const item = settingsItems().find((node) => node.props.label === label);
   assert.ok(item, `SettingsItem with label ${label} was not rendered`);
   return item;
+}
+
+function textNodes(): ReactTestInstance[] {
+  return rendered('Text');
+}
+
+function textContent(node: ReactTestInstance): string {
+  return Array.isArray(node.props.children)
+    ? node.props.children.filter((child: unknown) => typeof child === 'string').join('')
+    : String(node.props.children ?? '');
 }
 
 function flattenStyle(style: unknown): Record<string, unknown> {

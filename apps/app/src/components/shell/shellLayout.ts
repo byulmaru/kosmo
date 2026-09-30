@@ -43,7 +43,9 @@ export type WebMobileShellHeader = Readonly<{
     | '설정'
     | '개발 정보'
     | '알림'
-    | '정보';
+    | '정보'
+    | 'Kosmo 개인정보 처리방침'
+    | 'Kosmo 아동 안전 정책';
 }>;
 
 export function isSettingsRoute(pathname: string) {
@@ -106,6 +108,12 @@ export function getWebMobileShellHeader(
   }
   if (pathname === '/settings/developer') {
     return { leading: 'back', title: '개발 정보' };
+  }
+  if (pathname === '/settings/privacy') {
+    return { leading: 'back', title: 'Kosmo 개인정보 처리방침' };
+  }
+  if (pathname === '/settings/child-safety') {
+    return { leading: 'back', title: 'Kosmo 아동 안전 정책' };
   }
 
   if (routeSegments.at(-2) === '[profileHandle]' && routeSegments.at(-1) === '[postId]') {

@@ -94,6 +94,14 @@ describe('getShellLayout', () => {
       leading: 'back',
       title: '개발 정보',
     });
+    assert.deepEqual(getWebMobileShellHeader(true, 390, '/settings/privacy', []), {
+      leading: 'back',
+      title: 'Kosmo 개인정보 처리방침',
+    });
+    assert.deepEqual(getWebMobileShellHeader(true, 390, '/settings/child-safety', []), {
+      leading: 'back',
+      title: 'Kosmo 아동 안전 정책',
+    });
     assert.equal(getWebMobileShellHeader(true, 390, '/bookmarks', []), null);
     assert.equal(getWebMobileShellHeader(true, 390, '/compose', []), null);
     assert.equal(getWebMobileShellHeader(true, 390, '/search', []), null);

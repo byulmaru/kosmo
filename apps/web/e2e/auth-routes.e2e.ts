@@ -233,7 +233,10 @@ test('로그인 후 full shell에서도 개인정보 처리방침으로 이동�
   await expect(page).toHaveURL(/\/privacy$/);
 });
 
-test('로그인 후 Settings 정보에서 공개 정책 문서로 이동한다', async ({ context, page }) => {
+test('로그인 후 full Settings 정보에서 정책 문서와 parent·forward navigation을 유지한다', async ({
+  context,
+  page,
+}) => {
   const session = await createE2ESession();
   await setE2ESessionCookie(context, session.token);
   await page.setViewportSize({ height: 900, width: 1440 });
@@ -244,10 +247,56 @@ test('로그인 후 Settings 정보에서 공개 정책 문서로 이동한다',
   await page.getByRole('link', { name: '정보 설정 열기' }).click();
   await expect(page).toHaveURL(/\/settings\/info$/);
   await expect(page.getByRole('heading', { name: '정보' })).toBeVisible();
+  await expect(page.getByRole('link', { name: '개인정보 처리방침' })).toHaveAttribute(
+    'href',
+    '/settings/privacy',
+  );
+  await expect(page.getByRole('link', { name: '아동 안전 정책' })).toHaveAttribute(
+    'href',
+    '/settings/child-safety',
+  );
 
   await page.getByRole('link', { name: '개인정보 처리방침' }).click();
-  await expect(page).toHaveURL(/\/privacy$/);
+  await expect(page).toHaveURL(/\/settings\/privacy$/);
   await expect(page.getByRole('heading', { name: 'Kosmo 개인정보 처리방침' })).toBeVisible();
+  await page.getByRole('button', { name: '정보로 돌아가기' }).click();
+  await expect(page).toHaveURL(/\/settings\/info$/);
+
+  await page.getByRole('link', { name: '아동 안전 정책' }).click();
+  await expect(page).toHaveURL(/\/settings\/child-safety$/);
+  await expect(page.getByRole('heading', { name: 'Kosmo 아동 안전 정책' })).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL(/\/settings\/info$/);
+  await page.goForward();
+  await expect(page).toHaveURL(/\/settings\/child-safety$/);
+});
+
+test('compact Settings 정책 detail은 정보 parent와 route heading을 표시한다', async ({
+  context,
+  page,
+}) => {
+  const session = await createE2ESession();
+  await setE2ESessionCookie(context, session.token);
+  await page.setViewportSize({ height: 900, width: 900 });
+  await page.goto('/settings/privacy');
+
+  await expect(page.getByRole('heading', { name: 'Kosmo 개인정보 처리방침' })).toBeVisible();
+  await page.getByRole('button', { name: '정보로 돌아가기' }).click();
+  await expect(page).toHaveURL(/\/settings\/info$/);
+});
+
+test('mobile Settings 정책 detail은 shell heading을 중복하지 않고 parent로 돌아간다', async ({
+  context,
+  page,
+}) => {
+  const session = await createE2ESession();
+  await setE2ESessionCookie(context, session.token);
+  await page.setViewportSize({ height: 900, width: 390 });
+  await page.goto('/settings/child-safety');
+
+  await expect(page.getByRole('heading', { name: 'Kosmo 아동 안전 정책' })).toHaveCount(1);
+  await page.getByRole('button', { name: '뒤로 가기' }).click();
+  await expect(page).toHaveURL(/\/settings\/info$/);
 });
 
 test('세션 확인이 실패해도 루트 온보딩과 로그인 진입점을 유지한다', async ({ page }) => {

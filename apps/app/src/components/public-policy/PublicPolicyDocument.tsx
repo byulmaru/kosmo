@@ -2,7 +2,7 @@ import { Link, Stack } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { useTheme } from '@/theme/ThemeProvider';
-import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
+import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import type { Href } from 'expo-router';
 import type { PropsWithChildren, ReactNode } from 'react';
 
@@ -34,7 +34,11 @@ export function PublicPolicyDocument({
             <Text style={[styles.backLink, { color: theme.textSecondary }]}>KOSMO로 돌아가기</Text>
           </Pressable>
         </NavigationLink>
-        <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>
+        <Text
+          accessibilityRole="header"
+          aria-level={1}
+          style={[styles.title, { color: theme.text }]}
+        >
           {title}
         </Text>
         <Text style={[styles.effectiveDate, { color: theme.textSecondary }]}>
@@ -95,7 +99,11 @@ export function PolicySection({ children, title }: PropsWithChildren<{ title: st
   const theme = useTheme();
   return (
     <View style={styles.section}>
-      <Text accessibilityRole="header" style={[styles.sectionTitle, { color: theme.text }]}>
+      <Text
+        accessibilityRole="header"
+        aria-level={2}
+        style={[styles.sectionTitle, { color: theme.text }]}
+      >
         {title}
       </Text>
       {children}
@@ -133,11 +141,17 @@ export function PolicyBullet({ children }: { children: ReactNode }) {
   );
 }
 
-export function PolicyCard({ children, title }: PropsWithChildren<{ title: string }>) {
+export function PolicySubsection({ children, title }: PropsWithChildren<{ title: string }>) {
   const theme = useTheme();
   return (
-    <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-      <Text style={[styles.cardTitle, { color: theme.text }]}>{title}</Text>
+    <View style={styles.subsection}>
+      <Text
+        accessibilityRole="header"
+        aria-level={3}
+        style={[styles.subsectionTitle, { color: theme.text }]}
+      >
+        {title}
+      </Text>
       {children}
     </View>
   );
@@ -155,6 +169,7 @@ const styles = StyleSheet.create({
     fontFamily: fontFamilies.ui,
     marginBottom: spacing.xl,
     marginTop: spacing.sm,
+    textAlign: 'right',
     ...typography.sm,
   },
   policyNavigation: {
@@ -166,10 +181,10 @@ const styles = StyleSheet.create({
   policyLinkControl: { justifyContent: 'center', minHeight: 48 },
   policyLink: { fontFamily: fontFamilies.ui, textDecorationLine: 'underline', ...typography.sm },
   section: { gap: spacing.md, marginTop: spacing.xxxl },
-  sectionTitle: { fontFamily: fontFamilies.ui, fontWeight: '800', ...typography.xl },
+  sectionTitle: { fontFamily: fontFamilies.ui, fontWeight: '600', ...typography.lg },
   paragraph: { fontFamily: fontFamilies.ui, ...typography.md },
-  card: { borderRadius: radii.md, borderWidth: 1, gap: spacing.sm, padding: spacing.lg },
-  cardTitle: { fontFamily: fontFamilies.ui, fontWeight: '800', ...typography.md },
+  subsection: { gap: spacing.sm, marginTop: spacing.md },
+  subsectionTitle: { fontFamily: fontFamilies.ui, fontWeight: '600', ...typography.md },
   bulletRow: { alignItems: 'flex-start', flexDirection: 'row', gap: spacing.sm },
   bulletMark: { fontFamily: fontFamilies.ui, ...typography.md },
   bulletText: { flex: 1, fontFamily: fontFamilies.ui, ...typography.md },
