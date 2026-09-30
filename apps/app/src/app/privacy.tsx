@@ -10,7 +10,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import type { PropsWithChildren, ReactNode } from 'react';
 
-const EFFECTIVE_DATE = '2026년 9월 29일';
+const EFFECTIVE_DATE = '2026년 9월 30일';
 const POLICY_TITLE = 'Kosmo 개인정보 처리방침';
 
 function SubsectionTitle({ children }: { children: ReactNode }) {
