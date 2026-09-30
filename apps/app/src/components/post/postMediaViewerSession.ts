@@ -1,3 +1,4 @@
+import { AccessibilityInfo, Platform } from 'react-native';
 import type { RefObject } from 'react';
 import type { View as NativeView } from 'react-native';
 
@@ -6,7 +7,13 @@ export function focusPostMediaViewerTarget(
   fallback?: RefObject<NativeView | null>,
 ) {
   const target = usableFocusTarget(primary) ?? (fallback ? usableFocusTarget(fallback) : null);
-  target?.focus?.();
+  if (!target) {
+    return;
+  }
+  target.focus?.();
+  if (Platform.OS !== 'web') {
+    AccessibilityInfo.sendAccessibilityEvent(target as never, 'focus');
+  }
 }
 
 function usableFocusTarget(ref: RefObject<NativeView | null>) {

@@ -63,6 +63,7 @@ Object.assign(globalThis, {
 mock.module('react-native', {
   exports: {
     ActivityIndicator: 'ActivityIndicator',
+    AccessibilityInfo: { sendAccessibilityEvent: () => undefined },
     Animated: { View: 'AnimatedView' },
     Image: MockImage,
     Modal: 'Modal',
@@ -794,6 +795,24 @@ describe('PostMediaViewer', () => {
     assert.equal(closed, 0);
     await act(async () => rendered('Modal')[0]!.props.onRequestClose());
     assert.equal(closed, 1);
+  });
+
+  it('iOS VoiceOver Escape는 Modal dismiss 후 Viewer를 닫고 원래 target으로 focus를 복귀한다', async () => {
+    platform.OS = 'ios';
+    let closed = 0;
+    let originFocused = 0;
+    await render({
+      onClose: () => closed++,
+      originControl: { current: { focus: () => originFocused++ } as unknown as NativeView },
+    });
+
+    await act(async () => byTestId('post-media-viewer-dialog').props.onAccessibilityEscape());
+    assert.equal(closed, 0);
+    assert.equal(rendered('Modal')[0]?.props.visible, false);
+
+    await act(async () => rendered('Modal')[0]?.props.onDismiss());
+    assert.equal(closed, 1);
+    assert.equal(originFocused, 1);
   });
 });
 

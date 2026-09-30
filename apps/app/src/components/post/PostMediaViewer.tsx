@@ -113,6 +113,7 @@ export function PostMediaViewer({
   const [currentIndex, setCurrentIndex] = useState(selectedIndex);
   const [expanded, setExpanded] = useState(false);
   const [lastContentId, setLastContentId] = useState<string | null>(null);
+  const [closing, setClosing] = useState(false);
   const wide = Platform.OS === 'web' && width >= breakpoints.compact;
   const safeAreaStyle = useSafeAreaPadding();
   const closeTop = spacing.lg + (Platform.OS === 'web' ? 0 : insets.top);
@@ -137,9 +138,21 @@ export function PostMediaViewer({
     [lastContentId, selectedIndex],
   );
   const requestClose = useCallback(() => {
+    if (Platform.OS === 'ios') {
+      setClosing(true);
+      return;
+    }
     onClose();
     requestAnimationFrame(() => focusPostMediaViewerTarget(originControl, fallbackFocus));
   }, [fallbackFocus, onClose, originControl]);
+  const handleDismiss = useCallback(() => {
+    if (!closing) {
+      return;
+    }
+    setClosing(false);
+    onClose();
+    requestAnimationFrame(() => focusPostMediaViewerTarget(originControl, fallbackFocus));
+  }, [closing, fallbackFocus, onClose, originControl]);
   const viewerState = useMemo<ViewerState>(
     () => ({
       currentIndex,
@@ -207,11 +220,12 @@ export function PostMediaViewer({
       accessibilityLabel="이미지 뷰어"
       animationType="fade"
       navigationBarTranslucent
+      onDismiss={Platform.OS === 'ios' ? handleDismiss : undefined}
       onRequestClose={handlePlatformRequestClose}
       presentationStyle="overFullScreen"
       statusBarTranslucent
       transparent
-      visible
+      visible={!closing}
     >
       <View style={styles.backdrop} testID="post-media-viewer-backdrop">
         <Pressable
@@ -224,6 +238,7 @@ export function PostMediaViewer({
         />
         <View
           accessibilityViewIsModal
+          onAccessibilityEscape={requestClose}
           ref={dialogRef}
           style={[styles.dialog, Platform.OS === 'web' ? null : safeAreaStyle]}
           testID="post-media-viewer-dialog"
