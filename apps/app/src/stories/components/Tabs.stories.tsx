@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { Tab, TabList } from '@/components/ui/Tabs';
 import { fontFamilies } from '@/theme/tokens';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -92,7 +92,7 @@ export const UnderlineInteractionContract: Story = {
     const popularLabel = within(popular).getByText(popularText);
     const popularFeedback = popular.firstElementChild;
     const mediaFeedback = media.firstElementChild;
-    const indicator = popular.lastElementChild;
+    const indicator = group.lastElementChild;
 
     await step('기본 상태와 접근성 확인', async () => {
       expect(popular).toHaveAttribute('aria-selected', 'true');
@@ -148,17 +148,22 @@ export const UnderlineInteractionContract: Story = {
 
     await step('포인터 선택과 hover 상태 확인', async () => {
       await userEvent.hover(popular);
-      expect(getComputedStyle(popularFeedback as Element).backgroundColor).toBe(
-        'rgba(0, 0, 0, 0.04)',
+      await waitFor(() =>
+        expect(getComputedStyle(popularFeedback as Element).backgroundColor).toBe(
+          'rgba(0, 0, 0, 0.04)',
+        ),
       );
       await userEvent.hover(media);
-      expect(getComputedStyle(mediaFeedback as Element).backgroundColor).toBe(
-        'rgba(0, 0, 0, 0.04)',
+      await waitFor(() =>
+        expect(getComputedStyle(mediaFeedback as Element).backgroundColor).toBe(
+          'rgba(0, 0, 0, 0.04)',
+        ),
       );
       await userEvent.pointer({ keys: '[MouseLeft>]', target: media });
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      expect(getComputedStyle(mediaFeedback as Element).backgroundColor).toBe(
-        'rgba(0, 0, 0, 0.08)',
+      await waitFor(() =>
+        expect(getComputedStyle(mediaFeedback as Element).backgroundColor).toBe(
+          'rgba(0, 0, 0, 0.08)',
+        ),
       );
       await userEvent.click(media);
       expect(media).toHaveFocus();
@@ -186,13 +191,15 @@ export const PillInteractionContract: Story = {
     const group = canvas.getByRole('tablist', { name: '검색 결과 유형' });
     const popular = within(group).getByRole('tab', { name: '인기' });
     const latest = within(group).getByRole('tab', { name: '최신' });
-    const feedback = popular.firstElementChild;
+    const visual = popular.firstElementChild;
+    const feedback = visual?.firstElementChild;
 
     await step('Pill 상태와 포커스 확인', async () => {
       expect(popular).toHaveAttribute('aria-selected', 'true');
-      expect(popular).toHaveStyle({ borderRadius: '8px', height: '32px' });
-      expect(getComputedStyle(popular).backgroundColor).toBe('rgb(255, 255, 255)');
-      expect(getComputedStyle(popular).borderColor).toBe('rgb(252, 231, 154)');
+      expect(visual).toHaveStyle({ borderRadius: '8px', height: '32px' });
+      expect(getComputedStyle(visual as Element).backgroundColor).toBe('rgb(255, 255, 255)');
+      expect(getComputedStyle(visual as Element).borderColor).toBe('rgb(252, 231, 154)');
+      expect(feedback).not.toBeNull();
       expect(latest).toHaveAttribute('aria-disabled', 'true');
       expect(latest).toHaveStyle({ opacity: '0.45' });
 
@@ -204,10 +211,13 @@ export const PillInteractionContract: Story = {
 
     await step('Pill 탭 선택과 비활성 상태 확인', async () => {
       await userEvent.hover(popular);
-      expect(getComputedStyle(feedback as Element).backgroundColor).toBe('rgba(0, 0, 0, 0.04)');
+      await waitFor(() =>
+        expect(getComputedStyle(feedback as Element).backgroundColor).toBe('rgba(0, 0, 0, 0.04)'),
+      );
       await userEvent.pointer({ keys: '[MouseLeft>]', target: popular });
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      expect(getComputedStyle(feedback as Element).backgroundColor).toBe('rgba(0, 0, 0, 0.08)');
+      await waitFor(() =>
+        expect(getComputedStyle(feedback as Element).backgroundColor).toBe('rgba(0, 0, 0, 0.08)'),
+      );
       await userEvent.click(popular);
       expect(args.onValueChange).toHaveBeenCalledTimes(1);
       expect(args.onValueChange).toHaveBeenLastCalledWith('popular');

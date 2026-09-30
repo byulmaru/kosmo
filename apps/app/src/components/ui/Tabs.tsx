@@ -1,7 +1,16 @@
-import { Children, createContext, useContext, useEffect, useRef, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useTheme } from '@/theme/ThemeProvider';
-import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
+import { Children, createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Animated,
+  Easing,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
+import { borderWidths, iconSizes, motion, radius, space, textStyles } from '@/theme/tokens';
 import type { ReactElement, RefObject } from 'react';
 import type { ViewStyle } from 'react-native';
 
@@ -31,12 +40,15 @@ export type TabProps<Value extends string> = {
 type TabContextValue = Readonly<{
   focusValue: string;
   onValueChange: (value: string) => void;
+  onTabLayout: (value: string, frame: TabFrame) => void;
   optionRefs: Map<string, RefObject<View | null>>;
   options: readonly TabOption<string>[];
   setFocusValue: (value: string) => void;
   value: string;
   variant: TabVariant;
 }>;
+
+type TabFrame = Readonly<{ left: number; width: number }>;
 
 const TabContext = createContext<TabContextValue | null>(null);
 
@@ -45,10 +57,7 @@ type WebTabProps = {
   'aria-disabled': boolean;
   'aria-selected': boolean;
   onKeyDown: (event: { key: string; preventDefault: () => void }) => void;
-  onPointerCancel: () => void;
   onPointerDown: () => void;
-  onPointerLeave: () => void;
-  onPointerUp: () => void;
   role: 'tab';
   tabIndex: -1 | 0;
 };
@@ -63,8 +72,17 @@ export function TabList<Value extends string>({
   variant,
 }: TabListProps<Value>) {
   const theme = useTheme();
+  const reducedMotion = useReducedMotion();
   const [focusValue, setFocusValue] = useState<string>(value);
+  const [frames, setFrames] = useState<Partial<Record<string, TabFrame>>>({});
   const optionRefs = useRef(new Map<string, RefObject<View | null>>());
+  const selectionLeft = useRef(new Animated.Value(0)).current;
+  const selectionRight = useRef(new Animated.Value(iconSizes[64])).current;
+  const selectionWidth = useMemo(
+    () => Animated.subtract(selectionRight, selectionLeft),
+    [selectionLeft, selectionRight],
+  );
+  const previousSelectedValue = useRef<string | undefined>(undefined);
   const options = Children.toArray(children).map(
     (child) => (child as ReactElement<TabProps<Value>>).props.option,
   );
@@ -72,9 +90,80 @@ export function TabList<Value extends string>({
 
   useEffect(() => setFocusValue(value), [value]);
 
+  const selectedOption = options.find((option) => option.value === value);
+  const selectedFrame =
+    selectedOption && !selectedOption.disabled ? frames[selectedOption.value] : undefined;
+
+  useEffect(() => {
+    if (variant !== 'underline' || !selectedFrame) {
+      return;
+    }
+
+    const targetLeft = selectedFrame.left + selectedFrame.width / 2 - iconSizes[64] / 2;
+    const targetRight = targetLeft + iconSizes[64];
+    const valueChanged =
+      previousSelectedValue.current !== undefined && previousSelectedValue.current !== value;
+    previousSelectedValue.current = value;
+
+    if (reducedMotion || !valueChanged) {
+      selectionLeft.stopAnimation();
+      selectionRight.stopAnimation();
+      selectionLeft.setValue(targetLeft);
+      selectionRight.setValue(targetRight);
+      return;
+    }
+
+    let cancelled = false;
+    let animation: Animated.CompositeAnimation | undefined;
+    selectionLeft.stopAnimation((currentLeft) => {
+      selectionRight.stopAnimation((currentRight) => {
+        if (cancelled) {
+          return;
+        }
+
+        const movingRight = (targetLeft + targetRight) / 2 > (currentLeft + currentRight) / 2;
+        const standardEasing = Easing.bezier(...motion.easingPoints.standard);
+        const edgeEasing = (direction: 'in' | 'out') => (progress: number) => {
+          const easedProgress = standardEasing(progress);
+          return direction === 'out'
+            ? Math.sin((easedProgress * Math.PI) / 2)
+            : 1 - Math.cos((easedProgress * Math.PI) / 2);
+        };
+        animation = Animated.parallel([
+          Animated.timing(selectionLeft, {
+            duration: motion.duration.standard,
+            easing: edgeEasing(movingRight ? 'in' : 'out'),
+            toValue: targetLeft,
+            useNativeDriver: false,
+          }),
+          Animated.timing(selectionRight, {
+            duration: motion.duration.standard,
+            easing: edgeEasing(movingRight ? 'out' : 'in'),
+            toValue: targetRight,
+            useNativeDriver: false,
+          }),
+        ]);
+        animation.start();
+      });
+    });
+
+    return () => {
+      cancelled = true;
+      animation?.stop();
+    };
+  }, [reducedMotion, selectedFrame, selectionLeft, selectionRight, value, variant]);
+
   const contextValue: TabContextValue = {
     focusValue,
     onValueChange: onValueChange as (value: string) => void,
+    onTabLayout: (tabValue, frame) => {
+      setFrames((current) => {
+        const previous = current[tabValue];
+        return previous?.left === frame.left && previous.width === frame.width
+          ? current
+          : { ...current, [tabValue]: frame };
+      });
+    },
     optionRefs: optionRefs.current,
     options: options as readonly TabOption<string>[],
     setFocusValue,
@@ -129,6 +218,19 @@ export function TabList<Value extends string>({
           />
         ) : null}
         {children}
+        {selectedFrame ? (
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.tabIndicator,
+              {
+                backgroundColor: theme.actionPrimaryBase,
+                left: selectionLeft,
+                width: selectionWidth,
+              },
+            ]}
+          />
+        ) : null}
       </View>
     );
 
@@ -142,9 +244,9 @@ export function Tab<Value extends string>({ option }: TabProps<Value>) {
   }
 
   const theme = useTheme();
+  const reducedMotion = useReducedMotion();
   const optionRef = useRef<View>(null);
   const [focusVisible, setFocusVisible] = useState(false);
-  const [webPressed, setWebPressed] = useState(false);
   context.optionRefs.set(option.value, optionRef);
 
   const disabled = Boolean(option.disabled);
@@ -223,26 +325,16 @@ export function Tab<Value extends string>({ option }: TabProps<Value>) {
         context.setFocusValue(option.value);
         context.onValueChange(option.value);
       }}
+      onLayout={(event) => {
+        const { width, x: left } = event.nativeEvent.layout;
+        context.onTabLayout(option.value, { left, width });
+      }}
       ref={optionRef}
       style={[
         context.variant === 'pill' ? styles.pillTab : styles.underlineTab,
         {
-          backgroundColor:
-            context.variant === 'pill'
-              ? web
-                ? selected
-                  ? theme.background
-                  : theme.card
-                : 'transparent'
-              : 'transparent',
-          borderColor:
-            context.variant === 'pill'
-              ? web
-                ? selected
-                  ? theme.primary
-                  : theme.border
-                : 'transparent'
-              : theme.border,
+          backgroundColor: 'transparent',
+          borderColor: context.variant === 'pill' ? 'transparent' : theme.border,
           opacity: disabled ? 0.45 : 1,
           ...(focusVisible
             ? {
@@ -259,13 +351,7 @@ export function Tab<Value extends string>({ option }: TabProps<Value>) {
             'aria-disabled': disabled,
             'aria-selected': selected,
             onKeyDown,
-            onPointerCancel: () => setWebPressed(false),
-            onPointerDown: () => {
-              setFocusVisible(false);
-              setWebPressed(true);
-            },
-            onPointerLeave: () => setWebPressed(false),
-            onPointerUp: () => setWebPressed(false),
+            onPointerDown: () => setFocusVisible(false),
             role: 'tab',
             tabIndex,
           } as WebTabProps)
@@ -274,25 +360,32 @@ export function Tab<Value extends string>({ option }: TabProps<Value>) {
       {(state) => {
         const feedbackColor = disabled
           ? 'transparent'
-          : (web ? webPressed || state.pressed : state.pressed)
+          : state.pressed
             ? theme.statePressed
             : web && (state as { hovered?: boolean }).hovered
               ? theme.stateHover
               : 'transparent';
+        const feedbackTransition = web
+          ? ({
+              transitionDuration: `${reducedMotion ? motion.duration.instant : motion.duration.fast}ms`,
+              transitionProperty: 'background-color',
+              transitionTimingFunction: motion.easing.standard,
+            } as unknown as ViewStyle)
+          : undefined;
         const feedback = (
-          <View
-            pointerEvents="none"
-            style={[
-              styles.feedbackSurface,
-              context.variant === 'pill' && styles.pillFeedback,
-              { backgroundColor: feedbackColor },
-            ]}
+          <TabFeedback
+            color={feedbackColor}
+            pill={context.variant === 'pill'}
+            pressedColor={theme.statePressed}
+            reducedMotion={reducedMotion}
+            web={web}
+            webTransition={feedbackTransition}
           />
         );
 
         return (
           <>
-            {context.variant === 'pill' && !web ? (
+            {context.variant === 'pill' ? (
               <View
                 style={[
                   styles.pillSurface,
@@ -310,7 +403,7 @@ export function Tab<Value extends string>({ option }: TabProps<Value>) {
                 {feedback}
                 <Text
                   style={[
-                    context.variant === 'pill' ? styles.pillLabel : styles.underlineLabel,
+                    styles.underlineLabel,
                     {
                       color:
                         context.variant === 'underline' && !selected
@@ -323,9 +416,6 @@ export function Tab<Value extends string>({ option }: TabProps<Value>) {
                 </Text>
               </>
             )}
-            {context.variant === 'underline' && selected && !disabled ? (
-              <View style={[styles.tabIndicator, { backgroundColor: theme.actionPrimaryBase }]} />
-            ) : null}
           </>
         );
       }}
@@ -340,6 +430,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: Platform.OS === 'android' ? 0 : borderWidths[1],
     flexDirection: 'row',
     height: Platform.OS === 'android' ? 48 : 44,
+    position: 'relative',
   },
   underlineTab: {
     alignItems: 'center',
@@ -354,10 +445,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     bottom: Platform.OS === 'android' ? space[4] : 0,
     height: space[4],
-    left: '50%',
     position: 'absolute',
-    transform: [{ translateX: -iconSizes[64] / 2 }],
-    width: iconSizes[64],
   },
   underlineVisualBackdrop: {
     borderBottomWidth: borderWidths[1],
@@ -385,12 +473,11 @@ const styles = StyleSheet.create({
   pillTab: {
     alignItems: 'center',
     borderRadius: Platform.OS === 'web' ? radius[8] : 0,
-    borderWidth: Platform.OS === 'web' ? borderWidths[1] : 0,
     flexShrink: 0,
     height: Platform.OS === 'web' ? 32 : Platform.OS === 'android' ? 48 : 44,
     justifyContent: 'center',
     minWidth: Platform.OS === 'web' ? undefined : Platform.OS === 'android' ? 48 : 44,
-    paddingHorizontal: Platform.OS === 'web' ? space[8] : 0,
+    paddingHorizontal: 0,
   },
   pillSurface: {
     alignItems: 'center',
@@ -402,3 +489,59 @@ const styles = StyleSheet.create({
   },
   pillLabel: textStyles.uiLabelM,
 });
+
+type TabFeedbackProps = {
+  color: string;
+  pill: boolean;
+  pressedColor: string;
+  reducedMotion: boolean;
+  web: boolean;
+  webTransition?: ViewStyle;
+};
+
+function TabFeedback({
+  color,
+  pill,
+  pressedColor,
+  reducedMotion,
+  web,
+  webTransition,
+}: TabFeedbackProps) {
+  const opacity = useRef(new Animated.Value(color === 'transparent' ? 0 : 1)).current;
+  const visible = color !== 'transparent';
+
+  useEffect(() => {
+    if (web) {
+      return;
+    }
+
+    opacity.stopAnimation();
+    if (reducedMotion) {
+      opacity.setValue(visible ? 1 : 0);
+      return;
+    }
+
+    const animation = Animated.timing(opacity, {
+      duration: motion.duration.fast,
+      easing: Easing.bezier(...motion.easingPoints.standard),
+      toValue: visible ? 1 : 0,
+      useNativeDriver: true,
+    });
+    animation.start();
+
+    return () => animation.stop();
+  }, [opacity, reducedMotion, visible, web]);
+
+  const style = [
+    styles.feedbackSurface,
+    pill && styles.pillFeedback,
+    web ? webTransition : undefined,
+    web ? { backgroundColor: color } : { backgroundColor: pressedColor, opacity },
+  ];
+
+  return web ? (
+    <View pointerEvents="none" style={style} />
+  ) : (
+    <Animated.View pointerEvents="none" style={style} />
+  );
+}
