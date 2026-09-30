@@ -6,6 +6,7 @@ settings:
 
 overrides:
   '@opentelemetry/sdk-metrics@<2.8.0': ^2.8.0
+  undici@: 6.28.1
   ajv@8.20.0>fast-uri: 3.1.7
   '@react-native/metro-config': 0.85.3
   '@typescript-eslint/scope-manager': 8.62.1
@@ -8156,8 +8157,8 @@ packages:
   undici-types@7.28.0:
     resolution: {integrity: sha512-LJAfY+2w6HGeT8d8J1wNQsUGUEGio6NWWpwdwurQe4f6oojzCFuGLizl1KSve4irsTxyLly1QhEeE6iapdaIvQ==}
 
-  undici@6.28.0:
-    resolution: {integrity: sha512-LIY910g9TI13YS95lrMFrs8Rm/u/irgHeTWoKCoteeJ04CUJ92eEfj0rVn+7VKMPBpUPiUoBKfhNyLI23EE/KA==}
+  undici@6.28.1:
+    resolution: {integrity: sha512-zWpdTVD54H48CIybL0rWQ3ukpb9d23wM7eH5RtfdmeP70cWHNjtfo7P4vZX+5CoDcO53J4Pu5uXp7lNfjc6DRA==}
     engines: {node: '>=18.17'}
 
   undici@7.29.0:
@@ -9142,7 +9143,7 @@ snapshots:
   '@digitalbazaar/http-client@4.3.0':
     dependencies:
       ky: 1.14.3
-      undici: 6.28.0
+      undici: 6.28.1
 
   '@drizzle-team/brocli@0.11.0': {}
 
@@ -11684,7 +11685,7 @@ snapshots:
     dependencies:
       progress: 2.0.3
       proxy-from-env: 1.1.0
-      undici: 6.28.0
+      undici: 6.28.1
       which: 2.0.2
     optionalDependencies:
       '@sentry/cli-darwin': 3.6.0
@@ -11700,7 +11701,7 @@ snapshots:
     dependencies:
       progress: 2.0.3
       proxy-from-env: 1.1.0
-      undici: 6.28.0
+      undici: 6.28.1
       which: 2.0.2
     optionalDependencies:
       '@sentry/cli-darwin': 3.6.2
@@ -16840,7 +16841,7 @@ snapshots:
 
   undici-types@7.28.0: {}
 
-  undici@6.28.0: {}
+  undici@6.28.1: {}
 
   undici@7.29.0: {}
 
