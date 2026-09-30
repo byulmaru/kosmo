@@ -8,6 +8,9 @@ import type { ReactTestRenderer } from 'react-test-renderer';
 import type { ReplyComposerSurface as ReplyComposerSurfaceComponent } from './ReplyComposerSurface';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+Object.assign(globalThis, {
+  cancelAnimationFrame: globalThis.cancelAnimationFrame ?? (() => undefined),
+});
 
 const platform = { OS: 'android' };
 const nativeFocusEvents: Array<{ target: unknown; eventType: string }> = [];
@@ -244,3 +247,67 @@ test('iOS VoiceOver Escape는 제출 중 Quote를 닫지 않는다', async () =>
   assert.equal(closeCount, 0);
   assert.equal(renderer?.root.findAllByProps({ role: 'alertdialog' }).length, 0);
 });
+
+for (const mode of ['reply', 'quote'] as const) {
+  test(`iOS ${mode} Escape는 확인창의 계속 작성 버튼으로 VoiceOver focus를 이동한다`, async () => {
+    platform.OS = 'ios';
+    const queuedFrames: FrameRequestCallback[] = [];
+    const previousRequestAnimationFrame = globalThis.requestAnimationFrame;
+    const previousCancelAnimationFrame = globalThis.cancelAnimationFrame;
+    Object.assign(globalThis, {
+      cancelAnimationFrame: () => undefined,
+      requestAnimationFrame: (callback: FrameRequestCallback) => {
+        queuedFrames.push(callback);
+        return queuedFrames.length;
+      },
+    });
+    try {
+      const parent = {
+        content: { bodyText: '', contentWarning: null },
+        createdAt: '2026-01-01T00:00:00.000Z',
+        id: 'post-1',
+        profile: {
+          avatar: null,
+          displayName: '작성자',
+          handle: 'author',
+          relativeHandle: '@author',
+        },
+        repostSource: null,
+      };
+      await act(async () => {
+        renderer = create(
+          createElement(ReplyComposerSurface, {
+            mode,
+            onRequestClose: () => undefined,
+            open: true,
+            parent: parent as never,
+            profile: { composer: {}, id: 'profile-1', relativeHandle: '@kosmo' } as never,
+          }),
+        );
+      });
+
+      const dialog = renderer?.root.findByProps({ testID: `${mode}-composer-dialog-surface` });
+      assert.ok(dialog);
+      await act(async () => dialog.props.onAccessibilityEscape());
+      const confirm = renderer?.root.findByProps({ role: 'alertdialog' });
+      const continueEditing = renderer?.root
+        .findAllByType('Button' as ElementType)
+        .find((button) => button.props.tone === 'secondary');
+      assert.ok(confirm);
+      assert.ok(continueEditing);
+      const focusTarget = {};
+      (continueEditing.props.controlRef as { current: unknown }).current = focusTarget;
+      assert.deepEqual(nativeFocusEvents, []);
+
+      const focusFrame = queuedFrames.shift();
+      assert.ok(focusFrame);
+      await act(async () => focusFrame(0));
+      assert.deepEqual(nativeFocusEvents, [{ target: focusTarget, eventType: 'focus' }]);
+    } finally {
+      Object.assign(globalThis, {
+        cancelAnimationFrame: previousCancelAnimationFrame,
+        requestAnimationFrame: previousRequestAnimationFrame,
+      });
+    }
+  });
+}

@@ -157,6 +157,8 @@ function ReplyComposerSurfaceContents({
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
   const [nativeClosing, setNativeClosing] = useState(false);
   const discardConfirmRef = useRef<NativeView>(null);
+  // Native VoiceOver focus needs the concrete button host after the confirmation mounts.
+  const continueEditingRef = useRef<NativeView>(null);
   const editorRef = useRef<TextInput>(null);
   const nativeBackHandlerRef = useRef<(() => void) | null>(null);
   const closeAfterDiscardRef = useRef<(() => void) | undefined>(undefined);
@@ -307,10 +309,20 @@ function ReplyComposerSurfaceContents({
   );
 
   useEffect(() => {
-    if (!discardConfirmOpen || Platform.OS !== 'web') {
+    if (!discardConfirmOpen) {
+      return;
+    }
+    if (Platform.OS !== 'ios' && Platform.OS !== 'web') {
       return;
     }
     const frame = requestAnimationFrame(() => {
+      if (Platform.OS === 'ios') {
+        const continueEditingButton = continueEditingRef.current;
+        if (continueEditingButton) {
+          AccessibilityInfo.sendAccessibilityEvent(continueEditingButton as never, 'focus');
+        }
+        return;
+      }
       const confirm = discardConfirmRef.current as unknown as HTMLElement | null;
       confirm?.querySelector<HTMLElement>('button:not([disabled])')?.focus();
     });
@@ -345,7 +357,7 @@ function ReplyComposerSurfaceContents({
           작성 중인 내용은 저장되지 않습니다.
         </Text>
         <View style={styles.confirmActions}>
-          <Button onPress={continueEditing} tone="secondary">
+          <Button controlRef={continueEditingRef} onPress={continueEditing} tone="secondary">
             계속 작성
           </Button>
           <Button onPress={() => closeImmediately(closeAfterDiscardRef.current)} tone="danger">
