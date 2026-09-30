@@ -22,6 +22,7 @@ import type { PostListRow_post$key } from './__generated__/PostListRow_post.grap
 import type { PostActionBarProps } from './PostActionBar';
 import type { PostListPresentation } from './postListMetrics';
 import type { PostMediaOpenHandler } from './PostMediaImage';
+import type { ProfilePinContext } from './ProfilePinAction';
 
 const PostListRowFragment = graphql`
   fragment PostListRow_post on Post {
@@ -99,12 +100,14 @@ const PostListItemFragment = graphql`
 
 export function PostListItem({
   pinned = false,
+  profilePin,
   post: postKey,
   presentation,
   showDivider = true,
   showReplyAttribution = true,
 }: {
   pinned?: boolean;
+  profilePin?: ProfilePinContext | null;
   post: PostListItem_post$key;
   presentation: PostListPresentation;
   showDivider?: boolean;
@@ -197,6 +200,7 @@ export function PostListItem({
         <PostListRow
           actionBarStyle={Platform.OS === 'web' ? styles.webActionBarSlot : styles.actionBarSlot}
           post={post}
+          profilePin={profilePin}
           reply={reply}
         />
       </PostListItemCard>,
@@ -272,6 +276,7 @@ export function PostListItem({
           />
           <PostActionSurface
             actionBarStyle={Platform.OS === 'web' ? styles.webQuoteActionBar : undefined}
+            profilePin={profilePin}
             reactionSummaryStyle={styles.quoteReactionSummary}
             reply={reply}
             socialActionTarget={post.actionSurface!}
@@ -350,11 +355,13 @@ function PostAttributionRow({ children, icon }: { children: ReactNode; icon: Rea
 function PostListRow({
   actionBarStyle,
   post: postKey,
+  profilePin,
   reply,
   surfacePostId,
 }: {
   actionBarStyle?: StyleProp<ViewStyle>;
   post: PostListRow_post$key;
+  profilePin?: ProfilePinContext | null;
   reply?: PostActionBarProps['reply'];
   surfacePostId?: string;
 }) {
@@ -418,6 +425,7 @@ function PostListRow({
         ) : null}
         <PostActionSurface
           actionBarStyle={actionBarStyle}
+          profilePin={profilePin}
           reactionSummaryStyle={styles.reactionSummary}
           reply={reply}
           socialActionTarget={post.actionSurface!}

@@ -169,6 +169,7 @@ export function PostActionBar({
               menuExpanded={more.menuExpanded}
               onPress={more.onPress}
               popupRole={more.popupRole}
+              processing={morePending ? 'pending' : 'default'}
               stateful={Boolean(more.popupRole)}
               testID="more"
             />
