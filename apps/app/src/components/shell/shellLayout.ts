@@ -42,6 +42,7 @@ export type WebMobileShellHeader = Readonly<{
     | '테마'
     | '설정'
     | '개발 정보'
+    | '오픈소스 라이선스'
     | '알림'
     | '정보';
 }>;
@@ -103,6 +104,9 @@ export function getWebMobileShellHeader(
   }
   if (pathname === '/settings/info') {
     return { leading: 'back', title: '정보' };
+  }
+  if (pathname === '/settings/open-source-licenses') {
+    return { leading: 'back', title: '오픈소스 라이선스' };
   }
   if (pathname === '/settings/developer') {
     return { leading: 'back', title: '개발 정보' };

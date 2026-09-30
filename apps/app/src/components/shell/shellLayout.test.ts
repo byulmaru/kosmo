@@ -90,6 +90,10 @@ describe('getShellLayout', () => {
       leading: 'back',
       title: '정보',
     });
+    assert.deepEqual(getWebMobileShellHeader(true, 390, '/settings/open-source-licenses', []), {
+      leading: 'back',
+      title: '오픈소스 라이선스',
+    });
     assert.deepEqual(getWebMobileShellHeader(true, 390, '/settings/developer', []), {
       leading: 'back',
       title: '개발 정보',
@@ -101,6 +105,7 @@ describe('getShellLayout', () => {
     assert.equal(getWebMobileShellHeader(true, 390, '/@writer/following', []), null);
     assert.equal(getWebMobileShellHeader(true, 390, '/login/callback', []), null);
     assert.equal(getWebMobileShellHeader(true, 768, '/notifications', []), null);
+    assert.equal(getWebMobileShellHeader(true, 768, '/settings/open-source-licenses', []), null);
     assert.equal(getWebMobileShellHeader(true, 1_280, '/notifications', []), null);
     assert.equal(getWebMobileShellHeader(false, 390, '/notifications', []), null);
   });
