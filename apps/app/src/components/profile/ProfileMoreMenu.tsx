@@ -10,6 +10,7 @@ type Props = {
   focusTriggerRef?: RefObject<() => void>;
   onTriggerReady?: (focusTrigger: () => void) => void;
   renderTrigger?: ComponentProps<typeof ActionMenu>['renderTrigger'];
+  sheetIconSize?: 20 | 24;
 };
 
 /** Menu presentation only. Supplied actions own requests and completion lifecycles. */
@@ -20,12 +21,14 @@ export function ProfileMoreMenu({
   focusTriggerRef,
   onTriggerReady,
   renderTrigger,
+  sheetIconSize,
 }: Props) {
   return (
     <ActionMenu
       accessibilityLabel={accessibilityLabel}
       disabled={disabled}
       items={items}
+      sheetIconSize={sheetIconSize}
       webMinWidth={160}
       {...(renderTrigger
         ? { webHorizontalPlacement: 'end' as const }
