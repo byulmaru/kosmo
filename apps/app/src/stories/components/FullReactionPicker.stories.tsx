@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { FullReactionPicker } from '@/components/reaction/FullReactionPicker';
-import { reactionEmojiCatalog } from '@/components/reaction/reactionEmojiCatalog';
+import {
+  reactionEmojiCatalog,
+  reactionEmojiPickerOptions,
+} from '@/components/reaction/reactionEmojiCatalog';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type {
   FullReactionPickerOption,
@@ -251,6 +254,7 @@ const meta = {
     options: reactionOptions,
     presentation: 'web',
     query: '',
+    recentValues: [],
     selectedValues: [],
     loading: false,
   },
@@ -262,6 +266,7 @@ const meta = {
     presentation: { control: 'inline-radio', options: ['web', 'mobile'] },
     query: { control: 'text' },
     selectedValues: { control: 'object' },
+    recentValues: { control: 'object' },
     loading: { control: 'boolean' },
   },
   component: FullReactionPicker,
@@ -270,8 +275,14 @@ const meta = {
     'LoadingContract',
     'MobileGridGeometryContract',
     'MobileBrowseGeometryContract',
+    'MobileHandleExpansionContract',
     'MobileExpandedGeometryContract',
     'WebGridGeometryContract',
+    'WebMobileGridGeometryContract',
+    'RecentSectionContract',
+    'RecentTwoRowsWebContract',
+    'RecentTwoRowsMobileWebContract',
+    'RecentTwoRowsNativeContract',
     'reactionOptions',
     'VirtualizedCatalogContract',
     'FlagAssetContract',
@@ -288,6 +299,7 @@ export const WebBrowse: Story = {};
 export const WebSearchResults: Story = { args: { query: '하트' } };
 export const WebEmpty: Story = { args: { query: '존재하지않음' } };
 export const WebLoading: Story = { args: { loading: true } };
+export const WebRecent: Story = { args: { recentValues: ['fire', 'laugh'] } };
 
 const mobileGlobals = { viewport: { isRotated: false, value: 'kosmoMobile' } } as const;
 const mobileParameters = { layout: 'fullscreen' } as const;
@@ -324,15 +336,15 @@ export const MobileLoading: Story = {
   globals: mobileGlobals,
   parameters: mobileParameters,
 };
+export const MobileRecent: Story = {
+  ...MobileBrowse,
+  args: { presentation: 'mobile', recentValues: ['fire', 'laugh'] },
+};
 
 export const MobileGridGeometryContract: Story = {
   ...MobileBrowse,
   play: async ({ canvasElement }) => {
-    const rows = within(canvasElement).getAllByTestId(/^full-reaction-section-symbols-row-/);
-    expect(rows).toHaveLength(2);
-    for (const row of rows) {
-      expect(getComputedStyle(row).justifyContent).toBe('space-between');
-    }
+    expectQuickColumnsToAlign(canvasElement);
   },
 };
 
@@ -342,8 +354,89 @@ export const WebGridGeometryContract: Story = {
     expect(rows).toHaveLength(2);
     expect(getComputedStyle(rows[0]).justifyContent).toBe('space-between');
     expect(getComputedStyle(rows[1]).justifyContent).toBe('flex-start');
+    expectQuickColumnsToAlign(canvasElement);
   },
 };
+
+export const WebMobileGridGeometryContract: Story = {
+  globals: mobileGlobals,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const dialog = canvas.getByRole('dialog', { name: '반응 선택' });
+    expect(dialog.getBoundingClientRect().width).toBeLessThanOrEqual(288);
+    expect(dialog.getBoundingClientRect().height).toBeLessThanOrEqual(420);
+    const grid = within(canvas.getByTestId('full-reaction-section-symbols-row-0')).getAllByRole(
+      'button',
+    );
+    expect(grid).toHaveLength(6);
+    expectQuickColumnsToAlign(canvasElement);
+  },
+};
+
+export const RecentSectionContract: Story = {
+  args: { recentValues: ['fire', 'laugh'] },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    expect(canvas.getByRole('heading', { name: '최근 사용' })).toBeVisible();
+    expect(canvas.getByTestId('full-reaction-section-recent-row-0')).toBeVisible();
+    const recent = within(canvas.getByTestId('full-reaction-section-recent-row-0')).getAllByRole(
+      'button',
+    );
+    expect(recent.map((button) => button.getAttribute('aria-label'))).toEqual([
+      '불꽃 🔥',
+      '웃음 😂',
+    ]);
+  },
+};
+
+const fullRecentValues = reactionOptions.map((option) => option.id);
+
+export const RecentTwoRowsWebContract: Story = {
+  args: { recentValues: fullRecentValues },
+  play: async ({ canvasElement }) => {
+    const rows = within(canvasElement).getAllByTestId(/^full-reaction-section-recent-row-/);
+    expect(rows).toHaveLength(2);
+    expect(rows.map((row) => within(row).getAllByRole('button').length)).toEqual([8, 8]);
+  },
+};
+
+export const RecentTwoRowsMobileWebContract: Story = {
+  args: { recentValues: fullRecentValues },
+  globals: mobileGlobals,
+  play: async ({ canvasElement }) => {
+    const rows = within(canvasElement).getAllByTestId(/^full-reaction-section-recent-row-/);
+    expect(rows).toHaveLength(2);
+    expect(rows.map((row) => within(row).getAllByRole('button').length)).toEqual([6, 6]);
+  },
+};
+
+export const RecentTwoRowsNativeContract: Story = {
+  ...MobileBrowse,
+  args: { presentation: 'mobile', recentValues: fullRecentValues },
+  play: async ({ canvasElement }) => {
+    const rows = within(canvasElement).getAllByTestId(/^full-reaction-section-recent-row-/);
+    expect(rows).toHaveLength(2);
+    expect(rows.map((row) => within(row).getAllByRole('button').length)).toEqual([7, 7]);
+  },
+};
+
+function expectQuickColumnsToAlign(canvasElement: HTMLElement) {
+  const canvas = within(canvasElement);
+  const quick = within(canvas.getByTestId('full-reaction-section-quick-row-0')).getAllByRole(
+    'button',
+  );
+  const grid = within(canvas.getByTestId('full-reaction-section-symbols-row-0')).getAllByRole(
+    'button',
+  );
+  expect(quick).toHaveLength(6);
+  for (let column = 0; column < quick.length; column += 1) {
+    expect(
+      Math.abs(
+        quick[column].getBoundingClientRect().left - grid[column].getBoundingClientRect().left,
+      ),
+    ).toBeLessThan(1);
+  }
+}
 
 function InteractivePicker(props: FullReactionPickerProps) {
   const [query, setQuery] = useState(props.query);
@@ -411,11 +504,11 @@ export const InteractionContract: Story = {
 };
 
 export const VirtualizedCatalogContract: Story = {
-  args: { options: reactionEmojiCatalog },
+  args: { options: reactionEmojiPickerOptions },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     expect(canvas.getAllByRole('button', { name: /활짝 웃는 얼굴/ }).length).toBeGreaterThan(0);
-    expect(canvas.getAllByRole('button').length).toBeLessThan(reactionEmojiCatalog.length);
+    expect(canvas.getAllByRole('button').length).toBeLessThan(reactionEmojiPickerOptions.length);
   },
 };
 
@@ -460,5 +553,16 @@ export const MobileExpandedGeometryContract: Story = {
     expect(within(canvasElement).getByTestId('full-reaction-picker-sheet')).toHaveStyle({
       height: '720px',
     });
+  },
+};
+
+export const MobileHandleExpansionContract: Story = {
+  ...MobileBrowse,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const sheet = canvas.getByTestId('full-reaction-picker-sheet');
+    expect(sheet).toHaveStyle({ height: '480px' });
+    await userEvent.click(canvas.getByTestId('full-reaction-picker-drag-handle'));
+    await waitFor(() => expect(parseFloat(getComputedStyle(sheet).height)).toBeGreaterThan(480));
   },
 };

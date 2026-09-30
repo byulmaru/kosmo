@@ -2,17 +2,19 @@
 
 ## 범위와 정보 구조
 
-Reaction UI는 Post에 Reaction을 추가·삭제하는 Quick Picker와 Unicode-first Full Picker, 이미 등록된 Reaction의 Type별 count를 보여 주는 요약 row, Reaction을 남긴 Profile을 확인하는 전용 route로 구성한다.
+Reaction UI는 Post에 Reaction을 추가·삭제하는 Unicode-first Full Picker, 이미 등록된 Reaction의 Type별 count를 보여 주는 요약 row, Reaction을 남긴 Profile을 확인하는 전용 route로 구성한다.
 
 - 일반 Post와 Quote Post는 화면에 표시한 해당 Post를 Reaction 대상으로 사용한다.
 - 순수 Repost는 바깥 Repost가 아니라 source Post를 Reaction 대상으로 사용한다.
 - 목록과 상세 화면은 같은 대상 결정 규칙과 UI를 사용한다. Reaction 요약 row는 Post body 또는 source body 아래, Post Action Bar 위에 표시한다.
-- Post surface는 `reactionTarget`을 한 번 결정하고 Quick Picker, 요약 row, Profile 목록에 같은 Post ID를 전달한다. 같은 surface 안에서 서로 다른 Post를 읽거나 변경하지 않는다.
+- Post surface는 `reactionTarget`을 한 번 결정하고 Full Picker, 요약 row, Profile 목록에 같은 Post ID를 전달한다. 같은 surface 안에서 서로 다른 Post를 읽거나 변경하지 않는다.
 - 이미지 기반 custom reaction의 asset·data·category 계약, API·DB 변경, 전역 toast, 범용 anchored popover, Reply composer, Post Action Bar의 일반 More action menu, 로그인·가입·Profile 선택 onboarding 자체는 이 계약의 범위가 아니다. Action Bar 부모 surface는 기존 인증·Profile 선택 진입점을 재사용할 수 있지만 Reaction feature가 그 흐름을 새로 구현하지 않는다.
 
 ## Reaction Quick Picker
 
 Reaction Quick Picker는 현재 제공된 Reaction option을 빠르게 선택하는 펼쳐진 패널이다. option 목록과 toggle intent는 부모가 공급하며 Picker는 플랫폼별 시각 표현만 소유한다.
+
+이 절은 독립 컴포넌트의 계약이다. 게시글 Action Bar에서는 Quick Picker를 먼저 열지 않고 Full Picker의 `빠른 반응` 첫 줄에 기존 여섯 Type을 제공한다.
 
 ### 형태
 
@@ -44,30 +46,28 @@ Reaction Quick Picker는 현재 제공된 Reaction option을 빠르게 선택하
 
 ## Full Reaction Picker
 
-Full Reaction Picker는 Quick Picker를 폐기하지 않고, Emoji 16의 완전 수식 emoji 3,781개를 검색하거나 category별로 탐색해 더 많은 Reaction을 선택하는 확장 surface다. Full Picker 목록과 서버가 허용하는 Reaction Type은 같은 3,781개 집합을 사용하고, Web·iOS·Android는 `emoji-datasource-google@16.0.0`의 Noto Emoji v2.048 이미지를 표시한다. Quick Picker의 여섯 Type은 유지한다. 최근 사용과 custom reaction은 후속 범위이며 현재 별도 section이나 정책을 표시하지 않는다.
+Full Reaction Picker는 Emoji 16의 완전 수식 emoji 중 기본형 1,906개를 검색하거나 category별로 탐색하는 게시글 반응 선택 surface다. 피부색 변형 1,875개는 피커의 탐색·검색에서 숨기되, 서버는 전체 3,781개 Type을 계속 허용하고 기존 변형 반응의 이미지 표시·해제를 유지한다. Web·iOS·Android는 `emoji-datasource-google@16.0.0`의 Noto Emoji v2.048 이미지를 표시한다. 기존 Quick Picker의 여섯 Type은 `빠른 반응` 첫 section에 유지한다. 피부색 선택 UI와 custom reaction은 후속 범위다.
 
-- Figma source는 `Presentation=Web | Mobile`과 `State=Browse | SearchResults | Empty | Loading`을 조합한 8 variants다. `Browse`는 검색, 빠른 반응, category heading과 전체 emoji grid를 표시하고, `SearchResults`는 검색 결과만, `Empty`는 검색 결과 없음만, `Loading`은 spinner만 표시한다. Browse에는 category shortcut control이나 최근 사용 section을 두지 않는다. Web은 한 행에 8개, Mobile은 7개를 배치하고, 가득 찬 행은 좌우 가장자리를 맞추며 마지막 덜 찬 행은 기존 간격으로 왼쪽 정렬한다. Picker 전체 `Error` variant는 만들지 않는다.
-- Web은 trigger에 붙는 non-modal dialog를 사용한다. 열릴 때 검색 field로 focus를 옮기고 같은 trigger, `Escape`, 바깥 클릭으로 닫은 뒤 focus를 trigger에 복원한다.
-- Mobile은 modal bottom sheet를 사용한다. `Browse`의 initial height는 480, `SearchResults`·`Empty`·`Loading`의 expanded height는 720이다. `Scrolled`는 expanded sheet의 runtime scroll 위치 표본이지 별도 source variant가 아니다.
+- Figma source는 `Presentation=Web | Mobile`과 `State=Browse | SearchResults | Empty | Loading`을 조합한 8 variants다. `Browse`는 검색, 빠른 반응, category heading과 전체 emoji grid를 표시하고, `SearchResults`는 검색 결과만, `Empty`는 검색 결과 없음만, `Loading`은 spinner만 표시한다. 최근 반응이 없는 Browse 표본에는 최근 사용 section이 없다. Runtime은 최근 기록이 있으면 빠른 반응 아래에 `최근 사용`을 표시하며, 검색 중에는 숨긴다. Category shortcut control은 두지 않는다. Web은 `compact` 이상에서 최대 360×624px·8열, 모바일 레이아웃에서 최대 288×420px·6열로 표시하고 빠른 반응 6개를 아래 그리드의 첫 6열에 맞춘다. Mobile Figma 표본은 7열이며, runtime은 화면 너비와 시스템 글자 크기에 따라 48pt 이상의 터치 영역이 들어가는 열 수를 사용한다. Mobile 빠른 반응 6개와 category 행은 동일한 열 간격을 사용하며, 남는 열은 오른쪽에 비워 둔다. 마지막 덜 찬 category 행도 왼쪽 정렬한다. Picker 전체 `Error` variant는 만들지 않는다.
+- 최근 사용은 선택한 Profile별로 로컬 기기에만 최신 16개를 중복 없이 보관하고, 피커에는 해당 화면의 열 수에 맞춰 최대 두 줄을 표시한다. 반응 추가를 선택하면 가장 앞으로 옮기고, 해제는 순서를 바꾸지 않는다. 서버 동기화는 하지 않는다.
+- Web은 trigger에 붙는 non-modal dialog를 사용한다. 모바일 레이아웃에서는 하단 탐색을 가리지 않는 쪽에 배치한다. 열릴 때 검색 field로 focus를 옮기고 같은 trigger, `Escape`, 바깥 클릭으로 닫은 뒤 focus를 trigger에 복원한다.
+- Mobile은 modal bottom sheet를 사용한다. `Browse`의 initial height는 480, `SearchResults`·`Empty`·`Loading`의 initial height는 720이다. 손잡이를 위로 끌거나 활성화하면 상단 safe area까지 펼치고, 펼친 상태에서 아래로 끌면 초기 높이로 접으며, 접힌 상태에서 아래로 끌면 닫는다. `Scrolled`는 sheet의 runtime scroll 위치 표본이지 별도 source variant가 아니다.
 - Mobile Screens의 [`Post action overlays and picker`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6772-10989)는
   Quick Picker Light/Dark와 Full Picker Browse Light/Dark를 실제 PostMediaViewer Open 위 child overlay로 조립한
-  Target evidence다. Quick은 Viewer를 유지한 채 reaction trigger 위에 열리고, Full Picker는 Quick을 닫은 뒤 같은
-  Viewer 위 Mobile sheet로 전환한다. 다른 Full Picker source state를 늘리거나 runtime focus·dismiss·keyboard
-  동작 완료를 뜻하지 않는다.
-- Mobile은 열릴 때 software keyboard를 자동으로 띄우지 않고 sheet title부터 탐색한다. backdrop tap, drag dismiss, Android back으로 닫고 focus를 원래 trigger로 복원한다.
+  이전 Target evidence다. 현재 게시글 reaction trigger는 Viewer 위 Full Picker Mobile sheet를 바로 연다.
+  다른 Full Picker source state를 늘리거나 runtime focus·dismiss·keyboard 동작 완료를 뜻하지 않는다.
+- Mobile은 열릴 때 software keyboard를 자동으로 띄우지 않고 sheet title부터 탐색한다. backdrop tap, 손잡이 drag dismiss, Android back으로 닫고 focus를 원래 trigger로 복원한다. 목록 scroll은 손잡이 drag와 독립적으로 동작한다.
 - dialog의 접근성 이름은 `반응 선택`이다. 검색 field, category heading과 Reaction button은 식별 가능한 이름을 제공하고, Reaction button은 selected 상태를 제공한다. 결과 영역은 Loading에서 busy 상태와 시각적으로 숨긴 `반응을 불러오는 중` 문구를 함께 노출한다.
 - spinner는 `motion/duration/loading-cycle` 800ms마다 linear하게 회전한다. reduced motion에서는 회전을 제거하고 정적인 `···`로 대체한다.
 - sticky header·category, grid scroll, safe area, software keyboard, Web keyboard, VoiceOver·TalkBack의 실제 focus·dismiss·reflow는 Production runtime QA에서 검증한다.
 
 ## Post Action Bar 통합
 
-- 실제 Post Action Bar의 Reaction action은 현재 여섯 Type을 zero-count 여부와 무관하게 client catalog에서 공급하고, selected Profile의 `viewerReactions`를 선택 상태로 사용한다.
-- Reaction trigger는 Web·iOS·Android 모두에서 trigger에 붙은 작은 floating popover를 열며 같은 trigger를 다시 누르면 닫힌다. 화면 공간에 따라 위·아래로 전환하고 viewport와 safe area 안으로 수평 위치를 제한한다. option row의 고유 너비가 가용 너비보다 크면 target 크기를 줄이지 않고 feature-local `ScrollView` shell 안에서 수평 scroll을 허용한다.
-- PostMediaViewer의 390×844 Mobile Target은 reaction trigger 위 공간이 충분하므로 같은 adaptive 규칙이 위쪽 배치를
-  선택한다. Viewer 전용 `alwaysAbove` 예외를 만들지 않는다.
-- popover는 외부 클릭·터치, Web `Escape`, Android back, 대상 Post unmount 또는 selected Profile 전환으로 닫힌다. Web에서는 열릴 때 첫 option으로 focus를 옮기고 닫힐 때 trigger로 focus를 복원한다.
-- 한 Type을 선택하거나 해제한 뒤에도 popover를 유지해 여러 Type을 연속으로 조작할 수 있다.
-- Action Bar 부모 surface는 target 자체가 적격한 Reaction trigger를 세션 상태와 분리해 해석한다. guest는 기존 인증 진입으로 위임하고, valid 세션에서 selected Profile이 없으면 `ShellChromeContext.openProfileSwitcher()`로 기존 Profile 선택기를 연다. session error에서는 trigger를 disabled로 유지한다. 어떤 resolution에서도 popover나 mutation을 먼저 시작하지 않으며, Profile 선택 성공 뒤 원래 Reaction을 자동으로 재실행하지 않는다.
+- 실제 Post Action Bar의 Reaction trigger는 Full Picker를 바로 연다. 빠른 반응 section은 기존 여섯 Type을 zero-count 여부와 무관하게 공급하고, 피커 목록은 Emoji 16 기본형 1,906개를 사용한다. 선택 상태는 selected Profile의 `viewerReactions`를 사용한다.
+- Web Full Picker는 trigger 주변 가용 공간에 맞춰 위·아래에 붙여 배치하고 viewport 안으로 수평 위치를 제한한다. Mobile은 Viewer를 포함한 현재 화면 위에 bottom sheet로 연다.
+- Full Picker는 같은 trigger, 외부 클릭·터치, Web `Escape`, Android back, 대상 Post unmount 또는 selected Profile 전환으로 닫힌다. Web에서는 열릴 때 검색 field로 focus를 옮기고 닫힐 때 trigger로 복원한다.
+- 한 Type을 선택하거나 해제한 뒤에도 Full Picker를 유지해 여러 Type을 연속으로 조작할 수 있다.
+- Action Bar 부모 surface는 target 자체가 적격한 Reaction trigger를 세션 상태와 분리해 해석한다. guest는 기존 인증 진입으로 위임하고, valid 세션에서 selected Profile이 없으면 `ShellChromeContext.openProfileSwitcher()`로 기존 Profile 선택기를 연다. session error에서는 trigger를 disabled로 유지한다. 어떤 resolution에서도 Picker나 mutation을 먼저 시작하지 않으며, Profile 선택 성공 뒤 원래 Reaction을 자동으로 재실행하지 않는다.
 - 이 통합은 기존 Post Action Bar의 Reaction 자리만 소유한다. 전체 action 조립과 범용 ActionMenu 일반화는 하지 않는다.
 
 ## Reaction 요약 row
@@ -110,13 +110,13 @@ Full Reaction Picker는 Quick Picker를 폐기하지 않고, Emoji 16의 완전 
 - 앱 안에서 진입한 화면의 Back은 이전 화면으로 돌아가고, 직접 진입으로 앱의 이전 화면이 없으면 canonical Post 상세로 이동한다. 프로필 방문 후 Back은 같은 Type과 기존 route scroll 위치를 복원한다.
 - 최초 진입은 화면 제목에 focus를 두고, 필터 전환은 선택 tab의 focus와 현재 목록 scroll 위치를 유지한다. Back의 화면·scroll 복원은 기존 navigation lifecycle을 사용한다.
 - PROD-938은 목록·상세·답글 알림·Wide Viewer의 기존 People 진입점을 이관한다. Viewer를 떠나는 이동은 열린 Viewer와 focus lifecycle도 정리한다. Compact Viewer의 새로운 People 진입점 노출은 PROD-849에서 정렬한다.
-- Quick Picker가 제시하는 Type은 여섯 개로 유지한다. Full Picker와 서버가 허용하는 Type은 Emoji 16 완전 수식 3,781개이며, Reaction People route는 그중 실제 양수 count가 있는 Type을 사용한다.
+- Full Picker의 빠른 반응 section은 기존 여섯 Type을 유지한다. 피커에는 Emoji 16 기본형 1,906개를 표시하고 서버는 피부색 변형을 포함한 3,781개를 허용한다. Reaction People route는 그중 실제 양수 count가 있는 Type을 사용한다.
 - PROD-938은 기존 `ReactionProfilesModal`을 전용 route로 교체한다. 구현·자동 검증·Web 관찰 결과와 Native 미실행 항목은 해당 OpenSpec change의 검증 기록으로 구분한다.
 
 ## Mutation과 공유 상태
 
 - private `PostReactionController`가 한 `reactionTarget`의 `viewerReactions`, Type별 pending·error, mutation과 Relay cache 갱신을 소유한다. generic context나 공용 mock infrastructure로 일반화하지 않는다.
-- Quick Picker option과 요약 token은 같은 controller 상태와 toggle 동작을 사용한다. 한쪽에서 성공한 변경은 같은 surface의 다른쪽에 즉시 같은 server-confirmed 상태로 보인다.
+- Full Picker option과 요약 token은 같은 controller 상태와 toggle 동작을 사용한다. 한쪽에서 성공한 변경은 같은 surface의 다른쪽에 즉시 같은 server-confirmed 상태로 보인다.
 - 선택 상태와 count는 optimistic하게 바꾸지 않는다. mutation payload가 성공을 확인한 뒤에만 해당 Type의 상태를 반영한다.
 - add/delete mutation payload는 대상 Post의 현재 `viewerReactions`와 `reactionCounts`를 함께 반환한다. Relay가 이 Post를 정규화한 결과를 선택 상태와 count의 authoritative 상태로 사용하며, client에서 count delta를 계산하거나 별도 refetch로 보정하지 않는다.
 - 요청한 Type만 pending으로 막고 다른 Type은 계속 조작할 수 있다. 같은 Type의 연속 입력은 하나의 operation만 만들지만 서로 다른 Type은 동시에 진행할 수 있다.
@@ -129,7 +129,7 @@ Full Reaction Picker는 Quick Picker를 폐기하지 않고, Emoji 16의 완전 
 
 - `ReactionSelector`는 Quick Picker의 플랫폼별 presentation만 소유한다.
 - `FullReactionPicker`는 Unicode-first 검색·category 탐색과 Web dialog·Mobile sheet presentation을 소유한다. Web에서 이를 여는 composition은 trigger와 open state를 소유하고 같은 trigger·`Escape`·바깥 클릭 dismiss 및 trigger focus 복원을 연결한다. custom reaction의 asset·data·API와 runtime fetch·cache는 소유하지 않는다.
-- private `ReactionAction`과 `ReactionPopover`는 Action Bar trigger와 anchored popover를 소유한다.
+- private `ReactionAction`과 `FullReactionOverlay`는 Action Bar trigger와 Full Picker overlay를 소유한다.
 - private `PostReactionController`는 한 Post의 toggle 상태와 mutation/cache 동작을 소유한다.
 - private `__ReactionSummaryItem`은 Web 32px·iOS 44pt·Android 48dp의 reaction, selected, `+N` item presentation을 소유한다.
 - `ReactionSummary`는 Product-ordered input을 한 줄 width-fit으로 조합하고 `Ellipsis` 또는 `+N`의 항상 도달 가능한 People 진입점을 표시하는 presentation을 소유한다. 표시 상한과 정렬 정책은 소유하지 않는다.
@@ -149,5 +149,5 @@ Full Reaction Picker는 Quick Picker를 폐기하지 않고, Emoji 16의 완전 
 - Action Bar trigger는 target이 적격할 때 guest에서 기존 인증 진입, valid 세션의 selected Profile 부재에서 기존 Profile 선택기 진입, session error에서 disabled인지 검증한다. resolution 전에는 popover·mutation이 없고 Profile 선택 뒤 원래 Reaction을 자동 재실행하지 않는다. 요약 token toggle은 selected Profile이 없으면 계속 disabled이며 trailing People control과 Profile 목록 조회는 가능해야 한다.
 - Reaction People route의 Back header, 양수 count pill 순서, 기본 선택, collapsed `앞 6개 + +N`, selected-outside-top-six 보존, expanded 전체 Type, item emoji, `ProfileListItem`의 팔로우·팔로잉·요청됨 상태, Profile 사이 separator, pagination·최초/추가 조회 재시도와 actor별 cache 격리를 검증한다.
 - 390px Mobile, 1024px Compact Web, 1440px Full Web에서 전용 route가 기존 shell 계약을 유지하는지 검증한다. Full Web은 `RightRail`, Mobile은 `BottomTabBar`를 보존하고 route 안에는 modal chrome이 없어야 한다.
-- 320px, 390px, 600px Web viewport에서 Quick Picker가 viewport 안에 머물고 exact 32px target을 유지한 채 feature-local horizontal scroll로 접근 가능한지 실제 관찰한다. 요약 row는 같은 viewport에서 scroll 대신 한 줄 width-fit과 항상 도달 가능한 trailing People control을 유지하고, overflow가 있을 때만 이를 `+N`으로 표시해야 한다.
+- 320px, 390px, 600px Web viewport에서 Full Picker가 trigger에 붙고 viewport 안에 머물며 빠른 반응과 전체 목록에 접근 가능한지 실제 관찰한다. 요약 row는 같은 viewport에서 scroll 대신 한 줄 width-fit과 항상 도달 가능한 trailing People control을 유지하고, overflow가 있을 때만 이를 `+N`으로 표시해야 한다.
 - 자동 검증과 Web runtime 관찰을 분리해 기록한다. iOS·Android runtime은 이번 Web 우선 범위의 완료 증거가 아니며 Native 출시 전 44pt·48dp target과 assistive technology 동작을 별도로 관찰한다.

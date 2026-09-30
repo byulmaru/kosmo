@@ -1,0 +1,258 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  Animated,
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { FullReactionPicker } from '@/components/reaction/FullReactionPicker';
+import { getBottomTabBarContentHeight } from '@/components/ui/navigationChrome';
+import { useTheme } from '@/theme/ThemeProvider';
+import { breakpoints, spacing } from '@/theme/tokens';
+import { useOverlayMotion } from '@/theme/useOverlayMotion';
+import type React from 'react';
+import type { LayoutChangeEvent, LayoutRectangle, View as ViewType } from 'react-native';
+import type { FullReactionPickerOption } from '@/components/reaction/FullReactionPicker';
+
+export type FullReactionOverlayProps = Readonly<{
+  options: ReadonlyArray<FullReactionPickerOption>;
+  onClose: () => void;
+  onQueryChange: (query: string) => void;
+  onSelect: (option: FullReactionPickerOption) => void;
+  open: boolean;
+  query: string;
+  recentValues?: ReadonlyArray<string>;
+  pendingOptionIds?: ReadonlyArray<string>;
+  errorOptionIds?: ReadonlyArray<string>;
+  selectedValues: ReadonlyArray<string>;
+  triggerRef: TriggerRef;
+}>;
+
+type Anchor = Pick<LayoutRectangle, 'height' | 'width' | 'x' | 'y'>;
+type TriggerRef = { current: ViewType | null };
+
+export function FullReactionOverlay({
+  onClose,
+  onQueryChange,
+  onSelect,
+  open,
+  options,
+  pendingOptionIds = [],
+  errorOptionIds = [],
+  query,
+  recentValues = [],
+  selectedValues,
+  triggerRef,
+}: FullReactionOverlayProps): React.ReactElement | null {
+  const theme = useTheme();
+  const insets = useSafeAreaInsets();
+  const { height: viewportHeight, width: viewportWidth } = useWindowDimensions();
+  const web = Platform.OS === 'web';
+  const compactWeb = web && viewportWidth < breakpoints.compact;
+  const overlayMotion = useOverlayMotion(web ? false : open);
+  const [anchor, setAnchor] = useState<Anchor | null>(null);
+  const [content, setContent] = useState<Pick<LayoutRectangle, 'height' | 'width'> | null>(null);
+  const contentRef = useRef<ViewType>(null);
+  const wasNativeMounted = useRef(false);
+
+  const measureAnchor = useCallback(
+    () =>
+      triggerRef.current?.measureInWindow((x, y, width, height) =>
+        setAnchor({ height, width, x, y }),
+      ),
+    [triggerRef],
+  );
+  const close = useCallback(() => {
+    onClose();
+    if (web) {
+      requestAnimationFrame(() => triggerRef.current?.focus());
+    }
+  }, [onClose, triggerRef, web]);
+
+  useEffect(() => {
+    if (web) {
+      return;
+    }
+    if (overlayMotion.mounted) {
+      wasNativeMounted.current = true;
+    } else if (wasNativeMounted.current) {
+      wasNativeMounted.current = false;
+      triggerRef.current?.focus();
+    }
+  }, [overlayMotion.mounted, triggerRef, web]);
+  const onContentLayout = useCallback((event: LayoutChangeEvent) => {
+    const { height, width } = event.nativeEvent.layout;
+    setContent((current) =>
+      current?.height === height && current.width === width ? current : { height, width },
+    );
+  }, []);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    measureAnchor();
+  }, [measureAnchor, open]);
+
+  useEffect(() => {
+    if (!web || !open) {
+      return;
+    }
+    const onPointerDown = (event: PointerEvent) => {
+      const trigger = triggerRef.current as unknown as HTMLElement | null;
+      const contentElement = contentRef.current as unknown as HTMLElement | null;
+      const target = event.target as Node;
+      if (trigger?.contains(target) || contentElement?.contains(target)) {
+        return;
+      }
+      close();
+    };
+    window.addEventListener('scroll', measureAnchor, true);
+    window.addEventListener('resize', measureAnchor);
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => {
+      window.removeEventListener('scroll', measureAnchor, true);
+      window.removeEventListener('resize', measureAnchor);
+      document.removeEventListener('pointerdown', onPointerDown);
+    };
+  }, [close, measureAnchor, open, triggerRef, web]);
+
+  if (web ? !open : !overlayMotion.mounted) {
+    return null;
+  }
+
+  const below = anchor
+    ? viewportHeight -
+      insets.bottom -
+      (compactWeb ? getBottomTabBarContentHeight('web') : 0) -
+      (anchor.y + anchor.height)
+    : 0;
+  const above = anchor ? anchor.y - insets.top : 0;
+  const preferredHeight = Math.min(
+    compactWeb ? 420 : 624,
+    Math.max(0, viewportHeight - 2 * spacing.sm),
+  );
+  const placement = below >= preferredHeight + spacing.xs || below >= above ? 'bottom' : 'top';
+  const webHeight = Math.min(
+    preferredHeight,
+    Math.max(0, (placement === 'bottom' ? below : above) - spacing.xs - spacing.sm),
+  );
+  const minLeft = insets.left + spacing.sm;
+  const maxRight = viewportWidth - insets.right - spacing.sm;
+  const availableWidth = Math.max(0, maxRight - minLeft);
+  const shellWidth = Math.min(content?.width ?? (compactWeb ? 288 : 360), availableWidth);
+  const left = anchor ? Math.min(Math.max(anchor.x, minLeft), maxRight - shellWidth) : minLeft;
+  const requestedTop = anchor
+    ? placement === 'bottom'
+      ? anchor.y + anchor.height + spacing.xs
+      : anchor.y - (content?.height ?? 0) - spacing.xs
+    : insets.top + spacing.sm;
+  const minTop = insets.top + spacing.sm;
+  const maxTop = Math.max(
+    minTop,
+    viewportHeight - insets.bottom - (content?.height ?? 0) - spacing.sm,
+  );
+  const top = Math.min(Math.max(requestedTop, minTop), maxTop);
+  const webPlacementProps: Record<string, unknown> = { dataSet: { placement } };
+  const picker = (
+    <View onLayout={onContentLayout} ref={contentRef} style={!web && styles.nativeContent}>
+      <FullReactionPicker
+        onBackdropPress={close}
+        onClose={close}
+        onQueryChange={onQueryChange}
+        onSelect={onSelect}
+        options={options}
+        pendingOptionIds={pendingOptionIds}
+        errorOptionIds={errorOptionIds}
+        presentation={web ? 'web' : 'mobile'}
+        query={query}
+        recentValues={recentValues}
+        selectedValues={selectedValues}
+        webHeight={web ? webHeight : undefined}
+      />
+    </View>
+  );
+
+  return (
+    <Modal
+      accessibilityLabel="반응 선택 창"
+      animationType="none"
+      onRequestClose={close}
+      transparent
+      visible
+    >
+      {web ? (
+        <View style={styles.webRoot}>
+          {anchor ? (
+            <Pressable
+              accessible={false}
+              aria-hidden
+              onPress={close}
+              style={[
+                styles.triggerDismiss,
+                { height: anchor.height, left: anchor.x, top: anchor.y, width: anchor.width },
+              ]}
+              testID="full-reaction-overlay-trigger-dismiss"
+            />
+          ) : null}
+          <View
+            {...webPlacementProps}
+            style={[styles.webPosition, { left, top, width: shellWidth }]}
+            testID="full-reaction-overlay-position"
+          >
+            {picker}
+          </View>
+        </View>
+      ) : (
+        <View style={styles.nativeRoot}>
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              StyleSheet.absoluteFill,
+              { backgroundColor: theme.overlayScrim, opacity: overlayMotion.progress },
+            ]}
+          />
+          <Pressable
+            accessibilityElementsHidden
+            aria-hidden
+            onPress={close}
+            style={StyleSheet.absoluteFill}
+            testID="full-reaction-overlay-backdrop"
+          />
+          <Animated.View
+            pointerEvents={open ? 'auto' : 'none'}
+            style={[
+              styles.nativePicker,
+              {
+                opacity: overlayMotion.progress,
+                transform: [
+                  {
+                    translateY: overlayMotion.progress.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [24, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            {picker}
+          </Animated.View>
+        </View>
+      )}
+    </Modal>
+  );
+}
+
+const styles = StyleSheet.create({
+  nativeContent: { flex: 1 },
+  nativePicker: { flex: 1 },
+  nativeRoot: { flex: 1 },
+  triggerDismiss: { position: 'absolute' },
+  webPosition: { position: 'absolute' },
+  webRoot: { flex: 1 },
+});

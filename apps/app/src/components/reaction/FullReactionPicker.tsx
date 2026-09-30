@@ -10,12 +10,13 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { BottomSheetSurface } from '@/components/ui/BottomSheetSurface';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
-import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
+import { borderWidths, breakpoints, iconSizes, radius, space, textStyles } from '@/theme/tokens';
 import { ReactionEmojiImage } from './ReactionEmojiImage';
+import { getMobileReactionGridLayout } from './reactionGridLayout';
 import { ReactionPendingSpinner } from './ReactionPendingSpinner';
 import type React from 'react';
-import type { GestureResponderEvent } from 'react-native';
 
 export type FullReactionPickerOption = Readonly<{
   category: string;
@@ -25,7 +26,7 @@ export type FullReactionPickerOption = Readonly<{
   keywords?: ReadonlyArray<string>;
   label: string;
   quick?: boolean;
-  recent?: boolean;
+  quickOrder?: number;
 }>;
 
 export type FullReactionPickerProps = {
@@ -36,10 +37,12 @@ export type FullReactionPickerProps = {
   options: ReadonlyArray<FullReactionPickerOption>;
   presentation?: 'mobile' | 'web';
   query: string;
+  recentValues?: ReadonlyArray<string>;
   selectedValues?: ReadonlyArray<string>;
   pendingOptionIds?: ReadonlyArray<string>;
   errorOptionIds?: ReadonlyArray<string>;
   loading?: boolean;
+  webHeight?: number;
 };
 
 export function FullReactionPicker({
@@ -50,17 +53,22 @@ export function FullReactionPicker({
   options,
   presentation = 'web',
   query,
+  recentValues = [],
   selectedValues = [],
   pendingOptionIds = [],
   errorOptionIds = [],
   loading = false,
+  webHeight,
 }: FullReactionPickerProps): React.ReactElement {
   const theme = useTheme();
   const elevation = useElevation();
-  const { height: viewportHeight } = useWindowDimensions();
+  const { height: viewportHeight, width: viewportWidth, fontScale } = useWindowDimensions();
   const mobile = presentation === 'mobile';
+  const compactWeb = !mobile && viewportWidth < breakpoints.compact;
+  const { columns, columnGap, targetSize } = mobile
+    ? getMobileReactionGridLayout(viewportWidth - 2 * (space[16] + borderWidths[1]), fontScale)
+    : { columns: compactWeb ? 6 : 8, columnGap: 0, targetSize: 32 };
   const pickerRef = useRef<View>(null);
-  const dragStartY = useRef<number | null>(null);
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const searchResults = options.filter((option) =>
     [option.emoji, option.label, ...(option.keywords ?? [])]
@@ -95,51 +103,31 @@ export function FullReactionPicker({
     ownerDocument.addEventListener('keyup', onKeyUp, true);
     return () => ownerDocument.removeEventListener('keyup', onKeyUp, true);
   }, [mobile, onClose]);
-  const onDragStart = (event: GestureResponderEvent) => {
-    dragStartY.current = event.nativeEvent.pageY;
-  };
-  const onDragEnd = (event: GestureResponderEvent) => {
-    const startY = dragStartY.current;
-    dragStartY.current = null;
-    if (startY !== null && event.nativeEvent.pageY - startY > 80) {
-      onClose();
-    }
-  };
   const picker = (
     <View
       accessibilityLabel="반응 선택"
-      accessibilityViewIsModal
       onAccessibilityEscape={onClose}
       ref={pickerRef}
       role={Platform.OS === 'web' ? 'dialog' : undefined}
       style={[
-        mobile ? styles.mobileSheet : styles.webDialog,
-        mobile
-          ? { height: Math.min(state === 'browse' ? 480 : 720, viewportHeight) }
-          : elevation.overlay,
-        !mobile && { height: Math.min(624, Math.max(0, viewportHeight - 2 * space[8])) },
-        { backgroundColor: theme.backgroundElevated, borderColor: theme.borderDefault },
+        mobile ? styles.mobileSheetContent : styles.webDialog,
+        !mobile && elevation.overlay,
+        !mobile && {
+          height:
+            webHeight ??
+            Math.min(compactWeb ? 420 : 624, Math.max(0, viewportHeight - 2 * space[8])),
+          maxWidth: compactWeb ? 288 : 360,
+        },
+        !mobile && { backgroundColor: theme.backgroundElevated, borderColor: theme.borderDefault },
       ]}
-      testID={mobile ? 'full-reaction-picker-sheet' : undefined}
     >
       {mobile ? (
-        <>
-          <View
-            onStartShouldSetResponder={() => true}
-            onTouchEnd={onDragEnd}
-            onTouchStart={onDragStart}
-            style={styles.dragHandleHitArea}
-            testID="full-reaction-picker-drag-handle"
-          >
-            <View style={[styles.dragHandle, { backgroundColor: theme.borderStrong }]} />
-          </View>
-          <Text
-            accessibilityRole="header"
-            style={[styles.mobileTitle, { color: theme.foregroundPrimary }]}
-          >
-            반응 선택
-          </Text>
-        </>
+        <Text
+          accessibilityRole="header"
+          style={[styles.mobileTitle, { color: theme.foregroundPrimary }]}
+        >
+          반응 선택
+        </Text>
       ) : null}
       <SearchField onChange={onQueryChange} value={query} />
       {state === 'loading' ? (
@@ -168,8 +156,8 @@ export function FullReactionPicker({
         <FlatList<ReactionGridItem>
           data={
             state === 'searchResults'
-              ? createGridItems('results', '반응', searchResults, mobile ? 7 : 8)
-              : createBrowseItems(options, mobile ? 7 : 8)
+              ? createGridItems('results', '반응', searchResults, columns)
+              : createBrowseItems(options, columns, recentValues)
           }
           initialNumToRender={mobile ? 12 : 10}
           keyExtractor={(item) => item.id}
@@ -193,11 +181,14 @@ export function FullReactionPicker({
               </View>
             ) : (
               <ReactionGridRow
+                columnGap={columnGap}
+                columns={columns}
                 mobile={mobile}
                 onSelect={onSelect}
                 options={item.options}
                 rowIndex={item.rowIndex}
                 sectionId={item.sectionId}
+                targetSize={targetSize}
                 selectedValues={selectedValues}
                 pendingValues={pendingOptionIds}
                 errorValues={errorOptionIds}
@@ -221,10 +212,18 @@ export function FullReactionPicker({
         }
       }}
       onStartShouldSetResponder={(event) => event.target === event.currentTarget}
-      style={[styles.mobileRoot, { backgroundColor: theme.overlayScrim }]}
+      style={[styles.mobileRoot, !onBackdropPress && { backgroundColor: theme.overlayScrim }]}
       testID="full-reaction-picker-backdrop"
     >
-      {picker}
+      <BottomSheetSurface
+        handleTestID="full-reaction-picker-drag-handle"
+        initialHeight={state === 'browse' ? 480 : 720}
+        onClose={onClose}
+        style={styles.mobileSheetSurface}
+        testID="full-reaction-picker-sheet"
+      >
+        {picker}
+      </BottomSheetSurface>
     </View>
   ) : (
     picker
@@ -297,6 +296,7 @@ function createGridItems(
 function createBrowseItems(
   options: ReadonlyArray<FullReactionPickerOption>,
   columns: number,
+  recentValues: ReadonlyArray<string>,
 ): ReactionGridItem[] {
   const categories = Array.from(
     new Map(options.map((option) => [option.category, option.categoryLabel])).entries(),
@@ -306,7 +306,17 @@ function createBrowseItems(
     ...createGridItems(
       'quick',
       '빠른 반응',
-      options.filter((option) => option.quick),
+      options
+        .filter((option) => option.quick)
+        .sort((left, right) => (left.quickOrder ?? 0) - (right.quickOrder ?? 0)),
+      columns,
+    ),
+    ...createGridItems(
+      'recent',
+      '최근 사용',
+      recentValues
+        .flatMap((id) => options.find((option) => option.id === id) ?? [])
+        .slice(0, columns * 2),
       columns,
     ),
     ...categories.flatMap(({ id, options: categoryOptions, title }) =>
@@ -316,32 +326,40 @@ function createBrowseItems(
 }
 
 function ReactionGridRow({
+  columnGap,
+  columns,
   mobile,
   onSelect,
   options,
   rowIndex,
   sectionId,
+  targetSize,
   selectedValues,
   pendingValues,
   errorValues,
 }: {
+  columnGap: number;
+  columns: number;
   mobile: boolean;
   onSelect: (option: FullReactionPickerOption) => void;
   options: ReadonlyArray<FullReactionPickerOption>;
   rowIndex: number;
   sectionId: string;
+  targetSize: number;
   selectedValues: ReadonlyArray<string>;
   pendingValues: ReadonlyArray<string>;
   errorValues: ReadonlyArray<string>;
 }) {
   const theme = useTheme();
-  const columns = mobile ? 7 : 8;
   return (
     <View
       style={[
         styles.gridRow,
-        mobile ? styles.mobileGrid : styles.webGrid,
-        options.length === columns ? styles.fullGridRow : styles.partialGridRow,
+        mobile ? { columnGap } : styles.webGrid,
+        !mobile &&
+          (options.length === columns || sectionId === 'quick'
+            ? styles.fullGridRow
+            : styles.partialGridRow),
       ]}
       testID={`full-reaction-section-${sectionId}-row-${rowIndex}`}
     >
@@ -364,13 +382,17 @@ function ReactionGridRow({
             disabled={pending}
             key={option.id}
             onPress={() => onSelect(option)}
-            style={mobile ? styles.mobileReactionTarget : styles.webReactionTarget}
+            style={
+              mobile
+                ? [styles.mobileReactionTarget, { height: targetSize, width: targetSize }]
+                : styles.webReactionTarget
+            }
           >
             {({ pressed }) => (
               <View
                 style={[
                   styles.reaction,
-                  mobile ? styles.mobileReaction : styles.webReaction,
+                  mobile ? { height: targetSize - 4, width: targetSize - 4 } : styles.webReaction,
                   {
                     backgroundColor: selected
                       ? theme.stateSelectedSurface
@@ -381,7 +403,7 @@ function ReactionGridRow({
                   },
                 ]}
               >
-                <ReactionEmojiImage size={mobile ? 24 : 20} type={option.emoji} />
+                <ReactionEmojiImage size={mobile ? targetSize / 2 : 20} type={option.emoji} />
                 {pending ? (
                   <View accessibilityElementsHidden aria-hidden style={styles.pendingOverlay}>
                     <ReactionPendingSpinner />
@@ -392,37 +414,38 @@ function ReactionGridRow({
           </Pressable>
         );
       })}
+      {!mobile && sectionId === 'quick'
+        ? Array.from({ length: Math.max(0, columns - options.length) }, (_, index) => (
+            <View
+              accessible={false}
+              aria-hidden
+              key={`empty-${index}`}
+              style={styles.webReactionTarget}
+            />
+          ))
+        : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  dragHandle: { borderRadius: radius.full, height: 4, width: 32 },
-  dragHandleHitArea: {
-    alignItems: 'center',
-    alignSelf: 'center',
-    height: 48,
-    justifyContent: 'center',
-    width: 56,
-  },
   emptyDescription: textStyles.uiCopyM,
   emptyTitle: textStyles.uiLabelL,
   fullGridRow: { justifyContent: 'space-between' },
   gridRow: { flexDirection: 'row' },
-  mobileGrid: { gap: 0 },
-  mobileReaction: { height: 44, width: 44 },
-  mobileReactionTarget: { alignItems: 'center', height: 48, justifyContent: 'center', width: 48 },
+  mobileReactionTarget: { alignItems: 'center', justifyContent: 'center' },
   mobileRoot: { flex: 1, justifyContent: 'flex-end', minHeight: 0 },
-  mobileSheet: {
-    borderTopLeftRadius: radius[24],
-    borderTopRightRadius: radius[24],
-    borderWidth: borderWidths[1],
+  mobileSheetContent: {
+    flex: 1,
     gap: space[12],
-    maxWidth: 390,
     paddingBottom: space[24],
     paddingHorizontal: space[16],
     paddingTop: space[12],
     width: '100%',
+  },
+  mobileSheetSurface: {
+    borderTopLeftRadius: radius[24],
+    borderTopRightRadius: radius[24],
   },
   mobileSpinner: { transform: [{ scale: 1.5 }] },
   mobileTitle: { textAlign: 'left', ...textStyles.uiLabelL },
