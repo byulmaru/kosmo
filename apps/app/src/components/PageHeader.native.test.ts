@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import { before, mock, test } from 'node:test';
-import { createElement } from 'react';
+import { createElement, useCallback, useMemo, useState } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
+import { useNavigationCache } from 'expo-router/build/react-navigation/core/useNavigationCache';
 import type { PageHeader as PageHeaderComponent } from './PageHeader.native';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -12,6 +13,8 @@ type HeaderOptions = { header?: (() => ReactNode) | undefined; headerShown?: boo
 
 const setOptions = mock.fn<(options: HeaderOptions) => void>();
 let renderer: ReactTestRenderer | null = null;
+let activeNavigation: { setOptions: (options: HeaderOptions) => void } | null = null;
+let routeOptionUpdates = 0;
 
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, {
@@ -19,7 +22,7 @@ const mockModule = (specifier: string | URL, exports: object) =>
   } as unknown as Parameters<typeof mock.module>[1]);
 
 mockModule('expo-router', {
-  useNavigation: () => ({ setOptions }),
+  useNavigation: () => activeNavigation ?? { setOptions },
 });
 mockModule('react-native', { View: 'View' });
 mockModule('react-native-safe-area-context', {
@@ -36,6 +39,43 @@ mockModule(new URL('./shell/NavigationDrawerTrigger.tsx', import.meta.url), {
 });
 
 let PageHeader: typeof PageHeaderComponent;
+
+const navigationState = { routes: [{ key: 'settings' }], index: 0 };
+
+function NavigationHarness({ children }: { children: ReactNode }) {
+  const [options, setOptionsState] = useState<Record<string, HeaderOptions>>({});
+  const getState = useCallback(() => navigationState, []);
+  const navigation = useMemo(
+    () => ({
+      getState,
+      getId: () => 'settings-stack',
+      getParent: () => undefined,
+      isFocused: () => true,
+      dispatch: () => undefined,
+    }),
+    [getState],
+  );
+  const router = useMemo(() => ({ actionCreators: {} }), []);
+  const emitter = useMemo(() => ({ create: () => ({}) }), []);
+  const setNavigationOptions = useCallback(
+    (update: (previous: Record<string, HeaderOptions>) => Record<string, HeaderOptions>) => {
+      routeOptionUpdates += 1;
+      setOptionsState(update);
+    },
+    [],
+  );
+  const { navigations } = useNavigationCache({
+    state: navigationState as never,
+    getState: getState as never,
+    navigation: navigation as never,
+    setOptions: setNavigationOptions as never,
+    router: router as never,
+    emitter: emitter as never,
+  });
+
+  activeNavigation = navigations.settings as typeof activeNavigation;
+  return createElement('NavigationHarness', { options: options.settings }, children);
+}
 
 before(async () => {
   ({ PageHeader } = await import('./PageHeader.native'));
@@ -114,4 +154,47 @@ test('Native PageHeader는 route가 지정한 leading action을 유지한다', a
   assert.equal(headerProps.leading, back);
 
   await act(async () => renderer?.unmount());
+});
+
+test('Native PageHeader는 props 갱신에 옵션을 한 번 반영하고 조건부 해제 때 header를 비운다', async () => {
+  routeOptionUpdates = 0;
+
+  await act(async () => {
+    renderer = create(
+      createElement(NavigationHarness, null, createElement(PageHeader, { title: '설정' })),
+    );
+  });
+
+  assert.equal(routeOptionUpdates, 1);
+  const initialOptions = renderer?.root.findByType('NavigationHarness' as never).props.options as
+    | HeaderOptions
+    | undefined;
+  assert.equal(initialOptions?.headerShown, true);
+
+  await act(async () => {
+    renderer?.update(
+      createElement(NavigationHarness, null, createElement(PageHeader, { title: '뮤트 및 차단' })),
+    );
+  });
+
+  assert.equal(routeOptionUpdates, 2);
+  const updatedOptions = renderer?.root.findByType('NavigationHarness' as never).props.options as
+    | HeaderOptions
+    | undefined;
+  const updatedHeader = updatedOptions?.header?.();
+  assert.ok(updatedHeader && typeof updatedHeader === 'object' && 'props' in updatedHeader);
+  assert.equal((updatedHeader.props as { title: string }).title, '뮤트 및 차단');
+
+  await act(async () => {
+    renderer?.update(createElement(NavigationHarness, null, null));
+  });
+
+  assert.equal(routeOptionUpdates, 3);
+  const clearedOptions = renderer?.root.findByType('NavigationHarness' as never).props.options as
+    | HeaderOptions
+    | undefined;
+  assert.deepEqual(clearedOptions, { header: undefined, headerShown: false });
+
+  await act(async () => renderer?.unmount());
+  activeNavigation = null;
 });
