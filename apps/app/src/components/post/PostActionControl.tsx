@@ -74,6 +74,7 @@ export function PostActionControl({
   const isDisabled = processing === 'disabled';
   const blocked = isPending || isDisabled;
   const native = Platform.OS !== 'web';
+  const keepMenuFocus = !native && popupRole === 'menu' && isPending;
   const nativeTargetSize = Platform.OS === 'android' ? 48 : 44;
   const accessibilityState: AccessibilityState = {
     busy: isPending,
@@ -107,11 +108,22 @@ export function PostActionControl({
         accessibilityLabel={accessibilityLabel}
         accessibilityRole="button"
         accessibilityState={stateful ? accessibilityState : undefined}
-        disabled={blocked}
+        disabled={blocked && !keepMenuFocus}
         onHoverIn={Platform.OS === 'web' ? () => setHovered(true) : undefined}
         onHoverOut={Platform.OS === 'web' ? () => setHovered(false) : undefined}
-        onPress={onPress}
-        ref={controlRef}
+        onPress={blocked ? undefined : onPress}
+        ref={(node) => {
+          // RN Web turns disabled into a native disabled button, dropping menu
+          // focus. Keep pending menu triggers focusable with ARIA disabled instead.
+          if (!native && node) {
+            (node as unknown as HTMLElement).setAttribute('aria-disabled', String(blocked));
+          }
+          if (typeof controlRef === 'function') {
+            controlRef(node);
+          } else if (controlRef) {
+            controlRef.current = node;
+          }
+        }}
         testID={`post-action-${testID}`}
         style={({ pressed }) => [
           styles.action,
