@@ -240,7 +240,7 @@ export function timeline(...posts: StoryPost[]) {
 }
 
 export function profileWithPosts(posts: StoryPost[], overrides: Partial<StoryProfile> = {}) {
-  return { ...profile(overrides), posts: timeline(...posts) };
+  return { ...profile(overrides), posts: timeline(...posts), pinnedPosts: timeline() };
 }
 
 export function shellQuery({
