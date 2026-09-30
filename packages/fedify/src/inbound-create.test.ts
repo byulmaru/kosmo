@@ -286,7 +286,7 @@ describe('inbound Create dispatch', () => {
             url: new URL(profileUrl),
           }),
       } as unknown as Parameters<typeof materializeRemoteProfileActor>[0]['context'],
-      now: receivedAt.add({ seconds: 1 }),
+      now: Temporal.Now.instant().add({ seconds: 1 }),
     });
 
     const refreshedActor = await db
@@ -3545,6 +3545,7 @@ const createStoredRemoteActor = async ({
     .then(firstOrThrow);
 
   await db.insert(ActivityPubActors).values({
+    lastFetchedAt: Temporal.Now.instant(),
     profileId: profile.id,
     ...(profileUrl === undefined ? {} : { profileUrl }),
     type: ActivityPubActorType.PERSON,

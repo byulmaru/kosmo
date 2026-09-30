@@ -272,12 +272,19 @@ visibility를 통과한 Profile만 반환한다. 같은 명시적 qualified hand
 Instance Reachability State가 Reachable 또는 Unreachable인 경우 모두 같다. 마지막 성공 조회·갱신 시각이 있고 현재까지
 7일 미만인 저장 Profile은 fresh하며 기존 DB 검색과 visibility를 적용해 반환하고 원격 lookup이나 Instance Reachability
 회복을 강제하지 않는다. 성공 시각이 없거나 7일 이상 지난 저장 Profile은 stale하며 기존 DB 검색과 visibility를 먼저
-적용한 결과를 즉시 반환하고 결과를 기다리지 않는 기존 갱신을 시작한다. 갱신 실패는 저장 Profile과 Instance
+적용한 결과를 즉시 반환하고 결과를 기다리지 않는 기존 갱신을 시작한다. Qualified-handle 조회와 generic canonical actor
+URI 조회는 이 같은 7일 freshness 기준을 사용하며, stale URI 조회도 저장 Profile ID를 반환하고 별도 refresh를 시작한다.
+갱신 실패는 저장 Profile과 Instance
 Reachability State를 바꾸지 않으며, 예상하지 못한 오류는 관측 가능하게 남긴다. 일반 텍스트, 부분 remote handle, local handle, malformed
 handle은 원격 fetch·refresh를 시작하지 않는다. exact `profileByHandle`, 프로필 route와 그 하위 경로도 원격
 materialization이나 refresh 없이 저장된 Profile만 조회한다. 원격 lookup 실패, identity 충돌 또는 새 원격 요청을
 보낼 수 없는 Instance는 Profile이 없는 검색 결과로 처리하며 Instance Reachability State를 바꾸지 않는다. 예상하지
 못한 오류는 관측 가능하게 남긴다.
+
+검증된 inbound receipt에 따른 reachability 복구는 canonical actor URI가 가리키는 기존 usable Remote Profile을 확인한
+경우에만 수행하고, 그 자체로 actor 표현 freshness를 갱신하지 않는다. 원격 fetch만으로는 freshness가 바뀌지 않으며,
+검증된 actor document apply가 성공한 경우에만 조회 관측 시각으로 7일 기준을 갱신한다. 검증된 inbound Update의
+document apply가 성공하면 수신 시각으로 freshness를 갱신하며 Unresponsive Instance를 복구할 수 있다.
 
 - Remote Profile lookup은 Instance의 Safety State가 Domain Block이 아니고 Service State가 Active여야 한다.
   Reachability State가 Reachable이면 새 원격 요청을 보낼 수 있다. Unreachable이면 Remote Profile materialization·갱신에

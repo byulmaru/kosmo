@@ -21,10 +21,13 @@ export {
 } from './activities/push-notification';
 export { collectRemoteFeaturedActivity } from './activities/remote-profile-featured';
 export {
+  applyRemoteProfileActorActivity,
+  fetchRemoteProfileActorActivity,
+  getRemoteProfileActorStateActivity,
   lookupRemoteActorUriActivity,
   materializeRemoteProfileActorActivity,
+  recoverRemoteProfileActorActivity,
   refreshRemoteProfileActorActivity,
-  updateRemoteProfileActorActivity,
 } from './activities/remote-profile-materialization';
 export {
   sendProfileFollowActivity,

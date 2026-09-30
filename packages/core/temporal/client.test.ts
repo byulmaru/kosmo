@@ -486,7 +486,6 @@ test('Remote Profile Update ID는 같은 receipt에서 안정적이고 actor·re
   const input: RemoteProfileUpdateInput = {
     actorUri: 'https://remote.example/users/alice',
     actorJsonLd: { id: 'https://remote.example/users/alice', type: 'Person' },
-    contextOrigin: 'https://local.example',
     receipt: {
       activityUri: 'https://remote.example/activities/update-1',
       receivedAt: '2026-08-01T00:00:02Z',
