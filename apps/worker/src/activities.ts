@@ -11,6 +11,7 @@ export {
   executeProfileBlockTransitionActivity,
   executeProfileUnblockTransitionActivity,
 } from './activities/profile-block';
+export { syncRemoteFeaturedActivity } from './activities/remote-profile-featured';
 export {
   listPushNotificationInstallations as listPushNotificationInstallationsActivity,
   sendPushNotification as sendPushNotificationActivity,

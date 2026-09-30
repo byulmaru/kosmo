@@ -11,6 +11,7 @@ import {
   isUniqueViolation,
   Media,
   ProfileMedia,
+  ProfilePinnedPosts,
   Profiles,
 } from '@kosmo/core/db';
 import {
@@ -25,16 +26,19 @@ import {
 } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError } from '@kosmo/core/error';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
+import { runWorkflow } from '@kosmo/core/temporal/client';
+import { remoteProfileFeaturedWorkflow } from '@kosmo/core/temporal/workflows';
 import { normalizeHandle } from '@kosmo/core/utils';
 import {
   profileBioSchema,
   profileDisplayNameSchema,
   remoteProfileHandleSchema,
 } from '@kosmo/core/validation';
-import { and, eq, getColumns, inArray, ne } from 'drizzle-orm';
+import { and, eq, getColumns, inArray, isNotNull, ne, sql } from 'drizzle-orm';
 import { isHttpUri } from './activitypub-uri';
 import type { Context, DocumentLoader } from '@fedify/fedify';
 import type { Actor, Image, LanguageString, Object as ActivityPubObject } from '@fedify/vocab';
+import type { RemoteProfileFeaturedSyncInput } from '@kosmo/core/temporal/workflows';
 
 export class RemoteActorMaterializationError extends Error {
   constructor(message: string) {
@@ -87,6 +91,30 @@ const getNow = () => Temporal.Now.instant();
 
 const noNetworkDocumentLoader = async (): Promise<never> => {
   throw new TypeError('Remote actor representation lookup is disabled');
+};
+
+const startRemoteFeaturedSync = async ({
+  actorUri,
+  featuredUri,
+  profileId,
+  revision,
+}: RemoteProfileFeaturedSyncInput): Promise<void> => {
+  try {
+    await runWorkflow(remoteProfileFeaturedWorkflow, {
+      args: [{ actorUri, featuredUri, profileId, revision }],
+      mode: 'start',
+      workflowIdConflictPolicy: 'USE_EXISTING',
+      workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+    });
+  } catch (error) {
+    console.error('Remote Profile Featured Workflow start failed', {
+      actorUri,
+      error,
+      featuredUri,
+      profileId,
+      revision,
+    });
+  }
 };
 
 const toActorType = (actor: Actor): ActivityPubActorType => {
@@ -419,6 +447,7 @@ export const materializeRemoteProfileActor = async (options: RemoteActorMaterial
     sharedInboxUri: actor.endpoints?.sharedInbox?.href ?? null,
   };
   const actorUri = actorId.href;
+  const featuredUri = actor.featuredId?.href ?? null;
   const actorType = toActorType(actor);
   const canonicalActorHostname = actorId.hostname.toLowerCase().replace(/\.$/, '');
   const canonicalRemoteInstance = await ensureRemoteInstance(
@@ -607,15 +636,17 @@ export const materializeRemoteProfileActor = async (options: RemoteActorMaterial
           existingActor.actor.lastFetchedAt.epochNanoseconds >= now.epochNanoseconds
         ) {
           if (existingInstanceId === canonicalRemoteInstance.id) {
-            return existingActor.profile;
+            return { profile: existingActor.profile };
           }
 
-          return tx
-            .update(Profiles)
-            .set({ instanceId: canonicalRemoteInstance.id })
-            .where(eq(Profiles.id, existingActor.profile.id))
-            .returning()
-            .then(firstOrThrow);
+          return {
+            profile: await tx
+              .update(Profiles)
+              .set({ instanceId: canonicalRemoteInstance.id })
+              .where(eq(Profiles.id, existingActor.profile.id))
+              .returning()
+              .then(firstOrThrow),
+          };
         }
 
         const profile = await tx
@@ -633,20 +664,46 @@ export const materializeRemoteProfileActor = async (options: RemoteActorMaterial
           .returning()
           .then(firstOrThrow);
 
-        await tx
+        const updatedActor = await tx
           .update(ActivityPubActors)
           .set({
             ...endpoints,
+            featuredRevision: sql`${ActivityPubActors.featuredRevision} + 1`,
+            featuredUri,
             lastFetchedAt: now,
             profileUrl: projection.profileUrl,
             type: actorType,
             updatedAt: now,
           })
-          .where(eq(ActivityPubActors.uri, actorUri));
+          .where(eq(ActivityPubActors.uri, actorUri))
+          .returning({ featuredRevision: ActivityPubActors.featuredRevision })
+          .then(firstOrThrow);
+
+        if (featuredUri === null) {
+          await tx
+            .delete(ProfilePinnedPosts)
+            .where(
+              and(
+                eq(ProfilePinnedPosts.profileId, profile.id),
+                isNotNull(ProfilePinnedPosts.position),
+              ),
+            );
+        }
 
         await syncProfileMedia(profile.id);
 
-        return profile;
+        return {
+          featuredSync:
+            featuredUri === null
+              ? undefined
+              : {
+                  actorUri,
+                  featuredUri,
+                  profileId: profile.id,
+                  revision: updatedActor.featuredRevision,
+                },
+          profile,
+        };
       }
 
       const targetRemoteInstance =
@@ -681,31 +738,51 @@ export const materializeRemoteProfileActor = async (options: RemoteActorMaterial
         .returning()
         .then(firstOrThrow);
 
-      await tx
+      const insertedActor = await tx
         .insert(ActivityPubActors)
         .values({
           ...endpoints,
+          featuredUri,
           lastFetchedAt: now,
           profileId: profile.id,
           profileUrl: projection.profileUrl,
           type: actorType,
           uri: actorUri,
         })
-        .returning()
+        .returning({ featuredRevision: ActivityPubActors.featuredRevision })
         .then(firstOrThrow);
 
       await syncProfileMedia(profile.id);
 
-      return profile;
+      return {
+        featuredSync:
+          featuredUri === null
+            ? undefined
+            : {
+                actorUri,
+                featuredUri,
+                profileId: profile.id,
+                revision: insertedActor.featuredRevision,
+              },
+        profile,
+      };
     });
 
   try {
-    return await persistActor();
+    const result = await persistActor();
+    if (result.featuredSync) {
+      await startRemoteFeaturedSync(result.featuredSync);
+    }
+    return result.profile;
   } catch (error) {
     if (!isUniqueViolation(error)) {
       throw error;
     }
 
-    return persistActor();
+    const result = await persistActor();
+    if (result.featuredSync) {
+      await startRemoteFeaturedSync(result.featuredSync);
+    }
+    return result.profile;
   }
 };

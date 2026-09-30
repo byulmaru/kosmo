@@ -12,6 +12,7 @@ export { profileUpdateEffectsWorkflow } from './profile-update';
 export { pushNotificationDeliveryWorkflow } from './push-notification';
 export { reactionCreateEffectsWorkflow } from './reaction-create';
 export { reactionDeleteEffectsWorkflow } from './reaction-delete';
+export { remoteProfileFeaturedWorkflow } from './remote-profile-featured';
 export { remoteProfileLookupWorkflow } from './remote-profile-lookup';
 export { remoteProfileRefreshWorkflow } from './remote-profile-refresh';
 export { postRepostWorkflow } from './repost';
