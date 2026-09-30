@@ -1,4 +1,6 @@
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import type { Href } from 'expo-router';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { NavigationLink } from '@/components/shell/NavigationLink';
 import {
   PolicyBullet,
   PolicyEmailLink,
@@ -70,6 +72,8 @@ function NumberedItem({ children, number }: { children: ReactNode; number: numbe
 }
 
 export default function PrivacyScreen() {
+  const theme = useTheme();
+
   return (
     <PublicPolicyDocument
       currentPolicy="privacy"
@@ -330,6 +334,18 @@ export default function PrivacyScreen() {
           변경은 시행일 전에 알립니다.
         </PolicyParagraph>
       </PolicySection>
+
+      <NavigationLink href={'/privacy/2026-09-09' as Href}>
+        <Pressable
+          accessibilityLabel="이전 개인정보 처리방침 (2026년 9월 9일부터 2026년 9월 29일까지)"
+          accessibilityRole="link"
+          style={styles.previousPolicyLinkControl}
+        >
+          <Text style={[styles.previousPolicyLink, { color: theme.textSecondary }]}>
+            이전 개인정보 처리방침 (2026년 9월 9일부터 2026년 9월 29일까지)
+          </Text>
+        </Pressable>
+      </NavigationLink>
     </PublicPolicyDocument>
   );
 }
@@ -357,4 +373,14 @@ const styles = StyleSheet.create({
     ...typography.sm,
   },
   tableHeaderCell: { fontWeight: '800' },
+  previousPolicyLinkControl: {
+    justifyContent: 'center',
+    marginTop: spacing.xxxl,
+    minHeight: 48,
+  },
+  previousPolicyLink: {
+    fontFamily: fontFamilies.ui,
+    textDecorationLine: 'underline',
+    ...typography.sm,
+  },
 });

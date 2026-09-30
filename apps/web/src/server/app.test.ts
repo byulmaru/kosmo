@@ -496,7 +496,7 @@ describe('runtime routing', () => {
     expect(federationFetch).toHaveBeenCalledTimes(4);
   });
 
-  test.each(['/privacy', '/account-deletion', '/child-safety'])(
+  test.each(['/privacy', '/privacy/2026-09-09', '/account-deletion', '/child-safety'])(
     'serves the public policy %s as an SPA document without navigation headers',
     async (path) => {
       for (const accept of [undefined, '*/*', 'text/html']) {
