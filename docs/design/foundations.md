@@ -113,7 +113,7 @@ Fullscreen media와 제품 고유 shadow는 일괄 치환하지 않고 아래 In
 ## 상태·접근성·viewport 정본
 
 - focus-visible, keyboard, modal close·focus restore, accessible name·announcement는 [accessibility.md](./accessibility.md)를 따른다.
-- 공용 `Tab`은 선택 여부와 관계없이 활성 탭의 Web hover와 Web·Native pressed를 `state/hover`·`state/pressed` 표면으로 표시한다. 선택 표시와 focus ring은 함께 유지하며, disabled 탭에는 상호작용 표면을 표시하지 않는다.
+- 공용 underline `TabList`의 기본 배경은 `background/canvas`를 사용한다. 공용 `Tab`은 선택 여부와 관계없이 활성 탭의 Web hover와 Web·Native pressed를 `state/hover`·`state/pressed` 표면으로 표시한다. 선택 표시와 focus ring은 함께 유지하며, disabled 탭에는 상호작용 표면을 표시하지 않는다.
 - mobile `<768`, compact Web `768–1279`, full Web `≥1280`과 shell·scroll 규칙은 [breakpoints.md](./breakpoints.md)를 따른다.
 - 공용 header geometry와 상태는 [page-header.md](./page-header.md)를 따른다.
 - route별 loading, empty, error, retry 의미와 전용 geometry는 각 제품 문서를 따른다.

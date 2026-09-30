@@ -11,7 +11,7 @@ const mockModule = (specifier: string | URL, exports: object) =>
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-let platformOS: 'ios' | 'web' = 'web';
+let platformOS: 'android' | 'ios' | 'web' = 'web';
 let pressState = { hovered: false, pressed: false };
 let reducedMotion = false;
 const PressableHost = 'Pressable' as unknown as ElementType;
@@ -128,16 +128,15 @@ mockModule('@/theme/ThemeProvider', {
   useReducedMotion: () => reducedMotion,
   useTheme: () => ({
     actionPrimaryBase: 'primary',
-    background: 'background',
-    border: 'border',
+    backgroundCanvas: 'canvas',
+    backgroundSurface: 'surface',
+    borderDefault: 'border',
     borderSubtle: 'border-subtle',
-    card: 'card',
-    primary: 'selected-border',
+    foregroundPrimary: 'text',
+    foregroundSecondary: 'text-secondary',
     stateFocusRing: 'focus',
     stateHover: 'hover',
     statePressed: 'pressed',
-    text: 'text',
-    textSecondary: 'text-secondary',
   }),
 });
 mockModule('@/theme/tokens', {
@@ -284,6 +283,29 @@ test('Tabs show hover and pressed feedback on selected Web tabs and pressed feed
   }
 });
 
+test('Underline Tabs use the canvas background across platforms', () => {
+  for (const platform of ['web', 'ios', 'android'] as const) {
+    platformOS = platform;
+    const renderer = renderTab('underline');
+    const list = renderer.root.findByProps({ accessibilityRole: 'tablist' });
+    assert.equal(
+      flattenStyle(list.props.style).backgroundColor,
+      platform === 'android' ? 'transparent' : 'canvas',
+    );
+    if (platform === 'android') {
+      assert.equal(
+        renderer.root
+          .findAllByType(ViewHost)
+          .map(({ props }) => flattenStyle(props.style))
+          .find(
+            ({ height, position, top }) => height === 44 && position === 'absolute' && top === 0,
+          )?.backgroundColor,
+        'canvas',
+      );
+    }
+  }
+});
+
 test('Tabs animate Web feedback with the shared motion contract', () => {
   platformOS = 'web';
   pressState = { hovered: true, pressed: false };
@@ -337,7 +359,19 @@ test('Tabs keep a shared 32px pill visual on Web and Native', () => {
     platformOS = platform;
     pressState = { hovered: false, pressed: false };
     const renderer = renderTab('pill');
-    assert.equal(pillSurfaceStyles(renderer).length, 1);
+    assert.deepEqual(
+      pillSurfaceStyles(renderer).map(({ backgroundColor, borderColor }) => ({
+        backgroundColor,
+        borderColor,
+      })),
+      [{ backgroundColor: 'canvas', borderColor: 'primary' }],
+    );
+    assert.deepEqual(
+      pillSurfaceStyles(renderTab('pill', false, false)).map(
+        ({ backgroundColor, borderColor }) => ({ backgroundColor, borderColor }),
+      ),
+      [{ backgroundColor: 'surface', borderColor: 'border' }],
+    );
     if (platform === 'web') {
       const pressable = renderer.root.findByType(PressableHost);
       const pressableStyle = flattenStyle(pressable.props.style);

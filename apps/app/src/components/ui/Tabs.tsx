@@ -202,7 +202,7 @@ export function TabList<Value extends string>({
         style={[
           styles.underlineList,
           {
-            backgroundColor: Platform.OS === 'android' ? 'transparent' : theme.card,
+            backgroundColor: Platform.OS === 'android' ? 'transparent' : theme.backgroundCanvas,
             borderColor: theme.borderSubtle,
           },
         ]}
@@ -213,7 +213,7 @@ export function TabList<Value extends string>({
             pointerEvents="none"
             style={[
               styles.underlineVisualBackdrop,
-              { backgroundColor: theme.card, borderColor: theme.borderSubtle },
+              { backgroundColor: theme.backgroundCanvas, borderColor: theme.borderSubtle },
             ]}
           />
         ) : null}
@@ -334,7 +334,7 @@ export function Tab<Value extends string>({ option }: TabProps<Value>) {
         context.variant === 'pill' ? styles.pillTab : styles.underlineTab,
         {
           backgroundColor: 'transparent',
-          borderColor: context.variant === 'pill' ? 'transparent' : theme.border,
+          borderColor: context.variant === 'pill' ? 'transparent' : theme.borderDefault,
           opacity: disabled ? 0.45 : 1,
           ...(focusVisible
             ? {
@@ -390,13 +390,15 @@ export function Tab<Value extends string>({ option }: TabProps<Value>) {
                 style={[
                   styles.pillSurface,
                   {
-                    backgroundColor: selected ? theme.background : theme.card,
-                    borderColor: selected ? theme.primary : theme.border,
+                    backgroundColor: selected ? theme.backgroundCanvas : theme.backgroundSurface,
+                    borderColor: selected ? theme.actionPrimaryBase : theme.borderDefault,
                   },
                 ]}
               >
                 {feedback}
-                <Text style={[styles.pillLabel, { color: theme.text }]}>{option.label}</Text>
+                <Text style={[styles.pillLabel, { color: theme.foregroundPrimary }]}>
+                  {option.label}
+                </Text>
               </View>
             ) : (
               <>
@@ -407,8 +409,8 @@ export function Tab<Value extends string>({ option }: TabProps<Value>) {
                     {
                       color:
                         context.variant === 'underline' && !selected
-                          ? theme.textSecondary
-                          : theme.text,
+                          ? theme.foregroundSecondary
+                          : theme.foregroundPrimary,
                     },
                   ]}
                 >

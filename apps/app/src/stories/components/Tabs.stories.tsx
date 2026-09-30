@@ -102,6 +102,7 @@ export const UnderlineInteractionContract: Story = {
       expect(latest).toHaveStyle({ opacity: '0.45' });
       expect(media).toHaveAttribute('tabindex', '-1');
       expect(group).toHaveStyle({
+        backgroundColor: 'rgb(255, 255, 255)',
         borderBottomColor: 'rgb(236, 236, 240)',
         borderBottomWidth: '1px',
       });
@@ -198,7 +199,7 @@ export const PillInteractionContract: Story = {
       expect(popular).toHaveAttribute('aria-selected', 'true');
       expect(visual).toHaveStyle({ borderRadius: '8px', height: '32px' });
       expect(getComputedStyle(visual as Element).backgroundColor).toBe('rgb(255, 255, 255)');
-      expect(getComputedStyle(visual as Element).borderColor).toBe('rgb(252, 231, 154)');
+      expect(getComputedStyle(visual as Element).borderColor).toBe('rgb(255, 229, 151)');
       expect(feedback).not.toBeNull();
       expect(latest).toHaveAttribute('aria-disabled', 'true');
       expect(latest).toHaveStyle({ opacity: '0.45' });
