@@ -14,7 +14,7 @@ import { PostBody } from './PostBody';
 import { postListMetrics } from './postListMetrics';
 import { usePostMediaViewerHost } from './PostMediaViewerHost';
 import { usePostReplySurface } from './PostReplySurface';
-import { PostSourcePresentationView } from './PostSourcePresentationView';
+import { PostSourcePresentationView, PostSourcePreview } from './PostSourcePresentationView';
 import {
   PostSurfaceHoverSuppressionContext,
   usePostSurfaceFeedback,
@@ -40,6 +40,9 @@ const PostListRowFragment = graphql`
         url
       }
       contentWarning
+    }
+    repostSource {
+      ...PostSourcePreview_source
     }
     profile {
       avatar {
@@ -401,6 +404,9 @@ function PostListRow({
               post={post}
             />
           </View>
+        ) : null}
+        {post.content && post.repostSource ? (
+          <PostSourcePreview source={post.repostSource} style={styles.quoteSourcePreview} />
         ) : null}
         <PostActionSurface
           actionBarStyle={actionBarStyle}

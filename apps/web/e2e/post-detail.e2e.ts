@@ -406,6 +406,58 @@ test('게시글 목록에서 상세로 이동하고 뒤로 가며 deep-link hand
   await expect(page.getByText(body)).toBeVisible();
 });
 
+test('순수 Repost 상세는 Quote Source로 replace되고 한 단계 C preview를 표시한다', async ({
+  context,
+  page,
+}) => {
+  const viewer = await createE2ESession({ handle: 'e2e-pure-repost-detail-viewer' });
+  const author = await createE2EProfile({ handle: 'e2e-pure-repost-detail-author' });
+  const sourceBody = 'E2E repost quote source preview body';
+  const quoteBody = 'E2E quote source post body';
+  const thirdDepthBody = 'E2E third source depth must stay hidden';
+  const thirdDepth = await createE2EPost({
+    body: thirdDepthBody,
+    profileId: author.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const directSource = await createE2EPost({
+    body: sourceBody,
+    profileId: author.id,
+    repostSourceId: thirdDepth.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const quote = await createE2EPost({
+    body: quoteBody,
+    profileId: author.id,
+    repostSourceId: directSource.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const quoteRepost = await createE2EPost({
+    content: false,
+    profileId: author.id,
+    repostSourceId: quote.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const quoteId = toGlobalId('Post', quote.id);
+  const repostId = toGlobalId('Post', quoteRepost.id);
+
+  await setE2ESessionCookie(context, viewer.token);
+  await page.goto('/home');
+
+  await gotoPostDetail(page, `/@${author.handle}/${repostId}`);
+  await expect
+    .poll(() => decodeURIComponent(new URL(page.url()).pathname))
+    .toBe(`/@${author.handle}/${quoteId}`);
+  await expect(page.getByText(quoteBody)).toBeVisible();
+  await expect(page.getByTestId('source-post-preview')).toHaveCount(1);
+  await expect(page.getByText(sourceBody)).toBeVisible();
+  await expect(page.getByText(thirdDepthBody)).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '답글', exact: true })).toBeEnabled();
+
+  await page.goBack();
+  await expect(page).toHaveURL(/\/home$/);
+});
+
 test('연합 프로필 게시글은 relativeHandle URL을 유지하고 정규화한다', async ({ context, page }) => {
   const body = 'E2E federated post detail body';
   const viewer = await createE2ESession({ handle: 'e2e-federated-detail-viewer' });

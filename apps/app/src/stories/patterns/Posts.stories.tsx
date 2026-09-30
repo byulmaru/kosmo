@@ -345,8 +345,41 @@ const sourceAuthor = profile({
   id: 'profile-repost-source',
   relativeHandle: '@source@remote.example',
 });
+const deepestSourceAuthor = profile({
+  displayName: '두 번째 Source 작성자',
+  handle: 'deep-source@remote.example',
+  id: 'profile-source-depth-2',
+  relativeHandle: '@deep-source@remote.example',
+});
+const thirdSourceAuthor = profile({
+  displayName: '세 번째 Source 작성자',
+  handle: 'third-source@remote.example',
+  id: 'profile-source-depth-3',
+  relativeHandle: '@third-source@remote.example',
+});
+const deepestSourcePost = post({
+  bodyText: '세 번째 Source의 본문은 목록에 표시하지 않습니다.',
+  id: 'post-source-depth-3',
+  profile: thirdSourceAuthor,
+});
 const contentWarningSourcePreviewPost = post({
   bodyText: '가림 해제 뒤 표시되는 원문 프리뷰 본문입니다.',
+  bodyDocument: {
+    type: 'doc',
+    content: [
+      {
+        type: 'paragraph',
+        content: [
+          { type: 'text', text: '가림 해제 뒤 표시되는 원문 프리뷰 본문입니다. ' },
+          {
+            type: 'text',
+            text: '안전한 외부 링크',
+            marks: [{ type: 'link', attrs: { href: 'https://example.com/path' } }],
+          },
+        ],
+      },
+    ],
+  },
   contentWarning: '원문 프리뷰 경고',
   id: 'content-warning-source-preview-post',
   media: [
@@ -357,7 +390,8 @@ const contentWarningSourcePreviewPost = post({
       url: postMediaImageUri,
     },
   ],
-  profile: sourceAuthor,
+  profile: deepestSourceAuthor,
+  repostSource: deepestSourcePost,
 });
 const replyTargetProfile = profile({
   displayName: 'Reply 대상 작성자',
@@ -409,22 +443,12 @@ const sourcePost = {
   repostCount: 7,
   viewerRepost: { __typename: 'Post' as const, id: 'source-viewer-repost' },
 };
-const deepestSourceAuthor = profile({
-  displayName: '두 번째 Source 작성자',
-  handle: 'deep-source@remote.example',
-  id: 'profile-source-depth-2',
-  relativeHandle: '@deep-source@remote.example',
-});
-const deepestSourcePost = post({
-  bodyText: '두 번째 Source의 본문은 목록에서 full preview하지 않습니다.',
-  id: 'post-source-depth-2',
-  profile: deepestSourceAuthor,
-});
 const sourceQuotePost = post({
   bodyText: '첫 번째 direct Source Quote의 본문입니다.',
   id: 'post-source-quote',
   profile: sourceAuthor,
-  repostSource: deepestSourcePost,
+  reactionCounts: [{ count: 5, type: '🌟' }],
+  repostSource: contentWarningSourcePreviewPost,
 });
 const pureRepost = {
   ...post({
@@ -476,6 +500,17 @@ const pureRepostOfQuote = post({
   id: 'post-repost-of-quote',
   profile: repostAuthor,
   repostSource: sourceQuotePost,
+});
+const sourceQuoteWithoutPreview = post({
+  bodyText: '원문이 없어도 유지되는 직접 Quote 본문입니다.',
+  id: 'post-source-quote-without-preview',
+  profile: sourceAuthor,
+});
+const pureRepostOfQuoteWithoutPreview = post({
+  bodyText: null,
+  id: 'post-repost-of-quote-without-preview',
+  profile: repostAuthor,
+  repostSource: sourceQuoteWithoutPreview,
 });
 const quoteOfQuotePost = post({
   bodyText: 'Source Quote를 인용하는 outer Quote 본문입니다.',
@@ -833,6 +868,8 @@ const storyPosts = [
   deepestSourcePost,
   sourceQuotePost,
   pureRepostOfQuote,
+  sourceQuoteWithoutPreview,
+  pureRepostOfQuoteWithoutPreview,
   quoteOfQuotePost,
   mediaTextPost,
   mediaOnlyPost,
@@ -1414,6 +1451,10 @@ function PostDeletionListEdgeSafety() {
 }
 
 type ProductionReactionRequest = Readonly<{ postId: string; type: string }>;
+type ProductionTargetActionRequest = Readonly<{
+  kind: 'bookmark' | 'repost';
+  postId: string;
+}>;
 
 type ProductionBookmarkRequest =
   | Readonly<{ action: 'create'; postId: string }>
@@ -1431,6 +1472,7 @@ function withReactionViewerState(storyPost: StoryPost): StoryPost & {
 
 function ProductionReactionMutationTargetsStory() {
   const [requests, setRequests] = useState<ProductionReactionRequest[]>([]);
+  const [actionRequests, setActionRequests] = useState<ProductionTargetActionRequest[]>([]);
   const environment = useMemo(() => {
     const selectedTypesByPost = new Map<string, Set<string>>();
 
@@ -1465,6 +1507,22 @@ function ProductionReactionMutationTargetsStory() {
               homeTimeline,
               nodes: storyPosts.map(withReactionViewerState),
             },
+          } as GraphQLResponse);
+        }
+        if (request.name === 'RepostActionRepostPostMutation') {
+          const postId = String(variables.sourceId);
+          setActionRequests((current) => [...current, { kind: 'repost', postId }]);
+          return Promise.resolve({
+            data: { repostPost: null },
+            errors: [{ message: 'target verification repost failure' }],
+          } as GraphQLResponse);
+        }
+        if (request.name === 'PostBookmarkActionCreateBookmarkMutation') {
+          const input = variables.input as { postId: string };
+          setActionRequests((current) => [...current, { kind: 'bookmark', postId: input.postId }]);
+          return Promise.resolve({
+            data: { createBookmark: null },
+            errors: [{ message: 'target verification bookmark failure' }],
           } as GraphQLResponse);
         }
         if (request.name === 'PostReactionControllerAddReactionMutation') {
@@ -1514,6 +1572,7 @@ function ProductionReactionMutationTargetsStory() {
         </SessionProvider>
       </Suspense>
       <Text testID="production-reaction-request-log">{JSON.stringify(requests)}</Text>
+      <Text testID="production-target-action-request-log">{JSON.stringify(actionRequests)}</Text>
     </RelayEnvironmentProvider>
   );
 }
@@ -3450,7 +3509,7 @@ export const ProductionRepostQuoteListIntegration: Story = {
     const pureRepostActionBar = within(pureRepostRow!).getByRole('toolbar', {
       name: '액션 바',
     });
-    const pureRepostNoSummaryActionBar = within(repostOfQuoteRow!).getByRole('toolbar', {
+    const repostOfQuoteActionBar = within(repostOfQuoteRow!).getByRole('toolbar', {
       name: '액션 바',
     });
     const quoteActionBar = within(quoteRow!.parentElement!).getByRole('toolbar', {
@@ -3473,8 +3532,13 @@ export const ProductionRepostQuoteListIntegration: Story = {
     ).toBeCloseTo(0, 0);
     const quoteSourcePreview = within(quoteRow!).getByTestId('source-post-preview');
     const quoteSourceBody = within(quoteSourcePreview).getByTestId('source-post-body');
+    const repostQuotePreview = within(repostOfQuoteRow!).getByTestId('source-post-preview');
+    const repostQuoteSourceBody = within(repostQuotePreview).getByTestId('source-post-body');
     const quoteReactionSummary = await within(quoteCard).findByRole('button', {
       name: '🎉 반응 3개',
+    });
+    const repostQuoteReactionSummary = await within(repostOfQuoteRow!).findByRole('button', {
+      name: '🌟 반응 5개',
     });
     const ordinaryReactionSummary = within(ordinaryCard).getByRole('button', {
       name: '❤️ 반응 2개',
@@ -3502,13 +3566,22 @@ export const ProductionRepostQuoteListIntegration: Story = {
       replyActionBar.getBoundingClientRect().top - replyBody.getBoundingClientRect().bottom,
     ).toBeCloseTo(12, 0);
     expect(
-      pureRepostNoSummaryActionBar.getBoundingClientRect().top -
-        within(repostOfQuoteRow!).getByTestId('post-list-row-body').getBoundingClientRect().bottom,
+      repostQuoteReactionSummary.getBoundingClientRect().top -
+        repostQuotePreview.getBoundingClientRect().bottom,
+    ).toBeCloseTo(8, 0);
+    expect(
+      repostOfQuoteActionBar.getBoundingClientRect().top -
+        repostQuoteReactionSummary.getBoundingClientRect().bottom,
     ).toBeCloseTo(12, 0);
     expect(
       quoteSourcePreview.getBoundingClientRect().bottom -
         Number.parseFloat(getComputedStyle(quoteSourcePreview).borderBottomWidth) -
         quoteSourceBody.getBoundingClientRect().bottom,
+    ).toBeCloseTo(4, 0);
+    expect(
+      repostQuotePreview.getBoundingClientRect().bottom -
+        Number.parseFloat(getComputedStyle(repostQuotePreview).borderBottomWidth) -
+        repostQuoteSourceBody.getBoundingClientRect().bottom,
     ).toBeCloseTo(4, 0);
     for (const { actionBar, card, geometry } of [
       {
@@ -3527,7 +3600,7 @@ export const ProductionRepostQuoteListIntegration: Story = {
         geometry: { cardBottom: 8, cardTop: '8px', slotBottom: '0px', slotTop: '8px' },
       },
       {
-        actionBar: pureRepostNoSummaryActionBar,
+        actionBar: repostOfQuoteActionBar,
         card: repostOfQuoteRow!,
         geometry: { cardBottom: 8, cardTop: '8px', slotBottom: '0px', slotTop: '8px' },
       },
@@ -3551,7 +3624,7 @@ export const ProductionRepostQuoteListIntegration: Story = {
       ordinaryActionBar,
       quoteActionBar,
       pureRepostActionBar,
-      pureRepostNoSummaryActionBar,
+      repostOfQuoteActionBar,
     ]) {
       expect(
         within(actionBar)
@@ -3613,6 +3686,19 @@ export const ProductionRepostQuoteListIntegration: Story = {
     expect(
       repostOfQuoteRow!.querySelectorAll('a[href="/@source@remote.example/post-source-quote"]'),
     ).toHaveLength(1);
+    expect(repostOfQuoteRow!.querySelectorAll('[data-testid="source-post-preview"]')).toHaveLength(
+      1,
+    );
+    expect(within(repostOfQuoteRow!).getByRole('button', { name: '답글' })).toBeDisabled();
+    expect(repostQuotePreview).toBeVisible();
+    expect(
+      within(repostQuotePreview).getByRole('button', {
+        name: /원문 프리뷰 경고, 본문 · 이미지 1개, 보기/,
+      }),
+    ).toBeVisible();
+    expect(repostOfQuoteRow!.textContent).not.toContain(
+      '세 번째 Source의 본문은 목록에 표시하지 않습니다.',
+    );
     expect(quoteOfQuoteRow!.querySelectorAll('[data-testid="source-post-preview"]')).toHaveLength(
       1,
     );
@@ -3711,6 +3797,13 @@ export const ProductionReactionMutationTargets: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const home = within(await canvas.findByTestId('production-home-reposts'));
+    const profile = within(await canvas.findByTestId('production-profile-reposts'));
+    const repostOfQuoteRoot = profile
+      .getByText('재게시한 코스모 사용자님이 재게시함')
+      .closest<HTMLElement>('[role="article"]')!;
+    const repostOfQuoteActionBar = within(repostOfQuoteRoot).getByRole('toolbar', {
+      name: '액션 바',
+    });
     const ordinaryActionBar = within(home.getAllByRole('article')[0]!).getByRole('toolbar', {
       name: '액션 바',
     });
@@ -3762,6 +3855,11 @@ export const ProductionReactionMutationTargets: Story = {
         root: pureRepostRoot,
         summaryLabel: '👀 반응 4개',
       },
+      {
+        actionBar: repostOfQuoteActionBar,
+        root: repostOfQuoteRoot,
+        summaryLabel: '🌟 반응 5개',
+      },
     ];
 
     for (const [index, { actionBar, root, summaryLabel }] of surfaces.entries()) {
@@ -3789,7 +3887,42 @@ export const ProductionReactionMutationTargets: Story = {
       shortPost.id,
       quotePost.id,
       pureRepost.repostSource!.id,
+      sourceQuotePost.id,
     ]);
+
+    await userEvent.click(within(repostOfQuoteActionBar).getByRole('button', { name: '재게시' }));
+    await userEvent.click(
+      within(await screen.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
+        name: '재게시하기',
+      }),
+    );
+    await waitFor(() => {
+      const actionRequests = JSON.parse(
+        canvas.getByTestId('production-target-action-request-log').textContent ?? '[]',
+      ) as ProductionTargetActionRequest[];
+      expect(actionRequests).toContainEqual({ kind: 'repost', postId: sourceQuotePost.id });
+    });
+
+    await userEvent.click(within(repostOfQuoteActionBar).getByRole('button', { name: '북마크' }));
+    await waitFor(() => {
+      const actionRequests = JSON.parse(
+        canvas.getByTestId('production-target-action-request-log').textContent ?? '[]',
+      ) as ProductionTargetActionRequest[];
+      expect(actionRequests).toContainEqual({ kind: 'bookmark', postId: sourceQuotePost.id });
+    });
+
+    resetClipboardMock();
+    await userEvent.click(within(repostOfQuoteActionBar).getByRole('button', { name: '더 보기' }));
+    await userEvent.click(
+      within(await screen.findByRole('menu', { name: '더 보기 메뉴' })).getByRole('menuitem', {
+        name: '링크 복사',
+      }),
+    );
+    await waitFor(() =>
+      expect(getCopiedStrings()).toEqual([
+        `${storyShareOrigin()}/${sourceQuotePost.profile.relativeHandle}/${sourceQuotePost.id}`,
+      ]),
+    );
   },
   render: () => <ProductionReactionMutationTargetsStory />,
 };
@@ -4292,24 +4425,151 @@ export const PureRepostOfQuote: Story = {
     const canvas = within(canvasElement);
     const article = canvas.getByRole('article');
     const standardRow = within(article).getByTestId('post-list-standard-row');
+    const sourcePreview = within(article).getByTestId('source-post-preview');
+    const actionBar = within(article).getByRole('toolbar', { name: '액션 바' });
+    const sourceAuthorLink = within(sourcePreview).getByRole('link', {
+      name: '두 번째 Source 작성자 프로필 보기',
+    });
+    const sourceTimestampLink = within(sourcePreview).getByRole('link', {
+      name: '원문 게시글 보기',
+    });
+    const warningButton = within(sourcePreview).getByRole('button', {
+      name: /원문 프리뷰 경고, 본문 · 이미지 1개, 보기/,
+    });
 
     expect(canvas.getAllByRole('article')).toHaveLength(1);
     expect(article.querySelector('[role="article"]')).toBeNull();
+    expect(article.querySelectorAll('[data-testid="post-list-standard-row"]')).toHaveLength(1);
+    expect(article.querySelectorAll('[data-testid="source-post-preview"]')).toHaveLength(1);
     expect(within(standardRow).getByText('아주 긴 Source 작성자 표시 이름')).toBeVisible();
     expect(
       within(standardRow).getByText('첫 번째 direct Source Quote의 본문입니다.'),
     ).toBeVisible();
+    expect(warningButton).toBeVisible();
+    expect(
+      within(sourcePreview).queryByText('가림 해제 뒤 표시되는 원문 프리뷰 본문입니다.'),
+    ).not.toBeInTheDocument();
+    expect(article).not.toHaveTextContent('세 번째 Source의 본문은 목록에 표시하지 않습니다.');
+    expect(await within(article).findByRole('button', { name: '🌟 반응 5개' })).toBeVisible();
+    expect(within(actionBar).getByRole('button', { name: '답글' })).toBeDisabled();
+    expect(sourceAuthorLink).toHaveAttribute('href', '/@deep-source@remote.example');
+    expect(sourceTimestampLink).toHaveAttribute(
+      'href',
+      '/@deep-source@remote.example/content-warning-source-preview-post',
+    );
+    expect(sourceTimestampLink.getBoundingClientRect().width).toBeGreaterThanOrEqual(44);
+    expect(sourceTimestampLink.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(
+      within(sourcePreview).getByTestId('source-post-body').closest('[role="link"]'),
+    ).toBeNull();
     expect(article.querySelector('a a')).toBeNull();
     expect(article.querySelector('[role="link"] [role="link"]')).toBeNull();
 
-    await userEvent.click(
-      within(standardRow).getByText('첫 번째 direct Source Quote의 본문입니다.'),
-    );
-    expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent(
-      '/@source@remote.example/post-source-quote',
-    );
+    const openURL = fn(async () => undefined);
+    const originalOpenURL = Linking.openURL;
+    Linking.openURL = openURL;
+    try {
+      const repostAuthorLink = canvas.getByRole('link', {
+        name: '재게시한 코스모 사용자 프로필 보기',
+      });
+      await userEvent.click(repostAuthorLink);
+      expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent('/@reposter');
+
+      const quoteAuthorLink = within(standardRow)
+        .getByText('아주 긴 Source 작성자 표시 이름')
+        .closest('a')!;
+      await userEvent.click(quoteAuthorLink);
+      expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent(
+        '/@source@remote.example',
+      );
+
+      const quoteTimestampLink = standardRow.querySelector<HTMLAnchorElement>(
+        'a[href="/@source@remote.example/post-source-quote"]',
+      )!;
+      await userEvent.click(quoteTimestampLink);
+      expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent(
+        '/@source@remote.example/post-source-quote',
+      );
+
+      sourceAuthorLink.focus();
+      await userEvent.keyboard('{Enter}');
+      expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent(
+        '/@deep-source@remote.example',
+      );
+      sourceTimestampLink.focus();
+      await userEvent.keyboard('{Enter}');
+      expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent(
+        '/@deep-source@remote.example/content-warning-source-preview-post',
+      );
+
+      await userEvent.click(warningButton);
+      expect(
+        within(sourcePreview).getByText('가림 해제 뒤 표시되는 원문 프리뷰 본문입니다.'),
+      ).toBeVisible();
+      expect(sourcePreview).toHaveTextContent('안전한 외부 링크');
+      expect(within(sourcePreview).getByTestId('post-media-gallery')).toBeVisible();
+      expect(
+        within(sourcePreview).getByLabelText('가림 해제 뒤 표시되는 원문 프리뷰 이미지'),
+      ).toBeVisible();
+
+      await userEvent.click(
+        within(sourcePreview).getByLabelText('안전한 외부 링크, https://example.com/path'),
+      );
+      await expect(openURL).toHaveBeenCalledWith('https://example.com/path');
+      expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent(
+        '/@deep-source@remote.example/content-warning-source-preview-post',
+      );
+
+      await userEvent.click(sourcePreview);
+      expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent(
+        '/@deep-source@remote.example/content-warning-source-preview-post',
+      );
+      await userEvent.click(
+        within(sourcePreview).getByText('가림 해제 뒤 표시되는 원문 프리뷰 본문입니다.'),
+      );
+      expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent(
+        '/@deep-source@remote.example/content-warning-source-preview-post',
+      );
+
+      await userEvent.click(
+        within(standardRow).getByText('첫 번째 direct Source Quote의 본문입니다.'),
+      );
+      expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent(
+        '/@source@remote.example/post-source-quote',
+      );
+    } finally {
+      Linking.openURL = originalOpenURL;
+    }
   },
   render: () => <ProductionPostListItemStory postId="post-repost-of-quote" presentation="wide" />,
+};
+
+export const PureRepostOfQuoteWithoutAvailableSource: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const article = canvas.getByRole('article');
+    const standardRow = within(article).getByTestId('post-list-standard-row');
+    const actionBar = within(article).getByRole('toolbar', { name: '액션 바' });
+
+    expect(canvas.getAllByRole('article')).toHaveLength(1);
+    expect(article).toHaveTextContent('원문이 없어도 유지되는 직접 Quote 본문입니다.');
+    expect(article.querySelector('[data-testid="source-post-preview"]')).toBeNull();
+    expect(article.querySelector('[role="article"]')).toBeNull();
+    expect(within(actionBar).getByRole('button', { name: '답글' })).toBeDisabled();
+
+    await userEvent.click(
+      within(standardRow).getByText('원문이 없어도 유지되는 직접 Quote 본문입니다.'),
+    );
+    expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent(
+      '/@source@remote.example/post-source-quote-without-preview',
+    );
+  },
+  render: () => (
+    <ProductionPostListItemStory
+      postId="post-repost-of-quote-without-preview"
+      presentation="wide"
+    />
+  ),
 };
 
 export const Quote: Story = {
