@@ -5,17 +5,18 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import { NavigationLink } from './NavigationLink';
 import type { RefObject } from 'react';
+import type { View as NativeView } from 'react-native';
 import type { PostComposerHostCloseReason } from '@/components/post/PostComposerHost';
 import type { RightRail_profile$key } from './__generated__/RightRail_profile.graphql';
 import type { RightRail_query$key } from './__generated__/RightRail_query.graphql';
 
 type RightRailProps = {
-  fallbackFocusRef?: RefObject<HTMLElement | null>;
+  fallbackFocusRef?: RefObject<HTMLElement | NativeView | null>;
   onRequestClose: (reason: PostComposerHostCloseReason) => void;
   open?: boolean;
   profile: RightRail_profile$key;
   query: RightRail_query$key;
-  triggerFocusRef?: RefObject<HTMLElement | null>;
+  triggerFocusRef?: RefObject<HTMLElement | NativeView | null>;
 } & ({ mode: 'rail'; onExpand: () => void } | { mode: 'mobile' | 'overlay'; onExpand?: never });
 
 const RightRailFragment = graphql`

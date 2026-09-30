@@ -7,7 +7,8 @@ import { BottomTabBar as BottomTabBarPresentation } from '@/components/ui/Bottom
 import { NavigationLink } from './NavigationLink';
 import { isTimelineRoute } from './shellLayout';
 import type { Href, LinkProps } from 'expo-router';
-import type { ReactElement } from 'react';
+import type { ReactElement, RefObject } from 'react';
+import type { View } from 'react-native';
 import type {
   BottomTabBarRenderControlProps,
   BottomTabDestination,
@@ -27,6 +28,7 @@ const BottomTabBarFragment = graphql`
 `;
 
 type Props = {
+  composeTriggerRef?: RefObject<View | null>;
   onComposeOpen?: () => void;
   onHomeReselect?: () => void;
   profile?: BottomTabBar_profile$key | null;
@@ -44,7 +46,12 @@ export function isBottomTabDestination(href: Href) {
   return typeof href === 'string' && Object.values(hrefs).some((tabHref) => tabHref === href);
 }
 
-export function BottomTabBar({ onComposeOpen, onHomeReselect, profile: profileKey }: Props) {
+export function BottomTabBar({
+  composeTriggerRef,
+  onComposeOpen,
+  onHomeReselect,
+  profile: profileKey,
+}: Props) {
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
   const profile = useFragment(BottomTabBarFragment, profileKey ?? null);
@@ -58,10 +65,15 @@ export function BottomTabBar({ onComposeOpen, onHomeReselect, profile: profileKe
   }: BottomTabBarRenderControlProps): ReactElement => {
     if (destination === 'compose' && onComposeOpen) {
       return cloneElement(
-        children as ReactElement<{ accessibilityRole?: 'button'; onPress?: () => void }>,
+        children as ReactElement<{
+          accessibilityRole?: 'button';
+          onPress?: () => void;
+          ref?: RefObject<View | null>;
+        }>,
         {
           accessibilityRole: 'button',
           onPress: onComposeOpen,
+          ref: composeTriggerRef,
         },
       );
     }
