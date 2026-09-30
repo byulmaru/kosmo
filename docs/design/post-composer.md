@@ -155,8 +155,10 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
 
 - modal을 열면 Reply action은 expanded 상태를 노출하고 본문 editor로 focus를 이동한다.
 - Web modal은 `X`·backdrop·`Escape`로 닫기를 요청하고, 닫힌 뒤 원래 Reply action으로 focus를 복원한다.
-  fullscreen은 보이는 header close, Web `Escape`와 Native platform back을 사용하고 backdrop dismiss를
-  제공하지 않는다. 폐기 확인은 두 surface가 공유한다.
+  fullscreen은 보이는 header close, Web `Escape`, Native platform back과 iOS VoiceOver의
+  `onAccessibilityEscape`를 사용하고 backdrop dismiss를 제공하지 않는다. iOS는 Native Modal의
+  dismiss 완료 뒤 부모 close와 원래 trigger 또는 안전한 fallback focus 복원을 실행한다. 폐기 확인은 두
+  surface가 공유한다.
 - Navigation API를 지원하는 Web 브라우저의 취소 가능한 동일 문서 뒤로가기·앞으로가기는 Reply/Quote의
   같은 폐기 확인을 거친다. `계속 작성`은 현재 URL·surface·초안을 유지하고, `작성 취소`는 요청했던 기존
   history 항목으로 이동한다. Composer를 열거나 이 이동을 보호하기 위해 히스토리 항목을 추가하지 않는다.
@@ -167,7 +169,7 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   Composer에만 남는 Full Web right rail은 이 Reply lifecycle의 대상이 아니다.
 - modal Reply surface를 여는 순간 direct Parent 맥락 자체를 dirty로 취급하므로, 본문·Content Warning·Visibility와
   Media가 초기값이어도 `X`, backdrop 또는 `Escape`로 닫을 때 확인을 표시한다. fullscreen도 같은 dirty
-  판정을 사용하되 header close, Web `Escape` 또는 Native platform back에서 확인한다.
+  판정을 사용하되 header close, Web `Escape`, Native platform back 또는 iOS VoiceOver Escape에서 확인한다.
 - Reply 보호 정책은 Parent와 close lifecycle을 아는 surface가 직접 소유한다. modal·fullscreen surface는 입력별 dirty를
   다시 계산하지 않고 열린 동안 항상 폐기 확인 대상으로 취급하며, 공용 Post Composer에서는 제출 중 여부만
   전달받아 close 차단에 사용한다. 따라서 Parent에서 복사된 Content Warning을 그대로 두거나 수정·제거해도
@@ -208,7 +210,7 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
 
 - Web modal은 공용 `글쓰기` heading과 관계 맥락을 포함한 modal dialog semantics, focus trap을
   제공한다.
-- `X`, backdrop, `Escape`, 취소 확인과 성공 close에서 focus 이동을 각각 검증한다.
+- `X`, backdrop, `Escape`, iOS VoiceOver Escape, 취소 확인과 성공 close에서 focus 이동을 각각 검증한다.
 - 오류는 alert semantics, Content Warning 입력·reveal control·Visibility와 Reply action은 name/state, 남은
   글자 수는 두 Plain Text 입력과 연관된 설명을 제공한다.
 - Media 추가·제거·재시도, 업로드 상태, Alt Text와 Sensitive Media control은 기존 일반 Composer와 같은

@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import { XIcon } from 'lucide-react-native';
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -154,6 +155,7 @@ function ReplyComposerSurfaceContents({
   const composerName = quoteMode ? '인용 게시글' : '답글';
   const [submitting, setSubmitting] = useState(false);
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
+  const [nativeClosing, setNativeClosing] = useState(false);
   const discardConfirmRef = useRef<NativeView>(null);
   const editorRef = useRef<TextInput>(null);
   const nativeBackHandlerRef = useRef<(() => void) | null>(null);
@@ -178,6 +180,11 @@ function ReplyComposerSurfaceContents({
       setDiscardConfirmOpen(false);
       closeAfterDiscardRef.current = undefined;
       restoreTriggerFocusRef.current = onClosed === undefined;
+      if (Platform.OS === 'ios') {
+        closeAfterDiscardRef.current = onClosed;
+        setNativeClosing(true);
+        return;
+      }
       onRequestClose(onClosed !== undefined);
       onClosed?.();
     },
@@ -194,6 +201,17 @@ function ReplyComposerSurfaceContents({
     },
     [discardConfirmOpen, submitting],
   );
+  const continueEditing = useCallback(() => {
+    closeAfterDiscardRef.current = undefined;
+    setDiscardConfirmOpen(false);
+    requestAnimationFrame(() => {
+      const editor = editorRef.current;
+      editor?.focus();
+      if (editor && Platform.OS !== 'web') {
+        AccessibilityInfo.sendAccessibilityEvent(editor as never, 'focus');
+      }
+    });
+  }, []);
   const requestNavigation = useCallback(
     (action: () => void) => {
       if (submitting) {
@@ -225,21 +243,35 @@ function ReplyComposerSurfaceContents({
     if (submitting) {
       return;
     }
+    if (discardConfirmOpen) {
+      continueEditing();
+      return;
+    }
     if (nativeBackHandlerRef.current) {
       nativeBackHandlerRef.current();
       return;
     }
     requestClose();
-  }, [requestClose, submitting]);
+  }, [continueEditing, discardConfirmOpen, requestClose, submitting]);
   const registerNativeBackHandler = useCallback((handler: (() => void) | null) => {
     nativeBackHandlerRef.current = handler;
   }, []);
-
-  const continueEditing = useCallback(() => {
+  const handleNativeDismiss = useCallback(() => {
+    if (!nativeClosing) {
+      return;
+    }
+    const onClosed = closeAfterDiscardRef.current;
     closeAfterDiscardRef.current = undefined;
-    setDiscardConfirmOpen(false);
-    requestAnimationFrame(() => editorRef.current?.focus());
-  }, []);
+    setNativeClosing(false);
+    const focusTarget = restoreTriggerFocusRef.current ? triggerRef?.current : null;
+    onRequestClose(onClosed !== undefined);
+    onClosed?.();
+    if (focusTarget) {
+      requestAnimationFrame(() =>
+        AccessibilityInfo.sendAccessibilityEvent(focusTarget as never, 'focus'),
+      );
+    }
+  }, [nativeClosing, onRequestClose, triggerRef]);
 
   const handleOverlayRequestClose = useCallback(
     (reason: OverlayCloseReason) => {
@@ -294,6 +326,7 @@ function ReplyComposerSurfaceContents({
       <View
         accessibilityLabel={`${composerName} 작성을 취소할까요?`}
         accessibilityViewIsModal
+        onAccessibilityEscape={continueEditing}
         ref={discardConfirmRef}
         role="alertdialog"
         style={[
@@ -330,6 +363,7 @@ function ReplyComposerSurfaceContents({
       accessibilityLabel={`${composerName} 쓰기`}
       animationType={Platform.OS === 'web' ? 'none' : 'fade'}
       navigationBarTranslucent
+      onDismiss={Platform.OS === 'ios' ? handleNativeDismiss : undefined}
       onRequestClose={() => {
         if (Platform.OS !== 'web') {
           requestNativeBack();
@@ -339,7 +373,7 @@ function ReplyComposerSurfaceContents({
       role="dialog"
       statusBarTranslucent
       transparent
-      visible
+      visible={!nativeClosing}
     >
       <ToastProvider>
         <OverlayBackdrop
@@ -356,6 +390,7 @@ function ReplyComposerSurfaceContents({
           <Pressable
             accessible={false}
             accessibilityViewIsModal
+            onAccessibilityEscape={requestNativeBack}
             onPress={(event) => event.stopPropagation()}
             ref={dialogRef}
             style={[
