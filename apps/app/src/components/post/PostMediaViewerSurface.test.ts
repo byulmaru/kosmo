@@ -255,9 +255,13 @@ mock.module(require.resolve('./PostMediaViewerIOSDoubleTap.tsx'), {
 } as unknown as Parameters<typeof mock.module>[1]);
 
 before(async () => {
+  const androidZoomModule = await import('./PostMediaViewerAndroidZoom.android');
+  // Node does not resolve Metro's .android suffix; execute the actual platform module.
+  mock.module(require.resolve('./PostMediaViewerAndroidZoom.tsx'), {
+    exports: androidZoomModule,
+  } as unknown as Parameters<typeof mock.module>[1]);
   PostMediaViewerSurface = (await import('./PostMediaViewerSurface'))
     .PostMediaViewerSurface as ComponentType<SurfaceProps>;
-  const androidZoomModule = await import('./PostMediaViewerAndroidZoom.android');
   AndroidZoomImage = androidZoomModule.AndroidZoomImage as ComponentType<Record<string, unknown>>;
   AndroidPagerGesture = androidZoomModule.AndroidPagerGesture as ComponentType<
     Record<string, unknown>
@@ -513,6 +517,83 @@ describe('PostMediaViewerSurface', () => {
 
     await render({ viewState: 'error' });
     assert.equal(queryByTestId('post-media-viewer-native-pager'), null);
+  });
+
+  it('Android Surface connects image zoom and accessibility to paging and resets on selection', async () => {
+    mockPlatform.OS = 'android';
+    await render({ currentIndex: 0 });
+    await act(async () =>
+      byTestId('post-media-viewer-media-viewport').props.onLayout({
+        nativeEvent: { layout: { width: 390, height: 600 } },
+      }),
+    );
+    const gesture = () =>
+      byTestId('post-media-viewer-android-zoom').find(
+        (node) => String(node.type) === 'GestureDetector',
+      ).props.gesture as FakeGesture;
+    assert.equal(gesture().gestures?.[0]?.enabledValue, false);
+    await act(async () => image().props.onLoad());
+    const animated = byTestId('post-media-viewer-android-zoom').find(
+      (node) => String(node.type) === 'AnimatedView',
+    );
+    await act(async () =>
+      animated.props.onLayout({
+        nativeEvent: { layout: { width: 390, height: 219.375 } },
+      }),
+    );
+    const pagerGesture = renderer!.root.find(
+      (node) => String(node.type) === 'GestureDetector' && node.props.gesture.name === 'native',
+    ).props.gesture;
+    assert.equal(gesture().gestures?.[0]?.externalGestures?.[0], pagerGesture);
+    const tap = () => gesture().gestures!.find((item) => item.name === 'tap')!;
+    for (const scale of [2, 4, 1]) {
+      await act(async () => tap().onEndCallback!({ x: 195, y: 300 }, true));
+      assert.equal(byTestId('post-media-viewer-native-pager').props.scrollEnabled, scale === 1);
+      assert.equal(image().parent!.props.accessibilityValue.now, scale);
+    }
+    await act(async () =>
+      image().parent!.props.onAccessibilityAction({
+        nativeEvent: { actionName: 'increment' },
+      }),
+    );
+    assert.equal(byTestId('post-media-viewer-native-pager').props.scrollEnabled, false);
+    assert.equal(image().parent!.props.accessibilityValue.now, 2);
+    const previousImage = image();
+    await render({ currentIndex: 1 });
+    assert.notEqual(image(), previousImage);
+    assert.equal(byTestId('post-media-viewer-native-pager').props.scrollEnabled, true);
+    assert.equal(image().parent!.props.accessibilityValue, undefined);
+    await act(async () => image().props.onLoad());
+    assert.equal(image().parent!.props.accessibilityValue.now, 1);
+    const preview = byTestId('post-media-viewer-preview-image');
+    assert.equal(preview.parent!.props.accessibilityActions, undefined);
+    await act(async () =>
+      image().parent!.props.onAccessibilityAction({
+        nativeEvent: { actionName: 'increment' },
+      }),
+    );
+    await act(async () => image().props.onError());
+    assert.equal(byTestId('post-media-viewer-native-pager').props.scrollEnabled, true);
+    assert.equal(image().parent!.props.accessibilityActions, undefined);
+  });
+
+  it('Web keeps the plain image after viewport measurement', async () => {
+    await render();
+    await act(async () =>
+      byTestId('post-media-viewer-media-viewport').props.onLayout({
+        nativeEvent: { layout: { width: 390, height: 600 } },
+      }),
+    );
+    await act(async () => image().props.onLoad());
+    assert.equal(image().props.accessible, true);
+    assert.equal(image().parent!.props.accessibilityActions, undefined);
+    assert.equal(queryByTestId('post-media-viewer-ios-zoom'), null);
+    assert.equal(queryByTestId('post-media-viewer-android-zoom'), null);
+    assert.equal(queryByTestId('post-media-viewer-native-pager'), null);
+    assert.equal(
+      renderer!.root.findAll((node) => String(node.type) === 'GestureDetector').length,
+      0,
+    );
   });
 
   it('Android image accessibility actions share zoom bounds and area direction', async () => {

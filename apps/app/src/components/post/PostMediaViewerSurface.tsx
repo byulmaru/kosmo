@@ -1,9 +1,8 @@
 import { ChevronLeftIcon, ChevronRightIcon, XIcon } from 'lucide-react-native';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
-  Image,
   Platform,
   Pressable,
   ScrollView,
@@ -18,23 +17,16 @@ import { Toast } from '@/components/ui/Toast';
 import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, radius, space, textStyles } from '@/theme/tokens';
 import { useToastMotion } from '@/theme/useOverlayMotion';
-import { AndroidPagerGesture, AndroidZoomImage } from './PostMediaViewerAndroidZoom';
-import { IOSDoubleTap } from './PostMediaViewerIOSDoubleTap';
-import { getZoomAccessibilityProps } from './PostMediaViewerZoomAccessibility';
+import { ViewerImage, ZoomableImage, ZoomableImagePagerGesture } from './ZoomableImage';
 import type { ReactElement } from 'react';
 import type {
-  ImageLoadEvent,
   LayoutChangeEvent,
   PressableStateCallbackType,
   StyleProp,
   ViewStyle,
 } from 'react-native';
 import type { PostMediaItem } from '@/components/post/PostMediaImage';
-import type {
-  ZoomAccessibilityActionName,
-  ZoomAccessibilityProps,
-  ZoomAccessibilityState,
-} from './PostMediaViewerZoomAccessibility';
+import type { ImageSize } from './ZoomableImage';
 
 export type PostMediaViewerPresentation = 'compact' | 'wide';
 
@@ -235,55 +227,29 @@ export function PostMediaViewerSurface({
                     currentIndex={currentIndex}
                     media={media}
                     onIndexChange={onIndexChange}
-                    onZoomedChange={
-                      Platform.OS === 'ios' || Platform.OS === 'android' ? setZoomed : undefined
-                    }
+                    onZoomedChange={setZoomed}
                     reducedMotion={reducedMotion}
                     viewportSize={mediaViewportSize}
-                    zoomed={Platform.OS === 'ios' || Platform.OS === 'android' ? zoomed : false}
+                    zoomed={zoomed}
                   >
-                    {Platform.OS === 'ios' ? (
-                      <IOSNativeZoomImage
-                        key={zoomKey}
-                        accessibilityLabel={imageName}
-                        onStatus={settle}
-                        onZoomedChange={setZoomed}
-                        reducedMotion={reducedMotion}
-                        viewportSize={mediaViewportSize}
-                        status={request.status}
-                        url={currentMedia.url}
-                      />
-                    ) : Platform.OS === 'android' ? (
-                      <AndroidZoomImage
-                        key={zoomKey}
-                        onZoomedChange={setZoomed}
-                        status={request.status}
-                        viewportSize={mediaViewportSize}
-                      >
-                        <ViewerImage
-                          accessibilityLabel={imageName}
-                          onStatus={settle}
-                          viewportSize={mediaViewportSize}
-                          status={request.status}
-                          url={currentMedia.url}
-                        />
-                      </AndroidZoomImage>
-                    ) : (
-                      <ViewerImage
-                        key={zoomKey}
-                        accessibilityLabel={imageName}
-                        onStatus={settle}
-                        viewportSize={mediaViewportSize}
-                        status={request.status}
-                        url={currentMedia.url}
-                      />
-                    )}
+                    <ZoomableImage
+                      key={zoomKey}
+                      accessibilityLabel={imageName}
+                      onStatus={settle}
+                      onZoomedChange={setZoomed}
+                      reducedMotion={reducedMotion}
+                      viewportSize={mediaViewportSize}
+                      status={request.status}
+                      url={currentMedia.url}
+                    />
                   </NativeMediaPager>
                 ) : (
-                  <ViewerImage
+                  <ZoomableImage
                     key={zoomKey}
                     accessibilityLabel={imageName}
                     onStatus={settle}
+                    onZoomedChange={setZoomed}
+                    reducedMotion={reducedMotion}
                     viewportSize={mediaViewportSize}
                     status={request.status}
                     url={currentMedia.url}
@@ -538,334 +504,7 @@ function NativeMediaPager({
     </ScrollView>
   );
 
-  return Platform.OS === 'android' ? <AndroidPagerGesture>{pager}</AndroidPagerGesture> : pager;
-}
-
-function IOSNativeZoomImage({
-  accessibilityLabel,
-  onStatus,
-  onZoomedChange,
-  reducedMotion,
-  status,
-  url,
-  viewportSize,
-}: Readonly<{
-  accessibilityLabel: string;
-  onStatus: (status: ImageRequest['status']) => void;
-  onZoomedChange: (zoomed: boolean) => void;
-  reducedMotion: boolean;
-  status: ImageRequest['status'];
-  url: string;
-  viewportSize: ImageSize;
-}>) {
-  const scroll = useRef<ScrollView>(null);
-  const [zoomState, setZoomState] = useState({ offsetX: 0, offsetY: 0, scale: 1 });
-  const resetZoom = useCallback(
-    (animated: boolean) => {
-      scroll.current?.scrollResponderZoomTo(
-        {
-          animated,
-          height: viewportSize.height,
-          width: viewportSize.width,
-          x: 0,
-          y: 0,
-        },
-        animated,
-      );
-      if (!animated) {
-        setZoomState({ offsetX: 0, offsetY: 0, scale: 1 });
-        onZoomedChange(false);
-      }
-    },
-    [onZoomedChange, viewportSize],
-  );
-  const handleScroll = useCallback(
-    (event: {
-      nativeEvent: {
-        contentOffset?: { x: number; y: number };
-        zoomScale?: number;
-      };
-    }) => {
-      const scale = event.nativeEvent.zoomScale ?? 1;
-      const contentOffset = event.nativeEvent.contentOffset ?? { x: 0, y: 0 };
-      setZoomState({ offsetX: contentOffset.x, offsetY: contentOffset.y, scale });
-      onZoomedChange(status === 'ready' && scale > 1);
-    },
-    [onZoomedChange, status],
-  );
-  const handleStatus = useCallback(
-    (nextStatus: ImageRequest['status']) => {
-      if (nextStatus === 'error') {
-        resetZoom(false);
-      }
-      onStatus(nextStatus);
-    },
-    [onStatus, resetZoom],
-  );
-  const handleDoubleTap = useCallback(
-    (point: { x: number; y: number }) => {
-      const currentScale = zoomState.scale;
-      const nextScale = currentScale < 2 ? 2 : currentScale < 4 ? 4 : 1;
-      if (nextScale === 1) {
-        resetZoom(!reducedMotion);
-        return;
-      }
-      const width = viewportSize.width / nextScale;
-      const height = viewportSize.height / nextScale;
-      const contentPoint = {
-        x: (zoomState.offsetX + point.x) / currentScale,
-        y: (zoomState.offsetY + point.y) / currentScale,
-      };
-      const x = Math.max(0, Math.min(viewportSize.width - width, contentPoint.x - width / 2));
-      const y = Math.max(0, Math.min(viewportSize.height - height, contentPoint.y - height / 2));
-      scroll.current?.scrollResponderZoomTo(
-        {
-          animated: !reducedMotion,
-          x,
-          y,
-          width,
-          height,
-        },
-        !reducedMotion,
-      );
-      onZoomedChange(true);
-    },
-    [onZoomedChange, reducedMotion, resetZoom, viewportSize, zoomState],
-  );
-  const handleAccessibilityAction = useCallback(
-    (event: { nativeEvent: { actionName: string } }) => {
-      if (status !== 'ready') {
-        return;
-      }
-      const actionName = event.nativeEvent.actionName as ZoomAccessibilityActionName;
-      const currentScale = zoomState.scale;
-      if (actionName === 'reset') {
-        if (currentScale > 1) {
-          resetZoom(!reducedMotion);
-        }
-        return;
-      }
-      if (actionName === 'increment' || actionName === 'decrement') {
-        const nextScale =
-          actionName === 'increment'
-            ? currentScale < 2
-              ? 2
-              : currentScale < 4
-                ? 4
-                : 4
-            : currentScale > 2
-              ? 2
-              : currentScale > 1
-                ? 1
-                : 1;
-        if (nextScale === currentScale) {
-          return;
-        }
-        if (nextScale === 1) {
-          resetZoom(!reducedMotion);
-          return;
-        }
-        const width = viewportSize.width / nextScale;
-        const height = viewportSize.height / nextScale;
-        const x = (viewportSize.width - width) / 2;
-        const y = (viewportSize.height - height) / 2;
-        scroll.current?.scrollResponderZoomTo(
-          { animated: !reducedMotion, height, width, x, y },
-          !reducedMotion,
-        );
-        onZoomedChange(true);
-        return;
-      }
-      if (currentScale <= 1) {
-        return;
-      }
-      const maxOffsetX = viewportSize.width * (currentScale - 1);
-      const maxOffsetY = viewportSize.height * (currentScale - 1);
-      const stepX = viewportSize.width / 2;
-      const stepY = viewportSize.height / 2;
-      const offsetX =
-        actionName === 'panLeft'
-          ? Math.max(0, zoomState.offsetX - stepX)
-          : actionName === 'panRight'
-            ? Math.min(maxOffsetX, zoomState.offsetX + stepX)
-            : zoomState.offsetX;
-      const offsetY =
-        actionName === 'panUp'
-          ? Math.max(0, zoomState.offsetY - stepY)
-          : actionName === 'panDown'
-            ? Math.min(maxOffsetY, zoomState.offsetY + stepY)
-            : zoomState.offsetY;
-      if (offsetX === zoomState.offsetX && offsetY === zoomState.offsetY) {
-        return;
-      }
-      scroll.current?.scrollTo({ animated: !reducedMotion, x: offsetX, y: offsetY });
-    },
-    [onZoomedChange, reducedMotion, resetZoom, status, viewportSize, zoomState],
-  );
-  const zoomAccessibilityState: ZoomAccessibilityState = {
-    canPanDown: zoomState.offsetY < viewportSize.height * (zoomState.scale - 1) - 0.001,
-    canPanLeft: zoomState.offsetX > 0.001,
-    canPanRight: zoomState.offsetX < viewportSize.width * (zoomState.scale - 1) - 0.001,
-    canPanUp: zoomState.offsetY > 0.001,
-    scale: zoomState.scale,
-  };
-  const zoomAccessibility: ZoomAccessibilityProps | undefined = useMemo(
-    () =>
-      status === 'ready'
-        ? getZoomAccessibilityProps(zoomAccessibilityState, handleAccessibilityAction)
-        : undefined,
-    [handleAccessibilityAction, status, zoomAccessibilityState],
-  );
-  return (
-    <IOSDoubleTap enabled={status === 'ready'} onDoubleTap={handleDoubleTap}>
-      <ScrollView
-        bounces={false}
-        bouncesZoom={false}
-        centerContent
-        contentContainerStyle={{
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: viewportSize.height,
-          minWidth: viewportSize.width,
-        }}
-        maximumZoomScale={4}
-        minimumZoomScale={1}
-        onScroll={handleScroll}
-        pinchGestureEnabled={status === 'ready'}
-        ref={scroll}
-        scrollEventThrottle={16}
-        showsHorizontalScrollIndicator={false}
-        showsVerticalScrollIndicator={false}
-        style={viewportSize}
-        testID="post-media-viewer-ios-zoom"
-        zoomScale={1}
-      >
-        <ViewerImage
-          accessibilityLabel={accessibilityLabel}
-          onStatus={handleStatus}
-          status={status}
-          url={url}
-          viewportSize={viewportSize}
-          zoomAccessibility={zoomAccessibility}
-        />
-      </ScrollView>
-    </IOSDoubleTap>
-  );
-}
-
-function ViewerImage({
-  accessibilityLabel,
-  testID = 'post-media-viewer-image',
-  onStatus,
-  status,
-  url,
-  viewportSize,
-  zoomAccessibility,
-}: Readonly<{
-  accessibilityLabel: string;
-  testID?: string;
-  onStatus: (status: ImageRequest['status']) => void;
-  status: ImageRequest['status'];
-  url: string;
-  viewportSize: ImageSize | null;
-  zoomAccessibility?: ZoomAccessibilityProps;
-}>) {
-  const active = useRef(true);
-  const [intrinsicSize, setIntrinsicSize] = useState<ImageSize | null>(null);
-  useEffect(() => {
-    active.current = true;
-    return () => {
-      active.current = false;
-    };
-  }, []);
-  const settle = useCallback(
-    (next: ImageRequest['status']) => {
-      if (active.current) {
-        onStatus(next);
-      }
-    },
-    [onStatus],
-  );
-  const updateIntrinsicSize = useCallback((width: number, height: number) => {
-    if (active.current && width > 0 && height > 0) {
-      setIntrinsicSize({ height, width });
-    }
-  }, []);
-  const handleError = useCallback(() => settle('error'), [settle]);
-  const handleLoad = useCallback(
-    (event?: ImageLoadEvent) => {
-      const source = event?.nativeEvent?.source;
-      const width = source?.width ?? 0;
-      const height = source?.height ?? 0;
-      if (width > 0 && height > 0) {
-        updateIntrinsicSize(width, height);
-      } else {
-        Image.getSize(
-          url,
-          (naturalWidth, naturalHeight) => updateIntrinsicSize(naturalWidth, naturalHeight),
-          () => undefined,
-        );
-      }
-      settle('ready');
-    },
-    [settle, updateIntrinsicSize, url],
-  );
-  const handleLoadStart = useCallback(() => settle('loading'), [settle]);
-  const imageSize = fitImageSize(viewportSize, intrinsicSize);
-  const frameSize = imageSize ?? viewportSize;
-  const hasZoomAccessibility = zoomAccessibility != null;
-  return (
-    <View
-      {...(hasZoomAccessibility ? zoomAccessibility : {})}
-      accessible={hasZoomAccessibility ? true : undefined}
-      accessibilityLabel={hasZoomAccessibility ? accessibilityLabel : undefined}
-      accessibilityRole={hasZoomAccessibility ? 'image' : undefined}
-      style={frameSize ? [styles.imageFrame, frameSize] : styles.imageFrameFallback}
-    >
-      <Image
-        accessible={!hasZoomAccessibility}
-        accessibilityElementsHidden={hasZoomAccessibility ? true : undefined}
-        accessibilityLabel={hasZoomAccessibility ? undefined : accessibilityLabel}
-        accessibilityRole={hasZoomAccessibility ? undefined : 'image'}
-        accessibilityState={{ busy: status === 'loading' }}
-        importantForAccessibility={hasZoomAccessibility ? 'no' : undefined}
-        onError={handleError}
-        onLoad={handleLoad}
-        onLoadStart={handleLoadStart}
-        resizeMode="contain"
-        source={status === 'error' ? undefined : { uri: url }}
-        style={styles.image}
-        testID={testID}
-      />
-    </View>
-  );
-}
-
-type ImageSize = Readonly<{ height: number; width: number }>;
-
-function fitImageSize(
-  viewportSize: ImageSize | null,
-  intrinsicSize: ImageSize | null,
-): ImageSize | null {
-  if (
-    !viewportSize ||
-    !intrinsicSize ||
-    viewportSize.height <= 0 ||
-    viewportSize.width <= 0 ||
-    intrinsicSize.height <= 0 ||
-    intrinsicSize.width <= 0
-  ) {
-    return null;
-  }
-
-  const scale = Math.min(
-    viewportSize.width / intrinsicSize.width,
-    viewportSize.height / intrinsicSize.height,
-  );
-  return {
-    height: intrinsicSize.height * scale,
-    width: intrinsicSize.width * scale,
-  };
+  return <ZoomableImagePagerGesture>{pager}</ZoomableImagePagerGesture>;
 }
 
 function ViewerErrorToast({
@@ -1037,17 +676,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minHeight: 0,
     minWidth: 0,
-  },
-  imageFrame: { borderRadius: radius[8], height: '100%', overflow: 'hidden', width: '100%' },
-  imageFrameFallback: { height: '100%', width: '100%' },
-  image: {
-    bottom: 0,
-    height: '100%',
-    left: 0,
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    width: '100%',
   },
   imagePrivacyBoundary: {},
   closeButton: { position: 'absolute', top: space[16], zIndex: 2 },
