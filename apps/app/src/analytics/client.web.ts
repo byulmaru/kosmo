@@ -1,7 +1,7 @@
 import posthogClient from 'posthog-js';
 import { getPublicConfig } from '@/config/public';
 import type { PostHog } from 'posthog-js';
-import type { AnalyticsEventArgs } from './events';
+import type { AnalyticsEventArgs, ReactionAnalyticsEventArgs } from './events';
 
 const POSTHOG_USER_ID = '$user_id';
 
@@ -46,6 +46,30 @@ function initializeAnalytics(): PostHog | null {
 export function trackAnalytics(...args: AnalyticsEventArgs): void {
   try {
     initializeAnalytics()?.capture(args[0], args[1] as Parameters<PostHog['capture']>[1]);
+  } catch {
+    // Analytics is best-effort and must not affect the product flow.
+  }
+}
+
+export function trackAnalyticsForAccount(
+  accountId: string,
+  ...args: ReactionAnalyticsEventArgs
+): void {
+  if (!accountId) {
+    return;
+  }
+
+  try {
+    const analyticsClient = initializeAnalytics();
+    if (
+      !analyticsClient ||
+      getPostHogAccountId(analyticsClient) !== accountId ||
+      analyticsClient.get_distinct_id() !== accountId
+    ) {
+      return;
+    }
+
+    analyticsClient.capture(args[0], args[1] as Parameters<PostHog['capture']>[1]);
   } catch {
     // Analytics is best-effort and must not affect the product flow.
   }

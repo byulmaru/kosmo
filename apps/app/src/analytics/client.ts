@@ -1,6 +1,14 @@
-import type { AnalyticsEventArgs } from './events';
+import type { AnalyticsEventArgs, ReactionAnalyticsEventArgs } from './events';
 
 export function trackAnalytics(...args: AnalyticsEventArgs): void {
+  void args;
+}
+
+export function trackAnalyticsForAccount(
+  accountId: string,
+  ...args: ReactionAnalyticsEventArgs
+): void {
+  void accountId;
   void args;
 }
 
