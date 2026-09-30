@@ -28,8 +28,8 @@ export function SettingsRouteLayout({ children }: { children?: ReactNode }) {
   const layout = getShellLayout(web, width);
   const root = pathname === '/settings' || pathname === '/settings/';
   const selected =
-    root || pathname === '/settings/default-post-visibility'
-      ? 'default-post-visibility'
+    root || pathname === '/settings/profile' || pathname === '/settings/default-post-visibility'
+      ? 'profile'
       : pathname === '/settings/info' || pathname === '/settings/developer'
         ? 'info'
         : pathname === '/settings/mute-and-block' ||

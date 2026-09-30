@@ -172,8 +172,8 @@ mockModule('./SidebarNavigation', {
 });
 mockModule('./shellLayout', {
   getWebMobileShellHeader: (_web: boolean, _width: number, route: string) =>
-    route === '/settings/default-post-visibility'
-      ? { leading: 'back', title: '게시물 기본 공개 범위' }
+    route === '/settings/profile' || route === '/settings/default-post-visibility'
+      ? { leading: 'back', title: '프로필 설정' }
       : null,
   getShellRoutePresentation: () => ({
     layout,
@@ -229,7 +229,7 @@ describe('UniversalShell screen fallback focus target', () => {
   it('mobile Web Settings shell back은 명시한 parent route로 dismiss한다', async () => {
     platform.OS = 'web';
     layout = 'mobile';
-    pathname = '/settings/default-post-visibility';
+    pathname = '/settings/profile';
     await renderShell();
 
     const back = renderer?.root.findByProps({ accessibilityLabel: '뒤로 가기' });

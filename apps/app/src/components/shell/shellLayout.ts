@@ -35,7 +35,7 @@ export type WebMobileShellHeader = Readonly<{
   leading: 'back' | 'menu';
   title:
     | '게시글'
-    | '게시물 기본 공개 범위'
+    | '프로필 설정'
     | '뮤트 및 차단'
     | '뮤트한 프로필'
     | '차단한 프로필'
@@ -86,8 +86,8 @@ export function getWebMobileShellHeader(
   if (pathname === '/settings') {
     return { leading: 'menu', title: '설정' };
   }
-  if (pathname === '/settings/default-post-visibility') {
-    return { leading: 'back', title: '게시물 기본 공개 범위' };
+  if (pathname === '/settings/profile' || pathname === '/settings/default-post-visibility') {
+    return { leading: 'back', title: '프로필 설정' };
   }
   if (pathname === '/settings/mute-and-block') {
     return { leading: 'back', title: '뮤트 및 차단' };

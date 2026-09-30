@@ -31,6 +31,7 @@ let muteHeadingFocusCalls = 0;
 
 mock.module('expo-router', {
   exports: {
+    Redirect: ({ href }: { href: string }) => createElement('Redirect', { href }),
     Slot: () => createElement(SlotRoute),
     Stack: () => createElement('Stack', null, createElement(SlotRoute)),
     usePathname: () => pathname,
@@ -158,6 +159,7 @@ mock.module(new URL('../../session/SessionProvider.tsx', import.meta.url), {
 } as unknown as Parameters<typeof mock.module>[1]);
 
 let SettingsDefaultPostVisibilityRoute: ComponentType;
+let SettingsProfileRoute: ComponentType;
 let SettingsMuteAndBlockRoute: ComponentType;
 let SettingsMutedProfilesRoute: ComponentType;
 let SettingsBlockedProfilesRoute: ComponentType;
@@ -182,6 +184,8 @@ before(async () => {
     await import('../../app/(tabs)/(protected)/settings/developer'));
   ({ default: SettingsDefaultPostVisibilityRoute } =
     await import('../../app/(tabs)/(protected)/settings/default-post-visibility'));
+  ({ default: SettingsProfileRoute } =
+    await import('../../app/(tabs)/(protected)/settings/profile'));
   ({ default: SettingsMuteAndBlockRoute } =
     await import('../../app/(tabs)/(protected)/settings/mute-and-block'));
   ({ default: SettingsMutedProfilesRoute } =
@@ -244,7 +248,7 @@ describe('Settings routes', () => {
     assert.equal(byTestId('settings-detail-pane').props.style.flex, 1);
     assert.deepEqual(
       rendered('PageHeader').map((node) => node.props.title),
-      ['설정', '게시물 기본 공개 범위'],
+      ['설정', '프로필 설정'],
     );
     const detailContainer = byTestId('settings-detail-pane')
       .findAll(
@@ -259,24 +263,35 @@ describe('Settings routes', () => {
     assert.ok(detailContainer);
     assert.equal(flattenStyle(detailContainer.props.style).minWidth, 0);
     assert.equal(flattenStyle(detailContainer.props.style).width, '100%');
-    assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'default-post-visibility');
+    assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'profile');
     assert.equal(rendered('SettingsProfileDetail').length, 1);
   });
 
   it('full Web detail은 공통 master와 명시적인 parent back을 표시한다', async () => {
-    await renderRoute('/settings/default-post-visibility', SettingsDefaultPostVisibilityRoute);
+    await renderRoute('/settings/profile', SettingsProfileRoute);
 
     assert.ok(byTestId('settings-workspace'));
     assert.deepEqual(
       rendered('PageHeader').map((node) => node.props.title),
-      ['설정', '게시물 기본 공개 범위'],
+      ['설정', '프로필 설정'],
     );
-    assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'default-post-visibility');
+    assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'profile');
     assert.equal(
       rendered('PageHeader')[1].props.leading.props.accessibilityLabel,
       '설정으로 돌아가기',
     );
     assert.equal(rendered('SettingsProfileDetail').length, 1);
+  });
+
+  it('legacy default-post-visibility route redirects to the canonical profile settings route', async () => {
+    pathname = '/settings/default-post-visibility';
+    await act(async () => {
+      renderer = create(createElement(SettingsDefaultPostVisibilityRoute));
+    });
+
+    const redirect = rendered('Redirect')[0];
+    assert.ok(redirect);
+    assert.equal(redirect.props.href, '/settings/profile');
   });
 
   it('full Web mute category는 master 진입점을 선택하고 상세에 하위 목록을 표시한다', async () => {
@@ -416,7 +431,7 @@ describe('Settings routes', () => {
     assert.equal(rendered('SettingsNavigationList').length, 1);
     assert.equal(rendered('SettingsNavigationList')[0].props.selected, undefined);
 
-    await rerenderRoute('/settings/default-post-visibility', SettingsDefaultPostVisibilityRoute);
+    await rerenderRoute('/settings/profile', SettingsProfileRoute);
     assert.equal(rendered('PageHeader').length, 0);
     assert.equal(rendered('SettingsNavigationList').length, 0);
     assert.equal(rendered('SettingsProfileDetail').length, 1);
@@ -426,7 +441,7 @@ describe('Settings routes', () => {
   it('Native detail은 header부터 content까지 하나의 vertical ScrollView가 소유한다', async () => {
     platform = 'android';
     width = 320;
-    await renderRoute('/settings/default-post-visibility', SettingsDefaultPostVisibilityRoute);
+    await renderRoute('/settings/profile', SettingsProfileRoute);
 
     const scrollView = rendered('ScrollView')[0];
     assert.ok(scrollView);
@@ -450,12 +465,12 @@ describe('Settings routes', () => {
   it('iOS detail은 back heading과 Profile content를 하나의 ScrollView에 표시한다', async () => {
     platform = 'ios';
     width = 390;
-    await renderRoute('/settings/default-post-visibility', SettingsDefaultPostVisibilityRoute);
+    await renderRoute('/settings/profile', SettingsProfileRoute);
 
     const scrollView = rendered('ScrollView')[0];
     assert.ok(scrollView);
     const header = scrollView.findAll((node) => (node.type as unknown) === 'PageHeader')[0];
-    assert.equal(header.props.title, '게시물 기본 공개 범위');
+    assert.equal(header.props.title, '프로필 설정');
     assert.equal(header.props.leading.props.accessibilityLabel, '설정으로 돌아가기');
     assert.equal(
       scrollView.findAll((node) => (node.type as unknown) === 'SettingsProfileDetail').length,
@@ -468,10 +483,10 @@ describe('Settings routes', () => {
 
   it('compact Web detail은 route-owned back header로 Settings root를 연다', async () => {
     width = 768;
-    await renderRoute('/settings/default-post-visibility', SettingsDefaultPostVisibilityRoute);
+    await renderRoute('/settings/profile', SettingsProfileRoute);
 
     const header = rendered('PageHeader')[0];
-    assert.equal(header.props.title, '게시물 기본 공개 범위');
+    assert.equal(header.props.title, '프로필 설정');
     const back = header.props.leading;
     assert.equal(back.props.accessibilityLabel, '설정으로 돌아가기');
     await act(async () => back.props.onPress());
@@ -480,7 +495,7 @@ describe('Settings routes', () => {
 
   it('Android detail back action은 44dp layout과 hit slop으로 48dp target을 제공한다', async () => {
     platform = 'android';
-    await renderRoute('/settings/default-post-visibility', SettingsDefaultPostVisibilityRoute);
+    await renderRoute('/settings/profile', SettingsProfileRoute);
 
     const back = rendered('Pressable').find(
       (node) => node.props.accessibilityLabel === '설정으로 돌아가기',

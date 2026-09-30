@@ -16,7 +16,6 @@ type MutationConfig = {
 
 type ScreenProps = Record<string, unknown> & {
   initialValue: Record<string, unknown> & {
-    followPolicy: 'APPROVAL_REQUIRED' | 'OPEN';
     tags: ReadonlyArray<string>;
   };
   onAvatarEdit: () => Promise<void>;
@@ -77,7 +76,6 @@ type EditableQueryProfile = {
   avatar: { id: string; url: string | null } | null;
   bio: string | null;
   displayName: string;
-  followPolicy: 'APPROVAL_REQUIRED' | 'OPEN';
   header: { id: string; url: string | null } | null;
   id: string;
   instance: { kind: 'ACTIVITYPUB' | 'LOCAL' };
@@ -269,7 +267,6 @@ const editableQueryData = () => ({
       avatar: { id: 'media-avatar-current', url: 'https://media.example/avatar-current' },
       bio: '기존 소개',
       displayName: '기존 이름',
-      followPolicy: 'OPEN' as const,
       header: { id: 'media-header-current', url: 'https://media.example/header-current' },
       id: 'profile-owner',
       instance: { kind: 'LOCAL' as const },
@@ -401,7 +398,6 @@ describe('ProfileEditRoute', () => {
       avatar: { kind: 'current', previewUri: 'https://media.example/avatar-current' },
       bio: '기존 소개',
       displayName: '기존 이름',
-      followPolicy: 'OPEN',
       header: { kind: 'current', previewUri: 'https://media.example/header-current' },
       tags: ['Fediverse', '개발'],
     });
@@ -559,7 +555,6 @@ describe('ProfileEditRoute', () => {
       ...requireScreenProps().value,
       bio: ' 저장할 소개 ',
       displayName: '새 이름',
-      followPolicy: 'APPROVAL_REQUIRED',
       tags: ['Fediverse', '새태그'],
     };
     await act(async () => requireScreenProps().onChange(changed));
@@ -597,7 +592,6 @@ describe('ProfileEditRoute', () => {
         avatarId: 'media-issued-3',
         bio: '저장할 소개',
         displayName: '새 이름',
-        followPolicy: 'APPROVAL_REQUIRED',
         headerId: 'media-issued-1',
         tags: ['Fediverse', '새태그'],
       },
@@ -924,7 +918,6 @@ describe('ProfileEditRoute', () => {
       requireScreenProps().onChange({
         ...requireScreenProps().value,
         bio: '저장 no-op',
-        followPolicy: 'APPROVAL_REQUIRED',
       }),
     );
     mutationHandlers.set('ProfileEditRouteUpdateProfileMutation', (config) =>
@@ -953,8 +946,6 @@ describe('ProfileEditRoute', () => {
     const updateCalls = mutationCalls.get('ProfileEditRouteUpdateProfileMutation');
     assert.equal(requireScreenProps().submitState.kind, 'idle');
     assert.deepEqual(requireScreenProps().initialValue, requireScreenProps().value);
-    assert.equal(requireScreenProps().value.followPolicy, 'APPROVAL_REQUIRED');
-    assert.equal(requireScreenProps().initialValue.followPolicy, 'APPROVAL_REQUIRED');
     assert.equal(updateCalls?.length, 2);
     assert.deepEqual(
       updateCalls?.map((call) => call.variables.input),
@@ -963,7 +954,6 @@ describe('ProfileEditRoute', () => {
           avatarId: 'media-issued-2',
           bio: '저장 no-op',
           displayName: '기존 이름',
-          followPolicy: 'APPROVAL_REQUIRED',
           headerId: 'media-issued-1',
           tags: ['Fediverse', '개발'],
         },
@@ -971,7 +961,6 @@ describe('ProfileEditRoute', () => {
           avatarId: 'media-issued-2',
           bio: '저장 failure',
           displayName: '기존 이름',
-          followPolicy: 'APPROVAL_REQUIRED',
           headerId: 'media-issued-1',
           tags: ['Fediverse', '개발'],
         },
