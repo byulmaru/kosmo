@@ -92,7 +92,6 @@ export const UnderlineInteractionContract: Story = {
     const popularLabel = within(popular).getByText(popularText);
     const popularFeedback = popular.firstElementChild;
     const mediaFeedback = media.firstElementChild;
-    const indicator = group.lastElementChild;
 
     await step('기본 상태와 접근성 확인', async () => {
       expect(popular).toHaveAttribute('aria-selected', 'true');
@@ -114,9 +113,12 @@ export const UnderlineInteractionContract: Story = {
         fontWeight: '600',
         lineHeight: '20px',
       });
-      expect(indicator).not.toBeNull();
-      expect(getComputedStyle(indicator as Element).backgroundColor).toBe('rgb(255, 229, 151)');
-      expect(indicator).toHaveStyle({ height: '4px', width: '64px' });
+      await waitFor(() => {
+        const indicator = group.lastElementChild;
+        expect(indicator).not.toBeNull();
+        expect(getComputedStyle(indicator as Element).backgroundColor).toBe('rgb(255, 229, 151)');
+        expect(indicator).toHaveStyle({ height: '4px', width: '64px' });
+      });
 
       await userEvent.tab();
       expect(popular).toHaveFocus();
