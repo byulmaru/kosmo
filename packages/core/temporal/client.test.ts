@@ -13,13 +13,13 @@ import {
 } from '@temporalio/client';
 import type { WorkflowHandleWithStartDetails } from '@temporalio/client';
 import type { WorkflowDefinition, WorkflowUpdateDefinition } from './client';
-import type { RemoteProfileLookupInput } from './remote-profile';
+import type { RemoteProfileLookupInput, RemoteProfileUpdateInput } from './remote-profile';
 
 process.env.TEMPORAL_ADDRESS ??= '127.0.0.1:7233';
 process.env.TEMPORAL_NAMESPACE ??= 'test';
 
 const { runWorkflow, temporalClient } = await import('./client');
-const { remoteProfileLookupWorkflow, remoteProfileRefreshWorkflow } =
+const { remoteProfileLookupWorkflow, remoteProfileRefreshWorkflow, remoteProfileUpdateWorkflow } =
   await import('./remote-profile');
 
 const importClient = (environment: NodeJS.ProcessEnv) =>
@@ -402,10 +402,13 @@ test('remote Profile Workflow builder는 normalized handle과 profileId를 실�
   }
 });
 
-test('Remote Profile 증거 shape별 ID를 기존 문자열로 유지한다', () => {
+test('Remote Profile lookup ID stability', () => {
   const actorUri = 'https://remote.example/users/alice';
   const contextOrigin = 'https://local.example';
   const receivedAt = '2026-08-01T00:00:01Z';
+  const profileId = '00000000-0000-8000-8000-000000000001';
+  const otherProfileId = '00000000-0000-8000-8000-000000000002';
+  const activityUri = 'https://remote.example/activities/follow-1';
   const workflowIdFromArgs = remoteProfileLookupWorkflow.workflowIdFromArgs;
   const inputs = [
     {
@@ -417,29 +420,41 @@ test('Remote Profile 증거 shape별 ID를 기존 문자열로 유지한다', ()
     },
     {
       actorUri,
+      contextOrigin,
+    },
+    {
+      actorUri,
+      contextOrigin,
+      profileId,
       receipt: {
-        activityUri: 'https://remote.example/activities/follow-1',
+        activityUri,
         receivedAt,
       },
     },
     {
       actorUri,
-      actorDocument: {
-        jsonLd: { id: actorUri, type: 'Person' },
-        contextOrigin,
+      contextOrigin,
+      profileId,
+      receipt: {
+        activityUri,
+        receivedAt: '2026-08-01T00:00:02Z',
+      },
+    },
+    {
+      actorUri,
+      contextOrigin,
+      profileId: otherProfileId,
+      receipt: {
+        activityUri,
         receivedAt,
       },
     },
     {
       actorUri,
-      actorDocument: {
-        jsonLd: { id: actorUri, type: 'Person' },
-        contextOrigin,
-        receivedAt: '2026-08-01T00:00:02Z',
-      },
+      contextOrigin,
+      profileId,
       receipt: {
-        activityUri: 'https://remote.example/activities/update-1',
-        receivedAt: '2026-08-01T00:00:02Z',
+        receivedAt,
       },
     },
   ] satisfies RemoteProfileLookupInput[];
@@ -448,31 +463,71 @@ test('Remote Profile 증거 shape별 ID를 기존 문자열로 유지한다', ()
   const workflowName = remoteProfileLookupWorkflow.workflow;
   assert.deepEqual(ids, [
     `${workflowName}:["remote.example","alice","configured-local"]`,
-    `${workflowName}:["stored-actor","${actorUri}","without-receipt"]`,
-    `${workflowName}:["stored-actor","${actorUri}","https://remote.example/activities/follow-1"]`,
-    `${workflowName}:["actor-document","${actorUri}","${receivedAt}"]`,
-    `${workflowName}:["update","${actorUri}","https://remote.example/activities/update-1","2026-08-01T00:00:02Z"]`,
+    `${workflowName}:["${actorUri}","configured-local","configured-local","without-receipt"]`,
+    `${workflowName}:["${actorUri}","configured-local","${contextOrigin}","without-receipt"]`,
+    `${workflowName}:["${actorUri}","${profileId}","${contextOrigin}","${activityUri}"]`,
+    `${workflowName}:["${actorUri}","${profileId}","${contextOrigin}","${activityUri}"]`,
+    `${workflowName}:["${actorUri}","${otherProfileId}","${contextOrigin}","${activityUri}"]`,
+    `${workflowName}:["${actorUri}","${profileId}","${contextOrigin}","${receivedAt}"]`,
   ]);
-  assert.equal(workflowIdFromArgs(inputs[2]!), ids[2]);
+  assert.equal(workflowIdFromArgs(inputs[3]!), ids[3]);
+  assert.equal(workflowIdFromArgs(inputs[4]!), ids[3]);
+  assert.notEqual(ids[3], ids[5]);
   assert.notEqual(
     workflowIdFromArgs({
-      ...inputs[2]!,
-      receipt: {
-        ...inputs[2]!.receipt!,
-        activityUri: 'https://remote.example/activities/follow-2',
-      },
+      ...inputs[3]!,
+      contextOrigin: 'https://other-local.example',
     }),
-    ids[2],
+    ids[3],
+  );
+});
+
+test('Remote Profile Update ID는 같은 receipt에서 안정적이고 actor·receipt 변경을 구분한다', () => {
+  const input: RemoteProfileUpdateInput = {
+    actorUri: 'https://remote.example/users/alice',
+    actorJsonLd: { id: 'https://remote.example/users/alice', type: 'Person' },
+    contextOrigin: 'https://local.example',
+    receipt: {
+      activityUri: 'https://remote.example/activities/update-1',
+      receivedAt: '2026-08-01T00:00:02Z',
+    },
+  };
+  const workflowIdFromArgs = remoteProfileUpdateWorkflow.workflowIdFromArgs;
+  const id = workflowIdFromArgs(input);
+
+  assert.equal(
+    id,
+    `${remoteProfileUpdateWorkflow.workflow}:["${input.actorUri}","${input.receipt.activityUri}","${input.receipt.receivedAt}"]`,
+  );
+  assert.equal(workflowIdFromArgs(input), id);
+  const receiptWithoutActivityId: RemoteProfileUpdateInput = {
+    ...input,
+    receipt: { receivedAt: input.receipt.receivedAt },
+  };
+  const fallbackId = workflowIdFromArgs(receiptWithoutActivityId);
+  assert.equal(
+    fallbackId,
+    `${remoteProfileUpdateWorkflow.workflow}:["${input.actorUri}","${input.receipt.receivedAt}","${input.receipt.receivedAt}"]`,
+  );
+  assert.equal(workflowIdFromArgs(receiptWithoutActivityId), fallbackId);
+  assert.notEqual(fallbackId, id);
+  assert.notEqual(
+    workflowIdFromArgs({ ...input, actorUri: 'https://remote.example/users/mallory' }),
+    id,
   );
   assert.notEqual(
     workflowIdFromArgs({
-      ...inputs[4]!,
-      actorDocument: {
-        ...inputs[4]!.actorDocument!,
-        receivedAt: '2026-08-01T00:00:03Z',
-      },
+      ...input,
+      receipt: { ...input.receipt, activityUri: 'https://remote.example/activities/update-2' },
     }),
-    ids[4],
+    id,
+  );
+  assert.notEqual(
+    workflowIdFromArgs({
+      ...input,
+      receipt: { ...input.receipt, receivedAt: '2026-08-01T00:00:03Z' },
+    }),
+    id,
   );
 });
 

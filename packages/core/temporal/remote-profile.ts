@@ -11,19 +11,16 @@ export type RemoteProfileHandleLookupInput = {
 
 export type RemoteProfileMaterializationInput = {
   readonly actorUri: string;
+  readonly contextOrigin?: string;
   readonly profileId?: string;
 };
 
 export type RemoteProfileActorLookupInput = {
   readonly actorUri: string;
+  readonly contextOrigin?: string;
   readonly profileId?: string;
   readonly receipt?: {
     readonly activityUri?: string;
-    readonly receivedAt: string;
-  };
-  readonly actorDocument?: {
-    readonly jsonLd: unknown;
-    readonly contextOrigin: string;
     readonly receivedAt: string;
   };
 };
@@ -45,24 +42,12 @@ export const remoteProfileLookupWorkflow: WorkflowDefinition<
       ])}`;
     }
 
-    if (!input.actorDocument) {
-      return `${REMOTE_PROFILE_LOOKUP_WORKFLOW_TYPE}:${JSON.stringify([
-        'stored-actor',
-        input.actorUri,
-        input.receipt?.activityUri ?? input.receipt?.receivedAt ?? 'without-receipt',
-      ])}`;
-    }
-
-    return `${REMOTE_PROFILE_LOOKUP_WORKFLOW_TYPE}:${JSON.stringify(
-      input.receipt
-        ? [
-            'update',
-            input.actorUri,
-            input.receipt.activityUri ?? input.receipt.receivedAt,
-            input.actorDocument.receivedAt,
-          ]
-        : ['actor-document', input.actorUri, input.actorDocument.receivedAt],
-    )}`;
+    return `${REMOTE_PROFILE_LOOKUP_WORKFLOW_TYPE}:${JSON.stringify([
+      input.actorUri,
+      input.profileId ?? 'configured-local',
+      input.contextOrigin ?? 'configured-local',
+      input.receipt?.activityUri ?? input.receipt?.receivedAt ?? 'without-receipt',
+    ])}`;
   },
 };
 
@@ -73,9 +58,34 @@ export const remoteProfileRefreshWorkflow: WorkflowDefinition<
 > = {
   workflow: REMOTE_PROFILE_REFRESH_WORKFLOW_TYPE,
   workflowIdFromArgs: (input) =>
-    `${REMOTE_PROFILE_REFRESH_WORKFLOW_TYPE}:${JSON.stringify([
+    `${REMOTE_PROFILE_REFRESH_WORKFLOW_TYPE}:${JSON.stringify(
+      input.contextOrigin !== undefined
+        ? [input.actorUri, input.profileId ?? 'configured-local', input.contextOrigin]
+        : [input.actorUri, input.profileId ?? 'configured-local'],
+    )}`,
+};
+
+export type RemoteProfileUpdateInput = {
+  readonly actorUri: string;
+  readonly actorJsonLd: unknown;
+  readonly contextOrigin: string;
+  readonly receipt: {
+    readonly activityUri?: string;
+    readonly receivedAt: string;
+  };
+};
+
+export const REMOTE_PROFILE_UPDATE_WORKFLOW_TYPE = 'remoteProfileUpdateWorkflow';
+
+export const remoteProfileUpdateWorkflow: WorkflowDefinition<
+  (input: RemoteProfileUpdateInput) => Promise<string | null>
+> = {
+  workflow: REMOTE_PROFILE_UPDATE_WORKFLOW_TYPE,
+  workflowIdFromArgs: (input) =>
+    `${REMOTE_PROFILE_UPDATE_WORKFLOW_TYPE}:${JSON.stringify([
       input.actorUri,
-      input.profileId ?? 'configured-local',
+      input.receipt.activityUri ?? input.receipt.receivedAt,
+      input.receipt.receivedAt,
     ])}`,
 };
 

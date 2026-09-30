@@ -74,7 +74,7 @@ export const handleInboundFollow = async (
   try {
     remoteActor = await findOrMaterializeRemoteProfileActorByUri({
       actorUri,
-      context,
+      contextOrigin: context.canonicalOrigin,
       receipt: { activityUri: follow.id, receivedAt: now },
     });
   } catch (error) {
@@ -317,7 +317,7 @@ export const handleInboundUndo = async (
   try {
     remoteActor = await findOrMaterializeRemoteProfileActorByUri({
       actorUri,
-      context,
+      contextOrigin: context.canonicalOrigin,
       receipt: { activityUri: undo.id, receivedAt },
     });
   } catch (error) {

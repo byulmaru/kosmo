@@ -33,7 +33,7 @@ export const handleInboundReject = async (
   try {
     remoteActor = await findOrMaterializeRemoteProfileActorByUri({
       actorUri,
-      context,
+      contextOrigin: context.canonicalOrigin,
       receipt: { activityUri: reject.id, receivedAt },
     });
   } catch (error) {

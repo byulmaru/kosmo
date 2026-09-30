@@ -13,16 +13,19 @@ import {
 import { KosmoError } from '@kosmo/core/error';
 import { temporalClient } from '@kosmo/core/temporal/client';
 import { profileFollowRemovalWorkflowId } from '@kosmo/core/temporal/follow-command';
+import { remoteProfileLookupWorkflow } from '@kosmo/core/temporal/workflows';
 import { eq, ne } from 'drizzle-orm';
 import { setInboundObservabilityReporter, withInboundObservability } from './inbound-observability';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
+import type { RemoteProfileLookupInput } from '@kosmo/core/temporal/workflows';
 import type { federation as productionFederation } from './federation';
 import type * as InboundAccept from './inbound-accept';
 import type * as InboundAcceptFollow from './inbound-accept-follow';
 import type * as InboundFollow from './inbound-follow';
 import type * as InboundReject from './inbound-reject';
+import type * as Materialization from './remote-actor-materialization';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
@@ -45,7 +48,27 @@ let handleInboundAccept: typeof InboundAccept.handleInboundAccept;
 let handleInboundAcceptFollow: typeof InboundAcceptFollow.handleInboundAcceptFollow;
 let handleInboundUndo: typeof InboundFollow.handleInboundUndo;
 let handleInboundReject: typeof InboundReject.handleInboundReject;
+let materializeRemoteProfileActor: typeof Materialization.materializeRemoteProfileActor;
 let localInstanceId: string;
+
+const mockRemoteProfileLookup = (lookupObject: (identifier: string | URL) => Promise<unknown>) =>
+  mock.method(temporalClient.workflow, 'execute', async (workflow: unknown, options: unknown) => {
+    assert.equal(workflow, remoteProfileLookupWorkflow.workflow);
+    assert.ok(options && typeof options === 'object');
+    const workflowOptions = options as {
+      args?: readonly RemoteProfileLookupInput[];
+      workflowId?: string;
+    };
+    const input = workflowOptions.args?.[0];
+    assert.ok(input && 'actorUri' in input);
+    assert.equal(workflowOptions.args?.length, 1);
+    assert.equal(workflowOptions.workflowId, remoteProfileLookupWorkflow.workflowIdFromArgs(input));
+    const profile = await materializeRemoteProfileActor({
+      actorUri: new URL(input.actorUri),
+      context: { lookupObject } as never,
+    });
+    return profile.id;
+  });
 let federation: typeof productionFederation;
 
 describe('inbound Accept, Reject, and Undo', () => {
@@ -69,6 +92,7 @@ describe('inbound Accept, Reject, and Undo', () => {
     ({ handleInboundAcceptFollow } = await import('./inbound-accept-follow'));
     ({ handleInboundUndo } = await import('./inbound-follow'));
     ({ handleInboundReject } = await import('./inbound-reject'));
+    ({ materializeRemoteProfileActor } = await import('./remote-actor-materialization'));
     ({ federation } = await import('./federation'));
     const { localInstance } = await seedDatabase({ publicOrigin });
     localInstanceId = localInstance.id;
@@ -684,47 +708,54 @@ describe('inbound Accept, Reject, and Undo', () => {
     ];
     const actorsByUri = new Map(missingActors.map(({ actor }) => [actor.id!.href, actor]));
     const lookupObject = mock.fn(async (uri: URL) => actorsByUri.get(uri.href) ?? null);
+    const lookupWorkflow = mockRemoteProfileLookup(async (identifier) =>
+      lookupObject(new URL(identifier)),
+    );
     const context = {
       ...createContext(localProfileId),
       lookupObject,
     } as unknown as InboxContext<void>;
 
-    await handleInboundAccept(
-      context,
-      new Accept({
-        actor: missingActors[0].actor.id,
-        id: missingActors[0].activityUri,
-        object: new Follow({
-          actor: localActorUri,
-          object: missingActors[0].actor.id,
+    try {
+      await handleInboundAccept(
+        context,
+        new Accept({
+          actor: missingActors[0].actor.id,
+          id: missingActors[0].activityUri,
+          object: new Follow({
+            actor: localActorUri,
+            object: missingActors[0].actor.id,
+          }),
         }),
-      }),
-      Temporal.Instant.from('2026-09-29T00:00:00Z'),
-    );
-    await handleInboundReject(
-      context,
-      new Reject({
-        actor: missingActors[1].actor.id,
-        id: missingActors[1].activityUri,
-        object: new Follow({
-          actor: localActorUri,
-          object: missingActors[1].actor.id,
+        Temporal.Instant.from('2026-09-29T00:00:00Z'),
+      );
+      await handleInboundReject(
+        context,
+        new Reject({
+          actor: missingActors[1].actor.id,
+          id: missingActors[1].activityUri,
+          object: new Follow({
+            actor: localActorUri,
+            object: missingActors[1].actor.id,
+          }),
         }),
-      }),
-      Temporal.Instant.from('2026-09-29T00:00:01Z'),
-    );
-    await handleInboundUndo(
-      context,
-      new Undo({
-        actor: missingActors[2].actor.id,
-        id: missingActors[2].activityUri,
-        object: new Follow({
+        Temporal.Instant.from('2026-09-29T00:00:01Z'),
+      );
+      await handleInboundUndo(
+        context,
+        new Undo({
           actor: missingActors[2].actor.id,
-          object: localActorUri,
+          id: missingActors[2].activityUri,
+          object: new Follow({
+            actor: missingActors[2].actor.id,
+            object: localActorUri,
+          }),
         }),
-      }),
-      Temporal.Instant.from('2026-09-29T00:00:02Z'),
-    );
+        Temporal.Instant.from('2026-09-29T00:00:02Z'),
+      );
+    } finally {
+      lookupWorkflow.mock.restore();
+    }
 
     assert.equal(lookupObject.mock.calls.length, missingActors.length);
     for (const { actor } of missingActors) {
@@ -790,12 +821,17 @@ describe('inbound Accept, Reject, and Undo', () => {
         lookupObject: invalidLookup,
       } as unknown as InboxContext<void>;
 
-      await dispatch(
-        invalidContext,
-        invalidActorUri,
-        new URL(`https://${name}-invalid.example/activities/response`),
-        Temporal.Instant.from('2026-09-29T00:01:00Z'),
-      );
+      const invalidWorkflow = mockRemoteProfileLookup(async () => invalidLookup());
+      try {
+        await dispatch(
+          invalidContext,
+          invalidActorUri,
+          new URL(`https://${name}-invalid.example/activities/response`),
+          Temporal.Instant.from('2026-09-29T00:01:00Z'),
+        );
+      } finally {
+        invalidWorkflow.mock.restore();
+      }
       assert.equal(invalidLookup.mock.calls.length, 1);
 
       const lookupFailure = new Error(`${name} actor lookup unavailable`);
@@ -808,15 +844,20 @@ describe('inbound Accept, Reject, and Undo', () => {
         lookupObject: unavailableLookup,
       } as unknown as InboxContext<void>;
 
-      await assert.rejects(
-        dispatch(
-          unavailableContext,
-          unavailableActorUri,
-          new URL(`https://${name}-unavailable.example/activities/response`),
-          Temporal.Instant.from('2026-09-29T00:01:01Z'),
-        ),
-        (error: unknown) => error === lookupFailure,
-      );
+      const unavailableWorkflow = mockRemoteProfileLookup(async () => unavailableLookup());
+      try {
+        await assert.rejects(
+          dispatch(
+            unavailableContext,
+            unavailableActorUri,
+            new URL(`https://${name}-unavailable.example/activities/response`),
+            Temporal.Instant.from('2026-09-29T00:01:01Z'),
+          ),
+          (error: unknown) => error === lookupFailure,
+        );
+      } finally {
+        unavailableWorkflow.mock.restore();
+      }
       assert.equal(unavailableLookup.mock.calls.length, 1);
 
       const suspendedActorUri = new URL(`https://${name}-suspended.example/users/alice`);

@@ -17,6 +17,7 @@ import type {
   RemoteProfileActorLookupInput,
   RemoteProfileHandleLookupInput,
   RemoteProfileMaterializationInput,
+  RemoteProfileUpdateInput,
 } from '@kosmo/core/temporal/workflows';
 
 const remoteActorRefreshTtl = Temporal.Duration.from({ hours: 7 * 24 });
@@ -193,7 +194,7 @@ export const refreshRemoteProfileActorActivity = async (
     let signingProfileId: string | undefined;
 
     if (!input.profileId) {
-      origin = (await resolveConfiguredLocalInstance()).canonicalOrigin;
+      origin = input.contextOrigin ?? (await resolveConfiguredLocalInstance()).canonicalOrigin;
     } else {
       const selected = await db
         .select({ actor: ActivityPubActors, instance: Instances })
@@ -286,44 +287,49 @@ export const refreshRemoteProfileActorActivity = async (
   }
 };
 
+export const updateRemoteProfileActorActivity = async (
+  input: RemoteProfileUpdateInput,
+): Promise<string | null> => {
+  try {
+    const stored = await findStoredRemoteProfileActorByUri(input.actorUri);
+    if (!stored) {
+      return null;
+    }
+
+    requireUsableStoredRemoteProfileActor(stored);
+
+    const context = federation.createContext(new URL(input.contextOrigin), undefined);
+    const profile = await materializeRemoteProfileActor({
+      actorJsonLd: input.actorJsonLd,
+      actorUri: new URL(input.actorUri),
+      context,
+      now: Temporal.Instant.from(input.receipt.receivedAt),
+      reactivateUnresponsive: true,
+    });
+
+    return profile.id;
+  } catch (error) {
+    return rethrowRemoteProfileMaterializationError(error);
+  }
+};
+
 export const materializeRemoteProfileActorActivity = async (
   input: RemoteProfileActorLookupInput,
 ): Promise<RemoteProfileMaterializationState | null> => {
   try {
-    if (!input.actorDocument) {
-      const now = Temporal.Now.instant();
-      const stored = await findStoredRemoteProfileActorByUri(input.actorUri);
-      if (!stored) {
-        await ensureMissingRemoteProfileLookupAllowed(new URL(input.actorUri));
-        return null;
-      }
-
-      const usable = requireUsableStoredRemoteProfileActor(stored);
-      const actor = input.receipt ? await reactivateStoredRemoteProfileActor(usable) : usable;
-      return {
-        needsRefresh: needsRefresh(actor.actor.lastFetchedAt, now),
-        profileId: actor.profile.id,
-      };
+    const now = Temporal.Now.instant();
+    const stored = await findStoredRemoteProfileActorByUri(input.actorUri);
+    if (!stored) {
+      await ensureMissingRemoteProfileLookupAllowed(new URL(input.actorUri));
+      return null;
     }
 
-    if (input.receipt) {
-      const stored = await findStoredRemoteProfileActorByUri(input.actorUri);
-      if (!stored) {
-        return null;
-      }
-
-      requireUsableStoredRemoteProfileActor(stored);
-    }
-
-    const context = federation.createContext(new URL(input.actorDocument.contextOrigin), undefined);
-    const profile = await materializeRemoteProfileActor({
-      actorJsonLd: input.actorDocument.jsonLd,
-      actorUri: new URL(input.actorUri),
-      context,
-      now: Temporal.Instant.from(input.actorDocument.receivedAt),
-      reactivateUnresponsive: true,
-    });
-    return { needsRefresh: false, profileId: profile.id };
+    const usable = requireUsableStoredRemoteProfileActor(stored);
+    const actor = input.receipt ? await reactivateStoredRemoteProfileActor(usable) : usable;
+    return {
+      needsRefresh: needsRefresh(actor.actor.lastFetchedAt, now),
+      profileId: actor.profile.id,
+    };
   } catch (error) {
     return rethrowRemoteProfileMaterializationError(error);
   }
