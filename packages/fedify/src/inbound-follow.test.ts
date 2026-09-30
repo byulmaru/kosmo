@@ -956,6 +956,7 @@ const createFixture = async ({
     },
     {
       inboxUri: remoteInbox ? 'https://remote.example/users/alice/inbox' : null,
+      lastFetchedAt: Temporal.Now.instant(),
       profileId: remoteProfile.id,
       sharedInboxUri: remoteInbox ? 'https://remote.example/inbox' : null,
       type: ActivityPubActorType.PERSON,

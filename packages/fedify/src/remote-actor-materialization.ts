@@ -384,6 +384,59 @@ export const fetchRemoteProfileActor = async (
   return requireRemoteActor(result as ActivityPubObject, actorUri);
 };
 
+export const fetchRemoteProfileActorDocument = async (
+  context: Pick<Context<void>, 'lookupObject'>,
+  actorUri: URL,
+  documentLoader?: DocumentLoader,
+): Promise<unknown> => {
+  const actor = await fetchRemoteProfileActor(context, actorUri, documentLoader);
+  const actorJsonLd = await actor.toJsonLd({
+    contextLoader: noNetworkDocumentLoader,
+    format: 'expand',
+  });
+  if (actorJsonLd === undefined) {
+    throw new RemoteActorMaterializationError('Remote actor JSON-LD could not be serialized.');
+  }
+  return actorJsonLd;
+};
+
+const parseRemoteProfileActorDocument = async (actorJsonLd: unknown, actorUri: URL) => {
+  let parsed: ActivityPubObject;
+  try {
+    parsed = await ActivityPubObject.fromJsonLd(actorJsonLd, {
+      contextLoader: noNetworkDocumentLoader,
+      documentLoader: noNetworkDocumentLoader,
+    });
+  } catch {
+    throw new RemoteActorMaterializationError('Remote actor JSON-LD could not be parsed.');
+  }
+
+  return requireRemoteActor(parsed, actorUri);
+};
+
+const findRequestedRemoteInstance = async (actorUri: URL, allowUnresponsive: boolean) => {
+  const localInstance = await resolveConfiguredLocalInstance();
+
+  if ((actorUri.protocol !== 'http:' && actorUri.protocol !== 'https:') || !actorUri.hostname) {
+    throw new RemoteActorMaterializationError('Remote actor URI must use HTTP(S) with a hostname.');
+  }
+
+  if (actorUri.origin === localInstance.canonicalOrigin) {
+    throw new ConflictError({ message: 'Remote actor URI uses the local origin' });
+  }
+
+  const targetActorDomain = `${actorUri.hostname.toLowerCase().replace(/\.$/, '')}${
+    actorUri.port ? `:${actorUri.port}` : ''
+  }`;
+
+  return {
+    localInstanceId: localInstance.id,
+    requestedRemoteInstance: await findAvailableRemoteInstance(targetActorDomain, {
+      allowUnresponsive,
+    }),
+  };
+};
+
 export const findOrMaterializeRemoteProfileActorByUri = async (
   options: RemoteActorLookupOptions,
 ) => {
@@ -405,43 +458,13 @@ export const findOrMaterializeRemoteProfileActorByUri = async (
   return materialized;
 };
 
-export const materializeRemoteProfileActor = async (options: RemoteActorMaterializationOptions) => {
-  const { context, now = getNow(), reactivateUnresponsive = false } = options;
-  const localInstance = await resolveConfiguredLocalInstance();
-
-  if (
-    (options.actorUri.protocol !== 'http:' && options.actorUri.protocol !== 'https:') ||
-    !options.actorUri.hostname
-  ) {
-    throw new RemoteActorMaterializationError('Remote actor URI must use HTTP(S) with a hostname.');
-  }
-
-  if (options.actorUri.origin === localInstance.canonicalOrigin) {
-    throw new ConflictError({ message: 'Remote actor URI uses the local origin' });
-  }
-
-  const targetActorDomain = `${options.actorUri.hostname.toLowerCase().replace(/\.$/, '')}${
-    options.actorUri.port ? `:${options.actorUri.port}` : ''
-  }`;
-  const existingRequestedRemoteInstance = await findAvailableRemoteInstance(targetActorDomain, {
-    allowUnresponsive: reactivateUnresponsive,
-  });
-  let actor: Actor;
-  if (options.actorJsonLd === undefined) {
-    actor = await fetchRemoteProfileActor(context, options.actorUri, options.documentLoader);
-  } else {
-    let parsed: ActivityPubObject;
-    try {
-      parsed = await ActivityPubObject.fromJsonLd(options.actorJsonLd, {
-        contextLoader: noNetworkDocumentLoader,
-        documentLoader: noNetworkDocumentLoader,
-      });
-    } catch {
-      throw new RemoteActorMaterializationError('Remote actor JSON-LD could not be parsed.');
-    }
-    actor = requireRemoteActor(parsed, options.actorUri);
-  }
-
+const persistRemoteProfileActor = async (
+  actor: Actor,
+  localInstanceId: string,
+  existingRequestedRemoteInstance: typeof Instances.$inferSelect | undefined,
+  now: Temporal.Instant,
+  reactivateUnresponsive: boolean,
+) => {
   const actorId = actor.id!;
 
   let projection: ActorProjection;
@@ -606,7 +629,7 @@ export const materializeRemoteProfileActor = async (options: RemoteActorMaterial
 
         if (
           existingInstanceId === null ||
-          existingInstanceId === localInstance.id ||
+          existingInstanceId === localInstanceId ||
           !existingActor.instance ||
           existingActor.instance.kind === InstanceKind.LOCAL
         ) {
@@ -750,4 +773,43 @@ export const materializeRemoteProfileActor = async (options: RemoteActorMaterial
 
     return persistActor();
   }
+};
+
+export const applyRemoteProfileActorDocument = async (input: {
+  actorUri: URL;
+  actorJsonLd: unknown;
+  observedAt: Temporal.Instant;
+}) => {
+  const { localInstanceId, requestedRemoteInstance } = await findRequestedRemoteInstance(
+    input.actorUri,
+    true,
+  );
+  const actor = await parseRemoteProfileActorDocument(input.actorJsonLd, input.actorUri);
+  return persistRemoteProfileActor(
+    actor,
+    localInstanceId,
+    requestedRemoteInstance,
+    input.observedAt,
+    true,
+  );
+};
+
+export const materializeRemoteProfileActor = async (options: RemoteActorMaterializationOptions) => {
+  const { context, now = getNow(), reactivateUnresponsive = false } = options;
+  const { localInstanceId, requestedRemoteInstance } = await findRequestedRemoteInstance(
+    options.actorUri,
+    reactivateUnresponsive,
+  );
+  const actor =
+    options.actorJsonLd === undefined
+      ? await fetchRemoteProfileActor(context, options.actorUri, options.documentLoader)
+      : await parseRemoteProfileActorDocument(options.actorJsonLd, options.actorUri);
+
+  return persistRemoteProfileActor(
+    actor,
+    localInstanceId,
+    requestedRemoteInstance,
+    now,
+    reactivateUnresponsive,
+  );
 };

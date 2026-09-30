@@ -24,6 +24,7 @@ import type {
 } from '@kosmo/core/temporal/workflows';
 import type * as Fedify from '@kosmo/fedify';
 import type * as WorkerActivities from './activities';
+import type * as RemoteProfileMaterializationActivities from './activities/remote-profile-materialization';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
@@ -53,7 +54,10 @@ let federation: typeof Fedify.federation;
 let lookupRemoteActorUriActivity: typeof WorkerActivities.lookupRemoteActorUriActivity;
 let materializeRemoteProfileActorActivity: typeof WorkerActivities.materializeRemoteProfileActorActivity;
 let refreshRemoteProfileActorActivity: typeof WorkerActivities.refreshRemoteProfileActorActivity;
-let updateRemoteProfileActorActivity: typeof WorkerActivities.updateRemoteProfileActorActivity;
+let getRemoteProfileActorStateActivity: typeof RemoteProfileMaterializationActivities.getRemoteProfileActorStateActivity;
+let fetchRemoteProfileActorActivity: typeof RemoteProfileMaterializationActivities.fetchRemoteProfileActorActivity;
+let applyRemoteProfileActorActivity: typeof RemoteProfileMaterializationActivities.applyRemoteProfileActorActivity;
+let recoverRemoteProfileActorActivity: typeof RemoteProfileMaterializationActivities.recoverRemoteProfileActorActivity;
 let seedDatabase: typeof CoreSeed.seedDatabase;
 let localInstanceId: string;
 
@@ -66,8 +70,13 @@ before(async () => {
     lookupRemoteActorUriActivity,
     materializeRemoteProfileActorActivity,
     refreshRemoteProfileActorActivity,
-    updateRemoteProfileActorActivity,
   } = await import('./activities'));
+  ({
+    getRemoteProfileActorStateActivity,
+    fetchRemoteProfileActorActivity,
+    applyRemoteProfileActorActivity,
+    recoverRemoteProfileActorActivity,
+  } = await import('./activities/remote-profile-materialization'));
 });
 
 beforeEach(async () => {
@@ -114,6 +123,7 @@ test(
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-materialization-${process.pid}`;
     const worker = await Worker.create({
       activities: {
+        ...remoteProfileActivities(),
         lookupRemoteActorUriActivity,
         materializeRemoteProfileActorActivity,
         refreshRemoteProfileActorActivity,
@@ -196,6 +206,7 @@ test(
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-uri-retry-${process.pid}`;
     const worker = await Worker.create({
       activities: {
+        ...remoteProfileActivities(),
         lookupRemoteActorUriActivity,
         materializeRemoteProfileActorActivity,
         refreshRemoteProfileActorActivity,
@@ -263,6 +274,7 @@ test(
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-uri-invalid-${process.pid}`;
     const worker = await Worker.create({
       activities: {
+        ...remoteProfileActivities(),
         lookupRemoteActorUriActivity,
         materializeRemoteProfileActorActivity,
         refreshRemoteProfileActorActivity,
@@ -329,49 +341,25 @@ test(
     const actorJsonLd = await createActor({ id: actorUri, name: 'Updated Alice' }).toJsonLd({
       format: 'expand',
     });
-    const contextOrigins: string[] = [];
-    t.mock.method(federation, 'createContext', (origin: URL) => {
-      contextOrigins.push(origin.href);
-      return {
-        lookupObject: async () => {
-          throw new Error('A supplied Update actor must not be fetched');
-        },
-      } as never;
-    });
-
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
-    });
-    t.after(() => environment.teardown());
-    const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-update-${process.pid}`;
-    const worker = await Worker.create({
-      activities: { updateRemoteProfileActorActivity },
-      connection: environment.nativeConnection,
-      namespace: environment.namespace,
-      taskQueue,
-      workflowsPath,
+    let contextCalls = 0;
+    t.mock.method(federation, 'createContext', () => {
+      contextCalls += 1;
+      throw new Error('Applying a supplied Update actor must not fetch it');
     });
     const input: RemoteProfileUpdateInput = {
       actorUri: actorUri.href,
       actorJsonLd,
-      contextOrigin: publicOrigin,
       receipt: {
         activityUri: 'https://update-workflow.example/activities/update-1',
         receivedAt: '2026-09-29T00:00:00Z',
       },
     };
 
-    const profileId = await worker.runUntil(() =>
-      environment.client.workflow.execute(REMOTE_PROFILE_UPDATE_WORKFLOW_TYPE, {
-        args: [input],
-        taskQueue,
-        workflowId: remoteProfileUpdateWorkflow.workflowIdFromArgs(input),
-      }),
-    );
+    const profileId = await runRemoteProfileUpdateWorkflow(input);
     const stored = await readStoredProfile(storedProfile.id);
 
     assert.equal(profileId, storedProfile.id);
-    assert.deepEqual(contextOrigins, [new URL(publicOrigin).href]);
+    assert.equal(contextCalls, 0);
     assert.equal(stored.profile.displayName, 'Updated Alice');
     assert.equal(stored.actor.uri, actorUri.href);
     assert.equal(stored.actor.lastFetchedAt?.toString(), input.receipt.receivedAt);
@@ -418,6 +406,7 @@ test(
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-materialization-retry-${process.pid}`;
     const worker = await Worker.create({
       activities: {
+        ...remoteProfileActivities(),
         lookupRemoteActorUriActivity,
         materializeRemoteProfileActorActivity,
         refreshRemoteProfileActorActivity,
@@ -471,12 +460,12 @@ test(
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-materialization-no-match-${process.pid}`;
     const worker = await Worker.create({
       activities: {
+        ...remoteProfileActivities(),
         lookupRemoteActorUriActivity,
-        materializeRemoteProfileActorActivity: async () => {
+        fetchRemoteProfileActorActivity: async () => {
           materializationCalls += 1;
           throw new Error('lookup failure must stop before materialization');
         },
-        refreshRemoteProfileActorActivity,
       },
       connection: environment.nativeConnection,
       namespace: environment.namespace,
@@ -531,12 +520,12 @@ test(
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-materialization-invalid-webfinger-${process.pid}`;
     const worker = await Worker.create({
       activities: {
+        ...remoteProfileActivities(),
         lookupRemoteActorUriActivity,
-        materializeRemoteProfileActorActivity: async () => {
+        fetchRemoteProfileActorActivity: async () => {
           materializationCalls += 1;
           throw new Error('lookup failure must stop before materialization');
         },
-        refreshRemoteProfileActorActivity,
       },
       connection: environment.nativeConnection,
       namespace: environment.namespace,
@@ -636,6 +625,7 @@ test(
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-materialization-rejection-${process.pid}`;
     const worker = await Worker.create({
       activities: {
+        ...remoteProfileActivities(),
         lookupRemoteActorUriActivity,
         materializeRemoteProfileActorActivity,
         refreshRemoteProfileActorActivity,
@@ -1138,9 +1128,17 @@ test('Remote Profile Activity는 exact actor URI 조회 성공 뒤 UNRESPONSIVE�
 
 test('Actor receipt만 UNRESPONSIVE actor를 복구하고 stale TTL을 유지한다', async (t) => {
   let contextCalls = 0;
+  let lookupCalls = 0;
+  const missingUri = 'https://stored-missing.example/users/alice';
   t.mock.method(federation, 'createContext', () => {
     contextCalls += 1;
-    throw new Error('Stored actor paths must not fetch');
+    return {
+      lookupObject: async (identifier: string | URL) => {
+        lookupCalls += 1;
+        assert.equal(String(identifier), missingUri);
+        return createActor({ id: new URL(missingUri) });
+      },
+    } as never;
   });
 
   const cachedUri = 'https://stored-cached.example/users/alice';
@@ -1184,13 +1182,16 @@ test('Actor receipt만 UNRESPONSIVE actor를 복구하고 stale TTL을 유지한
   assert.deepEqual(received, { needsRefresh: true, profileId: receivedProfile.id });
   assert.equal((await readStoredProfile(receivedProfile.id)).instance.state, InstanceState.ACTIVE);
 
-  assert.equal(
-    await materializeRemoteProfileActorActivity({
-      actorUri: 'https://stored-missing.example/users/alice',
-    }),
-    null,
-  );
+  assert.equal(await getRemoteProfileActorStateActivity({ actorUri: missingUri }), null);
   assert.equal(contextCalls, 0);
+
+  const materialized = await materializeRemoteProfileActorActivity({ actorUri: missingUri });
+  assert.ok(materialized);
+  assert.equal(materialized.needsRefresh, false);
+  const storedMissing = await readStoredProfile(materialized.profileId);
+  assert.equal(storedMissing.actor.uri, missingUri);
+  assert.equal(contextCalls, 1);
+  assert.equal(lookupCalls, 1);
 });
 
 test('Actor receipt cannot bypass DISABLED Profile or SUSPENDED Instance eligibility', async () => {
@@ -1266,7 +1267,7 @@ test('No-document lookup rejects missing targets on SUSPENDED and local Instance
   );
 });
 
-test('Remote Profile Update는 저장된 actor가 없으면 network 없이 null을 반환한다', async (t) => {
+test('Remote Profile Update Workflow는 저장된 actor가 없으면 network 없이 null을 반환한다', async (t) => {
   const actorUri = new URL(`https://${remoteDomain}/users/missing-update`);
   const actor = createActor({ id: actorUri });
   const actorJsonLd = await actor.toJsonLd({ format: 'expand' });
@@ -1277,10 +1278,9 @@ test('Remote Profile Update는 저장된 actor가 없으면 network 없이 null�
   });
 
   assert.equal(
-    await updateRemoteProfileActorActivity({
+    await runRemoteProfileUpdateWorkflow({
       actorUri: actorUri.href,
       actorJsonLd,
-      contextOrigin: publicOrigin,
       receipt: {
         activityUri: 'https://remote.example/activities/update-missing',
         receivedAt: '2026-09-29T00:00:00Z',
@@ -1294,7 +1294,7 @@ test('Remote Profile Update는 저장된 actor가 없으면 network 없이 null�
   assert.equal(await db.$count(ActivityPubActors), 0);
 });
 
-test('Remote Profile Update projection URI mismatch는 non-retryable 오류로 남고 저장 상태를 보존한다', async (t) => {
+test('Remote Profile Update Workflow는 projection URI mismatch를 거부하고 저장 상태를 보존한다', async (t) => {
   const actorUri = new URL(`https://${remoteDomain}/users/alice`);
   const mismatchedActorUri = new URL(`https://${remoteDomain}/users/mallory`);
   const remoteInstance = await createInstance({
@@ -1310,33 +1310,36 @@ test('Remote Profile Update projection URI mismatch는 non-retryable 오류로 �
   const before = await readStoredProfile(profile.id);
   const mismatchedActor = createActor({ id: mismatchedActorUri, name: 'Mallory' });
   const actorJsonLd = await mismatchedActor.toJsonLd({ format: 'expand' });
-  let lookupCalls = 0;
-  t.mock.method(
-    federation,
-    'createContext',
-    () =>
-      ({
-        lookupObject: async () => {
-          lookupCalls += 1;
-          throw new Error('A supplied Update document must not be fetched');
-        },
-      }) as never,
-  );
+  let contextCalls = 0;
+  t.mock.method(federation, 'createContext', () => {
+    contextCalls += 1;
+    throw new Error('A supplied Update document must not be fetched');
+  });
 
   await assert.rejects(
-    updateRemoteProfileActorActivity({
+    runRemoteProfileUpdateWorkflow({
       actorUri: actorUri.href,
       actorJsonLd,
-      contextOrigin: publicOrigin,
       receipt: {
         activityUri: 'https://remote.example/activities/update-1',
         receivedAt: '2026-09-29T00:00:00Z',
       },
     }),
     (error: unknown) => {
-      assert.ok(error instanceof ApplicationFailure);
-      assert.equal(error.nonRetryable, true);
-      assert.equal(error.type, 'RemoteActorMaterializationError');
+      let current: unknown = error;
+      let foundNonRetryableFailure = false;
+      while (current && typeof current === 'object') {
+        if (
+          'nonRetryable' in current &&
+          current.nonRetryable === true &&
+          'type' in current &&
+          current.type === 'RemoteActorMaterializationError'
+        ) {
+          foundNonRetryableFailure = true;
+        }
+        current = 'cause' in current ? current.cause : undefined;
+      }
+      assert.equal(foundNonRetryableFailure, true);
       return true;
     },
   );
@@ -1347,7 +1350,7 @@ test('Remote Profile Update projection URI mismatch는 non-retryable 오류로 �
   assert.equal(after.profile.displayName, before.profile.displayName);
   assert.equal(after.actor.uri, before.actor.uri);
   assert.equal(after.actor.lastFetchedAt?.toString(), before.actor.lastFetchedAt?.toString());
-  assert.equal(lookupCalls, 0);
+  assert.equal(contextCalls, 0);
   assert.equal(await db.$count(Profiles), 1);
   assert.equal(await db.$count(ActivityPubActors), 1);
   assert.equal(
@@ -1565,6 +1568,439 @@ test('Remote Profile state Activity는 7일 TTL과 UNRESPONSIVE·eligibility를 
   );
 });
 
+test('분리된 actor state Activity는 7일 경계와 null timestamp를 판정하면서 상태를 바꾸지 않는다', async (t) => {
+  const now = Temporal.Instant.from('2026-09-29T00:00:00Z');
+  t.mock.method(Temporal.Now, 'instant', () => now);
+
+  const staleUri = 'https://split-state-stale.example/users/alice';
+  const staleInstance = await createInstance({
+    domain: 'split-state-stale.example',
+    state: InstanceState.UNRESPONSIVE,
+  });
+  const staleProfile = await createStoredProfile({
+    actorUri: staleUri,
+    handle: 'split-state-stale',
+    instanceId: staleInstance.id,
+    lastFetchedAt: now.subtract({ hours: 7 * 24 }),
+  });
+  const before = await readStoredProfile(staleProfile.id);
+
+  assert.deepEqual(await getRemoteProfileActorStateActivity({ actorUri: staleUri }), {
+    needsRefresh: true,
+    profileId: staleProfile.id,
+  });
+
+  const after = await readStoredProfile(staleProfile.id);
+  assert.equal(after.instance.state, before.instance.state);
+  assert.equal(after.actor.lastFetchedAt?.toString(), before.actor.lastFetchedAt?.toString());
+
+  const freshUri = 'https://split-state-fresh.example/users/alice';
+  const freshInstance = await createInstance({ domain: 'split-state-fresh.example' });
+  const freshProfile = await createStoredProfile({
+    actorUri: freshUri,
+    handle: 'split-state-fresh',
+    instanceId: freshInstance.id,
+    lastFetchedAt: now.subtract({ hours: 7 * 24 }).add({ nanoseconds: 1_000 }),
+  });
+  assert.deepEqual(await getRemoteProfileActorStateActivity({ actorUri: freshUri }), {
+    needsRefresh: false,
+    profileId: freshProfile.id,
+  });
+
+  const neverFetchedUri = 'https://split-state-never-fetched.example/users/alice';
+  const neverFetchedInstance = await createInstance({
+    domain: 'split-state-never-fetched.example',
+  });
+  const neverFetchedProfile = await createStoredProfile({
+    actorUri: neverFetchedUri,
+    handle: 'split-state-never-fetched',
+    instanceId: neverFetchedInstance.id,
+    lastFetchedAt: null,
+  });
+  assert.deepEqual(await getRemoteProfileActorStateActivity({ actorUri: neverFetchedUri }), {
+    needsRefresh: true,
+    profileId: neverFetchedProfile.id,
+  });
+});
+
+test('분리된 fetch Activity는 요청 전 시각을 반환하고 actor projection을 쓰지 않는다', async (t) => {
+  const actorUri = new URL('https://split-fetch.example/users/alice');
+  const actor = createActor({ id: actorUri });
+  const observedAt = Temporal.Instant.from('2026-09-29T00:00:00Z');
+  const afterFetchStarted = Temporal.Instant.from('2026-09-29T00:00:01Z');
+  let now = observedAt;
+  t.mock.method(Temporal.Now, 'instant', () => now);
+  const profileCount = await db.$count(Profiles);
+  const actorCount = await db.$count(ActivityPubActors);
+  let lookupCalls = 0;
+  let contextOrigin: string | undefined;
+  t.mock.method(federation, 'createContext', (origin: URL) => {
+    contextOrigin = origin.origin;
+    return {
+      lookupObject: async (identifier: string | URL) => {
+        lookupCalls += 1;
+        assert.equal(String(identifier), actorUri.href);
+        now = afterFetchStarted;
+        return actor;
+      },
+    } as never;
+  });
+
+  const document = await fetchRemoteProfileActorActivity({
+    actorUri: actorUri.href,
+    contextOrigin: publicOrigin,
+  });
+
+  assert.equal(contextOrigin, publicOrigin);
+  assert.equal(lookupCalls, 1);
+  assert.equal(document.observedAt, observedAt.toString());
+  assert.ok(JSON.stringify(document.actorJsonLd).includes(actorUri.href));
+  assert.equal(await db.$count(Profiles), profileCount);
+  assert.equal(await db.$count(ActivityPubActors), actorCount);
+});
+
+test('actor state 조회 뒤 Profile이 비활성화되면 fetch Activity는 원격 lookup 전에 중단한다', async (t) => {
+  const actorUri = 'https://split-fetch-disabled.example/users/alice';
+  const instance = await createInstance({ domain: 'split-fetch-disabled.example' });
+  const profile = await createStoredProfile({
+    actorUri,
+    handle: 'split-fetch-disabled',
+    instanceId: instance.id,
+    lastFetchedAt: Temporal.Now.instant().subtract({ hours: 8 * 24 }),
+  });
+
+  assert.deepEqual(await getRemoteProfileActorStateActivity({ actorUri }), {
+    needsRefresh: true,
+    profileId: profile.id,
+  });
+  await db
+    .update(Profiles)
+    .set({ state: ProfileState.DISABLED })
+    .where(eq(Profiles.id, profile.id));
+  const before = await readStoredProfile(profile.id);
+  let contextCalls = 0;
+  t.mock.method(federation, 'createContext', () => {
+    contextCalls += 1;
+    throw new Error('Disabled profiles must not perform actor lookup');
+  });
+
+  await assert.rejects(
+    fetchRemoteProfileActorActivity({ actorUri, contextOrigin: publicOrigin }),
+    (error: unknown) => {
+      assert.ok(error instanceof ApplicationFailure);
+      assert.equal(error.nonRetryable, true);
+      assert.equal(error.type, 'NotFoundError');
+      return true;
+    },
+  );
+
+  const after = await readStoredProfile(profile.id);
+  assert.equal(contextCalls, 0);
+  assert.equal(after.profile.state, ProfileState.DISABLED);
+  assert.equal(after.instance.state, before.instance.state);
+  assert.equal(after.actor.lastFetchedAt?.toString(), before.actor.lastFetchedAt?.toString());
+});
+
+test('분리된 apply Activity는 network 없이 supplied timestamp로 actor를 저장하고 복구한다', async (t) => {
+  const actorUri = new URL('https://split-apply.example/users/alice');
+  const instance = await createInstance({
+    domain: actorUri.hostname,
+    state: InstanceState.UNRESPONSIVE,
+  });
+  const profile = await createStoredProfile({
+    actorUri: actorUri.href,
+    handle: 'split-apply',
+    instanceId: instance.id,
+    lastFetchedAt: Temporal.Instant.from('2026-09-01T00:00:00Z'),
+  });
+  const actorJsonLd = await createActor({ id: actorUri, name: 'Applied Alice' }).toJsonLd({
+    format: 'expand',
+  });
+  const observedAt = '2026-09-28T12:34:56Z';
+  let contextCalls = 0;
+  t.mock.method(federation, 'createContext', () => {
+    contextCalls += 1;
+    throw new Error('Applying a fetched document must not perform network lookup');
+  });
+
+  assert.equal(
+    await applyRemoteProfileActorActivity({
+      actorUri: actorUri.href,
+      actorJsonLd,
+      observedAt,
+    }),
+    profile.id,
+  );
+
+  const stored = await readStoredProfile(profile.id);
+  assert.equal(contextCalls, 0);
+  assert.equal(stored.profile.displayName, 'Applied Alice');
+  assert.equal(
+    stored.actor.lastFetchedAt?.toString(),
+    Temporal.Instant.from(observedAt).toString(),
+  );
+  assert.equal(stored.instance.state, InstanceState.ACTIVE);
+});
+
+test('분리된 recovery Activity는 cached actor를 복구하되 stale freshness를 유지한다', async (t) => {
+  const actorUri = new URL('https://split-recovery.example/users/alice');
+  const instance = await createInstance({
+    domain: actorUri.hostname,
+    state: InstanceState.UNRESPONSIVE,
+  });
+  const staleAt = Temporal.Instant.from('2026-09-01T00:00:00Z');
+  const profile = await createStoredProfile({
+    actorUri: actorUri.href,
+    handle: 'split-recovery',
+    instanceId: instance.id,
+    lastFetchedAt: staleAt,
+  });
+  let contextCalls = 0;
+  t.mock.method(federation, 'createContext', () => {
+    contextCalls += 1;
+    throw new Error('Receipt-only recovery must not fetch an actor');
+  });
+
+  await recoverRemoteProfileActorActivity({ actorUri: actorUri.href });
+
+  const stored = await readStoredProfile(profile.id);
+  assert.equal(contextCalls, 0);
+  assert.equal(stored.instance.state, InstanceState.ACTIVE);
+  assert.equal(stored.actor.lastFetchedAt?.toString(), staleAt.toString());
+});
+
+test(
+  'URI lookup Workflow는 fresh cache를 반환하고 refresh child를 시작하지 않는다',
+  {
+    timeout: 120_000,
+  },
+  async (t) => {
+    const actorUri = 'https://split-uri-fresh.example/users/alice';
+    const instance = await createInstance({ domain: 'split-uri-fresh.example' });
+    const profile = await createStoredProfile({
+      actorUri,
+      handle: 'split-uri-fresh',
+      instanceId: instance.id,
+      lastFetchedAt: Temporal.Now.instant().subtract({ hours: 1 }),
+    });
+    let stateCalls = 0;
+    let fetchCalls = 0;
+    let applyCalls = 0;
+    let recoverCalls = 0;
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+    const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-uri-fresh-${process.pid}`;
+    const worker = await Worker.create({
+      activities: {
+        ...remoteProfileActivities(),
+        getRemoteProfileActorStateActivity: async (input: { actorUri: string }) => {
+          stateCalls += 1;
+          return getRemoteProfileActorStateActivity(input);
+        },
+        fetchRemoteProfileActorActivity: async () => {
+          fetchCalls += 1;
+          throw new Error('Fresh URI cache must not refresh');
+        },
+        applyRemoteProfileActorActivity: async (input: {
+          actorUri: string;
+          actorJsonLd: unknown;
+          observedAt: string;
+        }) => {
+          applyCalls += 1;
+          return applyRemoteProfileActorActivity(input);
+        },
+        recoverRemoteProfileActorActivity: async (input: { actorUri: string }) => {
+          recoverCalls += 1;
+          return recoverRemoteProfileActorActivity(input);
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    const result = await worker.runUntil(() =>
+      environment.client.workflow.execute(REMOTE_PROFILE_LOOKUP_WORKFLOW_TYPE, {
+        args: [{ actorUri, contextOrigin: publicOrigin }],
+        taskQueue,
+        workflowId: `${taskQueue}:fresh`,
+      }),
+    );
+
+    assert.equal(result, profile.id);
+    assert.equal(stateCalls, 1);
+    assert.equal(fetchCalls, 0);
+    assert.equal(applyCalls, 0);
+    assert.equal(recoverCalls, 0);
+  },
+);
+
+test(
+  'receipt-only URI lookup는 cached actor를 복구하고 freshness를 갱신하지 않는다',
+  {
+    timeout: 120_000,
+  },
+  async (t) => {
+    const actorUri = 'https://split-uri-receipt.example/users/alice';
+    const instance = await createInstance({
+      domain: 'split-uri-receipt.example',
+      state: InstanceState.UNRESPONSIVE,
+    });
+    const lastFetchedAt = Temporal.Now.instant().subtract({ hours: 1 });
+    const profile = await createStoredProfile({
+      actorUri,
+      handle: 'split-uri-receipt',
+      instanceId: instance.id,
+      lastFetchedAt,
+    });
+    const storedBefore = await readStoredProfile(profile.id);
+    let fetchCalls = 0;
+    let recoveryCalls = 0;
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+    const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-uri-receipt-${process.pid}`;
+    const worker = await Worker.create({
+      activities: {
+        ...remoteProfileActivities(),
+        fetchRemoteProfileActorActivity: async () => {
+          fetchCalls += 1;
+          throw new Error('A cached receipt-only lookup must not fetch an actor');
+        },
+        recoverRemoteProfileActorActivity: async (input: { actorUri: string }) => {
+          recoveryCalls += 1;
+          return recoverRemoteProfileActorActivity(input);
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    const result = await worker.runUntil(() =>
+      environment.client.workflow.execute(REMOTE_PROFILE_LOOKUP_WORKFLOW_TYPE, {
+        args: [
+          {
+            actorUri,
+            contextOrigin: publicOrigin,
+            receipt: {
+              activityUri: 'https://split-uri-receipt.example/activities/1',
+              receivedAt: '2026-09-29T00:00:00Z',
+            },
+          },
+        ],
+        taskQueue,
+        workflowId: `${taskQueue}:cached-receipt`,
+      }),
+    );
+
+    const storedAfter = await readStoredProfile(profile.id);
+    assert.equal(result, profile.id);
+    assert.equal(recoveryCalls, 1);
+    assert.equal(fetchCalls, 0);
+    assert.equal(storedAfter.instance.state, InstanceState.ACTIVE);
+    assert.equal(
+      storedAfter.actor.lastFetchedAt?.toString(),
+      storedBefore.actor.lastFetchedAt?.toString(),
+    );
+  },
+);
+
+test(
+  'URI lookup Workflow는 7일 초과 Profile을 즉시 반환하고 refresh child를 시작한다',
+  { timeout: 120_000 },
+  async (t) => {
+    const now = Temporal.Instant.from('2026-09-29T00:00:00Z');
+    t.mock.method(Temporal.Now, 'instant', () => now);
+    const actorUri = 'https://split-uri-stale.example/users/alice';
+    const lastFetchedAt = now.subtract({ hours: 7 * 24 }).subtract({ nanoseconds: 1_000 });
+    const instance = await createInstance({ domain: 'split-uri-stale.example' });
+    const profile = await createStoredProfile({
+      actorUri,
+      handle: 'split-uri-stale',
+      instanceId: instance.id,
+      lastFetchedAt,
+    });
+    const before = await readStoredProfile(profile.id);
+    const actorJsonLd = await createActor({
+      id: new URL(actorUri),
+      name: 'Refreshed Alice',
+    }).toJsonLd({ format: 'expand' });
+    let fetchCalls = 0;
+    let signalFetchStarted!: () => void;
+    let releaseFetch!: () => void;
+    const fetchStarted = new Promise<void>((resolve) => {
+      signalFetchStarted = resolve;
+    });
+    const fetchReleased = new Promise<void>((resolve) => {
+      releaseFetch = resolve;
+    });
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+    const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-uri-stale-${process.pid}`;
+    const worker = await Worker.create({
+      activities: {
+        ...remoteProfileActivities(),
+        fetchRemoteProfileActorActivity: async (input: { actorUri: string }) => {
+          fetchCalls += 1;
+          assert.equal(input.actorUri, actorUri);
+          signalFetchStarted();
+          await fetchReleased;
+          return { actorJsonLd, observedAt: now.toString() };
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    try {
+      await worker.runUntil(async () => {
+        const input: RemoteProfileMaterializationInput = { actorUri, contextOrigin: publicOrigin };
+        const parentResult = environment.client.workflow.execute<
+          (input: RemoteProfileMaterializationInput) => Promise<string>
+        >(REMOTE_PROFILE_LOOKUP_WORKFLOW_TYPE, {
+          args: [input],
+          taskQueue,
+          workflowId: `${taskQueue}:stale`,
+        });
+
+        await fetchStarted;
+        assert.equal(await parentResult, profile.id);
+        const cached = await readStoredProfile(profile.id);
+        assert.equal(
+          cached.actor.lastFetchedAt?.toString(),
+          before.actor.lastFetchedAt?.toString(),
+        );
+
+        const childWorkflowId = remoteProfileRefreshWorkflow.workflowIdFromArgs(input);
+        const child =
+          environment.client.workflow.getHandle<
+            (input: RemoteProfileMaterializationInput) => Promise<string>
+          >(childWorkflowId);
+        releaseFetch();
+        assert.equal(await child.result(), profile.id);
+      });
+    } finally {
+      releaseFetch();
+    }
+
+    assert.equal(fetchCalls, 1);
+    assert.equal(
+      (await readStoredProfile(profile.id)).actor.lastFetchedAt?.toString(),
+      now.toString(),
+    );
+  },
+);
+
 test(
   'Remote Profile Workflow는 stale UNRESPONSIVE Profile을 즉시 반환하고 refresh child를 시작한다',
   { timeout: 120_000 },
@@ -1588,6 +2024,9 @@ test(
       instanceId: unresponsiveInstance.id,
       lastFetchedAt: Temporal.Now.instant().subtract({ hours: 8 * 24 }),
     });
+    const actorJsonLd = await createActor({ id: new URL(unresponsiveUri) }).toJsonLd({
+      format: 'expand',
+    });
     let refreshCalls = 0;
     let markRefreshComplete!: () => void;
     const refreshCompleted = new Promise<void>((resolve) => {
@@ -1601,14 +2040,12 @@ test(
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-materialization-fresh-${process.pid}`;
     const worker = await Worker.create({
       activities: {
-        lookupRemoteActorUriActivity,
-        materializeRemoteProfileActorActivity,
-        refreshRemoteProfileActorActivity: async (input: RemoteProfileMaterializationInput) => {
-          const { actorUri } = input;
+        ...remoteProfileActivities(),
+        fetchRemoteProfileActorActivity: async (input: RemoteProfileMaterializationInput) => {
           refreshCalls += 1;
-          assert.equal(actorUri, unresponsiveUri);
+          assert.equal(input.actorUri, unresponsiveUri);
           markRefreshComplete();
-          return unresponsiveProfile.id;
+          return { actorJsonLd, observedAt: Temporal.Now.instant().toString() };
         },
       },
       connection: environment.nativeConnection,
@@ -1686,6 +2123,7 @@ test(
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-materialization-stale-${process.pid}`;
     const worker = await Worker.create({
       activities: {
+        ...remoteProfileActivities(),
         lookupRemoteActorUriActivity,
         materializeRemoteProfileActorActivity,
         refreshRemoteProfileActorActivity,
@@ -1760,22 +2198,58 @@ test(
 );
 
 test(
-  'Remote Profile Workflow는 refresh child 실패 뒤에도 cached Profile을 유지한다',
+  'Remote Profile URI Workflow는 refresh child 실패 뒤 receipt recovery만 유지하고 stale TTL을 보존한다',
   { timeout: 120_000 },
   async (t) => {
-    const actorUri = new URL(`https://${remoteDomain}/users/refresh-failure`);
-    const remoteInstance = await createInstance({ domain: remoteDomain });
-    const profile = await createStoredProfile({
-      actorUri: actorUri.href,
-      handle: 'refresh-failure',
-      instanceId: remoteInstance.id,
-      lastFetchedAt: Temporal.Now.instant().subtract({ hours: 8 * 24 }),
-    });
-    const before = await readStoredProfile(profile.id);
+    const staleAt = Temporal.Now.instant().subtract({ hours: 8 * 24 });
+    const scenarios = await Promise.all(
+      [
+        {
+          actorUri: 'https://refresh-failure-no-receipt.example/users/alice',
+          domain: 'refresh-failure-no-receipt.example',
+          handle: 'refresh-failure-no-receipt',
+          receipt: undefined,
+        },
+        {
+          actorUri: 'https://refresh-failure-with-receipt.example/users/alice',
+          domain: 'refresh-failure-with-receipt.example',
+          handle: 'refresh-failure-with-receipt',
+          receipt: {
+            activityUri: 'https://refresh-failure-with-receipt.example/activities/1',
+            receivedAt: '2026-09-29T00:00:00Z',
+          },
+        },
+      ].map(async ({ actorUri, domain, handle, receipt }) => {
+        const instance = await createInstance({ domain, state: InstanceState.UNRESPONSIVE });
+        const profile = await createStoredProfile({
+          actorUri,
+          handle,
+          instanceId: instance.id,
+          lastFetchedAt: staleAt,
+        });
+
+        return {
+          actorUri,
+          before: await readStoredProfile(profile.id),
+          input: {
+            actorUri,
+            contextOrigin: publicOrigin,
+            ...(receipt === undefined ? {} : { receipt }),
+          } satisfies RemoteProfileLookupInput,
+          materializationInput: {
+            actorUri,
+            contextOrigin: publicOrigin,
+          } satisfies RemoteProfileMaterializationInput,
+          profile,
+        };
+      }),
+    );
     const refreshFailure = ApplicationFailure.nonRetryable(
       'refresh lookup failed',
       'RemoteActorMaterializationError',
     );
+    const fetchCalls: string[] = [];
+    const recoveryCalls: string[] = [];
 
     const environment = await TestWorkflowEnvironment.createLocal({
       server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
@@ -1784,10 +2258,16 @@ test(
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-materialization-failure-${process.pid}`;
     const worker = await Worker.create({
       activities: {
-        lookupRemoteActorUriActivity,
-        materializeRemoteProfileActorActivity,
-        refreshRemoteProfileActorActivity: async () => {
+        ...remoteProfileActivities(),
+        fetchRemoteProfileActorActivity: async ({
+          actorUri,
+        }: RemoteProfileMaterializationInput) => {
+          fetchCalls.push(actorUri);
           throw refreshFailure;
+        },
+        recoverRemoteProfileActorActivity: async ({ actorUri }: { actorUri: string }) => {
+          recoveryCalls.push(actorUri);
+          return recoverRemoteProfileActorActivity({ actorUri });
         },
       },
       connection: environment.nativeConnection,
@@ -1795,40 +2275,68 @@ test(
       taskQueue,
       workflowsPath,
     });
-    const input: RemoteProfileLookupInput = {
-      domain: remoteDomain,
-      handle: 'refresh-failure',
-    };
-    const materializationInput: RemoteProfileMaterializationInput = {
-      actorUri: actorUri.href,
-    };
 
     await worker.runUntil(async () => {
-      const profileId = await environment.client.workflow.execute<
-        (input: RemoteProfileLookupInput) => Promise<string>
-      >(REMOTE_PROFILE_LOOKUP_WORKFLOW_TYPE, {
-        args: [input],
-        taskQueue,
-        workflowId: `${taskQueue}:failure`,
-      });
-      assert.equal(profileId, profile.id);
+      const results = await Promise.all(
+        scenarios.map(({ input, materializationInput }) =>
+          environment.client.workflow.execute<
+            (input: RemoteProfileLookupInput) => Promise<string | null>
+          >(REMOTE_PROFILE_LOOKUP_WORKFLOW_TYPE, {
+            args: [input],
+            taskQueue,
+            workflowId: `${taskQueue}:${materializationInput.actorUri}`,
+          }),
+        ),
+      );
+      assert.deepEqual(
+        results,
+        scenarios.map(({ profile }) => profile.id),
+      );
 
-      const childWorkflowId = remoteProfileRefreshWorkflow.workflowIdFromArgs(materializationInput);
-      const childHandle =
-        environment.client.workflow.getHandle<
-          (input: RemoteProfileMaterializationInput) => Promise<string>
-        >(childWorkflowId);
-      await assert.rejects(childHandle.result());
+      await Promise.all(
+        scenarios.map(({ materializationInput }) => {
+          const childWorkflowId =
+            remoteProfileRefreshWorkflow.workflowIdFromArgs(materializationInput);
+          const childHandle =
+            environment.client.workflow.getHandle<
+              (input: RemoteProfileMaterializationInput) => Promise<string>
+            >(childWorkflowId);
+          return assert.rejects(childHandle.result());
+        }),
+      );
     });
 
-    const after = await readStoredProfile(profile.id);
-    assert.equal(after.profile.id, before.profile.id);
-    assert.equal(after.actor.lastFetchedAt?.toString(), before.actor.lastFetchedAt?.toString());
+    const after = await Promise.all(scenarios.map(({ profile }) => readStoredProfile(profile.id)));
+    assert.deepEqual(fetchCalls.toSorted(), scenarios.map(({ actorUri }) => actorUri).toSorted());
+    assert.deepEqual(recoveryCalls, [scenarios[1]!.actorUri]);
+    assert.deepEqual(
+      after.map(({ profile }) => profile.id),
+      scenarios.map(({ profile }) => profile.id),
+    );
+    assert.deepEqual(
+      after.map(({ actor, instance }, index) => ({
+        lastFetchedAt: actor.lastFetchedAt?.toString(),
+        state: instance.state,
+        beforeLastFetchedAt: scenarios[index]!.before.actor.lastFetchedAt?.toString(),
+      })),
+      [
+        {
+          lastFetchedAt: scenarios[0]!.before.actor.lastFetchedAt?.toString(),
+          state: InstanceState.UNRESPONSIVE,
+          beforeLastFetchedAt: scenarios[0]!.before.actor.lastFetchedAt?.toString(),
+        },
+        {
+          lastFetchedAt: scenarios[1]!.before.actor.lastFetchedAt?.toString(),
+          state: InstanceState.ACTIVE,
+          beforeLastFetchedAt: scenarios[1]!.before.actor.lastFetchedAt?.toString(),
+        },
+      ],
+    );
   },
 );
 
 test(
-  'Remote Profile Workflow는 missing actor refresh 실패를 caller에게 전달한다',
+  'Remote Profile Workflow는 missing actor fetch 실패를 caller에게 전달한다',
   { timeout: 120_000 },
   async (t) => {
     const actorUri = new URL(`https://${remoteDomain}/users/missing-failure`);
@@ -1836,7 +2344,7 @@ test(
       'missing actor refresh failed',
       'RemoteActorMaterializationError',
     );
-    let refreshCalls = 0;
+    let fetchCalls = 0;
     const environment = await TestWorkflowEnvironment.createLocal({
       server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
     });
@@ -1844,10 +2352,10 @@ test(
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-materialization-missing-${process.pid}`;
     const worker = await Worker.create({
       activities: {
+        ...remoteProfileActivities(),
         lookupRemoteActorUriActivity: async () => actorUri.href,
-        materializeRemoteProfileActorActivity,
-        refreshRemoteProfileActorActivity: async () => {
-          refreshCalls += 1;
+        fetchRemoteProfileActorActivity: async () => {
+          fetchCalls += 1;
           throw refreshFailure;
         },
       },
@@ -1882,7 +2390,7 @@ test(
         return true;
       },
     );
-    assert.equal(refreshCalls, 1);
+    assert.equal(fetchCalls, 1);
     assert.equal(await db.$count(Profiles), 0);
     assert.equal(await db.$count(ActivityPubActors), 0);
   },
@@ -1893,7 +2401,6 @@ test(
   { timeout: 120_000 },
   async (t) => {
     let lookupActivityCalls = 0;
-    let updateActivityCalls = 0;
     const environment = await TestWorkflowEnvironment.createLocal({
       server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
     });
@@ -1905,17 +2412,28 @@ test(
           lookupActivityCalls += 1;
           return null;
         },
-        materializeRemoteProfileActorActivity: async () => {
+        getRemoteProfileActorStateActivity: async () => {
           lookupActivityCalls += 1;
           return null;
+        },
+        fetchRemoteProfileActorActivity: async () => {
+          lookupActivityCalls += 1;
+          return { actorJsonLd: {}, observedAt: '2026-09-29T00:00:00Z' };
+        },
+        applyRemoteProfileActorActivity: async () => {
+          lookupActivityCalls += 1;
+          return '';
+        },
+        recoverRemoteProfileActorActivity: async () => {
+          lookupActivityCalls += 1;
+        },
+        materializeRemoteProfileActorActivity: async () => {
+          lookupActivityCalls += 1;
+          return { profileId: '', needsRefresh: false };
         },
         refreshRemoteProfileActorActivity: async () => {
           lookupActivityCalls += 1;
           return '';
-        },
-        updateRemoteProfileActorActivity: async () => {
-          updateActivityCalls += 1;
-          return null;
         },
       },
       connection: environment.nativeConnection,
@@ -1975,12 +2493,52 @@ test(
           workflowId: `${taskQueue}:invalid-update-input`,
         }),
       );
-      assert.equal(updateActivityCalls, 0);
+      assert.equal(lookupActivityCalls, 0);
     });
   },
 );
 
 type PersonOptions = ConstructorParameters<typeof Person>[0];
+
+const runRemoteProfileUpdateWorkflow = async (input: RemoteProfileUpdateInput) => {
+  const environment = await TestWorkflowEnvironment.createLocal({
+    server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+  });
+  const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-update-${crypto.randomUUID()}`;
+
+  try {
+    const worker = await Worker.create({
+      activities: {
+        getRemoteProfileActorStateActivity,
+        applyRemoteProfileActorActivity,
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    return await worker.runUntil(() =>
+      environment.client.workflow.execute(REMOTE_PROFILE_UPDATE_WORKFLOW_TYPE, {
+        args: [input],
+        taskQueue,
+        workflowId: remoteProfileUpdateWorkflow.workflowIdFromArgs(input),
+      }),
+    );
+  } finally {
+    await environment.teardown();
+  }
+};
+
+const remoteProfileActivities = () => ({
+  lookupRemoteActorUriActivity,
+  materializeRemoteProfileActorActivity,
+  refreshRemoteProfileActorActivity,
+  getRemoteProfileActorStateActivity,
+  fetchRemoteProfileActorActivity,
+  applyRemoteProfileActorActivity,
+  recoverRemoteProfileActorActivity,
+});
 
 const createActor = (overrides: Partial<PersonOptions> = {}) =>
   new Person({
