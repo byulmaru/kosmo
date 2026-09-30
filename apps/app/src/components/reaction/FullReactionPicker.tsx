@@ -1,10 +1,21 @@
 import { Search } from 'lucide-react-native';
 import { useEffect, useRef } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  FlatList,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
+import { ReactionEmojiImage } from './ReactionEmojiImage';
 import { ReactionPendingSpinner } from './ReactionPendingSpinner';
 import type React from 'react';
+import type { GestureResponderEvent } from 'react-native';
 
 export type FullReactionPickerOption = Readonly<{
   category: string;
@@ -18,6 +29,7 @@ export type FullReactionPickerOption = Readonly<{
 }>;
 
 export type FullReactionPickerProps = {
+  onBackdropPress?: () => void;
   onClose: () => void;
   onQueryChange: (query: string) => void;
   onSelect: (option: FullReactionPickerOption) => void;
@@ -25,10 +37,13 @@ export type FullReactionPickerProps = {
   presentation?: 'mobile' | 'web';
   query: string;
   selectedValues?: ReadonlyArray<string>;
+  pendingOptionIds?: ReadonlyArray<string>;
+  errorOptionIds?: ReadonlyArray<string>;
   loading?: boolean;
 };
 
 export function FullReactionPicker({
+  onBackdropPress,
   onClose,
   onQueryChange,
   onSelect,
@@ -36,16 +51,16 @@ export function FullReactionPicker({
   presentation = 'web',
   query,
   selectedValues = [],
+  pendingOptionIds = [],
+  errorOptionIds = [],
   loading = false,
 }: FullReactionPickerProps): React.ReactElement {
   const theme = useTheme();
   const elevation = useElevation();
+  const { height: viewportHeight } = useWindowDimensions();
   const mobile = presentation === 'mobile';
   const pickerRef = useRef<View>(null);
-  const categories = Array.from(
-    new Map(options.map((option) => [option.category, option.categoryLabel])).entries(),
-    ([id, label]) => ({ id, label }),
-  );
+  const dragStartY = useRef<number | null>(null);
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const searchResults = options.filter((option) =>
     [option.emoji, option.label, ...(option.keywords ?? [])]
@@ -80,6 +95,16 @@ export function FullReactionPicker({
     ownerDocument.addEventListener('keyup', onKeyUp, true);
     return () => ownerDocument.removeEventListener('keyup', onKeyUp, true);
   }, [mobile, onClose]);
+  const onDragStart = (event: GestureResponderEvent) => {
+    dragStartY.current = event.nativeEvent.pageY;
+  };
+  const onDragEnd = (event: GestureResponderEvent) => {
+    const startY = dragStartY.current;
+    dragStartY.current = null;
+    if (startY !== null && event.nativeEvent.pageY - startY > 80) {
+      onClose();
+    }
+  };
   const picker = (
     <View
       accessibilityLabel="반응 선택"
@@ -89,14 +114,25 @@ export function FullReactionPicker({
       role={Platform.OS === 'web' ? 'dialog' : undefined}
       style={[
         mobile ? styles.mobileSheet : styles.webDialog,
-        mobile ? { height: state === 'browse' ? 480 : 720 } : elevation.overlay,
+        mobile
+          ? { height: Math.min(state === 'browse' ? 480 : 720, viewportHeight) }
+          : elevation.overlay,
+        !mobile && { height: Math.min(624, Math.max(0, viewportHeight - 2 * space[8])) },
         { backgroundColor: theme.backgroundElevated, borderColor: theme.borderDefault },
       ]}
       testID={mobile ? 'full-reaction-picker-sheet' : undefined}
     >
       {mobile ? (
         <>
-          <View style={[styles.dragHandle, { backgroundColor: theme.borderStrong }]} />
+          <View
+            onStartShouldSetResponder={() => true}
+            onTouchEnd={onDragEnd}
+            onTouchStart={onDragStart}
+            style={styles.dragHandleHitArea}
+            testID="full-reaction-picker-drag-handle"
+          >
+            <View style={[styles.dragHandle, { backgroundColor: theme.borderStrong }]} />
+          </View>
           <Text
             accessibilityRole="header"
             style={[styles.mobileTitle, { color: theme.foregroundPrimary }]}
@@ -129,61 +165,67 @@ export function FullReactionPicker({
           </Text>
         </View>
       ) : (
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          testID={mobile ? 'full-reaction-picker-scroll' : undefined}
-        >
-          {state === 'searchResults' ? (
-            <>
+        <FlatList<ReactionGridItem>
+          data={
+            state === 'searchResults'
+              ? createGridItems('results', '반응', searchResults, mobile ? 7 : 8)
+              : createBrowseItems(options, mobile ? 7 : 8)
+          }
+          initialNumToRender={mobile ? 12 : 10}
+          keyExtractor={(item) => item.id}
+          ListHeaderComponent={
+            state === 'searchResults' ? (
               <Text style={[styles.resultCount, { color: theme.foregroundSecondary }]}>
                 ‘{query}’ 검색 결과 {searchResults.length}개
               </Text>
-              <ReactionSection
+            ) : null
+          }
+          maxToRenderPerBatch={mobile ? 12 : 10}
+          renderItem={({ item }) =>
+            item.kind === 'heading' ? (
+              <View style={styles.section} testID={item.testID}>
+                <Text
+                  accessibilityRole="header"
+                  style={[styles.sectionTitle, { color: theme.foregroundPrimary }]}
+                >
+                  {item.title}
+                </Text>
+              </View>
+            ) : (
+              <ReactionGridRow
                 mobile={mobile}
                 onSelect={onSelect}
-                options={searchResults}
+                options={item.options}
+                rowIndex={item.rowIndex}
+                sectionId={item.sectionId}
                 selectedValues={selectedValues}
-                title="반응"
+                pendingValues={pendingOptionIds}
+                errorValues={errorOptionIds}
               />
-            </>
-          ) : (
-            <>
-              <ReactionSection
-                mobile={mobile}
-                onSelect={onSelect}
-                options={options.filter((option) => option.quick)}
-                selectedValues={selectedValues}
-                title="빠른 반응"
-              />
-              <ReactionSection
-                mobile={mobile}
-                onSelect={onSelect}
-                options={options.filter((option) => option.recent).slice(0, mobile ? 14 : 16)}
-                selectedValues={selectedValues}
-                testID="full-reaction-section-recent"
-                title="최근 사용"
-              />
-              {categories.map((category) => (
-                <ReactionSection
-                  key={category.id}
-                  mobile={mobile}
-                  onSelect={onSelect}
-                  options={options.filter((option) => option.category === category.id)}
-                  selectedValues={selectedValues}
-                  testID={`full-reaction-section-${category.id}`}
-                  title={category.label}
-                />
-              ))}
-            </>
-          )}
-        </ScrollView>
+            )
+          }
+          showsVerticalScrollIndicator={false}
+          testID="full-reaction-picker-scroll"
+          windowSize={5}
+          contentContainerStyle={styles.scrollContent}
+        />
       )}
     </View>
   );
 
   return mobile ? (
-    <View style={[styles.mobileRoot, { backgroundColor: theme.overlayScrim }]}>{picker}</View>
+    <View
+      onResponderRelease={(event) => {
+        if (event.target === event.currentTarget) {
+          onBackdropPress?.();
+        }
+      }}
+      onStartShouldSetResponder={(event) => event.target === event.currentTarget}
+      style={[styles.mobileRoot, { backgroundColor: theme.overlayScrim }]}
+      testID="full-reaction-picker-backdrop"
+    >
+      {picker}
+    </View>
   ) : (
     picker
   );
@@ -215,99 +257,162 @@ function SearchField({ onChange, value }: { onChange: (value: string) => void; v
   );
 }
 
-function ReactionSection({
+type ReactionGridItem =
+  | Readonly<{ id: string; kind: 'heading'; testID: string; title: string }>
+  | Readonly<{
+      id: string;
+      kind: 'row';
+      options: ReadonlyArray<FullReactionPickerOption>;
+      rowIndex: number;
+      sectionId: string;
+    }>;
+
+function createGridItems(
+  sectionId: string,
+  title: string,
+  options: ReadonlyArray<FullReactionPickerOption>,
+  columns: number,
+): ReactionGridItem[] {
+  if (options.length === 0) {
+    return [];
+  }
+
+  return [
+    {
+      id: `${sectionId}-heading`,
+      kind: 'heading',
+      testID: `full-reaction-section-${sectionId}`,
+      title,
+    },
+    ...Array.from({ length: Math.ceil(options.length / columns) }, (_, rowIndex) => ({
+      id: `${sectionId}-row-${rowIndex}`,
+      kind: 'row' as const,
+      options: options.slice(rowIndex * columns, (rowIndex + 1) * columns),
+      rowIndex,
+      sectionId,
+    })),
+  ];
+}
+
+function createBrowseItems(
+  options: ReadonlyArray<FullReactionPickerOption>,
+  columns: number,
+): ReactionGridItem[] {
+  const categories = Array.from(
+    new Map(options.map((option) => [option.category, option.categoryLabel])).entries(),
+    ([id, title]) => ({ id, options: options.filter((option) => option.category === id), title }),
+  );
+  return [
+    ...createGridItems(
+      'quick',
+      '빠른 반응',
+      options.filter((option) => option.quick),
+      columns,
+    ),
+    ...categories.flatMap(({ id, options: categoryOptions, title }) =>
+      createGridItems(id, title, categoryOptions, columns),
+    ),
+  ];
+}
+
+function ReactionGridRow({
   mobile,
   onSelect,
   options,
+  rowIndex,
+  sectionId,
   selectedValues,
-  testID,
-  title,
+  pendingValues,
+  errorValues,
 }: {
   mobile: boolean;
   onSelect: (option: FullReactionPickerOption) => void;
   options: ReadonlyArray<FullReactionPickerOption>;
+  rowIndex: number;
+  sectionId: string;
   selectedValues: ReadonlyArray<string>;
-  testID?: string;
-  title: string;
+  pendingValues: ReadonlyArray<string>;
+  errorValues: ReadonlyArray<string>;
 }) {
   const theme = useTheme();
   const columns = mobile ? 7 : 8;
-  const rows = Array.from({ length: Math.ceil(options.length / columns) }, (_, index) =>
-    options.slice(index * columns, (index + 1) * columns),
-  );
   return (
-    <View style={styles.section} testID={testID}>
-      <Text
-        accessibilityRole="header"
-        style={[styles.sectionTitle, { color: theme.foregroundPrimary }]}
-      >
-        {title}
-      </Text>
-      <View style={[styles.grid, mobile ? styles.mobileGrid : styles.webGrid]}>
-        {rows.map((row, rowIndex) => (
-          <View
-            key={rowIndex}
-            style={[
-              styles.gridRow,
-              mobile ? styles.mobileGrid : styles.webGrid,
-              row.length === columns ? styles.fullGridRow : styles.partialGridRow,
-            ]}
-            testID={testID ? `${testID}-row-${rowIndex}` : undefined}
+    <View
+      style={[
+        styles.gridRow,
+        mobile ? styles.mobileGrid : styles.webGrid,
+        options.length === columns ? styles.fullGridRow : styles.partialGridRow,
+      ]}
+      testID={`full-reaction-section-${sectionId}-row-${rowIndex}`}
+    >
+      {options.map((option) => {
+        const selected = selectedValues.includes(option.id);
+        const pending = pendingValues.includes(option.id);
+        const error = errorValues.includes(option.id);
+        const accessibilityLabel = error
+          ? `${option.label} 반응, 오류, 다시 시도 ${option.emoji}`
+          : pending
+            ? `${option.label} 반응, 처리 중 ${option.emoji}`
+            : `${option.label} ${option.emoji}`;
+        return (
+          <Pressable
+            accessibilityLabel={accessibilityLabel}
+            accessibilityRole="button"
+            accessibilityState={{ busy: pending, disabled: pending, selected }}
+            aria-busy={pending}
+            aria-pressed={selected}
+            disabled={pending}
+            key={option.id}
+            onPress={() => onSelect(option)}
+            style={mobile ? styles.mobileReactionTarget : styles.webReactionTarget}
           >
-            {row.map((option) => {
-              const selected = selectedValues.includes(option.id);
-              return (
-                <Pressable
-                  accessibilityLabel={`${option.label} ${option.emoji}`}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected }}
-                  aria-pressed={selected}
-                  key={option.id}
-                  onPress={() => onSelect(option)}
-                  style={mobile ? styles.mobileReactionTarget : styles.webReactionTarget}
-                >
-                  {({ pressed }) => (
-                    <View
-                      style={[
-                        styles.reaction,
-                        mobile ? styles.mobileReaction : styles.webReaction,
-                        {
-                          backgroundColor: selected
-                            ? theme.stateSelectedSurface
-                            : pressed
-                              ? theme.statePressed
-                              : 'transparent',
-                          borderColor: selected ? theme.stateSelectedBorder : 'transparent',
-                        },
-                      ]}
-                    >
-                      <Text style={mobile ? styles.mobileEmoji : styles.webEmoji}>
-                        {option.emoji}
-                      </Text>
-                    </View>
-                  )}
-                </Pressable>
-              );
-            })}
-          </View>
-        ))}
-      </View>
+            {({ pressed }) => (
+              <View
+                style={[
+                  styles.reaction,
+                  mobile ? styles.mobileReaction : styles.webReaction,
+                  {
+                    backgroundColor: selected
+                      ? theme.stateSelectedSurface
+                      : pressed
+                        ? theme.statePressed
+                        : 'transparent',
+                    borderColor: selected ? theme.stateSelectedBorder : 'transparent',
+                  },
+                ]}
+              >
+                <ReactionEmojiImage size={mobile ? 24 : 20} type={option.emoji} />
+                {pending ? (
+                  <View accessibilityElementsHidden aria-hidden style={styles.pendingOverlay}>
+                    <ReactionPendingSpinner />
+                  </View>
+                ) : null}
+              </View>
+            )}
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  dragHandle: { alignSelf: 'center', borderRadius: radius.full, height: 4, width: 32 },
+  dragHandle: { borderRadius: radius.full, height: 4, width: 32 },
+  dragHandleHitArea: {
+    alignItems: 'center',
+    alignSelf: 'center',
+    height: 48,
+    justifyContent: 'center',
+    width: 56,
+  },
   emptyDescription: textStyles.uiCopyM,
   emptyTitle: textStyles.uiLabelL,
   fullGridRow: { justifyContent: 'space-between' },
-  grid: { flexDirection: 'column' },
   gridRow: { flexDirection: 'row' },
-  mobileEmoji: { fontSize: 24, lineHeight: 32 },
   mobileGrid: { gap: 0 },
   mobileReaction: { height: 44, width: 44 },
   mobileReactionTarget: { alignItems: 'center', height: 48, justifyContent: 'center', width: 48 },
-  mobileRoot: { flex: 1, justifyContent: 'flex-end', minHeight: 844 },
+  mobileRoot: { flex: 1, justifyContent: 'flex-end', minHeight: 0 },
   mobileSheet: {
     borderTopLeftRadius: radius[24],
     borderTopRightRadius: radius[24],
@@ -322,6 +427,16 @@ const styles = StyleSheet.create({
   mobileSpinner: { transform: [{ scale: 1.5 }] },
   mobileTitle: { textAlign: 'left', ...textStyles.uiLabelL },
   partialGridRow: { justifyContent: 'flex-start' },
+  pendingOverlay: {
+    alignItems: 'center',
+    bottom: 0,
+    justifyContent: 'center',
+    left: 0,
+    pointerEvents: 'none',
+    position: 'absolute',
+    right: 0,
+    top: 0,
+  },
   reaction: {
     alignItems: 'center',
     borderRadius: radius[12],
@@ -347,12 +462,10 @@ const styles = StyleSheet.create({
     borderRadius: radius[16],
     borderWidth: borderWidths[1],
     gap: space[16],
-    height: 624,
-    maxHeight: '100%',
     padding: space[16],
-    width: 360,
+    maxWidth: 360,
+    width: '100%',
   },
-  webEmoji: { fontSize: 20, lineHeight: 24 },
   webGrid: { gap: space[8] },
   webReaction: { height: 32, width: 32 },
   webReactionTarget: { height: 32, width: 32 },

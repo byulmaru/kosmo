@@ -10,6 +10,7 @@ test-results
 apps/app/.expo/
 apps/app/dist/
 apps/app/storybook-static/
+apps/app/public/reaction-emoji/emoji-16/
 apps/app/android/
 apps/app/ios/
 apps/admin/.svelte-kit/

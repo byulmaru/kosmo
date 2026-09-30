@@ -44,9 +44,9 @@ Reaction Quick Picker는 현재 제공된 Reaction option을 빠르게 선택하
 
 ## Full Reaction Picker
 
-Full Reaction Picker는 Quick Picker를 폐기하지 않고, Unicode emoji를 검색하거나 category별로 탐색해 더 많은 Reaction을 선택하는 확장 surface다. custom reaction의 데이터·asset 계약이 정해지기 전에는 별도 custom section이나 실패 화면을 추측해 추가하지 않는다.
+Full Reaction Picker는 Quick Picker를 폐기하지 않고, Emoji 16의 완전 수식 emoji 3,781개를 검색하거나 category별로 탐색해 더 많은 Reaction을 선택하는 확장 surface다. Full Picker 목록과 서버가 허용하는 Reaction Type은 같은 3,781개 집합을 사용하고, Web·iOS·Android는 `emoji-datasource-google@16.0.0`의 Noto Emoji v2.048 이미지를 표시한다. Quick Picker의 여섯 Type은 유지한다. 최근 사용과 custom reaction은 후속 범위이며 현재 별도 section이나 정책을 표시하지 않는다.
 
-- Figma source는 `Presentation=Web | Mobile`과 `State=Browse | SearchResults | Empty | Loading`을 조합한 8 variants다. `Browse`는 검색, 빠른 반응, 최근 사용, category heading과 전체 emoji grid를 표시하고, `SearchResults`는 검색 결과만, `Empty`는 검색 결과 없음만, `Loading`은 spinner만 표시한다. Browse에는 category shortcut control을 두지 않으며, 최근 사용은 Web 최대 16개·Mobile 최대 14개를 아래 category grid와 같은 방식으로 표시한다. Web은 한 행에 8개, Mobile은 7개를 배치하고, 가득 찬 행은 좌우 가장자리를 맞추며 마지막 덜 찬 행은 기존 간격으로 왼쪽 정렬한다. Picker 전체 `Error` variant는 만들지 않는다.
+- Figma source는 `Presentation=Web | Mobile`과 `State=Browse | SearchResults | Empty | Loading`을 조합한 8 variants다. `Browse`는 검색, 빠른 반응, category heading과 전체 emoji grid를 표시하고, `SearchResults`는 검색 결과만, `Empty`는 검색 결과 없음만, `Loading`은 spinner만 표시한다. Browse에는 category shortcut control이나 최근 사용 section을 두지 않는다. Web은 한 행에 8개, Mobile은 7개를 배치하고, 가득 찬 행은 좌우 가장자리를 맞추며 마지막 덜 찬 행은 기존 간격으로 왼쪽 정렬한다. Picker 전체 `Error` variant는 만들지 않는다.
 - Web은 trigger에 붙는 non-modal dialog를 사용한다. 열릴 때 검색 field로 focus를 옮기고 같은 trigger, `Escape`, 바깥 클릭으로 닫은 뒤 focus를 trigger에 복원한다.
 - Mobile은 modal bottom sheet를 사용한다. `Browse`의 initial height는 480, `SearchResults`·`Empty`·`Loading`의 expanded height는 720이다. `Scrolled`는 expanded sheet의 runtime scroll 위치 표본이지 별도 source variant가 아니다.
 - Mobile Screens의 [`Post action overlays and picker`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6772-10989)는
@@ -110,7 +110,7 @@ Full Reaction Picker는 Quick Picker를 폐기하지 않고, Unicode emoji를 �
 - 앱 안에서 진입한 화면의 Back은 이전 화면으로 돌아가고, 직접 진입으로 앱의 이전 화면이 없으면 canonical Post 상세로 이동한다. 프로필 방문 후 Back은 같은 Type과 기존 route scroll 위치를 복원한다.
 - 최초 진입은 화면 제목에 focus를 두고, 필터 전환은 선택 tab의 focus와 현재 목록 scroll 위치를 유지한다. Back의 화면·scroll 복원은 기존 navigation lifecycle을 사용한다.
 - PROD-938은 목록·상세·답글 알림·Wide Viewer의 기존 People 진입점을 이관한다. Viewer를 떠나는 이동은 열린 Viewer와 focus lifecycle도 정리한다. Compact Viewer의 새로운 People 진입점 노출은 PROD-849에서 정렬한다.
-- 현재 허용 Reaction은 여섯 Type이다. 6종 초과 펼침·접기는 독립 UI Tests에서 디자인 계약으로 검증하며, Production Playground와 서버 통합 검증에는 실제 지원 Type만 사용한다. 이 검증을 이유로 API나 저장 가능한 Type을 확장하지 않는다.
+- Quick Picker가 제시하는 Type은 여섯 개로 유지한다. Full Picker와 서버가 허용하는 Type은 Emoji 16 완전 수식 3,781개이며, Reaction People route는 그중 실제 양수 count가 있는 Type을 사용한다.
 - PROD-938은 기존 `ReactionProfilesModal`을 전용 route로 교체한다. 구현·자동 검증·Web 관찰 결과와 Native 미실행 항목은 해당 OpenSpec change의 검증 기록으로 구분한다.
 
 ## Mutation과 공유 상태

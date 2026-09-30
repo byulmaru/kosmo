@@ -122,6 +122,18 @@ test('여섯 built-in Type을 정확한 Unicode 문자열로 저장하고 서로
   assert.equal(await countReactions(input.postId), reactionTypes.length);
 });
 
+test('Emoji 16의 Quick Picker 밖 Type도 저장하고 삭제한다', async () => {
+  const { input } = await createFixture();
+
+  const added = await addReaction({ ...input, type: '🫶' });
+  assert.equal(added.reaction.type, '🫶');
+  assert.equal(await countReactions(input.postId), 1);
+
+  const deleted = await deleteReaction({ ...input, type: '🫶' });
+  assert.equal(deleted.reaction?.id, added.reaction.id);
+  assert.equal(await countReactions(input.postId), 0);
+});
+
 test('허용되지 않은 Type은 추가·삭제에서 field type validation 오류로 거부한다', async () => {
   const { input } = await createFixture();
 
