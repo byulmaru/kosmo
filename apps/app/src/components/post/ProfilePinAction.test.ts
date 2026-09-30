@@ -17,6 +17,7 @@ import {
 } from 'relay-runtime';
 import pinMutation from './__generated__/ProfilePinActionPinProfilePostMutation.graphql';
 import unpinMutation from './__generated__/ProfilePinActionUnpinProfilePostMutation.graphql';
+import type { ReactNode } from 'react';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import type { GraphQLResponse } from 'relay-runtime';
 import type { ProfilePinActionPinProfilePostMutation } from './__generated__/ProfilePinActionPinProfilePostMutation.graphql';
@@ -65,6 +66,14 @@ const toastMock = {
 };
 mockModule('@/session/SessionProvider', sessionMock);
 mockModule('@/components/ui/ToastProvider', toastMock);
+mockModule('@/components/ui/ConfirmationContent', {
+  ConfirmationContent: ({ children, ...props }: { children?: ReactNode }) =>
+    createElement('ConfirmationContent', props, children),
+});
+mockModule('@/components/ui/ModalSheet', {
+  ModalSheet: ({ children, ...props }: { children?: ReactNode }) =>
+    createElement('ModalSheet', props, children),
+});
 
 before(async () => {
   ({ useProfilePinAction } = await import('./ProfilePinAction'));
@@ -95,11 +104,15 @@ function ActionHarness({
   context,
   post,
 }: {
-  context: { firstPinnedPostId: string | null; profileIsLocal: boolean };
+  context: {
+    firstPinnedPostId: string | null;
+    onUnpinned?: () => void;
+    profileIsLocal: boolean;
+  };
   post: object;
 }) {
   const action = useProfilePinAction(post as never, context);
-  return createElement('ActionState', action);
+  return createElement('ActionState', action, action.confirmation);
 }
 
 const actionPost = {
@@ -111,13 +124,17 @@ const actionPost = {
   profile: { id: profileId, instance: { kind: 'LOCAL' } },
 };
 
-async function renderAction(environment: Environment, firstPinnedPostId: string | null = null) {
+async function renderAction(
+  environment: Environment,
+  firstPinnedPostId: string | null = null,
+  onUnpinned?: () => void,
+) {
   await act(async () => {
     renderer = create(
       createElement(ReactRelay.RelayEnvironmentProvider, {
         environment,
         children: createElement(ActionHarness, {
-          context: { firstPinnedPostId, profileIsLocal: true },
+          context: { firstPinnedPostId, onUnpinned, profileIsLocal: true },
           post: actionPost,
         }),
       }),
@@ -133,7 +150,7 @@ function actionState(): ReactTestInstance {
 }
 
 async function respondAction(response: GraphQLResponse) {
-  const request = requests[0];
+  const request = requests.at(-1);
   assert.ok(request);
   await act(async () => {
     request.sink.next(response);
@@ -141,12 +158,45 @@ async function respondAction(response: GraphQLResponse) {
   });
 }
 
+function modal(): ReactTestInstance {
+  assert.ok(renderer);
+  const instance = renderer.root.findAll((node) => String(node.type) === 'ModalSheet')[0];
+  assert.ok(instance);
+  return instance;
+}
+
+function confirmation(): ReactTestInstance {
+  assert.ok(renderer);
+  const instance = renderer.root.findAll((node) => String(node.type) === 'ConfirmationContent')[0];
+  assert.ok(instance);
+  return instance;
+}
+
 describe('ProfilePinAction mutation lifecycle', () => {
-  it('keeps the action pending and accepts a durable no-op payload with a nullable leaf error', async () => {
+  it('confirms pin before starting a request and restores focus after cancel', async () => {
     const environment = createActionEnvironment();
     await renderAction(environment);
 
+    let focusCount = 0;
+    actionState().props.onMoreTriggerReady(() => {
+      focusCount += 1;
+    });
     await act(async () => actionState().props.item.onSelect());
+    assert.equal(requests.length, 0);
+    assert.equal(modal().props.title, '프로필에 고정할까요?');
+    assert.equal(confirmation().props.confirmLabel, '고정');
+    await act(async () => confirmation().props.onCancel());
+    assert.equal(requests.length, 0);
+    await act(async () => modal().props.onDismiss());
+    assert.equal(focusCount, 1);
+
+    await act(async () => actionState().props.item.onSelect());
+    await act(async () => confirmation().props.onConfirm());
+    await act(async () => confirmation().props.onConfirm());
+    assert.equal(requests.length, 0);
+    assert.equal(modal().props.visible, false);
+    await act(async () => modal().props.onDismiss());
+    assert.equal(requests.length, 1);
     assert.equal(actionState().props.pending, true);
 
     await respondAction({
@@ -192,18 +242,49 @@ describe('ProfilePinAction mutation lifecycle', () => {
     assert.deepEqual(toasts, []);
   });
 
-  it('preserves the menu state and reports a null mutation payload as a failure', async () => {
+  it('closes unpin confirmation before the request and allows a confirmed retry', async () => {
     const environment = createActionEnvironment();
-    await renderAction(environment);
+    let unpinned = 0;
+    await renderAction(environment, actionPost.id, () => {
+      unpinned += 1;
+    });
 
     await act(async () => actionState().props.item.onSelect());
+    assert.equal(modal().props.title, '프로필 고정을 해제할까요?');
+    assert.equal(confirmation().props.confirmLabel, '고정 해제');
+    assert.equal(
+      confirmation().props.message,
+      '프로필 상단에서 이 게시글을 제거해요. 게시글은 삭제되지 않아요.',
+    );
+    assert.equal(requests.length, 0);
+    await act(async () => confirmation().props.onConfirm());
+    await act(async () => confirmation().props.onConfirm());
+    assert.equal(requests.length, 0);
+    await act(async () => modal().props.onDismiss());
+    assert.equal(requests.length, 1);
     await respondAction({
-      data: { pinProfilePost: null },
-      errors: [{ message: 'pin failed', path: ['pinProfilePost'] }],
+      data: { unpinProfilePost: null },
+      errors: [{ message: 'unpin failed', path: ['unpinProfilePost'] }],
     });
 
     assert.equal(actionState().props.pending, false);
     assert.deepEqual(toasts, ['고정 상태를 변경하지 못했어요. 다시 시도해 주세요.']);
+    assert.equal(actionState().props.confirmation, null);
+    await act(async () => actionState().props.item.onSelect());
+    await act(async () => confirmation().props.onConfirm());
+    await act(async () => modal().props.onDismiss());
+    assert.equal(actionState().props.pending, true);
+    assert.equal(requests.length, 2);
+    await respondAction({
+      data: {
+        unpinProfilePost: {
+          changed: true,
+          profile: { id: profileId },
+        },
+      },
+    });
+    assert.equal(unpinned, 1);
+    assert.equal(actionState().props.confirmation, null);
   });
 });
 

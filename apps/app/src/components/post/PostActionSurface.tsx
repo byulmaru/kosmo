@@ -94,6 +94,7 @@ export function PostActionSurface({
         moreItems={moreItems}
         morePending={profilePinAction.pending}
         moreSheetIconSize={profilePin ? 24 : undefined}
+        onMoreTriggerReady={profilePinAction.onMoreTriggerReady}
         onBookmarkError={onBookmarkError}
         onDeleted={onDeleted}
         onRepostError={onRepostError}
@@ -118,6 +119,7 @@ export function PostActionSurface({
               disabled={disabled || profilePinAction.pending}
               focusTriggerRef={focusTriggerRef}
               items={[...moreItems, item]}
+              onTriggerReady={profilePinAction.onMoreTriggerReady}
               sheetIconSize={profilePin ? 24 : undefined}
               renderTrigger={({ expanded, onPress, ref }) =>
                 renderActions({
@@ -134,6 +136,7 @@ export function PostActionSurface({
       ) : (
         renderActions()
       )}
+      {profilePinAction.confirmation}
     </>
   );
 }
