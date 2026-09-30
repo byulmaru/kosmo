@@ -15,6 +15,9 @@ let hardwareBackPressListener: (() => boolean) | null = null;
 let layout: 'compact' | 'full' | 'mobile' = 'mobile';
 let pathname = '/home';
 let sessionProfile: Record<string, unknown> | null = null;
+let accountId: string | null = null;
+let profileIds: string[] | null = null;
+const identifyCalls: Array<[string, number]> = [];
 let showRightRail = false;
 let dismissedToPaths: string[] = [];
 const router = {
@@ -97,6 +100,7 @@ mockModule('react-relay', {
   graphql: () => ({}),
   useLazyLoadQuery: () => ({
     currentSession: sessionProfile ? { selectedProfile: sessionProfile } : null,
+    me: profileIds === null ? null : { profiles: profileIds.map((id) => ({ id })) },
   }),
 });
 
@@ -107,6 +111,9 @@ mockModule(require.resolve('lucide-react-native'), {
 
 mockModule('@/components/feedback/FeedbackOverlay', {
   FeedbackOverlay: () => null,
+});
+mockModule('@/analytics/client', {
+  identifyAnalytics: (id: string, count: number) => identifyCalls.push([id, count]),
 });
 mockModule('@/components/notification/NotificationReadAllContext', {
   NotificationReadAllAction: () => null,
@@ -129,6 +136,9 @@ mockModule('@/components/ui/useSafeAreaPadding', {
   useSafeAreaPadding: () => ({}),
 });
 mockModule('@/relay/RelayActorProvider', { RelayActorBoundary: PassThrough });
+mockModule('@/session/SessionProvider', {
+  useSession: () => ({ accountId, status: accountId ? 'valid' : 'guest' }),
+});
 mockModule('@/theme/ThemeProvider', {
   useElevation: () => ({ overlay: {} }),
   useTheme: () => ({
@@ -202,6 +212,9 @@ afterEach(async () => {
   layout = 'mobile';
   pathname = '/home';
   sessionProfile = null;
+  accountId = null;
+  profileIds = null;
+  identifyCalls.length = 0;
   showRightRail = false;
   dismissedToPaths = [];
   bottomTabBarProps = undefined;
@@ -218,6 +231,26 @@ afterEach(async () => {
 });
 
 describe('UniversalShell screen fallback focus target', () => {
+  it('알려진 Profile 수 0과 변경값만 현재 Account의 Person 속성으로 전달한다', async () => {
+    accountId = 'account-a';
+    await renderShell();
+    assert.deepEqual(identifyCalls, []);
+
+    profileIds = [];
+    await act(async () => renderer?.update(createElement(UniversalShell)));
+    profileIds = ['profile-a', 'profile-b'];
+    await act(async () => renderer?.update(createElement(UniversalShell)));
+    accountId = 'account-b';
+    profileIds = ['profile-c'];
+    await act(async () => renderer?.update(createElement(UniversalShell)));
+
+    assert.deepEqual(identifyCalls, [
+      ['account-a', 0],
+      ['account-a', 2],
+      ['account-b', 1],
+    ]);
+  });
+
   it('Web에서는 shell root를 tab 순서에서 제외한다', async () => {
     platform.OS = 'web';
     const root = await renderShell();

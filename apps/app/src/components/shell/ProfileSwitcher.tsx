@@ -42,6 +42,8 @@ import type { ProfileSwitcher_query$key } from './__generated__/ProfileSwitcher_
 import type { ProfileSwitcherCreateProfileMutation } from './__generated__/ProfileSwitcherCreateProfileMutation.graphql';
 import type { ProfileSwitcherSelectProfileMutation } from './__generated__/ProfileSwitcherSelectProfileMutation.graphql';
 
+type ProfileSelectionCause = 'auto' | 'direct';
+
 const ProfileSwitcherFragment = graphql`
   fragment ProfileSwitcher_query on Query {
     currentSession {
@@ -273,10 +275,15 @@ export function ProfileSwitcher({
     };
   }, [open, surface]);
 
-  const commitProfileSelection = (id: string, onError?: OperationErrorHandler) => {
+  const commitProfileSelection = (
+    id: string,
+    onError?: OperationErrorHandler,
+    cause: ProfileSelectionCause = 'direct',
+  ) => {
     const reportError = onError ?? setOperationError;
     setFieldError(null);
     setOperationError(null);
+    const previousProfileId = active?.id ?? null;
     commitSelect({
       variables: { id },
       onCompleted: (response, errors) => {
@@ -286,7 +293,11 @@ export function ProfileSwitcher({
         }
 
         const selectedProfileId = response.selectProfile.profile.id;
-        trackAnalytics('profile_selected', { selected_profile_id: selectedProfileId });
+        trackAnalytics('profile_selected', {
+          selected_profile_id: selectedProfileId,
+          selection_cause: cause,
+          ...(previousProfileId ? { previous_profile_id: previousProfileId } : {}),
+        });
         setOpen(false);
         resetActor(selectedProfileId);
       },
@@ -339,7 +350,7 @@ export function ProfileSwitcher({
         });
         setHandle('');
         setCreating(false);
-        commitProfileSelection(response.createProfile.profile.id, onError);
+        commitProfileSelection(response.createProfile.profile.id, onError, 'auto');
       },
       onError: (cause) => {
         const source = isRecord(cause) ? cause.source : undefined;

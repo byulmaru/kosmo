@@ -92,6 +92,8 @@ Account 요청에서 Profile이 주체인 행동의 `Account.Active`는 해당 P
   Account-Profile Membership 교차 객체 조회 범위와 필드.
 
 - [Search Conversion Analytics Policy](./policies/search-conversion-analytics.md): 검색 선택부터 Profile 조회·Follow까지의 탐색 전환 계산.
+- [Multi-Profile Usage Policy](./policies/multi-profile-usage.md): 멀티 Profile 사용 자격, 주간 사용,
+  생성·전환·핵심 행동 지표의 계산 규칙.
 
 ## 결정과 기록
 

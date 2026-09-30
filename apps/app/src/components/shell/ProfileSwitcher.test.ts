@@ -35,6 +35,7 @@ type PressableChildren = ReactNode | ((state: { pressed: boolean }) => ReactNode
 
 const platform: { OS: PlatformName } = { OS: 'ios' };
 const resetActorCalls: Array<string | null | undefined> = [];
+const analyticsCalls: Array<[string, Record<string, unknown>]> = [];
 const queryData = {
   currentSession: {
     id: 'session-1',
@@ -168,7 +169,9 @@ mockModule(require.resolve('lucide-react-native'), {
   PlusIcon: 'PlusIcon',
 });
 mockModule('@/analytics/client', {
-  trackAnalytics: () => undefined,
+  trackAnalytics: (...args: unknown[]) => {
+    analyticsCalls.push(args as (typeof analyticsCalls)[number]);
+  },
 });
 mockModule('@/components/profile/ProfilePicker', {
   ProfilePicker: MockProfilePicker,
@@ -227,6 +230,7 @@ afterEach(async () => {
   fragmentData = queryData;
   pendingSelectMutation = null;
   resetActorCalls.length = 0;
+  analyticsCalls.length = 0;
   mock.restoreAll();
 });
 
@@ -249,6 +253,19 @@ describe('ProfileSwitcher selection lifecycle', () => {
     await completeSelection();
     assert.deepEqual(resetActorCalls, ['profile-b']);
     assert.equal(modal().props.visible, false);
+    assert.deepEqual(
+      analyticsCalls.map(([event, properties]) => ({ event, properties })),
+      [
+        {
+          event: 'profile_selected',
+          properties: {
+            previous_profile_id: 'profile-a',
+            selected_profile_id: 'profile-b',
+            selection_cause: 'direct',
+          },
+        },
+      ],
+    );
   });
 
   it('GraphQL/network 실패와 단순 취소는 actor를 reset하지 않는다', async () => {
