@@ -4,6 +4,7 @@ import {
   ChildWorkflowCancellationType,
   log,
   ParentClosePolicy,
+  patched,
   proxyActivities,
   WorkflowIdReusePolicy,
 } from '@temporalio/workflow';
@@ -21,6 +22,10 @@ const {
   lookupRemoteActorUriActivity,
   materializeRemoteProfileActorActivity,
   refreshRemoteProfileActorActivity,
+  getRemoteProfileActorStateActivity,
+  fetchRemoteProfileActorActivity,
+  applyRemoteProfileActorActivity,
+  recoverRemoteProfileActorActivity,
 } = proxyActivities<typeof activities>(workflowActivityOptions);
 
 const httpUriSchema = z.url().refine((value) => {
@@ -92,32 +97,65 @@ export async function remoteProfileLookupWorkflow(
 ): Promise<string | null> {
   const parsedInput = parseRemoteProfileLookupInput(input);
 
+  if (!patched('remote-profile-activity-split-v1')) {
+    if ('domain' in parsedInput) {
+      const actorUri = await lookupRemoteActorUriActivity(parsedInput);
+      if (actorUri === null) {
+        return null;
+      }
+
+      const materializationInput: RemoteProfileActorLookupInput = {
+        actorUri,
+        ...(parsedInput.profileId ? { profileId: parsedInput.profileId } : {}),
+      };
+      const state = await materializeRemoteProfileActorActivity(materializationInput);
+      return state === null
+        ? refreshRemoteProfileActorActivity(materializationInput)
+        : startRefreshIfNeeded(materializationInput, state);
+    }
+
+    const state = await materializeRemoteProfileActorActivity(parsedInput);
+    if (state !== null) {
+      return state.profileId;
+    }
+
+    return refreshRemoteProfileActorActivity({
+      actorUri: parsedInput.actorUri,
+      ...(parsedInput.contextOrigin === undefined
+        ? {}
+        : { contextOrigin: parsedInput.contextOrigin }),
+      ...(parsedInput.profileId === undefined ? {} : { profileId: parsedInput.profileId }),
+    });
+  }
+
+  let actorInput: RemoteProfileActorLookupInput;
   if ('domain' in parsedInput) {
     const actorUri = await lookupRemoteActorUriActivity(parsedInput);
     if (actorUri === null) {
       return null;
     }
 
-    const materializationInput: RemoteProfileActorLookupInput = {
+    actorInput = {
       actorUri,
       ...(parsedInput.profileId ? { profileId: parsedInput.profileId } : {}),
     };
-    const state = await materializeRemoteProfileActorActivity(materializationInput);
-    return state === null
-      ? refreshRemoteProfileActorActivity(materializationInput)
-      : startRefreshIfNeeded(materializationInput, state);
+  } else {
+    actorInput = parsedInput;
   }
 
-  const state = await materializeRemoteProfileActorActivity(parsedInput);
+  const materializationInput: RemoteProfileMaterializationInput = {
+    actorUri: actorInput.actorUri,
+    ...(actorInput.contextOrigin === undefined ? {} : { contextOrigin: actorInput.contextOrigin }),
+    ...(actorInput.profileId === undefined ? {} : { profileId: actorInput.profileId }),
+  };
+  const state = await getRemoteProfileActorStateActivity({ actorUri: actorInput.actorUri });
   if (state !== null) {
-    return state.profileId;
+    if (actorInput.receipt) {
+      await recoverRemoteProfileActorActivity({ actorUri: actorInput.actorUri });
+    }
+    return startRefreshIfNeeded(materializationInput, state);
   }
 
-  return refreshRemoteProfileActorActivity({
-    actorUri: parsedInput.actorUri,
-    ...(parsedInput.contextOrigin === undefined
-      ? {}
-      : { contextOrigin: parsedInput.contextOrigin }),
-    ...(parsedInput.profileId === undefined ? {} : { profileId: parsedInput.profileId }),
-  });
+  const document = await fetchRemoteProfileActorActivity(materializationInput);
+  return applyRemoteProfileActorActivity({ actorUri: materializationInput.actorUri, ...document });
 }

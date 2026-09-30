@@ -1,11 +1,15 @@
-import { ApplicationFailure, proxyActivities } from '@temporalio/workflow';
+import { ApplicationFailure, patched, proxyActivities } from '@temporalio/workflow';
 import { z } from 'zod';
 import { workflowActivityOptions } from './activity-options';
 import type { RemoteProfileMaterializationInput } from '@kosmo/core/temporal/workflows';
 import type * as activities from '../activities';
 
-const { refreshRemoteProfileActorActivity } =
-  proxyActivities<typeof activities>(workflowActivityOptions);
+const {
+  refreshRemoteProfileActorActivity,
+  getRemoteProfileActorStateActivity,
+  fetchRemoteProfileActorActivity,
+  applyRemoteProfileActorActivity,
+} = proxyActivities<typeof activities>(workflowActivityOptions);
 
 const httpUriSchema = z.url().refine((value) => {
   const uri = new URL(value);
@@ -32,5 +36,16 @@ const parseRefreshInput = (value: unknown): RemoteProfileMaterializationInput =>
 export async function remoteProfileRefreshWorkflow(
   input: RemoteProfileMaterializationInput,
 ): Promise<string> {
-  return refreshRemoteProfileActorActivity(parseRefreshInput(input));
+  const parsedInput = parseRefreshInput(input);
+  if (!patched('remote-profile-activity-split-v1')) {
+    return refreshRemoteProfileActorActivity(parsedInput);
+  }
+
+  const state = await getRemoteProfileActorStateActivity({ actorUri: parsedInput.actorUri });
+  if (state !== null && !state.needsRefresh) {
+    return state.profileId;
+  }
+
+  const document = await fetchRemoteProfileActorActivity(parsedInput);
+  return applyRemoteProfileActorActivity({ actorUri: parsedInput.actorUri, ...document });
 }

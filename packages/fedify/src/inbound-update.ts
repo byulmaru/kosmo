@@ -2,7 +2,6 @@ import '@kosmo/core/polyfill';
 
 import { isActor } from '@fedify/vocab';
 import { ConflictError, NotFoundError } from '@kosmo/core/error';
-import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { runWorkflow } from '@kosmo/core/temporal/client';
 import { remoteProfileUpdateWorkflow } from '@kosmo/core/temporal/workflows';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
@@ -98,8 +97,6 @@ export const handleInboundUpdate = async (
     const input: RemoteProfileUpdateInput = {
       actorUri: actorUri.href,
       actorJsonLd,
-      contextOrigin:
-        context.canonicalOrigin ?? (await resolveConfiguredLocalInstance()).canonicalOrigin,
       receipt: serializeReceipt({ activityUri: update.id, receivedAt }),
     };
     const profileId = await runWorkflow(remoteProfileUpdateWorkflow, {

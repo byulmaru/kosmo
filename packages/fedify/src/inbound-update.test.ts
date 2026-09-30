@@ -105,7 +105,6 @@ describe('inbound actor Update', () => {
         assert.deepEqual(input, {
           actorUri: remoteActorUri.href,
           actorJsonLd,
-          contextOrigin: publicOrigin,
           receipt: { receivedAt: receivedAt.toString() },
         });
         assert.equal(

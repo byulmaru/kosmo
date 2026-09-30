@@ -4,7 +4,7 @@ import { workflowActivityOptions } from './activity-options';
 import type { RemoteProfileUpdateInput } from '@kosmo/core/temporal/workflows';
 import type * as activities from '../activities';
 
-const { updateRemoteProfileActorActivity } =
+const { getRemoteProfileActorStateActivity, applyRemoteProfileActorActivity } =
   proxyActivities<typeof activities>(workflowActivityOptions);
 
 const httpUriSchema = z.url().refine((value) => {
@@ -15,7 +15,6 @@ const httpUriSchema = z.url().refine((value) => {
 const remoteProfileUpdateInputSchema = z.strictObject({
   actorUri: httpUriSchema,
   actorJsonLd: z.json(),
-  contextOrigin: httpUriSchema,
   receipt: z.strictObject({
     activityUri: httpUriSchema.optional(),
     receivedAt: z.iso.datetime(),
@@ -36,5 +35,15 @@ const parseRemoteProfileUpdateInput = (value: unknown): RemoteProfileUpdateInput
 export async function remoteProfileUpdateWorkflow(
   input: RemoteProfileUpdateInput,
 ): Promise<string | null> {
-  return updateRemoteProfileActorActivity(parseRemoteProfileUpdateInput(input));
+  const parsedInput = parseRemoteProfileUpdateInput(input);
+  const state = await getRemoteProfileActorStateActivity({ actorUri: parsedInput.actorUri });
+  if (state === null) {
+    return null;
+  }
+
+  return applyRemoteProfileActorActivity({
+    actorUri: parsedInput.actorUri,
+    actorJsonLd: parsedInput.actorJsonLd,
+    observedAt: parsedInput.receipt.receivedAt,
+  });
 }

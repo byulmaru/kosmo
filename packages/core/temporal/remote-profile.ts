@@ -68,7 +68,6 @@ export const remoteProfileRefreshWorkflow: WorkflowDefinition<
 export type RemoteProfileUpdateInput = {
   readonly actorUri: string;
   readonly actorJsonLd: unknown;
-  readonly contextOrigin: string;
   readonly receipt: {
     readonly activityUri?: string;
     readonly receivedAt: string;
