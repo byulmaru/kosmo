@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { before, mock, test } from 'node:test';
-import { createElement, useCallback, useMemo, useState } from 'react';
+import { useNavigationCache } from 'expo-router/build/react-navigation/core/useNavigationCache';
+import { createElement, Suspense, useCallback, useMemo, useState } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
-import { useNavigationCache } from 'expo-router/build/react-navigation/core/useNavigationCache';
 import type { PageHeader as PageHeaderComponent } from './PageHeader.native';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -194,6 +194,59 @@ test('Native PageHeader는 props 갱신에 옵션을 한 번 반영하고 조건
     | HeaderOptions
     | undefined;
   assert.deepEqual(clearedOptions, { header: undefined, headerShown: false });
+
+  await act(async () => renderer?.unmount());
+  activeNavigation = null;
+});
+
+test('Native PageHeader는 Suspense fallback에서 resolved header로 전환된 뒤 표시 상태를 유지한다', async () => {
+  let resolved = false;
+  let resolveSuspension!: () => void;
+  const suspension = new Promise<void>((resolve) => {
+    resolveSuspension = resolve;
+  });
+  function ResolvedPageHeader() {
+    if (!resolved) {
+      throw suspension;
+    }
+    return createElement(PageHeader, { title: '불러온 프로필' });
+  }
+
+  await act(async () => {
+    renderer = create(
+      createElement(
+        NavigationHarness,
+        null,
+        createElement(
+          Suspense,
+          { fallback: createElement(PageHeader, { title: '불러오는 중' }) },
+          createElement(ResolvedPageHeader),
+        ),
+      ),
+    );
+  });
+
+  const fallbackOptions = renderer?.root.findByType('NavigationHarness' as never).props.options as
+    | HeaderOptions
+    | undefined;
+  assert.equal(fallbackOptions?.headerShown, true);
+  const fallbackHeader = fallbackOptions?.header?.();
+  assert.ok(fallbackHeader && typeof fallbackHeader === 'object' && 'props' in fallbackHeader);
+  assert.equal((fallbackHeader.props as { title: string }).title, '불러오는 중');
+
+  resolved = true;
+  await act(async () => {
+    resolveSuspension();
+    await suspension;
+  });
+
+  const resolvedOptions = renderer?.root.findByType('NavigationHarness' as never).props.options as
+    | HeaderOptions
+    | undefined;
+  assert.equal(resolvedOptions?.headerShown, true);
+  const resolvedHeader = resolvedOptions?.header?.();
+  assert.ok(resolvedHeader && typeof resolvedHeader === 'object' && 'props' in resolvedHeader);
+  assert.equal((resolvedHeader.props as { title: string }).title, '불러온 프로필');
 
   await act(async () => renderer?.unmount());
   activeNavigation = null;

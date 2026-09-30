@@ -1,5 +1,5 @@
 import { useNavigation } from 'expo-router';
-import { useEffect, useLayoutEffect } from 'react';
+import { useLayoutEffect } from 'react';
 import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -21,7 +21,7 @@ export function PageHeader(props: PageHeaderProps) {
     });
   }, [headerProps, navigation]);
 
-  useEffect(
+  useLayoutEffect(
     () => () => navigation.setOptions({ header: undefined, headerShown: false }),
     [navigation],
   );
