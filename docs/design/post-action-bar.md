@@ -275,6 +275,11 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - fixture의 모의 요청 중 실제 More trigger의 busy·disabled 표시를 검증한다. 모의 완료 뒤 More trigger로
   focus를 돌리고, 실패하면 기존 고정 표시를 유지하며 공용 toast에 한국어 오류를 표시한다. 오류 원문은
   표시하지 않는다. 메뉴를 다시 열어 재시도할 수 있지만, 이는 실제 Pin 요청의 중복 방지·실패 복구 증거가 아니다.
+- 고정과 고정 해제는 선택 즉시 요청하지 않고 각각 `프로필에 고정할까요?`·`프로필 고정을 해제할까요?`
+  alertdialog에서 `취소`와 `고정`·`고정 해제`를 확인한다. 설명은 프로필 상단 표시 또는 제거와 게시글이
+  삭제되지 않는다는 결과를 함께 알린다. 취소하면 요청 없이 닫고 More trigger로 focus를 복원한다. 확인하면
+  dialog를 닫은 뒤 요청하며 pending 중 More의 중복 실행을 막는다. 실패하면 오류 toast를 표시하고 메뉴에서
+  다시 확인해 재시도한다. 고정 목록에서 제거되는 해제 경로는 기존 목록 focus fallback을 유지한다.
 - `KOSMO/Patterns/Profile/Pin Action`의 Playground는 수동 Controls·Actions용이며 자동 조작은 Controls가
   비활성화된 `Tests`에 둔다. Controls는 owner/visitor, pin/unpin, 요청 success/pending/error를 제공한다.
 - 2026-09-08 PROD-863 범위 확정에 따라 empty·removed·unavailable·loading·error 전용 상태 카드와
