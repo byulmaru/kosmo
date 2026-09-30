@@ -21,6 +21,8 @@ mockModule(new URL('../session/SessionProvider.tsx', import.meta.url), {
 mockModule(new URL('./client.ts', import.meta.url), {
   clearAnalytics: () => calls.push('clear'),
   identifyAnalytics: (id: string) => calls.push(`identify:${id}`),
+  setAnalyticsSelectedProfile: (id: string | null, profileId: string | null) =>
+    calls.push(`profile:${id ?? 'none'}:${profileId ?? 'none'}`),
 });
 let Bridge: typeof AnalyticsSessionBridge;
 before(async () => {
@@ -39,18 +41,30 @@ test('Account 인증 변화에 맞춰 identify·reset하고 선택 Profile 변�
   await act(async () => {
     renderer = create(createElement(Bridge));
   });
-  assert.deepEqual(calls, ['identify:account-a']);
+  assert.deepEqual(calls, ['profile:account-a:profile-a', 'identify:account-a']);
 
   session.selectedProfileId = 'profile-b';
   await act(async () => renderer!.update(createElement(Bridge)));
-  assert.deepEqual(calls, ['identify:account-a']);
+  assert.deepEqual(calls, [
+    'profile:account-a:profile-a',
+    'identify:account-a',
+    'profile:account-a:profile-b',
+    'identify:account-a',
+  ]);
 
   session.accountId = 'account-b';
   await act(async () => renderer!.update(createElement(Bridge)));
-  assert.deepEqual(calls, ['identify:account-a', 'identify:account-b']);
+  assert.deepEqual(calls, [
+    'profile:account-a:profile-a',
+    'identify:account-a',
+    'profile:account-a:profile-b',
+    'identify:account-a',
+    'profile:account-b:profile-b',
+    'identify:account-b',
+  ]);
 
   session.status = 'guest';
   session.accountId = null;
   await act(async () => renderer!.update(createElement(Bridge)));
-  assert.deepEqual(calls, ['identify:account-a', 'identify:account-b', 'clear']);
+  assert.deepEqual(calls.slice(-2), ['profile:none:none', 'clear']);
 });

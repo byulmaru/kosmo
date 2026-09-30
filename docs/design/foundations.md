@@ -142,3 +142,5 @@ Fullscreen media와 제품 고유 shadow는 일괄 치환하지 않고 아래 In
 - PROD-753: FeedbackForm·ProfileDefaultPostVisibilityControl의 controlled value·radio role/state semantics·Web keyboard·disabled 동작을 공용 `RadioGroup`·`RadioOption`으로 수렴하고, mutation·dirty/submitting·Relay actor lifecycle과 option layout은 각 consumer에 유지했다.
 - PROD-775: PROD-753에서 consumer에 남긴 canonical option presentation·state visuals를 공용 `RadioOption`으로 이전하고, group placement·mutation·dirty/submitting·Relay actor lifecycle은 각 consumer에 유지한다.
 - DSN-13: 선행 구현 후 Components/Screens를 최종 재바인딩하고 evidence를 남긴다.
+
+공용 RadioOption의 20px indicator는 2px 외곽선과 10px 내부 원이 같은 중심을 공유한다. 비정수 표시 배율에서도 중심을 유지하며, 표시 배율이나 Light/Dark에 따른 별도 위치 보정을 두지 않는다.

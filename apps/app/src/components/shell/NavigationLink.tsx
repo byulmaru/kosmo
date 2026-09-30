@@ -4,10 +4,13 @@ import { Platform } from 'react-native';
 import { useNavigationGuard } from './NavigationGuardContext';
 import { usePrimaryNavigationScroll } from './PrimaryNavigationScrollContext';
 import type { Href, LinkProps } from 'expo-router';
-import type { ReactElement } from 'react';
+import type { ReactElement, Ref } from 'react';
+import type { PressableProps, View } from 'react-native';
 
 type ChildProps = {
+  ref?: Ref<View>;
   onPress?: NonNullable<LinkProps['onPress']>;
+  style?: PressableProps['style'];
 };
 
 type Props = Omit<LinkProps, 'asChild' | 'children' | 'href' | 'onPress'> & {
@@ -89,9 +92,29 @@ export function NavigationLink({
       asChild
       href={href}
     >
-      {cloneElement(children, { onPress: handlePress })}
+      <NavigationLinkChild ref={children.props.ref} element={children} onPress={handlePress} />
     </Link>
   );
+}
+
+// Expo Router's Slot merges styles as objects, which discards Pressable callbacks.
+// Keep the child's style behind the Slot boundary so pressed styles still execute.
+function NavigationLinkChild({
+  element,
+  style,
+  ...props
+}: Omit<ChildProps, 'style'> & {
+  element: ReactElement<ChildProps>;
+  style?: Exclude<PressableProps['style'], (...args: never[]) => unknown>;
+}) {
+  const childStyle = element.props.style;
+  return cloneElement(element, {
+    ...props,
+    style:
+      typeof childStyle === 'function'
+        ? (state) => [style, childStyle(state)]
+        : [style, childStyle],
+  });
 }
 
 function getNavigationMode(

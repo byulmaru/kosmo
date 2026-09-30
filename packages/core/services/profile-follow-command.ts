@@ -8,7 +8,7 @@ import {
   PermissionDeniedError,
   ValidationError,
 } from '../error';
-import { assertProfilePairIsNotBlocked } from './profile-block-policy';
+import { assertProfilePairIsNotBlocked, ProfilePairBlockedError } from './profile-block-policy';
 import {
   acceptProfileFollowRequestInTransaction,
   approveProfileFollowRequestInTransaction,
@@ -133,6 +133,7 @@ export type ProfileFollowPairTransitionFailure = {
   readonly code: ErrorCode;
   readonly message: string;
   readonly field?: string;
+  readonly reason?: 'PROFILE_PAIR_BLOCKED';
 };
 
 /** Public transition result; effect orchestration stays inside the Worker. */
@@ -192,6 +193,7 @@ const serializeFailure = (error: KosmoError): ProfileFollowPairTransitionFailure
     code: error.code,
     message: error.message,
     ...(field === undefined ? {} : { field }),
+    ...(error instanceof ProfilePairBlockedError ? { reason: 'PROFILE_PAIR_BLOCKED' } : {}),
   };
 };
 
@@ -202,6 +204,9 @@ export const rehydrateProfileFollowFailure = (
     case 'CONFLICT':
       return new ConflictError({ message: failure.message, field: failure.field });
     case 'NOT_FOUND':
+      if (failure.reason === 'PROFILE_PAIR_BLOCKED') {
+        return new ProfilePairBlockedError(failure.message);
+      }
       return new NotFoundError(failure.message);
     case 'PERMISSION_DENIED':
       return new PermissionDeniedError(failure.message);

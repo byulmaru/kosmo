@@ -600,7 +600,10 @@ export function PostComposer({
         surface === 'rail' ? styles.rail : styles.overlay,
         surface === 'overlay' ? styles.overlayRoot : null,
         surface === 'overlay' && Platform.OS === 'web' ? styles.webOverlay : null,
-        { backgroundColor: theme.backgroundCanvas },
+        {
+          backgroundColor:
+            surface === 'overlay' ? theme.backgroundElevated : theme.backgroundCanvas,
+        },
       ]}
       testID="post-composer-target"
     >

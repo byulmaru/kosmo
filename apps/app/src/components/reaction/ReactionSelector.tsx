@@ -43,7 +43,12 @@ export function ReactionSelector({
   const selectedIds = new Set(selectedOptionIds);
 
   return (
-    <View style={[styles.root, { backgroundColor: theme.card, borderColor: theme.border }]}>
+    <View
+      style={[
+        styles.root,
+        { backgroundColor: theme.backgroundElevated, borderColor: theme.borderDefault },
+      ]}
+    >
       {options.map((option) => {
         const error = errorIds.has(option.id);
         const pending = pendingIds.has(option.id);
@@ -82,8 +87,8 @@ export function ReactionSelector({
                           ? theme.primaryHover
                           : theme.primary
                         : pressed
-                          ? theme.surface
-                          : theme.card,
+                          ? theme.backgroundSurface
+                          : theme.backgroundElevated,
                       opacity: selected ? 0.7 : 1,
                     },
                   ]}

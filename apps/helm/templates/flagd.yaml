@@ -1,0 +1,70 @@
+{{- if eq .Values.env "prod" -}}
+{{- $featureFlagName := printf "%s-flags" .Release.Name | trunc 63 | trimSuffix "-" -}}
+{{- $featureFlagSourceName := printf "%s-flag-source" .Release.Name | trunc 63 | trimSuffix "-" -}}
+{{- $flagdName := printf "%s-flagd" .Release.Name | trunc 63 | trimSuffix "-" -}}
+{{- $labels := dict "helm.sh/chart" (include "kosmo.chart" .) "app.kubernetes.io/name" "flagd" "app.kubernetes.io/instance" .Release.Name "app.kubernetes.io/managed-by" .Release.Service -}}
+apiVersion: core.openfeature.dev/v1beta1
+kind: FeatureFlag
+metadata:
+  name: {{ $featureFlagName }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+{{ toYaml $labels | indent 4 }}
+spec:
+  flagSpec:
+    flags:
+      quote:
+        state: ENABLED
+        variants:
+          'on': true
+          'off': false
+        defaultVariant: 'off'
+---
+apiVersion: core.openfeature.dev/v1beta1
+kind: FeatureFlagSource
+metadata:
+  name: {{ $featureFlagSourceName }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+{{ toYaml $labels | indent 4 }}
+spec:
+  sources:
+    - source: {{ printf "%s/%s" .Release.Namespace $featureFlagName | quote }}
+      provider: kubernetes
+  cors:
+    - https://kos.moe
+---
+apiVersion: core.openfeature.dev/v1beta1
+kind: Flagd
+metadata:
+  name: {{ $flagdName }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+{{ toYaml $labels | indent 4 }}
+spec:
+  featureFlagSource: {{ $featureFlagSourceName }}
+  serviceType: ClusterIP
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ printf "%s-flagd-route" .Release.Name | trunc 63 | trimSuffix "-" }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+{{ toYaml $labels | indent 4 }}
+spec:
+  parentRefs:
+    - name: "public"
+      namespace: "gateway"
+      sectionName: "https-kos-moe-wildcard"
+  hostnames:
+    - "flags.kos.moe"
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /ofrep/v1/evaluate/flags
+      backendRefs:
+        - name: {{ $flagdName }}
+          port: 8016
+{{- end }}

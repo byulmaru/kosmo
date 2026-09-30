@@ -90,6 +90,35 @@ test('Web 검색 도구막대를 모든 breakpoint의 중앙 컬럼 최상단에
   }
 });
 
+test('최근 검색과 결과 본문은 검색 도구막대와 같은 중앙 컬럼 폭을 쓴다', async ({
+  context,
+  page,
+}) => {
+  await signInSearchUser(context);
+  await setRecentSearchesBeforeNavigation(page, ['recent-alpha']);
+  await page.setViewportSize({ height: 900, width: 1_400 });
+  await page.goto('/search');
+  await page.getByRole('textbox', { name: '검색어' }).focus();
+
+  const toolbar = page
+    .getByLabel('검색', { exact: true })
+    .filter({ has: page.getByRole('textbox', { name: '검색어' }) });
+  const toolbarBox = await toolbar.boundingBox();
+  const recentHeadingBox = await page.getByText('최근 검색', { exact: true }).boundingBox();
+  const recentLinkBox = await page.getByRole('link', { name: 'recent-alpha' }).boundingBox();
+  expect(toolbarBox).not.toBeNull();
+  expect(recentHeadingBox?.x).toBe(toolbarBox?.x);
+  expect(recentHeadingBox?.y).toBe((toolbarBox?.y ?? 0) + 64);
+  expect(recentLinkBox?.x).toBe(toolbarBox?.x);
+
+  await page.goto('/search?q=recent-alpha&tab=people');
+  const resultsToolbarBox = await toolbar.boundingBox();
+  const tabsBox = await page.getByRole('tablist', { name: '검색 결과 유형' }).boundingBox();
+  expect(tabsBox?.x).toBe(resultsToolbarBox?.x);
+  expect(tabsBox?.y).toBe((resultsToolbarBox?.y ?? 0) + 64);
+  expect(tabsBox?.width).toBe(resultsToolbarBox?.width);
+});
+
 test('모바일 검색 상단바가 햄버거와 검색 초기화를 같은 leading 영역에서 전환한다', async ({
   context,
   page,

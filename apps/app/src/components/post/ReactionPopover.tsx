@@ -183,7 +183,7 @@ export function ReactionPopover({
                 style={[
                   styles.shell,
                   web ? elevation.floating : elevation.overlay,
-                  { backgroundColor: theme.card, borderColor: theme.border },
+                  { backgroundColor: theme.backgroundElevated, borderColor: theme.borderDefault },
                 ]}
                 testID="reaction-popover-scroll"
               >

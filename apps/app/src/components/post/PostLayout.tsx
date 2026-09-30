@@ -52,11 +52,9 @@ const PostLayoutFragment = graphql`
       id
     }
     ...ReplyComposerSurface_parent @alias(as: "replySurface")
-    ...ReplyComposerSurface_parent @alias(as: "quoteSurface")
     ...PostActionSurface_post @alias(as: "actionSurface")
     repostSource {
       ...PostSourcePreview_source
-      ...ReplyComposerSurface_parent @alias(as: "quoteSurface")
       ...PostActionSurface_post @alias(as: "actionSurface")
     }
     ...PostBody_post
@@ -92,7 +90,6 @@ export function PostLayout({
   const theme = useTheme();
   const post = useFragment(PostLayoutFragment, postKey);
   const [bodyExpanded, setBodyExpanded] = useState(false);
-  const restoreQuoteTriggerFocusRef = useRef<(() => void) | null>(null);
   const bodyMeasurementKey = JSON.stringify([post.content?.id, post.content?.bodyText]);
   const currentBodyMeasurementKey = useRef(bodyMeasurementKey);
   currentBodyMeasurementKey.current = bodyMeasurementKey;
@@ -119,41 +116,12 @@ export function PostLayout({
   const openViewer = usePostMediaViewerHost();
   const composerPostId = replySurfacePostId ?? post.id;
   const replyBinding = usePostComposerBinding(composerPostId);
-  const quoteBinding = usePostComposerBinding(composerPostId, 'quote');
-  const composerExpandedRef = useRef(false);
-  composerExpandedRef.current = Boolean(replyBinding?.expanded || quoteBinding?.expanded);
   const replyAuthentication = usePostActionAuthentication(replyAvailable ?? Boolean(post.content));
   const replyTriggerRef = useRef<View>(null);
   const profileHref = `/${post.profile.relativeHandle}` as const;
   const source = post.repostSource;
   const pureRepost = !post.content && !post.replyParent && post.repostSource;
   const socialActionTarget = pureRepost ? post.repostSource?.actionSurface : post.actionSurface;
-  const quoteParent = pureRepost ? source?.quoteSurface : post.quoteSurface;
-  const openQuote = useCallback(
-    (restoreFocus: () => void) => {
-      if (!replyBinding?.profile || !quoteParent) {
-        return;
-      }
-      restoreQuoteTriggerFocusRef.current = restoreFocus;
-      quoteBinding?.onPress();
-    },
-    [quoteBinding, quoteParent, replyBinding?.profile],
-  );
-  const closeQuote = useCallback(
-    (willContinue = false) => {
-      quoteBinding?.onRequestClose();
-      if (!willContinue) {
-        const restoreFocus = restoreQuoteTriggerFocusRef.current;
-        restoreQuoteTriggerFocusRef.current = null;
-        requestAnimationFrame(() => {
-          if (!composerExpandedRef.current) {
-            restoreFocus?.();
-          }
-        });
-      }
-    },
-    [quoteBinding],
-  );
   const handleReplyPress = useCallback(() => {
     if (replyAuthentication.execution.kind === 'resolution-required') {
       replyAuthentication.resolve(replyAuthentication.execution.reason);
@@ -325,22 +293,11 @@ export function PostLayout({
               { borderColor: theme.borderSubtle },
             ]}
             onDeleted={handleDeleted}
-            onQuote={openQuote}
             reactionSummaryStyle={compact ? styles.compactReactionSummary : undefined}
             reply={reply}
             socialActionTarget={socialActionTarget!}
           />
         </View>
-        {quoteBinding?.expanded && quoteParent && quoteBinding.profile ? (
-          <ReplyComposerSurface
-            ref={quoteBinding.surfaceRef}
-            mode="quote"
-            onRequestClose={closeQuote}
-            open
-            parent={quoteParent}
-            profile={quoteBinding.profile}
-          />
-        ) : null}
         {!compact &&
         replyBinding?.expanded &&
         replyAuthentication.execution.kind === 'enabled' &&

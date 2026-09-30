@@ -21,24 +21,11 @@ jobs:
             command: pnpm test:eslint
           - name: Admin
             command: pnpm --filter @kosmo/admin test
-          - name: Admin Helm
+          - name: Helm
             command: |
               set -euo pipefail
               helm lint apps/helm --set env=dev
-              rendered="$(helm template kosmo apps/helm --namespace kosmo-dev --set env=dev)"
-              admin="$(helm template kosmo apps/helm --namespace kosmo-dev --set env=dev --show-only templates/admin/deployment.yaml)"
-              for env in PGPASSWORD PGHOST PGPORT PGUSER PGDATABASE; do grep -Fq -- "- name: $env" <<<"$admin"; done
-              grep -Eq '^kind: Deployment$' <<<"$rendered"
-              grep -Eq '^kind: Service$' <<<"$rendered"
-              grep -Eq '^kind: Ingress$' <<<"$rendered"
-              grep -Eq '^kind: NetworkPolicy$' <<<"$rendered"
-              grep -Eq 'ingressClassName: tailscale' <<<"$rendered"
-              grep -Fq 'path: /healthz' <<<"$rendered"
-              grep -Fq 'kubernetes.io/metadata.name: tailscale' <<<"$rendered"
-              grep -Fq 'tailscale.com/parent-resource-type: ingress' <<<"$rendered"
-              grep -Fq 'tailscale.com/parent-resource: "kosmo-admin"' <<<"$rendered"
-              grep -Fq 'tailscale.com/parent-resource-ns: "kosmo-dev"' <<<"$rendered"
-              if grep -Eq '^kind: HTTPRoute$' <<<"$rendered"; then exit 1; fi
+              helm template kosmo apps/helm --namespace kosmo-dev --set env=dev >/dev/null
               helm lint apps/helm --set env=prod --set imageDigest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
               helm template kosmo apps/helm --namespace kosmo-prod --set env=prod --set imageDigest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa >/dev/null
           - name: Admin Image

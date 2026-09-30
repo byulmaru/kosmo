@@ -1,10 +1,13 @@
 import { Quote, Repeat2 } from 'lucide-react-native';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useId, useRef } from 'react';
 import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
+import { useFeatureFlag } from '@/components/FeatureFlagsContext';
 import { ActionMenu } from '@/components/ui/ActionMenu';
 import { useTheme } from '@/theme/ThemeProvider';
 import { PostActionControl } from './PostActionControl';
+import { useOptionalPostComposerBinding } from './PostComposerCoordinator';
+import { ReplyComposerSurface } from './ReplyComposerSurface';
 import type { RepostAction_post$key } from './__generated__/RepostAction_post.graphql';
 import type { RepostActionDeletePostMutation } from './__generated__/RepostActionDeletePostMutation.graphql';
 import type { RepostActionRepostPostMutation } from './__generated__/RepostActionRepostPostMutation.graphql';
@@ -20,13 +23,13 @@ export type RepostActionFailure = Readonly<{
 type Props = {
   execution?: PostActionExecution;
   onError?: (failure: RepostActionFailure) => void;
-  onQuote?: (restoreFocus: () => void) => void;
   onResolutionRequired?: (reason: PostActionResolutionReason) => void;
   post: RepostAction_post$key;
 };
 
 const repostActionPostFragment = graphql`
   fragment RepostAction_post on Post {
+    ...ReplyComposerSurface_parent
     content {
       id
     }
@@ -73,12 +76,13 @@ const deletePostMutation = graphql`
 export function RepostAction({
   execution = { kind: 'enabled' },
   onError,
-  onQuote,
   onResolutionRequired,
   post,
 }: Props) {
   const theme = useTheme();
   const data = useFragment(repostActionPostFragment, post);
+  const quoteBinding = useOptionalPostComposerBinding(useId(), 'quote');
+  const quoteEnabled = useFeatureFlag('quote');
   const environment = useRelayEnvironment();
   const [commitRepost, isReposting] =
     useMutation<RepostActionRepostPostMutation>(repostPostMutation);
@@ -86,7 +90,6 @@ export function RepostAction({
     useMutation<RepostActionDeletePostMutation>(deletePostMutation);
   const inFlight = useRef(false);
   const currentEnvironment = useRef(environment);
-  const restoreFocusRef = useRef<() => void>(() => undefined);
   const processing = isReposting || isDeleting;
 
   currentEnvironment.current = environment;
@@ -173,13 +176,13 @@ export function RepostAction({
   const label = action === 'cancel' ? '재게시 취소' : '재게시하기';
   const items = [
     { icon: Repeat2, key: action, label, onSelect: () => runMutation(action) },
-    ...(data.content && onQuote
+    ...(data.content && quoteEnabled && quoteBinding?.profile
       ? [
           {
             icon: Quote,
             key: 'quote',
             label: '인용하기',
-            onSelect: () => onQuote(restoreFocusRef.current),
+            onSelect: () => quoteBinding.onPress(),
           },
         ]
       : []),
@@ -190,32 +193,44 @@ export function RepostAction({
       accessibilityLabel="재게시 메뉴"
       disabled={processing || execution.kind !== 'enabled'}
       items={items}
-      renderTrigger={({ expanded: menuExpanded, focusTrigger, onPress, ref }) => {
-        restoreFocusRef.current = focusTrigger;
+      renderTrigger={({ expanded: menuExpanded, onPress, ref }) => {
         const triggerPress =
           execution.kind === 'resolution-required'
             ? () => onResolutionRequired?.(execution.reason)
             : onPress;
         return (
-          <PostActionControl
-            accessibilityLabel={data.viewerRepost ? '재게시 취소' : '재게시'}
-            active={Boolean(data.viewerRepost)}
-            activeColor={theme.actionRepostBase}
-            controlRef={ref}
-            count={data.repostCount}
-            hoverColor={theme.actionRepostBase}
-            hoverDisabled={execution.kind === 'resolution-required'}
-            hoverForegroundColor={theme.actionRepostBase}
-            icon={Repeat2}
-            iconStrokeWidth={2.7}
-            menuExpanded={execution.kind === 'enabled' ? menuExpanded : false}
-            onPress={triggerPress}
-            popupRole="menu"
-            processing={
-              processing ? 'pending' : execution.kind === 'disabled' ? 'disabled' : 'default'
-            }
-            testID="repost"
-          />
+          <>
+            <PostActionControl
+              accessibilityLabel={data.viewerRepost ? '재게시 취소' : '재게시'}
+              active={Boolean(data.viewerRepost)}
+              activeColor={theme.actionRepostBase}
+              controlRef={ref}
+              count={data.repostCount}
+              hoverColor={theme.actionRepostBase}
+              hoverDisabled={execution.kind === 'resolution-required'}
+              hoverForegroundColor={theme.actionRepostBase}
+              icon={Repeat2}
+              iconStrokeWidth={2.7}
+              menuExpanded={execution.kind === 'enabled' ? menuExpanded : false}
+              onPress={triggerPress}
+              popupRole="menu"
+              processing={
+                processing ? 'pending' : execution.kind === 'disabled' ? 'disabled' : 'default'
+              }
+              testID="repost"
+            />
+            {quoteBinding?.expanded && quoteBinding.profile ? (
+              <ReplyComposerSurface
+                ref={quoteBinding.surfaceRef}
+                mode="quote"
+                onRequestClose={quoteBinding.onRequestClose}
+                open
+                parent={data}
+                profile={quoteBinding.profile}
+                triggerRef={ref}
+              />
+            ) : null}
+          </>
         );
       }}
     />

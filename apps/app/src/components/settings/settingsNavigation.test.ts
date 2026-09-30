@@ -20,6 +20,7 @@ describe('Settings detail back navigation', () => {
       ['/settings/muted-profiles', '/settings/mute-and-block'],
       ['/settings/blocked-profiles', '/settings/mute-and-block'],
       ['/settings/info', '/settings'],
+      ['/settings/theme', '/settings'],
       ['/settings/developer', '/settings/info'],
     ] as const;
 

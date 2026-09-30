@@ -299,13 +299,16 @@ function ReplyComposerSurfaceContents({
         style={[
           styles.confirm,
           elevation.overlay,
-          { backgroundColor: theme.card, borderColor: theme.border },
+          { backgroundColor: theme.backgroundElevated, borderColor: theme.borderDefault },
         ]}
       >
-        <Text accessibilityRole="header" style={[styles.confirmTitle, { color: theme.text }]}>
+        <Text
+          accessibilityRole="header"
+          style={[styles.confirmTitle, { color: theme.foregroundPrimary }]}
+        >
           {composerName} 작성을 취소할까요?
         </Text>
-        <Text style={[styles.confirmDescription, { color: theme.textSecondary }]}>
+        <Text style={[styles.confirmDescription, { color: theme.foregroundSecondary }]}>
           작성 중인 내용은 저장되지 않습니다.
         </Text>
         <View style={styles.confirmActions}>
@@ -361,8 +364,8 @@ function ReplyComposerSurfaceContents({
               presentation === 'fullscreen' ? styles.fullscreen : styles.modal,
               Platform.OS === 'web' && presentation === 'modal' ? styles.webModal : null,
               {
-                backgroundColor: theme.card,
-                borderColor: theme.border,
+                backgroundColor: theme.backgroundElevated,
+                borderColor: theme.borderDefault,
               },
             ]}
             testID={`${quoteMode ? 'quote' : 'reply'}-composer-dialog-surface`}
@@ -375,8 +378,11 @@ function ReplyComposerSurfaceContents({
                 style={[styles.main, discardConfirmOpen ? styles.mainBlocked : null]}
               >
                 {presentation === 'modal' ? (
-                  <View style={[styles.header, { borderColor: theme.border }]}>
-                    <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>
+                  <View style={[styles.header, { borderColor: theme.borderDefault }]}>
+                    <Text
+                      accessibilityRole="header"
+                      style={[styles.title, { color: theme.foregroundPrimary }]}
+                    >
                       글쓰기
                     </Text>
                     <IconButton
@@ -396,7 +402,7 @@ function ReplyComposerSurfaceContents({
                       visualSize={closeControlSize}
                       visualStyle={styles.close}
                     >
-                      <XIcon color={theme.text} size={20} strokeWidth={2} />
+                      <XIcon color={theme.foregroundPrimary} size={20} strokeWidth={2} />
                     </IconButton>
                   </View>
                 ) : null}
@@ -434,7 +440,9 @@ function ReplyComposerSurfaceContents({
                           <View style={styles.parentContent}>
                             <View style={styles.parentIdentity}>
                               <ProfileNameBlock profile={parent.profile} />
-                              <Text style={[styles.timestamp, { color: theme.textSecondary }]}>
+                              <Text
+                                style={[styles.timestamp, { color: theme.foregroundSecondary }]}
+                              >
                                 {formatTimelineTimestamp(parent.createdAt)}
                               </Text>
                             </View>

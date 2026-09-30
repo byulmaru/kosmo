@@ -65,14 +65,14 @@ mock.module(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
   exports: {
     useReducedMotion: () => reducedMotion,
     useTheme: () => ({
-      divider: '#eeeeee',
-      focus: '#005fcc',
-      selectedSurface: '#fff8dc',
-      selectedBorder: '#9a7800',
+      borderSubtle: '#eeeeee',
+      foregroundPrimary: '#111111',
+      foregroundSecondary: '#666666',
+      stateFocusRing: '#005fcc',
+      stateSelectedSurface: '#fff8dc',
+      stateSelectedBorder: '#9a7800',
       stateHover: '#f4f4f4',
       statePressed: '#e8e8e8',
-      text: '#111111',
-      textSecondary: '#666666',
     }),
   },
 } as unknown as Parameters<typeof mock.module>[1]);

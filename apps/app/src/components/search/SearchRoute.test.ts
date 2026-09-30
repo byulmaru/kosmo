@@ -46,6 +46,9 @@ mockModule('react-relay', { graphql: () => ({}), useFragment: () => ({}) });
 mockModule('@/analytics/client', {
   trackAnalytics: () => undefined,
 });
+mockModule('@/session/SessionProvider', {
+  useSession: () => ({ accountId: null, selectedProfileId: null, status: 'guest' }),
+});
 mockModule('@/components/PageHeader', {
   PageHeader: ({ children }: { children: ReactNode }) =>
     createElement('NativeStackHeader', null, children),

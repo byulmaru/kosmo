@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Skeleton } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
 import type { RefObject } from 'react';
@@ -150,6 +151,14 @@ export function PostMediaImage({
         style={styles.image}
         testID={`post-media-image-${item.id}`}
       />
+      {status === 'loading' ? (
+        <Skeleton
+          borderRadius={radii.md}
+          height="100%"
+          style={StyleSheet.absoluteFill}
+          width="100%"
+        />
+      ) : null}
     </View>
   );
 

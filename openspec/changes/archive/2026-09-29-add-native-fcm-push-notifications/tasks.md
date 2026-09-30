@@ -1,3 +1,6 @@
+> PR #916의 세션 기록이다. PROD-914 구현과 Android·iOS 기기 검증은 남아 있으며, archive는 이를 완료 처리하거나
+> PR #916의 review gate로 두지 않는다.
+
 ## 1. PROD-912 Account 설치 registration과 shared Domain/OpenSpec Gate
 
 **Authority / Provenance**
@@ -13,7 +16,7 @@
 인증된 Account가 외부 installation ID 없이 새 registration row를 발급하고 반환된 server-issued
 `PushInstallation` GlobalID로 현재 Account가 소유한 FCM token을 갱신·해제하며, 등록 당시 연결된 `sessionId`는
 lifecycle association으로 유지하고 요청 Session으로 재바인딩하지 않는다. 모든 Profile·eligible
-installation·Recipient Profile·privacy·expiry·no-backlog·Read State 경계를 sibling 구현이 공유할 수 있는
+installation·Recipient Profile·privacy·expiry·registration eligibility·Read State 경계를 sibling 구현이 공유할 수 있는
 server 계약과 lifecycle을 제공한다.
 
 **Guardrails**
@@ -22,9 +25,9 @@ server 계약과 lifecycle을 제공한다.
 - selected Profile 또는 most-recent installation으로 수신 범위를 줄이지 않는다.
 - server-side logout·account switch·Account deletion·명시적 해제·일치하는 invalid/unregistered token은 installation row와 token을 즉시 삭제해 이후 신규 전달의 eligibility를 정리한다.
 - 최초 registration은 새 row ID를 반환하고, update는 반환된 ID와 인증된 현재 Account 소유권만 확인해 row를 갱신한다. 알 수 없거나 삭제된 ID와 다른 Account 소유 ID의 update는 row 존재 여부를 노출하지 않는 동일한 `PERMISSION_DENIED`(`Push installation is unavailable.`)로 실패하며, unregister는 현재 Account 소유 ID만 삭제하고 unknown·foreign ID는 `{ completed: true }`로 멱등 완료한다. 같은 Account의 다른 Session도 row를 관리할 수 있고, 등록 당시 연결된 Session의 lifecycle cleanup은 유지한다.
-- 같은 Account의 새 registration이 active token을 재등록하면 기존 duplicate row를 원자적으로 삭제하고 새 row ID와 registration epoch를 만든다. 다른 Account의 active token은 거부한다.
+- 같은 Account의 새 registration이 active token을 재등록하면 기존 duplicate row를 원자적으로 삭제하고 새 row ID를 만든다. 다른 Account의 active token은 거부한다.
 - DB UUID PK를 `PushInstallation` GlobalID로 인코딩하고 별도 Node/query/registry를 추가하지 않는다.
-- registration 이후 생성된 Notification만 전달하고 기존 unread backlog를 replay하지 않는다.
+- 새 registration 뒤 신규 Notification 전달은 best-effort로 시작하며, 기존 unread backlog를 별도로 replay하지 않는다.
 - token, credential과 private body를 repository·client bundle·일반 로그·analytics에 기록하지 않는다.
 - PROD-913과 PROD-914는 이 shared Gate 승인 후 착수하며, 912의 Provider integration 전체 완료를 서로의 선행 조건으로 만들지 않는다.
 
@@ -32,13 +35,13 @@ server 계약과 lifecycle을 제공한다.
 
 - Account ownership·다중 Profile·다중 installation의 등록·갱신·해제 동작 및 권한 실패를 실행 검증한다. register의 server-issued ID 반환, update의 Account-only 제한과 same-Account 다른 Session 허용, unknown·deleted·foreign ID에 대한 동일한 `PERMISSION_DENIED`(`Push installation is unavailable.`), unregister의 unknown·foreign ID `{ completed: true }`와 삭제 ID의 비재생성·late unregister 무효화를 포함한다.
 - Session `REVOKED`·`EXPIRED`, Account 삭제의 기존 정리 순서와 Account 비활성의 auth·eligibility exclusion, explicit unregister와 matching/stale invalid-unregistered token 뒤 실제 row 삭제 및 신규 delivery eligibility를 확인한다.
-- registration 시점 전후 Notification과 Read State를 사용해 no-backlog·expiry·read independence 경계를 검증한다.
+- registration 시점과 Notification 생성 시각의 기존 server-side eligibility 테스트 evidence를 유지하고 expiry·Read State 독립성을 검증한다.
 - 인증·payload·token 개인정보가 로그와 analytics에 남지 않는지 관측 결과를 확인한다.
 
 - [x] 1.1 shared Domain/OpenSpec Gate에서 Account·Profile·installation·token ownership과 신규 전달 eligibility를 승인된 계약으로 연결한다.
 - [x] 1.2 인증된 Account의 server-issued ID registration·refresh·unregister lifecycle을 구현하고 다른 Account 접근은 거부하되 같은 Account의 다른 Session 관리는 허용한다. 등록 당시 연결된 Session의 lifecycle cleanup은 유지한다.
 - [x] 1.3 server-side logout·account switch·Account deletion·provider invalid/unregistered 결과를 이후 신규 전달 자격 정리와 연결한다.
-- [x] 1.4 registration 이후 생성된 Notification만 대상이 되도록 no-backlog 경계를 구현하고, expiry·Read State와 충돌하지 않음을 검증한다.
+- [x] 1.4 server-side registration-time Notification eligibility와 no-backlog selection을 실행 검증했다. 이는 live FCM delivery를 주장하지 않으며, strict per-registration epoch recovery는 요구하지 않는다.
 - [x] 1.5 token·credential·private body 저장·관측 경계를 확인하고 PROD-913/914가 사용할 shared Gate evidence를 남긴다.
 
 ## 2. PROD-913 Android·iOS 권한·token·tap 연결
@@ -62,25 +65,21 @@ server 계약과 lifecycle을 제공한다.
 - OS 권한 대화상자는 `알림 받기` action에서만 시작하고 앱 시작·로그인 완료에서 자동으로 열지 않는다.
 - 같은 설치에서 안내 close·permission deny·일반 update 뒤 자동 안내를 반복하지 않으며, in-app Push switch/preference API를 만들지 않는다.
 - foreground에서도 OS banner를 사용하고 custom in-app Push banner를 추가하지 않는다.
-- cross-profile tap은 현재 Account의 Recipient Profile 접근을 재검증한 뒤 Profile 전환·target 이동을 수행한다.
-- 삭제·접근 불가 target은 접근 가능한 Notification 목록만 열고 toast·message를 표시하지 않는다.
+- cross-profile tap은 payload의 Notification ID로 목적지 정보를 조회하고 현재 Account의 Recipient Profile 접근을 재검증한 뒤, 접근 가능하면 Profile로 전환해 조회된 목적지로 기존 route를 사용한다.
+- Push 전용 deleted/inaccessible target redirect를 추가하지 않으며, ID만으로 route를 구성할 수 없으면 일반 Notification 목록 fallback을 사용할 수 있다.
 - logged-out tap은 target을 버리고 일반 login으로 수렴하며 login 뒤 target을 자동 복귀하지 않는다.
 
 **Verification**
 
 - Local implementation과 lifecycle/storage·payload/settings·Relay focused checks는 완료된 것으로 기록한다.
-- Android·iOS signed build의 permission CTA, foreground/background/terminated 수신, cross-profile·deleted/inaccessible·logged-out tap은 별도 evidence로 확인한다.
-- Firebase service-file injection/prebuild와 iOS FCM–APNs provisioning/entitlement, 실제 device arrival evidence를 local checks와 분리한다.
-- AsyncStorage의 close·deny·update 억제 및 uninstall/reinstall·backup/restore 동작은 signed device에서 별도로 확인하며,
-  backup 복원 결과를 strict install-level once의 보장으로 일반화하지 않는다.
+- **미실행 device verification:** Android·iOS signed-device permission, delivery/tap, provisioning과 install-storage
+  persistence 검증을 실행하지 않았다.
 
 - [x] 2.1 현재 PROD-913 client implementation과 lifecycle/storage·payload/settings·Relay local checks를 실행하고 결과를 기록한다.
-- [ ] 2.2 Android·iOS signed build에서 permission CTA, foreground/background/terminated 수신과 Push tap 흐름을 확인한다.
-- [ ] 2.3 Firebase service-file injection/prebuild를 실제 native build에서 확인한다.
-- [ ] 2.4 iOS FCM–APNs provisioning/entitlement와 실제 Android·iOS device arrival evidence를 확인한다.
-- [ ] 2.5 AsyncStorage marker의 close·deny·update, uninstall/reinstall·backup/restore 동작을 signed device에서 확인한다.
 
-## 3. PROD-914 canonical Notification FCM 전달
+## 3. PROD-914 canonical Notification FCM 전달 (미구현 범위)
+
+아래 server delivery 동작은 PROD-914 범위이며 PR #916의 완료 범위가 아니다. 체크하지 않은 항목은 완료를 주장하지 않는다.
 
 **Authority / Provenance**
 
@@ -122,45 +121,11 @@ cleanup과 운영 관측을 제공한다.
 - [ ] 3.1 현재 5개 generator(`createFollowNotification`, `createFollowRequestNotification`, `createReactionNotification`, `createRepostNotification`, `createReplyNotification`)가 공통 전달 flow에 연결되는 현재 inventory를 확인하고, 향후 canonical type도 domain owner가 연결한 저장 성공 결과로 같은 flow에 진입할 수 있도록 기존 Recipient·Mute·Block·visibility 정책과 연결해 eligible target을 계산한다.
 - [ ] 3.2 sender·type·Recipient Profile·body preview payload를 권한·sensitive/CW redaction과 bodyless 규칙에 맞춰 구성하고 Provider handoff 전에 크기를 검증한다.
 - [ ] 3.3 Notification materialization 뒤 Provider 전달을 시작하고, 원본 Notification 실패 격리와 installation별 success·transient·timeout·rate limit·partial·terminal 결과를 구현한다. 복구 불가능한 추가 post-commit 외부 start window를 만들지 않는다.
-- [ ] 3.4 최초 Notification 생성 시각 기준 24시간 expiry, retry/backoff·dedup와 no-backlog registration 경계를 구현한다.
+- [ ] 3.4 최초 Notification 생성 시각 기준 24시간 expiry, retry/backoff·dedup, best-effort registration 전달과 historical backlog 미재생을 구현한다.
 - [ ] 3.5 invalid/unregistered token 결과를 PROD-912 cleanup 경계로 연결하고 token·credential·private body 비노출 관측을 검증한다.
 - [ ] 3.6 Read State 독립성, Provider accepted/queued와 actual arrival 분리, 원본 commit 실패 격리를 실행 검증하고, 기존 source Workflow가 Notification materialization 전에 시작 실패하는 관측 경계를 별도로 기록한다.
 
-## 4. PROD-875 Android·iOS 종단 간 통합과 archive
+## 세션 종료 상태
 
-**Authority / Provenance**
-
-- `docs/domain/objects/notification.md`
-- `docs/domain/decisions/0029-native-push-notification-policy.md`
-- `docs/design/notifications.md`
-- `PROD-875`
-- `PROD-912`
-- `PROD-913`
-- `PROD-914`
-
-**Deliverable**
-
-세 child의 scoped validation을 하나의 Android·iOS signed-build 종단 간 결과로 통합하고, 전체 declared scope와
-OpenSpec requirements가 충족된 뒤 change archive를 소유한다.
-
-**Guardrails**
-
-- PROD-912 shared Gate 승인과 child별 결과를 선행 조건으로 확인한다.
-- Provider accepted·workflow success·actual device arrival·OS permission 상태를 하나의 성공 주장으로 합치지 않는다.
-- Push 실패가 canonical Notification 생성·조회·Read 또는 기존 in-app lifecycle을 rollback하지 않는다.
-- 현재 PROD-875 scope 밖의 Web Push, marketing broadcast, future generator·PROD-911 generator 자체 구현과 in-app preference를 검증 scope에 추가하지 않는다.
-- 개별 child 완료만으로 전체 change archive를 주장하지 않으며 PROD-875가 남은 cross-slice evidence와 archive를 소유한다.
-
-**Verification**
-
-- Android·iOS 각각에서 permission CTA·OS Settings·foreground/background/terminated·token refresh·logout/account switch를 확인한다.
-- all Profile·all eligible installation fan-out, body privacy, cross-profile/inaccessible/logged-out tap, expiry/no-backlog/read independence를 확인한다.
-- Provider fake/accepted·retry·failure evidence와 실제 signed device arrival을 분리해 기록한다.
-- `openspec validate add-native-fcm-push-notifications --strict`와 repository의 관련 lint/type/test/build checks를 통과시킨다.
-- 전체 declared scope가 완료되고 canonical·Linear·OpenSpec 정합성이 재확인된 뒤에만 archive한다.
-
-- [ ] 4.1 PROD-912 Gate와 세 child의 implementation/scoped validation evidence를 기준 branch에서 수집한다.
-- [ ] 4.2 Android signed build에서 권한·token·foreground/background/terminated·tap·multi-profile/multi-installation 시나리오를 실행한다.
-- [ ] 4.3 iOS signed build에서 같은 시나리오와 iOS FCM–APNs/device arrival evidence를 실행한다.
-- [ ] 4.4 Provider accepted·workflow·arrival·privacy·failure evidence를 cross-slice 결과로 통합하고 기존 Notification lifecycle 회귀를 확인한다.
-- [ ] 4.5 전체 requirements와 task verification을 대조해 OpenSpec change를 archive할 completion package를 준비한다.
+완료 기록: PROD-912 installation lifecycle과 PR #916의 PROD-913 native client 로컬 검증.
+남음: PROD-914 server delivery와 Android·iOS signed-device 검증.
