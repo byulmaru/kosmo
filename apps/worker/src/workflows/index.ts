@@ -10,6 +10,7 @@ export { profileUnblockWorkflow } from './profile-unblock';
 export { profileUpdateEffectsWorkflow } from './profile-update';
 export { reactionCreateEffectsWorkflow } from './reaction-create';
 export { reactionDeleteEffectsWorkflow } from './reaction-delete';
+export { remoteProfileFeaturedWorkflow } from './remote-profile-featured';
 export { remoteProfileLookupWorkflow } from './remote-profile-lookup';
 export { remoteProfileRefreshWorkflow } from './remote-profile-refresh';
 export { postRepostWorkflow } from './repost';

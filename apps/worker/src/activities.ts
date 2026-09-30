@@ -6,6 +6,7 @@ export {
   executeProfileBlockTransitionActivity,
   executeProfileUnblockTransitionActivity,
 } from './activities/profile-block';
+export { syncRemoteFeaturedActivity } from './activities/remote-profile-featured';
 export {
   lookupRemoteActorUriActivity,
   materializeRemoteProfileActorActivity,

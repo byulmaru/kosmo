@@ -219,7 +219,7 @@ type RemoteNoteMaterializationSource =
 
 type HydratedRemoteNoteAudience = {
   advertisingActorUri: string | URL;
-  followerProfileId: string;
+  followerProfileId?: string;
 };
 
 type RemoteNoteMaterializationRejectionReason =
@@ -427,12 +427,13 @@ const materializeRemoteNote = async ({
   }
   if (
     visibility === PostVisibility.FOLLOWERS &&
-    !(await hasEstablishedFollower({
-      followerProfileId:
-        source.kind === 'create' ? source.recipient : source.audience?.followerProfileId,
-      followeeProfileId:
-        source.kind === 'create' ? source.storedActor.profile.id : storedActor!.profile.id,
-    }))
+    ((source.kind === 'hydrated' && !source.audience?.followerProfileId) ||
+      !(await hasEstablishedFollower({
+        followerProfileId:
+          source.kind === 'create' ? source.recipient : source.audience?.followerProfileId,
+        followeeProfileId:
+          source.kind === 'create' ? source.storedActor.profile.id : storedActor!.profile.id,
+      })))
   ) {
     return { reason: 'followers_visibility_without_follow', status: 'rejected' };
   }

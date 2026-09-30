@@ -10,7 +10,9 @@ import {
   ProfileFollowPolicy,
   ProfileMediaKind,
 } from '@kosmo/core/enums';
+import { temporalClient } from '@kosmo/core/temporal/client';
 import { executeProfileFollowPairTransition } from '@kosmo/core/temporal/follow-command';
+import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
 import { and, eq, inArray } from 'drizzle-orm';
 import { setInboundObservabilityReporter } from './inbound-observability';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
@@ -138,6 +140,88 @@ describe('inbound actor Update', () => {
     assert.equal(stored.actor.lastFetchedAt?.toString(), secondReceivedAt.toString());
     assert.deepEqual(await readProfileMedia(fixture.profile.id), []);
     assert.equal(await db.$count(Media, eq(Media.profileId, fixture.profile.id)), 2);
+  });
+
+  test('verified Actor Update persists Featured generation and schedules its sync', async () => {
+    const fixture = await createRemoteActor(ProfileFollowPolicy.OPEN);
+    const start = mock.method(temporalClient.workflow, 'start', async () => undefined as never);
+    const receivedAt = Temporal.Instant.from('2026-07-31T05:00:00Z');
+
+    await handleInboundUpdate(
+      createContext(),
+      new Update({
+        actor: remoteActorUri,
+        object: createActor({ featured: new URL(`${remoteActorUri.href}/featured`) }),
+      }),
+      receivedAt,
+    );
+
+    const firstStored = await readRemoteActor(fixture.profile.id);
+    assert.equal(firstStored.actor.featuredUri, `${remoteActorUri.href}/featured`);
+    assert.equal(firstStored.actor.featuredRevision, 1);
+    assert.equal(start.mock.callCount(), 1);
+    assert.equal(start.mock.calls[0]?.arguments[0], 'remoteProfileFeaturedWorkflow');
+    assert.equal(start.mock.calls[0]?.arguments[1]?.taskQueue, KOSMO_TASK_QUEUE);
+    assert.deepEqual(start.mock.calls[0]?.arguments[1]?.args, [
+      {
+        actorUri: remoteActorUri.href,
+        featuredUri: `${remoteActorUri.href}/featured`,
+        profileId: fixture.profile.id,
+        revision: 1,
+      },
+    ]);
+
+    await handleInboundUpdate(
+      createContext(),
+      new Update({
+        actor: remoteActorUri,
+        object: createActor({ featured: new URL(`${remoteActorUri.href}/featured`) }),
+      }),
+      receivedAt,
+    );
+    assert.equal((await readRemoteActor(fixture.profile.id)).actor.featuredRevision, 1);
+    assert.equal(start.mock.callCount(), 1);
+
+    await handleInboundUpdate(
+      createContext(),
+      new Update({
+        actor: remoteActorUri,
+        object: createActor({ featured: null }),
+      }),
+      receivedAt.add({ seconds: 1 }),
+    );
+
+    const removed = await readRemoteActor(fixture.profile.id);
+    assert.equal(removed.actor.featuredUri, null);
+    assert.equal(removed.actor.featuredRevision, 2);
+    assert.equal(start.mock.callCount(), 1);
+  });
+
+  test('Featured Workflow start failure does not roll back the verified Actor Update', async () => {
+    const fixture = await createRemoteActor(ProfileFollowPolicy.OPEN);
+    const start = mock.method(temporalClient.workflow, 'start', async () => {
+      throw new Error('Temporal unavailable');
+    });
+    const errorLog = mock.method(console, 'error', () => undefined);
+
+    await handleInboundUpdate(
+      createContext(),
+      new Update({
+        actor: remoteActorUri,
+        object: createActor({ featured: new URL(`${remoteActorUri.href}/featured`) }),
+      }),
+      Temporal.Instant.from('2026-07-31T05:00:00Z'),
+    );
+
+    const stored = await readRemoteActor(fixture.profile.id);
+    assert.equal(stored.actor.featuredUri, `${remoteActorUri.href}/featured`);
+    assert.equal(stored.actor.featuredRevision, 1);
+    assert.equal(start.mock.callCount(), 1);
+    assert.equal(errorLog.mock.callCount(), 1);
+    assert.equal(
+      errorLog.mock.calls[0]?.arguments[0],
+      'Remote Profile Featured Workflow start failed',
+    );
   });
 
   test('ignores mismatched, unsupported, unknown, and local actor updates without document loading', async () => {
