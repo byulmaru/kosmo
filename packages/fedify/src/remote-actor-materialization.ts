@@ -46,8 +46,7 @@ export class RemoteActorMaterializationError extends Error {
   }
 }
 
-type RemoteActorLookupContext = Pick<Context<void>, 'lookupObject'> &
-  Partial<Pick<Context<void>, 'canonicalOrigin'>>;
+type RemoteActorLookupContext = Pick<Context<void>, 'lookupObject'>;
 export type RemoteActorMaterializationOptions = {
   actorJsonLd?: unknown;
   context: RemoteActorLookupContext;
@@ -294,12 +293,13 @@ type RemoteActorReceipt = {
   receivedAt: Temporal.Instant;
 };
 
-type RemoteActorLookupOptions = { actorUri: URL; context: RemoteActorLookupContext } & (
-  | { actorJsonLd?: never; now?: Temporal.Instant; receipt?: RemoteActorReceipt }
-  | { actorJsonLd: unknown; receipt: RemoteActorReceipt }
-);
+type RemoteActorLookupOptions = {
+  actorUri: URL;
+  contextOrigin?: string;
+  receipt?: RemoteActorReceipt;
+};
 
-const serializeReceipt = (receipt: RemoteActorReceipt) => {
+export const serializeReceipt = (receipt: RemoteActorReceipt) => {
   let activityUri: string | undefined;
   if (receipt.activityUri) {
     try {
@@ -318,6 +318,21 @@ const serializeReceipt = (receipt: RemoteActorReceipt) => {
   };
 };
 
+export const rethrowRemoteActorWorkflowError = (error: unknown): never => {
+  const failure = error as (Error & { type?: unknown }) | null;
+  if (failure?.name === 'ApplicationFailure' && typeof failure.type === 'string') {
+    switch (failure.type) {
+      case 'ConflictError':
+        throw new ConflictError({ message: failure.message });
+      case 'NotFoundError':
+        throw new NotFoundError(failure.message);
+      case 'RemoteActorMaterializationError':
+        throw new RemoteActorMaterializationError(failure.message);
+    }
+  }
+  throw error;
+};
+
 const lookupRemoteProfileActor = async (input: RemoteProfileActorLookupInput) => {
   try {
     return await runWorkflow(remoteProfileLookupWorkflow, {
@@ -327,93 +342,61 @@ const lookupRemoteProfileActor = async (input: RemoteProfileActorLookupInput) =>
       workflowIdReusePolicy: 'ALLOW_DUPLICATE',
     });
   } catch (error) {
-    const failure = error as (Error & { type?: unknown }) | null;
-    if (failure?.name === 'ApplicationFailure' && typeof failure.type === 'string') {
-      switch (failure.type) {
-        case 'ConflictError':
-          throw new ConflictError({ message: failure.message });
-        case 'NotFoundError':
-          throw new NotFoundError(failure.message);
-        case 'RemoteActorMaterializationError':
-          throw new RemoteActorMaterializationError(failure.message);
-      }
-    }
-    throw error;
+    return rethrowRemoteActorWorkflowError(error);
   }
 };
 
-const getContextOrigin = async (context: RemoteActorLookupContext) =>
-  context.canonicalOrigin ?? (await resolveConfiguredLocalInstance()).canonicalOrigin;
+const requireRemoteActor = (actor: ActivityPubObject | null, actorUri: URL): Actor => {
+  if (!isActor(actor)) {
+    throw new RemoteActorMaterializationError('Remote lookup did not return an actor.');
+  }
+
+  if (!actor.id) {
+    throw new RemoteActorMaterializationError('Remote actor is missing canonical URI.');
+  }
+
+  const actorId = actor.id;
+
+  if ((actorId.protocol !== 'http:' && actorId.protocol !== 'https:') || !actorId.hostname) {
+    throw new RemoteActorMaterializationError('Remote actor URI must use HTTP(S) with a hostname.');
+  }
+
+  if (actorId.href !== actorUri.href) {
+    throw new RemoteActorMaterializationError('Remote lookup returned a different actor URI.');
+  }
+
+  return actor;
+};
+
+export const fetchRemoteProfileActor = async (
+  context: Pick<Context<void>, 'lookupObject'>,
+  actorUri: URL,
+  documentLoader?: DocumentLoader,
+): Promise<Actor> => {
+  const result = await (documentLoader
+    ? context.lookupObject(actorUri, { documentLoader })
+    : context.lookupObject(actorUri));
+
+  if (result === null) {
+    throw new Error('Remote lookup did not return an actor.');
+  }
+
+  return requireRemoteActor(result as ActivityPubObject, actorUri);
+};
 
 export const findOrMaterializeRemoteProfileActorByUri = async (
   options: RemoteActorLookupOptions,
 ) => {
-  const { actorUri, context } = options;
-  let input: RemoteProfileActorLookupInput;
-
-  if ('actorJsonLd' in options) {
-    if (options.actorJsonLd === undefined) {
-      throw new RemoteActorMaterializationError('Remote actor JSON-LD could not be serialized.');
-    }
-
-    input = {
-      actorUri: actorUri.href,
-      actorDocument: {
-        jsonLd: options.actorJsonLd,
-        contextOrigin: await getContextOrigin(context),
-        receivedAt: options.receipt.receivedAt.toString(),
-      },
-      receipt: serializeReceipt(options.receipt),
-    };
-  } else {
-    const profileId = await lookupRemoteProfileActor({
-      actorUri: actorUri.href,
-      ...(options.receipt ? { receipt: serializeReceipt(options.receipt) } : {}),
-    });
-    if (profileId) {
-      const stored = await findStoredRemoteProfileActorByUri(actorUri);
-      if (stored?.profile.id === profileId) {
-        return stored;
-      }
-    }
-
-    // Keep the caller's Fedify lookup context so transport hooks and failures
-    // retain the behavior expected by existing callers.
-    const actor = (await context.lookupObject(actorUri)) as ActivityPubObject | null;
-    if (!actor || !isActor(actor)) {
-      throw new RemoteActorMaterializationError('Remote lookup did not return an actor.');
-    }
-
-    let actorJsonLd: unknown;
-    try {
-      actorJsonLd = await actor.toJsonLd({
-        contextLoader: noNetworkDocumentLoader,
-        format: 'expand',
-      });
-    } catch {
-      throw new RemoteActorMaterializationError('Remote actor JSON-LD could not be serialized.');
-    }
-
-    input = {
-      actorUri: actorUri.href,
-      actorDocument: {
-        jsonLd: actorJsonLd,
-        contextOrigin: await getContextOrigin(context),
-        receivedAt: (options.now ?? getNow()).toString(),
-      },
-    };
-  }
-
-  const profileId = await lookupRemoteProfileActor(input);
-
+  const profileId = await lookupRemoteProfileActor({
+    actorUri: options.actorUri.href,
+    ...(options.contextOrigin === undefined ? {} : { contextOrigin: options.contextOrigin }),
+    ...(options.receipt ? { receipt: serializeReceipt(options.receipt) } : {}),
+  });
   if (!profileId) {
-    if ('actorJsonLd' in options) {
-      throw new NotFoundError('Profile not found');
-    }
     throw new RemoteActorMaterializationError('Remote actor URI did not materialize a profile.');
   }
 
-  const materialized = await findStoredRemoteProfileActorByUri(actorUri);
+  const materialized = await findStoredRemoteProfileActorByUri(options.actorUri);
 
   if (!materialized || materialized.profile.id !== profileId) {
     throw new RemoteActorMaterializationError('Materialized actor URI does not match.');
@@ -443,43 +426,23 @@ export const materializeRemoteProfileActor = async (options: RemoteActorMaterial
   const existingRequestedRemoteInstance = await findAvailableRemoteInstance(targetActorDomain, {
     allowUnresponsive: reactivateUnresponsive,
   });
-  const lookupOptions = options.documentLoader
-    ? { documentLoader: options.documentLoader }
-    : undefined;
-  let actor: ActivityPubObject | null;
+  let actor: Actor;
   if (options.actorJsonLd === undefined) {
-    actor = (await context.lookupObject(
-      options.actorUri,
-      lookupOptions,
-    )) as ActivityPubObject | null;
+    actor = await fetchRemoteProfileActor(context, options.actorUri, options.documentLoader);
   } else {
+    let parsed: ActivityPubObject;
     try {
-      actor = await ActivityPubObject.fromJsonLd(options.actorJsonLd, {
+      parsed = await ActivityPubObject.fromJsonLd(options.actorJsonLd, {
         contextLoader: noNetworkDocumentLoader,
         documentLoader: noNetworkDocumentLoader,
       });
     } catch {
       throw new RemoteActorMaterializationError('Remote actor JSON-LD could not be parsed.');
     }
+    actor = requireRemoteActor(parsed, options.actorUri);
   }
 
-  if (!isActor(actor)) {
-    throw new RemoteActorMaterializationError('Remote lookup did not return an actor.');
-  }
-
-  if (!actor.id) {
-    throw new RemoteActorMaterializationError('Remote actor is missing canonical URI.');
-  }
-
-  const actorId = actor.id;
-
-  if ((actorId.protocol !== 'http:' && actorId.protocol !== 'https:') || !actorId.hostname) {
-    throw new RemoteActorMaterializationError('Remote actor URI must use HTTP(S) with a hostname.');
-  }
-
-  if (actorId.href !== options.actorUri.href) {
-    throw new RemoteActorMaterializationError('Remote lookup returned a different actor URI.');
-  }
+  const actorId = actor.id!;
 
   let projection: ActorProjection;
   try {

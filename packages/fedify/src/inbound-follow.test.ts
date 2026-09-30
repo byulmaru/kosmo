@@ -13,11 +13,13 @@ import {
 } from '@kosmo/core/enums';
 import { ConflictError } from '@kosmo/core/error';
 import { temporalClient } from '@kosmo/core/temporal/client';
+import { remoteProfileLookupWorkflow } from '@kosmo/core/temporal/workflows';
 import { eq, ne } from 'drizzle-orm';
 import { setInboundObservabilityReporter, withInboundObservability } from './inbound-observability';
 import type { InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
+import type { RemoteProfileLookupInput } from '@kosmo/core/temporal/workflows';
 import type * as FederationModule from './federation';
 import type * as InboundFollow from './inbound-follow';
 
@@ -746,35 +748,70 @@ describe('inbound Follow and Undo', () => {
       lookupWebFinger,
       recipient: 'different-profile',
     });
+    const lookupWorkflow = mock.method(temporalClient.workflow, 'execute', async () => {
+      throw new Error('Recipient rejection must happen before URI workflow dispatch');
+    });
 
-    await handleInboundFollow(
-      context,
-      new Follow({
-        actor: new URL('https://unknown.example/users/mallory'),
-        object: localActorUri,
-      }),
-    );
+    try {
+      await handleInboundFollow(
+        context,
+        new Follow({
+          actor: new URL('https://unknown.example/users/mallory'),
+          object: localActorUri,
+        }),
+      );
+    } finally {
+      lookupWorkflow.mock.restore();
+    }
 
+    assert.equal(lookupWorkflow.mock.callCount(), 0);
     assert.equal(lookupObject.mock.calls.length, 0);
     assert.equal(lookupWebFinger.mock.calls.length, 0);
     assert.equal((await db.select().from(ProfileFollows)).length, 0);
   });
 
-  test('propagates a retryable inbox Context lookup error unchanged', async () => {
+  test('propagates a retryable URI Workflow failure unchanged', async () => {
     await createFixture();
     const unknownActorUri = new URL('https://unknown.example/users/mallory');
     const follow = new Follow({ actor: unknownActorUri, object: localActorUri });
     const lookupFailure = new Error('Actor lookup unavailable');
-    const lookupObject = mock.fn(async () => {
-      throw lookupFailure;
-    });
-
-    await assert.rejects(
-      handleInboundFollow(createContext({ lookupObject, recipient: localProfileId }), follow),
-      (error: unknown) => error === lookupFailure,
+    const receivedAt = Temporal.Instant.from('2026-09-29T00:03:00Z');
+    const lookupWorkflow = mock.method(
+      temporalClient.workflow,
+      'execute',
+      async (workflow: unknown, options: unknown) => {
+        assert.equal(workflow, remoteProfileLookupWorkflow.workflow);
+        assert.ok(options && typeof options === 'object');
+        const workflowOptions = options as {
+          args?: readonly RemoteProfileLookupInput[];
+          workflowId?: string;
+        };
+        const input = workflowOptions.args?.[0];
+        assert.ok(input && 'actorUri' in input);
+        assert.equal(workflowOptions.args?.length, 1);
+        assert.deepEqual(input, {
+          actorUri: unknownActorUri.href,
+          contextOrigin: publicOrigin,
+          receipt: { receivedAt: receivedAt.toString() },
+        });
+        assert.equal(
+          workflowOptions.workflowId,
+          remoteProfileLookupWorkflow.workflowIdFromArgs(input),
+        );
+        throw lookupFailure;
+      },
     );
 
-    assert.equal(lookupObject.mock.calls.length, 1);
+    try {
+      await assert.rejects(
+        handleInboundFollow(createContext({ recipient: localProfileId }), follow, receivedAt),
+        (error: unknown) => error === lookupFailure,
+      );
+    } finally {
+      lookupWorkflow.mock.restore();
+    }
+
+    assert.equal(lookupWorkflow.mock.callCount(), 1);
     assert.equal((await db.select().from(ProfileFollows)).length, 0);
   });
 

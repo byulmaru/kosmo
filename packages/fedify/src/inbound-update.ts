@@ -2,14 +2,19 @@ import '@kosmo/core/polyfill';
 
 import { isActor } from '@fedify/vocab';
 import { ConflictError, NotFoundError } from '@kosmo/core/error';
+import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
+import { runWorkflow } from '@kosmo/core/temporal/client';
+import { remoteProfileUpdateWorkflow } from '@kosmo/core/temporal/workflows';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
 import { observeInbound } from './inbound-observability';
 import {
-  findOrMaterializeRemoteProfileActorByUri,
   RemoteActorMaterializationError,
+  rethrowRemoteActorWorkflowError,
+  serializeReceipt,
 } from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
 import type { Update } from '@fedify/vocab';
+import type { RemoteProfileUpdateInput } from '@kosmo/core/temporal/workflows';
 
 const noNetworkDocumentLoader = async (url: string) => {
   throw new Error(`Network lookup is disabled for inbound Update: ${url}`);
@@ -90,12 +95,23 @@ export const handleInboundUpdate = async (
   }
 
   try {
-    await findOrMaterializeRemoteProfileActorByUri({
+    const input: RemoteProfileUpdateInput = {
+      actorUri: actorUri.href,
       actorJsonLd,
-      actorUri,
-      context,
-      receipt: { activityUri: update.id, receivedAt },
-    });
+      contextOrigin:
+        context.canonicalOrigin ?? (await resolveConfiguredLocalInstance()).canonicalOrigin,
+      receipt: serializeReceipt({ activityUri: update.id, receivedAt }),
+    };
+    const profileId = await runWorkflow(remoteProfileUpdateWorkflow, {
+      args: [input],
+      mode: 'execute',
+      workflowIdConflictPolicy: 'USE_EXISTING',
+      workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+    }).catch(rethrowRemoteActorWorkflowError);
+
+    if (profileId === null) {
+      throw new NotFoundError('Profile not found');
+    }
   } catch (error) {
     if (error instanceof NotFoundError) {
       observeInbound({

@@ -454,41 +454,60 @@ test('remote Move target lookup returning null stays retryable', async () => {
     async () => null,
   );
 
-  await assert.rejects(result, /Remote Move actor lookup returned no actor/);
+  await assert.rejects(result, (error: unknown) => {
+    assert.ok(error instanceof Error);
+    assert.equal('nonRetryable' in error && error.nonRetryable === true, false);
+    return true;
+  });
   assert.equal(await db.$count(Profiles), 0);
 });
 
-test('remote target materialization lookup returning null stays retryable before source materialization', async () => {
+test('remote target materialization lookup retries a null result before source materialization', async () => {
   const sourceActorUri = 'https://source.example/users/alice';
   const targetActorUri = 'https://target.example/users/alice';
   const lookups: string[] = [];
-  const result = runPreparationActivity({ sourceActorUri, targetActorUri }, async (identifier) => {
-    lookups.push(identifier.toString());
-    return lookups.length === 1 ? createMoveActor(targetActorUri, [sourceActorUri]) : null;
-  });
+  let targetLookups = 0;
+  const result = await runPreparationActivity(
+    { sourceActorUri, targetActorUri },
+    async (identifier) => {
+      const uri = identifier.toString();
+      lookups.push(uri);
+      if (uri === targetActorUri) {
+        targetLookups += 1;
+        return targetLookups === 2 ? null : createMoveActor(targetActorUri, [sourceActorUri]);
+      }
+      return createMoveActor(sourceActorUri);
+    },
+  );
 
-  await assert.rejects(result, /Remote Move actor lookup returned no actor/);
-  assert.deepEqual(lookups, [targetActorUri, targetActorUri]);
-  assert.equal(await db.$count(Profiles), 0);
+  assert.ok(result);
+  assert.deepEqual(lookups, [targetActorUri, targetActorUri, targetActorUri, sourceActorUri]);
+  assert.equal(await db.$count(Profiles), 2);
+  assert.equal(await db.$count(ActivityPubActors), 2);
 });
 
-test('source materialization lookup returning null stays retryable after target materialization', async () => {
+test('source materialization lookup retries a null result after target materialization', async () => {
   const sourceActorUri = 'https://source.example/users/alice';
   const targetActorUri = 'https://target.example/users/alice';
   const lookups: string[] = [];
-  const result = runPreparationActivity({ sourceActorUri, targetActorUri }, async (identifier) => {
-    const uri = identifier.toString();
-    lookups.push(uri);
-    if (uri === targetActorUri) {
-      return createMoveActor(targetActorUri, [sourceActorUri]);
-    }
-    return null;
-  });
+  let sourceLookups = 0;
+  const result = await runPreparationActivity(
+    { sourceActorUri, targetActorUri },
+    async (identifier) => {
+      const uri = identifier.toString();
+      lookups.push(uri);
+      if (uri === targetActorUri) {
+        return createMoveActor(targetActorUri, [sourceActorUri]);
+      }
+      sourceLookups += 1;
+      return sourceLookups === 1 ? null : createMoveActor(sourceActorUri);
+    },
+  );
 
-  await assert.rejects(result, /Remote Move actor lookup returned no actor/);
-  assert.deepEqual(lookups, [targetActorUri, targetActorUri, sourceActorUri]);
-  assert.equal(await db.$count(Profiles), 1);
-  assert.equal(await db.$count(ActivityPubActors), 1);
+  assert.ok(result);
+  assert.deepEqual(lookups, [targetActorUri, targetActorUri, sourceActorUri, sourceActorUri]);
+  assert.equal(await db.$count(Profiles), 2);
+  assert.equal(await db.$count(ActivityPubActors), 2);
 });
 
 test('Move follower batch는 active Local established Follow만 keyset으로 읽는다', async () => {

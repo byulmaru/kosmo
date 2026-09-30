@@ -33,12 +33,6 @@ const receiptSchema = z.strictObject({
   activityUri: activityUriSchema,
   receivedAt: z.iso.datetime(),
 });
-const actorDocumentSchema = z.strictObject({
-  jsonLd: z.json(),
-  contextOrigin: httpUriSchema,
-  receivedAt: z.iso.datetime(),
-});
-
 const remoteProfileLookupInputSchema = z.union([
   z.strictObject({
     domain: z.string().min(1),
@@ -47,9 +41,9 @@ const remoteProfileLookupInputSchema = z.union([
   }),
   z.strictObject({
     actorUri: httpUriSchema,
+    contextOrigin: httpUriSchema.optional(),
     profileId: z.string().min(1).optional(),
     receipt: receiptSchema.optional(),
-    actorDocument: actorDocumentSchema.optional(),
   }),
 ]);
 
@@ -115,5 +109,15 @@ export async function remoteProfileLookupWorkflow(
   }
 
   const state = await materializeRemoteProfileActorActivity(parsedInput);
-  return state?.profileId ?? null;
+  if (state !== null) {
+    return state.profileId;
+  }
+
+  return refreshRemoteProfileActorActivity({
+    actorUri: parsedInput.actorUri,
+    ...(parsedInput.contextOrigin === undefined
+      ? {}
+      : { contextOrigin: parsedInput.contextOrigin }),
+    ...(parsedInput.profileId === undefined ? {} : { profileId: parsedInput.profileId }),
+  });
 }

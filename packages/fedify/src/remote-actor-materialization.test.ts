@@ -13,7 +13,6 @@ import {
   ProfileMediaKind,
   ProfileState,
 } from '@kosmo/core/enums';
-import { ConflictError, NotFoundError } from '@kosmo/core/error';
 import { temporalClient } from '@kosmo/core/temporal/client';
 import { remoteProfileLookupWorkflow } from '@kosmo/core/temporal/workflows';
 import { count, eq, ne } from 'drizzle-orm';
@@ -511,16 +510,17 @@ describe('remote actor materialization', () => {
     }
   });
 
-  test('uses the inbox Context after a stored actor miss and passes its expanded document to Worker', async () => {
+  test('dispatches a URI lookup once with the string origin and returns its stored result', async () => {
     const actor = createActor();
     const seedLookupObject = mock.fn(async () => actor);
     const storedProfile = await materializeRemoteProfileActor({
       actorUri: actor.id!,
       context: { lookupObject: seedLookupObject },
     });
-    const lookupObject = mock.fn(async () => actor);
-    const actorJsonLd = await actor.toJsonLd({ format: 'expand' });
-    const now = Temporal.Instant.from('2026-08-01T00:00:00Z');
+    const input = {
+      actorUri: actor.id!.href,
+      contextOrigin: publicOrigin,
+    } satisfies RemoteProfileLookupInput;
     const execute = mock.method(
       temporalClient.workflow,
       'execute',
@@ -528,44 +528,33 @@ describe('remote actor materialization', () => {
         assert.equal(workflow, remoteProfileLookupWorkflow.workflow);
         assert.ok(options && typeof options === 'object');
         const workflowOptions = options as { args?: unknown[]; workflowId?: string };
-        const input = workflowOptions.args?.[0] as RemoteProfileLookupInput;
-        assert.ok('actorUri' in input);
-        assert.equal(input.actorUri, actor.id!.href);
+        assert.deepEqual(workflowOptions.args, [input]);
         assert.equal(
           workflowOptions.workflowId,
           remoteProfileLookupWorkflow.workflowIdFromArgs(input),
         );
-        if (!input.actorDocument) {
-          assert.deepEqual(input, { actorUri: actor.id!.href });
-          return null;
-        }
-        assert.deepEqual(input, {
-          actorUri: actor.id!.href,
-          actorDocument: {
-            jsonLd: actorJsonLd,
-            contextOrigin: publicOrigin,
-            receivedAt: now.toString(),
-          },
-        });
         return storedProfile.id;
       },
     );
 
     const result = await findOrMaterializeRemoteProfileActorByUri({
       actorUri: actor.id!,
-      context: { canonicalOrigin: publicOrigin, lookupObject },
-      now,
+      contextOrigin: publicOrigin,
     });
 
     assert.equal(result.actor.uri, actor.id?.href);
     assert.equal(result.profile.id, storedProfile.id);
-    assert.equal(lookupObject.mock.calls.length, 1);
-    assert.equal(execute.mock.calls.length, 2);
+    assert.equal(execute.mock.calls.length, 1);
   });
 
-  test('omits a non-HTTP receipt activity ID and keeps receipt time as the dedup identity', async () => {
+  test('omits a non-HTTP receipt activity ID and forwards its time as the dedup identity', async () => {
     const stored = await createStoredRemoteActor();
     const receivedAt = Temporal.Instant.from('2026-08-01T00:00:00Z');
+    const input = {
+      actorUri: stored.actor.uri,
+      contextOrigin: publicOrigin,
+      receipt: { receivedAt: receivedAt.toString() },
+    } satisfies RemoteProfileLookupInput;
     const execute = mock.method(
       temporalClient.workflow,
       'execute',
@@ -573,10 +562,6 @@ describe('remote actor materialization', () => {
         assert.equal(workflow, remoteProfileLookupWorkflow.workflow);
         assert.ok(options && typeof options === 'object');
         const workflowOptions = options as { args?: unknown[]; workflowId?: string };
-        const input = {
-          actorUri: stored.actor.uri,
-          receipt: { receivedAt: receivedAt.toString() },
-        } as const;
         assert.deepEqual(workflowOptions.args, [input]);
         assert.equal(
           workflowOptions.workflowId,
@@ -588,7 +573,7 @@ describe('remote actor materialization', () => {
 
     const result = await findOrMaterializeRemoteProfileActorByUri({
       actorUri: new URL(stored.actor.uri),
-      context: { canonicalOrigin: publicOrigin, lookupObject: async () => null },
+      contextOrigin: publicOrigin,
       receipt: {
         activityUri: new URL('urn:activity:follow-1'),
         receivedAt,
@@ -597,203 +582,6 @@ describe('remote actor materialization', () => {
 
     assert.equal(result.profile.id, stored.profile.id);
     assert.equal(execute.mock.calls.length, 1);
-  });
-
-  test('sends an Update document and its nested receipt without fetching the supplied actor', async () => {
-    const stored = await createStoredRemoteActor();
-    const actor = createActor({
-      id: new URL(stored.actor.uri),
-      name: 'Updated Alice',
-    });
-    const actorJsonLd = await actor.toJsonLd({ format: 'expand' });
-    const receivedAt = Temporal.Instant.from('2026-08-01T00:00:00Z');
-    const activityUri = new URL('https://remote.example/activities/update-1');
-    const lookupObject = mock.fn(async () => {
-      throw new Error('A supplied Update document must not be fetched');
-    });
-    const execute = mock.method(
-      temporalClient.workflow,
-      'execute',
-      async (workflow: unknown, options: unknown) => {
-        assert.equal(workflow, remoteProfileLookupWorkflow.workflow);
-        assert.ok(options && typeof options === 'object');
-        const workflowOptions = options as { args?: unknown[]; workflowId?: string };
-        const input: RemoteProfileLookupInput = {
-          actorUri: stored.actor.uri,
-          actorDocument: {
-            jsonLd: actorJsonLd,
-            contextOrigin: publicOrigin,
-            receivedAt: receivedAt.toString(),
-          },
-          receipt: {
-            activityUri: activityUri.href,
-            receivedAt: receivedAt.toString(),
-          },
-        };
-        assert.deepEqual(workflowOptions.args, [input]);
-        assert.equal(
-          workflowOptions.workflowId,
-          remoteProfileLookupWorkflow.workflowIdFromArgs(input),
-        );
-        return stored.profile.id;
-      },
-    );
-
-    const result = await findOrMaterializeRemoteProfileActorByUri({
-      actorJsonLd,
-      actorUri: new URL(stored.actor.uri),
-      context: { canonicalOrigin: publicOrigin, lookupObject },
-      receipt: { activityUri, receivedAt },
-    });
-
-    assert.equal(result.profile.id, stored.profile.id);
-    assert.equal(lookupObject.mock.calls.length, 0);
-    assert.equal(execute.mock.calls.length, 1);
-  });
-
-  test('rejects an inbound actor URI mismatch before persisting the looked-up actor', async () => {
-    const expectedActorUri = new URL(`https://${remoteDomain}/users/alice`);
-    const returnedActor = createActor({
-      id: new URL(`https://${remoteDomain}/users/mallory`),
-    });
-    const lookupObject = mock.fn(async () => returnedActor);
-
-    await assert.rejects(
-      findOrMaterializeRemoteProfileActorByUri({
-        actorUri: expectedActorUri,
-        context: { canonicalOrigin: publicOrigin, lookupObject },
-      }),
-      RemoteActorMaterializationError,
-    );
-
-    assert.equal(await db.$count(ActivityPubActors), 0);
-    assert.equal(await db.$count(Profiles), 0);
-  });
-
-  test('reactivates an unknown actor instance only after materialization succeeds', async () => {
-    const instance = await createRemoteInstance({ state: InstanceState.UNRESPONSIVE });
-    const actor = createActor();
-    const lookupObject = mock.fn(async () => actor);
-
-    await findOrMaterializeRemoteProfileActorByUri({
-      actorUri: actor.id!,
-      context: { canonicalOrigin: publicOrigin, lookupObject },
-    });
-
-    const reactivated = await db
-      .select()
-      .from(Instances)
-      .where(eq(Instances.id, instance.id))
-      .limit(1)
-      .then(firstOrThrow);
-    assert.equal(reactivated.state, InstanceState.ACTIVE);
-  });
-
-  test('keeps an unknown actor instance UNRESPONSIVE when materialization fails', async () => {
-    const instance = await createRemoteInstance({ state: InstanceState.UNRESPONSIVE });
-    const actor = createActor();
-    const lookupObject = mock.fn(async () => null);
-
-    await assert.rejects(
-      findOrMaterializeRemoteProfileActorByUri({
-        actorUri: actor.id!,
-        context: { canonicalOrigin: publicOrigin, lookupObject },
-      }),
-      RemoteActorMaterializationError,
-    );
-
-    const preserved = await db
-      .select()
-      .from(Instances)
-      .where(eq(Instances.id, instance.id))
-      .limit(1)
-      .then(firstOrThrow);
-    assert.equal(preserved.state, InstanceState.UNRESPONSIVE);
-  });
-
-  test('reuses a stored actor without treating cached data as UNRESPONSIVE recovery evidence', async () => {
-    const stored = await createStoredRemoteActor({
-      instanceState: InstanceState.UNRESPONSIVE,
-      lastFetchedAt: Temporal.Now.instant().subtract({ hours: 1 }),
-    });
-    const lookupObject = mock.fn(async () => createActor());
-
-    const result = await findOrMaterializeRemoteProfileActorByUri({
-      actorUri: new URL(stored.actor.uri),
-      context: { lookupObject },
-    });
-
-    assert.equal(result.profile.id, stored.profile.id);
-    assert.equal(result.instance.state, InstanceState.UNRESPONSIVE);
-    assert.equal(lookupObject.mock.calls.length, 0);
-  });
-
-  test('propagates a retryable inbox Context lookup error unchanged after a stored miss', async () => {
-    const actorUri = new URL(`https://${remoteDomain}/users/alice`);
-    const lookupFailure = new Error('inbox Context actor lookup unavailable');
-    const lookupObject = mock.fn(async () => {
-      throw lookupFailure;
-    });
-    const execute = mock.method(
-      temporalClient.workflow,
-      'execute',
-      async (_workflow: unknown, options: unknown) => {
-        const input = (options as { args: RemoteProfileLookupInput[] }).args[0]!;
-        assert.deepEqual(input, { actorUri: actorUri.href });
-        return null;
-      },
-    );
-
-    await assert.rejects(
-      findOrMaterializeRemoteProfileActorByUri({
-        actorUri,
-        context: { canonicalOrigin: publicOrigin, lookupObject },
-      }),
-      (error: unknown) => error === lookupFailure,
-    );
-
-    assert.deepEqual(lookupObject.mock.calls[0]?.arguments, [actorUri]);
-    assert.equal(execute.mock.calls.length, 1);
-  });
-
-  test('ignores a stored SUSPENDED inbound actor without network access', async () => {
-    const stored = await createStoredRemoteActor({ instanceState: InstanceState.SUSPENDED });
-    const lookupObject = mock.fn(async () => createActor());
-
-    await assert.rejects(
-      findOrMaterializeRemoteProfileActorByUri({
-        actorUri: new URL(stored.actor.uri),
-        context: { lookupObject },
-      }),
-      /Profile not found/,
-    );
-    assert.equal(lookupObject.mock.calls.length, 0);
-  });
-
-  test('rejects missing actors on SUSPENDED or local Instances before inbox lookup', async () => {
-    const suspendedUri = new URL('https://suspended.example/users/alice');
-    await createRemoteInstance({ domain: 'suspended.example', state: InstanceState.SUSPENDED });
-    const suspendedLookup = mock.fn(async () => createActor({ id: suspendedUri }));
-
-    await assert.rejects(
-      findOrMaterializeRemoteProfileActorByUri({
-        actorUri: suspendedUri,
-        context: { canonicalOrigin: publicOrigin, lookupObject: suspendedLookup },
-      }),
-      (error: unknown) => error instanceof NotFoundError,
-    );
-    assert.equal(suspendedLookup.mock.calls.length, 0);
-
-    const localActorUri = new URL('/ap/actor/missing', publicOrigin);
-    const localLookup = mock.fn(async () => createActor({ id: localActorUri }));
-    await assert.rejects(
-      findOrMaterializeRemoteProfileActorByUri({
-        actorUri: localActorUri,
-        context: { canonicalOrigin: publicOrigin, lookupObject: localLookup },
-      }),
-      (error: unknown) => error instanceof ConflictError,
-    );
-    assert.equal(localLookup.mock.calls.length, 0);
   });
 
   test('preserves reserved remote handle casing during lookup', async () => {
@@ -854,17 +642,19 @@ describe('remote actor materialization', () => {
     const lookupError = new Error('lookup failed');
     const cases: Array<{
       expected: RegExp;
+      isPermanentActorFailure: boolean;
       result: ActivityPubObject | Error | null;
     }> = [
-      { expected: /lookup failed/, result: lookupError },
-      { expected: /did not return an actor/, result: null },
+      { expected: /lookup failed/, isPermanentActorFailure: false, result: lookupError },
+      { expected: /did not return an actor/, isPermanentActorFailure: false, result: null },
       {
         expected: /did not return an actor/,
+        isPermanentActorFailure: true,
         result: new Note({ id: new URL(`https://${remoteDomain}/notes/1`), content: 'note' }),
       },
     ];
 
-    for (const { expected, result } of cases) {
+    for (const { expected, isPermanentActorFailure, result } of cases) {
       const { context } = createLookupContext(async () => {
         if (result instanceof Error) {
           throw result;
@@ -874,7 +664,12 @@ describe('remote actor materialization', () => {
 
       await assert.rejects(
         materializeRemoteProfileActor({ context, actorUri: remoteActorUri }),
-        expected,
+        (error: unknown) => {
+          assert.ok(error instanceof Error);
+          assert.match(error.message, expected);
+          assert.equal(error instanceof RemoteActorMaterializationError, isPermanentActorFailure);
+          return true;
+        },
       );
       assert.equal(await countRows(Profiles), 0);
       assert.equal(await countRows(Instances), 1);

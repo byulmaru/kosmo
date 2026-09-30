@@ -10,6 +10,7 @@ export {
   lookupRemoteActorUriActivity,
   materializeRemoteProfileActorActivity,
   refreshRemoteProfileActorActivity,
+  updateRemoteProfileActorActivity,
 } from './activities/remote-profile-materialization';
 export {
   sendProfileFollowActivity,

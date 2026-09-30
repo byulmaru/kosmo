@@ -10,12 +10,15 @@ import {
   ProfileFollowPolicy,
   ProfileMediaKind,
 } from '@kosmo/core/enums';
+import { temporalClient } from '@kosmo/core/temporal/client';
 import { executeProfileFollowPairTransition } from '@kosmo/core/temporal/follow-command';
+import { remoteProfileUpdateWorkflow } from '@kosmo/core/temporal/workflows';
 import { and, eq, inArray } from 'drizzle-orm';
 import { setInboundObservabilityReporter } from './inbound-observability';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
+import type { RemoteProfileUpdateInput } from '@kosmo/core/temporal/workflows';
 import type { handleInboundAccept as HandleInboundAccept } from './inbound-accept';
 import type { handleInboundUpdate as HandleInboundUpdate } from './inbound-update';
 
@@ -75,6 +78,45 @@ describe('inbound actor Update', () => {
 
   after(async () => {
     await pg.end();
+  });
+
+  test('Update handler dispatches the supplied actor and receipt to its dedicated Workflow', async () => {
+    const receivedAt = Temporal.Instant.from('2026-07-31T05:00:00Z');
+    const actor = createActor();
+    const actorJsonLd = await actor.toJsonLd({ format: 'expand' });
+    const lookupObject = mock.fn(async () => {
+      throw new Error('Update dispatch must not fetch through the inbox Context');
+    });
+    const execute = mock.method(
+      temporalClient.workflow,
+      'execute',
+      async (workflow: unknown, options: unknown) => {
+        assert.equal(workflow, remoteProfileUpdateWorkflow.workflow);
+        assert.ok(options && typeof options === 'object');
+        const workflowOptions = options as { args?: unknown[]; workflowId?: string };
+        const input = workflowOptions.args?.[0] as RemoteProfileUpdateInput;
+        assert.deepEqual(input, {
+          actorUri: remoteActorUri.href,
+          actorJsonLd,
+          contextOrigin: publicOrigin,
+          receipt: { receivedAt: receivedAt.toString() },
+        });
+        assert.equal(
+          workflowOptions.workflowId,
+          remoteProfileUpdateWorkflow.workflowIdFromArgs(input),
+        );
+        return null as never;
+      },
+    );
+
+    await handleInboundUpdate(
+      { ...createContext(), lookupObject } as unknown as InboxContext<void>,
+      new Update({ actor: remoteActorUri, object: actor }),
+      receivedAt,
+    );
+
+    assert.equal(lookupObject.mock.calls.length, 0);
+    assert.equal(execute.mock.calls.length, 1);
   });
 
   test('refreshes profile projection and endpoint metadata in both policy directions', async () => {

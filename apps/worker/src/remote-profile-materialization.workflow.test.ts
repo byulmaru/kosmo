@@ -20,6 +20,7 @@ import type * as CoreSeed from '@kosmo/core/db/seed';
 import type {
   RemoteProfileLookupInput,
   RemoteProfileMaterializationInput,
+  RemoteProfileUpdateInput,
 } from '@kosmo/core/temporal/workflows';
 import type * as Fedify from '@kosmo/fedify';
 import type * as WorkerActivities from './activities';
@@ -34,8 +35,13 @@ process.env.PUBLIC_ORIGIN = publicOrigin;
 process.env.TEMPORAL_ADDRESS ??= '127.0.0.1:7233';
 process.env.TEMPORAL_NAMESPACE ??= 'test';
 
-const { REMOTE_PROFILE_LOOKUP_WORKFLOW_TYPE, remoteProfileRefreshWorkflow } =
-  await import('@kosmo/core/temporal/workflows');
+const {
+  REMOTE_PROFILE_LOOKUP_WORKFLOW_TYPE,
+  REMOTE_PROFILE_UPDATE_WORKFLOW_TYPE,
+  remoteProfileRefreshWorkflow,
+  remoteProfileLookupWorkflow,
+  remoteProfileUpdateWorkflow,
+} = await import('@kosmo/core/temporal/workflows');
 
 let ActivityPubActors: typeof CoreDb.ActivityPubActors;
 let db: typeof CoreDb.db;
@@ -47,6 +53,7 @@ let federation: typeof Fedify.federation;
 let lookupRemoteActorUriActivity: typeof WorkerActivities.lookupRemoteActorUriActivity;
 let materializeRemoteProfileActorActivity: typeof WorkerActivities.materializeRemoteProfileActorActivity;
 let refreshRemoteProfileActorActivity: typeof WorkerActivities.refreshRemoteProfileActorActivity;
+let updateRemoteProfileActorActivity: typeof WorkerActivities.updateRemoteProfileActorActivity;
 let seedDatabase: typeof CoreSeed.seedDatabase;
 let localInstanceId: string;
 
@@ -59,6 +66,7 @@ before(async () => {
     lookupRemoteActorUriActivity,
     materializeRemoteProfileActorActivity,
     refreshRemoteProfileActorActivity,
+    updateRemoteProfileActorActivity,
   } = await import('./activities'));
 });
 
@@ -149,20 +157,34 @@ test(
 );
 
 test(
-  'actor-document Workflow는 supplied JSON-LD를 network lookup 없이 저장한다',
+  'URI lookup Workflow는 fetch null을 retry한 뒤 같은 actor를 검증해 한 Profile로 저장한다',
   { timeout: 120_000 },
   async (t) => {
-    const actorUri = new URL('https://actor-document.example/users/alice');
-    const actor = createActor({ id: actorUri, name: 'Document Alice' });
-    const actorJsonLd = await actor.toJsonLd({ format: 'expand' });
-    let actorLookupCalls = 0;
+    const actorUri = new URL('https://uri-workflow.example/users/alice');
+    const actor = createActor({ id: actorUri, name: 'URI Alice' });
+    const signer = await createStoredProfile({
+      handle: 'uri-workflow-signer',
+      instanceId: localInstanceId,
+    });
+    const lookups: Array<string | URL> = [];
     const origins: string[] = [];
+    const documentLoaderIdentifiers: string[] = [];
+    const documentLoaders: unknown[] = [];
+    let actorLookupCalls = 0;
     t.mock.method(federation, 'createContext', (origin: URL) => {
       origins.push(origin.href);
+      const documentLoader = async () => ({}) as never;
       return {
-        lookupObject: async () => {
+        getDocumentLoader: async ({ identifier }: { identifier: string }) => {
+          documentLoaderIdentifiers.push(identifier);
+          documentLoaders.push(documentLoader);
+          return documentLoader;
+        },
+        lookupObject: async (identifier: string | URL, options?: { documentLoader?: unknown }) => {
           actorLookupCalls += 1;
-          throw new Error('actor-document must not fetch its supplied actor');
+          lookups.push(identifier);
+          assert.equal(options?.documentLoader, documentLoader);
+          return actorLookupCalls === 1 ? null : actor;
         },
       } as never;
     });
@@ -171,7 +193,7 @@ test(
       server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
     });
     t.after(() => environment.teardown());
-    const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-actor-document-${process.pid}`;
+    const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-uri-retry-${process.pid}`;
     const worker = await Worker.create({
       activities: {
         lookupRemoteActorUriActivity,
@@ -185,28 +207,177 @@ test(
     });
     const input: RemoteProfileLookupInput = {
       actorUri: actorUri.href,
-      actorDocument: {
-        jsonLd: actorJsonLd,
-        contextOrigin: publicOrigin,
-        receivedAt: '2026-09-28T23:59:00Z',
-      },
+      contextOrigin: publicOrigin,
+      profileId: signer.id,
     };
 
     const profileId = await worker.runUntil(() =>
       environment.client.workflow.execute(REMOTE_PROFILE_LOOKUP_WORKFLOW_TYPE, {
         args: [input],
         taskQueue,
-        workflowId: `${taskQueue}:actor-document`,
+        workflowId: remoteProfileLookupWorkflow.workflowIdFromArgs(input),
       }),
     );
     const stored = await readStoredProfile(profileId as string);
 
-    assert.equal(actorLookupCalls, 0);
-    assert.deepEqual(origins, [new URL(publicOrigin).href]);
+    assert.equal(actorLookupCalls, 2);
+    assert.deepEqual(lookups.map(String), [actorUri.href, actorUri.href]);
+    assert.deepEqual(origins, [new URL(publicOrigin).href, new URL(publicOrigin).href]);
+    assert.deepEqual(documentLoaderIdentifiers, [signer.id, signer.id]);
+    assert.equal(documentLoaders.length, 2);
     assert.equal(stored.actor.uri, actorUri.href);
-    assert.equal(stored.profile.displayName, 'Document Alice');
+    assert.equal(stored.profile.displayName, 'URI Alice');
     assert.equal(stored.instance.state, InstanceState.ACTIVE);
-    assert.equal(stored.actor.lastFetchedAt?.toString(), '2026-09-28T23:59:00Z');
+    assert.equal(await db.$count(Profiles, eq(Profiles.handle, 'alice')), 1);
+    assert.equal(await db.$count(ActivityPubActors, eq(ActivityPubActors.uri, actorUri.href)), 1);
+  },
+);
+
+test(
+  'URI lookup Workflow rejects a different fetched Actor permanently without writes',
+  { timeout: 120_000 },
+  async (t) => {
+    const actorUri = new URL('https://uri-workflow-invalid.example/users/alice');
+    const mismatchedActor = createActor({
+      id: new URL('https://uri-workflow-invalid.example/users/mallory'),
+      name: 'Mallory',
+      preferredUsername: 'alice',
+    });
+    let actorLookupCalls = 0;
+    const origins: string[] = [];
+    t.mock.method(federation, 'createContext', (origin: URL) => {
+      origins.push(origin.href);
+      return {
+        lookupObject: async (identifier: string | URL) => {
+          actorLookupCalls += 1;
+          assert.equal(String(identifier), actorUri.href);
+          return mismatchedActor;
+        },
+      } as never;
+    });
+
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+    const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-uri-invalid-${process.pid}`;
+    const worker = await Worker.create({
+      activities: {
+        lookupRemoteActorUriActivity,
+        materializeRemoteProfileActorActivity,
+        refreshRemoteProfileActorActivity,
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+    const input: RemoteProfileLookupInput = {
+      actorUri: actorUri.href,
+      contextOrigin: publicOrigin,
+    };
+
+    await assert.rejects(
+      worker.runUntil(() =>
+        environment.client.workflow.execute(REMOTE_PROFILE_LOOKUP_WORKFLOW_TYPE, {
+          args: [input],
+          taskQueue,
+          workflowId: remoteProfileLookupWorkflow.workflowIdFromArgs(input),
+        }),
+      ),
+      (error: unknown) => {
+        let current: unknown = error;
+        let foundPermanentFailure = false;
+        while (current && typeof current === 'object') {
+          if (
+            'nonRetryable' in current &&
+            current.nonRetryable === true &&
+            'type' in current &&
+            current.type === 'RemoteActorMaterializationError'
+          ) {
+            foundPermanentFailure = true;
+          }
+          current = 'cause' in current ? current.cause : undefined;
+        }
+        assert.equal(foundPermanentFailure, true);
+        return true;
+      },
+    );
+
+    assert.equal(actorLookupCalls, 1);
+    assert.deepEqual(origins, [new URL(publicOrigin).href]);
+    assert.equal(await db.$count(Profiles), 0);
+    assert.equal(await db.$count(ActivityPubActors), 0);
+  },
+);
+
+test(
+  'Remote Profile Update Workflow는 production Activity로 기존 actor를 갱신하고 다시 활성화한다',
+  { timeout: 120_000 },
+  async (t) => {
+    const actorUri = new URL('https://update-workflow.example/users/alice');
+    const instance = await createInstance({
+      domain: actorUri.hostname,
+      state: InstanceState.UNRESPONSIVE,
+    });
+    const storedProfile = await createStoredProfile({
+      actorUri: actorUri.href,
+      handle: 'alice',
+      instanceId: instance.id,
+      lastFetchedAt: Temporal.Instant.from('2026-09-20T00:00:00Z'),
+    });
+    const actorJsonLd = await createActor({ id: actorUri, name: 'Updated Alice' }).toJsonLd({
+      format: 'expand',
+    });
+    const contextOrigins: string[] = [];
+    t.mock.method(federation, 'createContext', (origin: URL) => {
+      contextOrigins.push(origin.href);
+      return {
+        lookupObject: async () => {
+          throw new Error('A supplied Update actor must not be fetched');
+        },
+      } as never;
+    });
+
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+    const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-update-${process.pid}`;
+    const worker = await Worker.create({
+      activities: { updateRemoteProfileActorActivity },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+    const input: RemoteProfileUpdateInput = {
+      actorUri: actorUri.href,
+      actorJsonLd,
+      contextOrigin: publicOrigin,
+      receipt: {
+        activityUri: 'https://update-workflow.example/activities/update-1',
+        receivedAt: '2026-09-29T00:00:00Z',
+      },
+    };
+
+    const profileId = await worker.runUntil(() =>
+      environment.client.workflow.execute(REMOTE_PROFILE_UPDATE_WORKFLOW_TYPE, {
+        args: [input],
+        taskQueue,
+        workflowId: remoteProfileUpdateWorkflow.workflowIdFromArgs(input),
+      }),
+    );
+    const stored = await readStoredProfile(storedProfile.id);
+
+    assert.equal(profileId, storedProfile.id);
+    assert.deepEqual(contextOrigins, [new URL(publicOrigin).href]);
+    assert.equal(stored.profile.displayName, 'Updated Alice');
+    assert.equal(stored.actor.uri, actorUri.href);
+    assert.equal(stored.actor.lastFetchedAt?.toString(), input.receipt.receivedAt);
+    assert.equal(stored.instance.state, InstanceState.ACTIVE);
+    assert.equal(await db.$count(Profiles), 1);
+    assert.equal(await db.$count(ActivityPubActors), 1);
   },
 );
 
@@ -1099,27 +1270,17 @@ test('Remote Profile Update는 저장된 actor가 없으면 network 없이 null�
   const actorUri = new URL(`https://${remoteDomain}/users/missing-update`);
   const actor = createActor({ id: actorUri });
   const actorJsonLd = await actor.toJsonLd({ format: 'expand' });
-  let lookupCalls = 0;
-  t.mock.method(
-    federation,
-    'createContext',
-    () =>
-      ({
-        lookupObject: async () => {
-          lookupCalls += 1;
-          throw new Error('A supplied Update document must not be fetched');
-        },
-      }) as never,
-  );
+  let contextCalls = 0;
+  t.mock.method(federation, 'createContext', () => {
+    contextCalls += 1;
+    throw new Error('A missing Update actor must not create a Fedify context');
+  });
 
   assert.equal(
-    await materializeRemoteProfileActorActivity({
+    await updateRemoteProfileActorActivity({
       actorUri: actorUri.href,
-      actorDocument: {
-        jsonLd: actorJsonLd,
-        contextOrigin: publicOrigin,
-        receivedAt: '2026-09-29T00:00:00Z',
-      },
+      actorJsonLd,
+      contextOrigin: publicOrigin,
       receipt: {
         activityUri: 'https://remote.example/activities/update-missing',
         receivedAt: '2026-09-29T00:00:00Z',
@@ -1128,7 +1289,7 @@ test('Remote Profile Update는 저장된 actor가 없으면 network 없이 null�
     null,
   );
 
-  assert.equal(lookupCalls, 0);
+  assert.equal(contextCalls, 0);
   assert.equal(await db.$count(Profiles), 0);
   assert.equal(await db.$count(ActivityPubActors), 0);
 });
@@ -1163,13 +1324,10 @@ test('Remote Profile Update projection URI mismatch는 non-retryable 오류로 �
   );
 
   await assert.rejects(
-    materializeRemoteProfileActorActivity({
+    updateRemoteProfileActorActivity({
       actorUri: actorUri.href,
-      actorDocument: {
-        jsonLd: actorJsonLd,
-        contextOrigin: publicOrigin,
-        receivedAt: '2026-09-29T00:00:00Z',
-      },
+      actorJsonLd,
+      contextOrigin: publicOrigin,
       receipt: {
         activityUri: 'https://remote.example/activities/update-1',
         receivedAt: '2026-09-29T00:00:00Z',
@@ -1731,10 +1889,11 @@ test(
 );
 
 test(
-  'Remote Profile Workflow는 sandbox 안에서 malformed 입력을 non-retryable로 거부한다',
+  'Remote Profile lookup과 Update Workflow는 malformed 입력을 Activity 전에 non-retryable로 거부한다',
   { timeout: 120_000 },
   async (t) => {
-    let activityCalls = 0;
+    let lookupActivityCalls = 0;
+    let updateActivityCalls = 0;
     const environment = await TestWorkflowEnvironment.createLocal({
       server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
     });
@@ -1743,16 +1902,20 @@ test(
     const worker = await Worker.create({
       activities: {
         lookupRemoteActorUriActivity: async () => {
-          activityCalls += 1;
+          lookupActivityCalls += 1;
           return null;
         },
         materializeRemoteProfileActorActivity: async () => {
-          activityCalls += 1;
+          lookupActivityCalls += 1;
           return null;
         },
         refreshRemoteProfileActorActivity: async () => {
-          activityCalls += 1;
+          lookupActivityCalls += 1;
           return '';
+        },
+        updateRemoteProfileActorActivity: async () => {
+          updateActivityCalls += 1;
+          return null;
         },
       },
       connection: environment.nativeConnection,
@@ -1760,24 +1923,20 @@ test(
       taskQueue,
       workflowsPath,
     });
-    const input = {
-      actorUri: 'ftp://remote.example/users/alice',
-      actorDocument: {
-        jsonLd: { id: 'ftp://remote.example/users/alice', type: 'Person' },
-        contextOrigin: publicOrigin,
-        receivedAt: '2026-09-29T00:00:00Z',
+    const invalidLookupInputs = [
+      { actorUri: 'ftp://remote.example/users/alice' },
+      {
+        actorUri: 'https://remote.example/users/alice',
+        actorDocument: {
+          jsonLd: { id: 'https://remote.example/users/alice', type: 'Person' },
+          contextOrigin: publicOrigin,
+          receivedAt: '2026-09-29T00:00:00Z',
+        },
       },
-    } as RemoteProfileLookupInput;
+    ] as unknown as RemoteProfileLookupInput[];
 
-    await assert.rejects(
-      worker.runUntil(() =>
-        environment.client.workflow.execute(REMOTE_PROFILE_LOOKUP_WORKFLOW_TYPE, {
-          args: [input],
-          taskQueue,
-          workflowId: `${taskQueue}:invalid-input`,
-        }),
-      ),
-      (error: unknown) => {
+    const assertNonRetryable = (promise: Promise<unknown>) =>
+      assert.rejects(promise, (error: unknown) => {
         let current: unknown = error;
         let foundNonRetryableFailure = false;
         while (current && typeof current === 'object') {
@@ -1788,10 +1947,36 @@ test(
         }
         assert.equal(foundNonRetryableFailure, true);
         return true;
-      },
-    );
+      });
 
-    assert.equal(activityCalls, 0);
+    await worker.runUntil(async () => {
+      for (const [index, input] of invalidLookupInputs.entries()) {
+        await assertNonRetryable(
+          environment.client.workflow.execute(REMOTE_PROFILE_LOOKUP_WORKFLOW_TYPE, {
+            args: [input],
+            taskQueue,
+            workflowId: `${taskQueue}:invalid-lookup-input:${index}`,
+          }),
+        );
+      }
+      assert.equal(lookupActivityCalls, 0);
+
+      const invalidUpdate = {
+        actorUri: 'https://remote.example/users/alice',
+        actorJsonLd: { id: 'https://remote.example/users/alice', type: 'Person' },
+        contextOrigin: publicOrigin,
+        receipt: { receivedAt: '2026-09-29T00:00:00Z' },
+        unexpected: true,
+      } as RemoteProfileUpdateInput;
+      await assertNonRetryable(
+        environment.client.workflow.execute(REMOTE_PROFILE_UPDATE_WORKFLOW_TYPE, {
+          args: [invalidUpdate],
+          taskQueue,
+          workflowId: `${taskQueue}:invalid-update-input`,
+        }),
+      );
+      assert.equal(updateActivityCalls, 0);
+    });
   },
 );
 
