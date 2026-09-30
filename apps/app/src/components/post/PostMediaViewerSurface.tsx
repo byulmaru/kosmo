@@ -189,6 +189,20 @@ export function PostMediaViewerSurface({
     });
   };
 
+  const currentImage =
+    viewState === 'ready' && currentMedia?.url ? (
+      <ZoomableImage
+        key={zoomKey}
+        accessibilityLabel={imageName}
+        onStatus={settle}
+        onZoomedChange={setZoomed}
+        reducedMotion={reducedMotion}
+        viewportSize={mediaViewportSize}
+        status={request.status}
+        url={currentMedia.url}
+      />
+    ) : null;
+
   return (
     <View style={[styles.surface, style]} testID="post-media-viewer-surface">
       <View style={[styles.content, presentation === 'wide' ? styles.wideContent : undefined]}>
@@ -216,7 +230,7 @@ export function PostMediaViewerSurface({
             style={styles.mediaViewport}
             testID="post-media-viewer-media-viewport"
           >
-            {viewState === 'ready' && currentMedia?.url ? (
+            {currentImage ? (
               <PostContentPrivacyBoundary
                 style={Platform.OS === 'web' ? styles.imagePrivacyBoundary : mediaViewportSize}
                 testID="post-media-viewer-image-privacy-boundary"
@@ -232,28 +246,10 @@ export function PostMediaViewerSurface({
                     viewportSize={mediaViewportSize}
                     zoomed={zoomed}
                   >
-                    <ZoomableImage
-                      key={zoomKey}
-                      accessibilityLabel={imageName}
-                      onStatus={settle}
-                      onZoomedChange={setZoomed}
-                      reducedMotion={reducedMotion}
-                      viewportSize={mediaViewportSize}
-                      status={request.status}
-                      url={currentMedia.url}
-                    />
+                    {currentImage}
                   </NativeMediaPager>
                 ) : (
-                  <ZoomableImage
-                    key={zoomKey}
-                    accessibilityLabel={imageName}
-                    onStatus={settle}
-                    onZoomedChange={setZoomed}
-                    reducedMotion={reducedMotion}
-                    viewportSize={mediaViewportSize}
-                    status={request.status}
-                    url={currentMedia.url}
-                  />
+                  currentImage
                 )}
               </PostContentPrivacyBoundary>
             ) : null}
