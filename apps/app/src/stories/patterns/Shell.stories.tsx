@@ -2320,14 +2320,14 @@ export const UniversalMobileSettingsDetailHeaderReflow: Story = {
   parameters: {
     ...universalParameters,
     router: {
-      pathname: '/settings/default-post-visibility',
-      slotLabel: '공개 범위 설정 화면',
+      pathname: '/settings/profile',
+      slotLabel: '프로필 설정 화면',
     },
     viewport: {
       options: {
         settingsHeaderNarrow: {
           name: 'Settings header narrow reflow',
-          styles: { height: '844px', width: '200px' },
+          styles: { height: '844px', width: '140px' },
           type: 'mobile',
         },
       },
@@ -2335,10 +2335,10 @@ export const UniversalMobileSettingsDetailHeaderReflow: Story = {
   },
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const heading = canvas.getByRole('heading', { name: '게시물 기본 공개 범위' });
+    const heading = canvas.getByRole('heading', { name: '프로필 설정' });
     const pageHeader = heading.parentElement;
     const shellHeader = pageHeader?.parentElement;
-    const content = canvas.getByText('공개 범위 설정 화면');
+    const content = canvas.getByText('프로필 설정 화면');
     const pageHeaderRect = pageHeader?.getBoundingClientRect();
     const shellHeaderRect = shellHeader?.getBoundingClientRect();
 
