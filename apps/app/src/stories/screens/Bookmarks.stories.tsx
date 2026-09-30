@@ -620,6 +620,10 @@ export const RepostQuoteUsesOneSourceDepth: Story = {
       '/@deep-bookmark-source/bookmark-source-depth-2',
     );
 
+    await userEvent.click(repostQuoteAuthorLink);
+    expect(canvas.getByTestId('bookmark-story-pathname')).toHaveTextContent(
+      '/@bookmark-pure-source',
+    );
     await userEvent.click(within(repostQuotePreview).getByTestId('source-post-body'));
     expect(canvas.getByTestId('bookmark-story-pathname')).toHaveTextContent(
       '/@deep-bookmark-source/bookmark-source-depth-2',

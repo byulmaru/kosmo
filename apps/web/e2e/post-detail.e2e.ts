@@ -412,6 +412,8 @@ test('순수 Repost 상세는 Quote Source로 replace되고 한 단계 C preview
 }) => {
   const viewer = await createE2ESession({ handle: 'e2e-pure-repost-detail-viewer' });
   const author = await createE2EProfile({ handle: 'e2e-pure-repost-detail-author' });
+  const quoteAuthor = await createE2EProfile({ handle: 'e2e-reposted-quote-author' });
+  const sourceAuthor = await createE2EProfile({ handle: 'e2e-reposted-source-author' });
   const sourceBody = 'E2E repost quote source preview body';
   const quoteBody = 'E2E quote source post body';
   const thirdDepthBody = 'E2E third source depth must stay hidden';
@@ -422,13 +424,13 @@ test('순수 Repost 상세는 Quote Source로 replace되고 한 단계 C preview
   });
   const directSource = await createE2EPost({
     body: sourceBody,
-    profileId: author.id,
+    profileId: sourceAuthor.id,
     repostSourceId: thirdDepth.id,
     visibility: PostVisibility.PUBLIC,
   });
   const quote = await createE2EPost({
     body: quoteBody,
-    profileId: author.id,
+    profileId: quoteAuthor.id,
     repostSourceId: directSource.id,
     visibility: PostVisibility.PUBLIC,
   });
@@ -447,7 +449,7 @@ test('순수 Repost 상세는 Quote Source로 replace되고 한 단계 C preview
   await gotoPostDetail(page, `/@${author.handle}/${repostId}`);
   await expect
     .poll(() => decodeURIComponent(new URL(page.url()).pathname))
-    .toBe(`/@${author.handle}/${quoteId}`);
+    .toBe(`/@${quoteAuthor.handle}/${quoteId}`);
   await expect(page.getByText(quoteBody)).toBeVisible();
   await expect(page.getByTestId('source-post-preview')).toHaveCount(1);
   await expect(page.getByText(sourceBody)).toBeVisible();

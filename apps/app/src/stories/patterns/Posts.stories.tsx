@@ -4520,9 +4520,13 @@ export const PureRepostOfQuote: Story = {
         '/@deep-source@remote.example/content-warning-source-preview-post',
       );
 
+      await userEvent.click(quoteTimestampLink);
+      expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent(
+        '/@source@remote.example/post-source-quote',
+      );
       await userEvent.click(sourcePreview);
       expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent(
-        '/@deep-source@remote.example/content-warning-source-preview-post',
+        '/@source@remote.example/post-source-quote',
       );
       await userEvent.click(
         within(sourcePreview).getByText('가림 해제 뒤 표시되는 원문 프리뷰 본문입니다.'),
