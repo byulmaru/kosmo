@@ -1,8 +1,4 @@
-import type { Href } from 'expo-router';
 import { Pressable, Text } from 'react-native';
-import { NavigationLink } from '@/components/shell/NavigationLink';
-import { useTheme } from '@/theme/ThemeProvider';
-import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import {
   PolicyBullet,
   PolicyCard,
@@ -10,6 +6,10 @@ import {
   PolicySection,
   PublicPolicyDocument,
 } from '@/components/public-policy/PublicPolicyDocument';
+import { NavigationLink } from '@/components/shell/NavigationLink';
+import { useTheme } from '@/theme/ThemeProvider';
+import { fontFamilies, spacing, typography } from '@/theme/tokens';
+import type { Href } from 'expo-router';
 
 const EFFECTIVE_DATE = '2026년 9월 9일';
 const POLICY_TITLE = '이전 개인정보 처리방침';

@@ -1,6 +1,4 @@
-import type { Href } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { NavigationLink } from '@/components/shell/NavigationLink';
 import {
   PolicyBullet,
   PolicyEmailLink,
@@ -8,8 +6,10 @@ import {
   PolicySection,
   PublicPolicyDocument,
 } from '@/components/public-policy/PublicPolicyDocument';
+import { NavigationLink } from '@/components/shell/NavigationLink';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, spacing, typography } from '@/theme/tokens';
+import type { Href } from 'expo-router';
 import type { PropsWithChildren, ReactNode } from 'react';
 
 const EFFECTIVE_DATE = '2026년 9월 30일';
