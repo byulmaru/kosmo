@@ -65,9 +65,9 @@ React 오류 경계 Sentry reporter로 다시 수집하지 않는다. 이 제외
 - 업로드 실패 event에는 기존 오류 정책에서 허용한 안전한 `stage`·`reason` 분류와 다음 context를 전달한다. `operation`은 `issue`, `normalize`, `read`, `put`, `complete` 중 하나로 실패 경계를 구분하고, 공통 업로드 경계에서 직접 확인할 수 있는 normalized-image read/PUT 응답이 있는 경우에만 숫자 `status`를 기록한다. 응답의 machine-readable `code`는 `unsupported_image`, `content_type_mismatch`, `size_limit_exceeded`, `pixel_limit_exceeded`, `dimension_limit_exceeded`, `invalid_image` 중 하나일 때만 기록하며, 그 밖의 code는 버린다.
 - 성공, 비활성 항목의 `null` 결과와 명시적 no-op은 처리된 실패 event를 만들지 않는다.
 - Sentry capture 자체의 실패나 동기 예외는 업로드 오류 결과, 오류 UI, 재시도와 성공 동작을 바꾸지 않는다.
-- 업로드에서 실제 발생한 Error는 직접 전달하거나 기존 UI 분류 wrapper의 표준 `cause` chain에 원본 객체를 연결하여 원래 message·stack·cause와 SDK 진단 정보를 모든 오류 단계에서 보존한다. 기존 UI 분류 wrapper는 유지할 수 있지만, 원본 오류 연결 없이 수집만을 위한 일반 메시지의 새 Error로 대체하거나 오류를 복제·전역 정제하지 않는다. 사용자-facing 오류 분류와 안내 문구는 기존 정책을 유지한다.
+- 호출자에게 던지는 업로드 오류는 원본 Error를 표준 `cause`에 연결해 진단 정보를 보존한다. Sentry에는 같은 실패 분류와 관측 정보만 가진, 원본 `cause`가 없는 업로드 오류를 전달한다. 사용자-facing 오류 분류와 안내 문구는 유지한다.
 - 업로드 경계가 추가하는 관측 context에는 위에서 허용한 진단 필드만 넣는다. 이미지 byte, File/Blob, 서명 upload URL, 인증 토큰, raw request/response와 사용자 콘텐츠를 오류나 context에 별도로 첨부하지 않는다.
-- SDK가 생성한 원본 Error는 data/blob/file URI가 message·stack·cause에 포함되어 있어도 수정 없이 보존한다. 업로드 경계는 URI 치환, message·stack 변경이나 오류 복제를 하지 않는다. SDK 오류에 이미 포함된 진단을 보존하는 것과 이미지·토큰·raw response를 별도로 첨부하는 것을 구분한다.
+- SDK가 생성한 원본 Error는 호출자에게 던지는 오류의 `cause`에서 수정 없이 보존한다. Sentry event의 오류·context에는 원본의 data/blob/file URI나 signed URL을 포함하지 않는다.
 
 이 처리된 실패 수집은 기존 runtime 활성화 조건을 따른다. DSN·environment·release metadata가 완전하지 않은 local·test 실행은 외부 event를 전송하지 않으며, 자동 breadcrumb·session tracking을 다시 활성화하지 않는다.
 

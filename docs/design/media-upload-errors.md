@@ -66,9 +66,9 @@ accessible name에 사용하지 않는다.
 - 실패 event에는 이 문서의 공통 오류 모델에서 안전하게 구성한 `stage`·`reason`과 `operation`을 context로 전달한다. `operation`은 `issue`, `normalize`, `read`, `put`, `complete` 중 하나이며, `transfer` 단계 안에서 정규화·정규화된 이미지 byte 읽기·signed PUT을 구분한다. 공통 업로드 경계에서 직접 확인할 수 있는 normalized-image read/PUT 응답이 있는 실패에만 숫자 `status`를 추가하고, `unsupported_image`, `content_type_mismatch`, `size_limit_exceeded`, `pixel_limit_exceeded`, `dimension_limit_exceeded`, `invalid_image` 중 하나인 경우에만 machine-readable `code`를 추가한다.
 - 성공, 비활성 항목의 `null` 결과와 명시적 no-op은 Sentry 처리된 실패 event를 만들지 않는다.
 - Sentry capture 실패는 원래 업로드 오류, 실패 항목 보존, 오류 UI와 재시도 동작을 바꾸지 않는다.
-- 업로드에서 실제 발생한 Error는 직접 capture에 전달하거나 기존 UI 분류 wrapper의 표준 `cause` chain에 원본 객체를 연결하여 원래 message·stack·cause를 모든 오류 단계에서 보존한다. 기존 UI 분류 wrapper는 유지할 수 있지만, 원본 오류 연결 없이 수집만을 위한 일반 메시지의 새 Error로 대체하거나 복제·전역 정제하지 않는다. 이 진단 정보는 Sentry에서 사용하며 사용자-facing 오류 분류와 안내 문구는 기존 정책을 유지한다.
+- 호출자에게 던지는 업로드 오류는 원본 Error를 표준 `cause`에 연결하여 message·stack·cause를 보존한다. Sentry에는 동일한 실패 분류와 관측 정보만 가진, 원본 `cause`가 없는 오류를 전달한다. 사용자-facing 오류 분류와 안내 문구는 유지한다.
 - 새 관측 context에는 위에서 허용한 진단 필드만 넣는다. 이미지 byte, File/Blob, signed upload URL, 인증 토큰, raw request/response와 사용자 콘텐츠를 오류나 context에 별도로 첨부하지 않는다.
-- SDK가 생성한 원본 Error는 data/blob/file URI가 message·stack·cause에 포함되어 있어도 수정 없이 보존한다. 업로드 경계는 URI 치환, message·stack 변경이나 오류 복제를 하지 않는다. SDK 오류에 이미 포함된 진단을 보존하는 것과 이미지·토큰·raw response를 별도로 첨부하는 것을 구분한다.
+- SDK가 생성한 원본 Error는 호출자에게 던지는 오류의 `cause`에서 수정 없이 보존한다. 원본의 data/blob/file URI 또는 signed URL이 Sentry event의 오류·context에 포함되지 않도록 수집용 오류에는 원본 `cause`를 연결하지 않는다.
 
 ## 접근성
 
@@ -85,7 +85,7 @@ accessible name에 사용하지 않는다.
 - 공통 분류는 정상 PUT, 각 허용 status/code 조합, 네트워크 실패, `5xx`, malformed/unknown 응답과 단계별
   fallback을 단위 테스트로 고정한다.
 - 공통 업로드 경계가 처리된 실패를 한 번만 보고하고 성공·no-op은 보고하지 않으며, 허용된 `stage`·`reason`과
-  원래 오류 결과를 보존하는지 검증한다. 직접 전달하거나 표준 `cause` chain으로 연결한 실제 Error의 객체 identity·message·stack·cause 보존과 관측 context에
+  원래 오류 결과를 보존하는지 검증한다. 수집용 오류에 `cause`와 private URI가 없고, 호출자 오류의 표준 `cause` chain에는 원본 Error의 객체 identity·message·stack·cause가 보존되며 관측 context에
   민감한 입력·URL·토큰·응답 본문이 추가되지 않는지를 실행 결과로 검증한다. 관측 실패가 업로드 결과를 바꾸지
   않는지도 확인한다.
 - Post Composer와 Profile 편집은 같은 분류 결과를 각 UI 상태에 연결하고 실패 보존·항목별 재시도·accessible

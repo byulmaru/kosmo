@@ -944,8 +944,9 @@ for (const boundary of [
   'put',
   'complete',
 ] as const) {
-  test(`preserves original Error identity, message, stack, and cause at ${boundary}`, async (t) => {
-    const root = new Error('decoder or transport root cause');
+  test(`keeps original error for the caller and excludes it from capture at ${boundary}`, async (t) => {
+    const signedUrl = 'https://upload.example/private?token=secret';
+    const root = new Error(`decoder or transport root cause: ${signedUrl}`);
     const original = new TypeError(`${boundary} failed with actionable detail`, { cause: root });
     const originalStack = original.stack;
     const rootStack = root.stack;
@@ -990,12 +991,17 @@ for (const boundary of [
       (error: unknown) => {
         assert.ok(error instanceof ImageUploadError);
         assert.equal(captureCalls.length, 1);
-        assert.equal(captureCalls[0]?.error, error);
+        assert.ok(captureCalls[0]?.error instanceof ImageUploadError);
+        assert.notEqual(captureCalls[0].error, error);
+        assert.equal(captureCalls[0].error.cause, undefined);
+        assert.equal(captureCalls[0].error.stack?.includes(signedUrl), false);
+        assert.deepEqual(captureCalls[0].error.failure, error.failure);
+        assert.deepEqual(captureCalls[0].error.observation, error.observation);
         assert.equal(error.cause, original);
         assert.equal(original.message, `${boundary} failed with actionable detail`);
         assert.equal(original.stack, originalStack);
         assert.equal(original.cause, root);
-        assert.equal(root.message, 'decoder or transport root cause');
+        assert.equal(root.message, `decoder or transport root cause: ${signedUrl}`);
         assert.equal(root.stack, rootStack);
         const stage =
           boundary === 'issue' ? 'issue' : boundary === 'complete' ? 'complete' : 'transfer';
@@ -1012,7 +1018,7 @@ for (const boundary of [
   });
 }
 
-test('preserves Expo image URIs in frozen original errors and their cause chain', async () => {
+test('excludes Expo image URIs from capture while preserving frozen original errors for callers', async () => {
   const assetUri = 'file:///private/photos/user-image.jpg';
   const sourceUri = 'blob:https://kosmo.example/source-secret';
   const normalizedUri = 'data:image/png;base64,private-image-bytes';
@@ -1050,7 +1056,11 @@ test('preserves Expo image URIs in frozen original errors and their cause chain'
     (error: unknown) => {
       assert.ok(error instanceof ImageUploadError);
       assert.equal(captureCalls.length, 1);
-      assert.equal(captureCalls[0]?.error, error);
+      assert.ok(captureCalls[0]?.error instanceof ImageUploadError);
+      assert.equal(captureCalls[0].error.cause, undefined);
+      assert.equal(captureCalls[0].error.message.includes(assetUri), false);
+      assert.equal(captureCalls[0].error.stack?.includes(sourceUri), false);
+      assert.equal(captureCalls[0].error.stack?.includes(normalizedUri), false);
       assert.equal(error.cause, original);
       assert.equal(original.cause, root);
       assert.equal(original.name, 'Error');
@@ -1068,7 +1078,7 @@ test('preserves Expo image URIs in frozen original errors and their cause chain'
   );
 });
 
-test('preserves the saved URI and original diagnostics in read errors', async (t) => {
+test('excludes the saved URI from capture while preserving read diagnostics for callers', async (t) => {
   const resultUri = 'file:///private/cache/result.webp';
   const original = new Error(`Read failed: ${resultUri}; see https://docs.example/read`);
   const originalStack = original.stack;
@@ -1086,7 +1096,9 @@ test('preserves the saved URI and original diagnostics in read errors', async (t
     (error: unknown) => {
       assert.ok(error instanceof ImageUploadError);
       assert.equal(error.cause, original);
-      assert.equal(captureCalls[0]?.error, error);
+      assert.ok(captureCalls[0]?.error instanceof ImageUploadError);
+      assert.equal(captureCalls[0].error.cause, undefined);
+      assert.equal(captureCalls[0].error.stack?.includes(resultUri), false);
       assert.equal(original.message, `Read failed: ${resultUri}; see https://docs.example/read`);
       assert.equal(original.stack, originalStack);
       assert.deepEqual(captureCalls[0]?.context, {
@@ -1100,7 +1112,7 @@ test('preserves the saved URI and original diagnostics in read errors', async (t
 });
 
 for (const includeUri of [false, true]) {
-  test(`preserves Canvas SecurityError identity with${includeUri ? '' : 'out'} a known image URI`, async () => {
+  test(`preserves Canvas SecurityError for callers with${includeUri ? '' : 'out'} a known image URI`, async () => {
     const uri = 'data:image/png;base64,private-canvas-image';
     const message = `The canvas has been tainted by cross-origin data${includeUri ? `: ${uri}` : ''}`;
     const original = new DOMException(message, 'SecurityError');
@@ -1120,7 +1132,9 @@ for (const includeUri of [false, true]) {
       (error: unknown) => {
         assert.ok(error instanceof ImageUploadError);
         assert.equal(captureCalls.length, 1);
-        assert.equal(captureCalls[0]?.error, error);
+        assert.ok(captureCalls[0]?.error instanceof ImageUploadError);
+        assert.equal(captureCalls[0].error.cause, undefined);
+        assert.equal(captureCalls[0].error.stack?.includes(uri), false);
         assert.equal(error.cause, original);
         assert.equal(original.name, 'SecurityError');
         assert.equal(original.message, message);

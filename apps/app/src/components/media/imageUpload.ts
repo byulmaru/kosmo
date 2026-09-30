@@ -241,7 +241,7 @@ export async function uploadImage({
         if (observation?.code) {
           context.code = observation.code;
         }
-        captureHandledError(uploadError, context);
+        captureHandledError(new ImageUploadError(failure, observation), context);
       }
     } catch {
       // Observability must not change the upload result.
