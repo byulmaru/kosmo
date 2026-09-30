@@ -915,7 +915,10 @@ test('does not capture a stale failure after the upload becomes inactive', async
 
 test('preserves the original upload failure when capture throws', async () => {
   const rawDetail = 'private issue detail';
+  const original = new Error(rawDetail);
+  let captureCount = 0;
   captureHandledErrorImpl = () => {
+    captureCount += 1;
     throw new Error('sentry unavailable');
   };
 
@@ -925,15 +928,17 @@ test('preserves the original upload failure when capture throws', async () => {
       complete: async () => undefined,
       isActive: () => true,
       issue: async () => {
-        throw new Error(rawDetail);
+        throw original;
       },
     }),
     (error: unknown) =>
       error instanceof ImageUploadError &&
       error.failure.stage === 'issue' &&
       error.failure.reason === 'transient' &&
+      error.cause === original &&
       !error.message.includes(rawDetail),
   );
+  assert.equal(captureCount, 1);
 });
 
 for (const boundary of [
