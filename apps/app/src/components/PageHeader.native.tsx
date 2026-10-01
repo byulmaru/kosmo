@@ -19,9 +19,12 @@ export function PageHeader(props: PageHeaderProps) {
       header: () => <NativePageHeader {...headerProps} />,
       headerShown: true,
     });
-
-    return () => navigation.setOptions({ header: undefined, headerShown: false });
   }, [headerProps, navigation]);
+
+  useLayoutEffect(
+    () => () => navigation.setOptions({ header: undefined, headerShown: false }),
+    [navigation],
+  );
 
   return null;
 }
