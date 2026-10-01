@@ -1,6 +1,7 @@
 export { materializeInboundReaction, undoInboundReaction } from './activitypub-reaction';
 export { createBookmark, deleteBookmark } from './bookmark';
 export { createReplyNotification } from './create-reply-notification';
+export { createMentionNotification } from './mention-notification';
 export {
   createFollowNotification,
   createFollowRequestNotification,

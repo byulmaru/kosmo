@@ -427,3 +427,43 @@ test('an existing Reply remains the representative and keeps its read state', as
     .where(eq(Notifications.id, reply.id));
   assert.equal(preservedReply?.readAt?.epochMicroseconds, readAt.epochMicroseconds);
 });
+
+test('an existing Mention remains the representative when Quote coordination runs', async () => {
+  const sourceAuthor = await createProfile();
+  const quoteAuthor = await createProfile();
+  const source = await createContentPost(sourceAuthor.id);
+  const quote = await createContentPost(quoteAuthor.id, source.id);
+  const readAt = Temporal.Instant.from('2026-10-02T02:34:56.654321Z');
+  const mention = await db
+    .insert(Notifications)
+    .values({
+      data: {},
+      kind: NotificationKind.MENTION,
+      recipientProfileId: sourceAuthor.id,
+      sourceId: quote.id,
+      readAt,
+    })
+    .returning()
+    .then(firstOrThrow);
+
+  assert.equal(await createQuoteNotification(quote.id), null);
+
+  const notifications = await db
+    .select()
+    .from(Notifications)
+    .where(eq(Notifications.sourceId, quote.id));
+  assert.deepEqual(
+    notifications.map(({ kind }) => kind),
+    [NotificationKind.MENTION],
+  );
+  assert.equal(notifications[0]?.id, mention.id);
+  assert.equal(notifications[0]?.readAt?.toString(), readAt.toString());
+
+  const [judgment] = await db
+    .select()
+    .from(NotificationQuoteJudgments)
+    .where(eq(NotificationQuoteJudgments.quotePostId, quote.id));
+  assert.equal(judgment?.outcome, 'REPRESENTED_BY_EXISTING');
+  assert.equal(judgment?.representativeKind, NotificationKind.MENTION);
+  assert.equal(judgment?.representativeNotificationId, mention.id);
+});

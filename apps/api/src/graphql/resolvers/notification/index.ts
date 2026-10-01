@@ -4,6 +4,7 @@ import './mutation';
 export {
   FollowNotification,
   FollowRequestNotification,
+  MentionNotification,
   Notification,
   QuoteNotification,
   ReactionNotification,

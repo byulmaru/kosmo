@@ -16,6 +16,7 @@ import { colors } from '@/theme/tokens';
 import {
   followNotification,
   followRequestNotification,
+  mentionNotification,
   notificationsProfile,
   post,
   profile,
@@ -113,6 +114,34 @@ const contentProfile = notificationsProfile(
   {},
   notificationRecipient,
 );
+const mentionProfile = notificationsProfile(
+  [
+    mentionNotification({
+      id: 'notification-mention',
+      post: notificationPost({
+        bodyText: '이 글에서 회원님을 멘션했습니다.',
+        id: 'notification-mention-post',
+        profile: unreadFollower,
+        replyParent: post({
+          bodyText: '답글 원문 미리보기는 표시하지 않습니다.',
+          id: 'notification-mention-parent',
+          profile: profile({
+            displayName: '답글 원글 작성자',
+            handle: 'reply-parent',
+            id: 'notification-mention-parent-author',
+            relativeHandle: '@reply-parent',
+          }),
+        }),
+      }),
+    }),
+    mentionNotification({
+      id: 'notification-mention-unavailable',
+      post: null,
+    }),
+  ],
+  {},
+  { id: 'notification-profile-mention' },
+);
 const paginationProfile = notificationsProfile(
   [followNotification({ id: 'notification-page-1', profile: unreadFollower })],
   { hasNext: true },
@@ -141,7 +170,14 @@ const profileB = notificationsProfile(
   {},
   { id: 'notification-profile-b' },
 );
-const storyProfiles = [emptyProfile, contentProfile, paginationProfile, profileA, profileB];
+const storyProfiles = [
+  emptyProfile,
+  contentProfile,
+  paginationProfile,
+  profileA,
+  profileB,
+  mentionProfile,
+];
 
 const NotificationsStoriesQuery = graphql`
   query NotificationsStoriesQuery($ids: [ID!]!) {
@@ -284,7 +320,37 @@ const replyReadMutationResponse = {
   },
 };
 
+const mentionReadMutationResponse = {
+  markNotificationRead: {
+    notifications: [
+      {
+        __typename: 'MentionNotification',
+        id: 'notification-mention',
+        readAt: '2026-07-21T12:00:00Z',
+      },
+    ],
+    recipientProfiles: [
+      {
+        __typename: 'Profile',
+        id: 'notification-profile-mention',
+        unreadNotificationCount: 0,
+      },
+    ],
+  },
+};
+
 const notificationMutationRequest = fn<(operationName: string, variables: Variables) => void>();
+
+function MentionSelectedProfileScreenContent() {
+  const pathname = usePathname();
+
+  return (
+    <>
+      <Text>{pathname}</Text>
+      <NotificationsScreen />
+    </>
+  );
+}
 
 const repostReadMutationResponse = {
   markNotificationRead: {
@@ -1000,6 +1066,42 @@ export const SelectedProfileScreen: Story = {
     ).toBeVisible();
   },
   render: () => <NotificationsScreen />,
+};
+
+export const MentionSelectedProfileScreen: Story = {
+  parameters: {
+    controls: { disable: true },
+    relay: {
+      data: { currentSession: { id: 'notification-session', selectedProfile: mentionProfile } },
+      mutationRequestObserver: (request: RequestParameters, variables: Variables) =>
+        notificationMutationRequest(request.name, variables),
+      mutationResponse: mentionReadMutationResponse,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    notificationMutationRequest.mockClear();
+    const canvas = within(canvasElement);
+    const mention = canvas.getByTestId('mention-notification-post');
+    const item = mention.closest('[data-testid="notification-list-item"]');
+
+    await expect(mention).toBeVisible();
+    await expect(canvas.getAllByTestId('mention-notification-post')).toHaveLength(1);
+    await expect(mention).toHaveTextContent('멘션 알림');
+    await expect(mention).toHaveTextContent('이 글에서 회원님을 멘션했습니다.');
+    await expect(mention).not.toHaveTextContent('답글 원문 미리보기는 표시하지 않습니다.');
+    await expect(canvas.queryByTestId('notification-reason')).not.toBeInTheDocument();
+    await expect(item).toHaveTextContent('읽지 않은 알림');
+
+    await userEvent.click(within(mention).getByTestId('post-list-row-body'));
+    await expect(canvas.findByText('/@starlight/notification-mention-post')).resolves.toBeVisible();
+    await expect(notificationMutationRequest).toHaveBeenCalledTimes(1);
+    await expect(notificationMutationRequest).toHaveBeenCalledWith(
+      'NotificationListItemMarkReadMutation',
+      { ids: ['notification-mention'] },
+    );
+    await waitFor(() => expect(item).not.toHaveTextContent('읽지 않은 알림'));
+  },
+  render: () => <MentionSelectedProfileScreenContent />,
 };
 
 export const NoSelectedProfileScreen: Story = {
