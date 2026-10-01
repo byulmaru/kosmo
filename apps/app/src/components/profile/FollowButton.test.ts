@@ -141,10 +141,10 @@ test('내가 차단한 Profile은 FollowButton이 차단 해제 lifecycle을 사
 
   await act(async () => confirmation?.props.onConfirm());
   assert.deepEqual(mutationCalls[0], { id: 'profile-block-a' });
+  assert.deepEqual(toastCalls, [{ message: '차단을 해제했어요', tone: 'success' }]);
   await act(async () =>
     renderer?.root.find((node) => (node.type as unknown) === 'ModalSheet').props.onDismiss(),
   );
-  assert.deepEqual(toastCalls, [{ message: '차단을 해제했어요', tone: 'success' }]);
 });
 
 test('내가 차단한 Profile은 고정된 차단 해제 action을 표시한다', async () => {
@@ -194,9 +194,8 @@ test('서로 차단한 Profile은 내 차단 해제 확인과 mutation을 소유
 
   await act(async () => confirmation?.props.onConfirm());
   assert.deepEqual(mutationCalls, [{ id: 'profile-block-a' }]);
-  assert.deepEqual(toastCalls, []);
-  await act(async () => modal?.props.onDismiss());
   assert.deepEqual(toastCalls, [{ message: '차단을 해제했어요', tone: 'success' }]);
+  await act(async () => modal?.props.onDismiss());
 });
 
 test('차단 해제 실패 시 확인창을 닫고 action으로 focus를 복귀한다', async () => {
@@ -226,11 +225,11 @@ test('차단 해제 실패 시 확인창을 닫고 action으로 focus를 복귀�
   });
   const modal = renderer?.root.find((node) => (node.type as unknown) === 'ModalSheet');
   assert.equal(modal?.props.visible, false);
-  modal?.props.onDismiss();
-  assert.equal(focusCalls, 1);
   assert.deepEqual(toastCalls, [
     { message: '차단을 해제하지 못했어요. 다시 시도해 주세요.', tone: 'danger' },
   ]);
+  modal?.props.onDismiss();
+  assert.equal(focusCalls, 1);
 });
 
 test('관리 관계 fragment도 같은 차단 해제 action을 사용한다', async () => {

@@ -227,9 +227,9 @@ test('실제 FollowButton·Relay는 pending 중 중복과 닫기를 막고 실�
   await act(async () => requests[0]!.sink.error(new Error('offline')));
   assert.equal(button().props.children, '차단 해제');
   assert.equal(modal().props.visible, false);
+  assert.deepEqual(toasts, ['차단을 해제하지 못했어요. 다시 시도해 주세요.']);
   await act(async () => modal().props.onDismiss());
   assert.equal(focusCount, 1);
-  assert.deepEqual(toasts, ['차단을 해제하지 못했어요. 다시 시도해 주세요.']);
   assert.ok(store.getSource().get(blockId));
   await confirm();
   await respond(1, { data: unblockPayload(blockId) });
@@ -238,7 +238,7 @@ test('실제 FollowButton·Relay는 pending 중 중복과 닫기를 막고 실�
   assert.ok(store.getSource().get(blockId));
   assert.equal(store.getSource().get(stateId)?.profileBlock, null);
   assert.equal(store.getSource().get('unrelated')?.displayName, '보존');
-  assert.deepEqual(toasts, ['차단을 해제하지 못했어요. 다시 시도해 주세요.']);
+  assert.deepEqual(toasts, ['차단을 해제하지 못했어요. 다시 시도해 주세요.', '차단을 해제했어요']);
 });
 
 test('실제 FollowButton의 늦은 A 응답은 B의 action·Store를 바꾸지 않는다', async () => {
@@ -305,8 +305,8 @@ test('Block 성공 결과로 실제 FollowButton과 차단 action을 전환한�
   await respond(0, { data: payload });
   assert.deepEqual(labels(), ['차단 해제', '차단']);
   assert.equal(environment.getStore().getSource().get(stateId)?.profileBlock?.__ref, blockId);
-  await act(async () => actionControl('ModalSheet').props.onDismiss());
   assert.deepEqual(toasts, ['프로필을 차단했어요']);
+  await act(async () => actionControl('ModalSheet').props.onDismiss());
 });
 
 for (const [name, response] of [
@@ -330,8 +330,8 @@ for (const [name, response] of [
 
     assert.deepEqual(relationshipState(environment), before);
     assert.equal(control('ModalSheet').props.visible, false);
-    await act(async () => control('ModalSheet').props.onDismiss());
     assert.deepEqual(toasts, ['프로필을 차단하지 못했어요. 다시 시도해 주세요.']);
+    await act(async () => control('ModalSheet').props.onDismiss());
   });
 }
 
@@ -365,8 +365,8 @@ for (const [name, response] of [
     assert.deepEqual(relationshipState(environment), before);
     assert.equal(button().props.children, '차단 해제');
     assert.equal(modal().props.visible, false);
-    await act(async () => modal().props.onDismiss());
     assert.deepEqual(toasts, ['차단을 해제하지 못했어요. 다시 시도해 주세요.']);
+    await act(async () => modal().props.onDismiss());
   });
 }
 

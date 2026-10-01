@@ -104,7 +104,6 @@ export function ProfileBlockAction({
   const cancelRef = useRef<View>(null);
   const actionRef = useRef<View>(null);
   const focusTrigger = useRef<() => void>(() => {});
-  const completed = useRef<(() => void) | null>(null);
   const pending = blocking || unblocking;
 
   if (!selectedProfileId || !targetProfile) {
@@ -135,7 +134,7 @@ export function ProfileBlockAction({
       return;
     }
     const finish = (status: 'success' | 'error') => {
-      completed.current = () => notify(status);
+      notify(status);
       setOpen(false);
     };
     try {
@@ -206,9 +205,6 @@ export function ProfileBlockAction({
           } else {
             actionRef.current?.focus();
           }
-          const notify = completed.current;
-          completed.current = null;
-          notify?.();
         }}
         onShow={() => cancelRef.current?.focus()}
         title={nextBlocked ? '이 프로필을 차단할까요?' : '이 프로필의 차단을 해제할까요?'}
