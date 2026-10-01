@@ -1,5 +1,5 @@
-import { expect, fn, userEvent, within } from 'storybook/test';
 import { feedbackAttachmentMaxBytes } from '@kosmo/core/validation';
+import { expect, fn, userEvent, within } from 'storybook/test';
 import { FeedbackOverlay } from '@/components/feedback/FeedbackOverlay';
 import { FeedbackPage } from '@/components/feedback/FeedbackPage';
 import { captureFeedback } from '@/observability/sentry.web';
