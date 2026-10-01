@@ -13,7 +13,7 @@ spec:
   instances: {{ ternary .Values.postgres.pooler.replicas.prod .Values.postgres.pooler.replicas.dev (eq .Values.env "prod") }}
   type: rw
   pgbouncer:
-    poolMode: session
+    poolMode: transaction
     parameters:
       max_client_conn: {{ .Values.postgres.pooler.maxClientConnections | quote }}
       default_pool_size: {{ .Values.postgres.pooler.defaultPoolSize | quote }}

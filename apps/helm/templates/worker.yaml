@@ -70,7 +70,7 @@ spec:
                   name: {{ include "kosmo.runtimeDatabasePasswordSecretName" . | quote }}
                   key: password
             - name: PGHOST
-              value: {{ printf "%s-rw" (include "kosmo.postgresName" .) | quote }}
+              value: {{ include "kosmo.postgresPoolerName" . | quote }}
             - name: PGPORT
               value: "5432"
             - name: PGUSER
