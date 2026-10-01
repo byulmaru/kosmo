@@ -516,6 +516,9 @@ importers:
 
   apps/worker:
     dependencies:
+      '@fedify/vocab':
+        specifier: 2.3.8
+        version: 2.3.8
       '@kosmo/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -549,9 +552,6 @@ importers:
     devDependencies:
       '@fedify/fedify':
         specifier: ^2.3.8
-        version: 2.3.8
-      '@fedify/vocab':
-        specifier: 2.3.8
         version: 2.3.8
       '@temporalio/testing':
         specifier: ^1.22.0
