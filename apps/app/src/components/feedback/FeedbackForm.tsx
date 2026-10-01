@@ -123,25 +123,42 @@ export function FeedbackForm({ onStateChange }: Props) {
       if (result.canceled) {
         return;
       }
-      const supported = result.assets.filter(
-        (asset) => getFeedbackAssetContentType(asset) !== null,
-      );
+      const discardedUris: string[] = [];
+      const supported = result.assets.filter((asset) => {
+        const isSupported = getFeedbackAssetContentType(asset) !== null;
+        if (!isSupported) {
+          discardedUris.push(asset.uri);
+        }
+        return isSupported;
+      });
       if (supported.length !== result.assets.length) {
         setAttachmentError('정적 JPEG, PNG, WebP 이미지만 첨부할 수 있어요.');
       }
       const withinSize = supported.filter((asset) => {
         const size = asset.file?.size ?? asset.fileSize;
-        return size === undefined || size <= feedbackAttachmentMaxBytes;
+        const isWithinSize = size === undefined || size <= feedbackAttachmentMaxBytes;
+        if (!isWithinSize) {
+          discardedUris.push(asset.uri);
+        }
+        return isWithinSize;
       });
       if (withinSize.length !== supported.length) {
         setAttachmentError('이미지는 한 장당 5MB 이하로 첨부해주세요.');
       }
-      const next = withinSize.map((asset) => ({
+      const next = withinSize.slice(0, available).map((asset) => ({
         asset,
         altText: '',
         key: `feedback-media-${++nextAttachmentKey.current}`,
         state: 'selected' as const,
       }));
+      if (web) {
+        for (const uri of [
+          ...discardedUris,
+          ...withinSize.slice(available).map((asset) => asset.uri),
+        ]) {
+          releaseImagePreview(uri);
+        }
+      }
       setAttachments((current) => [...current, ...next].slice(0, feedbackAttachmentLimit));
       setStatus('idle');
     } catch {

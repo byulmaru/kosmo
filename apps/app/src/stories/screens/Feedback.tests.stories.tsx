@@ -1,4 +1,5 @@
 import { expect, fn, userEvent, within } from 'storybook/test';
+import { feedbackAttachmentMaxBytes } from '@kosmo/core/validation';
 import { FeedbackOverlay } from '@/components/feedback/FeedbackOverlay';
 import { FeedbackPage } from '@/components/feedback/FeedbackPage';
 import { captureFeedback } from '@/observability/sentry.web';
@@ -66,6 +67,61 @@ export const SelectedImages: Story = {
     });
     await userEvent.click(canvas.getByRole('button', { name: '이미지 추가' }));
     expect(canvas.getAllByRole('button', { name: /^첨부 이미지 \d 제거$/u })).toHaveLength(3);
+  },
+};
+
+export const DiscardedImagePreviews: Story = {
+  beforeEach: () => {
+    resetImagePickerMock();
+    return resetImagePickerMock;
+  },
+  render: () => <FeedbackPage />,
+  play: async ({ canvasElement }) => {
+    const revoked: string[] = [];
+    const revokeObjectURL = URL.revokeObjectURL;
+    URL.revokeObjectURL = (uri) => {
+      revoked.push(uri);
+      revokeObjectURL(uri);
+    };
+    try {
+      const imageUri = () => URL.createObjectURL(new Blob(['preview'], { type: 'image/png' }));
+      const unsupported = imageUri();
+      const oversized = imageUri();
+      const retained = [imageUri(), imageUri(), imageUri()];
+      const truncated = imageUri();
+      const asset = (uri: string, fileName: string, fileSize: number, mimeType: string) => ({
+        fileName,
+        fileSize,
+        height: 630,
+        mimeType,
+        uri,
+        width: 1200,
+      });
+      setNextImagePickerResult({
+        assets: [
+          asset(unsupported, 'unsupported.gif', 1024, 'image/gif'),
+          asset(oversized, 'oversized.png', feedbackAttachmentMaxBytes + 1, 'image/png'),
+          ...retained.map((uri, index) =>
+            asset(uri, `retained-${index + 1}.png`, 1024, 'image/png'),
+          ),
+          asset(truncated, 'truncated.png', 1024, 'image/png'),
+        ],
+        canceled: false,
+      });
+
+      const canvas = within(canvasElement);
+      await userEvent.click(canvas.getByRole('button', { name: '이미지 추가' }));
+      await canvas.findByRole('button', { name: '첨부 이미지 3 제거' });
+      expect(revoked).toHaveLength(3);
+      expect(new Set(revoked)).toEqual(new Set([unsupported, oversized, truncated]));
+      expect(retained.some((uri) => revoked.includes(uri))).toBe(false);
+
+      await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 1 제거' }));
+      expect(revoked).toHaveLength(4);
+      expect(new Set(revoked)).toEqual(new Set([unsupported, oversized, truncated, retained[0]]));
+    } finally {
+      URL.revokeObjectURL = revokeObjectURL;
+    }
   },
 };
 
