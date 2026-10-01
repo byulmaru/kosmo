@@ -44,7 +44,9 @@ afterEach(async () => {
 });
 
 test('Profile 변화는 identity를 유지하고 Account 전환은 이전 탐색을 종료한 뒤 연결한다', async () => {
-  await act(async () => { renderer = create(createElement(Bridge)); });
+  await act(async () => {
+    renderer = create(createElement(Bridge));
+  });
   assert.deepEqual(calls, ['profile:account-a:profile-a', 'identify:account-a']);
   session.selectedProfileId = 'profile-b';
   await act(async () => renderer!.update(createElement(Bridge)));
@@ -52,7 +54,11 @@ test('Profile 변화는 identity를 유지하고 Account 전환은 이전 탐색
   identityAccountId = 'account-b';
   session.accountId = 'account-b';
   await act(async () => renderer!.update(createElement(Bridge)));
-  assert.deepEqual(calls.slice(-3), ['end:account-a', 'profile:account-b:profile-b', 'identify:account-b']);
+  assert.deepEqual(calls.slice(-3), [
+    'end:account-a',
+    'profile:account-b:profile-b',
+    'identify:account-b',
+  ]);
   session.status = 'guest';
   session.accountId = null;
   identityAccountId = null;
@@ -61,7 +67,9 @@ test('Profile 변화는 identity를 유지하고 Account 전환은 이전 탐색
 });
 
 test('actor 전환 중 임시 error는 identity와 탐색을 초기화하지 않고 Profile context만 비운다', async () => {
-  await act(async () => { renderer = create(createElement(Bridge)); });
+  await act(async () => {
+    renderer = create(createElement(Bridge));
+  });
   calls.length = 0;
   session.status = 'error';
   session.accountId = null;

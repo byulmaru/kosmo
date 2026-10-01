@@ -54,21 +54,21 @@ export function HashtagRelatedProfileList({
     hasNext: pagination.hasNext,
     isLoadingNext: pagination.isLoadingNext,
     itemCount: profiles.length,
-    loadNext: (count, options) => pagination.loadNext(count, {
-      onComplete: (error) => {
-        if (error) {
-          onPaginationFailure?.();
-        }
-        options.onComplete(error);
-      },
-    }),
+    loadNext: (count, options) =>
+      pagination.loadNext(count, {
+        onComplete: (error) => {
+          if (error) {
+            onPaginationFailure?.();
+          }
+          options.onComplete(error);
+        },
+      }),
     pageSize: 20,
     webScrollTarget: 'container',
   });
   useEffect(() => {
     onInitialResults?.(profiles.length > 0);
   }, [onInitialResults, profiles.length]);
-
 
   return (
     <ScrollView {...nativeScrollProps} contentContainerStyle={styles.root}>

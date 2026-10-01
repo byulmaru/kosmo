@@ -74,7 +74,11 @@ function HashtagRelatedProfilesRoute({
       loading={<HashtagRelatedProfileListState leading={backButton} state="loading" />}
       title="관련 프로필을 불러오지 못했어요"
     >
-      <HashtagRelatedProfilesContent backButton={backButton} hashtagId={hashtagId} tracking={tracking} />
+      <HashtagRelatedProfilesContent
+        backButton={backButton}
+        hashtagId={hashtagId}
+        tracking={tracking}
+      />
     </RouteBoundary>
   );
 }
