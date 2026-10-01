@@ -9,6 +9,10 @@ import type { ReactTestRenderer } from 'react-test-renderer';
 
 let renderer: ReactTestRenderer | null = null;
 let paginationCompletion: ((error?: Error | null) => void) | undefined;
+let profileEdges = [
+  { cursor: 'cursor-a', node: { id: 'profile-a' } },
+  { cursor: 'cursor-b', node: { id: 'profile-b' } },
+];
 
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, {
@@ -27,10 +31,7 @@ mockModule('react-relay', {
     data: {
       name: 'Fediverse',
       relatedProfiles: {
-        edges: [
-          { cursor: 'cursor-a', node: { id: 'profile-a' } },
-          { cursor: 'cursor-b', node: { id: 'profile-b' } },
-        ],
+        edges: profileEdges,
       },
     },
     hasNext: true,
@@ -96,9 +97,34 @@ afterEach(async () => {
     renderer = null;
   }
   paginationCompletion = undefined;
+  profileEdges = [
+    { cursor: 'cursor-a', node: { id: 'profile-a' } },
+    { cursor: 'cursor-b', node: { id: 'profile-b' } },
+  ];
 });
 
 describe('Hashtag 관련 Profile 목록 viewport', () => {
+  it('성공한 빈 목록은 empty callback을 전달하고 Profile item을 렌더하지 않는다', async () => {
+    profileEdges = [];
+    const onInitialResults = mock.fn();
+    await act(async () => {
+      renderer = create(
+        createElement(HashtagRelatedProfileList, { hashtag: {}, onInitialResults }),
+      );
+    });
+    assert.ok(renderer);
+    assert.equal(onInitialResults.mock.callCount(), 1);
+    assert.equal(onInitialResults.mock.calls[0]?.arguments[0], false);
+    assert.equal(
+      renderer.root.findAll((node) => (node.type as unknown) === 'ProfileListItem').length,
+      0,
+    );
+    assert.equal(
+      renderer.root.find((node) => (node.type as unknown) === 'StateView').props.title,
+      '관련 프로필이 없어요',
+    );
+  });
+
   it('성공과 상태 화면에 같은 leading action을 전달한다', async () => {
     const leading = createElement('BackButton');
     await act(async () => {
