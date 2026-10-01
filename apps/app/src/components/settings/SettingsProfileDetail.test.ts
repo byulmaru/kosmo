@@ -2,13 +2,14 @@ import assert from 'node:assert/strict';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
-import type { ComponentType } from 'react';
+import type { ComponentType, Context } from 'react';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 type QueryData = {
   currentSession: {
+    account: { featureFlags: string[] } | null;
     selectedProfile: {
       id: string;
       instance: { kind: 'ACTIVITYPUB' | 'LOCAL' };
@@ -43,10 +44,19 @@ mock.module('react-relay', {
     },
   },
 } as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('../../session/SessionProvider.tsx', import.meta.url), {
+  exports: { useSession: () => ({ accountId: 'settings-account' }) },
+} as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../profile/ProfileDefaultPostVisibilityControl.tsx', import.meta.url), {
   exports: {
     ProfileDefaultPostVisibilityControl: (props: Record<string, unknown>) =>
       createElement('ProfileDefaultPostVisibilityControl', props),
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('../profile/ProfileMigrationSourceControl.tsx', import.meta.url), {
+  exports: {
+    ProfileMigrationSourceControl: (props: Record<string, unknown>) =>
+      createElement('ProfileMigrationSourceControl', props),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../shell/ShellChromeContext.tsx', import.meta.url), {
@@ -70,15 +80,17 @@ mock.module(new URL('../../relay/RelayActorProvider.tsx', import.meta.url), {
   exports: { useRelayActorLifecycleKey: () => relayActorLifecycleKey },
 } as unknown as Parameters<typeof mock.module>[1]);
 
+let FeatureFlagsContext: Context<(key: string) => boolean>;
 let SettingsProfileDetail: ComponentType;
 let renderer: ReactTestRenderer | null = null;
 
 before(async () => {
+  ({ FeatureFlagsContext } = await import('../FeatureFlagsContext'));
   ({ SettingsProfileDetail } = await import('./SettingsProfileDetail'));
 });
 
 afterEach(async () => {
-  queryData = { currentSession: { selectedProfile: null } };
+  queryData = { currentSession: { account: null, selectedProfile: null } };
   queryFetchKeys = [];
   openProfileSwitcherCalls = 0;
   queryMode = 'success';
@@ -97,14 +109,20 @@ describe('SettingsProfileDetail', () => {
       viewerState: { membership: { role: 'OWNER' as const } },
     };
     queryData = {
-      currentSession: { selectedProfile: profile },
+      currentSession: {
+        account: null,
+        selectedProfile: profile,
+      },
     };
-    await render();
+    await render(true);
 
     const control = rendered('ProfileDefaultPostVisibilityControl')[0];
     assert.equal(control.props.profile, profile);
     assert.equal(control.props.editable, true);
     assert.equal(control.props.showTitle, false);
+    const migration = rendered('ProfileMigrationSourceControl')[0];
+    assert.equal(migration.props.profile, profile);
+    assert.equal(migration.props.editable, true);
     assert.deepEqual(queryFetchKeys, [0]);
   });
 
@@ -114,15 +132,22 @@ describe('SettingsProfileDetail', () => {
       instance: { kind: 'LOCAL' as const },
       viewerState: { membership: { role: 'MEMBER' as const } },
     };
-    queryData = { currentSession: { selectedProfile: profile } };
-    await render();
+    queryData = {
+      currentSession: {
+        account: null,
+        selectedProfile: profile,
+      },
+    };
+    await render(true);
 
     assert.equal(rendered('ProfileDefaultPostVisibilityControl')[0].props.editable, false);
+    assert.equal(rendered('ProfileMigrationSourceControl')[0].props.editable, false);
   });
 
   it('selected Remote Profile에는 Local 공개 범위 control을 표시하지 않는다', async () => {
     queryData = {
       currentSession: {
+        account: null,
         selectedProfile: {
           id: 'profile:remote',
           instance: { kind: 'ACTIVITYPUB' },
@@ -130,14 +155,15 @@ describe('SettingsProfileDetail', () => {
         },
       },
     };
-    await render();
+    await render(true);
 
     assert.equal(rendered('ProfileDefaultPostVisibilityControl').length, 0);
+    assert.equal(rendered('ProfileMigrationSourceControl').length, 0);
     assert.equal(rendered('StateView')[0].props.title, '설정할 Profile이 없어요');
   });
 
   it('selected Profile이 없으면 기존 Profile 선택 흐름을 연다', async () => {
-    queryData = { currentSession: { selectedProfile: null } };
+    queryData = { currentSession: { account: null, selectedProfile: null } };
     await render();
 
     const state = rendered('StateView')[0];
@@ -148,7 +174,7 @@ describe('SettingsProfileDetail', () => {
   });
 
   it('production RouteBoundary가 manual retry와 actor lifecycle의 fetchKey를 소유한다', async () => {
-    queryData = { currentSession: { selectedProfile: null } };
+    queryData = { currentSession: { account: null, selectedProfile: null } };
     queryMode = 'error';
     const originalConsoleError = console.error;
     console.error = () => undefined;
@@ -175,13 +201,49 @@ describe('SettingsProfileDetail', () => {
       console.error = originalConsoleError;
     }
   });
+
+  it('flag off와 context 기본값은 legacy Account.featureFlags가 있어도 숨긴다', async () => {
+    const profile = {
+      id: 'profile:flag-off',
+      instance: { kind: 'LOCAL' as const },
+      viewerState: { membership: { role: 'OWNER' as const } },
+    };
+    queryData = {
+      currentSession: {
+        account: { featureFlags: ['profile-migration'] },
+        selectedProfile: profile,
+      },
+    };
+    await render(false);
+    assert.equal(rendered('ProfileMigrationSourceControl').length, 0);
+    await update();
+    assert.equal(rendered('ProfileMigrationSourceControl').length, 0);
+  });
 });
 
-async function render() {
+async function render(featureFlag?: boolean) {
   await act(async () => {
-    renderer = create(createElement(SettingsProfileDetail));
+    renderer = create(renderTree(featureFlag));
   });
   assert.ok(renderer);
+}
+
+async function update(featureFlag?: boolean) {
+  assert.ok(renderer);
+  await act(async () => {
+    renderer?.update(renderTree(featureFlag));
+  });
+}
+
+function renderTree(featureFlag?: boolean) {
+  const detail = createElement(SettingsProfileDetail);
+  return featureFlag === undefined
+    ? detail
+    : createElement(
+        FeatureFlagsContext.Provider,
+        { value: (key) => key === 'profile-migration' && featureFlag },
+        detail,
+      );
 }
 
 function rendered(type: string): ReactTestInstance[] {

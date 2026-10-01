@@ -22,8 +22,12 @@ const selectedProfile = profile({
     membership: { role: 'OWNER' },
   },
 });
+const ownerProfile = { ...selectedProfile, migrationSource: null };
 const ownerData = {
-  currentSession: { id: 'settings-session', selectedProfile },
+  currentSession: {
+    id: 'settings-session',
+    selectedProfile: ownerProfile,
+  },
 };
 
 const meta = {
@@ -65,6 +69,7 @@ export const FullMasterDetail: Story = {
 
     expect(canvas.getByRole('heading', { name: '설정' })).toBeVisible();
     expect(canvas.getByRole('heading', { name: '게시물 기본 공개 범위' })).toBeVisible();
+    expect(canvas.getByTestId('profile-migration-source-control')).toBeVisible();
     expect(account).toHaveAttribute('href', BYULMARU_ID_ACCOUNT_SETTINGS_URL);
     expect(profileEntry).toHaveAttribute('href', '/settings/default-post-visibility');
     expect(profileEntry).toHaveStyle({

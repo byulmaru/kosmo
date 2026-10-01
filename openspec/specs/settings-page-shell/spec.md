@@ -9,7 +9,7 @@ Kosmo의 canonical `/settings` route family, responsive master-detail/one-pane s
 
 ### Requirement: Canonical Settings route family와 진입점
 
-**Authority / Provenance:** `docs/design/settings.md`, `docs/design/breakpoints.md`, `PROD-685`; 선행 정보 구조 `PROD-653` — 인증된 universal client는 Kosmo 설정 hub의 canonical 내부 route로 `/settings`를 제공해야 하며(MUST), 지원되는 내부 detail을 같은 Settings route family에서 열 수 있어야 한다(MUST). 이 route family를 Byulmaru ID Account Settings의 내부 canonical route로 취급해서는 안 된다(MUST NOT). full Web sidebar와 compact Web icon rail은 `설정` 주요 navigation을 제공해야 하고(MUST), mobile Web과 Android·iOS는 mobile drawer에 같은 진입점을 제공해야 한다(MUST). 하단 탭 바와 일반 우측 레일은 `설정` 진입점을 중복해서는 안 된다(MUST NOT). 진입점은 실제 route와 page shell이 함께 동작할 때만 노출되어야 한다(MUST).
+**Authority / Provenance:** 제품 계약 `PROD-685`; 선행 정보 구조 `PROD-653`; 시각 handoff source `docs/design/breakpoints.md` — 인증된 universal client는 Kosmo 설정 hub의 canonical 내부 route로 `/settings`를 제공해야 하며(MUST), 지원되는 내부 detail을 같은 Settings route family에서 열 수 있어야 한다(MUST). 이 route family를 Byulmaru ID Account Settings의 내부 canonical route로 취급해서는 안 된다(MUST NOT). full Web sidebar와 compact Web icon rail은 `설정` 주요 navigation을 제공해야 하고(MUST), mobile Web과 Android·iOS는 mobile drawer에 같은 진입점을 제공해야 한다(MUST). 하단 탭 바와 일반 우측 레일은 `설정` 진입점을 중복해서는 안 된다(MUST NOT). 진입점은 실제 route와 page shell이 함께 동작할 때만 노출되어야 한다(MUST).
 
 #### Scenario: full Web sidebar에서 설정을 연다
 
@@ -41,7 +41,7 @@ Kosmo의 canonical `/settings` route family, responsive master-detail/one-pane s
 
 ### Requirement: 현재 Settings root와 공통 item 정보 구조
 
-**Authority / Provenance:** `docs/design/settings.md`, `docs/design/profile-mute-block.md`, `PROD-685`, `DSN-53`, `DSN-54`; 기능 경계 `PROD-645`, `PROD-667`, 테마 runtime `PROD-812`, Mute·Block runtime `PROD-814`, `PROD-823`, `PROD-813` — Settings root는 시각 label `계정 설정`인 Byulmaru ID 외부 진입점과 현재 선택값을 함께 보여 주는 `테마`, `게시물 기본 공개 범위`, `뮤트 및 차단` 내부 진입점을 이 순서로 직접 제공해야 한다(MUST). `테마`는 `/settings/theme` detail을 열어야 하며(MUST), `뮤트 및 차단`은 `뮤트한 프로필`과 `차단한 프로필`을 별도 destination으로 제공하는 category를 열어야 한다(MUST). 두 Mute·Block 상태를 하나의 혼합 목록으로 표시해서는 안 된다(MUST NOT). 현재 네 entry를 위해 한 항목짜리 `계정`·`화면 설정`·`프로필` category를 만들어서는 안 되며(MUST NOT), 별도 canonical·Linear 승인이 없는 미래 category를 disabled item·placeholder·범용 registry로 노출해서는 안 된다(MUST NOT). 공통 presentational `SettingsItem`은 부모 container 폭에 맞는 row geometry와 필수 label·선택적 leading·description·trailing content·selected presentation을 조합할 수 있어야 한다(MUST). `SettingsItem`이 Link·Pressable·focus·accessible name·feature 조회·저장·persistence semantics를 추론하거나 소유해서는 안 된다(MUST NOT).
+**Authority / Provenance:** 제품 계약 `PROD-685`; 기능 경계 `PROD-645`, `PROD-667`; 테마·Mute·Block runtime `PROD-812`, `PROD-814`, `PROD-823`, `PROD-813`; 시각 handoff source `docs/design/profile-mute-block.md`, `DSN-53`, `DSN-54` — Settings root는 시각 label `계정 설정`인 Byulmaru ID 외부 진입점과 현재 선택값을 함께 보여 주는 `테마`, `게시물 기본 공개 범위`, `뮤트 및 차단` 내부 진입점을 이 순서로 직접 제공해야 한다(MUST). `테마`는 `/settings/theme` detail을 열어야 하며(MUST), `뮤트 및 차단`은 `뮤트한 프로필`과 `차단한 프로필`을 별도 destination으로 제공하는 category를 열어야 한다(MUST). 두 Mute·Block 상태를 하나의 혼합 목록으로 표시해서는 안 된다(MUST NOT). 현재 네 entry를 위해 한 항목짜리 `계정`·`화면 설정`·`프로필` category를 만들어서는 안 되며(MUST NOT), 별도 canonical·Linear 승인이 없는 미래 category를 disabled item·placeholder·범용 registry로 노출해서는 안 된다(MUST NOT). 공통 presentational `SettingsItem`은 부모 container 폭에 맞는 row geometry와 필수 label·선택적 leading·description·trailing content·selected presentation을 조합할 수 있어야 한다(MUST). `SettingsItem`이 Link·Pressable·focus·accessible name·feature 조회·저장·persistence semantics를 추론하거나 소유해서는 안 된다(MUST NOT).
 
 #### Scenario: 현재 승인된 네 entry를 직접 표시한다
 
@@ -64,7 +64,7 @@ Kosmo의 canonical `/settings` route family, responsive master-detail/one-pane s
 
 ### Requirement: Account 설정은 Byulmaru ID 외부 navigation으로만 제공한다
 
-**Authority / Provenance:** `docs/design/settings.md`, `PROD-685`; 외부 진입점 소유 `PROD-645` — Account Settings의 소유자는 Byulmaru ID(OIDC Provider)여야 하며(MUST), Kosmo는 Settings root에 Byulmaru ID canonical Account Settings 페이지로 이동하는 외부 진입점만 제공해야 한다(MUST). Kosmo는 내부 Account 설정 route·UI·Account 데이터 조회·입력·저장 또는 Account 관리 기능을 구현해서는 안 된다(MUST NOT). Account 진입점은 PROD-645가 제공하는 플랫폼별 external `Link` 계약을 그대로 사용해야 하며(MUST), Kosmo는 브라우저·OS가 소유하는 외부 이동에 별도 loading·error·retry lifecycle을 추가해서는 안 된다(MUST NOT).
+**Authority / Provenance:** 제품 계약 `PROD-685`; 외부 진입점 소유 `PROD-645` — Account Settings의 소유자는 Byulmaru ID(OIDC Provider)여야 하며(MUST), Kosmo는 Settings root에 Byulmaru ID canonical Account Settings 페이지로 이동하는 외부 진입점만 제공해야 한다(MUST). Kosmo는 내부 Account 설정 route·UI·Account 데이터 조회·입력·저장 또는 Account 관리 기능을 구현해서는 안 된다(MUST NOT). Account 진입점은 PROD-645가 제공하는 플랫폼별 external `Link` 계약을 그대로 사용해야 하며(MUST), Kosmo는 브라우저·OS가 소유하는 외부 이동에 별도 loading·error·retry lifecycle을 추가해서는 안 된다(MUST NOT).
 
 #### Scenario: Web에서 Byulmaru ID Account Settings로 이동한다
 
@@ -86,7 +86,7 @@ Kosmo의 canonical `/settings` route family, responsive master-detail/one-pane s
 
 ### Requirement: Full Web workspace와 one-pane responsive navigation
 
-**Authority / Provenance:** `docs/design/settings.md`, `docs/design/page-header.md`, `docs/design/breakpoints.md`, `PROD-685`, `PROD-838` — full Web의 Settings route family는 전역 sidebar를 유지하고 일반 `RightRail`을 숨긴 뒤 기존 center+right 영역을 Settings wide workspace로 사용해야 한다(MUST). workspace는 약 320px master pane과 남은 폭을 채우는 detail pane을 제공해야 하며(MUST), `/settings` hub는 `게시물 기본 공개 범위` entry를 기본 selected 상태로 두고 Profile detail을 표시해야 한다(MUST). compact Web, mobile Web, Android와 iOS의 `/settings`는 root 목록부터 표시하고 내부 entry를 선택했을 때 한 화면짜리 category 또는 detail destination으로 이동해야 한다(MUST). 모든 내부 destination은 명시적인 parent를 가져야 하고(MUST), back navigation은 이전 history·navigation stack과 무관하게 해당 parent를 열어야 한다(MUST). root의 직접 entry가 여는 1단계 destination의 parent는 `/settings` root여야 하며(MUST), 중첩 destination의 parent는 바로 위 category여야 한다(MUST). 다른 route의 center 600px·RightRail visibility와 기존 `compact=768`, `full=1280` breakpoint를 변경해서는 안 된다(MUST NOT).
+**Authority / Provenance:** 제품 계약 `PROD-685`, `PROD-838`; 시각 handoff source `docs/design/page-header.md`, `docs/design/breakpoints.md` — full Web의 Settings route family는 전역 sidebar를 유지하고 일반 `RightRail`을 숨긴 뒤 기존 center+right 영역을 Settings wide workspace로 사용해야 한다(MUST). workspace는 약 320px master pane과 남은 폭을 채우는 detail pane을 제공해야 하며(MUST), `/settings` hub는 `게시물 기본 공개 범위` entry를 기본 selected 상태로 두고 Profile detail을 표시해야 한다(MUST). compact Web, mobile Web, Android와 iOS의 `/settings`는 root 목록부터 표시하고 내부 entry를 선택했을 때 한 화면짜리 category 또는 detail destination으로 이동해야 한다(MUST). 모든 내부 destination은 명시적인 parent를 가져야 하고(MUST), back navigation은 이전 history·navigation stack과 무관하게 해당 parent를 열어야 한다(MUST). root의 직접 entry가 여는 1단계 destination의 parent는 `/settings` root여야 하며(MUST), 중첩 destination의 parent는 바로 위 category여야 한다(MUST). 다른 route의 center 600px·RightRail visibility와 기존 `compact=768`, `full=1280` breakpoint를 변경해서는 안 된다(MUST NOT).
 
 #### Scenario: full Web에서 Settings master-detail을 표시한다
 
@@ -134,13 +134,45 @@ Kosmo의 canonical `/settings` route family, responsive master-detail/one-pane s
 
 ### Requirement: Profile detail 상태 소유
 
-**Authority / Provenance:** `docs/design/settings.md`, `PROD-685`; Profile 데이터·전환·저장 경계 `PROD-667` — Profile detail은 현재 Local Profile identity와 Profile query·loading·error·empty·content·retry 상태를 자기 화면 안에서 소유해야 한다(MUST). Profile loading 중 확인되지 않은 값을 확정된 것처럼 표시해서는 안 되며(MUST NOT), Profile 전환 뒤 이전 Profile 결과를 새 대상 아래에 표시해서는 안 된다(MUST NOT). 오류에는 backend 원문이 아닌 안전한 한국어 설명과 재시도 action을 제공해야 한다(MUST). Settings shell과 Account entry가 Profile 오류 종류나 저장 상태를 공통 상태로 해석하거나 재구현해서는 안 된다(MUST NOT). page shell은 공개 범위 control의 inline·dropdown·sheet 또는 즉시·명시적 저장 interaction을 고정해서는 안 된다(MUST NOT).
+**Authority / Provenance:** 제품 근거 `docs/domain/objects/profile.md`, 승인된 ADR `docs/domain/decisions/0027-profile-migration-inbound-move.md`, Linear 계약 `PROD-685`, `PROD-743`; Profile 데이터·전환·저장 경계 `PROD-667` — Profile detail은 현재 Local Profile identity와 Profile query·loading·error·empty·content·retry 상태를 자기 화면 안에서 소유해야 한다(MUST). Profile loading 중 확인되지 않은 값을 확정된 것처럼 표시해서는 안 되며(MUST NOT), Profile 전환 뒤 이전 Profile 결과를 새 대상 아래에 표시해서는 안 된다(MUST NOT). 오류에는 backend 원문이 아닌 안전한 한국어 설명과 재시도 action을 제공해야 한다(MUST). Settings shell과 Account entry가 Profile 오류 종류나 저장 상태를 공통 상태로 해석하거나 재구현해서는 안 된다(MUST NOT). page shell은 공개 범위 control의 inline·dropdown·sheet 또는 즉시·명시적 저장 interaction을 고정해서는 안 된다(MUST NOT). Profile Migration source 준비 control은 이 detail에서 현재 선택된 Profile을 target으로 사용하고 별도 target Profile ID 입력 없이 source qualified handle만 제출하도록 해당 feature flag가 켜져 있고 값이 확인된 경우에만 노출해야 하며(MUST), flag가 꺼져 있거나 확인할 수 없거나 로딩 중이면 렌더링해서는 안 된다(MUST NOT). 이 flag는 Profile Owner 권한을 대신하지 않으며(MUST NOT), 이미 준비된 관계와 그로부터 파생된 alias 및 inbound Move 처리를 flag 상태로 중단하거나 제거해서는 안 된다(MUST NOT).
 
 #### Scenario: 선택한 Profile detail을 표시한다
 
 - **WHEN** selected Local Profile이 있는 사용자가 Profile 기본 공개 범위 detail을 연다
 - **THEN** detail은 현재 Profile의 표시 이름·`relativeHandle`과 Profile 설정 content를 표시한다
 - **AND** Profile control의 accessible name은 Kosmo 내부 기능과 현재 대상을 전달한다
+
+#### Scenario: 확인된 feature flag가 켜져 있을 때 source 준비 control을 표시한다
+
+- **WHEN** selected Profile이 있고 Profile Migration feature flag가 켜진 것으로 확인된다
+- **THEN** Profile detail은 source qualified handle을 준비할 수 있는 Profile Migration control을 표시한다
+- **AND** control 실행은 기존 `Account.Active`와 `Profile.Owner` 권한 경계를 사용한다
+
+#### Scenario: source 등록 성공 뒤 ActivityPub Move를 안내한다
+
+- **WHEN** Profile detail의 현재 selected Profile에서 source qualified handle만 담은 `RegisterProfileMigrationSourceInput`으로 `registerProfileMigrationSource` mutation이 성공한다
+- **THEN** detail은 `RegisterProfileMigrationSourcePayload.profile`의 target Profile과 `migrationSource` field를 반영한다
+- **AND** 성공 안내는 기존 Mastodon 계정에서 새 Kosmo handle로 ActivityPub `Move`를 시작하도록 설명한다
+- **AND** detail은 Profile 이전 완료를 표시하거나 Move 이후 완료를 위한 별도 Kosmo API·action을 제공하지 않는다
+
+#### Scenario: feature flag가 꺼졌거나 확인되지 않으면 source 준비 control을 숨긴다
+
+- **WHEN** Profile Migration feature flag가 꺼져 있거나 값을 확인할 수 없거나 로딩 중이다
+- **THEN** Profile detail은 Profile Migration source 준비 control을 렌더링하지 않는다
+- **AND** Profile identity·기존 Profile 설정 content의 loading·error·empty 정책은 변경하지 않는다
+
+#### Scenario: Settings UI flag가 Profile 권한을 넓히지 않는다
+
+- **WHEN** feature flag는 켜져 있지만 현재 Account가 selected Profile의 `Profile.Owner`가 아니다
+- **THEN** 시스템은 Profile Migration source 준비 action을 기존 Profile Owner 권한으로 거부한다
+- **AND** 준비 관계와 Profile 상태를 변경하지 않는다
+
+#### Scenario: source 준비 저장 실패에서 입력과 재시도를 보존한다
+
+- **WHEN** Profile Migration source qualified handle을 제출했지만 준비 요청이 실패한다
+- **THEN** Profile detail은 사용자가 제출한 source 입력과 안전한 오류 설명을 유지한다
+- **AND** 같은 입력으로 재시도할 수 있는 action을 제공한다
+- **AND** 기존 준비 관계와 alias를 실패 결과로 변경하지 않는다
 
 #### Scenario: 설정 대상 Profile이 없다
 
@@ -160,9 +192,15 @@ Kosmo의 canonical `/settings` route family, responsive master-detail/one-pane s
 - **THEN** detail은 이전 결과를 새 Profile identity 아래에 표시하지 않는다
 - **AND** 새 Profile의 identity와 데이터가 일치할 때만 설정 control을 content 상태로 표시한다
 
+#### Scenario: flag 상태가 이미 준비된 inbound 동작을 중단하지 않는다
+
+- **WHEN** Profile Migration 관계와 그로부터 파생된 alias가 이미 존재하고 feature flag가 꺼지거나 확인되지 않는다
+- **THEN** Settings detail은 source 준비 control을 숨길 수 있다
+- **AND** 기존 관계·alias와 inbound Move 처리는 flag 상태에 따라 제거되거나 중단되지 않는다
+
 ### Requirement: Settings 접근성 계약
 
-**Authority / Provenance:** `docs/design/settings.md`, `docs/design/profile-mute-block.md`, `docs/design/accessibility.md`, `PROD-685`, `DSN-53`, `DSN-54` — root 화면과 full master pane은 `설정` heading을, one-pane category·detail 화면과 full detail pane은 현재 destination heading을 programmatic하게 노출해야 한다(MUST). 시각적으로 없는 category heading을 screen reader 전용으로 반복해서는 안 된다(MUST NOT). root/master 목록의 문서·보조기술 순서는 `설정` heading → 시각 label `계정 설정`의 Byulmaru ID 외부 entry → `테마`와 현재 선택값 → `게시물 기본 공개 범위` → `뮤트 및 차단`이어야 하며(MUST), full Web에서는 이어서 detail heading과 현재 선택된 content를 노출해야 한다(MUST). Account entry는 accessible name에서 Byulmaru ID 외부 서비스로 이동함을 전달해야 하고(MUST), 내부 entry는 selected/current destination을, Profile control은 Kosmo 내부 기능과 현재 대상을 전달해야 한다(MUST). heading과 비상호작용 identity는 tab stop이어서는 안 된다(MUST NOT). Web pointer target은 24×24 CSS px minimum 또는 공식 예외를 충족해야 하고(MUST), iOS는 기본 44×44pt, Android는 48×48dp touch target을 사용해야 한다(MUST).
+**Authority / Provenance:** 제품 계약 `PROD-685`; 시각 handoff source `docs/design/settings.md`, `docs/design/profile-mute-block.md`, `docs/design/accessibility.md`, `DSN-53`, `DSN-54` — root 화면과 full master pane은 `설정` heading을, one-pane category·detail 화면과 full detail pane은 현재 destination heading을 programmatic하게 노출해야 한다(MUST). 시각적으로 없는 category heading을 screen reader 전용으로 반복해서는 안 된다(MUST NOT). root/master 목록의 문서·보조기술 순서는 `설정` heading → 시각 label `계정 설정`의 Byulmaru ID 외부 entry → `테마`와 현재 선택값 → `게시물 기본 공개 범위` → `뮤트 및 차단`이어야 하며(MUST), full Web에서는 이어서 detail heading과 현재 선택된 content를 노출해야 한다(MUST). Account entry는 accessible name에서 Byulmaru ID 외부 서비스로 이동함을 전달해야 하고(MUST), 내부 entry는 selected/current destination을, Profile control은 Kosmo 내부 기능과 현재 대상을 전달해야 한다(MUST). heading과 비상호작용 identity는 tab stop이어서는 안 된다(MUST NOT). Web pointer target은 24×24 CSS px minimum 또는 공식 예외를 충족해야 하고(MUST), iOS는 기본 44×44pt, Android는 48×48dp touch target을 사용해야 한다(MUST).
 
 #### Scenario: screen reader가 master와 detail을 구분한다
 
@@ -186,7 +224,7 @@ Kosmo의 canonical `/settings` route family, responsive master-detail/one-pane s
 
 ### Requirement: Account 외부 진입점과 Profile 내부 기능의 페이지 수준 통합
 
-**Authority / Provenance:** `docs/design/settings.md`, `PROD-685`, `PROD-645`, `PROD-667`; 최종 통합·archive `PROD-684`, backend `PROD-648` — PROD-645의 Byulmaru ID Account 외부 진입점과 PROD-667의 Kosmo Profile 기본 게시 공개 범위 control은 Settings root/detail의 각 소유 경계 안에서 함께 동작해야 한다(MUST). 공통 shell은 Account 기능을 구현하거나 자식의 외부 이동, Profile 저장·권한·GraphQL·DB·Relay와 Composer 계약을 재구현해서는 안 된다(MUST NOT). PROD-685의 페이지 수준 완료 검증은 자식 기능의 세부 테스트를 반복하는 대신 지원 navigation surface, root/detail 전환, full workspace와 외부/내부 소유 경계를 자동화로 확인해 PROD-684에 인계해야 한다(MUST). 자동화·source/unit 결과를 실제 Web 보조기술 또는 Android·iOS runtime 통과 증거로 일반화해서는 안 된다(MUST NOT).
+**Authority / Provenance:** 제품 계약 `PROD-685`, `PROD-645`, `PROD-667`; 최종 통합·archive `PROD-684`, backend `PROD-648` — PROD-645의 Byulmaru ID Account 외부 진입점과 PROD-667의 Kosmo Profile 기본 게시 공개 범위 control은 Settings root/detail의 각 소유 경계 안에서 함께 동작해야 한다(MUST). 공통 shell은 Account 기능을 구현하거나 자식의 외부 이동, Profile 저장·권한·GraphQL·DB·Relay와 Composer 계약을 재구현해서는 안 된다(MUST NOT). PROD-685의 페이지 수준 완료 검증은 자식 기능의 세부 테스트를 반복하는 대신 지원 navigation surface, root/detail 전환, full workspace와 외부/내부 소유 경계를 자동화로 확인해 PROD-684에 인계해야 한다(MUST). 자동화·source/unit 결과를 실제 Web 보조기술 또는 Android·iOS runtime 통과 증거로 일반화해서는 안 된다(MUST NOT).
 
 #### Scenario: 두 자식 결과를 root/detail에 배치한다
 
