@@ -15,6 +15,10 @@ on:
         description: Full 40-character source SHA to export
         required: true
         type: string
+    secrets:
+      SENTRY_AUTH_TOKEN:
+        description: Sentry token authorized to upload Expo source maps
+        required: true
     outputs:
       artifact_name:
         description: Uploaded export artifact name
@@ -106,3 +110,31 @@ jobs:
           name: ${{ steps.export.outputs.artifact_name }}
           path: apps/app/.artifacts/${{ inputs.platform }}
           retention-days: 90
+
+      - name: Upload source maps to Sentry
+        working-directory: apps/app
+        shell: bash
+        env:
+          EXPORT_DIRECTORY: .artifacts/${{ inputs.platform }}
+          PLATFORM: ${{ inputs.platform }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+          SENTRY_RELEASE: ${{ inputs.source_sha }}
+          SENTRY_URL: https://sentry.io/
+        run: |
+          set -euo pipefail
+
+          : "${SENTRY_AUTH_TOKEN:?SENTRY_AUTH_TOKEN must be configured}"
+          : "${SENTRY_ORG:?SENTRY_ORG must be configured}"
+          : "${SENTRY_PROJECT:?SENTRY_PROJECT must be configured}"
+          if [[ ! "${SENTRY_RELEASE}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::SENTRY_RELEASE must be the full source SHA."
+            exit 1
+          fi
+
+          bundle_path="$(jq -er --arg platform "${PLATFORM}" '.fileMetadata[$platform].bundle' "${EXPORT_DIRECTORY}/metadata.json")"
+          test -s "${EXPORT_DIRECTORY}/${bundle_path}"
+          test -s "${EXPORT_DIRECTORY}/${bundle_path}.map"
+          bundle_directory="$(dirname "${EXPORT_DIRECTORY}/${bundle_path}")"
+          ./node_modules/.bin/sentry-expo-upload-sourcemaps "${bundle_directory}"
