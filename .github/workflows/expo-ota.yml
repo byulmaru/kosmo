@@ -137,4 +137,4 @@ jobs:
           test -s "${EXPORT_DIRECTORY}/${bundle_path}"
           test -s "${EXPORT_DIRECTORY}/${bundle_path}.map"
           bundle_directory="$(dirname "${EXPORT_DIRECTORY}/${bundle_path}")"
-          ./node_modules/.bin/sentry-expo-upload-sourcemaps "${bundle_directory}"
+          pnpm dlx @sentry/expo-upload-sourcemaps@8.24.0 "${bundle_directory}"

@@ -122,7 +122,7 @@ runtimeVersion, export root 기준 `expo_client_path: expo-client.json`을 publi
 넣으므로 `.map` 파일은 R2에 기록되지 않는다.
 
 각 platform export job은 의존성 설치, export, public config 생성을 secret 없이 실행하고 기존 90일
-export artifact를 upload한 뒤 같은 workspace에서 이미 설치된 공식 Sentry uploader step을 실행한다.
+export artifact를 upload한 뒤 고정 버전의 공식 Sentry uploader를 pnpm dlx로 실행한다.
 `SENTRY_AUTH_TOKEN`은 uploader step에만 전달한다.
 Uploader는 `SENTRY_ORG`, `SENTRY_PROJECT`, caller의 bare full `source_sha`를 `SENTRY_RELEASE`로,
 `https://sentry.io/`를 `SENTRY_URL`로 사용한다. Sentry upload 실패는 해당 export job을 실패시켜 기존
