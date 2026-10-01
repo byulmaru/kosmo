@@ -1,8 +1,15 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createFederation, MemoryKvStore } from '@fedify/fedify';
+import {
+  createFederation,
+  generateCryptoKeyPair,
+  MemoryKvStore,
+  signObject,
+  verifyObject,
+} from '@fedify/fedify';
 import { quoteInteraction } from '@fedify/interaction-controls';
-import { Note, QuoteAuthorization, QuoteRequest } from '@fedify/vocab';
+import { Multikey, Note, Person, QuoteAuthorization, QuoteRequest } from '@fedify/vocab';
+import type { DocumentLoader } from '@fedify/vocab-runtime';
 
 const targetUri = new URL('https://remote.example/posts/target');
 const targetAuthorUri = new URL('https://remote.example/users/alice');
@@ -85,4 +92,55 @@ test('Fedify 2.4 interaction-controls preserves the FEP-044f quote boundary', as
     to: quoteAuthorUri,
   });
   assert.equal(revocation.objectId?.href, authorization.id?.href);
+});
+
+test('QuoteAuthorization proof survives standalone and nested serialization without trusting claimed key ownership', async () => {
+  const keyPair = await generateCryptoKeyPair('Ed25519');
+  const keyId = new URL('#ed25519', targetAuthorUri);
+  const key = new Multikey({
+    id: keyId,
+    controller: targetAuthorUri,
+    publicKey: keyPair.publicKey,
+  });
+  const actor = new Person({ id: targetAuthorUri, assertionMethod: key });
+  const documents = new Map<string, unknown>([
+    [keyId.href, await key.toJsonLd()],
+    [targetAuthorUri.href, await actor.toJsonLd()],
+  ]);
+  const documentLoader: DocumentLoader = async (url) => {
+    const document = documents.get(url);
+    assert.ok(document, `Unexpected document lookup: ${url}`);
+    return { contextUrl: null, document, documentUrl: url };
+  };
+  const authorization = quoteInteraction.createAuthorization({
+    attributedTo: targetAuthorUri,
+    id: new URL('https://remote.example/quote-authorizations/signed'),
+    interactingObject: quoteUri,
+    interactionTarget: targetUri,
+  });
+  const signed = await signObject(authorization, keyPair.privateKey, keyId, { documentLoader });
+  const serialized = await signed.toJsonLd();
+  const verified = await verifyObject(QuoteAuthorization, serialized, { documentLoader });
+  assert.ok(verified);
+  assert.equal(verified.interactingObjectId?.href, quoteUri.href);
+  assert.equal(verified.interactionTargetId?.href, targetUri.href);
+  const quote = new Note({
+    id: quoteUri,
+    attribution: quoteAuthorUri,
+    quote: targetUri,
+    quoteAuthorization: signed,
+  });
+  const nested = await quote.toJsonLd();
+  assert.ok(nested && typeof nested === 'object' && 'quoteAuthorization' in nested);
+  const verifiedNested = await verifyObject(QuoteAuthorization, nested.quoteAuthorization, {
+    documentLoader,
+  });
+  assert.ok(verifiedNested);
+  const hydrated = await Note.fromJsonLd(nested, { documentLoader });
+  assert.equal(hydrated.quoteAuthorizationId?.href, authorization.id?.href);
+  const tampered = structuredClone(serialized) as Record<string, unknown>;
+  tampered.interactionTarget = 'https://remote.example/posts/other';
+  assert.equal(await verifyObject(QuoteAuthorization, tampered, { documentLoader }), null);
+  documents.set(targetAuthorUri.href, await new Person({ id: targetAuthorUri }).toJsonLd());
+  assert.equal(await verifyObject(QuoteAuthorization, serialized, { documentLoader }), null);
 });
