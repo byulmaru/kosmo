@@ -689,7 +689,14 @@ test('current Home refresh는 in-flight 중복을 막고 settle 뒤 다음 activ
   }
 
   await page.setViewportSize({ height: 360, width: 1440 });
-  await page.goto('/home');
+  // Enter Home from a mounted shell so initial-document cached revalidation cannot overlap this refresh.
+  await page.goto('/settings');
+  await expect(page.getByRole('heading', { name: '설정', exact: true }).first()).toBeVisible();
+  const entry = await homeEntry(page, 'navigation');
+  const initialHomeResponse = waitForGraphQLOperation(page, 'HomePageQuery');
+  await entry.click();
+  const initialHome = await initialHomeResponse;
+  await initialHome.finished();
   await expect(page.getByText('E2E Home reselection post 0')).toBeVisible();
   await scrollDocument(page);
 
@@ -731,7 +738,6 @@ test('current Home refresh는 in-flight 중복을 막고 settle 뒤 다음 activ
     }
   });
 
-  const entry = await homeEntry(page, 'navigation');
   try {
     await entry.click();
     await homeQueryStarted;
