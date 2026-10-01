@@ -1,17 +1,11 @@
 import '@kosmo/core/polyfill';
 
 import { Note, QuoteAuthorization } from '@fedify/vocab';
-import {
-  db as coreDb,
-  first,
-  Instances,
-  PostQuoteRevocations,
-  Posts,
-  Profiles,
-} from '@kosmo/core/db';
+import { db as coreDb, first, Posts, Profiles } from '@kosmo/core/db';
 import {
   InstanceKind,
   InstanceState,
+  PostQuoteConsentStatus,
   PostState,
   PostVisibility,
   ProfileState,
@@ -26,7 +20,7 @@ import {
 } from '@kosmo/core/services';
 import { runWorkflow } from '@kosmo/core/temporal/client';
 import { postQuoteCommandWorkflow } from '@kosmo/core/temporal/workflows';
-import { and, eq, isNotNull, isNull, or, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { findPostByActivityPubUri } from './activitypub-post-uri';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
 import { materializeHydratedRemoteNote } from './inbound-create-note';
@@ -39,6 +33,7 @@ import {
 import type { InboxContext } from '@fedify/fedify';
 import type { Accept, Delete, QuoteRequest, Reject } from '@fedify/vocab';
 import type { PostQuoteConsentRow } from '@kosmo/core/services';
+import type { PostQuoteCommand } from '@kosmo/core/temporal/workflows';
 
 const noNetworkDocumentLoader = async (url: string): Promise<never> => {
   throw new Error(`Network lookup is disabled for inbound QuoteAuthorization: ${url}`);
@@ -350,87 +345,6 @@ const observeResponseMismatch = (
     reasonCode,
   });
 
-const forwardQuoteRevocation = async (
-  context: InboxContext<void>,
-  consent: PostQuoteConsentRow,
-): Promise<void> => {
-  const quote = await coreDb
-    .select({ profileId: Profiles.id })
-    .from(Posts)
-    .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
-    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .where(
-      and(
-        eq(Posts.id, consent.quotePostId),
-        eq(Posts.state, PostState.ACTIVE),
-        isNotNull(Posts.currentContentId),
-        eq(Profiles.state, ProfileState.ACTIVE),
-        eq(Instances.kind, InstanceKind.LOCAL),
-        eq(Instances.state, InstanceState.ACTIVE),
-      ),
-    )
-    .limit(1)
-    .then(first);
-  if (!quote) {
-    return;
-  }
-
-  await context.forwardActivity({ identifier: quote.profileId }, 'followers', {
-    skipIfUnsigned: true,
-  });
-};
-
-const forwardClaimedQuoteRevocation = async (
-  context: InboxContext<void>,
-  consent: PostQuoteConsentRow,
-  approvalUri: string,
-): Promise<void> => {
-  const claim = await coreDb
-    .update(PostQuoteRevocations)
-    .set({ forwardingAt: sql`now()` })
-    .where(
-      and(
-        eq(PostQuoteRevocations.approvalUri, approvalUri),
-        eq(PostQuoteRevocations.forwardEligible, true),
-        isNull(PostQuoteRevocations.forwardedAt),
-        or(
-          isNull(PostQuoteRevocations.forwardingAt),
-          sql`${PostQuoteRevocations.forwardingAt} < now() - interval '5 minutes'`,
-        ),
-      ),
-    )
-    .returning({ forwardingAt: PostQuoteRevocations.forwardingAt })
-    .then(first);
-  if (!claim?.forwardingAt) {
-    return;
-  }
-  const { forwardingAt } = claim;
-  try {
-    await forwardQuoteRevocation(context, consent);
-    await coreDb
-      .update(PostQuoteRevocations)
-      .set({ forwardedAt: sql`now()`, forwardingAt: null })
-      .where(
-        and(
-          eq(PostQuoteRevocations.approvalUri, approvalUri),
-          eq(PostQuoteRevocations.forwardingAt, forwardingAt),
-        ),
-      );
-  } catch (error) {
-    await coreDb
-      .update(PostQuoteRevocations)
-      .set({ forwardingAt: null })
-      .where(
-        and(
-          eq(PostQuoteRevocations.approvalUri, approvalUri),
-          isNull(PostQuoteRevocations.forwardedAt),
-          eq(PostQuoteRevocations.forwardingAt, forwardingAt),
-        ),
-      );
-    throw error;
-  }
-};
-
 export const handleInboundQuoteAccept = async ({
   accept,
   context,
@@ -564,10 +478,7 @@ export const handleInboundQuoteReject = async ({
   });
 };
 
-export const handleInboundQuoteRevocation = async (
-  context: InboxContext<void>,
-  activity: Delete,
-): Promise<boolean> => {
+export const handleInboundQuoteRevocation = async (activity: Delete): Promise<boolean> => {
   const actorUri = activity.actorId;
   const approvalUri = activity.objectId;
   if (!isUsableHttpUri(actorUri) || !isUsableHttpUri(approvalUri)) {
@@ -605,26 +516,14 @@ export const handleInboundQuoteRevocation = async (
     if (!pendingConsent) {
       return false;
     }
-    const revocation = await runWorkflow(postQuoteCommandWorkflow, {
-      args: [
-        {
-          kind: 'revoke',
-          approvalUri: approvalUri.href,
-          consentId: pendingConsent.id,
-          quoteUri: embeddedQuoteUri ?? pendingConsent.quoteUri,
-          sourceAuthorActorUri: actorUri.href,
-          sourceUri,
-        },
-      ],
-      mode: 'update-with-start',
-      updateId: 'command',
-      workflowIdConflictPolicy: 'USE_EXISTING',
-      workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+    return executeQuoteRevocation({
+      kind: 'revoke',
+      approvalUri: approvalUri.href,
+      consentId: pendingConsent.id,
+      quoteUri: embeddedQuoteUri ?? pendingConsent.quoteUri,
+      sourceAuthorActorUri: actorUri.href,
+      sourceUri,
     });
-    if (revocation?.forwardEligible) {
-      await forwardClaimedQuoteRevocation(context, pendingConsent, approvalUri.href);
-    }
-    return revocation !== null;
   }
 
   if (
@@ -649,23 +548,30 @@ export const handleInboundQuoteRevocation = async (
     return true;
   }
 
-  const revocation = await runWorkflow(postQuoteCommandWorkflow, {
-    args: [
-      {
-        kind: 'revoke',
-        approvalUri: approvalUri.href,
-        quoteUri: consent.quoteUri,
-        sourceAuthorActorUri: actorUri.href,
-        sourceUri: consent.sourceUri,
-      },
-    ],
+  // The admitted revocation or Source-delete Workflow owns its durable Update.
+  // A duplicate inbox delivery must not start a second delivery Workflow.
+  if (consent.status === PostQuoteConsentStatus.REVOKED) {
+    return true;
+  }
+  await executeQuoteRevocation({
+    kind: 'revoke',
+    approvalUri: approvalUri.href,
+    quoteUri: consent.quoteUri,
+    sourceAuthorActorUri: actorUri.href,
+    sourceUri: consent.sourceUri,
+  });
+  return true;
+};
+
+const executeQuoteRevocation = async (
+  command: Extract<PostQuoteCommand, { readonly kind: 'revoke' }>,
+): Promise<boolean> => {
+  const result = await runWorkflow(postQuoteCommandWorkflow, {
+    args: [command],
     mode: 'update-with-start',
     updateId: 'command',
     workflowIdConflictPolicy: 'USE_EXISTING',
     workflowIdReusePolicy: 'ALLOW_DUPLICATE',
   });
-  if (revocation?.forwardEligible) {
-    await forwardClaimedQuoteRevocation(context, consent, approvalUri.href);
-  }
-  return true;
+  return result !== null;
 };

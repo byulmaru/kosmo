@@ -6,8 +6,8 @@
 
 - 작성 시 인용 정책 선택과 최초 Note의 정책 표현을 유지한다. 게시 후 정책 변경은 후속으로 분리한다.
 - 원격 Quote를 검증·저장한 뒤 동의를 기록한다. 수신 Quote의 Source 카드 노출은 PROD-792의 기존 경계를 유지한다.
-- 정책·동의를 Post에 통합하고 별도 정책·동의·effect receipt 테이블을 제거한다.
-- Local Post 작성·삭제와 인용 명령은 Workflow 접수 후 Activity에서 상태를 변경한다. 원본 서명 철회 전달은 Fedify inbox의 원본 Activity와 재시도를 사용한다.
+- 정책·동의를 Post에 통합하고 별도 정책·동의·effect receipt·revocation 전달 테이블을 제거한다.
+- Local Post 작성·삭제와 인용 명령은 Workflow 접수 후 Activity에서 상태를 변경한다. 수신한 철회는 로컬 상태에 반영하고 기존 Quote Update 경로로 전달·재시도한다. 원본 Delete 중계는 하지 않는다.
 - 사용자가 새 구조의 미배포 상태를 확인했다. PR 전용 마이그레이션을 직접 수정한다. D15의 기존 Local Quote 백필 제외 결정은 유지한다.
 
 ## 진행
@@ -22,4 +22,4 @@
 
 ## 검증 범위
 
-실행 검증은 GitHub CI에서 한다. 이전 head의 성공을 현재 결과로 표현하지 않는다. UI는 기존 작성 정책 선택 흐름의 회귀를 확인하고, 삭제한 게시 후 편집 흐름을 완료 조건으로 남기지 않는다. Native 실행 검증 여부는 별도로 기록한다. session harness의 archive 여부는 PR 완료 조건이 아니다.
+이번 사용자 요청에 따라 집중 로컬 테스트와 GitHub CI에서 실행 검증한다. 이전 head의 성공을 현재 결과로 표현하지 않는다. UI는 기존 작성 정책 선택 흐름의 회귀를 확인하고, 삭제한 게시 후 편집 흐름을 완료 조건으로 남기지 않는다. Native 실행 검증 여부는 별도로 기록한다. session harness의 archive 여부는 PR 완료 조건이 아니다.

@@ -5,7 +5,6 @@ import {
   db,
   first,
   Instances,
-  PostQuoteRevocations,
   Posts,
   ProfileBlocks,
   ProfileFollows,
@@ -55,29 +54,6 @@ export type PostQuoteConsentRow = {
   readonly approvalUri: string | null;
   readonly status: PostQuoteConsentStatus;
   readonly revision: number;
-};
-
-type InboundQuoteRevocationIdentity = {
-  readonly approvalUri: string;
-  readonly quoteUri?: string | null;
-  readonly sourceAuthorActorUri: string;
-  readonly sourceUri: string;
-};
-
-const storeInboundQuoteRevocation = async (
-  database: DatabaseHandle,
-  { approvalUri, quoteUri, sourceAuthorActorUri, sourceUri }: InboundQuoteRevocationIdentity,
-) => {
-  await database
-    .insert(PostQuoteRevocations)
-    .values({ approvalUri, quoteUri: quoteUri ?? null, sourceAuthorActorUri, sourceUri })
-    .onConflictDoNothing({ target: PostQuoteRevocations.approvalUri });
-  return database
-    .select()
-    .from(PostQuoteRevocations)
-    .where(eq(PostQuoteRevocations.approvalUri, approvalUri))
-    .limit(1)
-    .then(first);
 };
 
 export const isLocalQuoteAllowedByPolicy = async (
@@ -484,8 +460,11 @@ export const applyInboundQuoteAccept = async ({
 
     // A retried Activity can observe the committed transition or a newer
     // revocation. Preserve the terminal state; never revive a revoked Quote.
+    if (current.status === PostQuoteConsentStatus.REVOKED) {
+      return null;
+    }
     if (current.status !== PostQuoteConsentStatus.PENDING) {
-      return current.status === PostQuoteConsentStatus.REJECTED ? null : { consent: current };
+      return current.status === PostQuoteConsentStatus.APPROVED ? { consent: current } : null;
     }
 
     const source = await loadQuoteSourceIdentity(tx, current.sourcePostId);
@@ -540,29 +519,12 @@ export const applyInboundQuoteAccept = async ({
       return null;
     }
 
-    const revocation = await tx
-      .select()
-      .from(PostQuoteRevocations)
-      .where(eq(PostQuoteRevocations.approvalUri, approvalUri))
-      .limit(1)
-      .then(first);
-    if (
-      revocation &&
-      (revocation.sourceAuthorActorUri !== sourceAuthorActorUri ||
-        revocation.sourceUri !== sourceUri ||
-        (revocation.quoteUri !== null && revocation.quoteUri !== quoteUri))
-    ) {
-      return null;
-    }
-
     const updated = await tx
       .update(Posts)
       .set({
         quoteConsentApprovalUri: approvalUri,
         quoteConsentRevision: sql`${Posts.quoteConsentRevision} + 1`,
-        quoteConsentStatus: revocation
-          ? PostQuoteConsentStatus.REVOKED
-          : PostQuoteConsentStatus.APPROVED,
+        quoteConsentStatus: PostQuoteConsentStatus.APPROVED,
       })
       .where(
         and(eq(Posts.id, current.id), eq(Posts.quoteConsentStatus, PostQuoteConsentStatus.PENDING)),
@@ -595,8 +557,11 @@ export const applyInboundQuoteReject = async ({
 
     // A retried Activity can observe the committed transition or a newer
     // revocation. Preserve the terminal state; never revive a revoked Quote.
+    if (current.status === PostQuoteConsentStatus.REVOKED) {
+      return null;
+    }
     if (current.status !== PostQuoteConsentStatus.PENDING) {
-      return current.status === PostQuoteConsentStatus.APPROVED ? null : { consent: current };
+      return current.status === PostQuoteConsentStatus.REJECTED ? { consent: current } : null;
     }
 
     const updated = await tx
@@ -628,10 +593,7 @@ export const applyInboundQuoteRevocation = async ({
   readonly quoteUri: string;
   readonly sourceAuthorActorUri: string;
   readonly sourceUri: string;
-}): Promise<{
-  readonly consent: PostQuoteConsentRow;
-  readonly forwardEligible: boolean;
-} | null> => {
+}): Promise<PostQuoteConsentRow | null> => {
   const result = await db.transaction(async (tx) => {
     const current = await tx
       .select(postQuoteConsentColumns)
@@ -653,23 +615,11 @@ export const applyInboundQuoteRevocation = async ({
       return null;
     }
 
-    const revocation = await storeInboundQuoteRevocation(tx, {
-      approvalUri,
-      quoteUri,
-      sourceAuthorActorUri,
-      sourceUri,
-    });
-    if (
-      !revocation ||
-      revocation.sourceAuthorActorUri !== sourceAuthorActorUri ||
-      revocation.sourceUri !== sourceUri ||
-      (revocation.quoteUri !== null && revocation.quoteUri !== quoteUri)
-    ) {
-      return null;
-    }
-
     if (current.status === PostQuoteConsentStatus.REVOKED) {
-      return { consent: current, forwardEligible: revocation.forwardEligible };
+      const source = await loadQuoteSourceIdentity(tx, current.sourcePostId);
+      // Source deletion already admitted its own durable Quote Update.
+      // Remote-revoke retries still need the committed row while Source is active.
+      return source?.sourceState === PostState.DELETED ? null : current;
     }
     if (current.status === PostQuoteConsentStatus.REJECTED) {
       return null;
@@ -687,18 +637,10 @@ export const applyInboundQuoteRevocation = async ({
       .then(first)
       .then((row) => row ?? null);
     if (!updated) {
-      // Re-read after a concurrent Accept rather than deriving forwarding
-      // eligibility from the stale PENDING snapshot.
+      // Retry the Activity against the latest state after a concurrent transition.
       throw new Error('Quote consent changed during revocation');
     }
-    const forwardEligible = current.status === PostQuoteConsentStatus.APPROVED;
-    if (forwardEligible) {
-      await tx
-        .update(PostQuoteRevocations)
-        .set({ forwardEligible: true })
-        .where(eq(PostQuoteRevocations.id, revocation.id));
-    }
-    return { consent: updated, forwardEligible };
+    return updated;
   });
   return result;
 };
@@ -791,7 +733,7 @@ export const revokePostQuoteConsentsForSource = async (
         eq(Posts.quoteConsentStatus, PostQuoteConsentStatus.PENDING),
       ),
     );
-  const approved = await tx
+  await tx
     .update(Posts)
     .set({
       quoteConsentRevision: sql`${Posts.quoteConsentRevision} + 1`,
@@ -802,31 +744,7 @@ export const revokePostQuoteConsentsForSource = async (
         eq(Posts.quoteConsentSourcePostId, sourcePostId),
         eq(Posts.quoteConsentStatus, PostQuoteConsentStatus.APPROVED),
       ),
-    )
-    .returning(postQuoteConsentColumns);
-  for (const consent of approved) {
-    if (!consent.approvalUri) {
-      continue;
-    }
-    const revocation = await storeInboundQuoteRevocation(tx, {
-      approvalUri: consent.approvalUri,
-      quoteUri: consent.quoteUri,
-      sourceAuthorActorUri: consent.sourceAuthorActorUri,
-      sourceUri: consent.sourceUri,
-    });
-    if (
-      !revocation ||
-      revocation.sourceAuthorActorUri !== consent.sourceAuthorActorUri ||
-      revocation.sourceUri !== consent.sourceUri ||
-      (revocation.quoteUri !== null && revocation.quoteUri !== consent.quoteUri)
-    ) {
-      throw new Error('Quote revocation binding does not match the stored consent');
-    }
-    await tx
-      .update(PostQuoteRevocations)
-      .set({ forwardEligible: true })
-      .where(eq(PostQuoteRevocations.id, revocation.id));
-  }
+    );
 };
 
 export type QuoteSource = Readonly<{ quotePostId: string; sourcePostId: string }>;

@@ -36,7 +36,6 @@ export type PostQuoteCommand =
     };
 
 export type PostQuoteCommandResult = {
-  readonly forwardEligible: boolean;
   readonly consentId: string;
   readonly postId: string;
   readonly revision: number;

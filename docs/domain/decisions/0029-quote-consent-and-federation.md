@@ -35,18 +35,19 @@ Accepted
   Source를 정상 인용으로 노출하지 않으며 원문 서버에 별도 승인 요청을 보낸다. 유효한 승인을 받으면
   Source와 승인을 연결하고 필요한 Update를 보낸다.
 - 거절·승인 철회·Source 삭제 후에도 Quote 자체 Content는 유지하고 Source는 비노출한다. Local Source 삭제는
-  그 Source의 유효한 승인마다 `Delete(QuoteAuthorization)`을 Quote Author 또는 Quote 소유 서버에 전달하고,
-  소유 서버가 기존 Quote audience에 전달하게 해 일반 Source audience 밖의 원격 Quote도 수렴시킨다. 일반
+  원격 Quote에 발급한 유효한 승인마다 `Delete(QuoteAuthorization)`을 원격 Quote Author 또는 소유 서버에 전달하고,
+  Kosmo가 Quote를 소유하면 철회를 반영한 로컬 Quote `Update(Note)`를 기존 Quote audience에 보내 Source 비노출로 수렴시킨다. 일반
   `Delete(Note)` 전달만으로 이 경로를 대신하지 않는다. 실패나 응답 부재는 승인이 아니며, 뒤늦은 응답이 더
   최신의 거절·철회를 되돌려서는 안 된다.
 - 차단은 새로운 인용 요청·승인을 양방향으로 막는다. 기존 승인 Source의 표시는 별도 양방향 규칙을 만들지
   않고 기존 방향별 Post 조회 정책을 적용한다. Viewer가 Source Author를 차단한 방향만 존재하면 Viewer의 직접
   조회 조건에 따라 Source를 볼 수 있고, Source Author가 Viewer를 차단했거나 상호 차단이면 Source를 숨긴다.
   차단 자체가 기존 승인을 자동 철회하거나 제3자의 Source 조회를 일괄 막지는 않는다. Author의 개별 승인 철회는 현재 출시에서 제외한다.
-- Local Source 삭제는 QuoteAuthorization을 무효로 만들고 Delete(QuoteAuthorization)를 전달한다.
+- Local Source 삭제는 QuoteAuthorization을 무효로 만들고 원격 Quote 소유자에게 Delete(QuoteAuthorization)를 전달한다.
   원격 철회의 수신자는 철회 주체와 대상 승인의 대응을 검증한 뒤 Source를 숨긴다. 수신자가 Quote의 소유 서버라면
-  기존 Quote audience에도 같은 철회를 전달한다. 발신·전달하는 철회 Delete의 object와 target은 객체를
-  embed하지 않고 URI 참조로만 제공한다.
+  원본 Delete를 중계하지 않고 Source 관계·승인 참조·자동 생성 FEP/legacy 표현을 제거한 로컬 Quote `Update(Note)`를
+  기존 audience에 보낸다. 작성자의 직접 작성 Content·링크와 Quote identity는 유지한다. Local Source 발급자가
+  원격 Quote 소유자에게 보내는 철회 Delete의 object와 target은 객체를 embed하지 않고 URI 참조로만 제공한다.
 - FEP-044f의 quote와 QuoteAuthorization을 정식 경로로 사용한다. `interactionPolicy`상 요청자가
   `automaticApproval`과 `manualApproval` 어느 쪽에도 명백히 포함되지 않으면 승인되지 않을 것으로
   예상된다는 정보를 UI·eligibility 힌트로 사용할 수 있지만, 정책 광고만으로 개별 승인을 대체하지 않는다.
@@ -114,7 +115,8 @@ PROD-924 Spec 대화에서 인용 허용 설정을 기존 공개 범위 설정 U
 
 이어서 “개별 승인 철회는 현재 도입하지 않음”으로 범위가 정정됐다. 원문 작성자의 개별 철회 UI·API를
 이번 출시와 PROD-924 완료 조건에서 제외한다. 원격 Delete(QuoteAuthorization) 검증·수신, Local Source 삭제에
-따른 승인 무효화·원격 전달·Quote audience forwarding, 본문 보존·Source 비노출은 유지한다. 이 정정은 앞선
+따른 승인 무효화·원격 전달, 본문 보존·Source 비노출은 유지한다. 당시 Quote audience forwarding 결정은 아래
+2026-10-01 정정으로 대체한다. 이 정정은 앞선
 Author의 명시적 철회 기능 도입 결정을 대체한다. 정책 변경·차단에 따른 자동 철회는 계속 하지 않는다.
 
 ## PROD-924 기존 데이터 예외 제거 (2026-09-22)
@@ -137,3 +139,20 @@ PR #940 리뷰 대응에서 사용자가 게시 후 정책 변경을 이번 출�
 정책 편집과 정책 변경 전달은 후속 범위이며 PROD-924 완료 조건에 포함하지 않는다. 후속 기능 도입 전에는
 게시 후 인용 정책을 변경할 수 없다. 이 결정은 앞선 게시 후 변경 포함 결정을 대체한다. 기존 Local Post의
 `모두` 초기값, 기존 승인 유지, 차단·삭제·원격 승인 철회와 D15 백필 제외 결정은 유지한다.
+
+## 수신 철회의 로컬 Quote Update 전달 (2026-10-01)
+
+[PR #940 수정 리뷰](https://github.com/byulmaru/kosmo/pull/940#discussion_r4153117882)와 사용자 지시에 따라,
+유효한 원격 `Delete(QuoteAuthorization)`은 검증한 뒤 로컬 Quote를 철회 상태로 전환한다. 원본 Delete를
+Quote audience에 중계하거나 수신자를 대신해 새 Delete를 만들지 않는다. 대신 로컬 Quote 작성자의
+`Update(Note)`로 Source 관계·승인 참조와 자동 생성 FEP/legacy 표현을 제거한 결과를 기존 audience에 알린다.
+작성자의 직접 작성 Content·링크, Quote identity와 공개 범위는 유지하며 전달 실패가 철회를 되돌리지 않는다.
+중복·역순 수신은 기존 승인 결속과 최종 철회 상태를 유지해야 한다. Local Source 삭제로 로컬 Quote의
+승인이 무효화된 경우에도 같은 Update를 보낸다. Local Source 발급자가 원격 Quote 소유자에게 직접 보내는
+`Delete(QuoteAuthorization)`은 유지한다.
+
+이는 [Hackers’ Pub의 실제 철회 처리와 Quote Update](https://github.com/hackers-pub/hackerspub/blob/afb95c9fb61692df46eb8a0bf8544f6553401206/federation/inbox/quote.ts#L942-L1023)를
+참고한 Kosmo 전달 정책이다. [FEP-044f의 Handling a Revocation](https://fediverse.codeberg.page/fep/fep/044f/#handling-a-revocation)은
+Quote 소유자가 원본 Delete를 audience에 forwarding하도록 규정한다. Kosmo는 해당 forwarding 요구와 다르게
+동작하며, 이 Update 방식을 FEP 자체의 요구로 설명하거나 forwarding 준수로 간주하지 않는다. 원본 서명·proof를
+보존하는 inbox forwarding을 Worker의 새 Delete 발신으로 대체하지 않고, Quote 작성자 자신의 수정만 발신한다.

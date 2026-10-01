@@ -43,7 +43,7 @@ export const handleInboundDelete = async (
     return;
   }
 
-  if (await handleInboundQuoteRevocation(context, activity)) {
+  if (await handleInboundQuoteRevocation(activity)) {
     return;
   }
 

@@ -397,18 +397,6 @@ export const Posts = pgTable(
   ],
 );
 
-export const PostQuoteRevocations = pgTable('post_quote_revocation', {
-  id: id(),
-  approvalUri: text('approval_uri').notNull().unique(),
-  sourceAuthorActorUri: text('source_author_actor_uri').notNull(),
-  sourceUri: text('source_uri').notNull(),
-  quoteUri: text('quote_uri'),
-  forwardEligible: boolean('forward_eligible').notNull().default(false),
-  forwardingAt: datetime('forwarding_at'),
-  forwardedAt: datetime('forwarded_at'),
-  createdAt: createdAt(),
-});
-
 export const PostContents = pgTable(
   'post_content',
   {

@@ -23,16 +23,4 @@ ALTER TABLE "post" ADD CONSTRAINT "post_quote_consent_request_uri_key" UNIQUE("q
 ALTER TABLE "post" ADD CONSTRAINT "post_quote_consent_approval_uri_key" UNIQUE("quote_consent_approval_uri");--> statement-breakpoint
 ALTER TABLE "post" ADD CONSTRAINT "post_quote_consent_complete" CHECK (("quote_consent_status" IS NULL AND "quote_consent_source_post_id" IS NULL AND "quote_consent_source_uri" IS NULL AND "quote_consent_source_author_actor_uri" IS NULL AND "quote_consent_quote_uri" IS NULL AND "quote_consent_quote_author_actor_uri" IS NULL AND "quote_consent_request_uri" IS NULL AND "quote_consent_approval_uri" IS NULL AND "quote_consent_revision" IS NULL) OR ("quote_consent_status" IS NOT NULL AND "quote_consent_source_post_id" IS NOT NULL AND "quote_consent_source_uri" IS NOT NULL AND "quote_consent_source_author_actor_uri" IS NOT NULL AND "quote_consent_quote_uri" IS NOT NULL AND "quote_consent_quote_author_actor_uri" IS NOT NULL AND "quote_consent_request_uri" IS NOT NULL AND "quote_consent_revision" IS NOT NULL AND "quote_consent_revision" > 0));--> statement-breakpoint
 CREATE INDEX "post_quote_consent_source_post_id_index" ON "post" USING btree ("quote_consent_source_post_id");--> statement-breakpoint
-CREATE INDEX "post_quote_consent_binding_index" ON "post" USING btree ("quote_consent_status","quote_consent_source_author_actor_uri","quote_consent_source_uri","quote_consent_quote_uri");--> statement-breakpoint
-CREATE TABLE "post_quote_revocation" (
-	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
-	"approval_uri" text NOT NULL,
-	"source_author_actor_uri" text NOT NULL,
-	"source_uri" text NOT NULL,
-	"quote_uri" text,
-	"forward_eligible" boolean DEFAULT false NOT NULL,
-	"forwarding_at" timestamp with time zone,
-	"forwarded_at" timestamp with time zone,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "post_quote_revocation_approval_uri_key" UNIQUE("approval_uri")
-);
+CREATE INDEX "post_quote_consent_binding_index" ON "post" USING btree ("quote_consent_status","quote_consent_source_author_actor_uri","quote_consent_source_uri","quote_consent_quote_uri");

@@ -201,10 +201,10 @@ Kosmo 원문에 들어오는 QuoteRequest는 요청 Profile·인용 Post·Source
 `docs/domain/decisions/0029-quote-consent-and-federation.md`, PROD-902, PROD-924.
 
 로컬 Quote에 대한 유효한 Reject 또는 승인 철회는 자체 Content를 유지한 채 Source를 비노출로 수렴시켜야
-한다(MUST). Local Source 삭제는 발급 승인을 무효화하고 `Delete(QuoteAuthorization)`를 전달해야
+한다(MUST). Local Source 삭제는 발급 승인을 무효화하고 원격 Quote 소유자에게 `Delete(QuoteAuthorization)`를 전달해야
 한다(MUST). 사용자용 개별 승인 철회 UI·API는 현재 범위에서 제공해서는 안 된다(MUST NOT). 수신된 철회는 주체와 대상 승인의 대응을 검증해야 한다(MUST). 수신자가 Quote의 소유 서버라면
-검증된 `Delete(QuoteAuthorization)`을 기존 Quote audience에 전달해야 한다(MUST). Source 삭제와 Quote 자체
-삭제를 혼동하여 다른 작성자의 Content를 삭제해서는 안 된다(MUST NOT). 발신하거나 전달하는 철회 `Delete`는
+Source 관계·승인 참조·자동 생성 FEP/legacy 표현을 제거한 로컬 Quote `Update(Note)`를 기존 audience에 전달해야 한다(MUST). 원본 Delete를 중계해서는 안 된다(MUST NOT). 이는 FEP-044f의 forwarding 요구와 다른 Kosmo 전달 정책이다(ADR 0029, 2026-10-01). Source 삭제와 Quote 자체
+삭제를 혼동하여 다른 작성자의 Content를 삭제해서는 안 된다(MUST NOT). Local Source 발급자가 원격 Quote 소유자에게 발신하는 철회 `Delete`는
 `object`와 `target`에 객체를 embed해서는 안 된다(MUST NOT). 두 속성은 URI 참조만 제공해야 한다(MUST).
 
 #### Scenario: 원격 원문의 Reject 또는 승인 철회
@@ -213,18 +213,18 @@ Kosmo 원문에 들어오는 QuoteRequest는 요청 Profile·인용 Post·Source
 - **THEN** 해당 Source·승인을 더 이상 정상 인용으로 노출하지 않는다
 - **AND** 자체 Content와 Quote identity를 유지하고 이미 발신한 표현도 필요한 갱신으로 수렴시킨다
 
-#### Scenario: 수신한 승인 철회의 Quote audience 전달
+#### Scenario: 수신한 승인 철회를 반영한 로컬 Quote Update
 
 - **WHEN** 로컬 Quote의 소유 서버가 유효한 Delete(QuoteAuthorization)을 수신한다
-- **THEN** 해당 Source를 비노출로 전환하고 기존 Quote audience에 철회를 전달한다
-- **AND** 전달하는 `Delete`의 `object`와 `target`에는 객체를 embed하지 않고 URI 참조만 제공한다
+- **THEN** 해당 Source를 비노출로 전환하고 Source 관계·승인 참조·자동 생성 FEP/legacy 표현이 없는 로컬 Quote `Update(Note)`를 기존 audience에 전달한다
+- **AND** 원본 Delete 중계나 대신 생성한 Delete 발신 없이 작성자의 직접 작성 Content·링크와 Quote identity를 보존한다
 - **AND** 전달 대상별 실패가 검증된 로컬 철회 상태와 Quote 자체 Content를 되돌리지 않는다
 
 #### Scenario: Local Source 삭제의 원격 Quote 수렴
 
 - **WHEN** Local Source가 삭제되고 그 Source에 결속된 유효한 QuoteAuthorization이 있다
-- **THEN** 각 승인을 철회하고 결속된 Quote Author 또는 Quote 소유 서버의 inbox에 `Delete(QuoteAuthorization)`을 전달한다
-- **AND** Quote 소유 서버는 철회를 기존 Quote audience에 전달해 자체 Content를 유지하고 Source를 비노출한다
+- **THEN** 각 승인을 철회하고 원격 Quote의 결속된 Author 또는 소유 서버의 inbox에 `Delete(QuoteAuthorization)`을 전달한다
+- **AND** Kosmo가 Quote를 소유하면 철회를 반영한 로컬 Quote Update를 기존 audience에 보내 자체 Content를 유지하고 Source를 비노출한다
 - **AND** 일반 Source audience에 보내는 `Delete(Note)`만으로 승인 철회 전달을 대신하지 않는다
 
 #### Scenario: 잘못된 철회와 Quote 삭제

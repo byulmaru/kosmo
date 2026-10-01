@@ -181,7 +181,7 @@ D15는 2026-09-22 사용자 결정으로 갱신됐다. 기존 2건을 위한 표
 - Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/objects/profile-block.md`, `docs/domain/decisions/0029-quote-consent-and-federation.md`, `docs/design/post-action-bar.md`, PROD-902·924의 2026-09-11 범위 정정; 현재 대화의 사용자 답변 “개별 승인 철회는 현재 도입하지 않음”.
 - Status: Active
 - Context / Problem: Mastodon의 인용별 철회 조작을 조사한 뒤 현재 출시에서의 제공 여부를 정해야 했다.
-- Decision Outcome: 사용자용 개별 승인 철회 UI·API·권한 필드를 제공하지 않는다. 유효한 원격 `Delete(QuoteAuthorization)` 수신과 Local Source 삭제에 따른 승인 무효화·원격 전달은 유지한다. Quote 소유 서버는 기존 Quote audience에 검증된 철회를 전달하고 Source만 숨기며 자체 Content는 보존한다.
+- Decision Outcome: 사용자용 개별 승인 철회 UI·API·권한 필드를 제공하지 않는다. 유효한 원격 `Delete(QuoteAuthorization)` 수신과 Local Source 삭제에 따른 승인 무효화·원격 전달은 유지한다. Kosmo가 Quote를 소유하면 Source 관계와 자동 생성 인용 표현을 제거한 로컬 Quote Update를 기존 audience에 보낸다. 원본 Delete 중계는 2026-10-01 결정으로 대체했으며 자체 Content는 보존한다.
 - Alternatives Considered: 상대 인용글 더보기의 확인 후 철회, 복구·재승인 UX는 현재 도입하지 않는다. 원격 철회 수신과 삭제 처리를 함께 제거하는 방안도 채택하지 않았다.
 - Consequences: D4의 개별 철회 제공 범위를 대체한다. 정책 변경·차단은 기존 승인을 자동 철회하지 않으며 차단된 당사자의 Source 조회에는 기존 방향별 정책을 적용한다. PROD-924의 tasks 4~7은 연합 철회·삭제 검증을 유지한다.
 - Confirmation / Follow-up: 원격 유효·위조 철회, Local Source 삭제, Quote audience 전달·재시도, 제3자 비노출과 자체 Content 보존을 실행해 검증한다.
@@ -210,3 +210,13 @@ D15는 2026-09-22 사용자 결정으로 갱신됐다. 기존 2건을 위한 표
 - D4는 2026-09-11 D14로 대체됐다. 사용자용 개별 승인 철회 도입을 제외하고 연합 철회·삭제 lifecycle은 유지한다.
 - D13의 기존 Local Quote 0건 전제는 2026-09-17 사용자 정정으로 폐기됐고 D15가 대체한다. 2026-09-17 D15의 표시 보존 예외는 2026-09-22 사용자 결정으로 폐기됐다.
 - 작성 전의 ‘PROD-902는 OpenSpec 제외, PROD-924에서 스펙 작성’ 해석은 사용자 정정과 Linear 갱신으로 폐기했다. 현재 결정은 D6이며 당시 기록은 조사 record에 보존한다.
+
+### D17 수신 철회를 로컬 Quote Update로 전달
+
+- Decision Date: 2026-10-01
+- Decision Class: Derived Contract
+- Authority / Provenance: ADR 0029의 2026-10-01 결정, PROD-924, [PR #940 수정 리뷰](https://github.com/byulmaru/kosmo/pull/940#discussion_r4153117882)와 사용자 지시.
+- Status: Active
+- Decision Outcome: 원격 Delete(QuoteAuthorization)는 검증·로컬 REVOKED 전이에 사용하고 원본 중계하지 않는다. 기존 Workflow에서 Source 관계·승인 참조·자동 생성 FEP/legacy 표현을 제거한 로컬 Quote Update를 발신한다. 직접 작성 Content·링크는 보존한다. Local Source 삭제의 로컬 Quote도 같은 결과로 수렴한다. 발급자가 원격 Quote 소유자에게 보내는 Delete는 유지한다.
+- Consequences: D4·D14의 audience 철회 전달 방식과 과거 원본 forwarding 구현 메모를 대체한다. FEP-044f의 forwarding 요구와 다른 Kosmo 전달 정책이며 Hackers’ Pub 구현을 참고했다. 별도 전달 테이블·claim·lease 없이 기존 Temporal retry와 안정된 Update identity를 사용한다.
+- Confirmation / Follow-up: 승인·철회·Source 삭제, duplicate/concurrent/stale 입력, 본문 보존, Update 재시도와 migration smoke를 검증한다.

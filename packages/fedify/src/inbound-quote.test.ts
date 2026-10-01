@@ -18,7 +18,6 @@ import {
   Instances,
   pg,
   PostContents,
-  PostQuoteRevocations,
   Posts,
   Profiles,
 } from '@kosmo/core/db';
@@ -42,6 +41,7 @@ import {
 import { temporalClient } from '@kosmo/core/temporal/client';
 import { eq, ne } from 'drizzle-orm';
 import { federation } from './federation';
+import { handleInboundDelete } from './inbound-delete';
 import {
   handleInboundQuoteAccept,
   handleInboundQuoteRequest,
@@ -70,7 +70,6 @@ describe('ActivityPub inbound Quote lifecycle', () => {
   });
 
   beforeEach(async () => {
-    await db.delete(PostQuoteRevocations);
     await db.update(Posts).set({ currentContentId: null });
     await db.delete(PostContents);
     await db.delete(Posts);
@@ -277,7 +276,7 @@ describe('ActivityPub inbound Quote lifecycle', () => {
     assert.equal(consent.approvalUri, null);
   });
 
-  test('Accept는 QuoteRequest·Source·QuoteAuthorization의 URI 결속이 맞을 때만 승인한다', async () => {
+  test('Accept는 QuoteRequest·Source·QuoteAuthorization의 URI 결속이 맞을 때만 승인한다', async (t) => {
     const fixture = await createRemoteSourceAndPendingQuote();
     const authorizationUri = 'https://remote-source.example/quote-authorizations/quote-1';
     const request = createQuoteRequest({
@@ -296,7 +295,7 @@ describe('ActivityPub inbound Quote lifecycle', () => {
         interactionTarget: fixture.sourceUri,
       }),
     });
-    mock.method(temporalClient.workflow, 'start', async () => undefined as never);
+    t.mock.method(temporalClient.workflow, 'start', async () => undefined as never);
 
     await handleInboundQuoteAccept({ accept, context: createContext(), request });
 
@@ -321,54 +320,12 @@ describe('ActivityPub inbound Quote lifecycle', () => {
     );
   });
 
-  test('QuoteAuthorization 철회가 Accept보다 먼저 와도 늦은 Accept가 승인을 되살리지 않는다', async () => {
-    const fixture = await createRemoteSourceAndPendingQuote();
-    const request = createQuoteRequest({
-      actorUri: fixture.quoteActorUri,
-      quoteUri: fixture.quoteUri,
-      requestUri: fixture.requestUri,
-      sourceUri: fixture.sourceUri,
-    });
-    const accept = new Accept({
-      actor: fixture.sourceActorUri,
-      object: request,
-      result: new QuoteAuthorization({
-        attribution: fixture.sourceActorUri,
-        id: fixture.approvalUri,
-        interactingObject: fixture.quoteUri,
-        interactionTarget: fixture.sourceUri,
-      }),
-    });
-    mock.method(temporalClient.workflow, 'start', async () => undefined as never);
-    let forwarded = 0;
-    const context = createContext({
-      forwardActivity: async () => {
-        forwarded += 1;
-      },
-    });
+  test('원격 Delete는 승인된 Quote를 REVOKED로 전이하지만 원본 Delete를 forwarding하지 않는다', async () => {
+    const fixture = await createRemoteSourceAndPendingQuote({ approved: true });
+    const forwarded = mock.fn();
+    const context = createContext({ forwardActivity: async (...args) => forwarded(...args) });
 
-    assert.equal(
-      await handleInboundQuoteRevocation(
-        context,
-        new Delete({
-          actor: fixture.sourceActorUri,
-          object: fixture.approvalUri,
-          target: fixture.sourceUri,
-        }),
-      ),
-      true,
-    );
-    await handleInboundQuoteAccept({ accept, context: createContext(), request });
-
-    const consent = await db
-      .select(postQuoteConsentColumns)
-      .from(Posts)
-      .where(eq(Posts.id, fixture.consentId))
-      .then(firstOrThrow);
-    assert.equal(consent.status, PostQuoteConsentStatus.REVOKED);
-    assert.equal(consent.approvalUri, fixture.approvalUri.href);
-    assert.equal(consent.revision, 2);
-    await handleInboundQuoteRevocation(
+    await handleInboundDelete(
       context,
       new Delete({
         actor: fixture.sourceActorUri,
@@ -376,20 +333,30 @@ describe('ActivityPub inbound Quote lifecycle', () => {
         target: fixture.sourceUri,
       }),
     );
-    assert.equal(forwarded, 0);
+    const consent = await db
+      .select(postQuoteConsentColumns)
+      .from(Posts)
+      .where(eq(Posts.id, fixture.consentId))
+      .then(firstOrThrow);
+    assert.equal(consent.status, PostQuoteConsentStatus.REVOKED);
+    assert.equal(consent.revision, 2);
+    assert.equal(forwarded.mock.calls.length, 0);
+    const handle = temporalClient.workflow.getHandle(
+      `post-quote-revoke:${fixture.approvalUri.href}`,
+    );
+    await handle.result();
+    const history = await handle.fetchHistory();
     assert.equal(
-      (
-        await db
-          .select()
-          .from(PostQuoteRevocations)
-          .where(eq(PostQuoteRevocations.approvalUri, fixture.approvalUri.href))
-          .then(firstOrThrow)
-      ).forwardEligible,
-      false,
+      (history.events ?? []).filter(
+        (event) =>
+          event.activityTaskScheduledEventAttributes?.activityType?.name ===
+          'sendLocalPostConsentUpdateActivity',
+      ).length,
+      1,
     );
   });
 
-  test('pending 조회 뒤 승인된 Quote의 철회도 팔로워에게 전달한다', async (t) => {
+  test('pending 조회 뒤 Accept가 끼어들어도 동일한 Workflow가 Quote를 REVOKED로 수렴시킨다', async (t) => {
     const fixture = await createRemoteSourceAndPendingQuote();
     const request = createQuoteRequest({
       actorUri: fixture.quoteActorUri,
@@ -426,145 +393,201 @@ describe('ActivityPub inbound Quote lifecycle', () => {
         return executeUpdate(update, options);
       },
     );
-    let forwarded = 0;
-    const context = createContext({
-      forwardActivity: async () => {
-        forwarded += 1;
-      },
-    });
     const revocation = new Delete({
       actor: fixture.sourceActorUri,
       object: fixture.approvalUri,
       target: fixture.sourceUri,
     });
-    assert.equal(await handleInboundQuoteRevocation(context, revocation), true);
+    assert.equal(await handleInboundQuoteRevocation(revocation), true);
     assert.equal(acceptedBetweenReadAndTransition, true);
-    assert.equal(forwarded, 1);
-    const tombstone = await db
-      .select()
-      .from(PostQuoteRevocations)
-      .where(eq(PostQuoteRevocations.approvalUri, fixture.approvalUri.href))
+    const consent = await db
+      .select(postQuoteConsentColumns)
+      .from(Posts)
+      .where(eq(Posts.id, fixture.consentId))
       .then(firstOrThrow);
-    assert.equal(tombstone.forwardEligible, true);
-    const repeatedTransition = await applyInboundQuoteRevocation({
-      approvalUri: fixture.approvalUri.href,
-      quoteUri: fixture.quoteUri.href,
-      sourceAuthorActorUri: fixture.sourceActorUri.href,
-      sourceUri: fixture.sourceUri.href,
-    });
-    assert.equal(repeatedTransition?.forwardEligible, true);
-
-    assert.ok(tombstone.forwardedAt);
+    assert.equal(consent.status, PostQuoteConsentStatus.REVOKED);
+    assert.equal(consent.revision, 3);
     assert.equal(
-      (await db.select().from(Posts).where(eq(Posts.id, fixture.consentId)).then(firstOrThrow))
-        .quoteConsentStatus,
+      (
+        await applyInboundQuoteRevocation({
+          approvalUri: fixture.approvalUri.href,
+          quoteUri: fixture.quoteUri.href,
+          sourceAuthorActorUri: fixture.sourceActorUri.href,
+          sourceUri: fixture.sourceUri.href,
+        })
+      )?.revision,
+      3,
+    );
+  });
+
+  test('Delete가 선도착하고 늦은 Accept가 오면 Quote를 되살리지 않는다', async () => {
+    const fixture = await createRemoteSourceAndPendingQuote();
+    const request = createQuoteRequest({
+      actorUri: fixture.quoteActorUri,
+      quoteUri: fixture.quoteUri,
+      requestUri: fixture.requestUri,
+      sourceUri: fixture.sourceUri,
+    });
+    const accept = new Accept({
+      actor: fixture.sourceActorUri,
+      object: request,
+      result: new QuoteAuthorization({
+        attribution: fixture.sourceActorUri,
+        id: fixture.approvalUri,
+        interactingObject: fixture.quoteUri,
+        interactionTarget: fixture.sourceUri,
+      }),
+    });
+    await handleInboundQuoteRevocation(
+      new Delete({
+        actor: fixture.sourceActorUri,
+        object: fixture.approvalUri,
+        target: fixture.sourceUri,
+      }),
+    );
+    await handleInboundQuoteAccept({ accept, context: createContext(), request });
+    assert.equal(
+      (
+        await db
+          .select(postQuoteConsentColumns)
+          .from(Posts)
+          .where(eq(Posts.id, fixture.consentId))
+          .then(firstOrThrow)
+      ).status,
       PostQuoteConsentStatus.REVOKED,
     );
-    await handleInboundQuoteRevocation(context, revocation);
-    assert.equal(forwarded, 1);
+  });
+
+  test('잘못된 target과 선도착 Delete는 상태를 변경하지 않는다', async (t) => {
+    const fixture = await createRemoteSourceAndPendingQuote({ approved: true });
+    const executeUpdate = t.mock.method(
+      temporalClient.workflow,
+      'executeUpdateWithStart',
+      async () => null,
+    );
+    const wrongTarget = new Delete({
+      actor: fixture.sourceActorUri,
+      object: fixture.approvalUri,
+      target: new URL('https://remote-source.example/notes/wrong'),
+    });
+    assert.equal(await handleInboundQuoteRevocation(wrongTarget), true);
+    assert.equal(executeUpdate.mock.calls.length, 0);
+    const unknown = new Delete({
+      actor: fixture.sourceActorUri,
+      object: new URL('https://remote-source.example/quote-authorizations/unknown'),
+      target: fixture.sourceUri,
+    });
+    assert.equal(await handleInboundQuoteRevocation(unknown), false);
+    assert.equal(executeUpdate.mock.calls.length, 0);
+    assert.equal(
+      (
+        await db
+          .select(postQuoteConsentColumns)
+          .from(Posts)
+          .where(eq(Posts.id, fixture.consentId))
+          .then(firstOrThrow)
+      ).status,
+      PostQuoteConsentStatus.APPROVED,
+    );
   });
 
   for (const approved of [true, false]) {
-    test(`Remote Source 삭제 후 원본 철회는 ${approved ? '승인되었던 Quote에만 한 번 전달한다' : 'pending Quote에 전달하지 않는다'}`, async () => {
+    test(`Source 삭제 후 ${approved ? '승인된' : 'pending'} Quote는 REVOKED로 남고 inbound Delete가 중복 Workflow를 만들지 않는다`, async (t) => {
       const fixture = await createRemoteSourceAndPendingQuote({ approved });
       await deletePostPersisted({
         actorProfileId: fixture.sourceAuthorId,
         postId: fixture.sourcePostId,
         origin: 'ACTIVITYPUB',
       });
-      assert.equal(
-        (await db.select().from(Posts).where(eq(Posts.id, fixture.consentId)).then(firstOrThrow))
-          .quoteConsentStatus,
-        PostQuoteConsentStatus.REVOKED,
-      );
-      let forwarded = 0;
-      const context = createContext({
-        forwardActivity: async () => {
-          forwarded += 1;
+      const executeUpdate = t.mock.method(
+        temporalClient.workflow,
+        'executeUpdateWithStart',
+        async () => {
+          throw new Error('Source deletion already owns revocation delivery');
         },
-      });
+      );
       const revocation = new Delete({
         actor: fixture.sourceActorUri,
         object: fixture.approvalUri,
         target: fixture.sourceUri,
       });
-      await handleInboundQuoteRevocation(context, revocation);
-      await handleInboundQuoteRevocation(context, revocation);
-      assert.equal(forwarded, approved ? 1 : 0);
-      const [tombstone] = await db
-        .select()
-        .from(PostQuoteRevocations)
-        .where(eq(PostQuoteRevocations.approvalUri, fixture.approvalUri.href));
-      assert.equal(tombstone?.forwardEligible ?? false, approved);
-      if (approved) {
-        assert.ok(tombstone?.forwardedAt);
-      }
+      assert.equal(await handleInboundQuoteRevocation(revocation), approved);
+      assert.equal(executeUpdate.mock.calls.length, 0);
+      assert.equal(
+        (
+          await db
+            .select(postQuoteConsentColumns)
+            .from(Posts)
+            .where(eq(Posts.id, fixture.consentId))
+            .then(firstOrThrow)
+        ).status,
+        PostQuoteConsentStatus.REVOKED,
+      );
+      assert.equal(
+        await applyInboundQuoteRevocation({
+          approvalUri: fixture.approvalUri.href,
+          quoteUri: fixture.quoteUri.href,
+          sourceAuthorActorUri: fixture.sourceActorUri.href,
+          sourceUri: fixture.sourceUri.href,
+        }),
+        null,
+      );
     });
   }
 
-  test('Source 삭제는 충돌하는 철회 identity를 덮어쓰지 않고 transaction을 rollback한다', async () => {
-    const fixture = await createRemoteSourceAndPendingQuote({ approved: true });
-    await db.insert(PostQuoteRevocations).values({
-      approvalUri: fixture.approvalUri.href,
-      sourceAuthorActorUri: fixture.sourceActorUri.href,
-      sourceUri: 'https://remote-source.example/notes/different-source',
-      quoteUri: fixture.quoteUri.href,
-    });
-    await assert.rejects(
-      deletePostPersisted({
-        actorProfileId: fixture.sourceAuthorId,
-        postId: fixture.sourcePostId,
-        origin: 'ACTIVITYPUB',
-      }),
-      /binding does not match/,
+  test('pending 조회 뒤 Source 삭제가 commit되면 revoke Workflow는 추가 Update를 만들지 않는다', async (t) => {
+    const fixture = await createRemoteSourceAndPendingQuote();
+    const executeUpdate = temporalClient.workflow.executeUpdateWithStart.bind(
+      temporalClient.workflow,
     );
-    assert.equal(
-      (await db.select().from(Posts).where(eq(Posts.id, fixture.sourcePostId)).then(firstOrThrow))
-        .state,
-      PostState.ACTIVE,
+    t.mock.method(
+      temporalClient.workflow,
+      'executeUpdateWithStart',
+      async (...args: Parameters<typeof executeUpdate>) => {
+        await deletePostPersisted({
+          actorProfileId: fixture.sourceAuthorId,
+          postId: fixture.sourcePostId,
+          origin: 'ACTIVITYPUB',
+        });
+        return executeUpdate(...args);
+      },
     );
-    assert.equal(
-      (await db.select().from(Posts).where(eq(Posts.id, fixture.consentId)).then(firstOrThrow))
-        .quoteConsentStatus,
-      PostQuoteConsentStatus.APPROVED,
-    );
-    assert.equal(
-      (
-        await db
-          .select()
-          .from(PostQuoteRevocations)
-          .where(eq(PostQuoteRevocations.approvalUri, fixture.approvalUri.href))
-          .then(firstOrThrow)
-      ).forwardEligible,
-      false,
-    );
-  });
-
-  test('대응하는 pending consent가 없는 선도착 Delete는 철회로 저장하지 않는다', async () => {
-    const approvalUri = new URL('https://remote-source.example/quote-authorizations/unknown');
-
     assert.equal(
       await handleInboundQuoteRevocation(
-        createContext(),
         new Delete({
-          actor: new URL('https://remote-source.example/users/source-author'),
-          object: approvalUri,
-          target: new URL('https://remote-source.example/posts/unknown'),
+          actor: fixture.sourceActorUri,
+          object: fixture.approvalUri,
+          target: fixture.sourceUri,
         }),
       ),
       false,
     );
+    const handle = temporalClient.workflow.getHandle(
+      `post-quote-revoke:${fixture.approvalUri.href}`,
+    );
+    await handle.result();
+    const history = await handle.fetchHistory();
     assert.equal(
-      await db
-        .select({ id: PostQuoteRevocations.id })
-        .from(PostQuoteRevocations)
-        .where(eq(PostQuoteRevocations.approvalUri, approvalUri.href))
-        .then((rows) => rows.length),
+      (history.events ?? []).filter(
+        (event) =>
+          event.activityTaskScheduledEventAttributes?.activityType?.name ===
+          'sendLocalPostConsentUpdateActivity',
+      ).length,
       0,
+    );
+    assert.equal(
+      (
+        await db
+          .select(postQuoteConsentColumns)
+          .from(Posts)
+          .where(eq(Posts.id, fixture.consentId))
+          .then(firstOrThrow)
+      ).status,
+      PostQuoteConsentStatus.REVOKED,
     );
   });
 
-  test('위조된 Accept와 철회 전달 실패는 Source를 부활시키지 않고 재시도 가능하게 수렴한다', async () => {
+  test('위조된 Accept는 Quote 상태를 바꾸지 않고 유효한 Delete만 REVOKED로 전이한다', async () => {
     const fixture = await createRemoteSourceAndPendingQuote({ approved: true });
     const request = createQuoteRequest({
       actorUri: fixture.quoteActorUri,
@@ -582,171 +605,146 @@ describe('ActivityPub inbound Quote lifecycle', () => {
         interactionTarget: fixture.sourceUri,
       }),
     });
-    mock.method(temporalClient.workflow, 'start', async () => undefined as never);
-
     await handleInboundQuoteAccept({ accept: forgedAccept, context: createContext(), request });
     assert.equal(
-      await db
-        .select({ status: Posts.quoteConsentStatus })
-        .from(Posts)
-        .where(eq(Posts.id, fixture.consentId))
-        .then(firstOrThrow)
-        .then(({ status }) => status),
+      (
+        await db
+          .select(postQuoteConsentColumns)
+          .from(Posts)
+          .where(eq(Posts.id, fixture.consentId))
+          .then(firstOrThrow)
+      ).status,
       PostQuoteConsentStatus.APPROVED,
     );
 
-    let forwardAttempts = 0;
-    const failingContext = createContext({
-      forwardActivity: async () => {
-        forwardAttempts += 1;
-        throw new Error('temporary forward failure');
-      },
-    });
-    const revocation = new Delete({
-      actor: fixture.sourceActorUri,
-      object: fixture.approvalUri,
-      target: fixture.sourceUri,
-    });
-    await assert.rejects(handleInboundQuoteRevocation(failingContext, revocation), /temporary/);
-    assert.equal(forwardAttempts, 1);
-    assert.equal(
-      await db
-        .select({ status: Posts.quoteConsentStatus })
-        .from(Posts)
-        .where(eq(Posts.id, fixture.consentId))
-        .then(firstOrThrow)
-        .then(({ status }) => status),
-      PostQuoteConsentStatus.REVOKED,
-    );
-
-    const forwarded: unknown[][] = [];
     await handleInboundQuoteRevocation(
-      createContext({
-        forwardActivity: async (...args) => {
-          forwarded.push(args);
-        },
-      }),
-      revocation,
-    );
-    assert.equal(forwarded.length, 1);
-    assert.deepEqual(forwarded[0]?.slice(0, 2), [
-      { identifier: fixture.quoteAuthorId },
-      'followers',
-    ]);
-
-    await handleInboundQuoteRevocation(
-      createContext({
-        forwardActivity: async (...args) => {
-          forwarded.push(args);
-        },
-      }),
-      revocation,
-    );
-    assert.equal(forwarded.length, 1);
-
-    await handleInboundQuoteRevocation(
-      createContext(),
       new Delete({
-        actor: new URL('https://other-source.example/users/attacker'),
+        actor: fixture.sourceActorUri,
         object: fixture.approvalUri,
         target: fixture.sourceUri,
       }),
     );
     assert.equal(
-      await db
-        .select({ status: Posts.quoteConsentStatus })
-        .from(Posts)
-        .where(eq(Posts.id, fixture.consentId))
-        .then(firstOrThrow)
-        .then(({ status }) => status),
+      (
+        await db
+          .select(postQuoteConsentColumns)
+          .from(Posts)
+          .where(eq(Posts.id, fixture.consentId))
+          .then(firstOrThrow)
+      ).status,
       PostQuoteConsentStatus.REVOKED,
     );
-    assert.equal(forwarded.length, 1);
   });
 
-  test('target 없는 승인 철회는 적용하고 잘못된 target은 거부한다', async () => {
+  test('target 없는 Delete는 적용하고 잘못된 target은 거부한다', async (t) => {
     const fixture = await createRemoteSourceAndPendingQuote({ approved: true });
-    mock.method(temporalClient.workflow, 'start', async () => undefined as never);
-    let forwards = 0;
-    const context = createContext({
-      forwardActivity: async () => {
-        forwards += 1;
+    const executeUpdate = t.mock.method(
+      temporalClient.workflow,
+      'executeUpdateWithStart',
+      async () => {
+        return applyInboundQuoteRevocation({
+          approvalUri: fixture.approvalUri.href,
+          consentId: fixture.consentId,
+          quoteUri: fixture.quoteUri.href,
+          sourceAuthorActorUri: fixture.sourceActorUri.href,
+          sourceUri: fixture.sourceUri.href,
+        });
       },
-    });
-    await handleInboundQuoteRevocation(
-      context,
-      new Delete({
-        actor: fixture.sourceActorUri,
-        object: fixture.approvalUri,
-        target: new URL('https://remote-source.example/notes/wrong'),
-      }),
     );
-    const loadConsent = () =>
-      db
-        .select(postQuoteConsentColumns)
-        .from(Posts)
-        .where(eq(Posts.id, fixture.consentId))
-        .then(firstOrThrow);
-    assert.equal((await loadConsent()).status, PostQuoteConsentStatus.APPROVED);
-    assert.equal(forwards, 0);
-    const revocation = new Delete({ actor: fixture.sourceActorUri, object: fixture.approvalUri });
-    assert.equal(await handleInboundQuoteRevocation(context, revocation), true);
-    assert.equal((await loadConsent()).status, PostQuoteConsentStatus.REVOKED);
-    assert.equal(forwards, 1);
-    await handleInboundQuoteRevocation(context, revocation);
-    assert.equal(forwards, 1);
+    const wrongTarget = new Delete({
+      actor: fixture.sourceActorUri,
+      object: fixture.approvalUri,
+      target: new URL('https://remote-source.example/notes/wrong'),
+    });
+    assert.equal(await handleInboundQuoteRevocation(wrongTarget), true);
+    assert.equal(executeUpdate.mock.calls.length, 0);
+    const revocation = new Delete({
+      actor: fixture.sourceActorUri,
+      object: fixture.approvalUri,
+    });
+    assert.equal(await handleInboundQuoteRevocation(revocation), true);
+    assert.equal(
+      (
+        await db
+          .select(postQuoteConsentColumns)
+          .from(Posts)
+          .where(eq(Posts.id, fixture.consentId))
+          .then(firstOrThrow)
+      ).status,
+      PostQuoteConsentStatus.REVOKED,
+    );
+    await handleInboundQuoteRevocation(revocation);
+    assert.equal(executeUpdate.mock.calls.length, 1);
   });
 
-  test('동시에 중복 수신한 철회는 팔로워에게 한 번만 전달한다', async () => {
+  test('중복 Delete는 같은 Quote command identity로 수렴하고 원본 forwarding을 호출하지 않는다', async (t) => {
     const fixture = await createRemoteSourceAndPendingQuote({ approved: true });
-    mock.method(temporalClient.workflow, 'start', async () => undefined as never);
-
-    let releaseForward!: () => void;
-    const forwardReleased = new Promise<void>((resolve) => {
-      releaseForward = resolve;
-    });
-    let observeForward!: () => void;
-    const forwardObserved = new Promise<void>((resolve) => {
-      observeForward = resolve;
-    });
-    let forwardAttempts = 0;
-    const context = createContext({
-      forwardActivity: async () => {
-        forwardAttempts += 1;
-        observeForward();
-        await forwardReleased;
+    const commands: unknown[] = [];
+    t.mock.method(
+      temporalClient.workflow,
+      'executeUpdateWithStart',
+      async (...args: Parameters<typeof temporalClient.workflow.executeUpdateWithStart>) => {
+        const [, options] = args;
+        commands.push(options.startWorkflowOperation.options.args?.[0]);
+        await applyInboundQuoteRevocation({
+          approvalUri: fixture.approvalUri.href,
+          consentId: fixture.consentId,
+          quoteUri: fixture.quoteUri.href,
+          sourceAuthorActorUri: fixture.sourceActorUri.href,
+          sourceUri: fixture.sourceUri.href,
+        });
+        return null;
       },
-    });
+    );
     const revocation = new Delete({
       actor: fixture.sourceActorUri,
       object: fixture.approvalUri,
       target: fixture.sourceUri,
     });
+    await handleInboundQuoteRevocation(revocation);
+    await handleInboundQuoteRevocation(revocation);
+    assert.equal(commands.length, 1);
+  });
 
-    const first = handleInboundQuoteRevocation(context, revocation);
-    let timeout: ReturnType<typeof setTimeout> | undefined;
-    try {
-      await Promise.race([
-        forwardObserved,
-        first.then(() => {
-          throw new Error('Quote revocation completed without forwarding');
-        }),
-        new Promise<never>((_, reject) => {
-          timeout = setTimeout(
-            () => reject(new Error('Quote revocation forwarding did not start')),
-            10_000,
-          );
-        }),
-      ]);
-      const second = handleInboundQuoteRevocation(context, revocation);
-      releaseForward();
-      await Promise.all([first, second]);
-    } finally {
-      clearTimeout(timeout);
-      releaseForward();
-    }
-
-    assert.equal(forwardAttempts, 1);
+  test('동시에 도착한 중복 Delete도 하나의 Quote Update Workflow identity로 수렴한다', async (t) => {
+    const fixture = await createRemoteSourceAndPendingQuote({ approved: true });
+    const workflowIds: string[] = [];
+    const updateIds: string[] = [];
+    const executeUpdate = temporalClient.workflow.executeUpdateWithStart.bind(
+      temporalClient.workflow,
+    );
+    t.mock.method(
+      temporalClient.workflow,
+      'executeUpdateWithStart',
+      async (...args: Parameters<typeof executeUpdate>) => {
+        const [, options] = args;
+        workflowIds.push(options.startWorkflowOperation.options.workflowId ?? '');
+        updateIds.push(options.updateId ?? '');
+        return executeUpdate(...args);
+      },
+    );
+    const revocation = new Delete({
+      actor: fixture.sourceActorUri,
+      object: fixture.approvalUri,
+      target: fixture.sourceUri,
+    });
+    await Promise.all([
+      handleInboundQuoteRevocation(revocation),
+      handleInboundQuoteRevocation(revocation),
+    ]);
+    assert.equal(workflowIds.length, 2);
+    assert.equal(new Set(workflowIds).size, 1);
+    assert.deepEqual(updateIds, ['command', 'command']);
+    assert.equal(
+      (
+        await db
+          .select(postQuoteConsentColumns)
+          .from(Posts)
+          .where(eq(Posts.id, fixture.consentId))
+          .then(firstOrThrow)
+      ).status,
+      PostQuoteConsentStatus.REVOKED,
+    );
   });
 });
 

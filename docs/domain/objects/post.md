@@ -130,9 +130,9 @@ Notification이 소유하며, Quote·Reply Parent·Repost Source의 구조와 �
   Source 삭제 시에는 Quote 자체 Content를 유지하고 Source 카드·관계는 비노출한다. 비노출을 위해 저장
   관계를 물리적으로 제거해야 하는지는 도메인 계약으로 고정하지 않는다.
 - Local Source가 삭제되면 그 Source에 발급된 각 유효한 QuoteAuthorization을 철회하고, 승인에 결속된
-  Quote Author의 inbox 또는 Quote 소유 서버가 수신하는 inbox로 `Delete(QuoteAuthorization)`을 전달한다.
-  Quote 소유 서버는 이를 기존 Quote audience에 전달해 원문 작성자를 팔로우하지 않는 수신자도 Source
-  비노출로 수렴시킨다. 일반 Source Post audience에만 보내는 `Delete(Note)`로 이 경로를 대신하지 않는다.
+  원격 Quote Author의 inbox 또는 원격 Quote 소유 서버가 수신하는 inbox로 `Delete(QuoteAuthorization)`을 전달한다.
+  Kosmo가 Quote를 소유하면 철회를 반영한 로컬 Quote `Update(Note)`를 기존 audience에 보내 Source
+  비노출로 수렴시킨다. 원격에서 수신한 원본 Delete는 중계하지 않는다. 일반 Source Post audience에만 보내는 `Delete(Note)`로 이 경로를 대신하지 않는다.
 - 전송 실패나 응답 부재를 승인으로 간주하지 않는다. 늦게 도착한 응답이나 중복 전달이 더 최신의 거절·철회를
   무효화하지 않도록 한다. 세부 재시도와 전달 순서는 해당 lifecycle의 구현 계약에서 정한다.
 - 게시글별 인용 허용 설정의 변경은 이후 요청에만 적용하고 기존 승인은 유지한다. 현재 출시에서는
@@ -391,10 +391,13 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
 - 승인 전·거절·철회 상태에서는 일반 Note 표현이나 자동 생성한 레거시 호환 표현을 통해 정상 인용인 것처럼
   Source 관계를 노출하지 않는다. Quote 작성자가 직접 작성한 Content를 Source lifecycle 때문에 삭제하지
   않는다.
-- Local Source 삭제는 발급된 `QuoteAuthorization`을 무효로 만들고 `Delete(QuoteAuthorization)`를 전달한다.
+- Local Source 삭제는 발급된 `QuoteAuthorization`을 무효로 만들고 원격 Quote 소유자에게 `Delete(QuoteAuthorization)`를 전달한다.
   원격 철회를 수신하는 경계도 철회 주체와 승인의 대응을 검증한 뒤 Source를 비노출한다. 수신자가 Quote의 소유
-  서버라면 기존 Quote audience에도 검증된 `Delete(QuoteAuthorization)`을 전달한다. 발신·전달하는 철회
-  `Delete`의 `object`와 `target`에는 객체를 embed하지 않고 URI 참조만 제공한다.
+  서버라면 Source 관계·승인 참조와 자동 생성 FEP/legacy 표현을 제거한 로컬 Quote `Update(Note)`를 기존
+  audience에 보내며 원본 Delete는 중계하지 않는다. 작성자가 직접 작성한 Content·링크와 Quote identity는
+  유지한다. 이는 FEP-044f의 원본 Delete forwarding 요구와 다른 Kosmo 정책이다(ADR 0029의 2026-10-01 결정).
+  Local Source 발급자가 원격 Quote 소유자에게 보내는 철회 `Delete`의 `object`와 `target`에는 객체를 embed하지
+  않고 URI 참조만 제공한다.
 - 레거시 Quote 속성의 상호운용을 지원하되 FEP 형식이 존재하지만 유효하지 않은 경우 레거시 형식으로
   강등하지 않는다. 승인된 인용에는 `quoteUrl`, `quoteUri`, `_misskey_quote`와 원문 링크의 본문 fallback을
   발신 표현으로 제공한다. 승인 전·거절·철회 상태에서는 자동 생성한 이 표현을 숨기되 직접 작성한 본문은

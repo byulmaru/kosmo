@@ -238,12 +238,6 @@
     },
     {
       "isRlsEnabled": false,
-      "name": "post_quote_revocation",
-      "entityType": "tables",
-      "schema": "public"
-    },
-    {
-      "isRlsEnabled": false,
       "name": "post",
       "entityType": "tables",
       "schema": "public"
@@ -1847,123 +1841,6 @@
       "entityType": "columns",
       "schema": "public",
       "table": "post_mentions"
-    },
-    {
-      "type": "uuid",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "uuidv7()",
-      "generated": null,
-      "identity": null,
-      "name": "id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_revocation"
-    },
-    {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "forwarded_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_revocation"
-    },
-    {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "forwarding_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_revocation"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "approval_uri",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_revocation"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "source_author_actor_uri",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_revocation"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "source_uri",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_revocation"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "quote_uri",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_revocation"
-    },
-    {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "now()",
-      "generated": null,
-      "identity": null,
-      "name": "created_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_revocation"
-    },
-    {
-      "type": "boolean",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "false",
-      "generated": null,
-      "identity": null,
-      "name": "forward_eligible",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_quote_revocation"
     },
     {
       "type": "uuid",
@@ -4735,14 +4612,6 @@
     {
       "columns": ["id"],
       "nameExplicit": false,
-      "name": "post_quote_revocation_pkey",
-      "schema": "public",
-      "table": "post_quote_revocation",
-      "entityType": "pks"
-    },
-    {
-      "columns": ["id"],
-      "nameExplicit": false,
       "name": "post_pkey",
       "schema": "public",
       "table": "post",
@@ -5086,15 +4955,6 @@
       "name": "media_storage_reference_key",
       "schema": "public",
       "table": "media",
-      "entityType": "uniques"
-    },
-    {
-      "nameExplicit": false,
-      "columns": ["approval_uri"],
-      "nullsNotDistinct": false,
-      "name": "post_quote_revocation_approval_uri_key",
-      "schema": "public",
-      "table": "post_quote_revocation",
       "entityType": "uniques"
     },
     {

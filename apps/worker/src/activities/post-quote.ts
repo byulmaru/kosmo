@@ -9,7 +9,6 @@ import type { PostQuoteCommand, PostQuoteCommandResult } from '@kosmo/core/tempo
 export const executePostQuoteCommandActivity = async (
   command: PostQuoteCommand,
 ): Promise<PostQuoteCommandResult> => {
-  const revocation = command.kind === 'revoke' ? await applyInboundQuoteRevocation(command) : null;
   const consent =
     command.kind === 'request'
       ? (await recordInboundQuoteRequest(command)).consent
@@ -17,10 +16,9 @@ export const executePostQuoteCommandActivity = async (
         ? await applyInboundQuoteAccept(command)
         : command.kind === 'reject'
           ? await applyInboundQuoteReject(command)
-          : revocation?.consent;
+          : await applyInboundQuoteRevocation(command);
   return consent
     ? {
-        forwardEligible: revocation?.forwardEligible ?? false,
         consentId: consent.id,
         postId: consent.quotePostId,
         revision: consent.revision,

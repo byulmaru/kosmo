@@ -1782,14 +1782,17 @@ test(
       const start = new WithStartWorkflowOperation('postQuoteCommandWorkflow', {
         args: [
           {
-            kind: 'reject',
-            requestUri: 'https://quote.example/request',
+            kind: 'revoke',
+            approvalUri: 'https://source.example/quote-authorizations/quote',
+            quoteUri: 'https://quote.example/note',
             sourceAuthorActorUri: 'https://source.example/actor',
+            sourceUri: 'https://source.example/note',
           },
         ],
         taskQueue,
         workflowId: `quote-command-test-${process.pid}`,
         workflowIdConflictPolicy: 'USE_EXISTING',
+        workflowIdReusePolicy: 'ALLOW_DUPLICATE',
       });
       const committed = await environment.client.workflow.executeUpdateWithStart(
         'postQuoteCommand',
@@ -1801,10 +1804,38 @@ test(
       );
       assert.deepEqual(committed, result);
       assert.equal(transitions, 1);
+      const handle = await start.workflowHandle();
+      assert.deepEqual(
+        await handle.executeUpdate('postQuoteCommand', { args: [], updateId: 'command' }),
+        result,
+      );
+      assert.equal(transitions, 1);
       releaseDelivery();
-      await (await start.workflowHandle()).result();
+      await handle.result();
       assert.equal(deliveries, 2);
       assert.equal(transitions, 1);
+      const history = await handle.fetchHistory();
+      const consentUpdateSchedules = (history.events ?? []).filter(
+        (event) =>
+          event.activityTaskScheduledEventAttributes?.activityType?.name ===
+          'sendLocalPostConsentUpdateActivity',
+      );
+      assert.equal(consentUpdateSchedules.length, 1);
+      const duplicate = new WithStartWorkflowOperation('postQuoteCommandWorkflow', start.options);
+      assert.deepEqual(
+        await environment.client.workflow.executeUpdateWithStart('postQuoteCommand', {
+          args: [],
+          updateId: 'command',
+          startWorkflowOperation: duplicate,
+        }),
+        result,
+      );
+      assert.equal(
+        (await duplicate.workflowHandle()).firstExecutionRunId,
+        handle.firstExecutionRunId,
+      );
+      assert.equal(transitions, 1);
+      assert.equal(deliveries, 2);
     });
   },
 );
@@ -1864,6 +1895,90 @@ test(
       await assert.rejects(handle.result());
       assert.equal(transitionAttempts, 10);
       assert.equal(effectCalls, 0);
+    });
+  },
+);
+
+test(
+  '철회 Update retry 소진은 Workflow 실패로 남고 중복 command가 새 전달을 만들지 않는다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+    const taskQueue = `${KOSMO_TASK_QUEUE}-quote-delivery-failure-${process.pid}`;
+    const committed = {
+      consentId: 'consent',
+      postId: 'quote',
+      sourcePostId: 'source',
+      revision: 2,
+    };
+    let transitions = 0;
+    let deliveries = 0;
+    const worker = await Worker.create({
+      activities: {
+        executePostQuoteCommandActivity: async () => {
+          transitions += 1;
+          return committed;
+        },
+        sendLocalPostConsentUpdateActivity: async (input: unknown) => {
+          assert.deepEqual(input, committed);
+          deliveries += 1;
+          throw ApplicationFailure.create({
+            message: 'temporary Update delivery failure',
+            nextRetryDelay: '1ms',
+          });
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+    await worker.runUntil(async () => {
+      const options = {
+        args: [
+          {
+            kind: 'revoke',
+            approvalUri: 'https://source.example/authorization/failure',
+            quoteUri: 'https://quote.example/note',
+            sourceAuthorActorUri: 'https://source.example/actor',
+            sourceUri: 'https://source.example/note',
+          },
+        ],
+        taskQueue,
+        workflowId: `quote-delivery-failure-${process.pid}`,
+        workflowIdConflictPolicy: 'USE_EXISTING' as const,
+        workflowIdReusePolicy: 'ALLOW_DUPLICATE' as const,
+      };
+      const failed = new WithStartWorkflowOperation('postQuoteCommandWorkflow', options);
+      assert.deepEqual(
+        await environment.client.workflow.executeUpdateWithStart('postQuoteCommand', {
+          args: [],
+          updateId: 'command',
+          startWorkflowOperation: failed,
+        }),
+        committed,
+      );
+      const failedHandle = await failed.workflowHandle();
+      await assert.rejects(failedHandle.result());
+      assert.equal(deliveries, 10);
+      const duplicate = new WithStartWorkflowOperation('postQuoteCommandWorkflow', options);
+      assert.deepEqual(
+        await environment.client.workflow.executeUpdateWithStart('postQuoteCommand', {
+          args: [],
+          updateId: 'command',
+          startWorkflowOperation: duplicate,
+        }),
+        committed,
+      );
+      assert.equal(
+        (await duplicate.workflowHandle()).firstExecutionRunId,
+        failedHandle.firstExecutionRunId,
+      );
+      assert.equal(transitions, 1);
+      assert.equal(deliveries, 10);
     });
   },
 );

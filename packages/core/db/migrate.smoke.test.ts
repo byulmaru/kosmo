@@ -153,7 +153,7 @@ try {
       null,
       null,
       null,
-      'post_quote_revocation',
+      null,
       'media',
       'profile_media',
       'profile_mute',
@@ -186,7 +186,6 @@ try {
             table_name = 'media'
             AND column_name IN ('source', 'state', 'storage_reference', 'media_type', 'url', 'ready_at', 'alt_text')
           )
-          OR (table_name = 'post_quote_revocation' AND column_name = 'forward_eligible')
           OR (
             table_name = 'profile_mute'
             AND column_name IN ('created_at', 'expires_at', 'owner_profile_id', 'target_profile_id')
@@ -218,7 +217,6 @@ try {
       { tableName: 'post', columnName: 'quote_policy' },
       { tableName: 'post', columnName: 'reply_parent_id' },
       { tableName: 'post', columnName: 'repost_source_id' },
-      { tableName: 'post_quote_revocation', columnName: 'forward_eligible' },
       { tableName: 'profile_mute', columnName: 'created_at' },
       { tableName: 'profile_mute', columnName: 'expires_at' },
       { tableName: 'profile_mute', columnName: 'owner_profile_id' },

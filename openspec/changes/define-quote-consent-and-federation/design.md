@@ -5,7 +5,8 @@
 - Post가 작성 정책과 자신의 인용 동의를 소유한다. 요청·승인 URI의 유일성과 Source/Quote/작성자 결속을 유지한다.
 - 원격 Quote는 먼저 검증·저장한다. 동의의 Source 결속과 UI의 `repostSourceId`를 분리해 기존 원격 수신 노출 범위를 바꾸지 않는다.
 - Local Post 작성·삭제와 인용 승인 명령은 Update-with-Start로 접수한다. 상태 전이는 Activity transaction에서 수행하고, commit 결과 반환 뒤 Workflow가 생성한 후속 효과의 재시도를 담당한다.
-- 원본 서명이 필요한 철회 forwarding은 Fedify의 원본 Activity를 유지한다. 재직렬화한 객체를 원본 서명 메시지로 취급하지 않는다.
+- 수신한 철회 Delete는 검증 후 상태 전이에만 사용한다. 기존 Quote command Workflow가 로컬 Quote Update의 전달·재시도를 소유한다. 원본 Delete forwarding과 별도 전달 테이블·claim·lease는 제거한다.
+- Quote Update Activity는 기존 최대 10회 재시도를 사용하며 소진하면 Workflow 실패로 남긴다. 완료된 상태 전이 Update ID를 다시 보내도 새 delivery run이 생기지 않는다. 네트워크의 정확히 한 번 전송은 보장하지 않으며 같은 동의 revision은 같은 Activity ID를 사용한다.
 - 게시 후 정책 변경과 그 전용 API·UI·Workflow는 제외한다. 정책은 작성 시 선택하고 최초 Note에 반영한다.
 - 새 구조는 미배포이므로 PR 전용 마이그레이션을 직접 수정한다. 기존 Local Quote 백필은 하지 않는다.
 
