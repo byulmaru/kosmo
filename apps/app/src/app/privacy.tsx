@@ -12,7 +12,7 @@ import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import type { Href } from 'expo-router';
 import type { PropsWithChildren, ReactNode } from 'react';
 
-const EFFECTIVE_DATE = '2026년 9월 30일';
+const EFFECTIVE_DATE = '2026년 10월 1일';
 const POLICY_TITLE = 'Kosmo 개인정보 처리방침';
 
 function SubsectionTitle({ children }: { children: ReactNode }) {
@@ -337,12 +337,12 @@ export default function PrivacyScreen() {
 
       <NavigationLink href={'/privacy/2026-09-09' as Href}>
         <Pressable
-          accessibilityLabel="이전 개인정보 처리방침 (2026년 9월 9일부터 2026년 9월 29일까지)"
+          accessibilityLabel="이전 개인정보 처리방침 (2026년 9월 9일부터 2026년 9월 30일까지)"
           accessibilityRole="link"
           style={styles.previousPolicyLinkControl}
         >
           <Text style={[styles.previousPolicyLink, { color: theme.textSecondary }]}>
-            이전 개인정보 처리방침 (2026년 9월 9일부터 2026년 9월 29일까지)
+            이전 개인정보 처리방침 (2026년 9월 9일부터 2026년 9월 30일까지)
           </Text>
         </Pressable>
       </NavigationLink>
