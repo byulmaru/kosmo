@@ -1,18 +1,26 @@
 import { useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import { fn } from 'storybook/test';
 import { PageHeader } from '@/components/PageHeader';
 import { BlockedProfileList } from '@/components/profile/BlockedProfileList';
 import { ProfileListItemContent } from '@/components/profile/ProfileListItemContent';
 import { Button } from '@/components/ui/Button';
-import { useTheme } from '@/theme/ThemeProvider';
-import { textStyles } from '@/theme/tokens';
 import appleTouchIconUrl from '../../../public/apple-touch-icon.png?url';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 const profiles = [
-  { id: 'kosmo', displayName: '코스모 작가', avatarUri: appleTouchIconUrl },
-  { id: 'galaxy', displayName: '은하 관측자', avatarUri: appleTouchIconUrl },
+  {
+    id: 'kosmo',
+    displayName: '코스모 작가',
+    relativeHandle: '@kosmo',
+    avatarUri: appleTouchIconUrl,
+  },
+  {
+    id: 'galaxy',
+    displayName: '은하 관측자',
+    relativeHandle: '@galaxy',
+    avatarUri: appleTouchIconUrl,
+  },
 ];
 type Props = {
   state: 'loaded' | 'loading' | 'error' | 'empty' | 'loadingMore' | 'loadMoreError';
@@ -24,7 +32,6 @@ type Props = {
 function Fixture({ state, displayName, onSelectAction, onRetry }: Props) {
   const [loaded, setLoaded] = useState(false);
   useEffect(() => setLoaded(false), [state]);
-  const theme = useTheme();
   const visibleState = loaded ? 'loaded' : state;
   const retry = () => {
     onRetry();
@@ -49,14 +56,7 @@ function Fixture({ state, displayName, onSelectAction, onRetry }: Props) {
                         avatarLabel={name}
                         avatarUri={profile.avatarUri}
                         displayName={name}
-                        identity={
-                          <Text
-                            numberOfLines={1}
-                            style={[textStyles.uiLabelL, { color: theme.foregroundPrimary }]}
-                          >
-                            {name}
-                          </Text>
-                        }
+                        relativeHandle={profile.relativeHandle}
                         style={{ height: 64, paddingVertical: 0 }}
                       >
                         {/* Presentation event only; no fake mutation or relationship update. */}

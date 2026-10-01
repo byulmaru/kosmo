@@ -9,6 +9,20 @@ import { expect, test } from './fixtures';
 import { readGraphQLOperation, toGlobalId, waitForGraphQLOperation } from './graphql';
 import type { Locator, Page } from '@playwright/test';
 
+const quoteFlagUrl = 'https://flags.kos.moe/ofrep/v1/evaluate/flags';
+
+async function routeQuoteFlag(page: Page, response: { body: string; status?: number }) {
+  await page.route(quoteFlagUrl, (route) =>
+    route.fulfill({ contentType: 'application/json', status: 200, ...response }),
+  );
+}
+
+function waitForQuoteFlagResponse(page: Page) {
+  return page.waitForResponse(
+    (response) => response.url() === quoteFlagUrl && response.request().method() === 'POST',
+  );
+}
+
 async function pasteComposerImage(input: Locator) {
   await input.evaluate((element) => {
     const clipboardData = new DataTransfer();
@@ -60,7 +74,12 @@ test('목록의 재게시 메뉴에서 Quote Composer를 연다', async ({ conte
   });
   await setE2ESessionCookie(context, viewer.token);
   await page.setViewportSize({ width: 1024, height: 800 });
+  await routeQuoteFlag(page, {
+    body: JSON.stringify({ flags: [{ key: 'quote', value: true }] }),
+  });
+  const quoteFlagResponse = waitForQuoteFlagResponse(page);
   await page.goto('/local');
+  await (await quoteFlagResponse).finished();
 
   const sourceRow = page.getByRole('article').filter({ hasText: sourceBody });
   const trigger = sourceRow.getByRole('button', { name: '재게시' });
@@ -96,6 +115,149 @@ test('목록의 재게시 메뉴에서 Quote Composer를 연다', async ({ conte
   await expect(footer).toBeVisible();
   await expect(composer.getByTestId('post-composer-editor')).toHaveCSS('border-width', '0px');
 });
+
+for (const [state, response] of [
+  [
+    'off',
+    {
+      body: JSON.stringify({ flags: [{ key: 'quote', value: false }] }),
+    },
+  ],
+  ['unconfigured', { body: '{"flags":[]}' }],
+] as const) {
+  test(`Quote flag ${state} hides Quote while Reply and Repost remain usable`, async ({
+    context,
+    page,
+  }) => {
+    const body = `E2E Quote flag ${state} source`;
+    const viewer = await createE2ESession({
+      displayName: `E2E Quote flag ${state} Viewer`,
+      handle: `e2e-quote-flag-${state}`,
+    });
+    await createE2EPost({ body, profileId: viewer.profile!.id });
+    await setE2ESessionCookie(context, viewer.token);
+    await routeQuoteFlag(page, response);
+    const quoteFlagResponse = waitForQuoteFlagResponse(page);
+    await page.goto('/local');
+    await (await quoteFlagResponse).finished();
+
+    const post = page.getByRole('article').filter({ hasText: body });
+    await post.getByRole('button', { name: '재게시' }).click();
+    const menu = page.getByRole('menu', { name: '재게시 메뉴' });
+    await expect(menu.getByRole('menuitem', { name: '재게시하기' })).toBeVisible();
+    await expect(menu.getByRole('menuitem', { name: '인용하기' })).toHaveCount(0);
+    await page.keyboard.press('Escape');
+
+    await post.getByRole('button', { name: '답글' }).click();
+    await expect(page.getByRole('dialog', { name: '답글 쓰기' })).toBeVisible();
+  });
+}
+
+for (const mode of ['reply', 'quote'] as const) {
+  test(`390px ${mode === 'reply' ? 'Reply' : 'Quote'}의 Escape·닫기·Browser Back/Forward는 초안을 보호한다`, async ({
+    context,
+    page,
+  }) => {
+    const composerLabel = mode === 'reply' ? '답글' : '인용 게시글';
+    const parentBody = `E2E Browser Back ${composerLabel} parent`;
+    const childBody = `E2E Browser Back ${composerLabel} child`;
+    const draft = `E2E Browser Back ${composerLabel} draft`;
+    const viewer = await createE2ESession({
+      displayName: `E2E Browser Back ${composerLabel} Viewer`,
+      handle: `e2e-browser-back-${mode}-viewer`,
+    });
+    const parent = await createE2EPost({ body: parentBody, profileId: viewer.profile!.id });
+    const child = await createE2EPost({
+      body: childBody,
+      profileId: viewer.profile!.id,
+      replyParentId: parent.id,
+    });
+    const parentPath = `/@${viewer.profile!.handle}/${toGlobalId('Post', parent.id)}`;
+    const childPath = `/@${viewer.profile!.handle}/${toGlobalId('Post', child.id)}`;
+
+    await setE2ESessionCookie(context, viewer.token);
+    await page.setViewportSize({ width: 390, height: 844 });
+    if (mode === 'quote') {
+      await routeQuoteFlag(page, {
+        body: JSON.stringify({ flags: [{ key: 'quote', value: true }] }),
+      });
+    }
+    const quoteFlagResponse = mode === 'quote' ? waitForQuoteFlagResponse(page) : undefined;
+    await page.goto('/local');
+    if (quoteFlagResponse) {
+      await (await quoteFlagResponse).finished();
+    }
+
+    const post = page.getByRole('article').filter({ hasText: parentBody });
+    await expect(post).toBeVisible();
+    await post.getByTestId('post-list-row-body').click();
+    await expect(page).toHaveURL(new RegExp(`${parentPath.replaceAll('/', '\\/')}$`));
+    const childRow = page.getByTestId(`post-thread-item-${toGlobalId('Post', child.id)}`);
+    await expect(childRow).toBeVisible();
+    await childRow.getByTestId('post-list-row-body').click();
+    await expect(page).toHaveURL(new RegExp(`${childPath.replaceAll('/', '\\/')}$`));
+    await page.evaluate(() => window.history.back());
+    await expect(page).toHaveURL(new RegExp(`${parentPath.replaceAll('/', '\\/')}$`));
+    await expect(page.getByText(parentBody, { exact: true })).toBeVisible();
+
+    const historyLength = await page.evaluate(() => window.history.length);
+    const detailEngagement = page.getByTestId('post-layout-engagement');
+    if (mode === 'reply') {
+      await detailEngagement.getByTestId('post-action-reply').click();
+    } else {
+      await detailEngagement.getByTestId('post-action-repost').click();
+      const repostMenu = page.getByRole('menu', { name: '재게시 메뉴' });
+      await expect(repostMenu).toBeVisible();
+      await repostMenu.getByRole('menuitem', { name: '인용하기' }).click();
+    }
+    const composer = page.getByRole('dialog', { name: `${composerLabel} 쓰기` });
+    const input = composer.getByRole('textbox', { name: `${composerLabel} 본문` });
+    await input.fill(draft);
+    await expect(input).toHaveValue(draft);
+    await expect.poll(() => page.evaluate(() => window.history.length)).toBe(historyLength);
+
+    await composer.getByRole('heading', { name: '글쓰기' }).click();
+    await page.keyboard.press('Escape');
+    const discardDialog = page.getByRole('alertdialog', {
+      name: `${composerLabel} 작성을 취소할까요?`,
+    });
+    await expect(discardDialog).toBeVisible();
+    await discardDialog.getByRole('button', { name: '계속 작성' }).click();
+    await expect(composer).toBeVisible();
+    await expect(input).toHaveValue(draft);
+    await expect(page).toHaveURL(new RegExp(`${parentPath.replaceAll('/', '\\/')}$`));
+
+    await composer.getByRole('button', { name: '글쓰기 닫기', exact: true }).click();
+    await expect(discardDialog).toBeVisible();
+    await discardDialog.getByRole('button', { name: '계속 작성' }).click();
+    await expect(composer).toBeVisible();
+    await expect(input).toHaveValue(draft);
+
+    await page.evaluate(() => window.history.forward());
+
+    await expect(page).toHaveURL(new RegExp(`${parentPath.replaceAll('/', '\\/')}$`));
+    await expect(discardDialog).toBeVisible();
+    await expect.poll(() => page.evaluate(() => window.history.length)).toBe(historyLength);
+    await discardDialog.getByRole('button', { name: '계속 작성' }).click();
+    await expect(composer).toBeVisible();
+    await expect(input).toHaveValue(draft);
+    await expect.poll(() => page.evaluate(() => window.history.length)).toBe(historyLength);
+
+    await page.evaluate(() => window.history.back());
+    await expect(page).toHaveURL(new RegExp(`${parentPath.replaceAll('/', '\\/')}$`));
+    await expect(discardDialog).toBeVisible();
+    await discardDialog.getByRole('button', { name: '계속 작성' }).click();
+    await expect(composer).toBeVisible();
+    await expect(input).toHaveValue(draft);
+    await expect.poll(() => page.evaluate(() => window.history.length)).toBe(historyLength);
+
+    await page.evaluate(() => window.history.back());
+    await expect(discardDialog).toBeVisible();
+    await discardDialog.getByRole('button', { name: '작성 취소' }).click();
+    await expect(page).toHaveURL(/\/local$/);
+    await expect(page.getByRole('dialog', { name: `${composerLabel} 쓰기` })).toHaveCount(0);
+  });
+}
 
 test('Web Composer는 긴 본문을 중앙에서 스크롤하고 footer를 modal 바닥에 유지한다', async ({
   context,

@@ -113,6 +113,7 @@ Fullscreen media와 제품 고유 shadow는 일괄 치환하지 않고 아래 In
 ## 상태·접근성·viewport 정본
 
 - focus-visible, keyboard, modal close·focus restore, accessible name·announcement는 [accessibility.md](./accessibility.md)를 따른다.
+- 공용 underline `TabList`의 기본 배경은 `background/canvas`를 사용한다. 공용 `Tab`은 선택 여부와 관계없이 활성 탭의 Web hover와 Web·Native pressed를 `state/hover`·`state/pressed` 표면으로 표시한다. 선택 표시와 focus ring은 함께 유지하며, disabled 탭에는 상호작용 표면을 표시하지 않는다.
 - mobile `<768`, compact Web `768–1279`, full Web `≥1280`과 shell·scroll 규칙은 [breakpoints.md](./breakpoints.md)를 따른다.
 - 공용 header geometry와 상태는 [page-header.md](./page-header.md)를 따른다.
 - route별 loading, empty, error, retry 의미와 전용 geometry는 각 제품 문서를 따른다.
@@ -141,3 +142,5 @@ Fullscreen media와 제품 고유 shadow는 일괄 치환하지 않고 아래 In
 - PROD-753: FeedbackForm·ProfileDefaultPostVisibilityControl의 controlled value·radio role/state semantics·Web keyboard·disabled 동작을 공용 `RadioGroup`·`RadioOption`으로 수렴하고, mutation·dirty/submitting·Relay actor lifecycle과 option layout은 각 consumer에 유지했다.
 - PROD-775: PROD-753에서 consumer에 남긴 canonical option presentation·state visuals를 공용 `RadioOption`으로 이전하고, group placement·mutation·dirty/submitting·Relay actor lifecycle은 각 consumer에 유지한다.
 - DSN-13: 선행 구현 후 Components/Screens를 최종 재바인딩하고 evidence를 남긴다.
+
+공용 RadioOption의 20px indicator는 2px 외곽선과 10px 내부 원이 같은 중심을 공유한다. 비정수 표시 배율에서도 중심을 유지하며, 표시 배율이나 Light/Dark에 따른 별도 위치 보정을 두지 않는다.

@@ -296,7 +296,7 @@ export function FormOverlay({
             nativeMaxHeight === null ? null : { maxHeight: nativeMaxHeight },
             mobile ? styles.mobileSurface : null,
             mobile && nativeMaxHeight !== null ? { height: nativeMaxHeight } : null,
-            { backgroundColor: theme.card, borderColor: theme.border },
+            { backgroundColor: theme.backgroundElevated, borderColor: theme.borderDefault },
           ]}
           testID={`${testIDPrefix}-overlay-surface`}
         >
@@ -307,8 +307,11 @@ export function FormOverlay({
             ref={mainRef}
             style={styles.main}
           >
-            <View style={[styles.header, { borderColor: theme.border }]}>
-              <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>
+            <View style={[styles.header, { borderColor: theme.borderDefault }]}>
+              <Text
+                accessibilityRole="header"
+                style={[styles.title, { color: theme.foregroundPrimary }]}
+              >
                 {title}
               </Text>
               <IconButton
@@ -316,16 +319,10 @@ export function FormOverlay({
                 controlRef={closeRef}
                 disabled={formState.submitting}
                 onPress={requestClose}
-                style={({ pressed }) => [
-                  styles.close,
-                  {
-                    backgroundColor: pressed ? theme.surface : 'transparent',
-                    opacity: formState.submitting ? 0.45 : 1,
-                  },
-                ]}
+                style={styles.close}
                 targetSize={36}
               >
-                <XIcon color={theme.text} size={20} strokeWidth={2} />
+                <XIcon color={theme.foregroundPrimary} size={20} strokeWidth={2} />
               </IconButton>
             </View>
             <ScrollView
@@ -355,12 +352,12 @@ export function FormOverlay({
                 style={[
                   styles.confirm,
                   elevation.overlay,
-                  { backgroundColor: theme.card, borderColor: theme.border },
+                  { backgroundColor: theme.backgroundElevated, borderColor: theme.borderDefault },
                 ]}
               >
                 <Text
                   accessibilityRole="header"
-                  style={[styles.confirmTitle, { color: theme.text }]}
+                  style={[styles.confirmTitle, { color: theme.foregroundPrimary }]}
                 >
                   {discardTitle}
                 </Text>

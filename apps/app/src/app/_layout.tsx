@@ -2,9 +2,10 @@ import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import { AppProviders } from '@/components/AppProviders';
+import { useThemeMode } from '@/theme/ThemeProvider';
 import { fontFamilies } from '@/theme/tokens';
 
 void SplashScreen.preventAutoHideAsync().catch(() => undefined);
@@ -24,7 +25,9 @@ const fontAssets = Platform.select<Record<string, number>>({
     SUIT: suitAsset,
   },
   default: {
-    // Android and Web register the variable assets under the shared consumer names.
+    // Android and Web use the shared consumer names. Android config-plugin
+    // registrations are detected by expo-font, so this stays a fallback for
+    // binaries that predate the native registrations.
     [fontFamilies.content]: pretendardAsset,
     [fontFamilies.ui]: suitAsset,
   },
@@ -32,21 +35,28 @@ const fontAssets = Platform.select<Record<string, number>>({
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts(fontAssets);
+  const [themeReady, setThemeReady] = useState(false);
+  const onThemeReady = useCallback(() => setThemeReady(true), []);
 
   useEffect(() => {
-    if (fontsLoaded || fontError) {
+    if ((fontsLoaded || fontError) && themeReady) {
       void SplashScreen.hideAsync();
     }
-  }, [fontError, fontsLoaded]);
+  }, [fontError, fontsLoaded, themeReady]);
 
   if (!fontsLoaded && !fontError) {
     return null;
   }
 
   return (
-    <AppProviders>
-      <StatusBar style="auto" />
+    <AppProviders onThemeReady={onThemeReady}>
+      <ThemeStatusBar />
       <Stack screenOptions={{ headerShown: false }} />
     </AppProviders>
   );
+}
+
+function ThemeStatusBar() {
+  const mode = useThemeMode();
+  return <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />;
 }

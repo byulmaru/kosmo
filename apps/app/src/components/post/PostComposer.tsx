@@ -582,7 +582,6 @@ export function PostComposer({
             accessibilityLabel="Composer 확장"
             controlRef={expandControlRef}
             disabled={submitting}
-            feedback="opacity"
             onPress={onExpand}
             targetSize={40}
             visualSize={40}
@@ -637,7 +636,10 @@ export function PostComposer({
         surface === 'rail' ? styles.rail : styles.overlay,
         surface === 'overlay' ? styles.overlayRoot : null,
         surface === 'overlay' && Platform.OS === 'web' ? styles.webOverlay : null,
-        { backgroundColor: theme.backgroundCanvas },
+        {
+          backgroundColor:
+            surface === 'overlay' ? theme.backgroundElevated : theme.backgroundCanvas,
+        },
       ]}
       testID="post-composer-target"
     >
@@ -925,7 +927,6 @@ export function MobileFullscreenComposerShellCandidate({
           <IconButton
             accessibilityLabel={`${copy.title} 닫기`}
             disabled={submitting}
-            feedback="opacity"
             onPress={() => onOverlayClose()}
             targetSize={44}
           >
@@ -1364,7 +1365,6 @@ function ComposerTool({
       accessibilityState={selected === undefined ? undefined : { selected }}
       aria-pressed={selected}
       disabled={disabled}
-      feedback="opacity"
       onPress={onPress}
       visualSize={32}
       visualStyle={[

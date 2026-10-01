@@ -39,16 +39,10 @@ export function ProfileMoreButton({ controlRef, disabled, expanded, onPress }: P
       targetSize={40 + targetInset * 2}
       style={{ borderRadius: radius.full, outlineWidth: 0 }}
       visualSize={40}
-      visualStyle={(state) => [
+      visualStyle={[
         styles.circle,
         {
-          backgroundColor: disabled
-            ? theme.stateDisabledSurface
-            : state.pressed
-              ? theme.statePressed
-              : (state as { hovered?: boolean }).hovered
-                ? theme.stateHover
-                : 'transparent',
+          backgroundColor: disabled ? theme.stateDisabledSurface : 'transparent',
           borderColor: disabled ? theme.borderDisabled : theme.borderDefault,
         },
         Platform.OS === 'web'
@@ -58,7 +52,7 @@ export function ProfileMoreButton({ controlRef, disabled, expanded, onPress }: P
               outlineStyle: focusVisible && !disabled ? 'solid' : 'none',
               outlineWidth: borderWidths[2],
               transitionDuration: `${reducedMotion ? motion.duration.instant : motion.duration.fast}ms`,
-              transitionProperty: 'background-color, border-color',
+              transitionProperty: 'border-color',
               transitionTimingFunction: motion.easing.standard,
             } as unknown as ViewStyle)
           : undefined,

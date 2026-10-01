@@ -51,8 +51,8 @@ Figma variable의 code syntax가 개발 target 이름이다.
 | Semantic token               | Light     | Dark      | 용도                        |
 | ---------------------------- | --------- | --------- | --------------------------- |
 | `color/background/canvas`    | `#FFFFFF` | `#000000` | 앱의 최하단 배경            |
-| `color/background/surface`   | `#FAFAFB` | `#141414` | 기본 제품 surface           |
-| `color/background/elevated`  | `#FFFFFF` | `#262626` | modal, card 등 상승 표면    |
+| `color/background/surface`   | `#FAFAFB` | `#18181B` | 기본 제품 surface           |
+| `color/background/elevated`  | `#FFFFFF` | `#000000` | modal, card 등 상승 표면    |
 | `color/background/inverse`   | `#1A1A1A` | `#FAFAFB` | tooltip, badge 등 역상 표면 |
 | `color/foreground/primary`   | `#1A1A1A` | `#E0E0E0` | 본문과 핵심 아이콘          |
 | `color/foreground/secondary` | `#64646F` | `#A3A3A3` | 설명과 메타데이터           |
@@ -65,7 +65,9 @@ Figma variable의 code syntax가 개발 target 이름이다.
 | `color/border/focus`         | `#4F46E5` | `#A5B4FC` | keyboard focus 경계         |
 | `color/border/disabled`      | `#F4F4F5` | `#262626` | 비활성 경계                 |
 
-Dark `color/border/subtle`은 `background/elevated #262626` 위 divider가 표면과 같아지지 않도록 `ink/750 #303030`으로 분리한다.
+Dark `color/border/subtle`은 `ink/750 #303030`을 유지하며 검정 elevated 위 divider를 구분한다.
+
+Light와 Dark 모두 canvas와 elevated는 각 모드의 같은 기준색을 사용한다. Dark의 canvas·elevated는 `fixed/black #000000`, surface는 기존 Neutral 팔레트의 가장 어두운 `neutral/950 #18181B`를 참조한다. Elevated라는 이름은 상승 표면의 역할을 유지하며 명도 차이를 강제하지 않는다. Modal·card·menu는 border·scrim·elevation으로 구분한다. Primitive 값과 action·disabled 역할은 변경하지 않는다.
 
 Light의 route canvas는 순백색을 사용한다. 기본 입력과 내부 preview는 `neutral/0`을 참조하는 `background/surface`로 구분하고, 독립 modal·card·menu는 같은 순백색 위에 border 또는 elevation을 함께 사용한다. `fixed/white`는 Success/Danger `on-base`, fullscreen media와 mask처럼 테마 비종속 흰색이 필요한 경우에만 사용한다.
 
@@ -90,7 +92,7 @@ Secondary Button은 중립 surface 역할을 직접 소비하지 않고 아래 a
 
 | Token                            | 같은 값을 사용하는 기존 역할                           | 용도                       |
 | -------------------------------- | ------------------------------------------------------ | -------------------------- |
-| `color/action/secondary/base`    | `color/background/surface`                             | 기본 Secondary action 표면 |
+| `color/action/secondary/base`    | Light surface; Dark `#141414`                          | 기본 Secondary action 표면 |
 | `color/action/secondary/on-base` | `color/foreground/primary`                             | label과 icon               |
 | `color/action/secondary/border`  | `color/border/default`                                 | 기본 경계                  |
 | `color/action/secondary/hover`   | `color/state/hover` (Light); opaque `#262626` (Dark)   | Button hover fill          |
@@ -107,7 +109,7 @@ Focus와 Disabled는 Secondary 전용 색상을 추가하지 않고 공용 `colo
 
 Repost는 미선택 default에서 중립 `color/foreground/secondary`를 사용하고, hover glyph·background와
 selected glyph·count에서 제품 action 의미색을 사용한다. 전역 `color/feedback/success/base`와 분리하며 Dark의
-`green/500 #409667`은 canvas `#000000`에서 `5.78:1`, surface `#141414`에서 `5.07:1` 대비를
+`green/500 #409667`은 canvas `#000000`에서 `5.78:1`, surface `#18181B`에서 `4.87:1` 대비를
 유지한다. 전역 Success는 Light·Dark 모두 기존 `green/600 #16794A`를 유지한다.
 
 ### Link Indigo
@@ -168,16 +170,16 @@ Secondary action의 Dark hover/pressed처럼 Button fill을 교체하는 opaque 
 | Link Light / Surface            |  `6.03:1` |
 | Link Dark / Canvas              | `10.53:1` |
 | Light Muted / Canvas            |  `4.83:1` |
-| Dark Muted / Elevated           |  `5.12:1` |
-| Dark Focus / Elevated           |  `7.59:1` |
-| Dark Strong Border / Surface    |  `3.81:1` |
+| Dark Muted / Elevated           |  `7.10:1` |
+| Dark Focus / Elevated           | `10.53:1` |
+| Dark Strong Border / Surface    |  `3.67:1` |
 | Dark Primary / Canvas           | `15.91:1` |
 | Light Selected Border / Surface |  `3.24:1` |
 | Light Info Border / Subtle      |  `3.24:1` |
 | Light Warning Border / Subtle   |  `3.25:1` |
 | Light Warning Border / Surface  |  `3.42:1` |
 | Dark Repost / Canvas            |  `5.78:1` |
-| Dark Repost / Surface           |  `5.07:1` |
+| Dark Repost / Surface           |  `4.87:1` |
 
 ## Component usage mapping
 
@@ -189,6 +191,7 @@ Figma의 [`08 Component Usage Mapping`](https://www.figma.com/design/Erj975S6vVP
 - 연속 피드와 목록도 같은 canvas 평면을 이어 쓴다. `PostListItem`·`PostLayout` 같은 post presentation root는 Web·Native host의 중립 배경이 비치지 않도록 `background/canvas`를 직접 적용하고 `border/subtle`로 구분한다. 이는 목록과 같은 canvas 색을 명시하는 것이며 각 row를 `background/surface`나 `background/elevated` card로 올리는 계약이 아니다. post 내부에서 의도적으로 투명한 요소는 이 root canvas를 그대로 보인다.
 - post 내부의 일반 link preview처럼 resting surface가 필요한 영역은 `background/surface`, modal·menu·독립 floating card는 `background/elevated`를 사용한다. direct Quote Source preview는 예외적으로 resting fill 없이 주변 Post background를 그대로 보이고 semantic border로만 경계를 구분한다. Web의 interactive Quote Source preview만 pointer hover 동안 root 전체에 `state/hover` overlay를 사용하며, Native와 `interactive=false` preview에는 이 hover 표현을 투영하지 않는다.
 - Modal, Sheet와 Menu는 `background/elevated`, `border/default`, `overlay/scrim`을 사용한다. Fullscreen media와 Native mobile fullscreen Composer는 이 표준 scrim에서 제외한다.
+- Composer modal은 header·본문 주변 여백·footer를 하나의 `background/elevated` 표면으로 연결하고 외곽 전체를 1px `border/default`로 감싼다. 내부 여백에 route용 `background/canvas`를 섞지 않는다. Mobile fullscreen Composer는 기존 canvas를 유지하며 외곽 테두리를 두지 않는다.
 - Toast는 Info/Success/Warning/Danger 중 의미에 맞는 tone을 반드시 명시한다. 각 tone은 semantic feedback `subtle`·`on-subtle` pair와 `base`를 사용해 4px left rail을 둔다. [PROD-877](https://linear.app/byulmaru/issue/PROD-877)은 [PROD-775](https://linear.app/byulmaru/issue/PROD-775)의 Default inverse 부분을 대체하므로 tone 없는 fallback은 제공하지 않는다.
 - StateView root는 fill을 갖지 않고 host 평면을 상속한다. Route loading·empty·retry는 canvas 위에 두고, alert만 feedback subtle block을 사용할 수 있다. 이미 경계가 있는 component 내부 StateView는 그 component의 surface를 상속하되 스스로 surface를 선택하지 않는다.
 - StateView의 action은 현재 state에서 제공하는 단일 retry·복귀 행동이므로 Button의 primary tone을 사용한다. 저장·생성 같은 화면별 action은 StateView 밖에서 해당 consumer가 소유한다.
@@ -232,33 +235,35 @@ Repost는 `color/action/repost/base`, Reaction은 `color/action/reaction/base`�
 
 - **DSN-21 feed plane slice:** `shell/UniversalShell.tsx` root·center plane, `PageHeader.tsx`, `bookmark/BookmarkList.tsx`, `post/PostList.tsx`, `post/PostListItem.tsx`, `post/PostLayout.tsx`, `post/PostThreadLayout.tsx`, `post/PostSourcePresentationView.tsx`의 legacy background·card·border·divider를 분리한다. Route·header·loading·empty host와 연속 feed는 canvas, `PostListItem`·`PostLayout` root는 명시적 canvas + `border/subtle`, 내부 preview는 `background/surface` + `border/default`를 사용하며 feed·row에는 elevated를 사용하지 않는다.
 
-| Consumer                                                                                                                                                                         | 현재 표현                                                                                      | 판정            | 목표 token·규칙                                                                              | 후속 소유                                   |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | --------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| `theme/tokens.ts`, `ThemeProvider.tsx`                                                                                                                                           | Production semantic Light/Dark와 명시적 selector API; 앱 기본값은 Light                        | 완료·호환       | legacy flat key는 DSN-21 consumer 이관 동안만 compatibility alias로 유지                     | DSN-19 완료, alias 제거는 DSN-21 이후       |
-| `apps/app/app.config.ts`                                                                                                                                                         | Expo `userInterfaceStyle: 'light'` 고정                                                        | 후속            | `automatic`으로 이관하고 Native rebuild 후 OS Light/Dark의 `시스템` 전환 검증                | PROD-812                                    |
-| `theme/tokens.ts`의 공용 `shadow`                                                                                                                                                | named Light/Dark elevation과 deprecated raw fallback                                           | 완료·호환       | 공용 primitive는 named elevation을 사용하고 기존 route/domain import만 fallback 유지         | DSN-19 완료, fallback 제거는 DSN-21 이후    |
-| `ui/Button.tsx`                                                                                                                                                                  | Danger `base/on-base`와 disabled pair                                                          | 완료            | `color/feedback/danger/*`, `color/state/disabled-*`                                          | DSN-19                                      |
-| `ui/ModalSheet.tsx`, `ui/ActionMenu.tsx`                                                                                                                                         | semantic elevated surface, border와 표준 scrim                                                 | 완료            | `color/background/elevated`, `color/border/default`, `color/overlay/scrim`                   | DSN-19                                      |
-| `shell/UniversalShell.tsx`                                                                                                                                                       | `theme.overlayScrim` backdrop + named elevation                                                | 완료            | `color/overlay/scrim` + `elevation.overlay`                                                  | DSN-21                                      |
-| `feedback/FeedbackOverlay.tsx`, `post/ReplyComposerSurface.tsx`                                                                                                                  | `theme.overlayScrim` backdrop                                                                  | 완료            | `color/overlay/scrim`                                                                        | PROD-750                                    |
-| `post/PostComposer.tsx`, `post/PostDeletionAction.tsx`, `profile/ProfileEditDiscardDialog.tsx`, `shell/ProfileSwitcher.tsx`                                                      | `theme.overlayScrim` backdrop                                                                  | 완료            | `color/overlay/scrim`                                                                        | PROD-750                                    |
-| `shell/SidebarNavigation.tsx`, `shell/shellLayout.ts`                                                                                                                            | Primary icon과 ProfileSwitcher 편집 action foreground `#111111`                                | 교체            | `color/action/primary/on-base`                                                               | DSN-21                                      |
-| `post/PostMediaViewer.tsx`                                                                                                                                                       | fixed black/white, black 70% overlay, semantic Danger retry Toast                              | 예외            | Fullscreen fixed-black surface·70% overlay와 공용 Danger Toast 유지                          | DSN-21 예외 검증                            |
-| `post/PostComposerMediaControls.tsx`, `profile/ProfileEditImageFields.tsx`                                                                                                       | `colors.light/dark` 직접 참조로 media mask 전경·배경 구성                                      | 예외            | theme 전환과 무관한 fixed black/white를 유지하고 직접 Light/Dark theme 참조는 제거           | DSN-21                                      |
-| `shell/ProfileSwitcher.tsx`                                                                                                                                                      | raw neutral profile gradient                                                                   | 후속            | 제품 의미 승인 전 유지, profile component token 후보                                         | DSN-21 또는 연결된 Product 이슈             |
-| `post/PostComposer.tsx`, `post/PostDeletionAction.tsx`, `feedback/FeedbackOverlay.tsx`, `post/ReplyComposerSurface.tsx`, `post/ReactionPopover.tsx`, `shell/ProfileSwitcher.tsx` | `elevation.floating` / `elevation.overlay`                                                     | 완료 (PROD-750) | Anchored Web menu·popover는 `elevation.floating`, modal·Native surface는 `elevation.overlay` | PROD-750                                    |
-| `ui/ToastProvider.tsx`                                                                                                                                                           | Info/Success/Warning/Danger tone 필수, feedback subtle/on-subtle pair와 4px feedback base rail | 완료            | 호출부가 의미에 맞는 tone을 명시하고 semantic feedback pair와 feedback base rail 사용        | PROD-877 (PROD-775 Default inverse 대체)    |
-| `shell/UnreadDot.tsx`, `notification/NotificationListItem.tsx`                                                                                                                   | `accent`, Primary와 Primary Subtle을 unread 의미로 재사용                                      | 후속            | unread 전용 semantic 역할 승인 전 legacy 표현 유지                                           | DSN-21; 제품 의미 결정 시 Product 이슈 연결 |
-| `post/PostActionBar.tsx`                                                                                                                                                         | Repost·Reaction 등 제품 action 의미색                                                          | 부분 완료       | Repost는 `color/action/repost/base`, Reaction은 `color/action/reaction/base`; Bookmark 후속  | PROD-866; Bookmark는 연결된 Product 이슈    |
+| Consumer                                                                                                                                                                         | 현재 표현                                                                                      | 판정             | 목표 token·규칙                                                                              | 후속 소유                                   |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ---------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| `theme/tokens.ts`, `ThemeProvider.tsx`                                                                                                                                           | Production semantic Light/Dark; 앱 preference 기본값은 시스템                                  | 완료·호환        | legacy flat key는 DSN-21 consumer 이관 동안만 compatibility alias로 유지                     | DSN-19 완료, alias 제거는 DSN-21 이후       |
+| `apps/app/app.config.ts`                                                                                                                                                         | Expo `userInterfaceStyle: 'automatic'`, runtime `0.4`                                          | Native 검증 대기 | Native rebuild 후 OS Light/Dark의 `시스템` 전환 검증                                         | PROD-812                                    |
+| `theme/tokens.ts`의 공용 `shadow`                                                                                                                                                | named Light/Dark elevation과 deprecated raw fallback                                           | 완료·호환        | 공용 primitive는 named elevation을 사용하고 기존 route/domain import만 fallback 유지         | DSN-19 완료, fallback 제거는 DSN-21 이후    |
+| `ui/Button.tsx`                                                                                                                                                                  | Danger `base/on-base`와 disabled pair                                                          | 완료             | `color/feedback/danger/*`, `color/state/disabled-*`                                          | DSN-19                                      |
+| `ui/ModalSheet.tsx`, `ui/ActionMenu.tsx`                                                                                                                                         | semantic elevated surface, border와 표준 scrim                                                 | 완료             | `color/background/elevated`, `color/border/default`, `color/overlay/scrim`                   | DSN-19                                      |
+| `shell/UniversalShell.tsx`                                                                                                                                                       | `theme.overlayScrim` backdrop + named elevation                                                | 완료             | `color/overlay/scrim` + `elevation.overlay`                                                  | DSN-21                                      |
+| `feedback/FeedbackOverlay.tsx`, `post/ReplyComposerSurface.tsx`                                                                                                                  | `theme.overlayScrim` backdrop                                                                  | 완료             | `color/overlay/scrim`                                                                        | PROD-750                                    |
+| `post/PostComposer.tsx`, `post/PostDeletionAction.tsx`, `profile/ProfileEditDiscardDialog.tsx`, `shell/ProfileSwitcher.tsx`                                                      | `theme.overlayScrim` backdrop                                                                  | 완료             | `color/overlay/scrim`                                                                        | PROD-750                                    |
+| `ui/SidebarNavigation.tsx`, `shell/ProfileSwitcher.tsx`                                                                                                                          | Primary icon과 ProfileSwitcher 편집 action의 semantic foreground                               | 완료             | `color/action/primary/on-base`                                                               | DSN-21                                      |
+| `post/PostMediaViewer.tsx`                                                                                                                                                       | fixed black/white, black 70% overlay, semantic Danger retry Toast                              | 예외             | Fullscreen fixed-black surface·70% overlay와 공용 Danger Toast 유지                          | DSN-21 예외 검증                            |
+| `post/PostComposerMediaControls.tsx`, `profile/ProfileEditImageFields.tsx`                                                                                                       | semantic fixed black/white와 scrim으로 media mask 구성                                         | 예외             | theme 전환과 무관한 fixed black/white 유지                                                   | DSN-21                                      |
+| `shell/ProfileSwitcher.tsx`                                                                                                                                                      | raw neutral profile gradient                                                                   | 후속             | 제품 의미 승인 전 유지, profile component token 후보                                         | DSN-21 또는 연결된 Product 이슈             |
+| `post/PostComposer.tsx`, `post/PostDeletionAction.tsx`, `feedback/FeedbackOverlay.tsx`, `post/ReplyComposerSurface.tsx`, `post/ReactionPopover.tsx`, `shell/ProfileSwitcher.tsx` | `elevation.floating` / `elevation.overlay`                                                     | 완료 (PROD-750)  | Anchored Web menu·popover는 `elevation.floating`, modal·Native surface는 `elevation.overlay` | PROD-750                                    |
+| `ui/ToastProvider.tsx`                                                                                                                                                           | Info/Success/Warning/Danger tone 필수, feedback subtle/on-subtle pair와 4px feedback base rail | 완료             | 호출부가 의미에 맞는 tone을 명시하고 semantic feedback pair와 feedback base rail 사용        | PROD-877 (PROD-775 Default inverse 대체)    |
+| `shell/UnreadDot.tsx`, `ui/BottomTabBar.tsx`, `ui/SidebarNavigation.tsx`                                                                                                         | unread glyph는 legacy `accent` 유지; NotificationListItemView는 semantic Primary 사용          | 후속             | unread 전용 semantic 역할 승인 전 legacy 표현 유지                                           | DSN-21; 제품 의미 결정 시 Product 이슈 연결 |
+| `post/PostActionBar.tsx`                                                                                                                                                         | Repost·Reaction 등 제품 action 의미색                                                          | 부분 완료        | Repost는 `color/action/repost/base`, Reaction은 `color/action/reaction/base`; Bookmark 후속  | PROD-866; Bookmark는 연결된 Product 이슈    |
 
 PROD-750 scrim migration 대상은 `theme.overlayScrim`을 공통 backdrop으로 사용한다. Named elevation migration 대상은 기존 raw·legacy shadow가 있던 `PostComposer`, `PostDeletionAction`, `FeedbackOverlay`, `ReplyComposerSurface`, `ReactionPopover`, `ProfileSwitcher`이며, anchored Web menu·popover는 `elevation.floating`, modal·Native surface는 `elevation.overlay`를 사용한다. `ProfileEditDiscardDialog`는 기존 raw shadow가 없어 scrim만 이관했다. `UniversalShell`의 drawer는 DSN-21에서 이미 `theme.overlayScrim`과 `elevation.overlay`를 사용한다. `shell/ProfileSwitcher.tsx`의 `avatarShadow`는 프로필 이미지의 깊이 표현이므로 유지하고, `post/PostMediaViewer.tsx`의 fixed black/white와 fullscreen overlay는 테마 종속 표준 scrim·elevation에서 제외되는 예외다. 과거 PROD-750에서 scrim을 이관한 `ReactionProfilesModal`은 PROD-938의 전용 route 교체로 삭제되어 현재 inventory에서 제외한다.
 
 - Scrim 적용 대상: `post/PostDeletionAction.tsx`, `post/PostComposer.tsx`, `profile/ProfileEditDiscardDialog.tsx`, `feedback/FeedbackOverlay.tsx`, `post/ReplyComposerSurface.tsx`, `shell/ProfileSwitcher.tsx`.
 - Elevation 적용 대상: `post/PostComposer.tsx`, `post/PostDeletionAction.tsx`, `feedback/FeedbackOverlay.tsx`, `post/ReplyComposerSurface.tsx`, `post/ReactionPopover.tsx`, `shell/ProfileSwitcher.tsx`.
 
+PROD-812는 남은 neutral legacy alias를 같은 mode의 semantic canvas·surface·foreground·border·selected·focus·danger 역할에 연결한다. 일반 card는 surface를 쓰고 modal·popover는 elevated를 명시한다. Native 전체 화면 Composer는 canvas를 사용한다. 아직 제품 의미가 확정되지 않은 unread·Bookmark·profile gradient 예외는 유지한다.
+
 ## Runtime theme 전략
 
-Figma와 semantic contract는 Light/Dark를 모두 production 값으로 제공한다. `ThemeProvider`는 명시적 Light/Dark selector API를 제공하고 공용 primitive는 선택된 semantic mode를 소비한다. 앱의 `AppProviders`는 아직 Light를 명시적으로 공급한다. 프로덕션 전체 Dark 활성화 gate는 PROD-812가 DSN-21 또는 연결된 Product 이슈의 남은 route·shell·domain consumer를 semantic token으로 이관하거나 위 inventory의 예외로 닫고, 지원 플랫폼의 대표 화면과 주요 interaction state 검증까지 완료한 뒤 닫는다.
+Figma와 semantic contract는 Light/Dark를 모두 production 값으로 제공한다. `ThemeProvider`는 명시적 Light/Dark selector API를 제공하고 공용 primitive는 선택된 semantic mode를 소비한다. 앱은 기기에 저장한 `시스템`·`라이트`·`다크` preference를 해석해 `AppProviders` 전체에 적용한다. 저장값 확인 전에는 앱 화면을 렌더링하지 않고 기존 Splash를 유지하며, 실패 처리와 system chrome 반영은 [설정 계약](./settings.md#테마-설정)을 따른다. 프로덕션 전체 Dark 활성화 gate는 PROD-812가 DSN-21 또는 연결된 Product 이슈의 남은 route·shell·domain consumer를 semantic token으로 이관하거나 위 inventory의 예외로 닫고, 지원 플랫폼의 대표 화면과 주요 interaction state 검증까지 완료한 뒤 닫는다.
 
 - 공용 primitive가 semantic foreground pair와 interaction state를 소비한다.
 - DSN-19의 공용 primitive raw 값과 DSN-21/Product의 route·shell·domain raw 값이 각각 이관되거나 위 inventory의 예외로 남는다.

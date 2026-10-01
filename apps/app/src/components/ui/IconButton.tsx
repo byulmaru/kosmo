@@ -1,7 +1,9 @@
 import { Platform, Pressable, StyleSheet, View } from 'react-native';
+import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
+import { motion, radius } from '@/theme/tokens';
 import { getInteractionTargetSize } from './interactionTarget';
 import type { ReactNode, Ref } from 'react';
-import type { PressableProps } from 'react-native';
+import type { PressableProps, ViewStyle } from 'react-native';
 
 export function getIconButtonHitSlop(
   renderedTargetSize: number,
@@ -96,7 +98,7 @@ export type IconButtonProps = Omit<
   accessibilityRole?: 'button' | 'link';
   children: PressableProps['children'];
   controlRef?: Ref<View>;
-  feedback?: 'none' | 'opacity';
+  feedbackTone?: 'inverse';
   visualStyle?: PressableProps['style'];
 } & IconButtonSizeProps;
 
@@ -107,7 +109,7 @@ export function IconButton({
   children,
   controlRef,
   disabled = false,
-  feedback = 'none',
+  feedbackTone,
   hitSlop,
   style,
   targetSize,
@@ -115,6 +117,8 @@ export function IconButton({
   visualStyle,
   ...props
 }: IconButtonProps): ReactNode {
+  const theme = useTheme();
+  const reducedMotion = useReducedMotion();
   const buttonDisabled = disabled === true;
   const flattenedStyle =
     targetSize === undefined && visualSize === undefined && typeof style !== 'function'
@@ -132,7 +136,6 @@ export function IconButton({
     requestedTargetSize,
     visualSize,
   );
-
   return (
     <Pressable
       {...props}
@@ -145,28 +148,60 @@ export function IconButton({
       style={(state) => [
         styles.target,
         { height: minimumTargetSize, width: minimumTargetSize },
-        feedback === 'opacity'
-          ? { opacity: buttonDisabled ? 0.45 : state.pressed ? 0.7 : 1 }
-          : undefined,
         typeof style === 'function' ? style(state) : style,
+        buttonDisabled ? { opacity: 0.45 } : undefined,
         { minHeight: minimumTargetSize, minWidth: minimumTargetSize },
       ]}
     >
       {(state) => {
         const content = typeof children === 'function' ? children(state) : children;
 
-        return visualSize === undefined && visualStyle === undefined ? (
-          content
-        ) : (
+        const hovered = Platform.OS === 'web' && Boolean((state as { hovered?: boolean }).hovered);
+        const feedbackBackground = buttonDisabled
+          ? 'transparent'
+          : state.pressed
+            ? feedbackTone === 'inverse'
+              ? 'rgba(255, 255, 255, 0.24)'
+              : theme.statePressed
+            : hovered
+              ? feedbackTone === 'inverse'
+                ? 'rgba(255, 255, 255, 0.16)'
+                : theme.stateHover
+              : 'transparent';
+        const visualDimensions =
+          visualSize === undefined && visualStyle === undefined
+            ? { height: requestedTargetSize, width: requestedTargetSize }
+            : visualSize === undefined
+              ? undefined
+              : { height: visualSize, width: visualSize };
+
+        return (
           <View
             accessibilityElementsHidden
             importantForAccessibility="no-hide-descendants"
             style={[
               styles.visual,
-              visualSize === undefined ? undefined : { height: visualSize, width: visualSize },
+              visualDimensions,
               typeof visualStyle === 'function' ? visualStyle(state) : visualStyle,
             ]}
           >
+            <View
+              pointerEvents="none"
+              style={[
+                styles.feedbackSurface,
+                visualSize === undefined
+                  ? styles.feedbackFill
+                  : { height: visualSize, width: visualSize },
+                Platform.OS === 'web'
+                  ? ({
+                      transitionDuration: `${reducedMotion ? motion.duration.instant : motion.duration.fast}ms`,
+                      transitionProperty: 'background-color',
+                      transitionTimingFunction: motion.easing.standard,
+                    } as unknown as ViewStyle)
+                  : undefined,
+                { backgroundColor: feedbackBackground },
+              ]}
+            />
             {content}
           </View>
         );
@@ -185,4 +220,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     pointerEvents: 'none',
   },
+  feedbackFill: { bottom: 0, left: 0, right: 0, top: 0 },
+  feedbackSurface: { borderRadius: radius.full, position: 'absolute' },
 });

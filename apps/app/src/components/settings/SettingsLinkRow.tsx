@@ -11,6 +11,7 @@ import type { ViewStyle } from 'react-native';
 
 export type SettingsLinkRowProps = {
   accessibilityLabel: string;
+  currentPage?: boolean;
   description?: string;
   external?: boolean;
   href: Href;
@@ -23,6 +24,7 @@ export type SettingsLinkRowProps = {
 
 export function SettingsLinkRow({
   accessibilityLabel,
+  currentPage = false,
   description,
   external = false,
   href,
@@ -42,7 +44,7 @@ export function SettingsLinkRow({
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="link"
       accessibilityState={{ selected }}
-      aria-current={selected ? 'page' : undefined}
+      aria-current={currentPage ? 'page' : undefined}
       onBlur={() => setFocusVisible(false)}
       onFocus={(event) => {
         if (!web) {
@@ -81,11 +83,11 @@ export function SettingsLinkRow({
               : hovered
                 ? theme.stateHover
                 : selected
-                  ? theme.selectedSurface
+                  ? theme.stateSelectedSurface
                   : 'transparent',
-            borderColor: selected ? theme.selectedBorder : 'transparent',
+            borderColor: selected ? theme.stateSelectedBorder : 'transparent',
             borderWidth: borderWidths[1],
-            outlineColor: focusVisible ? theme.focus : undefined,
+            outlineColor: focusVisible ? theme.stateFocusRing : undefined,
             outlineOffset: 2,
             outlineStyle: focusVisible ? 'solid' : 'none',
             outlineWidth: focusVisible ? 2 : 0,
@@ -99,7 +101,7 @@ export function SettingsLinkRow({
         label={label}
         trailing={
           <View accessibilityElementsHidden pointerEvents="none">
-            <ChevronRightIcon color={theme.textSecondary} size={20} strokeWidth={2} />
+            <ChevronRightIcon color={theme.foregroundSecondary} size={20} strokeWidth={2} />
           </View>
         }
       />
@@ -115,7 +117,7 @@ export function SettingsLinkRow({
   }
 
   return (
-    <NavigationLink href={href} onNavigate={onNavigate} primary={primary}>
+    <NavigationLink href={href} onNavigate={onNavigate} primary={primary} push>
       {row}
     </NavigationLink>
   );

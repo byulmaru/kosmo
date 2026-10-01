@@ -365,13 +365,7 @@ export function PostComposerMediaControls({
           onPress={() => void selectMedia()}
           style={styles.addMediaTarget}
           visualSize={mediaAddVisualSize}
-          visualStyle={({ pressed }) => [
-            styles.addMediaVisual,
-            {
-              backgroundColor: pressed ? theme.surface : 'transparent',
-              opacity: disabled || media.length >= postComposerMediaLimit ? 0.45 : 1,
-            },
-          ]}
+          visualStyle={styles.addMediaVisual}
         >
           <ImagePlusIcon color={theme.primary} size={24} />
         </IconButton>
@@ -430,7 +424,7 @@ export function PostComposerMediaItems({
                   <View style={[StyleSheet.absoluteFill, styles.mediaOverlay]}>
                     <ActivityIndicator
                       accessibilityLabel={`첨부 이미지 ${index + 1} 업로드 중`}
-                      color={colors.light.background}
+                      color={colors.light.fixedWhite}
                     />
                   </View>
                 ) : (
@@ -440,7 +434,7 @@ export function PostComposerMediaItems({
                     onPress={() => onRetry(item)}
                     style={[StyleSheet.absoluteFill, styles.mediaOverlay]}
                   >
-                    <RefreshCwIcon color={colors.light.background} size={24} />
+                    <RefreshCwIcon color={colors.light.fixedWhite} size={24} />
                   </Pressable>
                 )}
               </>
@@ -448,16 +442,14 @@ export function PostComposerMediaItems({
             <IconButton
               accessibilityLabel={`첨부 이미지 ${index + 1} 제거`}
               disabled={disabled}
+              feedbackTone="inverse"
               onPress={() => onRemove(item.key)}
               style={styles.mediaRemoveTarget}
               targetSize={mediaRemoveGeometry.targetSize}
               visualSize={mediaRemoveVisualSize}
-              visualStyle={({ pressed }) => [
-                styles.mediaRemoveVisual,
-                { opacity: disabled ? 0.45 : pressed ? 0.75 : 1 },
-              ]}
+              visualStyle={styles.mediaRemoveVisual}
             >
-              <XIcon color={colors.light.background} size={18} />
+              <XIcon color={colors.light.fixedWhite} size={18} />
             </IconButton>
           </View>
           {item.state === 'ready' ? (
@@ -513,7 +505,7 @@ const styles = StyleSheet.create({
     width: 96,
   },
   mediaPreview: { height: 96, width: 96 },
-  mediaOverlayBackdrop: { backgroundColor: colors.light.text, opacity: 0.58 },
+  mediaOverlayBackdrop: { backgroundColor: colors.light.fixedBlack, opacity: 0.58 },
   mediaOverlay: { alignItems: 'center', justifyContent: 'center' },
   mediaRemoveTarget: {
     height: mediaRemoveGeometry.targetSize,
@@ -524,7 +516,7 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   mediaRemoveVisual: {
-    backgroundColor: colors.light.text,
+    backgroundColor: colors.light.fixedBlack,
     borderRadius: radii.full,
     position: 'absolute',
     right: mediaRemoveGeometry.visualInset,

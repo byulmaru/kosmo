@@ -1,8 +1,7 @@
 import { Platform } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { FollowButton } from './FollowButton';
-import { ProfileListItemContent } from './ProfileListItemContent';
-import { ProfileNameBlock } from './ProfileNameBlock';
+import { ProfileListItemRow } from './ProfileListItemRow';
 import type { Href } from 'expo-router';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { ProfileListItem_profile$key } from './__generated__/ProfileListItem_profile.graphql';
@@ -18,16 +17,9 @@ type ProfileListItemProps = {
 
 const profileListItemFragment = graphql`
   fragment ProfileListItem_profile on Profile {
-    avatar {
-      id
-      url
-    }
-    displayName
-    handle
     relativeHandle
-    bio
+    ...ProfileListItemRow_profile @arguments(showBio: true)
     ...FollowButton_profile
-    ...ProfileNameBlock_profile
   }
 `;
 
@@ -41,16 +33,12 @@ export function ProfileListItem({
 }: ProfileListItemProps) {
   const data = useFragment(profileListItemFragment, profile);
   return (
-    <ProfileListItemContent
-      avatarUri={data.avatar?.url}
-      avatarLabel={data.displayName || data.handle}
-      bio={showBio ? data.bio : undefined}
-      displayName={data.displayName}
+    <ProfileListItemRow
       href={linked ? (`/${data.relativeHandle}` as Href) : undefined}
-      identity={<ProfileNameBlock profile={data} style={{ flex: 0 }} variant="compact" />}
       onPress={onPress}
       onNavigate={onNavigate}
-      relativeHandle={data.relativeHandle}
+      profile={data}
+      showBio={showBio}
       style={style}
     >
       <FollowButton
@@ -60,6 +48,6 @@ export function ProfileListItem({
           marginVertical: Platform.OS === 'android' ? -4 : Platform.OS === 'ios' ? -2 : 0,
         }}
       />
-    </ProfileListItemContent>
+    </ProfileListItemRow>
   );
 }

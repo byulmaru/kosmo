@@ -145,6 +145,25 @@ describe('InfiniteList', () => {
     assert.equal(loadRequests.length, 2);
   });
 
+  it('native FlatList가 pull-to-refresh callback과 진행 상태를 전달한다', async () => {
+    const onRefresh = mock.fn();
+
+    await act(async () => {
+      renderer = create(createElement(InfiniteList, props({ onRefresh, refreshing: true })));
+    });
+
+    let list = flatList();
+    assert.equal(list.props.onRefresh, onRefresh);
+    assert.equal(list.props.refreshing, true);
+
+    await act(async () => list.props.onRefresh());
+    assert.equal(onRefresh.mock.callCount(), 1);
+
+    await update(props({ onRefresh, refreshing: false }));
+    list = flatList();
+    assert.equal(list.props.refreshing, false);
+  });
+
   it('PaginationScrollView 안에서는 View body가 outer metrics pagination을 등록한다', async () => {
     await act(async () => {
       renderer = create(

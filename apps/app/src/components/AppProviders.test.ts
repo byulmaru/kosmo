@@ -17,6 +17,9 @@ import type { ReactTestRenderer } from 'react-test-renderer';
 
 type QueryName = 'SessionProviderQuery' | 'ShellRecoveryQuery' | 'UniversalShellQuery';
 type QueryMode = 'error' | 'pending' | 'success';
+type OfrepRequest = { body: unknown; contentType: string | null; method: string; url: string };
+
+const flagEvaluationUrl = 'https://flags.kos.moe/ofrep/v1/evaluate/flags';
 
 const queryModes: Record<QueryName, QueryMode> = {
   SessionProviderQuery: 'success',
@@ -26,6 +29,8 @@ const queryModes: Record<QueryName, QueryMode> = {
 const queryHistory: Array<{ fetchKey: unknown; query: QueryName }> = [];
 const pendingSessionQueries: Array<() => void> = [];
 const pendingRootRenders: Array<() => void> = [];
+let mockAccountId: string | null = 'account-1';
+let mockSessionId: string | null = 'session-1';
 let navigationMounts = 0;
 let navigationUnmounts = 0;
 let relayActorMounts = 0;
@@ -33,6 +38,7 @@ let relayActorUnmounts = 0;
 let rootShouldThrow = false;
 let rootShouldSuspend = false;
 let AppProviders: ComponentType<PropsWithChildren>;
+let useFeatureFlag: (key: string) => boolean;
 let UniversalShell: ComponentType;
 let RouteBoundary: ComponentType<{
   children: ReactNode;
@@ -41,13 +47,17 @@ let RouteBoundary: ComponentType<{
   title: string;
 }>;
 let useRouteBoundary: () => { fetchKey: number };
-let useRelayActor: () => Pick<MockRelayActorValue, 'nativeToken' | 'setNativeSession'>;
+let useRelayActor: () => Pick<
+  MockRelayActorValue,
+  'clearNativeSession' | 'nativeToken' | 'setNativeSession'
+>;
 let useSession: () => {
   selectedProfileId: string | null;
   sessionId: string | null;
   status: string;
 };
 let renderer: ReactTestRenderer | null = null;
+let originalFetch: typeof fetch;
 
 type MockRelayActorValue = {
   actorLifecycleKey: string;
@@ -141,8 +151,12 @@ mockModule('react-native', {
   Platform: { OS: 'web' },
   Pressable: 'Pressable',
   StyleSheet: { create: <T>(styles: T) => styles },
+  useColorScheme: () => 'light',
   useWindowDimensions: () => ({ height: 900, width: 1024 }),
   View: 'View',
+});
+mockModule('@react-native-async-storage/async-storage', {
+  default: { getItem: async () => null, setItem: async () => undefined },
 });
 mockModule('expo-router', {
   DefaultTheme: mockDefaultNavigationTheme,
@@ -153,7 +167,7 @@ mockModule('expo-router', {
     createElement(MockNavigationThemeContext.Provider, { value }, children),
   useTheme: () => useContext(MockNavigationThemeContext),
   usePathname: () => '/home',
-  useRouter: () => ({ replace: () => undefined }),
+  useRouter: () => ({ dismissTo: () => undefined, replace: () => undefined }),
   useSegments: () => [],
 });
 mockModule(require.resolve('lucide-react-native'), {
@@ -183,11 +197,13 @@ mockModule('react-relay', {
     }
     if (query === 'SessionProviderQuery') {
       return {
-        currentSession: {
-          id: 'session-1',
-          selectedProfile: { id: 'profile-a' },
-        },
-        me: { id: 'account-1', name: 'Account' },
+        currentSession: mockSessionId
+          ? {
+              id: mockSessionId,
+              selectedProfile: { id: 'profile-a' },
+            }
+          : null,
+        me: mockAccountId ? { id: mockAccountId, name: 'Account' } : null,
       };
     }
     return { action: 'ready' };
@@ -195,6 +211,7 @@ mockModule('react-relay', {
 });
 mockModule(new URL('../analytics/client.ts', import.meta.url), {
   initializeAnalytics: () => undefined,
+  trackAnalytics: () => undefined,
 });
 mockModule(new URL('../analytics/AnalyticsSessionBridge.tsx', import.meta.url), {
   AnalyticsSessionBridge: () => null,
@@ -240,10 +257,12 @@ mockModule(new URL('../theme/ThemeProvider.tsx', import.meta.url), {
     foregroundPrimary: '#111',
     overlayScrim: '#0008',
   }),
+  useThemeMode: () => 'light',
   ThemeProvider: ({ children }: PropsWithChildren) => children,
 });
 mockModule(new URL('../components/ui/ToastProvider.tsx', import.meta.url), {
   ToastProvider: ({ children }: PropsWithChildren) => children,
+  useToast: () => ({ showToast: () => undefined }),
 });
 mockModule(new URL('./shell/BottomTabBar.tsx', import.meta.url), {
   BottomTabBar: () => null,
@@ -286,6 +305,7 @@ mockModule(new URL('../relay/RelayActorProvider.tsx', import.meta.url), {
 
 before(async () => {
   ({ AppProviders } = await import('./AppProviders'));
+  ({ useFeatureFlag } = await import('./FeatureFlagsContext'));
   ({ UniversalShell } = await import('./shell/UniversalShell'));
   ({ RouteBoundary, useRouteBoundary } = await import('./RouteBoundary'));
   ({ useSession } = await import('../session/SessionProvider'));
@@ -293,9 +313,13 @@ before(async () => {
 });
 
 beforeEach(() => {
+  originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(null, { status: 503 });
   queryModes.SessionProviderQuery = 'success';
   queryModes.ShellRecoveryQuery = 'success';
   queryModes.UniversalShellQuery = 'success';
+  mockAccountId = 'account-1';
+  mockSessionId = 'session-1';
   queryHistory.length = 0;
   pendingSessionQueries.length = 0;
   navigationMounts = 0;
@@ -308,9 +332,13 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
-  if (renderer) {
-    await act(async () => renderer?.unmount());
-    renderer = null;
+  try {
+    if (renderer) {
+      await act(async () => renderer?.unmount());
+      renderer = null;
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
   }
 });
 
@@ -380,6 +408,61 @@ function NavigationThemeProbe() {
   });
 }
 
+function FeatureFlagsProbe() {
+  return createElement('FeatureFlagsProbe', {
+    quote: useFeatureFlag('quote'),
+    disabled: useFeatureFlag('disabled'),
+    malformed: useFeatureFlag('malformed'),
+    errored: useFeatureFlag('errored'),
+    missing: useFeatureFlag('missing'),
+  });
+}
+
+function FeatureFlagsAccountSwitchProbe() {
+  const actor = useRelayActor();
+
+  return createElement('FeatureFlagsAccountSwitchProbe', {
+    onAccountChange: async (accountId: string | null) => {
+      mockAccountId = accountId;
+      mockSessionId = accountId ? `session-${accountId}` : null;
+      if (accountId) {
+        await actor.setNativeSession(`token-${accountId}`);
+      } else {
+        await actor.clearNativeSession();
+      }
+    },
+  });
+}
+
+async function captureOfrepRequest(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<OfrepRequest> {
+  const request = input instanceof Request ? input : new Request(input, init);
+  return {
+    body: await request.clone().json(),
+    contentType: request.headers.get('content-type')?.split(';', 1)[0]?.trim() ?? null,
+    method: request.method,
+    url: request.url,
+  };
+}
+
+function assertFlagRequest(request: OfrepRequest, targetingKey: string) {
+  assert.deepEqual(request, {
+    body: { context: { targetingKey } },
+    contentType: 'application/json',
+    method: 'POST',
+    url: flagEvaluationUrl,
+  });
+}
+
+function flagsResponse(flags: Array<Record<string, unknown>>) {
+  return new Response(JSON.stringify({ flags }), {
+    headers: { 'Content-Type': 'application/json' },
+    status: 200,
+  });
+}
+
 function findTag(tag: string) {
   assert.ok(renderer);
   const node = renderer.root.findAll((candidate) => String(candidate.type) === tag)[0];
@@ -399,6 +482,138 @@ describe('AppProviders runtime composition', () => {
     });
 
     assert.equal(findTag('NavigationThemeProbe').props.background, '#fff');
+  });
+
+  it('loads one shared flag snapshot per provider mount and fails closed', async () => {
+    const requests: OfrepRequest[] = [];
+    const pendingRequests: Array<(response: Response) => void> = [];
+    globalThis.fetch = async (input) => {
+      requests.push(await captureOfrepRequest(input));
+
+      if (requests.length === 1) {
+        return new Promise<Response>((resolve) => pendingRequests.push(resolve));
+      }
+      return new Response(null, { status: 503 });
+    };
+
+    await act(async () => {
+      renderer = create(createElement(AppProviders, null, createElement(FeatureFlagsProbe)));
+    });
+
+    assert.deepEqual(findTag('FeatureFlagsProbe').props, {
+      quote: false,
+      disabled: false,
+      malformed: false,
+      errored: false,
+      missing: false,
+    });
+    assert.equal(requests.length, 1);
+    assertFlagRequest(requests[0]!, 'account-1');
+    const resolveFirstRequest = pendingRequests.shift();
+    assert.ok(resolveFirstRequest);
+
+    await act(async () => {
+      resolveFirstRequest(
+        flagsResponse([
+          { key: 'quote', value: true },
+          { key: 'disabled', value: false },
+          { key: 'malformed', value: 'true' },
+          { key: 'errored', errorCode: 'FLAG_NOT_FOUND' },
+        ]),
+      );
+    });
+
+    assert.deepEqual(findTag('FeatureFlagsProbe').props, {
+      quote: true,
+      disabled: false,
+      malformed: false,
+      errored: false,
+      missing: false,
+    });
+    assert.equal(requests.length, 1);
+
+    await act(async () => renderer?.unmount());
+    renderer = null;
+
+    await act(async () => {
+      renderer = create(createElement(AppProviders, null, createElement(FeatureFlagsProbe)));
+    });
+
+    assert.equal(findTag('FeatureFlagsProbe').props.quote, false);
+    assert.equal(findTag('FeatureFlagsProbe').props.disabled, false);
+    assert.equal(requests.length, 2);
+    assertFlagRequest(requests[1]!, 'account-1');
+  });
+
+  it('targets flags to the active account, ignores obsolete results, and resets after logout', async () => {
+    const requests: OfrepRequest[] = [];
+    const pendingRequests: Array<(response: Response) => void> = [];
+    globalThis.fetch = async (input) => {
+      requests.push(await captureOfrepRequest(input));
+      return new Promise<Response>((resolve) => pendingRequests.push(resolve));
+    };
+    mockAccountId = null;
+    mockSessionId = null;
+
+    await act(async () => {
+      renderer = create(
+        createElement(
+          AppProviders,
+          null,
+          createElement(
+            'FlagTestRoot',
+            null,
+            createElement(FeatureFlagsProbe),
+            createElement(FeatureFlagsAccountSwitchProbe),
+          ),
+        ),
+      );
+    });
+
+    const quote = () => findTag('FeatureFlagsProbe').props.quote;
+    const changeAccount = findTag('FeatureFlagsAccountSwitchProbe').props.onAccountChange;
+    const respond = async (index: number, response: Response) => {
+      const resolve = pendingRequests[index];
+      assert.ok(resolve);
+      await act(async () => resolve(response));
+    };
+    const flagResponse = (value: boolean) => flagsResponse([{ key: 'quote', value }]);
+
+    assert.equal(quote(), false);
+    assert.equal(pendingRequests.length, 0);
+
+    assert.equal(typeof changeAccount, 'function');
+
+    await act(async () => changeAccount('account-1'));
+    await respond(0, flagResponse(true));
+    assert.equal(quote(), true);
+
+    await act(async () => changeAccount(null));
+    assert.equal(pendingRequests.length, 1);
+    assert.equal(quote(), false);
+
+    await act(async () => changeAccount('account-1'));
+    assert.equal(quote(), false);
+    await act(async () => changeAccount('account-2'));
+    assert.equal(quote(), false);
+    await respond(2, flagResponse(true));
+    assert.equal(quote(), true);
+    await respond(1, flagResponse(false));
+    assert.equal(quote(), true);
+
+    await act(async () => changeAccount(null));
+    assert.equal(pendingRequests.length, 3);
+    assert.equal(quote(), false);
+
+    await act(async () => changeAccount('account-1'));
+    assert.equal(quote(), false);
+    await respond(3, new Response(null, { status: 503 }));
+    assert.equal(quote(), false);
+    const targetingKeys = ['account-1', 'account-1', 'account-2', 'account-1'];
+    assert.equal(requests.length, targetingKeys.length);
+    for (const [index, targetingKey] of targetingKeys.entries()) {
+      assertFlagRequest(requests[index]!, targetingKey);
+    }
   });
 
   it('root fallback remounts the complete app runtime after its action', async () => {

@@ -7,6 +7,7 @@ finite transition, 반복 loading cycle, toast 체류시간과 focus scheduling�
 ## Motion token
 
 Figma의 active collection은 `KOSMO Motion`이며 단일 `Value` mode를 사용한다. duration 값의 단위는 ms다.
+`skeleton-wave`는 PROD-1018의 앱 구현 값이며 Figma Motion 정본 반영을 기다리고 있다.
 
 | Token                           |                 값 | 역할                                  |
 | ------------------------------- | -----------------: | ------------------------------------- |
@@ -16,6 +17,7 @@ Figma의 active collection은 `KOSMO Motion`이며 단일 `Value` mode를 사용
 | `motion/duration/emphasized`    |              360ms | modal·drawer의 공간 변화가 있는 enter |
 | `motion/duration/reaction`      |              300ms | like·reaction의 유한한 확인 피드백    |
 | `motion/duration/loading-cycle` |              800ms | indeterminate spinner 한 바퀴         |
+| `motion/duration/skeleton-wave` |             2000ms | Skeleton highlight wave               |
 | `motion/easing/standard`        | `.17, .73, .14, 1` | 일반 상태 전환                        |
 | `motion/easing/enter`           |    `.16, 1, .3, 1` | 빠르게 나타나 안정적으로 정착         |
 | `motion/easing/exit`            |      `.4, 0, 1, 1` | 주의를 끌지 않고 빠르게 퇴장          |
@@ -25,16 +27,18 @@ Figma의 active collection은 `KOSMO Motion`이며 단일 `Value` mode를 사용
 
 ## Component 사용표
 
-| 역할               | Duration                 | Easing     | 표현                                    |
-| ------------------ | ------------------------ | ---------- | --------------------------------------- |
-| Hover·Pressed      | `fast` 120ms             | standard   | color·opacity, 필요한 경우 scale `0.98` |
-| Selected           | `standard` 200ms         | standard   | indicator 위치, surface·border·color    |
-| Modal·Drawer enter | `emphasized` 360ms       | enter      | scrim fade와 짧은 position·opacity 변화 |
-| Modal·Drawer exit  | `standard` 200ms         | exit       | position·opacity를 함께 정리            |
-| Toast              | enter 200ms / exit 120ms | enter/exit | translate·opacity, 체류시간은 별도      |
-| Reaction           | `reaction` 300ms         | standard   | 유한한 scale·color 확인 피드백          |
-| Spinner            | `loading-cycle` 800ms    | linear     | rotation만 반복                         |
-| Skeleton           | `instant` 0ms            | 없음       | 정적 placeholder                        |
+| 역할               | Duration                 | Easing     | 표현                                            |
+| ------------------ | ------------------------ | ---------- | ----------------------------------------------- |
+| Hover·Pressed      | `fast` 120ms             | standard   | color·opacity, 필요한 경우 scale `0.98`         |
+| Selected           | `standard` 200ms         | standard   | indicator 위치, surface·border·color            |
+| Modal·Drawer enter | `emphasized` 360ms       | enter      | scrim fade와 짧은 position·opacity 변화         |
+| Modal·Drawer exit  | `standard` 200ms         | exit       | position·opacity를 함께 정리                    |
+| Toast              | enter 200ms / exit 120ms | enter/exit | translate·opacity, 체류시간은 별도              |
+| Reaction           | `reaction` 300ms         | standard   | 유한한 scale·color 확인 피드백                  |
+| Spinner            | `loading-cycle` 800ms    | linear     | rotation만 반복                                 |
+| Skeleton           | `skeleton-wave` 2000ms   | linear     | placeholder highlight 이동 후 2000ms 대기, 반복 |
+
+Underline Tabs에서는 64px 선택 바의 양 끝이 새 위치까지 서로 다른 속도로 동시에 이동해 탭 사이 거리에 따른 폭 변화가 생긴다. 초기 배치·레이아웃 변경·reduced-motion에서는 최종 위치와 크기를 즉시 반영한다.
 
 상태의 의미와 accessible state는 motion 완료를 기다리지 않고 즉시 갱신한다. focus 이동·복원과 `requestAnimationFrame` scheduling은 시각 transition으로 분류하지 않는다.
 

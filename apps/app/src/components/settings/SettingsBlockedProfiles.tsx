@@ -4,7 +4,7 @@ import { usePaginationScrollRegistration } from '@/components/pagination/Paginat
 import { useAutomaticPagination } from '@/components/pagination/useAutomaticPagination';
 import { BlockedProfileList } from '@/components/profile/BlockedProfileList';
 import { ProfileBlockAction } from '@/components/profile/ProfileBlockAction';
-import { ProfileListItemContent } from '@/components/profile/ProfileListItemContent';
+import { ProfileListItemRow } from '@/components/profile/ProfileListItemRow';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { StateView } from '@/components/ui/StateView';
@@ -45,8 +45,7 @@ const SettingsBlockedProfileRowFragment = graphql`
   fragment SettingsBlockedProfileRow_profileBlock on ProfileBlock {
     ...ProfileBlockAction_profileBlock
     targetProfile {
-      displayName
-      relativeHandle
+      ...ProfileListItemRow_profile
       ...ProfileBlockAction_profile
       viewerState {
         profileBlock {
@@ -108,7 +107,6 @@ function SettingsBlockedProfilesContent() {
     itemCount: edges.length,
     loadNext: pagination.loadNext,
     pageSize: 20,
-    requestKey: profile?.id,
   });
   usePaginationScrollRegistration(nativeScrollProps);
 
@@ -176,19 +174,14 @@ function SettingsBlockedProfileRow({
   const currentProfileBlock = targetProfile.viewerState?.profileBlock ?? null;
 
   return (
-    <ProfileListItemContent
-      avatarLabel={targetProfile.displayName}
-      displayName={targetProfile.displayName}
-      relativeHandle={targetProfile.relativeHandle}
-      style={styles.row}
-    >
+    <ProfileListItemRow profile={targetProfile} style={styles.row}>
       <ProfileBlockAction
         {...(currentProfileBlock
           ? { nextBlocked: false as const, profileBlock: currentProfileBlock }
           : { nextBlocked: true as const, profile: targetProfile })}
         surface="button"
       />
-    </ProfileListItemContent>
+    </ProfileListItemRow>
   );
 }
 

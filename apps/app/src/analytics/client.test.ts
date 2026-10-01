@@ -3,7 +3,11 @@ import { after, beforeEach, describe, it, mock } from 'node:test';
 import type { CaptureResult, PostHogConfig } from 'posthog-js';
 import type * as AnalyticsModule from './client.web';
 
-type Call = { event: string; properties?: Record<string, unknown> };
+type Call = {
+  event: string;
+  properties?: Record<string, unknown>;
+  options?: { uuid?: string; timestamp?: Date };
+};
 
 class FakePostHog {
   constructor(readonly config: Partial<PostHogConfig>) {}
@@ -16,8 +20,10 @@ class FakePostHog {
     return () => this.sessionListeners.delete(callback);
   }
   readonly calls: Call[] = [];
+  readonly sent: CaptureResult[] = [];
   readonly timestamps: Date[] = [];
   readonly identities: string[] = [];
+  readonly personProperties: Array<Record<string, unknown> | undefined> = [];
   readonly actions: string[] = [];
   captureAttempts = 0;
   resets = 0;
@@ -27,7 +33,11 @@ class FakePostHog {
   distinctId = 'anonymous-id';
   userId: string | undefined;
 
-  capture(event: string, properties?: Record<string, unknown>, options?: { timestamp?: Date }) {
+  capture(
+    event: string,
+    properties?: Record<string, unknown>,
+    options?: { uuid?: string; timestamp?: Date },
+  ) {
     this.captureAttempts += 1;
     if (this.captureFails) {
       throw new Error('capture failure');
@@ -41,7 +51,7 @@ class FakePostHog {
     const result = {
       event,
       properties: { ...properties, $session_id: this.sessionId },
-      uuid: 'test',
+      uuid: options?.uuid ?? 'test',
       timestamp: options?.timestamp ?? new Date(),
     } as CaptureResult;
     const filtered =
@@ -49,18 +59,20 @@ class FakePostHog {
     if (!filtered) {
       return undefined;
     }
-    this.calls.push({ event, properties });
+    this.calls.push({ event, properties, ...(options ? { options } : {}) });
+    this.sent.push(filtered);
     assert.ok(filtered.timestamp);
     this.timestamps.push(filtered.timestamp);
     return filtered;
   }
 
-  identify(accountId: string) {
+  identify(accountId: string, properties?: Record<string, unknown>) {
     if (this.identifyFails) {
       throw new Error('identify failure');
     }
     this.actions.push(`identify:${accountId}`);
     this.identities.push(accountId);
+    this.personProperties.push(properties);
     this.distinctId = accountId;
     this.userId = accountId;
   }
@@ -192,6 +204,19 @@ describe('PostHog Web client', () => {
     assert.deepEqual(instance.calls, [{ event: 'post_created', properties }]);
   });
 
+  it('capture 실패는 product flow를 차단하지 않는다', () => {
+    analytics.clearAnalytics();
+    const instance = instances[0];
+    assert.ok(instance);
+    instance.captureFails = true;
+
+    assert.doesNotThrow(() =>
+      analytics.trackAnalytics('profile_created', { selected_profile_id: 'profile-id' }),
+    );
+    assert.equal(instance.captureAttempts, 1);
+    assert.deepEqual(instance.calls, []);
+  });
+
   it('Account identity는 같은 ID를 SDK에 위임하고 전환·guest에서 reset 후 분리한다', () => {
     analytics.clearAnalytics();
     const instance = instances[0];
@@ -212,6 +237,62 @@ describe('PostHog Web client', () => {
       'identify:account-b',
       'reset',
     ]);
+  });
+
+  it('알려진 Profile 수 0과 변경값만 Person 속성으로 전달하고 미확인 값은 생략한다', () => {
+    analytics.identifyAnalytics('account-a');
+    analytics.identifyAnalytics('account-a', 0);
+    analytics.identifyAnalytics('account-a', 2);
+    analytics.identifyAnalytics('account-a');
+    const instance = instances[0];
+    assert.ok(instance);
+    assert.deepEqual(instance.personProperties, [
+      undefined,
+      { available_profile_count: 0 },
+      { available_profile_count: 2 },
+      undefined,
+    ]);
+  });
+
+  it('Account 전환에는 reset 뒤 새 Account의 count를 identify로 전달한다', () => {
+    analytics.identifyAnalytics('account-a', 2);
+    analytics.identifyAnalytics('account-b', 1);
+    const instance = instances[0];
+    assert.ok(instance);
+    assert.deepEqual(instance.actions, ['identify:account-a', 'reset', 'identify:account-b']);
+    assert.deepEqual(instance.personProperties, [
+      { available_profile_count: 2 },
+      { available_profile_count: 1 },
+    ]);
+  });
+
+  it('인증된 pageview에만 조회 당시 선택 Profile을 붙이고 전환·guest에서 지운다', () => {
+    analytics.setAnalyticsSelectedProfile('account-a', 'profile-a');
+    analytics.identifyAnalytics('account-a');
+    const instance = instances[0];
+    assert.ok(instance);
+    instance.capture('$pageview', {});
+    analytics.trackAnalytics('bookmark_added', {});
+    analytics.trackAnalytics('profile_selected', { selected_profile_id: 'profile-b' });
+    instance.capture('$pageview', {});
+    analytics.setAnalyticsSelectedProfile('account-b', 'profile-c');
+    instance.capture('$pageview', {});
+    analytics.identifyAnalytics('account-b');
+    instance.capture('$pageview', {});
+    analytics.clearAnalytics();
+    instance.capture('$pageview', {});
+
+    assert.deepEqual(
+      instance.sent
+        .filter((event) => event.event === '$pageview')
+        .map((event) => event.properties?.selected_profile_id),
+      ['profile-a', 'profile-b', undefined, 'profile-c', undefined],
+    );
+    assert.equal(
+      instance.sent.find((event) => event.event === 'bookmark_added')?.properties
+        ?.selected_profile_id,
+      undefined,
+    );
   });
 
   it('reload 뒤 SDK에 남은 같은 Account는 reset하지 않는다', () => {

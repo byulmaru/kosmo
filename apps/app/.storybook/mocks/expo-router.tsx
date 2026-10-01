@@ -86,6 +86,7 @@ export function useRouter() {
   return useMemo(
     () => ({
       back: () => undefined,
+      dismissTo: setPathname,
       push: setPathname,
       replace: setPathname,
     }),

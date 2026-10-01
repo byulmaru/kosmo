@@ -1,7 +1,11 @@
 export type AnalyticsEventProperties = {
   profile_view_succeeded: Record<string, never>;
   profile_created: { selected_profile_id: string };
-  profile_selected: { selected_profile_id: string };
+  profile_selected: {
+    selected_profile_id: string;
+    selection_cause?: 'auto' | 'direct';
+    previous_profile_id?: string;
+  };
   post_created: {
     selected_profile_id: string;
     visibility: 'PUBLIC' | 'UNLISTED' | 'FOLLOWERS' | 'DIRECT';

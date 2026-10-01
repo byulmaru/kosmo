@@ -21,7 +21,6 @@ export type UseAutomaticPaginationOptions = {
   loadNext: LoadNext;
   nativePagination?: 'endReached' | 'metrics';
   pageSize: number;
-  requestKey?: string;
   webScrollTarget?: 'container' | 'document';
 };
 
@@ -41,7 +40,6 @@ export function useAutomaticPagination({
   loadNext,
   nativePagination = 'metrics',
   pageSize,
-  requestKey,
   webScrollTarget = 'document',
 }: UseAutomaticPaginationOptions): UseAutomaticPaginationResult {
   const [loadError, setLoadError] = useState(false);
@@ -50,14 +48,6 @@ export function useAutomaticPagination({
   const handledContainerPageRevisionRef = useRef(0);
   const requestInFlightRef = useRef(false);
   const pageErrorRef = useRef(false);
-  const requestKeyRef = useRef(requestKey);
-  const requestGenerationRef = useRef(0);
-  if (requestKeyRef.current !== requestKey) {
-    requestKeyRef.current = requestKey;
-    requestGenerationRef.current += 1;
-    requestInFlightRef.current = false;
-    pageErrorRef.current = false;
-  }
   const webNearEndCheckRef = useRef<(() => void) | null>(null);
   const nativeMetricsRef = useRef<ScrollMetrics>({
     contentLength: 0,
@@ -88,14 +78,10 @@ export function useAutomaticPagination({
     }
 
     requestInFlightRef.current = true;
-    const activeRequestGeneration = requestGenerationRef.current;
     pageErrorRef.current = false;
     setLoadError(false);
     latestOptions.loadNext(latestOptions.pageSize, {
       onComplete: (error) => {
-        if (requestGenerationRef.current !== activeRequestGeneration) {
-          return;
-        }
         pageErrorRef.current = Boolean(error);
         setLoadError(Boolean(error));
         if (error) {
@@ -107,14 +93,8 @@ export function useAutomaticPagination({
           return;
         }
         setTimeout(() => {
-          if (requestGenerationRef.current !== activeRequestGeneration) {
-            return;
-          }
           if (Platform.OS === 'web' && latestOptionsRef.current.webScrollTarget === 'document') {
             window.requestAnimationFrame(() => {
-              if (requestGenerationRef.current !== activeRequestGeneration) {
-                return;
-              }
               requestInFlightRef.current = false;
               webNearEndCheckRef.current?.();
             });
@@ -132,10 +112,6 @@ export function useAutomaticPagination({
     pageErrorRef.current = false;
     setLoadError(false);
   }, []);
-
-  useEffect(() => {
-    resetError();
-  }, [requestKey, resetError]);
 
   const onEndReached = useCallback(() => {
     if (nativePagination !== 'endReached' || pageErrorRef.current || loadError) {

@@ -10,6 +10,7 @@ import type { PostComposerHost as PostComposerHostComponent } from './PostCompos
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const platform = { OS: 'web' };
+const safeAreaInsets = { bottom: 0, left: 0, right: 0, top: 0 };
 let composerProps:
   | {
       body: string;
@@ -37,6 +38,9 @@ mockModule('react-native', {
   Text: 'Text',
   View: 'View',
 });
+mockModule('react-native-safe-area-context', {
+  useSafeAreaInsets: () => safeAreaInsets,
+});
 mockModule(require.resolve('./PostComposerController'), {
   PostComposerController: (
     props: Omit<NonNullable<typeof composerProps>, 'body' | 'onBodyChange'>,
@@ -56,7 +60,14 @@ mockModule('@/components/ui/ToastProvider', {
 mockModule('@/components/ui/useSafeAreaPadding', { useSafeAreaPadding: () => ({}) });
 mockModule('@/theme/ThemeProvider', {
   useElevation: () => ({ overlay: { shadowOpacity: 1 } }),
-  useTheme: () => ({ border: '#ddd', card: '#fff', overlayScrim: '#000', text: '#111' }),
+  useTheme: () => ({
+    backgroundCanvas: '#canvas',
+    backgroundElevated: '#elevated',
+    backgroundSurface: '#surface',
+    borderSubtle: '#subtle',
+    foregroundPrimary: '#primary',
+    overlayScrim: '#scrim',
+  }),
 });
 mockModule('@/theme/tokens', {
   fontFamilies: { ui: 'ui' },
@@ -79,6 +90,7 @@ afterEach(async () => {
   }
   composerProps = undefined;
   platform.OS = 'web';
+  safeAreaInsets.top = 0;
   mock.restoreAll();
 });
 
@@ -102,10 +114,54 @@ describe('PostComposerHost', () => {
 
     assert.equal(modal?.props.transparent, false);
     assert.equal(renderer?.root.findAllByProps({ testID: 'post-composer-backdrop' }).length, 0);
+    assert.equal(dialogStyles.at(-1)?.backgroundColor, '#canvas');
     assert.equal(
       dialogStyles.some((style) => style.shadowOpacity === 1),
       false,
     );
+  });
+
+  it('Native mobile KeyboardAvoidingView는 safe-area screen offset을 받는다', async () => {
+    platform.OS = 'ios';
+    safeAreaInsets.top = 59;
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposerHost, {
+          mode: 'mobile',
+          onRequestClose: () => undefined,
+          open: true,
+          profile: {} as never,
+        }),
+      );
+    });
+
+    const keyboardAvoidingView = renderer?.root.findByType('KeyboardAvoidingView' as ElementType);
+    assert.equal(keyboardAvoidingView?.props.behavior, 'height');
+    assert.equal(keyboardAvoidingView?.props.keyboardVerticalOffset, 59);
+  });
+
+  it('모바일 Web surface는 safe-area host의 dynamic viewport 높이를 사용한다', async () => {
+    platform.OS = 'web';
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposerHost, {
+          mode: 'mobile',
+          onRequestClose: () => undefined,
+          open: true,
+          profile: {} as never,
+        }),
+      );
+    });
+
+    const host = renderer?.root.findAllByType('View' as ElementType).find((view) => {
+      const styles = (
+        Array.isArray(view.props.style) ? view.props.style.flat(Infinity) : [view.props.style]
+      ) as Array<{ position?: unknown }>;
+      return styles.some((style) => style?.position === 'fixed');
+    });
+    assert.ok(host);
+    const hostStyles = (host?.props.style.flat(Infinity) ?? []) as Array<{ height?: unknown }>;
+    assert.ok(hostStyles.some((style) => style?.height === '100dvh'));
   });
 
   it('닫힌 Overlay를 modal로 노출하지 않는다', async () => {
@@ -136,6 +192,9 @@ describe('PostComposerHost', () => {
     await act(async () => {
       renderer = create(createElement(PostComposerHost, props));
     });
+    assert.ok(renderer);
+    const rail = renderer.root.findByProps({ testID: 'post-composer-rail' });
+    assert.equal(rail.props.style.at(-1).backgroundColor, '#surface');
     await act(async () => composerProps?.onBodyChange('유지할 draft'));
     await act(async () => {
       renderer?.update(
@@ -147,6 +206,10 @@ describe('PostComposerHost', () => {
         }),
       );
     });
+    assert.ok(renderer);
+
+    const overlay = renderer.root.findByProps({ testID: 'post-composer-dialog' });
+    assert.equal(overlay.props.style.at(-1).backgroundColor, '#elevated');
 
     assert.equal(composerProps?.body, '유지할 draft');
   });
@@ -287,9 +350,17 @@ describe('PostComposerHost', () => {
         }
       },
     };
+    const previousRequestAnimationFrame = globalThis.requestAnimationFrame;
     Object.defineProperty(globalThis, 'document', {
       configurable: true,
       value: documentMock,
+    });
+    Object.defineProperty(globalThis, 'requestAnimationFrame', {
+      configurable: true,
+      value: (callback: FrameRequestCallback) => {
+        callback(0);
+        return 0;
+      },
     });
 
     try {
@@ -338,6 +409,10 @@ describe('PostComposerHost', () => {
       Object.defineProperty(globalThis, 'document', {
         configurable: true,
         value: previousDocument,
+      });
+      Object.defineProperty(globalThis, 'requestAnimationFrame', {
+        configurable: true,
+        value: previousRequestAnimationFrame,
       });
     }
   });

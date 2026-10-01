@@ -23,6 +23,7 @@
     "./temporal/post": "./temporal/post.ts",
     "./temporal/profile-block": "./temporal/profile-block.ts",
     "./temporal/profile-block-failure": "./temporal/profile-block-failure.ts",
+    "./temporal/profile-migration": "./temporal/profile-migration.ts",
     "./temporal/task-queue": "./temporal/task-queue.ts",
     "./temporal/workflows": "./temporal/workflows.ts",
     "./utils": "./utils.ts",

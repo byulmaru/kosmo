@@ -86,9 +86,11 @@ export {
   rejectProfileFollowRequest,
 } from './profile-follow-request';
 export type { AcceptProfileFollowRequestResult } from './profile-follow-transaction';
+export { profileFollowPairCondition } from './profile-follow-transaction';
 export type { PrepareProfileMigrationInput } from './profile-migration';
 export { prepareProfileMigration } from './profile-migration';
 export { muteProfile, unmuteProfile } from './profile-mute';
+export { pinProfilePost, unpinProfilePost } from './profile-pin';
 export { updateProfile } from './profile-update';
 export { findEligiblePushInstallations, invalidatePushInstallation } from './push-installation';
 export { createQuoteNotification } from './quote-notification';

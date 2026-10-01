@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { Tab, TabList } from '@/components/ui/Tabs';
 import { fontFamilies } from '@/theme/tokens';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -90,7 +90,8 @@ export const UnderlineInteractionContract: Story = {
     const latest = within(group).getByRole('tab', { name: latestText });
     const media = within(group).getByRole('tab', { name: mediaText });
     const popularLabel = within(popular).getByText(popularText);
-    const indicator = popular.lastElementChild;
+    const popularFeedback = popular.firstElementChild;
+    const mediaFeedback = media.firstElementChild;
 
     await step('기본 상태와 접근성 확인', async () => {
       expect(popular).toHaveAttribute('aria-selected', 'true');
@@ -100,19 +101,24 @@ export const UnderlineInteractionContract: Story = {
       expect(latest).toHaveStyle({ opacity: '0.45' });
       expect(media).toHaveAttribute('tabindex', '-1');
       expect(group).toHaveStyle({
+        backgroundColor: 'rgb(255, 255, 255)',
         borderBottomColor: 'rgb(236, 236, 240)',
         borderBottomWidth: '1px',
       });
       expect(getComputedStyle(popular).backgroundColor).toBe('rgba(0, 0, 0, 0)');
+      expect(getComputedStyle(popularFeedback as Element).backgroundColor).toBe('rgba(0, 0, 0, 0)');
       expect(popularLabel).toHaveStyle({
         fontFamily: fontFamilies.ui,
         fontSize: '14px',
         fontWeight: '600',
         lineHeight: '20px',
       });
-      expect(indicator).not.toBeNull();
-      expect(getComputedStyle(indicator as Element).backgroundColor).toBe('rgb(255, 229, 151)');
-      expect(indicator).toHaveStyle({ height: '4px', width: '64px' });
+      await waitFor(() => {
+        const indicator = group.lastElementChild;
+        expect(indicator).not.toBeNull();
+        expect(getComputedStyle(indicator as Element).backgroundColor).toBe('rgb(255, 229, 151)');
+        expect(indicator).toHaveStyle({ height: '4px', width: '64px' });
+      });
 
       await userEvent.tab();
       expect(popular).toHaveFocus();
@@ -144,9 +150,24 @@ export const UnderlineInteractionContract: Story = {
     });
 
     await step('포인터 선택과 hover 상태 확인', async () => {
+      await userEvent.hover(popular);
+      await waitFor(() =>
+        expect(getComputedStyle(popularFeedback as Element).backgroundColor).toBe(
+          'rgba(0, 0, 0, 0.04)',
+        ),
+      );
+      await userEvent.hover(media);
+      await waitFor(() =>
+        expect(getComputedStyle(mediaFeedback as Element).backgroundColor).toBe(
+          'rgba(0, 0, 0, 0.04)',
+        ),
+      );
       await userEvent.pointer({ keys: '[MouseLeft>]', target: media });
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      expect(getComputedStyle(media).opacity).toBe('0.85');
+      await waitFor(() =>
+        expect(getComputedStyle(mediaFeedback as Element).backgroundColor).toBe(
+          'rgba(0, 0, 0, 0.08)',
+        ),
+      );
       await userEvent.click(media);
       expect(media).toHaveFocus();
       expect(media).toHaveAttribute('aria-selected', 'true');
@@ -173,12 +194,15 @@ export const PillInteractionContract: Story = {
     const group = canvas.getByRole('tablist', { name: '검색 결과 유형' });
     const popular = within(group).getByRole('tab', { name: '인기' });
     const latest = within(group).getByRole('tab', { name: '최신' });
+    const visual = popular.firstElementChild;
+    const feedback = visual?.firstElementChild;
 
     await step('Pill 상태와 포커스 확인', async () => {
       expect(popular).toHaveAttribute('aria-selected', 'true');
-      expect(popular).toHaveStyle({ borderRadius: '8px', height: '32px' });
-      expect(getComputedStyle(popular).backgroundColor).toBe('rgb(255, 255, 255)');
-      expect(getComputedStyle(popular).borderColor).toBe('rgb(252, 231, 154)');
+      expect(visual).toHaveStyle({ borderRadius: '8px', height: '32px' });
+      expect(getComputedStyle(visual as Element).backgroundColor).toBe('rgb(255, 255, 255)');
+      expect(getComputedStyle(visual as Element).borderColor).toBe('rgb(255, 229, 151)');
+      expect(feedback).not.toBeNull();
       expect(latest).toHaveAttribute('aria-disabled', 'true');
       expect(latest).toHaveStyle({ opacity: '0.45' });
 
@@ -189,9 +213,14 @@ export const PillInteractionContract: Story = {
     });
 
     await step('Pill 탭 선택과 비활성 상태 확인', async () => {
+      await userEvent.hover(popular);
+      await waitFor(() =>
+        expect(getComputedStyle(feedback as Element).backgroundColor).toBe('rgba(0, 0, 0, 0.04)'),
+      );
       await userEvent.pointer({ keys: '[MouseLeft>]', target: popular });
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      expect(getComputedStyle(popular).opacity).toBe('0.85');
+      await waitFor(() =>
+        expect(getComputedStyle(feedback as Element).backgroundColor).toBe('rgba(0, 0, 0, 0.08)'),
+      );
       await userEvent.click(popular);
       expect(args.onValueChange).toHaveBeenCalledTimes(1);
       expect(args.onValueChange).toHaveBeenLastCalledWith('popular');

@@ -46,15 +46,17 @@ mock.module(new URL('../shell/NavigationLink.tsx', import.meta.url), {
       href,
       onNavigate,
       primary,
+      push,
     }: {
       children: ReactElement<{ href?: string }>;
       href: string;
       onNavigate?: () => void;
       primary?: boolean;
+      push?: boolean;
     }) =>
       createElement(
         'NavigationLink',
-        { href, onNavigate, primary },
+        { href, onNavigate, primary, push },
         cloneElement(children, { href }),
       ),
   },
@@ -63,14 +65,14 @@ mock.module(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
   exports: {
     useReducedMotion: () => reducedMotion,
     useTheme: () => ({
-      divider: '#eeeeee',
-      focus: '#005fcc',
-      selectedSurface: '#fff8dc',
-      selectedBorder: '#9a7800',
+      borderSubtle: '#eeeeee',
+      foregroundPrimary: '#111111',
+      foregroundSecondary: '#666666',
+      stateFocusRing: '#005fcc',
+      stateSelectedSurface: '#fff8dc',
+      stateSelectedBorder: '#9a7800',
       stateHover: '#f4f4f4',
       statePressed: '#e8e8e8',
-      text: '#111111',
-      textSecondary: '#666666',
     }),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
@@ -94,9 +96,10 @@ afterEach(async () => {
 });
 
 describe('SettingsLinkRow', () => {
-  it('내부 링크는 NavigationLink primary와 selected link semantics를 유지한다', async () => {
+  it('내부 링크는 현재 페이지에서 aria-current=page를 노출한다', async () => {
     await render({
       accessibilityLabel: '게시물 기본 공개 범위 설정 열기',
+      currentPage: true,
       href: '/settings/default-post-visibility',
       label: '게시물 기본 공개 범위',
       primary: true,
@@ -108,6 +111,7 @@ describe('SettingsLinkRow', () => {
     const navigationLink = rendered('NavigationLink')[0];
     assert.equal(navigationLink.props.href, '/settings/default-post-visibility');
     assert.equal(navigationLink.props.primary, true);
+    assert.equal(navigationLink.props.push, true);
     assert.equal(row.props.href, '/settings/default-post-visibility');
     assert.equal(row.props.accessibilityRole, 'link');
     assert.equal(row.props.accessibilityLabel, '게시물 기본 공개 범위 설정 열기');
@@ -125,6 +129,24 @@ describe('SettingsLinkRow', () => {
     assert.ok(chevronWrapper);
     assert.equal(chevronWrapper.props.pointerEvents, 'none');
     assert.equal(chevronWrapper.props.children.type, 'ChevronRightIcon');
+  });
+
+  it('선택된 상위 category도 현재 페이지가 아니면 aria-current를 받지 않는다', async () => {
+    await render({
+      accessibilityLabel: '뮤트 및 차단 설정 열기',
+      currentPage: false,
+      href: '/settings/mute-and-block',
+      label: '뮤트 및 차단',
+      selected: true,
+      testID: 'selected-parent-settings-row',
+    });
+
+    const row = byTestId('selected-parent-settings-row');
+    assert.equal(row.props['aria-current'], undefined);
+    assert.deepEqual(row.props.accessibilityState, { selected: true });
+    const rowStyle = flattenStyle(row.props.style({ hovered: false, pressed: false }));
+    assert.equal(rowStyle.backgroundColor, '#fff8dc');
+    assert.equal(rowStyle.borderColor, '#9a7800');
   });
 
   it('외부 링크는 expo Link asChild와 exact href를 사용한다', async () => {

@@ -7,6 +7,7 @@ export { postDeleteMutationWorkflow } from './post-delete-mutation';
 export { profileBlockWorkflow } from './profile-block';
 export { profileFollowPairWorkflow } from './profile-follow-pair';
 export { profileFollowRemovalWorkflow } from './profile-follow-removal';
+export { profileMigrationMoveWorkflow } from './profile-migration';
 export { profileUnblockWorkflow } from './profile-unblock';
 export { profileUpdateEffectsWorkflow } from './profile-update';
 export { postQuoteCommandWorkflow } from './quote-command';

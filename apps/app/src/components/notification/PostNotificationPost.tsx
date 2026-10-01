@@ -5,6 +5,7 @@ import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { PostActionSurface } from '@/components/post/PostActionSurface';
 import { PostBody } from '@/components/post/PostBody';
+import { PostComposerCoordinatorContext } from '@/components/post/PostComposerCoordinator';
 import { usePostMediaViewerHost } from '@/components/post/PostMediaViewerHost';
 import { usePostReplySurface } from '@/components/post/PostReplySurface';
 import { PostSourcePreview } from '@/components/post/PostSourcePresentationView';
@@ -154,12 +155,14 @@ export function PostNotificationPost({
             />
           </View>
           {post.repostSource ? <PostSourcePreview source={post.repostSource} /> : null}
-          <PostActionSurface
-            actionBarStyle={styles.actionBar}
-            reactionSummaryStyle={styles.reactionSummary}
-            reply={reply}
-            socialActionTarget={post.actionSurface!}
-          />
+          <PostComposerCoordinatorContext.Provider value={undefined}>
+            <PostActionSurface
+              actionBarStyle={styles.actionBar}
+              reactionSummaryStyle={styles.reactionSummary}
+              reply={reply}
+              socialActionTarget={post.actionSurface!}
+            />
+          </PostComposerCoordinatorContext.Provider>
         </View>
       </View>
       {replySurface}

@@ -1,17 +1,68 @@
 import { useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { graphql, useLazyLoadQuery } from 'react-relay';
 import { fn } from 'storybook/test';
 import { MutedProfileList } from '@/components/profile/MutedProfileList';
 import { ProfileMuteActionControl } from '@/components/profile/ProfileMuteAction';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, space, textStyles } from '@/theme/tokens';
 import appleTouchIconUrl from '../../../public/apple-touch-icon.png?url';
+import { profile } from '../fixtures';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { MutedProfileListStoriesQuery as MutedProfileListStoriesQueryType } from './__generated__/MutedProfileListStoriesQuery.graphql';
 
+const longDisplayName = '아주 긴 표시 이름을 사용하는 코스모의 은하 관측자';
 const profiles = [
-  { id: 'kosmo', displayName: '코스모 작가', avatarUri: appleTouchIconUrl },
-  { id: 'galaxy', displayName: '은하 관측자', avatarUri: appleTouchIconUrl },
+  profile({
+    avatar: { id: 'muted-kosmo-avatar', url: appleTouchIconUrl },
+    displayName: '코스모 작가',
+    handle: 'kosmo',
+    id: 'kosmo',
+    relativeHandle: '@kosmo',
+  }),
+  profile({
+    avatar: { id: 'muted-galaxy-avatar', url: appleTouchIconUrl },
+    displayName: '은하 관측자',
+    handle: 'galaxy',
+    id: 'galaxy',
+    relativeHandle: '@galaxy',
+  }),
+  profile({
+    avatar: { id: 'muted-long-avatar', url: appleTouchIconUrl },
+    displayName: longDisplayName,
+    handle: 'long',
+    id: 'long',
+    relativeHandle: '@long',
+  }),
 ];
+const profileIds = profiles.map(({ id }) => id);
+
+const MutedProfileListStoriesQuery = graphql`
+  query MutedProfileListStoriesQuery($ids: [ID!]!) {
+    nodes(ids: $ids) {
+      __typename
+      ... on Profile {
+        id
+        ...ProfileListItemRow_profile @alias(as: "row")
+      }
+    }
+  }
+`;
+
+function useStoryProfiles() {
+  const data = useLazyLoadQuery<MutedProfileListStoriesQueryType>(MutedProfileListStoriesQuery, {
+    ids: profileIds,
+  });
+
+  return data.nodes.map((node) => {
+    if (node?.__typename !== 'Profile' || !node.row) {
+      throw new globalThis.Error(
+        'MutedProfileListStoriesQuery must return Profile fragments in fixture order.',
+      );
+    }
+    return { id: node.id, row: node.row };
+  });
+}
 type Props = {
   state: 'loaded' | 'loading' | 'error' | 'empty' | 'loadingMore' | 'loadMoreError';
   outcome: 'success' | 'error' | 'pending';
@@ -21,6 +72,7 @@ type Props = {
   onFeedback: (event: { profileId: string; muted: boolean; status: 'success' | 'error' }) => void;
 };
 function Fixture({ state, outcome, displayName, onUnmute, onRetry, onFeedback }: Props) {
+  const storyProfiles = useStoryProfiles();
   const theme = useTheme();
   const headingRef = useRef<View>(null);
   const focusAfterRemoval = useRef(false);
@@ -59,11 +111,13 @@ function Fixture({ state, outcome, displayName, onUnmute, onRetry, onFeedback }:
     onRetry();
     setRequestState(visibleState === 'error' ? 'loading' : 'loadingMore');
   };
-  const items = profiles
-    .map((p, index) => {
-      const item = { ...p, displayName: index ? p.displayName : displayName };
+  const selectedProfile = profiles.find((p) => p.displayName === displayName) ?? profiles[0]!;
+  const items = [
+    selectedProfile,
+    ...profiles.filter((p) => p.id !== selectedProfile.id).slice(0, 1),
+  ]
+    .map((item) => {
       return {
-        ...item,
         action: (
           <ProfileMuteActionControl
             displayName={item.displayName}
@@ -88,6 +142,8 @@ function Fixture({ state, outcome, displayName, onUnmute, onRetry, onFeedback }:
             surface="button"
           />
         ),
+        id: item.id,
+        profile: storyProfiles.find((storyProfile) => storyProfile.id === item.id)!.row,
       };
     })
     .filter((p) => !removed.includes(p.id));
@@ -147,7 +203,7 @@ const meta = {
       options: ['loaded', 'loading', 'error', 'empty', 'loadingMore', 'loadMoreError'],
     },
     outcome: { control: 'inline-radio', options: ['success', 'error', 'pending'] },
-    displayName: { control: 'text' },
+    displayName: { control: 'select', options: profiles.map(({ displayName }) => displayName) },
   },
   component: Fixture,
   excludeStories: [
@@ -157,7 +213,10 @@ const meta = {
     'RetryContract',
     'PaginationContract',
   ],
-  parameters: { controls: { include: ['state', 'outcome', 'displayName'] } },
+  parameters: {
+    controls: { include: ['state', 'outcome', 'displayName'] },
+    relay: { data: { nodes: profiles } },
+  },
   title: 'KOSMO/Patterns/Profile/Muted Profiles',
 } satisfies Meta<typeof Fixture>;
 export default meta;
@@ -169,7 +228,7 @@ export const Error: Story = { args: { state: 'error' } };
 export const LoadingMore: Story = { args: { state: 'loadingMore' } };
 export const LoadMoreError: Story = { args: { state: 'loadMoreError' } };
 export const Mobile: Story = {
-  args: { displayName: '아주 긴 표시 이름을 사용하는 코스모의 은하 관측자' },
+  args: { displayName: longDisplayName },
   globals: { viewport: { value: 'kosmoMobile', isRotated: false } },
   parameters: { layout: 'fullscreen' },
 };

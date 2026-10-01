@@ -18,7 +18,7 @@ Use this skill only when implementation of an existing change is requested.
 1. Resolve the target change from the conversation. If it is absent and exactly one active change exists, use it; if several changes are plausible or the target is ambiguous, inspect `openspec list --json` and ask the user to choose. Do not guess.
 2. Read `openspec status --change "<name>" --json`, then `openspec instructions apply --change "<name>" --json`. Use the reported schema, context files, task list, and state rather than assuming artifact names.
 3. Read every file listed by `contextFiles`. Use those artifacts to locate canonical documents and Linear issues, but do not treat OpenSpec text as upstream authority.
-4. Independently re-read the referenced canonical `docs/domain` and `docs/design` documents and the current Linear issue bodies, relations, and contract-changing comments before relying on a requirement or decision.
+4. Independently re-read the referenced product-canonical `docs/domain` documents and accepted ADRs, plus the current Linear issue bodies, relations, and contract-changing comments before relying on a product requirement or decision. Read `docs/design` as the visual design source for visual structure/state/accessibility decisions; its authority does not extend to product policy, permissions, state transitions, or server behavior.
 5. Implement pending tasks in dependency order, keeping each change within its declared scope. Mark a task complete when its implementation and relevant verification are complete, then continue through all actionable tasks.
 
 ## Stop conditions

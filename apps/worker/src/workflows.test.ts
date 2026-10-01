@@ -1571,7 +1571,7 @@ test(
 );
 
 test(
-  'Profile Block Update는 held post-commit effect보다 먼저 committed relation을 반환한다',
+  'Profile Block Update는 effect 실패 시 accepted duplicate handler 완료까지 Workflow를 유지한다',
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
@@ -1609,11 +1609,20 @@ test(
     const effectStartedPromise = new Promise<void>((resolve) => {
       effectStarted = resolve;
     });
+    const duplicateTransitionExecuted = Promise.withResolvers<void>();
+    const duplicateTransitionReleased = Promise.withResolvers<void>();
+    let holdDuplicateTransition = false;
 
     const worker = await Worker.create({
       activities: {
         executeProfileBlockTransitionActivity: async (value: unknown) => {
           assert.deepEqual(value, input);
+          if (holdDuplicateTransition) {
+            holdDuplicateTransition = false;
+            duplicateTransitionExecuted.resolve();
+            await duplicateTransitionReleased.promise;
+            return { ...execution, result: { ...execution.result, created: false } };
+          }
           return execution;
         },
         sendProfileUnfollowActivity: async (value: unknown) => {
@@ -1632,10 +1641,11 @@ test(
 
     await worker.runUntil(async () => {
       try {
+        const workflowId = 'profile-block-test:' + process.pid + ':effect-failure';
         const startWorkflowOperation = new WithStartWorkflowOperation('profileBlockWorkflow', {
           args: [input],
           taskQueue,
-          workflowId: 'profile-block-test:' + process.pid + ':success',
+          workflowId,
           workflowIdConflictPolicy: 'USE_EXISTING',
           workflowIdReusePolicy: 'ALLOW_DUPLICATE',
         });
@@ -1656,7 +1666,7 @@ test(
         const conflictingStart = new WithStartWorkflowOperation('profileBlockWorkflow', {
           args: [conflictingInput],
           taskQueue,
-          workflowId: 'profile-block-test:' + process.pid + ':success',
+          workflowId,
           workflowIdConflictPolicy: 'USE_EXISTING',
           workflowIdReusePolicy: 'ALLOW_DUPLICATE',
         });
@@ -1668,16 +1678,65 @@ test(
           }),
         );
 
+        holdDuplicateTransition = true;
+        const duplicate = await environment.client.workflow.startUpdateWithStart(
+          PROFILE_BLOCK_UPDATE_NAME,
+          {
+            args: [input],
+            updateId: PROFILE_BLOCK_UPDATE_ID + ':duplicate',
+            waitForStage: 'ACCEPTED',
+            startWorkflowOperation: new WithStartWorkflowOperation('profileBlockWorkflow', {
+              args: [input],
+              taskQueue,
+              workflowId,
+              workflowIdConflictPolicy: 'USE_EXISTING',
+              workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+            }),
+          },
+        );
+        await duplicateTransitionExecuted.promise;
+
         releaseEffect();
-        const handle = await startWorkflowOperation.workflowHandle();
+        const handle = environment.client.workflow.getHandle(workflowId, duplicate.workflowRunId);
+        for (;;) {
+          const events = (await handle.fetchHistory()).events ?? [];
+          const effectScheduledEventId = events
+            .find(
+              (event) =>
+                event.activityTaskScheduledEventAttributes?.activityType?.name ===
+                'sendProfileUnfollowActivity',
+            )
+            ?.eventId?.toString();
+          const effectFailedEvent = events.find(
+            (event) =>
+              effectScheduledEventId !== undefined &&
+              event.activityTaskFailedEventAttributes?.scheduledEventId?.toString() ===
+                effectScheduledEventId,
+          );
+          if (
+            effectFailedEvent?.eventId != null &&
+            events.some(
+              (event) =>
+                event.workflowTaskCompletedEventAttributes != null &&
+                event.eventId != null &&
+                BigInt(event.eventId.toString()) > BigInt(effectFailedEvent.eventId!.toString()),
+            )
+          ) {
+            break;
+          }
+        }
+
+        assert.equal((await handle.describe()).status.name, 'RUNNING');
+        duplicateTransitionReleased.resolve();
+        assert.deepEqual(await duplicate.result(), { ...execution.result, created: false });
         await assert.rejects(handle.result());
       } finally {
         releaseEffect();
+        duplicateTransitionReleased.resolve();
       }
     });
   },
 );
-
 test(
   'Profile Unblock Workflow passes only the exact Profile Block row ID and preserves a stale replacement',
   { timeout: 120_000 },
@@ -1739,6 +1798,156 @@ test(
       const handle = await startWorkflowOperation.workflowHandle();
       await handle.result();
     });
+  },
+);
+
+test(
+  'Profile Migration Move Workflow는 준비 후 이전하고 Continue-As-New에서 준비 결과를 재사용한다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+    const taskQueue = KOSMO_TASK_QUEUE + '-profile-migration-' + process.pid;
+    const sourceProfileId = '00000000-0000-8000-8000-000000000701';
+    const targetProfileId = '00000000-0000-8000-8000-000000000702';
+    const sourceActorUri = 'https://source.example/users/alice';
+    const targetActorUri = 'https://target.example/users/alice';
+    const rejectedSourceActorUri = 'https://source.example/users/rejected';
+    const rejectedTargetActorUri = 'https://target.example/users/rejected';
+    const selfFollow = {
+      followerProfileId: targetProfileId,
+      sourceFollowId: '00000000-0000-8000-8000-000000000703',
+    };
+    const regularFollow = {
+      followerProfileId: '00000000-0000-8000-8000-000000000704',
+      sourceFollowId: '00000000-0000-8000-8000-000000000705',
+    };
+    const preparationCalls: Array<{ sourceActorUri: string; targetActorUri: string }> = [];
+    const loadedBatches: Array<{
+      sourceProfileId: string;
+      targetProfileId: string;
+      afterSourceFollowId?: string;
+      limit: number;
+    }> = [];
+    const activityOrder: string[] = [];
+    const executedFollowers: Array<{
+      sourceProfileId: string;
+      targetProfileId: string;
+      followerProfileId: string;
+      sourceFollowId: string;
+    }> = [];
+    let preparationAttempts = 0;
+    let regularAttempts = 0;
+
+    const worker = await Worker.create({
+      activities: {
+        prepareProfileMigrationMoveActivity: async (input: {
+          sourceActorUri: string;
+          targetActorUri: string;
+        }) => {
+          preparationCalls.push(input);
+          if (input.sourceActorUri === rejectedSourceActorUri) {
+            activityOrder.push('prepare:rejected');
+            return null;
+          }
+          activityOrder.push('prepare:transfer');
+          if (preparationAttempts++ === 0) {
+            throw new Error('temporary Move preparation failure');
+          }
+          return { sourceProfileId, targetProfileId };
+        },
+        loadProfileMigrationMoveFollowerBatchActivity: async (input: {
+          sourceProfileId: string;
+          targetProfileId: string;
+          afterSourceFollowId?: string;
+          limit: number;
+        }) => {
+          loadedBatches.push(input);
+          activityOrder.push('load');
+          return input.afterSourceFollowId === undefined ? [selfFollow, regularFollow] : [];
+        },
+        executeProfileMigrationMoveFollowerActivity: async (input: {
+          sourceProfileId: string;
+          targetProfileId: string;
+          followerProfileId: string;
+          sourceFollowId: string;
+        }) => {
+          activityOrder.push('execute');
+          executedFollowers.push(input);
+          if (
+            input.followerProfileId === regularFollow.followerProfileId &&
+            regularAttempts++ === 0
+          ) {
+            throw new Error('temporary move follower failure');
+          }
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      await assert.rejects(
+        environment.client.workflow.execute('profileMigrationMoveWorkflow', {
+          args: [{ sourceActorUri, targetActorUri: sourceActorUri }],
+          taskQueue,
+          workflowId: 'profile-migration-move-invalid-test:' + process.pid,
+        }),
+      );
+      await assert.rejects(
+        environment.client.workflow.execute('profileMigrationMoveWorkflow', {
+          args: [{ sourceActorUri: 'not a URL', targetActorUri }],
+          taskQueue,
+          workflowId: 'profile-migration-move-malformed-test:' + process.pid,
+        }),
+      );
+      await environment.client.workflow.execute('profileMigrationMoveWorkflow', {
+        args: [
+          {
+            sourceActorUri: rejectedSourceActorUri,
+            targetActorUri: rejectedTargetActorUri,
+          },
+        ],
+        taskQueue,
+        workflowId: 'profile-migration-move-rejected-test:' + process.pid,
+      });
+      await environment.client.workflow.execute('profileMigrationMoveWorkflow', {
+        args: [{ sourceActorUri, targetActorUri }],
+        taskQueue,
+        workflowId: 'profile-migration-move-test:' + sourceProfileId + ':' + targetProfileId,
+      });
+    });
+
+    assert.deepEqual(preparationCalls, [
+      { sourceActorUri: rejectedSourceActorUri, targetActorUri: rejectedTargetActorUri },
+      { sourceActorUri, targetActorUri },
+      { sourceActorUri, targetActorUri },
+    ]);
+    assert.deepEqual(activityOrder.slice(0, 4), [
+      'prepare:rejected',
+      'prepare:transfer',
+      'prepare:transfer',
+      'load',
+    ]);
+    assert.deepEqual(executedFollowers, [
+      { sourceProfileId, targetProfileId, ...selfFollow },
+      { sourceProfileId, targetProfileId, ...regularFollow },
+      { sourceProfileId, targetProfileId, ...regularFollow },
+    ]);
+    assert.equal(regularAttempts, 2);
+    assert.deepEqual(loadedBatches, [
+      { sourceProfileId, targetProfileId, limit: 50 },
+      {
+        sourceProfileId,
+        targetProfileId,
+        afterSourceFollowId: regularFollow.sourceFollowId,
+        limit: 50,
+      },
+    ]);
   },
 );
 

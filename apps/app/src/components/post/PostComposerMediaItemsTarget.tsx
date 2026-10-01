@@ -133,7 +133,6 @@ export function PostComposerMediaItemsTarget({
               <IconButton
                 accessibilityLabel={`첨부 이미지 ${itemNumber} 제거`}
                 disabled={disabled}
-                feedback="opacity"
                 onPress={() => onRemove(item.key)}
                 style={styles.removeAction}
                 visualSize={actionVisualSize}
@@ -149,7 +148,6 @@ export function PostComposerMediaItemsTarget({
                 <IconButton
                   accessibilityLabel={`첨부 이미지 ${itemNumber} 편집`}
                   disabled={disabled}
-                  feedback="opacity"
                   onPress={() => onEdit(item.key, 'alt')}
                   style={styles.editAction}
                   visualSize={actionVisualSize}
@@ -173,7 +171,6 @@ export function PostComposerMediaItemsTarget({
                 <IconButton
                   accessibilityLabel={`${itemNumber}번째 이미지 업로드 다시 시도`}
                   disabled={disabled}
-                  feedback="opacity"
                   onPress={() => onRetry(item)}
                   style={styles.retryAction}
                   visualSize={actionVisualSize}
@@ -238,7 +235,6 @@ export function PostComposerMediaItemsTarget({
           <IconButton
             accessibilityLabel="첨부 이미지 갤러리 이전"
             disabled={disabled || scrollOffset <= 0}
-            feedback="opacity"
             onPress={() => scrollGallery(-1)}
             style={styles.previousAction}
             visualSize={actionVisualSize}
@@ -252,7 +248,6 @@ export function PostComposerMediaItemsTarget({
           <IconButton
             accessibilityLabel="첨부 이미지 갤러리 다음"
             disabled={disabled || (galleryWidth > 0 && scrollOffset >= maxScrollOffset)}
-            feedback="opacity"
             onPress={() => scrollGallery(1)}
             style={styles.nextAction}
             visualSize={actionVisualSize}

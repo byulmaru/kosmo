@@ -27,17 +27,19 @@ export function SettingsItem({
       style={StyleSheet.flatten([
         styles.root,
         {
-          backgroundColor: selected ? theme.selectedSurface : 'transparent',
-          borderColor: theme.divider,
+          backgroundColor: selected ? theme.stateSelectedSurface : 'transparent',
+          borderColor: theme.borderSubtle,
         },
       ])}
       testID={testID}
     >
       {leading ? <View style={styles.leading}>{leading}</View> : null}
       <View style={styles.copy}>
-        <Text style={[styles.label, { color: theme.text }]}>{label}</Text>
+        <Text style={[styles.label, { color: theme.foregroundPrimary }]}>{label}</Text>
         {description ? (
-          <Text style={[styles.description, { color: theme.textSecondary }]}>{description}</Text>
+          <Text style={[styles.description, { color: theme.foregroundSecondary }]}>
+            {description}
+          </Text>
         ) : null}
       </View>
       {trailing ? <View style={styles.trailing}>{trailing}</View> : null}

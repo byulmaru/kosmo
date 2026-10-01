@@ -2,8 +2,12 @@ import { View } from 'react-native';
 import { expect, spyOn, userEvent, within } from 'storybook/test';
 import SettingsRoute from '@/app/(tabs)/(protected)/settings';
 import { SettingsRouteLayout } from '@/app/(tabs)/(protected)/settings/_layout';
+import SettingsThemeRoute from '@/app/(tabs)/(protected)/settings/theme';
 import { BYULMARU_ID_ACCOUNT_SETTINGS_URL } from '@/components/settings/ByulmaruIdAccountSettingsEntry';
 import { SettingsProfileDetail } from '@/components/settings/SettingsProfileDetail';
+import { ThemePreferenceProvider } from '@/theme/ThemePreferenceProvider';
+import { useTheme } from '@/theme/ThemeProvider';
+import { colors } from '@/theme/tokens';
 import { profile } from '../fixtures';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
@@ -63,7 +67,11 @@ export const FullMasterDetail: Story = {
     expect(canvas.getByRole('heading', { name: '게시물 기본 공개 범위' })).toBeVisible();
     expect(account).toHaveAttribute('href', BYULMARU_ID_ACCOUNT_SETTINGS_URL);
     expect(profileEntry).toHaveAttribute('href', '/settings/default-post-visibility');
-    expect(profileEntry).toHaveAttribute('aria-current', 'page');
+    expect(profileEntry).toHaveStyle({
+      backgroundColor: colors.light.selectedSurface,
+      borderColor: colors.light.selectedBorder,
+    });
+    expect(profileEntry).not.toHaveAttribute('aria-current');
     expect(
       canvas.getByRole('radiogroup', {
         name: 'Kosmo 내부 Profile 현재 Profile @settings-owner 기본 게시 공개 범위',
@@ -105,6 +113,31 @@ export const CompactRootFirst: Story = {
     ).not.toHaveAttribute('aria-current');
   },
 };
+
+export const ThemeDetail: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: {
+    controls: { disable: true },
+    router: { pathname: '/settings/theme' },
+  },
+  render: () => (
+    <ThemePreferenceProvider>
+      <ThemeStoryCanvas />
+    </ThemePreferenceProvider>
+  ),
+};
+
+function ThemeStoryCanvas() {
+  const theme = useTheme();
+
+  return (
+    <View style={{ backgroundColor: theme.backgroundCanvas, flex: 1, minHeight: '100%' }}>
+      <SettingsRouteLayout>
+        <SettingsThemeRoute />
+      </SettingsRouteLayout>
+    </View>
+  );
+}
 
 export const NoSelectedProfile: Story = {
   parameters: {

@@ -45,11 +45,11 @@ mockModule('@/components/ui/Avatar', { Avatar: 'Avatar' });
 mockModule('@/theme/ThemeProvider', {
   useElevation: () => ({ floating: {}, overlay: {} }),
   useTheme: () => ({
-    border: '#ddd',
-    card: '#fff',
-    surface: '#eee',
-    text: '#111',
-    textSecondary: '#666',
+    backgroundElevated: '#elevated',
+    backgroundSurface: '#surface',
+    borderDefault: '#border',
+    foregroundPrimary: '#primary',
+    foregroundSecondary: '#secondary',
   }),
 });
 
@@ -101,6 +101,15 @@ it('Native ProfilePicker는 목록을 스크롤하고 footer를 scroller 밖에 
   assert.ok(renderer);
 
   const scrollView = renderer.root.findByType('ScrollView' as never);
+  const menu = renderer.root.find((node) => {
+    const styles = Array.isArray(node.props.style) ? node.props.style : [node.props.style];
+    return styles.some((style) => style?.backgroundColor === '#elevated');
+  });
+  const menuStyle = Array.isArray(menu.props.style)
+    ? menu.props.style.find((style) => style?.backgroundColor === '#elevated')
+    : menu.props.style;
+  assert.equal(menuStyle?.backgroundColor, '#elevated');
+  assert.equal(menuStyle?.borderColor, '#border');
   const profileB = renderer.root.findByProps({ accessibilityLabel: 'Profile B, @profile-b' });
   await act(async () => profileB.props.onPress());
   assert.equal(selectedId, 'profile-b');

@@ -1,7 +1,6 @@
 import { Slot, Stack, usePathname } from 'expo-router';
-import { Platform, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { PageHeader } from '@/components/PageHeader';
-import { SettingsMuteAndBlockNavigation } from '@/components/settings/SettingsMuteAndBlockNavigation';
 import { SettingsNavigationList } from '@/components/settings/SettingsNavigationList';
 import { SettingsRouteProvider } from '@/components/settings/SettingsRouteContext';
 import { getShellLayout } from '@/components/shell/shellLayout';
@@ -10,7 +9,7 @@ import type { ReactNode } from 'react';
 import type { SettingsDetailHeaderMode } from '@/components/settings/SettingsRouteContext';
 
 export const unstable_settings = {
-  initialRouteName: 'index',
+  initialRouteName: Platform.OS === 'web' ? undefined : 'index',
 };
 
 export default function SettingsLayout() {
@@ -28,16 +27,20 @@ export function SettingsRouteLayout({ children }: { children?: ReactNode }) {
   const web = Platform.OS === 'web';
   const layout = getShellLayout(web, width);
   const root = pathname === '/settings' || pathname === '/settings/';
-  const muteAndBlockDetail =
-    pathname === '/settings/muted-profiles' || pathname === '/settings/blocked-profiles';
   const selected =
     root || pathname === '/settings/default-post-visibility'
       ? 'default-post-visibility'
       : pathname === '/settings/info' || pathname === '/settings/developer'
         ? 'info'
-        : undefined;
+        : pathname === '/settings/mute-and-block' ||
+            pathname === '/settings/muted-profiles' ||
+            pathname === '/settings/blocked-profiles'
+          ? 'mute-and-block'
+          : pathname === '/settings/theme'
+            ? 'theme'
+            : undefined;
   const detailHeaderMode: SettingsDetailHeaderMode =
-    layout === 'full' ? 'plain' : web && layout === 'mobile' ? 'hidden' : 'back';
+    web && layout === 'mobile' ? 'hidden' : root ? 'plain' : 'back';
 
   if (layout === 'full') {
     return (
@@ -48,15 +51,7 @@ export function SettingsRouteLayout({ children }: { children?: ReactNode }) {
             testID="settings-master-pane"
           >
             <PageHeader title="설정" />
-            {muteAndBlockDetail ? (
-              <SettingsMuteAndBlockNavigation
-                selected={
-                  pathname === '/settings/blocked-profiles' ? 'blocked-profiles' : 'muted-profiles'
-                }
-              />
-            ) : (
-              <SettingsNavigationList selected={selected} />
-            )}
+            <SettingsNavigationList pathname={pathname} selected={selected} />
           </View>
           <View style={styles.detailPane} testID="settings-detail-pane">
             {children}
@@ -66,28 +61,12 @@ export function SettingsRouteLayout({ children }: { children?: ReactNode }) {
     );
   }
 
-  const content = root ? (
-    <>
-      {!web || layout !== 'mobile' ? <PageHeader title="설정" /> : null}
-      <SettingsNavigationList />
-    </>
-  ) : (
-    children
-  );
-
   return (
     <SettingsRouteProvider detailHeaderMode={detailHeaderMode}>
       {web ? (
-        <View style={styles.onePane}>{content}</View>
-      ) : root ? (
-        <ScrollView
-          contentContainerStyle={styles.nativeOnePaneContent}
-          style={styles.nativeOnePaneScroll}
-        >
-          {content}
-        </ScrollView>
+        <View style={styles.onePane}>{children}</View>
       ) : (
-        <View style={styles.nativeOnePane}>{content}</View>
+        <View style={styles.nativeOnePane}>{children}</View>
       )}
     </SettingsRouteProvider>
   );
@@ -99,6 +78,4 @@ const styles = StyleSheet.create({
   detailPane: { flex: 1, minWidth: 0 },
   onePane: { minHeight: '100%', minWidth: 0, width: '100%' },
   nativeOnePane: { flex: 1, minWidth: 0, width: '100%' },
-  nativeOnePaneScroll: { flex: 1, minWidth: 0, width: '100%' },
-  nativeOnePaneContent: { flexGrow: 1, minWidth: 0, width: '100%' },
 });

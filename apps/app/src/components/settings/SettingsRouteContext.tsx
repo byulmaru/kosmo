@@ -3,7 +3,9 @@ import type { ReactNode } from 'react';
 
 export type SettingsDetailHeaderMode = 'back' | 'hidden' | 'plain';
 
-const SettingsRouteContext = createContext<SettingsDetailHeaderMode | null>(null);
+const SettingsRouteContext = createContext<{
+  detailHeaderMode: SettingsDetailHeaderMode;
+} | null>(null);
 
 export function SettingsRouteProvider({
   children,
@@ -13,18 +15,18 @@ export function SettingsRouteProvider({
   detailHeaderMode: SettingsDetailHeaderMode;
 }) {
   return (
-    <SettingsRouteContext.Provider value={detailHeaderMode}>
+    <SettingsRouteContext.Provider value={{ detailHeaderMode }}>
       {children}
     </SettingsRouteContext.Provider>
   );
 }
 
 export function useSettingsDetailHeaderMode() {
-  const mode = useContext(SettingsRouteContext);
+  const context = useContext(SettingsRouteContext);
 
-  if (!mode) {
+  if (!context) {
     throw new Error('Settings detail routes must render inside the Settings route layout.');
   }
 
-  return mode;
+  return context.detailHeaderMode;
 }

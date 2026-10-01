@@ -18,7 +18,8 @@
     "relay:watch": "relay-compiler --watch",
     "start": "expo start",
     "storybook:dev": "storybook dev -p 6006 --disable-telemetry",
-    "test": "pnpm check && pnpm test:unit && pnpm build-storybook && pnpm test:storybook",
+    "test": "pnpm check && pnpm test:config-plugins && pnpm test:unit && pnpm build-storybook && pnpm test:storybook",
+    "test:config-plugins": "node plugins/withIosResourceBundleDeploymentTarget.test.cjs",
     "test:storybook": "vitest run --project=storybook",
     "test:unit": "node --experimental-test-module-mocks --import tsx --test 'src/**/*.test.ts'",
     "web": "expo start --web --port 5173"
@@ -30,6 +31,8 @@
     "@formatjs/intl-pluralrules": "^6.3.13",
     "@formatjs/intl-relativetimeformat": "^12.3.13",
     "@kosmo/core": "workspace:*",
+    "@openfeature/ofrep-web-provider": "^0.4.3",
+    "@openfeature/web-sdk": "^1.10.0",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-native-firebase/app": "26.4.0",
     "@react-native-firebase/messaging": "26.4.0",

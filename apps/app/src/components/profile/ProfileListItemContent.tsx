@@ -3,6 +3,7 @@ import { NavigationLink } from '@/components/shell/NavigationLink';
 import { Avatar } from '@/components/ui/Avatar';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, layoutRecipes, space, textStyles } from '@/theme/tokens';
+import { ProfileBioPrivacyBoundary } from './ProfileBioPrivacyBoundary';
 import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
@@ -55,9 +56,11 @@ export function ProfileListItemContent({
           </>
         )}
         {bio ? (
-          <Text numberOfLines={3} style={[styles.bio, { color: theme.foregroundPrimary }]}>
-            {bio}
-          </Text>
+          <ProfileBioPrivacyBoundary>
+            <Text numberOfLines={3} style={[styles.bio, { color: theme.foregroundPrimary }]}>
+              {bio}
+            </Text>
+          </ProfileBioPrivacyBoundary>
         ) : null}
       </View>
     </>

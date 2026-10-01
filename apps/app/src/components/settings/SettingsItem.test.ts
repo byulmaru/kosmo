@@ -24,10 +24,10 @@ mock.module('react-native', {
 mock.module(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
   exports: {
     useTheme: () => ({
-      divider: '#eeeeee',
-      selectedSurface: '#fff8dc',
-      text: '#111111',
-      textSecondary: '#666666',
+      borderSubtle: '#eeeeee',
+      foregroundPrimary: '#111111',
+      foregroundSecondary: '#666666',
+      stateSelectedSurface: '#fff8dc',
     }),
   },
 } as unknown as Parameters<typeof mock.module>[1]);

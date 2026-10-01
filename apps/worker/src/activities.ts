@@ -23,6 +23,11 @@ export {
   sendProfileUnfollowActivity,
 } from './profile-follow-activities';
 export {
+  executeProfileMigrationMoveFollowerActivity,
+  loadProfileMigrationMoveFollowerBatchActivity,
+  prepareProfileMigrationMoveActivity,
+} from './profile-migration-activities';
+export {
   executeProfileFollowPairTransition as executeProfileFollowPairTransitionActivity,
   executeProfileFollowRemoval as executeProfileFollowRemovalActivity,
   loadPendingFollowRequestId as loadPendingFollowRequestIdActivity,

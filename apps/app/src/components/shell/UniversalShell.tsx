@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { graphql, useLazyLoadQuery } from 'react-relay';
+import { identifyAnalytics } from '@/analytics/client';
 import { FeedbackOverlay } from '@/components/feedback/FeedbackOverlay';
 import {
   NotificationReadAllAction,
@@ -21,6 +22,7 @@ import { PostMediaViewerScreenFallbackProvider } from '@/components/post/PostMed
 import { IconButton } from '@/components/ui/IconButton';
 import { getBottomTabBarContentHeight } from '@/components/ui/navigationChrome';
 import { RelayActorBoundary } from '@/relay/RelayActorProvider';
+import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { returnToSettingsParent } from '../settings/settingsNavigation';
@@ -52,6 +54,11 @@ const ShellQuery = graphql`
   query UniversalShellQuery {
     ...SidebarNavigation_query
     ...RightRail_query
+    me {
+      profiles {
+        id
+      }
+    }
     currentSession {
       id
       selectedProfile {
@@ -119,6 +126,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
   const composerTriggerFocusRef = useRef<HTMLElement | null>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  const { accountId, status } = useSession();
   const menuButtonRef = useRef<NativeView>(null);
   const screenFallbackRef = useRef<NativeView>(null);
   const homeReselectionHandlerRef = useRef<HomeReselectionHandler | null>(null);
@@ -144,6 +152,12 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
   );
   const profile = data.currentSession?.selectedProfile ?? null;
   const web = Platform.OS === 'web';
+  const availableProfileCount = data.me?.profiles.length;
+  useEffect(() => {
+    if (web && status === 'valid' && accountId && availableProfileCount !== undefined) {
+      identifyAnalytics(accountId, availableProfileCount);
+    }
+  }, [accountId, availableProfileCount, status, web]);
   const nativeDrawerSwipeEnabled = !web && isNativeDrawerSwipeEnabled(pathname);
   // Web keeps the shell root out of the tab order. Native View#focus() requires an explicit
   // focusable host target; tabIndex={-1} maps to focusable=false on Native.
@@ -296,7 +310,6 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
       accessibilityLabel="메뉴 열기"
       accessibilityState={{ expanded: drawerOpen }}
       controlRef={menuButtonRef}
-      feedback="opacity"
       onPress={openNavigationDrawer}
       style={styles.menuButton}
       targetSize={44}
