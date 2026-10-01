@@ -113,9 +113,22 @@ const bookmarkOtherOwner = {
     pageInfo: { endCursor: 'bookmark-b-cursor-1', hasNextPage: true },
   },
 };
+const bookmarkThirdSource = {
+  ...post({
+    bodyText: '북마크에서 표시하지 않아야 하는 세 번째 Source 본문입니다.',
+    id: 'bookmark-source-depth-3',
+    profile: profile({
+      displayName: '세 번째 북마크 원문 작성자',
+      handle: 'third-bookmark-source',
+      id: 'bookmark-third-source-author',
+      relativeHandle: '@third-bookmark-source',
+    }),
+  }),
+  viewerReactions: [],
+};
 const bookmarkDeepSource = {
   ...post({
-    bodyText: '북마크에서 표시하지 않아야 하는 두 번째 Source 본문입니다.',
+    bodyText: '북마크 순수 재게시에서 표시하는 direct Source 본문입니다.',
     id: 'bookmark-source-depth-2',
     profile: profile({
       displayName: '깊은 원문 작성자',
@@ -123,6 +136,7 @@ const bookmarkDeepSource = {
       id: 'bookmark-deep-source-author',
       relativeHandle: '@deep-bookmark-source',
     }),
+    repostSource: bookmarkThirdSource,
   }),
   viewerReactions: [],
 };
@@ -163,7 +177,7 @@ const bookmarkRepostAuthor = profile({
 });
 const bookmarkPureRepostSource = {
   ...post({
-    bodyText: '북마크 순수 재게시의 일반 Source입니다.',
+    bodyText: '북마크 순수 재게시의 Quote Source입니다.',
     id: 'bookmark-pure-repost-source',
     profile: profile({
       displayName: '순수 재게시 Source 작성자',
@@ -171,6 +185,8 @@ const bookmarkPureRepostSource = {
       id: 'bookmark-pure-source-author',
       relativeHandle: '@bookmark-pure-source',
     }),
+    reactionCounts: [{ count: 5, type: '💠' }],
+    repostSource: bookmarkDeepSource,
   }),
   viewerReactions: [],
 };
@@ -518,13 +534,26 @@ export const RepostQuoteUsesOneSourceDepth: Story = {
     ).toBeVisible();
     const pureRepostRow = within(pureRepostArticle!).getByTestId('post-list-standard-row');
     expect(
-      within(pureRepostRow).getByText('북마크 순수 재게시의 일반 Source입니다.'),
+      within(pureRepostRow).getByText('북마크 순수 재게시의 Quote Source입니다.'),
     ).toBeVisible();
-    expect(within(pureRepostArticle!).queryByTestId('source-post-preview')).toBeNull();
-    expect(pureRepostArticle!.querySelector('[role="article"]')).toBeNull();
+    const repostQuotePreview = within(pureRepostArticle!).getByTestId('source-post-preview');
+    expect(repostQuotePreview).toBeVisible();
+    expect(pureRepostArticle!.querySelectorAll('[data-testid="source-post-preview"]')).toHaveLength(
+      1,
+    );
     expect(
-      canvas.queryByText('북마크에서 표시하지 않아야 하는 두 번째 Source 본문입니다.'),
-    ).not.toBeInTheDocument();
+      within(repostQuotePreview).getByText(
+        '북마크 순수 재게시에서 표시하는 direct Source 본문입니다.',
+      ),
+    ).toBeVisible();
+    expect(pureRepostArticle!.querySelector('[role="article"]')).toBeNull();
+    expect(pureRepostArticle).not.toHaveTextContent(
+      '북마크에서 표시하지 않아야 하는 세 번째 Source 본문입니다.',
+    );
+    expect(
+      await within(pureRepostArticle!).findByRole('button', { name: '💠 반응 5개' }),
+    ).toBeVisible();
+    expect(within(pureRepostArticle!).getByRole('button', { name: '답글' })).toBeDisabled();
 
     const quoteCanvas = within(quoteArticle!);
     expect(quoteCanvas.getByRole('link', { name: '원문 게시글 보기' })).toHaveAttribute(
@@ -564,6 +593,41 @@ export const RepostQuoteUsesOneSourceDepth: Story = {
       }),
     );
     expect(canvas.getByTestId('bookmark-story-pathname')).toHaveTextContent('/@bookmark-reposter');
+
+    const repostQuoteAuthorLink = within(pureRepostRow)
+      .getByText('순수 재게시 Source 작성자')
+      .closest('a')!;
+    await userEvent.click(repostQuoteAuthorLink);
+    expect(canvas.getByTestId('bookmark-story-pathname')).toHaveTextContent(
+      '/@bookmark-pure-source',
+    );
+
+    const previewAuthorLink = within(repostQuotePreview).getByRole('link', {
+      name: '깊은 원문 작성자 프로필 보기',
+    });
+    previewAuthorLink.focus();
+    await userEvent.keyboard('{Enter}');
+    expect(canvas.getByTestId('bookmark-story-pathname')).toHaveTextContent(
+      '/@deep-bookmark-source',
+    );
+
+    const previewTimestampLink = within(repostQuotePreview).getByRole('link', {
+      name: '원문 게시글 보기',
+    });
+    previewTimestampLink.focus();
+    await userEvent.keyboard('{Enter}');
+    expect(canvas.getByTestId('bookmark-story-pathname')).toHaveTextContent(
+      '/@deep-bookmark-source/bookmark-source-depth-2',
+    );
+
+    await userEvent.click(repostQuoteAuthorLink);
+    expect(canvas.getByTestId('bookmark-story-pathname')).toHaveTextContent(
+      '/@bookmark-pure-source',
+    );
+    await userEvent.click(within(repostQuotePreview).getByTestId('source-post-body'));
+    expect(canvas.getByTestId('bookmark-story-pathname')).toHaveTextContent(
+      '/@deep-bookmark-source/bookmark-source-depth-2',
+    );
 
     await userEvent.click(within(pureRepostRow).getByTestId('post-list-row-body'));
     expect(canvas.getByTestId('bookmark-story-pathname')).toHaveTextContent(
