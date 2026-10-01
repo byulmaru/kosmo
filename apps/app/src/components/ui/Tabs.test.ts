@@ -417,7 +417,7 @@ test('Underline Tabs move and stretch the shared indicator between measured tabs
 
   timingCalls.length = 0;
   layoutTab(renderer, 1, 150, 100);
-  assert.deepEqual(timingCalls, []);
+  assert.equal(timingCalls.length, 0);
   assert.equal((indicatorStyle(renderer)?.left as AnimatedValueMock).value, 168);
   assertClose((indicatorStyle(renderer)?.width as AnimatedSubtractMock).value, 64);
 
