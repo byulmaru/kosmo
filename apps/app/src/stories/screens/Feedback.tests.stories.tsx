@@ -1,5 +1,6 @@
 import { feedbackAttachmentMaxBytes } from '@kosmo/core/validation';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { useState } from 'react';
+import { expect, fireEvent, fn, userEvent, waitFor, within } from 'storybook/test';
 import { FeedbackOverlay } from '@/components/feedback/FeedbackOverlay';
 import { FeedbackPage } from '@/components/feedback/FeedbackPage';
 import { captureFeedback } from '@/observability/sentry.web';
@@ -259,4 +260,77 @@ export const OverlaySelectedImages: Story = {
     const body = page.getByTestId('feedback-overlay-body');
     expect(body.scrollHeight).toBeGreaterThan(body.clientHeight);
   },
+};
+
+function SubmittingOverlay() {
+  const [visible, setVisible] = useState(true);
+  return <FeedbackOverlay onRequestClose={() => setVisible(false)} visible={visible} />;
+}
+
+async function verifyPendingSubmission(canvasElement: HTMLElement, overlay: boolean) {
+  const page = within(canvasElement.ownerDocument.body);
+  const dialog = overlay ? await page.findByRole('dialog', { name: '피드백 보내기' }) : null;
+  const canvas = within(dialog ?? canvasElement);
+  const bytes = await (await fetch(ogImage)).arrayBuffer();
+  const file = new File([bytes], 'pending.png', { type: 'image/png' });
+  const read = Promise.withResolvers<ArrayBuffer>();
+  file.arrayBuffer = () => read.promise;
+  setNextImagePickerResult({
+    assets: [{ file, uri: ogImage, mimeType: 'image/png', width: 1, height: 1 }],
+    canceled: false,
+  });
+  try {
+    const body = canvas.getByRole('textbox', { name: '피드백 내용' });
+    await userEvent.type(body, '제출 중인 피드백');
+    await userEvent.click(canvas.getByRole('button', { name: '이미지 추가' }));
+    await canvas.findByLabelText('첨부 이미지 1, 선택됨');
+    const submit = canvas.getByRole('button', { name: '피드백 보내기' });
+    await userEvent.click(submit);
+    expect(submit).toBeDisabled();
+    expect(submit).toHaveAttribute('aria-busy', 'true');
+    expect(body).toHaveAttribute('readonly');
+    for (const radio of canvas.getAllByRole('radio')) {
+      expect(radio).toHaveAttribute('aria-disabled', 'true');
+    }
+    expect(canvas.getByRole('button', { name: '이미지 추가' })).toBeDisabled();
+    expect(canvas.getByRole('button', { name: '첨부 이미지 1 제거' })).toBeDisabled();
+    fireEvent.click(submit);
+    expect(captureFeedback).not.toHaveBeenCalled();
+    expect(body).toHaveValue('제출 중인 피드백');
+    if (dialog) {
+      const close = canvas.getByRole('button', { name: '피드백 닫기' });
+      expect(close).toBeDisabled();
+      fireEvent.click(close);
+      await userEvent.keyboard('{Escape}');
+      const backdrop = page.getByTestId('feedback-overlay-surface').parentElement;
+      expect(backdrop).not.toBeNull();
+      await userEvent.click(backdrop!);
+      expect(page.getByRole('dialog', { name: '피드백 보내기' })).toBeVisible();
+      expect(page.queryByRole('alertdialog')).toBeNull();
+      expect(body).toHaveValue('제출 중인 피드백');
+    }
+    read.resolve(bytes);
+    await expect(canvas.findByText('피드백을 전달했습니다. 감사합니다!')).resolves.toBeVisible();
+    expect(captureFeedback).toHaveBeenCalledTimes(1);
+    expect(body).toHaveValue('');
+    if (dialog) {
+      expect(canvas.getByRole('button', { name: '피드백 닫기' })).toBeEnabled();
+      await userEvent.click(page.getByTestId('feedback-overlay-surface').parentElement!);
+      await waitFor(() => expect(page.queryByRole('dialog', { name: '피드백 보내기' })).toBeNull());
+    }
+  } finally {
+    read.resolve(bytes);
+    resetImagePickerMock();
+  }
+}
+
+export const Pending: Story = {
+  render: () => <FeedbackPage />,
+  play: async ({ canvasElement }) => verifyPendingSubmission(canvasElement, false),
+};
+
+export const OverlaySubmittingCloseGuard: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  render: () => <SubmittingOverlay />,
+  play: async ({ canvasElement }) => verifyPendingSubmission(canvasElement, true),
 };
