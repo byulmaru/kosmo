@@ -71,7 +71,7 @@ import type { PostsStoriesQuery as PostsStoriesQueryType } from './__generated__
 const postMediaImageUri = ogDefaultUrl;
 
 const storyShareOrigin = () => window.location.origin;
-const quoteFailureMutationRequestObserver = fn().mockName('Quote failure mutation');
+const quoteMutationRequestObserver = fn().mockName('Quote composer mutation');
 
 const shortPost = {
   ...post({
@@ -2948,7 +2948,7 @@ const meta = {
     mocked(trackAnalytics).mockClear();
     mocked(startWebLogin).mockReset();
     mocked(startWebLogin).mockImplementation(() => undefined);
-    quoteFailureMutationRequestObserver.mockClear();
+    quoteMutationRequestObserver.mockClear();
     resetClipboardMock();
     resetImagePickerMock();
   },
@@ -3213,13 +3213,13 @@ export const BodyTimeAndLayoutStates: Story = {
         name: '재게시 취소',
       }),
     ).toBeVisible();
-    /*
-    expect(
-      within(screen.getByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
-        name: '인용하기',
-      }),
-    ).toBeVisible();
-    */
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() =>
+      expect(screen.queryByRole('menu', { name: '재게시 메뉴' })).not.toBeInTheDocument(),
+    );
+    await userEvent.click(within(detailActionBar).getByRole('button', { name: '재게시' }));
+    const quoteMenu = await screen.findByRole('menu', { name: '재게시 메뉴' });
+    expect(within(quoteMenu).getByRole('menuitem', { name: '재게시하기' })).toBeVisible();
   },
 };
 
@@ -4379,9 +4379,9 @@ export const QuoteComposerListIntegration: Story = {
           ),
         },
       },
+      mutationRequestObserver: quoteMutationRequestObserver,
     },
   },
-  /*
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const trigger = canvas.getByRole('button', { name: '재게시 취소' });
@@ -4398,10 +4398,20 @@ export const QuoteComposerListIntegration: Story = {
     await waitFor(() =>
       expect(screen.queryByRole('dialog', { name: '인용 게시글 쓰기' })).toBeNull(),
     );
+    expect(quoteMutationRequestObserver).toHaveBeenCalledTimes(1);
+    expect(quoteMutationRequestObserver).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      expect.objectContaining({
+        input: expect.objectContaining({
+          bodyText: '실제 메뉴에서 작성한 인용입니다.',
+          repostSourceId: shortPost.id,
+        }),
+      }),
+    );
     expect(trigger).toHaveFocus();
     expect(await screen.findByRole('alert')).toHaveTextContent('인용 게시글을 게시했어요');
   },
-  */
   render: () => <QuoteListSurfaceStory />,
 };
 
@@ -4410,14 +4420,13 @@ export const QuoteReplyListCoordinatorIntegration: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const replyButton = canvas.getByRole('button', { name: '답글' });
-    // const quoteTrigger = canvas.getByRole('button', { name: '재게시 취소' });
+    const quoteTrigger = canvas.getByRole('button', { name: '재게시 취소' });
 
     await userEvent.click(replyButton);
     const replyDialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
     const replyBody = within(replyDialog).getByRole('textbox', { name: '답글 본문' });
     await userEvent.type(replyBody, '목록에서 작성 중인 답글');
 
-    /*
     quoteTrigger.click();
     within(await screen.findByRole('menu', { name: '재게시 메뉴' }))
       .getByRole('menuitem', { name: '인용하기' })
@@ -4467,7 +4476,6 @@ export const QuoteReplyListCoordinatorIntegration: Story = {
     );
     await waitFor(() => expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).toBeNull());
     expect(replyButton).toHaveFocus();
-    */
   },
   render: () => <QuoteListSurfaceStory />,
 };
@@ -4597,6 +4605,12 @@ export const PostMediaViewerCompact: Story = {
     const actionBar = viewer.getByRole('toolbar', { name: '액션 바' });
     expect(within(actionBar).getByRole('button', { name: '재게시' })).toHaveTextContent('5');
     expect(viewer.queryByRole('button', { name: /다운로드|저장/ })).toBeNull();
+
+    await userEvent.click(within(actionBar).getByRole('button', { name: '재게시' }));
+    const repostMenu = await screen.findByRole('menu', { name: '재게시 메뉴' });
+    expect(within(repostMenu).queryByRole('menuitem', { name: '인용하기' })).toBeNull();
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('menu', { name: '재게시 메뉴' })).toBeNull());
 
     await userEvent.click(await viewer.findByRole('button', { name: '원문 더 보기' }));
     const expandedBody = viewer.getByTestId('post-media-viewer-body-scroll');
@@ -7838,7 +7852,7 @@ export const QuoteModalFailureLifecycle: Story = {
   parameters: {
     relay: {
       mutationError: '인용 전송 네트워크 오류',
-      mutationRequestObserver: quoteFailureMutationRequestObserver,
+      mutationRequestObserver: quoteMutationRequestObserver,
     },
   },
   play: async () => {
@@ -7915,8 +7929,8 @@ export const QuoteModalFailureLifecycle: Story = {
     await expect(within(dialog).findByRole('alert')).resolves.toHaveTextContent(
       '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.',
     );
-    expect(quoteFailureMutationRequestObserver).toHaveBeenCalledTimes(1);
-    expect(quoteFailureMutationRequestObserver).toHaveBeenNthCalledWith(
+    expect(quoteMutationRequestObserver).toHaveBeenCalledTimes(1);
+    expect(quoteMutationRequestObserver).toHaveBeenNthCalledWith(
       1,
       expect.anything(),
       expect.objectContaining({
@@ -7932,8 +7946,8 @@ export const QuoteModalFailureLifecycle: Story = {
     const retry = within(dialog).getByRole('button', { name: '인용 게시' });
     expect(retry).toBeEnabled();
     await userEvent.click(retry);
-    await waitFor(() => expect(quoteFailureMutationRequestObserver).toHaveBeenCalledTimes(2));
-    expect(quoteFailureMutationRequestObserver).toHaveBeenNthCalledWith(
+    await waitFor(() => expect(quoteMutationRequestObserver).toHaveBeenCalledTimes(2));
+    expect(quoteMutationRequestObserver).toHaveBeenNthCalledWith(
       2,
       expect.anything(),
       expect.objectContaining({
@@ -7984,7 +7998,7 @@ export const QuoteModalNullFailureLifecycle: Story = {
     relay: {
       mutationGraphQLErrors: ['인용 본문 형식이 올바르지 않습니다.'],
       mutationResponse: { createPost: null },
-      mutationRequestObserver: quoteFailureMutationRequestObserver,
+      mutationRequestObserver: quoteMutationRequestObserver,
     },
   },
   play: async () => {
@@ -7997,14 +8011,14 @@ export const QuoteModalNullFailureLifecycle: Story = {
     await expect(within(dialog).findByRole('alert')).resolves.toHaveTextContent(
       '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.',
     );
-    expect(quoteFailureMutationRequestObserver).toHaveBeenCalledTimes(1);
+    expect(quoteMutationRequestObserver).toHaveBeenCalledTimes(1);
     expect(body).toHaveValue('null 응답 뒤 유지할 인용');
     expect(source).toBeVisible();
     expect(within(source).getByText('짧은 본문 한 줄.')).toBeVisible();
     const retry = within(dialog).getByRole('button', { name: '인용 게시' });
     expect(retry).toBeEnabled();
     await userEvent.click(retry);
-    await waitFor(() => expect(quoteFailureMutationRequestObserver).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(quoteMutationRequestObserver).toHaveBeenCalledTimes(2));
     expect(screen.getByRole('alert')).toHaveTextContent(
       '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.',
     );

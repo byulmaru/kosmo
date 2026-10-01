@@ -139,17 +139,17 @@ server-issued installation row ID와 GraphQL mutation surface는 sibling 구현�
 - Consequences: installation-local 안내 완료·dismiss·deny 상태를 업데이트와 Account 재로그인 흐름에서 보존해야 한다.
 - Confirmation / Follow-up: CTA close, OS deny와 일반 update를 각각 같은 설치에서 반복 실행해 자동 안내가 없는지 확인한다.
 
-### cross-profile tap은 접근 재검증 뒤 Profile 전환·target 이동을 수행한다
+### cross-profile tap은 Notification ID로 목적지를 조회한 뒤 기존 route를 사용한다
 
-- Decision Date: 2026-09-10
+- Decision Date: 2026-09-29
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/objects/notification.md`, `docs/domain/decisions/0029-native-push-notification-policy.md`, `docs/design/notifications.md`, `PROD-875`, `PROD-913`
 - Status: Active
-- Context / Problem: Push가 생성된 뒤 Account membership 또는 target visibility가 바뀔 수 있어 탭 payload만 신뢰할 수 없다.
-- Decision Outcome: tap 시 현재 Account가 Recipient Profile에 접근할 수 있는지 다시 확인하고, 접근 가능하면 해당 Profile로 전환해 target을 연다. target이 삭제되었거나 접근할 수 없으면 접근 가능한 Notification 목록만 열고 toast·message를 표시하지 않는다.
-- Alternatives Considered: stale payload를 바로 열거나 old-valid/duplicate 상태에도 자동 목록 fallback을 적용하면 현재 권한과 다른 navigation을 만들므로 선택하지 않는다.
-- Consequences: native tap handler는 server revalidation과 Profile switch를 route 이동보다 먼저 수행해야 한다.
-- Confirmation / Follow-up: cross-profile valid target, deleted target, inaccessible target의 signed build evidence를 분리한다.
+- Context / Problem: Push payload는 Notification과 Recipient Profile ID를 제공하며, 목적지 정보는 Notification에서 조회한다.
+- Decision Outcome: `notificationId`로 목적지 정보를 조회한다. 현재 Account가 Recipient Profile에 접근할 수 있는지 다시 확인하고, 접근 가능하면 해당 Profile로 전환한 뒤 조회된 목적지로 기존 route를 사용한다. destination의 missing·access·error 상태는 기존 destination 동작을 따른다. 목적지를 구성할 수 없을 때는 일반 Notification 목록 fallback을 사용할 수 있다.
+- Alternatives Considered: Push 전용 deleted/inaccessible target redirect를 추가할 필요가 없다.
+- Consequences: navigation은 Notification ID로 조회한 목적지와 기존 route 동작을 사용하며, Account/Recipient Profile 접근을 재검증하고 접근 가능한 경우 Profile을 전환한 뒤 이동한다.
+- Confirmation / Follow-up: 기존 cross-profile Push navigation의 signed-build evidence를 유지한다.
 
 ### logged-out tap은 target을 버리고 일반 login으로 수렴한다
 
@@ -187,17 +187,17 @@ server-issued installation row ID와 GraphQL mutation surface는 sibling 구현�
 - Consequences: delivery query와 retry state는 Read State와 독립적으로 검증하고, Push tap의 화면 이동이 별도 기존 Read 계약을 임의로 변경하지 않게 한다.
 - Confirmation / Follow-up: 이미 Read인 item, 다른 표면에서 Read된 item, Push 전달 후 Read State를 각각 확인한다.
 
-### registration 이후 생성된 Notification만 전달하고 backlog를 재생하지 않는다
+### 새 registration 뒤 전달은 best-effort이며 unread backlog를 재생하지 않는다
 
-- Decision Date: 2026-09-10
+- Decision Date: 2026-09-29
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/decisions/0029-native-push-notification-policy.md`, `docs/design/notifications.md`, `PROD-875`, `PROD-912`, `PROD-913`, `PROD-914`
 - Status: Active
-- Context / Problem: 새 설치·device·permission activation 때 과거 unread를 자동 replay하면 사용자가 기대하지 않은 과거 Push를 받게 된다.
-- Decision Outcome: 최초 registration, 새 device 또는 OS 권한 허용으로 전달 대상을 등록할 때 registration을 받은 시점 이후 생성된 Notification만 전달한다. 이미 생성된 unread Notification은 backlog로 재생하지 않으며, client는 관찰 가능한 OS 상태를 동기화한다.
-- Alternatives Considered: 기존 unread 전체 replay 또는 정확한 OS 상태 변화 시각을 서버가 추론하는 방식은 확정된 no-backlog와 관찰 가능성 경계를 벗어나므로 선택하지 않는다.
-- Consequences: 등록 시점과 Notification 생성 시각의 순서를 delivery eligibility에 사용하고, OS 상태 감지 구현의 세부 방식은 native slice에 남긴다.
-- Confirmation / Follow-up: 새 registration·권한 허용 전후 Notification과 client가 관찰한 OS permission 상태를 실제 기기에서 확인한다.
+- Context / Problem: registration 뒤 신규 Notification 전달은 best-effort이며, client는 관찰 가능한 OS 상태를 동기화한다.
+- Decision Outcome: 새 registration 이후 Notification 전달의 엄격한 timestamp cut-off나 epoch recovery는 요구하지 않으며, 이미 생성된 unread Notification을 별도 backlog로 재생하지 않는다.
+- Alternatives Considered: strict per-registration timestamp/epoch recovery와 과거 unread replay는 요구하지 않는다.
+- Consequences: registration eligibility는 best-effort로 적용하며 historical unread Notification용 별도 backlog 경로를 만들지 않는다.
+- Confirmation / Follow-up: 기존 server-side eligibility 테스트는 유지한다. PROD-875 Android·iOS signed-device 권한·도착 증거는 통합 검증에 남긴다.
 
 ### PROD-912 installation token은 active row만 보관하고 폐기 시 즉시 삭제한다
 
@@ -205,8 +205,8 @@ server-issued installation row ID와 GraphQL mutation surface는 sibling 구현�
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/decisions/0029-native-push-notification-policy.md`, `docs/design/notifications.md`, `PROD-912`
 - Status: Active
-- Context / Problem: invalid·unregistered token이나 logout·account switch 뒤 token row를 tombstone으로 남기면 민감한 token 보관 기간이 불필요하게 늘고, 삭제 뒤 재등록이 이전 수신 epoch와 backlog를 잘못 재사용할 수 있다.
-- Decision Outcome: active installation row만 opaque token을 보관한다. 명시적 unregister는 인증된 Account·installation ID ownership만 확인한 뒤 row와 token을 같은 원자적 작업에서 즉시 삭제한다. 등록 당시 연결된 `sessionId`는 lifecycle association으로 유지하며 현재 인증 Session과 비교하거나 요청 Session으로 재바인딩하지 않으므로 같은 Account의 다른 Session도 row를 관리할 수 있다. Session 폐기와 Account 삭제는 기존 auth·deletion lifecycle의 정리 순서와 Session→installation FK cascade로 row를 삭제한다. Provider invalid/unregistered 결과는 Account·installation ID·현재 token이 모두 일치할 때만 row와 token을 즉시 삭제하며, 이전 token 결과는 갱신된 현재 token과 일치하지 않으면 아무 row도 삭제하지 않는다. 삭제 뒤 재등록은 새 registration epoch를 기록하고 삭제 전 Notification을 전달하지 않는다.
+- Context / Problem: invalid·unregistered token이나 logout·account switch 뒤 token row를 tombstone으로 남기면 민감한 token 보관 기간이 불필요하게 늘고, 오래된 Provider 결과가 새 token에 영향을 줄 수 있다.
+- Decision Outcome: active installation row만 opaque token을 보관한다. 명시적 unregister는 인증된 Account·installation ID ownership만 확인한 뒤 row와 token을 같은 원자적 작업에서 즉시 삭제한다. 등록 당시 연결된 `sessionId`는 lifecycle association으로 유지하며 현재 인증 Session과 비교하거나 요청 Session으로 재바인딩하지 않으므로 같은 Account의 다른 Session도 row를 관리할 수 있다. Session 폐기와 Account 삭제는 기존 auth·deletion lifecycle의 정리 순서와 Session→installation FK cascade로 row를 삭제한다. Provider invalid/unregistered 결과는 Account·installation ID·현재 token이 모두 일치할 때만 row와 token을 즉시 삭제하며, 이전 token 결과는 갱신된 현재 token과 일치하지 않으면 아무 row도 삭제하지 않는다. 삭제 뒤 재등록은 새 row ID를 사용한다.
 - Alternatives Considered: `INVALID`·`UNREGISTERED` tombstone과 token 보관은 수신 eligibility를 조회에서만 제외하면서 민감정보 retention과 stale-token 경계를 남긴다. 오래된 token 결과를 installation ID만으로 삭제하면 token refresh 이후의 새 token을 지울 수 있다.
 - Consequences: Push installation table에는 active registration만 남고 invalidation·logout·account deletion은 실제 `DELETE`를 수행한다. Provider invalidation은 Account·installation ID·token을 함께 조건으로 사용한다. 기존 Session revoke와 Account 삭제 lifecycle을 재설계하지 않고 해당 경로에서 installation cleanup을 호출한다.
 - Confirmation / Follow-up: Session `REVOKED`·`EXPIRED`, Account 삭제의 기존 sessions-first 정리와 FK cascade, explicit unregister, matching·stale Provider invalidation과 same-Account reinstall을 실제 DB에서 검증했다. Account 비활성은 기존 auth·eligibility semantics를 유지하며 별도 물리삭제 lifecycle을 추가하지 않는다. Provider SDK와 retry 수치는 PROD-914가 소유한다.
@@ -218,10 +218,10 @@ server-issued installation row ID와 GraphQL mutation surface는 sibling 구현�
 - Authority / Provenance: `docs/domain/decisions/0029-native-push-notification-policy.md`, `docs/design/notifications.md`, `PROD-912`
 - Status: Active
 - Context / Problem: 외부 installation ID를 등록 입력으로 재사용하면 늦은 unregister가 같은 식별자를 가진 새 registration row에 영향을 줄 수 있다.
-- Decision Outcome: 최초 registration은 외부 installation ID 없이 서버가 새 installation row ID를 발급한다. update는 반환된 ID와 인증된 현재 Account가 소유한 row에만 적용하며, 알 수 없거나 삭제된 ID와 다른 Account 소유 ID는 row 존재 여부를 노출하지 않는 동일한 `PERMISSION_DENIED`(`Push installation is unavailable.`)로 실패한다. unregister는 인증된 현재 Account가 소유한 row만 삭제하며, 알 수 없거나 삭제된 ID와 다른 Account 소유 ID는 row 존재 여부를 노출하지 않고 `{ completed: true }`로 멱등 완료한다. 등록 당시 연결된 `sessionId`는 lifecycle association으로 유지하고 요청 Session으로 재바인딩하지 않는다. 기존의 현재 Account·Session 관리 조건은 Account-only 권한 확인과 unknown·foreign ID의 row 존재를 노출하지 않는 update 실패·unregister 완료 규칙으로 대체한다. 재등록은 항상 새 row ID와 새 registration epoch를 사용하므로 늦은 이전 ID의 unregister가 새 row를 삭제하지 않는다.
+- Decision Outcome: 최초 registration은 외부 installation ID 없이 서버가 새 installation row ID를 발급한다. update는 반환된 ID와 인증된 현재 Account가 소유한 row에만 적용하며, 알 수 없거나 삭제된 ID와 다른 Account 소유 ID는 row 존재 여부를 노출하지 않는 동일한 `PERMISSION_DENIED`(`Push installation is unavailable.`)로 실패한다. unregister는 인증된 현재 Account가 소유한 row만 삭제하며, 알 수 없거나 삭제된 ID와 다른 Account 소유 ID는 row 존재 여부를 노출하지 않고 `{ completed: true }`로 멱등 완료한다. 등록 당시 연결된 `sessionId`는 lifecycle association으로 유지하고 요청 Session으로 재바인딩하지 않는다. 기존의 현재 Account·Session 관리 조건은 Account-only 권한 확인과 unknown·foreign ID의 row 존재를 노출하지 않는 update 실패·unregister 완료 규칙으로 대체한다. 재등록은 항상 새 row ID를 사용하므로 늦은 이전 ID의 unregister가 새 row를 삭제하지 않는다.
 - Alternatives Considered: client가 발급한 stable installation ID를 재사용하거나 unregister에서 token·ID 없이 Account의 설치를 추측하는 방식은 늦은 해제의 대상 경계를 보장하지 못하므로 선택하지 않는다.
 - Consequences: client는 최초 register 응답의 row ID를 저장해 이후 update·unregister에 사용한다. 같은 Account의 다른 Session도 Account 소유 row를 관리할 수 있지만 registration 당시 연결된 Session association은 바뀌지 않는다. 같은 Account의 active token 중복은 기존 row를 원자적으로 삭제한 뒤 새 row ID로 등록하며, Provider invalidation은 row ID와 현재 token을 함께 확인한다.
-- Confirmation / Follow-up: register→unregister→register 순서에서 ID 비재사용, stale unregister 격리와 no-backlog·새 epoch를 API/DB에서 검증한다. GraphQL field shape와 GlobalID 인코딩은 별도 Implementation Choice로 기록한다.
+- Confirmation / Follow-up: register→unregister→register 순서에서 ID 비재사용과 stale unregister 격리를 API/DB에서 검증한다. GraphQL field shape와 GlobalID 인코딩은 별도 Implementation Choice로 기록한다.
 
 ### PROD-912 GraphQL mutation은 server-issued ID를 `PushInstallation` GlobalID로 노출한다
 

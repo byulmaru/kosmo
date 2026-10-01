@@ -15,10 +15,11 @@ FCM을 통한 OS Push 전달 경계가 없다. PROD-875와 세 child의 공통 �
 - sender·알림 유형·게시글 본문 미리보기, 게시글 본문이 없는 알림의 excerpt 생략, sensitive·Content
   Warning 본문 숨김, Recipient 권한이 확인된 private 본문 포함과 token·private body의 일반 로그·analytics
   비기록 경계를 정의한다.
-- cross-profile Push tap의 접근 권한 재검증·Profile 전환·target 이동, 삭제·접근 불가 target의 접근 가능한
-  알림 목록 fallback, logged-out tap의 일반 로그인 수렴을 정의한다.
-- 설치 registration 이후 생성된 Notification만 전달하고, 최초 생성 시각 기준 24시간 expiry·retry 독립성·no
-  backlog·read state 독립성·Provider accepted와 실제 도착의 증거 분리를 정의한다.
+- cross-profile Push tap은 payload의 Notification ID로 목적지 정보를 조회한 뒤 접근 권한을 재검증해 Profile을
+  전환하고, 조회된 목적지로 기존 route를 사용한다. logged-out tap은 일반 로그인으로 수렴하며 원래 target을 보존하지 않는다.
+- 신규 registration 뒤 Notification 전달 시점은 best-effort로 두고 이미 생성된 unread Notification을 backlog로
+  재생하지 않는다. 최초 생성 시각 기준 24시간 expiry·retry 독립성·Read State 독립성·Provider accepted와 실제
+  도착의 증거 분리를 정의한다.
 - 최초 `registerPushInstallation`은 외부 installation ID 없이 서버가 새 installation row ID를 발급해 반환하고,
   `updatePushInstallation`은 반환된 ID로 인증된 현재 Account가 소유한 row만 갱신하며,
   `unregisterPushInstallation`은 현재 Account가 소유한 해당 ID만 해제한다. 알 수 없거나 삭제된 ID와 다른
@@ -29,7 +30,7 @@ FCM을 통한 OS Push 전달 경계가 없다. PROD-875와 세 child의 공통 �
   새 registration row에 영향을 주지 않도록 한다.
 - Account·Profile·설치·device·FCM token 등록 lifecycle, 비동기 Provider 전달, retry·dedup·invalid token
   cleanup과 원본 Notification commit 이후 실패 격리를 세 구현 slice의 책임으로 나누고, PROD-875가 Android·iOS
-  실제 기기 종단 간 검증과 최종 OpenSpec archive를 소유한다.
+  실제 기기 종단 간 검증을 소유한다. PR #916은 현재 세션 기록만 archive한다.
 
 ## Authority / Provenance
 

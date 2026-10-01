@@ -1264,18 +1264,17 @@ describe('profile route parameter lifecycle', () => {
     await act(async () => confirmation.props.onConfirm());
     assert.equal(changeBlockedCalls.length, 1);
     assert.equal(requireRendered('ModalSheet').props.visible, false);
-    assert.equal(toastCalls.length, 0);
-    await act(async () => requireRendered('ModalSheet').props.onDismiss());
     assert.equal(toastCalls.at(-1)?.tone, 'danger');
+    await act(async () => requireRendered('ModalSheet').props.onDismiss());
     assert.equal(menuTriggerFocus.mock.callCount(), 1);
 
     await act(async () => requireRendered('ActionMenu').props.items[0].onSelect());
     await act(async () => requireRendered('ConfirmationContent').props.onConfirm());
     assert.equal(changeBlockedCalls.length, 2);
     assert.equal(requireRendered('ModalSheet').props.visible, false);
-    assert.equal(toastCalls.length, 1);
-    await act(async () => requireRendered('ModalSheet').props.onDismiss());
+    assert.equal(toastCalls.length, 2);
     assert.equal(toastCalls.at(-1)?.tone, 'success');
+    await act(async () => requireRendered('ModalSheet').props.onDismiss());
   });
 
   it('Profile 메뉴의 차단 확인을 취소하면 더보기 trigger로 포커스를 복원한다', async () => {

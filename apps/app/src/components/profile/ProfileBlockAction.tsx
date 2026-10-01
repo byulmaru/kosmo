@@ -1,10 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
-import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
+import { useRef, useState } from 'react';
+import { graphql, useFragment, useMutation } from 'react-relay';
 import { Button } from '@/components/ui/Button';
 import { ConfirmationContent } from '@/components/ui/ConfirmationContent';
 import { ModalSheet } from '@/components/ui/ModalSheet';
 import { useToast } from '@/components/ui/ToastProvider';
-import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useSession } from '@/session/SessionProvider';
 import type { ReactNode, RefObject } from 'react';
 import type { View } from 'react-native';
@@ -96,34 +95,16 @@ export function ProfileBlockAction({
   const profileBlockData = useFragment(profileBlockFragment, profileBlock ?? null);
   const targetProfile = profileBlockData?.targetProfile ?? profileData;
   const { selectedProfileId } = useSession();
-  const environment = useRelayEnvironment();
-  const environmentGenerationRef = useRelayEnvironmentGeneration();
   const [commitBlock, blocking] =
     useMutation<ProfileBlockActionBlockMutation>(blockProfileMutation);
   const [commitUnblock, unblocking] =
     useMutation<ProfileBlockActionUnblockMutation>(unblockProfileMutation);
   const { showToast } = useToast();
   const [open, setOpen] = useState(false);
-  const mounted = useRef(false);
-  const currentEnvironment = useRef(environment);
-  const currentSelectedProfileId = useRef(selectedProfileId);
   const cancelRef = useRef<View>(null);
   const actionRef = useRef<View>(null);
   const focusTrigger = useRef<() => void>(() => {});
-  const completed = useRef<(() => void) | null>(null);
-  currentEnvironment.current = environment;
-  currentSelectedProfileId.current = selectedProfileId;
   const pending = blocking || unblocking;
-
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-      const notify = completed.current;
-      completed.current = null;
-      notify?.();
-    };
-  }, []);
 
   if (!selectedProfileId || !targetProfile) {
     return null;
@@ -152,22 +133,8 @@ export function ProfileBlockAction({
     if (pending) {
       return;
     }
-    const requestEnvironment = environment;
-    const requestGeneration = environmentGenerationRef?.current;
-    const requestSelectedProfileId = selectedProfileId;
-    const isCurrent = () =>
-      currentEnvironment.current === requestEnvironment &&
-      environmentGenerationRef?.current === requestGeneration &&
-      currentSelectedProfileId.current === requestSelectedProfileId;
     const finish = (status: 'success' | 'error') => {
-      if (!isCurrent()) {
-        return;
-      }
-      if (!mounted.current) {
-        notify(status);
-        return;
-      }
-      completed.current = () => notify(status);
+      notify(status);
       setOpen(false);
     };
     try {
@@ -233,17 +200,11 @@ export function ProfileBlockAction({
         dismissDisabled={pending}
         onClose={close}
         onDismiss={() => {
-          if (!mounted.current) {
-            return;
-          }
           if (surface === 'menu') {
             focusTrigger.current();
           } else {
             actionRef.current?.focus();
           }
-          const notify = completed.current;
-          completed.current = null;
-          notify?.();
         }}
         onShow={() => cancelRef.current?.focus()}
         title={nextBlocked ? '이 프로필을 차단할까요?' : '이 프로필의 차단을 해제할까요?'}

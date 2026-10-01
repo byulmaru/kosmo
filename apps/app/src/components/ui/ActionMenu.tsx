@@ -25,7 +25,7 @@ import { ActionMenuPortal } from '@/components/ui/ActionMenuPortal';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, layoutRecipes, radius, space, textStyles } from '@/theme/tokens';
 import { useOverlayMotion } from '@/theme/useOverlayMotion';
-import type { ComponentType, ReactElement, ReactNode, Ref } from 'react';
+import type { ComponentType, ReactElement, ReactNode, RefObject } from 'react';
 
 type ActionMenuIcon = ComponentType<{
   color: string;
@@ -56,7 +56,7 @@ export type ActionMenuTriggerRenderProps = Readonly<{
   expanded: boolean;
   focusTrigger: () => void;
   onPress: () => void;
-  ref: Ref<View>;
+  ref: RefObject<View | null>;
 }>;
 
 type Props = {

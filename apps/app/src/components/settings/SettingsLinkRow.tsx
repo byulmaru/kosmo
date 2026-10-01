@@ -83,11 +83,11 @@ export function SettingsLinkRow({
               : hovered
                 ? theme.stateHover
                 : selected
-                  ? theme.selectedSurface
+                  ? theme.stateSelectedSurface
                   : 'transparent',
-            borderColor: selected ? theme.selectedBorder : 'transparent',
+            borderColor: selected ? theme.stateSelectedBorder : 'transparent',
             borderWidth: borderWidths[1],
-            outlineColor: focusVisible ? theme.focus : undefined,
+            outlineColor: focusVisible ? theme.stateFocusRing : undefined,
             outlineOffset: 2,
             outlineStyle: focusVisible ? 'solid' : 'none',
             outlineWidth: focusVisible ? 2 : 0,
@@ -101,7 +101,7 @@ export function SettingsLinkRow({
         label={label}
         trailing={
           <View accessibilityElementsHidden pointerEvents="none">
-            <ChevronRightIcon color={theme.textSecondary} size={20} strokeWidth={2} />
+            <ChevronRightIcon color={theme.foregroundSecondary} size={20} strokeWidth={2} />
           </View>
         }
       />

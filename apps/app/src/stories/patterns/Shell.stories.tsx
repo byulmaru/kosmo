@@ -20,7 +20,7 @@ import { SidebarNavigation } from '@/components/shell/SidebarNavigation';
 import { UniversalShell } from '@/components/shell/UniversalShell';
 import { SessionProvider } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
-import { borderWidths, colors, elevations, semanticColors, spacing } from '@/theme/tokens';
+import { borderWidths, elevations, semanticColors, spacing } from '@/theme/tokens';
 import appleTouchIconUrl from '../../../public/apple-touch-icon.png?url';
 import appIconUrl from '../../../public/icon-192.png?url';
 import ogDefaultUrl from '../../../public/og-default.png?url';
@@ -474,7 +474,7 @@ export const SharedNavigation: Story = {
     expect(profileEditRect.top - activeProfileRect.top).toBe(158);
     expect(activeProfileRect.right - profileEditRect.right).toBe(20);
     expect(profileEditVisual).toHaveStyle({
-      backgroundColor: 'rgb(252, 231, 154)',
+      backgroundColor: semanticColors.light.actionPrimaryBase,
       borderRadius: '8px',
       height: '32px',
       width: '72px',
@@ -709,7 +709,7 @@ export const ProfileEditNavigationCurrentState: Story = {
     expect(link).toHaveAttribute('href', '/profile-edit');
     expect(link).toHaveAttribute('aria-current', 'page');
     expect(within(link).getByTestId('profile-edit-action-visual')).toHaveStyle({
-      backgroundColor: 'rgb(252, 231, 154)',
+      backgroundColor: semanticColors.light.actionPrimaryBase,
     });
   },
   render: () => <FeedbackNavigationFullStory />,
@@ -1398,7 +1398,7 @@ export const ProfileSwitcherImagePresentation: Story = {
     const activeSurface = canvas.getByLabelText('활성 프로필');
     const cover = activeSurface.firstElementChild as HTMLElement;
     expect(cover.contains(headerImage)).toBe(true);
-    expect(cover).toHaveStyle({ backgroundColor: colors.light.primary });
+    expect(cover).toHaveStyle({ backgroundColor: semanticColors.light.actionPrimaryBase });
     expect(getComputedStyle(cover).filter).toBe('none');
 
     await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
@@ -1451,9 +1451,13 @@ export const ProfileSwitcherSelectTracksAnalytics: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
     const list = await canvas.findByLabelText('전환할 프로필 목록');
     await userEvent.click(within(list).getAllByRole('button')[1]!);
-    expect(trackAnalytics).toHaveBeenCalledOnce();
-    expect(trackAnalytics).toHaveBeenCalledWith('profile_selected', {
+    expect(trackAnalytics).toHaveBeenCalledTimes(1);
+    const selectCall = mocked(trackAnalytics).mock.calls[0];
+    expect(selectCall?.[0]).toBe('profile_selected');
+    expect(selectCall?.[1]).toEqual({
+      previous_profile_id: selectedProfile.id,
       selected_profile_id: secondProfile.id,
+      selection_cause: 'direct',
     });
   },
   render: () => <ProfileSwitcherStory />,
@@ -1480,11 +1484,17 @@ export const ProfileSwitcherApprovedSelectRunsOnce: Story = {
     expect(trackAnalytics).not.toHaveBeenCalled();
 
     await userEvent.click(body.getByRole('button', { name: '버리기' }));
-    await waitFor(() =>
-      expect(trackAnalytics).toHaveBeenCalledWith('profile_selected', {
+    await waitFor(() => {
+      const selectCall = mocked(trackAnalytics).mock.calls.find(
+        ([eventName]) => eventName === 'profile_selected',
+      );
+      expect(selectCall?.[0]).toBe('profile_selected');
+      expect(selectCall?.[1]).toEqual({
+        previous_profile_id: selectedProfile.id,
         selected_profile_id: secondProfile.id,
-      }),
-    );
+        selection_cause: 'direct',
+      });
+    });
     await waitFor(() =>
       expect(
         canvasElement.ownerDocument.querySelector(
@@ -1567,11 +1577,14 @@ export const ProfileSwitcherCreateTracksAnalytics: Story = {
     await userEvent.type(canvas.getByRole('textbox', { name: '프로필 핸들' }), 'administrator_dev');
     await userEvent.click(canvas.getByRole('button', { name: '만들기' }));
     await waitFor(() => expect(trackAnalytics).toHaveBeenCalledTimes(2));
-    expect(trackAnalytics).toHaveBeenNthCalledWith(1, 'profile_created', {
+    const createdCall = mocked(trackAnalytics).mock.calls[0];
+    const selectedCall = mocked(trackAnalytics).mock.calls[1];
+    expect(createdCall?.[0]).toBe('profile_created');
+    expect(createdCall?.[1]).toEqual({ selected_profile_id: secondProfile.id });
+    expect(selectedCall?.[0]).toBe('profile_selected');
+    expect(selectedCall?.[1]).toEqual({
       selected_profile_id: secondProfile.id,
-    });
-    expect(trackAnalytics).toHaveBeenNthCalledWith(2, 'profile_selected', {
-      selected_profile_id: secondProfile.id,
+      selection_cause: 'auto',
     });
   },
   render: () => <FirstProfileSwitcherStory />,

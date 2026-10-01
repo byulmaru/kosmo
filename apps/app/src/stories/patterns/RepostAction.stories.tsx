@@ -10,7 +10,7 @@ import {
   RecordSource,
   Store,
 } from 'relay-runtime';
-import { expect, fn, screen, userEvent, waitFor, within } from 'storybook/test';
+import { expect, screen, userEvent, waitFor, within } from 'storybook/test';
 import { PostActionBar } from '@/components/post/PostActionBar';
 import { RelayActorBoundary, RelayActorProvider, useRelayActor } from '@/relay/RelayActorProvider';
 import RepostActionStoryQueryNode from './__generated__/RepostActionStoryQuery.graphql';
@@ -123,11 +123,9 @@ type MutationFailure = 'graphql' | 'network' | undefined;
 function CapturedRepostActionStory({
   failure,
   initialSource = unselectedSource,
-  onQuote,
 }: {
   failure?: MutationFailure;
-  initialSource?: typeof unselectedSource | typeof selectedSource | typeof sourceWithContent;
-  onQuote?: () => void;
+  initialSource?: typeof unselectedSource | typeof selectedSource;
 }) {
   const [requests, setRequests] = useState<Array<{ name: string; variables: Variables }>>([]);
   const environment = useMemo(() => {
@@ -184,13 +182,13 @@ function CapturedRepostActionStory({
 
   return (
     <RelayEnvironmentProvider environment={environment}>
-      <CapturedRepostActionControls onQuote={onQuote} />
+      <CapturedRepostActionControls />
       <Text testID="repost-request-log">{JSON.stringify(requests)}</Text>
     </RelayEnvironmentProvider>
   );
 }
 
-function CapturedRepostActionControls({ onQuote }: { onQuote?: () => void }) {
+function CapturedRepostActionControls() {
   const [errorCount, setErrorCount] = useState(0);
   const [failureActions, setFailureActions] = useState<string[]>([]);
   const data = useLazyLoadQuery<RepostActionStoryQuery>(
@@ -205,7 +203,6 @@ function CapturedRepostActionControls({ onQuote }: { onQuote?: () => void }) {
           setErrorCount((count) => count + 1);
           setFailureActions((actions) => [...actions, failure.action]);
         }}
-        onQuote={onQuote}
         post={data.node!.actionBar!}
       />
       <Text testID="repost-error-count">{errorCount}</Text>
@@ -228,12 +225,6 @@ const selectedSource = {
   viewerRepost: { __typename: 'Post', id: activeRepostId },
   viewerReactions: [],
 };
-const sourceWithContent = {
-  ...unselectedSource,
-  content: { __typename: 'PostContent', id: 'content-source' },
-};
-const quote = fn();
-
 const meta = {
   component: RepostActionStory,
   title: 'KOSMO/Patterns/Post/Repost Action',
@@ -485,19 +476,6 @@ export const RequestVariablesAndDuplicateGuard: Story = {
     await expect(canvas.findByRole('button', { name: '재게시' })).resolves.toHaveTextContent('3');
   },
   render: () => <CapturedRepostActionStory />,
-};
-
-export const QuoteMenuInvokesComposer: Story = {
-  play: async ({ canvasElement }) => {
-    quote.mockClear();
-    const canvas = within(canvasElement);
-    await userEvent.click(await canvas.findByRole('button', { name: '재게시' }));
-    const menu = await screen.findByRole('menu', { name: '재게시 메뉴' });
-    await userEvent.click(within(menu).getByRole('menuitem', { name: '인용하기' }));
-    expect(quote).toHaveBeenCalledOnce();
-    expect(screen.queryByRole('menu', { name: '재게시 메뉴' })).toBeNull();
-  },
-  render: () => <CapturedRepostActionStory initialSource={sourceWithContent} onQuote={quote} />,
 };
 
 export const NetworkErrorKeepsSourceAndRetries: Story = {

@@ -16,9 +16,9 @@ export type PostComposerOwner = 'detail' | 'list';
 export type PostComposerMode = 'quote' | 'reply';
 
 type ActivePostComposer = {
+  key: string;
   mode: PostComposerMode;
   owner?: PostComposerOwner;
-  postId: string;
 };
 
 export type PostComposerBinding = {
@@ -37,7 +37,7 @@ type PostComposerCoordinatorValue = {
   close: () => void;
   onPostCreated: ((post: PostComposerCreatedPost) => void) | undefined;
   owner: PostComposerOwner;
-  press: (postId: string, mode: PostComposerMode, owner?: PostComposerOwner) => void;
+  press: (key: string, mode: PostComposerMode, owner?: PostComposerOwner) => void;
   profile: ReplyComposerSurface_profile$key | null;
 };
 
@@ -47,9 +47,9 @@ type PostComposerCoordinatorProviderProps = PropsWithChildren<{
   profile: ReplyComposerSurface_profile$key | null;
 }>;
 
-const PostComposerCoordinatorContext = createContext<PostComposerCoordinatorValue | undefined>(
-  undefined,
-);
+export const PostComposerCoordinatorContext = createContext<
+  PostComposerCoordinatorValue | undefined
+>(undefined);
 
 export function PostComposerCoordinatorProvider({
   children,
@@ -70,8 +70,8 @@ export function PostComposerCoordinatorProvider({
 
   const close = useCallback(() => setActiveComposer(null), []);
   const press = useCallback(
-    (postId: string, mode: PostComposerMode, ownerOverride?: PostComposerOwner) => {
-      const nextComposer = { mode, owner: ownerOverride, postId };
+    (key: string, mode: PostComposerMode, ownerOverride?: PostComposerOwner) => {
+      const nextComposer = { key, mode, owner: ownerOverride };
       const currentComposer = activeComposerRef.current;
       if (currentComposer === null) {
         setActiveComposer(nextComposer);
@@ -79,7 +79,7 @@ export function PostComposerCoordinatorProvider({
       }
 
       const sameComposer =
-        currentComposer.postId === nextComposer.postId &&
+        currentComposer.key === nextComposer.key &&
         currentComposer.mode === nextComposer.mode &&
         (currentComposer.owner ?? owner) === (nextComposer.owner ?? owner);
       const activeSurface = activeSurfaceRef.current;
@@ -106,22 +106,22 @@ export function PostComposerCoordinatorProvider({
   );
 }
 
-export function usePostComposerBinding(
-  postId: string,
+export function useOptionalPostComposerBinding(
+  key: string,
   mode: PostComposerMode = 'reply',
 ): PostComposerBinding | null {
   const coordinator = useContext(PostComposerCoordinatorContext);
   if (coordinator === undefined) {
-    throw new Error('Post Composer 표현부에는 PostComposerCoordinatorProvider가 필요합니다.');
+    return null;
   }
   const expanded =
-    coordinator.activeComposer?.postId === postId && coordinator.activeComposer.mode === mode;
+    coordinator.activeComposer?.key === key && coordinator.activeComposer.mode === mode;
   return {
     expanded,
     onPostCreated: coordinator.onPostCreated,
     onPress: (ownerOverride?: PostComposerOwner) => {
       if (coordinator.profile) {
-        coordinator.press(postId, mode, ownerOverride);
+        coordinator.press(key, mode, ownerOverride);
       }
     },
     onRequestClose: coordinator.close,
@@ -129,4 +129,15 @@ export function usePostComposerBinding(
     profile: coordinator.profile,
     ...(expanded ? { surfaceRef: coordinator.activeSurfaceRef } : {}),
   };
+}
+
+export function usePostComposerBinding(
+  key: string,
+  mode: PostComposerMode = 'reply',
+): PostComposerBinding {
+  const binding = useOptionalPostComposerBinding(key, mode);
+  if (binding === null) {
+    throw new Error('Post Composer 표현부에는 PostComposerCoordinatorProvider가 필요합니다.');
+  }
+  return binding;
 }

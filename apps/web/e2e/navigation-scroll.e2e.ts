@@ -91,6 +91,36 @@ async function scrollDocument(page: Page) {
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
 }
 
+test('Web 프로필 타임라인을 내려도 풀 사이드바가 화면에 고정된다', async ({ page }) => {
+  const session = await signIn(page, 'e2e-profile-sticky-sidebar');
+  for (let index = 0; index < 16; index += 1) {
+    await createE2EPost({
+      body: `Profile sticky sidebar post ${index} ${'긴 본문 '.repeat(20)}`,
+      profileId: session.profile!.id,
+    });
+  }
+
+  await page.setViewportSize({ height: 720, width: 1440 });
+  await page.goto('/@e2e-profile-sticky-sidebar');
+  await expect(page.getByText('Profile sticky sidebar post 0', { exact: false })).toBeVisible();
+  const navigation = await visiblePrimaryNavigation(page);
+  const sidebarTop = () =>
+    navigation.evaluate((element) => {
+      let rail: HTMLElement | null = element as HTMLElement;
+      while (rail && getComputedStyle(rail).position !== 'sticky') {
+        rail = rail.parentElement;
+      }
+      if (!rail) {
+        throw new Error('Sticky sidebar was not found');
+      }
+      return rail.getBoundingClientRect().top;
+    });
+
+  const initialTop = await sidebarTop();
+  await scrollDocument(page);
+  await expect.poll(sidebarTop).toBe(initialTop);
+});
+
 async function waitAnimationFrames(page: Page, count = 4) {
   await page.evaluate((frameCount) => {
     return new Promise<void>((resolve) => {

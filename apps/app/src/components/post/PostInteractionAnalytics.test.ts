@@ -113,6 +113,7 @@ mockModule('@/theme/ThemeProvider', {
   useTheme: () => ({ actionRepostBase: '#16794A' }),
 });
 mockModule('./PostActionControl', { PostActionControl: MockPostActionControl });
+mockModule('./ReplyComposerSurface', { ReplyComposerSurface: 'ReplyComposerSurface' });
 
 let RepostAction: typeof RepostActionExport;
 let usePostBookmarkAction: typeof usePostBookmarkActionExport;

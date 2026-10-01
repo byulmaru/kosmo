@@ -29,12 +29,11 @@ mockModule(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
   useElevation: () => ({ overlay: {} }),
   useTheme: () => ({
     backgroundElevated: '#fff',
+    backgroundSurface: '#f5f5f5',
     borderDefault: '#ddd',
-    card: '#fff',
+    foregroundPrimary: '#111',
     foregroundSecondary: '#666',
     overlayScrim: '#0008',
-    text: '#111',
-    textSecondary: '#666',
   }),
 });
 mockModule(new URL('../../theme/tokens.ts', import.meta.url), {
@@ -96,6 +95,10 @@ test('dirty form close uses the shared discard flow before closing', async () =>
     );
   });
   assert.ok(renderer);
+
+  const surface = renderer.root.findByProps({ testID: 'content-report-overlay-surface' });
+  assert.equal(surface.props.style.at(-1).backgroundColor, '#fff');
+  assert.equal(surface.props.style.at(-1).borderColor, '#ddd');
 
   const close = renderer.root.find((node) => (node.type as unknown) === 'IconButton');
   await act(async () => close.props.onPress());

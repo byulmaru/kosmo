@@ -60,7 +60,14 @@ mockModule('@/components/ui/ToastProvider', {
 mockModule('@/components/ui/useSafeAreaPadding', { useSafeAreaPadding: () => ({}) });
 mockModule('@/theme/ThemeProvider', {
   useElevation: () => ({ overlay: { shadowOpacity: 1 } }),
-  useTheme: () => ({ border: '#ddd', card: '#fff', overlayScrim: '#000', text: '#111' }),
+  useTheme: () => ({
+    backgroundCanvas: '#canvas',
+    backgroundElevated: '#elevated',
+    backgroundSurface: '#surface',
+    borderSubtle: '#subtle',
+    foregroundPrimary: '#primary',
+    overlayScrim: '#scrim',
+  }),
 });
 mockModule('@/theme/tokens', {
   fontFamilies: { ui: 'ui' },
@@ -107,6 +114,7 @@ describe('PostComposerHost', () => {
 
     assert.equal(modal?.props.transparent, false);
     assert.equal(renderer?.root.findAllByProps({ testID: 'post-composer-backdrop' }).length, 0);
+    assert.equal(dialogStyles.at(-1)?.backgroundColor, '#canvas');
     assert.equal(
       dialogStyles.some((style) => style.shadowOpacity === 1),
       false,
@@ -184,6 +192,9 @@ describe('PostComposerHost', () => {
     await act(async () => {
       renderer = create(createElement(PostComposerHost, props));
     });
+    assert.ok(renderer);
+    const rail = renderer.root.findByProps({ testID: 'post-composer-rail' });
+    assert.equal(rail.props.style.at(-1).backgroundColor, '#surface');
     await act(async () => composerProps?.onBodyChange('유지할 draft'));
     await act(async () => {
       renderer?.update(
@@ -195,6 +206,10 @@ describe('PostComposerHost', () => {
         }),
       );
     });
+    assert.ok(renderer);
+
+    const overlay = renderer.root.findByProps({ testID: 'post-composer-dialog' });
+    assert.equal(overlay.props.style.at(-1).backgroundColor, '#elevated');
 
     assert.equal(composerProps?.body, '유지할 draft');
   });

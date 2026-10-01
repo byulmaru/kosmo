@@ -34,9 +34,9 @@ lifecycle·권한·표시·탭 이동·실패 경계를 기존 Notification 권�
 
 ### Requirement: 설치 registration과 신규 Notification 경계
 
-**Authority / Provenance:** `docs/domain/decisions/0029-native-push-notification-policy.md`, `docs/domain/objects/notification.md`, `PROD-875`, `PROD-912`, `PROD-914` — 인증된 Account는 자신이 소유한 Android·iOS 앱 설치와 FCM registration token을 등록·갱신·해제할 수 있어야 하며(MUST), 시스템은 서버가 발급한 installation row ID와 설치별 소유권·token lifecycle을 관리해야 한다(MUST). 최초 `registerPushInstallation(input: { platform, token })`은 외부 installation ID 없이 새 row를 만들고 `PushInstallation` GlobalID인 `id: ID!`를 반환해야 하며(MUST). `updatePushInstallation(input: { id: ID!, platform, token })`은 반환된 ID와 인증된 현재 Account가 소유한 row만 갱신해야 하며(MUST), 알 수 없거나 삭제된 ID와 다른 Account 소유 ID는 row 존재 여부를 드러내지 않는 동일한 `PERMISSION_DENIED`(`Push installation is unavailable.`)로 실패해야 한다(MUST). `unregisterPushInstallation(input: { id: ID! })`은 인증된 현재 Account가 소유한 해당 ID만 삭제해야 하며(MUST), 알 수 없거나 삭제된 ID와 다른 Account 소유 ID는 row 존재 여부를 노출하지 않고 `{ completed: true }`로 멱등 완료해야 한다(MUST). 등록 당시 연결된 `sessionId`는 lifecycle association으로 유지하고 현재 인증 Session과 비교하거나 요청 Session으로 재바인딩해서는 안 되며(MUST NOT), 따라서 같은 Account의 다른 Session도 row를 관리할 수 있어야 한다(MUST). 등록 당시 연결된 Session의 logout/revoke와 Account deletion cleanup은 유지해야 한다(MUST). active installation row만 token을 보관해야 하며(MUST), logout·account switch·Account deletion·명시적 해제·일치하는 invalid/unregistered 결과로 폐기된 설치 registration과 token은 즉시 삭제되어 이후 신규 전달 eligible target이 아니어야 한다(MUST). stale old-token 결과는 갱신된 현재 token을 삭제해서는 안 된다(MUST NOT). 같은 Account가 새 registration으로 현재 active token을 다시 등록하면 기존 중복 row를 원자적으로 삭제하고 새 row ID와 새 registration epoch로 등록해야 하며(MUST), 다른 Account의 active token은 거부해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/decisions/0029-native-push-notification-policy.md`, `docs/domain/objects/notification.md`, `PROD-875`, `PROD-912`, `PROD-914` — 인증된 Account는 자신이 소유한 Android·iOS 앱 설치와 FCM registration token을 등록·갱신·해제할 수 있어야 하며(MUST), 시스템은 서버가 발급한 installation row ID와 설치별 소유권·token lifecycle을 관리해야 한다(MUST). 최초 `registerPushInstallation(input: { platform, token })`은 외부 installation ID 없이 새 row를 만들고 `PushInstallation` GlobalID인 `id: ID!`를 반환해야 하며(MUST). `updatePushInstallation(input: { id: ID!, platform, token })`은 반환된 ID와 인증된 현재 Account가 소유한 row만 갱신해야 하며(MUST), 알 수 없거나 삭제된 ID와 다른 Account 소유 ID는 row 존재 여부를 드러내지 않는 동일한 `PERMISSION_DENIED`(`Push installation is unavailable.`)로 실패해야 한다(MUST). `unregisterPushInstallation(input: { id: ID! })`은 인증된 현재 Account가 소유한 해당 ID만 삭제해야 하며(MUST), 알 수 없거나 삭제된 ID와 다른 Account 소유 ID는 row 존재 여부를 노출하지 않고 `{ completed: true }`로 멱등 완료해야 한다(MUST). 등록 당시 연결된 `sessionId`는 lifecycle association으로 유지하고 현재 인증 Session과 비교하거나 요청 Session으로 재바인딩해서는 안 되며(MUST NOT), 따라서 같은 Account의 다른 Session도 row를 관리할 수 있어야 한다(MUST). 등록 당시 연결된 Session의 logout/revoke와 Account deletion cleanup은 유지해야 한다(MUST). active installation row만 token을 보관해야 하며(MUST), logout·account switch·Account deletion·명시적 해제·일치하는 invalid/unregistered 결과로 폐기된 설치 registration과 token은 즉시 삭제되어 이후 신규 전달 eligible target이 아니어야 한다(MUST). stale old-token 결과는 갱신된 현재 token을 삭제해서는 안 된다(MUST NOT). 같은 Account가 새 registration으로 현재 active token을 다시 등록하면 기존 중복 row를 원자적으로 삭제하고 새 row ID로 등록해야 하며(MUST), 다른 Account의 active token은 거부해야 한다(MUST).
 
-대상 registration을 받은 시점을 경계로 그 이후 생성된 Notification만 해당 설치에 전달해야 한다(MUST). 새 설치, 새 device 또는 OS 권한 허용 시점에 이미 생성된 unread Notification을 backlog로 재생해서는 안 된다(MUST NOT). OS 상태 변화의 정확한 감지 시점은 이 capability가 고정하지 않으며, client는 관찰 가능한 OS 상태를 동기화한다.
+새 registration 또는 OS 권한 활성화와 Notification 생성이 맞물리는 구간의 전달은 best-effort이며, registration 시각을 기준으로 한 엄격한 Notification 생성 cut-off나 epoch recovery를 요구하지 않는다. 이미 생성된 unread Notification을 새 설치에 별도 backlog로 재생해서는 안 된다(MUST NOT). OS 상태 변화의 정확한 감지 시점은 이 capability가 고정하지 않으며, client는 관찰 가능한 OS 상태를 동기화한다.
 
 #### Scenario: 자신의 설치만 등록
 
@@ -51,28 +51,27 @@ lifecycle·권한·표시·탭 이동·실패 경계를 기존 Notification 권�
 #### Scenario: 삭제된 ID는 재생성하지 않고 늦은 해제를 무시한다
 
 - **WHEN** registration이 반환한 `id`가 해제된 뒤 같은 Account가 다시 `registerPushInstallation`을 호출한다
-- **THEN** 시스템은 새 `id`를 반환하고 새 registration epoch를 기록하며 이전 `id`를 재사용하지 않는다
+- **THEN** 시스템은 새 `id`를 반환하고 이전 `id`를 재사용하지 않는다
 - **AND** 이전 `id`를 사용하는 늦은 `unregisterPushInstallation`은 새 registration row를 삭제하지 않는다
 - **AND** 이미 없는 `id`의 unregister는 멱등 완료를 반환한다
 
-#### Scenario: registration 이후 생성된 Notification만 전달
+#### Scenario: 새 registration에서 과거 backlog를 재생하지 않음
 
-- **WHEN** 설치 registration 또는 OS 권한 허용이 Notification 생성 시각보다 뒤에 완료된다
-- **THEN** 시스템은 registration을 받은 시점 이후 생성된 Notification만 해당 설치의 전달 대상으로 만든다
-- **AND** registration 이전에 생성된 unread Notification을 backlog로 재생하지 않는다
+- **WHEN** Notification이 생성된 뒤 새 installation registration 또는 OS 권한 허용이 완료된다
+- **THEN** 시스템은 이미 생성된 unread Notification을 별도 backlog로 재생하지 않는다
 
 #### Scenario: 폐기된 설치의 신규 전달 무효화
 
 - **WHEN** 등록 당시 연결된 Session이 logout/revoke 또는 Account 전환으로 폐기되거나, Account 삭제 또는 명시적 해제로 설치가 폐기된다
 - **THEN** 시스템은 그 설치를 이후 신규 Notification 전달의 eligible target에서 제외한다
-- **AND** 시스템은 설치 row와 opaque token을 즉시 삭제하고 삭제 전 registration epoch를 보존하지 않는다
+- **AND** 시스템은 설치 row와 opaque token을 즉시 삭제한다
 - **AND** Provider가 이미 accepted·queued한 Push의 실제 도착 또는 회수는 이 상태 변화로 보장하지 않는다
 
 #### Scenario: old token 무효화와 재설치 중복 정리
 
 - **WHEN** Provider가 갱신 전 old token을 invalid 또는 unregistered로 응답하거나, 같은 Account가 새 registration으로 현재 active token을 다시 등록한다
 - **THEN** old token 결과는 Account·row ID·현재 token이 모두 일치하지 않으면 아무 row도 삭제하지 않고, 같은 Account의 active duplicate는 기존 row를 원자적으로 삭제한 뒤 새 row ID로 등록한다
-- **AND** 새 registration은 새 수신 시작 시각과 epoch를 사용하며 registration 이전 Notification을 backlog로 전달하지 않는다
+- **AND** 신규 Notification 전달은 새 registration 이후 일반 flow에서 best-effort로 시작하며, 과거 unread Notification은 별도 backlog로 재생하지 않는다
 - **AND** 다른 Account가 소유한 active token은 삭제하거나 등록하지 않는다
 
 ### Requirement: 네이티브 권한 안내와 OS 표시
@@ -130,21 +129,22 @@ FCM registration token, Provider service credential과 authorized private body�
 
 ### Requirement: Push tap의 Profile·target 수렴
 
-**Authority / Provenance:** `docs/domain/decisions/0029-native-push-notification-policy.md`, `docs/design/notifications.md`, `docs/domain/objects/notification.md`, `PROD-875`, `PROD-913` — Push tap은 현재 Account가 Recipient Profile에 접근할 수 있는지 다시 확인한 뒤, 접근 가능하면 해당 Profile로 전환해 target을 열어야 한다(MUST). target이 삭제되었거나 접근할 수 없으면 접근 가능한 알림 목록만 열고 별도 toast·message를 표시해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/decisions/0029-native-push-notification-policy.md`, `docs/design/notifications.md`, `docs/domain/objects/notification.md`, `PROD-875`, `PROD-913` — Push payload는 route lookup을 위해 `notificationId`와 `recipientProfileId`를 제공해야 한다(MUST). Push tap은 `notificationId`로 목적지 정보를 조회하고 현재 Account의 Recipient Profile 접근을 다시 확인해야 한다(MUST). 접근 가능하면 해당 Profile로 전환한 뒤 조회된 목적지로 기존 route를 사용해야 한다(MUST). resolved destination의 missing·access·error 상태는 기존 destination 동작을 따른다. 목적지를 구성할 수 없을 때는 일반 Notification 목록 fallback을 사용할 수 있다.
 
-로그인되지 않은 상태에서 Push를 탭하면 원래 target을 버리고 일반 로그인 흐름을 따라야 하며(MUST), 로그인 뒤 Push target으로 자동 복귀해서는 안 된다(MUST NOT). 삭제·접근 불가 외의 target 처리에 대해 임의의 old-valid 또는 duplicate 자동 목록 fallback을 추가하지 않는다.
+로그인되지 않은 상태에서 Push를 탭하면 원래 target을 버리고 일반 로그인 흐름을 따라야 하며(MUST), 로그인 뒤 Push target으로 자동 복귀해서는 안 된다(MUST NOT). Push 전용 deleted/inaccessible target redirect나 destination feedback 억제는 요구하지 않는다.
 
 #### Scenario: 다른 Recipient Profile로 cross-profile 이동
 
 - **WHEN** 현재 selected Profile과 Push의 Recipient Profile이 다르고 현재 Account가 Recipient Profile membership을 가진 상태에서 사용자가 Push를 탭한다
-- **THEN** 시스템은 현재 Account의 Recipient Profile 접근 권한을 다시 확인한다
-- **AND** 권한이 있으면 Recipient Profile로 전환한 뒤 target을 연다
+- **THEN** 시스템은 payload의 `notificationId`로 목적지 정보를 조회한다
+- **AND** 시스템은 현재 Account의 Recipient Profile 접근 권한을 다시 확인한다
+- **AND** 권한이 있으면 Recipient Profile로 전환한 뒤 조회된 목적지로 기존 route를 사용한다
 
-#### Scenario: 삭제·접근 불가 target
+#### Scenario: Notification ID로 destination lookup 후 이동
 
-- **WHEN** 사용자가 탭한 target이 삭제되었거나 현재 Account가 접근할 수 없다
-- **THEN** 시스템은 현재 접근 가능한 Notification 목록만 연다
-- **AND** 설명용 toast·message 또는 target을 대신하는 다른 자동 fallback을 표시하지 않는다
+- **WHEN** 현재 Account가 payload의 `recipientProfileId`에 접근할 수 있고 사용자가 Push를 탭한다
+- **THEN** 시스템은 payload의 `notificationId`로 목적지 정보를 조회한다
+- **AND** 접근 가능한 Recipient Profile로 전환한 뒤 조회된 목적지로 기존 route를 사용한다
 
 #### Scenario: logged-out tap
 

@@ -20,7 +20,6 @@ import type { MoreActionConfig, PostActionBarProps } from './PostActionBar';
 type Props = Readonly<{
   actionBarStyle?: StyleProp<ViewStyle>;
   onDeleted?: () => void;
-  onQuote?: (restoreFocus: () => void) => void;
   reactionSummaryStyle?: StyleProp<ViewStyle>;
   reply?: PostActionBarProps['reply'];
   socialActionTarget: PostActionSurface_post$key;
@@ -43,7 +42,6 @@ const postActionSurfaceFragment = graphql`
 export function PostActionSurface({
   actionBarStyle,
   onDeleted,
-  // onQuote,
   reactionSummaryStyle,
   reply,
   socialActionTarget,
@@ -86,7 +84,6 @@ export function PostActionSurface({
         moreItems={moreItems}
         onBookmarkError={onBookmarkError}
         onDeleted={onDeleted}
-        onQuote={undefined /* onQuote */}
         onRepostError={onRepostError}
         onResolutionRequired={authentication.resolve}
         post={target.actionBar}
