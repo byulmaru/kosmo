@@ -94,6 +94,13 @@ Wide Web의 오른쪽 thread rail은 fullscreen modal 안의 별도 elevation su
 - 현재 이미지가 바뀌어도 작성자·원문과 Action Bar의 surface routing은 바뀌지 않는다. Pure Repost에서는 Reply만 바깥 contentless Repost identity를 유지하고 나머지 표시·social action은 direct Source를 대상으로 한다.
 - Viewer open과 Media 탐색은 route나 browser history를 변경하지 않는다.
 
+## Native 확대·이동 (PROD-1004)
+
+- iOS는 화면 맞춤 1배에서 4배까지 기본 이미지 핀치 확대를 제공하고, 이미지에서 더블 탭하면 누른 지점을 중심으로 1→2→4→1배를 순환한다. 별도 확대·축소 버튼은 제공하지 않으며 기본 이미지 Alt Text와 close·이전·다음 접근성은 유지한다.
+- iOS·Android 확대 중에는 외부 수평 paging을 잠그고 1배에서 다시 연다. 이미지·Content revision 변경, 이미지 재시도, 닫기·재진입에서는 zoom을 1배로 초기화하고 기존 오류·재시도 동작을 유지한다.
+- Android도 1~4배 핀치 확대와 확대 중 한 손 드래그 이동을 제공하고, 이미지에서 더블 탭하면 누른 지점을 중심으로 1→2→4→1배를 순환한다. 임의 핀치 배율에서는 다음 단계를 2배 미만이면 2배, 4배 미만이면 4배로 정한다. iOS·Android 모두 별도 확대·축소 버튼은 제공하지 않으며 기본 이미지 Alt Text와 close·이전·다음 접근성은 유지한다. Web 확대와 더블 탭은 이 범위에 포함하지 않는다.
+- Native ready 이미지의 기존 Alt Text focus는 현재 배율(1~4배)을 accessibility value로 알리고, 확대·축소·화면 맞춤과 확대 중 방향 영역 보기 action을 제공한다. Loading·error 상태와 현재 이미지가 아닌 preview에는 zoom action을 노출하지 않는다.
+
 ## Post Action Bar
 
 Viewer는 [기존 Post Action Bar](./post-action-bar.md)가 현재 제공하는 Reply, Repost, Reaction, Bookmark, More와 각 count·상태·target 계약을 그대로 재사용한다. 일반·Repost·Quote Post surface에서 기존 target routing을 유지하되 Quote를 새 Action Bar action으로 추가하지 않는다. Pure Repost의 Reply는 바깥 contentless Repost 기준으로 disabled이고, Repost·Reaction·Bookmark·More는 direct Source를 대상으로 한다. 현재 Post의 Reply는 Web 폭과 관계없이 Viewer를 닫은 뒤 배경 surface의 공용 modal을 연다. 같은 Reply availability를 사용하므로 pure Repost에는 Source Composer를 열지 않는다. Viewer 전용 action row를 만들거나 Media를 action 대상으로 바꾸지 않는다. 기존 Post 링크 복사는 유지하지만 Media 파일 URL 복사·공유·다운로드·기기 저장은 제공하지 않는다.
@@ -156,4 +163,4 @@ Figma·Storybook 정적 완료를 현재 runtime 검증이나 component 반영 �
 
 ## 제외 범위
 
-Zoom·pan, Media 편집·crop·caption·metadata, gallery layout 변경, viewer route·deep link, Media 전용 action bar와 파일 공유·다운로드·기기 저장은 제외한다. 기기 저장은 플랫폼별 permission, 파일 전달 방식과 실패·재시도 UX가 별도 제품·기술 계약을 필요로 하므로 후속 범위에서 다룬다.
+Web Zoom·pan, Media 편집·crop·caption·metadata, gallery layout 변경, viewer route·deep link, Media 전용 action bar와 파일 공유·다운로드·기기 저장은 제외한다. 기기 저장은 플랫폼별 permission, 파일 전달 방식과 실패·재시도 UX가 별도 제품·기술 계약을 필요로 하므로 후속 범위에서 다룬다.

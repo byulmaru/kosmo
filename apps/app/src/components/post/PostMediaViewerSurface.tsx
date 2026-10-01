@@ -3,7 +3,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
-  Image,
   Platform,
   Pressable,
   ScrollView,
@@ -18,15 +17,16 @@ import { Toast } from '@/components/ui/Toast';
 import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, radius, space, textStyles } from '@/theme/tokens';
 import { useToastMotion } from '@/theme/useOverlayMotion';
+import { ViewerImage, ZoomableImage, ZoomableImagePagerGesture } from './ZoomableImage';
 import type { ReactElement } from 'react';
 import type {
-  ImageLoadEvent,
   LayoutChangeEvent,
   PressableStateCallbackType,
   StyleProp,
   ViewStyle,
 } from 'react-native';
 import type { PostMediaItem } from '@/components/post/PostMediaImage';
+import type { ImageSize } from './ZoomableImage';
 
 export type PostMediaViewerPresentation = 'compact' | 'wide';
 
@@ -97,6 +97,10 @@ export function PostMediaViewerSurface({
   const reducedMotion = useReducedMotion();
   const { height: viewportHeight } = useWindowDimensions();
   const [mediaViewportSize, setMediaViewportSize] = useState<ImageSize | null>(null);
+  const [zoomState, setZoomState] = useState<Readonly<{ key: string; zoomed: boolean }>>({
+    key: '',
+    zoomed: false,
+  });
   const navigable = viewState === 'ready';
   const multiple = navigable && media.length > 1;
   const currentMedia = media[currentIndex];
@@ -115,6 +119,18 @@ export function PostMediaViewerSurface({
       : null;
   const request = imageState.identity === identity ? imageState.request : initialRequest;
   const token = imageState.identity === identity ? imageState.token : imageState.token + 1;
+  const zoomKey = JSON.stringify([identity, token]);
+  const zoomed = zoomState.key === zoomKey && zoomState.zoomed;
+  const setZoomed = useCallback(
+    (nextZoomed: boolean) => {
+      setZoomState((previous) =>
+        previous.key === zoomKey && previous.zoomed === nextZoomed
+          ? previous
+          : { key: zoomKey, zoomed: nextZoomed },
+      );
+    },
+    [zoomKey],
+  );
 
   useEffect(() => {
     setImageState((current) =>
@@ -139,7 +155,8 @@ export function PostMediaViewerSurface({
         if (
           current.generation !== generation ||
           current.status === 'error' ||
-          current.status === nextStatus
+          current.status === nextStatus ||
+          (current.status === 'ready' && nextStatus === 'loading')
         ) {
           return previous;
         }
@@ -172,6 +189,20 @@ export function PostMediaViewerSurface({
     });
   };
 
+  const currentImage =
+    viewState === 'ready' && currentMedia?.url ? (
+      <ZoomableImage
+        key={zoomKey}
+        accessibilityLabel={imageName}
+        onStatus={settle}
+        onZoomedChange={setZoomed}
+        reducedMotion={reducedMotion}
+        viewportSize={mediaViewportSize}
+        status={request.status}
+        url={currentMedia.url}
+      />
+    ) : null;
+
   return (
     <View style={[styles.surface, style]} testID="post-media-viewer-surface">
       <View style={[styles.content, presentation === 'wide' ? styles.wideContent : undefined]}>
@@ -199,7 +230,7 @@ export function PostMediaViewerSurface({
             style={styles.mediaViewport}
             testID="post-media-viewer-media-viewport"
           >
-            {viewState === 'ready' && currentMedia?.url ? (
+            {currentImage ? (
               <PostContentPrivacyBoundary
                 style={Platform.OS === 'web' ? styles.imagePrivacyBoundary : mediaViewportSize}
                 testID="post-media-viewer-image-privacy-boundary"
@@ -210,27 +241,15 @@ export function PostMediaViewerSurface({
                     currentIndex={currentIndex}
                     media={media}
                     onIndexChange={onIndexChange}
+                    onZoomedChange={setZoomed}
                     reducedMotion={reducedMotion}
                     viewportSize={mediaViewportSize}
+                    zoomed={zoomed}
                   >
-                    <ViewerImage
-                      key={JSON.stringify([identity, token])}
-                      accessibilityLabel={imageName}
-                      onStatus={settle}
-                      viewportSize={mediaViewportSize}
-                      status={request.status}
-                      url={currentMedia.url}
-                    />
+                    {currentImage}
                   </NativeMediaPager>
                 ) : (
-                  <ViewerImage
-                    key={JSON.stringify([identity, token])}
-                    accessibilityLabel={imageName}
-                    onStatus={settle}
-                    viewportSize={mediaViewportSize}
-                    status={request.status}
-                    url={currentMedia.url}
-                  />
+                  currentImage
                 )}
               </PostContentPrivacyBoundary>
             ) : null}
@@ -397,20 +416,23 @@ function NativeMediaPager({
   currentIndex,
   media,
   onIndexChange,
+  onZoomedChange,
   reducedMotion,
   viewportSize,
+  zoomed,
 }: Readonly<{
   children: ReactElement;
   currentIndex: number;
   media: readonly PostMediaItem[];
   onIndexChange: (index: number) => void;
+  onZoomedChange?: (zoomed: boolean) => void;
   reducedMotion: boolean;
   viewportSize: ImageSize;
+  zoomed: boolean;
 }>) {
   const scroll = useRef<ScrollView>(null);
   const active = useRef(true);
-  const position = useRef({ index: currentIndex, width: viewportSize.width });
-  const initialOffset = useRef({ x: currentIndex * viewportSize.width, y: 0 });
+  const position = useRef({ index: currentIndex, width: viewportSize.width, zoomed });
   const { width, height } = viewportSize;
   useEffect(() => {
     active.current = true;
@@ -420,16 +442,16 @@ function NativeMediaPager({
   }, []);
   useEffect(() => {
     const previous = position.current;
-    if (previous.index !== currentIndex || previous.width !== width) {
+    if (previous.index !== currentIndex || previous.width !== width || previous.zoomed !== zoomed) {
       scroll.current?.scrollTo({
         x: currentIndex * width,
         animated: previous.width === width && !reducedMotion,
       });
     }
-    position.current = { index: currentIndex, width };
-  }, [currentIndex, reducedMotion, width]);
+    position.current = { index: currentIndex, width, zoomed };
+  }, [currentIndex, reducedMotion, width, zoomed]);
 
-  return (
+  const pager = (
     <ScrollView
       ref={scroll}
       horizontal
@@ -437,9 +459,9 @@ function NativeMediaPager({
       bounces={false}
       directionalLockEnabled
       disableIntervalMomentum
-      scrollEnabled={media.length > 1}
+      scrollEnabled={media.length > 1 && !zoomed}
       showsHorizontalScrollIndicator={false}
-      contentOffset={initialOffset.current}
+      contentOffset={{ x: currentIndex * width, y: 0 }}
       onMomentumScrollEnd={(event) => {
         if (!active.current || event.nativeEvent.layoutMeasurement.width !== width || width <= 0) {
           return;
@@ -448,8 +470,9 @@ function NativeMediaPager({
           0,
           Math.min(media.length - 1, Math.round(event.nativeEvent.contentOffset.x / width)),
         );
-        position.current = { index, width };
+        position.current = { index, width, zoomed };
         if (index !== currentIndex) {
+          onZoomedChange?.(false);
           onIndexChange(index);
         }
       }}
@@ -479,109 +502,8 @@ function NativeMediaPager({
       ))}
     </ScrollView>
   );
-}
 
-function ViewerImage({
-  accessibilityLabel,
-  testID = 'post-media-viewer-image',
-  onStatus,
-  status,
-  url,
-  viewportSize,
-}: Readonly<{
-  accessibilityLabel: string;
-  testID?: string;
-  onStatus: (status: ImageRequest['status']) => void;
-  status: ImageRequest['status'];
-  url: string;
-  viewportSize: ImageSize | null;
-}>) {
-  const active = useRef(true);
-  const [intrinsicSize, setIntrinsicSize] = useState<ImageSize | null>(null);
-  useEffect(() => {
-    active.current = true;
-    return () => {
-      active.current = false;
-    };
-  }, []);
-  const settle = useCallback(
-    (next: ImageRequest['status']) => {
-      if (active.current) {
-        onStatus(next);
-      }
-    },
-    [onStatus],
-  );
-  const updateIntrinsicSize = useCallback((width: number, height: number) => {
-    if (active.current && width > 0 && height > 0) {
-      setIntrinsicSize({ height, width });
-    }
-  }, []);
-  const handleError = useCallback(() => settle('error'), [settle]);
-  const handleLoad = useCallback(
-    (event?: ImageLoadEvent) => {
-      const source = event?.nativeEvent?.source;
-      const width = source?.width ?? 0;
-      const height = source?.height ?? 0;
-      if (width > 0 && height > 0) {
-        updateIntrinsicSize(width, height);
-      } else {
-        Image.getSize(
-          url,
-          (naturalWidth, naturalHeight) => updateIntrinsicSize(naturalWidth, naturalHeight),
-          () => undefined,
-        );
-      }
-      settle('ready');
-    },
-    [settle, updateIntrinsicSize, url],
-  );
-  const handleLoadStart = useCallback(() => settle('loading'), [settle]);
-  const imageSize = fitImageSize(viewportSize, intrinsicSize);
-  const frameSize = imageSize ?? viewportSize;
-  return (
-    <View style={frameSize ? [styles.imageFrame, frameSize] : styles.imageFrameFallback}>
-      <Image
-        accessibilityLabel={accessibilityLabel}
-        accessibilityRole="image"
-        accessibilityState={{ busy: status === 'loading' }}
-        onError={handleError}
-        onLoad={handleLoad}
-        onLoadStart={handleLoadStart}
-        resizeMode="contain"
-        source={status === 'error' ? undefined : { uri: url }}
-        style={styles.image}
-        testID={testID}
-      />
-    </View>
-  );
-}
-
-type ImageSize = Readonly<{ height: number; width: number }>;
-
-function fitImageSize(
-  viewportSize: ImageSize | null,
-  intrinsicSize: ImageSize | null,
-): ImageSize | null {
-  if (
-    !viewportSize ||
-    !intrinsicSize ||
-    viewportSize.height <= 0 ||
-    viewportSize.width <= 0 ||
-    intrinsicSize.height <= 0 ||
-    intrinsicSize.width <= 0
-  ) {
-    return null;
-  }
-
-  const scale = Math.min(
-    viewportSize.width / intrinsicSize.width,
-    viewportSize.height / intrinsicSize.height,
-  );
-  return {
-    height: intrinsicSize.height * scale,
-    width: intrinsicSize.width * scale,
-  };
+  return <ZoomableImagePagerGesture>{pager}</ZoomableImagePagerGesture>;
 }
 
 function ViewerErrorToast({
@@ -736,17 +658,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minHeight: 0,
     minWidth: 0,
-  },
-  imageFrame: { borderRadius: radius[8], height: '100%', overflow: 'hidden', width: '100%' },
-  imageFrameFallback: { height: '100%', width: '100%' },
-  image: {
-    bottom: 0,
-    height: '100%',
-    left: 0,
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    width: '100%',
   },
   imagePrivacyBoundary: {},
   closeButton: { position: 'absolute', top: space[16], zIndex: 2 },
