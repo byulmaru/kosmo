@@ -8,21 +8,11 @@ export * from './utils';
 
 const schema = { ...tables, ...enums };
 
-const postgresConnectionOptions = {
+export const pg = postgres({
   max_lifetime: 3600,
-  connection: {
-    idle_in_transaction_session_timeout: 30 * 1000,
-    lock_timeout: 10 * 1000,
-    statement_timeout: 30 * 1000,
-  },
-} as const;
-
-const processDatabaseOptions = {
-  ...postgresConnectionOptions,
   max: 20,
-} as const;
-
-export const pg = postgres(processDatabaseOptions);
+  prepare: false,
+});
 
 export const db = drizzle({
   client: pg,

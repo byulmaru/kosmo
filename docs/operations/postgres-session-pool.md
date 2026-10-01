@@ -1,9 +1,13 @@
 # PostgreSQL PgBouncer session pool 운영
 
 > [!IMPORTANT]
-> 이 문서는 GraphQL operation session과 RLS 전환의 과거 운영·incident·rollback 기록이다. 현재 target
-> architecture는 [ADR 0024](../domain/decisions/0024-application-policy-and-runtime-db-boundary.md)로
-> 대체되었다. 이 문서의 production 명령은 새 전환 계획과 별도 승인 없이 실행하지 않는다.
+> 이 문서는 GraphQL operation session과 RLS 전환의 과거 운영·incident·rollback 기록이다. 현재 API, Web,
+> Worker, Fedify consumer와 Admin의 ordinary `PGHOST`는 transaction-mode PgBouncer를 사용하며, Fedify
+> MessageQueue의 `FEDIFY_QUEUE_DATABASE_URL`과 migration owner의 `PGHOST`는 direct read-write Service를
+> 사용한다. 현재 target은
+> [ADR 0024](../domain/decisions/0024-application-policy-and-runtime-db-boundary.md)와
+> [Core 서비스 경계](../architecture/core-services.md)에 정의되어 있다. 아래 명령은 과거 operation-session
+> 절차이며 현재 전환 절차로 실행하지 않는다.
 
 ## 운영 경계
 

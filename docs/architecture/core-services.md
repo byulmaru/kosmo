@@ -83,8 +83,10 @@ application query 계층이 계산한다.
 
 GraphQL의 요청별 가시성·owner policy는 PostgreSQL RLS나 session actor state로 계산하지 않는다.
 GraphQL application SQL은 표준 `PGHOST`/`PGPORT`/`PGUSER`/`PGDATABASE`/`PGPASSWORD`로 구성한 process
-shared DB access 경계를 사용하고, API, Web과 Worker는 하나의 shared non-owner runtime role을 사용한다.
-GraphQL operation 전용 DB session, actor GUC, operation-scoped `ctx.db`와 `OPERATION_DATABASE_URL`은
+shared DB access 경계를 사용한다. API, Web, Worker, Fedify consumer와 Admin의 ordinary `PG*` connection은
+하나의 shared non-owner runtime role과 transaction-mode CloudNativePG Pooler를 사용한다. Fedify
+MessageQueue의 별도 `FEDIFY_QUEUE_DATABASE_URL`과 migration owner의 `PGHOST`는 direct read-write Service를
+사용한다. GraphQL operation 전용 DB session, actor GUC, operation-scoped `ctx.db`와 `OPERATION_DATABASE_URL`은
 target architecture에 포함하지 않는다.
 
 Temporal-first GraphQL mutation은 위 caller 인증·membership·visibility 검증과 입력 정규화를 마친 뒤

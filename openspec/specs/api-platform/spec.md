@@ -293,4 +293,5 @@ API는 request 승인·거절·취소 결과가 Relay cache에서 삭제된 requ
 - **WHEN** API GraphQL shared DB 전환을 렌더하고 검증한다
 - **THEN** Worker, Fedify와 Temporal의 DB lifecycle 및 policy는 변경되지 않는다
 - **AND** migration owner와 Fedify queue의 별도 database/role 경계는 유지된다
-- **AND** 기존 PgBouncer Pooler 리소스는 유지되지만 GraphQL application traffic은 이를 사용하지 않는다
+- **AND** ordinary runtime `PG*` traffic은 retained transaction-mode PgBouncer Pooler를 사용한다
+- **AND** migration owner `PGHOST`와 Fedify queue `FEDIFY_QUEUE_DATABASE_URL`은 direct read-write Service를 사용한다
