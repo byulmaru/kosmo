@@ -1011,7 +1011,7 @@ export function MobileFullscreenComposerShellCandidate({
         </View>
         <View style={styles.submit}>
           <Text
-            accessibilityRole={'status' as never}
+            role={Platform.OS === 'web' ? 'status' : undefined}
             accessibilityLabel={`남은 글자 수 ${remaining.toLocaleString('ko-KR')}자`}
             accessibilityLiveRegion="polite"
             style={[
