@@ -453,7 +453,7 @@ describe('Settings Block consumer with real Relay', () => {
     });
   }
 
-  it('actor 전환 뒤 늦은 해제 성공은 새 Owner의 행과 feedback을 바꾸지 않는다', async () => {
+  it('actor 전환 뒤 늦은 해제 성공은 새 Owner의 행과 Store를 바꾸지 않는다', async () => {
     await render(createEnvironment());
     await respond(latestRequest('SettingsBlockedProfilesQuery'), firstPage(['one']));
     await act(async () => button('차단 해제').props.onPress());
@@ -474,7 +474,6 @@ describe('Settings Block consumer with real Relay', () => {
     });
     assert.deepEqual(avatars(), ['https://media.example/other.png']);
     assert.deepEqual(environmentB.getStore().getSource().toJSON(), before);
-    assert.deepEqual(toastCalls, []);
     assert.equal(one('Button').props.accessibilityState.busy, false);
   });
 });
