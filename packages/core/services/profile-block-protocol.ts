@@ -355,15 +355,4 @@ export const loadProfileBlockProtocolActivityByProfileBlockId = async (
     .limit(1)
     .then(first);
 
-export const closeProfileBlockProtocolActivity = async (activityUri: string): Promise<void> => {
-  await db
-    .update(ProfileBlockActivities)
-    .set({
-      closedAt: sql`now()`,
-      state: 'CLOSED',
-      updatedAt: sql`now()`,
-    })
-    .where(protocolActivityCondition(activityUri));
-};
-
 export type { ProfileBlockActivityOrigin, ProfileBlockActivityState };

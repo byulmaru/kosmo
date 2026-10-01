@@ -104,6 +104,12 @@ test('Block과 Undo는 직접 target만 수신하고 관계 삭제 뒤에도 sta
     preferSharedInbox: true,
   });
 
+  const originalActivity = await db
+    .select()
+    .from(ProfileBlockActivities)
+    .where(eq(ProfileBlockActivities.profileBlockId, profileBlock.id))
+    .then((rows) => rows[0]);
+
   const { executeProfileUnblockTransitionActivity } =
     await import('../../../apps/worker/src/activities/profile-block');
   const transition = await executeProfileUnblockTransitionActivity({
@@ -117,7 +123,7 @@ test('Block과 Undo는 직접 target만 수신하고 관계 삭제 뒤에도 sta
       .select({ state: ProfileBlockActivities.state })
       .from(ProfileBlockActivities)
       .where(eq(ProfileBlockActivities.profileBlockId, profileBlock.id)),
-    [{ state: 'CLOSING' }],
+    [{ state: 'ACTIVE' }],
   );
 
   assert.deepEqual(
@@ -149,7 +155,9 @@ test('Block과 Undo는 직접 target만 수신하고 관계 삭제 뒤에도 sta
     .from(ProfileBlockActivities)
     .where(eq(ProfileBlockActivities.activityUri, `${publicOrigin}/ap/block/${profileBlock.id}`))
     .then((rows) => rows[0]);
-  assert.equal(settledActivity?.state, 'CLOSED');
+  assert.equal(settledActivity?.state, 'ACTIVE');
+  assert.equal(settledActivity?.closedAt, null);
+  assert.deepEqual(settledActivity, originalActivity);
 });
 
 test('커밋된 Undo는 Owner와 Local Instance 상태 변경 뒤에도 전송한다', async (t) => {
@@ -389,7 +397,8 @@ test('Undo 전달 실패 후에도 같은 identity로 다시 queue에 인계한�
     .from(ProfileBlockActivities)
     .where(eq(ProfileBlockActivities.activityUri, `${publicOrigin}/ap/block/${profileBlock.id}`))
     .then((rows) => rows[0]);
-  assert.equal(settledActivity?.state, 'CLOSED');
+  assert.equal(settledActivity?.state, 'ACTIVE');
+  assert.equal(settledActivity?.closedAt, null);
 });
 
 type SendActivityCall = {

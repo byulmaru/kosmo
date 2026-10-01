@@ -75,8 +75,8 @@ PROD-822·PROD-823 In Review다. 이슈 상태와 실제 병합·통합 검증 �
    이미 확정된 효과를 임의로 추가·취소하지 않게 한다. 현재 recipient admission에 따른 보류는 계획 취소와 구분한다. 추가 개인정보를 담거나 Public/followers로 확장하지 않는다.
 7. **실패 구분:** required cleanup은 domain 성공 조건이고, queue 인계 실패와 인계 후 remote 실패는 별도다.
    인계 전 실패·응답 유실은 같은 identity의 선두 효과로 재시도하고 실제 수락을 확인·보존하면 정산한다.
-   그 뒤 Undo를 진행하며 remote retry는 Fedify에 맡긴다. 정산 뒤 새로 호출한 과거 효과는 추가 인계 없이 끝내지만,
-   이미 실행 중인 이전 attempt의 종료를 보장하지 않는다. 그 attempt나 consumer retry 때문에 추가 보류하지 않는다.
+   remote retry는 Fedify에 맡긴다. 응답 유실 뒤에는 같은 stable identity로 다시 인계할 수 있으며,
+   outbound 진행 상태를 DB에 기록하지 않는다. 이전 attempt나 consumer retry 때문에 Undo를 추가 보류하지 않는다.
    인계 retry 소진 시 선두 실패와 뒤 효과 대기를 보존하고 자동으로 건너뛰지 않는다. 원격 실패는 확정된 로컬 상태를 되돌리지 않는다.
 8. **Origin:** inbound Block/Undo는 같은 Block/Undo 발신 효과를 만들지 않는다. 기존 Follow cleanup이 소유한
    Notification 정리와 필요한 Follow 효과는 원래 계약대로 실행한다.

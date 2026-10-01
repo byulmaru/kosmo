@@ -570,7 +570,44 @@ test('inbound Block 원본이 여러 개여도 Undo는 현재 pair의 정확한 
   }
 });
 
-test('local Unblock은 원본을 전송 대기 상태로 두고 재차단과 오래된 해제를 구분한다', async () => {
+test('local Unblock도 inbound 원본은 닫아 이후 관계를 보호한다', async () => {
+  const { profile: owner } = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
+  const { profile: target } = await createProfile();
+  const activityUri = `https://remote.example/activities/${crypto.randomUUID()}`;
+  const block = await executeProfileBlockTransitionActivity({
+    ownerProfileId: owner.id,
+    targetProfileId: target.id,
+    origin: 'ACTIVITYPUB',
+    protocolActivity: {
+      activityUri,
+      actorUri: `https://remote.example/users/${owner.id}`,
+      objectUri: `https://local.example/ap/actor/${target.id}`,
+      origin: 'INBOUND',
+      ownerProfileId: owner.id,
+      targetProfileId: target.id,
+    },
+  });
+  assert.equal(block.ok, true);
+  if (!block.ok) {
+    return;
+  }
+  const unblock = await executeProfileUnblockTransitionActivity({
+    ownerProfileId: owner.id,
+    targetProfileId: target.id,
+    profileBlockId: block.result.profileBlockId,
+    origin: 'LOCAL',
+  });
+  assert.equal(unblock.ok && unblock.result.removed, true);
+  const original = await db
+    .select()
+    .from(ProfileBlockActivities)
+    .where(eq(ProfileBlockActivities.activityUri, activityUri))
+    .then((rows) => rows[0]);
+  assert.equal(original?.state, 'CLOSED');
+  assert.ok(original?.closedAt);
+});
+
+test('local Unblock은 outbound 진행 상태를 기록하지 않고 재차단과 오래된 해제를 구분한다', async () => {
   const { profile: owner } = await createProfile();
   const { profile: target } = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
   const original = await executeProfileBlockTransitionActivity({
@@ -605,7 +642,7 @@ test('local Unblock은 원본을 전송 대기 상태로 두고 재차단과 오
       .select({ state: ProfileBlockActivities.state })
       .from(ProfileBlockActivities)
       .where(eq(ProfileBlockActivities.activityUri, oldActivityUri)),
-    [{ state: 'CLOSING' }],
+    [{ state: 'ACTIVE' }],
   );
 
   const replacement = await executeProfileBlockTransitionActivity({

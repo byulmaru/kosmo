@@ -307,8 +307,8 @@ export const executeProfileUnblockTransitionActivity = async (
       await tx
         .update(ProfileBlockActivities)
         .set({
-          state: input.origin === 'ACTIVITYPUB' ? 'CLOSED' : 'CLOSING',
-          ...(input.origin === 'ACTIVITYPUB' ? { closedAt: sql`now()` } : {}),
+          state: 'CLOSED',
+          closedAt: sql`now()`,
           updatedAt: sql`now()`,
         })
         .where(
@@ -317,6 +317,7 @@ export const executeProfileUnblockTransitionActivity = async (
             eq(ProfileBlockActivities.ownerProfileId, input.ownerProfileId),
             eq(ProfileBlockActivities.targetProfileId, input.targetProfileId),
             eq(ProfileBlockActivities.state, 'ACTIVE'),
+            eq(ProfileBlockActivities.origin, 'INBOUND'),
             ...(input.protocolActivityUri
               ? [eq(ProfileBlockActivities.activityUri, input.protocolActivityUri)]
               : []),

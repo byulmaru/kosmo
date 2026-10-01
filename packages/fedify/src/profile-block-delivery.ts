@@ -2,7 +2,6 @@ import { Block, Undo } from '@fedify/vocab';
 import { ActivityPubActors, db, first, Instances, ProfileBlocks, Profiles } from '@kosmo/core/db';
 import { InstanceKind, InstanceState, ProfileState } from '@kosmo/core/enums';
 import {
-  closeProfileBlockProtocolActivity,
   ensureProfileBlockProtocolActivity,
   loadProfileBlockProtocolActivityByProfileBlockId,
 } from '@kosmo/core/services';
@@ -302,6 +301,5 @@ export const sendProfileBlockUndo = async ({
     orderingKey: getProfileBlockOrderingKey(actorUri, objectUri),
     targetProfileId,
   });
-  await closeProfileBlockProtocolActivity(protocol.activityUri);
   return { status: 'SETTLED' };
 };
