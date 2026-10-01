@@ -172,7 +172,7 @@ jobs:
             "packageManager": "pnpm@11.22.0"
           }
           JSON
-          pnpm --dir "${uploader_directory}" add --save-exact \
+          pnpm --dir "${uploader_directory}" add --save-exact --allow-build=@sentry/cli \
             @sentry/expo-upload-sourcemaps@8.24.0
 
       - name: Upload source maps to Sentry
