@@ -24,7 +24,7 @@ export default function PreviousPrivacyScreen() {
       testID="privacy-policy-history"
       title={POLICY_TITLE}
     >
-      <PolicyParagraph>적용 기간: 2026년 9월 9일부터 2026년 9월 29일까지</PolicyParagraph>
+      <PolicyParagraph>적용 기간: 2026년 9월 9일부터 2026년 9월 30일까지</PolicyParagraph>
       <PolicyParagraph>
         별마루는 Kosmo 이용자의 개인정보를 중요하게 생각하며 개인정보 보호법 등 관계 법령을
         준수합니다. 이 방침은 Kosmo가 어떤 개인정보를 왜, 어떻게 처리하는지와 이용자가 행사할 수
