@@ -10,6 +10,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { colors } from '@/theme/tokens';
 import { profile } from '../fixtures';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { RequestParameters, Variables } from 'relay-runtime';
 
 const selectedProfile = profile({
   displayName: '현재 Profile',
@@ -25,6 +26,39 @@ const selectedProfile = profile({
 const ownerData = {
   currentSession: { id: 'settings-session', selectedProfile },
 };
+const settingsMutationResponse = {
+  updateProfile: {
+    profile: {
+      followPolicy: selectedProfile.followPolicy,
+      id: selectedProfile.id,
+      private: {
+        defaultPostVisibility: selectedProfile.private?.defaultPostVisibility ?? 'UNLISTED',
+      },
+    },
+  },
+};
+
+function resetSettingsMutationResponse() {
+  settingsMutationResponse.updateProfile.profile.followPolicy = selectedProfile.followPolicy;
+  settingsMutationResponse.updateProfile.profile.private = {
+    defaultPostVisibility: selectedProfile.private?.defaultPostVisibility ?? 'UNLISTED',
+  };
+}
+
+function observeSettingsMutation(_request: RequestParameters, variables: Variables) {
+  const input = variables.input as {
+    defaultPostVisibility?: 'FOLLOWERS' | 'PUBLIC' | 'UNLISTED';
+    followPolicy?: 'APPROVAL_REQUIRED' | 'OPEN';
+  };
+  if (input.defaultPostVisibility !== undefined) {
+    settingsMutationResponse.updateProfile.profile.private = {
+      defaultPostVisibility: input.defaultPostVisibility,
+    };
+  }
+  if (input.followPolicy !== undefined) {
+    settingsMutationResponse.updateProfile.profile.followPolicy = input.followPolicy;
+  }
+}
 
 const meta = {
   component: SettingsRouteLayout,
@@ -37,7 +71,11 @@ const meta = {
   ],
   parameters: {
     layout: 'fullscreen',
-    relay: { data: ownerData },
+    relay: {
+      data: ownerData,
+      mutationRequestObserver: observeSettingsMutation,
+      mutationResponse: settingsMutationResponse,
+    },
     router: { pathname: '/settings' },
   },
   render: () => (
@@ -52,6 +90,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const FullMasterDetail: Story = {
+  beforeEach: resetSettingsMutationResponse,
   globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -60,23 +99,19 @@ export const FullMasterDetail: Story = {
       name: 'Byulmaru ID Account Settings 외부 서비스로 이동',
     });
     const profileEntry = within(navigation).getByRole('link', {
-      name: '게시물 기본 공개 범위 설정 열기',
+      name: '프로필 설정 열기',
     });
 
-    expect(canvas.getByRole('heading', { name: '설정' })).toBeVisible();
-    expect(canvas.getByRole('heading', { name: '게시물 기본 공개 범위' })).toBeVisible();
+    expect(canvas.getByRole('heading', { name: /^설정$/ })).toBeVisible();
+    expect(canvas.getByRole('heading', { name: /^프로필 설정$/ })).toBeVisible();
     expect(account).toHaveAttribute('href', BYULMARU_ID_ACCOUNT_SETTINGS_URL);
-    expect(profileEntry).toHaveAttribute('href', '/settings/default-post-visibility');
+    expect(profileEntry).toHaveAttribute('href', '/settings/profile');
     expect(profileEntry).toHaveStyle({
       backgroundColor: colors.light.selectedSurface,
       borderColor: colors.light.selectedBorder,
     });
     expect(profileEntry).not.toHaveAttribute('aria-current');
-    expect(
-      canvas.getByRole('radiogroup', {
-        name: 'Kosmo 내부 Profile 현재 Profile @settings-owner 기본 게시 공개 범위',
-      }),
-    ).toBeVisible();
+    expect(canvas.getByRole('combobox', { name: '게시물 기본 공개 범위' })).toBeVisible();
     expect(canvasElement.querySelectorAll('[role="navigation"]')).toHaveLength(1);
   },
 };
@@ -105,12 +140,12 @@ export const CompactRootFirst: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    expect(canvas.getByRole('heading', { name: '설정' })).toBeVisible();
+    expect(canvas.getByRole('heading', { name: /^설정$/ })).toBeVisible();
     expect(canvas.getByRole('navigation', { name: '설정 목록' })).toBeVisible();
-    expect(canvas.queryByRole('radiogroup')).toBeNull();
-    expect(
-      canvas.getByRole('link', { name: '게시물 기본 공개 범위 설정 열기' }),
-    ).not.toHaveAttribute('aria-current');
+    expect(canvas.queryByRole('combobox')).toBeNull();
+    expect(canvas.getByRole('link', { name: '프로필 설정 열기' })).not.toHaveAttribute(
+      'aria-current',
+    );
   },
 };
 
@@ -150,7 +185,7 @@ export const NoSelectedProfile: Story = {
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
     expect(canvas.getByText('설정할 Profile이 없어요')).toBeVisible();
-    expect(canvas.queryByRole('radiogroup')).toBeNull();
+    expect(canvas.queryByRole('combobox')).toBeNull();
   },
   render: () => <SettingsProfileDetail />,
 };
@@ -199,9 +234,7 @@ export const ProfileErrorRetry: Story = {
     );
     await userEvent.click(canvas.getByRole('button', { name: '다시 시도' }));
     await expect(
-      canvas.findByRole('radiogroup', {
-        name: 'Kosmo 내부 Profile 현재 Profile @settings-owner 기본 게시 공개 범위',
-      }),
+      canvas.findByRole('combobox', { name: '게시물 기본 공개 범위' }),
     ).resolves.toBeVisible();
     expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
   },

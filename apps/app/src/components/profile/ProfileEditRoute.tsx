@@ -36,13 +36,6 @@ import type {
 
 type ImageField = 'avatar' | 'header';
 
-function requireProfileFollowPolicy(value: string): ProfileEditDraft['followPolicy'] {
-  if (value === 'OPEN' || value === 'APPROVAL_REQUIRED') {
-    return value;
-  }
-  throw new Error('Unsupported Profile follow policy');
-}
-
 function profileTagValidationError(errors: ReadonlyArray<unknown> | null | undefined) {
   for (const error of errors ?? []) {
     if (!error || typeof error !== 'object') {
@@ -76,7 +69,6 @@ const query = graphql`
         relativeHandle
         displayName
         bio
-        followPolicy
         instance {
           kind
         }
@@ -132,7 +124,6 @@ const updateProfileMutation = graphql`
         relativeHandle
         displayName
         bio
-        followPolicy
         tags {
           id
           name
@@ -195,7 +186,6 @@ function EditableProfileRoute({
     avatar: initialAvatar.presentation,
     bio: profile.bio ?? '',
     displayName: profile.displayName,
-    followPolicy: requireProfileFollowPolicy(profile.followPolicy),
     header: initialHeader.presentation,
     tags: profile.tags.map((tag) => tag.name),
   };
@@ -389,7 +379,6 @@ function EditableProfileRoute({
             ...(avatarId === undefined ? {} : { avatarId }),
             bio: draft.bio.trim() || null,
             displayName: draft.displayName,
-            followPolicy: draft.followPolicy,
             ...(headerId === undefined ? {} : { headerId }),
             tags: [...draft.tags],
           },

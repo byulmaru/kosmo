@@ -63,7 +63,6 @@ test('native profile edit scroll keeps the focused field above the keyboard', as
     avatar: { kind: 'current', previewUri: null },
     bio: '',
     displayName: '프로필',
-    followPolicy: 'APPROVAL_REQUIRED' as const,
     header: { kind: 'current', previewUri: null },
     tags: [],
   };

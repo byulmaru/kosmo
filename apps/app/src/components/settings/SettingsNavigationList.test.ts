@@ -111,7 +111,7 @@ mock.module(new URL('../ui/ToastProvider.tsx', import.meta.url), {
 
 let SettingsNavigationList: ComponentType<{
   pathname?: string;
-  selected?: 'default-post-visibility' | 'mute-and-block' | 'theme' | 'info';
+  selected?: 'profile' | 'mute-and-block' | 'theme' | 'info';
 }>;
 let SettingsMuteAndBlockNavigation: ComponentType<{
   selected?: 'blocked-profiles' | 'muted-profiles';
@@ -169,8 +169,8 @@ describe('SettingsNavigationList', () => {
       'Byulmaru ID Account Settings 외부 서비스로 이동',
     );
     assert.equal(links[0].props.href, 'https://id.byulmaru.co');
-    assert.equal(links[1].props.accessibilityLabel, '게시물 기본 공개 범위 설정 열기');
-    assert.equal(links[1].props.href, '/settings/default-post-visibility');
+    assert.equal(links[1].props.accessibilityLabel, '프로필 설정 열기');
+    assert.equal(links[1].props.href, '/settings/profile');
     assert.equal(links[2].props.accessibilityLabel, '뮤트 및 차단 설정 열기');
     assert.equal(links[2].props.href, '/settings/mute-and-block');
     assert.equal(
@@ -347,8 +347,8 @@ describe('SettingsNavigationList', () => {
 
   it('현재 path와 같은 root detail만 page-current 상태를 받는다', async () => {
     await render({
-      pathname: '/settings/default-post-visibility',
-      selected: 'default-post-visibility',
+      pathname: '/settings/profile',
+      selected: 'profile',
     });
 
     const internal = rendered('Pressable')[1];
@@ -357,7 +357,7 @@ describe('SettingsNavigationList', () => {
   });
 
   it('root detail을 visual selected로 표시해도 root path에서는 current page가 아니다', async () => {
-    await render({ pathname: '/settings', selected: 'default-post-visibility' });
+    await render({ pathname: '/settings', selected: 'profile' });
 
     const profileSettings = rendered('Pressable')[1];
     assert.equal(profileSettings.props['aria-current'], undefined);
@@ -392,7 +392,7 @@ describe('SettingsNavigationList', () => {
 async function render(
   props: {
     pathname?: string;
-    selected?: 'default-post-visibility' | 'mute-and-block' | 'theme' | 'info';
+    selected?: 'profile' | 'mute-and-block' | 'theme' | 'info';
   } = {},
 ) {
   await act(async () => {

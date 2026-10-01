@@ -68,7 +68,11 @@ describe('getShellLayout', () => {
     });
     assert.deepEqual(getWebMobileShellHeader(true, 390, '/settings/default-post-visibility', []), {
       leading: 'back',
-      title: '게시물 기본 공개 범위',
+      title: '프로필 설정',
+    });
+    assert.deepEqual(getWebMobileShellHeader(true, 390, '/settings/profile', []), {
+      leading: 'back',
+      title: '프로필 설정',
     });
     assert.deepEqual(getWebMobileShellHeader(true, 390, '/settings/mute-and-block', []), {
       leading: 'back',
@@ -107,6 +111,7 @@ describe('getShellLayout', () => {
 
   it('treats only the canonical Settings route family as Settings', () => {
     assert.equal(isSettingsRoute('/settings'), true);
+    assert.equal(isSettingsRoute('/settings/profile'), true);
     assert.equal(isSettingsRoute('/settings/default-post-visibility'), true);
     assert.equal(isSettingsRoute('/settings-legacy'), false);
     assert.equal(isSettingsRoute('/profile/settings'), false);
@@ -154,6 +159,11 @@ describe('getShellLayout', () => {
       showRightRail: false,
     });
     assert.deepEqual(getShellRoutePresentation(true, 768, '/settings/default-post-visibility'), {
+      layout: 'compact',
+      settingsWorkspace: false,
+      showRightRail: false,
+    });
+    assert.deepEqual(getShellRoutePresentation(true, 768, '/settings/profile'), {
       layout: 'compact',
       settingsWorkspace: false,
       showRightRail: false,

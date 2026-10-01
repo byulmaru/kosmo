@@ -70,6 +70,7 @@ test('text-only 저장은 Ready avatar/header payload를 끝내고 Profile로 re
 
   await page.getByRole('button', { name: '저장', exact: true }).click();
   const response = await responsePromise;
+  const updateVariables = readGraphQLOperation(response.request().postData())?.variables;
   const body = (await response.json()) as {
     data?: {
       updateProfile?: {
@@ -85,6 +86,8 @@ test('text-only 저장은 Ready avatar/header payload를 끝내고 Profile로 re
   };
 
   expect(body.errors, JSON.stringify(body, null, 2)).toBeUndefined();
+  expect(updateVariables).toBeDefined();
+  expect(updateVariables).not.toHaveProperty('input.followPolicy');
   expect(body.data?.updateProfile?.profile).toMatchObject({
     avatar: { id: expect.any(String) },
     bio: 'PROD-613 text-only boundary',
