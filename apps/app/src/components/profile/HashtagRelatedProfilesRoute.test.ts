@@ -351,19 +351,45 @@ describe('hashtag related profiles route identity and lifecycle', () => {
     const originalConsoleError = console.error;
     console.error = () => undefined;
     try {
+      pendingExploration = { hashtagId: 'hashtag-global-a', sessionId: 'session-a' };
       queryMode = 'error';
       await renderScreen();
       const state = requireRendered('HashtagRelatedProfileListState');
       assert.equal(state.props.state, 'error');
+      assert.equal(explorationTrackerCalls.initialFailure, 1);
 
       queryMode = 'success';
       await act(async () => state.props.onRetry());
 
       assert.equal(queryHistory.at(-1)?.fetchKey, 1);
       assert.equal(requireRendered('HashtagRelatedProfileList').props.identity, 'hashtag-global-a');
+      await act(async () => listTrackingProps?.onInitialResults?.(false));
+      assert.deepEqual(consumedExplorations, ['hashtag-global-a']);
+      assert.deepEqual(explorationTrackerCalls.initialResults, [false]);
+      assert.equal(explorationTrackerCalls.initialFailure, 1);
+      assert.equal(explorationTrackerCalls.end, 0);
     } finally {
       console.error = originalConsoleError;
     }
+  });
+
+  it('accepted session의 not-found 이후 성공도 동일 tracker에 연결한다', async () => {
+    pendingExploration = { hashtagId: 'hashtag-global-a', sessionId: 'session-a' };
+    hashtagNode = null;
+    await renderScreen();
+    assert.equal(requireRendered('HashtagRelatedProfileListState').props.state, 'notFound');
+    assert.equal(explorationTrackerCalls.initialFailure, 1);
+    hashtagNode = {
+      __typename: 'Hashtag',
+      id: 'hashtag-global-a',
+      name: 'Fediverse',
+      relatedProfileList: { id: 'hashtag-global-a', name: 'Fediverse' },
+    };
+    await renderScreen();
+    await act(async () => listTrackingProps?.onInitialResults?.(true));
+    assert.deepEqual(consumedExplorations, ['hashtag-global-a']);
+    assert.deepEqual(explorationTrackerCalls.initialResults, [true]);
+    assert.equal(explorationTrackerCalls.end, 0);
   });
 
   it('없는 Node와 Hashtag가 아닌 Node는 관계 목록으로 대체하지 않는다', async () => {
