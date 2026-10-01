@@ -56,14 +56,18 @@ async function readFeedbackAttachment(
   }
 
   let bytes: Uint8Array;
-  if (asset.file) {
-    bytes = new Uint8Array(await asset.file.arrayBuffer());
-  } else {
-    const response = await fetch(asset.uri);
-    if (!response.ok) {
-      throw new Error('이미지 파일을 읽을 수 없어요.');
+  try {
+    if (asset.file) {
+      bytes = new Uint8Array(await asset.file.arrayBuffer());
+    } else {
+      const response = await fetch(asset.uri);
+      if (!response.ok) {
+        throw new Error('이미지 파일을 읽을 수 없어요.');
+      }
+      bytes = new Uint8Array(await response.arrayBuffer());
     }
-    bytes = new Uint8Array(await response.arrayBuffer());
+  } catch {
+    throw new Error('이미지 파일을 읽을 수 없어요.');
   }
   if (bytes.byteLength === 0) {
     throw new Error('이미지 파일을 읽을 수 없어요.');

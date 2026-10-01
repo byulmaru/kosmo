@@ -175,6 +175,7 @@ export function FeedbackForm({ onStateChange }: Props) {
       releaseImagePreview(removed.asset.uri);
     }
     setAttachments((current) => current.filter((item) => item.key !== key));
+    setAttachmentError(null);
   };
 
   useEffect(() => {
@@ -196,11 +197,24 @@ export function FeedbackForm({ onStateChange }: Props) {
     setSubmitting(true);
     reportState({ dirty, submitting: true });
     setStatus('idle');
-    void prepareFeedbackAttachments(attachments)
-      .then((prepared) => {
-        captureFeedback(parsedBody.data, kind, prepared);
-      })
-      .then(completeSubmission, failSubmission);
+    setAttachmentError(null);
+    void prepareFeedbackAttachments(attachments).then(
+      (prepared) => {
+        try {
+          captureFeedback(parsedBody.data, kind, prepared);
+        } catch {
+          failSubmission();
+          return;
+        }
+        completeSubmission();
+      },
+      (error: unknown) => {
+        failSubmission();
+        setAttachmentError(
+          error instanceof Error ? error.message : '이미지 파일을 읽을 수 없어요.',
+        );
+      },
+    );
   };
 
   return (

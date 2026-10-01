@@ -177,6 +177,54 @@ export const SelectedImagesSubmission: Story = {
   },
 };
 
+export const AttachmentPreparationFailureKeepsDraft: Story = {
+  beforeEach: () => {
+    resetImagePickerMock();
+    const unreadableFile = new File([], 'feedback.png', { type: 'image/png' });
+    Object.defineProperty(unreadableFile, 'arrayBuffer', {
+      value: async () => {
+        throw new Error('platform file read failed');
+      },
+    });
+    setNextImagePickerResult({
+      assets: [
+        {
+          file: unreadableFile,
+          fileName: 'feedback.png',
+          fileSize: 0,
+          height: 630,
+          mimeType: 'image/png',
+          uri: ogImage,
+          width: 1200,
+        },
+      ],
+      canceled: false,
+    });
+    return resetImagePickerMock;
+  },
+  render: () => <FeedbackPage />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const bodyText = '첨부 준비 오류 뒤에도 초안을 유지해요.';
+    const body = canvas.getByRole('textbox', { name: '피드백 내용' });
+    const bugReport = canvas.getByRole('radio', { name: '버그를 발견했어요' });
+    await userEvent.click(bugReport);
+    await userEvent.type(body, bodyText);
+    await userEvent.click(canvas.getByRole('button', { name: '이미지 추가' }));
+    await expect(canvas.findByLabelText('첨부 이미지 1, 선택됨')).resolves.toBeVisible();
+
+    await userEvent.click(canvas.getByRole('button', { name: '피드백 보내기' }));
+    await expect(canvas.findByText('이미지 파일을 읽을 수 없어요.')).resolves.toBeVisible();
+    await expect(
+      canvas.findByText('피드백을 전달하지 못했습니다. 입력 내용을 확인한 뒤 다시 시도해주세요.'),
+    ).resolves.toBeVisible();
+    expect(canvas.getByRole('button', { name: '피드백 다시 시도' })).toBeVisible();
+    expect(bugReport).toBeChecked();
+    await expect(body).toHaveValue(bodyText);
+    expect(canvas.getByLabelText('첨부 이미지 1, 선택됨')).toBeVisible();
+  },
+};
+
 export const OverlaySelectedImages: Story = {
   globals: { viewport: { isRotated: false, value: 'feedbackDesktopShort' } },
   parameters: {
