@@ -69,8 +69,8 @@
   같은 orderingKey로 순서대로 인계한다. queue 인계 실패는 효과를 재시도하며 수락 이후 remote retry는 Fedify가 소유한다.
   Block·Undo의 Activity ID는 retry 중 바꾸지 않는다. 일반적으로 producer는 앞선 효과의 인계 결과를 확인·보존할 때까지
   같은 pair의 뒤 효과를 인계하지 않는다. 다만 Local Unblock은 이전 Block handoff나 metadata 존재를 선행 조건으로
-  삼지 않고 exact generation의 Undo를 독립적으로 인계한다. 응답 유실은 같은 미정산 효과로 재시도하고, 이미 정산된 효과의 재호출은
-  인계 없이 끝낸다. 이는 정산 후 새 호출의 처리이며 이미 실행 중인 이전 attempt의 종료를 보장하지 않는다.
+  삼지 않고 exact generation의 Undo를 독립적으로 인계한다. 응답 유실은 같은 stable identity로 재시도하며
+  중복 queue 인계 가능성을 허용한다. 전달 상태를 별도 DB 기록으로 유지하지 않고 Temporal Activity 완료·재시도에 맡긴다.
   실제 queue 수락을 확인·보존하면 인계를 정산하고 뒤 효과를 진행한다. remote-visible ordering은 D7에 따라 별도 보장하지 않는다. 인계 retry 소진 시 선두 실패와 뒤 효과 대기를 보존하고, 복구하기 전에는 자동으로 건너뛰지 않는다.
 - Alternatives Considered: 각 Activity마다 무작위 ID 재생성, 삭제된 row 재조회, process-local 순서 제어, 별도의 remote
   retry queue는 identity·restart 계약을 지키지 못하거나 기존 queue와 책임이 겹친다.
