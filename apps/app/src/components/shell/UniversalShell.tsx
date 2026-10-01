@@ -43,7 +43,7 @@ import {
 } from './shellLayout';
 import { NativeNavigationDrawer, WebNavigationDrawer } from './ShellNavigationDrawer';
 import { SidebarNavigation } from './SidebarNavigation';
-import type { ReactNode } from 'react';
+import type { ReactNode, RefObject } from 'react';
 import type { View as NativeView, ViewStyle } from 'react-native';
 import type { UniversalShellQuery } from './__generated__/UniversalShellQuery.graphql';
 import type { HomeReselectionHandler } from './ShellChromeContext';
@@ -117,8 +117,6 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
   const composerTriggerFocusRef = useRef<HTMLElement | null>(null);
-  // Native Modal dismissal restores VoiceOver focus through this actual compose control ref.
-  const composerTriggerRef = useRef<NativeView>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const menuButtonRef = useRef<NativeView>(null);
@@ -427,7 +425,6 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
         {mobile ? (
           <View aria-hidden={drawerOpen || undefined} style={web ? webFixedBottomBar : undefined}>
             <BottomTabBar
-              composeTriggerRef={composerTriggerRef}
               onComposeOpen={openComposer}
               onHomeReselect={web ? reselectHome : undefined}
               profile={profile}
@@ -448,12 +445,12 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
         >
           {profile ? (
             <RightRail
-              fallbackFocusRef={screenFallbackRef}
+              fallbackFocusRef={screenFallbackRef as unknown as RefObject<HTMLElement | null>}
               onRequestClose={closeComposer}
               open={composerVisible}
               profile={profile}
               query={data}
-              triggerFocusRef={web ? composerTriggerFocusRef : composerTriggerRef}
+              triggerFocusRef={composerTriggerFocusRef}
               {...(composerMode === 'rail'
                 ? { mode: composerMode, onExpand: openComposer }
                 : { mode: composerMode })}

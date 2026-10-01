@@ -21,7 +21,6 @@ let composerProps:
     }
   | undefined;
 let renderer: ReactTestRenderer | null = null;
-const nativeFocusEvents: Array<{ target: unknown; eventType: string }> = [];
 
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, {
@@ -30,10 +29,6 @@ const mockModule = (specifier: string | URL, exports: object) =>
 
 mockModule(require.resolve('lucide-react-native'), { XIcon: 'XIcon' });
 mockModule('react-native', {
-  AccessibilityInfo: {
-    sendAccessibilityEvent: (target: unknown, eventType: string) =>
-      nativeFocusEvents.push({ target, eventType }),
-  },
   KeyboardAvoidingView: 'KeyboardAvoidingView',
   Modal: 'Modal',
   Platform: platform,
@@ -96,7 +91,6 @@ afterEach(async () => {
   composerProps = undefined;
   platform.OS = 'web';
   safeAreaInsets.top = 0;
-  nativeFocusEvents.length = 0;
   mock.restoreAll();
 });
 
@@ -340,11 +334,9 @@ describe('PostComposerHost', () => {
     platform.OS = 'ios';
     let closeCount = 0;
     let editorBackCount = 0;
-    const fallback = {};
     await act(async () => {
       renderer = create(
         createElement(PostComposerHost, {
-          fallbackFocusRef: { current: fallback } as never,
           mode: 'mobile',
           onRequestClose: () => closeCount++,
           open: true,
@@ -366,21 +358,7 @@ describe('PostComposerHost', () => {
 
     await act(async () => composerProps?.onSubmittingChange?.(false));
     await act(async () => dialog.props.onAccessibilityEscape());
-    const modal = renderer?.root.findByType('Modal' as ElementType);
-    assert.equal(modal?.props.visible, false);
-    assert.equal(closeCount, 0);
-    assert.deepEqual(nativeFocusEvents, []);
-    const previousRequestAnimationFrame = globalThis.requestAnimationFrame;
-    Object.assign(globalThis, {
-      requestAnimationFrame: (callback: FrameRequestCallback) => {
-        callback(0);
-        return 0;
-      },
-    });
-    await act(async () => modal?.props.onDismiss());
-    Object.assign(globalThis, { requestAnimationFrame: previousRequestAnimationFrame });
     assert.equal(closeCount, 1);
-    assert.deepEqual(nativeFocusEvents, [{ target: fallback, eventType: 'focus' }]);
   });
 
   it('Web pending은 Escape·backdrop·닫기 버튼을 공용 dismiss guard에서 차단한다', async () => {

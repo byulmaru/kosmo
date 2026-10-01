@@ -24,17 +24,13 @@ const router = {
   replace: mock.fn(),
 };
 type RightRailProps = {
-  fallbackFocusRef?: { current: unknown };
   mode?: string;
   onExpand?: () => void;
   onRequestClose?: (reason?: 'created' | 'dismiss') => void;
   open?: boolean;
-  triggerFocusRef?: { current: unknown };
 };
 let rightRailProps: RightRailProps | undefined;
-let bottomTabBarProps:
-  | { composeTriggerRef?: { current: unknown }; onComposeOpen?: () => void }
-  | undefined;
+let bottomTabBarProps: { onComposeOpen?: () => void } | undefined;
 let sidebarNavigationProps: { onComposeOpen?: () => void } | undefined;
 let shellChromeProps:
   | { navigationDrawerOpen?: boolean; openNavigationDrawer?: () => void }
@@ -457,9 +453,6 @@ describe('UniversalShell screen fallback focus target', () => {
     await renderShell();
 
     assert.ok(bottomTabBarProps?.onComposeOpen);
-    const initialMobileHost = rightRailProps as RightRailProps | undefined;
-    assert.equal(bottomTabBarProps?.composeTriggerRef, initialMobileHost?.triggerFocusRef);
-    assert.ok(initialMobileHost?.fallbackFocusRef);
     await act(async () => bottomTabBarProps?.onComposeOpen?.());
     const mobileHost = rightRailProps as RightRailProps | undefined;
     assert.equal(mobileHost?.mode, 'mobile');

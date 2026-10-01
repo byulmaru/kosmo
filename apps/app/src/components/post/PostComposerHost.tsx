@@ -1,7 +1,6 @@
 import { XIcon } from 'lucide-react-native';
 import { useCallback, useRef, useState } from 'react';
 import {
-  AccessibilityInfo,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -19,7 +18,6 @@ import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, textStyles } from '@/theme/tokens';
 import { PostComposerController } from './PostComposerController';
 import type { RefObject } from 'react';
-import type { View as NativeView } from 'react-native';
 import type { OverlayCloseReason } from '@/components/ui/Overlay';
 import type { PostComposer_profile$key } from './__generated__/PostComposer_profile.graphql';
 import type { PostComposerProfileRef } from './PostComposerProfileSwitcher';
@@ -28,12 +26,12 @@ export type PostComposerHostMode = 'mobile' | 'overlay' | 'rail';
 export type PostComposerHostCloseReason = 'created' | 'dismiss';
 
 type PostComposerHostProps = {
-  fallbackFocusRef?: RefObject<HTMLElement | NativeView | null>;
+  fallbackFocusRef?: RefObject<HTMLElement | null>;
   onRequestClose: (reason: PostComposerHostCloseReason) => void;
   open: boolean;
   profile: PostComposer_profile$key;
   profiles?: readonly PostComposerProfileRef[];
-  triggerFocusRef?: RefObject<HTMLElement | NativeView | null>;
+  triggerFocusRef?: RefObject<HTMLElement | null>;
 } & ({ mode: 'rail'; onExpand: () => void } | { mode: 'mobile' | 'overlay'; onExpand?: never });
 
 type PostComposerRequestCloseReason = PostComposerHostCloseReason | OverlayCloseReason;
@@ -52,7 +50,6 @@ export function PostComposerHost({
   const elevation = useElevation();
   const insets = useSafeAreaInsets();
   const [submitting, setSubmitting] = useState(false);
-  const [nativeClosing, setNativeClosing] = useState(false);
   const web = Platform.OS === 'web';
   const nativeMobile = !web && mode === 'mobile';
   const composerSurface =
@@ -70,13 +67,9 @@ export function PostComposerHost({
       if (reason !== 'created' && submitting) {
         return;
       }
-      if (Platform.OS === 'ios' && overlayVisible && reason !== 'created') {
-        setNativeClosing(true);
-        return;
-      }
       onRequestClose(reason === 'created' ? 'created' : 'dismiss');
     },
-    [onRequestClose, overlayVisible, submitting],
+    [onRequestClose, submitting],
   );
   const requestNativeBack = useCallback(() => {
     if (submitting) {
@@ -91,26 +84,12 @@ export function PostComposerHost({
   const registerNativeBackHandler = useCallback((handler: (() => void) | null) => {
     nativeBackHandlerRef.current = handler;
   }, []);
-  const handleNativeDismiss = useCallback(() => {
-    if (!nativeClosing) {
-      return;
-    }
-    setNativeClosing(false);
-    const focusTarget = triggerFocusRef?.current ?? fallbackFocusRef?.current;
-    onRequestClose('dismiss');
-    requestAnimationFrame(() => {
-      focusTarget?.focus?.();
-      if (focusTarget) {
-        AccessibilityInfo.sendAccessibilityEvent(focusTarget as unknown as NativeView, 'focus');
-      }
-    });
-  }, [fallbackFocusRef, nativeClosing, onRequestClose, triggerFocusRef]);
   const { dialogRef } = useOverlayLifecycle({
-    fallbackFocusRef: fallbackFocusRef as RefObject<HTMLElement | null> | undefined,
+    fallbackFocusRef,
     onRequestClose: requestClose,
     open: overlayVisible,
     preferredFocusRef: expandControlRef,
-    triggerFocusRef: triggerFocusRef as RefObject<HTMLElement | null> | undefined,
+    triggerFocusRef,
   });
 
   const composer = (
@@ -185,14 +164,13 @@ export function PostComposerHost({
         accessibilityLabel="글쓰기"
         accessibilityViewIsModal
         animationType="fade"
-        onDismiss={Platform.OS === 'ios' ? handleNativeDismiss : undefined}
         onRequestClose={requestNativeBack}
         navigationBarTranslucent
         presentationStyle={mode === 'mobile' ? 'fullScreen' : undefined}
         role="dialog"
         statusBarTranslucent
         transparent={mode !== 'mobile'}
-        visible={overlayVisible && !nativeClosing}
+        visible={overlayVisible}
       >
         {mode === 'mobile' ? (
           <View

@@ -2,7 +2,6 @@ import { useRouter } from 'expo-router';
 import { XIcon } from 'lucide-react-native';
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import {
-  AccessibilityInfo,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -155,10 +154,7 @@ function ReplyComposerSurfaceContents({
   const composerName = quoteMode ? '인용 게시글' : '답글';
   const [submitting, setSubmitting] = useState(false);
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
-  const [nativeClosing, setNativeClosing] = useState(false);
   const discardConfirmRef = useRef<NativeView>(null);
-  // Native VoiceOver focus needs the concrete button host after the confirmation mounts.
-  const continueEditingRef = useRef<NativeView>(null);
   const editorRef = useRef<TextInput>(null);
   const nativeBackHandlerRef = useRef<(() => void) | null>(null);
   const closeAfterDiscardRef = useRef<(() => void) | undefined>(undefined);
@@ -182,11 +178,6 @@ function ReplyComposerSurfaceContents({
       setDiscardConfirmOpen(false);
       closeAfterDiscardRef.current = undefined;
       restoreTriggerFocusRef.current = onClosed === undefined;
-      if (Platform.OS === 'ios') {
-        closeAfterDiscardRef.current = onClosed;
-        setNativeClosing(true);
-        return;
-      }
       onRequestClose(onClosed !== undefined);
       onClosed?.();
     },
@@ -206,13 +197,7 @@ function ReplyComposerSurfaceContents({
   const continueEditing = useCallback(() => {
     closeAfterDiscardRef.current = undefined;
     setDiscardConfirmOpen(false);
-    requestAnimationFrame(() => {
-      const editor = editorRef.current;
-      editor?.focus();
-      if (editor && Platform.OS !== 'web') {
-        AccessibilityInfo.sendAccessibilityEvent(editor as never, 'focus');
-      }
-    });
+    requestAnimationFrame(() => editorRef.current?.focus());
   }, []);
   const requestNavigation = useCallback(
     (action: () => void) => {
@@ -258,23 +243,6 @@ function ReplyComposerSurfaceContents({
   const registerNativeBackHandler = useCallback((handler: (() => void) | null) => {
     nativeBackHandlerRef.current = handler;
   }, []);
-  const handleNativeDismiss = useCallback(() => {
-    if (!nativeClosing) {
-      return;
-    }
-    const onClosed = closeAfterDiscardRef.current;
-    closeAfterDiscardRef.current = undefined;
-    setNativeClosing(false);
-    const focusTarget = restoreTriggerFocusRef.current ? triggerRef?.current : null;
-    onRequestClose(onClosed !== undefined);
-    onClosed?.();
-    if (focusTarget) {
-      requestAnimationFrame(() =>
-        AccessibilityInfo.sendAccessibilityEvent(focusTarget as never, 'focus'),
-      );
-    }
-  }, [nativeClosing, onRequestClose, triggerRef]);
-
   const handleOverlayRequestClose = useCallback(
     (reason: OverlayCloseReason) => {
       if (reason === 'escape' && discardConfirmOpen) {
@@ -309,20 +277,10 @@ function ReplyComposerSurfaceContents({
   );
 
   useEffect(() => {
-    if (!discardConfirmOpen) {
-      return;
-    }
-    if (Platform.OS !== 'ios' && Platform.OS !== 'web') {
+    if (!discardConfirmOpen || Platform.OS !== 'web') {
       return;
     }
     const frame = requestAnimationFrame(() => {
-      if (Platform.OS === 'ios') {
-        const continueEditingButton = continueEditingRef.current;
-        if (continueEditingButton) {
-          AccessibilityInfo.sendAccessibilityEvent(continueEditingButton as never, 'focus');
-        }
-        return;
-      }
       const confirm = discardConfirmRef.current as unknown as HTMLElement | null;
       confirm?.querySelector<HTMLElement>('button:not([disabled])')?.focus();
     });
@@ -357,7 +315,7 @@ function ReplyComposerSurfaceContents({
           작성 중인 내용은 저장되지 않습니다.
         </Text>
         <View style={styles.confirmActions}>
-          <Button controlRef={continueEditingRef} onPress={continueEditing} tone="secondary">
+          <Button onPress={continueEditing} tone="secondary">
             계속 작성
           </Button>
           <Button onPress={() => closeImmediately(closeAfterDiscardRef.current)} tone="danger">
@@ -375,7 +333,6 @@ function ReplyComposerSurfaceContents({
       accessibilityLabel={`${composerName} 쓰기`}
       animationType={Platform.OS === 'web' ? 'none' : 'fade'}
       navigationBarTranslucent
-      onDismiss={Platform.OS === 'ios' ? handleNativeDismiss : undefined}
       onRequestClose={() => {
         if (Platform.OS !== 'web') {
           requestNativeBack();
@@ -385,7 +342,7 @@ function ReplyComposerSurfaceContents({
       role="dialog"
       statusBarTranslucent
       transparent
-      visible={!nativeClosing}
+      visible
     >
       <ToastProvider>
         <OverlayBackdrop

@@ -156,9 +156,8 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
 - modal을 열면 Reply action은 expanded 상태를 노출하고 본문 editor로 focus를 이동한다.
 - Web modal은 `X`·backdrop·`Escape`로 닫기를 요청하고, 닫힌 뒤 원래 Reply action으로 focus를 복원한다.
   fullscreen은 보이는 header close, Web `Escape`, Native platform back과 iOS VoiceOver의
-  `onAccessibilityEscape`를 사용하고 backdrop dismiss를 제공하지 않는다. iOS는 Native Modal의
-  dismiss 완료 뒤 부모 close와 원래 trigger 또는 안전한 fallback focus 복원을 실행한다. 폐기 확인은 두
-  surface가 공유한다.
+  `onAccessibilityEscape`를 사용하고 backdrop dismiss를 제공하지 않는다. Native에서 닫을 때는 접근성 포커스를
+  수동으로 옮기거나 특정 요소로의 포커스 복귀를 요구하지 않는다. 폐기 확인은 두 surface가 공유한다.
 - Navigation API를 지원하는 Web 브라우저의 취소 가능한 동일 문서 뒤로가기·앞으로가기는 Reply/Quote의
   같은 폐기 확인을 거친다. `계속 작성`은 현재 URL·surface·초안을 유지하고, `작성 취소`는 요청했던 기존
   history 항목으로 이동한다. Composer를 열거나 이 이동을 보호하기 위해 히스토리 항목을 추가하지 않는다.
@@ -199,8 +198,8 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
 - 제출 성공 뒤 같은 Composer가 초기화되면 작성 Profile을 전역 선택 Profile로 되돌린다. Visibility는 성공
   callback을 만든 render가 캡처한 전역 선택 Profile Fragment 값을 best-effort seed로 사용한다. 제출 중 별도
   render에서 갱신된 최신 Profile 기본값까지 보장하지 않는다.
-- 제출 성공 시 modal을 닫고 원래 Reply action으로 focus를 복원한 뒤 `답글을 게시했어요` 성공 snackbar와
-  `보기` action을 표시한다. 이 snackbar는 기존 공용 toast처럼 약 3초 뒤 자동으로 사라지며, 표시 중 사용자가
+- 제출 성공 시 modal을 닫고 `답글을 게시했어요` 성공 snackbar와 `보기` action을 표시한다. Web modal은
+  닫힌 뒤 원래 Reply action으로 포커스를 복원한다. 이 snackbar는 기존 공용 toast처럼 약 3초 뒤 자동으로 사라지며, 표시 중 사용자가
   `보기`를 활성화할 때만 생성된 Reply 상세로 이동하고 자동으로 route를 바꾸지 않는다.
 - 성공 payload 반영은 Reply surface가 임의의 Post나 다른 Profile Store membership을 합성하지 않고, 이를 연 surface가
   제공한 현재 actor의 connection/callback 경계만 사용한다. 상세 surface는 현재 detail query만 targeted
@@ -210,7 +209,9 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
 
 - Web modal은 공용 `글쓰기` heading과 관계 맥락을 포함한 modal dialog semantics, focus trap을
   제공한다.
-- `X`, backdrop, `Escape`, iOS VoiceOver Escape, 취소 확인과 성공 close에서 focus 이동을 각각 검증한다.
+- Web modal은 닫힌 뒤 원래 Reply action으로 포커스를 복원하고, fullscreen은 editor에 포커스를 둔 채 열린다.
+  iOS VoiceOver Escape로 닫을 수 있다. 취소 확인과 성공 종료는 각 surface의 기존 lifecycle을 검증하며,
+  Native에서는 닫은 뒤 접근성 포커스를 수동으로 옮기거나 특정 요소로의 포커스 복귀는 요구하지 않는다.
 - 오류는 alert semantics, Content Warning 입력·reveal control·Visibility와 Reply action은 name/state, 남은
   글자 수는 두 Plain Text 입력과 연관된 설명을 제공한다.
 - Media 추가·제거·재시도, 업로드 상태, Alt Text와 Sensitive Media control은 기존 일반 Composer와 같은
@@ -263,9 +264,11 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
 - 모든 지원 Reply surface에서 이미지 선택·업로드·미리보기·제거·재시도, Alt Text, Sensitive Media와
   Media-only Reply payload를 확인한다. 업로드 중·실패 상태는 제출을 차단하고 재시도 또는 제거 뒤 유효성을
   다시 계산해야 한다.
-- modal Reply-open dirty/pristine Post/pending/success close, 취소 확인, focus open/restore, 성공 snackbar의
+- Web modal Reply-open dirty/pristine Post/pending/success close, 취소 확인, editor focus open·Reply action focus
+  restore, 성공 snackbar의
   `보기` 이동과 자동 이동 없음, Media upload 중 dirty close를 확인한다. fullscreen은 backdrop 없이 header
-  close, Web `Escape`와 Native platform back에서 같은 dirty·pending 보호를 제공하는지 확인한다.
+  close, Web `Escape`, Native platform back과 iOS VoiceOver Escape에서 같은 dirty·pending 보호를 제공하는지
+  확인한다.
   Web 390px에서는 지원 브라우저의 Back·Forward, 계속 작성의 초안·URL 유지, 폐기 후 원래 목적지 이동과
   history 항목 추가·반복 이동이 없음을 확인한다. 두 surface 모두 selected
   Profile·Parent·Relay Environment 전환의 첫 commit과 늦은 설정 조회·upload·mutation completion 격리를 확인한다.
