@@ -33,6 +33,7 @@ spec:
       provider: kubernetes
   cors:
     - https://kos.moe
+    - https://dev.kos.moe
 ---
 apiVersion: core.openfeature.dev/v1beta1
 kind: Flagd
