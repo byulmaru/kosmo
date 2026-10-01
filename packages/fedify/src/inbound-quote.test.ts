@@ -5,9 +5,11 @@ import { after, before, beforeEach, mock, test } from 'node:test';
 import { generateCryptoKeyPair, signRequest } from '@fedify/fedify';
 import { quoteInteraction } from '@fedify/interaction-controls';
 import {
+  Block,
   Create,
   CryptographicKey,
   Delete,
+  Move,
   Note,
   Person,
   PUBLIC_COLLECTION,
@@ -26,6 +28,7 @@ import {
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { temporalClient } from '@kosmo/core/temporal/client';
 import { eq, ne } from 'drizzle-orm';
+import { setInboundObservabilityReporter } from './inbound-observability';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type * as CoreServices from '@kosmo/core/services';
@@ -54,6 +57,7 @@ let Posts: typeof CoreDb.Posts;
 let Profiles: typeof CoreDb.Profiles;
 let createPost: typeof CoreServices.createPost;
 let createKosmoFederation: typeof createKosmoFederationType;
+let federation: ReturnType<typeof createKosmoFederationType>;
 let handleInboundCreate: typeof handleInboundCreateType;
 let handleInboundQuote: typeof handleInboundQuoteType;
 let handleInboundUpdate: typeof handleInboundUpdateType;
@@ -78,7 +82,7 @@ before(async () => {
   } = await import('@kosmo/core/db'));
   const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
   ({ createPost } = await import('@kosmo/core/services'));
-  ({ createKosmoFederation } = await import('./federation'));
+  ({ createKosmoFederation, federation } = await import('./federation'));
   ({ handleInboundCreate } = await import('./inbound-create'));
   ({ handleInboundQuote, resolveStoredInboundQuote, revokeInboundQuote } =
     await import('./inbound-quote'));
@@ -104,6 +108,166 @@ after(async () => {
   await db.delete(Posts);
   await db.delete(Profiles);
   await pg.end();
+});
+
+test('production singleton serves the configured actor, follow counters, Note and authorized collection', async () => {
+  const profile = await db
+    .insert(Profiles)
+    .values({
+      displayName: 'production-dispatcher',
+      followPolicy: ProfileFollowPolicy.OPEN,
+      handle: 'production-dispatcher',
+      instanceId: localInstanceId,
+      normalizedHandle: 'production-dispatcher',
+      state: ProfileState.ACTIVE,
+    })
+    .returning()
+    .then(firstOrThrow);
+  await db
+    .update(Profiles)
+    .set({ followersCount: 7, followingCount: 3 })
+    .where(eq(Profiles.id, profile.id));
+  const { post } = await createPost({
+    document: postContentDocumentFromText('production singleton Note'),
+    origin: 'LOCAL',
+    profileId: profile.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const fetchDocument = async (path: string) => {
+    const response = await federation.fetch(
+      new Request(new URL(path, publicOrigin), {
+        headers: { Accept: 'application/activity+json' },
+      }),
+      { contextData: undefined },
+    );
+    assert.equal(response.status, 200, await response.clone().text());
+    return response.json();
+  };
+  const actor = await fetchDocument(`/ap/actor/${profile.id}`);
+  assert.equal(actor.id, `${publicOrigin}/ap/actor/${profile.id}`);
+  assert.ok(actor.publicKey);
+  assert.equal((await fetchDocument(`/ap/actor/${profile.id}/followers`)).totalItems, 7);
+  assert.equal((await fetchDocument(`/ap/actor/${profile.id}/following`)).totalItems, 3);
+  const note = await fetchDocument(`/ap/note/${post.id}`);
+  assert.equal(note.type, 'Note');
+  assert.match(note.content, /production singleton Note/);
+  const collection = await fetchDocument(`/ap/note/${post.id}/emoji-reactions`);
+  assert.equal(collection.type, 'Collection');
+  assert.equal(collection.totalItems, 0);
+  const { post: privatePost } = await createPost({
+    document: postContentDocumentFromText('not anonymously visible'),
+    origin: 'LOCAL',
+    profileId: profile.id,
+    visibility: PostVisibility.FOLLOWERS,
+  });
+  for (const suffix of ['', '/emoji-reactions']) {
+    const response = await federation.fetch(
+      new Request(`${publicOrigin}/ap/note/${privatePost.id}${suffix}`, {
+        headers: { Accept: 'application/activity+json' },
+      }),
+      { contextData: undefined },
+    );
+    assert.equal(response.status, 401);
+  }
+});
+
+test('configured factory preserves signed Block and Move listeners and pre-dispatch onError', async () => {
+  const profile = await db
+    .insert(Profiles)
+    .values({
+      displayName: 'production-inbox',
+      followPolicy: ProfileFollowPolicy.OPEN,
+      handle: 'production-inbox',
+      instanceId: localInstanceId,
+      normalizedHandle: 'production-inbox',
+      state: ProfileState.ACTIVE,
+    })
+    .returning()
+    .then(firstOrThrow);
+  const actorUri = new URL('https://remote.example/users/production-inbox');
+  const keyUri = new URL('#main-key', actorUri);
+  const keyPair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
+  const key = new CryptographicKey({ id: keyUri, owner: actorUri, publicKey: keyPair.publicKey });
+  const actor = new Person({ id: actorUri, publicKey: key });
+  const documents = new Map([
+    [actorUri.href, await actor.toJsonLd({ format: 'expand' })],
+    [keyUri.href, await key.toJsonLd({ format: 'expand' })],
+  ]);
+  const documentLoader = async (url: string) => {
+    assert.ok(documents.has(url), `unexpected document URL: ${url}`);
+    return { contextUrl: null, document: documents.get(url), documentUrl: url };
+  };
+  const configured = createKosmoFederation({
+    documentLoaderFactory: () => documentLoader,
+    authenticatedDocumentLoaderFactory: () => documentLoader,
+    contextLoaderFactory: () => getDocumentLoader(),
+  });
+  const observations: Array<{ handler: string; reasonCode?: string }> = [];
+  const restore = setInboundObservabilityReporter({
+    captureException: () => assert.fail('expected protocol rejection must not be captured'),
+    log: (observation) => observations.push(observation),
+  });
+  const start = mock.method(temporalClient.workflow, 'start', async () => undefined as never);
+  try {
+    for (const path of [`/ap/actor/${profile.id}/inbox`, '/inbox']) {
+      for (const activity of [
+        new Block({ actor: actorUri, object: new URL(`/ap/actor/${profile.id}`, publicOrigin) }),
+        new Move({
+          actor: actorUri,
+          object: actorUri,
+          target: new URL('https://target.example/users/production-inbox'),
+        }),
+      ]) {
+        const response = await configured.fetch(
+          await signRequest(
+            new Request(new URL(path, publicOrigin), {
+              method: 'POST',
+              headers: { 'content-type': 'application/activity+json' },
+              body: JSON.stringify(await activity.toJsonLd({ contextLoader: getDocumentLoader() })),
+            }),
+            keyPair.privateKey,
+            keyUri,
+          ),
+          { contextData: undefined },
+        );
+        assert.equal(response.status, 202, await response.text());
+      }
+    }
+    assert.equal(
+      observations.filter(
+        ({ handler, reasonCode }) => handler === 'block' && reasonCode === 'invalid_block_identity',
+      ).length,
+      2,
+    );
+    assert.equal(start.mock.callCount(), 2);
+    for (const call of start.mock.calls) {
+      assert.equal(call.arguments[0], 'profileMigrationMoveWorkflow');
+      assert.deepEqual((call.arguments[1] as { args: unknown[] }).args, [
+        {
+          sourceActorUri: actorUri.href,
+          targetActorUri: 'https://target.example/users/production-inbox',
+        },
+      ]);
+    }
+    const malformed = await configured.fetch(
+      new Request(new URL('/inbox', publicOrigin), {
+        method: 'POST',
+        headers: { 'content-type': 'application/activity+json' },
+        body: '{',
+      }),
+      { contextData: undefined },
+    );
+    assert.equal(malformed.status, 400);
+    assert.ok(
+      observations.some(
+        ({ handler, reasonCode }) =>
+          handler === 'listener' && reasonCode === 'external_listener_error',
+      ),
+    );
+  } finally {
+    start.mock.restore();
+    restore();
+  }
 });
 
 test('FEP-044f authorization approves one materialized Source without changing Note identity', async () => {
