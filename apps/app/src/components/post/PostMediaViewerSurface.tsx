@@ -17,7 +17,8 @@ import { Toast } from '@/components/ui/Toast';
 import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, radius, space, textStyles } from '@/theme/tokens';
 import { useToastMotion } from '@/theme/useOverlayMotion';
-import { ViewerImage, ZoomableImage, ZoomableImagePagerGesture } from './ZoomableImage';
+import { ViewerImage } from './ViewerImage';
+import { ZoomableImage, ZoomableImagePagerGesture } from './ZoomableImage';
 import type { ReactElement } from 'react';
 import type {
   LayoutChangeEvent,
@@ -26,7 +27,7 @@ import type {
   ViewStyle,
 } from 'react-native';
 import type { PostMediaItem } from '@/components/post/PostMediaImage';
-import type { ImageSize } from './ZoomableImage';
+import type { ImageSize } from './ViewerImage';
 
 export type PostMediaViewerPresentation = 'compact' | 'wide';
 

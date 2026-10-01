@@ -1,5 +1,4 @@
 import {
-  cloneElement,
   createContext,
   useCallback,
   useContext,
@@ -17,28 +16,30 @@ import Animated, {
   useSharedValue,
 } from 'react-native-reanimated';
 import { getZoomAccessibilityProps } from './PostMediaViewerZoomAccessibility';
+import { ViewerImage } from './ViewerImage';
 import type { ReactElement } from 'react';
 import type { GestureType } from 'react-native-gesture-handler';
-import type { AndroidZoomImageProps } from './PostMediaViewerAndroidZoom';
 import type {
   ZoomAccessibilityActionName,
   ZoomAccessibilityState,
 } from './PostMediaViewerZoomAccessibility';
+import type { ImageSize, ZoomableImageProps } from './ViewerImage';
 
-export {
-  getZoomAccessibilityProps,
-  type ZoomAccessibilityActionName,
-  type ZoomAccessibilityChildProps,
-  type ZoomAccessibilityProps,
-  type ZoomAccessibilityState,
-} from './PostMediaViewerZoomAccessibility';
-
-type ImageSize = Readonly<{ height: number; width: number }>;
 type ZoomPosition = Readonly<{ x: number; y: number }>;
+type AndroidZoomableImageProps = Omit<ZoomableImageProps, 'viewportSize'> &
+  Readonly<{ viewportSize: ImageSize }>;
 
 const PagerGestureContext = createContext<GestureType | null>(null);
 
-export function AndroidPagerGesture({ children }: { children: ReactElement }) {
+export function ZoomableImage(props: ZoomableImageProps) {
+  return props.viewportSize ? (
+    <AndroidZoomImage {...props} viewportSize={props.viewportSize} />
+  ) : (
+    <ViewerImage {...props} />
+  );
+}
+
+export function ZoomableImagePagerGesture({ children }: { children: ReactElement }) {
   const pagerGesture = useMemo(() => Gesture.Native(), []);
   return (
     <GestureHandlerRootView style={styles.gestureRoot} unstable_forceActive>
@@ -68,12 +69,14 @@ function clampZoomOffset(
   };
 }
 
-export function AndroidZoomImage({
-  children,
+function AndroidZoomImage({
+  accessibilityLabel,
+  onStatus,
   onZoomedChange,
   status,
+  url,
   viewportSize,
-}: AndroidZoomImageProps) {
+}: AndroidZoomableImageProps) {
   const pagerGesture = useContext(PagerGestureContext);
   const [imageSize, setImageSize] = useState<ImageSize | null>(null);
   const [zoomed, setZoomed] = useState(false);
@@ -146,17 +149,7 @@ export function AndroidZoomImage({
         }
         if (name === 'increment' || name === 'decrement') {
           const nextScale =
-            name === 'increment'
-              ? currentScale < 2
-                ? 2
-                : currentScale < 4
-                  ? 4
-                  : 4
-              : currentScale > 2
-                ? 2
-                : currentScale > 1
-                  ? 1
-                  : 1;
+            name === 'increment' ? (currentScale < 2 ? 2 : 4) : currentScale > 2 ? 2 : 1;
           if (nextScale === currentScale) {
             return;
           }
@@ -387,7 +380,6 @@ export function AndroidZoomImage({
     status === 'ready'
       ? getZoomAccessibilityProps(zoomAccessibilityState, handleAccessibilityAction)
       : undefined;
-  const accessibleChildren = cloneElement(children, { zoomAccessibility });
 
   return (
     <View style={[styles.root, viewportFrameStyle]} testID="post-media-viewer-android-zoom">
@@ -397,7 +389,14 @@ export function AndroidZoomImage({
             onLayout={handleImageLayout}
             style={[styles.imageContainer, animatedImageStyle]}
           >
-            {accessibleChildren}
+            <ViewerImage
+              accessibilityLabel={accessibilityLabel}
+              onStatus={onStatus}
+              status={status}
+              url={url}
+              viewportSize={viewportSize}
+              zoomAccessibility={zoomAccessibility}
+            />
           </Animated.View>
         </View>
       </GestureDetector>

@@ -3,10 +3,11 @@ import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement, forwardRef, useImperativeHandle, useRef } from 'react';
 import { act, create } from 'react-test-renderer';
-import type { ComponentType, ReactNode } from 'react';
+import type { ComponentType, ReactElement, ReactNode } from 'react';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import type { PostMediaItem } from '@/components/post/PostMediaImage';
 import type { PostMediaViewerSurfaceProps } from './PostMediaViewerSurface';
+import type { ZoomableImageProps } from './ViewerImage';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -233,42 +234,58 @@ type SurfaceProps = Readonly<{
 }>;
 
 let PostMediaViewerSurface: ComponentType<SurfaceProps> | undefined;
-let AndroidZoomImage: ComponentType<Record<string, unknown>> | undefined;
-let AndroidPagerGesture: ComponentType<Record<string, unknown>> | undefined;
-let IOSDoubleTap: ComponentType<Record<string, unknown>> | undefined;
-type IOSDoubleTapTestProps = {
-  children?: ReactNode;
-  enabled: boolean;
-  onDoubleTap: (point: { x: number; y: number }) => void;
-};
-let iosDoubleTapProps: IOSDoubleTapTestProps | undefined;
+type ZoomableImageModule = Readonly<{
+  ZoomableImage: ComponentType<ZoomableImageProps>;
+  ZoomableImagePagerGesture: ComponentType<{ children: ReactElement }>;
+}>;
+let defaultZoomableImageModule: ZoomableImageModule | undefined;
+let iosZoomableImageModule: ZoomableImageModule | undefined;
+let androidZoomableImageModule: ZoomableImageModule | undefined;
 let renderer: ReactTestRenderer | null = null;
 let androidRenderer: ReactTestRenderer | null = null;
 
-mock.module(require.resolve('./PostMediaViewerIOSDoubleTap.tsx'), {
-  exports: {
-    IOSDoubleTap: (props: IOSDoubleTapTestProps) => {
-      iosDoubleTapProps = props;
-      return props.children ?? null;
-    },
-  },
-} as unknown as Parameters<typeof mock.module>[1]);
+function getIOSDoubleTapGesture(
+  target: ReactTestRenderer | null = renderer,
+): FakeGesture | undefined {
+  return target?.root
+    .findAll((node) => String(node.type) === 'GestureDetector')
+    .map((node) => node.props.gesture as FakeGesture)
+    .find((gesture) => gesture.name === 'tap' && gesture.numberOfTapsValue === 2);
+}
 
 before(async () => {
-  const androidZoomModule = await import('./PostMediaViewerAndroidZoom.android');
-  // Node does not resolve Metro's .android suffix; execute the actual platform module.
-  mock.module(require.resolve('./PostMediaViewerAndroidZoom.tsx'), {
-    exports: androidZoomModule,
+  // Load the generic module before the Node adapter replaces its Metro-resolved module ID.
+  defaultZoomableImageModule = (await import('./ZoomableImage')) as ZoomableImageModule;
+  iosZoomableImageModule = (await import('./ZoomableImage.ios')) as ZoomableImageModule;
+  androidZoomableImageModule = (await import('./ZoomableImage.android')) as ZoomableImageModule;
+
+  // Node does not resolve Metro's platform suffixes; route this Surface test through the actual modules.
+  mock.module(require.resolve('./ZoomableImage.tsx'), {
+    exports: {
+      ZoomableImage: (props: ZoomableImageProps) => {
+        const implementation =
+          mockPlatform.OS === 'ios'
+            ? iosZoomableImageModule?.ZoomableImage
+            : mockPlatform.OS === 'android'
+              ? androidZoomableImageModule?.ZoomableImage
+              : defaultZoomableImageModule?.ZoomableImage;
+        assert.ok(implementation);
+        return createElement(implementation, props);
+      },
+      ZoomableImagePagerGesture: ({ children }: { children: ReactElement }) => {
+        const implementation =
+          mockPlatform.OS === 'ios'
+            ? iosZoomableImageModule?.ZoomableImagePagerGesture
+            : mockPlatform.OS === 'android'
+              ? androidZoomableImageModule?.ZoomableImagePagerGesture
+              : defaultZoomableImageModule?.ZoomableImagePagerGesture;
+        assert.ok(implementation);
+        return createElement(implementation, { children });
+      },
+    },
   } as unknown as Parameters<typeof mock.module>[1]);
   PostMediaViewerSurface = (await import('./PostMediaViewerSurface'))
     .PostMediaViewerSurface as ComponentType<SurfaceProps>;
-  AndroidZoomImage = androidZoomModule.AndroidZoomImage as ComponentType<Record<string, unknown>>;
-  AndroidPagerGesture = androidZoomModule.AndroidPagerGesture as ComponentType<
-    Record<string, unknown>
-  >;
-  IOSDoubleTap = (await import('./PostMediaViewerIOSDoubleTap.ios')).IOSDoubleTap as ComponentType<
-    Record<string, unknown>
-  >;
 });
 
 afterEach(async () => {
@@ -277,7 +294,6 @@ afterEach(async () => {
   mockReducedMotion = false;
   scrollCalls.length = 0;
   zoomToCalls.length = 0;
-  iosDoubleTapProps = undefined;
   if (renderer) {
     await act(async () => renderer?.unmount());
     renderer = null;
@@ -290,15 +306,18 @@ afterEach(async () => {
 
 describe('PostMediaViewerSurface', () => {
   it('Android native zoom locks paging, clamps one-pointer pan, and releases on reset', async () => {
-    const NativeZoom = AndroidZoomImage;
-    const PagerGesture = AndroidPagerGesture;
+    const NativeZoom = androidZoomableImageModule?.ZoomableImage;
+    const PagerGesture = androidZoomableImageModule?.ZoomableImagePagerGesture;
     assert.ok(NativeZoom);
     assert.ok(PagerGesture);
     const zoomedChanges: boolean[] = [];
-    const props = {
-      children: createElement('View', { style: { height: 585, width: 390 } }),
+    const props: ZoomableImageProps = {
+      accessibilityLabel: 'Viewer image',
+      onStatus: () => undefined,
       onZoomedChange: (zoomed: boolean) => zoomedChanges.push(zoomed),
+      reducedMotion: false,
       status: 'ready' as const,
+      url: 'https://example.com/image.png',
       viewportSize: { height: 600, width: 390 },
     };
     await act(async () => {
@@ -597,15 +616,18 @@ describe('PostMediaViewerSurface', () => {
   });
 
   it('Android image accessibility actions share zoom bounds and area direction', async () => {
-    const NativeZoom = AndroidZoomImage;
-    const PagerGesture = AndroidPagerGesture;
+    const NativeZoom = androidZoomableImageModule?.ZoomableImage;
+    const PagerGesture = androidZoomableImageModule?.ZoomableImagePagerGesture;
     assert.ok(NativeZoom);
     assert.ok(PagerGesture);
     const zoomedChanges: boolean[] = [];
-    const props = {
-      children: createElement('View', { style: { height: 585, width: 390 } }),
+    const props: ZoomableImageProps = {
+      accessibilityLabel: 'Viewer image',
+      onStatus: () => undefined,
       onZoomedChange: (zoomed: boolean) => zoomedChanges.push(zoomed),
+      reducedMotion: false,
       status: 'ready' as const,
+      url: 'https://example.com/image.png',
       viewportSize: { height: 600, width: 390 },
     };
     await act(async () => {
@@ -616,14 +638,18 @@ describe('PostMediaViewerSurface', () => {
     const image = nativeRenderer.root.findAll((node) => String(node.type) === 'AnimatedView')[0];
     assert.ok(image);
     const accessibleChild = () =>
-      nativeRenderer.root.findAll((node) => node.props.zoomAccessibility !== undefined)[0];
+      nativeRenderer.root.findAll(
+        (node) =>
+          node.props.accessibilityLabel === 'Viewer image' &&
+          node.props.accessibilityRole === 'image',
+      )[0];
     await act(async () =>
       image.props.onLayout({ nativeEvent: { layout: { height: 585, width: 390 } } }),
     );
-    assert.deepEqual(accessibleChild()?.props.zoomAccessibility.accessibilityActions, [
+    assert.deepEqual(accessibleChild()?.props.accessibilityActions, [
       { label: '확대', name: 'increment' },
     ]);
-    assert.deepEqual(accessibleChild()?.props.zoomAccessibility.accessibilityValue, {
+    assert.deepEqual(accessibleChild()?.props.accessibilityValue, {
       max: 4,
       min: 1,
       now: 1,
@@ -631,7 +657,7 @@ describe('PostMediaViewerSurface', () => {
     });
 
     await act(async () =>
-      accessibleChild()?.props.zoomAccessibility.onAccessibilityAction({
+      accessibleChild()?.props.onAccessibilityAction({
         nativeEvent: { actionName: 'increment' },
       }),
     );
@@ -641,9 +667,9 @@ describe('PostMediaViewerSurface', () => {
       2,
     );
     assert.deepEqual(zoomedChanges, [true]);
-    assert.equal(accessibleChild()?.props.zoomAccessibility.accessibilityValue.now, 2);
+    assert.equal(accessibleChild()?.props.accessibilityValue.now, 2);
     await act(async () =>
-      accessibleChild()?.props.zoomAccessibility.onAccessibilityAction({
+      accessibleChild()?.props.onAccessibilityAction({
         nativeEvent: { actionName: 'increment' },
       }),
     );
@@ -652,15 +678,15 @@ describe('PostMediaViewerSurface', () => {
         ?.scale,
       4,
     );
-    assert.equal(accessibleChild()?.props.zoomAccessibility.accessibilityValue.now, 4);
+    assert.equal(accessibleChild()?.props.accessibilityValue.now, 4);
     await act(async () =>
-      accessibleChild()?.props.zoomAccessibility.onAccessibilityAction({
+      accessibleChild()?.props.onAccessibilityAction({
         nativeEvent: { actionName: 'increment' },
       }),
     );
-    assert.equal(accessibleChild()?.props.zoomAccessibility.accessibilityValue.now, 4);
+    assert.equal(accessibleChild()?.props.accessibilityValue.now, 4);
     await act(async () =>
-      accessibleChild()?.props.zoomAccessibility.onAccessibilityAction({
+      accessibleChild()?.props.onAccessibilityAction({
         nativeEvent: { actionName: 'decrement' },
       }),
     );
@@ -669,14 +695,14 @@ describe('PostMediaViewerSurface', () => {
         ?.scale,
       2,
     );
-    assert.equal(accessibleChild()?.props.zoomAccessibility.accessibilityValue.now, 2);
+    assert.equal(accessibleChild()?.props.accessibilityValue.now, 2);
     await act(async () =>
-      accessibleChild()?.props.zoomAccessibility.onAccessibilityAction({
+      accessibleChild()?.props.onAccessibilityAction({
         nativeEvent: { actionName: 'panRight' },
       }),
     );
     await act(async () =>
-      accessibleChild()?.props.zoomAccessibility.onAccessibilityAction({
+      accessibleChild()?.props.onAccessibilityAction({
         nativeEvent: { actionName: 'panDown' },
       }),
     );
@@ -684,17 +710,17 @@ describe('PostMediaViewerSurface', () => {
       (image.props.style[1] as () => { transform: Array<Record<string, number>> })().transform,
       [{ translateX: -195 }, { translateY: -285 }, { scale: 2 }],
     );
-    const edgeActions = accessibleChild()?.props.zoomAccessibility.accessibilityActions.map(
+    const edgeActions = accessibleChild()?.props.accessibilityActions.map(
       (action: { name: string }) => action.name,
     );
     assert.deepEqual(edgeActions, ['increment', 'decrement', 'reset', 'panLeft', 'panUp']);
     await act(async () =>
-      accessibleChild()?.props.zoomAccessibility.onAccessibilityAction({
+      accessibleChild()?.props.onAccessibilityAction({
         nativeEvent: { actionName: 'panRight' },
       }),
     );
     await act(async () =>
-      accessibleChild()?.props.zoomAccessibility.onAccessibilityAction({
+      accessibleChild()?.props.onAccessibilityAction({
         nativeEvent: { actionName: 'panDown' },
       }),
     );
@@ -703,12 +729,12 @@ describe('PostMediaViewerSurface', () => {
       [{ translateX: -195 }, { translateY: -285 }, { scale: 2 }],
     );
     await act(async () =>
-      accessibleChild()?.props.zoomAccessibility.onAccessibilityAction({
+      accessibleChild()?.props.onAccessibilityAction({
         nativeEvent: { actionName: 'panLeft' },
       }),
     );
     await act(async () =>
-      accessibleChild()?.props.zoomAccessibility.onAccessibilityAction({
+      accessibleChild()?.props.onAccessibilityAction({
         nativeEvent: { actionName: 'panUp' },
       }),
     );
@@ -717,7 +743,7 @@ describe('PostMediaViewerSurface', () => {
       [{ translateX: 0 }, { translateY: 15 }, { scale: 2 }],
     );
     await act(async () =>
-      accessibleChild()?.props.zoomAccessibility.onAccessibilityAction({
+      accessibleChild()?.props.onAccessibilityAction({
         nativeEvent: { actionName: 'decrement' },
       }),
     );
@@ -737,7 +763,8 @@ describe('PostMediaViewerSurface', () => {
         ),
       );
     });
-    assert.equal(accessibleChild()?.props.zoomAccessibility, undefined);
+    assert.equal(accessibleChild()?.props.accessibilityActions, undefined);
+    assert.equal(accessibleChild()?.props.accessibilityValue, undefined);
     await act(async () => {
       nativeRenderer.update(
         createElement(
@@ -747,31 +774,41 @@ describe('PostMediaViewerSurface', () => {
         ),
       );
     });
-    assert.equal(accessibleChild()?.props.zoomAccessibility, undefined);
+    assert.equal(accessibleChild()?.props.accessibilityActions, undefined);
+    assert.equal(accessibleChild()?.props.accessibilityValue, undefined);
   });
 
-  it('iOS double-tap platform boundary forwards the native focal point', async () => {
-    const NativeDoubleTap = IOSDoubleTap;
-    assert.ok(NativeDoubleTap);
-    const points: Array<{ x: number; y: number }> = [];
+  it('iOS platform zoom handles only successful double-tap focal points', async () => {
+    const NativeZoom = iosZoomableImageModule?.ZoomableImage;
+    assert.ok(NativeZoom);
+    const zoomedChanges: boolean[] = [];
+    const props: ZoomableImageProps = {
+      accessibilityLabel: 'Viewer image',
+      onStatus: () => undefined,
+      onZoomedChange: (zoomed) => zoomedChanges.push(zoomed),
+      reducedMotion: false,
+      status: 'ready',
+      url: 'https://example.com/image.png',
+      viewportSize: { height: 600, width: 390 },
+    };
     await act(async () => {
-      renderer = create(
-        createElement(
-          NativeDoubleTap,
-          { enabled: true, onDoubleTap: (point: { x: number; y: number }) => points.push(point) },
-          createElement('View'),
-        ),
-      );
+      renderer = create(createElement(NativeZoom, props));
     });
-    const detector = renderer?.root.find((node) => String(node.type) === 'GestureDetector');
-    assert.ok(detector);
-    const tap = detector.props.gesture as FakeGesture;
+    const tap = getIOSDoubleTapGesture();
+    assert.ok(tap);
     assert.equal(tap.enabledValue, true);
     assert.equal(tap.numberOfTapsValue, 2);
+    await act(async () => tap.onEndCallback?.({ x: 120, y: 240 }, false));
+    assert.deepEqual(zoomToCalls, []);
     await act(async () => tap.onEndCallback?.({ x: 120, y: 240 }, true));
-    assert.deepEqual(points, [{ x: 120, y: 240 }]);
-    await act(async () => tap.onEndCallback?.({ x: 10, y: 20 }, false));
-    assert.deepEqual(points, [{ x: 120, y: 240 }]);
+    assert.deepEqual(zoomToCalls.at(-1), {
+      animated: true,
+      height: 300,
+      width: 195,
+      x: 22.5,
+      y: 90,
+    });
+    assert.deepEqual(zoomedChanges, [true]);
     assert.ok(renderer?.root.find((node) => String(node.type) === 'GestureHandlerRootView'));
   });
 
@@ -797,10 +834,10 @@ describe('PostMediaViewerSurface', () => {
       minHeight: 600,
       minWidth: 390,
     });
-    assert.equal(iosDoubleTapProps?.enabled, true);
+    assert.equal(getIOSDoubleTapGesture()?.enabledValue, true);
     assert.equal(pager.props.scrollEnabled, true);
 
-    await act(async () => iosDoubleTapProps?.onDoubleTap({ x: 100, y: 200 }));
+    await act(async () => getIOSDoubleTapGesture()?.onEndCallback?.({ x: 100, y: 200 }, true));
     assert.deepEqual(zoomToCalls.at(-1), {
       animated: true,
       height: 300,
@@ -812,7 +849,7 @@ describe('PostMediaViewerSurface', () => {
     await act(async () =>
       zoom.props.onScroll({ nativeEvent: { contentOffset: { x: 40, y: 20 }, zoomScale: 2 } }),
     );
-    await act(async () => iosDoubleTapProps?.onDoubleTap({ x: 100, y: 200 }));
+    await act(async () => getIOSDoubleTapGesture()?.onEndCallback?.({ x: 100, y: 200 }, true));
     assert.deepEqual(zoomToCalls.at(-1), {
       animated: true,
       height: 150,
@@ -824,7 +861,7 @@ describe('PostMediaViewerSurface', () => {
     await act(async () =>
       zoom.props.onScroll({ nativeEvent: { contentOffset: { x: 0, y: 0 }, zoomScale: 4 } }),
     );
-    await act(async () => iosDoubleTapProps?.onDoubleTap({ x: 100, y: 200 }));
+    await act(async () => getIOSDoubleTapGesture()?.onEndCallback?.({ x: 100, y: 200 }, true));
     assert.deepEqual(zoomToCalls.at(-1), {
       animated: true,
       height: 600,
@@ -837,7 +874,7 @@ describe('PostMediaViewerSurface', () => {
       zoom.props.onScroll({ nativeEvent: { contentOffset: { x: 0, y: 0 }, zoomScale: 1 } }),
     );
     assert.equal(byTestId('post-media-viewer-native-pager').props.scrollEnabled, true);
-    await act(async () => iosDoubleTapProps?.onDoubleTap({ x: 50, y: 50 }));
+    await act(async () => getIOSDoubleTapGesture()?.onEndCallback?.({ x: 50, y: 50 }, true));
     assert.deepEqual(zoomToCalls.at(-1), {
       animated: true,
       height: 300,
@@ -848,7 +885,7 @@ describe('PostMediaViewerSurface', () => {
     await act(async () =>
       zoom.props.onScroll({ nativeEvent: { contentOffset: { x: 0, y: 0 }, zoomScale: 2 } }),
     );
-    await act(async () => iosDoubleTapProps?.onDoubleTap({ x: 340, y: 550 }));
+    await act(async () => getIOSDoubleTapGesture()?.onEndCallback?.({ x: 340, y: 550 }, true));
     assert.deepEqual(zoomToCalls.at(-1), {
       animated: true,
       height: 150,
@@ -859,7 +896,7 @@ describe('PostMediaViewerSurface', () => {
     await act(async () =>
       zoom.props.onScroll({ nativeEvent: { contentOffset: { x: 0, y: 0 }, zoomScale: 4 } }),
     );
-    await act(async () => iosDoubleTapProps?.onDoubleTap({ x: 200, y: 300 }));
+    await act(async () => getIOSDoubleTapGesture()?.onEndCallback?.({ x: 200, y: 300 }, true));
     assert.deepEqual(zoomToCalls.at(-1), {
       animated: true,
       height: 600,
@@ -871,7 +908,7 @@ describe('PostMediaViewerSurface', () => {
       zoom.props.onScroll({ nativeEvent: { contentOffset: { x: 0, y: 0 }, zoomScale: 1 } }),
     );
     assert.equal(byTestId('post-media-viewer-native-pager').props.scrollEnabled, true);
-    await act(async () => iosDoubleTapProps?.onDoubleTap({ x: 340, y: 550 }));
+    await act(async () => getIOSDoubleTapGesture()?.onEndCallback?.({ x: 340, y: 550 }, true));
     assert.deepEqual(zoomToCalls.at(-1), {
       animated: true,
       height: 300,
@@ -883,7 +920,7 @@ describe('PostMediaViewerSurface', () => {
     await act(async () =>
       zoom.props.onScroll({ nativeEvent: { contentOffset: { x: 0, y: 0 }, zoomScale: 1.5 } }),
     );
-    await act(async () => iosDoubleTapProps?.onDoubleTap({ x: 100, y: 200 }));
+    await act(async () => getIOSDoubleTapGesture()?.onEndCallback?.({ x: 100, y: 200 }, true));
     assert.deepEqual(zoomToCalls.at(-1), {
       animated: true,
       height: 300,
@@ -897,7 +934,7 @@ describe('PostMediaViewerSurface', () => {
     await act(async () =>
       zoom.props.onScroll({ nativeEvent: { contentOffset: { x: 0, y: 0 }, zoomScale: 4 } }),
     );
-    await act(async () => iosDoubleTapProps?.onDoubleTap({ x: 100, y: 200 }));
+    await act(async () => getIOSDoubleTapGesture()?.onEndCallback?.({ x: 100, y: 200 }, true));
     assert.deepEqual(zoomToCalls.at(-1), {
       animated: false,
       height: 600,
