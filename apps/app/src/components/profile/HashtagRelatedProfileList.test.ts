@@ -51,7 +51,11 @@ mockModule(new URL('../pagination/PaginationSurface.tsx', import.meta.url), {
   PaginationSurface: (props: object) => createElement('PaginationSurface', props),
 });
 mockModule(new URL('../pagination/useAutomaticPagination.ts', import.meta.url), {
-  useAutomaticPagination: ({ loadNext }: { loadNext: (count: number, options: { onComplete: (error: Error | null) => void }) => void }) => ({
+  useAutomaticPagination: ({
+    loadNext,
+  }: {
+    loadNext: (count: number, options: { onComplete: (error: Error | null) => void }) => void;
+  }) => ({
     endRef: { current: null },
     loadError: false,
     loadNextPage: () => loadNext(20, { onComplete: () => undefined }),
