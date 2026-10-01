@@ -128,6 +128,8 @@ jobs:
       channel: dev
       platform: android
       source_sha: ${{ github.event.workflow_run.head_sha }}
+    secrets:
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
 
   export_ios:
     name: Export Dev iOS OTA
@@ -138,30 +140,6 @@ jobs:
     uses: ./.github/workflows/expo-ota.yml
     with:
       channel: dev
-      platform: ios
-      source_sha: ${{ github.event.workflow_run.head_sha }}
-
-  upload_sentry_android:
-    name: Upload Dev Android OTA Source Maps to Sentry
-    needs: export_android
-    permissions:
-      actions: read
-    uses: ./.github/workflows/expo-ota-sentry.yml
-    with:
-      artifact_name: ${{ needs.export_android.outputs.artifact_name }}
-      platform: android
-      source_sha: ${{ github.event.workflow_run.head_sha }}
-    secrets:
-      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-
-  upload_sentry_ios:
-    name: Upload Dev iOS OTA Source Maps to Sentry
-    needs: export_ios
-    permissions:
-      actions: read
-    uses: ./.github/workflows/expo-ota-sentry.yml
-    with:
-      artifact_name: ${{ needs.export_ios.outputs.artifact_name }}
       platform: ios
       source_sha: ${{ github.event.workflow_run.head_sha }}
     secrets:

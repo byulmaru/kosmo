@@ -110,8 +110,8 @@ Export가 성공하면 같은 `apps/app` workspace와 환경에서 `pnpm exec ex
 identifier를 검증한다. 이 public config는 Expo SDK 호환성에 필요한 client metadata를 publisher에
 전달하기 위한 것으로, secret이나 publish credential을 포함하지 않는다. `expo-client.json`은
 export artifact에 포함된다. 각 platform은 한 개의 `expo-ota-${platform}-${run_id}-export`
-GitHub Actions artifact를 만들고 90일 보관한다. 이 artifact에는 외부 source map `.map` 파일을 포함한
-원본 Expo export가 그대로 들어가며, 별도 helper나 단계가 map을 제거하거나 bundle의
+GitHub Actions artifact를 만들고 90일 보관한다. 이 artifact에는 `sourcesContent`가 든 외부 source map
+`.map` 파일을 포함한 원본 Expo export가 그대로 들어가며, 별도 helper나 단계가 map을 제거하거나 bundle의
 `sourceMappingURL`을 지우지 않는다. Repository read access가 있는 signed-in 사용자는 이 artifact를
 다운로드할 수 있다.
 
@@ -121,14 +121,12 @@ runtimeVersion, export root 기준 `expo_client_path: expo-client.json`을 publi
 전달한다. Publisher는 해당 platform의 Expo `metadata.json`이 선택한 bundle과 asset만 R2 upload allowlist에
 넣으므로 `.map` 파일은 R2에 기록되지 않는다.
 
-각 export에는 Android 또는 iOS Sentry upload sibling job이 같은 90일 artifact를 사용한다. 이 job은 local
-`.github/workflows/expo-ota-sentry.yml`을 호출하고 대응하는 export job을 기다린다. Production에서는
-preflight가 확정한 `source_sha`를 전달하기 위해 `canonical_preflight`도 dependency에 둔다. Sentry token을
-설정하기 전에 Expo `metadata.json`이 지정한 실제 platform bundle 경로를 찾아 sibling `.map`을 검증하고,
-map JSON과 `sourcesContent`가 유효한지 preflight한다. `SENTRY_AUTH_TOKEN`은 uploader step에만 전달한다.
+각 platform export job은 의존성 설치, export, public config 생성을 secret 없이 실행하고 기존 90일
+export artifact를 upload한 뒤 고정 버전의 공식 Sentry uploader를 pnpm dlx로 실행한다.
+`SENTRY_AUTH_TOKEN`은 uploader step에만 전달한다.
 Uploader는 `SENTRY_ORG`, `SENTRY_PROJECT`, caller의 bare full `source_sha`를 `SENTRY_RELEASE`로,
-`https://sentry.io/`를 `SENTRY_URL`로 사용한다. Upload 실패는 uploader job과 전체 workflow run에 표시되지만,
-기존 publish job의 `needs`와 condition에는 uploader가 포함되지 않아 OTA publish를 막지 않는다.
+`https://sentry.io/`를 `SENTRY_URL`로 사용한다. Sentry upload 실패는 해당 export job을 실패시켜 기존
+`needs`에 따라 그 platform의 OTA publish를 막는다. 이미 성공한 Argo/server 배포는 영향을 받지 않는다.
 
 Publisher는 Expo Metro `metadata.json`과 참조된 파일을 읽어 export를 검증하고, 실제 bundle과 asset
 bytes를 hashing한 뒤 사전 계산한 SHA-256 표준 Base64를 각 R2 `PutObject`에 전달해 서버 검증을 수행하며
@@ -139,7 +137,7 @@ Publisher의 R2 upload SHA-256 서버 검증, manifest signing 또는 R2 write�
 후 public edge를 다시 조회하지 않는다. Static host가 실제로 응답하는지와 Store binary가
 device에서 update, rejection, offline fallback을 수행하는지는 별도 운영 evidence로
 확인한다.
-Sentry upload job의 성공은 실제 Native event의 OTA JavaScript symbolication 증거와 구분한다.
+Sentry uploader step의 성공은 실제 Native event의 OTA JavaScript symbolication 증거와 구분한다.
 
 ## Native에서 channel 전환
 
@@ -190,7 +188,7 @@ trust를 추가하지 않는다.
 - workflow run ID, caller workflow ref와 source SHA
 - project, platform, OTA channel, 수동 runtime generation(`runtimeVersion`, 현재 `0.4`)과 keyid
 - platform별 90일 GitHub Actions export artifact 이름, `.map` 포함 여부와 repository reader 접근 경계
-- Sentry upload job 결과, bare SHA `SENTRY_RELEASE`, metadata-selected bundle/map preflight 결과
+- Sentry uploader 결과와 bare SHA `SENTRY_RELEASE`
 - Publisher upload allowlist가 `.map` 파일을 제외하고 R2에 기록하지 않는 결과
 - publisher의 R2 upload SHA-256 검증 결과와 publish job 결과
 - production release의 Environment 승인과 동일한 source SHA
