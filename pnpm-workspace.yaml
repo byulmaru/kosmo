@@ -74,9 +74,6 @@ overrides:
   # xcode@3.0.1 requires uuid ^7 but only uses the CommonJS v4 API; uuid 11.1.1
   # preserves that API while resolving GHSA-w5hq-g745-h8pq.
   'xcode@3.0.1>uuid': 11.1.1
-  # Fedify's dev snapshot publishes prerelease ranges that otherwise let pnpm
-  # select the older PR snapshot for this transitive package.
-  '@fedify/vocab-runtime': 2.4.0-dev.1922
   react-native-reanimated: 4.3.1
   react-native-worklets: 0.8.3
   # Compatible Temporal consumers: CVE-2026-101916; preserve Firebase's exact 1.9.16 pin.
