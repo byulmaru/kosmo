@@ -56,7 +56,3 @@ export function getZoomAccessibilityProps(
     onAccessibilityAction,
   };
 }
-
-export type ZoomAccessibilityChildProps = Readonly<{
-  zoomAccessibility?: ZoomAccessibilityProps;
-}>;
