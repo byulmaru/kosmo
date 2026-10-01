@@ -843,13 +843,16 @@ test('Create Activity 전에 Repost가 Tombstone이면 성공한 no-op이다', a
   assert.equal(await db.$count(Notifications), 0);
 });
 
-const createProfile = async ({ state = ProfileState.ACTIVE }: { state?: ProfileState } = {}) => {
+const createProfile = async ({
+  instanceKind = InstanceKind.LOCAL,
+  state = ProfileState.ACTIVE,
+}: { instanceKind?: InstanceKind; state?: ProfileState } = {}) => {
   const suffix = crypto.randomUUID();
   const instance = await db
     .insert(Instances)
     .values({
       domain: `${suffix}.example`,
-      kind: InstanceKind.LOCAL,
+      kind: instanceKind,
       state: InstanceState.ACTIVE,
     })
     .returning()
@@ -1147,6 +1150,85 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
     await sendPushNotificationActivity(notificationId, installationIds[0]!);
     assert.equal(sent[2]?.notification?.body, '이 게시글에 반응했습니다');
     assert.equal(sent[2]?.notification?.body.includes('Read the article'), false);
+  } finally {
+    if (postId) {
+      await db.update(Posts).set({ currentContentId: null }).where(eq(Posts.id, postId));
+      await db.delete(PostContents).where(eq(PostContents.postId, postId));
+      await db.delete(Posts).where(eq(Posts.id, postId));
+    }
+    await cleanupAccountDeletionFixture(fixture);
+    if (previousProjectId === undefined) {
+      delete process.env.FIREBASE_PROJECT_ID;
+    } else {
+      process.env.FIREBASE_PROJECT_ID = previousProjectId;
+    }
+  }
+});
+
+test('Mention Push Notification은 원인 Post의 Mention 타입·경로·안전한 preview를 사용한다', async (t) => {
+  const previousProjectId = process.env.FIREBASE_PROJECT_ID;
+  process.env.FIREBASE_PROJECT_ID = 'kosmo-push-test';
+  const fixture = await createAccountDeletionFixture({ profileStates: [ProfileState.ACTIVE] });
+  let postId: string | null = null;
+
+  try {
+    const recipient = fixture.profiles[0]!;
+    const author = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
+    const publishedAt = Temporal.Now.instant();
+    const createdPost = await createCorePost({
+      document: postContentDocumentFromText('Mention source preview'),
+      mentionProfileIds: [recipient.id],
+      objectUri: `https://${author.handle}.example/posts/${crypto.randomUUID()}`,
+      origin: 'ACTIVITYPUB',
+      profileId: author.id,
+      publishedAt,
+      receivedAt: publishedAt,
+      visibility: PostVisibility.PUBLIC,
+    });
+    if (!createdPost.created) {
+      throw new Error('Expected a new ActivityPub Mention source post');
+    }
+    const { post } = createdPost;
+    postId = post.id;
+    const {
+      createMentionNotificationActivity,
+      listPushNotificationInstallationsActivity,
+      sendPushNotificationActivity,
+    } = await import('./activities');
+    const [notificationId] = await createMentionNotificationActivity(post.id);
+    assert.ok(notificationId);
+
+    const installationIds = await listPushNotificationInstallationsActivity(notificationId);
+    assert.ok(installationIds[0]);
+    const { applicationDefault, getApps, initializeApp } = await import('firebase-admin/app');
+    const { getMessaging } = await import('firebase-admin/messaging');
+    const app =
+      getApps().find(({ name }) => name === '[DEFAULT]') ??
+      initializeApp({
+        credential: applicationDefault(),
+        projectId: process.env.FIREBASE_PROJECT_ID,
+      });
+    const messaging = getMessaging(app);
+    type FcmMessage = Parameters<typeof messaging.send>[0];
+    const sent: FcmMessage[] = [];
+    t.mock.method(messaging, 'send', async (message: FcmMessage) => {
+      sent.push(message);
+      return 'projects/kosmo-push-test/messages/mention-test';
+    });
+
+    await sendPushNotificationActivity(notificationId, installationIds[0]);
+    const payload = sent[0];
+    assert.ok(payload);
+    const { encodeGlobalId } = await import('@kosmo/core/global-id');
+    assert.deepEqual(payload.notification, {
+      title: author.displayName,
+      body: '회원님을 언급했습니다: Mention source preview',
+    });
+    assert.deepEqual(payload.data, {
+      notificationId: encodeGlobalId('MentionNotification', notificationId),
+      recipientProfileId: encodeGlobalId('Profile', recipient.id),
+      href: `/@${author.handle}@${author.handle}.example/${encodeGlobalId('Post', post.id)}`,
+    });
   } finally {
     if (postId) {
       await db.update(Posts).set({ currentContentId: null }).where(eq(Posts.id, postId));

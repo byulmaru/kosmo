@@ -235,7 +235,7 @@ test(
 );
 
 test(
-  'Post Create Effects Workflow는 Reply와 Quote Notification effect를 함께 실행한다',
+  'Post Create Effects Workflow는 Reply, Quote, Mention Notification effect를 함께 실행한다',
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
@@ -244,12 +244,33 @@ test(
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-post-create-effects-test-${process.pid}`;
     const postId = '00000000-0000-8000-8000-000000000301';
+    const mentionNotificationId = '00000000-0000-8000-8000-000000000303';
     const calls: string[] = [];
+    let mentionAttempts = 0;
+    let retryFirstMention = false;
+    let failMention = false;
 
     const worker = await Worker.create({
       activities: {
-        createNotificationActivity: async (input: CreateNotificationInput) =>
-          calls.push(`${input.kind}:${input.sourceId}`),
+        createNotificationActivity: async (input: CreateNotificationInput) => {
+          calls.push(`${input.kind}:${input.sourceId}`);
+        },
+        createMentionNotificationActivity: async (id: string) => {
+          calls.push(`mention:${id}`);
+          mentionAttempts += 1;
+          if (retryFirstMention) {
+            retryFirstMention = false;
+            throw new Error('Transient Mention notification failure');
+          }
+          if (failMention) {
+            throw ApplicationFailure.nonRetryable('Mention notification failed');
+          }
+          return [mentionNotificationId];
+        },
+        listPushNotificationInstallationsActivity: async (id: string) => {
+          calls.push(`push-list:${id}`);
+          return [];
+        },
         sendLocalPostCreateActivity: async (id: string) => calls.push(`send:${id}`),
       },
       connection: environment.nativeConnection,
@@ -261,12 +282,19 @@ test(
     await worker.runUntil(async () => {
       for (const origin of ['LOCAL', 'ACTIVITYPUB'] as const) {
         calls.length = 0;
+        mentionAttempts = 0;
+        retryFirstMention = origin === 'ACTIVITYPUB';
         const handle = await environment.client.workflow.start('postCreateEffectsWorkflow', {
           args: [{ postId, origin }],
           taskQueue,
           workflowId: `post-create-effects-test:${origin}:${postId}`,
         });
         await handle.result();
+        if (origin === 'ACTIVITYPUB') {
+          await environment.client.workflow
+            .getHandle(`push-notification:${mentionNotificationId}`)
+            .result();
+        }
         assert.deepEqual(
           calls.toSorted(),
           (origin === 'LOCAL'
@@ -275,15 +303,41 @@ test(
                 `${NotificationKind.REPLY}:${postId}`,
                 `send:${postId}`,
               ]
-            : [`${NotificationKind.QUOTE}:${postId}`, `${NotificationKind.REPLY}:${postId}`]
+            : [
+                `${NotificationKind.QUOTE}:${postId}`,
+                `${NotificationKind.REPLY}:${postId}`,
+                `mention:${postId}`,
+                `mention:${postId}`,
+                `push-list:${mentionNotificationId}`,
+              ]
           ).toSorted(),
         );
+        if (origin === 'ACTIVITYPUB') {
+          assert.equal(mentionAttempts, 2);
+        }
         await Worker.runReplayHistory(
           { workflowsPath },
           await handle.fetchHistory(),
           handle.workflowId,
         );
       }
+
+      const failingPostId = '00000000-0000-8000-8000-000000000302';
+      failMention = true;
+      mentionAttempts = 0;
+      calls.length = 0;
+      const failingHandle = await environment.client.workflow.start('postCreateEffectsWorkflow', {
+        args: [{ postId: failingPostId, origin: 'ACTIVITYPUB' }],
+        taskQueue,
+        workflowId: `post-create-effects-test:ACTIVITYPUB:failed-mention:${failingPostId}`,
+      });
+      await assert.rejects(failingHandle.result());
+      failMention = false;
+      assert.deepEqual(
+        calls.toSorted(),
+        [`quote:${failingPostId}`, `reply:${failingPostId}`, `mention:${failingPostId}`].toSorted(),
+      );
+      assert.equal(mentionAttempts, 1);
     });
   },
 );

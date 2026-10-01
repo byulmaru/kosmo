@@ -13,12 +13,15 @@ PROD-930은 production Notification runtime에서 플랫폼별로 나뉘었던 `
 - [Reaction / Repost thumbnail](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4327-11389)
 - [Private NotificationRow](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1906-1129)
 
-2026-09-07 readback과 DSN-42 최종 결정의 현재 kind는 Follow, FollowRequest, Reaction, Repost,
-Reply다. Mention은 Future 표본이므로 public props와 Playground에 노출하지 않는다.
+2026-09-07 readback과 DSN-42 최종 결정 당시 kind는 Follow, FollowRequest, Reaction, Repost,
+Reply였다. Mention은 Future 표본이므로 public props와 Playground에 노출하지 않았다.
 
 2026-09-08 사용자 승인으로 Reply/Mention의 Figma 표본을 아래 표시 계약으로 갱신했다.
-Reply 계약은 로컬 코드·Storybook에 반영했으며 Tailnet은 이전 빌드를 유지한다. Mention의 디자인 승인은
-API kind, 알림 생성 또는 runtime 통합의 완료를 의미하지 않는다.
+Reply 계약은 로컬 코드·Storybook에 반영했으며 Tailnet은 이전 빌드를 유지한다. Mention의 디자인 승인만으로
+API kind, 알림 생성 또는 runtime 통합이 완료된 것은 아니었다. 2026-10-02 PROD-911은
+`MentionNotification`을 선택 Profile의 알림 목록에 연결하고, Reply와 공유하는 게시글 구성·읽음 처리·원인
+게시글 이동을 제공한다. Storybook 검증은 React Native Web 근거이며 실제 Web/iOS/Android 경로나 기기 동작을
+증명하지 않는다.
 
 2026-09-14 PROD-951 사용자 결정으로 Reply는 별도의 알림 이유 문장을 제거하고 24px Avatar와 inline
 작성자 행을 사용하며, Web의 Notification·PostListItem inset을 왼쪽 12px·오른쪽 24px로 정렬했다.
@@ -59,9 +62,9 @@ composer control은 자체 동작만 수행한다. 모두 읽음, unread indicat
 - 기본 잠금 화면 FCM Push에는 발신자, 알림 유형과 게시글 본문 미리보기를 포함한다.
 - Follow와 FollowRequest처럼 게시글 본문이 없는 알림은 본문 미리보기를 생략한다.
 - Push transport는 canonical Notification이 저장 성공한 결과를 받는 공통 전달 flow를 소유한다. 현재
-  Notification runtime의 Follow, FollowRequest, Reaction, Repost, Reply는 이 flow의 현재 integration inventory로
-  같은 수신 대상 fan-out, 권한·visibility 억제, preview privacy, 24시간 expiry, no-backlog, retry·dedup와
-  원본 실패 격리를 적용한다. 이 inventory는 닫힌 type whitelist가 아니다.
+  Notification runtime의 Follow, FollowRequest, Reaction, Repost, Reply와 inbound ActivityPub Mention은 이 flow의
+  현재 integration inventory로 같은 수신 대상 fan-out, 권한·visibility 억제, preview privacy, 24시간 expiry,
+  no-backlog, retry·dedup와 원본 실패 격리를 적용한다. 이 inventory는 닫힌 type whitelist가 아니다.
 - 향후 canonical Notification type도 해당 도메인 owner가 생성 권한·source semantics·유형별 표시와 필요한
   target 정보를 공통 flow에 연결한 저장 성공 결과로 같은 공통 Push flow를 거치며, 새 type 추가 때 Push
   transport 전체나 source workflow별 전달 lifecycle을 복제하지 않는다. 미래 generator 자체의 구현·통합은 이
@@ -117,9 +120,10 @@ composer control은 자체 동작만 수행한다. 모두 읽음, unread indicat
 - 이 결정은 공통 Worker Notification Activity가 저장된 Notification ID를 기존 Push delivery Workflow에
   연결하고, Push flow가 이후 수신 대상 fan-out과 전달 lifecycle을 소유한다는 경계와 앱 설정의 권한 상태별 동작,
   현재 integration inventory, 기본 표시 구성과 foreground OS 배너, OS 설정 이동과 token 동기화, cross-profile
-  target 처리, Push 만료와 read state 독립성을 확정한다. 미리보기 excerpt 길이와 PROD-911이 소유하는 향후
-  Mention 생성·통합 및 유형별 source·표시 계약은 별도 범위로 남지만, 해당 type이 canonical Notification으로
-  저장되면 같은 공통 Push flow를 사용한다.
+  target 처리, Push 만료와 read state 독립성을 확정한다.
+- 현재 typed Mention 관계를 공급하는 입력 경로는 ActivityPub 수신이며, Local 작성의 Mention 입력·해석은 별도
+  범위다. 저장된 Mention Notification은 같은 공통 Push flow를 사용하며, 이 연결은 FCM Provider의 수락이나
+  기기 도착을 입증하지 않는다.
 
 ## 표시와 합성
 
@@ -143,7 +147,7 @@ composer control은 자체 동작만 수행한다. 모두 읽음, unread indicat
   따라서 Read와 Unread의 hover 색상이 구분된다. keyboard focus는 `stateFocusRing`이다. 이는 unread
   전용 semantic token 신설이 아니다.
 - Reaction/Repost는 요약 헤더·한 줄 미리보기·썸네일을 하나의 이동 target으로 취급한다.
-  hover·읽음 배경과 읽음 rail은 알림 전체에 적용한다. Reply도 게시글 전체를 하나의 알림 surface로
+  hover·읽음 배경과 읽음 rail은 알림 전체에 적용한다. Reply/Mention도 게시글 전체를 하나의 알림 surface로
   표시하며 게시글 위에서 전체 hover 배경이 유지된다. 별도 header 이동 링크는 없으며 Post 내부 링크·
   Action Bar는 독립적으로 동작한다. 내부 버튼 클릭이 알림 이동을 함께 실행하지 않는다.
 - Follow에는 `UserRoundPlus`, Repost에는 `Repeat2`를 사용한다. Reaction의 Figma
@@ -158,8 +162,8 @@ composer control은 자체 동작만 수행한다. 모두 읽음, unread indicat
 - 미리보기의 하단 여백은 썸네일 유무와 무관하게 일반 행과 같은 8px이다.
   2026-09-07 사용자 결정에 따라 Figma Light/Dark 조합 표본과 구현을 함께 정렬했다.
 - Reply/Mention은 종류 아이콘 → 작성자 이름·핸들·시각 → 본문·미디어 → Action Bar의
-  동일한 게시글 구성을 사용한다. 48px kind rail 안에 32px `MessageCircle`(Reply)·`AtSign`(Future
-  Mention)을 `foregroundSecondary`로 표시한다. 작성자 행은 24px Avatar와 `ProfileNameBlock`의
+  동일한 게시글 구성을 사용한다. 48px kind rail 안에 32px `MessageCircle`(Reply)·`AtSign`(Mention)을
+  `foregroundSecondary`로 표시한다. 작성자 행은 24px Avatar와 `ProfileNameBlock`의
   `inline` variant를 사용한다. 이름과 핸들은 한 줄에 배치하며 이름을 우선한다. 공간이 부족하면 핸들이 먼저
   가려지고, 이름도 가용 폭을 넘으면 말줄임한다. 이 계약을 다른 Profile 표시 전체에 확대하지 않는다.
 - Reply/Mention에는 별도의 알림 이유 문장을 표시하지 않는다. 이 결정은 Quote의 이유 문구를 정하지 않는다.
@@ -169,32 +173,34 @@ composer control은 자체 동작만 수행한다. 모두 읽음, unread indicat
 - Reply/Mention 알림에는 원글 미리보기나 별도 받는 사람 목록을 추가하지 않는다. 결과 게시글을
   활성화하면 해당 게시글 상세에서 대화 문맥을 확인한다. 이 제한은 Reaction/Repost의 actionless
   미리보기에는 적용하지 않는다. 수신자별 Reply/Mention 중복 정책은
-  [Notification 도메인의 Future 계약](../domain/objects/notification.md#replymention-수신자별-분류와-중복-처리-future)을 따른다.
-- Reply 알림은 `ReplyNotificationPost`가 kind rail·작성자·시각과 게시글 내용을 조립한다.
+  [Notification 도메인의 Reply/Mention 분류 계약](../domain/objects/notification.md#replymention-수신자별-분류와-중복-처리)을 따른다.
+- Reply/Mention 알림은 각 `ReplyNotificationPost`·`MentionNotificationPost` wrapper가 공용 게시글 구성을
+  사용해 kind rail·작성자·시각과 게시글 내용을 조립한다.
   `PostBody`·`PostSourcePreview`·`PostActionSurface`를 재사용하고, Reply 버튼·composer·focus 연결은
   `usePostReplySurface`를 게시글 목록과 공유한다. Reply 버튼은 `owner="list"`인 기존 Reply composer의
   popup modal을 열며 Notification 전용 composer나 별도 popup lifecycle을 만들지 않는다. `PostListItem`은
   알림 종류·문구·배치를 소유하지 않는다.
-  기존 Post action/provider·Relay ref 계약을 따르며 action을 알림 이동 링크 안에 중첩하지 않는다.
-  단일 하단 divider는 Notification wrapper가 소유한다. Reply wrapper는 `children`과 `unread`만 받고
-  자식으로 `ReplyNotificationPost`를 합성한다. 게시글 identity와 이동은 이 자식이 소유하므로 wrapper에
-  actor·timestamp·별도 이동 props를 중복 전달하지 않는다.
+  기존 Post action/provider·Relay ref 계약을 따르며 action을 알림 이동 링크 안에 중첩하지 않는다. 단일 하단
+  divider는 Notification wrapper가 소유한다. Reply/Mention wrapper는 `children`과 `unread`만 받고 해당 종류의
+  게시글 자식을 합성한다. 게시글 identity와 이동은 자식이 소유하므로 wrapper에 actor·timestamp·별도 이동 props를
+  중복 전달하지 않는다.
 - Follow/FollowRequest/Reaction/Repost의 pending/disabled는 알림 이동을 차단한다. consumer가 pending
   수명을 소유하며 presentation에서 읽음 mutation·cache 또는 실패 복구 정책을 실행하지 않는다.
-  Reply의 이동과 Post action 상태는 해당 Post가 소유한다. 권한 상실로 Post를 숨겨야 하면 consumer가
+  Reply/Mention의 이동과 Post action 상태는 해당 Post가 소유한다. 권한 상실로 Post를 숨겨야 하면 consumer가
   전체 item을 제거해야 한다.
 - Notification 활성화에 따른 Best Effort Read는 이동이나 열기를 기다리게 하지 않는다.
-  Follow/FollowRequest/Reaction/Repost는 단일 item target 활성화에서, Reply는 작성자 Profile·시각·본문의
-  link navigation과 미디어 열기에서 각각 한 번 시작한다. Reply의 Content Warning 공개, Action Bar와 열린
+  Follow/FollowRequest/Reaction/Repost는 단일 item target 활성화에서, Reply/Mention은 작성자 Profile·시각·본문의
+  link navigation과 미디어 열기에서 각각 한 번 시작한다. Reply/Mention의 Content Warning 공개, Action Bar와 열린
   composer의 control은 자체 동작만 수행하며 item navigation이나 Read를 함께 시작하지 않는다.
 
 ## 검증 경계
 
 2026-09-08 Figma에서 Reply의 Light/Dark·긴 이름·읽음/읽지 않음 표본과 Mention의 Light/Dark
-표본을 시각 확인했다. 새 Reply Storybook에서 중복 header와 별도 알림 이유 행 제거, 이름·핸들 overflow,
-Reply Parent 미리보기 부재, Action Bar의 독립 동작과 unread/hover 범위를 다시 검증한다.
+표본을 시각 확인했다. Reply/Mention Storybook에서 중복 header와 별도 알림 이유 행 제거, 이름·핸들 overflow,
+Reply Parent 미리보기 부재, Action Bar의 독립 동작과 unread/hover 범위를 검증한다.
 답글 자체가 Quote를 포함하는 경우 기존 인용 내용은 유지하며 Reply Parent 미리보기와 구분한다.
-Web 자동화는 Native 실제 기기의 touch·focus 검증을 대체하지 않는다.
+Mention Storybook은 선택 Profile의 실제 목록 fragment, 공용 읽음 mutation, 원인 게시글 경로와 Post 부재 시 숨김도
+검증한다. Storybook과 Web 자동화는 Native 실제 기기의 touch·focus 검증을 대체하지 않는다.
 
 PROD-811 통합 시 [현행 Notification OpenSpec](../../openspec/specs/notification/spec.md)의 기존
 Follow 표시 scenario(28px kind icon·image avatar와 복수 사용자 aggregation 없음)와 새 presentation의
@@ -205,8 +211,9 @@ Follow 표시 scenario(28px kind icon·image avatar와 복수 사용자 aggregat
 개별 스토리 기본 폭은 실제 앱 중앙 열의 최대 폭과 같은 600px이며 좁은 화면에서는 가용 폭으로 줄어든다.
 Controls에서 320·390·600·720px 또는 전체 폭을 선택할 수 있다. LongContent와 ReplyLongName은
 320px를 기본값으로 쓴다.
-`Screens/Notifications/Presentation`에는 PageHeader와 알림 5종을 조립해 목록 밀도와 읽음 상태를
-검토한다. 해당 화면의 모두 읽음은 로컬 표시 상태만 변경하며 실제 mutation 통합을 입증하지 않는다.
+`Screens/Notifications/Presentation`에는 PageHeader와 다섯 가지 수동 표시 예시를 조립해 목록 밀도와 읽음
+상태를 검토한다. 선택 Profile 화면 Storybook은 Mention을 포함한 runtime 목록 통합을 검증한다. Presentation
+화면의 모두 읽음은 로컬 표시 상태만 변경하며 실제 mutation 통합을 입증하지 않는다.
 
 Playground는 수동 Controls/Actions, Tests는 activation·pending 중복 실행 차단·Reply 합성·보호된
 미리보기를 검증한다. 기존 Notifications screen story는 loading/error/empty와 프로필 접근 상실 등

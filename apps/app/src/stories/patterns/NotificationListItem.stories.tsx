@@ -47,7 +47,7 @@ const replyPost = {
 };
 
 export type NotificationStoryArgs = {
-  kind: Exclude<NotificationListItemViewProps['kind'], 'quote'>;
+  kind: Exclude<NotificationListItemViewProps['kind'], 'mention' | 'quote'>;
   name: string;
   grouped: boolean;
   otherActorCount: number;

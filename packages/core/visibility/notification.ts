@@ -3,6 +3,8 @@ import { alias, unionAll } from 'drizzle-orm/pg-core';
 import {
   Instances,
   Notifications,
+  PostContents,
+  PostMentions,
   Posts,
   ProfileBlocks,
   ProfileFollowRequests,
@@ -74,6 +76,20 @@ const NotificationQuoteRecipientProfiles = alias(
 const NotificationQuoteRecipientInstances = alias(
   Instances,
   'notification_availability_quote_recipient_instance',
+);
+const NotificationMentionPosts = alias(Posts, 'notification_availability_mention_post');
+const NotificationMentionAuthors = alias(Profiles, 'notification_availability_mention_author');
+const NotificationMentionAuthorInstances = alias(
+  Instances,
+  'notification_availability_mention_author_instance',
+);
+const NotificationMentionRecipientProfiles = alias(
+  Profiles,
+  'notification_availability_mention_recipient',
+);
+const NotificationMentionRecipientInstances = alias(
+  Instances,
+  'notification_availability_mention_recipient_instance',
 );
 
 export type NotificationSourceAvailabilityOptions = {
@@ -163,6 +179,7 @@ export const notificationSourceAvailabilityKinds = [
   NotificationKind.REPOST,
   NotificationKind.REPLY,
   NotificationKind.QUOTE,
+  NotificationKind.MENTION,
 ] as const;
 
 /**
@@ -445,6 +462,75 @@ export const notificationSourceAvailabilityWhere = (
                   ),
                 ),
             ),
+          ),
+        ),
+      database
+        .select({ id: NotificationMentionPosts.id })
+        .from(NotificationMentionPosts)
+        .innerJoin(
+          NotificationMentionAuthors,
+          eq(NotificationMentionAuthors.id, NotificationMentionPosts.profileId),
+        )
+        .innerJoin(
+          NotificationMentionAuthorInstances,
+          eq(NotificationMentionAuthorInstances.id, NotificationMentionAuthors.instanceId),
+        )
+        .innerJoin(
+          NotificationMentionRecipientProfiles,
+          eq(NotificationMentionRecipientProfiles.id, Notifications.recipientProfileId),
+        )
+        .innerJoin(
+          NotificationMentionRecipientInstances,
+          eq(
+            NotificationMentionRecipientInstances.id,
+            NotificationMentionRecipientProfiles.instanceId,
+          ),
+        )
+        .where(
+          and(
+            eq(Notifications.kind, NotificationKind.MENTION),
+            eq(NotificationMentionPosts.id, Notifications.sourceId),
+            isRecipientAvailable({
+              includeRecipientAvailability,
+              profile: NotificationMentionRecipientProfiles,
+              instance: NotificationMentionRecipientInstances,
+              requireLocalInstance: true,
+            }),
+            exists(
+              database
+                .select({ postContentId: PostMentions.postContentId })
+                .from(PostMentions)
+                .innerJoin(
+                  PostContents,
+                  and(
+                    eq(PostContents.id, PostMentions.postContentId),
+                    eq(PostContents.id, NotificationMentionPosts.currentContentId),
+                    eq(PostContents.postId, NotificationMentionPosts.id),
+                  ),
+                )
+                .where(and(eq(PostMentions.profileId, Notifications.recipientProfileId))),
+            ),
+            // The author-to-recipient direction is in visiblePostWhere; cleanup
+            // still checks the inverse without deleting for Recipient downtime.
+            includeRecipientAvailability
+              ? undefined
+              : profileBlockVisibilityWhere({
+                  database,
+                  ownerProfileId: Notifications.recipientProfileId,
+                  targetProfileId: NotificationMentionAuthors.id,
+                }),
+            visiblePostWhere({
+              post: NotificationMentionPosts,
+              profileVisible: sql<boolean>`${relatedProfileAvailability({
+                database,
+                includeRecipientAvailability,
+                instance: NotificationMentionAuthorInstances,
+                profile: NotificationMentionAuthors,
+                recipientProfileId: Notifications.recipientProfileId,
+              })}`,
+              viewerProfileId: Notifications.recipientProfileId,
+              db: database,
+            }),
           ),
         ),
       database

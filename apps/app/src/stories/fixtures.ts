@@ -381,6 +381,26 @@ export function replyNotification({
   };
 }
 
+export function mentionNotification({
+  createdAt = Temporal.Now.instant().subtract({ minutes: 2 }).toString(),
+  id = 'notification-mention-1',
+  post: relatedPost = post(),
+  readAt = null,
+}: {
+  createdAt?: string;
+  id?: string;
+  post?: StoryPost | null;
+  readAt?: string | null;
+} = {}) {
+  return {
+    __typename: 'MentionNotification' as const,
+    createdAt,
+    id,
+    post: relatedPost,
+    readAt,
+  };
+}
+
 export function repostNotification({
   createdAt = Temporal.Now.instant().subtract({ minutes: 2 }).toString(),
   id = 'notification-repost-1',
@@ -409,6 +429,7 @@ export function notificationsProfile(
     | ReturnType<typeof followNotification>
     | ReturnType<typeof followRequestNotification>
     | ReturnType<typeof reactionNotification>
+    | ReturnType<typeof mentionNotification>
     | ReturnType<typeof replyNotification>
     | ReturnType<typeof repostNotification>
   >,

@@ -34,6 +34,7 @@ export type ReactionNotificationRow = NotificationRow;
 export type RepostNotificationRow = NotificationRow;
 export type ReplyNotificationRow = NotificationRow;
 export type QuoteNotificationRow = NotificationRow;
+export type MentionNotificationRow = NotificationRow;
 
 type NotificationSource = {
   followRequest?: typeof ProfileFollowRequests.$inferSelect;
@@ -119,8 +120,14 @@ type QuoteNotificationSourceRow = {
   profileId: string;
 };
 
+type MentionNotificationSourceRow = {
+  id: string;
+  profileId: string;
+};
+
 const ReplyNotificationParents = alias(Posts, 'reply_notification_parent');
 const QuoteNotificationSources = alias(Posts, 'quote_notification_source');
+const MentionNotificationPosts = alias(Posts, 'mention_notification_post');
 
 const followNotificationSourceLoader = (ctx: UserContext) =>
   ctx.loader<string, FollowNotificationSourceRow, string, true>({
@@ -238,6 +245,31 @@ const quoteNotificationSourceLoader = (ctx: UserContext) =>
     key: (source) => source?.id ?? null,
   });
 
+const mentionNotificationSourceLoader = (ctx: UserContext) =>
+  ctx.loader<string, MentionNotificationSourceRow, string, true>({
+    name: 'notification.mentionSource',
+    nullable: true,
+    load: (ids) =>
+      db
+        .select({
+          id: Notifications.id,
+          profileId: MentionNotificationPosts.profileId,
+        })
+        .from(Notifications)
+        .innerJoin(
+          MentionNotificationPosts,
+          eq(MentionNotificationPosts.id, Notifications.sourceId),
+        )
+        .where(
+          and(
+            inArray(Notifications.id, ids),
+            eq(Notifications.kind, NotificationKind.MENTION),
+            visibleNotificationWhere({ ctx }),
+          ),
+        ),
+    key: (source) => source?.id ?? null,
+  });
+
 export const getNotificationSource = async (
   notification: NotificationRow,
   ctx: UserContext,
@@ -256,6 +288,9 @@ export const getNotificationSource = async (
     )
     .with(NotificationKind.QUOTE, () =>
       quoteNotificationSourceLoader(ctx).load(notification.sourceId),
+    )
+    .with(NotificationKind.MENTION, () =>
+      mentionNotificationSourceLoader(ctx).load(notification.id),
     )
     .with(NotificationKind.REPLY, () =>
       replyNotificationSourceLoader(ctx).load(notification.sourceId),
@@ -277,6 +312,7 @@ export const notificationNodeType = (kind: string) =>
     .with(NotificationKind.REPOST, () => 'RepostNotification' as const)
     .with(NotificationKind.QUOTE, () => 'QuoteNotification' as const)
     .with(NotificationKind.REPLY, () => 'ReplyNotification' as const)
+    .with(NotificationKind.MENTION, () => 'MentionNotification' as const)
     .otherwise(() => null);
 
 export const notificationKindForNodeType = (typename: string) =>
@@ -287,6 +323,7 @@ export const notificationKindForNodeType = (typename: string) =>
     .with('RepostNotification', () => NotificationKind.REPOST)
     .with('QuoteNotification', () => NotificationKind.QUOTE)
     .with('ReplyNotification', () => NotificationKind.REPLY)
+    .with('MentionNotification', () => NotificationKind.MENTION)
     .otherwise(() => null);
 
 export const Notification = builder.interfaceRef<NotificationRow>('Notification');
@@ -454,6 +491,29 @@ export const QuoteNotification = createObjectRef<QuoteNotificationRow>(
 );
 
 QuoteNotification.implement({
+  interfaces: [Notification],
+  fields: (t) => ({
+    createdAt: t.expose('createdAt', { type: 'DateTime' }),
+    readAt: t.expose('readAt', { type: 'DateTime', nullable: true }),
+  }),
+});
+
+export const MentionNotification = createObjectRef<MentionNotificationRow>(
+  'MentionNotification',
+  (ids, ctx) =>
+    db
+      .select(getColumns(Notifications))
+      .from(Notifications)
+      .where(
+        and(
+          inArray(Notifications.id, ids),
+          eq(Notifications.kind, NotificationKind.MENTION),
+          visibleNotificationWhere({ ctx }),
+        ),
+      ),
+);
+
+MentionNotification.implement({
   interfaces: [Notification],
   fields: (t) => ({
     createdAt: t.expose('createdAt', { type: 'DateTime' }),

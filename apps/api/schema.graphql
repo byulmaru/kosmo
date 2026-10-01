@@ -264,6 +264,14 @@ enum MediaState {
   UPLOADING
 }
 
+type MentionNotification implements Node & Notification {
+  createdAt: DateTime!
+  id: ID!
+  post: Post
+  profile: Profile!
+  readAt: DateTime
+}
+
 type Mutation {
   addReaction(input: AddReactionInput!): AddReactionPayload!
   approveProfileFollowRequest(input: ApproveProfileFollowRequestInput!): ApproveProfileFollowRequestPayload!
