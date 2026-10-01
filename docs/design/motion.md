@@ -38,6 +38,8 @@ Figma의 active collection은 `KOSMO Motion`이며 단일 `Value` mode를 사용
 | Spinner            | `loading-cycle` 800ms    | linear     | rotation만 반복                                 |
 | Skeleton           | `skeleton-wave` 2000ms   | linear     | placeholder highlight 이동 후 2000ms 대기, 반복 |
 
+Underline Tabs에서는 64px 선택 바의 양 끝이 새 위치까지 서로 다른 속도로 동시에 이동해 탭 사이 거리에 따른 폭 변화가 생긴다. 초기 배치·레이아웃 변경·reduced-motion에서는 최종 위치와 크기를 즉시 반영한다.
+
 상태의 의미와 accessible state는 motion 완료를 기다리지 않고 즉시 갱신한다. focus 이동·복원과 `requestAnimationFrame` scheduling은 시각 transition으로 분류하지 않는다.
 
 ## 현행 표현 판정과 이관
