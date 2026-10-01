@@ -26,6 +26,7 @@ import {
   ProfileFollowPolicy,
   ProfileState,
 } from '@kosmo/core/enums';
+import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { eq, inArray } from 'drizzle-orm';
 import type { Context } from '@fedify/fedify';
 import type { Activity, Recipient } from '@fedify/vocab';
@@ -619,6 +620,12 @@ describe('ActivityPub Local Post delivery', () => {
       uri: sourceUri,
     });
     const quote = await createPost(quoteAuthor.id, { repostSourceId: source.id });
+    const authoredContent = `own words ${sourceUri}`;
+    assert.ok(quote.currentContentId);
+    await db
+      .update(PostContents)
+      .set({ document: postContentDocumentFromText(authoredContent) })
+      .where(eq(PostContents.id, quote.currentContentId));
     await db
       .update(Posts)
       .set({
@@ -648,7 +655,19 @@ describe('ActivityPub Local Post delivery', () => {
     assert.equal(note.quoteId, null);
     assert.equal(note.quoteUrl, null);
     assert.equal(note.quoteAuthorizationId, null);
-    assert.equal(note.content, '<p>body</p>');
+    assert.equal(note.content, `<p>${authoredContent}</p>`);
+    const serialized = await note.toJsonLd();
+    assert.ok(serialized !== null && typeof serialized === 'object');
+    for (const property of [
+      'quote',
+      'quoteAuthorization',
+      'quoteUrl',
+      'quoteUri',
+      '_misskey_quote',
+    ]) {
+      assert.equal(Object.hasOwn(serialized, property), false);
+    }
+    assert.doesNotMatch(note.content?.toString() ?? '', /quote-inline/);
     assert.deepEqual(
       fixture.calls[0]?.recipients.map((recipient) => recipient.id?.href),
       [follower.actorUri],

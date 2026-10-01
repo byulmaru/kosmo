@@ -2040,8 +2040,8 @@ test(
         result,
       );
       assert.equal(
-        (await duplicate.workflowHandle()).firstExecutionRunId,
-        handle.firstExecutionRunId,
+        (await (await duplicate.workflowHandle()).describe()).runId,
+        (await handle.describe()).runId,
       );
       assert.equal(transitions, 1);
       assert.equal(deliveries, 2);
@@ -2183,8 +2183,8 @@ test(
         committed,
       );
       assert.equal(
-        (await duplicate.workflowHandle()).firstExecutionRunId,
-        failedHandle.firstExecutionRunId,
+        (await (await duplicate.workflowHandle()).describe()).runId,
+        (await failedHandle.describe()).runId,
       );
       assert.equal(transitions, 1);
       assert.equal(deliveries, 10);
