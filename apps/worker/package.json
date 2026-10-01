@@ -14,6 +14,7 @@
     "test:workflow": "node --import tsx --test src/workflows.test.ts src/child-workflow.test.ts"
   },
   "dependencies": {
+    "@fedify/vocab": "2.3.8",
     "@kosmo/core": "workspace:*",
     "@kosmo/fedify": "workspace:*",
     "@temporalio/activity": "^1.22.0",
@@ -27,7 +28,6 @@
   },
   "devDependencies": {
     "@fedify/fedify": "^2.3.8",
-    "@fedify/vocab": "2.3.8",
     "@temporalio/testing": "^1.22.0"
   }
 }
