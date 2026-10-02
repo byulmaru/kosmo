@@ -1334,10 +1334,6 @@ test('Remote Featured Activity는 사용 가능한 local follower identity로 co
   const featuredUri = `${actorUri}/featured`;
   const instance = await createInstance({ domain: remoteDomain });
   const remote = await createStoredProfile({ actorUri, handle: 'alice', instanceId: instance.id });
-  await db
-    .update(ActivityPubActors)
-    .set({ featuredRevision: 1, featuredUri })
-    .where(eq(ActivityPubActors.profileId, remote.id));
   const follower = await createStoredProfile({ handle: 'follower', instanceId: localInstanceId });
   await db.insert(ProfileFollows).values({
     followerProfileId: follower.id,
@@ -1384,7 +1380,7 @@ test('Remote Featured Activity는 사용 가능한 local follower identity로 co
       }) as never,
   );
 
-  await syncRemoteFeaturedActivity({ actorUri, featuredUri, profileId: remote.id, revision: 1 });
+  await syncRemoteFeaturedActivity({ actorUri, featuredUri, profileId: remote.id });
   assert.deepEqual(signed, [follower.id]);
   assert.deepEqual(publicLoads, []);
 
@@ -1393,16 +1389,13 @@ test('Remote Featured Activity는 사용 가능한 local follower identity로 co
     .set({ state: ProfileState.SUSPENDED })
     .where(eq(Profiles.id, follower.id));
   signed.length = 0;
-  await syncRemoteFeaturedActivity({ actorUri, featuredUri, profileId: remote.id, revision: 1 });
+  await syncRemoteFeaturedActivity({ actorUri, featuredUri, profileId: remote.id });
   assert.deepEqual(signed, []);
-  assert.deepEqual(publicLoads, [featuredUri]);
-
-  await syncRemoteFeaturedActivity({ actorUri, featuredUri, profileId: remote.id, revision: 0 });
   assert.deepEqual(publicLoads, [featuredUri]);
 });
 
 test(
-  'Remote Featured Workflow는 일시적인 Activity 실패를 재시도하고 generation token을 전달한다',
+  'Remote Featured Workflow retries transient Activity failures with the same input',
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
@@ -1431,13 +1424,6 @@ test(
       actorUri: 'https://remote.example/users/alice',
       featuredUri: 'https://remote.example/users/alice/featured',
       profileId: '019f7abc-3333-7777-8888-123456789abc',
-      revision: 4,
-    };
-
-    const newer: RemoteProfileFeaturedSyncInput = {
-      ...input,
-      featuredUri: 'https://remote.example/users/alice/featured-v2',
-      revision: 5,
     };
 
     await worker.runUntil(async () => {
@@ -1451,17 +1437,7 @@ test(
 
       assert.equal(attempts, 2);
       assert.deepEqual(calls, [input, input]);
-
-      await environment.client.workflow.execute<
-        (input: RemoteProfileFeaturedSyncInput) => Promise<void>
-      >('remoteProfileFeaturedWorkflow', {
-        args: [newer],
-        taskQueue,
-        workflowId: `${taskQueue}:newer`,
-      });
     });
-
-    assert.deepEqual(calls.at(-1), newer);
   },
 );
 

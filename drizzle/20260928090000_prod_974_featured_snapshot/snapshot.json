@@ -686,32 +686,6 @@
       "table": "activitypub_actor"
     },
     {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "featured_uri",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "activitypub_actor"
-    },
-    {
-      "type": "integer",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "0",
-      "generated": null,
-      "identity": null,
-      "name": "featured_revision",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "activitypub_actor"
-    },
-    {
       "type": "timestamp with time zone",
       "typeSchema": null,
       "notNull": false,
@@ -5404,13 +5378,6 @@
       "schema": "public",
       "table": "session",
       "entityType": "uniques"
-    },
-    {
-      "value": "\"featured_revision\" >= 0",
-      "name": "activitypub_actor_featured_revision_nonnegative",
-      "entityType": "checks",
-      "schema": "public",
-      "table": "activitypub_actor"
     },
     {
       "value": "\n        (\n          \"source\" = 'LOCAL'\n          AND \"account_id\" IS NOT NULL\n          AND \"storage_reference\" IS NOT NULL\n          AND \"upload_expires_at\" IS NOT NULL\n          AND (\n            (\n              \"state\" = 'UPLOADING'\n              AND \"media_type\" IS NULL\n              AND \"url\" IS NULL\n              AND \"ready_at\" IS NULL\n            )\n            OR (\n              \"state\" = 'READY'\n              AND \"media_type\" IS NOT NULL\n              AND \"url\" IS NOT NULL\n              AND \"ready_at\" IS NOT NULL\n            )\n          )\n        )\n        OR (\n          \"source\" = 'REMOTE'\n          AND \"state\" = 'READY'\n          AND \"account_id\" IS NULL\n          AND \"storage_reference\" IS NULL\n          AND \"upload_expires_at\" IS NULL\n          AND \"url\" IS NOT NULL\n          AND \"ready_at\" IS NULL\n        )\n      ",

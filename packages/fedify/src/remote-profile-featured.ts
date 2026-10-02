@@ -213,15 +213,13 @@ export const syncRemoteFeaturedSnapshot = async ({
   documentLoader,
   featuredUri,
   profileId,
-  revision,
 }: {
   actorUri: string;
   context: Pick<Context<void>, 'canonicalOrigin' | 'lookupObject' | 'parseUri'>;
   documentLoader: DocumentLoader;
   featuredUri: string;
   profileId: string;
-  revision: number;
-}): Promise<boolean> => {
+}): Promise<void> => {
   if (!isHttpUri(new URL(featuredUri))) {
     throw new TypeError('Remote Featured URI must use HTTP(S)');
   }
@@ -291,7 +289,7 @@ export const syncRemoteFeaturedSnapshot = async ({
       postIds.push(result.postId);
     }
     controller.signal.throwIfAborted();
-    return replaceRemoteFeaturedSnapshot({ actorUri, featuredUri, postIds, profileId, revision });
+    await replaceRemoteFeaturedSnapshot({ postIds, profileId });
   } finally {
     clearTimeout(deadline);
   }

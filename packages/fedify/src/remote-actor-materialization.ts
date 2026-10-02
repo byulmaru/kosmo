@@ -34,7 +34,7 @@ import {
   profileDisplayNameSchema,
   remoteProfileHandleSchema,
 } from '@kosmo/core/validation';
-import { and, eq, getColumns, inArray, isNotNull, ne, sql } from 'drizzle-orm';
+import { and, eq, getColumns, inArray, isNotNull, ne } from 'drizzle-orm';
 import { isHttpUri } from './activitypub-uri';
 import type { Context, DocumentLoader } from '@fedify/fedify';
 import type { Actor, Image, LanguageString, Object as ActivityPubObject } from '@fedify/vocab';
@@ -97,11 +97,10 @@ const startRemoteFeaturedSync = async ({
   actorUri,
   featuredUri,
   profileId,
-  revision,
 }: RemoteProfileFeaturedSyncInput): Promise<void> => {
   try {
     await runWorkflow(remoteProfileFeaturedWorkflow, {
-      args: [{ actorUri, featuredUri, profileId, revision }],
+      args: [{ actorUri, featuredUri, profileId }],
       mode: 'start',
       workflowIdConflictPolicy: 'USE_EXISTING',
       workflowIdReusePolicy: 'ALLOW_DUPLICATE',
@@ -112,7 +111,6 @@ const startRemoteFeaturedSync = async ({
       error,
       featuredUri,
       profileId,
-      revision,
     });
   }
 };
@@ -664,20 +662,16 @@ export const materializeRemoteProfileActor = async (options: RemoteActorMaterial
           .returning()
           .then(firstOrThrow);
 
-        const updatedActor = await tx
+        await tx
           .update(ActivityPubActors)
           .set({
             ...endpoints,
-            featuredRevision: sql`${ActivityPubActors.featuredRevision} + 1`,
-            featuredUri,
             lastFetchedAt: now,
             profileUrl: projection.profileUrl,
             type: actorType,
             updatedAt: now,
           })
-          .where(eq(ActivityPubActors.uri, actorUri))
-          .returning({ featuredRevision: ActivityPubActors.featuredRevision })
-          .then(firstOrThrow);
+          .where(eq(ActivityPubActors.uri, actorUri));
 
         if (featuredUri === null) {
           await tx
@@ -700,7 +694,6 @@ export const materializeRemoteProfileActor = async (options: RemoteActorMaterial
                   actorUri,
                   featuredUri,
                   profileId: profile.id,
-                  revision: updatedActor.featuredRevision,
                 },
           profile,
         };
@@ -738,19 +731,14 @@ export const materializeRemoteProfileActor = async (options: RemoteActorMaterial
         .returning()
         .then(firstOrThrow);
 
-      const insertedActor = await tx
-        .insert(ActivityPubActors)
-        .values({
-          ...endpoints,
-          featuredUri,
-          lastFetchedAt: now,
-          profileId: profile.id,
-          profileUrl: projection.profileUrl,
-          type: actorType,
-          uri: actorUri,
-        })
-        .returning({ featuredRevision: ActivityPubActors.featuredRevision })
-        .then(firstOrThrow);
+      await tx.insert(ActivityPubActors).values({
+        ...endpoints,
+        lastFetchedAt: now,
+        profileId: profile.id,
+        profileUrl: projection.profileUrl,
+        type: actorType,
+        uri: actorUri,
+      });
 
       await syncProfileMedia(profile.id);
 
@@ -762,7 +750,6 @@ export const materializeRemoteProfileActor = async (options: RemoteActorMaterial
                 actorUri,
                 featuredUri,
                 profileId: profile.id,
-                revision: insertedActor.featuredRevision,
               },
         profile,
       };

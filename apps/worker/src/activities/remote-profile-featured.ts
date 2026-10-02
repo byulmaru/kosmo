@@ -11,7 +11,7 @@ export const syncRemoteFeaturedActivity = async (
   input: RemoteProfileFeaturedSyncInput,
 ): Promise<void> => {
   const current = await db
-    .select({ actor: ActivityPubActors, instance: Instances, profile: Profiles })
+    .select({ instance: Instances, profile: Profiles })
     .from(ActivityPubActors)
     .innerJoin(Profiles, eq(Profiles.id, ActivityPubActors.profileId))
     .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
@@ -19,8 +19,6 @@ export const syncRemoteFeaturedActivity = async (
       and(
         eq(ActivityPubActors.profileId, input.profileId),
         eq(ActivityPubActors.uri, input.actorUri),
-        eq(ActivityPubActors.featuredUri, input.featuredUri),
-        eq(ActivityPubActors.featuredRevision, input.revision),
       ),
     )
     .limit(1)

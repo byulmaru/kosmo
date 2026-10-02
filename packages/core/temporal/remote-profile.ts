@@ -43,7 +43,6 @@ export type RemoteProfileFeaturedSyncInput = {
   readonly actorUri: string;
   readonly featuredUri: string;
   readonly profileId: string;
-  readonly revision: number;
 };
 
 export const REMOTE_PROFILE_FEATURED_WORKFLOW_TYPE = 'remoteProfileFeaturedWorkflow';
@@ -52,6 +51,5 @@ export const remoteProfileFeaturedWorkflow: WorkflowDefinition<
   (input: RemoteProfileFeaturedSyncInput) => Promise<void>
 > = {
   workflow: REMOTE_PROFILE_FEATURED_WORKFLOW_TYPE,
-  workflowIdFromArgs: ({ profileId, revision }) =>
-    `${REMOTE_PROFILE_FEATURED_WORKFLOW_TYPE}:${profileId}:${revision}`,
+  workflowIdFromArgs: ({ profileId }) => `${REMOTE_PROFILE_FEATURED_WORKFLOW_TYPE}:${profileId}`,
 };
