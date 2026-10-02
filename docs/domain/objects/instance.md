@@ -24,10 +24,10 @@ Remote Instance를 구분하고, safety 정책, 통신 실패 관측, 서비스 
 
 ### Instance Reachability State
 
-| 값          | 의미                                   |
-| ----------- | -------------------------------------- |
-| Reachable   | Instance 요청이 성공할 수 있는 상태    |
-| Unreachable | 응답 실패로 새 원격 요청을 중단한 상태 |
+| 값          | 의미                                        |
+| ----------- | ------------------------------------------- |
+| Reachable   | Instance 요청이 성공할 수 있는 상태         |
+| Unreachable | 응답 실패로 일반 새 원격 요청을 중단한 상태 |
 
 ### Instance Service State
 
@@ -67,7 +67,7 @@ Post와 Media의 Instance는 각각 Author Profile과 Media Profile에서 파생
 | Domain Block 적용    | 운영자 Account | Instance  | 사유      | `Account.Active`, `Account.Operator` | Type이 Remote이고 Safety State가 Domain Block이 아니다              | Safety State가 Domain Block이 되고 Safety 사유가 기록된다                                |
 | Domain 제한 해제     | 운영자 Account | Instance  | 없음      | `Account.Active`, `Account.Operator` | Type이 Remote이고 Safety State가 Domain Limit 또는 Domain Block이다 | Safety State가 Normal이 되고 현재 Safety 사유가 제거된다                                 |
 | 응답 불가 관측       | 시스템         | Instance  | 실패 사유 | `System.InstanceStateSource`         | Type이 Remote이고 Reachability State가 Reachable이다                | Reachability State가 Unreachable이 되고 사유가 기록된다                                  |
-| 응답 성공 관측       | 시스템         | Instance  | 없음      | `System.InstanceStateSource`         | Type이 Remote이고 Reachability State가 Unreachable이다              | Reachability State가 Reachable이 되고 현재 Reachability 사유가 제거된다                  |
+| 응답 성공 관측       | 시스템         | Instance  | 없음      | `System.InstanceStateSource`         | Remote/Active/Unreachable 상태이며 exact canonical actor가 확인됐다 | Reachability State가 Reachable이 되고 현재 Reachability 사유가 제거된다                  |
 | 원격 정지 신호 반영  | 시스템         | Instance  | 정지 근거 | `System.InstanceStateSource`         | Type이 Remote이고 Service State가 Active다                          | Service State가 Suspended가 되고 Service 사유가 기록된다                                 |
 | 원격 정지 해제 반영  | 시스템         | Instance  | 해제 근거 | `System.InstanceStateSource`         | Type이 Remote이고 Service State가 Suspended다                       | Service State가 Active가 되고 현재 Service 사유가 제거된다                               |
 
@@ -85,9 +85,12 @@ Post와 Media의 Instance는 각각 Author Profile과 Media Profile에서 파생
 
 - 명시적인 qualified handle의 원격 actor discovery는 WebFinger로 canonical actor URI를 확인하는 단계이며, Actor
   Instance 상태를 판정하기 전에 수행할 수 있다.
-- WebFinger 응답만으로 Instance를 추출하거나 그 Instance의 상태를 판정하지 않는다. canonical actor URI로 식별한
-  Actor Instance의 Safety State가 Domain Block이 아니고 Reachability State가 Reachable이며 Service State가 Active일
-  때만 Actor document fetch·materialization 같은 실제 원격 요청을 보낸다.
+- WebFinger 응답만으로 Instance 상태를 판정하거나 Reachable로 바꾸지 않는다. canonical actor URI로 식별한 Actor
+  Instance의 Safety State가 Domain Block이 아니고 Service State가 Active이며 Reachability State가 Reachable일 때 일반
+  원격 요청을 보낼 수 있다. Reachability State가 Unreachable이면 Remote Profile materialization·갱신을 위한 exact
+  canonical actor URI lookup만 허용한다. 이 lookup이 요청한 canonical identity를 확인하거나 같은 canonical actor가 직접
+  보낸 검증된 Activity를 받을 때만 Reachability State를 Reachable로 바꾸며, 실패는 상태를 바꾸지 않는다.
+- 저장된 actor 또는 cache의 존재, WebFinger 결과, 다른 actor가 해당 actor를 참조한 사실은 Reachability State를 바꾸지 않는다.
 - 저장된 canonical actor URI가 있으면 WebFinger discovery를 반복하지 않고 그 URI로 식별한 Actor Instance의 상태
   정책을 적용한다.
 - Domain Limit은 새 원격 요청을 막지 않지만 공개 Post List와 공개 검색 후보에서 해당 Remote Instance 콘텐츠를

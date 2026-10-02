@@ -12,5 +12,6 @@ export { reactionCreateEffectsWorkflow } from './reaction-create';
 export { reactionDeleteEffectsWorkflow } from './reaction-delete';
 export { remoteProfileLookupWorkflow } from './remote-profile-lookup';
 export { remoteProfileRefreshWorkflow } from './remote-profile-refresh';
+export { remoteProfileUpdateWorkflow } from './remote-profile-update';
 export { postRepostWorkflow } from './repost';
 export { repostDeleteWorkflow } from './repost-delete';

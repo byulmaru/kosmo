@@ -23,7 +23,6 @@ import {
 import { isExternalInboundError, observeInbound } from './inbound-observability';
 import {
   findOrMaterializeRemoteProfileActorByUri,
-  findUsableStoredRemoteProfileActorByUri,
   RemoteActorMaterializationError,
 } from './remote-actor-materialization';
 import type { Context, InboxContext } from '@fedify/fedify';
@@ -424,13 +423,10 @@ const materializeRemoteNote = async ({
     storedActor = source.storedActor;
   } else {
     try {
-      storedActor =
-        (await findUsableStoredRemoteProfileActorByUri(attributionUri)) ??
-        (await findOrMaterializeRemoteProfileActorByUri({
-          actorUri: attributionUri,
-          context,
-          now: receivedAt,
-        }));
+      storedActor = await findOrMaterializeRemoteProfileActorByUri({
+        actorUri: attributionUri,
+        contextOrigin: context.canonicalOrigin,
+      });
     } catch (error) {
       if (
         error instanceof RemoteActorMaterializationError ||

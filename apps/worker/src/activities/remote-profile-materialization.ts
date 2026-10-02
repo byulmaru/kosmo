@@ -6,34 +6,51 @@ import { ConflictError, NotFoundError } from '@kosmo/core/error';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { normalizeHandle } from '@kosmo/core/utils';
 import {
+  applyRemoteProfileActorDocument,
   federation,
+  fetchRemoteProfileActorDocument,
   findStoredRemoteProfileActorByUri,
-  materializeRemoteProfileActor,
   RemoteActorMaterializationError,
 } from '@kosmo/fedify';
 import { ApplicationFailure } from '@temporalio/activity';
 import { and, eq } from 'drizzle-orm';
 import type {
-  RemoteProfileLookupInput,
+  RemoteProfileActorLookupInput,
+  RemoteProfileHandleLookupInput,
   RemoteProfileMaterializationInput,
 } from '@kosmo/core/temporal/workflows';
 
+type RemoteProfileActorStateInput = { readonly actorUri: string };
+type RemoteProfileActorState = { readonly profileId: string; readonly needsRefresh: boolean };
+type RemoteProfileActorDocument = { readonly actorJsonLd: unknown; readonly observedAt: string };
+type RemoteProfileActorDocumentInput = RemoteProfileActorStateInput & RemoteProfileActorDocument;
+
 const remoteActorRefreshTtl = Temporal.Duration.from({ hours: 7 * 24 });
+const needsRefresh = (lastFetchedAt: Temporal.Instant | null, now: Temporal.Instant) =>
+  lastFetchedAt === null ||
+  lastFetchedAt.add(remoteActorRefreshTtl).epochNanoseconds <= now.epochNanoseconds;
 
-export type RemoteProfileMaterializationState = {
-  readonly profileId: string;
-  readonly needsRefresh: boolean;
-};
-
-const findStoredRemoteProfileActorState = async (
-  input: RemoteProfileMaterializationInput,
-): Promise<RemoteProfileMaterializationState | null> => {
-  const stored = await findStoredRemoteProfileActorByUri(input.actorUri);
-
-  if (!stored) {
-    return null;
+const rethrowRemoteProfileMaterializationError = (error: unknown): never => {
+  if (error instanceof RemoteActorMaterializationError) {
+    throw ApplicationFailure.nonRetryable(error.message, 'RemoteActorMaterializationError');
   }
 
+  if (error instanceof ConflictError) {
+    throw ApplicationFailure.nonRetryable(error.message, 'ConflictError');
+  }
+
+  if (error instanceof NotFoundError) {
+    throw ApplicationFailure.nonRetryable(error.message, 'NotFoundError');
+  }
+
+  throw error;
+};
+
+type StoredRemoteProfileActor = NonNullable<
+  Awaited<ReturnType<typeof findStoredRemoteProfileActorByUri>>
+>;
+
+const requireUsableStoredRemoteProfileActor = (stored: StoredRemoteProfileActor) => {
   if (
     stored.profile.state !== ProfileState.ACTIVE ||
     stored.instance.state === InstanceState.SUSPENDED
@@ -41,18 +58,35 @@ const findStoredRemoteProfileActorState = async (
     throw ApplicationFailure.nonRetryable('Profile not found', 'NotFoundError');
   }
 
-  return {
-    profileId: stored.profile.id,
-    needsRefresh:
-      stored.instance.state !== InstanceState.UNRESPONSIVE &&
-      (stored.actor.lastFetchedAt === null ||
-        stored.actor.lastFetchedAt.add(remoteActorRefreshTtl).epochNanoseconds <=
-          Temporal.Now.instant().epochNanoseconds),
-  };
+  return stored;
+};
+
+const ensureRemoteProfileLookupAllowed = async (actorUri: URL) => {
+  const localInstance = await resolveConfiguredLocalInstance();
+  if (actorUri.origin === localInstance.canonicalOrigin) {
+    throw new ConflictError({ message: 'Remote actor URI uses the local origin' });
+  }
+
+  const domain = `${actorUri.hostname.toLowerCase().replace(/\.$/, '')}${
+    actorUri.port ? `:${actorUri.port}` : ''
+  }`;
+  const instance = await db
+    .select()
+    .from(Instances)
+    .where(eq(Instances.domain, domain))
+    .limit(1)
+    .then(first);
+
+  if (
+    instance &&
+    (instance.kind !== InstanceKind.ACTIVITYPUB || instance.state === InstanceState.SUSPENDED)
+  ) {
+    throw new NotFoundError('Profile not found');
+  }
 };
 
 export const lookupRemoteActorUriActivity = async (
-  input: RemoteProfileLookupInput,
+  input: RemoteProfileHandleLookupInput,
 ): Promise<string | null> => {
   const stored = await db
     .select({ actorUri: ActivityPubActors.uri })
@@ -119,23 +153,43 @@ export const lookupRemoteActorUriActivity = async (
   return null;
 };
 
-export const refreshRemoteProfileActorActivity = async (
+const readUsableRemoteProfileActor = async (actorUri: string) => {
+  const stored = await findStoredRemoteProfileActorByUri(actorUri);
+  return stored ? requireUsableStoredRemoteProfileActor(stored) : null;
+};
+
+export const getRemoteProfileActorStateActivity = async (
+  input: RemoteProfileActorStateInput,
+): Promise<RemoteProfileActorState | null> => {
+  try {
+    const now = Temporal.Now.instant();
+    const stored = await readUsableRemoteProfileActor(input.actorUri);
+    return stored
+      ? {
+          needsRefresh: needsRefresh(stored.actor.lastFetchedAt, now),
+          profileId: stored.profile.id,
+        }
+      : null;
+  } catch (error) {
+    return rethrowRemoteProfileMaterializationError(error);
+  }
+};
+
+export const fetchRemoteProfileActorActivity = async (
   input: RemoteProfileMaterializationInput,
-): Promise<string> => {
-  const now = Temporal.Now.instant();
+): Promise<RemoteProfileActorDocument> => {
+  const observedAt = Temporal.Now.instant();
 
   try {
-    const stored = await findStoredRemoteProfileActorState(input);
-
-    if (stored && !stored.needsRefresh) {
-      return stored.profileId;
-    }
+    const actorUri = new URL(input.actorUri);
+    await readUsableRemoteProfileActor(input.actorUri);
+    await ensureRemoteProfileLookupAllowed(actorUri);
 
     let origin: string;
     let signingProfileId: string | undefined;
 
     if (!input.profileId) {
-      origin = (await resolveConfiguredLocalInstance()).canonicalOrigin;
+      origin = input.contextOrigin ?? (await resolveConfiguredLocalInstance()).canonicalOrigin;
     } else {
       const selected = await db
         .select({ actor: ActivityPubActors, instance: Instances })
@@ -168,9 +222,9 @@ export const refreshRemoteProfileActorActivity = async (
           );
         }
 
-        let actorUri: URL;
+        let selectedActorUri: URL;
         try {
-          actorUri = new URL(selected.actor.uri);
+          selectedActorUri = new URL(selected.actor.uri);
         } catch {
           throw new RemoteActorMaterializationError(
             'Unable to determine materialization origin: Remote Profile actor URI is invalid.',
@@ -178,15 +232,15 @@ export const refreshRemoteProfileActorActivity = async (
         }
 
         if (
-          (actorUri.protocol !== 'http:' && actorUri.protocol !== 'https:') ||
-          !actorUri.hostname
+          (selectedActorUri.protocol !== 'http:' && selectedActorUri.protocol !== 'https:') ||
+          !selectedActorUri.hostname
         ) {
           throw new RemoteActorMaterializationError(
             'Unable to determine materialization origin: Remote Profile actor URI must use HTTP(S) with a hostname.',
           );
         }
 
-        origin = actorUri.origin;
+        origin = selectedActorUri.origin;
       }
     }
 
@@ -194,40 +248,117 @@ export const refreshRemoteProfileActorActivity = async (
     const documentLoader = signingProfileId
       ? await context.getDocumentLoader({ identifier: signingProfileId })
       : undefined;
-    const profile = await materializeRemoteProfileActor({
-      context,
-      actorUri: new URL(input.actorUri),
-      documentLoader,
-      now,
-    });
 
-    return profile.id;
+    return {
+      actorJsonLd: await fetchRemoteProfileActorDocument(context, actorUri, documentLoader),
+      observedAt: observedAt.toString(),
+    };
   } catch (error) {
-    if (error instanceof RemoteActorMaterializationError) {
-      throw ApplicationFailure.nonRetryable(error.message, 'RemoteActorMaterializationError');
-    }
-
-    if (error instanceof ConflictError) {
-      throw ApplicationFailure.nonRetryable(error.message, 'ConflictError');
-    }
-
-    if (error instanceof NotFoundError) {
-      throw ApplicationFailure.nonRetryable(error.message, 'NotFoundError');
-    }
-
-    throw error;
+    return rethrowRemoteProfileMaterializationError(error);
   }
 };
 
-export const materializeRemoteProfileActorActivity = async (
-  input: RemoteProfileMaterializationInput,
-): Promise<RemoteProfileMaterializationState> => {
-  const stored = await findStoredRemoteProfileActorState(input);
+export const applyRemoteProfileActorActivity = async (
+  input: RemoteProfileActorDocumentInput,
+): Promise<string> => {
+  try {
+    const profile = await applyRemoteProfileActorDocument({
+      actorJsonLd: input.actorJsonLd,
+      actorUri: new URL(input.actorUri),
+      observedAt: Temporal.Instant.from(input.observedAt),
+    });
+    return profile.id;
+  } catch (error) {
+    return rethrowRemoteProfileMaterializationError(error);
+  }
+};
 
-  if (stored) {
+export const recoverRemoteProfileActorActivity = async (
+  input: RemoteProfileActorStateInput,
+): Promise<void> => {
+  try {
+    const stored = await readUsableRemoteProfileActor(input.actorUri);
+    if (stored) {
+      await reactivateStoredRemoteProfileActor(stored);
+    }
+  } catch (error) {
+    return rethrowRemoteProfileMaterializationError(error);
+  }
+};
+
+const fetchAndApplyRemoteProfileActor = async (input: RemoteProfileMaterializationInput) => {
+  const document = await fetchRemoteProfileActorActivity(input);
+  return applyRemoteProfileActorActivity({ actorUri: input.actorUri, ...document });
+};
+
+// Temporal histories record these Activity names. Keep them for histories without
+// `remote-profile-activity-split-v1`; remove them after those histories drain.
+export const refreshRemoteProfileActorActivity = async (
+  input: RemoteProfileMaterializationInput,
+): Promise<string> => {
+  try {
+    const stored = await getRemoteProfileActorStateActivity({ actorUri: input.actorUri });
+    if (stored && !stored.needsRefresh) {
+      return stored.profileId;
+    }
+
+    return await fetchAndApplyRemoteProfileActor(input);
+  } catch (error) {
+    return rethrowRemoteProfileMaterializationError(error);
+  }
+};
+
+// Temporal histories record this Activity name. Keep it for lookup histories without
+// `remote-profile-activity-split-v1`; remove it after those histories drain.
+export const materializeRemoteProfileActorActivity = async (
+  input: RemoteProfileActorLookupInput,
+): Promise<RemoteProfileActorState | null> => {
+  try {
+    const stored = await getRemoteProfileActorStateActivity({ actorUri: input.actorUri });
+    if (input.receipt && stored) {
+      await recoverRemoteProfileActorActivity({ actorUri: input.actorUri });
+    }
+    if (stored) {
+      return stored;
+    }
+
+    return {
+      needsRefresh: false,
+      profileId: await fetchAndApplyRemoteProfileActor(input),
+    };
+  } catch (error) {
+    return rethrowRemoteProfileMaterializationError(error);
+  }
+};
+
+const reactivateStoredRemoteProfileActor = async (stored: StoredRemoteProfileActor) => {
+  if (stored.instance.state !== InstanceState.UNRESPONSIVE) {
     return stored;
   }
 
-  const profileId = await refreshRemoteProfileActorActivity(input);
-  return { needsRefresh: false, profileId };
+  const reactivated = await db
+    .update(Instances)
+    .set({ state: InstanceState.ACTIVE })
+    .where(
+      and(eq(Instances.id, stored.instance.id), eq(Instances.state, InstanceState.UNRESPONSIVE)),
+    )
+    .returning()
+    .then(first);
+
+  if (reactivated) {
+    return { ...stored, instance: reactivated };
+  }
+
+  const current = await db
+    .select()
+    .from(Instances)
+    .where(eq(Instances.id, stored.instance.id))
+    .limit(1)
+    .then(first);
+
+  if (!current || current.state !== InstanceState.ACTIVE) {
+    throw ApplicationFailure.nonRetryable('Profile not found', 'NotFoundError');
+  }
+
+  return { ...stored, instance: current };
 };

@@ -1,6 +1,6 @@
 import '@kosmo/core/polyfill';
 
-import { getActorTypeName, isActor, Link } from '@fedify/vocab';
+import { getActorTypeName, isActor, Link, Object as ActivityPubObject } from '@fedify/vocab';
 import { projectRemoteActivityPubHtmlToPlainText } from '@kosmo/core/activitypub-note-content/server';
 import {
   ActivityPubActors,
@@ -25,6 +25,8 @@ import {
 } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError } from '@kosmo/core/error';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
+import { runWorkflow } from '@kosmo/core/temporal/client';
+import { remoteProfileLookupWorkflow } from '@kosmo/core/temporal/workflows';
 import { normalizeHandle } from '@kosmo/core/utils';
 import {
   profileBioSchema,
@@ -34,7 +36,8 @@ import {
 import { and, eq, getColumns, inArray, ne } from 'drizzle-orm';
 import { isHttpUri } from './activitypub-uri';
 import type { Context, DocumentLoader } from '@fedify/fedify';
-import type { Actor, Image, LanguageString, Object as ActivityPubObject } from '@fedify/vocab';
+import type { Actor, Image, LanguageString } from '@fedify/vocab';
+import type { RemoteProfileActorLookupInput } from '@kosmo/core/temporal/workflows';
 
 export class RemoteActorMaterializationError extends Error {
   constructor(message: string) {
@@ -45,6 +48,7 @@ export class RemoteActorMaterializationError extends Error {
 
 type RemoteActorLookupContext = Pick<Context<void>, 'lookupObject'>;
 export type RemoteActorMaterializationOptions = {
+  actorJsonLd?: unknown;
   context: RemoteActorLookupContext;
   actorUri: URL;
   documentLoader?: DocumentLoader;
@@ -284,114 +288,65 @@ export const findStoredRemoteProfileActorByUri = async (actorUri: URL | string) 
     .limit(1)
     .then(first);
 
-const requireUsableStoredRemoteActor = async (
-  stored: NonNullable<Awaited<ReturnType<typeof findStoredRemoteProfileActorByUri>>>,
-) => {
-  if (stored.profile.state !== ProfileState.ACTIVE) {
-    throw new NotFoundError('Profile not found');
-  }
-
-  if (stored.instance.state === InstanceState.SUSPENDED) {
-    throw new NotFoundError('Profile not found');
-  }
-
-  if (stored.instance.state !== InstanceState.UNRESPONSIVE) {
-    return stored;
-  }
-
-  const reactivated = await db
-    .update(Instances)
-    .set({ state: InstanceState.ACTIVE })
-    .where(
-      and(eq(Instances.id, stored.instance.id), eq(Instances.state, InstanceState.UNRESPONSIVE)),
-    )
-    .returning()
-    .then(first);
-
-  if (reactivated) {
-    return { ...stored, instance: reactivated };
-  }
-
-  const current = await db
-    .select()
-    .from(Instances)
-    .where(eq(Instances.id, stored.instance.id))
-    .limit(1)
-    .then(firstOrThrow);
-
-  if (current.state !== InstanceState.ACTIVE) {
-    throw new NotFoundError('Profile not found');
-  }
-
-  return { ...stored, instance: current };
+type RemoteActorReceipt = {
+  activityUri?: URL | string | null;
+  receivedAt: Temporal.Instant;
 };
 
-export const findUsableStoredRemoteProfileActorByUri = async (actorUri: URL | string) => {
-  const stored = await findStoredRemoteProfileActorByUri(actorUri);
-
-  return stored ? requireUsableStoredRemoteActor(stored) : undefined;
-};
-
-export const findOrMaterializeRemoteProfileActorByUri = async ({
-  actorUri,
-  context,
-  now = getNow(),
-}: {
+type RemoteActorLookupOptions = {
   actorUri: URL;
-  context: RemoteActorLookupContext;
-  now?: Temporal.Instant;
-}) => {
-  const stored = await findUsableStoredRemoteProfileActorByUri(actorUri);
-
-  if (stored) {
-    return stored;
-  }
-
-  await materializeRemoteProfileActor({
-    context,
-    actorUri,
-    now,
-    reactivateUnresponsive: true,
-  });
-
-  const materialized = await findStoredRemoteProfileActorByUri(actorUri);
-
-  if (!materialized) {
-    throw new RemoteActorMaterializationError('Materialized actor URI does not match.');
-  }
-
-  return requireUsableStoredRemoteActor(materialized);
+  contextOrigin?: string;
+  receipt?: RemoteActorReceipt;
 };
 
-export const materializeRemoteProfileActor = async (options: RemoteActorMaterializationOptions) => {
-  const { context, now = getNow(), reactivateUnresponsive = false } = options;
-  const localInstance = await resolveConfiguredLocalInstance();
-
-  if (
-    (options.actorUri.protocol !== 'http:' && options.actorUri.protocol !== 'https:') ||
-    !options.actorUri.hostname
-  ) {
-    throw new RemoteActorMaterializationError('Remote actor URI must use HTTP(S) with a hostname.');
+export const serializeReceipt = (receipt: RemoteActorReceipt) => {
+  let activityUri: string | undefined;
+  if (receipt.activityUri) {
+    try {
+      const uri = new URL(receipt.activityUri.toString());
+      if (isHttpUri(uri) && uri.hostname) {
+        activityUri = uri.href;
+      }
+    } catch {
+      // Activity IDs are optional evidence; receivedAt remains the stable fallback.
+    }
   }
 
-  if (options.actorUri.origin === localInstance.canonicalOrigin) {
-    throw new ConflictError({ message: 'Remote actor URI uses the local origin' });
+  return {
+    receivedAt: receipt.receivedAt.toString(),
+    ...(activityUri ? { activityUri } : {}),
+  };
+};
+
+export const rethrowRemoteActorWorkflowError = (error: unknown): never => {
+  const failure = error as (Error & { type?: unknown }) | null;
+  if (failure?.name === 'ApplicationFailure' && typeof failure.type === 'string') {
+    switch (failure.type) {
+      case 'ConflictError':
+        throw new ConflictError({ message: failure.message });
+      case 'NotFoundError':
+        throw new NotFoundError(failure.message);
+      case 'RemoteActorMaterializationError':
+        throw new RemoteActorMaterializationError(failure.message);
+    }
   }
+  throw error;
+};
 
-  const targetActorDomain = `${options.actorUri.hostname.toLowerCase().replace(/\.$/, '')}${
-    options.actorUri.port ? `:${options.actorUri.port}` : ''
-  }`;
-  const existingRequestedRemoteInstance = await findAvailableRemoteInstance(targetActorDomain, {
-    allowUnresponsive: reactivateUnresponsive,
-  });
-  const lookupOptions = options.documentLoader
-    ? { documentLoader: options.documentLoader }
-    : undefined;
-  const actor = (await context.lookupObject(
-    options.actorUri,
-    lookupOptions,
-  )) as ActivityPubObject | null;
+const lookupRemoteProfileActor = async (input: RemoteProfileActorLookupInput) => {
+  try {
+    return await runWorkflow(remoteProfileLookupWorkflow, {
+      args: [input],
+      mode: 'execute',
+      workflowIdConflictPolicy: 'USE_EXISTING',
+      workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+    });
+  } catch (error) {
+    return rethrowRemoteActorWorkflowError(error);
+  }
+};
 
+const requireRemoteActor = (actor: ActivityPubObject | null, actorUri: URL): Actor => {
   if (!isActor(actor)) {
     throw new RemoteActorMaterializationError('Remote lookup did not return an actor.');
   }
@@ -406,11 +361,121 @@ export const materializeRemoteProfileActor = async (options: RemoteActorMaterial
     throw new RemoteActorMaterializationError('Remote actor URI must use HTTP(S) with a hostname.');
   }
 
-  if (actorId.href !== options.actorUri.href) {
+  if (actorId.href !== actorUri.href) {
     throw new RemoteActorMaterializationError('Remote lookup returned a different actor URI.');
   }
 
-  const projection = await projectActor(actor as ActorWithKosmoFields);
+  return actor;
+};
+
+export const fetchRemoteProfileActor = async (
+  context: Pick<Context<void>, 'lookupObject'>,
+  actorUri: URL,
+  documentLoader?: DocumentLoader,
+): Promise<Actor> => {
+  const result = await (documentLoader
+    ? context.lookupObject(actorUri, { documentLoader })
+    : context.lookupObject(actorUri));
+
+  if (result === null) {
+    throw new Error('Remote lookup did not return an actor.');
+  }
+
+  return requireRemoteActor(result as ActivityPubObject, actorUri);
+};
+
+export const fetchRemoteProfileActorDocument = async (
+  context: Pick<Context<void>, 'lookupObject'>,
+  actorUri: URL,
+  documentLoader?: DocumentLoader,
+): Promise<unknown> => {
+  const actor = await fetchRemoteProfileActor(context, actorUri, documentLoader);
+  const actorJsonLd = await actor.toJsonLd({
+    contextLoader: noNetworkDocumentLoader,
+    format: 'expand',
+  });
+  if (actorJsonLd === undefined) {
+    throw new RemoteActorMaterializationError('Remote actor JSON-LD could not be serialized.');
+  }
+  return actorJsonLd;
+};
+
+const parseRemoteProfileActorDocument = async (actorJsonLd: unknown, actorUri: URL) => {
+  let parsed: ActivityPubObject;
+  try {
+    parsed = await ActivityPubObject.fromJsonLd(actorJsonLd, {
+      contextLoader: noNetworkDocumentLoader,
+      documentLoader: noNetworkDocumentLoader,
+    });
+  } catch {
+    throw new RemoteActorMaterializationError('Remote actor JSON-LD could not be parsed.');
+  }
+
+  return requireRemoteActor(parsed, actorUri);
+};
+
+const findRequestedRemoteInstance = async (actorUri: URL, allowUnresponsive: boolean) => {
+  const localInstance = await resolveConfiguredLocalInstance();
+
+  if ((actorUri.protocol !== 'http:' && actorUri.protocol !== 'https:') || !actorUri.hostname) {
+    throw new RemoteActorMaterializationError('Remote actor URI must use HTTP(S) with a hostname.');
+  }
+
+  if (actorUri.origin === localInstance.canonicalOrigin) {
+    throw new ConflictError({ message: 'Remote actor URI uses the local origin' });
+  }
+
+  const targetActorDomain = `${actorUri.hostname.toLowerCase().replace(/\.$/, '')}${
+    actorUri.port ? `:${actorUri.port}` : ''
+  }`;
+
+  return {
+    localInstanceId: localInstance.id,
+    requestedRemoteInstance: await findAvailableRemoteInstance(targetActorDomain, {
+      allowUnresponsive,
+    }),
+  };
+};
+
+export const findOrMaterializeRemoteProfileActorByUri = async (
+  options: RemoteActorLookupOptions,
+) => {
+  const profileId = await lookupRemoteProfileActor({
+    actorUri: options.actorUri.href,
+    ...(options.contextOrigin === undefined ? {} : { contextOrigin: options.contextOrigin }),
+    ...(options.receipt ? { receipt: serializeReceipt(options.receipt) } : {}),
+  });
+  if (!profileId) {
+    throw new RemoteActorMaterializationError('Remote actor URI did not materialize a profile.');
+  }
+
+  const materialized = await findStoredRemoteProfileActorByUri(options.actorUri);
+
+  if (!materialized || materialized.profile.id !== profileId) {
+    throw new RemoteActorMaterializationError('Materialized actor URI does not match.');
+  }
+
+  return materialized;
+};
+
+const persistRemoteProfileActor = async (
+  actor: Actor,
+  localInstanceId: string,
+  existingRequestedRemoteInstance: typeof Instances.$inferSelect | undefined,
+  now: Temporal.Instant,
+  reactivateUnresponsive: boolean,
+) => {
+  const actorId = actor.id!;
+
+  let projection: ActorProjection;
+  try {
+    projection = await projectActor(actor as ActorWithKosmoFields);
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new RemoteActorMaterializationError('Remote actor profile projection was rejected.');
+    }
+    throw error;
+  }
   const endpoints = {
     followersUri: actor.followersId?.href ?? null,
     followingUri: actor.followingId?.href ?? null,
@@ -564,7 +629,7 @@ export const materializeRemoteProfileActor = async (options: RemoteActorMaterial
 
         if (
           existingInstanceId === null ||
-          existingInstanceId === localInstance.id ||
+          existingInstanceId === localInstanceId ||
           !existingActor.instance ||
           existingActor.instance.kind === InstanceKind.LOCAL
         ) {
@@ -708,4 +773,43 @@ export const materializeRemoteProfileActor = async (options: RemoteActorMaterial
 
     return persistActor();
   }
+};
+
+export const applyRemoteProfileActorDocument = async (input: {
+  actorUri: URL;
+  actorJsonLd: unknown;
+  observedAt: Temporal.Instant;
+}) => {
+  const { localInstanceId, requestedRemoteInstance } = await findRequestedRemoteInstance(
+    input.actorUri,
+    true,
+  );
+  const actor = await parseRemoteProfileActorDocument(input.actorJsonLd, input.actorUri);
+  return persistRemoteProfileActor(
+    actor,
+    localInstanceId,
+    requestedRemoteInstance,
+    input.observedAt,
+    true,
+  );
+};
+
+export const materializeRemoteProfileActor = async (options: RemoteActorMaterializationOptions) => {
+  const { context, now = getNow(), reactivateUnresponsive = false } = options;
+  const { localInstanceId, requestedRemoteInstance } = await findRequestedRemoteInstance(
+    options.actorUri,
+    reactivateUnresponsive,
+  );
+  const actor =
+    options.actorJsonLd === undefined
+      ? await fetchRemoteProfileActor(context, options.actorUri, options.documentLoader)
+      : await parseRemoteProfileActorDocument(options.actorJsonLd, options.actorUri);
+
+  return persistRemoteProfileActor(
+    actor,
+    localInstanceId,
+    requestedRemoteInstance,
+    now,
+    reactivateUnresponsive,
+  );
 };

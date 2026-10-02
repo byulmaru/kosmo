@@ -2,8 +2,8 @@ import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { after, before, beforeEach, describe, test } from 'node:test';
-import { Accept, Follow, Note, Reject } from '@fedify/vocab';
+import { after, before, beforeEach, describe, mock, test } from 'node:test';
+import { Accept, Follow, Note, Person, Reject, Undo } from '@fedify/vocab';
 import {
   ActivityPubActorType,
   InstanceKind,
@@ -13,15 +13,19 @@ import {
 import { KosmoError } from '@kosmo/core/error';
 import { temporalClient } from '@kosmo/core/temporal/client';
 import { profileFollowRemovalWorkflowId } from '@kosmo/core/temporal/follow-command';
+import { remoteProfileLookupWorkflow } from '@kosmo/core/temporal/workflows';
 import { eq, ne } from 'drizzle-orm';
 import { setInboundObservabilityReporter, withInboundObservability } from './inbound-observability';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
+import type { RemoteProfileLookupInput } from '@kosmo/core/temporal/workflows';
 import type { federation as productionFederation } from './federation';
 import type * as InboundAccept from './inbound-accept';
 import type * as InboundAcceptFollow from './inbound-accept-follow';
+import type * as InboundFollow from './inbound-follow';
 import type * as InboundReject from './inbound-reject';
+import type * as Materialization from './remote-actor-materialization';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
@@ -42,11 +46,32 @@ let ProfileFollows: typeof CoreDb.ProfileFollows;
 let Profiles: typeof CoreDb.Profiles;
 let handleInboundAccept: typeof InboundAccept.handleInboundAccept;
 let handleInboundAcceptFollow: typeof InboundAcceptFollow.handleInboundAcceptFollow;
+let handleInboundUndo: typeof InboundFollow.handleInboundUndo;
 let handleInboundReject: typeof InboundReject.handleInboundReject;
+let materializeRemoteProfileActor: typeof Materialization.materializeRemoteProfileActor;
 let localInstanceId: string;
+
+const mockRemoteProfileLookup = (lookupObject: (identifier: string | URL) => Promise<unknown>) =>
+  mock.method(temporalClient.workflow, 'execute', async (workflow: unknown, options: unknown) => {
+    assert.equal(workflow, remoteProfileLookupWorkflow.workflow);
+    assert.ok(options && typeof options === 'object');
+    const workflowOptions = options as {
+      args?: readonly RemoteProfileLookupInput[];
+      workflowId?: string;
+    };
+    const input = workflowOptions.args?.[0];
+    assert.ok(input && 'actorUri' in input);
+    assert.equal(workflowOptions.args?.length, 1);
+    assert.equal(workflowOptions.workflowId, remoteProfileLookupWorkflow.workflowIdFromArgs(input));
+    const profile = await materializeRemoteProfileActor({
+      actorUri: new URL(input.actorUri),
+      context: { lookupObject } as never,
+    });
+    return profile.id;
+  });
 let federation: typeof productionFederation;
 
-describe('inbound Accept and Reject', () => {
+describe('inbound Accept, Reject, and Undo', () => {
   before(async () => {
     process.env.DATABASE_URL = databaseUrl;
     process.env.PUBLIC_ORIGIN = publicOrigin;
@@ -65,7 +90,9 @@ describe('inbound Accept and Reject', () => {
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
     ({ handleInboundAccept } = await import('./inbound-accept'));
     ({ handleInboundAcceptFollow } = await import('./inbound-accept-follow'));
+    ({ handleInboundUndo } = await import('./inbound-follow'));
     ({ handleInboundReject } = await import('./inbound-reject'));
+    ({ materializeRemoteProfileActor } = await import('./remote-actor-materialization'));
     ({ federation } = await import('./federation'));
     const { localInstance } = await seedDatabase({ publicOrigin });
     localInstanceId = localInstance.id;
@@ -651,17 +678,230 @@ describe('inbound Accept and Reject', () => {
     assert.deepEqual(await readCounts(fixture), { localFollowing: 0, remoteFollowers: 0 });
   });
 
-  test('reactivates UNRESPONSIVE but ignores SUSPENDED actors', async () => {
+  test('materializes unknown actors before Accept, Reject, and Undo relation lookup', async () => {
+    const fixture = await createFixture({ projection: 'PENDING' });
+    const missingActors = [
+      {
+        activityUri: new URL('https://accept.example/activities/accept-1'),
+        actor: new Person({
+          id: new URL('https://accept.example/users/alice'),
+          inbox: new URL('https://accept.example/users/alice/inbox'),
+          preferredUsername: 'alice',
+        }),
+      },
+      {
+        activityUri: new URL('https://reject.example/activities/reject-1'),
+        actor: new Person({
+          id: new URL('https://reject.example/users/bob'),
+          inbox: new URL('https://reject.example/users/bob/inbox'),
+          preferredUsername: 'bob',
+        }),
+      },
+      {
+        activityUri: new URL('https://undo.example/activities/undo-1'),
+        actor: new Person({
+          id: new URL('https://undo.example/users/carol'),
+          inbox: new URL('https://undo.example/users/carol/inbox'),
+          preferredUsername: 'carol',
+        }),
+      },
+    ];
+    const actorsByUri = new Map(missingActors.map(({ actor }) => [actor.id!.href, actor]));
+    const lookupObject = mock.fn(async (uri: URL) => actorsByUri.get(uri.href) ?? null);
+    const lookupWorkflow = mockRemoteProfileLookup(async (identifier) =>
+      lookupObject(new URL(identifier)),
+    );
+    const context = {
+      ...createContext(localProfileId),
+      lookupObject,
+    } as unknown as InboxContext<void>;
+
+    try {
+      await handleInboundAccept(
+        context,
+        new Accept({
+          actor: missingActors[0].actor.id,
+          id: missingActors[0].activityUri,
+          object: new Follow({
+            actor: localActorUri,
+            object: missingActors[0].actor.id,
+          }),
+        }),
+        Temporal.Instant.from('2026-09-29T00:00:00Z'),
+      );
+      await handleInboundReject(
+        context,
+        new Reject({
+          actor: missingActors[1].actor.id,
+          id: missingActors[1].activityUri,
+          object: new Follow({
+            actor: localActorUri,
+            object: missingActors[1].actor.id,
+          }),
+        }),
+        Temporal.Instant.from('2026-09-29T00:00:01Z'),
+      );
+      await handleInboundUndo(
+        context,
+        new Undo({
+          actor: missingActors[2].actor.id,
+          id: missingActors[2].activityUri,
+          object: new Follow({
+            actor: missingActors[2].actor.id,
+            object: localActorUri,
+          }),
+        }),
+        Temporal.Instant.from('2026-09-29T00:00:02Z'),
+      );
+    } finally {
+      lookupWorkflow.mock.restore();
+    }
+
+    assert.equal(lookupObject.mock.calls.length, missingActors.length);
+    for (const { actor } of missingActors) {
+      const stored = await db
+        .select()
+        .from(ActivityPubActors)
+        .where(eq(ActivityPubActors.uri, actor.id!.href))
+        .then(firstOrThrow);
+      assert.equal(stored.uri, actor.id!.href);
+    }
+    assert.deepEqual(await db.select().from(ProfileFollowRequests), [fixture.projection]);
+    assert.equal((await db.select().from(ProfileFollows)).length, 0);
+    assert.deepEqual(await readCounts(fixture), { localFollowing: 0, remoteFollowers: 0 });
+  });
+
+  test('consumes known Accept and Reject actor rejections while propagating lookup failures', async () => {
+    const handlers = [
+      {
+        name: 'accept',
+        dispatch: (
+          context: InboxContext<void>,
+          actorUri: URL,
+          activityUri: URL,
+          receivedAt: Temporal.Instant,
+        ) =>
+          handleInboundAccept(
+            context,
+            new Accept({
+              actor: actorUri,
+              id: activityUri,
+              object: new Follow({ actor: localActorUri, object: actorUri }),
+            }),
+            receivedAt,
+          ),
+      },
+      {
+        name: 'reject',
+        dispatch: (
+          context: InboxContext<void>,
+          actorUri: URL,
+          activityUri: URL,
+          receivedAt: Temporal.Instant,
+        ) =>
+          handleInboundReject(
+            context,
+            new Reject({
+              actor: actorUri,
+              id: activityUri,
+              object: new Follow({ actor: localActorUri, object: actorUri }),
+            }),
+            receivedAt,
+          ),
+      },
+    ] as const;
+
+    for (const { dispatch, name } of handlers) {
+      const invalidActorUri = new URL(`https://${name}-invalid.example/users/alice`);
+      const invalidLookup = mock.fn(
+        async () => new Note({ id: invalidActorUri, content: 'not an actor' }),
+      );
+      const invalidContext = {
+        ...createContext(localProfileId),
+        lookupObject: invalidLookup,
+      } as unknown as InboxContext<void>;
+
+      const invalidWorkflow = mockRemoteProfileLookup(async () => invalidLookup());
+      try {
+        await dispatch(
+          invalidContext,
+          invalidActorUri,
+          new URL(`https://${name}-invalid.example/activities/response`),
+          Temporal.Instant.from('2026-09-29T00:01:00Z'),
+        );
+      } finally {
+        invalidWorkflow.mock.restore();
+      }
+      assert.equal(invalidLookup.mock.calls.length, 1);
+
+      const lookupFailure = new Error(`${name} actor lookup unavailable`);
+      const unavailableActorUri = new URL(`https://${name}-unavailable.example/users/alice`);
+      const unavailableLookup = mock.fn(async () => {
+        throw lookupFailure;
+      });
+      const unavailableContext = {
+        ...createContext(localProfileId),
+        lookupObject: unavailableLookup,
+      } as unknown as InboxContext<void>;
+
+      const unavailableWorkflow = mockRemoteProfileLookup(async () => unavailableLookup());
+      try {
+        await assert.rejects(
+          dispatch(
+            unavailableContext,
+            unavailableActorUri,
+            new URL(`https://${name}-unavailable.example/activities/response`),
+            Temporal.Instant.from('2026-09-29T00:01:01Z'),
+          ),
+          (error: unknown) => error === lookupFailure,
+        );
+      } finally {
+        unavailableWorkflow.mock.restore();
+      }
+      assert.equal(unavailableLookup.mock.calls.length, 1);
+
+      const suspendedActorUri = new URL(`https://${name}-suspended.example/users/alice`);
+      await db.insert(Instances).values({
+        domain: `${name}-suspended.example`,
+        kind: InstanceKind.ACTIVITYPUB,
+        state: InstanceState.SUSPENDED,
+      });
+      const suspendedLookup = mock.fn(async () => {
+        throw new Error('Suspended actor must not trigger network lookup');
+      });
+      const suspendedContext = {
+        ...createContext(localProfileId),
+        lookupObject: suspendedLookup,
+      } as unknown as InboxContext<void>;
+      await dispatch(
+        suspendedContext,
+        suspendedActorUri,
+        new URL(`https://${name}-suspended.example/activities/response`),
+        Temporal.Instant.from('2026-09-29T00:01:02Z'),
+      );
+      assert.equal(suspendedLookup.mock.calls.length, 0);
+    }
+  });
+
+  test('uses receipt evidence to reactivate UNRESPONSIVE actors but ignores SUSPENDED actors', async () => {
     const unresponsive = await createFixture({
       projection: 'PENDING',
       remoteInstanceState: InstanceState.UNRESPONSIVE,
     });
+    const lookupObject = mock.fn(async () => null);
+    const context = {
+      ...createContext(localProfileId),
+      lookupObject,
+    } as unknown as InboxContext<void>;
+    const receivedAt = Temporal.Instant.from('2026-09-29T00:02:00Z');
     await handleInboundAccept(
-      createContext(localProfileId),
+      context,
       new Accept({
         actor: remoteActorUri,
+        id: new URL('https://remote.example/activities/accept-recovery'),
         object: createOutboundFollow(unresponsive.projection, { includeId: false }),
       }),
+      receivedAt,
     );
     assert.equal((await db.select().from(ProfileFollows)).length, 1);
     assert.equal(
@@ -673,6 +913,43 @@ describe('inbound Accept and Reject', () => {
         .then(({ state }) => state),
       InstanceState.ACTIVE,
     );
+    assert.equal(lookupObject.mock.calls.length, 0);
+
+    const established = await db.select().from(ProfileFollows).then(firstOrThrow);
+    await db
+      .update(Instances)
+      .set({ state: InstanceState.UNRESPONSIVE })
+      .where(eq(Instances.id, unresponsive.remoteInstance.id));
+    await handleInboundReject(
+      context,
+      new Reject({
+        actor: remoteActorUri,
+        id: new URL('https://remote.example/activities/reject-recovery'),
+        object: createOutboundFollow(established),
+        published: established.createdAt,
+      }),
+      receivedAt.add({ seconds: 1 }),
+    );
+    await temporalClient.workflow
+      .getHandle(
+        profileFollowRemovalWorkflowId({
+          expectedRowId: established.id,
+          followeeProfileId: established.followeeProfileId,
+          followerProfileId: established.followerProfileId,
+        }),
+      )
+      .result();
+    assert.equal((await db.select().from(ProfileFollows)).length, 0);
+    assert.equal(
+      await db
+        .select({ state: Instances.state })
+        .from(Instances)
+        .where(eq(Instances.id, unresponsive.remoteInstance.id))
+        .then(firstOrThrow)
+        .then(({ state }) => state),
+      InstanceState.ACTIVE,
+    );
+    assert.equal(lookupObject.mock.calls.length, 0);
 
     await db.delete(Profiles);
     await db.delete(Instances).where(ne(Instances.id, localInstanceId));
@@ -858,6 +1135,7 @@ const createFixture = async ({
     },
     {
       inboxUri: 'https://remote.example/users/alice/inbox',
+      lastFetchedAt: Temporal.Now.instant(),
       profileId: remoteProfile.id,
       type: ActivityPubActorType.PERSON,
       uri: remoteActorUri.href,

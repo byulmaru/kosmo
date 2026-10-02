@@ -7,8 +7,12 @@ export {
   executeProfileUnblockTransitionActivity,
 } from './activities/profile-block';
 export {
+  applyRemoteProfileActorActivity,
+  fetchRemoteProfileActorActivity,
+  getRemoteProfileActorStateActivity,
   lookupRemoteActorUriActivity,
   materializeRemoteProfileActorActivity,
+  recoverRemoteProfileActorActivity,
   refreshRemoteProfileActorActivity,
 } from './activities/remote-profile-materialization';
 export {
