@@ -19,12 +19,31 @@ spec:
           'on': true
           'off': false
         defaultVariant: 'off'
+        targeting:
+          if:
+            - {$ref: isDeveloper}
+            - 'on'
+            - 'off'
       profile-migration:
         state: ENABLED
         variants:
           'on': true
           'off': false
         defaultVariant: 'off'
+        targeting:
+          if:
+            - {$ref: isDeveloper}
+            - 'on'
+            - 'off'
+    $evaluators:
+      isDeveloper:
+        in:
+          - {var: targetingKey}
+          - [
+              "AZ-3PYSKe1uNqjAgAT0PE0FjY291bnQ", # 019fb73d-848a-7b5b-8daa-3020013d0f13
+              "AZ-3cGoQdiatebq5osMAPkFjY291bnQ", # 019fb770-6a10-7626-ad79-bab9a2c3003e
+              "AZ-3e-dudOqH4ppgbtv5ckFjY291bnQ" # 019fb77b-e76e-74ea-87e2-9a606edbf972
+            ]
 ---
 apiVersion: core.openfeature.dev/v1beta1
 kind: FeatureFlagSource
