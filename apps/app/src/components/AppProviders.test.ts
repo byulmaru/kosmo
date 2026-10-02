@@ -29,8 +29,12 @@ const queryModes: Record<QueryName, QueryMode> = {
 const queryHistory: Array<{ fetchKey: unknown; query: QueryName }> = [];
 const pendingSessionQueries: Array<() => void> = [];
 const pendingRootRenders: Array<() => void> = [];
+const platform = { OS: 'web' };
 let mockAccountId: string | null = 'account-1';
+let mockSelectedProfileId: string | null = 'profile-a';
 let mockSessionId: string | null = 'session-1';
+let failNativeSessionDelete = false;
+let nativeSessionDeleteAttempts = 0;
 let navigationMounts = 0;
 let navigationUnmounts = 0;
 let relayActorMounts = 0;
@@ -49,10 +53,12 @@ let RouteBoundary: ComponentType<{
 let useRouteBoundary: () => { fetchKey: number };
 let useRelayActor: () => Pick<
   MockRelayActorValue,
-  'clearNativeSession' | 'nativeToken' | 'setNativeSession'
+  'clearNativeSession' | 'nativeToken' | 'resetActor' | 'setNativeSession'
 >;
+let useRelayAuthLifecycleKey: () => string;
 let useSession: () => {
   accountId: string | null;
+  accountName: string | null;
   selectedProfileId: string | null;
   sessionId: string | null;
   status: string;
@@ -62,6 +68,7 @@ let originalFetch: typeof fetch;
 
 type MockRelayActorValue = {
   actorLifecycleKey: string;
+  authLifecycleKey: string;
   clearNativeSession: () => Promise<void>;
   nativeToken: string | null;
   resetActor: (profileId?: string | null) => void;
@@ -88,15 +95,22 @@ function MockRelayActorProvider({ children }: PropsWithChildren) {
 
   const [nativeToken, setNativeToken] = useState<string | null>(null);
   const [actorLifecycleKey, setActorLifecycleKey] = useState('actor-session');
+  const [authLifecycleKey, setAuthLifecycleKey] = useState('auth-session');
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   const setNativeSession = useCallback(async (token: string) => {
     setNativeToken(token);
     setSelectedProfileId(null);
+    setAuthLifecycleKey((current) => `${current}:native`);
     setActorLifecycleKey((current) => `${current}:native`);
   }, []);
   const clearNativeSession = useCallback(async () => {
+    nativeSessionDeleteAttempts += 1;
+    if (failNativeSessionDelete) {
+      throw new Error('SecureStore delete failure');
+    }
     setNativeToken(null);
     setSelectedProfileId(null);
+    setAuthLifecycleKey((current) => `${current}:guest`);
     setActorLifecycleKey((current) => `${current}:guest`);
   }, []);
   const resetActor = useCallback((profileId?: string | null) => {
@@ -106,6 +120,7 @@ function MockRelayActorProvider({ children }: PropsWithChildren) {
   const value = useMemo(
     () => ({
       actorLifecycleKey,
+      authLifecycleKey,
       clearNativeSession,
       nativeToken,
       resetActor,
@@ -114,6 +129,7 @@ function MockRelayActorProvider({ children }: PropsWithChildren) {
     }),
     [
       actorLifecycleKey,
+      authLifecycleKey,
       clearNativeSession,
       nativeToken,
       resetActor,
@@ -135,6 +151,10 @@ function useMockRelayActor(): MockRelayActorValue {
 
 function useMockRelayActorLifecycleKey(): string {
   return useMockRelayActor().actorLifecycleKey;
+}
+
+function useMockRelayAuthLifecycleKey(): string {
+  return useMockRelayActor().authLifecycleKey;
 }
 
 function MockRelayActorBoundary({ children }: PropsWithChildren) {
@@ -162,7 +182,7 @@ const mockModule = (specifier: string | URL, exports: object) =>
 mockModule('react-native', {
   Modal: 'Modal',
   PanResponder: { create: () => ({ panHandlers: {} }) },
-  Platform: { OS: 'web' },
+  Platform: platform,
   Pressable: 'Pressable',
   StyleSheet: { create: <T>(styles: T) => styles },
   useColorScheme: () => 'light',
@@ -214,7 +234,7 @@ mockModule('react-relay', {
         currentSession: mockSessionId
           ? {
               id: mockSessionId,
-              selectedProfile: { id: 'profile-a' },
+              selectedProfile: mockSelectedProfileId ? { id: mockSelectedProfileId } : null,
             }
           : null,
         me: mockAccountId ? { id: mockAccountId, name: 'Account' } : null,
@@ -314,7 +334,13 @@ mockModule(new URL('../relay/RelayActorProvider.tsx', import.meta.url), {
   RelayActorBoundary: MockRelayActorBoundary,
   RelayActorProvider: MockRelayActorProvider,
   useRelayActor: useMockRelayActor,
+  useRelayAuthLifecycleKey: useMockRelayAuthLifecycleKey,
   useRelayActorLifecycleKey: useMockRelayActorLifecycleKey,
+});
+mockModule('@/auth/selectedProfileStorage', {
+  deleteSelectedProfile: async () => undefined,
+  readSelectedProfile: async () => null,
+  writeSelectedProfile: async () => undefined,
 });
 
 before(async () => {
@@ -323,17 +349,21 @@ before(async () => {
   ({ UniversalShell } = await import('./shell/UniversalShell'));
   ({ RouteBoundary, useRouteBoundary } = await import('./RouteBoundary'));
   ({ useSession } = await import('../session/SessionProvider'));
-  ({ useRelayActor } = await import('../relay/RelayActorProvider'));
+  ({ useRelayActor, useRelayAuthLifecycleKey } = await import('../relay/RelayActorProvider'));
 });
 
 beforeEach(() => {
+  platform.OS = 'web';
   originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(null, { status: 503 });
   queryModes.SessionProviderQuery = 'success';
   queryModes.ShellRecoveryQuery = 'success';
   queryModes.UniversalShellQuery = 'success';
   mockAccountId = 'account-1';
+  mockSelectedProfileId = 'profile-a';
   mockSessionId = 'session-1';
+  failNativeSessionDelete = false;
+  nativeSessionDeleteAttempts = 0;
   queryHistory.length = 0;
   pendingSessionQueries.length = 0;
   navigationMounts = 0;
@@ -396,8 +426,18 @@ function NativeSessionFixture() {
   }, []);
 
   return createElement('NativeSession', {
+    accountId: session.accountId,
+    accountName: session.accountName,
+    authLifecycleKey: useRelayAuthLifecycleKey(),
     nativeToken: actor.nativeToken,
     onPress: () => actor.setNativeSession('native-session-token'),
+    onExpireSession: () => {
+      mockAccountId = null;
+      mockSelectedProfileId = null;
+      mockSessionId = null;
+      actor.resetActor(null);
+    },
+    onProfileSwitch: (profileId: string) => actor.resetActor(profileId),
     selectedProfileId: session.selectedProfileId,
     sessionId: session.sessionId,
     status: session.status,
@@ -431,6 +471,11 @@ function FeatureFlagsProbe() {
     errored: useFeatureFlag('errored'),
     missing: useFeatureFlag('missing'),
   });
+}
+
+function ProfileLifecycleProbe() {
+  const { resetActor } = useRelayActor();
+  return createElement('ProfileLifecycleProbe', { resetActor });
 }
 
 function FeatureFlagsAccountSwitchProbe() {
@@ -501,7 +546,7 @@ describe('AppProviders runtime composition', () => {
     assert.equal(findTag('NavigationThemeProbe').props.background, '#fff');
   });
 
-  it('loads one shared flag snapshot per provider mount and fails closed', async () => {
+  it('keeps one account flag snapshot across profile restoration and selection', async () => {
     const requests: OfrepRequest[] = [];
     const pendingRequests: Array<(response: Response) => void> = [];
     globalThis.fetch = async (input) => {
@@ -514,7 +559,14 @@ describe('AppProviders runtime composition', () => {
     };
 
     await act(async () => {
-      renderer = create(createElement(AppProviders, null, createElement(FeatureFlagsProbe)));
+      renderer = create(
+        createElement(
+          AppProviders,
+          null,
+          createElement(FeatureFlagsProbe),
+          createElement(ProfileLifecycleProbe),
+        ),
+      );
     });
 
     assert.deepEqual(findTag('FeatureFlagsProbe').props, {
@@ -549,6 +601,12 @@ describe('AppProviders runtime composition', () => {
       errored: false,
       missing: false,
     });
+    assert.equal(requests.length, 1);
+
+    mockSelectedProfileId = 'profile-b';
+    await act(async () => findTag('ProfileLifecycleProbe').props.resetActor('profile-b'));
+
+    assert.equal(findTag('FeatureFlagsProbe').props.quote, true);
     assert.equal(requests.length, 1);
 
     await act(async () => renderer?.unmount());
@@ -751,7 +809,7 @@ describe('AppProviders runtime composition', () => {
     );
   });
 
-  it('does not expose the previous profile while a new actor Session query is pending', async () => {
+  it('clears the previous Session while a new auth Session query is pending', async () => {
     await act(async () => {
       renderer = create(createElement(AppProviders, null, createElement(NativeSessionFixture)));
     });
@@ -759,11 +817,15 @@ describe('AppProviders runtime composition', () => {
     const initial = findTag('NativeSession');
     assert.deepEqual(
       {
+        accountId: initial.props.accountId,
+        accountName: initial.props.accountName,
         selectedProfileId: initial.props.selectedProfileId,
         sessionId: initial.props.sessionId,
         status: initial.props.status,
       },
       {
+        accountId: 'account-1',
+        accountName: 'Account',
         selectedProfileId: 'profile-a',
         sessionId: 'session-1',
         status: 'valid',
@@ -779,12 +841,16 @@ describe('AppProviders runtime composition', () => {
     const duringTransition = findTag('NativeSession');
     assert.deepEqual(
       {
+        accountId: duringTransition.props.accountId,
+        accountName: duringTransition.props.accountName,
         nativeToken: duringTransition.props.nativeToken,
         selectedProfileId: duringTransition.props.selectedProfileId,
         sessionId: duringTransition.props.sessionId,
         status: duringTransition.props.status,
       },
       {
+        accountId: null,
+        accountName: null,
         nativeToken: 'native-session-token',
         selectedProfileId: null,
         sessionId: null,
@@ -804,6 +870,27 @@ describe('AppProviders runtime composition', () => {
     assert.equal(recovered.props.status, 'valid');
     assert.equal(navigationMounts, 1);
     assert.equal(navigationUnmounts, 0);
+
+    queryModes.SessionProviderQuery = 'error';
+    await act(async () => recovered.props.onPress());
+
+    const afterAuthQueryError = findTag('NativeSession');
+    assert.deepEqual(
+      {
+        accountId: afterAuthQueryError.props.accountId,
+        accountName: afterAuthQueryError.props.accountName,
+        selectedProfileId: afterAuthQueryError.props.selectedProfileId,
+        sessionId: afterAuthQueryError.props.sessionId,
+        status: afterAuthQueryError.props.status,
+      },
+      {
+        accountId: null,
+        accountName: null,
+        selectedProfileId: null,
+        sessionId: null,
+        status: 'error',
+      },
+    );
   });
 
   it('one route retry reruns only the failed route query', async () => {
@@ -849,5 +936,146 @@ describe('AppProviders runtime composition', () => {
     );
     assert.strictEqual(findByTestId('universal-shell-root'), shellRoot);
     assert.ok(queryHistory.filter(({ query }) => query === 'ShellRecoveryQuery').length > 1);
+  });
+
+  it('preserves the confirmed Session while a profile-only query is pending or fails', async () => {
+    await act(async () => {
+      renderer = create(createElement(AppProviders, null, createElement(NativeSessionFixture)));
+    });
+
+    const initial = findTag('NativeSession');
+    assert.deepEqual(
+      {
+        accountId: initial.props.accountId,
+        accountName: initial.props.accountName,
+        selectedProfileId: initial.props.selectedProfileId,
+        sessionId: initial.props.sessionId,
+        status: initial.props.status,
+      },
+      {
+        accountId: 'account-1',
+        accountName: 'Account',
+        selectedProfileId: 'profile-a',
+        sessionId: 'session-1',
+        status: 'valid',
+      },
+    );
+
+    queryModes.SessionProviderQuery = 'pending';
+    mockSelectedProfileId = 'profile-b';
+    await act(async () => {
+      initial.props.onProfileSwitch('profile-b');
+      await Promise.resolve();
+    });
+
+    const duringTransition = findTag('NativeSession');
+    assert.deepEqual(
+      {
+        accountId: duringTransition.props.accountId,
+        accountName: duringTransition.props.accountName,
+        selectedProfileId: duringTransition.props.selectedProfileId,
+        sessionId: duringTransition.props.sessionId,
+        status: duringTransition.props.status,
+      },
+      {
+        accountId: 'account-1',
+        accountName: 'Account',
+        selectedProfileId: null,
+        sessionId: 'session-1',
+        status: 'valid',
+      },
+    );
+    assert.equal(navigationMounts, 1);
+    assert.equal(navigationUnmounts, 0);
+
+    queryModes.SessionProviderQuery = 'success';
+    await act(async () => {
+      pendingSessionQueries.splice(0).forEach((resolve) => resolve());
+    });
+
+    const recovered = findTag('NativeSession');
+    assert.deepEqual(
+      {
+        accountId: recovered.props.accountId,
+        accountName: recovered.props.accountName,
+        selectedProfileId: recovered.props.selectedProfileId,
+        sessionId: recovered.props.sessionId,
+        status: recovered.props.status,
+      },
+      {
+        accountId: 'account-1',
+        accountName: 'Account',
+        selectedProfileId: 'profile-b',
+        sessionId: 'session-1',
+        status: 'valid',
+      },
+    );
+
+    queryModes.SessionProviderQuery = 'error';
+    await act(async () => findTag('NativeSession').props.onProfileSwitch('profile-c'));
+
+    const afterActorQueryError = findTag('NativeSession');
+    assert.deepEqual(
+      {
+        accountId: afterActorQueryError.props.accountId,
+        accountName: afterActorQueryError.props.accountName,
+        selectedProfileId: afterActorQueryError.props.selectedProfileId,
+        sessionId: afterActorQueryError.props.sessionId,
+        status: afterActorQueryError.props.status,
+      },
+      {
+        accountId: 'account-1',
+        accountName: 'Account',
+        selectedProfileId: null,
+        sessionId: 'session-1',
+        status: 'valid',
+      },
+    );
+  });
+
+  it('keeps a server-confirmed guest even when native credential deletion fails', async () => {
+    platform.OS = 'native';
+    await act(async () => {
+      renderer = create(createElement(AppProviders, null, createElement(NativeSessionFixture)));
+    });
+    await act(async () => findTag('NativeSession').props.onPress());
+
+    const beforeGuestQuery = findTag('NativeSession');
+    const authLifecycleKey = beforeGuestQuery.props.authLifecycleKey;
+    const nativeToken = beforeGuestQuery.props.nativeToken;
+    assert.equal(nativeToken, 'native-session-token');
+
+    failNativeSessionDelete = true;
+    const unhandledRejections: unknown[] = [];
+    const onUnhandledRejection = (reason: unknown) => unhandledRejections.push(reason);
+    process.on('unhandledRejection', onUnhandledRejection);
+    try {
+      await act(async () => findTag('NativeSession').props.onExpireSession());
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      const guest = findTag('NativeSession');
+      assert.deepEqual(
+        {
+          accountId: guest.props.accountId,
+          accountName: guest.props.accountName,
+          selectedProfileId: guest.props.selectedProfileId,
+          sessionId: guest.props.sessionId,
+          status: guest.props.status,
+        },
+        {
+          accountId: null,
+          accountName: null,
+          selectedProfileId: null,
+          sessionId: null,
+          status: 'guest',
+        },
+      );
+      assert.equal(guest.props.nativeToken, nativeToken);
+      assert.equal(guest.props.authLifecycleKey, authLifecycleKey);
+      assert.equal(nativeSessionDeleteAttempts, 1);
+      assert.deepEqual(unhandledRejections, []);
+    } finally {
+      process.off('unhandledRejection', onUnhandledRejection);
+    }
   });
 });

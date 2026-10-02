@@ -24,7 +24,7 @@ export type LogoutState = {
 
 export function useLogout(): LogoutState {
   const router = useRouter();
-  const { clearNativeSession, resetActor } = useRelayActor();
+  const { clearNativeSession, resetSession } = useRelayActor();
   const [commitNativeLogout] = useMutation<LogoutRevokeCurrentSessionMutationType>(
     RevokeCurrentSessionMutation,
   );
@@ -65,7 +65,7 @@ export function useLogout(): LogoutState {
         if (Platform.OS === 'web') {
           await requestWebLogout();
           await deleteSelectedProfile();
-          resetActor(null);
+          resetSession();
           clearAnalytics();
         } else {
           await revokeNativeSession();
@@ -82,7 +82,7 @@ export function useLogout(): LogoutState {
         inFlight.current = false;
       }
     })();
-  }, [clearNativeSession, resetActor, revokeNativeSession, router]);
+  }, [clearNativeSession, resetSession, revokeNativeSession, router]);
 
   return { error, logout, pending };
 }

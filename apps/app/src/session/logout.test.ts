@@ -17,6 +17,7 @@ type State = {
   events: string[];
   requestWebLogout: () => Promise<void>;
   routerReplace: (href: string) => void;
+  resetSession: () => void;
 };
 
 function createState(): State {
@@ -37,6 +38,7 @@ function createState(): State {
       assert.equal(href, '/');
       state.events.push('replace-root');
     },
+    resetSession: () => state.events.push('reset-session'),
   };
 }
 
@@ -85,7 +87,7 @@ mockModule(new URL('../analytics/client.ts', import.meta.url), {
 mockModule(new URL('../relay/RelayActorProvider.tsx', import.meta.url), {
   useRelayActor: () => ({
     clearNativeSession: () => state.clearNativeSession(),
-    resetActor: () => state.events.push('reset-actor'),
+    resetSession: () => state.resetSession(),
   }),
 });
 
@@ -105,7 +107,7 @@ async function flushLogout() {
 }
 
 describe('useLogout production composition', () => {
-  it('Web은 BFF 성공 뒤 actor Store를 교체하고 root로 replace한다', async () => {
+  it('Web은 BFF 성공 뒤 auth lifecycle을 reset하고 root로 replace한다', async () => {
     platform.OS = 'web';
 
     useLogout().logout();
@@ -114,10 +116,24 @@ describe('useLogout production composition', () => {
     assert.deepEqual(state.events, [
       'request-web-logout',
       'delete-selected-profile',
-      'reset-actor',
+      'reset-session',
       'clear-analytics',
       'replace-root',
     ]);
+  });
+
+  it('Web BFF failure keeps the local auth lifecycle and route', async () => {
+    platform.OS = 'web';
+    state.requestWebLogout = async () => {
+      state.events.push('request-web-logout');
+      throw new Error('BFF failure');
+    };
+
+    useLogout().logout();
+    await flushLogout();
+
+    assert.deepEqual(state.events, ['request-web-logout']);
+    assert.ok(state.errors.includes('로그아웃하지 못했습니다. 다시 시도해주세요.'));
   });
 
   it('Native는 실제 Relay mutation 성공 뒤 SecureStore와 actor를 정리하고 root로 replace한다', async () => {

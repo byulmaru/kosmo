@@ -10,17 +10,23 @@ import type { ReactTestRenderer } from 'react-test-renderer';
 
 type RelayActorSnapshot = {
   actorLifecycleKey: string;
+  authLifecycleKey: string;
   clearNativeSession: () => Promise<void>;
   environment: Environment;
   nativeToken: string | null;
   resetActor: (profileId?: string | null) => void;
+  resetSession: () => void;
   selectedProfileId: string | null;
   setNativeSession: (token: string) => Promise<void>;
 };
 
-type RelayActorSnapshotValue = Omit<RelayActorSnapshot, 'actorLifecycleKey' | 'environment'>;
+type RelayActorSnapshotValue = Omit<
+  RelayActorSnapshot,
+  'actorLifecycleKey' | 'authLifecycleKey' | 'environment'
+>;
 
 let deleteFailure = false;
+let writeFailure = false;
 let deleteItemCallCount = 0;
 let actorSubtreeMountCount = 0;
 let stableSubtreeMountCount = 0;
@@ -28,6 +34,7 @@ let renderer: ReactTestRenderer | null = null;
 let snapshot: RelayActorSnapshot | null = null;
 let storedToken: string | null = null;
 const environmentInputs: Array<{ selectedProfileId: string | null; token: string | null }> = [];
+const platform = { OS: 'native' };
 
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, {
@@ -35,7 +42,7 @@ const mockModule = (specifier: string | URL, exports: object) =>
   } as unknown as Parameters<typeof mock.module>[1]);
 
 mockModule('react-native', {
-  Platform: { OS: 'native' },
+  Platform: platform,
 });
 mockModule('@/observability/sentry', {
   captureHandledMessage: () => undefined,
@@ -52,6 +59,9 @@ mockModule('expo-secure-store', {
   getItemAsync: async () => storedToken,
   isAvailableAsync: async () => true,
   setItemAsync: async (_key: string, value: string) => {
+    if (writeFailure) {
+      throw new Error('SecureStore write failure');
+    }
     storedToken = value;
   },
 });
@@ -67,6 +77,7 @@ let RelayActorProvider: ComponentType<
 let ActorBoundary: ComponentType<PropsWithChildren>;
 let useRelayActor: () => RelayActorSnapshotValue;
 let useRelayActorLifecycleKey: () => string;
+let useRelayAuthLifecycleKey: () => string;
 let useRelayEnvironment: () => Environment;
 
 before(async () => {
@@ -75,12 +86,15 @@ before(async () => {
     RelayActorProvider,
     useRelayActor,
     useRelayActorLifecycleKey,
+    useRelayAuthLifecycleKey,
   } = await import('./RelayActorProvider'));
   ({ useRelayEnvironment } = await import('react-relay'));
 });
 
 beforeEach(() => {
   deleteFailure = false;
+  writeFailure = false;
+  platform.OS = 'native';
   deleteItemCallCount = 0;
   actorSubtreeMountCount = 0;
   stableSubtreeMountCount = 0;
@@ -107,15 +121,18 @@ function createEnvironment(token: string | null, selectedProfileId: string | nul
 function Probe() {
   const actor = useRelayActor();
   const actorLifecycleKey = useRelayActorLifecycleKey();
+  const authLifecycleKey = useRelayAuthLifecycleKey();
   useEffect(() => {
     actorSubtreeMountCount += 1;
   }, []);
   snapshot = {
     actorLifecycleKey,
+    authLifecycleKey,
     clearNativeSession: actor.clearNativeSession,
     environment: useRelayEnvironment(),
     nativeToken: actor.nativeToken,
     resetActor: actor.resetActor,
+    resetSession: actor.resetSession,
     selectedProfileId: actor.selectedProfileId,
     setNativeSession: actor.setNativeSession,
   };
@@ -144,11 +161,13 @@ describe('RelayActorProvider session cleanup', () => {
     await renderProvider();
 
     assert.equal(environmentInputs.at(-1)?.selectedProfileId, null);
+    const authLifecycleKey = snapshot?.authLifecycleKey;
 
     await act(async () => snapshot?.resetActor('profile-a'));
 
     assert.equal(snapshot?.selectedProfileId, 'profile-a');
     assert.equal(environmentInputs.at(-1)?.selectedProfileId, 'profile-a');
+    assert.equal(snapshot?.authLifecycleKey, authLifecycleKey);
   });
 
   it('actor reset은 같은 app lifecycle에서 이전 Store를 새 Store로 교체한다', async () => {
@@ -159,6 +178,7 @@ describe('RelayActorProvider session cleanup', () => {
     assert.equal(stableSubtreeMountCount, 1);
     const previousEnvironment = snapshot.environment;
     const previousActorLifecycleKey = snapshot.actorLifecycleKey;
+    const previousAuthLifecycleKey = snapshot.authLifecycleKey;
     commitLocalUpdate(previousEnvironment, (store) => {
       store.create('old-viewer', 'Profile').setValue('이전 사용자', 'displayName');
     });
@@ -169,6 +189,7 @@ describe('RelayActorProvider session cleanup', () => {
     assert.notEqual(snapshot.environment, previousEnvironment);
     assert.notEqual(snapshot.environment.getStore(), previousEnvironment.getStore());
     assert.notEqual(snapshot.actorLifecycleKey, previousActorLifecycleKey);
+    assert.equal(snapshot.authLifecycleKey, previousAuthLifecycleKey);
     assert.equal(snapshot.environment.getStore().getSource().get('old-viewer'), undefined);
     assert.equal(actorSubtreeMountCount, 2);
     assert.equal(stableSubtreeMountCount, 1);
@@ -182,6 +203,7 @@ describe('RelayActorProvider session cleanup', () => {
     assert.equal(snapshot.nativeToken, 'first-session-token');
     assert.notEqual(storedToken, null);
     const authenticatedEnvironment = snapshot.environment;
+    const authenticatedAuthLifecycleKey = snapshot.authLifecycleKey;
     commitLocalUpdate(authenticatedEnvironment, (store) => {
       store.create('old-viewer', 'Profile').setValue('이전 사용자', 'displayName');
     });
@@ -192,6 +214,8 @@ describe('RelayActorProvider session cleanup', () => {
     assert.equal(deleteItemCallCount, 1);
     assert.equal(storedToken, null);
     assert.equal(snapshot.nativeToken, null);
+    assert.notEqual(snapshot.authLifecycleKey, authenticatedAuthLifecycleKey);
+    assert.equal(snapshot.selectedProfileId, null);
     assert.notEqual(snapshot.environment, authenticatedEnvironment);
     assert.notEqual(snapshot.environment.getStore(), authenticatedEnvironment.getStore());
     assert.equal(snapshot.environment.getStore().getSource().get('old-viewer'), undefined);
@@ -201,6 +225,8 @@ describe('RelayActorProvider session cleanup', () => {
 
     assert.ok(snapshot);
     assert.equal(snapshot.nativeToken, 'next-session-token');
+    assert.notEqual(snapshot.authLifecycleKey, authenticatedAuthLifecycleKey);
+    assert.equal(snapshot.selectedProfileId, null);
     assert.notEqual(snapshot.environment, guestEnvironment);
     assert.notEqual(snapshot.environment, authenticatedEnvironment);
     assert.equal(snapshot.environment.getStore().getSource().get('old-viewer'), undefined);
@@ -212,6 +238,8 @@ describe('RelayActorProvider session cleanup', () => {
 
     assert.ok(snapshot);
     const authenticatedEnvironment = snapshot.environment;
+    const authenticatedAuthLifecycleKey = snapshot.authLifecycleKey;
+    const authenticatedActorLifecycleKey = snapshot.actorLifecycleKey;
     const retainedStoredToken = storedToken;
     deleteFailure = true;
     let cleanupError: unknown;
@@ -230,15 +258,20 @@ describe('RelayActorProvider session cleanup', () => {
     assert.equal(storedToken, retainedStoredToken);
     assert.equal(snapshot.nativeToken, 'retained-session-token');
     assert.equal(snapshot.environment, authenticatedEnvironment);
+    assert.equal(snapshot.authLifecycleKey, authenticatedAuthLifecycleKey);
+    assert.equal(snapshot.actorLifecycleKey, authenticatedActorLifecycleKey);
   });
 
-  it('같은 SecureStore token을 다시 설정해도 auth lifecycle을 새 Store로 교체한다', async () => {
+  it('새 auth가 같은 token을 받아도 profile 선택을 지우고 auth Store를 교체한다', async () => {
     await renderProvider();
     await act(async () => snapshot?.setNativeSession('same-session-token'));
+    await act(async () => snapshot?.resetActor('profile-a'));
 
     assert.ok(snapshot);
+    assert.equal(snapshot.selectedProfileId, 'profile-a');
     const previousEnvironment = snapshot.environment;
     const previousActorLifecycleKey = snapshot.actorLifecycleKey;
+    const previousAuthLifecycleKey = snapshot.authLifecycleKey;
     const previousMountCount = actorSubtreeMountCount;
 
     await act(async () => snapshot?.setNativeSession('same-session-token'));
@@ -247,7 +280,60 @@ describe('RelayActorProvider session cleanup', () => {
     assert.notEqual(snapshot.environment, previousEnvironment);
     assert.notEqual(snapshot.environment.getStore(), previousEnvironment.getStore());
     assert.notEqual(snapshot.actorLifecycleKey, previousActorLifecycleKey);
+    assert.notEqual(snapshot.authLifecycleKey, previousAuthLifecycleKey);
+    assert.equal(snapshot.selectedProfileId, null);
     assert.equal(actorSubtreeMountCount, previousMountCount + 1);
     assert.equal(stableSubtreeMountCount, 1);
+  });
+
+  it('SecureStore write failure retains the current credential, keys, and Store', async () => {
+    await renderProvider();
+    await act(async () => snapshot?.setNativeSession('current-session-token'));
+    await act(async () => snapshot?.resetActor('profile-a'));
+
+    assert.ok(snapshot);
+    const previousEnvironment = snapshot.environment;
+    const previousActorLifecycleKey = snapshot.actorLifecycleKey;
+    const previousAuthLifecycleKey = snapshot.authLifecycleKey;
+    const previousStoredToken = storedToken;
+    writeFailure = true;
+    let writeError: unknown;
+
+    await act(async () => {
+      try {
+        await snapshot?.setNativeSession('uncommitted-session-token');
+      } catch (error) {
+        writeError = error;
+      }
+    });
+
+    assert.match(String(writeError), /SecureStore write failure/);
+    assert.equal(storedToken, previousStoredToken);
+    assert.equal(snapshot?.nativeToken, 'current-session-token');
+    assert.equal(snapshot?.selectedProfileId, 'profile-a');
+    assert.equal(snapshot?.environment, previousEnvironment);
+    assert.equal(snapshot?.actorLifecycleKey, previousActorLifecycleKey);
+    assert.equal(snapshot?.authLifecycleKey, previousAuthLifecycleKey);
+  });
+
+  it('Web resetSession changes auth and actor lifecycles and clears the selected profile', async () => {
+    platform.OS = 'web';
+    await renderProvider();
+    await act(async () => snapshot?.resetActor('profile-a'));
+
+    assert.ok(snapshot);
+    const previousEnvironment = snapshot.environment;
+    const previousActorLifecycleKey = snapshot.actorLifecycleKey;
+    const previousAuthLifecycleKey = snapshot.authLifecycleKey;
+
+    await act(async () => snapshot?.resetSession());
+
+    assert.ok(snapshot);
+    assert.equal(snapshot.nativeToken, null);
+    assert.equal(snapshot.selectedProfileId, null);
+    assert.notEqual(snapshot.environment, previousEnvironment);
+    assert.notEqual(snapshot.environment.getStore(), previousEnvironment.getStore());
+    assert.notEqual(snapshot.actorLifecycleKey, previousActorLifecycleKey);
+    assert.notEqual(snapshot.authLifecycleKey, previousAuthLifecycleKey);
   });
 });

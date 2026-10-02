@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { afterEach, before, beforeEach, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
-import type { ComponentType, PropsWithChildren } from 'react';
+import type { ComponentType, PropsWithChildren, ReactElement, ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -11,12 +11,23 @@ const platform = { OS: 'web' };
 let actorProfileId: string | null = null;
 let persistedProfileId: string | null = null;
 let serverSelectedProfileId: string | null = 'profile-server';
+let authLifecycleKey = 'auth-1';
+let actorLifecycleKey = 'actor-1';
+let serverAccountId: string | null = 'account-1';
+let serverAccountName: string | null = 'Account';
+let serverSessionId: string | null = 'session-1';
 const resetActorCalls: Array<string | null | undefined> = [];
 const writes: Array<{ accountId: string; profileId: string; sessionId: string }> = [];
+let latestSessionErrorReporter: ReactElement<{
+  actorLifecycleKey: string;
+  authLifecycleKey: string;
+  onError: (authKey: string, actorKey: string) => void;
+}> | null = null;
 let renderer: ReactTestRenderer | null = null;
 let SessionProvider: ComponentType<PropsWithChildren>;
 let useSession: () => {
   accountId: string | null;
+  accountName: string | null;
   selectedProfileId: string | null;
   sessionId: string | null;
   status: string;
@@ -31,11 +42,13 @@ mockModule('react-native', { Platform: platform });
 mockModule('react-relay', {
   graphql: () => 'SessionProviderQuery',
   useLazyLoadQuery: () => ({
-    currentSession: {
-      id: 'session-1',
-      selectedProfile: serverSelectedProfileId ? { id: serverSelectedProfileId } : null,
-    },
-    me: { id: 'account-1', name: 'Account' },
+    currentSession: serverSessionId
+      ? {
+          id: serverSessionId,
+          selectedProfile: serverSelectedProfileId ? { id: serverSelectedProfileId } : null,
+        }
+      : null,
+    me: serverAccountId ? { id: serverAccountId, name: serverAccountName } : null,
   }),
 });
 mockModule('@/auth/selectedProfileStorage', {
@@ -49,7 +62,10 @@ mockModule('@/auth/selectedProfileStorage', {
   },
 });
 mockModule('@/components/RelayFailOpenBoundary', {
-  RelayFailOpenBoundary: ({ children }: PropsWithChildren) => children,
+  RelayFailOpenBoundary: ({ children, fallback }: PropsWithChildren<{ fallback: ReactNode }>) => {
+    latestSessionErrorReporter = fallback as typeof latestSessionErrorReporter;
+    return children;
+  },
 });
 mockModule('@/components/Splash', { Splash: () => null });
 mockModule('@/relay/RelayActorProvider', {
@@ -62,7 +78,8 @@ mockModule('@/relay/RelayActorProvider', {
     },
     selectedProfileId: actorProfileId,
   }),
-  useRelayActorLifecycleKey: () => 'actor-lifecycle',
+  useRelayActorLifecycleKey: () => actorLifecycleKey,
+  useRelayAuthLifecycleKey: () => authLifecycleKey,
 });
 
 before(async () => {
@@ -73,6 +90,12 @@ beforeEach(() => {
   actorProfileId = null;
   persistedProfileId = null;
   serverSelectedProfileId = 'profile-server';
+  authLifecycleKey = 'auth-1';
+  actorLifecycleKey = 'actor-1';
+  serverAccountId = 'account-1';
+  serverAccountName = 'Account';
+  serverSessionId = 'session-1';
+  latestSessionErrorReporter = null;
   resetActorCalls.length = 0;
   writes.length = 0;
 });
@@ -113,6 +136,54 @@ describe('SessionProvider selected profile bootstrap', () => {
       { accountId: 'account-1', profileId: 'profile-server', sessionId: 'session-1' },
     ]);
   });
+
+  it('ignores stale actor and auth error reports but retains current-auth identity', async () => {
+    await renderProvider();
+    assert.ok(latestSessionErrorReporter);
+    const firstReporter = latestSessionErrorReporter;
+
+    actorLifecycleKey = 'actor-2';
+    await updateProvider();
+    assert.ok(latestSessionErrorReporter);
+    const secondReporter = latestSessionErrorReporter;
+    await act(async () => firstReporter.props.onError('auth-1', 'actor-1'));
+
+    assert.deepEqual(readSession(), {
+      accountId: 'account-1',
+      accountName: 'Account',
+      selectedProfileId: 'profile-server',
+      sessionId: 'session-1',
+      status: 'valid',
+    });
+
+    authLifecycleKey = 'auth-2';
+    actorLifecycleKey = 'actor-3';
+    serverAccountId = 'account-2';
+    serverAccountName = 'Second account';
+    serverSessionId = 'session-2';
+    serverSelectedProfileId = 'profile-second';
+    await updateProvider();
+    assert.ok(latestSessionErrorReporter);
+    const currentReporter = latestSessionErrorReporter;
+    await act(async () => secondReporter.props.onError('auth-1', 'actor-2'));
+
+    assert.deepEqual(readSession(), {
+      accountId: 'account-2',
+      accountName: 'Second account',
+      selectedProfileId: 'profile-second',
+      sessionId: 'session-2',
+      status: 'valid',
+    });
+
+    await act(async () => currentReporter.props.onError('auth-2', 'actor-3'));
+    assert.deepEqual(readSession(), {
+      accountId: 'account-2',
+      accountName: 'Second account',
+      selectedProfileId: null,
+      sessionId: 'session-2',
+      status: 'valid',
+    });
+  });
 });
 
 async function renderProvider() {
@@ -120,6 +191,20 @@ async function renderProvider() {
     renderer = create(createElement(SessionProvider, null, createElement(SessionProbe)));
   });
   assert.ok(renderer);
+}
+
+async function updateProvider() {
+  assert.ok(renderer);
+  await act(async () => {
+    renderer?.update(createElement(SessionProvider, null, createElement(SessionProbe)));
+  });
+}
+
+function readSession() {
+  assert.ok(renderer);
+  const sessionProbe = renderer.root.findAll((node) => String(node.type) === 'Session')[0];
+  assert.ok(sessionProbe);
+  return sessionProbe.props;
 }
 
 function SessionProbe() {

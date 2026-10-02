@@ -17,7 +17,11 @@ import {
 } from '@/auth/selectedProfileStorage';
 import { RelayFailOpenBoundary } from '@/components/RelayFailOpenBoundary';
 import { Splash } from '@/components/Splash';
-import { useRelayActor, useRelayActorLifecycleKey } from '@/relay/RelayActorProvider';
+import {
+  useRelayActor,
+  useRelayActorLifecycleKey,
+  useRelayAuthLifecycleKey,
+} from '@/relay/RelayActorProvider';
 import type { PropsWithChildren } from 'react';
 import type { SessionProviderQuery as SessionProviderQueryType } from './__generated__/SessionProviderQuery.graphql';
 
@@ -30,6 +34,7 @@ type SessionValue = {
 };
 
 type SessionState = {
+  authLifecycleKey: string;
   actorLifecycleKey: string;
   ready: boolean;
   value: SessionValue;
@@ -61,37 +66,69 @@ const SessionProviderQuery = graphql`
 `;
 
 export function SessionProvider({ children }: PropsWithChildren) {
+  const authLifecycleKey = useRelayAuthLifecycleKey();
   const actorLifecycleKey = useRelayActorLifecycleKey();
-  const actorLifecycleKeyRef = useRef(actorLifecycleKey);
-  actorLifecycleKeyRef.current = actorLifecycleKey;
+  const lifecycleKeysRef = useRef({ authLifecycleKey, actorLifecycleKey });
+  lifecycleKeysRef.current = { authLifecycleKey, actorLifecycleKey };
   const [sessionState, setSessionState] = useState<SessionState>(() => ({
+    authLifecycleKey,
     actorLifecycleKey,
     ready: false,
     value: guestSession,
   }));
-  const setSession = useCallback((lifecycleKey: string, value: SessionValue) => {
-    if (lifecycleKey !== actorLifecycleKeyRef.current) {
+  const setSession = useCallback((authKey: string, actorKey: string, value: SessionValue) => {
+    const currentKeys = lifecycleKeysRef.current;
+    if (authKey !== currentKeys.authLifecycleKey || actorKey !== currentKeys.actorLifecycleKey) {
       return;
     }
 
-    setSessionState({ actorLifecycleKey: lifecycleKey, ready: true, value });
+    setSessionState({
+      authLifecycleKey: authKey,
+      actorLifecycleKey: actorKey,
+      ready: true,
+      value,
+    });
   }, []);
-  const setSessionError = useCallback(
-    (lifecycleKey: string) => setSession(lifecycleKey, errorSession),
-    [setSession],
-  );
+  const setSessionError = useCallback((authKey: string, actorKey: string) => {
+    const currentKeys = lifecycleKeysRef.current;
+    if (authKey !== currentKeys.authLifecycleKey || actorKey !== currentKeys.actorLifecycleKey) {
+      return;
+    }
+
+    setSessionState((previous) => ({
+      authLifecycleKey: authKey,
+      actorLifecycleKey: actorKey,
+      ready: true,
+      value:
+        previous.authLifecycleKey === authKey && previous.ready
+          ? { ...previous.value, selectedProfileId: null }
+          : errorSession,
+    }));
+  }, []);
   const visibleSession =
-    sessionState.actorLifecycleKey === actorLifecycleKey ? sessionState.value : errorSession;
+    sessionState.authLifecycleKey !== authLifecycleKey
+      ? errorSession
+      : sessionState.actorLifecycleKey === actorLifecycleKey
+        ? sessionState.value
+        : { ...sessionState.value, selectedProfileId: null };
 
   return (
     <SessionContext.Provider value={visibleSession}>
       <RelayFailOpenBoundary
         fallback={
-          <SessionErrorReporter lifecycleKey={actorLifecycleKey} onError={setSessionError} />
+          <SessionErrorReporter
+            authLifecycleKey={authLifecycleKey}
+            actorLifecycleKey={actorLifecycleKey}
+            onError={setSessionError}
+          />
         }
       >
         <Suspense fallback={<Splash label="세션을 확인하는 중입니다." />}>
-          <SessionQuery actorLifecycleKey={actorLifecycleKey} onSessionChange={setSession} />
+          <SessionQuery
+            authLifecycleKey={authLifecycleKey}
+            actorLifecycleKey={actorLifecycleKey}
+            onSessionChange={setSession}
+          />
         </Suspense>
       </RelayFailOpenBoundary>
       {sessionState.ready ? children : null}
@@ -100,11 +137,17 @@ export function SessionProvider({ children }: PropsWithChildren) {
 }
 
 function SessionQuery({
+  authLifecycleKey,
   actorLifecycleKey,
   onSessionChange,
 }: {
+  authLifecycleKey: string;
   actorLifecycleKey: string;
-  onSessionChange: (lifecycleKey: string, value: SessionValue) => void;
+  onSessionChange: (
+    authLifecycleKey: string,
+    actorLifecycleKey: string,
+    value: SessionValue,
+  ) => void;
 }) {
   const {
     clearNativeSession,
@@ -133,13 +176,13 @@ function SessionQuery({
 
   useEffect(() => {
     if (Platform.OS !== 'web' && nativeToken && !sessionId) {
-      void clearNativeSession();
+      void clearNativeSession().catch(() => undefined);
     }
-  }, [clearNativeSession, nativeToken, sessionId]);
+  }, [authLifecycleKey, clearNativeSession, nativeToken, sessionId]);
 
   useEffect(
-    () => onSessionChange(actorLifecycleKey, session),
-    [actorLifecycleKey, onSessionChange, session],
+    () => onSessionChange(authLifecycleKey, actorLifecycleKey, session),
+    [actorLifecycleKey, authLifecycleKey, onSessionChange, session],
   );
 
   useEffect(() => {
@@ -171,7 +214,15 @@ function SessionQuery({
     return () => {
       active = false;
     };
-  }, [accountId, actorSelectedProfileId, resetActor, serverSelectedProfileId, sessionId]);
+  }, [
+    accountId,
+    actorLifecycleKey,
+    actorSelectedProfileId,
+    authLifecycleKey,
+    resetActor,
+    serverSelectedProfileId,
+    sessionId,
+  ]);
 
   useEffect(() => {
     if (actorSelectedProfileId === null) {
@@ -194,19 +245,32 @@ function SessionQuery({
       void deleteSelectedProfile();
     }
     resetActor(serverSelectedProfileId);
-  }, [accountId, actorSelectedProfileId, resetActor, serverSelectedProfileId, sessionId]);
+  }, [
+    accountId,
+    actorLifecycleKey,
+    actorSelectedProfileId,
+    authLifecycleKey,
+    resetActor,
+    serverSelectedProfileId,
+    sessionId,
+  ]);
 
   return null;
 }
 
 function SessionErrorReporter({
-  lifecycleKey,
+  authLifecycleKey,
+  actorLifecycleKey,
   onError,
 }: {
-  lifecycleKey: string;
-  onError: (lifecycleKey: string) => void;
+  authLifecycleKey: string;
+  actorLifecycleKey: string;
+  onError: (authLifecycleKey: string, actorLifecycleKey: string) => void;
 }) {
-  useEffect(() => onError(lifecycleKey), [lifecycleKey, onError]);
+  useEffect(
+    () => onError(authLifecycleKey, actorLifecycleKey),
+    [actorLifecycleKey, authLifecycleKey, onError],
+  );
   return null;
 }
 
