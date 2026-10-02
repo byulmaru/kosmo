@@ -112,6 +112,17 @@ type CreateBookmarkPayload {
   bookmark: Bookmark!
 }
 
+input CreateHashtagMuteRuleInput {
+  decision: HashtagMuteDecision!
+  expiresAt: DateTime
+  hashtagId: ID!
+  scopes: [HashtagMuteScope!]!
+}
+
+type CreateHashtagMuteRulePayload {
+  hashtagMuteRule: HashtagMuteRule!
+}
+
 input CreatePostInput {
   actorProfileId: ID
   bodyText: String!
@@ -156,6 +167,14 @@ type DeleteBookmarkPayload {
   bookmarkId: ID
   post: Post
   requestedBookmarkId: ID!
+}
+
+input DeleteHashtagMuteRuleInput {
+  id: ID!
+}
+
+type DeleteHashtagMuteRulePayload {
+  hashtagMuteRuleId: ID!
 }
 
 input DeletePostInput {
@@ -224,6 +243,34 @@ type Hashtag implements Node {
   id: ID!
   name: String!
   relatedProfiles(after: String, first: Int): ProfileConnection!
+  viewerMuteRule: HashtagMuteRule
+}
+
+enum HashtagMuteDecision {
+  COLLAPSE
+  EXCLUDE
+}
+
+type HashtagMuteRule implements Node {
+  appliesTo(scope: HashtagMuteScope!): Boolean!
+  createdAt: DateTime!
+  decision: HashtagMuteDecision!
+  expiresAt: DateTime
+  id: ID!
+  isActive: Boolean!
+  ownerProfile: Profile!
+  scopes: [HashtagMuteScope!]!
+  targetHashtag: Hashtag!
+  updatedAt: DateTime!
+}
+
+enum HashtagMuteScope {
+  HASHTAG
+  HOME
+  LOCAL
+  NOTIFICATION
+  PROFILE
+  SEARCH
 }
 
 enum InstanceKind {
@@ -271,10 +318,12 @@ type Mutation {
   cancelProfileFollowRequest(input: CancelProfileFollowRequestInput!): CancelProfileFollowRequestPayload!
   completeMediaUpload(input: CompleteMediaUploadInput!): CompleteMediaUploadPayload!
   createBookmark(input: CreateBookmarkInput!): CreateBookmarkPayload!
+  createHashtagMuteRule(input: CreateHashtagMuteRuleInput!): CreateHashtagMuteRulePayload!
   createPost(input: CreatePostInput!): CreatePostPayload!
   createProfile(input: CreateProfileInput!): CreateProfilePayload!
   deleteAccount: DeleteAccountPayload!
   deleteBookmark(input: DeleteBookmarkInput!): DeleteBookmarkPayload!
+  deleteHashtagMuteRule(input: DeleteHashtagMuteRuleInput!): DeleteHashtagMuteRulePayload!
   deletePost(input: DeletePostInput!): DeletePostPayload!
   deleteProfile(input: DeleteProfileInput!): DeleteProfilePayload!
   deleteReaction(input: DeleteReactionInput!): DeleteReactionPayload!
@@ -297,6 +346,7 @@ type Mutation {
   unpinProfilePost(input: UnpinProfilePostInput!): UnpinProfilePostPayload!
   unregisterProfileMigrationSource: UnregisterProfileMigrationSourcePayload!
   unregisterPushInstallation(input: UnregisterPushInstallationInput!): UnregisterPushInstallationPayload!
+  updateHashtagMuteRule(input: UpdateHashtagMuteRuleInput!): UpdateHashtagMuteRulePayload!
   updateProfile(input: UpdateProfileInput!): UpdateProfilePayload!
   updatePushInstallation(input: UpdatePushInstallationInput!): UpdatePushInstallationPayload!
 }
@@ -411,6 +461,7 @@ type Profile implements Node {
   following(after: String, before: String, first: Int, last: Int): ProfileFollowingConnection!
   followingCount: Int!
   handle: String!
+  hashtagMuteRules(after: String, before: String, first: Int, last: Int): ProfileHashtagMuteRulesConnection!
   header: Media
   id: ID!
   incomingProfileFollowRequests(after: String, before: String, first: Int, last: Int): ProfileIncomingProfileFollowRequestsConnection
@@ -494,6 +545,16 @@ type ProfileFollowingConnection {
 type ProfileFollowingConnectionEdge {
   cursor: String!
   node: ProfileFollow!
+}
+
+type ProfileHashtagMuteRulesConnection {
+  edges: [ProfileHashtagMuteRulesConnectionEdge!]!
+  pageInfo: PageInfo!
+}
+
+type ProfileHashtagMuteRulesConnectionEdge {
+  cursor: String!
+  node: HashtagMuteRule!
 }
 
 type ProfileIncomingProfileFollowRequestsConnection {
@@ -729,6 +790,17 @@ input UnregisterPushInstallationInput {
 
 type UnregisterPushInstallationPayload {
   completed: Boolean!
+}
+
+input UpdateHashtagMuteRuleInput {
+  decision: HashtagMuteDecision
+  expiresAt: DateTime
+  id: ID!
+  scopes: [HashtagMuteScope!]
+}
+
+type UpdateHashtagMuteRulePayload {
+  hashtagMuteRule: HashtagMuteRule!
 }
 
 input UpdateProfileInput {
