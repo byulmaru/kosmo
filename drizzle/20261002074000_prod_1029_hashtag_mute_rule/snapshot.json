@@ -1,10 +1,10 @@
 {
   "dialect": "postgres",
-  "id": "726b1503-e3e1-4235-8726-399b1dcc9fa2",
+  "id": "4c94979e-4a87-49aa-9ded-b987c1896734",
   "prevIds": [
     "43c13e3a-c33b-4d8f-b835-72ad72e96312",
-    "8ec1a29d-6cf3-4d7a-8d55-955646539895",
-    "6bf317a9-eec6-4bd9-854f-487b64171b50"
+    "6bf317a9-eec6-4bd9-854f-487b64171b50",
+    "36f83a4e-5b4d-4c8c-9128-4226761e22c0"
   ],
   "version": "8",
   "ddl": [
@@ -111,13 +111,13 @@
       "schema": "public"
     },
     {
-      "values": ["ACTIVE", "CLOSED"],
+      "values": ["ACTIVE", "CLOSING", "CLOSED"],
       "name": "profile_block_activity_state",
       "entityType": "enums",
       "schema": "public"
     },
     {
-      "values": ["NONE", "SETTLED"],
+      "values": ["NONE", "PENDING", "SETTLED"],
       "name": "profile_block_delivery_state",
       "entityType": "enums",
       "schema": "public"
@@ -3934,7 +3934,7 @@
       "table": "post"
     },
     {
-      "nameExplicit": true,
+      "nameExplicit": false,
       "columns": [
         {
           "value": "owner_profile_id",
@@ -3949,14 +3949,21 @@
           "asc": true,
           "nullsFirst": false,
           "opclass": null
+        },
+        {
+          "value": "state",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
         }
       ],
-      "isUnique": true,
-      "where": "\"state\" = 'ACTIVE'",
+      "isUnique": false,
+      "where": null,
       "with": "",
       "method": "btree",
       "concurrently": false,
-      "name": "profile_block_activity_active_pair_unique",
+      "name": "profile_block_activity_owner_profile_id_target_profile_id_state_index",
       "entityType": "indexes",
       "schema": "public",
       "table": "profile_block_activity"
