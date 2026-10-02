@@ -87,6 +87,8 @@ export default defineConfig({
     },
     {
       command: 'pnpm --dir ../worker exec node --import tsx src/temporal-test-server.ts',
+      // Let pnpm forward shutdown to its child process before Playwright force-kills it.
+      gracefulShutdown: { signal: 'SIGTERM', timeout: 5000 },
       env: {
         HOST: host,
         PORT: String(temporalHealthPort),
@@ -99,6 +101,7 @@ export default defineConfig({
     },
     {
       command: 'pnpm --dir ../worker start',
+      gracefulShutdown: { signal: 'SIGTERM', timeout: 5000 },
       env: {
         DATABASE_URL: databaseUrl,
         FEDIFY_QUEUE_DATABASE_URL: databaseUrl,
@@ -116,6 +119,7 @@ export default defineConfig({
     {
       command:
         'pnpm --dir ../api db:bootstrap-local-instance && pnpm --dir ../api exec node --import tsx src/index.ts',
+      gracefulShutdown: { signal: 'SIGTERM', timeout: 5000 },
       env: {
         DATABASE_URL: databaseUrl,
         NODE_ENV: 'production',
@@ -133,6 +137,7 @@ export default defineConfig({
     },
     {
       command: 'pnpm --dir ../app build && node --import tsx src/server/index.ts',
+      gracefulShutdown: { signal: 'SIGTERM', timeout: 5000 },
       env: {
         DATABASE_URL: databaseUrl,
         ENVIRONMENT: 'dev',
