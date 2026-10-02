@@ -2,6 +2,7 @@ import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
 import { after, afterEach, test } from 'node:test';
+import { setTimeout as delay } from 'node:timers/promises';
 import {
   db,
   firstOrThrow,
@@ -224,6 +225,63 @@ test('만료된 부분 변경은 무변경으로 실패하고 미래·영구 변
   assert.equal(recreated.expiresAt, null);
   assert.deepEqual(recreated.scopes, [HashtagMuteScope.SEARCH]);
   assert.equal(await db.$count(HashtagMuteRules, eq(HashtagMuteRules.ownerProfileId, owner.id)), 1);
+});
+
+test('변경이 삭제 transaction을 기다린 뒤 Rule이 사라지면 NOT_FOUND를 반환한다', async () => {
+  const { create, owner } = await fixture();
+  const rule = await createdRule(create);
+  const command: HashtagMuteCommand = {
+    action: 'UPDATE',
+    commandId: crypto.randomUUID(),
+    ownerProfileId: owner.id,
+    ruleId: rule.id,
+    decision: HashtagMuteDecision.COLLAPSE,
+  };
+  const deletion = await pg.reserve();
+  let held = false;
+  let update: ReturnType<typeof executeHashtagMuteRuleActivity> | undefined;
+  try {
+    await deletion`BEGIN`;
+    held = true;
+    const [{ pid }] = await deletion<{ pid: number }[]>`SELECT pg_backend_pid()::int AS pid`;
+    await deletion`DELETE FROM hashtag_mute_rule WHERE id = ${rule.id}`;
+    update = executeHashtagMuteRuleActivity(command);
+    let blocked = false;
+    for (let attempt = 0; attempt < 250; attempt += 1) {
+      const [activity] = await pg<{ blocked: boolean }[]>`
+        SELECT EXISTS (
+          SELECT 1 FROM pg_stat_activity
+          WHERE ${pid} = ANY(pg_blocking_pids(pid))
+        ) AS blocked
+      `;
+      if (activity.blocked) {
+        blocked = true;
+        break;
+      }
+      await delay(20);
+    }
+    assert.ok(blocked, 'Rule update must reach the pending deletion before it commits');
+    await deletion`COMMIT`;
+    held = false;
+    const result = await update;
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.equal(result.error.code, 'NOT_FOUND');
+    }
+    assert.equal(await db.$count(HashtagMuteRules, eq(HashtagMuteRules.id, rule.id)), 0);
+    assert.equal(
+      await db.$count(HashtagMuteRuleCommands, eq(HashtagMuteRuleCommands.id, command.commandId)),
+      0,
+    );
+  } finally {
+    if (held) {
+      await deletion`ROLLBACK`;
+    }
+    if (update) {
+      await Promise.allSettled([update]);
+    }
+    deletion.release();
+  }
 });
 
 test('다른 Owner와 잘못된 최종 상태는 rule과 command를 남기지 않는다', async () => {
