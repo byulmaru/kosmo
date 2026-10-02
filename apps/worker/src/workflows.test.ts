@@ -243,7 +243,8 @@ test(
     });
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-post-create-effects-test-${process.pid}`;
-    const postId = '00000000-0000-8000-8000-000000000301';
+    const localPostId = '00000000-0000-8000-8000-000000000301';
+    const remotePostId = '00000000-0000-8000-8000-000000000304';
     const mentionNotificationId = '00000000-0000-8000-8000-000000000303';
     const calls: string[] = [];
     let mentionAttempts = 0;
@@ -265,7 +266,7 @@ test(
           if (failMention) {
             throw ApplicationFailure.nonRetryable('Mention notification failed');
           }
-          return [mentionNotificationId];
+          return id === localPostId ? [] : [mentionNotificationId];
         },
         listPushNotificationInstallationsActivity: async (id: string) => {
           calls.push(`push-list:${id}`);
@@ -281,6 +282,7 @@ test(
 
     await worker.runUntil(async () => {
       for (const origin of ['LOCAL', 'ACTIVITYPUB'] as const) {
+        const postId = origin === 'LOCAL' ? localPostId : remotePostId;
         calls.length = 0;
         mentionAttempts = 0;
         retryFirstMention = origin === 'ACTIVITYPUB';
@@ -299,6 +301,7 @@ test(
           calls.toSorted(),
           (origin === 'LOCAL'
             ? [
+                `mention:${postId}`,
                 `${NotificationKind.QUOTE}:${postId}`,
                 `${NotificationKind.REPLY}:${postId}`,
                 `send:${postId}`,
@@ -312,9 +315,7 @@ test(
               ]
           ).toSorted(),
         );
-        if (origin === 'ACTIVITYPUB') {
-          assert.equal(mentionAttempts, 2);
-        }
+        assert.equal(mentionAttempts, origin === 'LOCAL' ? 1 : 2);
         await Worker.runReplayHistory(
           { workflowsPath },
           await handle.fetchHistory(),

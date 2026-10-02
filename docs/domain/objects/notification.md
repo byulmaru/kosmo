@@ -98,9 +98,9 @@ Recipient Profile은 Related Post의 direct Repost Source Author Profile이다. 
 
 ### Reply/Mention 수신자별 분류와 중복 처리
 
-2026-09-08 사용자 승인으로 확정한 정책이다. PROD-911은 ActivityPub에서 수신한 typed Mention을
-Local Profile에 알리는 경로를 구현한다. Local 작성으로 만든 Mention Notification 생성은 이 구현 범위에
-포함되지 않는다.
+2026-09-08 사용자 승인으로 확정한 정책이다. 현재 typed Mention 관계를 공급하는 입력 경로는 ActivityPub
+수신이며, Local 작성의 Mention 입력·해석은 미구현이다. 알림 생성은 저장된 유효 Mention 관계에 대해 출처
+종류를 제한하지 않는다.
 
 - 분류 기준은 해당 Post가 답글인지 여부만이 아니라 각 Recipient와 원인 Post의 관계다.
 - Mention의 source와 Related Post는 Recipient를 멘션한 원인 Post이며, Related Profile은 그 Post의

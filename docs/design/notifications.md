@@ -21,7 +21,8 @@ Reply 계약은 로컬 코드·Storybook에 반영했으며 Tailnet은 이전 �
 API kind, 알림 생성 또는 runtime 통합이 완료된 것은 아니었다. 2026-10-02 PROD-911은
 `MentionNotification`을 선택 Profile의 알림 목록에 연결하고, Reply와 공유하는 게시글 구성·읽음 처리·원인
 게시글 이동을 제공한다. Storybook 검증은 React Native Web 근거이며 실제 Web/iOS/Android 경로나 기기 동작을
-증명하지 않는다.
+증명하지 않는다. 현재 typed Mention 관계를 공급하는 입력 경로는 ActivityPub 수신이며, Local 작성의 Mention
+입력·해석은 미구현이다. 알림 생성은 저장된 유효 Mention 관계에 대해 출처 종류를 제한하지 않는다.
 
 2026-09-14 PROD-951 사용자 결정으로 Reply는 별도의 알림 이유 문장을 제거하고 24px Avatar와 inline
 작성자 행을 사용하며, Web의 Notification·PostListItem inset을 왼쪽 12px·오른쪽 24px로 정렬했다.

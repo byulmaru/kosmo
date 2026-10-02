@@ -35,7 +35,7 @@ export async function postCreateEffectsWorkflow({
             : createQuoteNotificationActivity(postId),
         ]
       : []),
-    ...(origin === 'ACTIVITYPUB' && mentionNotificationEnabled
+    ...(mentionNotificationEnabled
       ? [
           createMentionNotificationActivity(postId).then((notificationIds) =>
             pushNotificationDispatchEnabled
