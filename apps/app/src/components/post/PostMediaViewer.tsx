@@ -224,6 +224,7 @@ export function PostMediaViewer({
         />
         <View
           accessibilityViewIsModal
+          onAccessibilityEscape={requestClose}
           ref={dialogRef}
           style={[styles.dialog, Platform.OS === 'web' ? null : safeAreaStyle]}
           testID="post-media-viewer-dialog"

@@ -481,6 +481,7 @@ describe('UniversalShell screen fallback focus target', () => {
     await act(async () => renderer?.unmount());
     renderer = null;
     layout = 'mobile';
+    platform.OS = 'android';
     rightRailProps = undefined;
     await renderShell();
 

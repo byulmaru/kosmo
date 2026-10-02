@@ -795,6 +795,15 @@ describe('PostMediaViewer', () => {
     await act(async () => rendered('Modal')[0]!.props.onRequestClose());
     assert.equal(closed, 1);
   });
+
+  it('iOS VoiceOver Escape는 Viewer를 즉시 닫는다', async () => {
+    platform.OS = 'ios';
+    let closed = 0;
+    await render({ onClose: () => closed++ });
+
+    await act(async () => byTestId('post-media-viewer-dialog').props.onAccessibilityEscape());
+    assert.equal(closed, 1);
+  });
 });
 
 function defaultProps(): ViewerProps {

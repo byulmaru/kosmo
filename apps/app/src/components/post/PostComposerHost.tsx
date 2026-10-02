@@ -131,6 +131,7 @@ export function PostComposerHost({
         accessibilityLabel={overlayVisible ? '글쓰기' : undefined}
         accessibilityViewIsModal={overlayVisible}
         aria-modal={overlayVisible || undefined}
+        onAccessibilityEscape={requestNativeBack}
         ref={dialogRef}
         role={overlayVisible ? 'dialog' : undefined}
         style={[

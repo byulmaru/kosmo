@@ -194,6 +194,11 @@ function ReplyComposerSurfaceContents({
     },
     [discardConfirmOpen, submitting],
   );
+  const continueEditing = useCallback(() => {
+    closeAfterDiscardRef.current = undefined;
+    setDiscardConfirmOpen(false);
+    requestAnimationFrame(() => editorRef.current?.focus());
+  }, []);
   const requestNavigation = useCallback(
     (action: () => void) => {
       if (submitting) {
@@ -225,22 +230,19 @@ function ReplyComposerSurfaceContents({
     if (submitting) {
       return;
     }
+    if (discardConfirmOpen) {
+      continueEditing();
+      return;
+    }
     if (nativeBackHandlerRef.current) {
       nativeBackHandlerRef.current();
       return;
     }
     requestClose();
-  }, [requestClose, submitting]);
+  }, [continueEditing, discardConfirmOpen, requestClose, submitting]);
   const registerNativeBackHandler = useCallback((handler: (() => void) | null) => {
     nativeBackHandlerRef.current = handler;
   }, []);
-
-  const continueEditing = useCallback(() => {
-    closeAfterDiscardRef.current = undefined;
-    setDiscardConfirmOpen(false);
-    requestAnimationFrame(() => editorRef.current?.focus());
-  }, []);
-
   const handleOverlayRequestClose = useCallback(
     (reason: OverlayCloseReason) => {
       if (reason === 'escape' && discardConfirmOpen) {
@@ -294,6 +296,7 @@ function ReplyComposerSurfaceContents({
       <View
         accessibilityLabel={`${composerName} 작성을 취소할까요?`}
         accessibilityViewIsModal
+        onAccessibilityEscape={continueEditing}
         ref={discardConfirmRef}
         role="alertdialog"
         style={[
@@ -356,6 +359,7 @@ function ReplyComposerSurfaceContents({
           <Pressable
             accessible={false}
             accessibilityViewIsModal
+            onAccessibilityEscape={requestNativeBack}
             onPress={(event) => event.stopPropagation()}
             ref={dialogRef}
             style={[

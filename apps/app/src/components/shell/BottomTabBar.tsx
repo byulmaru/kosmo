@@ -58,7 +58,10 @@ export function BottomTabBar({ onComposeOpen, onHomeReselect, profile: profileKe
   }: BottomTabBarRenderControlProps): ReactElement => {
     if (destination === 'compose' && onComposeOpen) {
       return cloneElement(
-        children as ReactElement<{ accessibilityRole?: 'button'; onPress?: () => void }>,
+        children as ReactElement<{
+          accessibilityRole?: 'button';
+          onPress?: () => void;
+        }>,
         {
           accessibilityRole: 'button',
           onPress: onComposeOpen,

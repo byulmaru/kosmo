@@ -330,6 +330,37 @@ describe('PostComposerHost', () => {
     assert.equal(closeCount, 0);
   });
 
+  it('iOS VoiceOver Escape는 nested editor를 먼저 닫고 제출 중에는 부모를 유지한다', async () => {
+    platform.OS = 'ios';
+    let closeCount = 0;
+    let editorBackCount = 0;
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposerHost, {
+          mode: 'mobile',
+          onRequestClose: () => closeCount++,
+          open: true,
+          profile: {} as never,
+        }),
+      );
+    });
+    await act(async () => composerProps?.registerNativeBackHandler?.(() => editorBackCount++));
+    const dialog = renderer?.root.findByProps({ testID: 'post-composer-dialog' });
+    assert.ok(dialog);
+    await act(async () => dialog.props.onAccessibilityEscape());
+    assert.equal(editorBackCount, 1);
+    assert.equal(closeCount, 0);
+
+    await act(async () => composerProps?.registerNativeBackHandler?.(null));
+    await act(async () => composerProps?.onSubmittingChange?.(true));
+    await act(async () => dialog.props.onAccessibilityEscape());
+    assert.equal(closeCount, 0);
+
+    await act(async () => composerProps?.onSubmittingChange?.(false));
+    await act(async () => dialog.props.onAccessibilityEscape());
+    assert.equal(closeCount, 1);
+  });
+
   it('Web pending은 Escape·backdrop·닫기 버튼을 공용 dismiss guard에서 차단한다', async () => {
     platform.OS = 'web';
     let closeCount = 0;
