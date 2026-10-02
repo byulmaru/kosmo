@@ -195,6 +195,10 @@ function useVisibilityMenu(
         const option = visibilityOptions[next];
         if (option) {
           onVisibilityChangeRef.current(option.value);
+          if (!isPostComposerQuotePolicyVisible(option.value)) {
+            setVisibilityOpen(false);
+            triggerRef.current?.focus();
+          }
         }
       }
     };
