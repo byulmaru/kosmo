@@ -336,11 +336,20 @@ export const InteractionContract: Story = {
       canvas.queryByRole('button', { name: '첨부 이미지 2 민감한 이미지 설정 편집' }),
     ).not.toBeInTheDocument();
 
-    await userEvent.click(canvas.getByText('먼 우주의 사용자', { exact: true }));
-    expect(trigger).toHaveAttribute('aria-expanded', 'false');
-    await userEvent.click(canvas.getByText('@remote', { exact: true }));
-    expect(trigger).toHaveAttribute('aria-expanded', 'false');
-    await userEvent.click(canvas.getByLabelText('먼 우주의 사용자 프로필 이미지'));
+    const profileCopyTargets = [
+      canvas.getByText('먼 우주의 사용자', { exact: true }),
+      canvas.getByText('@remote', { exact: true }),
+      canvas.getByLabelText('먼 우주의 사용자 프로필 이미지'),
+    ];
+    for (const target of profileCopyTargets) {
+      await userEvent.click(target);
+      await waitFor(() => expect(trigger).toHaveAttribute('aria-expanded', 'true'));
+      expect(await canvas.findByLabelText('프로필 전환')).toBeVisible();
+      await userEvent.click(body);
+      await waitFor(() => expect(trigger).toHaveAttribute('aria-expanded', 'false'));
+    }
+
+    await userEvent.click(trigger);
     expect(trigger).toHaveAttribute('aria-expanded', 'true');
     const picker = await canvas.findByLabelText('프로필 전환');
     const kosmo = within(picker).getByRole('button', { name: '코스모 작가, @kosmo' });

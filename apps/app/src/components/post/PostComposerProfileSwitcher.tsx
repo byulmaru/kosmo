@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
+import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { ProfilePicker } from '@/components/profile/ProfilePicker';
 import { Avatar } from '@/components/ui/Avatar';
 import { useTheme } from '@/theme/ThemeProvider';
-import { fontFamilies, spacing, typography } from '@/theme/tokens';
+import { fontFamilies, spacing, textStyles, typography } from '@/theme/tokens';
 import type { ProfilePickerProfile } from '@/components/profile/ProfilePicker';
 import type { PostComposer_profile$key } from './__generated__/PostComposer_profile.graphql';
 import type { PostComposerProfileSwitcher_profiles$key } from './__generated__/PostComposerProfileSwitcher_profiles.graphql';
@@ -19,6 +20,7 @@ const PostComposerProfileSwitcherFragment = graphql`
     id
     relativeHandle
     displayName
+    ...ProfileNameBlock_profile
     avatar {
       url
     }
@@ -183,49 +185,55 @@ export function PostComposerProfileSwitcher({
 
   return (
     <View ref={rootRef} style={styles.root}>
-      <View style={styles.trigger}>
-        <Pressable
-          accessibilityLabel="작성 프로필"
-          accessibilityRole="button"
-          accessibilityState={{ busy: pending, disabled: disabled || pending, expanded: open }}
-          aria-busy={pending}
-          aria-disabled={disabled || undefined}
-          aria-expanded={open}
-          disabled={disabled || (pending && open)}
-          hitSlop={4}
-          onPress={() => {
-            if (disabled || pendingRef.current) {
-              return;
-            }
-            setError(null);
-            setOpen((value) => !value);
-          }}
-          ref={triggerRef}
-          style={({ pressed }) => [
-            styles.avatarTrigger,
-            {
-              backgroundColor: pressed ? theme.surface : 'transparent',
-              opacity: disabled || pending ? 0.5 : 1,
-            },
-          ]}
-        >
-          <Avatar
-            imageUri={selectedProfile?.avatar?.url}
-            label={selectedProfile?.displayName ?? '프로필'}
-            size={40}
-          />
-        </Pressable>
-        <View style={styles.triggerCopy}>
-          <Text numberOfLines={1} style={[styles.triggerName, { color: theme.text }]}>
-            {selectedProfile?.displayName ?? '프로필 선택'}
-          </Text>
-          {selectedProfile ? (
-            <Text numberOfLines={1} style={[styles.triggerHandle, { color: theme.textSecondary }]}>
-              {selectedProfile.relativeHandle}
-            </Text>
-          ) : null}
-        </View>
-      </View>
+      <Pressable
+        accessibilityLabel="작성 프로필"
+        accessibilityRole="button"
+        accessibilityState={{ busy: pending, disabled: disabled || pending, expanded: open }}
+        aria-busy={pending}
+        aria-disabled={disabled || undefined}
+        aria-expanded={open}
+        disabled={disabled || (pending && open)}
+        hitSlop={4}
+        onPress={() => {
+          if (disabled || pendingRef.current) {
+            return;
+          }
+          setError(null);
+          setOpen((value) => !value);
+        }}
+        ref={triggerRef}
+        style={styles.trigger}
+      >
+        {({ pressed }) => (
+          <>
+            <View
+              style={[
+                styles.avatarTrigger,
+                {
+                  backgroundColor: pressed ? theme.surface : 'transparent',
+                  opacity: disabled || pending ? 0.5 : 1,
+                },
+              ]}
+            >
+              <Avatar
+                imageUri={selectedProfile?.avatar?.url}
+                label={selectedProfile?.displayName ?? '프로필'}
+                size={40}
+              />
+            </View>
+            {selectedProfile ? (
+              <ProfileNameBlock profile={selectedProfile} />
+            ) : (
+              <Text
+                numberOfLines={1}
+                style={[textStyles.uiLabelL, { color: theme.foregroundPrimary }]}
+              >
+                프로필 선택
+              </Text>
+            )}
+          </>
+        )}
+      </Pressable>
       {open ? (
         <View testID="post-composer-profile-picker" style={styles.pickerLayer}>
           <ProfilePicker
@@ -258,9 +266,6 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
   },
   avatarTrigger: { borderRadius: 999 },
-  triggerCopy: { flex: 1, minWidth: 0 },
-  triggerName: { fontFamily: fontFamilies.ui, fontWeight: '700', ...typography.md },
-  triggerHandle: { fontFamily: fontFamilies.ui, ...typography.sm },
   pickerLayer: { left: 0, position: 'absolute', top: 48, zIndex: 30 },
   error: { fontFamily: fontFamilies.ui, padding: spacing.sm, ...typography.xsm },
 });
