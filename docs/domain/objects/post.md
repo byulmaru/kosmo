@@ -382,6 +382,9 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
   automatic/manual 여부, 정책 부재 또는 해석 실패와 관계없이 원문 서버에 `QuoteRequest`를 보낸다.
   본문만 먼저 전달한 뒤 검증된 `Accept`와 유효한 승인 객체를 받으면
   `quote`·`quoteAuthorization`을 반영한 `Update`를 전달한다.
+- 원문 작성자의 승인이 필요한 Quote에서 승인 증거가 없거나 유효하지 않거나 검증되지 않으면 승인 대기 상태로
+  두고 Source를 노출하지 않는다. 이를 원문 작성자의 거절로 해석하지 않으며, fetch 실패도 승인이 아니다.
+  재시도 세부는 PROD-924의 lifecycle 및 PROD-792·PROD-793의 수신·fetch 구현 계약에서 정한다.
 - `interactionPolicy`는 작성 전 UI·eligibility 힌트로 사용할 수 있다. 요청자가
   `automaticApproval`과 `manualApproval` 어느 쪽에도 명백히 포함되지 않으면 승인되지 않을 것으로
   예상된다는 정보를 제공할 수 있지만, 정책 자체를 승인 증거로 사용하지 않는다.

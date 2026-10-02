@@ -2,7 +2,16 @@ import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, test } from 'node:test';
-import { PostState, PostVisibility, ProfileFollowPolicy, ProfileState } from '@kosmo/core/enums';
+import {
+  AccountProfileRole,
+  AccountState,
+  PostQuoteConsentStatus,
+  PostState,
+  PostVisibility,
+  ProfileFollowPolicy,
+  ProfileState,
+  SessionState,
+} from '@kosmo/core/enums';
 import { encodeGlobalId as globalId } from '@kosmo/core/global-id';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { normalizeHandle } from '@kosmo/core/utils';
@@ -64,7 +73,7 @@ describe('GraphQL Post Repost Source', () => {
   });
 
   beforeEach(async () => {
-    await db.update(Posts).set({ currentContentId: null });
+    await db.update(Posts).set({ currentContentId: null, repostSourceId: null });
     await db.delete(PostContents);
     await db.delete(Posts);
     await db.delete(ProfileFollows);
@@ -79,7 +88,7 @@ describe('GraphQL Post Repost Source', () => {
     await pg.end();
   });
 
-  test('nodes는 Post fragment와 global ID로 direct Source 계약을 반환한다', async () => {
+  test('nodes는 NULL consent status의 기존 Quote Source와 Content를 유지한다', async () => {
     const profile = await insertProfile();
     const normal = await insertPost({ bodyText: 'normal', profileId: profile.id });
     const reply = await insertPost({
@@ -93,6 +102,7 @@ describe('GraphQL Post Repost Source', () => {
     const quote = await insertPost({
       bodyText: 'quote',
       profileId: quoteProfile.id,
+      quoteConsentStatus: null,
       repostSourceId: source.id,
     });
     const replyQuoteProfile = await insertProfile();
@@ -117,7 +127,7 @@ describe('GraphQL Post Repost Source', () => {
     const result = await requestGraphQL<{
       nodes: Array<{
         __typename: 'Post';
-        content: { id: string } | null;
+        content: { bodyText: string; id: string } | null;
         id: string;
         repostSource: { id: string } | null;
       } | null>;
@@ -127,7 +137,7 @@ describe('GraphQL Post Repost Source', () => {
           __typename
           ... on Post {
             id
-            content { id }
+            content { id bodyText }
             repostSource { id }
           }
         }
@@ -143,13 +153,13 @@ describe('GraphQL Post Repost Source', () => {
     assert.deepEqual(result.data?.nodes, [
       {
         __typename: 'Post',
-        content: { id: globalId('PostContent', normal.currentContentId!) },
+        content: { bodyText: 'normal', id: globalId('PostContent', normal.currentContentId!) },
         id: globalId('Post', normal.id),
         repostSource: null,
       },
       {
         __typename: 'Post',
-        content: { id: globalId('PostContent', reply.currentContentId!) },
+        content: { bodyText: 'reply', id: globalId('PostContent', reply.currentContentId!) },
         id: globalId('Post', reply.id),
         repostSource: null,
       },
@@ -161,23 +171,176 @@ describe('GraphQL Post Repost Source', () => {
       },
       {
         __typename: 'Post',
-        content: { id: globalId('PostContent', quote.currentContentId!) },
+        content: { bodyText: 'quote', id: globalId('PostContent', quote.currentContentId!) },
         id: globalId('Post', quote.id),
         repostSource: { id: globalId('Post', source.id) },
       },
       {
         __typename: 'Post',
-        content: { id: globalId('PostContent', replyQuote.currentContentId!) },
+        content: {
+          bodyText: 'reply quote',
+          id: globalId('PostContent', replyQuote.currentContentId!),
+        },
         id: globalId('Post', replyQuote.id),
         repostSource: { id: globalId('Post', source.id) },
       },
       {
         __typename: 'Post',
-        content: { id: globalId('PostContent', nestedQuote.currentContentId!) },
+        content: {
+          bodyText: 'nested quote',
+          id: globalId('PostContent', nestedQuote.currentContentId!),
+        },
         id: globalId('Post', nestedQuote.id),
         repostSource: { id: globalId('Post', intermediate.id) },
       },
     ]);
+  });
+
+  test('인용 승인이 명시적으로 보류·거절·철회되면 Quote 본문만 남기고 Source를 숨긴다', async () => {
+    const sourceAuthor = await insertProfile();
+    const source = await insertPost({ bodyText: 'source', profileId: sourceAuthor.id });
+    const quoteAuthor = await insertProfile();
+    const approved = await insertPost({
+      bodyText: 'approved quote',
+      profileId: quoteAuthor.id,
+      quoteConsentStatus: PostQuoteConsentStatus.APPROVED,
+      repostSourceId: source.id,
+    });
+    const pending = await insertPost({
+      bodyText: 'pending quote',
+      profileId: quoteAuthor.id,
+      quoteConsentStatus: PostQuoteConsentStatus.PENDING,
+      repostSourceId: source.id,
+    });
+    const rejected = await insertPost({
+      bodyText: 'rejected quote',
+      profileId: quoteAuthor.id,
+      quoteConsentStatus: PostQuoteConsentStatus.REJECTED,
+      repostSourceId: source.id,
+    });
+    const revoked = await insertPost({
+      bodyText: 'revoked quote',
+      profileId: quoteAuthor.id,
+      quoteConsentStatus: PostQuoteConsentStatus.REVOKED,
+      repostSourceId: source.id,
+    });
+    const result = await requestGraphQL<{
+      nodes: Array<{
+        content: { bodyText: string } | null;
+        id: string;
+        repostSource: { id: string } | null;
+      } | null>;
+    }>(
+      `query QuoteConsentSourceProjection($ids: [ID!]!) {
+        nodes(ids: $ids) {
+          ... on Post {
+            id
+            content { bodyText }
+            repostSource { id }
+          }
+        }
+      }`,
+      { ids: [approved, pending, rejected, revoked].map(({ id }) => globalId('Post', id)) },
+    );
+
+    assert.equal(result.errors, undefined, JSON.stringify(result.errors));
+    assert.deepEqual(result.data?.nodes, [
+      {
+        content: { bodyText: 'approved quote' },
+        id: globalId('Post', approved.id),
+        repostSource: { id: globalId('Post', source.id) },
+      },
+      {
+        content: { bodyText: 'pending quote' },
+        id: globalId('Post', pending.id),
+        repostSource: null,
+      },
+      {
+        content: { bodyText: 'rejected quote' },
+        id: globalId('Post', rejected.id),
+        repostSource: null,
+      },
+      {
+        content: { bodyText: 'revoked quote' },
+        id: globalId('Post', revoked.id),
+        repostSource: null,
+      },
+    ]);
+  });
+
+  test('승인된 Quote도 기존 Source viewer authorization을 따른다', async () => {
+    const sourceAuthor = await insertProfile();
+    const source = await insertPost({
+      bodyText: 'private source',
+      profileId: sourceAuthor.id,
+      visibility: PostVisibility.DIRECT,
+    });
+    const quoteAuthor = await insertProfile();
+    const quote = await insertPost({
+      bodyText: 'quote body',
+      profileId: quoteAuthor.id,
+      quoteConsentStatus: PostQuoteConsentStatus.APPROVED,
+      repostSourceId: source.id,
+    });
+    const account = await db
+      .insert(Accounts)
+      .values({
+        displayName: 'source-author',
+        oidcSubject: `source-author-${crypto.randomUUID()}`,
+        state: AccountState.ACTIVE,
+      })
+      .returning()
+      .then(firstOrThrow);
+    await db.insert(AccountProfiles).values({
+      accountId: account.id,
+      profileId: sourceAuthor.id,
+      role: AccountProfileRole.OWNER,
+    });
+    const token = `source-author-${crypto.randomUUID()}`;
+    await db.insert(Sessions).values({
+      accountId: account.id,
+      activeProfileId: sourceAuthor.id,
+      state: SessionState.ACTIVE,
+      token,
+    });
+
+    const query = `query ApprovedQuoteSourceVisibility($id: ID!) {
+      node(id: $id) {
+        ... on Post {
+          id
+          content { bodyText }
+          repostSource { id }
+        }
+      }
+    }`;
+    const variables = { id: globalId('Post', quote.id) };
+    const anonymous = await requestGraphQL<{
+      node: {
+        content: { bodyText: string } | null;
+        id: string;
+        repostSource: { id: string } | null;
+      } | null;
+    }>(query, variables);
+    const sourceAuthorView = await requestGraphQL<{
+      node: {
+        content: { bodyText: string } | null;
+        id: string;
+        repostSource: { id: string } | null;
+      } | null;
+    }>(query, variables, token);
+
+    assert.equal(anonymous.errors, undefined, JSON.stringify(anonymous.errors));
+    assert.deepEqual(anonymous.data?.node, {
+      content: { bodyText: 'quote body' },
+      id: globalId('Post', quote.id),
+      repostSource: null,
+    });
+    assert.equal(sourceAuthorView.errors, undefined, JSON.stringify(sourceAuthorView.errors));
+    assert.deepEqual(sourceAuthorView.data?.node, {
+      content: { bodyText: 'quote body' },
+      id: globalId('Post', quote.id),
+      repostSource: { id: globalId('Post', source.id) },
+    });
   });
 
   test('nodes는 unavailable direct Source의 Repost만 숨기고 Quote와 Reply+Quote Content는 유지한다', async () => {
@@ -313,6 +476,7 @@ const insertPost = async ({
   bodyText,
   profileId,
   replyParentId = null,
+  quoteConsentStatus = null,
   repostSourceId = null,
   state = PostState.ACTIVE,
   visibility = PostVisibility.PUBLIC,
@@ -320,6 +484,7 @@ const insertPost = async ({
   bodyText?: string;
   profileId: string;
   replyParentId?: string | null;
+  quoteConsentStatus?: PostQuoteConsentStatus | null;
   repostSourceId?: string | null;
   state?: PostState;
   visibility?: PostVisibility;
@@ -329,6 +494,7 @@ const insertPost = async ({
     .values({
       currentContentId: null,
       profileId,
+      quoteConsentStatus,
       replyParentId,
       repostSourceId,
       state,
@@ -355,10 +521,18 @@ const insertPost = async ({
     .then(firstOrThrow);
 };
 
-const requestGraphQL = async <TData>(query: string, variables: Record<string, unknown>) => {
+const requestGraphQL = async <TData>(
+  query: string,
+  variables: Record<string, unknown>,
+  token?: string,
+) => {
+  const headers = new Headers({ 'content-type': 'application/json' });
+  if (token) {
+    headers.set('authorization', `Bearer ${token}`);
+  }
   const response = await app.request('/graphql', {
     body: JSON.stringify({ query, variables }),
-    headers: { 'content-type': 'application/json' },
+    headers,
     method: 'POST',
   });
   assert.equal(response.status, 200);

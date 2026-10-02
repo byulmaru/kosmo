@@ -120,6 +120,14 @@ export const PostState = {
 } as const;
 export type PostState = keyof typeof PostState;
 
+export const PostQuoteConsentStatus = {
+  PENDING: 'PENDING',
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED',
+  REVOKED: 'REVOKED',
+} as const;
+export type PostQuoteConsentStatus = keyof typeof PostQuoteConsentStatus;
+
 export const PostVisibility = {
   PUBLIC: 'PUBLIC',
   UNLISTED: 'UNLISTED',

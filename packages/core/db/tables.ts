@@ -354,6 +354,8 @@ export const Posts = pgTable(
       onDelete: 'set null',
     }),
     repostSourceId: uuid('repost_source_id').references((): AnyPgColumn => Posts.id),
+    quoteConsentStatus: Enum.postQuoteConsentStatus('quote_consent_status'),
+    quoteConsentApprovalUri: text('quote_consent_approval_uri'),
     createdAt: createdAt(),
     deletedAt: datetime('deleted_at'),
   },
