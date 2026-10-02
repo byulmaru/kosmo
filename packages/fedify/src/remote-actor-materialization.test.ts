@@ -1155,9 +1155,8 @@ describe('remote actor materialization', () => {
     ]);
   });
 
-  test('atomically replaces, rejects stale, rolls back, and clears remote Featured pins', async () => {
+  test('atomically replaces remote Featured pins and rolls back a failed replacement', async () => {
     const stored = await createStoredRemoteActor();
-    const featuredUri = 'https://remote.example/users/alice/featured';
     const posts = await db
       .insert(Posts)
       .values([
@@ -1179,10 +1178,11 @@ describe('remote actor materialization', () => {
       ])
       .returning();
 
-    await db
-      .update(ActivityPubActors)
-      .set({ featuredRevision: 1, featuredUri })
-      .where(eq(ActivityPubActors.id, stored.actor.id));
+    await db.insert(ProfilePinnedPosts).values({
+      position: 0,
+      postId: posts[2]!.id,
+      profileId: stored.profile.id,
+    });
 
     const readPins = () =>
       db
@@ -1191,16 +1191,10 @@ describe('remote actor materialization', () => {
         .where(eq(ProfilePinnedPosts.profileId, stored.profile.id))
         .orderBy(ProfilePinnedPosts.position, ProfilePinnedPosts.id);
 
-    assert.equal(
-      await replaceRemoteFeaturedSnapshot({
-        actorUri: stored.actor.uri,
-        featuredUri,
-        postIds: [posts[0]!.id, posts[1]!.id],
-        profileId: stored.profile.id,
-        revision: 1,
-      }),
-      true,
-    );
+    await replaceRemoteFeaturedSnapshot({
+      postIds: [posts[0]!.id, posts[1]!.id],
+      profileId: stored.profile.id,
+    });
     assert.deepEqual(
       (await readPins()).map(({ position, postId }) => [position, postId]),
       [
@@ -1211,11 +1205,8 @@ describe('remote actor materialization', () => {
 
     await assert.rejects(
       replaceRemoteFeaturedSnapshot({
-        actorUri: stored.actor.uri,
-        featuredUri,
         postIds: [posts[2]!.id, posts[2]!.id],
         profileId: stored.profile.id,
-        revision: 1,
       }),
     );
     assert.deepEqual(
@@ -1225,44 +1216,6 @@ describe('remote actor materialization', () => {
         [1, posts[1]!.id],
       ],
     );
-
-    await db
-      .update(ActivityPubActors)
-      .set({ featuredRevision: 2 })
-      .where(eq(ActivityPubActors.id, stored.actor.id));
-    assert.equal(
-      await replaceRemoteFeaturedSnapshot({
-        actorUri: stored.actor.uri,
-        featuredUri,
-        postIds: [posts[2]!.id],
-        profileId: stored.profile.id,
-        revision: 1,
-      }),
-      false,
-    );
-    assert.deepEqual(
-      (await readPins()).map(({ position, postId }) => [position, postId]),
-      [
-        [0, posts[0]!.id],
-        [1, posts[1]!.id],
-      ],
-    );
-
-    await db
-      .update(ActivityPubActors)
-      .set({ featuredRevision: 3, featuredUri: null })
-      .where(eq(ActivityPubActors.id, stored.actor.id));
-    assert.equal(
-      await replaceRemoteFeaturedSnapshot({
-        actorUri: stored.actor.uri,
-        featuredUri: null,
-        postIds: [],
-        profileId: stored.profile.id,
-        revision: 3,
-      }),
-      true,
-    );
-    assert.deepEqual(await readPins(), []);
   });
 
   test('syncs a Followers Only Featured Note without a local Follow and keeps pins on invalid attribution', async (t) => {
@@ -1272,8 +1225,6 @@ describe('remote actor materialization', () => {
     await db
       .update(ActivityPubActors)
       .set({
-        featuredRevision: 1,
-        featuredUri,
         followersUri: `${remoteActorUri.href}/followers`,
       })
       .where(eq(ActivityPubActors.id, stored.actor.id));
@@ -1310,7 +1261,6 @@ describe('remote actor materialization', () => {
       documentLoader,
       featuredUri,
       profileId: stored.profile.id,
-      revision: 1,
     };
 
     await syncRemoteFeaturedSnapshot(input);
@@ -1425,8 +1375,6 @@ describe('remote actor materialization', () => {
     assert.deepEqual(
       columns.map((column) => [column.column_name, column.is_nullable]),
       [
-        ['featured_revision', 'NO'],
-        ['featured_uri', 'YES'],
         ['followers_uri', 'YES'],
         ['following_uri', 'YES'],
         ['inbox_uri', 'YES'],

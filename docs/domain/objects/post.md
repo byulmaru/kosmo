@@ -362,8 +362,7 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
   Note 수신·저장은 Kosmo의 현재 Local Follow를 요구하지 않으며, 저장된 Post의 viewer 조회는 기존 Post Visibility와 Post
   Eligibility를 따른다. next page 순환을 검출하고 구현이 정한 page·item·byte·시간 예산을 적용한다. 전체 ordered list를
   가져와 검증한 성공 결과만 원자적으로 교체한다. 실패한 retrieval은 새 목록을 쓰지 않으며 빈 collection의 근거가 아니다.
-  검증된 최신 Profile 표현에 `featured` URI가 없으면 목록을 비우고, 오래된 Actor 결과가 현재 결과를 덮거나 제거된 목록을
-  복원하지 않는다.
+  검증된 Remote Profile 표현에 `featured` URI가 없으면 목록을 비운다.
 
 ### Quote federation 정책
 
