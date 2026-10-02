@@ -1,1 +1,1 @@
-export { captureHandledError, captureHandledMessage } from './sentry-native';
+export { captureFeedback, captureHandledError, captureHandledMessage } from './sentry-native';

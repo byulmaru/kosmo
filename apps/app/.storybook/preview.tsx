@@ -17,6 +17,7 @@ import type { PropsWithChildren } from 'react';
 sb.mock(import('../src/analytics/client.web.ts'), { spy: true });
 sb.mock(import('../src/auth/webLogin.ts'), { spy: true });
 sb.mock(import('../src/buildVersion.ts'), { spy: true });
+sb.mock(import('../src/observability/sentry.web.ts'), { spy: true });
 
 const preview: Preview = {
   decorators: [

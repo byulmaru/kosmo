@@ -14,6 +14,8 @@ type CaptureCall = {
 };
 const initCalls: InitOptions[] = [];
 const captureCalls: CaptureCall[] = [];
+const feedbackCalls: Array<{ params: unknown; hint: unknown }> = [];
+let clientInitialized = false;
 let captureExceptionThrows = false;
 let captureMessageThrows = false;
 
@@ -33,8 +35,14 @@ mock.module('@sentry/react-native', {
 
       captureCalls.push({ context: undefined, extras: undefined, level, message });
     },
+    captureFeedback: (params: unknown, hint: unknown) => {
+      feedbackCalls.push({ params, hint });
+      return 'feedback-event';
+    },
+    getClient: () => (clientInitialized ? {} : undefined),
     init: (options: InitOptions) => {
       initCalls.push(options);
+      clientInitialized = true;
     },
     withScope: (
       callback: (scope: {
@@ -81,6 +89,8 @@ describe('Native app Sentry configuration', () => {
   beforeEach(() => {
     initCalls.length = 0;
     captureCalls.length = 0;
+    feedbackCalls.length = 0;
+    clientInitialized = false;
     captureExceptionThrows = false;
     captureMessageThrows = false;
   });
@@ -106,6 +116,33 @@ describe('Native app Sentry configuration', () => {
     assert.equal(initCalls[0]?.sendDefaultPii, false);
     assert.equal(initCalls[0]?.enableAutoSessionTracking, false);
     assert.equal((initCalls[0]?.beforeBreadcrumb as () => null)(), null);
+  });
+
+  it('captures feedback only after initialization with the kind tag and attachments', async () => {
+    process.env.EXPO_PUBLIC_SENTRY_RELEASE = 'kosmo@abc123';
+    const { captureFeedback } = await import(`${sentryModule}?feedback`);
+    const attachment = {
+      contentType: 'image/png',
+      data: new Uint8Array([1]),
+      filename: 'feedback-1.png',
+    };
+
+    assert.equal(captureFeedback('피드백 본문', 'BUG_REPORT', [attachment]), 'feedback-event');
+    assert.deepEqual(feedbackCalls, [
+      {
+        params: { message: '피드백 본문', tags: { feedback_kind: 'BUG_REPORT' } },
+        hint: { attachments: [attachment] },
+      },
+    ]);
+  });
+
+  it('fails closed when feedback capture is not initialized', async () => {
+    delete process.env.EXPO_PUBLIC_SENTRY_RELEASE;
+    const { captureFeedback } = await import(`${sentryModule}?feedback-disabled`);
+    assert.throws(
+      () => captureFeedback('피드백 본문', 'POSITIVE'),
+      /Sentry feedback is not initialized/u,
+    );
   });
 
   it('captures React errors with their component context', async () => {

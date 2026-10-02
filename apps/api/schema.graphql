@@ -195,13 +195,6 @@ type ExchangeNativeOidcSessionPayload {
   token: String!
 }
 
-enum FeedbackKind {
-  BUG_REPORT
-  FEATURE_REQUEST
-  NEGATIVE
-  POSITIVE
-}
-
 type FollowNotification implements Node & Notification {
   createdAt: DateTime!
   id: ID!
@@ -298,7 +291,6 @@ type Mutation {
   revokeCurrentSession: RevokeCurrentSessionPayload!
   selectProfile(input: SelectProfileInput!): SelectProfilePayload!
   submitContentReport(input: SubmitContentReportInput!): SubmitContentReportPayload!
-  submitFeedback(input: SubmitFeedbackInput!): SubmitFeedbackPayload!
   unblockProfile(input: UnblockProfileInput!): UnblockProfilePayload!
   unfollowProfile(input: UnfollowProfileInput!): UnfollowProfilePayload!
   unmuteProfile(input: UnmuteProfileInput!): UnmuteProfilePayload!
@@ -685,15 +677,6 @@ input SubmitContentReportInput {
 
 type SubmitContentReportPayload {
   status: ContentReportDeliveryStatus!
-}
-
-input SubmitFeedbackInput {
-  body: String!
-  kind: FeedbackKind!
-}
-
-type SubmitFeedbackPayload {
-  completed: Boolean!
 }
 
 input UnblockProfileInput {

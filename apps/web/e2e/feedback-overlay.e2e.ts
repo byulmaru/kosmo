@@ -1,6 +1,5 @@
 import { createE2ESession, resetE2EDatabase, setE2ESessionCookie } from './db-fixtures';
 import { expect, test } from './fixtures';
-import { isGraphQLOperation } from './graphql';
 
 test.beforeEach(async () => {
   await resetE2EDatabase();
@@ -48,30 +47,9 @@ test('guest public shell에는 feedback action과 query overlay를 노출하지 
   await expect(page.getByRole('dialog', { name: '피드백 보내기' })).toHaveCount(0);
 });
 
-test('submitting explicit close를 차단하고 성공 후 같은 overlay에서 연속 입력한다', async ({
-  context,
-  page,
-}) => {
+test('성공 후 같은 overlay에서 연속 입력한다', async ({ context, page }) => {
   const viewer = await createE2ESession({ profile: false });
   await setE2ESessionCookie(context, viewer.token);
-
-  let releaseSubmit!: () => void;
-  const submitGate = new Promise<void>((resolve) => {
-    releaseSubmit = resolve;
-  });
-  await page.route('**/graphql', async (route) => {
-    if (!isGraphQLOperation(route.request().postData(), 'FeedbackFormSubmitFeedbackMutation')) {
-      await route.continue();
-      return;
-    }
-
-    await submitGate;
-    await route.fulfill({
-      body: JSON.stringify({ data: { submitFeedback: { completed: true } } }),
-      contentType: 'application/json',
-      status: 200,
-    });
-  });
 
   await page.goto('/home');
   await page
@@ -84,13 +62,6 @@ test('submitting explicit close를 차단하고 성공 후 같은 overlay에서 
 
   await body.fill('제출 중에는 닫히면 안 되는 피드백');
   await submit.click();
-  await expect(submit).toHaveAttribute('aria-busy', 'true');
-
-  await page.keyboard.press('Escape');
-  await expect(dialog).toBeVisible();
-  await expect(page.getByRole('alertdialog')).toHaveCount(0);
-
-  releaseSubmit();
   await expect(dialog.getByText('피드백을 전달했습니다. 감사합니다!')).toBeVisible();
   await expect(body).toHaveValue('');
   await expect(page).toHaveURL(/\/home$/u);
@@ -142,12 +113,11 @@ test('keyboard trap, Escape와 clean backdrop을 한 close 경계로 처리한�
   await feedbackButton.click();
   const dialog = page.getByRole('dialog', { name: '피드백 보내기' });
   const close = dialog.getByRole('button', { name: '피드백 닫기' });
-  const body = dialog.getByRole('textbox', { name: '피드백 내용' });
 
   await expect(page.getByTestId('universal-shell-root')).toHaveAttribute('aria-hidden', 'true');
   await expect(close).toBeFocused();
   await page.keyboard.press('Shift+Tab');
-  await expect(body).toBeFocused();
+  await expect(dialog.getByRole('button', { name: '이미지 추가', exact: true })).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(close).toBeFocused();
   await page.keyboard.press('Escape');
@@ -238,7 +208,65 @@ test('390px sheet와 900px·1400px dialog geometry를 실제 Web runtime에서 �
     expect(desktopBox).not.toBeNull();
     expect(desktopBox!.width).toBeCloseTo(600, 0);
     expect(desktopBox!.x + desktopBox!.width / 2).toBeCloseTo(viewport.width / 2, 0);
-    expect(desktopBox!.height).toBeLessThanOrEqual(viewport.height * 0.85 + 1);
+    expect(desktopBox!.y).toBe(48);
+    expect(desktopBox!.height).toBeLessThanOrEqual(viewport.height - 96 + 1);
     await page.getByRole('button', { name: '피드백 닫기' }).click();
   }
+});
+
+test('첨부 draft를 보호하고 Sentry 피드백 성공 후 입력을 초기화한다', async ({ context, page }) => {
+  const viewer = await createE2ESession({ profile: false });
+  await setE2ESessionCookie(context, viewer.token);
+  const sentryPayloads: string[] = [];
+  page.on('request', (request) => {
+    if (request.url().includes('sentry.io')) {
+      sentryPayloads.push(request.postData() ?? '');
+    }
+  });
+  const png = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGNwLLgEAAJ5AYRVsdfUAAAAAElFTkSuQmCC',
+    'base64',
+  );
+  const images = [1, 2, 3].map((index) => ({
+    buffer: png,
+    mimeType: 'image/png',
+    name: `feedback-${index}.png`,
+  }));
+  await page.goto('/home');
+  await page
+    .getByTestId('universal-shell-root')
+    .getByRole('button', { name: '피드백 보내기' })
+    .click();
+  const dialog = page.getByRole('dialog', { name: '피드백 보내기' });
+  const addImages = dialog.getByRole('button', { name: '이미지 추가', exact: true });
+  const chooserPromise = page.waitForEvent('filechooser');
+  await addImages.click();
+  await (await chooserPromise).setFiles(images);
+  const removeImages = dialog.getByRole('button', { name: /^첨부 이미지 \d 제거$/u });
+  await expect(removeImages).toHaveCount(3);
+  await expect(dialog.getByRole('button', { name: '피드백 보내기' })).toBeDisabled();
+  await dialog.getByRole('button', { name: '피드백 닫기' }).click();
+  const confirm = page.getByRole('alertdialog', { name: '작성 중인 피드백을 버릴까요?' });
+  await expect(confirm).toBeVisible();
+  await confirm.getByRole('button', { name: '계속 작성' }).click();
+  await expect(removeImages).toHaveCount(3);
+
+  await removeImages.last().click();
+  await expect(removeImages).toHaveCount(2);
+  const replacementChooser = page.waitForEvent('filechooser');
+  await addImages.click();
+  await (await replacementChooser).setFiles(images[2]);
+  await expect(removeImages).toHaveCount(3);
+  const body = dialog.getByRole('textbox', { name: '피드백 내용' });
+  await body.fill('이미지 첨부 피드백');
+  await dialog.getByRole('button', { name: '피드백 보내기' }).click();
+  await expect(dialog.getByText('피드백을 전달했습니다. 감사합니다!')).toBeVisible();
+  await expect
+    .poll(() => sentryPayloads.some((payload) => payload.includes('이미지 첨부 피드백')))
+    .toBe(true);
+  await expect
+    .poll(() => sentryPayloads.some((payload) => payload.includes('feedback-1.png')))
+    .toBe(true);
+  await expect(body).toHaveValue('');
+  await expect(removeImages).toHaveCount(0);
 });

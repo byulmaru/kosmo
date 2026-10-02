@@ -471,6 +471,13 @@ describe('GraphQL proxy', () => {
     expect(await response.text()).toBe('Authorization header must use Bearer');
     expect(fetch).not.toHaveBeenCalled();
   });
+
+  test('rejects GraphQL multipart instead of forwarding uploaded files', async () => {
+    const response = await app.request('/graphql', { method: 'POST', body: new FormData() });
+    expect(response.status).toBe(415);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(federationFetch).not.toHaveBeenCalled();
+  });
 });
 
 describe('runtime routing', () => {

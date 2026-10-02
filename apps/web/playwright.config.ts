@@ -136,6 +136,7 @@ export default defineConfig({
       env: {
         DATABASE_URL: databaseUrl,
         ENVIRONMENT: 'dev',
+        EXPO_PUBLIC_SENTRY_RELEASE: 'kosmo-e2e',
         EXPO_WEB_ROOT: '../app/dist',
         OIDC_CLIENT_SECRET: oidcClientSecret,
         PORT: String(webPort),

@@ -15,6 +15,7 @@ const app = createYoga<{ c: ServerContext }, UserContext>({
   context: createGraphQLContext,
   graphqlEndpoint: '/graphql',
   batching: false,
+  multipart: false,
   cors: {
     allowedHeaders: ['Authorization', 'Content-Type'],
     methods: ['GET', 'POST'],
@@ -25,6 +26,11 @@ const app = createYoga<{ c: ServerContext }, UserContext>({
 });
 
 yoga.on(['GET', 'POST', 'OPTIONS'], '/', async (c) => {
+  const isMultipart = c.req.header('content-type')?.toLowerCase().startsWith('multipart/form-data');
+  if (isMultipart) {
+    return c.text('GraphQL multipart requests are not supported', 415);
+  }
+
   const response = await app.handle(c.req.raw, { c });
   return c.newResponse(response.body, response);
 });

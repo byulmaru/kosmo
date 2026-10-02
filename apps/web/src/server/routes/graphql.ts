@@ -17,7 +17,6 @@ graphqlRoutes.post('/graphql', async (c) => {
   const accept = c.req.header('accept');
   const explicitAuthorization = c.req.header('authorization');
   const sessionToken = getCookie(c, sessionName);
-
   headers.set('content-type', c.req.header('content-type') ?? 'application/json');
   if (accept) {
     headers.set('accept', accept);

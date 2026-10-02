@@ -1,7 +1,14 @@
 import * as Sentry from '@sentry/react-native';
 import { getPublicConfig } from '@/config/public';
 import { RelayTransportError } from '@/relay/transportError';
+import type { FeedbackKind } from '@kosmo/core/enums';
 import type { ErrorInfo } from 'react';
+
+type FeedbackAttachment = {
+  readonly data: string | Uint8Array;
+  readonly filename: string;
+  readonly contentType?: string;
+};
 
 const channel = getPublicConfig('channel');
 const dsn = getPublicConfig('sentryDsn');
@@ -74,4 +81,23 @@ export const captureHandledMessage = (message: string, context?: HandledErrorCon
   } catch {
     // Sentry reporting is best-effort and must not affect the product flow.
   }
+};
+
+export const captureFeedback = (
+  message: string,
+  kind: FeedbackKind,
+  attachments: readonly FeedbackAttachment[] = [],
+): string => {
+  if (!enabled || !Sentry.getClient()) {
+    throw new Error('Sentry feedback is not initialized.');
+  }
+
+  const eventId = Sentry.captureFeedback(
+    { message, tags: { feedback_kind: kind } },
+    { attachments: [...attachments] },
+  );
+  if (!eventId) {
+    throw new Error('Sentry feedback was not captured.');
+  }
+  return eventId;
 };
