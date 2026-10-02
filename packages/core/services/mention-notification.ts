@@ -1,7 +1,6 @@
 import { and, eq, inArray, isNotNull, ne } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import {
-  ActivityPubPosts,
   getDatabaseConnection,
   Instances,
   Notifications,
@@ -14,6 +13,7 @@ import {
 import { InstanceKind, InstanceState, NotificationKind, ProfileState } from '../enums';
 import { postVisibilityCondition } from '../visibility/post';
 import { materializeNotification } from './notification-policy';
+import { materializeQuoteNotificationIfEligible } from './quote-notification';
 import { materializeReplyNotificationIfEligible } from './quote-notification-coordination';
 import type { Database } from '../db';
 
@@ -22,7 +22,7 @@ const MentionAuthorInstances = alias(Instances, 'mention_notification_author_ins
 const MentionRecipients = alias(Profiles, 'mention_notification_recipient');
 const MentionRecipientInstances = alias(Instances, 'mention_notification_recipient_instance');
 
-/** Materialize one Mention inbox row for each eligible local recipient of an inbound Post. */
+/** Materialize one Mention inbox row for each eligible local recipient of a stored Post. */
 export const createMentionNotification = async (
   postId: string,
   handle?: Database,
@@ -31,7 +31,6 @@ export const createMentionNotification = async (
     const candidates = await tx
       .select({ recipientProfileId: PostMentions.profileId, relatedProfileId: Posts.profileId })
       .from(Posts)
-      .innerJoin(ActivityPubPosts, eq(ActivityPubPosts.postId, Posts.id))
       .innerJoin(
         PostContents,
         and(eq(PostContents.id, Posts.currentContentId), eq(PostContents.postId, Posts.id)),
@@ -54,7 +53,6 @@ export const createMentionNotification = async (
       .where(
         and(
           eq(Posts.id, postId),
-          eq(MentionAuthorInstances.kind, InstanceKind.ACTIVITYPUB),
           eq(MentionRecipients.state, ProfileState.ACTIVE),
           eq(MentionRecipientInstances.kind, InstanceKind.LOCAL),
           eq(MentionRecipientInstances.state, InstanceState.ACTIVE),
@@ -82,6 +80,7 @@ export const createMentionNotification = async (
     // lets a Reply that is actually eligible represent the Post for its parent,
     // while an ineligible or suppressed Reply cannot hide another Mention.
     await materializeReplyNotificationIfEligible(tx, postId);
+    await materializeQuoteNotificationIfEligible(tx, postId);
 
     const notificationIds: string[] = [];
     for (const { recipientProfileId, relatedProfileId } of candidates) {

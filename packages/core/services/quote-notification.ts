@@ -21,7 +21,7 @@ import {
   materializeReplyNotificationIfEligible,
   QuoteNotificationJudgmentOutcome,
 } from './quote-notification-coordination';
-import type { Database } from '../db';
+import type { Database, Transaction } from '../db';
 
 export const QUOTE_NOTIFICATION_ROLLOUT_KEY = 'QUOTE_NOTIFICATION';
 
@@ -66,125 +66,129 @@ const isVisibleToProfile = ({
   );
 };
 
+export const materializeQuoteNotificationIfEligible = async (
+  database: Transaction,
+  quotePostId: string,
+): Promise<string | null> => {
+  const source = await database
+    .select({
+      activatedAt: NotificationRollouts.activatedAt,
+      quoteAuthorId: Posts.profileId,
+      quoteAuthorInstanceKind: QuoteNotificationQuoteAuthorInstances.kind,
+      quoteAuthorInstanceState: QuoteNotificationQuoteAuthorInstances.state,
+      quoteAuthorState: QuoteNotificationQuoteAuthors.state,
+      quoteCreatedAt: Posts.createdAt,
+      quoteCurrentContentId: Posts.currentContentId,
+      quotePostId: Posts.id,
+      quotePostState: Posts.state,
+      quoteVisibility: Posts.visibility,
+      sourceAuthorInstanceKind: QuoteNotificationSourceAuthorInstances.kind,
+      sourceAuthorInstanceState: QuoteNotificationSourceAuthorInstances.state,
+      sourceAuthorState: QuoteNotificationSourceAuthors.state,
+      sourceCurrentContentId: QuoteNotificationSourcePosts.currentContentId,
+      sourcePostState: QuoteNotificationSourcePosts.state,
+      sourceProfileId: QuoteNotificationSourcePosts.profileId,
+      sourceVisibility: QuoteNotificationSourcePosts.visibility,
+    })
+    .from(Posts)
+    .innerJoin(
+      QuoteNotificationSourcePosts,
+      eq(QuoteNotificationSourcePosts.id, Posts.repostSourceId),
+    )
+    .innerJoin(QuoteNotificationQuoteAuthors, eq(QuoteNotificationQuoteAuthors.id, Posts.profileId))
+    .innerJoin(
+      QuoteNotificationQuoteAuthorInstances,
+      eq(QuoteNotificationQuoteAuthorInstances.id, QuoteNotificationQuoteAuthors.instanceId),
+    )
+    .innerJoin(
+      QuoteNotificationSourceAuthors,
+      eq(QuoteNotificationSourceAuthors.id, QuoteNotificationSourcePosts.profileId),
+    )
+    .innerJoin(
+      QuoteNotificationSourceAuthorInstances,
+      eq(QuoteNotificationSourceAuthorInstances.id, QuoteNotificationSourceAuthors.instanceId),
+    )
+    .innerJoin(
+      NotificationRollouts,
+      and(
+        eq(NotificationRollouts.key, QUOTE_NOTIFICATION_ROLLOUT_KEY),
+        eq(NotificationRollouts.enabled, true),
+      ),
+    )
+    .where(eq(Posts.id, quotePostId))
+    .limit(1)
+    .then((rows) => rows[0]);
+
+  if (
+    !source ||
+    source.sourceAuthorInstanceKind !== InstanceKind.LOCAL ||
+    source.quoteAuthorInstanceKind !== InstanceKind.LOCAL
+  ) {
+    // This slice consumes only the synchronous Local-to-Local approval path.
+    // Neither a Remote Quote nor a Remote Source FK proves approval. Leave
+    // its judgment untouched until the actual upstream approval adapter exists.
+    return null;
+  }
+
+  // Local Quote creation commits this relation only after validateQuoteSource
+  // accepts the Local Source; Kosmo does not have a per-Quote manual approval
+  // state for Local Sources.
+
+  const replyNotification = await materializeReplyNotificationIfEligible(database, quotePostId);
+  if (replyNotification?.recipientProfileId === source.sourceProfileId) {
+    return null;
+  }
+
+  const followsQuoteAuthor =
+    (
+      await database
+        .select({ id: ProfileFollows.id })
+        .from(ProfileFollows)
+        .where(
+          and(
+            eq(ProfileFollows.followerProfileId, source.sourceProfileId),
+            eq(ProfileFollows.followeeProfileId, source.quoteAuthorId),
+          ),
+        )
+        .limit(1)
+    ).length > 0;
+
+  const quoteIsVisible = isVisibleToProfile({
+    authorProfileId: source.quoteAuthorId,
+    currentContentId: source.quoteCurrentContentId,
+    followsAuthor: followsQuoteAuthor,
+    postState: source.quotePostState,
+    postVisibility: source.quoteVisibility,
+    viewerProfileId: source.sourceProfileId,
+  });
+  const sourceIsAvailable =
+    source.sourcePostState === PostState.ACTIVE &&
+    source.sourceCurrentContentId !== null &&
+    source.sourceAuthorState === ProfileState.ACTIVE &&
+    source.sourceAuthorInstanceState === InstanceState.ACTIVE &&
+    isPublicPost(source.sourceVisibility);
+  const quoteAuthorIsAvailable =
+    source.quoteAuthorState === ProfileState.ACTIVE &&
+    source.quoteAuthorInstanceState !== InstanceState.SUSPENDED;
+  const isPrelaunch = Temporal.Instant.compare(source.quoteCreatedAt, source.activatedAt) < 0;
+
+  return materializeCoordinatedNotification(database, {
+    eligible: quoteIsVisible && sourceIsAvailable && quoteAuthorIsAvailable,
+    kind: NotificationKind.QUOTE,
+    quotePostId: source.quotePostId,
+    recipientProfileId: source.sourceProfileId,
+    relatedProfileId: source.quoteAuthorId,
+    sourceId: quotePostId,
+    suppressedOutcome: isPrelaunch
+      ? QuoteNotificationJudgmentOutcome.EXCLUDED_PRELAUNCH
+      : undefined,
+  });
+};
+
 export const createQuoteNotification = async (
   quotePostId: string,
   handle?: Database,
 ): Promise<string | null> =>
-  getDatabaseConnection(handle).transaction(async (database) => {
-    const source = await database
-      .select({
-        activatedAt: NotificationRollouts.activatedAt,
-        quoteAuthorId: Posts.profileId,
-        quoteAuthorInstanceKind: QuoteNotificationQuoteAuthorInstances.kind,
-        quoteAuthorInstanceState: QuoteNotificationQuoteAuthorInstances.state,
-        quoteAuthorState: QuoteNotificationQuoteAuthors.state,
-        quoteCreatedAt: Posts.createdAt,
-        quoteCurrentContentId: Posts.currentContentId,
-        quotePostId: Posts.id,
-        quotePostState: Posts.state,
-        quoteVisibility: Posts.visibility,
-        sourceAuthorInstanceKind: QuoteNotificationSourceAuthorInstances.kind,
-        sourceAuthorInstanceState: QuoteNotificationSourceAuthorInstances.state,
-        sourceAuthorState: QuoteNotificationSourceAuthors.state,
-        sourceCurrentContentId: QuoteNotificationSourcePosts.currentContentId,
-        sourcePostState: QuoteNotificationSourcePosts.state,
-        sourceProfileId: QuoteNotificationSourcePosts.profileId,
-        sourceVisibility: QuoteNotificationSourcePosts.visibility,
-      })
-      .from(Posts)
-      .innerJoin(
-        QuoteNotificationSourcePosts,
-        eq(QuoteNotificationSourcePosts.id, Posts.repostSourceId),
-      )
-      .innerJoin(
-        QuoteNotificationQuoteAuthors,
-        eq(QuoteNotificationQuoteAuthors.id, Posts.profileId),
-      )
-      .innerJoin(
-        QuoteNotificationQuoteAuthorInstances,
-        eq(QuoteNotificationQuoteAuthorInstances.id, QuoteNotificationQuoteAuthors.instanceId),
-      )
-      .innerJoin(
-        QuoteNotificationSourceAuthors,
-        eq(QuoteNotificationSourceAuthors.id, QuoteNotificationSourcePosts.profileId),
-      )
-      .innerJoin(
-        QuoteNotificationSourceAuthorInstances,
-        eq(QuoteNotificationSourceAuthorInstances.id, QuoteNotificationSourceAuthors.instanceId),
-      )
-      .innerJoin(
-        NotificationRollouts,
-        and(
-          eq(NotificationRollouts.key, QUOTE_NOTIFICATION_ROLLOUT_KEY),
-          eq(NotificationRollouts.enabled, true),
-        ),
-      )
-      .where(eq(Posts.id, quotePostId))
-      .limit(1)
-      .then((rows) => rows[0]);
-
-    if (
-      !source ||
-      source.sourceAuthorInstanceKind !== InstanceKind.LOCAL ||
-      source.quoteAuthorInstanceKind !== InstanceKind.LOCAL
-    ) {
-      // This slice consumes only the synchronous Local-to-Local approval path.
-      // Neither a Remote Quote nor a Remote Source FK proves approval. Leave
-      // its judgment untouched until the actual upstream approval adapter exists.
-      return null;
-    }
-
-    // Local Quote creation commits this relation only after validateQuoteSource
-    // accepts the Local Source; Kosmo does not have a per-Quote manual approval
-    // state for Local Sources.
-
-    const replyNotification = await materializeReplyNotificationIfEligible(database, quotePostId);
-    if (replyNotification?.recipientProfileId === source.sourceProfileId) {
-      return null;
-    }
-
-    const followsQuoteAuthor =
-      (
-        await database
-          .select({ id: ProfileFollows.id })
-          .from(ProfileFollows)
-          .where(
-            and(
-              eq(ProfileFollows.followerProfileId, source.sourceProfileId),
-              eq(ProfileFollows.followeeProfileId, source.quoteAuthorId),
-            ),
-          )
-          .limit(1)
-      ).length > 0;
-
-    const quoteIsVisible = isVisibleToProfile({
-      authorProfileId: source.quoteAuthorId,
-      currentContentId: source.quoteCurrentContentId,
-      followsAuthor: followsQuoteAuthor,
-      postState: source.quotePostState,
-      postVisibility: source.quoteVisibility,
-      viewerProfileId: source.sourceProfileId,
-    });
-    const sourceIsAvailable =
-      source.sourcePostState === PostState.ACTIVE &&
-      source.sourceCurrentContentId !== null &&
-      source.sourceAuthorState === ProfileState.ACTIVE &&
-      source.sourceAuthorInstanceState === InstanceState.ACTIVE &&
-      isPublicPost(source.sourceVisibility);
-    const quoteAuthorIsAvailable =
-      source.quoteAuthorState === ProfileState.ACTIVE &&
-      source.quoteAuthorInstanceState !== InstanceState.SUSPENDED;
-    const isPrelaunch = Temporal.Instant.compare(source.quoteCreatedAt, source.activatedAt) < 0;
-
-    return materializeCoordinatedNotification(database, {
-      eligible: quoteIsVisible && sourceIsAvailable && quoteAuthorIsAvailable,
-      kind: NotificationKind.QUOTE,
-      quotePostId: source.quotePostId,
-      recipientProfileId: source.sourceProfileId,
-      relatedProfileId: source.quoteAuthorId,
-      sourceId: quotePostId,
-      suppressedOutcome: isPrelaunch
-        ? QuoteNotificationJudgmentOutcome.EXCLUDED_PRELAUNCH
-        : undefined,
-    });
-  });
+  getDatabaseConnection(handle).transaction((database) =>
+    materializeQuoteNotificationIfEligible(database, quotePostId),
+  );

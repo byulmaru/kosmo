@@ -21,7 +21,8 @@ Reply 계약은 로컬 코드·Storybook에 반영했으며 Tailnet은 이전 �
 API kind, 알림 생성 또는 runtime 통합이 완료된 것은 아니었다. 2026-10-02 PROD-911은
 `MentionNotification`을 선택 Profile의 알림 목록에 연결하고, Reply와 공유하는 게시글 구성·읽음 처리·원인
 게시글 이동을 제공한다. Storybook 검증은 React Native Web 근거이며 실제 Web/iOS/Android 경로나 기기 동작을
-증명하지 않는다.
+증명하지 않는다. 현재 typed Mention 관계를 공급하는 입력 경로는 ActivityPub 수신이며, Local 작성의 Mention
+입력·해석은 미구현이다. 알림 생성은 저장된 유효 Mention 관계에 대해 출처 종류를 제한하지 않는다.
 
 2026-09-14 PROD-951 사용자 결정으로 Reply는 별도의 알림 이유 문장을 제거하고 24px Avatar와 inline
 작성자 행을 사용하며, Web의 Notification·PostListItem inset을 왼쪽 12px·오른쪽 24px로 정렬했다.
@@ -120,8 +121,9 @@ composer control은 자체 동작만 수행한다. 모두 읽음, unread indicat
 - 이 결정은 공통 Push flow가 canonical Notification 저장 성공 결과부터 수신 대상 fan-out과 전달 lifecycle을
   소유한다는 경계와, 앱 설정의 권한 상태별 동작, 현재 integration inventory, 기본 표시 구성과 foreground OS
   배너, OS 설정 이동과 token 동기화, cross-profile target 처리, Push 만료와 read state 독립성을 확정한다.
-- PROD-911은 inbound ActivityPub Mention을 같은 공통 Push flow에 연결한다. 앱에서 작성한 게시글의 Mention 알림
-  생성은 이 범위에 포함되지 않으며, 이 연결은 FCM Provider의 수락이나 기기 도착을 입증하지 않는다.
+- 현재 typed Mention 관계를 공급하는 입력 경로는 ActivityPub 수신이며, Local 작성의 Mention 입력·해석은 별도
+  범위다. 저장된 Mention Notification은 같은 공통 Push flow를 사용하며, 이 연결은 FCM Provider의 수락이나
+  기기 도착을 입증하지 않는다.
 
 ## 표시와 합성
 
