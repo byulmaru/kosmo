@@ -248,9 +248,6 @@ test(
       origin: 'ACTIVITYPUB',
     });
     assert.equal(block.ok, true);
-    if (!block.ok) {
-      return;
-    }
 
     const command = {
       ownerProfileId: input.ownerProfileId,
@@ -258,7 +255,6 @@ test(
       origin: 'ACTIVITYPUB' as const,
     };
     const taskQueue = `${KOSMO_TASK_QUEUE}-profile-unblock-retry-${process.pid}`;
-    let failNextUnblock = true;
     let unblockActivityAttempts = 0;
     let outboundUndoAttempts = 0;
     const retryWorker = await Worker.create({
@@ -268,8 +264,7 @@ test(
           value: Parameters<typeof activities.executeProfileUnblockTransitionActivity>[0],
         ) => {
           unblockActivityAttempts += 1;
-          if (failNextUnblock) {
-            failNextUnblock = false;
+          if (unblockActivityAttempts === 1) {
             throw new Error('injected transient Profile Unblock Activity failure');
           }
           return activities.executeProfileUnblockTransitionActivity(value);
