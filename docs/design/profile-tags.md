@@ -31,6 +31,19 @@ Profile 화면이 같은 태그를 Web·Android·iOS에서 일관되게 표시�
 - PROD-529는 표시 전용 TagChip visual과 편집 책임을 유지하면서 공개 Profile의 진입점을 [Hashtag 관련 Profile 목록 탐색](./hashtag-related-profiles.md)으로 이동하는 링크로 활성화한다. PROD-525는 완료된 API·client slice의 종단간 정합성 검증과 shared OpenSpec archive를 소유한다.
 - Profile이 공개 조회 조건을 통과하지 않으면 Profile Tag만 별도로 표시하지 않는다.
 
+## Hashtag Mute의 현재 제공 범위
+
+- [PROD-735](https://linear.app/byulmaru/issue/PROD-735)는 Profile Tag에서 현재 선택한 Profile의 영구 뮤트를
+  설정·해제하는 UI 연결을 소유한다. 해당 태그를 프로필에 단 사람에게서 오는 새 알림만 제어하며,
+  범위·숨기기/접기·기간 선택 control, preset, 날짜·시각 입력은 제공하지 않는다.
+- 기존 TagChip의 관련 Profile 탐색 동작을 유지한다. 뮤트 상태와 해제 action은 같은 canonical Hashtag를
+  대상으로 하며, 태그가 표시된 Profile 자체를 뮤트하는 action과 구분한다.
+- 기존 [Profile Mute UI](./profile-mute-block.md)의 확인·요청 중·오류·완료 피드백을 재사용한다.
+  확인창은 대상 태그와 새 알림을 끄거나 다시 받는 결과를 설명하고, 취소하면 요청하지 않는다.
+  게시물 숨김·검색 제외·기존 알림 삭제·과거 억제 알림 복구를 안내하지 않는다.
+- 서버가 확정한 현재 selected Profile의 상태를 표시한다. 요청 실패에는 기존 상태를 유지하며 재시도할 수
+  있게 하고, Profile 전환 후 이전 요청의 상태·완료 피드백을 새 Profile에 적용하지 않는다.
+
 ## 플랫폼과 접근성
 
 - 공용 화면은 React Native primitive와 기존 theme token을 사용하고 Web·Android·iOS가 같은 정보 구조를
