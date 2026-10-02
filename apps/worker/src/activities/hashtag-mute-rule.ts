@@ -208,19 +208,6 @@ export const executeHashtagMuteRuleActivity = async (
             throw new ConflictError({ message: 'An active Hashtag Mute Rule already exists' });
           }
         } else {
-          const existing = await tx
-            .select()
-            .from(HashtagMuteRules)
-            .where(
-              and(
-                eq(HashtagMuteRules.id, input.ruleId),
-                eq(HashtagMuteRules.ownerProfileId, input.ownerProfileId),
-              ),
-            )
-            .then(first);
-          if (!existing) {
-            throw new NotFoundError('Hashtag Mute Rule not found');
-          }
           const expiresAt =
             input.expiresAt === undefined
               ? undefined
@@ -249,6 +236,19 @@ export const executeHashtagMuteRuleActivity = async (
             .returning()
             .then(first);
           if (!rule) {
+            const existing = await tx
+              .select({ id: HashtagMuteRules.id })
+              .from(HashtagMuteRules)
+              .where(
+                and(
+                  eq(HashtagMuteRules.id, input.ruleId),
+                  eq(HashtagMuteRules.ownerProfileId, input.ownerProfileId),
+                ),
+              )
+              .then(first);
+            if (!existing) {
+              throw new NotFoundError('Hashtag Mute Rule not found');
+            }
             throw new ValidationError('Expiration must be in the future or permanent', {
               field: 'expiresAt',
             });
