@@ -24,6 +24,7 @@
 - 앱 lockfile과 pnpm 배포물의 내장 의존성은 별개다. 이미지의 `/opt/pnpm/dist/node_modules` 탐지는 workspace override로 수정되지 않으므로 원문 report의 `PkgPath`를 확인한다.
 - pnpm 버전을 바꿀 때 `Dockerfile`, `mise.toml`, 루트 `packageManager`를 함께 맞추고 GHCR 태그 존재와 Linux ARM64 배포 아티팩트의 내장 버전도 확인한다. `ghcr.io/pnpm/pnpm:11.27.1`은 `undici@6.28.1`을 포함한다. npm에 공개된 버전이라도 같은 버전의 이미지 태그가 없을 수 있다.
 - `packages/core`의 `jsdom`과 `apps/admin`의 SvelteKit/Svelte는 production 의존성이므로 해당 경로의 undici/devalue를 빌드 도구 전용으로 분류하지 않는다. CI와 같은 platform의 최종 이미지 재빌드·재스캔은 lockfile 검사나 로컬 package 스캔과 별도 검증이다.
+- pnpm 11.27.1은 자식 command에 signal을 전달하고 종료를 기다린다. Playwright가 pnpm으로 실행한 서버에는 `gracefulShutdown: { signal: 'SIGTERM', timeout: 5000 }`을 지정한다. pnpm을 기본 SIGKILL로 먼저 종료하면 자식 서버가 남아 E2E teardown이 정체될 수 있다. 작은 HTTP 서버 재현에서 11.22.0 기본 종료는 통과, 11.27.1 기본 종료는 timeout, 11.27.1 SIGTERM 종료는 통과했다.
 
 ## Disposable test database
 
