@@ -1,10 +1,6 @@
 import { Block, Undo } from '@fedify/vocab';
 import { ActivityPubActors, db, first, Instances, ProfileBlocks, Profiles } from '@kosmo/core/db';
 import { InstanceKind, InstanceState, ProfileState } from '@kosmo/core/enums';
-import {
-  ensureProfileBlockProtocolActivity,
-  loadProfileBlockProtocolActivityByProfileBlockId,
-} from '@kosmo/core/services';
 import { and, eq, isNotNull } from 'drizzle-orm';
 import { localOutboundFederation } from './local-outbound-federation';
 import { dispatchActivityPubActivity } from './outbound-recipient-dispatch';
@@ -158,17 +154,8 @@ const dispatchProfileBlockActivity = async ({
 
 export const sendProfileBlock = async (
   profileBlockId: string,
-  { createIfMissing = false }: { readonly createIfMissing?: boolean } = {},
 ): Promise<ProfileBlockDeliveryResult> => {
-  const existing = await loadProfileBlockProtocolActivityByProfileBlockId(profileBlockId);
-  const source =
-    (await loadOutboundProfileBlockSource(profileBlockId)) ??
-    (existing?.origin === 'OUTBOUND'
-      ? await loadOutboundProfileBlockParticipants({
-          ownerProfileId: existing.ownerProfileId,
-          targetProfileId: existing.targetProfileId,
-        })
-      : undefined);
+  const source = await loadOutboundProfileBlockSource(profileBlockId);
   if (!source) {
     return { reason: 'stale_source', status: 'SKIPPED' };
   }
@@ -185,33 +172,14 @@ export const sendProfileBlock = async (
   const actorUri = context.getActorUri(source.ownerProfileId);
   let objectUri: URL;
   try {
-    objectUri = existing ? new URL(existing.objectUri) : new URL(source.targetActorUri);
+    objectUri = new URL(source.targetActorUri);
   } catch {
     throw new RemoteActorMaterializationError('Profile Block recipient actor URI is invalid.');
   }
-  if (existing?.origin !== undefined && existing.origin !== 'OUTBOUND') {
-    return { reason: 'stale_source', status: 'SKIPPED' };
-  }
-  if (!existing && !createIfMissing) {
-    return { reason: 'stale_source', status: 'SKIPPED' };
-  }
-  const activityUri = existing
-    ? new URL(existing.activityUri)
-    : getProfileBlockActivityUri(context.canonicalOrigin, profileBlockId);
-  const outboundActorUri = existing ? new URL(existing.actorUri) : actorUri;
-
-  await ensureProfileBlockProtocolActivity({
-    activityUri: activityUri.href,
-    actorUri: outboundActorUri.href,
-    objectUri: objectUri.href,
-    origin: 'OUTBOUND',
-    ownerProfileId: source.ownerProfileId,
-    profileBlockId,
-    targetProfileId: source.targetProfileId,
-  });
+  const activityUri = getProfileBlockActivityUri(context.canonicalOrigin, profileBlockId);
 
   const activity = new Block({
-    actor: outboundActorUri,
+    actor: actorUri,
     id: activityUri,
     object: objectUri,
     tos: [objectUri],
@@ -221,7 +189,7 @@ export const sendProfileBlock = async (
     actorProfileId: source.ownerProfileId,
     context,
     objectUri,
-    orderingKey: getProfileBlockOrderingKey(outboundActorUri, objectUri),
+    orderingKey: getProfileBlockOrderingKey(actorUri, objectUri),
     targetProfileId: source.targetProfileId,
   });
   return { status: 'SETTLED' };
@@ -236,24 +204,11 @@ export const sendProfileBlockUndo = async ({
   readonly profileBlockId: string;
   readonly targetProfileId: string;
 }): Promise<ProfileBlockDeliveryResult> => {
-  let protocol = await loadProfileBlockProtocolActivityByProfileBlockId(profileBlockId);
-  if (protocol?.origin !== undefined && protocol.origin !== 'OUTBOUND') {
-    return { reason: 'stale_source', status: 'SKIPPED' };
-  }
-  if (
-    protocol !== undefined &&
-    (protocol.ownerProfileId !== ownerProfileId || protocol.targetProfileId !== targetProfileId)
-  ) {
-    return { reason: 'stale_source', status: 'SKIPPED' };
-  }
-
-  const source =
-    (await loadOutboundProfileBlockSource(profileBlockId)) ??
-    (await loadOutboundProfileBlockParticipants({ ownerProfileId, targetProfileId }, false));
+  const source = await loadOutboundProfileBlockParticipants(
+    { ownerProfileId, targetProfileId },
+    false,
+  );
   if (!source) {
-    return { reason: 'stale_source', status: 'SKIPPED' };
-  }
-  if (source.ownerProfileId !== ownerProfileId || source.targetProfileId !== targetProfileId) {
     return { reason: 'stale_source', status: 'SKIPPED' };
   }
   if (source.targetInstanceKind !== InstanceKind.ACTIVITYPUB) {
@@ -266,27 +221,15 @@ export const sendProfileBlockUndo = async ({
   const context = localOutboundFederation.createContext(new URL(source.canonicalOrigin), {
     localInstanceId: source.localInstanceId,
   });
-  const defaultActorUri = context.getActorUri(ownerProfileId);
-  if (protocol === undefined) {
-    if (!source.targetActorUri) {
-      throw new RemoteActorMaterializationError(
-        'Profile Block Undo recipient actor URI is unavailable.',
-      );
-    }
-    protocol = await ensureProfileBlockProtocolActivity({
-      activityUri: getProfileBlockActivityUri(context.canonicalOrigin, profileBlockId).href,
-      actorUri: defaultActorUri.href,
-      objectUri: source.targetActorUri,
-      origin: 'OUTBOUND',
-      ownerProfileId,
-      profileBlockId,
-      targetProfileId,
-    });
+  if (!source.targetActorUri) {
+    throw new RemoteActorMaterializationError(
+      'Profile Block Undo recipient actor URI is unavailable.',
+    );
   }
-  const actorUri = new URL(protocol.actorUri);
-  const objectUri = new URL(protocol.objectUri);
-  const blockUri = new URL(protocol.activityUri);
-  const undoUri = new URL(`${blockUri.href}/undo`);
+  const actorUri = context.getActorUri(ownerProfileId);
+  const objectUri = new URL(source.targetActorUri);
+  const blockUri = getProfileBlockActivityUri(context.canonicalOrigin, profileBlockId);
+  const undoUri = getProfileBlockUndoActivityUri(context.canonicalOrigin, profileBlockId);
   const activity = new Undo({
     actor: actorUri,
     id: undoUri,

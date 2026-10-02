@@ -20,13 +20,23 @@ const profileIdSchema = z
   .string({ error: 'Profile Unblock requires non-empty profile IDs' })
   .min(1, 'Profile Unblock requires non-empty profile IDs');
 
-const profileUnblockInputSchema = z.strictObject({
+const localProfileUnblockInputSchema = z.strictObject({
   ownerProfileId: profileIdSchema,
   targetProfileId: profileIdSchema,
   profileBlockId: profileIdSchema,
-  origin: z.enum(['LOCAL', 'ACTIVITYPUB']).default('LOCAL'),
-  protocolActivityUri: profileIdSchema.optional(),
+  origin: z.literal('LOCAL').default('LOCAL'),
 });
+
+const activityPubProfileUnblockInputSchema = z.strictObject({
+  ownerProfileId: profileIdSchema,
+  targetProfileId: profileIdSchema,
+  origin: z.literal('ACTIVITYPUB'),
+});
+
+const profileUnblockInputSchema = z.union([
+  localProfileUnblockInputSchema,
+  activityPubProfileUnblockInputSchema,
+]);
 
 const { executeProfileUnblockTransitionActivity, sendProfileBlockUndoActivity } =
   proxyActivities<typeof activities>(workflowActivityOptions);
@@ -43,6 +53,7 @@ const parseProfileUnblockInput = (value: unknown): ProfileUnblockInput => {
 
   throw ApplicationFailure.nonRetryable(
     result.error.issues[0]?.message ?? 'Profile Unblock input is invalid',
+    'VALIDATION',
   );
 };
 
@@ -54,9 +65,9 @@ const profileUnblockTransitionFailure = (
 ): ApplicationFailure => ApplicationFailure.nonRetryable(error.message, error.code);
 
 /**
- * Removes only the exact Profile Block row ID requested by the caller. The
- * committed result is returned by the Update handler before this Workflow
- * drains the outbound Undo effect.
+ * Removes the exact row ID for local requests or the verified pair's current
+ * relation for inbound Undo. The committed result is returned by the Update
+ * handler before this Workflow drains the outbound Undo effect.
  */
 export async function profileUnblockWorkflow(input: ProfileUnblockInput): Promise<void> {
   parseProfileUnblockInput(input);
@@ -107,11 +118,15 @@ export async function profileUnblockWorkflow(input: ProfileUnblockInput): Promis
   if (!settled.value.ok) {
     throw profileUnblockTransitionFailure(settled.value.error);
   }
-  if (settled.value.result.removed && (transitionOrigin ?? input.origin) !== 'ACTIVITYPUB') {
+  if (settled.value.result.removed && transitionOrigin === 'LOCAL') {
+    const { profileBlockId } = settled.value.result;
+    if (profileBlockId === null) {
+      throw new Error('Removed Profile Block relation has no ID');
+    }
     await settleEffects([
       sendProfileBlockUndoActivity({
         ownerProfileId: settled.value.result.ownerProfileId,
-        profileBlockId: settled.value.result.profileBlockId ?? input.profileBlockId,
+        profileBlockId,
         targetProfileId: settled.value.result.targetProfileId,
       }),
     ]);

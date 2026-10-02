@@ -1,4 +1,3 @@
-import type { ProfileBlockProtocolActivityInput } from '../services/profile-block-protocol';
 import type { WorkflowUpdateDefinition } from './client';
 
 export const PROFILE_BLOCK_WORKFLOW_TYPE = 'profileBlockWorkflow';
@@ -16,8 +15,6 @@ export type ProfileBlockInput = {
   readonly ownerProfileId: string;
   readonly targetProfileId: string;
   readonly origin: ProfileBlockEffectOrigin;
-  /** Optional ActivityPub identity recorded after the product transition. */
-  readonly protocolActivity?: ProfileBlockProtocolActivityInput;
 };
 
 export type ProfileBlockTransitionResult = {
@@ -27,16 +24,20 @@ export type ProfileBlockTransitionResult = {
   readonly targetProfileId: string;
 };
 
-export type ProfileUnblockInput = {
-  readonly ownerProfileId: string;
-  readonly targetProfileId: string;
-  /** Exact Profile Block relation ID targeted by this Unblock command. */
-  readonly profileBlockId: string;
-  /** Origin controls whether the post-commit Undo effect is scheduled. */
-  readonly origin?: ProfileBlockEffectOrigin;
-  /** Original inbound ActivityPub Block URI, when this is an inbound Undo. */
-  readonly protocolActivityUri?: string;
-};
+/** Local Unblock targets an exact relation; inbound Undo targets the current directed pair. */
+export type ProfileUnblockInput =
+  | {
+      readonly ownerProfileId: string;
+      readonly targetProfileId: string;
+      /** Exact Profile Block relation ID targeted by a local Unblock. */
+      readonly profileBlockId: string;
+      readonly origin?: 'LOCAL';
+    }
+  | {
+      readonly ownerProfileId: string;
+      readonly targetProfileId: string;
+      readonly origin: 'ACTIVITYPUB';
+    };
 
 export type ProfileUnblockTransitionResult = {
   readonly removed: boolean;
@@ -50,17 +51,21 @@ export type ProfileUnblockTransitionResult = {
  * permits re-Block after Unblock.
  */
 export const profileBlockWorkflowId = (
-  input: Pick<ProfileBlockInput, 'ownerProfileId' | 'targetProfileId'>,
-): string => `${PROFILE_BLOCK_WORKFLOW_ID_PREFIX}${input.ownerProfileId}:${input.targetProfileId}`;
-
-export const profileUnblockWorkflowId = (
-  input: Pick<ProfileUnblockInput, 'ownerProfileId' | 'targetProfileId' | 'profileBlockId'>,
+  input: Pick<ProfileBlockInput, 'ownerProfileId' | 'targetProfileId' | 'origin'>,
 ): string =>
-  `${PROFILE_UNBLOCK_WORKFLOW_ID_PREFIX}${input.ownerProfileId}:${input.targetProfileId}:${input.profileBlockId}`;
+  `${PROFILE_BLOCK_WORKFLOW_ID_PREFIX}${input.ownerProfileId}:${input.targetProfileId}${
+    input.origin === 'ACTIVITYPUB' ? ':inbound' : ''
+  }`;
 
-export const profileUnblockUpdateId = (
-  input: Pick<ProfileUnblockInput, 'profileBlockId'>,
-): string => `${PROFILE_UNBLOCK_UPDATE_ID_PREFIX}${input.profileBlockId}`;
+export const profileUnblockWorkflowId = (input: ProfileUnblockInput): string =>
+  `${PROFILE_UNBLOCK_WORKFLOW_ID_PREFIX}${input.ownerProfileId}:${input.targetProfileId}:${
+    'profileBlockId' in input ? input.profileBlockId : 'inbound'
+  }`;
+
+export const profileUnblockUpdateId = (input: ProfileUnblockInput): string =>
+  `${PROFILE_UNBLOCK_UPDATE_ID_PREFIX}${
+    'profileBlockId' in input ? input.profileBlockId : 'inbound'
+  }`;
 
 export const profileBlockWorkflow: WorkflowUpdateDefinition<
   (input: ProfileBlockInput) => Promise<void>,

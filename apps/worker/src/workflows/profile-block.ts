@@ -26,17 +26,6 @@ const profileBlockInputSchema = z.strictObject({
   origin: z.enum(['LOCAL', 'ACTIVITYPUB'], {
     error: 'Profile Block origin is invalid',
   }),
-  protocolActivity: z
-    .strictObject({
-      activityUri: profileIdSchema,
-      actorUri: profileIdSchema,
-      objectUri: profileIdSchema,
-      ownerProfileId: profileIdSchema,
-      targetProfileId: profileIdSchema,
-      origin: z.enum(['INBOUND', 'OUTBOUND']),
-      profileBlockId: profileIdSchema.optional(),
-    })
-    .optional(),
 });
 
 const {
@@ -135,7 +124,7 @@ export async function profileBlockWorkflow(input: ProfileBlockInput): Promise<vo
   const effects = [
     ...execution.unfollowInputs.map((input) => sendProfileUnfollowActivity(input)),
     ...((transitionOrigin ?? input.origin) === 'LOCAL' && execution.result.created
-      ? [sendProfileBlockActivity(execution.result.profileBlockId, { createIfMissing: true })]
+      ? [sendProfileBlockActivity(execution.result.profileBlockId)]
       : []),
   ];
   try {

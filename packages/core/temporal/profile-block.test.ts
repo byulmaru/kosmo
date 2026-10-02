@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test, { mock } from 'node:test';
 import { ApplicationFailure } from '@temporalio/client';
-import { ConflictError } from '../error';
+import { ConflictError, ValidationError } from '../error';
 
 process.env.TEMPORAL_ADDRESS ??= '127.0.0.1:7233';
 process.env.TEMPORAL_NAMESPACE ??= 'test';
@@ -37,6 +37,13 @@ test('Profile Block Workflow domain failure를 caller 오류로 복원한다', (
         ApplicationFailure.nonRetryable('already handled', 'CONFLICT'),
       ),
     (error) => error instanceof ConflictError && error.message === 'already handled',
+  );
+  assert.throws(
+    () =>
+      rethrowProfileBlockWorkflowFailure(
+        ApplicationFailure.nonRetryable('invalid input', 'VALIDATION'),
+      ),
+    (error) => error instanceof ValidationError && error.message === 'invalid input',
   );
 });
 
@@ -129,6 +136,24 @@ test('Profile Unblock Workflow definition includes the exact Block ID in its exe
         ...unblockInput,
         profileBlockId: '00000000-0000-8000-8000-000000000005',
       }),
+    );
+    const inboundUnblockInput = {
+      ownerProfileId: input.ownerProfileId,
+      targetProfileId: input.targetProfileId,
+      origin: 'ACTIVITYPUB' as const,
+    };
+    assert.equal(
+      profileUnblockWorkflowId(inboundUnblockInput),
+      `profile-unblock:${input.ownerProfileId}:${input.targetProfileId}:inbound`,
+    );
+    assert.equal(profileUnblockUpdateId(inboundUnblockInput), 'unblock:inbound');
+    assert.equal(
+      profileBlockWorkflowId({
+        ownerProfileId: input.ownerProfileId,
+        targetProfileId: input.targetProfileId,
+        origin: 'ACTIVITYPUB',
+      }),
+      `profile-block:${input.ownerProfileId}:${input.targetProfileId}:inbound`,
     );
     assert.equal(deadline.mock.calls.length, 1);
   } finally {
