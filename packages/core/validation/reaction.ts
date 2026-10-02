@@ -1,8 +1,6 @@
 import { z } from 'zod';
 import { reactionEmojiValues } from './reaction-emoji-values';
 
-export const reactionTypes = ['🥹', '❤️', '🎉', '👀', '☘️', '🌈'] as const;
-
 const allowedReactionTypes = new Set<string>(reactionEmojiValues);
 
 export const reactionTypeSchema = z.string().refine((value) => allowedReactionTypes.has(value), {
