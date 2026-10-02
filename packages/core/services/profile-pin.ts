@@ -3,10 +3,9 @@ import { and, eq, inArray, isNotNull } from 'drizzle-orm';
 import { db, first, Instances, Posts, ProfilePinnedPosts, Profiles } from '../db';
 import { InstanceKind, PostVisibility } from '../enums';
 import { NotFoundError } from '../error';
-import { temporalClient } from '../temporal/client';
-import { KOSMO_TASK_QUEUE } from '../temporal/task-queue';
 import { postVisibilityCondition } from '../visibility/post';
 import { visibleProfileWhere } from '../visibility/profile';
+import { startProfileUpdateEffects } from './profile-update';
 import type { Transaction } from '../db';
 
 type ProfilePinInput = {
@@ -70,24 +69,6 @@ const ensureEligiblePost = async (tx: Transaction, { profileId, postId }: Profil
 
   if (!post) {
     throw new NotFoundError('Post not found');
-  }
-};
-
-const startProfileUpdateEffects = async (profileId: string, updateId: string): Promise<void> => {
-  try {
-    await temporalClient.withDeadline(Date.now() + 5_000, () =>
-      temporalClient.workflow.start('profileUpdateEffectsWorkflow', {
-        args: [{ profileId, updateId }],
-        taskQueue: KOSMO_TASK_QUEUE,
-        workflowId: updateId,
-      }),
-    );
-  } catch (error) {
-    console.error('Profile Update effects Workflow start failed', {
-      error,
-      profileId,
-      updateId,
-    });
   }
 };
 
