@@ -2,6 +2,7 @@ import '@kosmo/core/polyfill';
 
 export { deleteAccountActivity } from './activities/account-deletion';
 export { cleanupUnavailableNotificationsActivity } from './activities/cleanup-unavailable-notifications';
+export { executeHashtagMuteRuleActivity } from './activities/hashtag-mute-rule';
 export {
   executeProfileBlockTransitionActivity,
   executeProfileUnblockTransitionActivity,
