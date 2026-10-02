@@ -12,7 +12,6 @@ import {
 } from 'react-native';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
-import { ReactionEmojiImage } from './ReactionEmojiImage';
 import { ReactionPendingSpinner } from './ReactionPendingSpinner';
 import type React from 'react';
 import type { GestureResponderEvent } from 'react-native';
@@ -381,7 +380,7 @@ function ReactionGridRow({
                   },
                 ]}
               >
-                <ReactionEmojiImage size={mobile ? 24 : 20} type={option.emoji} />
+                <Text style={mobile ? styles.mobileEmoji : styles.webEmoji}>{option.emoji}</Text>
                 {pending ? (
                   <View accessibilityElementsHidden aria-hidden style={styles.pendingOverlay}>
                     <ReactionPendingSpinner />
@@ -407,6 +406,7 @@ const styles = StyleSheet.create({
   },
   emptyDescription: textStyles.uiCopyM,
   emptyTitle: textStyles.uiLabelL,
+  mobileEmoji: { fontSize: 24, lineHeight: 32, textAlign: 'center' },
   fullGridRow: { justifyContent: 'space-between' },
   gridRow: { flexDirection: 'row' },
   mobileGrid: { gap: 0 },
@@ -467,6 +467,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   webGrid: { gap: space[8] },
+  webEmoji: { fontSize: 20, lineHeight: 24, textAlign: 'center' },
   webReaction: { height: 32, width: 32 },
   webReactionTarget: { height: 32, width: 32 },
   webSpinner: { transform: [{ scale: 1.25 }] },

@@ -555,10 +555,11 @@ describe('Settings routes', () => {
       rendered('Text')
         .filter((node) => node.props.accessibilityRole === 'header')
         .map((node) => node.props.children),
-      ['Noto Emoji 이미지', 'emoji-datasource-google', 'emojibase-data'],
+      ['emoji-datasource-google', 'emojibase-data'],
     );
-    assert.ok(
-      rendered('Text').some((node) => String(node.props.children).includes('Apache License\n')),
+    assert.equal(
+      rendered('Text').filter((node) => String(node.props.children).includes('MIT License')).length,
+      2,
     );
     const back = rendered('PageHeader')[1].props.leading;
     await act(async () => back.props.onPress());

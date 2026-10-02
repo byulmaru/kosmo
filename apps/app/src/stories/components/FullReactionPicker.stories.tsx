@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 import { FullReactionPicker } from '@/components/reaction/FullReactionPicker';
 import { reactionEmojiCatalog } from '@/components/reaction/reactionEmojiCatalog';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -241,8 +241,6 @@ export const reactionOptions: readonly FullReactionPickerOption[] = [
   },
 ];
 
-const flagOption = reactionEmojiCatalog.find((option) => option.category === 'flags')!;
-
 const meta = {
   args: {
     onClose: fn(),
@@ -274,7 +272,6 @@ const meta = {
     'WebGridGeometryContract',
     'reactionOptions',
     'VirtualizedCatalogContract',
-    'FlagAssetContract',
   ],
   parameters: { layout: 'centered' },
   title: 'KOSMO/Components/Full Reaction Picker',
@@ -388,7 +385,9 @@ export const InteractionContract: Story = {
     expect(canvas.getByRole('heading', { name: '표정과 감정' })).toBeVisible();
     expect(canvas.queryByRole('button', { name: /category 보기/ })).not.toBeInTheDocument();
 
-    await userEvent.click(canvas.getAllByRole('button', { name: '빨간 하트 ❤️' })[0]);
+    const heartButton = canvas.getAllByRole('button', { name: '빨간 하트 ❤️' })[0];
+    expect(within(heartButton).getByText('❤️')).toBeVisible();
+    await userEvent.click(heartButton);
     expect(args.onSelect).toHaveBeenLastCalledWith(
       expect.objectContaining({ emoji: '❤️', id: 'heart-red' }),
     );
@@ -416,22 +415,6 @@ export const VirtualizedCatalogContract: Story = {
     const canvas = within(canvasElement);
     expect(canvas.getAllByRole('button', { name: /활짝 웃는 얼굴/ }).length).toBeGreaterThan(0);
     expect(canvas.getAllByRole('button').length).toBeLessThan(reactionEmojiCatalog.length);
-  },
-};
-
-export const FlagAssetContract: Story = {
-  args: { options: [flagOption] },
-  play: async ({ canvasElement }) => {
-    const image = canvasElement.querySelector<HTMLImageElement>(
-      `img[src$="${flagOption.assetPath}"]`,
-    );
-    expect(image).not.toBeNull();
-    await waitFor(() => expect(image?.naturalWidth).toBeGreaterThan(0));
-    expect(
-      within(canvasElement).getByRole('button', {
-        name: `${flagOption.label} ${flagOption.emoji}`,
-      }),
-    ).toBeVisible();
   },
 };
 

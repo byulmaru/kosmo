@@ -2,14 +2,7 @@ import emojiData from 'emoji-datasource-google/emoji.json';
 import englishData from 'emojibase-data/en/data.json';
 import koreanData from 'emojibase-data/ko/data.json';
 
-export type ReactionEmojiAsset = Readonly<{
-  format: 'png';
-  path: string;
-}>;
-
 export type ReactionEmojiCatalogOption = Readonly<{
-  assetFormat: ReactionEmojiAsset['format'];
-  assetPath: string;
   category: string;
   categoryLabel: string;
   emoji: string;
@@ -75,19 +68,6 @@ export const reactionEmojiCatalog: readonly ReactionEmojiCatalogOption[] = emoji
         label: ko.label,
         labelEn: en.label,
         keywords: [ko.label, en.label, ...ko.tags, ...en.tags, ...entry.short_names],
-        assetPath: `/reaction-emoji/emoji-16/${variant.image}`,
-        assetFormat: 'png' as const,
       };
     });
   });
-
-const reactionEmojiAssets = new Map<string, ReactionEmojiAsset>(
-  reactionEmojiCatalog.map(({ assetFormat, assetPath, id }) => [
-    id,
-    { format: assetFormat, path: assetPath },
-  ]),
-);
-
-export function getReactionEmojiAsset(type: string): ReactionEmojiAsset | null {
-  return reactionEmojiAssets.get(type) ?? null;
-}

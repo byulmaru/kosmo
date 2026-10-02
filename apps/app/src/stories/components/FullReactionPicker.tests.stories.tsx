@@ -1,5 +1,4 @@
 import baseMeta, {
-  FlagAssetContract as flagAssetContract,
   InteractionContract as interactionContract,
   LoadingContract as loadingContract,
   MobileBrowseGeometryContract as mobileBrowseGeometryContract,
@@ -20,7 +19,6 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const InteractionContract: Story = interactionContract;
-export const FlagAssetContract: Story = flagAssetContract;
 export const LoadingContract: Story = loadingContract;
 export const MobileGridGeometryContract: Story = mobileGridGeometryContract;
 export const MobileBrowseGeometryContract: Story = mobileBrowseGeometryContract;

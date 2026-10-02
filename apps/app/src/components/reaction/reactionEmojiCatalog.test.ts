@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { getReactionEmojiAsset, reactionEmojiCatalog } from './reactionEmojiCatalog';
+import { reactionEmojiCatalog } from './reactionEmojiCatalog';
 
-test('Noto catalog provides the same 3,781 selectable values with localized search', () => {
+test('Emoji 16 catalog provides 3,781 selectable values with localized search', () => {
   assert.equal(reactionEmojiCatalog.length, 3781);
   assert.equal(new Set(reactionEmojiCatalog.map((option) => option.id)).size, 3781);
 
@@ -11,6 +11,4 @@ test('Noto catalog provides the same 3,781 selectable values with localized sear
   assert.equal(heart?.labelEn, 'red heart');
   assert.equal(heart?.keywords.includes('하트'), true);
   assert.equal(heart?.keywords.includes('red heart'), true);
-  assert.equal(getReactionEmojiAsset('❤️')?.path, '/reaction-emoji/emoji-16/2764-fe0f.png');
-  assert.equal(getReactionEmojiAsset('custom:party'), null);
 });

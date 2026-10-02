@@ -44,7 +44,7 @@ Reaction Quick Picker는 현재 제공된 Reaction option을 빠르게 선택하
 
 ## Full Reaction Picker
 
-Full Reaction Picker는 Quick Picker를 폐기하지 않고, Emoji 16의 완전 수식 emoji 3,781개를 검색하거나 category별로 탐색해 더 많은 Reaction을 선택하는 확장 surface다. Full Picker 목록과 서버가 허용하는 Reaction Type은 같은 3,781개 집합을 사용하고, Web·iOS·Android는 `emoji-datasource-google@16.0.0`의 Noto Emoji v2.048 이미지를 표시한다. Quick Picker의 여섯 Type은 유지한다. 최근 사용과 custom reaction은 후속 범위이며 현재 별도 section이나 정책을 표시하지 않는다.
+Full Reaction Picker는 Quick Picker를 폐기하지 않고, Emoji 16의 완전 수식 emoji 3,781개를 검색하거나 category별로 탐색해 더 많은 Reaction을 선택하는 확장 surface다. Full Picker 목록과 서버가 허용하는 Reaction Type은 같은 3,781개 집합을 사용한다. Web·iOS·Android는 Unicode 문자열을 client system emoji glyph로 표시하며, glyph 모양과 지원 범위는 브라우저·OS의 emoji font와 Unicode 지원 버전에 따라 달라질 수 있다. Quick Picker의 여섯 Type은 유지한다. 최근 사용과 custom reaction은 후속 범위이며 현재 별도 section이나 정책을 표시하지 않는다.
 
 - Figma source는 `Presentation=Web | Mobile`과 `State=Browse | SearchResults | Empty | Loading`을 조합한 8 variants다. `Browse`는 검색, 빠른 반응, category heading과 전체 emoji grid를 표시하고, `SearchResults`는 검색 결과만, `Empty`는 검색 결과 없음만, `Loading`은 spinner만 표시한다. Browse에는 category shortcut control이나 최근 사용 section을 두지 않는다. Web은 한 행에 8개, Mobile은 7개를 배치하고, 가득 찬 행은 좌우 가장자리를 맞추며 마지막 덜 찬 행은 기존 간격으로 왼쪽 정렬한다. Picker 전체 `Error` variant는 만들지 않는다.
 - Web은 trigger에 붙는 non-modal dialog를 사용한다. 열릴 때 검색 field로 focus를 옮기고 같은 trigger, `Escape`, 바깥 클릭으로 닫은 뒤 focus를 trigger에 복원한다.

@@ -36,7 +36,7 @@ export default function OpenSourceLicensesRoute() {
       ) : null}
       <View style={styles.content}>
         <Text style={[styles.description, { color: theme.textSecondary }]}>
-          반응 이모지 이미지와 검색 데이터에 사용한 오픈소스의 저작권 고지 및 라이선스입니다.
+          반응 이모지 데이터에 사용한 오픈소스의 저작권 고지 및 라이선스입니다.
         </Text>
         {licenses.map(({ license, name, text, version }) => (
           <View key={name} style={styles.license}>
