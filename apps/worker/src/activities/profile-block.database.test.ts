@@ -479,7 +479,7 @@ test('Block rejects self-blocking in the service and the database check', async 
   );
 });
 
-test('inbound duplicate Block keeps one active original and Undo closes its exact relation', async () => {
+test('inbound Block 원본이 여러 개여도 Undo는 현재 pair의 정확한 관계만 닫는다', async () => {
   const { profile: owner } = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
   const { profile: target } = await createProfile();
   const protocolActivity = (activityUri: string) => ({
@@ -521,12 +521,10 @@ test('inbound duplicate Block keeps one active original and Undo closes its exac
       .where(eq(ProfileBlockActivities.state, 'ACTIVE')),
     [{ activityUri: firstActivity.activityUri }],
   );
-  await assert.rejects(
-    db.insert(ProfileBlockActivities).values({
-      ...secondActivity,
-      profileBlockId: first.result.profileBlockId,
-    }),
-  );
+  await db.insert(ProfileBlockActivities).values({
+    ...secondActivity,
+    profileBlockId: first.result.profileBlockId,
+  });
   const duplicateOriginal = await recordProfileBlockProtocolTombstone(firstActivity);
   assert.equal(duplicateOriginal.state, 'ACTIVE');
   assert.equal(duplicateOriginal.profileBlockId, first.result.profileBlockId);
@@ -536,7 +534,7 @@ test('inbound duplicate Block keeps one active original and Undo closes its exac
     ownerProfileId: owner.id,
     targetProfileId: target.id,
     profileBlockId: first.result.profileBlockId,
-    protocolActivityUri: firstActivity.activityUri,
+    origin: 'ACTIVITYPUB',
   });
   assert.equal(unblock.ok && unblock.result.removed, true);
   assert.equal(await currentProfileBlockId(owner.id, target.id), null);
@@ -564,7 +562,7 @@ test('inbound duplicate Block keeps one active original and Undo closes its exac
     ownerProfileId: owner.id,
     targetProfileId: target.id,
     profileBlockId: first.result.profileBlockId,
-    protocolActivityUri: firstActivity.activityUri,
+    origin: 'ACTIVITYPUB',
   });
   assert.equal(retriedUndo.ok && retriedUndo.result.removed, false);
   if (third.ok) {
@@ -572,7 +570,44 @@ test('inbound duplicate Block keeps one active original and Undo closes its exac
   }
 });
 
-test('local Unblock closes the old original before reblock and old Undo retry', async () => {
+test('local Unblock도 inbound 원본은 닫아 이후 관계를 보호한다', async () => {
+  const { profile: owner } = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
+  const { profile: target } = await createProfile();
+  const activityUri = `https://remote.example/activities/${crypto.randomUUID()}`;
+  const block = await executeProfileBlockTransitionActivity({
+    ownerProfileId: owner.id,
+    targetProfileId: target.id,
+    origin: 'ACTIVITYPUB',
+    protocolActivity: {
+      activityUri,
+      actorUri: `https://remote.example/users/${owner.id}`,
+      objectUri: `https://local.example/ap/actor/${target.id}`,
+      origin: 'INBOUND',
+      ownerProfileId: owner.id,
+      targetProfileId: target.id,
+    },
+  });
+  assert.equal(block.ok, true);
+  if (!block.ok) {
+    return;
+  }
+  const unblock = await executeProfileUnblockTransitionActivity({
+    ownerProfileId: owner.id,
+    targetProfileId: target.id,
+    profileBlockId: block.result.profileBlockId,
+    origin: 'LOCAL',
+  });
+  assert.equal(unblock.ok && unblock.result.removed, true);
+  const original = await db
+    .select()
+    .from(ProfileBlockActivities)
+    .where(eq(ProfileBlockActivities.activityUri, activityUri))
+    .then((rows) => rows[0]);
+  assert.equal(original?.state, 'CLOSED');
+  assert.ok(original?.closedAt);
+});
+
+test('local Unblock은 outbound 진행 상태를 기록하지 않고 재차단과 오래된 해제를 구분한다', async () => {
   const { profile: owner } = await createProfile();
   const { profile: target } = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
   const original = await executeProfileBlockTransitionActivity({
@@ -607,7 +642,7 @@ test('local Unblock closes the old original before reblock and old Undo retry', 
       .select({ state: ProfileBlockActivities.state })
       .from(ProfileBlockActivities)
       .where(eq(ProfileBlockActivities.activityUri, oldActivityUri)),
-    [{ state: 'CLOSED' }],
+    [{ state: 'ACTIVE' }],
   );
 
   const replacement = await executeProfileBlockTransitionActivity({

@@ -55,8 +55,8 @@ const profileUnblockTransitionFailure = (
 
 /**
  * Removes only the exact Profile Block row ID requested by the caller. The
- * committed result is returned by the Update handler; this Workflow has no
- * post-commit effects to drain.
+ * committed result is returned by the Update handler before this Workflow
+ * drains the outbound Undo effect.
  */
 export async function profileUnblockWorkflow(input: ProfileUnblockInput): Promise<void> {
   parseProfileUnblockInput(input);

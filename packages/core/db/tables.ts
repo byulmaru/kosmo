@@ -515,9 +515,7 @@ export const ProfileBlockActivities = pgTable(
     closedAt: datetime('closed_at'),
   },
   (table) => [
-    uniqueIndex('profile_block_activity_active_pair_unique')
-      .on(table.ownerProfileId, table.targetProfileId)
-      .where(sql`${table.state} = 'ACTIVE'`),
+    index().on(table.ownerProfileId, table.targetProfileId, table.state),
     index().on(table.profileBlockId),
     check(
       'profile_block_activity_owner_not_target',

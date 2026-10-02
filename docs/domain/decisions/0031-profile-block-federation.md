@@ -32,14 +32,19 @@ ActivityPub은 차단 대상에게 `Block`을 전달하지 않도록 권고한�
   상대 서버가 원본 `Block`을 모르는 경우 해당 Undo가 remote no-op이 되는 것은 허용한다.
 - inbound Undo는 embedded object가 실제 `Block`일 때만 Profile Block 경로에서 처리한다. URI-only 원본이나
   embedded `Like`·`Follow` 등은 저장된 URI만으로 `Block`이라고 추론하지 않고 기존 해당 Undo 처리기로 넘긴다.
+- 인증된 inbound `Undo(Block)`는 Undo actor와 embedded Block actor, Local Target을 검증한 뒤 현재 방향 pair의
+  차단 관계를 해제한다. 원격 Block URI가 저장된 원본과 달라도 해제를 누락하지 않는다. 이미 종료된 원본이나
+  재전달된 Undo는 새로 생성된 관계를 해제하지 않는다. 이 재전달 구분에 필요한 최상위 Undo Activity ID가
+  없거나 유효한 HTTP(S) URI가 아니면 관계를 변경하지 않는다.
 - PROD-813은 로컬 Profile Block의 통합 검증과 완료를 소유한다. PROD-818은 그 완료 후 연합 구현에 착수하며,
   연합 계약의 검증·동기화·archive를 소유한다. 로컬 기능의 출시가 연합 구현을 기다리지는 않는다.
 
 ## 이유
 
 Mastodon과 차단 의도를 교환하면서 Kosmo에서는 하나의 차단 관계와 Owner 권한을 유지하기 위한 결정이다.
-exact generation identity로 Undo를 재구성하면 metadata 유실 뒤에도 다른 세대를 해제하지 않는다. 또한 embedded
-Activity type을 요구하면 URI 충돌만으로 다른 Activity를 Block으로 오인하는 type confusion을 막는다.
+발신 Undo를 exact generation identity로 재구성하면 metadata 유실 뒤에도 다른 세대를 해제하지 않는다. 수신 Undo는
+인증된 방향 pair를 기준으로 적용해 원격의 Block URI 표현 차이를 허용한다. embedded Activity type을 요구하면
+URI 충돌만으로 다른 Activity를 Block으로 오인하는 type confusion을 막는다.
 
 ## 대안과 결과
 

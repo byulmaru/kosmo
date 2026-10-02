@@ -1,3 +1,4 @@
+import { ValidationError } from '@kosmo/core/error';
 import type { InboxContext } from '@fedify/fedify';
 
 export type InboundActivityType =
@@ -254,7 +255,8 @@ export const withInboundObservability =
       await listener(context, activity);
     } catch (error) {
       const normalizedError = normalizeInboundError(error);
-      const external = isExternalInboundError(normalizedError);
+      const rejected = normalizedError instanceof ValidationError;
+      const external = !rejected && isExternalInboundError(normalizedError);
       markInboundErrorObserved(normalizedError);
       observeInbound({
         activityType: getInboundActivityType(activity),
@@ -270,10 +272,16 @@ export const withInboundObservability =
             : undefined,
         error: normalizedError,
         handler,
-        outcome: external ? 'external_failure' : 'internal_failure',
-        phase: 'listener',
-        reasonCode: external ? 'external_listener_error' : 'unexpected_listener_error',
+        outcome: rejected ? 'rejected' : external ? 'external_failure' : 'internal_failure',
+        phase: rejected ? 'validation' : 'listener',
+        reasonCode: rejected
+          ? 'invalid_listener_input'
+          : external
+            ? 'external_listener_error'
+            : 'unexpected_listener_error',
       });
-      throw normalizedError;
+      if (!rejected) {
+        throw normalizedError;
+      }
     }
   };

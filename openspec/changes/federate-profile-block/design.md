@@ -1,7 +1,7 @@
 ## Context
 
 이 설계는 `proposal.md`와 `specs/activitypub-profile-block/spec.md`를 구체화한다. 상위 권위는
-`docs/domain/objects/profile-block.md`, `docs/domain/decisions/0029-profile-block-federation.md`와
+`docs/domain/objects/profile-block.md`, `docs/domain/decisions/0031-profile-block-federation.md`와
 PROD-818의 2026-09-08 발신·수신 및 기존 차단 rollout 결정과 2026-09-10 구두 결정 기록이다.
 
 최신 원격 main `32c281349444208aaddbe5aafe0d038a6e1fdaf4`과 현재 기준 `3906f2251e70a8b9bd39721c897493efbe83ff4a`를 대조했다. 적용되는 domain·Temporal·Fedify·기존 spec 경계에는 차이가 없다. Profile Block row는 존재하지만
@@ -53,17 +53,15 @@ PROD-822·PROD-823 In Review다. 이슈 상태와 실제 병합·통합 검증 �
 
 ### Recommended Approach
 
-1. **Ingress와 공통 action:** 기존 Fedify 인증을 통과한 Activity의 Remote actor, 절대 원본 IRI, Local Target과
+1. **Ingress와 공통 action:** 기존 Fedify 인증을 통과한 Activity의 Remote actor, embedded Block 타입, Local Target과
    personal/shared inbox를 검증한다. 새 원격 조회는 기존 안전한 loader·Instance admission을 사용한다. 검증된
    identity와 ActivityPub-origin만 공통 Block action 경계에 전달하며 GraphQL session 타입을 core로 넘기지 않는다.
-2. **원본별 처리 증거:** Block IRI, Owner/Target, 정확한 domain row identity, 원본 해제 여부와 미완료 효과를 작은
-   Block 전용 protocol metadata로 보존한다. 같은 pair의 아직 해제되지 않은 서로 다른 원본을 구분하며, 하나의 Undo는 참조한
-   원본만 종료한다. 같은 pair의 미해제 원본은 하나의 현재 exact row에 연결한다. 마지막 원본 해제와 경합한 새
-   원본이 있으면 row 전체를 삭제하지 않도록 같은 원자적 경계에서 판정한다. 제품 관계는 여전히 pair당 하나이며,
-   과거 cleanup은 이후 성립한 새 row를 대상으로 삼지 않는다.
-3. **순서 역전:** 검증 가능한 Undo가 먼저 오면 해당 원본의 종료 증거를 남긴다. B2→B1→Undo B1처럼 도착해도 B2를
-   유지한다. 도착 시각이나 원격 published로 최신 의도를 추측하지 않는다. 저장된 원본 또는 검증된 embedded 원본을
-   우선 사용하고, URI-only 원본을 확인할 수 없으면 mutation 없이 관측 가능한 미검증 결과로 처리한다.
+2. **수신 Undo 처리 증거:** Block IRI, Owner/Target, 정확한 domain row identity와 Undo identity를 작은
+   Block 전용 protocol metadata로 보존한다. 인증된 actor·Local Target·pair를 기준으로 현재 exact row를
+   해제하며, 원격 Block URI가 달라도 해제를 누락하지 않는다. 제품 관계는 pair당 하나이고 이전 Undo의
+   재전달은 이후 성립한 새 row를 대상으로 삼지 않는다.
+3. **순서 역전:** 검증 가능한 Undo가 먼저 오면 해당 원본의 종료 증거를 남긴다. 도착 시각이나 원격
+   published로 최신 의도를 추측하지 않는다. URI-only 원본은 mutation 없이 기존 Undo 처리기로 넘긴다.
 4. **원자성과 복구:** protocol admission·원본 결과와 domain transition의 원자적 경계를 PROD-813 action에 맞춘다.
    외부 orchestration 단계는 exact row와 보존한 effect plan으로 재개한다. commit 뒤 completion loss에도 현재 pair의
    다른 row를 이번 결과로 추정하지 않는다. 단일 durable pair 조정과 DB uniqueness·exact-row 조건을 조합하고,
@@ -77,8 +75,8 @@ PROD-822·PROD-823 In Review다. 이슈 상태와 실제 병합·통합 검증 �
    이미 확정된 효과를 임의로 추가·취소하지 않게 한다. 현재 recipient admission에 따른 보류는 계획 취소와 구분한다. 추가 개인정보를 담거나 Public/followers로 확장하지 않는다.
 7. **실패 구분:** required cleanup은 domain 성공 조건이고, queue 인계 실패와 인계 후 remote 실패는 별도다.
    인계 전 실패·응답 유실은 같은 identity의 선두 효과로 재시도하고 실제 수락을 확인·보존하면 정산한다.
-   그 뒤 Undo를 진행하며 remote retry는 Fedify에 맡긴다. 정산 뒤 새로 호출한 과거 효과는 추가 인계 없이 끝내지만,
-   이미 실행 중인 이전 attempt의 종료를 보장하지 않는다. 그 attempt나 consumer retry 때문에 추가 보류하지 않는다.
+   remote retry는 Fedify에 맡긴다. 응답 유실 뒤에는 같은 stable identity로 다시 인계할 수 있으며,
+   outbound 진행 상태를 DB에 기록하지 않는다. 이전 attempt나 consumer retry 때문에 Undo를 추가 보류하지 않는다.
    인계 retry 소진 시 선두 실패와 뒤 효과 대기를 보존하고 자동으로 건너뛰지 않는다. 원격 실패는 확정된 로컬 상태를 되돌리지 않는다.
 8. **Origin:** inbound Block/Undo는 같은 Block/Undo 발신 효과를 만들지 않는다. 기존 Follow cleanup이 소유한
    Notification 정리와 필요한 Follow 효과는 원래 계약대로 실행한다.

@@ -8,6 +8,7 @@ import {
 } from '@fedify/fedify';
 import { CryptographicKey, EmojiReact, Follow, Like, Person } from '@fedify/vocab';
 import { getDocumentLoader } from '@fedify/vocab-runtime';
+import { ValidationError } from '@kosmo/core/error';
 import {
   hasInboundErrorBeenObserved,
   isExternalInboundError,
@@ -127,6 +128,42 @@ describe('Fedify inbox routes', () => {
       });
 
       assert.equal(response.status, 404);
+    }
+  });
+
+  test('rejects a permanent listener validation error without retrying it', async () => {
+    const captures: unknown[] = [];
+    const logs: unknown[] = [];
+    const restore = setInboundObservabilityReporter({
+      captureException: (error) => captures.push(error),
+      log: (observation) => logs.push(observation),
+    });
+
+    try {
+      const fixture = await createInboxFixture(async () => {
+        throw new ValidationError('Activity identity conflicts with its first observation');
+      });
+      const response = await fixture.federation.fetch(
+        await fixture.createSignedFollowRequest('/inbox', 'invalid-shared'),
+        { contextData: undefined },
+      );
+
+      assert.equal(response.status, 202, await response.text());
+      assert.equal(captures.length, 0);
+      assert.deepEqual(logs, [
+        {
+          activityType: 'Follow',
+          activityOrigin: 'https://remote.example',
+          actorOrigin: 'https://remote.example',
+          handler: 'follow',
+          objectOrigin: 'https://kos.moe',
+          outcome: 'rejected',
+          phase: 'validation',
+          reasonCode: 'invalid_listener_input',
+        },
+      ]);
+    } finally {
+      restore();
     }
   });
 
