@@ -78,6 +78,7 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
 | Content 없는 Repost  | Home 후보 정책 통과 시 Include | Exclude                    | Target 작성 시 Include                                    | Exclude                    |
 
 - 모든 후보는 먼저 Post Visibility와 Post Eligibility를 통과해야 한다.
+- Local Post List는 Local Scope가 선택된 Hashtag Mute Rule의 Collapse도 Exclude로 소비한다.
 - Followers Only 후보는 Author/Mentioned Profile이 아닌 viewer에게 viewer Profile과 Author Profile 사이의
   현재 established Follow Relationship을 추가로 요구하며, pending·rejected Follow Request 또는 unfollow로
   removed된 관계와 guest에는 접근 범위를 넓히지 않는다.
