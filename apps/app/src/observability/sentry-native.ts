@@ -1,5 +1,6 @@
 import * as Sentry from '@sentry/react-native';
 import { getPublicConfig } from '@/config/public';
+import { GraphQLHttpError } from '@/relay/network';
 import { RelayTransportError } from '@/relay/transportError';
 import type { ErrorInfo } from 'react';
 
@@ -30,6 +31,13 @@ export const captureReactError = (cause: unknown, info: ErrorInfo): void => {
   Sentry.withScope((scope) => {
     if (info.componentStack) {
       scope.setContext('react', { componentStack: info.componentStack });
+    }
+    if (cause instanceof GraphQLHttpError) {
+      scope.setExtras({
+        operationName: cause.operationName,
+        status: cause.status,
+        elapsedMs: cause.elapsedMs,
+      });
     }
 
     Sentry.captureException(cause, {
