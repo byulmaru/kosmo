@@ -52,11 +52,6 @@ export default function SettingsInfoRoute() {
           label="아동 안전 정책"
         />
         <SettingsLinkRow
-          accessibilityLabel="오픈소스 라이선스 열기"
-          href="/settings/open-source-licenses"
-          label="오픈소스 라이선스"
-        />
-        <SettingsLinkRow
           accessibilityLabel="개발 정보 설정 열기"
           href="/settings/developer"
           label="개발 정보"

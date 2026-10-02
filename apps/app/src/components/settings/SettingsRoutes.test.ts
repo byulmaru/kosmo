@@ -165,7 +165,6 @@ let SettingsLayout: ComponentType;
 let SettingsRoute: ComponentType;
 let SettingsInfoRoute: ComponentType;
 let SettingsDeveloperRoute: ComponentType;
-let OpenSourceLicensesRoute: ComponentType;
 let ProtectedLayout: ComponentType;
 let WebRouteScrollContainer: ComponentType<RouteScrollContainerProps>;
 let settingsInitialRouteName: string | undefined;
@@ -179,8 +178,6 @@ before(async () => {
     await import('../ui/RouteScrollContainer.web'));
   ({ default: SettingsRoute } = await import('../../app/(tabs)/(protected)/settings/index'));
   ({ default: SettingsInfoRoute } = await import('../../app/(tabs)/(protected)/settings/info'));
-  ({ default: OpenSourceLicensesRoute } =
-    await import('../../app/(tabs)/(protected)/settings/open-source-licenses'));
   ({ default: SettingsDeveloperRoute } =
     await import('../../app/(tabs)/(protected)/settings/developer'));
   ({ default: SettingsDefaultPostVisibilityRoute } =
@@ -531,39 +528,16 @@ describe('Settings routes', () => {
     );
   });
 
-  it('정보 화면은 정책 링크와 오픈소스 라이선스·개발 정보 진입점을 표시한다', async () => {
+  it('정보 화면은 공개 정책과 개발 정보 진입점을 표시한다', async () => {
     platform = 'web';
     await renderRoute('/settings/info', SettingsInfoRoute);
 
-    assert.ok(
-      rendered('SettingsLinkRow').some((node) => node.props.href === '/settings/developer'),
-    );
-    assert.ok(
-      rendered('SettingsLinkRow').some(
-        (node) => node.props.href === '/settings/open-source-licenses',
-      ),
+    assert.deepEqual(
+      rendered('SettingsLinkRow').map((node) => node.props.href),
+      ['/privacy', '/account-deletion', '/child-safety', '/settings/developer'],
     );
     assert.equal(rendered('NativeChannelSettings').length, 0);
     assert.equal(rendered('SettingsItem').length, 0);
-  });
-
-  it('오픈소스 라이선스 화면은 고지 전문을 표시하고 정보로 돌아간다', async () => {
-    await renderRoute('/settings/open-source-licenses', OpenSourceLicensesRoute);
-
-    assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'info');
-    assert.deepEqual(
-      rendered('Text')
-        .filter((node) => node.props.accessibilityRole === 'header')
-        .map((node) => node.props.children),
-      ['emoji-datasource-google', 'emojibase-data'],
-    );
-    assert.equal(
-      rendered('Text').filter((node) => String(node.props.children).includes('MIT License')).length,
-      2,
-    );
-    const back = rendered('PageHeader')[1].props.leading;
-    await act(async () => back.props.onPress());
-    assert.deepEqual(dismissedToPaths, ['/settings/info']);
   });
 
   it('full Web 개발 정보는 정보 parent로 dismiss한다', async () => {
