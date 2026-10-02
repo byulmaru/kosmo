@@ -19,6 +19,12 @@
 - 이미 설치된 workspace 도구를 실행하려는 경우에는 repository script 또는 `./node_modules/.bin/<tool>`을 우선 사용한다.
 - dependency 동기화가 실제로 필요한 경우에만 `CI=true pnpm install`을 한 번 실행한 뒤 원래 검증 명령을 다시 실행한다.
 
+## Container dependency scans
+
+- 앱 lockfile과 pnpm 배포물의 내장 의존성은 별개다. 이미지의 `/opt/pnpm/dist/node_modules` 탐지는 workspace override로 수정되지 않으므로 원문 report의 `PkgPath`를 확인한다.
+- pnpm 버전을 바꿀 때 `Dockerfile`, `mise.toml`, 루트 `packageManager`를 함께 맞추고 GHCR 태그 존재와 Linux ARM64 배포 아티팩트의 내장 버전도 확인한다. `ghcr.io/pnpm/pnpm:11.27.1`은 `undici@6.28.1`을 포함한다. npm에 공개된 버전이라도 같은 버전의 이미지 태그가 없을 수 있다.
+- `packages/core`의 `jsdom`과 `apps/admin`의 SvelteKit/Svelte는 production 의존성이므로 해당 경로의 undici/devalue를 빌드 도구 전용으로 분류하지 않는다. CI와 같은 platform의 최종 이미지 재빌드·재스캔은 lockfile 검사나 로컬 package 스캔과 별도 검증이다.
+
 ## Disposable test database
 
 - 공용 `kosmo_test` schema가 현재 코드보다 뒤처져 DB-backed 테스트가 실패하면 `pnpm db:test:reset && pnpm db:test:push`로 초기화한 뒤 다시 검증한다.
