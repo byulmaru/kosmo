@@ -1247,6 +1247,99 @@ for (const change of [
   });
 }
 
+test('다른 작성자의 embedded Update는 기존 Quote 승인과 Post를 바꾸지 않는다', async () => {
+  const ownerUri = 'https://quote.example/users/owner';
+  const owner = await createRemoteActor('owner', ownerUri);
+  const impostorUri = 'https://quote.example/users/impostor';
+  await createRemoteActor('impostor', impostorUri, owner.instanceId);
+  const sourceUri = 'https://source.example/notes/update-identity-source';
+  const sourceAuthor = await createRemoteActor(
+    'source-author',
+    'https://source.example/users/source-author',
+  );
+  const source = await createRemotePost(sourceAuthor.id, sourceUri);
+  const quoteUri = 'https://quote.example/notes/update-identity-quote';
+  const quote = await createRemotePost(owner.id, quoteUri);
+  const note = new Note({
+    attribution: new URL(ownerUri),
+    content: 'Original quote body',
+    id: new URL(quoteUri),
+    quote: new URL(sourceUri),
+    to: PUBLIC_COLLECTION,
+  });
+  const authorization = quoteInteraction.createAuthorization({
+    attributedTo: new URL('https://source.example/users/source-author'),
+    id: new URL('https://source.example/authorizations/update-identity'),
+    interactingObject: note,
+    interactionTarget: new URL(sourceUri),
+  });
+  const context = createContext(
+    new Map([[authorization.id!.href, await authorization.toJsonLd({ format: 'expand' })]]),
+  );
+  await handleInboundQuote({
+    actorUri: ownerUri,
+    context,
+    note: note.clone({ quoteAuthorization: authorization }),
+    postId: quote.post.id,
+    receivedAt,
+  });
+
+  const beforeQuote = await db
+    .select()
+    .from(ActivityPubPostQuotes)
+    .where(eq(ActivityPubPostQuotes.postId, quote.post.id))
+    .then(firstOrThrow);
+  assert.equal(beforeQuote.status, ActivityPubQuoteStatus.APPROVED);
+  const beforePost = await db
+    .select()
+    .from(Posts)
+    .where(eq(Posts.id, quote.post.id))
+    .then(firstOrThrow);
+  const beforeContent = await db
+    .select()
+    .from(PostContents)
+    .where(eq(PostContents.postId, quote.post.id))
+    .then(firstOrThrow);
+
+  await handleInboundUpdate(
+    createContext(),
+    new Update({
+      actor: new URL(impostorUri),
+      object: new Note({
+        attribution: new URL(impostorUri),
+        content: 'Impostor replacement',
+        id: new URL(quoteUri),
+        quote: new URL(sourceUri),
+        to: PUBLIC_COLLECTION,
+      }),
+    }),
+    receivedAt.add({ minutes: 1 }),
+  );
+
+  assert.deepEqual(
+    await db
+      .select()
+      .from(ActivityPubPostQuotes)
+      .where(eq(ActivityPubPostQuotes.postId, quote.post.id))
+      .then(firstOrThrow),
+    beforeQuote,
+  );
+  assert.deepEqual(
+    await db.select().from(Posts).where(eq(Posts.id, quote.post.id)).then(firstOrThrow),
+    beforePost,
+  );
+  assert.deepEqual(
+    await db
+      .select()
+      .from(PostContents)
+      .where(eq(PostContents.postId, quote.post.id))
+      .then(firstOrThrow),
+    beforeContent,
+  );
+  assert.equal(beforePost.profileId, owner.id);
+  assert.equal(beforePost.repostSourceId, source.post.id);
+});
+
 test('Quote metadata가 없는 기존 Post는 embedded Update로 backfill하지 않는다', async () => {
   const actor = await createRemoteActor('no-backfill', 'https://quote.example/users/no-backfill');
   const source = await createRemotePost(actor.id, 'https://quote.example/notes/no-backfill-source');
@@ -1549,24 +1642,28 @@ const createContext = (
   } as never;
 };
 
-const createRemoteActor = async (handle: string, actorUri: string) => {
-  const instance = await db
-    .insert(Instances)
-    .values({
-      canonicalOrigin: new URL(actorUri).origin,
-      domain: new URL(actorUri).hostname,
-      kind: InstanceKind.ACTIVITYPUB,
-      state: InstanceState.ACTIVE,
-    })
-    .returning()
-    .then(firstOrThrow);
+const createRemoteActor = async (handle: string, actorUri: string, instanceId?: string) => {
+  const profileInstanceId =
+    instanceId ??
+    (
+      await db
+        .insert(Instances)
+        .values({
+          canonicalOrigin: new URL(actorUri).origin,
+          domain: new URL(actorUri).hostname,
+          kind: InstanceKind.ACTIVITYPUB,
+          state: InstanceState.ACTIVE,
+        })
+        .returning()
+        .then(firstOrThrow)
+    ).id;
   const profile = await db
     .insert(Profiles)
     .values({
       displayName: handle,
       followPolicy: ProfileFollowPolicy.OPEN,
       handle,
-      instanceId: instance.id,
+      instanceId: profileInstanceId,
       normalizedHandle: handle,
       state: ProfileState.ACTIVE,
     })

@@ -107,7 +107,6 @@ test('settleEffects는 실패 뒤에도 모든 sibling effect 정산을 기다�
 });
 
 test(
-<<<<<<< HEAD
   'Remote Featured Workflow skips missing actors, clears empty collections, and retries replacement only',
   { timeout: 120_000 },
   async (t) => {
@@ -142,20 +141,6 @@ test(
             failNextNonemptyReplacement = false;
             throw new Error('temporary Featured replacement failure');
           }
-=======
-  'Quote resolution Workflow는 transient Activity 실패를 최대 10회만 재시도한다',
-  { timeout: 120_000 },
-  async (t) => {
-    const environment = await TestWorkflowEnvironment.createTimeSkipping();
-    t.after(() => environment.teardown());
-    const taskQueue = `${KOSMO_TASK_QUEUE}-quote-resolution-test-${process.pid}`;
-    let attempts = 0;
-    const worker = await Worker.create({
-      activities: {
-        resolveActivityPubQuoteActivity: async () => {
-          attempts += 1;
-          throw ApplicationFailure.retryable('temporary quote lookup outage');
->>>>>>> bb49c060d (feat(PROD-792): recover remote quote approval baseline)
         },
       },
       connection: environment.nativeConnection,
@@ -163,7 +148,6 @@ test(
       taskQueue,
       workflowsPath,
     });
-<<<<<<< HEAD
     const inputs: RemoteProfileFeaturedSyncInput[] = ['missing', 'empty', 'retry'].map(
       (suffix) => ({
         actorUri: `https://remote.example/users/${suffix}`,
@@ -212,19 +196,6 @@ test(
           collectionScheduledEventId,
       ),
     );
-=======
-
-    await worker.runUntil(async () => {
-      await assert.rejects(
-        environment.client.workflow.execute('activitypubQuoteResolutionWorkflow', {
-          args: [{ postId: '00000000-0000-8000-8000-000000000792', revision: 1 }],
-          taskQueue,
-          workflowId: 'activitypub-quote-resolution:retry-cap',
-        }),
-      );
-    });
-    assert.equal(attempts, 10);
->>>>>>> bb49c060d (feat(PROD-792): recover remote quote approval baseline)
   },
 );
 
@@ -2619,3 +2590,38 @@ test(
     ]);
   },
 );
+
+test(
+  'Quote resolution Workflow는 transient Activity 실패를 최대 10회만 재시도한다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createTimeSkipping();
+    t.after(() => environment.teardown());
+    const taskQueue = `${KOSMO_TASK_QUEUE}-quote-resolution-test-${process.pid}`;
+    let attempts = 0;
+    const worker = await Worker.create({
+      activities: {
+        resolveActivityPubQuoteActivity: async () => {
+          attempts += 1;
+          throw ApplicationFailure.retryable('temporary quote lookup outage');
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      await assert.rejects(
+        environment.client.workflow.execute('activitypubQuoteResolutionWorkflow', {
+          args: [{ postId: '00000000-0000-8000-8000-000000000792', revision: 1 }],
+          taskQueue,
+          workflowId: 'activitypub-quote-resolution:retry-cap',
+        }),
+      );
+    });
+    assert.equal(attempts, 10);
+  },
+);
+
