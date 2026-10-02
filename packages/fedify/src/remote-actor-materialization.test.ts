@@ -1265,24 +1265,28 @@ describe('remote actor materialization', () => {
     assert.deepEqual(await readPins(), []);
   });
 
-  test('verified Featured Notes replace pins in order while invalid attribution keeps the last snapshot', async () => {
+  test('syncs a Followers Only Featured Note without a local Follow and keeps pins on invalid attribution', async (t) => {
     const stored = await createStoredRemoteActor();
     const featuredUri = `${remoteActorUri.href}/featured`;
     const itemUris = [1, 2].map((index) => new URL(`https://${remoteDomain}/notes/${index}`));
     await db
       .update(ActivityPubActors)
-      .set({ featuredRevision: 1, featuredUri })
+      .set({
+        featuredRevision: 1,
+        featuredUri,
+        followersUri: `${remoteActorUri.href}/followers`,
+      })
       .where(eq(ActivityPubActors.id, stored.actor.id));
 
     const collection = new OrderedCollection({ id: new URL(featuredUri), items: itemUris });
     const document = await collection.toJsonLd({ format: 'expand' });
     const notes = itemUris.map(
-      (uri) =>
+      (uri, index) =>
         new Note({
           attribution: remoteActorUri,
           content: `Featured ${uri.pathname}`,
           id: uri,
-          to: PUBLIC_COLLECTION,
+          to: index === 1 ? new URL(`${remoteActorUri.href}/followers`) : PUBLIC_COLLECTION,
         }),
     );
     const documentLoader: DocumentLoader = async (url) => {
@@ -1320,6 +1324,19 @@ describe('remote actor materialization', () => {
       [0, 1],
     );
     assert.equal(pins[0]?.postId !== pins[1]?.postId, true);
+    assert.equal(
+      await db
+        .select({ visibility: Posts.visibility })
+        .from(Posts)
+        .where(eq(Posts.id, pins[1]!.postId))
+        .then(first)
+        .then((post) => post?.visibility),
+      PostVisibility.FOLLOWERS,
+    );
+    assert.equal(
+      await db.$count(ProfileFollows, eq(ProfileFollows.followeeProfileId, stored.profile.id)),
+      0,
+    );
 
     const otherProfile = await createProfile({ handle: 'mallory', instanceId: stored.instance.id });
     await db.update(Posts).set({ profileId: otherProfile.id }).where(eq(Posts.id, pins[1]!.postId));
@@ -1353,46 +1370,36 @@ describe('remote actor materialization', () => {
       pins,
     );
 
-    const follower = await createProfile({ handle: 'follower', instanceId: localInstanceId });
-    await db.insert(ProfileFollows).values({
-      followerProfileId: follower.id,
-      followeeProfileId: stored.profile.id,
-    });
-    notes[1] = new Note({
-      attribution: remoteActorUri,
-      content: 'Followers only',
-      id: itemUris[1],
-      to: new URL(`${remoteActorUri.href}/followers`),
-    });
-    await assert.rejects(syncRemoteFeaturedSnapshot(input), /Featured Note rejected/u);
-    assert.deepEqual(
-      await db
-        .select({ position: ProfilePinnedPosts.position, postId: ProfilePinnedPosts.postId })
-        .from(ProfilePinnedPosts)
-        .where(eq(ProfilePinnedPosts.profileId, stored.profile.id))
-        .orderBy(ProfilePinnedPosts.position),
-      pins,
-    );
-
-    const controller = new AbortController();
     let enteredLookup!: () => void;
     const entered = new Promise<void>((resolve) => {
       enteredLookup = resolve;
     });
-    const pending = syncRemoteFeaturedSnapshot({
-      ...input,
-      context: {
-        ...context,
-        lookupObject: async () => {
-          enteredLookup();
-          return new Promise<never>(() => undefined);
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    try {
+      const pending = syncRemoteFeaturedSnapshot({
+        ...input,
+        context: {
+          ...context,
+          lookupObject: async () => {
+            enteredLookup();
+            return new Promise<never>(() => undefined);
+          },
         },
-      },
-      signal: controller.signal,
-    });
-    await entered;
-    controller.abort();
-    await assert.rejects(pending, /aborted/u);
+      });
+      await entered;
+      t.mock.timers.tick(30_000);
+      await assert.rejects(pending, /deadline_exceeded/u);
+      assert.deepEqual(
+        await db
+          .select({ position: ProfilePinnedPosts.position, postId: ProfilePinnedPosts.postId })
+          .from(ProfilePinnedPosts)
+          .where(eq(ProfilePinnedPosts.profileId, stored.profile.id))
+          .orderBy(ProfilePinnedPosts.position),
+        pins,
+      );
+    } finally {
+      t.mock.timers.reset();
+    }
   });
 
   test('matches the remote actor Drizzle schema in PostgreSQL', async () => {

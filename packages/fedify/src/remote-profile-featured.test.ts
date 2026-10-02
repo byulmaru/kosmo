@@ -31,7 +31,7 @@ const createLoader = async (
   return documentLoader;
 };
 
-test('collects ordered item URIs across pages and forwards one cancellation signal', async () => {
+test('collects ordered item URIs across pages with one traversal signal', async () => {
   const pageOneUri = new URL(`${collectionUri.href}?page=1`);
   const pageTwoUri = new URL(`${collectionUri.href}?page=2`);
   const itemOneUri = new URL('https://remote.example/notes/1');
@@ -183,31 +183,27 @@ test('rejects page, item, and parsed-document budget exhaustion', async () => {
   );
 });
 
-test('rejects caller cancellation and the 30 second traversal deadline', async (t) => {
-  const controller = new AbortController();
-  controller.abort();
-  const cancelledLoader = await createLoader([]);
-  await assert.rejects(
-    collectRemoteFeaturedItemUris({
-      documentLoader: cancelledLoader,
-      featuredUri: collectionUri,
-      signal: controller.signal,
-    }),
-    /aborted/u,
-  );
-
+test('aborts a pending collection request at the 30 second traversal deadline', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   try {
-    const pendingLoader: DocumentLoader = async (_url, options) =>
-      new Promise((_resolve, reject) => {
-        options?.signal?.addEventListener('abort', () => reject(new Error('underlying abort')));
-      });
+    let enteredLoader!: () => void;
+    const entered = new Promise<void>((resolve) => {
+      enteredLoader = resolve;
+    });
+    let signal: AbortSignal | undefined;
+    const pendingLoader: DocumentLoader = async (_url, options) => {
+      signal = options?.signal;
+      enteredLoader();
+      return new Promise(() => undefined);
+    };
     const pending = collectRemoteFeaturedItemUris({
       documentLoader: pendingLoader,
       featuredUri: collectionUri,
     });
+    await entered;
     t.mock.timers.tick(30_000);
     await assert.rejects(pending, /deadline_exceeded/u);
+    assert.equal(signal?.aborted, true);
   } finally {
     t.mock.timers.reset();
   }
