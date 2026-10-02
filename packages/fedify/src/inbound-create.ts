@@ -2,7 +2,6 @@ import '@kosmo/core/polyfill';
 
 import { Note } from '@fedify/vocab';
 import { InstanceState, ProfileState } from '@kosmo/core/enums';
-import { findPostByActivityPubUri } from './activitypub-post-uri';
 import { uniqueHref } from './activitypub-uri';
 import { handleInboundCreateNote } from './inbound-create-note';
 import { observeInbound } from './inbound-observability';
@@ -65,7 +64,7 @@ export const handleInboundCreate = async (
   }
 
   if (object instanceof Note) {
-    await handleInboundCreateNote({
+    const materialization = await handleInboundCreateNote({
       actorUri,
       context,
       note: object,
@@ -73,11 +72,17 @@ export const handleInboundCreate = async (
       storedActor,
       receivedAt,
     });
+    if (materialization.status === 'rejected') {
+      return;
+    }
     if (await hasInboundQuote({ context, note: object })) {
-      const postId = await findPostByActivityPubUri(context, new URL(objectUri));
-      if (postId) {
-        await handleInboundQuote({ actorUri, context, note: object, postId, receivedAt });
-      }
+      await handleInboundQuote({
+        actorUri,
+        context,
+        note: object,
+        postId: materialization.postId,
+        receivedAt,
+      });
     }
     return;
   }

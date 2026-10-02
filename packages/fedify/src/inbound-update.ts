@@ -3,7 +3,7 @@ import '@kosmo/core/polyfill';
 import { isActor, Note } from '@fedify/vocab';
 import { ProfileState } from '@kosmo/core/enums';
 import { ConflictError } from '@kosmo/core/error';
-import { findPostByActivityPubUri } from './activitypub-post-uri';
+import { findRemotePostByActivityPubUri } from './activitypub-post-uri';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
 import { observeInbound } from './inbound-observability';
 import { handleInboundQuote, hasInboundQuote } from './inbound-quote';
@@ -65,8 +65,8 @@ export const handleInboundUpdate = async (
       return;
     }
 
-    const postId = await findPostByActivityPubUri(context, objectUri);
-    if (!postId) {
+    const identity = await findRemotePostByActivityPubUri(context, objectUri, actorUri);
+    if (identity.status === 'missing') {
       observeInbound({
         outcome: 'noop',
         activityType: 'Update',
@@ -78,13 +78,25 @@ export const handleInboundUpdate = async (
       });
       return;
     }
+    if (identity.status === 'author_mismatch') {
+      observeInbound({
+        outcome: 'rejected',
+        activityType: 'Update',
+        actorOrigin: actorUri.origin,
+        handler: 'update',
+        objectOrigin: objectUri.origin,
+        phase: 'validation',
+        reasonCode: 'stored_author_mismatch',
+      });
+      return;
+    }
 
     await handleInboundQuote({
       authorizationUpdate: true,
       actorUri: actorUri.href,
       context,
       note: object,
-      postId,
+      postId: identity.postId,
       receivedAt,
     });
     return;
