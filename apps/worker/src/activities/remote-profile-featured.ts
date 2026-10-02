@@ -66,6 +66,5 @@ export const syncRemoteFeaturedActivity = async (
     ...input,
     context,
     documentLoader,
-    followerProfileId: follower?.id,
   });
 };

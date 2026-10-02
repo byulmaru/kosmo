@@ -18,7 +18,6 @@ const MAX_DOCUMENT_BYTES = 2 * 1024 * 1024;
 const MAX_DURATION_MS = 30_000;
 
 type TraversalFailure =
-  | 'aborted'
   | 'deadline_exceeded'
   | 'document_budget_exceeded'
   | 'duplicate_item_uri'
@@ -36,28 +35,13 @@ class RemoteFeaturedTraversalError extends Error {
   }
 }
 
-const createAbortError = (signal: AbortSignal, deadlineReached: () => boolean) =>
-  deadlineReached() || signal.reason instanceof RemoteFeaturedTraversalError
-    ? new RemoteFeaturedTraversalError('deadline_exceeded')
-    : new RemoteFeaturedTraversalError('aborted');
-
-const throwIfAborted = (signal: AbortSignal, deadlineReached: () => boolean): void => {
-  if (signal.aborted) {
-    throw createAbortError(signal, deadlineReached);
-  }
-};
-
-const raceAbort = async <T>(
-  operation: Promise<T>,
-  signal: AbortSignal,
-  deadlineReached: () => boolean,
-): Promise<T> => {
+const raceAbort = async <T>(operation: Promise<T>, signal: AbortSignal): Promise<T> => {
   let rejectOnAbort: (() => void) | undefined;
   try {
     return await Promise.race([
       operation,
       new Promise<never>((_, reject) => {
-        rejectOnAbort = () => reject(createAbortError(signal, deadlineReached));
+        rejectOnAbort = () => reject(signal.reason);
         if (signal.aborted) {
           rejectOnAbort();
         } else {
@@ -83,7 +67,6 @@ const parsedDocumentBytes = (document: unknown): number => {
 export type CollectRemoteFeaturedItemUrisOptions = {
   documentLoader: DocumentLoader;
   featuredUri: URL | string;
-  signal?: AbortSignal;
 };
 
 /**
@@ -95,29 +78,19 @@ export type CollectRemoteFeaturedItemUrisOptions = {
 export const collectRemoteFeaturedItemUris = async ({
   documentLoader,
   featuredUri,
-  signal: externalSignal,
 }: CollectRemoteFeaturedItemUrisOptions): Promise<URL[]> => {
   const controller = new AbortController();
-  let deadlineReached = false;
-  const deadline = setTimeout(() => {
-    deadlineReached = true;
-    controller.abort(new RemoteFeaturedTraversalError('deadline_exceeded'));
-  }, MAX_DURATION_MS);
-  const forwardAbort = () => {
-    controller.abort(externalSignal?.reason);
-  };
-  if (externalSignal?.aborted) {
-    forwardAbort();
-  }
-  externalSignal?.addEventListener('abort', forwardAbort, { once: true });
+  const deadline = setTimeout(
+    () => controller.abort(new RemoteFeaturedTraversalError('deadline_exceeded')),
+    MAX_DURATION_MS,
+  );
 
   let documentBytes = 0;
   const loadedDocument = async (url: string) => {
-    throwIfAborted(controller.signal, () => deadlineReached);
+    controller.signal.throwIfAborted();
     const loaded = await raceAbort(
       documentLoader(url, { signal: controller.signal }),
       controller.signal,
-      () => deadlineReached,
     );
 
     documentBytes += parsedDocumentBytes(loaded.document);
@@ -136,7 +109,7 @@ export const collectRemoteFeaturedItemUris = async ({
   };
 
   try {
-    throwIfAborted(controller.signal, () => deadlineReached);
+    controller.signal.throwIfAborted();
     const requestedFeaturedUri = new URL(featuredUri).href;
     const root = await parseObject(requestedFeaturedUri);
     if (!(root instanceof OrderedCollection || root instanceof OrderedCollectionPage)) {
@@ -191,7 +164,7 @@ export const collectRemoteFeaturedItemUris = async ({
 
     let pageCount = 0;
     while (page !== null) {
-      throwIfAborted(controller.signal, () => deadlineReached);
+      controller.signal.throwIfAborted();
       pageCount += 1;
       if (pageCount > MAX_PAGES) {
         throw new RemoteFeaturedTraversalError('page_limit_exceeded');
@@ -231,7 +204,6 @@ export const collectRemoteFeaturedItemUris = async ({
     return orderedItems;
   } finally {
     clearTimeout(deadline);
-    externalSignal?.removeEventListener('abort', forwardAbort);
   }
 };
 
@@ -240,19 +212,15 @@ export const syncRemoteFeaturedSnapshot = async ({
   context,
   documentLoader,
   featuredUri,
-  followerProfileId,
   profileId,
   revision,
-  signal,
 }: {
   actorUri: string;
   context: Pick<Context<void>, 'canonicalOrigin' | 'lookupObject' | 'parseUri'>;
   documentLoader: DocumentLoader;
   featuredUri: string;
-  followerProfileId?: string;
   profileId: string;
   revision: number;
-  signal?: AbortSignal;
 }): Promise<boolean> => {
   if (!isHttpUri(new URL(featuredUri))) {
     throw new TypeError('Remote Featured URI must use HTTP(S)');
@@ -263,26 +231,14 @@ export const syncRemoteFeaturedSnapshot = async ({
     () => controller.abort(new RemoteFeaturedTraversalError('deadline_exceeded')),
     MAX_DURATION_MS,
   );
-  const forwardAbort = () => controller.abort(signal?.reason);
-  if (signal?.aborted) {
-    forwardAbort();
-  }
-  signal?.addEventListener('abort', forwardAbort, { once: true });
   let bytes = 0;
   const boundedLoader: DocumentLoader = async (url, options) => {
-    throwIfAborted(
-      controller.signal,
-      () => controller.signal.reason instanceof RemoteFeaturedTraversalError,
-    );
+    controller.signal.throwIfAborted();
     const loaded = await raceAbort(
       documentLoader(url, { ...options, signal: controller.signal }),
       controller.signal,
-      () => controller.signal.reason instanceof RemoteFeaturedTraversalError,
     );
-    throwIfAborted(
-      controller.signal,
-      () => controller.signal.reason instanceof RemoteFeaturedTraversalError,
-    );
+    controller.signal.throwIfAborted();
     bytes += parsedDocumentBytes(loaded.document);
     if (bytes > MAX_DOCUMENT_BYTES) {
       throw new RemoteFeaturedTraversalError('document_budget_exceeded');
@@ -294,14 +250,10 @@ export const syncRemoteFeaturedSnapshot = async ({
     const itemUris = await collectRemoteFeaturedItemUris({
       documentLoader: boundedLoader,
       featuredUri,
-      signal: controller.signal,
     });
     const postIds: string[] = [];
     for (const objectUri of itemUris) {
-      throwIfAborted(
-        controller.signal,
-        () => controller.signal.reason instanceof RemoteFeaturedTraversalError,
-      );
+      controller.signal.throwIfAborted();
       if (!isHttpUri(objectUri)) {
         throw new TypeError('Remote Featured item URI must use HTTP(S)');
       }
@@ -312,13 +264,12 @@ export const syncRemoteFeaturedSnapshot = async ({
           documentLoader: boundedLoader,
         }),
         controller.signal,
-        () => controller.signal.reason instanceof RemoteFeaturedTraversalError,
       );
       if (!(note instanceof Note) || note.id?.href !== objectUri.href) {
         throw new TypeError('Remote Featured item must be a Note at its advertised URI');
       }
       const result = await materializeHydratedRemoteNote({
-        audience: { advertisingActorUri: actorUri, followerProfileId },
+        advertisingActorUri: actorUri,
         context,
         note,
         objectUri,
@@ -339,13 +290,9 @@ export const syncRemoteFeaturedSnapshot = async ({
       }
       postIds.push(result.postId);
     }
-    throwIfAborted(
-      controller.signal,
-      () => controller.signal.reason instanceof RemoteFeaturedTraversalError,
-    );
+    controller.signal.throwIfAborted();
     return replaceRemoteFeaturedSnapshot({ actorUri, featuredUri, postIds, profileId, revision });
   } finally {
     clearTimeout(deadline);
-    signal?.removeEventListener('abort', forwardAbort);
   }
 };
