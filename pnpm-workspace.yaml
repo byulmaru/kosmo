@@ -35,6 +35,7 @@ minimumReleaseAgeExclude:
   - '@temporalio/workflow@1.22.0'
 overrides:
   '@opentelemetry/sdk-metrics@<2.8.0': ^2.8.0
+  'undici@': 6.28.1
   # Ajv accepts fast-uri 3.x, so keep the security override within its declared range.
   'ajv@8.20.0>fast-uri': 3.1.7
   # Expo Router exposes broad native peers; align every peer snapshot with SDK 56 / RN 0.85.
