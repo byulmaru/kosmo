@@ -34,7 +34,9 @@ type QuoteConsentIdentity = {
 
 type QuoteConsentExpectation = QuoteConsentIdentity & {
   readonly expectedRepostSourceId: string | null;
+  /** Capture with expectedApprovalUri before asynchronous protocol proof verification. */
   readonly expectedStatus: PostQuoteConsentStatusType | null;
+  /** Reuse the pre-verification value with expectedStatus in the write CAS. */
   readonly expectedApprovalUri: string | null;
 };
 
@@ -53,6 +55,12 @@ type QuoteConsentResolveOperation =
       readonly proof:
         | {
             readonly kind: 'AUTHORIZATION';
+            /**
+             * Pass only after freshly verifying the issuer's Authorization object from
+             * the current Quote Note or correlated Accept: interactingObject,
+             * interactionTarget, and attributedTo must match the Quote, Source, and
+             * Source author. Never reuse proof cached from before revocation.
+             */
             readonly approvalUri: string;
             readonly issuerActorUri: string;
           }
@@ -73,6 +81,12 @@ type QuoteConsentOperation =
       readonly issuerActorUri: string;
     };
 
+/**
+ * Capture the expected status and Authorization reference before asynchronous proof
+ * verification, then pass that same snapshot to this compare-and-swap. An Authorization
+ * URI is opaque and does not identify a grant generation: when an issuer reuses a URI,
+ * current grant verification or reconciliation must come from the caller's protocol path.
+ */
 export type ApplyPostQuoteConsentInput = QuoteConsentExpectation & QuoteConsentOperation;
 
 type PostIdentity = {
@@ -191,10 +205,17 @@ const transitionAllowed = (input: ApplyPostQuoteConsentInput) => {
         expectedStatus === null ||
         expectedStatus === PostQuoteConsentStatus.PENDING ||
         (input.result === PostQuoteConsentStatus.APPROVED &&
-          expectedStatus === PostQuoteConsentStatus.APPROVED &&
+          (expectedStatus === PostQuoteConsentStatus.APPROVED ||
+            expectedStatus === PostQuoteConsentStatus.REVOKED) &&
           expectedApprovalUri === null)
       );
     case 'RESOLVE':
+      if (expectedStatus === PostQuoteConsentStatus.REVOKED) {
+        return (
+          input.result === PostQuoteConsentStatus.APPROVED && input.proof.kind === 'AUTHORIZATION'
+        );
+      }
+
       return (
         expectedStatus === null ||
         expectedStatus === PostQuoteConsentStatus.PENDING ||

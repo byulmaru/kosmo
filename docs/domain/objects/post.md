@@ -129,6 +129,10 @@ Notification이 소유하며, Quote·Reply Parent·Repost Source의 구조와 �
 - 검증된 승인을 받으면 승인과 Source 관계를 연결하고 이미 전달한 Quote를 갱신한다. 거절·승인 철회 또는
   Source 삭제 시에는 Quote 자체 Content를 유지하고 Source 카드·관계는 비노출한다. 비노출을 위해 저장
   관계를 물리적으로 제거해야 하는지는 도메인 계약으로 고정하지 않는다.
+- 철회 뒤에는 현재 유효한 승인이 확인될 때까지 Quote를 미승인으로 취급하고 Source를 숨긴다. 같은 Quote는
+  로컬 원문 서버의 새 승인 결정 또는 원격 원문 서버가 현재 승인한 것으로 검증된 QuoteAuthorization으로
+  다시 승인할 수 있다. 승인 URI는 재사용될 수 있으므로 URI가 같다는 이유만으로 승인하지 않고 원문 서버의
+  현재 승인 상태를 확인한다. 재승인 뒤에도 Source 조회·차단 조건은 그대로 적용한다.
 - Local Source가 삭제되면 그 Source에 발급된 각 유효한 QuoteAuthorization을 철회하고, 승인에 결속된
   Quote Author의 inbox 또는 Quote 소유 서버가 수신하는 inbox로 `Delete(QuoteAuthorization)`을 전달한다.
   Quote 소유 서버는 이를 기존 Quote audience에 전달해 원문 작성자를 팔로우하지 않는 수신자도 Source

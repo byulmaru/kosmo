@@ -107,3 +107,9 @@ PROD-902 Spec 대화에서 사용자가 원격 `interactionPolicy`의 automatic/
 인용은 QuoteRequest와 유효한 QuoteAuthorization을 거치도록 결정했다. 정책이 없거나 해석할 수 없어도
 작성자의 자체 Content를 pending 상태로 게시하고 QuoteRequest를 보낸다. 자기 인용만 요청 없이 허용하며,
 `interactionPolicy`는 작성 전 UI·정책 힌트로만 사용한다.
+
+## 재승인 정정 (2026-10-03)
+
+철회 뒤 같은 Quote는 원문 서버의 현재 승인 결정이 확인되면 다시 승인할 수 있다. 승인 URI가 재사용될 수 있어
+URI 자체는 현재 승인의 증거가 아니다. 이 재승인 허용은 FEP-044f의 명시 규정이라고 주장하지 않으며, 상세한
+동작은 [Post 객체의 Quote federation 정책](../objects/post.md#quote-federation-정책)에 기록한다.

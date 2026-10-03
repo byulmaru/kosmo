@@ -165,6 +165,15 @@ test('remote Quote resolution stores pending Authorization references and CASes 
     sourceActorUri: sourceAuthor.actorUri,
     sourceUri,
   });
+  const boundExpectation = (
+    expectedStatus: PostQuoteConsentStatus,
+    expectedApprovalUri: string | null,
+  ) => ({
+    ...identity,
+    expectedApprovalUri,
+    expectedRepostSourceId: source.post.id,
+    expectedStatus,
+  });
   const identityMismatches = [
     { ...identity, quote: { ...identity.quote, uri: `${quoteUri}/stale` } },
     {
@@ -539,17 +548,7 @@ test('remote Quote resolution stores pending Authorization references and CASes 
   assert.equal(approvedB?.approvalUri, approvalUriB);
 
   const refreshed = await applyPostQuoteConsent({
-    ...expectation({
-      quote: quote.post,
-      quoteActorUri: quoteAuthor.actorUri,
-      quoteUri,
-      source: source.post,
-      sourceActorUri: sourceAuthor.actorUri,
-      sourceUri,
-      expectedApprovalUri: approvalUriB,
-      expectedRepostSourceId: source.post.id,
-      expectedStatus: PostQuoteConsentStatus.APPROVED,
-    }),
+    ...boundExpectation(PostQuoteConsentStatus.APPROVED, approvalUriB),
     operation: 'RESOLVE',
     result: 'APPROVED',
     quoteAuthorActorUri: quoteAuthor.actorUri,
@@ -563,37 +562,118 @@ test('remote Quote resolution stores pending Authorization references and CASes 
   assert.equal(refreshed?.status, PostQuoteConsentStatus.APPROVED);
   assert.equal(refreshed?.approvalUri, approvalUriB);
 
+  const approvedA = await applyPostQuoteConsent({
+    ...boundExpectation(PostQuoteConsentStatus.APPROVED, approvalUriB),
+    operation: 'RESOLVE',
+    result: 'APPROVED',
+    quoteAuthorActorUri: quoteAuthor.actorUri,
+    proof: {
+      kind: 'AUTHORIZATION',
+      approvalUri: approvalUriA,
+      issuerActorUri: sourceAuthor.actorUri,
+    },
+  });
+  assert.equal(approvedA?.changed, true);
+  assert.equal(approvedA?.status, PostQuoteConsentStatus.APPROVED);
+  assert.equal(approvedA?.approvalUri, approvalUriA);
+
+  const preRevokeApprovalInput = {
+    ...boundExpectation(PostQuoteConsentStatus.APPROVED, approvalUriA),
+    operation: 'RESOLVE' as const,
+    result: 'APPROVED' as const,
+    quoteAuthorActorUri: quoteAuthor.actorUri,
+    proof: {
+      kind: 'AUTHORIZATION' as const,
+      approvalUri: approvalUriA,
+      issuerActorUri: sourceAuthor.actorUri,
+    },
+  };
   const revoked = await applyPostQuoteConsent({
-    ...expectation({
-      quote: quote.post,
-      quoteActorUri: quoteAuthor.actorUri,
-      quoteUri,
-      source: source.post,
-      sourceActorUri: sourceAuthor.actorUri,
-      sourceUri,
-      expectedApprovalUri: approvalUriB,
-      expectedRepostSourceId: source.post.id,
-      expectedStatus: PostQuoteConsentStatus.APPROVED,
-    }),
+    ...boundExpectation(PostQuoteConsentStatus.APPROVED, approvalUriA),
     operation: 'REVOKE',
-    approvalUri: approvalUriB,
+    approvalUri: approvalUriA,
     issuerActorUri: sourceAuthor.actorUri,
   });
   assert.equal(revoked?.status, PostQuoteConsentStatus.REVOKED);
-  assert.equal(revoked?.approvalUri, approvalUriB);
+  assert.equal(revoked?.approvalUri, approvalUriA);
 
-  const lateApproval = await applyPostQuoteConsent({
-    ...expectation({
-      quote: quote.post,
-      quoteActorUri: quoteAuthor.actorUri,
-      quoteUri,
-      source: source.post,
-      sourceActorUri: sourceAuthor.actorUri,
-      sourceUri,
-      expectedApprovalUri: approvalUriB,
-      expectedRepostSourceId: source.post.id,
-      expectedStatus: PostQuoteConsentStatus.REVOKED,
+  assert.equal(await applyPostQuoteConsent(preRevokeApprovalInput), null);
+
+  const revokedExpectation = boundExpectation(PostQuoteConsentStatus.REVOKED, approvalUriA);
+  const deniedReapprovals = await Promise.all([
+    applyPostQuoteConsent({
+      ...revokedExpectation,
+      operation: 'RESOLVE',
+      result: 'PENDING',
+      approvalUri: approvalUriB,
+      quoteAuthorActorUri: quoteAuthor.actorUri,
     }),
+    applyPostQuoteConsent({
+      ...revokedExpectation,
+      operation: 'RESOLVE',
+      result: 'APPROVED',
+      quoteAuthorActorUri: quoteAuthor.actorUri,
+      proof: { kind: 'SELF' },
+    }),
+    applyPostQuoteConsent({
+      ...revokedExpectation,
+      operation: 'RESOLVE',
+      result: 'APPROVED',
+      quoteAuthorActorUri: quoteAuthor.actorUri,
+      proof: { kind: 'LEGACY_QUOTE_URL' },
+    }),
+    applyPostQuoteConsent({
+      ...revokedExpectation,
+      operation: 'RESOLVE',
+      result: 'APPROVED',
+      quoteAuthorActorUri: quoteAuthor.actorUri,
+      proof: {
+        kind: 'AUTHORIZATION',
+        approvalUri: approvalUriA,
+        issuerActorUri: `${sourceAuthor.actorUri}/wrong-issuer`,
+      },
+    }),
+  ]);
+  assert.deepEqual(deniedReapprovals, [null, null, null, null]);
+
+  const stillRevoked = await db
+    .select({
+      quoteConsentApprovalUri: Posts.quoteConsentApprovalUri,
+      quoteConsentStatus: Posts.quoteConsentStatus,
+    })
+    .from(Posts)
+    .where(eq(Posts.id, quote.post.id))
+    .limit(1)
+    .then(firstOrThrow);
+  assert.equal(stillRevoked.quoteConsentStatus, PostQuoteConsentStatus.REVOKED);
+  assert.equal(stillRevoked.quoteConsentApprovalUri, approvalUriA);
+
+  const sameReferenceReapproval = await applyPostQuoteConsent({
+    ...revokedExpectation,
+    operation: 'RESOLVE',
+    result: 'APPROVED',
+    quoteAuthorActorUri: quoteAuthor.actorUri,
+    proof: {
+      kind: 'AUTHORIZATION',
+      approvalUri: approvalUriA,
+      issuerActorUri: sourceAuthor.actorUri,
+    },
+  });
+  assert.equal(sameReferenceReapproval?.changed, true);
+  assert.equal(sameReferenceReapproval?.status, PostQuoteConsentStatus.APPROVED);
+  assert.equal(sameReferenceReapproval?.approvalUri, approvalUriA);
+
+  const revokedAgain = await applyPostQuoteConsent({
+    ...boundExpectation(PostQuoteConsentStatus.APPROVED, approvalUriA),
+    operation: 'REVOKE',
+    approvalUri: approvalUriA,
+    issuerActorUri: sourceAuthor.actorUri,
+  });
+  assert.equal(revokedAgain?.status, PostQuoteConsentStatus.REVOKED);
+  assert.equal(revokedAgain?.approvalUri, approvalUriA);
+
+  const replacementReapproval = await applyPostQuoteConsent({
+    ...boundExpectation(PostQuoteConsentStatus.REVOKED, approvalUriA),
     operation: 'RESOLVE',
     result: 'APPROVED',
     quoteAuthorActorUri: quoteAuthor.actorUri,
@@ -603,7 +683,8 @@ test('remote Quote resolution stores pending Authorization references and CASes 
       issuerActorUri: sourceAuthor.actorUri,
     },
   });
-  assert.equal(lateApproval, null);
+  assert.equal(replacementReapproval?.status, PostQuoteConsentStatus.APPROVED);
+  assert.equal(replacementReapproval?.approvalUri, approvalUriB);
 
   const persistedQuote = await db
     .select()
@@ -670,15 +751,20 @@ test('Quote decisions and local Authorization revocation preserve authored Quote
     grantQuoteUri,
     'Remote Quote with local grant',
   );
-  const localGrant = await applyPostQuoteConsent({
-    ...expectation({
+  const localGrantExpectation = (expectedStatus: PostQuoteConsentStatus | null = null) =>
+    expectation({
       quote: grantQuote.post,
       quoteActorUri: remoteQuoteAuthor.actorUri,
       quoteUri: grantQuoteUri,
       source: sourceResult.post,
       sourceActorUri: localAuthor.actorUri,
       sourceUri: localSourceUri,
-    }),
+      expectedApprovalUri: null,
+      expectedRepostSourceId: expectedStatus === null ? null : sourceResult.post.id,
+      expectedStatus,
+    });
+  const localGrant = await applyPostQuoteConsent({
+    ...localGrantExpectation(),
     operation: 'DECIDE',
     result: 'APPROVED',
     issuerActorUri: localAuthor.actorUri,
@@ -691,17 +777,7 @@ test('Quote decisions and local Authorization revocation preserve authored Quote
     publicOrigin,
   ).href;
   const invalidLocalRevocation = await applyPostQuoteConsent({
-    ...expectation({
-      quote: grantQuote.post,
-      quoteActorUri: remoteQuoteAuthor.actorUri,
-      quoteUri: grantQuoteUri,
-      source: sourceResult.post,
-      sourceActorUri: localAuthor.actorUri,
-      sourceUri: localSourceUri,
-      expectedApprovalUri: null,
-      expectedRepostSourceId: sourceResult.post.id,
-      expectedStatus: PostQuoteConsentStatus.APPROVED,
-    }),
+    ...localGrantExpectation(PostQuoteConsentStatus.APPROVED),
     operation: 'REVOKE',
     approvalUri: `${localAuthorizationUri}-stale`,
     issuerActorUri: localAuthor.actorUri,
@@ -709,23 +785,46 @@ test('Quote decisions and local Authorization revocation preserve authored Quote
   assert.equal(invalidLocalRevocation, null);
 
   const localRevocation = await applyPostQuoteConsent({
-    ...expectation({
-      quote: grantQuote.post,
-      quoteActorUri: remoteQuoteAuthor.actorUri,
-      quoteUri: grantQuoteUri,
-      source: sourceResult.post,
-      sourceActorUri: localAuthor.actorUri,
-      sourceUri: localSourceUri,
-      expectedApprovalUri: null,
-      expectedRepostSourceId: sourceResult.post.id,
-      expectedStatus: PostQuoteConsentStatus.APPROVED,
-    }),
+    ...localGrantExpectation(PostQuoteConsentStatus.APPROVED),
     operation: 'REVOKE',
     approvalUri: localAuthorizationUri,
     issuerActorUri: localAuthor.actorUri,
   });
   assert.equal(localRevocation?.status, PostQuoteConsentStatus.REVOKED);
   assert.equal(localRevocation?.approvalUri, null);
+
+  const rejectedReapproval = await applyPostQuoteConsent({
+    ...localGrantExpectation(PostQuoteConsentStatus.REVOKED),
+    operation: 'DECIDE',
+    result: 'REJECTED',
+    issuerActorUri: localAuthor.actorUri,
+  });
+  assert.equal(rejectedReapproval, null);
+
+  const localReapproval = await applyPostQuoteConsent({
+    ...localGrantExpectation(PostQuoteConsentStatus.REVOKED),
+    operation: 'DECIDE',
+    result: 'APPROVED',
+    issuerActorUri: localAuthor.actorUri,
+  });
+  assert.equal(localReapproval?.status, PostQuoteConsentStatus.APPROVED);
+  assert.equal(localReapproval?.approvalUri, null);
+
+  const localReapprovalRevocation = await applyPostQuoteConsent({
+    ...localGrantExpectation(PostQuoteConsentStatus.APPROVED),
+    operation: 'REVOKE',
+    approvalUri: localAuthorizationUri,
+    issuerActorUri: localAuthor.actorUri,
+  });
+  assert.equal(localReapprovalRevocation?.status, PostQuoteConsentStatus.REVOKED);
+  assert.equal(localReapprovalRevocation?.approvalUri, null);
+  const persistedGrantQuote = await db
+    .select({ currentContentId: Posts.currentContentId })
+    .from(Posts)
+    .where(eq(Posts.id, grantQuote.post.id))
+    .limit(1)
+    .then(firstOrThrow);
+  assert.equal(persistedGrantQuote.currentContentId, grantQuote.content.id);
 
   const localQuoteDocument: PostContentDocumentV1 = {
     version: 1,
