@@ -38,45 +38,50 @@ export async function loadDatabaseCountsSnapshotActivity(): Promise<DatabaseCoun
     const [profiles] = await database
       .select({
         snapshotAt: sql<string>`to_char(statement_timestamp() at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`,
-        profileCount: sql<string>`count(*)::text`,
-        profileLocalCount: sql<string>`count(*) filter (where ${Instances.kind} = ${InstanceKind.LOCAL})::text`,
-        profileRemoteCount: sql<string>`count(*) filter (where ${Instances.kind} = ${InstanceKind.ACTIVITYPUB})::text`,
-        profileActiveCount: sql<string>`count(*) filter (where ${Profiles.state} = ${ProfileState.ACTIVE})::text`,
-        profileDisabledCount: sql<string>`count(*) filter (where ${Profiles.state} = ${ProfileState.DISABLED})::text`,
-        profileSuspendedCount: sql<string>`count(*) filter (where ${Profiles.state} = ${ProfileState.SUSPENDED})::text`,
+        profileCount: sql`count(*)`.mapWith(asCount),
+        profileLocalCount:
+          sql`count(*) filter (where ${Instances.kind} = ${InstanceKind.LOCAL})`.mapWith(asCount),
+        profileRemoteCount:
+          sql`count(*) filter (where ${Instances.kind} = ${InstanceKind.ACTIVITYPUB})`.mapWith(
+            asCount,
+          ),
+        profileActiveCount:
+          sql`count(*) filter (where ${Profiles.state} = ${ProfileState.ACTIVE})`.mapWith(asCount),
+        profileDisabledCount:
+          sql`count(*) filter (where ${Profiles.state} = ${ProfileState.DISABLED})`.mapWith(
+            asCount,
+          ),
+        profileSuspendedCount:
+          sql`count(*) filter (where ${Profiles.state} = ${ProfileState.SUSPENDED})`.mapWith(
+            asCount,
+          ),
       })
       .from(Profiles)
       .innerJoin(Instances, eq(Instances.id, Profiles.instanceId));
 
     const [posts] = await database
       .select({
-        postCount: sql<string>`count(*)::text`,
-        postLocalCount: sql<string>`count(*) filter (where ${Instances.kind} = ${InstanceKind.LOCAL})::text`,
-        postRemoteCount: sql<string>`count(*) filter (where ${Instances.kind} = ${InstanceKind.ACTIVITYPUB})::text`,
-        postActiveCount: sql<string>`count(*) filter (where ${Posts.state} = ${PostState.ACTIVE})::text`,
-        postDeletedCount: sql<string>`count(*) filter (where ${Posts.state} = ${PostState.DELETED})::text`,
+        postCount: sql`count(*)`.mapWith(asCount),
+        postLocalCount:
+          sql`count(*) filter (where ${Instances.kind} = ${InstanceKind.LOCAL})`.mapWith(asCount),
+        postRemoteCount:
+          sql`count(*) filter (where ${Instances.kind} = ${InstanceKind.ACTIVITYPUB})`.mapWith(
+            asCount,
+          ),
+        postActiveCount: sql`count(*) filter (where ${Posts.state} = ${PostState.ACTIVE})`.mapWith(
+          asCount,
+        ),
+        postDeletedCount:
+          sql`count(*) filter (where ${Posts.state} = ${PostState.DELETED})`.mapWith(asCount),
       })
       .from(Posts)
       .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
       .innerJoin(Instances, eq(Instances.id, Profiles.instanceId));
 
-    if (!profiles || !posts) {
-      throw new Error('Database count snapshot query returned no rows.');
-    }
-
     return {
+      ...profiles,
+      ...posts,
       snapshotAt: Temporal.Instant.from(profiles.snapshotAt).toString(),
-      profileCount: asCount(profiles.profileCount),
-      profileLocalCount: asCount(profiles.profileLocalCount),
-      profileRemoteCount: asCount(profiles.profileRemoteCount),
-      profileActiveCount: asCount(profiles.profileActiveCount),
-      profileDisabledCount: asCount(profiles.profileDisabledCount),
-      profileSuspendedCount: asCount(profiles.profileSuspendedCount),
-      postCount: asCount(posts.postCount),
-      postLocalCount: asCount(posts.postLocalCount),
-      postRemoteCount: asCount(posts.postRemoteCount),
-      postActiveCount: asCount(posts.postActiveCount),
-      postDeletedCount: asCount(posts.postDeletedCount),
     };
   });
 }

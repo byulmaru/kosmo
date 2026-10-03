@@ -32,15 +32,13 @@ const snapshot: DatabaseCountsSnapshot = {
 };
 
 const environmentKeys = ['ENVIRONMENT', 'POSTHOG_HOST', 'POSTHOG_KEY'] as const;
+const originalEnvironment = Object.fromEntries(
+  environmentKeys.map((key) => [key, process.env[key]]),
+);
 
 function setEnvironment(
   values: Partial<Record<(typeof environmentKeys)[number], string | undefined>>,
-): () => void {
-  const previous = {
-    ENVIRONMENT: process.env.ENVIRONMENT,
-    POSTHOG_HOST: process.env.POSTHOG_HOST,
-    POSTHOG_KEY: process.env.POSTHOG_KEY,
-  };
+): void {
   for (const key of environmentKeys) {
     const value = values[key];
     if (value === undefined) {
@@ -49,16 +47,6 @@ function setEnvironment(
       process.env[key] = value;
     }
   }
-  return () => {
-    for (const key of environmentKeys) {
-      const value = previous[key];
-      if (value === undefined) {
-        delete process.env[key];
-      } else {
-        process.env[key] = value;
-      }
-    }
-  };
 }
 
 test('snapshot Activity는 dev에서 DB를 읽거나 PostHog로 보내지 않는다', async (t) => {
@@ -67,12 +55,12 @@ test('snapshot Activity는 dev에서 DB를 읽거나 PostHog로 보내지 않는
     requests += 1;
     return new Response(null, { status: 200 });
   });
-  const restore = setEnvironment({
+  t.after(() => setEnvironment(originalEnvironment));
+  setEnvironment({
     ENVIRONMENT: 'dev',
     POSTHOG_HOST: undefined,
     POSTHOG_KEY: undefined,
   });
-  t.after(restore);
 
   assert.equal(await loadDatabaseCountsSnapshotActivity(), null);
   await captureDatabaseCountsSnapshotActivity({
@@ -85,12 +73,12 @@ test('snapshot Activity는 dev에서 DB를 읽거나 PostHog로 보내지 않는
 test('PostHog capture는 승인된 집계와 고정 ID를 보낸다', async (t) => {
   let requestUrl: string | undefined;
   let payload: Record<string, unknown> | undefined;
-  const restore = setEnvironment({
+  t.after(() => setEnvironment(originalEnvironment));
+  setEnvironment({
     ENVIRONMENT: 'prod',
     POSTHOG_HOST: 'https://us.i.posthog.com',
     POSTHOG_KEY: 'public-capture-key',
   });
-  t.after(restore);
   t.mock.method(globalThis, 'fetch', async (input: string | URL | Request, init?: RequestInit) => {
     requestUrl = String(input);
     assert.equal(init?.method, 'POST');
@@ -130,12 +118,12 @@ test('PostHog capture는 승인된 집계와 고정 ID를 보낸다', async (t) 
 });
 
 test('PostHog capture는 prod 설정 누락과 실패 응답을 실패로 반환한다', async (t) => {
-  const restore = setEnvironment({
+  t.after(() => setEnvironment(originalEnvironment));
+  setEnvironment({
     ENVIRONMENT: 'prod',
     POSTHOG_HOST: undefined,
     POSTHOG_KEY: 'capture-key',
   });
-  t.after(restore);
   await assert.rejects(
     captureDatabaseCountsSnapshotActivity({
       snapshot,

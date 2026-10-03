@@ -1569,7 +1569,6 @@ test(
     };
     const captured: Array<{ snapshot: DatabaseCountsSnapshot; eventId: string }> = [];
     let snapshotAvailable = true;
-    let captureAttempts = 0;
     const worker = await Worker.create({
       activities: {
         loadDatabaseCountsSnapshotActivity: async () => (snapshotAvailable ? snapshot : null),
@@ -1578,8 +1577,7 @@ test(
           eventId: string;
         }) => {
           captured.push(input);
-          captureAttempts += 1;
-          if (captureAttempts === 1) {
+          if (captured.length === 1) {
             throw new Error('temporary PostHog failure');
           }
         },

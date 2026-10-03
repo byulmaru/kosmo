@@ -28,8 +28,10 @@ test('없는 스케줄은 필요한 실행 연결만 활성 상태로 생성한�
     return undefined;
   });
 
-  const registrations = await runSchedules(connection, 'kosmo-dev', 'dev');
-  assert.deepEqual(registrations, [{ scheduleId, action: 'created' }]);
+  const registrations = await runSchedules(connection, 'kosmo-prod', 'dev');
+  assert.deepEqual(registrations, [
+    { scheduleId: 'kosmo-prod-notification-cleanup', action: 'created' },
+  ]);
   assert.equal(created.length, 1);
   const options = created[0];
   assert.ok(options);
@@ -79,20 +81,4 @@ test('database snapshot 스케줄은 ENVIRONMENT가 prod일 때만 등록한다'
     assert.equal(options.action.taskQueue, KOSMO_TASK_QUEUE);
   }
   assert.equal(options.policies?.overlap, 'SKIP');
-});
-
-test('database snapshot 스케줄은 namespace 이름이 prod여도 dev에서는 등록하지 않는다', async (t) => {
-  const created: ScheduleOptions[] = [];
-  const connection: ConnectionLike = Connection.lazy();
-  t.after(() => connection.close());
-  t.mock.method(ScheduleClient.prototype, 'create', async (options: ScheduleOptions) => {
-    created.push(options);
-    return undefined;
-  });
-
-  await runSchedules(connection, 'kosmo-prod', 'dev');
-  assert.deepEqual(
-    created.map(({ scheduleId: id }) => id),
-    ['kosmo-prod-notification-cleanup'],
-  );
 });

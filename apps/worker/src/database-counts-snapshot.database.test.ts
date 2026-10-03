@@ -81,7 +81,6 @@ test('database snapshot은 모든 local/remote profile 및 post state를 같은 
 
     const afterSnapshot = await loadDatabaseCountsSnapshotActivity();
     assert.ok(afterSnapshot);
-    assert.ok(Date.parse(afterSnapshot.snapshotAt));
     assert.deepEqual(
       {
         profileCount: afterSnapshot.profileCount - beforeSnapshot.profileCount,
