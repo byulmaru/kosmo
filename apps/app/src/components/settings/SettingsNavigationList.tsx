@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ActivityIndicator, Linking, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { useFeatureFlag } from '@/components/FeatureFlagsContext';
 import { getNativeNotificationPermissionStatus } from '@/components/native-push/nativePushClient';
 import { useRequestNativePushPermissionAndSync } from '@/components/native-push/nativePushPermissionContext';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -10,7 +11,12 @@ import { ByulmaruIdAccountSettingsEntry } from './ByulmaruIdAccountSettingsEntry
 import { SettingsItem } from './SettingsItem';
 import { SettingsLinkRow } from './SettingsLinkRow';
 
-type SettingsDestination = 'default-post-visibility' | 'mute-and-block' | 'theme' | 'info';
+type SettingsDestination =
+  | 'default-post-visibility'
+  | 'profile-migration'
+  | 'mute-and-block'
+  | 'theme'
+  | 'info';
 
 export function SettingsNavigationList({
   pathname,
@@ -20,6 +26,7 @@ export function SettingsNavigationList({
   selected?: SettingsDestination;
 }) {
   const themePreference = useThemePreference();
+  const migrationEnabled = useFeatureFlag('profile-migration');
   return (
     <View
       accessibilityLabel="설정 목록"
@@ -35,6 +42,16 @@ export function SettingsNavigationList({
         currentPage={pathname === '/settings/default-post-visibility'}
         selected={selected === 'default-post-visibility'}
       />
+      {migrationEnabled ? (
+        <SettingsLinkRow
+          accessibilityLabel="다른 서비스에서 이전 설정 열기"
+          href="/settings/profile-migration"
+          label="다른 서비스에서 이전"
+          primary
+          currentPage={pathname === '/settings/profile-migration'}
+          selected={selected === 'profile-migration'}
+        />
+      ) : null}
       <SettingsLinkRow
         accessibilityLabel="뮤트 및 차단 설정 열기"
         href="/settings/mute-and-block"

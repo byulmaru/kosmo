@@ -1,17 +1,17 @@
 import { StyleSheet, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
-import { ProfileDefaultPostVisibilityControl } from '@/components/profile/ProfileDefaultPostVisibilityControl';
+import { useFeatureFlag } from '@/components/FeatureFlagsContext';
+import { ProfileMigrationSourceControl } from '@/components/profile/ProfileMigrationSourceControl';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { StateView } from '@/components/ui/StateView';
 import { spacing } from '@/theme/tokens';
-import type { SettingsProfileDetailQuery } from './__generated__/SettingsProfileDetailQuery.graphql';
+import type { SettingsProfileMigrationDetailQuery } from './__generated__/SettingsProfileMigrationDetailQuery.graphql';
 
-const SettingsProfileQuery = graphql`
-  query SettingsProfileDetailQuery {
+const SettingsProfileMigrationQuery = graphql`
+  query SettingsProfileMigrationDetailQuery {
     currentSession {
       selectedProfile {
-        id
         instance {
           kind
         }
@@ -20,28 +20,33 @@ const SettingsProfileQuery = graphql`
             role
           }
         }
-        ...ProfileDefaultPostVisibilityControl_profile
+        ...ProfileMigrationSourceControl_profile
       }
     }
   }
 `;
 
-export function SettingsProfileDetail() {
+export function SettingsProfileMigrationDetail() {
+  const migrationEnabled = useFeatureFlag('profile-migration');
+  if (!migrationEnabled) {
+    return <StateView title="현재 이용할 수 없는 설정이에요" />;
+  }
+
   return (
     <RouteBoundary
-      loading={<StateView loading title="Profile 설정을 불러오는 중입니다." />}
-      title="Profile 설정을 불러오지 못했어요"
+      loading={<StateView loading title="이전 설정을 불러오는 중입니다." />}
+      title="이전 설정을 불러오지 못했어요"
     >
-      <SettingsProfileDetailContents />
+      <SettingsProfileMigrationDetailContents />
     </RouteBoundary>
   );
 }
 
-function SettingsProfileDetailContents() {
+function SettingsProfileMigrationDetailContents() {
   const { fetchKey } = useRouteBoundary();
   const shellChrome = useShellChrome();
-  const data = useLazyLoadQuery<SettingsProfileDetailQuery>(
-    SettingsProfileQuery,
+  const data = useLazyLoadQuery<SettingsProfileMigrationDetailQuery>(
+    SettingsProfileMigrationQuery,
     {},
     { fetchKey, fetchPolicy: 'store-and-network' },
   );
@@ -57,14 +62,11 @@ function SettingsProfileDetailContents() {
     );
   }
 
-  const editable = profile.viewerState?.membership?.role === 'OWNER';
-
   return (
     <View style={styles.root}>
-      <ProfileDefaultPostVisibilityControl
-        editable={editable}
+      <ProfileMigrationSourceControl
+        editable={profile.viewerState?.membership?.role === 'OWNER'}
         profile={profile}
-        showTitle={false}
       />
     </View>
   );

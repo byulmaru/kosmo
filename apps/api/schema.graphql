@@ -295,6 +295,7 @@ type Mutation {
   unfollowProfile(input: UnfollowProfileInput!): UnfollowProfilePayload!
   unmuteProfile(input: UnmuteProfileInput!): UnmuteProfilePayload!
   unpinProfilePost(input: UnpinProfilePostInput!): UnpinProfilePostPayload!
+  unregisterProfileMigrationSource: UnregisterProfileMigrationSourcePayload!
   unregisterPushInstallation(input: UnregisterPushInstallationInput!): UnregisterPushInstallationPayload!
   updateProfile(input: UpdateProfileInput!): UpdateProfilePayload!
   updatePushInstallation(input: UpdatePushInstallationInput!): UpdatePushInstallationPayload!
@@ -506,6 +507,7 @@ type ProfileIncomingProfileFollowRequestsConnectionEdge {
 }
 
 type ProfileInstance {
+  canonicalOrigin: String
   kind: InstanceKind!
 }
 
@@ -714,6 +716,10 @@ input UnpinProfilePostInput {
 
 type UnpinProfilePostPayload {
   changed: Boolean!
+  profile: Profile!
+}
+
+type UnregisterProfileMigrationSourcePayload {
   profile: Profile!
 }
 

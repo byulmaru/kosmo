@@ -70,6 +70,10 @@ describe('getShellLayout', () => {
       leading: 'back',
       title: '게시물 기본 공개 범위',
     });
+    assert.deepEqual(getWebMobileShellHeader(true, 390, '/settings/profile-migration', []), {
+      leading: 'back',
+      title: '다른 서비스에서 이전',
+    });
     assert.deepEqual(getWebMobileShellHeader(true, 390, '/settings/mute-and-block', []), {
       leading: 'back',
       title: '뮤트 및 차단',
@@ -108,6 +112,7 @@ describe('getShellLayout', () => {
   it('treats only the canonical Settings route family as Settings', () => {
     assert.equal(isSettingsRoute('/settings'), true);
     assert.equal(isSettingsRoute('/settings/default-post-visibility'), true);
+    assert.equal(isSettingsRoute('/settings/profile-migration'), true);
     assert.equal(isSettingsRoute('/settings-legacy'), false);
     assert.equal(isSettingsRoute('/profile/settings'), false);
   });

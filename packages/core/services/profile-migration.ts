@@ -66,3 +66,13 @@ export const prepareProfileMigration = async (input: PrepareProfileMigrationInpu
 
     throw new ConflictError({ message: 'Profile migration pair conflicts' });
   });
+
+export type UnregisterProfileMigrationSourceInput = {
+  readonly targetProfileId: string;
+};
+
+export const unregisterProfileMigrationSource = async ({
+  targetProfileId,
+}: UnregisterProfileMigrationSourceInput): Promise<void> => {
+  await db.delete(ProfileMigrations).where(eq(ProfileMigrations.targetProfileId, targetProfileId));
+};

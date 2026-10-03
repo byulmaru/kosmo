@@ -1,9 +1,13 @@
 import baseMeta, {
+  DestinationAddressUnavailable as destinationAddressUnavailable,
   FailureAndRetry as failureAndRetry,
-  LateCompletionIgnoredAfterEnvironmentTransition as lateCompletionIgnoredAfterEnvironmentTransition,
+  LateCompletionIgnoredAfterActorLifecycleReset as lateCompletionIgnoredAfterActorLifecycleReset,
   LongSourceReflowAtNarrowMobile as longSourceReflowAtNarrowMobile,
   LongSourceReflowAtWideWeb as longSourceReflowAtWideWeb,
+  MemberCannotUnregisterPreparedSource as memberCannotUnregisterPreparedSource,
+  OwnerNullSourceUnregisterThenRegister as ownerNullSourceUnregisterThenRegister,
   OwnerPreparationAndSuccess as ownerPreparationAndSuccess,
+  OwnerUnregistersPreparedSource as ownerUnregistersPreparedSource,
 } from './ProfileMigrationSourceControl.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
@@ -17,8 +21,12 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const OwnerPreparationAndSuccess: Story = ownerPreparationAndSuccess;
+export const OwnerNullSourceUnregisterThenRegister: Story = ownerNullSourceUnregisterThenRegister;
+export const OwnerUnregistersPreparedSource: Story = ownerUnregistersPreparedSource;
+export const MemberCannotUnregisterPreparedSource: Story = memberCannotUnregisterPreparedSource;
 export const FailureAndRetry: Story = failureAndRetry;
-export const LateCompletionIgnoredAfterEnvironmentTransition: Story =
-  lateCompletionIgnoredAfterEnvironmentTransition;
+export const LateCompletionIgnoredAfterActorLifecycleReset: Story =
+  lateCompletionIgnoredAfterActorLifecycleReset;
+export const DestinationAddressUnavailable: Story = destinationAddressUnavailable;
 export const LongSourceReflowAtNarrowMobile: Story = longSourceReflowAtNarrowMobile;
 export const LongSourceReflowAtWideWeb: Story = longSourceReflowAtWideWeb;

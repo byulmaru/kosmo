@@ -36,6 +36,7 @@ export type WebMobileShellHeader = Readonly<{
   title:
     | '게시글'
     | '게시물 기본 공개 범위'
+    | '다른 서비스에서 이전'
     | '뮤트 및 차단'
     | '뮤트한 프로필'
     | '차단한 프로필'
@@ -88,6 +89,9 @@ export function getWebMobileShellHeader(
   }
   if (pathname === '/settings/default-post-visibility') {
     return { leading: 'back', title: '게시물 기본 공개 범위' };
+  }
+  if (pathname === '/settings/profile-migration') {
+    return { leading: 'back', title: '다른 서비스에서 이전' };
   }
   if (pathname === '/settings/mute-and-block') {
     return { leading: 'back', title: '뮤트 및 차단' };

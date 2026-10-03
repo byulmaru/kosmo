@@ -28,13 +28,18 @@ identity, `alsoKnownAs` 표현, Local·Remote Follow 정책과 기존 follower �
   완료하며, target 해석·거부와 follower 이전은 admission 뒤 비동기 수행한다.
 - inbound Move는 remote-to-local과 remote-to-remote target을 지원한다. 준비 관계가 있는 target Profile과
   remote-to-remote target은 각각 target Profile에 존재하는 Follow Approval Policy를 따른다.
-- Profile Migration source 지정은 Settings의 Profile detail에서 feature flag가 켜져 있을 때만 노출한다. flag가 꺼져
+- Profile Migration source 지정은 Settings의 `다른 서비스에서 이전`에서 feature flag가 켜져 있을 때만 노출한다. flag가 꺼져
   있거나 값을 확인할 수 없거나 로딩 중이면 source 준비 control을 노출하지 않는다. source 등록은 현재 선택된
   Profile을 target으로 사용하며 별도 target Profile ID 입력을 받지 않는다. 현재 context의 `Account.Active`와
   `Profile.Owner` 권한을 재사용하고 별도 target eligibility를 적용하지 않는다. flag는 UI 노출 조건일 뿐 권한 증거가 아니며,
   기존 `Account.Active`와 `Profile.Owner` 권한을 유지한다. 같은 source·target pair는 no-op으로 처리하고,
-  다른 pair와 충돌하는 요청은 거부한다. 이미 준비된 관계·alias와 inbound Move 처리는 flag 상태로 중단하거나 제거하지
-  않는다. Kosmo가 source가 되어 발행하는 outgoing Move는 이 결정의 범위가 아니다.
+  다른 pair와 충돌하는 요청은 거부한다. Profile Owner는 이전 진행 중이거나 완료된 뒤에도 준비 관계를 해제하고 다른
+  source를 다시 지정할 수 있다. source 해제는 준비 관계와 파생 alias만 제거하며 이미 이전된 follower 관계나 요청은
+  롤백하지 않는다. 준비 관계를 사용하는 Local target의 source-target 검증을 이미 통과한 현재 follower 처리는 끝날 수
+  있지만, 관계가 없거나 다른 source로 바뀌면 해당 Local pair의 후속 처리와 inbound Move는 계속되지 않는다. 준비 관계와
+  독립적인 remote-to-remote Move는 이 해제의 영향을 받지 않는다. 새 source는 기존 Remote Profile 검증과 source·target
+  1:1 제약을 통과해야 한다. 이미 준비된 관계·alias와 inbound Move 처리는 flag 상태로 중단하거나 제거하지 않는다.
+  Kosmo가 source가 되어 발행하는 outgoing Move는 이 결정의 범위가 아니다.
 - source Profile을 Followee로 가진 기존 established Follow Relationship 중 Follower가 Local Profile인 관계는 target
   Follow Relationship 또는 Follow Request를 먼저 저장한 뒤 source 관계를 제거한다. target의 policy에 따라 두 결과
   중 하나를 선택하며, 저장 실패 시 source 관계를 먼저 제거하지 않는다. 단, 실행 시작 시 같은 follower와 target 사이에

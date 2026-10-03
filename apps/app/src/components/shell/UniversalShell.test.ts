@@ -184,7 +184,9 @@ mockModule('./shellLayout', {
   getWebMobileShellHeader: (_web: boolean, _width: number, route: string) =>
     route === '/settings/default-post-visibility'
       ? { leading: 'back', title: '게시물 기본 공개 범위' }
-      : null,
+      : route === '/settings/profile-migration'
+        ? { leading: 'back', title: '다른 서비스에서 이전' }
+        : null,
   getShellRoutePresentation: () => ({
     layout,
     settingsWorkspace: false,
@@ -265,6 +267,23 @@ describe('UniversalShell screen fallback focus target', () => {
     pathname = '/settings/default-post-visibility';
     await renderShell();
 
+    const back = renderer?.root.findByProps({ accessibilityLabel: '뒤로 가기' });
+    assert.ok(back);
+    await act(async () => back.props.onPress());
+
+    assert.deepEqual(dismissedToPaths, ['/settings']);
+    assert.equal(router.back.mock.callCount(), 0);
+  });
+
+  it('mobile Web migration route는 shared title과 /settings back을 사용한다', async () => {
+    platform.OS = 'web';
+    layout = 'mobile';
+    pathname = '/settings/profile-migration';
+    await renderShell();
+
+    const header = renderer?.root.findByType('PageHeader' as ElementType);
+    assert.ok(header);
+    assert.equal(header.props.title, '다른 서비스에서 이전');
     const back = renderer?.root.findByProps({ accessibilityLabel: '뒤로 가기' });
     assert.ok(back);
     await act(async () => back.props.onPress());
