@@ -167,11 +167,12 @@ function SessionQuery({
     () => ({
       accountId,
       accountName: data.me?.name ?? null,
-      selectedProfileId: serverSelectedProfileId,
+      selectedProfileId:
+        actorSelectedProfileId === serverSelectedProfileId ? serverSelectedProfileId : null,
       sessionId,
       status: sessionId ? ('valid' as const) : ('guest' as const),
     }),
-    [accountId, data.me?.name, serverSelectedProfileId, sessionId],
+    [accountId, actorSelectedProfileId, data.me?.name, serverSelectedProfileId, sessionId],
   );
 
   useEffect(() => {

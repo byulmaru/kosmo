@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useRef, useState } from 'react';
 import { unstable_batchedUpdates } from 'react-dom';
 import { Text, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
@@ -113,96 +113,98 @@ function PostActionBarFixture({
   onMutationRequest,
   reactionSelected = false,
   repostState = 'unselected',
-  selectedProfileId = 'profile-story',
+  selectedProfileId: fixtureSelectedProfileId = 'profile-story',
   showReactionSummary = false,
   ...props
 }: FixtureProps) {
-  const environment = useMemo(() => {
-    const source = {
-      ...(repostState === 'selected' || repostState === 'pending'
-        ? selectedSource
-        : unselectedSource),
-      viewerReactions: reactionSelected
-        ? selectedSource.viewerReactions
-        : unselectedSource.viewerReactions,
-    };
-    const result = new Environment({
-      network: Network.create((request, variables) => {
-        if (request.operationKind === 'mutation') {
-          onMutationRequest?.(request.name, variables);
-          if (request.name === 'PostDeletionActionDeletePostMutation') {
-            if (deleteOutcome === 'pending') {
-              return Observable.create(() => undefined);
-            }
-            if (deleteOutcome === 'network-error') {
-              return Promise.reject(new Error('delete failed'));
-            }
-            if (deleteOutcome === 'graphql-error') {
-              return Promise.resolve({
-                data: { deletePost: null },
-                errors: [{ message: 'delete failed' }],
-              } as GraphQLResponse);
+  const createEnvironment = useCallback(
+    (_nativeToken: string | null, selectedProfileId: string | null) => {
+      const source = {
+        ...(repostState === 'selected' || repostState === 'pending'
+          ? selectedSource
+          : unselectedSource),
+        viewerReactions: reactionSelected
+          ? selectedSource.viewerReactions
+          : unselectedSource.viewerReactions,
+      };
+      const result = new Environment({
+        network: Network.create((request, variables) => {
+          if (request.operationKind === 'mutation') {
+            onMutationRequest?.(request.name, variables);
+            if (request.name === 'PostDeletionActionDeletePostMutation') {
+              if (deleteOutcome === 'pending') {
+                return Observable.create(() => undefined);
+              }
+              if (deleteOutcome === 'network-error') {
+                return Promise.reject(new Error('delete failed'));
+              }
+              if (deleteOutcome === 'graphql-error') {
+                return Promise.resolve({
+                  data: { deletePost: null },
+                  errors: [{ message: 'delete failed' }],
+                } as GraphQLResponse);
+              }
             }
           }
-        }
-        return request.operationKind !== 'mutation'
-          ? Promise.resolve({
-              data:
-                request.name === 'SessionProviderQuery'
-                  ? {
-                      currentSession: {
-                        __typename: 'Session',
-                        id: 'session-story',
-                        selectedProfile:
-                          selectedProfileId === null
-                            ? null
-                            : {
-                                __typename: 'Profile',
-                                id: selectedProfileId,
-                              },
-                      },
-                      me: { __typename: 'Account', id: 'account-story', name: 'Story' },
-                    }
-                  : { node: source },
-            } as GraphQLResponse)
-          : repostState === 'pending'
-            ? Observable.create(() => undefined)
-            : Promise.resolve({
+          return request.operationKind !== 'mutation'
+            ? Promise.resolve({
                 data:
-                  request.name === 'PostDeletionActionDeletePostMutation'
-                    ? { deletePost: { postId: sourcePostId } }
-                    : request.name === 'RepostActionDeletePostMutation'
-                      ? {
-                          deletePost: {
-                            postId: activeRepostId,
-                            repostSource: {
-                              __typename: 'Post',
-                              id: sourcePostId,
-                              repostCount: unselectedSource.repostCount,
-                              viewerRepost: null,
-                            },
-                          },
-                        }
-                      : {
-                          repostPost: {
-                            repost: {
-                              __typename: 'Post',
-                              id: activeRepostId,
-                              repostSource: selectedSource,
-                            },
-                          },
+                  request.name === 'SessionProviderQuery'
+                    ? {
+                        currentSession: {
+                          __typename: 'Session',
+                          id: `session-${fixtureSelectedProfileId ?? 'no-profile'}`,
+                          selectedProfile:
+                            fixtureSelectedProfileId === null
+                              ? null
+                              : {
+                                  __typename: 'Profile',
+                                  id: selectedProfileId ?? fixtureSelectedProfileId,
+                                },
                         },
-              });
-      }),
-      store: new Store(new RecordSource()),
-    });
-    result.commitPayload(
-      createOperationDescriptor(getRequest(PostActionBarStoryQueryNode), { id: sourcePostId }),
-      { node: source },
-    );
-    return result;
-  }, [deleteOutcome, onMutationRequest, reactionSelected, repostState, selectedProfileId]);
-  const createEnvironment = useCallback(() => environment, [environment]);
+                        me: { __typename: 'Account', id: 'account-story', name: 'Story' },
+                      }
+                    : { node: source },
+              } as GraphQLResponse)
+            : repostState === 'pending'
+              ? Observable.create(() => undefined)
+              : Promise.resolve({
+                  data:
+                    request.name === 'PostDeletionActionDeletePostMutation'
+                      ? { deletePost: { postId: sourcePostId } }
+                      : request.name === 'RepostActionDeletePostMutation'
+                        ? {
+                            deletePost: {
+                              postId: activeRepostId,
+                              repostSource: {
+                                __typename: 'Post',
+                                id: sourcePostId,
+                                repostCount: unselectedSource.repostCount,
+                                viewerRepost: null,
+                              },
+                            },
+                          }
+                        : {
+                            repostPost: {
+                              repost: {
+                                __typename: 'Post',
+                                id: activeRepostId,
+                                repostSource: selectedSource,
+                              },
+                            },
+                          },
+                });
+        }),
+        store: new Store(new RecordSource()),
+      });
+      result.commitPayload(
+        createOperationDescriptor(getRequest(PostActionBarStoryQueryNode), { id: sourcePostId }),
+        { node: source },
+      );
+      return result;
+    },
+    [deleteOutcome, fixtureSelectedProfileId, onMutationRequest, reactionSelected, repostState],
+  );
 
   return (
     <RelayActorProvider createEnvironment={createEnvironment}>
@@ -290,69 +292,72 @@ function ReactionContractHarness() {
   const [mounted, setMounted] = useState(true);
   const [requests, setRequests] = useState<ReactionRequestSummary[]>([]);
 
-  const createEnvironment = useCallback(() => {
-    const actorId = ++nextActorId.current;
-    selectedTypesByActor.current.set(actorId, new Set());
-    const environment = new Environment({
-      network: Network.create((request: RequestParameters, variables: Variables) => {
-        if (request.operationKind !== 'mutation') {
-          const selectedTypes = selectedTypesByActor.current.get(actorId)!;
-          const reactionCounts = unselectedSource.reactionCounts.map((entry) => ({
-            ...entry,
-            count: entry.count + (selectedTypes.has(entry.type) ? 1 : 0),
-          }));
-          return Promise.resolve({
-            data:
-              request.name === 'SessionProviderQuery'
-                ? {
-                    currentSession: {
-                      __typename: 'Session',
-                      id: `session-${actorId}`,
-                      selectedProfile: {
-                        __typename: 'Profile',
-                        id: `profile-${actorId}`,
+  const createEnvironment = useCallback(
+    (_nativeToken: string | null, selectedProfileId: string | null) => {
+      const actorId = ++nextActorId.current;
+      selectedTypesByActor.current.set(actorId, new Set());
+      const environment = new Environment({
+        network: Network.create((request: RequestParameters, variables: Variables) => {
+          if (request.operationKind !== 'mutation') {
+            const selectedTypes = selectedTypesByActor.current.get(actorId)!;
+            const reactionCounts = unselectedSource.reactionCounts.map((entry) => ({
+              ...entry,
+              count: entry.count + (selectedTypes.has(entry.type) ? 1 : 0),
+            }));
+            return Promise.resolve({
+              data:
+                request.name === 'SessionProviderQuery'
+                  ? {
+                      currentSession: {
+                        __typename: 'Session',
+                        id: 'session-story',
+                        selectedProfile: {
+                          __typename: 'Profile',
+                          id: selectedProfileId ?? 'profile-reaction-default',
+                        },
                       },
-                    },
-                    me: {
-                      __typename: 'Account',
-                      id: `account-${actorId}`,
-                      name: `Actor ${actorId}`,
-                    },
-                  }
-                : { node: { ...unselectedSource, reactionCounts } },
-          } as GraphQLResponse);
-        }
+                      me: {
+                        __typename: 'Account',
+                        id: 'account-story',
+                        name: 'Story',
+                      },
+                    }
+                  : { node: { ...unselectedSource, reactionCounts } },
+            } as GraphQLResponse);
+          }
 
-        return Observable.create<GraphQLResponse>((sink) => {
-          const captured: CapturedReactionRequest = {
-            actorId,
-            id: ++nextRequestId.current,
-            name: request.name,
-            settled: false,
-            sink,
-            type: String(variables.type),
-          };
-          requestsRef.current.push(captured);
-          setRequests((current) => [
-            ...current,
-            {
-              actorId: captured.actorId,
-              id: captured.id,
-              name: captured.name,
+          return Observable.create<GraphQLResponse>((sink) => {
+            const captured: CapturedReactionRequest = {
+              actorId,
+              id: ++nextRequestId.current,
+              name: request.name,
               settled: false,
-              type: captured.type,
-            },
-          ]);
-        });
-      }),
-      store: new Store(new RecordSource()),
-    });
-    environment.commitPayload(
-      createOperationDescriptor(getRequest(PostActionBarStoryQueryNode), { id: sourcePostId }),
-      { node: unselectedSource },
-    );
-    return environment;
-  }, []);
+              sink,
+              type: String(variables.type),
+            };
+            requestsRef.current.push(captured);
+            setRequests((current) => [
+              ...current,
+              {
+                actorId: captured.actorId,
+                id: captured.id,
+                name: captured.name,
+                settled: false,
+                type: captured.type,
+              },
+            ]);
+          });
+        }),
+        store: new Store(new RecordSource()),
+      });
+      environment.commitPayload(
+        createOperationDescriptor(getRequest(PostActionBarStoryQueryNode), { id: sourcePostId }),
+        { node: unselectedSource },
+      );
+      return environment;
+    },
+    [],
+  );
 
   const settleRequest = useCallback((id: number, outcome: ReactionRequestOutcome) => {
     const request = requestsRef.current.find((candidate) => candidate.id === id);
@@ -1618,6 +1623,7 @@ export const ReactionFailureRetryActorSwitchAndUnmount: Story = {
     await userEvent.click(await screen.findByRole('button', { name: '👀 반응' }));
     await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(5));
     const currentActorRequest = readReactionRequests(canvas)[4]!;
+    expect(currentActorRequest.actorId).not.toBe(oldActorRequests[0]!.actorId);
     canvas.getByRole('button', { name: `요청 ${oldActorRequests[0]!.id} success` }).click();
     canvas.getByRole('button', { name: `요청 ${oldActorRequests[1]!.id} network-error` }).click();
     expect(screen.getByRole('button', { name: '👀 반응, 처리 중' })).toBeDisabled();

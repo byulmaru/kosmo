@@ -18,7 +18,10 @@ type RelayMockValue = {
   paginationResponses?: StoryOperationResponse[];
   operationResponses?: Record<
     string,
-    StoryOperationResponse | StoryOperationResponse[] | StoryOperationResponseSequence
+    | StoryOperationResponse
+    | StoryOperationResponse[]
+    | StoryOperationResponseSequence
+    | ((selectedProfileId: string | null) => StoryOperationResponse)
   >;
   queryData?: unknown;
   queryRequestObserver?: (request: RequestParameters, variables: Variables) => void;
@@ -90,14 +93,17 @@ export function RelayStoryProvider({
     ],
   );
   const environmentState = useRef({ index: 0, mock });
-  const createEnvironment = useCallback(() => {
-    if (environmentState.current.mock !== mock) {
-      environmentState.current = { index: 0, mock };
-    }
-    const index = environmentState.current.index++;
+  const createEnvironment = useCallback(
+    (_nativeToken: string | null, selectedProfileId: string | null) => {
+      if (environmentState.current.mock !== mock) {
+        environmentState.current = { index: 0, mock };
+      }
+      const index = environmentState.current.index++;
 
-    return createStoryEnvironment(mock, index);
-  }, [mock]);
+      return createStoryEnvironment(mock, index, selectedProfileId);
+    },
+    [mock],
+  );
 
   return (
     <RelayActorProvider createEnvironment={createEnvironment}>
@@ -106,7 +112,11 @@ export function RelayStoryProvider({
   );
 }
 
-function createStoryEnvironment(mock: RelayMockValue, environmentIndex: number): Environment {
+function createStoryEnvironment(
+  mock: RelayMockValue,
+  environmentIndex: number,
+  selectedProfileId: string | null,
+): Environment {
   let paginationResponseIndex = 0;
   const operationResponseIndices = new Map<string, number>();
   const nextOperationResponseIndex = (operationName: string) => {
@@ -122,6 +132,7 @@ function createStoryEnvironment(mock: RelayMockValue, environmentIndex: number):
         variables,
         mock,
         environmentIndex,
+        selectedProfileId,
         () => paginationResponseIndex++,
         nextOperationResponseIndex,
       ),
@@ -135,21 +146,23 @@ async function executeStoryOperation(
   variables: Variables,
   mock: RelayMockValue,
   environmentIndex: number,
+  selectedProfileId: string | null,
   nextPaginationResponseIndex: () => number,
   nextOperationResponseIndex: (operationName: string) => number,
 ): Promise<GraphQLResponse> {
   const getOperationResponse = () => {
     const configuredResponse = mock.operationResponses?.[request.name];
-    return Array.isArray(configuredResponse)
-      ? configuredResponse[Math.min(environmentIndex, configuredResponse.length - 1)]
-      : configuredResponse && 'sequence' in configuredResponse
-        ? configuredResponse.sequence[
-            Math.min(
-              nextOperationResponseIndex(request.name),
-              configuredResponse.sequence.length - 1,
-            )
-          ]
+    const actorResponse =
+      typeof configuredResponse === 'function'
+        ? configuredResponse(selectedProfileId)
         : configuredResponse;
+    return Array.isArray(actorResponse)
+      ? actorResponse[Math.min(environmentIndex, actorResponse.length - 1)]
+      : actorResponse && 'sequence' in actorResponse
+        ? actorResponse.sequence[
+            Math.min(nextOperationResponseIndex(request.name), actorResponse.sequence.length - 1)
+          ]
+        : actorResponse;
   };
   const resolveOperationResponse = async (
     operationResponse: StoryOperationResponse,

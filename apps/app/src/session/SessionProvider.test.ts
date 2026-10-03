@@ -10,6 +10,7 @@ import type { ReactTestRenderer } from 'react-test-renderer';
 const platform = { OS: 'web' };
 let actorProfileId: string | null = null;
 let persistedProfileId: string | null = null;
+let pendingProfileRead: Promise<string | null> | null = null;
 let serverSelectedProfileId: string | null = 'profile-server';
 let authLifecycleKey = 'auth-1';
 let actorLifecycleKey = 'actor-1';
@@ -53,7 +54,7 @@ mockModule('react-relay', {
 });
 mockModule('@/auth/selectedProfileStorage', {
   deleteSelectedProfile: async () => undefined,
-  readSelectedProfile: async () => persistedProfileId,
+  readSelectedProfile: () => pendingProfileRead ?? Promise.resolve(persistedProfileId),
   writeSelectedProfile: async (
     scope: { accountId: string; sessionId: string },
     profileId: string,
@@ -89,6 +90,7 @@ before(async () => {
 beforeEach(() => {
   actorProfileId = null;
   persistedProfileId = null;
+  pendingProfileRead = null;
   serverSelectedProfileId = 'profile-server';
   authLifecycleKey = 'auth-1';
   actorLifecycleKey = 'actor-1';
@@ -108,6 +110,42 @@ afterEach(async () => {
 });
 
 describe('SessionProvider selected profile bootstrap', () => {
+  it('keeps the server default hidden until the saved profile is verified', async () => {
+    let resolveProfileRead!: (profileId: string | null) => void;
+    const profileRead = new Promise<string | null>((resolve) => {
+      resolveProfileRead = resolve;
+    });
+    pendingProfileRead = profileRead;
+
+    await renderProvider();
+
+    assert.deepEqual(readSession(), {
+      accountId: 'account-1',
+      accountName: 'Account',
+      selectedProfileId: null,
+      sessionId: 'session-1',
+      status: 'valid',
+    });
+
+    await act(async () => {
+      resolveProfileRead('profile-client');
+      await profileRead;
+    });
+    assert.deepEqual(resetActorCalls, ['profile-client']);
+
+    actorLifecycleKey = 'actor-2';
+    serverSelectedProfileId = 'profile-client';
+    await updateProvider();
+
+    assert.deepEqual(readSession(), {
+      accountId: 'account-1',
+      accountName: 'Account',
+      selectedProfileId: 'profile-client',
+      sessionId: 'session-1',
+      status: 'valid',
+    });
+  });
+
   it('restores the scoped client profile without rewriting it', async () => {
     persistedProfileId = 'profile-client';
 
