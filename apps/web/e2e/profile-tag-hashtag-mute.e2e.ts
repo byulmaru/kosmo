@@ -18,6 +18,58 @@ test.beforeEach(async () => {
   await resetE2EDatabase();
 });
 
+test('Profile Tag 알림 상태 조회 실패를 다시 시도한다', async ({ context, page }) => {
+  const viewer = await createE2ESession({ handle: 'prod735-retry-viewer' });
+  const target = await createE2EProfile({ handle: 'prod735-retry-target' });
+  await createE2EHashtagRelation({
+    displayName: 'PROD735Retry',
+    name: 'prod735retry',
+    profileIds: [target.id],
+  });
+  await setE2ESessionCookie(context, viewer.token);
+
+  let failInitialStatusRead = true;
+  await page.route('**/graphql', async (route) => {
+    const operation = readGraphQLOperation(route.request().postData());
+    if (operation?.operationName === 'ProfileLayoutQuery' && failInitialStatusRead) {
+      failInitialStatusRead = false;
+      const response = await route.fetch();
+      const body = (await response.json()) as {
+        errors?: unknown[];
+      };
+      body.errors = [
+        {
+          message: 'E2E forced viewer mute rule field error',
+          path: ['profileByHandle', 'tags', 0, 'viewerMuteRule'],
+        },
+      ];
+      await route.fulfill({ response, body: JSON.stringify(body) });
+      return;
+    }
+    await route.fallback();
+  });
+
+  await page.goto(`/@${target.handle}`);
+  await expect(
+    page.getByRole('button', {
+      exact: true,
+      name: '#PROD735Retry 알림 상태를 불러오지 못했어요. 다시 시도',
+    }),
+  ).toBeVisible();
+
+  const retryResponse = waitForGraphQLOperation(page, 'ProfileTagMuteActionRefetchQuery');
+  await page
+    .getByRole('button', {
+      exact: true,
+      name: '#PROD735Retry 알림 상태를 불러오지 못했어요. 다시 시도',
+    })
+    .click();
+  await assertGraphQLSuccess(await retryResponse);
+  await expect(
+    page.getByRole('button', { exact: true, name: '#PROD735Retry 새 알림 뮤트 설정' }),
+  ).toBeVisible();
+});
+
 test('Profile Tag에서 Notification 전용 영구 규칙을 만들고 해제하며 기존 링크를 유지한다', async ({
   context,
   page,
@@ -42,7 +94,6 @@ test('Profile Tag에서 Notification 전용 영구 규칙을 만들고 해제하
   });
   await setE2ESessionCookie(context, viewer.token);
 
-  let failInitialStatusRead = true;
   let createMutationCount = 0;
   let releaseCreate!: () => void;
   let notifyCreateResponseFetched!: () => void;
@@ -54,22 +105,6 @@ test('Profile Tag에서 Notification 전용 영구 규칙을 만들고 해제하
   });
   await page.route('**/graphql', async (route) => {
     const operation = readGraphQLOperation(route.request().postData());
-    if (operation?.operationName === 'ProfileLayoutQuery' && failInitialStatusRead) {
-      failInitialStatusRead = false;
-      const response = await route.fetch();
-      const body = (await response.json()) as {
-        data?: { profileByHandle?: { tags?: ReadonlyArray<unknown> } };
-        errors?: unknown[];
-      };
-      body.errors = [
-        {
-          message: 'E2E forced viewer mute rule field error',
-          path: ['profileByHandle', 'tags', 0, 'viewerMuteRule'],
-        },
-      ];
-      await route.fulfill({ response, body: JSON.stringify(body) });
-      return;
-    }
     if (operation?.operationName === 'ProfileTagMuteActionCreateMutation') {
       createMutationCount += 1;
       if (createMutationCount === 1) {
@@ -95,14 +130,6 @@ test('Profile Tag에서 Notification 전용 영구 규칙을 만들고 해제하
 
   const tagLink = page.getByRole('link', { exact: true, name: '#PROD735Tag 관련 프로필 보기' });
   await expect(tagLink).toHaveAttribute('href', /\/hashtags\/[^/]+\/profiles$/u);
-  const retryButton = page.getByRole('button', {
-    exact: true,
-    name: '#PROD735Tag 알림 상태를 불러오지 못했어요. 다시 시도',
-  });
-  await expect(retryButton).toBeVisible();
-  const retryResponse = waitForGraphQLOperation(page, 'ProfileTagMuteActionRefetchQuery');
-  await retryButton.click();
-  await assertGraphQLSuccess(await retryResponse);
 
   const muteButton = () =>
     page.getByRole('button', { exact: true, name: '#PROD735Tag 새 알림 뮤트 설정' });
@@ -335,7 +362,7 @@ test('다른 범위의 임시 규칙이 있으면 규칙을 변경하지 않고 
   });
 
   await trigger.click();
-  await page.getByRole('menuitem', { name: /다른 임시 뮤트 규칙이 적용 중/ }).click();
+  await page.getByRole('menuitem', { name: /다른 범위의 임시 뮤트 규칙이 적용 중/ }).click();
   await expect(page.getByRole('alert')).toContainText(
     '현재 규칙을 보존하며, 만료 후 상태를 새로고침하면 영구 알림 뮤트를 설정할 수 있어요.',
   );
