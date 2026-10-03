@@ -390,13 +390,17 @@ const styles = StyleSheet.create({
   tagItem: {
     alignItems: 'center',
     flexDirection: 'row',
+    flexShrink: 1,
     gap: space[4],
     maxWidth: '100%',
+    minWidth: 0,
   },
   tagTarget: {
     alignItems: 'center',
+    flexShrink: 1,
     justifyContent: 'center',
     maxWidth: '100%',
+    minWidth: 0,
   },
   counts: { flexDirection: 'row', gap: space[16], marginTop: space[12] },
   countLink: { flexDirection: 'row', gap: space[4] },
