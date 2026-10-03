@@ -1,8 +1,6 @@
 import { StyleSheet, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
-import { useFeatureFlag } from '@/components/FeatureFlagsContext';
 import { ProfileDefaultPostVisibilityControl } from '@/components/profile/ProfileDefaultPostVisibilityControl';
-import { ProfileMigrationSourceControl } from '@/components/profile/ProfileMigrationSourceControl';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { StateView } from '@/components/ui/StateView';
@@ -23,7 +21,6 @@ const SettingsProfileQuery = graphql`
           }
         }
         ...ProfileDefaultPostVisibilityControl_profile
-        ...ProfileMigrationSourceControl_profile
       }
     }
   }
@@ -48,7 +45,6 @@ function SettingsProfileDetailContents() {
     {},
     { fetchKey, fetchPolicy: 'store-and-network' },
   );
-  const migrationEnabled = useFeatureFlag('profile-migration');
   const profile = data.currentSession?.selectedProfile ?? null;
 
   if (!profile || profile.instance.kind !== 'LOCAL') {
@@ -70,9 +66,6 @@ function SettingsProfileDetailContents() {
         profile={profile}
         showTitle={false}
       />
-      {migrationEnabled ? (
-        <ProfileMigrationSourceControl editable={editable} profile={profile} />
-      ) : null}
     </View>
   );
 }

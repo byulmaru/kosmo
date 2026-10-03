@@ -1,9 +1,8 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
+import { graphql, useFragment, useMutation } from 'react-relay';
 import { Button } from '@/components/ui/Button';
 import { TextField } from '@/components/ui/TextField';
-import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import type {
@@ -11,12 +10,17 @@ import type {
   ProfileMigrationSourceControl_profile$key,
 } from './__generated__/ProfileMigrationSourceControl_profile.graphql';
 import type { ProfileMigrationSourceControlMutation } from './__generated__/ProfileMigrationSourceControlMutation.graphql';
+import type { ProfileMigrationSourceControlUnregisterMutation } from './__generated__/ProfileMigrationSourceControlUnregisterMutation.graphql';
 
 const ProfileFragment = graphql`
   fragment ProfileMigrationSourceControl_profile on Profile {
     id
     displayName
+    handle
     relativeHandle
+    instance {
+      canonicalOrigin
+    }
     migrationSource {
       id
       displayName
@@ -30,18 +34,25 @@ const RegisterMutation = graphql`
     registerProfileMigrationSource(input: $input) {
       profile {
         id
-        migrationSource {
-          id
-          displayName
-          relativeHandle
-        }
         ...ProfileMigrationSourceControl_profile
       }
     }
   }
 `;
 
-type RegisterState = 'idle' | 'registering' | 'success' | 'error';
+const UnregisterMutation = graphql`
+  mutation ProfileMigrationSourceControlUnregisterMutation {
+    unregisterProfileMigrationSource {
+      profile {
+        id
+        ...ProfileMigrationSourceControl_profile
+      }
+    }
+  }
+`;
+
+type RegisterState = 'idle' | 'success' | 'error';
+type UnregisterState = 'idle' | 'error';
 
 export type ProfileMigrationSourceControlProps = {
   editable: boolean;
@@ -53,102 +64,73 @@ export function ProfileMigrationSourceControl({
   profile: profileKey,
 }: ProfileMigrationSourceControlProps) {
   const profile = useFragment(ProfileFragment, profileKey);
-  const environment = useRelayEnvironment();
-  const environmentGenerationRef = useRelayEnvironmentGeneration();
-  const environmentRef = useRef(environment);
-  const contextGenerationRef = useRef(0);
-  if (environmentRef.current !== environment) {
-    environmentRef.current = environment;
-    contextGenerationRef.current += 1;
-  }
-
-  return (
-    <ProfileMigrationSourceControlContents
-      editable={editable}
-      key={`${profile.id}:${contextGenerationRef.current}:${environmentGenerationRef?.current ?? 0}`}
-      profile={profile}
-    />
-  );
-}
-
-function ProfileMigrationSourceControlContents({
-  editable,
-  profile,
-}: {
-  editable: boolean;
-  profile: ProfileMigrationSourceControl_profile$data;
-}) {
   const theme = useTheme();
-  const environmentGenerationRef = useRelayEnvironmentGeneration();
   const [sourceHandle, setSourceHandle] = useState('');
   const [registerState, setRegisterState] = useState<RegisterState>('idle');
+  const [unregisterState, setUnregisterState] = useState<UnregisterState>('idle');
   const [validationError, setValidationError] = useState<string | undefined>();
-  const [commit] = useMutation<ProfileMigrationSourceControlMutation>(RegisterMutation);
-  const registerRequestIdRef = useRef(0);
-  const registerInFlightRef = useRef<number | null>(null);
+  const [registerCommit, registering] =
+    useMutation<ProfileMigrationSourceControlMutation>(RegisterMutation);
+  const [unregisterCommit, unregistering] =
+    useMutation<ProfileMigrationSourceControlUnregisterMutation>(UnregisterMutation);
+  const busy = registering || unregistering;
+  const destinationHandle = getQualifiedDestinationHandle(profile);
 
   const register = () => {
-    if (!editable || registerInFlightRef.current !== null) {
+    if (!editable || busy) {
       return;
     }
 
     const normalizedInput = sourceHandle.trim();
     if (!normalizedInput) {
-      setValidationError('이전할 프로필 주소를 입력해주세요.');
+      setValidationError('기존 계정 주소를 입력해주세요.');
       setRegisterState('idle');
       return;
     }
 
     setValidationError(undefined);
-    const environmentGeneration = environmentGenerationRef?.current;
-    const requestId = registerRequestIdRef.current + 1;
-    registerRequestIdRef.current = requestId;
-    registerInFlightRef.current = requestId;
-    setRegisterState('registering');
-
-    commit({
+    registerCommit({
       variables: { input: { sourceHandle: normalizedInput } },
-      onCompleted: (response, errors) => {
-        if (
-          registerInFlightRef.current !== requestId ||
-          environmentGenerationRef?.current !== environmentGeneration
-        ) {
-          if (registerInFlightRef.current === requestId) {
-            registerInFlightRef.current = null;
-          }
-          return;
-        }
-        registerInFlightRef.current = null;
-
-        const nextSource = response.registerProfileMigrationSource?.profile?.migrationSource;
-        if (errors?.length || !nextSource) {
+      onCompleted: (response) => {
+        const nextProfile = response.registerProfileMigrationSource?.profile;
+        if (!nextProfile || nextProfile.id !== profile.id) {
           setRegisterState('error');
           return;
         }
 
-        setSourceHandle(nextSource.relativeHandle);
         setRegisterState('success');
       },
-      onError: () => {
-        if (
-          registerInFlightRef.current !== requestId ||
-          environmentGenerationRef?.current !== environmentGeneration
-        ) {
-          if (registerInFlightRef.current === requestId) {
-            registerInFlightRef.current = null;
-          }
-          return;
-        }
-        registerInFlightRef.current = null;
-        setRegisterState('error');
-      },
+      onError: () => setRegisterState('error'),
     });
   };
 
-  const registering = registerState === 'registering';
+  const unregister = () => {
+    if (!editable || !profile.migrationSource || busy) {
+      return;
+    }
+
+    unregisterCommit({
+      variables: {},
+      onCompleted: (response) => {
+        const nextProfile = response.unregisterProfileMigrationSource?.profile;
+        if (!nextProfile || nextProfile.id !== profile.id) {
+          setUnregisterState('error');
+          return;
+        }
+
+        setSourceHandle('');
+        setValidationError(undefined);
+        setRegisterState('idle');
+        setUnregisterState('idle');
+      },
+      onError: () => setUnregisterState('error'),
+    });
+  };
+
   const preparedSource = profile.migrationSource;
   const controlLabel = `Kosmo 프로필 이전 원본 ${profile.displayName} ${profile.relativeHandle}`;
-  const registerButtonLabel = registerState === 'error' ? '다시 시도' : '원본 등록';
+  const registerButtonLabel = registerState === 'error' ? '다시 시도' : '기존 계정 등록';
+  const unregisterButtonLabel = unregisterState === 'error' ? '다시 시도' : '기존 계정 등록 해제';
 
   return (
     <View
@@ -160,8 +142,27 @@ function ProfileMigrationSourceControlContents({
         프로필 이전 원본
       </Text>
       <Text style={[styles.description, { color: theme.textSecondary }]}>
-        이전할 프로필 주소(@name@server)를 입력해 원본으로 등록하세요.
+        기존 계정 주소를 먼저 등록한 뒤 기존 서비스에서 이 Kosmo 프로필로 Move를 시작하세요.
+        팔로워는 옮길 수 있지만 게시물은 복사되지 않아요.
       </Text>
+      <View
+        accessibilityLabel={`이전받을 Kosmo 프로필 ${profile.displayName} ${destinationHandle ?? ''}`.trim()}
+        role="group"
+      >
+        <Text style={[styles.sourceLabel, { color: theme.textSecondary }]}>
+          이전받을 Kosmo 프로필
+        </Text>
+        <Text style={[styles.sourceName, { color: theme.text }]}>{profile.displayName}</Text>
+        {destinationHandle ? (
+          <Text style={[styles.sourceHandle, { color: theme.textSecondary }]}>
+            {destinationHandle}
+          </Text>
+        ) : (
+          <Text style={[styles.sourceHandle, { color: theme.textSecondary }]}>
+            주소를 확인할 수 없어요.
+          </Text>
+        )}
+      </View>
       {preparedSource ? (
         <View
           accessibilityLabel={`현재 등록된 원본 ${preparedSource.displayName} ${preparedSource.relativeHandle}`}
@@ -178,12 +179,12 @@ function ProfileMigrationSourceControlContents({
       ) : null}
       {!preparedSource ? (
         <TextField
-          accessibilityLabel="이전할 프로필 주소"
+          accessibilityLabel="기존 계정 주소"
           autoCapitalize="none"
           autoCorrect={false}
-          editable={editable && !registering}
+          editable={editable && !busy}
           error={validationError}
-          label="이전할 프로필 주소"
+          label="기존 계정 주소"
           onChangeText={(value) => {
             setSourceHandle(value);
             setValidationError(undefined);
@@ -196,8 +197,8 @@ function ProfileMigrationSourceControlContents({
       {editable && !preparedSource ? (
         <Button
           accessibilityLabel={registerButtonLabel}
-          accessibilityState={{ busy: registering, disabled: !sourceHandle.trim() }}
-          disabled={!sourceHandle.trim()}
+          accessibilityState={{ busy: registering, disabled: !sourceHandle.trim() || busy }}
+          disabled={!sourceHandle.trim() || busy}
           loading={registering}
           loadingText="등록 중"
           onPress={register}
@@ -206,12 +207,25 @@ function ProfileMigrationSourceControlContents({
           {registerButtonLabel}
         </Button>
       ) : editable && preparedSource ? (
-        <Text style={[styles.memberNote, { color: theme.textSecondary }]}>
-          등록된 원본은 교체할 수 없어요.
-        </Text>
+        <>
+          <Button
+            accessibilityLabel={unregisterButtonLabel}
+            accessibilityState={{ busy: unregistering, disabled: busy }}
+            disabled={busy}
+            loading={unregistering}
+            loadingText="해제 중"
+            onPress={unregister}
+            style={styles.register}
+          >
+            {unregisterButtonLabel}
+          </Button>
+          <Text style={[styles.memberNote, { color: theme.textSecondary }]}>
+            등록 해제 후 남은 팔로워 이전은 중단될 수 있어요. 이미 이전된 팔로워는 그대로 유지돼요.
+          </Text>
+        </>
       ) : (
         <Text style={[styles.memberNote, { color: theme.textSecondary }]}>
-          프로필 소유자만 원본을 등록할 수 있어요.
+          프로필 소유자만 원본을 변경할 수 있어요.
         </Text>
       )}
       {registerState === 'error' ? (
@@ -225,12 +239,27 @@ function ProfileMigrationSourceControlContents({
             이전 원본을 등록했어요
           </Text>
           <Text style={[styles.success, { color: theme.textSecondary }]}>
-            기존 Mastodon 계정에서 이 Kosmo 프로필로 이전을 실행하세요
+            이제 기존 서비스의 계정에서 이 Kosmo 프로필로 Move를 시작하세요.
           </Text>
         </View>
       ) : null}
+      {unregisterState === 'error' ? (
+        <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>
+          기존 계정 등록을 해제하지 못했어요.
+        </Text>
+      ) : null}
     </View>
   );
+}
+
+function getQualifiedDestinationHandle(
+  profile: ProfileMigrationSourceControl_profile$data,
+): string | null {
+  if (!profile.instance.canonicalOrigin) {
+    return null;
+  }
+
+  return `@${profile.handle}@${new URL(profile.instance.canonicalOrigin).host}`;
 }
 
 const styles = StyleSheet.create({

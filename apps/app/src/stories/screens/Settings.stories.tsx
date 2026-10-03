@@ -2,6 +2,7 @@ import { View } from 'react-native';
 import { expect, spyOn, userEvent, within } from 'storybook/test';
 import SettingsRoute from '@/app/(tabs)/(protected)/settings';
 import { SettingsRouteLayout } from '@/app/(tabs)/(protected)/settings/_layout';
+import SettingsProfileMigrationRoute from '@/app/(tabs)/(protected)/settings/profile-migration';
 import SettingsThemeRoute from '@/app/(tabs)/(protected)/settings/theme';
 import { BYULMARU_ID_ACCOUNT_SETTINGS_URL } from '@/components/settings/ByulmaruIdAccountSettingsEntry';
 import { SettingsProfileDetail } from '@/components/settings/SettingsProfileDetail';
@@ -13,7 +14,9 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 
 const selectedProfile = profile({
   displayName: '현재 Profile',
+  handle: 'settings-owner',
   id: 'settings-profile-owner',
+  instance: { canonicalOrigin: 'https://selected-profile.example', kind: 'LOCAL' },
   relativeHandle: '@settings-owner',
   viewerState: {
     follow: null,
@@ -29,6 +32,27 @@ const ownerData = {
     selectedProfile: ownerProfile,
   },
 };
+
+function setVisualViewportWidth(width: number, storyName: string) {
+  const visualViewport = window.visualViewport;
+
+  if (!visualViewport) {
+    throw new Error(`${storyName} requires visualViewport.`);
+  }
+
+  const originalWidthDescriptor = Object.getOwnPropertyDescriptor(visualViewport, 'width');
+  Object.defineProperty(visualViewport, 'width', { configurable: true, value: width });
+  visualViewport.dispatchEvent(new Event('resize'));
+
+  return () => {
+    if (originalWidthDescriptor) {
+      Object.defineProperty(visualViewport, 'width', originalWidthDescriptor);
+    } else {
+      delete (visualViewport as { width?: number }).width;
+    }
+    visualViewport.dispatchEvent(new Event('resize'));
+  };
+}
 
 const meta = {
   component: SettingsRouteLayout,
@@ -66,10 +90,14 @@ export const FullMasterDetail: Story = {
     const profileEntry = within(navigation).getByRole('link', {
       name: '게시물 기본 공개 범위 설정 열기',
     });
+    const migrationEntry = within(navigation).getByRole('link', {
+      name: '다른 서비스에서 이전 설정 열기',
+    });
 
     expect(canvas.getByRole('heading', { name: '설정' })).toBeVisible();
     expect(canvas.getByRole('heading', { name: '게시물 기본 공개 범위' })).toBeVisible();
-    expect(canvas.getByTestId('profile-migration-source-control')).toBeVisible();
+    expect(migrationEntry).toHaveAttribute('href', '/settings/profile-migration');
+    expect(canvas.queryByTestId('profile-migration-source-control')).toBeNull();
     expect(account).toHaveAttribute('href', BYULMARU_ID_ACCOUNT_SETTINGS_URL);
     expect(profileEntry).toHaveAttribute('href', '/settings/default-post-visibility');
     expect(profileEntry).toHaveStyle({
@@ -87,26 +115,7 @@ export const FullMasterDetail: Story = {
 };
 
 export const CompactRootFirst: Story = {
-  beforeEach: () => {
-    const visualViewport = window.visualViewport;
-
-    if (!visualViewport) {
-      throw new Error('Settings compact story requires visualViewport.');
-    }
-
-    const originalWidthDescriptor = Object.getOwnPropertyDescriptor(visualViewport, 'width');
-    Object.defineProperty(visualViewport, 'width', { configurable: true, value: 900 });
-    visualViewport.dispatchEvent(new Event('resize'));
-
-    return () => {
-      if (originalWidthDescriptor) {
-        Object.defineProperty(visualViewport, 'width', originalWidthDescriptor);
-      } else {
-        delete (visualViewport as { width?: number }).width;
-      }
-      visualViewport.dispatchEvent(new Event('resize'));
-    };
-  },
+  beforeEach: () => setVisualViewportWidth(900, 'Settings compact story'),
   globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -116,6 +125,10 @@ export const CompactRootFirst: Story = {
     expect(
       canvas.getByRole('link', { name: '게시물 기본 공개 범위 설정 열기' }),
     ).not.toHaveAttribute('aria-current');
+    expect(canvas.getByRole('link', { name: '다른 서비스에서 이전 설정 열기' })).toHaveAttribute(
+      'href',
+      '/settings/profile-migration',
+    );
   },
 };
 
@@ -129,6 +142,62 @@ export const ThemeDetail: Story = {
     <ThemePreferenceProvider>
       <ThemeStoryCanvas />
     </ThemePreferenceProvider>
+  ),
+};
+
+export const ProfileMigrationFullWeb: Story = {
+  beforeEach: () => setVisualViewportWidth(1400, 'Profile migration full Web story'),
+  globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
+  parameters: {
+    controls: { disable: true },
+    relay: { data: ownerData },
+    router: { pathname: '/settings/profile-migration' },
+  },
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    expect(canvas.getByRole('heading', { name: '설정' })).toBeVisible();
+    expect(canvas.getByRole('heading', { name: '다른 서비스에서 이전' })).toBeVisible();
+    expect(canvas.getByRole('link', { name: '다른 서비스에서 이전 설정 열기' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(canvas.getByRole('textbox', { name: '기존 계정 주소' })).toBeVisible();
+    expect(canvas.getByRole('button', { name: '기존 계정 등록' })).toBeDisabled();
+    expect(
+      canvas.getByRole('group', {
+        name: '이전받을 Kosmo 프로필 현재 Profile @settings-owner@selected-profile.example',
+      }),
+    ).toBeVisible();
+    expect(
+      canvas.getByText(
+        '기존 계정 주소를 먼저 등록한 뒤 기존 서비스에서 이 Kosmo 프로필로 Move를 시작하세요. 팔로워는 옮길 수 있지만 게시물은 복사되지 않아요.',
+      ),
+    ).toBeVisible();
+  },
+  render: () => (
+    <SettingsRouteLayout>
+      <SettingsProfileMigrationRoute />
+    </SettingsRouteLayout>
+  ),
+};
+
+export const ProfileMigrationMobileWeb: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: {
+    controls: { disable: true },
+    relay: { data: ownerData },
+    router: { pathname: '/settings/profile-migration' },
+  },
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    expect(canvas.getByTestId('profile-migration-source-control')).toBeVisible();
+    expect(canvas.getByRole('textbox', { name: '기존 계정 주소' })).toBeVisible();
+    expect(canvas.getByRole('button', { name: '기존 계정 등록' })).toBeDisabled();
+  },
+  render: () => (
+    <SettingsRouteLayout>
+      <SettingsProfileMigrationRoute />
+    </SettingsRouteLayout>
   ),
 };
 

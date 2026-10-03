@@ -2,7 +2,7 @@ import { AccountProfileRole } from '@kosmo/core/enums';
 import { ValidationError } from '@kosmo/core/error';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { parseProfileHandle } from '@kosmo/core/profile';
-import { prepareProfileMigration } from '@kosmo/core/services';
+import { prepareProfileMigration, unregisterProfileMigrationSource } from '@kosmo/core/services';
 import { runWorkflow } from '@kosmo/core/temporal/client';
 import { remoteProfileLookupWorkflow } from '@kosmo/core/temporal/workflows';
 import {
@@ -68,6 +68,21 @@ builder.mutationField('registerProfileMigrationSource', (t) =>
         sourceProfileId,
       });
 
+      return { profile: targetProfileId };
+    },
+  }),
+);
+
+builder.mutationField('unregisterProfileMigrationSource', (t) =>
+  t.withAuth({ profileRole: AccountProfileRole.OWNER }).field({
+    type: builder.simpleObject('UnregisterProfileMigrationSourcePayload', {
+      fields: (field) => ({
+        profile: field.field({ type: Profile }),
+      }),
+    }),
+    resolve: async (_, __, ctx) => {
+      const targetProfileId = ctx.session.profile.id;
+      await unregisterProfileMigrationSource({ targetProfileId });
       return { profile: targetProfileId };
     },
   }),

@@ -5,6 +5,7 @@ import { Profile } from '../ref';
 
 const ProfileInstance = builder.simpleObject('ProfileInstance', {
   fields: (t) => ({
+    canonicalOrigin: t.string({ nullable: true }),
     kind: t.field({
       type: InstanceKind,
     }),

@@ -18,6 +18,7 @@ let permission: { granted: boolean; status?: 'denied' | 'granted' | 'undetermine
 };
 let permissionStatusCalls = 0;
 let requestPermissionAndSyncCalls = 0;
+let migrationEnabled = false;
 let requestPermissionAndSync: () => Promise<void> = async () => {
   requestPermissionAndSyncCalls += 1;
 };
@@ -62,6 +63,9 @@ mock.module(new URL('../native-push/nativePushClient.ts', import.meta.url), {
       return Promise.resolve(permission);
     },
   },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('../FeatureFlagsContext.tsx', import.meta.url), {
+  exports: { useFeatureFlag: (key: string) => key === 'profile-migration' && migrationEnabled },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../native-push/nativePushPermissionContext.ts', import.meta.url), {
   exports: {
@@ -111,7 +115,7 @@ mock.module(new URL('../ui/ToastProvider.tsx', import.meta.url), {
 
 let SettingsNavigationList: ComponentType<{
   pathname?: string;
-  selected?: 'default-post-visibility' | 'mute-and-block' | 'theme' | 'info';
+  selected?: 'default-post-visibility' | 'profile-migration' | 'mute-and-block' | 'theme' | 'info';
 }>;
 let SettingsMuteAndBlockNavigation: ComponentType<{
   selected?: 'blocked-profiles' | 'muted-profiles';
@@ -152,6 +156,7 @@ afterEach(async () => {
   requestPermissionAndSync = async () => {
     requestPermissionAndSyncCalls += 1;
   };
+  migrationEnabled = false;
   toastCalls.length = 0;
   if (renderer) {
     await act(async () => renderer?.unmount());
@@ -161,6 +166,7 @@ afterEach(async () => {
 
 describe('SettingsNavigationList', () => {
   it('실제 데이터가 연결된 설정 진입점만 제공한다', async () => {
+    migrationEnabled = true;
     await render();
 
     const links = rendered('Pressable');
@@ -171,10 +177,21 @@ describe('SettingsNavigationList', () => {
     assert.equal(links[0].props.href, 'https://id.byulmaru.co');
     assert.equal(links[1].props.accessibilityLabel, '게시물 기본 공개 범위 설정 열기');
     assert.equal(links[1].props.href, '/settings/default-post-visibility');
-    assert.equal(links[2].props.accessibilityLabel, '뮤트 및 차단 설정 열기');
-    assert.equal(links[2].props.href, '/settings/mute-and-block');
+    assert.equal(links[2].props.accessibilityLabel, '다른 서비스에서 이전 설정 열기');
+    assert.equal(links[2].props.href, '/settings/profile-migration');
+    assert.equal(links[3].props.accessibilityLabel, '뮤트 및 차단 설정 열기');
+    assert.equal(links[3].props.href, '/settings/mute-and-block');
     assert.equal(
       links.some((node) => node.props.testID === 'native-notification-settings'),
+      false,
+    );
+  });
+
+  it('migration feature flag가 꺼져 있으면 Settings root에 진입점을 노출하지 않는다', async () => {
+    await render();
+
+    assert.equal(
+      rendered('Pressable').some((node) => node.props.href === '/settings/profile-migration'),
       false,
     );
   });
@@ -356,6 +373,18 @@ describe('SettingsNavigationList', () => {
     assert.deepEqual(internal.props.accessibilityState, { selected: true });
   });
 
+  it('migration route는 feature flag가 켜졌을 때 현재·선택 상태를 표시한다', async () => {
+    migrationEnabled = true;
+    await render({ pathname: '/settings/profile-migration', selected: 'profile-migration' });
+
+    const migration = rendered('Pressable').find(
+      (link) => link.props.href === '/settings/profile-migration',
+    );
+    assert.ok(migration);
+    assert.equal(migration.props['aria-current'], 'page');
+    assert.deepEqual(migration.props.accessibilityState, { selected: true });
+  });
+
   it('root detail을 visual selected로 표시해도 root path에서는 current page가 아니다', async () => {
     await render({ pathname: '/settings', selected: 'default-post-visibility' });
 
@@ -392,7 +421,12 @@ describe('SettingsNavigationList', () => {
 async function render(
   props: {
     pathname?: string;
-    selected?: 'default-post-visibility' | 'mute-and-block' | 'theme' | 'info';
+    selected?:
+      | 'default-post-visibility'
+      | 'profile-migration'
+      | 'mute-and-block'
+      | 'theme'
+      | 'info';
   } = {},
 ) {
   await act(async () => {

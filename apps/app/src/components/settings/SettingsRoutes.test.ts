@@ -121,6 +121,11 @@ mock.module(new URL('./SettingsProfileDetail.tsx', import.meta.url), {
     SettingsProfileDetail: () => createElement('SettingsProfileDetail'),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('./SettingsProfileMigrationDetail.tsx', import.meta.url), {
+  exports: {
+    SettingsProfileMigrationDetail: () => createElement('SettingsProfileMigrationDetail'),
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('./SettingsMuteAndBlockNavigation.tsx', import.meta.url), {
   exports: {
     SettingsMuteAndBlockNavigation: (props: Record<string, unknown>) =>
@@ -158,6 +163,7 @@ mock.module(new URL('../../session/SessionProvider.tsx', import.meta.url), {
 } as unknown as Parameters<typeof mock.module>[1]);
 
 let SettingsDefaultPostVisibilityRoute: ComponentType;
+let SettingsProfileMigrationRoute: ComponentType;
 let SettingsMuteAndBlockRoute: ComponentType;
 let SettingsMutedProfilesRoute: ComponentType;
 let SettingsBlockedProfilesRoute: ComponentType;
@@ -182,6 +188,8 @@ before(async () => {
     await import('../../app/(tabs)/(protected)/settings/developer'));
   ({ default: SettingsDefaultPostVisibilityRoute } =
     await import('../../app/(tabs)/(protected)/settings/default-post-visibility'));
+  ({ default: SettingsProfileMigrationRoute } =
+    await import('../../app/(tabs)/(protected)/settings/profile-migration'));
   ({ default: SettingsMuteAndBlockRoute } =
     await import('../../app/(tabs)/(protected)/settings/mute-and-block'));
   ({ default: SettingsMutedProfilesRoute } =
@@ -277,6 +285,22 @@ describe('Settings routes', () => {
       '설정으로 돌아가기',
     );
     assert.equal(rendered('SettingsProfileDetail').length, 1);
+  });
+
+  it('full Web migration detail은 공통 master의 migration item과 Settings parent back을 사용한다', async () => {
+    await renderRoute('/settings/profile-migration', SettingsProfileMigrationRoute);
+
+    assert.ok(byTestId('settings-workspace'));
+    assert.deepEqual(
+      rendered('PageHeader').map((node) => node.props.title),
+      ['설정', '다른 서비스에서 이전'],
+    );
+    assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'profile-migration');
+    assert.equal(rendered('SettingsProfileMigrationDetail').length, 1);
+    const back = rendered('PageHeader')[1].props.leading;
+    assert.equal(back.props.accessibilityLabel, '설정으로 돌아가기');
+    await act(async () => back.props.onPress());
+    assert.deepEqual(dismissedToPaths, ['/settings']);
   });
 
   it('full Web mute category는 master 진입점을 선택하고 상세에 하위 목록을 표시한다', async () => {
@@ -421,6 +445,11 @@ describe('Settings routes', () => {
     assert.equal(rendered('SettingsNavigationList').length, 0);
     assert.equal(rendered('SettingsProfileDetail').length, 1);
     assert.equal(rendered('ScrollView').length, 0);
+
+    await rerenderRoute('/settings/profile-migration', SettingsProfileMigrationRoute);
+    assert.equal(rendered('PageHeader').length, 0);
+    assert.equal(rendered('SettingsNavigationList').length, 0);
+    assert.equal(rendered('SettingsProfileMigrationDetail').length, 1);
   });
 
   it('Native detail은 header부터 content까지 하나의 vertical ScrollView가 소유한다', async () => {
@@ -459,6 +488,26 @@ describe('Settings routes', () => {
     assert.equal(header.props.leading.props.accessibilityLabel, '설정으로 돌아가기');
     assert.equal(
       scrollView.findAll((node) => (node.type as unknown) === 'SettingsProfileDetail').length,
+      1,
+    );
+
+    await act(async () => header.props.leading.props.onPress());
+    assert.deepEqual(dismissedToPaths, ['/settings']);
+  });
+
+  it('iOS migration destination도 header와 content를 같은 ScrollView에 두고 Settings로 돌아간다', async () => {
+    platform = 'ios';
+    width = 390;
+    await renderRoute('/settings/profile-migration', SettingsProfileMigrationRoute);
+
+    const scrollView = rendered('ScrollView')[0];
+    assert.ok(scrollView);
+    const header = scrollView.findAll((node) => (node.type as unknown) === 'PageHeader')[0];
+    assert.equal(header.props.title, '다른 서비스에서 이전');
+    assert.equal(header.props.leading.props.accessibilityLabel, '설정으로 돌아가기');
+    assert.equal(
+      scrollView.findAll((node) => (node.type as unknown) === 'SettingsProfileMigrationDetail')
+        .length,
       1,
     );
 

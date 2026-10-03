@@ -61,7 +61,8 @@ export {
 export type { AcceptProfileFollowRequestResult } from './profile-follow-transaction';
 export { profileFollowPairCondition } from './profile-follow-transaction';
 export type { PrepareProfileMigrationInput } from './profile-migration';
-export { prepareProfileMigration } from './profile-migration';
+export type { UnregisterProfileMigrationSourceInput } from './profile-migration';
+export { prepareProfileMigration, unregisterProfileMigrationSource } from './profile-migration';
 export { muteProfile, unmuteProfile } from './profile-mute';
 export { pinProfilePost, unpinProfilePost } from './profile-pin';
 export { updateProfile } from './profile-update';

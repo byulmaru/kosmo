@@ -27,7 +27,7 @@ export type StoryProfile = {
   handle: string;
   header: { id: string; url: string | null } | null;
   id: string;
-  instance: { kind: 'ACTIVITYPUB' | 'LOCAL' };
+  instance: { canonicalOrigin?: string | null; kind: 'ACTIVITYPUB' | 'LOCAL' };
   private: { defaultPostVisibility: 'FOLLOWERS' | 'PUBLIC' | 'UNLISTED' } | null;
   relativeHandle: string;
   tags: Array<{ id: string; name: string }>;
@@ -96,7 +96,7 @@ export function profile(overrides: Partial<StoryProfile> = {}): StoryProfile {
     handle: 'kosmo',
     header: null,
     id: 'profile-kosmo',
-    instance: { kind: 'LOCAL' },
+    instance: { canonicalOrigin: null, kind: 'LOCAL' },
     relativeHandle: '@kosmo',
     tags: [],
     unreadNotificationCount: 0,

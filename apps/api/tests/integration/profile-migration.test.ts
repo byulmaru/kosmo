@@ -32,6 +32,8 @@ let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
 let pg: typeof CoreDb.pg;
+let ProfileFollowRequests: typeof CoreDb.ProfileFollowRequests;
+let ProfileFollows: typeof CoreDb.ProfileFollows;
 let ProfileMigrations: typeof CoreDb.ProfileMigrations;
 let Profiles: typeof CoreDb.Profiles;
 let Sessions: typeof CoreDb.Sessions;
@@ -66,6 +68,17 @@ const registerSourceMutation = `mutation RegisterProfileMigrationSource($input: 
   }
 }`;
 
+const unregisterSourceMutation = `mutation UnregisterProfileMigrationSource {
+  unregisterProfileMigrationSource {
+    profile {
+      id
+      displayName
+      relativeHandle
+      migrationSource { id }
+    }
+  }
+}`;
+
 describe('GraphQL profile migration', () => {
   before(async () => {
     process.env.DATABASE_URL = databaseUrl;
@@ -80,6 +93,8 @@ describe('GraphQL profile migration', () => {
       firstOrThrow,
       Instances,
       pg,
+      ProfileFollowRequests,
+      ProfileFollows,
       ProfileMigrations,
       Profiles,
       Sessions,
@@ -285,15 +300,23 @@ describe('GraphQL profile migration', () => {
     });
 
     const read = await requestGraphQL<{
-      source: { id: string; migrationSource: null } | null;
-      target: { id: string; migrationSource: { id: string } | null } | null;
+      source: {
+        id: string;
+        instance: { canonicalOrigin: string | null };
+        migrationSource: null;
+      } | null;
+      target: {
+        id: string;
+        instance: { canonicalOrigin: string | null };
+        migrationSource: { id: string } | null;
+      } | null;
     }>(
       `query ReadMigrationSource($sourceId: ID!, $targetId: ID!) {
         target: node(id: $targetId) {
-          ... on Profile { id migrationSource { id } }
+          ... on Profile { id migrationSource { id } instance { canonicalOrigin } }
         }
         source: node(id: $sourceId) {
-          ... on Profile { id migrationSource { id } }
+          ... on Profile { id migrationSource { id } instance { canonicalOrigin } }
         }
       }`,
       {
@@ -305,12 +328,179 @@ describe('GraphQL profile migration', () => {
 
     assertNoGraphQLErrors(read);
     assert.deepEqual(read.data, {
-      source: { id: globalId('Profile', persistedSource.id), migrationSource: null },
+      source: {
+        id: globalId('Profile', persistedSource.id),
+        instance: { canonicalOrigin: null },
+        migrationSource: null,
+      },
       target: {
         id: globalId('Profile', auth.profile.id),
+        instance: { canonicalOrigin: publicOrigin },
         migrationSource: { id: globalId('Profile', persistedSource.id) },
       },
     });
+  });
+
+  test('Profile instance returns the selected instance canonical origin, not PUBLIC_ORIGIN', async () => {
+    const selectedOrigin = 'https://selected-local.example:8443';
+    const selectedInstance = await db
+      .insert(Instances)
+      .values({
+        canonicalOrigin: selectedOrigin,
+        domain: 'selected-local.example:8443',
+        kind: InstanceKind.LOCAL,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const profile = await createProfile({
+      handle: 'selected-origin',
+      instanceId: selectedInstance.id,
+    });
+    const auth = await createAuthenticatedSession({ profileId: profile.id });
+    const result = await requestGraphQL<{
+      node: { instance: { canonicalOrigin: string | null } } | null;
+    }>(
+      `query SelectedProfileInstanceOrigin($id: ID!) {
+        node(id: $id) { ... on Profile { instance { canonicalOrigin } } }
+      }`,
+      { id: globalId('Profile', profile.id) },
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.equal(result.data?.node?.instance.canonicalOrigin, selectedOrigin);
+    assert.notEqual(result.data?.node?.instance.canonicalOrigin, publicOrigin);
+  });
+
+  test('unregister requires an active owner of the selected profile', async () => {
+    const target = await createProfile({ handle: 'migration-target' });
+    const source = await createRemoteSource();
+    await db.insert(ProfileMigrations).values({
+      sourceProfileId: source.id,
+      targetProfileId: target.id,
+    });
+    const member = await createAuthenticatedSession({
+      profileId: target.id,
+      role: AccountProfileRole.MEMBER,
+    });
+    const inactive = await createAuthenticatedSession({
+      accountState: AccountState.DISABLED,
+      profileId: target.id,
+      role: AccountProfileRole.OWNER,
+    });
+
+    for (const token of [member.token, inactive.token, undefined]) {
+      const result = await requestGraphQL(unregisterSourceMutation, {}, token);
+
+      assertGraphQLErrorCode(result, 'PERMISSION_DENIED');
+    }
+
+    assert.equal(await countMigrations(), 1);
+  });
+
+  test('unregister returns the selected target with no source, preserves prior follows, and allows a different source', async (t) => {
+    const target = await createProfile({
+      displayName: 'Migration Target',
+      handle: 'migration-target',
+    });
+    const otherTarget = await createProfile({ handle: 'other-target' });
+    const source = await createRemoteSource();
+    const otherSource = await createRemoteSource({
+      domain: 'other-remote.example',
+      handle: 'bob',
+    });
+    const follower = await createProfile({ handle: 'old-source-follower' });
+    const requester = await createProfile({ handle: 'old-source-requester' });
+    const auth = await createAuthenticatedSession({ profileId: target.id });
+    await db.insert(ProfileMigrations).values([
+      { sourceProfileId: source.id, targetProfileId: target.id },
+      { sourceProfileId: otherSource.id, targetProfileId: otherTarget.id },
+    ]);
+    const follow = await db
+      .insert(ProfileFollows)
+      .values({ followerProfileId: follower.id, followeeProfileId: source.id })
+      .returning()
+      .then(firstOrThrow);
+    const request = await db
+      .insert(ProfileFollowRequests)
+      .values({ followerProfileId: requester.id, followeeProfileId: source.id })
+      .returning()
+      .then(firstOrThrow);
+    const profileCount = await countProfiles();
+
+    const result = await requestGraphQL<{
+      unregisterProfileMigrationSource: {
+        profile: {
+          displayName: string;
+          id: string;
+          migrationSource: null;
+          relativeHandle: string;
+        };
+      };
+    }>(unregisterSourceMutation, {}, auth.token);
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.unregisterProfileMigrationSource.profile, {
+      displayName: 'Migration Target',
+      id: globalId('Profile', target.id),
+      migrationSource: null,
+      relativeHandle: '@migration-target',
+    });
+    assert.equal(await countProfiles(), profileCount);
+    assert.deepEqual(
+      await db
+        .select({ sourceProfileId: ProfileMigrations.sourceProfileId })
+        .from(ProfileMigrations)
+        .where(eq(ProfileMigrations.targetProfileId, target.id)),
+      [],
+    );
+    assert.deepEqual(
+      await db
+        .select({ sourceProfileId: ProfileMigrations.sourceProfileId })
+        .from(ProfileMigrations)
+        .where(eq(ProfileMigrations.targetProfileId, otherTarget.id)),
+      [{ sourceProfileId: otherSource.id }],
+    );
+    assert.deepEqual(
+      await db
+        .select({ id: ProfileFollows.id, followerProfileId: ProfileFollows.followerProfileId })
+        .from(ProfileFollows)
+        .where(eq(ProfileFollows.id, follow.id)),
+      [{ id: follow.id, followerProfileId: follower.id }],
+    );
+    assert.deepEqual(
+      await db
+        .select({
+          followerProfileId: ProfileFollowRequests.followerProfileId,
+          id: ProfileFollowRequests.id,
+        })
+        .from(ProfileFollowRequests)
+        .where(eq(ProfileFollowRequests.id, request.id)),
+      [{ followerProfileId: requester.id, id: request.id }],
+    );
+
+    const repeated = await requestGraphQL(unregisterSourceMutation, {}, auth.token);
+    assertNoGraphQLErrors(repeated);
+    assert.equal(await countMigrations(), 1);
+
+    const replacement = await createRemoteSource({
+      domain: 'replacement.example',
+      handle: 'carol',
+    });
+    t.mock.method(temporalClient.workflow, 'execute', async () => replacement.id as never);
+    const registered = await requestGraphQL<{
+      registerProfileMigrationSource: { profile: { migrationSource: { id: string } } };
+    }>(
+      registerSourceMutation,
+      { input: { sourceHandle: '@carol@replacement.example' } },
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(registered);
+    assert.equal(
+      registered.data?.registerProfileMigrationSource.profile.migrationSource.id,
+      globalId('Profile', replacement.id),
+    );
   });
 });
 
@@ -406,27 +596,33 @@ const createAuthenticatedSession = async ({
   return { account, profile, token };
 };
 
-const createRemoteSource = async () => {
+const createRemoteSource = async ({
+  domain = remoteDomain,
+  handle = 'alice',
+}: {
+  domain?: string;
+  handle?: string;
+} = {}) => {
   const instance = await db
     .insert(Instances)
     .values({
       canonicalOrigin: null,
-      domain: remoteDomain,
+      domain,
       kind: InstanceKind.ACTIVITYPUB,
     })
     .returning()
     .then(firstOrThrow);
   const profile = await createProfile({
     displayName: 'Alice Remote',
-    handle: 'alice',
+    handle,
     instanceId: instance.id,
   });
   await db.insert(ActivityPubActors).values({
-    inboxUri: `https://${remoteDomain}/users/alice/inbox`,
+    inboxUri: `https://${domain}/users/${handle}/inbox`,
     profileId: profile.id,
-    sharedInboxUri: `https://${remoteDomain}/inbox`,
+    sharedInboxUri: `https://${domain}/inbox`,
     type: 'PERSON',
-    uri: `https://${remoteDomain}/users/alice`,
+    uri: `https://${domain}/users/${handle}`,
   });
   return profile;
 };

@@ -13,7 +13,7 @@ import {
 } from '../db';
 import { InstanceKind, ProfileFollowPolicy } from '../enums';
 import { ConflictError, NotFoundError } from '../error';
-import { prepareProfileMigration } from './profile-migration';
+import { prepareProfileMigration, unregisterProfileMigrationSource } from './profile-migration';
 
 const instanceIds: string[] = [];
 const profileIds: string[] = [];
@@ -229,4 +229,39 @@ test('source와 target이 같으면 migration을 만들지 않고 거부한다',
       .where(eq(ProfileMigrations.targetProfileId, profile.profile.id)),
     [],
   );
+});
+
+test('source 해제는 선택한 target의 pair만 삭제하고 재실행해도 성공한다', async () => {
+  const target = await createProfileFixture();
+  const otherTarget = await createProfileFixture();
+  const source = await createProfileFixture({ instanceKind: InstanceKind.ACTIVITYPUB });
+  const otherSource = await createProfileFixture({ instanceKind: InstanceKind.ACTIVITYPUB });
+
+  await prepareProfileMigration({
+    sourceProfileId: source.profile.id,
+    targetProfileId: target.profile.id,
+  });
+  await prepareProfileMigration({
+    sourceProfileId: otherSource.profile.id,
+    targetProfileId: otherTarget.profile.id,
+  });
+
+  await unregisterProfileMigrationSource({ targetProfileId: target.profile.id });
+  await unregisterProfileMigrationSource({ targetProfileId: target.profile.id });
+
+  assert.deepEqual(
+    await db
+      .select({ sourceProfileId: ProfileMigrations.sourceProfileId })
+      .from(ProfileMigrations)
+      .where(eq(ProfileMigrations.targetProfileId, target.profile.id)),
+    [],
+  );
+  assert.deepEqual(
+    await db
+      .select({ sourceProfileId: ProfileMigrations.sourceProfileId })
+      .from(ProfileMigrations)
+      .where(eq(ProfileMigrations.targetProfileId, otherTarget.profile.id)),
+    [{ sourceProfileId: otherSource.profile.id }],
+  );
+  assert.equal(await db.$count(Profiles), profileIds.length);
 });

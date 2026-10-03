@@ -46,6 +46,7 @@ const [
   { profileFollowPairWorkflowId, profileFollowRemovalWorkflowId },
   activities,
   migrationActivities,
+  { prepareProfileMigration, unregisterProfileMigrationSource },
   { federation, setInboundObservabilityReporter },
 ] = await Promise.all([
   import('@kosmo/core/db'),
@@ -55,6 +56,7 @@ const [
   import('@kosmo/core/temporal/follow-command'),
   import('./activities'),
   import('./profile-migration-activities'),
+  import('@kosmo/core/services'),
   import('@kosmo/fedify'),
 ]);
 
@@ -576,6 +578,137 @@ test('Move follower batch는 Local target 준비와 Remote target origin을 다�
     });
   assert.equal(approvalTargetBatch.length, 1);
   assert.equal(approvalTargetBatch[0]?.followerProfileId, follower.profile.id);
+});
+
+test('unregistering a prepared migration preserves processed followers and rejects pending source follows', async () => {
+  const source = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
+  const target = await createProfile({
+    actorUri: new URL(`/ap/actor/${randomUUID()}`, publicOrigin).href,
+    instanceId: localInstanceId,
+    instanceKind: InstanceKind.LOCAL,
+    withActor: true,
+  });
+  const completedFollowFollower = await createProfile();
+  const completedRequestFollower = await createProfile();
+  const pendingFollower = await createProfile();
+  await prepareProfileMigration({
+    sourceProfileId: source.profile.id,
+    targetProfileId: target.profile.id,
+  });
+  await Promise.all([
+    createSourceFollow(completedFollowFollower.profile.id, source.profile.id),
+    createSourceFollow(completedRequestFollower.profile.id, source.profile.id),
+    createSourceFollow(pendingFollower.profile.id, source.profile.id),
+  ]);
+
+  const initialBatch = await migrationActivities.loadProfileMigrationMoveFollowerBatchActivity({
+    sourceProfileId: source.profile.id,
+    targetProfileId: target.profile.id,
+  });
+  assert.equal(initialBatch.length, 3);
+
+  const followMove = initialBatch.find(
+    ({ followerProfileId }) => followerProfileId === completedFollowFollower.profile.id,
+  );
+  assert.ok(followMove);
+  await runWithWorker(() =>
+    migrationActivities.executeProfileMigrationMoveFollowerActivity({
+      ...followMove,
+      sourceProfileId: source.profile.id,
+      targetProfileId: target.profile.id,
+    }),
+  );
+
+  await db
+    .update(Profiles)
+    .set({ followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED })
+    .where(eq(Profiles.id, target.profile.id));
+  const requestMove = (
+    await migrationActivities.loadProfileMigrationMoveFollowerBatchActivity({
+      sourceProfileId: source.profile.id,
+      targetProfileId: target.profile.id,
+    })
+  ).find(({ followerProfileId }) => followerProfileId === completedRequestFollower.profile.id);
+  assert.ok(requestMove);
+  await runWithWorker(() =>
+    migrationActivities.executeProfileMigrationMoveFollowerActivity({
+      ...requestMove,
+      sourceProfileId: source.profile.id,
+      targetProfileId: target.profile.id,
+    }),
+  );
+
+  const [pendingMove] = await migrationActivities.loadProfileMigrationMoveFollowerBatchActivity({
+    sourceProfileId: source.profile.id,
+    targetProfileId: target.profile.id,
+  });
+  assert.ok(pendingMove);
+  assert.equal(pendingMove.followerProfileId, pendingFollower.profile.id);
+  assert.equal(await countFollow(completedFollowFollower.profile.id, target.profile.id), 1);
+  assert.equal(await countFollowRequest(completedRequestFollower.profile.id, target.profile.id), 1);
+
+  await unregisterProfileMigrationSource({ targetProfileId: target.profile.id });
+
+  assert.deepEqual(
+    await migrationActivities.loadProfileMigrationMoveFollowerBatchActivity({
+      sourceProfileId: source.profile.id,
+      targetProfileId: target.profile.id,
+    }),
+    [],
+  );
+  await runWithWorker(() =>
+    migrationActivities.executeProfileMigrationMoveFollowerActivity({
+      ...pendingMove,
+      sourceProfileId: source.profile.id,
+      targetProfileId: target.profile.id,
+    }),
+  );
+  assert.equal(await countFollow(pendingFollower.profile.id, source.profile.id), 1);
+  assert.equal(await countFollow(pendingFollower.profile.id, target.profile.id), 0);
+  assert.equal(await countFollowRequest(pendingFollower.profile.id, target.profile.id), 0);
+  assert.equal(await countFollow(completedFollowFollower.profile.id, target.profile.id), 1);
+  assert.equal(await countFollowRequest(completedRequestFollower.profile.id, target.profile.id), 1);
+
+  const replacementSource = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
+  const replacementFollower = await createProfile();
+  const replacementSourceFollow = await createSourceFollow(
+    replacementFollower.profile.id,
+    replacementSource.profile.id,
+  );
+  await prepareProfileMigration({
+    sourceProfileId: replacementSource.profile.id,
+    targetProfileId: target.profile.id,
+  });
+
+  assert.deepEqual(
+    await migrationActivities.loadProfileMigrationMoveFollowerBatchActivity({
+      sourceProfileId: source.profile.id,
+      targetProfileId: target.profile.id,
+    }),
+    [],
+  );
+  assert.deepEqual(
+    await migrationActivities.loadProfileMigrationMoveFollowerBatchActivity({
+      sourceProfileId: replacementSource.profile.id,
+      targetProfileId: target.profile.id,
+    }),
+    [
+      {
+        followerProfileId: replacementFollower.profile.id,
+        sourceFollowId: replacementSourceFollow.id,
+      },
+    ],
+  );
+  await runWithWorker(() =>
+    migrationActivities.executeProfileMigrationMoveFollowerActivity({
+      ...pendingMove,
+      sourceProfileId: source.profile.id,
+      targetProfileId: target.profile.id,
+    }),
+  );
+  assert.equal(await countFollow(pendingFollower.profile.id, source.profile.id), 1);
+  assert.equal(await countFollow(pendingFollower.profile.id, target.profile.id), 0);
+  assert.equal(await countFollowRequest(pendingFollower.profile.id, target.profile.id), 0);
 });
 
 test('Move follower target 저장 실패는 source Follow를 보존한다', async () => {

@@ -1,6 +1,6 @@
-import { useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { graphql, RelayEnvironmentProvider, useLazyLoadQuery } from 'react-relay';
+import { graphql, useLazyLoadQuery } from 'react-relay';
 import {
   createOperationDescriptor,
   Environment,
@@ -12,6 +12,7 @@ import {
 } from 'relay-runtime';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import { ProfileMigrationSourceControl } from '@/components/profile/ProfileMigrationSourceControl';
+import { RelayActorBoundary, RelayActorProvider, useRelayActor } from '@/relay/RelayActorProvider';
 import ProfileMigrationSourceControlStoriesQueryNode from './__generated__/ProfileMigrationSourceControlStoriesQuery.graphql';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { GraphQLResponse, RequestParameters, Variables } from 'relay-runtime';
@@ -49,6 +50,7 @@ function createEnvironment({
   onMutationAttempt,
   onPending,
   sourceFixture,
+  targetCanonicalOrigin,
   targetId,
 }: {
   initialSource: typeof preparedSource | null;
@@ -56,6 +58,7 @@ function createEnvironment({
   onMutationAttempt: (attempt: number) => void;
   onPending: (complete: () => void) => void;
   sourceFixture: typeof preparedSource;
+  targetCanonicalOrigin: string | null;
   targetId: string;
 }) {
   let attempts = 0;
@@ -67,7 +70,9 @@ function createEnvironment({
         if (mode === 'pending' && attempts === 1) {
           return Observable.create<GraphQLResponse>((sink) => {
             onPending(() => {
-              sink.next({ data: preparePayload(targetId, variables, sourceFixture) });
+              sink.next({
+                data: preparePayload(targetId, variables, sourceFixture, targetCanonicalOrigin),
+              });
               sink.complete();
             });
           });
@@ -76,7 +81,26 @@ function createEnvironment({
           return Promise.reject(new Error('profile migration preparation failed'));
         }
         return Promise.resolve({
-          data: preparePayload(targetId, variables, sourceFixture),
+          data: preparePayload(targetId, variables, sourceFixture, targetCanonicalOrigin),
+        } as GraphQLResponse);
+      }
+      if (request.name === 'ProfileMigrationSourceControlUnregisterMutation') {
+        attempts += 1;
+        onMutationAttempt(attempts);
+        return Promise.resolve({
+          data: {
+            unregisterProfileMigrationSource: {
+              profile: {
+                __typename: 'Profile',
+                displayName: '현재 Profile',
+                handle: 'target',
+                id: targetId,
+                instance: { __typename: 'ProfileInstance', canonicalOrigin: targetCanonicalOrigin },
+                migrationSource: null,
+                relativeHandle: '@target',
+              },
+            },
+          },
         } as GraphQLResponse);
       }
       return Promise.resolve({ data: {} } as GraphQLResponse);
@@ -91,7 +115,9 @@ function createEnvironment({
       node: {
         __typename: 'Profile',
         displayName: '현재 Profile',
+        handle: 'target',
         id: targetId,
+        instance: { __typename: 'ProfileInstance', canonicalOrigin: targetCanonicalOrigin },
         migrationSource: initialSource,
         relativeHandle: '@target',
       },
@@ -104,6 +130,7 @@ function preparePayload(
   targetId: string,
   variables: Variables,
   sourceFixture: typeof preparedSource,
+  targetCanonicalOrigin: string | null,
 ) {
   const input = variables.input as { sourceHandle: string };
   return {
@@ -111,7 +138,9 @@ function preparePayload(
       profile: {
         __typename: 'Profile',
         displayName: '현재 Profile',
+        handle: 'target',
         id: targetId,
+        instance: { __typename: 'ProfileInstance', canonicalOrigin: targetCanonicalOrigin },
         migrationSource: {
           ...sourceFixture,
           relativeHandle: input.sourceHandle.trim(),
@@ -128,16 +157,17 @@ function ProfileMigrationSourceStory({
   mode = 'success',
   onMutationAttempt,
   sourceFixture = preparedSource,
+  targetCanonicalOrigin = 'https://selected-profile.example',
 }: {
   editable?: boolean;
   initialSource?: typeof preparedSource | null;
   mode?: Mode;
   onMutationAttempt: () => void;
   sourceFixture?: typeof preparedSource;
+  targetCanonicalOrigin?: string | null;
 }) {
-  const [revision, setRevision] = useState(0);
   const pendingCompletionRef = useRef<(() => void) | null>(null);
-  const environment = useMemo(
+  const createActorEnvironment = useCallback(
     () =>
       createEnvironment({
         initialSource,
@@ -147,48 +177,82 @@ function ProfileMigrationSourceStory({
           pendingCompletionRef.current = complete;
         },
         sourceFixture,
-        targetId: `${profileId}:${revision}`,
+        targetCanonicalOrigin,
+        targetId: profileId,
       }),
-    [initialSource, mode, onMutationAttempt, revision, sourceFixture],
+    [initialSource, mode, onMutationAttempt, sourceFixture, targetCanonicalOrigin],
   );
 
   return (
     <View>
-      <RelayEnvironmentProvider environment={environment}>
-        <ProfileMigrationSourceStoryContents editable={editable} revision={revision} />
-      </RelayEnvironmentProvider>
-      {mode === 'pending' ? (
-        <Pressable
-          accessibilityLabel="Profile과 Environment 전환"
-          accessibilityRole="button"
-          onPress={() => setRevision((value) => value + 1)}
-        >
-          <Text>Profile과 Environment 전환</Text>
-        </Pressable>
-      ) : null}
-      {mode === 'pending' ? (
-        <Pressable
-          accessibilityLabel="이전 원본 등록 완료"
-          accessibilityRole="button"
-          onPress={() => pendingCompletionRef.current?.()}
-        >
-          <Text>이전 원본 등록 완료</Text>
-        </Pressable>
-      ) : null}
+      <RelayActorProvider createEnvironment={createActorEnvironment}>
+        <InitializeStoryActor profileId={profileId} />
+        <RelayActorBoundary>
+          <ProfileMigrationSourceStoryContents editable={editable} profileId={profileId} />
+        </RelayActorBoundary>
+        {mode === 'pending' ? (
+          <ActorTransitionActions
+            completePending={() => pendingCompletionRef.current?.()}
+            profileId={profileId}
+          />
+        ) : null}
+      </RelayActorProvider>
     </View>
+  );
+}
+
+function InitializeStoryActor({ profileId }: { profileId: string }) {
+  const { resetActor } = useRelayActor();
+  const initializedRef = useRef(false);
+
+  useEffect(() => {
+    if (!initializedRef.current) {
+      initializedRef.current = true;
+      resetActor(profileId);
+    }
+  }, [profileId, resetActor]);
+
+  return null;
+}
+
+function ActorTransitionActions({
+  completePending,
+  profileId,
+}: {
+  completePending: () => void;
+  profileId: string;
+}) {
+  const { resetActor } = useRelayActor();
+  return (
+    <>
+      <Pressable
+        accessibilityLabel="현재 Profile 환경 재설정"
+        accessibilityRole="button"
+        onPress={() => resetActor(profileId)}
+      >
+        <Text>현재 Profile 환경 재설정</Text>
+      </Pressable>
+      <Pressable
+        accessibilityLabel="이전 원본 등록 완료"
+        accessibilityRole="button"
+        onPress={completePending}
+      >
+        <Text>이전 원본 등록 완료</Text>
+      </Pressable>
+    </>
   );
 }
 
 function ProfileMigrationSourceStoryContents({
   editable,
-  revision,
+  profileId,
 }: {
   editable: boolean;
-  revision: number;
+  profileId: string;
 }) {
   const data = useLazyLoadQuery<ProfileMigrationSourceControlStoriesQuery>(
     query,
-    { id: `${profileId}:${revision}` },
+    { id: profileId },
     { fetchPolicy: 'store-only' },
   );
   const profile = data.node?.profile;
@@ -202,9 +266,11 @@ const meta = {
   args: { onMutationAttempt: fn() },
   component: ProfileMigrationSourceStory,
   excludeStories: [
+    'DestinationAddressUnavailable',
     'FailureAndRetry',
-    'LateCompletionIgnoredAfterEnvironmentTransition',
+    'LateCompletionIgnoredAfterActorLifecycleReset',
     'OwnerPreparationAndSuccess',
+    'OwnerUnregistersPreparedSource',
   ],
   parameters: { controls: { disable: true } },
   title: 'KOSMO/Components/Profile Migration Source Control',
@@ -231,13 +297,18 @@ export const OwnerPreparationAndSuccess: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.type(
-      canvas.getByRole('textbox', { name: '이전할 프로필 주소' }),
+      canvas.getByRole('textbox', { name: '기존 계정 주소' }),
       '@source@remote.example',
     );
-    await userEvent.click(canvas.getByRole('button', { name: '원본 등록' }));
+    await userEvent.click(canvas.getByRole('button', { name: '기존 계정 등록' }));
     await expect(canvas.findByText('이전 원본을 등록했어요')).resolves.toBeVisible();
     await expect(
-      canvas.findByText('기존 Mastodon 계정에서 이 Kosmo 프로필로 이전을 실행하세요'),
+      canvas.findByText('이제 기존 서비스의 계정에서 이 Kosmo 프로필로 Move를 시작하세요.'),
+    ).resolves.toBeVisible();
+    await expect(
+      canvas.findByRole('group', {
+        name: '이전받을 Kosmo 프로필 현재 Profile @target@selected-profile.example',
+      }),
     ).resolves.toBeVisible();
     await expect(
       canvas.findByRole('group', {
@@ -248,14 +319,36 @@ export const OwnerPreparationAndSuccess: Story = {
   render: (args) => <ProfileMigrationSourceStory {...args} editable />,
 };
 
+export const OwnerUnregistersPreparedSource: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const source = canvas.getByRole('group', {
+      name: '현재 등록된 원본 원격 원본 Profile @source@remote.example',
+    });
+    expect(source).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: '기존 계정 등록 해제' }));
+    await expect(canvas.findByRole('textbox', { name: '기존 계정 주소' })).resolves.toBeVisible();
+    await expect(canvas.findByRole('button', { name: '기존 계정 등록' })).resolves.toBeDisabled();
+    expect(
+      canvas.queryByText(
+        '등록 해제 후 남은 팔로워 이전은 중단될 수 있어요. 이미 이전된 팔로워는 그대로 유지돼요.',
+      ),
+    ).toBeNull();
+    expect(canvas.queryByRole('group', { name: /현재 등록된 원본/ })).toBeNull();
+  },
+  render: (args) => (
+    <ProfileMigrationSourceStory {...args} editable initialSource={preparedSource} />
+  ),
+};
+
 export const FailureAndRetry: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.type(
-      canvas.getByRole('textbox', { name: '이전할 프로필 주소' }),
+      canvas.getByRole('textbox', { name: '기존 계정 주소' }),
       '@source@remote.example',
     );
-    await userEvent.click(canvas.getByRole('button', { name: '원본 등록' }));
+    await userEvent.click(canvas.getByRole('button', { name: '기존 계정 등록' }));
     await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
       '이전 원본을 등록하지 못했어요.',
     );
@@ -265,37 +358,51 @@ export const FailureAndRetry: Story = {
   render: (args) => <ProfileMigrationSourceStory {...args} editable mode="error-once" />,
 };
 
-export const LateCompletionIgnoredAfterEnvironmentTransition: Story = {
+export const LateCompletionIgnoredAfterActorLifecycleReset: Story = {
   play: async ({ args, canvasElement }) => {
     args.onMutationAttempt.mockClear();
     const canvas = within(canvasElement);
     await userEvent.type(
-      canvas.getByRole('textbox', { name: '이전할 프로필 주소' }),
+      canvas.getByRole('textbox', { name: '기존 계정 주소' }),
       '@source@remote.example',
     );
-    await userEvent.click(canvas.getByRole('button', { name: '원본 등록' }));
+    await userEvent.click(canvas.getByRole('button', { name: '기존 계정 등록' }));
     expect(args.onMutationAttempt).toHaveBeenCalledOnce();
-    await userEvent.click(canvas.getByRole('button', { name: 'Profile과 Environment 전환' }));
+    await userEvent.click(canvas.getByRole('button', { name: '현재 Profile 환경 재설정' }));
+    await expect(canvas.getByRole('textbox', { name: '기존 계정 주소' })).toHaveValue('');
     await userEvent.click(canvas.getByRole('button', { name: '이전 원본 등록 완료' }));
     expect(canvas.queryByText('이전 원본을 등록했어요')).toBeNull();
   },
   render: (args) => <ProfileMigrationSourceStory {...args} editable mode="pending" />,
 };
 
+export const DestinationAddressUnavailable: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      canvas.findByRole('group', { name: '이전받을 Kosmo 프로필 현재 Profile' }),
+    ).resolves.toBeVisible();
+    await expect(canvas.findByText('주소를 확인할 수 없어요.')).resolves.toBeVisible();
+    await expect(canvas.findByRole('textbox', { name: '기존 계정 주소' })).resolves.toBeVisible();
+    await expect(canvas.getByRole('button', { name: '기존 계정 등록' })).toBeDisabled();
+  },
+  render: (args) => <ProfileMigrationSourceStory {...args} editable targetCanonicalOrigin={null} />,
+};
+
 const longSourceReflowPlay = async ({ canvasElement }: { canvasElement: HTMLElement }) => {
   const canvas = within(canvasElement);
   const control = canvas.getByTestId('profile-migration-source-control');
-  const input = canvas.getByRole('textbox', { name: '이전할 프로필 주소' });
+  const input = canvas.getByRole('textbox', { name: '기존 계정 주소' });
   const longHandle = longPreparedSource.relativeHandle;
 
   expect(input).toBeVisible();
-  expect(canvas.getByRole('button', { name: '원본 등록' })).toBeVisible();
+  expect(canvas.getByRole('button', { name: '기존 계정 등록' })).toBeVisible();
   await userEvent.type(input, longHandle);
-  expect(canvas.getByRole('button', { name: '원본 등록' })).toBeEnabled();
+  expect(canvas.getByRole('button', { name: '기존 계정 등록' })).toBeEnabled();
   expect(control.scrollWidth).toBeLessThanOrEqual(control.clientWidth + 1);
   expect(canvasElement.scrollWidth).toBeLessThanOrEqual(canvasElement.clientWidth + 1);
 
-  await userEvent.click(canvas.getByRole('button', { name: '원본 등록' }));
+  await userEvent.click(canvas.getByRole('button', { name: '기존 계정 등록' }));
   const source = await canvas.findByRole('group', { name: /현재 등록된 원본/ });
   expect(source).toBeVisible();
   expect(within(source).getByText(longPreparedSource.displayName)).toBeVisible();
