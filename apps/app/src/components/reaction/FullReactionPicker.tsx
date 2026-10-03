@@ -212,7 +212,7 @@ export function FullReactionPicker({
     <View
       onResponderRelease={(event) => {
         if (event.target === event.currentTarget) {
-          onBackdropPress?.();
+          (onBackdropPress ?? onClose)();
         }
       }}
       onStartShouldSetResponder={(event) => event.target === event.currentTarget}

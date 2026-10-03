@@ -82,6 +82,34 @@ export const MobileKeyboardMediaEditorGeometryContract: Story =
   mobileKeyboardMediaEditorGeometryContract;
 export const MobileMediaFooterGeometryContract: Story = mobileMediaFooterGeometryContract;
 export const MobilePlaygroundContract: Story = mobilePlaygroundContract;
+export const MobileFullPickerBackdropDismissContract: Story = {
+  ...mobilePlaygroundStory,
+  args: { ...mobilePlaygroundStory.args, body: '모바일 반응 선택', items: [] },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '이모지 추가' }));
+
+    const composerPicker = await canvas.findByTestId('post-composer-emoji-picker');
+    const backdrop = within(composerPicker).getByTestId('full-reaction-picker-backdrop');
+    const sheet = within(backdrop).getByTestId('full-reaction-picker-sheet');
+    const backdropBounds = backdrop.getBoundingClientRect();
+    const sheetBounds = sheet.getBoundingClientRect();
+
+    expect(sheetBounds.top).toBeGreaterThan(backdropBounds.top);
+    await userEvent.click(sheet);
+    expect(composerPicker).toBeVisible();
+
+    const backdropClickPoint = {
+      clientX: backdropBounds.left + backdropBounds.width / 2,
+      clientY: backdropBounds.top + (sheetBounds.top - backdropBounds.top) / 2,
+    };
+    await userEvent.pointer([
+      { keys: '[MouseLeft>]', target: backdrop, coords: backdropClickPoint },
+      { keys: '[/MouseLeft]', target: backdrop, coords: backdropClickPoint },
+    ]);
+    await waitFor(() => expect(canvas.queryByTestId('post-composer-emoji-picker')).toBeNull());
+  },
+};
 export const MobileReplyShellContract: Story = mobileReplyShellContract;
 export const MobileRuntimeAltEditorContract: Story = mobileRuntimeAltEditorContract;
 export const MobileFlexLayoutContract: Story = mobileFlexLayoutContract;
