@@ -276,9 +276,9 @@ test('Native ActionMenu handle closes its sheet for assistive input', async () =
     );
   });
   await act(async () => renderer.root.findByProps({ testID: 'trigger' }).props.onPress());
-  await act(async () =>
-    renderer.root.findByProps({ accessibilityLabel: '시트 닫기' }).props.onPress(),
-  );
+  const handle = renderer.root.findByProps({ accessibilityLabel: '시트 닫기' });
+  assert.equal(handle.props.accessibilityState?.expanded, undefined);
+  await act(async () => handle.props.onPress());
   assert.equal(renderer.root.findByType('Modal' as unknown as ElementType).props.visible, false);
   await act(async () => renderer.unmount());
 });
@@ -353,18 +353,31 @@ test('shared bottom sheet follows an upward drag, then collapses and dismisses o
   });
   const sheetHeight = () =>
     flattenStyle(renderer.root.findByProps({ accessibilityViewIsModal: true }).props.style).height;
-  const handle = renderer.root.findByProps({ accessibilityLabel: '시트 펼치기' }).parent;
-  assert.ok(handle);
+  const handleButton = () => renderer.root.findByType(PressableHost);
+  const handleTarget = handleButton().parent;
+  assert.ok(handleTarget);
+  assert.equal(handleButton().props.accessibilityLabel, '시트 펼치기');
+  assert.deepEqual(handleButton().props.accessibilityState, { expanded: false });
+  await act(async () => handleButton().props.onPress());
+  assert.equal(handleButton().props.accessibilityLabel, '시트 접기');
+  assert.deepEqual(handleButton().props.accessibilityState, { expanded: true });
+  await act(async () => handleButton().props.onPress());
+  assert.equal(handleButton().props.accessibilityLabel, '시트 펼치기');
+  assert.deepEqual(handleButton().props.accessibilityState, { expanded: false });
   assert.equal(sheetHeight(), 480);
-  assert.equal(handle.props.onMoveShouldSetResponder(null, { dx: 0, dy: -100 }), true);
-  await act(async () => handle.props.onResponderMove(null, { dy: -100 }));
+  assert.equal(handleTarget.props.onMoveShouldSetResponder(null, { dx: 0, dy: -100 }), true);
+  await act(async () => handleTarget.props.onResponderMove(null, { dy: -100 }));
   assert.equal(sheetHeight(), 580);
-  await act(async () => handle.props.onResponderRelease(null, { dy: -100, vy: -1 }));
+  await act(async () => handleTarget.props.onResponderRelease(null, { dy: -100, vy: -1 }));
   assert.equal(sheetHeight(), 844);
-  await act(async () => handle.props.onResponderRelease(null, { dy: 420, vy: 1 }));
+  assert.equal(handleButton().props.accessibilityLabel, '시트 접기');
+  assert.deepEqual(handleButton().props.accessibilityState, { expanded: true });
+  await act(async () => handleTarget.props.onResponderRelease(null, { dy: 420, vy: 1 }));
   assert.equal(sheetHeight(), 480);
-  await act(async () => handle.props.onResponderMove(null, { dy: 100 }));
-  await act(async () => handle.props.onResponderRelease(null, { dy: 100, vy: 1 }));
+  assert.equal(handleButton().props.accessibilityLabel, '시트 펼치기');
+  assert.deepEqual(handleButton().props.accessibilityState, { expanded: false });
+  await act(async () => handleTarget.props.onResponderMove(null, { dy: 100 }));
+  await act(async () => handleTarget.props.onResponderRelease(null, { dy: 100, vy: 1 }));
   assert.equal(closes, 1);
   const releaseTranslation = flattenStyle(
     renderer.root.findByProps({ accessibilityViewIsModal: true }).props.style,

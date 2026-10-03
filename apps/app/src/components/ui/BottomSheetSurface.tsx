@@ -154,6 +154,7 @@ export function BottomSheetSurface({
         accessible
         accessibilityLabel={expandable ? (expanded ? '시트 접기' : '시트 펼치기') : '시트 닫기'}
         accessibilityRole="button"
+        accessibilityState={expandable ? { expanded } : undefined}
         disabled={closeDisabled}
         importantForAccessibility="yes"
         onPress={() => {
