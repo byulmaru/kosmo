@@ -24,7 +24,6 @@ export type FullReactionPickerOption = Readonly<{
   keywords?: ReadonlyArray<string>;
   label: string;
   quick?: boolean;
-  recent?: boolean;
 }>;
 
 export type FullReactionPickerProps = {
@@ -74,6 +73,12 @@ export function FullReactionPicker({
       : searchResults.length > 0
         ? 'searchResults'
         : 'empty';
+  const gridItems =
+    state === 'searchResults'
+      ? createGridItems('results', '반응', searchResults, mobile ? 7 : 8)
+      : state === 'browse'
+        ? createBrowseItems(options, mobile ? 7 : 8)
+        : [];
   useEffect(() => {
     if (mobile) {
       return;
@@ -165,12 +170,8 @@ export function FullReactionPicker({
         </View>
       ) : (
         <FlatList<ReactionGridItem>
-          data={
-            state === 'searchResults'
-              ? createGridItems('results', '반응', searchResults, mobile ? 7 : 8)
-              : createBrowseItems(options, mobile ? 7 : 8)
-          }
-          initialNumToRender={mobile ? 12 : 10}
+          data={gridItems}
+          initialNumToRender={Platform.OS === 'web' ? gridItems.length : mobile ? 12 : 10}
           keyExtractor={(item) => item.id}
           ListHeaderComponent={
             state === 'searchResults' ? (

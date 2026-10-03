@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { FullReactionPicker } from '@/components/reaction/FullReactionPicker';
 import { reactionEmojiCatalog } from '@/components/reaction/reactionEmojiCatalog';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -271,7 +271,7 @@ const meta = {
     'MobileExpandedGeometryContract',
     'WebGridGeometryContract',
     'reactionOptions',
-    'VirtualizedCatalogContract',
+    'SequentialKeyboardBrowseContract',
   ],
   parameters: { layout: 'centered' },
   title: 'KOSMO/Components/Full Reaction Picker',
@@ -409,12 +409,32 @@ export const InteractionContract: Story = {
   render: (args) => <InteractivePicker {...args} />,
 };
 
-export const VirtualizedCatalogContract: Story = {
+export const SequentialKeyboardBrowseContract: Story = {
   args: { options: reactionEmojiCatalog },
+  render: (args) => <InteractivePicker {...args} />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    expect(canvas.getAllByRole('button', { name: /활짝 웃는 얼굴/ }).length).toBeGreaterThan(0);
-    expect(canvas.getAllByRole('button').length).toBeLessThan(reactionEmojiCatalog.length);
+    const dialog = canvas.getByRole('dialog', { name: '반응 선택' });
+    const search = canvas.getByRole('searchbox', { name: '반응 검색' });
+    await waitFor(() => expect(search).toHaveFocus());
+
+    const buttons = canvas.getAllByRole('button');
+    await userEvent.tab();
+    expect(buttons[0]).toHaveFocus();
+
+    const boundaryButton = buttons[409];
+    expect(boundaryButton).toBeDefined();
+    boundaryButton.focus();
+    await userEvent.keyboard('{Tab}'.repeat(10));
+    expect(buttons[419]).toHaveFocus();
+
+    await userEvent.tab({ shift: true });
+    expect(buttons[418]).toHaveFocus();
+
+    buttons[buttons.length - 1].focus();
+    expect(buttons[buttons.length - 1]).toHaveFocus();
+    await userEvent.tab();
+    expect(dialog.contains(canvasElement.ownerDocument.activeElement)).toBe(false);
   },
 };
 
