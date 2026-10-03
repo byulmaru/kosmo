@@ -12,6 +12,12 @@ import type { Locator, Page } from '@playwright/test';
 const quoteFlagUrl = 'https://flags.kos.moe/ofrep/v1/evaluate/flags';
 
 async function routeQuoteFlag(page: Page, response: { body: string; status?: number }) {
+  await page.route('**/channel.js', (route) =>
+    route.fulfill({
+      contentType: 'application/javascript; charset=UTF-8',
+      body: `globalThis.__KOSMO_CHANNEL__ = 'prod';\n`,
+    }),
+  );
   await page.route(quoteFlagUrl, (route) =>
     route.fulfill({ contentType: 'application/json', status: 200, ...response }),
   );
