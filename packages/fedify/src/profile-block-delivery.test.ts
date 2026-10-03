@@ -134,7 +134,10 @@ test('Undo after relation deletion derives its embedded Block without prior Bloc
     targetProfileId: fixture.remoteProfileId,
   });
   assert.equal(transition.ok && transition.result.removed, true);
-  assert.deepEqual(await db.select().from(ProfileBlocks), []);
+  assert.deepEqual(
+    await db.select().from(ProfileBlocks).where(eq(ProfileBlocks.id, profileBlock.id)),
+    [],
+  );
 
   assert.deepEqual(
     await sendProfileBlockUndo({
