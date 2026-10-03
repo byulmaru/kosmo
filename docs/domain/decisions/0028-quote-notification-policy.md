@@ -76,7 +76,7 @@ Quote는 자체 Content와 상세 경로를 가진다. 별도 알림에서 Quote
 
 ### 2026-09-09 재검토에서 확정한 유지 이유
 
-[기존 Reply/Mention 분류 계약](../objects/notification.md#replymention-수신자별-분류와-중복-처리-future)은
+[기존 Reply/Mention 분류 계약](../objects/notification.md#replymention-수신자별-분류와-중복-처리)은
 수신자의 Post에 답하면서 같은 수신자를 Mention하면 Reply 한 건을 제공한다. 이 선행 계약은
 [PROD-884의 PR #778](https://github.com/byulmaru/kosmo/pull/778)에 있으며 Quote의 위치까지 정하지는 않았다.
 

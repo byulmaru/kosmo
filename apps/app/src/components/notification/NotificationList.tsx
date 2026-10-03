@@ -22,6 +22,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import {
   FollowRequestNotificationListItem,
+  MentionNotificationListItem,
   NotificationListItem,
   ReactionNotificationListItem,
   ReplyNotificationListItem,
@@ -53,6 +54,9 @@ const notificationListFragment = graphql`
           }
           ... on FollowRequestNotification {
             ...FollowRequestNotificationListItem_notification @alias(as: "followRequest")
+          }
+          ... on MentionNotification {
+            ...MentionNotificationListItem_notification @alias(as: "mention")
           }
           ... on ReactionNotification {
             ...ReactionNotificationListItem_notification @alias(as: "reaction")
@@ -99,6 +103,9 @@ export function NotificationList({ profile }: NotificationListProps) {
     }
     if (node.__typename === 'FollowRequestNotification' && node.followRequest) {
       return <FollowRequestNotificationListItem key={node.id} notification={node.followRequest} />;
+    }
+    if (node.__typename === 'MentionNotification' && node.mention) {
+      return <MentionNotificationListItem key={node.id} notification={node.mention} />;
     }
     if (node.__typename === 'ReactionNotification' && node.reaction) {
       return <ReactionNotificationListItem key={node.id} notification={node.reaction} />;

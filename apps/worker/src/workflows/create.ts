@@ -12,6 +12,7 @@ type PostCreateEffectsInput = {
 
 const {
   createQuoteNotificationActivity,
+  createMentionNotificationActivity,
   createReplyNotificationActivity,
   sendLocalPostCreateActivity,
 } = proxyActivities<typeof activities>(workflowActivityOptions);
@@ -21,6 +22,7 @@ export async function postCreateEffectsWorkflow({
   origin,
 }: PostCreateEffectsInput): Promise<void> {
   const pushNotificationDispatchEnabled = patched('post-create-effects-push-notification-v1');
+  const mentionNotificationEnabled = patched('post-create-effects-mention-notification-v1');
   await settleEffects([
     createReplyNotificationActivity(postId).then((notificationId) =>
       pushNotificationDispatchEnabled ? startPushNotificationWorkflow(notificationId) : undefined,
@@ -30,6 +32,15 @@ export async function postCreateEffectsWorkflow({
           createQuoteNotificationActivity(postId).then((notificationId) =>
             pushNotificationDispatchEnabled
               ? startPushNotificationWorkflow(notificationId)
+              : undefined,
+          ),
+        ]
+      : []),
+    ...(mentionNotificationEnabled
+      ? [
+          createMentionNotificationActivity(postId).then((notificationIds) =>
+            pushNotificationDispatchEnabled
+              ? Promise.all(notificationIds.map(startPushNotificationWorkflow))
               : undefined,
           ),
         ]

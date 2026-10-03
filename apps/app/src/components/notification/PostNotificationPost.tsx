@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { MessageCircle, Quote } from 'lucide-react-native';
+import { AtSign, MessageCircle, Quote } from 'lucide-react-native';
 import { useCallback } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
@@ -44,9 +44,10 @@ const PostNotificationPostFragment = graphql`
   }
 `;
 
-type PostNotificationKind = 'quote' | 'reply';
+type PostNotificationKind = 'mention' | 'quote' | 'reply';
 
 const presentations = {
+  mention: { Icon: AtSign, label: '멘션 알림', reason: null },
   quote: {
     Icon: Quote,
     label: '인용 알림',
@@ -55,7 +56,7 @@ const presentations = {
   reply: { Icon: MessageCircle, label: '답글 알림', reason: null },
 } as const;
 
-/** Shared Post composition for recipient-relative Reply and Quote notifications. */
+/** Shared Post composition for recipient-relative Mention, Reply, and Quote notifications. */
 export function PostNotificationPost({
   kind,
   onActivate,

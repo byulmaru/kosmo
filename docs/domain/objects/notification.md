@@ -96,11 +96,11 @@ Recipient Profile은 Related Post의 direct Repost Source Author Profile이다. 
 | Followee Post     | Follower Profile                    | Related Post, Followee인 Related Profile, Related Follow Relationship              |
 | Operational       | Account                             | 운영 메시지                                                                        |
 
-### Reply/Mention 수신자별 분류와 중복 처리 (Future)
+### Reply/Mention 수신자별 분류와 중복 처리
 
-2026-09-08 사용자 승인으로 확정한 후속 Mention 구현 계약이다. Mention은 도메인 Type으로
-정의되어 있으나 현재 API·알림 생성·inbox 통합의 완료를 의미하지 않는다. 후속 구현 전 담당 Linear
-이슈와 필요한 OpenSpec scenario에 아래 정책을 연결하고 검증한다.
+2026-09-08 사용자 승인으로 확정한 정책이다. 현재 typed Mention 관계를 공급하는 입력 경로는 ActivityPub
+수신이며, Local 작성의 Mention 입력·해석은 미구현이다. 알림 생성은 저장된 유효 Mention 관계에 대해 출처
+종류를 제한하지 않는다.
 
 - 분류 기준은 해당 Post가 답글인지 여부만이 아니라 각 Recipient와 원인 Post의 관계다.
 - Mention의 source와 Related Post는 Recipient를 멘션한 원인 Post이며, Related Profile은 그 Post의

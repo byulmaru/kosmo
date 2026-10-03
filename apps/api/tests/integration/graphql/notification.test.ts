@@ -41,6 +41,7 @@ let Instances: typeof CoreDb.Instances;
 let Notifications: typeof CoreDb.Notifications;
 let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
+let PostMentions: typeof CoreDb.PostMentions;
 let Posts: typeof CoreDb.Posts;
 let ProfileFollowRequests: typeof CoreDb.ProfileFollowRequests;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
@@ -69,6 +70,7 @@ describe('Notification GraphQL Node boundary', () => {
       Notifications,
       pg,
       PostContents,
+      PostMentions,
       Posts,
       ProfileFollowRequests,
       ProfileFollows,
@@ -732,6 +734,131 @@ describe('Notification GraphQL Node boundary', () => {
       recipientProfiles: [],
     });
     assert.equal(await notificationReadAt(notification.id), null);
+  });
+
+  test('resolves Mention notifications only for the typed recipient and hides unavailable sources', async () => {
+    const auth = await createAuthenticatedSession();
+    const recipient = auth.profile;
+    const otherRecipient = await createProfile('mention-other-recipient');
+    const author = await createProfile('mention-author');
+    await addMembership(auth.account.id, otherRecipient.id, AccountProfileRole.MEMBER);
+
+    const post = await createContentPost(author.id);
+    await db.insert(PostMentions).values({
+      postContentId: post.currentContentId!,
+      profileId: recipient.id,
+    });
+    const notification = await createMentionNotification(recipient.id, post.id);
+
+    const mismatchedPost = await createContentPost(author.id);
+    await db.insert(PostMentions).values({
+      postContentId: mismatchedPost.currentContentId!,
+      profileId: otherRecipient.id,
+    });
+    const mismatchedNotification = await createMentionNotification(recipient.id, mismatchedPost.id);
+
+    const stalePost = await createContentPost(author.id);
+    await db.insert(PostMentions).values({
+      postContentId: stalePost.currentContentId!,
+      profileId: recipient.id,
+    });
+    const staleNotification = await createMentionNotification(recipient.id, stalePost.id);
+    const newerContent = await db
+      .insert(PostContents)
+      .values({
+        document: postContentDocumentFromText('updated without mention'),
+        postId: stalePost.id,
+      })
+      .returning()
+      .then(firstOrThrow);
+    await db
+      .update(Posts)
+      .set({ currentContentId: newerContent.id })
+      .where(eq(Posts.id, stalePost.id));
+
+    const notificationId = encodeGlobalId('MentionNotification', notification.id);
+    const recipientId = encodeGlobalId('Profile', recipient.id);
+    const result = await requestGraphQL<{
+      node: {
+        __typename: string;
+        profile: { id: string };
+        post: { id: string; profile: { id: string } } | null;
+      } | null;
+      profile: {
+        unreadNotificationCount: number;
+        notifications: { edges: Array<{ node: NotificationNode }> };
+      } | null;
+    }>(
+      `query MentionNotification($notificationId: ID!, $profileId: ID!) {
+        node(id: $notificationId) {
+          __typename
+          ... on MentionNotification { profile { id } post { id profile { id } } }
+        }
+        profile: node(id: $profileId) {
+          ... on Profile {
+            unreadNotificationCount
+            notifications(first: 10) {
+              edges {
+                node {
+                  __typename
+                  id
+                  ... on MentionNotification { profile { id } post { id profile { id } } }
+                }
+              }
+            }
+          }
+        }
+      }`,
+      { notificationId, profileId: recipientId },
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.node, {
+      __typename: 'MentionNotification',
+      profile: { id: encodeGlobalId('Profile', author.id) },
+      post: {
+        id: encodeGlobalId('Post', post.id),
+        profile: { id: encodeGlobalId('Profile', author.id) },
+      },
+    });
+    assert.deepEqual(
+      result.data?.profile?.notifications.edges.map(({ node }) => node.id),
+      [notificationId],
+    );
+    assert.equal(result.data?.profile?.unreadNotificationCount, 1);
+
+    const hiddenIds = [
+      encodeGlobalId('MentionNotification', mismatchedNotification.id),
+      encodeGlobalId('MentionNotification', staleNotification.id),
+    ];
+    assert.deepEqual(await loadNodes(hiddenIds, auth.token), [null, null]);
+
+    const hiddenRead = await markNotificationRead(hiddenIds, auth.token);
+    assertNoGraphQLErrors(hiddenRead);
+    assert.deepEqual(hiddenRead.data?.markNotificationRead, {
+      notifications: [],
+      recipientProfiles: [],
+    });
+    assert.deepEqual(
+      await Promise.all(
+        [mismatchedNotification, staleNotification].map(({ id }) => notificationReadAt(id)),
+      ),
+      [null, null],
+    );
+
+    const read = await markNotificationRead([notificationId], auth.token);
+    assertNoGraphQLErrors(read);
+    assert.equal(read.data?.markNotificationRead.notifications[0]?.id, notificationId);
+    assert.equal(
+      read.data?.markNotificationRead.notifications[0]?.post?.id,
+      encodeGlobalId('Post', post.id),
+    );
+    assert.equal(
+      read.data?.markNotificationRead.notifications[0]?.profile.id,
+      encodeGlobalId('Profile', author.id),
+    );
+    assert.equal(read.data?.markNotificationRead.recipientProfiles[0]?.unreadNotificationCount, 0);
   });
 
   test('rechecks Quote Post access through the Post loader', async () => {
@@ -2105,6 +2232,7 @@ const loadNotificationConnection = (
                 ... on RepostNotification { profile { id } post { id } }
                 ... on QuoteNotification { profile { id } post { id } }
                 ... on ReplyNotification { profile { id } post { id } }
+                ... on MentionNotification { profile { id } post { id } }
               }
             }
             pageInfo { endCursor hasNextPage }
@@ -2134,6 +2262,7 @@ const markNotificationRead = (ids: string[], token?: string) =>
           ... on RepostNotification { profile { id } post { id } }
           ... on QuoteNotification { profile { id } post { id } }
           ... on ReplyNotification { profile { id } post { id } }
+          ... on MentionNotification { profile { id } post { id } }
         }
         recipientProfiles { id unreadNotificationCount }
       }
@@ -2256,6 +2385,17 @@ const createQuoteNotificationFixture = async (
 
   return { notification, quote };
 };
+
+const createMentionNotification = async (recipientProfileId: string, sourceId: string) =>
+  db
+    .insert(Notifications)
+    .values({
+      kind: NotificationKind.MENTION,
+      recipientProfileId,
+      sourceId,
+    })
+    .returning()
+    .then(firstOrThrow);
 
 const createReactionNotification = async (
   recipientProfileId: string,

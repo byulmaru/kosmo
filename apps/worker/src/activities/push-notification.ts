@@ -32,6 +32,7 @@ const DISPLAY_NAME_MAX_CODE_POINTS = 40;
 const notificationTypes: Record<NotificationKind, string> = {
   FOLLOW: 'FollowNotification',
   FOLLOW_REQUEST: 'FollowRequestNotification',
+  MENTION: 'MentionNotification',
   QUOTE: 'QuoteNotification',
   REACTION: 'ReactionNotification',
   REPLY: 'ReplyNotification',
@@ -41,6 +42,7 @@ const notificationTypes: Record<NotificationKind, string> = {
 const notificationMessages: Record<NotificationKind, string> = {
   FOLLOW: '팔로우했습니다',
   FOLLOW_REQUEST: '팔로우를 요청했습니다',
+  MENTION: '회원님을 언급했습니다',
   QUOTE: '회원님의 게시글을 인용했습니다',
   REACTION: '이 게시글에 반응했습니다',
   REPLY: '회원님의 게시글에 답글을 달았습니다',
@@ -99,6 +101,7 @@ const loadNotificationSource = async (
         .where(eq(Posts.id, sourceId))
         .limit(1)
         .then((rows) => rows[0] ?? null);
+    case NotificationKind.MENTION:
     case NotificationKind.REPLY:
     case NotificationKind.QUOTE:
       return db
