@@ -4,6 +4,8 @@ import { and, eq, inArray } from 'drizzle-orm';
 import {
   db,
   firstOrThrow,
+  HashtagMuteRules,
+  Hashtags,
   Instances,
   NotificationQuoteJudgments,
   NotificationRollouts,
@@ -12,10 +14,13 @@ import {
   PostContents,
   Posts,
   ProfileBlocks,
+  ProfileHashtags,
   ProfileMutes,
   Profiles,
 } from '../db';
 import {
+  HashtagMuteDecision,
+  HashtagMuteScope,
   InstanceKind,
   InstanceState,
   NotificationKind,
@@ -30,6 +35,7 @@ import { createQuoteNotification } from './quote-notification';
 const profileIds: string[] = [];
 const instanceIds: string[] = [];
 const postIds: string[] = [];
+const hashtagIds: string[] = [];
 
 const createProfile = async () => {
   const suffix = crypto.randomUUID();
@@ -72,6 +78,39 @@ const createContentPost = async (profileId: string, repostSourceId?: string) => 
   postIds.push(result.post.id);
   return result.post;
 };
+
+const createHashtag = async (name: string, displayName = name) => {
+  const hashtag = await db
+    .insert(Hashtags)
+    .values({ name: `${name}-${crypto.randomUUID()}`, displayName })
+    .returning()
+    .then(firstOrThrow);
+  hashtagIds.push(hashtag.id);
+  return hashtag;
+};
+
+const createHashtagMuteRule = async ({
+  ownerProfileId,
+  targetHashtagId,
+  decision = HashtagMuteDecision.EXCLUDE,
+  expiresAt = null,
+}: {
+  readonly ownerProfileId: string;
+  readonly targetHashtagId: string;
+  readonly decision?: HashtagMuteDecision;
+  readonly expiresAt?: Temporal.Instant | null;
+}) =>
+  db
+    .insert(HashtagMuteRules)
+    .values({
+      ownerProfileId,
+      targetHashtagId,
+      scopes: [HashtagMuteScope.NOTIFICATION],
+      decision,
+      expiresAt,
+    })
+    .returning()
+    .then(firstOrThrow);
 
 before(async () => {
   await db
@@ -196,6 +235,9 @@ after(async () => {
       await db.delete(ProfileMutes).where(inArray(ProfileMutes.ownerProfileId, profileIds));
       await db.delete(Profiles).where(inArray(Profiles.id, profileIds));
     }
+    if (hashtagIds.length > 0) {
+      await db.delete(Hashtags).where(inArray(Hashtags.id, hashtagIds));
+    }
     if (instanceIds.length > 0) {
       await db.delete(Instances).where(inArray(Instances.id, instanceIds));
     }
@@ -313,6 +355,137 @@ test('active Profile Mute and bidirectional Profile Block suppress the first Quo
   );
 });
 
+test('Profile Tag checks Quote Author, then keeps a suppressed first judgment after rule changes', async () => {
+  const hashtag = await createHashtag('quote-author-topic', '별도 표시 이름');
+
+  const sourceAuthorWithTag = await createProfile();
+  const quoteAuthorWithoutTag = await createProfile();
+  await createHashtagMuteRule({
+    ownerProfileId: sourceAuthorWithTag.id,
+    targetHashtagId: hashtag.id,
+  });
+  await db
+    .insert(ProfileHashtags)
+    .values({ profileId: sourceAuthorWithTag.id, hashtagId: hashtag.id });
+  const sourceOnly = await createContentPost(sourceAuthorWithTag.id);
+  const sourceOnlyQuote = await createContentPost(quoteAuthorWithoutTag.id, sourceOnly.id);
+  await createQuoteNotification(sourceOnlyQuote.id);
+
+  const [sourceOnlyNotification] = await db
+    .select()
+    .from(Notifications)
+    .where(eq(Notifications.sourceId, sourceOnlyQuote.id));
+  assert.equal(sourceOnlyNotification?.recipientProfileId, sourceAuthorWithTag.id);
+  assert.equal(sourceOnlyNotification?.kind, NotificationKind.QUOTE);
+
+  const sourceAuthorWithoutTag = await createProfile();
+  const quoteAuthorWithTag = await createProfile();
+  const rule = await createHashtagMuteRule({
+    ownerProfileId: sourceAuthorWithoutTag.id,
+    targetHashtagId: hashtag.id,
+    decision: HashtagMuteDecision.COLLAPSE,
+    expiresAt: Temporal.Now.instant().add({ minutes: 5 }),
+  });
+  await db
+    .insert(ProfileHashtags)
+    .values({ profileId: quoteAuthorWithTag.id, hashtagId: hashtag.id });
+  const quoteAuthorMatchedSource = await createContentPost(sourceAuthorWithoutTag.id);
+  const quoteReplyParent = await createContentPost(sourceAuthorWithoutTag.id);
+  const quoteAuthorMatched = await createPost({
+    document: postContentDocumentFromText(crypto.randomUUID()),
+    origin: 'LOCAL',
+    profileId: quoteAuthorWithTag.id,
+    replyParentId: quoteReplyParent.id,
+    visibility: PostVisibility.PUBLIC,
+  }).then(({ post }) => post);
+  postIds.push(quoteAuthorMatched.id);
+  await db
+    .update(Posts)
+    .set({ repostSourceId: quoteAuthorMatchedSource.id })
+    .where(eq(Posts.id, quoteAuthorMatched.id));
+
+  await createQuoteNotification(quoteAuthorMatched.id);
+  assert.equal(
+    await db.$count(Notifications, eq(Notifications.sourceId, quoteAuthorMatched.id)),
+    0,
+  );
+  const [firstJudgment] = await db
+    .select()
+    .from(NotificationQuoteJudgments)
+    .where(eq(NotificationQuoteJudgments.quotePostId, quoteAuthorMatched.id));
+  assert.equal(firstJudgment?.outcome, 'SUPPRESSED');
+
+  await db
+    .update(HashtagMuteRules)
+    .set({ expiresAt: Temporal.Now.instant().subtract({ minutes: 5 }) })
+    .where(eq(HashtagMuteRules.id, rule.id));
+  await createQuoteNotification(quoteAuthorMatched.id);
+  await db
+    .delete(ProfileHashtags)
+    .where(
+      and(
+        eq(ProfileHashtags.profileId, quoteAuthorWithTag.id),
+        eq(ProfileHashtags.hashtagId, hashtag.id),
+      ),
+    );
+  await db.delete(HashtagMuteRules).where(eq(HashtagMuteRules.id, rule.id));
+  await createQuoteNotification(quoteAuthorMatched.id);
+
+  assert.equal(
+    await db.$count(Notifications, eq(Notifications.sourceId, quoteAuthorMatched.id)),
+    0,
+  );
+  const [retainedJudgment] = await db
+    .select()
+    .from(NotificationQuoteJudgments)
+    .where(eq(NotificationQuoteJudgments.quotePostId, quoteAuthorMatched.id));
+  assert.equal(retainedJudgment?.quotePostId, firstJudgment?.quotePostId);
+  assert.equal(retainedJudgment?.decidedAt.toString(), firstJudgment?.decidedAt.toString());
+  assert.equal(retainedJudgment?.outcome, 'SUPPRESSED');
+});
+
+test('Hashtag Mute lookup failure rolls back the Quote judgment and retry uses the stored Quote', async () => {
+  const sourceAuthor = await createProfile();
+  const quoteAuthor = await createProfile();
+  const source = await createContentPost(sourceAuthor.id);
+  const quote = await createContentPost(quoteAuthor.id, source.id);
+
+  await pg.unsafe('ALTER TABLE hashtag_mute_rule RENAME TO hashtag_mute_rule_policy_failure');
+  try {
+    await assert.rejects(
+      createQuoteNotification(quote.id),
+      (error: unknown) => {
+        assert.match(String(error), /hashtag_mute_rule/);
+        return true;
+      },
+      'Quote Hashtag Mute policy SELECT failure should propagate',
+    );
+    assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, quote.id)), 0);
+    assert.equal(
+      await db.$count(
+        NotificationQuoteJudgments,
+        eq(NotificationQuoteJudgments.quotePostId, quote.id),
+      ),
+      0,
+    );
+  } finally {
+    await pg.unsafe('ALTER TABLE hashtag_mute_rule_policy_failure RENAME TO hashtag_mute_rule');
+  }
+
+  await createQuoteNotification(quote.id);
+  assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, quote.id)), 1);
+  assert.equal(
+    await db.$count(
+      NotificationQuoteJudgments,
+      and(
+        eq(NotificationQuoteJudgments.quotePostId, quote.id),
+        eq(NotificationQuoteJudgments.outcome, 'EMITTED'),
+      ),
+    ),
+    1,
+  );
+});
+
 for (const remoteParticipant of ['Quote', 'Source'] as const) {
   test(`a Remote ${remoteParticipant} relation alone cannot consume the first approval judgment`, async () => {
     const sourceAuthor = await createProfile();
@@ -421,5 +594,5 @@ test('an existing Reply remains the representative and keeps its read state', as
     .select({ readAt: Notifications.readAt })
     .from(Notifications)
     .where(eq(Notifications.id, reply.id));
-  assert.equal(preservedReply?.readAt?.epochMicroseconds, readAt.epochMicroseconds);
+  assert.equal(preservedReply?.readAt?.toString(), readAt.toString());
 });
