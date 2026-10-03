@@ -24,7 +24,12 @@ import {
 } from '../enums';
 import { NotFoundError, PermissionDeniedError, ValidationError } from '../error';
 import { postContentDocumentFromText } from '../post-content/server';
-import { createPost, deletePost as deletePostAction, repostPost as repostPostAction } from './post';
+import {
+  createPost,
+  deletePost as deletePostAction,
+  deletePostPersisted,
+  repostPost as repostPostAction,
+} from './post';
 import { ProfilePairBlockedError } from './profile-block-policy';
 
 const publicOrigin = 'http://127.0.0.1:4173';
@@ -338,7 +343,7 @@ test('repostPost의 순차·동시 요청은 같은 Active Repost identity로 �
   );
 });
 
-test('최초 Repost create와 delete가 event-specific Workflow를 시작한다', async () => {
+test('최초 Repost create는 효과 Workflow를 시작하고 delete는 Tombstone을 기록한다', async () => {
   const actor = await createProfile();
   const source = await createContentPost(actor.profile.id);
   const { temporalClient } = await import('../temporal/client');
@@ -364,19 +369,16 @@ test('최초 Repost create와 delete가 event-specific Workflow를 시작한다'
       }),
     ),
   );
-  assert.equal(start.mock.callCount(), 2);
-  const deleteStart = start.mock.calls[1];
-  assert.ok(deleteStart);
-  assert.equal(deleteStart.arguments[0], 'repostDeleteWorkflow');
-  const deleteOptions = deleteStart.arguments[1];
-  assert.ok(deleteOptions);
-  assert.equal(deleteOptions.workflowId, `repost-delete:${first.repost.id}`);
-  assert.deepEqual(deleteOptions.args, [{ origin: 'LOCAL', postId: first.repost.id }]);
+  assert.equal(start.mock.callCount(), 1);
+  assert.equal(
+    (await db.select().from(Posts).where(eq(Posts.id, first.repost.id)).then(firstOrThrow)).state,
+    PostState.DELETED,
+  );
   await runDelete({ actorProfileId: actor.profile.id, postId: first.repost.id });
-  assert.equal(start.mock.callCount(), 2);
+  assert.equal(start.mock.callCount(), 1);
 });
 
-test('Content Post delete가 Post Delete Workflow를 시작한다', async () => {
+test('Content Post delete는 Tombstone을 기록한다', async () => {
   const actor = await createProfile();
   const post = await createContentPost(actor.profile.id);
   const { temporalClient } = await import('../temporal/client');
@@ -384,16 +386,14 @@ test('Content Post delete가 Post Delete Workflow를 시작한다', async () => 
 
   await runDelete({ actorProfileId: actor.profile.id, postId: post.id });
 
-  assert.equal(start.mock.callCount(), 1);
-  const call = start.mock.calls[0];
-  assert.ok(call);
-  assert.equal(call.arguments[0], 'postDeleteWorkflow');
-  const options = call.arguments[1];
-  assert.ok(options);
-  assert.deepEqual(options.args, [{ origin: 'LOCAL', postId: post.id }]);
+  assert.equal(start.mock.callCount(), 0);
+  assert.equal(
+    (await db.select().from(Posts).where(eq(Posts.id, post.id)).then(firstOrThrow)).state,
+    PostState.DELETED,
+  );
 });
 
-test('Reply·Quote·Reply Quote delete도 Post Delete Workflow를 시작한다', async () => {
+test('Reply·Quote·Reply Quote delete도 Tombstone을 기록한다', async () => {
   const actor = await createProfile();
   const parent = await createContentPost(actor.profile.id);
   const source = await createContentPost(actor.profile.id);
@@ -430,11 +430,13 @@ test('Reply·Quote·Reply Quote delete도 Post Delete Workflow를 시작한다',
     await runDelete({ actorProfileId: actor.profile.id, postId: post.id });
   }
 
-  assert.deepEqual(starts, [
-    { origin: 'LOCAL', postId: reply.id },
-    { origin: 'LOCAL', postId: quote.id },
-    { origin: 'LOCAL', postId: replyQuote.id },
-  ]);
+  assert.deepEqual(starts, []);
+  for (const post of [reply, quote, replyQuote]) {
+    assert.equal(
+      (await db.select().from(Posts).where(eq(Posts.id, post.id)).then(firstOrThrow)).state,
+      PostState.DELETED,
+    );
+  }
 });
 
 test('ActivityPub origin은 outbound effect 없이 Repost Workflow만 시작한다', async () => {
@@ -680,7 +682,7 @@ test('deletePost는 대상 Quote만 삭제하고 별도 Active Repost는 유지�
   assert.equal(activeRepost.state, PostState.ACTIVE);
 });
 
-test('deletePost는 자체 transaction에서 DB 실패를 rollback한다', async () => {
+test('deletePostPersisted는 자체 transaction에서 DB 실패를 rollback한다', async () => {
   const actor = await createProfile();
   const post = await createContentPost(actor.profile.id);
 
@@ -700,7 +702,7 @@ test('deletePost는 자체 transaction에서 DB 실패를 rollback한다', async
 
   try {
     await assert.rejects(
-      deletePostAction({
+      deletePostPersisted({
         actorProfileId: actor.profile.id,
         origin: 'LOCAL',
         postId: post.id,

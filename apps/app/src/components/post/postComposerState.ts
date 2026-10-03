@@ -1,7 +1,11 @@
+import { PostQuotePolicy } from '@kosmo/core/enums';
 import { normalizePostContentPlainText } from '@kosmo/core/post-content';
 import type { PostVisibility } from '@kosmo/core/enums';
 
 export type PostComposerVisibility = 'FOLLOWERS' | 'PUBLIC' | 'UNLISTED';
+export type PostComposerQuotePolicy = PostQuotePolicy;
+
+export const defaultPostComposerQuotePolicy = PostQuotePolicy.EVERYONE;
 
 export function resolvePostComposerVisibility(
   value: string | null | undefined,
@@ -21,6 +25,7 @@ export function createPostComposerMutationInput(
   replyParentId?: string,
   contentWarning?: string | null,
   repostSourceId?: string,
+  quotePolicy?: PostComposerQuotePolicy,
 ) {
   const normalizedContentWarning = normalizePostContentPlainText(contentWarning ?? '');
 
@@ -29,8 +34,13 @@ export function createPostComposerMutationInput(
     ...(normalizedContentWarning ? { contentWarning: normalizedContentWarning } : {}),
     ...(replyParentId ? { replyParentId } : {}),
     ...(repostSourceId ? { repostSourceId } : {}),
+    ...(quotePolicy && isPostComposerQuotePolicyVisible(visibility) ? { quotePolicy } : {}),
     visibility,
   };
+}
+
+export function isPostComposerQuotePolicyVisible(visibility: PostVisibility): boolean {
+  return visibility === 'PUBLIC' || visibility === 'UNLISTED';
 }
 
 export function isPostComposerVisibilityAllowed(

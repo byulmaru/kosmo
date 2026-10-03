@@ -1,8 +1,12 @@
-import { AccountProfileRole, PostVisibility } from '@kosmo/core/enums';
+import { randomUUID } from 'node:crypto';
+import { db, firstOrThrow, Posts } from '@kosmo/core/db';
+import { AccountProfileRole, PostQuotePolicy, PostVisibility } from '@kosmo/core/enums';
 import { normalizePostContentPlainText } from '@kosmo/core/post-content';
 import { postContentDocumentFromTextAndMedia } from '@kosmo/core/post-content/server';
-import { createPost } from '@kosmo/core/services';
+import { runWorkflow } from '@kosmo/core/temporal/client';
+import { postCreateWorkflow, unwrapPostTransition } from '@kosmo/core/temporal/post';
 import { postBodyMaxLength, postBodyTextOrEmptySchema } from '@kosmo/core/validation';
+import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { builder } from '@/graphql/builder';
 import { resolveComposerProfileId } from '@/profile/authorization';
@@ -61,6 +65,7 @@ builder.mutationField('createPost', (t) =>
       actorProfileId: t.input.globalID({ for: Profile, required: false }),
       replyParentId: t.input.globalID({ for: Post, required: false }),
       repostSourceId: t.input.globalID({ for: Post, required: false }),
+      quotePolicy: t.input.field({ type: PostQuotePolicy, required: false }),
       sensitiveMedia: t.input.boolean({ required: false }),
       visibility: t.input.field({ type: PostVisibility }),
     },
@@ -69,28 +74,45 @@ builder.mutationField('createPost', (t) =>
       const contentWarning = normalizePostContentPlainText(input.contentWarning ?? '');
       const profileId = await resolveComposerProfileId(ctx, input.actorProfileId?.id);
 
-      const result = await createPost({
-        accountId: ctx.session.accountId,
-        document: postContentDocumentFromTextAndMedia(
-          input.bodyText,
-          media.map(({ mediaId }) => ({
-            mediaId: mediaId.id,
-          })),
-          input.sensitiveMedia ?? false,
-          contentWarning || null,
-        ),
-        media: media.map(({ altText, mediaId }) => ({
-          altText: altText ?? null,
-          mediaId: mediaId.id,
-        })),
-        origin: 'LOCAL',
-        profileId,
-        replyParentId: input.replyParentId?.id,
-        repostSourceId: input.repostSourceId?.id,
-        visibility: input.visibility,
-      });
+      const result = unwrapPostTransition(
+        await runWorkflow(postCreateWorkflow, {
+          args: [
+            {
+              admissionId: randomUUID(),
+              accountId: ctx.session.accountId,
+              document: postContentDocumentFromTextAndMedia(
+                input.bodyText,
+                media.map(({ mediaId }) => ({
+                  mediaId: mediaId.id,
+                })),
+                input.sensitiveMedia ?? false,
+                contentWarning || null,
+              ),
+              media: media.map(({ altText, mediaId }) => ({
+                altText: altText ?? null,
+                mediaId: mediaId.id,
+              })),
+              origin: 'LOCAL',
+              profileId,
+              replyParentId: input.replyParentId?.id,
+              repostSourceId: input.repostSourceId?.id,
+              quotePolicy: input.quotePolicy ?? undefined,
+              visibility: input.visibility,
+            },
+          ],
+          mode: 'update-with-start',
+          updateId: 'create',
+          workflowIdConflictPolicy: 'USE_EXISTING',
+          workflowIdReusePolicy: 'REJECT_DUPLICATE',
+        }),
+      );
 
-      return { post: result.post };
+      const post = await db
+        .select()
+        .from(Posts)
+        .where(eq(Posts.id, result.postId))
+        .then(firstOrThrow);
+      return { post };
     },
   }),
 );

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { and, eq, inArray, isNotNull, isNull, ne, notExists, or, sql } from 'drizzle-orm';
 import {
   ActivityPubPosts,
@@ -19,6 +20,7 @@ import {
   InstanceState,
   MediaSource,
   MediaState,
+  PostQuoteConsentStatus,
   PostState,
   PostVisibility,
   ProfileState,
@@ -28,15 +30,30 @@ import {
   canonicalizePostContentDocument,
   validateLocalPostContentDocument,
 } from '../post-content/server';
-import { temporalClient } from '../temporal/client';
+import { runWorkflow, temporalClient } from '../temporal/client';
+import {
+  postCreateWorkflow,
+  postDeleteMutationWorkflow,
+  unwrapPostTransition,
+} from '../temporal/post';
 import { KOSMO_TASK_QUEUE } from '../temporal/task-queue';
 import { postVisibilityCondition } from '../visibility/post';
+import {
+  assertPostQuotePolicy,
+  createPostQuoteConsent,
+  defaultPostQuotePolicy,
+  isLocalQuoteAllowedByPolicy,
+  loadQuotePostIdentity,
+  loadQuoteSourceIdentity,
+  revokePostQuoteConsentsForSource,
+} from './post-quote-consent';
 import { validatePostStructure } from './post-structure';
 import { assertProfilePairIsNotBlocked } from './profile-block-policy';
 import type { Transaction } from '../db';
+import type { PostQuotePolicy } from '../enums';
 import type { PostContentDocumentV1 } from '../post-content';
 
-type LocalPostInput = {
+export type LocalPostInput = {
   accountId?: string;
   document: PostContentDocumentV1;
   media?: readonly {
@@ -47,6 +64,7 @@ type LocalPostInput = {
   profileId: string;
   replyParentId?: string;
   repostSourceId?: string;
+  quotePolicy?: PostQuotePolicy | null;
   visibility: PostVisibility;
 };
 
@@ -215,6 +233,7 @@ const findVisibleQuoteSource = async (
       ),
     )
     .limit(1)
+    .for('update', { of: Posts })
     .then(first);
 
 const validateQuoteSource = async (
@@ -234,10 +253,16 @@ const validateQuoteSource = async (
   if (source.visibility === PostVisibility.DIRECT) {
     throw new ValidationError('Post cannot be quoted', { field: 'repostSourceId' });
   }
-  if (source.instanceKind === InstanceKind.ACTIVITYPUB) {
-    throw new ValidationError('Quote approval is not available', {
-      field: 'repostSourceId',
-    });
+  if (
+    source.instanceKind === InstanceKind.LOCAL &&
+    source.profileId !== actorProfileId &&
+    !(await isLocalQuoteAllowedByPolicy(tx, {
+      actorProfileId,
+      sourceAuthorProfileId: source.profileId,
+      sourcePostId: source.id,
+    }))
+  ) {
+    throw new ValidationError('Post cannot be quoted', { field: 'repostSourceId' });
   }
   return source;
 };
@@ -429,16 +454,15 @@ const materializeRemoteMedia = async (
   return materialized;
 };
 
-export const deletePost = async ({
+export const deletePostPersisted = async ({
   actorProfileId,
-  origin,
   postId,
 }: {
   readonly actorProfileId: string;
   readonly origin: PostOrigin;
   readonly postId: string;
-}): Promise<{ readonly postId: string; readonly sourcePostId: string | null }> => {
-  const { deleted, result } = await db.transaction(async (tx) => {
+}) => {
+  return db.transaction(async (tx) => {
     const post = await tx
       .select({
         currentContentId: Posts.currentContentId,
@@ -473,42 +497,34 @@ export const deletePost = async ({
       })
       .then(first);
 
+    if (deleted && post.currentContentId !== null) {
+      await revokePostQuoteConsentsForSource(tx, postId);
+    }
+
     const sourcePostId =
       post.currentContentId === null && post.replyParentId === null ? post.repostSourceId : null;
     return { deleted, result: { postId, sourcePostId } };
   });
+};
 
-  if (deleted) {
-    const workflowInput = { postId: deleted.id, origin };
-    const isRepostDelete = result.sourcePostId !== null;
-    try {
-      await temporalClient.withDeadline(Date.now() + 5_000, () =>
-        isRepostDelete
-          ? temporalClient.workflow.start('repostDeleteWorkflow', {
-              args: [workflowInput],
-              taskQueue: KOSMO_TASK_QUEUE,
-              workflowId: `repost-delete:${workflowInput.postId}`,
-              workflowIdConflictPolicy: 'USE_EXISTING',
-              workflowIdReusePolicy: 'REJECT_DUPLICATE',
-            })
-          : temporalClient.workflow.start('postDeleteWorkflow', {
-              args: [workflowInput],
-              taskQueue: KOSMO_TASK_QUEUE,
-              workflowId: `post-delete:${workflowInput.postId}`,
-              workflowIdConflictPolicy: 'USE_EXISTING',
-              workflowIdReusePolicy: 'REJECT_DUPLICATE',
-            }),
-      );
-    } catch (error) {
-      console.error('%s Workflow start failed', isRepostDelete ? 'Repost Delete' : 'Post Delete', {
-        error,
-        origin,
-        postId: deleted.id,
-      });
-    }
-  }
-
-  return result;
+export const deletePost = async ({
+  actorProfileId,
+  origin,
+  postId,
+}: {
+  readonly actorProfileId: string;
+  readonly origin: PostOrigin;
+  readonly postId: string;
+}): Promise<{ readonly postId: string; readonly sourcePostId: string | null }> => {
+  return unwrapPostTransition(
+    await runWorkflow(postDeleteMutationWorkflow, {
+      args: [{ actorProfileId, origin, postId }],
+      mode: 'update-with-start',
+      updateId: 'delete',
+      workflowIdConflictPolicy: 'USE_EXISTING',
+      workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+    }),
+  );
 };
 
 export function repostPost(input: LocalRepostInput): Promise<RepostResult>;
@@ -568,14 +584,38 @@ export async function repostPost(input: RepostInput): Promise<RepostResult> {
 
   return result;
 }
-export function createPost(input: LocalPostInput): Promise<CreatedPost>;
-export function createPost(input: ActivityPubPostInput): Promise<CreatedPost | DuplicatePost>;
-export async function createPost(
+export function createPostPersisted(input: LocalPostInput, postId?: string): Promise<CreatedPost>;
+export function createPostPersisted(
+  input: ActivityPubPostInput,
+): Promise<CreatedPost | DuplicatePost>;
+export async function createPostPersisted(
   input: LocalPostInput | ActivityPubPostInput,
+  postId?: string,
 ): Promise<CreatedPost | DuplicatePost> {
+  const localQuotePolicy =
+    input.origin === 'LOCAL'
+      ? input.quotePolicy == null
+        ? defaultPostQuotePolicy
+        : assertPostQuotePolicy(input.quotePolicy)
+      : undefined;
   let result: CreatedPost;
   try {
     result = await db.transaction(async (tx) => {
+      if (postId) {
+        const existing = await tx.select().from(Posts).where(eq(Posts.id, postId)).then(first);
+        if (existing) {
+          if (existing.profileId !== input.profileId || !existing.currentContentId) {
+            throw new PermissionDeniedError('Post create identity does not match');
+          }
+          const content = await tx
+            .select()
+            .from(PostContents)
+            .where(eq(PostContents.id, existing.currentContentId))
+            .then(firstOrThrow);
+          return { created: true as const, post: existing, content };
+        }
+      }
+      let quoteSource: Awaited<ReturnType<typeof validateQuoteSource>> | undefined;
       let document =
         input.origin === 'LOCAL'
           ? validateLocalPostContentDocument(input.document)
@@ -662,7 +702,7 @@ export async function createPost(
       }
 
       if (input.origin === 'LOCAL' && input.repostSourceId !== undefined) {
-        await validateQuoteSource(tx, {
+        quoteSource = await validateQuoteSource(tx, {
           actorProfileId: input.profileId,
           postId: input.repostSourceId,
         });
@@ -712,7 +752,9 @@ export async function createPost(
         .insert(Posts)
         .values({
           createdAt,
+          id: postId,
           currentContentId: content.id,
+          quotePolicy: localQuotePolicy,
           profileId: input.profileId,
           repostSourceId: input.origin === 'LOCAL' ? (input.repostSourceId ?? null) : undefined,
           state: PostState.ACTIVE,
@@ -773,7 +815,37 @@ export async function createPost(
         .returning()
         .then(firstOrThrow);
 
-      return { content: linkedContent, created: true, post: linkedPost };
+      if (quoteSource && quoteSource.profileId !== input.profileId) {
+        const [sourceIdentity, quoteIdentity] = await Promise.all([
+          loadQuoteSourceIdentity(tx, quoteSource.id),
+          loadQuotePostIdentity(tx, linkedPost.id),
+        ]);
+        if (!sourceIdentity?.sourceUri || !quoteIdentity?.requestUri) {
+          throw new ValidationError('Post cannot be quoted', { field: 'repostSourceId' });
+        }
+
+        const approved = sourceIdentity.instanceKind === InstanceKind.LOCAL;
+        await createPostQuoteConsent(tx, {
+          approvalUri: approved
+            ? new URL(`/ap/quote-authorization/${linkedPost.id}`, sourceIdentity.sourceUri).href
+            : undefined,
+          quoteAuthorActorUri: quoteIdentity.authorActorUri,
+          quoteAuthorProfileId: input.profileId,
+          quotePostId: linkedPost.id,
+          quoteUri: quoteIdentity.quoteUri,
+          requestUri: quoteIdentity.requestUri,
+          sourceAuthorActorUri: sourceIdentity.authorActorUri,
+          sourcePostId: quoteSource.id,
+          sourceUri: sourceIdentity.sourceUri,
+          status: approved ? PostQuoteConsentStatus.APPROVED : PostQuoteConsentStatus.PENDING,
+        });
+      }
+
+      return {
+        content: linkedContent,
+        created: true,
+        post: linkedPost,
+      };
     });
   } catch (error) {
     if (input.origin !== 'ACTIVITYPUB' || !isActivityPubPostUriConflict(error)) {
@@ -783,6 +855,36 @@ export async function createPost(
     return { created: false };
   }
 
+  return result;
+}
+
+export function createPost(input: LocalPostInput): Promise<CreatedPost>;
+export function createPost(input: ActivityPubPostInput): Promise<CreatedPost | DuplicatePost>;
+export async function createPost(
+  input: LocalPostInput | ActivityPubPostInput,
+): Promise<CreatedPost | DuplicatePost> {
+  if (input.origin === 'LOCAL') {
+    const { postId } = unwrapPostTransition(
+      await runWorkflow(postCreateWorkflow, {
+        args: [{ ...input, admissionId: randomUUID() }],
+        mode: 'update-with-start',
+        updateId: 'create',
+        workflowIdConflictPolicy: 'USE_EXISTING',
+        workflowIdReusePolicy: 'REJECT_DUPLICATE',
+      }),
+    );
+    const post = await db.select().from(Posts).where(eq(Posts.id, postId)).then(firstOrThrow);
+    const content = await db
+      .select()
+      .from(PostContents)
+      .where(eq(PostContents.id, post.currentContentId!))
+      .then(firstOrThrow);
+    return { created: true, post, content };
+  }
+  const result = await createPostPersisted(input);
+  if (!result.created) {
+    return result;
+  }
   try {
     const workflowInput = { postId: result.post.id, origin: input.origin };
     await temporalClient.withDeadline(Date.now() + 5_000, () =>
@@ -802,5 +904,5 @@ export async function createPost(
     });
   }
 
-  return result;
+  return { content: result.content, created: true, post: result.post };
 }

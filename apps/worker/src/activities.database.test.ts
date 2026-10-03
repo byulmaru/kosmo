@@ -22,8 +22,8 @@ import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { eq, inArray } from 'drizzle-orm';
 import type * as CoreDb from '@kosmo/core/db';
 import type {
-  createPost as CreatePost,
-  deletePost as DeletePost,
+  createPostPersisted as CreatePost,
+  deletePostPersisted as DeletePost,
   repostPost as RepostPost,
 } from '@kosmo/core/services';
 import type {
@@ -105,7 +105,11 @@ before(async () => {
     deleteReactionNotificationActivity,
     deleteRepostNotificationActivity,
   } = await import('./activities'));
-  ({ createPost: createCorePost, deletePost, repostPost } = await import('@kosmo/core/services'));
+  ({
+    createPostPersisted: createCorePost,
+    deletePostPersisted: deletePost,
+    repostPost,
+  } = await import('@kosmo/core/services'));
   await db
     .insert(NotificationRollouts)
     .values({ key: 'QUOTE_NOTIFICATION', activatedAt: Temporal.Now.instant(), enabled: true })

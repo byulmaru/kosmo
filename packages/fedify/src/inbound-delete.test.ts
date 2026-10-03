@@ -52,6 +52,7 @@ let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
 let Profiles: typeof CoreDb.Profiles;
 let createPost: typeof CoreServices.createPost;
+let deletePostPersisted: typeof CoreServices.deletePostPersisted;
 let handleInboundCreate: typeof handleInboundCreateType;
 let handleInboundDelete: typeof handleInboundDeleteType;
 let localInstanceId: string;
@@ -72,7 +73,7 @@ describe('inbound Delete dispatch', () => {
       Profiles,
     } = await import('@kosmo/core/db'));
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
-    ({ createPost } = await import('@kosmo/core/services'));
+    ({ createPost, deletePostPersisted } = await import('@kosmo/core/services'));
     ({ handleInboundCreate } = await import('./inbound-create'));
     ({ handleInboundDelete } = await import('./inbound-delete'));
     const { localInstance } = await seedDatabase({ publicOrigin });
@@ -94,7 +95,7 @@ describe('inbound Delete dispatch', () => {
     await pg.end();
   });
 
-  test('deletes the exact mapped remote Post without hydration and preserves its projection', async (t) => {
+  test('deletes the exact mapped remote Post without hydration and preserves its projection', async () => {
     const actorUri = new URL('https://remote.example/users/alice');
     const objectUri = new URL('https://remote.example/notes/1');
     const profile = await createStoredRemoteActor(actorUri);
@@ -102,7 +103,6 @@ describe('inbound Delete dispatch', () => {
     const documentLoader = mock.fn(async () => {
       throw new Error('the inbox context loader must not run');
     });
-    const start = t.mock.method(temporalClient.workflow, 'start', async () => undefined as never);
 
     await handleInboundDelete(
       createContext(documentLoader),
@@ -116,17 +116,6 @@ describe('inbound Delete dispatch', () => {
     assert.equal(firstDelete.mapping.id, materialized.mapping.id);
     assert.equal(firstDelete.content.id, materialized.content.id);
     assert.equal(documentLoader.mock.calls.length, 0);
-    assert.equal(start.mock.callCount(), 1);
-    const firstStart = start.mock.calls[0];
-    assert.ok(firstStart);
-    const firstOptions = firstStart.arguments[1];
-    assert.ok(firstOptions);
-    assert.deepEqual(firstOptions.args, [
-      {
-        origin: 'ACTIVITYPUB',
-        postId: materialized.post.id,
-      },
-    ]);
 
     await handleInboundDelete(
       createContext(documentLoader),
@@ -135,7 +124,23 @@ describe('inbound Delete dispatch', () => {
     const repeated = await storedProjection(objectUri);
     assert.equal(repeated.post.deletedAt?.toString(), firstDelete.post.deletedAt.toString());
     assert.equal(documentLoader.mock.calls.length, 0);
-    assert.equal(start.mock.callCount(), 1);
+  });
+
+  test('Workflow admission failure leaves the mapped remote Post active', async (t) => {
+    const actorUri = new URL('https://remote.example/users/alice');
+    const objectUri = new URL('https://remote.example/notes/admission-failure');
+    const profile = await createStoredRemoteActor(actorUri);
+    await materializeRemotePost(profile.id, objectUri);
+    const update = t.mock.method(temporalClient.workflow, 'executeUpdateWithStart', async () => {
+      throw new Error('Temporal unavailable');
+    });
+
+    await assert.rejects(
+      handleInboundDelete(createContext(), new Delete({ actor: actorUri, object: objectUri })),
+      /Temporal unavailable/,
+    );
+    assert.equal(update.mock.callCount(), 1);
+    assert.equal((await storedProjection(objectUri)).post.state, PostState.ACTIVE);
   });
 
   test('does not delete a mapped Post when an object-less Delete lookup fails', async () => {
@@ -443,7 +448,7 @@ describe('inbound Delete dispatch', () => {
     const actorUri = new URL('https://remote.example/users/alice');
     const objectUri = new URL('https://remote.example/notes/rollback');
     const profile = await createStoredRemoteActor(actorUri);
-    await materializeRemotePost(profile.id, objectUri);
+    const materialized = await materializeRemotePost(profile.id, objectUri);
     await pg`
       create function fail_inbound_delete() returns trigger
       language plpgsql as $function$
@@ -460,7 +465,11 @@ describe('inbound Delete dispatch', () => {
 
     try {
       await assert.rejects(
-        handleInboundDelete(createContext(), new Delete({ actor: actorUri, object: objectUri })),
+        deletePostPersisted({
+          actorProfileId: profile.id,
+          origin: 'ACTIVITYPUB',
+          postId: materialized.post.id,
+        }),
         (error) =>
           error instanceof Error &&
           error.cause instanceof Error &&

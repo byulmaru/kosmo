@@ -26,6 +26,7 @@ import {
   InstanceState,
   MediaSource,
   MediaState,
+  PostQuoteConsentStatus,
   PostState,
   PostVisibility,
   ProfileFollowPolicy,
@@ -38,6 +39,7 @@ import type * as CoreSeed from '@kosmo/core/db/seed';
 import type * as PostUriModule from './activitypub-post-uri';
 import type * as LocalPostNoteModule from './local-post-note';
 import type * as LocalPostReactionCollectionModule from './local-post-reaction-collection';
+import type * as LocalQuoteAuthorizationModule from './local-quote-authorization';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
@@ -54,6 +56,7 @@ let dispatchLocalPostNote: typeof LocalPostNoteModule.dispatchLocalPostNote;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let isCanonicalPostId: typeof PostUriModule.isCanonicalPostId;
 let Instances: typeof CoreDb.Instances;
+let dispatchLocalQuoteAuthorization: typeof LocalQuoteAuthorizationModule.dispatchLocalQuoteAuthorization;
 let localInstanceId: string;
 let Media: typeof CoreDb.Media;
 let pg: typeof CoreDb.pg;
@@ -86,6 +89,7 @@ describe('ActivityPub Local Post Note', () => {
       Media,
       pg,
       PostContents,
+
       Posts,
       ProfileFollowRequests,
       ProfileFollows,
@@ -94,6 +98,7 @@ describe('ActivityPub Local Post Note', () => {
     } = await import('@kosmo/core/db'));
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
     ({ isCanonicalPostId, resolveActivityPubPostUri } = await import('./activitypub-post-uri'));
+    ({ dispatchLocalQuoteAuthorization } = await import('./local-quote-authorization'));
     ({ authorizeLocalPostNote, dispatchLocalPostNote } = await import('./local-post-note'));
     ({
       countLocalPostEmojiReactions,
@@ -228,6 +233,117 @@ describe('ActivityPub Local Post Note', () => {
       tombstoneParentNote?.replyTargetId?.href,
       `${publicOrigin}/ap/note/${localParent.id}`,
     );
+  });
+
+  test('projects only approved FEP-044f Quotes and hides unapproved Source references', async () => {
+    const fixtureId = crypto.randomUUID();
+    const sourceAuthor = await createProfile({
+      handle: `quote-source-${fixtureId}`,
+      kind: InstanceKind.LOCAL,
+    });
+    const quoteAuthor = await createProfile({
+      handle: `quote-author-${fixtureId}`,
+      kind: InstanceKind.LOCAL,
+    });
+    const source = await createPost(sourceAuthor.id);
+    const approvedQuote = await createPost(quoteAuthor.id, { repostSourceId: source.id });
+    const sourceUri = `${publicOrigin}/ap/note/${source.id}`;
+    const quoteUri = `${publicOrigin}/ap/note/${approvedQuote.id}`;
+    const approvalUri = `${publicOrigin}/ap/quote-authorization/${approvedQuote.id}`;
+    await db
+      .update(Posts)
+      .set({
+        quoteConsentApprovalUri: approvalUri,
+        quoteConsentQuoteAuthorActorUri: `${publicOrigin}/ap/actor/${quoteAuthor.id}`,
+        quoteConsentQuoteUri: quoteUri,
+        quoteConsentRequestUri: `${publicOrigin}/ap/quote-request/${approvedQuote.id}`,
+        quoteConsentSourceAuthorActorUri: `${publicOrigin}/ap/actor/${sourceAuthor.id}`,
+        quoteConsentSourcePostId: source.id,
+        quoteConsentSourceUri: sourceUri,
+        quoteConsentStatus: PostQuoteConsentStatus.APPROVED,
+        quoteConsentRevision: 1,
+      })
+      .where(eq(Posts.id, approvedQuote.id));
+
+    const approvedNote = await dispatchLocalPostNote(createContext(), { id: approvedQuote.id });
+    assert.ok(approvedNote);
+    assert.equal(approvedNote.quoteId?.href, sourceUri);
+    assert.equal(approvedNote.quoteUrl?.href, sourceUri);
+    assert.equal(approvedNote.quoteAuthorizationId?.href, approvalUri);
+    assert.match(approvedNote.content?.toString() ?? '', /quote-inline/);
+    assert.match(JSON.stringify(await approvedNote.toJsonLd()), /quoteAuthorization/);
+
+    const unapprovedAuthor = await createProfile({
+      handle: `quote-unapproved-${fixtureId}`,
+      kind: InstanceKind.LOCAL,
+    });
+    const unapprovedQuote = await createPost(unapprovedAuthor.id, {
+      repostSourceId: source.id,
+    });
+    const unapprovedNote = await dispatchLocalPostNote(createContext(), { id: unapprovedQuote.id });
+    assert.ok(unapprovedNote);
+    assert.equal(unapprovedNote.quoteId, null);
+    assert.equal(unapprovedNote.quoteUrl, null);
+    assert.equal(unapprovedNote.quoteAuthorizationId, null);
+    assert.equal(unapprovedNote.content?.toString(), '<p>body</p>');
+  });
+
+  test('serves a materialized remote Quote authorization and rejects mismatched identities', async () => {
+    const fixtureId = crypto.randomUUID();
+    const sourceAuthor = await createProfile({
+      handle: `authorization-source-${fixtureId}`,
+      kind: InstanceKind.LOCAL,
+    });
+    const source = await createPost(sourceAuthor.id);
+    const requestUri = `https://quote-author.example/quote-requests/${fixtureId}`;
+    const approvalUri = `${publicOrigin}/ap/quote-authorization/${encodeURIComponent(requestUri)}`;
+    const quoteUri = `https://quote-author.example/notes/${fixtureId}`;
+    const sourceUri = `${publicOrigin}/ap/note/${source.id}`;
+    const quoteAuthor = await createProfile({ handle: `quote-author-${fixtureId}` });
+    const quote = await createPost(quoteAuthor.id);
+    await db.insert(ActivityPubActors).values({
+      profileId: quoteAuthor.id,
+      type: ActivityPubActorType.PERSON,
+      uri: `https://quote-author.example/users/${fixtureId}`,
+    });
+    await db.insert(ActivityPubPosts).values({
+      postId: quote.id,
+      receivedAt: Temporal.Instant.from('2026-09-27T00:00:00Z'),
+      uri: quoteUri,
+    });
+    await db
+      .update(Posts)
+      .set({
+        quoteConsentApprovalUri: approvalUri,
+        quoteConsentQuoteAuthorActorUri: `https://quote-author.example/users/${fixtureId}`,
+        quoteConsentQuoteUri: quoteUri,
+        quoteConsentRequestUri: requestUri,
+        quoteConsentSourceAuthorActorUri: `${publicOrigin}/ap/actor/${sourceAuthor.id}`,
+        quoteConsentSourcePostId: source.id,
+        quoteConsentSourceUri: sourceUri,
+        quoteConsentStatus: PostQuoteConsentStatus.APPROVED,
+        quoteConsentRevision: 1,
+      })
+      .where(eq(Posts.id, quote.id));
+
+    const authorization = await dispatchLocalQuoteAuthorization(createContext(approvalUri));
+
+    assert.ok(authorization);
+    assert.equal(authorization.id?.href, approvalUri);
+    assert.equal(authorization.interactingObjectId?.href, quoteUri);
+    assert.equal(authorization.interactionTargetId?.href, sourceUri);
+
+    await db
+      .update(ActivityPubPosts)
+      .set({ uri: `${quoteUri}-mismatch` })
+      .where(eq(ActivityPubPosts.postId, quote.id));
+    assert.equal(await dispatchLocalQuoteAuthorization(createContext(approvalUri)), null);
+    await db
+      .update(ActivityPubPosts)
+      .set({ uri: quoteUri })
+      .where(eq(ActivityPubPosts.postId, quote.id));
+    await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, quote.id));
+    assert.equal(await dispatchLocalQuoteAuthorization(createContext(approvalUri)), null);
   });
 
   test('projects stored ordered Ready Local Media as Image attachments without HTML duplication or network reads', async () => {
@@ -835,16 +951,15 @@ describe('ActivityPub Local Post Note', () => {
   });
 });
 
-const createContext = (): RequestContext<void> => {
+const createContext = (
+  url = `${publicOrigin}/ap/note/00000000-0000-8000-8000-000000000001`,
+): RequestContext<void> => {
   const federation = createFederation<void>({ kv: new MemoryKvStore(), origin: publicOrigin });
   federation.setActorDispatcher(
     '/ap/actor/{identifier}',
     (context, identifier) => new Person({ id: context.getActorUri(identifier) }),
   );
-  return federation.createContext(
-    new Request(`${publicOrigin}/ap/note/00000000-0000-8000-8000-000000000001`),
-    undefined,
-  );
+  return federation.createContext(new Request(url), undefined);
 };
 
 const createUnsignedCollectionFederation = () => {
@@ -992,6 +1107,7 @@ const createPost = async (
   {
     replyParentId = null,
     media = [],
+    repostSourceId = null,
     sensitiveMedia = false,
     state = PostState.ACTIVE,
     summary = null,
@@ -999,6 +1115,7 @@ const createPost = async (
   }: {
     replyParentId?: string | null;
     media?: readonly { readonly altText: string | null; readonly mediaId: string }[];
+    repostSourceId?: string | null;
     sensitiveMedia?: boolean;
     state?: (typeof PostState)[keyof typeof PostState];
     summary?: string | null;
@@ -1007,7 +1124,7 @@ const createPost = async (
 ) => {
   const post = await db
     .insert(Posts)
-    .values({ profileId, replyParentId, state, visibility })
+    .values({ profileId, replyParentId, repostSourceId, state, visibility })
     .returning()
     .then(firstOrThrow);
   for (const { altText, mediaId } of media) {

@@ -128,6 +128,21 @@ export const PostVisibility = {
 } as const;
 export type PostVisibility = keyof typeof PostVisibility;
 
+export const PostQuotePolicy = {
+  EVERYONE: 'EVERYONE',
+  FOLLOWERS: 'FOLLOWERS',
+  AUTHOR: 'AUTHOR',
+} as const;
+export type PostQuotePolicy = keyof typeof PostQuotePolicy;
+
+export const PostQuoteConsentStatus = {
+  PENDING: 'PENDING',
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED',
+  REVOKED: 'REVOKED',
+} as const;
+export type PostQuoteConsentStatus = keyof typeof PostQuoteConsentStatus;
+
 export const ProfileFollowPolicy = {
   OPEN: 'OPEN',
   APPROVAL_REQUIRED: 'APPROVAL_REQUIRED',

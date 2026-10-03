@@ -24,6 +24,11 @@ export const notificationKind = createPgEnum('notification_kind', Enum.Notificat
 export const oauthTokenState = createPgEnum('oauth_token_state', Enum.OAuthTokenState);
 export const postState = createPgEnum('post_state', Enum.PostState);
 export const postVisibility = createPgEnum('post_visibility', Enum.PostVisibility);
+export const postQuotePolicy = createPgEnum('post_quote_policy_value', Enum.PostQuotePolicy);
+export const postQuoteConsentStatus = createPgEnum(
+  'post_quote_consent_status',
+  Enum.PostQuoteConsentStatus,
+);
 export const profileFollowPolicy = createPgEnum('profile_follow_policy', Enum.ProfileFollowPolicy);
 export const profileBlockActivityOrigin = createPgEnum(
   'profile_block_activity_origin',

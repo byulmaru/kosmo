@@ -2,6 +2,13 @@ import '@kosmo/core/polyfill';
 
 export { deleteAccountActivity } from './activities/account-deletion';
 export { cleanupUnavailableNotificationsActivity } from './activities/cleanup-unavailable-notifications';
+export { executePostQuoteCommandActivity } from './activities/post-quote';
+export {
+  createPostTransitionActivity,
+  deletePostTransitionActivity,
+  reservePostIdActivity,
+  verifyPostDeletionActivity,
+} from './activities/post-transition';
 export {
   executeProfileBlockTransitionActivity,
   executeProfileUnblockTransitionActivity,
@@ -45,6 +52,13 @@ export {
 export {
   sendLocalPostCreate as sendLocalPostCreateActivity,
   sendLocalPostDelete as sendLocalPostDeleteActivity,
+  sendLocalPostQuoteRevocations as sendLocalPostQuoteRevocationsActivity,
+} from '@kosmo/fedify';
+export {
+  sendLocalPostConsentUpdate as sendLocalPostConsentUpdateActivity,
+  sendLocalPostQuoteDecision as sendLocalPostQuoteDecisionActivity,
+  sendLocalPostQuoteRequest as sendLocalPostQuoteRequestActivity,
+  sendLocalPostQuoteRevocation as sendLocalPostQuoteRevocationActivity,
 } from '@kosmo/fedify';
 export {
   sendRepostAnnounce as sendRepostAnnounceActivity,

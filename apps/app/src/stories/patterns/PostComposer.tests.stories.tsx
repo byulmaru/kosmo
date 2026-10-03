@@ -158,6 +158,23 @@ export const QuoteModeContract: Story = {
   },
 };
 
+export const KeyboardFollowersDismissContract: Story = {
+  ...playgroundContract,
+  args: { ...playgroundContract.args, surface: 'rail', visibility: 'UNLISTED' },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const trigger = canvas.getByRole('button', { name: '공개 범위: 조용한 공개' });
+    await userEvent.click(trigger);
+    expect(canvas.getByRole('group', { name: '인용 허용 정책' })).toBeVisible();
+    expect(canvas.getByRole('menuitemradio', { name: '조용한 공개' })).toHaveFocus();
+
+    await userEvent.keyboard('{ArrowDown}');
+
+    await waitFor(() => expect(canvas.queryByRole('menu')).toBeNull());
+    expect(canvas.getByRole('button', { name: '공개 범위: 팔로워만' })).toHaveFocus();
+  },
+};
+
 export const ProgrammaticBodyResetHeightContract: Story = {
   ...playgroundContract,
   args: {

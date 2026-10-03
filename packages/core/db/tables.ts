@@ -348,6 +348,18 @@ export const Posts = pgTable(
       .notNull()
       .references(() => Profiles.id),
     visibility: Enum.postVisibility('visibility').notNull(),
+    quotePolicy: Enum.postQuotePolicy('quote_policy'),
+    quoteConsentSourcePostId: uuid('quote_consent_source_post_id').references(
+      (): AnyPgColumn => Posts.id,
+    ),
+    quoteConsentSourceUri: text('quote_consent_source_uri'),
+    quoteConsentSourceAuthorActorUri: text('quote_consent_source_author_actor_uri'),
+    quoteConsentQuoteUri: text('quote_consent_quote_uri'),
+    quoteConsentQuoteAuthorActorUri: text('quote_consent_quote_author_actor_uri'),
+    quoteConsentRequestUri: text('quote_consent_request_uri').unique(),
+    quoteConsentApprovalUri: text('quote_consent_approval_uri').unique(),
+    quoteConsentStatus: Enum.postQuoteConsentStatus('quote_consent_status'),
+    quoteConsentRevision: integer('quote_consent_revision'),
     state: Enum.postState('state').notNull(),
     currentContentId: uuid('current_content_id').references((): AnyPgColumn => PostContents.id),
     replyParentId: uuid('reply_parent_id').references((): AnyPgColumn => Posts.id, {
@@ -361,6 +373,17 @@ export const Posts = pgTable(
     check(
       'post_reply_parent_not_self',
       sql`${table.replyParentId} IS NULL OR ${table.replyParentId} <> ${table.id}`,
+    ),
+    check(
+      'post_quote_consent_complete',
+      sql`(${table.quoteConsentStatus} IS NULL AND ${table.quoteConsentSourcePostId} IS NULL AND ${table.quoteConsentSourceUri} IS NULL AND ${table.quoteConsentSourceAuthorActorUri} IS NULL AND ${table.quoteConsentQuoteUri} IS NULL AND ${table.quoteConsentQuoteAuthorActorUri} IS NULL AND ${table.quoteConsentRequestUri} IS NULL AND ${table.quoteConsentApprovalUri} IS NULL AND ${table.quoteConsentRevision} IS NULL) OR (${table.quoteConsentStatus} IS NOT NULL AND ${table.quoteConsentSourcePostId} IS NOT NULL AND ${table.quoteConsentSourceUri} IS NOT NULL AND ${table.quoteConsentSourceAuthorActorUri} IS NOT NULL AND ${table.quoteConsentQuoteUri} IS NOT NULL AND ${table.quoteConsentQuoteAuthorActorUri} IS NOT NULL AND ${table.quoteConsentRequestUri} IS NOT NULL AND ${table.quoteConsentRevision} IS NOT NULL AND ${table.quoteConsentRevision} > 0)`,
+    ),
+    index('post_quote_consent_source_post_id_index').on(table.quoteConsentSourcePostId),
+    index('post_quote_consent_binding_index').on(
+      table.quoteConsentStatus,
+      table.quoteConsentSourceAuthorActorUri,
+      table.quoteConsentSourceUri,
+      table.quoteConsentQuoteUri,
     ),
     index().on(table.profileId, table.id.desc()),
     index('post_reply_parent_id_index')

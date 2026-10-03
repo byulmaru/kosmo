@@ -1,4 +1,10 @@
-import { PostVisibility } from '@kosmo/core/enums';
+import { db } from '@kosmo/core/db';
+import { PostQuoteConsentStatus, PostVisibility } from '@kosmo/core/enums';
+import {
+  createPostQuoteConsent,
+  loadQuotePostIdentity,
+  loadQuoteSourceIdentity,
+} from '@kosmo/core/services';
 import {
   createE2EFollow,
   createE2EPost,
@@ -433,6 +439,33 @@ test('순수 Repost 상세는 Quote Source로 replace되고 한 단계 C preview
     profileId: quoteAuthor.id,
     repostSourceId: directSource.id,
     visibility: PostVisibility.PUBLIC,
+  });
+  // These DB-seeded Quotes bypass creation, so record the approvals required
+  // for the Source preview this navigation scenario exercises.
+  await db.transaction(async (tx) => {
+    for (const [quotePost, sourcePost] of [
+      [directSource, thirdDepth],
+      [quote, directSource],
+    ] as const) {
+      const quoteIdentity = await loadQuotePostIdentity(tx, quotePost.id);
+      const sourceIdentity = await loadQuoteSourceIdentity(tx, sourcePost.id);
+      if (!quoteIdentity?.requestUri || !sourceIdentity) {
+        throw new Error('Local Quote fixture identities are unavailable');
+      }
+      await createPostQuoteConsent(tx, {
+        approvalUri: new URL(`/ap/quote-authorization/${quotePost.id}`, quoteIdentity.quoteUri)
+          .href,
+        quoteAuthorActorUri: quoteIdentity.authorActorUri,
+        quoteAuthorProfileId: quotePost.profileId,
+        quotePostId: quotePost.id,
+        quoteUri: quoteIdentity.quoteUri,
+        requestUri: quoteIdentity.requestUri,
+        sourceAuthorActorUri: sourceIdentity.authorActorUri,
+        sourcePostId: sourcePost.id,
+        sourceUri: sourceIdentity.sourceUri,
+        status: PostQuoteConsentStatus.APPROVED,
+      });
+    }
   });
   const quoteRepost = await createE2EPost({
     content: false,

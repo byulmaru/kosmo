@@ -6,9 +6,22 @@
 
 이 spec의 GraphQL enum `DIRECT`는 canonical 문서의 Mentioned Profiles visibility를 나타내는 API 표현이다.
 
-Quote Source는 인용 승인 조건과 viewer별 Source 조회 조건을 모두 통과할 때만 반환해야 한다(MUST).
-승인되지 않았거나 거절·철회된 Source는 반환해서는 안 되며(MUST NOT), 자체 Content와 Post Node는
+Quote Source는 인용 승인 조건과 viewer별 Source 조회 조건을 모두 통과할 때 반환해야 한다(MUST).
+도입 전 Local Quote 2건을 위한 별도 표시 예외를 두어서는 안 되며(MUST NOT), 자기 인용 계약은 유지한다.
+미승인·거절·철회 Source는 반환해서는 안 되며(MUST NOT), 자체 Content와 Post Node는
 그 Post 자체의 조회 정책을 통과하면 유지해야 한다(MUST).
+
+게시글별 인용 제어에는 nullable `quotePolicy: PostQuotePolicy`와
+`viewerCanUpdateQuotePolicy: Boolean!`를 제공해야 한다(MUST).
+정책은 Content가 있는 Local Post에서만 반환하고 권한 플래그는 현재 selected Profile을 기준으로 계산해야 한다(MUST).
+Source 조회 시 승인 조건은 Content 있는 Quote에 적용하며 Content 없는 순수 Repost의 기존 조회·count·
+viewerRepost 동작을 변경해서는 안 된다(MUST NOT).
+
+#### Scenario: 인용 제어 필드와 기존 Post 필드의 동시 조회
+
+- **WHEN** 클라이언트가 기존 Post 필드와 인용 정책·권한 필드를 함께 조회한다
+- **THEN** 기존 Post identity·Content·visibility·관계 필드를 유지하면서 현재 정책과 actor 권한을 반환한다
+- **AND** pending·거절·철회된 Quote의 Source는 null이고 순수 Repost는 기존 조회 규칙을 유지한다
 
 #### Scenario: 활성 게시글 object 조회
 
@@ -70,6 +83,12 @@ Quote Source는 인용 승인 조건과 viewer별 Source 조회 조건을 모두
 - **AND** nullable `repostSource`는 `null`을 반환한다
 - **AND** direct Source의 Source가 unavailable하다는 이유로 바깥 Quote를 숨기지 않는다
 
+#### Scenario: 승인 기록 없는 타인 Quote 조회
+
+- **WHEN** 타인 Quote에 유효한 승인이 없다
+- **THEN** `repostSource`는 null이고 조회 가능한 Quote 자체 Content는 보존한다
+- **AND** Source FK 존재나 기존 데이터라는 이유로 표시 예외를 적용하지 않는다
+
 #### Scenario: 원격 승인 대기 또는 철회된 Quote 조회
 
 - **WHEN** Quote 자체는 조회 가능하지만 Source 승인이 대기·거절·철회 상태다
@@ -97,6 +116,10 @@ Quote Source는 인용 승인 조건과 viewer별 Source 조회 조건을 모두
 ### Requirement: Plain Text post creation
 
 **Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/post-content.md`, `docs/domain/objects/media.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/domain/decisions/0014-post-structure-relations.md`, `docs/domain/decisions/0022-post-content-revision-media-nodes.md`, `PROD-424`, `PROD-461`, `PROD-554`, `PROD-431`, `PROD-902`, `docs/domain/decisions/0029-quote-consent-and-federation.md`, `PROD-962` 로그인했고 active profile이 있는 사용자는 Plain Text UX의 `bodyText`, 선택적 Media item과 Sensitive Media, 선택적 concrete `Post` `replyParentId`로 versioned canonical document의 일반 Post 또는 Reply를 작성할 수 있어야 한다(MUST). 기존 입력에 선택적 concrete `Post` global ID인 `repostSourceId`를 추가해 기본 Quote를 작성할 수 있어야 한다(MUST). `repostSourceId` 생략·null은 Source 없음이며, `replyParentId`와 `repostSourceId`를 함께 지정한 작성 요청은 거부해야 한다(MUST). GraphQL `usingProfile` entry point가 보장한 Active Account, membership과 selected Profile 조회 가능 상태를 resolver가 중복 검증하면 안 된다(MUST NOT). selected Profile의 선택 자격은 Account-Profile Membership으로만 결정하며, 이 requirement는 Profile Origin 또는 Instance Kind에 따른 selected Profile 지원·금지 capability를 정의하지 않는다.
+PROD-924가 연결하는 `CreatePostInput.quotePolicy: PostQuotePolicy`는 optional이다. 생략·null은
+`EVERYONE`이며 명시한 게시글별 정책은 Post·Content와 같은 transaction에 저장해야 한다(MUST). 근거는
+`docs/domain/objects/post.md`, `docs/design/post-action-bar.md`, PROD-924의 2026-09-11 사용자 결정이다.
+이 확장은 PROD-431 기본 작성 tasks 2~3의 완료 조건을 확대하지 않는다.
 
 #### Scenario: Plain Text 게시글 작성 성공
 

@@ -13,7 +13,34 @@ export {
   deleteReactionNotification,
   deleteRepostNotification,
 } from './notification';
-export { createPost, deletePost, repostPost } from './post';
+export {
+  createPost,
+  createPostPersisted,
+  deletePost,
+  deletePostPersisted,
+  repostPost,
+} from './post';
+export type { PostQuoteConsentRow, QuoteSource } from './post-quote-consent';
+export {
+  applyInboundQuoteAccept,
+  applyInboundQuoteReject,
+  applyInboundQuoteRevocation,
+  assertPostQuotePolicy,
+  canDisplayQuoteSource,
+  createPostQuoteConsent,
+  defaultPostQuotePolicy,
+  isLocalQuoteAllowedByPolicy,
+  loadPendingQuoteConsentByBinding,
+  loadQuoteConsentByApprovalUri,
+  loadQuoteConsentByRequestUri,
+  loadQuoteConsentForPost,
+  loadQuotePostIdentity,
+  loadQuoteSourceIdentity,
+  postQuoteConsentColumns,
+  recordInboundQuoteRequest,
+  revokePostQuoteConsentsForSource,
+  visibleQuoteSources,
+} from './post-quote-consent';
 export { disableProfile } from './profile';
 export { assertProfilePairIsNotBlocked, ProfilePairBlockedError } from './profile-block-policy';
 export type { ProfileBlockProtocolActivityInput } from './profile-block-protocol';

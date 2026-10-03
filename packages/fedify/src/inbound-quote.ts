@@ -1,0 +1,577 @@
+import '@kosmo/core/polyfill';
+
+import { Note, QuoteAuthorization } from '@fedify/vocab';
+import { db as coreDb, first, Posts, Profiles } from '@kosmo/core/db';
+import {
+  InstanceKind,
+  InstanceState,
+  PostQuoteConsentStatus,
+  PostState,
+  PostVisibility,
+  ProfileState,
+} from '@kosmo/core/enums';
+import { ConflictError, NotFoundError } from '@kosmo/core/error';
+import {
+  loadPendingQuoteConsentByBinding,
+  loadQuoteConsentByApprovalUri,
+  loadQuoteConsentByRequestUri,
+  loadQuotePostIdentity,
+  loadQuoteSourceIdentity,
+} from '@kosmo/core/services';
+import { runWorkflow } from '@kosmo/core/temporal/client';
+import { postQuoteCommandWorkflow } from '@kosmo/core/temporal/workflows';
+import { eq } from 'drizzle-orm';
+import { findPostByActivityPubUri } from './activitypub-post-uri';
+import { isHttpUri, uniqueHref } from './activitypub-uri';
+import { materializeHydratedRemoteNote } from './inbound-create-note';
+import { resolveInboundLocalRecipient } from './inbound-local-recipient';
+import { observeInbound } from './inbound-observability';
+import {
+  findOrMaterializeRemoteProfileActorByUri,
+  RemoteActorMaterializationError,
+} from './remote-actor-materialization';
+import type { InboxContext } from '@fedify/fedify';
+import type { Accept, Delete, QuoteRequest, Reject } from '@fedify/vocab';
+import type { PostQuoteConsentRow } from '@kosmo/core/services';
+import type { PostQuoteCommand } from '@kosmo/core/temporal/workflows';
+
+const noNetworkDocumentLoader = async (url: string): Promise<never> => {
+  throw new Error(`Network lookup is disabled for inbound QuoteAuthorization: ${url}`);
+};
+
+const isUsableHttpUri = (value: URL | null | undefined): value is URL =>
+  value !== null && value !== undefined && isHttpUri(value);
+
+const quoteAuthorizationUri = (canonicalOrigin: string, requestUri: string): string =>
+  new URL(`/ap/quote-authorization/${encodeURIComponent(requestUri)}`, canonicalOrigin).href;
+
+const observeQuoteValidation = ({
+  activityType,
+  actorOrigin,
+  handler,
+  objectOrigin,
+  reasonCode,
+}: {
+  readonly activityType: 'Accept' | 'Delete' | 'QuoteRequest' | 'Reject';
+  readonly actorOrigin?: string;
+  readonly handler: 'accept' | 'delete' | 'quote' | 'reject';
+  readonly objectOrigin?: string;
+  readonly reasonCode: string;
+}) =>
+  observeInbound({
+    activityType,
+    actorOrigin,
+    handler,
+    objectOrigin,
+    outcome: 'rejected',
+    phase: 'protocol',
+    reasonCode,
+  });
+
+const requestMatchesConsent = (request: QuoteRequest, consent: PostQuoteConsentRow): boolean =>
+  request.id?.href === consent.requestUri &&
+  request.actorId?.href === consent.quoteAuthorActorUri &&
+  request.objectId?.href === consent.sourceUri &&
+  request.instrumentId?.href === consent.quoteUri;
+
+const loadVerifiedQuoteRequest = async (
+  context: InboxContext<void>,
+  request: QuoteRequest,
+  receivedAt: Temporal.Instant,
+): Promise<{
+  readonly actorUri: URL;
+  readonly instrument: Note;
+  readonly instrumentUri: URL;
+  readonly quotePostId: string;
+  readonly requestUri: URL;
+  readonly sourcePostId: string;
+  readonly sourceUri: URL;
+  readonly sourceAuthorProfileId: string;
+  readonly sourceAuthorActorUri: URL;
+  readonly sourceCanonicalOrigin: string;
+} | null> => {
+  const actorUri = request.actorId;
+  const requestUri = request.id;
+  const sourceUri = request.objectId;
+  const instrumentUri = request.instrumentId;
+  if (
+    !isUsableHttpUri(actorUri) ||
+    !isUsableHttpUri(requestUri) ||
+    !isUsableHttpUri(sourceUri) ||
+    !isUsableHttpUri(instrumentUri)
+  ) {
+    observeQuoteValidation({
+      activityType: 'QuoteRequest',
+      actorOrigin: actorUri?.origin,
+      handler: 'quote',
+      objectOrigin: sourceUri?.origin,
+      reasonCode: 'quote_request_identity_invalid',
+    });
+    return null;
+  }
+
+  // Resolve the local Source before looking up or materializing the remote
+  // quote author. This keeps invalid requests from exposing remote profiles.
+  const sourcePostId = await findPostByActivityPubUri(context, sourceUri);
+  if (!sourcePostId) {
+    observeQuoteValidation({
+      activityType: 'QuoteRequest',
+      actorOrigin: actorUri.origin,
+      handler: 'quote',
+      objectOrigin: sourceUri.origin,
+      reasonCode: 'quote_request_source_missing',
+    });
+    return null;
+  }
+
+  const source = await loadQuoteSourceIdentity(coreDb, sourcePostId);
+  if (
+    !source ||
+    source.instanceKind !== InstanceKind.LOCAL ||
+    !source.canonicalOrigin ||
+    source.authorProfileState !== ProfileState.ACTIVE ||
+    source.instanceState === InstanceState.SUSPENDED ||
+    source.sourceUri !== sourceUri.href ||
+    source.sourceState !== PostState.ACTIVE ||
+    source.sourceContentId === null ||
+    (source.sourceVisibility !== PostVisibility.PUBLIC &&
+      source.sourceVisibility !== PostVisibility.UNLISTED)
+  ) {
+    observeQuoteValidation({
+      activityType: 'QuoteRequest',
+      actorOrigin: actorUri.origin,
+      handler: 'quote',
+      objectOrigin: sourceUri.origin,
+      reasonCode: 'quote_request_source_not_quoteable',
+    });
+    return null;
+  }
+
+  const localRecipient = await resolveInboundLocalRecipient(
+    context,
+    new URL(source.authorActorUri),
+  );
+  if (
+    !localRecipient ||
+    localRecipient.id !== source.authorProfileId ||
+    context.getActorUri(localRecipient.id).href !== source.authorActorUri
+  ) {
+    observeQuoteValidation({
+      activityType: 'QuoteRequest',
+      actorOrigin: actorUri.origin,
+      handler: 'quote',
+      objectOrigin: sourceUri.origin,
+      reasonCode: 'quote_request_recipient_mismatch',
+    });
+    return null;
+  }
+
+  const instrument = await request.getInstrument({
+    crossOrigin: 'trust',
+    documentLoader: context.documentLoader,
+    suppressError: true,
+  });
+  if (
+    !(instrument instanceof Note) ||
+    instrument.id?.href !== instrumentUri.href ||
+    instrument.quoteId?.href !== sourceUri.href ||
+    (instrument.quoteUrl !== null && instrument.quoteUrl.href !== sourceUri.href)
+  ) {
+    observeQuoteValidation({
+      activityType: 'QuoteRequest',
+      actorOrigin: actorUri.origin,
+      handler: 'quote',
+      objectOrigin: instrumentUri.origin,
+      reasonCode: 'quote_request_instrument_invalid',
+    });
+    return null;
+  }
+
+  const instrumentAuthor = uniqueHref(instrument.attributionIds);
+  if (instrumentAuthor !== actorUri.href) {
+    observeQuoteValidation({
+      activityType: 'QuoteRequest',
+      actorOrigin: actorUri.origin,
+      handler: 'quote',
+      objectOrigin: instrumentUri.origin,
+      reasonCode: 'quote_request_author_mismatch',
+    });
+    return null;
+  }
+
+  let quotePostId = await findPostByActivityPubUri(context, instrumentUri);
+  if (!quotePostId) {
+    const materialized = await materializeHydratedRemoteNote({
+      context,
+      note: instrument,
+      objectUri: instrumentUri,
+      observation: { activityType: 'QuoteRequest', handler: 'quote' },
+      receivedAt,
+    });
+    if (materialized.status === 'rejected') {
+      observeQuoteValidation({
+        activityType: 'QuoteRequest',
+        actorOrigin: actorUri.origin,
+        handler: 'quote',
+        objectOrigin: instrumentUri.origin,
+        reasonCode: 'quote_request_materialization_failed',
+      });
+      return null;
+    }
+    quotePostId = materialized.postId;
+  }
+  const quotePost = await coreDb
+    .select({
+      currentContentId: Posts.currentContentId,
+      repostSourceId: Posts.repostSourceId,
+      consentSourcePostId: Posts.quoteConsentSourcePostId,
+      profileState: Profiles.state,
+      state: Posts.state,
+    })
+    .from(Posts)
+    .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
+    .where(eq(Posts.id, quotePostId))
+    .limit(1)
+    .then(first);
+  const quoteIdentity = await loadQuotePostIdentity(coreDb, quotePostId);
+  if (
+    !quotePost ||
+    quotePost.state !== PostState.ACTIVE ||
+    quotePost.currentContentId === null ||
+    (quotePost.repostSourceId !== null && quotePost.repostSourceId !== sourcePostId) ||
+    (quotePost.consentSourcePostId !== null && quotePost.consentSourcePostId !== sourcePostId) ||
+    quotePost.profileState !== ProfileState.ACTIVE ||
+    !quoteIdentity ||
+    quoteIdentity.quoteUri !== instrumentUri.href ||
+    quoteIdentity.authorActorUri !== actorUri.href
+  ) {
+    observeQuoteValidation({
+      activityType: 'QuoteRequest',
+      actorOrigin: actorUri.origin,
+      handler: 'quote',
+      objectOrigin: instrumentUri.origin,
+      reasonCode: 'quote_request_quote_identity_mismatch',
+    });
+    return null;
+  }
+
+  return {
+    actorUri,
+    instrument,
+    instrumentUri,
+    requestUri,
+    quotePostId,
+    sourcePostId,
+    sourceUri,
+    sourceAuthorProfileId: source.authorProfileId,
+    sourceAuthorActorUri: new URL(source.authorActorUri),
+    sourceCanonicalOrigin: source.canonicalOrigin,
+  };
+};
+
+export const handleInboundQuoteRequest = async (
+  context: InboxContext<void>,
+  request: QuoteRequest,
+  receivedAt: Temporal.Instant = Temporal.Now.instant(),
+): Promise<void> => {
+  const verified = await loadVerifiedQuoteRequest(context, request, receivedAt);
+  if (!verified) {
+    return;
+  }
+
+  let remoteActor;
+  try {
+    remoteActor = await findOrMaterializeRemoteProfileActorByUri({
+      actorUri: verified.actorUri,
+      context,
+      now: receivedAt,
+    });
+  } catch (error) {
+    if (
+      error instanceof ConflictError ||
+      error instanceof NotFoundError ||
+      error instanceof RemoteActorMaterializationError
+    ) {
+      observeInbound({
+        activityType: 'QuoteRequest',
+        actorOrigin: verified.actorUri.origin,
+        handler: 'quote',
+        objectOrigin: verified.sourceUri.origin,
+        outcome: 'external_failure',
+        phase: 'actor_lookup',
+        reasonCode: 'quote_request_actor_unavailable',
+      });
+      return;
+    }
+    throw error;
+  }
+
+  await runWorkflow(postQuoteCommandWorkflow, {
+    args: [
+      {
+        kind: 'request',
+        approvalUri: quoteAuthorizationUri(
+          verified.sourceCanonicalOrigin,
+          verified.requestUri.href,
+        ),
+        quoteAuthorActorUri: verified.actorUri.href,
+        quoteAuthorProfileId: remoteActor.profile.id,
+        quotePostId: verified.quotePostId,
+        quoteUri: verified.instrumentUri.href,
+        requestUri: verified.requestUri.href,
+        sourceAuthorActorUri: verified.sourceAuthorActorUri.href,
+        sourcePostId: verified.sourcePostId,
+        sourceUri: verified.sourceUri.href,
+      },
+    ],
+    mode: 'update-with-start',
+    updateId: 'command',
+    workflowIdConflictPolicy: 'USE_EXISTING',
+    workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+  });
+};
+
+const observeResponseMismatch = (
+  activityType: 'Accept' | 'Reject',
+  actorUri: URL,
+  requestUri: URL,
+  reasonCode: string,
+) =>
+  observeQuoteValidation({
+    activityType,
+    actorOrigin: actorUri.origin,
+    handler: activityType === 'Accept' ? 'accept' : 'reject',
+    objectOrigin: requestUri.origin,
+    reasonCode,
+  });
+
+export const handleInboundQuoteAccept = async ({
+  accept,
+  context,
+  request,
+}: {
+  readonly accept: Accept;
+  readonly context: InboxContext<void>;
+  readonly request: QuoteRequest;
+}): Promise<void> => {
+  const actorUri = accept.actorId;
+  const requestUri = accept.objectId;
+  if (!isUsableHttpUri(actorUri) || !isUsableHttpUri(requestUri)) {
+    observeResponseMismatch(
+      'Accept',
+      actorUri ?? new URL('https://invalid.example'),
+      requestUri ?? new URL('https://invalid.example'),
+      'quote_accept_identity_invalid',
+    );
+    return;
+  }
+
+  const consent = await loadQuoteConsentByRequestUri(coreDb, requestUri.href);
+  if (!consent) {
+    observeInbound({
+      activityType: 'Accept',
+      actorOrigin: actorUri.origin,
+      handler: 'accept',
+      objectOrigin: requestUri.origin,
+      outcome: 'noop',
+      phase: 'projection',
+      reasonCode: 'quote_accept_request_missing',
+    });
+    return;
+  }
+  if (consent.sourceAuthorActorUri !== actorUri.href || !requestMatchesConsent(request, consent)) {
+    observeResponseMismatch(
+      'Accept',
+      actorUri,
+      requestUri,
+      'quote_accept_request_binding_mismatch',
+    );
+    return;
+  }
+
+  const resultUri = accept.resultId;
+  const result = await accept.getResult({
+    crossOrigin: 'trust',
+    documentLoader: context.documentLoader,
+    suppressError: true,
+  });
+  if (
+    !isUsableHttpUri(resultUri) ||
+    !(result instanceof QuoteAuthorization) ||
+    result.id?.href !== resultUri?.href ||
+    (consent.approvalUri !== null && consent.approvalUri !== resultUri.href) ||
+    uniqueHref(result.attributionIds) !== actorUri.href ||
+    result.interactingObjectId?.href !== consent.quoteUri ||
+    result.interactionTargetId?.href !== consent.sourceUri ||
+    resultUri.origin !== actorUri.origin
+  ) {
+    observeResponseMismatch('Accept', actorUri, requestUri, 'quote_accept_authorization_invalid');
+    return;
+  }
+
+  await runWorkflow(postQuoteCommandWorkflow, {
+    args: [
+      {
+        kind: 'accept',
+        approvalUri: resultUri.href,
+        quoteUri: consent.quoteUri,
+        requestUri: consent.requestUri,
+        sourceAuthorActorUri: actorUri.href,
+        sourceUri: consent.sourceUri,
+      },
+    ],
+    mode: 'update-with-start',
+    updateId: 'command',
+    workflowIdConflictPolicy: 'USE_EXISTING',
+    workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+  });
+};
+
+export const handleInboundQuoteReject = async ({
+  reject,
+  request,
+}: {
+  readonly reject: Reject;
+  readonly request: QuoteRequest;
+}): Promise<void> => {
+  const actorUri = reject.actorId;
+  const requestUri = reject.objectId;
+  if (!isUsableHttpUri(actorUri) || !isUsableHttpUri(requestUri)) {
+    observeResponseMismatch(
+      'Reject',
+      actorUri ?? new URL('https://invalid.example'),
+      requestUri ?? new URL('https://invalid.example'),
+      'quote_reject_identity_invalid',
+    );
+    return;
+  }
+
+  const consent = await loadQuoteConsentByRequestUri(coreDb, requestUri.href);
+  if (!consent) {
+    observeInbound({
+      activityType: 'Reject',
+      actorOrigin: actorUri.origin,
+      handler: 'reject',
+      objectOrigin: requestUri.origin,
+      outcome: 'noop',
+      phase: 'projection',
+      reasonCode: 'quote_reject_request_missing',
+    });
+    return;
+  }
+  if (consent.sourceAuthorActorUri !== actorUri.href || !requestMatchesConsent(request, consent)) {
+    observeResponseMismatch(
+      'Reject',
+      actorUri,
+      requestUri,
+      'quote_reject_request_binding_mismatch',
+    );
+    return;
+  }
+
+  await runWorkflow(postQuoteCommandWorkflow, {
+    args: [{ kind: 'reject', requestUri: consent.requestUri, sourceAuthorActorUri: actorUri.href }],
+    mode: 'update-with-start',
+    updateId: 'command',
+    workflowIdConflictPolicy: 'USE_EXISTING',
+    workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+  });
+};
+
+export const handleInboundQuoteRevocation = async (activity: Delete): Promise<boolean> => {
+  const actorUri = activity.actorId;
+  const approvalUri = activity.objectId;
+  if (!isUsableHttpUri(actorUri) || !isUsableHttpUri(approvalUri)) {
+    return false;
+  }
+
+  const targetHrefs = activity.targetIds.map(({ href }) => href);
+  const embedded = await activity.getObject({
+    crossOrigin: 'trust',
+    documentLoader: noNetworkDocumentLoader,
+    suppressError: true,
+  });
+  const consent = await loadQuoteConsentByApprovalUri(coreDb, approvalUri.href);
+  if (!consent) {
+    const sourceUri = targetHrefs.length === 1 ? targetHrefs[0] : undefined;
+    const embeddedQuoteUri =
+      embedded instanceof QuoteAuthorization ? embedded.interactingObjectId?.href : undefined;
+    if (
+      approvalUri.origin !== actorUri.origin ||
+      !sourceUri ||
+      (embedded !== null &&
+        (!(embedded instanceof QuoteAuthorization) ||
+          embedded.id?.href !== approvalUri.href ||
+          uniqueHref(embedded.attributionIds) !== actorUri.href ||
+          !embeddedQuoteUri ||
+          embedded.interactionTargetId?.href !== sourceUri))
+    ) {
+      return false;
+    }
+    const pendingConsent = await loadPendingQuoteConsentByBinding(coreDb, {
+      quoteUri: embeddedQuoteUri,
+      sourceAuthorActorUri: actorUri.href,
+      sourceUri,
+    });
+    if (!pendingConsent) {
+      return false;
+    }
+    return executeQuoteRevocation({
+      kind: 'revoke',
+      approvalUri: approvalUri.href,
+      consentId: pendingConsent.id,
+      quoteUri: embeddedQuoteUri ?? pendingConsent.quoteUri,
+      sourceAuthorActorUri: actorUri.href,
+      sourceUri,
+    });
+  }
+
+  if (
+    consent.sourceAuthorActorUri !== actorUri.href ||
+    approvalUri.origin !== actorUri.origin ||
+    (targetHrefs.length > 0 &&
+      (targetHrefs.length !== 1 || targetHrefs[0] !== consent.sourceUri)) ||
+    (embedded !== null &&
+      (!(embedded instanceof QuoteAuthorization) ||
+        embedded.id?.href !== approvalUri.href ||
+        uniqueHref(embedded.attributionIds) !== actorUri.href ||
+        embedded.interactingObjectId?.href !== consent.quoteUri ||
+        embedded.interactionTargetId?.href !== consent.sourceUri))
+  ) {
+    observeQuoteValidation({
+      activityType: 'Delete',
+      actorOrigin: actorUri.origin,
+      handler: 'delete',
+      objectOrigin: approvalUri.origin,
+      reasonCode: 'quote_revocation_binding_mismatch',
+    });
+    return true;
+  }
+
+  // The admitted revocation or Source-delete Workflow owns its durable Update.
+  // A duplicate inbox delivery must not start a second delivery Workflow.
+  if (consent.status === PostQuoteConsentStatus.REVOKED) {
+    return true;
+  }
+  await executeQuoteRevocation({
+    kind: 'revoke',
+    approvalUri: approvalUri.href,
+    quoteUri: consent.quoteUri,
+    sourceAuthorActorUri: actorUri.href,
+    sourceUri: consent.sourceUri,
+  });
+  return true;
+};
+
+const executeQuoteRevocation = async (
+  command: Extract<PostQuoteCommand, { readonly kind: 'revoke' }>,
+): Promise<boolean> => {
+  const result = await runWorkflow(postQuoteCommandWorkflow, {
+    args: [command],
+    mode: 'update-with-start',
+    updateId: 'command',
+    workflowIdConflictPolicy: 'USE_EXISTING',
+    workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+  });
+  return result !== null;
+};

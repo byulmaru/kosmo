@@ -39,7 +39,7 @@ import {
   deleteNotificationBySource,
 } from './notification';
 import { materializeNotification } from './notification-policy';
-import { createPost, repostPost } from './post';
+import { createPost, createPostPersisted, repostPost } from './post';
 import { followProfile, removeInboundFollow, unfollowProfile } from './profile-follow.test-helpers';
 import { muteProfile, unmuteProfile } from './profile-mute';
 
@@ -483,7 +483,7 @@ test('다섯 source는 실제 정책 SELECT 실패를 전파하고 commit된 sou
     .returning()
     .then(firstOrThrow);
   const replyParent = await createContentPost(followee.id);
-  const reply = await createPost({
+  const reply = await createPostPersisted({
     document: postContentDocumentFromText('policy failure reply'),
     origin: 'LOCAL',
     profileId: follower.id,

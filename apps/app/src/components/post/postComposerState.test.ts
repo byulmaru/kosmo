@@ -86,6 +86,44 @@ describe('PostComposer Reply context contract', () => {
         visibility: 'PUBLIC',
       },
     );
+    assert.deepEqual(
+      createPostComposerMutationInput(
+        '정책을 고른 인용 본문',
+        'UNLISTED',
+        undefined,
+        undefined,
+        'post-source',
+        'FOLLOWERS',
+      ),
+      {
+        bodyText: '정책을 고른 인용 본문',
+        quotePolicy: 'FOLLOWERS',
+        repostSourceId: 'post-source',
+        visibility: 'UNLISTED',
+      },
+    );
+    assert.deepEqual(
+      createPostComposerMutationInput(
+        '제한 공개 본문',
+        'FOLLOWERS',
+        undefined,
+        undefined,
+        undefined,
+        'AUTHOR',
+      ),
+      {
+        bodyText: '제한 공개 본문',
+        visibility: 'FOLLOWERS',
+      },
+    );
+  });
+
+  it('shows quote policy only for standalone Public and Unlisted drafts', async () => {
+    const { isPostComposerQuotePolicyVisible } = await import('./postComposerState');
+
+    assert.equal(isPostComposerQuotePolicyVisible('PUBLIC'), true);
+    assert.equal(isPostComposerQuotePolicyVisible('UNLISTED'), true);
+    assert.equal(isPostComposerQuotePolicyVisible('FOLLOWERS'), false);
   });
 
   it('excludes DIRECT only while composing a Reply', async () => {

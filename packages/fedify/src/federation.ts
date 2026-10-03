@@ -11,6 +11,8 @@ import {
   Move,
   Note,
   Object as ActivityObject,
+  QuoteAuthorization,
+  QuoteRequest,
   Reject,
   Undo,
   Update,
@@ -32,6 +34,7 @@ import {
   withInboundObservability,
 } from './inbound-observability';
 import { handleInboundBlock } from './inbound-profile-block';
+import { handleInboundQuoteRequest } from './inbound-quote';
 import { handleInboundReaction } from './inbound-reaction';
 import { handleInboundReject } from './inbound-reject';
 import { handleInboundUpdate } from './inbound-update';
@@ -48,6 +51,10 @@ import {
 import { isCanonicalLocalProfileId } from './local-profile-actor';
 import { dispatchLocalProfileFollow } from './local-profile-follow';
 import { createLocalProfilePerson } from './local-profile-person';
+import {
+  authorizeLocalQuoteAuthorization,
+  dispatchLocalQuoteAuthorization,
+} from './local-quote-authorization';
 import { fedifyQueue } from './queue';
 import { resolveLocalActorIdentifierByHandle } from './webfinger';
 import type { Context, Federation } from '@fedify/fedify';
@@ -172,6 +179,14 @@ federation
   .authorize(authorizeLocalPostNote);
 
 federation
+  .setObjectDispatcher(
+    QuoteAuthorization,
+    '/ap/quote-authorization/{id}',
+    dispatchLocalQuoteAuthorization,
+  )
+  .authorize(authorizeLocalQuoteAuthorization);
+
+federation
   .setCollectionDispatcher(
     'activitypub-note-emoji-reactions',
     ActivityObject,
@@ -196,6 +211,7 @@ federation
   .on(Like, withInboundObservability('reaction', handleInboundReaction))
   .on(Move, withInboundObservability('move', handleInboundMove))
   .on(Reject, withInboundObservability('reject', handleInboundReject))
+  .on(QuoteRequest, withInboundObservability('quote', handleInboundQuoteRequest))
   .on(Undo, withInboundObservability('undo', handleInboundUndo))
   .on(Update, withInboundObservability('update', handleInboundUpdate))
   .onError((_context, error) => {
