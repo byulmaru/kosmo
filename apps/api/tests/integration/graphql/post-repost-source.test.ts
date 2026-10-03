@@ -2,7 +2,17 @@ import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, test } from 'node:test';
-import { PostState, PostVisibility, ProfileFollowPolicy, ProfileState } from '@kosmo/core/enums';
+import {
+  AccountProfileRole,
+  AccountState,
+  ActivityPubQuoteFormat,
+  ActivityPubQuoteStatus,
+  PostState,
+  PostVisibility,
+  ProfileFollowPolicy,
+  ProfileState,
+  SessionState,
+} from '@kosmo/core/enums';
 import { encodeGlobalId as globalId } from '@kosmo/core/global-id';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { normalizeHandle } from '@kosmo/core/utils';
@@ -16,6 +26,7 @@ const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhos
 
 let AccountProfiles: typeof CoreDb.AccountProfiles;
 let Accounts: typeof CoreDb.Accounts;
+let ActivityPubPostQuotes: typeof CoreDb.ActivityPubPostQuotes;
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
@@ -37,6 +48,7 @@ describe('GraphQL Post Repost Source', () => {
     ({
       AccountProfiles,
       Accounts,
+      ActivityPubPostQuotes,
       db,
       firstOrThrow,
       Instances,
@@ -64,7 +76,8 @@ describe('GraphQL Post Repost Source', () => {
   });
 
   beforeEach(async () => {
-    await db.update(Posts).set({ currentContentId: null });
+    await db.delete(ActivityPubPostQuotes);
+    await db.update(Posts).set({ currentContentId: null, repostSourceId: null });
     await db.delete(PostContents);
     await db.delete(Posts);
     await db.delete(ProfileFollows);
@@ -291,7 +304,144 @@ describe('GraphQL Post Repost Source', () => {
       },
     ]);
   });
+
+  test('pending/revoked/invalid Quote는 자체 Content를 유지하고 GraphQL Source만 숨긴다', async () => {
+    const quoteProfile = await insertProfile();
+    const source = await insertPost({ bodyText: 'remote source', profileId: quoteProfile.id });
+    const quote = await insertPost({
+      bodyText: 'quote body',
+      profileId: quoteProfile.id,
+      repostSourceId: source.id,
+    });
+    await db.insert(ActivityPubPostQuotes).values({
+      format: ActivityPubQuoteFormat.FEP_044F,
+      postId: quote.id,
+      resolutionRevision: 1,
+      status: ActivityPubQuoteStatus.PENDING,
+      targetUri: 'https://remote.example/notes/source',
+    });
+
+    const pending = await requestGraphQL<{
+      nodes: Array<{
+        content: { bodyText: string } | null;
+        repostSource: { id: string } | null;
+      } | null>;
+    }>(
+      `query PendingQuote($postId: ID!, $contentId: ID!) {
+        nodes(ids: [$postId, $contentId]) {
+          ... on Post { content { bodyText } repostSource { id } }
+          ... on PostContent { bodyText }
+        }
+      }`,
+      {
+        contentId: globalId('PostContent', quote.currentContentId!),
+        postId: globalId('Post', quote.id),
+      },
+    );
+    assert.equal(pending.errors, undefined, JSON.stringify(pending.errors));
+    assert.deepEqual(pending.data?.nodes, [
+      { content: { bodyText: 'quote body' }, repostSource: null },
+      { bodyText: 'quote body' },
+    ]);
+
+    await db
+      .update(ActivityPubPostQuotes)
+      .set({ status: ActivityPubQuoteStatus.APPROVED })
+      .where(eq(ActivityPubPostQuotes.postId, quote.id));
+    const approved = await requestGraphQL<{
+      nodes: Array<{ repostSource: { id: string } | null } | null>;
+    }>(
+      `query ApprovedQuote($postId: ID!) {
+        nodes(ids: [$postId]) { ... on Post { repostSource { id } } }
+      }`,
+      { postId: globalId('Post', quote.id) },
+    );
+    assert.equal(approved.errors, undefined, JSON.stringify(approved.errors));
+    assert.deepEqual(approved.data?.nodes, [{ repostSource: { id: globalId('Post', source.id) } }]);
+
+    for (const status of [ActivityPubQuoteStatus.REVOKED, ActivityPubQuoteStatus.INVALID]) {
+      await db
+        .update(ActivityPubPostQuotes)
+        .set({ status })
+        .where(eq(ActivityPubPostQuotes.postId, quote.id));
+      const hidden = await requestGraphQL<{
+        nodes: Array<{ content: { bodyText: string }; repostSource: null } | null>;
+      }>(
+        `query HiddenQuote($postId: ID!) { nodes(ids: [$postId]) { ... on Post { content { bodyText } repostSource { id } } } }`,
+        { postId: globalId('Post', quote.id) },
+      );
+      assert.equal(hidden.errors, undefined, JSON.stringify(hidden.errors));
+      assert.deepEqual(hidden.data?.nodes, [
+        { content: { bodyText: 'quote body' }, repostSource: null },
+      ]);
+    }
+  });
+
+  test('APPROVED Quote도 viewer별 Source visibility를 독립 적용한다', async () => {
+    const sourceAuthor = await insertProfile();
+    const source = await insertPost({
+      bodyText: 'followers source',
+      profileId: sourceAuthor.id,
+      visibility: PostVisibility.FOLLOWERS,
+    });
+    const quoteAuthor = await insertProfile();
+    const quote = await insertPost({
+      bodyText: 'public quote',
+      profileId: quoteAuthor.id,
+      repostSourceId: source.id,
+    });
+    await db.insert(ActivityPubPostQuotes).values({
+      format: ActivityPubQuoteFormat.FEP_044F,
+      postId: quote.id,
+      resolutionRevision: 1,
+      status: ActivityPubQuoteStatus.APPROVED,
+      targetUri: 'https://remote.example/notes/followers-source',
+    });
+    const allowed = await createAuthenticatedViewer();
+    const denied = await createAuthenticatedViewer();
+    await db
+      .insert(ProfileFollows)
+      .values({ followeeProfileId: sourceAuthor.id, followerProfileId: allowed.profile.id });
+    const query = `query ViewerQuote($postId: ID!) { nodes(ids: [$postId]) { ... on Post { content { bodyText } repostSource { id } } } }`;
+
+    const visible = await requestGraphQL<{
+      nodes: Array<{ content: { bodyText: string }; repostSource: { id: string } | null } | null>;
+    }>(query, { postId: globalId('Post', quote.id) }, allowed.token);
+    const hidden = await requestGraphQL<{
+      nodes: Array<{ content: { bodyText: string }; repostSource: { id: string } | null } | null>;
+    }>(query, { postId: globalId('Post', quote.id) }, denied.token);
+    assert.deepEqual(visible.data?.nodes, [
+      { content: { bodyText: 'public quote' }, repostSource: { id: globalId('Post', source.id) } },
+    ]);
+    assert.deepEqual(hidden.data?.nodes, [
+      { content: { bodyText: 'public quote' }, repostSource: null },
+    ]);
+  });
 });
+
+const createAuthenticatedViewer = async () => {
+  const account = await db
+    .insert(Accounts)
+    .values({
+      displayName: 'Quote viewer',
+      oidcSubject: `quote-viewer-${crypto.randomUUID()}`,
+      state: AccountState.ACTIVE,
+    })
+    .returning()
+    .then(firstOrThrow);
+  const profile = await insertProfile();
+  await db
+    .insert(AccountProfiles)
+    .values({ accountId: account.id, profileId: profile.id, role: AccountProfileRole.OWNER });
+  const token = `quote-token-${crypto.randomUUID()}`;
+  await db.insert(Sessions).values({
+    accountId: account.id,
+    activeProfileId: profile.id,
+    state: SessionState.ACTIVE,
+    token,
+  });
+  return { profile, token };
+};
 
 const insertProfile = ({ instanceId = localInstanceId }: { instanceId?: string } = {}) => {
   const handle = `profile-${crypto.randomUUID()}`;
@@ -355,10 +505,18 @@ const insertPost = async ({
     .then(firstOrThrow);
 };
 
-const requestGraphQL = async <TData>(query: string, variables: Record<string, unknown>) => {
+const requestGraphQL = async <TData>(
+  query: string,
+  variables: Record<string, unknown>,
+  token?: string,
+) => {
+  const headers = new Headers({ 'content-type': 'application/json' });
+  if (token) {
+    headers.set('authorization', `Bearer ${token}`);
+  }
   const response = await app.request('/graphql', {
     body: JSON.stringify({ query, variables }),
-    headers: { 'content-type': 'application/json' },
+    headers,
     method: 'POST',
   });
   assert.equal(response.status, 200);

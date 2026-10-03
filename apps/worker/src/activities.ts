@@ -6,6 +6,7 @@ export {
   executeProfileBlockTransitionActivity,
   executeProfileUnblockTransitionActivity,
 } from './activities/profile-block';
+export { resolveActivityPubQuoteActivity } from './activities/quote-resolution';
 export {
   lookupRemoteActorUriActivity,
   materializeRemoteProfileActorActivity,

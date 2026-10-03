@@ -5,6 +5,7 @@ import { InstanceState, ProfileState } from '@kosmo/core/enums';
 import { uniqueHref } from './activitypub-uri';
 import { handleInboundCreateNote } from './inbound-create-note';
 import { observeInbound } from './inbound-observability';
+import { handleInboundQuote, hasInboundQuote } from './inbound-quote';
 import { findStoredRemoteProfileActorByUri } from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
 import type { Create } from '@fedify/vocab';
@@ -63,7 +64,7 @@ export const handleInboundCreate = async (
   }
 
   if (object instanceof Note) {
-    await handleInboundCreateNote({
+    const materialization = await handleInboundCreateNote({
       actorUri,
       context,
       note: object,
@@ -71,6 +72,18 @@ export const handleInboundCreate = async (
       storedActor,
       receivedAt,
     });
+    if (materialization.status === 'rejected') {
+      return;
+    }
+    if (await hasInboundQuote({ context, note: object })) {
+      await handleInboundQuote({
+        actorUri,
+        context,
+        note: object,
+        postId: materialization.postId,
+        receivedAt,
+      });
+    }
     return;
   }
 

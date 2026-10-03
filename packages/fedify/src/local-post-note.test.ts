@@ -450,10 +450,12 @@ describe('ActivityPub Local Post Note', () => {
   test('allows the local Author identity without requiring a Follow row', async () => {
     const author = await createProfile({ kind: InstanceKind.LOCAL });
     const followersPost = await createPost(author.id, { visibility: PostVisibility.FOLLOWERS });
-    const context = Object.assign(Object.create(createContext()) as RequestContext<void>, {
-      getSignedKeyOwner: async () =>
-        new Person({ id: new URL(`/ap/actor/${author.id}`, publicOrigin) }),
-    });
+    const context = createContext();
+    mock.method(
+      context,
+      'getSignedKeyOwner',
+      async () => new Person({ id: new URL(`/ap/actor/${author.id}`, publicOrigin) }),
+    );
 
     assert.equal(await authorizeLocalPostNote(context, { id: followersPost.id }), true);
   });
