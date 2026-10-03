@@ -263,5 +263,5 @@ test('source 해제는 선택한 target의 pair만 삭제하고 재실행해도 
       .where(eq(ProfileMigrations.targetProfileId, otherTarget.profile.id)),
     [{ sourceProfileId: otherSource.profile.id }],
   );
-  assert.equal(await db.$count(Profiles), profileIds.length);
+  assert.equal(await db.$count(Profiles, inArray(Profiles.id, profileIds)), profileIds.length);
 });
