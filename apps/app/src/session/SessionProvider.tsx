@@ -40,6 +40,18 @@ type SessionState = {
   value: SessionValue;
 };
 
+type SessionChange = {
+  accountChanged: boolean;
+  cleanupPromise: Promise<void>;
+};
+
+type ProfileRestoreState = {
+  authKey: string;
+  accountId: string;
+  promise: Promise<string | null>;
+  applied: boolean;
+};
+
 const guestSession: SessionValue = {
   accountId: null,
   accountName: null,
@@ -76,19 +88,53 @@ export function SessionProvider({ children }: PropsWithChildren) {
     ready: false,
     value: guestSession,
   }));
-  const setSession = useCallback((authKey: string, actorKey: string, value: SessionValue) => {
-    const currentKeys = lifecycleKeysRef.current;
-    if (authKey !== currentKeys.authLifecycleKey || actorKey !== currentKeys.actorLifecycleKey) {
-      return;
-    }
+  const confirmedIdentityRef = useRef<{
+    authKey: string;
+    accountId: string | null;
+    cleanupPromise: Promise<void>;
+  } | null>(null);
+  const restoreRef = useRef<ProfileRestoreState | null>(null);
+  const setSession = useCallback(
+    (authKey: string, actorKey: string, value: SessionValue): SessionChange | null => {
+      const currentKeys = lifecycleKeysRef.current;
+      if (authKey !== currentKeys.authLifecycleKey || actorKey !== currentKeys.actorLifecycleKey) {
+        return null;
+      }
 
-    setSessionState({
-      authLifecycleKey: authKey,
-      actorLifecycleKey: actorKey,
-      ready: true,
-      value,
-    });
-  }, []);
+      const previousIdentity = confirmedIdentityRef.current;
+      const confirmedGuest = value.sessionId === null && value.accountId === null;
+      const confirmedValid = Boolean(value.sessionId && value.accountId);
+      let accountChanged = false;
+      let cleanupPromise = previousIdentity?.cleanupPromise ?? Promise.resolve();
+
+      if (confirmedGuest || confirmedValid) {
+        const sameIdentity =
+          previousIdentity?.authKey === authKey && previousIdentity.accountId === value.accountId;
+        accountChanged =
+          confirmedValid &&
+          previousIdentity !== null &&
+          previousIdentity.accountId !== null &&
+          previousIdentity.accountId !== value.accountId;
+
+        if ((confirmedGuest && !sameIdentity) || accountChanged) {
+          cleanupPromise = cleanupPromise
+            .then(() => deleteSelectedProfile())
+            .catch(() => undefined);
+        }
+
+        confirmedIdentityRef.current = { authKey, accountId: value.accountId, cleanupPromise };
+      }
+
+      setSessionState({
+        authLifecycleKey: authKey,
+        actorLifecycleKey: actorKey,
+        ready: true,
+        value,
+      });
+      return { accountChanged, cleanupPromise };
+    },
+    [],
+  );
   const setSessionError = useCallback((authKey: string, actorKey: string) => {
     const currentKeys = lifecycleKeysRef.current;
     if (authKey !== currentKeys.authLifecycleKey || actorKey !== currentKeys.actorLifecycleKey) {
@@ -128,6 +174,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
             authLifecycleKey={authLifecycleKey}
             actorLifecycleKey={actorLifecycleKey}
             onSessionChange={setSession}
+            restoreRef={restoreRef}
           />
         </Suspense>
       </RelayFailOpenBoundary>
@@ -140,14 +187,16 @@ function SessionQuery({
   authLifecycleKey,
   actorLifecycleKey,
   onSessionChange,
+  restoreRef,
 }: {
   authLifecycleKey: string;
   actorLifecycleKey: string;
+  restoreRef: { current: ProfileRestoreState | null };
   onSessionChange: (
     authLifecycleKey: string,
     actorLifecycleKey: string,
     value: SessionValue,
-  ) => void;
+  ) => SessionChange | null;
 }) {
   const {
     clearNativeSession,
@@ -181,78 +230,115 @@ function SessionQuery({
     }
   }, [authLifecycleKey, clearNativeSession, nativeToken, sessionId]);
 
-  useEffect(
-    () => onSessionChange(authLifecycleKey, actorLifecycleKey, session),
-    [actorLifecycleKey, authLifecycleKey, onSessionChange, session],
-  );
-
   useEffect(() => {
-    if (!sessionId || !accountId || actorSelectedProfileId !== null) {
+    let active = true;
+    const deactivate = () => {
+      active = false;
+    };
+    const identityChange = onSessionChange(authLifecycleKey, actorLifecycleKey, session);
+    if (!identityChange) {
       return;
     }
 
-    let active = true;
-    void readSelectedProfile({ accountId, sessionId }).then(
-      (persistedProfileId) => {
-        if (!active) {
-          return;
-        }
-
-        if (persistedProfileId) {
-          resetActor(persistedProfileId);
-        } else if (serverSelectedProfileId) {
-          void writeSelectedProfile({ accountId, sessionId }, serverSelectedProfileId);
-          resetActor(serverSelectedProfileId);
-        }
-      },
-      () => {
-        if (active && serverSelectedProfileId) {
-          resetActor(serverSelectedProfileId);
-        }
-      },
-    );
-
-    return () => {
-      active = false;
-    };
-  }, [
-    accountId,
-    actorLifecycleKey,
-    actorSelectedProfileId,
-    authLifecycleKey,
-    resetActor,
-    serverSelectedProfileId,
-    sessionId,
-  ]);
-
-  useEffect(() => {
-    if (actorSelectedProfileId === null) {
-      return;
+    const confirmedGuest = sessionId === null && accountId === null;
+    if (confirmedGuest) {
+      if (actorSelectedProfileId !== null) {
+        resetActor(null);
+      }
+      return deactivate;
     }
 
     if (!sessionId || !accountId) {
-      void deleteSelectedProfile();
+      return deactivate;
+    }
+
+    if (identityChange.accountChanged && actorSelectedProfileId !== null) {
       resetActor(null);
-      return;
+      return deactivate;
     }
 
-    if (serverSelectedProfileId === actorSelectedProfileId) {
-      return;
+    if (actorSelectedProfileId !== null) {
+      if (serverSelectedProfileId !== actorSelectedProfileId) {
+        void identityChange.cleanupPromise.then(() => {
+          if (!active) {
+            return;
+          }
+
+          if (serverSelectedProfileId) {
+            void writeSelectedProfile(serverSelectedProfileId);
+            resetActor(serverSelectedProfileId);
+          } else {
+            const currentRestore = restoreRef.current;
+            if (
+              currentRestore?.authKey === authLifecycleKey &&
+              currentRestore.accountId === accountId
+            ) {
+              currentRestore.applied = true;
+            } else {
+              restoreRef.current = {
+                authKey: authLifecycleKey,
+                accountId,
+                promise: Promise.resolve(null),
+                applied: true,
+              };
+            }
+            resetActor(null);
+          }
+        });
+      }
+
+      return deactivate;
     }
 
-    if (serverSelectedProfileId) {
-      void writeSelectedProfile({ accountId, sessionId }, serverSelectedProfileId);
-    } else {
-      void deleteSelectedProfile();
+    let restore = restoreRef.current;
+    if (restore?.authKey !== authLifecycleKey || restore.accountId !== accountId) {
+      restore = {
+        authKey: authLifecycleKey,
+        accountId,
+        promise: identityChange.cleanupPromise.then(() => readSelectedProfile()).catch(() => null),
+        applied: false,
+      };
+      restoreRef.current = restore;
     }
-    resetActor(serverSelectedProfileId);
+
+    if (restore.applied) {
+      if (serverSelectedProfileId) {
+        void identityChange.cleanupPromise.then(() => {
+          if (!active || restoreRef.current !== restore) {
+            return;
+          }
+
+          void writeSelectedProfile(serverSelectedProfileId);
+          resetActor(serverSelectedProfileId);
+        });
+      }
+      return deactivate;
+    }
+
+    void restore.promise.then((persistedProfileId) => {
+      if (!active || restoreRef.current !== restore) {
+        return;
+      }
+
+      restore.applied = true;
+      if (persistedProfileId) {
+        resetActor(persistedProfileId);
+      } else if (serverSelectedProfileId) {
+        void writeSelectedProfile(serverSelectedProfileId);
+        resetActor(serverSelectedProfileId);
+      }
+    });
+
+    return deactivate;
   }, [
     accountId,
     actorLifecycleKey,
     actorSelectedProfileId,
     authLifecycleKey,
+    onSessionChange,
     resetActor,
     serverSelectedProfileId,
+    session,
     sessionId,
   ]);
 

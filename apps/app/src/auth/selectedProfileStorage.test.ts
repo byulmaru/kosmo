@@ -5,6 +5,7 @@ type PlatformName = 'native' | 'web';
 
 const platform: { OS: PlatformName } = { OS: 'web' };
 const webValues = new Map<string, string>();
+let webStorageFailure = false;
 let nativeValue: string | null = null;
 let nativeReadFailure = false;
 let nativeWriteFailure = false;
@@ -38,14 +39,8 @@ mockModule('expo-secure-store', {
 });
 
 let deleteSelectedProfile: () => Promise<void>;
-let readSelectedProfile: (scope: {
-  accountId: string;
-  sessionId: string;
-}) => Promise<string | null>;
-let writeSelectedProfile: (
-  scope: { accountId: string; sessionId: string },
-  profileId: string,
-) => Promise<void>;
+let readSelectedProfile: () => Promise<string | null>;
+let writeSelectedProfile: (profileId: string) => Promise<void>;
 
 before(async () => {
   ({ deleteSelectedProfile, readSelectedProfile, writeSelectedProfile } =
@@ -54,6 +49,7 @@ before(async () => {
 
 beforeEach(() => {
   platform.OS = 'web';
+  webStorageFailure = false;
   webValues.clear();
   nativeValue = null;
   nativeReadFailure = false;
@@ -62,38 +58,76 @@ beforeEach(() => {
   Object.defineProperty(globalThis, 'localStorage', {
     configurable: true,
     value: {
-      getItem: (key: string) => webValues.get(key) ?? null,
-      removeItem: (key: string) => void webValues.delete(key),
-      setItem: (key: string, value: string) => void webValues.set(key, value),
+      getItem: (key: string) => {
+        if (webStorageFailure) {
+          throw new Error('web read failed');
+        }
+        return webValues.get(key) ?? null;
+      },
+      removeItem: (key: string) => {
+        if (webStorageFailure) {
+          throw new Error('web delete failed');
+        }
+        webValues.delete(key);
+      },
+      setItem: (key: string, value: string) => {
+        if (webStorageFailure) {
+          throw new Error('web write failed');
+        }
+        webValues.set(key, value);
+      },
     },
   });
 });
 
 describe('selected profile storage', () => {
-  const scope = { accountId: 'account-1', sessionId: 'session-1' };
+  it('Web은 profileId만 저장하고 복원한다', async () => {
+    await writeSelectedProfile('profile-a');
 
-  it('Web은 현재 account/session에 저장한 profile만 복원한다', async () => {
-    await writeSelectedProfile(scope, 'profile-a');
+    assert.equal(
+      webValues.get('kosmo:selected-profile'),
+      JSON.stringify({ profileId: 'profile-a' }),
+    );
+    assert.equal(await readSelectedProfile(), 'profile-a');
+  });
 
-    assert.equal(await readSelectedProfile(scope), 'profile-a');
-    assert.equal(
-      await readSelectedProfile({ accountId: 'account-2', sessionId: 'session-1' }),
-      null,
+  it('legacy JSON의 account/session metadata를 무시하고 profileId를 복원한다', async () => {
+    webValues.set(
+      'kosmo:selected-profile',
+      JSON.stringify({
+        accountId: 'another-account',
+        sessionId: 'old-session',
+        profileId: 'profile-a',
+      }),
     );
-    assert.equal(
-      await readSelectedProfile({ accountId: 'account-1', sessionId: 'session-2' }),
-      null,
-    );
+
+    assert.equal(await readSelectedProfile(), 'profile-a');
+  });
+
+  it('빈 profileId와 손상된 JSON은 복원하지 않는다', async () => {
+    webValues.set('kosmo:selected-profile', JSON.stringify({ profileId: '' }));
+    assert.equal(await readSelectedProfile(), null);
+
+    webValues.set('kosmo:selected-profile', '{');
+    assert.equal(await readSelectedProfile(), null);
+  });
+
+  it('Web Storage 실패는 profile storage 동작을 막지 않는다', async () => {
+    webStorageFailure = true;
+
+    await writeSelectedProfile('profile-a');
+    assert.equal(await readSelectedProfile(), null);
+    await deleteSelectedProfile();
   });
 
   it('Native는 SecureStore에 저장하고 logout 시 값을 삭제한다', async () => {
     platform.OS = 'native';
 
-    await writeSelectedProfile(scope, 'profile-b');
-    assert.equal(await readSelectedProfile(scope), 'profile-b');
+    await writeSelectedProfile('profile-b');
+    assert.equal(await readSelectedProfile(), 'profile-b');
 
     await deleteSelectedProfile();
-    assert.equal(await readSelectedProfile(scope), null);
+    assert.equal(await readSelectedProfile(), null);
   });
 
   it('Native SecureStore 실패는 session 동작을 막지 않는다', async () => {
@@ -102,8 +136,8 @@ describe('selected profile storage', () => {
     nativeReadFailure = true;
     nativeDeleteFailure = true;
 
-    await writeSelectedProfile(scope, 'profile-a');
-    assert.equal(await readSelectedProfile(scope), null);
+    await writeSelectedProfile('profile-a');
+    assert.equal(await readSelectedProfile(), null);
     await deleteSelectedProfile();
   });
 });

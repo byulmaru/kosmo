@@ -251,7 +251,7 @@ describe('browser login', () => {
       oidcSubject: 'oidc-subject',
     });
     expect(response.status).toBe(302);
-    expect(response.headers.get('location')).toBe('/home');
+    expect(response.headers.get('location')).toBe('/home?resetSelectedProfile=1');
     expect(setCookie).toContain('kosmo_session=kosmo-session-token');
     expect(setCookie).toContain('Max-Age=31536000');
     expect(setCookie).toContain('Path=/');
@@ -271,6 +271,7 @@ describe('browser login', () => {
 
     expect(response.status).toBe(400);
     expect(await response.text()).toBe('Invalid id_token claims');
+    expect(response.headers.get('location')).toBeNull();
     expect(captureUnexpectedError).not.toHaveBeenCalled();
   });
 
@@ -287,6 +288,7 @@ describe('browser login', () => {
 
     expect(response.status).toBe(400);
     expect(await response.text()).toBe('OIDC callback redirect_uri is invalid');
+    expect(response.headers.get('location')).toBeNull();
     expect(authorizationCodeGrant).not.toHaveBeenCalled();
     expect(createSession).not.toHaveBeenCalled();
   });

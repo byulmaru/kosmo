@@ -4151,6 +4151,13 @@ export const ProductionBookmarkDeleteGraphQLFailureRetry: Story = {
   ),
 };
 
+const productionBookmarkEnvironmentReplacementSession = shellQuery({
+  profiles: [
+    profile({ id: 'profile-production-bookmark-environment-first' }),
+    profile({ id: 'profile-production-bookmark-environment-second' }),
+  ],
+});
+
 export const ProductionBookmarkEnvironmentReplacement: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -4180,6 +4187,18 @@ export const ProductionBookmarkEnvironmentReplacement: Story = {
       { action: 'create', postId: shortPost.id },
       { action: 'create', postId: shortPost.id },
     ]);
+  },
+  parameters: {
+    relay: {
+      data: {
+        ...postsStoryRelayData,
+        currentSession: productionBookmarkEnvironmentReplacementSession.currentSession,
+        me: {
+          ...productionBookmarkEnvironmentReplacementSession.me,
+          id: 'account-production-bookmark',
+        },
+      },
+    },
   },
   render: () => <ProductionBookmarkEnvironmentReplacementStory />,
 };

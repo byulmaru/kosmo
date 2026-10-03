@@ -33,6 +33,7 @@ let stableSubtreeMountCount = 0;
 let renderer: ReactTestRenderer | null = null;
 let snapshot: RelayActorSnapshot | null = null;
 let storedToken: string | null = null;
+let storedSelectedProfile: string | null = null;
 const environmentInputs: Array<{ selectedProfileId: string | null; token: string | null }> = [];
 const platform = { OS: 'native' };
 
@@ -49,20 +50,30 @@ mockModule('@/observability/sentry', {
 });
 mockModule('expo-secure-store', {
   AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY: 'after-first-unlock-this-device-only',
-  deleteItemAsync: async () => {
+  deleteItemAsync: async (key: string) => {
+    if (key === 'kosmo.selected-profile') {
+      storedSelectedProfile = null;
+      return;
+    }
+
     deleteItemCallCount += 1;
     if (deleteFailure) {
       throw new Error('SecureStore delete failure');
     }
     storedToken = null;
   },
-  getItemAsync: async () => storedToken,
+  getItemAsync: async (key: string) =>
+    key === 'kosmo.selected-profile' ? storedSelectedProfile : storedToken,
   isAvailableAsync: async () => true,
-  setItemAsync: async (_key: string, value: string) => {
+  setItemAsync: async (key: string, value: string) => {
     if (writeFailure) {
       throw new Error('SecureStore write failure');
     }
-    storedToken = value;
+    if (key === 'kosmo.selected-profile') {
+      storedSelectedProfile = value;
+    } else {
+      storedToken = value;
+    }
   },
 });
 mockModule(new URL('../components/Splash.tsx', import.meta.url), {
@@ -100,6 +111,7 @@ beforeEach(() => {
   stableSubtreeMountCount = 0;
   snapshot = null;
   storedToken = null;
+  storedSelectedProfile = null;
   environmentInputs.length = 0;
 });
 
@@ -273,6 +285,7 @@ describe('RelayActorProvider session cleanup', () => {
     const previousActorLifecycleKey = snapshot.actorLifecycleKey;
     const previousAuthLifecycleKey = snapshot.authLifecycleKey;
     const previousMountCount = actorSubtreeMountCount;
+    storedSelectedProfile = JSON.stringify({ profileId: 'profile-a' });
 
     await act(async () => snapshot?.setNativeSession('same-session-token'));
 
@@ -282,6 +295,7 @@ describe('RelayActorProvider session cleanup', () => {
     assert.notEqual(snapshot.actorLifecycleKey, previousActorLifecycleKey);
     assert.notEqual(snapshot.authLifecycleKey, previousAuthLifecycleKey);
     assert.equal(snapshot.selectedProfileId, null);
+    assert.equal(storedSelectedProfile, null);
     assert.equal(actorSubtreeMountCount, previousMountCount + 1);
     assert.equal(stableSubtreeMountCount, 1);
   });
@@ -296,6 +310,8 @@ describe('RelayActorProvider session cleanup', () => {
     const previousActorLifecycleKey = snapshot.actorLifecycleKey;
     const previousAuthLifecycleKey = snapshot.authLifecycleKey;
     const previousStoredToken = storedToken;
+    const previousStoredSelectedProfile = JSON.stringify({ profileId: 'profile-a' });
+    storedSelectedProfile = previousStoredSelectedProfile;
     writeFailure = true;
     let writeError: unknown;
 
@@ -309,6 +325,7 @@ describe('RelayActorProvider session cleanup', () => {
 
     assert.match(String(writeError), /SecureStore write failure/);
     assert.equal(storedToken, previousStoredToken);
+    assert.equal(storedSelectedProfile, previousStoredSelectedProfile);
     assert.equal(snapshot?.nativeToken, 'current-session-token');
     assert.equal(snapshot?.selectedProfileId, 'profile-a');
     assert.equal(snapshot?.environment, previousEnvironment);

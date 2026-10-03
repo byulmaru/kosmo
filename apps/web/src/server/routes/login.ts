@@ -90,7 +90,7 @@ loginRoutes.get('/login/callback', async (c) => {
     secure: publicOrigin.protocol === 'https:',
   });
 
-  return c.redirect('/home', 302);
+  return c.redirect('/home?resetSelectedProfile=1', 302);
 });
 loginRoutes.all('/login/callback', (c) => c.text('Method Not Allowed', 405, { Allow: 'GET' }));
 

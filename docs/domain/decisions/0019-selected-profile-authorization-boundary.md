@@ -16,6 +16,12 @@ Remote 선택 capability를 명시한 문구와 selected Profile이 Remote일 �
 현재 운영 경로에 Remote Profile Membership 생성이 없다는 사실은 구현 결과이며, Remote 선택을 지원하거나
 금지하는 capability로 해석하지 않는다.
 
+## 2026-10-03 보완
+
+클라이언트가 기억하는 selected Profile 선택은 로그인 성공 때마다(같은 Account로 다시 로그인한 경우 포함),
+명시적 로그아웃, 서버에서 확인된 guest/session 만료 또는 현재 Account가 달라진 것이 관측되었을 때 초기화한다.
+프로필 actor 전환, 일반 reload/requery, 일시적인 네트워크 오류만으로는 초기화하지 않는다.
+
 ## 결정
 
 - Account 요청의 selected Profile 자격은 요청 Account와 Profile 사이의 Account-Profile Membership 존재로만

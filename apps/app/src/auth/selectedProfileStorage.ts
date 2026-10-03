@@ -4,18 +4,11 @@ import { Platform } from 'react-native';
 const NATIVE_KEY = 'kosmo.selected-profile';
 const WEB_KEY = 'kosmo:selected-profile';
 
-export type SelectedProfileStorageScope = {
-  accountId: string;
-  sessionId: string;
-};
-
-type StoredSelectedProfile = SelectedProfileStorageScope & {
+type StoredSelectedProfile = {
   profileId: string;
 };
 
-export async function readSelectedProfile(
-  scope: SelectedProfileStorageScope,
-): Promise<string | null> {
+export async function readSelectedProfile(): Promise<string | null> {
   const serialized = await readSerialized();
   if (!serialized) {
     return null;
@@ -23,12 +16,7 @@ export async function readSelectedProfile(
 
   try {
     const value = JSON.parse(serialized) as Partial<StoredSelectedProfile>;
-    if (
-      value.accountId !== scope.accountId ||
-      value.sessionId !== scope.sessionId ||
-      typeof value.profileId !== 'string' ||
-      value.profileId.length === 0
-    ) {
+    if (typeof value.profileId !== 'string' || value.profileId.length === 0) {
       return null;
     }
 
@@ -38,15 +26,12 @@ export async function readSelectedProfile(
   }
 }
 
-export async function writeSelectedProfile(
-  scope: SelectedProfileStorageScope,
-  profileId: string,
-): Promise<void> {
-  if (!scope.accountId || !scope.sessionId || !profileId) {
+export async function writeSelectedProfile(profileId: string): Promise<void> {
+  if (!profileId) {
     return;
   }
 
-  const serialized = JSON.stringify({ ...scope, profileId } satisfies StoredSelectedProfile);
+  const serialized = JSON.stringify({ profileId } satisfies StoredSelectedProfile);
 
   if (Platform.OS === 'web') {
     try {

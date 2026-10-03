@@ -5,6 +5,7 @@ import { Suspense } from 'react';
 import { Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { sb } from 'storybook/test';
+import { deleteSelectedProfile } from '@/auth/selectedProfileStorage';
 import { FeatureFlagsContext } from '@/components/FeatureFlagsContext';
 import { PostContentWarningRevealProvider } from '@/components/post/PostContentWarningRevealContext';
 import { ToastProvider } from '@/components/ui/ToastProvider';
@@ -20,6 +21,7 @@ sb.mock(import('../src/buildVersion.ts'), { spy: true });
 sb.mock(import('../src/observability/sentry.web.ts'), { spy: true });
 
 const preview: Preview = {
+  beforeEach: deleteSelectedProfile,
   decorators: [
     (Story) => (
       <FeatureFlagsContext.Provider value={() => true}>

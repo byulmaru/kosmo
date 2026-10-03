@@ -9,6 +9,7 @@ import {
   useState,
 } from 'react';
 import { Platform } from 'react-native';
+import { deleteSelectedProfile } from '@/auth/selectedProfileStorage';
 import { deleteSessionToken, readSessionToken, writeSessionToken } from '@/auth/tokenStorage';
 import { Splash } from '@/components/Splash';
 import { initialActorState, reduceActorState } from './actorState';
@@ -64,6 +65,7 @@ export function RelayActorProvider({
   const setNativeSession = useCallback(
     async (token: string) => {
       await writeSessionToken(token);
+      await deleteSelectedProfile();
       resetSession();
       setNativeToken(token);
     },

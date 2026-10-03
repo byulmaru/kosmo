@@ -36,11 +36,7 @@ type PressableChildren = ReactNode | ((state: { pressed: boolean }) => ReactNode
 const platform: { OS: PlatformName } = { OS: 'ios' };
 const resetActorCalls: Array<string | null | undefined> = [];
 const analyticsCalls: Array<[string, Record<string, unknown>]> = [];
-const selectedProfileWrites: Array<{
-  accountId: string;
-  profileId: string;
-  sessionId: string;
-}> = [];
+const selectedProfileWrites: string[] = [];
 const queryData = {
   currentSession: {
     id: 'session-1',
@@ -179,11 +175,8 @@ mockModule('@/analytics/client', {
   },
 });
 mockModule('@/auth/selectedProfileStorage', {
-  writeSelectedProfile: async (
-    scope: { accountId: string; sessionId: string },
-    profileId: string,
-  ) => {
-    selectedProfileWrites.push({ ...scope, profileId });
+  writeSelectedProfile: async (profileId: string) => {
+    selectedProfileWrites.push(profileId);
   },
 });
 mockModule('@/components/profile/ProfilePicker', {
@@ -269,9 +262,7 @@ describe('ProfileSwitcher selection lifecycle', () => {
 
     await completeSelection();
     assert.deepEqual(resetActorCalls, ['profile-b']);
-    assert.deepEqual(selectedProfileWrites, [
-      { accountId: 'account-1', profileId: 'profile-b', sessionId: 'session-1' },
-    ]);
+    assert.deepEqual(selectedProfileWrites, ['profile-b']);
     assert.equal(modal().props.visible, false);
     assert.deepEqual(
       analyticsCalls.map(([event, properties]) => ({ event, properties })),

@@ -30,9 +30,15 @@ const queryHistory: Array<{ fetchKey: unknown; query: QueryName }> = [];
 const pendingSessionQueries: Array<() => void> = [];
 const pendingRootRenders: Array<() => void> = [];
 const platform = { OS: 'web' };
+const browserHistoryReplacements: unknown[] = [];
 let mockAccountId: string | null = 'account-1';
 let mockSelectedProfileId: string | null = 'profile-a';
 let mockSessionId: string | null = 'session-1';
+let selectedProfileCache: string | null = null;
+let selectedProfileDeleteGate: Promise<void> | null = null;
+let selectedProfileDeleteCalls = 0;
+let selectedProfileReads: Array<string | null> = [];
+let selectedProfileWrites: string[] = [];
 let failNativeSessionDelete = false;
 let nativeSessionDeleteAttempts = 0;
 let navigationMounts = 0;
@@ -65,6 +71,17 @@ let useSession: () => {
 };
 let renderer: ReactTestRenderer | null = null;
 let originalFetch: typeof fetch;
+let originalWindowDescriptor: PropertyDescriptor | undefined;
+
+type MockBrowserWindow = {
+  history: {
+    replaceState: (data: unknown, title: string, url?: string | URL | null) => void;
+    state: unknown;
+  };
+  location: { href: string };
+};
+
+let browserWindow: MockBrowserWindow;
 
 type MockRelayActorValue = {
   actorLifecycleKey: string;
@@ -338,12 +355,25 @@ mockModule(new URL('../relay/RelayActorProvider.tsx', import.meta.url), {
   useRelayActorLifecycleKey: useMockRelayActorLifecycleKey,
 });
 mockModule('@/auth/selectedProfileStorage', {
-  deleteSelectedProfile: async () => undefined,
-  readSelectedProfile: async () => null,
-  writeSelectedProfile: async () => undefined,
+  deleteSelectedProfile: async () => {
+    selectedProfileDeleteCalls += 1;
+    if (selectedProfileDeleteGate) {
+      await selectedProfileDeleteGate;
+    }
+    selectedProfileCache = null;
+  },
+  readSelectedProfile: async () => {
+    selectedProfileReads.push(selectedProfileCache);
+    return selectedProfileCache;
+  },
+  writeSelectedProfile: async (profileId: string) => {
+    selectedProfileWrites.push(profileId);
+    selectedProfileCache = profileId;
+  },
 });
 
 before(async () => {
+  originalWindowDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'window');
   ({ AppProviders } = await import('./AppProviders'));
   ({ useFeatureFlag } = await import('./FeatureFlagsContext'));
   ({ UniversalShell } = await import('./shell/UniversalShell'));
@@ -362,6 +392,33 @@ beforeEach(() => {
   mockAccountId = 'account-1';
   mockSelectedProfileId = 'profile-a';
   mockSessionId = 'session-1';
+  selectedProfileCache = null;
+  selectedProfileDeleteGate = null;
+  selectedProfileDeleteCalls = 0;
+  selectedProfileReads = [];
+  selectedProfileWrites = [];
+  browserHistoryReplacements.length = 0;
+  browserWindow = {
+    history: {
+      replaceState(data, title, url) {
+        browserHistoryReplacements.push(data);
+        this.state = data;
+        if (url != null) {
+          browserWindow.location.href = new URL(
+            String(url),
+            browserWindow.location.href,
+          ).toString();
+        }
+      },
+      state: { key: 'app-history-entry' },
+    },
+    location: { href: 'https://kos.moe/home' },
+  };
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: browserWindow,
+    writable: true,
+  });
   failNativeSessionDelete = false;
   nativeSessionDeleteAttempts = 0;
   queryHistory.length = 0;
@@ -383,6 +440,11 @@ afterEach(async () => {
     }
   } finally {
     globalThis.fetch = originalFetch;
+    if (originalWindowDescriptor) {
+      Object.defineProperty(globalThis, 'window', originalWindowDescriptor);
+    } else {
+      Reflect.deleteProperty(globalThis, 'window');
+    }
   }
 });
 
@@ -538,6 +600,73 @@ function findByTestId(testID: string) {
 }
 
 describe('AppProviders runtime composition', () => {
+  it('clears the cached Web profile before restoring the post-login Session', async () => {
+    selectedProfileCache = 'profile-b';
+    browserWindow.location.href = 'https://kos.moe/home?from=oidc&resetSelectedProfile=1#feed';
+    const historyState = browserWindow.history.state;
+    let finishDelete!: () => void;
+    selectedProfileDeleteGate = new Promise<void>((resolve) => {
+      finishDelete = resolve;
+    });
+
+    await act(async () => {
+      renderer = create(createElement(AppProviders, null, createElement(NativeSessionFixture)));
+    });
+
+    assert.equal(selectedProfileDeleteCalls, 1);
+    assert.equal(selectedProfileCache, 'profile-b');
+    assert.deepEqual(
+      queryHistory.filter(({ query }) => query === 'SessionProviderQuery'),
+      [],
+    );
+    assert.equal(browserHistoryReplacements.length, 0);
+
+    await act(async () => {
+      finishDelete();
+      await Promise.resolve();
+    });
+
+    assert.equal(selectedProfileDeleteCalls, 1);
+    assert.deepEqual(selectedProfileReads, [null]);
+    assert.deepEqual(selectedProfileWrites, ['profile-a']);
+    assert.equal(selectedProfileCache, 'profile-a');
+    assert.ok(queryHistory.some(({ query }) => query === 'SessionProviderQuery'));
+    assert.equal(browserHistoryReplacements.length, 1);
+    assert.strictEqual(browserHistoryReplacements[0], historyState);
+    assert.equal(browserWindow.location.href, 'https://kos.moe/home?from=oidc#feed');
+    assert.deepEqual(
+      {
+        accountId: findTag('NativeSession').props.accountId,
+        selectedProfileId: findTag('NativeSession').props.selectedProfileId,
+        sessionId: findTag('NativeSession').props.sessionId,
+      },
+      { accountId: 'account-1', selectedProfileId: 'profile-a', sessionId: 'session-1' },
+    );
+
+    await act(async () => {
+      renderer?.update(createElement(AppProviders, null, createElement(NativeSessionFixture)));
+    });
+    assert.equal(selectedProfileDeleteCalls, 1);
+    assert.equal(browserHistoryReplacements.length, 1);
+  });
+
+  it('preserves the cached Web profile on ordinary startup without the login marker', async () => {
+    selectedProfileCache = 'profile-b';
+    mockSelectedProfileId = 'profile-b';
+    browserWindow.location.href = 'https://kos.moe/home?from=bookmark#feed';
+
+    await act(async () => {
+      renderer = create(createElement(AppProviders, null, createElement(NativeSessionFixture)));
+    });
+
+    assert.equal(selectedProfileDeleteCalls, 0);
+    assert.deepEqual(selectedProfileReads, ['profile-b']);
+    assert.equal(selectedProfileCache, 'profile-b');
+    assert.equal(browserHistoryReplacements.length, 0);
+    assert.equal(browserWindow.location.href, 'https://kos.moe/home?from=bookmark#feed');
+    assert.equal(findTag('NativeSession').props.selectedProfileId, 'profile-b');
+  });
+
   it('uses the app canvas for the Native navigation background', async () => {
     await act(async () => {
       renderer = create(createElement(AppProviders, null, createElement(NavigationThemeProbe)));
