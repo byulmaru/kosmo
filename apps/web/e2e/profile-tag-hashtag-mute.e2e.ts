@@ -22,6 +22,14 @@ test('Profile Tag에서 Notification 전용 영구 규칙을 만들고 해제하
   context,
   page,
 }) => {
+  const browserErrors: string[] = [];
+  page.on('pageerror', (error) => browserErrors.push(error.stack ?? error.message));
+  page.on('console', (message) => {
+    if (message.type() === 'error') {
+      browserErrors.push(message.text());
+    }
+  });
+
   const viewer = await createE2ESession({ handle: 'prod735-viewer' });
   const target = await createE2EProfile({
     displayName: 'PROD-735 대상 프로필',
@@ -167,7 +175,7 @@ test('Profile Tag에서 Notification 전용 영구 규칙을 만들고 해제하
   const deleteResponse = waitForGraphQLOperation(page, 'ProfileTagMuteActionDeleteMutation');
   await page.getByRole('button', { exact: true, name: '뮤트 해제' }).click();
   await assertGraphQLSuccess(await deleteResponse);
-  await expect(muteButton()).toBeVisible();
+  await expect(muteButton(), browserErrors.join('\n')).toBeVisible();
   await expect(page.getByRole('alert')).toContainText('#PROD735Tag 새 알림 뮤트를 해제했어요.');
   expect(
     await db
@@ -327,7 +335,7 @@ test('다른 범위의 임시 규칙이 있으면 규칙을 변경하지 않고 
   });
 
   await trigger.click();
-  await page.getByRole('menuitem', { exact: true, name: '다른 임시 뮤트 규칙이 적용 중' }).click();
+  await page.getByRole('menuitem', { name: /다른 임시 뮤트 규칙이 적용 중/ }).click();
   await expect(page.getByRole('alert')).toContainText(
     '현재 규칙을 보존하며, 만료 후 상태를 새로고침하면 영구 알림 뮤트를 설정할 수 있어요.',
   );
