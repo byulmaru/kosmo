@@ -30,6 +30,13 @@
 - **THEN** 서버 계약의 Notification 전용 영구 설정으로 규칙을 생성한다
 - **AND** 사용자에게 범위·숨기기/접기·기간·날짜·시각 선택을 요구하지 않는다
 
+#### Scenario: 다른 범위의 활성 임시 규칙 보존
+
+- **WHEN** 현재 selected Profile이 같은 Hashtag에 Notification 이외 범위의 활성 임시 규칙을 소유한다
+- **THEN** 클라이언트는 해당 규칙의 Scope·Decision·만료 시각을 변경하지 않는다
+- **AND** Notification 영구 뮤트 생성·변경·해제 mutation을 보내지 않는다
+- **AND** 상태를 새로 읽은 뒤 다시 설정할 수 있음을 사용자에게 안내한다
+
 #### Scenario: 기존 확인 UI에서 결과 안내
 
 - **WHEN** 사용자가 태그 뮤트 또는 해제 확인 UI를 연다

@@ -41,6 +41,9 @@ Profile 화면이 같은 태그를 Web·Android·iOS에서 일관되게 표시�
 - 기존 [Profile Mute UI](./profile-mute-block.md)의 확인·요청 중·오류·완료 피드백을 재사용한다.
   확인창은 대상 태그와 새 알림을 끄거나 다시 받는 결과를 설명하고, 취소하면 요청하지 않는다.
   게시물 숨김·검색 제외·기존 알림 삭제·과거 억제 알림 복구를 안내하지 않는다.
+- 같은 selected Profile·Hashtag에 Notification 이외의 Scope를 가진 적용 중 임시 규칙이 있으면 그 규칙과 만료를
+  보존하고 영구 Notification 뮤트를 추가하지 않는다. 만료 시각이 모든 Scope에 공통으로 적용되므로 기존 Scope를
+  영구화하거나 임시 효과를 조기에 해제하지 않으며, 상태를 새로 읽은 뒤 다시 설정할 수 있음을 안내한다.
 - 서버가 확정한 현재 selected Profile의 상태를 표시한다. 요청 실패에는 기존 상태를 유지하며 재시도할 수
   있게 하고, Profile 전환 후 이전 요청의 상태·완료 피드백을 새 Profile에 적용하지 않는다.
 

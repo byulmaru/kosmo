@@ -329,7 +329,7 @@ test('다른 범위의 임시 규칙이 있으면 규칙을 변경하지 않고 
   await trigger.click();
   await page.getByRole('menuitem', { exact: true, name: '다른 임시 뮤트 규칙이 적용 중' }).click();
   await expect(page.getByRole('alert')).toContainText(
-    '기존 규칙을 보존하기 위해 영구 알림 뮤트를 추가하지 않았어요.',
+    '현재 규칙을 보존하며, 만료 후 상태를 새로고침하면 영구 알림 뮤트를 설정할 수 있어요.',
   );
   expect(mutationCount).toBe(0);
   expect(

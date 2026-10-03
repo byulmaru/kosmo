@@ -20,7 +20,7 @@
 - [ ] 2.3 생성·해제 확인 취소 시 요청 없음·기존 상태와 focus 유지, 요청 중 중복 입력, 조회·mutation 오류와 재시도, 응답 유실 후 재조회를 검증한다. 생성·해제가 성공하면 별도 새로고침·재조회·재진입 없이 현재 화면의 상태와 action에 결과가 반영되는지 확인한다. 구체적인 반영 시간이나 render timing은 계약하거나 테스트하지 않는다.
 - [ ] 2.4 actor A→B·Account 전환·태그 target 전환과 이전 요청의 늦은 성공·실패를 실행해 상태·Toast·focus 격리를 검증한다.
 - [ ] 2.5 Web 키보드·focus 복귀·보조 기술 이름, 좁은 폭·긴 태그·Light/Dark와 기존 navigation 회귀를 검증한다.
-- [ ] 2.6 실제 API·DB를 사용해 Profile Tag → 생성 → 현재 화면의 뮤트 상태·해제 action 확인 → 해제 → 현재 화면의 미뮤트 상태·생성 action 확인을 실행한다. 각 성공 후 화면 반영은 별도 새로고침·재조회·재진입 없이 검증하고, 이후 새 조회와의 일치 및 다른 selected Profile의 격리도 확인한다. mock만으로 완료하지 않는다.
+- [ ] 2.6 실제 API·DB를 사용해 Profile Tag → 생성 → 현재 화면의 뮤트 상태·해제 action 확인 → 해제 → 현재 화면의 미뮤트 상태·생성 action 확인을 실행한다. 각 성공 후 화면 반영은 별도 새로고침·재조회·재진입 없이 검증하고, 영구 다른 Scope의 보존·임시 다른 Scope의 만료 보존 및 다른 selected Profile의 격리도 확인한다. mock만으로 완료하지 않는다.
 
 검증 경로 후보는 현재 `package.json`의 `pnpm --filter @kosmo/app check`, `pnpm --filter @kosmo/app test:unit`, `pnpm --filter @kosmo/app test:storybook`, `pnpm test:e2e`다. 후속 Test 세션에서는 해당 workflow의 GitHub CI 실행 계약을 따른다.
 
