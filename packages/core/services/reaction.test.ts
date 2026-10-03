@@ -23,7 +23,6 @@ import {
 } from '../enums';
 import { NotFoundError, ValidationError } from '../error';
 import { temporalClient } from '../temporal/client';
-import { reactionTypes } from '../validation';
 import { ProfilePairBlockedError } from './profile-block-policy';
 import { addReaction, deleteReaction } from './reaction';
 
@@ -107,19 +106,23 @@ const assertDeleteResult = (
   assert.deepEqual({ postId: result.postId, reaction: result.reaction }, expected);
 };
 
-test('여섯 built-in Type을 정확한 Unicode 문자열로 저장하고 서로 공존시킨다', async () => {
+test('Quick Picker 밖 Emoji 16 Type도 다른 Reaction과 공존하고 삭제한다', async () => {
   const { input } = await createFixture();
 
-  const results = [];
-  for (const type of reactionTypes) {
-    results.push((await addReaction({ ...input, type })).reaction);
-  }
+  await addReaction({ ...input, type: '🎉' });
+  const added = await addReaction({ ...input, type: '🫶' });
+  assert.equal(added.reaction.type, '🫶');
+  assert.equal(await countReactions(input.postId), 2);
 
+  const deleted = await deleteReaction({ ...input, type: '🫶' });
+  assert.equal(deleted.reaction?.id, added.reaction.id);
   assert.deepEqual(
-    results.map(({ type }) => type),
-    reactionTypes,
+    await db
+      .select({ type: Reactions.type })
+      .from(Reactions)
+      .where(eq(Reactions.postId, input.postId)),
+    [{ type: '🎉' }],
   );
-  assert.equal(await countReactions(input.postId), reactionTypes.length);
 });
 
 test('허용되지 않은 Type은 추가·삭제에서 field type validation 오류로 거부한다', async () => {

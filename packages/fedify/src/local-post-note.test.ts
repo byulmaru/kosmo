@@ -525,6 +525,46 @@ describe('ActivityPub Local Post Note', () => {
     assert.equal(await countLocalPostEmojiReactions(createContext(), { id: localPost.id }), 1);
   });
 
+  test('counts and pages a newly supported Type while excluding invalid stored rows', async () => {
+    const author = await createProfile({ kind: InstanceKind.LOCAL });
+    const post = await createPost(author.id);
+    for (let index = 0; index < 51; index++) {
+      const profile = await createProfile({
+        handle: `full-reaction-${index}`,
+        kind: InstanceKind.LOCAL,
+      });
+      await createReaction(profile.id, post.id, '🫶', {
+        createdAt: Temporal.Instant.from('2026-08-01T00:00:00Z'),
+      });
+    }
+    const invalidProfile = await createProfile({
+      handle: 'invalid-reaction',
+      kind: InstanceKind.LOCAL,
+    });
+    await createReaction(invalidProfile.id, post.id, 'custom', {
+      createdAt: Temporal.Instant.from('2026-08-02T00:00:00Z'),
+    });
+
+    const firstPage = await dispatchLocalPostEmojiReactions(createContext(), { id: post.id }, null);
+    assert.ok(firstPage);
+    assert.equal(firstPage.items.length, 50);
+    assert.ok(firstPage.nextCursor);
+    assert.equal(await countLocalPostEmojiReactions(createContext(), { id: post.id }), 51);
+
+    const secondPage = await dispatchLocalPostEmojiReactions(
+      createContext(),
+      { id: post.id },
+      firstPage.nextCursor ?? null,
+    );
+    assert.ok(secondPage);
+    assert.equal(secondPage.items.length, 1);
+    assert.equal(secondPage.nextCursor, undefined);
+    const items = [...firstPage.items, ...secondPage.items];
+    assert.equal(items.length, 51);
+    assert.equal(new Set(items.map((item) => item.id?.href)).size, 51);
+    assert.deepEqual(new Set(items.map((item) => item.content?.toString())), new Set(['🫶']));
+  });
+
   test('uses the reacting Local Instance identity for all six reaction types', async () => {
     const author = await createProfile({ kind: InstanceKind.LOCAL });
     const post = await createPost(author.id);

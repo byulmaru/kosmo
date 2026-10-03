@@ -26,9 +26,9 @@ Accepted
   결과도 Followers Only가 된다. Mentioned Profiles Post는 Repost할 수 없다.
 - 같은 Profile/Post/Reaction Type 조합에는 Reaction이 하나만 존재하며 다른 Reaction Type은 함께 존재할 수
   있다.
-- 초기 Reaction Type은 `🥹` (`U+1F979`), `❤️` (`U+2764 U+FE0F`), `🎉` (`U+1F389`), `👀`
-  (`U+1F440`), `☘️` (`U+2618 U+FE0F`), `🌈` (`U+1F308`)만 허용한다. 이 나열 순서는 Reaction Type의
-  표시 순서를 정의하지 않는다.
+- PROD-942에서 Reaction Type 허용 범위를 Emoji 16.0의 완전 수식 Unicode emoji 3,781개로 확장했다.
+  허용 목록 밖 Unicode와 사용자 정의 이모지는 제외한다. 초기 여섯 Type(`🥹`, `❤️`, `🎉`, `👀`, `☘️`,
+  `🌈`)은 빠른 반응 선택지로 유지하며, 이 나열 순서는 Reaction Type의 표시 순서를 정의하지 않는다.
 - Reaction 조회 결과는 Reaction Type별 개수와 Reaction을 남긴 Profile 목록을 제공한다. Reaction Type은
   각 Type에 현재 존재하는 Reaction 중 가장 이른 생성 시각 오름차순으로 표시한다. 같은 가장 이른 생성
   시각에는 제품상 Type 우선순위를 뜻하지 않는 결정적 최종 순서를 적용한다. 한 Type의 현재 Reaction이 모두

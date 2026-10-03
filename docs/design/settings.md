@@ -51,8 +51,8 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   root에 중복 노출하거나 항목 하나만 가진 `계정`·`화면 설정` 대분류를 만들지 않는다.
 - `정보`는 별도 category나 generic policy registry가 아닌 Settings root의 direct destination이다. `/settings/info`
   detail은 `개인정보 처리방침`, `계정 삭제 안내`, `아동 안전 정책`을 각각 public route로 여는 기존 Settings
-  link-row 문법을 사용한다. 모든 플랫폼의 `/settings/info`는 세 policy link와 `개발 정보` link row를
-  제공하며 channel selector나 OTA 진단을 inline으로 표시하지 않는다. 정책 문서의 본문·시행일·이메일 처리와
+  link-row 문법을 사용한다. 모든 플랫폼에서 세 policy link와 `개발 정보` link row를 제공하며 channel
+  selector나 OTA 진단을 inline으로 표시하지 않는다. 정책 문서의 본문·시행일·이메일 처리와
   public route 간 cross-link는 각 정책 문서가 소유한다.
 - `/settings/developer`는 `/settings/info`를 명시적 parent로 갖는 nested detail destination이다. Web에서는
   `getPublicConfig('channel')`로 확인한 channel을 읽기 전용 행으로 표시한다. Android/iOS Native에서는 기존

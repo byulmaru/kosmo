@@ -528,12 +528,13 @@ describe('Settings routes', () => {
     );
   });
 
-  it('정보 화면은 정책 링크와 개발 정보 진입점만 표시하고 진단 행을 인라인하지 않는다', async () => {
+  it('정보 화면은 공개 정책과 개발 정보 진입점을 표시한다', async () => {
     platform = 'web';
     await renderRoute('/settings/info', SettingsInfoRoute);
 
-    assert.ok(
-      rendered('SettingsLinkRow').some((node) => node.props.href === '/settings/developer'),
+    assert.deepEqual(
+      rendered('SettingsLinkRow').map((node) => node.props.href),
+      ['/privacy', '/account-deletion', '/child-safety', '/settings/developer'],
     );
     assert.equal(rendered('NativeChannelSettings').length, 0);
     assert.equal(rendered('SettingsItem').length, 0);

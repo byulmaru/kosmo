@@ -63,7 +63,6 @@ const reactionOptions = [
     keywords: ['하트', '사랑'],
     label: '빨간 하트',
     quick: true,
-    recent: true,
   },
   {
     category: 'gestures',
@@ -72,7 +71,6 @@ const reactionOptions = [
     id: 'clap',
     keywords: ['박수'],
     label: '박수',
-    recent: true,
   },
 ] as const;
 
