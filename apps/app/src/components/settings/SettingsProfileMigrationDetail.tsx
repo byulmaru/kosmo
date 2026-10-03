@@ -1,9 +1,11 @@
+import { StyleSheet, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { useFeatureFlag } from '@/components/FeatureFlagsContext';
 import { ProfileMigrationSourceControl } from '@/components/profile/ProfileMigrationSourceControl';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { StateView } from '@/components/ui/StateView';
+import { spacing } from '@/theme/tokens';
 import type { SettingsProfileMigrationDetailQuery } from './__generated__/SettingsProfileMigrationDetailQuery.graphql';
 
 const SettingsProfileMigrationQuery = graphql`
@@ -61,9 +63,15 @@ function SettingsProfileMigrationDetailContents() {
   }
 
   return (
-    <ProfileMigrationSourceControl
-      editable={profile.viewerState?.membership?.role === 'OWNER'}
-      profile={profile}
-    />
+    <View style={styles.root}>
+      <ProfileMigrationSourceControl
+        editable={profile.viewerState?.membership?.role === 'OWNER'}
+        profile={profile}
+      />
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: { padding: spacing.lg },
+});
