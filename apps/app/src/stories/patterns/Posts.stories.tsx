@@ -962,6 +962,8 @@ const paginationProfileNextPageResponse = {
     node: {
       __typename: 'Profile',
       id: paginationProfile.id,
+      instance: paginationProfile.instance,
+      pinnedPosts: timeline(),
       posts: paginatedTimeline(paginationProfileNextPost, false),
     },
   },

@@ -12,14 +12,17 @@ import { PostActionBar } from './PostActionBar';
 import { useBookmarkFailureToast } from './PostBookmarkAction';
 import { usePostMoreMenuItem } from './PostMoreMenu';
 import { usePostReactionController } from './PostReactionController';
+import { useProfilePinAction } from './ProfilePinAction';
 import { useRepostFailureToast } from './useRepostFailureToast';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { PostActionSurface_post$key } from './__generated__/PostActionSurface_post.graphql';
 import type { MoreActionConfig, PostActionBarProps } from './PostActionBar';
+import type { ProfilePinContext } from './ProfilePinAction';
 
 type Props = Readonly<{
   actionBarStyle?: StyleProp<ViewStyle>;
   onDeleted?: () => void;
+  profilePin?: ProfilePinContext | null;
   reactionSummaryStyle?: StyleProp<ViewStyle>;
   reply?: PostActionBarProps['reply'];
   socialActionTarget: PostActionSurface_post$key;
@@ -29,6 +32,7 @@ const postActionSurfaceFragment = graphql`
   fragment PostActionSurface_post on Post {
     id
     visibility
+    ...ProfilePinAction_post @alias(as: "profilePin")
     profile {
       id
       relativeHandle
@@ -42,6 +46,7 @@ const postActionSurfaceFragment = graphql`
 export function PostActionSurface({
   actionBarStyle,
   onDeleted,
+  profilePin,
   reactionSummaryStyle,
   reply,
   socialActionTarget,
@@ -62,6 +67,7 @@ export function PostActionSurface({
   );
   const onBookmarkError = useBookmarkFailureToast();
   const onRepostError = useRepostFailureToast();
+  const profilePinAction = useProfilePinAction(target.profilePin!, profilePin);
   const copyLinkItem = usePostMoreMenuItem({
     postId: target.id,
     relativeHandle: target.profile.relativeHandle,
@@ -71,7 +77,11 @@ export function PostActionSurface({
     kind: ContentReportTargetType.POST,
     label: `${target.profile.relativeHandle}의 게시물 · ${target.id}`,
   });
-  const moreItems = sessionId ? [copyLinkItem, reportItem] : [copyLinkItem];
+  const moreItems = [
+    copyLinkItem,
+    ...(profilePinAction.item ? [profilePinAction.item] : []),
+    ...(sessionId ? [reportItem] : []),
+  ];
 
   const canMute =
     authentication.selectedProfileId && authentication.selectedProfileId !== target.profile.id;
@@ -82,6 +92,9 @@ export function PostActionSurface({
         execution={authentication.execution}
         more={more}
         moreItems={moreItems}
+        morePending={profilePinAction.pending}
+        moreSheetIconSize={profilePin ? 24 : undefined}
+        onMoreTriggerReady={profilePinAction.onMoreTriggerReady}
         onBookmarkError={onBookmarkError}
         onDeleted={onDeleted}
         onRepostError={onRepostError}
@@ -103,9 +116,11 @@ export function PostActionSurface({
           renderMenuItem={({ disabled, focusTriggerRef, item }) => (
             <ProfileMoreMenu
               accessibilityLabel="더 보기 메뉴"
-              disabled={disabled}
+              disabled={disabled || profilePinAction.pending}
               focusTriggerRef={focusTriggerRef}
               items={[...moreItems, item]}
+              onTriggerReady={profilePinAction.onMoreTriggerReady}
+              sheetIconSize={profilePin ? 24 : undefined}
               renderTrigger={({ expanded, onPress, ref }) =>
                 renderActions({
                   accessibilityLabel: '더 보기',
@@ -121,6 +136,7 @@ export function PostActionSurface({
       ) : (
         renderActions()
       )}
+      {profilePinAction.confirmation}
     </>
   );
 }

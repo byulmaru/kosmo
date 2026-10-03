@@ -34,6 +34,7 @@ type Props = {
   onPress: () => void;
   popupRole?: 'dialog' | 'menu';
   processing?: PostActionProcessingState;
+  retainFocusWhilePending?: boolean;
   hoverColor?: string;
   hoverDisabled?: boolean;
   hoverForegroundColor?: string;
@@ -61,6 +62,7 @@ export function PostActionControl({
   onPress,
   popupRole,
   processing = 'default',
+  retainFocusWhilePending = false,
   hoverColor,
   hoverDisabled = false,
   hoverForegroundColor,
@@ -74,6 +76,7 @@ export function PostActionControl({
   const isDisabled = processing === 'disabled';
   const blocked = isPending || isDisabled;
   const native = Platform.OS !== 'web';
+  const keepMenuFocus = !native && retainFocusWhilePending && isPending;
   const nativeTargetSize = Platform.OS === 'android' ? 48 : 44;
   const accessibilityState: AccessibilityState = {
     busy: isPending,
@@ -107,11 +110,27 @@ export function PostActionControl({
         accessibilityLabel={accessibilityLabel}
         accessibilityRole="button"
         accessibilityState={stateful ? accessibilityState : undefined}
-        disabled={blocked}
+        disabled={blocked && !keepMenuFocus}
         onHoverIn={Platform.OS === 'web' ? () => setHovered(true) : undefined}
         onHoverOut={Platform.OS === 'web' ? () => setHovered(false) : undefined}
-        onPress={onPress}
-        ref={controlRef}
+        onPress={blocked ? undefined : onPress}
+        ref={(node) => {
+          // RN Web turns disabled into a native disabled button, dropping menu
+          // focus. Keep pending menu triggers focusable with ARIA disabled instead.
+          if (!native && node) {
+            const element = node as unknown as HTMLElement;
+            if (blocked) {
+              element.setAttribute('aria-disabled', 'true');
+            } else {
+              element.removeAttribute('aria-disabled');
+            }
+          }
+          if (typeof controlRef === 'function') {
+            controlRef(node);
+          } else if (controlRef) {
+            controlRef.current = node;
+          }
+        }}
         testID={`post-action-${testID}`}
         style={({ pressed }) => [
           styles.action,
