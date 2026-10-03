@@ -1,6 +1,7 @@
 import { OFREPWebProvider } from '@openfeature/ofrep-web-provider';
 import { OpenFeature } from '@openfeature/web-sdk';
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { getPublicConfig } from '@/config/public';
 import { useSession } from '@/session/SessionProvider';
 import type { Client } from '@openfeature/web-sdk';
 import type { PropsWithChildren } from 'react';
@@ -10,6 +11,7 @@ const DOMAIN = 'kosmo';
 export const FeatureFlagsContext = createContext<(key: string) => boolean>(() => false);
 
 export function FeatureFlagsProvider({ children }: PropsWithChildren) {
+  const isDevChannel = getPublicConfig('channel') === 'dev';
   const { accountId } = useSession();
   const [evaluation, setEvaluation] = useState<{
     accountId: string;
@@ -19,7 +21,7 @@ export function FeatureFlagsProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     setEvaluation(null);
 
-    if (accountId === null) {
+    if (isDevChannel || accountId === null) {
       return;
     }
 
@@ -44,12 +46,13 @@ export function FeatureFlagsProvider({ children }: PropsWithChildren) {
     return () => {
       active = false;
     };
-  }, [accountId]);
+  }, [accountId, isDevChannel]);
 
   const isEnabled = useCallback(
     (key: string) =>
-      evaluation?.accountId === accountId && evaluation.client.getBooleanValue(key, false),
-    [accountId, evaluation],
+      isDevChannel ||
+      (evaluation?.accountId === accountId && evaluation.client.getBooleanValue(key, false)),
+    [accountId, evaluation, isDevChannel],
   );
 
   return <FeatureFlagsContext.Provider value={isEnabled}>{children}</FeatureFlagsContext.Provider>;
