@@ -19,6 +19,8 @@
 - 서버의 현재 Notification Rule·적용 상태를 읽은 뒤 설정 또는 해제 action을 제공한다. 조회 중·조회 실패를 미뮤트로 표시하거나 중복 생성을 허용하지 않는다.
 - 현재 UI에서 생성하는 규칙은 Notification Scope만 사용하는 영구 규칙이다. Notification에서는 Exclude·Collapse가 모두 새 알림 억제를 뜻하므로 생성 input은 Exclude를 사용하고 사용자에게 Decision을 고르게 하지 않는 접근을 제안한다. 이 필드 매핑은 구현 메모이며 실제 PROD-1029 API와 대조한다. 만료 입력·preset·picker를 추가하지 않는다. 일반 서버 계약의 미래 만료 지원을 삭제하거나 기존 기간 규칙을 영구로 덮어쓰는 작업도 포함하지 않는다.
 - action owner에 Relay fragment·mutation을 두고 표준 `useMutation`의 in-flight 상태와 서버 payload로 수렴시킨다. 기존 Profile Mute 코드의 Promise wrapper·별도 pending 구현은 현재 Relay 지침과 대조하고 그대로 복제하지 않는다.
+- 생성·해제 확인을 취소하면 요청하지 않고 기존 서버 확정 상태와 action을 유지한다. 기존 focus 복귀 흐름도 보존한다.
+- 생성·해제가 성공하면 별도 새로고침·재조회·재진입 없이 현재 화면의 상태와 다음 action에 결과를 반영한다. 구체적인 반영 시간이나 render timing은 계약하거나 테스트하지 않는다.
 - 오류가 발생하면 기존 서버 확정 상태를 유지한다. 응답을 잃었거나 동일 Hashtag의 현재 상태가 바뀐 경우에는 해당 상태를 다시 조회해 다음 action을 결정한다.
 - Hashtag identity가 다른 태그로 바뀌거나 actor가 전환되면 이전 확인·오류·완료 피드백을 새 대상에 적용하지 않는다. Hashtag의 공개 Node identity만으로 viewer별 상태를 전역 공유하지 않는다.
 - 해제는 현재 selected Profile이 소유한 정확한 Rule에 실행한다. 재조회 결과 만료·해제가 확인됐으면 그 결과에 맞춰 표시하며, 시간이 지났거나 사용자가 클릭했다는 이유만으로 서버 요청이 성공했다고 표시하지 않는다.
@@ -33,9 +35,9 @@
 ## Risks / Limits
 
 - UI 완료는 목록·검색·Notification 정책 구현 완료를 뜻하지 않는다. 실제 효과의 검증은 각 소비자 이슈가 소유한다.
-- 일반 Scope·만료 지원과 Local 정책 정렬은 PROD-1029가 소유한다. 이 PR에 다른 작업 공간의 미커밋 문서나 서버 구현을 가져오지 않는다.
+- 일반 Scope·만료 지원과 Local 정책 정렬은 PROD-1029가 소유한다. 현재 스펙 보정에 다른 작업 공간의 미커밋 문서나 서버 구현을 가져오지 않는다.
 - 제품 runtime 검증은 미실행이다. Web의 실제 생성·해제 흐름을 검증하며 Native 결과는 공용 코드만으로 완료 처리하지 않는다. 기존 Profile Tag의 Native 출시 검증 경계를 유지한다.
-- 이 문서 PR에는 실행 코드·DB·배포 변경이 없다. 구현 시 schema·payload가 달라지면 이 작업 메모를 수정하고 실제 변경의 rollback 영향을 PR에서 설명한다.
+- 현재 보존된 스펙에는 실행 코드·DB·배포 변경이 없다. 구현 시 schema·payload가 달라지면 이 작업 메모를 수정하고 실제 변경의 rollback 영향을 PR에서 설명한다.
 
 ## Open Questions
 
