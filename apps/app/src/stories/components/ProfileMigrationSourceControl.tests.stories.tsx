@@ -4,6 +4,8 @@ import baseMeta, {
   LateCompletionIgnoredAfterActorLifecycleReset as lateCompletionIgnoredAfterActorLifecycleReset,
   LongSourceReflowAtNarrowMobile as longSourceReflowAtNarrowMobile,
   LongSourceReflowAtWideWeb as longSourceReflowAtWideWeb,
+  MemberCannotUnregisterPreparedSource as memberCannotUnregisterPreparedSource,
+  OwnerNullSourceUnregisterThenRegister as ownerNullSourceUnregisterThenRegister,
   OwnerPreparationAndSuccess as ownerPreparationAndSuccess,
   OwnerUnregistersPreparedSource as ownerUnregistersPreparedSource,
 } from './ProfileMigrationSourceControl.stories';
@@ -19,7 +21,9 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const OwnerPreparationAndSuccess: Story = ownerPreparationAndSuccess;
+export const OwnerNullSourceUnregisterThenRegister: Story = ownerNullSourceUnregisterThenRegister;
 export const OwnerUnregistersPreparedSource: Story = ownerUnregistersPreparedSource;
+export const MemberCannotUnregisterPreparedSource: Story = memberCannotUnregisterPreparedSource;
 export const FailureAndRetry: Story = failureAndRetry;
 export const LateCompletionIgnoredAfterActorLifecycleReset: Story =
   lateCompletionIgnoredAfterActorLifecycleReset;

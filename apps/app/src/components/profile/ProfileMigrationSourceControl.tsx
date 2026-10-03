@@ -105,7 +105,7 @@ export function ProfileMigrationSourceControl({
   };
 
   const unregister = () => {
-    if (!editable || !profile.migrationSource || busy) {
+    if (!editable || busy) {
       return;
     }
 
@@ -129,8 +129,8 @@ export function ProfileMigrationSourceControl({
 
   const preparedSource = profile.migrationSource;
   const controlLabel = `Kosmo 프로필 이전 원본 ${profile.displayName} ${profile.relativeHandle}`;
-  const registerButtonLabel = registerState === 'error' ? '다시 시도' : '기존 계정 등록';
-  const unregisterButtonLabel = unregisterState === 'error' ? '다시 시도' : '기존 계정 등록 해제';
+  const registerButtonLabel = '기존 계정 등록';
+  const unregisterButtonLabel = '기존 계정 등록 해제';
 
   return (
     <View
@@ -194,20 +194,21 @@ export function ProfileMigrationSourceControl({
           value={sourceHandle}
         />
       ) : null}
-      {editable && !preparedSource ? (
-        <Button
-          accessibilityLabel={registerButtonLabel}
-          accessibilityState={{ busy: registering, disabled: !sourceHandle.trim() || busy }}
-          disabled={!sourceHandle.trim() || busy}
-          loading={registering}
-          loadingText="등록 중"
-          onPress={register}
-          style={styles.register}
-        >
-          {registerButtonLabel}
-        </Button>
-      ) : editable && preparedSource ? (
+      {editable ? (
         <>
+          {!preparedSource ? (
+            <Button
+              accessibilityLabel={registerButtonLabel}
+              accessibilityState={{ busy: registering, disabled: !sourceHandle.trim() || busy }}
+              disabled={!sourceHandle.trim() || busy}
+              loading={registering}
+              loadingText="등록 중"
+              onPress={register}
+              style={styles.register}
+            >
+              {registerButtonLabel}
+            </Button>
+          ) : null}
           <Button
             accessibilityLabel={unregisterButtonLabel}
             accessibilityState={{ busy: unregistering, disabled: busy }}

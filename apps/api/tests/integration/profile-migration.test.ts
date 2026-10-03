@@ -6,6 +6,7 @@ import {
   AccountProfileRole,
   AccountState,
   InstanceKind,
+  InstanceState,
   ProfileFollowPolicy,
   ProfileState,
   SessionState,
@@ -502,6 +503,109 @@ describe('GraphQL profile migration', () => {
       globalId('Profile', replacement.id),
     );
   });
+
+  for (const scenario of [
+    { label: 'disabled Profile', profileState: ProfileState.DISABLED },
+    { label: 'suspended Instance', instanceState: InstanceState.SUSPENDED },
+  ] as const) {
+    test(`owner can unregister and replace a source hidden by a ${scenario.label}`, async (t) => {
+      const target = await createProfile({ handle: 'migration-target' });
+      const source = await createRemoteSource();
+      const auth = await createAuthenticatedSession({ profileId: target.id });
+      await db.insert(ProfileMigrations).values({
+        sourceProfileId: source.id,
+        targetProfileId: target.id,
+      });
+
+      if (scenario.profileState !== undefined) {
+        await db
+          .update(Profiles)
+          .set({ state: scenario.profileState })
+          .where(eq(Profiles.id, source.id));
+      } else {
+        await db
+          .update(Instances)
+          .set({ state: scenario.instanceState })
+          .where(eq(Instances.id, source.instanceId));
+      }
+
+      const readHiddenSource = await requestGraphQL<{
+        node: { id: string; migrationSource: { id: string } | null } | null;
+      }>(
+        `query ReadMigrationSource($id: ID!) {
+          node(id: $id) { ... on Profile { id migrationSource { id } } }
+        }`,
+        { id: globalId('Profile', target.id) },
+        auth.token,
+      );
+
+      assertNoGraphQLErrors(readHiddenSource);
+      assert.deepEqual(readHiddenSource.data?.node, {
+        id: globalId('Profile', target.id),
+        migrationSource: null,
+      });
+      assert.deepEqual(
+        await db
+          .select({ sourceProfileId: ProfileMigrations.sourceProfileId })
+          .from(ProfileMigrations)
+          .where(eq(ProfileMigrations.targetProfileId, target.id)),
+        [{ sourceProfileId: source.id }],
+      );
+
+      const unregistered = await requestGraphQL<{
+        unregisterProfileMigrationSource: {
+          profile: { id: string; migrationSource: null };
+        };
+      }>(unregisterSourceMutation, {}, auth.token);
+
+      assertNoGraphQLErrors(unregistered);
+      assert.equal(
+        unregistered.data?.unregisterProfileMigrationSource.profile.id,
+        globalId('Profile', target.id),
+      );
+      assert.equal(
+        unregistered.data?.unregisterProfileMigrationSource.profile.migrationSource,
+        null,
+      );
+      assert.deepEqual(
+        await db
+          .select({ sourceProfileId: ProfileMigrations.sourceProfileId })
+          .from(ProfileMigrations)
+          .where(eq(ProfileMigrations.targetProfileId, target.id)),
+        [],
+      );
+      assert.deepEqual(
+        await db.select({ id: Profiles.id }).from(Profiles).where(eq(Profiles.id, source.id)),
+        [{ id: source.id }],
+      );
+
+      const replacement = await createRemoteSource({
+        domain: 'replacement.example',
+        handle: 'carol',
+      });
+      t.mock.method(temporalClient.workflow, 'execute', async () => replacement.id as never);
+      const registered = await requestGraphQL<{
+        registerProfileMigrationSource: { profile: { migrationSource: { id: string } } };
+      }>(
+        registerSourceMutation,
+        { input: { sourceHandle: '@carol@replacement.example' } },
+        auth.token,
+      );
+
+      assertNoGraphQLErrors(registered);
+      assert.equal(
+        registered.data?.registerProfileMigrationSource.profile.migrationSource.id,
+        globalId('Profile', replacement.id),
+      );
+      assert.deepEqual(
+        await db
+          .select({ sourceProfileId: ProfileMigrations.sourceProfileId })
+          .from(ProfileMigrations)
+          .where(eq(ProfileMigrations.targetProfileId, target.id)),
+        [{ sourceProfileId: replacement.id }],
+      );
+    });
+  }
 });
 
 const requestGraphQL = async <TData = Record<string, unknown>>(

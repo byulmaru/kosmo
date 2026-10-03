@@ -101,8 +101,10 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   action은 `기존 계정 등록`이다. 선택된 Kosmo Profile의 이름과 qualified handle을 보여 주며, 주소를 확인할 수
   없으면 주소 부재를 표시하고 global origin으로 대체하지 않는다. 먼저 기존 계정 주소를 등록한 뒤 기존 서비스의
   계정에서 현재 Kosmo Profile로 Move를 시작해야 하며, 팔로워는 옮길 수 있지만 게시물은 복사되지 않는다고 알린다.
-  준비된 원본에는 `기존 계정 등록 해제` action을 제공한다. 해제 후 남은 팔로워 이전은 중단될 수 있지만 이미
-  이전된 팔로워는 유지된다는 안내를 제공한다. 해제 성공 후 null Profile 상태는 기존 빈 등록 form을 표시한다.
+  Owner에게는 `migrationSource`가 표시되는지와 무관하게 `기존 계정 등록 해제` action을 제공하고, source가
+  표시되지 않으면 기존 빈 등록 form과 함께 보인다. 이 action은 선택한 Profile에 대한 기존 idempotent mutation을
+  사용한다. action에는 해제 후 남은 팔로워 이전이 중단될 수 있지만 이미 이전된 팔로워는 유지된다는 안내를
+  함께 제공한다. 성공 후 source가 null이면 기존 빈 등록 form을 표시한다.
   control은 기존 Settings card·field·button과 accessible error·busy·success 표현을 재사용한다.
 - Profile target selector의 Figma lifecycle source는
   [`Mobile`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4867-13083),
