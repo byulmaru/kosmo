@@ -14,8 +14,8 @@ Profile Block의 로컬 기능과 ActivityPub 연합은 서로 다른 전달·�
 차단 상태를 만들면 같은 Profile 사이의 차단과 해제가 진입점에 따라 달라질 수 있다.
 
 ActivityPub은 차단 대상에게 `Block`을 전달하지 않도록 권고한다. Mastodon은 원격 서버에도 차단 의도를 알리는
-확장을 사용한다. PROD-818은 Mastodon 호환 발신·수신을 선택한다. Profile Block과 이 연합 기능은 함께 사용
-가능해졌으므로, protocol 원본 없이 먼저 존재하던 Local Owner → Remote Target Profile Block은 가능한 제품 상태가 아니다.
+확장을 사용한다. PROD-818은 Mastodon 호환 발신·수신을 선택한다. 발신 object identity는 기존 local Profile Block
+ID에서 안정적으로 도출하며 별도 protocol identity 저장은 요구하지 않는다.
 
 ## 결정
 
@@ -27,33 +27,32 @@ ActivityPub은 차단 대상에게 `Block`을 전달하지 않도록 권고한�
   Request·Follow Relationship은 복구하지 않는다.
 - 수신한 차단으로 같은 `Block`을 다시 발신하지 않으며, 수신한 해제로 같은 `Undo(Block)`를 다시 발신하지 않는다.
   차단 생성에서 기존 Follow cleanup이 소유한 필수 효과는 유지한다. 원격 전달 실패는 확정된 로컬 차단·해제를 되돌리지 않는다.
-- 발신 대상인 모든 Local Owner → Remote Target 해제는 exact `profileBlockId`로 안정적인 원본 identity를 구성해
-  `Undo(Block)`만 전달한다. protocol metadata가 없어도 선행 `Block`을 생성·재발신하거나 해제를 생략하지 않는다.
-  상대 서버가 원본 `Block`을 모르는 경우 해당 Undo가 remote no-op이 되는 것은 허용한다.
+- 발신 identity는 기존 local Profile Block ID에서 안정적으로 도출한다. 모든 Local Owner → Remote Target 해제는 그 identity를
+  참조하는 `Undo(Block)`만 전달하며, 선행 `Block`을 새로 보내거나 해제를 생략하지 않는다. 상대 서버가 원본을
+  모르는 경우 Undo는 no-op일 수 있다. 별도 protocol identity나 tombstone은 저장하지 않는다.
 - inbound Undo는 embedded object가 실제 `Block`일 때만 Profile Block 경로에서 처리한다. URI-only 원본이나
   embedded `Like`·`Follow` 등은 저장된 URI만으로 `Block`이라고 추론하지 않고 기존 해당 Undo 처리기로 넘긴다.
-- 인증된 inbound `Undo(Block)`는 Undo actor와 embedded Block actor, Local Target을 검증한 뒤 현재 방향 pair의
-  차단 관계를 해제한다. 원격 Block URI가 저장된 원본과 달라도 해제를 누락하지 않는다. 이미 종료된 원본이나
-  재전달된 Undo는 새로 생성된 관계를 해제하지 않는다. 이 재전달 구분에 필요한 최상위 Undo Activity ID가
-  없거나 유효한 HTTP(S) URI가 아니면 관계를 변경하지 않는다.
+- Inbound `Block`·`Undo(Block)`는 HTTP local object와 활성 Local recipient, verified Remote actor와 방향 pair를
+  검증한다. `Undo(Block)`의 최상위 actor는 embedded `Block` actor와 같아야 한다. 검증된 명령은 현재 Remote Owner →
+  Local Target 관계에 적용한다. embedded object가 `Block` Activity여야 하지만 그 activity URI를 저장·비교해 재차단
+  관계를 이전 Undo로부터 보호하지 않는다.
 - PROD-813은 로컬 Profile Block의 통합 검증과 완료를 소유한다. PROD-818은 그 완료 후 연합 구현에 착수하며,
   연합 계약의 검증·동기화·archive를 소유한다. 로컬 기능의 출시가 연합 구현을 기다리지는 않는다.
 
 ## 이유
 
 Mastodon과 차단 의도를 교환하면서 Kosmo에서는 하나의 차단 관계와 Owner 권한을 유지하기 위한 결정이다.
-발신 Undo를 exact generation identity로 재구성하면 metadata 유실 뒤에도 다른 세대를 해제하지 않는다. 수신 Undo는
-인증된 방향 pair를 기준으로 적용해 원격의 Block URI 표현 차이를 허용한다. embedded Activity type을 요구하면
-URI 충돌만으로 다른 Activity를 Block으로 오인하는 type confusion을 막는다.
+발신 identity는 기존 local Profile Block ID에서 만들고, 수신 명령은 검증된 actor·object type·recipient와 방향 pair를
+기준으로 현재 관계에 적용한다. URI-only나 non-Block embedded object를 거부해 URI 충돌만으로 다른 Activity를
+Block으로 오인하지 않는다. 별도 generation identity를 보존하거나 이전 Undo로부터 새 same-pair 관계를 보호하지 않는다.
 
 ## 대안과 결과
 
 - 발신을 제외하고 수신만 처리하는 대안은 채택하지 않았다. PROD-818의 기존 발신·수신 범위를 유지한다.
 - 별도 원격 차단 상태는 채택하지 않았다. 생성·해제와 조회 정책은 Profile Block이 소유한다.
-- metadata가 없는 해제에서 선행 `Block`을 보내는 대안은 채택하지 않았다. 원격 서버가 원본을 모르는 상태와
-  Undo no-op은 허용되며 Kosmo 내부 해제 결과는 유지된다.
+- 원본 identity와 tombstone을 별도 저장하는 대안은 채택하지 않았다. Outbound identity는 기존 local Profile Block ID로
+  도출한다.
 - 저장된 protocol URI를 근거로 URI-only 또는 non-Block Undo를 Block으로 추론하는 대안은 채택하지 않았다.
-- protocol identity, 중복·순서 역전, 재시도와 배포 방식은 이 도메인 계약을 만족하는 연합 명세에서 구체화한다.
 
 ## 근거
 
@@ -65,5 +64,5 @@ URI 충돌만으로 다른 Activity를 Block으로 오인하는 type confusion�
 
 ## 문서 반영
 
-- [Profile Block](../objects/profile-block.md)에 연합 방향, 관계 재사용, Undo identity와 ingress type 경계를 반영한다.
+- [Profile Block](../objects/profile-block.md)에 연합 방향, 관계 재사용과 ingress 검증 경계를 반영한다.
 - PROD-818의 OpenSpec은 이 결정에서 protocol 요구사항과 구현·검증 작업을 도출한다.

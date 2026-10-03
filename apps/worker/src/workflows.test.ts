@@ -1723,9 +1723,8 @@ test(
           await effectReleased;
           throw ApplicationFailure.nonRetryable('ActivityPub effect failed');
         },
-        sendProfileBlockActivity: async (profileBlockId: string, options: unknown) => {
+        sendProfileBlockActivity: async (profileBlockId: string) => {
           assert.equal(profileBlockId, execution.result.profileBlockId);
-          assert.deepEqual(options, { createIfMissing: true });
           calls.push('block:' + profileBlockId);
         },
       },

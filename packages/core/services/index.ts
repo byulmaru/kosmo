@@ -18,16 +18,6 @@ export type { AppliedPostQuoteConsent, ApplyPostQuoteConsentInput } from './post
 export { applyPostQuoteConsent } from './post-quote-consent';
 export { disableProfile } from './profile';
 export { assertProfilePairIsNotBlocked, ProfilePairBlockedError } from './profile-block-policy';
-export type { ProfileBlockProtocolActivityInput } from './profile-block-protocol';
-export {
-  ensureProfileBlockProtocolActivity,
-  ensureProfileBlockProtocolActivityInTransaction,
-  finalizeProfileBlockProtocolUndo,
-  loadProfileBlockProtocolActivity,
-  loadProfileBlockProtocolActivityByProfileBlockId,
-  prepareProfileBlockProtocolUndo,
-  recordProfileBlockProtocolTombstone,
-} from './profile-block-protocol';
 export { followProfile, unfollowProfile } from './profile-follow';
 export type {
   HydratedProfileFollowPairTransition,

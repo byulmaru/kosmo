@@ -27,7 +27,6 @@ let Instances: typeof CoreDb.Instances;
 let localInstanceId: string;
 let localOutboundFederation: typeof LocalOutboundFederation;
 let pg: typeof CoreDb.pg;
-let ProfileBlockActivities: typeof CoreDb.ProfileBlockActivities;
 let ProfileBlocks: typeof CoreDb.ProfileBlocks;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
 let Profiles: typeof CoreDb.Profiles;
@@ -39,17 +38,8 @@ const testInstanceIds = new Set<string>();
 before(async () => {
   process.env.DATABASE_URL ??= 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
   process.env.PUBLIC_ORIGIN = publicOrigin;
-  ({
-    ActivityPubActors,
-    db,
-    firstOrThrow,
-    Instances,
-    pg,
-    ProfileBlockActivities,
-    ProfileBlocks,
-    ProfileFollows,
-    Profiles,
-  } = await import('@kosmo/core/db'));
+  ({ ActivityPubActors, db, firstOrThrow, Instances, pg, ProfileBlocks, ProfileFollows, Profiles } =
+    await import('@kosmo/core/db'));
   const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
   ({ localOutboundFederation } = await import('./local-outbound-federation'));
   ({ sendProfileBlock, sendProfileBlockUndo } = await import('./profile-block-delivery'));
@@ -73,7 +63,7 @@ after(async () => {
   await pg.end();
 });
 
-test('Block과 Undo는 직접 target만 수신하고 관계 삭제 뒤에도 stable identity로 재시도한다', async () => {
+test('Block delivery derives a stable Activity ID from the current relation and targets only that Profile', async () => {
   const fixture = await createFixture();
   const profileBlock = await db
     .insert(ProfileBlocks)
@@ -88,27 +78,53 @@ test('Block과 Undo는 직접 target만 수신하고 관계 삭제 뒤에도 sta
   const contextFixture = createContextFixture();
   mock.method(localOutboundFederation, 'createContext', () => contextFixture.context);
 
-  assert.deepEqual(await sendProfileBlock(profileBlock.id, { createIfMissing: true }), {
-    status: 'SETTLED',
-  });
+  assert.deepEqual(await sendProfileBlock(profileBlock.id), { status: 'SETTLED' });
   assert.equal(contextFixture.calls.length, 1);
-  const blockCall = contextFixture.calls[0];
-  assert.ok(blockCall?.activity instanceof Block);
-  assert.equal(blockCall.activity.id?.href, `${publicOrigin}/ap/block/${profileBlock.id}`);
+  const call = contextFixture.calls[0];
+  assert.ok(call?.activity instanceof Block);
+  assert.equal(call.activity.id?.href, `${publicOrigin}/ap/block/${profileBlock.id}`);
+  assert.equal(
+    call.activity.actorIds[0]?.href,
+    `${publicOrigin}/ap/actor/${fixture.localProfileId}`,
+  );
+  assert.equal(call.activity.objectId?.href, fixture.remoteActorUri);
   assert.deepEqual(
-    blockCall.recipients.map((recipient) => recipient.id?.href),
+    call.recipients.map((recipient) => recipient.id?.href),
     [fixture.remoteActorUri],
   );
-  assert.deepEqual(blockCall.options, {
+  assert.deepEqual(call.options, {
     orderingKey: `profile-block:${publicOrigin}/ap/actor/${fixture.localProfileId}\n${fixture.remoteActorUri}`,
     preferSharedInbox: true,
   });
+});
 
-  const originalActivity = await db
-    .select()
-    .from(ProfileBlockActivities)
-    .where(eq(ProfileBlockActivities.profileBlockId, profileBlock.id))
-    .then((rows) => rows[0]);
+test('Block delivery skips a source after its relation is removed', async () => {
+  const fixture = await createFixture();
+  const profileBlock = await db
+    .insert(ProfileBlocks)
+    .values({ ownerProfileId: fixture.localProfileId, targetProfileId: fixture.remoteProfileId })
+    .returning()
+    .then(firstOrThrow);
+  await db.delete(ProfileBlocks).where(eq(ProfileBlocks.id, profileBlock.id));
+  const contextFixture = createContextFixture();
+  mock.method(localOutboundFederation, 'createContext', () => contextFixture.context);
+
+  assert.deepEqual(await sendProfileBlock(profileBlock.id), {
+    reason: 'stale_source',
+    status: 'SKIPPED',
+  });
+  assert.equal(contextFixture.calls.length, 0);
+});
+
+test('Undo after relation deletion derives its embedded Block without prior Block delivery', async () => {
+  const fixture = await createFixture();
+  const profileBlock = await db
+    .insert(ProfileBlocks)
+    .values({ ownerProfileId: fixture.localProfileId, targetProfileId: fixture.remoteProfileId })
+    .returning()
+    .then(firstOrThrow);
+  const contextFixture = createContextFixture();
+  mock.method(localOutboundFederation, 'createContext', () => contextFixture.context);
 
   const { executeProfileUnblockTransitionActivity } =
     await import('../../../apps/worker/src/activities/profile-block');
@@ -119,11 +135,8 @@ test('Block과 Undo는 직접 target만 수신하고 관계 삭제 뒤에도 sta
   });
   assert.equal(transition.ok && transition.result.removed, true);
   assert.deepEqual(
-    await db
-      .select({ state: ProfileBlockActivities.state })
-      .from(ProfileBlockActivities)
-      .where(eq(ProfileBlockActivities.profileBlockId, profileBlock.id)),
-    [{ state: 'ACTIVE' }],
+    await db.select().from(ProfileBlocks).where(eq(ProfileBlocks.id, profileBlock.id)),
+    [],
   );
 
   assert.deepEqual(
@@ -134,30 +147,22 @@ test('Block과 Undo는 직접 target만 수신하고 관계 삭제 뒤에도 sta
     }),
     { status: 'SETTLED' },
   );
-  assert.equal(contextFixture.calls.length, 2);
-  const undoCall = contextFixture.calls[1];
-  assert.ok(undoCall?.activity instanceof Undo);
-  assert.equal(undoCall.activity.id?.href, `${publicOrigin}/ap/block/${profileBlock.id}/undo`);
-  assert.deepEqual(
-    undoCall.recipients.map((recipient) => recipient.id?.href),
-    [fixture.remoteActorUri],
+  assert.equal(contextFixture.calls.length, 1);
+  const call = contextFixture.calls[0];
+  assert.ok(call?.activity instanceof Undo);
+  assert.equal(call.activity.id?.href, `${publicOrigin}/ap/block/${profileBlock.id}/undo`);
+  assert.equal(
+    call.activity.actorIds[0]?.href,
+    `${publicOrigin}/ap/actor/${fixture.localProfileId}`,
   );
-  const originalBlock = await undoCall.activity.getObject();
+  const originalBlock = await call.activity.getObject();
   assert.ok(originalBlock instanceof Block);
   assert.equal(originalBlock.id?.href, `${publicOrigin}/ap/block/${profileBlock.id}`);
-  assert.deepEqual(undoCall.options, {
-    orderingKey: `profile-block:${publicOrigin}/ap/actor/${fixture.localProfileId}\n${fixture.remoteActorUri}`,
-    preferSharedInbox: true,
-  });
-
-  const settledActivity = await db
-    .select()
-    .from(ProfileBlockActivities)
-    .where(eq(ProfileBlockActivities.activityUri, `${publicOrigin}/ap/block/${profileBlock.id}`))
-    .then((rows) => rows[0]);
-  assert.equal(settledActivity?.state, 'ACTIVE');
-  assert.equal(settledActivity?.closedAt, null);
-  assert.deepEqual(settledActivity, originalActivity);
+  assert.equal(originalBlock.objectId?.href, fixture.remoteActorUri);
+  assert.deepEqual(
+    call.recipients.map((recipient) => recipient.id?.href),
+    [fixture.remoteActorUri],
+  );
 });
 
 test('커밋된 Undo는 Owner와 Local Instance 상태 변경 뒤에도 전송한다', async (t) => {
@@ -169,7 +174,7 @@ test('커밋된 Undo는 Owner와 Local Instance 상태 변경 뒤에도 전송�
     .then(firstOrThrow);
   const contextFixture = createContextFixture();
   mock.method(localOutboundFederation, 'createContext', () => contextFixture.context);
-  await sendProfileBlock(profileBlock.id, { createIfMissing: true });
+  await sendProfileBlock(profileBlock.id);
 
   const { executeProfileUnblockTransitionActivity } =
     await import('../../../apps/worker/src/activities/profile-block');
@@ -232,7 +237,7 @@ test('Block 전달은 누락된 recipient projection을 복원한 뒤 queue에 �
   });
   mock.method(localOutboundFederation, 'createContext', () => contextFixture.context);
 
-  assert.deepEqual(await sendProfileBlock(profileBlock.id, { createIfMissing: true }), {
+  assert.deepEqual(await sendProfileBlock(profileBlock.id), {
     status: 'SETTLED',
   });
   assert.equal(contextFixture.calls.length, 1);
@@ -257,10 +262,7 @@ test('Block 전달은 recipient projection을 복원하지 못하면 실패로 �
   const contextFixture = createContextFixture({ lookupObject: async () => null });
   mock.method(localOutboundFederation, 'createContext', () => contextFixture.context);
 
-  await assert.rejects(
-    sendProfileBlock(profileBlock.id, { createIfMissing: true }),
-    /Remote lookup did not return an actor/,
-  );
+  await assert.rejects(sendProfileBlock(profileBlock.id), /Remote lookup did not return an actor/);
   assert.equal(contextFixture.calls.length, 0);
 });
 
@@ -274,13 +276,10 @@ test('Block queue 인계 실패는 같은 Activity ID로 재시도한다', async
   const contextFixture = createContextFixture({ failSendOnce: true });
   mock.method(localOutboundFederation, 'createContext', () => contextFixture.context);
 
-  await assert.rejects(
-    sendProfileBlock(profileBlock.id, { createIfMissing: true }),
-    /queue handoff failed/,
-  );
+  await assert.rejects(sendProfileBlock(profileBlock.id), /queue handoff failed/);
   assert.equal(contextFixture.calls.length, 0);
 
-  assert.deepEqual(await sendProfileBlock(profileBlock.id, { createIfMissing: true }), {
+  assert.deepEqual(await sendProfileBlock(profileBlock.id), {
     status: 'SETTLED',
   });
   assert.equal(contextFixture.calls.length, 1);
@@ -310,7 +309,7 @@ test('Undo 전달도 누락된 recipient projection을 복원한 뒤 queue에 �
   });
   mock.method(localOutboundFederation, 'createContext', () => contextFixture.context);
 
-  await sendProfileBlock(profileBlock.id, { createIfMissing: true });
+  await sendProfileBlock(profileBlock.id);
   await db.delete(ProfileBlocks).where(eq(ProfileBlocks.id, profileBlock.id));
   await db
     .update(ActivityPubActors)
@@ -355,7 +354,7 @@ test('Undo 전달 실패 후에도 같은 identity로 다시 queue에 인계한�
   });
   mock.method(localOutboundFederation, 'createContext', () => contextFixture.context);
 
-  await sendProfileBlock(profileBlock.id, { createIfMissing: true });
+  await sendProfileBlock(profileBlock.id);
   await db.delete(ProfileBlocks).where(eq(ProfileBlocks.id, profileBlock.id));
   await db
     .update(ActivityPubActors)
@@ -371,13 +370,6 @@ test('Undo 전달 실패 후에도 같은 identity로 다시 queue에 인계한�
     /Remote lookup did not return an actor/,
   );
   assert.equal(contextFixture.calls.length, 1);
-  assert.deepEqual(
-    await db
-      .select({ state: ProfileBlockActivities.state })
-      .from(ProfileBlockActivities)
-      .where(eq(ProfileBlockActivities.activityUri, `${publicOrigin}/ap/block/${profileBlock.id}`)),
-    [{ state: 'ACTIVE' }],
-  );
   canMaterialize = true;
   assert.deepEqual(
     await sendProfileBlockUndo({
@@ -392,13 +384,6 @@ test('Undo 전달 실패 후에도 같은 identity로 다시 queue에 인계한�
     contextFixture.calls[1]?.activity.id?.href,
     `${publicOrigin}/ap/block/${profileBlock.id}/undo`,
   );
-  const settledActivity = await db
-    .select()
-    .from(ProfileBlockActivities)
-    .where(eq(ProfileBlockActivities.activityUri, `${publicOrigin}/ap/block/${profileBlock.id}`))
-    .then((rows) => rows[0]);
-  assert.equal(settledActivity?.state, 'ACTIVE');
-  assert.equal(settledActivity?.closedAt, null);
 });
 
 type SendActivityCall = {

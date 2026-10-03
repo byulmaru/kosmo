@@ -9,7 +9,10 @@ import { WithStartWorkflowOperation } from '@temporalio/client';
 import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
 import { and, eq } from 'drizzle-orm';
-import type { ProfileBlockTransitionResult } from '@kosmo/core/temporal/profile-block';
+import type {
+  ProfileBlockTransitionResult,
+  ProfileUnblockTransitionResult,
+} from '@kosmo/core/temporal/profile-block';
 
 process.env.DATABASE_URL ??= 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 
@@ -20,7 +23,14 @@ process.env.TEMPORAL_ADDRESS = environment.address;
 process.env.TEMPORAL_NAMESPACE = environment.namespace ?? 'default';
 
 const [
-  { PROFILE_BLOCK_UPDATE_ID, PROFILE_BLOCK_UPDATE_NAME, profileBlockWorkflow },
+  {
+    PROFILE_BLOCK_UPDATE_ID,
+    PROFILE_BLOCK_UPDATE_NAME,
+    PROFILE_UNBLOCK_UPDATE_NAME,
+    profileBlockWorkflow,
+    profileUnblockUpdateId,
+    profileUnblockWorkflow,
+  },
   { db, firstOrThrow, Instances, pg, ProfileBlocks, Profiles },
   activities,
 ] = await Promise.all([
@@ -223,5 +233,158 @@ test(
       blockEffectReleased.resolve();
       duplicateTransitionReleased.resolve();
     }
+  },
+);
+
+test(
+  'Profile Unblock Activity retry removes the inbound current pair without an outbound echo',
+  { timeout: 120_000 },
+  async () => {
+    await truncateDatabase();
+    const input = await createFixture();
+    const block = await activities.executeProfileBlockTransitionActivity({
+      ownerProfileId: input.ownerProfileId,
+      targetProfileId: input.targetProfileId,
+      origin: 'ACTIVITYPUB',
+    });
+    assert.equal(block.ok, true);
+
+    const command = {
+      ownerProfileId: input.ownerProfileId,
+      targetProfileId: input.targetProfileId,
+      origin: 'ACTIVITYPUB' as const,
+    };
+    const taskQueue = `${KOSMO_TASK_QUEUE}-profile-unblock-retry-${process.pid}`;
+    let unblockActivityAttempts = 0;
+    let outboundUndoAttempts = 0;
+    const retryWorker = await Worker.create({
+      activities: {
+        ...activities,
+        executeProfileUnblockTransitionActivity: async (
+          value: Parameters<typeof activities.executeProfileUnblockTransitionActivity>[0],
+        ) => {
+          unblockActivityAttempts += 1;
+          if (unblockActivityAttempts === 1) {
+            throw new Error('injected transient Profile Unblock Activity failure');
+          }
+          return activities.executeProfileUnblockTransitionActivity(value);
+        },
+        sendProfileBlockUndoActivity: async () => {
+          outboundUndoAttempts += 1;
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+    await retryWorker.runUntil(async () => {
+      const startWorkflowOperation = new WithStartWorkflowOperation(
+        profileUnblockWorkflow.workflow,
+        {
+          args: [command],
+          taskQueue,
+          workflowId: profileUnblockWorkflow.workflowIdFromArgs(command),
+          workflowIdConflictPolicy: 'USE_EXISTING',
+          workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+        },
+      );
+      const result = (await environment.client.workflow.executeUpdateWithStart(
+        PROFILE_UNBLOCK_UPDATE_NAME,
+        {
+          args: [command],
+          updateId: profileUnblockUpdateId(command),
+          startWorkflowOperation,
+        },
+      )) as ProfileUnblockTransitionResult;
+      assert.equal(result.removed, true);
+      await (await startWorkflowOperation.workflowHandle()).result();
+    });
+
+    assert.ok(unblockActivityAttempts >= 2);
+    assert.equal(outboundUndoAttempts, 0);
+    assert.equal((await db.select().from(ProfileBlocks)).length, 0);
+  },
+);
+
+test(
+  'Profile Unblock Update returns the committed removal while the local Undo effect is held',
+  { timeout: 120_000 },
+  async () => {
+    await truncateDatabase();
+    const input = await createFixture();
+    const block = await activities.executeProfileBlockTransitionActivity(input);
+    assert.equal(block.ok, true);
+    if (!block.ok) {
+      return;
+    }
+
+    const command = {
+      ownerProfileId: input.ownerProfileId,
+      profileBlockId: block.result.profileBlockId,
+      targetProfileId: input.targetProfileId,
+    };
+    const undoActivityStarted =
+      Promise.withResolvers<Parameters<typeof activities.sendProfileBlockUndoActivity>[0]>();
+    const releaseUndoActivity = Promise.withResolvers<void>();
+    const taskQueue = `${KOSMO_TASK_QUEUE}-profile-unblock-held-${process.pid}`;
+    const heldUndoWorker = await Worker.create({
+      activities: {
+        ...activities,
+        sendProfileBlockUndoActivity: async (
+          value: Parameters<typeof activities.sendProfileBlockUndoActivity>[0],
+        ) => {
+          undoActivityStarted.resolve(value);
+          await releaseUndoActivity.promise;
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await heldUndoWorker.runUntil(async () => {
+      try {
+        const startWorkflowOperation = new WithStartWorkflowOperation(
+          profileUnblockWorkflow.workflow,
+          {
+            args: [command],
+            taskQueue,
+            workflowId: profileUnblockWorkflow.workflowIdFromArgs(command),
+            workflowIdConflictPolicy: 'USE_EXISTING',
+            workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+          },
+        );
+        const result = (await environment.client.workflow.executeUpdateWithStart(
+          PROFILE_UNBLOCK_UPDATE_NAME,
+          {
+            args: [command],
+            updateId: profileUnblockUpdateId(command),
+            startWorkflowOperation,
+          },
+        )) as ProfileUnblockTransitionResult;
+        assert.deepEqual(result, {
+          removed: true,
+          profileBlockId: command.profileBlockId,
+          ownerProfileId: command.ownerProfileId,
+          targetProfileId: command.targetProfileId,
+        });
+        assert.deepEqual(await undoActivityStarted.promise, {
+          ownerProfileId: command.ownerProfileId,
+          profileBlockId: command.profileBlockId,
+          targetProfileId: command.targetProfileId,
+        });
+        assert.deepEqual(
+          await db.select().from(ProfileBlocks).where(eq(ProfileBlocks.id, command.profileBlockId)),
+          [],
+        );
+
+        releaseUndoActivity.resolve();
+        await (await startWorkflowOperation.workflowHandle()).result();
+      } finally {
+        releaseUndoActivity.resolve();
+      }
+    });
   },
 );

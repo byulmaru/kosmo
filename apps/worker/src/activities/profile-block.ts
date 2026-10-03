@@ -3,18 +3,13 @@ import {
   first,
   Instances,
   Notifications,
-  ProfileBlockActivities,
   ProfileBlocks,
   ProfileFollowRequests,
   ProfileFollows,
   Profiles,
 } from '@kosmo/core/db';
 import { InstanceKind, InstanceState, NotificationKind } from '@kosmo/core/enums';
-import { ConflictError, KosmoError, NotFoundError, ValidationError } from '@kosmo/core/error';
-import {
-  ensureProfileBlockProtocolActivityInTransaction,
-  loadProfileBlockProtocolActivity,
-} from '@kosmo/core/services';
+import { ConflictError, KosmoError, NotFoundError } from '@kosmo/core/error';
 import { and, eq, inArray, or, sql } from 'drizzle-orm';
 import type {
   ProfileBlockInput,
@@ -85,13 +80,6 @@ export const executeProfileBlockTransitionActivity = async (
         throw new NotFoundError('Profile not found');
       }
 
-      const existingProtocol = input.protocolActivity
-        ? await loadProfileBlockProtocolActivity(input.protocolActivity.activityUri, tx)
-        : undefined;
-      if (existingProtocol && existingProtocol.state !== 'ACTIVE') {
-        throw new ConflictError({ message: 'Profile Block activity has already been closed' });
-      }
-
       const inserted = await tx
         .insert(ProfileBlocks)
         .values({
@@ -118,16 +106,6 @@ export const executeProfileBlockTransitionActivity = async (
           .then(first));
       if (!profileBlock) {
         throw new Error('Profile Block not found after insert conflict');
-      }
-
-      if (input.protocolActivity && (inserted || existingProtocol)) {
-        const protocol = await ensureProfileBlockProtocolActivityInTransaction(
-          { ...input.protocolActivity, profileBlockId: profileBlock.id },
-          tx,
-        );
-        if (protocol.state !== 'ACTIVE') {
-          throw new ConflictError({ message: 'Profile Block activity has already been closed' });
-        }
       }
 
       const unfollowInputs: ProfileBlockUnfollowInput[] = [];
@@ -266,63 +244,23 @@ export const executeProfileBlockTransitionActivity = async (
   }
 };
 
-/** The Unblock transition has no relationship or post-commit effect cleanup. */
+/** Commits local exact-ID or verified inbound pair removal. */
 export const executeProfileUnblockTransitionActivity = async (
   input: ProfileUnblockInput,
 ): Promise<ProfileUnblockTransitionExecution> => {
   try {
     return await db.transaction(async (tx) => {
-      if (input.protocolActivityUri) {
-        const original = await loadProfileBlockProtocolActivity(input.protocolActivityUri, tx);
-        if (!original || original.state === 'CLOSED') {
-          return {
-            ok: true,
-            result: {
-              removed: false,
-              profileBlockId: null,
-              ownerProfileId: input.ownerProfileId,
-              targetProfileId: input.targetProfileId,
-            },
-          };
-        }
-        if (
-          original.profileBlockId !== input.profileBlockId ||
-          original.ownerProfileId !== input.ownerProfileId ||
-          original.targetProfileId !== input.targetProfileId
-        ) {
-          throw new ValidationError('Profile Block Undo does not match its original relation');
-        }
-      }
       const profileBlock = await tx
         .delete(ProfileBlocks)
         .where(
           and(
             eq(ProfileBlocks.ownerProfileId, input.ownerProfileId),
             eq(ProfileBlocks.targetProfileId, input.targetProfileId),
-            eq(ProfileBlocks.id, input.profileBlockId),
+            ...('profileBlockId' in input ? [eq(ProfileBlocks.id, input.profileBlockId)] : []),
           ),
         )
-        .returning()
+        .returning({ id: ProfileBlocks.id })
         .then(first);
-      await tx
-        .update(ProfileBlockActivities)
-        .set({
-          state: 'CLOSED',
-          closedAt: sql`now()`,
-          updatedAt: sql`now()`,
-        })
-        .where(
-          and(
-            eq(ProfileBlockActivities.profileBlockId, input.profileBlockId),
-            eq(ProfileBlockActivities.ownerProfileId, input.ownerProfileId),
-            eq(ProfileBlockActivities.targetProfileId, input.targetProfileId),
-            eq(ProfileBlockActivities.state, 'ACTIVE'),
-            eq(ProfileBlockActivities.origin, 'INBOUND'),
-            ...(input.protocolActivityUri
-              ? [eq(ProfileBlockActivities.activityUri, input.protocolActivityUri)]
-              : []),
-          ),
-        );
       const result: ProfileUnblockTransitionResult = {
         removed: profileBlock !== undefined,
         profileBlockId: profileBlock?.id ?? null,

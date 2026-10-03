@@ -36,7 +36,6 @@ Profile Block의 도메인 계약은 Owner Profile이 Local인지 Remote인지 �
 요구하지 않는다. 각 ingress는 자체 인증·admission 경계를 검증한다. 현재 GraphQL ingress는
 [ADR 0019](../decisions/0019-selected-profile-authorization-boundary.md)에 따라 Account-Profile Membership으로
 인증된 selected Profile을 사용하며, 선택 자격에 Profile Origin·Role·생성자 조건을 추가하지 않는다.
-remote ActivityPub ingress와 Block/Undo 전달은 `PROD-818`의 후속 범위다.
 
 ActivityPub 연합은 [ADR 0031](../decisions/0031-profile-block-federation.md)에 따라 Mastodon 호환 발신·수신을
 지원한다. Local Owner가 Remote Target을 차단하거나 해제하면 `Block` 또는 `Undo(Block)`를 Target의 원격
@@ -47,13 +46,13 @@ ActivityPub 연합은 [ADR 0031](../decisions/0031-profile-block-federation.md)�
 Owner는 자기 방향의 관계만 생성·제거하며, 반대 방향 Local Owner의 Block은 변경하지 않는다. 수신한 차단·해제를
 다시 같은 `Block` 또는 `Undo(Block)`로 발신하지 않는다.
 
-Profile Block과 연합 기능은 함께 사용 가능해졌으므로 protocol 원본 없이 먼저 존재하던 발신 대상 Profile Block을
-legacy 상태로 취급하지 않는다. 발신 대상인 모든 Local Owner → Remote Target 해제는 exact `profileBlockId`로
-안정적인 원본 identity를 구성해 `Undo(Block)`만 전달한다. metadata 부재를 이유로 선행 `Block`을 만들거나 해제를
-생략하지 않으며, 상대 서버가 원본을 모르는 경우 Undo no-op을 허용한다. inbound Undo는 embedded object가 실제
-`Block`이고 인증된 actor·Local Target·방향 pair가 일치할 때 현재 관계를 해제한다. 원격 Block URI가 달라도
-해제를 누락하지 않으며, URI-only와 non-Block Activity는 URI 일치만으로 Block으로 추론하지 않는다.
-재전달된 Undo가 새 관계를 해제하지 않도록 최상위 Undo Activity ID가 유효한 HTTP(S) URI일 때만 관계를 변경한다.
+발신 Block identity는 기존 local Profile Block ID에서 안정적으로 도출하며 별도 protocol identity나 tombstone은 요구하지 않는다.
+모든 Local Owner → Remote Target 해제는 선행 Block을 새로 보내거나 해제를 생략하지 않고, 해당 identity를 참조하는
+`Undo(Block)`만 전달한다. 상대 서버가 원본을 모르면 해당 Undo는 no-op일 수 있다. Inbound Block과 Undo는 verified
+Remote Owner, HTTP local object, 활성 Local recipient와 방향이 맞는 Remote Owner → Local Target pair를 검증한다.
+Inbound Undo 경로는 embedded object가 실제 `Block`일 때만 처리하며, 최상위 actor는 embedded Block actor와 같아야 한다.
+이 검증은 current pair 관계를 적용하며, 별도 generation identity를 보존하거나 이전 Undo로부터 재차단 관계를 보호하지
+않는다. URI-only와 non-Block Activity는 URI만으로 Block으로 추론하지 않는다.
 
 ## 권한
 

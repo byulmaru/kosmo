@@ -2,18 +2,14 @@ import '@kosmo/core/polyfill';
 
 import { Block } from '@fedify/vocab';
 import { ConflictError, NotFoundError, ValidationError } from '@kosmo/core/error';
-import {
-  ensureProfileBlockProtocolActivity,
-  finalizeProfileBlockProtocolUndo,
-  loadProfileBlockProtocolActivity,
-  prepareProfileBlockProtocolUndo,
-} from '@kosmo/core/services';
 import { runWorkflow } from '@kosmo/core/temporal/client';
 import {
+  PROFILE_BLOCK_UPDATE_ID,
   profileBlockWorkflow,
   profileUnblockUpdateId,
   profileUnblockWorkflow,
 } from '@kosmo/core/temporal/profile-block';
+import { rethrowProfileBlockWorkflowFailure } from '@kosmo/core/temporal/profile-block-failure';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
 import { resolveInboundLocalRecipient } from './inbound-local-recipient';
 import { observeInbound } from './inbound-observability';
@@ -22,7 +18,10 @@ import {
   RemoteActorMaterializationError,
 } from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
-import type { ProfileBlockTransitionResult } from '@kosmo/core/temporal/profile-block';
+import type {
+  ProfileBlockTransitionResult,
+  ProfileUnblockTransitionResult,
+} from '@kosmo/core/temporal/profile-block';
 
 const isExpectedTemporalAdmissionRejection = (
   error: unknown,
@@ -64,11 +63,10 @@ export const handleInboundBlock = async (
   block: Block,
   now: Temporal.Instant = Temporal.Now.instant(),
 ): Promise<void> => {
-  const activityUri = block.id;
   const actorHref = uniqueHref(block.actorIds);
   const objectUri = block.objectId;
 
-  if (!isHttpUri(activityUri) || !actorHref || !isHttpUri(objectUri)) {
+  if (!actorHref || !isHttpUri(objectUri)) {
     observeRejectedBlock({
       actorUri: actorHref ? new URL(actorHref) : undefined,
       objectUri: objectUri ?? undefined,
@@ -86,20 +84,6 @@ export const handleInboundBlock = async (
       actorUri,
       objectUri,
       reasonCode: 'local_recipient_not_found',
-    });
-    return;
-  }
-
-  const existingProtocol = await loadProfileBlockProtocolActivity(activityUri.href);
-  if (existingProtocol?.state === 'CLOSED') {
-    observeInbound({
-      activityType: 'Block',
-      actorOrigin: actorUri.origin,
-      handler: 'block',
-      objectOrigin: objectUri.origin,
-      outcome: 'noop',
-      phase: 'projection',
-      reasonCode: 'duplicate_or_closed_block_noop',
     });
     return;
   }
@@ -132,19 +116,12 @@ export const handleInboundBlock = async (
     const command = {
       ownerProfileId: remoteActor.profile.id,
       origin: 'ACTIVITYPUB',
-      protocolActivity: {
-        activityUri: activityUri.href,
-        actorUri: actorUri.href,
-        objectUri: objectUri.href,
-        origin: 'INBOUND',
-        ownerProfileId: remoteActor.profile.id,
-        targetProfileId: localRecipient.id,
-      },
       targetProfileId: localRecipient.id,
     } as const;
     result = await runWorkflow(profileBlockWorkflow, {
       args: [command],
       updateArgs: [command],
+      updateId: PROFILE_BLOCK_UPDATE_ID,
       mode: 'update-with-start',
       workflowIdConflictPolicy: 'USE_EXISTING',
       workflowIdReusePolicy: 'ALLOW_DUPLICATE',
@@ -161,28 +138,6 @@ export const handleInboundBlock = async (
     throw error;
   }
 
-  try {
-    await ensureProfileBlockProtocolActivity({
-      activityUri: activityUri.href,
-      actorUri: actorUri.href,
-      objectUri: objectUri.href,
-      origin: 'INBOUND',
-      ownerProfileId: remoteActor.profile.id,
-      profileBlockId: result.profileBlockId,
-      targetProfileId: localRecipient.id,
-    });
-  } catch (error) {
-    if (isExpectedAdmissionRejection(error)) {
-      observeRejectedBlock({
-        actorUri,
-        objectUri,
-        reasonCode: 'profile_block_protocol_rejected',
-      });
-      return;
-    }
-    throw error;
-  }
-
   if (!result.created) {
     observeInbound({
       activityType: 'Block',
@@ -191,7 +146,7 @@ export const handleInboundBlock = async (
       objectOrigin: objectUri.origin,
       outcome: 'noop',
       phase: 'projection',
-      reasonCode: 'duplicate_or_closed_block_noop',
+      reasonCode: 'duplicate_block_noop',
     });
   }
 };
@@ -199,7 +154,6 @@ export const handleInboundBlock = async (
 type InboundUndoBlockInput = {
   readonly context: InboxContext<void>;
   readonly actorUri: URL;
-  readonly undoUri?: URL | null;
   readonly objectUri: URL | null;
   readonly embedded: unknown;
   readonly remoteActorProfileId: string;
@@ -212,7 +166,6 @@ type InboundUndoBlockInput = {
 export const handleInboundUndoBlock = async ({
   context,
   actorUri,
-  undoUri,
   objectUri,
   embedded,
   remoteActorProfileId,
@@ -225,23 +178,6 @@ export const handleInboundUndoBlock = async ({
   }
   const embeddedBlock = embedded;
 
-  const activityUri = embeddedBlock.id;
-  const undoActivityUri = undoUri ?? null;
-  if (!isHttpUri(undoActivityUri)) {
-    observeInbound({
-      activityType: 'Undo',
-      actorOrigin: actorUri.origin,
-      handler: 'undo',
-      objectOrigin: objectUri?.origin,
-      outcome: 'rejected',
-      phase: 'protocol',
-      reasonCode: 'invalid_block_undo_identity',
-    });
-    return true;
-  }
-  const stored = isHttpUri(activityUri)
-    ? await loadProfileBlockProtocolActivity(activityUri.href)
-    : undefined;
   const originalActorHref = uniqueHref(embeddedBlock.actorIds);
   const originalActorUri = originalActorHref ? new URL(originalActorHref) : null;
   const originalObjectUri = embeddedBlock.objectId;
@@ -279,67 +215,40 @@ export const handleInboundUndoBlock = async ({
     return true;
   }
 
-  if (stored) {
-    if (
-      stored.origin !== 'INBOUND' ||
-      stored.actorUri !== actorUri.href ||
-      stored.objectUri !== originalObjectUri.href ||
-      stored.ownerProfileId !== remoteActorProfileId ||
-      stored.targetProfileId !== localRecipient.id
-    ) {
-      observeInbound({
-        activityType: 'Undo',
-        actorOrigin: actorUri.origin,
-        handler: 'undo',
-        objectOrigin: originalObjectUri.origin,
-        outcome: 'rejected',
-        phase: 'protocol',
-        reasonCode: 'stored_block_identity_mismatch',
-      });
-      return true;
-    }
-  }
-
-  const preparation = await prepareProfileBlockProtocolUndo({
-    actorUri: actorUri.href,
-    objectUri: originalObjectUri.href,
-    ...(isHttpUri(activityUri) ? { originalActivityUri: activityUri.href } : {}),
-    ownerProfileId: remoteActorProfileId,
-    targetProfileId: localRecipient.id,
-    undoActivityUri: `undo:${undoActivityUri.href}`,
-  });
-  if (preparation.kind !== 'REMOVE') {
-    observeInbound({
-      activityType: 'Undo',
-      actorOrigin: actorUri.origin,
-      handler: 'undo',
-      objectOrigin: originalObjectUri.origin,
-      outcome: 'noop',
-      phase: 'projection',
-      reasonCode: 'block_undo_missing_or_repeated',
-    });
-    return true;
-  }
-
   const command = {
     ownerProfileId: remoteActorProfileId,
     origin: 'ACTIVITYPUB',
-    profileBlockId: preparation.profileBlockId,
     targetProfileId: localRecipient.id,
   } as const;
-  const result = await runWorkflow(profileUnblockWorkflow, {
-    args: [command],
-    updateArgs: [command],
-    updateId: profileUnblockUpdateId(command),
-    mode: 'update-with-start',
-    workflowIdConflictPolicy: 'USE_EXISTING',
-    workflowIdReusePolicy: 'ALLOW_DUPLICATE',
-  });
-  await finalizeProfileBlockProtocolUndo({
-    ownerProfileId: remoteActorProfileId,
-    profileBlockId: preparation.profileBlockId,
-    targetProfileId: localRecipient.id,
-  });
+  let result!: ProfileUnblockTransitionResult;
+  try {
+    result = await runWorkflow(profileUnblockWorkflow, {
+      args: [command],
+      updateArgs: [command],
+      updateId: profileUnblockUpdateId(command),
+      mode: 'update-with-start',
+      workflowIdConflictPolicy: 'USE_EXISTING',
+      workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+    });
+  } catch (error) {
+    try {
+      rethrowProfileBlockWorkflowFailure(error);
+    } catch (normalizedError) {
+      if (isExpectedAdmissionRejection(normalizedError)) {
+        observeInbound({
+          activityType: 'Undo',
+          actorOrigin: actorUri.origin,
+          handler: 'undo',
+          objectOrigin: originalObjectUri.origin,
+          outcome: 'rejected',
+          phase: 'projection',
+          reasonCode: 'profile_block_undo_admission_rejected',
+        });
+        return true;
+      }
+      throw normalizedError;
+    }
+  }
   if (!result.removed) {
     observeInbound({
       activityType: 'Undo',

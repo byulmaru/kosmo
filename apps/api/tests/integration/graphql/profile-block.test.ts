@@ -1347,6 +1347,7 @@ describe('GraphQL Profile Block', () => {
         profileBlockWorkflowId({
           ownerProfileId: owner.profile.id,
           targetProfileId: target.id,
+          origin: 'LOCAL',
         }),
       )
       .result();
