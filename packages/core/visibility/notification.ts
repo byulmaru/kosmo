@@ -10,7 +10,14 @@ import {
   Profiles,
   Reactions,
 } from '../db';
-import { InstanceKind, InstanceState, NotificationKind, PostState, ProfileState } from '../enums';
+import {
+  InstanceKind,
+  InstanceState,
+  NotificationKind,
+  PostQuoteConsentStatus,
+  PostState,
+  ProfileState,
+} from '../enums';
 import { visiblePostWhere } from './post';
 import { visibleProfileWhere } from './profile';
 import { profileBlockVisibilityWhere } from './profile-block';
@@ -472,6 +479,10 @@ export const notificationSourceAvailabilityWhere = (
             isNotNull(NotificationQuotePosts.currentContentId),
             eq(NotificationQuoteSources.state, PostState.ACTIVE),
             isNotNull(NotificationQuoteSources.currentContentId),
+            or(
+              isNull(NotificationQuotePosts.quoteConsentStatus),
+              eq(NotificationQuotePosts.quoteConsentStatus, PostQuoteConsentStatus.APPROVED),
+            ),
             quoteRecipientAvailability,
             not(
               exists(

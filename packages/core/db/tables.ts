@@ -354,6 +354,8 @@ export const Posts = pgTable(
       onDelete: 'set null',
     }),
     repostSourceId: uuid('repost_source_id').references((): AnyPgColumn => Posts.id),
+    quoteConsentStatus: Enum.postQuoteConsentStatus('quote_consent_status'),
+    quoteConsentApprovalUri: text('quote_consent_approval_uri'),
     createdAt: createdAt(),
     deletedAt: datetime('deleted_at'),
   },
@@ -366,6 +368,9 @@ export const Posts = pgTable(
     index('post_reply_parent_id_index')
       .on(table.replyParentId)
       .where(sql`${table.replyParentId} IS NOT NULL`),
+    index('post_repost_source_id_index')
+      .on(table.repostSourceId)
+      .where(sql`${table.repostSourceId} IS NOT NULL`),
     uniqueIndex('post_active_repost_profile_source_unique')
       .on(table.profileId, table.repostSourceId)
       .where(

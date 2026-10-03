@@ -6,6 +6,7 @@ import {
   InstanceKind,
   InstanceState,
   NotificationKind,
+  PostQuoteConsentStatus,
   PostState,
   PostVisibility,
   ProfileFollowPolicy,
@@ -201,6 +202,12 @@ test('cleanup evaluates Quote source and preserves only recipient-only inactivit
     profileId: quoteAuthor.id,
     repostSourceId: availableSource.id,
   });
+  const approvedSource = await createPost({ profileId: recipient.id });
+  const approvedQuote = await createPost({
+    profileId: quoteAuthor.id,
+    repostSourceId: approvedSource.id,
+    quoteConsentStatus: PostQuoteConsentStatus.APPROVED,
+  });
   const unavailableSource = await createPost({ profileId: recipient.id });
   const unavailableQuote = await createPost({
     profileId: quoteAuthor.id,
@@ -217,6 +224,11 @@ test('cleanup evaluates Quote source and preserves only recipient-only inactivit
     recipientProfileId: recipient.id,
     sourceId: availableQuote.id,
   });
+  const approved = await createNotification({
+    kind: NotificationKind.QUOTE,
+    recipientProfileId: recipient.id,
+    sourceId: approvedQuote.id,
+  });
   const unavailable = await createNotification({
     kind: NotificationKind.QUOTE,
     recipientProfileId: recipient.id,
@@ -227,6 +239,25 @@ test('cleanup evaluates Quote source and preserves only recipient-only inactivit
     recipientProfileId: recipientOnlyInactive.id,
     sourceId: recipientOnlyQuote.id,
   });
+  const nonApproved = await Promise.all(
+    [
+      PostQuoteConsentStatus.PENDING,
+      PostQuoteConsentStatus.REJECTED,
+      PostQuoteConsentStatus.REVOKED,
+    ].map(async (quoteConsentStatus) => {
+      const source = await createPost({ profileId: recipient.id });
+      const quote = await createPost({
+        profileId: quoteAuthor.id,
+        repostSourceId: source.id,
+        quoteConsentStatus,
+      });
+      return createNotification({
+        kind: NotificationKind.QUOTE,
+        recipientProfileId: recipient.id,
+        sourceId: quote.id,
+      });
+    }),
+  );
 
   await db
     .update(Posts)
@@ -242,8 +273,19 @@ test('cleanup evaluates Quote source and preserves only recipient-only inactivit
   const remaining = await db
     .select({ id: Notifications.id })
     .from(Notifications)
-    .where(inArray(Notifications.id, [available.id, unavailable.id, recipientOnly.id]));
-  assert.deepEqual(remaining.map(({ id }) => id).sort(), [available.id, recipientOnly.id].sort());
+    .where(
+      inArray(Notifications.id, [
+        available.id,
+        approved.id,
+        unavailable.id,
+        recipientOnly.id,
+        ...nonApproved.map(({ id }) => id),
+      ]),
+    );
+  assert.deepEqual(
+    remaining.map(({ id }) => id).sort(),
+    [available.id, approved.id, recipientOnly.id].sort(),
+  );
 });
 
 test('cleanup converges across bounded Activity invocations and preserves available notifications', async () => {
@@ -390,11 +432,13 @@ const createPost = async ({
   profileId,
   replyParentId = null,
   repostSourceId = null,
+  quoteConsentStatus = null,
   withContent = true,
 }: {
   readonly profileId: string;
   readonly replyParentId?: string | null;
   readonly repostSourceId?: string | null;
+  readonly quoteConsentStatus?: PostQuoteConsentStatus | null;
   readonly withContent?: boolean;
 }) => {
   const post = await db
@@ -405,6 +449,7 @@ const createPost = async ({
       visibility: PostVisibility.PUBLIC,
       replyParentId,
       repostSourceId,
+      quoteConsentStatus,
       currentContentId: null,
     })
     .returning()

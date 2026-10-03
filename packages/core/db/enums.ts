@@ -22,6 +22,10 @@ export const mediaSource = createPgEnum('media_source', Enum.MediaSource);
 export const mediaState = createPgEnum('media_state', Enum.MediaState);
 export const notificationKind = createPgEnum('notification_kind', Enum.NotificationKind);
 export const oauthTokenState = createPgEnum('oauth_token_state', Enum.OAuthTokenState);
+export const postQuoteConsentStatus = createPgEnum(
+  'post_quote_consent_status',
+  Enum.PostQuoteConsentStatus,
+);
 export const postState = createPgEnum('post_state', Enum.PostState);
 export const postVisibility = createPgEnum('post_visibility', Enum.PostVisibility);
 export const profileFollowPolicy = createPgEnum('profile_follow_policy', Enum.ProfileFollowPolicy);

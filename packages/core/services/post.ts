@@ -19,6 +19,7 @@ import {
   InstanceState,
   MediaSource,
   MediaState,
+  PostQuoteConsentStatus,
   PostState,
   PostVisibility,
   ProfileState,
@@ -31,6 +32,7 @@ import {
 import { temporalClient } from '../temporal/client';
 import { KOSMO_TASK_QUEUE } from '../temporal/task-queue';
 import { postVisibilityCondition } from '../visibility/post';
+import { revokePostQuoteConsentsForSource } from './post-quote-consent';
 import { validatePostStructure } from './post-structure';
 import { assertProfilePairIsNotBlocked } from './profile-block-policy';
 import type { Transaction } from '../db';
@@ -473,6 +475,10 @@ export const deletePost = async ({
       })
       .then(first);
 
+    if (deleted && post.currentContentId !== null) {
+      await revokePostQuoteConsentsForSource(tx, postId);
+    }
+
     const sourcePostId =
       post.currentContentId === null && post.replyParentId === null ? post.repostSourceId : null;
     return { deleted, result: { postId, sourcePostId } };
@@ -715,6 +721,10 @@ export async function createPost(
           currentContentId: content.id,
           profileId: input.profileId,
           repostSourceId: input.origin === 'LOCAL' ? (input.repostSourceId ?? null) : undefined,
+          quoteConsentStatus:
+            input.origin === 'LOCAL' && input.repostSourceId !== undefined
+              ? PostQuoteConsentStatus.APPROVED
+              : undefined,
           state: PostState.ACTIVE,
           visibility: input.visibility,
         })

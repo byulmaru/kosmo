@@ -14,6 +14,8 @@ export {
   deleteRepostNotification,
 } from './notification';
 export { createPost, deletePost, repostPost } from './post';
+export type { AppliedPostQuoteConsent, ApplyPostQuoteConsentInput } from './post-quote-consent';
+export { applyPostQuoteConsent } from './post-quote-consent';
 export { disableProfile } from './profile';
 export { assertProfilePairIsNotBlocked, ProfilePairBlockedError } from './profile-block-policy';
 export type { ProfileBlockProtocolActivityInput } from './profile-block-protocol';

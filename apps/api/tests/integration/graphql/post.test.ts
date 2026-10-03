@@ -12,6 +12,7 @@ import {
   InstanceState,
   MediaSource,
   MediaState,
+  PostQuoteConsentStatus,
   PostState,
   PostVisibility,
   ProfileFollowPolicy,
@@ -1162,6 +1163,47 @@ describe('Post Reply GraphQL 경계', () => {
     });
   });
 
+  test('조상 Quote의 consent 상태에 따라 repostSource를 숨기거나 노출한다', async () => {
+    const author = await createProfile('ancestor-quote-consent-author');
+    const source = await createContentfulPost(author.id);
+    const statuses = [
+      null,
+      PostQuoteConsentStatus.REVOKED,
+      PostQuoteConsentStatus.REJECTED,
+      PostQuoteConsentStatus.PENDING,
+      PostQuoteConsentStatus.APPROVED,
+    ] as const;
+    const quotes: Array<{ id: string; status: (typeof statuses)[number] }> = [];
+    let replyParentId: string | undefined;
+
+    for (const status of statuses) {
+      const quote = await createContentfulPost(author.id, {
+        replyParentId,
+        repostSourceId: source.id,
+      });
+      if (status !== null) {
+        await db.update(Posts).set({ quoteConsentStatus: status }).where(eq(Posts.id, quote.id));
+      }
+      quotes.push({ id: quote.id, status });
+      replyParentId = quote.id;
+    }
+
+    const reply = await createContentfulPost(author.id, { replyParentId });
+    const result = await requestPostAncestorsWithSources(reply.id);
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(
+      result.data?.node?.replyAncestors,
+      [...quotes].reverse().map(({ id, status }) => ({
+        id: encodeGlobalId('Post', id),
+        repostSource:
+          status === null || status === PostQuoteConsentStatus.APPROVED
+            ? { id: encodeGlobalId('Post', source.id) }
+            : null,
+      })),
+    );
+  });
+
   test('조회 불가능한 중간 Parent에서 조상 경로를 중단하고 그 위를 노출하지 않는다', async () => {
     const author = await createProfile('ancestor-boundary-author');
     const root = await createContentfulPost(author.id);
@@ -1479,6 +1521,14 @@ type PostAncestorsNode = {
   replyAncestors: Array<{ id: string }>;
 };
 
+type PostAncestorsWithSourcesNode = {
+  id: string;
+  replyAncestors: Array<{
+    id: string;
+    repostSource: { id: string } | null;
+  }>;
+};
+
 type GraphQLResult<TData> = {
   data?: TData;
   errors?: Array<{
@@ -1603,6 +1653,16 @@ const requestPostAncestors = (postId: string) =>
     `query PostReplyAncestors($postId: ID!) {
       node(id: $postId) {
         ... on Post { id replyAncestors { id } }
+      }
+    }`,
+    { postId: encodeGlobalId('Post', postId) },
+  );
+
+const requestPostAncestorsWithSources = (postId: string) =>
+  requestGraphQL<{ node: PostAncestorsWithSourcesNode | null }>(
+    `query PostReplyAncestorsWithSources($postId: ID!) {
+      node(id: $postId) {
+        ... on Post { id replyAncestors { id repostSource { id } } }
       }
     }`,
     { postId: encodeGlobalId('Post', postId) },

@@ -114,6 +114,14 @@ export const OAuthTokenState = {
 } as const;
 export type OAuthTokenState = keyof typeof OAuthTokenState;
 
+export const PostQuoteConsentStatus = {
+  PENDING: 'PENDING',
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED',
+  REVOKED: 'REVOKED',
+} as const;
+export type PostQuoteConsentStatus = keyof typeof PostQuoteConsentStatus;
+
 export const PostState = {
   ACTIVE: 'ACTIVE',
   DELETED: 'DELETED',

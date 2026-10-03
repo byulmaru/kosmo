@@ -28,6 +28,8 @@ const loadReplyAncestors = async (post: PostRow, ctx: UserContext): Promise<Post
         ${Posts.currentContentId},
         ${Posts.replyParentId},
         ${Posts.repostSourceId},
+        ${Posts.quoteConsentStatus},
+        ${Posts.quoteConsentApprovalUri},
         ${Posts.createdAt},
         ${Posts.deletedAt},
         ARRAY[${post.id}::uuid, ${Posts.id}] AS path,
@@ -48,6 +50,8 @@ const loadReplyAncestors = async (post: PostRow, ctx: UserContext): Promise<Post
         ${Posts.currentContentId},
         ${Posts.replyParentId},
         ${Posts.repostSourceId},
+        ${Posts.quoteConsentStatus},
+        ${Posts.quoteConsentApprovalUri},
         ${Posts.createdAt},
         ${Posts.deletedAt},
         array_append(reply_ancestor.path, ${Posts.id}),
@@ -67,6 +71,8 @@ const loadReplyAncestors = async (post: PostRow, ctx: UserContext): Promise<Post
       current_content_id AS "currentContentId",
       reply_parent_id AS "replyParentId",
       repost_source_id AS "repostSourceId",
+      quote_consent_status AS "quoteConsentStatus",
+      quote_consent_approval_uri AS "quoteConsentApprovalUri",
       created_at AS "createdAt",
       deleted_at AS "deletedAt"
     FROM reply_ancestor

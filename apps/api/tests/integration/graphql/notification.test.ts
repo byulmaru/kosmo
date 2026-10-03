@@ -7,6 +7,7 @@ import {
   AccountState,
   InstanceKind,
   NotificationKind,
+  PostQuoteConsentStatus,
   PostState,
   PostVisibility,
   ProfileFollowPolicy,
@@ -560,86 +561,126 @@ describe('Notification GraphQL Node boundary', () => {
     );
   });
 
-  test('resolves Quote notifications through Node, list, unread count and Read', async () => {
+  test('resolves legacy and approved Quote notifications through Node, list, unread count and Read', async () => {
     const auth = await createAuthenticatedSession();
     const recipient = await createProfile('quote-recipient');
     const quoteAuthor = await createProfile('quote-author');
     await addMembership(auth.account.id, recipient.id, AccountProfileRole.OWNER);
-    const source = await createContentPost(recipient.id);
-    const quote = await db
-      .insert(Posts)
-      .values({
-        profileId: quoteAuthor.id,
-        repostSourceId: source.id,
-        state: PostState.ACTIVE,
-        visibility: PostVisibility.PUBLIC,
-      })
-      .returning()
-      .then(firstOrThrow);
-    const quoteContent = await db
-      .insert(PostContents)
-      .values({ document: postContentDocumentFromText('quote'), postId: quote.id })
-      .returning()
-      .then(firstOrThrow);
-    await db.update(Posts).set({ currentContentId: quoteContent.id }).where(eq(Posts.id, quote.id));
-    const notification = await db
-      .insert(Notifications)
-      .values({
-        kind: NotificationKind.QUOTE,
-        recipientProfileId: recipient.id,
-        sourceId: quote.id,
-      })
-      .returning()
-      .then(firstOrThrow);
-    const notificationId = encodeGlobalId('QuoteNotification', notification.id);
+    const quoteFixtures = await Promise.all(
+      [null, PostQuoteConsentStatus.APPROVED].map((quoteConsentStatus) =>
+        createQuoteNotificationFixture(recipient.id, quoteAuthor.id, quoteConsentStatus),
+      ),
+    );
+    const notificationIds = quoteFixtures.map(({ notification }) =>
+      encodeGlobalId('QuoteNotification', notification.id),
+    );
+    const quoteIds = quoteFixtures.map(({ quote }) => encodeGlobalId('Post', quote.id));
+    const notificationId = notificationIds[0]!;
     const recipientId = encodeGlobalId('Profile', recipient.id);
-    const quoteId = encodeGlobalId('Post', quote.id);
     const quoteAuthorId = encodeGlobalId('Profile', quoteAuthor.id);
 
     const result = await requestGraphQL<{
       node: NotificationNode | null;
+      nodes: Array<{ id: string; post: { id: string }; profile: { id: string } } | null>;
       profile: {
         unreadNotificationCount: number;
-        notifications: { edges: Array<{ node: NotificationNode }> };
+        notifications: { edges: Array<{ node: { id: string } }> };
       } | null;
     }>(
-      `query QuoteNotification($notificationId: ID!, $profileId: ID!) {
+      `query QuoteNotification($notificationId: ID!, $notificationIds: [ID!]!, $profileId: ID!) {
         node(id: $notificationId) {
           __typename
           ... on QuoteNotification { post { id } profile { id } }
+        }
+        nodes(ids: $notificationIds) {
+          ... on QuoteNotification { id post { id } profile { id } }
         }
         profile: node(id: $profileId) {
           ... on Profile {
             unreadNotificationCount
             notifications(first: 10) {
-              edges { node { __typename ... on QuoteNotification { post { id } profile { id } } } }
+              edges { node { id ... on QuoteNotification { post { id } profile { id } } } }
             }
           }
         }
       }`,
-      { notificationId, profileId: recipientId },
+      { notificationId, notificationIds, profileId: recipientId },
       auth.token,
     );
 
     assertNoGraphQLErrors(result);
     assert.deepEqual(result.data?.node, {
       __typename: 'QuoteNotification',
-      post: { id: quoteId },
+      post: { id: quoteIds[0] },
       profile: { id: quoteAuthorId },
     });
-    assert.equal(result.data?.profile?.unreadNotificationCount, 1);
-    assert.deepEqual(result.data?.profile?.notifications.edges[0]?.node, {
-      __typename: 'QuoteNotification',
-      post: { id: quoteId },
-      profile: { id: quoteAuthorId },
-    });
+    assert.deepEqual(
+      result.data?.nodes.map((node) => node?.id).sort(),
+      [...notificationIds].sort(),
+    );
+    assert.deepEqual(result.data?.nodes.map((node) => node?.post.id).sort(), [...quoteIds].sort());
+    assert.deepEqual(
+      result.data?.nodes.map((node) => node?.profile.id),
+      [quoteAuthorId, quoteAuthorId],
+    );
+    assert.equal(result.data?.profile?.unreadNotificationCount, 2);
+    assert.deepEqual(
+      result.data?.profile?.notifications.edges.map(({ node }) => node.id).sort(),
+      [...notificationIds].sort(),
+    );
 
-    const read = await markNotificationRead([notificationId], auth.token);
+    const read = await markNotificationRead(notificationIds, auth.token);
     assertNoGraphQLErrors(read);
-    assert.equal(read.data?.markNotificationRead.notifications[0]?.id, notificationId);
-    assert.equal(read.data?.markNotificationRead.notifications[0]?.post?.id, quoteId);
-    assert.equal(read.data?.markNotificationRead.notifications[0]?.profile?.id, quoteAuthorId);
+    assert.deepEqual(
+      read.data?.markNotificationRead.notifications.map(({ id }) => id).sort(),
+      [...notificationIds].sort(),
+    );
+    assert.deepEqual(
+      read.data?.markNotificationRead.notifications.map(({ post }) => post?.id).sort(),
+      [...quoteIds].sort(),
+    );
     assert.equal(read.data?.markNotificationRead.recipientProfiles[0]?.unreadNotificationCount, 0);
+  });
+
+  test('hides non-approved Quote notifications from every read surface', async () => {
+    const auth = await createAuthenticatedSession();
+    const recipient = await createProfile('quote-consent-recipient');
+    const quoteAuthor = await createProfile('quote-consent-author');
+    await addMembership(auth.account.id, recipient.id, AccountProfileRole.OWNER);
+    const notifications = await Promise.all(
+      [
+        PostQuoteConsentStatus.PENDING,
+        PostQuoteConsentStatus.REJECTED,
+        PostQuoteConsentStatus.REVOKED,
+      ].map(async (quoteConsentStatus) => {
+        const { notification } = await createQuoteNotificationFixture(
+          recipient.id,
+          quoteAuthor.id,
+          quoteConsentStatus,
+        );
+        return notification;
+      }),
+    );
+    const notificationIds = notifications.map(({ id }) => encodeGlobalId('QuoteNotification', id));
+    const recipientId = encodeGlobalId('Profile', recipient.id);
+
+    assert.deepEqual(await loadNodes(notificationIds, auth.token), [null, null, null]);
+
+    const connection = await loadNotificationConnection(recipientId, auth.token, { first: 10 });
+    assertNoGraphQLErrors(connection);
+    assert.deepEqual(connection.data?.node?.notifications.edges, []);
+    const counts = await loadUnreadNotificationCounts([recipientId], auth.token);
+    assertNoGraphQLErrors(counts);
+    assert.equal(counts.data?.nodes[0]?.unreadNotificationCount, 0);
+    const read = await markNotificationRead(notificationIds, auth.token);
+    assertNoGraphQLErrors(read);
+    assert.deepEqual(read.data?.markNotificationRead, {
+      notifications: [],
+      recipientProfiles: [],
+    });
+    for (const { id } of notifications) {
+      assert.equal(await notificationReadAt(id), null);
+    }
   });
 
   test('hides a Quote notification when its direct Source is unavailable', async () => {
@@ -2176,6 +2217,45 @@ const createReplyNotificationFixture = async (recipientProfileId: string, source
     })
     .returning()
     .then(firstOrThrow);
+
+const createQuoteNotificationFixture = async (
+  recipientProfileId: string,
+  quoteAuthorProfileId: string,
+  quoteConsentStatus: PostQuoteConsentStatus | null,
+) => {
+  const source = await createContentPost(recipientProfileId);
+  const quote = await db
+    .insert(Posts)
+    .values({
+      profileId: quoteAuthorProfileId,
+      repostSourceId: source.id,
+      quoteConsentStatus,
+      state: PostState.ACTIVE,
+      visibility: PostVisibility.PUBLIC,
+    })
+    .returning()
+    .then(firstOrThrow);
+  const quoteContent = await db
+    .insert(PostContents)
+    .values({
+      document: postContentDocumentFromText('quote notification fixture'),
+      postId: quote.id,
+    })
+    .returning()
+    .then(firstOrThrow);
+  await db.update(Posts).set({ currentContentId: quoteContent.id }).where(eq(Posts.id, quote.id));
+  const notification = await db
+    .insert(Notifications)
+    .values({
+      kind: NotificationKind.QUOTE,
+      recipientProfileId,
+      sourceId: quote.id,
+    })
+    .returning()
+    .then(firstOrThrow);
+
+  return { notification, quote };
+};
 
 const createReactionNotification = async (
   recipientProfileId: string,
