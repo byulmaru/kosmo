@@ -1,9 +1,9 @@
 import { Search } from 'lucide-react-native';
 import { useEffect, useRef } from 'react';
 import {
-  FlatList,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -169,21 +169,19 @@ export function FullReactionPicker({
           </Text>
         </View>
       ) : (
-        <FlatList<ReactionGridItem>
-          data={gridItems}
-          initialNumToRender={Platform.OS === 'web' ? gridItems.length : mobile ? 12 : 10}
-          keyExtractor={(item) => item.id}
-          ListHeaderComponent={
-            state === 'searchResults' ? (
-              <Text style={[styles.resultCount, { color: theme.foregroundSecondary }]}>
-                ‘{query}’ 검색 결과 {searchResults.length}개
-              </Text>
-            ) : null
-          }
-          maxToRenderPerBatch={mobile ? 12 : 10}
-          renderItem={({ item }) =>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          testID="full-reaction-picker-scroll"
+        >
+          {state === 'searchResults' ? (
+            <Text style={[styles.resultCount, { color: theme.foregroundSecondary }]}>
+              ‘{query}’ 검색 결과 {searchResults.length}개
+            </Text>
+          ) : null}
+          {gridItems.map((item) =>
             item.kind === 'heading' ? (
-              <View style={styles.section} testID={item.testID}>
+              <View key={item.id} style={styles.section} testID={item.testID}>
                 <Text
                   accessibilityRole="header"
                   style={[styles.sectionTitle, { color: theme.foregroundPrimary }]}
@@ -193,6 +191,7 @@ export function FullReactionPicker({
               </View>
             ) : (
               <ReactionGridRow
+                key={item.id}
                 mobile={mobile}
                 onSelect={onSelect}
                 options={item.options}
@@ -202,13 +201,9 @@ export function FullReactionPicker({
                 pendingValues={pendingOptionIds}
                 errorValues={errorOptionIds}
               />
-            )
-          }
-          showsVerticalScrollIndicator={false}
-          testID="full-reaction-picker-scroll"
-          windowSize={5}
-          contentContainerStyle={styles.scrollContent}
-        />
+            ),
+          )}
+        </ScrollView>
       )}
     </View>
   );

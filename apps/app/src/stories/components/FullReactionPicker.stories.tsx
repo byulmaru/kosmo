@@ -386,11 +386,22 @@ export const InteractionContract: Story = {
     expect(canvas.queryByRole('button', { name: /category 보기/ })).not.toBeInTheDocument();
 
     const heartButton = canvas.getAllByRole('button', { name: '빨간 하트 ❤️' })[0];
+    const movedButton = canvas.getAllByRole('button', { name: '감동 🥹' })[0];
     expect(within(heartButton).getByText('❤️')).toBeVisible();
+    expect(heartButton).toHaveAttribute('aria-pressed', 'false');
+    expect(movedButton).toHaveAttribute('aria-pressed', 'false');
     await userEvent.click(heartButton);
     expect(args.onSelect).toHaveBeenLastCalledWith(
       expect.objectContaining({ emoji: '❤️', id: 'heart-red' }),
     );
+    expect(heartButton).toHaveAttribute('aria-pressed', 'true');
+
+    await userEvent.click(movedButton);
+    expect(movedButton).toHaveAttribute('aria-pressed', 'true');
+    expect(heartButton).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.click(heartButton);
+    expect(heartButton).toHaveAttribute('aria-pressed', 'false');
+    expect(movedButton).toHaveAttribute('aria-pressed', 'true');
 
     await userEvent.type(search, '하트');
     expect(args.onQueryChange).toHaveBeenLastCalledWith('하트');
@@ -414,27 +425,42 @@ export const SequentialKeyboardBrowseContract: Story = {
   render: (args) => <InteractivePicker {...args} />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const document = canvasElement.ownerDocument;
     const dialog = canvas.getByRole('dialog', { name: '반응 선택' });
     const search = canvas.getByRole('searchbox', { name: '반응 검색' });
+    const scroll = canvas.getByTestId('full-reaction-picker-scroll') as HTMLElement;
     await waitFor(() => expect(search).toHaveFocus());
 
-    const buttons = canvas.getAllByRole('button');
     await userEvent.tab();
-    expect(buttons[0]).toHaveFocus();
-
-    const boundaryButton = buttons[409];
-    expect(boundaryButton).toBeDefined();
-    boundaryButton.focus();
-    await userEvent.keyboard('{Tab}'.repeat(10));
-    expect(buttons[419]).toHaveFocus();
-
+    const firstOption = canvas.getByRole('button', {
+      name: `${reactionEmojiCatalog[0]?.label} ${reactionEmojiCatalog[0]?.emoji}`,
+    });
+    expect(firstOption).toHaveFocus();
+    await userEvent.tab();
+    const secondOption = canvas.getByRole('button', {
+      name: `${reactionEmojiCatalog[1]?.label} ${reactionEmojiCatalog[1]?.emoji}`,
+    });
+    expect(secondOption).toHaveFocus();
     await userEvent.tab({ shift: true });
-    expect(buttons[418]).toHaveFocus();
+    expect(firstOption).toHaveFocus();
 
-    buttons[buttons.length - 1].focus();
-    expect(buttons[buttons.length - 1]).toHaveFocus();
+    const finalCatalogOption = reactionEmojiCatalog[reactionEmojiCatalog.length - 1];
+    const tailOption = canvas.getByRole('button', {
+      name: `${finalCatalogOption?.label} ${finalCatalogOption?.emoji}`,
+    });
+    expect(scroll.contains(tailOption)).toBe(true);
+    expect(tailOption).toBeInTheDocument();
+    scroll.scroll({ top: scroll.scrollHeight, behavior: 'instant' });
+    await waitFor(() => {
+      const tailRect = tailOption.getBoundingClientRect();
+      const scrollRect = scroll.getBoundingClientRect();
+      expect(tailRect.top < scrollRect.bottom && tailRect.bottom > scrollRect.top).toBe(true);
+    });
+
+    tailOption.focus();
+    expect(tailOption).toHaveFocus();
     await userEvent.tab();
-    expect(dialog.contains(canvasElement.ownerDocument.activeElement)).toBe(false);
+    expect(dialog.contains(document.activeElement)).toBe(false);
   },
 };
 
