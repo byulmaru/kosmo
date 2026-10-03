@@ -2,6 +2,10 @@ env:
 image: ghcr.io/byulmaru/kosmo
 imageDigest: ''
 version: main
+# Allow up to five minutes for startup; readiness and liveness start after the first success.
+startupProbe:
+  periodSeconds: 10
+  failureThreshold: 30
 worker:
   replicas:
     dev: 1
