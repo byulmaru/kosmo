@@ -39,6 +39,7 @@ const guestSession: SessionValue = {
 };
 const errorSession: SessionValue = { ...guestSession, status: 'error' };
 const SessionContext = createContext<SessionValue>(guestSession);
+const AnalyticsIdentityAccountContext = createContext<string | null>(null);
 
 const SessionProviderQuery = graphql`
   query SessionProviderQuery {
@@ -79,18 +80,20 @@ export function SessionProvider({ children }: PropsWithChildren) {
     sessionState.actorLifecycleKey === actorLifecycleKey ? sessionState.value : errorSession;
 
   return (
-    <SessionContext.Provider value={visibleSession}>
-      <RelayFailOpenBoundary
-        fallback={
-          <SessionErrorReporter lifecycleKey={actorLifecycleKey} onError={setSessionError} />
-        }
-      >
-        <Suspense fallback={<Splash label="세션을 확인하는 중입니다." />}>
-          <SessionQuery actorLifecycleKey={actorLifecycleKey} onSessionChange={setSession} />
-        </Suspense>
-      </RelayFailOpenBoundary>
-      {sessionState.ready ? children : null}
-    </SessionContext.Provider>
+    <AnalyticsIdentityAccountContext.Provider value={sessionState.value.accountId}>
+      <SessionContext.Provider value={visibleSession}>
+        <RelayFailOpenBoundary
+          fallback={
+            <SessionErrorReporter lifecycleKey={actorLifecycleKey} onError={setSessionError} />
+          }
+        >
+          <Suspense fallback={<Splash label="세션을 확인하는 중입니다." />}>
+            <SessionQuery actorLifecycleKey={actorLifecycleKey} onSessionChange={setSession} />
+          </Suspense>
+        </RelayFailOpenBoundary>
+        {sessionState.ready ? children : null}
+      </SessionContext.Provider>
+    </AnalyticsIdentityAccountContext.Provider>
   );
 }
 
@@ -146,6 +149,10 @@ function SessionErrorReporter({
 
 export function useSession(): SessionValue {
   return useContext(SessionContext);
+}
+
+export function useAnalyticsIdentityAccountId(): string | null {
+  return useContext(AnalyticsIdentityAccountContext);
 }
 
 export function SessionErrorProvider({ children }: PropsWithChildren) {

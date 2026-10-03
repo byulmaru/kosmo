@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { identifyAnalytics } from '@/analytics/client';
+import { ProfileHashtagScreenAnalyticsProvider } from '@/analytics/ProfileHashtagScreenAnalytics';
 import { FeedbackOverlay } from '@/components/feedback/FeedbackOverlay';
 import {
   NotificationReadAllAction,
@@ -433,7 +434,9 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
           ]}
         >
           <PostMediaViewerScreenFallbackProvider fallbackFocus={screenFallbackRef}>
-            <RelayActorBoundary>{children}</RelayActorBoundary>
+            <ProfileHashtagScreenAnalyticsProvider>
+              <RelayActorBoundary>{children}</RelayActorBoundary>
+            </ProfileHashtagScreenAnalyticsProvider>
           </PostMediaViewerScreenFallbackProvider>
         </View>
         {mobile ? (

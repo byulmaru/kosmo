@@ -52,10 +52,12 @@ let useRelayActor: () => Pick<
   'clearNativeSession' | 'nativeToken' | 'setNativeSession'
 >;
 let useSession: () => {
+  accountId: string | null;
   selectedProfileId: string | null;
   sessionId: string | null;
   status: string;
 };
+let useAnalyticsIdentityAccountId: () => string | null;
 let renderer: ReactTestRenderer | null = null;
 let originalFetch: typeof fetch;
 
@@ -308,7 +310,7 @@ before(async () => {
   ({ useFeatureFlag } = await import('./FeatureFlagsContext'));
   ({ UniversalShell } = await import('./shell/UniversalShell'));
   ({ RouteBoundary, useRouteBoundary } = await import('./RouteBoundary'));
-  ({ useSession } = await import('../session/SessionProvider'));
+  ({ useAnalyticsIdentityAccountId, useSession } = await import('../session/SessionProvider'));
   ({ useRelayActor } = await import('../relay/RelayActorProvider'));
 });
 
@@ -373,6 +375,8 @@ function ShellRecoveryRoute() {
 
 function NativeSessionFixture() {
   const actor = useRelayActor();
+  const analyticsAccountId = useSession().accountId;
+  const analyticsIdentityAccountId = useAnalyticsIdentityAccountId();
   const session = useSession();
   useEffect(() => {
     navigationMounts += 1;
@@ -382,6 +386,8 @@ function NativeSessionFixture() {
   }, []);
 
   return createElement('NativeSession', {
+    analyticsAccountId,
+    analyticsIdentityAccountId,
     nativeToken: actor.nativeToken,
     onPress: () => actor.setNativeSession('native-session-token'),
     selectedProfileId: session.selectedProfileId,
@@ -697,12 +703,16 @@ describe('AppProviders runtime composition', () => {
     const duringTransition = findTag('NativeSession');
     assert.deepEqual(
       {
+        analyticsAccountId: duringTransition.props.analyticsAccountId,
+        analyticsIdentityAccountId: duringTransition.props.analyticsIdentityAccountId,
         nativeToken: duringTransition.props.nativeToken,
         selectedProfileId: duringTransition.props.selectedProfileId,
         sessionId: duringTransition.props.sessionId,
         status: duringTransition.props.status,
       },
       {
+        analyticsAccountId: null,
+        analyticsIdentityAccountId: 'account-1',
         nativeToken: 'native-session-token',
         selectedProfileId: null,
         sessionId: null,

@@ -169,6 +169,20 @@ after(() => {
 });
 
 describe('PostHog Web client', () => {
+  it('요청 품질 identity snapshot은 확인된 Account만 반환하고 reset·불일치는 제외한다', () => {
+    assert.equal(analytics.getAnalyticsAccountId(), null);
+    analytics.identifyAnalytics('account-a');
+    assert.equal(analytics.getAnalyticsAccountId(), 'account-a');
+    analytics.identifyAnalytics('account-b');
+    assert.equal(analytics.getAnalyticsAccountId(), 'account-b');
+    const instance = instances.at(-1)!;
+    instance.distinctId = 'mismatched';
+    assert.equal(analytics.getAnalyticsAccountId(), null);
+    instance.distinctId = 'account-b';
+    analytics.clearAnalytics();
+    assert.equal(analytics.getAnalyticsAccountId(), null);
+  });
+
   it('dev 채널에서는 PostHog를 초기화하지 않는다', () => {
     globals.__KOSMO_CHANNEL__ = 'dev';
 

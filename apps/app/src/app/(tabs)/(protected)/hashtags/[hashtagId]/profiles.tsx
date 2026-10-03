@@ -2,6 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeftIcon } from 'lucide-react-native';
 import { StyleSheet } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
+import { useProfileHashtagScreenAnalytics } from '@/analytics/ProfileHashtagScreenAnalytics';
 import {
   HashtagRelatedProfileList,
   HashtagRelatedProfileListState,
@@ -59,6 +60,7 @@ function HashtagRelatedProfilesRoute({
   backButton: ReactNode;
   hashtagId: string;
 }) {
+  const tracking = useProfileHashtagScreenAnalytics();
   return (
     <RouteBoundary
       error={(retry) => (
@@ -67,7 +69,11 @@ function HashtagRelatedProfilesRoute({
       loading={<HashtagRelatedProfileListState leading={backButton} state="loading" />}
       title="관련 프로필을 불러오지 못했어요"
     >
-      <HashtagRelatedProfilesContent backButton={backButton} hashtagId={hashtagId} />
+      <HashtagRelatedProfilesContent
+        backButton={backButton}
+        hashtagId={hashtagId}
+        tracking={tracking}
+      />
     </RouteBoundary>
   );
 }
@@ -75,9 +81,11 @@ function HashtagRelatedProfilesRoute({
 function HashtagRelatedProfilesContent({
   backButton,
   hashtagId,
+  tracking,
 }: {
   backButton: ReactNode;
   hashtagId: string;
+  tracking: ReturnType<typeof useProfileHashtagScreenAnalytics>;
 }) {
   const { fetchKey } = useRouteBoundary();
   const data = useLazyLoadQuery<HashtagRelatedProfilesPageQuery>(
@@ -87,7 +95,12 @@ function HashtagRelatedProfilesContent({
   );
 
   return data.node?.__typename === 'Hashtag' && data.node.relatedProfileList ? (
-    <HashtagRelatedProfileList hashtag={data.node.relatedProfileList} leading={backButton} />
+    <HashtagRelatedProfileList
+      hashtag={data.node.relatedProfileList}
+      leading={backButton}
+      onVisibleResults={tracking.onVisibleResults}
+      onResultSelected={tracking.onResultSelected}
+    />
   ) : (
     <HashtagRelatedProfileListState leading={backButton} state="notFound" />
   );

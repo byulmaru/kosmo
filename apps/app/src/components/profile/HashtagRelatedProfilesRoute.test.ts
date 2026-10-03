@@ -1,306 +1,124 @@
 import assert from 'node:assert/strict';
-import { createRequire } from 'node:module';
-import { afterEach, before, describe, it, mock } from 'node:test';
-import { createElement } from 'react';
+import { afterEach, before, mock, test } from 'node:test';
+import { createElement, useEffect } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ComponentType } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
+import type { useProfileHashtagScreenAnalytics } from '../../analytics/ProfileHashtagScreenAnalytics';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-
-type HashtagNode =
-  | {
-      __typename: 'Hashtag';
-      id: string;
-      name: string;
-      relatedProfileList: { id: string; name: string };
-    }
-  | { __typename: 'Profile'; id: string }
-  | null;
-type QueryMode = 'error' | 'loading' | 'success';
-
-const pending = new Promise<never>(() => undefined);
-const require = createRequire(import.meta.url);
-const queryHistory: Array<{ fetchKey: number; variables: { id: string } }> = [];
-let hashtagId: string | string[] | undefined = 'hashtag-global-a';
-let hashtagNode: HashtagNode = {
-  __typename: 'Hashtag',
-  id: 'hashtag-global-a',
-  name: 'Fediverse',
-  relatedProfileList: { id: 'hashtag-global-a', name: 'Fediverse' },
-};
-let queryMode: QueryMode = 'success';
-let renderer: ReactTestRenderer | null = null;
-let routerCanGoBack = true;
-let routerBackCount = 0;
-const routerReplacements: string[] = [];
-
+let pathname = '/hashtags/opaque-a/profiles';
+let accountId: string | null = 'account-a';
+let renderer: ReactTestRenderer | undefined;
+const events: Array<[string, Record<string, unknown>]> = [];
 const mockModule = (specifier: string | URL, exports: object) =>
-  mock.module(specifier, {
-    exports,
-  } as unknown as Parameters<typeof mock.module>[1]);
-
-mockModule('expo-router', {
-  useLocalSearchParams: () => ({ hashtagId }),
-  useRouter: () => ({
-    back: () => {
-      routerBackCount += 1;
-    },
-    canGoBack: () => routerCanGoBack,
-    replace: (href: string) => routerReplacements.push(href),
-  }),
+  mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
+mockModule('expo-router', { usePathname: () => pathname });
+mockModule(new URL('../../session/SessionProvider.tsx', import.meta.url), {
+  useSession: () => ({ accountId }),
 });
-mockModule('lucide-react-native', {
-  ArrowLeftIcon: 'ArrowLeftIcon',
+mockModule(new URL('../../analytics/client.ts', import.meta.url), {
+  identifyAnalytics: () => undefined,
+  trackAnalytics: (event: string, properties: Record<string, unknown>) =>
+    events.push([event, properties]),
 });
-mockModule('react-native', {
-  StyleSheet: { create: <T>(styles: T) => styles },
-});
-mockModule(require.resolve('lucide-react-native'), {
-  ArrowLeftIcon: 'ArrowLeftIcon',
-});
-mockModule('@/components/ui/IconButton', {
-  IconButton: (props: object) => createElement('IconButton', props),
-});
-mockModule('@/theme/ThemeProvider', {
-  useTheme: () => ({ foregroundPrimary: 'foreground' }),
-});
-mockModule('react-relay', {
-  graphql: (parts: TemplateStringsArray) => {
-    assert.match(parts.join(''), /query HashtagRelatedProfilesPageQuery/);
-    return 'HashtagRelatedProfilesPageQuery';
-  },
-  useLazyLoadQuery: (query: string, variables: { id: string }, options: { fetchKey: number }) => {
-    assert.equal(query, 'HashtagRelatedProfilesPageQuery');
-    queryHistory.push({ fetchKey: options.fetchKey, variables });
-
-    if (queryMode === 'loading') {
-      throw pending;
-    }
-    if (queryMode === 'error') {
-      throw new Error('hashtag related profiles query failed');
-    }
-
-    return { node: hashtagNode };
-  },
-});
-mockModule(new URL('./HashtagRelatedProfileList.tsx', import.meta.url), {
-  HashtagRelatedProfileList: ({
-    hashtag,
-    leading,
-  }: {
-    hashtag: { id: string; name: string };
-    leading?: unknown;
-  }) =>
-    createElement('HashtagRelatedProfileList', {
-      identity: hashtag.id,
-      leading,
-      name: hashtag.name,
-    }),
-  HashtagRelatedProfileListState: ({
-    leading,
-    onRetry,
-    state,
-  }: {
-    leading?: unknown;
-    onRetry?: () => void;
-    state: string;
-  }) => createElement('HashtagRelatedProfileListState', { leading, onRetry, state }),
-});
-mockModule(new URL('../../observability/UnexpectedErrorContext.ts', import.meta.url), {
-  useUnexpectedErrorReporter: () => undefined,
-});
-mockModule(new URL('../../relay/RelayActorProvider.tsx', import.meta.url), {
-  useRelayActorLifecycleKey: () => 'actor-a',
-});
-mockModule(new URL('../ui/StateView.tsx', import.meta.url), {
-  StateView: (props: object) => createElement('StateView', props),
-});
-
-let HashtagRelatedProfilesScreen: ComponentType | null = null;
-
+let Provider: ComponentType<{ children: ReturnType<typeof createElement> }>;
+let useTracking: typeof useProfileHashtagScreenAnalytics;
 before(async () => {
-  const module = await import('../../app/(tabs)/(protected)/hashtags/[hashtagId]/profiles').catch(
-    () => null,
-  );
-  HashtagRelatedProfilesScreen = module?.default ?? null;
+  const module = await import('../../analytics/ProfileHashtagScreenAnalytics');
+  Provider = module.ProfileHashtagScreenAnalyticsProvider;
+  useTracking = module.useProfileHashtagScreenAnalytics;
 });
-
 afterEach(async () => {
-  if (renderer) {
-    await act(async () => renderer?.unmount());
-    renderer = null;
-  }
-  hashtagId = 'hashtag-global-a';
-  hashtagNode = {
-    __typename: 'Hashtag',
-    id: 'hashtag-global-a',
-    name: 'Fediverse',
-    relatedProfileList: { id: 'hashtag-global-a', name: 'Fediverse' },
-  };
-  queryHistory.length = 0;
-  queryMode = 'success';
-  routerBackCount = 0;
-  routerCanGoBack = true;
-  routerReplacements.length = 0;
+  await act(async () => renderer?.unmount());
+  renderer = undefined;
+  events.length = 0;
+  accountId = 'account-a';
+  pathname = '/hashtags/opaque-a/profiles';
 });
-
-async function renderScreen() {
-  const Screen = HashtagRelatedProfilesScreen;
-  assert.ok(Screen, 'HashtagRelatedProfilesScreen must exist');
-
+function Screen({ state }: { state: 'loading' | 'error' | 'empty' | 'list' }) {
+  const { onVisibleResults, onResultSelected } = useTracking();
+  useEffect(() => {
+    if (state === 'empty' || state === 'list') {
+      onVisibleResults('opaque-a', state === 'list');
+    }
+  }, [state, onVisibleResults]);
+  return createElement('div', {
+    'data-state': state,
+    onSelect: () => onResultSelected('opaque-a'),
+  });
+}
+async function render(state: 'loading' | 'error' | 'empty' | 'list', key = 'actor-a') {
   await act(async () => {
+    const element = createElement(Provider, { children: createElement(Screen, { state, key }) });
     if (renderer) {
-      renderer.update(createElement(Screen));
+      renderer.update(element);
     } else {
-      renderer = create(createElement(Screen));
+      renderer = create(element);
     }
   });
-  assert.ok(renderer);
 }
+const names = () => events.map(([event]) => event);
 
-function rendered(type: string) {
-  assert.ok(renderer);
-  return renderer.root.findAll((node) => node.type === type);
-}
-
-function requireRendered(type: string) {
-  const node = rendered(type)[0];
-  assert.ok(node);
-  return node;
-}
-
-function assertBackButton(leading: { type: unknown; props: Record<string, unknown> }) {
-  assert.equal(leading.props.accessibilityLabel, '뒤로 가기');
-  assert.equal(leading.props.targetSize, 44);
-  assert.equal(leading.props.visualSize, 44);
-  assert.equal(typeof leading.props.onPress, 'function');
-  assert.equal((leading.props.children as { type: unknown }).type, 'ArrowLeftIcon');
-}
-
-describe('hashtag related profiles route identity and lifecycle', () => {
-  it('모든 상태에 뒤로가기 action을 전달하고 history가 없으면 홈으로 이동한다', async () => {
-    await renderScreen();
-
-    const successLeading = requireRendered('HashtagRelatedProfileList').props.leading;
-    assertBackButton(successLeading);
-    successLeading.props.onPress();
-    assert.equal(routerBackCount, 1);
-
-    queryMode = 'loading';
-    await renderScreen();
-    const loadingLeading = requireRendered('HashtagRelatedProfileListState').props.leading;
-    assertBackButton(loadingLeading);
-
-    queryMode = 'error';
-    const originalConsoleError = console.error;
-    console.error = () => undefined;
-    try {
-      await renderScreen();
-      const errorLeading = requireRendered('HashtagRelatedProfileListState').props.leading;
-      assertBackButton(errorLeading);
-    } finally {
-      console.error = originalConsoleError;
-    }
-
-    queryMode = 'success';
-    hashtagNode = null;
-    await renderScreen();
-    const notFoundLeading = requireRendered('HashtagRelatedProfileListState').props.leading;
-    assertBackButton(notFoundLeading);
-
-    routerCanGoBack = false;
-    notFoundLeading.props.onPress();
-    assert.deepEqual(routerReplacements, ['/home']);
-  });
-
-  it('path의 exact Hashtag ID만 Node query와 목록에 전달한다', async () => {
-    await renderScreen();
-
-    assert.deepEqual(queryHistory.at(-1), {
-      fetchKey: 0,
-      variables: { id: 'hashtag-global-a' },
-    });
-    const list = requireRendered('HashtagRelatedProfileList');
-    assert.equal(list.props.identity, 'hashtag-global-a');
-    assert.equal(list.props.name, 'Fediverse');
-    assertBackButton(list.props.leading);
-  });
-
-  it('첫 요청 중에는 관련 Profile 맥락을 유지한다', async () => {
-    queryMode = 'loading';
-    await renderScreen();
-
-    const state = requireRendered('HashtagRelatedProfileListState');
-    assert.equal(state.props.state, 'loading');
-  });
-
-  it('현재 Hashtag query error만 새 fetchKey로 재시도한다', async () => {
-    const originalConsoleError = console.error;
-    console.error = () => undefined;
-    try {
-      queryMode = 'error';
-      await renderScreen();
-      const state = requireRendered('HashtagRelatedProfileListState');
-      assert.equal(state.props.state, 'error');
-
-      queryMode = 'success';
-      await act(async () => state.props.onRetry());
-
-      assert.equal(queryHistory.at(-1)?.fetchKey, 1);
-      assert.equal(requireRendered('HashtagRelatedProfileList').props.identity, 'hashtag-global-a');
-    } finally {
-      console.error = originalConsoleError;
-    }
-  });
-
-  it('없는 Node와 Hashtag가 아닌 Node는 관계 목록으로 대체하지 않는다', async () => {
-    hashtagNode = null;
-    await renderScreen();
-    assert.equal(requireRendered('HashtagRelatedProfileListState').props.state, 'notFound');
-
-    hashtagNode = { __typename: 'Profile', id: 'profile-a' };
-    await renderScreen();
-    assert.equal(requireRendered('HashtagRelatedProfileListState').props.state, 'notFound');
-    assert.deepEqual(rendered('HashtagRelatedProfileList'), []);
-  });
-
-  it('유효한 단일 path ID가 없으면 Node query를 실행하지 않는다', async () => {
-    hashtagId = ['hashtag-a', 'hashtag-b'];
-    await renderScreen();
-
-    assert.deepEqual(queryHistory, []);
-    const state = requireRendered('HashtagRelatedProfileListState');
-    assert.equal(state.props.state, 'notFound');
-    assertBackButton(state.props.leading);
-  });
-
-  it('Hashtag ID가 바뀌면 이전 retry state를 재사용하지 않는다', async () => {
-    const originalConsoleError = console.error;
-    console.error = () => undefined;
-    try {
-      queryMode = 'error';
-      await renderScreen();
-      queryMode = 'success';
-      await act(async () => requireRendered('HashtagRelatedProfileListState').props.onRetry());
-      assert.equal(queryHistory.at(-1)?.fetchKey, 1);
-
-      hashtagId = 'hashtag-global-b';
-      hashtagNode = {
-        __typename: 'Hashtag',
-        id: 'hashtag-global-b',
-        name: '개발',
-        relatedProfileList: { id: 'hashtag-global-b', name: '개발' },
-      };
-      await renderScreen();
-
-      assert.deepEqual(queryHistory.at(-1), {
-        fetchKey: 0,
-        variables: { id: 'hashtag-global-b' },
-      });
-      assert.equal(requireRendered('HashtagRelatedProfileList').props.identity, 'hashtag-global-b');
-    } finally {
-      console.error = originalConsoleError;
-    }
-  });
+test('loading/error 진입도 분모에 남고 Empty 후 목록과 선택이 가능하다', async () => {
+  await render('loading');
+  await render('error');
+  assert.deepEqual(names(), ['profile_hashtag_screen_entered']);
+  await render('empty');
+  assert.equal(renderer!.root.findByProps({ 'data-state': 'empty' }).props['data-state'], 'empty');
+  await render('list');
+  renderer!.root.findByProps({ 'data-state': 'list' }).props.onSelect();
+  assert.deepEqual(names(), [
+    'profile_hashtag_screen_entered',
+    'profile_hashtag_initial_state_viewed',
+    'profile_hashtag_list_viewed',
+    'profile_hashtag_profile_selected',
+  ]);
+  assert.equal(events[1]![1].result, 'empty');
+  assert.ok(!Number.isNaN(Date.parse(events[1]![1].entered_at as string)));
+});
+test('먼저 표시된 목록 이후 Empty는 최초 상태를 덮어쓰지 않는다', async () => {
+  await render('list');
+  await render('empty');
+  await render('list');
+  assert.deepEqual(names(), [
+    'profile_hashtag_screen_entered',
+    'profile_hashtag_initial_state_viewed',
+    'profile_hashtag_list_viewed',
+  ]);
+  assert.equal(events[1]![1].result, 'has_results');
+});
+test('actor remount와 일시적 Account loading은 같은 화면 진입을 중복하지 않는다', async () => {
+  await render('empty');
+  accountId = null;
+  await render('loading', 'actor-b');
+  accountId = 'account-a';
+  await render('empty', 'actor-b');
+  await render('list', 'actor-b');
+  assert.equal(names().filter((event) => event === 'profile_hashtag_screen_entered').length, 1);
+  assert.equal(
+    names().filter((event) => event === 'profile_hashtag_initial_state_viewed').length,
+    1,
+  );
+});
+test('다른 화면 이탈 후 재진입과 다른 Hashtag는 새로운 화면 진입이다', async () => {
+  await render('empty');
+  pathname = '/home';
+  await render('loading');
+  pathname = '/hashtags/opaque-a/profiles';
+  await render('list');
+  pathname = '/hashtags/opaque-b/profiles';
+  await render('loading');
+  assert.equal(names().filter((event) => event === 'profile_hashtag_screen_entered').length, 3);
+});
+test('새 Account는 기존 최초 상태를 상속하지 않는다', async () => {
+  await render('empty');
+  accountId = 'account-b';
+  await render('list');
+  assert.deepEqual(
+    events
+      .filter(([event]) => event === 'profile_hashtag_initial_state_viewed')
+      .map(([, properties]) => properties.result),
+    ['empty', 'has_results'],
+  );
 });
