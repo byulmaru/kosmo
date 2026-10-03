@@ -30,7 +30,7 @@ const queryHistory: Array<{ fetchKey: unknown; query: QueryName }> = [];
 const pendingSessionQueries: Array<() => void> = [];
 const pendingRootRenders: Array<() => void> = [];
 const platform = { OS: 'web' };
-const browserHistoryReplacements: unknown[] = [];
+const routerReplacements: string[] = [];
 let mockAccountId: string | null = 'account-1';
 let mockSelectedProfileId: string | null = 'profile-a';
 let mockSessionId: string | null = 'session-1';
@@ -74,10 +74,6 @@ let originalFetch: typeof fetch;
 let originalWindowDescriptor: PropertyDescriptor | undefined;
 
 type MockBrowserWindow = {
-  history: {
-    replaceState: (data: unknown, title: string, url?: string | URL | null) => void;
-    state: unknown;
-  };
   location: { href: string };
 };
 
@@ -211,6 +207,12 @@ mockModule('@react-native-async-storage/async-storage', {
 });
 mockModule('expo-router', {
   DefaultTheme: mockDefaultNavigationTheme,
+  router: {
+    replace(href: string) {
+      routerReplacements.push(href);
+      browserWindow.location.href = new URL(href, browserWindow.location.href).toString();
+    },
+  },
   ThemeProvider: ({
     children,
     value,
@@ -397,21 +399,8 @@ beforeEach(() => {
   selectedProfileDeleteCalls = 0;
   selectedProfileReads = [];
   selectedProfileWrites = [];
-  browserHistoryReplacements.length = 0;
+  routerReplacements.length = 0;
   browserWindow = {
-    history: {
-      replaceState(data, title, url) {
-        browserHistoryReplacements.push(data);
-        this.state = data;
-        if (url != null) {
-          browserWindow.location.href = new URL(
-            String(url),
-            browserWindow.location.href,
-          ).toString();
-        }
-      },
-      state: { key: 'app-history-entry' },
-    },
     location: { href: 'https://kos.moe/home' },
   };
   Object.defineProperty(globalThis, 'window', {
@@ -603,7 +592,6 @@ describe('AppProviders runtime composition', () => {
   it('clears the cached Web profile before restoring the post-login Session', async () => {
     selectedProfileCache = 'profile-b';
     browserWindow.location.href = 'https://kos.moe/home?from=oidc&resetSelectedProfile=1#feed';
-    const historyState = browserWindow.history.state;
     let finishDelete!: () => void;
     selectedProfileDeleteGate = new Promise<void>((resolve) => {
       finishDelete = resolve;
@@ -619,7 +607,7 @@ describe('AppProviders runtime composition', () => {
       queryHistory.filter(({ query }) => query === 'SessionProviderQuery'),
       [],
     );
-    assert.equal(browserHistoryReplacements.length, 0);
+    assert.deepEqual(routerReplacements, []);
 
     await act(async () => {
       finishDelete();
@@ -631,8 +619,7 @@ describe('AppProviders runtime composition', () => {
     assert.deepEqual(selectedProfileWrites, ['profile-a']);
     assert.equal(selectedProfileCache, 'profile-a');
     assert.ok(queryHistory.some(({ query }) => query === 'SessionProviderQuery'));
-    assert.equal(browserHistoryReplacements.length, 1);
-    assert.strictEqual(browserHistoryReplacements[0], historyState);
+    assert.deepEqual(routerReplacements, ['/home?from=oidc#feed']);
     assert.equal(browserWindow.location.href, 'https://kos.moe/home?from=oidc#feed');
     assert.deepEqual(
       {
@@ -647,7 +634,33 @@ describe('AppProviders runtime composition', () => {
       renderer?.update(createElement(AppProviders, null, createElement(NativeSessionFixture)));
     });
     assert.equal(selectedProfileDeleteCalls, 1);
-    assert.equal(browserHistoryReplacements.length, 1);
+    assert.deepEqual(routerReplacements, ['/home?from=oidc#feed']);
+  });
+
+  it('does not replace the route when the login reset is canceled by unmount', async () => {
+    browserWindow.location.href = 'https://kos.moe/home?resetSelectedProfile=1';
+    let finishDelete!: () => void;
+    selectedProfileDeleteGate = new Promise<void>((resolve) => {
+      finishDelete = resolve;
+    });
+
+    await act(async () => {
+      renderer = create(createElement(AppProviders, null, createElement(NativeSessionFixture)));
+    });
+
+    assert.equal(selectedProfileDeleteCalls, 1);
+    await act(async () => {
+      renderer?.unmount();
+      renderer = null;
+    });
+    await act(async () => {
+      finishDelete();
+      await selectedProfileDeleteGate;
+      await Promise.resolve();
+    });
+
+    assert.deepEqual(routerReplacements, []);
+    assert.equal(browserWindow.location.href, 'https://kos.moe/home?resetSelectedProfile=1');
   });
 
   it('preserves the cached Web profile on ordinary startup without the login marker', async () => {
@@ -662,7 +675,7 @@ describe('AppProviders runtime composition', () => {
     assert.equal(selectedProfileDeleteCalls, 0);
     assert.deepEqual(selectedProfileReads, ['profile-b']);
     assert.equal(selectedProfileCache, 'profile-b');
-    assert.equal(browserHistoryReplacements.length, 0);
+    assert.deepEqual(routerReplacements, []);
     assert.equal(browserWindow.location.href, 'https://kos.moe/home?from=bookmark#feed');
     assert.equal(findTag('NativeSession').props.selectedProfileId, 'profile-b');
   });

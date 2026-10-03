@@ -1,4 +1,4 @@
-import { DefaultTheme, ThemeProvider as NavigationThemeProvider } from 'expo-router';
+import { DefaultTheme, router, ThemeProvider as NavigationThemeProvider } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import { AnalyticsSessionBridge } from '@/analytics/AnalyticsSessionBridge';
@@ -17,6 +17,7 @@ import { useTheme, useThemeMode } from '@/theme/ThemeProvider';
 import { GraphQLErrorBoundary } from './GraphQLErrorBoundary';
 import { PostContentWarningRevealProvider } from './post/PostContentWarningRevealContext';
 import { ToastProvider, useToast } from './ui/ToastProvider';
+import type { Href } from 'expo-router';
 import type { PropsWithChildren } from 'react';
 
 const resetSelectedProfileParam = 'resetSelectedProfile';
@@ -46,11 +47,7 @@ export function AppProviders({
 
       const url = new URL(window.location.href);
       url.searchParams.delete(resetSelectedProfileParam);
-      window.history.replaceState(
-        window.history.state,
-        '',
-        `${url.pathname}${url.search}${url.hash}`,
-      );
+      router.replace(`${url.pathname}${url.search}${url.hash}` as Href);
       setResetSelectedProfilePending(false);
     })();
 
