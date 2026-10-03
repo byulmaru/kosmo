@@ -32,10 +32,10 @@
 
 #### Scenario: 다른 범위의 활성 임시 규칙 보존
 
-- **WHEN** 현재 selected Profile이 같은 Hashtag에 Notification 이외 범위의 활성 임시 규칙을 소유한다
+- **WHEN** 현재 선택한 Profile에 같은 Hashtag를 대상으로 Notification 이외 범위의 활성 임시 규칙이 있다
 - **THEN** 클라이언트는 해당 규칙의 Scope·Decision·만료 시각을 변경하지 않는다
 - **AND** Notification 영구 뮤트 생성·변경·해제 mutation을 보내지 않는다
-- **AND** 상태를 새로 읽은 뒤 다시 설정할 수 있음을 사용자에게 안내한다
+- **AND** 규칙이 만료된 뒤 상태를 다시 불러오면 설정할 수 있다고 안내한다
 
 #### Scenario: 기존 확인 UI에서 결과 안내
 
