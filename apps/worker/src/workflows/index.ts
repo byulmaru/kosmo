@@ -1,6 +1,7 @@
 export { accountDeletionWorkflow } from './account-deletion';
 export { notificationCleanupWorkflow } from './cleanup-unavailable-notifications';
 export { postCreateEffectsWorkflow } from './create';
+export { databaseCountsSnapshotWorkflow } from './database-counts-snapshot';
 export { postDeleteWorkflow } from './delete';
 export { profileBlockWorkflow } from './profile-block';
 export { profileFollowPairWorkflow } from './profile-follow-pair';

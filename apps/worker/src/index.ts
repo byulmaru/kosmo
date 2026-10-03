@@ -42,7 +42,7 @@ if (import.meta.main) {
       });
       const running = worker.run();
       process.off('SIGTERM', terminateDuringStartup);
-      void runSchedules(connection, namespace)
+      void runSchedules(connection, namespace, process.env.ENVIRONMENT)
         .then((schedules) => {
           console.log(JSON.stringify({ event: 'temporal_schedules_registered', schedules }));
         })
