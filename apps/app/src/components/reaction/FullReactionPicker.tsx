@@ -73,11 +73,12 @@ export function FullReactionPicker({
       : searchResults.length > 0
         ? 'searchResults'
         : 'empty';
-  const gridItems =
+  const columns = mobile ? 7 : 8;
+  const gridSections =
     state === 'searchResults'
-      ? createGridItems('results', '반응', searchResults, mobile ? 7 : 8)
+      ? [{ id: 'results', title: '반응', options: searchResults }]
       : state === 'browse'
-        ? createBrowseItems(options, mobile ? 7 : 8)
+        ? createBrowseSections(options)
         : [];
   useEffect(() => {
     if (mobile) {
@@ -179,30 +180,38 @@ export function FullReactionPicker({
               ‘{query}’ 검색 결과 {searchResults.length}개
             </Text>
           ) : null}
-          {gridItems.map((item) =>
-            item.kind === 'heading' ? (
-              <View key={item.id} style={styles.section} testID={item.testID}>
-                <Text
-                  accessibilityRole="header"
-                  style={[styles.sectionTitle, { color: theme.foregroundPrimary }]}
-                >
-                  {item.title}
-                </Text>
+          {gridSections.map((section) => (
+            <View
+              key={`${section.id}-heading`}
+              style={styles.section}
+              testID={`full-reaction-section-${section.id}`}
+            >
+              <Text
+                accessibilityRole="header"
+                style={[styles.sectionTitle, { color: theme.foregroundPrimary }]}
+              >
+                {section.title}
+              </Text>
+              <View style={mobile ? styles.mobileGrid : styles.webGrid}>
+                {Array.from(
+                  { length: Math.ceil(section.options.length / columns) },
+                  (_, rowIndex) => (
+                    <ReactionGridRow
+                      key={`${section.id}-row-${rowIndex}`}
+                      mobile={mobile}
+                      onSelect={onSelect}
+                      options={section.options.slice(rowIndex * columns, (rowIndex + 1) * columns)}
+                      rowIndex={rowIndex}
+                      sectionId={section.id}
+                      selectedValues={selectedValues}
+                      pendingValues={pendingOptionIds}
+                      errorValues={errorOptionIds}
+                    />
+                  ),
+                )}
               </View>
-            ) : (
-              <ReactionGridRow
-                key={item.id}
-                mobile={mobile}
-                onSelect={onSelect}
-                options={item.options}
-                rowIndex={item.rowIndex}
-                sectionId={item.sectionId}
-                selectedValues={selectedValues}
-                pendingValues={pendingOptionIds}
-                errorValues={errorOptionIds}
-              />
-            ),
-          )}
+            </View>
+          ))}
         </ScrollView>
       )}
     </View>
@@ -252,61 +261,24 @@ function SearchField({ onChange, value }: { onChange: (value: string) => void; v
   );
 }
 
-type ReactionGridItem =
-  | Readonly<{ id: string; kind: 'heading'; testID: string; title: string }>
-  | Readonly<{
-      id: string;
-      kind: 'row';
-      options: ReadonlyArray<FullReactionPickerOption>;
-      rowIndex: number;
-      sectionId: string;
-    }>;
+type ReactionGridSection = Readonly<{
+  id: string;
+  options: ReadonlyArray<FullReactionPickerOption>;
+  title: string;
+}>;
 
-function createGridItems(
-  sectionId: string,
-  title: string,
+function createBrowseSections(
   options: ReadonlyArray<FullReactionPickerOption>,
-  columns: number,
-): ReactionGridItem[] {
-  if (options.length === 0) {
-    return [];
-  }
-
-  return [
-    {
-      id: `${sectionId}-heading`,
-      kind: 'heading',
-      testID: `full-reaction-section-${sectionId}`,
-      title,
-    },
-    ...Array.from({ length: Math.ceil(options.length / columns) }, (_, rowIndex) => ({
-      id: `${sectionId}-row-${rowIndex}`,
-      kind: 'row' as const,
-      options: options.slice(rowIndex * columns, (rowIndex + 1) * columns),
-      rowIndex,
-      sectionId,
-    })),
-  ];
-}
-
-function createBrowseItems(
-  options: ReadonlyArray<FullReactionPickerOption>,
-  columns: number,
-): ReactionGridItem[] {
+): ReactionGridSection[] {
   const categories = Array.from(
     new Map(options.map((option) => [option.category, option.categoryLabel])).entries(),
     ([id, title]) => ({ id, options: options.filter((option) => option.category === id), title }),
   );
   return [
-    ...createGridItems(
-      'quick',
-      '빠른 반응',
-      options.filter((option) => option.quick),
-      columns,
-    ),
-    ...categories.flatMap(({ id, options: categoryOptions, title }) =>
-      createGridItems(id, title, categoryOptions, columns),
-    ),
+    ...(options.some((option) => option.quick)
+      ? [{ id: 'quick', title: '빠른 반응', options: options.filter((option) => option.quick) }]
+      : []),
+    ...categories,
   ];
 }
 

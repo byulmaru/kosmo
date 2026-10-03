@@ -325,20 +325,46 @@ export const MobileLoading: Story = {
 export const MobileGridGeometryContract: Story = {
   ...MobileBrowse,
   play: async ({ canvasElement }) => {
-    const rows = within(canvasElement).getAllByTestId(/^full-reaction-section-symbols-row-/);
+    const canvas = within(canvasElement);
+    const rows = canvas.getAllByTestId(/^full-reaction-section-symbols-row-/);
+    const quickRow = canvas.getByTestId('full-reaction-section-quick-row-0');
+    const symbolsHeading = canvas.getByRole('heading', { name: '기호' });
+    const expressionsHeading = canvas.getByRole('heading', { name: '표정과 감정' });
     expect(rows).toHaveLength(2);
     for (const row of rows) {
       expect(getComputedStyle(row).justifyContent).toBe('space-between');
     }
+    expect(
+      rows[1]!.getBoundingClientRect().top - rows[0]!.getBoundingClientRect().bottom,
+    ).toBeCloseTo(0, 0);
+    expect(
+      rows[0]!.getBoundingClientRect().top - symbolsHeading.getBoundingClientRect().bottom,
+    ).toBeCloseTo(8, 0);
+    expect(
+      expressionsHeading.getBoundingClientRect().top - quickRow.getBoundingClientRect().bottom,
+    ).toBeCloseTo(16, 0);
   },
 };
 
 export const WebGridGeometryContract: Story = {
   play: async ({ canvasElement }) => {
-    const rows = within(canvasElement).getAllByTestId(/^full-reaction-section-symbols-row-/);
+    const canvas = within(canvasElement);
+    const rows = canvas.getAllByTestId(/^full-reaction-section-symbols-row-/);
+    const quickRow = canvas.getByTestId('full-reaction-section-quick-row-0');
+    const symbolsHeading = canvas.getByRole('heading', { name: '기호' });
+    const expressionsHeading = canvas.getByRole('heading', { name: '표정과 감정' });
     expect(rows).toHaveLength(2);
     expect(getComputedStyle(rows[0]).justifyContent).toBe('space-between');
     expect(getComputedStyle(rows[1]).justifyContent).toBe('flex-start');
+    expect(
+      rows[1]!.getBoundingClientRect().top - rows[0]!.getBoundingClientRect().bottom,
+    ).toBeCloseTo(8, 0);
+    expect(
+      rows[0]!.getBoundingClientRect().top - symbolsHeading.getBoundingClientRect().bottom,
+    ).toBeCloseTo(8, 0);
+    expect(
+      expressionsHeading.getBoundingClientRect().top - quickRow.getBoundingClientRect().bottom,
+    ).toBeCloseTo(16, 0);
   },
 };
 
