@@ -182,6 +182,7 @@ export function ProfileTagMuteAction({ hashtag }: Props) {
     confirmLabel: '뮤트 해제',
   };
   const conflictLabel = '다른 임시 뮤트 규칙이 적용 중';
+  const conflictMessage = `${tagDisplayName}에 다른 범위의 임시 뮤트 규칙이 적용 중이에요. 현재 규칙을 보존하며, 만료 후 상태를 새로고침하면 영구 알림 뮤트를 설정할 수 있어요.`;
   const startRequest = (nextMuted: boolean) => {
     if (pending || !selectedProfileId || !intent) {
       return;
@@ -213,10 +214,7 @@ export function ProfileTagMuteAction({ hashtag }: Props) {
 
     if (nextMuted) {
       if (hasActiveTemporaryRuleForOtherScopes) {
-        showToast(
-          `${tagDisplayName}에 다른 범위의 임시 뮤트 규칙이 적용 중이에요. 기존 규칙을 보존하기 위해 영구 알림 뮤트를 추가하지 않았어요.`,
-          { tone: 'danger' },
-        );
+        showToast(conflictMessage, { tone: 'danger' });
         setOpen(false);
         return;
       }
@@ -304,10 +302,7 @@ export function ProfileTagMuteAction({ hashtag }: Props) {
         key: 'mute-notification-unavailable',
         label: conflictLabel,
         onSelect: () => {
-          showToast(
-            `${tagDisplayName}에 다른 범위의 임시 뮤트 규칙이 적용 중이에요. 기존 규칙을 보존하기 위해 영구 알림 뮤트를 추가하지 않았어요.`,
-            { tone: 'danger' },
-          );
+          showToast(conflictMessage, { tone: 'danger' });
         },
       }
     : {
