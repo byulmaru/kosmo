@@ -7,6 +7,9 @@ Hashtag Mute Rule은 Owner Profile이 특정 Hashtag를 기준으로 Post List, 
 
 ## 상태
 
+하나의 Hashtag Mute Rule은 여러 Mute Scope를 가질 수 있지만 Decision과 만료 시각은 각각 하나이며 모든 Scope에
+공통으로 적용된다. Scope마다 다른 Decision이나 만료 시각을 저장하지 않는다.
+
 ### Mute Scope
 
 Mute Scope는 여러 값을 동시에 가질 수 있다.
