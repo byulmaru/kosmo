@@ -129,16 +129,14 @@ Notification이 소유하며, Quote·Reply Parent·Repost Source의 구조와 �
 - 검증된 승인을 받으면 승인과 Source 관계를 연결하고 이미 전달한 Quote를 갱신한다. 거절·승인 철회 또는
   Source 삭제 시에는 Quote 자체 Content를 유지하고 Source 카드·관계는 비노출한다. 비노출을 위해 저장
   관계를 물리적으로 제거해야 하는지는 도메인 계약으로 고정하지 않는다.
-- 철회 뒤에는 현재 유효한 승인이 확인될 때까지 Quote를 미승인으로 취급하고 Source를 숨긴다. 같은 Quote는
-  로컬 원문 서버의 새 승인 결정 또는 원격 원문 서버가 현재 승인한 것으로 검증된 QuoteAuthorization으로
-  다시 승인할 수 있다. 승인 URI는 재사용될 수 있으므로 URI가 같다는 이유만으로 승인하지 않고 원문 서버의
-  현재 승인 상태를 확인한다. 재승인 뒤에도 Source 조회·차단 조건은 그대로 적용한다.
-- Local Source가 삭제되면 그 Source에 발급된 각 유효한 QuoteAuthorization을 철회하고, 승인에 결속된
-  Quote Author의 inbox 또는 Quote 소유 서버가 수신하는 inbox로 `Delete(QuoteAuthorization)`을 전달한다.
-  Quote 소유 서버는 이를 기존 Quote audience에 전달해 원문 작성자를 팔로우하지 않는 수신자도 Source
-  비노출로 수렴시킨다. 일반 Source Post audience에만 보내는 `Delete(Note)`로 이 경로를 대신하지 않는다.
-- 전송 실패나 응답 부재를 승인으로 간주하지 않는다. 늦게 도착한 응답이나 중복 전달이 더 최신의 거절·철회를
-  무효화하지 않도록 한다. 세부 재시도와 전달 순서는 해당 lifecycle의 구현 계약에서 정한다.
+- 철회 뒤에는 현재 승인이 확인될 때까지 Quote를 미승인으로 취급하고 Source를 숨긴다. 같은 Quote는 Local
+  Source Author의 현재 승인 결정이나 Remote Source Author의 현재 승인으로 검증된 QuoteAuthorization을 받아
+  다시 승인할 수 있다. 승인 URI는 재사용하거나 새로 발급할 수 있으며, URI가 같거나 다르다는 사실만으로
+  현재 승인을 판단하지 않는다. 재승인 뒤에도 Source 조회·차단 조건은 그대로 적용한다.
+- Local Source가 삭제되면 그 Source에 발급된 모든 유효한 QuoteAuthorization을 철회한다. Local·Remote Quote로의
+  전달은 아래 Quote federation 정책을 따른다.
+- 전송 실패나 응답 부재를 승인으로 간주하지 않는다. 이전 승인을 위한 뒤늦은 응답이나 오래된 중복 전달은 더
+  최근의 거절·철회를 무효화하지 않도록 한다. 세부 재시도와 전달 순서는 해당 lifecycle의 구현 계약에서 정한다.
 - 게시글별 인용 허용 설정의 변경은 이후 요청에만 적용한다. 기존 승인을 없애려면 별도 인용 승인 철회를
   사용하며, 설정 변경 자체로 기존 Quote의 Source를 일괄 숨기지 않는다.
 - 차단은 새 인용 요청·승인을 양방향으로 막지만 기존 승인을 자동 철회하지 않는다. 기존 승인 Source 표시는
@@ -395,10 +393,16 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
 - 승인 전·거절·철회 상태에서는 일반 Note 표현이나 자동 생성한 레거시 호환 표현을 통해 정상 인용인 것처럼
   Source 관계를 노출하지 않는다. Quote 작성자가 직접 작성한 Content를 Source lifecycle 때문에 삭제하지
   않는다.
-- 명시적 인용 승인 철회는 `QuoteAuthorization`을 무효로 만들고 `Delete(QuoteAuthorization)`를 전달한다.
-  이를 수신하는 경계도 철회 주체와 승인의 대응을 검증한 뒤 Source를 비노출한다. 수신자가 Quote의 소유
-  서버라면 기존 Quote audience에도 검증된 `Delete(QuoteAuthorization)`을 전달한다. 발신·전달하는 철회
-  `Delete`의 `object`와 `target`에는 객체를 embed하지 않고 URI 참조만 제공한다.
+- Remote Source Author가 보낸 `Delete(QuoteAuthorization)`은 발신자가 해당 승인 발급자이고 승인·Source·Quote가
+  서로 결속됨을 확인한 뒤 Local Quote의 승인을 철회하고 Source를 숨긴다. 이 수신자는 원본 `Delete`를 Quote
+  audience에 중계하거나 대체 `Delete`를 만들지 않는다. 대신 기존 Quote audience에 Source와 승인 참조 및
+  자동 생성한 FEP·legacy Quote 표현을 제외한 `Update(Note)`를 전달한다. Quote 작성자가 직접 작성한 본문과
+  링크, Quote identity와 공개 범위는 유지되며, 전달 실패가 로컬 철회를 되돌리지 않는다.
+- Local Source 삭제 뒤에는 Local Quote에도 같은 `Update(Note)` 표현을 기존 audience에 전달한다. Remote Quote owner에게는
+  Source Author가 `Delete(QuoteAuthorization)`을 직접 전달한다. 이 Kosmo 정책은 FEP-044f의 Quote owner가 원본
+  Delete를 forwarding해야 한다는 요구와 다르며, 그 forwarding 요구를 준수한다고 주장하지 않는다.
+- Source Author가 직접 발신하는 `Delete(QuoteAuthorization)`의 `object`와 `target`에는 객체를 embed하지 않고
+  URI 참조만 제공한다.
 - 레거시 Quote 속성의 상호운용을 지원하되 FEP 형식이 존재하지만 유효하지 않은 경우 레거시 형식으로
   강등하지 않는다. 승인된 인용에는 `quoteUrl`, `quoteUri`, `_misskey_quote`와 원문 링크의 본문 fallback을
   발신 표현으로 제공한다. 승인 전·거절·철회 상태에서는 자동 생성한 이 표현을 숨기되 직접 작성한 본문은
