@@ -4,7 +4,7 @@
 
 ## Goal
 
-선택한 Profile의 서버 확정 뮤트 상태를 확인하고, 해당 태그를 Profile Tag로 가진 사람에게서 오는 새 알림을 영구적으로 끄고 다시 켜는 클라이언트 흐름의 스펙을 작성한다. 이번 요청에서는 스펙 문서와 공식 Stack PR을 만들고 구현은 다음 세션에서 진행한다.
+선택한 Profile의 서버 확정 뮤트 상태를 확인하고, 해당 태그를 Profile Tag로 가진 사람에게서 오는 새 알림을 영구적으로 끄고 다시 켜는 클라이언트 흐름의 스펙을 작성한다. 작성한 스펙은 보존하며, 현재 요청에서는 검토에서 확인한 P2 세 건만 보정한다. PR #1089는 사용자 요청으로 닫힌 상태이며 구현은 별도 요청에 따라 진행한다.
 
 ## What Changes
 
@@ -30,14 +30,14 @@
 
 ## Verification
 
-스펙 문서는 한국어 윤문 전후 계약·구조 대조, OpenSpec strict validation, Prettier와 diff 검사를 수행한다. 제품 구현 이후에는 exact identity, 서버 상태 수렴, 요청 실패·재시도, A→B 전환 중 늦은 응답 격리, 키보드·focus·접근성 및 실제 생성→조회→해제 흐름을 검증한다. 현재 세션에서 제품 테스트를 실행한 것으로 표시하지 않는다.
+스펙 문서는 한국어 윤문 전후 계약·구조 대조, OpenSpec strict validation, Prettier와 diff 검사를 수행한다. 제품 구현 이후에는 exact identity, 확인 취소 시 요청 없음·기존 상태 유지, 별도 새로고침·재조회·재진입 없이 성공 결과를 반영하는 현재 화면, 요청 실패·재시도, A→B 전환 중 늦은 응답 격리, 키보드·focus·접근성 및 실제 생성→조회→해제 흐름을 검증한다. 구체적인 반영 시간이나 render timing은 계약하거나 테스트하지 않는다. 현재 세션에서 제품 테스트를 실행한 것으로 표시하지 않는다.
 
 ## Business Context
 
 - Product canonical: `docs/domain/objects/hashtag.md`, `docs/domain/objects/hashtag-mute-rule.md`, accepted `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`
 - Visual design source: `docs/design/profile-tags.md`, `docs/design/hashtag-related-profiles.md`, `docs/design/profile-mute-block.md`의 기존 확인·피드백 패턴
 - Linear: [PROD-735](https://linear.app/byulmaru/issue/PROD-735), [PROD-1029](https://linear.app/byulmaru/issue/PROD-1029). 2026-10-02 본문·관계를 직접 확인했으며 PROD-735 댓글은 없다.
-- User agreement: 2026-10-02 PROD-735 스펙 작성과 Stack PR 요청. 현재 UI는 영구 뮤트만 제공하도록 지시했고 기존 UI 확인을 요청했다. 이어 해당 태그를 프로필에 단 사람의 새 알림만 끄고 게시물 해시태그 기능은 추후 구현하도록 확정했다.
+- User agreement: 2026-10-02 PROD-735 스펙 작성 요청. 이후 사용자가 PR을 닫고 스펙을 보존하도록 지시했으며, 현재는 검토에서 확인한 P2 세 건의 문서 보정을 요청했다. 현재 UI는 영구 뮤트만 제공하도록 지시했고 기존 UI 확인을 요청했다. 이어 해당 태그를 프로필에 단 사람의 새 알림만 끄고 게시물 해시태그 기능은 추후 구현하도록 확정했다.
 
 ## Session Status
 
