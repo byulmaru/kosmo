@@ -24,6 +24,53 @@ Kosmo Web의 PostHog client는 `prod` 채널에서 공개 `posthogKey`와 `posth
 
 Account가 바뀐 뒤 늦게 완료된 이전 요청은 새 Account에 귀속하지 않는다. 같은 Account에서 Profile만 바뀐 경우에는 Account identity를 유지한다. Account 전환·로그아웃 중 SDK의 reset 또는 identify가 실패하면 제품 흐름은 계속하되, SDK의 실제 `$user_id`와 distinct ID가 현재 Account와 다시 일치할 때까지 명시적 custom event를 보내지 않는다.
 
+## Worker 데이터베이스 집계 스냅샷
+
+Worker는 `ENVIRONMENT=prod`인 경우에만 매 24시간 `database_counts_snapshot` event를 보낸다. 개발 환경에는 스케줄을 등록하지 않으며, Activity에서도 production 환경과 설정을 다시 확인한다. 이 system event는 고정 `distinct_id`인 `kosmo-production-db`를 사용하고 `$process_person_profile: false`를 보내므로 Account/Profile person이나 로그인 identity와 연결되지 않는다. 스냅샷 시각은 event의 top-level `timestamp`로 전송한다.
+
+2026-10-03 Kosmo project의 native Metrics probe에서는 약 30일 뒤 만료되는 결과를 관측했다. 이는 해당 project/probe에 대한 관측이며 다른 project나 plan의 보존 기간을 뜻하지 않는다. 장기 추세의 원본은 일별 `database_counts_snapshot` event로 두고, Dashboard query는 최근 1년 범위를 요청한다. 실제 조회 가능 기간은 해당 project의 event retention에 따르며, 현재 설정을 확인하지 않았으므로 1년 또는 영구 보존을 보장하지 않는다. PostHog [Metrics 문서](https://posthog.com/docs/metrics)를 참고한다.
+
+스냅샷은 read-only repeatable-read PostgreSQL transaction에서 Profile과 Post 전체 row를 집계한다. row security가 집계를 숨기는 경우 쿼리는 실패한다. PostgreSQL statement timeout은 30초다. PostHog event의 top-level `timestamp`는 DB snapshot 관측 시각이며, Workflow run UUID를 event UUID로 재사용해 전송 재시도가 같은 immutable snapshot을 중복 제거할 수 있게 한다. Capture 요청은 10초 뒤 중단한다. DB, 설정, timeout 또는 HTTP 실패는 zero snapshot으로 바꾸지 않고 Workflow Activity 실패로 남는다.
+
+허용된 event properties는 다음 숫자 집계와 두 고정 값이다.
+
+| Property                                                                    | 의미                                             |
+| --------------------------------------------------------------------------- | ------------------------------------------------ |
+| `profile_count`                                                             | 전체 Profile                                     |
+| `profile_local_count`, `profile_remote_count`                               | Instance kind별 Profile (`LOCAL`, `ACTIVITYPUB`) |
+| `profile_active_count`, `profile_disabled_count`, `profile_suspended_count` | Profile state별 Profile                          |
+| `post_count`                                                                | 전체 Post                                        |
+| `post_local_count`, `post_remote_count`                                     | 작성 Profile의 Instance kind별 Post              |
+| `post_active_count`, `post_deleted_count`                                   | Post state별 Post                                |
+| `environment`                                                               | 항상 `prod`                                      |
+| `$process_person_profile`                                                   | 항상 `false`                                     |
+
+일별 차트는 `timestamp`를 `Asia/Seoul` 날짜로 묶고 각 날짜의 최신 값을 선택한다. Schedule 외 수동 실행이나 재전송 이벤트가 같은 날짜에 있더라도 누적 합계를 사용하지 않는다. HogQL 예시는 다음과 같다.
+
+```sql
+SELECT
+  toStartOfDay(timestamp, 'Asia/Seoul') AS day,
+  argMax(toFloat(properties.profile_count), timestamp) AS profile_count,
+  argMax(toFloat(properties.profile_local_count), timestamp) AS profile_local_count,
+  argMax(toFloat(properties.profile_remote_count), timestamp) AS profile_remote_count,
+  argMax(toFloat(properties.profile_active_count), timestamp) AS profile_active_count,
+  argMax(toFloat(properties.profile_disabled_count), timestamp) AS profile_disabled_count,
+  argMax(toFloat(properties.profile_suspended_count), timestamp) AS profile_suspended_count,
+  argMax(toFloat(properties.post_count), timestamp) AS post_count,
+  argMax(toFloat(properties.post_local_count), timestamp) AS post_local_count,
+  argMax(toFloat(properties.post_remote_count), timestamp) AS post_remote_count,
+  argMax(toFloat(properties.post_active_count), timestamp) AS post_active_count,
+  argMax(toFloat(properties.post_deleted_count), timestamp) AS post_deleted_count
+FROM events
+WHERE event = 'database_counts_snapshot'
+  AND properties.environment = 'prod'
+  AND timestamp >= now() - INTERVAL 1 YEAR
+GROUP BY day
+ORDER BY day
+```
+
+Saved event-backed views: [production database counts dashboard](https://us.posthog.com/project/563575/dashboard/2165835), [snapshot insight 9QlDIKUD](https://us.posthog.com/project/563575/insights/9QlDIKUD), and [snapshot insight pXxOSjkG](https://us.posthog.com/project/563575/insights/pXxOSjkG).
+
 ## 배포 후 확인
 
 수집을 재개할 때는 production build와 PostHog project 설정을 같은 승인된 배포 경계에서 확인한다. 실제 사용자 식별자나 콘텐츠를 ticket·스크린샷에 복사하지 않는다.
@@ -35,4 +82,4 @@ Account가 바뀐 뒤 늦게 완료된 이전 요청은 새 Account에 귀속하
 5. Reaction 원문과 Post·Profile 식별자가 explicit property에 포함되지 않는지 확인한다.
 6. PostHog endpoint를 차단한 상태에서도 재게시·Reaction·북마크가 동일하게 완료되는지 확인한다.
 
-집계 Dashboard, funnel 정의, native analytics, emoji별 분석은 이 운영 문서와 구현 범위에 포함하지 않는다. 수집을 재개하거나 event taxonomy를 바꿀 때는 이 문서와 canonical product contract를 함께 갱신한다.
+Web event의 집계 Dashboard, funnel 정의, native analytics, emoji별 분석은 Worker 스냅샷과 별도 범위다. Web 수집을 재개하거나 event taxonomy를 바꿀 때는 이 문서와 canonical product contract를 함께 갱신한다.

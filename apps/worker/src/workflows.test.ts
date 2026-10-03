@@ -17,6 +17,7 @@ import type {
   ProfileFollowPairTransitionInput,
   ProfileFollowPairTransitionOutcome,
 } from '@kosmo/core/services';
+import type { DatabaseCountsSnapshot } from './activities/database-counts-snapshot';
 
 type ReactionCreateEffectsInput = {
   readonly reactionId: string;
@@ -1540,6 +1541,76 @@ test(
     });
 
     assert.equal(activityCalls, 1);
+  },
+);
+
+test(
+  'Database Counts Snapshot Workflow는 같은 스냅샷과 run ID로 capture를 재시도하고 dev 결과는 건너뛴다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+    const taskQueue = `${KOSMO_TASK_QUEUE}-database-counts-test-${process.pid}`;
+    const snapshot: DatabaseCountsSnapshot = {
+      snapshotAt: '2026-10-03T12:34:56.000Z',
+      profileCount: 120,
+      profileLocalCount: 80,
+      profileRemoteCount: 40,
+      profileActiveCount: 110,
+      profileDisabledCount: 7,
+      profileSuspendedCount: 3,
+      postCount: 900,
+      postLocalCount: 650,
+      postRemoteCount: 250,
+      postActiveCount: 875,
+      postDeletedCount: 25,
+    };
+    const captured: Array<{ snapshot: DatabaseCountsSnapshot; eventId: string }> = [];
+    let snapshotAvailable = true;
+    const worker = await Worker.create({
+      activities: {
+        loadDatabaseCountsSnapshotActivity: async () => (snapshotAvailable ? snapshot : null),
+        captureDatabaseCountsSnapshotActivity: async (input: {
+          snapshot: DatabaseCountsSnapshot;
+          eventId: string;
+        }) => {
+          captured.push(input);
+          if (captured.length === 1) {
+            throw new Error('temporary PostHog failure');
+          }
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      await environment.client.workflow.execute('databaseCountsSnapshotWorkflow', {
+        args: [],
+        taskQueue,
+        workflowId: `database-counts-prod:${process.pid}`,
+      });
+      assert.equal(captured.length, 2);
+      assert.deepEqual(captured[0]?.snapshot, snapshot);
+      assert.deepEqual(captured[1]?.snapshot, snapshot);
+      assert.equal(captured[0]?.eventId, captured[1]?.eventId);
+      assert.match(
+        captured[0]?.eventId ?? '',
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+      );
+
+      snapshotAvailable = false;
+      await environment.client.workflow.execute('databaseCountsSnapshotWorkflow', {
+        args: [],
+        taskQueue,
+        workflowId: `database-counts-dev:${process.pid}`,
+      });
+      assert.equal(captured.length, 2);
+    });
   },
 );
 

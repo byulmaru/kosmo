@@ -64,6 +64,12 @@ spec:
               value: {{ .Values.temporal.frontendAddress | quote }}
             - name: TEMPORAL_NAMESPACE
               value: {{ include "kosmo.temporalNamespaceName" . | quote }}
+{{- if eq .Values.env "prod" }}
+            - name: POSTHOG_HOST
+              value: {{ .Values.worker.posthog.host | quote }}
+            - name: POSTHOG_KEY
+              value: {{ .Values.worker.posthog.captureKey | quote }}
+{{- end }}
             - name: PGPASSWORD
               valueFrom:
                 secretKeyRef:

@@ -8,6 +8,9 @@ worker:
     prod: 2
   health:
     port: 8080
+  posthog:
+    host: https://us.i.posthog.com
+    captureKey: phc_vYTsfHrgz8wE6wQv5kfpQM5XPBnKKjvNQgaHabb6zdsS
   resources:
     requests:
       cpu: 100m
