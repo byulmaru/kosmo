@@ -16,6 +16,7 @@ import type { ActionMenuItem } from '@/components/ui/ActionMenu';
 import type { ProfileTagMuteAction_tag$key } from './__generated__/ProfileTagMuteAction_tag.graphql';
 import type { ProfileTagMuteActionCreateMutation } from './__generated__/ProfileTagMuteActionCreateMutation.graphql';
 import type { ProfileTagMuteActionDeleteMutation } from './__generated__/ProfileTagMuteActionDeleteMutation.graphql';
+import type { ProfileTagMuteActionDeleteUpdaterQuery } from './__generated__/ProfileTagMuteActionDeleteUpdaterQuery.graphql';
 import type { ProfileTagMuteActionRefetchQuery } from './__generated__/ProfileTagMuteActionRefetchQuery.graphql';
 import type { ProfileTagMuteActionUpdateMutation } from './__generated__/ProfileTagMuteActionUpdateMutation.graphql';
 
@@ -67,6 +68,19 @@ const deleteHashtagMuteRuleMutation = graphql`
   mutation ProfileTagMuteActionDeleteMutation($input: DeleteHashtagMuteRuleInput!) {
     deleteHashtagMuteRule(input: $input) {
       hashtagMuteRuleId @deleteRecord
+    }
+  }
+`;
+
+const deleteHashtagMuteRuleUpdaterQuery = graphql`
+  query ProfileTagMuteActionDeleteUpdaterQuery($hashtagId: ID!) @updatable {
+    node(id: $hashtagId) {
+      ... on Hashtag {
+        __typename
+        viewerMuteRule {
+          id
+        }
+      }
     }
   }
 `;
@@ -286,9 +300,16 @@ export function ProfileTagMuteAction({ hashtag }: Props) {
       },
       onError: handleMutationError,
       updater: (store) => {
-        // The delete payload contains only the deleted rule ID, so unlink this exact viewer state
-        // from its canonical Hashtag without a follow-up query.
-        store.get(data.id)?.setLinkedRecord(null, 'viewerMuteRule');
+        // The delete payload only returns the rule ID, so clear the nullable viewer link on the
+        // canonical Hashtag with Relay's type-safe updatable query.
+        const { updatableData } = store.readUpdatableQuery<ProfileTagMuteActionDeleteUpdaterQuery>(
+          deleteHashtagMuteRuleUpdaterQuery,
+          { hashtagId: data.id },
+        );
+        const hashtagRecord = updatableData.node;
+        if (hashtagRecord?.__typename === 'Hashtag') {
+          hashtagRecord.viewerMuteRule = null;
+        }
       },
       variables: { input: { id: rule.id } },
     });
