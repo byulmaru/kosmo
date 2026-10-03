@@ -18,7 +18,7 @@
 - 표시 이름은 대상 안내에만 쓰고 mutation target은 서버가 준 Hashtag identity를 사용한다. Owner는 selected Profile이며 공개 Profile의 소유자와 혼동하지 않는다.
 - 서버의 현재 Notification Rule·적용 상태를 읽은 뒤 설정 또는 해제 action을 제공한다. 조회 중·조회 실패를 미뮤트로 표시하거나 중복 생성을 허용하지 않는다.
 - 현재 UI에서 생성하는 규칙은 Notification Scope만 사용하는 영구 규칙이다. Notification에서는 Exclude·Collapse가 모두 새 알림 억제를 뜻하므로 생성 input은 Exclude를 사용하고 사용자에게 Decision을 고르게 하지 않는 접근을 제안한다. 이 필드 매핑은 구현 메모이며 실제 PROD-1029 API와 대조한다. 만료 입력·preset·picker를 추가하지 않는다. 일반 서버 계약의 미래 만료 지원을 삭제하거나 기존 기간 규칙을 영구로 덮어쓰는 작업도 포함하지 않는다.
-- 같은 selected Profile·Hashtag에 Notification 이외의 Scope를 가진 활성 임시 규칙이 있으면 Scope·Decision·만료를 보존하고 Notification을 추가하지 않는다. 만료 시각이 모든 Scope에 공통이므로 이 규칙을 영구화하거나 Notification만 남겨 기존 Scope를 조기에 끝내지 않는다. 만료 뒤 새 상태를 읽어 다시 설정할 수 있음을 안내한다.
+- 같은 selected Profile이 같은 Hashtag에 Notification 이외 Scope의 활성 임시 규칙을 갖고 있으면 기존 Scope·Decision·만료 시각을 유지하고 Notification을 추가하지 않는다. 만료 시각은 모든 Scope에 함께 적용되므로 기존 규칙을 영구화하거나 Notification만 남겨 다른 Scope의 임시 동작을 일찍 끝내지 않는다. 규칙이 만료된 뒤 상태를 다시 불러오면 설정할 수 있다고 안내한다.
 - action owner에 Relay fragment·mutation을 두고 표준 `useMutation`의 in-flight 상태와 서버 payload로 수렴시킨다. 기존 Profile Mute 코드의 Promise wrapper·별도 pending 구현은 현재 Relay 지침과 대조하고 그대로 복제하지 않는다.
 - 생성·해제 확인을 취소하면 요청하지 않고 기존 서버 확정 상태와 action을 유지한다. 기존 focus 복귀 흐름도 보존한다.
 - 생성·해제가 성공하면 별도 새로고침·재조회·재진입 없이 현재 화면의 상태와 다음 action에 결과를 반영한다. 구체적인 반영 시간이나 render timing은 계약하거나 테스트하지 않는다.
