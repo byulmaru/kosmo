@@ -75,11 +75,27 @@ test('Profile Tag에서 Notification 전용 영구 규칙을 만들고 해제하
   page,
 }) => {
   const browserErrors: string[] = [];
+  const graphQLErrors: string[] = [];
   page.on('pageerror', (error) => browserErrors.push(error.stack ?? error.message));
   page.on('console', (message) => {
     if (message.type() === 'error') {
       browserErrors.push(message.text());
     }
+  });
+  page.on('response', (response) => {
+    const operation = readGraphQLOperation(response.request().postData());
+    if (!operation) {
+      return;
+    }
+
+    void response
+      .json()
+      .then((body: { errors?: ReadonlyArray<{ message: string }> }) => {
+        if (body.errors?.length) {
+          graphQLErrors.push(`${operation.operationName}: ${JSON.stringify(body.errors)}`);
+        }
+      })
+      .catch(() => {});
   });
 
   const viewer = await createE2ESession({ handle: 'prod735-viewer' });
@@ -202,7 +218,12 @@ test('Profile Tag에서 Notification 전용 영구 규칙을 만들고 해제하
   const deleteResponse = waitForGraphQLOperation(page, 'ProfileTagMuteActionDeleteMutation');
   await page.getByRole('button', { exact: true, name: '뮤트 해제' }).click();
   await assertGraphQLSuccess(await deleteResponse);
-  await expect(muteButton(), browserErrors.join('\n')).toBeVisible();
+  try {
+    await expect(muteButton()).toBeVisible();
+  } catch (error) {
+    const diagnostics = [...browserErrors, ...graphQLErrors].join('\n');
+    throw new Error([diagnostics, String(error)].filter(Boolean).join('\n'));
+  }
   await expect(page.getByRole('alert')).toContainText('#PROD735Tag 새 알림 뮤트를 해제했어요.');
   expect(
     await db
