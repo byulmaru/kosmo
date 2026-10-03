@@ -7,10 +7,14 @@ import {
   ActivityPubActorType,
   InstanceKind,
   InstanceState,
+  PostState,
+  PostVisibility,
   ProfileFollowPolicy,
   ProfileMediaKind,
 } from '@kosmo/core/enums';
+import { temporalClient } from '@kosmo/core/temporal/client';
 import { executeProfileFollowPairTransition } from '@kosmo/core/temporal/follow-command';
+import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
 import { and, eq, inArray } from 'drizzle-orm';
 import { setInboundObservabilityReporter } from './inbound-observability';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
@@ -35,6 +39,8 @@ let pg: typeof CoreDb.pg;
 let ProfileFollowRequests: typeof CoreDb.ProfileFollowRequests;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
 let ProfileMedia: typeof CoreDb.ProfileMedia;
+let ProfilePinnedPosts: typeof CoreDb.ProfilePinnedPosts;
+let Posts: typeof CoreDb.Posts;
 let Profiles: typeof CoreDb.Profiles;
 let handleInboundAccept: typeof HandleInboundAccept;
 let handleInboundUpdate: typeof HandleInboundUpdate;
@@ -55,6 +61,8 @@ describe('inbound actor Update', () => {
       ProfileFollowRequests,
       ProfileFollows,
       ProfileMedia,
+      ProfilePinnedPosts,
+      Posts,
       Profiles,
     } = await import('@kosmo/core/db'));
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
@@ -138,6 +146,102 @@ describe('inbound actor Update', () => {
     assert.equal(stored.actor.lastFetchedAt?.toString(), secondReceivedAt.toString());
     assert.deepEqual(await readProfileMedia(fixture.profile.id), []);
     assert.equal(await db.$count(Media, eq(Media.profileId, fixture.profile.id)), 2);
+  });
+
+  test('verified Actor Update schedules Featured sync and clears pins when Featured is removed', async () => {
+    const fixture = await createRemoteActor(ProfileFollowPolicy.OPEN);
+    const start = mock.method(temporalClient.workflow, 'start', async () => undefined as never);
+    const receivedAt = Temporal.Instant.from('2026-07-31T05:00:00Z');
+
+    await handleInboundUpdate(
+      createContext(),
+      new Update({
+        actor: remoteActorUri,
+        object: createActor({ featured: new URL(`${remoteActorUri.href}/featured`) }),
+      }),
+      receivedAt,
+    );
+
+    assert.equal(start.mock.callCount(), 1);
+    assert.equal(start.mock.calls[0]?.arguments[0], 'remoteProfileFeaturedWorkflow');
+    assert.equal(start.mock.calls[0]?.arguments[1]?.taskQueue, KOSMO_TASK_QUEUE);
+    assert.deepEqual(start.mock.calls[0]?.arguments[1]?.args, [
+      {
+        actorUri: remoteActorUri.href,
+        featuredUri: `${remoteActorUri.href}/featured`,
+        profileId: fixture.profile.id,
+      },
+    ]);
+
+    await handleInboundUpdate(
+      createContext(),
+      new Update({
+        actor: remoteActorUri,
+        object: createActor({ featured: new URL(`${remoteActorUri.href}/featured`) }),
+      }),
+      receivedAt,
+    );
+    assert.equal(start.mock.callCount(), 1);
+
+    const post = await db
+      .insert(Posts)
+      .values({
+        profileId: fixture.profile.id,
+        state: PostState.ACTIVE,
+        visibility: PostVisibility.PUBLIC,
+      })
+      .returning()
+      .then(firstOrThrow);
+    await db.insert(ProfilePinnedPosts).values({
+      position: 0,
+      postId: post.id,
+      profileId: fixture.profile.id,
+    });
+
+    await handleInboundUpdate(
+      createContext(),
+      new Update({
+        actor: remoteActorUri,
+        object: createActor({ featured: null }),
+      }),
+      receivedAt.add({ seconds: 1 }),
+    );
+
+    assert.deepEqual(
+      await db
+        .select({ position: ProfilePinnedPosts.position, postId: ProfilePinnedPosts.postId })
+        .from(ProfilePinnedPosts)
+        .where(eq(ProfilePinnedPosts.profileId, fixture.profile.id)),
+      [],
+    );
+    assert.equal(start.mock.callCount(), 1);
+  });
+
+  test('Featured Workflow start failure does not roll back the verified Actor Update', async () => {
+    const fixture = await createRemoteActor(ProfileFollowPolicy.OPEN);
+    const start = mock.method(temporalClient.workflow, 'start', async () => {
+      throw new Error('Temporal unavailable');
+    });
+    const errorLog = mock.method(console, 'error', () => undefined);
+
+    const receivedAt = Temporal.Instant.from('2026-07-31T05:00:00Z');
+    await handleInboundUpdate(
+      createContext(),
+      new Update({
+        actor: remoteActorUri,
+        object: createActor({ featured: new URL(`${remoteActorUri.href}/featured`) }),
+      }),
+      receivedAt,
+    );
+
+    const stored = await readRemoteActor(fixture.profile.id);
+    assert.equal(stored.actor.lastFetchedAt?.toString(), receivedAt.toString());
+    assert.equal(start.mock.callCount(), 1);
+    assert.equal(errorLog.mock.callCount(), 1);
+    assert.equal(
+      errorLog.mock.calls[0]?.arguments[0],
+      'Remote Profile Featured Workflow start failed',
+    );
   });
 
   test('ignores mismatched, unsupported, unknown, and local actor updates without document loading', async () => {
@@ -501,23 +605,23 @@ const cleanFixtures = async () => {
     .select({ id: Instances.id })
     .from(Instances)
     .where(eq(Instances.domain, 'remote.example'));
-  await db.delete(Profiles).where(
-    inArray(Profiles.id, [
-      firstLocalProfileId,
-      secondLocalProfileId,
-      ...(
-        await db
-          .select({ id: Profiles.id })
-          .from(Profiles)
-          .where(
-            inArray(
-              Profiles.instanceId,
-              remoteInstances.map(({ id }) => id),
-            ),
-          )
-      ).map(({ id }) => id),
-    ]),
-  );
+  const remoteProfiles = await db
+    .select({ id: Profiles.id })
+    .from(Profiles)
+    .where(
+      inArray(
+        Profiles.instanceId,
+        remoteInstances.map(({ id }) => id),
+      ),
+    );
+  const profileIds = [
+    firstLocalProfileId,
+    secondLocalProfileId,
+    ...remoteProfiles.map(({ id }) => id),
+  ];
+  await db.delete(ProfilePinnedPosts).where(inArray(ProfilePinnedPosts.profileId, profileIds));
+  await db.delete(Posts).where(inArray(Posts.profileId, profileIds));
+  await db.delete(Profiles).where(inArray(Profiles.id, profileIds));
   if (remoteInstances.length > 0) {
     await db.delete(Instances).where(
       inArray(

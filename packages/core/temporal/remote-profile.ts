@@ -38,3 +38,18 @@ export const remoteProfileRefreshWorkflow: WorkflowDefinition<
       input.profileId ?? 'configured-local',
     ])}`,
 };
+
+export type RemoteProfileFeaturedSyncInput = {
+  readonly actorUri: string;
+  readonly featuredUri: string;
+  readonly profileId: string;
+};
+
+export const REMOTE_PROFILE_FEATURED_WORKFLOW_TYPE = 'remoteProfileFeaturedWorkflow';
+
+export const remoteProfileFeaturedWorkflow: WorkflowDefinition<
+  (input: RemoteProfileFeaturedSyncInput) => Promise<void>
+> = {
+  workflow: REMOTE_PROFILE_FEATURED_WORKFLOW_TYPE,
+  workflowIdFromArgs: ({ profileId }) => `${REMOTE_PROFILE_FEATURED_WORKFLOW_TYPE}:${profileId}`,
+};

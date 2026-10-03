@@ -2,13 +2,24 @@ import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
 import { after, afterEach, before, beforeEach, describe, mock, test } from 'node:test';
-import { Endpoints, Image, LanguageString, Link, Note, Person } from '@fedify/vocab';
+import {
+  Endpoints,
+  Image,
+  LanguageString,
+  Link,
+  Note,
+  OrderedCollection,
+  Person,
+  PUBLIC_COLLECTION,
+} from '@fedify/vocab';
 import {
   ActivityPubActorType,
   InstanceKind,
   InstanceState,
   MediaSource,
   MediaState,
+  PostState,
+  PostVisibility,
   ProfileFollowPolicy,
   ProfileMediaKind,
   ProfileState,
@@ -18,7 +29,10 @@ import type { Context, DocumentLoader } from '@fedify/fedify';
 import type { Object as ActivityPubObject } from '@fedify/vocab';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
+import type * as Federation from './federation';
 import type * as Materialization from './remote-actor-materialization';
+import type * as Snapshot from './remote-featured-snapshot';
+import type * as Featured from './remote-profile-featured';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
@@ -30,15 +44,22 @@ let ActivityPubActors: typeof CoreDb.ActivityPubActors;
 let db: typeof CoreDb.db;
 let first: typeof CoreDb.first;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
+let federation: typeof Federation.federation;
 let Instances: typeof CoreDb.Instances;
 let Media: typeof CoreDb.Media;
 let pg: typeof CoreDb.pg;
+let Posts: typeof CoreDb.Posts;
+let PostContents: typeof CoreDb.PostContents;
 let ProfileMedia: typeof CoreDb.ProfileMedia;
+let ProfileFollows: typeof CoreDb.ProfileFollows;
+let ProfilePinnedPosts: typeof CoreDb.ProfilePinnedPosts;
 let Profiles: typeof CoreDb.Profiles;
 let seedDatabase: typeof CoreSeed.seedDatabase;
 let findOrMaterializeRemoteProfileActorByUri: typeof Materialization.findOrMaterializeRemoteProfileActorByUri;
 let materializeRemoteProfileActor: typeof Materialization.materializeRemoteProfileActor;
 let RemoteActorMaterializationError: typeof Materialization.RemoteActorMaterializationError;
+let replaceRemoteFeaturedSnapshot: typeof Snapshot.replaceRemoteFeaturedSnapshot;
+let syncRemoteFeaturedSnapshot: typeof Featured.syncRemoteFeaturedSnapshot;
 
 describe('remote actor materialization', () => {
   let localInstanceId: string;
@@ -47,14 +68,30 @@ describe('remote actor materialization', () => {
     process.env.DATABASE_URL = databaseUrl;
     process.env.PUBLIC_ORIGIN = publicOrigin;
 
-    ({ ActivityPubActors, db, first, firstOrThrow, Instances, Media, pg, ProfileMedia, Profiles } =
-      await import('@kosmo/core/db'));
+    ({
+      ActivityPubActors,
+      db,
+      first,
+      firstOrThrow,
+      Instances,
+      Media,
+      pg,
+      Posts,
+      PostContents,
+      ProfileMedia,
+      ProfileFollows,
+      ProfilePinnedPosts,
+      Profiles,
+    } = await import('@kosmo/core/db'));
     ({ seedDatabase } = await import('@kosmo/core/db/seed'));
+    ({ federation } = await import('./federation'));
     ({
       findOrMaterializeRemoteProfileActorByUri,
       materializeRemoteProfileActor,
       RemoteActorMaterializationError,
     } = await import('./remote-actor-materialization'));
+    ({ replaceRemoteFeaturedSnapshot } = await import('./remote-featured-snapshot'));
+    ({ syncRemoteFeaturedSnapshot } = await import('./remote-profile-featured'));
 
     await truncateDatabase();
     const { localInstance } = await seedDatabase({ publicOrigin });
@@ -62,6 +99,10 @@ describe('remote actor materialization', () => {
   });
 
   beforeEach(async () => {
+    await db.delete(ProfilePinnedPosts);
+    await db.update(Posts).set({ currentContentId: null });
+    await db.delete(PostContents);
+    await db.delete(Posts);
     await db.delete(ProfileMedia);
     await db.delete(Media);
     await db.delete(Profiles);
@@ -1114,6 +1155,203 @@ describe('remote actor materialization', () => {
     ]);
   });
 
+  test('atomically replaces remote Featured pins and rolls back a failed replacement', async () => {
+    const stored = await createStoredRemoteActor();
+    const posts = await db
+      .insert(Posts)
+      .values([
+        {
+          profileId: stored.profile.id,
+          state: PostState.ACTIVE,
+          visibility: PostVisibility.PUBLIC,
+        },
+        {
+          profileId: stored.profile.id,
+          state: PostState.ACTIVE,
+          visibility: PostVisibility.PUBLIC,
+        },
+        {
+          profileId: stored.profile.id,
+          state: PostState.ACTIVE,
+          visibility: PostVisibility.PUBLIC,
+        },
+      ])
+      .returning();
+
+    await db.insert(ProfilePinnedPosts).values({
+      position: 0,
+      postId: posts[2]!.id,
+      profileId: stored.profile.id,
+    });
+
+    const readPins = () =>
+      db
+        .select({ position: ProfilePinnedPosts.position, postId: ProfilePinnedPosts.postId })
+        .from(ProfilePinnedPosts)
+        .where(eq(ProfilePinnedPosts.profileId, stored.profile.id))
+        .orderBy(ProfilePinnedPosts.position, ProfilePinnedPosts.id);
+
+    await replaceRemoteFeaturedSnapshot({
+      postIds: [posts[0]!.id, posts[1]!.id],
+      profileId: stored.profile.id,
+    });
+    assert.deepEqual(
+      (await readPins()).map(({ position, postId }) => [position, postId]),
+      [
+        [0, posts[0]!.id],
+        [1, posts[1]!.id],
+      ],
+    );
+
+    await assert.rejects(
+      replaceRemoteFeaturedSnapshot({
+        postIds: [posts[2]!.id, posts[2]!.id],
+        profileId: stored.profile.id,
+      }),
+    );
+    assert.deepEqual(
+      (await readPins()).map(({ position, postId }) => [position, postId]),
+      [
+        [0, posts[0]!.id],
+        [1, posts[1]!.id],
+      ],
+    );
+  });
+
+  test('syncs a Followers Only Featured Note without a local Follow and keeps pins on invalid attribution', async (t) => {
+    const stored = await createStoredRemoteActor();
+    const featuredUri = `${remoteActorUri.href}/featured`;
+    const itemUris = [1, 2].map((index) => new URL(`https://${remoteDomain}/notes/${index}`));
+    await db
+      .update(ActivityPubActors)
+      .set({
+        followersUri: `${remoteActorUri.href}/followers`,
+      })
+      .where(eq(ActivityPubActors.id, stored.actor.id));
+
+    const collection = new OrderedCollection({ id: new URL(featuredUri), items: itemUris });
+    const document = await collection.toJsonLd({ format: 'expand' });
+    const notes = itemUris.map(
+      (uri, index) =>
+        new Note({
+          attribution: remoteActorUri,
+          content: `Featured ${uri.pathname}`,
+          id: uri,
+          to: index === 1 ? new URL(`${remoteActorUri.href}/followers`) : PUBLIC_COLLECTION,
+        }),
+    );
+    const documentLoader: DocumentLoader = async (url) => {
+      const note = notes.find((candidate) => candidate.id?.href === url);
+      if (url === featuredUri) {
+        return { contextUrl: null, document, documentUrl: url };
+      }
+      if (note) {
+        return {
+          contextUrl: null,
+          document: await note.toJsonLd({ format: 'expand' }),
+          documentUrl: url,
+        };
+      }
+      throw new Error(`Unexpected Featured lookup: ${url}`);
+    };
+    const context = federation.createContext(new URL(publicOrigin), undefined);
+    const input = {
+      actorUri: remoteActorUri.href,
+      context,
+      documentLoader,
+      featuredUri,
+      profileId: stored.profile.id,
+    };
+
+    await syncRemoteFeaturedSnapshot(input);
+    const pins = await db
+      .select({ position: ProfilePinnedPosts.position, postId: ProfilePinnedPosts.postId })
+      .from(ProfilePinnedPosts)
+      .where(eq(ProfilePinnedPosts.profileId, stored.profile.id))
+      .orderBy(ProfilePinnedPosts.position);
+    assert.deepEqual(
+      pins.map(({ position }) => position),
+      [0, 1],
+    );
+    assert.equal(pins[0]?.postId !== pins[1]?.postId, true);
+    assert.equal(
+      await db
+        .select({ visibility: Posts.visibility })
+        .from(Posts)
+        .where(eq(Posts.id, pins[1]!.postId))
+        .then(first)
+        .then((post) => post?.visibility),
+      PostVisibility.FOLLOWERS,
+    );
+    assert.equal(
+      await db.$count(ProfileFollows, eq(ProfileFollows.followeeProfileId, stored.profile.id)),
+      0,
+    );
+
+    const otherProfile = await createProfile({ handle: 'mallory', instanceId: stored.instance.id });
+    await db.update(Posts).set({ profileId: otherProfile.id }).where(eq(Posts.id, pins[1]!.postId));
+    await assert.rejects(syncRemoteFeaturedSnapshot(input), /Featured Note rejected/u);
+    await db
+      .update(Posts)
+      .set({ profileId: stored.profile.id })
+      .where(eq(Posts.id, pins[1]!.postId));
+    assert.deepEqual(
+      await db
+        .select({ position: ProfilePinnedPosts.position, postId: ProfilePinnedPosts.postId })
+        .from(ProfilePinnedPosts)
+        .where(eq(ProfilePinnedPosts.profileId, stored.profile.id))
+        .orderBy(ProfilePinnedPosts.position),
+      pins,
+    );
+
+    notes[1] = new Note({
+      attribution: new URL(`https://${remoteDomain}/users/mallory`),
+      content: 'Wrong author',
+      id: itemUris[1],
+      to: PUBLIC_COLLECTION,
+    });
+    await assert.rejects(syncRemoteFeaturedSnapshot(input), /Featured Note rejected/u);
+    assert.deepEqual(
+      await db
+        .select({ position: ProfilePinnedPosts.position, postId: ProfilePinnedPosts.postId })
+        .from(ProfilePinnedPosts)
+        .where(eq(ProfilePinnedPosts.profileId, stored.profile.id))
+        .orderBy(ProfilePinnedPosts.position),
+      pins,
+    );
+
+    let enteredLookup!: () => void;
+    const entered = new Promise<void>((resolve) => {
+      enteredLookup = resolve;
+    });
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    try {
+      const pending = syncRemoteFeaturedSnapshot({
+        ...input,
+        context: {
+          ...context,
+          lookupObject: async () => {
+            enteredLookup();
+            return new Promise<never>(() => undefined);
+          },
+        },
+      });
+      await entered;
+      t.mock.timers.tick(30_000);
+      await assert.rejects(pending, /deadline_exceeded/u);
+      assert.deepEqual(
+        await db
+          .select({ position: ProfilePinnedPosts.position, postId: ProfilePinnedPosts.postId })
+          .from(ProfilePinnedPosts)
+          .where(eq(ProfilePinnedPosts.profileId, stored.profile.id))
+          .orderBy(ProfilePinnedPosts.position),
+        pins,
+      );
+    } finally {
+      t.mock.timers.reset();
+    }
+  });
+
   test('matches the remote actor Drizzle schema in PostgreSQL', async () => {
     const columns = await pg<
       Array<{ column_name: string; is_nullable: 'YES' | 'NO' }>
@@ -1126,6 +1364,8 @@ describe('remote actor materialization', () => {
           'outbox_uri',
           'followers_uri',
           'following_uri',
+          'featured_revision',
+          'featured_uri',
           'shared_inbox_uri',
           'last_fetched_at',
           'profile_url'

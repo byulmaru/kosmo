@@ -2,7 +2,7 @@ import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, test } from 'node:test';
-import { Endpoints, Person } from '@fedify/vocab';
+import { Endpoints, OrderedCollection, Person } from '@fedify/vocab';
 import {
   ActivityPubActorType,
   InstanceKind,
@@ -23,6 +23,7 @@ import type {
 } from '@kosmo/core/temporal/workflows';
 import type * as Fedify from '@kosmo/fedify';
 import type * as WorkerActivities from './activities';
+import type { RemoteProfileFeaturedSyncInput } from './workflows/remote-profile-featured';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
@@ -43,15 +44,17 @@ let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
 let pg: typeof CoreDb.pg;
 let Profiles: typeof CoreDb.Profiles;
+let ProfileFollows: typeof CoreDb.ProfileFollows;
 let federation: typeof Fedify.federation;
 let lookupRemoteActorUriActivity: typeof WorkerActivities.lookupRemoteActorUriActivity;
 let materializeRemoteProfileActorActivity: typeof WorkerActivities.materializeRemoteProfileActorActivity;
 let refreshRemoteProfileActorActivity: typeof WorkerActivities.refreshRemoteProfileActorActivity;
+let syncRemoteFeaturedActivity: typeof WorkerActivities.syncRemoteFeaturedActivity;
 let seedDatabase: typeof CoreSeed.seedDatabase;
 let localInstanceId: string;
 
 before(async () => {
-  ({ ActivityPubActors, db, firstOrThrow, Instances, pg, Profiles } =
+  ({ ActivityPubActors, db, firstOrThrow, Instances, pg, ProfileFollows, Profiles } =
     await import('@kosmo/core/db'));
   ({ seedDatabase } = await import('@kosmo/core/db/seed'));
   ({ federation } = await import('@kosmo/fedify'));
@@ -59,6 +62,7 @@ before(async () => {
     lookupRemoteActorUriActivity,
     materializeRemoteProfileActorActivity,
     refreshRemoteProfileActorActivity,
+    syncRemoteFeaturedActivity,
   } = await import('./activities'));
 });
 
@@ -1322,6 +1326,118 @@ test(
     );
     assert.equal(await db.$count(Profiles), 0);
     assert.equal(await db.$count(ActivityPubActors), 0);
+  },
+);
+
+test('Remote Featured Activity는 사용 가능한 local follower identity로 collection을 읽는다', async (t) => {
+  const actorUri = `https://${remoteDomain}/users/alice`;
+  const featuredUri = `${actorUri}/featured`;
+  const instance = await createInstance({ domain: remoteDomain });
+  const remote = await createStoredProfile({ actorUri, handle: 'alice', instanceId: instance.id });
+  const follower = await createStoredProfile({ handle: 'follower', instanceId: localInstanceId });
+  await db.insert(ProfileFollows).values({
+    followerProfileId: follower.id,
+    followeeProfileId: remote.id,
+  });
+  const otherLocalInstance = await createInstance({
+    canonicalOrigin: 'https://other-local.example',
+    domain: 'other-local.example',
+    kind: InstanceKind.LOCAL,
+  });
+  const otherFollower = await createStoredProfile({
+    handle: 'other-follower',
+    instanceId: otherLocalInstance.id,
+  });
+  await db.insert(ProfileFollows).values({
+    followerProfileId: otherFollower.id,
+    followeeProfileId: remote.id,
+  });
+  const collection = await new OrderedCollection({ id: new URL(featuredUri), items: [] }).toJsonLd({
+    format: 'expand',
+  });
+  const signed: string[] = [];
+  const publicLoads: string[] = [];
+  const loader = async (url: string) => {
+    assert.equal(url, featuredUri);
+    return { contextUrl: null, document: collection, documentUrl: url };
+  };
+  t.mock.method(
+    federation,
+    'createContext',
+    () =>
+      ({
+        canonicalOrigin: publicOrigin,
+        documentLoader: async (url: string) => {
+          publicLoads.push(url);
+          return loader(url);
+        },
+        getDocumentLoader: async ({ identifier }: { identifier: string }) => {
+          signed.push(identifier);
+          return loader;
+        },
+        lookupObject: async () => null,
+        parseUri: () => null,
+      }) as never,
+  );
+
+  await syncRemoteFeaturedActivity({ actorUri, featuredUri, profileId: remote.id });
+  assert.deepEqual(signed, [follower.id]);
+  assert.deepEqual(publicLoads, []);
+
+  await db
+    .update(Profiles)
+    .set({ state: ProfileState.SUSPENDED })
+    .where(eq(Profiles.id, follower.id));
+  signed.length = 0;
+  await syncRemoteFeaturedActivity({ actorUri, featuredUri, profileId: remote.id });
+  assert.deepEqual(signed, []);
+  assert.deepEqual(publicLoads, [featuredUri]);
+});
+
+test(
+  'Remote Featured Workflow retries transient Activity failures with the same input',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+    const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-featured-${process.pid}`;
+    const calls: RemoteProfileFeaturedSyncInput[] = [];
+    let attempts = 0;
+    const worker = await Worker.create({
+      activities: {
+        syncRemoteFeaturedActivity: async (input: RemoteProfileFeaturedSyncInput) => {
+          attempts += 1;
+          calls.push(input);
+          if (attempts === 1) {
+            throw new Error('temporary Featured failure');
+          }
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+    const input: RemoteProfileFeaturedSyncInput = {
+      actorUri: 'https://remote.example/users/alice',
+      featuredUri: 'https://remote.example/users/alice/featured',
+      profileId: '019f7abc-3333-7777-8888-123456789abc',
+    };
+
+    await worker.runUntil(async () => {
+      await environment.client.workflow.execute<
+        (input: RemoteProfileFeaturedSyncInput) => Promise<void>
+      >('remoteProfileFeaturedWorkflow', {
+        args: [input],
+        taskQueue,
+        workflowId: `${taskQueue}:retry`,
+      });
+
+      assert.equal(attempts, 2);
+      assert.deepEqual(calls, [input, input]);
+    });
   },
 );
 

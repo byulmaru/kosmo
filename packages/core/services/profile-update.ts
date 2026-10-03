@@ -115,6 +115,27 @@ const normalizeDefaultPostVisibility = (
   return visibility;
 };
 
+export const startProfileUpdateEffects = async (
+  profileId: string,
+  updateId: string,
+): Promise<void> => {
+  try {
+    await temporalClient.withDeadline(Date.now() + 5_000, () =>
+      temporalClient.workflow.start('profileUpdateEffectsWorkflow', {
+        args: [{ profileId, updateId }],
+        taskQueue: KOSMO_TASK_QUEUE,
+        workflowId: updateId,
+      }),
+    );
+  } catch (error) {
+    console.error('Profile Update effects Workflow start failed', {
+      error,
+      profileId,
+      updateId,
+    });
+  }
+};
+
 export const updateProfile = async (input: UpdateProfileInput): Promise<UpdateProfileResult> => {
   const result = await db.transaction(async (tx) => {
     const profile = await tx
@@ -299,21 +320,7 @@ export const updateProfile = async (input: UpdateProfileInput): Promise<UpdatePr
 
   const updateId = result.updateId;
   if (updateId) {
-    try {
-      await temporalClient.withDeadline(Date.now() + 5_000, () =>
-        temporalClient.workflow.start('profileUpdateEffectsWorkflow', {
-          args: [{ profileId: result.profile.id, updateId }],
-          taskQueue: KOSMO_TASK_QUEUE,
-          workflowId: updateId,
-        }),
-      );
-    } catch (error) {
-      console.error('Profile Update effects Workflow start failed', {
-        error,
-        profileId: result.profile.id,
-        updateId,
-      });
-    }
+    await startProfileUpdateEffects(result.profile.id, updateId);
   }
 
   return { profile: result.profile };

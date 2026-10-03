@@ -1071,6 +1071,55 @@ describe('inbound Create dispatch', () => {
     assert.equal(postContentDocumentToText(materialized.content.document), 'Original');
   });
 
+  test('materializes a Followers Only hydrated original without a local Follow', async () => {
+    const profile = await createStoredRemoteActor();
+    const objectUri = new URL('https://objects.example/notes/hydrated-followers');
+
+    const result = await materializeHydratedRemoteNote({
+      advertisingActorUri: remoteActorUri,
+      context: createContext(),
+      note: new Note({
+        attribution: remoteActorUri,
+        content: 'Followers only original',
+        id: objectUri,
+        to: new URL('https://remote.example/users/alice/followers'),
+      }),
+      objectUri,
+      observation: createObservation,
+      receivedAt,
+    });
+
+    const materialized = await getMaterializedPost(objectUri);
+    assert.deepEqual(result, { postId: materialized.post.id, status: 'created' });
+    assert.equal(materialized.post.profileId, profile.id);
+    assert.equal(materialized.post.visibility, PostVisibility.FOLLOWERS);
+    assert.equal(
+      await db.$count(ProfileFollows, eq(ProfileFollows.followeeProfileId, profile.id)),
+      0,
+    );
+  });
+
+  test('requires the advertised actor URI for a Followers Only hydrated original', async () => {
+    const objectUri = new URL('https://objects.example/notes/hydrated-followers-rejected');
+
+    const unselectedResult = await materializeHydratedRemoteNote({
+      advertisingActorUri: new URL('https://remote.example/users/mallory'),
+      context: createContext(),
+      note: new Note({
+        attribution: remoteActorUri,
+        content: 'Wrong advertising actor',
+        id: objectUri,
+        to: new URL('https://remote.example/users/alice/followers'),
+      }),
+      objectUri,
+      observation: createObservation,
+      receivedAt,
+    });
+
+    assert.deepEqual(unselectedResult, { reason: 'invalid_note', status: 'rejected' });
+    assert.equal(await db.$count(Posts), 0);
+  });
+
   test('rejects a mismatched discovered author without persisting the actor or Post', async () => {
     const objectUri = new URL('https://objects.example/notes/mismatched-author');
     const lookupObject = mock.fn(
@@ -1765,83 +1814,23 @@ describe('inbound Create dispatch', () => {
     assert.equal((await db.select().from(Notifications)).length, 0);
   });
 
-  test('requires an established local follower for Followers Only personal and shared deliveries', async () => {
-    const profile = await createStoredRemoteActor();
-    const follower = await createLocalFollowerProfile('accepted-follower');
-    const objectUri = new URL('https://remote.example/notes/followers-relevance');
-    const note = new Note({
-      attribution: remoteActorUri,
-      content: 'Followers only',
-      id: objectUri,
-      to: new URL('https://remote.example/users/alice/followers'),
-    });
+  test('materializes Followers Only Create deliveries without a local Follow', async () => {
+    const author = await createStoredRemoteActor();
+    const recipient = await createLocalFollowerProfile('unfollowed-recipient');
+    const deliveries = [
+      { context: createContext(undefined, recipient.id), path: 'personal' },
+      { context: createContext(), path: 'shared' },
+    ];
 
-    await handleInboundCreate(
-      createContext(undefined, follower.id),
-      new Create({ actor: remoteActorUri, object: note }),
-      receivedAt,
-    );
-    assert.equal((await db.select().from(ActivityPubPosts)).length, 0);
-
-    await db.insert(ProfileFollows).values({
-      followerProfileId: follower.id,
-      followeeProfileId: profile.id,
-    });
-    await handleInboundCreate(
-      createContext(undefined, follower.id),
-      new Create({ actor: remoteActorUri, object: note }),
-      receivedAt,
-    );
-    assert.equal((await getMaterializedPost(objectUri)).post.visibility, PostVisibility.FOLLOWERS);
-
-    const sharedObjectUri = new URL('https://remote.example/notes/followers-shared-relevance');
-    await handleInboundCreate(
-      createContext(),
-      new Create({
-        actor: remoteActorUri,
-        object: new Note({
-          attribution: remoteActorUri,
-          content: 'Followers shared',
-          id: sharedObjectUri,
-          to: new URL('https://remote.example/users/alice/followers'),
-        }),
-      }),
-      receivedAt,
-    );
-    assert.equal(
-      (await getMaterializedPost(sharedObjectUri)).post.visibility,
-      PostVisibility.FOLLOWERS,
-    );
-  });
-
-  test('requires an active local follower on an active local instance for shared delivery', async () => {
-    const profile = await createStoredRemoteActor();
-    const remoteFollowerInstance = await db
-      .insert(Instances)
-      .values({
-        canonicalOrigin: 'https://remote-follower.example',
-        domain: 'remote-follower.example',
-        kind: InstanceKind.ACTIVITYPUB,
-        state: InstanceState.ACTIVE,
-      })
-      .returning()
-      .then(firstOrThrow);
-    const remoteFollower = await createLocalFollowerProfile('remote-follower', undefined, {
-      instanceId: remoteFollowerInstance.id,
-    });
-    await db.insert(ProfileFollows).values({
-      followerProfileId: remoteFollower.id,
-      followeeProfileId: profile.id,
-    });
-
-    const deliver = async (objectUri: URL) =>
-      handleInboundCreate(
-        createContext(),
+    for (const { context, path } of deliveries) {
+      const objectUri = new URL(`https://remote.example/notes/followers-${path}`);
+      await handleInboundCreate(
+        context,
         new Create({
           actor: remoteActorUri,
           object: new Note({
             attribution: remoteActorUri,
-            content: 'Followers only',
+            content: `Followers ${path}`,
             id: objectUri,
             to: new URL('https://remote.example/users/alice/followers'),
           }),
@@ -1849,57 +1838,14 @@ describe('inbound Create dispatch', () => {
         receivedAt,
       );
 
-    await deliver(new URL('https://remote.example/notes/remote-follower-only'));
-    assert.equal((await db.select().from(ActivityPubPosts)).length, 0);
-
-    for (const [index, state] of [ProfileState.SUSPENDED, ProfileState.DISABLED].entries()) {
-      const inactiveFollower = await createLocalFollowerProfile(
-        `inactive-follower-${index}`,
-        undefined,
-        {
-          state,
-        },
-      );
-      await db.insert(ProfileFollows).values({
-        followerProfileId: inactiveFollower.id,
-        followeeProfileId: profile.id,
-      });
-      await deliver(new URL(`https://remote.example/notes/inactive-follower-${index}`));
-      assert.equal((await db.select().from(ActivityPubPosts)).length, 0);
+      const materialized = await getMaterializedPost(objectUri);
+      assert.equal(materialized.post.profileId, author.id);
+      assert.equal(materialized.post.visibility, PostVisibility.FOLLOWERS);
     }
 
-    const suspendedInstance = await db
-      .insert(Instances)
-      .values({
-        canonicalOrigin: 'https://suspended-local.example',
-        domain: 'suspended-local.example',
-        kind: InstanceKind.LOCAL,
-        state: InstanceState.SUSPENDED,
-      })
-      .returning()
-      .then(firstOrThrow);
-    const suspendedInstanceFollower = await createLocalFollowerProfile(
-      'suspended-instance-follower',
-      undefined,
-      { instanceId: suspendedInstance.id },
-    );
-    await db.insert(ProfileFollows).values({
-      followerProfileId: suspendedInstanceFollower.id,
-      followeeProfileId: profile.id,
-    });
-    await deliver(new URL('https://remote.example/notes/suspended-instance-follower'));
-    assert.equal((await db.select().from(ActivityPubPosts)).length, 0);
-
-    const activeFollower = await createLocalFollowerProfile('active-follower');
-    await db.insert(ProfileFollows).values({
-      followerProfileId: activeFollower.id,
-      followeeProfileId: profile.id,
-    });
-    const activeObjectUri = new URL('https://remote.example/notes/active-follower');
-    await deliver(activeObjectUri);
     assert.equal(
-      (await getMaterializedPost(activeObjectUri)).post.visibility,
-      PostVisibility.FOLLOWERS,
+      await db.$count(ProfileFollows, eq(ProfileFollows.followeeProfileId, author.id)),
+      0,
     );
   });
 
