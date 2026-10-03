@@ -144,3 +144,16 @@ export function clearAnalytics(): void {
     // Analytics is best-effort and must not affect the product flow.
   }
 }
+
+export function getAnalyticsAccountId(): string | null {
+  try {
+    const analyticsClient = initializeAnalytics();
+    if (!analyticsClient) {
+      return null;
+    }
+    const accountId = getPostHogAccountId(analyticsClient);
+    return analyticsClient.get_distinct_id() === accountId ? accountId : null;
+  } catch {
+    return null;
+  }
+}

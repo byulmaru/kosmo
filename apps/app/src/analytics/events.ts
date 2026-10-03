@@ -30,21 +30,19 @@ export type AnalyticsEventProperties = {
   search_result_selected: {
     tab: 'popular' | 'latest' | 'media' | 'people';
   };
-  profile_hashtag_exploration_started: ProfileHashtagExplorationProperties;
-  profile_hashtag_results_loaded: ProfileHashtagExplorationProperties & {
+  profile_hashtag_clicked: { hashtag_id: string };
+  profile_hashtag_screen_entered: Record<string, never>;
+  profile_hashtag_initial_state_viewed: {
+    hashtag_id: string;
     result: 'has_results' | 'empty';
-    stage: 'initial' | 'pagination';
+    entered_at: string;
   };
-  profile_hashtag_results_failed: ProfileHashtagExplorationProperties & {
+  profile_hashtag_list_viewed: { hashtag_id: string };
+  profile_hashtag_profile_selected: { hashtag_id: string };
+  profile_hashtag_request_completed: {
     stage: 'initial' | 'pagination';
+    result: 'success' | 'partial' | 'failure';
   };
-  profile_hashtag_result_selected: ProfileHashtagExplorationProperties;
-  profile_hashtag_exploration_ended: ProfileHashtagExplorationProperties;
-};
-
-type ProfileHashtagExplorationProperties = {
-  profile_tag_exploration_session_id: string;
-  hashtag_id?: string;
 };
 
 export type AnalyticsEventName = keyof AnalyticsEventProperties;

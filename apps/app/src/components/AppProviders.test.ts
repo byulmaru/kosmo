@@ -69,7 +69,6 @@ let useSession: () => {
   sessionId: string | null;
   status: string;
 };
-let useAnalyticsAccountId: () => string | null;
 let useAnalyticsIdentityAccountId: () => string | null;
 let renderer: ReactTestRenderer | null = null;
 let originalFetch: typeof fetch;
@@ -382,7 +381,7 @@ before(async () => {
   ({ useFeatureFlag } = await import('./FeatureFlagsContext'));
   ({ UniversalShell } = await import('./shell/UniversalShell'));
   ({ RouteBoundary, useRouteBoundary } = await import('./RouteBoundary'));
-  ({ useAnalyticsAccountId, useAnalyticsIdentityAccountId, useSession } =
+  ({ useAnalyticsIdentityAccountId, useSession } =
     await import('../session/SessionProvider'));
   ({ useRelayActor, useRelayAuthLifecycleKey } = await import('../relay/RelayActorProvider'));
 });
@@ -471,7 +470,7 @@ function ShellRecoveryRoute() {
 
 function NativeSessionFixture() {
   const actor = useRelayActor();
-  const analyticsAccountId = useAnalyticsAccountId();
+  const analyticsAccountId = useSession().accountId;
   const analyticsIdentityAccountId = useAnalyticsIdentityAccountId();
   const session = useSession();
   useEffect(() => {

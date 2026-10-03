@@ -1,20 +1,17 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeftIcon } from 'lucide-react-native';
-import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
-import { acquireProfileHashtagExplorationTracker } from '@/analytics/profileHashtagExploration';
+import { useProfileHashtagScreenAnalytics } from '@/analytics/ProfileHashtagScreenAnalytics';
 import {
   HashtagRelatedProfileList,
   HashtagRelatedProfileListState,
 } from '@/components/profile/HashtagRelatedProfileList';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { IconButton } from '@/components/ui/IconButton';
-import { useAnalyticsAccountId, useAnalyticsIdentityAccountId } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import type { ReactNode } from 'react';
-import type { ProfileHashtagExplorationTracker } from '@/analytics/profileHashtagExploration';
 import type { HashtagRelatedProfilesPageQuery } from './__generated__/HashtagRelatedProfilesPageQuery.graphql';
 
 const HashtagRelatedProfilesQuery = graphql`
@@ -63,13 +60,11 @@ function HashtagRelatedProfilesRoute({
   backButton: ReactNode;
   hashtagId: string;
 }) {
-  const tracking = useProfileHashtagExploration(hashtagId);
+  const tracking = useProfileHashtagScreenAnalytics();
   return (
     <RouteBoundary
       error={(retry) => (
-        <TrackedInitialFailure onInitialFailure={tracking.onInitialFailure}>
-          <HashtagRelatedProfileListState leading={backButton} onRetry={retry} state="error" />
-        </TrackedInitialFailure>
+        <HashtagRelatedProfileListState leading={backButton} onRetry={retry} state="error" />
       )}
       loading={<HashtagRelatedProfileListState leading={backButton} state="loading" />}
       title="관련 프로필을 불러오지 못했어요"
@@ -90,7 +85,7 @@ function HashtagRelatedProfilesContent({
 }: {
   backButton: ReactNode;
   hashtagId: string;
-  tracking: ReturnType<typeof useProfileHashtagExploration>;
+  tracking: ReturnType<typeof useProfileHashtagScreenAnalytics>;
 }) {
   const { fetchKey } = useRouteBoundary();
   const data = useLazyLoadQuery<HashtagRelatedProfilesPageQuery>(
@@ -103,59 +98,12 @@ function HashtagRelatedProfilesContent({
     <HashtagRelatedProfileList
       hashtag={data.node.relatedProfileList}
       leading={backButton}
-      onInitialResults={tracking.onInitialResults}
-      onPaginationFailure={tracking.onPaginationFailure}
+      onVisibleResults={tracking.onVisibleResults}
       onResultSelected={tracking.onResultSelected}
     />
   ) : (
-    <TrackedInitialFailure onInitialFailure={tracking.onInitialFailure}>
-      <HashtagRelatedProfileListState leading={backButton} state="notFound" />
-    </TrackedInitialFailure>
+    <HashtagRelatedProfileListState leading={backButton} state="notFound" />
   );
-}
-
-function useProfileHashtagExploration(hashtagId: string) {
-  const accountId = useAnalyticsAccountId();
-  const identityAccountId = useAnalyticsIdentityAccountId();
-  const [retainedTracker, setRetainedTracker] = useState<{
-    accountId: string;
-    tracker: ProfileHashtagExplorationTracker;
-  } | null>(null);
-
-  useEffect(() => {
-    const lease = identityAccountId
-      ? acquireProfileHashtagExplorationTracker(identityAccountId, hashtagId)
-      : null;
-    setRetainedTracker(
-      lease && identityAccountId ? { accountId: identityAccountId, tracker: lease.tracker } : null,
-    );
-
-    return () => lease?.release();
-  }, [hashtagId, identityAccountId]);
-
-  const tracker =
-    accountId && retainedTracker?.accountId === accountId ? retainedTracker.tracker : null;
-
-  const onInitialFailure = useCallback(() => tracker?.recordInitialFailure(), [tracker]);
-  const onInitialResults = useCallback(
-    (hasResults: boolean) => tracker?.recordInitialResults(hasResults),
-    [tracker],
-  );
-  const onPaginationFailure = useCallback(() => tracker?.recordPaginationFailure(), [tracker]);
-  const onResultSelected = useCallback(() => tracker?.recordResultSelected(), [tracker]);
-
-  return { onInitialFailure, onInitialResults, onPaginationFailure, onResultSelected };
-}
-
-function TrackedInitialFailure({
-  children,
-  onInitialFailure,
-}: {
-  children: ReactNode;
-  onInitialFailure: () => void;
-}) {
-  useEffect(() => onInitialFailure(), [onInitialFailure]);
-  return children;
 }
 
 const styles = StyleSheet.create({

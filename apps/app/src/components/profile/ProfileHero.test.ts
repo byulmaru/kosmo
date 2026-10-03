@@ -27,7 +27,7 @@ type ProfileData = {
 };
 
 let fragmentData: ProfileData;
-const beginExploration = mock.fn();
+const trackEvent = mock.fn();
 const platformSelections: Array<Record<string, number>> = [];
 let renderer: ReactTestRenderer | null = null;
 let windowWidth = 1280;
@@ -57,11 +57,12 @@ mockModule(new URL('../shell/NavigationLink.tsx', import.meta.url), {
     onNavigate?: () => void;
   }) => createElement('NavigationLink', { href, onExternalNavigate, onNavigate }, children),
 });
-mockModule('@/analytics/profileHashtagExploration', {
-  beginProfileHashtagExploration: beginExploration,
+mockModule('@/analytics/client', {
+  identifyAnalytics: () => undefined,
+  trackAnalytics: trackEvent,
 });
 mockModule(new URL('../../session/SessionProvider.tsx', import.meta.url), {
-  useAnalyticsAccountId: () => 'account-a',
+  useSession: () => ({ accountId: 'account-a' }),
 });
 mockModule('react-native', {
   Image: 'Image',
@@ -145,7 +146,7 @@ afterEach(async () => {
     renderer = null;
   }
   platformSelections.length = 0;
-  beginExploration.mock.resetCalls();
+  trackEvent.mock.resetCalls();
   windowWidth = 1280;
   platform.OS = 'web';
 });
@@ -490,14 +491,16 @@ describe('ProfileHero Profile Tag presentation', () => {
         },
       ],
     );
-    assert.ok(links.every((node) => node.props.onNavigate !== node.props.onExternalNavigate));
+    assert.ok(links.every((node) => node.props.onNavigate === node.props.onExternalNavigate));
     links[0]?.props.onNavigate?.();
-    assert.deepEqual(beginExploration.mock.calls[0]?.arguments, ['account-a', 'hashtag-fediverse']);
+    assert.deepEqual(trackEvent.mock.calls[0]?.arguments, [
+      'profile_hashtag_clicked',
+      { hashtag_id: 'hashtag-fediverse' },
+    ]);
     links[0]?.props.onExternalNavigate?.();
-    assert.deepEqual(beginExploration.mock.calls[1]?.arguments, [
-      'account-a',
-      'hashtag-fediverse',
-      { persistForExternal: true },
+    assert.deepEqual(trackEvent.mock.calls[1]?.arguments, [
+      'profile_hashtag_clicked',
+      { hashtag_id: 'hashtag-fediverse' },
     ]);
     assert.deepEqual(
       targets.map((node) => ({

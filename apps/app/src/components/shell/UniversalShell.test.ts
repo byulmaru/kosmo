@@ -136,6 +136,9 @@ mockModule('@/components/ui/useSafeAreaPadding', {
   useSafeAreaPadding: () => ({}),
 });
 mockModule('@/relay/RelayActorProvider', { RelayActorBoundary: PassThrough });
+mockModule('@/analytics/ProfileHashtagScreenAnalytics', {
+  ProfileHashtagScreenAnalyticsProvider: PassThrough,
+});
 mockModule('@/session/SessionProvider', {
   useSession: () => ({ accountId, status: accountId ? 'valid' : 'guest' }),
 });

@@ -29,6 +29,7 @@ mockModule('react-relay', {
   graphql: () => 'HashtagRelatedProfileList_hashtag',
   usePaginationFragment: () => ({
     data: {
+      id: 'opaque-hashtag',
       name: 'Fediverse',
       relatedProfiles: {
         edges: profileEdges,
@@ -73,9 +74,8 @@ mockModule(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
 let HashtagRelatedProfileList: ComponentType<{
   hashtag: unknown;
   leading?: unknown;
-  onInitialResults?: (hasResults: boolean) => void;
-  onPaginationFailure?: () => void;
-  onResultSelected?: () => void;
+  onVisibleResults?: (hashtagId: string, hasResults: boolean) => void;
+  onResultSelected?: (hashtagId: string) => void;
 }>;
 let HashtagRelatedProfileListState: ComponentType<{
   leading?: unknown;
@@ -106,15 +106,15 @@ afterEach(async () => {
 describe('Hashtag 관련 Profile 목록 viewport', () => {
   it('성공한 빈 목록은 empty callback을 전달하고 Profile item을 렌더하지 않는다', async () => {
     profileEdges = [];
-    const onInitialResults = mock.fn();
+    const onVisibleResults = mock.fn();
     await act(async () => {
       renderer = create(
-        createElement(HashtagRelatedProfileList, { hashtag: {}, onInitialResults }),
+        createElement(HashtagRelatedProfileList, { hashtag: {}, onVisibleResults }),
       );
     });
     assert.ok(renderer);
-    assert.equal(onInitialResults.mock.callCount(), 1);
-    assert.equal(onInitialResults.mock.calls[0]?.arguments[0], false);
+    assert.equal(onVisibleResults.mock.callCount(), 1);
+    assert.equal(onVisibleResults.mock.calls[0]?.arguments[1], false);
     assert.equal(
       renderer.root.findAll((node) => (node.type as unknown) === 'ProfileListItem').length,
       0,
@@ -167,17 +167,15 @@ describe('Hashtag 관련 Profile 목록 viewport', () => {
     );
   });
 
-  it('첫 결과, 항목 선택, pagination 실패를 각각 계측 callback으로 전달한다', async () => {
-    const onInitialResults = mock.fn();
-    const onPaginationFailure = mock.fn();
+  it('표시된 결과와 항목 선택을 확인된 Hashtag identity로 전달한다', async () => {
+    const onVisibleResults = mock.fn();
     const onResultSelected = mock.fn();
 
     await act(async () => {
       renderer = create(
         createElement(HashtagRelatedProfileList, {
           hashtag: {},
-          onInitialResults,
-          onPaginationFailure,
+          onVisibleResults,
           onResultSelected,
         }),
       );
@@ -185,8 +183,8 @@ describe('Hashtag 관련 Profile 목록 viewport', () => {
     assert.ok(renderer);
 
     const scrollView = renderer.root.find((node) => (node.type as unknown) === 'ScrollView');
-    assert.equal(onInitialResults.mock.callCount(), 1);
-    assert.equal(onInitialResults.mock.calls[0]?.arguments[0], true);
+    assert.equal(onVisibleResults.mock.callCount(), 1);
+    assert.equal(onVisibleResults.mock.calls[0]?.arguments[1], true);
 
     const firstProfile = scrollView.findAll(
       (node) => (node.type as unknown) === 'ProfileListItem',
@@ -198,6 +196,6 @@ describe('Hashtag 관련 Profile 목록 viewport', () => {
       scrollView.find((node) => (node.type as unknown) === 'PaginationSurface').props.onRetry();
       paginationCompletion?.(new Error('pagination failed'));
     });
-    assert.equal(onPaginationFailure.mock.callCount(), 1);
+    assert.deepEqual(onResultSelected.mock.calls[0]?.arguments, ['opaque-hashtag']);
   });
 });
