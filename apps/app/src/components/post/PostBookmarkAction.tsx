@@ -3,6 +3,7 @@ import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-re
 import { ConnectionHandler } from 'relay-runtime';
 import { trackAnalytics } from '@/analytics/client';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useSession } from '@/session/SessionProvider';
 import type { PostBookmarkAction_post$key } from './__generated__/PostBookmarkAction_post.graphql';
 import type { PostBookmarkActionCreateBookmarkMutation } from './__generated__/PostBookmarkActionCreateBookmarkMutation.graphql';
@@ -75,6 +76,7 @@ export function usePostBookmarkAction(
 ): BookmarkActionConfig | undefined {
   const data = useFragment(postBookmarkActionFragment, post);
   const environment = useRelayEnvironment();
+  const environmentGenerationRef = useRelayEnvironmentGeneration();
   const { selectedProfileId } = useSession();
   const [commitCreate, isCreating] =
     useMutation<PostBookmarkActionCreateBookmarkMutation>(createBookmarkMutation);
@@ -106,13 +108,17 @@ export function usePostBookmarkAction(
     const action: BookmarkActionKind = activeBookmarkId ? 'cancel' : 'create';
     inFlight.current = true;
     const requestEnvironment = environment;
+    const requestGeneration = environmentGenerationRef?.current;
+    const isCurrentRequest = () =>
+      currentEnvironment.current === requestEnvironment &&
+      environmentGenerationRef?.current === requestGeneration;
     const finish = () => {
-      if (currentEnvironment.current === requestEnvironment) {
+      if (isCurrentRequest()) {
         inFlight.current = false;
       }
     };
     const finishWithError = (error: Error) => {
-      if (currentEnvironment.current !== requestEnvironment) {
+      if (!isCurrentRequest()) {
         return;
       }
       inFlight.current = false;
@@ -173,6 +179,7 @@ export function usePostBookmarkAction(
     data,
     environment,
     execution,
+    environmentGenerationRef,
     onError,
     onResolutionRequired,
     processing,

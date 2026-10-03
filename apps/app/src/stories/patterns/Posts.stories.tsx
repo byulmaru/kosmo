@@ -9,7 +9,9 @@ import {
 } from 'react-relay';
 import {
   commitLocalUpdate,
+  createOperationDescriptor,
   Environment,
+  getRequest,
   Network,
   Observable,
   RecordSource,
@@ -1027,6 +1029,9 @@ const PostsStoriesQuery = graphql`
     ...PostList_home @arguments(count: 20) @alias(as: "home")
   }
 `;
+const postsStoriesOperation = createOperationDescriptor(getRequest(PostsStoriesQuery), {
+  ids: storyPosts.map(({ id }) => id),
+});
 
 const ProductionComposerAdapterStoryQuery = graphql`
   query PostsProductionComposerAdapterStoryQuery {
@@ -1477,8 +1482,16 @@ function ProductionReactionMutationTargetsStory() {
   const createEnvironment = useCallback(
     (_nativeToken: string | null, selectedProfileId: string | null) => {
       const selectedTypesByPost = new Map<string, Set<string>>();
+      const queryData = {
+        alternateComposerProfile,
+        composerProfile,
+        contentPostsProfile,
+        emptyPostsProfile,
+        homeTimeline,
+        nodes: storyPosts.map(withReactionViewerState),
+      };
 
-      return new Environment({
+      const environment = new Environment({
         network: Network.create((request: RequestParameters, variables: Variables) => {
           if (request.name === 'SessionProviderQuery') {
             return Promise.resolve({
@@ -1500,16 +1513,7 @@ function ProductionReactionMutationTargetsStory() {
             } as GraphQLResponse);
           }
           if (request.name === 'PostsStoriesQuery') {
-            return Promise.resolve({
-              data: {
-                alternateComposerProfile,
-                composerProfile,
-                contentPostsProfile,
-                emptyPostsProfile,
-                homeTimeline,
-                nodes: storyPosts.map(withReactionViewerState),
-              },
-            } as GraphQLResponse);
+            return Promise.resolve({ data: queryData } as GraphQLResponse);
           }
           if (request.name === 'RepostActionRepostPostMutation') {
             const postId = String(variables.sourceId);
@@ -1567,6 +1571,8 @@ function ProductionReactionMutationTargetsStory() {
         }),
         store: new Store(new RecordSource()),
       });
+      environment.commitPayload(postsStoriesOperation, queryData);
+      return environment;
     },
     [],
   );
@@ -1673,8 +1679,16 @@ function ProductionBookmarkMutationStory({
           })),
         },
       };
+      const queryData = {
+        alternateComposerProfile,
+        composerProfile,
+        contentPostsProfile: bookmarkContentPostsProfile,
+        emptyPostsProfile,
+        homeTimeline: bookmarkHomeTimeline,
+        nodes: posts,
+      };
 
-      return new Environment({
+      const environment = new Environment({
         network: Network.create((request: RequestParameters, variables: Variables) => {
           if (request.name === 'SessionProviderQuery') {
             return Promise.resolve({
@@ -1696,16 +1710,7 @@ function ProductionBookmarkMutationStory({
             } as GraphQLResponse);
           }
           if (request.name === 'PostsStoriesQuery') {
-            return Promise.resolve({
-              data: {
-                alternateComposerProfile,
-                composerProfile,
-                contentPostsProfile: bookmarkContentPostsProfile,
-                emptyPostsProfile,
-                homeTimeline: bookmarkHomeTimeline,
-                nodes: posts,
-              },
-            } as GraphQLResponse);
+            return Promise.resolve({ data: queryData } as GraphQLResponse);
           }
           if (request.name === 'PostBookmarkActionCreateBookmarkMutation') {
             const input = variables.input as { postId: string };
@@ -1777,6 +1782,8 @@ function ProductionBookmarkMutationStory({
         }),
         store: new Store(new RecordSource()),
       });
+      environment.commitPayload(postsStoriesOperation, queryData);
+      return environment;
     },
     [initiallyBookmarked, mode],
   );
@@ -1819,8 +1826,16 @@ function ProductionBookmarkEnvironmentReplacementStory() {
   const createEnvironment = useCallback(
     (_nativeToken: string | null, selectedProfileId: string | null) => {
       const profileId = selectedProfileId ?? 'profile-production-bookmark-environment-first';
+      const queryData = {
+        alternateComposerProfile,
+        composerProfile,
+        contentPostsProfile,
+        emptyPostsProfile,
+        homeTimeline,
+        nodes: storyPosts.map(withReactionViewerState),
+      };
 
-      return new Environment({
+      const environment = new Environment({
         network: Network.create((request: RequestParameters, variables: Variables) => {
           if (request.name === 'SessionProviderQuery') {
             return Promise.resolve({
@@ -1842,16 +1857,7 @@ function ProductionBookmarkEnvironmentReplacementStory() {
             } as GraphQLResponse);
           }
           if (request.name === 'PostsStoriesQuery') {
-            return Promise.resolve({
-              data: {
-                alternateComposerProfile,
-                composerProfile,
-                contentPostsProfile,
-                emptyPostsProfile,
-                homeTimeline,
-                nodes: storyPosts.map(withReactionViewerState),
-              },
-            } as GraphQLResponse);
+            return Promise.resolve({ data: queryData } as GraphQLResponse);
           }
           if (request.name === 'PostBookmarkActionCreateBookmarkMutation') {
             const input = variables.input as { postId: string };
@@ -1882,6 +1888,8 @@ function ProductionBookmarkEnvironmentReplacementStory() {
         }),
         store: new Store(new RecordSource()),
       });
+      environment.commitPayload(postsStoriesOperation, queryData);
+      return environment;
     },
     [sessionId],
   );
@@ -6115,7 +6123,7 @@ export const PostDetailThreadPageLoading: Story = {
       operationResponses: {
         PostDetailQuery: {
           data: {
-            currentSession: null,
+            currentSession: defaultSession.currentSession,
             node: {
               ...routeCurrentPostWithoutReactions,
               replyAncestors: [],
@@ -6158,7 +6166,7 @@ export const PostDetailThreadPageFailureRetries: Story = {
       operationResponses: {
         PostDetailQuery: {
           data: {
-            currentSession: null,
+            currentSession: defaultSession.currentSession,
             node: {
               ...routeCurrentPostWithoutReactions,
               replyAncestors: [],

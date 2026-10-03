@@ -34,6 +34,8 @@ const session: Session = {
 const analyticsCalls: unknown[][] = [];
 const mutationRequests: MutationRequest[] = [];
 const relayEnvironment = {};
+const environmentGeneration = { current: 0 };
+const bookmarkFailures: unknown[] = [];
 let fragmentData: unknown;
 let renderer: ReactTestRenderer | null = null;
 
@@ -108,6 +110,9 @@ mockModule('@/components/ui/ActionMenu', { ActionMenu: MockActionMenu });
 mockModule('@/components/ui/ToastProvider', {
   useToast: () => ({ showToast: () => undefined }),
 });
+mockModule('@/relay/RelayEnvironmentBoundary', {
+  useRelayEnvironmentGeneration: () => environmentGeneration,
+});
 mockModule('@/session/SessionProvider', { useSession: () => session });
 mockModule('@/theme/ThemeProvider', {
   useTheme: () => ({ actionRepostBase: '#16794A' }),
@@ -120,7 +125,9 @@ let usePostBookmarkAction: typeof usePostBookmarkActionExport;
 let usePostReactionController: typeof usePostReactionControllerExport;
 
 function BookmarkHarness() {
-  const config = usePostBookmarkAction({} as never);
+  const config = usePostBookmarkAction({} as never, undefined, undefined, (failure) =>
+    bookmarkFailures.push(failure),
+  );
   assert.ok(config);
   return createElement('BookmarkHarness', config);
 }
@@ -160,6 +167,8 @@ beforeEach(() => {
   session.status = 'valid';
   analyticsCalls.length = 0;
   mutationRequests.length = 0;
+  environmentGeneration.current = 0;
+  bookmarkFailures.length = 0;
   fragmentData = undefined;
 });
 
@@ -272,6 +281,24 @@ describe('Post interaction analytics callbacks', () => {
       ['bookmark_added', {}],
       ['bookmark_removed', {}],
     ]);
+  });
+
+  it('actor generation이 바뀐 뒤 이전 북마크 요청 오류를 전달하지 않는다', async () => {
+    fragmentData = { id: 'post-id', viewerBookmark: null };
+
+    await act(async () => {
+      renderer = create(createElement(BookmarkHarness));
+    });
+    const oldConfig = renderer!.root.findByType('BookmarkHarness' as never).props;
+    await act(async () => oldConfig.onPress());
+    const oldRequest = lastMutationRequest();
+
+    environmentGeneration.current += 1;
+    await act(async () => renderer?.unmount());
+    renderer = null;
+    await act(async () => oldRequest.onError?.(new Error('network failure')));
+
+    assert.deepEqual(bookmarkFailures, []);
   });
 
   it('Reaction은 성공 payload에서만 분류된 reaction_type을 기록하고 원문은 보내지 않는다', async () => {
