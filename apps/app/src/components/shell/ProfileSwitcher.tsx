@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
+import { writeSelectedProfile } from '@/auth/selectedProfileStorage';
 import { ProfilePicker } from '@/components/profile/ProfilePicker';
 import { ProfileSwitcherUnreadIndicator } from '@/components/profile/ProfileSwitcherUnread';
 import { Avatar } from '@/components/ui/Avatar';
@@ -298,6 +299,7 @@ export function ProfileSwitcher({
           selection_cause: cause,
           ...(previousProfileId ? { previous_profile_id: previousProfileId } : {}),
         });
+        void writeSelectedProfile(selectedProfileId);
         setOpen(false);
         resetActor(selectedProfileId);
       },

@@ -4,6 +4,7 @@ import { Platform } from 'react-native';
 import { graphql, useMutation } from 'react-relay';
 import { clearAnalytics } from '@/analytics/client';
 import { LOGOUT_FAILURE_MESSAGE, requestWebLogout } from '@/auth/logout';
+import { deleteSelectedProfile } from '@/auth/selectedProfileStorage';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import type { LogoutRevokeCurrentSessionMutation as LogoutRevokeCurrentSessionMutationType } from './__generated__/LogoutRevokeCurrentSessionMutation.graphql';
 
@@ -23,7 +24,7 @@ export type LogoutState = {
 
 export function useLogout(): LogoutState {
   const router = useRouter();
-  const { clearNativeSession, resetActor } = useRelayActor();
+  const { clearNativeSession, resetSession } = useRelayActor();
   const [commitNativeLogout] = useMutation<LogoutRevokeCurrentSessionMutationType>(
     RevokeCurrentSessionMutation,
   );
@@ -63,11 +64,13 @@ export function useLogout(): LogoutState {
       try {
         if (Platform.OS === 'web') {
           await requestWebLogout();
-          resetActor(null);
+          await deleteSelectedProfile();
+          resetSession();
           clearAnalytics();
         } else {
           await revokeNativeSession();
           await clearNativeSession();
+          await deleteSelectedProfile();
         }
 
         router.replace('/');
@@ -79,7 +82,7 @@ export function useLogout(): LogoutState {
         inFlight.current = false;
       }
     })();
-  }, [clearNativeSession, resetActor, revokeNativeSession, router]);
+  }, [clearNativeSession, resetSession, revokeNativeSession, router]);
 
   return { error, logout, pending };
 }

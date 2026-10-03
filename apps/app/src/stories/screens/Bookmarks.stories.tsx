@@ -769,34 +769,27 @@ export const InitialRouteErrorAndRetry: Story = {
   render: () => <BookmarksRouteStory />,
 };
 
+function currentSessionForActor(selectedProfileId: string | null) {
+  return {
+    id: 'bookmark-actor-reset-session',
+    selectedProfile:
+      selectedProfileId === bookmarkOtherOwner.id ? bookmarkOtherOwner : bookmarkOwner,
+  };
+}
+
 export const ActorResetUsesNextProfileConnection: Story = {
   parameters: {
     relay: {
       operationResponses: {
-        BookmarksPageQuery: [
-          {
-            data: { currentSession: { id: 'bookmark-session-a', selectedProfile: bookmarkOwner } },
+        BookmarksPageQuery: (selectedProfileId: string | null) => ({
+          data: { currentSession: currentSessionForActor(selectedProfileId) },
+        }),
+        SessionProviderQuery: (selectedProfileId: string | null) => ({
+          data: {
+            currentSession: currentSessionForActor(selectedProfileId),
+            me: { id: 'bookmark-account', name: 'bookmark-account' },
           },
-          {
-            data: {
-              currentSession: { id: 'bookmark-session-b', selectedProfile: bookmarkOtherOwner },
-            },
-          },
-        ],
-        SessionProviderQuery: [
-          {
-            data: {
-              currentSession: { id: 'bookmark-session-a', selectedProfile: bookmarkOwner },
-              me: { id: 'bookmark-account', name: 'bookmark-account' },
-            },
-          },
-          {
-            data: {
-              currentSession: { id: 'bookmark-session-b', selectedProfile: bookmarkOtherOwner },
-              me: { id: 'bookmark-account', name: 'bookmark-account' },
-            },
-          },
-        ],
+        }),
       },
     },
   },

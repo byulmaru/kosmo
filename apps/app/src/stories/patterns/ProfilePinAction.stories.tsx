@@ -208,6 +208,7 @@ function StoryProviders({
       operationResponses={operationResponses}
       mutationResponse={deletionResponse}
       mutationRequestObserver={observeMutation}
+      actorBoundary
     >
       <SessionProvider>
         <PostActionAuthenticationProvider>

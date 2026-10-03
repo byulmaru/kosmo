@@ -7,7 +7,10 @@ const MISSING_EXPECTED_DATA_KIND = 'missing_expected_data.log';
 const RELAY_MISSING_EXPECTED_DATA_MESSAGE = 'Relay missing expected data';
 type RelayFieldLoggerEvent = Parameters<RelayFieldLogger>[0];
 
-export function createRelayEnvironment(token: string | null): Environment {
+export function createRelayEnvironment(
+  token: string | null,
+  selectedProfileId: string | null = null,
+): Environment {
   const environmentCreatedAt = Date.now();
   const reportedEvents = new Set<string>();
 
@@ -32,7 +35,7 @@ export function createRelayEnvironment(token: string | null): Environment {
 
   return new Environment({
     network: Network.create((request, variables) =>
-      executeGraphQLRequest(request, variables, token),
+      executeGraphQLRequest(request, variables, token, fetch, selectedProfileId),
     ),
     relayFieldLogger,
     store: new Store(new RecordSource()),

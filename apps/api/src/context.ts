@@ -8,6 +8,7 @@ import {
   Sessions,
 } from '@kosmo/core/db';
 import { AccountState, SessionState } from '@kosmo/core/enums';
+import { decodeGlobalId } from '@kosmo/core/global-id';
 import DataLoader from 'dataloader';
 import { and, eq } from 'drizzle-orm';
 import stringify from 'fast-json-stable-stringify';
@@ -64,6 +65,31 @@ export type Env = {
   Variables: { context: Context };
 };
 
+const findVisibleProfile = async (
+  accountId: string,
+  profileId: string,
+): Promise<{ id: string; role: AccountProfileRole } | null> =>
+  db
+    .select({
+      id: Profiles.id,
+      role: AccountProfiles.role,
+    })
+    .from(Profiles)
+    .innerJoin(
+      AccountProfiles,
+      and(eq(AccountProfiles.profileId, Profiles.id), eq(AccountProfiles.accountId, accountId)),
+    )
+    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+    .where(
+      and(
+        eq(Profiles.id, profileId),
+        visibleProfileWhere({ profile: Profiles, instance: Instances }),
+      ),
+    )
+    .limit(1)
+    .then(first)
+    .then((selectedProfile) => selectedProfile ?? null);
+
 export const deriveContext = async (c: ServerContext): Promise<Context> => {
   const ctx = createContext();
 
@@ -91,31 +117,7 @@ export const deriveContext = async (c: ServerContext): Promise<Context> => {
     if (session) {
       let profile: { id: string; role: AccountProfileRole } | null = null;
       if (session.activeProfileId) {
-        await db
-          .select({
-            id: Profiles.id,
-            role: AccountProfiles.role,
-          })
-          .from(Profiles)
-          .innerJoin(
-            AccountProfiles,
-            and(
-              eq(AccountProfiles.profileId, Profiles.id),
-              eq(AccountProfiles.accountId, session.accountId),
-            ),
-          )
-          .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-          .where(
-            and(
-              eq(Profiles.id, session.activeProfileId),
-              visibleProfileWhere({ profile: Profiles, instance: Instances }),
-            ),
-          )
-          .limit(1)
-          .then(first)
-          .then((selectedProfile) => {
-            profile = selectedProfile ?? null;
-          });
+        profile = await findVisibleProfile(session.accountId, session.activeProfileId);
       }
 
       ctx.session = {
@@ -127,6 +129,40 @@ export const deriveContext = async (c: ServerContext): Promise<Context> => {
   }
 
   return ctx;
+};
+
+const getSelectedProfileId = (extensions: unknown): string | null => {
+  if (typeof extensions !== 'object' || extensions === null || Array.isArray(extensions)) {
+    return null;
+  }
+
+  const selectedProfileId = (extensions as Record<string, unknown>).selectedProfileId;
+  if (typeof selectedProfileId !== 'string') {
+    return null;
+  }
+
+  try {
+    const decoded = decodeGlobalId(selectedProfileId);
+    return decoded.typename === 'Profile' ? decoded.id : null;
+  } catch {
+    return null;
+  }
+};
+
+export const applySelectedProfileExtension = async (
+  ctx: Context,
+  extensions: unknown,
+): Promise<void> => {
+  const selectedProfileId = getSelectedProfileId(extensions);
+  if (!selectedProfileId || !ctx.session) {
+    return;
+  }
+
+  const selectedProfile = await findVisibleProfile(ctx.session.accountId, selectedProfileId);
+
+  if (selectedProfile) {
+    ctx.session.profile = selectedProfile;
+  }
 };
 
 const createContext = (): Context => {

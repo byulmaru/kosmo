@@ -1,6 +1,8 @@
-import { DefaultTheme, ThemeProvider as NavigationThemeProvider } from 'expo-router';
-import { useEffect } from 'react';
+import { DefaultTheme, router, ThemeProvider as NavigationThemeProvider } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { Platform } from 'react-native';
 import { AnalyticsSessionBridge } from '@/analytics/AnalyticsSessionBridge';
+import { deleteSelectedProfile } from '@/auth/selectedProfileStorage';
 import { ContentReportProvider } from '@/components/content-report/ContentReportContext';
 import { FeatureFlagsProvider } from '@/components/FeatureFlagsContext';
 import { NativePushProvider } from '@/components/native-push/NativePushProvider';
@@ -15,35 +17,70 @@ import { useTheme, useThemeMode } from '@/theme/ThemeProvider';
 import { GraphQLErrorBoundary } from './GraphQLErrorBoundary';
 import { PostContentWarningRevealProvider } from './post/PostContentWarningRevealContext';
 import { ToastProvider, useToast } from './ui/ToastProvider';
+import type { Href } from 'expo-router';
 import type { PropsWithChildren } from 'react';
+
+const resetSelectedProfileParam = 'resetSelectedProfile';
 
 export function AppProviders({
   children,
   onThemeReady,
 }: PropsWithChildren<{ onThemeReady?: () => void }>) {
+  const [resetSelectedProfilePending, setResetSelectedProfilePending] = useState(
+    () =>
+      Platform.OS === 'web' &&
+      typeof window !== 'undefined' &&
+      new URL(window.location.href).searchParams.get(resetSelectedProfileParam) === '1',
+  );
+
+  useEffect(() => {
+    if (!resetSelectedProfilePending) {
+      return;
+    }
+
+    let active = true;
+    void (async () => {
+      await deleteSelectedProfile();
+      if (!active) {
+        return;
+      }
+
+      const url = new URL(window.location.href);
+      url.searchParams.delete(resetSelectedProfileParam);
+      router.replace(`${url.pathname}${url.search}${url.hash}` as Href);
+      setResetSelectedProfilePending(false);
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [resetSelectedProfilePending]);
+
   return (
     <ThemePreferenceProvider onHydrated={onThemeReady}>
-      <NavigationThemeBoundary>
-        <ToastProvider>
-          <ThemeStorageErrorToast />
-          <GraphQLErrorBoundary>
-            <RelayActorProvider>
-              <SessionProvider>
-                <FeatureFlagsProvider>
-                  <AnalyticsSessionBridge />
-                  <NativePushProvider>
-                    <ContentReportProvider>
-                      <PostContentWarningRevealProvider>
-                        {children}
-                      </PostContentWarningRevealProvider>
-                    </ContentReportProvider>
-                  </NativePushProvider>
-                </FeatureFlagsProvider>
-              </SessionProvider>
-            </RelayActorProvider>
-          </GraphQLErrorBoundary>
-        </ToastProvider>
-      </NavigationThemeBoundary>
+      {resetSelectedProfilePending ? null : (
+        <NavigationThemeBoundary>
+          <ToastProvider>
+            <ThemeStorageErrorToast />
+            <GraphQLErrorBoundary>
+              <RelayActorProvider>
+                <SessionProvider>
+                  <FeatureFlagsProvider>
+                    <AnalyticsSessionBridge />
+                    <NativePushProvider>
+                      <ContentReportProvider>
+                        <PostContentWarningRevealProvider>
+                          {children}
+                        </PostContentWarningRevealProvider>
+                      </ContentReportProvider>
+                    </NativePushProvider>
+                  </FeatureFlagsProvider>
+                </SessionProvider>
+              </RelayActorProvider>
+            </GraphQLErrorBoundary>
+          </ToastProvider>
+        </NavigationThemeBoundary>
+      )}
     </ThemePreferenceProvider>
   );
 }
