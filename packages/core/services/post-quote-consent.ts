@@ -373,16 +373,6 @@ export const applyPostQuoteConsent = async (
       quote.repostSourceId === source.postId &&
       quote.quoteConsentStatus === next.status &&
       quote.quoteConsentApprovalUri === next.approvalUri;
-    if (sameValue) {
-      return {
-        changed: false,
-        quote: input.quote,
-        source: input.source,
-        repostSourceId: source.postId,
-        status: next.status,
-        approvalUri: next.approvalUri,
-      };
-    }
 
     const updated = await tx
       .update(Posts)
@@ -434,7 +424,7 @@ export const applyPostQuoteConsent = async (
     }
 
     return {
-      changed: true,
+      changed: !sameValue,
       quote: input.quote,
       source: input.source,
       repostSourceId: source.postId,

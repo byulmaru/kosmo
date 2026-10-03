@@ -25,6 +25,8 @@ import {
 import { postContentDocumentFromText } from '../post-content/server';
 import { createPost, deletePost } from './post';
 import { applyPostQuoteConsent } from './post-quote-consent';
+import type { SQL } from 'drizzle-orm';
+import type { DatabaseHandle } from '../db';
 import type { InstanceKind as InstanceKindType } from '../enums';
 import type { PostContentDocumentV1 } from '../post-content';
 
@@ -254,6 +256,69 @@ test('remote Quote resolution stores pending Authorization references and CASes 
   assert.equal(directlyApproved?.approvalUri, directAuthorizationUri);
   assert.equal(directlyApproved?.repostSourceId, source.post.id);
 
+  const concurrentRevokeDatabase = {
+    transaction: (callback: (tx: unknown) => Promise<unknown>) =>
+      db.transaction((tx) =>
+        callback({
+          select: tx.select.bind(tx),
+          update: (table: typeof Posts) => ({
+            set: (values: unknown) => ({
+              where: (condition: unknown) => ({
+                returning: async (selection: unknown) => {
+                  await db
+                    .update(Posts)
+                    .set({ quoteConsentStatus: PostQuoteConsentStatus.REVOKED })
+                    .where(eq(Posts.id, directQuote.post.id));
+                  return tx
+                    .update(table)
+                    .set(values as never)
+                    .where(condition as SQL)
+                    .returning(selection as never);
+                },
+              }),
+            }),
+          }),
+        }),
+      ),
+  } as unknown as DatabaseHandle;
+  const staleIdenticalRefresh = await applyPostQuoteConsent(
+    {
+      ...expectation({
+        quote: directQuote.post,
+        quoteActorUri: quoteAuthor.actorUri,
+        quoteUri: directQuoteUri,
+        source: source.post,
+        sourceActorUri: sourceAuthor.actorUri,
+        sourceUri,
+        expectedApprovalUri: directAuthorizationUri,
+        expectedRepostSourceId: source.post.id,
+        expectedStatus: PostQuoteConsentStatus.APPROVED,
+      }),
+      operation: 'RESOLVE',
+      result: 'APPROVED',
+      quoteAuthorActorUri: quoteAuthor.actorUri,
+      proof: {
+        kind: 'AUTHORIZATION',
+        approvalUri: directAuthorizationUri,
+        issuerActorUri: sourceAuthor.actorUri,
+      },
+    },
+    concurrentRevokeDatabase,
+  );
+  assert.equal(staleIdenticalRefresh, null);
+
+  const afterConcurrentRevoke = await db
+    .select({
+      quoteConsentApprovalUri: Posts.quoteConsentApprovalUri,
+      quoteConsentStatus: Posts.quoteConsentStatus,
+    })
+    .from(Posts)
+    .where(eq(Posts.id, directQuote.post.id))
+    .limit(1)
+    .then(firstOrThrow);
+  assert.equal(afterConcurrentRevoke.quoteConsentStatus, PostQuoteConsentStatus.REVOKED);
+  assert.equal(afterConcurrentRevoke.quoteConsentApprovalUri, directAuthorizationUri);
+
   const selfSourceUri = `https://${quoteAuthor.instance.domain}/notes/self-source`;
   const selfSource = await createRemotePost(
     quoteAuthor.profile.id,
@@ -325,6 +390,17 @@ test('remote Quote resolution stores pending Authorization references and CASes 
   assert.equal(pending?.status, PostQuoteConsentStatus.PENDING);
   assert.equal(pending?.approvalUri, approvalUriA);
   assert.equal(pending?.repostSourceId, source.post.id);
+
+  const identicalPending = await applyPostQuoteConsent({
+    ...boundExpectation(PostQuoteConsentStatus.PENDING, approvalUriA),
+    operation: 'RESOLVE',
+    result: 'PENDING',
+    approvalUri: approvalUriA,
+    quoteAuthorActorUri: quoteAuthor.actorUri,
+  });
+  assert.equal(identicalPending?.changed, false);
+  assert.equal(identicalPending?.status, PostQuoteConsentStatus.PENDING);
+  assert.equal(identicalPending?.approvalUri, approvalUriA);
 
   const otherSourceAuthor = await createProfile(InstanceKind.ACTIVITYPUB);
   const otherSourceUri = `https://${otherSourceAuthor.instance.domain}/notes/other-source`;
