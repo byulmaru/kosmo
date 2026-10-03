@@ -52,6 +52,7 @@ let useRelayActor: () => Pick<
   'clearNativeSession' | 'nativeToken' | 'setNativeSession'
 >;
 let useSession: () => {
+  accountId: string | null;
   selectedProfileId: string | null;
   sessionId: string | null;
   status: string;
@@ -411,6 +412,7 @@ function NavigationThemeProbe() {
 function FeatureFlagsProbe() {
   return createElement('FeatureFlagsProbe', {
     quote: useFeatureFlag('quote'),
+    arbitrary: useFeatureFlag('future-flag-without-a-provider-entry'),
     disabled: useFeatureFlag('disabled'),
     malformed: useFeatureFlag('malformed'),
     errored: useFeatureFlag('errored'),
@@ -420,8 +422,10 @@ function FeatureFlagsProbe() {
 
 function FeatureFlagsAccountSwitchProbe() {
   const actor = useRelayActor();
+  const session = useSession();
 
   return createElement('FeatureFlagsAccountSwitchProbe', {
+    accountId: session.accountId,
     onAccountChange: async (accountId: string | null) => {
       mockAccountId = accountId;
       mockSessionId = accountId ? `session-${accountId}` : null;
@@ -502,6 +506,7 @@ describe('AppProviders runtime composition', () => {
 
     assert.deepEqual(findTag('FeatureFlagsProbe').props, {
       quote: false,
+      arbitrary: false,
       disabled: false,
       malformed: false,
       errored: false,
@@ -525,6 +530,7 @@ describe('AppProviders runtime composition', () => {
 
     assert.deepEqual(findTag('FeatureFlagsProbe').props, {
       quote: true,
+      arbitrary: false,
       disabled: false,
       malformed: false,
       errored: false,
@@ -543,6 +549,69 @@ describe('AppProviders runtime composition', () => {
     assert.equal(findTag('FeatureFlagsProbe').props.disabled, false);
     assert.equal(requests.length, 2);
     assertFlagRequest(requests[1]!, 'account-1');
+  });
+
+  it('enables every flag on dev with and without an account and skips OFREP', async () => {
+    const globals = globalThis as typeof globalThis & { __DEV__?: unknown };
+    const originalDev = globals.__DEV__;
+    let fetchCalls = 0;
+    globalThis.fetch = async () => {
+      fetchCalls += 1;
+      return new Response(null, { status: 503 });
+    };
+    globals.__DEV__ = true;
+    mockAccountId = null;
+    mockSessionId = null;
+
+    try {
+      await act(async () => {
+        renderer = create(
+          createElement(
+            AppProviders,
+            null,
+            createElement(
+              'FlagTestRoot',
+              null,
+              createElement(FeatureFlagsProbe),
+              createElement(FeatureFlagsAccountSwitchProbe),
+            ),
+          ),
+        );
+      });
+
+      const flags = () => findTag('FeatureFlagsProbe').props;
+      const accountId = () => findTag('FeatureFlagsAccountSwitchProbe').props.accountId;
+      assert.equal(accountId(), null);
+      assert.deepEqual(flags(), {
+        quote: true,
+        arbitrary: true,
+        disabled: true,
+        malformed: true,
+        errored: true,
+        missing: true,
+      });
+      assert.equal(fetchCalls, 0);
+
+      const changeAccount = findTag('FeatureFlagsAccountSwitchProbe').props.onAccountChange;
+      await act(async () => changeAccount('account-1'));
+
+      assert.equal(accountId(), 'account-1');
+      assert.deepEqual(flags(), {
+        quote: true,
+        arbitrary: true,
+        disabled: true,
+        malformed: true,
+        errored: true,
+        missing: true,
+      });
+      assert.equal(fetchCalls, 0);
+    } finally {
+      if (originalDev === undefined) {
+        delete globals.__DEV__;
+      } else {
+        globals.__DEV__ = originalDev;
+      }
+    }
   });
 
   it('targets flags to the active account, ignores obsolete results, and resets after logout', async () => {
