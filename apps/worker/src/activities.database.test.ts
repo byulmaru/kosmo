@@ -547,7 +547,7 @@ test('Quote와 Reply 판단이 경합해도 Reply가 대표가 된다', async ()
   });
   await db.update(Posts).set({ replyParentId: source.id }).where(eq(Posts.id, quote.id));
 
-  await Promise.all([
+  const notificationIds = await Promise.all([
     createQuoteNotificationActivity(quote.id),
     createReplyNotificationActivity(quote.id),
   ]);
@@ -556,6 +556,7 @@ test('Quote와 Reply 판단이 경합해도 Reply가 대표가 된다', async ()
   assert.equal(notifications.length, 1);
   assert.equal(notifications[0]?.kind, NotificationKind.REPLY);
   assert.equal(notifications[0]?.sourceId, quote.id);
+  assert.deepEqual(notificationIds, [null, notifications[0]?.id]);
 });
 
 test('Quote와 Reply의 recipient가 다르면 각 알림을 독립적으로 만든다', async () => {
@@ -578,7 +579,7 @@ test('Quote와 Reply의 recipient가 다르면 각 알림을 독립적으로 만
   });
   await db.update(Posts).set({ replyParentId: replyParent.id }).where(eq(Posts.id, quote.id));
 
-  await Promise.all([
+  const notificationIds = await Promise.all([
     createQuoteNotificationActivity(quote.id),
     createReplyNotificationActivity(quote.id),
   ]);
@@ -591,6 +592,7 @@ test('Quote와 Reply의 recipient가 다르면 각 알림을 독립적으로 만
       `${NotificationKind.REPLY}:${replyRecipient.id}`,
     ]),
   );
+  assert.deepEqual(new Set(notificationIds), new Set(notifications.map(({ id }) => id)));
 });
 
 test('Reaction Notification Activities는 create와 delete retry에 멱등이다', async () => {
@@ -871,3 +873,199 @@ const createPost = (
     })
     .returning()
     .then(firstOrThrow);
+
+test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, CW와 민감 미디어 마스킹을 유지한다', async (t) => {
+  const previousProjectId = process.env.FIREBASE_PROJECT_ID;
+  process.env.FIREBASE_PROJECT_ID = 'kosmo-push-test';
+  const fixture = await createAccountDeletionFixture({ profileStates: [ProfileState.ACTIVE] });
+  let postId: string | null = null;
+
+  try {
+    const recipient = fixture.profiles[0]!;
+    const actor = await createProfile();
+    const document = {
+      version: 1,
+      summary: null,
+      body: {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              { type: 'text', text: 'Read the ' },
+              {
+                type: 'text',
+                text: 'article',
+                marks: [{ type: 'link', attrs: { href: 'https://example.com/article' } }],
+              },
+            ],
+          },
+        ],
+      },
+    } as const;
+    const { post } = await createCorePost({
+      document,
+      origin: 'LOCAL',
+      profileId: recipient.id,
+      visibility: PostVisibility.PUBLIC,
+    });
+    postId = post.id;
+    const reaction = await db
+      .insert(Reactions)
+      .values({ postId: post.id, profileId: actor.id, type: '❤️' })
+      .returning()
+      .then(firstOrThrow);
+    const notificationId = await createReactionNotificationActivity(reaction.id);
+    assert.ok(notificationId);
+
+    const installationRows = await db
+      .select({ id: PushInstallations.id, token: PushInstallations.token })
+      .from(PushInstallations)
+      .where(eq(PushInstallations.accountId, fixture.account.id));
+    const { listPushNotificationInstallationsActivity, sendPushNotificationActivity } =
+      await import('./activities');
+
+    const installationIds = await listPushNotificationInstallationsActivity(notificationId);
+    assert.deepEqual([...installationIds].sort(), installationRows.map(({ id }) => id).sort());
+    assert.equal(
+      installationIds.some((id) => installationRows.some(({ token }) => token === id)),
+      false,
+    );
+
+    const { applicationDefault, getApps, initializeApp } = await import('firebase-admin/app');
+    const { getMessaging } = await import('firebase-admin/messaging');
+    const app =
+      getApps().find(({ name }) => name === '[DEFAULT]') ??
+      initializeApp({
+        credential: applicationDefault(),
+        projectId: process.env.FIREBASE_PROJECT_ID,
+      });
+    const messaging = getMessaging(app);
+    type FcmMessage = Parameters<typeof messaging.send>[0];
+    const sent: FcmMessage[] = [];
+    t.mock.method(messaging, 'send', async (message: FcmMessage) => {
+      sent.push(message);
+      return 'projects/kosmo-push-test/messages/push-test';
+    });
+
+    await sendPushNotificationActivity(notificationId, installationIds[0]!);
+    const payload = sent[0];
+    assert.ok(payload);
+    const { encodeGlobalId } = await import('@kosmo/core/global-id');
+    assert.deepEqual(payload.notification, {
+      title: actor.displayName,
+      body: '이 게시글에 반응했습니다: Read the article',
+    });
+    assert.deepEqual(payload.data, {
+      notificationId: encodeGlobalId('ReactionNotification', notificationId),
+      recipientProfileId: encodeGlobalId('Profile', recipient.id),
+      href: `/@${recipient.handle}/${encodeGlobalId('Post', post.id)}`,
+    });
+    assert.ok((payload.android?.ttl ?? 0) > 0);
+    assert.ok((payload.android?.ttl ?? Number.POSITIVE_INFINITY) <= 24 * 60 * 60 * 1000);
+
+    const contentId = post.currentContentId;
+    assert.ok(contentId);
+    const warningDocument = { ...document, summary: 'Private warning text' };
+    await db
+      .update(PostContents)
+      .set({ document: warningDocument })
+      .where(eq(PostContents.id, contentId));
+    await sendPushNotificationActivity(notificationId, installationIds[0]!);
+    assert.equal(sent[1]?.notification?.body, '이 게시글에 반응했습니다');
+    assert.equal(sent[1]?.notification?.body.includes('Private warning text'), false);
+
+    const sensitiveDocument = {
+      ...document,
+      body: { ...document.body, attrs: { sensitiveMedia: true } },
+    };
+    await db
+      .update(PostContents)
+      .set({ document: sensitiveDocument })
+      .where(eq(PostContents.id, contentId));
+    await sendPushNotificationActivity(notificationId, installationIds[0]!);
+    assert.equal(sent[2]?.notification?.body, '이 게시글에 반응했습니다');
+    assert.equal(sent[2]?.notification?.body.includes('Read the article'), false);
+  } finally {
+    if (postId) {
+      await db.update(Posts).set({ currentContentId: null }).where(eq(Posts.id, postId));
+      await db.delete(PostContents).where(eq(PostContents.postId, postId));
+      await db.delete(Posts).where(eq(Posts.id, postId));
+    }
+    await cleanupAccountDeletionFixture(fixture);
+    if (previousProjectId === undefined) {
+      delete process.env.FIREBASE_PROJECT_ID;
+    } else {
+      process.env.FIREBASE_PROJECT_ID = previousProjectId;
+    }
+  }
+});
+
+test('Push Notification Activity는 등록되지 않은 token만 정확히 제거한다', async (t) => {
+  const previousProjectId = process.env.FIREBASE_PROJECT_ID;
+  process.env.FIREBASE_PROJECT_ID = 'kosmo-push-test';
+  const fixture = await createAccountDeletionFixture({ profileStates: [ProfileState.ACTIVE] });
+  let postId: string | null = null;
+
+  try {
+    const recipient = fixture.profiles[0]!;
+    const actor = await createProfile();
+    const { post } = await createCorePost({
+      document: postContentDocumentFromText('Token cleanup'),
+      origin: 'LOCAL',
+      profileId: recipient.id,
+      visibility: PostVisibility.PUBLIC,
+    });
+    postId = post.id;
+    const reaction = await db
+      .insert(Reactions)
+      .values({ postId: post.id, profileId: actor.id, type: '❤️' })
+      .returning()
+      .then(firstOrThrow);
+    const notificationId = await createReactionNotificationActivity(reaction.id);
+    assert.ok(notificationId);
+
+    const { applicationDefault, FirebaseError, getApps, initializeApp } =
+      await import('firebase-admin/app');
+    const { getMessaging } = await import('firebase-admin/messaging');
+    const app =
+      getApps().find(({ name }) => name === '[DEFAULT]') ??
+      initializeApp({
+        credential: applicationDefault(),
+        projectId: process.env.FIREBASE_PROJECT_ID,
+      });
+    const messaging = getMessaging(app);
+    t.mock.method(messaging, 'send', async () => {
+      throw new FirebaseError({
+        code: 'messaging/registration-token-not-registered',
+        message: 'Registration token is no longer registered',
+      });
+    });
+
+    const { listPushNotificationInstallationsActivity, sendPushNotificationActivity } =
+      await import('./activities');
+    const installationIds = await listPushNotificationInstallationsActivity(notificationId);
+    const invalidInstallationId = installationIds[0]!;
+    await sendPushNotificationActivity(notificationId, invalidInstallationId);
+    assert.equal(
+      await db.$count(PushInstallations, eq(PushInstallations.id, invalidInstallationId)),
+      0,
+    );
+    assert.equal(
+      await db.$count(PushInstallations, eq(PushInstallations.accountId, fixture.account.id)),
+      1,
+    );
+  } finally {
+    if (postId) {
+      await db.update(Posts).set({ currentContentId: null }).where(eq(Posts.id, postId));
+      await db.delete(PostContents).where(eq(PostContents.postId, postId));
+      await db.delete(Posts).where(eq(Posts.id, postId));
+    }
+    await cleanupAccountDeletionFixture(fixture);
+    if (previousProjectId === undefined) {
+      delete process.env.FIREBASE_PROJECT_ID;
+    } else {
+      process.env.FIREBASE_PROJECT_ID = previousProjectId;
+    }
+  }
+});

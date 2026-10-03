@@ -23,8 +23,8 @@ const NotificationRepostRecipientInstances = alias(
   'notification_repost_recipient_instance',
 );
 
-export const createFollowNotification = async (sourceId: string): Promise<void> => {
-  await getDatabaseConnection().transaction(async (tx) => {
+export const createFollowNotification = async (sourceId: string): Promise<string | null> =>
+  getDatabaseConnection().transaction(async (tx) => {
     const source = await tx
       .select({
         id: ProfileFollows.id,
@@ -41,20 +41,19 @@ export const createFollowNotification = async (sourceId: string): Promise<void> 
     // The relation may be consumed by a concurrent terminal action before this
     // post-commit projection is materialized. There is no Notification to project.
     if (!source) {
-      return;
+      return null;
     }
 
-    await materializeNotification(tx, {
+    return materializeNotification(tx, {
       kind: NotificationKind.FOLLOW,
       recipientProfileId: source.recipientProfileId,
       relatedProfileId: source.relatedProfileId,
       sourceId: source.id,
     });
   });
-};
 
-export const createFollowRequestNotification = async (sourceId: string): Promise<void> => {
-  await getDatabaseConnection().transaction(async (tx) => {
+export const createFollowRequestNotification = async (sourceId: string): Promise<string | null> =>
+  getDatabaseConnection().transaction(async (tx) => {
     const source = await tx
       .select({
         id: ProfileFollowRequests.id,
@@ -78,23 +77,22 @@ export const createFollowRequestNotification = async (sourceId: string): Promise
     // The source may have reached a terminal state between the source commit and this
     // post-commit effect. In that case there is no Notification to project.
     if (!source) {
-      return;
+      return null;
     }
 
-    await materializeNotification(tx, {
+    return materializeNotification(tx, {
       kind: NotificationKind.FOLLOW_REQUEST,
       recipientProfileId: source.recipientProfileId,
       relatedProfileId: source.relatedProfileId,
       sourceId: source.id,
     });
   });
-};
 
 export const createReactionNotification = async (
   sourceId: string,
   handle?: Database,
-): Promise<void> => {
-  await getDatabaseConnection(handle).transaction(async (tx) => {
+): Promise<string | null> =>
+  getDatabaseConnection(handle).transaction(async (tx) => {
     const source = await tx
       .select({
         actorProfileId: Reactions.profileId,
@@ -113,29 +111,28 @@ export const createReactionNotification = async (
     // An inbound Undo may remove the source before notification materialization.
     // The committed reaction lifecycle remains authoritative, so this is an expected no-op.
     if (!source) {
-      return;
+      return null;
     }
 
     if (
       source.actorProfileId === source.recipientProfileId ||
       source.recipientInstanceKind !== InstanceKind.LOCAL
     ) {
-      return;
+      return null;
     }
 
-    await materializeNotification(tx, {
+    return materializeNotification(tx, {
       kind: NotificationKind.REACTION,
       recipientProfileId: source.recipientProfileId,
       relatedProfileId: source.actorProfileId,
       sourceId: source.id,
     });
   });
-};
 
 export const createRepostNotification = async (
   sourceId: string,
   handle?: Database,
-): Promise<void> => {
+): Promise<string | null> => {
   const connection = getDatabaseConnection(handle);
   const source = await connection
     .select({
@@ -183,17 +180,17 @@ export const createRepostNotification = async (
   // A delete or visibility transition may win before this retried effect runs.
   // The committed lifecycle is authoritative, so there is no Notification to project.
   if (!source) {
-    return;
+    return null;
   }
 
   if (
     source.actorProfileId === source.recipientProfileId ||
     source.recipientInstanceKind !== InstanceKind.LOCAL
   ) {
-    return;
+    return null;
   }
 
-  await materializeNotification(connection, {
+  return materializeNotification(connection, {
     kind: NotificationKind.REPOST,
     recipientProfileId: source.recipientProfileId,
     relatedProfileId: source.actorProfileId,

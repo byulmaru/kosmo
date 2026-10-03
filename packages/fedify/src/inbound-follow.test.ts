@@ -13,6 +13,10 @@ import {
 } from '@kosmo/core/enums';
 import { ConflictError } from '@kosmo/core/error';
 import { temporalClient } from '@kosmo/core/temporal/client';
+import {
+  profileFollowPairWorkflowId,
+  profileFollowRemovalWorkflowId,
+} from '@kosmo/core/temporal/follow-command';
 import { eq, ne } from 'drizzle-orm';
 import { setInboundObservabilityReporter, withInboundObservability } from './inbound-observability';
 import type { InboxContext } from '@fedify/fedify';
@@ -696,6 +700,14 @@ describe('inbound Follow and Undo', () => {
       new Follow({ actor: remoteActorUri, object: localActorUri }),
     );
     const relation = await db.select().from(ProfileFollows).limit(1).then(firstOrThrow);
+    await temporalClient.workflow
+      .getHandle(
+        profileFollowPairWorkflowId({
+          followerProfileId: relation.followerProfileId,
+          followeeProfileId: relation.followeeProfileId,
+        }),
+      )
+      .result();
     await handleInboundUndo(
       context,
       new Undo({
@@ -704,7 +716,15 @@ describe('inbound Follow and Undo', () => {
       }),
     );
 
-    await waitForProfileFollowWorkflows();
+    await temporalClient.workflow
+      .getHandle(
+        profileFollowRemovalWorkflowId({
+          followerProfileId: relation.followerProfileId,
+          followeeProfileId: relation.followeeProfileId,
+          expectedRowId: relation.id,
+        }),
+      )
+      .result();
     assert.equal((await db.select().from(ProfileFollows)).length, 0);
     assert.equal(
       await db
@@ -732,7 +752,14 @@ describe('inbound Follow and Undo', () => {
       }),
     );
 
-    await waitForProfileFollowWorkflows();
+    await temporalClient.workflow
+      .getHandle(
+        profileFollowPairWorkflowId({
+          followerProfileId: request.followerProfileId,
+          followeeProfileId: request.followeeProfileId,
+        }),
+      )
+      .result();
     assert.equal((await db.select().from(ProfileFollowRequests)).length, 0);
     assert.equal((await db.select().from(Notifications)).length, 0);
     assert.equal(

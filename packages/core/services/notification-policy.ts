@@ -22,12 +22,12 @@ type MaterializeNotificationInput = {
 export const materializeNotification = async (
   database: DatabaseHandle,
   { kind, recipientProfileId, relatedProfileId, sourceId }: MaterializeNotificationInput,
-): Promise<void> => {
+): Promise<string | null> => {
   if (await isNotificationSuppressed(database, recipientProfileId, relatedProfileId)) {
-    return;
+    return null;
   }
 
-  await database
+  const [inserted] = await database
     .insert(Notifications)
     .values({
       data: {},
@@ -37,7 +37,25 @@ export const materializeNotification = async (
     })
     .onConflictDoNothing({
       target: [Notifications.recipientProfileId, Notifications.kind, Notifications.sourceId],
-    });
+    })
+    .returning({ id: Notifications.id });
+
+  if (inserted) {
+    return inserted.id;
+  }
+
+  return database
+    .select({ id: Notifications.id })
+    .from(Notifications)
+    .where(
+      and(
+        eq(Notifications.kind, kind),
+        eq(Notifications.recipientProfileId, recipientProfileId),
+        eq(Notifications.sourceId, sourceId),
+      ),
+    )
+    .limit(1)
+    .then((rows) => rows[0]?.id ?? null);
 };
 
 export const isNotificationSuppressed = async (
