@@ -1,148 +1,128 @@
-# Profile Hashtag 탐색 지표
+# Profile Hashtag 사용자 전환과 품질 지표
 
-## 목적과 근거
+## 목적과 권위
 
-공개 Profile의 TagChip에서 시작한 관련 Profile 탐색의 사용률과 결과 선택률을 같은 기준으로 재현한다.
-[PROD-556](https://linear.app/byulmaru/issue/PROD-556)의 2026-09-03 지표·session 승인을 따른다.
-이 문서는 2026-09-22 현재 Linear 본문과 승인 댓글을 바탕으로 복원했다. 같은 날 사용자가 요청한
-Profile Tag 탐색 session 명명, opaque Hashtag identity 수집과 Hashtag별 탐색 성과 breakdown 범위를 반영한다.
+[PROD-556](https://linear.app/byulmaru/issue/PROD-556)은 **태그 탐색을 시작한 사용자가 관련 Profile
+목록을 보고 Profile 선택까지 이어지는가**를 측정한다. 2026-10-03 정혜주의 리뷰 대응 결정을 반영한
+현재 계약(`prod-556-user-funnel-v2`)이다. [2026-09-03 승인 기록](../records/2026-09-03-profile-hashtag-exploration-metrics-contract.md)의
+탐색 session 계약은 역사적 기록이며 아래 계약으로 대체됐다.
 
-탐색 기능의 인증, 공개 후보, 정확한 Hashtag identity, 최대 20개 forward pagination과 실패 시 기존 목록
-유지는 [ADR 0021](../decisions/0021-hashtag-related-profile-navigation.md)과
-[탐색 디자인](../../design/hashtag-related-profiles.md)을 따른다. 지표 때문에 탐색 동작을 바꾸지 않는다.
+인증·공개 후보·정확한 Hashtag identity·20개 forward pagination·오류 시 기존 목록 유지와 UX는
+[ADR 0021](../decisions/0021-hashtag-related-profile-navigation.md)과 [탐색 디자인](../../design/hashtag-related-profiles.md)을 따른다.
+계측은 기존 탐색 UX를 바꾸지 않는다.
 
-## 집계 대상과 기간
+## 세 분석 단위
 
-- production Web에서 관측 당시 인증된 Account만 집계한다.
-- 한 주는 Asia/Seoul 월요일 00:00 이상부터 다음 월요일 00:00 미만이다. 수신 시각 대신 관측 시각으로
-  주차를 정하고 완료된 직전 주를 검토한다.
-- WAA는 인증된 화면 조회, Profile 생성·선택 성공, Post 생성 성공, Follow 실행 성공, 검색 제출·결과
-  로드·선택 중 하나 이상이 관측된 distinct Account다. PROD-555의 승인된 운영 정의를 이 지표에 적용하며,
-  다른 지표의 공통 분모를 새로 정하지 않는다.
-- 자동 클릭, Replay, pageleave, performance, feature flag, SDK 진단 이벤트만 있거나 실패 요청만 있는
-  Account는 WAA에서 제외한다.
-- 익명 관측, development·test, 내부·테스트·알려진 봇·자동화 Account를 제외한다. 여러 session이나 기기를
-  사용해도 같은 Account는 해당 주의 WAA와 사용률 분자에 각각 한 번만 센다.
-- 집계에는 계산 규칙과 제외 목록의 버전을 표시한다. 실제 Account 제외 목록은 공개 산출물에 넣지 않는다.
+| 지표                    | 단위                  | 분자 / 분모                                                          |
+| ----------------------- | --------------------- | -------------------------------------------------------------------- |
+| 사용자 Funnel 전체 전환 | distinct 인증 Account | 30분 안에 같은 Hashtag로 3단계를 완료한 사용자 / TagChip 선택 사용자 |
+| 사용자 Funnel 목록 도달 | distinct 인증 Account | 30분 안에 같은 Hashtag 목록을 본 사용자 / TagChip 선택 사용자        |
+| 최초 Empty 경험 비율    | 화면 진입             | 최초 meaningful state가 Empty인 진입 / 전체 태그 탐색 화면 진입      |
+| 요청 완전 실패율        | 실제 완료 요청        | `failure` 요청 / `success + partial + failure` 요청                  |
+| 부분 응답 비율          | 실제 완료 요청        | `partial` 요청 / `success + partial + failure` 요청                  |
 
-## 탐색 session과 결과
+각 비율은 분자/분모 × 100이며 분모 0은 계산할 수 없음이다. Funnel 분모에 WAA나 탐색 session 수를
+사용하지 않는다. PROD-555의 WAA 정의를 바꾸지 않는다.
 
-- 공개 Profile의 TagChip으로 특정 Hashtag 탐색에 진입하면 session이 시작되고 해당 탐색을 이탈하면 끝난다.
-  다른 Hashtag 진입과 Account 전환은 기존 session을 끝낸다. 이전 관측을 다음 session이나 Account로 옮기지 않는다.
-- 탐색을 연결하는 무작위 불투명 식별자는 `profile_tag_exploration_session_id`로 부른다. Profile Tag에서
-  관련 Profile을 탐색하는 session을 뜻하며, Profile Tag라는 별도 durable 객체나 Hashtag identity를 만들지 않는다.
-- 같은 session의 재시도, 추가 로드와 cache·network 재노출은 별도 탐색 session으로 세지 않는다.
-- 첫 목록 요청이 성공하고 관련 Profile을 하나 이상 표시하면 `has_results`, 성공했지만 표시할 Profile이
-  없으면 `empty`다. 첫 목록 요청 실패나 유효한 Hashtag 목록을 만들지 못한 뒤 이탈할 때까지 성공하지 못하면
-  `error`다.
-- 첫 오류나 not-found 뒤 같은 session의 재시도가 성공하면 첫 목록 결과는 `has_results` 또는 `empty`다.
-  다음 page 오류는 첫 목록 결과를 바꾸지 않고 별도 품질 항목으로 집계한다.
-- 같은 session의 cache·network 재노출은 첫 목록 결과를 중복 집계하지 않는다. 첫 결과 전에 오류 없이
-  이탈한 session은 Empty·Error 비율의 분모에서 제외한다.
-- Profile 결과 item을 선택하면 전환으로 센다. Profile route의 후속 network 실패가 이미 발생한 선택을
-  취소하지 않는다. 한 session에서 여러 Profile을 선택해도 전환은 최대 한 번이다.
+### 사용자 Funnel
 
-## 계산식
+**TagChip 선택 → 관련 Profile 목록 표시 → Profile 선택**, ordered 순서, conversion window **30분**이다.
+다른 event가 중간에 있어도 된다. 최초 단계부터 마지막 단계까지 30분 이내여야 한다.
+동일 사용자의 여러 탐색 시도를 별도 Funnel 분모로 세지 않는다. 한 사용자의 여러 시도 중 유효한
+같은 Hashtag 경로가 있으면 해당 기간 사용자 전환에 최대 한 번 기여한다. 탐색별 최종 outcome은 없다.
+Profile 선택은 관련 목록 item의 실제 navigation 선택이며 도착 Profile query 실패가 선택을 취소하지 않는다.
+직접 URL 진입은 화면 진입·목록 관측에는 포함되지만 앞선 TagChip 선택 없이 Funnel 시작으로 합성하지 않는다.
+새 탭의 실제 TagChip 클릭도 source tab에서 기록하고 기존 Account identity로 연결한다.
 
-| 지표                     | 분자                                                         | 분모                          |
-| ------------------------ | ------------------------------------------------------------ | ----------------------------- |
-| 주간 Hashtag 탐색 사용률 | 첫 목록 결과가 `has_results` 또는 `empty`인 distinct Account | WAA                           |
-| 결과 선택률              | Profile을 하나 이상 선택한 `has_results` session             | `has_results` session         |
-| Empty 비율               | 첫 목록 결과가 `empty`인 session                             | 첫 목록 결과가 확정된 session |
-| Error 비율               | 첫 목록 결과가 `error`인 session                             | 첫 목록 결과가 확정된 session |
+목록 표시는 cache/network 출처가 아니라 **사용자에게 실제로 표시된 nonempty 목록**이다. commit되지
+않은 render나 background 데이터 갱신은 표시가 아니다. 같은 화면 진입에서 최초 nonempty 목록 표시만
+기록하되 Empty를 먼저 봤어도 이후 목록 step과 Profile 선택을 기록할 수 있다.
 
-각 비율은 분자 / 분모 × 100으로 계산한다. 분모가 0이면 0% 대신 계산할 수 없음으로 표시한다.
-첫 목록 결과가 확정된 session은 `has_results`, `empty`, `error` session의 합이다.
-Session 지표는 첫 목록 결과가 일어난 주에 귀속한다. 주 경계 뒤 선택이 발생해도 같은 session의 첫 목록
-결과 주차에 반영한다. 최종 `error`는 session 종료 주가 아니라 첫 initial 오류가 발생한 주에 귀속한다.
-같은 session에서 retry에 성공하면 오류로 세지 않고 성공 결과가 발생한 주에 귀속한다.
+### 화면 진입과 최초 Empty
 
-## Hashtag별 탐색 성과 breakdown
+화면 진입은 다른 화면에서 태그 탐색 화면으로 이동하거나 다른 Hashtag 화면으로 이동한 경우다.
+새 탭·새 문서의 직접 진입도 포함한다. 같은 화면의 재시도·background 갱신·actor remount·일시적인
+Account 조회 loading은 새 진입이 아니다. 화면 이탈 후 돌아오면 새 진입이다. 새로운 인증 Account의
+관측은 이전 Account의 진입과 분리한다. 이 단위는 탐색 session이나 Funnel correlation이 아니다.
 
-전체 지표와 같은 session·결과·주차·인증·제외·중복 규칙을 `hashtag_id` dimension에 적용한다.
-새로운 도달률은 정의하지 않는다. Hashtag별 지표는 다음 다섯 값과 각 값의 주간 추세다.
+분모는 **전체 화면 진입**으로, 로딩 중 이탈·요청 실패·notFound 등 의미 있는 결과를 끝내 표시하지 못한
+진입도 포함한다. 최초로 실제 표시한 meaningful state는 `has_results` 또는 `empty`다.
+**loading/skeleton, error, notFound는 meaningful result state가 아니다.** 재시도 뒤 처음 목록/Empty가
+표시되면 그것을 최초 상태로 기록한다. 최초 Empty 이후 목록이 표시돼도 최초 Empty 경험은 유지되고
+Funnel 진행을 막지 않는다. 진입 시각으로 Empty 분자와 전체 진입 분모의 주차를 맞춘다.
 
-| 지표                     | 같은 Hashtag와 주차에서의 계산                                                                                                    |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| distinct 탐색 Account 수 | 첫 목록 결과가 `has_results` 또는 `empty`인 distinct Account 수. 기존 전체 사용률 분자를 breakdown하며 별도 비율로 바꾸지 않는다. |
-| 탐색 session 수          | 첫 목록 결과가 확정된 session 수. 기존 공통 분모인 `has_results`, `empty`, `error`의 합이다.                                      |
-| 결과 선택률              | Profile을 선택한 `has_results` session 수 / `has_results` session 수 × 100                                                        |
-| Empty 비율               | `empty` session 수 / 첫 목록 결과가 확정된 session 수 × 100                                                                       |
-| Error 비율               | `error` session 수 / 첫 목록 결과가 확정된 session 수 × 100                                                                       |
+### 요청 품질
 
-Account 수는 첫 목록 성공 기준, session 수는 첫 결과 확정 기준임을 표시한다. 오류만 있던 Account를
-성공 Account 수에 넣거나, 결과·오류 전에 이탈한 session을 확정 session 수에 넣지 않는다.
-성공 결과는 성공 주, 성공 없이 종료한 오류는 첫 initial 오류 주, 주 경계 뒤 선택은 같은 session의
-결과 주에 둔다. 각 주를 같은 방식으로 계산해 주간 추세를 제공하고 분모 0은 계산할 수 없음으로 표시한다.
+초기 요청, background 재검증, pagination, retry의 **실제 network 요청 완료**를 각각 센다. cache snapshot은
+network 요청이 아니다. retry 성공이 이전 실패를 지우지 않는다. 화면 이탈을 기다리거나 최종 Error로
+확정하지 않는다. 요청 오류는 Funnel outcome이 아니며 Funnel 성공을 덮어쓰지 않는다.
 
-같은 Account가 여러 Hashtag를 탐색하면 각 Hashtag에서 한 번씩 셀 수 있다. Hashtag별 Account 수를 더해
-전체 distinct Account 수로 사용하지 않으며, Hashtag별 비율의 단순 평균으로 전체 비율을 만들지 않는다.
-전체 값은 기존 계약대로 다시 계산한다. `hashtag_id`가 없는 관측은 특정 Hashtag에 추정 배정하지 않고
-별도 누락 범위를 표시한다. 전체 집계는 기존 규칙을 유지한다.
+- `success`: 오류 없는 유효한 GraphQL 응답. 정상 Empty와 오류 없는 `node: null`(notFound)도 요청 성공이다.
+- `partial`: GraphQL `errors`와 사용 가능한 관련 Profile connection(Empty 포함)이 함께 반환된다.
+- `failure`: transport/HTTP/JSON 실패 또는 GraphQL 오류로 사용 가능한 관련 목록 결과를 제공하지 못한다.
+  `data: null`, 오류 때문에 `node`/connection이 null로 전파된 경우를 포함한다.
 
-Hashtag별 도달률, TagChip impression과 이를 분모로 한 노출→탐색 funnel은 이번 범위가 아니다.
-이런 새 계측이 필요하면 후속 후보로 남기며 이번 완료 조건에 넣지 않는다.
+`partial`은 별도 분류하고 완전 실패율 분자에는 넣지 않는다. 요청 단계 `initial / pagination`은 구분한다.
+늦은 이전 Account 요청을 현재 Account에 귀속하지 않는다. analytics가 실패하거나 요청 당시 인증 identity를
+확인할 수 없으면 best-effort 누락으로 보고하고 제품 흐름은 유지한다.
 
-## 개인정보와 수집 경계
+## 이벤트와 property
 
-- 이 지표의 앱 소유 custom event는 `profile_tag_exploration_session_id`, 탐색 대상의 안정적인 opaque
-  Hashtag identity인 `hashtag_id`, 결과·요청 단계처럼 계산에 필요한 고정 분류값만 사용한다.
-- `hashtag_id`는 TagChip이 이미 확인한 공용 Hashtag identity를 사용한다. 이름이나 이름을 인코딩·해시한
-  대체값, 임의 route 입력으로 만들지 않는다. 같은 Hashtag의 여러 session은 같은 identity를 사용하며
-  session 식별자와 Hashtag identity를 혼동하지 않는다. 확인된 identity가 없으면 해당 property를 생략하고
-  누락 범위를 검증 결과에 남긴다. 이름·URL을 대신 보내거나 기존 전체 오류 집계에서 조용히 제외하지 않는다.
-- 이 수집은 이번 Hashtag별 distinct 탐색 Account 수·탐색 session 수·결과 선택률·Empty/Error 비율과
-  주간 추세를 재현하고 그 원천 자료를 보존하기 위해 필요하다. 전체 네 비율 계산만을 위해서는 필요하지 않은 항목임을 구분한다.
-  session마다 바뀌는 식별자로는 동일 Hashtag의 여러 탐색을 연결할 수 없으므로 안정적인 identity 하나를
-  추가하며, 사람이 읽을 수 있는 주제 이름과 Profile 정보는 복제하지 않는다.
-- Opaque identity라고 해서 익명 데이터이거나 민감하지 않은 데이터가 되는 것은 아니다. Hashtag 자료와 연결하면 주제를 알 수 있고,
-  Account의 행동과 결합하면 관심 주제를 추론할 수 있다. 2026-09-22 사용자는 이 목적과 최소 범위로
-  PROD-556의 Hashtag identity 수집을 명시적으로 요청했다. 다른 identifier의 수집 허용으로 확대하지 않는다.
-- raw Hashtag text·Canonical/Display Hashtag Name·검색어·Profile ID·이름·handle·오류 원문·URL·pathname·
-  Account ID 중복 property는 추가하지 않는다. 현재 Account 연결은 기존 opaque Account identify/reset 경계를 따른다.
-- SDK가 만드는 표준 pageview·pageleave·autocapture와 URL·referrer·session·검색·캠페인 metadata는 유지한다.
-  이 지표를 위해 표준 수집을 정제하거나 차단하지 않는다.
-- Replay는 이 지표와 별도 책임이다. PROD-795의 Product Analytics 활성화·Replay 비활성화 결정과
-  PROD-741의 조건부 재활성화 범위를 따른다. PROD-556은 Replay를 활성화하거나 Cloud 보호 설정을 변경하지 않는다.
-- Replay를 사용하는 경우 production canonical origin, 10% sampling, input masking, 30일 retention과
-  canonical Post Content의 표준 보호를 유지하는 책임은 상위 작업에 남는다.
-- 자유 입력 또는 비공개 콘텐츠로 탐색 범위가 확대되면 배포 전에 상위 개인정보 계약을 다시 검토한다.
-- 분석 초기화·식별자 생성·전송 실패는 탐색, 재시도, 추가 로드와 Profile 선택을 막지 않는다.
-- SDK의 reset·identify 실패 중 실제 Account 귀속은 정상 전환과 구분해 검증한다. 기존 fail-open을 유지하며
-  해당 실패 경로의 귀속을 보장할 수 없다면 그 한계를 명시한다. 별도 identity recovery system이나
-  분석 성공을 기다리는 제품 차단을 이 지표의 의무로 삼지 않는다.
+새 이벤트만 v2 분석에 사용하며 과거 session 이벤트와 합쳐 계산하지 않는다.
 
-## Dashboard와 책임
+| 이벤트                                 | 발생 경계                                    | 앱 소유 property                                                         |
+| -------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------ |
+| `profile_hashtag_clicked`              | 실제 TagChip navigation 선택(새 탭 포함)     | `hashtag_id`                                                             |
+| `profile_hashtag_screen_entered`       | 인증된 태그 탐색 화면 진입 1회               | 없음                                                                     |
+| `profile_hashtag_initial_state_viewed` | 해당 진입의 최초 표시된 meaningful state 1회 | `hashtag_id`, `result: has_results / empty`, `entered_at`(ISO 진입 시각) |
+| `profile_hashtag_list_viewed`          | 해당 진입의 최초 nonempty 목록 표시          | `hashtag_id`                                                             |
+| `profile_hashtag_profile_selected`     | 관련 목록 item의 실제 선택                   | `hashtag_id`                                                             |
+| `profile_hashtag_request_completed`    | 해당 목록의 실제 요청 완료마다               | `stage: initial / pagination`, `result: success / partial / failure`     |
 
-PROD-556 담당자는 초기 PostHog Insight·dashboard를 만들고 매주 완료된 직전 주의 전체 네 비율과
-Hashtag별 다섯 지표·주간 추세를 검토한다.
-분자·분모 절대 수, WAA, 관측 기간, 집계 실행 시각, 계산 규칙 버전과 제외 목록 버전을 함께 표시한다.
-다음 page 오류는 주 지표와 분리해서 확인하며 production Web 외 플랫폼은 미검증으로 표시한다.
+`entered_at`은 Empty의 진입 주차 귀속용이며 correlation/session ID가 아니다. 전체 진입은 실패 전에도
+세므로 확인되지 않은 route 입력을 Hashtag property로 보내지 않는다. Hashtag별 Funnel·목록 사용자 수와
+최초 Empty 관측 건수는 확인된 `hashtag_id`로 제공한다. 전체 화면 진입 기반 Empty 비율과 전체 요청
+품질은 별도 tile로 제공하며 Hashtag별 사용자 Funnel 분모를 품질 지표 분모로 재사용하지 않는다.
 
-PROD-556은 자신의 지표 계약, 이벤트, 전체 네 비율과 Hashtag별 탐색 성과 Insight·dashboard, 합성 자료
-대조와 실제 수집 검증을 맡는다. opaque Hashtag identity의 계측·안정성·원문 비포함·수집 누락 검증도
-PROD-556 책임이다. payload에 ID가 있는 것만으로 완료로 보지 않는다. 여러 Hashtag·주차의 합성 자료를
-실제 PostHog Insight·dashboard에서 breakdown하고 Account 수·session 수·각 비율의 분자/분모·주간 추세가
-기대값과 일치하는지 확인한다. raw Hashtag text/name을 보내거나 분석용 이름 속성을 추가해 재현하지 않는다.
-PROD-795의 실제 개인정보·운영 통합 결과가 확인되기 전에는 production 수집 인수를 완료로 표시하지 않는다.
-이슈 Done만으로 실제 적용과 검증을 대신하지 않는다. PROD-741의 Replay 재활성화·검증과 PROD-575의 전체
-제품 분석 인수 책임은 가져오지 않는다.
+## Hashtag 연결과 집계 기간
 
-프로필 태그 도메인·탐색 UX, Post Hashtag 계측, PROD-557의 검색→Profile·Follow 전환과 30분 attribution,
-Native SDK, 과거 이벤트와의 호환성은 제외한다.
+Funnel 세 step의 `hashtag_id`는 **동일한 확인된 GraphQL Hashtag ID**여야 한다. 사용자 identity만 맞는
+A의 클릭 → B의 목록/선택은 A나 전체 전환이 아니다. PostHog event breakdown은 `hashtag_id`, attribution은
+`all_events`로 설정해 모든 step의 값 일치를 요구한다. 단순 first-touch breakdown은 충분하지 않다.
+전체 사용자 값은 유효한 동일 Hashtag 경로들의 **사용자 합집합**이며 Hashtag별 사용자 수를 더하지 않는다.
+합계에서 동일 Hashtag 조건을 잃는 쿼리도 사용하지 않는다. 목록→선택 상대 전환과 클릭→선택 전체
+전환을 별도 이름으로 표시한다. 기존 탐색별 선택률 이름을 사용자 전환에 재사용하지 않는다.
 
-## 승인 이력
+Production Web의 관측 당시 인증 Account만 집계한다. development/test, 내부·테스트·알려진 봇·자동화
+Account는 기존 운영 제외 규칙을 적용한다. 식별은 기존 Account identify/reset을 사용한다.
+한 주는 Asia/Seoul 월요일 00:00 이상부터 다음 월요일 미만이며 수신 시각이 아닌 관측 시각을 쓴다.
+Funnel은 시작 step 주, Empty는 진입 주, 요청 품질은 요청 완료 주다. 주 말 30분 안의 Funnel 완료를
+관측할 여유를 두고 완료된 직전 주를 검토한다. Hashtag별 사용자 수의 합·비율의 평균을 전체값으로 삼지 않는다.
+기간·timezone·분자/분모 절대 수·계산 규칙/제외 버전·실행 시각·수집 누락을 표시한다.
 
-- [2026-09-03 지표·session 승인 복원 기록](../records/2026-09-03-profile-hashtag-exploration-metrics-contract.md)
-- PROD-556 승인 댓글 `88fa293a-616e-47d5-81fa-ede269ce3c3a`가 이전 화면 진입 기반 사용률을 대체한다.
-- 최신 Replay 책임은 [PROD-741](https://linear.app/byulmaru/issue/PROD-741)의 2026-09-22 범위 결정과
-  [PR #955](https://github.com/byulmaru/kosmo/pull/955)의 병합된 결정에 따른다.
+## 이전 계약 폐기와 운영 인수
 
-- 2026-09-22 정혜주는 첫 오류가 일요일에 발생하고 성공 없이 월요일에 이탈한 session을 첫 오류 발생 주에
-  집계하도록 현재 Spec 작업에서 선택했다.
-- 2026-09-22 Review Packet 수정 요청은 기존 Hashtag ID 수집 금지를 위 목적의 opaque Hashtag identity
-  허용으로 변경했다. raw 이름과 Profile 정보 금지, 표준 SDK 수집·Replay 책임, 기존 네 계산식은 유지한다.
-  이 수집 변경 지시만으로 수정 산출물의 최종 승인이나 구현·배포 승인을 뜻하지 않는다.
-- 같은 날 후속 결정으로 Hashtag별 다섯 지표·주간 추세와 실제 Insight·dashboard 재현 검증을 PROD-556에
-  포함했다. 새 도달률·TagChip impression은 제외한다. 사용자는 이 범위 반영과 재검증에 문제가 없으면
-  수정 Spec을 최종 승인하며, 이번 세션의 구현·push/PR·배포·Cloud 변경은 금지한다고 명시했다.
+`profile_tag_exploration_session_id`, 탐색별 결과 선택률, 확정 session 분모의 Empty/Error 비율,
+초기 오류→retry→성공 없이 탐색 종료 기반 **Final Error**, 탐색 session 수와 종료 주차 규칙은 폐기한다.
+기존 다섯 session 이벤트도 더 이상 발행하지 않는다. 새 사용자 Funnel/화면 진입 Empty/요청 품질과
+같은 지표로 해석하거나 과거 수치를 이어 붙이지 않는다. Dashboard 이름·설명에도 v2와 단절을 명시한다.
+
+PROD-556 담당자는 Dashboard `2122242`의 저장 Insight를 새 계약으로 교체하고 주간 사용자 Funnel,
+Hashtag별 Funnel 및 Empty·요청 품질을 함께 검토한다. 반복 시도·태그 간 step 혼합·Empty→목록·background
+failure·partial·주 경계의 합성 자료를 실제 query 및 저장 Insight/dashboard에서 재현해 기대값과 대조한다.
+정의 read-back, 합성 검증, 실제 production 수집 인수를 구분한다. 이벤트 없는 기간은 0% 성공/실패로
+표시하지 않는다. PROD-795의 개인정보·운영 통합 실제 증거와 production payload/비율 검증 전에는
+production acceptance를 완료로 표시하지 않는다. PR merge·배포·Linear Done도 별도다.
+
+## 개인정보와 제외 범위
+
+앱 custom property는 위 최소 allowlist만 사용한다. `hashtag_id`는 TagChip/목록이 받은 opaque Hashtag
+identity이며 이름·slug·URL·이름의 encoding/hash·임의 route 입력을 대체값으로 보내지 않는다. raw Hashtag
+text/name·검색어·Profile ID/name/handle·오류 원문·URL/pathname·Account ID 중복 property는 추가하지 않는다.
+opaque identity가 익명을 보장하지 않는다는 기존 수집 목적과 한계는 유지한다.
+
+SDK 표준 pageview/pageleave/autocapture, URL/referrer/session/검색/캠페인 metadata와 fail-open을 유지한다.
+Replay는 PROD-741과 PROD-795 책임이며 PROD-556은 활성화·Cloud 보호 설정을 바꾸지 않는다. 기존
+canonical origin·sampling·input masking·retention·Post Content 보호의 상위 책임을 유지한다.
+Post Hashtag, TagChip impression/도달률, 검색→Profile/Follow(PROD-557), Native SDK와 과거 이벤트
+호환성은 제외한다. OpenSpec은 짧은 작업·검증 메모이며 제품 요구사항의 authority가 아니다.

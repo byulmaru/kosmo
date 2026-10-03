@@ -1,5 +1,11 @@
 # 2026-09-03 Profile Hashtag 탐색 지표 승인 기록
 
+## 현재 상태: Superseded
+
+2026-10-03 정혜주의 사용자 Funnel(30분)·화면 진입 Empty·요청 품질 결정으로 아래 session 계약은
+폐기·대체됐다. 현재 계약은 [canonical 정책](../policies/profile-hashtag-exploration-analytics.md)을 따른다.
+아래 승인 사실은 역사적 기록이며 새 지표와의 동일성·수치 연속성을 의미하지 않는다.
+
 ## 복원 경위
 
 2026-09-22 현재 main과 조회한 Git 이력에는 이전 handoff가 가리킨 정책·기록·OpenSpec 파일이 없다.

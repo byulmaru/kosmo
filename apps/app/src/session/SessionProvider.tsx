@@ -39,7 +39,6 @@ const guestSession: SessionValue = {
 };
 const errorSession: SessionValue = { ...guestSession, status: 'error' };
 const SessionContext = createContext<SessionValue>(guestSession);
-const AnalyticsAccountContext = createContext<string | null>(null);
 const AnalyticsIdentityAccountContext = createContext<string | null>(null);
 
 const SessionProviderQuery = graphql`
@@ -82,20 +81,18 @@ export function SessionProvider({ children }: PropsWithChildren) {
 
   return (
     <AnalyticsIdentityAccountContext.Provider value={sessionState.value.accountId}>
-      <AnalyticsAccountContext.Provider value={visibleSession.accountId}>
-        <SessionContext.Provider value={visibleSession}>
-          <RelayFailOpenBoundary
-            fallback={
-              <SessionErrorReporter lifecycleKey={actorLifecycleKey} onError={setSessionError} />
-            }
-          >
-            <Suspense fallback={<Splash label="세션을 확인하는 중입니다." />}>
-              <SessionQuery actorLifecycleKey={actorLifecycleKey} onSessionChange={setSession} />
-            </Suspense>
-          </RelayFailOpenBoundary>
-          {sessionState.ready ? children : null}
-        </SessionContext.Provider>
-      </AnalyticsAccountContext.Provider>
+      <SessionContext.Provider value={visibleSession}>
+        <RelayFailOpenBoundary
+          fallback={
+            <SessionErrorReporter lifecycleKey={actorLifecycleKey} onError={setSessionError} />
+          }
+        >
+          <Suspense fallback={<Splash label="세션을 확인하는 중입니다." />}>
+            <SessionQuery actorLifecycleKey={actorLifecycleKey} onSessionChange={setSession} />
+          </Suspense>
+        </RelayFailOpenBoundary>
+        {sessionState.ready ? children : null}
+      </SessionContext.Provider>
     </AnalyticsIdentityAccountContext.Provider>
   );
 }
@@ -152,10 +149,6 @@ function SessionErrorReporter({
 
 export function useSession(): SessionValue {
   return useContext(SessionContext);
-}
-
-export function useAnalyticsAccountId(): string | null {
-  return useContext(AnalyticsAccountContext);
 }
 
 export function useAnalyticsIdentityAccountId(): string | null {

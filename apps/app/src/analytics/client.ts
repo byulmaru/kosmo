@@ -22,3 +22,7 @@ export function setAnalyticsSelectedProfile(
 }
 
 export function clearAnalytics(): void {}
+
+export function getAnalyticsAccountId(): string | null {
+  return null;
+}

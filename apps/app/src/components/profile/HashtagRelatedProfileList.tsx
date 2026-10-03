@@ -32,17 +32,15 @@ const hashtagRelatedProfileListFragment = graphql`
 `;
 
 export function HashtagRelatedProfileList({
-  onInitialResults,
-  onPaginationFailure,
+  onVisibleResults,
   onResultSelected,
   hashtag,
   leading,
 }: {
   hashtag: HashtagRelatedProfileList_hashtag$key;
   leading?: ReactNode;
-  onInitialResults?: (hasResults: boolean) => void;
-  onPaginationFailure?: () => void;
-  onResultSelected?: () => void;
+  onVisibleResults?: (hashtagId: string, hasResults: boolean) => void;
+  onResultSelected?: (hashtagId: string) => void;
 }) {
   const pagination = usePaginationFragment<
     HashtagRelatedProfilesNextPageQuery,
@@ -54,21 +52,13 @@ export function HashtagRelatedProfileList({
     hasNext: pagination.hasNext,
     isLoadingNext: pagination.isLoadingNext,
     itemCount: profiles.length,
-    loadNext: (count, options) =>
-      pagination.loadNext(count, {
-        onComplete: (error) => {
-          if (error) {
-            onPaginationFailure?.();
-          }
-          options.onComplete(error);
-        },
-      }),
+    loadNext: pagination.loadNext,
     pageSize: 20,
     webScrollTarget: 'container',
   });
   useEffect(() => {
-    onInitialResults?.(profiles.length > 0);
-  }, [onInitialResults, profiles.length]);
+    onVisibleResults?.(pagination.data.id, profiles.length > 0);
+  }, [onVisibleResults, pagination.data.id, profiles.length]);
 
   return (
     <ScrollView {...nativeScrollProps} contentContainerStyle={styles.root}>
@@ -78,7 +68,7 @@ export function HashtagRelatedProfileList({
           <ProfileListItem
             key={edge.cursor}
             linked
-            onPress={onResultSelected}
+            onPress={() => onResultSelected?.(pagination.data.id)}
             profile={edge.node}
             showBio
           />

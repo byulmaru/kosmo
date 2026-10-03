@@ -3,10 +3,8 @@ import { useCallback, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import { graphql, useMutation } from 'react-relay';
 import { clearAnalytics } from '@/analytics/client';
-import { endProfileHashtagExplorationsForAccount } from '@/analytics/profileHashtagExploration';
 import { LOGOUT_FAILURE_MESSAGE, requestWebLogout } from '@/auth/logout';
 import { useRelayActor } from '@/relay/RelayActorProvider';
-import { useAnalyticsIdentityAccountId } from './SessionProvider';
 import type { LogoutRevokeCurrentSessionMutation as LogoutRevokeCurrentSessionMutationType } from './__generated__/LogoutRevokeCurrentSessionMutation.graphql';
 
 const RevokeCurrentSessionMutation = graphql`
@@ -25,7 +23,6 @@ export type LogoutState = {
 
 export function useLogout(): LogoutState {
   const router = useRouter();
-  const accountId = useAnalyticsIdentityAccountId();
   const { clearNativeSession, resetActor } = useRelayActor();
   const [commitNativeLogout] = useMutation<LogoutRevokeCurrentSessionMutationType>(
     RevokeCurrentSessionMutation,
@@ -66,16 +63,10 @@ export function useLogout(): LogoutState {
       try {
         if (Platform.OS === 'web') {
           await requestWebLogout();
-          if (accountId) {
-            endProfileHashtagExplorationsForAccount(accountId);
-          }
           resetActor(null);
           clearAnalytics();
         } else {
           await revokeNativeSession();
-          if (accountId) {
-            endProfileHashtagExplorationsForAccount(accountId);
-          }
           await clearNativeSession();
         }
 
@@ -88,7 +79,7 @@ export function useLogout(): LogoutState {
         inFlight.current = false;
       }
     })();
-  }, [accountId, clearNativeSession, resetActor, revokeNativeSession, router]);
+  }, [clearNativeSession, resetActor, revokeNativeSession, router]);
 
   return { error, logout, pending };
 }

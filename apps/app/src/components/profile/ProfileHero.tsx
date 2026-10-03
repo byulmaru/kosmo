@@ -10,14 +10,14 @@ import {
   View,
 } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
-import { beginProfileHashtagExploration } from '@/analytics/profileHashtagExploration';
+import { identifyAnalytics, trackAnalytics } from '@/analytics/client';
 import { setStringAsync } from '@/components/post/postClipboard';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { Avatar } from '@/components/ui/Avatar';
 import { Skeleton } from '@/components/ui/StateView';
 import { useToast } from '@/components/ui/ToastProvider';
 import { getPublicWebOrigin } from '@/config/origin';
-import { useAnalyticsAccountId } from '@/session/SessionProvider';
+import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { breakpoints, radius, space, textStyles } from '@/theme/tokens';
 import { ProfileBioPrivacyBoundary } from './ProfileBioPrivacyBoundary';
@@ -96,7 +96,7 @@ export function ProfileHero({
     }
   }, [unmuteFocusRevision]);
   const theme = useTheme();
-  const accountId = useAnalyticsAccountId();
+  const { accountId } = useSession();
   const { showToast } = useToast();
   const { width } = useWindowDimensions();
   const data = useFragment(profileHeroFragment, profile);
@@ -358,16 +358,15 @@ function ProfileTagLink({
     params: { hashtagId: id },
     pathname: '/hashtags/[hashtagId]/profiles',
   } as const;
-  const beginExploration = () => accountId && beginProfileHashtagExploration(accountId, id);
-  const beginExternalExploration = () =>
-    accountId && beginProfileHashtagExploration(accountId, id, { persistForExternal: true });
+  const recordClick = () => {
+    if (accountId) {
+      identifyAnalytics(accountId);
+      trackAnalytics('profile_hashtag_clicked', { hashtag_id: id });
+    }
+  };
 
   return (
-    <NavigationLink
-      href={href}
-      onExternalNavigate={beginExternalExploration}
-      onNavigate={beginExploration}
-    >
+    <NavigationLink href={href} onExternalNavigate={recordClick} onNavigate={recordClick}>
       <Pressable
         accessibilityLabel={`#${name} 관련 프로필 보기`}
         accessibilityRole="link"

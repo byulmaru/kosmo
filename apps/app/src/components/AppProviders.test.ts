@@ -52,11 +52,11 @@ let useRelayActor: () => Pick<
   'clearNativeSession' | 'nativeToken' | 'setNativeSession'
 >;
 let useSession: () => {
+  accountId: string | null;
   selectedProfileId: string | null;
   sessionId: string | null;
   status: string;
 };
-let useAnalyticsAccountId: () => string | null;
 let useAnalyticsIdentityAccountId: () => string | null;
 let renderer: ReactTestRenderer | null = null;
 let originalFetch: typeof fetch;
@@ -310,8 +310,7 @@ before(async () => {
   ({ useFeatureFlag } = await import('./FeatureFlagsContext'));
   ({ UniversalShell } = await import('./shell/UniversalShell'));
   ({ RouteBoundary, useRouteBoundary } = await import('./RouteBoundary'));
-  ({ useAnalyticsAccountId, useAnalyticsIdentityAccountId, useSession } =
-    await import('../session/SessionProvider'));
+  ({ useAnalyticsIdentityAccountId, useSession } = await import('../session/SessionProvider'));
   ({ useRelayActor } = await import('../relay/RelayActorProvider'));
 });
 
@@ -376,7 +375,7 @@ function ShellRecoveryRoute() {
 
 function NativeSessionFixture() {
   const actor = useRelayActor();
-  const analyticsAccountId = useAnalyticsAccountId();
+  const analyticsAccountId = useSession().accountId;
   const analyticsIdentityAccountId = useAnalyticsIdentityAccountId();
   const session = useSession();
   useEffect(() => {
