@@ -24,7 +24,7 @@ const noNetworkDocumentLoader = async (url: string) => {
 };
 
 export const handleInboundDelete = async (
-  _context: InboxContext<void>,
+  context: InboxContext<void>,
   activity: Delete,
 ): Promise<void> => {
   const actorHref = uniqueHref(activity.actorIds);
@@ -43,7 +43,9 @@ export const handleInboundDelete = async (
     return;
   }
 
-  if (await revokeInboundQuote({ actorUri: actorUri.href, authorizationUri: objectUri.href })) {
+  if (
+    await revokeInboundQuote({ actorUri: actorUri.href, authorizationUri: objectUri.href, context })
+  ) {
     return;
   }
 

@@ -89,7 +89,6 @@ const mockRemoteProfileRefresh = (execute: (actorUri: string) => Promise<string>
   });
 
 let ActivityPubActors: typeof CoreDb.ActivityPubActors;
-let ActivityPubPostQuotes: typeof CoreDb.ActivityPubPostQuotes;
 let ActivityPubPosts: typeof CoreDb.ActivityPubPosts;
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
@@ -118,7 +117,6 @@ describe('inbound Create dispatch', () => {
     process.env.PUBLIC_ORIGIN = publicOrigin;
     ({
       ActivityPubActors,
-      ActivityPubPostQuotes,
       ActivityPubPosts,
       db,
       firstOrThrow,
@@ -2923,7 +2921,7 @@ describe('inbound Create dispatch', () => {
     assert.equal(after.post.profileId, owner.id);
     assert.equal(after.post.repostSourceId, null);
     assert.equal(postContentDocumentToText(after.content.document), 'Hello');
-    assert.equal(await db.$count(ActivityPubPostQuotes), 0);
+    assert.equal(after.post.quoteConsentStatus, null);
     assert.equal(await db.$count(Posts), 2);
   });
 

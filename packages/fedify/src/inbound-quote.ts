@@ -4,7 +4,6 @@ import { quoteInteraction } from '@fedify/interaction-controls';
 import { Note } from '@fedify/vocab';
 import {
   ActivityPubActors,
-  ActivityPubPostQuotes,
   ActivityPubPosts,
   db,
   first,
@@ -12,31 +11,36 @@ import {
   Posts,
   Profiles,
 } from '@kosmo/core/db';
-import {
-  ActivityPubQuoteFormat,
-  ActivityPubQuoteStatus,
-  InstanceKind,
-  PostState,
-} from '@kosmo/core/enums';
+import { InstanceKind, PostQuoteConsentStatus, PostState } from '@kosmo/core/enums';
+import { applyPostQuoteConsent } from '@kosmo/core/services';
 import { temporalClient } from '@kosmo/core/temporal/client';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
-import { and, eq } from 'drizzle-orm';
-import { alias } from 'drizzle-orm/pg-core';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { findPostByActivityPubUri } from './activitypub-post-uri';
 import { isHttpUri } from './activitypub-uri';
 import { materializeHydratedRemoteNote } from './inbound-create-note';
 import { RemoteActorDiscoveryUnavailableError } from './remote-actor-materialization';
 import type { Context } from '@fedify/fedify';
 import type { Object as ActivityPubObject } from '@fedify/vocab';
+import type { Transaction } from '@kosmo/core/db';
+import type { ApplyPostQuoteConsentInput } from '@kosmo/core/services';
 import type { InboundObservation } from './inbound-observability';
 
-const QuoteTargetActivityPubPosts = alias(
-  ActivityPubPosts,
-  'inbound_quote_target_activitypub_post',
-);
-const QuoteTargetPosts = alias(Posts, 'inbound_quote_target_post');
-const QuoteTargetProfiles = alias(Profiles, 'inbound_quote_target_profile');
-const QuoteTargetActors = alias(ActivityPubActors, 'inbound_quote_target_actor');
+const ActivityPubQuoteFormat = { FEP_044F: 'FEP_044F', LEGACY: 'LEGACY' } as const;
+type ActivityPubQuoteFormat = (typeof ActivityPubQuoteFormat)[keyof typeof ActivityPubQuoteFormat];
+
+export type QuoteExpectation = {
+  readonly expectedStatus: PostQuoteConsentStatus | null;
+  readonly expectedApprovalUri: string | null;
+  readonly expectedRepostSourceId: string | null;
+};
+
+export type InboundQuoteRetryInput = QuoteExpectation & {
+  readonly postId: string;
+  readonly targetUri: string;
+  readonly format: ActivityPubQuoteFormat;
+  readonly approvalUri: string | null;
+};
 
 type QuoteContext = Pick<
   Context<void>,
@@ -50,13 +54,14 @@ type InboundQuoteInput = {
   postId: string;
   receivedAt: Temporal.Instant;
   startWorkflow?: boolean;
-  expectedRevision?: number;
+  expectation?: QuoteExpectation;
   authorizationUpdate?: boolean;
 };
 
 export type InboundQuoteResolution = {
   retryable: boolean;
-  status: ActivityPubQuoteStatus | null;
+  status: PostQuoteConsentStatus | null;
+  retryInput?: InboundQuoteRetryInput;
 };
 
 type QuoteExtraction = {
@@ -77,15 +82,20 @@ type QuoteSource = {
   postId: string;
   postState: string;
   profileId: string;
+  uri: string;
 };
 
 type QuoteResolution = {
   approvalUri: string | null;
   format: ActivityPubQuoteFormat;
   sourcePostId: string | null;
-  status: ActivityPubQuoteStatus;
+  status: PostQuoteConsentStatus;
   targetUri: string;
   retryable: boolean;
+  proof?: Extract<
+    ApplyPostQuoteConsentInput,
+    { operation: 'RESOLVE'; result: 'APPROVED' }
+  >['proof'];
 };
 
 type QuoteTargetResolution =
@@ -215,11 +225,13 @@ const loadQuoteSource = async (postId: string): Promise<QuoteSource | null> => {
       postId: Posts.id,
       postState: Posts.state,
       profileId: Profiles.id,
+      uri: ActivityPubPosts.uri,
     })
     .from(Posts)
     .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
     .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
     .leftJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Profiles.id))
+    .leftJoin(ActivityPubPosts, eq(ActivityPubPosts.postId, Posts.id))
     .where(eq(Posts.id, postId))
     .limit(1)
     .then(first);
@@ -232,21 +244,22 @@ const loadQuoteSource = async (postId: string): Promise<QuoteSource | null> => {
     return {
       ...row,
       actorUri: new URL(`/ap/actor/${row.profileId}`, row.canonicalOrigin).href,
+      uri: new URL(`/ap/note/${row.postId}`, row.canonicalOrigin).href,
     };
   }
 
-  return row;
+  return row.uri ? { ...row, uri: row.uri } : null;
 };
 
 const materializeTarget = async ({
   context,
-  expectedRevision,
+  expectation,
   extraction,
   postId,
   receivedAt,
 }: {
   context: QuoteContext;
-  expectedRevision?: number;
+  expectation?: QuoteExpectation;
   extraction: QuoteExtraction;
   postId: string;
   receivedAt: Temporal.Instant;
@@ -272,23 +285,8 @@ const materializeTarget = async ({
     return { kind: 'permanent_failure' };
   }
 
-  if (expectedRevision !== undefined) {
-    const current = await db
-      .select({
-        resolutionRevision: ActivityPubPostQuotes.resolutionRevision,
-        status: ActivityPubPostQuotes.status,
-      })
-      .from(ActivityPubPostQuotes)
-      .where(eq(ActivityPubPostQuotes.postId, postId))
-      .limit(1)
-      .then(first);
-    if (
-      !current ||
-      current.resolutionRevision !== expectedRevision ||
-      current.status !== ActivityPubQuoteStatus.PENDING
-    ) {
-      return { kind: 'stale' };
-    }
+  if (expectation && !(await matchesQuoteExpectation(postId, expectation))) {
+    return { kind: 'stale' };
   }
 
   let materialized;
@@ -341,13 +339,14 @@ const classifyAuthorization = async ({
   extraction: QuoteExtraction;
   note: Note;
   source: QuoteSource;
-}): Promise<{ approvalUri: string | null; retryable: boolean; status: ActivityPubQuoteStatus }> => {
+}): Promise<Pick<QuoteResolution, 'approvalUri' | 'retryable' | 'status' | 'proof'>> => {
   const suppliedApprovalUri = authorizationId?.href ?? authorization?.id?.href ?? null;
   if (source.actorUri === actorUri) {
     return {
       approvalUri: suppliedApprovalUri,
       retryable: false,
-      status: ActivityPubQuoteStatus.APPROVED,
+      status: PostQuoteConsentStatus.APPROVED,
+      proof: { kind: 'SELF' },
     };
   }
 
@@ -355,7 +354,8 @@ const classifyAuthorization = async ({
     return {
       approvalUri: suppliedApprovalUri,
       retryable: false,
-      status: ActivityPubQuoteStatus.APPROVED,
+      status: PostQuoteConsentStatus.APPROVED,
+      proof: { kind: 'LEGACY_QUOTE_URL' },
     };
   }
 
@@ -363,14 +363,14 @@ const classifyAuthorization = async ({
     return {
       approvalUri: authorizationId?.href ?? null,
       retryable: authorizationId !== null,
-      status: ActivityPubQuoteStatus.PENDING,
+      status: PostQuoteConsentStatus.PENDING,
     };
   }
   if (!authorization.id || !source.actorUri || !isHttpUri(new URL(source.actorUri))) {
     return {
       approvalUri: authorization.id?.href ?? null,
       retryable: false,
-      status: ActivityPubQuoteStatus.INVALID,
+      status: PostQuoteConsentStatus.PENDING,
     };
   }
 
@@ -382,158 +382,147 @@ const classifyAuthorization = async ({
   });
   return verification.verified
     ? {
+        proof: {
+          kind: 'AUTHORIZATION',
+          approvalUri: verification.authorizationId.href,
+          issuerActorUri: source.actorUri,
+        },
         approvalUri: verification.authorizationId.href,
         retryable: false,
-        status: ActivityPubQuoteStatus.APPROVED,
+        status: PostQuoteConsentStatus.APPROVED,
       }
     : verification.failure.category === 'unverifiable'
       ? {
           approvalUri: authorization.id.href,
           retryable: true,
-          status: ActivityPubQuoteStatus.PENDING,
+          status: PostQuoteConsentStatus.PENDING,
         }
       : {
           approvalUri: authorization.id.href,
           retryable: false,
-          status: ActivityPubQuoteStatus.INVALID,
+          status: PostQuoteConsentStatus.PENDING,
         };
 };
+
+const loadQuoteExpectation = async (postId: string, tx: typeof db | Transaction = db) =>
+  tx
+    .select({
+      expectedStatus: Posts.quoteConsentStatus,
+      expectedApprovalUri: Posts.quoteConsentApprovalUri,
+      expectedRepostSourceId: Posts.repostSourceId,
+    })
+    .from(Posts)
+    .where(eq(Posts.id, postId))
+    .limit(1)
+    .then(first);
+
+const expectationCondition = (postId: string, expectation: QuoteExpectation) =>
+  and(
+    eq(Posts.id, postId),
+    eq(Posts.state, PostState.ACTIVE),
+    expectation.expectedStatus === null
+      ? isNull(Posts.quoteConsentStatus)
+      : eq(Posts.quoteConsentStatus, expectation.expectedStatus),
+    expectation.expectedApprovalUri === null
+      ? isNull(Posts.quoteConsentApprovalUri)
+      : eq(Posts.quoteConsentApprovalUri, expectation.expectedApprovalUri),
+    expectation.expectedRepostSourceId === null
+      ? isNull(Posts.repostSourceId)
+      : eq(Posts.repostSourceId, expectation.expectedRepostSourceId),
+  );
+
+const matchesQuoteExpectation = async (postId: string, expectation: QuoteExpectation) =>
+  (
+    await db
+      .select({ id: Posts.id })
+      .from(Posts)
+      .where(expectationCondition(postId, expectation))
+      .limit(1)
+  ).length > 0;
 
 const persistQuoteResolution = async (
   resolution: QuoteResolution,
   postId: string,
-  expectedRevision?: number,
-  authorizationUpdate = false,
-): Promise<{ applied: boolean; row: typeof ActivityPubPostQuotes.$inferSelect }> => {
-  for (;;) {
-    const result = await db.transaction(async (tx) => {
-      const current = await tx
-        .select()
-        .from(ActivityPubPostQuotes)
-        .where(eq(ActivityPubPostQuotes.postId, postId))
-        .limit(1)
-        .then(first);
-
-      // Embedded Updates can only change authorization on the existing Quote identity.
+  expectation: QuoteExpectation,
+  quote: QuoteSource,
+  source: QuoteSource | null,
+): Promise<{ applied: boolean; expectation: QuoteExpectation }> => {
+  const next = await db.transaction(async (tx) => {
+    if (resolution.sourcePostId === null) {
+      // There is no Source identity for the shared RESOLVE yet. Only initialize
+      // pending consent; never erase a verified rejection/revocation or relation.
       if (
-        authorizationUpdate &&
-        (!current ||
-          current.targetUri !== resolution.targetUri ||
-          current.format !== resolution.format)
+        expectation.expectedRepostSourceId !== null ||
+        expectation.expectedStatus === PostQuoteConsentStatus.REVOKED ||
+        expectation.expectedStatus === PostQuoteConsentStatus.REJECTED
       ) {
-        return current ? { applied: false, row: current } : null;
+        return false;
       }
-
-      if (
-        expectedRevision !== undefined &&
-        (!current ||
-          current.resolutionRevision !== expectedRevision ||
-          current.status !== ActivityPubQuoteStatus.PENDING)
-      ) {
-        return current ? { applied: false, row: current } : null;
-      }
-
-      if (
-        current &&
-        current.targetUri === resolution.targetUri &&
-        current.format === resolution.format &&
-        current.status === resolution.status &&
-        current.approvalUri === resolution.approvalUri
-      ) {
-        return { applied: true, row: current };
-      }
-
-      if (
-        current?.status === ActivityPubQuoteStatus.REVOKED &&
-        resolution.status === ActivityPubQuoteStatus.APPROVED &&
-        current.targetUri === resolution.targetUri &&
-        current.approvalUri === resolution.approvalUri
-      ) {
-        return { applied: false, row: current };
-      }
-
-      const nextRevision = expectedRevision ?? (current?.resolutionRevision ?? 0) + 1;
-      const next = current
-        ? await tx
-            .update(ActivityPubPostQuotes)
-            .set({
-              approvalUri: resolution.approvalUri,
-              format: resolution.format,
-              resolutionRevision: nextRevision,
-              status: resolution.status,
-              targetUri: resolution.targetUri,
-              updatedAt: Temporal.Now.instant(),
-            })
-            .where(
-              expectedRevision === undefined
-                ? and(
-                    eq(ActivityPubPostQuotes.postId, postId),
-                    eq(ActivityPubPostQuotes.resolutionRevision, current.resolutionRevision),
-                  )
-                : and(
-                    eq(ActivityPubPostQuotes.postId, postId),
-                    eq(ActivityPubPostQuotes.resolutionRevision, expectedRevision),
-                    eq(ActivityPubPostQuotes.status, ActivityPubQuoteStatus.PENDING),
-                  ),
-            )
-            .returning()
-            .then(first)
-        : await tx
-            .insert(ActivityPubPostQuotes)
-            .values({
-              approvalUri: resolution.approvalUri,
-              format: resolution.format,
-              postId,
-              resolutionRevision: nextRevision,
-              status: resolution.status,
-              targetUri: resolution.targetUri,
-            })
-            .onConflictDoNothing()
-            .returning()
-            .then(first);
-
-      if (next) {
-        if (resolution.sourcePostId === postId) {
-          throw new Error('Quote Source cannot reference the Quote Post itself');
-        }
-        if (resolution.sourcePostId !== null) {
-          await tx
-            .update(Posts)
-            .set({ repostSourceId: resolution.sourcePostId })
-            .where(eq(Posts.id, postId));
-        }
-        return { applied: true, row: next };
-      }
-
-      const raced = await tx
-        .select()
-        .from(ActivityPubPostQuotes)
-        .where(eq(ActivityPubPostQuotes.postId, postId))
-        .limit(1)
-        .then(first);
-      if (!raced) {
-        throw new Error('Quote resolution row disappeared after concurrent insert');
-      }
-      return { applied: false, raced: true as const, row: raced };
+      const rows = await tx
+        .update(Posts)
+        .set({
+          quoteConsentStatus: PostQuoteConsentStatus.PENDING,
+          quoteConsentApprovalUri: resolution.approvalUri,
+        })
+        .where(
+          and(
+            expectationCondition(postId, expectation),
+            eq(Posts.profileId, quote.profileId),
+            quote.currentContentId === null
+              ? isNull(Posts.currentContentId)
+              : eq(Posts.currentContentId, quote.currentContentId),
+            sql`EXISTS (SELECT 1 FROM activitypub_post ap INNER JOIN activitypub_actor actor ON actor.profile_id = ${quote.profileId} WHERE ap.post_id = ${postId} AND ap.uri = ${quote.uri} AND actor.uri = ${quote.actorUri})`,
+          ),
+        )
+        .returning({ id: Posts.id });
+      return rows.length > 0
+        ? {
+            ...expectation,
+            expectedStatus: PostQuoteConsentStatus.PENDING,
+            expectedApprovalUri: resolution.approvalUri,
+          }
+        : null;
+    }
+    if (!quote?.actorUri || !source?.actorUri) {
+      return false;
+    }
+    const identity = (post: QuoteSource) => ({
+      postId: post.postId,
+      profileId: post.profileId,
+      uri: post.uri,
+      authorActorUri: post.actorUri!,
     });
-    if (!result) {
-      throw new Error('Quote resolution row disappeared');
-    }
-    if ('raced' in result && expectedRevision === undefined) {
-      continue;
-    }
-    return { applied: result.applied, row: result.row };
-  }
+    const input: ApplyPostQuoteConsentInput = {
+      ...expectation,
+      quote: identity(quote),
+      source: identity(source),
+      operation: 'RESOLVE',
+      quoteAuthorActorUri: quote.actorUri,
+      ...(resolution.status === PostQuoteConsentStatus.APPROVED && resolution.proof
+        ? { result: 'APPROVED', proof: resolution.proof }
+        : { result: 'PENDING', approvalUri: resolution.approvalUri }),
+    };
+    const result = await applyPostQuoteConsent(input, tx);
+    return result
+      ? {
+          expectedStatus: result.status,
+          expectedApprovalUri: result.approvalUri,
+          expectedRepostSourceId: result.repostSourceId,
+        }
+      : null;
+  });
+  return { applied: !!next, expectation: next || expectation };
 };
 
-const startQuoteResolutionWorkflow = async (postId: string, revision: number): Promise<void> => {
+const startQuoteResolutionWorkflow = async (input: InboundQuoteRetryInput): Promise<void> => {
   await temporalClient.withDeadline(Date.now() + 5_000, () =>
-    temporalClient.workflow.start('activitypubQuoteResolutionWorkflow', {
-      args: [{ postId, revision }],
+    temporalClient.workflow.signalWithStart('activitypubQuoteResolutionWorkflow', {
+      signal: 'resolveQuote',
+      signalArgs: [input],
+      args: [input],
       taskQueue: KOSMO_TASK_QUEUE,
-      workflowId: `activitypub-quote-resolution:${postId}:${revision}`,
-      workflowIdConflictPolicy: 'USE_EXISTING',
-      workflowIdReusePolicy: 'REJECT_DUPLICATE',
+      workflowId: `activitypub-quote-resolution:${input.postId}`,
+      workflowIdReusePolicy: 'ALLOW_DUPLICATE',
     }),
   );
 };
@@ -545,41 +534,48 @@ export const handleInboundQuote = async ({
   postId,
   receivedAt,
   startWorkflow = true,
-  expectedRevision,
+  expectation,
   authorizationUpdate = false,
 }: InboundQuoteInput): Promise<InboundQuoteResolution> => {
+  const quote = await loadQuoteSource(postId);
+  if (!quote || quote.uri !== note.id?.href || quote.actorUri !== actorUri) {
+    return { retryable: false, status: null };
+  }
   let extraction = await extractQuote(context, note);
   if (!extraction) {
     return { retryable: false, status: null };
   }
 
-  const current = await db
-    .select()
-    .from(ActivityPubPostQuotes)
-    .where(eq(ActivityPubPostQuotes.postId, postId))
-    .limit(1)
-    .then(first);
-  if (
-    authorizationUpdate &&
-    (!current ||
-      extraction.malformed ||
-      current.targetUri !== extraction.targetUri ||
-      current.format !== extraction.format)
-  ) {
-    return { retryable: false, status: current?.status ?? null };
+  const current = await loadQuoteExpectation(postId);
+  if (!current) {
+    return { retryable: false, status: null };
   }
-
-  if (
-    current &&
-    current.targetUri === extraction.targetUri &&
-    current.format === extraction.format &&
-    current.approvalUri === (extraction.authorizationId?.href ?? null) &&
-    (current.status === ActivityPubQuoteStatus.INVALID ||
-      (!extraction.malformed &&
-        (current.status === ActivityPubQuoteStatus.APPROVED ||
-          current.status === ActivityPubQuoteStatus.REVOKED)))
-  ) {
-    return { retryable: false, status: current.status };
+  expectation ??= current;
+  if (!(await matchesQuoteExpectation(postId, expectation))) {
+    return { retryable: false, status: current.expectedStatus };
+  }
+  if (authorizationUpdate) {
+    if (current.expectedStatus === null || extraction.malformed) {
+      return { retryable: false, status: current.expectedStatus };
+    }
+    // An authorization Update cannot reinterpret an existing FEP Quote as legacy.
+    // Legacy Updates have no consent change to apply.
+    if (!extraction.fepPropertyPresent) {
+      return { retryable: false, status: current.expectedStatus };
+    }
+    if (current.expectedRepostSourceId !== null) {
+      const source = await loadQuoteSource(current.expectedRepostSourceId);
+      if (source?.uri !== extraction.targetUri) {
+        return { retryable: false, status: current.expectedStatus };
+      }
+    } else {
+      const original = await temporalClient.workflow
+        .getHandle(`activitypub-quote-resolution:${postId}`)
+        .query<InboundQuoteRetryInput>('inboundQuoteInput');
+      if (original.targetUri !== extraction.targetUri || original.format !== extraction.format) {
+        return { retryable: false, status: current.expectedStatus };
+      }
+    }
   }
 
   extraction = await hydrateFepReferences(context, note, extraction);
@@ -594,7 +590,7 @@ export const handleInboundQuote = async ({
       ? { kind: 'found', postId: existingSourcePostId }
       : await materializeTarget({
           context,
-          expectedRevision,
+          expectation,
           extraction,
           postId,
           receivedAt,
@@ -602,13 +598,10 @@ export const handleInboundQuote = async ({
   }
 
   if (targetResolution.kind === 'stale') {
-    const current = await db
-      .select({ status: ActivityPubPostQuotes.status })
-      .from(ActivityPubPostQuotes)
-      .where(eq(ActivityPubPostQuotes.postId, postId))
-      .limit(1)
-      .then(first);
-    return { retryable: false, status: current?.status ?? null };
+    return {
+      retryable: false,
+      status: (await loadQuoteExpectation(postId))?.expectedStatus ?? null,
+    };
   }
   const sourcePostId = targetResolution.kind === 'found' ? targetResolution.postId : undefined;
   const source = sourcePostId ? await loadQuoteSource(sourcePostId) : null;
@@ -618,7 +611,7 @@ export const handleInboundQuote = async ({
       approvalUri: extraction.authorizationId?.href ?? null,
       format: extraction.format,
       sourcePostId: null,
-      status: ActivityPubQuoteStatus.INVALID,
+      status: PostQuoteConsentStatus.PENDING,
       targetUri: extraction.targetUri,
       retryable: false,
     };
@@ -627,7 +620,7 @@ export const handleInboundQuote = async ({
       approvalUri: extraction.authorizationId?.href ?? null,
       format: extraction.format,
       sourcePostId: null,
-      status: ActivityPubQuoteStatus.INVALID,
+      status: PostQuoteConsentStatus.PENDING,
       targetUri: extraction.targetUri,
       retryable: false,
     };
@@ -637,7 +630,7 @@ export const handleInboundQuote = async ({
       approvalUri: extraction.authorizationId?.href ?? null,
       format: extraction.format,
       sourcePostId: null,
-      status: transient ? ActivityPubQuoteStatus.PENDING : ActivityPubQuoteStatus.INVALID,
+      status: transient ? PostQuoteConsentStatus.PENDING : PostQuoteConsentStatus.PENDING,
       targetUri: extraction.targetUri,
       retryable: transient,
     };
@@ -652,6 +645,7 @@ export const handleInboundQuote = async ({
       source,
     });
     resolution = {
+      proof: authorization.proof,
       approvalUri: authorization.approvalUri,
       format: extraction.format,
       sourcePostId: source.postId,
@@ -661,143 +655,151 @@ export const handleInboundQuote = async ({
     };
   }
 
-  const stored = await persistQuoteResolution(
-    resolution,
-    postId,
-    expectedRevision,
-    authorizationUpdate,
-  );
+  const stored = await persistQuoteResolution(resolution, postId, expectation, quote, source);
   if (!stored.applied) {
-    return { retryable: false, status: stored.row.status };
+    return { retryable: false, status: stored.expectation.expectedStatus };
   }
   if (
     startWorkflow &&
-    stored.row.status === ActivityPubQuoteStatus.PENDING &&
-    resolution.retryable
+    stored.expectation.expectedStatus === PostQuoteConsentStatus.PENDING &&
+    !extraction.malformed
   ) {
-    await startQuoteResolutionWorkflow(postId, stored.row.resolutionRevision);
+    await startQuoteResolutionWorkflow({
+      postId,
+      targetUri: extraction.targetUri,
+      format: extraction.format,
+      approvalUri: resolution.approvalUri,
+      ...stored.expectation,
+    });
   }
-  return { retryable: resolution.retryable, status: stored.row.status };
+  return {
+    retryable: resolution.retryable,
+    status: stored.expectation.expectedStatus,
+    ...(resolution.retryable
+      ? {
+          retryInput: {
+            postId,
+            targetUri: extraction.targetUri,
+            format: extraction.format,
+            approvalUri: resolution.approvalUri,
+            ...stored.expectation,
+          },
+        }
+      : {}),
+  };
 };
 
 export const resolveStoredInboundQuote = async ({
   context,
-  postId,
   receivedAt,
-  revision,
-}: {
+  ...input
+}: InboundQuoteRetryInput & {
   context: QuoteContext;
-  postId: string;
   receivedAt: Temporal.Instant;
-  revision: number;
 }): Promise<InboundQuoteResolution> => {
-  const row = await db
-    .select({
-      actorUri: ActivityPubActors.uri,
-      approvalUri: ActivityPubPostQuotes.approvalUri,
-      format: ActivityPubPostQuotes.format,
-      postUri: ActivityPubPosts.uri,
-      resolutionRevision: ActivityPubPostQuotes.resolutionRevision,
-      status: ActivityPubPostQuotes.status,
-      targetUri: ActivityPubPostQuotes.targetUri,
-    })
-    .from(ActivityPubPostQuotes)
-    .innerJoin(ActivityPubPosts, eq(ActivityPubPosts.postId, ActivityPubPostQuotes.postId))
-    .innerJoin(Posts, eq(Posts.id, ActivityPubPostQuotes.postId))
-    .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
-    .innerJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Profiles.id))
-    .where(eq(ActivityPubPostQuotes.postId, postId))
-    .limit(1)
-    .then(first);
-
-  if (
-    !row ||
-    row.resolutionRevision !== revision ||
-    row.status !== ActivityPubQuoteStatus.PENDING ||
-    row.actorUri === null
-  ) {
-    return { retryable: false, status: row?.status ?? null };
+  const quote = await loadQuoteSource(input.postId);
+  if (!quote?.actorUri || !(await matchesQuoteExpectation(input.postId, input))) {
+    return {
+      retryable: false,
+      status: (await loadQuoteExpectation(input.postId))?.expectedStatus ?? null,
+    };
   }
-
   const note = new Note({
-    attribution: new URL(row.actorUri),
-    id: new URL(row.postUri),
-    ...(row.format === ActivityPubQuoteFormat.FEP_044F
+    attribution: new URL(quote.actorUri),
+    id: new URL(quote.uri),
+    ...(input.format === ActivityPubQuoteFormat.FEP_044F
       ? {
-          quote: new URL(row.targetUri),
-          ...(row.approvalUri ? { quoteAuthorization: new URL(row.approvalUri) } : {}),
+          quote: new URL(input.targetUri),
+          ...(input.approvalUri ? { quoteAuthorization: new URL(input.approvalUri) } : {}),
         }
-      : { quoteUrl: new URL(row.targetUri) }),
+      : { quoteUrl: new URL(input.targetUri) }),
   });
   return handleInboundQuote({
-    actorUri: row.actorUri,
+    actorUri: quote.actorUri,
     context,
     note,
-    postId,
+    postId: input.postId,
     receivedAt,
     startWorkflow: false,
-    expectedRevision: revision,
+    expectation: input,
   });
 };
 
 export const revokeInboundQuote = async ({
   actorUri,
   authorizationUri,
+  context,
 }: {
   actorUri: string;
   authorizationUri: string;
+  context: QuoteContext;
 }): Promise<boolean> => {
-  const target = await db
-    .select({
-      postId: ActivityPubPostQuotes.postId,
-      sourceActorUri: QuoteTargetActors.uri,
-    })
-    .from(ActivityPubPostQuotes)
-    .innerJoin(Posts, eq(Posts.id, ActivityPubPostQuotes.postId))
-    .innerJoin(
-      QuoteTargetActivityPubPosts,
-      eq(QuoteTargetActivityPubPosts.uri, ActivityPubPostQuotes.targetUri),
-    )
-    .innerJoin(QuoteTargetPosts, eq(QuoteTargetPosts.id, QuoteTargetActivityPubPosts.postId))
-    .innerJoin(QuoteTargetProfiles, eq(QuoteTargetProfiles.id, QuoteTargetPosts.profileId))
-    .innerJoin(QuoteTargetActors, eq(QuoteTargetActors.profileId, QuoteTargetProfiles.id))
-    .where(eq(ActivityPubPostQuotes.approvalUri, authorizationUri))
-    .limit(1)
-    .then(first);
-
-  if (!target || target.sourceActorUri !== actorUri) {
-    return false;
+  const targets = await db
+    .select({ postId: Posts.id })
+    .from(Posts)
+    .where(eq(Posts.quoteConsentApprovalUri, authorizationUri));
+  let handled = false;
+  for (const target of targets) {
+    const expectation = await loadQuoteExpectation(target.postId);
+    if (!expectation?.expectedRepostSourceId) {
+      continue;
+    }
+    const quote = await loadQuoteSource(target.postId);
+    const source = await loadQuoteSource(expectation.expectedRepostSourceId);
+    if (!quote?.actorUri || !source || source.actorUri !== actorUri) {
+      continue;
+    }
+    handled = true;
+    if (expectation.expectedStatus === PostQuoteConsentStatus.REVOKED) {
+      continue;
+    }
+    // A signed Delete alone does not order reused Authorization URIs. Reconcile
+    // against the issuer's current object before changing the captured snapshot.
+    const verification = await quoteInteraction.verifyAuthorization(context as Context<void>, {
+      attributedTo: new URL(actorUri),
+      authorization: new URL(authorizationUri),
+      interactionTarget: new URL(source.uri),
+      interactingObject: new URL(quote.uri),
+    });
+    if (!verification.verified && verification.failure.category === 'unverifiable') {
+      const failure = verification.failure;
+      const cause = 'cause' in failure ? failure.cause : undefined;
+      const absent =
+        failure.type === 'notDereferenceable' &&
+        failure.url.href === authorizationUri &&
+        cause instanceof Error &&
+        'response' in cause &&
+        cause.response instanceof Response &&
+        (cause.response.status === 404 || cause.response.status === 410);
+      if (!absent) {
+        throw new Error(
+          'Current Quote Authorization could not be verified; retry revocation reconciliation',
+        );
+      }
+    }
+    const identity = (post: QuoteSource) => ({
+      postId: post.postId,
+      profileId: post.profileId,
+      uri: post.uri,
+      authorActorUri: post.actorUri!,
+    });
+    await applyPostQuoteConsent({
+      ...expectation,
+      quote: identity(quote),
+      source: identity(source),
+      ...(verification.verified
+        ? {
+            operation: 'RESOLVE',
+            result: 'APPROVED',
+            quoteAuthorActorUri: quote.actorUri,
+            proof: {
+              kind: 'AUTHORIZATION',
+              approvalUri: verification.authorizationId.href,
+              issuerActorUri: actorUri,
+            },
+          }
+        : { operation: 'REVOKE', approvalUri: authorizationUri, issuerActorUri: actorUri }),
+    });
   }
-
-  await db.transaction(async (tx) => {
-    const current = await tx
-      .select()
-      .from(ActivityPubPostQuotes)
-      .where(eq(ActivityPubPostQuotes.postId, target.postId))
-      .limit(1)
-      .then(first);
-    if (!current || current.status === ActivityPubQuoteStatus.REVOKED) {
-      return;
-    }
-    const revoked = await tx
-      .update(ActivityPubPostQuotes)
-      .set({
-        resolutionRevision: current.resolutionRevision + 1,
-        status: ActivityPubQuoteStatus.REVOKED,
-        updatedAt: Temporal.Now.instant(),
-      })
-      .where(
-        and(
-          eq(ActivityPubPostQuotes.postId, target.postId),
-          eq(ActivityPubPostQuotes.resolutionRevision, current.resolutionRevision),
-          eq(ActivityPubPostQuotes.approvalUri, authorizationUri),
-        ),
-      )
-      .returning({ postId: ActivityPubPostQuotes.postId })
-      .then(first);
-    if (!revoked) {
-      return;
-    }
-  });
-  return true;
+  return handled;
 };

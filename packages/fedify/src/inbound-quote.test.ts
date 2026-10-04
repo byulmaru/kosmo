@@ -18,9 +18,9 @@ import {
 import { getDocumentLoader } from '@fedify/vocab-runtime';
 import {
   ActivityPubActorType,
-  ActivityPubQuoteStatus,
   InstanceKind,
   InstanceState,
+  PostQuoteConsentStatus,
   PostVisibility,
   ProfileFollowPolicy,
   ProfileState,
@@ -46,7 +46,6 @@ const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhos
 const receivedAt = Temporal.Instant.from('2026-09-11T00:00:00Z');
 
 let ActivityPubActors: typeof CoreDb.ActivityPubActors;
-let ActivityPubPostQuotes: typeof CoreDb.ActivityPubPostQuotes;
 let ActivityPubPosts: typeof CoreDb.ActivityPubPosts;
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
@@ -70,7 +69,6 @@ before(async () => {
   process.env.PUBLIC_ORIGIN = publicOrigin;
   ({
     ActivityPubActors,
-    ActivityPubPostQuotes,
     ActivityPubPosts,
     db,
     firstOrThrow,
@@ -93,7 +91,20 @@ before(async () => {
 
 beforeEach(async () => {
   mock.restoreAll();
-  await db.delete(ActivityPubPostQuotes);
+  const inputs = new Map<string, unknown>();
+  mock.method(
+    temporalClient.workflow,
+    'signalWithStart',
+    async (_name: string, options: { workflowId: string; args?: readonly unknown[] }) => {
+      inputs.set(options.workflowId, options.args?.[0]);
+      return {} as never;
+    },
+  );
+  mock.method(
+    temporalClient.workflow,
+    'getHandle',
+    (workflowId: string) => ({ query: async () => inputs.get(workflowId) }) as never,
+  );
   await db.update(Posts).set({ currentContentId: null, repostSourceId: null });
   await db.delete(PostContents);
   await db.delete(Posts);
@@ -102,7 +113,6 @@ beforeEach(async () => {
 });
 
 after(async () => {
-  await db.delete(ActivityPubPostQuotes);
   await db.update(Posts).set({ currentContentId: null, repostSourceId: null });
   await db.delete(PostContents);
   await db.delete(Posts);
@@ -207,7 +217,11 @@ test('configured factory preserves signed Block and Move listeners and pre-dispa
     captureException: () => assert.fail('expected protocol rejection must not be captured'),
     log: (observation) => observations.push(observation),
   });
-  const start = mock.method(temporalClient.workflow, 'start', async () => undefined as never);
+  const start = mock.method(
+    temporalClient.workflow,
+    'signalWithStart',
+    async () => undefined as never,
+  );
   try {
     for (const path of [`/ap/actor/${profile.id}/inbox`, '/inbox']) {
       for (const activity of [
@@ -301,9 +315,14 @@ test('FEP-044f authorization approves one materialized Source without changing N
   });
 
   const storedQuote = await db
-    .select()
-    .from(ActivityPubPostQuotes)
-    .where(eq(ActivityPubPostQuotes.postId, quote.post.id))
+    .select({
+      status: Posts.quoteConsentStatus,
+      approvalUri: Posts.quoteConsentApprovalUri,
+      postId: Posts.id,
+      sourcePostId: Posts.repostSourceId,
+    })
+    .from(Posts)
+    .where(eq(Posts.id, quote.post.id))
     .then(firstOrThrow);
   const storedPost = await db
     .select()
@@ -311,8 +330,7 @@ test('FEP-044f authorization approves one materialized Source without changing N
     .where(eq(Posts.id, quote.post.id))
     .then(firstOrThrow);
 
-  assert.equal(storedQuote.targetUri, 'https://source.example/notes/1');
-  assert.equal(storedQuote.status, ActivityPubQuoteStatus.APPROVED);
+  assert.equal(storedQuote.status, PostQuoteConsentStatus.APPROVED);
   assert.equal(storedQuote.approvalUri, 'https://source.example/authorizations/1');
   assert.equal(storedPost.repostSourceId, source.post.id);
   assert.equal(quoteUri.href, 'https://quote.example/notes/2');
@@ -348,13 +366,18 @@ test('Create listener materializes the Quote body first and then records its res
     .where(eq(Posts.id, quoteMapping.postId))
     .then(firstOrThrow);
   const quoteState = await db
-    .select()
-    .from(ActivityPubPostQuotes)
-    .where(eq(ActivityPubPostQuotes.postId, quoteMapping.postId))
+    .select({
+      status: Posts.quoteConsentStatus,
+      approvalUri: Posts.quoteConsentApprovalUri,
+      postId: Posts.id,
+      sourcePostId: Posts.repostSourceId,
+    })
+    .from(Posts)
+    .where(eq(Posts.id, quoteMapping.postId))
     .then(firstOrThrow);
 
   assert.equal(quotePost.repostSourceId, source.post.id);
-  assert.equal(quoteState.status, ActivityPubQuoteStatus.PENDING);
+  assert.equal(quoteState.status, PostQuoteConsentStatus.PENDING);
 });
 
 test('a remote Quote without authorization remains pending and keeps its body visible', async () => {
@@ -383,9 +406,14 @@ test('a remote Quote without authorization remains pending and keeps its body vi
   });
 
   const storedQuote = await db
-    .select()
-    .from(ActivityPubPostQuotes)
-    .where(eq(ActivityPubPostQuotes.postId, quote.post.id))
+    .select({
+      status: Posts.quoteConsentStatus,
+      approvalUri: Posts.quoteConsentApprovalUri,
+      postId: Posts.id,
+      sourcePostId: Posts.repostSourceId,
+    })
+    .from(Posts)
+    .where(eq(Posts.id, quote.post.id))
     .then(firstOrThrow);
   const storedPost = await db
     .select()
@@ -393,7 +421,7 @@ test('a remote Quote without authorization remains pending and keeps its body vi
     .where(eq(Posts.id, quote.post.id))
     .then(firstOrThrow);
 
-  assert.equal(storedQuote.status, ActivityPubQuoteStatus.PENDING);
+  assert.equal(storedQuote.status, PostQuoteConsentStatus.PENDING);
   assert.equal(storedPost.repostSourceId, source.post.id);
   assert.ok(storedPost.currentContentId);
 });
@@ -431,13 +459,18 @@ test('an embedded public target uses the existing remote Note materializer befor
     .where(eq(ActivityPubPosts.uri, targetUri.href))
     .then(firstOrThrow);
   const storedQuote = await db
-    .select()
-    .from(ActivityPubPostQuotes)
-    .where(eq(ActivityPubPostQuotes.postId, quote.post.id))
+    .select({
+      status: Posts.quoteConsentStatus,
+      approvalUri: Posts.quoteConsentApprovalUri,
+      postId: Posts.id,
+      sourcePostId: Posts.repostSourceId,
+    })
+    .from(Posts)
+    .where(eq(Posts.id, quote.post.id))
     .then(firstOrThrow);
 
   assert.ok(materialized.id);
-  assert.equal(storedQuote.status, ActivityPubQuoteStatus.PENDING);
+  assert.equal(storedQuote.status, PostQuoteConsentStatus.PENDING);
 });
 
 test('a URL-only public target is hydrated through Fedify before resolution', async () => {
@@ -475,13 +508,18 @@ test('a URL-only public target is hydrated through Fedify before resolution', as
     .where(eq(ActivityPubPosts.uri, targetUri.href))
     .then(firstOrThrow);
   const storedQuote = await db
-    .select()
-    .from(ActivityPubPostQuotes)
-    .where(eq(ActivityPubPostQuotes.postId, quote.post.id))
+    .select({
+      status: Posts.quoteConsentStatus,
+      approvalUri: Posts.quoteConsentApprovalUri,
+      postId: Posts.id,
+      sourcePostId: Posts.repostSourceId,
+    })
+    .from(Posts)
+    .where(eq(Posts.id, quote.post.id))
     .then(firstOrThrow);
 
   assert.ok(materialized.id);
-  assert.equal(storedQuote.status, ActivityPubQuoteStatus.PENDING);
+  assert.equal(storedQuote.status, PostQuoteConsentStatus.PENDING);
   assert.ok(
     (await db.select().from(Posts).where(eq(Posts.id, materialized.id)).then(firstOrThrow))
       .currentContentId,
@@ -518,13 +556,17 @@ test('유효한 FEP Quote는 서로 다른 legacy URL보다 우선한다', async
   });
 
   const storedQuote = await db
-    .select()
-    .from(ActivityPubPostQuotes)
-    .where(eq(ActivityPubPostQuotes.postId, quote.post.id))
+    .select({
+      status: Posts.quoteConsentStatus,
+      approvalUri: Posts.quoteConsentApprovalUri,
+      postId: Posts.id,
+      sourcePostId: Posts.repostSourceId,
+    })
+    .from(Posts)
+    .where(eq(Posts.id, quote.post.id))
     .then(firstOrThrow);
 
-  assert.equal(storedQuote.status, ActivityPubQuoteStatus.APPROVED);
-  assert.equal(storedQuote.format, 'FEP_044F');
+  assert.equal(storedQuote.status, PostQuoteConsentStatus.APPROVED);
   assert.equal(
     (await db.select().from(Posts).where(eq(Posts.id, quote.post.id)).then(firstOrThrow))
       .repostSourceId,
@@ -561,7 +603,7 @@ test('legacy Quote는 Source 검증 뒤 승인서 없이 승인된다', async ()
     receivedAt,
   });
 
-  assert.deepEqual(result, { retryable: false, status: ActivityPubQuoteStatus.APPROVED });
+  assert.deepEqual(result, { retryable: false, status: PostQuoteConsentStatus.APPROVED });
   assert.equal(
     (await db.select().from(Posts).where(eq(Posts.id, quote.post.id)).then(firstOrThrow))
       .repostSourceId,
@@ -611,12 +653,17 @@ test('malformed FEP가 있으면 legacy target을 조회하거나 materialize하
   assert.equal(
     (
       await db
-        .select()
-        .from(ActivityPubPostQuotes)
-        .where(eq(ActivityPubPostQuotes.postId, quote.post.id))
+        .select({
+          status: Posts.quoteConsentStatus,
+          approvalUri: Posts.quoteConsentApprovalUri,
+          postId: Posts.id,
+          sourcePostId: Posts.repostSourceId,
+        })
+        .from(Posts)
+        .where(eq(Posts.id, quote.post.id))
         .then(firstOrThrow)
     ).status,
-    ActivityPubQuoteStatus.INVALID,
+    PostQuoteConsentStatus.PENDING,
   );
 });
 
@@ -646,32 +693,34 @@ test('Quote resolution은 자기 Post를 Source로 저장하지 않는다', asyn
   assert.equal(
     (
       await db
-        .select()
-        .from(ActivityPubPostQuotes)
-        .where(eq(ActivityPubPostQuotes.postId, quote.post.id))
+        .select({
+          status: Posts.quoteConsentStatus,
+          approvalUri: Posts.quoteConsentApprovalUri,
+          postId: Posts.id,
+          sourcePostId: Posts.repostSourceId,
+        })
+        .from(Posts)
+        .where(eq(Posts.id, quote.post.id))
         .then(firstOrThrow)
     ).status,
-    ActivityPubQuoteStatus.INVALID,
+    PostQuoteConsentStatus.PENDING,
   );
 });
 
-test('stale Workflow 결과는 concurrent 철회 revision과 Source 관계를 덮어쓰지 않는다', async () => {
+test('stale Workflow 결과는 concurrent 철회 expectation과 Source 관계를 덮어쓰지 않는다', async () => {
   await createRemoteActor('race-source', 'https://source.example/users/race');
   const quoteActor = await createRemoteActor('race-quote', 'https://quote.example/users/race');
   const quote = await createRemotePost(quoteActor.id, 'https://quote.example/notes/race');
   const targetUri = new URL('https://source.example/notes/race');
-  await db.insert(ActivityPubPostQuotes).values({
-    format: 'FEP_044F',
-    postId: quote.post.id,
-    resolutionRevision: 1,
-    status: ActivityPubQuoteStatus.PENDING,
-    targetUri: targetUri.href,
-  });
+  await db
+    .update(Posts)
+    .set({ quoteConsentStatus: PostQuoteConsentStatus.PENDING })
+    .where(eq(Posts.id, quote.post.id));
   const lookupObject = mock.fn(async () => {
     await db
-      .update(ActivityPubPostQuotes)
-      .set({ resolutionRevision: 2, status: ActivityPubQuoteStatus.REVOKED })
-      .where(eq(ActivityPubPostQuotes.postId, quote.post.id));
+      .update(Posts)
+      .set({ quoteConsentStatus: PostQuoteConsentStatus.REVOKED })
+      .where(eq(Posts.id, quote.post.id));
     return new Note({
       attribution: new URL('https://source.example/users/race'),
       content: 'late source',
@@ -684,16 +733,25 @@ test('stale Workflow 결과는 concurrent 철회 revision과 Source 관계를 �
     context: createContext(new Map(), lookupObject),
     postId: quote.post.id,
     receivedAt,
-    revision: 1,
+    targetUri: targetUri.href,
+    format: 'FEP_044F',
+    approvalUri: null,
+    expectedStatus: 'PENDING',
+    expectedApprovalUri: null,
+    expectedRepostSourceId: null,
   });
   const stored = await db
-    .select()
-    .from(ActivityPubPostQuotes)
-    .where(eq(ActivityPubPostQuotes.postId, quote.post.id))
+    .select({
+      status: Posts.quoteConsentStatus,
+      approvalUri: Posts.quoteConsentApprovalUri,
+      postId: Posts.id,
+      sourcePostId: Posts.repostSourceId,
+    })
+    .from(Posts)
+    .where(eq(Posts.id, quote.post.id))
     .then(firstOrThrow);
-  assert.deepEqual(result, { retryable: false, status: ActivityPubQuoteStatus.REVOKED });
-  assert.equal(stored.resolutionRevision, 2);
-  assert.equal(stored.status, ActivityPubQuoteStatus.REVOKED);
+  assert.deepEqual(result, { retryable: false, status: PostQuoteConsentStatus.REVOKED });
+  assert.equal(stored.status, PostQuoteConsentStatus.REVOKED);
   assert.equal(
     (await db.select().from(Posts).where(eq(Posts.id, quote.post.id)).then(firstOrThrow))
       .repostSourceId,
@@ -702,7 +760,7 @@ test('stale Workflow 결과는 concurrent 철회 revision과 Source 관계를 �
   assert.equal(await db.$count(ActivityPubPosts, eq(ActivityPubPosts.uri, targetUri.href)), 0);
 });
 
-test('target lookup의 transient 오류만 retryable PENDING이고 영구 object 오류는 INVALID다', async () => {
+test('target lookup의 transient 오류만 retryable PENDING이고 영구 object 오류는 PENDING다', async () => {
   const quoteActor = await createRemoteActor(
     'failure-quote',
     'https://quote.example/users/failure',
@@ -747,10 +805,12 @@ test('target lookup의 transient 오류만 retryable PENDING이고 영구 object
   const permanentResult = await handleInboundQuote(permanentInput);
   const repeatedPermanentResult = await handleInboundQuote(permanentInput);
 
-  assert.deepEqual(transientResult, { retryable: true, status: ActivityPubQuoteStatus.PENDING });
-  assert.deepEqual(permanentResult, { retryable: false, status: ActivityPubQuoteStatus.INVALID });
+  assert.equal(transientResult.retryable, true);
+  assert.equal(transientResult.status, PostQuoteConsentStatus.PENDING);
+  assert.equal(transientResult.retryInput?.targetUri, 'https://source.example/notes/transient');
+  assert.deepEqual(permanentResult, { retryable: false, status: PostQuoteConsentStatus.PENDING });
   assert.deepEqual(repeatedPermanentResult, permanentResult);
-  assert.equal(permanentLookup.mock.calls.length, 1);
+  assert.equal(permanentLookup.mock.calls.length, 2);
 });
 
 test('Source 작성자 discovery 장애는 transient PENDING으로 분류한다', async () => {
@@ -790,20 +850,25 @@ test('Source 작성자 discovery 장애는 transient PENDING으로 분류한다'
     startWorkflow: false,
   });
 
-  assert.deepEqual(result, { retryable: true, status: ActivityPubQuoteStatus.PENDING });
+  assert.deepEqual(result, { retryable: true, status: PostQuoteConsentStatus.PENDING });
   assert.equal(
     (
       await db
-        .select()
-        .from(ActivityPubPostQuotes)
-        .where(eq(ActivityPubPostQuotes.postId, quote.post.id))
+        .select({
+          status: Posts.quoteConsentStatus,
+          approvalUri: Posts.quoteConsentApprovalUri,
+          postId: Posts.id,
+          sourcePostId: Posts.repostSourceId,
+        })
+        .from(Posts)
+        .where(eq(Posts.id, quote.post.id))
         .then(firstOrThrow)
     ).status,
-    ActivityPubQuoteStatus.PENDING,
+    PostQuoteConsentStatus.PENDING,
   );
 });
 
-test('Workflow start 실패는 caller에 전파되어 동일 revision을 durable delivery가 재시도할 수 있다', async () => {
+test('Workflow start 실패는 caller에 전파되어 동일 expectation을 durable delivery가 재시도할 수 있다', async () => {
   const quoteActor = await createRemoteActor(
     'start-failure',
     'https://quote.example/users/start-failure',
@@ -816,7 +881,7 @@ test('Workflow start 실패는 caller에 전파되어 동일 revision을 durable
     to: PUBLIC_COLLECTION,
   });
   let startAttempts = 0;
-  const start = mock.method(temporalClient.workflow, 'start', async () => {
+  const start = mock.method(temporalClient.workflow, 'signalWithStart', async () => {
     startAttempts += 1;
     if (startAttempts === 1) {
       throw new Error('Temporal unavailable');
@@ -846,15 +911,19 @@ test('Workflow start 실패는 caller에 전파되어 동일 revision을 durable
     receivedAt,
   });
   const stored = await db
-    .select()
-    .from(ActivityPubPostQuotes)
-    .where(eq(ActivityPubPostQuotes.postId, quote.post.id))
+    .select({
+      status: Posts.quoteConsentStatus,
+      approvalUri: Posts.quoteConsentApprovalUri,
+      postId: Posts.id,
+      sourcePostId: Posts.repostSourceId,
+    })
+    .from(Posts)
+    .where(eq(Posts.id, quote.post.id))
     .then(firstOrThrow);
-  assert.equal(stored.status, ActivityPubQuoteStatus.PENDING);
-  assert.equal(stored.resolutionRevision, 1);
+  assert.equal(stored.status, PostQuoteConsentStatus.PENDING);
   assert.equal(start.mock.calls.length, 2);
   for (const call of start.mock.calls) {
-    assert.equal(call.arguments[1]?.workflowId, `activitypub-quote-resolution:${quote.post.id}:1`);
+    assert.equal(call.arguments[1]?.workflowId, `activitypub-quote-resolution:${quote.post.id}`);
   }
 });
 
@@ -894,10 +963,46 @@ test('source-author revocation preserves Source relation and a late approval can
     source.post.id,
   );
 
+  // A delayed Delete cannot revoke an issuer's still-current grant.
+  await revokeInboundQuote({
+    actorUri: 'https://source.example/users/source',
+    authorizationUri: authorization.id!.href,
+    context,
+  });
+  assert.equal(
+    (await db.select().from(Posts).where(eq(Posts.id, quote.post.id)).then(firstOrThrow))
+      .quoteConsentStatus,
+    PostQuoteConsentStatus.APPROVED,
+  );
+  await assert.rejects(
+    revokeInboundQuote({
+      actorUri: 'https://source.example/users/source',
+      authorizationUri: authorization.id!.href,
+      context: {
+        ...(context as Parameters<typeof handleInboundQuote>[0]['context']),
+        documentLoader: async () => {
+          throw new Error('temporary outage');
+        },
+      },
+    }),
+    /retry revocation reconciliation/,
+  );
+  assert.equal(
+    (await db.select().from(Posts).where(eq(Posts.id, quote.post.id)).then(firstOrThrow))
+      .quoteConsentStatus,
+    PostQuoteConsentStatus.APPROVED,
+  );
+
   assert.equal(
     await revokeInboundQuote({
       actorUri: 'https://source.example/users/source',
       authorizationUri: authorization.id!.href,
+      context: {
+        ...(context as Parameters<typeof handleInboundQuote>[0]['context']),
+        documentLoader: async () => {
+          throw Object.assign(new Error('gone'), { response: new Response(null, { status: 410 }) });
+        },
+      },
     }),
     true,
   );
@@ -915,14 +1020,19 @@ test('source-author revocation preserves Source relation and a late approval can
     receivedAt,
   });
   const storedQuote = await db
-    .select()
-    .from(ActivityPubPostQuotes)
-    .where(eq(ActivityPubPostQuotes.postId, quote.post.id))
+    .select({
+      status: Posts.quoteConsentStatus,
+      approvalUri: Posts.quoteConsentApprovalUri,
+      postId: Posts.id,
+      sourcePostId: Posts.repostSourceId,
+    })
+    .from(Posts)
+    .where(eq(Posts.id, quote.post.id))
     .then(firstOrThrow);
-  assert.equal(storedQuote.status, ActivityPubQuoteStatus.REVOKED);
+  assert.equal(storedQuote.status, PostQuoteConsentStatus.APPROVED);
 });
 
-test('Update authorization add/remove와 Delete listener가 revision 및 철회 계약을 지킨다', async () => {
+test('Update authorization add/remove와 Delete listener가 expectation 및 철회 계약을 지킨다', async () => {
   const sourceActor = await createRemoteActor(
     'lifecycle-source',
     'https://source.example/users/lifecycle',
@@ -998,7 +1108,9 @@ test('Update authorization add/remove와 Delete listener가 revision 및 철회 
   const documentLoader = async (url: string) => {
     const document = documents.get(url);
     if (!document) {
-      throw new Error(`unexpected production listener document URL: ${url}`);
+      throw Object.assign(new Error(`missing document: ${url}`), {
+        response: new Response(null, { status: 410 }),
+      });
     }
     return { contextUrl: null, document, documentUrl: url };
   };
@@ -1037,15 +1149,17 @@ test('Update authorization add/remove와 Delete listener가 revision 및 철회 
       quoteKeyUri,
     );
     const unchanged = await db
-      .select()
-      .from(ActivityPubPostQuotes)
-      .where(eq(ActivityPubPostQuotes.postId, quote.post.id))
+      .select({
+        status: Posts.quoteConsentStatus,
+        approvalUri: Posts.quoteConsentApprovalUri,
+        postId: Posts.id,
+        sourcePostId: Posts.repostSourceId,
+      })
+      .from(Posts)
+      .where(eq(Posts.id, quote.post.id))
       .then(firstOrThrow);
-    assert.equal(unchanged.status, ActivityPubQuoteStatus.PENDING);
-    assert.equal(unchanged.format, 'FEP_044F');
-    assert.equal(unchanged.targetUri, base.quoteId!.href);
+    assert.equal(unchanged.status, PostQuoteConsentStatus.PENDING);
     assert.equal(unchanged.approvalUri, null);
-    assert.equal(unchanged.resolutionRevision, 1);
     assert.equal(
       (await db.select().from(Posts).where(eq(Posts.id, quote.post.id)).then(firstOrThrow))
         .repostSourceId,
@@ -1067,12 +1181,16 @@ test('Update authorization add/remove와 Delete listener가 revision 및 철회 
     quoteKeyUri,
   );
   let stored = await db
-    .select()
-    .from(ActivityPubPostQuotes)
-    .where(eq(ActivityPubPostQuotes.postId, quote.post.id))
+    .select({
+      status: Posts.quoteConsentStatus,
+      approvalUri: Posts.quoteConsentApprovalUri,
+      postId: Posts.id,
+      sourcePostId: Posts.repostSourceId,
+    })
+    .from(Posts)
+    .where(eq(Posts.id, quote.post.id))
     .then(firstOrThrow);
-  assert.equal(stored.status, ActivityPubQuoteStatus.APPROVED);
-  assert.equal(stored.resolutionRevision, 2);
+  assert.equal(stored.status, PostQuoteConsentStatus.APPROVED);
 
   await deliver(
     new Update({ actor: quotePerson.id!, object: replacementApproved }),
@@ -1080,13 +1198,17 @@ test('Update authorization add/remove와 Delete listener가 revision 및 철회 
     quoteKeyUri,
   );
   stored = await db
-    .select()
-    .from(ActivityPubPostQuotes)
-    .where(eq(ActivityPubPostQuotes.postId, quote.post.id))
+    .select({
+      status: Posts.quoteConsentStatus,
+      approvalUri: Posts.quoteConsentApprovalUri,
+      postId: Posts.id,
+      sourcePostId: Posts.repostSourceId,
+    })
+    .from(Posts)
+    .where(eq(Posts.id, quote.post.id))
     .then(firstOrThrow);
-  assert.equal(stored.status, ActivityPubQuoteStatus.APPROVED);
+  assert.equal(stored.status, PostQuoteConsentStatus.APPROVED);
   assert.equal(stored.approvalUri, replacementAuthorization.id!.href);
-  assert.equal(stored.resolutionRevision, 3);
 
   await deliver(
     new Update({ actor: quotePerson.id!, object: base }),
@@ -1094,12 +1216,16 @@ test('Update authorization add/remove와 Delete listener가 revision 및 철회 
     quoteKeyUri,
   );
   stored = await db
-    .select()
-    .from(ActivityPubPostQuotes)
-    .where(eq(ActivityPubPostQuotes.postId, quote.post.id))
+    .select({
+      status: Posts.quoteConsentStatus,
+      approvalUri: Posts.quoteConsentApprovalUri,
+      postId: Posts.id,
+      sourcePostId: Posts.repostSourceId,
+    })
+    .from(Posts)
+    .where(eq(Posts.id, quote.post.id))
     .then(firstOrThrow);
-  assert.equal(stored.status, ActivityPubQuoteStatus.PENDING);
-  assert.equal(stored.resolutionRevision, 4);
+  assert.equal(stored.status, PostQuoteConsentStatus.PENDING);
   assert.equal(
     (await db.select().from(Posts).where(eq(Posts.id, quote.post.id)).then(firstOrThrow))
       .repostSourceId,
@@ -1127,24 +1253,34 @@ test('Update authorization add/remove와 Delete listener가 revision 및 철회 
   assert.equal(
     (
       await db
-        .select()
-        .from(ActivityPubPostQuotes)
-        .where(eq(ActivityPubPostQuotes.postId, quote.post.id))
+        .select({
+          status: Posts.quoteConsentStatus,
+          approvalUri: Posts.quoteConsentApprovalUri,
+          postId: Posts.id,
+          sourcePostId: Posts.repostSourceId,
+        })
+        .from(Posts)
+        .where(eq(Posts.id, quote.post.id))
         .then(firstOrThrow)
     ).status,
-    ActivityPubQuoteStatus.APPROVED,
+    PostQuoteConsentStatus.APPROVED,
   );
 
+  documents.delete(authorization.id!.href);
   const deletion = new Delete({ actor: sourcePerson.id!, object: authorization.id! });
   await deliver(deletion, sourceKeyPair.privateKey, sourceKeyUri);
   await deliver(deletion, sourceKeyPair.privateKey, sourceKeyUri);
   stored = await db
-    .select()
-    .from(ActivityPubPostQuotes)
-    .where(eq(ActivityPubPostQuotes.postId, quote.post.id))
+    .select({
+      status: Posts.quoteConsentStatus,
+      approvalUri: Posts.quoteConsentApprovalUri,
+      postId: Posts.id,
+      sourcePostId: Posts.repostSourceId,
+    })
+    .from(Posts)
+    .where(eq(Posts.id, quote.post.id))
     .then(firstOrThrow);
-  assert.equal(stored.status, ActivityPubQuoteStatus.REVOKED);
-  assert.equal(stored.resolutionRevision, 6);
+  assert.equal(stored.status, PostQuoteConsentStatus.REVOKED);
   assert.equal(
     (await db.select().from(Posts).where(eq(Posts.id, quote.post.id)).then(firstOrThrow))
       .repostSourceId,
@@ -1187,11 +1323,16 @@ for (const change of [
       receivedAt,
     });
     const before = await db
-      .select()
-      .from(ActivityPubPostQuotes)
-      .where(eq(ActivityPubPostQuotes.postId, quote.post.id))
+      .select({
+        status: Posts.quoteConsentStatus,
+        approvalUri: Posts.quoteConsentApprovalUri,
+        postId: Posts.id,
+        sourcePostId: Posts.repostSourceId,
+      })
+      .from(Posts)
+      .where(eq(Posts.id, quote.post.id))
       .then(firstOrThrow);
-    assert.equal(before.status, ActivityPubQuoteStatus.PENDING);
+    assert.equal(before.status, PostQuoteConsentStatus.PENDING);
     const aliases = {
       quoteUrl: 'https://www.w3.org/ns/activitystreams#quoteUrl',
       quoteUri: 'http://fedibird.com/ns#quoteUri',
@@ -1232,9 +1373,14 @@ for (const change of [
     await handleInboundUpdate(context, update, receivedAt);
     assert.deepEqual(
       await db
-        .select()
-        .from(ActivityPubPostQuotes)
-        .where(eq(ActivityPubPostQuotes.postId, quote.post.id))
+        .select({
+          status: Posts.quoteConsentStatus,
+          approvalUri: Posts.quoteConsentApprovalUri,
+          postId: Posts.id,
+          sourcePostId: Posts.repostSourceId,
+        })
+        .from(Posts)
+        .where(eq(Posts.id, quote.post.id))
         .then(firstOrThrow),
       before,
     );
@@ -1285,11 +1431,16 @@ test('다른 작성자의 embedded Update는 기존 Quote 승인과 Post를 바�
   });
 
   const beforeQuote = await db
-    .select()
-    .from(ActivityPubPostQuotes)
-    .where(eq(ActivityPubPostQuotes.postId, quote.post.id))
+    .select({
+      status: Posts.quoteConsentStatus,
+      approvalUri: Posts.quoteConsentApprovalUri,
+      postId: Posts.id,
+      sourcePostId: Posts.repostSourceId,
+    })
+    .from(Posts)
+    .where(eq(Posts.id, quote.post.id))
     .then(firstOrThrow);
-  assert.equal(beforeQuote.status, ActivityPubQuoteStatus.APPROVED);
+  assert.equal(beforeQuote.status, PostQuoteConsentStatus.APPROVED);
   const beforePost = await db
     .select()
     .from(Posts)
@@ -1318,9 +1469,14 @@ test('다른 작성자의 embedded Update는 기존 Quote 승인과 Post를 바�
 
   assert.deepEqual(
     await db
-      .select()
-      .from(ActivityPubPostQuotes)
-      .where(eq(ActivityPubPostQuotes.postId, quote.post.id))
+      .select({
+        status: Posts.quoteConsentStatus,
+        approvalUri: Posts.quoteConsentApprovalUri,
+        postId: Posts.id,
+        sourcePostId: Posts.repostSourceId,
+      })
+      .from(Posts)
+      .where(eq(Posts.id, quote.post.id))
       .then(firstOrThrow),
     beforeQuote,
   );
@@ -1358,8 +1514,9 @@ test('Quote metadata가 없는 기존 Post는 embedded Update로 backfill하지 
     receivedAt,
   );
   assert.equal(
-    await db.$count(ActivityPubPostQuotes, eq(ActivityPubPostQuotes.postId, quote.post.id)),
-    0,
+    (await db.select().from(Posts).where(eq(Posts.id, quote.post.id)).then(firstOrThrow))
+      .quoteConsentStatus,
+    null,
   );
   assert.equal(
     (await db.select().from(Posts).where(eq(Posts.id, quote.post.id)).then(firstOrThrow))
@@ -1402,9 +1559,14 @@ test('IRI-only 및 authorization-only Update는 Quote 상태를 변경하지 않
     receivedAt,
   });
   const before = await db
-    .select()
-    .from(ActivityPubPostQuotes)
-    .where(eq(ActivityPubPostQuotes.postId, quote.post.id))
+    .select({
+      status: Posts.quoteConsentStatus,
+      approvalUri: Posts.quoteConsentApprovalUri,
+      postId: Posts.id,
+      sourcePostId: Posts.repostSourceId,
+    })
+    .from(Posts)
+    .where(eq(Posts.id, quote.post.id))
     .then(firstOrThrow);
 
   await handleInboundUpdate(
@@ -1425,14 +1587,19 @@ test('IRI-only 및 authorization-only Update는 Quote 상태를 변경하지 않
   );
 
   const after = await db
-    .select()
-    .from(ActivityPubPostQuotes)
-    .where(eq(ActivityPubPostQuotes.postId, quote.post.id))
+    .select({
+      status: Posts.quoteConsentStatus,
+      approvalUri: Posts.quoteConsentApprovalUri,
+      postId: Posts.id,
+      sourcePostId: Posts.repostSourceId,
+    })
+    .from(Posts)
+    .where(eq(Posts.id, quote.post.id))
     .then(firstOrThrow);
   assert.deepEqual(after, before);
 });
 
-test('self-quote와 legacy Update는 승인 참조 revision만 바꾸고 APPROVED를 유지한다', async () => {
+test('self-quote와 legacy Update는 승인 참조 expectation만 바꾸고 APPROVED를 유지한다', async () => {
   const selfActor = await createRemoteActor(
     'update-self',
     'https://quote.example/users/update-self',
@@ -1466,9 +1633,14 @@ test('self-quote와 legacy Update는 승인 참조 revision만 바꾸고 APPROVE
     receivedAt,
   });
   const selfBefore = await db
-    .select()
-    .from(ActivityPubPostQuotes)
-    .where(eq(ActivityPubPostQuotes.postId, selfQuote.post.id))
+    .select({
+      status: Posts.quoteConsentStatus,
+      approvalUri: Posts.quoteConsentApprovalUri,
+      postId: Posts.id,
+      sourcePostId: Posts.repostSourceId,
+    })
+    .from(Posts)
+    .where(eq(Posts.id, selfQuote.post.id))
     .then(firstOrThrow);
   await createRemotePost(selfActor.id, 'https://quote.example/notes/update-self-other');
   await handleInboundUpdate(
@@ -1481,9 +1653,14 @@ test('self-quote와 legacy Update는 승인 참조 revision만 바꾸고 APPROVE
   );
   assert.deepEqual(
     await db
-      .select()
-      .from(ActivityPubPostQuotes)
-      .where(eq(ActivityPubPostQuotes.postId, selfQuote.post.id))
+      .select({
+        status: Posts.quoteConsentStatus,
+        approvalUri: Posts.quoteConsentApprovalUri,
+        postId: Posts.id,
+        sourcePostId: Posts.repostSourceId,
+      })
+      .from(Posts)
+      .where(eq(Posts.id, selfQuote.post.id))
       .then(firstOrThrow),
     selfBefore,
   );
@@ -1501,26 +1678,34 @@ test('self-quote와 legacy Update는 승인 참조 revision만 바꾸고 APPROVE
     receivedAt,
   );
   let stored = await db
-    .select()
-    .from(ActivityPubPostQuotes)
-    .where(eq(ActivityPubPostQuotes.postId, selfQuote.post.id))
+    .select({
+      status: Posts.quoteConsentStatus,
+      approvalUri: Posts.quoteConsentApprovalUri,
+      postId: Posts.id,
+      sourcePostId: Posts.repostSourceId,
+    })
+    .from(Posts)
+    .where(eq(Posts.id, selfQuote.post.id))
     .then(firstOrThrow);
-  assert.equal(stored.status, ActivityPubQuoteStatus.APPROVED);
-  assert.equal(stored.approvalUri, selfAuthorization.id!.href);
-  assert.equal(stored.resolutionRevision, 2);
+  assert.equal(stored.status, PostQuoteConsentStatus.APPROVED);
+  assert.equal(stored.approvalUri, null);
   await handleInboundUpdate(
     selfContext,
     new Update({ actor: new URL('https://quote.example/users/update-self'), object: selfBase }),
     receivedAt,
   );
   stored = await db
-    .select()
-    .from(ActivityPubPostQuotes)
-    .where(eq(ActivityPubPostQuotes.postId, selfQuote.post.id))
+    .select({
+      status: Posts.quoteConsentStatus,
+      approvalUri: Posts.quoteConsentApprovalUri,
+      postId: Posts.id,
+      sourcePostId: Posts.repostSourceId,
+    })
+    .from(Posts)
+    .where(eq(Posts.id, selfQuote.post.id))
     .then(firstOrThrow);
-  assert.equal(stored.status, ActivityPubQuoteStatus.APPROVED);
+  assert.equal(stored.status, PostQuoteConsentStatus.APPROVED);
   assert.equal(stored.approvalUri, null);
-  assert.equal(stored.resolutionRevision, 3);
 
   const legacySourceActor = await createRemoteActor(
     'update-legacy-source',
@@ -1564,13 +1749,17 @@ test('self-quote와 legacy Update는 승인 참조 revision만 바꾸고 APPROVE
     receivedAt,
   );
   stored = await db
-    .select()
-    .from(ActivityPubPostQuotes)
-    .where(eq(ActivityPubPostQuotes.postId, legacyQuote.post.id))
+    .select({
+      status: Posts.quoteConsentStatus,
+      approvalUri: Posts.quoteConsentApprovalUri,
+      postId: Posts.id,
+      sourcePostId: Posts.repostSourceId,
+    })
+    .from(Posts)
+    .where(eq(Posts.id, legacyQuote.post.id))
     .then(firstOrThrow);
-  assert.equal(stored.status, ActivityPubQuoteStatus.APPROVED);
-  assert.equal(stored.approvalUri, legacyAuthorization.id!.href);
-  assert.equal(stored.resolutionRevision, 2);
+  assert.equal(stored.status, PostQuoteConsentStatus.APPROVED);
+  assert.equal(stored.approvalUri, null);
   await handleInboundUpdate(
     legacyContext,
     new Update({
@@ -1580,13 +1769,17 @@ test('self-quote와 legacy Update는 승인 참조 revision만 바꾸고 APPROVE
     receivedAt,
   );
   stored = await db
-    .select()
-    .from(ActivityPubPostQuotes)
-    .where(eq(ActivityPubPostQuotes.postId, legacyQuote.post.id))
+    .select({
+      status: Posts.quoteConsentStatus,
+      approvalUri: Posts.quoteConsentApprovalUri,
+      postId: Posts.id,
+      sourcePostId: Posts.repostSourceId,
+    })
+    .from(Posts)
+    .where(eq(Posts.id, legacyQuote.post.id))
     .then(firstOrThrow);
-  assert.equal(stored.status, ActivityPubQuoteStatus.APPROVED);
+  assert.equal(stored.status, PostQuoteConsentStatus.APPROVED);
   assert.equal(stored.approvalUri, null);
-  assert.equal(stored.resolutionRevision, 3);
 });
 
 test('FEP self-quote는 승인서 없이 승인하되 다른 Post만 Source로 연결한다', async () => {
@@ -1608,12 +1801,17 @@ test('FEP self-quote는 승인서 없이 승인하되 다른 Post만 Source로 �
   assert.equal(
     (
       await db
-        .select()
-        .from(ActivityPubPostQuotes)
-        .where(eq(ActivityPubPostQuotes.postId, quote.post.id))
+        .select({
+          status: Posts.quoteConsentStatus,
+          approvalUri: Posts.quoteConsentApprovalUri,
+          postId: Posts.id,
+          sourcePostId: Posts.repostSourceId,
+        })
+        .from(Posts)
+        .where(eq(Posts.id, quote.post.id))
         .then(firstOrThrow)
     ).status,
-    ActivityPubQuoteStatus.APPROVED,
+    PostQuoteConsentStatus.APPROVED,
   );
   assert.equal(
     (await db.select().from(Posts).where(eq(Posts.id, quote.post.id)).then(firstOrThrow))

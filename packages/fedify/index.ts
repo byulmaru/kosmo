@@ -17,6 +17,7 @@ export {
   withInboundObservability,
 } from './src/inbound-observability';
 export { handleInboundBlock, handleInboundUndoBlock } from './src/inbound-profile-block';
+export type { InboundQuoteRetryInput } from './src/inbound-quote';
 export {
   handleInboundQuote,
   resolveStoredInboundQuote,
