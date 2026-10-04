@@ -28,7 +28,6 @@ const hashtagFragment = graphql`
     viewerMuteRule @catch(to: RESULT) {
       id
       scopes
-      decision
       expiresAt
       isActive
       appliesTo(scope: NOTIFICATION)
@@ -120,6 +119,7 @@ export function ProfileTagMuteAction({ hashtag }: Props) {
   const [completionToast, setCompletionToast] = useState<CompletionToast | null>(null);
   const pending = creating || updating || deleting;
   const cancelRef = useRef<NativeView>(null);
+  const retryTriggerRef = useRef<NativeView>(null);
   const focusTriggerRef = useRef<() => void>(() => {});
   const refreshRule = () => {
     if (!selectedProfileId || refreshing) {
@@ -150,29 +150,8 @@ export function ProfileTagMuteAction({ hashtag }: Props) {
   }
 
   const muteRuleResult = data.viewerMuteRule;
-  if (!muteRuleResult.ok || refreshFailed) {
-    const targetSize = Math.max(32, getInteractionTargetSize(Platform.OS));
-    return (
-      <IconButton
-        accessibilityLabel={`#${data.name} 알림 상태를 불러오지 못했어요. 다시 시도`}
-        accessibilityState={{ busy: refreshing }}
-        disabled={refreshing}
-        onPress={() => refreshRule()}
-        style={styles.trigger}
-        targetSize={targetSize}
-        testID="profile-tag-mute-retry"
-        visualSize={32}
-      >
-        {refreshing ? (
-          <ActivityIndicator color={theme.foregroundSecondary} size="small" />
-        ) : (
-          <RefreshCw color={theme.foregroundSecondary} size={iconSizes[16]} />
-        )}
-      </IconButton>
-    );
-  }
-
-  const rule = muteRuleResult.value;
+  const stateReadFailed = !muteRuleResult.ok || refreshFailed;
+  const rule = muteRuleResult.ok ? muteRuleResult.value : null;
   const muted = Boolean(rule?.appliesTo);
   const hasNotificationScope = Boolean(rule?.scopes.includes('NOTIFICATION'));
   const hasActiveTemporaryRuleForOtherScopes = Boolean(
@@ -197,10 +176,11 @@ export function ProfileTagMuteAction({ hashtag }: Props) {
   };
   const conflictLabel = '다른 임시 뮤트 규칙이 적용 중';
   const conflictMessage = `${tagDisplayName}에 다른 범위의 임시 뮤트 규칙이 적용 중이에요. 현재 규칙을 보존하며, 만료 후 상태를 새로고침하면 영구 알림 뮤트를 설정할 수 있어요.`;
-  const startRequest = (nextMuted: boolean) => {
-    if (pending || !selectedProfileId || !intent) {
+  const startRequest = () => {
+    if (pending || !selectedProfileId || !intent || stateReadFailed) {
       return;
     }
+    const nextMuted = intent.muted;
     const finish = (status: 'success' | 'error') => {
       setCompletionToast({
         message:
@@ -216,10 +196,10 @@ export function ProfileTagMuteAction({ hashtag }: Props) {
     };
     const handleMutationError = () => finish('error');
     const validateMutationResult = (
+      ruleId: string | null | undefined,
       targetHashtagId: string | null | undefined,
-      errors: ReadonlyArray<{ message: string }> | null | undefined,
     ) => {
-      if (errors?.length || targetHashtagId !== data.id) {
+      if (!ruleId || targetHashtagId !== data.id) {
         handleMutationError();
         return;
       }
@@ -235,10 +215,10 @@ export function ProfileTagMuteAction({ hashtag }: Props) {
 
       if (rule && rule.isActive) {
         commitUpdate({
-          onCompleted: (response, errors) =>
+          onCompleted: (response) =>
             validateMutationResult(
+              response.updateHashtagMuteRule?.hashtagMuteRule?.id,
               response.updateHashtagMuteRule?.hashtagMuteRule?.targetHashtag?.id,
-              errors,
             ),
           onError: handleMutationError,
           variables: {
@@ -252,10 +232,10 @@ export function ProfileTagMuteAction({ hashtag }: Props) {
       }
 
       commitCreate({
-        onCompleted: (response, errors) =>
+        onCompleted: (response) =>
           validateMutationResult(
+            response.createHashtagMuteRule?.hashtagMuteRule?.id,
             response.createHashtagMuteRule?.hashtagMuteRule?.targetHashtag?.id,
-            errors,
           ),
         onError: handleMutationError,
         variables: {
@@ -278,10 +258,10 @@ export function ProfileTagMuteAction({ hashtag }: Props) {
     const remainingScopes = rule.scopes.filter((scope) => scope !== 'NOTIFICATION');
     if (remainingScopes.length > 0) {
       commitUpdate({
-        onCompleted: (response, errors) =>
+        onCompleted: (response) =>
           validateMutationResult(
+            response.updateHashtagMuteRule?.hashtagMuteRule?.id,
             response.updateHashtagMuteRule?.hashtagMuteRule?.targetHashtag?.id,
-            errors,
           ),
         onError: handleMutationError,
         variables: { input: { id: rule.id, scopes: remainingScopes } },
@@ -338,41 +318,61 @@ export function ProfileTagMuteAction({ hashtag }: Props) {
 
   return (
     <View style={styles.root}>
-      <ProfileMoreMenu
-        accessibilityLabel={`${tagDisplayName} 알림 뮤트 설정`}
-        disabled={pending || refreshing}
-        focusTriggerRef={focusTriggerRef}
-        items={[item]}
-        renderTrigger={({ disabled, expanded, onPress, ref }) => (
-          <IconButton
-            accessibilityLabel={
-              hasActiveTemporaryRuleForOtherScopes
-                ? `${tagDisplayName} 새 알림 뮤트 불가. ${conflictLabel}`
-                : muted
-                  ? `${tagDisplayName} 새 알림 뮤트됨. 설정 변경`
-                  : `${tagDisplayName} 새 알림 뮤트 설정`
-            }
-            accessibilityState={{ busy: pending || refreshing, expanded }}
-            aria-expanded={expanded}
-            aria-haspopup="menu"
-            controlRef={ref}
-            disabled={disabled}
-            onPress={onPress}
-            style={styles.trigger}
-            targetSize={targetSize}
-            testID="profile-tag-mute-trigger"
-            visualSize={32}
-          >
-            {pending || refreshing ? (
-              <ActivityIndicator color={theme.foregroundSecondary} size="small" />
-            ) : muted ? (
-              <BellOff color={theme.foregroundPrimary} size={iconSizes[16]} />
-            ) : (
-              <Bell color={theme.foregroundSecondary} size={iconSizes[16]} />
-            )}
-          </IconButton>
-        )}
-      />
+      {stateReadFailed ? (
+        <IconButton
+          accessibilityLabel={`${tagDisplayName} 알림 상태를 불러오지 못했어요. 다시 시도`}
+          accessibilityState={{ busy: refreshing }}
+          controlRef={retryTriggerRef}
+          disabled={refreshing}
+          onPress={() => refreshRule()}
+          style={styles.trigger}
+          targetSize={targetSize}
+          testID="profile-tag-mute-retry"
+          visualSize={32}
+        >
+          {refreshing ? (
+            <ActivityIndicator color={theme.foregroundSecondary} size="small" />
+          ) : (
+            <RefreshCw color={theme.foregroundSecondary} size={iconSizes[16]} />
+          )}
+        </IconButton>
+      ) : (
+        <ProfileMoreMenu
+          accessibilityLabel={`${tagDisplayName} 알림 뮤트 설정`}
+          disabled={pending || refreshing}
+          focusTriggerRef={focusTriggerRef}
+          items={[item]}
+          renderTrigger={({ disabled, expanded, onPress, ref }) => (
+            <IconButton
+              accessibilityLabel={
+                hasActiveTemporaryRuleForOtherScopes
+                  ? `${tagDisplayName} 새 알림 뮤트 불가. ${conflictLabel}`
+                  : muted
+                    ? `${tagDisplayName} 새 알림 뮤트됨. 설정 변경`
+                    : `${tagDisplayName} 새 알림 뮤트 설정`
+              }
+              accessibilityState={{ busy: pending || refreshing, expanded }}
+              aria-expanded={expanded}
+              aria-haspopup="menu"
+              controlRef={ref}
+              disabled={disabled}
+              onPress={onPress}
+              style={styles.trigger}
+              targetSize={targetSize}
+              testID="profile-tag-mute-trigger"
+              visualSize={32}
+            >
+              {pending || refreshing ? (
+                <ActivityIndicator color={theme.foregroundSecondary} size="small" />
+              ) : muted ? (
+                <BellOff color={theme.foregroundPrimary} size={iconSizes[16]} />
+              ) : (
+                <Bell color={theme.foregroundSecondary} size={iconSizes[16]} />
+              )}
+            </IconButton>
+          )}
+        />
+      )}
       <ModalSheet
         dismissDisabled={pending}
         onClose={() => {
@@ -381,7 +381,11 @@ export function ProfileTagMuteAction({ hashtag }: Props) {
           }
         }}
         onDismiss={() => {
-          focusTriggerRef.current();
+          if (stateReadFailed) {
+            retryTriggerRef.current?.focus();
+          } else {
+            focusTriggerRef.current();
+          }
           if (completionToast) {
             showToast(completionToast.message, { tone: completionToast.tone });
             setCompletionToast(null);
@@ -397,7 +401,8 @@ export function ProfileTagMuteAction({ hashtag }: Props) {
           confirmLabel={intent?.confirmLabel ?? activeIntent.confirmLabel}
           message={intent?.message ?? activeIntent.message}
           onCancel={() => setOpen(false)}
-          onConfirm={() => startRequest(!muted)}
+          confirmDisabled={stateReadFailed}
+          onConfirm={startRequest}
           pending={pending}
         />
       </ModalSheet>
