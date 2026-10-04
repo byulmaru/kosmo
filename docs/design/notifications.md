@@ -122,8 +122,7 @@ composer control은 자체 동작만 수행한다. 모두 읽음, unread indicat
   연결하고, Push flow가 이후 수신 대상 fan-out과 전달 lifecycle을 소유한다는 경계와 앱 설정의 권한 상태별 동작,
   현재 integration inventory, 기본 표시 구성과 foreground OS 배너, OS 설정 이동과 token 동기화, cross-profile
   target 처리, Push 만료와 read state 독립성을 확정한다.
-- 현재 typed Mention 관계를 공급하는 입력 경로는 ActivityPub 수신이며, Local 작성의 Mention 입력·해석은 별도
-  범위다. 저장된 Mention Notification은 같은 공통 Push flow를 사용하며, 이 연결은 FCM Provider의 수락이나
+- 저장된 Mention Notification은 같은 공통 Push flow를 사용하며, 이 연결은 FCM Provider의 수락이나
   기기 도착을 입증하지 않는다.
 
 ## 표시와 합성

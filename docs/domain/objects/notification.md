@@ -98,8 +98,7 @@ Recipient Profile은 Related Post의 direct Repost Source Author Profile이다. 
 
 ### Reply/Mention 수신자별 분류와 중복 처리
 
-2026-09-08 사용자 승인으로 확정한 정책이다. 현재 typed Mention 관계를 공급하는 입력 경로는 ActivityPub
-수신이며, Local 작성의 Mention 입력·해석은 미구현이다. 알림 생성은 저장된 유효 Mention 관계에 대해 출처
+2026-09-08 사용자 승인으로 확정한 정책이다. 알림 생성은 저장된 유효 Mention 관계에 대해 출처
 종류를 제한하지 않는다.
 
 - 분류 기준은 해당 Post가 답글인지 여부만이 아니라 각 Recipient와 원인 Post의 관계다.
