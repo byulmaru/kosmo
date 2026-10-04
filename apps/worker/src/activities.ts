@@ -6,6 +6,7 @@ export {
   captureDatabaseCountsSnapshotActivity,
   loadDatabaseCountsSnapshotActivity,
 } from './activities/database-counts-snapshot';
+export { executeHashtagMuteRuleActivity } from './activities/hashtag-mute-rule';
 export {
   executeProfileBlockTransitionActivity,
   executeProfileUnblockTransitionActivity,

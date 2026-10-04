@@ -3,6 +3,7 @@ export { notificationCleanupWorkflow } from './cleanup-unavailable-notifications
 export { postCreateEffectsWorkflow } from './create';
 export { databaseCountsSnapshotWorkflow } from './database-counts-snapshot';
 export { postDeleteWorkflow } from './delete';
+export { hashtagMuteRuleWorkflow } from './hashtag-mute-rule';
 export { profileBlockWorkflow } from './profile-block';
 export { profileFollowPairWorkflow } from './profile-follow-pair';
 export { profileFollowRemovalWorkflow } from './profile-follow-removal';
