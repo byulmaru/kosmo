@@ -67,6 +67,10 @@ export async function activitypubQuoteResolutionWorkflow(
     const result = await resolveActivityPubQuoteActivity(active.input);
     if (result.retryable && result.retryInput) {
       if (active.attempts + 1 >= 10) {
+        if (pending.length > 0) {
+          active = undefined;
+          continue;
+        }
         throw ApplicationFailure.nonRetryable('Quote resolution retry limit reached');
       }
       await condition(() => pending.length > 0, Math.min(1000 * 2 ** active.attempts, 60000));

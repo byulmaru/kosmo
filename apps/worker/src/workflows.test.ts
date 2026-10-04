@@ -199,7 +199,7 @@ test(
   },
 );
 
-for (const scenario of ['pending-limit', 'stale-signal'] as const) {
+for (const scenario of ['pending-limit', 'stale-signal', 'limit-new-signal'] as const) {
   test(
     `Quote resolution ${scenario}은 재시도를 보존하고 한도에서 실행을 종료한다`,
     { timeout: 120_000 },
@@ -229,6 +229,15 @@ for (const scenario of ['pending-limit', 'stale-signal'] as const) {
         activities: {
           resolveActivityPubQuoteActivity: async (current: typeof input) => {
             seen.push(current.approvalUri);
+            if (scenario === 'limit-new-signal') {
+              if (seen.length === 10) {
+                entered();
+                await activityReleased;
+              }
+              if (seen.length > 10) {
+                return { retryable: false, status: 'APPROVED' };
+              }
+            }
             if (scenario === 'stale-signal') {
               if (seen.length === 1) {
                 entered();
@@ -257,8 +266,9 @@ for (const scenario of ['pending-limit', 'stale-signal'] as const) {
             workflowId: `quote-${scenario}`,
           },
         );
+        const completion = handle.result();
         if (scenario === 'pending-limit') {
-          await assert.rejects(handle.result());
+          await assert.rejects(completion);
         } else {
           await activityEntered;
           await handle.signal('resolveQuote', {
@@ -267,11 +277,14 @@ for (const scenario of ['pending-limit', 'stale-signal'] as const) {
             expectedApprovalUri: 'https://source.example/authorization/old',
           });
           release();
-          await handle.result();
+          await completion;
         }
       });
       if (scenario === 'pending-limit') {
         assert.equal(seen.length, 10);
+      } else if (scenario === 'limit-new-signal') {
+        assert.equal(seen.length, 11);
+        assert.equal(seen[10], 'https://source.example/authorization/old');
       } else {
         assert.deepEqual(seen, [
           input.approvalUri,
