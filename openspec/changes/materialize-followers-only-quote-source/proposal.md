@@ -1,3 +1,5 @@
+> Historical session note: #1094 이전 조사 기록이다. target/revision 및 선행 PR 미전달 설명은 현재 상태가 아니다. 현재 구현은 [design.md](./design.md), [tasks.md](./tasks.md)와 PR #962를 따르며 제품 계약은 canonical/Linear가 소유한다.
+
 ## Why
 
 원격 Quote가 아직 저장되지 않은 Followers Only Source를 참조하면, 조회 자격이 있는 Local Follower가 있어도 기존 Source 관계를 연결할 수 없다. 검증된 작성자 정보를 바탕으로 실제 Follow 권한을 가진 identity로 원문을 가져와 기존 Quote 표시 흐름에 연결한다.

@@ -1,3 +1,5 @@
+> Historical session note: #1094 이전 조사 기록이다. target/revision 및 선행 PR 미전달 설명은 현재 상태가 아니다. 현재 구현은 [design.md](./design.md), [tasks.md](./tasks.md)와 PR #962를 따르며 제품 계약은 canonical/Linear가 소유한다.
+
 ## Context
 
 이 기록은 검증된 Source 작성자 정보를 사용한 Followers Only 원문 조회와 기존 Quote resolution 연결을 다룬다. proposal·specs·design은 설명과 적용 범위를 제공하며, 아래 결정의 권위는 독립적으로 확인한 canonical 문서와 최신 Linear 계약에 있다. 2026-09-08 사용자의 작성자 신뢰 경계 확정은 해당 upstream 문서에 먼저 반영했다.

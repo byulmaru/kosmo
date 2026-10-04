@@ -1,3 +1,5 @@
+> Historical session note: #1094 이전 조사 기록이다. target/revision 및 선행 PR 미전달 설명은 현재 상태가 아니다. 현재 구현은 [design.md](../../design.md), [tasks.md](../../tasks.md)와 PR #962를 따르며 제품 계약은 canonical/Linear가 소유한다.
+
 ## ADDED Requirements
 
 ### Requirement: 검증된 Source 작성자 정보로 조회를 시작한다
