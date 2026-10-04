@@ -2,7 +2,6 @@ import '@kosmo/core/polyfill';
 
 export { deleteAccountActivity } from './activities/account-deletion';
 export { cleanupUnavailableNotificationsActivity } from './activities/cleanup-unavailable-notifications';
-export { executeHashtagMuteRuleActivity } from './activities/hashtag-mute-rule';
 export {
   captureDatabaseCountsSnapshotActivity,
   loadDatabaseCountsSnapshotActivity,
@@ -11,6 +10,7 @@ export {
   followImportedProfileActivity,
   resolveImportedLocalProfileActivity,
 } from './activities/following-accounts-import';
+export { executeHashtagMuteRuleActivity } from './activities/hashtag-mute-rule';
 export { createNotificationActivity } from './activities/notification';
 export {
   executeProfileBlockTransitionActivity,
