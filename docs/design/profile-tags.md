@@ -33,10 +33,12 @@ Profile 화면이 같은 태그를 Web·Android·iOS에서 일관되게 표시�
 
 ## Hashtag Mute의 현재 제공 범위
 
-- [PROD-735](https://linear.app/byulmaru/issue/PROD-735)는 Profile Tag에서 현재 선택한 Profile의 영구 뮤트를
-  설정·해제하는 UI 연결을 소유한다. 해당 태그를 프로필에 단 사람에게서 오는 새 알림만 제어하며,
+- [PROD-735](https://linear.app/byulmaru/issue/PROD-735)는 TagChip으로 이동한
+  [태그 상세·관련 Profile 목록 페이지](./hashtag-related-profiles.md)에서 현재 선택한 Profile이 소유하는
+  태그 영구 뮤트를 설정·해제하는 UI 연결을 소유한다. 해당 태그를 프로필에 단 사람에게서 오는 새 알림만 제어하며,
   범위·숨기기/접기·기간 선택 control, preset, 날짜·시각 입력은 제공하지 않는다.
-- 기존 TagChip의 관련 Profile 탐색 동작을 유지한다. 뮤트 상태와 해제 action은 같은 canonical Hashtag를
+- 공개 Profile의 TagChip은 기존 관련 Profile 탐색 링크로 유지한다. 프로필 화면에 태그 뮤트용 벨·메뉴나
+  확인 진입점을 추가하지 않는다. 기존 Profile 자체의 뮤트 UI는 유지한다. 뮤트 상태와 해제 action은 같은 canonical Hashtag를
   대상으로 하며, 태그가 표시된 Profile 자체를 뮤트하는 action과 구분한다.
 - 기존 [Profile Mute UI](./profile-mute-block.md)의 확인·요청 중·오류·완료 피드백을 재사용한다.
   확인창은 대상 태그와 새 알림을 끄거나 다시 받는 결과를 설명하고, 취소하면 요청하지 않는다.

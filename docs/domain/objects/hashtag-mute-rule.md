@@ -53,9 +53,13 @@ Mute Scope는 여러 값을 동시에 가질 수 있다.
 | Hashtag Mute Rule 변경 | Owner Profile     | Hashtag Mute Rule | Scope, Decision, 만료 시각          | `Account.Active`, `HashtagMuteRule.Owner` | Scope가 하나 이상이고 만료 시각이 미래이거나 영구다                                                                            | Scope, Decision, 만료 시각이 바뀐다                                          |
 | Hashtag Mute Rule 제거 | Owner Profile     | Hashtag Mute Rule | 없음                                | `Account.Active`, `HashtagMuteRule.Owner` | Rule이 존재한다                                                                                                                | Hashtag Mute Rule이 제거된다                                                 |
 
-## Profile Tag에서의 현재 제공 범위
+## 프로필 태그 상세 페이지에서의 현재 제공 범위
 
-- [PROD-735](https://linear.app/byulmaru/issue/PROD-735)의 Profile Tag UI는 해당 Hashtag를 Profile Tag로 가진
+- [PROD-735](https://linear.app/byulmaru/issue/PROD-735)는 기존 Hashtag 관련 Profile 목록인 태그 상세 페이지에서
+  해당 페이지의 canonical Hashtag를 대상으로 뮤트를 설정·해제한다. 공개 Profile의 TagChip은 탐색만 수행한다.
+  Owner는 현재 selected Profile이며 출발 Profile이나 관련 목록의 Profile 자체가 뮤트 대상은 아니다.
+  진입점은 [ADR 0021의 추가 결정](../decisions/0021-hashtag-related-profile-navigation.md)을 따른다.
+- 태그 상세 페이지의 UI는 해당 Hashtag를 Profile Tag로 가진
   사람에게서 오는 새 Notification만 끄는 영구 뮤트를 생성·해제한다. 현재 Profile Tag UI에서 생성하는 Rule은
   Notification Scope에만 적용하며, 범위·Decision·기간을 사용자가 선택하도록 요구하지 않는다.
 - 현재는 프로필 해시태그만 제공하므로 게시물 해시태그 기반 목록·검색·알림 제어는 추후 구현 범위로 둔다.

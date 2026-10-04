@@ -506,11 +506,7 @@ describe('ProfileHero Profile Tag presentation', () => {
     const muteActions = tagList.findAll(
       (node) => (node.type as unknown) === 'ProfileTagMuteAction',
     );
-    assert.deepEqual(
-      muteActions.map((node) => node.props.hashtag.id),
-      ['hashtag-fediverse', 'hashtag-development'],
-    );
-    assert.ok(muteActions.every((node) => (node.parent?.type as unknown) === 'View'));
+    assert.equal(muteActions.length, 0);
     assert.deepEqual(platformSelections, [
       { android: 48, default: 48, ios: 44, web: 32 },
       { android: 48, default: 48, ios: 44, web: 32 },

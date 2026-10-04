@@ -24,7 +24,6 @@ import { ProfileMoreMenu } from './ProfileMoreMenu';
 import { ProfileMuteAction } from './ProfileMuteAction';
 import { ProfileNameBlock } from './ProfileNameBlock';
 import { ProfileTagChip } from './ProfileTagChip';
-import { ProfileTagMuteAction } from './ProfileTagMuteAction';
 import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import type { ActionMenuItem } from '@/components/ui/ActionMenu';
@@ -48,7 +47,6 @@ const profileHeroFragment = graphql`
     tags {
       id
       name
-      ...ProfileTagMuteAction_tag
     }
     avatar {
       id
@@ -293,10 +291,7 @@ export function ProfileHero({
         {data.tags.length ? (
           <View style={styles.tags} testID="profile-tag-list">
             {data.tags.map((tag) => (
-              <View key={tag.id} style={styles.tagItem}>
-                <ProfileTagLink id={tag.id} name={tag.name} />
-                <ProfileTagMuteAction hashtag={tag} />
-              </View>
+              <ProfileTagLink id={tag.id} key={tag.id} name={tag.name} />
             ))}
           </View>
         ) : null}
@@ -387,14 +382,6 @@ const styles = StyleSheet.create({
   identity: { flex: -1 },
   bio: { marginTop: space[12], ...textStyles.uiCopyL },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: space[8], marginTop: space[12] },
-  tagItem: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    flexShrink: 1,
-    gap: space[4],
-    maxWidth: '100%',
-    minWidth: 0,
-  },
   tagTarget: {
     alignItems: 'center',
     flexShrink: 1,
