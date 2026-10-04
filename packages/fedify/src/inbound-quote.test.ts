@@ -951,6 +951,21 @@ test('Source-author 철회와 같은 URI 재승인은 캐시가 아닌 현재 is
   const authorizationDocument = await authorization.toJsonLd({ format: 'expand' });
   const context = createContext(new Map([[authorization.id!.href, authorizationDocument]]));
 
+  const absent = await handleInboundQuote({
+    actorUri: 'https://quote.example/users/quote',
+    context: {
+      ...(context as Parameters<typeof handleInboundQuote>[0]['context']),
+      quoteAuthorizationDocumentLoader: async () => {
+        throw Object.assign(new Error('gone'), { response: new Response(null, { status: 410 }) });
+      },
+    },
+    note: noteWithAuthorization,
+    postId: quote.post.id,
+    receivedAt,
+  });
+  assert.equal(absent.status, PostQuoteConsentStatus.PENDING);
+  assert.equal(absent.retryable, false);
+
   await handleInboundQuote({
     actorUri: 'https://quote.example/users/quote',
     context,

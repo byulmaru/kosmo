@@ -347,6 +347,24 @@ const materializeTarget = async ({
     : { kind: 'found', postId: materialized.postId };
 };
 
+const isAbsentAuthorization = (
+  failure: Extract<
+    Awaited<ReturnType<typeof quoteInteraction.verifyAuthorization>>,
+    { verified: false }
+  >['failure'],
+  authorizationUri: string,
+): boolean => {
+  const cause = 'cause' in failure ? failure.cause : undefined;
+  return (
+    failure.type === 'notDereferenceable' &&
+    failure.url.href === authorizationUri &&
+    cause instanceof Error &&
+    'response' in cause &&
+    cause.response instanceof Response &&
+    (cause.response.status === 404 || cause.response.status === 410)
+  );
+};
+
 const classifyAuthorization = async ({
   actorUri,
   authorization,
@@ -420,7 +438,7 @@ const classifyAuthorization = async ({
     : verification.failure.category === 'unverifiable'
       ? {
           approvalUri: candidate.href,
-          retryable: true,
+          retryable: !isAbsentAuthorization(verification.failure, candidate.href),
           status: PostQuoteConsentStatus.PENDING,
         }
       : {
@@ -792,16 +810,7 @@ export const revokeInboundQuote = async ({
       interactingObject: new URL(quote.uri),
     });
     if (!verification.verified && verification.failure.category === 'unverifiable') {
-      const failure = verification.failure;
-      const cause = 'cause' in failure ? failure.cause : undefined;
-      const absent =
-        failure.type === 'notDereferenceable' &&
-        failure.url.href === authorizationUri &&
-        cause instanceof Error &&
-        'response' in cause &&
-        cause.response instanceof Response &&
-        (cause.response.status === 404 || cause.response.status === 410);
-      if (!absent) {
+      if (!isAbsentAuthorization(verification.failure, authorizationUri)) {
         throw new Error(
           'Current Quote Authorization could not be verified; retry revocation reconciliation',
         );
