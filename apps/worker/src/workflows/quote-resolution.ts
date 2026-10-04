@@ -29,7 +29,9 @@ export async function activitypubQuoteResolutionWorkflow(
 ): Promise<void> {
   const parsed = activityPubQuoteResolutionInputSchema.safeParse(input);
   if (!parsed.success) {
-    return;
+    throw ApplicationFailure.nonRetryable(
+      'Unsupported Quote resolution input; check rollout compatibility',
+    );
   }
   const original = parsed.data;
   type Attempt = { input: ActivityPubQuoteResolutionInput; attempts: number };

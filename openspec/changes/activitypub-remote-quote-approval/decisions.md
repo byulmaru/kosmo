@@ -1,3 +1,5 @@
+> Historical session note: 이 파일은 #1094 이전 조사 기록이다. table/INVALID/revision/prerelease 및 과거 gate 설명은 현재 구현 계약이 아니다. 현재 구현·검증은 [design.md](./design.md), [tasks.md](./tasks.md)와 PR #961을 따른다. 제품 계약은 canonical/Linear가 소유한다.
+
 ## Context
 
 승인된 Post 계약과 PROD-792의 구현 계약을 proposal·specs·design에 반영했다. Domain Gate와 Issue Gate는

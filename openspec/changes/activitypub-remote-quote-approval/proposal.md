@@ -1,3 +1,5 @@
+> Historical session note: 이 파일은 #1094 이전 조사 기록이다. table/INVALID/revision/prerelease 및 과거 gate 설명은 현재 구현 계약이 아니다. 현재 구현·검증은 [design.md](./design.md), [tasks.md](./tasks.md)와 PR #961을 따른다. 제품 계약은 canonical/Linear가 소유한다.
+
 ## Why
 
 원격 Quote를 기존 Post 관계와 카드에 연결하려면 인용 승인과 Source 조회 권한을 구분해야 한다. 승인되지
