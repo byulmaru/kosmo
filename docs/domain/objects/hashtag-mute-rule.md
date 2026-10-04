@@ -7,6 +7,9 @@ Hashtag Mute Rule은 Owner Profile이 특정 Hashtag를 기준으로 Post List, 
 
 ## 상태
 
+하나의 Hashtag Mute Rule은 여러 Mute Scope를 가질 수 있지만 Decision과 만료 시각은 각각 하나이며 모든 Scope에
+공통으로 적용된다. Scope마다 다른 Decision이나 만료 시각을 저장하지 않는다.
+
 ### Mute Scope
 
 Mute Scope는 여러 값을 동시에 가질 수 있다.
@@ -49,6 +52,16 @@ Mute Scope는 여러 값을 동시에 가질 수 있다.
 | Hashtag Mute Rule 생성 | Owner Profile     | Hashtag Mute Rule | Hashtag, Scope, Decision, 만료 시각 | `Account.Active`, `Profile.Member`        | Owner는 Active/Normal Local Profile이고 Scope가 하나 이상이며 만료 시각이 미래이거나 영구다. 같은 조합의 적용 중인 Rule이 없다 | 입력 Scope/Decision과 Owner/Hashtag 관계를 가진 Hashtag Mute Rule이 생성된다 |
 | Hashtag Mute Rule 변경 | Owner Profile     | Hashtag Mute Rule | Scope, Decision, 만료 시각          | `Account.Active`, `HashtagMuteRule.Owner` | Scope가 하나 이상이고 만료 시각이 미래이거나 영구다                                                                            | Scope, Decision, 만료 시각이 바뀐다                                          |
 | Hashtag Mute Rule 제거 | Owner Profile     | Hashtag Mute Rule | 없음                                | `Account.Active`, `HashtagMuteRule.Owner` | Rule이 존재한다                                                                                                                | Hashtag Mute Rule이 제거된다                                                 |
+
+## Profile Tag에서의 현재 제공 범위
+
+- [PROD-735](https://linear.app/byulmaru/issue/PROD-735)의 Profile Tag UI는 해당 Hashtag를 Profile Tag로 가진
+  사람에게서 오는 새 Notification만 끄는 영구 뮤트를 생성·해제한다. 현재 Profile Tag UI에서 생성하는 Rule은
+  Notification Scope에만 적용하며, 범위·Decision·기간을 사용자가 선택하도록 요구하지 않는다.
+- 현재는 프로필 해시태그만 제공하므로 게시물 해시태그 기반 목록·검색·알림 제어는 추후 구현 범위로 둔다.
+  Profile Tag 기준 새 알림 생성 억제는 PROD-1048이 소유하며 기존 Notification과 Read State는 바꾸지 않는다.
+- 이 UI에서는 기간 preset이나 만료 시각 입력을 제공하지 않는다. 이는 현재 UI의 제공 범위이며, 규칙 자체의
+  미래 만료 시각 저장·조회·판정 계약을 제거하지 않는다.
 
 ## 권한
 
