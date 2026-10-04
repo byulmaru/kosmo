@@ -1,5 +1,6 @@
 import '@kosmo/core/polyfill';
 
+import { getDocumentLoader } from '@fedify/fedify/runtime';
 import { quoteInteraction } from '@fedify/interaction-controls';
 import { Note } from '@fedify/vocab';
 import {
@@ -21,6 +22,7 @@ import { isHttpUri } from './activitypub-uri';
 import { materializeHydratedRemoteNote } from './inbound-create-note';
 import { RemoteActorDiscoveryUnavailableError } from './remote-actor-materialization';
 import type { Context } from '@fedify/fedify';
+import type { DocumentLoader } from '@fedify/fedify/runtime';
 import type { Object as ActivityPubObject } from '@fedify/vocab';
 import type { Transaction } from '@kosmo/core/db';
 import type { ApplyPostQuoteConsentInput } from '@kosmo/core/services';
@@ -44,8 +46,30 @@ export type InboundQuoteRetryInput = QuoteExpectation & {
 
 type QuoteContext = Pick<
   Context<void>,
-  'canonicalOrigin' | 'contextLoader' | 'documentLoader' | 'lookupObject' | 'parseUri'
->;
+  | 'canonicalOrigin'
+  | 'contextLoader'
+  | 'documentLoader'
+  | 'lookupObject'
+  | 'parseUri'
+  | 'getActorKeyPairs'
+  | 'getDocumentLoader'
+> & { recipient?: string | null; quoteAuthorizationDocumentLoader?: DocumentLoader };
+
+const currentAuthorizationLoader = async (context: QuoteContext): Promise<DocumentLoader> => {
+  if (context.quoteAuthorizationDocumentLoader) {
+    return context.quoteAuthorizationDocumentLoader;
+  }
+  if (context.recipient) {
+    const keys = await context.getActorKeyPairs(context.recipient);
+    const key = keys.find((candidate) => candidate.privateKey !== null);
+    if (key?.privateKey) {
+      return context.getDocumentLoader({ keyId: key.keyId, privateKey: key.privateKey });
+    }
+  }
+  // Federation's ordinary documentLoader uses kvCache. Authorization URIs can
+  // be reused, so the issuer must be queried again for each consent decision.
+  return getDocumentLoader({ allowPrivateAddress: false });
+};
 
 type InboundQuoteInput = {
   actorUri: string;
@@ -205,7 +229,7 @@ const hydrateFepReferences = async (
     authorization = await note.getQuoteAuthorization({
       contextLoader: context.contextLoader,
       crossOrigin: 'trust',
-      documentLoader: context.documentLoader,
+      documentLoader: await currentAuthorizationLoader(context),
       suppressError: true,
     });
   } catch {
@@ -359,16 +383,17 @@ const classifyAuthorization = async ({
     };
   }
 
-  if (authorization === null) {
+  const candidate = authorizationId ?? authorization?.id ?? null;
+  if (candidate === null) {
     return {
       approvalUri: authorizationId?.href ?? null,
-      retryable: authorizationId !== null,
+      retryable: false,
       status: PostQuoteConsentStatus.PENDING,
     };
   }
-  if (!authorization.id || !source.actorUri || !isHttpUri(new URL(source.actorUri))) {
+  if (!source.actorUri || !isHttpUri(new URL(source.actorUri))) {
     return {
-      approvalUri: authorization.id?.href ?? null,
+      approvalUri: candidate.href,
       retryable: false,
       status: PostQuoteConsentStatus.PENDING,
     };
@@ -376,7 +401,8 @@ const classifyAuthorization = async ({
 
   const verification = await quoteInteraction.verifyAuthorization(context as Context<void>, {
     attributedTo: new URL(source.actorUri),
-    authorization: authorizationId ?? authorization,
+    authorization: candidate,
+    documentLoader: await currentAuthorizationLoader(context),
     interactionTarget: new URL(extraction.targetUri),
     interactingObject: note,
   });
@@ -393,12 +419,12 @@ const classifyAuthorization = async ({
       }
     : verification.failure.category === 'unverifiable'
       ? {
-          approvalUri: authorization.id.href,
+          approvalUri: candidate.href,
           retryable: true,
           status: PostQuoteConsentStatus.PENDING,
         }
       : {
-          approvalUri: authorization.id.href,
+          approvalUri: candidate.href,
           retryable: false,
           status: PostQuoteConsentStatus.PENDING,
         };
@@ -761,6 +787,7 @@ export const revokeInboundQuote = async ({
     const verification = await quoteInteraction.verifyAuthorization(context as Context<void>, {
       attributedTo: new URL(actorUri),
       authorization: new URL(authorizationUri),
+      documentLoader: await currentAuthorizationLoader(context),
       interactionTarget: new URL(source.uri),
       interactingObject: new URL(quote.uri),
     });

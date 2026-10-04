@@ -209,6 +209,7 @@ test('configured factory preserves signed Block and Move listeners and pre-dispa
   };
   const configured = createKosmoFederation({
     documentLoaderFactory: () => documentLoader,
+    quoteAuthorizationDocumentLoader: documentLoader,
     authenticatedDocumentLoaderFactory: () => documentLoader,
     contextLoaderFactory: () => getDocumentLoader(),
   });
@@ -217,11 +218,7 @@ test('configured factory preserves signed Block and Move listeners and pre-dispa
     captureException: () => assert.fail('expected protocol rejection must not be captured'),
     log: (observation) => observations.push(observation),
   });
-  const start = mock.method(
-    temporalClient.workflow,
-    'signalWithStart',
-    async () => undefined as never,
-  );
+  const start = mock.method(temporalClient.workflow, 'start', async () => undefined as never);
   try {
     for (const path of [`/ap/actor/${profile.id}/inbox`, '/inbox']) {
       for (const activity of [
@@ -850,7 +847,11 @@ test('Source 작성자 discovery 장애는 transient PENDING으로 분류한다'
     startWorkflow: false,
   });
 
-  assert.deepEqual(result, { retryable: true, status: PostQuoteConsentStatus.PENDING });
+  assert.equal(result.retryable, true);
+  assert.equal(result.status, PostQuoteConsentStatus.PENDING);
+  assert.equal(result.retryInput?.targetUri, targetUri.href);
+  assert.equal(result.retryInput?.expectedStatus, PostQuoteConsentStatus.PENDING);
+  assert.equal(result.retryInput?.expectedRepostSourceId, null);
   assert.equal(
     (
       await db
@@ -927,7 +928,7 @@ test('Workflow start 실패는 caller에 전파되어 동일 expectation을 dura
   }
 });
 
-test('source-author revocation preserves Source relation and a late approval cannot restore it', async () => {
+test('Source-author 철회와 같은 URI 재승인은 캐시가 아닌 현재 issuer 증거를 따른다', async () => {
   const sourceActor = await createRemoteActor('source', 'https://source.example/users/source');
   const quoteActor = await createRemoteActor('quote', 'https://quote.example/users/quote');
   const source = await createRemotePost(sourceActor.id, 'https://source.example/notes/revoked');
@@ -980,7 +981,7 @@ test('source-author revocation preserves Source relation and a late approval can
       authorizationUri: authorization.id!.href,
       context: {
         ...(context as Parameters<typeof handleInboundQuote>[0]['context']),
-        documentLoader: async () => {
+        quoteAuthorizationDocumentLoader: async () => {
           throw new Error('temporary outage');
         },
       },
@@ -999,7 +1000,7 @@ test('source-author revocation preserves Source relation and a late approval can
       authorizationUri: authorization.id!.href,
       context: {
         ...(context as Parameters<typeof handleInboundQuote>[0]['context']),
-        documentLoader: async () => {
+        quoteAuthorizationDocumentLoader: async () => {
           throw Object.assign(new Error('gone'), { response: new Response(null, { status: 410 }) });
         },
       },
@@ -1012,10 +1013,28 @@ test('source-author revocation preserves Source relation and a late approval can
     source.post.id,
   );
 
+  const staleResult = await handleInboundQuote({
+    actorUri: 'https://quote.example/users/quote',
+    context: {
+      ...(context as Parameters<typeof handleInboundQuote>[0]['context']),
+      quoteAuthorizationDocumentLoader: async () => {
+        throw Object.assign(new Error('gone'), { response: new Response(null, { status: 410 }) });
+      },
+    },
+    note: noteWithAuthorization,
+    postId: quote.post.id,
+    receivedAt,
+  });
+  assert.equal(staleResult.status, PostQuoteConsentStatus.REVOKED);
   await handleInboundQuote({
     actorUri: 'https://quote.example/users/quote',
-    context,
-    note: noteWithAuthorization,
+    context: {
+      ...(context as Parameters<typeof handleInboundQuote>[0]['context']),
+      documentLoader: async () => {
+        throw new Error('stale failed cache');
+      },
+    },
+    note: quoteNote.clone({ quoteAuthorization: authorization.id! }),
     postId: quote.post.id,
     receivedAt,
   });
@@ -1115,6 +1134,7 @@ test('Update authorization add/remove와 Delete listener가 expectation 및 철�
     return { contextUrl: null, document, documentUrl: url };
   };
   const productionFederation = createKosmoFederation({
+    quoteAuthorizationDocumentLoader: documentLoader,
     authenticatedDocumentLoaderFactory: () => documentLoader,
     contextLoaderFactory: () => getDocumentLoader(),
     documentLoaderFactory: () => documentLoader,
@@ -1825,7 +1845,7 @@ const createContext = (
   lookupObject: (identifier: string | URL) => Promise<unknown> = async () => null,
 ) => {
   const contextLoader = getDocumentLoader();
-  return {
+  const context = {
     canonicalOrigin: publicOrigin,
     contextLoader,
     documentLoader: async (url: string) => {
@@ -1837,7 +1857,8 @@ const createContext = (
     },
     lookupObject,
     parseUri: () => null,
-  } as never;
+  };
+  return { ...context, quoteAuthorizationDocumentLoader: context.documentLoader } as never;
 };
 
 const createRemoteActor = async (handle: string, actorUri: string, instanceId?: string) => {

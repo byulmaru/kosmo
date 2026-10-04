@@ -56,19 +56,23 @@ import { dispatchLocalProfileFollow } from './local-profile-follow';
 import { createLocalProfilePerson } from './local-profile-person';
 import { fedifyQueue } from './queue';
 import { resolveLocalActorIdentifierByHandle } from './webfinger';
-import type { Context, Federation, FederationOptions } from '@fedify/fedify';
+import type { Context, Federation, FederationOptions, InboxContext } from '@fedify/fedify';
+import type { DocumentLoader } from '@fedify/fedify/runtime';
 
 const federationOrigin = process.env.PUBLIC_ORIGIN;
 
 type FederationLoaderOverrides = Pick<
   FederationOptions<void>,
   'authenticatedDocumentLoaderFactory' | 'contextLoaderFactory' | 'documentLoaderFactory'
->;
+> & { quoteAuthorizationDocumentLoader?: DocumentLoader };
 
 /** Creates the configured application federation; production uses the singleton below. */
 export const createKosmoFederation = (
   overrides: FederationLoaderOverrides = {},
 ): Federation<void> => {
+  const { quoteAuthorizationDocumentLoader, ...loaderOverrides } = overrides;
+  const quoteContext = (context: InboxContext<void>) =>
+    Object.assign(context, { quoteAuthorizationDocumentLoader });
   const federation: Federation<void> = createFederation<void>({
     allowPrivateAddress: false,
     kv: new MemoryKvStore(),
@@ -81,7 +85,7 @@ export const createKosmoFederation = (
         }
       : {}),
     ...(federationOrigin ? { origin: federationOrigin } : {}),
-    ...overrides,
+    ...loaderOverrides,
   });
 
   federation
@@ -219,15 +223,30 @@ export const createKosmoFederation = (
     .on(Accept, withInboundObservability('accept', handleInboundAccept))
     .on(Announce, withInboundObservability('announce', handleInboundAnnounce))
     .on(Block, withInboundObservability('block', handleInboundBlock))
-    .on(Create, withInboundObservability('create', handleInboundCreate))
-    .on(Delete, withInboundObservability('delete', handleInboundDelete))
+    .on(
+      Create,
+      withInboundObservability('create', (context, activity) =>
+        handleInboundCreate(quoteContext(context), activity),
+      ),
+    )
+    .on(
+      Delete,
+      withInboundObservability('delete', (context, activity) =>
+        handleInboundDelete(quoteContext(context), activity),
+      ),
+    )
     .on(EmojiReact, withInboundObservability('reaction', handleInboundReaction))
     .on(Follow, withInboundObservability('follow', handleInboundFollow))
     .on(Like, withInboundObservability('reaction', handleInboundReaction))
     .on(Move, withInboundObservability('move', handleInboundMove))
     .on(Reject, withInboundObservability('reject', handleInboundReject))
     .on(Undo, withInboundObservability('undo', handleInboundUndo))
-    .on(Update, withInboundObservability('update', handleInboundUpdate))
+    .on(
+      Update,
+      withInboundObservability('update', (context, activity) =>
+        handleInboundUpdate(quoteContext(context), activity),
+      ),
+    )
     .onError((_context, error) => {
       if (hasInboundErrorBeenObserved(error)) {
         return;
