@@ -1165,6 +1165,115 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
   }
 });
 
+test('공통 Notification Activity는 저장된 Mention ID마다 Push를 시작하고 한 번의 실패를 격리한다', async (t) => {
+  const fixture = await createAccountDeletionFixture({
+    profileStates: [ProfileState.ACTIVE, ProfileState.ACTIVE],
+  });
+  let postId: string | null = null;
+
+  try {
+    const [recipient, secondRecipient] = fixture.profiles;
+    assert.ok(recipient);
+    assert.ok(secondRecipient);
+    const author = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
+    const publishedAt = Temporal.Now.instant();
+    const createdPost = await createCorePost({
+      document: postContentDocumentFromText('Mention source preview'),
+      mentionProfileIds: [recipient.id, secondRecipient.id],
+      objectUri: `https://${author.handle}.example/posts/${crypto.randomUUID()}`,
+      origin: 'ACTIVITYPUB',
+      profileId: author.id,
+      publishedAt,
+      receivedAt: publishedAt,
+      visibility: PostVisibility.PUBLIC,
+    });
+    if (!createdPost.created) {
+      throw new Error('Expected a new ActivityPub Mention source post');
+    }
+    postId = createdPost.post.id;
+
+    let startAttempts = 0;
+    const start = t.mock.method(temporalClient.workflow, 'start', async () => {
+      startAttempts += 1;
+      if (startAttempts === 1) {
+        throw new Error('temporary Push workflow start failure');
+      }
+      return undefined as never;
+    });
+
+    await new MockActivityEnvironment().run(createNotificationActivity, {
+      kind: NotificationKind.MENTION,
+      sourceId: postId,
+    });
+
+    const notifications = await db
+      .select()
+      .from(Notifications)
+      .where(eq(Notifications.sourceId, postId));
+    assert.equal(notifications.length, 2);
+    assert.ok(notifications.every(({ kind }) => kind === NotificationKind.MENTION));
+    assert.deepEqual(
+      new Set(notifications.map(({ recipientProfileId }) => recipientProfileId)),
+      new Set([recipient.id, secondRecipient.id]),
+    );
+    assert.equal(start.mock.calls.length, 2);
+
+    const workflowIds = start.mock.calls.map((call) => call.arguments[1]?.workflowId);
+    assert.deepEqual(
+      new Set(workflowIds),
+      new Set(notifications.map(({ id }) => `push-notification:${id}`)),
+    );
+  } finally {
+    if (postId) {
+      await db.update(Posts).set({ currentContentId: null }).where(eq(Posts.id, postId));
+      await db.delete(PostContents).where(eq(PostContents.postId, postId));
+      await db.delete(Posts).where(eq(Posts.id, postId));
+    }
+    await cleanupAccountDeletionFixture(fixture);
+  }
+});
+
+test('공통 Notification Activity는 Mention materialization이 빈 배열이면 Push를 시작하지 않는다', async (t) => {
+  const fixture = await createAccountDeletionFixture({ profileStates: [ProfileState.ACTIVE] });
+  let postId: string | null = null;
+
+  try {
+    const recipient = fixture.profiles[0];
+    assert.ok(recipient);
+    const author = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
+    const createdPost = await createCorePost({
+      document: postContentDocumentFromText('No Mention recipients'),
+      mentionProfileIds: [],
+      objectUri: `https://${author.handle}.example/posts/${crypto.randomUUID()}`,
+      origin: 'ACTIVITYPUB',
+      profileId: author.id,
+      publishedAt: null,
+      receivedAt: Temporal.Now.instant(),
+      visibility: PostVisibility.PUBLIC,
+    });
+    if (!createdPost.created) {
+      throw new Error('Expected a new ActivityPub source post');
+    }
+    postId = createdPost.post.id;
+    const start = t.mock.method(temporalClient.workflow, 'start', async () => undefined as never);
+
+    await new MockActivityEnvironment().run(createNotificationActivity, {
+      kind: NotificationKind.MENTION,
+      sourceId: postId,
+    });
+
+    assert.equal(await db.$count(Notifications), 0);
+    assert.equal(start.mock.calls.length, 0);
+  } finally {
+    if (postId) {
+      await db.update(Posts).set({ currentContentId: null }).where(eq(Posts.id, postId));
+      await db.delete(PostContents).where(eq(PostContents.postId, postId));
+      await db.delete(Posts).where(eq(Posts.id, postId));
+    }
+    await cleanupAccountDeletionFixture(fixture);
+  }
+});
+
 test('Mention Push Notification은 원인 Post의 Mention 타입·경로·안전한 preview를 사용한다', async (t) => {
   const previousProjectId = process.env.FIREBASE_PROJECT_ID;
   process.env.FIREBASE_PROJECT_ID = 'kosmo-push-test';

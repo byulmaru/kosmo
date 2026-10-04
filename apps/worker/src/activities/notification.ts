@@ -2,6 +2,7 @@ import { NotificationKind } from '@kosmo/core/enums';
 import {
   createFollowNotification,
   createFollowRequestNotification,
+  createMentionNotification,
   createQuoteNotification,
   createReactionNotification,
   createReplyNotification,
@@ -22,30 +23,34 @@ export async function createNotificationActivity({
   kind,
   sourceId,
 }: CreateNotificationInput): Promise<void> {
-  const notificationId = await match(kind)
+  const materialized = await match(kind)
     .with(NotificationKind.FOLLOW, () => createFollowNotification(sourceId))
     .with(NotificationKind.FOLLOW_REQUEST, () => createFollowRequestNotification(sourceId))
     .with(NotificationKind.REACTION, () => createReactionNotification(sourceId))
     .with(NotificationKind.REPOST, () => createRepostNotification(sourceId))
     .with(NotificationKind.REPLY, () => createReplyNotification(sourceId))
     .with(NotificationKind.QUOTE, () => createQuoteNotification(sourceId))
+    .with(NotificationKind.MENTION, () => createMentionNotification(sourceId))
     .exhaustive();
+  const notificationIds = typeof materialized === 'string' ? [materialized] : (materialized ?? []);
 
-  if (notificationId !== null) {
-    try {
-      await runWorkflow(pushNotificationWorkflow, {
-        mode: 'start',
-        args: [{ notificationId }],
-        workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
-        workflowIdReusePolicy: WorkflowIdReusePolicy.REJECT_DUPLICATE,
-      });
-    } catch (error: unknown) {
-      if (!(error instanceof Error && error.name === 'WorkflowExecutionAlreadyStartedError')) {
-        log.error('Push notification workflow failed to start', {
-          notificationId,
-          error,
+  await Promise.all(
+    notificationIds.map(async (notificationId) => {
+      try {
+        await runWorkflow(pushNotificationWorkflow, {
+          mode: 'start',
+          args: [{ notificationId }],
+          workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
+          workflowIdReusePolicy: WorkflowIdReusePolicy.REJECT_DUPLICATE,
         });
+      } catch (error: unknown) {
+        if (!(error instanceof Error && error.name === 'WorkflowExecutionAlreadyStartedError')) {
+          log.error('Push notification workflow failed to start', {
+            notificationId,
+            error,
+          });
+        }
       }
-    }
-  }
+    }),
+  );
 }

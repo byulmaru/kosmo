@@ -235,7 +235,7 @@ test(
 );
 
 test(
-  'Post Create Effects Workflow는 Reply, Quote, Mention Notification effect를 함께 실행한다',
+  'Post Create Effects Workflow는 공통 Notification Activity로 Reply, Quote, Mention을 실행한다',
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
@@ -245,7 +245,6 @@ test(
     const taskQueue = `${KOSMO_TASK_QUEUE}-post-create-effects-test-${process.pid}`;
     const localPostId = '00000000-0000-8000-8000-000000000301';
     const remotePostId = '00000000-0000-8000-8000-000000000304';
-    const mentionNotificationId = '00000000-0000-8000-8000-000000000303';
     const calls: string[] = [];
     let mentionAttempts = 0;
     let retryFirstMention = false;
@@ -255,9 +254,9 @@ test(
       activities: {
         createNotificationActivity: async (input: CreateNotificationInput) => {
           calls.push(`${input.kind}:${input.sourceId}`);
-        },
-        createMentionNotificationActivity: async (id: string) => {
-          calls.push(`mention:${id}`);
+          if (input.kind !== NotificationKind.MENTION) {
+            return;
+          }
           mentionAttempts += 1;
           if (retryFirstMention) {
             retryFirstMention = false;
@@ -266,11 +265,6 @@ test(
           if (failMention) {
             throw ApplicationFailure.nonRetryable('Mention notification failed');
           }
-          return id === localPostId ? [] : [mentionNotificationId];
-        },
-        listPushNotificationInstallationsActivity: async (id: string) => {
-          calls.push(`push-list:${id}`);
-          return [];
         },
         sendLocalPostCreateActivity: async (id: string) => calls.push(`send:${id}`),
       },
@@ -292,16 +286,11 @@ test(
           workflowId: `post-create-effects-test:${origin}:${postId}`,
         });
         await handle.result();
-        if (origin === 'ACTIVITYPUB') {
-          await environment.client.workflow
-            .getHandle(`push-notification:${mentionNotificationId}`)
-            .result();
-        }
         assert.deepEqual(
           calls.toSorted(),
           (origin === 'LOCAL'
             ? [
-                `mention:${postId}`,
+                `${NotificationKind.MENTION}:${postId}`,
                 `${NotificationKind.QUOTE}:${postId}`,
                 `${NotificationKind.REPLY}:${postId}`,
                 `send:${postId}`,
@@ -309,9 +298,8 @@ test(
             : [
                 `${NotificationKind.QUOTE}:${postId}`,
                 `${NotificationKind.REPLY}:${postId}`,
-                `mention:${postId}`,
-                `mention:${postId}`,
-                `push-list:${mentionNotificationId}`,
+                `${NotificationKind.MENTION}:${postId}`,
+                `${NotificationKind.MENTION}:${postId}`,
               ]
           ).toSorted(),
         );
@@ -336,7 +324,11 @@ test(
       failMention = false;
       assert.deepEqual(
         calls.toSorted(),
-        [`quote:${failingPostId}`, `reply:${failingPostId}`, `mention:${failingPostId}`].toSorted(),
+        [
+          `${NotificationKind.QUOTE}:${failingPostId}`,
+          `${NotificationKind.REPLY}:${failingPostId}`,
+          `${NotificationKind.MENTION}:${failingPostId}`,
+        ].toSorted(),
       );
       assert.equal(mentionAttempts, 1);
     });

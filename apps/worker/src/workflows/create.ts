@@ -37,11 +37,9 @@ export async function postCreateEffectsWorkflow({
       : []),
     ...(mentionNotificationEnabled
       ? [
-          createMentionNotificationActivity(postId).then((notificationIds) =>
-            pushNotificationDispatchEnabled
-              ? Promise.all(notificationIds.map(startPushNotificationWorkflow))
-              : undefined,
-          ),
+          pushNotificationDispatchEnabled
+            ? createNotificationActivity({ kind: NotificationKind.MENTION, sourceId: postId })
+            : createMentionNotificationActivity(postId),
         ]
       : []),
     ...match(origin)
