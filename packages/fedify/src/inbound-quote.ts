@@ -2,7 +2,7 @@ import '@kosmo/core/polyfill';
 
 import { getDocumentLoader } from '@fedify/fedify/runtime';
 import { quoteInteraction } from '@fedify/interaction-controls';
-import { Note } from '@fedify/vocab';
+import { Note, PUBLIC_COLLECTION } from '@fedify/vocab';
 import {
   ActivityPubActors,
   ActivityPubPosts,
@@ -10,22 +10,38 @@ import {
   first,
   Instances,
   Posts,
+  ProfileFollows,
   Profiles,
 } from '@kosmo/core/db';
-import { InstanceKind, PostQuoteConsentStatus, PostState } from '@kosmo/core/enums';
+import {
+  InstanceKind,
+  InstanceState,
+  PostQuoteConsentStatus,
+  PostState,
+  PostVisibility,
+  ProfileState,
+} from '@kosmo/core/enums';
+import { NotFoundError } from '@kosmo/core/error';
 import { applyPostQuoteConsent } from '@kosmo/core/services';
 import { temporalClient } from '@kosmo/core/temporal/client';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { findPostByActivityPubUri } from './activitypub-post-uri';
 import { isHttpUri } from './activitypub-uri';
-import { materializeHydratedRemoteNote } from './inbound-create-note';
-import { RemoteActorDiscoveryUnavailableError } from './remote-actor-materialization';
+import {
+  materializeFollowersOnlyQuoteNote,
+  materializeHydratedRemoteNote,
+} from './inbound-create-note';
+import {
+  findUsableStoredRemoteProfileActorByUri,
+  RemoteActorDiscoveryUnavailableError,
+} from './remote-actor-materialization';
 import type { Context } from '@fedify/fedify';
 import type { DocumentLoader } from '@fedify/fedify/runtime';
 import type { Object as ActivityPubObject } from '@fedify/vocab';
 import type { Transaction } from '@kosmo/core/db';
 import type { ApplyPostQuoteConsentInput } from '@kosmo/core/services';
+import type { StoredRemoteProfileActor } from './inbound-create-note';
 import type { InboundObservation } from './inbound-observability';
 
 const ActivityPubQuoteFormat = { FEP_044F: 'FEP_044F', LEGACY: 'LEGACY' } as const;
@@ -69,6 +85,12 @@ const currentAuthorizationLoader = async (context: QuoteContext): Promise<Docume
   // Federation's ordinary documentLoader uses kvCache. Authorization URIs can
   // be reused, so the issuer must be queried again for each consent decision.
   return getDocumentLoader({ allowPrivateAddress: false });
+};
+
+type TrustedInboundQuoteSource = {
+  readonly approvalUri: string;
+  readonly authorUri: string;
+  readonly sourceUri: string;
 };
 
 type InboundQuoteInput = {
@@ -125,6 +147,13 @@ type QuoteResolution = {
 
 type QuoteTargetResolution =
   | { kind: 'found'; postId: string }
+  | {
+      expectedActor: StoredRemoteProfileActor;
+      followerProfileId: string;
+      kind: 'followers_note';
+      note: Note;
+      sourceUri: URL;
+    }
   | { kind: 'permanent_failure' }
   | { kind: 'stale' }
   | { kind: 'transient_failure' };
@@ -240,8 +269,11 @@ const hydrateFepReferences = async (
   return { ...extraction, authorization, targetObject };
 };
 
-const loadQuoteSource = async (postId: string): Promise<QuoteSource | null> => {
-  const row = await db
+const loadQuoteSource = async (
+  postId: string,
+  handle: typeof db | Transaction = db,
+): Promise<QuoteSource | null> => {
+  const row = await handle
     .select({
       actorUri: ActivityPubActors.uri,
       canonicalOrigin: Instances.canonicalOrigin,
@@ -276,19 +308,219 @@ const loadQuoteSource = async (postId: string): Promise<QuoteSource | null> => {
   return row.uri ? { ...row, uri: row.uri } : null;
 };
 
+const deriveVerifiedInboundQuoteSource = async ({
+  context,
+  extraction,
+  note,
+}: {
+  context: QuoteContext;
+  extraction: QuoteExtraction;
+  note: Note;
+}): Promise<TrustedInboundQuoteSource | undefined> => {
+  const authorizationId = extraction.authorizationId;
+  const candidateAuthor = extraction.authorization?.attributionId;
+  if (
+    !extraction.fepPropertyPresent ||
+    extraction.malformed ||
+    !authorizationId ||
+    !candidateAuthor ||
+    !isHttpUri(candidateAuthor)
+  ) {
+    return undefined;
+  }
+
+  const verification = await quoteInteraction.verifyAuthorization(context as Context<void>, {
+    attributedTo: candidateAuthor,
+    authorization: authorizationId,
+    interactionTarget: new URL(extraction.targetUri),
+    interactingObject: note,
+  });
+  if (!verification.verified) {
+    return undefined;
+  }
+
+  return {
+    approvalUri: verification.authorizationId.href,
+    authorUri: candidateAuthor.href,
+    sourceUri: extraction.targetUri,
+  };
+};
+
+const findEligibleLocalFollower = async ({
+  followeeProfileId,
+}: {
+  followeeProfileId: string;
+}): Promise<{ profileId: string } | undefined> =>
+  db
+    .select({ profileId: Profiles.id })
+    .from(ProfileFollows)
+    .innerJoin(Profiles, eq(Profiles.id, ProfileFollows.followerProfileId))
+    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+    .where(
+      and(
+        eq(ProfileFollows.followeeProfileId, followeeProfileId),
+        eq(Profiles.state, ProfileState.ACTIVE),
+        eq(Instances.kind, InstanceKind.LOCAL),
+        eq(Instances.state, InstanceState.ACTIVE),
+      ),
+    )
+    .orderBy(asc(Profiles.id))
+    .limit(1)
+    .then(first);
+
+const materializeFollowersOnlyTarget = async ({
+  context,
+  expectation,
+  extraction,
+  postId,
+  receivedAt,
+  trustedSource,
+}: {
+  context: QuoteContext;
+  expectation: QuoteExpectation;
+  extraction: QuoteExtraction;
+  postId: string;
+  receivedAt: Temporal.Instant;
+  trustedSource: TrustedInboundQuoteSource;
+}): Promise<QuoteTargetResolution> => {
+  const sourceUri = new URL(trustedSource.sourceUri);
+
+  let expectedActor: StoredRemoteProfileActor | undefined;
+  try {
+    expectedActor = await findUsableStoredRemoteProfileActorByUri(trustedSource.authorUri);
+  } catch (error) {
+    if (error instanceof NotFoundError) {
+      return { kind: 'permanent_failure' };
+    }
+    throw error;
+  }
+  if (!expectedActor || expectedActor.actor.uri !== trustedSource.authorUri) {
+    return { kind: 'permanent_failure' };
+  }
+
+  const follower = await findEligibleLocalFollower({
+    followeeProfileId: expectedActor.profile.id,
+  });
+  if (!follower) {
+    return { kind: 'permanent_failure' };
+  }
+  if (!(await matchesQuoteExpectation(postId, expectation))) {
+    return { kind: 'stale' };
+  }
+
+  let keyPairs;
+  try {
+    keyPairs = await context.getActorKeyPairs(follower.profileId);
+  } catch {
+    return { kind: 'transient_failure' };
+  }
+  const keyPair = [...keyPairs]
+    .filter((candidate) => candidate.privateKey !== null)
+    .sort((left, right) => left.keyId.href.localeCompare(right.keyId.href))[0];
+  if (!keyPair || !keyPair.privateKey) {
+    return { kind: 'permanent_failure' };
+  }
+
+  let targetObject: ActivityPubObject | null;
+  let documentLoader: ReturnType<QuoteContext['getDocumentLoader']>;
+  try {
+    documentLoader = context.getDocumentLoader({
+      keyId: keyPair.keyId,
+      privateKey: keyPair.privateKey,
+    });
+  } catch {
+    return { kind: 'permanent_failure' };
+  }
+
+  try {
+    targetObject = await context.lookupObject(sourceUri, {
+      contextLoader: context.contextLoader,
+      crossOrigin: 'trust',
+      documentLoader,
+    });
+  } catch {
+    return { kind: 'transient_failure' };
+  }
+
+  if (
+    !(targetObject instanceof Note) ||
+    !targetObject.id ||
+    targetObject.id.href !== extraction.targetUri
+  ) {
+    return { kind: 'permanent_failure' };
+  }
+  if (!(await matchesQuoteExpectation(postId, expectation))) {
+    return { kind: 'stale' };
+  }
+
+  if (
+    targetObject.toIds.some((uri) => uri.href === PUBLIC_COLLECTION.href) ||
+    targetObject.ccIds.some((uri) => uri.href === PUBLIC_COLLECTION.href)
+  ) {
+    try {
+      const materialized = await materializeHydratedRemoteNote({
+        context: {
+          ...context,
+          lookupObject: async (identifier) => {
+            try {
+              return await context.lookupObject(identifier);
+            } catch (error) {
+              throw new RemoteActorDiscoveryUnavailableError('Remote actor lookup failed.', {
+                cause: error,
+              });
+            }
+          },
+        },
+        note: targetObject,
+        objectUri: sourceUri,
+        observation: { activityType: 'Create', handler: 'create' },
+        receivedAt,
+      });
+      return materialized.status === 'rejected'
+        ? { kind: 'permanent_failure' }
+        : { kind: 'found', postId: materialized.postId };
+    } catch (error) {
+      if (error instanceof RemoteActorDiscoveryUnavailableError) {
+        return { kind: 'transient_failure' };
+      }
+      throw error;
+    }
+  }
+
+  return {
+    expectedActor,
+    followerProfileId: follower.profileId,
+    kind: 'followers_note',
+    note: targetObject,
+    sourceUri,
+  };
+};
+
 const materializeTarget = async ({
   context,
   expectation,
   extraction,
   postId,
   receivedAt,
+  trustedSource,
 }: {
   context: QuoteContext;
-  expectation?: QuoteExpectation;
+  expectation: QuoteExpectation;
   extraction: QuoteExtraction;
   postId: string;
   receivedAt: Temporal.Instant;
+  trustedSource?: TrustedInboundQuoteSource;
 }): Promise<QuoteTargetResolution> => {
+  if (trustedSource && extraction.targetObject === null) {
+    return materializeFollowersOnlyTarget({
+      context,
+      expectation,
+      extraction,
+      postId,
+      receivedAt,
+      trustedSource,
+    });
+  }
   let targetObject = extraction.targetObject;
   if (targetObject === null) {
     const targetUri = new URL(extraction.targetUri);
@@ -491,8 +723,9 @@ const persistQuoteResolution = async (
   expectation: QuoteExpectation,
   quote: QuoteSource,
   source: QuoteSource | null,
+  handle: typeof db | Transaction = db,
 ): Promise<{ applied: boolean; expectation: QuoteExpectation }> => {
-  const next = await db.transaction(async (tx) => {
+  const next = await handle.transaction(async (tx) => {
     if (resolution.sourcePostId === null) {
       // There is no Source identity for the shared RESOLVE yet. Only initialize
       // pending consent; never erase a verified rejection/revocation or relation.
@@ -557,6 +790,119 @@ const persistQuoteResolution = async (
       : null;
   });
   return { applied: !!next, expectation: next || expectation };
+};
+
+class FollowersQuoteCommitRaceError extends Error {}
+
+class FollowersQuoteMaterializationRejectedError extends Error {
+  constructor() {
+    super('Followers-only Quote Source no longer satisfies the verified private projection');
+  }
+}
+
+const commitFollowersOnlyQuoteResolution = async ({
+  context,
+  quote,
+  expectation,
+  extraction,
+  postId,
+  receivedAt,
+  target,
+  trustedSource,
+}: {
+  context: QuoteContext;
+  quote: QuoteSource;
+  expectation: QuoteExpectation;
+  extraction: QuoteExtraction;
+  postId: string;
+  receivedAt: Temporal.Instant;
+  target: Extract<QuoteTargetResolution, { kind: 'followers_note' }>;
+  trustedSource: TrustedInboundQuoteSource;
+}): Promise<InboundQuoteResolution | null> => {
+  let postCommit: (() => Promise<void>) | undefined;
+  try {
+    const stored = await db.transaction(async (tx) => {
+      const materialized = await materializeFollowersOnlyQuoteNote({
+        context,
+        expectedActor: target.expectedActor,
+        followerProfileId: target.followerProfileId,
+        note: target.note,
+        objectUri: target.sourceUri,
+        receivedAt,
+        transaction: tx,
+      });
+      if (materialized.status === 'rejected' || !materialized.postId) {
+        return null;
+      }
+
+      const materializedSource = await tx
+        .select({
+          actorUri: ActivityPubActors.uri,
+          currentContentId: Posts.currentContentId,
+          profileId: Posts.profileId,
+          state: Posts.state,
+          visibility: Posts.visibility,
+        })
+        .from(Posts)
+        .innerJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Posts.profileId))
+        .where(eq(Posts.id, materialized.postId))
+        .limit(1)
+        .then(first);
+      if (
+        materializedSource?.actorUri !== trustedSource.authorUri ||
+        materializedSource.profileId !== target.expectedActor.profile.id ||
+        materializedSource.state !== PostState.ACTIVE ||
+        materializedSource.currentContentId === null ||
+        materializedSource.visibility !== PostVisibility.FOLLOWERS
+      ) {
+        throw new FollowersQuoteMaterializationRejectedError();
+      }
+
+      const source = await loadQuoteSource(materialized.postId, tx);
+      const resolution: QuoteResolution = {
+        proof: {
+          kind: 'AUTHORIZATION',
+          approvalUri: trustedSource.approvalUri,
+          issuerActorUri: trustedSource.authorUri,
+        },
+        approvalUri: trustedSource.approvalUri,
+        format: extraction.format,
+        retryable: false,
+        sourcePostId: materialized.postId,
+        status: PostQuoteConsentStatus.APPROVED,
+        targetUri: extraction.targetUri,
+      };
+      const persisted = await persistQuoteResolution(
+        resolution,
+        postId,
+        expectation,
+        quote,
+        source,
+        tx,
+      );
+      if (!persisted.applied) {
+        throw new FollowersQuoteCommitRaceError();
+      }
+      postCommit = materialized.postCommit;
+      return persisted.expectation;
+    });
+    if (!stored) {
+      return null;
+    }
+    await postCommit?.();
+    return { retryable: false, status: stored.expectedStatus };
+  } catch (error) {
+    if (error instanceof FollowersQuoteCommitRaceError) {
+      return {
+        retryable: false,
+        status: (await loadQuoteExpectation(postId))?.expectedStatus ?? null,
+      };
+    }
+    if (error instanceof FollowersQuoteMaterializationRejectedError) {
+      return null;
+    }
+    throw error;
+  }
 };
 
 const startQuoteResolutionWorkflow = async (input: InboundQuoteRetryInput): Promise<void> => {
@@ -666,6 +1012,7 @@ export const handleInboundQuote = async ({
   }
 
   extraction = await hydrateFepReferences(context, note, extraction);
+  const trustedSource = await deriveVerifiedInboundQuoteSource({ context, extraction, note });
 
   let targetResolution: QuoteTargetResolution = { kind: 'permanent_failure' };
   if (!extraction.malformed) {
@@ -681,6 +1028,7 @@ export const handleInboundQuote = async ({
           extraction,
           postId,
           receivedAt,
+          trustedSource,
         });
   }
 
@@ -690,8 +1038,29 @@ export const handleInboundQuote = async ({
       status: (await loadQuoteExpectation(postId))?.expectedStatus ?? null,
     };
   }
-  const sourcePostId = targetResolution.kind === 'found' ? targetResolution.postId : undefined;
-  const source = sourcePostId ? await loadQuoteSource(sourcePostId) : null;
+  if (targetResolution.kind === 'followers_note' && trustedSource) {
+    const committed = await commitFollowersOnlyQuoteResolution({
+      context,
+      quote,
+      expectation,
+      extraction,
+      postId,
+      receivedAt,
+      target: targetResolution,
+      trustedSource,
+    });
+    if (committed) {
+      return committed;
+    }
+    targetResolution = { kind: 'permanent_failure' };
+  }
+  let sourcePostId = targetResolution.kind === 'found' ? targetResolution.postId : undefined;
+  let source = sourcePostId ? await loadQuoteSource(sourcePostId) : null;
+  if (trustedSource && source && source.actorUri !== trustedSource.authorUri) {
+    sourcePostId = undefined;
+    source = null;
+    targetResolution = { kind: 'permanent_failure' };
+  }
   let resolution: QuoteResolution;
   if (extraction.malformed) {
     resolution = {

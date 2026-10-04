@@ -563,7 +563,6 @@ const materializeRemoteNote = async ({
         ),
       )
       .limit(1)
-      .for('update')
       .then(first);
     if (!current) {
       return { reason: 'followers_visibility_without_follow', status: 'rejected' };
