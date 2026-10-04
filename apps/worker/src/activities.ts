@@ -6,6 +6,7 @@ export {
   captureDatabaseCountsSnapshotActivity,
   loadDatabaseCountsSnapshotActivity,
 } from './activities/database-counts-snapshot';
+export { createNotificationActivity } from './activities/notification';
 export {
   executeProfileBlockTransitionActivity,
   executeProfileUnblockTransitionActivity,

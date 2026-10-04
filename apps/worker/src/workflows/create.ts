@@ -1,8 +1,8 @@
+import { NotificationKind } from '@kosmo/core/enums';
 import { patched, proxyActivities } from '@temporalio/workflow';
 import { match } from 'ts-pattern';
 import { workflowActivityOptions } from './activity-options';
 import { settleEffects } from './settle-effects';
-import { startPushNotificationWorkflow } from './start-push-notification';
 import type * as activities from '../activities';
 
 type PostCreateEffectsInput = {
@@ -11,6 +11,7 @@ type PostCreateEffectsInput = {
 };
 
 const {
+  createNotificationActivity,
   createQuoteNotificationActivity,
   createReplyNotificationActivity,
   sendLocalPostCreateActivity,
@@ -22,16 +23,14 @@ export async function postCreateEffectsWorkflow({
 }: PostCreateEffectsInput): Promise<void> {
   const pushNotificationDispatchEnabled = patched('post-create-effects-push-notification-v1');
   await settleEffects([
-    createReplyNotificationActivity(postId).then((notificationId) =>
-      pushNotificationDispatchEnabled ? startPushNotificationWorkflow(notificationId) : undefined,
-    ),
+    pushNotificationDispatchEnabled
+      ? createNotificationActivity({ kind: NotificationKind.REPLY, sourceId: postId })
+      : createReplyNotificationActivity(postId),
     ...(patched('post-create-effects-quote-notification-v1')
       ? [
-          createQuoteNotificationActivity(postId).then((notificationId) =>
-            pushNotificationDispatchEnabled
-              ? startPushNotificationWorkflow(notificationId)
-              : undefined,
-          ),
+          pushNotificationDispatchEnabled
+            ? createNotificationActivity({ kind: NotificationKind.QUOTE, sourceId: postId })
+            : createQuoteNotificationActivity(postId),
         ]
       : []),
     ...match(origin)

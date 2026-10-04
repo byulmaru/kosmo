@@ -30,6 +30,11 @@ installation token lifecycle을 고정하므로 앱 설정의 권한 처리와 t
   활성화 때 FCM token을 자동 동기화하고, 권한 요청이 허용된 직후에도 token을 즉시 동기화한다.
 - 서버의 FCM OS 표시 payload는 `notification.title`과 `notification.body`를 사용해 발신자, 알림 유형과 허용된 게시글 본문 미리보기를 표시한다.
 - Follow와 FollowRequest처럼 게시글 본문이 없는 알림은 본문 미리보기를 생략한다.
+- 공통 Worker Notification Activity는 Domain Workflow의 Notification 생성 요청을 받아 기존 Core materializer를
+  호출한다. 저장된 Notification ID가 반환되면 그 ID로 기존 Push delivery Workflow를 시작하고 start
+  acknowledgement만 기다린다. materializer가 Notification을 만들지 않거나 실패하면 Push를 시작하지 않는다.
+  commit 뒤 Workflow 시작이 실패해도 저장된 Notification을 유지하고 해당 시작만을 위해 Activity를 재시도하지
+  않는다.
 - Push transport는 canonical Notification이 저장 성공한 결과를 받는 공통 전달 flow를 소유한다. 현재
   Notification runtime이 생성·제공하는 모든 알림은 이 flow에서 같은 수신 대상 fan-out, 권한·visibility 억제,
   preview privacy, 24시간 expiry, no-backlog, retry·dedup와 원본 실패 격리 계약을 적용한다. 현재 runtime의
@@ -90,10 +95,10 @@ installation token lifecycle을 고정하므로 앱 설정의 권한 처리와 t
   전달 자체는 canonical read state를 변경하지 않는다.
 - Provider의 accepted 응답은 기기 도착을 증명하지 않으며, Provider에 큐잉된 Push를 절대적으로 회수할 수
   있다는 보장도 없다. 이는 Provider·플랫폼의 관찰 가능한 경계다.
-- 이 결정은 공통 Push flow가 canonical Notification 저장 성공 결과부터 수신 대상 fan-out과 전달 lifecycle을
-  소유한다는 경계와, 앱 설정의 권한 상태별 동작, 현재 Push 대상 검증 범위, 기본 잠금 화면 정보와 본문 예외,
-  foreground OS 배너, OS 설정 이동과 token 동기화, cross-profile target 처리, 다중 설치 fan-out, Push 만료와
-  read state 독립성을 고정한다.
+- 이 결정은 공통 Worker Notification Activity가 저장된 Notification ID를 기존 Push delivery Workflow에
+  연결하고, Push flow가 이후 수신 대상 fan-out과 전달 lifecycle을 소유한다는 경계와 앱 설정의 권한 상태별 동작,
+  현재 Push 대상 검증 범위, 기본 잠금 화면 정보와 본문 예외, foreground OS 배너, OS 설정 이동과 token 동기화,
+  cross-profile target 처리, 다중 설치 fan-out, Push 만료와 read state 독립성을 고정한다.
   PROD-912가 소유하는 installation token의 저장·폐기 lifecycle은 위와 같이 정한다. Provider SDK,
   정확한 retry/backoff 정책과 route data 및 OS 표시용 title/body 밖의 provider payload는 이 ADR에서 정하지 않는다.
 

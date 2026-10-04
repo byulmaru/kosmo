@@ -114,11 +114,12 @@ composer control은 자체 동작만 수행한다. 모두 읽음, unread indicat
   전달 자체는 canonical read state를 변경하지 않는다.
 - Provider의 accepted 응답은 기기 도착을 증명하지 않으며, Provider에 큐잉된 Push를 절대적으로 회수할 수
   있다는 보장도 없다. 이는 Provider·플랫폼의 관찰 가능한 경계다.
-- 이 결정은 공통 Push flow가 canonical Notification 저장 성공 결과부터 수신 대상 fan-out과 전달 lifecycle을
-  소유한다는 경계와, 앱 설정의 권한 상태별 동작, 현재 integration inventory, 기본 표시 구성과 foreground OS
-  배너, OS 설정 이동과 token 동기화, cross-profile target 처리, Push 만료와 read state 독립성을 확정한다. 미리보기
-  excerpt 길이와 PROD-911이 소유하는 향후 Mention 생성·통합 및 유형별 source·표시 계약은 별도 범위로 남지만,
-  해당 type이 canonical Notification으로 저장되면 같은 공통 Push flow를 사용한다.
+- 이 결정은 공통 Worker Notification Activity가 저장된 Notification ID를 기존 Push delivery Workflow에
+  연결하고, Push flow가 이후 수신 대상 fan-out과 전달 lifecycle을 소유한다는 경계와 앱 설정의 권한 상태별 동작,
+  현재 integration inventory, 기본 표시 구성과 foreground OS 배너, OS 설정 이동과 token 동기화, cross-profile
+  target 처리, Push 만료와 read state 독립성을 확정한다. 미리보기 excerpt 길이와 PROD-911이 소유하는 향후
+  Mention 생성·통합 및 유형별 source·표시 계약은 별도 범위로 남지만, 해당 type이 canonical Notification으로
+  저장되면 같은 공통 Push flow를 사용한다.
 
 ## 표시와 합성
 

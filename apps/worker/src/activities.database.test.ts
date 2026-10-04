@@ -19,6 +19,9 @@ import {
   SessionState,
 } from '@kosmo/core/enums';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
+import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
+import { WorkflowIdConflictPolicy, WorkflowIdReusePolicy } from '@temporalio/client';
+import { MockActivityEnvironment } from '@temporalio/testing';
 import { eq, inArray } from 'drizzle-orm';
 import type * as CoreDb from '@kosmo/core/db';
 import type {
@@ -26,7 +29,9 @@ import type {
   deletePost as DeletePost,
   repostPost as RepostPost,
 } from '@kosmo/core/services';
+import type { temporalClient as TemporalClient } from '@kosmo/core/temporal/client';
 import type {
+  createNotificationActivity as CreateNotificationActivity,
   createQuoteNotificationActivity as CreateQuoteNotificationActivity,
   createReactionNotificationActivity as CreateReactionNotificationActivity,
   createReplyNotificationActivity as CreateReplyNotificationActivity,
@@ -37,6 +42,8 @@ import type {
 } from './activities';
 
 process.env.DATABASE_URL ??= 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
+process.env.TEMPORAL_ADDRESS ??= '127.0.0.1:7233';
+process.env.TEMPORAL_NAMESPACE ??= 'test';
 
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
@@ -70,6 +77,8 @@ let createReplyNotificationActivity: typeof CreateReplyNotificationActivity;
 let createRepostNotificationActivity: typeof CreateRepostNotificationActivity;
 let deleteRepostNotificationActivity: typeof DeleteRepostNotificationActivity;
 let repostPost: typeof RepostPost;
+let createNotificationActivity: typeof CreateNotificationActivity;
+let temporalClient: typeof TemporalClient;
 
 before(async () => {
   ({
@@ -97,6 +106,7 @@ before(async () => {
     Sessions,
   } = await import('@kosmo/core/db'));
   ({
+    createNotificationActivity,
     createReactionNotificationActivity,
     createQuoteNotificationActivity,
     createReplyNotificationActivity,
@@ -105,6 +115,7 @@ before(async () => {
     deleteReactionNotificationActivity,
     deleteRepostNotificationActivity,
   } = await import('./activities'));
+  ({ temporalClient } = await import('@kosmo/core/temporal/client'));
   ({ createPost: createCorePost, deletePost, repostPost } = await import('@kosmo/core/services'));
   await db
     .insert(NotificationRollouts)
@@ -593,6 +604,156 @@ test('Quote와 Reply의 recipient가 다르면 각 알림을 독립적으로 만
     ]),
   );
   assert.deepEqual(new Set(notificationIds), new Set(notifications.map(({ id }) => id)));
+});
+
+test('공통 Notification Activity는 저장된 ID로 Push Workflow를 시작하고 전달 완료는 기다리지 않는다', async (t) => {
+  const recipient = await createProfile();
+  const author = await createProfile();
+  const parent = await createPost(recipient.id);
+  const reply = await createPost(author.id, { replyParentId: parent.id });
+  let releaseStart!: (handle: unknown) => void;
+  const startAcknowledgement = new Promise<unknown>((resolve) => {
+    releaseStart = resolve;
+  });
+  let signalStartEntered!: () => void;
+  const startEntered = new Promise<void>((resolve) => {
+    signalStartEntered = resolve;
+  });
+  let workflowResultCalled = false;
+  const start = t.mock.method(temporalClient.workflow, 'start', async () => {
+    assert.equal(await db.$count(Notifications), 1);
+    signalStartEntered();
+    return (await startAcknowledgement) as never;
+  });
+  const execute = t.mock.method(temporalClient.workflow, 'execute', async () => {
+    throw new Error('Push delivery must remain detached');
+  });
+
+  const activityRun = new MockActivityEnvironment().run(createNotificationActivity, {
+    kind: NotificationKind.REPLY,
+    sourceId: reply.id,
+  });
+  let activitySettled = false;
+  void activityRun.then(
+    () => {
+      activitySettled = true;
+    },
+    () => {
+      activitySettled = true;
+    },
+  );
+  await startEntered;
+  assert.equal(activitySettled, false);
+
+  const handle = {
+    workflowId: 'push-notification:test',
+    firstExecutionRunId: 'test-run',
+    result: async () => {
+      workflowResultCalled = true;
+    },
+  };
+  releaseStart(handle);
+  await activityRun;
+
+  assert.equal(start.mock.calls.length, 1);
+  assert.equal(execute.mock.calls.length, 0);
+  assert.equal(workflowResultCalled, false);
+  const notification = (await db.select().from(Notifications))[0];
+  assert.ok(notification);
+  const startCall = start.mock.calls[0];
+  assert.ok(startCall);
+  assert.equal(startCall.arguments[0], 'pushNotificationDeliveryWorkflow');
+  const startOptions = startCall.arguments[1];
+  assert.ok(startOptions);
+  assert.deepEqual(startOptions.args, [{ notificationId: notification.id }]);
+  assert.equal(startOptions.workflowId, `push-notification:${notification.id}`);
+  assert.equal(startOptions.taskQueue, KOSMO_TASK_QUEUE);
+  assert.equal(startOptions.workflowIdConflictPolicy, WorkflowIdConflictPolicy.USE_EXISTING);
+  assert.equal(startOptions.workflowIdReusePolicy, WorkflowIdReusePolicy.REJECT_DUPLICATE);
+});
+
+test('공통 Notification Activity는 Notification이 materialize되지 않으면 Push를 시작하지 않는다', async (t) => {
+  const start = t.mock.method(temporalClient.workflow, 'start', async () => undefined as never);
+
+  await new MockActivityEnvironment().run(createNotificationActivity, {
+    kind: NotificationKind.REPLY,
+    sourceId: crypto.randomUUID(),
+  });
+
+  assert.equal(await db.$count(Notifications), 0);
+  assert.equal(start.mock.calls.length, 0);
+});
+
+test('공통 Notification Activity는 Core materialization 실패를 전파하고 Push를 시작하지 않는다', async (t) => {
+  const recipient = await createProfile();
+  const author = await createProfile();
+  const parent = await createPost(recipient.id);
+  const reply = await createPost(author.id, { replyParentId: parent.id });
+  const suffix = crypto.randomUUID().replaceAll('-', '');
+  const functionName = `test_notification_materialization_failure_${suffix}`;
+  const triggerName = `test_notification_materialization_failure_${suffix}`;
+  let triggerCreated = false;
+  const start = t.mock.method(temporalClient.workflow, 'start', async () => undefined as never);
+
+  try {
+    await pg.unsafe(`
+      CREATE FUNCTION "${functionName}"() RETURNS trigger
+      LANGUAGE plpgsql AS $$
+      BEGIN
+        RAISE EXCEPTION 'notification materialization failed';
+      END;
+      $$
+    `);
+    await pg.unsafe(`
+      CREATE TRIGGER "${triggerName}"
+      BEFORE INSERT ON "notification"
+      FOR EACH ROW EXECUTE FUNCTION "${functionName}"()
+    `);
+    triggerCreated = true;
+
+    await assert.rejects(
+      new MockActivityEnvironment().run(createNotificationActivity, {
+        kind: NotificationKind.REPLY,
+        sourceId: reply.id,
+      }),
+    );
+    assert.equal(await db.$count(Notifications), 0);
+    assert.equal(start.mock.calls.length, 0);
+  } finally {
+    if (triggerCreated) {
+      await pg.unsafe(`DROP TRIGGER "${triggerName}" ON "notification"`);
+    }
+    await pg.unsafe(`DROP FUNCTION IF EXISTS "${functionName}"()`);
+  }
+});
+
+test('공통 Notification Activity는 Push start 실패 뒤 저장된 알림을 보존하고 이미 시작된 Workflow를 허용한다', async (t) => {
+  const recipient = await createProfile();
+  const author = await createProfile();
+  const parent = await createPost(recipient.id);
+  const reply = await createPost(author.id, { replyParentId: parent.id });
+  const startErrors = [new Error('temporary Temporal failure'), new Error('already started')];
+  const duplicateStart = startErrors[1];
+  assert.ok(duplicateStart);
+  duplicateStart.name = 'WorkflowExecutionAlreadyStartedError';
+  const start = t.mock.method(temporalClient.workflow, 'start', async () => {
+    const error = startErrors.shift();
+    assert.ok(error);
+    throw error;
+  });
+  const input = { kind: NotificationKind.REPLY, sourceId: reply.id } as const;
+
+  await new MockActivityEnvironment().run(createNotificationActivity, input);
+  await new MockActivityEnvironment().run(createNotificationActivity, input);
+
+  const notifications = await db.select().from(Notifications);
+  assert.equal(notifications.length, 1);
+  assert.equal(start.mock.calls.length, 2);
+  const workflowIds = start.mock.calls.map((call) => call.arguments[1]?.workflowId);
+  assert.deepEqual(workflowIds, [
+    `push-notification:${notifications[0]?.id}`,
+    `push-notification:${notifications[0]?.id}`,
+  ]);
 });
 
 test('Reaction Notification Activities는 create와 delete retry에 멱등이다', async () => {
