@@ -199,6 +199,90 @@ test(
   },
 );
 
+for (const scenario of ['pending-limit', 'stale-signal'] as const) {
+  test(
+    `Quote resolution ${scenario}은 재시도를 보존하고 한도에서 실행을 종료한다`,
+    { timeout: 120_000 },
+    async (t) => {
+      const environment = await TestWorkflowEnvironment.createTimeSkipping();
+      t.after(() => environment.teardown());
+      const taskQueue = `${KOSMO_TASK_QUEUE}-quote-${scenario}-${process.pid}`;
+      const input = {
+        postId: 'quote',
+        targetUri: 'https://source.example/notes/1',
+        format: 'FEP_044F',
+        approvalUri: 'https://source.example/authorization/new',
+        expectedStatus: 'PENDING',
+        expectedApprovalUri: 'https://source.example/authorization/new',
+        expectedRepostSourceId: null,
+      };
+      const seen: string[] = [];
+      let entered!: () => void;
+      let release!: () => void;
+      const activityEntered = new Promise<void>((resolve) => {
+        entered = resolve;
+      });
+      const activityReleased = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const worker = await Worker.create({
+        activities: {
+          resolveActivityPubQuoteActivity: async (current: typeof input) => {
+            seen.push(current.approvalUri);
+            if (scenario === 'stale-signal') {
+              if (seen.length === 1) {
+                entered();
+                await activityReleased;
+              } else {
+                return {
+                  retryable: false,
+                  status: current.approvalUri === input.approvalUri ? 'APPROVED' : 'PENDING',
+                };
+              }
+            }
+            return { retryable: true, status: 'PENDING', retryInput: current };
+          },
+        },
+        connection: environment.nativeConnection,
+        namespace: environment.namespace,
+        taskQueue,
+        workflowsPath,
+      });
+      await worker.runUntil(async () => {
+        const handle = await environment.client.workflow.start(
+          'activitypubQuoteResolutionWorkflow',
+          {
+            args: [input],
+            taskQueue,
+            workflowId: `quote-${scenario}`,
+          },
+        );
+        if (scenario === 'pending-limit') {
+          await assert.rejects(handle.result());
+        } else {
+          await activityEntered;
+          await handle.signal('resolveQuote', {
+            ...input,
+            approvalUri: 'https://source.example/authorization/old',
+            expectedApprovalUri: 'https://source.example/authorization/old',
+          });
+          release();
+          await handle.result();
+        }
+      });
+      if (scenario === 'pending-limit') {
+        assert.equal(seen.length, 10);
+      } else {
+        assert.deepEqual(seen, [
+          input.approvalUri,
+          'https://source.example/authorization/old',
+          input.approvalUri,
+        ]);
+      }
+    },
+  );
+}
+
 test(
   'Reaction Effects Workflow의 origin 분기와 sibling Activity 격리를 검증한다',
   { timeout: 120_000 },

@@ -630,7 +630,7 @@ export const handleInboundQuote = async ({
       approvalUri: extraction.authorizationId?.href ?? null,
       format: extraction.format,
       sourcePostId: null,
-      status: transient ? PostQuoteConsentStatus.PENDING : PostQuoteConsentStatus.PENDING,
+      status: PostQuoteConsentStatus.PENDING,
       targetUri: extraction.targetUri,
       retryable: transient,
     };
@@ -657,7 +657,10 @@ export const handleInboundQuote = async ({
 
   const stored = await persistQuoteResolution(resolution, postId, expectation, quote, source);
   if (!stored.applied) {
-    return { retryable: false, status: stored.expectation.expectedStatus };
+    return {
+      retryable: false,
+      status: (await loadQuoteExpectation(postId))?.expectedStatus ?? null,
+    };
   }
   if (
     startWorkflow &&

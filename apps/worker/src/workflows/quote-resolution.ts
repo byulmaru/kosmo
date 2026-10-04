@@ -1,4 +1,5 @@
 import {
+  ApplicationFailure,
   condition,
   defineQuery,
   defineSignal,
@@ -30,38 +31,50 @@ export async function activitypubQuoteResolutionWorkflow(
   if (!parsed.success) {
     return;
   }
-  let latest = parsed.data;
-  let pending: ActivityPubQuoteResolutionInput | null = latest;
-  setHandler(defineQuery<ActivityPubQuoteResolutionInput>('inboundQuoteInput'), () => latest);
+  const original = parsed.data;
+  type Attempt = { input: ActivityPubQuoteResolutionInput; attempts: number };
+  const pending: Attempt[] = [{ input: original, attempts: 0 }];
+  let active: Attempt | undefined;
+  const sameSnapshot = (
+    left: ActivityPubQuoteResolutionInput,
+    right: ActivityPubQuoteResolutionInput,
+  ) =>
+    left.approvalUri === right.approvalUri &&
+    left.expectedStatus === right.expectedStatus &&
+    left.expectedApprovalUri === right.expectedApprovalUri &&
+    left.expectedRepostSourceId === right.expectedRepostSourceId;
+  // Quote identity is immutable; candidates are validated against Posts by the Activity.
+  setHandler(defineQuery<ActivityPubQuoteResolutionInput>('inboundQuoteInput'), () => original);
   setHandler(defineSignal<[ActivityPubQuoteResolutionInput]>('resolveQuote'), (input) => {
     const update = activityPubQuoteResolutionInputSchema.safeParse(input);
     if (
       !update.success ||
-      update.data.postId !== latest.postId ||
-      update.data.targetUri !== latest.targetUri ||
-      update.data.format !== latest.format
+      update.data.postId !== original.postId ||
+      update.data.targetUri !== original.targetUri ||
+      update.data.format !== original.format
     ) {
       return;
     }
-    latest = update.data;
-    pending = latest;
-  });
-  let attempts = 0;
-  while (pending !== null) {
-    const current: ActivityPubQuoteResolutionInput = pending;
-    pending = null;
-    const result: Awaited<ReturnType<typeof resolveActivityPubQuoteActivity>> =
-      await resolveActivityPubQuoteActivity(current);
-    if (result.retryable && result.retryInput) {
-      if (++attempts >= 10) {
-        throw new Error('Quote resolution retry limit reached');
-      }
-      await condition(() => pending !== null, Math.min(1000 * 2 ** (attempts - 1), 60000));
-      if (pending === null) {
-        pending = result.retryInput;
-      }
-    } else {
-      attempts = 0;
+    if (active && sameSnapshot(active.input, update.data)) {
+      return;
     }
+    if (!pending.some((attempt) => sameSnapshot(attempt.input, update.data))) {
+      pending.push({ input: update.data, attempts: 0 });
+    }
+  });
+  while (pending.length > 0) {
+    active = pending.shift()!;
+    const result = await resolveActivityPubQuoteActivity(active.input);
+    if (result.retryable && result.retryInput) {
+      if (active.attempts + 1 >= 10) {
+        throw ApplicationFailure.nonRetryable('Quote resolution retry limit reached');
+      }
+      await condition(() => pending.length > 0, Math.min(1000 * 2 ** active.attempts, 60000));
+      // A delayed stale signal cannot discard the successful Activity's retry input.
+      if (!pending.some((attempt) => sameSnapshot(attempt.input, result.retryInput!))) {
+        pending.push({ input: result.retryInput, attempts: active.attempts + 1 });
+      }
+    }
+    active = undefined;
   }
 }
