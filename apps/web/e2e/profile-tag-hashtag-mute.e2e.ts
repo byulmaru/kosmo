@@ -374,7 +374,7 @@ for (const transition of ['hashtag', 'profile'] as const) {
     await page.goBack();
     await expect(page).toHaveURL(new RegExp(`/@${target.handle}$`, 'u'));
     if (transition === 'profile') {
-      await selectProfileFromSwitcher(page, secondProfile!.handle, { query: 'profile' });
+      await selectProfileFromSwitcher(page, secondProfile!.handle);
     }
     const nextTagLink =
       transition === 'hashtag'
@@ -608,14 +608,20 @@ test('Notification 범위를 추가·해제할 때 영구인 다른 범위와 se
     scopes: [HashtagMuteScope.HOME, HashtagMuteScope.NOTIFICATION],
   });
 
+  await page.goBack();
+  await expect(page).toHaveURL(new RegExp(`/@${target.handle}$`, 'u'));
   await selectProfileFromSwitcher(page, secondProfile.handle);
+  await page.getByRole('link', { exact: true, name: '#PROD735Shared 관련 프로필 보기' }).click();
   await expect(firstMuteButton()).toBeVisible();
   await expect(
     page.getByRole('button', { exact: true, name: '#PROD735Shared 뮤트 해제' }),
   ).toHaveCount(0);
   await expect(page.getByRole('dialog')).toHaveCount(0);
 
+  await page.goBack();
+  await expect(page).toHaveURL(new RegExp(`/@${target.handle}$`, 'u'));
   await selectProfileFromSwitcher(page, owner.profile!.handle);
+  await page.getByRole('link', { exact: true, name: '#PROD735Shared 관련 프로필 보기' }).click();
   const unmuteButton = () =>
     page.getByRole('button', { exact: true, name: '#PROD735Shared 뮤트 해제' });
   await expect(unmuteButton()).toBeVisible();
@@ -714,18 +720,11 @@ async function assertGraphQLSuccess(response: Awaited<ReturnType<typeof waitForG
   expect(body.errors, JSON.stringify(body, null, 2)).toBeUndefined();
 }
 
-async function selectProfileFromSwitcher(
-  page: Page,
-  handle: string,
-  options: { query?: 'detail' | 'profile' } = {},
-) {
+async function selectProfileFromSwitcher(page: Page, handle: string) {
   await page.getByRole('button', { name: '프로필 목록' }).first().click();
   await expect(page.getByLabel('프로필 전환')).toBeVisible();
   const selection = waitForGraphQLOperation(page, 'ProfileSwitcherSelectProfileMutation');
-  const routeQuery = waitForGraphQLOperation(
-    page,
-    options.query === 'profile' ? 'ProfileLayoutQuery' : 'HashtagRelatedProfilesPageQuery',
-  );
+  const routeQuery = waitForGraphQLOperation(page, 'ProfileLayoutQuery');
   await page
     .getByLabel('전환할 프로필 목록')
     .getByRole('button')
