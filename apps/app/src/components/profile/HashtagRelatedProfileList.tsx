@@ -4,6 +4,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { PaginationSurface } from '@/components/pagination/PaginationSurface';
 import { useAutomaticPagination } from '@/components/pagination/useAutomaticPagination';
 import { ProfileListItem } from '@/components/profile/ProfileListItem';
+import { ProfileTagMuteAction } from '@/components/profile/ProfileTagMuteAction';
 import { StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
@@ -17,6 +18,7 @@ const hashtagRelatedProfileListFragment = graphql`
   @refetchable(queryName: "HashtagRelatedProfilesNextPageQuery") {
     id
     name
+    ...ProfileTagMuteAction_tag
     relatedProfiles(first: $count, after: $cursor)
       @connection(key: "HashtagRelatedProfileList_relatedProfiles") {
       edges {
@@ -54,7 +56,12 @@ export function HashtagRelatedProfileList({
 
   return (
     <ScrollView {...nativeScrollProps} contentContainerStyle={styles.root}>
-      <PageHeader leading={leading} title={`#${pagination.data.name} 관련 프로필`} />
+      <PageHeader
+        leading={leading}
+        title={`#${pagination.data.name} 관련 프로필`}
+        titleLines={1}
+        trailing={<ProfileTagMuteAction hashtag={pagination.data} key={pagination.data.id} />}
+      />
       {profiles.length ? (
         profiles.map((edge) => (
           <ProfileListItem key={edge.cursor} linked profile={edge.node} showBio />

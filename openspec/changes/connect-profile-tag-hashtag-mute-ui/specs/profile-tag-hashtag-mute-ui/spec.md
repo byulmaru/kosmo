@@ -1,5 +1,38 @@
 ## ADDED Requirements
 
+### Requirement: 태그 상세 페이지의 뮤트 진입점
+
+클라이언트는 기존 Hashtag 관련 Profile 목록인 태그 상세 페이지에서 태그 뮤트·해제를 제공해야 한다(SHALL).
+공개 Profile 화면에 태그 뮤트용 벨·메뉴·확인 진입점을 제공하지 않아야 한다(MUST NOT).
+
+**Source Context:** 2026-10-04 사용자 결정, ADR 0021 추가 결정, PROD-735, `docs/design/hashtag-related-profiles.md`.
+
+#### Scenario: Profile Tag에서 상세 페이지로 이동한 뒤 뮤트
+
+- **WHEN** 사용자가 공개 Profile의 TagChip을 선택한다
+- **THEN** 기존의 동일 Hashtag 상세·관련 Profile 목록 페이지로 이동한다
+- **AND** 이동만으로 뮤트 mutation을 실행하지 않는다
+- **AND** 사용자는 상세 페이지에서 해당 태그의 뮤트 상태를 확인하고 권한에 맞는 설정·해제를 실행한다
+
+#### Scenario: 헤더 종 아이콘에서 확인창 직접 열기
+
+- **WHEN** 사용자가 태그 상세 헤더 우측의 종 아이콘을 클릭한다
+- **THEN** 미뮤트는 뮤트 확인창, 뮤트 상태는 해제 확인창을 중간 메뉴 없이 바로 연다
+- **AND** 미뮤트는 Bell, 뮤트 상태는 BellOff를 표시하며 접근성 이름에 전체 태그 이름과 행동을 제공한다
+- **AND** 초기 focus는 취소이며 취소·완료 후 상세 헤더의 유효한 action으로 돌아간다
+
+#### Scenario: 상세 페이지에 직접 진입
+
+- **WHEN** 사용자가 기존 태그 상세 페이지에 직접 진입한다
+- **THEN** 해당 페이지의 canonical Hashtag와 현재 selected Profile에 같은 뮤트 계약을 적용한다
+- **AND** 출발 Profile이나 목록 item의 Profile ID를 태그 뮤트 대상으로 사용하지 않는다
+
+#### Scenario: 기존 Profile 뮤트와 관련 목록 보존
+
+- **WHEN** 태그 상세 페이지에서 태그를 뮤트하거나 해제한다
+- **THEN** 기존 관련 Profile 목록의 후보·pagination·조회 계약을 유지한다
+- **AND** Profile 자체의 기존 뮤트 기능을 제거하거나 대체하지 않는다
+
 ### Requirement: Profile Tag의 canonical Hashtag identity 유지
 
 클라이언트는 Profile Tag에서 확인한 canonical Hashtag identity를 뮤트 생성·해제 대상으로 유지해야 한다(SHALL).
@@ -8,7 +41,7 @@
 
 #### Scenario: 표시 이름과 무관하게 정확한 Hashtag를 생성 대상으로 전달
 
-- **WHEN** 사용자가 표시된 Profile Tag의 뮤트를 확정한다
+- **WHEN** 사용자가 태그 상세 페이지에서 뮤트를 확정한다
 - **THEN** 클라이언트는 그 태그의 서버 identity를 대상으로 요청한다
 - **AND** 표시 문자열로 다른 Hashtag를 만들거나 해당 Profile 자체를 뮤트하지 않는다
 
@@ -20,22 +53,28 @@
 
 ### Requirement: 현재 UI의 영구 뮤트 제공
 
-현재 Profile Tag 뮤트 UI는 해당 태그를 프로필에 단 사람의 새 알림만 제어하는 영구 뮤트를 제공하며, 범위·숨기기/접기·기간 선택을 제공하지 않아야 한다(MUST NOT).
+현재 태그 상세 페이지의 뮤트 UI는 해당 태그를 프로필에 단 사람의 새 알림만 제어하는 영구 뮤트를 제공하며, 범위·숨기기/접기·기간 선택을 제공하지 않아야 한다(MUST NOT).
 
 **Source Context:** 2026-10-02 현재 사용자의 영구 뮤트 및 프로필 태그 기준 새 알림 전용 지시, `docs/domain/objects/hashtag-mute-rule.md`의 현재 UI 제공 범위.
 
 #### Scenario: 영구 규칙 생성
 
-- **WHEN** 사용자가 Profile Tag 뮤트를 확정한다
+- **WHEN** 사용자가 태그 상세 페이지에서 뮤트를 확정한다
 - **THEN** 서버 계약의 Notification 전용 영구 설정으로 규칙을 생성한다
 - **AND** 사용자에게 범위·숨기기/접기·기간·날짜·시각 선택을 요구하지 않는다
 
 #### Scenario: 다른 범위의 활성 임시 규칙 보존
 
-- **WHEN** 현재 선택한 Profile에 같은 Hashtag를 대상으로 Notification 이외 범위의 활성 임시 규칙이 있다
+- **WHEN** 현재 선택한 Profile에 같은 Hashtag를 대상으로 Notification을 포함하지 않는 다른 범위의 활성 임시 규칙이 있다
 - **THEN** 클라이언트는 해당 규칙의 Scope·Decision·만료 시각을 변경하지 않는다
-- **AND** Notification 영구 뮤트 생성·변경·해제 mutation을 보내지 않는다
+- **AND** 영구 Notification을 추가하는 생성·변경 mutation을 보내지 않는다
 - **AND** 규칙이 만료된 뒤 상태를 다시 불러오면 설정할 수 있다고 안내한다
+
+#### Scenario: 임시 복합 규칙의 알림 뮤트 해제
+
+- **WHEN** 사용자가 Notification과 다른 Scope를 함께 가진 활성 임시 규칙에서 알림 뮤트를 해제한다
+- **THEN** 클라이언트는 Notification Scope만 제거한다
+- **AND** 나머지 Scope·Decision·만료 시각을 보존한다
 
 #### Scenario: 기존 확인 UI에서 결과 안내
 
@@ -78,7 +117,7 @@
 - **WHEN** 사용자가 뮤트 생성 또는 해제 확인 UI에서 확정 전에 취소한다
 - **THEN** 생성·해제 요청을 보내지 않는다
 - **AND** 기존 서버 확정 뮤트 상태와 그에 맞는 action을 유지한다
-- **AND** 현재 태그 맥락의 유효한 control로 focus가 돌아오거나 이어진다
+- **AND** 현재 태그 상세 페이지의 유효한 control로 focus가 돌아오거나 이어진다
 
 #### Scenario: 요청 중 중복 입력
 
@@ -144,4 +183,4 @@
 #### Scenario: action 종료 후 focus 유지
 
 - **WHEN** 사용자가 action을 취소하거나 요청의 성공·실패 처리가 끝난다
-- **THEN** 현재 태그 맥락의 유효한 control로 focus가 돌아오거나 이어져 탐색을 계속할 수 있다
+- **THEN** 현재 태그 상세 페이지의 유효한 control로 focus가 돌아오거나 이어져 탐색을 계속할 수 있다

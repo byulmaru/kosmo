@@ -1,32 +1,34 @@
-## Session Work
+## 문서 정렬 — 2026-10-04
 
-- [x] 1.1 PROD-735·PROD-1029의 최신 범위·관계와 canonical·기존 UI·코드 경계를 조사한다.
-- [x] 1.2 알림 전용 영구 뮤트 결정을 canonical·디자인 문서와 Linear에 반영하고 기존 확인 UI 재사용 경계를 정리한다.
-- [x] 1.3 확정된 범위의 스펙을 윤문하고 계약·구조 대조, strict validation, Prettier, diff 검사를 수행한다.
-- [x] 1.4 작성한 스펙을 보존하고 구현 handoff에 범위·검증 설명과 PR 종료 상태를 기록한다. 미구현·미검증 항목은 그대로 표시한다.
+- [x] 사용자 결정과 기존 태그 탐색·뮤트 계약을 확인한다.
+- [x] ADR·도메인·디자인 문서에 태그 상세 페이지의 뮤트 진입점을 반영한다.
+- [x] OpenSpec의 모호한 진입점과 오래된 완료·인계 상태를 바로잡는다.
+- [x] Linear 본문과 완료 조건을 같은 흐름으로 갱신하고 다시 읽어 확인한다.
+- [x] OpenSpec strict validation, Prettier, diff 검사를 수행한다.
 
-## Verification Evidence
+## 승인된 구현·검증
 
-- Result: 스펙 문서 검증 통과. 제품 구현·runtime 검증은 미실행.
-- Checks: `openspec validate connect-profile-tag-hashtag-mute-ui --strict`, 변경 문서 Prettier, `git diff --check`와 한국어 윤문 전후 계약·구조 대조가 통과했다. Linear 본문·관계·PROD-735 댓글, `main`의 `a890cc8766c1350ef5f5cc10c6b236c966bafb09`, 기존 TagChip navigation·Profile Mute UI·Relay actor 지침을 확인했다.
-- Limits: 현재 세션은 스펙 작성이다. 제품 코드·테스트는 실행하지 않았으며 선행 API의 실제 결과 확인과 구현 검증이 남아 있다.
+2026-10-04 헤더 우측 종 아이콘 목업의 구현 승인을 받았다. 후속 사용자가 리뷰·문서·스펙 정합성 확인 후 PR 반영을 요청했다.
 
-## Implementation Handoff
+- [x] 프로필 화면의 태그 뮤트 벨·메뉴를 제거하고 기존 TagChip 링크와 Profile 자체 뮤트를 유지한다.
+- [x] 기존 태그 상세·관련 Profile 목록 페이지에 서버 상태와 태그 뮤트·해제를 연결한다.
+- [x] 기존 확인 UI, 취소, 중복 제출 방지, 오류·재시도, 현재 화면의 성공 상태 반영과 focus를 검증한다.
+- [ ] Profile·Account·태그 전환 중 늦은 응답 격리와 다른 Scope·임시 규칙 보존을 검증한다.
+- [ ] 실제 API로 Profile Tag → 상세 페이지 → 뮤트 → 상태 확인 → 해제 흐름을 검증한다.
+- [ ] 직접 상세 진입의 동일 identity, selected Profile 없는 목록 탐색, 기존 pagination·오류 복구를 검증한다.
+- [ ] 키보드·접근성·좁은 폭·긴 태그·Light/Dark를 검증하고 Storybook의 실제 상세 페이지 상태를 캡처한다.
 
-아래는 다음 구현 세션의 current issue 작업 후보이며 현재 세션의 구현 승인이 아니다. 현재 계약을 다시 확인한 뒤 필요한 항목만 수행한다.
+## 원격 전달 전 검증 기록 — 2026-10-04
 
-- [ ] 2.1 PROD-1029의 실제 API·payload·권한·적용 상태 조회와 canonical 정렬을 확인한다. Hashtag identity와 selected Profile을 연결하는 client read를 작성한다.
-- [ ] 2.2 태그 맥락에 기존 확인 presentation을 조합해 Notification 전용 영구 생성·해제와 서버 확정 상태를 연결한다. 기존 관련 Profile 탐색을 보존한다.
-- [ ] 2.3 생성·해제 확인 취소 시 요청 없음·기존 상태와 focus 유지, 요청 중 중복 입력, 조회·mutation 오류와 재시도, 응답 유실 후 재조회를 검증한다. 생성·해제가 성공하면 별도 새로고침·재조회·재진입 없이 현재 화면의 상태와 action에 결과가 반영되는지 확인한다. 구체적인 반영 시간이나 render timing은 계약하거나 테스트하지 않는다.
-- [ ] 2.4 actor A→B·Account 전환·태그 target 전환과 이전 요청의 늦은 성공·실패를 실행해 상태·Toast·focus 격리를 검증한다.
-- [ ] 2.5 Web 키보드·focus 복귀·보조 기술 이름, 좁은 폭·긴 태그·Light/Dark와 기존 navigation 회귀를 검증한다.
-- [ ] 2.6 실제 API·DB를 사용해 Profile Tag → 생성 → 현재 화면의 뮤트 상태·해제 action 확인 → 해제 → 현재 화면의 미뮤트 상태·생성 action 확인을 실행한다. 각 성공 후 화면 반영은 별도 새로고침·재조회·재진입 없이 검증하고, 다른 영구 Scope가 유지되는지, 다른 Scope의 임시 규칙 범위와 만료가 보존되는지, 다른 selected Profile이 격리되는지 확인한다. mock만으로 완료하지 않는다.
-
-검증 경로 후보는 현재 `package.json`의 `pnpm --filter @kosmo/app check`, `pnpm --filter @kosmo/app test:unit`, `pnpm --filter @kosmo/app test:storybook`, `pnpm test:e2e`다. 후속 Test 세션에서는 해당 workflow의 GitHub CI 실행 계약을 따른다.
-
-## Progress
-
-- Status: Complete
-- Completed: 알림 전용 영구 뮤트 범위 확인, canonical·디자인·Linear 정렬, 스펙 작성·윤문·검증과 구현 인계 준비.
-- Next: 문서 검토 후 별도 구현 세션에서 PROD-1029의 실제 결과를 확인하고 필요한 구현·검증을 진행한다.
-- Last updated: 2026-10-02
+- 로컬 구현: 완료. 헤더 Bell/BellOff → 직접 확인창, 실제 Relay mutation·서버 상태 연결, ProfileHero의 태그 뮤트 제거.
+- 통과: Relay compiler, 앱 TypeScript, 관련 단위 테스트 24개, Storybook interaction·a11y 13개,
+  Storybook 정적 빌드, Expo Web export, 변경 코드 ESLint, 문서 Prettier·OpenSpec strict·diff 검사.
+- Storybook은 실제 route·컴포넌트·Relay Store를 사용하고 응답만 fixture로 제공했다. 생성·해제·취소·focus,
+  실패·재시도, pending 중 dismiss 금지, 임시 규칙 충돌, selected Profile 없는 탐색을 검증했다.
+- 실제 API·DB E2E: 실행 준비 실패. 기존 54329 포트 충돌 후 별도 54339 포트·격리 DB로 재시도했으나
+  `packages/core`에서 `tsx` 패키지를 찾지 못해 테스트 시작 전에 종료됐다. 만든 DB·컨테이너·네트워크는 정리했다.
+- 아래 미완료 항목은 원격 전달 전 상태다. 최신 HEAD의 CI 결과와 남은 검증 범위는 PR #1095와 portable handoff에서 확인한다.
+- 실제 API·DB E2E에 직접 상세 URL 재진입, 임시 복합 규칙의 Notification만 해제, Profile·태그 전환 후 늦은 응답 격리를 추가했다. 이 기록 시점에는 CI 실행 전이며 Native runtime은 현재 Web 출시 검증 범위 밖이다.
+- 코드 리뷰와 복잡성 재검토: 최종 actionable finding 0. 충돌 버튼의 잘못된 dialog 안내와 로딩 표시 이름을 수정했다.
+- 실제 구현 Storybook 캡처 완료. 이전 목업·프로필 화면 CI 결과를 현재의 실제 API·DB 검증 근거로 재사용하지 않는다.
+- 후속 리뷰·전달: correctness·보안·테스트·복잡성과 문서·스펙 정합성을 재검토한다. 현재 HEAD의 GitHub CI 전체와 충돌 없음을 확인한 뒤 Ready로 전환한다. 원격 검증 결과는 PR과 portable handoff에 기록한다.
