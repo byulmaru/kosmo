@@ -64,7 +64,17 @@ Mute Scope는 여러 값을 동시에 가질 수 있다.
 - Local Post List에서는 Local Scope가 선택된 Rule의 Collapse도 Exclude로 소비한다. 저장된 Mute Decision은
   유지하며, 다른 Scope의 Decision 의미는 바꾸지 않는다.
 - 기존 Notification의 존재와 Read State는 바꾸지 않는다.
-- Quote Notification에서는 Quote의 Hashtag를 검사하고 인용된 direct Source의 Hashtag를 다시 검사하지 않는다.
+- Notification Scope에서는 새 알림 생성 판단 시점에 원인 행동자인 Related Profile의 구조화된 Profile Tag를
+  검사한다. Recipient Profile이 Owner인 적용 중인 Rule의 Target Hashtag와 canonical identity가 하나라도
+  일치하면 Exclude·Collapse 모두 새 Notification 생성을 억제한다. 게시물에 해당 Hashtag가 없어도 적용한다.
+- Profile Tag 기준은 Related Profile을 가진 Profile 대상 알림에 적용하며 Operational 알림에는 적용하지 않는다.
+  이후 Profile Tag나 Rule의 변경으로 기존 Notification을 다시 판정하지 않는다.
+- 게시물 Hashtag 기준과 원인 행동자의 Profile Tag 기준은 독립적인 억제 사유다. 어느 하나가 일치하면
+  새 Notification을 생성하지 않는다. 프로필 태그 기준은 뮤트한 주제의 태그를 단 사람으로부터 발생하는
+  알림을 제어하기 위한 정책이며 게시물 Hashtag 도입을 전제로 하지 않는다.
+- Quote Notification의 게시물 태그 기준은 Quote의 Hashtag를 검사하고 인용된 direct Source의 Hashtag를
+  다시 검사하지 않는다. 프로필 태그 기준은 Quote Author의 Profile Tag를 검사하며 Source Author의 태그로
+  대신 판정하지 않는다. 기존 Quote의 비소급 생성 계약을 유지한다.
 - 만료 시각이 지난 Rule은 조회 정책에 적용하지 않는다.
 
 ## 확정 용어
