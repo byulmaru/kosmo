@@ -32,8 +32,8 @@ import {
 import { temporalClient } from '../temporal/client';
 import { KOSMO_TASK_QUEUE } from '../temporal/task-queue';
 import { postVisibilityCondition } from '../visibility/post';
-import { revokePostQuoteConsentsForSource } from './post-quote-consent';
 import { noPostCommit, oncePostCommit } from './post-commit';
+import { revokePostQuoteConsentsForSource } from './post-quote-consent';
 import { validatePostStructure } from './post-structure';
 import { assertProfilePairIsNotBlocked } from './profile-block-policy';
 import type { Transaction } from '../db';
