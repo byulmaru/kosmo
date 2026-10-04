@@ -332,6 +332,7 @@ const deriveVerifiedInboundQuoteSource = async ({
   const verification = await quoteInteraction.verifyAuthorization(context as Context<void>, {
     attributedTo: candidateAuthor,
     authorization: authorizationId,
+    documentLoader: await currentAuthorizationLoader(context),
     interactionTarget: new URL(extraction.targetUri),
     interactingObject: note,
   });

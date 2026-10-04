@@ -1983,14 +1983,21 @@ test('검증된 Followers Only Source는 결정적인 Local Follower identity로
 
   const result = await handleInboundQuote({
     actorUri: 'https://quote.example/users/private-quote',
-    context: createSignedContext(
-      keyPairs,
-      keyCalls,
-      signedKeyIds,
-      lookupObject,
-      authorized.documents,
-      signedLoaderUrls,
-    ),
+    context: Object.assign(
+      createSignedContext(
+        keyPairs,
+        keyCalls,
+        signedKeyIds,
+        lookupObject,
+        authorized.documents,
+        signedLoaderUrls,
+      ) as object,
+      {
+        documentLoader: async () => {
+          throw new Error('stale ordinary loader');
+        },
+      },
+    ) as never,
     note: authorized.note,
     postId: quote.post.id,
     receivedAt,
