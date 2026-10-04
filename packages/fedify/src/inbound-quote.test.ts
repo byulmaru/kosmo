@@ -222,7 +222,8 @@ test('configured factory preserves signed Block and Move listeners and pre-dispa
   try {
     for (const path of [`/ap/actor/${profile.id}/inbox`, '/inbox']) {
       for (const activity of [
-        new Block({ actor: actorUri, object: new URL(`/ap/actor/${profile.id}`, publicOrigin) }),
+        // Missing object deliberately exercises the Block listener's identity rejection.
+        new Block({ actor: actorUri }),
         new Move({
           actor: actorUri,
           object: actorUri,
@@ -1854,6 +1855,107 @@ test('FEP self-quote는 승인서 없이 승인하되 다른 Post만 Source로 �
     source.post.id,
   );
 });
+
+for (const revokedDuringVerification of [false, true]) {
+  test(
+    `승인 Update 검증 중 Source를 숨기고 중간 철회를 보존한다: ${revokedDuringVerification}`,
+    { timeout: 30_000 },
+    async () => {
+      const sourceActorUri = 'https://source.example/users/pending-update';
+      const quoteActorUri = 'https://quote.example/users/pending-update';
+      const sourceActor = await createRemoteActor('pending-update-source', sourceActorUri);
+      const quoteActor = await createRemoteActor('pending-update-quote', quoteActorUri);
+      const sourceUri = new URL('https://source.example/notes/pending-update');
+      const quoteUri = new URL('https://quote.example/notes/pending-update');
+      const source = await createRemotePost(sourceActor.id, sourceUri.href);
+      const quote = await createRemotePost(quoteActor.id, quoteUri.href);
+      const base = new Note({
+        id: quoteUri,
+        attribution: new URL(quoteActorUri),
+        quote: sourceUri,
+        to: PUBLIC_COLLECTION,
+      });
+      const authorization = quoteInteraction.createAuthorization({
+        attributedTo: new URL(sourceActorUri),
+        id: new URL('https://source.example/authorizations/pending-update'),
+        interactingObject: base,
+        interactionTarget: sourceUri,
+      });
+      const note = base.clone({ quoteAuthorization: authorization });
+      const documents = new Map([
+        [authorization.id!.href, await authorization.toJsonLd({ format: 'expand' })],
+      ]);
+      const context = createContext(documents);
+      await handleInboundQuote({
+        actorUri: quoteActorUri,
+        context,
+        note,
+        postId: quote.post.id,
+        receivedAt,
+      });
+      let entered!: () => void;
+      let release!: () => void;
+      const lookupStarted = new Promise<void>((resolve) => {
+        entered = resolve;
+      });
+      const lookupReleased = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const update = handleInboundUpdate(
+        {
+          ...(context as Parameters<typeof handleInboundQuote>[0]['context']),
+          quoteAuthorizationDocumentLoader: async (url: string) => {
+            entered();
+            await lookupReleased;
+            return { contextUrl: null, document: documents.get(url), documentUrl: url };
+          },
+        } as never,
+        new Update({ actor: new URL(quoteActorUri), object: note }),
+        receivedAt,
+      );
+      try {
+        await lookupStarted;
+        const waiting = await db
+          .select()
+          .from(Posts)
+          .where(eq(Posts.id, quote.post.id))
+          .then(firstOrThrow);
+        assert.equal(waiting.quoteConsentStatus, PostQuoteConsentStatus.PENDING);
+        assert.equal(waiting.repostSourceId, source.post.id);
+        if (revokedDuringVerification) {
+          await revokeInboundQuote({
+            actorUri: sourceActorUri,
+            authorizationUri: authorization.id!.href,
+            context: {
+              ...(context as Parameters<typeof handleInboundQuote>[0]['context']),
+              quoteAuthorizationDocumentLoader: async () => {
+                throw Object.assign(new Error('gone'), {
+                  response: new Response(null, { status: 410 }),
+                });
+              },
+            },
+          });
+        }
+      } finally {
+        release();
+        await update;
+      }
+      const stored = await db
+        .select()
+        .from(Posts)
+        .where(eq(Posts.id, quote.post.id))
+        .then(firstOrThrow);
+      assert.equal(
+        stored.quoteConsentStatus,
+        revokedDuringVerification
+          ? PostQuoteConsentStatus.REVOKED
+          : PostQuoteConsentStatus.APPROVED,
+      );
+      assert.equal(stored.repostSourceId, source.post.id);
+      assert.equal(stored.currentContentId, quote.post.currentContentId);
+    },
+  );
+}
 
 const createContext = (
   documents = new Map<string, unknown>(),

@@ -26,15 +26,18 @@ Warning, Sensitive Media, Media 구성은 [Post Content](./post-content.md)가 �
 
 ### Remote Quote Approval
 
-원격 Note가 인용을 참조할 때 Post가 소유하는 승인 상태다. Post Lifecycle State, Post Visibility와 Source의
-조회 가능성과는 독립적이며, 별도 Post Kind나 Quote 객체를 만들지 않는다.
+원격 Note의 인용도 Post의 공통 동의 상태를 사용한다. Post Lifecycle State, Post Visibility와 Source의
+조회 가능성은 독립적이며, 원격 전용 동의 상태나 별도 Quote 객체를 만들지 않는다.
 
 | 값       | 의미                                                                      |
 | -------- | ------------------------------------------------------------------------- |
-| Pending  | 인용 참조를 수신했지만 승인 여부를 확정하지 못했거나 필요한 승인서가 없다 |
-| Approved | FEP 자기 인용·유효한 승인서 또는 레거시 호환 조건을 충족했다              |
-| Revoked  | 앞서 확인한 인용 승인이 철회되었다                                        |
-| Invalid  | 인용 참조 또는 승인 검증이 영구적으로 실패했다                            |
+| Pending  | 아직 승인을 검증하지 못했다. 신규 입력의 승인서 부재·검증 실패도 포함한다 |
+| Approved | 현재 유효한 승인 또는 자기 인용·레거시 호환 조건을 충족했다               |
+| Rejected | 명시적인 인용 거절을 확인했다                                             |
+| Revoked  | 앞서 확인한 인용 승인이 철회되었으며 현재 재승인을 확인하지 못했다        |
+
+검증 실패를 명시적 거절로 해석하지 않는다. 철회 뒤 재승인은 아래 공통 Quote Source 승인 조건과
+[ADR 0029](../decisions/0029-quote-consent-and-federation.md)를 따른다.
 
 ## 속성
 
@@ -188,7 +191,8 @@ Notification이 소유하며, Quote·Reply Parent·Repost Source의 구조와 �
   유효한 철회임을 확인한 경우 Remote Quote Approval을 Revoked로 바꾼다.
 - 다른 인용·Source·발급자의 승인에 대한 삭제는 현재 인용의 승인을 철회하지 않는다.
 - 승인 철회는 인용 작성자의 Content와 이미 연결된 Repost Source 관계를 보존한다. 같은 승인에 대한
-  중복 철회와 늦게 끝난 검증 결과가 철회를 취소하지 않는다.
+  중복 철회와 철회 이전의 늦은 검증 결과가 철회를 취소하지 않는다. 현재 issuer의 승인을 새로 검증한 경우에는
+  공통 Quote 동의 계약에 따라 같은 URI 또는 새 URI로 다시 승인할 수 있다.
 
 ## 권한
 
@@ -455,7 +459,7 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
 
 - Remote Quote Approval이 Approved이고 viewer가 Source의 Post Visibility와 Post Eligibility를 모두
   통과할 때만 목록·상세의 기존 Quote 카드에 Source를 표시한다. 승인 자체는 Source 조회 권한이 아니다.
-- Pending, Revoked, Invalid이거나 Source가 없거나 조회 불가하면 Source 카드만 숨긴다. 인용 작성자의
+- Pending, Rejected, Revoked이거나 Source가 없거나 조회 불가하면 Source 카드만 숨긴다. 인용 작성자의
   Content, Reply Parent와 자체 Post Eligibility는 독립적으로 유지한다.
 - 미저장 Public·Unlisted 원문은 기존 원격 Note 저장 경계를 통해 확보할 수 있다. Followers Only 원문은
   이미 저장된 경우에만 연결하며, 조회 시점에는 현재 viewer의 권한을 다시 적용한다.

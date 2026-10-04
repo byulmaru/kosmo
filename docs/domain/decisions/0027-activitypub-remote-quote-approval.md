@@ -2,7 +2,8 @@
 
 ## 상태
 
-Accepted — 2026-09-10 사용자가 최신 명세 검토안 전체를 Domain Gate 및 Issue Gate 결과로 승인했다.
+Accepted — 2026-09-10 사용자 승인. 동의 상태와 현재 승인·재승인/철회 의미는 후속
+[ADR 0029](./0029-quote-consent-and-federation.md)와 현재 [Post](../objects/post.md) 계약을 따른다.
 
 ## 날짜
 

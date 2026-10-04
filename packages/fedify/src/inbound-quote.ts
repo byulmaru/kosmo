@@ -607,8 +607,11 @@ export const handleInboundQuote = async ({
     if (!extraction.fepPropertyPresent) {
       return { retryable: false, status: current.expectedStatus };
     }
+    const source =
+      current.expectedRepostSourceId === null
+        ? null
+        : await loadQuoteSource(current.expectedRepostSourceId);
     if (current.expectedRepostSourceId !== null) {
-      const source = await loadQuoteSource(current.expectedRepostSourceId);
       if (source?.uri !== extraction.targetUri) {
         return { retryable: false, status: current.expectedStatus };
       }
@@ -619,6 +622,35 @@ export const handleInboundQuote = async ({
       if (original.targetUri !== extraction.targetUri || original.format !== extraction.format) {
         return { retryable: false, status: current.expectedStatus };
       }
+    }
+    if (
+      source?.actorUri !== actorUri &&
+      (current.expectedStatus === PostQuoteConsentStatus.APPROVED ||
+        current.expectedStatus === PostQuoteConsentStatus.PENDING)
+    ) {
+      // Hide the previous grant while verifying the author's replacement. This
+      // returned snapshot, not a post-verification reread, guards the final CAS.
+      const pending = await persistQuoteResolution(
+        {
+          approvalUri: extraction.authorizationId?.href ?? null,
+          format: extraction.format,
+          sourcePostId: source?.postId ?? null,
+          status: PostQuoteConsentStatus.PENDING,
+          targetUri: extraction.targetUri,
+          retryable: false,
+        },
+        postId,
+        expectation,
+        quote,
+        source,
+      );
+      if (!pending.applied) {
+        return {
+          retryable: false,
+          status: (await loadQuoteExpectation(postId))?.expectedStatus ?? null,
+        };
+      }
+      expectation = pending.expectation;
     }
   }
 
