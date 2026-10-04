@@ -31,9 +31,11 @@ export function ModalSheet({
   const theme = useTheme();
   const elevation = useElevation();
   const overlayMotion = useOverlayMotion(visible);
+  // Android Modal has no onDismiss callback. Web and iOS hosts report dismissal after
+  // releasing their focus trap, so only Android needs the overlay presence fallback.
   const wasMounted = useRef(overlayMotion.mounted);
   useEffect(() => {
-    if (Platform.OS !== 'ios' && wasMounted.current && !overlayMotion.mounted) {
+    if (Platform.OS === 'android' && wasMounted.current && !overlayMotion.mounted) {
       onDismiss?.();
     }
     wasMounted.current = overlayMotion.mounted;
@@ -50,7 +52,7 @@ export function ModalSheet({
         }
       }}
       onShow={onShow}
-      onDismiss={Platform.OS === 'ios' ? onDismiss : undefined}
+      onDismiss={Platform.OS === 'android' ? undefined : onDismiss}
       role={Platform.OS === 'web' ? role : 'dialog'}
       transparent
       visible={overlayMotion.mounted}
