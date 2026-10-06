@@ -31,7 +31,7 @@
   `expiresAt > now`이면 만료 기준으로 유효하다. 요청 Scope별 적용 여부는 이 조건을 만족하고 해당 Scope가
   저장된 경우에만 참이다. 따라서 유효한 Home 전용 규칙도 Search에는 적용되지 않으며, 만료된 규칙은
   저장된 Scope에도 적용되지 않는다. 시간 경과만으로 결과가 바뀌므로 cron이나 저장된 active boolean에 의존하지 않는다.
-- 원자적 write 직전에 만료 조건을 평가하고, retry에서는 이미 확정한 명령 결과와 새로운 요청을 구분한다.
+- 원자적 write 직전에 만료 조건을 평가하고, retry에서는 현재 규칙 상태로 중복 write를 피하고 새로운 생성 요청을 구분한다.
   영구 설정·만료 설정의 전환과 만료 후 재생성도 같은 경계에서 처리한다.
 
 ### GraphQL과 selected Profile
@@ -68,9 +68,9 @@ retry 판정을 맡는다. query와 loader는 기존 DB 조회 경계를 사용�
 queue를 복제하지 않는다. 이번 범위에는 Notification·ActivityPub effect가 없다.
 
 구현 시에는 명령을 구분하는 Workflow ID와 conflict/reuse 정책을 함께 정한다. pair ID만으로 서로 다른
-변경 요청을 하나의 실행으로 합치지 않는다. Activity commit 뒤 응답 유실·재시도로 중복 생성, 이전 값의
-재적용 또는 해제한 규칙의 부활이 생기지 않는지 실행 검증한다. 이 보장을 위해 명령 결과를 보존해야 한다면 해당
-capability에 필요한 최소 범위로 두며 범용 command framework는 추가하지 않는다.
+변경 요청을 하나의 실행으로 합치지 않는다. Activity commit 뒤 응답 유실·재시도를 CRUD 자체에서 처리한다. 생성에는 PostgreSQL이 발급한 고정 ID를 전달하고,
+변경은 입력값이 달라질 때만 write하며, 삭제는 이미 없는 행을 성공으로 처리한다. 최초 삭제 요청의 Owner·존재
+검증은 GraphQL에서 유지한다. 과거 명령 결과 재생이나 명령 간 순서 보장은 두지 않고 별도 receipt를 저장하지 않는다.
 
 ### 변경 후보와 검증 연결
 

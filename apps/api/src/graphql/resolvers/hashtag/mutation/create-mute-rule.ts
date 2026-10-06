@@ -1,4 +1,6 @@
+import { db, firstOrThrow } from '@kosmo/core/db';
 import { AccountProfileRole, HashtagMuteDecision, HashtagMuteScope } from '@kosmo/core/enums';
+import { sql } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { HashtagMuteRule } from '../mute-rule-ref';
 import { Hashtag } from '../ref';
@@ -16,9 +18,10 @@ builder.mutationField('createHashtagMuteRule', (t) =>
       expiresAt: t.input.field({ type: 'DateTime', required: false }),
     },
     resolve: async (_, { input }, ctx) => {
+      const { id: commandId } = await db.select({ id: sql<string>`uuidv7()` }).then(firstOrThrow);
       const result = await executeHashtagMuteCommand({
         action: 'CREATE',
-        commandId: crypto.randomUUID(),
+        commandId,
         ownerProfileId: ctx.session.profile.id,
         targetHashtagId: input.hashtagId.id,
         scopes: input.scopes,
