@@ -130,6 +130,82 @@ test('createPost는 local Post와 최초 content 연결을 하나의 transaction
   );
 });
 
+test('createPost는 Local Mention node를 저장하고 반복 Profile relation을 하나로 만든다', async () => {
+  const author = await createProfile();
+  const mentioned = await createProfile();
+  const relativeHandle = `@${mentioned.handle}`;
+  const bodyText = `Hi ${relativeHandle} and ${relativeHandle}`;
+  const firstStart = bodyText.indexOf(relativeHandle);
+  const secondStart = bodyText.lastIndexOf(relativeHandle);
+  const document = postContentDocumentFromTextAndMedia(bodyText, [], false, null, [
+    {
+      end: firstStart + relativeHandle.length,
+      profileId: mentioned.id,
+      relativeHandle,
+      start: firstStart,
+    },
+    {
+      end: secondStart + relativeHandle.length,
+      profileId: mentioned.id,
+      relativeHandle,
+      start: secondStart,
+    },
+  ]);
+
+  const result = await createPost({
+    authoredBodyText: bodyText,
+    document,
+    origin: 'LOCAL',
+    profileId: author.id,
+    visibility: PostVisibility.UNLISTED,
+  });
+
+  assert.deepEqual(result.content.document, document);
+  assert.deepEqual(
+    await db.select().from(PostMentions).where(eq(PostMentions.postContentId, result.content.id)),
+    [{ postContentId: result.content.id, profileId: mentioned.id }],
+  );
+});
+
+test('createPost는 Local Post mention FK 실패 시 Post·Content·relation을 rollback한다', async () => {
+  const author = await createProfile();
+  const missingProfileId = crypto.randomUUID();
+  const relativeHandle = '@missing';
+  const bodyText = relativeHandle;
+  const document = postContentDocumentFromTextAndMedia(bodyText, [], false, null, [
+    { end: relativeHandle.length, profileId: missingProfileId, relativeHandle, start: 0 },
+  ]);
+  const counts = {
+    content: await db.$count(PostContents),
+    mention: await db.$count(PostMentions),
+    post: await db.$count(Posts),
+  };
+
+  await assert.rejects(
+    createPost({
+      authoredBodyText: bodyText,
+      document,
+      origin: 'LOCAL',
+      profileId: author.id,
+      visibility: PostVisibility.PUBLIC,
+    }),
+    (error: unknown) =>
+      error instanceof DrizzleQueryError &&
+      error.cause &&
+      'code' in error.cause &&
+      error.cause.code === '23503',
+  );
+
+  assert.deepEqual(
+    {
+      content: await db.$count(PostContents),
+      mention: await db.$count(PostMentions),
+      post: await db.$count(Posts),
+    },
+    counts,
+  );
+});
+
 test('createPost는 Source와 자체 Content를 원자적으로 연결하고 Reply Parent와의 조합을 거부한다', async () => {
   const sourceAuthor = await createProfile();
   const quoteAuthor = await createProfile();

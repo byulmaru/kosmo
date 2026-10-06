@@ -117,6 +117,7 @@ input CreatePostInput {
   bodyText: String!
   contentWarning: String
   media: [CreatePostMediaInput!]
+  mentions: [CreatePostMentionInput!]
   replyParentId: ID
   repostSourceId: ID
   sensitiveMedia: Boolean
@@ -126,6 +127,12 @@ input CreatePostInput {
 input CreatePostMediaInput {
   altText: String
   mediaId: ID!
+}
+
+input CreatePostMentionInput {
+  end: Int!
+  profileId: ID!
+  start: Int!
 }
 
 type CreatePostPayload {
@@ -578,7 +585,7 @@ type Query {
   node(id: ID!): Node
   nodes(ids: [ID!]!): [Node]!
   profileByHandle(handle: String!): Profile
-  searchProfiles(after: String, before: String, first: Int, last: Int, query: String!): ProfileConnection!
+  searchProfiles(actorProfileId: ID, after: String, before: String, first: Int, last: Int, query: String!): ProfileConnection!
 }
 
 type QuoteNotification implements Node & Notification {

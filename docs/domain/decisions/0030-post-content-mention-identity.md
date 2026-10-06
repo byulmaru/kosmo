@@ -11,12 +11,15 @@ Accepted
 ## 근거
 
 - [PROD-340](https://linear.app/byulmaru/issue/PROD-340)의 2026-09-14 계약 정정.
+- [PROD-652](https://linear.app/byulmaru/issue/PROD-652)의 2026-10-06 Local Mention 작성 계약 확장.
 - [Post](../objects/post.md)와 [Post Content](../objects/post-content.md)의 Mentioned Profile 소유권과
   canonical document 규칙.
 - 기존 ActivityPub actor materialization·refresh가 보유한 Profile URL metadata 경계.
 
 ## 결정
 
+- Local Post, Reply, Quote 작성은 작성자가 명시적으로 선택한 Profile identity와 일치하는 본문 handle token에서 Mention relation을 만든다. 서버는 실제 작성 Profile 기준으로 선택 Profile의 visibility와 양방향 Block 정책을 검증한다. 하나라도 본문과 일치하지 않거나 이용할 수 없는 Profile이 있으면 전체 작성 요청을 거부한다. 같은 Profile의 여러 occurrence는 각 canonical Mention node로 남고 relation은 중복 저장하지 않는다. 직접 입력한 `@handle` 문자열만으로는 Profile identity를 만들지 않는다. Local authored body는 document 및 길이 검증에 사용하고 저장하지 않는다. Canonical Mention node는 inbound와 동일하게 `profileId`만 저장한다.
+- Local Mention은 Post Visibility, DIRECT audience/addressee, outbound ActivityPub `Mention` tag, delivery, 알림 정책을 변경하지 않는다.
 - inbound typed `Mention.href`는 먼저 기존 ActivityPub actor/Profile mapping을 확인한다. 이미 알려진 Local/Remote Profile은
   현재 mapping을 그대로 사용한다. 알려지지 않은 remote actor target은 Note당 최대 32개의 고유 remote actor URI까지 typed href를 통해
   resolve하고 materialize할 수 있다. 한도 내 target의 remote actor 조회는 모두 동시에 시작하며, 각 조회는 기존 actor URI 기반 Temporal
@@ -52,3 +55,4 @@ Accepted
 
 - [Post Content](../objects/post-content.md)
 - [PROD-340](https://linear.app/byulmaru/issue/PROD-340)
+- [PROD-652](https://linear.app/byulmaru/issue/PROD-652)

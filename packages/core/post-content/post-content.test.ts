@@ -75,6 +75,112 @@ test('preserves ordered Media nodes and omits the default Sensitive Media attr',
   assert.equal(isPostContentDocumentV1(document), true);
 });
 
+test('creates canonical Mention nodes from exact UTF-16 authored-body ranges', () => {
+  const bodyText = '🙂 hi @alice@remote.example and @alice@remote.example';
+  const handle = '@alice@remote.example';
+  const firstStart = bodyText.indexOf(handle);
+  const secondStart = bodyText.lastIndexOf(handle);
+  const document = postContentDocumentFromTextAndMedia(bodyText, [], false, null, [
+    {
+      end: firstStart + handle.length,
+      profileId: aliceProfileId,
+      relativeHandle: handle,
+      start: firstStart,
+    },
+    {
+      end: secondStart + handle.length,
+      profileId: aliceProfileId,
+      relativeHandle: handle,
+      start: secondStart,
+    },
+  ]);
+
+  assert.deepEqual(document.body.content[0], {
+    type: 'paragraph',
+    content: [
+      { type: 'text', text: '🙂 hi ' },
+      { type: 'mention', attrs: { profileId: aliceProfileId } },
+      { type: 'text', text: ' and ' },
+      { type: 'mention', attrs: { profileId: aliceProfileId } },
+    ],
+  });
+});
+
+test('rejects invalid authored Mention ranges', () => {
+  const bodyText = '🙂 @alice@remote.example';
+  const handle = '@alice@remote.example';
+  const start = bodyText.indexOf(handle);
+  const valid = {
+    end: start + handle.length,
+    profileId: aliceProfileId,
+    relativeHandle: handle,
+    start,
+  };
+
+  for (const mention of [
+    { ...valid, start: start + 0.5 },
+    { ...valid, start: 1, end: 2 }, // splits the emoji's surrogate pair
+    { ...valid, start: start + 1 },
+    { ...valid, end: bodyText.length + 1 },
+    { ...valid, end: valid.end - 1 },
+  ]) {
+    assert.throws(
+      () => postContentDocumentFromTextAndMedia(bodyText, [], false, null, [mention]),
+      /Mention selection is invalid/,
+    );
+  }
+
+  assert.throws(
+    () =>
+      postContentDocumentFromTextAndMedia('x @alice@remote.example', [], false, null, [
+        { ...valid, start: 2, end: 2 + handle.length },
+        { ...valid, start: 3, end: 3 + handle.length },
+      ]),
+    /Mention selection is invalid/,
+  );
+});
+
+test('rejects selected handles embedded in a larger handle token', () => {
+  for (const [bodyText, relativeHandle] of [
+    ['word@alice', '@alice'],
+    ['@alicex', '@alice'],
+    ['@alice.x', '@alice'],
+    ['@alice@remote.example-more', '@alice@remote.example'],
+    ['@alice@remote.example.extra', '@alice@remote.example'],
+    ['@alice@remote.example:3000', '@alice@remote.example'],
+  ]) {
+    const start = bodyText.indexOf(relativeHandle);
+    assert.throws(
+      () =>
+        postContentDocumentFromTextAndMedia(bodyText, [], false, null, [
+          {
+            end: start + relativeHandle.length,
+            profileId: aliceProfileId,
+            relativeHandle,
+            start,
+          },
+        ]),
+      /Mention selection is invalid/,
+    );
+  }
+
+  assert.doesNotThrow(() =>
+    postContentDocumentFromTextAndMedia('@alice@remote.example. next', [], false, null, [
+      {
+        end: '@alice@remote.example'.length,
+        profileId: aliceProfileId,
+        relativeHandle: '@alice@remote.example',
+        start: 0,
+      },
+    ]),
+  );
+  assert.doesNotThrow(() =>
+    postContentDocumentFromTextAndMedia('@alice. next', [], false, null, [
+      { end: '@alice'.length, profileId: aliceProfileId, relativeHandle: '@alice', start: 0 },
+    ]),
+  );
+});
+
 test('canonicalizes legacy Media Alt Text attrs away', () => {
   assert.deepEqual(
     canonicalizePostContentDocument({
@@ -175,6 +281,38 @@ test('rejects invalid Sensitive Media and Media attr scalar types', () => {
   ]) {
     assert.throws(() => canonicalizePostContentDocument({ version: 1, summary: null, body }));
   }
+});
+
+test('checks complete Unicode code points at Mention token boundaries', () => {
+  const relativeHandle = '@aa';
+  for (const bodyText of ['𐐀@aa', '@aa𐐀']) {
+    const start = bodyText.indexOf(relativeHandle);
+    assert.throws(
+      () =>
+        postContentDocumentFromTextAndMedia(bodyText, [], false, null, [
+          {
+            end: start + relativeHandle.length,
+            profileId: aliceProfileId,
+            relativeHandle,
+            start,
+          },
+        ]),
+      /Mention selection is invalid/,
+    );
+  }
+
+  const bodyText = `😀${relativeHandle}😀`;
+  const start = bodyText.indexOf(relativeHandle);
+  assert.doesNotThrow(() =>
+    postContentDocumentFromTextAndMedia(bodyText, [], false, null, [
+      {
+        end: start + relativeHandle.length,
+        profileId: aliceProfileId,
+        relativeHandle,
+        start,
+      },
+    ]),
+  );
 });
 
 test('canonicalizes empty paragraphs, adjacent text, duplicate marks and URLs', () => {
@@ -615,7 +753,36 @@ test('validates the combined local summary and body length', () => {
   );
 });
 
-test('rejects inbound Mention nodes from the local Post Content validator', () => {
+test('requires authored body text and counts its actual length for local Mention nodes', () => {
+  const relativeHandle = '@aa';
+  const bodyText = `${'가'.repeat(496)} ${relativeHandle}`;
+  const start = bodyText.length - relativeHandle.length;
+  const document = postContentDocumentFromTextAndMedia(bodyText, [], false, null, [
+    {
+      end: bodyText.length,
+      profileId: aliceProfileId,
+      relativeHandle,
+      start,
+    },
+  ]);
+
+  assert.deepEqual(validateLocalPostContentDocument(document, bodyText), document);
+  assert.throws(() => validateLocalPostContentDocument(document), /require the authored body text/);
+  assert.doesNotThrow(() =>
+    validateLocalPostContentDocument(postContentDocumentFromText('plain'), 'plain'),
+  );
+  assert.throws(
+    () => validateLocalPostContentDocument(postContentDocumentFromText('plain'), 'different'),
+    /must match its document/,
+  );
+  assert.throws(
+    () => validateLocalPostContentDocument(document, '가'.repeat(501)),
+    /exceeds 500 characters/,
+  );
+  assert.equal(postContentDocumentToText(document).length > bodyText.length, true);
+});
+
+test('rejects local Mention nodes when authored body text is missing', () => {
   assert.throws(
     () =>
       validateLocalPostContentDocument({
@@ -636,6 +803,6 @@ test('rejects inbound Mention nodes from the local Post Content validator', () =
           ],
         },
       }),
-    /Local PostContent cannot contain Mention nodes/,
+    /require the authored body text/,
   );
 });

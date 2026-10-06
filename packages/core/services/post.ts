@@ -40,6 +40,11 @@ import type { PostContentDocumentV1 } from '../post-content';
 
 type LocalPostInput = {
   accountId?: string;
+  /**
+   * Normalized authored body paired with `document`, supplied by the API after validating the
+   * selected mention ranges. GraphQL clients send body text and ranges, never this value or a doc.
+   */
+  authoredBodyText?: string;
   document: PostContentDocumentV1;
   media?: readonly {
     altText: string | null;
@@ -584,7 +589,7 @@ export async function createPost(
     result = await db.transaction(async (tx) => {
       let document =
         input.origin === 'LOCAL'
-          ? validateLocalPostContentDocument(input.document)
+          ? validateLocalPostContentDocument(input.document, input.authoredBodyText)
           : input.document;
 
       if (

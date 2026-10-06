@@ -56,6 +56,7 @@ let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
 let PostMentions: typeof CoreDb.PostMentions;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
+let ProfileBlocks: typeof CoreDb.ProfileBlocks;
 let Posts: typeof CoreDb.Posts;
 let Profiles: typeof CoreDb.Profiles;
 let Sessions: typeof CoreDb.Sessions;
@@ -84,6 +85,7 @@ describe('Post Reply GraphQL 경계', () => {
       PostContents,
       PostMentions,
       ProfileFollows,
+      ProfileBlocks,
       Posts,
       Profiles,
       Sessions,
@@ -146,6 +148,184 @@ describe('Post Reply GraphQL 경계', () => {
     assert.equal(stored.replyParentId, null);
     assert.equal(stored.repostSourceId, null);
     assert.equal(content.document.summary, '통합 검증 경고');
+  });
+
+  test('createPost는 선택한 Mention만 Profile 관계로 저장한다', async () => {
+    const auth = await createAuthenticatedSession();
+    const mentioned = await createProfile('selected-mention');
+    const relativeHandle = `@${mentioned.handle}`;
+    const remoteMentioned = await createRemoteActorProfile('remote-mention');
+    const remoteInstance = await db
+      .select()
+      .from(Instances)
+      .where(eq(Instances.id, remoteMentioned.instanceId))
+      .then(firstOrThrow);
+    const remoteRelativeHandle = `@${remoteMentioned.handle}@${remoteInstance.domain}`;
+    const bodyText = `😀 hi ${relativeHandle}, and ${relativeHandle}; also ${remoteRelativeHandle}`;
+    const start = bodyText.indexOf(relativeHandle);
+    const remoteStart = bodyText.indexOf(remoteRelativeHandle);
+    const result = await requestCreatePost(
+      {
+        bodyText,
+        mentions: [
+          {
+            end: start + relativeHandle.length,
+            profileId: encodeGlobalId('Profile', mentioned.id),
+            start,
+          },
+          {
+            end: remoteStart + remoteRelativeHandle.length,
+            profileId: encodeGlobalId('Profile', remoteMentioned.id),
+            start: remoteStart,
+          },
+        ],
+        visibility: PostVisibility.PUBLIC,
+      },
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    const post = await db.select().from(Posts).then(firstOrThrow);
+    const content = await db
+      .select()
+      .from(PostContents)
+      .where(eq(PostContents.postId, post.id))
+      .then(firstOrThrow);
+    const paragraph = content.document.body.content[0];
+    assert.ok(paragraph?.type === 'paragraph');
+    assert.deepEqual(paragraph.content, [
+      { type: 'text', text: '😀 hi ' },
+      { type: 'mention', attrs: { profileId: mentioned.id } },
+      { type: 'text', text: `, and ${relativeHandle}; also ` },
+      { type: 'mention', attrs: { profileId: remoteMentioned.id } },
+    ]);
+    const storedMentions = await db
+      .select()
+      .from(PostMentions)
+      .where(eq(PostMentions.postContentId, content.id));
+    assert.deepEqual(
+      storedMentions.map(({ profileId }) => profileId).sort(),
+      [mentioned.id, remoteMentioned.id].sort(),
+    );
+
+    const projected = await requestPostContent(result.data!.createPost.post.id, auth.token);
+    assertNoGraphQLErrors(projected);
+    assert.equal(
+      projected.data?.node?.content.bodyText,
+      `😀 hi @알 수 없는 사용자, and ${relativeHandle}; also @알 수 없는 사용자`,
+    );
+    assert.deepEqual(
+      projected.data?.node?.content.mentionedProfiles
+        .map(({ relativeHandle: storedRelativeHandle }) => storedRelativeHandle)
+        .sort(),
+      [relativeHandle, remoteRelativeHandle].sort(),
+    );
+  });
+
+  test('createPost validates Mention ranges and target eligibility before writing', async () => {
+    const auth = await createAuthenticatedSession();
+    const available = await createProfile('eligible-mention');
+    const bodyText = `@${available.handle}`;
+    const mention = {
+      end: bodyText.length,
+      profileId: encodeGlobalId('Profile', available.id),
+      start: 0,
+    };
+    const before = {
+      contents: await db.$count(PostContents),
+      mentions: await db.$count(PostMentions),
+      posts: await db.$count(Posts),
+    };
+
+    const invalidRange = await requestCreatePost(
+      {
+        bodyText,
+        mentions: [{ ...mention, start: 1 }],
+        visibility: PostVisibility.PUBLIC,
+      },
+      auth.token,
+    );
+    assert.equal(invalidRange.errors?.[0]?.extensions?.code, 'VALIDATION');
+    assert.equal(invalidRange.errors?.[0]?.extensions?.field, 'mentions');
+
+    const missing = await requestCreatePost(
+      {
+        bodyText,
+        mentions: [{ ...mention, profileId: encodeGlobalId('Profile', crypto.randomUUID()) }],
+        visibility: PostVisibility.PUBLIC,
+      },
+      auth.token,
+    );
+    assert.equal(missing.errors?.[0]?.extensions?.code, 'VALIDATION');
+    assert.equal(missing.errors?.[0]?.extensions?.field, 'mentions');
+
+    const blocked = await createProfile('blocked-mention');
+    await db.insert(ProfileBlocks).values({
+      ownerProfileId: blocked.id,
+      targetProfileId: auth.profile.id,
+    });
+    const blockedHandle = `@${blocked.handle}`;
+    const blockedResult = await requestCreatePost(
+      {
+        bodyText: blockedHandle,
+        mentions: [
+          {
+            end: blockedHandle.length,
+            profileId: encodeGlobalId('Profile', blocked.id),
+            start: 0,
+          },
+        ],
+        visibility: PostVisibility.PUBLIC,
+      },
+      auth.token,
+    );
+    assert.equal(blockedResult.errors?.[0]?.extensions?.code, 'VALIDATION');
+    assert.equal(blockedResult.errors?.[0]?.extensions?.field, 'mentions');
+
+    assert.deepEqual(
+      {
+        contents: await db.$count(PostContents),
+        mentions: await db.$count(PostMentions),
+        posts: await db.$count(Posts),
+      },
+      before,
+    );
+  });
+
+  test('createPost checks Mention block policy against the explicitly selected composer Profile', async () => {
+    const auth = await createAuthenticatedSession();
+    const composer = await createProfile('composer-mention-author');
+    const mentioned = await createProfile('composer-blocked-mention');
+    await db.insert(AccountProfiles).values({
+      accountId: auth.account.id,
+      profileId: composer.id,
+      role: AccountProfileRole.MEMBER,
+    });
+    await db.insert(ProfileBlocks).values({
+      ownerProfileId: composer.id,
+      targetProfileId: mentioned.id,
+    });
+    const relativeHandle = `@${mentioned.handle}`;
+    const bodyText = relativeHandle;
+    const result = await requestCreatePost(
+      {
+        actorProfileId: encodeGlobalId('Profile', composer.id),
+        bodyText,
+        mentions: [
+          {
+            end: bodyText.length,
+            profileId: encodeGlobalId('Profile', mentioned.id),
+            start: 0,
+          },
+        ],
+        visibility: PostVisibility.PUBLIC,
+      },
+      auth.token,
+    );
+
+    assert.equal(result.errors?.[0]?.extensions?.code, 'VALIDATION');
+    assert.equal(result.errors?.[0]?.extensions?.field, 'mentions');
+    assert.equal(await db.$count(Posts), 0);
   });
 
   test('명시한 같은 계정 Profile로 작성하고 active session Profile은 유지한다', async () => {
@@ -1722,6 +1902,7 @@ const requestCreatePost = (
     bodyText: string;
     contentWarning?: string | null;
     media?: Array<{ altText: string | null; mediaId: string }>;
+    mentions?: Array<{ end: number; profileId: string; start: number }>;
     actorProfileId?: string;
     replyParentId?: string;
     sensitiveMedia?: boolean;

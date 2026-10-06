@@ -1,8 +1,10 @@
 import { isDeepStrictEqual } from 'node:util';
 import { JSDOM } from 'jsdom';
 import { DOMSerializer } from 'prosemirror-model';
+import { ValidationError } from '../error';
 import { postBodyMaxLength } from '../validation/post-policy';
 import {
+  hasPostContentMentionTokenBoundaries,
   normalizePostContentPlainText,
   normalizePostContentProfileId,
   postContentMentionFallbackText,
@@ -14,12 +16,20 @@ import type { Mark, Node as ProseMirrorNode } from 'prosemirror-model';
 import type {
   PostContentBodyDocumentV1,
   PostContentDocumentV1,
+  PostContentInlineNode,
   PostContentMediaNode,
   PostContentSchemaVersion,
 } from './index';
 
 export interface PostContentMediaReference {
   readonly mediaId: string;
+}
+
+export interface PostContentMentionReference {
+  readonly end: number;
+  readonly profileId: string;
+  readonly relativeHandle: string;
+  readonly start: number;
 }
 
 export function canonicalizePostContentDocument(document: unknown): PostContentDocumentV1 {
@@ -120,8 +130,10 @@ export function postContentDocumentFromTextAndMedia(
   media: readonly PostContentMediaReference[],
   sensitiveMedia = false,
   summary: string | null = null,
+  mentions: readonly PostContentMentionReference[] = [],
 ): PostContentDocumentV1 {
   const normalized = normalizePostContentPlainText(bodyText);
+  const inline = postContentInlineFromText(normalized, mentions);
 
   return canonicalizePostContentDocument({
     version: postContentSchemaVersion,
@@ -132,7 +144,7 @@ export function postContentDocumentFromTextAndMedia(
       content: [
         {
           type: 'paragraph',
-          ...(normalized.length > 0 ? { content: [{ type: 'text', text: normalized }] } : {}),
+          ...(inline.length > 0 ? { content: inline } : {}),
         },
         ...media.map(
           ({ mediaId }): PostContentMediaNode => ({
@@ -166,18 +178,33 @@ export function postContentDocumentToHtml(document: PostContentDocumentV1): stri
   return container.innerHTML;
 }
 
-export function validateLocalPostContentDocument(value: unknown): PostContentDocumentV1 {
+export function validateLocalPostContentDocument(
+  value: unknown,
+  authoredBodyText?: string,
+): PostContentDocumentV1 {
   const document = canonicalizePostContentDocument(value);
-  if (
-    document.body.content.some(
-      (block) =>
-        block.type === 'paragraph' && (block.content ?? []).some((node) => node.type === 'mention'),
-    )
-  ) {
-    throw new TypeError('Local PostContent cannot contain Mention nodes');
+  const hasMentions = document.body.content.some(
+    (block) =>
+      block.type === 'paragraph' && (block.content ?? []).some((node) => node.type === 'mention'),
+  );
+  if (hasMentions && authoredBodyText === undefined) {
+    throw new TypeError('Local PostContent Mention nodes require the authored body text');
   }
   const mediaCount = document.body.content.filter((block) => block.type === 'media').length;
-  const bodyTextLength = postContentBodyToText(document.body).length;
+  const bodyText =
+    authoredBodyText === undefined
+      ? postContentBodyToText(document.body)
+      : normalizePostContentPlainText(authoredBodyText);
+  if (
+    !hasMentions &&
+    authoredBodyText !== undefined &&
+    postContentBodyToText(document.body) !== bodyText
+  ) {
+    throw new ValidationError('Local PostContent body text must match its document', {
+      field: 'bodyText',
+    });
+  }
+  const bodyTextLength = bodyText.length;
   const authoredTextLength = (document.summary?.length ?? 0) + bodyTextLength;
 
   if (bodyTextLength === 0 && mediaCount === 0) {
@@ -188,6 +215,36 @@ export function validateLocalPostContentDocument(value: unknown): PostContentDoc
   }
 
   return document;
+}
+
+function postContentInlineFromText(
+  bodyText: string,
+  mentions: readonly PostContentMentionReference[],
+): PostContentInlineNode[] {
+  const inline: PostContentInlineNode[] = [];
+  const orderedMentions = [...mentions].sort((left, right) => left.start - right.start);
+  let previousEnd = 0;
+  for (const mention of orderedMentions) {
+    const { end, profileId, relativeHandle, start } = mention;
+    if (
+      start < previousEnd ||
+      !hasPostContentMentionTokenBoundaries(bodyText, start, end, relativeHandle)
+    ) {
+      throw new ValidationError('Mention selection is invalid', { field: 'mentions' });
+    }
+
+    if (start > previousEnd) {
+      inline.push({ type: 'text', text: bodyText.slice(previousEnd, start) });
+    }
+    inline.push({ type: 'mention', attrs: { profileId } });
+    previousEnd = end;
+  }
+
+  if (previousEnd < bodyText.length) {
+    inline.push({ type: 'text', text: bodyText.slice(previousEnd) });
+  }
+
+  return inline;
 }
 
 function postContentBodyToText(document: PostContentBodyDocumentV1): string {
