@@ -33,6 +33,14 @@ minimumReleaseAgeExclude:
   - '@temporalio/proto@1.22.0'
   - '@temporalio/worker@1.22.0'
   - '@temporalio/workflow@1.22.0'
+  # Allow only the requested Fedify 2.4.0 upgrade past the release-age gate.
+  - '@fedify/fedify@2.4.0'
+  - '@fedify/postgres@2.4.0'
+  - '@fedify/uri-template@2.4.0'
+  - '@fedify/vocab-runtime@2.4.0'
+  - '@fedify/vocab-tools@2.4.0'
+  - '@fedify/vocab@2.4.0'
+  - '@fedify/webfinger@2.4.0'
 overrides:
   '@opentelemetry/sdk-metrics@<2.8.0': ^2.8.0
   'undici@': 6.28.1
