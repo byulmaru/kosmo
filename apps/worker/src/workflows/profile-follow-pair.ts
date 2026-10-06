@@ -1,8 +1,10 @@
+import { NotificationKind } from '@kosmo/core/enums';
 import {
   allHandlersFinished,
   ApplicationFailure,
   condition,
   defineUpdate,
+  patched,
   proxyActivities,
   setHandler,
 } from '@temporalio/workflow';
@@ -98,6 +100,7 @@ const profileFollowPairCommandSchema = z
   }) satisfies z.ZodType<ProfileFollowPairCommand>;
 
 const {
+  createNotificationActivity,
   createFollowNotificationActivity,
   createFollowRequestNotificationActivity,
   deleteFollowNotificationActivity,
@@ -241,6 +244,8 @@ export async function profileFollowPairWorkflow(input: ProfileFollowPair): Promi
     return;
   }
 
+  const pushNotificationDispatchEnabled = patched('profile-follow-pair-push-notification-v1');
+
   while (true) {
     await condition(allHandlersFinished);
 
@@ -279,10 +284,27 @@ export async function profileFollowPairWorkflow(input: ProfileFollowPair): Promi
       await settleEffects(
         match(effect)
           .with({ kind: 'CREATE' }, ({ input }) => [
-            match(input.sourceKind)
-              .with('FOLLOW', () => createFollowNotificationActivity(input.sourceId))
-              .with('FOLLOW_REQUEST', () => createFollowRequestNotificationActivity(input.sourceId))
-              .exhaustive(),
+            pushNotificationDispatchEnabled
+              ? match(input.sourceKind)
+                  .with('FOLLOW', () =>
+                    createNotificationActivity({
+                      kind: NotificationKind.FOLLOW,
+                      sourceId: input.sourceId,
+                    }),
+                  )
+                  .with('FOLLOW_REQUEST', () =>
+                    createNotificationActivity({
+                      kind: NotificationKind.FOLLOW_REQUEST,
+                      sourceId: input.sourceId,
+                    }),
+                  )
+                  .exhaustive()
+              : match(input.sourceKind)
+                  .with('FOLLOW', () => createFollowNotificationActivity(input.sourceId))
+                  .with('FOLLOW_REQUEST', () =>
+                    createFollowRequestNotificationActivity(input.sourceId),
+                  )
+                  .exhaustive(),
             ...match(input)
               .with({ sendActivityPub: true }, () => [
                 sendProfileFollowActivity({

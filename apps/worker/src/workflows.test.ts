@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { NotificationKind } from '@kosmo/core/enums';
 import {
   PROFILE_BLOCK_UPDATE_ID,
   PROFILE_BLOCK_UPDATE_NAME,
@@ -17,7 +18,10 @@ import type {
   ProfileFollowPairTransitionInput,
   ProfileFollowPairTransitionOutcome,
 } from '@kosmo/core/services';
+import type { createNotificationActivity as CreateNotificationActivity } from './activities';
 import type { DatabaseCountsSnapshot } from './activities/database-counts-snapshot';
+
+type CreateNotificationInput = Parameters<typeof CreateNotificationActivity>[0];
 
 type ReactionCreateEffectsInput = {
   readonly reactionId: string;
@@ -38,8 +42,13 @@ const legacyProfileFollowWorkflowPath = new URL(
   './test-fixtures/legacy-profile-follow-pair.ts',
   import.meta.url,
 ).pathname;
+const legacyNotificationEffectsWorkflowPath = new URL(
+  './test-fixtures/legacy-notification-effects.ts',
+  import.meta.url,
+).pathname;
 
 type ActivityName =
+  | 'createNotificationActivity'
   | 'createReactionNotificationActivity'
   | 'sendReactionActivity'
   | 'deleteReactionNotificationActivity'
@@ -117,6 +126,8 @@ test(
 
     const worker = await Worker.create({
       activities: {
+        createNotificationActivity: (input: CreateNotificationInput) =>
+          record('createNotificationActivity', input),
         createReactionNotificationActivity: (reactionId: string) =>
           record('createReactionNotificationActivity', reactionId),
         sendReactionActivity: (reactionId: string) => record('sendReactionActivity', reactionId),
@@ -150,7 +161,10 @@ test(
       assert.deepEqual(
         calls.map(({ name, argument }) => `${name}:${JSON.stringify(argument)}`).sort(),
         [
-          `createReactionNotificationActivity:${JSON.stringify(localCreateId)}`,
+          `createNotificationActivity:${JSON.stringify({
+            kind: NotificationKind.REACTION,
+            sourceId: localCreateId,
+          })}`,
           `sendReactionActivity:${JSON.stringify(localCreateId)}`,
         ].sort(),
       );
@@ -159,7 +173,10 @@ test(
       calls.length = 0;
       await executeCreate({ reactionId: remoteCreateId, origin: 'ACTIVITYPUB' });
       assert.deepEqual(calls, [
-        { name: 'createReactionNotificationActivity', argument: remoteCreateId },
+        {
+          name: 'createNotificationActivity',
+          argument: { kind: NotificationKind.REACTION, sourceId: remoteCreateId },
+        },
       ]);
 
       const localDeleteId = '00000000-0000-8000-8000-000000000103';
@@ -189,14 +206,17 @@ test(
       ]);
 
       const createFailureId = '00000000-0000-8000-8000-000000000105';
-      terminalFailures.add('createReactionNotificationActivity');
+      terminalFailures.add('createNotificationActivity');
       calls.length = 0;
       await assert.rejects(executeCreate({ reactionId: createFailureId, origin: 'LOCAL' }));
       assert.deepEqual(
-        new Set(calls.map(({ name, argument }) => `${name}:${argument}`)),
+        new Set(calls.map(({ name, argument }) => `${name}:${JSON.stringify(argument)}`)),
         new Set([
-          `createReactionNotificationActivity:${createFailureId}`,
-          `sendReactionActivity:${createFailureId}`,
+          `createNotificationActivity:${JSON.stringify({
+            kind: NotificationKind.REACTION,
+            sourceId: createFailureId,
+          })}`,
+          `sendReactionActivity:${JSON.stringify(createFailureId)}`,
         ]),
       );
       terminalFailures.clear();
@@ -228,8 +248,8 @@ test(
 
     const worker = await Worker.create({
       activities: {
-        createQuoteNotificationActivity: async (id: string) => calls.push(`quote:${id}`),
-        createReplyNotificationActivity: async (id: string) => calls.push(`reply:${id}`),
+        createNotificationActivity: async (input: CreateNotificationInput) =>
+          calls.push(`${input.kind}:${input.sourceId}`),
         sendLocalPostCreateActivity: async (id: string) => calls.push(`send:${id}`),
       },
       connection: environment.nativeConnection,
@@ -250,8 +270,12 @@ test(
         assert.deepEqual(
           calls.toSorted(),
           (origin === 'LOCAL'
-            ? [`quote:${postId}`, `reply:${postId}`, `send:${postId}`]
-            : [`quote:${postId}`, `reply:${postId}`]
+            ? [
+                `${NotificationKind.QUOTE}:${postId}`,
+                `${NotificationKind.REPLY}:${postId}`,
+                `send:${postId}`,
+              ]
+            : [`${NotificationKind.QUOTE}:${postId}`, `${NotificationKind.REPLY}:${postId}`]
           ).toSorted(),
         );
         await Worker.runReplayHistory(
@@ -298,6 +322,320 @@ test(
         );
       }
     });
+  },
+);
+
+test(
+  'Post Repost Effects Workflow는 공통 Notification Activity를 실행한다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+    const taskQueue = `${KOSMO_TASK_QUEUE}-post-repost-effects-${process.pid}`;
+    const postId = '00000000-0000-8000-8000-000000000401';
+    const calls: string[] = [];
+    const worker = await Worker.create({
+      activities: {
+        createNotificationActivity: async (input: CreateNotificationInput) =>
+          calls.push(`${input.kind}:${input.sourceId}`),
+        sendRepostAnnounceActivity: async (id: string) => calls.push(`announce:${id}`),
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      const handle = await environment.client.workflow.start('postRepostWorkflow', {
+        args: [{ postId, origin: 'LOCAL' }],
+        taskQueue,
+        workflowId: `post-repost-effects:${postId}`,
+      });
+      await handle.result();
+      assert.deepEqual(
+        calls.toSorted(),
+        [`${NotificationKind.REPOST}:${postId}`, `announce:${postId}`].toSorted(),
+      );
+      await Worker.runReplayHistory(
+        { workflowsPath },
+        await handle.fetchHistory(),
+        handle.workflowId,
+      );
+    });
+  },
+);
+
+test(
+  'Pre-push Reaction, Repost, Follow CREATE history는 이전 Activity 이름으로 재생된다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+    const taskQueue = `${KOSMO_TASK_QUEUE}-notification-legacy-replay-${process.pid}`;
+    const pair = {
+      followerProfileId: '00000000-0000-8000-8000-000000000451',
+      followeeProfileId: '00000000-0000-8000-8000-000000000452',
+    };
+    const followId = '00000000-0000-8000-8000-000000000453';
+    const calls: string[] = [];
+    const followExecution = {
+      ok: true as const,
+      nextState: 'ESTABLISHED' as const,
+      result: {
+        commandKind: 'FOLLOW' as const,
+        created: true,
+        kind: 'ESTABLISHED' as const,
+        ...pair,
+        profileFollowId: followId,
+      },
+      effectPlan: [
+        {
+          kind: 'CREATE' as const,
+          input: {
+            sendActivityPub: true,
+            sourceId: followId,
+            sourceKind: 'FOLLOW' as const,
+          },
+        },
+      ],
+    };
+    const worker = await Worker.create({
+      activities: {
+        createReactionNotificationActivity: async (id: string) => calls.push(`reaction:${id}`),
+        sendReactionActivity: async (id: string) => calls.push(`send-reaction:${id}`),
+        createRepostNotificationActivity: async (id: string) => calls.push(`repost:${id}`),
+        sendRepostAnnounceActivity: async (id: string) => calls.push(`announce:${id}`),
+        loadPendingFollowRequestIdActivity: async () => undefined,
+        executeProfileFollowPairTransitionActivity: async () => followExecution,
+        createFollowNotificationActivity: async (id: string) => calls.push(`follow:${id}`),
+        sendProfileFollowActivity: async (input: unknown) =>
+          calls.push(`send-follow:${JSON.stringify(input)}`),
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath: legacyNotificationEffectsWorkflowPath,
+    });
+
+    await worker.runUntil(async () => {
+      const reactionId = '00000000-0000-8000-8000-000000000454';
+      const reaction = await environment.client.workflow.start('reactionCreateEffectsWorkflow', {
+        args: [{ reactionId, origin: 'LOCAL' }],
+        taskQueue,
+        workflowId: `legacy-reaction:${reactionId}`,
+      });
+      await reaction.result();
+      assert.deepEqual(
+        new Set(calls.splice(0)),
+        new Set([`reaction:${reactionId}`, `send-reaction:${reactionId}`]),
+      );
+      await Worker.runReplayHistory(
+        { workflowsPath },
+        await reaction.fetchHistory(),
+        reaction.workflowId,
+      );
+
+      const repostId = '00000000-0000-8000-8000-000000000455';
+      const repost = await environment.client.workflow.start('postRepostWorkflow', {
+        args: [{ postId: repostId, origin: 'LOCAL' }],
+        taskQueue,
+        workflowId: `legacy-repost:${repostId}`,
+      });
+      await repost.result();
+      assert.deepEqual(
+        new Set(calls.splice(0)),
+        new Set([`repost:${repostId}`, `announce:${repostId}`]),
+      );
+      await Worker.runReplayHistory(
+        { workflowsPath },
+        await repost.fetchHistory(),
+        repost.workflowId,
+      );
+
+      const startWorkflowOperation = new WithStartWorkflowOperation('profileFollowPairWorkflow', {
+        args: [pair],
+        taskQueue,
+        workflowId: `legacy-follow:${pair.followerProfileId}`,
+        workflowIdConflictPolicy: 'USE_EXISTING',
+        workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+      });
+      const updateResult = await environment.client.workflow.executeUpdateWithStart(
+        'profileFollowPairUpdate',
+        {
+          args: [{ kind: 'FOLLOW', origin: 'LOCAL' }],
+          updateId: 'legacy-follow-create',
+          startWorkflowOperation,
+        },
+      );
+      assert.deepEqual(updateResult, { ok: true, result: followExecution.result });
+      const follow = await startWorkflowOperation.workflowHandle();
+      await follow.result();
+      assert.deepEqual(
+        new Set(calls.splice(0)),
+        new Set([
+          `follow:${followId}`,
+          `send-follow:${JSON.stringify({ sourceId: followId, sourceKind: 'FOLLOW' })}`,
+        ]),
+      );
+      await Worker.runReplayHistory(
+        { workflowsPath },
+        await follow.fetchHistory(),
+        follow.workflowId,
+      );
+    });
+  },
+);
+
+test(
+  'Push delivery는 per-installation Activity를 재시도하고 확인된 형제 send를 다시 호출하지 않는다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+    const taskQueue = `${KOSMO_TASK_QUEUE}-push-delivery-retry-${process.pid}`;
+    const notificationId = '00000000-0000-8000-8000-000000000311';
+    const attempts = new Map<string, number>();
+    const worker = await Worker.create({
+      activities: {
+        listPushNotificationInstallationsActivity: async (id: string) => {
+          assert.equal(id, notificationId);
+          return ['installation-a', 'installation-b'];
+        },
+        sendPushNotificationActivity: async (id: string, installationId: string) => {
+          assert.equal(id, notificationId);
+          const nextAttempt = (attempts.get(installationId) ?? 0) + 1;
+          attempts.set(installationId, nextAttempt);
+          if (installationId === 'installation-a' && nextAttempt === 1) {
+            throw new Error('temporary provider failure');
+          }
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      await environment.client.workflow.execute('pushNotificationDeliveryWorkflow', {
+        args: [{ notificationId }],
+        taskQueue,
+        workflowId: `push-delivery-retry:${notificationId}`,
+      });
+    });
+
+    assert.deepEqual([...attempts.entries()].sort(), [
+      ['installation-a', 2],
+      ['installation-b', 1],
+    ]);
+  },
+);
+
+test(
+  'Notification child start is detached and a stable completed ID cannot reopen',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+    const taskQueue = `${KOSMO_TASK_QUEUE}-push-detached-${process.pid}`;
+    const notificationId = '00000000-0000-8000-8000-000000000312';
+    const installationId = 'installation-a';
+    let releaseSend!: () => void;
+    let sendStarted!: () => void;
+    const sendGate = new Promise<void>((resolve) => {
+      releaseSend = resolve;
+    });
+    const sendStartedPromise = new Promise<void>((resolve) => {
+      sendStarted = resolve;
+    });
+    let listCalls = 0;
+    let sendCalls = 0;
+    const startNotificationDelivery = async (notificationId: string) => {
+      try {
+        await environment.client.workflow.start('pushNotificationDeliveryWorkflow', {
+          args: [{ notificationId }],
+          taskQueue,
+          workflowId: `push-notification:${notificationId}`,
+          workflowIdConflictPolicy: 'USE_EXISTING',
+          workflowIdReusePolicy: 'REJECT_DUPLICATE',
+        });
+      } catch (error) {
+        if (!(error instanceof Error && error.name === 'WorkflowExecutionAlreadyStartedError')) {
+          throw error;
+        }
+      }
+    };
+    const worker = await Worker.create({
+      activities: {
+        createNotificationActivity: async (input: CreateNotificationInput) => {
+          assert.equal(input.kind, NotificationKind.REACTION);
+          assert.match(input.sourceId, /^reaction-/);
+          await startNotificationDelivery(notificationId);
+        },
+        sendReactionActivity: async () => undefined,
+        listPushNotificationInstallationsActivity: async () => {
+          listCalls += 1;
+          return [installationId];
+        },
+        sendPushNotificationActivity: async () => {
+          sendCalls += 1;
+          sendStarted();
+          await sendGate;
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      try {
+        const firstParent = environment.client.workflow.execute('reactionCreateEffectsWorkflow', {
+          args: [{ reactionId: 'reaction-a', origin: 'LOCAL' }],
+          taskQueue,
+          workflowId: 'reaction-create-push-parent-a',
+        });
+        await sendStartedPromise;
+        const child = environment.client.workflow.getHandle(`push-notification:${notificationId}`);
+        assert.equal((await child.describe()).status.name, 'RUNNING');
+        assert.equal(
+          await Promise.race([
+            firstParent.then(() => true),
+            new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 3_000)),
+          ]),
+          true,
+        );
+
+        await environment.client.workflow.execute('reactionCreateEffectsWorkflow', {
+          args: [{ reactionId: 'reaction-b', origin: 'LOCAL' }],
+          taskQueue,
+          workflowId: 'reaction-create-push-parent-b',
+        });
+        releaseSend();
+        await child.result();
+
+        await environment.client.workflow.execute('reactionCreateEffectsWorkflow', {
+          args: [{ reactionId: 'reaction-c', origin: 'LOCAL' }],
+          taskQueue,
+          workflowId: 'reaction-create-push-parent-c',
+        });
+      } finally {
+        releaseSend();
+      }
+    });
+
+    assert.equal(listCalls, 1);
+    assert.equal(sendCalls, 1);
   },
 );
 
@@ -417,8 +755,9 @@ test(
         deleteFollowRequestNotificationActivity: async (sourceId: string) => {
           calls.push('delete:' + sourceId);
         },
-        createFollowNotificationActivity: async (sourceId: string) => {
-          calls.push('notification:' + sourceId);
+        createNotificationActivity: async (input: CreateNotificationInput) => {
+          assert.equal(input.kind, NotificationKind.FOLLOW);
+          calls.push('notification:' + input.sourceId);
           effectStarted();
           await effectReleased;
         },
@@ -521,7 +860,7 @@ test(
           };
         },
         loadPendingFollowRequestIdActivity: async () => requestId,
-        createFollowNotificationActivity: async () => {
+        createNotificationActivity: async () => {
           effectCallCount += 1;
         },
         sendProfileFollowActivity: async () => {
@@ -872,8 +1211,9 @@ test(
           };
         },
         loadPendingFollowRequestIdActivity: async () => undefined,
-        createFollowRequestNotificationActivity: async (sourceId: string) => {
-          calls.push('create:' + sourceId);
+        createNotificationActivity: async (input: CreateNotificationInput) => {
+          assert.equal(input.kind, NotificationKind.FOLLOW_REQUEST);
+          calls.push('create:' + input.sourceId);
           effectFailureResolve();
           throw ApplicationFailure.nonRetryable('pending notification failed');
         },

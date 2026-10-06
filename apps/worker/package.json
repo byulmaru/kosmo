@@ -22,6 +22,7 @@
     "@temporalio/worker": "^1.22.0",
     "@temporalio/workflow": "^1.22.0",
     "drizzle-orm": "1.0.0-beta.22",
+    "firebase-admin": "^14.4.0",
     "ts-pattern": "^5.9.0",
     "tsx": "^4.22.4",
     "zod": "^4.4.3"

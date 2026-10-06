@@ -6,10 +6,15 @@ export {
   captureDatabaseCountsSnapshotActivity,
   loadDatabaseCountsSnapshotActivity,
 } from './activities/database-counts-snapshot';
+export { createNotificationActivity } from './activities/notification';
 export {
   executeProfileBlockTransitionActivity,
   executeProfileUnblockTransitionActivity,
 } from './activities/profile-block';
+export {
+  listPushNotificationInstallations as listPushNotificationInstallationsActivity,
+  sendPushNotification as sendPushNotificationActivity,
+} from './activities/push-notification';
 export {
   lookupRemoteActorUriActivity,
   materializeRemoteProfileActorActivity,

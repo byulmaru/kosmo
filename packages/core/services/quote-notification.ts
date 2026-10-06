@@ -69,8 +69,8 @@ const isVisibleToProfile = ({
 export const createQuoteNotification = async (
   quotePostId: string,
   handle?: Database,
-): Promise<void> => {
-  await getDatabaseConnection(handle).transaction(async (database) => {
+): Promise<string | null> =>
+  getDatabaseConnection(handle).transaction(async (database) => {
     const source = await database
       .select({
         activatedAt: NotificationRollouts.activatedAt,
@@ -131,19 +131,16 @@ export const createQuoteNotification = async (
       // This slice consumes only the synchronous Local-to-Local approval path.
       // Neither a Remote Quote nor a Remote Source FK proves approval. Leave
       // its judgment untouched until the actual upstream approval adapter exists.
-      return;
+      return null;
     }
 
     // Local Quote creation commits this relation only after validateQuoteSource
     // accepts the Local Source; Kosmo does not have a per-Quote manual approval
     // state for Local Sources.
 
-    const replyRecipientProfileId = await materializeReplyNotificationIfEligible(
-      database,
-      quotePostId,
-    );
-    if (replyRecipientProfileId === source.sourceProfileId) {
-      return;
+    const replyNotification = await materializeReplyNotificationIfEligible(database, quotePostId);
+    if (replyNotification?.recipientProfileId === source.sourceProfileId) {
+      return null;
     }
 
     const followsQuoteAuthor =
@@ -179,7 +176,7 @@ export const createQuoteNotification = async (
       source.quoteAuthorInstanceState !== InstanceState.SUSPENDED;
     const isPrelaunch = Temporal.Instant.compare(source.quoteCreatedAt, source.activatedAt) < 0;
 
-    await materializeCoordinatedNotification(database, {
+    return materializeCoordinatedNotification(database, {
       eligible: quoteIsVisible && sourceIsAvailable && quoteAuthorIsAvailable,
       kind: NotificationKind.QUOTE,
       quotePostId: source.quotePostId,
@@ -191,4 +188,3 @@ export const createQuoteNotification = async (
         : undefined,
     });
   });
-};

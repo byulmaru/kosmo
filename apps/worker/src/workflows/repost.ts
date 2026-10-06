@@ -1,4 +1,5 @@
-import { proxyActivities } from '@temporalio/workflow';
+import { NotificationKind } from '@kosmo/core/enums';
+import { patched, proxyActivities } from '@temporalio/workflow';
 import { match } from 'ts-pattern';
 import { workflowActivityOptions } from './activity-options';
 import { settleEffects } from './settle-effects';
@@ -9,12 +10,16 @@ type PostRepostInput = {
   readonly origin: 'LOCAL' | 'ACTIVITYPUB';
 };
 
-const { createRepostNotificationActivity, sendRepostAnnounceActivity } =
+const { createNotificationActivity, createRepostNotificationActivity, sendRepostAnnounceActivity } =
   proxyActivities<typeof activities>(workflowActivityOptions);
 
 export async function postRepostWorkflow({ postId, origin }: PostRepostInput): Promise<void> {
+  const pushNotificationDispatchEnabled = patched('post-repost-push-notification-v1');
+
   await settleEffects([
-    createRepostNotificationActivity(postId),
+    pushNotificationDispatchEnabled
+      ? createNotificationActivity({ kind: NotificationKind.REPOST, sourceId: postId })
+      : createRepostNotificationActivity(postId),
     ...match(origin)
       .with('LOCAL', () => [sendRepostAnnounceActivity(postId)])
       .with('ACTIVITYPUB', () => [])

@@ -35,6 +35,11 @@ type MaterializeCoordinatedNotificationInput = {
   readonly suppressedOutcome?: QuoteNotificationJudgmentOutcome;
 };
 
+export type MaterializedReplyNotification = {
+  readonly notificationId: string | null;
+  readonly recipientProfileId: string;
+};
+
 const ReplyParents = alias(Posts, 'reply_notification_parent');
 const ReplyAuthors = alias(Profiles, 'reply_notification_author');
 const ReplyAuthorInstances = alias(Instances, 'reply_notification_author_instance');
@@ -70,7 +75,7 @@ export const materializeCoordinatedNotification = async (
     sourceId,
     suppressedOutcome,
   }: MaterializeCoordinatedNotificationInput,
-): Promise<void> => {
+): Promise<string | null> => {
   const judgmentCondition = and(
     eq(NotificationQuoteJudgments.quotePostId, quotePostId),
     eq(NotificationQuoteJudgments.recipientProfileId, recipientProfileId),
@@ -91,7 +96,18 @@ export const materializeCoordinatedNotification = async (
     .returning({ quotePostId: NotificationQuoteJudgments.quotePostId });
 
   if (inserted.length === 0) {
-    return;
+    const judgment = await database
+      .select({
+        notificationId: NotificationQuoteJudgments.representativeNotificationId,
+        outcome: NotificationQuoteJudgments.outcome,
+      })
+      .from(NotificationQuoteJudgments)
+      .where(judgmentCondition)
+      .limit(1)
+      .then((rows) => rows[0]);
+    return judgment?.outcome === QuoteNotificationJudgmentOutcome.EMITTED
+      ? judgment.notificationId
+      : null;
   }
 
   const candidates = await quoteNotificationCandidates(database, quotePostId, recipientProfileId);
@@ -112,18 +128,18 @@ export const materializeCoordinatedNotification = async (
         representativeNotificationId: representative?.id ?? null,
       })
       .where(judgmentCondition);
-    return;
+    return null;
   }
 
   if (suppressedOutcome || !eligible) {
-    return;
+    return null;
   }
 
   if (
     relatedProfileId === recipientProfileId ||
     (await isNotificationSuppressed(database, recipientProfileId, relatedProfileId))
   ) {
-    return;
+    return null;
   }
 
   const [notification] = await database
@@ -154,7 +170,7 @@ export const materializeCoordinatedNotification = async (
         representativeNotificationId: representative?.id ?? null,
       })
       .where(judgmentCondition);
-    return;
+    return null;
   }
 
   await database
@@ -165,6 +181,7 @@ export const materializeCoordinatedNotification = async (
       representativeNotificationId: notification.id,
     })
     .where(judgmentCondition);
+  return notification.id;
 };
 
 /**
@@ -175,7 +192,7 @@ export const materializeCoordinatedNotification = async (
 export const materializeReplyNotificationIfEligible = async (
   database: Transaction,
   postId: string,
-): Promise<string | null> => {
+): Promise<MaterializedReplyNotification | null> => {
   const source = await database
     .select({
       id: Posts.id,
@@ -226,7 +243,7 @@ export const materializeReplyNotificationIfEligible = async (
   }
 
   if (source.repostSourceId !== null) {
-    await materializeCoordinatedNotification(database, {
+    const notificationId = await materializeCoordinatedNotification(database, {
       eligible: true,
       kind: NotificationKind.REPLY,
       quotePostId: source.id,
@@ -234,14 +251,14 @@ export const materializeReplyNotificationIfEligible = async (
       relatedProfileId: source.relatedProfileId,
       sourceId: source.id,
     });
-    return source.recipientProfileId;
+    return { notificationId, recipientProfileId: source.recipientProfileId };
   }
 
-  await materializeNotification(database, {
+  const notificationId = await materializeNotification(database, {
     kind: NotificationKind.REPLY,
     recipientProfileId: source.recipientProfileId,
     relatedProfileId: source.relatedProfileId,
     sourceId: source.id,
   });
-  return source.recipientProfileId;
+  return { notificationId, recipientProfileId: source.recipientProfileId };
 };

@@ -1,4 +1,5 @@
-import { proxyActivities } from '@temporalio/workflow';
+import { NotificationKind } from '@kosmo/core/enums';
+import { patched, proxyActivities } from '@temporalio/workflow';
 import { match } from 'ts-pattern';
 import { workflowActivityOptions } from './activity-options';
 import { settleEffects } from './settle-effects';
@@ -9,15 +10,19 @@ type ReactionCreateEffectsInput = {
   readonly origin: 'LOCAL' | 'ACTIVITYPUB';
 };
 
-const { createReactionNotificationActivity, sendReactionActivity } =
+const { createNotificationActivity, createReactionNotificationActivity, sendReactionActivity } =
   proxyActivities<typeof activities>(workflowActivityOptions);
 
 export async function reactionCreateEffectsWorkflow({
   reactionId,
   origin,
 }: ReactionCreateEffectsInput): Promise<void> {
+  const pushNotificationDispatchEnabled = patched('reaction-create-effects-push-notification-v1');
+
   await settleEffects([
-    createReactionNotificationActivity(reactionId),
+    pushNotificationDispatchEnabled
+      ? createNotificationActivity({ kind: NotificationKind.REACTION, sourceId: reactionId })
+      : createReactionNotificationActivity(reactionId),
     ...match(origin)
       .with('LOCAL', () => [sendReactionActivity(reactionId)])
       .with('ACTIVITYPUB', () => [])
