@@ -89,6 +89,7 @@ builder.queryField('searchProfiles', (t) =>
       args: {
         actorProfileId: t.arg.globalID({ for: Profile, required: false }),
         query: t.arg.string({ required: true }),
+        resolveRemote: t.arg.boolean({ required: false }),
       },
       resolve: async (_, args, ctx) => {
         const composerProfileId = args.actorProfileId
@@ -108,7 +109,7 @@ builder.queryField('searchProfiles', (t) =>
 
         let materializedProfileId: string | null | undefined;
 
-        if (isExplicitRemoteHandle(args.query, parsed)) {
+        if (args.resolveRemote !== false && isExplicitRemoteHandle(args.query, parsed)) {
           materializedProfileId = await runWorkflow(remoteProfileLookupWorkflow, {
             args: [
               {

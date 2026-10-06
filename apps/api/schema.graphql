@@ -585,7 +585,7 @@ type Query {
   node(id: ID!): Node
   nodes(ids: [ID!]!): [Node]!
   profileByHandle(handle: String!): Profile
-  searchProfiles(actorProfileId: ID, after: String, before: String, first: Int, last: Int, query: String!): ProfileConnection!
+  searchProfiles(actorProfileId: ID, after: String, before: String, first: Int, last: Int, query: String!, resolveRemote: Boolean): ProfileConnection!
 }
 
 type QuoteNotification implements Node & Notification {

@@ -3,15 +3,15 @@
 ## 정의
 
 Post Content는 Post의 작성 내용을 한 시점에 보존하는 immutable revision이다. Content Warning, 본문,
-Sensitive Media, 선택된 Local Mention과 검증된 inbound typed Mention, 순서가 있는 Media 참조를 하나의 canonical Content Document로 소유한다. Post는
+Sensitive Media, 저장된 Profile과 일치하는 typed Local Mention·선택된 Local Mention과 검증된 inbound typed Mention, 순서가 있는 Media 참조를 하나의 canonical Content Document로 소유한다. Post는
 현재 Post Content를 가리키며, 작성 내용을 수정하면 기존 revision을 바꾸지 않고 새 Post Content를 만든다.
 
 ## 속성
 
-| 속성             | 타입/nullability | 검증 정책                                                                                                                                                                                                                                                                                                                                                                                                                                                                | 존재 조건 | 조회 조건           | 조회 권한 |
-| ---------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------- | ------------------- | --------- |
-| Content Document | Versioned JSON   | `{ version, summary, body }`; `version`은 breaking schema version이며 revision 번호가 아니다. V1 `summary`는 nullable Plain Text Content Warning이고 `body`는 ProseMirror document다. V1은 기존 paragraph/text/hard-break/link와 additive한 Media node를 지원하며, 선택한 Local Profile Mention과 검증된 inbound typed Mention을 additive node로 보존한다. Local Post의 summary와 authored body Plain Text 합계는 500자 이하이며 Media가 없으면 body가 비어 있을 수 없다 | 항상      | Post 조회 정책 통과 | 없음      |
-| 생성 시각        | 시각, 필수       | revision 생성 결과로 기록하며 변경 불가                                                                                                                                                                                                                                                                                                                                                                                                                                  | 항상      | Post 조회 정책 통과 | 없음      |
+| 속성             | 타입/nullability | 검증 정책                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | 존재 조건 | 조회 조건           | 조회 권한 |
+| ---------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | ------------------- | --------- |
+| Content Document | Versioned JSON   | `{ version, summary, body }`; `version`은 breaking schema version이며 revision 번호가 아니다. V1 `summary`는 nullable Plain Text Content Warning이고 `body`는 ProseMirror document다. V1은 기존 paragraph/text/hard-break/link와 additive한 Media node를 지원하며, stored Profile과 일치하는 typed·selected Local Mention과 검증된 inbound typed Mention을 additive node로 보존한다. Local Post의 summary와 authored body Plain Text 합계는 500자 이하이며 Media가 없으면 body가 비어 있을 수 없다 | 항상      | Post 조회 정책 통과 | 없음      |
+| 생성 시각        | 시각, 필수       | revision 생성 결과로 기록하며 변경 불가                                                                                                                                                                                                                                                                                                                                                                                                                                                            | 항상      | Post 조회 정책 통과 | 없음      |
 
 V1 Media node는 `mediaId`를 attr로 가지며 body 안의 위치가 표시 순서를 결정한다. 하나의
 document는 Media node를 최대 4개 가질 수 있다. V1 document root의 `sensitiveMedia` attr는 모든 Media node의
@@ -47,21 +47,19 @@ Media와 같은 순서의 Media node로 투영하고 초과분은 무시한다. 
 
 ## 관계
 
-| 관계              | 대상                    | 방향                    | cardinality | 존재 조건                                                                                                                | 조회 조건           | 조회 권한 |
-| ----------------- | ----------------------- | ----------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------- | --------- |
-| Post              | [Post](./post.md)       | Post Content -> Post    | 1 -> 1      | 항상                                                                                                                     | Post 조회 정책 통과 | 없음      |
-| Referenced Media  | [Media](./media.md)     | Post Content -> Media   | 1 -> 0..4   | document에 Media node가 있을 때                                                                                          | Post 조회 정책 통과 | 없음      |
-| Mentioned Profile | [Profile](./profile.md) | Post Content -> Profile | 1 -> 0..N   | Local 작성에서 선택한 Profile이 검증될 때 또는 inbound typed `Mention.href`가 알려진 Profile stable identity로 확인될 때 | Post 조회 정책 통과 | 없음      |
+| 관계              | 대상                    | 방향                    | cardinality | 존재 조건                                                                                                                                                                        | 조회 조건           | 조회 권한 |
+| ----------------- | ----------------------- | ----------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- | --------- |
+| Post              | [Post](./post.md)       | Post Content -> Post    | 1 -> 1      | 항상                                                                                                                                                                             | Post 조회 정책 통과 | 없음      |
+| Referenced Media  | [Media](./media.md)     | Post Content -> Media   | 1 -> 0..4   | document에 Media node가 있을 때                                                                                                                                                  | Post 조회 정책 통과 | 없음      |
+| Mentioned Profile | [Profile](./profile.md) | Post Content -> Profile | 1 -> 0..N   | Local 작성에서 본문 handle token이 저장된 eligible Profile과 일치하거나 선택 Profile이 검증될 때, 또는 inbound typed `Mention.href`가 알려진 Profile stable identity로 확인될 때 | Post 조회 정책 통과 | 없음      |
 
 Referenced Media는 Content Document의 Media node가 소유하는 revision 관계다. 별도 관계 테이블이나 Media ID
 배열을 두 번째 source of truth로 저장하지 않는다. Post Content를 만들 때 서버는 각 Media 참조의 존재,
 Source=Local, State=Ready와 Upload Account 조건을 검증한다. Media row의 물리 삭제는 과거 revision 참조를
 깨뜨리지 않는 별도 lifecycle 계약이 생기기 전까지 제공하지 않는다.
 
-Mentioned Profile은 Local 작성에서 작성자가 명시적으로 선택해 본문 선택과 일치하는 Profile identity 또는 inbound typed `Mention.href`에서
-확인한 stable Profile identity를 immutable revision에 저장하는 관계이며 `post_mentions` DB table에 persisted projection으로 저장한다. Local 작성은
-실제 작성 Profile 기준으로 target의 visibility와 양방향 Block 정책을 검증하며, 선택과 본문이 일치하지 않거나 target을 이용할 수 없으면 Post 전체를
-거부한다. 임의로 입력한 `@handle` text만으로는 관계를 만들지 않는다. 반복해서 같은 Profile을 선택하면 각 Mention node는 남지만 Profile relation은
+Mentioned Profile은 Local 작성에서 본문에 입력된 eligible Profile의 handle token이나 작성자가 명시적으로 선택해 본문 범위와 일치하는 Profile identity, 또는 inbound typed `Mention.href`에서
+확인한 stable Profile identity를 immutable revision에 저장하는 관계이며 `post_mentions` DB table에 persisted projection으로 저장한다. Local 작성은 bare handle과 configured Local domain을 configured Local Instance에서만 찾고, qualified remote handle은 이미 저장된 ActivityPub Profile에서만 찾는다. 작성 중 remote resolve/fetch는 하지 않는다. Unknown, malformed, ineligible token은 일반 text로 남는다. 실제 작성 Profile 기준으로 typed·selected target의 visibility와 양방향 Block 정책을 검증하며, 명시적으로 선택한 범위가 본문과 일치하지 않거나 selected target을 이용할 수 없으면 Post 전체를 거부한다. 같은 Profile이 여러 번 나타나면 각 Mention node는 남지만 Profile relation은
 한 번만 저장한다. Local authored body text는 문서 검증과 500자 길이 계산에 사용하고 저장하지 않는다. Inbound typed Mention의 관계 입력은 body
 conversion과 독립된 typed identity 집합이다. 두 작성 경계 모두 canonical Mention node에는 저장된 Profile identity인 `profileId`만 attr로 가진다. 원문 anchor의
 표시 문자열은 수신 중 loose resource/length budget을 계산하는 동안만 사용할 수 있고 canonical document, 관계, GraphQL 응답 또는
@@ -95,9 +93,9 @@ rollback해 partial relation을 남기지 않는다.
 
 ## 행동
 
-| 행동              | 행동 주체 Profile | 대상 객체 | 입력값                                                                  | 권한                            | 조건                                                                                                                                                                | 결과                                                                                                                                                                             |
-| ----------------- | ----------------- | --------- | ----------------------------------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Post Content 작성 | Profile           | Post      | Content Warning, 본문, 선택한 Mention 대상, Sensitive Media, Media 목록 | `Account.Active`, `Post.Author` | Post가 Active이고 Content를 가지며 입력 document가 현재 schema와 길이·Media·선택 Mention 검증을 통과한다. 참조한 Local Media의 Upload Account가 요청 Account와 같다 | 기존 revision은 유지되고 새 immutable Post Content와 deduplicated Mentioned Profile relation이 생성되며 Post의 현재 Content 포인터가 같은 transaction에서 새 revision으로 바뀐다 |
+| 행동              | 행동 주체 Profile | 대상 객체 | 입력값                                                                               | 권한                            | 조건                                                                                                                                                                          | 결과                                                                                                                                                                             |
+| ----------------- | ----------------- | --------- | ------------------------------------------------------------------------------------ | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Post Content 작성 | Profile           | Post      | Content Warning, 본문 내 typed handle·선택 Mention 대상, Sensitive Media, Media 목록 | `Account.Active`, `Post.Author` | Post가 Active이고 Content를 가지며 입력 document가 현재 schema와 길이·Media·typed/selected Mention 검증을 통과한다. 참조한 Local Media의 Upload Account가 요청 Account와 같다 | 기존 revision은 유지되고 새 immutable Post Content와 deduplicated Mentioned Profile relation이 생성되며 Post의 현재 Content 포인터가 같은 transaction에서 새 revision으로 바뀐다 |
 
 본문, Content Warning, Sensitive Media, Media의 추가·제거·순서 또는 Media 자체 교체 중 하나라도
 바뀌면 새 Post Content를 만든다. 이미지 교체는 먼저 새 Local Media를 Ready로 만든 다음 그 Media를 참조하는 새

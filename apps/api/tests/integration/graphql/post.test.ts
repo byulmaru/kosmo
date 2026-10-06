@@ -150,11 +150,11 @@ describe('Post Reply GraphQL 경계', () => {
     assert.equal(content.document.summary, '통합 검증 경고');
   });
 
-  test('createPost는 선택한 Mention만 Profile 관계로 저장한다', async () => {
+  test('createPost combines selected and typed Mentions into Profile relations', async () => {
     const auth = await createAuthenticatedSession();
-    const mentioned = await createProfile('selected-mention');
+    const mentioned = await createProfile('selected_mention');
     const relativeHandle = `@${mentioned.handle}`;
-    const remoteMentioned = await createRemoteActorProfile('remote-mention');
+    const remoteMentioned = await createRemoteActorProfile('remote_mention');
     const remoteInstance = await db
       .select()
       .from(Instances)
@@ -196,7 +196,9 @@ describe('Post Reply GraphQL 경계', () => {
     assert.deepEqual(paragraph.content, [
       { type: 'text', text: '😀 hi ' },
       { type: 'mention', attrs: { profileId: mentioned.id } },
-      { type: 'text', text: `, and ${relativeHandle}; also ` },
+      { type: 'text', text: ', and ' },
+      { type: 'mention', attrs: { profileId: mentioned.id } },
+      { type: 'text', text: '; also ' },
       { type: 'mention', attrs: { profileId: remoteMentioned.id } },
     ]);
     const storedMentions = await db
@@ -212,7 +214,7 @@ describe('Post Reply GraphQL 경계', () => {
     assertNoGraphQLErrors(projected);
     assert.equal(
       projected.data?.node?.content.bodyText,
-      `😀 hi @알 수 없는 사용자, and ${relativeHandle}; also @알 수 없는 사용자`,
+      '😀 hi @알 수 없는 사용자, and @알 수 없는 사용자; also @알 수 없는 사용자',
     );
     assert.deepEqual(
       projected.data?.node?.content.mentionedProfiles
@@ -220,6 +222,150 @@ describe('Post Reply GraphQL 경계', () => {
         .sort(),
       [relativeHandle, remoteRelativeHandle].sort(),
     );
+  });
+
+  test('createPost resolves typed local and stored remote handles without normalizing their body text', async () => {
+    const auth = await createAuthenticatedSession();
+    const local = await createProfile('typed_local');
+    const remote = await createRemoteActorProfile('typed_remote');
+    const localInstance = await db
+      .select()
+      .from(Instances)
+      .where(eq(Instances.id, localInstanceId))
+      .then(firstOrThrow);
+    const remoteInstance = await db
+      .select()
+      .from(Instances)
+      .where(eq(Instances.id, remote.instanceId))
+      .then(firstOrThrow);
+    const idnInstance = await db
+      .insert(Instances)
+      .values({
+        domain: 'xn--bcher-kva.example',
+        kind: InstanceKind.ACTIVITYPUB,
+        state: InstanceState.ACTIVE,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const idnProfile = await createProfile('typed_idn', { instanceId: idnInstance.id });
+    const typedBody =
+      `😀 @${local.handle}, ` +
+      `@${local.handle.toUpperCase()}@${localInstance.domain}! ` +
+      `@${remote.handle.toUpperCase()}@${remoteInstance.domain.toUpperCase()}, ` +
+      `@${idnProfile.handle}@bücher.example.`;
+    const filler = 'x'.repeat(500 - typedBody.length - 1);
+    const bodyText = `${filler} ${typedBody}`;
+    assert.equal(bodyText.length, 500);
+
+    const result = await requestCreatePost(
+      { bodyText, visibility: PostVisibility.PUBLIC },
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    const post = await db.select().from(Posts).then(firstOrThrow);
+    const content = await db
+      .select()
+      .from(PostContents)
+      .where(eq(PostContents.postId, post.id))
+      .then(firstOrThrow);
+    const paragraph = content.document.body.content[0];
+    assert.ok(paragraph?.type === 'paragraph');
+    assert.deepEqual(
+      paragraph.content?.flatMap((node) => (node.type === 'mention' ? [node.attrs.profileId] : [])),
+      [local.id, local.id, remote.id, idnProfile.id],
+    );
+    const storedMentions = await db
+      .select()
+      .from(PostMentions)
+      .where(eq(PostMentions.postContentId, content.id));
+    assert.deepEqual(
+      storedMentions.map(({ profileId }) => profileId).sort(),
+      [idnProfile.id, local.id, remote.id].sort(),
+    );
+  });
+
+  test('createPost leaves unknown, malformed, URL, email and ineligible typed handles as plain text', async (t) => {
+    const auth = await createAuthenticatedSession();
+    const available = await createProfile('eligible_typed');
+    const blocked = await createProfile('blocked_typed');
+    const disabled = await createProfile('disabled_typed', ProfileState.DISABLED);
+    await db.insert(ProfileBlocks).values({
+      ownerProfileId: blocked.id,
+      targetProfileId: auth.profile.id,
+    });
+    const bodyText =
+      `😀 @${available.handle}, '@${available.handle}' ` +
+      `foo+@${available.handle} foo'@${available.handle} ` +
+      `https://example.com/@${available.handle} ` +
+      `@${available.handle}.extra @${available.handle}é ` +
+      `@${available.handle}@missing.example @missing@missing.example ` +
+      `@${blocked.handle} @${disabled.handle}`;
+    const execute = t.mock.method(temporalClient.workflow, 'execute');
+
+    const result = await requestCreatePost(
+      { bodyText, visibility: PostVisibility.PUBLIC },
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.equal(execute.mock.calls.length, 0);
+    const post = await db.select().from(Posts).then(firstOrThrow);
+    const content = await db
+      .select()
+      .from(PostContents)
+      .where(eq(PostContents.postId, post.id))
+      .then(firstOrThrow);
+    const paragraph = content.document.body.content[0];
+    assert.ok(paragraph?.type === 'paragraph');
+    assert.deepEqual(
+      paragraph.content?.flatMap((node) => (node.type === 'mention' ? [node.attrs.profileId] : [])),
+      [available.id, available.id],
+    );
+    const storedMentions = await db
+      .select()
+      .from(PostMentions)
+      .where(eq(PostMentions.postContentId, content.id));
+    assert.deepEqual(
+      storedMentions.map(({ profileId }) => profileId),
+      [available.id],
+    );
+  });
+
+  test('createPost uses the selected composer Profile for typed Mention eligibility', async () => {
+    const auth = await createAuthenticatedSession();
+    const composer = await createProfile('typed_mention_author');
+    const blocked = await createProfile('composer_blocked_typed');
+    await db.insert(AccountProfiles).values({
+      accountId: auth.account.id,
+      profileId: composer.id,
+      role: AccountProfileRole.MEMBER,
+    });
+    await db.insert(ProfileBlocks).values({
+      ownerProfileId: composer.id,
+      targetProfileId: blocked.id,
+    });
+
+    const result = await requestCreatePost(
+      {
+        actorProfileId: encodeGlobalId('Profile', composer.id),
+        bodyText: `@${blocked.handle}`,
+        visibility: PostVisibility.PUBLIC,
+      },
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    const post = await db.select().from(Posts).then(firstOrThrow);
+    const content = await db
+      .select()
+      .from(PostContents)
+      .where(eq(PostContents.postId, post.id))
+      .then(firstOrThrow);
+    assert.deepEqual(content.document.body.content, [
+      { type: 'paragraph', content: [{ type: 'text', text: `@${blocked.handle}` }] },
+    ]);
+    assert.equal(await db.$count(PostMentions), 0);
   });
 
   test('createPost validates Mention ranges and target eligibility before writing', async () => {

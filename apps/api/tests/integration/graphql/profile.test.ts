@@ -408,6 +408,43 @@ describe('GraphQL remote profile boundary', () => {
     ]);
   });
 
+  test('returns a stored remote profile without resolving it when requested', async (t) => {
+    const auth = await createAuthenticatedSession();
+    const stored = await createStoredActivityPubAuthor({ domain: remoteDomain, handle: 'alice' });
+    const execute = t.mock.method(temporalClient.workflow, 'execute');
+    const search = (query: string) =>
+      requestGraphQL<{
+        searchProfiles: { edges: Array<{ node: { id: string; relativeHandle: string } }> };
+      }>(
+        `query SearchRemoteProfile($query: String!, $resolveRemote: Boolean!) {
+          searchProfiles(query: $query, first: 20, resolveRemote: $resolveRemote) {
+            edges { node { id relativeHandle } }
+          }
+        }`,
+        { query, resolveRemote: false },
+        auth.token,
+      );
+
+    const result = await search(`@alice@${remoteDomain}`);
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.searchProfiles.edges, [
+      {
+        node: {
+          id: globalId('Profile', stored.profile.id),
+          relativeHandle: `@alice@${remoteDomain}`,
+        },
+      },
+    ]);
+    assert.equal(execute.mock.calls.length, 0);
+
+    const missing = await search(`@missing@${remoteDomain}`);
+
+    assertNoGraphQLErrors(missing);
+    assert.deepEqual(missing.data?.searchProfiles.edges, []);
+    assert.equal(execute.mock.calls.length, 0);
+  });
+
   for (const state of [InstanceState.SUSPENDED, InstanceState.UNRESPONSIVE]) {
     test(`dispatches a ${state.toLowerCase()} handle domain to the lookup Workflow`, async (t) => {
       const auth = await createAuthenticatedSession();
