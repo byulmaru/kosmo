@@ -35,7 +35,7 @@
     "remeda": "^2.34.1",
     "ts-pattern": "^5.9.0",
     "tsx": "^4.22.4",
-    "uuid": "^14.0.1",
+    "uuid": "^14.0.2",
     "zod": "^4.4.3"
   },
   "devDependencies": {
