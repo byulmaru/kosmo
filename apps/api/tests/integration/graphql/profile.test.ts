@@ -362,7 +362,7 @@ describe('GraphQL remote profile boundary', () => {
       ]);
     }
 
-    assert.equal(await db.$count(Profiles), handles.length + 1);
+    assert.equal(await db.$count(Profiles), handles.length + 2);
     assert.equal(await db.$count(ActivityPubActors), 0);
   });
 
