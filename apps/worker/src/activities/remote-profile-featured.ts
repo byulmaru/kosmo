@@ -3,13 +3,13 @@ import '@kosmo/core/polyfill';
 import { ActivityPubActors, db, first, Instances, ProfileFollows, Profiles } from '@kosmo/core/db';
 import { InstanceKind, InstanceState, ProfileState } from '@kosmo/core/enums';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
-import { federation, syncRemoteFeaturedSnapshot } from '@kosmo/fedify';
+import { collectRemoteFeaturedPostIds, federation } from '@kosmo/fedify';
 import { and, eq, isNotNull } from 'drizzle-orm';
 import type { RemoteProfileFeaturedSyncInput } from '../workflows/remote-profile-featured';
 
-export const syncRemoteFeaturedActivity = async (
+export const collectRemoteFeaturedActivity = async (
   input: RemoteProfileFeaturedSyncInput,
-): Promise<void> => {
+): Promise<string[] | null> => {
   const current = await db
     .select({ instance: Instances, profile: Profiles })
     .from(ActivityPubActors)
@@ -24,7 +24,7 @@ export const syncRemoteFeaturedActivity = async (
     .limit(1)
     .then(first);
   if (!current || current.profile.state !== ProfileState.ACTIVE) {
-    return;
+    return null;
   }
   if (
     current.instance.kind !== InstanceKind.ACTIVITYPUB ||
@@ -60,7 +60,7 @@ export const syncRemoteFeaturedActivity = async (
   const documentLoader = follower
     ? await context.getDocumentLoader({ identifier: follower.id })
     : context.documentLoader;
-  await syncRemoteFeaturedSnapshot({
+  return collectRemoteFeaturedPostIds({
     ...input,
     context,
     documentLoader,

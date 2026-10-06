@@ -42,6 +42,7 @@ const remoteAliasDomain = 'alias.example';
 const remoteActorUri = new URL(`https://${remoteDomain}/users/alice`);
 
 let ActivityPubActors: typeof CoreDb.ActivityPubActors;
+let ActivityPubPosts: typeof CoreDb.ActivityPubPosts;
 let db: typeof CoreDb.db;
 let first: typeof CoreDb.first;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
@@ -60,7 +61,7 @@ let findOrMaterializeRemoteProfileActorByUri: typeof Materialization.findOrMater
 let materializeRemoteProfileActor: typeof Materialization.materializeRemoteProfileActor;
 let RemoteActorMaterializationError: typeof Materialization.RemoteActorMaterializationError;
 let replaceRemoteFeaturedSnapshot: typeof Snapshot.replaceRemoteFeaturedSnapshot;
-let syncRemoteFeaturedSnapshot: typeof Featured.syncRemoteFeaturedSnapshot;
+let collectRemoteFeaturedPostIds: typeof Featured.collectRemoteFeaturedPostIds;
 
 describe('remote actor materialization', () => {
   let localInstanceId: string;
@@ -71,6 +72,7 @@ describe('remote actor materialization', () => {
 
     ({
       ActivityPubActors,
+      ActivityPubPosts,
       db,
       first,
       firstOrThrow,
@@ -92,7 +94,7 @@ describe('remote actor materialization', () => {
       RemoteActorMaterializationError,
     } = await import('./remote-actor-materialization'));
     ({ replaceRemoteFeaturedSnapshot } = await import('./remote-featured-snapshot'));
-    ({ syncRemoteFeaturedSnapshot } = await import('./remote-profile-featured'));
+    ({ collectRemoteFeaturedPostIds } = await import('./remote-profile-featured'));
 
     await truncateDatabase();
     const { localInstance } = await seedDatabase({ publicOrigin });
@@ -1219,7 +1221,7 @@ describe('remote actor materialization', () => {
     );
   });
 
-  test('syncs a Followers Only Featured Note without a local Follow and preserves pins on sync failure', async () => {
+  test('collects ordered Followers Only Featured Notes before replacing pins', async () => {
     const stored = await createStoredRemoteActor();
     const featuredUri = `${remoteActorUri.href}/featured`;
     const itemUris = [1, 2].map((index) => new URL(`https://${remoteDomain}/notes/${index}`));
@@ -1264,12 +1266,49 @@ describe('remote actor materialization', () => {
       profileId: stored.profile.id,
     };
 
-    await syncRemoteFeaturedSnapshot(input);
-    const pins = await db
-      .select({ position: ProfilePinnedPosts.position, postId: ProfilePinnedPosts.postId })
-      .from(ProfilePinnedPosts)
-      .where(eq(ProfilePinnedPosts.profileId, stored.profile.id))
-      .orderBy(ProfilePinnedPosts.position);
+    const previousPost = await db
+      .insert(Posts)
+      .values({
+        profileId: stored.profile.id,
+        state: PostState.ACTIVE,
+        visibility: PostVisibility.PUBLIC,
+      })
+      .returning()
+      .then(firstOrThrow);
+    await db.insert(ProfilePinnedPosts).values({
+      position: 0,
+      postId: previousPost.id,
+      profileId: stored.profile.id,
+    });
+    const readPins = () =>
+      db
+        .select({ position: ProfilePinnedPosts.position, postId: ProfilePinnedPosts.postId })
+        .from(ProfilePinnedPosts)
+        .where(eq(ProfilePinnedPosts.profileId, stored.profile.id))
+        .orderBy(ProfilePinnedPosts.position);
+    const previousPins = await readPins();
+
+    const postIds = await collectRemoteFeaturedPostIds(input);
+    const expectedPostIds = await Promise.all(
+      itemUris.map((uri) =>
+        db
+          .select({ postId: ActivityPubPosts.postId })
+          .from(ActivityPubPosts)
+          .where(eq(ActivityPubPosts.uri, uri.href))
+          .limit(1)
+          .then(firstOrThrow)
+          .then(({ postId }) => postId),
+      ),
+    );
+    assert.deepEqual(postIds, expectedPostIds);
+    assert.deepEqual(await readPins(), previousPins);
+
+    await replaceRemoteFeaturedSnapshot({ postIds, profileId: stored.profile.id });
+    const pins = await readPins();
+    assert.deepEqual(
+      pins.map(({ postId }) => postId),
+      postIds,
+    );
     assert.deepEqual(
       pins.map(({ position }) => position),
       [0, 1],
@@ -1291,7 +1330,7 @@ describe('remote actor materialization', () => {
 
     const otherProfile = await createProfile({ handle: 'mallory', instanceId: stored.instance.id });
     await db.update(Posts).set({ profileId: otherProfile.id }).where(eq(Posts.id, pins[1]!.postId));
-    await assert.rejects(syncRemoteFeaturedSnapshot(input), /Featured Note rejected/u);
+    await assert.rejects(collectRemoteFeaturedPostIds(input), /Featured Note rejected/u);
     await db
       .update(Posts)
       .set({ profileId: stored.profile.id })
@@ -1324,7 +1363,7 @@ describe('remote actor materialization', () => {
       return { contextUrl: null, document, documentUrl: url };
     };
     await assert.rejects(
-      syncRemoteFeaturedSnapshot({ ...input, documentLoader: budgetLoader }),
+      collectRemoteFeaturedPostIds({ ...input, documentLoader: budgetLoader }),
       /document_budget_exceeded/u,
     );
     assert.deepEqual(
@@ -1342,7 +1381,7 @@ describe('remote actor materialization', () => {
       id: itemUris[1],
       to: PUBLIC_COLLECTION,
     });
-    await assert.rejects(syncRemoteFeaturedSnapshot(input), /Featured Note rejected/u);
+    await assert.rejects(collectRemoteFeaturedPostIds(input), /Featured Note rejected/u);
     assert.deepEqual(
       await db
         .select({ position: ProfilePinnedPosts.position, postId: ProfilePinnedPosts.postId })
@@ -1384,7 +1423,7 @@ describe('remote actor materialization', () => {
       },
     };
     await assert.rejects(
-      syncRemoteFeaturedSnapshot({
+      collectRemoteFeaturedPostIds({
         ...input,
         context: timeoutContext,
         documentLoader: timeoutLoader,

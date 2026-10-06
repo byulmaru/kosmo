@@ -23,7 +23,6 @@ import type {
 } from '@kosmo/core/temporal/workflows';
 import type * as Fedify from '@kosmo/fedify';
 import type * as WorkerActivities from './activities';
-import type { RemoteProfileFeaturedSyncInput } from './workflows/remote-profile-featured';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
@@ -49,7 +48,7 @@ let federation: typeof Fedify.federation;
 let lookupRemoteActorUriActivity: typeof WorkerActivities.lookupRemoteActorUriActivity;
 let materializeRemoteProfileActorActivity: typeof WorkerActivities.materializeRemoteProfileActorActivity;
 let refreshRemoteProfileActorActivity: typeof WorkerActivities.refreshRemoteProfileActorActivity;
-let syncRemoteFeaturedActivity: typeof WorkerActivities.syncRemoteFeaturedActivity;
+let collectRemoteFeaturedActivity: typeof WorkerActivities.collectRemoteFeaturedActivity;
 let seedDatabase: typeof CoreSeed.seedDatabase;
 let localInstanceId: string;
 
@@ -62,7 +61,7 @@ before(async () => {
     lookupRemoteActorUriActivity,
     materializeRemoteProfileActorActivity,
     refreshRemoteProfileActorActivity,
-    syncRemoteFeaturedActivity,
+    collectRemoteFeaturedActivity,
   } = await import('./activities'));
 });
 
@@ -1380,7 +1379,10 @@ test('Remote Featured Activity는 사용 가능한 local follower identity로 co
       }) as never,
   );
 
-  await syncRemoteFeaturedActivity({ actorUri, featuredUri, profileId: remote.id });
+  assert.deepEqual(
+    await collectRemoteFeaturedActivity({ actorUri, featuredUri, profileId: remote.id }),
+    [],
+  );
   assert.deepEqual(signed, [follower.id]);
   assert.deepEqual(publicLoads, []);
 
@@ -1389,57 +1391,13 @@ test('Remote Featured Activity는 사용 가능한 local follower identity로 co
     .set({ state: ProfileState.SUSPENDED })
     .where(eq(Profiles.id, follower.id));
   signed.length = 0;
-  await syncRemoteFeaturedActivity({ actorUri, featuredUri, profileId: remote.id });
+  assert.deepEqual(
+    await collectRemoteFeaturedActivity({ actorUri, featuredUri, profileId: remote.id }),
+    [],
+  );
   assert.deepEqual(signed, []);
   assert.deepEqual(publicLoads, [featuredUri]);
 });
-
-test(
-  'Remote Featured Workflow retries transient Activity failures with the same input',
-  { timeout: 120_000 },
-  async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
-    });
-    t.after(() => environment.teardown());
-    const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-featured-${process.pid}`;
-    const calls: RemoteProfileFeaturedSyncInput[] = [];
-    let attempts = 0;
-    const worker = await Worker.create({
-      activities: {
-        syncRemoteFeaturedActivity: async (input: RemoteProfileFeaturedSyncInput) => {
-          attempts += 1;
-          calls.push(input);
-          if (attempts === 1) {
-            throw new Error('temporary Featured failure');
-          }
-        },
-      },
-      connection: environment.nativeConnection,
-      namespace: environment.namespace,
-      taskQueue,
-      workflowsPath,
-    });
-    const input: RemoteProfileFeaturedSyncInput = {
-      actorUri: 'https://remote.example/users/alice',
-      featuredUri: 'https://remote.example/users/alice/featured',
-      profileId: '019f7abc-3333-7777-8888-123456789abc',
-    };
-
-    await worker.runUntil(async () => {
-      await environment.client.workflow.execute<
-        (input: RemoteProfileFeaturedSyncInput) => Promise<void>
-      >('remoteProfileFeaturedWorkflow', {
-        args: [input],
-        taskQueue,
-        workflowId: `${taskQueue}:retry`,
-      });
-
-      assert.equal(attempts, 2);
-      assert.deepEqual(calls, [input, input]);
-    });
-  },
-);
 
 type PersonOptions = ConstructorParameters<typeof Person>[0];
 

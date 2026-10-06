@@ -5,10 +5,14 @@ import type * as activities from '../activities';
 
 export type { RemoteProfileFeaturedSyncInput } from '@kosmo/core/temporal/workflows';
 
-const { syncRemoteFeaturedActivity } = proxyActivities<typeof activities>(workflowActivityOptions);
+const { collectRemoteFeaturedActivity, replaceRemoteFeaturedActivity } =
+  proxyActivities<typeof activities>(workflowActivityOptions);
 
 export async function remoteProfileFeaturedWorkflow(
   input: RemoteProfileFeaturedSyncInput,
 ): Promise<void> {
-  await syncRemoteFeaturedActivity(input);
+  const postIds = await collectRemoteFeaturedActivity(input);
+  if (postIds !== null) {
+    await replaceRemoteFeaturedActivity({ profileId: input.profileId, postIds });
+  }
 }

@@ -8,7 +8,6 @@ import { db, first, Posts } from '@kosmo/core/db';
 import { eq } from 'drizzle-orm';
 import { isHttpUri } from './activitypub-uri';
 import { materializeHydratedRemoteNote } from './inbound-create-note';
-import { replaceRemoteFeaturedSnapshot } from './remote-featured-snapshot';
 import type { Context } from '@fedify/fedify';
 import type { DocumentLoader } from '@fedify/vocab';
 
@@ -154,7 +153,7 @@ export const collectRemoteFeaturedItemUris = async ({
   return orderedItems;
 };
 
-export const syncRemoteFeaturedSnapshot = async ({
+export const collectRemoteFeaturedPostIds = async ({
   actorUri,
   context,
   documentLoader,
@@ -166,7 +165,7 @@ export const syncRemoteFeaturedSnapshot = async ({
   documentLoader: DocumentLoader;
   featuredUri: string;
   profileId: string;
-}): Promise<void> => {
+}): Promise<string[]> => {
   if (!isHttpUri(new URL(featuredUri))) {
     throw new TypeError('Remote Featured URI must use HTTP(S)');
   }
@@ -225,5 +224,5 @@ export const syncRemoteFeaturedSnapshot = async ({
     }
     postIds.push(result.postId);
   }
-  await replaceRemoteFeaturedSnapshot({ postIds, profileId });
+  return postIds;
 };
