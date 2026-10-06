@@ -126,6 +126,11 @@ mock.module(new URL('./SettingsProfileMigrationDetail.tsx', import.meta.url), {
     SettingsProfileMigrationDetail: () => createElement('SettingsProfileMigrationDetail'),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('./SettingsFollowingImportDetail.tsx', import.meta.url), {
+  exports: {
+    SettingsFollowingImportDetail: () => createElement('SettingsFollowingImportDetail'),
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('./SettingsMuteAndBlockNavigation.tsx', import.meta.url), {
   exports: {
     SettingsMuteAndBlockNavigation: (props: Record<string, unknown>) =>
@@ -164,6 +169,7 @@ mock.module(new URL('../../session/SessionProvider.tsx', import.meta.url), {
 
 let SettingsDefaultPostVisibilityRoute: ComponentType;
 let SettingsProfileMigrationRoute: ComponentType;
+let SettingsFollowingImportRoute: ComponentType;
 let SettingsMuteAndBlockRoute: ComponentType;
 let SettingsMutedProfilesRoute: ComponentType;
 let SettingsBlockedProfilesRoute: ComponentType;
@@ -190,6 +196,8 @@ before(async () => {
     await import('../../app/(tabs)/(protected)/settings/default-post-visibility'));
   ({ default: SettingsProfileMigrationRoute } =
     await import('../../app/(tabs)/(protected)/settings/profile-migration'));
+  ({ default: SettingsFollowingImportRoute } =
+    await import('../../app/(tabs)/(protected)/settings/following-import'));
   ({ default: SettingsMuteAndBlockRoute } =
     await import('../../app/(tabs)/(protected)/settings/mute-and-block'));
   ({ default: SettingsMutedProfilesRoute } =
@@ -297,6 +305,22 @@ describe('Settings routes', () => {
     );
     assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'profile-migration');
     assert.equal(rendered('SettingsProfileMigrationDetail').length, 1);
+    const back = rendered('PageHeader')[1].props.leading;
+    assert.equal(back.props.accessibilityLabel, '설정으로 돌아가기');
+    await act(async () => back.props.onPress());
+    assert.deepEqual(dismissedToPaths, ['/settings']);
+  });
+
+  it('full Web following import detail은 같은 master와 Settings parent back을 사용한다', async () => {
+    await renderRoute('/settings/following-import', SettingsFollowingImportRoute);
+
+    assert.ok(byTestId('settings-workspace'));
+    assert.deepEqual(
+      rendered('PageHeader').map((node) => node.props.title),
+      ['설정', '팔로잉 가져오기'],
+    );
+    assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'following-import');
+    assert.equal(rendered('SettingsFollowingImportDetail').length, 1);
     const back = rendered('PageHeader')[1].props.leading;
     assert.equal(back.props.accessibilityLabel, '설정으로 돌아가기');
     await act(async () => back.props.onPress());

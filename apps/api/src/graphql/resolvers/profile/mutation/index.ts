@@ -3,6 +3,7 @@ import './block';
 import './delete';
 import './follow';
 import './follow-request';
+import './following-accounts-import';
 import './mute';
 import './migration';
 import './select';

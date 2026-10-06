@@ -226,6 +226,14 @@ type Hashtag implements Node {
   relatedProfiles(after: String, first: Int): ProfileConnection!
 }
 
+input ImportFollowingAccountsInput {
+  csv: String!
+}
+
+type ImportFollowingAccountsPayload {
+  accepted: Boolean!
+}
+
 enum InstanceKind {
   ACTIVITYPUB
   LOCAL
@@ -288,6 +296,7 @@ type Mutation {
   deleteReaction(input: DeleteReactionInput!): DeleteReactionPayload!
   exchangeNativeOidcSession(input: ExchangeNativeOidcSessionInput!): ExchangeNativeOidcSessionPayload!
   followProfile(input: FollowProfileInput!): FollowProfilePayload!
+  importFollowingAccounts(input: ImportFollowingAccountsInput!): ImportFollowingAccountsPayload!
   issueMediaUploadUrl(input: IssueMediaUploadUrlInput): IssueMediaUploadUrlPayload!
   markNotificationRead(input: MarkNotificationReadInput!): MarkNotificationReadPayload!
   muteProfile(input: MuteProfileInput!): MuteProfilePayload!
