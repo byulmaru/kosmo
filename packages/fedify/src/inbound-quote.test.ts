@@ -378,6 +378,63 @@ test('Create listener materializes the Quote body first and then records its res
   assert.equal(quoteState.status, PostQuoteConsentStatus.PENDING);
 });
 
+test('an authorization-free duplicate Create preserves the approved Quote and its Source', async () => {
+  const sourceActor = await createRemoteActor('source', 'https://source.example/users/source');
+  await createRemoteActor('quote', 'https://quote.example/users/quote');
+  const sourceUri = new URL('https://source.example/notes/duplicate-create');
+  const source = await createRemotePost(sourceActor.id, sourceUri.href);
+  const actorUri = new URL('https://quote.example/users/quote');
+  const quoteUri = new URL('https://quote.example/notes/duplicate-create');
+  const original = new Note({
+    attribution: actorUri,
+    content: 'first quote body',
+    id: quoteUri,
+    quote: sourceUri,
+    to: PUBLIC_COLLECTION,
+  });
+  const authorization = quoteInteraction.createAuthorization({
+    attributedTo: new URL('https://source.example/users/source'),
+    id: new URL('https://source.example/authorizations/duplicate-create'),
+    interactingObject: original,
+    interactionTarget: sourceUri,
+  });
+  const context = createContext(
+    new Map([[authorization.id!.href, await authorization.toJsonLd({ format: 'expand' })]]),
+  );
+  const deliver = async (note: Note) =>
+    handleInboundCreate(context, new Create({ actor: actorUri, object: note }), receivedAt);
+  const readQuote = async () =>
+    db
+      .select({ post: Posts })
+      .from(ActivityPubPosts)
+      .innerJoin(Posts, eq(Posts.id, ActivityPubPosts.postId))
+      .where(eq(ActivityPubPosts.uri, quoteUri.href))
+      .then(firstOrThrow);
+
+  await deliver(original);
+  assert.equal((await readQuote()).post.quoteConsentStatus, PostQuoteConsentStatus.PENDING);
+  await deliver(original.clone({ quoteAuthorization: authorization }));
+  const approved = (await readQuote()).post;
+  assert.equal(approved.quoteConsentStatus, PostQuoteConsentStatus.APPROVED);
+  assert.equal(approved.quoteConsentApprovalUri, authorization.id!.href);
+  assert.equal(approved.repostSourceId, source.post.id);
+
+  for (let replay = 0; replay < 2; replay++) {
+    await deliver(original);
+    const afterReplay = (await readQuote()).post;
+    assert.equal(afterReplay.quoteConsentStatus, PostQuoteConsentStatus.APPROVED);
+    assert.equal(afterReplay.quoteConsentApprovalUri, approved.quoteConsentApprovalUri);
+    assert.equal(afterReplay.repostSourceId, approved.repostSourceId);
+    assert.equal(afterReplay.currentContentId, approved.currentContentId);
+  }
+
+  await handleInboundUpdate(context, new Update({ actor: actorUri, object: original }), receivedAt);
+  const afterUpdate = (await readQuote()).post;
+  assert.equal(afterUpdate.quoteConsentStatus, PostQuoteConsentStatus.PENDING);
+  assert.equal(afterUpdate.quoteConsentApprovalUri, null);
+  assert.equal(afterUpdate.repostSourceId, source.post.id);
+});
+
 test('a remote Quote without authorization remains pending and keeps its body visible', async () => {
   const sourceActor = await createRemoteActor('source', 'https://source.example/users/source');
   const quoteActor = await createRemoteActor('quote', 'https://quote.example/users/quote');

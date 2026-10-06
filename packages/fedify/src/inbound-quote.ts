@@ -80,6 +80,7 @@ type InboundQuoteInput = {
   startWorkflow?: boolean;
   expectation?: QuoteExpectation;
   authorizationUpdate?: boolean;
+  duplicateCreate?: boolean;
 };
 
 export type InboundQuoteResolution = {
@@ -580,6 +581,7 @@ export const handleInboundQuote = async ({
   startWorkflow = true,
   expectation,
   authorizationUpdate = false,
+  duplicateCreate = false,
 }: InboundQuoteInput): Promise<InboundQuoteResolution> => {
   const quote = await loadQuoteSource(postId);
   if (!quote || quote.uri !== note.id?.href || quote.actorUri !== actorUri) {
@@ -596,6 +598,15 @@ export const handleInboundQuote = async ({
   }
   expectation ??= current;
   if (!(await matchesQuoteExpectation(postId, expectation))) {
+    return { retryable: false, status: current.expectedStatus };
+  }
+  if (
+    duplicateCreate &&
+    !authorizationUpdate &&
+    current.expectedStatus === PostQuoteConsentStatus.APPROVED &&
+    extraction.authorizationId === null
+  ) {
+    // Replaying the original Create without a grant is not an authorization Update.
     return { retryable: false, status: current.expectedStatus };
   }
   if (authorizationUpdate) {

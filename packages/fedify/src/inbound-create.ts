@@ -79,6 +79,7 @@ export const handleInboundCreate = async (
       await handleInboundQuote({
         actorUri,
         context,
+        duplicateCreate: materialization.status === 'duplicate',
         note: object,
         postId: materialization.postId,
         receivedAt,
