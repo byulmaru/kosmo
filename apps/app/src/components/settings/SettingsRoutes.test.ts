@@ -105,6 +105,9 @@ mock.module(new URL('./SettingsItem.tsx', import.meta.url), {
     SettingsItem: (props: Record<string, unknown>) => createElement('SettingsItem', props),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('../ui/StateView.tsx', import.meta.url), {
+  exports: { StateView: (props: Record<string, unknown>) => createElement('StateView', props) },
+} as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../../config/public.ts', import.meta.url), {
   exports: {
     getPublicConfig: (key: string) => {
