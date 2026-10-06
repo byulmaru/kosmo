@@ -31,18 +31,8 @@ export type AnalyticsEventProperties = {
     tab: 'popular' | 'latest' | 'media' | 'people';
   };
   profile_hashtag_clicked: { hashtag_id: string };
-  profile_hashtag_screen_entered: Record<string, never>;
-  profile_hashtag_initial_state_viewed: {
-    hashtag_id: string;
-    result: 'has_results' | 'empty';
-    entered_at: string;
-  };
-  profile_hashtag_list_viewed: { hashtag_id: string };
+  profile_hashtag_list_viewed: { hashtag_id: string; result_count: number };
   profile_hashtag_profile_selected: { hashtag_id: string };
-  profile_hashtag_request_completed: {
-    stage: 'initial' | 'pagination';
-    result: 'success' | 'partial' | 'failure';
-  };
 };
 
 export type AnalyticsEventName = keyof AnalyticsEventProperties;

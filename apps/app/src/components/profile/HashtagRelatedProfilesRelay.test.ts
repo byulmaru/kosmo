@@ -23,6 +23,7 @@ const fragment = require('./__generated__/HashtagRelatedProfileList_hashtag.grap
 
 const events: Array<[string, Record<string, unknown>]> = [];
 let renderer: ReactTestRenderer | undefined;
+let accountId: string | null = 'account-a';
 let routeId: string | string[] | undefined = 'tag-a';
 let canGoBack = true;
 let backCount = 0;
@@ -57,7 +58,7 @@ mockModule(new URL('../../analytics/client.ts', import.meta.url), {
     events.push([event, properties]),
 });
 mockModule(new URL('../../session/SessionProvider.tsx', import.meta.url), {
-  useSession: () => ({ accountId: 'account-a' }),
+  useSession: () => ({ accountId }),
 });
 mockModule(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
   useTheme: () => ({ foregroundPrimary: '#111', border: '#ddd' }),
@@ -85,12 +86,9 @@ mockModule(new URL('../../observability/UnexpectedErrorContext.ts', import.meta.
   useUnexpectedErrorReporter: () => undefined,
 });
 let Screen: ComponentType;
-let Provider: ComponentType<{ children: ReturnType<typeof createElement> }>;
 let execute: typeof executeGraphQLRequest;
 before(async () => {
   Screen = (await import('../../app/(tabs)/(protected)/hashtags/[hashtagId]/profiles')).default;
-  Provider = (await import('../../analytics/ProfileHashtagScreenAnalytics'))
-    .ProfileHashtagScreenAnalyticsProvider;
   execute = (await import('../../relay/network')).executeGraphQLRequest;
 });
 afterEach(async () => {
@@ -99,15 +97,16 @@ afterEach(async () => {
   events.length = 0;
   mock.timers.reset();
   routeId = 'tag-a';
+  accountId = 'account-a';
   canGoBack = true;
   backCount = 0;
   replacements.length = 0;
 });
-const payload = (count: number) => ({
+const payload = (count: number, id = 'tag-a') => ({
   data: {
     node: {
       __typename: 'Hashtag',
-      id: 'tag-a',
+      id,
       name: 'Topic',
       relatedProfiles: {
         edges: Array.from({ length: count }, (_, i) => ({
@@ -132,6 +131,7 @@ const payload = (count: number) => ({
 });
 for (const [cache, network] of [
   [1, 1],
+  [25, 1],
   [0, 1],
   [1, 0],
   [1, 'error'],
@@ -161,22 +161,18 @@ for (const [cache, network] of [
     }
     await act(async () => {
       renderer = create(
-        createElement(
-          relay.RelayEnvironmentProvider,
-          { environment },
-          createElement(Provider, { children: createElement(Screen) }),
-        ),
+        createElement(relay.RelayEnvironmentProvider, { environment }, createElement(Screen)),
       );
     });
     if (cache !== null) {
       assert.equal(renderer!.root.findAllByType('a').length, cache);
       assert.equal(
-        events.find(([name]) => name === 'profile_hashtag_initial_state_viewed')?.[1].result,
-        cache ? 'has_results' : 'empty',
+        events.find(([name]) => name === 'profile_hashtag_list_viewed')?.[1].result_count,
+        Math.min(cache, 20),
       );
     } else {
       assert.ok(renderer!.root.findAllByProps({ loading: true }).length > 0);
-      assert.ok(!events.some(([name]) => name === 'profile_hashtag_initial_state_viewed'));
+      assert.ok(!events.some(([name]) => name === 'profile_hashtag_list_viewed'));
     }
     await act(async () => {
       complete(
@@ -186,18 +182,15 @@ for (const [cache, network] of [
       );
       await new Promise((resolve) => setImmediate(resolve));
     });
-    const initial = events.filter(([name]) => name === 'profile_hashtag_initial_state_viewed');
+    const initial = events.filter(([name]) => name === 'profile_hashtag_list_viewed');
     assert.equal(initial.length, cache !== null || network !== 'error' ? 1 : 0);
-    assert.equal(
-      events.filter(([name]) => name === 'profile_hashtag_list_viewed').length,
-      cache === 1 || network === 1 ? 1 : 0,
-    );
-    assert.deepEqual(
-      events
-        .filter(([name]) => name === 'profile_hashtag_request_completed')
-        .map(([, properties]) => properties.result),
-      [network === 'error' ? 'failure' : 'success'],
-    );
+    if (initial.length) {
+      assert.deepEqual(initial[0]![1], {
+        hashtag_id: 'tag-a',
+        result_count: Math.min((cache ?? network) as number, 20),
+      });
+    }
+    assert.ok(!events.some(([name]) => name === 'profile_hashtag_request_completed'));
     if (cache === null && network === 'error') {
       const errorState = renderer!.root.findAllByType('p').find((node) => node.props.alert)!;
       assert.equal(errorState.props.actionLabel, '다시 시도');
@@ -207,21 +200,11 @@ for (const [cache, network] of [
         await new Promise((resolve) => setImmediate(resolve));
       });
       assert.equal(renderer!.root.findAllByType('a').length, 1);
-      assert.deepEqual(
-        events
-          .filter(([name]) => name === 'profile_hashtag_request_completed')
-          .map(([, props]) => props.result),
-        ['failure', 'success'],
-      );
-      assert.equal(events.filter(([name]) => name === 'profile_hashtag_screen_entered').length, 1);
-      assert.equal(
-        events.filter(([name]) => name === 'profile_hashtag_initial_state_viewed').length,
-        1,
-      );
+      assert.equal(events.filter(([name]) => name === 'profile_hashtag_list_viewed').length, 1);
     }
     if (cache === 0 && network === 1) {
       renderer!.root.findByType('a').props.onPress();
-      assert.equal(initial[0]![1].result, 'empty');
+      assert.equal(initial[0]![1].result_count, 0);
       assert.equal(events.at(-1)?.[0], 'profile_hashtag_profile_selected');
     }
   });
@@ -240,11 +223,7 @@ test('malformed 단일 route ID는 요청 없이 notFound를 표시하고 histor
   });
   await act(async () => {
     renderer = create(
-      createElement(
-        relay.RelayEnvironmentProvider,
-        { environment },
-        createElement(Provider, { children: createElement(Screen) }),
-      ),
+      createElement(relay.RelayEnvironmentProvider, { environment }, createElement(Screen)),
     );
   });
   assert.equal(requests, 0);
@@ -257,8 +236,37 @@ test('malformed 단일 route ID는 요청 없이 notFound를 표시하고 histor
   assert.equal(back.props.accessibilityLabel, '뒤로 가기');
   back.props.onPress();
   assert.deepEqual(replacements, ['/home']);
-  assert.equal(
-    events.filter(([name]) => name === 'profile_hashtag_initial_state_viewed').length,
-    0,
+  assert.equal(events.filter(([name]) => name === 'profile_hashtag_list_viewed').length, 0);
+});
+
+test('같은 결과의 Account loading은 중복하지 않고 Account·Hashtag 변경은 새 결과를 기록한다', async () => {
+  mock.timers.enable({ apis: ['setTimeout'] });
+  const environment = new Environment({
+    store: new Store(new RecordSource()),
+    network: Network.create(() => new Promise(() => {})),
+  });
+  for (const id of ['tag-a', 'tag-b']) {
+    environment.commitPayload(createOperationDescriptor(query, { id }), payload(2, id).data);
+  }
+  const element = () =>
+    createElement(relay.RelayEnvironmentProvider, { environment }, createElement(Screen));
+  await act(async () => {
+    renderer = create(element());
+  });
+  assert.equal(events.length, 1);
+  accountId = null;
+  await act(async () => renderer!.update(element()));
+  accountId = 'account-a';
+  await act(async () => renderer!.update(element()));
+  assert.equal(events.length, 1);
+  accountId = 'account-b';
+  await act(async () => renderer!.update(element()));
+  assert.equal(events.length, 2);
+  routeId = 'tag-b';
+  await act(async () => renderer!.update(element()));
+  assert.deepEqual(
+    events.map(([, properties]) => properties.hashtag_id),
+    ['tag-a', 'tag-a', 'tag-b'],
   );
+  assert.ok(events.every(([, properties]) => properties.result_count === 2));
 });

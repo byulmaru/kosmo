@@ -1,14 +1,16 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeftIcon } from 'lucide-react-native';
+import { useCallback, useRef } from 'react';
 import { StyleSheet } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
-import { useProfileHashtagScreenAnalytics } from '@/analytics/ProfileHashtagScreenAnalytics';
+import { identifyAnalytics, trackAnalytics } from '@/analytics/client';
 import {
   HashtagRelatedProfileList,
   HashtagRelatedProfileListState,
 } from '@/components/profile/HashtagRelatedProfileList';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { IconButton } from '@/components/ui/IconButton';
+import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import type { ReactNode } from 'react';
@@ -60,7 +62,32 @@ function HashtagRelatedProfilesRoute({
   backButton: ReactNode;
   hashtagId: string;
 }) {
-  const tracking = useProfileHashtagScreenAnalytics();
+  const { accountId } = useSession();
+  const recordedAccount = useRef<string | null>(null);
+  const onVisibleResults = useCallback(
+    (confirmedHashtagId: string, resultCount: number) => {
+      if (!accountId || recordedAccount.current === accountId) {
+        return;
+      }
+      recordedAccount.current = accountId;
+      identifyAnalytics(accountId);
+      trackAnalytics('profile_hashtag_list_viewed', {
+        hashtag_id: confirmedHashtagId,
+        result_count: resultCount,
+      });
+    },
+    [accountId],
+  );
+  const onResultSelected = useCallback(
+    (confirmedHashtagId: string) => {
+      if (!accountId) {
+        return;
+      }
+      identifyAnalytics(accountId);
+      trackAnalytics('profile_hashtag_profile_selected', { hashtag_id: confirmedHashtagId });
+    },
+    [accountId],
+  );
   return (
     <RouteBoundary
       error={(retry) => (
@@ -72,7 +99,8 @@ function HashtagRelatedProfilesRoute({
       <HashtagRelatedProfilesContent
         backButton={backButton}
         hashtagId={hashtagId}
-        tracking={tracking}
+        onVisibleResults={onVisibleResults}
+        onResultSelected={onResultSelected}
       />
     </RouteBoundary>
   );
@@ -81,11 +109,13 @@ function HashtagRelatedProfilesRoute({
 function HashtagRelatedProfilesContent({
   backButton,
   hashtagId,
-  tracking,
+  onVisibleResults,
+  onResultSelected,
 }: {
   backButton: ReactNode;
   hashtagId: string;
-  tracking: ReturnType<typeof useProfileHashtagScreenAnalytics>;
+  onVisibleResults: (hashtagId: string, resultCount: number) => void;
+  onResultSelected: (hashtagId: string) => void;
 }) {
   const { fetchKey } = useRouteBoundary();
   const data = useLazyLoadQuery<HashtagRelatedProfilesPageQuery>(
@@ -98,8 +128,8 @@ function HashtagRelatedProfilesContent({
     <HashtagRelatedProfileList
       hashtag={data.node.relatedProfileList}
       leading={backButton}
-      onVisibleResults={tracking.onVisibleResults}
-      onResultSelected={tracking.onResultSelected}
+      onVisibleResults={onVisibleResults}
+      onResultSelected={onResultSelected}
     />
   ) : (
     <HashtagRelatedProfileListState leading={backButton} state="notFound" />

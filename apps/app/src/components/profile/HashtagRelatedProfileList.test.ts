@@ -74,7 +74,7 @@ mockModule(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
 let HashtagRelatedProfileList: ComponentType<{
   hashtag: unknown;
   leading?: unknown;
-  onVisibleResults?: (hashtagId: string, hasResults: boolean) => void;
+  onVisibleResults?: (hashtagId: string, resultCount: number) => void;
   onResultSelected?: (hashtagId: string) => void;
 }>;
 let HashtagRelatedProfileListState: ComponentType<{
@@ -114,7 +114,7 @@ describe('Hashtag 관련 Profile 목록 viewport', () => {
     });
     assert.ok(renderer);
     assert.equal(onVisibleResults.mock.callCount(), 1);
-    assert.equal(onVisibleResults.mock.calls[0]?.arguments[1], false);
+    assert.equal(onVisibleResults.mock.calls[0]?.arguments[1], 0);
     assert.equal(
       renderer.root.findAll((node) => (node.type as unknown) === 'ProfileListItem').length,
       0,
@@ -184,7 +184,7 @@ describe('Hashtag 관련 Profile 목록 viewport', () => {
 
     const scrollView = renderer.root.find((node) => (node.type as unknown) === 'ScrollView');
     assert.equal(onVisibleResults.mock.callCount(), 1);
-    assert.equal(onVisibleResults.mock.calls[0]?.arguments[1], true);
+    assert.equal(onVisibleResults.mock.calls[0]?.arguments[1], 2);
 
     const firstProfile = scrollView.findAll(
       (node) => (node.type as unknown) === 'ProfileListItem',

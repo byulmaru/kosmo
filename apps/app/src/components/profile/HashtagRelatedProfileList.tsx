@@ -39,7 +39,7 @@ export function HashtagRelatedProfileList({
 }: {
   hashtag: HashtagRelatedProfileList_hashtag$key;
   leading?: ReactNode;
-  onVisibleResults?: (hashtagId: string, hasResults: boolean) => void;
+  onVisibleResults?: (hashtagId: string, resultCount: number) => void;
   onResultSelected?: (hashtagId: string) => void;
 }) {
   const pagination = usePaginationFragment<
@@ -57,7 +57,7 @@ export function HashtagRelatedProfileList({
     webScrollTarget: 'container',
   });
   useEffect(() => {
-    onVisibleResults?.(pagination.data.id, profiles.length > 0);
+    onVisibleResults?.(pagination.data.id, Math.min(profiles.length, 20));
   }, [onVisibleResults, pagination.data.id, profiles.length]);
 
   return (
