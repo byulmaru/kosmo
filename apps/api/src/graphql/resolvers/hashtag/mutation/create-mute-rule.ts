@@ -18,7 +18,9 @@ builder.mutationField('createHashtagMuteRule', (t) =>
       expiresAt: t.input.field({ type: 'DateTime', required: false }),
     },
     resolve: async (_, { input }, ctx) => {
-      const { id: commandId } = await db.select({ id: sql<string>`uuidv7()` }).then(firstOrThrow);
+      const { id: commandId } = await db
+        .execute<{ id: string }>(sql`SELECT uuidv7() AS id`)
+        .then(firstOrThrow);
       const result = await executeHashtagMuteCommand({
         action: 'CREATE',
         commandId,
