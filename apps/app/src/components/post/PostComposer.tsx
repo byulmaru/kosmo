@@ -44,6 +44,7 @@ import type {
   PostComposerMentionCandidate,
   PostComposerMentionCandidateResults,
   PostComposerMentionQuery,
+  PostComposerMentionSearchState,
   PostComposerTextSelection,
 } from './postComposerState';
 
@@ -72,8 +73,10 @@ export type PostComposerProps = Readonly<{
   expandControlRef?: RefObject<View | null>;
   items: readonly ComposerMediaItem[];
   mentionCandidates?: PostComposerMentionCandidateResults;
+  mentionSearchState?: PostComposerMentionSearchState;
   selection: PostComposerTextSelection;
   onSelectMention?: PostComposerMentionSelection;
+  onRetryMentionSearch?: () => void;
   onBodyChange: (value: string) => void;
   onSelectionChange: (selection: PostComposerTextSelection) => void;
   onContentWarningChange: (value: string) => void;
@@ -240,7 +243,9 @@ export function PostComposer({
   expandControlRef,
   items,
   mentionCandidates,
+  mentionSearchState,
   onSelectMention = () => undefined,
+  onRetryMentionSearch,
   onBodyChange,
   onSelectionChange,
   selection,
@@ -325,9 +330,11 @@ export function PostComposer({
         disabled={submitting}
         inputRef={bodyRef ?? bodyInputRef}
         mentionCandidates={mentionCandidates}
+        mentionSearchState={mentionSearchState}
         onBodyChange={onBodyChange}
         onSelectionChange={onSelectionChange}
         onSelectMention={onSelectMention}
+        onRetryMentionSearch={onRetryMentionSearch}
         renderInput={(mentionInput) => {
           return (
             <TextArea
@@ -690,6 +697,7 @@ export function MobileFullscreenComposerShellCandidate({
   fillContainer = false,
   items,
   mentionCandidates,
+  mentionSearchState,
   onSelectionChange,
   keyboard = false,
   onBodyChange,
@@ -702,6 +710,7 @@ export function MobileFullscreenComposerShellCandidate({
   onMediaRetry,
   onOverlayClose,
   onSelectMention = () => undefined,
+  onRetryMentionSearch,
   selection,
   onPollAction,
   onSubmit,
@@ -824,9 +833,11 @@ export function MobileFullscreenComposerShellCandidate({
         disabled={submitting}
         inputRef={bodyRef ?? bodyInputRef}
         mentionCandidates={mentionCandidates}
+        mentionSearchState={mentionSearchState}
         onBodyChange={onBodyChange}
         onSelectionChange={onSelectionChange}
         onSelectMention={onSelectMention}
+        onRetryMentionSearch={onRetryMentionSearch}
         renderInput={(mentionInput) => {
           return (
             <TextInput

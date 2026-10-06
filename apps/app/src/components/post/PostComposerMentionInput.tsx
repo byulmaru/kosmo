@@ -10,6 +10,7 @@ import type {
   PostComposerMentionCandidate,
   PostComposerMentionCandidateResults,
   PostComposerMentionQuery,
+  PostComposerMentionSearchState,
   PostComposerTextSelection,
 } from './postComposerState';
 
@@ -33,7 +34,9 @@ type Props = Readonly<{
   disabled?: boolean;
   inputRef: RefObject<TextInput | null>;
   mentionCandidates?: PostComposerMentionCandidateResults;
+  mentionSearchState?: PostComposerMentionSearchState;
   onBodyChange: (value: string) => void;
+  onRetryMentionSearch?: () => void;
   onSelectionChange: (selection: PostComposerTextSelection) => void;
   selection: PostComposerTextSelection;
   onSelectMention: (
@@ -49,7 +52,9 @@ export function PostComposerMentionInput({
   disabled = false,
   inputRef,
   mentionCandidates,
+  mentionSearchState,
   onBodyChange,
+  onRetryMentionSearch,
   onSelectionChange: updateSelection,
   onSelectMention,
   renderInput,
@@ -140,7 +145,7 @@ export function PostComposerMentionInput({
   const webProps: InputWebProps = {
     'aria-activedescendant': activeDescendant,
     'aria-autocomplete': 'list',
-    'aria-controls': visible ? listboxId : undefined,
+    'aria-controls': visible && candidates.length > 0 ? listboxId : undefined,
   };
 
   return (
@@ -163,67 +168,98 @@ export function PostComposerMentionInput({
             <Text style={[styles.message, { color: theme.foregroundSecondary }]}>
               검색어를 입력하세요.
             </Text>
+          ) : mentionSearchState === 'loading' ? (
+            <Text
+              accessibilityLiveRegion="polite"
+              style={[styles.message, { color: theme.foregroundSecondary }]}
+            >
+              프로필을 검색하고 있어요.
+            </Text>
+          ) : mentionSearchState === 'error' ? (
+            <View>
+              <Text
+                accessibilityLiveRegion="polite"
+                accessibilityRole="alert"
+                style={[styles.message, { color: theme.foregroundSecondary }]}
+              >
+                프로필을 검색하지 못했어요.
+              </Text>
+              {onRetryMentionSearch ? (
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={disabled}
+                  onPress={() => onRetryMentionSearch()}
+                  style={styles.retry}
+                >
+                  <Text style={[styles.retryLabel, { color: theme.foregroundPrimary }]}>
+                    다시 시도
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
           ) : candidates.length === 0 ? (
             <Text style={[styles.message, { color: theme.foregroundSecondary }]}>
               검색 결과가 없어요.
             </Text>
           ) : null}
-          <ScrollView
-            accessibilityLabel="멘션할 프로필 결과"
-            keyboardShouldPersistTaps="handled"
-            nativeID={listboxId}
-            style={styles.candidateList}
-            {...(Platform.OS === 'web'
-              ? ({ role: 'listbox' } as unknown as Pick<ViewProps, 'role'>)
-              : undefined)}
-          >
-            {candidates.map((candidate, index) => {
-              const active = index === activeCandidateIndex;
-              const avatarLabel = candidate.displayName || candidate.relativeHandle;
-              const domain = candidate.domain?.trim();
-              const handleLabel =
-                domain && !candidate.relativeHandle.toLowerCase().includes(domain.toLowerCase())
-                  ? `${candidate.relativeHandle} · ${domain}`
-                  : candidate.relativeHandle;
-              return (
-                <Pressable
-                  accessibilityLabel={`${avatarLabel}, ${handleLabel}`}
-                  accessibilityRole={Platform.OS === 'web' ? undefined : 'button'}
-                  accessibilityState={{ selected: active }}
-                  aria-selected={Platform.OS === 'web' ? active : undefined}
-                  disabled={disabled}
-                  key={candidate.id}
-                  nativeID={`${listboxId}-option-${index}`}
-                  onPress={() => selectCandidate(candidate)}
-                  role={Platform.OS === 'web' ? ('option' as ViewProps['role']) : undefined}
-                  style={({ pressed }) => [
-                    styles.option,
-                    {
-                      backgroundColor: pressed || active ? theme.stateHover : 'transparent',
-                      opacity: disabled ? 0.5 : 1,
-                    },
-                  ]}
-                  tabIndex={Platform.OS === 'web' ? -1 : undefined}
-                >
-                  <Avatar imageUri={candidate.avatar?.url} label={avatarLabel} size={32} />
-                  <View style={styles.copy}>
-                    <Text
-                      numberOfLines={1}
-                      style={[styles.name, { color: theme.foregroundPrimary }]}
-                    >
-                      {avatarLabel}
-                    </Text>
-                    <Text
-                      numberOfLines={1}
-                      style={[styles.handle, { color: theme.foregroundSecondary }]}
-                    >
-                      {handleLabel}
-                    </Text>
-                  </View>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
+          {candidates.length > 0 ? (
+            <ScrollView
+              accessibilityLabel="멘션할 프로필 결과"
+              keyboardShouldPersistTaps="handled"
+              nativeID={listboxId}
+              style={styles.candidateList}
+              {...(Platform.OS === 'web'
+                ? ({ role: 'listbox' } as unknown as Pick<ViewProps, 'role'>)
+                : undefined)}
+            >
+              {candidates.map((candidate, index) => {
+                const active = index === activeCandidateIndex;
+                const avatarLabel = candidate.displayName || candidate.relativeHandle;
+                const domain = candidate.domain?.trim();
+                const handleLabel =
+                  domain && !candidate.relativeHandle.toLowerCase().includes(domain.toLowerCase())
+                    ? `${candidate.relativeHandle} · ${domain}`
+                    : candidate.relativeHandle;
+                return (
+                  <Pressable
+                    accessibilityLabel={`${avatarLabel}, ${handleLabel}`}
+                    accessibilityRole={Platform.OS === 'web' ? undefined : 'button'}
+                    accessibilityState={{ selected: active }}
+                    aria-selected={Platform.OS === 'web' ? active : undefined}
+                    disabled={disabled}
+                    key={candidate.id}
+                    nativeID={`${listboxId}-option-${index}`}
+                    onPress={() => selectCandidate(candidate)}
+                    role={Platform.OS === 'web' ? ('option' as ViewProps['role']) : undefined}
+                    style={({ pressed }) => [
+                      styles.option,
+                      {
+                        backgroundColor: pressed || active ? theme.stateHover : 'transparent',
+                        opacity: disabled ? 0.5 : 1,
+                      },
+                    ]}
+                    tabIndex={Platform.OS === 'web' ? -1 : undefined}
+                  >
+                    <Avatar imageUri={candidate.avatar?.url} label={avatarLabel} size={32} />
+                    <View style={styles.copy}>
+                      <Text
+                        numberOfLines={1}
+                        style={[styles.name, { color: theme.foregroundPrimary }]}
+                      >
+                        {avatarLabel}
+                      </Text>
+                      <Text
+                        numberOfLines={1}
+                        style={[styles.handle, { color: theme.foregroundSecondary }]}
+                      >
+                        {handleLabel}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          ) : null}
         </View>
       ) : null}
     </View>
@@ -246,6 +282,14 @@ const styles = StyleSheet.create({
     paddingVertical: space[8],
     width: '100%',
   },
+  retry: {
+    alignSelf: 'flex-start',
+    justifyContent: 'center',
+    minHeight: 48,
+    paddingHorizontal: space[12],
+    paddingVertical: space[8],
+  },
+  retryLabel: textStyles.uiLabelM,
   root: { gap: space[8], position: 'relative', width: '100%' },
   suggestions: {
     borderRadius: radius[12],

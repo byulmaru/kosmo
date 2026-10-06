@@ -263,3 +263,17 @@ test('selects the highlighted candidate after IME composition and restores the e
   assert.deepEqual(input.inputProps.selection, { end: 7, start: 7 });
   assert.equal(input.inputProps['aria-activedescendant'], undefined);
 });
+
+test('shows empty-result feedback without a selection action', async () => {
+  const empty = renderMentionInput({ candidates: [] });
+  await act(async () => {
+    empty.setRenderer(create(empty.render()));
+  });
+  assert.equal(
+    empty.renderer?.root
+      .findAllByType('Text' as never)
+      .some((node) => node.children.join('') === '검색 결과가 없어요.'),
+    true,
+  );
+  assert.equal(empty.renderer?.root.findAllByType('Pressable' as never).length, 0);
+});

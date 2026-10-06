@@ -19,12 +19,19 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   재사용한다.
 - 일반 Post, Reply와 Quote는 같은 Plain Text editor에서 token boundary의 `@` 뒤에 한 글자 이상 입력했을
   때 Profile 제안을 표시한다. `@`만 입력하면 검색어를 입력하라는 짧은 안내를 표시하고 Profile 전체 목록은 열지
-  않는다. 제안을 선택하면 해당 입력을 Profile의 표시 handle과 공백으로 바꾸고, 선택한 Profile과의 연결을
-  해당 mention occurrence에 보존한다.
-- 직접 입력한 `@handle`은 선택된 Profile과 연결하지 않는다. mention 본문을 편집하면 그 occurrence의 연결을
-  버리고, 앞뒤 문장을 편집해도 영향받지 않은 mention 연결을 보존한다. 같은 Profile을 여러 번 선택한 경우
-  각 occurrence를 독립적으로 편집할 수 있다. Mention은 본문에 실제 작성한 문자열로 세는 기존 500자 합산에
-  별도 길이를 더하지 않는다.
+  않는다. 제안은 현재 작성 Profile을 기준으로 검색하며, 제안 조회 중에는 원격 Profile을 새로 resolve/fetch하지
+  않는다. 조회 중·실패·결과 없음은 같은 제안 영역에서 안내하고, 조회 중·실패 문구는 보조 기술에 공손한 live
+  update로 전달한다. 실패 시 다시 시도할 수 있다. 제안을 선택하면 해당 입력을 Profile의 표시 handle과 공백으로
+  바꾸고, 선택한 Profile과의 연결을 해당 mention occurrence에 보존한다.
+- 직접 입력한 `@handle`과 `@handle@domain`도 게시할 때 저장된 적격 Profile과 일치하면 Mention으로 저장한다.
+  Bare handle과 configured Local domain은 configured Local Instance에서, qualified remote handle은 이미 저장된
+  ActivityPub Profile에서 확인한다. 새 remote Profile을 조회 중 만들지 않는다. 알 수 없거나 차단·비활성 등
+  이용할 수 없는 대상의 token은 일반 본문 text로 남는다.
+- mention token을 편집하면 그 occurrence의 선택 연결은 해제하지만, 게시할 때 현재 본문을 다시 확인하므로
+  편집된 token이 다른 적격 Profile과 일치하면 Mention으로 저장한다. 앞뒤 문장만 편집하면 해당 선택 연결은
+  유지한다. 같은 Profile을 여러 번 선택한 경우 각 occurrence를 독립적으로 편집할 수 있다. 선택한 Profile을
+  게시 시 이용할 수 없거나 본문 handle과 선택한 Profile이 일치하지 않으면 게시 전체가 실패한다. Mention은
+  본문에 실제 작성한 문자열로 세는 기존 500자 합산에 별도 길이를 더하지 않는다.
 - Parent가 일반 Post, Reply 또는 Quote이면 화면에 표시되는 direct Parent의 자체 Content와 Source preview를
   보여준다. Action Bar와 Post menu는 Parent 맥락 안에 중복 표시하지 않는다.
 

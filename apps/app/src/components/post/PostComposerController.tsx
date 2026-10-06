@@ -3,6 +3,7 @@ import { postBodyMaxLength } from '@kosmo/core/validation/post-policy';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
+import { QueryRenderer } from 'react-relay/legacy';
 import { ConnectionHandler, ROOT_ID } from 'relay-runtime';
 import { trackAnalytics } from '@/analytics/client';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
@@ -21,6 +22,7 @@ import { PostComposerProfileSwitcher } from './PostComposerProfileSwitcher';
 import {
   createPostComposerContextKey,
   createPostComposerMutationInput,
+  findPostComposerMentionQuery,
   normalizePostComposerMentionDraft,
   replacePostComposerMentionQuery,
   resolvePostComposerVisibility,
@@ -32,16 +34,16 @@ import type { ReactNode, RefObject } from 'react';
 import type { TextInput } from 'react-native';
 import type { PostComposer_profile$key } from './__generated__/PostComposer_profile.graphql';
 import type { PostComposerCreatePostMutation } from './__generated__/PostComposerCreatePostMutation.graphql';
-import type {
-  PostComposerMentionSelection,
-  PostComposerMode,
-  PostComposerVisibility,
-} from './PostComposer';
+import type { PostComposerMentionSuggestionsQuery } from './__generated__/PostComposerMentionSuggestionsQuery.graphql';
+import type { PostComposerMode, PostComposerVisibility } from './PostComposer';
 import type { PostComposerMediaValue } from './PostComposerMediaControls';
 import type { PostComposerProfileRef } from './PostComposerProfileSwitcher';
 import type {
   PostComposerDraft,
+  PostComposerMentionCandidate,
   PostComposerMentionCandidateResults,
+  PostComposerMentionQuery,
+  PostComposerMentionSearchState,
   PostComposerTextSelection,
 } from './postComposerState';
 
@@ -76,6 +78,29 @@ const CreatePostMutation = graphql`
       post @prependNode(connections: $connections, edgeTypeName: "PostConnectionEdge") {
         id
         ...PostListItem_post @include(if: $prependToHome) @alias(as: "postListItem")
+      }
+    }
+  }
+`;
+
+const PostComposerMentionSuggestionsQuery = graphql`
+  query PostComposerMentionSuggestionsQuery($actorProfileId: ID!, $query: String!) {
+    searchProfiles(
+      actorProfileId: $actorProfileId
+      first: 10
+      query: $query
+      resolveRemote: false
+    ) {
+      edges {
+        node {
+          id
+          relativeHandle
+          displayName
+          avatar {
+            id
+            url
+          }
+        }
       }
     }
   }
@@ -208,6 +233,7 @@ function PostComposerContents({
   replyParentId,
   repostSourceId,
 }: PostComposerContentsProps) {
+  const environment = useRelayEnvironment();
   const [selectedProfileKey, setSelectedProfileKey] = useState<PostComposerProfileRef | null>(null);
   const globalProfile = useFragment(PostComposerFragment, profileKey);
   const profile = useFragment(PostComposerFragment, selectedProfileKey ?? profileKey);
@@ -224,6 +250,9 @@ function PostComposerContents({
     selection: { start: 0, end: 0 },
   });
   const { body, mentionRanges, selection } = draft;
+  const activeMentionQuery = findPostComposerMentionQuery(body, selection.start, selection.end);
+  const mentionQuery = activeMentionQuery?.query ?? '';
+  const shouldSearchMentions = mentionCandidates === undefined && mentionQuery.trim().length > 0;
   const onBodyChange = useCallback((nextBody: string) => {
     setDraft((previous) => updatePostComposerDraftBody(previous, nextBody));
   }, []);
@@ -238,12 +267,16 @@ function PostComposerContents({
       selection: { start: 0, end: 0 },
     });
   }, []);
-  const onSelectMention: PostComposerMentionSelection = useCallback(
-    (candidate, query) => {
+  const selectMention = useCallback(
+    (
+      candidate: PostComposerMentionCandidate,
+      query: PostComposerMentionQuery,
+      candidateResults: PostComposerMentionCandidateResults | undefined,
+    ) => {
       if (
-        mentionCandidates?.authorProfileId !== profile.id ||
-        mentionCandidates.query !== query.query ||
-        !mentionCandidates.profiles.some(
+        candidateResults?.authorProfileId !== profile.id ||
+        candidateResults.query !== query.query ||
+        !candidateResults.profiles.some(
           (result) =>
             result.id === candidate.id && result.relativeHandle === candidate.relativeHandle,
         )
@@ -275,7 +308,7 @@ function PostComposerContents({
         };
       });
     },
-    [mentionCandidates, profile.id],
+    [profile.id],
   );
   const [contentWarning, setContentWarning] = useState(() =>
     normalizePostContentPlainText(initialContentWarning ?? ''),
@@ -490,143 +523,196 @@ function PostComposerContents({
       ]}
       submitOnModEnter
     >
-      <PostComposerMediaControls
-        actions={null}
-        disabled={submitting}
-        editorRef={editor}
-        key={mediaGeneration}
-        profileId={profile.id}
-        onValueChange={setMedia}
-        render={({
-          items,
-          onAltTextChange,
-          onMediaAction,
-          onMediaRemove,
-          onMediaRetry,
-          onSensitiveMediaChange,
-          sensitiveMedia,
-        }) => {
-          const productionAuthor = (
-            <View style={styles.productionAuthor}>
-              {pickerProfiles.length > 1 ? (
-                <PostComposerProfileSwitcher
-                  disabled={submitting || items.some((item) => item.state === 'uploading')}
-                  onDismissChange={onProfilePickerDismissChange}
-                  onSelectionSuccess={() => editor.current?.focus()}
-                  onSelectProfile={onSelectProfile}
-                  profiles={pickerProfiles}
-                  selectedProfileId={profile.id}
-                  surface={presentation === 'rail' ? 'rail' : 'overlay'}
-                />
-              ) : (
-                <>
-                  <Avatar imageUri={profile.avatar?.url} label={profile.displayName} size={40} />
-                  <ProfileNameBlock profile={profile} />
-                </>
-              )}
-            </View>
-          );
-          const mediaEditorContent = mediaEditor ? (
-            <ComposerMediaEditor
-              fillContainer
-              media={items}
-              mobileState={mediaEditor.tool === 'alt' ? 'alt' : 'sensitive'}
-              onAltTextChange={onAltTextChange}
-              onBack={closeMediaEditor}
-              onClose={() => {
-                setMediaEditor(null);
-                onRequestClose?.();
-              }}
-              onDone={closeMediaEditor}
-              onSelectMedia={(key) => setMediaEditor({ key, tool: mediaEditor.tool })}
-              onSensitiveMediaChange={onSensitiveMediaChange}
-              onToolChange={(tool) => setMediaEditor({ key: mediaEditor.key, tool })}
-              presentation={resolvedPresentation === 'mobile' ? 'mobile' : 'web'}
-              selectedKey={mediaEditor.key}
-              sensitiveMedia={sensitiveMedia}
-              tool={mediaEditor.tool}
-            />
-          ) : null;
-
-          const openMediaEditor = (key: string, tool: 'alt' | 'sensitive') => {
-            editor.current?.blur();
-            setMediaEditor({ key, tool });
-            if (resolvedPresentation === 'rail') {
-              onExpand?.();
-            }
-          };
-          const sharedProductionProps = {
-            author: productionAuthor,
-            authorProfileId: profile.id,
-            body,
-            bodyRef: editor,
-            children,
-            contentWarning,
-            contentWarningExpanded,
-            expandControlRef,
-            items,
-            mentionCandidates,
-            onSelectMention,
-            onBodyChange,
-            onSelectionChange,
-            selection,
-            onContentWarningChange: setContentWarning,
-            onContentWarningToggle: () => setContentWarningExpanded((expanded) => !expanded),
-            onEmojiAction: () => undefined,
-            beforeEditor,
-            mode: composerMode,
-            replyContext,
-            onMediaAction,
-            onMediaEdit: openMediaEditor,
-            onMediaRemove,
-            onMediaRetry: (key: string) => {
-              const item = items.find((candidate) => candidate.key === key);
-              if (item) {
-                onMediaRetry(item);
-              }
-            },
-            onPollAction: () => undefined,
-            onSubmit: submit,
-            onVisibilityChange: setVisibility,
-            remaining,
-            sensitiveMedia,
-            showEmojiAction: false,
-            showMediaAction: items.length < 4,
-            showPollAction: false,
-            submitting,
-            visibility: productionSurface,
-          };
-
-          const composerContent =
-            resolvedPresentation === 'mobile' ? (
-              <MobileFullscreenComposerShellCandidate
-                {...sharedProductionProps}
-                fillContainer
-                onOverlayClose={onRequestClose!}
-              />
-            ) : (
-              <PostComposer
-                {...sharedProductionProps}
-                onExpand={resolvedPresentation === 'rail' ? onExpand! : () => undefined}
-                surface={resolvedPresentation === 'rail' ? 'rail' : 'overlay'}
-              />
-            );
+      <QueryRenderer<PostComposerMentionSuggestionsQuery>
+        environment={environment}
+        query={shouldSearchMentions ? PostComposerMentionSuggestionsQuery : null}
+        variables={{
+          actorProfileId: profile.id,
+          query: mentionQuery,
+        }}
+        render={({ error, props: searchData, retry }) => {
+          const searchedProfiles = searchData?.searchProfiles?.edges.flatMap((edge) => {
+            const candidate = edge?.node;
+            return candidate
+              ? [
+                  {
+                    avatar: candidate.avatar ? { url: candidate.avatar.url } : candidate.avatar,
+                    displayName: candidate.displayName,
+                    id: candidate.id,
+                    relativeHandle: candidate.relativeHandle,
+                  },
+                ]
+              : [];
+          });
+          const currentMentionCandidates =
+            mentionCandidates ??
+            (shouldSearchMentions && activeMentionQuery
+              ? {
+                  authorProfileId: profile.id,
+                  profiles: searchedProfiles ?? [],
+                  query: activeMentionQuery.query,
+                }
+              : undefined);
+          const mentionSearchState: PostComposerMentionSearchState | undefined =
+            shouldSearchMentions
+              ? error
+                ? 'error'
+                : searchData === null
+                  ? 'loading'
+                  : 'ready'
+              : undefined;
 
           return (
-            <>
-              <View
-                accessibilityElementsHidden={mediaEditor !== null}
-                aria-hidden={mediaEditor !== null || undefined}
-                style={[
-                  presentation !== undefined ? styles.editorScroll : null,
-                  resolvedPresentation === 'mobile' && styles.surfaceRoot,
-                  mediaEditor !== null && styles.hiddenPresentation,
-                ]}
-              >
-                {composerContent}
-              </View>
-              {mediaEditorContent}
-            </>
+            <PostComposerMediaControls
+              actions={null}
+              disabled={submitting}
+              editorRef={editor}
+              key={mediaGeneration}
+              profileId={profile.id}
+              onValueChange={setMedia}
+              render={({
+                items,
+                onAltTextChange,
+                onMediaAction,
+                onMediaRemove,
+                onMediaRetry,
+                onSensitiveMediaChange,
+                sensitiveMedia,
+              }) => {
+                const productionAuthor = (
+                  <View style={styles.productionAuthor}>
+                    {pickerProfiles.length > 1 ? (
+                      <PostComposerProfileSwitcher
+                        disabled={submitting || items.some((item) => item.state === 'uploading')}
+                        onDismissChange={onProfilePickerDismissChange}
+                        onSelectionSuccess={() => editor.current?.focus()}
+                        onSelectProfile={onSelectProfile}
+                        profiles={pickerProfiles}
+                        selectedProfileId={profile.id}
+                        surface={presentation === 'rail' ? 'rail' : 'overlay'}
+                      />
+                    ) : (
+                      <>
+                        <Avatar
+                          imageUri={profile.avatar?.url}
+                          label={profile.displayName}
+                          size={40}
+                        />
+                        <ProfileNameBlock profile={profile} />
+                      </>
+                    )}
+                  </View>
+                );
+                const mediaEditorContent = mediaEditor ? (
+                  <ComposerMediaEditor
+                    fillContainer
+                    media={items}
+                    mobileState={mediaEditor.tool === 'alt' ? 'alt' : 'sensitive'}
+                    onAltTextChange={onAltTextChange}
+                    onBack={closeMediaEditor}
+                    onClose={() => {
+                      setMediaEditor(null);
+                      onRequestClose?.();
+                    }}
+                    onDone={closeMediaEditor}
+                    onSelectMedia={(key) => setMediaEditor({ key, tool: mediaEditor.tool })}
+                    onSensitiveMediaChange={onSensitiveMediaChange}
+                    onToolChange={(tool) => setMediaEditor({ key: mediaEditor.key, tool })}
+                    presentation={resolvedPresentation === 'mobile' ? 'mobile' : 'web'}
+                    selectedKey={mediaEditor.key}
+                    sensitiveMedia={sensitiveMedia}
+                    tool={mediaEditor.tool}
+                  />
+                ) : null;
+
+                const openMediaEditor = (key: string, tool: 'alt' | 'sensitive') => {
+                  editor.current?.blur();
+                  setMediaEditor({ key, tool });
+                  if (resolvedPresentation === 'rail') {
+                    onExpand?.();
+                  }
+                };
+                const sharedProductionProps = {
+                  author: productionAuthor,
+                  authorProfileId: profile.id,
+                  body,
+                  bodyRef: editor,
+                  children,
+                  contentWarning,
+                  contentWarningExpanded,
+                  expandControlRef,
+                  items,
+                  mentionCandidates: currentMentionCandidates,
+                  mentionSearchState,
+                  onRetryMentionSearch:
+                    mentionSearchState === 'error' && retry ? () => retry() : undefined,
+                  onSelectMention: (
+                    candidate: PostComposerMentionCandidate,
+                    query: PostComposerMentionQuery,
+                  ) => selectMention(candidate, query, currentMentionCandidates),
+                  onBodyChange,
+                  onSelectionChange,
+                  selection,
+                  onContentWarningChange: setContentWarning,
+                  onContentWarningToggle: () => setContentWarningExpanded((expanded) => !expanded),
+                  onEmojiAction: () => undefined,
+                  beforeEditor,
+                  mode: composerMode,
+                  replyContext,
+                  onMediaAction,
+                  onMediaEdit: openMediaEditor,
+                  onMediaRemove,
+                  onMediaRetry: (key: string) => {
+                    const item = items.find((candidate) => candidate.key === key);
+                    if (item) {
+                      onMediaRetry(item);
+                    }
+                  },
+                  onPollAction: () => undefined,
+                  onSubmit: submit,
+                  onVisibilityChange: setVisibility,
+                  remaining,
+                  sensitiveMedia,
+                  showEmojiAction: false,
+                  showMediaAction: items.length < 4,
+                  showPollAction: false,
+                  submitting,
+                  visibility: productionSurface,
+                };
+
+                const composerContent =
+                  resolvedPresentation === 'mobile' ? (
+                    <MobileFullscreenComposerShellCandidate
+                      {...sharedProductionProps}
+                      fillContainer
+                      onOverlayClose={onRequestClose!}
+                    />
+                  ) : (
+                    <PostComposer
+                      {...sharedProductionProps}
+                      onExpand={resolvedPresentation === 'rail' ? onExpand! : () => undefined}
+                      surface={resolvedPresentation === 'rail' ? 'rail' : 'overlay'}
+                    />
+                  );
+
+                return (
+                  <>
+                    <View
+                      accessibilityElementsHidden={mediaEditor !== null}
+                      aria-hidden={mediaEditor !== null || undefined}
+                      style={[
+                        presentation !== undefined ? styles.editorScroll : null,
+                        resolvedPresentation === 'mobile' && styles.surfaceRoot,
+                        mediaEditor !== null && styles.hiddenPresentation,
+                      ]}
+                    >
+                      {composerContent}
+                    </View>
+                    {mediaEditorContent}
+                  </>
+                );
+              }}
+            />
           );
         }}
       />

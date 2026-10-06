@@ -22,6 +22,7 @@ export type PostComposerMentionCandidateResults = Readonly<{
   profiles: readonly PostComposerMentionCandidate[];
   query: string;
 }>;
+export type PostComposerMentionSearchState = 'error' | 'loading' | 'ready';
 export type PostComposerMentionQuery = Readonly<{
   end: number;
   query: string;
