@@ -46,7 +46,8 @@ Following CSV 가져오기는 `Account address` 열의 계정만 현재 선택�
 조회와 Follow lifecycle을 거치므로 대상의 eligibility, Profile Block, Follow Approval Policy, 기존 관계의
 멱등성은 일반 Follow와 동일하다. 가져오기는 기존 관계를 제거하거나 설정을 변경하지 않는다. 요청이 접수되면
 사용자가 앱을 닫은 뒤에도 백그라운드에서 계속 처리되며, 접수 응답은 작업 시작을 뜻하고 모든 대상 처리가 끝났음을
-뜻하지 않는다.
+뜻하지 않는다. 같은 Local Profile의 가져오기가 진행 중이면 새 요청은 거절되며, 진행 중인 가져오기가 종료된 뒤에는
+새 요청을 시작할 수 있다.
 
 Follow 생성은 caller 검증 뒤 `profile-follow-pair:{followerProfileId}:{followeeProfileId}` Workflow에 `FOLLOW`
 Update-with-Start된다. transaction Activity가 Open policy면 Follow Relationship을 commit하고, Update handler가

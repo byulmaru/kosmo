@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import { db, first, Instances, Profiles } from '@kosmo/core/db';
 import { AccountProfileRole, InstanceKind } from '@kosmo/core/enums';
 import { PermissionDeniedError, ValidationError } from '@kosmo/core/error';
@@ -138,19 +137,17 @@ builder.mutationField('importFollowingAccounts', (t) =>
       }
 
       const addresses = parseFollowingAccountsCsv(input.csv, localInstance.domain);
-      const importId = randomUUID();
 
       await runWorkflow(followingAccountsImportWorkflow, {
         args: [
           {
-            importId,
             followerProfileId: ctx.session.profile.id,
             addresses,
           },
         ],
         mode: 'start',
         workflowIdConflictPolicy: WorkflowIdConflictPolicy.FAIL,
-        workflowIdReusePolicy: WorkflowIdReusePolicy.REJECT_DUPLICATE,
+        workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
       });
 
       return { accepted: true };

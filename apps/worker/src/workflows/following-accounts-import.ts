@@ -3,7 +3,13 @@ import {
   remoteProfileLookupWorkflow,
 } from '@kosmo/core/temporal/workflows';
 import { localProfileHandleSchema, remoteProfileHandleSchema } from '@kosmo/core/validation';
-import { ApplicationFailure, continueAsNew, log, proxyActivities } from '@temporalio/workflow';
+import {
+  ApplicationFailure,
+  continueAsNew,
+  log,
+  proxyActivities,
+  workflowInfo,
+} from '@temporalio/workflow';
 import { z } from 'zod';
 import { workflowActivityOptions } from './activity-options';
 import { runChildWorkflow } from './child';
@@ -20,7 +26,6 @@ const { followImportedProfileActivity, resolveImportedLocalProfileActivity } =
 
 const followingAccountsImportInputSchema = z
   .strictObject({
-    importId: z.uuid(),
     followerProfileId: z.uuid(),
     addresses: z
       .array(
@@ -89,7 +94,8 @@ export async function followingAccountsImportWorkflow(
     );
   }
 
-  const { addresses, followerProfileId, importId } = parsed.data;
+  const { addresses, followerProfileId } = parsed.data;
+  const parentWorkflowId = workflowInfo().workflowId;
   const start = parsed.data.afterIndex ?? 0;
   const end = Math.min(start + BATCH_SIZE, addresses.length);
 
@@ -103,7 +109,7 @@ export async function followingAccountsImportWorkflow(
               {
                 ...remoteProfileLookupWorkflow,
                 workflowIdFromArgs: (lookupInput: RemoteProfileLookupInput) =>
-                  `${remoteProfileLookupWorkflow.workflowIdFromArgs(lookupInput)}:following-import:${importId}:${index}`,
+                  `${remoteProfileLookupWorkflow.workflowIdFromArgs(lookupInput)}:following-import:${parentWorkflowId}:${index}`,
               },
               {
                 mode: 'execute',
@@ -119,7 +125,7 @@ export async function followingAccountsImportWorkflow(
 
       if (followeeProfileId === null) {
         log.warn('Following import skipped an unresolved account', {
-          importId,
+          workflowId: parentWorkflowId,
           index,
           reason: 'NotFoundError',
         });
@@ -139,7 +145,7 @@ export async function followingAccountsImportWorkflow(
       }
 
       log.warn('Following import skipped an account', {
-        importId,
+        workflowId: parentWorkflowId,
         index,
         reason: failureType,
       });

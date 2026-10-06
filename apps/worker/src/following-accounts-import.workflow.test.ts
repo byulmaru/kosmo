@@ -3,9 +3,16 @@ import test from 'node:test';
 import { db, Instances } from '@kosmo/core/db';
 import { InstanceKind, InstanceState } from '@kosmo/core/enums';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
-import { remoteProfileLookupWorkflow } from '@kosmo/core/temporal/workflows';
+import {
+  followingAccountsImportWorkflow,
+  remoteProfileLookupWorkflow,
+} from '@kosmo/core/temporal/workflows';
 import { federation } from '@kosmo/fedify';
-import { ApplicationFailure } from '@temporalio/client';
+import {
+  ApplicationFailure,
+  WorkflowIdConflictPolicy,
+  WorkflowIdReusePolicy,
+} from '@temporalio/client';
 import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
 import { lookupRemoteActorUriActivity } from './activities/remote-profile-materialization';
@@ -14,6 +21,7 @@ import type * as activities from './activities';
 
 const workflowsPath = new URL('./workflows/index.ts', import.meta.url).pathname;
 const followerProfileId = '00000000-0000-8000-8000-000000000101';
+const otherFollowerProfileId = '00000000-0000-8000-8000-000000000103';
 const remoteProfileId = '00000000-0000-8000-8000-000000000102';
 
 test('Remote Profile lookup Activity classifies fetch errors and propagates database errors', async (t) => {
@@ -92,7 +100,7 @@ test('Remote Profile lookup Activity classifies fetch errors and propagates data
 });
 
 test(
-  'Following Accounts Import isolates shared lookups, skips known failures, and continues bounded batches',
+  'Following Accounts Import rejects active same-profile starts, reuses completed IDs, and continues bounded batches',
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
@@ -103,10 +111,24 @@ test(
     const taskQueue = `${KOSMO_TASK_QUEUE}-following-import-test-${process.pid}`;
     const followed: string[] = [];
     const lookupCalls: string[] = [];
+    let pauseFirstLookup = true;
+    let signalFirstLookupStarted!: () => void;
+    let releaseFirstLookup!: () => void;
+    const firstLookupStarted = new Promise<void>((resolve) => {
+      signalFirstLookupStarted = resolve;
+    });
+    const firstLookupGate = new Promise<void>((resolve) => {
+      releaseFirstLookup = resolve;
+    });
     const worker = await Worker.create({
       activities: {
         lookupRemoteActorUriActivity: async ({ domain, handle }) => {
           lookupCalls.push(`${handle}@${domain}`);
+          if (pauseFirstLookup) {
+            pauseFirstLookup = false;
+            signalFirstLookupStarted();
+            await firstLookupGate;
+          }
           if (domain === 'offline.example') {
             throw ApplicationFailure.nonRetryable(
               'Remote fetch retries were exhausted',
@@ -149,62 +171,87 @@ test(
       workflowsPath,
     });
 
-    const execute = (input: FollowingAccountsImportInput) =>
-      environment.client.workflow.execute('followingAccountsImportWorkflow', {
+    const start = (input: FollowingAccountsImportInput) =>
+      environment.client.workflow.start('followingAccountsImportWorkflow', {
         args: [input],
         taskQueue,
-        workflowId: `following-import-test:${input.importId}`,
+        workflowId: followingAccountsImportWorkflow.workflowIdFromArgs(input),
+        workflowIdConflictPolicy: WorkflowIdConflictPolicy.FAIL,
+        workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
       });
+    const execute = async (input: FollowingAccountsImportInput) => (await start(input)).result();
     const importInput = (
-      importId: string,
+      inputFollowerProfileId: string,
       addresses: FollowingAccountsImportInput['addresses'],
-    ): FollowingAccountsImportInput => ({ importId, followerProfileId, addresses });
+    ): FollowingAccountsImportInput => ({
+      followerProfileId: inputFollowerProfileId,
+      addresses,
+    });
 
     await worker.runUntil(async () => {
       const sharedAddress = [
         { kind: 'remote', handle: 'Alice', domain: 'remote.example' },
       ] as const;
-      const firstId = '00000000-0000-8000-8000-000000000201';
-      const secondId = '00000000-0000-8000-8000-000000000202';
-      await Promise.all([
-        execute(importInput(firstId, sharedAddress)),
-        execute(importInput(secondId, sharedAddress)),
-      ]);
+      const firstInput = importInput(followerProfileId, sharedAddress);
+      const firstWorkflowId = followingAccountsImportWorkflow.workflowIdFromArgs(firstInput);
+      const firstHandle = await start(firstInput);
+      await firstLookupStarted;
 
-      assert.deepEqual(lookupCalls, ['Alice@remote.example', 'Alice@remote.example']);
-      assert.deepEqual(followed, [remoteProfileId, remoteProfileId]);
+      try {
+        await assert.rejects(
+          start(importInput(followerProfileId, sharedAddress)),
+          (error: unknown) =>
+            error instanceof Error && error.name === 'WorkflowExecutionAlreadyStartedError',
+        );
+      } finally {
+        releaseFirstLookup();
+      }
+      await firstHandle.result();
 
       const lookupInput = {
         domain: 'remote.example',
         handle: 'Alice',
         profileId: followerProfileId,
       };
-      const lookupBaseId = remoteProfileLookupWorkflow.workflowIdFromArgs(lookupInput);
-      const firstLookupId = `${lookupBaseId}:following-import:${firstId}:0`;
-      const secondLookupId = `${lookupBaseId}:following-import:${secondId}:0`;
-      assert.notEqual(firstLookupId, secondLookupId);
-      assert.equal(
-        (await environment.client.workflow.getHandle(firstLookupId).describe()).workflowId,
-        firstLookupId,
-      );
-      assert.equal(
-        (await environment.client.workflow.getHandle(secondLookupId).describe()).workflowId,
-        secondLookupId,
-      );
+      const firstLookupId = `${remoteProfileLookupWorkflow.workflowIdFromArgs(lookupInput)}:following-import:${firstWorkflowId}:0`;
+      const firstChildRunId = (
+        await environment.client.workflow.getHandle(firstLookupId).describe()
+      ).runId;
 
-      const batchId = '00000000-0000-8000-8000-000000000203';
-      const batchAddresses = Array.from({ length: BATCH_SIZE_FOR_TEST }, (_, index) => ({
-        kind: 'local' as const,
-        handle: `user${index.toString().padStart(3, '0')}`,
-      }));
+      await execute(firstInput);
+      assert.deepEqual(lookupCalls, ['Alice@remote.example', 'Alice@remote.example']);
+      assert.deepEqual(followed, [remoteProfileId, remoteProfileId]);
+      const repeatedChildRunId = (
+        await environment.client.workflow.getHandle(firstLookupId).describe()
+      ).runId;
+      assert.notEqual(repeatedChildRunId, firstChildRunId);
+
+      const otherInput = importInput(otherFollowerProfileId, sharedAddress);
+      await Promise.all([execute(firstInput), execute(otherInput)]);
+      assert.equal(lookupCalls.length, 4);
+      assert.equal(followed.length, 4);
+
+      const otherLookupId = `${remoteProfileLookupWorkflow.workflowIdFromArgs({ ...lookupInput, profileId: otherFollowerProfileId })}:following-import:${followingAccountsImportWorkflow.workflowIdFromArgs(otherInput)}:0`;
+      assert.notEqual(firstLookupId, otherLookupId);
+      await environment.client.workflow.getHandle(otherLookupId).describe();
+
+      const batchAddresses = [
+        ...Array.from({ length: BATCH_SIZE_FOR_TEST - 1 }, (_, index) => ({
+          kind: 'local' as const,
+          handle: `user${index.toString().padStart(3, '0')}`,
+        })),
+        { kind: 'remote' as const, handle: 'batchlast', domain: 'remote.example' },
+      ];
+      const batchInput = importInput(followerProfileId, batchAddresses);
       const beforeBatch = followed.length;
-      await execute(importInput(batchId, batchAddresses));
+      await execute(batchInput);
       assert.equal(followed.length - beforeBatch, BATCH_SIZE_FOR_TEST);
+      const batchLookupId = `${remoteProfileLookupWorkflow.workflowIdFromArgs({ domain: 'remote.example', handle: 'batchlast', profileId: followerProfileId })}:following-import:${followingAccountsImportWorkflow.workflowIdFromArgs(batchInput)}:50`;
+      await environment.client.workflow.getHandle(batchLookupId).describe();
 
-      const skippedId = '00000000-0000-8000-8000-000000000204';
       const beforeSkipped = followed.length;
       await execute(
-        importInput(skippedId, [
+        importInput(followerProfileId, [
           { kind: 'remote', handle: 'unavailable', domain: 'offline.example' },
           { kind: 'local', handle: 'blockeduser' },
           { kind: 'local', handle: 'gooduser' },
@@ -212,11 +259,10 @@ test(
       );
       assert.deepEqual(followed.slice(beforeSkipped), ['local:gooduser']);
 
-      const fatalId = '00000000-0000-8000-8000-000000000205';
       const beforeFatal = followed.length;
       await assert.rejects(
         execute(
-          importInput(fatalId, [
+          importInput(followerProfileId, [
             { kind: 'remote', handle: 'invalid', domain: 'bad-origin.example' },
             { kind: 'local', handle: 'mustnotrun' },
           ]),

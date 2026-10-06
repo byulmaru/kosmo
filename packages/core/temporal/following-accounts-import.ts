@@ -8,7 +8,6 @@ export type FollowingAccountsImportAddress =
   | { readonly kind: 'remote'; readonly handle: string; readonly domain: string };
 
 export type FollowingAccountsImportInput = {
-  readonly importId: string;
   readonly followerProfileId: string;
   readonly addresses: readonly FollowingAccountsImportAddress[];
   readonly afterIndex?: number;
@@ -18,5 +17,6 @@ export const followingAccountsImportWorkflow: WorkflowDefinition<
   (input: FollowingAccountsImportInput) => Promise<void>
 > = {
   workflow: FOLLOWING_ACCOUNTS_IMPORT_WORKFLOW_TYPE,
-  workflowIdFromArgs: ({ importId }) => `${FOLLOWING_ACCOUNTS_IMPORT_WORKFLOW_TYPE}:${importId}`,
+  workflowIdFromArgs: ({ followerProfileId }) =>
+    `${FOLLOWING_ACCOUNTS_IMPORT_WORKFLOW_TYPE}:${followerProfileId}`,
 };

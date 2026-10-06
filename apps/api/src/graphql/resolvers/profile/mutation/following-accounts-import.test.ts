@@ -4,6 +4,8 @@ import { db, Profiles } from '@kosmo/core/db';
 import { AccountProfileRole, InstanceKind, InstanceState } from '@kosmo/core/enums';
 import { ValidationError } from '@kosmo/core/error';
 import { temporalClient } from '@kosmo/core/temporal/client';
+import { FOLLOWING_ACCOUNTS_IMPORT_WORKFLOW_TYPE } from '@kosmo/core/temporal/workflows';
+import { WorkflowIdConflictPolicy, WorkflowIdReusePolicy } from '@temporalio/client';
 import { graphql } from 'graphql';
 import { parseFollowingAccountsCsv } from './following-accounts-import';
 
@@ -177,10 +179,31 @@ test('importFollowingAccounts acknowledges only a successful Temporal start', as
     true,
   );
   assert.equal(starts.length, 1);
+  const firstStart = starts[0]!.options as {
+    readonly args: readonly unknown[];
+    readonly workflowId: string;
+    readonly workflowIdConflictPolicy: WorkflowIdConflictPolicy;
+    readonly workflowIdReusePolicy: WorkflowIdReusePolicy;
+  };
+  assert.equal(
+    firstStart.workflowId,
+    `${FOLLOWING_ACCOUNTS_IMPORT_WORKFLOW_TYPE}:${contextValue.session.profile.id}`,
+  );
+  assert.equal(firstStart.workflowIdConflictPolicy, WorkflowIdConflictPolicy.FAIL);
+  assert.equal(firstStart.workflowIdReusePolicy, WorkflowIdReusePolicy.ALLOW_DUPLICATE);
+  assert.deepEqual(firstStart.args, [
+    {
+      followerProfileId: contextValue.session.profile.id,
+      addresses: [{ kind: 'remote', handle: 'Alice', domain: 'remote.example' }],
+    },
+  ]);
 
   failStart = true;
   const rejected = await execute('Account address\nBob@REMOTE.example');
   assert.ok(rejected.errors?.length);
   assert.equal(rejected.data, null);
   assert.equal(starts.length, 2);
+  const secondStart = starts[1]!.options as typeof firstStart;
+  assert.equal(secondStart.workflowId, firstStart.workflowId);
+  assert.equal(secondStart.workflowIdConflictPolicy, WorkflowIdConflictPolicy.FAIL);
 });
