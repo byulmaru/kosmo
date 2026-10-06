@@ -290,7 +290,7 @@ const styles = StyleSheet.create({
     paddingVertical: space[8],
   },
   retryLabel: textStyles.uiLabelM,
-  root: { gap: space[8], position: 'relative', width: '100%' },
+  root: { flex: 1, gap: space[8], position: 'relative', width: '100%' },
   suggestions: {
     borderRadius: radius[12],
     borderWidth: borderWidths[1],
