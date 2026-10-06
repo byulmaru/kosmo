@@ -9,6 +9,7 @@ import {
   Link,
   Note,
   OrderedCollection,
+  OrderedCollectionPage,
   Person,
   PUBLIC_COLLECTION,
 } from '@fedify/vocab';
@@ -1218,7 +1219,7 @@ describe('remote actor materialization', () => {
     );
   });
 
-  test('syncs a Followers Only Featured Note without a local Follow and keeps pins on invalid attribution', async (t) => {
+  test('syncs a Followers Only Featured Note without a local Follow and preserves pins on sync failure', async () => {
     const stored = await createStoredRemoteActor();
     const featuredUri = `${remoteActorUri.href}/featured`;
     const itemUris = [1, 2].map((index) => new URL(`https://${remoteDomain}/notes/${index}`));
@@ -1295,6 +1296,37 @@ describe('remote actor materialization', () => {
       .update(Posts)
       .set({ profileId: stored.profile.id })
       .where(eq(Posts.id, pins[1]!.postId));
+
+    const budgetPageUri = new URL(`${featuredUri}?page=budget`);
+    const budgetDocuments = new Map<string, unknown>([
+      [
+        featuredUri,
+        await new OrderedCollection({
+          first: budgetPageUri,
+          id: new URL(featuredUri),
+          name: 'x'.repeat(1_100_000),
+        }).toJsonLd({ format: 'expand' }),
+      ],
+      [
+        budgetPageUri.href,
+        await new OrderedCollectionPage({
+          id: budgetPageUri,
+          items: [],
+          name: 'y'.repeat(1_100_000),
+        }).toJsonLd({ format: 'expand' }),
+      ],
+    ]);
+    const budgetLoader: DocumentLoader = async (url) => {
+      const document = budgetDocuments.get(url);
+      if (document === undefined) {
+        throw new Error(`Unexpected Featured lookup: ${url}`);
+      }
+      return { contextUrl: null, document, documentUrl: url };
+    };
+    await assert.rejects(
+      syncRemoteFeaturedSnapshot({ ...input, documentLoader: budgetLoader }),
+      /document_budget_exceeded/u,
+    );
     assert.deepEqual(
       await db
         .select({ position: ProfilePinnedPosts.position, postId: ProfilePinnedPosts.postId })
@@ -1320,36 +1352,54 @@ describe('remote actor materialization', () => {
       pins,
     );
 
-    let enteredLookup!: () => void;
-    const entered = new Promise<void>((resolve) => {
-      enteredLookup = resolve;
+    const nativeTimeout = AbortSignal.timeout.bind(AbortSignal);
+    let timeoutCalls = 0;
+    mock.method(AbortSignal, 'timeout', (milliseconds: number) => {
+      timeoutCalls += 1;
+      return nativeTimeout(Math.min(milliseconds, 1));
     });
-    t.mock.timers.enable({ apis: ['setTimeout'] });
-    try {
-      const pending = syncRemoteFeaturedSnapshot({
-        ...input,
-        context: {
-          ...context,
-          lookupObject: async () => {
-            enteredLookup();
-            return new Promise<never>(() => undefined);
-          },
-        },
+    const timeoutLoader: DocumentLoader = async (url, options) => {
+      if (url === featuredUri) {
+        return documentLoader(url, options);
+      }
+      const signal = options?.signal;
+      assert.ok(signal);
+      return new Promise<never>((_resolve, reject) => {
+        const rejectOnAbort = () => reject(signal.reason);
+        if (signal.aborted) {
+          rejectOnAbort();
+        } else {
+          signal.addEventListener('abort', rejectOnAbort, { once: true });
+        }
       });
-      await entered;
-      t.mock.timers.tick(30_000);
-      await assert.rejects(pending, /deadline_exceeded/u);
-      assert.deepEqual(
-        await db
-          .select({ position: ProfilePinnedPosts.position, postId: ProfilePinnedPosts.postId })
-          .from(ProfilePinnedPosts)
-          .where(eq(ProfilePinnedPosts.profileId, stored.profile.id))
-          .orderBy(ProfilePinnedPosts.position),
-        pins,
-      );
-    } finally {
-      t.mock.timers.reset();
-    }
+    };
+    const timeoutContext: typeof context = {
+      ...context,
+      lookupObject: async (identifier, options) => {
+        const loader = options?.documentLoader;
+        assert.ok(loader);
+        assert.ok(options?.signal);
+        await loader(identifier.toString());
+        return null;
+      },
+    };
+    await assert.rejects(
+      syncRemoteFeaturedSnapshot({
+        ...input,
+        context: timeoutContext,
+        documentLoader: timeoutLoader,
+      }),
+      (error: unknown) => error instanceof DOMException && error.name === 'TimeoutError',
+    );
+    assert.equal(timeoutCalls, 3);
+    assert.deepEqual(
+      await db
+        .select({ position: ProfilePinnedPosts.position, postId: ProfilePinnedPosts.postId })
+        .from(ProfilePinnedPosts)
+        .where(eq(ProfilePinnedPosts.profileId, stored.profile.id))
+        .orderBy(ProfilePinnedPosts.position),
+      pins,
+    );
   });
 
   test('matches the remote actor Drizzle schema in PostgreSQL', async () => {

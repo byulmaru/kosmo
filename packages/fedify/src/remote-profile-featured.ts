@@ -15,10 +15,9 @@ import type { DocumentLoader } from '@fedify/vocab';
 const MAX_PAGES = 32;
 const MAX_ITEMS = 500;
 const MAX_DOCUMENT_BYTES = 2 * 1024 * 1024;
-const MAX_DURATION_MS = 30_000;
+const REQUEST_TIMEOUT_MS = 30_000;
 
 type TraversalFailure =
-  | 'deadline_exceeded'
   | 'document_budget_exceeded'
   | 'duplicate_item_uri'
   | 'duplicate_page_uri'
@@ -35,27 +34,6 @@ class RemoteFeaturedTraversalError extends Error {
   }
 }
 
-const raceAbort = async <T>(operation: Promise<T>, signal: AbortSignal): Promise<T> => {
-  let rejectOnAbort: (() => void) | undefined;
-  try {
-    return await Promise.race([
-      operation,
-      new Promise<never>((_, reject) => {
-        rejectOnAbort = () => reject(signal.reason);
-        if (signal.aborted) {
-          rejectOnAbort();
-        } else {
-          signal.addEventListener('abort', rejectOnAbort, { once: true });
-        }
-      }),
-    ]);
-  } finally {
-    if (rejectOnAbort) {
-      signal.removeEventListener('abort', rejectOnAbort);
-    }
-  }
-};
-
 const parsedDocumentBytes = (document: unknown): number => {
   const serialized = JSON.stringify(document);
   if (serialized === undefined) {
@@ -69,142 +47,111 @@ export type CollectRemoteFeaturedItemUrisOptions = {
   featuredUri: URL | string;
 };
 
-/**
- * Collects ordered Featured item URIs without fetching the item documents.
- *
- * The document budget counts the UTF-8 size of parsed DocumentLoader results;
- * it is not a raw wire-byte limit.
- */
+/** Collects ordered Featured item URIs without fetching the item documents. */
 export const collectRemoteFeaturedItemUris = async ({
   documentLoader,
   featuredUri,
 }: CollectRemoteFeaturedItemUrisOptions): Promise<URL[]> => {
-  const controller = new AbortController();
-  const deadline = setTimeout(
-    () => controller.abort(new RemoteFeaturedTraversalError('deadline_exceeded')),
-    MAX_DURATION_MS,
-  );
-
-  let documentBytes = 0;
-  const loadedDocument = async (url: string) => {
-    controller.signal.throwIfAborted();
-    const loaded = await raceAbort(
-      documentLoader(url, { signal: controller.signal }),
-      controller.signal,
-    );
-
-    documentBytes += parsedDocumentBytes(loaded.document);
-    if (documentBytes > MAX_DOCUMENT_BYTES) {
-      throw new RemoteFeaturedTraversalError('document_budget_exceeded');
-    }
-    return loaded;
-  };
   const parseObject = async (url: string) => {
-    const loaded = await loadedDocument(url);
+    const loaded = await documentLoader(url);
     return ActivityObject.fromJsonLd(loaded.document, {
       baseUrl: new URL(loaded.documentUrl),
-      contextLoader: loadedDocument,
-      documentLoader: loadedDocument,
+      contextLoader: documentLoader,
+      documentLoader,
     });
   };
 
-  try {
-    controller.signal.throwIfAborted();
-    const requestedFeaturedUri = new URL(featuredUri).href;
-    const root = await parseObject(requestedFeaturedUri);
-    if (!(root instanceof OrderedCollection || root instanceof OrderedCollectionPage)) {
-      throw new TypeError('Remote Featured document must be an OrderedCollection or page');
-    }
-    if (root.id?.href !== requestedFeaturedUri) {
-      throw new TypeError('Remote Featured document id must match the requested URI');
-    }
-
-    const pageUris = new Set<string>();
-    const itemUris = new Set<string>();
-    const orderedItems: URL[] = [];
-
-    const collectItems = (page: OrderedCollection | OrderedCollectionPage) => {
-      const pageItems = page.itemIds;
-      if (orderedItems.length + pageItems.length > MAX_ITEMS) {
-        throw new RemoteFeaturedTraversalError('item_limit_exceeded');
-      }
-      for (const itemUri of pageItems) {
-        if (itemUris.has(itemUri.href)) {
-          throw new RemoteFeaturedTraversalError('duplicate_item_uri');
-        }
-        itemUris.add(itemUri.href);
-        orderedItems.push(itemUri);
-      }
-    };
-
-    let page: OrderedCollectionPage | null;
-    if (root instanceof OrderedCollectionPage) {
-      page = root;
-    } else {
-      const firstUri = root.firstId?.href;
-      if (firstUri !== undefined && root.itemIds.length > 0) {
-        throw new TypeError('Remote Featured collection cannot mix inline items and pages');
-      }
-      const firstPage = await root.getFirst({
-        contextLoader: loadedDocument,
-        crossOrigin: 'throw',
-        documentLoader: loadedDocument,
-      });
-      if (firstPage !== null && !(firstPage instanceof OrderedCollectionPage)) {
-        throw new TypeError('Remote Featured first page must be an OrderedCollectionPage');
-      }
-      if (firstPage !== null && firstPage.id?.href !== firstUri) {
-        throw new TypeError('Remote Featured first page id must match its requested URI');
-      }
-      page = firstPage;
-      if (firstPage === null) {
-        collectItems(root);
-      }
-    }
-
-    let pageCount = 0;
-    while (page !== null) {
-      controller.signal.throwIfAborted();
-      pageCount += 1;
-      if (pageCount > MAX_PAGES) {
-        throw new RemoteFeaturedTraversalError('page_limit_exceeded');
-      }
-
-      const pageUri = page.id?.href;
-      if (pageUri === undefined) {
-        throw new TypeError('Remote Featured page must have a URI');
-      }
-      if (pageUris.has(pageUri)) {
-        throw new RemoteFeaturedTraversalError('duplicate_page_uri');
-      }
-      pageUris.add(pageUri);
-      collectItems(page);
-
-      const nextUri = page.nextId?.href;
-      if (nextUri !== undefined && pageUris.has(nextUri)) {
-        throw new RemoteFeaturedTraversalError('duplicate_page_uri');
-      }
-      if (nextUri !== undefined && pageCount >= MAX_PAGES) {
-        throw new RemoteFeaturedTraversalError('page_limit_exceeded');
-      }
-      const nextPage = await page.getNext({
-        contextLoader: loadedDocument,
-        crossOrigin: 'throw',
-        documentLoader: loadedDocument,
-      });
-      if (nextPage !== null && !(nextPage instanceof OrderedCollectionPage)) {
-        throw new TypeError('Remote Featured next page must be an OrderedCollectionPage');
-      }
-      if (nextPage !== null && nextPage.id?.href !== nextUri) {
-        throw new TypeError('Remote Featured next page id must match its requested URI');
-      }
-      page = nextPage;
-    }
-
-    return orderedItems;
-  } finally {
-    clearTimeout(deadline);
+  const requestedFeaturedUri = new URL(featuredUri).href;
+  const root = await parseObject(requestedFeaturedUri);
+  if (!(root instanceof OrderedCollection || root instanceof OrderedCollectionPage)) {
+    throw new TypeError('Remote Featured document must be an OrderedCollection or page');
   }
+  if (root.id?.href !== requestedFeaturedUri) {
+    throw new TypeError('Remote Featured document id must match the requested URI');
+  }
+
+  const pageUris = new Set<string>();
+  const itemUris = new Set<string>();
+  const orderedItems: URL[] = [];
+
+  const collectItems = (page: OrderedCollection | OrderedCollectionPage) => {
+    const pageItems = page.itemIds;
+    if (orderedItems.length + pageItems.length > MAX_ITEMS) {
+      throw new RemoteFeaturedTraversalError('item_limit_exceeded');
+    }
+    for (const itemUri of pageItems) {
+      if (itemUris.has(itemUri.href)) {
+        throw new RemoteFeaturedTraversalError('duplicate_item_uri');
+      }
+      itemUris.add(itemUri.href);
+      orderedItems.push(itemUri);
+    }
+  };
+
+  let page: OrderedCollectionPage | null;
+  if (root instanceof OrderedCollectionPage) {
+    page = root;
+  } else {
+    const firstUri = root.firstId?.href;
+    if (firstUri !== undefined && root.itemIds.length > 0) {
+      throw new TypeError('Remote Featured collection cannot mix inline items and pages');
+    }
+    const firstPage = await root.getFirst({
+      contextLoader: documentLoader,
+      crossOrigin: 'throw',
+      documentLoader,
+    });
+    if (firstPage !== null && !(firstPage instanceof OrderedCollectionPage)) {
+      throw new TypeError('Remote Featured first page must be an OrderedCollectionPage');
+    }
+    if (firstPage !== null && firstPage.id?.href !== firstUri) {
+      throw new TypeError('Remote Featured first page id must match its requested URI');
+    }
+    page = firstPage;
+    if (firstPage === null) {
+      collectItems(root);
+    }
+  }
+
+  let pageCount = 0;
+  while (page !== null) {
+    pageCount += 1;
+    if (pageCount > MAX_PAGES) {
+      throw new RemoteFeaturedTraversalError('page_limit_exceeded');
+    }
+
+    const pageUri = page.id?.href;
+    if (pageUri === undefined) {
+      throw new TypeError('Remote Featured page must have a URI');
+    }
+    if (pageUris.has(pageUri)) {
+      throw new RemoteFeaturedTraversalError('duplicate_page_uri');
+    }
+    pageUris.add(pageUri);
+    collectItems(page);
+
+    const nextUri = page.nextId?.href;
+    if (nextUri !== undefined && pageUris.has(nextUri)) {
+      throw new RemoteFeaturedTraversalError('duplicate_page_uri');
+    }
+    if (nextUri !== undefined && pageCount >= MAX_PAGES) {
+      throw new RemoteFeaturedTraversalError('page_limit_exceeded');
+    }
+    const nextPage = await page.getNext({
+      contextLoader: documentLoader,
+      crossOrigin: 'throw',
+      documentLoader,
+    });
+    if (nextPage !== null && !(nextPage instanceof OrderedCollectionPage)) {
+      throw new TypeError('Remote Featured next page must be an OrderedCollectionPage');
+    }
+    if (nextPage !== null && nextPage.id?.href !== nextUri) {
+      throw new TypeError('Remote Featured next page id must match its requested URI');
+    }
+    page = nextPage;
+  }
+
+  return orderedItems;
 };
 
 export const syncRemoteFeaturedSnapshot = async ({
@@ -224,19 +171,13 @@ export const syncRemoteFeaturedSnapshot = async ({
     throw new TypeError('Remote Featured URI must use HTTP(S)');
   }
 
-  const controller = new AbortController();
-  const deadline = setTimeout(
-    () => controller.abort(new RemoteFeaturedTraversalError('deadline_exceeded')),
-    MAX_DURATION_MS,
-  );
   let bytes = 0;
   const boundedLoader: DocumentLoader = async (url, options) => {
-    controller.signal.throwIfAborted();
-    const loaded = await raceAbort(
-      documentLoader(url, { ...options, signal: controller.signal }),
-      controller.signal,
-    );
-    controller.signal.throwIfAborted();
+    const loaded = await documentLoader(url, {
+      ...options,
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    // The budget counts UTF-8 bytes of parsed documents, not raw response bytes.
     bytes += parsedDocumentBytes(loaded.document);
     if (bytes > MAX_DOCUMENT_BYTES) {
       throw new RemoteFeaturedTraversalError('document_budget_exceeded');
@@ -244,53 +185,45 @@ export const syncRemoteFeaturedSnapshot = async ({
     return loaded;
   };
 
-  try {
-    const itemUris = await collectRemoteFeaturedItemUris({
-      documentLoader: boundedLoader,
-      featuredUri,
-    });
-    const postIds: string[] = [];
-    for (const objectUri of itemUris) {
-      controller.signal.throwIfAborted();
-      if (!isHttpUri(objectUri)) {
-        throw new TypeError('Remote Featured item URI must use HTTP(S)');
-      }
-      const note = await raceAbort(
-        context.lookupObject(objectUri, {
-          contextLoader: boundedLoader,
-          crossOrigin: 'throw',
-          documentLoader: boundedLoader,
-        }),
-        controller.signal,
-      );
-      if (!(note instanceof Note) || note.id?.href !== objectUri.href) {
-        throw new TypeError('Remote Featured item must be a Note at its advertised URI');
-      }
-      const result = await materializeHydratedRemoteNote({
-        advertisingActorUri: actorUri,
-        context,
-        note,
-        objectUri,
-        observation: { activityType: 'Unknown', handler: 'create' },
-        receivedAt: Temporal.Now.instant(),
-      });
-      if (result.status === 'rejected') {
-        throw new TypeError(`Featured Note rejected: ${result.reason}`);
-      }
-      const post = await db
-        .select({ profileId: Posts.profileId })
-        .from(Posts)
-        .where(eq(Posts.id, result.postId))
-        .limit(1)
-        .then(first);
-      if (post?.profileId !== profileId) {
-        throw new TypeError('Featured Note rejected: existing post belongs to another profile');
-      }
-      postIds.push(result.postId);
+  const itemUris = await collectRemoteFeaturedItemUris({
+    documentLoader: boundedLoader,
+    featuredUri,
+  });
+  const postIds: string[] = [];
+  for (const objectUri of itemUris) {
+    if (!isHttpUri(objectUri)) {
+      throw new TypeError('Remote Featured item URI must use HTTP(S)');
     }
-    controller.signal.throwIfAborted();
-    await replaceRemoteFeaturedSnapshot({ postIds, profileId });
-  } finally {
-    clearTimeout(deadline);
+    const note = await context.lookupObject(objectUri, {
+      contextLoader: boundedLoader,
+      crossOrigin: 'throw',
+      documentLoader: boundedLoader,
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    if (!(note instanceof Note) || note.id?.href !== objectUri.href) {
+      throw new TypeError('Remote Featured item must be a Note at its advertised URI');
+    }
+    const result = await materializeHydratedRemoteNote({
+      advertisingActorUri: actorUri,
+      context,
+      note,
+      objectUri,
+      observation: { activityType: 'Unknown', handler: 'create' },
+      receivedAt: Temporal.Now.instant(),
+    });
+    if (result.status === 'rejected') {
+      throw new TypeError(`Featured Note rejected: ${result.reason}`);
+    }
+    const post = await db
+      .select({ profileId: Posts.profileId })
+      .from(Posts)
+      .where(eq(Posts.id, result.postId))
+      .limit(1)
+      .then(first);
+    if (post?.profileId !== profileId) {
+      throw new TypeError('Featured Note rejected: existing post belongs to another profile');
+    }
+    postIds.push(result.postId);
   }
+  await replaceRemoteFeaturedSnapshot({ postIds, profileId });
 };

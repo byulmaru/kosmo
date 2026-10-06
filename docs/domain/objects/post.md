@@ -360,7 +360,7 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
   `attributedTo`는 해당 collection을 광고하는 Actor의 canonical URI와 일치해야 하며, audience는 기존 Note 검증을 통과해야
   한다. Public/Unlisted는 공개 조회를 지원하고, Followers Only Note는 원격 서버가 요구하는 인증으로 가져온다.
   Note 수신·저장은 Kosmo의 현재 Local Follow를 요구하지 않으며, 저장된 Post의 viewer 조회는 기존 Post Visibility와 Post
-  Eligibility를 따른다. next page 순환을 검출하고 구현이 정한 page·item·byte·시간 예산을 적용한다. 전체 ordered list를
+  Eligibility를 따른다. next page 순환을 검출하고 구현이 정한 page·item·byte 예산을 적용한다. 전체 ordered list를
   가져와 검증한 성공 결과만 원자적으로 교체한다. 실패한 retrieval은 새 목록을 쓰지 않으며 빈 collection의 근거가 아니다.
   검증된 Remote Profile 표현에 `featured` URI가 없으면 목록을 비운다.
 

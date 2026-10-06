@@ -207,7 +207,7 @@ Remote Profile 등록, stale refresh와 검증된 inbound Profile Update에서 �
 Featured sync를 실행하거나 별도 effect로 예약한다. Sync 성공 여부는 Remote Profile 동작의 성공 여부에 영향을 주지 않는다.
 Public/Unlisted는 공개 조회를 지원하고, Followers Only Note는 원격 서버가 요구하는 인증으로 가져온다. 각 Note의
 canonical `attributedTo`는 광고하는 Actor의 canonical URI와 일치해야 하며 audience는 기존 Note 검증을 통과해야 한다.
-next page 순환을 검출하고 구현이 정한 page·item·byte·시간 예산을 적용한다. 전체 ordered list를 가져와 검증한 성공 결과만
+next page 순환을 검출하고 구현이 정한 page·item·byte 예산을 적용한다. 전체 ordered list를 가져와 검증한 성공 결과만
 원자적으로 교체한다. 실패한 retrieval은 새 목록을 쓰지 않으며 빈 collection의 근거가 아니다. 검증된 Remote Profile 표현에
 `featured` URI가 없으면 목록을 비운다.
 

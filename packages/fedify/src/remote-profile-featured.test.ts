@@ -11,7 +11,6 @@ const serialize = async (object: OrderedCollection | OrderedCollectionPage) =>
 
 const createLoader = async (
   objects: (OrderedCollection | OrderedCollectionPage)[],
-  onLoad?: (url: string, signal: AbortSignal | undefined) => void,
   aliases: Map<string, unknown> = new Map(),
 ) => {
   const documents = new Map<string, unknown>();
@@ -20,8 +19,7 @@ const createLoader = async (
     documents.set(object.id.href, await serialize(object));
   }
 
-  const documentLoader: DocumentLoader = async (url, options) => {
-    onLoad?.(url, options?.signal);
+  const documentLoader: DocumentLoader = async (url) => {
     const document = aliases.get(url) ?? documents.get(url);
     if (document === undefined) {
       throw new Error(`Unexpected Featured document URL: ${url}`);
@@ -31,30 +29,26 @@ const createLoader = async (
   return documentLoader;
 };
 
-test('collects ordered item URIs across pages with one traversal signal', async () => {
+test('collects ordered item URIs across pages', async () => {
   const pageOneUri = new URL(`${collectionUri.href}?page=1`);
   const pageTwoUri = new URL(`${collectionUri.href}?page=2`);
   const itemOneUri = new URL('https://remote.example/notes/1');
   const itemTwoUri = new URL('https://remote.example/notes/2');
   const itemThreeUri = new URL('https://remote.example/notes/3');
-  const signals: (AbortSignal | undefined)[] = [];
-  const documentLoader = await createLoader(
-    [
-      new OrderedCollection({ id: collectionUri, first: pageOneUri }),
-      new OrderedCollectionPage({
-        id: pageOneUri,
-        items: [itemOneUri, itemTwoUri],
-        next: pageTwoUri,
-        partOf: collectionUri,
-      }),
-      new OrderedCollectionPage({
-        id: pageTwoUri,
-        items: [itemThreeUri],
-        partOf: collectionUri,
-      }),
-    ],
-    (_url, signal) => signals.push(signal),
-  );
+  const documentLoader = await createLoader([
+    new OrderedCollection({ id: collectionUri, first: pageOneUri }),
+    new OrderedCollectionPage({
+      id: pageOneUri,
+      items: [itemOneUri, itemTwoUri],
+      next: pageTwoUri,
+      partOf: collectionUri,
+    }),
+    new OrderedCollectionPage({
+      id: pageTwoUri,
+      items: [itemThreeUri],
+      partOf: collectionUri,
+    }),
+  ]);
 
   const itemUris = await collectRemoteFeaturedItemUris({
     documentLoader,
@@ -65,9 +59,41 @@ test('collects ordered item URIs across pages with one traversal signal', async 
     itemUris.map((uri) => uri.href),
     [itemOneUri.href, itemTwoUri.href, itemThreeUri.href],
   );
-  assert.equal(signals.length, 3);
-  assert.ok(signals[0]);
-  assert.ok(signals.every((signal) => signal === signals[0]));
+});
+
+test('continues collection after more than 30 seconds across loader calls', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    const pageUri = new URL(`${collectionUri.href}?page=slow`);
+    const itemUri = new URL('https://remote.example/notes/slow');
+    const documents = new Map([
+      [
+        collectionUri.href,
+        await serialize(new OrderedCollection({ id: collectionUri, first: pageUri })),
+      ],
+      [pageUri.href, await serialize(new OrderedCollectionPage({ id: pageUri, items: [itemUri] }))],
+    ]);
+    const documentLoader: DocumentLoader = async (url) => {
+      if (url === pageUri.href) {
+        t.mock.timers.tick(30_001);
+      }
+      const document = documents.get(url);
+      assert.ok(document);
+      return { contextUrl: null, document, documentUrl: url };
+    };
+
+    const itemUris = await collectRemoteFeaturedItemUris({
+      documentLoader,
+      featuredUri: collectionUri,
+    });
+
+    assert.deepEqual(
+      itemUris.map((uri) => uri.href),
+      [itemUri.href],
+    );
+  } finally {
+    t.mock.timers.reset();
+  }
 });
 
 test('rejects duplicate item URIs and page cycles', async () => {
@@ -121,7 +147,6 @@ test('rejects mixed inline items and mismatched fetched page IDs', async () => {
   );
   const mismatchedLoader = await createLoader(
     [new OrderedCollection({ id: collectionUri, first: pageUri })],
-    undefined,
     new Map([[pageUri.href, mismatchedPageDocument]]),
   );
   await assert.rejects(
@@ -130,7 +155,7 @@ test('rejects mixed inline items and mismatched fetched page IDs', async () => {
   );
 });
 
-test('rejects page, item, and parsed-document budget exhaustion', async () => {
+test('rejects page and item limit exhaustion', async () => {
   const item = (index: number) => new URL(`https://remote.example/notes/${index}`);
   const itemLimitPage = new URL(`${collectionUri.href}?page=item-limit`);
   const itemLimitLoader = await createLoader([
@@ -171,42 +196,6 @@ test('rejects page, item, and parsed-document budget exhaustion', async () => {
     }),
     /page_limit_exceeded/u,
   );
-
-  const budgetPage = new URL(`${collectionUri.href}?page=budget`);
-  const budgetLoader = await createLoader([
-    new OrderedCollection({ id: collectionUri, first: budgetPage }),
-    new OrderedCollectionPage({ id: budgetPage, name: 'x'.repeat(2 * 1024 * 1024) }),
-  ]);
-  await assert.rejects(
-    collectRemoteFeaturedItemUris({ documentLoader: budgetLoader, featuredUri: collectionUri }),
-    /document_budget_exceeded/u,
-  );
-});
-
-test('aborts a pending collection request at the 30 second traversal deadline', async (t) => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
-  try {
-    let enteredLoader!: () => void;
-    const entered = new Promise<void>((resolve) => {
-      enteredLoader = resolve;
-    });
-    let signal: AbortSignal | undefined;
-    const pendingLoader: DocumentLoader = async (_url, options) => {
-      signal = options?.signal;
-      enteredLoader();
-      return new Promise(() => undefined);
-    };
-    const pending = collectRemoteFeaturedItemUris({
-      documentLoader: pendingLoader,
-      featuredUri: collectionUri,
-    });
-    await entered;
-    t.mock.timers.tick(30_000);
-    await assert.rejects(pending, /deadline_exceeded/u);
-    assert.equal(signal?.aborted, true);
-  } finally {
-    t.mock.timers.reset();
-  }
 });
 
 test('fails the complete traversal when a later page loader fails', async () => {
