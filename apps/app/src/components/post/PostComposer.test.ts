@@ -5,6 +5,11 @@ import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { PostComposerController as PostComposerComponent } from './PostComposerController';
 import type { PostComposerProfileRef } from './PostComposerProfileSwitcher';
+import type {
+  PostComposerMentionCandidate,
+  PostComposerMentionCandidateResults,
+  PostComposerMentionQuery,
+} from './postComposerState';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -30,10 +35,16 @@ let switcherProps:
   | undefined;
 let targetProps:
   | {
+      authorProfileId: string;
       body: string;
       contentWarning: string;
+      mentionCandidates?: PostComposerMentionCandidateResults;
       onBodyChange: (value: string) => void;
       onContentWarningChange: (value: string) => void;
+      onSelectMention: (
+        candidate: PostComposerMentionCandidate,
+        query: PostComposerMentionQuery,
+      ) => void;
       onSubmit: () => void;
       onVisibilityChange: (value: 'FOLLOWERS' | 'PUBLIC' | 'UNLISTED') => void;
     }
@@ -318,6 +329,55 @@ describe('PostComposer local author', () => {
       await act(async () => renderer?.unmount());
       renderer = null;
     }
+  });
+
+  it('keeps candidate identity tied to the current author and submits its normalized mention range', async () => {
+    const alice: PostComposerMentionCandidate = {
+      avatar: { url: 'https://example.com/alice.png' },
+      displayName: '앨리스',
+      domain: 'remote.example',
+      id: 'profile-alice',
+      relativeHandle: '@alice',
+    };
+    const mentionCandidates: PostComposerMentionCandidateResults = {
+      authorProfileId: profileB.id,
+      profiles: [alice],
+      query: 'ali',
+    };
+    const query = { end: 10, query: 'ali', start: 6 };
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposer, {
+          onExpand: () => undefined,
+          onRequestClose: () => undefined,
+          presentation: 'rail',
+          profile: profileA as never,
+          profiles: candidates as never,
+          mentionCandidates,
+        }),
+      );
+    });
+
+    await act(async () => targetProps?.onBodyChange(' \r\n😀 @ali'));
+    await act(async () => targetProps?.onSelectMention(alice, query));
+    assert.equal(targetProps?.body, ' \r\n😀 @ali');
+    assert.equal(targetProps?.authorProfileId, profileA.id);
+
+    await act(async () => switcherProps?.onSelectProfile(profileB.id, profileB));
+    assert.equal(targetProps?.authorProfileId, profileB.id);
+    await act(async () => targetProps?.onSelectMention(alice, query));
+    assert.equal(targetProps?.body, ' \r\n😀 @alice ');
+
+    await act(async () => targetProps?.onSubmit());
+    assert.equal(mutationCalls.length, 1);
+    assert.deepEqual(mutationCalls[0]?.variables.input, {
+      actorProfileId: profileB.id,
+      bodyText: '😀 @alice',
+      media: mediaValue.items,
+      mentions: [{ profileId: 'profile-alice', start: 3, end: 9 }],
+      sensitiveMedia: true,
+      visibility: 'UNLISTED',
+    });
   });
 
   it('restores the original author only after a successful post', async () => {

@@ -17,6 +17,14 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
 - 일반 Post Composer가 지원하는 Plain Text 본문, Content Warning, Visibility, 글자 수, Media
   선택·업로드·미리보기·제거·재시도, Alt Text, Sensitive Media, validation, pending과 오류 상태를 그대로
   재사용한다.
+- 일반 Post, Reply와 Quote는 같은 Plain Text editor에서 token boundary의 `@` 뒤에 한 글자 이상 입력했을
+  때 Profile 제안을 표시한다. `@`만 입력하면 검색어를 입력하라는 짧은 안내를 표시하고 Profile 전체 목록은 열지
+  않는다. 제안을 선택하면 해당 입력을 Profile의 표시 handle과 공백으로 바꾸고, 선택한 Profile과의 연결을
+  해당 mention occurrence에 보존한다.
+- 직접 입력한 `@handle`은 선택된 Profile과 연결하지 않는다. mention 본문을 편집하면 그 occurrence의 연결을
+  버리고, 앞뒤 문장을 편집해도 영향받지 않은 mention 연결을 보존한다. 같은 Profile을 여러 번 선택한 경우
+  각 occurrence를 독립적으로 편집할 수 있다. Mention은 본문에 실제 작성한 문자열로 세는 기존 500자 합산에
+  별도 길이를 더하지 않는다.
 - Parent가 일반 Post, Reply 또는 Quote이면 화면에 표시되는 direct Parent의 자체 Content와 Source preview를
   보여준다. Action Bar와 Post menu는 Parent 맥락 안에 중복 표시하지 않는다.
 
@@ -187,9 +195,9 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   Warning은 새 direct Parent 값에서 다시 한 번 초기화하며, 이전 Parent에서 수정한 값을 이어받지 않는다. 이전
   문맥의 늦은 upload·mutation completion은 새 문맥의 상태나 성공 callback을 변경하지 않는다.
 - 새 Post Rail·Overlay Composer에 한해 Composer-local 작성 Profile을 전환할 수 있다. 이 전환은 전역
-  Session/Profile과 Relay actor를 바꾸지 않으며, 본문·Content Warning·Media·ALT·Sensitive Media·현재 Visibility를
-  보존한 채 다음 mutation과 새 Media upload issue에 선택한 Profile ID를 전달한다. Reply·Quote Composer에는
-  이 local 전환을 제공하지 않는다.
+  Session/Profile과 Relay actor를 바꾸지 않으며, 본문·선택된 Mention·Content Warning·Media·ALT·Sensitive Media·현재
+  Visibility를 보존한 채 다음 mutation과 새 Media upload issue에 선택한 Profile을 사용한다.
+  Reply·Quote Composer에는 이 local 전환을 제공하지 않는다.
 - local Profile 선택이 성공하면 본문 editor로 focus를 옮겨 Native에서는 키보드를 이어서 입력할 수 있게 한다. Profile
   picker의 Escape·취소는 작성 Profile을 바꾸지 않고 trigger로 focus를 복원한다.
 - 업로드·게시 중에는 작성 Profile 전환을 잠그고 요청이 끝나면 다시 허용한다. 실패한 첨부와 draft는 유지한다.

@@ -15,6 +15,9 @@ export function Form({
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLFormElement>) => {
+    if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) {
+      return;
+    }
     if (event.key !== 'Enter' || (!event.metaKey && !event.ctrlKey)) {
       return;
     }

@@ -28,6 +28,7 @@ export const HorizontalReachabilityContract: Story = {
         contentWarningExpanded={false}
         items={mixedMedia}
         onBodyChange={fn()}
+        onSelectionChange={fn()}
         onContentWarningChange={fn()}
         onContentWarningToggle={fn()}
         onEmojiAction={fn()}
@@ -40,6 +41,7 @@ export const HorizontalReachabilityContract: Story = {
         onSubmit={fn()}
         onVisibilityChange={fn()}
         remaining={500}
+        selection={{ end: 0, start: 0 }}
         sensitiveMedia
         surface="rail"
         visibility="PUBLIC"

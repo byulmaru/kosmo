@@ -104,6 +104,10 @@ export function ComposerProfileFixture({
   const switchingRef = useRef(switching);
   const resolveSelectionRef = useRef<(() => void) | null>(null);
   const [body, setBody] = useState(initialBody);
+  const [selection, setSelection] = useState({
+    start: initialBody.length,
+    end: initialBody.length,
+  });
   const [contentWarning, setContentWarning] = useState(initialContentWarning);
   const [contentWarningExpanded, setContentWarningExpanded] = useState(
     initialContentWarningExpanded,
@@ -117,7 +121,10 @@ export function ComposerProfileFixture({
     normalizePostContentPlainText(body).length -
     normalizePostContentPlainText(contentWarning).length;
 
-  useEffect(() => setBody(initialBody), [initialBody]);
+  useEffect(() => {
+    setBody(initialBody);
+    setSelection({ start: initialBody.length, end: initialBody.length });
+  }, [initialBody]);
   useEffect(() => setContentWarning(initialContentWarning), [initialContentWarning]);
   useEffect(
     () => setContentWarningExpanded(initialContentWarningExpanded),
@@ -177,7 +184,8 @@ export function ComposerProfileFixture({
         contentWarning={contentWarning}
         contentWarningExpanded={contentWarningExpanded}
         items={items}
-        onBodyChange={setBody}
+        onBodyChange={(value) => setBody(value)}
+        onSelectionChange={setSelection}
         onContentWarningChange={setContentWarning}
         onContentWarningToggle={() => setContentWarningExpanded((value) => !value)}
         onEmojiAction={fn()}
@@ -191,6 +199,7 @@ export function ComposerProfileFixture({
         onVisibilityChange={setVisibility}
         remaining={remaining}
         sensitiveMedia={sensitiveMedia}
+        selection={selection}
         showPollAction={false}
         surface={surface}
         visibility={visibility}

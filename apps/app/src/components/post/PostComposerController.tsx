@@ -21,15 +21,29 @@ import { PostComposerProfileSwitcher } from './PostComposerProfileSwitcher';
 import {
   createPostComposerContextKey,
   createPostComposerMutationInput,
+  normalizePostComposerMentionDraft,
+  replacePostComposerMentionQuery,
   resolvePostComposerVisibility,
+  updatePostComposerDraftBody,
+  updatePostComposerDraftSelection,
+  updatePostComposerMentionRanges,
 } from './postComposerState';
 import type { ReactNode, RefObject } from 'react';
 import type { TextInput } from 'react-native';
 import type { PostComposer_profile$key } from './__generated__/PostComposer_profile.graphql';
 import type { PostComposerCreatePostMutation } from './__generated__/PostComposerCreatePostMutation.graphql';
-import type { PostComposerMode, PostComposerVisibility } from './PostComposer';
+import type {
+  PostComposerMentionSelection,
+  PostComposerMode,
+  PostComposerVisibility,
+} from './PostComposer';
 import type { PostComposerMediaValue } from './PostComposerMediaControls';
 import type { PostComposerProfileRef } from './PostComposerProfileSwitcher';
+import type {
+  PostComposerDraft,
+  PostComposerMentionCandidateResults,
+  PostComposerTextSelection,
+} from './postComposerState';
 
 type Visibility = PostComposerVisibility;
 export type PostComposerCreatedPost = Readonly<{ id: string }>;
@@ -75,6 +89,7 @@ type PostComposerBaseProps = {
   expandControlRef?: RefObject<View | null>;
   focusOnMount?: boolean;
   initialContentWarning?: string | null;
+  mentionCandidates?: PostComposerMentionCandidateResults;
   onPostCreated?: (post: PostComposerCreatedPost) => void;
   onSubmittingChange?: (submitting: boolean) => void;
   profile: PostComposer_profile$key;
@@ -148,6 +163,7 @@ export function PostComposerController({
       environmentGenerationRef={environmentGenerationRef}
       key={`${contextGenerationRef.current}:${environmentGenerationRef?.current ?? 0}`}
       globalProfileId={profile.id}
+      mentionCandidates={props.mentionCandidates}
       profileKey={profileKey}
       profiles={profiles}
     />
@@ -162,6 +178,7 @@ type PostComposerContentsProps = Omit<PostComposerBaseProps, 'profile'> &
     onRequestClose?: () => void;
     presentation?: 'mobile' | 'overlay' | 'rail';
     globalProfileId: string;
+    mentionCandidates?: PostComposerMentionCandidateResults;
     profileKey: PostComposer_profile$key;
     profiles: readonly PostComposerProfileRef[];
     replyContext?: ReactNode;
@@ -183,6 +200,7 @@ function PostComposerContents({
   onExpand,
   presentation,
   globalProfileId,
+  mentionCandidates,
   profileKey,
   profiles,
   replyContext,
@@ -199,7 +217,66 @@ function PostComposerContents({
   const resolvedPresentation = presentation ?? 'overlay';
   const internalEditorRef = useRef<TextInput>(null);
   const editor = editorRef ?? internalEditorRef;
-  const [body, setBody] = useState('');
+  const [draft, setDraft] = useState<PostComposerDraft>({
+    body: '',
+    mentionRanges: [],
+    previousSelection: { start: 0, end: 0 },
+    selection: { start: 0, end: 0 },
+  });
+  const { body, mentionRanges, selection } = draft;
+  const onBodyChange = useCallback((nextBody: string) => {
+    setDraft((previous) => updatePostComposerDraftBody(previous, nextBody));
+  }, []);
+  const onSelectionChange = useCallback((nextSelection: PostComposerTextSelection) => {
+    setDraft((previous) => updatePostComposerDraftSelection(previous, nextSelection));
+  }, []);
+  const onBodyReset = useCallback(() => {
+    setDraft({
+      body: '',
+      mentionRanges: [],
+      previousSelection: { start: 0, end: 0 },
+      selection: { start: 0, end: 0 },
+    });
+  }, []);
+  const onSelectMention: PostComposerMentionSelection = useCallback(
+    (candidate, query) => {
+      if (
+        mentionCandidates?.authorProfileId !== profile.id ||
+        mentionCandidates.query !== query.query ||
+        !mentionCandidates.profiles.some(
+          (result) =>
+            result.id === candidate.id && result.relativeHandle === candidate.relativeHandle,
+        )
+      ) {
+        return;
+      }
+
+      setDraft((previous) => {
+        const inserted = replacePostComposerMentionQuery(previous.body, query, candidate);
+        if (!inserted) {
+          return previous;
+        }
+        return {
+          body: inserted.body,
+          mentionRanges: [
+            ...updatePostComposerMentionRanges(
+              previous.body,
+              inserted.body,
+              previous.mentionRanges,
+              [{ start: query.start, end: query.end }],
+            ),
+            inserted.range,
+          ].sort((left, right) => left.start - right.start),
+          previousSelection: { start: query.start, end: query.start },
+          selection: {
+            start: inserted.range.end + 1,
+            end: inserted.range.end + 1,
+          },
+        };
+      });
+    },
+    [mentionCandidates, profile.id],
+  );
   const [contentWarning, setContentWarning] = useState(() =>
     normalizePostContentPlainText(initialContentWarning ?? ''),
   );
@@ -228,7 +305,7 @@ function PostComposerContents({
   const replyMode = Boolean(replyParentId);
   const quoteMode = Boolean(repostSourceId);
   const mountedRef = useRef(true);
-  const bodyText = normalizePostContentPlainText(body);
+  const { bodyText, mentions } = normalizePostComposerMentionDraft(body, mentionRanges);
   const contentWarningText = normalizePostContentPlainText(contentWarning);
   const hasDraftContent =
     bodyText.length > 0 ||
@@ -317,6 +394,7 @@ function PostComposerContents({
             replyParentId,
             contentWarningText,
             repostSourceId,
+            mentions,
           ),
           media: media.items,
           ...(profile.id !== globalProfileId ? { actorProfileId: profile.id } : {}),
@@ -343,7 +421,7 @@ function PostComposerContents({
           selected_profile_id: profile.id,
           visibility,
         });
-        setBody('');
+        onBodyReset();
         if (!submissionReplyMode) {
           setContentWarning('');
           setContentWarningExpanded(false);
@@ -479,6 +557,7 @@ function PostComposerContents({
           };
           const sharedProductionProps = {
             author: productionAuthor,
+            authorProfileId: profile.id,
             body,
             bodyRef: editor,
             children,
@@ -486,7 +565,11 @@ function PostComposerContents({
             contentWarningExpanded,
             expandControlRef,
             items,
-            onBodyChange: setBody,
+            mentionCandidates,
+            onSelectMention,
+            onBodyChange,
+            onSelectionChange,
+            selection,
             onContentWarningChange: setContentWarning,
             onContentWarningToggle: () => setContentWarningExpanded((expanded) => !expanded),
             onEmojiAction: () => undefined,

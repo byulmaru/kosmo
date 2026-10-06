@@ -1,11 +1,19 @@
 import { useState } from 'react';
 import { Text, View } from 'react-native';
-import { expect, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fireEvent, fn, userEvent, waitFor, within } from 'storybook/test';
 import { PostComposer } from '@/components/post/PostComposer';
+import {
+  normalizePostComposerMentionDraft,
+  replacePostComposerMentionQuery,
+  updatePostComposerDraftBody,
+  updatePostComposerDraftSelection,
+  updatePostComposerMentionRanges,
+} from '@/components/post/postComposerState';
 import baseMeta, {
   ActionSemanticsContract as actionSemanticsContract,
   Error as errorStory,
   InteractionContract as interactionContract,
+  MentionAutocompleteContract as mentionAutocompleteContract,
   MobileCandidateContract as mobileCandidateContract,
   MobileFlexLayoutContract as mobileFlexLayoutContract,
   MobileKeyboardContract as mobileKeyboardContract,
@@ -34,6 +42,10 @@ import baseMeta, {
   WebModalLayoutContract as webModalLayoutContract,
 } from './PostComposer.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type {
+  PostComposerDraft,
+  PostComposerMentionCandidate,
+} from '@/components/post/postComposerState';
 
 const meta = {
   ...baseMeta,
@@ -46,6 +58,134 @@ type Story = StoryObj<typeof meta>;
 
 export const ActionSemanticsContract: Story = actionSemanticsContract;
 export const InteractionContract: Story = interactionContract;
+export const MentionAutocompleteContract: Story = mentionAutocompleteContract;
+
+const mentionCandidate: PostComposerMentionCandidate = {
+  displayName: '앨리스',
+  id: 'profile-alice',
+  relativeHandle: '@alice',
+};
+
+export const MentionIdentityDeletionContract: Story = {
+  args: {
+    ...baseMeta.args,
+    body: '',
+    items: [],
+    onSubmit: fn(),
+    remaining: 500,
+    surface: 'rail',
+  },
+  render: (args) => <MentionIdentityDeletionFixture onSubmit={args.onSubmit} />,
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = canvas.getByRole('textbox', { name: '게시글 본문' }) as HTMLTextAreaElement;
+    await userEvent.type(body, '@ali');
+    await waitFor(() =>
+      expect(canvas.getByRole('listbox', { name: '멘션할 프로필 결과' })).toBeVisible(),
+    );
+    await userEvent.keyboard('{ArrowDown}{Enter}');
+    await waitFor(() => expect(body).toHaveValue('@alice '));
+    await userEvent.type(body, '@alice');
+    await waitFor(() => expect(body).toHaveValue('@alice @alice'));
+
+    body.focus();
+    body.setSelectionRange(0, 6);
+    fireEvent.select(body);
+    await waitFor(() => {
+      expect(body.selectionStart).toBe(0);
+      expect(body.selectionEnd).toBe(6);
+    });
+    await userEvent.keyboard('{Backspace}');
+    await waitFor(() => expect(body).toHaveValue(' @alice'));
+
+    await userEvent.click(canvas.getByRole('button', { name: '게시' }));
+    await waitFor(() =>
+      expect(canvas.getByTestId('mention-submit-result')).toHaveTextContent(
+        '{"bodyText":"@alice","mentions":[]}',
+      ),
+    );
+    expect(args.onSubmit).toHaveBeenCalledOnce();
+  },
+};
+
+function MentionIdentityDeletionFixture({ onSubmit }: { onSubmit: () => void }) {
+  const initialSelection = { start: 0, end: 0 };
+  const [draft, setDraft] = useState<PostComposerDraft>({
+    body: '',
+    mentionRanges: [],
+    previousSelection: initialSelection,
+    selection: initialSelection,
+  });
+  const [submitted, setSubmitted] = useState<ReturnType<
+    typeof normalizePostComposerMentionDraft
+  > | null>(null);
+  const normalized = normalizePostComposerMentionDraft(draft.body, draft.mentionRanges);
+
+  return (
+    <View>
+      <PostComposer
+        author={<Text>테스트 작성자</Text>}
+        authorProfileId="profile-author"
+        body={draft.body}
+        contentWarning=""
+        contentWarningExpanded={false}
+        items={[]}
+        mentionCandidates={{
+          authorProfileId: 'profile-author',
+          profiles: [mentionCandidate],
+          query: 'ali',
+        }}
+        onBodyChange={(body) => setDraft((previous) => updatePostComposerDraftBody(previous, body))}
+        onContentWarningChange={() => undefined}
+        onContentWarningToggle={() => undefined}
+        onEmojiAction={() => undefined}
+        onExpand={() => undefined}
+        onMediaAction={() => undefined}
+        onMediaEdit={() => undefined}
+        onMediaRemove={() => undefined}
+        onMediaRetry={() => undefined}
+        onPollAction={() => undefined}
+        onSelectMention={(candidate, query) => {
+          setDraft((previous) => {
+            const inserted = replacePostComposerMentionQuery(previous.body, query, candidate);
+            if (!inserted) {
+              return previous;
+            }
+            const selection = { start: inserted.range.end + 1, end: inserted.range.end + 1 };
+            return {
+              body: inserted.body,
+              mentionRanges: [
+                ...updatePostComposerMentionRanges(
+                  previous.body,
+                  inserted.body,
+                  previous.mentionRanges,
+                  [{ start: query.start, end: query.end }],
+                ),
+                inserted.range,
+              ],
+              previousSelection: selection,
+              selection,
+            };
+          });
+        }}
+        onSelectionChange={(selection) =>
+          setDraft((previous) => updatePostComposerDraftSelection(previous, selection))
+        }
+        onSubmit={() => {
+          onSubmit();
+          setSubmitted(normalized);
+        }}
+        onVisibilityChange={() => undefined}
+        remaining={500 - normalized.bodyText.length}
+        selection={draft.selection}
+        sensitiveMedia={false}
+        surface="rail"
+        visibility="PUBLIC"
+      />
+      {submitted ? <Text testID="mention-submit-result">{JSON.stringify(submitted)}</Text> : null}
+    </View>
+  );
+}
 export const MobileKeyboardMediaFooterGeometryContract: Story =
   mobileKeyboardMediaFooterGeometryContract;
 export const MobileCandidateContract: Story = mobileCandidateContract;
