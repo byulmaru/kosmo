@@ -1,5 +1,5 @@
 import { usePathname } from 'expo-router';
-import { Profiler, Suspense, useMemo, useRef, useState } from 'react';
+import { Profiler, Suspense, useCallback, useMemo, useRef, useState } from 'react';
 import { Linking, Pressable, Text, View } from 'react-native';
 import {
   graphql,
@@ -9,7 +9,9 @@ import {
 } from 'react-relay';
 import {
   commitLocalUpdate,
+  createOperationDescriptor,
   Environment,
+  getRequest,
   Network,
   Observable,
   RecordSource,
@@ -41,6 +43,7 @@ import { PostThreadLayout } from '@/components/post/PostThreadLayout';
 import { ReplyComposerSurface } from '@/components/post/ReplyComposerSurface';
 import { ShellChromeProvider } from '@/components/shell/ShellChromeContext';
 import { formatTimelineTimestamp } from '@/lib/date';
+import { RelayActorBoundary, RelayActorProvider, useRelayActor } from '@/relay/RelayActorProvider';
 import { RelayEnvironmentBoundary } from '@/relay/RelayEnvironmentBoundary';
 import { SessionErrorProvider, SessionProvider } from '@/session/SessionProvider';
 import { colors } from '@/theme/tokens';
@@ -1026,6 +1029,9 @@ const PostsStoriesQuery = graphql`
     ...PostList_home @arguments(count: 20) @alias(as: "home")
   }
 `;
+const postsStoriesOperation = createOperationDescriptor(getRequest(PostsStoriesQuery), {
+  ids: storyPosts.map(({ id }) => id),
+});
 
 const ProductionComposerAdapterStoryQuery = graphql`
   query PostsProductionComposerAdapterStoryQuery {
@@ -1473,107 +1479,116 @@ function withReactionViewerState(storyPost: StoryPost): StoryPost & {
 function ProductionReactionMutationTargetsStory() {
   const [requests, setRequests] = useState<ProductionReactionRequest[]>([]);
   const [actionRequests, setActionRequests] = useState<ProductionTargetActionRequest[]>([]);
-  const environment = useMemo(() => {
-    const selectedTypesByPost = new Map<string, Set<string>>();
+  const createEnvironment = useCallback(
+    (_nativeToken: string | null, selectedProfileId: string | null) => {
+      const selectedTypesByPost = new Map<string, Set<string>>();
+      const queryData = {
+        alternateComposerProfile,
+        composerProfile,
+        contentPostsProfile,
+        emptyPostsProfile,
+        homeTimeline,
+        nodes: storyPosts.map(withReactionViewerState),
+      };
 
-    return new Environment({
-      network: Network.create((request: RequestParameters, variables: Variables) => {
-        if (request.name === 'SessionProviderQuery') {
-          return Promise.resolve({
-            data: {
-              currentSession: {
-                __typename: 'Session',
-                id: 'session-production-reaction-targets',
-                selectedProfile: {
-                  __typename: 'Profile',
-                  id: 'profile-production-reaction-targets',
+      const environment = new Environment({
+        network: Network.create((request: RequestParameters, variables: Variables) => {
+          if (request.name === 'SessionProviderQuery') {
+            return Promise.resolve({
+              data: {
+                currentSession: {
+                  __typename: 'Session',
+                  id: 'session-production-reaction-targets',
+                  selectedProfile: {
+                    __typename: 'Profile',
+                    id: selectedProfileId ?? 'profile-production-reaction-targets',
+                  },
+                },
+                me: {
+                  __typename: 'Account',
+                  id: 'account-production-reaction-targets',
+                  name: 'Reaction Target Story',
                 },
               },
-              me: {
-                __typename: 'Account',
-                id: 'account-production-reaction-targets',
-                name: 'Reaction Target Story',
-              },
-            },
-          } as GraphQLResponse);
-        }
-        if (request.name === 'PostsStoriesQuery') {
-          return Promise.resolve({
-            data: {
-              alternateComposerProfile,
-              composerProfile,
-              contentPostsProfile,
-              emptyPostsProfile,
-              homeTimeline,
-              nodes: storyPosts.map(withReactionViewerState),
-            },
-          } as GraphQLResponse);
-        }
-        if (request.name === 'RepostActionRepostPostMutation') {
-          const postId = String(variables.sourceId);
-          setActionRequests((current) => [...current, { kind: 'repost', postId }]);
-          return Promise.resolve({
-            data: { repostPost: null },
-            errors: [{ message: 'target verification repost failure' }],
-          } as GraphQLResponse);
-        }
-        if (request.name === 'PostBookmarkActionCreateBookmarkMutation') {
-          const input = variables.input as { postId: string };
-          setActionRequests((current) => [...current, { kind: 'bookmark', postId: input.postId }]);
-          return Promise.resolve({
-            data: { createBookmark: null },
-            errors: [{ message: 'target verification bookmark failure' }],
-          } as GraphQLResponse);
-        }
-        if (request.name === 'PostReactionControllerAddReactionMutation') {
-          const postId = String(variables.postId);
-          const type = String(variables.type);
-          const target = requireStoryPostById(storyPosts, postId);
-          const selectedTypes = selectedTypesByPost.get(postId) ?? new Set<string>();
-          selectedTypes.add(type);
-          selectedTypesByPost.set(postId, selectedTypes);
-          setRequests((current) => [...current, { postId, type }]);
-          return Promise.resolve({
-            data: {
-              addReaction: {
-                post: {
-                  __typename: 'Post',
-                  id: postId,
-                  reactionCounts: target.reactionCounts.map((entry) => ({
-                    ...entry,
-                    count: entry.count + (selectedTypes.has(entry.type) ? 1 : 0),
-                  })),
-                  viewerReactions: [...selectedTypes].map((selectedType) => ({
+            } as GraphQLResponse);
+          }
+          if (request.name === 'PostsStoriesQuery') {
+            return Promise.resolve({ data: queryData } as GraphQLResponse);
+          }
+          if (request.name === 'RepostActionRepostPostMutation') {
+            const postId = String(variables.sourceId);
+            setActionRequests((current) => [...current, { kind: 'repost', postId }]);
+            return Promise.resolve({
+              data: { repostPost: null },
+              errors: [{ message: 'target verification repost failure' }],
+            } as GraphQLResponse);
+          }
+          if (request.name === 'PostBookmarkActionCreateBookmarkMutation') {
+            const input = variables.input as { postId: string };
+            setActionRequests((current) => [
+              ...current,
+              { kind: 'bookmark', postId: input.postId },
+            ]);
+            return Promise.resolve({
+              data: { createBookmark: null },
+              errors: [{ message: 'target verification bookmark failure' }],
+            } as GraphQLResponse);
+          }
+          if (request.name === 'PostReactionControllerAddReactionMutation') {
+            const postId = String(variables.postId);
+            const type = String(variables.type);
+            const target = requireStoryPostById(storyPosts, postId);
+            const selectedTypes = selectedTypesByPost.get(postId) ?? new Set<string>();
+            selectedTypes.add(type);
+            selectedTypesByPost.set(postId, selectedTypes);
+            setRequests((current) => [...current, { postId, type }]);
+            return Promise.resolve({
+              data: {
+                addReaction: {
+                  post: {
+                    __typename: 'Post',
+                    id: postId,
+                    reactionCounts: target.reactionCounts.map((entry) => ({
+                      ...entry,
+                      count: entry.count + (selectedTypes.has(entry.type) ? 1 : 0),
+                    })),
+                    viewerReactions: [...selectedTypes].map((selectedType) => ({
+                      __typename: 'Reaction',
+                      id: `reaction-${postId}-${selectedType}`,
+                      type: selectedType,
+                    })),
+                  },
+                  reaction: {
                     __typename: 'Reaction',
-                    id: `reaction-${postId}-${selectedType}`,
-                    type: selectedType,
-                  })),
-                },
-                reaction: {
-                  __typename: 'Reaction',
-                  id: `reaction-${postId}-${type}`,
-                  type,
+                    id: `reaction-${postId}-${type}`,
+                    type,
+                  },
                 },
               },
-            },
-          } as GraphQLResponse);
-        }
-        return Promise.resolve({ data: {} } as GraphQLResponse);
-      }),
-      store: new Store(new RecordSource()),
-    });
-  }, []);
+            } as GraphQLResponse);
+          }
+          return Promise.resolve({ data: {} } as GraphQLResponse);
+        }),
+        store: new Store(new RecordSource()),
+      });
+      environment.commitPayload(postsStoriesOperation, queryData);
+      return environment;
+    },
+    [],
+  );
 
   return (
-    <RelayEnvironmentProvider environment={environment}>
-      <Suspense fallback={<Text>Reaction target fixture를 불러오는 중입니다.</Text>}>
-        <SessionProvider>
-          <ProductionReactionMutationSurfaces />
-        </SessionProvider>
-      </Suspense>
+    <RelayActorProvider createEnvironment={createEnvironment}>
+      <SessionProvider>
+        <RelayActorBoundary>
+          <Suspense fallback={<Text>Reaction target fixture를 불러오는 중입니다.</Text>}>
+            <ProductionReactionMutationSurfaces />
+          </Suspense>
+        </RelayActorBoundary>
+      </SessionProvider>
       <Text testID="production-reaction-request-log">{JSON.stringify(requests)}</Text>
       <Text testID="production-target-action-request-log">{JSON.stringify(actionRequests)}</Text>
-    </RelayEnvironmentProvider>
+    </RelayActorProvider>
   );
 }
 
@@ -1632,152 +1647,158 @@ function ProductionBookmarkMutationStory({
   mode?: ProductionBookmarkMutationMode;
 }) {
   const [requests, setRequests] = useState<ProductionBookmarkRequest[]>([]);
-  const environment = useMemo(() => {
-    let activeBookmarkId: string | null = initiallyBookmarked ? `bookmark-${shortPost.id}` : null;
-    let createAttempts = 0;
-    let deleteAttempts = 0;
-    const posts = storyPosts.map(withReactionViewerState).map((candidate) =>
-      candidate.id === shortPost.id
-        ? {
-            ...candidate,
-            viewerBookmark: activeBookmarkId
-              ? { __typename: 'Bookmark' as const, id: activeBookmarkId }
-              : null,
-          }
-        : candidate,
-    );
-    const bookmarkHomeTimeline = {
-      ...homeTimeline,
-      edges: homeTimeline.edges.map((edge) => ({
-        ...edge,
-        node: posts.find((candidate) => candidate.id === edge.node.id) ?? edge.node,
-      })),
-    };
-    const bookmarkContentPostsProfile = {
-      ...contentPostsProfile,
-      posts: {
-        ...contentPostsProfile.posts,
-        edges: contentPostsProfile.posts.edges.map((edge) => ({
+  const createEnvironment = useCallback(
+    (_nativeToken: string | null, selectedProfileId: string | null) => {
+      let activeBookmarkId: string | null = initiallyBookmarked ? `bookmark-${shortPost.id}` : null;
+      let createAttempts = 0;
+      let deleteAttempts = 0;
+      const posts = storyPosts.map(withReactionViewerState).map((candidate) =>
+        candidate.id === shortPost.id
+          ? {
+              ...candidate,
+              viewerBookmark: activeBookmarkId
+                ? { __typename: 'Bookmark' as const, id: activeBookmarkId }
+                : null,
+            }
+          : candidate,
+      );
+      const bookmarkHomeTimeline = {
+        ...homeTimeline,
+        edges: homeTimeline.edges.map((edge) => ({
           ...edge,
           node: posts.find((candidate) => candidate.id === edge.node.id) ?? edge.node,
         })),
-      },
-    };
+      };
+      const bookmarkContentPostsProfile = {
+        ...contentPostsProfile,
+        posts: {
+          ...contentPostsProfile.posts,
+          edges: contentPostsProfile.posts.edges.map((edge) => ({
+            ...edge,
+            node: posts.find((candidate) => candidate.id === edge.node.id) ?? edge.node,
+          })),
+        },
+      };
+      const queryData = {
+        alternateComposerProfile,
+        composerProfile,
+        contentPostsProfile: bookmarkContentPostsProfile,
+        emptyPostsProfile,
+        homeTimeline: bookmarkHomeTimeline,
+        nodes: posts,
+      };
 
-    return new Environment({
-      network: Network.create((request: RequestParameters, variables: Variables) => {
-        if (request.name === 'SessionProviderQuery') {
-          return Promise.resolve({
-            data: {
-              currentSession: {
-                __typename: 'Session',
-                id: 'session-production-bookmark',
-                selectedProfile: {
-                  __typename: 'Profile',
-                  id: 'profile-production-bookmark',
+      const environment = new Environment({
+        network: Network.create((request: RequestParameters, variables: Variables) => {
+          if (request.name === 'SessionProviderQuery') {
+            return Promise.resolve({
+              data: {
+                currentSession: {
+                  __typename: 'Session',
+                  id: 'session-production-bookmark',
+                  selectedProfile: {
+                    __typename: 'Profile',
+                    id: selectedProfileId ?? 'profile-production-bookmark',
+                  },
+                },
+                me: {
+                  __typename: 'Account',
+                  id: 'account-production-bookmark',
+                  name: 'Bookmark Story',
                 },
               },
-              me: {
-                __typename: 'Account',
-                id: 'account-production-bookmark',
-                name: 'Bookmark Story',
-              },
-            },
-          } as GraphQLResponse);
-        }
-        if (request.name === 'PostsStoriesQuery') {
-          return Promise.resolve({
-            data: {
-              alternateComposerProfile,
-              composerProfile,
-              contentPostsProfile: bookmarkContentPostsProfile,
-              emptyPostsProfile,
-              homeTimeline: bookmarkHomeTimeline,
-              nodes: posts,
-            },
-          } as GraphQLResponse);
-        }
-        if (request.name === 'PostBookmarkActionCreateBookmarkMutation') {
-          const input = variables.input as { postId: string };
-          setRequests((current) => [...current, { action: 'create', postId: input.postId }]);
-          createAttempts += 1;
-          if (mode === 'pending') {
-            return new Promise<GraphQLResponse>(() => undefined);
+            } as GraphQLResponse);
           }
-          if (mode === 'create-failure' && createAttempts === 1) {
-            return Promise.reject(new Error('bookmark create failed'));
+          if (request.name === 'PostsStoriesQuery') {
+            return Promise.resolve({ data: queryData } as GraphQLResponse);
           }
-          activeBookmarkId = `bookmark-${input.postId}`;
-          return Promise.resolve({
-            data: {
-              createBookmark: {
-                bookmark: {
-                  __typename: 'Bookmark',
-                  id: activeBookmarkId,
-                  post: {
-                    __typename: 'Post',
-                    id: input.postId,
-                    viewerBookmark: { __typename: 'Bookmark', id: activeBookmarkId },
+          if (request.name === 'PostBookmarkActionCreateBookmarkMutation') {
+            const input = variables.input as { postId: string };
+            setRequests((current) => [...current, { action: 'create', postId: input.postId }]);
+            createAttempts += 1;
+            if (mode === 'pending') {
+              return new Promise<GraphQLResponse>(() => undefined);
+            }
+            if (mode === 'create-failure' && createAttempts === 1) {
+              return Promise.reject(new Error('bookmark create failed'));
+            }
+            activeBookmarkId = `bookmark-${input.postId}`;
+            return Promise.resolve({
+              data: {
+                createBookmark: {
+                  bookmark: {
+                    __typename: 'Bookmark',
+                    id: activeBookmarkId,
+                    post: {
+                      __typename: 'Post',
+                      id: input.postId,
+                      viewerBookmark: { __typename: 'Bookmark', id: activeBookmarkId },
+                    },
                   },
                 },
               },
-            },
-          } as GraphQLResponse);
-        }
-        if (request.name === 'PostBookmarkActionDeleteBookmarkMutation') {
-          const input = variables.input as { id: string };
-          setRequests((current) => [...current, { action: 'delete', bookmarkId: input.id }]);
-          deleteAttempts += 1;
-          if (mode === 'delete-failure' && deleteAttempts === 1) {
-            return Promise.reject(new Error('bookmark delete failed'));
-          }
-          if (mode === 'delete-graphql-failure' && deleteAttempts === 1) {
-            return Promise.resolve({
-              data: { deleteBookmark: null },
-              errors: [{ message: 'bookmark delete failed' }],
             } as GraphQLResponse);
           }
-          activeBookmarkId = null;
-          const response = {
-            data: {
-              deleteBookmark: {
-                requestedBookmarkId: input.id,
-                post: {
-                  __typename: 'Post',
-                  id: shortPost.id,
-                  viewerBookmark: null,
+          if (request.name === 'PostBookmarkActionDeleteBookmarkMutation') {
+            const input = variables.input as { id: string };
+            setRequests((current) => [...current, { action: 'delete', bookmarkId: input.id }]);
+            deleteAttempts += 1;
+            if (mode === 'delete-failure' && deleteAttempts === 1) {
+              return Promise.reject(new Error('bookmark delete failed'));
+            }
+            if (mode === 'delete-graphql-failure' && deleteAttempts === 1) {
+              return Promise.resolve({
+                data: { deleteBookmark: null },
+                errors: [{ message: 'bookmark delete failed' }],
+              } as GraphQLResponse);
+            }
+            activeBookmarkId = null;
+            const response = {
+              data: {
+                deleteBookmark: {
+                  requestedBookmarkId: input.id,
+                  post: {
+                    __typename: 'Post',
+                    id: shortPost.id,
+                    viewerBookmark: null,
+                  },
                 },
               },
-            },
-          } as GraphQLResponse;
-          if (mode === 'delete-partial-success') {
-            return Promise.resolve({
-              ...response,
-              errors: [
-                {
-                  message: 'viewerBookmark projection failed',
-                  path: ['deleteBookmark', 'post', 'viewerBookmark'],
-                },
-              ],
-            } as GraphQLResponse);
+            } as GraphQLResponse;
+            if (mode === 'delete-partial-success') {
+              return Promise.resolve({
+                ...response,
+                errors: [
+                  {
+                    message: 'viewerBookmark projection failed',
+                    path: ['deleteBookmark', 'post', 'viewerBookmark'],
+                  },
+                ],
+              } as GraphQLResponse);
+            }
+            return Promise.resolve(response);
           }
-          return Promise.resolve(response);
-        }
-        return Promise.resolve({ data: {} } as GraphQLResponse);
-      }),
-      store: new Store(new RecordSource()),
-    });
-  }, [initiallyBookmarked, mode]);
+          return Promise.resolve({ data: {} } as GraphQLResponse);
+        }),
+        store: new Store(new RecordSource()),
+      });
+      environment.commitPayload(postsStoriesOperation, queryData);
+      return environment;
+    },
+    [initiallyBookmarked, mode],
+  );
 
   return (
-    <RelayEnvironmentProvider environment={environment}>
-      <Suspense fallback={<Text>Bookmark fixture를 불러오는 중입니다.</Text>}>
-        <SessionProvider>
-          <ProductionBookmarkMutationContents />
-        </SessionProvider>
-      </Suspense>
+    <RelayActorProvider createEnvironment={createEnvironment}>
+      <SessionProvider>
+        <RelayActorBoundary>
+          <Suspense fallback={<Text>Bookmark fixture를 불러오는 중입니다.</Text>}>
+            <ProductionBookmarkMutationContents />
+          </Suspense>
+        </RelayActorBoundary>
+      </SessionProvider>
       <Text testID="production-bookmark-request-log">{JSON.stringify(requests)}</Text>
-    </RelayEnvironmentProvider>
+    </RelayActorProvider>
   );
 }
 
@@ -1798,21 +1819,33 @@ function ProductionBookmarkMutationContents() {
 
 function ProductionBookmarkEnvironmentReplacementStory() {
   const staleFailure = useRef<((error: Error) => void) | null>(null);
-  const [revision, setRevision] = useState(0);
+  const [sessionId] = useState(
+    () => `session-production-bookmark-environment-replacement-${crypto.randomUUID()}`,
+  );
   const [requests, setRequests] = useState<ProductionBookmarkRequest[]>([]);
-  const environment = useMemo(
-    () =>
-      new Environment({
+  const createEnvironment = useCallback(
+    (_nativeToken: string | null, selectedProfileId: string | null) => {
+      const profileId = selectedProfileId ?? 'profile-production-bookmark-environment-first';
+      const queryData = {
+        alternateComposerProfile,
+        composerProfile,
+        contentPostsProfile,
+        emptyPostsProfile,
+        homeTimeline,
+        nodes: storyPosts.map(withReactionViewerState),
+      };
+
+      const environment = new Environment({
         network: Network.create((request: RequestParameters, variables: Variables) => {
           if (request.name === 'SessionProviderQuery') {
             return Promise.resolve({
               data: {
                 currentSession: {
                   __typename: 'Session',
-                  id: `session-production-bookmark-${revision}`,
+                  id: sessionId,
                   selectedProfile: {
                     __typename: 'Profile',
-                    id: `profile-production-bookmark-${revision}`,
+                    id: profileId,
                   },
                 },
                 me: {
@@ -1824,21 +1857,12 @@ function ProductionBookmarkEnvironmentReplacementStory() {
             } as GraphQLResponse);
           }
           if (request.name === 'PostsStoriesQuery') {
-            return Promise.resolve({
-              data: {
-                alternateComposerProfile,
-                composerProfile,
-                contentPostsProfile,
-                emptyPostsProfile,
-                homeTimeline,
-                nodes: storyPosts.map(withReactionViewerState),
-              },
-            } as GraphQLResponse);
+            return Promise.resolve({ data: queryData } as GraphQLResponse);
           }
           if (request.name === 'PostBookmarkActionCreateBookmarkMutation') {
             const input = variables.input as { postId: string };
             setRequests((current) => [...current, { action: 'create', postId: input.postId }]);
-            if (revision === 0) {
+            if (profileId === 'profile-production-bookmark-environment-first') {
               return Observable.create((sink) => {
                 staleFailure.current = (error) => sink.error(error);
               });
@@ -1863,35 +1887,48 @@ function ProductionBookmarkEnvironmentReplacementStory() {
           return Promise.resolve({ data: {} } as GraphQLResponse);
         }),
         store: new Store(new RecordSource()),
-      }),
-    [revision],
+      });
+      environment.commitPayload(postsStoriesOperation, queryData);
+      return environment;
+    },
+    [sessionId],
   );
 
   return (
-    <View>
-      <RelayEnvironmentProvider environment={environment}>
-        <Suspense fallback={<Text>Bookmark Environment fixture를 불러오는 중입니다.</Text>}>
-          <SessionProvider>
-            <ProductionBookmarkMutationContents />
-          </SessionProvider>
-        </Suspense>
-      </RelayEnvironmentProvider>
-      <Pressable
-        accessibilityLabel="두 번째 Profile Store로 전환"
-        accessibilityRole="button"
-        onPress={() => setRevision(1)}
-      >
-        <Text>두 번째 Profile Store로 전환</Text>
-      </Pressable>
-      <Pressable
-        accessibilityLabel="이전 Store 요청 실패"
-        accessibilityRole="button"
-        onPress={() => staleFailure.current?.(new Error('stale bookmark failure'))}
-      >
-        <Text>이전 Store 요청 실패</Text>
-      </Pressable>
-      <Text testID="production-bookmark-request-log">{JSON.stringify(requests)}</Text>
-    </View>
+    <RelayActorProvider createEnvironment={createEnvironment}>
+      <View>
+        <SessionProvider>
+          <RelayActorBoundary>
+            <Suspense fallback={<Text>Bookmark Environment fixture를 불러오는 중입니다.</Text>}>
+              <ProductionBookmarkMutationContents />
+            </Suspense>
+          </RelayActorBoundary>
+        </SessionProvider>
+        <ProductionBookmarkEnvironmentReplacementControls />
+        <Pressable
+          accessibilityLabel="이전 Store 요청 실패"
+          accessibilityRole="button"
+          onPress={() => staleFailure.current?.(new Error('stale bookmark failure'))}
+        >
+          <Text>이전 Store 요청 실패</Text>
+        </Pressable>
+        <Text testID="production-bookmark-request-log">{JSON.stringify(requests)}</Text>
+      </View>
+    </RelayActorProvider>
+  );
+}
+
+function ProductionBookmarkEnvironmentReplacementControls() {
+  const { resetActor } = useRelayActor();
+
+  return (
+    <Pressable
+      accessibilityLabel="두 번째 Profile Store로 전환"
+      accessibilityRole="button"
+      onPress={() => resetActor('profile-production-bookmark-environment-second')}
+    >
+      <Text>두 번째 Profile Store로 전환</Text>
+    </Pressable>
   );
 }
 
@@ -4114,6 +4151,13 @@ export const ProductionBookmarkDeleteGraphQLFailureRetry: Story = {
   ),
 };
 
+const productionBookmarkEnvironmentReplacementSession = shellQuery({
+  profiles: [
+    profile({ id: 'profile-production-bookmark-environment-first' }),
+    profile({ id: 'profile-production-bookmark-environment-second' }),
+  ],
+});
+
 export const ProductionBookmarkEnvironmentReplacement: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -4143,6 +4187,18 @@ export const ProductionBookmarkEnvironmentReplacement: Story = {
       { action: 'create', postId: shortPost.id },
       { action: 'create', postId: shortPost.id },
     ]);
+  },
+  parameters: {
+    relay: {
+      data: {
+        ...postsStoryRelayData,
+        currentSession: productionBookmarkEnvironmentReplacementSession.currentSession,
+        me: {
+          ...productionBookmarkEnvironmentReplacementSession.me,
+          id: 'account-production-bookmark',
+        },
+      },
+    },
   },
   render: () => <ProductionBookmarkEnvironmentReplacementStory />,
 };
@@ -6086,7 +6142,7 @@ export const PostDetailThreadPageLoading: Story = {
       operationResponses: {
         PostDetailQuery: {
           data: {
-            currentSession: null,
+            currentSession: defaultSession.currentSession,
             node: {
               ...routeCurrentPostWithoutReactions,
               replyAncestors: [],
@@ -6129,7 +6185,7 @@ export const PostDetailThreadPageFailureRetries: Story = {
       operationResponses: {
         PostDetailQuery: {
           data: {
-            currentSession: null,
+            currentSession: defaultSession.currentSession,
             node: {
               ...routeCurrentPostWithoutReactions,
               replyAncestors: [],

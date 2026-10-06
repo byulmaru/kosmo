@@ -9,6 +9,7 @@ import {
   useState,
 } from 'react';
 import { Platform } from 'react-native';
+import { deleteSelectedProfile } from '@/auth/selectedProfileStorage';
 import { deleteSessionToken, readSessionToken, writeSessionToken } from '@/auth/tokenStorage';
 import { Splash } from '@/components/Splash';
 import { initialActorState, reduceActorState } from './actorState';
@@ -21,23 +22,27 @@ type RelayActorValue = {
   clearNativeSession: () => Promise<void>;
   nativeToken: string | null;
   resetActor: (profileId?: string | null) => void;
+  resetSession: () => void;
+  selectedProfileId: string | null;
   setNativeSession: (token: string) => Promise<void>;
 };
 
 const RelayActorContext = createContext<RelayActorValue | null>(null);
 const RelayActorLifecycleContext = createContext<string | null>(null);
+const RelayAuthLifecycleContext = createContext<string | null>(null);
 
 export function RelayActorProvider({
   children,
   createEnvironment = createRelayEnvironment,
 }: PropsWithChildren<{
-  createEnvironment?: (token: string | null) => Environment;
+  createEnvironment?: (token: string | null, selectedProfileId: string | null) => Environment;
 }>) {
   const [nativeToken, setNativeToken] = useState<string | null | undefined>(
     Platform.OS === 'web' ? null : undefined,
   );
   const [actor, dispatchActor] = useReducer(reduceActorState, initialActorState);
   const environmentGenerationRef = useRef(0);
+  const authLifecycleGenerationRef = useRef(0);
 
   useEffect(() => {
     if (Platform.OS === 'web') {
@@ -47,32 +52,34 @@ export function RelayActorProvider({
     void readSessionToken().then(setNativeToken, () => setNativeToken(null));
   }, []);
 
-  const setNativeSession = useCallback(
-    async (token: string) => {
-      await writeSessionToken(token);
-      environmentGenerationRef.current += 1;
-      setNativeToken(token);
-      // A token exchange starts a new authentication lifecycle even when the token value did not
-      // change. Dispatching a new actor state object guarantees a fresh Relay Store in that case.
-      dispatchActor({ type: 'profile-selected', profileId: actor.id });
-    },
-    [actor.id],
-  );
-
-  const clearNativeSession = useCallback(async () => {
-    await deleteSessionToken();
-    environmentGenerationRef.current += 1;
-    setNativeToken(null);
-    dispatchActor({ type: 'profile-selected', profileId: null });
-  }, []);
-
   const resetActor = useCallback((profileId?: string | null) => {
     environmentGenerationRef.current += 1;
     dispatchActor({ type: 'profile-selected', profileId });
   }, []);
 
+  const resetSession = useCallback(() => {
+    authLifecycleGenerationRef.current += 1;
+    resetActor(null);
+  }, [resetActor]);
+
+  const setNativeSession = useCallback(
+    async (token: string) => {
+      await writeSessionToken(token);
+      await deleteSelectedProfile();
+      resetSession();
+      setNativeToken(token);
+    },
+    [resetSession],
+  );
+
+  const clearNativeSession = useCallback(async () => {
+    await deleteSessionToken();
+    resetSession();
+    setNativeToken(null);
+  }, [resetSession]);
+
   const environment = useMemo(
-    () => createEnvironment(nativeToken ?? null),
+    () => createEnvironment(nativeToken ?? null, actor.id === 'session' ? null : actor.id),
     // Actor state identity intentionally invalidates selected-profile-scoped cached fields. Route
     // retries are owned by RouteBoundary and must not replace this Environment or Store.
     [actor, createEnvironment, nativeToken],
@@ -82,9 +89,11 @@ export function RelayActorProvider({
       clearNativeSession,
       nativeToken: nativeToken ?? null,
       resetActor,
+      resetSession,
+      selectedProfileId: actor.id === 'session' ? null : actor.id,
       setNativeSession,
     }),
-    [clearNativeSession, nativeToken, resetActor, setNativeSession],
+    [actor.id, clearNativeSession, nativeToken, resetActor, resetSession, setNativeSession],
   );
 
   if (nativeToken === undefined) {
@@ -94,16 +103,19 @@ export function RelayActorProvider({
   // This value is intentionally private and opaque to routes. It changes only when the actor or
   // authentication lifecycle changes, while the route-level fetch key remains independent.
   const actorLifecycleKey = `${actor.id}:${environmentGenerationRef.current}`;
+  const authLifecycleKey = `auth:${authLifecycleGenerationRef.current}`;
 
   return (
     <RelayActorContext.Provider value={value}>
       <RelayActorLifecycleContext.Provider value={actorLifecycleKey}>
-        <RelayEnvironmentBoundary
-          environment={environment}
-          generationRef={environmentGenerationRef}
-        >
-          {children}
-        </RelayEnvironmentBoundary>
+        <RelayAuthLifecycleContext.Provider value={authLifecycleKey}>
+          <RelayEnvironmentBoundary
+            environment={environment}
+            generationRef={environmentGenerationRef}
+          >
+            {children}
+          </RelayEnvironmentBoundary>
+        </RelayAuthLifecycleContext.Provider>
       </RelayActorLifecycleContext.Provider>
     </RelayActorContext.Provider>
   );
@@ -131,6 +143,19 @@ export function useRelayActorLifecycleKey(): string {
   }
 
   return actorLifecycleKey;
+}
+
+/**
+ * Returns an opaque identity that changes only when the authentication session changes.
+ */
+export function useRelayAuthLifecycleKey(): string {
+  const authLifecycleKey = useContext(RelayAuthLifecycleContext);
+
+  if (!authLifecycleKey) {
+    throw new Error('useRelayAuthLifecycleKey must be used inside RelayActorProvider.');
+  }
+
+  return authLifecycleKey;
 }
 
 function RelayActorBoundaryContent({ children }: PropsWithChildren) {

@@ -97,6 +97,7 @@ test('selectProfile response identifies the selected profile and recreates the a
 
   await page.goto('/login');
   await page.waitForURL('**/home');
+  await expect(page).toHaveURL(/\/home$/);
 
   const alphaProfileId = await createProfileFromSwitcher(page, 'alpha');
   await expect(page.getByText('프로필을 만들어 시작하세요')).toBeHidden();
