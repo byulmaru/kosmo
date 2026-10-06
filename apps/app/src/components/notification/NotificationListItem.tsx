@@ -2,10 +2,12 @@ import { isPostContentDocumentV1 } from '@kosmo/core/post-content';
 import { useCallback } from 'react';
 import { graphql, useFragment, useMutation } from 'react-relay';
 import { formatTimelineTimestamp } from '@/lib/date';
+import { MentionNotificationPost } from './MentionNotificationPost';
 import { NotificationListItemView } from './NotificationListItemView';
 import { ReplyNotificationPost } from './ReplyNotificationPost';
 import type { PostMediaItem } from '@/components/post/PostMediaImage';
 import type { FollowRequestNotificationListItem_notification$key } from './__generated__/FollowRequestNotificationListItem_notification.graphql';
+import type { MentionNotificationListItem_notification$key } from './__generated__/MentionNotificationListItem_notification.graphql';
 import type { NotificationListItem_notification$key } from './__generated__/NotificationListItem_notification.graphql';
 import type { NotificationListItemMarkReadMutation } from './__generated__/NotificationListItemMarkReadMutation.graphql';
 import type { ReactionNotificationListItem_notification$key } from './__generated__/ReactionNotificationListItem_notification.graphql';
@@ -61,6 +63,35 @@ function useNotificationRead() {
       });
     },
     [commitMarkRead],
+  );
+}
+
+const mentionNotificationFragment = graphql`
+  fragment MentionNotificationListItem_notification on MentionNotification {
+    id
+    readAt
+    post {
+      ...MentionNotificationPost_post
+    }
+  }
+`;
+
+export function MentionNotificationListItem({
+  notification,
+}: {
+  notification: MentionNotificationListItem_notification$key;
+}) {
+  const data = useFragment(mentionNotificationFragment, notification);
+  const markRead = useNotificationRead();
+
+  if (!data.post) {
+    return null;
+  }
+
+  return (
+    <NotificationListItemView kind="mention" unread={data.readAt === null}>
+      <MentionNotificationPost onActivate={() => markRead(data.id)} post={data.post} />
+    </NotificationListItemView>
   );
 }
 

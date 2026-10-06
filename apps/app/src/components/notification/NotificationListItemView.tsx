@@ -43,7 +43,7 @@ type GroupedNotificationProps = {
 );
 
 type PostNotificationChildProps = {
-  kind: 'reply' | 'quote';
+  kind: 'mention' | 'reply' | 'quote';
   unread?: boolean;
   /** Compose a post notification surface; this wrapper owns the divider and Read state. */
   children: ReactElement;
@@ -115,7 +115,7 @@ export function NotificationListItemView(props: NotificationListItemViewProps) {
 function isPostNotificationChild(
   props: NotificationListItemViewProps,
 ): props is PostNotificationChildProps {
-  return props.kind === 'reply' || props.kind === 'quote';
+  return props.kind === 'mention' || props.kind === 'reply' || props.kind === 'quote';
 }
 
 function NotificationTarget(props: GroupedNotificationProps) {

@@ -235,7 +235,7 @@ test(
 );
 
 test(
-  'Post Create Effects Workflow는 Reply와 Quote Notification effect를 함께 실행한다',
+  'Post Create Effects Workflow는 공통 Notification Activity로 Reply, Quote, Mention을 실행한다',
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
@@ -243,13 +243,29 @@ test(
     });
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-post-create-effects-test-${process.pid}`;
-    const postId = '00000000-0000-8000-8000-000000000301';
+    const localPostId = '00000000-0000-8000-8000-000000000301';
+    const remotePostId = '00000000-0000-8000-8000-000000000304';
     const calls: string[] = [];
+    let mentionAttempts = 0;
+    let retryFirstMention = false;
+    let failMention = false;
 
     const worker = await Worker.create({
       activities: {
-        createNotificationActivity: async (input: CreateNotificationInput) =>
-          calls.push(`${input.kind}:${input.sourceId}`),
+        createNotificationActivity: async (input: CreateNotificationInput) => {
+          calls.push(`${input.kind}:${input.sourceId}`);
+          if (input.kind !== NotificationKind.MENTION) {
+            return;
+          }
+          mentionAttempts += 1;
+          if (retryFirstMention) {
+            retryFirstMention = false;
+            throw new Error('Transient Mention notification failure');
+          }
+          if (failMention) {
+            throw ApplicationFailure.nonRetryable('Mention notification failed');
+          }
+        },
         sendLocalPostCreateActivity: async (id: string) => calls.push(`send:${id}`),
       },
       connection: environment.nativeConnection,
@@ -260,7 +276,10 @@ test(
 
     await worker.runUntil(async () => {
       for (const origin of ['LOCAL', 'ACTIVITYPUB'] as const) {
+        const postId = origin === 'LOCAL' ? localPostId : remotePostId;
         calls.length = 0;
+        mentionAttempts = 0;
+        retryFirstMention = origin === 'ACTIVITYPUB';
         const handle = await environment.client.workflow.start('postCreateEffectsWorkflow', {
           args: [{ postId, origin }],
           taskQueue,
@@ -271,19 +290,47 @@ test(
           calls.toSorted(),
           (origin === 'LOCAL'
             ? [
+                `${NotificationKind.MENTION}:${postId}`,
                 `${NotificationKind.QUOTE}:${postId}`,
                 `${NotificationKind.REPLY}:${postId}`,
                 `send:${postId}`,
               ]
-            : [`${NotificationKind.QUOTE}:${postId}`, `${NotificationKind.REPLY}:${postId}`]
+            : [
+                `${NotificationKind.QUOTE}:${postId}`,
+                `${NotificationKind.REPLY}:${postId}`,
+                `${NotificationKind.MENTION}:${postId}`,
+                `${NotificationKind.MENTION}:${postId}`,
+              ]
           ).toSorted(),
         );
+        assert.equal(mentionAttempts, origin === 'LOCAL' ? 1 : 2);
         await Worker.runReplayHistory(
           { workflowsPath },
           await handle.fetchHistory(),
           handle.workflowId,
         );
       }
+
+      const failingPostId = '00000000-0000-8000-8000-000000000302';
+      failMention = true;
+      mentionAttempts = 0;
+      calls.length = 0;
+      const failingHandle = await environment.client.workflow.start('postCreateEffectsWorkflow', {
+        args: [{ postId: failingPostId, origin: 'ACTIVITYPUB' }],
+        taskQueue,
+        workflowId: `post-create-effects-test:ACTIVITYPUB:failed-mention:${failingPostId}`,
+      });
+      await assert.rejects(failingHandle.result());
+      failMention = false;
+      assert.deepEqual(
+        calls.toSorted(),
+        [
+          `${NotificationKind.QUOTE}:${failingPostId}`,
+          `${NotificationKind.REPLY}:${failingPostId}`,
+          `${NotificationKind.MENTION}:${failingPostId}`,
+        ].toSorted(),
+      );
+      assert.equal(mentionAttempts, 1);
     });
   },
 );
