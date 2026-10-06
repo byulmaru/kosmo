@@ -1,4 +1,7 @@
+import { db, firstOrThrowWith, HashtagMuteRules } from '@kosmo/core/db';
 import { AccountProfileRole } from '@kosmo/core/enums';
+import { NotFoundError } from '@kosmo/core/error';
+import { and, eq } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { HashtagMuteRule } from '../mute-rule-ref';
 import { executeHashtagMuteCommand } from './execute';
@@ -17,6 +20,16 @@ builder.mutationField('deleteHashtagMuteRule', (t) =>
     }),
     input: { id: t.input.globalID({ for: HashtagMuteRule, required: true }) },
     resolve: async (_, { input }, ctx) => {
+      await db
+        .select({ id: HashtagMuteRules.id })
+        .from(HashtagMuteRules)
+        .where(
+          and(
+            eq(HashtagMuteRules.id, input.id.id),
+            eq(HashtagMuteRules.ownerProfileId, ctx.session.profile.id),
+          ),
+        )
+        .then(firstOrThrowWith(() => new NotFoundError('Hashtag Mute Rule not found')));
       const result = await executeHashtagMuteCommand({
         action: 'DELETE',
         commandId: crypto.randomUUID(),

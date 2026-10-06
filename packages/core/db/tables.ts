@@ -16,7 +16,6 @@ import * as Enum from './enums';
 import { datetime } from './types';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import type { PostContentDocumentV1 } from '../post-content';
-import type { HashtagMuteCommand, HashtagMuteResult } from '../temporal/hashtag-mute';
 
 type JsonWebKeyRecord = Record<string, unknown>;
 
@@ -208,22 +207,6 @@ export const HashtagMuteRules = pgTable(
     check('hashtag_mute_rule_scopes_nonempty', sql`cardinality(${table.scopes}) > 0`),
     check('hashtag_mute_rule_scopes_no_null', sql`array_position(${table.scopes}, NULL) IS NULL`),
   ],
-);
-
-// A receipt and its transition commit together. Activity retries return the
-// original outcome even after another command changes or removes the rule.
-export const HashtagMuteRuleCommands = pgTable(
-  'hashtag_mute_rule_command',
-  {
-    id: uuid('id').primaryKey(),
-    ownerProfileId: uuid('owner_profile_id')
-      .notNull()
-      .references(() => Profiles.id, { onDelete: 'cascade' }),
-    input: jsonb('input').$type<HashtagMuteCommand>().notNull(),
-    result: jsonb('result').$type<HashtagMuteResult>(),
-    createdAt: createdAt(),
-  },
-  (table) => [index().on(table.ownerProfileId)],
 );
 
 export const Instances = pgTable(

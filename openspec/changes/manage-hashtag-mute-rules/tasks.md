@@ -43,8 +43,14 @@
 
 ## Implement Checkpoint
 
-- 2026-10-02 사용자의 Implement 호출에 따라 규칙 schema·명령 receipt·Worker Workflow/Activity·GraphQL 관리/조회와 실행 검증 코드를 작성했다.
+- 2026-10-02 사용자의 Implement 호출에 따라 규칙 schema·Worker Workflow/Activity·GraphQL 관리/조회와 실행 검증 코드를 작성했다.
 - 로컬 타입 검사, ESLint, SDL 동기화 검사와 format/diff 검증을 수행한다. DB·Temporal 실행 테스트는 GitHub CI에 맡긴다.
 - `Test (API)`는 실제 인증 context와 production Worker를 거치는 GraphQL integration을, `Test (Worker)`는 실제 DB Activity와 production Workflow registry 검증을 실행한다. `Test (Core)`는 migration runner/smoke를 실행한다.
 - 기존 PROD-1048의 알림 정책 문서 변경은 이번 구현에서 수정하지 않았고 commit에 포함하지 않는다. 사용자의 재개 요청에 따라 알림 정책 변경을 임시 보관했다. 공식 Stack rebase를 완료했으며 원격 전달 뒤 원본 변경을 복원한다.
 - OpenSpec task checkbox는 CI 성공의 대용이 아니다. 런타임·migration·구버전 rollback 호환성 실행 결과는 아직 미확인이다.
+
+## Review Response — 2026-10-06
+
+- PR #1093의 별도 명령 결과 보존 제거 요청을 현재 canonical·Linear와 대조해 타당한 것으로 판단했다.
+- receipt 테이블·저장 경로를 제거하고 CREATE 고정 ID, UPDATE 값 변경 조건, DELETE 무변경 성공으로 Activity retry를 처리한다.
+- 새 HEAD의 GitHub CI 전체 통과·MERGEABLE 확인 전 답글·resolve·리뷰 재요청은 보류한다.

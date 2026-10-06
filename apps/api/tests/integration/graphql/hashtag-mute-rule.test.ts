@@ -33,7 +33,6 @@ let Instances: typeof CoreDb.Instances;
 let pg: typeof CoreDb.pg;
 let Hashtags: typeof CoreDb.Hashtags;
 let HashtagMuteRules: typeof CoreDb.HashtagMuteRules;
-let HashtagMuteRuleCommands: typeof CoreDb.HashtagMuteRuleCommands;
 
 let Profiles: typeof CoreDb.Profiles;
 let Sessions: typeof CoreDb.Sessions;
@@ -67,7 +66,6 @@ describe('GraphQL Hashtag Mute Rule', () => {
       pg,
       Hashtags,
       HashtagMuteRules,
-      HashtagMuteRuleCommands,
       Profiles,
       Sessions,
     } = await import('@kosmo/core/db'));
@@ -204,6 +202,10 @@ describe('GraphQL Hashtag Mute Rule', () => {
     assert.equal(removed.data?.deleteHashtagMuteRule.hashtagMuteRuleId, rule.id);
     assert.equal((await queryRule(rule.id, auth.token)).data?.node, null);
     assert.equal(await db.$count(HashtagMuteRules), 0);
+    assert.equal(
+      (await deleteResult(auth.token, rule.id)).errors?.[0].extensions?.code,
+      'NOT_FOUND',
+    );
     const recreated = await createRule(auth.token, hashtag.id, {
       scopes: ['HOME'],
       decision: 'EXCLUDE',
@@ -332,7 +334,6 @@ describe('GraphQL Hashtag Mute Rule', () => {
       );
     assert.ok((await createResult(auth.token, hashtag.id, valid)).errors);
     assert.equal(await db.$count(HashtagMuteRules), 0);
-    assert.equal(await db.$count(HashtagMuteRuleCommands), 0);
   });
 });
 
@@ -491,7 +492,6 @@ const createAuthenticatedSession = async (role: AccountProfileRole = AccountProf
 const resetFixtures = async () => {
   await db.delete(Sessions);
   await db.delete(HashtagMuteRules);
-  await db.delete(HashtagMuteRuleCommands);
   await db.delete(Hashtags);
   await db.delete(AccountProfiles);
   await db.delete(Accounts);

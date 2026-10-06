@@ -6,7 +6,6 @@ import { setTimeout as delay } from 'node:timers/promises';
 import {
   db,
   firstOrThrow,
-  HashtagMuteRuleCommands,
   HashtagMuteRules,
   Hashtags,
   Instances,
@@ -117,13 +116,40 @@ test('같은 pair의 동시 생성은 하나만 확정하고 기존 값을 덮�
     }
   }
   assert.equal(await db.$count(HashtagMuteRules, eq(HashtagMuteRules.ownerProfileId, owner.id)), 1);
-  assert.equal(
-    await db.$count(HashtagMuteRuleCommands, eq(HashtagMuteRuleCommands.ownerProfileId, owner.id)),
-    1,
-  );
 });
 
-test('commit 응답 유실 후 create·update·delete 재시도는 원래 결과를 반환하고 후속 변경을 덮지 않는다', async () => {
+test('같은 CREATE ID의 동시 재시도는 현재 Rule을 모두 반환한다', async () => {
+  const { create } = await fixture();
+  const results = await Promise.all(
+    Array.from({ length: 6 }, () => executeHashtagMuteRuleActivity(create)),
+  );
+  assert.equal(results.filter((result) => result.ok).length, 6);
+  const snapshots = results.map((result) => {
+    if (!result.ok) {
+      assert.fail(JSON.stringify(result));
+    }
+    return result.result;
+  });
+  for (const result of snapshots) {
+    assert.deepEqual(result, snapshots[0]);
+  }
+  assert.equal(await db.$count(HashtagMuteRules), 1);
+});
+
+test('같은 pair의 별도 CREATE는 설정이 같아도 충돌한다', async () => {
+  const { create } = await fixture();
+  await createdRule(create);
+  const duplicate = await executeHashtagMuteRuleActivity({
+    ...create,
+    commandId: crypto.randomUUID(),
+  });
+  assert.equal(duplicate.ok, false);
+  if (!duplicate.ok) {
+    assert.equal(duplicate.error.code, 'CONFLICT');
+  }
+});
+
+test('같은 CREATE ID 재시도는 현재 Rule을 반환하고 이후 삭제 결과를 복원하지 않는다', async () => {
   const { create, owner, hashtag } = await fixture();
   const rule = await createdRule(create);
   assert.deepEqual(await createdRule(create), rule);
@@ -138,6 +164,9 @@ test('commit 응답 유실 후 create·update·delete 재시도는 원래 결과
   };
   const changed = await createdRule(update);
   assert.equal(changed.decision, HashtagMuteDecision.COLLAPSE);
+  assert.deepEqual(await createdRule(update), changed);
+  const unchanged = await createdRule({ ...update, commandId: crypto.randomUUID() });
+  assert.deepEqual(unchanged, changed);
   const later = await createdRule({
     action: 'UPDATE',
     commandId: crypto.randomUUID(),
@@ -146,7 +175,7 @@ test('commit 응답 유실 후 create·update·delete 재시도는 원래 결과
     decision: HashtagMuteDecision.EXCLUDE,
     expiresAt: null,
   });
-  assert.deepEqual(await createdRule(update), changed);
+  assert.deepEqual(await createdRule(create), later);
   const current = await db
     .select()
     .from(HashtagMuteRules)
@@ -161,8 +190,6 @@ test('commit 응답 유실 후 create·update·delete 재시도는 원래 결과
     ruleId: rule.id,
   };
   assert.deepEqual(await execute(remove), { deletedRuleId: rule.id });
-  assert.deepEqual(await createdRule(create), rule);
-  assert.deepEqual(await createdRule(update), changed);
   assert.equal(await db.$count(HashtagMuteRules), 0);
   const replacement = await createdRule({ ...create, commandId: crypto.randomUUID() });
   assert.notEqual(replacement.id, rule.id);
@@ -171,14 +198,6 @@ test('commit 응답 유실 후 create·update·delete 재시도는 원래 결과
     await db.$count(HashtagMuteRules, eq(HashtagMuteRules.targetHashtagId, hashtag.id)),
     1,
   );
-  const identityReuse = await executeHashtagMuteRuleActivity({
-    ...create,
-    decision: HashtagMuteDecision.COLLAPSE,
-  });
-  assert.equal(identityReuse.ok, false);
-  if (!identityReuse.ok) {
-    assert.equal(identityReuse.error.code, 'CONFLICT');
-  }
 });
 
 test('만료된 부분 변경은 무변경으로 실패하고 미래·영구 변경과 만료 후 재생성을 허용한다', async () => {
@@ -269,10 +288,6 @@ test('변경이 삭제 transaction을 기다린 뒤 Rule이 사라지면 NOT_FOU
       assert.equal(result.error.code, 'NOT_FOUND');
     }
     assert.equal(await db.$count(HashtagMuteRules, eq(HashtagMuteRules.id, rule.id)), 0);
-    assert.equal(
-      await db.$count(HashtagMuteRuleCommands, eq(HashtagMuteRuleCommands.id, command.commandId)),
-      0,
-    );
   } finally {
     if (held) {
       await deletion`ROLLBACK`;
@@ -284,7 +299,7 @@ test('변경이 삭제 transaction을 기다린 뒤 Rule이 사라지면 NOT_FOU
   }
 });
 
-test('다른 Owner와 잘못된 최종 상태는 rule과 command를 남기지 않는다', async () => {
+test('다른 Owner와 잘못된 최종 상태는 rule을 남기지 않는다', async () => {
   const { create, owner, instance } = await fixture();
   const other = await fixture();
   const rule = await createdRule(create);
@@ -318,8 +333,14 @@ test('다른 Owner와 잘못된 최종 상태는 rule과 command를 남기지 �
     await db.select().from(HashtagMuteRules).where(eq(HashtagMuteRules.id, rule.id)),
     before,
   );
-  assert.equal(await db.$count(HashtagMuteRuleCommands), 1);
-  await db.delete(HashtagMuteRules).where(eq(HashtagMuteRules.id, rule.id));
+  const remove: HashtagMuteCommand = {
+    action: 'DELETE',
+    commandId: crypto.randomUUID(),
+    ownerProfileId: owner.id,
+    ruleId: rule.id,
+  };
+  assert.deepEqual(await execute(remove), { deletedRuleId: rule.id });
+  assert.deepEqual(await execute(remove), { deletedRuleId: rule.id });
   for (const state of [ProfileState.DISABLED, ProfileState.SUSPENDED]) {
     await db.update(Profiles).set({ state }).where(eq(Profiles.id, owner.id));
     const result = await executeHashtagMuteRuleActivity({
@@ -347,5 +368,4 @@ test('다른 Owner와 잘못된 최종 상태는 rule과 command를 남기지 �
     }
   }
   assert.equal(await db.$count(HashtagMuteRules), 0);
-  assert.equal(await db.$count(HashtagMuteRuleCommands), 1);
 });
