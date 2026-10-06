@@ -15,12 +15,12 @@ export {
   executeProfileBlockTransitionActivity,
   executeProfileUnblockTransitionActivity,
 } from './activities/profile-block';
-export { resolveActivityPubQuoteActivity } from './activities/quote-resolution';
 export {
   listPushNotificationInstallations as listPushNotificationInstallationsActivity,
   sendPushNotification as sendPushNotificationActivity,
 } from './activities/push-notification';
 export { collectRemoteFeaturedActivity } from './activities/remote-profile-featured';
+export { resolveActivityPubQuoteActivity } from './activities/quote-resolution';
 export {
   lookupRemoteActorUriActivity,
   materializeRemoteProfileActorActivity,
