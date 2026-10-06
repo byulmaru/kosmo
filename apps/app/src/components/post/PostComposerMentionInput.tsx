@@ -32,6 +32,7 @@ type Props = Readonly<{
   authorProfileId: string;
   body: string;
   disabled?: boolean;
+  grow?: boolean;
   inputRef: RefObject<TextInput | null>;
   mentionCandidates?: PostComposerMentionCandidateResults;
   mentionSearchState?: PostComposerMentionSearchState;
@@ -50,6 +51,7 @@ export function PostComposerMentionInput({
   authorProfileId,
   body,
   disabled = false,
+  grow = false,
   inputRef,
   mentionCandidates,
   mentionSearchState,
@@ -149,7 +151,7 @@ export function PostComposerMentionInput({
   };
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, grow ? styles.grow : null]}>
       {renderInput({
         onChangeText,
         onKeyPress,
@@ -290,7 +292,8 @@ const styles = StyleSheet.create({
     paddingVertical: space[8],
   },
   retryLabel: textStyles.uiLabelM,
-  root: { flex: 1, gap: space[8], position: 'relative', width: '100%' },
+  grow: { flex: 1 },
+  root: { gap: space[8], position: 'relative', width: '100%' },
   suggestions: {
     borderRadius: radius[12],
     borderWidth: borderWidths[1],

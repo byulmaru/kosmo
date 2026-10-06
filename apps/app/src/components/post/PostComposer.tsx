@@ -328,6 +328,7 @@ export function PostComposer({
         authorProfileId={authorProfileId}
         body={body}
         disabled={submitting}
+        grow={items.length === 0 && !hasTrailingContent}
         inputRef={bodyRef ?? bodyInputRef}
         mentionCandidates={mentionCandidates}
         mentionSearchState={mentionSearchState}
@@ -831,6 +832,7 @@ export function MobileFullscreenComposerShellCandidate({
         authorProfileId={authorProfileId}
         body={body}
         disabled={submitting}
+        grow={!bodyUsesTrailingContentLayout}
         inputRef={bodyRef ?? bodyInputRef}
         mentionCandidates={mentionCandidates}
         mentionSearchState={mentionSearchState}
