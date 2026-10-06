@@ -1,7 +1,12 @@
 {
   "dialect": "postgres",
   "id": "1adf799f-dab8-4b4f-97d7-6fe1fe5cd41b",
-  "prevIds": ["e004e9e1-eec8-4470-b865-b653ea194082", "4c94979e-4a87-49aa-9ded-b987c1896734"],
+  "prevIds": [
+    "e004e9e1-eec8-4470-b865-b653ea194082",
+    "4c94979e-4a87-49aa-9ded-b987c1896734",
+    "fd996bcf-7929-436a-8925-254faf1d348a",
+    "d5e9d1d9-5428-47fd-b9f7-96bf4b565784"
+  ],
   "version": "8",
   "ddl": [
     {
@@ -77,7 +82,7 @@
       "schema": "public"
     },
     {
-      "values": ["FOLLOW", "FOLLOW_REQUEST", "QUOTE", "REACTION", "REPLY", "REPOST"],
+      "values": ["FOLLOW", "FOLLOW_REQUEST", "MENTION", "QUOTE", "REACTION", "REPLY", "REPOST"],
       "name": "notification_kind",
       "entityType": "enums",
       "schema": "public"
@@ -103,24 +108,6 @@
     {
       "values": ["PUBLIC", "UNLISTED", "FOLLOWERS", "DIRECT"],
       "name": "post_visibility",
-      "entityType": "enums",
-      "schema": "public"
-    },
-    {
-      "values": ["INBOUND", "OUTBOUND"],
-      "name": "profile_block_activity_origin",
-      "entityType": "enums",
-      "schema": "public"
-    },
-    {
-      "values": ["ACTIVE", "CLOSING", "CLOSED"],
-      "name": "profile_block_activity_state",
-      "entityType": "enums",
-      "schema": "public"
-    },
-    {
-      "values": ["NONE", "PENDING", "SETTLED"],
-      "name": "profile_block_delivery_state",
       "entityType": "enums",
       "schema": "public"
     },
@@ -277,12 +264,6 @@
     {
       "isRlsEnabled": false,
       "name": "post",
-      "entityType": "tables",
-      "schema": "public"
-    },
-    {
-      "isRlsEnabled": false,
-      "name": "profile_block_activity",
       "entityType": "tables",
       "schema": "public"
     },
@@ -2267,188 +2248,6 @@
       "name": "id",
       "entityType": "columns",
       "schema": "public",
-      "table": "profile_block_activity"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "activity_uri",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "profile_block_activity"
-    },
-    {
-      "type": "uuid",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "owner_profile_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "profile_block_activity"
-    },
-    {
-      "type": "uuid",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "target_profile_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "profile_block_activity"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "actor_uri",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "profile_block_activity"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "object_uri",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "profile_block_activity"
-    },
-    {
-      "type": "profile_block_activity_origin",
-      "typeSchema": "public",
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "origin",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "profile_block_activity"
-    },
-    {
-      "type": "profile_block_activity_state",
-      "typeSchema": "public",
-      "notNull": true,
-      "dimensions": 0,
-      "default": "'ACTIVE'",
-      "generated": null,
-      "identity": null,
-      "name": "state",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "profile_block_activity"
-    },
-    {
-      "type": "profile_block_delivery_state",
-      "typeSchema": "public",
-      "notNull": true,
-      "dimensions": 0,
-      "default": "'NONE'",
-      "generated": null,
-      "identity": null,
-      "name": "delivery_state",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "profile_block_activity"
-    },
-    {
-      "type": "profile_block_delivery_state",
-      "typeSchema": "public",
-      "notNull": true,
-      "dimensions": 0,
-      "default": "'NONE'",
-      "generated": null,
-      "identity": null,
-      "name": "undo_delivery_state",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "profile_block_activity"
-    },
-    {
-      "type": "uuid",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "profile_block_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "profile_block_activity"
-    },
-    {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "now()",
-      "generated": null,
-      "identity": null,
-      "name": "created_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "profile_block_activity"
-    },
-    {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "now()",
-      "generated": null,
-      "identity": null,
-      "name": "updated_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "profile_block_activity"
-    },
-    {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "closed_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "profile_block_activity"
-    },
-    {
-      "type": "uuid",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "uuidv7()",
-      "generated": null,
-      "identity": null,
-      "name": "id",
-      "entityType": "columns",
-      "schema": "public",
       "table": "profile_block"
     },
     {
@@ -3894,62 +3693,6 @@
       "nameExplicit": false,
       "columns": [
         {
-          "value": "owner_profile_id",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        },
-        {
-          "value": "target_profile_id",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        },
-        {
-          "value": "state",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "profile_block_activity_owner_profile_id_target_profile_id_state_index",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "profile_block_activity"
-    },
-    {
-      "nameExplicit": false,
-      "columns": [
-        {
-          "value": "profile_block_id",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "profile_block_activity_profile_block_id_index",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "profile_block_activity"
-    },
-    {
-      "nameExplicit": false,
-      "columns": [
-        {
           "value": "target_profile_id",
           "isExpression": false,
           "asc": true,
@@ -4741,32 +4484,6 @@
       "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
-      "name": "profile_block_activity_owner_profile_id_profile_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "profile_block_activity"
-    },
-    {
-      "nameExplicit": false,
-      "columns": ["target_profile_id"],
-      "schemaTo": "public",
-      "tableTo": "profile",
-      "columnsTo": ["id"],
-      "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
-      "name": "profile_block_activity_target_profile_id_profile_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "profile_block_activity"
-    },
-    {
-      "nameExplicit": false,
-      "columns": ["owner_profile_id"],
-      "schemaTo": "public",
-      "tableTo": "profile",
-      "columnsTo": ["id"],
-      "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
       "name": "profile_block_owner_profile_id_profile_id_fkey",
       "entityType": "fks",
       "schema": "public",
@@ -5242,14 +4959,6 @@
     {
       "columns": ["id"],
       "nameExplicit": false,
-      "name": "profile_block_activity_pkey",
-      "schema": "public",
-      "table": "profile_block_activity",
-      "entityType": "pks"
-    },
-    {
-      "columns": ["id"],
-      "nameExplicit": false,
       "name": "profile_block_pkey",
       "schema": "public",
       "table": "profile_block",
@@ -5615,15 +5324,6 @@
     },
     {
       "nameExplicit": false,
-      "columns": ["activity_uri"],
-      "nullsNotDistinct": false,
-      "name": "profile_block_activity_activity_uri_key",
-      "schema": "public",
-      "table": "profile_block_activity",
-      "entityType": "uniques"
-    },
-    {
-      "nameExplicit": false,
       "columns": ["token"],
       "nullsNotDistinct": false,
       "name": "session_token_key",
@@ -5665,13 +5365,6 @@
       "entityType": "checks",
       "schema": "public",
       "table": "post"
-    },
-    {
-      "value": "\"owner_profile_id\" <> \"target_profile_id\"",
-      "name": "profile_block_activity_owner_not_target",
-      "entityType": "checks",
-      "schema": "public",
-      "table": "profile_block_activity"
     },
     {
       "value": "\"owner_profile_id\" <> \"target_profile_id\"",
