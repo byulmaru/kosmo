@@ -23,6 +23,7 @@ mockModule('react-native', {
   Text: 'Text',
   View: 'View',
 });
+mockModule('@/components/FeatureFlagsContext', { useFeatureFlag: () => true });
 mockModule('@/components/ui/Avatar', { Avatar: 'Avatar' });
 mockModule('@/theme/ThemeProvider', {
   useTheme: () => ({
@@ -62,9 +63,6 @@ function renderMentionInput({
   body = '@ali',
   authorProfileId = 'profile-author',
   candidates = [profileAlice],
-  mentionSearchEnabled = true,
-  mentionSearchState,
-  onRetryMentionSearch,
   query = 'ali',
   onSelect = () => undefined,
   onBodyChange = () => undefined,
@@ -73,10 +71,7 @@ function renderMentionInput({
   authorProfileId?: string;
   body?: string;
   candidates?: readonly PostComposerMentionCandidate[];
-  mentionSearchEnabled?: boolean;
-  mentionSearchState?: 'error' | 'loading' | 'ready';
   onBodyChange?: (body: string) => void;
-  onRetryMentionSearch?: () => void;
   onSelectionChange?: (selection: { end: number; start: number }) => void;
   onSelect?: (candidate: PostComposerMentionCandidate, query: PostComposerMentionQuery) => void;
   query?: string;
@@ -101,9 +96,7 @@ function renderMentionInput({
       authorProfileId: nextAuthor,
       body: nextBody,
       inputRef: inputRef as never,
-      mentionSearchEnabled,
       mentionCandidates: nextResults,
-      mentionSearchState,
       onBodyChange: (value) => {
         currentBody = value;
         onBodyChange(value);
@@ -124,7 +117,6 @@ function renderMentionInput({
         selection = { start: caret, end: caret };
         renderer?.update(render());
       },
-      onRetryMentionSearch,
       renderInput: ({ webProps, ...props }) => {
         inputProps = { ...props, ...webProps };
         return createElement('TextInput', inputProps);
@@ -285,77 +277,4 @@ test('shows empty-result feedback without a selection action', async () => {
     true,
   );
   assert.equal(empty.renderer?.root.findAllByType('Pressable' as never).length, 0);
-});
-
-test('hides mention suggestions, states, ARIA, and key handling when search is disabled', async () => {
-  let selected = 0;
-  let prevented = 0;
-  let changedBody = '';
-  const input = renderMentionInput({
-    body: '@ali',
-    mentionSearchEnabled: false,
-    mentionSearchState: 'error',
-    onBodyChange: (body) => {
-      changedBody = body;
-    },
-    onRetryMentionSearch: () => assert.fail('disabled search exposed retry'),
-    onSelect: () => selected++,
-  });
-  await act(async () => {
-    input.setRenderer(create(input.render()));
-  });
-
-  assert.equal(input.renderer?.root.findAllByType('ScrollView' as never).length, 0);
-  assert.equal(input.renderer?.root.findAllByType('Pressable' as never).length, 0);
-  assert.equal(input.renderer?.root.findAllByType('Text' as never).length, 0);
-  assert.equal(Object.hasOwn(input.inputProps, 'aria-autocomplete'), false);
-  assert.equal(Object.hasOwn(input.inputProps, 'aria-controls'), false);
-  assert.equal(Object.hasOwn(input.inputProps, 'aria-activedescendant'), false);
-
-  for (const key of ['Escape', 'ArrowDown', 'Enter']) {
-    await act(async () => {
-      (input.inputProps.onKeyPress as (event: unknown) => void)({
-        nativeEvent: { key },
-        preventDefault: () => prevented++,
-      });
-    });
-  }
-  assert.equal(prevented, 0);
-  assert.equal(selected, 0);
-
-  await act(async () => {
-    input.renderer?.update(input.render('@'));
-  });
-  assert.equal(input.renderer?.root.findAllByType('Text' as never).length, 0);
-
-  await act(async () => {
-    (input.inputProps.onChangeText as (value: string) => void)('plain @ali');
-  });
-  assert.equal(changedBody, 'plain @ali');
-
-  const loading = renderMentionInput({
-    body: '@ali',
-    candidates: [],
-    mentionSearchEnabled: false,
-    mentionSearchState: 'loading',
-  });
-  await act(async () => {
-    loading.setRenderer(create(loading.render()));
-  });
-  assert.equal(loading.renderer?.root.findAllByType('Text' as never).length, 0);
-  assert.equal(loading.renderer?.root.findAllByType('ScrollView' as never).length, 0);
-  await act(async () => loading.renderer?.unmount());
-
-  const empty = renderMentionInput({
-    body: '@ali',
-    candidates: [],
-    mentionSearchEnabled: false,
-    mentionSearchState: 'ready',
-  });
-  await act(async () => {
-    empty.setRenderer(create(empty.render()));
-  });
-  assert.equal(empty.renderer?.root.findAllByType('Text' as never).length, 0);
-  assert.equal(empty.renderer?.root.findAllByType('ScrollView' as never).length, 0);
-  await act(async () => empty.renderer?.unmount());
 });

@@ -1,5 +1,6 @@
 import { useId, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useFeatureFlag } from '@/components/FeatureFlagsContext';
 import { Avatar } from '@/components/ui/Avatar';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, radius, space, textStyles } from '@/theme/tokens';
@@ -34,7 +35,6 @@ type Props = Readonly<{
   disabled?: boolean;
   grow?: boolean;
   inputRef: RefObject<TextInput | null>;
-  mentionSearchEnabled?: boolean;
   mentionCandidates?: PostComposerMentionCandidateResults;
   mentionSearchState?: PostComposerMentionSearchState;
   onBodyChange: (value: string) => void;
@@ -54,7 +54,6 @@ export function PostComposerMentionInput({
   disabled = false,
   grow = false,
   inputRef,
-  mentionSearchEnabled = true,
   mentionCandidates,
   mentionSearchState,
   onBodyChange,
@@ -64,6 +63,7 @@ export function PostComposerMentionInput({
   renderInput,
   selection,
 }: Props) {
+  const mentionSearchEnabled = useFeatureFlag('post-composer-mention-search');
   const theme = useTheme();
   const rawListboxId = useId();
   const listboxId = `post-composer-mention-list-${rawListboxId.replace(/[^a-zA-Z0-9_-]/g, '')}`;

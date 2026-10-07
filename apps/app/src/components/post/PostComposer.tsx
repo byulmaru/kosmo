@@ -72,7 +72,6 @@ export type PostComposerProps = Readonly<{
   contentWarningExpanded: boolean;
   expandControlRef?: RefObject<View | null>;
   items: readonly ComposerMediaItem[];
-  mentionSearchEnabled?: boolean;
   mentionCandidates?: PostComposerMentionCandidateResults;
   mentionSearchState?: PostComposerMentionSearchState;
   selection: PostComposerTextSelection;
@@ -243,7 +242,6 @@ export function PostComposer({
   contentWarningExpanded,
   expandControlRef,
   items,
-  mentionSearchEnabled,
   mentionCandidates,
   mentionSearchState,
   onSelectMention = () => undefined,
@@ -332,7 +330,6 @@ export function PostComposer({
         disabled={submitting}
         grow={items.length === 0 && !hasTrailingContent}
         inputRef={bodyRef ?? bodyInputRef}
-        mentionSearchEnabled={mentionSearchEnabled}
         mentionCandidates={mentionCandidates}
         mentionSearchState={mentionSearchState}
         onBodyChange={onBodyChange}
@@ -700,7 +697,6 @@ export function MobileFullscreenComposerShellCandidate({
   contentWarningExpanded,
   fillContainer = false,
   items,
-  mentionSearchEnabled,
   mentionCandidates,
   mentionSearchState,
   onSelectionChange,
@@ -838,7 +834,6 @@ export function MobileFullscreenComposerShellCandidate({
         disabled={submitting}
         grow={!bodyUsesTrailingContentLayout}
         inputRef={bodyRef ?? bodyInputRef}
-        mentionSearchEnabled={mentionSearchEnabled}
         mentionCandidates={mentionCandidates}
         mentionSearchState={mentionSearchState}
         onBodyChange={onBodyChange}

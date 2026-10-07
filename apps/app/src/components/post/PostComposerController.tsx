@@ -159,7 +159,6 @@ export function PostComposerController({
   repostSourceId,
   ...props
 }: PostComposerControllerProps) {
-  const mentionSearchEnabled = useFeatureFlag('post-composer-mention-search');
   const environment = useRelayEnvironment();
   const environmentGenerationRef = useRelayEnvironmentGeneration();
   const environmentRef = useRef(environment);
@@ -190,7 +189,6 @@ export function PostComposerController({
       environmentGenerationRef={environmentGenerationRef}
       key={`${contextGenerationRef.current}:${environmentGenerationRef?.current ?? 0}`}
       globalProfileId={profile.id}
-      mentionSearchEnabled={mentionSearchEnabled}
       mentionCandidates={props.mentionCandidates}
       profileKey={profileKey}
       profiles={profiles}
@@ -202,7 +200,6 @@ type PostComposerContentsProps = Omit<PostComposerBaseProps, 'profile'> &
   PostComposerRelationshipProps & {
     contextGenerationRef: RefObject<number>;
     environmentGenerationRef: RefObject<number> | null;
-    mentionSearchEnabled: boolean;
     onExpand?: () => void;
     onRequestClose?: () => void;
     presentation?: 'mobile' | 'overlay' | 'rail';
@@ -223,7 +220,6 @@ function PostComposerContents({
   environmentGenerationRef,
   focusOnMount = false,
   initialContentWarning,
-  mentionSearchEnabled,
   onPostCreated,
   onRequestClose,
   onSubmittingChange,
@@ -238,6 +234,7 @@ function PostComposerContents({
   replyParentId,
   repostSourceId,
 }: PostComposerContentsProps) {
+  const mentionSearchEnabled = useFeatureFlag('post-composer-mention-search');
   const environment = useRelayEnvironment();
   const [selectedProfileKey, setSelectedProfileKey] = useState<PostComposerProfileRef | null>(null);
   const globalProfile = useFragment(PostComposerFragment, profileKey);
@@ -648,7 +645,6 @@ function PostComposerContents({
                   contentWarningExpanded,
                   expandControlRef,
                   items,
-                  mentionSearchEnabled,
                   mentionCandidates: currentMentionCandidates,
                   mentionSearchState,
                   onRetryMentionSearch:
