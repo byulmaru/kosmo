@@ -194,10 +194,8 @@ function notificationSession(
 ) {
   return {
     __typename: 'Session' as const,
-    accountId: 'notification-account',
     id,
     notifications: selectedProfile?.notifications ?? emptyNotificationConnection,
-    operationalOnly: false,
     selectedProfile,
     unreadNotificationCount:
       selectedProfile?.notifications.edges.filter(({ node }) => !node.readAt).length ?? 0,
@@ -334,7 +332,6 @@ const readMutationResponse = {
   markNotificationRead: {
     currentSession: {
       __typename: 'Session',
-      accountId: 'notification-account',
       id: `session-${contentProfile.id}`,
       unreadNotificationCount: 5,
     },
@@ -359,7 +356,6 @@ const replyReadMutationResponse = {
   markNotificationRead: {
     currentSession: {
       __typename: 'Session',
-      accountId: 'notification-account',
       id: `session-${contentProfile.id}`,
       unreadNotificationCount: 5,
     },
@@ -384,7 +380,6 @@ const mentionReadMutationResponse = {
   markNotificationRead: {
     currentSession: {
       __typename: 'Session',
-      accountId: 'notification-account',
       id: 'notification-session',
       unreadNotificationCount: 1,
     },
@@ -427,7 +422,6 @@ const operationalReadMutationResponse = {
   markNotificationRead: {
     currentSession: {
       __typename: 'Session',
-      accountId: 'notification-account',
       id: 'notification-session',
       unreadNotificationCount: 0,
     },
@@ -457,7 +451,6 @@ const repostReadMutationResponse = {
   markNotificationRead: {
     currentSession: {
       __typename: 'Session',
-      accountId: 'notification-account',
       id: `session-${contentProfile.id}`,
       unreadNotificationCount: 5,
     },
@@ -482,7 +475,6 @@ const readAllMutationResponse = {
   markNotificationRead: {
     currentSession: {
       __typename: 'Session',
-      accountId: 'notification-account',
       id: `session-${contentProfile.id}`,
       unreadNotificationCount: 0,
     },
@@ -900,9 +892,7 @@ export const ReplyContentAndProtectedActions: Story = {
         SessionProviderQuery: {
           data: {
             currentSession: {
-              accountId: 'notification-account',
               id: 'notification-session',
-              operationalOnly: false,
               selectedProfile: { id: 'notification-profile-content' },
             },
             me: { id: 'notification-account', name: 'Notification Story' },
@@ -1101,9 +1091,7 @@ export const SelectedProfileSwitch: Story = {
         SessionProviderQuery: {
           data: {
             currentSession: {
-              accountId: 'notification-account',
               id: 'notification-session',
-              operationalOnly: false,
               selectedProfile: { id: 'notification-profile-a' },
             },
             me: { id: 'notification-account', name: 'Notification Story' },
@@ -1229,9 +1217,7 @@ export const NoSelectedProfileScreen: Story = {
         SessionProviderQuery: {
           data: {
             currentSession: {
-              accountId: 'notification-account',
               id: 'notification-session',
-              operationalOnly: false,
               selectedProfile: null,
             },
             me: { id: 'notification-account', name: 'Notification Story' },
@@ -1270,9 +1256,7 @@ export const OperationalReadBeforeNavigation: Story = {
         SessionProviderQuery: {
           data: {
             currentSession: {
-              accountId: 'notification-account',
               id: 'notification-session',
-              operationalOnly: false,
               selectedProfile: null,
             },
             me: { id: 'notification-account', name: 'Notification Story' },

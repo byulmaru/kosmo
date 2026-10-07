@@ -45,9 +45,9 @@ export const visibleSessionNotificationWhere = ({
           visibleNotificationWhere({ ctx }),
         )
       : undefined;
-  const operationalNotifications = ctx.operationalSession
+  const operationalNotifications = ctx.session
     ? and(
-        eq(Notifications.recipientAccountId, ctx.operationalSession.accountId),
+        eq(Notifications.recipientAccountId, ctx.session.accountId),
         notificationSourceAvailabilityWhere(db, { includeRecipientAvailability: true }),
       )
     : undefined;

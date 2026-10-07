@@ -15,7 +15,7 @@ const mockModule = (specifier: string | URL, exports: object) =>
   } as unknown as Parameters<typeof mock.module>[1]);
 
 let platform: Platform = 'web';
-let sessionStatus: 'guest' | 'operational' | 'valid' = 'guest';
+let sessionStatus: 'guest' | 'valid' = 'guest';
 let renderer: ReactTestRenderer | null = null;
 let IndexScreen: ComponentType;
 const replace = mock.fn();
@@ -120,16 +120,6 @@ describe('session landing route', () => {
     assert.deepEqual(
       replace.mock.calls.map(({ arguments: args }) => args),
       [['/home']],
-    );
-  });
-
-  it('sends operational-only accounts to their notifications', async () => {
-    sessionStatus = 'operational';
-    await renderLoginScreen('web');
-
-    assert.deepEqual(
-      replace.mock.calls.map(({ arguments: args }) => args),
-      [['/notifications']],
     );
   });
 });

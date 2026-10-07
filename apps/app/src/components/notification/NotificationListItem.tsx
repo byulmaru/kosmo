@@ -43,7 +43,6 @@ const notificationListItemMarkReadMutation = graphql`
     markNotificationRead(input: { ids: $ids }) {
       currentSession {
         id
-        accountId
         unreadNotificationCount
       }
       notifications {

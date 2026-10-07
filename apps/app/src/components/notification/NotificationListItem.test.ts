@@ -46,7 +46,6 @@ function createEnvironment(typename: NotificationTypename = 'FollowNotification'
   source.set(sessionId, {
     __id: sessionId,
     __typename: 'Session',
-    accountId: 'notification-account',
     id: sessionId,
     unreadNotificationCount: 2,
   });
@@ -68,7 +67,6 @@ function commitReadPayload(
     markNotificationRead: {
       currentSession: {
         __typename: 'Session',
-        accountId: 'notification-account',
         id: sessionId,
         unreadNotificationCount: 1,
       },

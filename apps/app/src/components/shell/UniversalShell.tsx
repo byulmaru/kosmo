@@ -6,7 +6,6 @@ import {
   PanResponder,
   Platform,
   StyleSheet,
-  Text,
   useWindowDimensions,
   View,
 } from 'react-native';
@@ -20,14 +19,12 @@ import {
 } from '@/components/notification/NotificationReadAllContext';
 import { PageHeader } from '@/components/PageHeader';
 import { PostMediaViewerScreenFallbackProvider } from '@/components/post/PostMediaViewerHost';
-import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { getBottomTabBarContentHeight } from '@/components/ui/navigationChrome';
 import { RelayActorBoundary } from '@/relay/RelayActorProvider';
-import { useLogout } from '@/session/logout';
 import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
-import { spacing, textStyles } from '@/theme/tokens';
+import { spacing } from '@/theme/tokens';
 import { returnToSettingsParent } from '../settings/settingsNavigation';
 import { BottomTabBar } from './BottomTabBar';
 import { NavigationGuardProvider } from './NavigationGuardContext';
@@ -119,73 +116,6 @@ export function UniversalShell({ children }: { children?: ReactNode }) {
 }
 
 function UniversalShellContent({ children }: { children?: ReactNode }) {
-  const { status } = useSession();
-
-  return status === 'operational' ? (
-    <OperationalOnlyShell>{children}</OperationalOnlyShell>
-  ) : (
-    <UniversalShellActiveContent>{children}</UniversalShellActiveContent>
-  );
-}
-
-function OperationalOnlyShell({ children }: { children?: ReactNode }) {
-  const theme = useTheme();
-  const insets = useSafeAreaInsets();
-  const { error, logout, pending } = useLogout();
-
-  return (
-    <View
-      style={[styles.operationalRoot, { backgroundColor: theme.backgroundCanvas }]}
-      testID="operational-only-shell"
-    >
-      <View
-        style={[
-          styles.operationalHeader,
-          {
-            borderColor: theme.borderSubtle,
-            paddingTop: insets.top,
-            paddingLeft: insets.left + spacing.lg,
-            paddingRight: insets.right + spacing.lg,
-          },
-        ]}
-      >
-        <Text
-          accessibilityRole="header"
-          style={[textStyles.uiLabelL, { color: theme.foregroundPrimary }]}
-        >
-          알림
-        </Text>
-        <View style={styles.operationalActions}>
-          <RelayActorBoundary>
-            <NotificationReadAllAction />
-          </RelayActorBoundary>
-          <Button
-            accessibilityState={{ busy: pending }}
-            disabled={pending}
-            onPress={logout}
-            size="compact"
-            tone="secondary"
-          >
-            로그아웃
-          </Button>
-        </View>
-      </View>
-      {error ? (
-        <Text
-          accessibilityRole="alert"
-          style={[styles.operationalError, { color: theme.foregroundPrimary }]}
-        >
-          {error}
-        </Text>
-      ) : null}
-      <View style={styles.operationalRoute}>
-        <RelayActorBoundary>{children}</RelayActorBoundary>
-      </View>
-    </View>
-  );
-}
-
-function UniversalShellActiveContent({ children }: { children?: ReactNode }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
@@ -605,18 +535,6 @@ function UniversalShellActiveContent({ children }: { children?: ReactNode }) {
 
 const styles = StyleSheet.create({
   root: { flexDirection: 'row', justifyContent: 'center', minHeight: '100%' },
-  operationalRoot: { flex: 1, minHeight: '100%' },
-  operationalHeader: {
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    minHeight: 64,
-    paddingBottom: spacing.sm,
-  },
-  operationalActions: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm },
-  operationalError: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
-  operationalRoute: { flex: 1, minHeight: 0 },
   backgroundBlocked: { pointerEvents: 'none' },
   nativeRoot: { flex: 1 },
   webRoot: { flexGrow: 1 },

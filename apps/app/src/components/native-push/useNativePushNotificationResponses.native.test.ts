@@ -9,7 +9,7 @@ import type { ReactTestRenderer } from 'react-test-renderer';
 let session: { accountId: string; selectedProfileId: string | null; status: string } = {
   accountId: 'account-1',
   selectedProfileId: 'profile-1',
-  status: 'operational',
+  status: 'valid',
 };
 let responseListener: ((response: unknown) => void) | null = null;
 const router = { replace: mock.fn() };
@@ -65,7 +65,7 @@ afterEach(async () => {
     await act(async () => renderer?.unmount());
     renderer = null;
   }
-  session = { accountId: 'account-1', selectedProfileId: 'profile-1', status: 'operational' };
+  session = { accountId: 'account-1', selectedProfileId: 'profile-1', status: 'valid' };
   responseListener = null;
   router.replace.mock.resetCalls();
   openURL.mock.resetCalls();
@@ -76,7 +76,7 @@ afterEach(async () => {
   mock.restoreAll();
 });
 
-describe('operational native push responses', () => {
+describe('native push responses', () => {
   it('opens any internal app route without selecting a Profile or marking the notification read', async () => {
     await renderHook();
 
@@ -149,24 +149,6 @@ describe('operational native push responses', () => {
     assert.deepEqual(
       router.replace.mock.calls.map(({ arguments: args }) => args),
       [['/notifications?source=notice']],
-    );
-    assert.equal(resetActor.mock.callCount(), 0);
-    assert.equal(commitMutation.mock.callCount(), 0);
-  });
-
-  it('falls back to notifications for a Profile push received by a suspended-only session', async () => {
-    session = { accountId: 'account-1', selectedProfileId: null, status: 'operational' };
-    await renderHook();
-
-    await handle({
-      href: '/@follower/post-1',
-      notificationId: 'profile-notification',
-      recipientProfileId: 'profile-1',
-    });
-
-    assert.deepEqual(
-      router.replace.mock.calls.map(({ arguments: args }) => args),
-      [['/notifications']],
     );
     assert.equal(resetActor.mock.callCount(), 0);
     assert.equal(commitMutation.mock.callCount(), 0);

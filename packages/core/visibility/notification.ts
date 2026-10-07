@@ -1,4 +1,4 @@
-import { and, eq, exists, inArray, isNotNull, isNull, not, or, sql } from 'drizzle-orm';
+import { and, eq, exists, isNotNull, isNull, not, or, sql } from 'drizzle-orm';
 import { alias, unionAll } from 'drizzle-orm/pg-core';
 import {
   Accounts,
@@ -635,10 +635,7 @@ export const notificationSourceAvailabilityWhere = (
               .where(
                 and(
                   eq(NotificationRecipientAccounts.id, Notifications.recipientAccountId),
-                  inArray(NotificationRecipientAccounts.state, [
-                    AccountState.ACTIVE,
-                    AccountState.SUSPENDED,
-                  ]),
+                  eq(NotificationRecipientAccounts.state, AccountState.ACTIVE),
                 ),
               ),
           )

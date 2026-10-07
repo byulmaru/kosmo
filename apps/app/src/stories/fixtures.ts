@@ -252,9 +252,7 @@ export function shellQuery({
 } = {}) {
   return {
     currentSession: {
-      accountId: 'account-story',
       id: 'session-story',
-      operationalOnly: false,
       selectedProfile,
       unreadNotificationCount: selectedProfile?.unreadNotificationCount ?? 0,
     },

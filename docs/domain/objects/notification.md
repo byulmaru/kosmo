@@ -71,7 +71,7 @@ Recipient Profile은 Related Post의 direct Repost Source Author Profile이다. 
 | Notification 생성                          | 시스템    | Notification                  | Type, Recipient, Type별 데이터와 필요한 원인 객체 | `System.NotificationSource`                | Type별 필수 데이터·관계가 유효하고 Recipient 조회 정책을 통과하며 아래 억제 정책에 걸리지 않는다                                                            | 입력 Notification Type과 Read State=Unread인 Notification이 생성된다                                          |
 | 상호작용 Notification 정리                 | 시스템    | Notification                  | 정리 대상 Notification                            | `System.NotificationSource`                | 원인 객체가 있는 Type의 필수 관계 결손·원인 Recipient 불일치·Recipient 기준 Related Post/Profile 비가용 (Recipient 자체의 복구 가능한 비활성화·정지는 제외) | 시점과 성공을 보장하지 않고 Notification 제거를 Best Effort로 시도한다                                        |
 | Profile Notification 지정 읽음 처리        | Account   | Notification 목록             | Notification ID 목록                              | `Account.Active`, `Notification.Recipient` | Type이 Operational이 아닌 입력 항목 중 요청 Account가 현재 조회할 수 있는 Notification이다                                                                  | 처리 가능한 입력 항목은 Read가 되고 읽음 시각이 최초 기록된다. 이미 Read이면 상태와 읽음 시각을 바꾸지 않는다 |
-| Account Operational Notification 읽음 처리 | Account   | Operational Notification 목록 | Notification ID 목록                              | `Notification.Recipient`                   | Recipient Account가 ACTIVE 또는 SUSPENDED이고 요청 Account의 Operational Notification이다                                                                   | 처리 가능한 입력 항목은 Read가 되고 최초 읽음 시각을 보존한다                                                 |
+| Account Operational Notification 읽음 처리 | Account   | Operational Notification 목록 | Notification ID 목록                              | `Account.Active`, `Notification.Recipient` | 요청 Account의 Operational Notification이다                                                                                                                 | 처리 가능한 입력 항목은 Read가 되고 최초 읽음 시각을 보존한다                                                 |
 
 ### Profile Notification 지정 읽음 처리
 
@@ -91,15 +91,11 @@ Recipient Profile은 Related Post의 direct Repost Source Author Profile이다. 
 - 활성 Session의 Recipient Account가 ACTIVE이면 `currentSession.notifications`와
   `currentSession.unreadNotificationCount`는 현재 선택된 Profile의 조회 가능한 Profile Notification과 해당
   Account의 Operational Notification을 함께 포함한다. Profile의 기존 `notifications`와
-  `unreadNotificationCount`는 Profile Notification만 제공한다.
-- Recipient Account가 SUSPENDED이면 활성 Session은 자신의 Operational Notification과 그 읽지 않은 수만
-  조회하고 해당 항목을 읽음 처리할 수 있다. 이 Session은 `me`, selected Profile, Account/Profile의 일반 정보와
-  사회 기능을 이용할 수 없다. DISABLED Account의 Session은 현재 Session으로 인증되지 않으며 Operational
-  Notification을 조회하거나 읽음 처리할 수 없다.
+  `unreadNotificationCount`는 Profile Notification만 제공한다. 선택된 Profile이 없으면 Profile Notification은
+  포함하지 않는다.
 - `markNotificationRead`는 요청에 지정된 ID 중 각 권한 범위에서 현재 조회 가능한 항목만 읽음 처리한다.
-  ACTIVE Account는 기존 Profile Notification과 자신의 Operational Notification을 지정할 수 있고, SUSPENDED
-  Account는 자신의 Operational Notification만 지정할 수 있다. 존재하지 않거나 다른 Recipient에게 속하거나
-  현재 조회할 수 없는 ID는 조용히 제외한다.
+  ACTIVE Account는 기존 Profile Notification과 자신의 Operational Notification을 지정할 수 있다. 존재하지 않거나
+  다른 Recipient에게 속하거나 현재 조회할 수 없는 ID는 조용히 제외한다.
 - 빈 ID 목록, 중복 ID와 이미 Read인 항목은 성공한 멱등 처리다. 최초 읽음 시각을 보존하며, 입력에 없는 항목을
   요청 중 새로 생성된 알림까지 확장해 읽음 처리하지 않는다.
 - Operational Notification 목록에서 항목을 활성화하면 이동을 기다리게 하지 않고 Best Effort Read를 시작한다.
@@ -110,7 +106,6 @@ Recipient Profile은 Related Post의 direct Repost Source Author Profile이다. 
 - 각 수동 발송은 고유 UUID `sendId`로 식별한다. 최초 수신자 집합 capture가 성공한 시점에 ACTIVE인 Account를
   대상으로 고정하며, 그 뒤 가입하거나 ACTIVE가 된 Account를 같은 발송의 재시도에 추가하지 않는다.
 - Operational Notification Push는 최초 capture 뒤에도 전달 시점에 Account State가 ACTIVE인 설치만 대상으로 한다.
-  SUSPENDED Account는 자신의 Operational Notification을 조회할 수 있지만 Push는 받지 않는다.
 - 같은 `sendId`와 제목·본문·링크 데이터로 재시도해도 기존 Notification 행, 데이터와 `readAt`을 바꾸지 않는다.
   같은 `sendId`를 다른 제목·본문·링크 데이터와 함께 재사용하면 발송을 실패 처리한다.
 

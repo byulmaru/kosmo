@@ -80,7 +80,7 @@ export function useNativePushNotificationResponses() {
       }
 
       const currentSession = sessionRef.current;
-      if (currentSession.status !== 'valid' && currentSession.status !== 'operational') {
+      if (currentSession.status !== 'valid') {
         markResponseHandled(response);
         router.replace('/');
         return;
@@ -109,12 +109,6 @@ export function useNativePushNotificationResponses() {
             fallbackToNotifications();
           }
         }
-        return;
-      }
-
-      if (currentSession.status === 'operational') {
-        markResponseHandled(response);
-        fallbackToNotifications();
         return;
       }
 

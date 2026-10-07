@@ -1,8 +1,13 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "cf7af5d6-63e3-45ef-b10e-91ad074f86e6",
-  "prevIds": ["81d07611-06ac-4b7d-b4a9-3f7fe66e9b2e"],
+  "id": "adf70b3b-ecb0-43ee-90a7-0440bbdec9ed",
+  "prevIds": [
+    "5603290f-50cf-4cf5-87b0-88e6222a2e72",
+    "d5e9d1d9-5428-47fd-b9f7-96bf4b565784",
+    "fd996bcf-7929-436a-8925-254faf1d348a",
+    "e004e9e1-eec8-4470-b865-b653ea194082"
+  ],
   "ddl": [
     {
       "values": ["OWNER", "MEMBER"],

@@ -181,9 +181,7 @@ function StoryProviders({
         data: {
           currentSession: {
             __typename: 'Session',
-            accountId: 'account-story',
             id: 'session-story',
-            operationalOnly: false,
             selectedProfile: {
               __typename: 'Profile',
               id: viewer === 'owner' ? storyPost.profile.id : 'profile-visitor',

@@ -32,9 +32,9 @@ Session credential의 원문은 Session의 조회 가능한 속성이 아니다.
 
 ## 관계
 
-| 관계    | 대상                    | 방향               | cardinality | 존재 조건 | 조회 조건                       | 조회 권한                           |
-| ------- | ----------------------- | ------------------ | ----------- | --------- | ------------------------------- | ----------------------------------- |
-| Account | [Account](./account.md) | Session -> Account | N -> 1      | 항상      | 현재 Session의 Account가 Active | `Session.Self` AND `Account.Active` |
+| 관계    | 대상                    | 방향               | cardinality | 존재 조건 | 조회 조건              | 조회 권한      |
+| ------- | ----------------------- | ------------------ | ----------- | --------- | ---------------------- | -------------- |
+| Account | [Account](./account.md) | Session -> Account | N -> 1      | 항상      | 현재 Session 내부 조회 | `Session.Self` |
 
 ## 행동
 
@@ -73,7 +73,6 @@ caller-owned credential과 해당 Session에 종속된 상태를 제거하고 �
 - 현재 Session 조회는 요청 credential로 식별된 Active Session만 반환한다.
 - credential이 Revoked 또는 Expired Session을 가리키면 현재 Session을 반환하지 않는다.
 - 현재 계약은 다른 Session의 목록과 조회를 제공하지 않는다.
-- Suspended Account의 Active Session은 최소한의 현재 Session identity, 자기 Operational notification 접근과 현재 Session 폐기에 사용할 수 있다. 이 접근은 `Session.account` 관계 조회 권한을 부여하지 않으며, 관계 조회에는 `Session.Self`와 `Account.Active`가 모두 필요하다.
 
 ## 확정 용어
 

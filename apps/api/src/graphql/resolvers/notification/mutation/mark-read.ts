@@ -7,7 +7,7 @@ import { visibleSessionNotificationWhere } from '../access/visibility';
 import { Notification, notificationKindForNodeType } from '../ref';
 
 builder.mutationField('markNotificationRead', (t) =>
-  t.withAuth({ operationalSession: true }).fieldWithInput({
+  t.withAuth({ login: true }).fieldWithInput({
     type: builder.simpleObject('MarkNotificationReadPayload', {
       fields: (field) => ({
         currentSession: field.field({ type: Session }),
@@ -26,7 +26,7 @@ builder.mutationField('markNotificationRead', (t) =>
 
       if (candidates.length === 0) {
         return {
-          currentSession: ctx.operationalSession.id,
+          currentSession: ctx.session.id,
           notifications: [],
           recipientProfiles: [],
         };
@@ -48,7 +48,7 @@ builder.mutationField('markNotificationRead', (t) =>
         .returning(getColumns(Notifications));
 
       return {
-        currentSession: ctx.operationalSession.id,
+        currentSession: ctx.session.id,
         notifications,
         recipientProfiles: [
           ...new Set(

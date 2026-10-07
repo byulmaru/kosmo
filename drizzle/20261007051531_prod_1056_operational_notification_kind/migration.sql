@@ -1,1 +1,0 @@
-ALTER TYPE "notification_kind" ADD VALUE 'OPERATIONAL' BEFORE 'QUOTE';

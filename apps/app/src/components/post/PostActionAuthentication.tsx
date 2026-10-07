@@ -44,7 +44,7 @@ export function PostActionAuthenticationProvider({ children }: PropsWithChildren
     () => ({
       resolve,
       selectedProfileId: session.selectedProfileId,
-      status: session.status === 'operational' ? 'error' : session.status,
+      status: session.status,
     }),
     [resolve, session.selectedProfileId, session.status],
   );

@@ -17,7 +17,6 @@ test('silently excludes a non-Notification global ID', async () => {
       ids: [encodeGlobalId('Profile', '00000000-0000-8006-8000-000000000001')],
     },
     contextValue: {
-      operationalSession: { accountId: 'account', accountState: 'ACTIVE', id: 'session' },
       session: { accountId: 'account', id: 'session', profile: null },
     },
   });

@@ -24,11 +24,7 @@ let app: Hono<Env>;
 
 type GraphQLResult<T> = {
   data?: T;
-  errors?: Array<{
-    extensions?: { code?: string };
-    message: string;
-    path?: Array<string | number>;
-  }>;
+  errors?: Array<{ extensions?: { code?: string }; message: string }>;
 };
 
 before(async () => {
@@ -125,82 +121,47 @@ test('Active·Suspended current Session을 폐기하고 재사용 인증을 거�
   }
 });
 
-test('Suspended Account는 Notification 전용 Session으로 식별하고 Disabled는 Guest로 남는다', async () => {
+test('현재 Session과 일반 Account 조회는 Active Account만 허용한다', async () => {
   const active = await createSession();
   const suspended = await createSession({ accountState: AccountState.SUSPENDED });
   const disabled = await createSession({ accountState: AccountState.DISABLED });
 
   try {
     const query = `query {
-      currentSession { id accountId operationalOnly selectedProfile { id } }
+      currentSession { id account { id name } selectedProfile { id } }
       me { id }
     }`;
-    const [activeResult, suspendedResult, disabledResult] = await Promise.all([
+    const [activeResult, suspendedResult, disabledResult, anonymousResult] = await Promise.all([
       request<{
         currentSession: {
-          accountId: string;
+          account: { id: string; name: string };
           id: string;
-          operationalOnly: boolean;
           selectedProfile: null;
         } | null;
         me: { id: string } | null;
       }>(query, active.session.token),
-      request<{
-        currentSession: {
-          accountId: string;
-          id: string;
-          operationalOnly: boolean;
-          selectedProfile: null;
-        } | null;
-        me: { id: string } | null;
-      }>(query, suspended.session.token),
+      request<{ currentSession: null; me: null }>(query, suspended.session.token),
       request<{ currentSession: null; me: null }>(query, disabled.session.token),
-    ]);
-    const accountQuery = 'query { currentSession { account { id name } } }';
-    const [activeAccountResult, suspendedAccountResult] = await Promise.all([
-      request<{
-        currentSession: { account: { id: string; name: string } } | null;
-      }>(accountQuery, active.session.token),
-      request<{
-        currentSession: { account: { id: string; name: string } } | null;
-      }>(accountQuery, suspended.session.token),
+      request<{ currentSession: null; me: null }>(query),
     ]);
 
     assert.equal(activeResult.errors, undefined, JSON.stringify(activeResult.errors));
     assert.deepEqual(activeResult.data, {
       currentSession: {
-        accountId: encodeGlobalId('Account', active.account.id),
+        account: {
+          id: encodeGlobalId('Account', active.account.id),
+          name: active.account.displayName,
+        },
         id: encodeGlobalId('Session', active.session.id),
-        operationalOnly: false,
         selectedProfile: null,
       },
       me: { id: encodeGlobalId('Account', active.account.id) },
     });
 
     assert.equal(suspendedResult.errors, undefined, JSON.stringify(suspendedResult.errors));
-    assert.deepEqual(suspendedResult.data, {
-      currentSession: {
-        accountId: encodeGlobalId('Account', suspended.account.id),
-        id: encodeGlobalId('Session', suspended.session.id),
-        operationalOnly: true,
-        selectedProfile: null,
-      },
-      me: null,
-    });
-
-    assert.equal(activeAccountResult.errors, undefined, JSON.stringify(activeAccountResult.errors));
-    assert.deepEqual(activeAccountResult.data, {
-      currentSession: {
-        account: {
-          id: encodeGlobalId('Account', active.account.id),
-          name: active.account.displayName,
-        },
-      },
-    });
-
-    assert.deepEqual(suspendedAccountResult.data, { currentSession: null });
-    assert.equal(suspendedAccountResult.errors?.length, 1);
-    assert.deepEqual(suspendedAccountResult.errors?.[0]?.path, ['currentSession', 'account']);
+    assert.deepEqual(suspendedResult.data, { currentSession: null, me: null });
+    assert.deepEqual(disabledResult, { data: { currentSession: null, me: null } });
+    assert.deepEqual(anonymousResult, { data: { currentSession: null, me: null } });
 
     const suspendedProfileMutation = await request<unknown>(
       'mutation { createProfile(input: { handle: "suspendedprofile" }) { profile { id } } }',
@@ -208,8 +169,6 @@ test('Suspended Account는 Notification 전용 Session으로 식별하고 Disabl
     );
     assert.equal(suspendedProfileMutation.data, null);
     assert.equal(suspendedProfileMutation.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
-
-    assert.deepEqual(disabledResult, { data: { currentSession: null, me: null } });
   } finally {
     await cleanup([active.account.id, suspended.account.id, disabled.account.id]);
   }

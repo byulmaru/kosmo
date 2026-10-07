@@ -50,10 +50,9 @@ export function FeatureFlagsProvider({ children }: PropsWithChildren) {
 
   const isEnabled = useCallback(
     (key: string) =>
-      status !== 'operational' &&
-      (isDevChannel ||
-        (evaluation?.accountId === accountId && evaluation.client.getBooleanValue(key, false))),
-    [accountId, evaluation, isDevChannel, status],
+      isDevChannel ||
+      (evaluation?.accountId === accountId && evaluation.client.getBooleanValue(key, false)),
+    [accountId, evaluation, isDevChannel],
   );
 
   return <FeatureFlagsContext.Provider value={isEnabled}>{children}</FeatureFlagsContext.Provider>;

@@ -11,22 +11,15 @@ import WithInputPlugin from '@pothos/plugin-with-input';
 import * as R from 'remeda';
 import type { AccountProfileRole } from '@kosmo/core/enums';
 import type { PostContentDocumentV1 } from '@kosmo/core/post-content';
-import type {
-  OperationalSessionContext,
-  SessionContext,
-  SessionWithProfileContext,
-  UserContext,
-} from '@/context';
+import type { SessionContext, SessionWithProfileContext, UserContext } from '@/context';
 
 export const builder = new SchemaBuilder<{
   AuthContexts: {
     login: UserContext & SessionContext;
-    operationalSession: UserContext & OperationalSessionContext;
     profileRole: UserContext & SessionWithProfileContext;
   };
   AuthScopes: {
     login: boolean;
-    operationalSession: boolean;
     profileRole: AccountProfileRole;
   };
   Context: UserContext;
@@ -72,7 +65,6 @@ export const builder = new SchemaBuilder<{
   scopeAuth: {
     authScopes: async (ctx) => ({
       login: !!ctx.session,
-      operationalSession: !!ctx.operationalSession,
       profileRole: (minimumRole) => {
         const currentProfile = ctx.session?.profile;
         if (!currentProfile) {

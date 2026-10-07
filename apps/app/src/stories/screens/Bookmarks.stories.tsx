@@ -669,9 +669,7 @@ export const SelectedProfileRoute: Story = {
         SessionProviderQuery: {
           data: {
             currentSession: {
-              accountId: 'bookmark-account',
               id: 'bookmark-session',
-              operationalOnly: false,
               selectedProfile: bookmarkOwner,
             },
             me: { id: 'bookmark-account', name: 'bookmark-account' },
@@ -701,9 +699,7 @@ export const NoSelectedProfileSkipsBookmarkQuery: Story = {
         SessionProviderQuery: {
           data: {
             currentSession: {
-              accountId: 'bookmark-account',
               id: 'bookmark-session',
-              operationalOnly: false,
               selectedProfile: null,
             },
             me: { id: 'bookmark-account', name: 'bookmark-account' },
@@ -762,9 +758,7 @@ export const InitialRouteErrorAndRetry: Story = {
         SessionProviderQuery: {
           data: {
             currentSession: {
-              accountId: 'bookmark-account',
               id: 'bookmark-session',
-              operationalOnly: false,
               selectedProfile: bookmarkOwner,
             },
             me: { id: 'bookmark-account', name: 'bookmark-account' },
@@ -786,9 +780,7 @@ export const InitialRouteErrorAndRetry: Story = {
 
 function currentSessionForActor(selectedProfileId: string | null) {
   return {
-    accountId: 'bookmark-account',
     id: 'bookmark-actor-reset-session',
-    operationalOnly: false,
     selectedProfile:
       selectedProfileId === bookmarkOtherOwner.id ? bookmarkOtherOwner : bookmarkOwner,
   };

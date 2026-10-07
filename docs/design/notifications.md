@@ -58,8 +58,7 @@ composer control은 자체 동작만 수행한다. 모두 읽음, unread indicat
 ## Account Operational Notification 표시 · PROD-1056
 
 - ACTIVE Account의 Session 목록은 현재 선택 Profile의 조회 가능한 알림과 Account의 Operational 알림을 함께
-  표시한다. 기존 Profile별 알림 목록은 Profile 알림만 유지한다. SUSPENDED Account는 자신의 Operational 알림을
-  보는 알림 전용 화면과 로그아웃을 사용할 수 있으며, Profile·일반 소셜 기능은 제공하지 않는다.
+  표시한다. 기존 Profile별 알림 목록은 Profile 알림만 유지한다.
 - Operational 알림은 actor 없는 전체 폭 링크 행으로 표시한다. 저장된 제목, 제공된 경우의 본문, 시각을 보여주며
   읽지 않은 행에는 기존의 subtle surface와 rail을 사용한다.
 - 링크의 접근 가능한 이름은 제목, 선택적 본문, 시각, 읽지 않은 경우 `읽지 않은 알림`, `알림 열기` 순으로

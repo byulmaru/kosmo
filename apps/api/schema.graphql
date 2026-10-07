@@ -700,10 +700,8 @@ type SelectProfilePayload {
 
 type Session implements Node {
   account: Account!
-  accountId: ID!
   id: ID!
   notifications(after: String, before: String, first: Int, last: Int): NotificationConnection!
-  operationalOnly: Boolean!
   selectedProfile: Profile
   unreadNotificationCount: Int!
 }

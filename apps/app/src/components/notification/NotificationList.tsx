@@ -18,7 +18,6 @@ import { PostComposerCoordinatorProvider } from '@/components/post/PostComposerC
 import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHost';
 import { getWebMobileShellHeader } from '@/components/shell/shellLayout';
 import { Skeleton, StateView } from '@/components/ui/StateView';
-import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import {
@@ -252,7 +251,6 @@ export function NotificationListState({
 }
 
 function NotificationPageHeader() {
-  const { status } = useSession();
   const pathname = usePathname();
   const routeSegments = useSegments();
   const { width } = useWindowDimensions();
@@ -260,7 +258,7 @@ function NotificationPageHeader() {
     getWebMobileShellHeader(Platform.OS === 'web', width, pathname, routeSegments)?.title ===
     '알림';
 
-  return status === 'operational' || shellOwnsHeader ? null : (
+  return shellOwnsHeader ? null : (
     <PageHeader title="알림" trailing={<NotificationReadAllAction />} />
   );
 }

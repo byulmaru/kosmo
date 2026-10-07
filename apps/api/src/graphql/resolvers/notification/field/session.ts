@@ -14,7 +14,7 @@ import {
 import type { NotificationRow } from '../ref';
 
 builder.objectField(Session, 'notifications', (t) =>
-  t.withAuth({ operationalSession: true }).connection(
+  t.withAuth({ login: true }).connection(
     {
       type: Notification,
       resolve: async (_, args, ctx) =>
@@ -54,7 +54,7 @@ builder.objectField(Session, 'notifications', (t) =>
 );
 
 builder.objectField(Session, 'unreadNotificationCount', (t) =>
-  t.withAuth({ operationalSession: true }).field({
+  t.withAuth({ login: true }).field({
     type: 'Int',
     resolve: async (_, __, ctx) => {
       const [result] = await db

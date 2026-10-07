@@ -1,3 +1,4 @@
+ALTER TYPE "notification_kind" ADD VALUE 'OPERATIONAL' BEFORE 'QUOTE';--> statement-breakpoint
 ALTER TABLE "notification" ADD COLUMN "recipient_account_id" uuid;--> statement-breakpoint
 ALTER TABLE "notification" ALTER COLUMN "recipient_profile_id" DROP NOT NULL;--> statement-breakpoint
 ALTER TABLE "notification" ADD CONSTRAINT "notification_recipient_account_id_kind_source_id_unique" UNIQUE("recipient_account_id","kind","source_id");--> statement-breakpoint
