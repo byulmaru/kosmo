@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { db, Instances } from '@kosmo/core/db';
 import { InstanceKind, InstanceState } from '@kosmo/core/enums';
+import { ProfilePairBlockedError } from '@kosmo/core/services';
+import { temporalClient } from '@kosmo/core/temporal/client';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
 import {
   followingAccountsImportWorkflow,
@@ -15,7 +17,11 @@ import {
 } from '@temporalio/client';
 import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
-import { lookupRemoteActorUriActivity } from './activities/remote-profile-materialization';
+import { followImportedProfileActivity } from './activities/following-accounts-import';
+import {
+  lookupRemoteActorUriActivity,
+  materializeRemoteProfileActorActivity,
+} from './activities/remote-profile-materialization';
 import type { FollowingAccountsImportInput } from '@kosmo/core/temporal/workflows';
 import type * as activities from './activities';
 
@@ -24,7 +30,7 @@ const followerProfileId = '00000000-0000-8000-8000-000000000101';
 const otherFollowerProfileId = '00000000-0000-8000-8000-000000000103';
 const remoteProfileId = '00000000-0000-8000-8000-000000000102';
 
-test('Remote Profile lookup Activity classifies fetch errors and propagates database errors', async (t) => {
+test('Remote Profile Activities classify fetch errors, reject missing origins, and propagate database errors', async (t) => {
   const origin = 'https://worker-local.example';
   const previousOrigin = process.env.PUBLIC_ORIGIN;
   process.env.PUBLIC_ORIGIN = origin;
@@ -92,10 +98,49 @@ test('Remote Profile lookup Activity classifies fetch errors and propagates data
     },
   );
 
+  await assert.rejects(
+    materializeRemoteProfileActorActivity({
+      actorUri: 'https://missing-target.example/actors/alice',
+      profileId: followerProfileId,
+    }),
+    (error: unknown) => {
+      assert.ok(error instanceof ApplicationFailure);
+      assert.equal(error.type, 'RemoteActorMaterializationError');
+      assert.equal(error.nonRetryable, true);
+      assert.deepEqual(error.details, ['initiator-origin']);
+      return true;
+    },
+  );
+
   state.databaseError = new Error('Database unavailable');
   await assert.rejects(
     lookupRemoteActorUriActivity({ domain: 'database-error.example', handle: 'alice' }),
     (error: unknown) => error === state.databaseError,
+  );
+});
+
+test('Following Accounts Import Activity wraps blocked pairs as non-retryable failures', async (t) => {
+  t.mock.method(temporalClient.workflow, 'executeUpdateWithStart', async () => ({
+    ok: false as const,
+    error: {
+      code: 'NOT_FOUND' as const,
+      reason: 'PROFILE_PAIR_BLOCKED' as const,
+      message: 'Profile pair is blocked',
+    },
+  }));
+
+  await assert.rejects(
+    followImportedProfileActivity({
+      followerProfileId,
+      followeeProfileId: remoteProfileId,
+    }),
+    (error: unknown) => {
+      assert.ok(error instanceof ApplicationFailure);
+      assert.equal(error.type, 'ProfilePairBlockedError');
+      assert.equal(error.nonRetryable, true);
+      assert.ok(error.cause instanceof ProfilePairBlockedError);
+      return true;
+    },
   );
 });
 
