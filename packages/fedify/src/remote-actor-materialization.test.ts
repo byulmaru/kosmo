@@ -1135,6 +1135,48 @@ describe('remote actor materialization', () => {
     assert.deepEqual(await readPins(otherProfile.id), [[0, otherPin!.id]]);
   });
 
+  test('keeps the actor projection committed when Featured Workflow start fails', async () => {
+    const stored = await createStoredRemoteActor();
+    const observedAt = Temporal.Instant.from('2026-07-12T00:00:00Z');
+    const featuredUri = new URL(remoteActorUri.href + '/featured');
+    const actorJsonLd = await createActor({
+      featured: featuredUri,
+      name: 'Committed Alice',
+    }).toJsonLd({ format: 'expand' });
+    const startError = new Error('Temporal unavailable');
+    const start = mock.method(temporalClient.workflow, 'start', async () => {
+      throw startError;
+    });
+    const errorLog = mock.method(console, 'error', () => undefined);
+
+    const result = await applyRemoteProfileActorDocument({
+      actorUri: remoteActorUri,
+      actorJsonLd,
+      observedAt,
+    });
+
+    const persisted = await db
+      .select({ actor: ActivityPubActors, profile: Profiles })
+      .from(ActivityPubActors)
+      .innerJoin(Profiles, eq(Profiles.id, ActivityPubActors.profileId))
+      .where(eq(ActivityPubActors.uri, remoteActorUri.href))
+      .limit(1)
+      .then(firstOrThrow);
+    assert.equal(start.mock.callCount(), 1);
+    assert.equal(result.id, stored.profile.id);
+    assert.equal(persisted.profile.displayName, 'Committed Alice');
+    assert.equal(persisted.actor.lastFetchedAt?.toString(), observedAt.toString());
+    assert.equal(errorLog.mock.callCount(), 1);
+    assert.equal(
+      errorLog.mock.calls[0]?.arguments[0],
+      'Remote Profile Featured Workflow start failed',
+    );
+    assert.equal(
+      (errorLog.mock.calls[0]?.arguments[1] as { error?: unknown } | undefined)?.error,
+      startError,
+    );
+  });
+
   test('rejects handle collisions when refreshing an existing actor URI', async () => {
     const stored = await createStoredRemoteActor();
     await createProfile({ handle: 'bob', instanceId: stored.instance.id });

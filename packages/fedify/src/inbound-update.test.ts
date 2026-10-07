@@ -14,7 +14,6 @@ import {
 } from '@kosmo/core/enums';
 import { temporalClient } from '@kosmo/core/temporal/client';
 import { executeProfileFollowPairTransition } from '@kosmo/core/temporal/follow-command';
-import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
 import { remoteProfileUpdateWorkflow } from '@kosmo/core/temporal/workflows';
 import { and, eq, inArray } from 'drizzle-orm';
 import { setInboundObservabilityReporter } from './inbound-observability';
@@ -188,41 +187,9 @@ describe('inbound actor Update', () => {
     assert.equal(await db.$count(Media, eq(Media.profileId, fixture.profile.id)), 2);
   });
 
-  test('verified Actor Update schedules Featured sync and clears pins when Featured is removed', async () => {
+  test('verified Actor Update clears remote pins when Featured is removed', async () => {
     const fixture = await createRemoteActor(ProfileFollowPolicy.OPEN);
-    const start = mock.method(temporalClient.workflow, 'start', async () => undefined as never);
-    const receivedAt = Temporal.Instant.from('2026-07-31T05:00:00Z');
-
-    await handleInboundUpdate(
-      createContext(),
-      new Update({
-        actor: remoteActorUri,
-        object: createActor({ featured: new URL(`${remoteActorUri.href}/featured`) }),
-      }),
-      receivedAt,
-    );
-
-    assert.equal(start.mock.callCount(), 1);
-    assert.equal(start.mock.calls[0]?.arguments[0], 'remoteProfileFeaturedWorkflow');
-    assert.equal(start.mock.calls[0]?.arguments[1]?.taskQueue, KOSMO_TASK_QUEUE);
-    assert.deepEqual(start.mock.calls[0]?.arguments[1]?.args, [
-      {
-        actorUri: remoteActorUri.href,
-        featuredUri: `${remoteActorUri.href}/featured`,
-        profileId: fixture.profile.id,
-      },
-    ]);
-
-    await handleInboundUpdate(
-      createContext(),
-      new Update({
-        actor: remoteActorUri,
-        object: createActor({ featured: new URL(`${remoteActorUri.href}/featured`) }),
-      }),
-      receivedAt,
-    );
-    assert.equal(start.mock.callCount(), 1);
-
+    const updatedAt = Temporal.Instant.from('2026-07-31T05:00:01Z');
     const post = await db
       .insert(Posts)
       .values({
@@ -244,7 +211,7 @@ describe('inbound actor Update', () => {
         actor: remoteActorUri,
         object: createActor({ featured: null }),
       }),
-      receivedAt.add({ seconds: 1 }),
+      updatedAt,
     );
 
     assert.deepEqual(
@@ -254,34 +221,8 @@ describe('inbound actor Update', () => {
         .where(eq(ProfilePinnedPosts.profileId, fixture.profile.id)),
       [],
     );
-    assert.equal(start.mock.callCount(), 1);
-  });
-
-  test('Featured Workflow start failure does not roll back the verified Actor Update', async () => {
-    const fixture = await createRemoteActor(ProfileFollowPolicy.OPEN);
-    const start = mock.method(temporalClient.workflow, 'start', async () => {
-      throw new Error('Temporal unavailable');
-    });
-    const errorLog = mock.method(console, 'error', () => undefined);
-
-    const receivedAt = Temporal.Instant.from('2026-07-31T05:00:00Z');
-    await handleInboundUpdate(
-      createContext(),
-      new Update({
-        actor: remoteActorUri,
-        object: createActor({ featured: new URL(`${remoteActorUri.href}/featured`) }),
-      }),
-      receivedAt,
-    );
-
     const stored = await readRemoteActor(fixture.profile.id);
-    assert.equal(stored.actor.lastFetchedAt?.toString(), receivedAt.toString());
-    assert.equal(start.mock.callCount(), 1);
-    assert.equal(errorLog.mock.callCount(), 1);
-    assert.equal(
-      errorLog.mock.calls[0]?.arguments[0],
-      'Remote Profile Featured Workflow start failed',
-    );
+    assert.equal(stored.actor.lastFetchedAt?.toString(), updatedAt.toString());
   });
 
   test('ignores mismatched, unsupported, unknown, and local actor updates without document loading', async () => {

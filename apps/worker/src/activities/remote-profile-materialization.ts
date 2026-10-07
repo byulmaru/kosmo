@@ -49,6 +49,7 @@ const wrapRemoteProfileFetchError = (error: unknown): never => {
   }
   throw error;
 };
+
 const rethrowRemoteProfileMaterializationError = (error: unknown): never => {
   if (error instanceof RemoteActorMaterializationError) {
     throw ApplicationFailure.create({
