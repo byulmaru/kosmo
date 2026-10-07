@@ -12,10 +12,6 @@ export {
 } from './activities/following-accounts-import';
 export { createNotificationActivity } from './activities/notification';
 export {
-  captureOperationalNotificationAudienceActivity,
-  dispatchOperationalNotificationPageActivity,
-} from './activities/operational-notification';
-export {
   executeProfileBlockTransitionActivity,
   executeProfileUnblockTransitionActivity,
 } from './activities/profile-block';

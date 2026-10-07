@@ -19,21 +19,6 @@ type CreateNotificationInput = {
   readonly sourceId: string;
 };
 
-export const startPushNotificationWorkflow = async (notificationId: string): Promise<void> => {
-  try {
-    await runWorkflow(pushNotificationWorkflow, {
-      mode: 'start',
-      args: [{ notificationId }],
-      workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
-      workflowIdReusePolicy: WorkflowIdReusePolicy.REJECT_DUPLICATE,
-    });
-  } catch (error: unknown) {
-    if (!(error instanceof Error && error.name === 'WorkflowExecutionAlreadyStartedError')) {
-      throw error;
-    }
-  }
-};
-
 export async function createNotificationActivity({
   kind,
   sourceId,
@@ -52,12 +37,19 @@ export async function createNotificationActivity({
   await Promise.all(
     notificationIds.map(async (notificationId) => {
       try {
-        await startPushNotificationWorkflow(notificationId);
-      } catch (error: unknown) {
-        log.error('Push notification workflow failed to start', {
-          notificationId,
-          error,
+        await runWorkflow(pushNotificationWorkflow, {
+          mode: 'start',
+          args: [{ notificationId }],
+          workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
+          workflowIdReusePolicy: WorkflowIdReusePolicy.REJECT_DUPLICATE,
         });
+      } catch (error: unknown) {
+        if (!(error instanceof Error && error.name === 'WorkflowExecutionAlreadyStartedError')) {
+          log.error('Push notification workflow failed to start', {
+            notificationId,
+            error,
+          });
+        }
       }
     }),
   );

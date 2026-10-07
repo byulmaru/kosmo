@@ -36,7 +36,7 @@ relationship 금지 규칙에 다음 한정 예외를 둔다.
   `(recipient_account_id, kind, source_id)`가 같은 수신자·요청의 중복 생성을 막는다. Operational은 loose
   source 조회나 social source cleanup에 포함하지 않는다. `(kind, source_id, id)` index는 Worker의 send별
   keyset page 조회를 지원하며 source cleanup 용도가 아니다.
-- 일반 Notification 조회는 Operational Recipient Account가 ACTIVE 또는 SUSPENDED일 때 이를 노출한다.
+- 일반 Notification 조회는 Operational Recipient Account가 ACTIVE일 때 이를 노출한다.
   source cleanup용 조회는 Recipient Account 상태를 검사하지 않으며, Operational에 source 관계가 있다고
   가정하지 않는다.
 

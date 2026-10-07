@@ -20,7 +20,6 @@
     "./services": "./services/index.ts",
     "./temporal/client": "./temporal/client.ts",
     "./temporal/follow-command": "./temporal/follow-command.ts",
-    "./temporal/operational-notification": "./temporal/operational-notification.ts",
     "./temporal/push-notification": "./temporal/push-notification.ts",
     "./temporal/profile-block": "./temporal/profile-block.ts",
     "./temporal/profile-block-failure": "./temporal/profile-block-failure.ts",
