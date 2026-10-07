@@ -222,6 +222,9 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
 
 ## 접근성·입력
 
+- Profile 멘션 자동완성 검색 UI는 feature flag가 활성화된 경우에만 제공한다. 비활성화 중에도 직접 입력한
+  멘션 텍스트는 기존 게시 시 파싱 흐름을 유지한다.
+
 - Web modal은 공용 `글쓰기` heading과 관계 맥락을 포함한 modal dialog semantics, focus trap을
   제공한다.
 - Web modal은 닫힌 뒤 원래 Reply action으로 포커스를 복원하고, fullscreen은 editor에 포커스를 둔 채 열린다.

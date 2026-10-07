@@ -29,6 +29,7 @@ const mediaValue = {
   sensitiveMedia: true,
 };
 let mediaState: 'ready' | 'uploading' | 'failed' = 'ready';
+let mentionSearchFlagEnabled = true;
 let refreshMedia: (() => void) | undefined;
 let switcherProps:
   | {
@@ -46,6 +47,7 @@ let targetProps:
       body: string;
       contentWarning: string;
       bodyRef?: { current: { focus: () => void } | null };
+      mentionSearchEnabled: boolean;
       mentionCandidates?: PostComposerMentionCandidateResults;
       mentionSearchState?: 'error' | 'loading' | 'ready';
       onBodyChange: (value: string) => void;
@@ -185,6 +187,10 @@ mockModule('relay-runtime', {
   ROOT_ID: 'root',
 });
 mockModule('@/analytics/client', { trackAnalytics: () => undefined });
+mockModule('@/components/FeatureFlagsContext', {
+  useFeatureFlag: (key: string) =>
+    key === 'post-composer-mention-search' && mentionSearchFlagEnabled,
+});
 mockModule('@/components/profile/ProfileNameBlock', {
   ProfileNameBlock: () => createElement('ProfileNameBlock'),
 });
@@ -279,6 +285,7 @@ mockModule('./PostComposer', {
             body: props?.body ?? '',
             disabled: props?.submitting,
             inputRef: (props?.bodyRef ?? { current: null }) as never,
+            mentionSearchEnabled: props?.mentionSearchEnabled,
             mentionCandidates: props?.mentionCandidates,
             mentionSearchState: props?.mentionSearchState,
             onBodyChange: props?.onBodyChange ?? (() => undefined),
@@ -302,6 +309,7 @@ before(async () => {
 });
 
 beforeEach(() => {
+  mentionSearchFlagEnabled = true;
   requests = [];
   relayEnvironment = createRelayEnvironment();
   textInputMountCount = 0;
@@ -514,6 +522,107 @@ describe('PostComposer local author', () => {
 });
 
 describe('PostComposer mention suggestions', () => {
+  it('keeps plain-text editing and submission available when search is disabled', async () => {
+    mentionSearchFlagEnabled = false;
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposer, {
+          onExpand: () => undefined,
+          onRequestClose: () => undefined,
+          presentation: 'rail',
+          profile: profileA as never,
+        }),
+      );
+    });
+
+    assert.equal(targetProps?.mentionSearchEnabled, false);
+    const textInput = renderer?.root.findByType('TextInput' as never);
+    assert.ok(textInput);
+    await act(async () => textInput.props.onChangeText('@typed'));
+
+    assert.equal(requests.length, 0);
+    assert.equal(textInputMountCount, 1);
+    assert.equal(textInputUnmountCount, 0);
+    assert.equal(
+      renderer?.root
+        .findAllByType('Text' as never)
+        .some((node) => node.children.join('') === '검색어를 입력하세요.'),
+      false,
+    );
+    assert.equal(Object.hasOwn(textInput.props, 'aria-autocomplete'), false);
+
+    await act(async () => targetProps?.onSubmit());
+    assert.equal(mutationCalls.length, 1);
+    assert.equal(mutationCalls[0]?.variables.input.bodyText, '@typed');
+    assert.equal(mutationCalls[0]?.variables.input.mentions, undefined);
+  });
+
+  it('preserves a selected mention range when the search flag turns off', async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposer, {
+          onExpand: () => undefined,
+          onRequestClose: () => undefined,
+          presentation: 'rail',
+          profile: profileA as never,
+        }),
+      );
+    });
+
+    await act(async () => targetProps?.onBodyChange('@ali'));
+    assert.equal(requests.length, 1);
+    await act(async () => {
+      requests[0]?.next({
+        data: {
+          searchProfiles: {
+            edges: [
+              {
+                node: {
+                  avatar: { id: 'avatar-alice', url: 'https://example.com/alice.png' },
+                  displayName: '앨리스',
+                  id: 'profile-alice',
+                  relativeHandle: '@alice',
+                },
+              },
+            ],
+          },
+        },
+      });
+      requests[0]?.complete();
+    });
+    await act(async () => {
+      renderer?.root.findByProps({ accessibilityLabel: '앨리스, @alice' }).props.onPress();
+    });
+    assert.equal(targetProps?.body, '@alice ');
+
+    mentionSearchFlagEnabled = false;
+    await act(async () => {
+      renderer?.update(
+        createElement(PostComposer, {
+          onExpand: () => undefined,
+          onRequestClose: () => undefined,
+          presentation: 'rail',
+          profile: profileA as never,
+        }),
+      );
+    });
+
+    assert.equal(targetProps?.mentionSearchEnabled, false);
+    assert.equal(targetProps?.body, '@alice ');
+    assert.equal(requests.length, 1);
+    assert.equal(textInputMountCount, 1);
+    assert.equal(textInputUnmountCount, 0);
+
+    await act(async () => targetProps?.onSubmit());
+    assert.deepEqual(mutationCalls[0]?.variables.input, {
+      bodyText: '@alice',
+      media: mediaValue.items,
+      mentions: [{ profileId: 'profile-alice', start: 0, end: 6 }],
+      sensitiveMedia: true,
+      visibility: 'UNLISTED',
+    });
+  });
+
   it('keeps the rendered editor mounted while searching and ignores late results from the previous author', async () => {
     await act(async () => {
       renderer = create(

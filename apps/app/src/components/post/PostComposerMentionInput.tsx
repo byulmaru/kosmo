@@ -16,7 +16,7 @@ import type {
 
 type InputWebProps = {
   'aria-activedescendant'?: string;
-  'aria-autocomplete': 'list';
+  'aria-autocomplete'?: 'list';
   'aria-controls'?: string;
 };
 
@@ -34,6 +34,7 @@ type Props = Readonly<{
   disabled?: boolean;
   grow?: boolean;
   inputRef: RefObject<TextInput | null>;
+  mentionSearchEnabled?: boolean;
   mentionCandidates?: PostComposerMentionCandidateResults;
   mentionSearchState?: PostComposerMentionSearchState;
   onBodyChange: (value: string) => void;
@@ -53,6 +54,7 @@ export function PostComposerMentionInput({
   disabled = false,
   grow = false,
   inputRef,
+  mentionSearchEnabled = true,
   mentionCandidates,
   mentionSearchState,
   onBodyChange,
@@ -67,7 +69,9 @@ export function PostComposerMentionInput({
   const listboxId = `post-composer-mention-list-${rawListboxId.replace(/[^a-zA-Z0-9_-]/g, '')}`;
   const [activeCandidateId, setActiveCandidateId] = useState<string | null>(null);
   const [dismissedQueryKey, setDismissedQueryKey] = useState<string | null>(null);
-  const activeQuery = findPostComposerMentionQuery(body, selection.start, selection.end);
+  const activeQuery = mentionSearchEnabled
+    ? findPostComposerMentionQuery(body, selection.start, selection.end)
+    : null;
   const queryKey = activeQuery
     ? `${body}\u0000${activeQuery.start}\u0000${activeQuery.end}\u0000${activeQuery.query}`
     : null;
@@ -144,11 +148,13 @@ export function PostComposerMentionInput({
     }
   };
 
-  const webProps: InputWebProps = {
-    'aria-activedescendant': activeDescendant,
-    'aria-autocomplete': 'list',
-    'aria-controls': visible && candidates.length > 0 ? listboxId : undefined,
-  };
+  const webProps: InputWebProps = mentionSearchEnabled
+    ? {
+        'aria-activedescendant': activeDescendant,
+        'aria-autocomplete': 'list',
+        'aria-controls': visible && candidates.length > 0 ? listboxId : undefined,
+      }
+    : {};
 
   return (
     <View style={[styles.root, grow ? styles.grow : null]}>

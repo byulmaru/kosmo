@@ -6,6 +6,7 @@ import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-re
 import { QueryRenderer } from 'react-relay/legacy';
 import { ConnectionHandler, ROOT_ID } from 'relay-runtime';
 import { trackAnalytics } from '@/analytics/client';
+import { useFeatureFlag } from '@/components/FeatureFlagsContext';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
 import { Form } from '@/components/ui/Form';
@@ -158,6 +159,7 @@ export function PostComposerController({
   repostSourceId,
   ...props
 }: PostComposerControllerProps) {
+  const mentionSearchEnabled = useFeatureFlag('post-composer-mention-search');
   const environment = useRelayEnvironment();
   const environmentGenerationRef = useRelayEnvironmentGeneration();
   const environmentRef = useRef(environment);
@@ -188,6 +190,7 @@ export function PostComposerController({
       environmentGenerationRef={environmentGenerationRef}
       key={`${contextGenerationRef.current}:${environmentGenerationRef?.current ?? 0}`}
       globalProfileId={profile.id}
+      mentionSearchEnabled={mentionSearchEnabled}
       mentionCandidates={props.mentionCandidates}
       profileKey={profileKey}
       profiles={profiles}
@@ -199,6 +202,7 @@ type PostComposerContentsProps = Omit<PostComposerBaseProps, 'profile'> &
   PostComposerRelationshipProps & {
     contextGenerationRef: RefObject<number>;
     environmentGenerationRef: RefObject<number> | null;
+    mentionSearchEnabled: boolean;
     onExpand?: () => void;
     onRequestClose?: () => void;
     presentation?: 'mobile' | 'overlay' | 'rail';
@@ -219,6 +223,7 @@ function PostComposerContents({
   environmentGenerationRef,
   focusOnMount = false,
   initialContentWarning,
+  mentionSearchEnabled,
   onPostCreated,
   onRequestClose,
   onSubmittingChange,
@@ -252,7 +257,8 @@ function PostComposerContents({
   const { body, mentionRanges, selection } = draft;
   const activeMentionQuery = findPostComposerMentionQuery(body, selection.start, selection.end);
   const mentionQuery = activeMentionQuery?.query ?? '';
-  const shouldSearchMentions = mentionCandidates === undefined && mentionQuery.trim().length > 0;
+  const shouldSearchMentions =
+    mentionSearchEnabled && mentionCandidates === undefined && mentionQuery.trim().length > 0;
   const onBodyChange = useCallback((nextBody: string) => {
     setDraft((previous) => updatePostComposerDraftBody(previous, nextBody));
   }, []);
@@ -642,6 +648,7 @@ function PostComposerContents({
                   contentWarningExpanded,
                   expandControlRef,
                   items,
+                  mentionSearchEnabled,
                   mentionCandidates: currentMentionCandidates,
                   mentionSearchState,
                   onRetryMentionSearch:
