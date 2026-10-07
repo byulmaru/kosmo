@@ -133,6 +133,7 @@ const createProfile = async ({
         actorInboxUri === undefined
           ? `https://${instance.domain}/users/${profile.handle}/inbox`
           : actorInboxUri,
+      lastFetchedAt: instanceKind === InstanceKind.ACTIVITYPUB ? Temporal.Now.instant() : null,
       profileId: profile.id,
       type: ActivityPubActorType.PERSON,
       uri: actorUri ?? `https://${instance.domain}/users/${profile.handle}`,
