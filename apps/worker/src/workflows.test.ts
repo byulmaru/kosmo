@@ -199,6 +199,102 @@ test(
   },
 );
 
+test(
+  'Quote resolution Workflow는 transient Activity 실패를 최대 10회만 재시도한다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createTimeSkipping();
+    t.after(() => environment.teardown());
+    const taskQueue = `${KOSMO_TASK_QUEUE}-quote-resolution-test-${process.pid}`;
+    let attempts = 0;
+    const worker = await Worker.create({
+      activities: {
+        resolveActivityPubQuoteActivity: async () => {
+          attempts += 1;
+          throw ApplicationFailure.retryable('temporary quote lookup outage');
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      await assert.rejects(
+        environment.client.workflow.execute('activitypubQuoteResolutionWorkflow', {
+          args: [
+            {
+              postId: '00000000-0000-8000-8000-000000000792',
+              targetUri: 'https://source.example/notes/1',
+              format: 'FEP_044F',
+              approvalUri: null,
+              expectedStatus: 'PENDING',
+              expectedApprovalUri: null,
+              expectedRepostSourceId: null,
+            },
+          ],
+          taskQueue,
+          workflowId: 'activitypub-quote-resolution:retry-cap',
+        }),
+      );
+    });
+    assert.equal(attempts, 10);
+  },
+);
+
+test(
+  'Quote resolution은 Source 연결 결과를 다음 retry 입력으로 보존한다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createTimeSkipping();
+    t.after(() => environment.teardown());
+    const taskQueue = `${KOSMO_TASK_QUEUE}-quote-input-test-${process.pid}`;
+    const seen: Array<{ expectedRepostSourceId: string | null }> = [];
+    const worker = await Worker.create({
+      activities: {
+        resolveActivityPubQuoteActivity: async (input: {
+          expectedRepostSourceId: string | null;
+        }) => {
+          seen.push(input);
+          return seen.length === 1
+            ? {
+                retryable: true,
+                status: 'PENDING',
+                retryInput: { ...input, expectedRepostSourceId: 'stored-source' },
+              }
+            : { retryable: false, status: 'APPROVED' };
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+    await worker.runUntil(() =>
+      environment.client.workflow.execute('activitypubQuoteResolutionWorkflow', {
+        args: [
+          {
+            postId: 'quote',
+            targetUri: 'https://source.example/notes/1',
+            format: 'FEP_044F',
+            approvalUri: 'https://source.example/authorization/1',
+            expectedStatus: 'PENDING',
+            expectedApprovalUri: 'https://source.example/authorization/1',
+            expectedRepostSourceId: null,
+          },
+        ],
+        taskQueue,
+        workflowId: 'quote-retry-input',
+      }),
+    );
+    assert.deepEqual(
+      seen.map((input) => input.expectedRepostSourceId),
+      [null, 'stored-source'],
+    );
+  },
+);
+
 for (const scenario of ['pending-limit', 'stale-signal', 'limit-new-signal'] as const) {
   test(
     `Quote resolution ${scenario}은 재시도를 보존하고 한도에서 실행을 종료한다`,
@@ -2687,101 +2783,3 @@ test(
     ]);
   },
 );
-
-test(
-  'Quote resolution Workflow는 transient Activity 실패를 최대 10회만 재시도한다',
-  { timeout: 120_000 },
-  async (t) => {
-    const environment = await TestWorkflowEnvironment.createTimeSkipping();
-    t.after(() => environment.teardown());
-    const taskQueue = `${KOSMO_TASK_QUEUE}-quote-resolution-test-${process.pid}`;
-    let attempts = 0;
-    const worker = await Worker.create({
-      activities: {
-        resolveActivityPubQuoteActivity: async () => {
-          attempts += 1;
-          throw ApplicationFailure.retryable('temporary quote lookup outage');
-        },
-      },
-      connection: environment.nativeConnection,
-      namespace: environment.namespace,
-      taskQueue,
-      workflowsPath,
-    });
-
-    await worker.runUntil(async () => {
-      await assert.rejects(
-        environment.client.workflow.execute('activitypubQuoteResolutionWorkflow', {
-          args: [
-            {
-              postId: '00000000-0000-8000-8000-000000000792',
-              targetUri: 'https://source.example/notes/1',
-              format: 'FEP_044F',
-              approvalUri: null,
-              expectedStatus: 'PENDING',
-              expectedApprovalUri: null,
-              expectedRepostSourceId: null,
-            },
-          ],
-          taskQueue,
-          workflowId: 'activitypub-quote-resolution:retry-cap',
-        }),
-      );
-    });
-    assert.equal(attempts, 10);
-  },
-);
-
-
-test(
-  'Quote resolution은 Source 연결 결과를 다음 retry 입력으로 보존한다',
-  { timeout: 120_000 },
-  async (t) => {
-    const environment = await TestWorkflowEnvironment.createTimeSkipping();
-    t.after(() => environment.teardown());
-    const taskQueue = `${KOSMO_TASK_QUEUE}-quote-input-test-${process.pid}`;
-    const seen: Array<{ expectedRepostSourceId: string | null }> = [];
-    const worker = await Worker.create({
-      activities: {
-        resolveActivityPubQuoteActivity: async (input: {
-          expectedRepostSourceId: string | null;
-        }) => {
-          seen.push(input);
-          return seen.length === 1
-            ? {
-                retryable: true,
-                status: 'PENDING',
-                retryInput: { ...input, expectedRepostSourceId: 'stored-source' },
-              }
-            : { retryable: false, status: 'APPROVED' };
-        },
-      },
-      connection: environment.nativeConnection,
-      namespace: environment.namespace,
-      taskQueue,
-      workflowsPath,
-    });
-    await worker.runUntil(() =>
-      environment.client.workflow.execute('activitypubQuoteResolutionWorkflow', {
-        args: [
-          {
-            postId: 'quote',
-            targetUri: 'https://source.example/notes/1',
-            format: 'FEP_044F',
-            approvalUri: 'https://source.example/authorization/1',
-            expectedStatus: 'PENDING',
-            expectedApprovalUri: 'https://source.example/authorization/1',
-            expectedRepostSourceId: null,
-          },
-        ],
-        taskQueue,
-        workflowId: 'quote-retry-input',
-      }),
-    );
-    assert.deepEqual(
-      seen.map((input) => input.expectedRepostSourceId),
-      [null, 'stored-source'],
-    );
-  },
-);
-

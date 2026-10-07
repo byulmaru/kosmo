@@ -12,7 +12,6 @@ import { postContentDocumentToText } from '@kosmo/core/post-content/server';
 import { createPost, ProfilePairBlockedError } from '@kosmo/core/services';
 import { runWorkflow } from '@kosmo/core/temporal/client';
 import { remoteProfileRefreshWorkflow } from '@kosmo/core/temporal/workflows';
-import { and, eq } from 'drizzle-orm';
 import { findPostByActivityPubUri, findRemotePostByActivityPubUri } from './activitypub-post-uri';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
 import {
@@ -555,8 +554,7 @@ export const handleInboundCreateNote = async ({
       result.reason === 'note_identity_mismatch' ||
       result.reason === 'note_attribution_mismatch' ||
       result.reason === 'stored_author_mismatch' ||
-      result.reason === 'unsupported_note_visibility' ||
-      result.reason === 'followers_visibility_without_follow'
+      result.reason === 'unsupported_note_visibility'
         ? 'validation'
         : 'projection';
     observeInbound({
