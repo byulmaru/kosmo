@@ -9,6 +9,11 @@ import {
   MobileFullscreenComposerShellCandidate,
   PostComposer,
 } from '@/components/post/PostComposer';
+import {
+  replacePostComposerMentionQuery,
+  updatePostComposerDraftBody,
+  updatePostComposerDraftSelection,
+} from '@/components/post/postComposerState';
 import { FullReactionPicker } from '@/components/reaction/FullReactionPicker';
 import { Avatar } from '@/components/ui/Avatar';
 import { IconButton } from '@/components/ui/IconButton';
@@ -21,6 +26,10 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { ComposerMediaEditorMobileState } from '@/components/post/ComposerMediaEditor';
 import type { PostComposerProps } from '@/components/post/PostComposer';
 import type { ComposerMediaItem } from '@/components/post/PostComposerMediaControls';
+import type {
+  PostComposerDraft,
+  PostComposerTextSelection,
+} from '@/components/post/postComposerState';
 
 const mediaAsset = { height: 390, uri: ogImage, width: 560 };
 
@@ -95,6 +104,7 @@ const meta = {
     contentWarningExpanded: false,
     items: composerMedia,
     onBodyChange: fn(),
+    onSelectionChange: fn(),
     onContentWarningChange: fn(),
     onContentWarningToggle: fn(),
     onEmojiAction: fn(),
@@ -107,6 +117,7 @@ const meta = {
     onSubmit: fn(),
     onVisibilityChange: fn(),
     remaining: 450,
+    selection: { end: 0, start: 0 },
     sensitiveMedia: false,
     showCWAction: true,
     showEmojiAction: true,
@@ -124,6 +135,7 @@ const meta = {
     contentWarningExpanded: { control: 'boolean' },
     items: { control: false },
     onBodyChange: { action: 'bodyChange', control: false },
+    onSelectionChange: { action: 'selectionChange', control: false },
     onContentWarningChange: { action: 'contentWarningChange', control: false },
     onContentWarningToggle: { action: 'contentWarningToggle', control: false },
     onEmojiAction: { action: 'emojiAction', control: false },
@@ -150,6 +162,7 @@ const meta = {
   excludeStories: [
     'ActionSemanticsContract',
     'InteractionContract',
+    'MentionAutocompleteContract',
     'MobileCandidateContract',
     'MobileReplyShellContract',
     'MobileKeyboardMediaFooterGeometryContract',
@@ -336,8 +349,26 @@ function InteractiveComposer({
   ...props
 }: PostComposerProps & { keyboard?: boolean; mobile?: boolean }) {
   const theme = useTheme();
-  const composerProps = { ...props, showPollAction: false };
-  const [body, setBody] = useState(props.body);
+  const [draft, setDraft] = useState<PostComposerDraft>(() => {
+    const caret = props.body.length;
+    const selection = { start: caret, end: caret };
+    return {
+      body: props.body,
+      mentionRanges: [],
+      previousSelection: selection,
+      selection,
+    };
+  });
+  const { body, selection } = draft;
+  const composerProps = {
+    ...props,
+    onSelectionChange: (nextSelection: PostComposerTextSelection) => {
+      props.onSelectionChange(nextSelection);
+      setDraft((previous) => updatePostComposerDraftSelection(previous, nextSelection));
+    },
+    selection,
+    showPollAction: false,
+  };
   const [contentWarning, setContentWarning] = useState(props.contentWarning);
   const [contentWarningExpanded, setContentWarningExpanded] = useState(
     props.contentWarningExpanded,
@@ -376,7 +407,11 @@ function InteractiveComposer({
     }
   };
 
-  useEffect(() => setBody(props.body), [props.body]);
+  useEffect(() => {
+    const caret = props.body.length;
+    const selection = { start: caret, end: caret };
+    setDraft({ body: props.body, mentionRanges: [], previousSelection: selection, selection });
+  }, [props.body]);
   useEffect(() => setContentWarning(props.contentWarning), [props.contentWarning]);
   useEffect(
     () => setContentWarningExpanded(props.contentWarningExpanded),
@@ -469,7 +504,14 @@ function InteractiveComposer({
             }
             const value = `${body}${option.emoji}`;
             props.onBodyChange(value);
-            setBody(value);
+            setDraft((previous) => {
+              const caret = { start: value.length, end: value.length };
+              return {
+                ...updatePostComposerDraftBody(previous, value),
+                previousSelection: caret,
+                selection: caret,
+              };
+            });
             closePicker();
           }}
           options={reactionOptions}
@@ -541,7 +583,7 @@ function InteractiveComposer({
           keyboard={keyboard}
           onBodyChange={(value) => {
             props.onBodyChange(value);
-            setBody(value);
+            setDraft((previous) => updatePostComposerDraftBody(previous, value));
           }}
           onContentWarningChange={(value) => {
             props.onContentWarningChange(value);
@@ -584,7 +626,7 @@ function InteractiveComposer({
             remaining={remaining}
             onBodyChange={(value) => {
               props.onBodyChange(value);
-              setBody(value);
+              setDraft((previous) => updatePostComposerDraftBody(previous, value));
             }}
             onContentWarningChange={(value) => {
               props.onContentWarningChange(value);
@@ -681,7 +723,7 @@ function InteractiveComposer({
                 remaining={remaining}
                 onBodyChange={(value) => {
                   props.onBodyChange(value);
-                  setBody(value);
+                  setDraft((previous) => updatePostComposerDraftBody(previous, value));
                 }}
                 onContentWarningChange={(value) => {
                   props.onContentWarningChange(value);
@@ -827,6 +869,71 @@ export const InteractionContract: Story = {
     expect(railBody).toHaveValue('오늘의 코스모 이야기를 나눠보세요. 오버레이❤️');
   },
   render: (args) => <InteractiveComposer {...args} />,
+};
+
+export const MentionAutocompleteContract: Story = {
+  ...Playground,
+  args: {
+    ...Playground.args,
+    authorProfileId: 'composer-profile',
+    body: '',
+    items: [],
+    mentionCandidates: {
+      authorProfileId: 'composer-profile',
+      profiles: [
+        {
+          avatar: { url: 'https://example.com/alice.png' },
+          displayName: '앨리스',
+          domain: 'remote.example',
+          id: 'profile-alice',
+          relativeHandle: '@alice',
+        },
+      ],
+      query: 'ali',
+    },
+    remaining: 500,
+    surface: 'rail',
+  },
+  render: (args) => {
+    const [body, setBody] = useState(args.body);
+    const [selection, setSelection] = useState<PostComposerTextSelection>(() => ({
+      start: args.body.length,
+      end: args.body.length,
+    }));
+    return (
+      <PostComposer
+        {...args}
+        body={body}
+        onSelectionChange={(nextSelection) => {
+          args.onSelectionChange(nextSelection);
+          setSelection(nextSelection);
+        }}
+        onBodyChange={(nextBody) => {
+          args.onBodyChange(nextBody);
+          setBody(nextBody);
+        }}
+        selection={selection}
+        onSelectMention={(candidate, query) => {
+          const inserted = replacePostComposerMentionQuery(body, query, candidate);
+          if (inserted) {
+            args.onSelectMention?.(candidate, query);
+            const caret = inserted.range.end + 1;
+            setBody(inserted.body);
+            setSelection({ start: caret, end: caret });
+          }
+        }}
+      />
+    );
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = canvas.getByRole('textbox', { name: '게시글 본문' });
+    await userEvent.type(body, '@ali');
+    expect(canvas.getByRole('listbox', { name: '멘션할 프로필 결과' })).toBeVisible();
+    await userEvent.keyboard('{ArrowDown}{Enter}');
+    await waitFor(() => expect(body).toHaveValue('@alice '));
+    expect(canvas.queryByRole('listbox', { name: '멘션할 프로필 결과' })).toBeNull();
+  },
 };
 
 export const PendingMediaContract: Story = {

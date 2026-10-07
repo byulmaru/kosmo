@@ -10,6 +10,7 @@ import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { WorkflowIdConflictPolicy, WorkflowIdReusePolicy } from '@temporalio/client';
 import { and, asc, desc, eq, getColumns, gt, lt, sql } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
+import { resolveComposerProfileId } from '@/profile/authorization';
 import { visibleProfileWhere } from '@/profile/visibility';
 import { reportError } from '@/sentry';
 import { Profile, ProfileConnection } from '../ref';
@@ -86,9 +87,14 @@ builder.queryField('searchProfiles', (t) =>
     {
       type: Profile,
       args: {
+        actorProfileId: t.arg.globalID({ for: Profile, required: false }),
         query: t.arg.string({ required: true }),
+        resolveRemote: t.arg.boolean({ required: false }),
       },
       resolve: async (_, args, ctx) => {
+        const composerProfileId = args.actorProfileId
+          ? await resolveComposerProfileId(ctx, args.actorProfileId.id)
+          : ctx.session.profile?.id;
         const localInstance = await resolveConfiguredLocalInstance();
         const parsed = parseProfileHandle(args.query, {
           configuredLocalDomain: localInstance.domain,
@@ -103,13 +109,13 @@ builder.queryField('searchProfiles', (t) =>
 
         let materializedProfileId: string | null | undefined;
 
-        if (isExplicitRemoteHandle(args.query, parsed)) {
+        if (args.resolveRemote !== false && isExplicitRemoteHandle(args.query, parsed)) {
           materializedProfileId = await runWorkflow(remoteProfileLookupWorkflow, {
             args: [
               {
                 domain: parsed.domain,
                 handle: parsed.handle,
-                ...(ctx.session.profile?.id ? { profileId: ctx.session.profile.id } : {}),
+                ...(composerProfileId ? { profileId: composerProfileId } : {}),
               },
             ],
             mode: 'execute',
@@ -129,17 +135,17 @@ builder.queryField('searchProfiles', (t) =>
         const normalizedHandleLike = sql`
         ${Profiles.normalizedHandle} LIKE ${handlePattern} ESCAPE '\\'
       `;
-        const selectedProfileBlockWhere = ctx.session?.profile?.id
+        const selectedProfileBlockWhere = composerProfileId
           ? and(
               profileBlockVisibilityWhere({
                 database: db,
-                ownerProfileId: ctx.session.profile.id,
+                ownerProfileId: composerProfileId,
                 targetProfileId: Profiles.id,
               }),
               profileBlockVisibilityWhere({
                 database: db,
                 ownerProfileId: Profiles.id,
-                targetProfileId: ctx.session.profile.id,
+                targetProfileId: composerProfileId,
               }),
             )
           : undefined;

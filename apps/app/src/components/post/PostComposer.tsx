@@ -35,10 +35,18 @@ import {
   webScrollbarStyle,
 } from '@/theme/tokens';
 import { PostComposerMediaItemsTarget } from './PostComposerMediaItemsTarget';
+import { PostComposerMentionInput } from './PostComposerMentionInput';
 import { postVisibilityPresentation } from './postVisibilityPresentation';
 import type { ReactNode, RefObject } from 'react';
 import type { TextStyle, ViewStyle } from 'react-native';
 import type { ComposerMediaItem } from './PostComposerMediaControls';
+import type {
+  PostComposerMentionCandidate,
+  PostComposerMentionCandidateResults,
+  PostComposerMentionQuery,
+  PostComposerMentionSearchState,
+  PostComposerTextSelection,
+} from './postComposerState';
 
 const postComposerTargetVisibilityValues = [
   PostVisibility.PUBLIC,
@@ -48,9 +56,14 @@ const postComposerTargetVisibilityValues = [
 
 export type PostComposerVisibility = (typeof postComposerTargetVisibilityValues)[number];
 export type PostComposerMode = 'post' | 'quote' | 'reply';
+export type PostComposerMentionSelection = (
+  candidate: PostComposerMentionCandidate,
+  query: PostComposerMentionQuery,
+) => void;
 
 export type PostComposerProps = Readonly<{
   author: ReactNode;
+  authorProfileId?: string;
   beforeEditor?: ReactNode;
   children?: ReactNode;
   body: string;
@@ -59,7 +72,13 @@ export type PostComposerProps = Readonly<{
   contentWarningExpanded: boolean;
   expandControlRef?: RefObject<View | null>;
   items: readonly ComposerMediaItem[];
+  mentionCandidates?: PostComposerMentionCandidateResults;
+  mentionSearchState?: PostComposerMentionSearchState;
+  selection: PostComposerTextSelection;
+  onSelectMention?: PostComposerMentionSelection;
+  onRetryMentionSearch?: () => void;
   onBodyChange: (value: string) => void;
+  onSelectionChange: (selection: PostComposerTextSelection) => void;
   onContentWarningChange: (value: string) => void;
   onContentWarningToggle: () => void;
   onEmojiAction: () => void;
@@ -214,6 +233,7 @@ const composerPlaceholder = '무슨 일이 일어나고 있나요?';
 
 export function PostComposer({
   author,
+  authorProfileId = '',
   beforeEditor,
   body,
   bodyRef,
@@ -222,7 +242,13 @@ export function PostComposer({
   contentWarningExpanded,
   expandControlRef,
   items,
+  mentionCandidates,
+  mentionSearchState,
+  onSelectMention = () => undefined,
+  onRetryMentionSearch,
   onBodyChange,
+  onSelectionChange,
+  selection,
   onContentWarningChange,
   onContentWarningToggle,
   onEmojiAction,
@@ -298,44 +324,69 @@ export function PostComposer({
         surface === 'overlay' ? styles.overlayContent : null,
       ]}
     >
-      <TextArea
-        aria-describedby={Platform.OS === 'web' ? remainingDescriptionId : undefined}
-        accessibilityLabel={copy.bodyLabel}
-        editable={!submitting}
-        ref={bodyRef ?? bodyInputRef}
-        onBlur={() => setBodyFocused(false)}
-        onChange={(event) => {
-          if (Platform.OS === 'web') {
-            const input = event.currentTarget as unknown as HTMLTextAreaElement;
-            input.style.height = '0px';
-            const height = input.scrollHeight;
-            input.style.height = `${height}px`;
-            setBodyContentHeight(height);
-          }
+      <PostComposerMentionInput
+        authorProfileId={authorProfileId}
+        body={body}
+        disabled={submitting}
+        grow={items.length === 0 && !hasTrailingContent}
+        inputRef={bodyRef ?? bodyInputRef}
+        mentionCandidates={mentionCandidates}
+        mentionSearchState={mentionSearchState}
+        onBodyChange={onBodyChange}
+        onSelectionChange={onSelectionChange}
+        onSelectMention={onSelectMention}
+        onRetryMentionSearch={onRetryMentionSearch}
+        renderInput={(mentionInput) => {
+          return (
+            <TextArea
+              {...mentionInput.webProps}
+              accessibilityLabel={copy.bodyLabel}
+              aria-describedby={Platform.OS === 'web' ? remainingDescriptionId : undefined}
+              editable={!submitting}
+              onBlur={() => setBodyFocused(false)}
+              onChange={(event) => {
+                if (Platform.OS === 'web') {
+                  const input = event.currentTarget as unknown as HTMLTextAreaElement | null;
+                  if (!input) {
+                    return;
+                  }
+                  input.style.height = '0px';
+                  const height = input.scrollHeight;
+                  input.style.height = `${height}px`;
+                  setBodyContentHeight(height);
+                }
+              }}
+              onChangeText={mentionInput.onChangeText}
+              onContentSizeChange={(event) =>
+                setBodyContentHeight(Math.ceil(event.nativeEvent.contentSize.height))
+              }
+              onFocus={() => setBodyFocused(true)}
+              onKeyPress={mentionInput.onKeyPress}
+              onSelectionChange={mentionInput.onSelectionChange}
+              placeholder={composerPlaceholder}
+              ref={bodyRef ?? bodyInputRef}
+              scrollEnabled={surface === 'rail' && bodyContentHeight > railBodyMaxHeight}
+              selection={mentionInput.selection}
+              style={[
+                styles.body,
+                hasTrailingContent
+                  ? styles.trailingContentBody
+                  : items.length > 0
+                    ? styles.mediaBody
+                    : styles.textBody,
+                surface === 'rail' ? styles.railBody : null,
+                surface === 'overlay' && items.length === 0 && !hasTrailingContent
+                  ? styles.overlayTextBody
+                  : null,
+                bodyContentHeight > 0 ? { height: bodyContentHeight } : null,
+                { backgroundColor: theme.backgroundElevated, color: theme.foregroundPrimary },
+                composerBodyFocusStyle,
+              ]}
+              value={body}
+            />
+          );
         }}
-        onChangeText={onBodyChange}
-        onContentSizeChange={(event) =>
-          setBodyContentHeight(Math.ceil(event.nativeEvent.contentSize.height))
-        }
-        onFocus={() => setBodyFocused(true)}
-        placeholder={composerPlaceholder}
-        scrollEnabled={surface === 'rail' && bodyContentHeight > railBodyMaxHeight}
-        style={[
-          styles.body,
-          hasTrailingContent
-            ? styles.trailingContentBody
-            : items.length > 0
-              ? styles.mediaBody
-              : styles.textBody,
-          surface === 'rail' ? styles.railBody : null,
-          surface === 'overlay' && items.length === 0 && !hasTrailingContent
-            ? styles.overlayTextBody
-            : null,
-          bodyContentHeight > 0 ? { height: bodyContentHeight } : null,
-          { backgroundColor: theme.backgroundElevated, color: theme.foregroundPrimary },
-          composerBodyFocusStyle,
-        ]}
-        value={body}
+        selection={selection}
       />
       {children}
       {surface === 'overlay' ? mediaGallery : null}
@@ -637,6 +688,7 @@ export function PostComposer({
 
 export function MobileFullscreenComposerShellCandidate({
   author,
+  authorProfileId = '',
   beforeEditor,
   body,
   bodyRef,
@@ -645,6 +697,9 @@ export function MobileFullscreenComposerShellCandidate({
   contentWarningExpanded,
   fillContainer = false,
   items,
+  mentionCandidates,
+  mentionSearchState,
+  onSelectionChange,
   keyboard = false,
   onBodyChange,
   onContentWarningChange,
@@ -655,6 +710,9 @@ export function MobileFullscreenComposerShellCandidate({
   onMediaRemove,
   onMediaRetry,
   onOverlayClose,
+  onSelectMention = () => undefined,
+  onRetryMentionSearch,
+  selection,
   onPollAction,
   onSubmit,
   onVisibilityChange,
@@ -770,52 +828,79 @@ export function MobileFullscreenComposerShellCandidate({
           value={contentWarning}
         />
       ) : null}
-      <TextInput
-        ref={bodyRef ?? bodyInputRef}
-        aria-describedby={Platform.OS === 'web' ? remainingDescriptionId : undefined}
-        accessibilityLabel={copy.bodyLabel}
-        editable={!submitting}
-        multiline
-        onBlur={() => {
-          setBodyFocused(false);
+      <PostComposerMentionInput
+        authorProfileId={authorProfileId}
+        body={body}
+        disabled={submitting}
+        grow={!bodyUsesTrailingContentLayout}
+        inputRef={bodyRef ?? bodyInputRef}
+        mentionCandidates={mentionCandidates}
+        mentionSearchState={mentionSearchState}
+        onBodyChange={onBodyChange}
+        onSelectionChange={onSelectionChange}
+        onSelectMention={onSelectMention}
+        onRetryMentionSearch={onRetryMentionSearch}
+        renderInput={(mentionInput) => {
+          return (
+            <TextInput
+              {...mentionInput.webProps}
+              accessibilityLabel={copy.bodyLabel}
+              aria-describedby={Platform.OS === 'web' ? remainingDescriptionId : undefined}
+              editable={!submitting}
+              multiline
+              onBlur={() => {
+                setBodyFocused(false);
+              }}
+              onChange={(event) => {
+                if (shouldAutoSizeBody) {
+                  const input = event.currentTarget as unknown as HTMLTextAreaElement | null;
+                  if (!input) {
+                    return;
+                  }
+                  const availableHeight = input.clientHeight;
+                  input.style.height = '0px';
+                  const height = input.scrollHeight;
+                  const overflowing = height > availableHeight;
+                  input.style.height = overflowing ? `${height}px` : 'auto';
+                  setBodyContentHeight(overflowing ? height : 0);
+                }
+              }}
+              onChangeText={mentionInput.onChangeText}
+              onContentSizeChange={(event) =>
+                hasTrailingContent &&
+                setBodyContentHeight(Math.ceil(event.nativeEvent.contentSize.height))
+              }
+              onFocus={() => {
+                setBodyFocused(true);
+                scrollToBody();
+              }}
+              onKeyPress={mentionInput.onKeyPress}
+              onPressIn={scrollToBody}
+              onSelectionChange={mentionInput.onSelectionChange}
+              placeholder={composerPlaceholder}
+              placeholderTextColor={
+                submitting ? theme.stateDisabledForeground : theme.foregroundMuted
+              }
+              ref={bodyRef ?? bodyInputRef}
+              selection={mentionInput.selection}
+              style={[
+                styles.mobileBody,
+                bodyUsesTrailingContentLayout ? styles.mobileTrailingContentBody : null,
+                bodyUsesTrailingContentLayout && bodyContentHeight > 0
+                  ? { height: bodyContentHeight }
+                  : null,
+                {
+                  backgroundColor: theme.backgroundCanvas,
+                  color: theme.foregroundPrimary,
+                  ...composerBodyFocusStyle,
+                },
+              ]}
+              value={body}
+              {...(Platform.OS === 'web' ? { onPointerDown: scrollToBody } : {})}
+            />
+          );
         }}
-        onChange={(event) => {
-          if (shouldAutoSizeBody) {
-            const input = event.currentTarget as unknown as HTMLTextAreaElement;
-            const availableHeight = input.clientHeight;
-            input.style.height = '0px';
-            const height = input.scrollHeight;
-            const overflowing = height > availableHeight;
-            input.style.height = overflowing ? `${height}px` : 'auto';
-            setBodyContentHeight(overflowing ? height : 0);
-          }
-        }}
-        onChangeText={onBodyChange}
-        onContentSizeChange={(event) =>
-          hasTrailingContent &&
-          setBodyContentHeight(Math.ceil(event.nativeEvent.contentSize.height))
-        }
-        onPressIn={scrollToBody}
-        {...(Platform.OS === 'web' ? { onPointerDown: scrollToBody } : {})}
-        onFocus={() => {
-          setBodyFocused(true);
-          scrollToBody();
-        }}
-        placeholder={composerPlaceholder}
-        placeholderTextColor={submitting ? theme.stateDisabledForeground : theme.foregroundMuted}
-        style={[
-          styles.mobileBody,
-          bodyUsesTrailingContentLayout ? styles.mobileTrailingContentBody : null,
-          bodyUsesTrailingContentLayout && bodyContentHeight > 0
-            ? { height: bodyContentHeight }
-            : null,
-          {
-            backgroundColor: theme.backgroundCanvas,
-            color: theme.foregroundPrimary,
-            ...composerBodyFocusStyle,
-          },
-        ]}
-        value={body}
+        selection={selection}
       />
       {children}
     </View>

@@ -228,6 +228,68 @@ describe('GraphQL remote profile boundary', () => {
     );
   });
 
+  test('searchProfiles uses the optional actor Profile for mutual Block filtering', async () => {
+    const auth = await createAuthenticatedSession();
+    const composer = await createProfile({
+      handle: 'mention-composer',
+      instanceId: localInstanceId,
+    });
+    await db.insert(AccountProfiles).values({
+      accountId: auth.account.id,
+      profileId: composer.id,
+      role: AccountProfileRole.MEMBER,
+    });
+    const blockedByComposer = await createProfile({
+      handle: 'mention-target-a',
+      instanceId: localInstanceId,
+    });
+    const blockerIsTarget = await createProfile({
+      handle: 'mention-target-b',
+      instanceId: localInstanceId,
+    });
+    const available = await createProfile({
+      handle: 'mention-target-c',
+      instanceId: localInstanceId,
+    });
+    await db.insert(ProfileBlocks).values([
+      { ownerProfileId: composer.id, targetProfileId: blockedByComposer.id },
+      { ownerProfileId: blockerIsTarget.id, targetProfileId: composer.id },
+    ]);
+
+    const query = `query SearchProfiles($actorProfileId: ID) {
+      searchProfiles(query: "mention-target", first: 20, actorProfileId: $actorProfileId) {
+        edges { node { relativeHandle } }
+      }
+    }`;
+    const defaultActor = await requestGraphQL<{
+      searchProfiles: { edges: Array<{ node: { relativeHandle: string } }> };
+    }>(query, { actorProfileId: null }, auth.token);
+    assertNoGraphQLErrors(defaultActor);
+    assert.deepEqual(
+      defaultActor.data?.searchProfiles.edges.map(({ node }) => node.relativeHandle),
+      ['@mention-target-a', '@mention-target-b', '@mention-target-c'],
+    );
+
+    const explicitActor = await requestGraphQL<{
+      searchProfiles: { edges: Array<{ node: { relativeHandle: string } }> };
+    }>(query, { actorProfileId: globalId('Profile', composer.id) }, auth.token);
+    assertNoGraphQLErrors(explicitActor);
+    assert.deepEqual(
+      explicitActor.data?.searchProfiles.edges.map(({ node }) => node.relativeHandle),
+      [`@${available.handle}`],
+    );
+
+    const foreign = await createAuthenticatedSession();
+    const denied = await requestGraphQL(
+      query,
+      {
+        actorProfileId: globalId('Profile', foreign.profile.id),
+      },
+      auth.token,
+    );
+    assert.equal(denied.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
+  });
+
   test('does not dispatch a Workflow for unauthenticated explicit remote search', async (t) => {
     const execute = t.mock.method(temporalClient.workflow, 'execute');
     const query = `query SearchRemoteProfile($query: String!) {
@@ -246,6 +308,15 @@ describe('GraphQL remote profile boundary', () => {
 
   test('materializes a missing explicit remote profile into the existing connection', async (t) => {
     const auth = await createAuthenticatedSession();
+    const composer = await createProfile({
+      handle: 'remote-search-composer',
+      instanceId: localInstanceId,
+    });
+    await db.insert(AccountProfiles).values({
+      accountId: auth.account.id,
+      profileId: composer.id,
+      role: AccountProfileRole.MEMBER,
+    });
     const remoteInstance = await createRemoteInstance();
     const handles = ['ab', 'a'.repeat(31), 'test.user'] as const;
     const remotes = await Promise.all(
@@ -262,12 +333,15 @@ describe('GraphQL remote profile boundary', () => {
       const result = await requestGraphQL<{
         searchProfiles: { edges: Array<{ node: { id: string; relativeHandle: string } }> };
       }>(
-        `query SearchRemoteProfile($query: String!) {
-          searchProfiles(query: $query, first: 20) {
+        `query SearchRemoteProfile($query: String!, $actorProfileId: ID!) {
+          searchProfiles(query: $query, first: 20, actorProfileId: $actorProfileId) {
             edges { node { id relativeHandle } }
           }
         }`,
-        { query: `@${handle}@${remoteDomain}` },
+        {
+          actorProfileId: globalId('Profile', composer.id),
+          query: `@${handle}@${remoteDomain}`,
+        },
         auth.token,
       );
 
@@ -283,12 +357,12 @@ describe('GraphQL remote profile boundary', () => {
         {
           domain: remoteDomain,
           handle,
-          profileId: auth.profile.id,
+          profileId: composer.id,
         },
       ]);
     }
 
-    assert.equal(await db.$count(Profiles), handles.length + 1);
+    assert.equal(await db.$count(Profiles), handles.length + 2);
     assert.equal(await db.$count(ActivityPubActors), 0);
   });
 
@@ -332,6 +406,43 @@ describe('GraphQL remote profile boundary', () => {
         profileId: auth.profile.id,
       },
     ]);
+  });
+
+  test('returns a stored remote profile without resolving it when requested', async (t) => {
+    const auth = await createAuthenticatedSession();
+    const stored = await createStoredActivityPubAuthor({ domain: remoteDomain, handle: 'alice' });
+    const execute = t.mock.method(temporalClient.workflow, 'execute');
+    const search = (query: string) =>
+      requestGraphQL<{
+        searchProfiles: { edges: Array<{ node: { id: string; relativeHandle: string } }> };
+      }>(
+        `query SearchRemoteProfile($query: String!, $resolveRemote: Boolean!) {
+          searchProfiles(query: $query, first: 20, resolveRemote: $resolveRemote) {
+            edges { node { id relativeHandle } }
+          }
+        }`,
+        { query, resolveRemote: false },
+        auth.token,
+      );
+
+    const result = await search(`@alice@${remoteDomain}`);
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.searchProfiles.edges, [
+      {
+        node: {
+          id: globalId('Profile', stored.profile.id),
+          relativeHandle: `@alice@${remoteDomain}`,
+        },
+      },
+    ]);
+    assert.equal(execute.mock.calls.length, 0);
+
+    const missing = await search(`@missing@${remoteDomain}`);
+
+    assertNoGraphQLErrors(missing);
+    assert.deepEqual(missing.data?.searchProfiles.edges, []);
+    assert.equal(execute.mock.calls.length, 0);
   });
 
   for (const state of [InstanceState.SUSPENDED, InstanceState.UNRESPONSIVE]) {

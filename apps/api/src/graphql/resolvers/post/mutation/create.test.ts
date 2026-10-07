@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { db } from '@kosmo/core/db';
 import { AccountProfileRole } from '@kosmo/core/enums';
 import { ValidationError } from '@kosmo/core/error';
 import { encodeGlobalId } from '@kosmo/core/global-id';
@@ -89,4 +90,70 @@ test('validates createPost input before running the resolver', async () => {
     assert.ok(error instanceof ValidationError);
     assert.equal(error.field, field);
   }
+});
+
+test('rejects impossible Mention counts before querying target Profiles', async (t) => {
+  const select = t.mock.method(db, 'select');
+  const result = await graphql({
+    schema,
+    source: `
+      mutation CreatePost($input: CreatePostInput!) {
+        createPost(input: $input) { post { id } }
+      }
+    `,
+    variableValues: {
+      input: {
+        bodyText: '@x',
+        mentions: [
+          { end: 2, profileId: encodeGlobalId('Profile', crypto.randomUUID()), start: 0 },
+          { end: 2, profileId: encodeGlobalId('Profile', crypto.randomUUID()), start: 0 },
+        ],
+        visibility: 'UNLISTED',
+      },
+    },
+    contextValue: {
+      session: {
+        profile: {
+          id: crypto.randomUUID(),
+          role: AccountProfileRole.MEMBER,
+        },
+      },
+    },
+  });
+
+  const error = result.errors?.[0]?.originalError;
+  assert.ok(error instanceof ValidationError);
+  assert.equal(error.field, 'mentions');
+  assert.equal(select.mock.callCount(), 0);
+});
+
+test('Pothos rejects a non-Profile global ID for a selected Mention before target lookup', async (t) => {
+  const select = t.mock.method(db, 'select');
+  const wrongTypeId = encodeGlobalId('Post', crypto.randomUUID());
+  const result = await graphql({
+    schema,
+    source: `
+      mutation CreatePost($input: CreatePostInput!) {
+        createPost(input: $input) { post { id } }
+      }
+    `,
+    variableValues: {
+      input: {
+        bodyText: '@x',
+        mentions: [{ end: 2, profileId: wrongTypeId, start: 0 }],
+        visibility: 'UNLISTED',
+      },
+    },
+    contextValue: {
+      session: {
+        profile: {
+          id: crypto.randomUUID(),
+          role: AccountProfileRole.MEMBER,
+        },
+      },
+    },
+  });
+
+  assert.match(result.errors?.[0]?.message ?? '', /is not of type: Profile/);
+  assert.equal(select.mock.callCount(), 0);
 });

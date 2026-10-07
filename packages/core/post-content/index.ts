@@ -68,6 +68,84 @@ export function normalizePostContentPlainText(bodyText: string): string {
   return bodyText.replaceAll('\r\n', '\n').replaceAll('\r', '\n').trim();
 }
 
+export function hasPostContentMentionTokenBoundaries(
+  bodyText: string,
+  start: number,
+  end: number,
+  expectedText = bodyText.slice(start, end),
+): boolean {
+  if (
+    !Number.isInteger(start) ||
+    !Number.isInteger(end) ||
+    start < 0 ||
+    end <= start ||
+    end > bodyText.length ||
+    expectedText.length < 2 ||
+    expectedText[0] !== '@' ||
+    bodyText.slice(start, end) !== expectedText ||
+    splitsPostContentSurrogatePair(bodyText, start) ||
+    splitsPostContentSurrogatePair(bodyText, end)
+  ) {
+    return false;
+  }
+
+  const previous = postContentCodePointBefore(bodyText, start);
+  if (previous && /[\p{L}\p{N}_@]/u.test(previous)) {
+    return false;
+  }
+
+  const next = postContentCodePointAt(bodyText, end);
+  if (!next || !/[\p{L}\p{N}_@.:-]/u.test(next)) {
+    return true;
+  }
+
+  if (/[\p{L}\p{N}_@]/u.test(next)) {
+    return false;
+  }
+
+  const isRemoteRelativeHandle = expectedText.indexOf('@', 1) >= 0;
+  if (next === '-') {
+    return !isRemoteRelativeHandle;
+  }
+  if (next === ':') {
+    return !isRemoteRelativeHandle;
+  }
+  if (next === '.') {
+    return !/[\p{L}\p{N}_-]/u.test(postContentCodePointAt(bodyText, end + 1) ?? '');
+  }
+
+  return false;
+}
+
+function postContentCodePointAt(value: string, offset: number): string | undefined {
+  const codePoint = value.codePointAt(offset);
+  return codePoint === undefined ? undefined : String.fromCodePoint(codePoint);
+}
+
+function postContentCodePointBefore(value: string, offset: number): string | undefined {
+  if (offset === 0) {
+    return undefined;
+  }
+
+  const previousIndex = offset - 1;
+  const previousCodeUnit = value.charCodeAt(previousIndex);
+  const previousStart =
+    previousCodeUnit >= 0xdc00 && previousCodeUnit <= 0xdfff && previousIndex > 0
+      ? previousIndex - 1
+      : previousIndex;
+  return value.slice(previousStart, offset);
+}
+
+function splitsPostContentSurrogatePair(value: string, offset: number): boolean {
+  if (offset <= 0 || offset >= value.length) {
+    return false;
+  }
+
+  const previous = value.charCodeAt(offset - 1);
+  const next = value.charCodeAt(offset);
+  return previous >= 0xd800 && previous <= 0xdbff && next >= 0xdc00 && next <= 0xdfff;
+}
+
 const postContentProfileIdSchema = z.uuid();
 
 export function normalizePostContentProfileId(value: unknown): string {

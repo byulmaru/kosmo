@@ -3,13 +3,13 @@ import { AccountProfileRole, AccountProfileRoleOrder } from '@kosmo/core/enums';
 import { PermissionDeniedError } from '@kosmo/core/error';
 import { and, eq } from 'drizzle-orm';
 import { visibleProfileWhere } from './visibility';
-import type { SessionWithProfileContext } from '@/context';
+import type { SessionContext } from '@/context';
 
-export const resolveComposerProfileId = async (
-  ctx: SessionWithProfileContext,
-  profileId?: string,
-) => {
+export const resolveComposerProfileId = async (ctx: SessionContext, profileId?: string) => {
   if (!profileId) {
+    if (!ctx.session.profile) {
+      throw new PermissionDeniedError('Profile membership is required');
+    }
     return ctx.session.profile.id;
   }
 
