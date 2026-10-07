@@ -5228,7 +5228,7 @@
       "table": "notification_quote_judgment"
     },
     {
-      "value": "(\n        (\"recipient_profile_id\" IS NOT NULL AND \"recipient_account_id\" IS NULL AND \"kind\" <> 'OPERATIONAL')\n        OR (\"recipient_profile_id\" IS NULL AND \"recipient_account_id\" IS NOT NULL AND \"kind\" = 'OPERATIONAL')\n      )",
+      "value": "(\n        (\"recipient_profile_id\" IS NOT NULL AND \"recipient_account_id\" IS NULL AND \"kind\"::varchar <> 'OPERATIONAL')\n        OR (\"recipient_profile_id\" IS NULL AND \"recipient_account_id\" IS NOT NULL AND \"kind\"::varchar = 'OPERATIONAL')\n      )",
       "name": "notification_recipient_kind_check",
       "entityType": "checks",
       "schema": "public",

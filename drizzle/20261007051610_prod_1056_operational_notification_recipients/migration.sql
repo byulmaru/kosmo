@@ -4,6 +4,6 @@ ALTER TABLE "notification" ADD CONSTRAINT "notification_recipient_account_id_kin
 CREATE INDEX "notification_kind_source_id_id_index" ON "notification" ("kind","source_id","id");--> statement-breakpoint
 ALTER TABLE "notification" ADD CONSTRAINT "notification_recipient_account_id_account_id_fkey" FOREIGN KEY ("recipient_account_id") REFERENCES "account"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "notification" ADD CONSTRAINT "notification_recipient_kind_check" CHECK ((
-        ("recipient_profile_id" IS NOT NULL AND "recipient_account_id" IS NULL AND "kind" <> 'OPERATIONAL')
-        OR ("recipient_profile_id" IS NULL AND "recipient_account_id" IS NOT NULL AND "kind" = 'OPERATIONAL')
+        ("recipient_profile_id" IS NOT NULL AND "recipient_account_id" IS NULL AND "kind"::varchar <> 'OPERATIONAL')
+        OR ("recipient_profile_id" IS NULL AND "recipient_account_id" IS NOT NULL AND "kind"::varchar = 'OPERATIONAL')
       ));
