@@ -26,7 +26,6 @@ const SidebarNavigationFragment = graphql`
       selectedProfile {
         id
         relativeHandle
-        unreadNotificationCount
         displayName
         avatar {
           id

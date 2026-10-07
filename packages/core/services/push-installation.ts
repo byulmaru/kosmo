@@ -1,4 +1,4 @@
-import { and, eq, gt, lte, not } from 'drizzle-orm';
+import { and, eq, gt, lte } from 'drizzle-orm';
 import { unionAll } from 'drizzle-orm/pg-core';
 import {
   AccountProfiles,
@@ -59,15 +59,17 @@ export const findEligiblePushInstallations = async ({
 }) => {
   const expiryCutoff = Temporal.Now.instant().subtract({ hours: 24 });
 
+  const installationSelection = {
+    accountId: PushInstallations.accountId,
+    id: PushInstallations.id,
+    notificationCreatedAt: Notifications.createdAt,
+    platform: PushInstallations.platform,
+    sessionId: PushInstallations.sessionId,
+    token: PushInstallations.token,
+  };
+
   const profileNotifications = db
-    .select({
-      accountId: PushInstallations.accountId,
-      id: PushInstallations.id,
-      notificationCreatedAt: Notifications.createdAt,
-      platform: PushInstallations.platform,
-      sessionId: PushInstallations.sessionId,
-      token: PushInstallations.token,
-    })
+    .select(installationSelection)
     .from(Notifications)
     .innerJoin(Profiles, eq(Profiles.id, Notifications.recipientProfileId))
     .innerJoin(AccountProfiles, eq(AccountProfiles.profileId, Profiles.id))
@@ -77,7 +79,6 @@ export const findEligiblePushInstallations = async ({
     .where(
       and(
         eq(Notifications.id, notificationId),
-        not(eq(Notifications.kind, NotificationKind.OPERATIONAL)),
         eq(Profiles.state, ProfileState.ACTIVE),
         eq(Accounts.state, AccountState.ACTIVE),
         eq(Sessions.state, SessionState.ACTIVE),
@@ -87,14 +88,7 @@ export const findEligiblePushInstallations = async ({
     );
 
   const operationalNotifications = db
-    .select({
-      accountId: PushInstallations.accountId,
-      id: PushInstallations.id,
-      notificationCreatedAt: Notifications.createdAt,
-      platform: PushInstallations.platform,
-      sessionId: PushInstallations.sessionId,
-      token: PushInstallations.token,
-    })
+    .select(installationSelection)
     .from(Notifications)
     .innerJoin(Accounts, eq(Accounts.id, Notifications.recipientAccountId))
     .innerJoin(PushInstallations, eq(PushInstallations.accountId, Accounts.id))

@@ -160,7 +160,7 @@ function OperationalOnlyShell({ children }: { children?: ReactNode }) {
             <NotificationReadAllAction />
           </RelayActorBoundary>
           <Button
-            accessibilityState={{ busy: pending, disabled: pending }}
+            accessibilityState={{ busy: pending }}
             disabled={pending}
             onPress={logout}
             size="compact"

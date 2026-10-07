@@ -27,29 +27,6 @@ const sameOperationalData = (stored: unknown, expected: OperationalNotificationD
   );
 };
 
-const findOperationalNotifications = (sendId: string) =>
-  db
-    .select({ data: Notifications.data })
-    .from(Notifications)
-    .where(
-      and(eq(Notifications.kind, NotificationKind.OPERATIONAL), eq(Notifications.sourceId, sendId)),
-    );
-
-const verifyExistingData = async (sendId: string, data: OperationalNotificationData) => {
-  const existing = await findOperationalNotifications(sendId);
-  if (!existing.length) {
-    return false;
-  }
-
-  if (!existing.every(({ data: stored }) => sameOperationalData(stored, data))) {
-    throw ApplicationFailure.nonRetryable(
-      'Operational notification send ID already exists with different data',
-    );
-  }
-
-  return true;
-};
-
 /** Captures one durable audience per send; an empty audience creates no marker row. */
 export const captureOperationalNotificationAudienceActivity = async ({
   sendId,
@@ -99,7 +76,22 @@ export const captureOperationalNotificationAudienceActivity = async ({
       throw error;
     }
 
-    if (await verifyExistingData(sendId, data)) {
+    const existing = await db
+      .select({ data: Notifications.data })
+      .from(Notifications)
+      .where(
+        and(
+          eq(Notifications.kind, NotificationKind.OPERATIONAL),
+          eq(Notifications.sourceId, sendId),
+        ),
+      );
+    if (existing.length > 0) {
+      if (!existing.every(({ data: stored }) => sameOperationalData(stored, data))) {
+        throw ApplicationFailure.nonRetryable(
+          'Operational notification send ID already exists with different data',
+        );
+      }
+
       return true;
     }
 
