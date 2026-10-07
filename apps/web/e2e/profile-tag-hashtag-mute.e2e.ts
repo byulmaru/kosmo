@@ -1,0 +1,736 @@
+import { db, HashtagMuteRules } from '@kosmo/core/db';
+import { HashtagMuteDecision, HashtagMuteScope } from '@kosmo/core/enums';
+import { and, eq } from 'drizzle-orm';
+import { Temporal } from 'temporal-polyfill';
+import {
+  createE2EAccountProfile,
+  createE2EHashtagRelation,
+  createE2EProfile,
+  createE2ESession,
+  resetE2EDatabase,
+  setE2ESessionCookie,
+} from './db-fixtures';
+import { expect, test } from './fixtures';
+import { readGraphQLOperation, waitForGraphQLOperation } from './graphql';
+import type { Page } from '@playwright/test';
+
+test.beforeEach(async () => {
+  await resetE2EDatabase();
+});
+
+test('Profile Tag 알림 상태 조회 실패를 다시 시도한다', async ({ context, page }) => {
+  const viewer = await createE2ESession({ handle: 'prod735-retry-viewer' });
+  const target = await createE2EProfile({ handle: 'prod735-retry-target' });
+  await createE2EHashtagRelation({
+    displayName: 'PROD735Retry',
+    name: 'prod735retry',
+    profileIds: [target.id],
+  });
+  await setE2ESessionCookie(context, viewer.token);
+
+  let failInitialStatusRead = true;
+  await page.route('**/graphql', async (route) => {
+    const operation = readGraphQLOperation(route.request().postData());
+    if (operation?.operationName === 'HashtagRelatedProfilesPageQuery' && failInitialStatusRead) {
+      failInitialStatusRead = false;
+      const response = await route.fetch();
+      const body = (await response.json()) as {
+        data: { node: { viewerMuteRule: unknown } };
+        errors?: unknown[];
+      };
+      body.data.node.viewerMuteRule = null;
+      body.errors = [
+        {
+          message: 'E2E forced viewer mute rule field error',
+          path: ['node', 'viewerMuteRule'],
+        },
+      ];
+      await route.fulfill({ response, body: JSON.stringify(body) });
+      return;
+    }
+    await route.fallback();
+  });
+
+  await page.goto(`/@${target.handle}`);
+  await expect(page.getByTestId('profile-tag-mute-trigger')).toHaveCount(0);
+  await page.getByRole('link', { name: /관련 프로필 보기$/u }).click();
+  await expect(
+    page.getByRole('button', {
+      exact: true,
+      name: '#PROD735Retry 알림 상태를 불러오지 못했어요. 다시 시도',
+    }),
+  ).toBeVisible();
+
+  const retryResponse = waitForGraphQLOperation(page, 'ProfileTagMuteActionRefetchQuery');
+  await page
+    .getByRole('button', {
+      exact: true,
+      name: '#PROD735Retry 알림 상태를 불러오지 못했어요. 다시 시도',
+    })
+    .click();
+  await assertGraphQLSuccess(await retryResponse);
+  await expect(page.getByRole('button', { exact: true, name: '#PROD735Retry 뮤트' })).toBeVisible();
+});
+
+test('Profile Tag에서 Notification 전용 영구 규칙을 만들고 해제하며 기존 링크를 유지한다', async ({
+  context,
+  page,
+}) => {
+  const browserErrors: string[] = [];
+  const graphQLErrors: string[] = [];
+  page.on('pageerror', (error) => browserErrors.push(error.stack ?? error.message));
+  page.on('console', (message) => {
+    if (message.type() === 'error') {
+      browserErrors.push(message.text());
+    }
+  });
+  page.on('response', (response) => {
+    const operation = readGraphQLOperation(response.request().postData());
+    if (!operation) {
+      return;
+    }
+
+    void response
+      .json()
+      .then((body: { errors?: ReadonlyArray<{ message: string }> }) => {
+        if (body.errors?.length) {
+          graphQLErrors.push(`${operation.operationName}: ${JSON.stringify(body.errors)}`);
+        }
+      })
+      .catch(() => {});
+  });
+
+  const viewer = await createE2ESession({ handle: 'prod735-viewer' });
+  const target = await createE2EProfile({
+    displayName: 'PROD-735 대상 프로필',
+    handle: 'prod735-target',
+  });
+  const hashtag = await createE2EHashtagRelation({
+    displayName: 'PROD735Tag',
+    name: 'prod735tag',
+    profileIds: [target.id],
+  });
+  await setE2ESessionCookie(context, viewer.token);
+
+  let createMutationCount = 0;
+  let releaseCreate!: () => void;
+  let notifyCreateResponseFetched!: () => void;
+  const createRelease = new Promise<void>((resolve) => {
+    releaseCreate = resolve;
+  });
+  const createResponseFetched = new Promise<void>((resolve) => {
+    notifyCreateResponseFetched = resolve;
+  });
+  await page.route('**/graphql', async (route) => {
+    const operation = readGraphQLOperation(route.request().postData());
+    if (operation?.operationName === 'ProfileTagMuteActionCreateMutation') {
+      createMutationCount += 1;
+      if (createMutationCount === 1) {
+        await route.fulfill({
+          body: JSON.stringify({
+            data: null,
+            errors: [{ message: 'E2E forced create failure', path: ['createHashtagMuteRule'] }],
+          }),
+          contentType: 'application/json',
+          status: 200,
+        });
+        return;
+      }
+      const response = await route.fetch();
+      notifyCreateResponseFetched();
+      await createRelease;
+      await route.fulfill({ response });
+      return;
+    }
+    await route.fallback();
+  });
+  await page.goto(`/@${target.handle}`);
+  await expect(page.getByTestId('profile-tag-mute-trigger')).toHaveCount(0);
+  await page.getByRole('link', { name: /관련 프로필 보기$/u }).click();
+
+  await expect(page).toHaveURL(/\/hashtags\/[^/]+\/profiles$/u);
+  await expect(page.getByRole('heading', { name: '#PROD735Tag 관련 프로필' })).toBeVisible();
+
+  const muteButton = () => page.getByRole('button', { exact: true, name: '#PROD735Tag 뮤트' });
+  await expect(muteButton()).toBeVisible();
+  await muteButton().click();
+
+  await expect(page.getByRole('dialog', { name: '이 태그를 뮤트할까요?' })).toBeVisible();
+
+  await page.getByRole('button', { exact: true, name: '취소' }).click();
+  await expect(muteButton()).toBeFocused();
+  expect(createMutationCount).toBe(0);
+  await muteButton().click();
+
+  const failedCreateResponse = waitForGraphQLOperation(page, 'ProfileTagMuteActionCreateMutation');
+  await page.getByRole('button', { exact: true, name: '뮤트' }).click();
+  await failedCreateResponse;
+  await expect(page.getByRole('alert')).toContainText(
+    '#PROD735Tag 새 알림 뮤트 상태를 변경하지 못했어요. 다시 확인해 주세요.',
+  );
+  await expect(muteButton()).toBeVisible();
+  expect(
+    await db
+      .select()
+      .from(HashtagMuteRules)
+      .where(eq(HashtagMuteRules.ownerProfileId, viewer.profile!.id)),
+  ).toHaveLength(0);
+
+  await muteButton().click();
+
+  const createResponse = waitForGraphQLOperation(page, 'ProfileTagMuteActionCreateMutation');
+  await page.getByRole('button', { exact: true, name: '뮤트' }).click();
+  await createResponseFetched;
+  expect(createMutationCount).toBe(2);
+  await expect(page.getByRole('button', { exact: true, name: '뮤트' })).toBeDisabled();
+  releaseCreate();
+  await assertGraphQLSuccess(await createResponse);
+  await expect(
+    page.getByRole('button', { exact: true, name: '#PROD735Tag 뮤트 해제' }),
+  ).toBeVisible();
+  await expect(page.getByRole('alert')).toContainText('#PROD735Tag 새 알림 뮤트를 설정했어요.');
+
+  const detailUrl = page.url();
+  await page.reload();
+  await expect(page).toHaveURL(detailUrl);
+  await expect(page.getByRole('heading', { name: '#PROD735Tag 관련 프로필' })).toBeVisible();
+  await expect(
+    page.getByRole('button', { exact: true, name: '#PROD735Tag 뮤트 해제' }),
+  ).toBeVisible();
+
+  const createdRule = await db
+    .select()
+    .from(HashtagMuteRules)
+    .where(
+      and(
+        eq(HashtagMuteRules.ownerProfileId, viewer.profile!.id),
+        eq(HashtagMuteRules.targetHashtagId, hashtag.id),
+      ),
+    )
+    .then((rows) => rows[0]);
+  expect(createdRule).toMatchObject({
+    decision: HashtagMuteDecision.EXCLUDE,
+    expiresAt: null,
+    ownerProfileId: viewer.profile!.id,
+    scopes: [HashtagMuteScope.NOTIFICATION],
+    targetHashtagId: hashtag.id,
+  });
+
+  const unmuteButton = () =>
+    page.getByRole('button', { exact: true, name: '#PROD735Tag 뮤트 해제' });
+  await unmuteButton().click();
+
+  await expect(page.getByRole('dialog', { name: '이 태그를 뮤트 해제할까요?' })).toBeVisible();
+  const deleteResponse = waitForGraphQLOperation(page, 'ProfileTagMuteActionDeleteMutation');
+  await page.getByRole('button', { exact: true, name: '뮤트 해제' }).click();
+  await assertGraphQLSuccess(await deleteResponse);
+  try {
+    await expect(muteButton()).toBeVisible();
+  } catch (error) {
+    const diagnostics = [...browserErrors, ...graphQLErrors].join('\n');
+    throw new Error([diagnostics, String(error)].filter(Boolean).join('\n'));
+  }
+  await expect(page.getByRole('alert')).toContainText('#PROD735Tag 새 알림 뮤트를 해제했어요.');
+  expect(
+    await db
+      .select()
+      .from(HashtagMuteRules)
+      .where(
+        and(
+          eq(HashtagMuteRules.ownerProfileId, viewer.profile!.id),
+          eq(HashtagMuteRules.targetHashtagId, hashtag.id),
+        ),
+      ),
+  ).toHaveLength(0);
+
+  await expect(page).toHaveURL(/\/hashtags\/[^/]+\/profiles$/u);
+  await expect(page.getByRole('heading', { name: '#PROD735Tag 관련 프로필' })).toBeVisible();
+});
+
+test('Notification 범위만 해제해도 활성 임시 규칙의 다른 범위·결정·만료 시각을 보존한다', async ({
+  context,
+  page,
+}) => {
+  const viewer = await createE2ESession({ handle: 'prod735-temporary-notification-viewer' });
+  const target = await createE2EProfile({ handle: 'prod735-temporary-notification-target' });
+  const hashtag = await createE2EHashtagRelation({
+    displayName: 'PROD735TemporaryNotification',
+    name: 'prod735temporarynotification',
+    profileIds: [target.id],
+  });
+  const expiresAt = Temporal.Now.instant().add({ hours: 1 });
+  const originalRule = await db
+    .insert(HashtagMuteRules)
+    .values({
+      ownerProfileId: viewer.profile!.id,
+      targetHashtagId: hashtag.id,
+      scopes: [HashtagMuteScope.HOME, HashtagMuteScope.NOTIFICATION],
+      decision: HashtagMuteDecision.COLLAPSE,
+      expiresAt,
+    })
+    .returning()
+    .then((rows) => rows[0]!);
+
+  await setE2ESessionCookie(context, viewer.token);
+  await page.goto(`/@${target.handle}`);
+  await expect(page.getByTestId('profile-tag-mute-trigger')).toHaveCount(0);
+  await page.getByRole('link', { name: /관련 프로필 보기$/u }).click();
+
+  const unmuteButton = page.getByRole('button', {
+    exact: true,
+    name: '#PROD735TemporaryNotification 뮤트 해제',
+  });
+  await expect(unmuteButton).toBeVisible();
+  await unmuteButton.click();
+  await expect(page.getByRole('dialog', { name: '이 태그를 뮤트 해제할까요?' })).toBeVisible();
+
+  const updateResponse = waitForGraphQLOperation(page, 'ProfileTagMuteActionUpdateMutation');
+  await page.getByRole('button', { exact: true, name: '뮤트 해제' }).click();
+  await assertGraphQLSuccess(await updateResponse);
+  await expect(
+    page.getByRole('button', {
+      exact: true,
+      name: '#PROD735TemporaryNotification 새 알림 뮤트 불가. 다른 임시 뮤트 규칙이 적용 중',
+    }),
+  ).toBeVisible();
+
+  const [remainingRule] = await db
+    .select()
+    .from(HashtagMuteRules)
+    .where(eq(HashtagMuteRules.id, originalRule.id));
+  expect(remainingRule).toMatchObject({
+    decision: HashtagMuteDecision.COLLAPSE,
+    ownerProfileId: viewer.profile!.id,
+    scopes: [HashtagMuteScope.HOME],
+    targetHashtagId: hashtag.id,
+  });
+  expect(remainingRule?.expiresAt?.toString()).toBe(originalRule.expiresAt?.toString());
+});
+
+for (const transition of ['hashtag', 'profile'] as const) {
+  test(`뮤트 요청이 늦게 완료돼도 ${transition} 전환 뒤 새 화면의 상태·토스트·포커스를 덮어쓰지 않는다`, async ({
+    context,
+    page,
+  }) => {
+    const viewer = await createE2ESession({ handle: `prod735-late-response-${transition}-viewer` });
+    const target = await createE2EProfile({ handle: `prod735-late-response-${transition}-target` });
+    const firstHashtag = await createE2EHashtagRelation({
+      displayName: 'PROD735LateFirst',
+      name: 'prod735latefirst',
+      profileIds: [target.id],
+    });
+    const secondHashtag =
+      transition === 'hashtag'
+        ? await createE2EHashtagRelation({
+            displayName: 'PROD735LateSecond',
+            name: 'prod735latesecond',
+            profileIds: [target.id],
+          })
+        : null;
+    const secondProfile =
+      transition === 'profile'
+        ? await createE2EAccountProfile({
+            accountId: viewer.account.id,
+            handle: 'prod735-late-response-profile-b',
+          })
+        : null;
+    await setE2ESessionCookie(context, viewer.token);
+
+    let releaseCreate!: () => void;
+    let notifyCreateResponseFetched!: () => void;
+    const createRelease = new Promise<void>((resolve) => {
+      releaseCreate = resolve;
+    });
+    const createResponseFetched = new Promise<void>((resolve) => {
+      notifyCreateResponseFetched = resolve;
+    });
+    await page.route('**/graphql', async (route) => {
+      const operation = readGraphQLOperation(route.request().postData());
+      if (operation?.operationName === 'ProfileTagMuteActionCreateMutation') {
+        const response = await route.fetch();
+        notifyCreateResponseFetched();
+        await createRelease;
+        await route.fulfill({ response });
+        return;
+      }
+      await route.fallback();
+    });
+
+    await page.goto(`/@${target.handle}`);
+    await expect(page.getByTestId('profile-tag-mute-trigger')).toHaveCount(0);
+    await page
+      .getByRole('link', { exact: true, name: '#PROD735LateFirst 관련 프로필 보기' })
+      .click();
+    await expect(
+      page.getByRole('heading', { name: '#PROD735LateFirst 관련 프로필' }),
+    ).toBeVisible();
+    await page.getByRole('button', { exact: true, name: '#PROD735LateFirst 뮤트' }).click();
+    await expect(page.getByRole('dialog', { name: '이 태그를 뮤트할까요?' })).toBeVisible();
+
+    const createResponse = waitForGraphQLOperation(page, 'ProfileTagMuteActionCreateMutation');
+    await page.getByRole('button', { exact: true, name: '뮤트' }).click();
+    await createResponseFetched;
+
+    await page.goBack();
+    await expect(page).toHaveURL(new RegExp(`/@${target.handle}$`, 'u'));
+    if (transition === 'profile') {
+      await selectProfileFromSwitcher(page, secondProfile!.handle);
+    }
+    const nextTagLink =
+      transition === 'hashtag'
+        ? '#PROD735LateSecond 관련 프로필 보기'
+        : '#PROD735LateFirst 관련 프로필 보기';
+    await page.getByRole('link', { exact: true, name: nextTagLink }).click();
+    await expect(
+      page.getByRole('heading', {
+        name:
+          transition === 'hashtag'
+            ? '#PROD735LateSecond 관련 프로필'
+            : '#PROD735LateFirst 관련 프로필',
+      }),
+    ).toBeVisible();
+    const secondMuteButton = page.getByRole('button', {
+      exact: true,
+      name: transition === 'hashtag' ? '#PROD735LateSecond 뮤트' : '#PROD735LateFirst 뮤트',
+    });
+    await expect(secondMuteButton).toBeVisible();
+    await secondMuteButton.focus();
+    await expect(secondMuteButton).toBeFocused();
+
+    releaseCreate();
+    await assertGraphQLSuccess(await createResponse);
+    await expect(
+      page.getByRole('heading', {
+        name:
+          transition === 'hashtag'
+            ? '#PROD735LateSecond 관련 프로필'
+            : '#PROD735LateFirst 관련 프로필',
+      }),
+    ).toBeVisible();
+    await expect(secondMuteButton).toBeVisible();
+    await expect(secondMuteButton).toBeFocused();
+    await expect(page.getByRole('alert')).toHaveCount(0);
+
+    expect(
+      await db
+        .select()
+        .from(HashtagMuteRules)
+        .where(
+          and(
+            eq(HashtagMuteRules.ownerProfileId, viewer.profile!.id),
+            eq(HashtagMuteRules.targetHashtagId, firstHashtag.id),
+          ),
+        ),
+    ).toHaveLength(1);
+    if (transition === 'hashtag') {
+      expect(
+        await db
+          .select()
+          .from(HashtagMuteRules)
+          .where(
+            and(
+              eq(HashtagMuteRules.ownerProfileId, viewer.profile!.id),
+              eq(HashtagMuteRules.targetHashtagId, secondHashtag!.id),
+            ),
+          ),
+      ).toHaveLength(0);
+    }
+  });
+}
+
+for (const action of ['create', 'update'] as const) {
+  test(`Profile Tag ${action} 성공 후 알림 상태 projection 오류에도 완료하고 상태 조회를 재시도한다`, async ({
+    context,
+    page,
+  }) => {
+    const viewer = await createE2ESession({ handle: `prod735-partial-${action}-viewer` });
+    const target = await createE2EProfile({ handle: `prod735-partial-${action}-target` });
+    const hashtag = await createE2EHashtagRelation({
+      displayName: 'PROD735Partial',
+      name: 'prod735partial',
+      profileIds: [target.id],
+    });
+    const originalRule =
+      action === 'update'
+        ? await db
+            .insert(HashtagMuteRules)
+            .values({
+              ownerProfileId: viewer.profile!.id,
+              targetHashtagId: hashtag.id,
+              scopes: [HashtagMuteScope.HOME],
+              decision: HashtagMuteDecision.COLLAPSE,
+              expiresAt: null,
+            })
+            .returning()
+            .then((rows) => rows[0]!)
+        : null;
+    await setE2ESessionCookie(context, viewer.token);
+
+    const operationName =
+      action === 'create'
+        ? 'ProfileTagMuteActionCreateMutation'
+        : 'ProfileTagMuteActionUpdateMutation';
+    const mutationField = action === 'create' ? 'createHashtagMuteRule' : 'updateHashtagMuteRule';
+    await page.route('**/graphql', async (route) => {
+      const operation = readGraphQLOperation(route.request().postData());
+      if (operation?.operationName === operationName) {
+        const response = await route.fetch();
+        const body = (await response.json()) as {
+          data: Record<
+            string,
+            { hashtagMuteRule: { id: string; targetHashtag: { viewerMuteRule: unknown } } }
+          >;
+          errors?: unknown[];
+        };
+        expect(response.ok()).toBe(true);
+        expect(body.errors).toBeUndefined();
+        expect(body.data[mutationField]!.hashtagMuteRule.id).toBeTruthy();
+        body.data[mutationField]!.hashtagMuteRule.targetHashtag.viewerMuteRule = null;
+        body.errors = [
+          {
+            message: 'E2E forced viewer mute rule projection failure',
+            path: [mutationField, 'hashtagMuteRule', 'targetHashtag', 'viewerMuteRule'],
+          },
+        ];
+        await route.fulfill({ response, body: JSON.stringify(body) });
+        return;
+      }
+      await route.fallback();
+    });
+
+    await page.goto(`/@${target.handle}`);
+    await expect(page.getByTestId('profile-tag-mute-trigger')).toHaveCount(0);
+    await page.getByRole('link', { name: /관련 프로필 보기$/u }).click();
+    await page.getByRole('button', { exact: true, name: '#PROD735Partial 뮤트' }).click();
+
+    const dialog = page.getByRole('dialog', { name: '이 태그를 뮤트할까요?' });
+    await expect(dialog).toBeVisible();
+    const mutationResponse = waitForGraphQLOperation(page, operationName);
+    await page.getByRole('button', { exact: true, name: '뮤트' }).click();
+    await mutationResponse;
+
+    await expect(dialog).toBeHidden();
+    await expect(page.getByRole('alert')).toContainText(
+      '#PROD735Partial 새 알림 뮤트를 설정했어요.',
+    );
+    const retry = page.getByRole('button', {
+      exact: true,
+      name: '#PROD735Partial 알림 상태를 불러오지 못했어요. 다시 시도',
+    });
+    await expect(retry).toBeFocused();
+
+    const rules = await db
+      .select()
+      .from(HashtagMuteRules)
+      .where(
+        and(
+          eq(HashtagMuteRules.ownerProfileId, viewer.profile!.id),
+          eq(HashtagMuteRules.targetHashtagId, hashtag.id),
+        ),
+      );
+    expect(rules).toHaveLength(1);
+    expect(rules[0]).toMatchObject({
+      ...(originalRule ? { id: originalRule.id } : {}),
+      decision: action === 'create' ? HashtagMuteDecision.EXCLUDE : HashtagMuteDecision.COLLAPSE,
+      expiresAt: null,
+      ownerProfileId: viewer.profile!.id,
+      scopes:
+        action === 'create'
+          ? [HashtagMuteScope.NOTIFICATION]
+          : [HashtagMuteScope.HOME, HashtagMuteScope.NOTIFICATION],
+      targetHashtagId: hashtag.id,
+    });
+
+    const retryResponse = waitForGraphQLOperation(page, 'ProfileTagMuteActionRefetchQuery');
+    await retry.click();
+    await assertGraphQLSuccess(await retryResponse);
+    await expect(
+      page.getByRole('button', {
+        exact: true,
+        name: '#PROD735Partial 뮤트 해제',
+      }),
+    ).toBeVisible();
+  });
+}
+
+test('Notification 범위를 추가·해제할 때 영구인 다른 범위와 selected Profile을 보존한다', async ({
+  context,
+  page,
+}) => {
+  const owner = await createE2ESession({ handle: 'prod735-owner-a' });
+  const secondProfile = await createE2EAccountProfile({
+    accountId: owner.account.id,
+    handle: 'prod735-owner-b',
+  });
+  const target = await createE2EProfile({ handle: 'prod735-shared-target' });
+  const hashtag = await createE2EHashtagRelation({
+    displayName: 'PROD735Shared',
+    name: 'prod735shared',
+    profileIds: [target.id],
+  });
+  const originalRule = await db
+    .insert(HashtagMuteRules)
+    .values({
+      ownerProfileId: owner.profile!.id,
+      targetHashtagId: hashtag.id,
+      scopes: [HashtagMuteScope.HOME],
+      decision: HashtagMuteDecision.COLLAPSE,
+      expiresAt: null,
+    })
+    .returning()
+    .then((rows) => rows[0]!);
+
+  await setE2ESessionCookie(context, owner.token);
+  await page.setViewportSize({ height: 844, width: 1024 });
+  await page.goto(`/@${target.handle}`);
+  await expect(page.getByTestId('profile-tag-mute-trigger')).toHaveCount(0);
+  await page.getByRole('link', { name: /관련 프로필 보기$/u }).click();
+
+  const firstMuteButton = () =>
+    page.getByRole('button', { exact: true, name: '#PROD735Shared 뮤트' });
+  await firstMuteButton().click();
+
+  const addResponse = waitForGraphQLOperation(page, 'ProfileTagMuteActionUpdateMutation');
+  await page.getByRole('button', { exact: true, name: '뮤트' }).click();
+  await assertGraphQLSuccess(await addResponse);
+  await expect(
+    page.getByRole('button', { exact: true, name: '#PROD735Shared 뮤트 해제' }),
+  ).toBeVisible();
+
+  let rule = await db
+    .select()
+    .from(HashtagMuteRules)
+    .where(eq(HashtagMuteRules.id, originalRule.id))
+    .then((rows) => rows[0]);
+  expect(rule).toMatchObject({
+    decision: HashtagMuteDecision.COLLAPSE,
+    expiresAt: null,
+    scopes: [HashtagMuteScope.HOME, HashtagMuteScope.NOTIFICATION],
+  });
+
+  await page.goBack();
+  await expect(page).toHaveURL(new RegExp(`/@${target.handle}$`, 'u'));
+  await selectProfileFromSwitcher(page, secondProfile.handle);
+  await page.getByRole('link', { exact: true, name: '#PROD735Shared 관련 프로필 보기' }).click();
+  await expect(firstMuteButton()).toBeVisible();
+  await expect(
+    page.getByRole('button', { exact: true, name: '#PROD735Shared 뮤트 해제' }),
+  ).toHaveCount(0);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  await page.goBack();
+  await expect(page).toHaveURL(new RegExp(`/@${target.handle}$`, 'u'));
+  await selectProfileFromSwitcher(page, owner.profile!.handle);
+  await page.getByRole('link', { exact: true, name: '#PROD735Shared 관련 프로필 보기' }).click();
+  const unmuteButton = () =>
+    page.getByRole('button', { exact: true, name: '#PROD735Shared 뮤트 해제' });
+  await expect(unmuteButton()).toBeVisible();
+  await unmuteButton().click();
+
+  const removeResponse = waitForGraphQLOperation(page, 'ProfileTagMuteActionUpdateMutation');
+  await page.getByRole('button', { exact: true, name: '뮤트 해제' }).click();
+  await assertGraphQLSuccess(await removeResponse);
+  await expect(firstMuteButton()).toBeVisible();
+
+  rule = await db
+    .select()
+    .from(HashtagMuteRules)
+    .where(eq(HashtagMuteRules.id, originalRule.id))
+    .then((rows) => rows[0]);
+  expect(rule).toMatchObject({
+    decision: HashtagMuteDecision.COLLAPSE,
+    expiresAt: null,
+    scopes: [HashtagMuteScope.HOME],
+  });
+  expect(
+    await db
+      .select()
+      .from(HashtagMuteRules)
+      .where(
+        and(
+          eq(HashtagMuteRules.ownerProfileId, secondProfile.id),
+          eq(HashtagMuteRules.targetHashtagId, hashtag.id),
+        ),
+      ),
+  ).toHaveLength(0);
+});
+
+test('다른 범위의 임시 규칙이 있으면 규칙을 변경하지 않고 영구 뮤트 불가 사유를 안내한다', async ({
+  context,
+  page,
+}) => {
+  const viewer = await createE2ESession({ handle: 'prod735-temporary-viewer' });
+  const target = await createE2EProfile({ handle: 'prod735-temporary-target' });
+  const hashtag = await createE2EHashtagRelation({
+    displayName: 'PROD735Temporary',
+    name: 'prod735temporary',
+    profileIds: [target.id],
+  });
+  const expiresAt = Temporal.Now.instant().add({ hours: 1 });
+  const originalRule = await db
+    .insert(HashtagMuteRules)
+    .values({
+      ownerProfileId: viewer.profile!.id,
+      targetHashtagId: hashtag.id,
+      scopes: [HashtagMuteScope.HOME],
+      decision: HashtagMuteDecision.EXCLUDE,
+      expiresAt,
+    })
+    .returning()
+    .then((rows) => rows[0]!);
+
+  await setE2ESessionCookie(context, viewer.token);
+  await page.goto(`/@${target.handle}`);
+  await expect(page.getByTestId('profile-tag-mute-trigger')).toHaveCount(0);
+  await page.getByRole('link', { name: /관련 프로필 보기$/u }).click();
+  const trigger = page.getByRole('button', {
+    exact: true,
+    name: '#PROD735Temporary 새 알림 뮤트 불가. 다른 임시 뮤트 규칙이 적용 중',
+  });
+  await expect(trigger).toBeVisible();
+  let mutationCount = 0;
+  page.on('request', (request) => {
+    const operation = readGraphQLOperation(request.postData());
+    if (
+      operation &&
+      [
+        'ProfileTagMuteActionCreateMutation',
+        'ProfileTagMuteActionUpdateMutation',
+        'ProfileTagMuteActionDeleteMutation',
+      ].includes(operation.operationName ?? '')
+    ) {
+      mutationCount += 1;
+    }
+  });
+
+  await trigger.click();
+
+  await expect(page.getByRole('alert')).toContainText(
+    '현재 규칙을 보존하며, 만료 후 상태를 새로고침하면 영구 알림 뮤트를 설정할 수 있어요.',
+  );
+  expect(mutationCount).toBe(0);
+  expect(
+    await db.select().from(HashtagMuteRules).where(eq(HashtagMuteRules.id, originalRule.id)),
+  ).toEqual([originalRule]);
+});
+
+async function assertGraphQLSuccess(response: Awaited<ReturnType<typeof waitForGraphQLOperation>>) {
+  const body = (await response.json()) as { errors?: unknown[] };
+  expect(response.ok(), JSON.stringify(body, null, 2)).toBe(true);
+  expect(body.errors, JSON.stringify(body, null, 2)).toBeUndefined();
+}
+
+async function selectProfileFromSwitcher(page: Page, handle: string) {
+  await page.getByRole('button', { name: '프로필 목록' }).first().click();
+  await expect(page.getByLabel('프로필 전환')).toBeVisible();
+  const selection = waitForGraphQLOperation(page, 'ProfileSwitcherSelectProfileMutation');
+  const routeQuery = waitForGraphQLOperation(page, 'ProfileLayoutQuery');
+  await page
+    .getByLabel('전환할 프로필 목록')
+    .getByRole('button')
+    .filter({ hasText: `@${handle}` })
+    .click();
+  await assertGraphQLSuccess(await selection);
+  await assertGraphQLSuccess(await routeQuery);
+  await expect(page.getByRole('progressbar')).toHaveCount(0);
+}

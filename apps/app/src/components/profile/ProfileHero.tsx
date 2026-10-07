@@ -384,8 +384,10 @@ const styles = StyleSheet.create({
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: space[8], marginTop: space[12] },
   tagTarget: {
     alignItems: 'center',
+    flexShrink: 1,
     justifyContent: 'center',
     maxWidth: '100%',
+    minWidth: 0,
   },
   counts: { flexDirection: 'row', gap: space[16], marginTop: space[12] },
   countLink: { flexDirection: 'row', gap: space[4] },

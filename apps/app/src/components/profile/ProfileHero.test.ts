@@ -118,6 +118,9 @@ mockModule(new URL('./ProfileBlockAction.tsx', import.meta.url), {
 mockModule(new URL('./ProfileMuteAction.tsx', import.meta.url), {
   ProfileMuteAction: 'ProfileMuteAction',
 });
+mockModule(new URL('./ProfileTagMuteAction.tsx', import.meta.url), {
+  ProfileTagMuteAction: 'ProfileTagMuteAction',
+});
 mockModule(new URL('./ProfileMoreMenu.tsx', import.meta.url), {
   ProfileMoreMenu: 'ProfileMoreMenu',
 });
@@ -500,6 +503,10 @@ describe('ProfileHero Profile Tag presentation', () => {
         },
       ],
     );
+    const muteActions = tagList.findAll(
+      (node) => (node.type as unknown) === 'ProfileTagMuteAction',
+    );
+    assert.equal(muteActions.length, 0);
     assert.deepEqual(platformSelections, [
       { android: 48, default: 48, ios: 44, web: 32 },
       { android: 48, default: 48, ios: 44, web: 32 },

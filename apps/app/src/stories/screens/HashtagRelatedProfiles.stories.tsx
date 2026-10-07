@@ -60,6 +60,7 @@ function hashtag({
 }) {
   return {
     __typename: 'Hashtag' as const,
+    viewerMuteRule: null,
     id,
     name,
     relatedProfiles: relatedProfilesConnection(profiles, hasNextPage),
@@ -87,6 +88,7 @@ const paginationNextPage = {
   node: {
     __typename: 'Hashtag' as const,
     id: paginationHashtag.id,
+    viewerMuteRule: null,
     name: paginationHashtag.name,
     relatedProfiles: {
       ...relatedProfilesConnection([relatedC]),
