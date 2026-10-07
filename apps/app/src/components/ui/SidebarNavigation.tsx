@@ -1,3 +1,4 @@
+import { Link } from 'expo-router';
 import {
   Bell,
   Bookmark,
@@ -9,6 +10,7 @@ import {
   Mail,
   Search,
   Settings as SettingsIcon,
+  Smartphone,
   SquarePen,
   UserRound,
   UserRoundPlus,
@@ -22,6 +24,7 @@ import { Avatar } from './Avatar';
 import { getIconButtonHitSlop } from './IconButton';
 import { getInteractionTargetSize } from './interactionTarget';
 import { getUnreadNotificationAccessibilityLabel } from './navigationChrome';
+import type { Href } from 'expo-router';
 import type { LucideIcon } from 'lucide-react-native';
 import type { ReactElement, Ref } from 'react';
 import type { PressableStateCallbackType, ViewStyle } from 'react-native';
@@ -71,6 +74,7 @@ type SidebarControlProps = {
   disabled?: boolean;
   destination?: NavigationDestination;
   expanded?: boolean;
+  href?: Href;
   hasMenu?: boolean;
   Icon: LucideIcon;
   label: string;
@@ -92,6 +96,7 @@ function SidebarControl({
   destination,
   disabled = false,
   expanded,
+  href,
   hasMenu = false,
   Icon,
   label,
@@ -109,6 +114,9 @@ function SidebarControl({
   const [focusVisible, setFocusVisible] = useState(false);
   const active = selected && !disabled;
   const controlDisabled = disabled || busy;
+  const linkAttrs = href
+    ? { hrefAttrs: { rel: 'noopener noreferrer', target: '_blank' } }
+    : {};
   const unread = unreadCount !== null && unreadCount > 0;
   const color = controlDisabled
     ? theme.stateDisabledForeground
@@ -120,12 +128,13 @@ function SidebarControl({
 
   const control = (
     <Pressable
+      {...linkAttrs}
       aria-busy={busy || undefined}
       aria-current={active ? 'page' : undefined}
       aria-expanded={expanded}
       aria-haspopup={hasMenu ? 'menu' : undefined}
       accessibilityLabel={accessibilityLabel ?? label}
-      accessibilityRole="button"
+      accessibilityRole={href ? 'link' : 'button'}
       accessibilityState={{
         disabled: controlDisabled,
         ...(busy ? { busy: true } : {}),
@@ -144,7 +153,7 @@ function SidebarControl({
         };
         setFocusVisible(Boolean(target.matches?.(':focus-visible')));
       }}
-      onPress={renderControl && destination ? undefined : onPress}
+      onPress={href || (renderControl && destination) ? undefined : onPress}
       ref={controlRef}
       style={StyleSheet.flatten([
         styles.control,
@@ -261,16 +270,21 @@ function SidebarControl({
     </Pressable>
   );
 
-  const renderedControl =
-    renderControl && destination
-      ? renderControl({
-          children: control,
-          destination,
-          disabled: controlDisabled,
-          onPress,
-          selected: active,
-        })
-      : control;
+  const renderedControl = href ? (
+    <Link asChild href={href} rel="noopener noreferrer" target="_blank">
+      {control}
+    </Link>
+  ) : renderControl && destination ? (
+    renderControl({
+      children: control,
+      destination,
+      disabled: controlDisabled,
+      onPress,
+      selected: active,
+    })
+  ) : (
+    control
+  );
 
   return compact ? <View style={styles.compactTarget}>{renderedControl}</View> : renderedControl;
 }
@@ -386,6 +400,16 @@ export function SidebarNavigation({
           { borderColor: theme.borderSubtle },
         ]}
       >
+        {showFeedback && Platform.OS === 'web' ? (
+          <SidebarControl
+            compact={compact}
+            href="https://forms.gle/hzuQTGab6JLAjbzb8"
+            Icon={Smartphone}
+            label="모바일 앱 베타테스트 신청"
+            onPress={() => undefined}
+          />
+        ) : null}
+
         {showFeedback ? (
           <SidebarControl
             compact={compact}

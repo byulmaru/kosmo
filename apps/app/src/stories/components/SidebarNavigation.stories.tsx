@@ -41,6 +41,8 @@ const labels = {
   search: '검색',
   settings: '설정',
 } satisfies Record<NavigationDestination, string>;
+const betaApplicationLabel = '모바일 앱 베타테스트 신청';
+const betaApplicationHref = 'https://forms.gle/hzuQTGab6JLAjbzb8';
 
 function SidebarNavigationCatalog({
   currentDestination = 'home',
@@ -356,6 +358,18 @@ export const InteractionContract: Story = {
     args.onNavigate.mockClear();
     const navigation = getNavigation(canvasElement);
     const presentation = args.presentation ?? 'full';
+    const betaApplication = within(navigation).getByRole('link', { name: betaApplicationLabel });
+    const feedback = getButton(navigation, 'feedback');
+    const rel = betaApplication.getAttribute('rel') ?? '';
+
+    expect(betaApplication).toHaveAttribute('href', betaApplicationHref);
+    expect(betaApplication).toHaveAttribute('target', '_blank');
+    expect(rel.split(/\s+/)).toContain('noopener');
+    expect(rel.split(/\s+/)).toContain('noreferrer');
+    expect(
+      betaApplication.compareDocumentPosition(feedback) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
     const home = getButton(navigation, 'home');
     const search = getButton(navigation, 'search');
     const notifications = getButton(navigation, 'notifications');
@@ -467,7 +481,10 @@ export const CompactInteractionContract: Story = {
     onMenuOpenChange.mockClear();
     args.onNavigate.mockClear();
     const navigation = getNavigation(canvasElement);
+    const betaApplication = within(navigation).getByRole('link', { name: betaApplicationLabel });
     const utility = within(navigation).getByRole('button', { name: '설정 및 기타' });
+
+    expectRect(betaApplication, 44, 44);
 
     await step('ActionMenu 선택 callback 확인', async () => {
       await userEvent.click(utility);
@@ -501,9 +518,10 @@ async function playInlineUtility({
   onNavigate.mockClear();
   const navigation = getNavigation(canvasElement);
   const utility = within(navigation).getByRole('button', { name: '설정 및 기타' });
+  const betaApplication = within(navigation).getByRole('link', { name: betaApplicationLabel });
   const feedback = getButton(navigation, 'feedback');
   const home = getButton(navigation, 'home');
-  const footer = feedback.parentElement;
+  const footer = betaApplication.parentElement;
   const utilityVisual = within(utility).getByTestId('sidebar-control-visual');
   const utilityIcons = utilityVisual.querySelectorAll('svg');
   const utilityIconRect = utilityIcons[0].getBoundingClientRect();
@@ -521,12 +539,21 @@ async function playInlineUtility({
   expectRect(navigation, 320, 720);
   expect(home.getBoundingClientRect().top - navigation.getBoundingClientRect().top).toBe(24);
   expectRect(home, 288, 45);
+  expectRect(betaApplication, 288, 45);
   expectRect(utility, 288, 45);
   expectRect(feedback, 288, 45);
   expect(footer).not.toBeNull();
-  expectRect(footer!, 288, 94);
-  expect(feedback.getBoundingClientRect().top - footer!.getBoundingClientRect().top).toBe(4);
-  expect(utility.getBoundingClientRect().top - footer!.getBoundingClientRect().top).toBe(49);
+  expect(betaApplication.parentElement).toBe(footer);
+  expect(feedback.parentElement).toBe(footer);
+  expect(utility.parentElement).toBe(footer);
+  expectRect(footer!, 288, 139);
+  expect(betaApplication.getBoundingClientRect().top - footer!.getBoundingClientRect().top).toBe(4);
+  expect(feedback.getBoundingClientRect().top - footer!.getBoundingClientRect().top).toBe(49);
+  expect(utility.getBoundingClientRect().top - footer!.getBoundingClientRect().top).toBe(94);
+  expect(feedback.getBoundingClientRect().top - betaApplication.getBoundingClientRect().bottom).toBe(0);
+  expect(
+    betaApplication.compareDocumentPosition(feedback) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
   expect(feedback.closest('[role="menu"]')).toBeNull();
   expect(utility).toHaveAttribute('aria-expanded', 'false');
   expect(utilityIcons).toHaveLength(2);
@@ -641,10 +668,17 @@ export const NarrowDrawerLayoutContract: Story = {
   parameters: { controls: { disable: true } },
   play: async ({ canvasElement }) => {
     const navigation = getNavigation(canvasElement);
+    const betaApplication = within(navigation).getByRole('link', { name: betaApplicationLabel });
+    const betaLabel = within(betaApplication).getByText(betaApplicationLabel);
+    const betaRect = betaApplication.getBoundingClientRect();
+    const betaLabelRect = betaLabel.getBoundingClientRect();
 
     expectRect(navigation, 272, 720);
     expectRect(getButton(navigation, 'home'), 240, 45);
+    expectRect(betaApplication, 240, 45);
     expectRect(getButton(navigation, 'feedback'), 240, 45);
+    expect(betaLabelRect.right).toBeLessThanOrEqual(betaRect.right);
+    expect(betaLabelRect.bottom).toBeLessThanOrEqual(betaRect.bottom);
   },
 };
 
@@ -681,6 +715,7 @@ export const FeedbackUnavailableContract: Story = {
     args.onNavigate.mockClear();
     const navigation = getNavigation(canvasElement);
     expect(within(navigation).queryByRole('button', { name: '피드백 보내기' })).toBeNull();
+    expect(within(navigation).queryByRole('link', { name: betaApplicationLabel })).toBeNull();
     expect(within(navigation).getByRole('button', { name: '설정 및 기타' })).toBeVisible();
     expect(args.onNavigate).not.toHaveBeenCalledWith('feedback');
   },

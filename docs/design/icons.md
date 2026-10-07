@@ -78,6 +78,7 @@ back에 chevron을 사용하지 않는다.
 | Shell            | 팔로우 요청      | `UserRoundPlus`                | Home, `SidebarNavigation`                                                               |
 | Shell            | 북마크           | `Bookmark`                     | `SidebarNavigation`, `PostActionBar`                                                    |
 | Shell            | 설정             | `Settings`                     | `SidebarNavigation`                                                                     |
+| Shell            | 모바일 앱 베타테스트 신청 | `Smartphone` (20, stroke 2) | Web `SidebarNavigation`; Figma sync·runtime 검증 대기                                   |
 | Shell            | 피드백           | `Mail`                         | `SidebarNavigation`                                                                     |
 | Shell            | 메뉴·drawer 열기 | `Menu`                         | Search route, `UniversalShell`                                                          |
 | Shell            | 로그아웃         | `LogOut`                       | `SidebarNavigation`, `ActionMenu`                                                       |
