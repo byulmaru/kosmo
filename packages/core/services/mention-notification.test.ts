@@ -292,7 +292,7 @@ test('Operational notification visibility follows recipient Account state while 
     .update(Accounts)
     .set({ state: AccountState.SUSPENDED })
     .where(eq(Accounts.id, account.id));
-  assert.equal(await isAvailable(notification.id, true), true);
+  assert.equal(await isAvailable(notification.id, true), false);
 
   await db
     .update(Accounts)
