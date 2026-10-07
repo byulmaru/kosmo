@@ -13,7 +13,13 @@ let session: { accountId: string; selectedProfileId: string | null; status: stri
 };
 let responseListener: ((response: unknown) => void) | null = null;
 const router = { replace: mock.fn() };
-const openURL = mock.fn(async () => undefined);
+let rejectNextOpenURL = false;
+const openURL = mock.fn(async () => {
+  if (rejectNextOpenURL) {
+    rejectNextOpenURL = false;
+    throw new Error('External URL could not be opened.');
+  }
+});
 const resetActor = mock.fn();
 const commitMutation = mock.fn();
 let renderer: ReactTestRenderer | null = null;
@@ -63,6 +69,7 @@ afterEach(async () => {
   responseListener = null;
   router.replace.mock.resetCalls();
   openURL.mock.resetCalls();
+  rejectNextOpenURL = false;
   resetActor.mock.resetCalls();
   commitMutation.mock.resetCalls();
   clearResponseCount = 0;
@@ -103,6 +110,28 @@ describe('operational native push responses', () => {
       [['https://external.example/notice']],
     );
     assert.equal(router.replace.mock.callCount(), 0);
+    assert.equal(resetActor.mock.callCount(), 0);
+    assert.equal(commitMutation.mock.callCount(), 0);
+  });
+
+  it('falls back to notifications when opening a matching external Account destination fails', async () => {
+    await renderHook();
+    rejectNextOpenURL = true;
+
+    await handle({
+      href: 'https://external.example/notice',
+      notificationId: 'operational-open-failure',
+      recipientAccountId: 'account-1',
+    });
+
+    assert.deepEqual(
+      openURL.mock.calls.map(({ arguments: args }) => args),
+      [['https://external.example/notice']],
+    );
+    assert.deepEqual(
+      router.replace.mock.calls.map(({ arguments: args }) => args),
+      [['/notifications']],
+    );
     assert.equal(resetActor.mock.callCount(), 0);
     assert.equal(commitMutation.mock.callCount(), 0);
   });
