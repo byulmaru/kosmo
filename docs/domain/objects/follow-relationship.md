@@ -41,6 +41,14 @@ inbound Move에서 follower와 target 사이의 양방향 Active Profile Block�
 Approval Policy가 Approval Required인 Followee에는 Follow Relationship을 직접 생성하지 않고 Follow Request를 생성한다.
 Approval Policy 변경만으로 기존 Pending Follow Request를 승인하거나 제거하지 않는다.
 
+Following CSV 가져오기는 `Account address` 열의 계정만 현재 선택한 Local Profile의 Follow 대상으로 추가한다.
+`Show boosts`, `Notify on new posts`, `Languages` 같은 내보내기 설정 열은 무시한다. 각 주소는 기존 Profile
+조회와 Follow lifecycle을 거치므로 대상의 eligibility, Profile Block, Follow Approval Policy, 기존 관계의
+멱등성은 일반 Follow와 동일하다. 가져오기는 기존 관계를 제거하거나 설정을 변경하지 않는다. 요청이 접수되면
+사용자가 앱을 닫은 뒤에도 백그라운드에서 계속 처리되며, 접수 응답은 작업 시작을 뜻하고 모든 대상 처리가 끝났음을
+뜻하지 않는다. 같은 Local Profile의 가져오기가 진행 중이면 새 요청은 거절되며, 진행 중인 가져오기가 종료된 뒤에는
+새 요청을 시작할 수 있다.
+
 Follow 생성은 caller 검증 뒤 `profile-follow-pair:{followerProfileId}:{followeeProfileId}` Workflow에 `FOLLOW`
 Update-with-Start된다. transaction Activity가 Open policy면 Follow Relationship을 commit하고, Update handler가
 commit 결과를 즉시 반환한 뒤 Notification과 적용 가능한 ActivityPub effects를 FIFO로 drain하고 Workflow를 종료한다.
@@ -116,7 +124,8 @@ source 관계가 남을 수 있다. 서버 간 receipt 도착 순서는 보장�
 
 ## 제외/보류
 
-- 팔로우 가져오기/내보내기, 계정 이동·서버 이전 UI, outgoing Kosmo Move와 백업은 현재 범위에서 제외한다.
-- 검증된 inbound Move에 따른 Local Follower의 기존 Follow 이전(새 target 요청 생성 포함)만 이 객체가 다룬다.
+- Follow CSV 내보내기, 계정 이동·서버 이전 UI, outgoing Kosmo Move와 백업은 현재 범위에서 제외한다.
+- Profile Migration으로 인한 Follow 이전은 검증된 inbound Move에 따른 Local Follower의 기존 Follow 이전(새 target 요청
+  생성 포함)으로 한정한다.
 - List, 추천 팔로우, Followed Hashtag, 가까운 친구 또는 서클은 현재 범위에서 제외한다.
 - 원격 follow delivery 실패, 재시도, 동기화 상태는 구현/연합 스펙으로 분리한다.

@@ -6,6 +6,10 @@ export {
   captureDatabaseCountsSnapshotActivity,
   loadDatabaseCountsSnapshotActivity,
 } from './activities/database-counts-snapshot';
+export {
+  followImportedProfileActivity,
+  resolveImportedLocalProfileActivity,
+} from './activities/following-accounts-import';
 export { createNotificationActivity } from './activities/notification';
 export {
   captureOperationalNotificationAudienceActivity,

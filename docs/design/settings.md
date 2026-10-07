@@ -6,8 +6,9 @@ Kosmo의 인증된 설정은 `/settings`를 canonical hub로 사용하는 route 
 미리 노출하거나 구현하지 않는다.
 
 현재 Target 설정 IA에는 Byulmaru ID가 소유한 Account 설정의 **외부 진입점**, Kosmo가 소유한 Local
-Profile의 `프로필 설정`, `다른 서비스에서 이전`, `뮤트 및 차단`, 클라이언트 로컬의 `테마`
-**내부 진입점**을 직접 배치한다. Profile migration 진입점은 공개 feature flag가 활성화된 경우에만 표시한다.
+Profile의 `프로필 설정`, `다른 서비스에서 이전`, `팔로잉 가져오기`, `뮤트 및 차단`, 클라이언트 로컬의
+`테마` **내부 진입점**을 직접 배치한다. 이전과 가져오기 진입점은 공개 `profile-migration` feature flag가
+활성화된 경우에만 표시한다.
 실제 행의 label·이동 동작과 접근성 이름에서 서비스와 소유 단위를 명확히 구분한다.
 DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 기기 로컬 persistence를 소유한다.
 
@@ -28,9 +29,12 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   `/settings/default-post-visibility`는 이 Target으로 이관할 구현 경로이지 별도 Target destination이 아니다.
 - 다른 서비스에서 이전 detail의 canonical route는 `/settings/profile-migration`이며 명시적 parent는 `/settings`다.
   Target root에서는 `프로필 설정` 다음의 독립 destination으로 두며, `profile-migration` feature flag가 꺼져
-  있거나 평가되지 않았으면 진입점과 destination control을 숨긴다.
+  있거나 평가되지 않았으면 진입점과 destination control을 숨긴다. `팔로잉 가져오기`도 같은 flag가 켜진 경우에만
+  진입점과 destination control을 표시한다.
   현재 runtime의 legacy `게시물 기본 공개 범위` 행 바로 뒤에 migration 진입점을 배치하는 것은 구현 순서이며,
   Target IA의 Profile destination을 변경하거나 별도 Profile 목적지를 추가하지 않는다.
+- 팔로잉 가져오기 detail의 canonical route는 `/settings/following-import`이며 명시적 parent는 `/settings`다.
+  Root에서는 다른 서비스에서 이전 진입점 바로 뒤에 둔다.
 - 공개 정책 문서 진입점의 canonical Settings detail route는 `/settings/info`다. 이 route는 준비된 public
   `/privacy`, `/account-deletion`, `/child-safety`로 이동하는 링크를 제공하며 정책 문서 내용을 복제하지 않는다.
 - Mobile Target evidence는 [`Default`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6704-9409)와
@@ -51,7 +55,7 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
 
 - Settings는 모든 control을 한 화면에 쌓는 긴 form이 아니라, 진입점 목록에서 category·하위 목록·detail로
   점진적으로 이동하는 탐색 구조를 사용한다.
-- Target root 목록은 `계정 설정 → 프로필 설정 → 다른 서비스에서 이전 → 뮤트 및 차단 → 테마 → 정보`
+- Target root 목록은 `계정 설정 → 프로필 설정 → 다른 서비스에서 이전 → 팔로잉 가져오기 → 뮤트 및 차단 → 테마 → 정보`
   순서다. `계정 설정`은 Byulmaru ID 외부 진입점이고 나머지는 내부 진입점이다. `테마`는 현재 선택값을 함께
   표시한다. `게시물 기본 공개 범위`는 `/settings/profile` 안의 Profile 설정 field이며 root의 독립 destination으로
   중복 배치하지 않는다. 항목 하나만 가진 `계정`·`화면 설정` 대분류를 만들지 않는다.
@@ -106,6 +110,13 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   사용한다. action에는 해제 후 남은 팔로워 이전이 중단될 수 있지만 이미 이전된 팔로워는 유지된다는 안내를
   함께 제공한다. 성공 후 source가 null이면 기존 빈 등록 form을 표시한다.
   control은 기존 Settings card·field·button과 accessible error·busy·success 표현을 재사용한다.
+- `/settings/following-import`은 shell의 selected Local Profile을 대상으로 한다. 선택한 Profile의 표시 이름과
+  `relativeHandle`을 확인하고 현재 Profile 멤버십이 있을 때만 CSV 선택·가져오기 control을 제공한다. 화면은
+  Mastodon 팔로잉 CSV의 `Account address`만 가져오며 기존 팔로잉을 유지하고 CSV preference는 적용하지 않는다는 점,
+  앱을 닫은 뒤에도 이어지는 백그라운드 처리를 설명하고, 선택한 Profile을 명시하는 시작 action을 제공한다.
+  512 KiB보다 큰 파일은 읽거나 제출하지 않고
+  한국어 오류를 표시한다. 제출 중에는 busy 상태를, 실패에는 안전한 오류를, accepted 응답에는 시작 확인만 알린다.
+  작업 진행·결과 조회나 polling은 표시하지 않는다.
 - Profile target selector의 Figma lifecycle source는
   [`Mobile`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4867-13083),
   [`Compact`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4868-38112),
@@ -234,9 +245,10 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
 - Account 외부 진입점에는 Kosmo가 조회할 Account 값이나 외부 navigation 상태가 없으므로 Account 데이터 및
   외부 이동 loading·empty·save·error·retry·lock 상태를 만들지 않는다. 브라우저·OS가 소유하는 외부 이동을
   Kosmo Account 데이터 오류로 표현하지 않는다.
-- Profile detail과 `/settings/profile-migration`은 각각 자기 Profile identity·loading·error·empty·content와
-  재시도 상태를 소유한다. migration feature flag가 꺼져 있거나 미평가 상태에서 direct link로 열면 generic
-  unavailable Settings state를 표시하고 migration Profile query/control을 실행하지 않는다. Profile query 오류에는
+- Profile detail, `/settings/profile-migration`, `/settings/following-import`은 각각 자기 Profile
+  identity·loading·error·empty·content와 재시도 상태를 소유한다. migration feature flag가 꺼져 있거나 미평가
+  상태에서 migration 또는 following import direct link를 열면 generic unavailable Settings state를 표시하고
+  Profile query/control을 실행하지 않는다. Profile query 오류에는
   backend 원문이 아닌 안전한 한국어 설명과 재시도 action을 제공한다.
 - Profile 조회 중에는 확인되지 않은 값을 확정된 것처럼 표시하지 않고, 오류에는 backend 원문이 아닌 안전한
   한국어 설명과 재시도 action을 제공한다.
@@ -253,7 +265,7 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
   destination heading을 programmatic하게 노출한다. 시각적으로 없는 category heading을 screen reader 전용으로
   반복하지 않는다.
 - Target root/master 목록의 문서·보조기술 읽기 순서는 `설정` heading → `계정 설정` 외부 진입점 →
-  `프로필 설정` → feature flag가 켜진 경우 `다른 서비스에서 이전` → `뮤트 및 차단` →
+  `프로필 설정` → feature flag가 켜진 경우 `다른 서비스에서 이전`과 `팔로잉 가져오기` → `뮤트 및 차단` →
   `테마`와 현재 선택값 → `정보`다. full Web에서는 이어서 detail heading과
   현재 선택된 content를 읽는다. 모든 플랫폼의 `/settings/info`에서는 `정보` heading 다음에 세 public policy
   link를 문서 순서대로 읽고, 이어서 `개발 정보` link를 읽는다.
@@ -268,6 +280,9 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
 - navigation과 page action은 실제 동작에 맞는 role, accessible name, current·disabled·busy 상태를 제공한다.
   외부 이동 결과 announcement는 Kosmo가 소유하지 않으며 Profile 조회·저장 결과 announcement는 PROD-667이
   중복 없이 소유한다.
+- Following import detail은 선택한 Profile identity group 다음에 CSV 선택·현재 Profile로 시작 action을 읽는다.
+  파일 선택과 시작 action은 각각 accessible name과 disabled·busy 상태를 제공하고, file·mutation 오류는 alert,
+  accepted 시작 확인은 polite live region으로 한 번 알린다.
 - Native channel selector는 선택된 `dev`·`prod`와 busy/error 상태를 보조기술에
   전달한다. 확인·download 중에는 selector를 중복 실행할 수 없고, 취소·현재 channel 재선택은 별도
   announcement나 상태 변경을 만들지 않는다. Web `/settings/info`는 기존 세 policy link 순서와 `개발 정보`

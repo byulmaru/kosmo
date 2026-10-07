@@ -19,6 +19,25 @@ import type {
 } from '@kosmo/core/temporal/workflows';
 
 const remoteActorRefreshTtl = Temporal.Duration.from({ hours: 7 * 24 });
+const remoteProfileFetchErrorNames = new Set([
+  'AbortError',
+  'FetchError',
+  'WebFingerError',
+  'UrlError',
+]);
+
+class InitiatorOriginMaterializationError extends RemoteActorMaterializationError {}
+
+const wrapRemoteProfileFetchError = (error: unknown): never => {
+  if (error instanceof Error && remoteProfileFetchErrorNames.has(error.name)) {
+    throw ApplicationFailure.create({
+      message: error.message,
+      type: 'RemoteProfileFetchUnavailable',
+      cause: error,
+    });
+  }
+  throw error;
+};
 
 export type RemoteProfileMaterializationState = {
   readonly profileId: string;
@@ -75,7 +94,9 @@ export const lookupRemoteActorUriActivity = async (
 
   const localInstance = await resolveConfiguredLocalInstance();
   const context = federation.createContext(new URL(localInstance.canonicalOrigin), undefined);
-  const descriptor = await context.lookupWebFinger(`acct:${input.handle}@${input.domain}`);
+  const descriptor = await context
+    .lookupWebFinger(`acct:${input.handle}@${input.domain}`)
+    .catch(wrapRemoteProfileFetchError);
 
   if (descriptor === null) {
     return null;
@@ -147,7 +168,7 @@ export const refreshRemoteProfileActorActivity = async (
         .then(first);
 
       if (!selected) {
-        throw new RemoteActorMaterializationError(
+        throw new InitiatorOriginMaterializationError(
           'Unable to determine materialization origin: Profile was not found.',
         );
       }
@@ -155,7 +176,7 @@ export const refreshRemoteProfileActorActivity = async (
       if (selected.instance.kind === InstanceKind.LOCAL) {
         const localOrigin = selected.instance.canonicalOrigin;
         if (!localOrigin) {
-          throw new RemoteActorMaterializationError(
+          throw new InitiatorOriginMaterializationError(
             'Unable to determine materialization origin: Local Profile instance has no canonical origin.',
           );
         }
@@ -163,7 +184,7 @@ export const refreshRemoteProfileActorActivity = async (
         signingProfileId = input.profileId;
       } else {
         if (selected.instance.kind !== InstanceKind.ACTIVITYPUB || !selected.actor) {
-          throw new RemoteActorMaterializationError(
+          throw new InitiatorOriginMaterializationError(
             'Unable to determine materialization origin: Remote Profile actor metadata is missing.',
           );
         }
@@ -172,7 +193,7 @@ export const refreshRemoteProfileActorActivity = async (
         try {
           actorUri = new URL(selected.actor.uri);
         } catch {
-          throw new RemoteActorMaterializationError(
+          throw new InitiatorOriginMaterializationError(
             'Unable to determine materialization origin: Remote Profile actor URI is invalid.',
           );
         }
@@ -181,7 +202,7 @@ export const refreshRemoteProfileActorActivity = async (
           (actorUri.protocol !== 'http:' && actorUri.protocol !== 'https:') ||
           !actorUri.hostname
         ) {
-          throw new RemoteActorMaterializationError(
+          throw new InitiatorOriginMaterializationError(
             'Unable to determine materialization origin: Remote Profile actor URI must use HTTP(S) with a hostname.',
           );
         }
@@ -199,12 +220,20 @@ export const refreshRemoteProfileActorActivity = async (
       actorUri: new URL(input.actorUri),
       documentLoader,
       now,
-    });
+    }).catch(wrapRemoteProfileFetchError);
 
     return profile.id;
   } catch (error) {
     if (error instanceof RemoteActorMaterializationError) {
-      throw ApplicationFailure.nonRetryable(error.message, 'RemoteActorMaterializationError');
+      throw ApplicationFailure.create({
+        message: error.message,
+        type: 'RemoteActorMaterializationError',
+        nonRetryable: true,
+        ...(error instanceof InitiatorOriginMaterializationError
+          ? { details: ['initiator-origin'] }
+          : {}),
+        cause: error,
+      });
     }
 
     if (error instanceof ConflictError) {

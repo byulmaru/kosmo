@@ -47,6 +47,8 @@
     "expo-clipboard": "~56.0.4",
     "expo-constants": "~56.0.20",
     "expo-crypto": "~56.0.4",
+    "expo-document-picker": "~56.0.4",
+    "expo-file-system": "~56.0.11",
     "expo-font": "~56.0.7",
     "expo-image-manipulator": "~56.0.25",
     "expo-image-picker": "56.0.21",

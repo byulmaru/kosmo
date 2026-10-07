@@ -115,7 +115,13 @@ mock.module(new URL('../ui/ToastProvider.tsx', import.meta.url), {
 
 let SettingsNavigationList: ComponentType<{
   pathname?: string;
-  selected?: 'default-post-visibility' | 'profile-migration' | 'mute-and-block' | 'theme' | 'info';
+  selected?:
+    | 'default-post-visibility'
+    | 'profile-migration'
+    | 'following-import'
+    | 'mute-and-block'
+    | 'theme'
+    | 'info';
 }>;
 let SettingsMuteAndBlockNavigation: ComponentType<{
   selected?: 'blocked-profiles' | 'muted-profiles';
@@ -179,8 +185,11 @@ describe('SettingsNavigationList', () => {
     assert.equal(links[1].props.href, '/settings/default-post-visibility');
     assert.equal(links[2].props.accessibilityLabel, '다른 서비스에서 이전 설정 열기');
     assert.equal(links[2].props.href, '/settings/profile-migration');
-    assert.equal(links[3].props.accessibilityLabel, '뮤트 및 차단 설정 열기');
-    assert.equal(links[3].props.href, '/settings/mute-and-block');
+    assert.equal(links[3].props.accessibilityLabel, '팔로잉 가져오기 설정 열기');
+    assert.equal(links[3].props.href, '/settings/following-import');
+    assert.ok(texts().includes('팔로잉 가져오기'));
+    assert.equal(links[4].props.accessibilityLabel, '뮤트 및 차단 설정 열기');
+    assert.equal(links[4].props.href, '/settings/mute-and-block');
     assert.equal(
       links.some((node) => node.props.testID === 'native-notification-settings'),
       false,
@@ -192,6 +201,10 @@ describe('SettingsNavigationList', () => {
 
     assert.equal(
       rendered('Pressable').some((node) => node.props.href === '/settings/profile-migration'),
+      false,
+    );
+    assert.equal(
+      rendered('Pressable').some((node) => node.props.href === '/settings/following-import'),
       false,
     );
   });
@@ -385,6 +398,18 @@ describe('SettingsNavigationList', () => {
     assert.deepEqual(migration.props.accessibilityState, { selected: true });
   });
 
+  it('following import route는 같은 feature flag 아래 현재·선택 상태를 표시한다', async () => {
+    migrationEnabled = true;
+    await render({ pathname: '/settings/following-import', selected: 'following-import' });
+
+    const followingImport = rendered('Pressable').find(
+      (link) => link.props.href === '/settings/following-import',
+    );
+    assert.ok(followingImport);
+    assert.equal(followingImport.props['aria-current'], 'page');
+    assert.deepEqual(followingImport.props.accessibilityState, { selected: true });
+  });
+
   it('root detail을 visual selected로 표시해도 root path에서는 current page가 아니다', async () => {
     await render({ pathname: '/settings', selected: 'default-post-visibility' });
 
@@ -424,6 +449,7 @@ async function render(
     selected?:
       | 'default-post-visibility'
       | 'profile-migration'
+      | 'following-import'
       | 'mute-and-block'
       | 'theme'
       | 'info';

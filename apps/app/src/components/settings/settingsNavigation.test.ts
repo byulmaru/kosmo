@@ -17,6 +17,7 @@ describe('Settings detail back navigation', () => {
     const routes = [
       ['/settings/default-post-visibility', '/settings'],
       ['/settings/profile-migration', '/settings'],
+      ['/settings/following-import', '/settings'],
       ['/settings/mute-and-block', '/settings'],
       ['/settings/muted-profiles', '/settings/mute-and-block'],
       ['/settings/blocked-profiles', '/settings/mute-and-block'],

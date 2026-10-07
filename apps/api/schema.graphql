@@ -117,6 +117,7 @@ input CreatePostInput {
   bodyText: String!
   contentWarning: String
   media: [CreatePostMediaInput!]
+  mentions: [CreatePostMentionInput!]
   replyParentId: ID
   repostSourceId: ID
   sensitiveMedia: Boolean
@@ -126,6 +127,12 @@ input CreatePostInput {
 input CreatePostMediaInput {
   altText: String
   mediaId: ID!
+}
+
+input CreatePostMentionInput {
+  end: Int!
+  profileId: ID!
+  start: Int!
 }
 
 type CreatePostPayload {
@@ -226,6 +233,14 @@ type Hashtag implements Node {
   relatedProfiles(after: String, first: Int): ProfileConnection!
 }
 
+input ImportFollowingAccountsInput {
+  csv: String!
+}
+
+type ImportFollowingAccountsPayload {
+  accepted: Boolean!
+}
+
 enum InstanceKind {
   ACTIVITYPUB
   LOCAL
@@ -289,6 +304,7 @@ type Mutation {
   deleteReaction(input: DeleteReactionInput!): DeleteReactionPayload!
   exchangeNativeOidcSession(input: ExchangeNativeOidcSessionInput!): ExchangeNativeOidcSessionPayload!
   followProfile(input: FollowProfileInput!): FollowProfilePayload!
+  importFollowingAccounts(input: ImportFollowingAccountsInput!): ImportFollowingAccountsPayload!
   issueMediaUploadUrl(input: IssueMediaUploadUrlInput): IssueMediaUploadUrlPayload!
   markNotificationRead(input: MarkNotificationReadInput!): MarkNotificationReadPayload!
   muteProfile(input: MuteProfileInput!): MuteProfilePayload!
@@ -588,7 +604,7 @@ type Query {
   node(id: ID!): Node
   nodes(ids: [ID!]!): [Node]!
   profileByHandle(handle: String!): Profile
-  searchProfiles(after: String, before: String, first: Int, last: Int, query: String!): ProfileConnection!
+  searchProfiles(actorProfileId: ID, after: String, before: String, first: Int, last: Int, query: String!, resolveRemote: Boolean): ProfileConnection!
 }
 
 type QuoteNotification implements Node & Notification {
