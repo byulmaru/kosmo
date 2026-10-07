@@ -6,7 +6,7 @@ import {
   projectRemoteNoteContent,
   RemoteNoteContentLengthExceededError,
 } from '@kosmo/core/activitypub-note-content/server';
-import { ActivityPubActors, db, first, Instances, ProfileFollows, Profiles } from '@kosmo/core/db';
+import { ActivityPubActors, first, Instances, ProfileFollows, Profiles } from '@kosmo/core/db';
 import { InstanceKind, InstanceState, PostVisibility, ProfileState } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError, ValidationError } from '@kosmo/core/error';
 import { postContentDocumentToText } from '@kosmo/core/post-content/server';
@@ -223,7 +223,7 @@ type RemoteNoteMaterializationSource =
   | {
       advertisingActorUri?: string | URL;
       kind: 'hydrated';
-  }
+    }
   | {
       kind: 'followers-quote';
       followerProfileId: string;
@@ -232,6 +232,7 @@ type RemoteNoteMaterializationSource =
 
 type RemoteNoteMaterializationRejectionReason =
   | 'empty_note'
+  | 'followers_visibility_without_follow'
   | 'note_attribution_mismatch'
   | 'note_content_length_exceeded'
   | 'note_identity_mismatch'
@@ -720,7 +721,8 @@ export const handleInboundCreateNote = async ({
       result.reason === 'note_identity_mismatch' ||
       result.reason === 'note_attribution_mismatch' ||
       result.reason === 'stored_author_mismatch' ||
-      result.reason === 'unsupported_note_visibility'
+      result.reason === 'unsupported_note_visibility' ||
+      result.reason === 'followers_visibility_without_follow'
         ? 'validation'
         : 'projection';
     observeInbound({
