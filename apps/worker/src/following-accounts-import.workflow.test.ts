@@ -17,12 +17,14 @@ import {
 } from '@temporalio/client';
 import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import { followImportedProfileActivity } from './activities/following-accounts-import';
 import {
   lookupRemoteActorUriActivity,
   materializeRemoteProfileActorActivity,
 } from './activities/remote-profile-materialization';
 import type { FollowingAccountsImportInput } from '@kosmo/core/temporal/workflows';
+import type { SQL } from 'drizzle-orm';
 import type * as activities from './activities';
 
 const workflowsPath = new URL('./workflows/index.ts', import.meta.url).pathname;
@@ -50,9 +52,8 @@ test('Remote Profile Activities classify fetch errors, reject missing origins, a
     canonicalOrigin: origin,
   };
   let querySource: unknown;
-  const state: { databaseError?: Error; instanceRows: unknown[] } = {
-    instanceRows: [localInstance],
-  };
+  let instanceDomain: string | undefined;
+  const state: { databaseError?: Error } = {};
   const query = {
     from: (table: unknown) => {
       querySource = table;
@@ -60,10 +61,18 @@ test('Remote Profile Activities classify fetch errors, reject missing origins, a
     },
     innerJoin: () => query,
     leftJoin: () => query,
-    where: () => query,
+    where: (condition: unknown) => {
+      if (querySource === Instances) {
+        instanceDomain = new PgDialect().sqlToQuery(condition as SQL).params[0] as
+          | string
+          | undefined;
+      }
+      return query;
+    },
     limit: () => query,
     then: (onFulfilled: (rows: unknown[]) => unknown) => {
-      const rows = querySource === Instances ? state.instanceRows : [];
+      const rows =
+        querySource === Instances && instanceDomain === localInstance.domain ? [localInstance] : [];
       return Promise.resolve(rows).then(onFulfilled);
     },
   };
@@ -182,7 +191,8 @@ test(
           }
           return `https://${domain}/actors/${encodeURIComponent(handle)}`;
         },
-        materializeRemoteProfileActorActivity: async ({ actorUri }) => {
+        getRemoteProfileActorStateActivity: async () => null,
+        fetchRemoteProfileActorActivity: async ({ actorUri }) => {
           if (actorUri.includes('bad-origin.example')) {
             const originFailure = ApplicationFailure.create({
               message: 'Invalid initiating Profile origin',
@@ -197,8 +207,12 @@ test(
               cause: originFailure,
             });
           }
-          return { needsRefresh: false, profileId: remoteProfileId };
+          return {
+            actorJsonLd: { id: actorUri },
+            observedAt: '2026-10-07T00:00:00Z',
+          };
         },
+        applyRemoteProfileActorActivity: async () => remoteProfileId,
         resolveImportedLocalProfileActivity: async ({ handle }) => `local:${handle}`,
         followImportedProfileActivity: async ({ followeeProfileId }) => {
           if (followeeProfileId === 'local:blockeduser') {
@@ -215,7 +229,9 @@ test(
       } satisfies Pick<
         typeof activities,
         | 'lookupRemoteActorUriActivity'
-        | 'materializeRemoteProfileActorActivity'
+        | 'getRemoteProfileActorStateActivity'
+        | 'fetchRemoteProfileActorActivity'
+        | 'applyRemoteProfileActorActivity'
         | 'resolveImportedLocalProfileActivity'
         | 'followImportedProfileActivity'
       >,
