@@ -35,6 +35,17 @@ spec:
             - {$ref: isDeveloper}
             - 'on'
             - 'off'
+      post-composer-mention-search:
+        state: ENABLED
+        variants:
+          'on': true
+          'off': false
+        defaultVariant: 'off'
+        targeting:
+          if:
+            - {$ref: isDeveloper}
+            - 'on'
+            - 'off'
     $evaluators:
       isDeveloper:
         in:

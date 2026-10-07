@@ -23,6 +23,7 @@ mockModule('react-native', {
   Text: 'Text',
   View: 'View',
 });
+mockModule('@/components/FeatureFlagsContext', { useFeatureFlag: () => true });
 mockModule('@/components/ui/Avatar', { Avatar: 'Avatar' });
 mockModule('@/theme/ThemeProvider', {
   useTheme: () => ({

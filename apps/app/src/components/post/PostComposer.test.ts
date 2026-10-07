@@ -185,6 +185,7 @@ mockModule('relay-runtime', {
   ROOT_ID: 'root',
 });
 mockModule('@/analytics/client', { trackAnalytics: () => undefined });
+mockModule('@/components/FeatureFlagsContext', { useFeatureFlag: () => true });
 mockModule('@/components/profile/ProfileNameBlock', {
   ProfileNameBlock: () => createElement('ProfileNameBlock'),
 });

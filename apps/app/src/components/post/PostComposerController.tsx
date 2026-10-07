@@ -6,6 +6,7 @@ import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-re
 import { QueryRenderer } from 'react-relay/legacy';
 import { ConnectionHandler, ROOT_ID } from 'relay-runtime';
 import { trackAnalytics } from '@/analytics/client';
+import { useFeatureFlag } from '@/components/FeatureFlagsContext';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
 import { Form } from '@/components/ui/Form';
@@ -233,6 +234,7 @@ function PostComposerContents({
   replyParentId,
   repostSourceId,
 }: PostComposerContentsProps) {
+  const mentionSearchEnabled = useFeatureFlag('post-composer-mention-search');
   const environment = useRelayEnvironment();
   const [selectedProfileKey, setSelectedProfileKey] = useState<PostComposerProfileRef | null>(null);
   const globalProfile = useFragment(PostComposerFragment, profileKey);
@@ -252,7 +254,8 @@ function PostComposerContents({
   const { body, mentionRanges, selection } = draft;
   const activeMentionQuery = findPostComposerMentionQuery(body, selection.start, selection.end);
   const mentionQuery = activeMentionQuery?.query ?? '';
-  const shouldSearchMentions = mentionCandidates === undefined && mentionQuery.trim().length > 0;
+  const shouldSearchMentions =
+    mentionSearchEnabled && mentionCandidates === undefined && mentionQuery.trim().length > 0;
   const onBodyChange = useCallback((nextBody: string) => {
     setDraft((previous) => updatePostComposerDraftBody(previous, nextBody));
   }, []);
