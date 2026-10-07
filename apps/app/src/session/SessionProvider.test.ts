@@ -20,6 +20,8 @@ let actorLifecycleKey = 'actor-1';
 let serverAccountId: string | null = 'account-1';
 let serverAccountName: string | null = 'Account';
 let serverSessionId: string | null = 'session-1';
+let serverSessionAccountId: string | null = null;
+let serverOperationalOnly = false;
 let nativeToken: string | null = null;
 let nativeClearCalls = 0;
 let nativeClearFails = false;
@@ -65,7 +67,9 @@ mockModule('react-relay', {
   useLazyLoadQuery: () => ({
     currentSession: serverSessionId
       ? {
+          accountId: serverSessionAccountId ?? serverAccountId,
           id: serverSessionId,
+          operationalOnly: serverOperationalOnly,
           selectedProfile: serverSelectedProfileId ? { id: serverSelectedProfileId } : null,
         }
       : null,
@@ -120,6 +124,8 @@ beforeEach(() => {
   serverAccountId = 'account-1';
   serverAccountName = 'Account';
   serverSessionId = 'session-1';
+  serverSessionAccountId = null;
+  serverOperationalOnly = false;
   platform.OS = 'web';
   nativeToken = null;
   nativeClearCalls = 0;
@@ -182,6 +188,45 @@ describe('SessionProvider selected profile bootstrap', () => {
 
     assert.deepEqual(resetActorCalls, ['profile-client']);
     assert.deepEqual(writes, []);
+  });
+
+  it('keeps Session identity for an operational-only account without restoring or deleting its Profile', async () => {
+    actorProfileId = 'profile-server';
+    persistedProfileId = 'profile-server';
+    serverAccountId = null;
+    serverAccountName = null;
+    serverSessionAccountId = 'account-1';
+    serverSelectedProfileId = null;
+    serverOperationalOnly = true;
+
+    await renderProvider();
+
+    assert.deepEqual(readSession(), {
+      accountId: 'account-1',
+      accountName: null,
+      selectedProfileId: null,
+      sessionId: 'session-1',
+      status: 'operational',
+    });
+    assert.deepEqual(resetActorCalls, [null]);
+    assert.equal(readCalls, 0);
+    assert.equal(deleteCalls, 0);
+    assert.deepEqual(writes, []);
+  });
+
+  it('keeps active Session identity when no Profile is selected', async () => {
+    serverSelectedProfileId = null;
+
+    await renderProvider();
+
+    assert.deepEqual(readSession(), {
+      accountId: 'account-1',
+      accountName: 'Account',
+      selectedProfileId: null,
+      sessionId: 'session-1',
+      status: 'valid',
+    });
+    assert.equal(deleteCalls, 0);
   });
 
   it('falls back to the server-selected profile when client storage is empty', async () => {

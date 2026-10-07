@@ -2,13 +2,15 @@ import { db, Notifications } from '@kosmo/core/db';
 import { and, eq, getColumns, or, sql } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/resolvers/profile';
-import { visibleNotificationWhere } from '../access/visibility';
+import { Session } from '@/graphql/resolvers/session/ref';
+import { visibleSessionNotificationWhere } from '../access/visibility';
 import { Notification, notificationKindForNodeType } from '../ref';
 
 builder.mutationField('markNotificationRead', (t) =>
-  t.withAuth({ login: true }).fieldWithInput({
+  t.withAuth({ operationalSession: true }).fieldWithInput({
     type: builder.simpleObject('MarkNotificationReadPayload', {
       fields: (field) => ({
+        currentSession: field.field({ type: Session }),
         notifications: field.field({ type: [Notification] }),
         recipientProfiles: field.field({ type: [Profile] }),
       }),
@@ -23,7 +25,11 @@ builder.mutationField('markNotificationRead', (t) =>
       });
 
       if (candidates.length === 0) {
-        return { notifications: [], recipientProfiles: [] };
+        return {
+          currentSession: ctx.operationalSession.id,
+          notifications: [],
+          recipientProfiles: [],
+        };
       }
 
       const notifications = await db
@@ -36,15 +42,20 @@ builder.mutationField('markNotificationRead', (t) =>
                 and(eq(Notifications.id, id), eq(Notifications.kind, kind)),
               ),
             ),
-            visibleNotificationWhere({ ctx }),
+            visibleSessionNotificationWhere({ ctx }),
           ),
         )
         .returning(getColumns(Notifications));
 
       return {
+        currentSession: ctx.operationalSession.id,
         notifications,
         recipientProfiles: [
-          ...new Set(notifications.map(({ recipientProfileId }) => recipientProfileId)),
+          ...new Set(
+            notifications.flatMap(({ recipientProfileId }) =>
+              recipientProfileId === null ? [] : [recipientProfileId],
+            ),
+          ),
         ],
       };
     },

@@ -668,7 +668,12 @@ export const SelectedProfileRoute: Story = {
         },
         SessionProviderQuery: {
           data: {
-            currentSession: { id: 'bookmark-session', selectedProfile: bookmarkOwner },
+            currentSession: {
+              accountId: 'bookmark-account',
+              id: 'bookmark-session',
+              operationalOnly: false,
+              selectedProfile: bookmarkOwner,
+            },
             me: { id: 'bookmark-account', name: 'bookmark-account' },
           },
         },
@@ -695,7 +700,12 @@ export const NoSelectedProfileSkipsBookmarkQuery: Story = {
         BookmarksPageQuery: { error: 'Bookmark query must not run without a selected Profile.' },
         SessionProviderQuery: {
           data: {
-            currentSession: { id: 'bookmark-session', selectedProfile: null },
+            currentSession: {
+              accountId: 'bookmark-account',
+              id: 'bookmark-session',
+              operationalOnly: false,
+              selectedProfile: null,
+            },
             me: { id: 'bookmark-account', name: 'bookmark-account' },
           },
         },
@@ -751,7 +761,12 @@ export const InitialRouteErrorAndRetry: Story = {
         BookmarksPageQuery: { error: '북마크 목록을 불러오지 못했습니다.' },
         SessionProviderQuery: {
           data: {
-            currentSession: { id: 'bookmark-session', selectedProfile: bookmarkOwner },
+            currentSession: {
+              accountId: 'bookmark-account',
+              id: 'bookmark-session',
+              operationalOnly: false,
+              selectedProfile: bookmarkOwner,
+            },
             me: { id: 'bookmark-account', name: 'bookmark-account' },
           },
         },
@@ -771,7 +786,9 @@ export const InitialRouteErrorAndRetry: Story = {
 
 function currentSessionForActor(selectedProfileId: string | null) {
   return {
+    accountId: 'bookmark-account',
     id: 'bookmark-actor-reset-session',
+    operationalOnly: false,
     selectedProfile:
       selectedProfileId === bookmarkOtherOwner.id ? bookmarkOtherOwner : bookmarkOwner,
   };

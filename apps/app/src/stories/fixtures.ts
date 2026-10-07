@@ -251,7 +251,13 @@ export function shellQuery({
   selectedProfile?: StoryProfile | null;
 } = {}) {
   return {
-    currentSession: { id: 'session-story', selectedProfile },
+    currentSession: {
+      accountId: 'account-story',
+      id: 'session-story',
+      operationalOnly: false,
+      selectedProfile,
+      unreadNotificationCount: selectedProfile?.unreadNotificationCount ?? 0,
+    },
     me: { id: 'account-story', name: '스토리 계정', profiles },
   };
 }

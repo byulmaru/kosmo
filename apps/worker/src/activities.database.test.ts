@@ -30,7 +30,9 @@ import type {
   repostPost as RepostPost,
 } from '@kosmo/core/services';
 import type { temporalClient as TemporalClient } from '@kosmo/core/temporal/client';
+import type { Workflow, WorkflowStartOptions } from '@temporalio/client';
 import type {
+  captureOperationalNotificationAudienceActivity as CaptureOperationalNotificationAudienceActivity,
   createNotificationActivity as CreateNotificationActivity,
   createQuoteNotificationActivity as CreateQuoteNotificationActivity,
   createReactionNotificationActivity as CreateReactionNotificationActivity,
@@ -78,6 +80,7 @@ let createRepostNotificationActivity: typeof CreateRepostNotificationActivity;
 let deleteRepostNotificationActivity: typeof DeleteRepostNotificationActivity;
 let repostPost: typeof RepostPost;
 let createNotificationActivity: typeof CreateNotificationActivity;
+let captureOperationalNotificationAudienceActivity: typeof CaptureOperationalNotificationAudienceActivity;
 let temporalClient: typeof TemporalClient;
 
 before(async () => {
@@ -111,6 +114,7 @@ before(async () => {
     createQuoteNotificationActivity,
     createReplyNotificationActivity,
     createRepostNotificationActivity,
+    captureOperationalNotificationAudienceActivity,
     deleteAccountActivity,
     deleteReactionNotificationActivity,
     deleteRepostNotificationActivity,
@@ -135,6 +139,208 @@ beforeEach(async () => {
 });
 
 after(async () => pg.end());
+
+test('Operational audience capture is stable across retries, payload mismatches, and later signups', async () => {
+  const active = await createAccountDeletionFixture({ profileStates: [] });
+  const disabled = await createAccountDeletionFixture({ profileStates: [] });
+  const sendId = crypto.randomUUID();
+  const data = { href: '/maintenance', title: 'Scheduled maintenance' };
+  let lateSignup: Awaited<ReturnType<typeof createAccountDeletionFixture>> | undefined;
+
+  try {
+    await db
+      .update(Accounts)
+      .set({ state: AccountState.DISABLED })
+      .where(eq(Accounts.id, disabled.account.id));
+    assert.deepEqual(
+      await Promise.all([
+        captureOperationalNotificationAudienceActivity({ sendId, data }),
+        captureOperationalNotificationAudienceActivity({ sendId, data }),
+      ]),
+      [true, true],
+    );
+
+    const notifications = await db
+      .select()
+      .from(Notifications)
+      .where(eq(Notifications.sourceId, sendId));
+    assert.equal(notifications.length, 1);
+    assert.equal(notifications[0]?.recipientAccountId, active.account.id);
+    assert.equal(notifications[0]?.recipientProfileId, null);
+    assert.equal(notifications[0]?.kind, NotificationKind.OPERATIONAL);
+    assert.deepEqual(notifications[0]?.data, data);
+
+    const readAt = Temporal.Instant.from('2026-10-02T01:23:45.123456Z');
+    await db
+      .update(Notifications)
+      .set({ readAt })
+      .where(eq(Notifications.id, notifications[0]!.id));
+    lateSignup = await createAccountDeletionFixture({ profileStates: [] });
+
+    assert.equal(await captureOperationalNotificationAudienceActivity({ sendId, data }), true);
+    assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, sendId)), 1);
+    assert.equal(
+      (
+        await db
+          .select({ readAt: Notifications.readAt })
+          .from(Notifications)
+          .where(eq(Notifications.id, notifications[0]!.id))
+      )[0]?.readAt?.toString(),
+      readAt.toString(),
+    );
+    await assert.rejects(
+      captureOperationalNotificationAudienceActivity({
+        sendId,
+        data: { ...data, title: 'Different message' },
+      }),
+      /Operational notification send ID already exists with different data/,
+    );
+  } finally {
+    if (lateSignup) {
+      await cleanupAccountDeletionFixture(lateSignup);
+    }
+    await cleanupAccountDeletionFixture(active);
+    await cleanupAccountDeletionFixture(disabled);
+  }
+});
+
+test('Operational audience capture leaves no marker for an empty audience', async () => {
+  const disabled = await createAccountDeletionFixture({ profileStates: [] });
+  const sendId = crypto.randomUUID();
+  const data = { href: '/maintenance', title: 'Scheduled maintenance' };
+  let lateSignup: Awaited<ReturnType<typeof createAccountDeletionFixture>> | undefined;
+
+  try {
+    await db
+      .update(Accounts)
+      .set({ state: AccountState.DISABLED })
+      .where(eq(Accounts.id, disabled.account.id));
+    assert.equal(await captureOperationalNotificationAudienceActivity({ sendId, data }), false);
+    assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, sendId)), 0);
+
+    lateSignup = await createAccountDeletionFixture({ profileStates: [] });
+    assert.equal(await captureOperationalNotificationAudienceActivity({ sendId, data }), true);
+    const notification = await db
+      .select({ recipientAccountId: Notifications.recipientAccountId })
+      .from(Notifications)
+      .where(eq(Notifications.sourceId, sendId))
+      .then(firstOrThrow);
+    assert.equal(notification.recipientAccountId, lateSignup.account.id);
+  } finally {
+    if (lateSignup) {
+      await cleanupAccountDeletionFixture(lateSignup);
+    }
+    await cleanupAccountDeletionFixture(disabled);
+  }
+});
+
+test('Operational dispatch pages 51 stored recipients and retries failed Push starts from the same cursor', async (t) => {
+  const sendId = crypto.randomUUID();
+  const data = { href: '/maintenance', title: 'Scheduled maintenance' };
+  const accounts = await db
+    .insert(Accounts)
+    .values(
+      Array.from({ length: 51 }, () => {
+        const suffix = crypto.randomUUID();
+        return {
+          displayName: suffix,
+          oidcSubject: `subject-${suffix}`,
+          state: AccountState.ACTIVE,
+        };
+      }),
+    )
+    .returning({ id: Accounts.id });
+  const accountIds = accounts.map(({ id }) => id);
+
+  try {
+    await db.insert(Notifications).values(
+      accounts.map(({ id }) => ({
+        data,
+        kind: NotificationKind.OPERATIONAL,
+        recipientAccountId: id,
+        sourceId: sendId,
+      })),
+    );
+    const expectedIds = await db
+      .select({ id: Notifications.id })
+      .from(Notifications)
+      .where(eq(Notifications.sourceId, sendId))
+      .orderBy(Notifications.id)
+      .then((rows) => rows.map(({ id }) => id));
+    const startCalls: Array<{
+      readonly notificationId: string;
+      readonly workflowId: string | undefined;
+    }> = [];
+    const started = new Set<string>();
+    const { dispatchOperationalNotificationPageActivity } = await import('./activities');
+    let injectedFailure = false;
+    const start = t.mock.method(
+      temporalClient.workflow,
+      'start',
+      async (workflow: string | Workflow, options: WorkflowStartOptions) => {
+        assert.equal(workflow, 'pushNotificationDeliveryWorkflow');
+        assert.equal(options.taskQueue, KOSMO_TASK_QUEUE);
+        const args = options.args as [{ readonly notificationId: string }];
+        const notificationId = args[0]?.notificationId;
+        assert.ok(notificationId);
+        startCalls.push({ notificationId, workflowId: options.workflowId });
+
+        if (!injectedFailure && notificationId === expectedIds[0]) {
+          injectedFailure = true;
+          throw new Error('temporary Push workflow start failure');
+        }
+        if (started.has(notificationId)) {
+          const duplicate = new Error('Push workflow already started');
+          duplicate.name = 'WorkflowExecutionAlreadyStartedError';
+          throw duplicate;
+        }
+        started.add(notificationId);
+        return { workflowId: options.workflowId } as never;
+      },
+    );
+
+    await assert.rejects(
+      dispatchOperationalNotificationPageActivity({ sendId }),
+      /temporary Push workflow start failure/,
+    );
+    assert.equal(startCalls.length, 50);
+    assert.deepEqual(
+      startCalls.slice(0, 50).map(({ notificationId }) => notificationId),
+      expectedIds.slice(0, 50),
+    );
+
+    const firstPage = await dispatchOperationalNotificationPageActivity({ sendId });
+    assert.deepEqual(firstPage, { afterNotificationId: expectedIds[49], hasMore: true });
+    assert.deepEqual(
+      startCalls.slice(50, 100).map(({ notificationId }) => notificationId),
+      expectedIds.slice(0, 50),
+    );
+    assert.ok(
+      startCalls
+        .slice(50, 100)
+        .every(
+          ({ notificationId, workflowId }) => workflowId === `push-notification:${notificationId}`,
+        ),
+    );
+
+    const secondPage = await dispatchOperationalNotificationPageActivity({
+      sendId,
+      afterNotificationId: firstPage.afterNotificationId ?? undefined,
+    });
+    assert.deepEqual(secondPage, {
+      afterNotificationId: expectedIds[50],
+      hasMore: false,
+    });
+    assert.deepEqual(
+      startCalls.slice(100).map(({ notificationId }) => notificationId),
+      [expectedIds[50]],
+    );
+    assert.equal(start.mock.calls.length, 101);
+    assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, sendId)), 51);
+  } finally {
+    await db.delete(Accounts).where(inArray(Accounts.id, accountIds));
+  }
+});
 
 test('Account deletion Activity는 non-DISABLED Profile이 있으면 아무것도 변경하지 않는다', async () => {
   const fixture = await createAccountDeletionFixture({
@@ -1271,6 +1477,84 @@ test('공통 Notification Activity는 Mention materialization이 빈 배열이�
       await db.delete(Posts).where(eq(Posts.id, postId));
     }
     await cleanupAccountDeletionFixture(fixture);
+  }
+});
+
+test('Operational Push는 Account recipient와 저장된 제목·본문·링크를 전달한다', async (t) => {
+  const previousProjectId = process.env.FIREBASE_PROJECT_ID;
+  process.env.FIREBASE_PROJECT_ID = 'kosmo-push-test';
+  const fixture = await createAccountDeletionFixture({ profileStates: [] });
+  const data = {
+    body: 'Maintenance starts soon',
+    href: '/account/settings?tab=security#top',
+    title: 'Scheduled maintenance',
+  };
+
+  try {
+    const notification = await db
+      .insert(Notifications)
+      .values({
+        data,
+        kind: NotificationKind.OPERATIONAL,
+        recipientAccountId: fixture.account.id,
+        sourceId: crypto.randomUUID(),
+      })
+      .returning()
+      .then(firstOrThrow);
+    const readAt = Temporal.Now.instant();
+    await db.update(Notifications).set({ readAt }).where(eq(Notifications.id, notification.id));
+
+    const { listPushNotificationInstallationsActivity, sendPushNotificationActivity } =
+      await import('./activities');
+    const installationIds = await listPushNotificationInstallationsActivity(notification.id);
+    assert.equal(installationIds.length, 2);
+
+    const { applicationDefault, getApps, initializeApp } = await import('firebase-admin/app');
+    const { getMessaging } = await import('firebase-admin/messaging');
+    const app =
+      getApps().find(({ name }) => name === '[DEFAULT]') ??
+      initializeApp({
+        credential: applicationDefault(),
+        projectId: process.env.FIREBASE_PROJECT_ID,
+      });
+    const messaging = getMessaging(app);
+    type FcmMessage = Parameters<typeof messaging.send>[0];
+    const sent: FcmMessage[] = [];
+    t.mock.method(messaging, 'send', async (message: FcmMessage) => {
+      sent.push(message);
+      return 'projects/kosmo-push-test/messages/operational-test';
+    });
+
+    await sendPushNotificationActivity(notification.id, installationIds[0]!);
+
+    assert.equal(sent.length, 1);
+    const payload = sent[0];
+    assert.ok(payload);
+    const { encodeGlobalId } = await import('@kosmo/core/global-id');
+    assert.deepEqual(payload.notification, { body: data.body, title: data.title });
+    assert.deepEqual(payload.data, {
+      href: data.href,
+      notificationId: encodeGlobalId('OperationalNotification', notification.id),
+      recipientAccountId: encodeGlobalId('Account', fixture.account.id),
+    });
+    assert.ok((payload.android?.ttl ?? 0) > 0);
+    assert.ok((payload.android?.ttl ?? Number.POSITIVE_INFINITY) <= 24 * 60 * 60 * 1000);
+    assert.equal(
+      (
+        await db
+          .select({ readAt: Notifications.readAt })
+          .from(Notifications)
+          .where(eq(Notifications.id, notification.id))
+      )[0]?.readAt?.toString(),
+      readAt.toString(),
+    );
+  } finally {
+    await cleanupAccountDeletionFixture(fixture);
+    if (previousProjectId === undefined) {
+      delete process.env.FIREBASE_PROJECT_ID;
+    } else {
+      process.env.FIREBASE_PROJECT_ID = previousProjectId;
+    }
   }
 });
 

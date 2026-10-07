@@ -68,3 +68,18 @@ test('Account 인증 변화에 맞춰 identify·reset하고 선택 Profile 변�
   await act(async () => renderer!.update(createElement(Bridge)));
   assert.deepEqual(calls.slice(-2), ['profile:none:none', 'clear']);
 });
+
+test('active accounts without a selected Profile retain account analytics identity', async () => {
+  session.accountId = 'account-without-profile';
+  session.selectedProfileId = null;
+  session.status = 'valid';
+
+  await act(async () => {
+    renderer = create(createElement(Bridge));
+  });
+
+  assert.deepEqual(calls, [
+    'profile:account-without-profile:none',
+    'identify:account-without-profile',
+  ]);
+});

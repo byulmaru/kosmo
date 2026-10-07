@@ -246,6 +246,7 @@ input MarkNotificationReadInput {
 }
 
 type MarkNotificationReadPayload {
+  currentSession: Session!
   notifications: [Notification!]!
   recipientProfiles: [Profile!]!
 }
@@ -335,6 +336,15 @@ type NotificationConnection {
 type NotificationConnectionEdge {
   cursor: String!
   node: Notification!
+}
+
+type OperationalNotification implements Node & Notification {
+  body: String
+  createdAt: DateTime!
+  href: String!
+  id: ID!
+  readAt: DateTime
+  title: String!
 }
 
 type PageInfo {
@@ -674,8 +684,12 @@ type SelectProfilePayload {
 
 type Session implements Node {
   account: Account!
+  accountId: ID!
   id: ID!
+  notifications(after: String, before: String, first: Int, last: Int): NotificationConnection!
+  operationalOnly: Boolean!
   selectedProfile: Profile
+  unreadNotificationCount: Int!
 }
 
 input SubmitContentReportInput {

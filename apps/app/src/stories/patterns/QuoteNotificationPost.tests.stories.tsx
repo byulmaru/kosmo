@@ -87,7 +87,9 @@ const meta = {
         SessionProviderQuery: {
           data: {
             currentSession: {
+              accountId: 'notification-account',
               id: 'notification-session',
+              operationalOnly: false,
               selectedProfile: { id: 'notification-viewer' },
             },
             me: { id: 'notification-account', name: 'Story' },

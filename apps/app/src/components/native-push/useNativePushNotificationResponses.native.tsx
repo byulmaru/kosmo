@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef } from 'react';
-import { AppState } from 'react-native';
+import { AppState, Linking } from 'react-native';
 import { graphql, useMutation } from 'react-relay';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useSession } from '@/session/SessionProvider';
@@ -80,7 +80,7 @@ export function useNativePushNotificationResponses() {
       }
 
       const currentSession = sessionRef.current;
-      if (currentSession.status !== 'valid') {
+      if (currentSession.status !== 'valid' && currentSession.status !== 'operational') {
         markResponseHandled(response);
         router.replace('/');
         return;
@@ -88,6 +88,31 @@ export function useNativePushNotificationResponses() {
 
       const envelope = parseNativePushTapTarget(response.notification.request.content.data);
       if (!envelope) {
+        markResponseHandled(response);
+        fallbackToNotifications();
+        return;
+      }
+
+      if (envelope.kind === 'operational') {
+        markResponseHandled(response);
+        if (currentSession.accountId !== envelope.recipientAccountId) {
+          fallbackToNotifications();
+          return;
+        }
+
+        if (envelope.href.kind === 'internal') {
+          router.replace(envelope.href.href);
+        } else {
+          try {
+            await Linking.openURL(envelope.href.href);
+          } catch {
+            fallbackToNotifications();
+          }
+        }
+        return;
+      }
+
+      if (currentSession.status === 'operational') {
         markResponseHandled(response);
         fallbackToNotifications();
         return;

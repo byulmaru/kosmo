@@ -30,7 +30,7 @@ type SessionValue = {
   accountName: string | null;
   selectedProfileId: string | null;
   sessionId: string | null;
-  status: 'error' | 'guest' | 'valid';
+  status: 'error' | 'guest' | 'operational' | 'valid';
 };
 
 type SessionState = {
@@ -66,6 +66,8 @@ const SessionProviderQuery = graphql`
   query SessionProviderQuery {
     currentSession {
       id
+      accountId
+      operationalOnly
       selectedProfile {
         id
       }
@@ -210,18 +212,29 @@ function SessionQuery({
     { fetchPolicy: 'store-and-network' },
   );
   const sessionId = data.currentSession?.id ?? null;
-  const accountId = data.me?.id ?? null;
+  const accountId = data.currentSession?.accountId ?? data.me?.id ?? null;
+  const operationalOnly = data.currentSession?.operationalOnly ?? false;
   const serverSelectedProfileId = data.currentSession?.selectedProfile?.id ?? null;
-  const session = useMemo(
+  const session = useMemo<SessionValue>(
     () => ({
       accountId,
       accountName: data.me?.name ?? null,
-      selectedProfileId:
-        actorSelectedProfileId === serverSelectedProfileId ? serverSelectedProfileId : null,
+      selectedProfileId: operationalOnly
+        ? null
+        : actorSelectedProfileId === serverSelectedProfileId
+          ? serverSelectedProfileId
+          : null,
       sessionId,
-      status: sessionId ? ('valid' as const) : ('guest' as const),
+      status: !sessionId ? ('guest' as const) : operationalOnly ? 'operational' : 'valid',
     }),
-    [accountId, actorSelectedProfileId, data.me?.name, serverSelectedProfileId, sessionId],
+    [
+      accountId,
+      actorSelectedProfileId,
+      data.me?.name,
+      operationalOnly,
+      serverSelectedProfileId,
+      sessionId,
+    ],
   );
 
   useEffect(() => {
@@ -254,6 +267,13 @@ function SessionQuery({
 
     if (identityChange.accountChanged && actorSelectedProfileId !== null) {
       resetActor(null);
+      return deactivate;
+    }
+
+    if (operationalOnly) {
+      if (actorSelectedProfileId !== null) {
+        resetActor(null);
+      }
       return deactivate;
     }
 
@@ -335,6 +355,7 @@ function SessionQuery({
     actorLifecycleKey,
     actorSelectedProfileId,
     authLifecycleKey,
+    operationalOnly,
     onSessionChange,
     resetActor,
     serverSelectedProfileId,

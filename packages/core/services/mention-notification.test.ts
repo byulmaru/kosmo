@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
 import { and, eq, inArray, or } from 'drizzle-orm';
 import {
+  Accounts,
   db,
   firstOrThrow,
   Instances,
@@ -18,6 +19,7 @@ import {
   Profiles,
 } from '../db';
 import {
+  AccountState,
   InstanceKind,
   InstanceState,
   NotificationKind,
@@ -39,6 +41,7 @@ import type { TestContext } from 'node:test';
 const instanceIds: string[] = [];
 const profileIds: string[] = [];
 const postIds: string[] = [];
+const accountIds: string[] = [];
 
 const createProfile = async (kind: InstanceKind = InstanceKind.LOCAL) => {
   const suffix = crypto.randomUUID();
@@ -253,12 +256,50 @@ after(async () => {
         );
       await db.delete(Profiles).where(inArray(Profiles.id, profileIds));
     }
+    if (accountIds.length > 0) {
+      await db.delete(Accounts).where(inArray(Accounts.id, accountIds));
+    }
     if (instanceIds.length > 0) {
       await db.delete(Instances).where(inArray(Instances.id, instanceIds));
     }
   } finally {
     await pg.end();
   }
+});
+
+test('Operational notification visibility follows recipient Account state while cleanup bypasses it', async () => {
+  const suffix = crypto.randomUUID();
+  const account = await db
+    .insert(Accounts)
+    .values({ displayName: suffix, oidcSubject: `subject-${suffix}`, state: AccountState.ACTIVE })
+    .returning()
+    .then(firstOrThrow);
+  accountIds.push(account.id);
+  const notification = await db
+    .insert(Notifications)
+    .values({
+      data: { href: '/maintenance', title: 'Scheduled maintenance' },
+      kind: NotificationKind.OPERATIONAL,
+      recipientAccountId: account.id,
+      sourceId: crypto.randomUUID(),
+    })
+    .returning()
+    .then(firstOrThrow);
+
+  assert.equal(await isAvailable(notification.id, true), true);
+
+  await db
+    .update(Accounts)
+    .set({ state: AccountState.SUSPENDED })
+    .where(eq(Accounts.id, account.id));
+  assert.equal(await isAvailable(notification.id, true), true);
+
+  await db
+    .update(Accounts)
+    .set({ state: AccountState.DISABLED })
+    .where(eq(Accounts.id, account.id));
+  assert.equal(await isAvailable(notification.id, true), false);
+  assert.equal(await isAvailable(notification.id, false), true);
 });
 
 test('inbound typed Mention is per visible local Profile and concurrent retries return the stored IDs', async () => {

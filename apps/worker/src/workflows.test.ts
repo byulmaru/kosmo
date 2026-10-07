@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { NotificationKind } from '@kosmo/core/enums';
+import { operationalNotificationWorkflow } from '@kosmo/core/temporal/operational-notification';
 import {
   PROFILE_BLOCK_UPDATE_ID,
   PROFILE_BLOCK_UPDATE_NAME,
@@ -2587,6 +2588,92 @@ test(
         afterSourceFollowId: regularFollow.sourceFollowId,
         limit: 50,
       },
+    ]);
+  },
+);
+
+test(
+  'Operational Notification Workflow는 수신자를 한 번 캡처하고 다음 페이지에서 이어서 처리한다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+
+    const sendId = '00000000-0000-4000-8000-000000000101';
+    const invalidSendId = '00000000-0000-4000-8000-000000000103';
+    const mismatchedSendId = '00000000-0000-4000-8000-000000000104';
+    const taskQueue = `${KOSMO_TASK_QUEUE}-operational-notification-${process.pid}`;
+    const captures: unknown[] = [];
+    const pages: unknown[] = [];
+    const data = {
+      body: 'Maintenance starts soon',
+      href: ' /account/settings?tab=security#top ',
+      title: ' Scheduled maintenance ',
+    };
+
+    const worker = await Worker.create({
+      activities: {
+        captureOperationalNotificationAudienceActivity: async (input: unknown) => {
+          captures.push(input);
+          return true;
+        },
+        dispatchOperationalNotificationPageActivity: async (input: unknown) => {
+          pages.push(input);
+          if (pages.length === 1) {
+            return {
+              afterNotificationId: '00000000-0000-4000-8000-000000000102',
+              hasMore: true,
+            };
+          }
+          return { afterNotificationId: null, hasMore: false };
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      await environment.client.workflow.execute('operationalNotificationDeliveryWorkflow', {
+        args: [{ sendId, data }],
+        taskQueue,
+        workflowId: operationalNotificationWorkflow.workflowIdFromArgs({ sendId, data }),
+      });
+
+      await assert.rejects(
+        environment.client.workflow.execute('operationalNotificationDeliveryWorkflow', {
+          args: [{ sendId: invalidSendId, data: { ...data, href: '//outside.example/path' } }],
+          taskQueue,
+          workflowId: operationalNotificationWorkflow.workflowIdFromArgs({
+            sendId: invalidSendId,
+            data,
+          }),
+        }),
+      );
+      await assert.rejects(
+        environment.client.workflow.execute('operationalNotificationDeliveryWorkflow', {
+          args: [{ sendId: mismatchedSendId, data }],
+          taskQueue,
+          workflowId: 'operational-notification:wrong-id',
+        }),
+      );
+    });
+
+    assert.equal(captures.length, 1);
+    assert.deepEqual(captures[0], {
+      sendId,
+      data: {
+        body: 'Maintenance starts soon',
+        href: '/account/settings?tab=security#top',
+        title: 'Scheduled maintenance',
+      },
+    });
+    assert.deepEqual(pages, [
+      { sendId },
+      { afterNotificationId: '00000000-0000-4000-8000-000000000102', sendId },
     ]);
   },
 );

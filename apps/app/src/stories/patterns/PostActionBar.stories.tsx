@@ -153,7 +153,9 @@ function PostActionBarFixture({
                     ? {
                         currentSession: {
                           __typename: 'Session',
+                          accountId: 'account-story',
                           id: `session-${fixtureSelectedProfileId ?? 'no-profile'}`,
+                          operationalOnly: false,
                           selectedProfile:
                             fixtureSelectedProfileId === null
                               ? null
@@ -310,7 +312,9 @@ function ReactionContractHarness() {
                   ? {
                       currentSession: {
                         __typename: 'Session',
+                        accountId: 'account-story',
                         id: 'session-story',
+                        operationalOnly: false,
                         selectedProfile: {
                           __typename: 'Profile',
                           id: selectedProfileId ?? 'profile-reaction-default',

@@ -15,7 +15,11 @@ import type { ReactTestRenderer } from 'react-test-renderer';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-type QueryName = 'SessionProviderQuery' | 'ShellRecoveryQuery' | 'UniversalShellQuery';
+type QueryName =
+  | 'SessionProviderQuery'
+  | 'SessionLogoutMutation'
+  | 'ShellRecoveryQuery'
+  | 'UniversalShellQuery';
 type QueryMode = 'error' | 'pending' | 'success';
 type OfrepRequest = { body: unknown; contentType: string | null; method: string; url: string };
 
@@ -23,6 +27,7 @@ const flagEvaluationUrl = 'https://flags.kos.moe/ofrep/v1/evaluate/flags';
 
 const queryModes: Record<QueryName, QueryMode> = {
   SessionProviderQuery: 'success',
+  SessionLogoutMutation: 'success',
   ShellRecoveryQuery: 'success',
   UniversalShellQuery: 'success',
 };
@@ -232,7 +237,7 @@ mockModule('react-native-safe-area-context', {
 });
 mockModule('react-relay', {
   graphql: (parts: TemplateStringsArray) => {
-    const query = parts.join('').match(/query (\w+)/)?.[1];
+    const query = parts.join('').match(/(?:query|mutation) (\w+)/)?.[1];
     assert.ok(query);
     return query as QueryName;
   },

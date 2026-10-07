@@ -1,6 +1,7 @@
-import { and, eq, exists, isNotNull, isNull, not, or, sql } from 'drizzle-orm';
+import { and, eq, exists, inArray, isNotNull, isNull, not, or, sql } from 'drizzle-orm';
 import { alias, unionAll } from 'drizzle-orm/pg-core';
 import {
+  Accounts,
   Instances,
   Notifications,
   PostContents,
@@ -13,6 +14,7 @@ import {
   Reactions,
 } from '../db';
 import {
+  AccountState,
   InstanceKind,
   InstanceState,
   NotificationKind,
@@ -27,6 +29,10 @@ import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import type { DatabaseHandle } from '../db';
 
 const NotificationRecipientProfiles = alias(Profiles, 'notification_availability_recipient');
+const NotificationRecipientAccounts = alias(
+  Accounts,
+  'notification_availability_recipient_account',
+);
 const NotificationRelatedProfiles = alias(Profiles, 'notification_availability_related_profile');
 const NotificationRelatedInstances = alias(Instances, 'notification_availability_related_instance');
 const NotificationFollowRequestRecipientInstances = alias(
@@ -228,7 +234,7 @@ export const notificationSourceAvailabilityWhere = (
     requireLocalInstance: true,
   });
 
-  return exists(
+  const profileSourceAvailability = exists(
     unionAll(
       database
         .select({ id: ProfileFollows.id })
@@ -616,4 +622,27 @@ export const notificationSourceAvailabilityWhere = (
         ),
     ),
   );
+
+  return or(
+    profileSourceAvailability,
+    and(
+      eq(Notifications.kind, NotificationKind.OPERATIONAL),
+      includeRecipientAvailability
+        ? exists(
+            database
+              .select({ id: NotificationRecipientAccounts.id })
+              .from(NotificationRecipientAccounts)
+              .where(
+                and(
+                  eq(NotificationRecipientAccounts.id, Notifications.recipientAccountId),
+                  inArray(NotificationRecipientAccounts.state, [
+                    AccountState.ACTIVE,
+                    AccountState.SUSPENDED,
+                  ]),
+                ),
+              ),
+          )
+        : undefined,
+    ),
+  )!;
 };

@@ -1,6 +1,7 @@
 import baseMeta, {
   ActivationContract as activation,
   CompositionContract as composition,
+  OperationalActivationContract as operationalActivation,
   PendingContract as pending,
   ProtectionContract as protection,
   ReplyActionsContract as replyActions,
@@ -19,6 +20,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const ActivationContract: Story = activation;
+export const OperationalActivationContract: Story = operationalActivation;
 export const PendingContract: Story = pending;
 export const CompositionContract: Story = composition;
 export const ProtectionContract: Story = protection;

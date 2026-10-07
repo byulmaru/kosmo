@@ -7,11 +7,14 @@ export const Session = createObjectRef('Session', (ids, ctx) =>
     .select()
     .from(Sessions)
     .where(
-      and(inArray(Sessions.id, ids), ctx.session ? eq(Sessions.id, ctx.session.id) : sql`1=0`),
+      and(
+        inArray(Sessions.id, ids),
+        ctx.operationalSession ? eq(Sessions.id, ctx.operationalSession.id) : sql`1=0`,
+      ),
     ),
 );
 
 Session.implement({
-  authScopes: (session, ctx) => session.id === ctx.session?.id,
+  authScopes: (session, ctx) => session.id === ctx.operationalSession?.id,
   fields: () => ({}),
 });

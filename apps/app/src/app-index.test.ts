@@ -15,13 +15,15 @@ const mockModule = (specifier: string | URL, exports: object) =>
   } as unknown as Parameters<typeof mock.module>[1]);
 
 let platform: Platform = 'web';
+let sessionStatus: 'guest' | 'operational' | 'valid' = 'guest';
 let renderer: ReactTestRenderer | null = null;
 let IndexScreen: ComponentType;
+const replace = mock.fn();
 
 mockModule('expo-router', {
   Link: ({ children, href }: { children: ReactNode; href: string }) =>
     createElement('Link', { href }, children),
-  useRouter: () => ({ replace: () => undefined }),
+  useRouter: () => ({ replace }),
 });
 mockModule('react-native', {
   Platform: {
@@ -62,7 +64,7 @@ mockModule('@/relay/RelayActorProvider', {
   useRelayActor: () => ({ setNativeSession: async () => undefined }),
 });
 mockModule('@/session/SessionProvider', {
-  useSession: () => ({ status: 'guest' }),
+  useSession: () => ({ status: sessionStatus }),
 });
 mockModule('@/theme/ThemeProvider', {
   useTheme: () => ({
@@ -79,6 +81,8 @@ before(async () => {
 
 afterEach(async () => {
   platform = 'web';
+  sessionStatus = 'guest';
+  replace.mock.resetCalls();
   if (renderer) {
     await act(async () => renderer?.unmount());
     renderer = null;
@@ -105,6 +109,28 @@ describe('로그인 route', () => {
 
     assert.equal(rendered('Button').length, 1);
     assert.deepEqual(rendered('NativeChannelSettings'), []);
+  });
+});
+
+describe('session landing route', () => {
+  it('keeps active accounts on the existing Home route', async () => {
+    sessionStatus = 'valid';
+    await renderLoginScreen('web');
+
+    assert.deepEqual(
+      replace.mock.calls.map(({ arguments: args }) => args),
+      [['/home']],
+    );
+  });
+
+  it('sends operational-only accounts to their notifications', async () => {
+    sessionStatus = 'operational';
+    await renderLoginScreen('web');
+
+    assert.deepEqual(
+      replace.mock.calls.map(({ arguments: args }) => args),
+      [['/notifications']],
+    );
   });
 });
 

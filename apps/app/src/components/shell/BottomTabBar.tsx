@@ -16,7 +16,6 @@ import type { BottomTabBar_profile$key } from './__generated__/BottomTabBar_prof
 
 const BottomTabBarFragment = graphql`
   fragment BottomTabBar_profile on Profile {
-    unreadNotificationCount
     relativeHandle
     displayName
     avatar {
@@ -30,6 +29,7 @@ type Props = {
   onComposeOpen?: () => void;
   onHomeReselect?: () => void;
   profile?: BottomTabBar_profile$key | null;
+  unreadNotificationCount: number | null;
 };
 
 const hrefs: Record<BottomTabDestination, Href | undefined> = {
@@ -44,11 +44,15 @@ export function isBottomTabDestination(href: Href) {
   return typeof href === 'string' && Object.values(hrefs).some((tabHref) => tabHref === href);
 }
 
-export function BottomTabBar({ onComposeOpen, onHomeReselect, profile: profileKey }: Props) {
+export function BottomTabBar({
+  onComposeOpen,
+  onHomeReselect,
+  profile: profileKey,
+  unreadNotificationCount,
+}: Props) {
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
   const profile = useFragment(BottomTabBarFragment, profileKey ?? null);
-  const unreadNotificationCount = profile?.unreadNotificationCount ?? null;
   const profileHref = profile ? (`/${profile.relativeHandle}` as Href) : undefined;
   const currentDestination = getCurrentDestination(pathname, profileHref);
   const renderControl = ({

@@ -10,7 +10,7 @@ import {
 import { AccountState, SessionState } from '@kosmo/core/enums';
 import { decodeGlobalId } from '@kosmo/core/global-id';
 import DataLoader from 'dataloader';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import stringify from 'fast-json-stable-stringify';
 import * as R from 'remeda';
 import { visibleProfileWhere } from './profile/visibility';
@@ -51,13 +51,21 @@ export type SessionContext = {
   };
 };
 
+export type OperationalSessionContext = {
+  operationalSession: {
+    accountId: string;
+    accountState: AccountState;
+    id: string;
+  };
+};
+
 export type SessionWithProfileContext = SessionContext & {
   session: {
     profile: { id: string; role: AccountProfileRole };
   };
 };
 
-export type Context = DefaultContext & Partial<SessionContext>;
+export type Context = DefaultContext & Partial<SessionContext> & Partial<OperationalSessionContext>;
 export type ServerContext = HonoContext<Env>;
 export type UserContext = Context & { c: ServerContext };
 
@@ -98,16 +106,16 @@ export const deriveContext = async (c: ServerContext): Promise<Context> => {
     const session = await db
       .select({
         id: Sessions.id,
-        applicationId: Sessions.applicationId,
         accountId: Sessions.accountId,
         activeProfileId: Sessions.activeProfileId,
+        accountState: Accounts.state,
       })
       .from(Sessions)
       .innerJoin(Accounts, eq(Sessions.accountId, Accounts.id))
       .where(
         and(
           eq(Sessions.token, accessToken),
-          eq(Accounts.state, AccountState.ACTIVE),
+          inArray(Accounts.state, [AccountState.ACTIVE, AccountState.SUSPENDED]),
           eq(Sessions.state, SessionState.ACTIVE),
         ),
       )
@@ -115,16 +123,24 @@ export const deriveContext = async (c: ServerContext): Promise<Context> => {
       .then(first);
 
     if (session) {
-      let profile: { id: string; role: AccountProfileRole } | null = null;
-      if (session.activeProfileId) {
-        profile = await findVisibleProfile(session.accountId, session.activeProfileId);
-      }
-
-      ctx.session = {
-        id: session.id,
+      ctx.operationalSession = {
         accountId: session.accountId,
-        profile,
+        accountState: session.accountState,
+        id: session.id,
       };
+
+      if (session.accountState === AccountState.ACTIVE) {
+        let profile: { id: string; role: AccountProfileRole } | null = null;
+        if (session.activeProfileId) {
+          profile = await findVisibleProfile(session.accountId, session.activeProfileId);
+        }
+
+        ctx.session = {
+          id: session.id,
+          accountId: session.accountId,
+          profile,
+        };
+      }
     }
   }
 

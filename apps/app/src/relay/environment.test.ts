@@ -48,6 +48,7 @@ describe('Relay environment diagnostics', () => {
     const payload = {
       currentSession: {
         id: 'session-1',
+        unreadNotificationCount: 0,
         selectedProfile: {
           id: 'profile-a',
           displayName: 'Profile A',

@@ -18,29 +18,33 @@ import { PostComposerCoordinatorProvider } from '@/components/post/PostComposerC
 import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHost';
 import { getWebMobileShellHeader } from '@/components/shell/shellLayout';
 import { Skeleton, StateView } from '@/components/ui/StateView';
+import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import {
   FollowRequestNotificationListItem,
   MentionNotificationListItem,
   NotificationListItem,
+  OperationalNotificationListItem,
   ReactionNotificationListItem,
   ReplyNotificationListItem,
   RepostNotificationListItem,
 } from './NotificationListItem';
 import { NotificationReadAllAction, useNotificationReadAll } from './NotificationReadAllContext';
-import type { NotificationList_profile$key } from './__generated__/NotificationList_profile.graphql';
+import type { NotificationList_session$key } from './__generated__/NotificationList_session.graphql';
 import type { NotificationListNextPageQuery } from './__generated__/NotificationListNextPageQuery.graphql';
 
 type NotificationListProps = {
-  profile: NotificationList_profile$key;
+  session: NotificationList_session$key;
 };
 
 const notificationListFragment = graphql`
-  fragment NotificationList_profile on Profile
+  fragment NotificationList_session on Session
   @argumentDefinitions(count: { type: "Int", defaultValue: 20 }, cursor: { type: "String" })
   @refetchable(queryName: "NotificationListNextPageQuery") {
-    ...ReplyComposerSurface_profile
+    selectedProfile {
+      ...ReplyComposerSurface_profile
+    }
     notifications(first: $count, after: $cursor)
       @connection(key: "NotificationList_notifications") {
       edges {
@@ -67,18 +71,21 @@ const notificationListFragment = graphql`
           ... on RepostNotification {
             ...RepostNotificationListItem_notification @alias(as: "repost")
           }
+          ... on OperationalNotification {
+            ...OperationalNotificationListItem_notification @alias(as: "operational")
+          }
         }
       }
     }
   }
 `;
 
-export function NotificationList({ profile }: NotificationListProps) {
+export function NotificationList({ session }: NotificationListProps) {
   const theme = useTheme();
   const pagination = usePaginationFragment<
     NotificationListNextPageQuery,
-    NotificationList_profile$key
-  >(notificationListFragment, profile);
+    NotificationList_session$key
+  >(notificationListFragment, session);
   const { publishUnreadIds } = useNotificationReadAll();
   const [refreshing, startTransition] = useTransition();
   const { edges } = pagination.data.notifications;
@@ -116,6 +123,9 @@ export function NotificationList({ profile }: NotificationListProps) {
     if (node.__typename === 'RepostNotification' && node.repost) {
       return <RepostNotificationListItem key={node.id} notification={node.repost} />;
     }
+    if (node.__typename === 'OperationalNotification' && node.operational) {
+      return <OperationalNotificationListItem key={node.id} notification={node.operational} />;
+    }
     return [];
   });
 
@@ -144,7 +154,7 @@ export function NotificationList({ profile }: NotificationListProps) {
       <PostComposerCoordinatorProvider
         key={pagination.data.id}
         owner="list"
-        profile={pagination.data}
+        profile={pagination.data.selectedProfile ?? null}
       >
         <PostMediaViewerHostProvider>
           <ScrollView
@@ -165,7 +175,7 @@ export function NotificationList({ profile }: NotificationListProps) {
               notifications
             ) : (
               <StateView
-                description="새로운 팔로우, 팔로우 요청, 답글, 반응 또는 재게시 알림이 생기면 여기에 표시돼요."
+                description="새로운 계정 공지나 팔로우, 팔로우 요청, 답글, 반응 또는 재게시 알림이 생기면 여기에 표시돼요."
                 style={styles.state}
                 title="아직 알림이 없어요"
               />
@@ -242,6 +252,7 @@ export function NotificationListState({
 }
 
 function NotificationPageHeader() {
+  const { status } = useSession();
   const pathname = usePathname();
   const routeSegments = useSegments();
   const { width } = useWindowDimensions();
@@ -249,7 +260,7 @@ function NotificationPageHeader() {
     getWebMobileShellHeader(Platform.OS === 'web', width, pathname, routeSegments)?.title ===
     '알림';
 
-  return shellOwnsHeader ? null : (
+  return status === 'operational' || shellOwnsHeader ? null : (
     <PageHeader title="알림" trailing={<NotificationReadAllAction />} />
   );
 }

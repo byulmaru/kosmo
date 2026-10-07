@@ -28,7 +28,7 @@ installation token lifecycle을 고정하므로 앱 설정의 권한 처리와 t
 - 앱 시작이나 로그인 완료 때 OS 권한을 자동 요청하지 않는다. 앱 설정의 알림 action은 OS 권한이 미결정이면
   OS 권한 요청을 시작하고, 이미 허용되거나 거부된 경우 OS 알림 설정을 연다. 허용된 로그인 세션은 로그인·앱
   활성화 때 FCM token을 자동 동기화하고, 권한 요청이 허용된 직후에도 token을 즉시 동기화한다.
-- 서버의 FCM OS 표시 payload는 `notification.title`과 `notification.body`를 사용해 발신자, 알림 유형과 허용된 게시글 본문 미리보기를 표시한다.
+- 서버의 FCM OS 표시 payload는 `notification.title`과 `notification.body`를 사용해 발신자, 알림 유형과 허용된 게시글 본문 미리보기를 표시한다. Operational Notification은 저장된 제목과 선택적 본문을 사용한다.
 - Follow와 FollowRequest처럼 게시글 본문이 없는 알림은 본문 미리보기를 생략한다.
 - 공통 Worker Notification Activity는 Domain Workflow의 Notification 생성 요청을 받아 기존 Core materializer를
   호출한다. 저장된 Notification ID가 반환되면 그 ID로 기존 Push delivery Workflow를 시작하고 start
@@ -75,14 +75,16 @@ installation token lifecycle을 고정하므로 앱 설정의 권한 처리와 t
   본문을 미리보기에 포함한다.
 - 앱이 foreground인 경우에도 OS 알림 배너를 표시한다. 별도의 custom in-app Push banner를 추가하지
   않는다.
-- Push payload는 `notificationId`, `recipientProfileId`, 내부 앱 경로 문자열 `href`를 route data로 제공한다. Push를
-  탭하면 native client가 `href`가 현재 프로필 경로(하위 경로 포함)와 `/follow-requests` 중 하나의 내부 경로인지 검증한다.
-  `href`가 없거나 유효하지 않으면 Profile을 전환하지 않고
+- Profile Notification Push payload는 `notificationId`, `recipientProfileId`, 내부 앱 경로 문자열 `href`를
+  route data로 제공한다. Push를 탭하면 native client가 `href`가 현재 Profile 경로(하위 경로 포함)와
+  `/follow-requests` 중 하나의 내부 경로인지 검증한다. `href`가 없거나 유효하지 않으면 Profile을 전환하지 않고
   일반 알림 목록을 연다. 유효하면 현재 선택된 Profile이 `recipientProfileId`와 다를 때 기존 Profile 전환 흐름에서
-  현재 Account의 Profile membership를 확인해 전환한 뒤 `href`로 직접 이동한다. `notificationId`로
-  목적지를 조회하지 않는다. 실제 목적지가 없거나 삭제됐거나 접근할 수 없는 경우는 해당 화면의 기존 처리를 따른다.
-  로그인되지 않은 상태에서 Push를 탭하면 원래 target을 버리고 일반 로그인 흐름을 따르며, 로그인 뒤 Push target으로
-  자동 복귀하지 않는다.
+  현재 Account의 Profile membership를 확인해 전환한 뒤 `href`로 직접 이동한다. `notificationId`로 목적지를
+  조회하지 않는다. 실제 목적지가 없거나 삭제됐거나 접근할 수 없는 경우는 해당 화면의 기존 처리를 따른다.
+- Operational Notification Push는 저장된 `href`로 직접 이동한다. 내부 앱 경로는 앱에서 열고 HTTP(S) 외부 링크는
+  브라우저에서 연다. 이 경로는 Profile을 전환하지 않는다. 안전한 내부 경로 또는 HTTP(S) 주소가 없으면 Profile을
+  전환하지 않고 일반 알림 목록을 연다. 로그인되지 않은 상태에서 Push를 탭하면 원래 target을 버리고 일반 로그인
+  흐름을 따르며, 로그인 뒤 Push target으로 자동 복귀하지 않는다. Push tap은 canonical Read State를 바꾸지 않는다.
 - Notification 생성 시각부터 24시간이 지나면 해당 Push의 전달을 시도하지 않는다. 이 24시간은 최초
   Notification 생성 시각을 기준으로 하며, 재시도나 token refresh로 연장하거나 다시 시작하지 않는다. 이
   만료는 원래 인앱 Notification lifecycle을 변경하지 않는다.
@@ -98,7 +100,7 @@ installation token lifecycle을 고정하므로 앱 설정의 권한 처리와 t
 - 이 결정은 공통 Worker Notification Activity가 저장된 Notification ID를 기존 Push delivery Workflow에
   연결하고, Push flow가 이후 수신 대상 fan-out과 전달 lifecycle을 소유한다는 경계와 앱 설정의 권한 상태별 동작,
   현재 Push 대상 검증 범위, 기본 잠금 화면 정보와 본문 예외, foreground OS 배너, OS 설정 이동과 token 동기화,
-  cross-profile target 처리, 다중 설치 fan-out, Push 만료와 read state 독립성을 고정한다.
+  Profile 및 Operational target 처리, 다중 설치 fan-out, Push 만료와 read state 독립성을 고정한다.
   PROD-912가 소유하는 installation token의 저장·폐기 lifecycle은 위와 같이 정한다. Provider SDK,
   정확한 retry/backoff 정책과 route data 및 OS 표시용 title/body 밖의 provider payload는 이 ADR에서 정하지 않는다.
 

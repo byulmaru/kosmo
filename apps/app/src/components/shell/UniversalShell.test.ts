@@ -16,6 +16,7 @@ let layout: 'compact' | 'full' | 'mobile' = 'mobile';
 let pathname = '/home';
 let sessionProfile: Record<string, unknown> | null = null;
 let accountId: string | null = null;
+let operationalOnly = false;
 let profileIds: string[] | null = null;
 const identifyCalls: Array<[string, number]> = [];
 let showRightRail = false;
@@ -39,6 +40,7 @@ let shellChromeProps:
   | { navigationDrawerOpen?: boolean; openNavigationDrawer?: () => void }
   | undefined;
 let rightRailFooterCount = 0;
+let shellQueryCount = 0;
 
 function MockBottomTabBar(props: typeof bottomTabBarProps) {
   bottomTabBarProps = props;
@@ -59,6 +61,10 @@ const mockModule = (specifier: string | URL, exports: object) =>
 
 function PassThrough({ children }: PropsWithChildren): ReactNode {
   return children;
+}
+
+function MockButton({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) {
+  return createElement('button', props, children);
 }
 
 mockModule('expo-router', {
@@ -86,6 +92,7 @@ mockModule('react-native', {
   Platform: platform,
   Pressable: 'Pressable',
   StyleSheet: { create: (styles: unknown) => styles },
+  Text: 'Text',
   View: 'View',
   useWindowDimensions: () => ({ height: 800, width: 390 }),
 });
@@ -98,10 +105,15 @@ mockModule('react-native-safe-area-context', {
 
 mockModule('react-relay', {
   graphql: () => ({}),
-  useLazyLoadQuery: () => ({
-    currentSession: sessionProfile ? { selectedProfile: sessionProfile } : null,
-    me: profileIds === null ? null : { profiles: profileIds.map((id) => ({ id })) },
-  }),
+  useLazyLoadQuery: () => {
+    shellQueryCount++;
+    return {
+      currentSession: sessionProfile
+        ? { selectedProfile: sessionProfile, unreadNotificationCount: 3 }
+        : null,
+      me: profileIds === null ? null : { profiles: profileIds.map((id) => ({ id })) },
+    };
+  },
 });
 
 mockModule(require.resolve('lucide-react-native'), {
@@ -132,13 +144,21 @@ mockModule('@/components/ui/IconButton', {
   IconButton: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) =>
     createElement('Pressable', props, children),
 });
+mockModule('@/components/ui/Button', {
+  Button: MockButton,
+});
 mockModule('@/components/ui/useSafeAreaPadding', {
   useSafeAreaPadding: () => ({}),
 });
 mockModule('@/relay/RelayActorProvider', { RelayActorBoundary: PassThrough });
 mockModule('@/session/SessionProvider', {
-  useSession: () => ({ accountId, status: accountId ? 'valid' : 'guest' }),
+  useSession: () => ({
+    accountId,
+    status: operationalOnly ? 'operational' : accountId ? 'valid' : 'guest',
+  }),
 });
+const logout = mock.fn();
+mockModule('@/session/logout', { useLogout: () => ({ error: null, logout, pending: false }) });
 mockModule('@/theme/ThemeProvider', {
   useElevation: () => ({ overlay: {} }),
   useTheme: () => ({
@@ -151,6 +171,7 @@ mockModule('@/theme/ThemeProvider', {
 });
 mockModule('@/theme/tokens', {
   spacing: { lg: 24, xl: 32 },
+  textStyles: { uiLabelL: {} },
 });
 
 mockModule('./BottomTabBar', {
@@ -224,6 +245,9 @@ afterEach(async () => {
   sidebarNavigationProps = undefined;
   shellChromeProps = undefined;
   rightRailFooterCount = 0;
+  operationalOnly = false;
+  shellQueryCount = 0;
+  logout.mock.resetCalls();
   router.back.mock.resetCalls();
   router.dismissTo.mock.resetCalls();
   router.push.mock.resetCalls();
@@ -233,6 +257,23 @@ afterEach(async () => {
 });
 
 describe('UniversalShell screen fallback focus target', () => {
+  it('renders the account notification shell without loading the active-only shell query', async () => {
+    operationalOnly = true;
+    pathname = '/notifications';
+
+    await act(async () => {
+      renderer = create(createElement(UniversalShell));
+    });
+    assert.ok(renderer);
+
+    assert.equal(shellQueryCount, 0);
+    assert.equal(renderer?.root.findAllByProps({ testID: 'operational-only-shell' }).length, 1);
+    const logoutButton = renderer?.root.findByType(MockButton);
+    assert.equal(logoutButton?.props.children, '로그아웃');
+    logoutButton?.props.onPress();
+    assert.equal(logout.mock.callCount(), 1);
+  });
+
   it('알려진 Profile 수 0과 변경값만 현재 Account의 Person 속성으로 전달한다', async () => {
     accountId = 'account-a';
     await renderShell();

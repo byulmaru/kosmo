@@ -12,7 +12,7 @@ export const FeatureFlagsContext = createContext<(key: string) => boolean>(() =>
 
 export function FeatureFlagsProvider({ children }: PropsWithChildren) {
   const isDevChannel = getPublicConfig('channel') === 'dev';
-  const { accountId } = useSession();
+  const { accountId, status } = useSession();
   const [evaluation, setEvaluation] = useState<{
     accountId: string;
     client: Client;
@@ -21,7 +21,7 @@ export function FeatureFlagsProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     setEvaluation(null);
 
-    if (isDevChannel || accountId === null) {
+    if (isDevChannel || status !== 'valid' || accountId === null) {
       return;
     }
 
@@ -46,13 +46,14 @@ export function FeatureFlagsProvider({ children }: PropsWithChildren) {
     return () => {
       active = false;
     };
-  }, [accountId, isDevChannel]);
+  }, [accountId, isDevChannel, status]);
 
   const isEnabled = useCallback(
     (key: string) =>
-      isDevChannel ||
-      (evaluation?.accountId === accountId && evaluation.client.getBooleanValue(key, false)),
-    [accountId, evaluation, isDevChannel],
+      status !== 'operational' &&
+      (isDevChannel ||
+        (evaluation?.accountId === accountId && evaluation.client.getBooleanValue(key, false))),
+    [accountId, evaluation, isDevChannel, status],
   );
 
   return <FeatureFlagsContext.Provider value={isEnabled}>{children}</FeatureFlagsContext.Provider>;

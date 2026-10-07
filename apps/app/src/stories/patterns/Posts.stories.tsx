@@ -1498,7 +1498,9 @@ function ProductionReactionMutationTargetsStory() {
               data: {
                 currentSession: {
                   __typename: 'Session',
+                  accountId: 'account-production-reaction-targets',
                   id: 'session-production-reaction-targets',
+                  operationalOnly: false,
                   selectedProfile: {
                     __typename: 'Profile',
                     id: selectedProfileId ?? 'profile-production-reaction-targets',
@@ -1695,7 +1697,9 @@ function ProductionBookmarkMutationStory({
               data: {
                 currentSession: {
                   __typename: 'Session',
+                  accountId: 'account-production-bookmark',
                   id: 'session-production-bookmark',
+                  operationalOnly: false,
                   selectedProfile: {
                     __typename: 'Profile',
                     id: selectedProfileId ?? 'profile-production-bookmark',
@@ -1842,7 +1846,9 @@ function ProductionBookmarkEnvironmentReplacementStory() {
               data: {
                 currentSession: {
                   __typename: 'Session',
+                  accountId: 'account-production-bookmark',
                   id: sessionId,
+                  operationalOnly: false,
                   selectedProfile: {
                     __typename: 'Profile',
                     id: profileId,

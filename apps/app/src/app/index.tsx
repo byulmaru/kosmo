@@ -49,6 +49,8 @@ export default function IndexScreen() {
   useEffect(() => {
     if (status === 'valid') {
       router.replace('/home');
+    } else if (status === 'operational') {
+      router.replace('/notifications');
     }
   }, [router, status]);
 
@@ -87,7 +89,7 @@ export default function IndexScreen() {
     }
   };
 
-  if (status === 'valid') {
+  if (status === 'valid' || status === 'operational') {
     return null;
   }
 

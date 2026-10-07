@@ -3,6 +3,7 @@ import { useCallback } from 'react';
 import { graphql, useFragment, useMutation } from 'react-relay';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { MentionNotificationPost } from './MentionNotificationPost';
+import { parseNotificationHref } from './notificationHref';
 import { NotificationListItemView } from './NotificationListItemView';
 import { ReplyNotificationPost } from './ReplyNotificationPost';
 import type { PostMediaItem } from '@/components/post/PostMediaImage';
@@ -10,6 +11,7 @@ import type { FollowRequestNotificationListItem_notification$key } from './__gen
 import type { MentionNotificationListItem_notification$key } from './__generated__/MentionNotificationListItem_notification.graphql';
 import type { NotificationListItem_notification$key } from './__generated__/NotificationListItem_notification.graphql';
 import type { NotificationListItemMarkReadMutation } from './__generated__/NotificationListItemMarkReadMutation.graphql';
+import type { OperationalNotificationListItem_notification$key } from './__generated__/OperationalNotificationListItem_notification.graphql';
 import type { ReactionNotificationListItem_notification$key } from './__generated__/ReactionNotificationListItem_notification.graphql';
 import type { ReplyNotificationListItem_notification$key } from './__generated__/ReplyNotificationListItem_notification.graphql';
 import type { RepostNotificationListItem_notification$key } from './__generated__/RepostNotificationListItem_notification.graphql';
@@ -39,6 +41,11 @@ const notificationFragment = graphql`
 const notificationListItemMarkReadMutation = graphql`
   mutation NotificationListItemMarkReadMutation($ids: [ID!]!) {
     markNotificationRead(input: { ids: $ids }) {
+      currentSession {
+        id
+        accountId
+        unreadNotificationCount
+      }
       notifications {
         id
         readAt
@@ -63,6 +70,43 @@ function useNotificationRead() {
       });
     },
     [commitMarkRead],
+  );
+}
+
+const operationalNotificationFragment = graphql`
+  fragment OperationalNotificationListItem_notification on OperationalNotification {
+    id
+    createdAt
+    readAt
+    title
+    body
+    href
+  }
+`;
+
+export function OperationalNotificationListItem({
+  notification,
+}: {
+  notification: OperationalNotificationListItem_notification$key;
+}) {
+  const data = useFragment(operationalNotificationFragment, notification);
+  const markRead = useNotificationRead();
+  const href = parseNotificationHref(data.href);
+
+  if (!href) {
+    return null;
+  }
+
+  return (
+    <NotificationListItemView
+      body={data.body ?? null}
+      href={href}
+      kind="operational"
+      onNavigate={() => markRead(data.id)}
+      timestamp={formatTimelineTimestamp(data.createdAt)}
+      title={data.title}
+      unread={data.readAt === null}
+    />
   );
 }
 
