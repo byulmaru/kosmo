@@ -2,7 +2,7 @@ import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, test } from 'node:test';
-import { Endpoints, Person } from '@fedify/vocab';
+import { Endpoints, OrderedCollection, Person } from '@fedify/vocab';
 import {
   ActivityPubActorType,
   InstanceKind,
@@ -43,15 +43,17 @@ let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
 let pg: typeof CoreDb.pg;
 let Profiles: typeof CoreDb.Profiles;
+let ProfileFollows: typeof CoreDb.ProfileFollows;
 let federation: typeof Fedify.federation;
 let lookupRemoteActorUriActivity: typeof WorkerActivities.lookupRemoteActorUriActivity;
 let materializeRemoteProfileActorActivity: typeof WorkerActivities.materializeRemoteProfileActorActivity;
 let refreshRemoteProfileActorActivity: typeof WorkerActivities.refreshRemoteProfileActorActivity;
+let collectRemoteFeaturedActivity: typeof WorkerActivities.collectRemoteFeaturedActivity;
 let seedDatabase: typeof CoreSeed.seedDatabase;
 let localInstanceId: string;
 
 before(async () => {
-  ({ ActivityPubActors, db, firstOrThrow, Instances, pg, Profiles } =
+  ({ ActivityPubActors, db, firstOrThrow, Instances, pg, ProfileFollows, Profiles } =
     await import('@kosmo/core/db'));
   ({ seedDatabase } = await import('@kosmo/core/db/seed'));
   ({ federation } = await import('@kosmo/fedify'));
@@ -59,6 +61,7 @@ before(async () => {
     lookupRemoteActorUriActivity,
     materializeRemoteProfileActorActivity,
     refreshRemoteProfileActorActivity,
+    collectRemoteFeaturedActivity,
   } = await import('./activities'));
 });
 
@@ -1324,6 +1327,77 @@ test(
     assert.equal(await db.$count(ActivityPubActors), 0);
   },
 );
+
+test('Remote Featured Activity는 사용 가능한 local follower identity로 collection을 읽는다', async (t) => {
+  const actorUri = `https://${remoteDomain}/users/alice`;
+  const featuredUri = `${actorUri}/featured`;
+  const instance = await createInstance({ domain: remoteDomain });
+  const remote = await createStoredProfile({ actorUri, handle: 'alice', instanceId: instance.id });
+  const follower = await createStoredProfile({ handle: 'follower', instanceId: localInstanceId });
+  await db.insert(ProfileFollows).values({
+    followerProfileId: follower.id,
+    followeeProfileId: remote.id,
+  });
+  const otherLocalInstance = await createInstance({
+    canonicalOrigin: 'https://other-local.example',
+    domain: 'other-local.example',
+    kind: InstanceKind.LOCAL,
+  });
+  const otherFollower = await createStoredProfile({
+    handle: 'other-follower',
+    instanceId: otherLocalInstance.id,
+  });
+  await db.insert(ProfileFollows).values({
+    followerProfileId: otherFollower.id,
+    followeeProfileId: remote.id,
+  });
+  const collection = await new OrderedCollection({ id: new URL(featuredUri), items: [] }).toJsonLd({
+    format: 'expand',
+  });
+  const signed: string[] = [];
+  const publicLoads: string[] = [];
+  const loader = async (url: string) => {
+    assert.equal(url, featuredUri);
+    return { contextUrl: null, document: collection, documentUrl: url };
+  };
+  t.mock.method(
+    federation,
+    'createContext',
+    () =>
+      ({
+        canonicalOrigin: publicOrigin,
+        documentLoader: async (url: string) => {
+          publicLoads.push(url);
+          return loader(url);
+        },
+        getDocumentLoader: async ({ identifier }: { identifier: string }) => {
+          signed.push(identifier);
+          return loader;
+        },
+        lookupObject: async () => null,
+        parseUri: () => null,
+      }) as never,
+  );
+
+  assert.deepEqual(
+    await collectRemoteFeaturedActivity({ actorUri, featuredUri, profileId: remote.id }),
+    [],
+  );
+  assert.deepEqual(signed, [follower.id]);
+  assert.deepEqual(publicLoads, []);
+
+  await db
+    .update(Profiles)
+    .set({ state: ProfileState.SUSPENDED })
+    .where(eq(Profiles.id, follower.id));
+  signed.length = 0;
+  assert.deepEqual(
+    await collectRemoteFeaturedActivity({ actorUri, featuredUri, profileId: remote.id }),
+    [],
+  );
+  assert.deepEqual(signed, []);
+  assert.deepEqual(publicLoads, [featuredUri]);
+});
 
 type PersonOptions = ConstructorParameters<typeof Person>[0];
 

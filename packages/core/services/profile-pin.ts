@@ -1,9 +1,11 @@
+import { randomUUID } from 'node:crypto';
 import { and, eq, inArray, isNotNull } from 'drizzle-orm';
 import { db, first, Instances, Posts, ProfilePinnedPosts, Profiles } from '../db';
 import { InstanceKind, PostVisibility } from '../enums';
 import { NotFoundError } from '../error';
 import { postVisibilityCondition } from '../visibility/post';
 import { visibleProfileWhere } from '../visibility/profile';
+import { startProfileUpdateEffects } from './profile-update';
 import type { Transaction } from '../db';
 
 type ProfilePinInput = {
@@ -74,7 +76,7 @@ export const pinProfilePost = async ({
   profileId,
   postId,
 }: ProfilePinInput): Promise<ProfilePinResult> => {
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     await ensureLocalProfile(tx, profileId);
     await ensureEligiblePost(tx, { profileId, postId });
 
@@ -85,15 +87,24 @@ export const pinProfilePost = async ({
       .returning()
       .then(first);
 
-    return { changed: inserted !== undefined };
+    return {
+      changed: inserted !== undefined,
+      updateId: inserted ? randomUUID() : undefined,
+    };
   });
+
+  if (result.updateId) {
+    await startProfileUpdateEffects(profileId, result.updateId);
+  }
+
+  return { changed: result.changed };
 };
 
 export const unpinProfilePost = async ({
   profileId,
   postId,
-}: ProfilePinInput): Promise<ProfilePinResult> =>
-  db.transaction(async (tx) => {
+}: ProfilePinInput): Promise<ProfilePinResult> => {
+  const result = await db.transaction(async (tx) => {
     await ensureLocalProfile(tx, profileId);
 
     const deleted = await tx
@@ -104,5 +115,15 @@ export const unpinProfilePost = async ({
       .returning()
       .then(first);
 
-    return { changed: deleted !== undefined };
+    return {
+      changed: deleted !== undefined,
+      updateId: deleted ? randomUUID() : undefined,
+    };
   });
+
+  if (result.updateId) {
+    await startProfileUpdateEffects(profileId, result.updateId);
+  }
+
+  return { changed: result.changed };
+};

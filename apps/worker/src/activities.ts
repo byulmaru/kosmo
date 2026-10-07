@@ -15,6 +15,7 @@ export {
   listPushNotificationInstallations as listPushNotificationInstallationsActivity,
   sendPushNotification as sendPushNotificationActivity,
 } from './activities/push-notification';
+export { collectRemoteFeaturedActivity } from './activities/remote-profile-featured';
 export {
   lookupRemoteActorUriActivity,
   materializeRemoteProfileActorActivity,
@@ -52,6 +53,7 @@ export {
   createRepostNotification as createRepostNotificationActivity,
   deleteRepostNotification as deleteRepostNotificationActivity,
 } from '@kosmo/core/services';
+export { replaceRemoteFeaturedSnapshot as replaceRemoteFeaturedActivity } from '@kosmo/fedify';
 export {
   sendLocalPostCreate as sendLocalPostCreateActivity,
   sendLocalPostDelete as sendLocalPostDeleteActivity,

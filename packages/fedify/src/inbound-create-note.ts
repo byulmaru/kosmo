@@ -6,14 +6,12 @@ import {
   projectRemoteNoteContent,
   RemoteNoteContentLengthExceededError,
 } from '@kosmo/core/activitypub-note-content/server';
-import { db, first, Instances, ProfileFollows, Profiles } from '@kosmo/core/db';
-import { InstanceKind, InstanceState, PostVisibility, ProfileState } from '@kosmo/core/enums';
+import { PostVisibility } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError, ValidationError } from '@kosmo/core/error';
 import { postContentDocumentToText } from '@kosmo/core/post-content/server';
 import { createPost, ProfilePairBlockedError } from '@kosmo/core/services';
 import { runWorkflow } from '@kosmo/core/temporal/client';
 import { remoteProfileRefreshWorkflow } from '@kosmo/core/temporal/workflows';
-import { and, eq } from 'drizzle-orm';
 import { findPostByActivityPubUri } from './activitypub-post-uri';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
 import {
@@ -209,14 +207,15 @@ type RemoteNoteMaterializationSource =
   | {
       kind: 'create';
       actorUri: string;
-      recipient?: string | null;
       storedActor: StoredRemoteProfileActor;
     }
-  | { kind: 'hydrated' };
+  | {
+      advertisingActorUri?: string | URL;
+      kind: 'hydrated';
+    };
 
 type RemoteNoteMaterializationRejectionReason =
   | 'empty_note'
-  | 'followers_visibility_without_follow'
   | 'note_attribution_mismatch'
   | 'note_content_length_exceeded'
   | 'note_identity_mismatch'
@@ -317,35 +316,6 @@ const createRemoteNotePost = async ({
   }
 };
 
-const hasEstablishedFollower = async ({
-  followerProfileId,
-  followeeProfileId,
-}: {
-  followerProfileId?: string | null;
-  followeeProfileId: string;
-}): Promise<boolean> => {
-  const row = await db
-    .select({ id: ProfileFollows.id })
-    .from(ProfileFollows)
-    .innerJoin(Profiles, eq(Profiles.id, ProfileFollows.followerProfileId))
-    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .where(
-      and(
-        eq(ProfileFollows.followeeProfileId, followeeProfileId),
-        followerProfileId == null
-          ? undefined
-          : eq(ProfileFollows.followerProfileId, followerProfileId),
-        eq(Profiles.state, ProfileState.ACTIVE),
-        eq(Instances.kind, InstanceKind.LOCAL),
-        eq(Instances.state, InstanceState.ACTIVE),
-      ),
-    )
-    .limit(1)
-    .then(first);
-
-  return row !== undefined;
-};
-
 type RemoteNoteMaterializationResult =
   | RemoteNotePostMaterialized
   | { reason: RemoteNoteMaterializationRejectionReason; status: 'rejected' };
@@ -368,7 +338,17 @@ const materializeRemoteNote = async ({
   }
 
   const attributionHref = uniqueHref(note.attributionIds);
-  if (!attributionHref || (source.kind === 'create' && attributionHref !== source.actorUri)) {
+  if (!attributionHref) {
+    return { reason: 'note_attribution_mismatch', status: 'rejected' };
+  }
+  if (source.kind === 'create' && attributionHref !== source.actorUri) {
+    return { reason: 'note_attribution_mismatch', status: 'rejected' };
+  }
+  if (
+    source.kind === 'hydrated' &&
+    source.advertisingActorUri !== undefined &&
+    attributionHref !== source.advertisingActorUri.toString()
+  ) {
     return { reason: 'note_attribution_mismatch', status: 'rejected' };
   }
   const attributionUri = new URL(attributionHref);
@@ -376,24 +356,37 @@ const materializeRemoteNote = async ({
     return { reason: 'note_attribution_mismatch', status: 'rejected' };
   }
 
+  let storedActor: StoredRemoteProfileActor | undefined;
+  if (source.kind === 'hydrated' && source.advertisingActorUri !== undefined) {
+    try {
+      storedActor =
+        (await findUsableStoredRemoteProfileActorByUri(attributionUri)) ??
+        (await findOrMaterializeRemoteProfileActorByUri({
+          actorUri: attributionUri,
+          context,
+          now: receivedAt,
+        }));
+    } catch (error) {
+      if (
+        error instanceof RemoteActorMaterializationError ||
+        error instanceof ConflictError ||
+        error instanceof NotFoundError
+      ) {
+        return { reason: 'unusable_author', status: 'rejected' };
+      }
+      throw error;
+    }
+  }
+
   const visibility = resolveNoteVisibility(
     note,
-    source.kind === 'create' ? source.storedActor.actor.followersUri : undefined,
+    source.kind === 'create'
+      ? source.storedActor.actor.followersUri
+      : storedActor?.actor.followersUri,
   );
   if (!visibility) {
     return { reason: 'unsupported_note_visibility', status: 'rejected' };
   }
-  if (
-    source.kind === 'create' &&
-    visibility === PostVisibility.FOLLOWERS &&
-    !(await hasEstablishedFollower({
-      followerProfileId: source.recipient,
-      followeeProfileId: source.storedActor.profile.id,
-    }))
-  ) {
-    return { reason: 'followers_visibility_without_follow', status: 'rejected' };
-  }
-
   let projection;
   try {
     projection = await projectRemoteNote(
@@ -419,10 +412,9 @@ const materializeRemoteNote = async ({
     return { reason: 'empty_note', status: 'rejected' };
   }
 
-  let storedActor;
   if (source.kind === 'create') {
     storedActor = source.storedActor;
-  } else {
+  } else if (!storedActor) {
     try {
       storedActor =
         (await findUsableStoredRemoteProfileActorByUri(attributionUri)) ??
@@ -458,12 +450,14 @@ const materializeRemoteNote = async ({
 };
 
 export const materializeHydratedRemoteNote = async ({
+  advertisingActorUri,
   context,
   note,
   objectUri,
   observation,
   receivedAt,
 }: {
+  advertisingActorUri?: string | URL;
   context: RemoteNoteMaterializationContext;
   note: Note;
   objectUri: URL;
@@ -475,7 +469,7 @@ export const materializeHydratedRemoteNote = async ({
     note,
     objectUri,
     receivedAt,
-    source: { kind: 'hydrated' },
+    source: { advertisingActorUri, kind: 'hydrated' },
   });
   if (result.status === 'rejected') {
     if (result.reason === 'note_content_length_exceeded') {
@@ -527,14 +521,13 @@ export const handleInboundCreateNote = async ({
     note,
     objectUri: new URL(objectUri),
     receivedAt,
-    source: { actorUri, kind: 'create', recipient: context.recipient, storedActor },
+    source: { actorUri, kind: 'create', storedActor },
   });
   if (result.status === 'rejected') {
     const phase =
       result.reason === 'note_identity_mismatch' ||
       result.reason === 'note_attribution_mismatch' ||
-      result.reason === 'unsupported_note_visibility' ||
-      result.reason === 'followers_visibility_without_follow'
+      result.reason === 'unsupported_note_visibility'
         ? 'validation'
         : 'projection';
     observeInbound({

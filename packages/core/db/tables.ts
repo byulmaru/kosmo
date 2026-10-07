@@ -589,8 +589,17 @@ export const ProfilePinnedPosts = pgTable(
     postId: uuid('post_id')
       .notNull()
       .references(() => Posts.id, { onDelete: 'cascade' }),
+    position: integer('position'),
   },
-  (table) => [unique().on(table.profileId, table.postId), index().on(table.profileId, table.id)],
+  (table) => [
+    unique().on(table.profileId, table.postId),
+    unique().on(table.profileId, table.position),
+    index().on(table.profileId, table.id),
+    check(
+      'profile_pinned_post_position_nonnegative',
+      sql`${table.position} IS NULL OR ${table.position} >= 0`,
+    ),
+  ],
 );
 
 export const Reactions = pgTable(

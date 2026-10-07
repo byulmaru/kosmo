@@ -41,3 +41,4 @@ localOutboundFederation
 
 localOutboundFederation.setFollowersDispatcher('/ap/actor/{identifier}/followers', () => null);
 localOutboundFederation.setFollowingDispatcher('/ap/actor/{identifier}/following', () => null);
+localOutboundFederation.setFeaturedDispatcher('/ap/actor/{identifier}/featured', () => null);

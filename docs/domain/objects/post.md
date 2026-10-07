@@ -315,13 +315,11 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
   viewer access를 만들지 않는다. 여기서 정한 audience 분류는 body/tag Mention identity 보존과 별개이며, audience URI만으로 Mention
   관계를 만들지 않는다.
 - actor·object·attribution과 top-level Note의 기본 검증은 여전히 materialization 전에 통과해야 한다. 이 검증은
-  audience marker가 인식된 Note의 추가 actor URI를 근거 없이 거부하기 위한 검사가 아니라 저장할 Post Visibility와
-  local 수신 관련성을 결정하기 위한 경계다.
-- Followers Only Note의 inbound local 수신 대상은 Active local Profile·Active local Instance에 연결된 follower와
-  remote followee 사이의 현재 established Follow Relationship으로 확인한다. pending·rejected Follow Request,
-  unfollow로 removed된 관계 또는 follower Profile/Instance가 inbound eligibility를 통과하지 못하면 수신 대상이
-  아니다. GraphQL 조회는 기존 viewer→author established 관계와 Post/Author Profile·Instance eligibility 정책을
-  사용하며, 이 inbound local 조건을 일반 viewer locality 조건으로 확장하지 않는다.
+  audience marker가 인식된 Note의 추가 actor URI를 근거 없이 거부하기 위한 검사가 아니라 저장할 Post Visibility를
+  결정하기 위한 경계다.
+- 검증된 Followers Only Note의 수신·저장은 Kosmo에 해당 Author를 현재 팔로우하는 Local Profile이 있는지와 무관하다.
+  actor·object·attribution·audience·signature 검증은 그대로 적용하며, 저장된 Post의 viewer 조회는 기존 Post Visibility와
+  Post Eligibility를 따른다.
 - 수신 `Delete(Note)`는 저장된 ActivityPub Post mapping의 정확한 object URI와 Author Profile에 연결된
   ActivityPub Actor URI가 모두 일치할 때만 기존 Post 삭제 행동으로 해당 remote Post를 Tombstone 전이한다.
   mapping의 Post는 Current Content가 있는 Note 구조여야 하며, Content 없는 Repost의 Announce mapping은
@@ -359,16 +357,12 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
   연속된 commit은 최신 current representation delivery로 병합할 수 있으며 commit별 1:1 delivery나 완료 시간 SLA를
   요구하지 않는다. delivery 수단은 이 계약에서 고정하지 않으며, 실패가 이미 commit된 Local 고정 상태를 되돌리지는 않는다.
 - Remote Featured collection은 원격 ActivityPub Profile이 광고한 collection을 page traversal로 동기화한다. 각 Note의 canonical
-  `attributedTo`는 해당 collection을 광고하는 Actor의 canonical URI와 정확히 일치해야 한다. Public/Unlisted는 기존
-  Note 검증을 사용하고, Followers Only는 한 sync 시도 동안 동일한 Active/Normal이며 사용 가능한 Local Instance에 속한
-  local follower identity로 collection의 모든 page와 각 Note를 authenticated fetch해 author, audience와 Follow 관계를
-  검증한다. 성공한 authoritative sync만 remote
-  ordered pin set을 교체한다. 각 시도는 취소 가능하고 next page 순환 검출과 구현이 정한 page·item·byte·시간 예산을 적용하며,
-  fetch·parse·검증·취소·순환·예산 초과 실패는 마지막 성공 상태를 보존한다. 실패는 관측·재시도할 수 있어야 하며, 이후
-  성공한 retry만 snapshot을 원자적으로 교체한다. 더 최신 trigger 뒤에 완료된 이전 시도의 성공 결과는 폐기한다.
-  retry timing·backoff·횟수·SLA와 최신성 판별 수단은 고정하지 않는다. Remote unpin, Delete/Tombstone 또는
-  visibility·author eligibility 상실은 다음 성공 sync나 기존 lifecycle에서 노출에서 제거한다. 검증된 최신 Profile 표현에서
-  `featured` URI가 제거되면 이전 URI의 진행 중인 sync와 예약된 retry가 이후 결과를 덮지 못하게 하고 empty snapshot을 저장한다.
+  `attributedTo`는 해당 collection을 광고하는 Actor의 canonical URI와 일치해야 하며, audience는 기존 Note 검증을 통과해야
+  한다. Public/Unlisted는 공개 조회를 지원하고, Followers Only Note는 원격 서버가 요구하는 인증으로 가져온다.
+  Note 수신·저장은 Kosmo의 현재 Local Follow를 요구하지 않으며, 저장된 Post의 viewer 조회는 기존 Post Visibility와 Post
+  Eligibility를 따른다. next page 순환을 검출하고 구현이 정한 page·item·byte 예산을 적용한다. 전체 ordered list를
+  가져와 검증한 성공 결과만 원자적으로 교체한다. 실패한 retrieval은 새 목록을 쓰지 않으며 빈 collection의 근거가 아니다.
+  검증된 Remote Profile 표현에 `featured` URI가 없으면 목록을 비운다.
 
 ### Quote federation 정책
 

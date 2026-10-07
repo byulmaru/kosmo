@@ -35,4 +35,6 @@ export {
   materializeRemoteProfileActor,
   RemoteActorMaterializationError,
 } from './src/remote-actor-materialization';
+export { replaceRemoteFeaturedSnapshot } from './src/remote-featured-snapshot';
+export { collectRemoteFeaturedPostIds } from './src/remote-profile-featured';
 export { sendRepostAnnounce, sendRepostUndo } from './src/repost-delivery';

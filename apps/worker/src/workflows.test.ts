@@ -20,6 +20,7 @@ import type {
 } from '@kosmo/core/services';
 import type { createNotificationActivity as CreateNotificationActivity } from './activities';
 import type { DatabaseCountsSnapshot } from './activities/database-counts-snapshot';
+import type { RemoteProfileFeaturedSyncInput } from './workflows/remote-profile-featured';
 
 type CreateNotificationInput = Parameters<typeof CreateNotificationActivity>[0];
 
@@ -104,6 +105,99 @@ test('settleEffects는 실패 뒤에도 모든 sibling effect 정산을 기다�
   await assert.rejects(result, /effect failed/);
   assert.equal(settled, true);
 });
+
+test(
+  'Remote Featured Workflow skips missing actors, clears empty collections, and retries replacement only',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+    const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-featured-${process.pid}`;
+    const profileId = '00000000-0000-8000-8000-000000000201';
+    const orderedPostIds = [
+      '00000000-0000-8000-8000-000000000301',
+      '00000000-0000-8000-8000-000000000302',
+    ];
+    const collectionCalls: RemoteProfileFeaturedSyncInput[] = [];
+    const replacementCalls: Array<{ profileId: string; postIds: readonly string[] }> = [];
+    let failNextNonemptyReplacement = true;
+    const worker = await Worker.create({
+      activities: {
+        collectRemoteFeaturedActivity: async (input: RemoteProfileFeaturedSyncInput) => {
+          collectionCalls.push(input);
+          if (input.actorUri.endsWith('/missing')) {
+            return null;
+          }
+          return input.actorUri.endsWith('/empty') ? [] : orderedPostIds;
+        },
+        replaceRemoteFeaturedActivity: async (input: {
+          profileId: string;
+          postIds: readonly string[];
+        }) => {
+          replacementCalls.push(input);
+          if (input.postIds.length > 0 && failNextNonemptyReplacement) {
+            failNextNonemptyReplacement = false;
+            throw new Error('temporary Featured replacement failure');
+          }
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+    const inputs: RemoteProfileFeaturedSyncInput[] = ['missing', 'empty', 'retry'].map(
+      (suffix) => ({
+        actorUri: `https://remote.example/users/${suffix}`,
+        featuredUri: `https://remote.example/users/${suffix}/featured`,
+        profileId,
+      }),
+    );
+    const execute = (input: RemoteProfileFeaturedSyncInput, id: string) =>
+      environment.client.workflow.execute<(input: RemoteProfileFeaturedSyncInput) => Promise<void>>(
+        'remoteProfileFeaturedWorkflow',
+        {
+          args: [input],
+          taskQueue,
+          workflowId: `${taskQueue}:${id}`,
+        },
+      );
+
+    await worker.runUntil(async () => {
+      await execute(inputs[0]!, 'missing');
+      await execute(inputs[1]!, 'empty');
+      await execute(inputs[2]!, 'retry');
+
+      assert.deepEqual(collectionCalls, inputs);
+      assert.deepEqual(replacementCalls, [
+        { profileId, postIds: [] },
+        { profileId, postIds: orderedPostIds },
+        { profileId, postIds: orderedPostIds },
+      ]);
+    });
+
+    const events =
+      (await environment.client.workflow.getHandle(`${taskQueue}:retry`).fetchHistory()).events ??
+      [];
+    const collectionScheduledEventId = events
+      .find(
+        (event) =>
+          event.activityTaskScheduledEventAttributes?.activityType?.name ===
+          'collectRemoteFeaturedActivity',
+      )
+      ?.eventId?.toString();
+    assert.ok(collectionScheduledEventId);
+    assert.ok(
+      events.some(
+        (event) =>
+          event.activityTaskCompletedEventAttributes?.scheduledEventId?.toString() ===
+          collectionScheduledEventId,
+      ),
+    );
+  },
+);
 
 test(
   'Reaction Effects Workflow의 origin 분기와 sibling Activity 격리를 검증한다',
