@@ -114,9 +114,7 @@ function SidebarControl({
   const [focusVisible, setFocusVisible] = useState(false);
   const active = selected && !disabled;
   const controlDisabled = disabled || busy;
-  const linkAttrs = href
-    ? { hrefAttrs: { rel: 'noopener noreferrer', target: '_blank' } }
-    : {};
+  const linkAttrs = href ? { hrefAttrs: { rel: 'noopener noreferrer', target: '_blank' } } : {};
   const unread = unreadCount !== null && unreadCount > 0;
   const color = controlDisabled
     ? theme.stateDisabledForeground

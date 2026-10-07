@@ -550,7 +550,9 @@ async function playInlineUtility({
   expect(betaApplication.getBoundingClientRect().top - footer!.getBoundingClientRect().top).toBe(4);
   expect(feedback.getBoundingClientRect().top - footer!.getBoundingClientRect().top).toBe(49);
   expect(utility.getBoundingClientRect().top - footer!.getBoundingClientRect().top).toBe(94);
-  expect(feedback.getBoundingClientRect().top - betaApplication.getBoundingClientRect().bottom).toBe(0);
+  expect(
+    feedback.getBoundingClientRect().top - betaApplication.getBoundingClientRect().bottom,
+  ).toBe(0);
   expect(
     betaApplication.compareDocumentPosition(feedback) & Node.DOCUMENT_POSITION_FOLLOWING,
   ).toBeTruthy();
