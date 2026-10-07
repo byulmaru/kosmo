@@ -24,7 +24,11 @@ let app: Hono<Env>;
 
 type GraphQLResult<T> = {
   data?: T;
-  errors?: Array<{ extensions?: { code?: string }; message: string }>;
+  errors?: Array<{
+    extensions?: { code?: string };
+    message: string;
+    path?: Array<string | number>;
+  }>;
 };
 
 before(async () => {
@@ -152,6 +156,15 @@ test('Suspended Account는 Notification 전용 Session으로 식별하고 Disabl
       }>(query, suspended.session.token),
       request<{ currentSession: null; me: null }>(query, disabled.session.token),
     ]);
+    const accountQuery = 'query { currentSession { account { id name } } }';
+    const [activeAccountResult, suspendedAccountResult] = await Promise.all([
+      request<{
+        currentSession: { account: { id: string; name: string } } | null;
+      }>(accountQuery, active.session.token),
+      request<{
+        currentSession: { account: { id: string; name: string } } | null;
+      }>(accountQuery, suspended.session.token),
+    ]);
 
     assert.equal(activeResult.errors, undefined, JSON.stringify(activeResult.errors));
     assert.deepEqual(activeResult.data, {
@@ -174,6 +187,20 @@ test('Suspended Account는 Notification 전용 Session으로 식별하고 Disabl
       },
       me: null,
     });
+
+    assert.equal(activeAccountResult.errors, undefined, JSON.stringify(activeAccountResult.errors));
+    assert.deepEqual(activeAccountResult.data, {
+      currentSession: {
+        account: {
+          id: encodeGlobalId('Account', active.account.id),
+          name: active.account.displayName,
+        },
+      },
+    });
+
+    assert.deepEqual(suspendedAccountResult.data, { currentSession: null });
+    assert.equal(suspendedAccountResult.errors?.length, 1);
+    assert.deepEqual(suspendedAccountResult.errors?.[0]?.path, ['currentSession', 'account']);
 
     const suspendedProfileMutation = await request<unknown>(
       'mutation { createProfile(input: { handle: "suspendedprofile" }) { profile { id } } }',
