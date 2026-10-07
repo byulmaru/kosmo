@@ -4,7 +4,7 @@ import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { PropsWithChildren } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
-import type ProtectedLayoutComponent from './_layout';
+import type ProtectedLayoutComponent from './app/(tabs)/(protected)/_layout';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -37,7 +37,7 @@ mockModule('@/components/Splash', {
 mockModule('@/session/SessionProvider', { useSession: () => ({ status }) });
 
 before(async () => {
-  ({ default: ProtectedLayout } = await import('./_layout'));
+  ({ default: ProtectedLayout } = await import('./app/(tabs)/(protected)/_layout'));
 });
 
 afterEach(async () => {
