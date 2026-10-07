@@ -40,7 +40,7 @@ import {
 import { and, eq, getColumns, inArray, isNotNull, ne } from 'drizzle-orm';
 import { isHttpUri } from './activitypub-uri';
 import type { Context, DocumentLoader } from '@fedify/fedify';
-import type { Actor, Image, LanguageString, Object as ActivityPubObject } from '@fedify/vocab';
+import type { Actor, Image, LanguageString } from '@fedify/vocab';
 import type {
   RemoteProfileActorLookupInput,
   RemoteProfileFeaturedSyncInput,
