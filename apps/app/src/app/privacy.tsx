@@ -12,7 +12,7 @@ import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import type { Href } from 'expo-router';
 import type { PropsWithChildren, ReactNode } from 'react';
 
-const EFFECTIVE_DATE = '2026년 10월 1일';
+const EFFECTIVE_DATE = '2026년 10월 7일';
 const POLICY_TITLE = 'Kosmo 개인정보 처리방침';
 
 function SubsectionTitle({ children }: { children: ReactNode }) {
@@ -99,7 +99,7 @@ export default function PrivacyScreen() {
             cells={[
               '별마루 Account ID, Profile ID, handle, 표시명, 소개, 이미지와 선택 프로필 정보',
               '로그인, 계정 식별, 프로필 생성·선택과 서비스 제공',
-              '계정 삭제 또는 처리 목적 달성 시까지. 계정 삭제 요청과 처리 시점은 계정 삭제 안내를 따릅니다.',
+              'Account 정보의 처리 시점과 탈퇴 절차는 계정 삭제 안내를 따릅니다. Profile 정보는 계정 탈퇴 처리 완료일부터 30일간 보관한 뒤 파기합니다.',
               '개인정보 보호법 제15조 제1항 제4호(계약의 이행)',
             ]}
           />
@@ -107,7 +107,7 @@ export default function PrivacyScreen() {
             cells={[
               '작성 콘텐츠와 공개 범위, 관계·반응·북마크·알림 기록, 작성·변경 일시',
               '게시글·답글·인용, 팔로우, 반응, 북마크, 알림과 연합형 소셜 네트워크 제공',
-              '계정 또는 콘텐츠 삭제, 관계 종료, 처리 목적 달성 시까지. 다른 연합 서버에 이미 전달된 공개 정보는 해당 서버의 정책에 따라 별도로 남을 수 있습니다. 계정 삭제 요청에 따른 비공개 전환과 보존 예외는 계정 삭제 안내를 따릅니다.',
+              '콘텐츠 삭제, 관계 종료 또는 처리 목적 달성 시까지. 계정 탈퇴 처리 완료일부터 관련 게시글과 관계 기록을 30일간 보관한 뒤 파기합니다. 다른 연합 서버에 이미 전달된 공개 정보는 해당 서버의 정책에 따라 별도로 남을 수 있습니다. 계정 삭제 요청에 따른 비공개 전환은 계정 삭제 안내를 따릅니다.',
               '개인정보 보호법 제15조 제1항 제4호(계약의 이행)',
             ]}
           />
@@ -115,7 +115,7 @@ export default function PrivacyScreen() {
             cells={[
               'Session ID, 접속 일시, IP 주소, 요청·오류 기록, 기기·OS·브라우저 정보',
               '인증 유지, 오류 조사, 부정 이용 방지와 서비스 보호',
-              '보안·오류 조사 목적 달성 시까지 또는 관계 법령이 정한 기간',
+              '계정 이용 중 보안·오류 조사 목적에 필요한 기간 보관하고, 계정 탈퇴 처리 완료일부터 30일간 보관한 뒤 파기합니다.',
               '개인정보 보호법 제15조 제1항 제6호(안전한 서비스 운영을 위한 정당한 이익)',
             ]}
           />
@@ -235,8 +235,9 @@ export default function PrivacyScreen() {
 
       <PolicySection title="5. 개인정보의 파기">
         <NumberedItem number={1}>
-          보유 기간이 지나거나 처리 목적이 달성되면 지체 없이 파기합니다. 계정 삭제 안내에서 정한
-          moderation 및 신고 처리 관련 보존 예외가 적용될 수 있습니다.
+          보유 기간이 지나거나 처리 목적이 달성되면 지체 없이 파기합니다. 다만 진행 중인 신고·분쟁
+          또는 수사기관 요청의 처리에 필요한 관련 기록만 예외적으로 필요성이 있는 동안 보관하고,
+          필요성이 끝나면 지체 없이 파기합니다.
         </NumberedItem>
         <NumberedItem number={2}>
           관계 법령에 따라 보관해야 하는 정보는 다른 개인정보와 분리해 보관한 뒤 기간이 끝나면
@@ -337,12 +338,12 @@ export default function PrivacyScreen() {
 
       <NavigationLink href={'/privacy/2026-09-09' as Href}>
         <Pressable
-          accessibilityLabel="이전 개인정보 처리방침 (2026년 9월 9일부터 2026년 9월 30일까지)"
+          accessibilityLabel="이전 개인정보 처리방침 (2026년 9월 9일부터 2026년 10월 6일까지)"
           accessibilityRole="link"
           style={styles.previousPolicyLinkControl}
         >
           <Text style={[styles.previousPolicyLink, { color: theme.textSecondary }]}>
-            이전 개인정보 처리방침 (2026년 9월 9일부터 2026년 9월 30일까지)
+            이전 개인정보 처리방침 (2026년 9월 9일부터 2026년 10월 6일까지)
           </Text>
         </Pressable>
       </NavigationLink>
