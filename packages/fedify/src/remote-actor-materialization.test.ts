@@ -62,6 +62,7 @@ let Profiles: typeof CoreDb.Profiles;
 let seedDatabase: typeof CoreSeed.seedDatabase;
 let findOrMaterializeRemoteProfileActorByUri: typeof Materialization.findOrMaterializeRemoteProfileActorByUri;
 let materializeRemoteProfileActor: typeof Materialization.materializeRemoteProfileActor;
+let applyRemoteProfileActorDocument: typeof Materialization.applyRemoteProfileActorDocument;
 let RemoteActorMaterializationError: typeof Materialization.RemoteActorMaterializationError;
 let replaceRemoteFeaturedSnapshot: typeof Snapshot.replaceRemoteFeaturedSnapshot;
 let collectRemoteFeaturedPostIds: typeof Featured.collectRemoteFeaturedPostIds;
@@ -94,6 +95,7 @@ describe('remote actor materialization', () => {
     ({
       findOrMaterializeRemoteProfileActorByUri,
       materializeRemoteProfileActor,
+      applyRemoteProfileActorDocument,
       RemoteActorMaterializationError,
     } = await import('./remote-actor-materialization'));
     ({ replaceRemoteFeaturedSnapshot } = await import('./remote-featured-snapshot'));
@@ -991,6 +993,146 @@ describe('remote actor materialization', () => {
         },
       ],
     );
+  });
+
+  test('applies newer actor Featured state before sync and ignores stale removals', async () => {
+    const stored = await createStoredRemoteActor();
+    const otherInstance = await createRemoteInstance({ domain: 'other.remote.example' });
+    const otherProfile = await createProfile({ handle: 'bob', instanceId: otherInstance.id });
+    const createPosts = (profileId: string, amount: number) =>
+      db
+        .insert(Posts)
+        .values(
+          Array.from({ length: amount }, () => ({
+            profileId,
+            state: PostState.ACTIVE,
+            visibility: PostVisibility.PUBLIC,
+          })),
+        )
+        .returning();
+    const [remotePin, manualPin, stalePin, equalPin] = await createPosts(stored.profile.id, 4);
+    const [otherPin] = await createPosts(otherProfile.id, 1);
+
+    await db.insert(ProfilePinnedPosts).values([
+      { position: 0, postId: remotePin!.id, profileId: stored.profile.id },
+      { postId: manualPin!.id, profileId: stored.profile.id },
+      { position: 0, postId: otherPin!.id, profileId: otherProfile.id },
+    ]);
+
+    const readPins = async (profileId: string) =>
+      (
+        await db
+          .select({ position: ProfilePinnedPosts.position, postId: ProfilePinnedPosts.postId })
+          .from(ProfilePinnedPosts)
+          .where(eq(ProfilePinnedPosts.profileId, profileId))
+          .orderBy(ProfilePinnedPosts.position)
+      ).map(({ position, postId }) => [position, postId] as const);
+
+    const advertisedAt = Temporal.Instant.from('2026-07-10T00:00:00Z');
+    const featuredUri = new URL(remoteActorUri.href + '/featured');
+    const advertisedDocument = await createActor({
+      featured: featuredUri,
+      name: 'Advertised Alice',
+    }).toJsonLd({ format: 'expand' });
+    let projectionAtStart:
+      | { displayName: string; lastFetchedAt: Temporal.Instant | null }
+      | undefined;
+    const start = mock.method(temporalClient.workflow, 'start', async () => {
+      projectionAtStart = await db
+        .select({
+          displayName: Profiles.displayName,
+          lastFetchedAt: ActivityPubActors.lastFetchedAt,
+        })
+        .from(Profiles)
+        .innerJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Profiles.id))
+        .where(eq(Profiles.id, stored.profile.id))
+        .limit(1)
+        .then(firstOrThrow);
+      return undefined as never;
+    });
+
+    await applyRemoteProfileActorDocument({
+      actorUri: remoteActorUri,
+      actorJsonLd: advertisedDocument,
+      observedAt: advertisedAt,
+    });
+
+    assert.equal(start.mock.callCount(), 1);
+    assert.equal(start.mock.calls[0]?.arguments[0], 'remoteProfileFeaturedWorkflow');
+    assert.deepEqual(
+      (start.mock.calls[0]?.arguments[1] as { args?: unknown[] } | undefined)?.args,
+      [
+        {
+          actorUri: remoteActorUri.href,
+          featuredUri: featuredUri.href,
+          profileId: stored.profile.id,
+        },
+      ],
+    );
+    assert.equal(projectionAtStart?.displayName, 'Advertised Alice');
+    assert.equal(projectionAtStart?.lastFetchedAt?.toString(), advertisedAt.toString());
+
+    const withoutFeaturedAt = Temporal.Instant.from('2026-07-11T00:00:00Z');
+    const withoutFeaturedDocument = await createActor({ name: 'No Featured Alice' }).toJsonLd({
+      format: 'expand',
+    });
+    await applyRemoteProfileActorDocument({
+      actorUri: remoteActorUri,
+      actorJsonLd: withoutFeaturedDocument,
+      observedAt: withoutFeaturedAt,
+    });
+
+    assert.deepEqual(await readPins(stored.profile.id), [[null, manualPin!.id]]);
+    assert.deepEqual(await readPins(otherProfile.id), [[0, otherPin!.id]]);
+
+    await db.insert(ProfilePinnedPosts).values({
+      position: 1,
+      postId: stalePin!.id,
+      profileId: stored.profile.id,
+    });
+    const olderDocument = await createActor({ name: 'Older Alice' }).toJsonLd({
+      format: 'expand',
+    });
+    await applyRemoteProfileActorDocument({
+      actorUri: remoteActorUri,
+      actorJsonLd: olderDocument,
+      observedAt: Temporal.Instant.from('2026-07-10T23:59:59Z'),
+    });
+    assert.deepEqual(await readPins(stored.profile.id), [
+      [1, stalePin!.id],
+      [null, manualPin!.id],
+    ]);
+
+    await db.insert(ProfilePinnedPosts).values({
+      position: 2,
+      postId: equalPin!.id,
+      profileId: stored.profile.id,
+    });
+    await applyRemoteProfileActorDocument({
+      actorUri: remoteActorUri,
+      actorJsonLd: olderDocument,
+      observedAt: withoutFeaturedAt,
+    });
+    assert.deepEqual(await readPins(stored.profile.id), [
+      [1, stalePin!.id],
+      [2, equalPin!.id],
+      [null, manualPin!.id],
+    ]);
+
+    for (const observedAt of [Temporal.Instant.from('2026-07-10T23:59:59Z'), withoutFeaturedAt]) {
+      await applyRemoteProfileActorDocument({
+        actorUri: remoteActorUri,
+        actorJsonLd: advertisedDocument,
+        observedAt,
+      });
+      assert.deepEqual(await readPins(stored.profile.id), [
+        [1, stalePin!.id],
+        [2, equalPin!.id],
+        [null, manualPin!.id],
+      ]);
+      assert.equal(start.mock.callCount(), 1);
+    }
+    assert.deepEqual(await readPins(otherProfile.id), [[0, otherPin!.id]]);
   });
 
   test('rejects handle collisions when refreshing an existing actor URI', async () => {
