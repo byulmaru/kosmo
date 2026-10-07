@@ -109,6 +109,8 @@ Recipient Profile은 Related Post의 direct Repost Source Author Profile이다. 
 
 - 각 수동 발송은 고유 UUID `sendId`로 식별한다. 최초 수신자 집합 capture가 성공한 시점에 ACTIVE인 Account를
   대상으로 고정하며, 그 뒤 가입하거나 ACTIVE가 된 Account를 같은 발송의 재시도에 추가하지 않는다.
+- Operational Notification Push는 최초 capture 뒤에도 전달 시점에 Account State가 ACTIVE인 설치만 대상으로 한다.
+  SUSPENDED Account는 자신의 Operational Notification을 조회할 수 있지만 Push는 받지 않는다.
 - 같은 `sendId`와 제목·본문·링크 데이터로 재시도해도 기존 Notification 행, 데이터와 `readAt`을 바꾸지 않는다.
   같은 `sendId`를 다른 제목·본문·링크 데이터와 함께 재사용하면 발송을 실패 처리한다.
 
