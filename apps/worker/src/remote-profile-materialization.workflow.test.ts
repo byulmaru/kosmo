@@ -519,6 +519,7 @@ test('Remote Profile Activity는 profileId 증거에 따라 origin을 선택하�
     (error: unknown) => {
       assert.equal((error as { nonRetryable?: boolean }).nonRetryable, true);
       assert.equal((error as { type?: string }).type, 'RemoteActorMaterializationError');
+      assert.deepEqual((error as ApplicationFailure).details, ['initiator-origin']);
       return true;
     },
   );

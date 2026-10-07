@@ -14,6 +14,7 @@ import { SettingsLinkRow } from './SettingsLinkRow';
 type SettingsDestination =
   | 'default-post-visibility'
   | 'profile-migration'
+  | 'following-import'
   | 'mute-and-block'
   | 'theme'
   | 'info';
@@ -43,14 +44,24 @@ export function SettingsNavigationList({
         selected={selected === 'default-post-visibility'}
       />
       {migrationEnabled ? (
-        <SettingsLinkRow
-          accessibilityLabel="다른 서비스에서 이전 설정 열기"
-          href="/settings/profile-migration"
-          label="다른 서비스에서 이전"
-          primary
-          currentPage={pathname === '/settings/profile-migration'}
-          selected={selected === 'profile-migration'}
-        />
+        <>
+          <SettingsLinkRow
+            accessibilityLabel="다른 서비스에서 이전 설정 열기"
+            href="/settings/profile-migration"
+            label="다른 서비스에서 이전"
+            primary
+            currentPage={pathname === '/settings/profile-migration'}
+            selected={selected === 'profile-migration'}
+          />
+          <SettingsLinkRow
+            accessibilityLabel="팔로잉 가져오기 설정 열기"
+            href="/settings/following-import"
+            label="팔로잉 가져오기"
+            primary
+            currentPage={pathname === '/settings/following-import'}
+            selected={selected === 'following-import'}
+          />
+        </>
       ) : null}
       <SettingsLinkRow
         accessibilityLabel="뮤트 및 차단 설정 열기"
