@@ -139,11 +139,17 @@ test(
         },
         materializeRemoteProfileActorActivity: async ({ actorUri }) => {
           if (actorUri.includes('bad-origin.example')) {
-            throw ApplicationFailure.create({
+            const originFailure = ApplicationFailure.create({
               message: 'Invalid initiating Profile origin',
               type: 'RemoteActorMaterializationError',
               nonRetryable: true,
               details: ['initiator-origin'],
+            });
+            throw ApplicationFailure.create({
+              message: 'Remote account was not found',
+              type: 'NotFoundError',
+              nonRetryable: true,
+              cause: originFailure,
             });
           }
           return { needsRefresh: false, profileId: remoteProfileId };
@@ -155,6 +161,9 @@ test(
               'Profile pair is blocked',
               'ProfilePairBlockedError',
             );
+          }
+          if (followeeProfileId === 'local:unknownfailure') {
+            throw ApplicationFailure.nonRetryable('Unexpected import failure', 'UnexpectedFailure');
           }
           followed.push(followeeProfileId);
         },
@@ -258,6 +267,17 @@ test(
         ]),
       );
       assert.deepEqual(followed.slice(beforeSkipped), ['local:gooduser']);
+
+      const beforeUnknownFailure = followed.length;
+      await assert.rejects(
+        execute(
+          importInput(followerProfileId, [
+            { kind: 'local', handle: 'unknownfailure' },
+            { kind: 'local', handle: 'mustnotrun' },
+          ]),
+        ),
+      );
+      assert.equal(followed.length, beforeUnknownFailure);
 
       const beforeFatal = followed.length;
       await assert.rejects(

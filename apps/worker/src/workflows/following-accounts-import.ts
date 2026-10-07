@@ -49,40 +49,40 @@ const followingAccountsImportInputSchema = z
     ({ addresses, afterIndex }) => (afterIndex ?? 0) <= addresses.length,
   ) satisfies z.ZodType<FollowingAccountsImportInput>;
 
-type Failure = {
-  readonly type?: string | null;
-  readonly details?: readonly unknown[] | null;
-};
-
-const failuresInChain = (value: unknown): Failure[] => {
-  const failures: Failure[] = [];
+const accountFailureType = (error: unknown): string | undefined => {
   const seen = new Set<unknown>();
-  let current = value;
+  let current = error;
+  let failureType: string | undefined;
+
   while (current instanceof Error && !seen.has(current)) {
     seen.add(current);
-    failures.push(current as Error & Failure);
+    if (current instanceof ApplicationFailure) {
+      const type = current.type ?? '';
+      if (
+        type === 'RemoteActorMaterializationError' &&
+        current.details?.includes('initiator-origin')
+      ) {
+        return undefined;
+      }
+
+      if (
+        failureType === undefined &&
+        [
+          'ConflictError',
+          'NotFoundError',
+          'ProfilePairBlockedError',
+          'PermissionDeniedError',
+          'RemoteActorMaterializationError',
+          'RemoteProfileFetchUnavailable',
+        ].includes(type)
+      ) {
+        failureType = type;
+      }
+    }
     current = current.cause;
   }
-  return failures;
+  return failureType;
 };
-
-const isInitiatorOriginFailure = (failures: readonly Failure[]) =>
-  failures.some(
-    ({ type, details }) =>
-      type === 'RemoteActorMaterializationError' && details?.includes('initiator-origin'),
-  );
-
-const accountFailureType = (failures: readonly Failure[]) =>
-  failures.find(({ type }) =>
-    [
-      'ConflictError',
-      'NotFoundError',
-      'ProfilePairBlockedError',
-      'PermissionDeniedError',
-      'RemoteActorMaterializationError',
-      'RemoteProfileFetchUnavailable',
-    ].includes(type ?? ''),
-  )?.type;
 
 export async function followingAccountsImportWorkflow(
   input: FollowingAccountsImportInput,
@@ -134,12 +134,7 @@ export async function followingAccountsImportWorkflow(
 
       await followImportedProfileActivity({ followerProfileId, followeeProfileId });
     } catch (error) {
-      const failures = failuresInChain(error);
-      if (isInitiatorOriginFailure(failures)) {
-        throw error;
-      }
-
-      const failureType = accountFailureType(failures);
+      const failureType = accountFailureType(error);
       if (!failureType) {
         throw error;
       }
