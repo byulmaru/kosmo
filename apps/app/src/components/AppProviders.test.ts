@@ -381,8 +381,7 @@ before(async () => {
   ({ useFeatureFlag } = await import('./FeatureFlagsContext'));
   ({ UniversalShell } = await import('./shell/UniversalShell'));
   ({ RouteBoundary, useRouteBoundary } = await import('./RouteBoundary'));
-  ({ useAnalyticsIdentityAccountId, useSession } =
-    await import('../session/SessionProvider'));
+  ({ useAnalyticsIdentityAccountId, useSession } = await import('../session/SessionProvider'));
   ({ useRelayActor, useRelayAuthLifecycleKey } = await import('../relay/RelayActorProvider'));
 });
 

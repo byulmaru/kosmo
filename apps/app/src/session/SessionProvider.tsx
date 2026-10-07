@@ -161,27 +161,27 @@ export function SessionProvider({ children }: PropsWithChildren) {
 
   return (
     <AnalyticsIdentityAccountContext.Provider value={sessionState.value.accountId}>
-    <SessionContext.Provider value={visibleSession}>
-      <RelayFailOpenBoundary
-        fallback={
-          <SessionErrorReporter
-            authLifecycleKey={authLifecycleKey}
-            actorLifecycleKey={actorLifecycleKey}
-            onError={setSessionError}
-          />
-        }
-      >
-        <Suspense fallback={<Splash label="세션을 확인하는 중입니다." />}>
-          <SessionQuery
-            authLifecycleKey={authLifecycleKey}
-            actorLifecycleKey={actorLifecycleKey}
-            onSessionChange={setSession}
-            restoreRef={restoreRef}
-          />
-        </Suspense>
-      </RelayFailOpenBoundary>
-      {sessionState.ready ? children : null}
-    </SessionContext.Provider>
+      <SessionContext.Provider value={visibleSession}>
+        <RelayFailOpenBoundary
+          fallback={
+            <SessionErrorReporter
+              authLifecycleKey={authLifecycleKey}
+              actorLifecycleKey={actorLifecycleKey}
+              onError={setSessionError}
+            />
+          }
+        >
+          <Suspense fallback={<Splash label="세션을 확인하는 중입니다." />}>
+            <SessionQuery
+              authLifecycleKey={authLifecycleKey}
+              actorLifecycleKey={actorLifecycleKey}
+              onSessionChange={setSession}
+              restoreRef={restoreRef}
+            />
+          </Suspense>
+        </RelayFailOpenBoundary>
+        {sessionState.ready ? children : null}
+      </SessionContext.Provider>
     </AnalyticsIdentityAccountContext.Provider>
   );
 }
