@@ -2,7 +2,7 @@ import {
   FOLLOWING_ACCOUNTS_IMPORT_MAX_ADDRESSES,
   remoteProfileLookupWorkflow,
 } from '@kosmo/core/temporal/workflows';
-import { localProfileHandleSchema, remoteProfileHandleSchema } from '@kosmo/core/validation';
+import { profileHandleSchema, remoteProfileHandleSchema } from '@kosmo/core/validation';
 import {
   ApplicationFailure,
   continueAsNew,
@@ -30,7 +30,7 @@ const followingAccountsImportInputSchema = z
     addresses: z
       .array(
         z.discriminatedUnion('kind', [
-          z.strictObject({ kind: z.literal('local'), handle: localProfileHandleSchema }),
+          z.strictObject({ kind: z.literal('local'), handle: profileHandleSchema }),
           z.strictObject({
             kind: z.literal('remote'),
             handle: remoteProfileHandleSchema,

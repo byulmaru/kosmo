@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, textStyles } from '@/theme/tokens';
+import type { PayloadError } from 'relay-runtime';
 import type { SettingsFollowingImportDetailMutation } from './__generated__/SettingsFollowingImportDetailMutation.graphql';
 import type { SettingsFollowingImportDetailQuery } from './__generated__/SettingsFollowingImportDetailQuery.graphql';
 
@@ -42,7 +43,25 @@ const SettingsFollowingImportMutation = graphql`
   }
 `;
 
-type Feedback = 'accepted' | 'file-error' | 'file-too-large' | 'submit-error' | null;
+type Feedback =
+  | 'accepted'
+  | 'file-error'
+  | 'file-too-large'
+  | 'submit-error'
+  | { kind: 'csv-validation-error'; message: string }
+  | null;
+
+type CsvValidationError = PayloadError & {
+  extensions?: { code?: unknown; field?: unknown };
+};
+
+function csvValidationMessage(errors: ReadonlyArray<PayloadError> | null | undefined) {
+  const validationError = errors?.find((error) => {
+    const { code, field } = (error as CsvValidationError).extensions ?? {};
+    return code === 'VALIDATION' && field === 'csv';
+  });
+  return validationError?.message;
+}
 
 export function SettingsFollowingImportDetail() {
   const migrationEnabled = useFeatureFlag('profile-migration');
@@ -147,10 +166,30 @@ function SettingsFollowingImportDetailContents() {
     setFeedback(null);
     commit({
       variables: { input: { csv } },
-      onCompleted: (response) => {
-        setFeedback(response.importFollowingAccounts?.accepted ? 'accepted' : 'submit-error');
+      onCompleted: (response, errors) => {
+        if (response?.importFollowingAccounts?.accepted) {
+          setFeedback('accepted');
+          return;
+        }
+
+        const validationMessage = csvValidationMessage(errors);
+        setFeedback(
+          validationMessage
+            ? { kind: 'csv-validation-error', message: validationMessage }
+            : 'submit-error',
+        );
       },
-      onError: () => setFeedback('submit-error'),
+      onError: (error) => {
+        const source = (
+          error as Error & { source?: { errors?: ReadonlyArray<PayloadError> | null } }
+        ).source;
+        const validationMessage = csvValidationMessage(source?.errors);
+        setFeedback(
+          validationMessage
+            ? { kind: 'csv-validation-error', message: validationMessage }
+            : 'submit-error',
+        );
+      },
     });
   };
 
@@ -215,8 +254,10 @@ function SettingsFollowingImportDetailContents() {
             {feedback === 'file-too-large'
               ? 'CSV 파일은 512 KiB 이하여야 해요.'
               : feedback === 'submit-error'
-                ? '가져오기를 시작하지 못했어요. CSV 파일을 확인한 뒤 다시 시도해 주세요.'
-                : 'CSV 파일을 선택하거나 읽지 못했어요. 다시 시도해 주세요.'}
+                ? '가져오기를 시작하지 못했어요. 잠시 후 다시 시도해 주세요.'
+                : typeof feedback === 'object'
+                  ? feedback.message
+                  : 'CSV 파일을 선택하거나 읽지 못했어요. 다시 시도해 주세요.'}
           </Text>
         ) : null}
       </View>
