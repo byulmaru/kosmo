@@ -9,7 +9,11 @@ import {
   PROFILE_UNBLOCK_UPDATE_NAME,
 } from '@kosmo/core/temporal/profile-block';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
-import { ApplicationFailure, WithStartWorkflowOperation } from '@temporalio/client';
+import {
+  ApplicationFailure,
+  WithStartWorkflowOperation,
+  WorkflowFailedError,
+} from '@temporalio/client';
 import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
 import { settleEffects } from './workflows/settle-effects';
@@ -2604,6 +2608,7 @@ test(
     const sendId = '00000000-0000-4000-8000-000000000101';
     const invalidSendId = '00000000-0000-4000-8000-000000000103';
     const mismatchedSendId = '00000000-0000-4000-8000-000000000104';
+    const normalizedInvalidSendId = '00000000-0000-4000-8000-000000000105';
     const taskQueue = `${KOSMO_TASK_QUEUE}-operational-notification-${process.pid}`;
     const captures: unknown[] = [];
     const pages: unknown[] = [];
@@ -2652,6 +2657,21 @@ test(
             data,
           }),
         }),
+      );
+      const normalizedInvalidData = { ...data, href: '/.//status.example' };
+      await assert.rejects(
+        environment.client.workflow.execute('operationalNotificationDeliveryWorkflow', {
+          args: [{ sendId: normalizedInvalidSendId, data: normalizedInvalidData }],
+          taskQueue,
+          workflowId: operationalNotificationWorkflow.workflowIdFromArgs({
+            sendId: normalizedInvalidSendId,
+            data: normalizedInvalidData,
+          }),
+        }),
+        (error: unknown) =>
+          error instanceof WorkflowFailedError &&
+          error.cause instanceof ApplicationFailure &&
+          error.cause.nonRetryable,
       );
       await assert.rejects(
         environment.client.workflow.execute('operationalNotificationDeliveryWorkflow', {

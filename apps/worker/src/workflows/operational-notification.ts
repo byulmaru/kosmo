@@ -45,6 +45,9 @@ const normalizeOperationalHref = (value: string): string => {
     if (url.origin !== INTERNAL_ORIGIN) {
       throw new TypeError('Operational notification href must stay on the app origin');
     }
+    if (url.pathname.startsWith('//')) {
+      throw new TypeError('Operational notification href must be root-relative');
+    }
     return `${url.pathname}${url.search}${url.hash}`;
   }
 

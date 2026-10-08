@@ -58,10 +58,9 @@ export const captureOperationalNotificationAudienceActivity = async ({
         SELECT "id", ${NotificationKind.OPERATIONAL}::"notification_kind", ${sendId}::uuid, ${JSON.stringify(data)}::jsonb
         FROM "account"
         WHERE "state" = ${AccountState.ACTIVE}::"account_state"
-        RETURNING "id"
       `);
 
-      return { captured: inserted.length > 0, dataMatches: true };
+      return { captured: inserted.count > 0, dataMatches: true };
     });
 
     if (!captured.dataMatches) {
