@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef } from 'react';
 import { AppState, Linking } from 'react-native';
-import { graphql, useMutation } from 'react-relay';
+import { writeSelectedProfile } from '@/auth/selectedProfileStorage';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useSession } from '@/session/SessionProvider';
 import {
@@ -12,25 +12,6 @@ import {
 import { prepareNativePushNavigation } from './pushNavigation';
 import { nativePushResponseKey, parseNativePushTapTarget } from './pushPayload';
 import type { NotificationResponse } from 'expo-notifications';
-import type { NativePushSelectProfileMutation as NativePushSelectProfileMutationType } from './__generated__/NativePushSelectProfileMutation.graphql';
-
-const NativePushSelectProfileMutation = graphql`
-  mutation NativePushSelectProfileMutation($id: ID!) {
-    selectProfile(input: { id: $id }) {
-      profile {
-        id
-      }
-    }
-  }
-`;
-
-type RetryablePushError = Error & { retryable: true };
-
-const markRetryable = (error: Error): RetryablePushError =>
-  Object.assign(error, { retryable: true as const });
-
-const isRetryablePushError = (error: unknown): error is RetryablePushError =>
-  error instanceof Error && 'retryable' in error && error.retryable === true;
 
 export function useNativePushNotificationResponses() {
   const router = useRouter();
@@ -40,32 +21,10 @@ export function useNativePushNotificationResponses() {
   sessionRef.current = session;
   const tapQueueRef = useRef(Promise.resolve());
   const handledResponseKeyRef = useRef<string | null>(null);
-  const [commitSelectProfile] = useMutation<NativePushSelectProfileMutationType>(
-    NativePushSelectProfileMutation,
-  );
 
   const fallbackToNotifications = useCallback(() => {
     router.replace('/notifications');
   }, [router]);
-
-  const selectProfile = useCallback(
-    (id: string) =>
-      new Promise<string>((resolve, reject) => {
-        commitSelectProfile({
-          onCompleted: (response, errors) => {
-            if (errors?.length) {
-              reject(errors[0]);
-              return;
-            }
-
-            resolve(response.selectProfile.profile.id);
-          },
-          onError: (error) => reject(markRetryable(error)),
-          variables: { id },
-        });
-      }),
-    [commitSelectProfile],
-  );
 
   const markResponseHandled = useCallback((response: NotificationResponse) => {
     handledResponseKeyRef.current = nativePushResponseKey(response);
@@ -118,14 +77,10 @@ export function useNativePushNotificationResponses() {
           href: envelope.href,
           recipientProfileId: envelope.recipientProfileId,
           resetActor,
-          selectProfile,
+          writeSelectedProfile,
           selectedProfileId: sessionRef.current.selectedProfileId,
         });
-      } catch (error) {
-        if (isRetryablePushError(error)) {
-          return;
-        }
-
+      } catch {
         markResponseHandled(response);
         fallbackToNotifications();
         return;
@@ -134,7 +89,7 @@ export function useNativePushNotificationResponses() {
       markResponseHandled(response);
       router.replace(targetHref);
     },
-    [fallbackToNotifications, markResponseHandled, resetActor, router, selectProfile],
+    [fallbackToNotifications, markResponseHandled, resetActor, router],
   );
 
   const enqueueNotificationResponse = useCallback(

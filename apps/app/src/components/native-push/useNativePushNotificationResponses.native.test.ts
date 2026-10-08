@@ -12,7 +12,11 @@ let session: { accountId: string; selectedProfileId: string | null; status: stri
   status: 'valid',
 };
 let responseListener: ((response: unknown) => void) | null = null;
-const router = { replace: mock.fn() };
+const profileSelectionCalls: string[] = [];
+let writeProfile: (profileId: string) => Promise<void> = async () => undefined;
+const router = {
+  replace: mock.fn((href: string) => profileSelectionCalls.push(`navigate:${href}`)),
+};
 let rejectNextOpenURL = false;
 const openURL = mock.fn(async () => {
   if (rejectNextOpenURL) {
@@ -20,7 +24,7 @@ const openURL = mock.fn(async () => {
     throw new Error('External URL could not be opened.');
   }
 });
-const resetActor = mock.fn();
+const resetActor = mock.fn((profileId: string) => profileSelectionCalls.push(`reset:${profileId}`));
 const commitMutation = mock.fn();
 let renderer: ReactTestRenderer | null = null;
 let clearResponseCount = 0;
@@ -42,9 +46,13 @@ mockModule('react-relay', {
 });
 mockModule('@/relay/RelayActorProvider', { useRelayActor: () => ({ resetActor }) });
 mockModule('@/session/SessionProvider', { useSession: () => session });
+mockModule('@/auth/selectedProfileStorage', {
+  writeSelectedProfile: (profileId: string) => writeProfile(profileId),
+});
 mockModule('./nativePushClient', {
   clearLastNativeNotificationResponse: () => {
     clearResponseCount++;
+    profileSelectionCalls.push('clear-response');
   },
   getLastNativeNotificationResponse: async () => null,
   subscribeToNativeNotificationResponses: (listener: (response: unknown) => void) => {
@@ -67,6 +75,8 @@ afterEach(async () => {
   }
   session = { accountId: 'account-1', selectedProfileId: 'profile-1', status: 'valid' };
   responseListener = null;
+  writeProfile = async () => undefined;
+  profileSelectionCalls.length = 0;
   router.replace.mock.resetCalls();
   openURL.mock.resetCalls();
   rejectNextOpenURL = false;
@@ -170,6 +180,52 @@ describe('native push responses', () => {
     assert.equal(openURL.mock.callCount(), 0);
     assert.equal(resetActor.mock.callCount(), 0);
     assert.equal(commitMutation.mock.callCount(), 0);
+  });
+
+  it('persists and resets the recipient Profile before navigating to its destination', async () => {
+    let resolveWriteStarted!: () => void;
+    let releaseWrite!: () => void;
+    const writeStarted = new Promise<void>((resolve) => {
+      resolveWriteStarted = resolve;
+    });
+    const writeGate = new Promise<void>((resolve) => {
+      releaseWrite = resolve;
+    });
+    let resolveNavigation!: () => void;
+    const navigation = new Promise<void>((resolve) => {
+      resolveNavigation = resolve;
+    });
+    router.replace = mock.fn((href: string) => {
+      profileSelectionCalls.push(`navigate:${href}`);
+      resolveNavigation();
+    });
+    writeProfile = async (profileId) => {
+      profileSelectionCalls.push(`persist:start:${profileId}`);
+      resolveWriteStarted();
+      await writeGate;
+      profileSelectionCalls.push(`persist:done:${profileId}`);
+    };
+    await renderHook();
+
+    const handling = handle({
+      href: '/@recipient/postId',
+      notificationId: 'notification-1',
+      recipientProfileId: 'profile-recipient',
+    });
+    await writeStarted;
+    assert.deepEqual(profileSelectionCalls, ['persist:start:profile-recipient']);
+
+    releaseWrite();
+    await navigation;
+    await handling;
+
+    assert.deepEqual(profileSelectionCalls, [
+      'persist:start:profile-recipient',
+      'persist:done:profile-recipient',
+      'reset:profile-recipient',
+      'clear-response',
+      'navigate:/@recipient/postId',
+    ]);
   });
 });
 

@@ -10,9 +10,8 @@ describe('native push target navigation', () => {
       href: '/follow-requests',
       recipientProfileId: 'profile-target',
       resetActor: () => calls.push('reset-actor'),
-      selectProfile: async () => {
-        calls.push('select-profile');
-        return 'profile-target';
+      writeSelectedProfile: async () => {
+        calls.push('write-selected-profile');
       },
       selectedProfileId: 'profile-target',
     });
@@ -28,28 +27,27 @@ describe('native push target navigation', () => {
       href: '/@recipient/postId',
       recipientProfileId: 'profile-recipient',
       resetActor: (profileId) => calls.push(`reset:${profileId}`),
-      selectProfile: async (profileId) => {
-        calls.push(`select:${profileId}`);
-        return profileId;
+      writeSelectedProfile: async (profileId) => {
+        calls.push(`write:${profileId}`);
       },
       selectedProfileId: 'profile-current',
     });
 
     assert.equal(href, '/@recipient/postId');
-    assert.deepEqual(calls, ['select:profile-recipient', 'reset:profile-recipient']);
+    assert.deepEqual(calls, ['write:profile-recipient', 'reset:profile-recipient']);
   });
 
-  it('propagates a failed profile switch without resetting the actor', async () => {
+  it('propagates failed profile persistence without resetting the actor', async () => {
     const calls: string[] = [];
-    const switchError = new Error('Profile is not available to this account');
+    const switchError = new Error('Selected Profile persistence failed');
 
     await assert.rejects(
       prepareNativePushNavigation({
         href: '/@recipient',
         recipientProfileId: 'profile-recipient',
         resetActor: () => calls.push('reset-actor'),
-        selectProfile: async () => {
-          calls.push('select-profile');
+        writeSelectedProfile: async () => {
+          calls.push('write-selected-profile');
           throw switchError;
         },
         selectedProfileId: 'profile-current',
@@ -57,6 +55,6 @@ describe('native push target navigation', () => {
       switchError,
     );
 
-    assert.deepEqual(calls, ['select-profile']);
+    assert.deepEqual(calls, ['write-selected-profile']);
   });
 });

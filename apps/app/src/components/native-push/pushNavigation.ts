@@ -4,21 +4,21 @@ type PrepareNativePushNavigationOptions = {
   href: Href;
   recipientProfileId: string;
   resetActor: (profileId: string) => void;
-  selectProfile: (profileId: string) => Promise<string>;
+  writeSelectedProfile: (profileId: string) => Promise<void>;
   selectedProfileId: string | null | undefined;
 };
 
-/** Selects the recipient Profile before returning the already-validated destination. */
+/** Selects the recipient Profile locally before returning the validated destination. */
 export async function prepareNativePushNavigation({
   href,
   recipientProfileId,
   resetActor,
-  selectProfile,
+  writeSelectedProfile,
   selectedProfileId,
 }: PrepareNativePushNavigationOptions): Promise<Href> {
   if (selectedProfileId !== recipientProfileId) {
-    const nextProfileId = await selectProfile(recipientProfileId);
-    resetActor(nextProfileId);
+    await writeSelectedProfile(recipientProfileId);
+    resetActor(recipientProfileId);
   }
 
   return href;
