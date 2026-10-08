@@ -32,8 +32,8 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   유지한다. 같은 Profile을 여러 번 선택한 경우 각 occurrence를 독립적으로 편집할 수 있다. 선택한 Profile을
   게시 시 이용할 수 없거나 본문 handle과 선택한 Profile이 일치하지 않으면 게시 전체가 실패한다. Mention은
   본문에 실제 작성한 문자열로 세는 기존 500자 합산에 별도 길이를 더하지 않는다.
-- 새 Reply 본문에는 direct Parent 작성자와 원글에서 멘션한 사람들을 이 순서로 미리 적는다. 현재 작성
-  Profile과 중복된 사람은 제외한다. 사용자는 문구를 수정하거나 지울 수 있고, 이 기본 문구는 Mention 검색 UI가
+- 새 Reply 본문에는 direct Parent 작성자와 원글에서 멘션한 사람들을 미리 적는다. 현재 작성 Profile은
+  제외하고 같은 Profile은 한 번만 넣는다. 사용자는 문구를 수정하거나 지울 수 있고, 이 기본 문구는 Mention 검색 UI가
   꺼져 있어도 제공하며 Profile을 새로 조회하지 않는다. 일반 Post와 Quote 본문은 기존처럼 비어 있다.
 - Parent가 일반 Post, Reply 또는 Quote이면 화면에 표시되는 direct Parent의 자체 Content와 Source preview를
   보여준다. Action Bar와 Post menu는 Parent 맥락 안에 중복 표시하지 않는다.
@@ -277,7 +277,7 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
 - 일반 Post, Reply, Quote Parent의 Content/Source 표시와 Action Bar/menu 제외, thread connector를 확인한다.
 - Visibility 독립성, 선택 Profile의 기본값과 `UNLISTED` fallback, `DIRECT` 제외, 500자 count와
   disabled/pending/error 상태를 확인한다.
-- Reply 본문 초기값의 Parent 작성자 우선 순서, 저장된 Mention 순서, 현재 작성 Profile 제외, 중복 제거,
+- Reply 본문 초기값의 direct Parent 작성자와 저장된 Mention 포함, 현재 작성 Profile 제외, 중복 제거,
   편집·삭제·제출과 일반 Post·Quote 빈 초기값을 확인한다.
 - 일반 Post와 Reply의 Content Warning 입력·제출, Parent Content Warning 초기값, 수정·제거, 합산 500자 검증과
   Reply-open discard/reset/error 유지 상태를 확인한다.

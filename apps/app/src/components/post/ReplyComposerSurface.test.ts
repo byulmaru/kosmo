@@ -105,7 +105,7 @@ afterEach(async () => {
   platform.OS = 'android';
 });
 
-test('답글 본문은 direct Parent 작성자와 저장된 mention을 순서대로 미리 채운다', async () => {
+test('답글 본문은 direct Parent 작성자와 저장된 mention을 미리 채운다', async () => {
   const parent = {
     content: {
       bodyText: 'Parent 본문',
@@ -139,7 +139,10 @@ test('답글 본문은 direct Parent 작성자와 저장된 mention을 순서대
     renderer = create(createElement(ReplyComposerSurface, props));
   });
 
-  assert.equal(composerProps?.initialBodyText, '@parent @remote@remote.example ');
+  assert.deepEqual(composerProps?.initialBodyText?.trim().split(/\s+/).sort(), [
+    '@parent',
+    '@remote@remote.example',
+  ]);
 
   await act(async () => {
     renderer?.update(
