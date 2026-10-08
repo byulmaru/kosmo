@@ -251,11 +251,7 @@ export function shellQuery({
   selectedProfile?: StoryProfile | null;
 } = {}) {
   return {
-    currentSession: {
-      id: 'session-story',
-      selectedProfile,
-      unreadNotificationCount: selectedProfile?.unreadNotificationCount ?? 0,
-    },
+    currentSession: { id: 'session-story', selectedProfile },
     me: { id: 'account-story', name: '스토리 계정', profiles },
   };
 }
@@ -436,6 +432,15 @@ export function notificationsProfile(
     | ReturnType<typeof mentionNotification>
     | ReturnType<typeof replyNotification>
     | ReturnType<typeof repostNotification>
+    | {
+        __typename: 'OperationalNotification';
+        body: string | null;
+        createdAt: string;
+        href: string | null;
+        id: string;
+        readAt: string | null;
+        title: string;
+      }
   >,
   metadata: PaginationMetadata = {},
   overrides: Partial<StoryProfile> = {},

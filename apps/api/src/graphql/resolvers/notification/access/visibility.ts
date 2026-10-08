@@ -31,7 +31,7 @@ export const visibleNotificationWhere = ({ ctx }: { ctx: UserContext }) => {
   )!;
 };
 
-export const visibleSessionNotificationWhere = ({
+export const visibleViewerNotificationWhere = ({
   ctx,
   profileId,
 }: {

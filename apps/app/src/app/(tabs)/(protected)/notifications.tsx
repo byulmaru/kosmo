@@ -12,8 +12,8 @@ const NotificationsQuery = graphql`
       id
       selectedProfile {
         id
+        ...NotificationList_profile
       }
-      ...NotificationList_session
     }
   }
 `;
@@ -37,10 +37,10 @@ function NotificationsContent() {
     {},
     { fetchKey, fetchPolicy: 'store-and-network' },
   );
-  const session = data.currentSession ?? null;
+  const profile = data.currentSession?.selectedProfile ?? null;
 
-  return session ? (
-    <NotificationList session={session} />
+  return profile ? (
+    <NotificationList profile={profile} />
   ) : (
     <NotificationListState state="profileRequired" />
   );

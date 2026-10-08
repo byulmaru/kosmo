@@ -1,16 +1,14 @@
-import { db, Notifications } from '@kosmo/core/db';
+import { AccountProfiles, db, Notifications } from '@kosmo/core/db';
 import { and, eq, getColumns, or, sql } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/resolvers/profile';
-import { Session } from '@/graphql/resolvers/session/ref';
-import { visibleSessionNotificationWhere } from '../access/visibility';
+import { visibleViewerNotificationWhere } from '../access/visibility';
 import { Notification, notificationKindForNodeType } from '../ref';
 
 builder.mutationField('markNotificationRead', (t) =>
   t.withAuth({ login: true }).fieldWithInput({
     type: builder.simpleObject('MarkNotificationReadPayload', {
       fields: (field) => ({
-        currentSession: field.field({ type: Session }),
         notifications: field.field({ type: [Notification] }),
         recipientProfiles: field.field({ type: [Profile] }),
       }),
@@ -26,7 +24,6 @@ builder.mutationField('markNotificationRead', (t) =>
 
       if (candidates.length === 0) {
         return {
-          currentSession: ctx.session.id,
           notifications: [],
           recipientProfiles: [],
         };
@@ -42,21 +39,27 @@ builder.mutationField('markNotificationRead', (t) =>
                 and(eq(Notifications.id, id), eq(Notifications.kind, kind)),
               ),
             ),
-            visibleSessionNotificationWhere({ ctx }),
+            visibleViewerNotificationWhere({ ctx }),
           ),
         )
         .returning(getColumns(Notifications));
 
+      const recipientProfileIds = new Set(
+        notifications.flatMap(({ recipientProfileId }) =>
+          recipientProfileId === null ? [] : [recipientProfileId],
+        ),
+      );
+      if (notifications.some(({ recipientAccountId }) => recipientAccountId !== null)) {
+        const accountProfiles = await db
+          .select({ profileId: AccountProfiles.profileId })
+          .from(AccountProfiles)
+          .where(eq(AccountProfiles.accountId, ctx.session.accountId));
+        accountProfiles.forEach(({ profileId }) => recipientProfileIds.add(profileId));
+      }
+
       return {
-        currentSession: ctx.session.id,
         notifications,
-        recipientProfiles: [
-          ...new Set(
-            notifications.flatMap(({ recipientProfileId }) =>
-              recipientProfileId === null ? [] : [recipientProfileId],
-            ),
-          ),
-        ],
+        recipientProfiles: [...recipientProfileIds],
       };
     },
   }),

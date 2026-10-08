@@ -88,11 +88,10 @@ Recipient Profile은 Related Post의 direct Repost Source Author Profile이다. 
 
 ### Operational Notification 조회와 읽음 처리
 
-- 활성 Session의 Recipient Account가 ACTIVE이면 `currentSession.notifications`와
-  `currentSession.unreadNotificationCount`는 현재 선택된 Profile의 조회 가능한 Profile Notification과 해당
-  Account의 Operational Notification을 함께 포함한다. Profile의 기존 `notifications`와
-  `unreadNotificationCount`는 Profile Notification만 제공한다. 선택된 Profile이 없으면 Profile Notification은
-  포함하지 않는다.
+- Recipient Account가 ACTIVE이고 해당 Profile의 membership을 가지면 `Profile.notifications`와
+  `Profile.unreadNotificationCount`는 그 Profile의 조회 가능한 Profile Notification과 해당 Account의
+  Operational Notification을 함께 포함한다. Account Operational Notification은 Account가 membership을 가진
+  각 Profile에서 조회되며, Profile에 속한 social Notification은 해당 Profile에 한정된다.
 - `markNotificationRead`는 요청에 지정된 ID 중 각 권한 범위에서 현재 조회 가능한 항목만 읽음 처리한다.
   ACTIVE Account는 기존 Profile Notification과 자신의 Operational Notification을 지정할 수 있다. 존재하지 않거나
   다른 Recipient에게 속하거나 현재 조회할 수 없는 ID는 조용히 제외한다.

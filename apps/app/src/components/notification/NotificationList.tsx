@@ -30,20 +30,18 @@ import {
   RepostNotificationListItem,
 } from './NotificationListItem';
 import { NotificationReadAllAction, useNotificationReadAll } from './NotificationReadAllContext';
-import type { NotificationList_session$key } from './__generated__/NotificationList_session.graphql';
+import type { NotificationList_profile$key } from './__generated__/NotificationList_profile.graphql';
 import type { NotificationListNextPageQuery } from './__generated__/NotificationListNextPageQuery.graphql';
 
 type NotificationListProps = {
-  session: NotificationList_session$key;
+  profile: NotificationList_profile$key;
 };
 
 const notificationListFragment = graphql`
-  fragment NotificationList_session on Session
+  fragment NotificationList_profile on Profile
   @argumentDefinitions(count: { type: "Int", defaultValue: 20 }, cursor: { type: "String" })
   @refetchable(queryName: "NotificationListNextPageQuery") {
-    selectedProfile {
-      ...ReplyComposerSurface_profile
-    }
+    ...ReplyComposerSurface_profile
     notifications(first: $count, after: $cursor)
       @connection(key: "NotificationList_notifications") {
       edges {
@@ -79,12 +77,12 @@ const notificationListFragment = graphql`
   }
 `;
 
-export function NotificationList({ session }: NotificationListProps) {
+export function NotificationList({ profile }: NotificationListProps) {
   const theme = useTheme();
   const pagination = usePaginationFragment<
     NotificationListNextPageQuery,
-    NotificationList_session$key
-  >(notificationListFragment, session);
+    NotificationList_profile$key
+  >(notificationListFragment, profile);
   const { publishUnreadIds } = useNotificationReadAll();
   const [refreshing, startTransition] = useTransition();
   const { edges } = pagination.data.notifications;
@@ -153,7 +151,7 @@ export function NotificationList({ session }: NotificationListProps) {
       <PostComposerCoordinatorProvider
         key={pagination.data.id}
         owner="list"
-        profile={pagination.data.selectedProfile ?? null}
+        profile={pagination.data}
       >
         <PostMediaViewerHostProvider>
           <ScrollView

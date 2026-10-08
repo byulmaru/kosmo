@@ -170,7 +170,6 @@ const ShellStoriesQuery = graphql`
     ...SidebarNavigation_query
     currentSession {
       id
-      unreadNotificationCount
       selectedProfile {
         ...BottomTabBar_profile
         ...RightRail_profile
@@ -192,11 +191,7 @@ function useShellStoryData() {
   if (!profile) {
     throw new Error('ShellStoriesQuery requires a selected profile fixture.');
   }
-  return {
-    profile,
-    query: data,
-    unreadNotificationCount: data.currentSession?.unreadNotificationCount ?? null,
-  };
+  return { profile, query: data };
 }
 
 function NavigationCatalog() {
@@ -235,18 +230,12 @@ function NavigationCatalog() {
 }
 
 function BottomNavigationStory() {
-  const { profile, unreadNotificationCount } = useShellStoryData();
-  return <BottomTabBar profile={profile} unreadNotificationCount={unreadNotificationCount} />;
+  return <BottomTabBar profile={useShellStoryData().profile} />;
 }
 
 function BottomNavigationProfileUnavailableStory() {
   const data = useLazyLoadQuery<ShellStoriesQueryType>(ShellStoriesQuery, {});
-  return (
-    <BottomTabBar
-      profile={data.currentSession?.selectedProfile ?? null}
-      unreadNotificationCount={data.currentSession?.unreadNotificationCount ?? null}
-    />
-  );
+  return <BottomTabBar profile={data.currentSession?.selectedProfile ?? null} />;
 }
 
 function CompactSidebarStory() {
@@ -1942,7 +1931,6 @@ function SetUnreadNotificationCount({ count }: { count: number }) {
       label={`읽지 않은 알림 수를 ${count}개로 변경`}
       onPress={() =>
         commitLocalUpdate(environment, (store) => {
-          store.get('session-story')?.setValue(count, 'unreadNotificationCount');
           store.get(selectedProfile.id)?.setValue(count, 'unreadNotificationCount');
         })
       }
@@ -2433,7 +2421,7 @@ export const UniversalFullUnreadBadge: Story = {
   render: () => <UniversalShellStory />,
 };
 
-export const UnreadBadgeUsesNormalizedRelaySessionRecord: Story = {
+export const UnreadBadgeUsesNormalizedRelayProfileRecord: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
   parameters: unreadBadgeParameters(7),
   play: async ({ canvasElement }) => {

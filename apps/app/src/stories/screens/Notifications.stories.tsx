@@ -59,6 +59,7 @@ const longFollower = profile({
 const notificationRecipient = profile({
   id: 'notification-profile-content',
   relativeHandle: '@recipient',
+  unreadNotificationCount: 7,
 });
 const notificationReplyMedia = {
   __typename: 'Media' as const,
@@ -70,6 +71,16 @@ const notificationReplyMedia = {
 function notificationPost(options: Parameters<typeof post>[0] = {}) {
   return { ...post(options), viewerReactions: [] };
 }
+
+const operationalNotification = {
+  __typename: 'OperationalNotification' as const,
+  body: 'Profile 알림과 함께 표시되는 서비스 공지입니다.',
+  createdAt: '2026-07-21T12:00:00Z',
+  href: '/home',
+  id: 'notification-account-notice',
+  readAt: null,
+  title: '서비스 점검 안내',
+};
 
 const emptyProfile = notificationsProfile([], {}, { id: 'notification-profile-empty' });
 const contentProfile = notificationsProfile(
@@ -110,6 +121,7 @@ const contentProfile = notificationsProfile(
       }),
       profile: readFollower,
     }),
+    operationalNotification,
   ],
   {},
   notificationRecipient,
@@ -179,86 +191,40 @@ const storyProfiles = [
   mentionProfile,
 ];
 
-const storySessions = storyProfiles.map((profile) =>
-  notificationSession(profile, `session-${profile.id}`),
-);
-
-const emptyNotificationConnection = {
-  edges: [],
-  pageInfo: { endCursor: null, hasNextPage: false, hasPreviousPage: false, startCursor: null },
-};
-
-function notificationSession(
-  selectedProfile: (typeof storyProfiles)[number] | null,
-  id = 'notification-session',
-) {
-  return {
-    __typename: 'Session' as const,
-    id,
-    notifications: selectedProfile?.notifications ?? emptyNotificationConnection,
-    selectedProfile,
-    unreadNotificationCount:
-      selectedProfile?.notifications.edges.filter(({ node }) => !node.readAt).length ?? 0,
-  };
-}
-
-const operationalNotification = {
-  __typename: 'OperationalNotification' as const,
-  body: '계정 Profile이 없어도 확인할 수 있는 서비스 공지입니다.',
-  createdAt: '2026-07-21T12:00:00Z',
-  href: '/home',
-  id: 'notification-account-notice',
-  readAt: null,
-  title: '서비스 점검 안내',
-};
-const activeAccountWithoutProfile = {
-  ...notificationSession(null),
-  notifications: {
-    edges: [{ cursor: 'account-notice-cursor', node: operationalNotification }],
-    pageInfo: {
-      endCursor: 'account-notice-cursor',
-      hasNextPage: false,
-      hasPreviousPage: false,
-      startCursor: null,
-    },
-  },
-  unreadNotificationCount: 1,
-};
-
 const NotificationsStoriesQuery = graphql`
   query NotificationsStoriesQuery($ids: [ID!]!) {
     nodes(ids: $ids) {
       __typename
-      ... on Session {
+      ... on Profile {
         id
-        ...NotificationList_session @alias(as: "notificationList")
+        ...NotificationList_profile @alias(as: "notificationList")
       }
     }
   }
 `;
 
-type SessionNode = Extract<
+type ProfileNode = Extract<
   NonNullable<NotificationsStoriesQueryType['response']['nodes'][number]>,
-  { readonly __typename: 'Session' }
+  { readonly __typename: 'Profile' }
 >;
 
-function useStorySessions(): ReadonlyArray<SessionNode> {
+function useStoryProfiles(): ReadonlyArray<ProfileNode> {
   const data = useLazyLoadQuery<NotificationsStoriesQueryType>(NotificationsStoriesQuery, {
-    ids: storySessions.map(({ id }) => id),
+    ids: storyProfiles.map(({ id }) => id),
   });
 
   return data.nodes.map((node) => {
-    if (node?.__typename !== 'Session' || !node.notificationList) {
-      throw new Error('NotificationsStoriesQuery must return Session fragments in fixture order.');
+    if (node?.__typename !== 'Profile' || !node.notificationList) {
+      throw new Error('NotificationsStoriesQuery must return Profile fragments in fixture order.');
     }
     return node;
   });
 }
 
-function requireSession(sessions: ReadonlyArray<SessionNode>, index: number): SessionNode {
-  const result = sessions[index];
+function requireProfile(profiles: ReadonlyArray<ProfileNode>, index: number): ProfileNode {
+  const result = profiles[index];
   if (!result?.notificationList) {
-    throw new Error(`Missing notification Session fixture at index ${index}.`);
+    throw new Error(`Missing notification profile fixture at index ${index}.`);
   }
   return result;
 }
@@ -276,7 +242,7 @@ function storyColors(theme: unknown) {
 }
 
 function NotificationCatalog() {
-  const sessions = useStorySessions();
+  const profiles = useStoryProfiles();
 
   return (
     <Catalog>
@@ -290,23 +256,23 @@ function NotificationCatalog() {
         <NotificationListState state="profileRequired" />
       </Section>
       <Section title="Empty">
-        <NotificationList session={requireSession(sessions, 0).notificationList!} />
+        <NotificationList profile={requireProfile(profiles, 0).notificationList!} />
       </Section>
       <Section title="Unread / read / long content">
-        <NotificationList session={requireSession(sessions, 1).notificationList!} />
+        <NotificationList profile={requireProfile(profiles, 1).notificationList!} />
       </Section>
     </Catalog>
   );
 }
 
 function PaginationList() {
-  const sessionNode = requireSession(useStorySessions(), 2);
-  return <NotificationList session={sessionNode.notificationList!} />;
+  const profileNode = requireProfile(useStoryProfiles(), 2);
+  return <NotificationList profile={profileNode.notificationList!} />;
 }
 
 function RefreshList() {
-  const sessionNode = requireSession(useStorySessions(), 1);
-  return <NotificationList session={sessionNode.notificationList!} />;
+  const profileNode = requireProfile(useStoryProfiles(), 1);
+  return <NotificationList profile={profileNode.notificationList!} />;
 }
 
 function ReadNavigationList() {
@@ -330,11 +296,6 @@ function AuthenticatedReadNavigationList() {
 
 const readMutationResponse = {
   markNotificationRead: {
-    currentSession: {
-      __typename: 'Session',
-      id: `session-${contentProfile.id}`,
-      unreadNotificationCount: 5,
-    },
     notifications: [
       {
         __typename: 'FollowNotification',
@@ -346,7 +307,7 @@ const readMutationResponse = {
       {
         __typename: 'Profile',
         id: 'notification-profile-content',
-        unreadNotificationCount: 2,
+        unreadNotificationCount: 6,
       },
     ],
   },
@@ -354,11 +315,6 @@ const readMutationResponse = {
 
 const replyReadMutationResponse = {
   markNotificationRead: {
-    currentSession: {
-      __typename: 'Session',
-      id: `session-${contentProfile.id}`,
-      unreadNotificationCount: 5,
-    },
     notifications: [
       {
         __typename: 'ReplyNotification',
@@ -370,7 +326,7 @@ const replyReadMutationResponse = {
       {
         __typename: 'Profile',
         id: 'notification-profile-content',
-        unreadNotificationCount: 1,
+        unreadNotificationCount: 6,
       },
     ],
   },
@@ -378,11 +334,6 @@ const replyReadMutationResponse = {
 
 const mentionReadMutationResponse = {
   markNotificationRead: {
-    currentSession: {
-      __typename: 'Session',
-      id: 'notification-session',
-      unreadNotificationCount: 1,
-    },
     notifications: [
       {
         __typename: 'MentionNotification',
@@ -420,11 +371,6 @@ function OperationalReadNavigationScreen() {
 
 const operationalReadMutationResponse = {
   markNotificationRead: {
-    currentSession: {
-      __typename: 'Session',
-      id: 'notification-session',
-      unreadNotificationCount: 0,
-    },
     notifications: [
       {
         __typename: 'OperationalNotification',
@@ -432,7 +378,13 @@ const operationalReadMutationResponse = {
         readAt: '2026-07-21T12:10:00Z',
       },
     ],
-    recipientProfiles: [],
+    recipientProfiles: [
+      {
+        __typename: 'Profile',
+        id: 'notification-profile-content',
+        unreadNotificationCount: 6,
+      },
+    ],
   },
 };
 
@@ -449,11 +401,6 @@ function MentionSelectedProfileScreenContent() {
 
 const repostReadMutationResponse = {
   markNotificationRead: {
-    currentSession: {
-      __typename: 'Session',
-      id: `session-${contentProfile.id}`,
-      unreadNotificationCount: 5,
-    },
     notifications: [
       {
         __typename: 'RepostNotification',
@@ -465,7 +412,7 @@ const repostReadMutationResponse = {
       {
         __typename: 'Profile',
         id: 'notification-profile-content',
-        unreadNotificationCount: 2,
+        unreadNotificationCount: 6,
       },
     ],
   },
@@ -473,11 +420,6 @@ const repostReadMutationResponse = {
 
 const readAllMutationResponse = {
   markNotificationRead: {
-    currentSession: {
-      __typename: 'Session',
-      id: `session-${contentProfile.id}`,
-      unreadNotificationCount: 0,
-    },
     notifications: [
       'notification-unread',
       'notification-follow-request',
@@ -485,6 +427,7 @@ const readAllMutationResponse = {
       'notification-reaction',
       'notification-reply',
       'notification-repost',
+      'notification-account-notice',
     ].map((id) => ({
       __typename:
         id === 'notification-reaction'
@@ -493,9 +436,11 @@ const readAllMutationResponse = {
             ? 'ReplyNotification'
             : id === 'notification-repost'
               ? 'RepostNotification'
-              : id === 'notification-follow-request'
-                ? 'FollowRequestNotification'
-                : 'FollowNotification',
+              : id === 'notification-account-notice'
+                ? 'OperationalNotification'
+                : id === 'notification-follow-request'
+                  ? 'FollowRequestNotification'
+                  : 'FollowNotification',
       id,
       readAt: '2026-07-21T12:00:00Z',
     })),
@@ -503,21 +448,21 @@ const readAllMutationResponse = {
       {
         __typename: 'Profile',
         id: 'notification-profile-content',
-        unreadNotificationCount: 1,
+        unreadNotificationCount: 0,
       },
     ],
   },
 };
 
 function ProfileSwitchList() {
-  const sessions = useStorySessions();
+  const profiles = useStoryProfiles();
   const [selected, setSelected] = useState<3 | 4>(3);
-  const sessionNode = requireSession(sessions, selected);
+  const profileNode = requireProfile(profiles, selected);
 
   return (
     <SessionProvider>
       <Button onPress={() => setSelected((current) => (current === 3 ? 4 : 3))}>프로필 전환</Button>
-      <NotificationList key={sessionNode.id} session={sessionNode.notificationList!} />
+      <NotificationList key={profileNode.id} profile={profileNode.notificationList!} />
     </SessionProvider>
   );
 }
@@ -543,7 +488,7 @@ const meta = {
     ),
   ],
   parameters: {
-    relay: { data: { nodes: storySessions } },
+    relay: { data: { nodes: storyProfiles } },
     router: { pathname: '/notifications' },
   },
   title: 'KOSMO/Screens/Notifications/Catalog',
@@ -596,6 +541,10 @@ export const StatesAndFollowItems: Story = {
     expect(
       canvas.getByRole('link', { name: /새 요청자님이 팔로우를 요청했습니다/ }),
     ).toHaveAttribute('href', '/follow-requests');
+    const operationalLink = canvas.getByRole('link', {
+      name: /서비스 점검 안내.*Profile 알림과 함께 표시되는 서비스 공지.*읽지 않은 알림/,
+    });
+    expect(operationalLink).toHaveAttribute('href', '/home');
     expect(canvasElement.querySelector('a[href="/@starlight"]')).toBeInTheDocument();
     expect(
       canvas.getByRole('link', { name: /별빛 여행자님이 이 게시글에 반응했습니다/ }),
@@ -682,6 +631,11 @@ export const ReadAllLoadedUnread: Story = {
     ).not.toHaveAccessibleName(/읽지 않은 알림/);
     expect(canvas.getByRole('link', { name: /새 요청자님이 팔로우를 요청했습니다/ })).toBeVisible();
     await waitFor(() => expect(canvas.getByRole('button', { name: '모두 읽음' })).toBeDisabled());
+    await waitFor(() =>
+      expect(canvas.getByRole('link', { name: /서비스 점검 안내/ })).not.toHaveAccessibleName(
+        /읽지 않은 알림/,
+      ),
+    );
   },
   render: () => <RefreshList />,
 };
@@ -693,8 +647,8 @@ export const ReadAllLoadedZero: Story = {
     expect(action).toHaveAttribute('aria-disabled', 'true');
   },
   render: () => {
-    const sessions = useStorySessions();
-    return <NotificationList session={requireSession(sessions, 0).notificationList!} />;
+    const profiles = useStoryProfiles();
+    return <NotificationList profile={requireProfile(profiles, 0).notificationList!} />;
   },
 };
 
@@ -1135,7 +1089,7 @@ export const ActorResetClearsPaginationError: Story = {
     relay: {
       actorBoundary: true,
       data: {
-        currentSession: notificationSession(paginationProfile),
+        currentSession: { id: 'notification-session', selectedProfile: paginationProfile },
       },
       paginationError: true,
     },
@@ -1160,7 +1114,7 @@ export const ActorResetClearsPaginationError: Story = {
 export const SelectedProfileScreen: Story = {
   parameters: {
     relay: {
-      data: { currentSession: notificationSession(contentProfile) },
+      data: { currentSession: { id: 'notification-session', selectedProfile: contentProfile } },
     },
   },
   play: ({ canvasElement }) => {
@@ -1177,7 +1131,7 @@ export const MentionSelectedProfileScreen: Story = {
   parameters: {
     controls: { disable: true },
     relay: {
-      data: { currentSession: notificationSession(mentionProfile) },
+      data: { currentSession: { id: 'notification-session', selectedProfile: mentionProfile } },
       mutationRequestObserver: (request: RequestParameters, variables: Variables) =>
         notificationMutationRequest(request.name, variables),
       mutationResponse: mentionReadMutationResponse,
@@ -1212,7 +1166,7 @@ export const MentionSelectedProfileScreen: Story = {
 export const NoSelectedProfileScreen: Story = {
   parameters: {
     relay: {
-      data: { currentSession: activeAccountWithoutProfile },
+      data: { currentSession: { id: 'notification-session', selectedProfile: null } },
       operationResponses: {
         SessionProviderQuery: {
           data: {
@@ -1232,11 +1186,8 @@ export const NoSelectedProfileScreen: Story = {
 
     expect(heading).toBeVisible();
     expect(heading.parentElement?.getBoundingClientRect().height).toBe(64);
-    expect(
-      canvas.getByRole('link', {
-        name: /서비스 점검 안내.*계정 Profile이 없어도 확인할 수 있는 서비스 공지.*읽지 않은 알림/,
-      }),
-    ).toBeVisible();
+    expect(canvas.getByText('프로필이 필요해요')).toBeVisible();
+    expect(canvas.queryByRole('link', { name: /서비스 점검 안내/ })).not.toBeInTheDocument();
   },
   render: () => <NotificationsScreen />,
 };
@@ -1244,7 +1195,7 @@ export const NoSelectedProfileScreen: Story = {
 export const OperationalReadBeforeNavigation: Story = {
   parameters: {
     relay: {
-      data: { currentSession: activeAccountWithoutProfile },
+      data: { currentSession: { id: 'notification-session', selectedProfile: contentProfile } },
       mutationRequestObserver: (request: RequestParameters, variables: Variables) => {
         notificationMutationRequest(request.name, variables);
         if (request.name === 'NotificationListItemMarkReadMutation') {
@@ -1257,7 +1208,7 @@ export const OperationalReadBeforeNavigation: Story = {
           data: {
             currentSession: {
               id: 'notification-session',
-              selectedProfile: null,
+              selectedProfile: { id: contentProfile.id },
             },
             me: { id: 'notification-account', name: 'Notification Story' },
           },
@@ -1271,7 +1222,7 @@ export const OperationalReadBeforeNavigation: Story = {
     const canvas = within(canvasElement);
     const readAllButton = canvas.getByRole('button', { name: '모두 읽음' });
     const link = await canvas.findByRole('link', {
-      name: /서비스 점검 안내.*계정 Profile이 없어도 확인할 수 있는 서비스 공지.*읽지 않은 알림.*알림 열기/,
+      name: /서비스 점검 안내.*Profile 알림과 함께 표시되는 서비스 공지.*읽지 않은 알림.*알림 열기/,
     });
 
     expect(readAllButton).toBeEnabled();
@@ -1309,11 +1260,7 @@ export const MobileNoSelectedProfileScreen: Story = {
     const canvas = within(canvasElement);
 
     expect(canvas.queryByRole('heading', { name: '알림' })).not.toBeInTheDocument();
-    expect(
-      canvas.getByRole('link', {
-        name: /서비스 점검 안내.*계정 Profile이 없어도 확인할 수 있는 서비스 공지/,
-      }),
-    ).toBeVisible();
+    expect(canvas.getByText('프로필이 필요해요')).toBeVisible();
   },
   render: () => <NotificationsScreen />,
 };

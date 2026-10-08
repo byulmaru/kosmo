@@ -16,7 +16,6 @@ const mockModule = (specifier: string | URL, exports: object) =>
 
 let currentSession: {
   selectedProfile: Record<string, unknown>;
-  unreadNotificationCount: number;
 } | null;
 let logoutError: string | null;
 let logoutPending: boolean;
@@ -74,7 +73,6 @@ before(async () => {
 
 beforeEach(() => {
   currentSession = {
-    unreadNotificationCount: 3,
     selectedProfile: {
       avatar: null,
       displayName: '테스트 프로필',

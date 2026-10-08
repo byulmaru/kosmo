@@ -32,10 +32,6 @@ const noUnreadIds: ReadonlyArray<string> = [];
 const markAllReadMutation = graphql`
   mutation NotificationListMarkAllReadMutation($ids: [ID!]!) {
     markNotificationRead(input: { ids: $ids }) {
-      currentSession {
-        id
-        unreadNotificationCount
-      }
       notifications {
         id
         readAt

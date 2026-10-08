@@ -61,7 +61,6 @@ const ShellQuery = graphql`
     }
     currentSession {
       id
-      unreadNotificationCount
       selectedProfile {
         id
         ...BottomTabBar_profile
@@ -152,7 +151,6 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
     { fetchPolicy: 'store-and-network' },
   );
   const profile = data.currentSession?.selectedProfile ?? null;
-  const unreadNotificationCount = data.currentSession?.unreadNotificationCount ?? null;
   const web = Platform.OS === 'web';
   const availableProfileCount = data.me?.profiles.length;
   useEffect(() => {
@@ -444,7 +442,6 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
               onComposeOpen={openComposer}
               onHomeReselect={web ? reselectHome : undefined}
               profile={profile}
-              unreadNotificationCount={unreadNotificationCount}
             />
           </View>
         ) : null}

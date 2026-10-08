@@ -7,4 +7,3 @@ import './quote-notification';
 import './reply-notification';
 import './repost-notification';
 import './profile';
-import './session';

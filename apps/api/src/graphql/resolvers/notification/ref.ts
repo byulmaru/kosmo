@@ -16,7 +16,7 @@ import {
   NotificationRepostRelatedPosts,
   NotificationSourceReposts,
   visibleNotificationWhere,
-  visibleSessionNotificationWhere,
+  visibleViewerNotificationWhere,
 } from './access/visibility';
 import type { OperationalNotificationData } from '@kosmo/core/db';
 import type { UserContext } from '@/context';
@@ -542,7 +542,7 @@ export const OperationalNotification = createObjectRef<OperationalNotificationRo
         and(
           inArray(Notifications.id, ids),
           eq(Notifications.kind, NotificationKind.OPERATIONAL),
-          visibleSessionNotificationWhere({ ctx, profileId: null }),
+          visibleViewerNotificationWhere({ ctx, profileId: null }),
         ),
       )
       .then((rows) => rows as OperationalNotificationRow[]),

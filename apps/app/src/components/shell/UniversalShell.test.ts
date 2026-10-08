@@ -100,9 +100,7 @@ mockModule('react-native-safe-area-context', {
 mockModule('react-relay', {
   graphql: () => ({}),
   useLazyLoadQuery: () => ({
-    currentSession: sessionProfile
-      ? { selectedProfile: sessionProfile, unreadNotificationCount: 3 }
-      : null,
+    currentSession: sessionProfile ? { selectedProfile: sessionProfile } : null,
     me: profileIds === null ? null : { profiles: profileIds.map((id) => ({ id })) },
   }),
 });

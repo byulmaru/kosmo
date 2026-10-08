@@ -22,9 +22,9 @@ const SidebarNavigationFragment = graphql`
     ...ProfileSwitcher_query
     currentSession {
       id
-      unreadNotificationCount
       selectedProfile {
         id
+        unreadNotificationCount
         relativeHandle
         displayName
         avatar {
@@ -79,7 +79,7 @@ export function SidebarNavigation({
   const { error: logoutError, logout, pending: logoutPending } = useLogout();
   const data = useFragment(SidebarNavigationFragment, query);
   const profile = data.currentSession?.selectedProfile;
-  const unreadNotificationCount = data.currentSession?.unreadNotificationCount ?? null;
+  const unreadNotificationCount = profile?.unreadNotificationCount ?? null;
   const profileHref = profile ? (`/${profile.relativeHandle}` as Href) : undefined;
   const feedbackRouteActive = pathname === '/feedback';
   const feedbackUsesOverlay = Platform.OS === 'web' && !feedbackRouteActive;

@@ -15,11 +15,11 @@ import type { NotificationListItemMarkReadMutation } from './__generated__/Notif
 const notificationId = 'notification-unread';
 const recipientId = 'notification-profile-content';
 const otherRecipientId = 'notification-profile-other';
-const sessionId = 'notification-session';
 const readAt = '2026-07-21T12:00:00Z';
 type NotificationTypename =
   | 'FollowNotification'
   | 'FollowRequestNotification'
+  | 'OperationalNotification'
   | 'ReplyNotification'
   | 'RepostNotification';
 
@@ -43,13 +43,6 @@ function createEnvironment(typename: NotificationTypename = 'FollowNotification'
     id: otherRecipientId,
     unreadNotificationCount: 7,
   });
-  source.set(sessionId, {
-    __id: sessionId,
-    __typename: 'Session',
-    id: sessionId,
-    unreadNotificationCount: 2,
-  });
-
   return new Environment({
     network: Network.create(() => Promise.reject(new Error('network is not used'))),
     store: new Store(source),
@@ -59,25 +52,18 @@ function createEnvironment(typename: NotificationTypename = 'FollowNotification'
 function commitReadPayload(
   environment: Environment,
   typename: NotificationTypename = 'FollowNotification',
+  recipientProfiles = [{ id: recipientId, unreadNotificationCount: 1 }],
 ) {
   const operation = createOperationDescriptor(getRequest(MarkReadMutation), {
     ids: [notificationId],
   });
   environment.commitPayload(operation, {
     markNotificationRead: {
-      currentSession: {
-        __typename: 'Session',
-        id: sessionId,
-        unreadNotificationCount: 1,
-      },
       notifications: [{ __typename: typename, id: notificationId, readAt }],
-      recipientProfiles: [
-        {
-          __typename: 'Profile',
-          id: recipientId,
-          unreadNotificationCount: 1,
-        },
-      ],
+      recipientProfiles: recipientProfiles.map((profile) => ({
+        __typename: 'Profile',
+        ...profile,
+      })),
     },
   });
 }
@@ -89,15 +75,28 @@ function requireRecord(environment: Environment, id: string) {
 }
 
 describe('NotificationListItem Read cache', () => {
-  it('normalizes the Notification, Session count, and Recipient Profile', () => {
+  it('normalizes the Notification and Recipient Profile', () => {
     const environment = createEnvironment();
 
     commitReadPayload(environment);
 
     assert.equal(requireRecord(environment, notificationId).readAt, readAt);
-    assert.equal(requireRecord(environment, sessionId).unreadNotificationCount, 1);
     assert.equal(requireRecord(environment, recipientId).unreadNotificationCount, 1);
     assert.equal(requireRecord(environment, otherRecipientId).unreadNotificationCount, 7);
+  });
+
+  it('normalizes an Operational Notification across all Recipient Profiles', () => {
+    const environment = createEnvironment('OperationalNotification');
+
+    commitReadPayload(environment, 'OperationalNotification', [
+      { id: recipientId, unreadNotificationCount: 1 },
+      { id: otherRecipientId, unreadNotificationCount: 6 },
+    ]);
+
+    assert.equal(requireRecord(environment, notificationId).__typename, 'OperationalNotification');
+    assert.equal(requireRecord(environment, notificationId).readAt, readAt);
+    assert.equal(requireRecord(environment, recipientId).unreadNotificationCount, 1);
+    assert.equal(requireRecord(environment, otherRecipientId).unreadNotificationCount, 6);
   });
 
   it('normalizes a Repost Notification and Recipient Profile in the same actor Store', () => {
@@ -107,7 +106,6 @@ describe('NotificationListItem Read cache', () => {
 
     assert.equal(requireRecord(environment, notificationId).__typename, 'RepostNotification');
     assert.equal(requireRecord(environment, notificationId).readAt, readAt);
-    assert.equal(requireRecord(environment, sessionId).unreadNotificationCount, 1);
     assert.equal(requireRecord(environment, recipientId).unreadNotificationCount, 1);
     assert.equal(requireRecord(environment, otherRecipientId).unreadNotificationCount, 7);
   });
@@ -122,7 +120,6 @@ describe('NotificationListItem Read cache', () => {
       'FollowRequestNotification',
     );
     assert.equal(requireRecord(environment, notificationId).readAt, readAt);
-    assert.equal(requireRecord(environment, sessionId).unreadNotificationCount, 1);
     assert.equal(requireRecord(environment, recipientId).unreadNotificationCount, 1);
   });
 
@@ -133,7 +130,6 @@ describe('NotificationListItem Read cache', () => {
 
     assert.equal(requireRecord(environment, notificationId).__typename, 'ReplyNotification');
     assert.equal(requireRecord(environment, notificationId).readAt, readAt);
-    assert.equal(requireRecord(environment, sessionId).unreadNotificationCount, 1);
     assert.equal(requireRecord(environment, recipientId).unreadNotificationCount, 1);
   });
 
@@ -146,10 +142,8 @@ describe('NotificationListItem Read cache', () => {
 
     assert.equal(requireRecord(actorA, notificationId).__typename, 'RepostNotification');
     assert.equal(requireRecord(actorA, notificationId).readAt, readAt);
-    assert.equal(requireRecord(actorA, sessionId).unreadNotificationCount, 1);
     assert.equal(requireRecord(actorA, recipientId).unreadNotificationCount, 1);
     assert.equal(requireRecord(actorB, notificationId).readAt, null);
-    assert.equal(requireRecord(actorB, sessionId).unreadNotificationCount, 2);
     assert.equal(requireRecord(actorB, recipientId).unreadNotificationCount, 2);
   });
 
@@ -166,7 +160,6 @@ describe('NotificationListItem Read cache', () => {
     });
 
     assert.equal(requireRecord(environment, notificationId).readAt, null);
-    assert.equal(requireRecord(environment, sessionId).unreadNotificationCount, 2);
     assert.equal(requireRecord(environment, recipientId).unreadNotificationCount, 2);
   });
 });

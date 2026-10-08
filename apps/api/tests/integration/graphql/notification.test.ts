@@ -161,8 +161,10 @@ describe('Notification GraphQL Node boundary', () => {
     assert.equal((result.data?.nodes[2] as NotificationNode).profile.id, relatedProfileIds[0]);
   });
 
-  test('combines selected Profile and Account Operational Notifications in currentSession', async () => {
+  test('combines Profile and Account Operational Notifications in the Profile feed', async () => {
     const auth = await createAuthenticatedSession();
+    const otherProfile = await createProfile('operational-feed-other-profile');
+    await addMembership(auth.account.id, otherProfile.id, AccountProfileRole.OWNER);
     const related = await createProfile('operational-feed-related');
     const profileNotification = await createFollowNotification(auth.profile.id, related.id);
     const operationalNotification = await createOperationalNotification(auth.account.id, {
@@ -176,29 +178,24 @@ describe('Notification GraphQL Node boundary', () => {
       operationalNotification.id,
     );
     const profileId = encodeGlobalId('Profile', auth.profile.id);
+    const otherProfileId = encodeGlobalId('Profile', otherProfile.id);
     const result = await requestGraphQL<{
-      currentSession: {
-        account: { id: string };
-        notifications: { edges: Array<{ node: { __typename: string; id: string } }> };
-        unreadNotificationCount: number;
-      } | null;
       node: {
         body: string | null;
         href: string;
         id: string;
         title: string;
       } | null;
+      otherProfile: {
+        notifications: { edges: Array<{ node: { __typename: string; id: string } }> };
+        unreadNotificationCount: number;
+      } | null;
       profile: {
         notifications: { edges: Array<{ node: { __typename: string; id: string } }> };
         unreadNotificationCount: number;
       } | null;
     }>(
-      `query OperationalNotifications($notificationId: ID!, $profileId: ID!) {
-        currentSession {
-          account { id }
-          unreadNotificationCount
-          notifications(first: 10) { edges { node { __typename id } } }
-        }
+      `query OperationalNotifications($notificationId: ID!, $profileId: ID!, $otherProfileId: ID!) {
         node(id: $notificationId) {
           ... on OperationalNotification { id title body href }
         }
@@ -208,79 +205,87 @@ describe('Notification GraphQL Node boundary', () => {
             notifications(first: 10) { edges { node { __typename id } } }
           }
         }
+        otherProfile: node(id: $otherProfileId) {
+          ... on Profile {
+            unreadNotificationCount
+            notifications(first: 10) { edges { node { __typename id } } }
+          }
+        }
       }`,
-      { notificationId: operationalNotificationId, profileId },
+      { notificationId: operationalNotificationId, profileId, otherProfileId },
       auth.token,
     );
 
     assertNoGraphQLErrors(result);
-    assert.equal(
-      result.data?.currentSession?.account.id,
-      encodeGlobalId('Account', auth.account.id),
-    );
-    assert.equal(result.data?.currentSession?.unreadNotificationCount, 2);
-    assert.deepEqual(
-      new Set(
-        result.data?.currentSession?.notifications.edges.map(({ node }) => [
-          node.__typename,
-          node.id,
-        ]),
-      ),
-      new Set([
-        ['OperationalNotification', operationalNotificationId],
-        ['FollowNotification', profileNotificationId],
-      ]),
-    );
     assert.deepEqual(result.data?.node, {
       body: 'Scheduled maintenance begins tonight.',
       href: '/maintenance',
       id: operationalNotificationId,
       title: 'Service notice',
     });
-    assert.equal(result.data?.profile?.unreadNotificationCount, 1);
+    assert.equal(result.data?.profile?.unreadNotificationCount, 2);
     assert.deepEqual(
-      result.data?.profile?.notifications.edges.map(({ node }) => [node.__typename, node.id]),
-      [['FollowNotification', profileNotificationId]],
+      new Set(
+        result.data?.profile?.notifications.edges.map(({ node }) => [node.__typename, node.id]),
+      ),
+      new Set([
+        ['OperationalNotification', operationalNotificationId],
+        ['FollowNotification', profileNotificationId],
+      ]),
+    );
+    assert.equal(result.data?.otherProfile?.unreadNotificationCount, 1);
+    assert.deepEqual(
+      result.data?.otherProfile?.notifications.edges.map(({ node }) => [node.__typename, node.id]),
+      [['OperationalNotification', operationalNotificationId]],
     );
 
     const other = await createAuthenticatedSession();
     assert.deepEqual(await loadNodes([operationalNotificationId], other.token), [null]);
+    const otherAccountNotification = await createOperationalNotification(other.account.id, {
+      body: 'A notice for another account.',
+      href: '/other-account',
+      title: 'Other account notice',
+    });
+    const otherAccountNotificationId = encodeGlobalId(
+      'OperationalNotification',
+      otherAccountNotification.id,
+    );
 
     const read = await requestGraphQL<{
       markNotificationRead: {
-        currentSession: { account: { id: string }; unreadNotificationCount: number };
         notifications: Array<{ id: string; readAt: string | null; __typename: string }>;
         recipientProfiles: Array<{ id: string; unreadNotificationCount: number }>;
       };
     }>(
       `mutation MarkOperationalAndProfileNotifications($ids: [ID!]!) {
         markNotificationRead(input: { ids: $ids }) {
-          currentSession { account { id } unreadNotificationCount }
           notifications { __typename id readAt }
           recipientProfiles { id unreadNotificationCount }
         }
       }`,
-      { ids: [operationalNotificationId, profileNotificationId] },
+      { ids: [operationalNotificationId, profileNotificationId, otherAccountNotificationId] },
       auth.token,
     );
     assertNoGraphQLErrors(read);
-    assert.equal(
-      read.data?.markNotificationRead.currentSession.account.id,
-      encodeGlobalId('Account', auth.account.id),
-    );
-    assert.equal(read.data?.markNotificationRead.currentSession.unreadNotificationCount, 0);
     assert.deepEqual(
       new Set(read.data?.markNotificationRead.notifications.map(({ id }) => id)),
       new Set([operationalNotificationId, profileNotificationId]),
     );
-    assert.deepEqual(read.data?.markNotificationRead.recipientProfiles, [
-      { id: profileId, unreadNotificationCount: 0 },
-    ]);
+    const recipientProfiles = read.data?.markNotificationRead.recipientProfiles ?? [];
+    assert.deepEqual(
+      new Set(recipientProfiles.map(({ id }) => id)),
+      new Set([profileId, otherProfileId]),
+    );
+    assert.equal(recipientProfiles.length, 2);
+    assert.ok(
+      recipientProfiles.every(({ unreadNotificationCount }) => unreadNotificationCount === 0),
+    );
     const originalReadAts = await Promise.all([
       notificationReadAt(operationalNotification.id),
       notificationReadAt(profileNotification.id),
     ]);
     assert.ok(originalReadAts.every(Boolean));
+    assert.equal(await notificationReadAt(otherAccountNotification.id), null);
     const firstReadAts = new Map(
       read.data?.markNotificationRead.notifications.map(({ id, readAt }) => [id, readAt]),
     );
@@ -331,46 +336,45 @@ describe('Notification GraphQL Node boundary', () => {
     const result = await requestGraphQL<{
       currentSession: {
         account: { id: string };
-        notifications: { edges: Array<{ node: { id: string } }> };
         selectedProfile: null;
-        unreadNotificationCount: number;
       } | null;
       me: { id: string } | null;
+      node: { href: string; id: string; title: string } | null;
     }>(
-      `query ProfilelessAccountNotifications {
+      `query ProfilelessAccountNotifications($notificationId: ID!) {
+        node(id: $notificationId) {
+          ... on OperationalNotification { id title href }
+        }
         currentSession {
           account { id }
           selectedProfile { id }
-          unreadNotificationCount
-          notifications(first: 10) { edges { node { id } } }
         }
         me { id }
       }`,
-      {},
+      { notificationId },
       token,
     );
 
     assertNoGraphQLErrors(result);
     assert.deepEqual(result.data, {
+      node: { href: '/profileless-notice', id: notificationId, title: 'Account notice' },
       currentSession: {
         account: { id: accountId },
         selectedProfile: null,
-        unreadNotificationCount: 1,
-        notifications: { edges: [{ node: { id: notificationId } }] },
       },
       me: { id: accountId },
     });
 
     const read = await requestGraphQL<{
       markNotificationRead: {
-        currentSession: { account: { id: string }; unreadNotificationCount: number };
         notifications: Array<{ id: string }>;
+        recipientProfiles: Array<{ id: string; unreadNotificationCount: number }>;
       };
     }>(
       `mutation ReadProfilelessAccountNotification($id: ID!) {
         markNotificationRead(input: { ids: [$id] }) {
-          currentSession { account { id } unreadNotificationCount }
           notifications { id }
+          recipientProfiles { id unreadNotificationCount }
         }
       }`,
       { id: notificationId },
@@ -378,13 +382,13 @@ describe('Notification GraphQL Node boundary', () => {
     );
     assertNoGraphQLErrors(read);
     assert.deepEqual(read.data?.markNotificationRead, {
-      currentSession: { account: { id: accountId }, unreadNotificationCount: 0 },
       notifications: [{ id: notificationId }],
+      recipientProfiles: [],
     });
     assert.ok(await notificationReadAt(notification.id));
   });
 
-  test('keeps Account Operational Notifications across Profile selection and cursor pages', async () => {
+  test('keeps Account Operational Notifications in each Profile feed across cursor pages', async () => {
     const auth = await createAuthenticatedSession();
     const otherAccount = await createAuthenticatedSession();
     const otherProfile = await createProfile('operational-feed-other-profile');
@@ -437,24 +441,28 @@ describe('Notification GraphQL Node boundary', () => {
     const operationalReadAt = read.data?.markNotificationRead.notifications[0]?.readAt;
     assert.ok(operationalReadAt);
 
-    const loadSessionPage = (after: string | null) =>
+    const loadProfilePage = (after: string | null) =>
       requestGraphQL<{
         currentSession: {
-          notifications: {
-            edges: Array<{ cursor: string; node: { id: string; readAt: string | null } }>;
-            pageInfo: { hasNextPage: boolean };
-          };
-          selectedProfile: { id: string } | null;
-          unreadNotificationCount: number;
-        } | null;
+          selectedProfile: {
+            id: string;
+            notifications: {
+              edges: Array<{ cursor: string; node: { id: string; readAt: string | null } }>;
+              pageInfo: { hasNextPage: boolean };
+            };
+            unreadNotificationCount: number | null;
+          } | null;
+        };
       }>(
-        `query CurrentSessionNotifications($after: String) {
+        `query CurrentProfileNotifications($after: String) {
           currentSession {
-            selectedProfile { id }
-            unreadNotificationCount
-            notifications(first: 1, after: $after) {
-              edges { cursor node { id readAt } }
-              pageInfo { hasNextPage }
+            selectedProfile {
+              id
+              unreadNotificationCount
+              notifications(first: 1, after: $after) {
+                edges { cursor node { id readAt } }
+                pageInfo { hasNextPage }
+              }
             }
           }
         }`,
@@ -463,29 +471,33 @@ describe('Notification GraphQL Node boundary', () => {
       );
 
     const loadTwoPages = async () => {
-      const firstPage = await loadSessionPage(null);
+      const firstPage = await loadProfilePage(null);
       assertNoGraphQLErrors(firstPage);
       const firstSession = firstPage.data?.currentSession;
       assert.ok(firstSession);
-      const firstEdge = firstSession.notifications.edges[0];
+      const firstProfile = firstSession.selectedProfile;
+      assert.ok(firstProfile);
+      const firstEdge = firstProfile.notifications.edges[0];
       assert.ok(firstEdge);
-      assert.equal(firstSession.notifications.pageInfo.hasNextPage, true);
+      assert.equal(firstProfile.notifications.pageInfo.hasNextPage, true);
 
-      const secondPage = await loadSessionPage(firstEdge.cursor);
+      const secondPage = await loadProfilePage(firstEdge.cursor);
       assertNoGraphQLErrors(secondPage);
       const secondSession = secondPage.data?.currentSession;
       assert.ok(secondSession);
-      assert.equal(secondSession.notifications.pageInfo.hasNextPage, false);
+      const secondProfile = secondSession.selectedProfile;
+      assert.ok(secondProfile);
+      assert.equal(secondProfile.notifications.pageInfo.hasNextPage, false);
 
       return {
-        edges: [...firstSession.notifications.edges, ...secondSession.notifications.edges],
-        session: firstSession,
+        edges: [...firstProfile.notifications.edges, ...secondProfile.notifications.edges],
+        profile: firstProfile,
       };
     };
 
     const initial = await loadTwoPages();
-    assert.equal(initial.session.selectedProfile?.id, selectedProfileIds[0]);
-    assert.equal(initial.session.unreadNotificationCount, 1);
+    assert.equal(initial.profile.id, selectedProfileIds[0]);
+    assert.equal(initial.profile.unreadNotificationCount, 1);
     assert.deepEqual(
       new Set(initial.edges.map(({ node }) => node.id)),
       new Set([profileNotificationIds[0], operationalNotificationId]),
@@ -505,8 +517,8 @@ describe('Notification GraphQL Node boundary', () => {
     assert.equal(switchProfile.data?.selectProfile.profile.id, selectedProfileIds[1]);
 
     const switched = await loadTwoPages();
-    assert.equal(switched.session.selectedProfile?.id, selectedProfileIds[1]);
-    assert.equal(switched.session.unreadNotificationCount, 1);
+    assert.equal(switched.profile.id, selectedProfileIds[1]);
+    assert.equal(switched.profile.unreadNotificationCount, 1);
     assert.deepEqual(
       new Set(switched.edges.map(({ node }) => node.id)),
       new Set([profileNotificationIds[1], operationalNotificationId]),
@@ -520,32 +532,11 @@ describe('Notification GraphQL Node boundary', () => {
       switched.edges.find(({ node }) => node.id === operationalNotificationId)?.node.readAt,
       operationalReadAt,
     );
-
-    await db
-      .update(Sessions)
-      .set({ activeProfileId: null })
-      .where(eq(Sessions.id, auth.session.id));
-    const noProfileFirstPage = await loadSessionPage(null);
-    assertNoGraphQLErrors(noProfileFirstPage);
-    const noProfileSession = noProfileFirstPage.data?.currentSession;
-    assert.ok(noProfileSession);
-    assert.equal(noProfileSession.selectedProfile, null);
-    assert.equal(noProfileSession.unreadNotificationCount, 0);
-    assert.deepEqual(
-      noProfileSession.notifications.edges.map(({ node }) => [node.id, node.readAt]),
-      [[operationalNotificationId, operationalReadAt]],
-    );
-    assert.equal(noProfileSession.notifications.pageInfo.hasNextPage, false);
-
-    const noProfileAfterPage = await loadSessionPage(
-      noProfileSession.notifications.edges[0]!.cursor,
-    );
-    assertNoGraphQLErrors(noProfileAfterPage);
-    assert.deepEqual(noProfileAfterPage.data?.currentSession?.notifications.edges, []);
   });
 
   test('Suspended Accounts and guests cannot access Operational Notifications', async () => {
     const auth = await createAuthenticatedSession(AccountState.SUSPENDED);
+    const profileId = encodeGlobalId('Profile', auth.profile.id);
     const operationalNotification = await createOperationalNotification(auth.account.id, {
       href: 'https://status.example.com/incident',
       title: 'Service status update',
@@ -572,6 +563,25 @@ describe('Notification GraphQL Node boundary', () => {
     ]);
     assert.deepEqual(suspended, { data: { operationalNotification: null } });
     assert.deepEqual(anonymous, { data: { operationalNotification: null } });
+
+    const profileFeed = `query ProfileNotificationAccess($profileId: ID!) {
+      profile: node(id: $profileId) {
+        ... on Profile {
+          unreadNotificationCount
+          notifications(first: 1) { edges { node { id } } }
+        }
+      }
+    }`;
+    const [suspendedFeed, anonymousFeed] = await Promise.all([
+      requestGraphQL<unknown>(profileFeed, { profileId }, auth.token),
+      requestGraphQL<unknown>(profileFeed, { profileId }),
+    ]);
+    assert.ok(
+      suspendedFeed.errors?.some(({ extensions }) => extensions?.code === 'PERMISSION_DENIED'),
+    );
+    assert.ok(
+      anonymousFeed.errors?.some(({ extensions }) => extensions?.code === 'PERMISSION_DENIED'),
+    );
 
     const markRead = `mutation MarkOperationalNotificationRead($ids: [ID!]!) {
       markNotificationRead(input: { ids: $ids }) { notifications { id } }
@@ -1691,12 +1701,16 @@ describe('Notification GraphQL Node boundary', () => {
       await createFollowNotification(recipient.id, related.id);
       profileIds.push(encodeGlobalId('Profile', recipient.id));
     }
+    await createOperationalNotification(auth.account.id, {
+      href: '/account-notice',
+      title: 'Account notice',
+    });
 
     const selectedElsewhere = await loadUnreadNotificationCounts(profileIds, auth.token);
     assertNoGraphQLErrors(selectedElsewhere);
     assert.deepEqual(
       selectedElsewhere.data?.nodes.map((profile) => profile?.unreadNotificationCount),
-      profileIds.map(() => 1),
+      profileIds.map(() => 2),
     );
 
     await db
@@ -1707,7 +1721,7 @@ describe('Notification GraphQL Node boundary', () => {
     assertNoGraphQLErrors(withoutSelection);
     assert.deepEqual(
       withoutSelection.data?.nodes.map((profile) => profile?.unreadNotificationCount),
-      profileIds.map(() => 1),
+      profileIds.map(() => 2),
     );
 
     const unrelated = await createAuthenticatedSession();

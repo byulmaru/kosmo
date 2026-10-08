@@ -41,10 +41,6 @@ const notificationFragment = graphql`
 const notificationListItemMarkReadMutation = graphql`
   mutation NotificationListItemMarkReadMutation($ids: [ID!]!) {
     markNotificationRead(input: { ids: $ids }) {
-      currentSession {
-        id
-        unreadNotificationCount
-      }
       notifications {
         id
         readAt

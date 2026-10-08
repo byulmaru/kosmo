@@ -261,7 +261,6 @@ input MarkNotificationReadInput {
 }
 
 type MarkNotificationReadPayload {
-  currentSession: Session!
   notifications: [Notification!]!
   recipientProfiles: [Profile!]!
 }
@@ -701,9 +700,7 @@ type SelectProfilePayload {
 type Session implements Node {
   account: Account!
   id: ID!
-  notifications(after: String, before: String, first: Int, last: Int): NotificationConnection!
   selectedProfile: Profile
-  unreadNotificationCount: Int!
 }
 
 input SubmitContentReportInput {
