@@ -80,7 +80,7 @@ before(async () => {
     .onConflictDoNothing();
 });
 
-test('generation stays off before activation and while disabled without consuming a judgment', async (t) => {
+test('generation ignores a missing or disabled rollout while preserving judgments and deduplication', async (t) => {
   const condition = eq(NotificationRollouts.key, 'QUOTE_NOTIFICATION');
   const rollout = await db.select().from(NotificationRollouts).where(condition).then(firstOrThrow);
   t.after(async () => {
@@ -92,52 +92,48 @@ test('generation stays off before activation and while disabled without consumin
   const sourceAuthor = await createProfile();
   const quoteAuthor = await createProfile();
   const source = await createContentPost(sourceAuthor.id);
-  const quote = await createContentPost(quoteAuthor.id, source.id);
+  const quoteWithoutRollout = await createContentPost(quoteAuthor.id, source.id);
 
   await db.delete(NotificationRollouts).where(condition);
-  await createQuoteNotification(quote.id);
-  assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, quote.id)), 0);
+  await createQuoteNotification(quoteWithoutRollout.id);
+  assert.equal(
+    await db.$count(Notifications, eq(Notifications.sourceId, quoteWithoutRollout.id)),
+    1,
+  );
   assert.equal(
     await db.$count(
       NotificationQuoteJudgments,
-      eq(NotificationQuoteJudgments.quotePostId, quote.id),
+      eq(NotificationQuoteJudgments.quotePostId, quoteWithoutRollout.id),
     ),
-    0,
+    1,
+  );
+  await createQuoteNotification(quoteWithoutRollout.id);
+  assert.equal(
+    await db.$count(Notifications, eq(Notifications.sourceId, quoteWithoutRollout.id)),
+    1,
   );
 
-  await db.insert(NotificationRollouts).values({ ...rollout, enabled: false });
-  await createQuoteNotification(quote.id);
-  assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, quote.id)), 0);
+  await db.insert(NotificationRollouts).values({
+    ...rollout,
+    activatedAt: Temporal.Instant.from('2000-01-01T00:00:00Z'),
+    enabled: false,
+  });
+  const quoteWithDisabledRollout = await createContentPost(quoteAuthor.id, source.id);
+  await createQuoteNotification(quoteWithDisabledRollout.id);
   assert.equal(
-    await db.$count(
-      NotificationQuoteJudgments,
-      eq(NotificationQuoteJudgments.quotePostId, quote.id),
-    ),
-    0,
+    await db.$count(Notifications, eq(Notifications.sourceId, quoteWithDisabledRollout.id)),
+    1,
   );
-
-  await db.update(NotificationRollouts).set({ enabled: true }).where(condition);
-  await createQuoteNotification(quote.id);
-  const activated = await db
-    .select()
-    .from(NotificationRollouts)
-    .where(condition)
-    .then(firstOrThrow);
-  assert.equal(activated.activatedAt.toString(), rollout.activatedAt.toString());
-  assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, quote.id)), 1);
-
-  // Disabling generation must not discard the durable result, even after cleanup.
-  await db.update(NotificationRollouts).set({ enabled: false }).where(condition);
-  await db.delete(Notifications).where(eq(Notifications.sourceId, quote.id));
-  await createQuoteNotification(quote.id);
-  await db.update(NotificationRollouts).set({ enabled: true }).where(condition);
-  await createQuoteNotification(quote.id);
-  assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, quote.id)), 0);
   assert.equal(
     await db.$count(
       NotificationQuoteJudgments,
-      eq(NotificationQuoteJudgments.quotePostId, quote.id),
+      eq(NotificationQuoteJudgments.quotePostId, quoteWithDisabledRollout.id),
     ),
+    1,
+  );
+  await createQuoteNotification(quoteWithDisabledRollout.id);
+  assert.equal(
+    await db.$count(Notifications, eq(Notifications.sourceId, quoteWithDisabledRollout.id)),
     1,
   );
 });
@@ -149,7 +145,10 @@ test('the fixed DB cutoff excludes the preceding microsecond but includes equali
     await db.update(NotificationRollouts).set(rollout).where(condition);
   });
   const cutoff = Temporal.Instant.from('2026-09-17T00:00:00.123456Z');
-  await db.update(NotificationRollouts).set({ activatedAt: cutoff }).where(condition);
+  await db
+    .update(NotificationRollouts)
+    .set({ activatedAt: cutoff, enabled: false })
+    .where(condition);
   const sourceAuthor = await createProfile();
   const quoteAuthor = await createProfile();
   const source = await createContentPost(sourceAuthor.id);

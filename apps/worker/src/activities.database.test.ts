@@ -53,7 +53,6 @@ let ApplicationAuthorizations: typeof CoreDb.ApplicationAuthorizations;
 let Applications: typeof CoreDb.Applications;
 let Instances: typeof CoreDb.Instances;
 let NotificationQuoteJudgments: typeof CoreDb.NotificationQuoteJudgments;
-let NotificationRollouts: typeof CoreDb.NotificationRollouts;
 let Notifications: typeof CoreDb.Notifications;
 let OAuthAuthorizationCodes: typeof CoreDb.OAuthAuthorizationCodes;
 let OAuthTokens: typeof CoreDb.OAuthTokens;
@@ -90,7 +89,6 @@ before(async () => {
     firstOrThrow,
     Instances,
     NotificationQuoteJudgments,
-    NotificationRollouts,
     Notifications,
     OAuthAuthorizationCodes,
     OAuthTokens,
@@ -117,10 +115,6 @@ before(async () => {
   } = await import('./activities'));
   ({ temporalClient } = await import('@kosmo/core/temporal/client'));
   ({ createPost: createCorePost, deletePost, repostPost } = await import('@kosmo/core/services'));
-  await db
-    .insert(NotificationRollouts)
-    .values({ key: 'QUOTE_NOTIFICATION', activatedAt: Temporal.Now.instant(), enabled: true })
-    .onConflictDoNothing();
 });
 
 beforeEach(async () => {
