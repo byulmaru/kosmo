@@ -379,12 +379,149 @@ describe('PostComposer initial body', () => {
   });
 
   it('keeps a normal Post empty without an initial body', async () => {
+    const profile = { ...profileA, private: { defaultPostVisibility: 'PUBLIC' } };
     await act(async () => {
-      renderer = create(createElement(PostComposer, { profile: profileA as never }));
+      renderer = create(createElement(PostComposer, { profile: profile as never }));
     });
 
     assert.equal(targetProps?.body, '');
     assert.deepEqual(targetProps?.selection, { start: 0, end: 0 });
+    assert.equal(
+      renderer?.root.findByType('PostComposerTarget' as never).props.visibility,
+      'PUBLIC',
+    );
+  });
+});
+
+describe('PostComposer Reply visibility seed', () => {
+  it('submits the more restrictive of the selected Profile default and Parent visibility', async () => {
+    const cases = [
+      { defaultPostVisibility: 'PUBLIC', parentVisibility: 'FOLLOWERS', expected: 'FOLLOWERS' },
+      { defaultPostVisibility: 'PUBLIC', parentVisibility: 'DIRECT', expected: 'DIRECT' },
+      { defaultPostVisibility: 'FOLLOWERS', parentVisibility: 'PUBLIC', expected: 'FOLLOWERS' },
+    ] as const;
+
+    for (const { defaultPostVisibility, parentVisibility, expected } of cases) {
+      const profile = { ...profileA, private: { defaultPostVisibility } };
+      await act(async () => {
+        renderer = create(
+          createElement(PostComposer, {
+            onRequestClose: () => undefined,
+            presentation: 'overlay',
+            profile: profile as never,
+            replyParentId: 'post-parent',
+            replyParentVisibility: parentVisibility,
+          }),
+        );
+      });
+
+      assert.equal(
+        renderer?.root.findByType('PostComposerTarget' as never).props.visibility,
+        expected,
+      );
+      await act(async () => targetProps?.onBodyChange('답글 본문'));
+      await act(async () => targetProps?.onSubmit());
+      assert.equal(mutationCalls[0]?.variables.input.replyParentId, 'post-parent');
+      assert.equal(mutationCalls[0]?.variables.input.visibility, expected);
+
+      await act(async () => renderer?.unmount());
+      renderer = null;
+      targetProps = undefined;
+      mutationCalls = [];
+    }
+  });
+
+  it('preserves a manual visibility choice and seeds the clamp again after success', async () => {
+    const profile = { ...profileA, private: { defaultPostVisibility: 'PUBLIC' } };
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposer, {
+          onRequestClose: () => undefined,
+          presentation: 'overlay',
+          profile: profile as never,
+          replyParentId: 'post-parent',
+          replyParentVisibility: 'FOLLOWERS',
+        }),
+      );
+    });
+
+    assert.equal(
+      renderer?.root.findByType('PostComposerTarget' as never).props.visibility,
+      'FOLLOWERS',
+    );
+    await act(async () => targetProps?.onBodyChange('수동 공개 답글'));
+    await act(async () => targetProps?.onVisibilityChange('PUBLIC'));
+    await act(async () => targetProps?.onSubmit());
+    assert.equal(mutationCalls[0]?.variables.input.visibility, 'PUBLIC');
+
+    await act(async () =>
+      mutationCalls[0]?.onCompleted({ createPost: { post: { id: 'post-reply' } } }),
+    );
+    assert.equal(targetProps?.body, '');
+    assert.equal(
+      renderer?.root.findByType('PostComposerTarget' as never).props.visibility,
+      'FOLLOWERS',
+    );
+
+    await act(async () => targetProps?.onBodyChange('다음 답글'));
+    await act(async () => targetProps?.onSubmit());
+    assert.equal(mutationCalls[1]?.variables.input.visibility, 'FOLLOWERS');
+  });
+
+  it('keeps the current Reply draft and manual visibility when the Profile default changes', async () => {
+    const profile = { ...profileA, private: { defaultPostVisibility: 'PUBLIC' } };
+    const props = {
+      onRequestClose: () => undefined,
+      presentation: 'overlay' as const,
+      profile: profile as never,
+      replyParentId: 'post-parent',
+      replyParentVisibility: 'PUBLIC' as const,
+    };
+    await act(async () => {
+      renderer = create(createElement(PostComposer, props));
+    });
+    await act(async () => targetProps?.onBodyChange('보존할 답글'));
+    await act(async () => targetProps?.onVisibilityChange('DIRECT'));
+
+    await act(async () =>
+      renderer?.update(
+        createElement(PostComposer, {
+          ...props,
+          profile: { ...profile, private: { defaultPostVisibility: 'FOLLOWERS' } } as never,
+        }),
+      ),
+    );
+
+    assert.equal(targetProps?.body, '보존할 답글');
+    assert.equal(
+      renderer?.root.findByType('PostComposerTarget' as never).props.visibility,
+      'DIRECT',
+    );
+    await act(async () => targetProps?.onSubmit());
+    assert.equal(mutationCalls[0]?.variables.input.visibility, 'DIRECT');
+  });
+
+  it('leaves Quote visibility based on the Profile default', async () => {
+    const profile = { ...profileA, private: { defaultPostVisibility: 'PUBLIC' } };
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposer, {
+          onRequestClose: () => undefined,
+          presentation: 'overlay',
+          profile: profile as never,
+          repostSourceId: 'post-source',
+        }),
+      );
+    });
+
+    assert.equal(
+      renderer?.root.findByType('PostComposerTarget' as never).props.visibility,
+      'PUBLIC',
+    );
+    await act(async () => targetProps?.onBodyChange('인용 본문'));
+    await act(async () => targetProps?.onSubmit());
+    assert.equal(mutationCalls[0]?.variables.input.repostSourceId, 'post-source');
+    assert.equal(mutationCalls[0]?.variables.input.visibility, 'PUBLIC');
   });
 });
 
