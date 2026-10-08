@@ -58,13 +58,16 @@ let targetProps:
         query: PostComposerMentionQuery,
       ) => void;
       onSubmit: () => void;
-      onVisibilityChange: (value: 'FOLLOWERS' | 'PUBLIC' | 'UNLISTED') => void;
+      onVisibilityChange: (value: 'DIRECT' | 'FOLLOWERS' | 'PUBLIC' | 'UNLISTED') => void;
       selection: { end: number; start: number };
       submitting?: boolean;
     }
   | undefined;
 let mutationCalls: Array<{
-  onCompleted: (response: { createPost: { post: { id: string } } }) => void;
+  onCompleted: (
+    response: { createPost: { post: { id: string } | null } } | null,
+    errors?: Array<{ extensions?: { code?: unknown; field?: unknown }; message: string }> | null,
+  ) => void;
   onError: (error: Error) => void;
   variables: {
     connections: string[];
@@ -85,6 +88,7 @@ let relayEnvironment: Environment;
 let textInputMountCount = 0;
 let textInputUnmountCount = 0;
 let PostComposerMentionInput: typeof PostComposerMentionInputComponent;
+let toastCalls: Array<[string, { tone: string }]> = [];
 
 const profileA = {
   ' $fragmentSpreads': {
@@ -194,7 +198,11 @@ mockModule('@/components/profile/ProfilePicker', { ProfilePicker: 'ProfilePicker
 mockModule('@/components/ui/Avatar', { Avatar: 'Avatar' });
 mockModule('@/components/ui/Button', { Button: 'Button' });
 mockModule('@/components/ui/Form', { Form: 'Form' });
-mockModule('@/components/ui/ToastProvider', { useToast: () => ({ showToast: () => undefined }) });
+mockModule('@/components/ui/ToastProvider', {
+  useToast: () => ({
+    showToast: (message: string, options: { tone: string }) => toastCalls.push([message, options]),
+  }),
+});
 mockModule('@/components/ui/TextField', { TextArea: 'TextArea', TextField: 'TextField' });
 mockModule('@/relay/RelayEnvironmentBoundary', { useRelayEnvironmentGeneration: () => null });
 mockModule('@/theme/ThemeProvider', {
@@ -309,6 +317,7 @@ beforeEach(() => {
   relayEnvironment = createRelayEnvironment();
   textInputMountCount = 0;
   textInputUnmountCount = 0;
+  toastCalls = [];
 });
 
 afterEach(async () => {
@@ -401,7 +410,7 @@ describe('PostComposer local author', () => {
     assert.equal(switcherProps?.disabled, false);
     await act(async () => targetProps?.onBodyChange('보존할 본문'));
     await act(async () => targetProps?.onContentWarningChange('보존할 CW'));
-    await act(async () => targetProps?.onVisibilityChange('FOLLOWERS'));
+    await act(async () => targetProps?.onVisibilityChange('DIRECT'));
 
     mediaState = 'uploading';
     await act(async () => refreshMedia?.());
@@ -431,7 +440,7 @@ describe('PostComposer local author', () => {
     assert.equal(targetProps?.contentWarning, '보존할 CW');
     assert.equal(
       renderer?.root.findByType('PostComposerTarget' as never).props.visibility,
-      'FOLLOWERS',
+      'DIRECT',
     );
 
     await act(async () => targetProps?.onSubmit());
@@ -444,17 +453,21 @@ describe('PostComposer local author', () => {
         media: mediaValue.items,
         actorProfileId: profileB.id,
         sensitiveMedia: true,
-        visibility: 'FOLLOWERS',
+        visibility: 'DIRECT',
       },
       prependToHome: false,
     });
 
     await act(async () => mutationCalls[0]?.onError(new Error('실패')));
+    assert.deepEqual(toastCalls[0], [
+      '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+      { tone: 'danger' },
+    ]);
     assert.equal(targetProps?.body, '보존할 본문');
     assert.equal(targetProps?.contentWarning, '보존할 CW');
     assert.equal(
       renderer?.root.findByType('PostComposerTarget' as never).props.visibility,
-      'FOLLOWERS',
+      'DIRECT',
     );
   });
 
@@ -535,6 +548,105 @@ describe('PostComposer local author', () => {
     });
   });
 
+  it('submits DIRECT with the selected Mentioned Profile range', async () => {
+    const alice: PostComposerMentionCandidate = {
+      displayName: '앨리스',
+      id: 'profile-alice',
+      relativeHandle: '@alice',
+    };
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposer, {
+          onExpand: () => undefined,
+          onRequestClose: () => undefined,
+          presentation: 'rail',
+          profile: profileA as never,
+          profiles: candidates as never,
+          mentionCandidates: {
+            authorProfileId: profileA.id,
+            profiles: [alice],
+            query: 'ali',
+          },
+        }),
+      );
+    });
+
+    await act(async () => targetProps?.onBodyChange('@ali'));
+    await act(async () => targetProps?.onSelectMention(alice, { end: 4, query: 'ali', start: 0 }));
+    await act(async () => targetProps?.onVisibilityChange('DIRECT'));
+    await act(async () => targetProps?.onSubmit());
+
+    assert.deepEqual(mutationCalls[0]?.variables.input, {
+      bodyText: '@alice',
+      media: mediaValue.items,
+      mentions: [{ profileId: 'profile-alice', start: 0, end: 6 }],
+      sensitiveMedia: true,
+      visibility: 'DIRECT',
+    });
+  });
+
+  it('keeps a DIRECT draft and shows failure feedback when the server finds no recipients', async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposer, {
+          onExpand: () => undefined,
+          onRequestClose: () => undefined,
+          presentation: 'rail',
+          profile: profileA as never,
+          profiles: candidates as never,
+        }),
+      );
+    });
+
+    await act(async () => targetProps?.onBodyChange('수신자 없는 글'));
+    await act(async () => targetProps?.onVisibilityChange('DIRECT'));
+    await act(async () => targetProps?.onSubmit());
+    assert.equal(mutationCalls[0]?.variables.input.visibility, 'DIRECT');
+    assert.equal(mutationCalls[0]?.variables.input.mentions, undefined);
+
+    await act(async () =>
+      mutationCalls[0]?.onCompleted(null, [
+        {
+          message: 'DIRECT requires a recipient',
+          extensions: { code: 'VALIDATION', field: 'mentions' },
+        },
+      ]),
+    );
+
+    assert.equal(toastCalls.length, 1);
+    assert.deepEqual(toastCalls[0], [
+      '한 명 이상의 유효한 프로필을 멘션해 주세요.',
+      { tone: 'danger' },
+    ]);
+    assert.equal(targetProps?.body, '수신자 없는 글');
+    assert.equal(
+      renderer?.root.findByType('PostComposerTarget' as never).props.visibility,
+      'DIRECT',
+    );
+  });
+
+  it('submits typed mentions as text with DIRECT while mention search is off', async () => {
+    mentionSearchEnabled = false;
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposer, {
+          onRequestClose: () => undefined,
+          presentation: 'overlay',
+          profile: profileA as never,
+        }),
+      );
+    });
+
+    await act(async () => targetProps?.onBodyChange('본문 @alice'));
+    await act(async () => targetProps?.onVisibilityChange('DIRECT'));
+    await act(async () => targetProps?.onSubmit());
+
+    assert.equal(requests.length, 0);
+    assert.equal(mutationCalls[0]?.variables.input.bodyText, '본문 @alice');
+    assert.equal(mutationCalls[0]?.variables.input.visibility, 'DIRECT');
+    assert.equal(mutationCalls[0]?.variables.input.mentions, undefined);
+  });
+
   it('restores the original author only after a successful post', async () => {
     await act(async () => {
       renderer = create(
@@ -554,9 +666,13 @@ describe('PostComposer local author', () => {
     assert.equal(switcherProps?.selectedProfileId, profileB.id);
 
     await act(async () => targetProps?.onSubmit());
+    const toastCountBeforeSuccess = toastCalls.length;
     await act(async () =>
-      mutationCalls[1]?.onCompleted({ createPost: { post: { id: 'post-1' } } }),
+      mutationCalls[1]?.onCompleted({ createPost: { post: { id: 'post-1' } } }, [
+        { message: 'ignored field error', extensions: { code: 'VALIDATION', field: 'mentions' } },
+      ]),
     );
+    assert.equal(toastCalls.length, toastCountBeforeSuccess);
     assert.equal(switcherProps?.selectedProfileId, profileA.id);
     assert.equal(
       renderer?.root.findByType('PostComposerTarget' as never).props.visibility,

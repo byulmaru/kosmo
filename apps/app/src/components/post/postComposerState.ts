@@ -4,7 +4,7 @@ import {
 } from '@kosmo/core/post-content';
 import type { PostVisibility } from '@kosmo/core/enums';
 
-export type PostComposerVisibility = 'FOLLOWERS' | 'PUBLIC' | 'UNLISTED';
+export type PostComposerVisibility = 'DIRECT' | 'FOLLOWERS' | 'PUBLIC' | 'UNLISTED';
 export type PostComposerMentionRange = Readonly<{
   profileId: string;
   start: number;
@@ -446,13 +446,6 @@ export function normalizePostComposerMentionDraft(
       return [{ ...range, start, end }];
     }),
   };
-}
-
-export function isPostComposerVisibilityAllowed(
-  visibility: PostVisibility,
-  replyParentId?: string,
-): boolean {
-  return !(replyParentId && visibility === 'DIRECT');
 }
 
 export function createPostComposerContextKey(

@@ -11,6 +11,7 @@ import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import { composerMedia } from './PostComposer.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { TextInput } from 'react-native';
+import type { PostComposerVisibility } from '@/components/post/PostComposer';
 import type { ComposerMediaItem } from '@/components/post/PostComposerMediaControls';
 import type { ProfilePickerProfile } from '@/components/profile/ProfilePicker';
 import type { PostComposerProfileSwitcherStoriesQuery as PostComposerProfileSwitcherStoriesQueryType } from './__generated__/PostComposerProfileSwitcherStoriesQuery.graphql';
@@ -114,7 +115,7 @@ export function ComposerProfileFixture({
   );
   const [items, setItems] = useState(initialItems);
   const [sensitiveMedia, setSensitiveMedia] = useState(initialSensitiveMedia);
-  const [visibility, setVisibility] = useState<'FOLLOWERS' | 'PUBLIC' | 'UNLISTED'>('UNLISTED');
+  const [visibility, setVisibility] = useState<PostComposerVisibility>('UNLISTED');
   const bodyRef = useRef<TextInput>(null);
   const remaining =
     postBodyMaxLength -

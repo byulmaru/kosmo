@@ -63,6 +63,7 @@ export const createMentionNotification = async (
                 eq(MentionAuthors.state, ProfileState.ACTIVE),
                 ne(MentionAuthorInstances.state, InstanceState.SUSPENDED),
               )!,
+              postContentId: Posts.currentContentId,
               postState: Posts.state,
               postVisibility: Posts.visibility,
             },

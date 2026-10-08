@@ -156,7 +156,7 @@ const meta = {
     showSubmit: { control: 'boolean' },
     submitting: { control: 'boolean' },
     surface: { control: 'inline-radio', options: ['rail', 'overlay'] },
-    visibility: { control: 'select', options: ['PUBLIC', 'UNLISTED', 'FOLLOWERS'] },
+    visibility: { control: 'select', options: ['PUBLIC', 'UNLISTED', 'FOLLOWERS', 'DIRECT'] },
   },
   component: PostComposer,
   excludeStories: [

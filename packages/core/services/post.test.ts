@@ -130,6 +130,28 @@ test('createPost는 local Post와 최초 content 연결을 하나의 transaction
   );
 });
 
+test('createPost는 canonical Mention이 없는 local DIRECT Post를 저장하지 않는다', async () => {
+  const author = await createProfile();
+  const postCount = await db.$count(Posts);
+  const contentCount = await db.$count(PostContents);
+  const mentionCount = await db.$count(PostMentions);
+
+  await assert.rejects(
+    createPost({
+      authoredBodyText: '@typed_handle is not a recipient',
+      document: postContentDocumentFromText('@typed_handle is not a recipient'),
+      origin: 'LOCAL',
+      profileId: author.id,
+      visibility: PostVisibility.DIRECT,
+    }),
+    (error: unknown) => error instanceof ValidationError && error.field === 'mentions',
+  );
+
+  assert.equal(await db.$count(Posts), postCount);
+  assert.equal(await db.$count(PostContents), contentCount);
+  assert.equal(await db.$count(PostMentions), mentionCount);
+});
+
 test('createPost는 Local Mention node를 저장하고 반복 Profile relation을 하나로 만든다', async () => {
   const author = await createProfile();
   const mentioned = await createProfile();

@@ -33,6 +33,7 @@ import {
 } from './postComposerState';
 import type { ReactNode, RefObject } from 'react';
 import type { TextInput } from 'react-native';
+import type { PayloadError } from 'relay-runtime';
 import type { PostComposer_profile$key } from './__generated__/PostComposer_profile.graphql';
 import type { PostComposerCreatePostMutation } from './__generated__/PostComposerCreatePostMutation.graphql';
 import type { PostComposerMentionSuggestionsQuery } from './__generated__/PostComposerMentionSuggestionsQuery.graphql';
@@ -52,6 +53,7 @@ type Visibility = PostComposerVisibility;
 export type PostComposerCreatedPost = Readonly<{ id: string }>;
 
 const submitFailureMessage = '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.';
+const directMentionFailureMessage = '한 명 이상의 유효한 프로필을 멘션해 주세요.';
 
 const PostComposerFragment = graphql`
   fragment PostComposer_profile on Profile {
@@ -442,7 +444,7 @@ function PostComposerContents({
           sensitiveMedia: media.sensitiveMedia,
         },
       },
-      onCompleted: (response) => {
+      onCompleted: (response, errors) => {
         if (
           !mountedRef.current ||
           contextGenerationRef.current !== submissionGeneration ||
@@ -452,9 +454,19 @@ function PostComposerContents({
           return;
         }
         setSubmitting(false);
-        const createdPost = response.createPost?.post;
+        const createdPost = response?.createPost?.post;
         if (!createdPost) {
-          showToast(submitFailureMessage, { tone: 'danger' });
+          const invalidDirectMention =
+            visibility === 'DIRECT' &&
+            errors?.some((error) => {
+              const { code, field } =
+                (error as PayloadError & { extensions?: { code?: unknown; field?: unknown } })
+                  .extensions ?? {};
+              return code === 'VALIDATION' && field === 'mentions';
+            });
+          showToast(invalidDirectMention ? directMentionFailureMessage : submitFailureMessage, {
+            tone: 'danger',
+          });
           return;
         }
 
