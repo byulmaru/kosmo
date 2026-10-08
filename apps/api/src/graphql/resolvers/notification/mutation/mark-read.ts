@@ -1,8 +1,9 @@
-import { db, Notifications } from '@kosmo/core/db';
+import { AccountProfiles, db, Instances, Notifications, Profiles } from '@kosmo/core/db';
 import { and, eq, getColumns, or, sql } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/resolvers/profile';
-import { visibleNotificationWhere } from '../access/visibility';
+import { visibleProfileWhere } from '@/profile/visibility';
+import { visibleViewerNotificationWhere } from '../access/visibility';
 import { Notification, notificationKindForNodeType } from '../ref';
 
 builder.mutationField('markNotificationRead', (t) =>
@@ -23,7 +24,10 @@ builder.mutationField('markNotificationRead', (t) =>
       });
 
       if (candidates.length === 0) {
-        return { notifications: [], recipientProfiles: [] };
+        return {
+          notifications: [],
+          recipientProfiles: [],
+        };
       }
 
       const notifications = await db
@@ -36,16 +40,34 @@ builder.mutationField('markNotificationRead', (t) =>
                 and(eq(Notifications.id, id), eq(Notifications.kind, kind)),
               ),
             ),
-            visibleNotificationWhere({ ctx }),
+            visibleViewerNotificationWhere({ ctx }),
           ),
         )
         .returning(getColumns(Notifications));
 
+      const recipientProfileIds = new Set(
+        notifications.flatMap(({ recipientProfileId }) =>
+          recipientProfileId === null ? [] : [recipientProfileId],
+        ),
+      );
+      if (notifications.some(({ recipientAccountId }) => recipientAccountId !== null)) {
+        const accountProfiles = await db
+          .select({ profileId: Profiles.id })
+          .from(AccountProfiles)
+          .innerJoin(Profiles, eq(Profiles.id, AccountProfiles.profileId))
+          .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+          .where(
+            and(
+              eq(AccountProfiles.accountId, ctx.session.accountId),
+              visibleProfileWhere({ profile: Profiles, instance: Instances }),
+            ),
+          );
+        accountProfiles.forEach(({ profileId }) => recipientProfileIds.add(profileId));
+      }
+
       return {
         notifications,
-        recipientProfiles: [
-          ...new Set(notifications.map(({ recipientProfileId }) => recipientProfileId)),
-        ],
+        recipientProfiles: [...recipientProfileIds],
       };
     },
   }),

@@ -6,6 +6,7 @@ export {
   FollowRequestNotification,
   MentionNotification,
   Notification,
+  OperationalNotification,
   QuoteNotification,
   ReactionNotification,
   RepostNotification,

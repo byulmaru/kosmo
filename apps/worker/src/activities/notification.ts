@@ -15,7 +15,7 @@ import { WorkflowIdConflictPolicy, WorkflowIdReusePolicy } from '@temporalio/cli
 import { match } from 'ts-pattern';
 
 type CreateNotificationInput = {
-  readonly kind: NotificationKind;
+  readonly kind: Exclude<NotificationKind, 'OPERATIONAL'>;
   readonly sourceId: string;
 };
 

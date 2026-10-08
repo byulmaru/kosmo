@@ -432,6 +432,15 @@ export function notificationsProfile(
     | ReturnType<typeof mentionNotification>
     | ReturnType<typeof replyNotification>
     | ReturnType<typeof repostNotification>
+    | {
+        __typename: 'OperationalNotification';
+        body: string | null;
+        createdAt: string;
+        href: string | null;
+        id: string;
+        readAt: string | null;
+        title: string;
+      }
   >,
   metadata: PaginationMetadata = {},
   overrides: Partial<StoryProfile> = {},

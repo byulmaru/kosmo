@@ -353,6 +353,15 @@ type NotificationConnectionEdge {
   node: Notification!
 }
 
+type OperationalNotification implements Node & Notification {
+  body: String
+  createdAt: DateTime!
+  href: String!
+  id: ID!
+  readAt: DateTime
+  title: String!
+}
+
 type PageInfo {
   endCursor: String
   hasNextPage: Boolean!

@@ -3,6 +3,7 @@ import '@kosmo/core/polyfill';
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import { AccountState, SessionState } from '@kosmo/core/enums';
+import { encodeGlobalId } from '@kosmo/core/global-id';
 import { eq, inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type * as CoreDb from '@kosmo/core/db';
@@ -117,6 +118,59 @@ test('Active·Suspended current Session을 폐기하고 재사용 인증을 거�
     assert.deepEqual(current.data, { currentSession: null });
   } finally {
     await cleanup([active.account.id, suspended.account.id]);
+  }
+});
+
+test('현재 Session과 일반 Account 조회는 Active Account만 허용한다', async () => {
+  const active = await createSession();
+  const suspended = await createSession({ accountState: AccountState.SUSPENDED });
+  const disabled = await createSession({ accountState: AccountState.DISABLED });
+
+  try {
+    const query = `query {
+      currentSession { id account { id name } selectedProfile { id } }
+      me { id }
+    }`;
+    const [activeResult, suspendedResult, disabledResult, anonymousResult] = await Promise.all([
+      request<{
+        currentSession: {
+          account: { id: string; name: string };
+          id: string;
+          selectedProfile: null;
+        } | null;
+        me: { id: string } | null;
+      }>(query, active.session.token),
+      request<{ currentSession: null; me: null }>(query, suspended.session.token),
+      request<{ currentSession: null; me: null }>(query, disabled.session.token),
+      request<{ currentSession: null; me: null }>(query),
+    ]);
+
+    assert.equal(activeResult.errors, undefined, JSON.stringify(activeResult.errors));
+    assert.deepEqual(activeResult.data, {
+      currentSession: {
+        account: {
+          id: encodeGlobalId('Account', active.account.id),
+          name: active.account.displayName,
+        },
+        id: encodeGlobalId('Session', active.session.id),
+        selectedProfile: null,
+      },
+      me: { id: encodeGlobalId('Account', active.account.id) },
+    });
+
+    assert.equal(suspendedResult.errors, undefined, JSON.stringify(suspendedResult.errors));
+    assert.deepEqual(suspendedResult.data, { currentSession: null, me: null });
+    assert.deepEqual(disabledResult, { data: { currentSession: null, me: null } });
+    assert.deepEqual(anonymousResult, { data: { currentSession: null, me: null } });
+
+    const suspendedProfileMutation = await request<unknown>(
+      'mutation { createProfile(input: { handle: "suspendedprofile" }) { profile { id } } }',
+      suspended.session.token,
+    );
+    assert.equal(suspendedProfileMutation.data, null);
+    assert.equal(suspendedProfileMutation.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
+  } finally {
+    await cleanup([active.account.id, suspended.account.id, disabled.account.id]);
   }
 });
 

@@ -24,6 +24,7 @@ import {
   FollowRequestNotificationListItem,
   MentionNotificationListItem,
   NotificationListItem,
+  OperationalNotificationListItem,
   ReactionNotificationListItem,
   ReplyNotificationListItem,
   RepostNotificationListItem,
@@ -66,6 +67,9 @@ const notificationListFragment = graphql`
           }
           ... on RepostNotification {
             ...RepostNotificationListItem_notification @alias(as: "repost")
+          }
+          ... on OperationalNotification {
+            ...OperationalNotificationListItem_notification @alias(as: "operational")
           }
         }
       }
@@ -116,6 +120,9 @@ export function NotificationList({ profile }: NotificationListProps) {
     if (node.__typename === 'RepostNotification' && node.repost) {
       return <RepostNotificationListItem key={node.id} notification={node.repost} />;
     }
+    if (node.__typename === 'OperationalNotification' && node.operational) {
+      return <OperationalNotificationListItem key={node.id} notification={node.operational} />;
+    }
     return [];
   });
 
@@ -165,7 +172,7 @@ export function NotificationList({ profile }: NotificationListProps) {
               notifications
             ) : (
               <StateView
-                description="새로운 팔로우, 팔로우 요청, 답글, 반응 또는 재게시 알림이 생기면 여기에 표시돼요."
+                description="새로운 계정 공지나 팔로우, 팔로우 요청, 답글, 반응 또는 재게시 알림이 생기면 여기에 표시돼요."
                 style={styles.state}
                 title="아직 알림이 없어요"
               />

@@ -1268,6 +1268,84 @@ test('공통 Notification Activity는 Mention materialization이 빈 배열이�
   }
 });
 
+test('Operational Push는 Account recipient와 저장된 제목·본문·링크를 전달한다', async (t) => {
+  const previousProjectId = process.env.FIREBASE_PROJECT_ID;
+  process.env.FIREBASE_PROJECT_ID = 'kosmo-push-test';
+  const fixture = await createAccountDeletionFixture({ profileStates: [] });
+  const data = {
+    body: 'Maintenance starts soon',
+    href: '/account/settings?tab=security#top',
+    title: 'Scheduled maintenance',
+  };
+
+  try {
+    const notification = await db
+      .insert(Notifications)
+      .values({
+        data,
+        kind: NotificationKind.OPERATIONAL,
+        recipientAccountId: fixture.account.id,
+        sourceId: crypto.randomUUID(),
+      })
+      .returning()
+      .then(firstOrThrow);
+    const readAt = Temporal.Now.instant();
+    await db.update(Notifications).set({ readAt }).where(eq(Notifications.id, notification.id));
+
+    const { listPushNotificationInstallationsActivity, sendPushNotificationActivity } =
+      await import('./activities');
+    const installationIds = await listPushNotificationInstallationsActivity(notification.id);
+    assert.equal(installationIds.length, 2);
+
+    const { applicationDefault, getApps, initializeApp } = await import('firebase-admin/app');
+    const { getMessaging } = await import('firebase-admin/messaging');
+    const app =
+      getApps().find(({ name }) => name === '[DEFAULT]') ??
+      initializeApp({
+        credential: applicationDefault(),
+        projectId: process.env.FIREBASE_PROJECT_ID,
+      });
+    const messaging = getMessaging(app);
+    type FcmMessage = Parameters<typeof messaging.send>[0];
+    const sent: FcmMessage[] = [];
+    t.mock.method(messaging, 'send', async (message: FcmMessage) => {
+      sent.push(message);
+      return 'projects/kosmo-push-test/messages/operational-test';
+    });
+
+    await sendPushNotificationActivity(notification.id, installationIds[0]!);
+
+    assert.equal(sent.length, 1);
+    const payload = sent[0];
+    assert.ok(payload);
+    const { encodeGlobalId } = await import('@kosmo/core/global-id');
+    assert.deepEqual(payload.notification, { body: data.body, title: data.title });
+    assert.deepEqual(payload.data, {
+      href: data.href,
+      notificationId: encodeGlobalId('OperationalNotification', notification.id),
+      recipientAccountId: encodeGlobalId('Account', fixture.account.id),
+    });
+    assert.ok((payload.android?.ttl ?? 0) > 0);
+    assert.ok((payload.android?.ttl ?? Number.POSITIVE_INFINITY) <= 24 * 60 * 60 * 1000);
+    assert.equal(
+      (
+        await db
+          .select({ readAt: Notifications.readAt })
+          .from(Notifications)
+          .where(eq(Notifications.id, notification.id))
+      )[0]?.readAt?.toString(),
+      readAt.toString(),
+    );
+  } finally {
+    await cleanupAccountDeletionFixture(fixture);
+    if (previousProjectId === undefined) {
+      delete process.env.FIREBASE_PROJECT_ID;
+    } else {
+      process.env.FIREBASE_PROJECT_ID = previousProjectId;
+    }
+  }
+});
+
 test('Mention Push Notification은 원인 Post의 Mention 타입·경로·안전한 preview를 사용한다', async (t) => {
   const previousProjectId = process.env.FIREBASE_PROJECT_ID;
   process.env.FIREBASE_PROJECT_ID = 'kosmo-push-test';

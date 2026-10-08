@@ -184,6 +184,21 @@ describe('SessionProvider selected profile bootstrap', () => {
     assert.deepEqual(writes, []);
   });
 
+  it('keeps active Session identity when no Profile is selected', async () => {
+    serverSelectedProfileId = null;
+
+    await renderProvider();
+
+    assert.deepEqual(readSession(), {
+      accountId: 'account-1',
+      accountName: 'Account',
+      selectedProfileId: null,
+      sessionId: 'session-1',
+      status: 'valid',
+    });
+    assert.equal(deleteCalls, 0);
+  });
+
   it('falls back to the server-selected profile when client storage is empty', async () => {
     await renderProvider();
 

@@ -169,6 +169,7 @@ const ShellStoriesQuery = graphql`
     ...RightRail_query
     ...SidebarNavigation_query
     currentSession {
+      id
       selectedProfile {
         ...BottomTabBar_profile
         ...RightRail_profile

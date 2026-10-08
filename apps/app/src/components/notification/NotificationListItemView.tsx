@@ -12,6 +12,7 @@ import type { Href } from 'expo-router';
 import type { ReactElement } from 'react';
 import type { ViewStyle } from 'react-native';
 import type { PostMediaItem } from '@/components/post/PostMediaImage';
+import type { NotificationHrefTarget } from './notificationHref';
 
 type Actor = { id: string; name: string; avatarUrl?: string | null };
 
@@ -58,7 +59,27 @@ type PostNotificationChildProps = {
   pending?: never;
 };
 
-export type NotificationListItemViewProps = GroupedNotificationProps | PostNotificationChildProps;
+type OperationalNotificationProps = {
+  body: string | null;
+  href: NotificationHrefTarget;
+  kind: 'operational';
+  onNavigate: () => void;
+  timestamp: string;
+  title: string;
+  unread?: boolean;
+  actor?: never;
+  actors?: never;
+  totalActorCount?: never;
+  preview?: never;
+  children?: never;
+  disabled?: never;
+  pending?: never;
+};
+
+export type NotificationListItemViewProps =
+  | GroupedNotificationProps
+  | PostNotificationChildProps
+  | OperationalNotificationProps;
 
 const actions = {
   follow: '팔로우했습니다',
@@ -101,6 +122,8 @@ export function NotificationListItemView(props: NotificationListItemViewProps) {
               {props.children}
             </View>
           </>
+        ) : props.kind === 'operational' ? (
+          <OperationalNotificationTarget {...props} />
         ) : (
           <NotificationTarget {...props} />
         )}
@@ -109,6 +132,69 @@ export function NotificationListItemView(props: NotificationListItemViewProps) {
         ) : null}
       </View>
     </PostContentPrivacyBoundary>
+  );
+}
+
+function OperationalNotificationTarget({
+  body,
+  href,
+  onNavigate,
+  timestamp,
+  title,
+  unread = false,
+}: OperationalNotificationProps) {
+  const theme = useTheme();
+  const web = Platform.OS === 'web';
+  const [focusVisible, setFocusVisible] = useState(false);
+  const label = `${title}.${body ? ` ${body}.` : ''} ${timestamp}.${unread ? ' 읽지 않은 알림.' : ''} 알림 열기`;
+  const target = (
+    <Pressable
+      accessibilityLabel={label}
+      accessibilityRole="link"
+      onBlur={() => setFocusVisible(false)}
+      onFocus={(event) => {
+        const control = event.currentTarget as unknown as {
+          matches?: (selector: string) => boolean;
+        };
+        setFocusVisible(web && Boolean(control.matches?.(':focus-visible')));
+      }}
+      onPointerDown={() => setFocusVisible(false)}
+      onPress={onNavigate}
+      style={[
+        styles.operationalTarget,
+        {
+          outlineColor: theme.stateFocusRing,
+          outlineOffset: -2,
+          outlineStyle: focusVisible ? 'solid' : 'none',
+          outlineWidth: focusVisible ? 2 : 0,
+        } as ViewStyle,
+      ]}
+      testID="operational-notification-target"
+    >
+      <View style={styles.operationalSummary}>
+        <View style={styles.operationalTitleRow}>
+          <Text
+            style={[
+              textStyles.uiLabelL,
+              styles.operationalTitle,
+              { color: theme.foregroundPrimary },
+            ]}
+          >
+            {title}
+          </Text>
+          <TimestampText style={styles.time}>{timestamp}</TimestampText>
+        </View>
+        {body ? (
+          <Text style={[textStyles.uiCopyM, { color: theme.foregroundSecondary }]}>{body}</Text>
+        ) : null}
+      </View>
+    </Pressable>
+  );
+
+  return (
+    <Link asChild href={href.href as Href} push={href.kind === 'internal' && Platform.OS !== 'web'}>
+      {target}
+    </Link>
   );
 }
 
@@ -256,6 +342,15 @@ function NotificationTarget(props: GroupedNotificationProps) {
 const styles = StyleSheet.create({
   root: { borderBottomWidth: borderWidths[1], minWidth: 0, width: '100%' },
   target: { minWidth: 0 },
+  operationalTarget: {
+    minHeight: 80,
+    paddingHorizontal: space[12],
+    paddingVertical: space[16],
+    width: '100%',
+  },
+  operationalSummary: { flex: 1, gap: space[8], minWidth: 0 },
+  operationalTitleRow: { alignItems: 'flex-start', flexDirection: 'row', gap: space[8] },
+  operationalTitle: { flex: 1, minWidth: 0 },
   replyInset: {
     paddingLeft: Platform.OS === 'web' ? space[12] : space[8],
     paddingRight: Platform.OS === 'web' ? space[24] : space[8],

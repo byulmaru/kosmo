@@ -260,23 +260,40 @@ export const Notifications = pgTable(
   'notification',
   {
     id: id(),
-    recipientProfileId: uuid('recipient_profile_id')
-      .notNull()
-      .references(() => Profiles.id, { onDelete: 'cascade' }),
+    recipientProfileId: uuid('recipient_profile_id').references(() => Profiles.id, {
+      onDelete: 'cascade',
+    }),
+    recipientAccountId: uuid('recipient_account_id').references(() => Accounts.id, {
+      onDelete: 'cascade',
+    }),
     kind: Enum.notificationKind('kind').notNull(),
     sourceId: uuid('source_id').notNull(),
-    data: jsonb('data').$type<Record<string, never>>().notNull().default({}),
+    data: jsonb('data').$type<NotificationData>().notNull().default({}),
     createdAt: createdAt(),
     readAt: datetime('read_at'),
   },
   (table) => [
+    check(
+      'notification_recipient_check',
+      sql`(${table.recipientProfileId} IS NOT NULL) <> (${table.recipientAccountId} IS NOT NULL)`,
+    ),
     unique().on(table.recipientProfileId, table.kind, table.sourceId),
+    unique().on(table.recipientAccountId, table.kind, table.sourceId),
     index().on(table.recipientProfileId, table.id.desc()),
     index()
       .on(table.recipientProfileId)
       .where(sql`${table.readAt} IS NULL`),
+    index().on(table.kind, table.sourceId, table.id),
   ],
 );
+
+export type OperationalNotificationData = {
+  readonly title: string;
+  readonly body?: string;
+  readonly href: string;
+};
+
+export type NotificationData = Record<string, never> | OperationalNotificationData;
 
 export const NotificationRollouts = pgTable('notification_rollout', {
   key: text('key').primaryKey(),

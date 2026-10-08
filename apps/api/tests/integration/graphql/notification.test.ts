@@ -161,6 +161,449 @@ describe('Notification GraphQL Node boundary', () => {
     assert.equal((result.data?.nodes[2] as NotificationNode).profile.id, relatedProfileIds[0]);
   });
 
+  test('combines Profile and Account Operational Notifications in the Profile feed', async () => {
+    const auth = await createAuthenticatedSession();
+    const otherProfile = await createProfile('operational-feed-other-profile');
+    await addMembership(auth.account.id, otherProfile.id, AccountProfileRole.OWNER);
+    const disabledProfile = await createProfile('operational-feed-disabled-profile');
+    await addMembership(auth.account.id, disabledProfile.id, AccountProfileRole.OWNER);
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.DISABLED })
+      .where(eq(Profiles.id, disabledProfile.id));
+    const related = await createProfile('operational-feed-related');
+    const profileNotification = await createFollowNotification(auth.profile.id, related.id);
+    const operationalNotification = await createOperationalNotification(auth.account.id, {
+      body: 'Scheduled maintenance begins tonight.',
+      href: '/maintenance',
+      title: 'Service notice',
+    });
+    const profileNotificationId = encodeGlobalId('FollowNotification', profileNotification.id);
+    const operationalNotificationId = encodeGlobalId(
+      'OperationalNotification',
+      operationalNotification.id,
+    );
+    const profileId = encodeGlobalId('Profile', auth.profile.id);
+    const otherProfileId = encodeGlobalId('Profile', otherProfile.id);
+    const result = await requestGraphQL<{
+      node: {
+        body: string | null;
+        href: string;
+        id: string;
+        title: string;
+      } | null;
+      otherProfile: {
+        notifications: { edges: Array<{ node: { __typename: string; id: string } }> };
+        unreadNotificationCount: number;
+      } | null;
+      profile: {
+        notifications: { edges: Array<{ node: { __typename: string; id: string } }> };
+        unreadNotificationCount: number;
+      } | null;
+    }>(
+      `query OperationalNotifications($notificationId: ID!, $profileId: ID!, $otherProfileId: ID!) {
+        node(id: $notificationId) {
+          ... on OperationalNotification { id title body href }
+        }
+        profile: node(id: $profileId) {
+          ... on Profile {
+            unreadNotificationCount
+            notifications(first: 10) { edges { node { __typename id } } }
+          }
+        }
+        otherProfile: node(id: $otherProfileId) {
+          ... on Profile {
+            unreadNotificationCount
+            notifications(first: 10) { edges { node { __typename id } } }
+          }
+        }
+      }`,
+      { notificationId: operationalNotificationId, profileId, otherProfileId },
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.node, {
+      body: 'Scheduled maintenance begins tonight.',
+      href: '/maintenance',
+      id: operationalNotificationId,
+      title: 'Service notice',
+    });
+    assert.equal(result.data?.profile?.unreadNotificationCount, 2);
+    assert.deepEqual(
+      new Set(
+        result.data?.profile?.notifications.edges.map(({ node }) => [node.__typename, node.id]),
+      ),
+      new Set([
+        ['OperationalNotification', operationalNotificationId],
+        ['FollowNotification', profileNotificationId],
+      ]),
+    );
+    assert.equal(result.data?.otherProfile?.unreadNotificationCount, 1);
+    assert.deepEqual(
+      result.data?.otherProfile?.notifications.edges.map(({ node }) => [node.__typename, node.id]),
+      [['OperationalNotification', operationalNotificationId]],
+    );
+
+    const other = await createAuthenticatedSession();
+    assert.deepEqual(await loadNodes([operationalNotificationId], other.token), [null]);
+    const otherAccountNotification = await createOperationalNotification(other.account.id, {
+      body: 'A notice for another account.',
+      href: '/other-account',
+      title: 'Other account notice',
+    });
+    const otherAccountNotificationId = encodeGlobalId(
+      'OperationalNotification',
+      otherAccountNotification.id,
+    );
+
+    const read = await requestGraphQL<{
+      markNotificationRead: {
+        notifications: Array<{ id: string; readAt: string | null; __typename: string }>;
+        recipientProfiles: Array<{ id: string; unreadNotificationCount: number }>;
+      };
+    }>(
+      `mutation MarkOperationalAndProfileNotifications($ids: [ID!]!) {
+        markNotificationRead(input: { ids: $ids }) {
+          notifications { __typename id readAt }
+          recipientProfiles { id unreadNotificationCount }
+        }
+      }`,
+      { ids: [operationalNotificationId, profileNotificationId, otherAccountNotificationId] },
+      auth.token,
+    );
+    assertNoGraphQLErrors(read);
+    assert.deepEqual(
+      new Set(read.data?.markNotificationRead.notifications.map(({ id }) => id)),
+      new Set([operationalNotificationId, profileNotificationId]),
+    );
+    const recipientProfiles = read.data?.markNotificationRead.recipientProfiles ?? [];
+    assert.deepEqual(
+      new Set(recipientProfiles.map(({ id }) => id)),
+      new Set([profileId, otherProfileId]),
+    );
+    assert.equal(recipientProfiles.length, 2);
+    assert.ok(
+      recipientProfiles.every(({ unreadNotificationCount }) => unreadNotificationCount === 0),
+    );
+    const originalReadAts = await Promise.all([
+      notificationReadAt(operationalNotification.id),
+      notificationReadAt(profileNotification.id),
+    ]);
+    assert.ok(originalReadAts.every(Boolean));
+    assert.equal(await notificationReadAt(otherAccountNotification.id), null);
+    const firstReadAts = new Map(
+      read.data?.markNotificationRead.notifications.map(({ id, readAt }) => [id, readAt]),
+    );
+    assert.ok([...firstReadAts.values()].every(Boolean));
+
+    const repeated = await requestGraphQL<{
+      markNotificationRead: { notifications: Array<{ id: string; readAt: string | null }> };
+    }>(
+      `mutation RepeatOperationalNotificationRead($ids: [ID!]!) {
+        markNotificationRead(input: { ids: $ids }) { notifications { id readAt } }
+      }`,
+      { ids: [operationalNotificationId, profileNotificationId] },
+      auth.token,
+    );
+    assertNoGraphQLErrors(repeated);
+    assert.deepEqual(
+      new Map(
+        repeated.data?.markNotificationRead.notifications.map(({ id, readAt }) => [id, readAt]),
+      ),
+      firstReadAts,
+    );
+  });
+
+  test('ACTIVE Account without Profiles can read its own Operational Notifications', async () => {
+    const suffix = crypto.randomUUID();
+    const token = `profileless-${suffix}`;
+    const account = await db
+      .insert(Accounts)
+      .values({
+        displayName: 'Profileless Account',
+        oidcSubject: `subject-${suffix}`,
+        state: AccountState.ACTIVE,
+      })
+      .returning()
+      .then(firstOrThrow);
+    await db
+      .insert(Sessions)
+      .values({ accountId: account.id, state: SessionState.ACTIVE, token })
+      .returning()
+      .then(firstOrThrow);
+    const notification = await createOperationalNotification(account.id, {
+      href: '/profileless-notice',
+      title: 'Account notice',
+    });
+    const notificationId = encodeGlobalId('OperationalNotification', notification.id);
+    const accountId = encodeGlobalId('Account', account.id);
+
+    const result = await requestGraphQL<{
+      currentSession: {
+        account: { id: string };
+        selectedProfile: null;
+      } | null;
+      me: { id: string } | null;
+      node: { href: string; id: string; title: string } | null;
+    }>(
+      `query ProfilelessAccountNotifications($notificationId: ID!) {
+        node(id: $notificationId) {
+          ... on OperationalNotification { id title href }
+        }
+        currentSession {
+          account { id }
+          selectedProfile { id }
+        }
+        me { id }
+      }`,
+      { notificationId },
+      token,
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data, {
+      node: { href: '/profileless-notice', id: notificationId, title: 'Account notice' },
+      currentSession: {
+        account: { id: accountId },
+        selectedProfile: null,
+      },
+      me: { id: accountId },
+    });
+
+    const read = await requestGraphQL<{
+      markNotificationRead: {
+        notifications: Array<{ id: string }>;
+        recipientProfiles: Array<{ id: string; unreadNotificationCount: number }>;
+      };
+    }>(
+      `mutation ReadProfilelessAccountNotification($id: ID!) {
+        markNotificationRead(input: { ids: [$id] }) {
+          notifications { id }
+          recipientProfiles { id unreadNotificationCount }
+        }
+      }`,
+      { id: notificationId },
+      token,
+    );
+    assertNoGraphQLErrors(read);
+    assert.deepEqual(read.data?.markNotificationRead, {
+      notifications: [{ id: notificationId }],
+      recipientProfiles: [],
+    });
+    assert.ok(await notificationReadAt(notification.id));
+  });
+
+  test('keeps Account Operational Notifications in each Profile feed across cursor pages', async () => {
+    const auth = await createAuthenticatedSession();
+    const otherAccount = await createAuthenticatedSession();
+    const otherProfile = await createProfile('operational-feed-other-profile');
+    await addMembership(auth.account.id, otherProfile.id, AccountProfileRole.OWNER);
+
+    const relatedProfiles = await Promise.all([
+      createProfile('operational-feed-first-related'),
+      createProfile('operational-feed-second-related'),
+    ]);
+    const profileNotifications = await Promise.all([
+      createFollowNotification(auth.profile.id, relatedProfiles[0]!.id),
+      createFollowNotification(otherProfile.id, relatedProfiles[1]!.id),
+    ]);
+    const operationalNotification = await createOperationalNotification(auth.account.id, {
+      href: '/operational-feed',
+      title: 'Account notice',
+    });
+    const otherOperationalNotification = await createOperationalNotification(
+      otherAccount.account.id,
+      {
+        href: '/other-account-notice',
+        title: 'Other Account notice',
+      },
+    );
+    const profileNotificationIds = profileNotifications.map(({ id }) =>
+      encodeGlobalId('FollowNotification', id),
+    );
+    const operationalNotificationId = encodeGlobalId(
+      'OperationalNotification',
+      operationalNotification.id,
+    );
+    const otherOperationalNotificationId = encodeGlobalId(
+      'OperationalNotification',
+      otherOperationalNotification.id,
+    );
+    const selectedProfileIds = [auth.profile.id, otherProfile.id].map((id) =>
+      encodeGlobalId('Profile', id),
+    );
+
+    const read = await requestGraphQL<{
+      markNotificationRead: { notifications: Array<{ id: string; readAt: string | null }> };
+    }>(
+      `mutation ReadOperationalNotification($ids: [ID!]!) {
+        markNotificationRead(input: { ids: $ids }) { notifications { id readAt } }
+      }`,
+      { ids: [operationalNotificationId] },
+      auth.token,
+    );
+    assertNoGraphQLErrors(read);
+    const operationalReadAt = read.data?.markNotificationRead.notifications[0]?.readAt;
+    assert.ok(operationalReadAt);
+
+    const loadProfilePage = (after: string | null) =>
+      requestGraphQL<{
+        currentSession: {
+          selectedProfile: {
+            id: string;
+            notifications: {
+              edges: Array<{ cursor: string; node: { id: string; readAt: string | null } }>;
+              pageInfo: { hasNextPage: boolean };
+            };
+            unreadNotificationCount: number | null;
+          } | null;
+        };
+      }>(
+        `query CurrentProfileNotifications($after: String) {
+          currentSession {
+            selectedProfile {
+              id
+              unreadNotificationCount
+              notifications(first: 1, after: $after) {
+                edges { cursor node { id readAt } }
+                pageInfo { hasNextPage }
+              }
+            }
+          }
+        }`,
+        { after },
+        auth.token,
+      );
+
+    const loadTwoPages = async () => {
+      const firstPage = await loadProfilePage(null);
+      assertNoGraphQLErrors(firstPage);
+      const firstSession = firstPage.data?.currentSession;
+      assert.ok(firstSession);
+      const firstProfile = firstSession.selectedProfile;
+      assert.ok(firstProfile);
+      const firstEdge = firstProfile.notifications.edges[0];
+      assert.ok(firstEdge);
+      assert.equal(firstProfile.notifications.pageInfo.hasNextPage, true);
+
+      const secondPage = await loadProfilePage(firstEdge.cursor);
+      assertNoGraphQLErrors(secondPage);
+      const secondSession = secondPage.data?.currentSession;
+      assert.ok(secondSession);
+      const secondProfile = secondSession.selectedProfile;
+      assert.ok(secondProfile);
+      assert.equal(secondProfile.notifications.pageInfo.hasNextPage, false);
+
+      return {
+        edges: [...firstProfile.notifications.edges, ...secondProfile.notifications.edges],
+        profile: firstProfile,
+      };
+    };
+
+    const initial = await loadTwoPages();
+    assert.equal(initial.profile.id, selectedProfileIds[0]);
+    assert.equal(initial.profile.unreadNotificationCount, 1);
+    assert.deepEqual(
+      new Set(initial.edges.map(({ node }) => node.id)),
+      new Set([profileNotificationIds[0], operationalNotificationId]),
+    );
+    assert.equal(initial.edges.length, new Set(initial.edges.map(({ node }) => node.id)).size);
+    assert.equal(
+      initial.edges.some(({ node }) => node.id === otherOperationalNotificationId),
+      false,
+    );
+
+    const switchProfile = await requestGraphQL<{ selectProfile: { profile: { id: string } } }>(
+      `mutation SelectProfile($id: ID!) { selectProfile(input: { id: $id }) { profile { id } } }`,
+      { id: selectedProfileIds[1] },
+      auth.token,
+    );
+    assertNoGraphQLErrors(switchProfile);
+    assert.equal(switchProfile.data?.selectProfile.profile.id, selectedProfileIds[1]);
+
+    const switched = await loadTwoPages();
+    assert.equal(switched.profile.id, selectedProfileIds[1]);
+    assert.equal(switched.profile.unreadNotificationCount, 1);
+    assert.deepEqual(
+      new Set(switched.edges.map(({ node }) => node.id)),
+      new Set([profileNotificationIds[1], operationalNotificationId]),
+    );
+    assert.equal(switched.edges.length, new Set(switched.edges.map(({ node }) => node.id)).size);
+    assert.equal(
+      switched.edges.some(({ node }) => node.id === otherOperationalNotificationId),
+      false,
+    );
+    assert.equal(
+      switched.edges.find(({ node }) => node.id === operationalNotificationId)?.node.readAt,
+      operationalReadAt,
+    );
+  });
+
+  test('Suspended Accounts and guests cannot access Operational Notifications', async () => {
+    const auth = await createAuthenticatedSession(AccountState.SUSPENDED);
+    const profileId = encodeGlobalId('Profile', auth.profile.id);
+    const operationalNotification = await createOperationalNotification(auth.account.id, {
+      href: 'https://status.example.com/incident',
+      title: 'Service status update',
+    });
+    const operationalNotificationId = encodeGlobalId(
+      'OperationalNotification',
+      operationalNotification.id,
+    );
+
+    const query = `query OperationalNotificationAccess($notificationId: ID!) {
+      operationalNotification: node(id: $notificationId) {
+        ... on OperationalNotification { id }
+      }
+    }`;
+    const [suspended, anonymous] = await Promise.all([
+      requestGraphQL<{ operationalNotification: null }>(
+        query,
+        { notificationId: operationalNotificationId },
+        auth.token,
+      ),
+      requestGraphQL<{ operationalNotification: null }>(query, {
+        notificationId: operationalNotificationId,
+      }),
+    ]);
+    assert.deepEqual(suspended, { data: { operationalNotification: null } });
+    assert.deepEqual(anonymous, { data: { operationalNotification: null } });
+
+    const profileFeed = `query ProfileNotificationAccess($profileId: ID!) {
+      profile: node(id: $profileId) {
+        ... on Profile {
+          unreadNotificationCount
+          notifications(first: 1) { edges { node { id } } }
+        }
+      }
+    }`;
+    const [suspendedFeed, anonymousFeed] = await Promise.all([
+      requestGraphQL<unknown>(profileFeed, { profileId }, auth.token),
+      requestGraphQL<unknown>(profileFeed, { profileId }),
+    ]);
+    assert.ok(
+      suspendedFeed.errors?.some(({ extensions }) => extensions?.code === 'PERMISSION_DENIED'),
+    );
+    assert.ok(
+      anonymousFeed.errors?.some(({ extensions }) => extensions?.code === 'PERMISSION_DENIED'),
+    );
+
+    const markRead = `mutation MarkOperationalNotificationRead($ids: [ID!]!) {
+      markNotificationRead(input: { ids: $ids }) { notifications { id } }
+    }`;
+    const [read, anonymousRead] = await Promise.all([
+      requestGraphQL<unknown>(markRead, { ids: [operationalNotificationId] }, auth.token),
+      requestGraphQL<unknown>(markRead, { ids: [operationalNotificationId] }),
+    ]);
+    assert.equal(read.data, null);
+    assert.equal(read.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
+    assert.equal(anonymousRead.data, null);
+    assert.equal(anonymousRead.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
+
+    assert.equal(await notificationReadAt(operationalNotification.id), null);
+  });
+
   test('resolves FOLLOW_REQUEST rows through Node, list, unread count and Read', async () => {
     const auth = await createAuthenticatedSession();
     const recipient = await createProfile('follow-request-recipient');
@@ -1264,12 +1707,16 @@ describe('Notification GraphQL Node boundary', () => {
       await createFollowNotification(recipient.id, related.id);
       profileIds.push(encodeGlobalId('Profile', recipient.id));
     }
+    await createOperationalNotification(auth.account.id, {
+      href: '/account-notice',
+      title: 'Account notice',
+    });
 
     const selectedElsewhere = await loadUnreadNotificationCounts(profileIds, auth.token);
     assertNoGraphQLErrors(selectedElsewhere);
     assert.deepEqual(
       selectedElsewhere.data?.nodes.map((profile) => profile?.unreadNotificationCount),
-      profileIds.map(() => 1),
+      profileIds.map(() => 2),
     );
 
     await db
@@ -1280,7 +1727,7 @@ describe('Notification GraphQL Node boundary', () => {
     assertNoGraphQLErrors(withoutSelection);
     assert.deepEqual(
       withoutSelection.data?.nodes.map((profile) => profile?.unreadNotificationCount),
-      profileIds.map(() => 1),
+      profileIds.map(() => 2),
     );
 
     const unrelated = await createAuthenticatedSession();
@@ -2487,13 +2934,13 @@ const createRepostNotification = async (
   return { notification, post, repost };
 };
 
-const createAuthenticatedSession = async () => {
+const createAuthenticatedSession = async (accountState: AccountState = AccountState.ACTIVE) => {
   const account = await db
     .insert(Accounts)
     .values({
       displayName: 'Test Account',
       oidcSubject: `subject-${crypto.randomUUID()}`,
-      state: AccountState.ACTIVE,
+      state: accountState,
     })
     .returning()
     .then(firstOrThrow);
@@ -2513,6 +2960,22 @@ const createAuthenticatedSession = async () => {
 
   return { account, profile, session, token };
 };
+
+const createOperationalNotification = (
+  recipientAccountId: string,
+  data: CoreDb.OperationalNotificationData,
+) =>
+  db
+    .insert(Notifications)
+    .values({
+      data,
+      kind: NotificationKind.OPERATIONAL,
+      recipientAccountId,
+      recipientProfileId: null,
+      sourceId: crypto.randomUUID(),
+    })
+    .returning()
+    .then(firstOrThrow);
 
 const resetFixtures = async () => {
   await waitForProfileFollowWorkflows();

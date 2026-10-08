@@ -98,7 +98,6 @@ export const deriveContext = async (c: ServerContext): Promise<Context> => {
     const session = await db
       .select({
         id: Sessions.id,
-        applicationId: Sessions.applicationId,
         accountId: Sessions.accountId,
         activeProfileId: Sessions.activeProfileId,
       })

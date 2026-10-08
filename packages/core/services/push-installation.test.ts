@@ -303,6 +303,51 @@ test('all active installations fan out for every Account Profile', async () => {
   }
 });
 
+test('Operational Notifications select the recipient Account installations directly', async () => {
+  const fixture = await createFixture();
+  const [session] = fixture.sessions;
+  assert.ok(session);
+
+  try {
+    const installation = await db
+      .insert(PushInstallations)
+      .values({
+        accountId: fixture.account.id,
+        platform: PushInstallationPlatform.ANDROID,
+        registrationEpoch: Temporal.Now.instant().subtract({ seconds: 1 }),
+        sessionId: session.id,
+        token: `token-${crypto.randomUUID()}`,
+      })
+      .returning({ id: PushInstallations.id })
+      .then(firstOrThrow);
+    const notification = await db
+      .insert(Notifications)
+      .values({
+        data: { href: '/settings', title: 'Scheduled maintenance' },
+        kind: NotificationKind.OPERATIONAL,
+        recipientAccountId: fixture.account.id,
+        sourceId: crypto.randomUUID(),
+      })
+      .returning()
+      .then(firstOrThrow);
+
+    assert.deepEqual(
+      (await findEligiblePushInstallations({ notificationId: notification.id })).map(
+        ({ id }) => id,
+      ),
+      [installation.id],
+    );
+
+    await db
+      .update(Accounts)
+      .set({ state: AccountState.DISABLED })
+      .where(eq(Accounts.id, fixture.account.id));
+    assert.deepEqual(await findEligiblePushInstallations({ notificationId: notification.id }), []);
+  } finally {
+    await cleanupFixture(fixture);
+  }
+});
+
 test('stale provider invalidation leaves the refreshed token intact', async () => {
   const fixture = await createFixture();
   const [session] = fixture.sessions;

@@ -86,6 +86,7 @@ mockModule('react-native', {
   Platform: platform,
   Pressable: 'Pressable',
   StyleSheet: { create: (styles: unknown) => styles },
+  Text: 'Text',
   View: 'View',
   useWindowDimensions: () => ({ height: 800, width: 390 }),
 });
@@ -137,7 +138,10 @@ mockModule('@/components/ui/useSafeAreaPadding', {
 });
 mockModule('@/relay/RelayActorProvider', { RelayActorBoundary: PassThrough });
 mockModule('@/session/SessionProvider', {
-  useSession: () => ({ accountId, status: accountId ? 'valid' : 'guest' }),
+  useSession: () => ({
+    accountId,
+    status: accountId ? 'valid' : 'guest',
+  }),
 });
 mockModule('@/theme/ThemeProvider', {
   useElevation: () => ({ overlay: {} }),
@@ -151,6 +155,7 @@ mockModule('@/theme/ThemeProvider', {
 });
 mockModule('@/theme/tokens', {
   spacing: { lg: 24, xl: 32 },
+  textStyles: { uiLabelL: {} },
 });
 
 mockModule('./BottomTabBar', {

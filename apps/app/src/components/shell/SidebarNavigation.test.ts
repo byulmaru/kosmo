@@ -14,7 +14,9 @@ const mockModule = (specifier: string | URL, exports: object) =>
     exports,
   } as unknown as Parameters<typeof mock.module>[1]);
 
-let currentSession: { selectedProfile: Record<string, unknown> } | null;
+let currentSession: {
+  selectedProfile: Record<string, unknown>;
+} | null;
 let logoutError: string | null;
 let logoutPending: boolean;
 let presentationProps: PresentationProps | undefined;
