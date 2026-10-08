@@ -101,17 +101,13 @@ function createActionEnvironment() {
 }
 
 function ActionHarness({
-  context,
+  onUnpinned,
   post,
 }: {
-  context: {
-    firstPinnedPostId: string | null;
-    onUnpinned?: () => void;
-    profileIsLocal: boolean;
-  };
+  onUnpinned?: () => void;
   post: object;
 }) {
-  const action = useProfilePinAction(post as never, context);
+  const action = useProfilePinAction(post as never, onUnpinned);
   return createElement('ActionState', action, action.confirmation);
 }
 
@@ -121,7 +117,11 @@ const actionPost = {
   visibility: 'PUBLIC',
   content: { id: 'content-pin-action' },
   repostSource: null,
-  profile: { id: profileId, instance: { kind: 'LOCAL' } },
+  profile: {
+    id: profileId,
+    instance: { kind: 'LOCAL' },
+    pinnedPosts: { edges: [] },
+  },
 };
 
 async function renderAction(
@@ -134,8 +134,16 @@ async function renderAction(
       createElement(ReactRelay.RelayEnvironmentProvider, {
         environment,
         children: createElement(ActionHarness, {
-          context: { firstPinnedPostId, onUnpinned, profileIsLocal: true },
-          post: actionPost,
+          onUnpinned,
+          post: {
+            ...actionPost,
+            profile: {
+              ...actionPost.profile,
+              pinnedPosts: {
+                edges: firstPinnedPostId ? [{ node: { id: firstPinnedPostId } }] : [],
+              },
+            },
+          },
         }),
       }),
     );
@@ -242,6 +250,59 @@ describe('ProfilePinAction mutation lifecycle', () => {
     assert.deepEqual(toasts, []);
   });
 
+  it('hides a new pin when another post is the first visible pin', async () => {
+    const environment = createActionEnvironment();
+    await renderAction(environment, firstPostId);
+
+    assert.equal(actionState().props.item, undefined);
+    await act(async () => actionState().props.onMoreTriggerReady(() => undefined));
+    assert.equal(requests.length, 0);
+  });
+
+  it('skips a stale empty edge when deriving the first visible pin', async () => {
+    const environment = createActionEnvironment();
+    await act(async () => {
+      renderer = create(
+        createElement(ReactRelay.RelayEnvironmentProvider, {
+          environment,
+          children: createElement(ActionHarness, {
+            post: {
+              ...actionPost,
+              profile: {
+                ...actionPost.profile,
+                pinnedPosts: { edges: [{ node: null }, { node: { id: actionPost.id } }] },
+              },
+            },
+          }),
+        }),
+      );
+    });
+
+    assert.equal(actionState().props.item.label, '프로필 고정 해제');
+  });
+
+  it('blocks another pin using the first non-empty edge after a stale edge', async () => {
+    const environment = createActionEnvironment();
+    await act(async () => {
+      renderer = create(
+        createElement(ReactRelay.RelayEnvironmentProvider, {
+          environment,
+          children: createElement(ActionHarness, {
+            post: {
+              ...actionPost,
+              profile: {
+                ...actionPost.profile,
+                pinnedPosts: { edges: [{ node: null }, { node: { id: firstPostId } }] },
+              },
+            },
+          }),
+        }),
+      );
+    });
+
+    assert.equal(actionState().props.item, undefined);
+  });
+
   it('closes unpin confirmation before the request and allows a confirmed retry', async () => {
     const environment = createActionEnvironment();
     let unpinned = 0;
@@ -279,7 +340,18 @@ describe('ProfilePinAction mutation lifecycle', () => {
       data: {
         unpinProfilePost: {
           changed: true,
-          profile: { id: profileId },
+          profile: {
+            id: profileId,
+            pinnedPosts: {
+              edges: [],
+              pageInfo: {
+                endCursor: null,
+                hasNextPage: false,
+                hasPreviousPage: false,
+                startCursor: null,
+              },
+            },
+          },
         },
       },
     });

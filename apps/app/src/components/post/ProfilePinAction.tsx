@@ -12,12 +12,6 @@ import type { ProfilePinAction_post$key } from './__generated__/ProfilePinAction
 import type { ProfilePinActionPinProfilePostMutation } from './__generated__/ProfilePinActionPinProfilePostMutation.graphql';
 import type { ProfilePinActionUnpinProfilePostMutation } from './__generated__/ProfilePinActionUnpinProfilePostMutation.graphql';
 
-export type ProfilePinContext = Readonly<{
-  firstPinnedPostId: string | null;
-  profileIsLocal: boolean;
-  onUnpinned?: () => void;
-}>;
-
 const profilePinFragment = graphql`
   fragment ProfilePinAction_post on Post {
     id
@@ -33,6 +27,13 @@ const profilePinFragment = graphql`
       id
       instance {
         kind
+      }
+      pinnedPosts(first: 20) {
+        edges {
+          node {
+            id
+          }
+        }
       }
     }
   }
@@ -104,7 +105,7 @@ function isDurableProfilePinResult(
 
 export function useProfilePinAction(
   postKey: ProfilePinAction_post$key,
-  context: ProfilePinContext | null | undefined,
+  onUnpinned?: () => void,
 ): Readonly<{
   confirmation: ReactNode;
   item?: ActionMenuItem;
@@ -125,16 +126,17 @@ export function useProfilePinAction(
   const focusTriggerRef = useRef<() => void>(() => undefined);
   const pending = isPinning || isUnpinning;
 
-  const pinned = context?.firstPinnedPostId === post.id;
+  const firstPinnedPostId =
+    post.profile.pinnedPosts.edges.find((edge) => edge.node != null)?.node?.id ?? null;
+  const pinned = firstPinnedPostId === post.id;
   const eligible = Boolean(
-    context?.profileIsLocal &&
     selectedProfileId === post.profile.id &&
     post.profile.instance.kind === 'LOCAL' &&
     post.state === 'ACTIVE' &&
     post.content &&
     ['PUBLIC', 'UNLISTED', 'FOLLOWERS'].includes(post.visibility),
   );
-  const blockedByExistingPin = Boolean(context?.firstPinnedPostId && !pinned);
+  const blockedByExistingPin = Boolean(firstPinnedPostId && !pinned);
   const handleCompleted = useCallback(
     (operation: ProfilePinOperation, result: ProfilePinMutationPayload | null | undefined) => {
       if (!isDurableProfilePinResult(result, post.profile.id)) {
@@ -142,10 +144,10 @@ export function useProfilePinAction(
         return;
       }
       if (operation === 'unpin') {
-        context?.onUnpinned?.();
+        onUnpinned?.();
       }
     },
-    [context, post.profile.id, showToast],
+    [onUnpinned, post.profile.id, showToast],
   );
 
   const onSelect = useCallback(() => {
