@@ -26,82 +26,9 @@ import type { FollowingAccountsImportInput } from '@kosmo/core/temporal/workflow
 import type * as activities from './activities';
 
 const workflowsPath = new URL('./workflows/index.ts', import.meta.url).pathname;
-const legacyWorkflowsPath = new URL(
-  './test-fixtures/legacy-following-accounts-import.ts',
-  import.meta.url,
-).pathname;
 const followerProfileId = '00000000-0000-8000-8000-000000000101';
 const otherFollowerProfileId = '00000000-0000-8000-8000-000000000103';
 const remoteProfileId = '00000000-0000-8000-8000-000000000102';
-
-test(
-  'Legacy Following Accounts Import history replays with the current Workflow bundle',
-  { timeout: 120_000 },
-  async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
-    });
-    t.after(() => environment.teardown());
-
-    const taskQueue = `${KOSMO_TASK_QUEUE}-following-import-replay-${process.pid}`;
-    const calls: Array<{ name: string; input: unknown }> = [];
-    const worker = await Worker.create({
-      activities: {
-        resolveImportedLocalProfileActivity: async ({ handle }) => {
-          const result = `local:${handle}`;
-          calls.push({ name: 'resolve', input: { handle } });
-          return result;
-        },
-        followImportedProfileActivity: async (input) => {
-          calls.push({ name: 'follow', input });
-        },
-      } satisfies Pick<
-        typeof activities,
-        'resolveImportedLocalProfileActivity' | 'followImportedProfileActivity'
-      >,
-      connection: environment.nativeConnection,
-      namespace: environment.namespace,
-      taskQueue,
-      workflowsPath: legacyWorkflowsPath,
-    });
-
-    const input: FollowingAccountsImportInput = {
-      followerProfileId,
-      addresses: [
-        { kind: 'local', handle: 'legacyfirst' },
-        { kind: 'local', handle: 'legacysecond' },
-      ],
-    };
-
-    await worker.runUntil(async () => {
-      const handle = await environment.client.workflow.start('followingAccountsImportWorkflow', {
-        args: [input],
-        taskQueue,
-        workflowId: `${taskQueue}:legacy-replay`,
-      });
-      await handle.result();
-
-      assert.deepEqual(calls, [
-        { name: 'resolve', input: { handle: 'legacyfirst' } },
-        {
-          name: 'follow',
-          input: { followerProfileId, followeeProfileId: 'local:legacyfirst' },
-        },
-        { name: 'resolve', input: { handle: 'legacysecond' } },
-        {
-          name: 'follow',
-          input: { followerProfileId, followeeProfileId: 'local:legacysecond' },
-        },
-      ]);
-
-      await Worker.runReplayHistory(
-        { workflowsPath },
-        await handle.fetchHistory(),
-        handle.workflowId,
-      );
-    });
-  },
-);
 
 test('Remote Profile Activities classify fetch errors, reject missing origins, and propagate database errors', async (t) => {
   const origin = 'https://worker-local.example';

@@ -7,7 +7,6 @@ import {
   ApplicationFailure,
   continueAsNew,
   log,
-  patched,
   proxyActivities,
   workflowInfo,
 } from '@temporalio/workflow';
@@ -100,7 +99,6 @@ export async function followingAccountsImportWorkflow(
   const parentWorkflowId = workflowInfo().workflowId;
   const start = parsed.data.afterIndex ?? 0;
   const end = Math.min(start + BATCH_SIZE, addresses.length);
-  const parallel = patched('following-accounts-import-parallel-v1');
 
   const processAddress = async (index: number): Promise<void> => {
     const address = addresses[index]!;
@@ -150,15 +148,9 @@ export async function followingAccountsImportWorkflow(
     }
   };
 
-  if (parallel) {
-    await settleEffects(
-      Array.from({ length: end - start }, (_, offset) => processAddress(start + offset)),
-    );
-  } else {
-    for (let index = start; index < end; index += 1) {
-      await processAddress(index);
-    }
-  }
+  await settleEffects(
+    Array.from({ length: end - start }, (_, offset) => processAddress(start + offset)),
+  );
 
   if (end < addresses.length) {
     await continueAsNew<typeof followingAccountsImportWorkflow>({
