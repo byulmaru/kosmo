@@ -253,12 +253,13 @@ export default function PrivacyScreen() {
       <PolicySection title="6. 이용자와 법정대리인의 권리">
         <PolicyParagraph>
           이용자와 법정대리인은 개인정보의 열람, 전송, 정정·삭제, 처리정지 또는 동의 철회를 요청할
-          수 있습니다. 아래 연락처로 요청하면 본인 또는 정당한 대리인인지 확인한 뒤 관계 법령에 따라
-          처리합니다. 법령이 정한 사유가 있는 경우 일부 요청이 제한될 수 있으며 그 사유를
-          안내합니다.
+          수 있습니다. Kosmo 계정 탈퇴는 탈퇴하려는 Kosmo 계정으로 로그인한 뒤 Kosmo 내 설정에서
+          신청해 주세요. 그 밖의 권리 행사 요청은 아래 연락처로 접수할 수 있으며, 본인 또는 정당한
+          대리인인지 확인한 뒤 관계 법령에 따라 처리합니다. 법령이 정한 사유가 있는 경우 일부 요청이
+          제한될 수 있으며 그 사유를 안내합니다.
         </PolicyParagraph>
         <PolicyEmailLink />
-        <PolicyBullet>계정 정보의 열람·정정, 계정 삭제와 처리정지</PolicyBullet>
+        <PolicyBullet>계정 정보의 열람·정정과 처리정지</PolicyBullet>
         <PolicyBullet>그 밖의 개인정보 관련 요청</PolicyBullet>
         <PolicyParagraph>
           PostHog 분석 데이터의 열람·삭제·처리정지도 같은 연락처로 요청할 수 있습니다.
