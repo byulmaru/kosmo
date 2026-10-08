@@ -333,7 +333,11 @@ test('Notification recipient constraint requires exactly one recipient independe
   await assert.rejects(insertNotification(profile.id, account.id), assertRecipientCheckViolation);
 
   const profileNotification = await insertNotification(profile.id, null);
-  const accountNotification = await insertNotification(null, account.id, NotificationKind.OPERATIONAL);
+  const accountNotification = await insertNotification(
+    null,
+    account.id,
+    NotificationKind.OPERATIONAL,
+  );
   const operationalProfileNotification = await insertNotification(
     profile.id,
     null,
