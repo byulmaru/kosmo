@@ -19,6 +19,7 @@ KOSMO의 UI/시각 디자인, 상호작용 표현, 접근성 결정을 기록하
 - [settings.md](./settings.md) — 인증 설정 화면의 시각 구조, 반응형 배치, 공통 상태 표현과 접근성
 - [feedback.md](./feedback.md) — Web 피드백 page의 정보 위계와 후속 popup 재사용 경계
 - [typography.md](./typography.md) — 폰트 사용 규칙
+- [support-acknowledgement.md](./support-acknowledgement.md) — AI·SW마에스트로 지원 문구와 표시 위치
 - [breakpoints.md](./breakpoints.md) — 레이아웃 브레이크포인트 단계와 컨벤션
 - [post-action-bar.md](./post-action-bar.md) — Post Action Bar의 28px geometry, 배치, Repost 메뉴와 오류 toast 계약
 - [post-media-gallery.md](./post-media-gallery.md) — Post 첨부 이미지 1~4장의 surface, Sensitive·오류·상호작 경계

@@ -156,6 +156,8 @@ Secondary action의 Dark hover/pressed처럼 Button fill을 교체하는 opaque 
 ## 대비 계약
 
 - 일반 크기 본문과 Link는 WCAG AA `4.5:1` 이상을 유지한다.
+  [AI·SW마에스트로 지원 표기](./support-acknowledgement.md#의도적-접근성-예외)는 사용자 승인으로
+  이 기준을 충족하지 않는 낮은 대비를 수용한 한정적 예외이며, AA 충족으로 보고하지 않는다.
 - focus ring과 정보를 전달하는 control boundary는 인접 표면과 `3:1` 이상을 유지한다.
 - `border/default`와 `border/subtle`은 장식적 구분선이며 상태나 클릭 가능성을 단독으로 전달하지 않는다.
 - Disabled는 색상만으로 상태를 전달하지 않는다.
