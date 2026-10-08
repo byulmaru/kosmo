@@ -37,6 +37,7 @@ let localOutboundFederation: typeof LocalOutboundFederation;
 let Media: typeof CoreDb.Media;
 let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
+let PostMentions: typeof CoreDb.PostMentions;
 let Posts: typeof CoreDb.Posts;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
 let Profiles: typeof CoreDb.Profiles;
@@ -60,6 +61,7 @@ describe('ActivityPub Local Post delivery', () => {
       Media,
       pg,
       PostContents,
+      PostMentions,
       Posts,
       ProfileFollows,
       Profiles,
@@ -137,6 +139,76 @@ describe('ActivityPub Local Post delivery', () => {
       );
       assert.equal(call.recipients[0]?.endpoints?.sharedInbox?.href, parentAuthor.sharedInboxUri);
     }
+  });
+
+  test('Create(Note) delivery reuses the resolved Mention projection without adding recipients', async () => {
+    const author = await createProfile({ instanceId: localInstanceId });
+    const follower = await createRemoteActor({ handle: 'mention-delivery-follower' });
+    const mentionTarget = await createRemoteActor({ handle: 'mention-delivery-target' });
+    await db.insert(ProfileFollows).values({
+      followeeProfileId: author.id,
+      followerProfileId: follower.profile.id,
+    });
+    const post = await createPost(author.id);
+    assert.ok(post.currentContentId);
+    await db
+      .update(PostContents)
+      .set({
+        document: {
+          body: {
+            content: [
+              {
+                content: [
+                  { text: 'Hello ', type: 'text' },
+                  { attrs: { profileId: mentionTarget.profile.id }, type: 'mention' },
+                ],
+                type: 'paragraph',
+              },
+            ],
+            type: 'doc',
+          },
+          summary: null,
+          version: 1,
+        },
+      })
+      .where(eq(PostContents.id, post.currentContentId));
+    await db.insert(PostMentions).values({
+      postContentId: post.currentContentId,
+      profileId: mentionTarget.profile.id,
+    });
+    const fixture = createContextFixture();
+    mock.method(localOutboundFederation, 'createContext', () => fixture.context);
+
+    await sendLocalPostCreate(post.id);
+
+    assert.equal(fixture.calls.length, 1);
+    const call = fixture.calls[0];
+    assert.ok(call?.activity instanceof Create);
+    const note = await call.activity.getObject();
+    assert.ok(note instanceof Note);
+    assert.equal(
+      note.content?.toString(),
+      `<p>Hello <span class="h-card"><a href="${mentionTarget.actorUri}" class="u-url mention">@mention-delivery-target@${new URL(mentionTarget.actorUri).hostname}</a></span></p>`,
+    );
+    const serializedNote = (await note.toJsonLd()) as {
+      readonly tag?: { readonly href?: string; readonly name?: string; readonly type?: string };
+    };
+    assert.deepEqual(
+      {
+        href: serializedNote.tag?.href,
+        name: serializedNote.tag?.name,
+        type: serializedNote.tag?.type,
+      },
+      {
+        href: mentionTarget.actorUri,
+        name: `@mention-delivery-target@${new URL(mentionTarget.actorUri).hostname}`,
+        type: 'Mention',
+      },
+    );
+    assert.deepEqual(
+      call.recipients.map((recipient) => recipient.id?.href),
+      [follower.actorUri],
+    );
   });
 
   test('최초 Create(Note)가 조회 시점의 ordered Media 표현과 sensitive를 그대로 전달한다', async () => {
