@@ -90,7 +90,13 @@ const unpinMutation = graphql`
 `;
 
 const failureMessage = '고정 상태를 변경하지 못했어요. 다시 시도해 주세요.';
-type ProfilePinOperation = 'pin' | 'unpin';
+const replacementFailureMessage =
+  '기존 고정은 해제됐지만 새 게시글을 고정하지 못했어요. 다시 시도해 주세요.';
+type ProfilePinOperation = 'pin' | 'replace' | 'unpin';
+type SelectedProfilePinOperation = Readonly<{
+  existingPostId: string | null;
+  operation: ProfilePinOperation;
+}>;
 
 type ProfilePinMutationPayload =
   | ProfilePinActionPinProfilePostMutation['response']['pinProfilePost']
@@ -118,7 +124,9 @@ export function useProfilePinAction(
   const [commitPin, isPinning] = useMutation<ProfilePinActionPinProfilePostMutation>(pinMutation);
   const [commitUnpin, isUnpinning] =
     useMutation<ProfilePinActionUnpinProfilePostMutation>(unpinMutation);
-  const [selectedOperation, setSelectedOperation] = useState<ProfilePinOperation | null>(null);
+  const [selectedOperation, setSelectedOperation] = useState<SelectedProfilePinOperation | null>(
+    null,
+  );
   const [confirmationPhase, setConfirmationPhase] = useState<'open' | 'cancel' | 'confirm'>(
     'cancel',
   );
@@ -136,27 +144,16 @@ export function useProfilePinAction(
     post.content &&
     ['PUBLIC', 'UNLISTED', 'FOLLOWERS'].includes(post.visibility),
   );
-  const blockedByExistingPin = Boolean(firstPinnedPostId && !pinned);
-  const handleCompleted = useCallback(
-    (operation: ProfilePinOperation, result: ProfilePinMutationPayload | null | undefined) => {
-      if (!isDurableProfilePinResult(result, post.profile.id)) {
-        showToast(failureMessage, { tone: 'danger' });
-        return;
-      }
-      if (operation === 'unpin') {
-        onUnpinned?.();
-      }
-    },
-    [onUnpinned, post.profile.id, showToast],
-  );
-
   const onSelect = useCallback(() => {
-    if (!eligible || pending || blockedByExistingPin || selectedOperation) {
+    if (!eligible || pending || selectedOperation) {
       return;
     }
-    setSelectedOperation(pinned ? 'unpin' : 'pin');
+    setSelectedOperation({
+      existingPostId: pinned ? post.id : firstPinnedPostId,
+      operation: pinned ? 'unpin' : firstPinnedPostId ? 'replace' : 'pin',
+    });
     setConfirmationPhase('open');
-  }, [blockedByExistingPin, eligible, pending, pinned, selectedOperation]);
+  }, [eligible, firstPinnedPostId, pending, pinned, post.id, selectedOperation]);
 
   const closeConfirmation = useCallback(() => {
     if (confirmationPhase === 'open') {
@@ -165,46 +162,73 @@ export function useProfilePinAction(
   }, [confirmationPhase]);
 
   const onDismiss = useCallback(() => {
-    const operation = selectedOperation;
+    const selection = selectedOperation;
     setSelectedOperation(null);
     focusTriggerRef.current();
-    if (
-      !operation ||
-      confirmationPhase !== 'confirm' ||
-      pending ||
-      !eligible ||
-      blockedByExistingPin
-    ) {
+    if (!selection || confirmationPhase !== 'confirm' || pending || !eligible) {
       return;
     }
 
-    const onError = () => {
-      showToast(failureMessage, { tone: 'danger' });
+    const { existingPostId, operation } = selection;
+    const commitTargetPin = (failureToast: string) => {
+      commitPin({
+        onCompleted: (response) => {
+          if (!isDurableProfilePinResult(response.pinProfilePost, post.profile.id)) {
+            showToast(failureToast, { tone: 'danger' });
+          }
+        },
+        onError: () => {
+          showToast(failureToast, { tone: 'danger' });
+        },
+        variables: { postId: post.id },
+      });
     };
     if (operation === 'unpin') {
       commitUnpin({
         onCompleted: (response) => {
-          handleCompleted(operation, response.unpinProfilePost);
+          if (!isDurableProfilePinResult(response.unpinProfilePost, post.profile.id)) {
+            showToast(failureMessage, { tone: 'danger' });
+            return;
+          }
+          onUnpinned?.();
         },
-        onError,
+        onError: () => {
+          showToast(failureMessage, { tone: 'danger' });
+        },
         variables: { postId: post.id },
       });
       return;
     }
-    commitPin({
-      onCompleted: (response) => handleCompleted(operation, response.pinProfilePost),
-      onError,
-      variables: { postId: post.id },
-    });
+    if (operation === 'replace') {
+      if (!existingPostId) {
+        showToast(failureMessage, { tone: 'danger' });
+        return;
+      }
+      commitUnpin({
+        onCompleted: (response) => {
+          if (!isDurableProfilePinResult(response.unpinProfilePost, post.profile.id)) {
+            showToast(failureMessage, { tone: 'danger' });
+            return;
+          }
+          commitTargetPin(replacementFailureMessage);
+        },
+        onError: () => {
+          showToast(failureMessage, { tone: 'danger' });
+        },
+        variables: { postId: existingPostId },
+      });
+      return;
+    }
+    commitTargetPin(failureMessage);
   }, [
     commitPin,
     commitUnpin,
     confirmationPhase,
-    blockedByExistingPin,
     eligible,
-    handleCompleted,
     pending,
     post.id,
+    post.profile.id,
+    onUnpinned,
     selectedOperation,
     showToast,
   ]);
@@ -219,17 +243,25 @@ export function useProfilePinAction(
       onDismiss={onDismiss}
       onShow={() => cancelRef.current?.focus()}
       role="alertdialog"
-      title={selectedOperation === 'unpin' ? '프로필 고정을 해제할까요?' : '프로필에 고정할까요?'}
+      title={
+        selectedOperation.operation === 'unpin'
+          ? '프로필 고정을 해제할까요?'
+          : selectedOperation.operation === 'replace'
+            ? '고정 게시글을 바꿀까요?'
+            : '프로필에 고정할까요?'
+      }
       visible={confirmationPhase === 'open'}
     >
       <ConfirmationContent
         cancelLabel="취소"
         cancelRef={cancelRef}
-        confirmLabel={selectedOperation === 'unpin' ? '고정 해제' : '고정'}
+        confirmLabel={selectedOperation.operation === 'unpin' ? '고정 해제' : '고정'}
         message={
-          selectedOperation === 'unpin'
+          selectedOperation.operation === 'unpin'
             ? '프로필 상단에서 이 게시글을 제거해요. 게시글은 삭제되지 않아요.'
-            : '이 게시글을 프로필 상단에 표시해요. 게시글은 삭제되지 않아요.'
+            : selectedOperation.operation === 'replace'
+              ? '기존 고정을 해제하고 이 게시글을 고정해요.'
+              : '이 게시글을 프로필 상단에 표시해요. 게시글은 삭제되지 않아요.'
         }
         onCancel={closeConfirmation}
         onConfirm={() => {
@@ -241,7 +273,7 @@ export function useProfilePinAction(
     </ModalSheet>
   ) : null;
 
-  if (!eligible || blockedByExistingPin) {
+  if (!eligible) {
     return { confirmation, onMoreTriggerReady, pending };
   }
 

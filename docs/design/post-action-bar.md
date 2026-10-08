@@ -266,22 +266,27 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   Remote는 원격 순서의 전체 pin을 페이지별로 표시한다. Post action surface는 Home·Search·Detail·Profile 어디에서나
   동일한 owner action을 제공한다.
 - Production `useProfilePinAction`이 `pinProfilePost`·`unpinProfilePost` Relay mutation과 `profile.pinnedPosts`
-  projection을 소유하고 `PostActionSurface`가 메뉴를 조합한다. 기존 pin이 있으면 새 pin 항목은 숨기고, 교체는 제공하지 않으며 해제와 새 고정을
-  두 번의 명시적 동작으로 수행한다. mutation 응답은 `PostListItem_post`를 포함해 다음 visible pin의
-  normalized store 필드를 유지한다. 해제로 고정 카드가 사라지면 목록으로 focus를 옮기고, chronology에서
-  실행한 경우에는 남아 있는 More trigger의 focus를 유지한다.
+  projection을 소유하고 `PostActionSurface`가 메뉴를 조합한다. 기존 pin이 있는 owner 게시물에도 `프로필에 고정`을
+  제공하며, 확인하면 기존 pin을 `unpinProfilePost`로 해제한 뒤 성공 응답을 검증하고 대상 게시물을
+  `pinProfilePost`로 고정한다. mutation 응답은 `PostListItem_post`를 포함해 다음 visible pin의 normalized store
+  필드를 유지한다. 해제로 고정 카드가 사라지면 목록으로 focus를 옮기고, chronology에서 실행한 경우에는 남아 있는
+  More trigger의 focus를 유지한다.
 - 기존 `usePostMoreMenuItem`이 복사 URL·클립보드 실패 처리를 유지하고, `PostDeletionAction`이 삭제
   eligibility·확인창·mutation·cache·실패 처리를 유지한다. Storybook도 production 메뉴를 사용해 로그인 사용자의 신고와 visitor의 뮤트를 함께 검증한다. 실제 고정 자격·정책은 PROD-809의 Profile consumer와 서버 계약을 따른다.
 - 이 메뉴의 sheet 아이콘은 DSN-55 source에 맞춰 24px을 사용한다. 공용 `ActionMenu`의 다른 소비자는
   기존 20px을 유지한다. Web 메뉴는 기존 18px을 유지한다.
 - fixture의 모의 요청 중 실제 More trigger의 busy·disabled 표시를 검증한다. 모의 완료 뒤 More trigger로
-  focus를 돌리고, 실패하면 기존 고정 표시를 유지하며 공용 toast에 한국어 오류를 표시한다. 오류 원문은
-  표시하지 않는다. 메뉴를 다시 열어 재시도할 수 있지만, 이는 실제 Pin 요청의 중복 방지·실패 복구 증거가 아니다.
-- 고정과 고정 해제는 선택 즉시 요청하지 않고 각각 `프로필에 고정할까요?`·`프로필 고정을 해제할까요?`
-  alertdialog에서 `취소`와 `고정`·`고정 해제`를 확인한다. 설명은 프로필 상단 표시 또는 제거와 게시글이
-  삭제되지 않는다는 결과를 함께 알린다. 취소하면 요청 없이 닫고 More trigger로 focus를 복원한다. 확인하면
-  dialog를 닫은 뒤 요청하며 pending 중 More의 중복 실행을 막는다. 실패하면 오류 toast를 표시하고 메뉴에서
-  다시 확인해 재시도한다. 고정 목록에서 제거되는 해제 경로는 기존 목록 focus fallback을 유지한다.
+  focus를 돌리고, 단일 요청 실패에서는 기존 normalized 표시를 유지하며 교체에서 기존 해제 후 새 고정이
+  실패하면 해제된 상태를 유지한 채 공용 toast에 한국어 오류를 표시한다. 오류 원문은 표시하지 않는다.
+  메뉴를 다시 열어 재시도할 수 있지만, 이는 실제 Pin 요청의 중복 방지·실패 복구 증거가 아니다.
+- 고정, 기존 pin 교체, 고정 해제는 선택 즉시 요청하지 않고 각각 `프로필에 고정할까요?`·
+  `고정 게시글을 바꿀까요?`·`프로필 고정을 해제할까요?` alertdialog에서 `취소`와
+  `고정`·`고정 해제`를 확인한다. 교체는 기존 해제가 성공한 뒤에만 새 고정을 요청하며, 해제 실패 시 중단한다.
+  해제 후 새 고정이 실패하면 `기존 고정은 해제됐지만 새 게시글을 고정하지 못했어요. 다시 시도해 주세요.`를
+  표시하고 자동 롤백하지 않는다. 교체 설명은 `기존 고정을 해제하고 이 게시글을 고정해요.`로 간결하게
+  안내한다. 취소하면 요청 없이 닫고 More trigger로 focus를 복원한다. 확인하면 dialog를 닫은 뒤 요청하며
+  두 순차 요청 사이에도 pending 중 More의 중복 실행을 막는다. 고정 목록에서 제거되는 해제 경로는 기존
+  목록 focus fallback을 유지한다.
 - `KOSMO/Patterns/Profile/Pin Action`의 Playground는 수동 Controls·Actions용이며 자동 조작은 Controls가
   비활성화된 `Tests`에 둔다. Controls는 owner/visitor, pin/unpin, 요청 success/pending/error를 제공한다.
 - 2026-09-08 PROD-863 범위 확정에 따라 empty·removed·unavailable·loading·error 전용 상태 카드와
@@ -290,7 +295,7 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   사용하도록 정렬한다. Storybook의 pending·error·focus 검증은 request observer로 응답을 지연·실패시켜
   수행하며, 원격 Featured sync와 Native runtime QA는 별도 통합 범위로 남긴다.
 - 이 이관은 PROD-973의 기존 API·ordered relation과 Profile route의 두 connection을 연결한다. 새 API·schema·
-  replacement/reorder 계약은 추가하지 않는다.
+  reorder 계약은 추가하지 않는다.
 - 2026-09-09 로컬 검증: Relay·TypeScript·lint·Storybook 빌드와 Pin·PostActionBar·Posts의 123개 테스트가
   통과했다. 새 정적 빌드의 키보드 고정 모의 실행·표시 전환·More focus 복귀를 확인했고, 완료 상태의
   접근성 재검사는 위반 0건이었다. 이 기록은 fixture의 공용 UI 검증이며 실제 Pin mutation 증거가 아니다.

@@ -17,7 +17,7 @@ import type { RequestParameters, Variables } from 'relay-runtime';
 import type { ProfilePinActionStoriesQuery as ProfilePinActionStoriesQueryType } from './__generated__/ProfilePinActionStoriesQuery.graphql';
 
 type Outcome = 'success' | 'error' | 'pending';
-type ProfilePinOperation = 'pin' | 'unpin';
+type ProfilePinOperation = 'pin' | 'replace' | 'unpin';
 
 type StoryArgs = {
   action: ProfilePinOperation;
@@ -76,6 +76,22 @@ function storyPinnedPosts(isPinned: boolean) {
   };
 }
 
+function storyPinnedPostsForAction(action: ProfilePinOperation) {
+  const pinnedPostId =
+    action === 'unpin' ? storyPost.id : action === 'replace' ? 'profile-pin-existing-post' : null;
+  return {
+    edges: pinnedPostId
+      ? [{ cursor: 'pin-cursor', node: { __typename: 'Post' as const, id: pinnedPostId } }]
+      : [],
+    pageInfo: {
+      endCursor: pinnedPostId ? 'pin-cursor' : null,
+      hasNextPage: false,
+      hasPreviousPage: false,
+      startCursor: pinnedPostId ? 'pin-cursor' : null,
+    },
+  };
+}
+
 function storyPostWithPinState(isPinned: boolean) {
   return {
     ...storyPost,
@@ -103,7 +119,7 @@ function Fixture({ presentation }: StoryArgs) {
   return (
     <View style={styles.fixture}>
       <PostListItem
-        pinned={postNode.profile.pinnedPosts.edges.length > 0}
+        pinned={postNode.profile.pinnedPosts.edges.some((edge) => edge.node?.id === storyPost.id)}
         post={postNode.post}
         presentation={presentation}
       />
@@ -112,9 +128,14 @@ function Fixture({ presentation }: StoryArgs) {
 }
 
 function createStoryData(action: ProfilePinOperation) {
-  const isPinned = action === 'unpin';
   return {
-    node: storyPostWithPinState(isPinned),
+    node: {
+      ...storyPost,
+      profile: {
+        ...storyPost.profile,
+        pinnedPosts: storyPinnedPostsForAction(action),
+      },
+    },
   };
 }
 const deletionResponse = { deletePost: { postId: storyPost.id } };
@@ -244,7 +265,7 @@ const meta = {
     viewer: 'owner',
   },
   argTypes: {
-    action: { control: 'inline-radio', options: ['pin', 'unpin'] },
+    action: { control: 'inline-radio', options: ['pin', 'replace', 'unpin'] },
     outcome: { control: 'inline-radio', options: ['success', 'error', 'pending'] },
     viewer: { control: 'inline-radio', options: ['owner', 'visitor'] },
   },
@@ -295,6 +316,7 @@ export const Playground: Story = {
   parameters: { controls: { disable: false } },
 };
 export const OwnerPinned: Story = { args: { action: 'unpin' } };
+export const OwnerReplacement: Story = { args: { action: 'replace' } };
 export const VisitorPinned: Story = { args: { viewer: 'visitor' } };
 export const Mobile: Story = {
   args: { action: 'unpin', presentation: 'mobile' },
