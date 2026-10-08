@@ -2386,6 +2386,7 @@ function ReplyComposerContractContents({
       onPostCreated={onPostCreated}
       profile={composerProfile}
       replyParentId="post-parent"
+      replyParentVisibility="UNLISTED"
     />
   );
 }
@@ -7647,8 +7648,8 @@ export const ComposerReplyMutationContract: Story = {
 export const ComposerReplyProfileDefaultVisibilitySeed: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    expect(canvas.getByRole('button', { name: '공개 범위: 공개' })).toBeVisible();
-    await userEvent.click(canvas.getByRole('button', { name: '공개 범위: 공개' }));
+    expect(canvas.getByRole('button', { name: '공개 범위: 조용한 공개' })).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: '공개 범위: 조용한 공개' }));
     const menu = await canvas.findByRole('menu', { name: '공개 범위 선택' });
     expect(within(menu).getAllByRole('menuitemradio')).toHaveLength(4);
     expect(within(menu).getByRole('menuitemradio', { name: '지정 멤버만' })).toBeVisible();
