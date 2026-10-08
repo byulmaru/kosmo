@@ -21,8 +21,9 @@ export default function AccountDeletionScreen() {
           탈퇴하려는 Kosmo 계정으로 로그인한 뒤 Kosmo 내 설정에서 계정 탈퇴를 신청해 주세요.
         </PolicyParagraph>
         <PolicyParagraph>
-          계정 탈퇴 안내에 관한 질문은 아래 연락처로 문의해 주세요. 이 연락처로는 계정 탈퇴 신청을
-          접수하지 않습니다.
+          계정 탈퇴 안내에 관한 질문은 아래 연락처로 문의해 주세요. Kosmo 내 설정에서 탈퇴를 신청할
+          수 없는 경우 아래 이메일로 계정 탈퇴를 요청할 수 있으며, 이메일 요청은 계정 소유자 확인 후
+          처리합니다.
         </PolicyParagraph>
         <PolicyEmailLink />
       </PolicySection>
