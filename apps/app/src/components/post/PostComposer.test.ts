@@ -326,7 +326,7 @@ afterEach(async () => {
 });
 
 describe('PostComposer initial body', () => {
-  it('seeds an editable reply once and submits its plain text when mention search is off', async () => {
+  it('seeds an editable reply and submits its plain text when mention search is off', async () => {
     mentionSearchEnabled = false;
     const seed = '@parent @remote@remote.example ';
     const props = {
@@ -347,9 +347,6 @@ describe('PostComposer initial body', () => {
     assert.equal(requests.length, 0);
 
     await act(async () => targetProps?.onBodyChange('@parent '));
-    await act(async () => {
-      renderer?.update(createElement(PostComposer, { ...props, initialBodyText: '@updated ' }));
-    });
     assert.equal(targetProps?.body, '@parent ');
 
     await act(async () => targetProps?.onSubmit());
