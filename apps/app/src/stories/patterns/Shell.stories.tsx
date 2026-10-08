@@ -2774,6 +2774,7 @@ export const UniversalFull: Story = {
     }
     const rightRailStyle = rightRail ? view?.getComputedStyle(rightRail) : undefined;
     const privacyLink = canvas.getByRole('link', { name: '개인정보 처리방침' });
+    const supportAcknowledgement = canvas.getByText(/이 성과는 2026년도/);
     const rightRailRect = rightRail?.getBoundingClientRect();
     const privacyLinkRect = privacyLink.getBoundingClientRect();
 
@@ -2786,7 +2787,12 @@ export const UniversalFull: Story = {
     expect(rightRail?.scrollWidth ?? 1).toBeLessThanOrEqual(rightRail?.clientWidth ?? 0);
     expect(privacyLink).toHaveAttribute('href', '/privacy');
     expect(canvas.queryByText(/^버전:/)).toBeNull();
-    expect((rightRailRect?.bottom ?? 0) - privacyLinkRect.bottom).toBeLessThanOrEqual(spacing.sm);
+    expect(supportAcknowledgement.getBoundingClientRect().top).toBeGreaterThanOrEqual(
+      privacyLinkRect.bottom,
+    );
+    expect(
+      (rightRailRect?.bottom ?? 0) - supportAcknowledgement.getBoundingClientRect().bottom,
+    ).toBeLessThanOrEqual(spacing.sm);
   },
   render: () => (
     <View style={{ height: 1800 }}>

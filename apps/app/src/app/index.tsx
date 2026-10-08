@@ -13,6 +13,7 @@ import { graphql, useMutation } from 'react-relay';
 import { startNativeAuthorization, startWebLoginFromPress } from '@/auth/login';
 import { BrandLogo } from '@/components/BrandLogo';
 import { NavigationLink } from '@/components/shell/NavigationLink';
+import { SupportAcknowledgement } from '@/components/SupportAcknowledgement';
 import { Button } from '@/components/ui/Button';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useSession } from '@/session/SessionProvider';
@@ -160,6 +161,7 @@ export default function IndexScreen() {
               </Text>
             </Pressable>
           </NavigationLink>
+          <SupportAcknowledgement />
         </View>
       </View>
     </ScrollView>
