@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { Text, View } from 'react-native';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { ProfileMoreMenu } from '@/components/profile/ProfileMoreMenu';
@@ -108,6 +109,42 @@ const meta = {
 } satisfies Meta<typeof Fixture>;
 export default meta;
 type Story = StoryObj<typeof meta>;
+export const CancelDuringExit: Story = {
+  globals: { reduceMotion: false },
+  play: async ({ args, canvasElement, globals }) => {
+    args.onMute.mockClear();
+    const body = within(canvasElement.ownerDocument.body);
+    const trigger = within(canvasElement).getByRole('button', { name: '더보기' });
+    await userEvent.click(trigger);
+    await userEvent.click(await body.findByRole('menuitem', { name: '뮤트' }));
+    const cancel = await body.findByRole('button', { name: '취소' });
+    const confirm = body.getByRole('button', { name: '뮤트' });
+    await waitFor(() => expect(cancel).toHaveFocus());
+    // Commit cancellation before testing the retained surface in the same browser task.
+    flushSync(() => cancel.click());
+    if (!globals.reduceMotion) {
+      expect(confirm.isConnected).toBe(true);
+      expect(confirm.closest('[inert]')).not.toBeNull();
+      confirm.focus();
+      expect(confirm).not.toHaveFocus();
+      confirm.click();
+      expect(args.onMute).not.toHaveBeenCalled();
+    }
+    expect(args.onMute).not.toHaveBeenCalled();
+    await waitFor(() => expect(body.queryByRole('dialog')).not.toBeInTheDocument());
+    await waitFor(() => expect(trigger).toHaveFocus());
+    await userEvent.click(trigger);
+    await userEvent.click(await body.findByRole('menuitem', { name: '뮤트' }));
+    await userEvent.click(await body.findByRole('button', { name: '뮤트' }));
+    await waitFor(() => expect(args.onMute).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(trigger).toHaveFocus());
+  },
+};
+export const CancelWithoutMotion: Story = {
+  ...CancelDuringExit,
+  globals: { reduceMotion: true },
+};
+
 export const MuteContract: Story = {
   play: async ({ args, canvasElement }) => {
     args.onMute.mockClear();
