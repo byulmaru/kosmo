@@ -224,6 +224,165 @@ describe('Post Reply GraphQL 경계', () => {
     );
   });
 
+  test('DIRECT Post는 author와 stored Mentioned Profile만 읽고 recipient는 비공개 Reply를 작성할 수 있다', async () => {
+    const author = await createAuthenticatedSession({ profileHandle: 'direct_author' });
+    const recipient = await createAuthenticatedSession({ profileHandle: 'direct_recipient' });
+    const stranger = await createAuthenticatedSession();
+    const publicSource = await createContentfulPost(author.profile.id, {
+      bodyText: 'public source',
+    });
+    const recipientHandle = `@${recipient.profile.handle}`;
+    const unresolvedHandle = `@missing_${crypto.randomUUID().slice(0, 8)}`;
+    const bodyText = `private ${recipientHandle} ${unresolvedHandle}`;
+    const created = await requestCreatePost(
+      {
+        bodyText,
+        repostSourceId: encodeGlobalId('Post', publicSource.id),
+        visibility: PostVisibility.DIRECT,
+      },
+      author.token,
+    );
+    assertNoGraphQLErrors(created);
+    const postId = created.data!.createPost.post.id;
+    const storedPost = await db
+      .select({
+        currentContentId: Posts.currentContentId,
+        id: Posts.id,
+        repostSourceId: Posts.repostSourceId,
+      })
+      .from(Posts)
+      .where(
+        and(eq(Posts.profileId, author.profile.id), eq(Posts.visibility, PostVisibility.DIRECT)),
+      )
+      .then(firstOrThrow);
+    assert.ok(storedPost.currentContentId);
+    assert.equal(storedPost.repostSourceId, publicSource.id);
+
+    const [authorRead, recipientRead, strangerRead, anonymousRead] = await Promise.all([
+      requestPostContent(postId, author.token),
+      requestPostContent(postId, recipient.token),
+      requestPostContent(postId, stranger.token),
+      requestPostContent(postId),
+    ]);
+    for (const result of [authorRead, recipientRead, strangerRead, anonymousRead]) {
+      assertNoGraphQLErrors(result);
+    }
+    assert.ok(authorRead.data?.node);
+    assert.ok(recipientRead.data?.node);
+    assert.equal(strangerRead.data?.node, null);
+    assert.equal(anonymousRead.data?.node, null);
+
+    const authorHandle = `@${author.profile.handle}`;
+    const replyBody = `private reply ${authorHandle}`;
+    const reply = await requestCreatePost(
+      {
+        bodyText: replyBody,
+        replyParentId: postId,
+        visibility: PostVisibility.DIRECT,
+      },
+      recipient.token,
+    );
+    assertNoGraphQLErrors(reply);
+    const storedReply = await db
+      .select()
+      .from(Posts)
+      .where(and(eq(Posts.profileId, recipient.profile.id), eq(Posts.replyParentId, storedPost.id)))
+      .then(firstOrThrow);
+    assert.equal(storedReply.visibility, PostVisibility.DIRECT);
+    assert.equal(storedReply.replyParentId, storedPost.id);
+    assert.ok(storedReply.currentContentId);
+
+    const [authorCanReadReply, strangerCannotReadReply, anonymousCannotReadReply] =
+      await Promise.all([
+        requestPostContent(reply.data!.createPost.post.id, author.token),
+        requestPostContent(reply.data!.createPost.post.id, stranger.token),
+        requestPostContent(reply.data!.createPost.post.id),
+      ]);
+    for (const result of [authorCanReadReply, strangerCannotReadReply, anonymousCannotReadReply]) {
+      assertNoGraphQLErrors(result);
+    }
+    assert.ok(authorCanReadReply.data?.node);
+    assert.equal(strangerCannotReadReply.data?.node, null);
+    assert.equal(anonymousCannotReadReply.data?.node, null);
+
+    const oldContentMentions = await db
+      .select()
+      .from(PostMentions)
+      .where(eq(PostMentions.postContentId, storedPost.currentContentId));
+    assert.deepEqual(
+      oldContentMentions.map(({ profileId }) => profileId),
+      [recipient.profile.id],
+    );
+    const replacementContent = await db
+      .insert(PostContents)
+      .values({
+        document: postContentDocumentFromText('revised private content'),
+        postId: storedPost.id,
+      })
+      .returning()
+      .then(firstOrThrow);
+    await db
+      .update(Posts)
+      .set({ currentContentId: replacementContent.id })
+      .where(eq(Posts.id, storedPost.id));
+
+    const staleMentionRead = await requestPostContent(postId, recipient.token);
+    assertNoGraphQLErrors(staleMentionRead);
+    assert.equal(staleMentionRead.data?.node, null);
+
+    const remoteAuthor = await createRemoteActorProfile('remote_direct_author');
+    const { createPost: persistPost } = await import('@kosmo/core/services');
+    const remotePost = await persistPost({
+      document: postContentDocumentFromText('remote direct content'),
+      mentionProfileIds: [recipient.profile.id],
+      objectUri: `https://remote.example/notes/${crypto.randomUUID()}`,
+      origin: 'ACTIVITYPUB',
+      profileId: remoteAuthor.id,
+      publishedAt: null,
+      receivedAt: Temporal.Now.instant(),
+      visibility: PostVisibility.DIRECT,
+    });
+    assert.ok(remotePost.created);
+
+    const remoteRecipientRead = await requestPostContent(
+      encodeGlobalId('Post', remotePost.post.id),
+      recipient.token,
+    );
+    assertNoGraphQLErrors(remoteRecipientRead);
+    assert.equal(remoteRecipientRead.data?.node, null);
+  });
+
+  test('DIRECT createPost는 canonical recipient가 없으면 저장을 거부한다', async () => {
+    const auth = await createAuthenticatedSession();
+    const before = {
+      contents: await db.$count(PostContents),
+      mentions: await db.$count(PostMentions),
+      posts: await db.$count(Posts),
+    };
+
+    for (const bodyText of [
+      'private without a mention',
+      `@missing_${crypto.randomUUID().slice(0, 8)}`,
+    ]) {
+      const result = await requestCreatePost(
+        { bodyText, visibility: PostVisibility.DIRECT },
+        auth.token,
+      );
+      assert.equal(result.errors?.[0]?.extensions?.code, 'VALIDATION');
+      assert.equal(result.errors?.[0]?.extensions?.field, 'mentions');
+      assert.equal(result.data, null);
+    }
+
+    assert.deepEqual(
+      {
+        contents: await db.$count(PostContents),
+        mentions: await db.$count(PostMentions),
+        posts: await db.$count(Posts),
+      },
+      before,
+    );
+  });
+
   test('createPost resolves typed local and stored remote handles without normalizing their body text', async () => {
     const auth = await createAuthenticatedSession();
     const local = await createProfile('typed_local');
@@ -932,10 +1091,19 @@ describe('Post Reply GraphQL 경계', () => {
   test('Post를 조회할 수 없는 viewer에게 Media 표시 정보를 노출하지 않는다', async () => {
     const auth = await createAuthenticatedSession();
     const media = await createReadyMedia(auth.account.id, auth.profile.id);
+    const recipient = await createProfile('private_media_recipient');
+    const bodyText = `@${recipient.handle}`;
     const result = await requestCreatePost(
       {
-        bodyText: '',
+        bodyText,
         media: [{ altText: '비공개 설명', mediaId: encodeGlobalId('Media', media.id) }],
+        mentions: [
+          {
+            end: bodyText.length,
+            profileId: encodeGlobalId('Profile', recipient.id),
+            start: 0,
+          },
+        ],
         visibility: PostVisibility.DIRECT,
       },
       auth.token,
@@ -1856,7 +2024,7 @@ type PostAncestorsWithSourcesNode = {
 };
 
 type GraphQLResult<TData> = {
-  data?: TData;
+  data?: TData | null;
   errors?: Array<{
     extensions?: { code?: string; field?: string };
     message: string;
@@ -2051,6 +2219,7 @@ const requestCreatePost = (
     mentions?: Array<{ end: number; profileId: string; start: number }>;
     actorProfileId?: string;
     replyParentId?: string;
+    repostSourceId?: string;
     sensitiveMedia?: boolean;
     visibility: PostVisibility;
   },
@@ -2226,12 +2395,14 @@ const createAuthenticatedSession = async ({
   activeProfile = true,
   instanceId = localInstanceId,
   member = true,
+  profileHandle,
   profileState = ProfileState.ACTIVE,
 }: {
   accountState?: AccountState;
   activeProfile?: boolean;
   instanceId?: string;
   member?: boolean;
+  profileHandle?: string;
   profileState?: ProfileState;
 } = {}) => {
   const suffix = crypto.randomUUID();
@@ -2240,7 +2411,10 @@ const createAuthenticatedSession = async ({
     .values({ displayName: suffix, oidcSubject: suffix, state: accountState })
     .returning()
     .then(firstOrThrow);
-  const profile = await createProfile(`viewer-${suffix}`, { instanceId, state: profileState });
+  const profile = await createProfile(profileHandle ?? `viewer-${suffix}`, {
+    instanceId,
+    state: profileState,
+  });
   if (member) {
     await db.insert(AccountProfiles).values({
       accountId: account.id,
