@@ -19,7 +19,7 @@ import pinMutation from './__generated__/ProfilePinActionPinProfilePostMutation.
 import unpinMutation from './__generated__/ProfilePinActionUnpinProfilePostMutation.graphql';
 import type { ReactNode } from 'react';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
-import type { GraphQLResponse } from 'relay-runtime';
+import type { GraphQLResponse, RequestParameters, Variables } from 'relay-runtime';
 import type { ProfilePinActionPinProfilePostMutation } from './__generated__/ProfilePinActionPinProfilePostMutation.graphql';
 import type { useProfilePinAction as useProfilePinActionType } from './ProfilePinAction';
 
@@ -31,7 +31,9 @@ const require = createRequire(import.meta.url);
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
 const requests: Array<{
+  name: string;
   sink: { next(response: GraphQLResponse): void; complete(): void };
+  variables: Variables;
 }> = [];
 const toasts: string[] = [];
 let renderer: ReactTestRenderer | null = null;
@@ -91,22 +93,16 @@ afterEach(async () => {
 
 function createActionEnvironment() {
   return new Environment({
-    network: Network.create(() =>
+    network: Network.create((request: RequestParameters, variables: Variables) =>
       Observable.create<GraphQLResponse>((sink) => {
-        requests.push({ sink });
+        requests.push({ name: request.name, sink, variables });
       }),
     ),
     store: new Store(new RecordSource()),
   });
 }
 
-function ActionHarness({
-  onUnpinned,
-  post,
-}: {
-  onUnpinned?: () => void;
-  post: object;
-}) {
+function ActionHarness({ onUnpinned, post }: { onUnpinned?: () => void; post: object }) {
   const action = useProfilePinAction(post as never, onUnpinned);
   return createElement('ActionState', action, action.confirmation);
 }
@@ -250,12 +246,24 @@ describe('ProfilePinAction mutation lifecycle', () => {
     assert.deepEqual(toasts, []);
   });
 
-  it('hides a new pin when another post is the first visible pin', async () => {
+  it('offers replacement when another post is the first visible pin', async () => {
     const environment = createActionEnvironment();
     await renderAction(environment, firstPostId);
 
-    assert.equal(actionState().props.item, undefined);
+    assert.equal(actionState().props.item.label, '프로필에 고정');
     await act(async () => actionState().props.onMoreTriggerReady(() => undefined));
+    assert.equal(requests.length, 0);
+  });
+
+  it('cancels replacement without starting either request', async () => {
+    const environment = createActionEnvironment();
+    await renderAction(environment, firstPostId);
+
+    await act(async () => actionState().props.item.onSelect());
+    assert.equal(modal().props.title, '고정 게시글을 바꿀까요?');
+    await act(async () => confirmation().props.onCancel());
+    await act(async () => modal().props.onDismiss());
+
     assert.equal(requests.length, 0);
   });
 
@@ -281,7 +289,7 @@ describe('ProfilePinAction mutation lifecycle', () => {
     assert.equal(actionState().props.item.label, '프로필 고정 해제');
   });
 
-  it('blocks another pin using the first non-empty edge after a stale edge', async () => {
+  it('offers replacement using the first non-empty edge after a stale edge', async () => {
     const environment = createActionEnvironment();
     await act(async () => {
       renderer = create(
@@ -300,7 +308,123 @@ describe('ProfilePinAction mutation lifecycle', () => {
       );
     });
 
-    assert.equal(actionState().props.item, undefined);
+    assert.equal(actionState().props.item.label, '프로필에 고정');
+  });
+
+  it('unpins the existing post before pinning the selected post and stays pending between requests', async () => {
+    const environment = createActionEnvironment();
+    await renderAction(environment, firstPostId);
+
+    await act(async () => actionState().props.item.onSelect());
+    await act(async () => confirmation().props.onConfirm());
+    await act(async () => modal().props.onDismiss());
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0]?.name, 'ProfilePinActionUnpinProfilePostMutation');
+    assert.deepEqual(requests[0]?.variables, { postId: firstPostId });
+    assert.equal(actionState().props.pending, true);
+
+    await respondAction({
+      data: {
+        unpinProfilePost: {
+          changed: true,
+          profile: {
+            id: profileId,
+            pinnedPosts: {
+              edges: [],
+              pageInfo: {
+                endCursor: null,
+                hasNextPage: false,
+                hasPreviousPage: false,
+                startCursor: null,
+              },
+            },
+          },
+        },
+      },
+    });
+    assert.equal(requests.length, 2);
+    assert.equal(requests[1]?.name, 'ProfilePinActionPinProfilePostMutation');
+    assert.deepEqual(requests[1]?.variables, { postId: actionPost.id });
+    assert.equal(actionState().props.pending, true);
+    await act(async () => actionState().props.item.onSelect());
+    assert.equal(requests.length, 2);
+
+    await respondAction({
+      data: {
+        pinProfilePost: {
+          changed: true,
+          profile: {
+            id: profileId,
+            pinnedPosts: {
+              edges: [{ node: { id: actionPost.id } }],
+              pageInfo: {
+                endCursor: 'pin-cursor',
+                hasNextPage: false,
+                hasPreviousPage: false,
+                startCursor: 'pin-cursor',
+              },
+            },
+          },
+        },
+      },
+    });
+    assert.equal(actionState().props.pending, false);
+    assert.deepEqual(toasts, []);
+  });
+
+  it('stops replacement when unpinning the existing post fails', async () => {
+    const environment = createActionEnvironment();
+    await renderAction(environment, firstPostId);
+
+    await act(async () => actionState().props.item.onSelect());
+    await act(async () => confirmation().props.onConfirm());
+    await act(async () => modal().props.onDismiss());
+    await respondAction({
+      data: { unpinProfilePost: null },
+      errors: [{ message: 'unpin failed', path: ['unpinProfilePost'] }],
+    });
+
+    assert.equal(requests.length, 1);
+    assert.equal(actionState().props.pending, false);
+    assert.deepEqual(toasts, ['고정 상태를 변경하지 못했어요. 다시 시도해 주세요.']);
+  });
+
+  it('reports the partial replacement failure after the existing pin is removed', async () => {
+    const environment = createActionEnvironment();
+    await renderAction(environment, firstPostId);
+
+    await act(async () => actionState().props.item.onSelect());
+    await act(async () => confirmation().props.onConfirm());
+    await act(async () => modal().props.onDismiss());
+    await respondAction({
+      data: {
+        unpinProfilePost: {
+          changed: true,
+          profile: {
+            id: profileId,
+            pinnedPosts: {
+              edges: [],
+              pageInfo: {
+                endCursor: null,
+                hasNextPage: false,
+                hasPreviousPage: false,
+                startCursor: null,
+              },
+            },
+          },
+        },
+      },
+    });
+    await respondAction({
+      data: { pinProfilePost: null },
+      errors: [{ message: 'pin failed', path: ['pinProfilePost'] }],
+    });
+
+    assert.equal(requests.length, 2);
+    assert.equal(actionState().props.pending, false);
+    assert.deepEqual(toasts, [
+      '기존 고정은 해제됐지만 새 게시글을 고정하지 못했어요. 다시 시도해 주세요.',
+    ]);
   });
 
   it('closes unpin confirmation before the request and allows a confirmed retry', async () => {
