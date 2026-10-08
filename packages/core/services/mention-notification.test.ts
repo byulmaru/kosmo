@@ -6,7 +6,6 @@ import {
   firstOrThrow,
   Instances,
   NotificationQuoteJudgments,
-  NotificationRollouts,
   Notifications,
   pg,
   PostContents,
@@ -34,7 +33,6 @@ import { createReplyNotification } from './create-reply-notification';
 import { createMentionNotification } from './mention-notification';
 import { createPost as persistPost } from './post';
 import { createQuoteNotification } from './quote-notification';
-import type { TestContext } from 'node:test';
 
 const instanceIds: string[] = [];
 const profileIds: string[] = [];
@@ -163,37 +161,6 @@ const createPostForLocal = async (
     .where(eq(Posts.id, result.post.id))
     .returning()
     .then(firstOrThrow);
-};
-
-const withQuoteRollout = async (context: TestContext, enabled = true) => {
-  const condition = eq(NotificationRollouts.key, 'QUOTE_NOTIFICATION');
-  const previous = await db
-    .select({
-      activatedAt: NotificationRollouts.activatedAt,
-      enabled: NotificationRollouts.enabled,
-    })
-    .from(NotificationRollouts)
-    .where(condition)
-    .then((rows) => rows[0]);
-  const activatedAt = Temporal.Instant.from('2000-01-01T00:00:00Z');
-  const setEnabled = async (nextEnabled: boolean) =>
-    db
-      .insert(NotificationRollouts)
-      .values({ activatedAt, enabled: nextEnabled, key: 'QUOTE_NOTIFICATION' })
-      .onConflictDoUpdate({
-        target: NotificationRollouts.key,
-        set: { activatedAt, enabled: nextEnabled },
-      });
-
-  await setEnabled(enabled);
-  context.after(async () => {
-    if (previous) {
-      await db.update(NotificationRollouts).set(previous).where(condition);
-    } else {
-      await db.delete(NotificationRollouts).where(condition);
-    }
-  });
-  return setEnabled;
 };
 
 const readSourceNotifications = (sourceId: string) =>
@@ -363,8 +330,7 @@ test('a local typed Mention materializes idempotently while a local Post without
   assert.equal(preserved?.readAt?.toString(), readAt.toString());
 });
 
-test('an eligible Quote wins over Mention from either start order and during concurrent generation', async (t) => {
-  await withQuoteRollout(t);
+test('an eligible Quote wins over Mention from either start order and during concurrent generation', async () => {
   const recipient = await createProfile();
   const quoteAuthor = await createProfile();
 
@@ -414,8 +380,7 @@ test('an eligible Quote wins over Mention from either start order and during con
   assert.equal(concurrentNotification?.id, concurrentQuoteId);
 });
 
-test('an eligible Reply wins over Quote and Mention concurrently and preserves its read state', async (t) => {
-  await withQuoteRollout(t);
+test('an eligible Reply wins over Quote and Mention concurrently and preserves its read state', async () => {
   const recipient = await createProfile();
   const replyAuthor = await createProfile();
   const parent = await createPostForLocal(recipient.id);
@@ -454,8 +419,7 @@ test('an eligible Reply wins over Quote and Mention concurrently and preserves i
   assert.equal(retried[0]?.readAt?.toString(), readAt.toString());
 });
 
-test('an ineligible Quote does not suppress an eligible typed Mention', async (t) => {
-  await withQuoteRollout(t);
+test('an ineligible Quote does not suppress an eligible typed Mention', async () => {
   const recipient = await createProfile();
   const quoteAuthor = await createProfile();
   const source = await createPostForLocal(recipient.id);
@@ -478,8 +442,7 @@ test('an ineligible Quote does not suppress an eligible typed Mention', async (t
   assert.equal(notification?.recipientProfileId, recipient.id);
 });
 
-test('an existing Mention and its read state survive later Quote eligibility', async (t) => {
-  const setQuoteEnabled = await withQuoteRollout(t, false);
+test('an existing Mention and its read state survive later Quote eligibility', async () => {
   const recipient = await createProfile();
   const quoteAuthor = await createProfile();
   const source = await createPostForLocal(recipient.id);
@@ -487,13 +450,17 @@ test('an existing Mention and its read state survive later Quote eligibility', a
     mentionProfileIds: [recipient.id],
     repostSourceId: source.id,
   });
+  await db
+    .update(Posts)
+    .set({ visibility: PostVisibility.FOLLOWERS })
+    .where(eq(Posts.id, source.id));
 
   const [mentionId] = await createMentionNotification(quote.id);
   assert.ok(mentionId);
   const readAt = Temporal.Instant.from('2026-10-02T03:45:56.765432Z');
   await db.update(Notifications).set({ readAt }).where(eq(Notifications.id, mentionId));
 
-  await setQuoteEnabled(true);
+  await db.update(Posts).set({ visibility: PostVisibility.PUBLIC }).where(eq(Posts.id, source.id));
   assert.equal(await createQuoteNotification(quote.id), null);
   const notifications = await readSourceNotifications(quote.id);
   assert.equal(notifications.length, 1);
