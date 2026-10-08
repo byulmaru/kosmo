@@ -85,7 +85,9 @@ afterEach(async () => {
 });
 function Harness() {
   const data = Relay.useLazyLoadQuery<ProfilePostListPageQuery>(query, { handle: '@owner' });
-  return createElement(PostList, { profile: data.profileByHandle });
+  return createElement(PostList, {
+    profile: data.profileByHandle,
+  });
 }
 async function start() {
   const environment = new Environment({
@@ -152,13 +154,19 @@ const connection = (ids: string[], hasNextPage = false) => ({
     hasPreviousPage: false,
   },
 });
-const profile = (kind: string, pins: string[], posts: string[], hasNext = false) => ({
+const profile = (
+  kind: string,
+  pins: string[],
+  posts: string[],
+  pinnedHasNext = false,
+  postsHasNext = false,
+) => ({
   __typename: 'Profile',
   id: 'owner',
   instance: { kind },
   viewerState: null,
-  pinnedPosts: connection(pins, hasNext),
-  posts: connection(posts),
+  pinnedPosts: connection(pins, pinnedHasNext),
+  posts: connection(posts, postsHasNext),
 });
 async function respond(data: Record<string, unknown>) {
   await act(async () => {
@@ -188,12 +196,12 @@ it('Local shows first pin, permits duplicates, and survives deleted records', as
   assert.equal(all('InfiniteList').length, 1);
   assert.equal(all('Button').length, 0);
 });
-it('Remote paginates and retries pins independently of chronology', async () => {
+it('ActivityPub paginates pins independently of chronology', async () => {
   await start();
   const pins = Array.from({ length: 20 }, (_, index) => `pin-${index}`);
   await respond({
     currentSession: null,
-    profileByHandle: profile('REMOTE', pins, ['chronology'], true),
+    profileByHandle: profile('ACTIVITYPUB', pins, ['chronology'], true),
   });
   assert.equal(all('InfiniteList').length, 1);
   await act(async () => all('Button')[0]!.props.onPress());
@@ -210,4 +218,48 @@ it('Remote paginates and retries pins independently of chronology', async () => 
     [...pins, 'pin-20'].map((id) => [id, true]).concat([['chronology', false]]),
   );
   assert.equal(all('Button').length, 0);
+});
+
+it('keeps the loaded pin next page when the profile chronology loads another page', async () => {
+  await start();
+  const pins = Array.from({ length: 20 }, (_, index) => `pin-${index}`);
+  await respond({
+    currentSession: null,
+    profileByHandle: profile('ACTIVITYPUB', pins, ['chronology-0'], true, true),
+  });
+
+  await act(async () => all('Button')[0]!.props.onPress());
+  assert.equal(requests.at(-1)!.name, 'PostListProfilePinnedNextPageQuery');
+  assert.equal(requests.at(-1)!.variables.cursor, 'pin-19');
+  await respond({
+    node: {
+      __typename: 'Profile',
+      id: 'owner',
+      instance: { kind: 'ACTIVITYPUB' },
+      pinnedPosts: connection(['pin-20']),
+    },
+  });
+  assert.equal(all('Button').length, 0);
+
+  const list = all('InfiniteList')[0]!;
+  await act(async () => list.props.loadNext(20));
+  assert.equal(requests.at(-1)!.name, 'PostListProfileNextPageQuery');
+  assert.equal(requests.at(-1)!.variables.cursor, 'chronology-0');
+  await respond({
+    node: {
+      __typename: 'Profile',
+      id: 'owner',
+      instance: { kind: 'ACTIVITYPUB' },
+      pinnedPosts: connection(pins),
+      posts: connection(['chronology-1']),
+    },
+  });
+
+  assert.deepEqual(
+    cards(),
+    [...pins, 'pin-20', 'chronology-0', 'chronology-1'].map((id, index) => [
+      id,
+      index < pins.length + 1,
+    ]),
+  );
 });

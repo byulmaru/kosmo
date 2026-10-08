@@ -51,7 +51,6 @@ const PostListProfileFragment = graphql`
         }
       }
     }
-    ...PostList_profile_pinned @arguments(count: $count)
   }
 `;
 
@@ -112,7 +111,7 @@ type Props = {
   loading?: boolean;
   onRetry?: () => void;
   onRefresh?: () => void;
-  profile?: PostList_profile$key | null;
+  profile?: (PostList_profile$key & PostList_profile_pinned$key) | null;
   replyProfile?: ReplyComposerSurface_profile$key | null;
   refreshing?: boolean;
 };
@@ -146,7 +145,7 @@ export function PostList({
   const profilePinnedPagination = usePaginationFragment<
     PostListProfilePinnedNextPageQuery,
     PostList_profile_pinned$key
-  >(PostListProfilePinnedFragment, profilePagination.data);
+  >(PostListProfilePinnedFragment, profileKey ?? null);
   const localPagination = usePaginationFragment<PostListLocalNextPageQuery, PostList_local$key>(
     PostListLocalFragment,
     localKey ?? null,
@@ -208,6 +207,7 @@ export function PostList({
   );
 
   const listIdentityKey = identityKey ?? (isHome ? 'home' : isLocal ? 'local' : 'profile');
+  const listContainerStyle = profileKey || Platform.OS === 'web' ? styles.root : styles.flexRoot;
 
   if (loading && !hasData) {
     return <PostListSkeleton />;
@@ -240,7 +240,12 @@ export function PostList({
     <PostActionAuthenticationProvider>
       <PostComposerCoordinatorProvider owner="list" profile={replyProfile ?? null}>
         <PostMediaViewerHostProvider>
-          <View ref={listRef} tabIndex={-1} accessibilityLabel="게시글 목록" style={styles.root}>
+          <View
+            ref={listRef}
+            tabIndex={-1}
+            accessibilityLabel="게시글 목록"
+            style={listContainerStyle}
+          >
             {profileKey ? (
               <ProfilePinnedPostList
                 data={visiblePinnedEdges}
@@ -278,13 +283,10 @@ export function PostList({
                 ) : null
               }
               renderItem={({ item }) => (
-                <PostListItem
-                  post={item.node}
-                  presentation={postListPresentation}
-                />
+                <PostListItem post={item.node} presentation={postListPresentation} />
               )}
               refreshing={refreshing}
-              style={styles.root}
+              style={listContainerStyle}
             />
           </View>
         </PostMediaViewerHostProvider>
@@ -409,6 +411,7 @@ function PostListState({
 }
 
 const styles = StyleSheet.create({
+  flexRoot: { flex: 1, minHeight: 0, width: '100%' },
   loadingNext: { alignItems: 'center', padding: spacing.lg },
   pinnedPagination: { alignItems: 'center', padding: spacing.md },
   root: { width: '100%' },

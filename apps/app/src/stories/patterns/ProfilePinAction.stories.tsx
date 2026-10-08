@@ -6,6 +6,7 @@ import { PostActionAuthenticationProvider } from '@/components/post/PostActionAu
 import { PostComposerCoordinatorProvider } from '@/components/post/PostComposerCoordinator';
 import { PostListItem } from '@/components/post/PostListItem';
 import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHost';
+import { ProfilePinProvider, useProfilePin } from '@/components/post/ProfilePinProvider';
 import { ActionMenuPresentationProvider } from '@/components/ui/ActionMenu';
 import { SessionProvider } from '@/session/SessionProvider';
 import { getCopiedStrings, resetClipboardMock } from '../../../.storybook/mocks/postClipboard';
@@ -39,13 +40,6 @@ const ProfilePinActionStoriesQuery = graphql`
           id
           instance {
             kind
-          }
-          pinnedPosts(first: 20) @connection(key: "PostList_profile__pinnedPosts") {
-            edges {
-              node {
-                id
-              }
-            }
           }
         }
         ...PostListItem_post @alias(as: "listItem")
@@ -111,6 +105,7 @@ function useStoryPost() {
 
 function Fixture({ presentation }: StoryArgs) {
   const postNode = useStoryPost();
+  const { firstPinnedPostId } = useProfilePin();
 
   if (!postNode) {
     return null;
@@ -119,7 +114,7 @@ function Fixture({ presentation }: StoryArgs) {
   return (
     <View style={styles.fixture}>
       <PostListItem
-        pinned={postNode.profile.pinnedPosts.edges.some((edge) => edge.node?.id === storyPost.id)}
+        pinned={firstPinnedPostId === storyPost.id}
         post={postNode.post}
         presentation={presentation}
       />
@@ -174,6 +169,16 @@ const unpinResponse = {
   },
 };
 
+function profilePinQueryResponse(action: ProfilePinOperation) {
+  return {
+    node: {
+      __typename: 'Profile',
+      id: storyPost.profile.id,
+      pinnedPosts: storyPinnedPostsForAction(action),
+    },
+  };
+}
+
 function StoryProviders({
   action,
   children,
@@ -214,10 +219,11 @@ function StoryProviders({
           me: { __typename: 'Account', id: 'account-story', name: 'Story' },
         },
       },
-      ProfilePinActionPinProfilePostMutation: pinOperationResponse,
-      ProfilePinActionUnpinProfilePostMutation: unpinOperationResponse,
+      ProfilePinProviderPinProfilePostMutation: pinOperationResponse,
+      ProfilePinProviderQuery: { data: profilePinQueryResponse(action) },
+      ProfilePinProviderUnpinProfilePostMutation: unpinOperationResponse,
     };
-  }, [outcome, viewer]);
+  }, [action, outcome, viewer]);
   const observeMutation = useCallback(
     (request: RequestParameters, variables: Variables) => {
       if (request.name === 'PostDeletionActionDeletePostMutation') {
@@ -226,8 +232,8 @@ function StoryProviders({
       }
       const action = request.name.includes('Unpin') ? 'unpin' : 'pin';
       if (
-        request.name === 'ProfilePinActionPinProfilePostMutation' ||
-        request.name === 'ProfilePinActionUnpinProfilePostMutation'
+        request.name === 'ProfilePinProviderPinProfilePostMutation' ||
+        request.name === 'ProfilePinProviderUnpinProfilePostMutation'
       ) {
         void (action === 'pin' ? onPin() : onUnpin());
       }
@@ -244,11 +250,13 @@ function StoryProviders({
       actorBoundary
     >
       <SessionProvider>
-        <PostActionAuthenticationProvider>
-          <PostComposerCoordinatorProvider owner="list" profile={null}>
-            <PostMediaViewerHostProvider>{children}</PostMediaViewerHostProvider>
-          </PostComposerCoordinatorProvider>
-        </PostActionAuthenticationProvider>
+        <ProfilePinProvider>
+          <PostActionAuthenticationProvider>
+            <PostComposerCoordinatorProvider owner="list" profile={null}>
+              <PostMediaViewerHostProvider>{children}</PostMediaViewerHostProvider>
+            </PostComposerCoordinatorProvider>
+          </PostActionAuthenticationProvider>
+        </ProfilePinProvider>
       </SessionProvider>
     </RelayStoryProvider>
   );

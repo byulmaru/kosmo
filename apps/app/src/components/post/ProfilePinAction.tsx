@@ -1,16 +1,14 @@
 import { Pin } from 'lucide-react-native';
 import { useCallback, useRef, useState } from 'react';
-import { graphql, useFragment, useMutation } from 'react-relay';
+import { graphql, useFragment } from 'react-relay';
 import { ConfirmationContent } from '@/components/ui/ConfirmationContent';
 import { ModalSheet } from '@/components/ui/ModalSheet';
-import { useToast } from '@/components/ui/ToastProvider';
 import { useSession } from '@/session/SessionProvider';
+import { useProfilePin } from './ProfilePinProvider';
 import type { ReactNode } from 'react';
 import type { View } from 'react-native';
 import type { ActionMenuItem } from '@/components/ui/ActionMenu';
 import type { ProfilePinAction_post$key } from './__generated__/ProfilePinAction_post.graphql';
-import type { ProfilePinActionPinProfilePostMutation } from './__generated__/ProfilePinActionPinProfilePostMutation.graphql';
-import type { ProfilePinActionUnpinProfilePostMutation } from './__generated__/ProfilePinActionUnpinProfilePostMutation.graphql';
 
 const profilePinFragment = graphql`
   fragment ProfilePinAction_post on Post {
@@ -28,86 +26,14 @@ const profilePinFragment = graphql`
       instance {
         kind
       }
-      pinnedPosts(first: 20) {
-        edges {
-          node {
-            id
-          }
-        }
-      }
     }
   }
 `;
-
-const pinMutation = graphql`
-  mutation ProfilePinActionPinProfilePostMutation($postId: ID!) {
-    pinProfilePost(input: { postId: $postId }) {
-      changed
-      profile {
-        id
-        pinnedPosts(first: 20) @connection(key: "PostList_profile__pinnedPosts") {
-          edges {
-            node {
-              id
-              ...PostListItem_post
-            }
-          }
-          pageInfo {
-            endCursor
-            hasNextPage
-            hasPreviousPage
-            startCursor
-          }
-        }
-      }
-    }
-  }
-`;
-
-const unpinMutation = graphql`
-  mutation ProfilePinActionUnpinProfilePostMutation($postId: ID!) {
-    unpinProfilePost(input: { postId: $postId }) {
-      changed
-      profile {
-        id
-        pinnedPosts(first: 20) @connection(key: "PostList_profile__pinnedPosts") {
-          edges {
-            node {
-              id
-              ...PostListItem_post
-            }
-          }
-          pageInfo {
-            endCursor
-            hasNextPage
-            hasPreviousPage
-            startCursor
-          }
-        }
-      }
-    }
-  }
-`;
-
-const failureMessage = '고정 상태를 변경하지 못했어요. 다시 시도해 주세요.';
-const replacementFailureMessage =
-  '기존 고정은 해제됐지만 새 게시글을 고정하지 못했어요. 다시 시도해 주세요.';
 type ProfilePinOperation = 'pin' | 'replace' | 'unpin';
 type SelectedProfilePinOperation = Readonly<{
   existingPostId: string | null;
   operation: ProfilePinOperation;
 }>;
-
-type ProfilePinMutationPayload =
-  | ProfilePinActionPinProfilePostMutation['response']['pinProfilePost']
-  | ProfilePinActionUnpinProfilePostMutation['response']['unpinProfilePost'];
-
-function isDurableProfilePinResult(
-  result: ProfilePinMutationPayload | null | undefined,
-  profileId: string,
-) {
-  return typeof result?.changed === 'boolean' && result.profile?.id === profileId;
-}
 
 export function useProfilePinAction(
   postKey: ProfilePinAction_post$key,
@@ -120,10 +46,7 @@ export function useProfilePinAction(
 }> {
   const post = useFragment(profilePinFragment, postKey);
   const { selectedProfileId } = useSession();
-  const { showToast } = useToast();
-  const [commitPin, isPinning] = useMutation<ProfilePinActionPinProfilePostMutation>(pinMutation);
-  const [commitUnpin, isUnpinning] =
-    useMutation<ProfilePinActionUnpinProfilePostMutation>(unpinMutation);
+  const { available, firstPinnedPostId, pending, request } = useProfilePin();
   const [selectedOperation, setSelectedOperation] = useState<SelectedProfilePinOperation | null>(
     null,
   );
@@ -132,12 +55,9 @@ export function useProfilePinAction(
   );
   const cancelRef = useRef<View>(null);
   const focusTriggerRef = useRef<() => void>(() => undefined);
-  const pending = isPinning || isUnpinning;
-
-  const firstPinnedPostId =
-    post.profile.pinnedPosts.edges.find((edge) => edge.node != null)?.node?.id ?? null;
   const pinned = firstPinnedPostId === post.id;
   const eligible = Boolean(
+    available &&
     selectedProfileId === post.profile.id &&
     post.profile.instance.kind === 'LOCAL' &&
     post.state === 'ACTIVE' &&
@@ -170,68 +90,19 @@ export function useProfilePinAction(
     }
 
     const { existingPostId, operation } = selection;
-    const commitTargetPin = (failureToast: string) => {
-      commitPin({
-        onCompleted: (response) => {
-          if (!isDurableProfilePinResult(response.pinProfilePost, post.profile.id)) {
-            showToast(failureToast, { tone: 'danger' });
-          }
-        },
-        onError: () => {
-          showToast(failureToast, { tone: 'danger' });
-        },
-        variables: { postId: post.id },
-      });
-    };
     if (operation === 'unpin') {
-      commitUnpin({
-        onCompleted: (response) => {
-          if (!isDurableProfilePinResult(response.unpinProfilePost, post.profile.id)) {
-            showToast(failureMessage, { tone: 'danger' });
-            return;
-          }
-          onUnpinned?.();
-        },
-        onError: () => {
-          showToast(failureMessage, { tone: 'danger' });
-        },
-        variables: { postId: post.id },
-      });
+      request({ kind: 'unpin', onCompleted: onUnpinned, postId: post.id });
       return;
     }
     if (operation === 'replace') {
       if (!existingPostId) {
-        showToast(failureMessage, { tone: 'danger' });
         return;
       }
-      commitUnpin({
-        onCompleted: (response) => {
-          if (!isDurableProfilePinResult(response.unpinProfilePost, post.profile.id)) {
-            showToast(failureMessage, { tone: 'danger' });
-            return;
-          }
-          commitTargetPin(replacementFailureMessage);
-        },
-        onError: () => {
-          showToast(failureMessage, { tone: 'danger' });
-        },
-        variables: { postId: existingPostId },
-      });
+      request({ existingPostId, kind: 'replace', postId: post.id });
       return;
     }
-    commitTargetPin(failureMessage);
-  }, [
-    commitPin,
-    commitUnpin,
-    confirmationPhase,
-    eligible,
-    pending,
-    post.id,
-    post.profile.id,
-    onUnpinned,
-    selectedOperation,
-    showToast,
-  ]);
+    request({ kind: 'pin', postId: post.id });
+  }, [confirmationPhase, eligible, pending, post.id, onUnpinned, request, selectedOperation]);
 
   const onMoreTriggerReady = useCallback((focus: () => void) => {
     focusTriggerRef.current = focus;
@@ -274,7 +145,7 @@ export function useProfilePinAction(
   ) : null;
 
   if (!eligible) {
-    return { confirmation, onMoreTriggerReady, pending };
+    return { confirmation, onMoreTriggerReady, pending: false };
   }
 
   return {

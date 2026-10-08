@@ -40,6 +40,7 @@ import {
   PostSourcePreview,
 } from '@/components/post/PostSourcePresentationView';
 import { PostThreadLayout } from '@/components/post/PostThreadLayout';
+import { ProfilePinProvider } from '@/components/post/ProfilePinProvider';
 import { ReplyComposerSurface } from '@/components/post/ReplyComposerSurface';
 import { ShellChromeProvider } from '@/components/shell/ShellChromeContext';
 import { formatTimelineTimestamp } from '@/lib/date';
@@ -1016,16 +1017,18 @@ const PostsStoriesQuery = graphql`
     }
     emptyPostsProfile: node(id: "profile-posts-empty") {
       __typename
-      ... on Profile {
+      ... on Profile @alias(as: "profile") {
         id
-        ...PostList_profile @alias(as: "postList")
+        ...PostList_profile @arguments(count: 20)
+        ...PostList_profile_pinned @arguments(count: 20)
       }
     }
     contentPostsProfile: node(id: "profile-posts-content") {
       __typename
-      ... on Profile {
+      ... on Profile @alias(as: "profile") {
         id
-        ...PostList_profile @alias(as: "postList")
+        ...PostList_profile @arguments(count: 20)
+        ...PostList_profile_pinned @arguments(count: 20)
       }
     }
     ...PostList_home @arguments(count: 20) @alias(as: "home")
@@ -1052,9 +1055,10 @@ const PostDeletionListEdgeSafetyQuery = graphql`
     ...PostList_home @arguments(count: 1) @alias(as: "home")
     deletionProfile: node(id: "profile-posts-deletion") {
       __typename
-      ... on Profile {
+      ... on Profile @alias(as: "profile") {
         id
-        ...PostList_profile @alias(as: "postList")
+        ...PostList_profile @arguments(count: 1)
+        ...PostList_profile_pinned @arguments(count: 20)
       }
     }
   }
@@ -1111,8 +1115,8 @@ function usePostsStoryData() {
       data.composerProfile.replySurface,
       'Reply Composer profile',
     ),
-    contentPostsProfile: requireFragment(data.contentPostsProfile.postList, 'content post list'),
-    emptyPostsProfile: requireFragment(data.emptyPostsProfile.postList, 'empty post list'),
+    contentPostsProfile: requireFragment(data.contentPostsProfile.profile, 'content post list'),
+    emptyPostsProfile: requireFragment(data.emptyPostsProfile.profile, 'empty post list'),
     home: requireFragment(data.home, 'home post list'),
     posts,
   };
@@ -1444,16 +1448,18 @@ function PostDeletionListEdgeSafety() {
 
   return (
     <SessionProvider>
-      <Catalog>
-        <View testID="post-deletion-home-list">
-          <PostList home={requireFragment(data.home, 'deletion home list')} />
-        </View>
-        <View testID="post-deletion-profile-list">
-          <PostList
-            profile={requireFragment(data.deletionProfile.postList, 'deletion profile list')}
-          />
-        </View>
-      </Catalog>
+      <ProfilePinProvider>
+        <Catalog>
+          <View testID="post-deletion-home-list">
+            <PostList home={requireFragment(data.home, 'deletion home list')} />
+          </View>
+          <View testID="post-deletion-profile-list">
+            <PostList
+              profile={requireFragment(data.deletionProfile.profile, 'deletion profile list')}
+            />
+          </View>
+        </Catalog>
+      </ProfilePinProvider>
     </SessionProvider>
   );
 }
@@ -3040,6 +3046,15 @@ const postListPaginationRelayData = {
   contentPostsProfile: paginationProfile,
   homeTimeline: paginationHomeTimeline,
 };
+const profilePinProviderQueryResponse = (selectedProfileId: string | null) => ({
+  node: selectedProfileId
+    ? {
+        __typename: 'Profile' as const,
+        id: selectedProfileId,
+        pinnedPosts: profile().pinnedPosts,
+      }
+    : null,
+});
 
 const meta = {
   beforeEach: () => {
@@ -3800,6 +3815,11 @@ export const ProductionPostDeletionListEdgeSafety: Story = {
     relay: {
       data: deletionOwnerRelayData,
       mutationResponse: { deletePost: { postId: shortPost.id } },
+      operationResponses: {
+        ProfilePinProviderQuery: (selectedProfileId: string | null) => ({
+          data: profilePinProviderQueryResponse(selectedProfileId),
+        }),
+      },
     },
   },
   play: async ({ canvasElement }) => {

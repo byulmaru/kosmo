@@ -25,6 +25,7 @@ const ProfilePostListPageQuery = graphql`
         }
       }
       ...PostList_profile @arguments(count: 20)
+      ...PostList_profile_pinned @arguments(count: 20)
     }
   }
 `;

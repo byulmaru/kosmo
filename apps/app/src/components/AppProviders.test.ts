@@ -272,6 +272,9 @@ mockModule(new URL('../analytics/AnalyticsSessionBridge.tsx', import.meta.url), 
 mockModule(new URL('../components/post/PostContentWarningRevealContext.tsx', import.meta.url), {
   PostContentWarningRevealProvider: ({ children }: PropsWithChildren) => children,
 });
+mockModule(new URL('../components/post/ProfilePinProvider.tsx', import.meta.url), {
+  ProfilePinProvider: ({ children }: PropsWithChildren) => children,
+});
 mockModule('@/components/feedback/FeedbackOverlay', {
   FeedbackOverlay: () => null,
 });
