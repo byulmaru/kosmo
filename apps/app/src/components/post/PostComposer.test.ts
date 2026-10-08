@@ -20,6 +20,7 @@ import type {
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const platform = { OS: 'web' };
+let mentionSearchEnabled = true;
 Object.assign(platform, {
   select: <T>(values: { default?: T; web?: T }) => values.web ?? values.default,
 });
@@ -185,7 +186,7 @@ mockModule('relay-runtime', {
   ROOT_ID: 'root',
 });
 mockModule('@/analytics/client', { trackAnalytics: () => undefined });
-mockModule('@/components/FeatureFlagsContext', { useFeatureFlag: () => true });
+mockModule('@/components/FeatureFlagsContext', { useFeatureFlag: () => mentionSearchEnabled });
 mockModule('@/components/profile/ProfileNameBlock', {
   ProfileNameBlock: () => createElement('ProfileNameBlock'),
 });
@@ -303,6 +304,7 @@ before(async () => {
 });
 
 beforeEach(() => {
+  mentionSearchEnabled = true;
   requests = [];
   relayEnvironment = createRelayEnvironment();
   textInputMountCount = 0;
@@ -321,6 +323,63 @@ afterEach(async () => {
   targetProps = undefined;
   mutationCalls = [];
   mock.restoreAll();
+});
+
+describe('PostComposer initial body', () => {
+  it('seeds an editable reply once and submits its plain text when mention search is off', async () => {
+    mentionSearchEnabled = false;
+    const seed = '@parent @remote@remote.example ';
+    const props = {
+      initialBodyText: seed,
+      onRequestClose: () => undefined,
+      presentation: 'overlay' as const,
+      profile: profileA as never,
+      replyParentId: 'post-parent-a',
+    };
+
+    await act(async () => {
+      renderer = create(createElement(PostComposer, props));
+    });
+    await act(async () => undefined);
+
+    assert.equal(targetProps?.body, seed);
+    assert.deepEqual(targetProps?.selection, { start: seed.length, end: seed.length });
+    assert.equal(requests.length, 0);
+
+    await act(async () => targetProps?.onBodyChange('@parent '));
+    await act(async () => {
+      renderer?.update(createElement(PostComposer, { ...props, initialBodyText: '@updated ' }));
+    });
+    assert.equal(targetProps?.body, '@parent ');
+
+    await act(async () => targetProps?.onSubmit());
+    assert.equal(mutationCalls[0]?.variables.input.bodyText, '@parent');
+    assert.equal(mutationCalls[0]?.variables.input.mentions, undefined);
+    assert.equal(mutationCalls[0]?.variables.input.replyParentId, 'post-parent-a');
+    assert.equal(requests.length, 0);
+
+    const nextSeed = '@new-parent ';
+    await act(async () => {
+      renderer?.update(
+        createElement(PostComposer, {
+          ...props,
+          initialBodyText: nextSeed,
+          replyParentId: 'post-parent-b',
+        }),
+      );
+    });
+    assert.equal(targetProps?.body, nextSeed);
+    assert.deepEqual(targetProps?.selection, { start: nextSeed.length, end: nextSeed.length });
+  });
+
+  it('keeps a normal Post empty without an initial body', async () => {
+    await act(async () => {
+      renderer = create(createElement(PostComposer, { profile: profileA as never }));
+    });
+
+    assert.equal(targetProps?.body, '');
+    assert.deepEqual(targetProps?.selection, { start: 0, end: 0 });
+  });
 });
 
 describe('PostComposer local author', () => {
