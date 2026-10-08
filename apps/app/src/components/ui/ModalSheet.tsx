@@ -38,24 +38,31 @@ export function ModalSheet({
     }
     wasMounted.current = overlayMotion.mounted;
   }, [onDismiss, overlayMotion.mounted]);
+  const close = () => {
+    if (visible && !dismissDisabled) {
+      onClose();
+    }
+  };
 
   return (
     <ModalSheetHost
       accessibilityLabel={title}
       animationType="none"
-      closeRequestDisabled={dismissDisabled}
-      onRequestClose={() => {
-        if (!dismissDisabled) {
-          onClose();
-        }
-      }}
+      closeRequestDisabled={!visible || dismissDisabled}
+      interactionDisabled={!visible}
+      onRequestClose={close}
       onShow={onShow}
       onDismiss={Platform.OS === 'ios' ? onDismiss : undefined}
       role={Platform.OS === 'web' ? role : 'dialog'}
       transparent
       visible={overlayMotion.mounted}
     >
-      <View style={styles.backdrop}>
+      <View
+        accessibilityElementsHidden={!visible}
+        importantForAccessibility={visible ? 'auto' : 'no-hide-descendants'}
+        pointerEvents={visible ? 'auto' : 'none'}
+        style={styles.backdrop}
+      >
         <Animated.View
           pointerEvents="none"
           style={[
@@ -66,8 +73,8 @@ export function ModalSheet({
         <Pressable
           accessibilityLabel={`${title} 닫기`}
           accessibilityRole="button"
-          disabled={dismissDisabled}
-          onPress={onClose}
+          disabled={!visible || dismissDisabled}
+          onPress={close}
           style={StyleSheet.absoluteFill}
         />
         <Animated.View
@@ -95,11 +102,7 @@ export function ModalSheet({
           <Pressable
             accessibilityLabel={title}
             accessibilityViewIsModal={Platform.OS !== 'web'}
-            onAccessibilityEscape={() => {
-              if (!dismissDisabled) {
-                onClose();
-              }
-            }}
+            onAccessibilityEscape={close}
             onPress={(event) => event.stopPropagation()}
             role={Platform.OS === 'web' ? undefined : 'dialog'}
             style={[
@@ -117,8 +120,8 @@ export function ModalSheet({
               </Text>
               <IconButton
                 accessibilityLabel="닫기"
-                disabled={dismissDisabled}
-                onPress={onClose}
+                disabled={!visible || dismissDisabled}
+                onPress={close}
                 style={styles.close}
                 targetSize={44}
                 visualSize={44}
