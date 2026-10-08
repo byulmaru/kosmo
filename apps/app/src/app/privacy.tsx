@@ -12,7 +12,7 @@ import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import type { Href } from 'expo-router';
 import type { PropsWithChildren, ReactNode } from 'react';
 
-const EFFECTIVE_DATE = '2026년 10월 7일';
+const EFFECTIVE_DATE = '2026년 10월 8일';
 const POLICY_TITLE = 'Kosmo 개인정보 처리방침';
 
 function SubsectionTitle({ children }: { children: ReactNode }) {
@@ -124,7 +124,7 @@ export default function PrivacyScreen() {
               '아래 7절의 이용 정보와 화면 기록, 로그인한 경우 계정·프로필 식별자',
               '기능 이용 현황 파악, 사용자 흐름 개선, 품질 문제 확인과 제품 우선순위 결정',
               '일반 이벤트는 수집일부터 12개월간 보유하며, 보유 기간이 지나면 지체 없이 파기합니다. Session Replay는 수집일부터 30일입니다.',
-              '개인정보 보호법 제15조 제1항 제6호(서비스 개선을 위한 정당한 이익). 국외 이전은 제28조의8 제1항 제3호 가목에 따른 계약 체결·이행에 필요한 처리위탁·보관으로 처리하며, 이 방침에 공개합니다.',
+              '개인정보 보호법 제15조 제1항 제6호(서비스 개선을 위한 정당한 이익)',
             ]}
           />
           <TableRow
@@ -191,8 +191,9 @@ export default function PrivacyScreen() {
           별마루는 서비스 제공을 위해 다음과 같이 개인정보를 국외로 이전합니다. Cloudflare의 글로벌
           네트워크 이용 과정에서 접속·전송 정보가 미국 및 유럽경제지역으로 이전될 수 있습니다.
           Cloudflare에 대한 국외 이전은 개인정보 보호법 제28조의8 제1항 제3호 가목에 따른 계약 이행
-          목적의 처리위탁으로 처리합니다. PostHog Cloud에 대한 국외 이전도 같은 조항에 따른 계약
-          체결·이행에 필요한 처리위탁·보관으로 처리하며, 이 방침에 공개합니다.
+          목적의 처리위탁으로 처리합니다. PostHog Cloud에 대한 국외 이전은 개인정보 보호법 제28조의8
+          제1항 제5호에 따라 개인정보보호위원회가 동등한 개인정보 보호 수준을 인정한 유럽연합으로의
+          이전으로 처리합니다.
         </PolicyParagraph>
         <PolicyTable
           headers={[
@@ -216,7 +217,7 @@ export default function PrivacyScreen() {
           <TableRow
             cells={[
               'PostHog, Inc.\nprivacy@posthog.com',
-              '미국',
+              '독일(프랑크푸르트)',
               '7절의 제품 분석 및 Session Replay 정보의 제품 이용 분석과 Session Replay 제공',
               '서비스 이용 시 암호화된 네트워크로 지속적으로 전송',
               '일반 이벤트는 수집일부터 12개월간 보유하며, 보유 기간이 지나면 지체 없이 파기합니다. Session Replay는 수집일부터 30일입니다.',
@@ -338,12 +339,12 @@ export default function PrivacyScreen() {
 
       <NavigationLink href={'/privacy/2026-09-09' as Href}>
         <Pressable
-          accessibilityLabel="이전 개인정보 처리방침 (2026년 9월 9일부터 2026년 10월 6일까지)"
+          accessibilityLabel="이전 개인정보 처리방침 (2026년 9월 9일부터 2026년 10월 7일까지)"
           accessibilityRole="link"
           style={styles.previousPolicyLinkControl}
         >
           <Text style={[styles.previousPolicyLink, { color: theme.textSecondary }]}>
-            이전 개인정보 처리방침 (2026년 9월 9일부터 2026년 10월 6일까지)
+            이전 개인정보 처리방침 (2026년 9월 9일부터 2026년 10월 7일까지)
           </Text>
         </Pressable>
       </NavigationLink>
