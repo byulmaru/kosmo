@@ -17,6 +17,7 @@ let writeProfile: (profileId: string) => Promise<void> = async () => undefined;
 const router = {
   replace: mock.fn((href: string) => profileSelectionCalls.push(`navigate:${href}`)),
 };
+const defaultReplace = router.replace;
 let rejectNextOpenURL = false;
 const openURL = mock.fn(async () => {
   if (rejectNextOpenURL) {
@@ -77,6 +78,7 @@ afterEach(async () => {
   responseListener = null;
   writeProfile = async () => undefined;
   profileSelectionCalls.length = 0;
+  router.replace = defaultReplace;
   router.replace.mock.resetCalls();
   openURL.mock.resetCalls();
   rejectNextOpenURL = false;
@@ -223,6 +225,32 @@ describe('native push responses', () => {
       'persist:start:profile-recipient',
       'persist:done:profile-recipient',
       'reset:profile-recipient',
+      'clear-response',
+      'navigate:/@recipient/postId',
+    ]);
+  });
+
+  it('does not persist or reset when the notification recipient is already selected', async () => {
+    session.selectedProfileId = 'profile-recipient';
+    let resolveNavigation!: () => void;
+    const navigation = new Promise<void>((resolve) => {
+      resolveNavigation = resolve;
+    });
+    router.replace = mock.fn((href: string) => {
+      profileSelectionCalls.push(`navigate:${href}`);
+      resolveNavigation();
+    });
+    await renderHook();
+
+    const handling = handle({
+      href: '/@recipient/postId',
+      notificationId: 'notification-1',
+      recipientProfileId: 'profile-recipient',
+    });
+    await navigation;
+    await handling;
+
+    assert.deepEqual(profileSelectionCalls, [
       'clear-response',
       'navigate:/@recipient/postId',
     ]);

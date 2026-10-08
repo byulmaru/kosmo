@@ -9,7 +9,6 @@ import {
   getLastNativeNotificationResponse,
   subscribeToNativeNotificationResponses,
 } from './nativePushClient';
-import { prepareNativePushNavigation } from './pushNavigation';
 import { nativePushResponseKey, parseNativePushTapTarget } from './pushPayload';
 import type { NotificationResponse } from 'expo-notifications';
 
@@ -71,15 +70,11 @@ export function useNativePushNotificationResponses() {
         return;
       }
 
-      let targetHref: Awaited<ReturnType<typeof prepareNativePushNavigation>>;
       try {
-        targetHref = await prepareNativePushNavigation({
-          href: envelope.href,
-          recipientProfileId: envelope.recipientProfileId,
-          resetActor,
-          writeSelectedProfile,
-          selectedProfileId: sessionRef.current.selectedProfileId,
-        });
+        if (sessionRef.current.selectedProfileId !== envelope.recipientProfileId) {
+          await writeSelectedProfile(envelope.recipientProfileId);
+          resetActor(envelope.recipientProfileId);
+        }
       } catch {
         markResponseHandled(response);
         fallbackToNotifications();
@@ -87,7 +82,7 @@ export function useNativePushNotificationResponses() {
       }
 
       markResponseHandled(response);
-      router.replace(targetHref);
+      router.replace(envelope.href);
     },
     [fallbackToNotifications, markResponseHandled, resetActor, router],
   );
