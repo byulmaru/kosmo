@@ -8,7 +8,7 @@ import {
   FOLLOWING_ACCOUNTS_IMPORT_MAX_ADDRESSES,
   followingAccountsImportWorkflow,
 } from '@kosmo/core/temporal/workflows';
-import { localProfileHandleSchema, remoteProfileHandleSchema } from '@kosmo/core/validation';
+import { profileHandleSchema, remoteProfileHandleSchema } from '@kosmo/core/validation';
 import { WorkflowIdConflictPolicy, WorkflowIdReusePolicy } from '@temporalio/client';
 import { parse } from 'csv-parse/sync';
 import { eq } from 'drizzle-orm';
@@ -63,20 +63,21 @@ export const parseFollowingAccountsCsv = (
   }
 
   const byIdentity = new Map<string, FollowingAccountsImportAddress>();
-  for (const row of dataRows) {
+  for (const [index, row] of dataRows.entries()) {
     const rawAddress = row[HEADER]?.trim() ?? '';
     const address = rawAddress.replace(/^@/, '');
+    const invalidAddressMessage = `CSV ${index + 1}번째 계정 주소 형식이 올바르지 않아요. 예: user@example.com`;
     const parsed =
       address.split('@').length === 2
         ? parseProfileHandle(address, { configuredLocalDomain })
         : null;
     if (!parsed) {
-      throw invalidCsv('모든 계정 주소를 확인할 수 있어야 해요.');
+      throw invalidCsv(invalidAddressMessage);
     }
 
     if (parsed.kind === 'local') {
-      if (!localProfileHandleSchema.safeParse(parsed.handle).success) {
-        throw invalidCsv('모든 계정 주소를 확인할 수 있어야 해요.');
+      if (!profileHandleSchema.safeParse(parsed.handle).success) {
+        throw invalidCsv(invalidAddressMessage);
       }
       const normalized: FollowingAccountsImportAddress = {
         kind: 'local',
@@ -93,7 +94,7 @@ export const parseFollowingAccountsCsv = (
       parsed.handle !== parsed.handle.trim() ||
       !remoteProfileHandleSchema.safeParse(parsed.handle).success
     ) {
-      throw invalidCsv('모든 계정 주소를 확인할 수 있어야 해요.');
+      throw invalidCsv(invalidAddressMessage);
     }
     const normalized: FollowingAccountsImportAddress = {
       kind: 'remote',

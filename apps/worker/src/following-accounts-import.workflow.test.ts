@@ -289,6 +289,9 @@ test(
       assert.notEqual(firstLookupId, otherLookupId);
       await environment.client.workflow.getHandle(otherLookupId).describe();
 
+      await execute(importInput(followerProfileId, [{ kind: 'local', handle: 'kosmo' }]));
+      assert.equal(followed.at(-1), 'local:kosmo');
+
       const batchAddresses = [
         ...Array.from({ length: BATCH_SIZE_FOR_TEST - 1 }, (_, index) => ({
           kind: 'local' as const,

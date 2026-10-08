@@ -28,6 +28,13 @@ test('following CSV accepts BOM, CRLF, quoted optional columns, blank rows, and 
   ]);
 });
 
+test('following CSV accepts local handles reserved only for profile creation', () => {
+  assert.deepEqual(
+    parseFollowingAccountsCsv('Account address\nkosmo@kosmo.example', LOCAL_DOMAIN),
+    [{ kind: 'local', handle: 'kosmo' }],
+  );
+});
+
 test('following CSV deduplicates remote handles by existing normalized identity', () => {
   const addresses = parseFollowingAccountsCsv(
     'Account address\nAlice@example.com\nalice@EXAMPLE.com',
@@ -51,6 +58,24 @@ test('following CSV rejects malformed data, missing required headers, and invali
       csv,
     );
   }
+});
+
+test('following CSV reports the invalid account-address row without echoing its value', () => {
+  assert.throws(
+    () =>
+      parseFollowingAccountsCsv(
+        'Account address\nalice@example.com\nmalformed@@example.com',
+        LOCAL_DOMAIN,
+      ),
+    (error) => {
+      assert.ok(error instanceof ValidationError);
+      assert.equal(error.field, 'csv');
+      assert.match(error.message, /2번째 계정 주소/);
+      assert.match(error.message, /user@example\.com/);
+      assert.doesNotMatch(error.message, /malformed@@example\.com/);
+      return true;
+    },
+  );
 });
 
 test('following CSV rejects oversized files and row counts before deduplication', () => {
