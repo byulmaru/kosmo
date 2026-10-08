@@ -9,7 +9,7 @@ import {
   ProfileMutes,
   Profiles,
 } from '../db';
-import { InstanceKind, PostState, PostVisibility } from '../enums';
+import { PostState, PostVisibility } from '../enums';
 import { visibleProfileWhere } from './profile';
 import { profileBlockVisibilityWhere } from './profile-block';
 import type { SQL, SQLWrapper } from 'drizzle-orm';
@@ -39,13 +39,6 @@ export const postVisibilityCondition = ({
   const directWhere = viewerProfileId
     ? and(
         eq(columns.postVisibility, PostVisibility.DIRECT),
-        sql<boolean>`EXISTS (
-          SELECT 1
-          FROM ${Profiles}
-          INNER JOIN ${Instances} ON ${Instances.id} = ${Profiles.instanceId}
-          WHERE ${Profiles.id} = ${columns.authorProfileId}
-            AND ${Instances.kind} = ${InstanceKind.LOCAL}
-        )`,
         sql<boolean>`EXISTS (
           SELECT 1
           FROM ${PostMentions}

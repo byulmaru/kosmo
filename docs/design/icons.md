@@ -100,7 +100,7 @@ back에 chevron을 사용하지 않는다.
 | Visibility       | 공개                      | `Globe`                        | `postVisibilityPresentation`                                                            |
 | Visibility       | 조용한 공개               | `Moon`                         | `postVisibilityPresentation`                                                            |
 | Visibility       | 팔로워만                  | `Lock`                         | `postVisibilityPresentation`                                                            |
-| Visibility       | 언급한 계정만             | `AtSign`                       | `postVisibilityPresentation`                                                            |
+| Visibility       | 지정 멤버만               | `AtSign`                       | `postVisibilityPresentation`                                                            |
 | Search           | 최근 검색                 | `History`                      | Search route                                                                            |
 | Notification     | 팔로우                    | `UserPlus`                     | `NotificationListItem`                                                                  |
 | Notification     | 반응                      | `Smile`                        | `NotificationListItem`                                                                  |
