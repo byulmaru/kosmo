@@ -261,8 +261,10 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   `PostAttributionRow`의 [Center Pinned](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4821-12984)·
   [Mobile Pinned](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4821-12988) source다.
 - `PostListItem`의 `pinned`는 표시만 소유한다. 정렬·자격을 계산하거나 Home에 고정을 적용하지 않는다.
-  Profile route가 server-authoritative `pinnedPosts` connection을 공급하고 production action은 그 context에서
-  Local은 첫 visible pin만 표시·관리하고 Remote는 원격 순서의 전체 pin을 페이지별로 표시한다. Home·Local·Hashtag 목록은 이 context를 전달하지 않는다.
+  Profile route는 server-authoritative `pinnedPosts` connection의 표시·페이지네이션을 담당하고, production action은
+  작성자 Profile fragment에서 같은 ordered set의 첫 visible pin을 읽는다. Local은 첫 visible pin만 표시·관리하고
+  Remote는 원격 순서의 전체 pin을 페이지별로 표시한다. Post action surface는 Home·Search·Detail·Profile 어디에서나
+  동일한 owner action을 제공한다.
 - Production `useProfilePinAction`이 `pinProfilePost`·`unpinProfilePost` Relay mutation과 `profile.pinnedPosts`
   projection을 소유하고 `PostActionSurface`가 메뉴를 조합한다. 기존 pin이 있으면 새 pin 항목은 숨기고, 교체는 제공하지 않으며 해제와 새 고정을
   두 번의 명시적 동작으로 수행한다. mutation 응답은 `PostListItem_post`를 포함해 다음 visible pin의

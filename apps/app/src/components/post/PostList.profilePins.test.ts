@@ -132,6 +132,15 @@ const connection = (ids: string[], hasNextPage = false) => ({
         relativeHandle: '@author',
         avatar: null,
         instance: { kind: 'LOCAL' },
+        pinnedPosts: {
+          edges: [],
+          pageInfo: {
+            startCursor: null,
+            endCursor: null,
+            hasNextPage: false,
+            hasPreviousPage: false,
+          },
+        },
         viewerState: null,
       },
     },
@@ -170,8 +179,8 @@ it('Local shows first pin, permits duplicates, and survives deleted records', as
     ['first', true],
     ['first', false],
   ]);
-  assert.equal(all('PostListItem')[1]!.props.profilePin.onUnpinned, undefined);
-  all('PostListItem')[0]!.props.profilePin.onUnpinned();
+  assert.equal(all('PostListItem')[1]!.props.onProfileUnpinned, undefined);
+  all('PostListItem')[0]!.props.onProfileUnpinned();
   assert.equal(focusList.mock.callCount(), 1);
   await act(async () => environment.commitUpdate((store) => store.delete('first')));
   assert.deepEqual(cards(), [['second', true]]);

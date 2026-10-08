@@ -33,7 +33,6 @@ import type { PostListProfileNextPageQuery } from './__generated__/PostListProfi
 import type { PostListProfilePinnedNextPageQuery } from './__generated__/PostListProfilePinnedNextPageQuery.graphql';
 import type { ReplyComposerSurface_profile$key } from './__generated__/ReplyComposerSurface_profile.graphql';
 import type { PostListPresentation } from './postListMetrics';
-import type { ProfilePinContext } from './ProfilePinAction';
 
 const PostListProfileFragment = graphql`
   fragment PostList_profile on Profile
@@ -161,12 +160,6 @@ export function PostList({
   const pinnedEdges = (pinnedProfile?.pinnedPosts.edges ?? []).filter((edge) => edge.node != null);
   const profileIsLocal = profile?.instance.kind === 'LOCAL';
   const visiblePinnedEdges = profileIsLocal ? pinnedEdges.slice(0, 1) : pinnedEdges;
-  const profilePin = profileKey
-    ? {
-        firstPinnedPostId: visiblePinnedEdges[0]?.node?.id ?? null,
-        profileIsLocal,
-      }
-    : null;
   const connection = isHome ? home?.homeTimeline : isLocal ? local?.localTimeline : profile?.posts;
   const edges = connection?.edges ?? [];
   // A successful delete can remove the node record before Relay prunes an
@@ -254,10 +247,8 @@ export function PostList({
                 hasNext={!profileIsLocal && profilePinnedPagination.hasNext}
                 isLoadingNext={profilePinnedPagination.isLoadingNext}
                 loadNext={loadPinnedNext}
+                onProfileUnpinned={() => listRef.current?.focus()}
                 presentation={postListPresentation}
-                profilePin={
-                  profilePin ? { ...profilePin, onUnpinned: () => listRef.current?.focus() } : null
-                }
               />
             ) : null}
             <InfiniteList
@@ -290,7 +281,6 @@ export function PostList({
                 <PostListItem
                   post={item.node}
                   presentation={postListPresentation}
-                  profilePin={profilePin}
                 />
               )}
               refreshing={refreshing}
@@ -308,8 +298,8 @@ type ProfilePinnedPostListProps = Readonly<{
   hasNext: boolean;
   isLoadingNext: boolean;
   loadNext: LoadNext;
+  onProfileUnpinned: () => void;
   presentation: PostListPresentation;
-  profilePin: ProfilePinContext | null;
 }>;
 
 function ProfilePinnedPostList({
@@ -317,8 +307,8 @@ function ProfilePinnedPostList({
   hasNext,
   isLoadingNext,
   loadNext,
+  onProfileUnpinned,
   presentation,
-  profilePin,
 }: ProfilePinnedPostListProps) {
   const [loadError, setLoadError] = useState(false);
   const handleLoadNext = useCallback(() => {
@@ -336,10 +326,10 @@ function ProfilePinnedPostList({
       {data.map((edge) => (
         <PostListItem
           key={`pinned:${edge.node.id}`}
+          onProfileUnpinned={onProfileUnpinned}
           pinned
           post={edge.node}
           presentation={presentation}
-          profilePin={profilePin}
         />
       ))}
       {hasNext ? (

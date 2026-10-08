@@ -62,6 +62,30 @@ const storyPost = {
   viewerReactions: [],
 };
 
+function storyPinnedPosts(isPinned: boolean) {
+  return {
+    edges: isPinned
+      ? [{ cursor: 'pin-cursor', node: { __typename: 'Post' as const, id: storyPost.id } }]
+      : [],
+    pageInfo: {
+      endCursor: isPinned ? 'pin-cursor' : null,
+      hasNextPage: false,
+      hasPreviousPage: false,
+      startCursor: isPinned ? 'pin-cursor' : null,
+    },
+  };
+}
+
+function storyPostWithPinState(isPinned: boolean) {
+  return {
+    ...storyPost,
+    profile: {
+      ...storyPost.profile,
+      pinnedPosts: storyPinnedPosts(isPinned),
+    },
+  };
+}
+
 function useStoryPost() {
   const data = useLazyLoadQuery<ProfilePinActionStoriesQueryType>(ProfilePinActionStoriesQuery, {});
   return data.node?.__typename === 'Post' && data.node.listItem
@@ -82,32 +106,15 @@ function Fixture({ presentation }: StoryArgs) {
         pinned={postNode.profile.pinnedPosts.edges.length > 0}
         post={postNode.post}
         presentation={presentation}
-        profilePin={{
-          firstPinnedPostId: postNode.profile.pinnedPosts.edges[0]?.node?.id ?? null,
-          profileIsLocal: postNode.profile.instance.kind === 'LOCAL',
-        }}
       />
     </View>
   );
 }
 
 function createStoryData(action: ProfilePinOperation) {
+  const isPinned = action === 'unpin';
   return {
-    node: {
-      ...storyPost,
-      profile: {
-        ...storyPost.profile,
-        pinnedPosts: {
-          edges: action === 'unpin' ? [{ cursor: 'pin-cursor', node: storyPost }] : [],
-          pageInfo: {
-            endCursor: action === 'unpin' ? 'pin-cursor' : null,
-            hasNextPage: false,
-            hasPreviousPage: false,
-            startCursor: action === 'unpin' ? 'pin-cursor' : null,
-          },
-        },
-      },
-    },
+    node: storyPostWithPinState(isPinned),
   };
 }
 const deletionResponse = { deletePost: { postId: storyPost.id } };
@@ -117,7 +124,7 @@ const pinResponse = {
     profile: {
       id: storyPost.profile.id,
       pinnedPosts: {
-        edges: [{ cursor: 'pin-cursor', node: storyPost }],
+        edges: [{ cursor: 'pin-cursor', node: storyPostWithPinState(true) }],
         pageInfo: {
           endCursor: 'pin-cursor',
           hasNextPage: false,
@@ -497,15 +504,15 @@ export const ExistingDeletionFlow: Story = {
 export const ProductionWithoutPinFixture: Story = {
   render: function ProductionPost() {
     const postNode = useStoryPost();
-    return postNode ? <PostListItem pinned post={postNode.post} presentation="wide" /> : <></>;
+    return postNode ? <PostListItem post={postNode.post} presentation="wide" /> : <></>;
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
-    expect(canvas.getByText('고정됨')).toBeVisible();
     await userEvent.click(canvas.getByRole('button', { name: '더 보기' }));
     expect((await body.findAllByRole('menuitem')).map((item) => item.textContent)).toEqual([
       '링크 복사',
+      '프로필에 고정',
       '신고',
       '삭제',
     ]);
