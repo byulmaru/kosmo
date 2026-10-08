@@ -10,12 +10,14 @@ import {
   View,
 } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
+import { identifyAnalytics, trackAnalytics } from '@/analytics/client';
 import { setStringAsync } from '@/components/post/postClipboard';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { Avatar } from '@/components/ui/Avatar';
 import { Skeleton } from '@/components/ui/StateView';
 import { useToast } from '@/components/ui/ToastProvider';
 import { getPublicWebOrigin } from '@/config/origin';
+import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { breakpoints, radius, space, textStyles } from '@/theme/tokens';
 import { ProfileBioPrivacyBoundary } from './ProfileBioPrivacyBoundary';
@@ -94,6 +96,7 @@ export function ProfileHero({
     }
   }, [unmuteFocusRevision]);
   const theme = useTheme();
+  const { accountId } = useSession();
   const { showToast } = useToast();
   const { width } = useWindowDimensions();
   const data = useFragment(profileHeroFragment, profile);
@@ -291,7 +294,7 @@ export function ProfileHero({
         {data.tags.length ? (
           <View style={styles.tags} testID="profile-tag-list">
             {data.tags.map((tag) => (
-              <ProfileTagLink id={tag.id} key={tag.id} name={tag.name} />
+              <ProfileTagLink accountId={accountId} id={tag.id} key={tag.id} name={tag.name} />
             ))}
           </View>
         ) : null}
@@ -341,15 +344,29 @@ export function ProfileHero({
   );
 }
 
-function ProfileTagLink({ id, name }: { id: string; name: string }) {
+function ProfileTagLink({
+  accountId,
+  id,
+  name,
+}: {
+  accountId: string | null;
+  id: string;
+  name: string;
+}) {
   const targetSize = Platform.select({ android: 48, default: 48, ios: 44, web: 32 });
   const href = {
     params: { hashtagId: id },
     pathname: '/hashtags/[hashtagId]/profiles',
   } as const;
+  const recordClick = () => {
+    if (accountId) {
+      identifyAnalytics(accountId);
+      trackAnalytics('profile_hashtag_clicked', { hashtag_id: id });
+    }
+  };
 
   return (
-    <NavigationLink href={href}>
+    <NavigationLink href={href} onExternalNavigate={recordClick} onNavigate={recordClick}>
       <Pressable
         accessibilityLabel={`#${name} 관련 프로필 보기`}
         accessibilityRole="link"

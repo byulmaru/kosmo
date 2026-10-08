@@ -90,6 +90,9 @@ mockModule(new URL('../relay/RelayActorProvider.tsx', import.meta.url), {
     resetSession: () => state.resetSession(),
   }),
 });
+mockModule(new URL('./SessionProvider.tsx', import.meta.url), {
+  useAnalyticsIdentityAccountId: () => 'account-a',
+});
 
 let useLogout: () => LogoutState;
 
@@ -122,7 +125,7 @@ describe('useLogout production composition', () => {
     ]);
   });
 
-  it('Web BFF failure keeps the local auth lifecycle and route', async () => {
+  it('Web BFF 실패에서는 탐색과 identity, actor, route를 유지한다', async () => {
     platform.OS = 'web';
     state.requestWebLogout = async () => {
       state.events.push('request-web-logout');

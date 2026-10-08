@@ -1,0 +1,279 @@
+{
+  "rule": "prod-556-user-funnel-v3",
+  "project_id": 563575,
+  "dashboard_id": 2122242,
+  "dashboard_filters": {
+    "properties": [
+      {
+        "key": "id",
+        "type": "cohort",
+        "value": 493482,
+        "operator": "not_in"
+      }
+    ]
+  },
+  "definition_readback_at": "2026-10-06",
+  "production_acceptance": "pending",
+  "insights": [
+    {
+      "id": 12104770,
+      "short_id": "4wGUwUxz",
+      "name": "PROD-556 v3 · 주간 사용자 Funnel (동일 Hashtag · 30분)",
+      "description": "최초 첫 페이지 result_count 기준 사용자 Funnel/Empty. 30분 ordered·동일 hashtag_id. 결과 0은 Empty, >0은 목록 도달. 반복 사용자는 distinct 합집합. 이전 화면 진입·요청 품질 지표 폐기, 수치 연속성 없음. production 인수 pending.",
+      "query": {
+        "kind": "DataVisualizationNode",
+        "source": {
+          "filters": {
+            "properties": [
+              {
+                "key": "id",
+                "operator": "not_in",
+                "type": "cohort",
+                "value": 493482
+              },
+              {
+                "key": "id",
+                "operator": "not_in",
+                "type": "cohort",
+                "value": 493482
+              }
+            ]
+          },
+          "kind": "HogQLQuery",
+          "query": "WITH funnel_events AS (\nSELECT person_id AS account_id, properties['hashtag_id'] AS hashtag_id, timestamp, event, toInt(properties['result_count']) AS result_count\n  FROM events\n  WHERE {filters}\n    AND timestamp >= toStartOfWeek(toTimeZone(now() - INTERVAL 90 DAY, 'Asia/Seoul'), 1)\n    AND timestamp <= now()\n    AND event IN ('profile_hashtag_clicked', 'profile_hashtag_list_viewed', 'profile_hashtag_profile_selected')\n    AND properties['$user_id'] != '' AND properties['hashtag_id'] != ''\n    AND properties['$host'] = 'kos.moe' AND properties['$lib'] = 'web'\n    AND coalesce(properties['$virt_is_bot'], false) = false\n    AND coalesce(nullIf(properties['$virt_traffic_type'], ''), 'Regular') = 'Regular'\n),\nstart_weeks AS (\n  SELECT DISTINCT account_id, hashtag_id,\n    toStartOfWeek(toTimeZone(timestamp, 'Asia/Seoul'), 1) AS week\n  FROM funnel_events WHERE event = 'profile_hashtag_clicked'\n), per_tag_user AS (\n  SELECT starts.week, starts.account_id, starts.hashtag_id,\n    windowFunnel(1800)(\n      toDateTime(observed.timestamp),\n      observed.event = 'profile_hashtag_clicked' AND observed.timestamp < starts.week + INTERVAL 7 DAY,\n      observed.event = 'profile_hashtag_list_viewed' AND observed.result_count > 0,\n      observed.event = 'profile_hashtag_profile_selected'\n    ) AS steps\n  FROM start_weeks AS starts\n  INNER JOIN funnel_events AS observed\n    ON observed.account_id = starts.account_id AND observed.hashtag_id = starts.hashtag_id\n  WHERE observed.timestamp >= starts.week\n    AND observed.timestamp < starts.week + INTERVAL 7 DAY + INTERVAL 30 MINUTE\n  GROUP BY starts.week, starts.account_id, starts.hashtag_id\n), per_user AS (\n  SELECT week, account_id, max(steps) AS steps FROM per_tag_user GROUP BY week, account_id\n)\nSELECT week, countIf(steps >= 1) AS clicked_users,\n  countIf(steps >= 2) AS list_users, countIf(steps >= 3) AS selected_users,\n  list_users / nullIf(clicked_users, 0) AS list_reach_rate,\n  selected_users / nullIf(clicked_users, 0) AS user_conversion_rate,\n  selected_users / nullIf(list_users, 0) AS list_to_selection_rate,\n  'prod-556-user-funnel-v3' AS calculation_rule_version, now() AS calculated_at\nFROM per_user GROUP BY week ORDER BY week"
+        }
+      }
+    },
+    {
+      "id": 12104784,
+      "short_id": "gKEb8z5P",
+      "name": "PROD-556 v3 · Hashtag별 사용자 Funnel (30분)",
+      "description": "최초 첫 페이지 result_count 기준 사용자 Funnel/Empty. 30분 ordered·동일 hashtag_id. 결과 0은 Empty, >0은 목록 도달. 반복 사용자는 distinct 합집합. 이전 화면 진입·요청 품질 지표 폐기, 수치 연속성 없음. production 인수 pending.",
+      "query": {
+        "kind": "InsightVizNode",
+        "source": {
+          "breakdownFilter": {
+            "breakdown": "hashtag_id",
+            "breakdown_type": "event"
+          },
+          "dateRange": {
+            "date_from": "-90d",
+            "excludeIncompletePeriods": false,
+            "explicitDate": false
+          },
+          "filterTestAccounts": true,
+          "funnelsFilter": {
+            "breakdownAttributionType": "all_events",
+            "exclusions": [],
+            "funnelOrderType": "ordered",
+            "funnelStepReference": "total",
+            "funnelVizType": "steps",
+            "funnelWindowInterval": 30,
+            "funnelWindowIntervalUnit": "minute",
+            "hideIncompleteConversionWindowPeriods": false,
+            "layout": "vertical",
+            "legendPosition": "bottom",
+            "showAnnotations": true,
+            "showLegend": false,
+            "showValuesOnSeries": false
+          },
+          "interval": "week",
+          "kind": "FunnelsQuery",
+          "properties": {
+            "type": "AND",
+            "values": [
+              {
+                "type": "AND",
+                "values": [
+                  {
+                    "key": "$host",
+                    "operator": "exact",
+                    "type": "event",
+                    "value": "kos.moe"
+                  },
+                  {
+                    "key": "$lib",
+                    "operator": "exact",
+                    "type": "event",
+                    "value": "web"
+                  },
+                  {
+                    "key": "properties['$user_id'] != '' AND properties['hashtag_id'] != '' AND coalesce(properties['$virt_is_bot'], false) = false AND coalesce(nullIf(properties['$virt_traffic_type'], ''), 'Regular') = 'Regular'",
+                    "type": "hogql"
+                  }
+                ]
+              },
+              {
+                "type": "AND",
+                "values": [
+                  {
+                    "key": "id",
+                    "operator": "not_in",
+                    "type": "cohort",
+                    "value": 493482
+                  }
+                ]
+              }
+            ]
+          },
+          "series": [
+            {
+              "custom_name": "TagChip 선택",
+              "event": "profile_hashtag_clicked",
+              "kind": "EventsNode"
+            },
+            {
+              "custom_name": "최초 결과 표시 (result_count > 0)",
+              "event": "profile_hashtag_list_viewed",
+              "kind": "EventsNode",
+              "properties": [
+                {
+                  "key": "result_count",
+                  "type": "event",
+                  "operator": "gt",
+                  "value": 0
+                }
+              ]
+            },
+            {
+              "custom_name": "Profile 선택",
+              "event": "profile_hashtag_profile_selected",
+              "kind": "EventsNode"
+            }
+          ],
+          "version": 2
+        }
+      }
+    },
+    {
+      "id": 12477917,
+      "short_id": "fZtdaHRP",
+      "name": "PROD-556 v3 · 최초 결과 표시 중 Empty 비율",
+      "description": "최초 첫 페이지 result_count 기준 사용자 Funnel/Empty. 30분 ordered·동일 hashtag_id. 결과 0은 Empty, >0은 목록 도달. 반복 사용자는 distinct 합집합. 이전 화면 진입·요청 품질 지표 폐기, 수치 연속성 없음. production 인수 pending.",
+      "query": {
+        "kind": "DataVisualizationNode",
+        "source": {
+          "filters": {
+            "properties": [
+              {
+                "key": "id",
+                "operator": "not_in",
+                "type": "cohort",
+                "value": 493482
+              },
+              {
+                "key": "id",
+                "operator": "not_in",
+                "type": "cohort",
+                "value": 493482
+              }
+            ]
+          },
+          "kind": "HogQLQuery",
+          "query": "SELECT toStartOfWeek(toTimeZone(timestamp, 'Asia/Seoul'), 1) AS week,\n  count() AS result_views,\n  countIf(toInt(properties['result_count']) = 0) AS empty_views,\n  empty_views / nullIf(result_views, 0) AS empty_rate,\n  'prod-556-user-funnel-v3' AS calculation_rule_version, now() AS calculated_at\nFROM events\nWHERE {filters}\n  AND timestamp >= toStartOfWeek(toTimeZone(now() - INTERVAL 90 DAY, 'Asia/Seoul'), 1)\n  AND timestamp <= now()\n  AND event = 'profile_hashtag_list_viewed'\n  AND toInt(properties['result_count']) BETWEEN 0 AND 20\n  AND properties['$user_id'] != '' AND properties['hashtag_id'] != ''\n  AND properties['$host'] = 'kos.moe' AND properties['$lib'] = 'web'\n  AND coalesce(properties['$virt_is_bot'], false) = false\n  AND coalesce(nullIf(properties['$virt_traffic_type'], ''), 'Regular') = 'Regular'\nGROUP BY week ORDER BY week"
+        }
+      }
+    },
+    {
+      "id": 12478018,
+      "short_id": "FbAXya72",
+      "name": "PROD-556 v3 · Hashtag별 주간 사용자 전환 (30분)",
+      "description": "최초 첫 페이지 result_count 기준 사용자 Funnel/Empty. 30분 ordered·동일 hashtag_id. 결과 0은 Empty, >0은 목록 도달. 반복 사용자는 distinct 합집합. 이전 화면 진입·요청 품질 지표 폐기, 수치 연속성 없음. production 인수 pending.",
+      "query": {
+        "kind": "InsightVizNode",
+        "source": {
+          "breakdownFilter": {
+            "breakdown": "hashtag_id",
+            "breakdown_type": "event"
+          },
+          "dateRange": {
+            "date_from": "-90d",
+            "excludeIncompletePeriods": false,
+            "explicitDate": false
+          },
+          "filterTestAccounts": true,
+          "funnelsFilter": {
+            "breakdownAttributionType": "all_events",
+            "exclusions": [],
+            "funnelOrderType": "ordered",
+            "funnelStepReference": "total",
+            "funnelVizType": "trends",
+            "funnelWindowInterval": 30,
+            "funnelWindowIntervalUnit": "minute",
+            "hideIncompleteConversionWindowPeriods": false,
+            "layout": "vertical",
+            "legendPosition": "bottom",
+            "showAnnotations": true,
+            "showLegend": false,
+            "showValuesOnSeries": false
+          },
+          "interval": "week",
+          "kind": "FunnelsQuery",
+          "properties": {
+            "type": "AND",
+            "values": [
+              {
+                "type": "AND",
+                "values": [
+                  {
+                    "key": "$host",
+                    "operator": "exact",
+                    "type": "event",
+                    "value": "kos.moe"
+                  },
+                  {
+                    "key": "$lib",
+                    "operator": "exact",
+                    "type": "event",
+                    "value": "web"
+                  },
+                  {
+                    "key": "properties['$user_id'] != '' AND properties['hashtag_id'] != '' AND coalesce(properties['$virt_is_bot'], false) = false AND coalesce(nullIf(properties['$virt_traffic_type'], ''), 'Regular') = 'Regular'",
+                    "type": "hogql"
+                  }
+                ]
+              },
+              {
+                "type": "AND",
+                "values": [
+                  {
+                    "key": "id",
+                    "operator": "not_in",
+                    "type": "cohort",
+                    "value": 493482
+                  }
+                ]
+              }
+            ]
+          },
+          "series": [
+            {
+              "custom_name": "TagChip 선택",
+              "event": "profile_hashtag_clicked",
+              "kind": "EventsNode"
+            },
+            {
+              "custom_name": "최초 결과 표시 (result_count > 0)",
+              "event": "profile_hashtag_list_viewed",
+              "kind": "EventsNode",
+              "properties": [
+                {
+                  "key": "result_count",
+                  "type": "event",
+                  "operator": "gt",
+                  "value": 0
+                }
+              ]
+            },
+            {
+              "custom_name": "Profile 선택",
+              "event": "profile_hashtag_profile_selected",
+              "kind": "EventsNode"
+            }
+          ],
+          "version": 2
+        }
+      }
+    }
+  ]
+}
