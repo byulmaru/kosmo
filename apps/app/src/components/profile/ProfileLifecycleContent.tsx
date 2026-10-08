@@ -5,7 +5,7 @@ import { ConfirmationContent } from '@/components/ui/ConfirmationContent';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
 import { ProfileListItemContent } from './ProfileListItemContent';
-import type { Ref } from 'react';
+import type { ReactNode, Ref } from 'react';
 
 export type ProfileLifecycleProfile = {
   id: string;
@@ -28,9 +28,11 @@ type AcknowledgementProps = {
 };
 
 export function ProfileLifecycleIdentity({
+  children,
   profile,
   deactivated,
 }: {
+  children?: ReactNode;
   profile: ProfileLifecycleProfile;
   deactivated: boolean;
 }) {
@@ -51,7 +53,9 @@ export function ProfileLifecycleIdentity({
         </View>
       }
       style={{ borderColor: theme.borderSubtle, minHeight: 72 }}
-    />
+    >
+      {children}
+    </ProfileListItemContent>
   );
 }
 

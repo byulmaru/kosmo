@@ -11,9 +11,11 @@ import type { ProfilePostingSettingsValue } from './ProfilePostingSettings';
 const options = ['PUBLIC', 'UNLISTED', 'FOLLOWERS'] as const;
 
 export function ProfileVisibilitySelect({
+  disabled = false,
   value,
   onChange,
 }: {
+  disabled?: boolean;
   value: ProfilePostingSettingsValue['defaultPostVisibility'];
   onChange: (value: ProfilePostingSettingsValue['defaultPostVisibility']) => void;
 }) {
@@ -26,8 +28,13 @@ export function ProfileVisibilitySelect({
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`게시물 기본 공개 범위: ${value === 'PUBLIC' ? '전체 공개' : postVisibilityPresentation[value].label}`}
-        accessibilityState={{ expanded: open }}
-        onPress={() => setOpen(true)}
+        accessibilityState={{ disabled, expanded: open }}
+        disabled={disabled}
+        onPress={() => {
+          if (!disabled) {
+            setOpen(true);
+          }
+        }}
         ref={triggerRef}
         style={{
           alignItems: 'center',
@@ -70,7 +77,7 @@ export function ProfileVisibilitySelect({
         </View>
         <RadioGroup
           accessibilityLabel="게시물 기본 공개 범위"
-          disabled={!open}
+          disabled={disabled || !open}
           value={value}
           onChange={(nextValue) => {
             if (open) {
