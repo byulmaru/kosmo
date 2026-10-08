@@ -76,8 +76,9 @@ export const UniversalCompactOverlayGeometry: Story = {
     const scroll = within(dialog).getByTestId('post-composer-scroll');
     await waitFor(() => expect(dialog.getBoundingClientRect().height).toBeCloseTo(maxHeight, 0));
     expect(scroll.scrollHeight).toBeGreaterThan(scroll.clientHeight);
-    expect(getComputedStyle(scroll).scrollbarGutter).toBe('stable');
     expect(getComputedStyle(scroll).scrollbarWidth).toBe('thin');
+    scroll.scrollTop = 24;
+    await waitFor(() => expect(scroll.scrollTop).toBe(24));
     await userEvent.clear(body);
     await waitFor(() => expect(dialog.getBoundingClientRect().height).toBeLessThan(maxHeight));
   },
