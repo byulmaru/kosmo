@@ -227,6 +227,7 @@ export const materializeReplyNotificationIfEligible = async (
               eq(ReplyAuthors.state, ProfileState.ACTIVE),
               ne(ReplyAuthorInstances.state, InstanceState.SUSPENDED),
             )!,
+            postContentId: Posts.currentContentId,
             postState: Posts.state,
             postVisibility: Posts.visibility,
           },

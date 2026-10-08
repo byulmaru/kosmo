@@ -1,6 +1,14 @@
 import { and, eq, exists, inArray, isNotNull, isNull, ne, not, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
-import { Instances, Posts, ProfileBlocks, ProfileFollows, ProfileMutes, Profiles } from '../db';
+import {
+  Instances,
+  PostMentions,
+  Posts,
+  ProfileBlocks,
+  ProfileFollows,
+  ProfileMutes,
+  Profiles,
+} from '../db';
 import { PostState, PostVisibility } from '../enums';
 import { visibleProfileWhere } from './profile';
 import { profileBlockVisibilityWhere } from './profile-block';
@@ -10,6 +18,7 @@ import type { DatabaseHandle } from '../db';
 type PostVisibilityConditionColumns = {
   readonly authorProfileId: SQLWrapper;
   readonly authorVisible: SQLWrapper;
+  readonly postContentId: SQLWrapper;
   readonly postState: SQLWrapper;
   readonly postVisibility: SQLWrapper;
 };
@@ -27,10 +36,22 @@ export const postVisibilityCondition = ({
     PostVisibility.PUBLIC,
     PostVisibility.UNLISTED,
   ]);
+  const directWhere = viewerProfileId
+    ? and(
+        eq(columns.postVisibility, PostVisibility.DIRECT),
+        sql<boolean>`EXISTS (
+          SELECT 1
+          FROM ${PostMentions}
+          WHERE ${PostMentions.postContentId} = ${columns.postContentId}
+            AND ${PostMentions.profileId} = ${viewerProfileId}
+        )`,
+      )
+    : undefined;
   const visibleWhere = viewerProfileId
     ? or(
         publicWhere,
         eq(columns.authorProfileId, viewerProfileId),
+        directWhere,
         viewerFollowsAuthor
           ? and(eq(columns.postVisibility, PostVisibility.FOLLOWERS), viewerFollowsAuthor)
           : undefined,
@@ -45,6 +66,7 @@ export const postVisibilityCondition = ({
 };
 
 type VisiblePost = {
+  readonly currentContentId: SQLWrapper;
   readonly profileId: SQLWrapper;
   readonly state: SQLWrapper;
   readonly visibility: SQLWrapper;
@@ -105,6 +127,7 @@ export const visiblePostWhere = ({
       columns: {
         authorProfileId: post.profileId,
         authorVisible: profileVisible,
+        postContentId: post.currentContentId,
         postState: post.state,
         postVisibility: post.visibility,
       },

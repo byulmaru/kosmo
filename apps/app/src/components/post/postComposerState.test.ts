@@ -87,25 +87,21 @@ describe('PostComposer Reply context contract', () => {
       },
     );
     assert.deepEqual(
-      createPostComposerMutationInput('본문 @alice', 'PUBLIC', undefined, undefined, undefined, [
-        { profileId: 'profile-alice', start: 3, end: 9 },
-      ]),
+      createPostComposerMutationInput(
+        '본문 @alice',
+        'DIRECT',
+        'post-parent',
+        undefined,
+        undefined,
+        [{ profileId: 'profile-alice', start: 3, end: 9 }],
+      ),
       {
         bodyText: '본문 @alice',
+        replyParentId: 'post-parent',
         mentions: [{ profileId: 'profile-alice', start: 3, end: 9 }],
-        visibility: 'PUBLIC',
+        visibility: 'DIRECT',
       },
     );
-  });
-
-  it('excludes DIRECT only while composing a Reply', async () => {
-    const { isPostComposerVisibilityAllowed } = await import('./postComposerState');
-
-    assert.equal(isPostComposerVisibilityAllowed('DIRECT'), true);
-    assert.equal(isPostComposerVisibilityAllowed('DIRECT', 'post-parent'), false);
-    for (const visibility of ['PUBLIC', 'UNLISTED', 'FOLLOWERS'] as const) {
-      assert.equal(isPostComposerVisibilityAllowed(visibility, 'post-parent'), true);
-    }
   });
 
   it('changes context identity when either selected Profile or Parent changes', async () => {

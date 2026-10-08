@@ -469,7 +469,7 @@ test('an existing Mention and its read state survive later Quote eligibility', a
   assert.equal(notifications[0]?.readAt?.toString(), readAt.toString());
 });
 
-test('untyped, unavailable, muted, and either-direction blocked candidates are suppressed', async () => {
+test('stored Direct mentions remain eligible while unavailable, muted, and blocked candidates are suppressed', async () => {
   const remoteAuthor = await createProfile(InstanceKind.ACTIVITYPUB);
   const recipient = await createProfile();
 
@@ -481,7 +481,8 @@ test('untyped, unavailable, muted, and either-direction blocked candidates are s
     mentionProfileIds: [recipient.id],
     visibility: PostVisibility.DIRECT,
   });
-  assert.deepEqual(await createMentionNotification(privatePost.id), []);
+  const [privateMentionId] = await createMentionNotification(privatePost.id);
+  assert.ok(privateMentionId);
 
   const suspendedInstancePost = await createTestPost({
     authorProfileId: remoteAuthor.id,
@@ -535,16 +536,23 @@ test('untyped, unavailable, muted, and either-direction blocked candidates are s
       .from(Notifications)
       .where(
         and(
-          inArray(Notifications.sourceId, [
-            untyped.id,
-            privatePost.id,
-            suspendedInstancePost.id,
-            mutedPost.id,
-          ]),
+          inArray(Notifications.sourceId, [untyped.id, suspendedInstancePost.id, mutedPost.id]),
           eq(Notifications.kind, NotificationKind.MENTION),
         ),
       ),
     [],
+  );
+  assert.deepEqual(
+    await db
+      .select({ recipientProfileId: Notifications.recipientProfileId })
+      .from(Notifications)
+      .where(
+        and(
+          eq(Notifications.sourceId, privatePost.id),
+          eq(Notifications.kind, NotificationKind.MENTION),
+        ),
+      ),
+    [{ recipientProfileId: recipient.id }],
   );
 });
 

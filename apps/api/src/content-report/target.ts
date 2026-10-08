@@ -79,6 +79,7 @@ const resolvePostTarget = async (id: string, ctx: UserContext) => {
           columns: {
             authorProfileId: Posts.profileId,
             authorVisible: visibleProfileWhere({ profile: Profiles, instance: Instances }),
+            postContentId: Posts.currentContentId,
             postState: Posts.state,
             postVisibility: Posts.visibility,
           },

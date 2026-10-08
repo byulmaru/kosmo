@@ -17,12 +17,16 @@ Warning, Sensitive Media, Media 구성은 [Post Content](./post-content.md)가 �
 
 ### Post Visibility
 
-| 값                 | 의미                                                                 |
-| ------------------ | -------------------------------------------------------------------- |
-| Public             | 모든 viewer가 볼 수 있고 검색/Hashtag Post List 후보가 된다          |
-| Unlisted           | 모든 viewer가 볼 수 있지만 검색/Hashtag Post List 후보가 되지 않는다 |
-| Followers Only     | 작성자, 작성자를 팔로우한 Profile, 멘션된 Profile이 볼 수 있다       |
-| Mentioned Profiles | 작성자와 Post에서 멘션한 Profile만 볼 수 있다                        |
+| 값                 | 의미                                                                                   |
+| ------------------ | -------------------------------------------------------------------------------------- |
+| Public             | 모든 viewer가 볼 수 있고 검색/Hashtag Post List 후보가 된다                            |
+| Unlisted           | 모든 viewer가 볼 수 있지만 검색/Hashtag Post List 후보가 되지 않는다                   |
+| Followers Only     | 작성자, 작성자를 팔로우한 Profile, 멘션된 Profile이 볼 수 있다                         |
+| Mentioned Profiles | 작성자와 현재 Content의 canonical Mentioned Profile 관계에 포함된 Profile만 볼 수 있다 |
+
+이 조회 규칙에서 Author Profile과 Mentioned Profile의 `Origin`은 조건이 아니다. Local Post
+작성에서 `Mentioned Profiles`는 작성자가 명시적으로 선택하는 Visibility이며, 최소 한 개의 Mentioned Profile 관계가
+필요하다. 이는 ActivityPub DIRECT audience 수신이나 outbound delivery를 지원한다는 뜻이 아니다.
 
 ## 속성
 
@@ -108,7 +112,10 @@ qualified `@handle@domain`은 저장된 eligible ActivityPub Profile에 정확�
 Unknown, malformed, ineligible token은 일반 text로 남긴다.
 작성자가 같은 범위를 명시적으로 선택하면 selected target이 typed token보다 우선하고, selected target의 현재 handle, 본문 범위, visibility와
 양방향 Block 검증을 유지한다. 이 검증은 실제 작성 Profile 기준이다. 명시적으로 선택했지만 본문이 일치하지 않거나 target을 이용할 수 없으면
-전체 작성 요청을 거부한다. Mention은 Post Visibility, 수신자, outbound ActivityPub 전달이나 알림 정책을 바꾸지 않는다.
+전체 작성 요청을 거부한다. Local Mention 자체는 Post Visibility를 선택하지 않는다. `PUBLIC`·`UNLISTED`는 기존 조회 범위를
+유지하고 `FOLLOWERS`는 기존 Mentioned Profile 조회 권한을 유지한다. `Mentioned Profiles` Post의 제한 조회 범위와 Local Post
+작성 시 최소 관계 조건은 위 Post Visibility 정의를 따른다. Local Mention은 outbound ActivityPub Mention이나
+Notification 정책을 바꾸지 않는다.
 
 Local 작성과 Remote 수신의 Quote는 direct Repost Source Author를 수신자로 하는
 [Quote Notification](./notification.md#quote-notification)의 원인이다. 알림의 생성 조건과 중복 처리는
@@ -161,12 +168,12 @@ Notification이 소유하며, Quote·Reply Parent·Repost Source의 구조와 �
 
 ### Post Visibility
 
-| Visibility         | viewer 조건                                                |
-| ------------------ | ---------------------------------------------------------- |
-| Public             | 추가 관계 조건 없음                                        |
-| Unlisted           | 추가 관계 조건 없음                                        |
-| Followers Only     | Author, Mentioned Profile 또는 Author를 팔로우하는 Profile |
-| Mentioned Profiles | Author 또는 Mentioned Profile                              |
+| Visibility         | viewer 조건                                                        |
+| ------------------ | ------------------------------------------------------------------ |
+| Public             | 추가 관계 조건 없음                                                |
+| Unlisted           | 추가 관계 조건 없음                                                |
+| Followers Only     | Author, Mentioned Profile 또는 Author를 팔로우하는 Profile         |
+| Mentioned Profiles | Author 또는 현재 Content의 Mentioned Profile 관계에 포함된 Profile |
 
 ### Post Eligibility
 
@@ -464,8 +471,8 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
   갱신·제거할 수 있다. 기존 Post Content 수정, 운영자 또는 일괄 backfill은 수행하지 않는다. 원문 anchor의 표시 문자열은 수신 중 resource
   budget 계산에만 사용하고 저장하지 않는다. renderer는 같은 revision의 Profile `relativeHandle`에서 표시 문자열을 파생하며, Profile을
   조회할 수 없으면 비링크 `@알 수 없는 사용자`를 표시한다. `pre`와 일반 rich-text editor는 지원하지 않는다.
-- Mentioned Profiles audience와 ActivityPub outbound Mention projection·custom emoji는 후속
-  계약에서 정의한다. inbound Note의 typed Mention 보존은 별도 수신 계약을 따른다.
+- ActivityPub DIRECT/limited audience의 inbound 처리와 outbound delivery는 별도 [PROD-359](https://linear.app/byulmaru/issue/PROD-359)
+  계약에서 정의한다. outbound Mention projection과 custom emoji도 후속 계약에 남으며 inbound Note의 typed Mention 보존은 별도 수신 계약을 따른다.
 - Quote 정책은 [ADR 0029](../decisions/0029-quote-consent-and-federation.md)과
   [PROD-902](https://linear.app/byulmaru/issue/PROD-902)를 따른다. 로컬 작성은 PROD-431,
   federation·승인 발급·철회는 PROD-924, 원격 Quote 수신·검증은 PROD-792가 구현한다.

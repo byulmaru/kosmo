@@ -30,6 +30,7 @@ const eligiblePostWhere = (profileId: string) =>
       columns: {
         authorProfileId: Posts.profileId,
         authorVisible: visibleProfileWhere({ profile: Profiles, instance: Instances }),
+        postContentId: Posts.currentContentId,
         postState: Posts.state,
         postVisibility: Posts.visibility,
       },
