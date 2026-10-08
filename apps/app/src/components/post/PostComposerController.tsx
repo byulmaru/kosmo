@@ -114,6 +114,7 @@ type PostComposerBaseProps = {
   editorRef?: RefObject<TextInput | null>;
   expandControlRef?: RefObject<View | null>;
   focusOnMount?: boolean;
+  initialBodyText?: string;
   initialContentWarning?: string | null;
   mentionCandidates?: PostComposerMentionCandidateResults;
   onPostCreated?: (post: PostComposerCreatedPost) => void;
@@ -219,6 +220,7 @@ function PostComposerContents({
   expandControlRef,
   environmentGenerationRef,
   focusOnMount = false,
+  initialBodyText,
   initialContentWarning,
   onPostCreated,
   onRequestClose,
@@ -245,11 +247,14 @@ function PostComposerContents({
   const resolvedPresentation = presentation ?? 'overlay';
   const internalEditorRef = useRef<TextInput>(null);
   const editor = editorRef ?? internalEditorRef;
-  const [draft, setDraft] = useState<PostComposerDraft>({
-    body: '',
-    mentionRanges: [],
-    previousSelection: { start: 0, end: 0 },
-    selection: { start: 0, end: 0 },
+  const [draft, setDraft] = useState<PostComposerDraft>(() => {
+    const end = initialBodyText?.length ?? 0;
+    return {
+      body: initialBodyText ?? '',
+      mentionRanges: [],
+      previousSelection: { start: end, end },
+      selection: { start: end, end },
+    };
   });
   const { body, mentionRanges, selection } = draft;
   const activeMentionQuery = findPostComposerMentionQuery(body, selection.start, selection.end);

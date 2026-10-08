@@ -4756,7 +4756,7 @@ export const QuoteReplyListCoordinatorIntegration: Story = {
     });
     expect(screen.queryByRole('dialog', { name: '인용 게시글 쓰기' })).toBeNull();
     await userEvent.click(within(replyDiscardConfirm).getByRole('button', { name: '계속 작성' }));
-    expect(replyBody).toHaveValue('목록에서 작성 중인 답글');
+    expect(replyBody).toHaveValue('@kosmo 목록에서 작성 중인 답글');
 
     quoteTrigger.click();
     within(await screen.findByRole('menu', { name: '재게시 메뉴' }))
@@ -4781,7 +4781,9 @@ export const QuoteReplyListCoordinatorIntegration: Story = {
     expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).toBeNull();
     await userEvent.click(within(quoteDiscardConfirm).getByRole('button', { name: '작성 취소' }));
     const reopenedReplyDialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
-    expect(within(reopenedReplyDialog).getByRole('textbox', { name: '답글 본문' })).toHaveValue('');
+    expect(within(reopenedReplyDialog).getByRole('textbox', { name: '답글 본문' })).toHaveValue(
+      '@kosmo ',
+    );
     await waitFor(() =>
       expect(within(reopenedReplyDialog).getByRole('textbox', { name: '답글 본문' })).toHaveFocus(),
     );
@@ -6391,7 +6393,7 @@ export const PostDetailThreadReplyOwnerIntegration: Story = {
     const confirm = await screen.findByRole('alertdialog', {
       name: '답글 작성을 취소할까요?',
     });
-    expect(body).toHaveValue('첫 Parent draft');
+    expect(body).toHaveValue('@kosmo 첫 Parent draft');
     expect(
       replyButtons.filter((button) => button.getAttribute('aria-expanded') === 'true'),
     ).toEqual([replyButtons[0]]);
@@ -6405,7 +6407,7 @@ export const PostDetailThreadReplyOwnerIntegration: Story = {
     expect(continueButton).toHaveFocus();
     await userEvent.click(continueButton);
     expect(screen.queryByRole('alertdialog', { name: '답글 작성을 취소할까요?' })).toBeNull();
-    expect(body).toHaveValue('첫 Parent draft');
+    expect(body).toHaveValue('@kosmo 첫 Parent draft');
     await waitFor(() => expect(body).toHaveFocus());
 
     await userEvent.click(replyButtons[1]!);
@@ -6417,7 +6419,7 @@ export const PostDetailThreadReplyOwnerIntegration: Story = {
     );
     const nextDialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
     await waitFor(() =>
-      expect(within(nextDialog).getByRole('textbox', { name: '답글 본문' })).toHaveValue(''),
+      expect(within(nextDialog).getByRole('textbox', { name: '답글 본문' })).toHaveValue('@kosmo '),
     );
     expect(
       replyButtons.filter((button) => button.getAttribute('aria-expanded') === 'true'),
@@ -7605,7 +7607,7 @@ export const ComposerReplyGraphQLErrorWithoutCommittedPostPreservesInput: Story 
     await expect(within(dialog).findByRole('alert')).resolves.toHaveTextContent(
       '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.',
     );
-    expect(body).toHaveValue('오류가 나도 보존할 답글입니다.');
+    expect(body).toHaveValue('@kosmo 오류가 나도 보존할 답글입니다.');
   },
   render: () => <ReplyModalPresentationStory />,
 };
@@ -7828,12 +7830,12 @@ export const ComposerReplyEnvironmentIsolation: Story = {
     const currentBody = await screen.findByRole('textbox', { name: '답글 본문' });
     await waitFor(() =>
       expect(canvas.getByTestId('reply-environment-first-committed-state')).toHaveTextContent(
-        JSON.stringify({ body: '', closeDisabled: false }),
+        JSON.stringify({ body: '@kosmo ', closeDisabled: false }),
       ),
     );
-    expect(currentBody).toHaveValue('');
+    expect(currentBody).toHaveValue('@kosmo ');
     await userEvent.type(currentBody, '새 Environment의 답글');
-    expect(currentBody).toHaveValue('새 Environment의 답글');
+    expect(currentBody).toHaveValue('@kosmo 새 Environment의 답글');
     expect(canvas.getByTestId('reply-environment-created-log')).toHaveTextContent('[]');
   },
   render: () => <ReplyComposerEnvironmentIsolationStory />,
@@ -7863,7 +7865,7 @@ export const ComposerReplyEnvironmentMediaIsolation: Story = {
       await userEvent.click(canvas.getByRole('button', { name: 'Relay Environment 교체' }));
       await waitFor(() =>
         expect(canvas.getByTestId('reply-environment-first-committed-state')).toHaveTextContent(
-          JSON.stringify({ body: '', closeDisabled: false }),
+          JSON.stringify({ body: '@kosmo ', closeDisabled: false }),
         ),
       );
       expect(screen.queryByLabelText('첨부 이미지 1, 업로드 중')).toBeNull();
@@ -7872,7 +7874,7 @@ export const ComposerReplyEnvironmentMediaIsolation: Story = {
       finishUpload(new Response(null, { status: 200 }));
       await new Promise((resolve) => setTimeout(resolve, 0));
       expect(screen.queryByLabelText('첨부 이미지 1, 업로드 완료')).toBeNull();
-      expect(screen.getByRole('button', { name: '답글 게시' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: '답글 게시' })).toBeEnabled();
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -7959,12 +7961,13 @@ export const ReplyModalPresentation: Story = {
     expect(within(dialog).getByText('짧은 본문 한 줄.')).toBeVisible();
     const initialBody = within(dialog).getByRole('textbox', { name: '답글 본문' });
     expect(initialBody).toBeVisible();
-    expect(initialBody).toHaveAccessibleDescription('남은 글자 수 500자');
+    expect(initialBody).toHaveAccessibleDescription('남은 글자 수 494자');
+    expect(initialBody).toHaveValue('@kosmo ');
     expect(within(dialog).getByRole('button', { name: '공개 범위: 조용한 공개' })).toBeVisible();
-    expect(within(dialog).getByText('500')).toBeVisible();
+    expect(within(dialog).getByText('494')).toBeVisible();
     const submit = within(dialog).getByRole('button', { name: '답글 게시' });
     expect(submit).toHaveTextContent(/^게시$/);
-    expect(submit).toBeDisabled();
+    expect(submit).toBeEnabled();
     expect(within(dialog).queryByRole('toolbar', { name: '액션 바' })).toBeNull();
     const composerScroll = within(dialog).getByTestId('post-composer-scroll');
     const replyParent = within(dialog).getByTestId('reply-parent');
@@ -8053,7 +8056,7 @@ export const ReplyModalPresentation: Story = {
     const confirm = await screen.findByRole('alertdialog', {
       name: '답글 작성을 취소할까요?',
     });
-    expect(body).toHaveValue('작성 중인 답글');
+    expect(body).toHaveValue('@kosmo 작성 중인 답글');
     const continueButton = within(confirm).getByRole('button', { name: '계속 작성' });
     const discardButton = within(confirm).getByRole('button', { name: '작성 취소' });
     await waitFor(() => expect(continueButton).toHaveFocus());
@@ -8063,7 +8066,7 @@ export const ReplyModalPresentation: Story = {
     expect(continueButton).toHaveFocus();
     await userEvent.click(continueButton);
     expect(screen.queryByRole('alertdialog', { name: '답글 작성을 취소할까요?' })).toBeNull();
-    expect(body).toHaveValue('작성 중인 답글');
+    expect(body).toHaveValue('@kosmo 작성 중인 답글');
     await waitFor(() => expect(body).toHaveFocus());
 
     const reopenedSurface = within(reopenedDialog).getByTestId('reply-composer-dialog-surface');
@@ -8403,7 +8406,7 @@ export const ReplyDetailModalPendingLifecycle: Story = {
     expect(within(dialog).getByLabelText('게시 중 처리 중')).toBeVisible();
     await userEvent.click(replyButtons[1]!);
     expect(within(dialog).getByRole('textbox', { name: '답글 본문' })).toBe(body);
-    expect(body).toHaveValue('제출 중인 상세 답글');
+    expect(body).toHaveValue('@kosmo 제출 중인 상세 답글');
     expect(
       replyButtons.filter((button) => button.getAttribute('aria-expanded') === 'true'),
     ).toEqual([replyButtons[0]]);
@@ -8429,7 +8432,7 @@ export const ReplyModalFailureLifecycle: Story = {
       '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.',
     );
     expect(within(dialog).getByText('짧은 본문 한 줄.')).toBeVisible();
-    expect(body).toHaveValue('실패 뒤 유지할 답글');
+    expect(body).toHaveValue('@kosmo 실패 뒤 유지할 답글');
     expect(within(dialog).getByRole('button', { name: '답글 게시' })).toBeEnabled();
   },
   render: () => <ReplyModalPresentationStory />,
