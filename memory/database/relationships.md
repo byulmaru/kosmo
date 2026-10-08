@@ -31,7 +31,8 @@ relationship 금지 규칙에 다음 한정 예외를 둔다.
   count, Node와 Read에서 숨긴다. 장기 비동기 물리 정리는 별도 capability가 소유한다.
 - 이 예외를 다른 domain relationship의 generic polymorphic association 근거로 확장하지 않는다.
 - Recipient는 Profile 또는 Account 중 정확히 하나다. `recipient_profile_id`와
-  `recipient_account_id`는 각 소유 테이블을 참조하며, `kind`에 따라 해당 Recipient 하나만 허용한다.
+  `recipient_account_id`는 각 소유 테이블을 참조하며, DB CHECK는 두 컬럼 중 정확히 하나만 값이 있도록 한다.
+  `kind`와 Recipient의 조합은 알림 생성 경로가 결정하고, Operational producer는 Account를 대상으로 한다.
 - Operational Notification의 `source_id`는 UUID idempotency key이며 source 객체 foreign key가 아니다.
   `(recipient_account_id, kind, source_id)`가 같은 수신자·요청의 중복 생성을 막는다. Operational은 loose
   source 조회나 social source cleanup에 포함하지 않는다. `(kind, source_id, id)` index는 Worker의 send별

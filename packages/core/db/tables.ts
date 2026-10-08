@@ -273,13 +273,9 @@ export const Notifications = pgTable(
     readAt: datetime('read_at'),
   },
   (table) => [
-    // Keep varchar explicit: PostgreSQL simplifies ::text during Drizzle's enum rebuild.
     check(
-      'notification_recipient_kind_check',
-      sql`(
-        (${table.recipientProfileId} IS NOT NULL AND ${table.recipientAccountId} IS NULL AND ${table.kind}::varchar <> 'OPERATIONAL')
-        OR (${table.recipientProfileId} IS NULL AND ${table.recipientAccountId} IS NOT NULL AND ${table.kind}::varchar = 'OPERATIONAL')
-      )`,
+      'notification_recipient_check',
+      sql`(${table.recipientProfileId} IS NOT NULL) <> (${table.recipientAccountId} IS NOT NULL)`,
     ),
     unique().on(table.recipientProfileId, table.kind, table.sourceId),
     unique().on(table.recipientAccountId, table.kind, table.sourceId),

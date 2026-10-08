@@ -302,6 +302,54 @@ test('Operational notification visibility follows recipient Account state while 
   assert.equal(await isAvailable(notification.id, false), true);
 });
 
+test('Notification recipient constraint requires exactly one recipient independently of kind', async () => {
+  const profile = await createProfile();
+  const suffix = crypto.randomUUID();
+  const account = await db
+    .insert(Accounts)
+    .values({ displayName: suffix, oidcSubject: `subject-${suffix}`, state: AccountState.ACTIVE })
+    .returning()
+    .then(firstOrThrow);
+  accountIds.push(account.id);
+
+  const insertNotification = (
+    recipientProfileId: string | null,
+    recipientAccountId: string | null,
+    kind: NotificationKind = NotificationKind.MENTION,
+  ) =>
+    db
+      .insert(Notifications)
+      .values({ kind, recipientAccountId, recipientProfileId, sourceId: crypto.randomUUID() })
+      .returning()
+      .then(firstOrThrow);
+  const assertRecipientCheckViolation = (error: Error) => {
+    const cause = error.cause as { code?: string; constraint_name?: string } | undefined;
+    assert.equal(cause?.code, '23514');
+    assert.equal(cause?.constraint_name, 'notification_recipient_check');
+    return true;
+  };
+
+  await assert.rejects(insertNotification(null, null), assertRecipientCheckViolation);
+  await assert.rejects(insertNotification(profile.id, account.id), assertRecipientCheckViolation);
+
+  const profileNotification = await insertNotification(profile.id, null);
+  const accountNotification = await insertNotification(null, account.id, NotificationKind.OPERATIONAL);
+  const operationalProfileNotification = await insertNotification(
+    profile.id,
+    null,
+    NotificationKind.OPERATIONAL,
+  );
+  const mentionAccountNotification = await insertNotification(null, account.id);
+  assert.equal(profileNotification.kind, NotificationKind.MENTION);
+  assert.equal(profileNotification.recipientProfileId, profile.id);
+  assert.equal(accountNotification.kind, NotificationKind.OPERATIONAL);
+  assert.equal(accountNotification.recipientAccountId, account.id);
+  assert.equal(operationalProfileNotification.kind, NotificationKind.OPERATIONAL);
+  assert.equal(operationalProfileNotification.recipientProfileId, profile.id);
+  assert.equal(mentionAccountNotification.kind, NotificationKind.MENTION);
+  assert.equal(mentionAccountNotification.recipientAccountId, account.id);
+});
+
 test('inbound typed Mention is per visible local Profile and concurrent retries return the stored IDs', async () => {
   const author = await createProfile(InstanceKind.ACTIVITYPUB);
   const follower = await createProfile();

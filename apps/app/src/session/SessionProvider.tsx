@@ -212,14 +212,14 @@ function SessionQuery({
   const sessionId = data.currentSession?.id ?? null;
   const accountId = data.me?.id ?? null;
   const serverSelectedProfileId = data.currentSession?.selectedProfile?.id ?? null;
-  const session = useMemo<SessionValue>(
+  const session = useMemo(
     () => ({
       accountId,
       accountName: data.me?.name ?? null,
       selectedProfileId:
         actorSelectedProfileId === serverSelectedProfileId ? serverSelectedProfileId : null,
       sessionId,
-      status: !sessionId ? 'guest' : 'valid',
+      status: sessionId ? ('valid' as const) : ('guest' as const),
     }),
     [accountId, actorSelectedProfileId, data.me?.name, serverSelectedProfileId, sessionId],
   );
