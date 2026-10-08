@@ -17,16 +17,16 @@ Warning, Sensitive Media, Media 구성은 [Post Content](./post-content.md)가 �
 
 ### Post Visibility
 
-| 값                 | 의미                                                                 |
-| ------------------ | -------------------------------------------------------------------- |
-| Public             | 모든 viewer가 볼 수 있고 검색/Hashtag Post List 후보가 된다          |
-| Unlisted           | 모든 viewer가 볼 수 있지만 검색/Hashtag Post List 후보가 되지 않는다 |
-| Followers Only     | 작성자, 작성자를 팔로우한 Profile, 멘션된 Profile이 볼 수 있다       |
-| Mentioned Profiles | 작성자와 Post의 Mentioned Profile 관계에 저장된 Profile만 볼 수 있다 |
+| 값                 | 의미                                                                                   |
+| ------------------ | -------------------------------------------------------------------------------------- |
+| Public             | 모든 viewer가 볼 수 있고 검색/Hashtag Post List 후보가 된다                            |
+| Unlisted           | 모든 viewer가 볼 수 있지만 검색/Hashtag Post List 후보가 되지 않는다                   |
+| Followers Only     | 작성자, 작성자를 팔로우한 Profile, 멘션된 Profile이 볼 수 있다                         |
+| Mentioned Profiles | 작성자와 현재 Content의 canonical Mentioned Profile 관계에 포함된 Profile만 볼 수 있다 |
 
-Local 작성에서 `Mentioned Profiles`는 작성자가 명시적으로 선택하는 Visibility다. 작성자와 저장된 Mentioned
-Profile만 조회할 수 있으며, 최소 한 개의 Mentioned Profile 관계가 필요하다. 이는 ActivityPub DIRECT audience
-수신이나 outbound delivery를 지원한다는 뜻이 아니다.
+이 조회 규칙에서 Author Profile과 Mentioned Profile의 `Origin`은 조건이 아니다. Local Post
+작성에서 `Mentioned Profiles`는 작성자가 명시적으로 선택하는 Visibility이며, 최소 한 개의 Mentioned Profile 관계가
+필요하다. 이는 ActivityPub DIRECT audience 수신이나 outbound delivery를 지원한다는 뜻이 아니다.
 
 ## 속성
 
@@ -113,8 +113,8 @@ Unknown, malformed, ineligible token은 일반 text로 남긴다.
 작성자가 같은 범위를 명시적으로 선택하면 selected target이 typed token보다 우선하고, selected target의 현재 handle, 본문 범위, visibility와
 양방향 Block 검증을 유지한다. 이 검증은 실제 작성 Profile 기준이다. 명시적으로 선택했지만 본문이 일치하지 않거나 target을 이용할 수 없으면
 전체 작성 요청을 거부한다. Local Mention 자체는 Post Visibility를 선택하지 않는다. `PUBLIC`·`UNLISTED`는 기존 조회 범위를
-유지하고 `FOLLOWERS`는 기존 Mentioned Profile 조회 권한을 유지한다. 작성자가 Local Post의 Visibility를 `Mentioned Profiles`로 명시적으로
-선택할 때의 제한 조회 범위와 최소 관계 조건은 위 Post Visibility 정의를 따른다. Local Mention은 outbound ActivityPub Mention이나
+유지하고 `FOLLOWERS`는 기존 Mentioned Profile 조회 권한을 유지한다. `Mentioned Profiles` Post의 제한 조회 범위와 Local Post
+작성 시 최소 관계 조건은 위 Post Visibility 정의를 따른다. Local Mention은 outbound ActivityPub Mention이나
 Notification 정책을 바꾸지 않는다.
 
 Local 작성과 Remote 수신의 Quote는 direct Repost Source Author를 수신자로 하는
@@ -168,12 +168,12 @@ Notification이 소유하며, Quote·Reply Parent·Repost Source의 구조와 �
 
 ### Post Visibility
 
-| Visibility         | viewer 조건                                                |
-| ------------------ | ---------------------------------------------------------- |
-| Public             | 추가 관계 조건 없음                                        |
-| Unlisted           | 추가 관계 조건 없음                                        |
-| Followers Only     | Author, Mentioned Profile 또는 Author를 팔로우하는 Profile |
-| Mentioned Profiles | Author 또는 Mentioned Profile                              |
+| Visibility         | viewer 조건                                                        |
+| ------------------ | ------------------------------------------------------------------ |
+| Public             | 추가 관계 조건 없음                                                |
+| Unlisted           | 추가 관계 조건 없음                                                |
+| Followers Only     | Author, Mentioned Profile 또는 Author를 팔로우하는 Profile         |
+| Mentioned Profiles | Author 또는 현재 Content의 Mentioned Profile 관계에 포함된 Profile |
 
 ### Post Eligibility
 

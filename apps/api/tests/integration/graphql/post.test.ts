@@ -227,16 +227,39 @@ describe('Post Reply GraphQL 경계', () => {
   test('DIRECT Post는 author와 stored Mentioned Profile만 읽고 recipient는 비공개 Reply를 작성할 수 있다', async () => {
     const author = await createAuthenticatedSession({ profileHandle: 'direct_author' });
     const recipient = await createAuthenticatedSession({ profileHandle: 'direct_recipient' });
+    const remoteRecipientInstance = await createInstance(
+      InstanceKind.ACTIVITYPUB,
+      InstanceState.ACTIVE,
+    );
+    const remoteRecipient = await createAuthenticatedSession({
+      instanceId: remoteRecipientInstance.id,
+      profileHandle: 'direct_remote_recipient',
+    });
     const stranger = await createAuthenticatedSession();
     const publicSource = await createContentfulPost(author.profile.id, {
       bodyText: 'public source',
     });
     const recipientHandle = `@${recipient.profile.handle}`;
+    const remoteRecipientHandle = `@${remoteRecipient.profile.handle}@${remoteRecipientInstance.domain}`;
     const unresolvedHandle = `@missing_${crypto.randomUUID().slice(0, 8)}`;
-    const bodyText = `private ${recipientHandle} ${unresolvedHandle}`;
+    const bodyText = `private ${recipientHandle} ${remoteRecipientHandle} ${unresolvedHandle}`;
+    const recipientStart = bodyText.indexOf(recipientHandle);
+    const remoteRecipientStart = bodyText.indexOf(remoteRecipientHandle);
     const created = await requestCreatePost(
       {
         bodyText,
+        mentions: [
+          {
+            end: recipientStart + recipientHandle.length,
+            profileId: encodeGlobalId('Profile', recipient.profile.id),
+            start: recipientStart,
+          },
+          {
+            end: remoteRecipientStart + remoteRecipientHandle.length,
+            profileId: encodeGlobalId('Profile', remoteRecipient.profile.id),
+            start: remoteRecipientStart,
+          },
+        ],
         repostSourceId: encodeGlobalId('Post', publicSource.id),
         visibility: PostVisibility.DIRECT,
       },
@@ -258,17 +281,26 @@ describe('Post Reply GraphQL 경계', () => {
     assert.ok(storedPost.currentContentId);
     assert.equal(storedPost.repostSourceId, publicSource.id);
 
-    const [authorRead, recipientRead, strangerRead, anonymousRead] = await Promise.all([
-      requestPostContent(postId, author.token),
-      requestPostContent(postId, recipient.token),
-      requestPostContent(postId, stranger.token),
-      requestPostContent(postId),
-    ]);
-    for (const result of [authorRead, recipientRead, strangerRead, anonymousRead]) {
+    const [authorRead, recipientRead, remoteRecipientRead, strangerRead, anonymousRead] =
+      await Promise.all([
+        requestPostContent(postId, author.token),
+        requestPostContent(postId, recipient.token),
+        requestPostContent(postId, remoteRecipient.token),
+        requestPostContent(postId, stranger.token),
+        requestPostContent(postId),
+      ]);
+    for (const result of [
+      authorRead,
+      recipientRead,
+      remoteRecipientRead,
+      strangerRead,
+      anonymousRead,
+    ]) {
       assertNoGraphQLErrors(result);
     }
     assert.ok(authorRead.data?.node);
     assert.ok(recipientRead.data?.node);
+    assert.ok(remoteRecipientRead.data?.node);
     assert.equal(strangerRead.data?.node, null);
     assert.equal(anonymousRead.data?.node, null);
 
@@ -310,8 +342,8 @@ describe('Post Reply GraphQL 경계', () => {
       .from(PostMentions)
       .where(eq(PostMentions.postContentId, storedPost.currentContentId));
     assert.deepEqual(
-      oldContentMentions.map(({ profileId }) => profileId),
-      [recipient.profile.id],
+      oldContentMentions.map(({ profileId }) => profileId).sort(),
+      [recipient.profile.id, remoteRecipient.profile.id].sort(),
     );
     const replacementContent = await db
       .insert(PostContents)
@@ -326,9 +358,31 @@ describe('Post Reply GraphQL 경계', () => {
       .set({ currentContentId: replacementContent.id })
       .where(eq(Posts.id, storedPost.id));
 
-    const staleMentionRead = await requestPostContent(postId, recipient.token);
-    assertNoGraphQLErrors(staleMentionRead);
-    assert.equal(staleMentionRead.data?.node, null);
+    const staleMentionReads = await Promise.all([
+      requestPostContent(postId, recipient.token),
+      requestPostContent(postId, remoteRecipient.token),
+    ]);
+    for (const result of staleMentionReads) {
+      assertNoGraphQLErrors(result);
+      assert.equal(result.data?.node, null);
+    }
+
+    const localOriginRemoteAuthor = await createAuthenticatedSession({
+      instanceId: remoteRecipientInstance.id,
+      profileHandle: 'direct_local_origin_remote_author',
+    });
+    const localOriginBodyText = `@${recipient.profile.handle}`;
+    const localOriginPost = await requestCreatePost(
+      { bodyText: localOriginBodyText, visibility: PostVisibility.DIRECT },
+      localOriginRemoteAuthor.token,
+    );
+    assertNoGraphQLErrors(localOriginPost);
+    const localOriginRecipientRead = await requestPostContent(
+      localOriginPost.data!.createPost.post.id,
+      recipient.token,
+    );
+    assertNoGraphQLErrors(localOriginRecipientRead);
+    assert.ok(localOriginRecipientRead.data?.node?.content);
 
     const remoteAuthor = await createRemoteActorProfile('remote_direct_author');
     const { createPost: persistPost } = await import('@kosmo/core/services');
@@ -344,12 +398,12 @@ describe('Post Reply GraphQL 경계', () => {
     });
     assert.ok(remotePost.created);
 
-    const remoteRecipientRead = await requestPostContent(
+    const remoteDirectRead = await requestPostContent(
       encodeGlobalId('Post', remotePost.post.id),
       recipient.token,
     );
-    assertNoGraphQLErrors(remoteRecipientRead);
-    assert.equal(remoteRecipientRead.data?.node, null);
+    assertNoGraphQLErrors(remoteDirectRead);
+    assert.equal(remoteDirectRead.data?.node?.content.bodyText, 'remote direct content');
   });
 
   test('DIRECT createPost는 canonical recipient가 없으면 저장을 거부한다', async () => {

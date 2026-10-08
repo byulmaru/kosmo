@@ -357,9 +357,16 @@ test('compose에서 공개 범위와 500자 제한을 적용해 createPost를 �
 
   await visibilityTrigger.click();
   await page.keyboard.press('End');
-  await expect(visibilityMenu.getByRole('menuitemradio', { name: '팔로워만' })).toBeFocused();
-  await page.keyboard.press('Tab');
+  const directOption = visibilityMenu.getByRole('menuitemradio', { name: '지정 멤버만' });
+  await expect(directOption).toBeFocused();
+  await expect(directOption).toHaveAttribute('aria-checked', 'true');
+  await page.keyboard.press('ArrowUp');
+  const followersOption = visibilityMenu.getByRole('menuitemradio', { name: '팔로워만' });
+  await expect(followersOption).toBeFocused();
+  await expect(followersOption).toHaveAttribute('aria-checked', 'true');
+  await page.keyboard.press('Enter');
   await expect(visibilityMenu).toHaveCount(0);
+  await expect(composer.getByRole('button', { name: '공개 범위: 팔로워만' })).toBeVisible();
 
   await visibilityTrigger.click();
   await page.keyboard.press('Home');

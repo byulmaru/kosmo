@@ -148,8 +148,9 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   다른 Profile의 값을 재사용하지 않고 `UNLISTED`를 사용한다.
 - Composer는 `PUBLIC`, `UNLISTED`, `FOLLOWERS`, `DIRECT`를 제공한다. Profile 기본 Visibility 설정의 기존
   선택지 세 개는 유지하며, `DIRECT`는 Post별 선택이다.
-- `DIRECT`는 작성자와 본문에서 기존 Local Mention 규칙으로 확인된 Mentioned Profile만 읽을 수 있다. 본문에
-  저장되는 canonical Mentioned Profile이 하나 이상 있어야 한다. 기존 Mention 제안 또는 유효한 handle 입력으로
+- `DIRECT` Post는 작성자와 현재 Content의 canonical Mentioned Profile 관계에 포함된 Profile만 읽을 수 있으며,
+  Author Profile과 Mentioned Profile의 `Origin`은 조회 조건이 아니다. Composer에서 Post·Reply·Quote를 만들 때
+  `DIRECT`를 선택하려면 저장될 canonical Mentioned Profile이 하나 이상 있어야 한다. 기존 Mention 제안 또는 유효한 handle 입력으로
   대상을 지정하며, 미확인·malformed·이용할 수 없는 handle text는 수신자가 아니다. 별도 수신자 선택 UI는 없다.
 - 이 local 작성 선택은 ActivityPub DIRECT 수신 audience나 outbound delivery를 지원하지 않는다.
 
@@ -280,7 +281,7 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
 - content가 중앙 영역을 넘을 때 header/footer는 유지되고 중앙 영역 하나만 스크롤되는지 확인한다.
 - 일반 Post, Reply, Quote Parent의 Content/Source 표시와 Action Bar/menu 제외, thread connector를 확인한다.
 - 공통 Post/Reply/Quote Visibility 선택, Reply Parent와의 독립성, 기존 3개 Profile 기본값과 `UNLISTED`
-  fallback, `DIRECT`의 작성자·canonical Mentioned Profile 조회 범위와 최소 1명 조건을 확인한다. 미확인·malformed
+  fallback, `DIRECT`의 현재 Content canonical Mentioned Profile 조회 범위(Author/Mentioned Profile Origin 무관)와 생성 시 최소 1명 조건을 확인한다. 미확인·malformed
   handle text가 `DIRECT` 수신자로 계산되지 않고, `PUBLIC`·`UNLISTED`·`FOLLOWERS`의 기존 Mention 조회 범위는
   유지되는지 확인한다. 500자 count와 disabled/pending/error 상태도 확인한다.
 - Reply 본문 초기값의 direct Parent 작성자와 저장된 Mention 포함, 현재 작성 Profile 제외, 중복 제거,

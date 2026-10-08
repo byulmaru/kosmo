@@ -22,10 +22,10 @@ Accepted
 
 - Local Post, Reply, Quote 작성은 본문에 입력된 bare `@handle` 또는 qualified `@handle@domain`이 이미 저장된 eligible Local/Remote Profile과 정확히 일치할 때 Mention relation을 만든다. Bare handle과 configured Local domain은 configured Local Instance의 Profile만 찾고, qualified remote handle은 저장된 ActivityPub Profile만 찾으며 작성 중 remote actor를 resolve하지 않는다. Unknown, malformed, ineligible token은 일반 text로 남는다. 작성자가 명시적으로 선택한 Mention range는 같은 typed token보다 우선하고 기존의 strict target·range 검증을 유지한다. 서버는 실제 작성 Profile 기준으로 typed/selected Profile의 visibility와 양방향 Block 정책을 검증한다. 명시적으로 선택했으나 본문과 일치하지 않거나 이용할 수 없는 Profile은 전체 작성 요청을 거부한다. 같은 Profile의 여러 occurrence는 각 canonical Mention node로 남고 relation은 중복 저장하지 않는다. Local authored body는 document 및 길이 검증에 사용하고 저장하지 않는다. Canonical Mention node는 inbound와 동일하게 `profileId`만 저장한다.
 - Local Mention identity 자체는 Post Visibility를 선택하지 않는다. `PUBLIC`·`UNLISTED`는 기존 조회 범위를 유지하고,
-  `FOLLOWERS`는 기존 Mentioned Profile 조회 권한을 유지한다. Local Post·Reply·Quote에서 작성자가 `Mentioned Profiles`
-  (`DIRECT`) Visibility를 명시적으로 선택하면 작성자와 현재 Content의 canonical Mentioned Profile 관계에 포함된 Profile이
-  읽을 수 있다. Author Profile과 Mentioned Profile의 `Origin`은 조회 조건이 아니다. Local `DIRECT` Post·Reply·Quote 작성에는
-  현재 Content에 한 개 이상의 canonical Mentioned Profile 관계가 필요하며, 미확인·malformed·ineligible handle text는 수신자가 아니다.
+  `FOLLOWERS`는 기존 Mentioned Profile 조회 권한을 유지한다. Post Visibility가 `Mentioned Profiles` (`DIRECT`)이면
+  작성자와 현재 Content의 canonical Mentioned Profile 관계에 포함된 Profile이 읽을 수 있다. Author Profile과 Mentioned
+  Profile의 `Origin`은 조회 조건이 아니다. Local Post·Reply·Quote에서 이 Visibility를 명시적으로 선택해 작성하려면 현재
+  Content에 한 개 이상의 canonical Mentioned Profile 관계가 필요하며, 미확인·malformed·ineligible handle text는 수신자가 아니다.
 - [PROD-1102](https://linear.app/byulmaru/issue/PROD-1102)의 outbound Local Note ActivityPub Mention content/tag projection은
   표현만 추가하며 ActivityPub `to`/`cc` audience, recipient routing, signed-fetch 권한 또는 Notification 정책을 추가하지 않는다.
   ActivityPub DIRECT/limited audience의 inbound 처리와 outbound delivery는 별도 [PROD-359](https://linear.app/byulmaru/issue/PROD-359)
