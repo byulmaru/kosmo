@@ -665,7 +665,7 @@ export function PostComposer({
             keyboardShouldPersistTaps="handled"
             style={[
               styles.overlayScroll,
-              Platform.OS === 'web' ? webScrollbarStyle(theme.borderStrong, true) : null,
+              Platform.OS === 'web' ? webScrollbarStyle(theme.borderStrong) : null,
             ]}
             testID="post-composer-scroll"
           >
