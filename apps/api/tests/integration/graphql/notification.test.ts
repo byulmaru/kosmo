@@ -165,6 +165,12 @@ describe('Notification GraphQL Node boundary', () => {
     const auth = await createAuthenticatedSession();
     const otherProfile = await createProfile('operational-feed-other-profile');
     await addMembership(auth.account.id, otherProfile.id, AccountProfileRole.OWNER);
+    const disabledProfile = await createProfile('operational-feed-disabled-profile');
+    await addMembership(auth.account.id, disabledProfile.id, AccountProfileRole.OWNER);
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.DISABLED })
+      .where(eq(Profiles.id, disabledProfile.id));
     const related = await createProfile('operational-feed-related');
     const profileNotification = await createFollowNotification(auth.profile.id, related.id);
     const operationalNotification = await createOperationalNotification(auth.account.id, {
