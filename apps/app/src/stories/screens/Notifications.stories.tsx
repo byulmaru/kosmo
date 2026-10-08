@@ -126,6 +126,11 @@ const contentProfile = notificationsProfile(
   {},
   notificationRecipient,
 );
+const operationalProfile = notificationsProfile(
+  [operationalNotification],
+  {},
+  { id: 'notification-profile-operational', unreadNotificationCount: 1 },
+);
 const mentionProfile = notificationsProfile(
   [
     mentionNotification({
@@ -381,8 +386,8 @@ const operationalReadMutationResponse = {
     recipientProfiles: [
       {
         __typename: 'Profile',
-        id: 'notification-profile-content',
-        unreadNotificationCount: 6,
+        id: 'notification-profile-operational',
+        unreadNotificationCount: 0,
       },
     ],
   },
@@ -1195,7 +1200,7 @@ export const NoSelectedProfileScreen: Story = {
 export const OperationalReadBeforeNavigation: Story = {
   parameters: {
     relay: {
-      data: { currentSession: { id: 'notification-session', selectedProfile: contentProfile } },
+      data: { currentSession: { id: 'notification-session', selectedProfile: operationalProfile } },
       mutationRequestObserver: (request: RequestParameters, variables: Variables) => {
         notificationMutationRequest(request.name, variables);
         if (request.name === 'NotificationListItemMarkReadMutation') {
@@ -1208,7 +1213,7 @@ export const OperationalReadBeforeNavigation: Story = {
           data: {
             currentSession: {
               id: 'notification-session',
-              selectedProfile: { id: contentProfile.id },
+              selectedProfile: { id: operationalProfile.id },
             },
             me: { id: 'notification-account', name: 'Notification Story' },
           },
