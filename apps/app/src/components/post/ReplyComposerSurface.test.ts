@@ -16,6 +16,9 @@ let composerProps:
       onRequestClose?: (event?: unknown) => void;
       onSubmittingChange?: (submitting: boolean) => void;
       registerNativeBackHandler?: (handler: (() => void) | null) => void;
+      replyParentId?: string;
+      replyParentVisibility?: 'DIRECT' | 'FOLLOWERS' | 'PUBLIC' | 'UNLISTED' | null;
+      repostSourceId?: string;
       editorRef?: { current: unknown };
     }
   | undefined;
@@ -118,6 +121,7 @@ test('답글 본문은 direct Parent 작성자와 저장된 mention을 미리 �
     },
     createdAt: '2026-10-08T00:00:00.000Z',
     id: 'post-parent',
+    visibility: 'FOLLOWERS',
     profile: {
       avatar: null,
       displayName: 'Parent',
@@ -143,6 +147,8 @@ test('답글 본문은 direct Parent 작성자와 저장된 mention을 미리 �
     '@parent',
     '@remote@remote.example',
   ]);
+  assert.equal(composerProps?.replyParentId, parent.id);
+  assert.equal(composerProps?.replyParentVisibility, parent.visibility);
 
   await act(async () => {
     renderer?.update(
@@ -154,6 +160,8 @@ test('답글 본문은 direct Parent 작성자와 저장된 mention을 미리 �
   });
 
   assert.equal(composerProps?.initialBodyText, undefined);
+  assert.equal(composerProps?.replyParentVisibility, undefined);
+  assert.equal(composerProps?.repostSourceId, parent.id);
 
   await act(async () => {
     renderer?.update(

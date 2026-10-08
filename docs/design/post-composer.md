@@ -143,11 +143,15 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
 
 ## 공통 Visibility
 
-- Post, Reply와 Quote의 Visibility는 Parent 또는 Source Visibility와 독립적이다.
-- 기본값은 선택한 Local Profile의 기본 Post Visibility다. 저장값이 없거나 설정 조회가 실패·unavailable이면
-  다른 Profile의 값을 재사용하지 않고 `UNLISTED`를 사용한다.
+- 사용자가 직접 선택한 Visibility는 Reply Parent 또는 Quote Source Visibility와 독립적이다. 일반 Post와 Quote의
+  기본값은 선택한 Local Profile의 기본 Post Visibility이며, 새 Reply는 이 값과 direct Parent Visibility 중 더
+  좁은 값으로 시작한다. 범위 순서는 `PUBLIC > UNLISTED > FOLLOWERS > DIRECT`다.
+- 선택한 Local Profile의 기본값이 없거나, unavailable이거나, 지원되지 않으면 `UNLISTED`를 먼저 적용해 Reply
+  기본값을 정한다. 다른 Profile의 값을 재사용하지 않는다.
 - Composer는 `PUBLIC`, `UNLISTED`, `FOLLOWERS`, `DIRECT`를 제공한다. Profile 기본 Visibility 설정의 기존
   선택지 세 개는 유지하며, `DIRECT`는 Post별 선택이다.
+- direct Parent가 `DIRECT`면 Reply도 `DIRECT`로 시작하며, 기존 Reply 본문 prefill이 direct Parent 작성자와 원글의
+  Mention을 수신자 입력으로 제공한다.
 - `DIRECT` Post는 작성자와 현재 Content의 canonical Mentioned Profile 관계에 포함된 Profile만 읽을 수 있으며,
   Author Profile과 Mentioned Profile의 `Origin`은 조회 조건이 아니다. Composer에서 Post·Reply·Quote를 만들 때
   `DIRECT`를 선택하려면 저장될 canonical Mentioned Profile이 하나 이상 있어야 한다. 기존 Mention 제안 또는 유효한 handle 입력으로
@@ -197,9 +201,8 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   `답글 작성을 취소할까요?` 확인에서 사용자가 `계속 작성` 또는 `작성 취소`를 선택하게 한다.
 - Media 업로드 중에도 확인 뒤 작성 전체를 폐기할 수 있으며, 늦은 업로드 완료는 닫힌 surface를 다시 열거나 상태를 변경하지
   않는다.
-- Profile 기본 Visibility는 선택한 Profile의 값을 사용하고, 값이 없거나 지원하지 않는 경우 `UNLISTED`로
-  fallback한다. Composer를 연 뒤 Profile 기본값이 저장되거나 다른 화면에서 바뀌어도 현재 draft의 개별
-  Visibility는 자동으로 덮어쓰지 않으며, 다음 새 Composer부터 갱신된 기본값을 사용한다.
+- Profile 기본값이 저장되거나 바뀌어도 이미 열린 Composer의 Visibility를 덮어쓰지 않는다. 직접 선택한 값은
+  draft에 유지하고, 다음 Composer는 `공통 Visibility`의 최신 기본값 규칙을 따른다.
 - 열린 modal surface에서 현재 Reply action을 다시 활성화하거나 다른 Parent의 Reply action을 선택하는 동작도
   같은 close 요청으로 처리한다. dirty 상태에서는 확인 뒤 닫거나 Parent를 전환하고, Reply 제출 pending
   상태에서는 현재 작성과 active Parent를 유지한다.
@@ -280,10 +283,14 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   중 작은 값에서 제한되는지 Web runtime에서 확인한다.
 - content가 중앙 영역을 넘을 때 header/footer는 유지되고 중앙 영역 하나만 스크롤되는지 확인한다.
 - 일반 Post, Reply, Quote Parent의 Content/Source 표시와 Action Bar/menu 제외, thread connector를 확인한다.
-- 공통 Post/Reply/Quote Visibility 선택, Reply Parent와의 독립성, 기존 3개 Profile 기본값과 `UNLISTED`
-  fallback, `DIRECT`의 현재 Content canonical Mentioned Profile 조회 범위(Author/Mentioned Profile Origin 무관)와 생성 시 최소 1명 조건을 확인한다. 미확인·malformed
-  handle text가 `DIRECT` 수신자로 계산되지 않고, `PUBLIC`·`UNLISTED`·`FOLLOWERS`의 기존 Mention 조회 범위는
-  유지되는지 확인한다. 500자 count와 disabled/pending/error 상태도 확인한다.
+- 일반 Post와 Quote의 Profile 기본값, 새 Reply의 Profile 기본값과 direct Parent Visibility 중 더 좁은 기본값
+  (`PUBLIC > UNLISTED > FOLLOWERS > DIRECT`), 기본값이 없거나 unavailable·지원되지 않을 때 `UNLISTED`로 먼저
+  처리하는지 확인한다. `DIRECT` Parent는 `DIRECT` Reply 기본값과 기존 Mention prefill 수신자를 제공하고,
+  사용자가 고른 Visibility와 열린 draft가 자동 변경되지 않는지 확인한다. `DIRECT` Post의 현재 Content canonical
+  Mentioned Profile 조회 범위(Author/Mentioned Profile Origin 무관)와 Composer에서 Post·Reply·Quote 생성 시 저장될
+  canonical Mentioned Profile 최소 1명 조건을 확인한다. 미확인·malformed handle text가 `DIRECT` 수신자로 계산되지 않고,
+  `PUBLIC`·`UNLISTED`·`FOLLOWERS`의 기존 Mention 조회 범위는 유지되는지 확인한다. 500자 count와
+  disabled/pending/error 상태도 확인한다.
 - Reply 본문 초기값의 direct Parent 작성자와 저장된 Mention 포함, 현재 작성 Profile 제외, 중복 제거,
   편집·삭제·제출과 일반 Post·Quote 빈 초기값을 확인한다.
 - 일반 Post와 Reply의 Content Warning 입력·제출, Parent Content Warning 초기값, 수정·제거, 합산 500자 검증과

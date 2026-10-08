@@ -135,6 +135,44 @@ describe('PostComposer Reply context contract', () => {
     assert.equal(resolvePostComposerVisibility(null), 'UNLISTED');
   });
 
+  it('seeds Reply visibility at the more restrictive profile or Parent visibility', async () => {
+    const { resolvePostComposerVisibility } = await import('./postComposerState');
+    const pairs = [
+      ['PUBLIC', 'PUBLIC', 'PUBLIC'],
+      ['UNLISTED', 'PUBLIC', 'UNLISTED'],
+      ['FOLLOWERS', 'PUBLIC', 'FOLLOWERS'],
+      ['PUBLIC', 'UNLISTED', 'UNLISTED'],
+      ['UNLISTED', 'UNLISTED', 'UNLISTED'],
+      ['FOLLOWERS', 'UNLISTED', 'FOLLOWERS'],
+      ['PUBLIC', 'FOLLOWERS', 'FOLLOWERS'],
+      ['UNLISTED', 'FOLLOWERS', 'FOLLOWERS'],
+      ['FOLLOWERS', 'FOLLOWERS', 'FOLLOWERS'],
+      ['PUBLIC', 'DIRECT', 'DIRECT'],
+      ['UNLISTED', 'DIRECT', 'DIRECT'],
+      ['FOLLOWERS', 'DIRECT', 'DIRECT'],
+    ] as const;
+
+    for (const [profileDefault, parentVisibility, expected] of pairs) {
+      assert.equal(resolvePostComposerVisibility(profileDefault, parentVisibility), expected);
+    }
+
+    const fallbackResults = {
+      DIRECT: 'DIRECT',
+      FOLLOWERS: 'FOLLOWERS',
+      PUBLIC: 'UNLISTED',
+      UNLISTED: 'UNLISTED',
+    } as const;
+    for (const parentVisibility of ['PUBLIC', 'UNLISTED', 'FOLLOWERS', 'DIRECT'] as const) {
+      for (const profileDefault of [null, undefined, 'INVALID', 'DIRECT'] as const) {
+        assert.equal(
+          resolvePostComposerVisibility(profileDefault, parentVisibility),
+          fallbackResults[parentVisibility],
+        );
+      }
+    }
+    assert.equal(resolvePostComposerVisibility('FOLLOWERS', '%future added value'), 'FOLLOWERS');
+  });
+
   it('shifts untouched repeated mention ranges and drops ranges changed by the edit', async () => {
     const { updatePostComposerMentionRanges } = await import('./postComposerState');
     const body = '😀 @one and @two';
