@@ -9,7 +9,7 @@ import {
   getLastNativeNotificationResponse,
   subscribeToNativeNotificationResponses,
 } from './nativePushClient';
-import { nativePushResponseKey, parseNativePushTapTarget } from './pushPayload';
+import { parseNativePushTapTarget } from './pushPayload';
 import type { NotificationResponse } from 'expo-notifications';
 
 export function useNativePushNotificationResponses() {
@@ -19,40 +19,29 @@ export function useNativePushNotificationResponses() {
   const sessionRef = useRef(session);
   sessionRef.current = session;
   const tapQueueRef = useRef(Promise.resolve());
-  const handledResponseKeyRef = useRef<string | null>(null);
 
   const fallbackToNotifications = useCallback(() => {
     router.replace('/notifications');
   }, [router]);
 
-  const markResponseHandled = useCallback((response: NotificationResponse) => {
-    handledResponseKeyRef.current = nativePushResponseKey(response);
-    clearLastNativeNotificationResponse();
-  }, []);
-
   const handleNotificationResponse = useCallback(
     async (response: NotificationResponse) => {
-      const key = nativePushResponseKey(response);
-      if (key && key === handledResponseKeyRef.current) {
-        return;
-      }
-
       const currentSession = sessionRef.current;
       if (currentSession.status !== 'valid') {
-        markResponseHandled(response);
+        clearLastNativeNotificationResponse();
         router.replace('/');
         return;
       }
 
       const envelope = parseNativePushTapTarget(response.notification.request.content.data);
       if (!envelope) {
-        markResponseHandled(response);
+        clearLastNativeNotificationResponse();
         fallbackToNotifications();
         return;
       }
 
       if (envelope.kind === 'operational') {
-        markResponseHandled(response);
+        clearLastNativeNotificationResponse();
         if (currentSession.accountId !== envelope.recipientAccountId) {
           fallbackToNotifications();
           return;
@@ -76,15 +65,15 @@ export function useNativePushNotificationResponses() {
           resetActor(envelope.recipientProfileId);
         }
       } catch {
-        markResponseHandled(response);
+        clearLastNativeNotificationResponse();
         fallbackToNotifications();
         return;
       }
 
-      markResponseHandled(response);
+      clearLastNativeNotificationResponse();
       router.replace(envelope.href);
     },
-    [fallbackToNotifications, markResponseHandled, resetActor, router],
+    [fallbackToNotifications, resetActor, router],
   );
 
   const enqueueNotificationResponse = useCallback(
