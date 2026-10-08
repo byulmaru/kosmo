@@ -2,12 +2,27 @@ import { useEffect, useRef } from 'react';
 import { Modal } from 'react-native';
 import type { ModalSheetHostProps } from './ModalSheetHost';
 
-export function ModalSheetHost({ closeRequestDisabled, ...props }: ModalSheetHostProps) {
+export function ModalSheetHost({
+  closeRequestDisabled,
+  interactionDisabled,
+  children,
+  ...props
+}: ModalSheetHostProps) {
   // React Native Web's Modal always overwrites role with dialog. Keep its existing dialog path.
   return props.role === 'alertdialog' ? (
-    <AlertDialog closeRequestDisabled={closeRequestDisabled} {...props} />
+    <AlertDialog
+      closeRequestDisabled={closeRequestDisabled}
+      interactionDisabled={interactionDisabled}
+      {...props}
+    >
+      {children}
+    </AlertDialog>
   ) : (
-    <Modal {...props} />
+    <Modal {...props}>
+      <div inert={interactionDisabled} style={{ display: 'flex', flex: 1 }}>
+        {children}
+      </div>
+    </Modal>
   );
 }
 
@@ -15,6 +30,7 @@ function AlertDialog({
   accessibilityLabel,
   children,
   closeRequestDisabled,
+  interactionDisabled,
   onRequestClose,
   onShow,
   visible,
@@ -68,7 +84,12 @@ function AlertDialog({
       }}
     >
       <style>{'[data-kosmo-modal-sheet]::backdrop { background: transparent; }'}</style>
-      <div style={{ display: 'flex', minHeight: '100%', width: '100%' }}>{children}</div>
+      <div
+        inert={interactionDisabled}
+        style={{ display: 'flex', minHeight: '100%', width: '100%' }}
+      >
+        {children}
+      </div>
     </dialog>
   );
 }

@@ -158,6 +158,37 @@ afterEach(() => {
   delete (globalThis as { document?: unknown }).document;
 });
 
+test('Native ActionMenu rejects new selections after cancellation and allows reopening', async () => {
+  assert.ok(actionMenuModule);
+  const selected: string[] = [];
+  let renderer: ReactTestRenderer;
+  const props = {
+    accessibilityLabel: '메뉴',
+    items: [{ key: 'select', label: '선택', onSelect: () => selected.push('selected') }],
+    renderTrigger: ({ onPress }: { onPress: () => void }) =>
+      createElement(PressableHost, { onPress, testID: 'trigger' }),
+  };
+  await act(async () => {
+    renderer = create(createElement(actionMenuModule!.ActionMenu, props));
+  });
+  await act(async () => renderer.root.findByProps({ testID: 'trigger' }).props.onPress());
+  exitMounted = true;
+  await act(async () =>
+    renderer.root.findByProps({ testID: 'action-menu-backdrop' }).props.onPress(),
+  );
+  const item = renderer!.root.findByProps({ accessibilityRole: 'menuitem' });
+  await act(async () => item.props.onPress());
+  exitMounted = false;
+  await act(async () => renderer.update(createElement(actionMenuModule!.ActionMenu, props)));
+  assert.deepEqual(selected, []);
+  await act(async () => renderer.root.findByProps({ testID: 'trigger' }).props.onPress());
+  await act(async () =>
+    renderer.root.findByProps({ accessibilityRole: 'menuitem' }).props.onPress(),
+  );
+  assert.deepEqual(selected, ['selected']);
+  await act(async () => renderer.unmount());
+});
+
 test('Native ActionMenu runs a selected action after its exit finishes', async () => {
   assert.ok(actionMenuModule);
   const selected: string[] = [];

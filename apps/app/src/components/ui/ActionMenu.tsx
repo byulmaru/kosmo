@@ -11,7 +11,6 @@ import {
 import {
   ActivityIndicator,
   Animated,
-  Modal,
   Platform,
   Pressable,
   StyleSheet,
@@ -24,6 +23,7 @@ import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, layoutRecipes, radius, space, textStyles } from '@/theme/tokens';
 import { useOverlayMotion } from '@/theme/useOverlayMotion';
 import { BottomSheetSurface } from './BottomSheetSurface';
+import { ModalSheetHost } from './ModalSheetHost';
 import type { ComponentType, ReactElement, ReactNode, RefObject } from 'react';
 
 type ActionMenuIcon = ComponentType<{
@@ -233,7 +233,7 @@ export function ActionMenu({
   }, [disabled, items, open, positionWebMenu]);
   const select = useCallback(
     (item: ActionMenuItem) => {
-      if (item.disabled) {
+      if (!open || item.disabled) {
         return;
       }
       if (item.dismissOnSelect === false) {
@@ -253,7 +253,7 @@ export function ActionMenu({
       pendingSelectionRef.current = item.onSelect;
       dismiss(false);
     },
-    [dismiss, web],
+    [dismiss, open, web],
   );
 
   useEffect(() => {
@@ -533,15 +533,21 @@ export function ActionMenu({
         onPress: toggle,
         ref: triggerRef,
       })}
-      <Modal
+      <ModalSheetHost
         accessibilityLabel={accessibilityLabel}
         animationType="none"
+        interactionDisabled={!open}
         onRequestClose={() => dismiss()}
         role="dialog"
         transparent
         visible={overlayMotion.mounted}
       >
-        <View style={styles.backdrop}>
+        <View
+          accessibilityElementsHidden={!open}
+          importantForAccessibility={open ? 'auto' : 'no-hide-descendants'}
+          pointerEvents={open ? 'auto' : 'none'}
+          style={styles.backdrop}
+        >
           <Animated.View
             pointerEvents="none"
             style={[
@@ -573,7 +579,7 @@ export function ActionMenu({
             ]}
           >
             <BottomSheetSurface
-              closeDisabled={disabled}
+              closeDisabled={!open || disabled}
               onClose={() => dismiss()}
               style={[elevation.overlay, { paddingBottom: insets.bottom + space[8] }]}
             >
@@ -587,8 +593,8 @@ export function ActionMenu({
                       accessibilityLabel={item.accessibilityLabel ?? item.label}
                       accessibilityRole="menuitem"
                       aria-busy={item.busy || undefined}
-                      accessibilityState={{ busy: item.busy, disabled: item.disabled }}
-                      disabled={item.disabled}
+                      accessibilityState={{ busy: item.busy, disabled: !open || item.disabled }}
+                      disabled={!open || item.disabled}
                       onPress={() => select(item)}
                       style={[styles.item, styles.nativeItem]}
                     >
@@ -635,7 +641,7 @@ export function ActionMenu({
             </BottomSheetSurface>
           </Animated.View>
         </View>
-      </Modal>
+      </ModalSheetHost>
     </>
   );
 }
