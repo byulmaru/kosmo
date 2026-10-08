@@ -190,10 +190,12 @@ for (const viewport of [
     expect(headingBox!.y).toBeGreaterThan(logoBox!.y + logoBox!.height);
 
     if (viewport.centered) {
-      const privacyBox = await page.getByRole('link', { name: '개인정보 처리방침' }).boundingBox();
-      expect(privacyBox).not.toBeNull();
+      const acknowledgement = page.getByText(/^이 성과는 2026년도/);
+      await expect(acknowledgement).toBeVisible();
+      const acknowledgementBox = await acknowledgement.boundingBox();
+      expect(acknowledgementBox).not.toBeNull();
 
-      const contentCenter = (logoBox!.y + privacyBox!.y + privacyBox!.height) / 2;
+      const contentCenter = (logoBox!.y + acknowledgementBox!.y + acknowledgementBox!.height) / 2;
       expect(Math.abs(contentCenter - viewport.height / 2)).toBeLessThanOrEqual(2);
     } else {
       expect(Math.round(logoBox!.y)).toBe(44);
