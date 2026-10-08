@@ -196,6 +196,7 @@ describe('useLogout production composition', () => {
 
     assert.deepEqual(state.events, [
       'request-web-logout',
+      'delete-selected-profile',
       'reset-session',
       'clear-analytics',
       'replace-root',
@@ -220,6 +221,10 @@ describe('useLogout production composition', () => {
     useAccountDeletionCleanup().logout();
     await flushLogout();
 
-    assert.deepEqual(state.events, ['clear-native-session', 'replace-root']);
+    assert.deepEqual(state.events, [
+      'clear-native-session',
+      'delete-selected-profile',
+      'replace-root',
+    ]);
   });
 });
