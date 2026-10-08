@@ -1,14 +1,23 @@
 # PostHog Session Replay 운영 경계
 
-[PROD-741](https://linear.app/byulmaru/issue/PROD-741)은 조건 충족 후 Web Session Replay 재활성화와 Post Media Viewer 검증을 담당한다. PR #955 이후 Product Analytics는 활성화됐지만 Replay는 비활성 상태다. 2026-09-22 Spec 보강 요청은 아래 검증·인계 절차를 정하며 실제 활성화나 배포 승인이 아니다.
+## 현재 계약 (2026-10-08)
+
+승인된 PostHog 수집 계약에는 Session Replay가 포함되지 않습니다. Web SDK는 `disable_session_recording: true`를
+유지하고 PostHog Cloud의 Session Replay는 OFF로 둡니다. 배포 여부는 이 문서에서 확인하지 않습니다. 아래의
+2026-09-22 재활성화 gate, 설정 확인과 acceptance 절차는 이 계약으로 대체됐으며 현재 적용할 지침이 아닙니다.
+과거 경위와 증거만 보존합니다.
+
+2026-09-22 당시 [PROD-741](https://linear.app/byulmaru/issue/PROD-741)은 조건 충족 후 Web Session Replay
+재활성화와 Post Media Viewer 검증을 예정했습니다. 당시 PR #955 이후 Product Analytics는 활성화됐지만 Replay는
+비활성 상태였습니다. 아래 절차는 그때의 검증·인계 계획이며 실제 활성화나 배포 승인이 아니었습니다.
 
 ## PROD-1017: Web profile bio 보호
 
-Web 프로필 상세와 팔로워·팔로잉·검색·해시태그 결과에서 공유하는 프로필 목록은 렌더링된 bio만 `ph-mask ph-no-capture` 경계에 둔다. 이 경계는 새 Session Replay에서 bio 텍스트를 마스킹하고 autocapture 대상에서 제외한다. 표시명, handle, 링크, follow 동작과 기존 Post Content 경계는 이 변경의 대상이 아니다. Native 표시와 과거 녹화도 바뀌지 않는다.
+Web 프로필 상세와 팔로워·팔로잉·검색·해시태그 결과에서 공유하는 프로필 목록은 렌더링된 bio만 `ph-mask ph-no-capture` 경계에 둔다. `ph-no-capture`는 현재도 해당 영역의 autocapture를 제외한다. Replay masking에 관한 이 문서의 과거 설명은 현재 수집 계약이 아니다.
 
-Storybook은 실제 Web DOM의 경계와 bio 표시 여부를 검증하지만, marker 자체는 recorder payload나 autocapture 결과의 증거가 아니다. 실제 recorder·Replay와 autocapture에서 합성 bio가 보호되는지 별도 확인하고 그 결과를 기록해야 한다. 검증에는 synthetic bio만 사용하며 실제 사용자 콘텐츠를 사용하지 않는다.
+Storybook은 실제 Web DOM의 경계와 bio 표시 여부를 검증하지만, marker 자체는 autocapture 결과의 증거가 아니다. autocapture에서 합성 bio가 제외되는지 별도 확인하고 그 결과를 기록해야 한다. 검증에는 synthetic bio만 사용하며 실제 사용자 콘텐츠를 사용하지 않는다.
 
-## Spec Gate, PR Ready Gate와 Replay Rollout Gate
+## Superseded historical note (2026-09-22): Spec Gate, PR Ready Gate와 Replay Rollout Gate
 
 `Spec Gate`는 요구사항·범위·미결정 사항이 정리돼 구현을 시작할 수 있는지 판단한다. `Replay Rollout Gate`는 **“production에서 Session Replay를 실제로 재활성화해도 되는가?”**를 판단하는 PROD-741의 rollout checkpoint다. PostHog의 기능명이 아니며 Cloud 값을 설정하는 작업 하나만 뜻하지 않는다.
 
@@ -18,13 +27,13 @@ Replay Rollout Gate의 입력은 수용된 privacy baseline, 아래 네 Cloud �
 
 PR Ready 전환은 merge·auto-merge·queue·production 배포·Replay 활성화 승인이 아니다. B의 운영 검증과 Replay Rollout Gate는 별도 책임으로 유지하며, 실제 활성화와 production acceptance는 최신 HEAD와 배포 버전의 대응을 확인한 뒤 기존 절차에 따라 수행한다.
 
-## 확정된 privacy baseline과 Viewer
+## Superseded historical note (2026-09-22): 확정된 privacy baseline과 Viewer
 
 2026-09-22 사용자는 결정 당시 `main`(`8650253d7cfaea3cab94f35d318d381c838af6c9`)의 개인정보처리방침 상태를 PROD-741의 완료된 privacy baseline으로 수용했다. 과거에 같은 결정이 있었는지는 더 이상 blocker가 아니다. 이는 개인정보처리방침의 법적 완결성을 새로 판단한 것이 아니라, PROD-741이 PROD-795의 정책·고지 책임을 재감사하거나 수정하지 않는다는 범위 결정이다.
 
 같은 요청에서 사용자는 Storybook `KOSMO/Patterns/Post/Catalog`의 `Post Media Viewer Compact`와 `Post Media Viewer Wide`를 직접 보고 PROD-741의 검증 대상이 맞음을 확인했다. 두 입력은 완료됐으므로 Implement 진입을 위해 다시 확인받지 않는다. Cloud 실제 값과 코드·배포 준비는 별도 입력이므로 Replay Rollout Gate는 pending으로 유지한다.
 
-## 남은 두 세션의 책임
+## Superseded historical note (2026-09-22): 남은 두 세션의 책임
 
 남은 작업은 아래 두 별도 세션으로만 진행한다. 추가 Test·Review·운영 대기 세션을 필수 단계로 만들지 않는다.
 
@@ -35,13 +44,13 @@ PR Ready 전환은 merge·auto-merge·queue·production 배포·Replay 활성화
 
 A의 완료는 PROD-741 전체 완료나 Replay Rollout Gate PASS가 아니다. B에서 구현 결함이 발견되면 같은 A 세션으로 보완 책임을 돌리고 B를 재개한다. 코드 보완을 위한 세 번째 세션을 필수로 추가하지 않는다.
 
-## A. Implement checkpoint (2026-09-22)
+## Superseded historical note (2026-09-22): A. Implement checkpoint
 
 A는 `apps/app/src/analytics/client.web.ts`의 명시적 `disable_session_recording` 차단을 제거하고 기존 analytics adapter의 표준 이벤트·identity·Native no-op·fail-open 경계를 유지했다. 자동 검증은 앱이 소유하는 초기화 config·identity 전환·동기 SDK 예외 격리와 canonical Post Content의 `ph-mask ph-no-capture` DOM marker에 한정한다.
 
 SDK recorder의 내부 bundle 경로·압축 payload·rrweb snapshot 구조와 기본 masking은 자동 테스트에서 재검증하지 않는다. 실제 recorder 전송·input/textarea 및 Post Content masking·autocapture 제외·recorder/network 장애 격리는 B의 Operational Verification에서 확인하므로 Replay Rollout Gate는 계속 pending이다.
 
-## Human-required: Cloud 실제 값 확인
+## Superseded historical procedure (2026-09-22): Human-required Cloud 확인
 
 Operational Verification 세션은 실제 Replay 재활성화 직전에 반드시 멈춘다. Implement는 이 절차를 수행하지 않고 B에 인계한다. Codex가 해당 시점의 UI 경로와 캡처할 항목을 구체적으로 안내하면, 사용자가 `Kosmo Production` 프로젝트의 **저장된 설정 화면 screenshot**을 제공한다. Codex는 이미지를 직접 읽어 현재 값과 기대값을 대조한다. PROD-820 Done, 문서, 기본값이나 과거 screenshot만으로 통과시키지 않는다.
 
@@ -58,7 +67,7 @@ Operational Verification 세션은 실제 Replay 재활성화 직전에 반드�
 
 불일치 또는 미확인 항목은 **현재 값(미확인이면 그 이유), 기대값, 사람이 해야 할 조치, 미조치 시 pending인 Replay Rollout Gate 입력**으로 보고한다. 사용자가 콘솔에서 수정·저장한 뒤 새 screenshot을 제공하고 Codex가 다시 대조하기 전까지 통과 처리하지 않는다. 설정 변경이 필요하면 사람이 해야 할 정확한 조치를 요청한다. 사용자 수행이나 해당 행위의 명시적 승인 없이 실행·완료 처리하지 않으며, 승인만으로 실제 설정값 검증을 대신하지 않는다. 설정 screenshot은 실제 녹화·masking·비대상 origin 미전송을 증명하지 않으므로 아래 acceptance를 별도로 수행한다.
 
-## Replay acceptance와 장애 경계
+## Superseded historical procedure (2026-09-22): Replay acceptance와 장애 경계
 
 - 합성 데이터만 사용한다. 실제 사용자 개인정보·실제 사용자 콘텐츠를 입력하거나 검증용 session에서 열지 않는다.
 - 일반적인 route navigation과 Viewer 열기·이미지 전환·닫기를 하나의 session replay에서 정상적으로 기록·재생한다. SDK의 기존 pageview·pageleave·autocapture가 같은 journey에 연결되는지 실제 Replay와 이벤트 결과를 대조한다. Viewer 내부 이미지 전환은 route navigation이 아니며 이를 위한 별도 pageview나 앱 소유 analytics emitter를 추가하지 않는다.
@@ -69,7 +78,7 @@ Operational Verification 세션은 실제 Replay 재활성화 직전에 반드�
 
 보호 실패 시 acceptance를 완료하지 않고 Replay 비활성화를 유지하거나 기존 release 절차로 되돌린다. 실제 재생은 활성화 후 검증이므로 사전 Gate PASS를 이 검증의 성공으로 기록하지 않는다.
 
-## PROD-741 최종 acceptance와 historical evidence
+## Superseded historical note (2026-09-22): PROD-741 최종 acceptance와 historical evidence
 
 A는 B에 코드·자동 검증 결과를 인계한다. B는 privacy baseline 수용과 Viewer 확인의 현재 결정, 네 Cloud 실제 값의 비교·시점, Rollout Gate 판정, source·배포 버전, 실제 재활성화·표본 재생·장애 격리 결과, 필요한 Human-required 조치의 수행·승인과 실행 증거를 PROD-741에 정리한다. 필수 결과가 미확인·실패면 PROD-741 최종 acceptance는 pending이다. 실제 Account ID·프로젝트 키·사용자 콘텐츠·원본 녹화 payload는 복사하지 않는다.
 
