@@ -377,9 +377,9 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
 - PROD-970은 Settings root/master 마지막의 `코스모 탈퇴` 행과 `/settings/account-deletion` detail의
   기존 Profile 목록 기반 eligibility·authoritative server recheck·`ACTIVE` blocker 개수와 이유,
   acknowledgement·pending/error/retry·서버 확정 success·완료 후 login 이동, Kosmo Account의 `Deleted` 전이,
-  접근성 이름·상태·root 읽기 순서 계약을 소유한다. public `/account-deletion`의 in-app-only 탈퇴 안내 정합화도
-  이 이슈의 범위다. Byulmaru ID 외부 `계정 설정`, 재인증·유예기간·탈퇴 사유 입력, Profile 목록·관리 action과
-  Profile/Membership 삭제 흐름은 이 이슈의 범위가 아니다.
+  접근성 이름·상태·root 읽기 순서 계약을 소유한다. public `/account-deletion` 안내는 #714가 소유하며,
+  이 이슈는 내부 Settings 탈퇴 action만 소유한다. Byulmaru ID 외부 `계정 설정`, 재인증·유예기간·탈퇴 사유 입력,
+  Profile 목록·관리 action과 Profile/Membership 삭제 흐름은 이 이슈의 범위가 아니다.
 - 자동화·source/unit 결과는 실제 Web keyboard·screen reader·zoom 또는 Android·iOS runtime 접근성·
   navigation 통과 증거로 일반화하지 않는다.
 
