@@ -19,7 +19,7 @@
     "start": "expo start",
     "storybook:dev": "storybook dev -p 6006 --disable-telemetry",
     "test": "pnpm check && pnpm test:config-plugins && pnpm test:unit && pnpm build-storybook && pnpm test:storybook",
-    "test:config-plugins": "node plugins/withIosResourceBundleDeploymentTarget.test.cjs && node plugins/withNativePushPresentation.test.cjs",
+    "test:config-plugins": "node plugins/withIosResourceBundleDeploymentTarget.test.cjs && node plugins/withNativePushPresentation.test.cjs && ruby fastlane/ios_signing_profile_test.rb",
     "test:storybook": "vitest run --project=storybook",
     "test:unit": "node --experimental-test-module-mocks --import tsx --test 'src/**/*.test.ts'",
     "web": "expo start --web --port 5173"
