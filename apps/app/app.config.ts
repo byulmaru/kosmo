@@ -124,6 +124,7 @@ const config: ExpoConfig = {
       },
     ],
     '@react-native-firebase/messaging',
+    './plugins/withNativePushPresentation',
     [
       'expo-build-properties',
       {

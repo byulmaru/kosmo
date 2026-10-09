@@ -11,6 +11,10 @@ export function requestNativeNotificationPermission(): Promise<NativeNotificatio
   return Promise.resolve({ granted: false });
 }
 
+export function getNativePushPresentationVersion(): 1 | 0 {
+  return 0;
+}
+
 export function getNativeFcmToken(): Promise<string> {
   return Promise.reject(new Error('Native push is unavailable on this platform.'));
 }

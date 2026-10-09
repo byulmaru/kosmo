@@ -5,6 +5,7 @@ import { useSession } from '@/session/SessionProvider';
 import {
   getNativeFcmToken,
   getNativeNotificationPermissionStatus,
+  getNativePushPresentationVersion,
   requestNativeNotificationPermission,
   subscribeToNativeFcmTokenRefresh,
 } from './nativePushClient';
@@ -27,9 +28,12 @@ import type { NativePushUpdateInstallationMutation as NativePushUpdateInstallati
 const NativePushRegisterInstallationMutation = graphql`
   mutation NativePushRegisterInstallationMutation(
     $platform: PushInstallationPlatform!
+    $presentationVersion: Int
     $token: String!
   ) {
-    registerPushInstallation(input: { platform: $platform, token: $token }) {
+    registerPushInstallation(
+      input: { platform: $platform, presentationVersion: $presentationVersion, token: $token }
+    ) {
       id
     }
   }
@@ -39,9 +43,17 @@ const NativePushUpdateInstallationMutation = graphql`
   mutation NativePushUpdateInstallationMutation(
     $id: ID!
     $platform: PushInstallationPlatform!
+    $presentationVersion: Int
     $token: String!
   ) {
-    updatePushInstallation(input: { id: $id, platform: $platform, token: $token }) {
+    updatePushInstallation(
+      input: {
+        id: $id
+        platform: $platform
+        presentationVersion: $presentationVersion
+        token: $token
+      }
+    ) {
       completed
     }
   }
@@ -56,6 +68,7 @@ const NativePushUnregisterInstallationMutation = graphql`
 `;
 
 const platform = Platform.OS === 'ios' ? ('IOS' as const) : ('ANDROID' as const);
+const presentationVersion = getNativePushPresentationVersion();
 
 export function NativePushProvider({ children }: PropsWithChildren) {
   const session = useSession();
@@ -86,7 +99,7 @@ export function NativePushProvider({ children }: PropsWithChildren) {
             resolve(response.registerPushInstallation.id);
           },
           onError: reject,
-          variables: { platform, token },
+          variables: { platform, presentationVersion, token },
         });
       }),
     [commitRegister],
@@ -105,7 +118,7 @@ export function NativePushProvider({ children }: PropsWithChildren) {
             resolve();
           },
           onError: reject,
-          variables: { id, platform, token },
+          variables: { id, platform, presentationVersion, token },
         });
       }),
     [commitUpdate],
