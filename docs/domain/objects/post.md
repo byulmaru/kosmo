@@ -279,8 +279,22 @@ Notification이 소유하며, Quote·Reply Parent·Repost Source의 구조와 �
   `content`에 투영한다. Content Warning은 있으면 안전한 `summary`로 투영한다. Media node는 HTML에 `<img>`로
   중복하지 않고 document 순서대로 `attachment` Image에 투영하며 Alt Text와 조회 시점의 접근 가능한 URL·MIME
   type을 제공한다. document root의 Sensitive Media는 지원하는 ActivityPub sensitive 속성으로 투영한다. 이
-  Local Note 계약은 PostContent node, mark, canonicalization 또는 validation을 다시 정의하지 않는다. Mention,
-  custom emoji는 이 표현에 포함하지 않는다. Quote 전용 표현은 아래 Quote federation 정책을 따른다.
+  Local Note 계약은 PostContent node, mark, canonicalization 또는 validation을 다시 정의하지 않는다. Custom
+  emoji는 이 표현에 포함하지 않는다. Quote 전용 표현은 아래 Quote federation 정책을 따른다.
+- Local Note 역참조(`GET`), Featured collection, outbound `Create`는 같은 Current Content의 Mention projection을
+  사용한다. 해당 revision의 typed Mention node와 같은 revision의 저장된 Mentioned Profile 관계가 정확히 연결되고,
+  기존 Profile visibility 조건에서 Profile이 ACTIVE이며 연결 Instance가 SUSPENDED가 아닐 때만 본문 link와
+  ActivityPub `Mention` tag를 제공한다. Local Profile의 본문 label은 실제 `@handle`이고 link는 configured Local
+  Instance의 Profile human URL을 사용한다. Remote Profile의 label은 실제 `@handle@domain`이며 link는 저장된
+  `profileUrl`이 유효한 HTTP(S) URL일 때만 이를 사용하고, 아니면 canonical actor URI를 사용한다. `Mention.href`는
+  항상 canonical actor URI이고 `Mention.name`은 본문 label과 같다. 본문에 같은 Profile이 여러 번 나타나면 각
+  occurrence를 유지하고 tag는 target당 하나만 제공한다.
+- Mention relation이 없거나 target을 resolve할 수 없거나, visibility 조건을 통과하지 못하거나, target이
+  지원되지 않거나 malformed이면 본문에는 비링크 `@알 수 없는 사용자`를 표시하고 ActivityPub `Mention` tag를
+  생략한다. Projection 중 Remote Profile을 fetch하거나 refresh하지 않는다. 이는 `to`, `cc`, audience, recipients,
+  Mentioned Profiles/DIRECT visibility 또는 signed-fetch 권한, delivery routing, notification을 바꾸지 않는다.
+  Canonical Mention node는 `profileId`만 저장한다. 기존 글 backfill과 remote `Update(Note)` projection은 이 계약에
+  포함하지 않는다.
 - Reply Parent 관계가 있으면 Parent의 ActivityPub Post identity를 `inReplyTo`로 제공한다. Local Parent는
   같은 local Note URI 규칙을 사용하고 remote Parent는 저장된 ActivityPub Post URI를 사용한다. `inReplyTo`는
   requester별 Parent 조회 가능성에 따라 달라지지 않으며, Parent의 실제 표현은 Parent 자체의 역참조 권한으로
@@ -464,8 +478,9 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
   갱신·제거할 수 있다. 기존 Post Content 수정, 운영자 또는 일괄 backfill은 수행하지 않는다. 원문 anchor의 표시 문자열은 수신 중 resource
   budget 계산에만 사용하고 저장하지 않는다. renderer는 같은 revision의 Profile `relativeHandle`에서 표시 문자열을 파생하며, Profile을
   조회할 수 없으면 비링크 `@알 수 없는 사용자`를 표시한다. `pre`와 일반 rich-text editor는 지원하지 않는다.
-- Mentioned Profiles audience와 ActivityPub outbound Mention projection·custom emoji는 후속
-  계약에서 정의한다. inbound Note의 typed Mention 보존은 별도 수신 계약을 따른다.
+- Mentioned Profiles audience와 custom emoji는 후속 계약에서 정의한다. Local Note outbound Mention
+  projection은 [ADR 0030](../decisions/0030-post-content-mention-identity.md) 계약을 따른다. inbound Note의 typed
+  Mention 보존은 별도 수신 계약을 따른다.
 - Quote 정책은 [ADR 0029](../decisions/0029-quote-consent-and-federation.md)과
   [PROD-902](https://linear.app/byulmaru/issue/PROD-902)를 따른다. 로컬 작성은 PROD-431,
   federation·승인 발급·철회는 PROD-924, 원격 Quote 수신·검증은 PROD-792가 구현한다.

@@ -161,7 +161,10 @@ export function postContentDocumentToText(value: unknown): string {
   return postContentBodyToText(canonicalizePostContentDocument(value).body);
 }
 
-export function postContentDocumentToHtml(document: PostContentDocumentV1): string {
+export function postContentDocumentToHtml(
+  document: PostContentDocumentV1,
+  mentionLinks?: ReadonlyMap<string, { readonly href: string; readonly label: string }>,
+): string {
   const { body } = canonicalizePostContentDocument(document);
   const node = postContentSchema.nodeFromJSON({
     type: 'doc',
@@ -170,8 +173,31 @@ export function postContentDocumentToHtml(document: PostContentDocumentV1): stri
 
   const domDocument = new JSDOM().window.document;
   const container = domDocument.createElement('div');
+  const baseSerializer = DOMSerializer.fromSchema(postContentSchema);
+  const serializer = mentionLinks?.size
+    ? new DOMSerializer(
+        {
+          ...baseSerializer.nodes,
+          mention: (mentionNode) => {
+            const mention = mentionLinks.get(mentionNode.attrs.profileId);
+            return mention
+              ? [
+                  'span',
+                  { class: 'h-card' },
+                  [
+                    'a',
+                    { href: normalizeLinkHref(mention.href), class: 'u-url mention' },
+                    mention.label,
+                  ],
+                ]
+              : ['span', postContentMentionFallbackText];
+          },
+        },
+        baseSerializer.marks,
+      )
+    : baseSerializer;
   container.append(
-    DOMSerializer.fromSchema(postContentSchema).serializeFragment(node.content, {
+    serializer.serializeFragment(node.content, {
       document: domDocument,
     }),
   );

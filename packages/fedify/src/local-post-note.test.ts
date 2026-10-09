@@ -61,6 +61,7 @@ let localInstanceId: string;
 let Media: typeof CoreDb.Media;
 let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
+let PostMentions: typeof CoreDb.PostMentions;
 let Posts: typeof CoreDb.Posts;
 let ProfileFollowRequests: typeof CoreDb.ProfileFollowRequests;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
@@ -93,6 +94,7 @@ describe('ActivityPub Local Post Note', () => {
       Media,
       pg,
       PostContents,
+      PostMentions,
       Posts,
       ProfileFollowRequests,
       ProfileFollows,
@@ -292,7 +294,7 @@ describe('ActivityPub Local Post Note', () => {
     assert.equal(json.includes(secondMedia.id), false);
   });
 
-  test('serializes a stored Mention node with the unavailable Profile fallback without emitting an outbound tag', async () => {
+  test('keeps a stored Mention fallback when it has no current PostMentions relation', async () => {
     const author = await createProfile({ handle: 'mention-author', kind: InstanceKind.LOCAL });
     const post = await createPost(author.id);
     assert.ok(post.currentContentId);
@@ -326,6 +328,290 @@ describe('ActivityPub Local Post Note', () => {
     assert.ok(note);
     assert.equal(note.content?.toString(), '<p>Hello <span>@알 수 없는 사용자</span></p>');
     assert.deepEqual(note.tagIds, []);
+  });
+
+  test('projects current local and remote Mentions to escaped HTML and unique ActivityPub tags', async () => {
+    const author = await createProfile({ handle: 'mention-author', kind: InstanceKind.LOCAL });
+    const localTarget = await createProfile({ handle: 'local-target', kind: InstanceKind.LOCAL });
+    const remoteTarget = await createProfile({ domain: 'remote.example', handle: 'remote-target' });
+    const unsafeUrlTarget = await createProfile({
+      domain: 'unsafe-url.example',
+      handle: 'unsafe-url-target',
+    });
+    const malformedActorTarget = await createProfile({
+      domain: 'malformed-actor.example',
+      handle: 'malformed-actor-target',
+    });
+    const hiddenTarget = await createProfile({
+      domain: 'disabled.example',
+      handle: 'disabled-target',
+      state: ProfileState.DISABLED,
+    });
+    const unsupportedLocalInstance = await db
+      .insert(Instances)
+      .values({
+        canonicalOrigin: 'https://other-local.example',
+        domain: 'other-local.example',
+        kind: InstanceKind.LOCAL,
+        state: InstanceState.ACTIVE,
+      })
+      .returning()
+      .then(firstOrThrow);
+    testInstanceIds.push(unsupportedLocalInstance.id);
+    const unsupportedLocalTarget = await createProfile({
+      handle: 'other-local-target',
+      instanceId: unsupportedLocalInstance.id,
+    });
+    const oldRevisionTarget = await createProfile({
+      handle: 'old-revision-target',
+      kind: InstanceKind.LOCAL,
+    });
+    const orphanTarget = await createProfile({ handle: 'orphan-target', kind: InstanceKind.LOCAL });
+    const remoteDomain = await db
+      .select({ domain: Instances.domain })
+      .from(Instances)
+      .where(eq(Instances.id, remoteTarget.instanceId))
+      .then(firstOrThrow)
+      .then(({ domain }) => domain);
+    const unsafeUrlDomain = await db
+      .select({ domain: Instances.domain })
+      .from(Instances)
+      .where(eq(Instances.id, unsafeUrlTarget.instanceId))
+      .then(firstOrThrow)
+      .then(({ domain }) => domain);
+    const remoteActorUri = new URL(`https://${remoteDomain}/users/remote-target`);
+    const unsafeUrlActorUri = new URL(`https://${unsafeUrlDomain}/users/unsafe-url-target`);
+    const hiddenTargetDomain = await db
+      .select({ domain: Instances.domain })
+      .from(Instances)
+      .where(eq(Instances.id, hiddenTarget.instanceId))
+      .then(firstOrThrow)
+      .then(({ domain }) => domain);
+    const hiddenTargetActorUri = new URL(`https://${hiddenTargetDomain}/users/disabled-target`);
+    await db.insert(ActivityPubActors).values([
+      {
+        profileId: remoteTarget.id,
+        profileUrl: 'https://profiles.example/@remote-target',
+        type: ActivityPubActorType.PERSON,
+        uri: remoteActorUri.href,
+      },
+      {
+        profileId: unsafeUrlTarget.id,
+        profileUrl: 'javascript:alert(1)',
+        type: ActivityPubActorType.PERSON,
+        uri: unsafeUrlActorUri.href,
+      },
+      {
+        profileId: malformedActorTarget.id,
+        profileUrl: null,
+        type: ActivityPubActorType.PERSON,
+        uri: 'not a URL',
+      },
+      {
+        profileId: hiddenTarget.id,
+        profileUrl: null,
+        type: ActivityPubActorType.PERSON,
+        uri: hiddenTargetActorUri.href,
+      },
+    ]);
+    const post = await createPost(author.id);
+    assert.ok(post.currentContentId);
+    const mentionNode = (profileId: string) => ({
+      attrs: { profileId },
+      type: 'mention' as const,
+    });
+
+    await db
+      .update(PostContents)
+      .set({
+        document: {
+          body: {
+            content: [{ content: [mentionNode(oldRevisionTarget.id)], type: 'paragraph' }],
+            type: 'doc',
+          },
+          summary: null,
+          version: 1,
+        },
+      })
+      .where(eq(PostContents.id, post.currentContentId));
+    await db.insert(PostMentions).values({
+      postContentId: post.currentContentId,
+      profileId: oldRevisionTarget.id,
+    });
+
+    const currentContent = await db
+      .insert(PostContents)
+      .values({
+        document: {
+          body: {
+            content: [
+              {
+                content: [
+                  { text: 'Hello <script>alert(1)</script> & ', type: 'text' },
+                  mentionNode(localTarget.id),
+                  { text: ' ', type: 'text' },
+                  mentionNode(localTarget.id),
+                  { text: ' ', type: 'text' },
+                  mentionNode(remoteTarget.id),
+                  { text: ' ', type: 'text' },
+                  mentionNode(unsafeUrlTarget.id),
+                  { text: ' ', type: 'text' },
+                  mentionNode(malformedActorTarget.id),
+                  { text: ' ', type: 'text' },
+                  mentionNode(orphanTarget.id),
+                  { text: ' ', type: 'text' },
+                  mentionNode(oldRevisionTarget.id),
+                  { text: ' ', type: 'text' },
+                  mentionNode(unsupportedLocalTarget.id),
+                  { text: ' ', type: 'text' },
+                  mentionNode(hiddenTarget.id),
+                ],
+                type: 'paragraph',
+              },
+            ],
+            type: 'doc',
+          },
+          summary: null,
+          version: 1,
+        },
+        postId: post.id,
+      })
+      .returning()
+      .then(firstOrThrow);
+    await db
+      .update(Posts)
+      .set({ currentContentId: currentContent.id })
+      .where(eq(Posts.id, post.id));
+    await db.insert(PostMentions).values(
+      [
+        localTarget.id,
+        remoteTarget.id,
+        unsafeUrlTarget.id,
+        malformedActorTarget.id,
+        hiddenTarget.id,
+        unsupportedLocalTarget.id,
+      ].map((profileId) => ({
+        postContentId: currentContent.id,
+        profileId,
+      })),
+    );
+
+    const note = await dispatchLocalPostNote(createContext(), { id: post.id });
+    assert.ok(note);
+    assert.equal(note.toId?.href, PUBLIC_COLLECTION.href);
+    assert.equal(note.ccId?.href, `${publicOrigin}/ap/actor/${author.id}/followers`);
+    const html = note.content?.toString() ?? '';
+    assert.ok(html.includes('Hello &lt;script&gt;alert(1)&lt;/script&gt; &amp; '));
+    assert.ok(
+      html.includes(
+        `<span class="h-card"><a href="${publicOrigin}/@local-target" class="u-url mention">@local-target</a></span>`,
+      ),
+    );
+    assert.equal(html.match(/@local-target<\/a>/gu)?.length, 2);
+    assert.ok(
+      html.includes(
+        `<a href="https://profiles.example/@remote-target" class="u-url mention">@remote-target@${remoteDomain}</a>`,
+      ),
+    );
+    assert.ok(
+      html.includes(
+        `<a href="${unsafeUrlActorUri.href}" class="u-url mention">@unsafe-url-target@${unsafeUrlDomain}</a>`,
+      ),
+    );
+    assert.doesNotMatch(html, /javascript:|<script>/u);
+    assert.equal(html.match(/<span>@알 수 없는 사용자<\/span>/gu)?.length, 5);
+
+    const jsonLd = await note.toJsonLd();
+    const serializedTags = (jsonLd as { readonly tag?: unknown }).tag;
+    const serializedTagValues = Array.isArray(serializedTags) ? serializedTags : [serializedTags];
+    assert.deepEqual(
+      serializedTagValues
+        .map((tag) => {
+          const mentionTag = tag as {
+            readonly href?: string;
+            readonly name?: string;
+            readonly type?: string;
+          };
+          return { href: mentionTag.href, name: mentionTag.name, type: mentionTag.type };
+        })
+        .sort((left, right) => (left.href ?? '').localeCompare(right.href ?? '')),
+      [
+        {
+          href: `${publicOrigin}/ap/actor/${localTarget.id}`,
+          name: '@local-target',
+          type: 'Mention',
+        },
+        { href: remoteActorUri.href, name: `@remote-target@${remoteDomain}`, type: 'Mention' },
+        {
+          href: unsafeUrlActorUri.href,
+          name: `@unsafe-url-target@${unsafeUrlDomain}`,
+          type: 'Mention',
+        },
+      ].sort((left, right) => left.href.localeCompare(right.href)),
+    );
+  });
+
+  test('uses the configured Local Instance actor URI for Mentions from another Local origin', async () => {
+    const authorOrigin = 'https://author.local.example';
+    const authorInstance = await db
+      .insert(Instances)
+      .values({
+        canonicalOrigin: authorOrigin,
+        domain: 'author.local.example',
+        kind: InstanceKind.LOCAL,
+        state: InstanceState.ACTIVE,
+      })
+      .returning()
+      .then(firstOrThrow);
+    testInstanceIds.push(authorInstance.id);
+    const author = await createProfile({
+      handle: 'other-origin-author',
+      instanceId: authorInstance.id,
+      kind: InstanceKind.LOCAL,
+    });
+    const target = await createProfile({ handle: 'configured-target', kind: InstanceKind.LOCAL });
+    const post = await createPost(author.id);
+    assert.ok(post.currentContentId);
+
+    await db
+      .update(PostContents)
+      .set({
+        document: {
+          body: {
+            content: [
+              {
+                content: [{ attrs: { profileId: target.id }, type: 'mention' }],
+                type: 'paragraph',
+              },
+            ],
+            type: 'doc',
+          },
+          summary: null,
+          version: 1,
+        },
+      })
+      .where(eq(PostContents.id, post.currentContentId));
+    await db.insert(PostMentions).values({
+      postContentId: post.currentContentId,
+      profileId: target.id,
+    });
+
+    const note = await dispatchLocalPostNote(createContext(authorOrigin), { id: post.id });
+    assert.ok(note);
+    assert.equal(note.id?.href, `${authorOrigin}/ap/note/${post.id}`);
+    assert.equal(note.attributionId?.href, `${authorOrigin}/ap/actor/${author.id}`);
+    assert.equal(
+      note.content?.toString(),
+      `<p><span class="h-card"><a href="${publicOrigin}/@configured-target" class="u-url mention">@configured-target</a></span></p>`,
+    );
+
+    const jsonLd = await note.toJsonLd();
+    const serializedTags = (jsonLd as { readonly tag?: unknown }).tag;
+    const serializedTagValues = Array.isArray(serializedTags) ? serializedTags : [serializedTags];
+    assert.deepEqual(
+      serializedTagValues.map((tag) => (tag as { readonly href?: string }).href),
+      [`${publicOrigin}/ap/actor/${target.id}`],
+    );
   });
 
   test('does not project a partial Note when required Media is unavailable', async () => {
@@ -1065,14 +1351,14 @@ describe('ActivityPub Local Post Note', () => {
   });
 });
 
-const createContext = (): RequestContext<void> => {
-  const federation = createFederation<void>({ kv: new MemoryKvStore(), origin: publicOrigin });
+const createContext = (origin = publicOrigin): RequestContext<void> => {
+  const federation = createFederation<void>({ kv: new MemoryKvStore(), origin });
   federation.setActorDispatcher(
     '/ap/actor/{identifier}',
     (context, identifier) => new Person({ id: context.getActorUri(identifier) }),
   );
   return federation.createContext(
-    new Request(`${publicOrigin}/ap/note/00000000-0000-8000-8000-000000000001`),
+    new Request(`${origin}/ap/note/00000000-0000-8000-8000-000000000001`),
     undefined,
   );
 };
