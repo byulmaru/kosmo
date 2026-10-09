@@ -43,17 +43,27 @@ export const handleInboundDelete = async (
     return;
   }
 
-  if (
-    await revokeInboundQuote({ actorUri: actorUri.href, authorizationUri: objectUri.href, context })
-  ) {
-    return;
-  }
-
   const embedded = await activity.getObject({
     crossOrigin: 'trust',
     documentLoader: noNetworkDocumentLoader,
     suppressError: true,
   });
+  if (activity.targetIds.length > 1) {
+    return;
+  }
+  if (
+    await revokeInboundQuote({
+      actorUri: actorUri.href,
+      authorizationUri: objectUri.href,
+      context,
+      activityId: activity.id?.href ?? null,
+      targetUri: uniqueHref(activity.targetIds),
+      embedded,
+    })
+  ) {
+    return;
+  }
+
   if (embedded instanceof QuoteAuthorization) {
     observeInbound({
       outcome: 'noop',

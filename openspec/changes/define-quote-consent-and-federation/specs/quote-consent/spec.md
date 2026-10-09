@@ -1,19 +1,73 @@
 ## ADDED Requirements
 
+### Requirement: 게시글 인용 정책 GraphQL 계약
+
+**Authority / Provenance:** 이 요구사항은 반드시 준수해야 한다(MUST). 근거: `docs/domain/objects/post.md`의 게시글별 작성 시 정책,
+`docs/design/post-action-bar.md`, `memory/graphql-style.md`, PROD-902,
+PROD-924의 2026-09-09 API 구체화 위임과 2026-09-11 공개 범위 UI 통합·개별 철회 제외 결정.
+
+API는 `PostQuotePolicy`의 `EVERYONE`, `FOLLOWERS`, `AUTHOR`를 각각 모두·팔로워·본인만으로 제공해야
+한다(MUST). 조회 가능한 Content 있는 Local Post의 `Post.quotePolicy`는 이 enum을 반환하고, 원격 Post와
+Content 없는 Repost에서는 null을 반환해야 한다(MUST).
+
+`CreatePostInput.quotePolicy: PostQuotePolicy`는 optional이며 생략·null일 때 `EVERYONE`으로 시작해야
+한다(MUST). 명시적으로 선택한 값은 Post·Content와 같은 transaction에 저장해야 한다(MUST).
+게시 후 정책 변경은 2026-09-27 사용자 결정에 따라 후속 범위로 분리한다.
+사용자용 개별 승인 철회 mutation·권한 필드·UI를 이번 범위에서 제공해서는 안 된다(MUST NOT).
+
+#### Scenario: 새 글에 선택한 정책 저장
+
+- **WHEN** 작성자가 공개·조용한 공개 글의 작성 요청에 `FOLLOWERS` 정책을 함께 제출한다
+- **THEN** Post·Content와 같은 transaction에 정책을 저장하고 payload에서 같은 Post의 정책을 조회할 수 있다
+- **AND** rollback 시 부분 정책 row를 남기지 않으며 기존 클라이언트의 입력 생략은 `EVERYONE`으로 처리한다
+
+#### Scenario: 지원 대상과 selected Profile별 정책 조회
+
+- **WHEN** Local content-bearing Post, 원격 Post, Content 없는 Repost를 서로 다른 selected Profile로 조회한다
+- **THEN** Local content-bearing Post만 정책 enum을 반환하고 나머지는 null이다
+
+### Requirement: 기존 공개 범위 UI 안의 인용 정책 선택
+
+**Authority / Provenance:** 이 요구사항은 반드시 준수해야 한다(MUST). 근거: `docs/design/post-action-bar.md`, `docs/design/reply-composer.md`,
+`docs/domain/objects/post.md`, PROD-924의 2026-09-11 사용자 결정; 계약 owner PROD-902.
+
+기존 게시글 공개 범위 설정 UI를 재사용하고 그 안에 새로운 인용 허용 정책 선택 UI를 추가해야 한다(MUST). 현재 draft가 `PUBLIC` 또는
+`UNLISTED`일 때만 모두·팔로워·본인만 선택을 표시하고, 제한 공개에서는 해당 설정을 숨겨야 한다(MUST).
+새 draft는 모두로 시작하며 해당 글에서 선택한 값을 저장해야 한다(MUST). Parent/Source의 정책 또는 다른 actor의
+정책을 상속해서는 안 된다(MUST NOT). 게시 후 인용 정책 변경 UI는 이번 범위에서 제공하지 않는다.
+
+#### Scenario: 공개·조용한 공개와 제한 공개 전환
+
+- **WHEN** 작성자가 기존 공개 범위 UI에서 공개 또는 조용한 공개를 선택한다
+- **THEN** 같은 UI 안에서 인용 허용 값을 선택할 수 있고 두 공개 값 사이 전환은 선택값을 유지한다
+- **AND** 팔로워 공개를 선택하면 설정을 숨기며 기존 Source 인용 가능 범위는 바뀌지 않는다
+
+#### Scenario: 실패 복구와 요청 수명
+
+- **WHEN** 정책 저장이 실패하거나 pending 중 selected Profile·draft·Environment가 바뀐다
+- **THEN** 실패한 현재 입력은 보존해 재시도할 수 있고 pending 중 중복 제출을 막는다
+- **AND** 이전 요청의 늦은 응답은 새 draft·다른 actor Store·현재 navigation을 변경하지 않는다
+
+#### Scenario: 키보드와 설정 표시 조건
+
+- **WHEN** 키보드로 공개 범위와 인용 허용 설정을 조작한다
+- **THEN** 각 선택 그룹의 이름·현재 값·focus를 구별하고 Escape/dismiss 후 trigger focus를 복구한다
+- **AND** 공개 범위를 선택하자마자 메뉴를 닫아 인용 설정에 접근할 수 없게 하지 않는다
+
 ### Requirement: 게시글별 인용 허용 정책과 초기값
 
 **Authority / Provenance:** 이 요구사항은 반드시 준수해야 한다(MUST). 근거: `docs/domain/objects/post.md`, `docs/domain/objects/profile.md`,
 `docs/domain/decisions/0029-quote-consent-and-federation.md`, PROD-902, PROD-924.
 
 시스템은 Content가 있는 Local Post마다 `모두`, `팔로워`, `본인만` 중 하나의 인용 허용 정책을 제공해야
-한다(MUST). 새 Post와 도입 전의 기존 Post 초기값은 `모두`여야 한다(MUST). `팔로워`는 established
+한다(MUST). 선택하지 않은 새 Post와 도입 전의 기존 Post 기본값은 `모두`여야 한다(MUST). `팔로워`는 established
 Follower와 Source Author, `본인만`은 Source Author의 요청만 자동 승인해야 한다(MUST). 인용 허용은
 Source 조회 권한을 부여해서는 안 된다(MUST NOT).
 
 #### Scenario: 새 글과 기존 글의 최초 정책
 
-- **WHEN** 정책을 처음 도입하거나 새 Content-bearing Local Post를 작성한다
-- **THEN** 별도 변경 전 인용 허용 정책은 `모두`다
+- **WHEN** 정책을 처음 도입하거나 별도 정책 선택 없이 새 Content-bearing Local Post를 작성한다
+- **THEN** 인용 허용 정책은 `모두`다
 - **AND** 기존 QuoteAuthorization을 변경하거나 재발급하지 않는다
 
 #### Scenario: 팔로워 정책의 자동 승인
@@ -27,27 +81,6 @@ Source 조회 권한을 부여해서는 안 된다(MUST NOT).
 - **WHEN** Source 정책이 `본인만`이고 다른 Profile이 인용을 요청한다
 - **THEN** 자동 승인하지 않고 요청을 거절한다
 - **AND** Kosmo 원문용 건별 수동 승인 대기나 승인 UI를 만들지 않는다
-
-### Requirement: 작성자의 정책 변경과 비소급 적용
-
-**Authority / Provenance:** 이 요구사항은 반드시 준수해야 한다(MUST). 근거: `docs/domain/objects/post.md`, `docs/design/post-action-bar.md`,
-`docs/domain/decisions/0029-quote-consent-and-federation.md`, PROD-902, PROD-924.
-
-인증된 Account 요청은 `Account.Active`와 행동 Profile의 `Post.Author` 사실을 확인한 뒤 Content가 있는
-Active Local Post의 정책 변경을 허용해야 한다(MUST). 새 정책은 이후 요청·승인 판단에만 적용하고 기존
-승인을 자동 철회해서는 안 된다(MUST NOT). 이번 범위에서 Profile 기본값 설정을 제공해서는 안 된다(MUST NOT).
-
-#### Scenario: 모두에서 본인만으로 변경
-
-- **WHEN** 권한이 있는 작성자가 게시글 정책을 `모두`에서 `본인만`으로 변경한다
-- **THEN** 이후 타인 요청은 새 정책으로 거절한다
-- **AND** 기존에 발급한 승인과 그 승인을 가진 Quote는 일괄 철회하지 않는다
-
-#### Scenario: 다른 Profile의 정책 변경 시도
-
-- **WHEN** 행동 Profile이 대상 Post의 Author가 아니거나 Account가 Active가 아니다
-- **THEN** 정책을 변경하지 않는다
-- **AND** 다른 selected Profile의 권한이나 설정을 재사용하지 않는다
 
 ### Requirement: Quote Source의 인용 가능 범위
 
@@ -120,8 +153,8 @@ PROD-902, PROD-431, PROD-924.
 `docs/domain/decisions/0029-quote-consent-and-federation.md`, PROD-902, PROD-431, PROD-924.
 
 원격 승인 대기 중에도 Quote 자체 Content를 게시해야 하며(MUST), Source는 정상 인용으로 노출해서는
-안 된다(MUST NOT). 검증된 승인 후에만 Source를 연결·표시하고 거절·철회·원문 삭제 후에는 자체 Content를
-유지한 채 Source를 숨겨야 한다(MUST). 승인 여부와 무관하게 Source 조회·차단 정책을 적용해야 한다(MUST).
+안 된다(MUST NOT). 새 lifecycle에서 검증된 승인 후에만 Source를 연결·표시하고 거절·철회·원문 삭제 후에는 자체 Content를
+유지한 채 Source를 숨겨야 한다(MUST). 승인 여부와 무관하게 Source 조회·차단 정책을 적용해야 한다(MUST). 도입 전 Local Quote 2건을 위한 표시 예외를 두어서는 안 된다(MUST NOT).
 
 #### Scenario: 원격 타인 원문의 승인 대기
 
@@ -141,15 +174,16 @@ PROD-902, PROD-431, PROD-924.
 - **THEN** Quote 자체의 조회 정책을 통과하는 본문은 유지한다
 - **AND** Source 카드·관계를 숨기며 Quote 전체를 연쇄 삭제하지 않는다
 
-### Requirement: 차단과 명시적 승인 철회의 구분
+### Requirement: 차단과 연합 승인 철회의 구분
 
 **Authority / Provenance:** 이 요구사항은 반드시 준수해야 한다(MUST). 근거: `docs/domain/objects/post.md`, `docs/domain/objects/profile-block.md`,
 `docs/domain/decisions/0029-quote-consent-and-federation.md`, PROD-902, PROD-924.
 
 차단 관계는 당사자의 새 인용 요청·새 승인보다 양방향으로 우선해야 한다(MUST). 기존 승인에 따른 Source
 표시는 별도 양방향 제한을 추가하지 않고 viewer별 기존 Post 조회 정책으로 판정해야 한다(MUST). 차단 자체로
-기존 승인을 자동 철회하거나 제3자의 Source를 일괄 숨겨서는 안 된다(MUST NOT). 인증된 원문 작성자가 기존
-승인을 명시적으로 철회하면 승인에 의존하는 Source를 비노출해야 한다(MUST).
+기존 승인을 자동 철회하거나 제3자의 Source를 일괄 숨겨서는 안 된다(MUST NOT). 유효한 원격 승인 철회나
+Source 삭제를 처리하면 승인에 의존하는 Source를 비노출해야 한다(MUST). 사용자용 개별 승인 철회는 현재
+제공해서는 안 된다(MUST NOT).
 
 #### Scenario: 차단 뒤 새 요청
 
@@ -163,8 +197,31 @@ PROD-902, PROD-431, PROD-924.
 - **THEN** 전자는 기존 직접 Post 조회 조건을 통과하면 Source를 표시한다
 - **AND** 후자와 상호 차단은 Source를 숨기며 Quote 자체 Content는 별도 조회 정책으로 판정한다
 
-#### Scenario: 제3자에게도 인용 원문 숨기기
+#### Scenario: 원격 철회와 원문 삭제의 제3자 결과
 
-- **WHEN** Active Account의 Source Author가 해당 Source에 발급한 승인을 명시적으로 철회한다
+- **WHEN** 유효한 원격 승인 철회 또는 Local Source 삭제를 처리한다
 - **THEN** 승인을 무효로 만들고 제3자에게도 해당 승인에 따른 Source를 표시하지 않는다
 - **AND** Quote 작성자의 본문은 유지한다
+
+### Requirement: 기존 Local Quote 호환성 예외 제외
+
+**Authority / Provenance:** 이 요구사항은 반드시 준수해야 한다(MUST). 근거: `docs/domain/objects/post.md`,
+`docs/domain/decisions/0029-quote-consent-and-federation.md`, 2026-09-22 사용자 결정과 갱신된 D15.
+
+시스템은 신규 Quote consent 정책을 기존 Local Quote 2건을 위한 예외 없이 적용해야 한다(MUST).
+해당 2건의 migration/backfill·Source 표시 보존은 범위 밖이며 수행해서는 안 된다(MUST NOT).
+새 정책으로 기존 Source가 표시되지 않거나 접근할 수 없게 되어도 허용한다.
+production ID·Source 결속 확인이나 이를 위한 preflight·deployment validation·별도 배포 gate를 추가해서는 안 된다(MUST NOT).
+기존 Local Post의 정책 초기화와 이미 발급된 승인 보존은 별개로 유지해야 한다(MUST).
+
+#### Scenario: 승인 기록 없는 타인 Quote
+
+- **WHEN** 타인 Quote에 유효한 승인이 없다
+- **THEN** 기존 데이터라는 이유로 Source 표시 예외를 적용하지 않는다
+- **AND** Source FK 또는 승인 기록 부재만으로 승인을 추정하지 않는다
+
+#### Scenario: 기존 두 Quote의 도입 처리
+
+- **WHEN** 신규 consent 정책을 도입한다
+- **THEN** 기존 두 Quote를 위한 migration/backfill·표시 보존과 production identity 확인을 수행하지 않는다
+- **AND** 해당 2건만을 위한 preflight·deployment gate를 만들지 않는다

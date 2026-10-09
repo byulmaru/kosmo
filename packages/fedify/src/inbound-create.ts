@@ -77,6 +77,7 @@ export const handleInboundCreate = async (
     }
     if (await hasInboundQuote({ context, note: object })) {
       await handleInboundQuote({
+        commandId: create.id?.href,
         actorUri,
         context,
         duplicateCreate: materialization.status === 'duplicate',

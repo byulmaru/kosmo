@@ -92,6 +92,7 @@ export const handleInboundUpdate = async (
     }
 
     await handleInboundQuote({
+      commandId: update.id?.href,
       authorizationUpdate: true,
       actorUri: actorUri.href,
       context,

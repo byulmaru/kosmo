@@ -29,6 +29,15 @@
 
 - `materializeRemoteProfileActorActivity`는 stored/missing 판정과 현재 Profile/Instance state·actor TTL 확인을 소유하며 `{ profileId, needsRefresh }` non-null 최소 JSON-safe DTO를 반환한다. Activity 모듈의 private stored-state query에서 missing을 `null`로 관찰할 수 있지만, missing이면 refresh Activity의 fetch·persist를 ordinary call로 수행한 뒤 새 target ID를 `{ profileId: id, needsRefresh: false }` 의미로 반환한다. DTO의 `profileId`는 cached 또는 새로 생성한 target Profile ID이고 input의 optional `profileId`는 origin 선택용 행동 Profile ID다. 갱신 불필요 상태는 외부 fetch나 refresh child 없이 cached ID를 반환한다.
 
+## Quote Consent Owner
+
+- Quote consent의 변경 명령은 Quote ID별 owner의 FIFO admission을 통과한다. Handler는 enqueue만 수행한다.
+- 원격 proof 조회는 읽기 전용 Activity로 분리한다. 쓰기 Activity는 Source → Quote 잠금, 현재 Run/token Query fence,
+  기존 identity/state CAS를 같은 transaction에서 검사한다. Query 성공만으로 commit까지의 Temporal 소유권을 보장하지 않는다.
+- 정상 종료·Continue-As-New는 token 폐기와 DB drain을 수행한다. Source 삭제는 공유 잠금 순서를 따르는 제한된 다중 자원 transaction이다.
+- 강제 Terminate/Reset은 drain을 실행하지 않으므로 이미 fence를 통과한 늦은 commit을 취소하지 못한다.
+  새 Run bootstrap과 운영 복구의 보장 범위는 [ADR 0030](../../docs/architecture/decisions/0030-quote-consent-owner.md)을 따른다.
+
 ## Inputs And Identity
 
 - Workflow/Update wire input의 strict Zod schema는 해당 Workflow의 trust boundary 가까이에 둔다. Activity가

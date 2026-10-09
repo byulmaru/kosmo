@@ -224,12 +224,15 @@ test('Local 탭은 configured Local의 공개 top-level Content Post와 Quote만
   await timelineTabs.getByRole('tab', { name: '로컬' }).click();
   await localRefetchResponse;
 
-  await page.getByRole('link', { name: 'E2E Local Writer 프로필 보기' }).click();
+  const quoteArticle = page
+    .getByRole('article')
+    .filter({ hasText: 'E2E timeline local quote body' });
+  await quoteArticle.getByRole('link', { name: 'E2E Local Writer @e2e-local-writer' }).click();
   await expect(page).toHaveURL(/\/@e2e-local-writer$/);
   await page.goBack();
   await expect(page.getByText('E2E timeline local quote body', { exact: true })).toBeVisible();
 
-  await page.getByRole('link', { name: 'E2E Local Writer의 게시글 보기' }).click();
+  await quoteArticle.getByRole('link', { name: /^(?:방금|\d+(?:초|분|시간|일) 전)$/ }).click();
   await expect(page).toHaveURL(/\/@e2e-local-writer\/.+$/);
 });
 

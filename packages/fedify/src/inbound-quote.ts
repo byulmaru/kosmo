@@ -1,8 +1,9 @@
 import '@kosmo/core/polyfill';
 
+import { randomUUID } from 'node:crypto';
 import { getDocumentLoader } from '@fedify/fedify/runtime';
 import { quoteInteraction } from '@fedify/interaction-controls';
-import { Note } from '@fedify/vocab';
+import { Note, QuoteAuthorization } from '@fedify/vocab';
 import {
   ActivityPubActors,
   ActivityPubPosts,
@@ -13,10 +14,14 @@ import {
   Profiles,
 } from '@kosmo/core/db';
 import { InstanceKind, PostQuoteConsentStatus, PostState } from '@kosmo/core/enums';
-import { applyPostQuoteConsent } from '@kosmo/core/services';
-import { temporalClient } from '@kosmo/core/temporal/client';
-import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import {
+  loadPendingQuoteConsentByBinding,
+  loadQuoteConsentByApprovalUri,
+  loadQuoteConsentByRequestUri,
+} from '@kosmo/core/services';
+import { runWorkflow } from '@kosmo/core/temporal/client';
+import { postQuoteOwnerWorkflow } from '@kosmo/core/temporal/post-quote-owner';
+import { and, eq, isNull } from 'drizzle-orm';
 import { findPostByActivityPubUri } from './activitypub-post-uri';
 import { isHttpUri } from './activitypub-uri';
 import { materializeHydratedRemoteNote } from './inbound-create-note';
@@ -26,6 +31,10 @@ import type { DocumentLoader } from '@fedify/fedify/runtime';
 import type { Object as ActivityPubObject } from '@fedify/vocab';
 import type { Transaction } from '@kosmo/core/db';
 import type { ApplyPostQuoteConsentInput } from '@kosmo/core/services';
+import type {
+  PreparedQuoteConsent,
+  QuoteOwnerCommand,
+} from '@kosmo/core/temporal/post-quote-owner';
 import type { InboundObservation } from './inbound-observability';
 
 const ActivityPubQuoteFormat = { FEP_044F: 'FEP_044F', LEGACY: 'LEGACY' } as const;
@@ -72,6 +81,7 @@ const currentAuthorizationLoader = async (context: QuoteContext): Promise<Docume
 };
 
 type InboundQuoteInput = {
+  commandId?: string;
   actorUri: string;
   context: QuoteContext;
   note: Note;
@@ -200,44 +210,21 @@ const extractQuote = async (context: QuoteContext, note: Note): Promise<QuoteExt
     fepPropertyPresent,
     format,
     malformed,
-    targetObject: null,
+    targetObject:
+      !malformed && fepPropertyPresent
+        ? await note
+            .getQuote({
+              contextLoader: context.contextLoader,
+              documentLoader: async () => {
+                throw new Error('Only embedded Quote Source is extracted at admission');
+              },
+              suppressError: true,
+              crossOrigin: 'trust',
+            })
+            .catch(() => null)
+        : null,
     targetUri,
   };
-};
-
-const hydrateFepReferences = async (
-  context: QuoteContext,
-  note: Note,
-  extraction: QuoteExtraction,
-): Promise<QuoteExtraction> => {
-  if (!extraction.fepPropertyPresent || extraction.malformed) {
-    return extraction;
-  }
-
-  let targetObject: ActivityPubObject | null = null;
-  let authorization = null;
-  try {
-    targetObject = await note.getQuote({
-      contextLoader: context.contextLoader,
-      crossOrigin: 'trust',
-      documentLoader: context.documentLoader,
-      suppressError: true,
-    });
-  } catch {
-    targetObject = null;
-  }
-  try {
-    authorization = await note.getQuoteAuthorization({
-      contextLoader: context.contextLoader,
-      crossOrigin: 'trust',
-      documentLoader: await currentAuthorizationLoader(context),
-      suppressError: true,
-    });
-  } catch {
-    authorization = null;
-  }
-
-  return { ...extraction, authorization, targetObject };
 };
 
 const loadQuoteSource = async (postId: string): Promise<QuoteSource | null> => {
@@ -348,24 +335,6 @@ const materializeTarget = async ({
     : { kind: 'found', postId: materialized.postId };
 };
 
-const isAbsentAuthorization = (
-  failure: Extract<
-    Awaited<ReturnType<typeof quoteInteraction.verifyAuthorization>>,
-    { verified: false }
-  >['failure'],
-  authorizationUri: string,
-): boolean => {
-  const cause = 'cause' in failure ? failure.cause : undefined;
-  return (
-    failure.type === 'notDereferenceable' &&
-    failure.url.href === authorizationUri &&
-    cause instanceof Error &&
-    'response' in cause &&
-    cause.response instanceof Response &&
-    (cause.response.status === 404 || cause.response.status === 410)
-  );
-};
-
 const classifyAuthorization = async ({
   actorUri,
   authorization,
@@ -439,7 +408,7 @@ const classifyAuthorization = async ({
     : verification.failure.category === 'unverifiable'
       ? {
           approvalUri: candidate.href,
-          retryable: !isAbsentAuthorization(verification.failure, candidate.href),
+          retryable: true,
           status: PostQuoteConsentStatus.PENDING,
         }
       : {
@@ -485,318 +454,151 @@ const matchesQuoteExpectation = async (postId: string, expectation: QuoteExpecta
       .limit(1)
   ).length > 0;
 
-const persistQuoteResolution = async (
-  resolution: QuoteResolution,
-  postId: string,
-  expectation: QuoteExpectation,
-  quote: QuoteSource,
-  source: QuoteSource | null,
-): Promise<{ applied: boolean; expectation: QuoteExpectation }> => {
-  const next = await db.transaction(async (tx) => {
-    if (resolution.sourcePostId === null) {
-      // There is no Source identity for the shared RESOLVE yet. Only initialize
-      // pending consent; never erase a verified rejection/revocation or relation.
-      if (
-        expectation.expectedRepostSourceId !== null ||
-        expectation.expectedStatus === PostQuoteConsentStatus.REVOKED ||
-        expectation.expectedStatus === PostQuoteConsentStatus.REJECTED
-      ) {
-        return false;
-      }
-      const rows = await tx
-        .update(Posts)
-        .set({
-          quoteConsentStatus: PostQuoteConsentStatus.PENDING,
-          quoteConsentApprovalUri: resolution.approvalUri,
-        })
-        .where(
-          and(
-            expectationCondition(postId, expectation),
-            eq(Posts.profileId, quote.profileId),
-            quote.currentContentId === null
-              ? isNull(Posts.currentContentId)
-              : eq(Posts.currentContentId, quote.currentContentId),
-            sql`EXISTS (SELECT 1 FROM activitypub_post ap INNER JOIN activitypub_actor actor ON actor.profile_id = ${quote.profileId} WHERE ap.post_id = ${postId} AND ap.uri = ${quote.uri} AND actor.uri = ${quote.actorUri})`,
-          ),
-        )
-        .returning({ id: Posts.id });
-      return rows.length > 0
-        ? {
-            ...expectation,
-            expectedStatus: PostQuoteConsentStatus.PENDING,
-            expectedApprovalUri: resolution.approvalUri,
-          }
-        : null;
-    }
-    if (!quote?.actorUri || !source?.actorUri) {
-      return false;
-    }
-    const identity = (post: QuoteSource) => ({
-      postId: post.postId,
-      profileId: post.profileId,
-      uri: post.uri,
-      authorActorUri: post.actorUri!,
-    });
-    const input: ApplyPostQuoteConsentInput = {
-      ...expectation,
-      quote: identity(quote),
-      source: identity(source),
-      operation: 'RESOLVE',
-      quoteAuthorActorUri: quote.actorUri,
-      ...(resolution.status === PostQuoteConsentStatus.APPROVED && resolution.proof
-        ? { result: 'APPROVED', proof: resolution.proof }
-        : { result: 'PENDING', approvalUri: resolution.approvalUri }),
-    };
-    const result = await applyPostQuoteConsent(input, tx);
-    return result
-      ? {
-          expectedStatus: result.status,
-          expectedApprovalUri: result.approvalUri,
-          expectedRepostSourceId: result.repostSourceId,
-        }
-      : null;
+export type PreparedInboundQuote = PreparedQuoteConsent;
+
+const identity = (post: QuoteSource) => ({
+  postId: post.postId,
+  profileId: post.profileId,
+  uri: post.uri,
+  authorActorUri: post.actorUri!,
+});
+
+type NoteCommand = Extract<QuoteOwnerCommand, { kind: 'NOTE' }>;
+
+/** Source materialization is a write boundary, intentionally separate from proof reads. */
+export const materializeInboundQuoteSource = async (input: NoteCommand, context: QuoteContext) => {
+  if (
+    input.malformed ||
+    !input.targetUri ||
+    (await findPostByActivityPubUri(context, new URL(input.targetUri)))
+  ) {
+    return;
+  }
+  await materializeTarget({
+    context,
+    postId: input.postId,
+    receivedAt: Temporal.Now.instant(),
+    extraction: {
+      format: input.format,
+      targetUri: input.targetUri,
+      authorizationId: input.approvalUri ? new URL(input.approvalUri) : null,
+      authorization: null,
+      targetObject: input.embeddedSource
+        ? await Note.fromJsonLd(input.embeddedSource, {
+            contextLoader: context.contextLoader ?? getDocumentLoader(),
+          })
+        : null,
+      fepPropertyPresent: input.format === ActivityPubQuoteFormat.FEP_044F,
+      malformed: false,
+    },
   });
-  return { applied: !!next, expectation: next || expectation };
 };
 
-const startQuoteResolutionWorkflow = async (input: InboundQuoteRetryInput): Promise<void> => {
-  await temporalClient.withDeadline(Date.now() + 5_000, () =>
-    temporalClient.workflow.signalWithStart('activitypubQuoteResolutionWorkflow', {
-      signal: 'resolveQuote',
-      signalArgs: [input],
-      args: [input],
-      taskQueue: KOSMO_TASK_QUEUE,
-      workflowId: `activitypub-quote-resolution:${input.postId}`,
-      workflowIdReusePolicy: 'ALLOW_DUPLICATE',
-    }),
-  );
-};
-
-export const handleInboundQuote = async ({
-  actorUri,
-  context,
-  note,
-  postId,
-  receivedAt,
-  startWorkflow = true,
-  expectation,
-  authorizationUpdate = false,
-  duplicateCreate = false,
-}: InboundQuoteInput): Promise<InboundQuoteResolution> => {
-  const quote = await loadQuoteSource(postId);
-  if (!quote || quote.uri !== note.id?.href || quote.actorUri !== actorUri) {
-    return { retryable: false, status: null };
-  }
-  let extraction = await extractQuote(context, note);
-  if (!extraction) {
-    return { retryable: false, status: null };
-  }
-
-  const current = await loadQuoteExpectation(postId);
-  if (!current) {
-    return { retryable: false, status: null };
-  }
-  expectation ??= current;
-  if (!(await matchesQuoteExpectation(postId, expectation))) {
-    return { retryable: false, status: current.expectedStatus };
-  }
-  if (
-    duplicateCreate &&
-    !authorizationUpdate &&
-    current.expectedStatus === PostQuoteConsentStatus.APPROVED &&
-    extraction.authorizationId === null
-  ) {
-    // Replaying the original Create without a grant is not an authorization Update.
-    return { retryable: false, status: current.expectedStatus };
-  }
-  if (authorizationUpdate) {
-    if (current.expectedStatus === null || extraction.malformed) {
-      return { retryable: false, status: current.expectedStatus };
-    }
-    // An authorization Update cannot reinterpret an existing FEP Quote as legacy.
-    // Legacy Updates have no consent change to apply.
-    if (!extraction.fepPropertyPresent) {
-      return { retryable: false, status: current.expectedStatus };
-    }
-    const source =
-      current.expectedRepostSourceId === null
-        ? null
-        : await loadQuoteSource(current.expectedRepostSourceId);
-    if (current.expectedRepostSourceId !== null) {
-      if (source?.uri !== extraction.targetUri) {
-        return { retryable: false, status: current.expectedStatus };
-      }
-    } else {
-      const original = await temporalClient.workflow
-        .getHandle(`activitypub-quote-resolution:${postId}`)
-        .query<InboundQuoteRetryInput>('inboundQuoteInput');
-      if (original.targetUri !== extraction.targetUri || original.format !== extraction.format) {
-        return { retryable: false, status: current.expectedStatus };
-      }
-    }
-    if (
-      source?.actorUri !== actorUri &&
-      (current.expectedStatus === PostQuoteConsentStatus.APPROVED ||
-        current.expectedStatus === PostQuoteConsentStatus.PENDING)
-    ) {
-      // Hide the previous grant while verifying the author's replacement. This
-      // returned snapshot, not a post-verification reread, guards the final CAS.
-      const pending = await persistQuoteResolution(
-        {
-          approvalUri: extraction.authorizationId?.href ?? null,
-          format: extraction.format,
-          sourcePostId: source?.postId ?? null,
-          status: PostQuoteConsentStatus.PENDING,
-          targetUri: extraction.targetUri,
-          retryable: false,
-        },
-        postId,
-        expectation,
-        quote,
-        source,
-      );
-      if (!pending.applied) {
-        return {
-          retryable: false,
-          status: (await loadQuoteExpectation(postId))?.expectedStatus ?? null,
-        };
-      }
-      expectation = pending.expectation;
-    }
-  }
-
-  extraction = await hydrateFepReferences(context, note, extraction);
-
-  let targetResolution: QuoteTargetResolution = { kind: 'permanent_failure' };
-  if (!extraction.malformed) {
-    const existingSourcePostId = await findPostByActivityPubUri(
-      context,
-      new URL(extraction.targetUri),
-    );
-    targetResolution = existingSourcePostId
-      ? { kind: 'found', postId: existingSourcePostId }
-      : await materializeTarget({
-          context,
-          expectation,
-          extraction,
-          postId,
-          receivedAt,
-        });
-  }
-
-  if (targetResolution.kind === 'stale') {
-    return {
-      retryable: false,
-      status: (await loadQuoteExpectation(postId))?.expectedStatus ?? null,
-    };
-  }
-  const sourcePostId = targetResolution.kind === 'found' ? targetResolution.postId : undefined;
-  const source = sourcePostId ? await loadQuoteSource(sourcePostId) : null;
-  let resolution: QuoteResolution;
-  if (extraction.malformed) {
-    resolution = {
-      approvalUri: extraction.authorizationId?.href ?? null,
-      format: extraction.format,
-      sourcePostId: null,
-      status: PostQuoteConsentStatus.PENDING,
-      targetUri: extraction.targetUri,
-      retryable: false,
-    };
-  } else if (sourcePostId === postId) {
-    resolution = {
-      approvalUri: extraction.authorizationId?.href ?? null,
-      format: extraction.format,
-      sourcePostId: null,
-      status: PostQuoteConsentStatus.PENDING,
-      targetUri: extraction.targetUri,
-      retryable: false,
-    };
-  } else if (!source || source.currentContentId === null || source.postState !== PostState.ACTIVE) {
-    const transient = targetResolution.kind === 'transient_failure';
-    resolution = {
-      approvalUri: extraction.authorizationId?.href ?? null,
-      format: extraction.format,
-      sourcePostId: null,
-      status: PostQuoteConsentStatus.PENDING,
-      targetUri: extraction.targetUri,
-      retryable: transient,
-    };
-  } else {
-    const authorization = await classifyAuthorization({
-      actorUri,
-      authorization: extraction.authorization,
-      authorizationId: extraction.authorizationId,
-      context,
-      extraction,
-      note,
-      source,
-    });
-    resolution = {
-      proof: authorization.proof,
-      approvalUri: authorization.approvalUri,
-      format: extraction.format,
-      sourcePostId: source.postId,
-      status: authorization.status,
-      targetUri: extraction.targetUri,
-      retryable: authorization.retryable,
-    };
-  }
-
-  const stored = await persistQuoteResolution(resolution, postId, expectation, quote, source);
-  if (!stored.applied) {
-    return {
-      retryable: false,
-      status: (await loadQuoteExpectation(postId))?.expectedStatus ?? null,
-    };
-  }
-  if (
-    startWorkflow &&
-    stored.expectation.expectedStatus === PostQuoteConsentStatus.PENDING &&
-    !extraction.malformed
-  ) {
-    await startQuoteResolutionWorkflow({
-      postId,
-      targetUri: extraction.targetUri,
-      format: extraction.format,
-      approvalUri: resolution.approvalUri,
-      ...stored.expectation,
-    });
-  }
-  return {
-    retryable: resolution.retryable,
-    status: stored.expectation.expectedStatus,
-    ...(resolution.retryable
-      ? {
-          retryInput: {
-            postId,
-            targetUri: extraction.targetUri,
-            format: extraction.format,
-            approvalUri: resolution.approvalUri,
-            ...stored.expectation,
-          },
-        }
-      : {}),
-  };
-};
-
-export const resolveStoredInboundQuote = async ({
-  context,
-  receivedAt,
-  ...input
-}: InboundQuoteRetryInput & {
-  context: QuoteContext;
-  receivedAt: Temporal.Instant;
-}): Promise<InboundQuoteResolution> => {
+/** Reads identities and fresh protocol proof; never changes Posts or consent. */
+export const prepareStoredInboundQuote = async (
+  input: NoteCommand,
+  context: QuoteContext,
+  phase: 'INVALIDATE' | 'VERIFY' = 'VERIFY',
+): Promise<PreparedInboundQuote> => {
   const quote = await loadQuoteSource(input.postId);
-  if (!quote?.actorUri || !(await matchesQuoteExpectation(input.postId, input))) {
+  const expectation = await loadQuoteExpectation(input.postId);
+  if (!quote?.actorUri || quote.actorUri !== input.actorUri || !expectation) {
+    return { kind: 'NOOP', retryable: false };
+  }
+  if (input.malformed) {
+    if (expectation.expectedStatus !== null || expectation.expectedRepostSourceId !== null) {
+      return { kind: 'NOOP', retryable: false };
+    }
     return {
+      kind: 'PENDING_WITHOUT_SOURCE',
       retryable: false,
-      status: (await loadQuoteExpectation(input.postId))?.expectedStatus ?? null,
+      pending: {
+        postId: input.postId,
+        profileId: quote.profileId,
+        quoteUri: quote.uri,
+        actorUri: quote.actorUri,
+        currentContentId: quote.currentContentId,
+        expectedStatus: null,
+        expectedApprovalUri: expectation.expectedApprovalUri,
+        approvalUri: null,
+      },
+    };
+  }
+  if (
+    input.duplicateCreate &&
+    !input.authorizationUpdate &&
+    expectation.expectedStatus === PostQuoteConsentStatus.APPROVED &&
+    input.approvalUri === null
+  ) {
+    return { kind: 'NOOP', retryable: false };
+  }
+  const sourceId = input.targetUri
+    ? await findPostByActivityPubUri(context, new URL(input.targetUri))
+    : null;
+  const source = sourceId ? await loadQuoteSource(sourceId) : null;
+  if (
+    expectation.expectedRepostSourceId &&
+    (sourceId !== expectation.expectedRepostSourceId || source?.uri !== input.targetUri)
+  ) {
+    return { kind: 'NOOP', retryable: false };
+  }
+  if (
+    !source?.actorUri ||
+    source.postId === quote.postId ||
+    source.postState !== PostState.ACTIVE ||
+    source.currentContentId === null
+  ) {
+    if (
+      expectation.expectedRepostSourceId !== null ||
+      expectation.expectedStatus === PostQuoteConsentStatus.REVOKED ||
+      expectation.expectedStatus === PostQuoteConsentStatus.REJECTED
+    ) {
+      return { kind: 'NOOP', retryable: false };
+    }
+    return {
+      kind: 'PENDING_WITHOUT_SOURCE',
+      pending: {
+        postId: input.postId,
+        profileId: quote.profileId,
+        quoteUri: quote.uri,
+        actorUri: quote.actorUri,
+        currentContentId: quote.currentContentId,
+        expectedStatus: expectation.expectedStatus,
+        expectedApprovalUri: expectation.expectedApprovalUri,
+        approvalUri: input.approvalUri,
+      },
+      retryable: !!input.targetUri,
+    };
+  }
+  if (input.authorizationUpdate && input.format === ActivityPubQuoteFormat.LEGACY) {
+    return { kind: 'NOOP', retryable: false };
+  }
+  if (phase === 'INVALIDATE') {
+    if (
+      !input.authorizationUpdate ||
+      source.actorUri === input.actorUri ||
+      (expectation.expectedStatus !== PostQuoteConsentStatus.APPROVED &&
+        expectation.expectedStatus !== PostQuoteConsentStatus.PENDING)
+    ) {
+      return { kind: 'NOOP', retryable: false };
+    }
+    return {
+      kind: 'CHANGE',
+      retryable: false,
+      change: {
+        ...expectation,
+        quote: identity(quote),
+        source: identity(source),
+        operation: 'RESOLVE',
+        quoteAuthorActorUri: input.actorUri,
+        result: 'PENDING',
+        approvalUri: input.approvalUri,
+      },
     };
   }
   const note = new Note({
-    attribution: new URL(quote.actorUri),
     id: new URL(quote.uri),
+    attribution: new URL(input.actorUri),
     ...(input.format === ActivityPubQuoteFormat.FEP_044F
       ? {
           quote: new URL(input.targetUri),
@@ -804,84 +606,322 @@ export const resolveStoredInboundQuote = async ({
         }
       : { quoteUrl: new URL(input.targetUri) }),
   });
-  return handleInboundQuote({
-    actorUri: quote.actorUri,
+  const authorization = await classifyAuthorization({
+    actorUri: input.actorUri,
+    authorization: null,
+    authorizationId: input.approvalUri ? new URL(input.approvalUri) : null,
     context,
+    extraction: {
+      format: input.format,
+      targetUri: input.targetUri,
+      authorization: null,
+      authorizationId: null,
+      targetObject: null,
+      fepPropertyPresent: input.format === ActivityPubQuoteFormat.FEP_044F,
+      malformed: false,
+    },
     note,
-    postId: input.postId,
-    receivedAt,
-    startWorkflow: false,
-    expectation: input,
+    source,
   });
+  if (
+    expectation.expectedStatus === PostQuoteConsentStatus.APPROVED &&
+    !input.authorizationUpdate &&
+    authorization.status !== PostQuoteConsentStatus.APPROVED
+  ) {
+    return { kind: 'NOOP', retryable: true };
+  }
+  return {
+    kind: 'CHANGE',
+    retryable: authorization.retryable,
+    change: {
+      ...expectation,
+      quote: identity(quote),
+      source: identity(source),
+      operation: 'RESOLVE',
+      quoteAuthorActorUri: input.actorUri,
+      ...(authorization.status === PostQuoteConsentStatus.APPROVED && authorization.proof
+        ? { result: 'APPROVED', proof: authorization.proof }
+        : { result: 'PENDING', approvalUri: authorization.approvalUri }),
+    },
+  };
+};
+
+const admit = async (command: QuoteOwnerCommand) =>
+  runWorkflow(postQuoteOwnerWorkflow, {
+    args: [{ postId: command.postId }],
+    mode: 'update-with-start',
+    updateArgs: [command],
+    updateId: command.commandId,
+    workflowIdConflictPolicy: 'USE_EXISTING',
+    workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+  });
+
+export const handleInboundQuote = async ({
+  commandId = randomUUID(),
+  actorUri,
+  context,
+  note,
+  postId,
+  authorizationUpdate = false,
+  duplicateCreate = false,
+}: InboundQuoteInput): Promise<InboundQuoteResolution> => {
+  const extraction = await extractQuote(context, note);
+  if (!extraction) {
+    return { retryable: false, status: null };
+  }
+  const embedded = extraction.targetObject
+    ? await extraction.targetObject.toJsonLd({
+        format: 'expand',
+        contextLoader: context.contextLoader ?? getDocumentLoader(),
+      })
+    : null;
+  const result = await admit({
+    kind: 'NOTE',
+    postId,
+    commandId,
+    actorUri,
+    targetUri: extraction.malformed ? '' : extraction.targetUri,
+    ...(extraction.malformed ? { malformed: true } : {}),
+    ...(embedded
+      ? {
+          embeddedSource: (Array.isArray(embedded) ? embedded[0] : embedded) as Record<
+            string,
+            unknown
+          >,
+        }
+      : {}),
+    format: extraction.format,
+    approvalUri: extraction.authorizationId?.href ?? null,
+    authorizationUpdate,
+    duplicateCreate,
+  });
+  return { retryable: result.retryable, status: result.status };
+};
+
+/** Compatibility admission for the old resolution Workflow; it cannot write consent. */
+export const resolveStoredInboundQuote = async (
+  input: InboundQuoteRetryInput & {
+    context: QuoteContext;
+    receivedAt: Temporal.Instant;
+  },
+): Promise<InboundQuoteResolution> => {
+  const quote = await loadQuoteSource(input.postId);
+  if (!quote?.actorUri) {
+    return { retryable: false, status: null };
+  }
+  await admit({
+    kind: 'NOTE',
+    postId: input.postId,
+    commandId: randomUUID(),
+    actorUri: quote.actorUri,
+    targetUri: input.targetUri,
+    format: input.format,
+    approvalUri: input.approvalUri,
+    authorizationUpdate: false,
+    duplicateCreate: false,
+  });
+  return {
+    retryable: false,
+    status: (await loadQuoteExpectation(input.postId))?.expectedStatus ?? null,
+  };
+};
+
+export const prepareInboundQuoteDelete = async (
+  input: Extract<QuoteOwnerCommand, { kind: 'DELETE' }>,
+  context: QuoteContext,
+  ambiguous: boolean,
+): Promise<PreparedInboundQuote> => {
+  const expectation = await loadQuoteExpectation(input.postId);
+  if (
+    !expectation?.expectedRepostSourceId ||
+    (expectation.expectedApprovalUri !== null &&
+      expectation.expectedApprovalUri !== input.approvalUri) ||
+    expectation.expectedStatus === PostQuoteConsentStatus.REVOKED
+  ) {
+    return { kind: 'NOOP', retryable: false };
+  }
+  const quote = await loadQuoteSource(input.postId);
+  const source = await loadQuoteSource(expectation.expectedRepostSourceId);
+  if (
+    !quote?.actorUri ||
+    !source ||
+    source.actorUri !== input.actorUri ||
+    (input.targetUri !== null && input.targetUri !== source.uri)
+  ) {
+    return { kind: 'NOOP', retryable: false };
+  }
+  if (ambiguous) {
+    const verification = await quoteInteraction.verifyAuthorization(context as Context<void>, {
+      attributedTo: new URL(input.actorUri),
+      authorization: new URL(input.approvalUri),
+      documentLoader: await currentAuthorizationLoader(context),
+      interactionTarget: new URL(source.uri),
+      interactingObject: new URL(quote.uri),
+    });
+    // Unavailable, absent, malformed, and invalid objects do not prove deletion.
+    // Bare 410 remains unresolved; only explicit signed Delete is authoritative.
+    return { kind: 'NOOP', retryable: !verification.verified };
+  }
+  return {
+    kind: 'CHANGE',
+    retryable: false,
+    change: {
+      ...expectation,
+      quote: identity(quote),
+      source: identity(source),
+      operation: 'REVOKE',
+      approvalUri: input.approvalUri,
+      issuerActorUri: input.actorUri,
+    },
+  };
 };
 
 export const revokeInboundQuote = async ({
   actorUri,
   authorizationUri,
-  context,
+  activityId = null,
+  targetUri = null,
+  embedded = null,
 }: {
   actorUri: string;
   authorizationUri: string;
   context: QuoteContext;
+  activityId?: string | null;
+  targetUri?: string | null;
+  embedded?: ActivityPubObject | null;
 }): Promise<boolean> => {
   const targets = await db
     .select({ postId: Posts.id })
     .from(Posts)
     .where(eq(Posts.quoteConsentApprovalUri, authorizationUri));
+  const localConsent = await loadQuoteConsentByApprovalUri(db, authorizationUri);
+  if (localConsent && !targets.some((target) => target.postId === localConsent.id)) {
+    targets.push({ postId: localConsent.id });
+  }
+  if (targets.length === 0) {
+    const sourceUri =
+      targetUri ??
+      (embedded instanceof QuoteAuthorization ? embedded.interactionTargetId?.href : undefined);
+    if (sourceUri) {
+      const pending = await loadPendingQuoteConsentByBinding(db, {
+        sourceUri,
+        sourceAuthorActorUri: actorUri,
+        quoteUri:
+          embedded instanceof QuoteAuthorization ? embedded.interactingObjectId?.href : undefined,
+      });
+      if (pending) {
+        targets.push({ postId: pending.id });
+      }
+    }
+  }
   let handled = false;
   for (const target of targets) {
     const expectation = await loadQuoteExpectation(target.postId);
-    if (!expectation?.expectedRepostSourceId) {
+    const source = expectation?.expectedRepostSourceId
+      ? await loadQuoteSource(expectation.expectedRepostSourceId)
+      : null;
+    const quote = await loadQuoteSource(target.postId);
+    if (
+      source?.actorUri !== actorUri ||
+      !quote ||
+      new URL(authorizationUri).origin !== new URL(actorUri).origin ||
+      (targetUri !== null && targetUri !== source.uri)
+    ) {
       continue;
     }
-    const quote = await loadQuoteSource(target.postId);
-    const source = await loadQuoteSource(expectation.expectedRepostSourceId);
-    if (!quote?.actorUri || !source || source.actorUri !== actorUri) {
+    if (
+      embedded !== null &&
+      (!(embedded instanceof QuoteAuthorization) ||
+        embedded.id?.href !== authorizationUri ||
+        embedded.attributionIds.length !== 1 ||
+        embedded.attributionIds[0]?.href !== actorUri ||
+        embedded.interactingObjectId?.href !== quote.uri ||
+        embedded.interactionTargetId?.href !== source.uri)
+    ) {
       continue;
     }
     handled = true;
-    if (expectation.expectedStatus === PostQuoteConsentStatus.REVOKED) {
-      continue;
-    }
-    // A signed Delete alone does not order reused Authorization URIs. Reconcile
-    // against the issuer's current object before changing the captured snapshot.
-    const verification = await quoteInteraction.verifyAuthorization(context as Context<void>, {
-      attributedTo: new URL(actorUri),
-      authorization: new URL(authorizationUri),
-      documentLoader: await currentAuthorizationLoader(context),
-      interactionTarget: new URL(source.uri),
-      interactingObject: new URL(quote.uri),
-    });
-    if (!verification.verified && verification.failure.category === 'unverifiable') {
-      if (!isAbsentAuthorization(verification.failure, authorizationUri)) {
-        throw new Error(
-          'Current Quote Authorization could not be verified; retry revocation reconciliation',
-        );
-      }
-    }
-    const identity = (post: QuoteSource) => ({
-      postId: post.postId,
-      profileId: post.profileId,
-      uri: post.uri,
-      authorActorUri: post.actorUri!,
-    });
-    await applyPostQuoteConsent({
-      ...expectation,
-      quote: identity(quote),
-      source: identity(source),
-      ...(verification.verified
-        ? {
-            operation: 'RESOLVE',
-            result: 'APPROVED',
-            quoteAuthorActorUri: quote.actorUri,
-            proof: {
-              kind: 'AUTHORIZATION',
-              approvalUri: verification.authorizationId.href,
-              issuerActorUri: actorUri,
-            },
-          }
-        : { operation: 'REVOKE', approvalUri: authorizationUri, issuerActorUri: actorUri }),
+    await admit({
+      kind: 'DELETE',
+      postId: target.postId,
+      commandId: activityId ?? randomUUID(),
+      actorUri,
+      approvalUri: authorizationUri,
+      activityId,
+      targetUri,
     });
   }
   return handled;
+};
+
+export const prepareInboundQuoteResponse = async (
+  input: Extract<QuoteOwnerCommand, { kind: 'ACCEPT' | 'REJECT' }>,
+  context: QuoteContext,
+): Promise<PreparedQuoteConsent> => {
+  const consent = await loadQuoteConsentByRequestUri(db, input.requestUri);
+  if (
+    !consent ||
+    consent.id !== input.postId ||
+    consent.sourceAuthorActorUri !== input.sourceAuthorActorUri ||
+    consent.status !== PostQuoteConsentStatus.PENDING
+  ) {
+    return { kind: 'NOOP', retryable: false };
+  }
+  const expectation = await loadQuoteExpectation(input.postId);
+  const quote = await loadQuoteSource(input.postId);
+  const source = expectation?.expectedRepostSourceId
+    ? await loadQuoteSource(expectation.expectedRepostSourceId)
+    : null;
+  if (!expectation || !quote?.actorUri || !source?.actorUri) {
+    return { kind: 'NOOP', retryable: false };
+  }
+  if (input.kind === 'REJECT') {
+    return {
+      kind: 'CHANGE',
+      retryable: false,
+      change: {
+        ...expectation,
+        quote: identity(quote),
+        source: identity(source),
+        operation: 'REJECT',
+        issuerActorUri: input.sourceAuthorActorUri,
+      },
+    };
+  }
+  if (
+    input.quoteUri !== quote.uri ||
+    input.sourceUri !== source.uri ||
+    (expectation.expectedApprovalUri !== null &&
+      expectation.expectedApprovalUri !== null &&
+      expectation.expectedApprovalUri !== input.approvalUri)
+  ) {
+    return { kind: 'NOOP', retryable: false };
+  }
+  const verification = await quoteInteraction.verifyAuthorization(context as Context<void>, {
+    attributedTo: new URL(source.actorUri),
+    authorization: new URL(input.approvalUri),
+    documentLoader: await currentAuthorizationLoader(context),
+    interactionTarget: new URL(source.uri),
+    interactingObject: new URL(quote.uri),
+  });
+  if (!verification.verified) {
+    return { kind: 'NOOP', retryable: true };
+  }
+  return {
+    kind: 'CHANGE',
+    retryable: false,
+    change: {
+      ...expectation,
+      quote: identity(quote),
+      source: identity(source),
+      operation: 'RESOLVE',
+      quoteAuthorActorUri: quote.actorUri,
+      result: 'APPROVED',
+      proof: {
+        kind: 'AUTHORIZATION',
+        approvalUri: verification.authorizationId.href,
+        issuerActorUri: source.actorUri,
+      },
+    },
+  };
 };

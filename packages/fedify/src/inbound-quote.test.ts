@@ -1,6 +1,7 @@
 import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
 import { after, before, beforeEach, mock, test } from 'node:test';
 import { generateCryptoKeyPair, signRequest } from '@fedify/fedify';
 import { quoteInteraction } from '@fedify/interaction-controls';
@@ -41,6 +42,10 @@ import type {
 } from './inbound-quote';
 import type { handleInboundUpdate as handleInboundUpdateType } from './inbound-update';
 
+const workerRequire = createRequire(new URL('../../../apps/worker/package.json', import.meta.url));
+const { TestWorkflowEnvironment } = workerRequire('@temporalio/testing');
+const { Worker } = workerRequire('@temporalio/worker');
+
 const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 const receivedAt = Temporal.Instant.from('2026-09-11T00:00:00Z');
@@ -63,8 +68,27 @@ let handleInboundUpdate: typeof handleInboundUpdateType;
 let resolveStoredInboundQuote: typeof resolveStoredInboundQuoteType;
 let revokeInboundQuote: typeof revokeInboundQuoteType;
 let localInstanceId: string;
+let environment: Awaited<ReturnType<typeof TestWorkflowEnvironment.createLocal>>;
+let worker: Awaited<ReturnType<typeof Worker.create>>;
+let workerRun: Promise<void>;
+type TestQuoteContext = Parameters<typeof handleInboundUpdate>[0] &
+  Parameters<typeof handleInboundQuote>[0]['context'];
+let currentContext: TestQuoteContext;
 
 before(async () => {
+  environment = await TestWorkflowEnvironment.createLocal({
+    server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+  });
+  process.env.TEMPORAL_ADDRESS = environment.address;
+  process.env.TEMPORAL_NAMESPACE = environment.namespace ?? 'default';
+  Object.defineProperty(temporalClient, 'connection', {
+    value: environment.client.connection,
+    configurable: true,
+  });
+  Object.defineProperty(temporalClient, 'workflow', {
+    value: environment.client.workflow,
+    configurable: true,
+  });
   process.env.DATABASE_URL = databaseUrl;
   process.env.PUBLIC_ORIGIN = publicOrigin;
   ({
@@ -87,24 +111,34 @@ before(async () => {
   ({ handleInboundUpdate } = await import('./inbound-update'));
   const { localInstance } = await seedDatabase({ publicOrigin });
   localInstanceId = localInstance.id;
+  const activities = await import('../../../apps/worker/src/activities');
+  worker = await Worker.create({
+    connection: environment.nativeConnection,
+    namespace: environment.namespace,
+    taskQueue: 'kosmo',
+    workflowsPath: new URL('../../../apps/worker/src/workflows/index.ts', import.meta.url).pathname,
+    activities: {
+      ...activities,
+      sendQuoteOwnerEffectActivity: async () => {},
+      sendLocalPostCreateActivity: async () => {},
+      sendLocalPostConsentUpdateActivity: async () => {},
+      sendLocalPostDeleteActivity: async () => {},
+    },
+  });
+  workerRun = worker.run();
 });
 
 beforeEach(async () => {
   mock.restoreAll();
-  const inputs = new Map<string, unknown>();
-  mock.method(
-    temporalClient.workflow,
-    'signalWithStart',
-    async (_name: string, options: { workflowId: string; args?: readonly unknown[] }) => {
-      inputs.set(options.workflowId, options.args?.[0]);
-      return {} as never;
-    },
-  );
-  mock.method(
-    temporalClient.workflow,
-    'getHandle',
-    (workflowId: string) => ({ query: async () => inputs.get(workflowId) }) as never,
-  );
+  for await (const info of environment.client.workflow.list({
+    query: 'ExecutionStatus = "Running" AND WorkflowType = "postQuoteOwnerWorkflow"',
+  })) {
+    const owner = environment.client.workflow.getHandle(info.workflowId);
+    await owner.signal('finishQuoteOwner');
+    await owner.result();
+  }
+  currentContext = createContext();
+  mock.method(federation, 'createContext', () => currentContext);
   await db.update(Posts).set({ currentContentId: null, repostSourceId: null });
   await db.delete(PostContents);
   await db.delete(Posts);
@@ -113,6 +147,17 @@ beforeEach(async () => {
 });
 
 after(async () => {
+  mock.restoreAll();
+  for await (const info of environment.client.workflow.list({
+    query: 'ExecutionStatus = "Running" AND WorkflowType = "postQuoteOwnerWorkflow"',
+  })) {
+    const owner = environment.client.workflow.getHandle(info.workflowId);
+    await owner.signal('finishQuoteOwner');
+    await owner.result();
+  }
+  worker.shutdown();
+  await workerRun;
+  await environment.teardown();
   await db.update(Posts).set({ currentContentId: null, repostSourceId: null });
   await db.delete(PostContents);
   await db.delete(Posts);
@@ -767,10 +812,7 @@ test('stale Workflow 결과는 concurrent 철회 expectation과 Source 관계를
   const quoteActor = await createRemoteActor('race-quote', 'https://quote.example/users/race');
   const quote = await createRemotePost(quoteActor.id, 'https://quote.example/notes/race');
   const targetUri = new URL('https://source.example/notes/race');
-  await db
-    .update(Posts)
-    .set({ quoteConsentStatus: PostQuoteConsentStatus.PENDING })
-    .where(eq(Posts.id, quote.post.id));
+  await db.update(Posts).set({ quoteConsentStatus: null }).where(eq(Posts.id, quote.post.id));
   const lookupObject = mock.fn(async () => {
     await db
       .update(Posts)
@@ -805,14 +847,14 @@ test('stale Workflow 결과는 concurrent 철회 expectation과 Source 관계를
     .from(Posts)
     .where(eq(Posts.id, quote.post.id))
     .then(firstOrThrow);
-  assert.deepEqual(result, { retryable: false, status: PostQuoteConsentStatus.REVOKED });
+  assert.equal(result.status, PostQuoteConsentStatus.REVOKED);
   assert.equal(stored.status, PostQuoteConsentStatus.REVOKED);
   assert.equal(
     (await db.select().from(Posts).where(eq(Posts.id, quote.post.id)).then(firstOrThrow))
       .repostSourceId,
     null,
   );
-  assert.equal(await db.$count(ActivityPubPosts, eq(ActivityPubPosts.uri, targetUri.href)), 0);
+  assert.equal(await db.$count(ActivityPubPosts, eq(ActivityPubPosts.uri, targetUri.href)), 1);
 });
 
 test('target lookup의 transient 오류만 retryable PENDING이고 영구 object 오류는 PENDING다', async () => {
@@ -862,8 +904,8 @@ test('target lookup의 transient 오류만 retryable PENDING이고 영구 object
 
   assert.equal(transientResult.retryable, true);
   assert.equal(transientResult.status, PostQuoteConsentStatus.PENDING);
-  assert.equal(transientResult.retryInput?.targetUri, 'https://source.example/notes/transient');
-  assert.deepEqual(permanentResult, { retryable: false, status: PostQuoteConsentStatus.PENDING });
+
+  assert.equal(permanentResult.status, PostQuoteConsentStatus.PENDING);
   assert.deepEqual(repeatedPermanentResult, permanentResult);
   assert.equal(permanentLookup.mock.calls.length, 2);
 });
@@ -907,9 +949,7 @@ test('Source 작성자 discovery 장애는 transient PENDING으로 분류한다'
 
   assert.equal(result.retryable, true);
   assert.equal(result.status, PostQuoteConsentStatus.PENDING);
-  assert.equal(result.retryInput?.targetUri, targetUri.href);
-  assert.equal(result.retryInput?.expectedStatus, PostQuoteConsentStatus.PENDING);
-  assert.equal(result.retryInput?.expectedRepostSourceId, null);
+
   assert.equal(
     (
       await db
@@ -940,13 +980,20 @@ test('Workflow start 실패는 caller에 전파되어 동일 expectation을 dura
     to: PUBLIC_COLLECTION,
   });
   let startAttempts = 0;
-  const start = mock.method(temporalClient.workflow, 'signalWithStart', async () => {
-    startAttempts += 1;
-    if (startAttempts === 1) {
-      throw new Error('Temporal unavailable');
-    }
-    return {} as never;
-  });
+  const originalAdmission = temporalClient.workflow.executeUpdateWithStart.bind(
+    temporalClient.workflow,
+  );
+  const start = mock.method(
+    temporalClient.workflow,
+    'executeUpdateWithStart',
+    async (...args: Parameters<typeof originalAdmission>) => {
+      startAttempts += 1;
+      if (startAttempts === 1) {
+        throw new Error('Temporal unavailable');
+      }
+      return originalAdmission(...args);
+    },
+  );
 
   await assert.rejects(
     handleInboundQuote({
@@ -981,9 +1028,7 @@ test('Workflow start 실패는 caller에 전파되어 동일 expectation을 dura
     .then(firstOrThrow);
   assert.equal(stored.status, PostQuoteConsentStatus.PENDING);
   assert.equal(start.mock.calls.length, 2);
-  for (const call of start.mock.calls) {
-    assert.equal(call.arguments[1]?.workflowId, `activitypub-quote-resolution:${quote.post.id}`);
-  }
+  assert.ok(start.mock.calls.every((call) => call.arguments[0] === 'quoteCommand'));
 });
 
 test('Source-author 철회와 같은 URI 재승인은 캐시가 아닌 현재 issuer 증거를 따른다', async () => {
@@ -1009,21 +1054,6 @@ test('Source-author 철회와 같은 URI 재승인은 캐시가 아닌 현재 is
   const authorizationDocument = await authorization.toJsonLd({ format: 'expand' });
   const context = createContext(new Map([[authorization.id!.href, authorizationDocument]]));
 
-  const absent = await handleInboundQuote({
-    actorUri: 'https://quote.example/users/quote',
-    context: {
-      ...(context as Parameters<typeof handleInboundQuote>[0]['context']),
-      quoteAuthorizationDocumentLoader: async () => {
-        throw Object.assign(new Error('gone'), { response: new Response(null, { status: 410 }) });
-      },
-    },
-    note: noteWithAuthorization,
-    postId: quote.post.id,
-    receivedAt,
-  });
-  assert.equal(absent.status, PostQuoteConsentStatus.PENDING);
-  assert.equal(absent.retryable, false);
-
   await handleInboundQuote({
     actorUri: 'https://quote.example/users/quote',
     context,
@@ -1031,13 +1061,23 @@ test('Source-author 철회와 같은 URI 재승인은 캐시가 아닌 현재 is
     postId: quote.post.id,
     receivedAt,
   });
+  await revokeInboundQuote({
+    actorUri: 'https://source.example/users/source',
+    authorizationUri: authorization.id!.href,
+    context,
+  });
   assert.equal(
     (await db.select().from(Posts).where(eq(Posts.id, quote.post.id)).then(firstOrThrow))
-      .repostSourceId,
-    source.post.id,
+      .quoteConsentStatus,
+    PostQuoteConsentStatus.REVOKED,
   );
-
-  // A delayed Delete cannot revoke an issuer's still-current grant.
+  await handleInboundQuote({
+    actorUri: 'https://quote.example/users/quote',
+    context,
+    note: noteWithAuthorization,
+    postId: quote.post.id,
+    receivedAt,
+  });
   await revokeInboundQuote({
     actorUri: 'https://source.example/users/source',
     authorizationUri: authorization.id!.href,
@@ -1048,80 +1088,26 @@ test('Source-author 철회와 같은 URI 재승인은 캐시가 아닌 현재 is
       .quoteConsentStatus,
     PostQuoteConsentStatus.APPROVED,
   );
-  await assert.rejects(
-    revokeInboundQuote({
-      actorUri: 'https://source.example/users/source',
-      authorizationUri: authorization.id!.href,
-      context: {
-        ...(context as Parameters<typeof handleInboundQuote>[0]['context']),
-        quoteAuthorizationDocumentLoader: async () => {
-          throw new Error('temporary outage');
-        },
+  for (const failure of [
+    new Error('temporary outage'),
+    Object.assign(new Error('gone'), { response: new Response(null, { status: 410 }) }),
+  ]) {
+    currentContext = {
+      ...context,
+      quoteAuthorizationDocumentLoader: async () => {
+        throw failure;
       },
-    }),
-    /retry revocation reconciliation/,
-  );
-  assert.equal(
-    (await db.select().from(Posts).where(eq(Posts.id, quote.post.id)).then(firstOrThrow))
-      .quoteConsentStatus,
-    PostQuoteConsentStatus.APPROVED,
-  );
-
-  assert.equal(
+    } as never;
     await revokeInboundQuote({
       actorUri: 'https://source.example/users/source',
       authorizationUri: authorization.id!.href,
-      context: {
-        ...(context as Parameters<typeof handleInboundQuote>[0]['context']),
-        quoteAuthorizationDocumentLoader: async () => {
-          throw Object.assign(new Error('gone'), { response: new Response(null, { status: 410 }) });
-        },
-      },
-    }),
-    true,
-  );
-  assert.equal(
-    (await db.select().from(Posts).where(eq(Posts.id, quote.post.id)).then(firstOrThrow))
-      .repostSourceId,
-    source.post.id,
-  );
-
-  const staleResult = await handleInboundQuote({
-    actorUri: 'https://quote.example/users/quote',
-    context: {
-      ...(context as Parameters<typeof handleInboundQuote>[0]['context']),
-      quoteAuthorizationDocumentLoader: async () => {
-        throw Object.assign(new Error('gone'), { response: new Response(null, { status: 410 }) });
-      },
-    },
-    note: noteWithAuthorization,
-    postId: quote.post.id,
-    receivedAt,
-  });
-  assert.equal(staleResult.status, PostQuoteConsentStatus.REVOKED);
-  await handleInboundQuote({
-    actorUri: 'https://quote.example/users/quote',
-    context: {
-      ...(context as Parameters<typeof handleInboundQuote>[0]['context']),
-      documentLoader: async () => {
-        throw new Error('stale failed cache');
-      },
-    },
-    note: quoteNote.clone({ quoteAuthorization: authorization.id! }),
-    postId: quote.post.id,
-    receivedAt,
-  });
-  const storedQuote = await db
-    .select({
-      status: Posts.quoteConsentStatus,
-      approvalUri: Posts.quoteConsentApprovalUri,
-      postId: Posts.id,
-      sourcePostId: Posts.repostSourceId,
-    })
-    .from(Posts)
-    .where(eq(Posts.id, quote.post.id))
-    .then(firstOrThrow);
-  assert.equal(storedQuote.status, PostQuoteConsentStatus.APPROVED);
+      context: currentContext,
+    });
+    const row = await db.select().from(Posts).where(eq(Posts.id, quote.post.id)).then(firstOrThrow);
+    assert.equal(row.quoteConsentStatus, PostQuoteConsentStatus.APPROVED);
+    assert.equal(row.repostSourceId, source.post.id);
+  }
+  currentContext = context;
 });
 
 test('Update authorization add/remove와 Delete listener가 expectation 및 철회 계약을 지킨다', async () => {
@@ -1915,7 +1901,7 @@ test('FEP self-quote는 승인서 없이 승인하되 다른 Post만 Source로 �
 
 for (const revokedDuringVerification of [false, true]) {
   test(
-    `승인 Update 검증 중 Source를 숨기고 중간 철회를 보존한다: ${revokedDuringVerification}`,
+    `승인 Update 조회와 같은 URI Delete를 owner FIFO로 처리한다: ${revokedDuringVerification}`,
     { timeout: 30_000 },
     async () => {
       const sourceActorUri = 'https://source.example/users/pending-update';
@@ -1958,18 +1944,20 @@ for (const revokedDuringVerification of [false, true]) {
       const lookupReleased = new Promise<void>((resolve) => {
         release = resolve;
       });
+      currentContext = {
+        ...(context as Parameters<typeof handleInboundQuote>[0]['context']),
+        quoteAuthorizationDocumentLoader: async (url: string) => {
+          entered();
+          await lookupReleased;
+          return { contextUrl: null, document: documents.get(url), documentUrl: url };
+        },
+      } as never;
       const update = handleInboundUpdate(
-        {
-          ...(context as Parameters<typeof handleInboundQuote>[0]['context']),
-          quoteAuthorizationDocumentLoader: async (url: string) => {
-            entered();
-            await lookupReleased;
-            return { contextUrl: null, document: documents.get(url), documentUrl: url };
-          },
-        } as never,
+        currentContext,
         new Update({ actor: new URL(quoteActorUri), object: note }),
         receivedAt,
       );
+      let revocation: Promise<unknown> | undefined;
       try {
         await lookupStarted;
         const waiting = await db
@@ -1980,22 +1968,17 @@ for (const revokedDuringVerification of [false, true]) {
         assert.equal(waiting.quoteConsentStatus, PostQuoteConsentStatus.PENDING);
         assert.equal(waiting.repostSourceId, source.post.id);
         if (revokedDuringVerification) {
-          await revokeInboundQuote({
+          currentContext = context;
+          revocation = revokeInboundQuote({
             actorUri: sourceActorUri,
             authorizationUri: authorization.id!.href,
-            context: {
-              ...(context as Parameters<typeof handleInboundQuote>[0]['context']),
-              quoteAuthorizationDocumentLoader: async () => {
-                throw Object.assign(new Error('gone'), {
-                  response: new Response(null, { status: 410 }),
-                });
-              },
-            },
+            context: currentContext,
           });
         }
       } finally {
         release();
         await update;
+        await revocation;
       }
       const stored = await db
         .select()
@@ -2017,7 +2000,7 @@ for (const revokedDuringVerification of [false, true]) {
 const createContext = (
   documents = new Map<string, unknown>(),
   lookupObject: (identifier: string | URL) => Promise<unknown> = async () => null,
-) => {
+): TestQuoteContext => {
   const contextLoader = getDocumentLoader();
   const context = {
     canonicalOrigin: publicOrigin,
@@ -2032,7 +2015,11 @@ const createContext = (
     lookupObject,
     parseUri: () => null,
   };
-  return { ...context, quoteAuthorizationDocumentLoader: context.documentLoader } as never;
+  currentContext = {
+    ...context,
+    quoteAuthorizationDocumentLoader: context.documentLoader,
+  } as never;
+  return currentContext;
 };
 
 const createRemoteActor = async (handle: string, actorUri: string, instanceId?: string) => {

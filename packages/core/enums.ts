@@ -137,6 +137,13 @@ export const PostVisibility = {
 } as const;
 export type PostVisibility = keyof typeof PostVisibility;
 
+export const PostQuotePolicy = {
+  EVERYONE: 'EVERYONE',
+  FOLLOWERS: 'FOLLOWERS',
+  AUTHOR: 'AUTHOR',
+} as const;
+export type PostQuotePolicy = keyof typeof PostQuotePolicy;
+
 export const ProfileFollowPolicy = {
   OPEN: 'OPEN',
   APPROVAL_REQUIRED: 'APPROVAL_REQUIRED',

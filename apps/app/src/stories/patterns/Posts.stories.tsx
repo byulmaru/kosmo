@@ -7351,6 +7351,14 @@ export const ComposerVisibilityAndSubmitInteraction: Story = {
       within(menu).queryByRole('menuitemradio', { name: /^언급한 계정만/ }),
     ).not.toBeInTheDocument();
     await userEvent.click(within(menu).getByRole('menuitemradio', { name: /^공개/ }));
+    await userEvent.click(
+      within(within(menu).getByRole('group', { name: '인용 허용 정책' })).getByRole(
+        'menuitemradio',
+        {
+          name: /^모두/,
+        },
+      ),
+    );
     await waitFor(() => {
       expect(canvas.queryByRole('menu', { name: '공개 범위 선택' })).not.toBeInTheDocument();
     });
@@ -7409,7 +7417,9 @@ export const ComposerProfileDefaultVisibilitySeed: Story = {
     expect(canvas.getByRole('button', { name: '공개 범위: 공개' })).toBeVisible();
     await userEvent.click(canvas.getByRole('button', { name: '공개 범위: 공개' }));
     const menu = await canvas.findByRole('menu', { name: '공개 범위 선택' });
-    expect(within(menu).getAllByRole('menuitemradio')).toHaveLength(3);
+    expect(
+      within(within(menu).getByRole('group', { name: '공개 범위' })).getAllByRole('menuitemradio'),
+    ).toHaveLength(3);
     expect(within(menu).queryByRole('menuitemradio', { name: /^언급한 계정만/ })).toBeNull();
   },
   render: () => <ComposerStory />,
@@ -7484,6 +7494,7 @@ export const ComposerVisibilityFocusLifecycle: Story = {
     );
     expect(getComputedStyle(editorSurface).borderColor).toBe(baselineBorderColor);
     await pressTouch(within(menu).getByRole('menuitemradio', { name: /^공개/ }));
+    await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(canvas.queryByRole('menu')).not.toBeInTheDocument());
     expect(body).not.toHaveFocus();
     await waitFor(() => expect(trigger).toHaveFocus());
@@ -7516,6 +7527,7 @@ export const ComposerVisibilityKeyboardFocusLifecycle: Story = {
     });
     expect(keyboardOption).toHaveFocus();
     await userEvent.keyboard('{Enter}');
+    await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(canvas.queryByRole('menu')).not.toBeInTheDocument());
     expect(body).not.toHaveFocus();
     await waitFor(() => expect(trigger).toHaveFocus());
@@ -7650,7 +7662,9 @@ export const ComposerReplyProfileDefaultVisibilitySeed: Story = {
     expect(canvas.getByRole('button', { name: '공개 범위: 공개' })).toBeVisible();
     await userEvent.click(canvas.getByRole('button', { name: '공개 범위: 공개' }));
     const menu = await canvas.findByRole('menu', { name: '공개 범위 선택' });
-    expect(within(menu).getAllByRole('menuitemradio')).toHaveLength(3);
+    expect(
+      within(within(menu).getByRole('group', { name: '공개 범위' })).getAllByRole('menuitemradio'),
+    ).toHaveLength(3);
     expect(within(menu).queryByRole('menuitemradio', { name: /^언급한 계정만/ })).toBeNull();
   },
   render: () => <ReplyComposerContractStory defaultPostVisibility="PUBLIC" />,
@@ -7687,6 +7701,7 @@ export const ComposerReplyMediaMutationContract: Story = {
             {
               bodyText: '',
               replyParentId: 'post-parent',
+              quotePolicy: 'EVERYONE',
               visibility: 'UNLISTED',
               media: [{ altText: '답글 이미지', mediaId: 'media-reply-story-1' }],
               sensitiveMedia: true,
@@ -8222,7 +8237,6 @@ export const QuoteModalFailureLifecycle: Story = {
     await userEvent.click(within(visibilityMenu).getByRole('menuitemradio', { name: /^공개/ }));
     expect(within(dialog).getByRole('button', { name: '공개 범위: 공개' })).toBeVisible();
 
-    await userEvent.click(within(dialog).getByRole('button', { name: '공개 범위: 공개' }));
     visibilityMenu = await within(dialog).findByRole('menu', { name: '공개 범위 선택' });
     await userEvent.keyboard('{ArrowDown}');
     await userEvent.keyboard('{ArrowDown}');
