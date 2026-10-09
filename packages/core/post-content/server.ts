@@ -1,5 +1,6 @@
 import { isDeepStrictEqual } from 'node:util';
 import { JSDOM } from 'jsdom';
+import { LinkifyIt } from 'linkify-it';
 import { DOMSerializer } from 'prosemirror-model';
 import { ValidationError } from '../error';
 import { postBodyMaxLength } from '../validation/post-policy';
@@ -12,6 +13,7 @@ import {
 } from './index';
 import { postContentSchema } from './schema';
 import { normalizeLinkHref } from './schema/marks/link';
+import type { Match } from 'linkify-it';
 import type { Mark, Node as ProseMirrorNode } from 'prosemirror-model';
 import type {
   PostContentBodyDocumentV1,
@@ -20,6 +22,11 @@ import type {
   PostContentMediaNode,
   PostContentSchemaVersion,
 } from './index';
+
+const postContentLinkify = new LinkifyIt({ fuzzyLink: false, fuzzyEmail: false })
+  .add('ftp:', null)
+  .add('mailto:', null)
+  .add('//', null);
 
 export interface PostContentMediaReference {
   readonly mediaId: string;
@@ -249,6 +256,7 @@ function postContentInlineFromText(
 ): PostContentInlineNode[] {
   const inline: PostContentInlineNode[] = [];
   const orderedMentions = [...mentions].sort((left, right) => left.start - right.start);
+  const links = postContentLinkify.match(bodyText) ?? [];
   let previousEnd = 0;
   for (const mention of orderedMentions) {
     const { end, profileId, relativeHandle, start } = mention;
@@ -260,17 +268,51 @@ function postContentInlineFromText(
     }
 
     if (start > previousEnd) {
-      inline.push({ type: 'text', text: bodyText.slice(previousEnd, start) });
+      appendTextWithLinks(inline, bodyText, previousEnd, start, links);
     }
     inline.push({ type: 'mention', attrs: { profileId } });
     previousEnd = end;
   }
 
   if (previousEnd < bodyText.length) {
-    inline.push({ type: 'text', text: bodyText.slice(previousEnd) });
+    appendTextWithLinks(inline, bodyText, previousEnd, bodyText.length, links);
   }
 
   return inline;
+}
+
+function appendTextWithLinks(
+  inline: PostContentInlineNode[],
+  bodyText: string,
+  start: number,
+  end: number,
+  links: readonly Match[],
+): void {
+  let previousEnd = start;
+  for (const link of links) {
+    if (link.index < previousEnd || link.lastIndex > end) {
+      continue;
+    }
+    const text = bodyText.slice(link.index, link.lastIndex);
+    let href: string;
+    try {
+      href = normalizeLinkHref(text);
+    } catch {
+      continue;
+    }
+    if (link.index > previousEnd) {
+      inline.push({ type: 'text', text: bodyText.slice(previousEnd, link.index) });
+    }
+    inline.push({
+      type: 'text',
+      text,
+      marks: [postContentSchema.marks.link.create({ href }).toJSON()],
+    });
+    previousEnd = link.lastIndex;
+  }
+  if (previousEnd < end) {
+    inline.push({ type: 'text', text: bodyText.slice(previousEnd, end) });
+  }
 }
 
 function postContentBodyToText(document: PostContentBodyDocumentV1): string {

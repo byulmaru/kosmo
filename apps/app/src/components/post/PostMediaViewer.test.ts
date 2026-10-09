@@ -16,6 +16,7 @@ const platform = { OS: 'web' };
 const viewport = { height: 800, width: 767 };
 let keydownListener: ((event: KeyboardEvent) => void) | null = null;
 let closeFocused = 0;
+const openedUrls: string[] = [];
 const viewerKeyTarget = { tagName: 'DIV' };
 const childOverlayKeyTarget = { tagName: 'DIV' };
 const MockImage = Object.assign((props: Record<string, unknown>) => createElement('Image', props), {
@@ -65,6 +66,7 @@ mock.module('react-native', {
     ActivityIndicator: 'ActivityIndicator',
     Animated: { View: 'AnimatedView' },
     Image: MockImage,
+    Linking: { openURL: (url: string) => openedUrls.push(url) },
     Modal: 'Modal',
     Platform: platform,
     Pressable,
@@ -81,6 +83,24 @@ mock.module('react-relay', {
     graphql: () => ({}),
     useFragment: (_fragment: unknown, key: unknown) => key,
   },
+} as unknown as Parameters<typeof mock.module>[1]);
+
+mock.module('./PostContentWarningRevealContext', {
+  exports: {
+    usePostContentWarningReveal: () => ({ revealed: false, toggle: () => undefined }),
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+
+mock.module('./PostContentMention', {
+  exports: { PostContentMention: 'PostContentMention' },
+} as unknown as Parameters<typeof mock.module>[1]);
+
+mock.module('./PostContentWarning', {
+  exports: { PostContentWarning: 'PostContentWarning' },
+} as unknown as Parameters<typeof mock.module>[1]);
+
+mock.module('./PostMediaGallery', {
+  exports: { PostMediaGallery: 'PostMediaGallery' },
 } as unknown as Parameters<typeof mock.module>[1]);
 
 mock.module('react-native-safe-area-context', {
@@ -183,6 +203,7 @@ afterEach(async () => {
   viewport.width = 767;
   keydownListener = null;
   closeFocused = 0;
+  openedUrls.length = 0;
 });
 
 describe('PostMediaViewer', () => {
@@ -255,13 +276,27 @@ describe('PostMediaViewer', () => {
     );
   });
 
-  it('같은 Post fragment의 Content·Media·Profile 표시 데이터를 사용한다', async () => {
+  it('같은 Post fragment의 Content·Media·Profile 데이터를 canonical body renderer에 전달한다', async () => {
     await render();
 
     assert.equal(currentImage().props.accessibilityLabel, '첫 번째 이미지');
     assert.equal(textContents().includes('네 줄 이상이 될 수 있는 원문입니다.'), true);
+    assert.equal(renderer?.root.findAllByProps({ testID: 'post-content-renderer' }).length, 1);
+    assert.equal(rendered('PostContentWarning').length, 0);
+    assert.equal(rendered('PostMediaGallery').length, 0);
     assert.equal(rendered('Avatar')[0]?.props.label, '작성자');
     assert.equal(textContents().includes('@author'), true);
+
+    await act(async () =>
+      byTestId('post-media-viewer-body-measure').props.onLayout({
+        nativeEvent: { layout: { height: 96 } },
+      }),
+    );
+    await act(async () => pressable('원문 더 보기').props.onPress());
+    assert.equal(renderer?.root.findAllByProps({ testID: 'post-content-renderer' }).length, 1);
+    assert.ok(
+      byTestId('post-media-viewer-body-scroll').findByProps({ testID: 'post-content-renderer' }),
+    );
   });
 
   it('사용자 Media와 Compact 본문만 개인정보 경계 안에 둔다', async () => {
@@ -275,10 +310,13 @@ describe('PostMediaViewer', () => {
     const imageBoundary = byTestId('post-media-viewer-image-privacy-boundary');
     const bodyBoundary = byTestId('post-media-viewer-body-privacy-boundary');
     assert.equal(isDescendant(currentImage(), imageBoundary), true);
-    assert.equal(isDescendant(byTestId('post-media-viewer-body'), bodyBoundary), true);
+    assert.equal(isDescendant(byTestId('post-content-renderer'), bodyBoundary), true);
     assert.equal(isDescendant(pressable('다음 이미지'), imageBoundary), false);
     assert.equal(isDescendant(pressable('원문 더 보기'), bodyBoundary), false);
     assert.equal(isDescendant(byTestId('post-media-viewer-action-bar'), bodyBoundary), false);
+
+    await act(async () => pressable('원문 더 보기').props.onPress());
+    assert.equal(isDescendant(byTestId('post-content-renderer'), bodyBoundary), true);
   });
 
   it('선택 index에서 시작해 non-wrapping control과 다중 위치를 제공한다', async () => {
@@ -568,6 +606,73 @@ describe('PostMediaViewer', () => {
     assert.ok(byTestId('post-media-viewer-action-bar'));
   });
 
+  it('접힌 원문과 펼친 원문 모두 canonical 링크를 표시하고 연다', async () => {
+    const url = 'https://example.com/post';
+    const bodyText = `이 링크를 열어 주세요: ${url}`;
+    const post = viewerPost({
+      bodyText,
+      contentWarning: '민감한 내용',
+      document: {
+        body: {
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                {
+                  type: 'text',
+                  text: bodyText,
+                  marks: [{ type: 'link', attrs: { href: url } }],
+                },
+              ],
+            },
+          ],
+        },
+        summary: '민감한 내용',
+        version: 1,
+      },
+      media: [media(0, '이미지')],
+    });
+    await render({ post });
+
+    await act(async () =>
+      byTestId('post-media-viewer-body-measure').props.onLayout({
+        nativeEvent: { layout: { height: 96 } },
+      }),
+    );
+    const collapsedLink = byTestId('post-media-viewer-collapsed-body').findByProps({
+      accessibilityRole: 'link',
+    });
+    assert.equal(collapsedLink.parent?.props.numberOfLines, 3);
+    assert.equal(collapsedLink.props.accessibilityLabel, `${bodyText}, ${url}`);
+    assert.deepEqual(openedUrls, []);
+    assert.equal(rendered('PostContentWarning').length, 0);
+    assert.equal(rendered('PostMediaGallery').length, 0);
+    await act(async () =>
+      collapsedLink.props.onPress({
+        preventDefault: () => undefined,
+        stopPropagation: () => undefined,
+      }),
+    );
+    assert.deepEqual(openedUrls, [url]);
+
+    await act(async () => pressable('원문 더 보기').props.onPress());
+    assert.ok(byTestId('post-content-renderer'));
+    const expandedLink = byTestId('post-media-viewer-body-scroll').findByProps({
+      accessibilityRole: 'link',
+    });
+    assert.equal(expandedLink.parent?.props.numberOfLines, undefined);
+    await act(async () =>
+      expandedLink.props.onPress({
+        preventDefault: () => undefined,
+        stopPropagation: () => undefined,
+      }),
+    );
+    assert.deepEqual(openedUrls, [url, url]);
+    assert.equal(rendered('PostContentWarning').length, 0);
+    assert.equal(rendered('PostMediaGallery').length, 0);
+  });
+
   it('같은 높이의 새 Content에서 이전 원문 측정 callback이 overflow를 덮지 않는다', async () => {
     await render({ post: viewerPost({ contentId: 'content-a' }) });
     const previousMeasure = byTestId('post-media-viewer-body-measure');
@@ -818,7 +923,10 @@ function defaultProps(): ViewerProps {
 }
 
 function viewerPost({
+  bodyText = '네 줄 이상이 될 수 있는 원문입니다.',
+  contentWarning = null,
   contentId = 'content-1',
+  document = null,
   media: value = [media(0, '첫 번째 이미지'), media(1, '두 번째 이미지'), media(2, null)],
   profile = {
     avatar: { url: 'https://media.example/avatar.webp' },
@@ -826,7 +934,10 @@ function viewerPost({
     relativeHandle: '@author',
   },
 }: {
+  bodyText?: string;
+  contentWarning?: string | null;
   contentId?: string;
+  document?: unknown;
   media?: ReadonlyArray<PostMediaItem> | null;
   profile?: {
     avatar: { url: string } | null;
@@ -837,9 +948,12 @@ function viewerPost({
   return {
     id: 'post-1',
     content: {
-      bodyText: '네 줄 이상이 될 수 있는 원문입니다.',
+      bodyText,
+      contentWarning,
+      document,
       id: contentId,
       media: value,
+      mentionedProfiles: [],
     },
     profile,
   } as unknown as PostMediaViewer_post$key;

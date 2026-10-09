@@ -39,6 +39,7 @@
     "drizzle-orm": "1.0.0-beta.22",
     "emoji-datasource-google": "16.0.0",
     "jsdom": "^29.1.1",
+    "linkify-it": "6.1.0",
     "postgres": "^3.4.9",
     "prosemirror-model": "^1.25.10",
     "temporal-polyfill": "^0.3.2",
