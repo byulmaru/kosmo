@@ -523,10 +523,54 @@ describe('runtime routing', () => {
     },
   );
 
-  test('keeps non-document policy representations out of the SPA', async () => {
-    const response = await app.request('/child-safety', {
-      headers: { accept: 'application/activity+json' },
-    });
+  test.each([
+    '/@kosmo',
+    '/@alice@example.org',
+    '/@alice.remote@example.org',
+    '/@kosmo/AaCx-8WAcbyBDtHc8M8Xg1Bvc3Q',
+    '/@kosmo/followers',
+    '/@kosmo/following',
+    '/@kosmo/AaCx-8WAcbyBDtHc8M8Xg1Bvc3Q/reactions',
+  ])('serves the public route %s without navigation headers', async (path) => {
+    for (const accept of [undefined, '*/*', 'text/html', 'text/html;q=0.8', 'text/*']) {
+      for (const userAgent of ['Mozilla/5.0', 'Googlebot/2.1']) {
+        const headers = { 'user-agent': userAgent, ...(accept ? { accept } : {}) };
+        const response = await app.request(path, { headers });
+        const head = await app.request(path, { headers, method: 'HEAD' });
+
+        expect(response.status).toBe(200);
+        expect(response.headers.get('content-type')).toContain('text/html');
+        expect(response.headers.get('cache-control')).toBe('no-cache');
+        expect(await response.text()).toBe('<html>expo app</html>');
+        expect(head.status).toBe(200);
+        expect(await head.text()).toBe('');
+      }
+    }
+  });
+
+  test.each(['/child-safety', '/@kosmo', '/@kosmo/post-id'])(
+    'keeps non-document representations of %s out of the SPA',
+    async (path) => {
+      for (const accept of ['application/activity+json', 'text/html;q=0', 'text/html;q=0, */*']) {
+        for (const method of ['GET', 'HEAD']) {
+          const response = await app.request(path, { headers: { accept }, method });
+
+          expect(response.status).toBe(404);
+          expect(await response.text()).toBe(method === 'HEAD' ? '' : '404 Not Found');
+        }
+      }
+    },
+  );
+
+  test.each([
+    '/@',
+    '/@foo.js',
+    '/@bad@',
+    '/@kosmo/missing.js',
+    '/@kosmo/post-id/unknown',
+    '/@kosmo/a/b/c',
+  ])('keeps unsupported public route shapes %s as 404', async (path) => {
+    const response = await app.request(path, { headers: { accept: 'text/html' } });
 
     expect(response.status).toBe(404);
     expect(await response.text()).toBe('404 Not Found');

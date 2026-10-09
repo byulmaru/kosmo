@@ -15,5 +15,6 @@ Read this entire file when working on Expo Router routes, the shared Web/Native 
 - route component는 URL parameter와 top-level query를 소유한다. loading/error/success를 포함한 entry focus의 복원도 route 경계에서 책임진다. 표시 컴포넌트는 Expo Router parameter나 navigation singleton을 직접 읽지 않고 필요한 callback 또는 fragment ref를 받는다.
 - 뒤로가기·fallback·scroll은 기존 navigation 경계를 재사용한다. callback identity를 기억하는 전역 WeakSet이나 기능별 history/popstate stack을 추가하지 않으며, 별도 history 계약이 승인된 경우에만 예외를 둔다.
 - 프로필 route에는 표시용 `relativeHandle`과 lookup용 bare/federated handle을 혼동하지 않는다. URL을 만들 때는 `relativeHandle`, GraphQL lookup/validation에는 정규화한 route parameter를 사용한다.
+- BFF는 기존 공개 프로필·게시글 경로(팔로워·팔로잉·reaction 하위 화면 포함)의 HTML 문서 요청에 `Sec-Fetch-Mode: navigate`를 요구하지 않는다. 헤더가 없는 크롤러에도 기존 SPA shell을 제공하며, ActivityPub representation과 알 수 없는 경로·누락된 정적 파일의 오류 응답은 유지한다. Shell의 HTTP 200은 해당 프로필·게시글의 존재나 Google 색인 완료를 보장하지 않으며, 데이터 존재·공개 범위는 기존 API가 판정한다.
 - web shell은 `768px`와 `1280px` breakpoint를 사용한다. native shell은 화면 폭과 무관하게 mobile layout을 유지하고 safe area를 기준으로 한다. 값은 `apps/app/src/theme/tokens.ts`의 `breakpoints`를 사용하며 컴포넌트마다 같은 숫자를 다시 쓰지 않는다.
 - web 링크가 새 탭 열기, 주소 복사, 키보드 활성화 같은 browser 의미를 가져야 하면 Expo Router `Link`를 사용한다. local action은 `Pressable`/`Button`을 사용하고 접근성 role, label, state를 함께 지정한다.
