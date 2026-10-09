@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { afterEach, before, beforeEach, describe, it, mock } from 'node:test';
-import { createElement, Suspense } from 'react';
+import { createElement, Suspense, useState } from 'react';
 import * as ReactRelay from 'react-relay';
 import { act, create } from 'react-test-renderer';
 import {
@@ -39,7 +39,9 @@ const toasts: string[] = [];
 let renderer: ReactTestRenderer | null = null;
 let useProfilePin: typeof useProfilePinType;
 let ProfilePinProvider: (props: { children?: ReactNode }) => ReactNode;
-let selectedProfileId = profileId;
+let selectedProfileId: string | null = profileId;
+let restorationMounts = 0;
+let setRestorationState: ((value: string) => void) | undefined;
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -80,6 +82,8 @@ beforeEach(() => {
   requests.length = 0;
   toasts.length = 0;
   selectedProfileId = profileId;
+  restorationMounts = 0;
+  setRestorationState = undefined;
 });
 
 afterEach(async () => {
@@ -114,10 +118,46 @@ function Harness() {
   );
 }
 
+function RestorationChild() {
+  const pinState = useProfilePin();
+  const [value, setValue] = useState(() => {
+    restorationMounts += 1;
+    return 'initial';
+  });
+  setRestorationState = setValue;
+  return createElement('RestorationChild', {
+    queryFailed: pinState.queryFailed,
+    retry: pinState.retry,
+    value,
+  });
+}
+
+function restorationChild() {
+  assert.ok(renderer);
+  const child = renderer.root.findAll((node) => String(node.type) === 'RestorationChild')[0];
+  assert.ok(child);
+  return child;
+}
+
+function restorationState() {
+  return restorationChild().props.value as string;
+}
+
+function providerTree(environment: Environment, children: ReactNode) {
+  return createElement(ReactRelay.RelayEnvironmentProvider, {
+    children: createElement(
+      Suspense,
+      { fallback: createElement('Loading') },
+      createElement(ProfilePinProvider, null, children),
+    ),
+    environment,
+  });
+}
+
 async function renderProvider(
   environment = createEnvironment(),
   targetRequests = requests,
-  ownerId = selectedProfileId,
+  ownerId = selectedProfileId ?? profileId,
   relativeHandle = '@pin-owner',
 ) {
   await act(async () => {
@@ -226,6 +266,50 @@ function mutationResponse(field: 'pinProfilePost' | 'unpinProfilePost', postId: 
 }
 
 describe('ProfilePinProvider owner lifecycle', () => {
+  it('restores a selected profile without remounting existing children after the pin query resolves', async () => {
+    selectedProfileId = null;
+    const environment = createEnvironment();
+    await act(async () => {
+      renderer = create(providerTree(environment, createElement(RestorationChild)));
+    });
+    assert.equal(requests.length, 0);
+    assert.equal(restorationMounts, 1);
+    assert.equal(restorationState(), 'initial');
+
+    await act(async () => setRestorationState?.('edited'));
+    assert.equal(restorationState(), 'edited');
+
+    selectedProfileId = profileId;
+    await act(async () => {
+      renderer?.update(providerTree(environment, createElement(RestorationChild)));
+    });
+    assert.deepEqual(
+      requests.map((request) => request.name),
+      ['ProfilePinProviderQuery'],
+    );
+    assert.equal(renderer?.root.findAll((node) => String(node.type) === 'Loading').length, 0);
+    assert.equal(restorationMounts, 1);
+    assert.equal(restorationState(), 'edited');
+
+    await failLatestRequest('profile pin query failed');
+    assert.equal(restorationChild().props.queryFailed, true);
+    assert.equal(restorationMounts, 1);
+    assert.equal(restorationState(), 'edited');
+
+    await act(async () => restorationChild().props.retry());
+    assert.equal(requests.length, 2);
+    assert.equal(restorationMounts, 1);
+    assert.equal(restorationState(), 'edited');
+    await respond(profileQueryResponse(profileId, '@pin-owner'));
+    assert.deepEqual(
+      {
+        mounts: restorationMounts,
+        value: restorationState(),
+      },
+      { mounts: 1, value: 'edited' },
+    );
+  });
+
   it('exposes a retry after the profile query fails and restores pin state', async (t) => {
     t.mock.method(console, 'error', () => undefined);
     const environment = createEnvironment();

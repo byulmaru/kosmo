@@ -1,7 +1,8 @@
-import { createContext, useCallback, useContext, useMemo, useState } from 'react';
-import { graphql, useLazyLoadQuery, useMutation } from 'react-relay';
-import { RelayFailOpenBoundary } from '@/components/RelayFailOpenBoundary';
+import { createContext, useCallback, useContext, useEffect, useMemo } from 'react';
+import { graphql, useMutation, useRelayEnvironment } from 'react-relay';
+import { QueryRenderer } from 'react-relay/legacy';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useUnexpectedErrorReporter } from '@/observability/UnexpectedErrorContext';
 import { useSession } from '@/session/SessionProvider';
 import type { PropsWithChildren } from 'react';
 import type { ProfilePinProviderPinProfilePostMutation } from './__generated__/ProfilePinProviderPinProfilePostMutation.graphql';
@@ -112,57 +113,55 @@ const ProfilePinContext = createContext<ProfilePinContextValue>(unavailableValue
 
 export function ProfilePinProvider({ children }: PropsWithChildren) {
   const { selectedProfileId } = useSession();
-  const [retryKey, setRetryKey] = useState(0);
-  const retry = useCallback(() => {
-    setRetryKey((current) => current + 1);
-  }, []);
-  const fallbackValue = useMemo<ProfilePinContextValue>(
-    () => ({ ...unavailableValue, queryFailed: true, retry }),
-    [retry],
-  );
-
-  if (!selectedProfileId) {
-    return (
-      <ProfilePinContext.Provider value={unavailableValue}>{children}</ProfilePinContext.Provider>
-    );
-  }
-
-  const fallback = (
-    <ProfilePinContext.Provider value={fallbackValue}>{children}</ProfilePinContext.Provider>
-  );
+  const environment = useRelayEnvironment();
   return (
-    <RelayFailOpenBoundary fallback={fallback} resetKey={retryKey}>
-      <ProfilePinProviderContent
-        key={selectedProfileId}
-        fetchKey={retryKey}
-        profileId={selectedProfileId}
-      >
-        {children}
-      </ProfilePinProviderContent>
-    </RelayFailOpenBoundary>
+    <QueryRenderer<ProfilePinProviderQueryType>
+      environment={environment}
+      fetchPolicy="store-or-network"
+      query={selectedProfileId ? ProfilePinProviderQuery : null}
+      variables={{ profileId: selectedProfileId ?? '' }}
+      render={({ error, props, retry }) => (
+        <ProfilePinProviderContent
+          data={selectedProfileId ? props : null}
+          error={error}
+          profileId={selectedProfileId}
+          retry={retry}
+        >
+          {children}
+        </ProfilePinProviderContent>
+      )}
+    />
   );
 }
 
 function ProfilePinProviderContent({
+  data,
   children,
+  error,
   profileId,
-  fetchKey,
-}: PropsWithChildren<{ fetchKey: number; profileId: string }>) {
-  const data = useLazyLoadQuery<ProfilePinProviderQueryType>(
-    ProfilePinProviderQuery,
-    { profileId },
-    { fetchKey, fetchPolicy: 'store-or-network' },
-  );
+  retry,
+}: PropsWithChildren<{
+  data: ProfilePinProviderQueryType['response'] | null;
+  error: Error | null;
+  profileId: string | null;
+  retry: (() => void) | null;
+}>) {
   const [commitPin, isPinning] = useMutation<ProfilePinProviderPinProfilePostMutation>(pinMutation);
   const [commitUnpin, isUnpinning] =
     useMutation<ProfilePinProviderUnpinProfilePostMutation>(unpinMutation);
   const { showToast } = useToast();
+  const reportUnexpectedError = useUnexpectedErrorReporter();
 
+  useEffect(() => {
+    if (error) {
+      reportUnexpectedError?.(error, { componentStack: '' });
+    }
+  }, [error, reportUnexpectedError]);
+
+  const profile = data?.node?.__typename === 'Profile' ? data.node : null;
   const firstPinnedPostId =
-    data.node?.__typename === 'Profile'
-      ? (data.node.pinnedPosts.edges.find((edge) => edge.node != null)?.node?.id ?? null)
-      : null;
-  const available = data.node?.__typename === 'Profile' && data.node.id === profileId;
+    profile?.pinnedPosts.edges.find((edge) => edge.node != null)?.node?.id ?? null;
+  const available = profileId !== null && profile?.id === profileId;
   const pending = isPinning || isUnpinning;
   const showFailure = useCallback(
     (relativeHandle: string, message: string) => {
@@ -173,10 +172,10 @@ function ProfilePinProviderContent({
 
   const request = useCallback(
     (operation: ProfilePinRequest) => {
-      if (pending || data.node?.__typename !== 'Profile' || data.node.id !== profileId) {
+      if (pending || profileId === null || profile === null || profile.id !== profileId) {
         return;
       }
-      const requestProfileHandle = data.node.relativeHandle;
+      const requestProfileHandle = profile.relativeHandle;
 
       const commitPinRequest = (postId: string, errorMessage: string) => {
         commitPin({
@@ -222,7 +221,7 @@ function ProfilePinProviderContent({
 
       commitPinRequest(operation.postId, failureMessage);
     },
-    [commitPin, commitUnpin, data.node, pending, profileId, showFailure],
+    [commitPin, commitUnpin, pending, profile, profileId, showFailure],
   );
 
   const value = useMemo<ProfilePinContextValue>(
@@ -230,11 +229,11 @@ function ProfilePinProviderContent({
       available,
       firstPinnedPostId,
       pending,
-      queryFailed: false,
+      queryFailed: error !== null,
       request,
-      retry: unavailableValue.retry,
+      retry: retry ?? unavailableValue.retry,
     }),
-    [available, firstPinnedPostId, pending, request],
+    [available, error, firstPinnedPostId, pending, request, retry],
   );
 
   return <ProfilePinContext.Provider value={value}>{children}</ProfilePinContext.Provider>;
