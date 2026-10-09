@@ -9,6 +9,8 @@ Push 만료와 첫 릴리스의 in-app 설정 부재를 확정했다. PROD-912�
 시각과 동일 Account의 재설치 중복 정리를 확정했다. 2026-09-29 사용자 승인으로 사전 안내 모달을 제거하고 앱
 설정에서 OS 권한을 직접 요청하도록 변경했다. 2026-09-29 사용자 승인으로 Push 탭은 payload의 내부 경로 `href`로
 직접 이동하도록 변경했고, registration 이후 전달 경계는 best-effort로 정리했다.
+2026-10-08 PROD-1061 사용자 결정으로 접힌 알림은 행위자·수신 Profile·행동 요약을 표시하고, 게시글 본문은
+펼친 알림에서만 표시하도록 변경했다. 묶인 알림은 후속 결정으로 남긴다.
 
 ## 날짜
 
@@ -28,7 +30,15 @@ installation token lifecycle을 고정하므로 앱 설정의 권한 처리와 t
 - 앱 시작이나 로그인 완료 때 OS 권한을 자동 요청하지 않는다. 앱 설정의 알림 action은 OS 권한이 미결정이면
   OS 권한 요청을 시작하고, 이미 허용되거나 거부된 경우 OS 알림 설정을 연다. 허용된 로그인 세션은 로그인·앱
   활성화 때 FCM token을 자동 동기화하고, 권한 요청이 허용된 직후에도 token을 즉시 동기화한다.
-- 서버의 FCM OS 표시 payload는 `notification.title`과 `notification.body`를 사용해 발신자, 알림 유형과 허용된 게시글 본문 미리보기를 표시한다. Operational Notification은 저장된 제목과 선택적 본문을 사용한다.
+- OS 알림은 행위자와 수신 Profile의 이름·핸들, 알림 유형을 식별할 수 있어야 한다. 접힌 알림은 행동 요약만
+  표시하며 게시글 본문을 포함하지 않는다. 허용된 게시글 본문은 펼친 알림에서 표시한다.
+- Push 표시 capability가 있는 Android v1 installation은 data-only payload의 `data.title`·`data.message`를
+  native presentation에 사용한다. capability가 없는 Android와 모든 iOS는 기존 `notification`·`data` 조합을
+  사용한다. 두 경로 모두 route, privacy, expiry, retry·dedup와 recipient 계약을 유지한다.
+- iOS v1 presentation은 `KOSMO_PUSH_PRESENTATION_V1` category를 사용한다. 접힌 상태는 system icon과
+  header를 유지하고, 펼친 상태에서 actor avatar·reaction·허용된 게시글 본문을 표시한다. category 등록 실패는
+  token 동기화를 막지 않으며, 기존 앱은 OS 기본 표시를 사용한다.
+- Operational Notification은 저장된 제목·선택적 본문·href를 기존 Account target route 계약으로 전달한다.
 - Follow와 FollowRequest처럼 게시글 본문이 없는 알림은 본문 미리보기를 생략한다.
 - 공통 Worker Notification Activity는 Domain Workflow의 Notification 생성 요청을 받아 기존 Core materializer를
   호출한다. 저장된 Notification ID가 반환되면 그 ID로 기존 Push delivery Workflow를 시작하고 start

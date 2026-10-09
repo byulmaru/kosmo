@@ -209,6 +209,45 @@ test('eligible delivery enforces epoch, read-state, and TTL boundaries', async (
   }
 });
 
+test('eligible delivery returns the registered presentation capability', async () => {
+  const fixture = await createFixture({ sessionCount: 2 });
+  const [legacySession, nativeSession] = fixture.sessions;
+  assert.ok(legacySession);
+  assert.ok(nativeSession);
+
+  try {
+    await db.insert(PushInstallations).values([
+      {
+        accountId: fixture.account.id,
+        platform: PushInstallationPlatform.ANDROID,
+        presentationVersion: 0,
+        sessionId: legacySession.id,
+        token: `legacy-${crypto.randomUUID()}`,
+      },
+      {
+        accountId: fixture.account.id,
+        platform: PushInstallationPlatform.ANDROID,
+        presentationVersion: 1,
+        sessionId: nativeSession.id,
+        token: `native-${crypto.randomUUID()}`,
+      },
+    ]);
+    const notification = await insertNotification({
+      createdAt: Temporal.Now.instant(),
+      recipientProfileId: fixture.profiles[0]!.id,
+    });
+
+    assert.deepEqual(
+      (await findEligiblePushInstallations({ notificationId: notification.id }))
+        .map(({ presentationVersion }) => presentationVersion)
+        .sort(),
+      [0, 1],
+    );
+  } finally {
+    await cleanupFixture(fixture);
+  }
+});
+
 test('all active installations fan out for every Account Profile', async () => {
   const fixture = await createFixture({ profileCount: 2, sessionCount: 2 });
   const [firstSession, secondSession] = fixture.sessions;
