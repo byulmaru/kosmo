@@ -99,7 +99,7 @@ describe('AccountDeletionScreen', () => {
     assert.equal(stateView.props.title, '코스모 탈퇴를 할 수 없어요');
     assert.equal(
       stateView.props.description,
-      '활성 Profile 2개가 남아 있어 코스모를 탈퇴할 수 없어요. 모든 Profile을 먼저 비활성화해주세요.',
+      '활성 Profile 2개가 남아 있어 코스모를 탈퇴할 수 없어요. 활성 Profile을 먼저 비활성화해주세요.',
     );
     assert.equal(stateView.props.actionLabel, undefined);
     assert.equal(rendered('ConfirmationContent').length, 0);

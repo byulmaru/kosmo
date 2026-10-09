@@ -35,14 +35,14 @@ Admin Console의 Account 목록·상세는 일반 Account 조회 권한을 확�
 
 ## 행동
 
-| 행동              | 행동 주체      | 대상 객체 | 입력값 | 권한                                 | 조건                                                                                     | 결과                                                                                                                        |
-| ----------------- | -------------- | --------- | ------ | ------------------------------------ | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Account 삭제      | Account        | Account   | 없음   | `Account.Self`                       | Account State가 Active이고 연결된 모든 Profile의 Profile Lifecycle State가 Deactivated다 | Account State가 Deleted가 되고 연결된 Profile·Membership과 Account 속성은 보존되며, Kosmo 인증·Session·기기 연결이 폐기된다 |
-| Account 정지      | 운영자 Account | Account   | 사유   | `Account.Active`, `Account.Operator` | 대상 Account State가 Active다                                                            | Account State가 Suspended가 된다                                                                                            |
-| Account 정지 해제 | 운영자 Account | Account   | 사유   | `Account.Active`, `Account.Operator` | 대상 Account State가 Suspended다                                                         | Account State가 Active가 된다                                                                                               |
+| 행동              | 행동 주체      | 대상 객체 | 입력값 | 권한                                 | 조건                                                                            | 결과                                                                                                                        |
+| ----------------- | -------------- | --------- | ------ | ------------------------------------ | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Account 삭제      | Account        | Account   | 없음   | `Account.Self`                       | Account State가 Active이고 연결된 Profile의 저장 State가 `ACTIVE`인 경우가 없다 | Account State가 Deleted가 되고 연결된 Profile·Membership과 Account 속성은 보존되며, Kosmo 인증·Session·기기 연결이 폐기된다 |
+| Account 정지      | 운영자 Account | Account   | 사유   | `Account.Active`, `Account.Operator` | 대상 Account State가 Active다                                                   | Account State가 Suspended가 된다                                                                                            |
+| Account 정지 해제 | 운영자 Account | Account   | 사유   | `Account.Active`, `Account.Operator` | 대상 Account State가 Suspended다                                                | Account State가 Active가 된다                                                                                               |
 
-탈퇴 허용 여부는 연결된 모든 Profile State를 요청 시점에 서버가 다시 확인하며, 하나라도 Deactivated가
-아니면 Account와 관계를 변경하지 않고 거부한다.
+탈퇴 허용 여부는 연결된 모든 Profile 저장 State를 요청 시점에 서버가 다시 확인하며, 하나라도 `ACTIVE`이면
+Account와 관계를 변경하지 않고 거부한다. `SUSPENDED`와 `DISABLED` Profile은 이 조건만으로 탈퇴를 막지 않는다.
 
 Deleted Account는 되돌릴 수 없는 terminal 상태이며 공개 인증과 탈퇴 재요청을 허용하지 않는다.
 

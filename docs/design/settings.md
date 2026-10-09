@@ -165,7 +165,7 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
 규칙을 재사용한다. 이 action은 별도 Figma source나 범용 Settings registry를 추가하지 않고 기존 Settings와
 [Profile lifecycle](./profile-lifecycle.md)의 확인·상태·접근성 패턴을 따른다.
 
-- 탈퇴 조건은 Account에 연결된 모든 Profile이 기존 프로필 삭제 흐름의 `DISABLED` 상태인 것이다. 화면에 표시한
+- 탈퇴 조건은 Account에 연결된 Profile 중 저장 State가 `ACTIVE`인 Profile이 없는 것이다. 화면에 표시한
   eligibility와 별개로 탈퇴 확정 시 서버가 현재 Profile 목록으로 다시 확인하며, 하나라도 `ACTIVE` Profile이
   남아 있으면 탈퇴할 수 없다. 이 확인은 Profile 또는 Membership을 삭제하거나 연결 해제하지 않는다.
 - 조건을 충족하지 못하면 detail에는 `ACTIVE` Profile의 개수와 탈퇴할 수 없는 이유만 표시한다. Profile 목록,

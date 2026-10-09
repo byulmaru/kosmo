@@ -40,7 +40,7 @@ export const deleteAccountActivity = async ({
         .orderBy(Profiles.id)
         .for('update');
 
-      if (profiles.some(({ state }) => state !== ProfileState.DISABLED)) {
+      if (profiles.some(({ state }) => state === ProfileState.ACTIVE)) {
         return false;
       }
 
