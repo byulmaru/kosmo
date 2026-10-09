@@ -74,7 +74,8 @@ composer control은 자체 동작만 수행한다. 모두 읽음, unread indicat
 - 앱 시작이나 로그인 완료 때 OS 권한을 자동 요청하지 않는다. 앱 설정의 알림 action은 OS 권한이 미결정이면
   OS 권한 요청을 시작하고, 이미 허용되거나 거부된 경우 OS 알림 설정을 연다. 허용된 로그인 세션은 로그인·앱
   활성화 때 FCM token을 자동 동기화하고, 권한 요청이 허용된 직후에도 token을 즉시 동기화한다.
-- 기본 잠금 화면 FCM Push에는 발신자, 알림 유형과 게시글 본문 미리보기를 포함한다.
+- 기본 잠금 화면 FCM Push에는 발신자와 알림 유형을 포함한다. PROD-1061의 후속 표시 결정에 따라
+  접힌 알림은 수신 Profile을 포함한 행동 요약만 표시하고, 게시글 본문은 펼친 알림에서 표시한다.
 - Follow와 FollowRequest처럼 게시글 본문이 없는 알림은 본문 미리보기를 생략한다.
 - Push transport는 canonical Notification이 저장 성공한 결과를 받는 공통 전달 flow를 소유한다. 현재
   Notification runtime의 Follow, FollowRequest, Reaction, Repost, Reply와 inbound ActivityPub Mention은 이 flow의
@@ -107,7 +108,7 @@ composer control은 자체 동작만 수행한다. 모두 읽음, unread indicat
 - 첫 릴리스에는 전역·알림 유형별·Profile별 in-app Push enable/disable control이나 preference API를
   두지 않는다. Push 수신 여부는 OS 알림 설정으로 제어하며, 기존 Notification의 Mute·Block·visibility
   억제 정책은 계속 적용한다.
-- 잠금 화면 본문 미리보기는 sensitive 또는 Content Warning인 경우 가린다. 이 예외는 본문에만 적용하며,
+- 펼친 알림의 게시글 본문은 sensitive 또는 Content Warning인 경우 가린다. 이 예외는 본문에만 적용하며,
   발신자·알림 유형·Recipient Profile 식별은 유지한다. 그 외에는 Recipient가 조회 권한을 가진 비공개
   본문을 미리보기에 포함한다.
 - 앱이 foreground인 경우에도 OS 알림 배너를 표시한다. 별도의 custom in-app Push banner를 추가하지
@@ -141,6 +142,61 @@ composer control은 자체 동작만 수행한다. 모두 읽음, unread indicat
   target 처리, Push 만료와 read state 독립성을 확정한다.
 - 저장된 Mention Notification은 같은 공통 Push flow를 사용하며, 이 연결은 FCM Provider의 수락이나
   기기 도착을 입증하지 않는다.
+
+## Native Push 공통 표시 · PROD-1061
+
+2026-10-08 사용자 결정으로 Android/iOS OS Push의 단일 알림은 아래 표시 기준을 사용한다.
+인앱 알림 목록의 표시 계약에는 적용하지 않는다.
+
+- Follow, FollowRequest, Reaction, Repost, Reply, Quote, Mention 모두 행위자 아바타를 주요 이미지로
+  표시한다. 시스템 앱 아이콘과 OS 헤더·외곽은 플랫폼이 소유한다.
+- 멀티프로필 수신 대상을 구분할 수 있도록 수신 Profile의 이름과 핸들을 함께 표시한다. 일반적인
+  `회원님` 표현으로 수신 Profile을 대체하지 않는다.
+- 접힌 알림에는 행위자와 수신 Profile을 포함한 행동 요약만 표시한다. 게시글 본문 미리보기는 두지 않는다.
+- 펼친 알림에서도 아바타를 접힌 알림보다 키우지 않는다. 행위자 이름과 핸들은 같은 줄에 표시하고,
+  다음 줄에는 `{사용자명} {핸들}에게` 형식으로 수신 Profile을 표시한다.
+- Repost는 재게시된 게시글, Reply는 답글, Quote는 인용한 게시글, Mention은 언급이 담긴 게시글의
+  허용된 본문을 펼친 알림에서 표시한다. Follow와 FollowRequest에는 게시글 본문을 추가하지 않는다.
+- 묶인 알림의 표시와 집계 기준은 이번 결정 범위에서 제외한다. 묶인 알림을 다룰 때 별도로 결정하며,
+  단일 알림 시안을 근거로 복수 행위자 아바타·요약 문구·집계 방식을 미리 확정하지 않는다.
+
+Reaction을 제외한 접힌 알림의 문구는 다음과 같다.
+
+| 종류          | 행동 요약                                                                 |
+| ------------- | ------------------------------------------------------------------------- |
+| Follow        | `{행위자} 님이 {수신자명}({수신자핸들}) 님을 팔로우했습니다.`             |
+| FollowRequest | `{행위자} 님이 {수신자명}({수신자핸들}) 님에게 팔로우를 요청했습니다.`    |
+| Repost        | `{행위자} 님이 {수신자명}({수신자핸들}) 님의 게시글을 재게시했습니다.`    |
+| Reply         | `{행위자} 님이 {수신자명}({수신자핸들}) 님의 게시글에 답글을 달았습니다.` |
+| Quote         | `{행위자} 님이 {수신자명}({수신자핸들}) 님의 게시글을 인용했습니다.`      |
+| Mention       | `{행위자} 님이 {수신자명}({수신자핸들}) 님을 언급했습니다.`               |
+
+기존 sensitive/CW 본문 숨김과 조회 권한 계약을 유지한다. Android와 iOS의 펼친 콘텐츠는 각각 승인된
+Native 표시 surface에서 제공한다. iOS 접힘 상태는 시스템 앱 아이콘을 유지하고, 펼침 상태에서만
+행위자 아바타와 독립 Reaction 배지를 제공한다. iOS category를 등록하지 못해도 기존 token 등록과
+알림 수신은 계속되어야 하며, category를 모르는 구버전 앱은 시스템 기본 표시를 사용한다. 실제 FCM
+수신·탭·접힘/펼침 결과의 실기기 검증은 별도다.
+
+### Reaction 표시
+
+- 이 표시 결정의 범위는 Android/iOS OS Reaction Push이며, 인앱 `NotificationListItemView`에는 적용하지
+  않는다.
+- 접힌 알림은 `{반응한사람} 님이 {반응받은프로필} 님에게 {반응 종류}를 남겼습니다.` 형식으로 표시한다.
+  `{반응받은프로필}`에는 이름과 핸들을 함께 넣는다. 예를 들어
+  `혜주 님이 예은(@yeeun) 님에게 😂를 남겼습니다.`처럼 실제 Reaction emoji를 사용하며, 하트를 고정한
+  대표 아이콘으로 대체하지 않는다. 발신자 아바타가 주요 이미지인 방향은 유지한다.
+- 펼친 알림의 상단에는 반응한 사람의 아바타·같은 줄의 이름과 핸들, 수신자 `{사용자명} {핸들}에게`를 표시한다. 예시는
+  `예은 @yeeun에게`이다. 실제 Reaction은 아바타 모서리에 별도 배지 요소로 걸쳐 표시하며 이미지에
+  합성하지 않는다. 그 아래에는 반응 대상 게시글의 허용된 본문만 표시한다. `혜주님이 😂 반응했어요.`
+  설명이나 `반응한 게시글` label, 중복 작성자 행과 가로 구분선은 두지 않는다.
+- 기존 sensitive/CW 본문 숨김, 수신 Profile 식별과 조회 권한 계약은 유지한다. 별도의 숨김 문구·fallback·
+  미디어·액션은 이 결정에서 새로 확정하지 않는다.
+- 시스템 앱 아이콘과 OS 헤더·외곽은 OS 영역이다. iOS 기본 접힌 배너에 독립 Reaction 배지를 추가한다고
+  약속하지 않는다. Android 커스텀 펼친 콘텐츠와 iOS 펼친 Notification Content Extension은 이 계약에
+  맞춰 제공하며, 실제 기기에서의 플랫폼·유형 적합성 검증은 남아 있다.
+- 실제 Reaction 종류 전달, 표시 데이터 정렬, 플랫폼별 펼친 UI와 개인정보 경계, 실기기 검증은 후속 구현
+  범위다. 현재 결정은 설계 확정이며 구현·Figma 반영·Native 검증 완료를 뜻하지 않는다. Reaction의
+  모서리 배지와 본문 구성은 다른 알림 종류에 일반화하지 않는다.
 
 ## 표시와 합성
 

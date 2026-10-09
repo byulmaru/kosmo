@@ -1,9 +1,16 @@
 import { getMessaging } from '@react-native-firebase/messaging';
 import * as Notifications from 'expo-notifications';
+import { NativeModules, Platform } from 'react-native';
 import type { NotificationPermissionsStatus, NotificationResponse } from 'expo-notifications';
 import type { NativeNotificationPermissionStatus } from './nativeNotificationPermission';
 
 export type { NativeNotificationPermissionStatus } from './nativeNotificationPermission';
+
+const IOS_PUSH_CATEGORY_IDENTIFIER = 'KOSMO_PUSH_PRESENTATION_V1';
+
+export function getNativePushPresentationVersion(): 1 | 0 {
+  return NativeModules.KosmoPushPresentation?.presentationVersion === 1 ? 1 : 0;
+}
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -13,6 +20,12 @@ Notifications.setNotificationHandler({
     shouldShowList: true,
   }),
 });
+
+if (Platform.OS === 'ios') {
+  void Notifications.setNotificationCategoryAsync(IOS_PUSH_CATEGORY_IDENTIFIER, []).catch(() => {
+    // Category registration must not block token registration or notification delivery.
+  });
+}
 
 function normalizeNativeNotificationPermission(
   permission: NotificationPermissionsStatus,

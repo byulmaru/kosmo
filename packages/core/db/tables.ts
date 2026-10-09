@@ -672,6 +672,7 @@ export const PushInstallations = pgTable(
       .notNull()
       .references(() => Sessions.id, { onDelete: 'cascade' }),
     platform: Enum.pushInstallationPlatform('platform').notNull(),
+    presentationVersion: integer('presentation_version').notNull().default(0),
     token: text('token').notNull(),
     registrationEpoch: datetime('registration_epoch')
       .notNull()

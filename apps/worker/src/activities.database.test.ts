@@ -9,11 +9,14 @@ import {
   ApplicationType,
   InstanceKind,
   InstanceState,
+  MediaSource,
+  MediaState,
   NotificationKind,
   OAuthTokenState,
   PostState,
   PostVisibility,
   ProfileFollowPolicy,
+  ProfileMediaKind,
   ProfileState,
   PushInstallationPlatform,
   SessionState,
@@ -52,6 +55,7 @@ let Accounts: typeof CoreDb.Accounts;
 let ApplicationAuthorizations: typeof CoreDb.ApplicationAuthorizations;
 let Applications: typeof CoreDb.Applications;
 let Instances: typeof CoreDb.Instances;
+let Media: typeof CoreDb.Media;
 let NotificationQuoteJudgments: typeof CoreDb.NotificationQuoteJudgments;
 let Notifications: typeof CoreDb.Notifications;
 let OAuthAuthorizationCodes: typeof CoreDb.OAuthAuthorizationCodes;
@@ -61,7 +65,9 @@ let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
 let ProfileBlocks: typeof CoreDb.ProfileBlocks;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
+let ProfileFollowRequests: typeof CoreDb.ProfileFollowRequests;
 let ProfileMutes: typeof CoreDb.ProfileMutes;
+let ProfileMedia: typeof CoreDb.ProfileMedia;
 let Profiles: typeof CoreDb.Profiles;
 let PushInstallations: typeof CoreDb.PushInstallations;
 let Reactions: typeof CoreDb.Reactions;
@@ -88,6 +94,7 @@ before(async () => {
     db,
     firstOrThrow,
     Instances,
+    Media,
     NotificationQuoteJudgments,
     Notifications,
     OAuthAuthorizationCodes,
@@ -97,7 +104,9 @@ before(async () => {
     Posts,
     ProfileBlocks,
     ProfileFollows,
+    ProfileFollowRequests,
     ProfileMutes,
+    ProfileMedia,
     Profiles,
     PushInstallations,
     Reactions,
@@ -1037,10 +1046,38 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
   process.env.FIREBASE_PROJECT_ID = 'kosmo-push-test';
   const fixture = await createAccountDeletionFixture({ profileStates: [ProfileState.ACTIVE] });
   let postId: string | null = null;
+  let actorId: string | null = null;
+  let avatarId: string | null = null;
 
   try {
     const recipient = fixture.profiles[0]!;
     const actor = await createProfile();
+    actorId = actor.id;
+    await db
+      .update(Profiles)
+      .set({ displayName: '예은', handle: 'yeeun', normalizedHandle: 'yeeun' })
+      .where(eq(Profiles.id, recipient.id));
+    await db
+      .update(Profiles)
+      .set({ displayName: '혜주', handle: 'hyeju', normalizedHandle: 'hyeju' })
+      .where(eq(Profiles.id, actor.id));
+    const avatar = await db
+      .insert(Media)
+      .values({
+        mediaType: 'image/webp',
+        profileId: actor.id,
+        source: MediaSource.REMOTE,
+        state: MediaState.READY,
+        url: 'https://media.example/avatar.webp',
+      })
+      .returning()
+      .then(firstOrThrow);
+    avatarId = avatar.id;
+    await db.insert(ProfileMedia).values({
+      kind: ProfileMediaKind.AVATAR,
+      mediaId: avatar.id,
+      profileId: actor.id,
+    });
     const document = {
       version: 1,
       summary: null,
@@ -1070,21 +1107,62 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
     postId = post.id;
     const reaction = await db
       .insert(Reactions)
-      .values({ postId: post.id, profileId: actor.id, type: '❤️' })
+      .values({ postId: post.id, profileId: actor.id, type: '😂' })
       .returning()
       .then(firstOrThrow);
     const notificationId = await createReactionNotificationActivity(reaction.id);
     assert.ok(notificationId);
 
     const installationRows = await db
-      .select({ id: PushInstallations.id, token: PushInstallations.token })
+      .select({
+        id: PushInstallations.id,
+        platform: PushInstallations.platform,
+        token: PushInstallations.token,
+      })
       .from(PushInstallations)
       .where(eq(PushInstallations.accountId, fixture.account.id));
+    const nativeAndroid = installationRows.find(
+      ({ platform }) => platform === PushInstallationPlatform.ANDROID,
+    );
+    const ios = installationRows.find(({ platform }) => platform === PushInstallationPlatform.IOS);
+    assert.ok(nativeAndroid);
+    assert.ok(ios);
+    await db
+      .update(PushInstallations)
+      .set({ presentationVersion: 1 })
+      .where(eq(PushInstallations.id, nativeAndroid.id));
+    const notificationCreatedAt = await db
+      .select({ createdAt: Notifications.createdAt })
+      .from(Notifications)
+      .where(eq(Notifications.id, notificationId))
+      .then(firstOrThrow)
+      .then(({ createdAt }) => createdAt);
+    const legacySession = await db
+      .select({ id: Sessions.id })
+      .from(Sessions)
+      .where(eq(Sessions.accountId, fixture.account.id))
+      .limit(1)
+      .then(firstOrThrow);
+    const legacyAndroid = await db
+      .insert(PushInstallations)
+      .values({
+        accountId: fixture.account.id,
+        platform: PushInstallationPlatform.ANDROID,
+        presentationVersion: 0,
+        registrationEpoch: notificationCreatedAt,
+        sessionId: legacySession.id,
+        token: `legacy-${crypto.randomUUID()}`,
+      })
+      .returning({ id: PushInstallations.id })
+      .then(firstOrThrow);
     const { listPushNotificationInstallationsActivity, sendPushNotificationActivity } =
       await import('./activities');
 
     const installationIds = await listPushNotificationInstallationsActivity(notificationId);
-    assert.deepEqual([...installationIds].sort(), installationRows.map(({ id }) => id).sort());
+    assert.deepEqual(
+      [...installationIds].sort(),
+      [...installationRows.map(({ id }) => id), legacyAndroid.id].sort(),
+    );
     assert.equal(
       installationIds.some((id) => installationRows.some(({ token }) => token === id)),
       false,
@@ -1106,32 +1184,93 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
       return 'projects/kosmo-push-test/messages/push-test';
     });
 
-    await sendPushNotificationActivity(notificationId, installationIds[0]!);
-    const payload = sent[0];
+    await sendPushNotificationActivity(notificationId, nativeAndroid.id);
+    await sendPushNotificationActivity(notificationId, legacyAndroid.id);
+    await sendPushNotificationActivity(notificationId, ios.id);
+    const nativePayload = sent[0];
+    assert.ok(nativePayload);
+    assert.equal(nativePayload.notification, undefined);
+    assert.equal(nativePayload.android?.priority, 'high');
+    assert.equal(nativePayload.apns?.payload?.aps?.category, undefined);
+    assert.equal(nativePayload.data?.title, '혜주');
+    assert.equal(nativePayload.data?.message, '혜주 님이 예은(@yeeun) 님에게 😂를 남겼습니다.');
+    const payload = sent[1];
     assert.ok(payload);
     const { encodeGlobalId } = await import('@kosmo/core/global-id');
     assert.deepEqual(payload.notification, {
-      title: actor.displayName,
-      body: '이 게시글에 반응했습니다: Read the article',
+      title: '혜주',
+      body: '혜주 님이 예은(@yeeun) 님에게 😂를 남겼습니다.',
     });
+    assert.equal(payload.apns?.payload?.aps?.category, undefined);
+    assert.equal(payload.android?.priority, undefined);
+    assert.deepEqual(sent[2]?.notification, payload.notification);
+    assert.equal(sent[2]?.apns?.payload?.aps?.category, 'KOSMO_PUSH_PRESENTATION_V1');
     assert.deepEqual(payload.data, {
+      actorAvatarUrl: 'https://media.example/avatar.webp',
+      actorHandle: '@hyeju',
+      actorName: '혜주',
+      href: `/@yeeun/${encodeGlobalId('Post', post.id)}`,
+      kind: NotificationKind.REACTION,
       notificationId: encodeGlobalId('ReactionNotification', notificationId),
+      postText: 'Read the article',
+      presentationVersion: '1',
+      reaction: '😂',
+      recipientHandle: '@yeeun',
+      recipientName: '예은',
       recipientProfileId: encodeGlobalId('Profile', recipient.id),
-      href: `/@${recipient.handle}/${encodeGlobalId('Post', post.id)}`,
     });
     assert.ok((payload.android?.ttl ?? 0) > 0);
     assert.ok((payload.android?.ttl ?? Number.POSITIVE_INFINITY) <= 24 * 60 * 60 * 1000);
 
     const contentId = post.currentContentId;
     assert.ok(contentId);
+    const emojiText = '😀'.repeat(160);
+    const emojiDocument = {
+      version: 1,
+      summary: null,
+      body: {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [{ type: 'text', text: emojiText }],
+          },
+        ],
+      },
+    } as const;
+    await db
+      .update(PostContents)
+      .set({ document: emojiDocument })
+      .where(eq(PostContents.id, contentId));
+    await db
+      .update(Media)
+      .set({ url: `https://media.example/${'x'.repeat(4000)}` })
+      .where(eq(Media.id, avatarId));
+    await sendPushNotificationActivity(notificationId, nativeAndroid.id);
+    const oversizedAvatarPayload = sent[3];
+    assert.ok(oversizedAvatarPayload);
+    assert.equal(oversizedAvatarPayload.data?.actorAvatarUrl, undefined);
+    assert.equal(oversizedAvatarPayload.data?.href, `/@yeeun/${encodeGlobalId('Post', post.id)}`);
+    assert.equal(oversizedAvatarPayload.data?.postText, emojiText);
+    assert.equal(oversizedAvatarPayload.notification, undefined);
+    const serializedWithoutToken = {
+      android: oversizedAvatarPayload.android,
+      apns: oversizedAvatarPayload.apns,
+      data: oversizedAvatarPayload.data,
+      notification: oversizedAvatarPayload.notification,
+    };
+    assert.ok(new TextEncoder().encode(JSON.stringify(serializedWithoutToken)).byteLength < 4096);
+
     const warningDocument = { ...document, summary: 'Private warning text' };
     await db
       .update(PostContents)
       .set({ document: warningDocument })
       .where(eq(PostContents.id, contentId));
-    await sendPushNotificationActivity(notificationId, installationIds[0]!);
-    assert.equal(sent[1]?.notification?.body, '이 게시글에 반응했습니다');
-    assert.equal(sent[1]?.notification?.body.includes('Private warning text'), false);
+    await sendPushNotificationActivity(notificationId, nativeAndroid.id);
+    assert.equal(sent[4]?.notification, undefined);
+    assert.equal(sent[4]?.data?.postText, undefined);
+    assert.equal(sent[4]?.data?.message, '혜주 님이 예은(@yeeun) 님에게 😂를 남겼습니다.');
+    assert.equal(sent[4]?.data?.message?.includes('Private warning text'), false);
 
     const sensitiveDocument = {
       ...document,
@@ -1141,11 +1280,251 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
       .update(PostContents)
       .set({ document: sensitiveDocument })
       .where(eq(PostContents.id, contentId));
-    await sendPushNotificationActivity(notificationId, installationIds[0]!);
-    assert.equal(sent[2]?.notification?.body, '이 게시글에 반응했습니다');
-    assert.equal(sent[2]?.notification?.body.includes('Read the article'), false);
+    await sendPushNotificationActivity(notificationId, nativeAndroid.id);
+    assert.equal(sent[5]?.notification, undefined);
+    assert.equal(sent[5]?.data?.postText, undefined);
+    assert.equal(sent[5]?.data?.message, '혜주 님이 예은(@yeeun) 님에게 😂를 남겼습니다.');
+    assert.equal(sent[5]?.data?.message?.includes('Read the article'), false);
   } finally {
     if (postId) {
+      await db.update(Posts).set({ currentContentId: null }).where(eq(Posts.id, postId));
+      await db.delete(PostContents).where(eq(PostContents.postId, postId));
+      await db.delete(Posts).where(eq(Posts.id, postId));
+    }
+    if (actorId) {
+      await db.delete(ProfileMedia).where(eq(ProfileMedia.profileId, actorId));
+    }
+    if (avatarId) {
+      await db.delete(Media).where(eq(Media.id, avatarId));
+    }
+    await cleanupAccountDeletionFixture(fixture);
+    if (previousProjectId === undefined) {
+      delete process.env.FIREBASE_PROJECT_ID;
+    } else {
+      process.env.FIREBASE_PROJECT_ID = previousProjectId;
+    }
+  }
+});
+
+test('Push Notification Activity는 모든 Notification 종류의 접힌 행동 요약과 recipient를 표시한다', async (t) => {
+  const previousProjectId = process.env.FIREBASE_PROJECT_ID;
+  process.env.FIREBASE_PROJECT_ID = 'kosmo-push-test';
+  const fixture = await createAccountDeletionFixture({ profileStates: [ProfileState.ACTIVE] });
+  const postIds: string[] = [];
+
+  try {
+    const recipient = fixture.profiles[0]!;
+    const actor = await createProfile();
+    await db
+      .update(Profiles)
+      .set({ displayName: '수신자', handle: 'recipient', normalizedHandle: 'recipient' })
+      .where(eq(Profiles.id, recipient.id));
+    await db
+      .update(Profiles)
+      .set({ displayName: '행위자', handle: 'actor', normalizedHandle: 'actor' })
+      .where(eq(Profiles.id, actor.id));
+
+    const { post: target } = await createCorePost({
+      document: postContentDocumentFromText('target'),
+      origin: 'LOCAL',
+      profileId: recipient.id,
+      visibility: PostVisibility.PUBLIC,
+    });
+    postIds.push(target.id);
+    const { post: reply } = await createCorePost({
+      document: postContentDocumentFromText('reply'),
+      origin: 'LOCAL',
+      profileId: actor.id,
+      replyParentId: target.id,
+      visibility: PostVisibility.PUBLIC,
+    });
+    postIds.push(reply.id);
+    const { post: quote } = await createCorePost({
+      document: postContentDocumentFromText('quote'),
+      origin: 'LOCAL',
+      profileId: actor.id,
+      repostSourceId: target.id,
+      visibility: PostVisibility.PUBLIC,
+    });
+    postIds.push(quote.id);
+    const { repost } = await repostPost({
+      actorProfileId: actor.id,
+      origin: 'LOCAL',
+      sourcePostId: target.id,
+    });
+    postIds.push(repost.id);
+    const { post: mention } = await createCorePost({
+      document: {
+        body: {
+          content: [
+            {
+              content: [
+                { text: 'mention ', type: 'text' },
+                { attrs: { profileId: recipient.id }, type: 'mention' },
+              ],
+              type: 'paragraph',
+            },
+          ],
+          type: 'doc',
+        },
+        summary: null,
+        version: 1,
+      },
+      authoredBodyText: 'mention @recipient',
+      origin: 'LOCAL',
+      profileId: actor.id,
+      visibility: PostVisibility.PUBLIC,
+    });
+    postIds.push(mention.id);
+    const { listPushNotificationInstallationsActivity, sendPushNotificationActivity } =
+      await import('./activities');
+
+    const follow = await db
+      .insert(ProfileFollows)
+      .values({ followerProfileId: actor.id, followeeProfileId: recipient.id })
+      .returning()
+      .then(firstOrThrow);
+    const followRequest = await db
+      .insert(ProfileFollowRequests)
+      .values({ followerProfileId: actor.id, followeeProfileId: recipient.id })
+      .returning()
+      .then(firstOrThrow);
+    const reaction = await db
+      .insert(Reactions)
+      .values({ postId: target.id, profileId: actor.id, type: '😂' })
+      .returning()
+      .then(firstOrThrow);
+    const notificationSources = [
+      [NotificationKind.FOLLOW, follow.id],
+      [NotificationKind.FOLLOW_REQUEST, followRequest.id],
+      [NotificationKind.REACTION, reaction.id],
+      [NotificationKind.REPOST, repost.id],
+      [NotificationKind.REPLY, reply.id],
+      [NotificationKind.QUOTE, quote.id],
+      [NotificationKind.MENTION, mention.id],
+    ] as const;
+    const notifications = await Promise.all(
+      notificationSources.map(([kind, sourceId]) =>
+        db
+          .insert(Notifications)
+          .values({ kind, recipientProfileId: recipient.id, sourceId })
+          .returning({ id: Notifications.id })
+          .then(firstOrThrow),
+      ),
+    );
+
+    const installationIds = await listPushNotificationInstallationsActivity(notifications[0]!.id);
+    assert.ok(installationIds[0]);
+    const { applicationDefault, getApps, initializeApp } = await import('firebase-admin/app');
+    const { getMessaging } = await import('firebase-admin/messaging');
+    const app =
+      getApps().find(({ name }) => name === '[DEFAULT]') ??
+      initializeApp({
+        credential: applicationDefault(),
+        projectId: process.env.FIREBASE_PROJECT_ID,
+      });
+    const messaging = getMessaging(app);
+    type FcmMessage = Parameters<typeof messaging.send>[0];
+    const sent: FcmMessage[] = [];
+    t.mock.method(messaging, 'send', async (message: FcmMessage) => {
+      sent.push(message);
+      return 'projects/kosmo-push-test/messages/summary-test';
+    });
+
+    for (const notification of notifications) {
+      await sendPushNotificationActivity(notification.id, installationIds[0]);
+    }
+
+    assert.deepEqual(
+      sent.map(({ data, notification }) => ({
+        body: notification?.body,
+        data: {
+          actorName: data?.actorName,
+          kind: data?.kind,
+          recipientHandle: data?.recipientHandle,
+          recipientName: data?.recipientName,
+          reaction: data?.reaction,
+        },
+      })),
+      [
+        {
+          body: '행위자 님이 수신자(@recipient) 님을 팔로우했습니다.',
+          data: {
+            actorName: '행위자',
+            kind: NotificationKind.FOLLOW,
+            recipientHandle: '@recipient',
+            recipientName: '수신자',
+            reaction: undefined,
+          },
+        },
+        {
+          body: '행위자 님이 수신자(@recipient) 님에게 팔로우를 요청했습니다.',
+          data: {
+            actorName: '행위자',
+            kind: NotificationKind.FOLLOW_REQUEST,
+            recipientHandle: '@recipient',
+            recipientName: '수신자',
+            reaction: undefined,
+          },
+        },
+        {
+          body: '행위자 님이 수신자(@recipient) 님에게 😂를 남겼습니다.',
+          data: {
+            actorName: '행위자',
+            kind: NotificationKind.REACTION,
+            recipientHandle: '@recipient',
+            recipientName: '수신자',
+            reaction: '😂',
+          },
+        },
+        {
+          body: '행위자 님이 수신자(@recipient) 님의 게시글을 재게시했습니다.',
+          data: {
+            actorName: '행위자',
+            kind: NotificationKind.REPOST,
+            recipientHandle: '@recipient',
+            recipientName: '수신자',
+            reaction: undefined,
+          },
+        },
+        {
+          body: '행위자 님이 수신자(@recipient) 님의 게시글에 답글을 달았습니다.',
+          data: {
+            actorName: '행위자',
+            kind: NotificationKind.REPLY,
+            recipientHandle: '@recipient',
+            recipientName: '수신자',
+            reaction: undefined,
+          },
+        },
+        {
+          body: '행위자 님이 수신자(@recipient) 님의 게시글을 인용했습니다.',
+          data: {
+            actorName: '행위자',
+            kind: NotificationKind.QUOTE,
+            recipientHandle: '@recipient',
+            recipientName: '수신자',
+            reaction: undefined,
+          },
+        },
+        {
+          body: '행위자 님이 수신자(@recipient) 님을 언급했습니다.',
+          data: {
+            actorName: '행위자',
+            kind: NotificationKind.MENTION,
+            recipientHandle: '@recipient',
+            recipientName: '수신자',
+            reaction: undefined,
+          },
+        },
+      ],
+    );
+    assert.equal(
+      sent.every(({ notification }) => !notification?.body?.includes('target')),
+      true,
+    );
+  } finally {
+    for (const postId of [...postIds].reverse()) {
       await db.update(Posts).set({ currentContentId: null }).where(eq(Posts.id, postId));
       await db.delete(PostContents).where(eq(PostContents.postId, postId));
       await db.delete(Posts).where(eq(Posts.id, postId));
@@ -1403,12 +1782,19 @@ test('Mention Push Notification은 원인 Post의 Mention 타입·경로·안전
     const { encodeGlobalId } = await import('@kosmo/core/global-id');
     assert.deepEqual(payload.notification, {
       title: author.displayName,
-      body: '회원님을 언급했습니다: Mention source preview',
+      body: `${author.displayName} 님이 ${recipient.displayName}(@${recipient.handle}) 님을 언급했습니다.`,
     });
     assert.deepEqual(payload.data, {
-      notificationId: encodeGlobalId('MentionNotification', notificationId),
-      recipientProfileId: encodeGlobalId('Profile', recipient.id),
+      actorHandle: `@${author.handle}@${author.handle}.example`,
+      actorName: author.displayName,
       href: `/@${author.handle}@${author.handle}.example/${encodeGlobalId('Post', post.id)}`,
+      kind: NotificationKind.MENTION,
+      notificationId: encodeGlobalId('MentionNotification', notificationId),
+      postText: 'Mention source preview',
+      presentationVersion: '1',
+      recipientHandle: `@${recipient.handle}`,
+      recipientName: recipient.displayName,
+      recipientProfileId: encodeGlobalId('Profile', recipient.id),
     });
   } finally {
     if (postId) {

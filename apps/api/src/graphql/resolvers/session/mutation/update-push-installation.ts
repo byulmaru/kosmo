@@ -20,6 +20,10 @@ builder.mutationField('updatePushInstallation', (t) =>
     input: {
       id: t.input.globalID(),
       platform: t.input.field({ type: PushInstallationPlatform }),
+      presentationVersion: t.input.int({
+        required: false,
+        validate: z.number().int().min(0).max(1).optional(),
+      }),
       token: t.input.string({ validate: z.string().min(1).max(4096) }),
     },
     resolve: async (_, { input }, ctx) => {
@@ -35,6 +39,7 @@ builder.mutationField('updatePushInstallation', (t) =>
           .update(PushInstallations)
           .set({
             platform: input.platform,
+            presentationVersion: input.presentationVersion ?? 0,
             token: input.token,
             updatedAt: sql`now()`,
           })

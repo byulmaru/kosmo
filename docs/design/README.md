@@ -36,6 +36,7 @@ KOSMO의 UI/시각 디자인, 상호작용 표현, 접근성 결정을 기록하
 - [profile-tags.md](./profile-tags.md) — Profile Tag 편집·공개 표시의 플랫폼 공통 계약
 - [hashtag-related-profiles.md](./hashtag-related-profiles.md) — Hashtag 관련 Profile 목록 탐색의 결과·상태 계약
 - [local-timeline.md](./local-timeline.md) — Home·Local 타임라인 탭, route, 상태와 재조회 계약
+- [notifications.md](./notifications.md) — 인앱 알림과 Native Push의 접힘·펼침 표시 경계
 
 ## 갱신 규칙
 

@@ -69,6 +69,27 @@ export function parseNativePushTapTarget(value: unknown): NativePushTapTarget | 
   return null;
 }
 
+export function parseNativePushResponseTapTarget(
+  response: NotificationResponse,
+): NativePushTapTarget | null {
+  const content = response.notification.request.content;
+  const contentTarget = parseNativePushTapTarget(content.data);
+  if (contentTarget) {
+    return contentTarget;
+  }
+
+  const trigger = response.notification.request.trigger;
+  if (!isRecord(trigger)) {
+    return null;
+  }
+  const triggerRecord = trigger as RecordValue;
+  if (triggerRecord.type !== 'push') {
+    return null;
+  }
+
+  return parseNativePushTapTarget(triggerRecord.payload);
+}
+
 export function nativePushResponseKey(response: NotificationResponse): string | null {
   const identifier = nonEmptyString(response.notification.request.identifier);
   return identifier ? `${identifier}:${response.actionIdentifier}` : null;

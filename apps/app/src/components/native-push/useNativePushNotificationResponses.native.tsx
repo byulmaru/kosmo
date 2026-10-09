@@ -10,7 +10,7 @@ import {
   subscribeToNativeNotificationResponses,
 } from './nativePushClient';
 import { prepareNativePushNavigation } from './pushNavigation';
-import { nativePushResponseKey, parseNativePushTapTarget } from './pushPayload';
+import { nativePushResponseKey, parseNativePushResponseTapTarget } from './pushPayload';
 import type { NotificationResponse } from 'expo-notifications';
 import type { NativePushSelectProfileMutation as NativePushSelectProfileMutationType } from './__generated__/NativePushSelectProfileMutation.graphql';
 
@@ -86,7 +86,7 @@ export function useNativePushNotificationResponses() {
         return;
       }
 
-      const envelope = parseNativePushTapTarget(response.notification.request.content.data);
+      const envelope = parseNativePushResponseTapTarget(response);
       if (!envelope) {
         markResponseHandled(response);
         fallbackToNotifications();
