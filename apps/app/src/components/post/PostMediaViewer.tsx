@@ -326,6 +326,14 @@ export function PostMediaViewerContent({ actionBar, post: postKey, wideDetail }:
     },
     [bodyMeasurementKey],
   );
+  const renderedBody = (
+    <PostBody
+      contentWarningPresentation="revealed"
+      mediaPresentation="hidden"
+      numberOfLines={expanded ? undefined : 3}
+      post={post}
+    />
+  );
   const compactDetail = (
     <View testID="post-media-viewer-detail" style={styles.detailPanel}>
       <View style={styles.author}>
@@ -363,21 +371,11 @@ export function PostMediaViewerContent({ actionBar, post: postKey, wideDetail }:
               tabIndex={0}
               testID="post-media-viewer-body-scroll"
             >
-              <PostBody
-                contentWarningPresentation="revealed"
-                mediaPresentation="hidden"
-                post={post}
-              />
+              {renderedBody}
             </ScrollView>
           ) : (
             <View style={styles.collapsedBody} testID="post-media-viewer-collapsed-body">
-              <Text
-                numberOfLines={3}
-                style={[styles.bodyText, { color: theme.text }]}
-                testID="post-media-viewer-body"
-              >
-                {bodyText}
-              </Text>
+              {renderedBody}
             </View>
           )}
         </PostContentPrivacyBoundary>

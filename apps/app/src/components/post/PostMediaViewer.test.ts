@@ -281,11 +281,7 @@ describe('PostMediaViewer', () => {
 
     assert.equal(currentImage().props.accessibilityLabel, '첫 번째 이미지');
     assert.equal(textContents().includes('네 줄 이상이 될 수 있는 원문입니다.'), true);
-    assert.equal(
-      byTestId('post-media-viewer-body').children.join(''),
-      '네 줄 이상이 될 수 있는 원문입니다.',
-    );
-    assert.equal(renderer?.root.findAllByProps({ testID: 'post-content-renderer' }).length, 0);
+    assert.equal(renderer?.root.findAllByProps({ testID: 'post-content-renderer' }).length, 1);
     assert.equal(rendered('PostContentWarning').length, 0);
     assert.equal(rendered('PostMediaGallery').length, 0);
     assert.equal(rendered('Avatar')[0]?.props.label, '작성자');
@@ -297,7 +293,10 @@ describe('PostMediaViewer', () => {
       }),
     );
     await act(async () => pressable('원문 더 보기').props.onPress());
-    assert.ok(byTestId('post-content-renderer'));
+    assert.equal(renderer?.root.findAllByProps({ testID: 'post-content-renderer' }).length, 1);
+    assert.ok(
+      byTestId('post-media-viewer-body-scroll').findByProps({ testID: 'post-content-renderer' }),
+    );
   });
 
   it('사용자 Media와 Compact 본문만 개인정보 경계 안에 둔다', async () => {
@@ -311,7 +310,7 @@ describe('PostMediaViewer', () => {
     const imageBoundary = byTestId('post-media-viewer-image-privacy-boundary');
     const bodyBoundary = byTestId('post-media-viewer-body-privacy-boundary');
     assert.equal(isDescendant(currentImage(), imageBoundary), true);
-    assert.equal(isDescendant(byTestId('post-media-viewer-body'), bodyBoundary), true);
+    assert.equal(isDescendant(byTestId('post-content-renderer'), bodyBoundary), true);
     assert.equal(isDescendant(pressable('다음 이미지'), imageBoundary), false);
     assert.equal(isDescendant(pressable('원문 더 보기'), bodyBoundary), false);
     assert.equal(isDescendant(byTestId('post-media-viewer-action-bar'), bodyBoundary), false);
@@ -607,7 +606,7 @@ describe('PostMediaViewer', () => {
     assert.ok(byTestId('post-media-viewer-action-bar'));
   });
 
-  it('접힌 원문은 일반 텍스트로, 펼친 원문은 canonical 링크로 표시한다', async () => {
+  it('접힌 원문과 펼친 원문 모두 canonical 링크를 표시하고 연다', async () => {
     const url = 'https://example.com/post';
     const bodyText = `이 링크를 열어 주세요: ${url}`;
     const post = viewerPost({
@@ -641,16 +640,21 @@ describe('PostMediaViewer', () => {
         nativeEvent: { layout: { height: 96 } },
       }),
     );
-    const collapsedBody = byTestId('post-media-viewer-body');
-    assert.equal(collapsedBody.children.join(''), bodyText);
-    assert.equal(collapsedBody.props.numberOfLines, 3);
-    assert.equal(
-      rendered('Text').some((node) => node.props.accessibilityRole === 'link'),
-      false,
-    );
+    const collapsedLink = byTestId('post-media-viewer-collapsed-body').findByProps({
+      accessibilityRole: 'link',
+    });
+    assert.equal(collapsedLink.parent?.props.numberOfLines, 3);
+    assert.equal(collapsedLink.props.accessibilityLabel, `${bodyText}, ${url}`);
     assert.deepEqual(openedUrls, []);
     assert.equal(rendered('PostContentWarning').length, 0);
     assert.equal(rendered('PostMediaGallery').length, 0);
+    await act(async () =>
+      collapsedLink.props.onPress({
+        preventDefault: () => undefined,
+        stopPropagation: () => undefined,
+      }),
+    );
+    assert.deepEqual(openedUrls, [url]);
 
     await act(async () => pressable('원문 더 보기').props.onPress());
     assert.ok(byTestId('post-content-renderer'));
@@ -664,7 +668,7 @@ describe('PostMediaViewer', () => {
         stopPropagation: () => undefined,
       }),
     );
-    assert.deepEqual(openedUrls, [url]);
+    assert.deepEqual(openedUrls, [url, url]);
     assert.equal(rendered('PostContentWarning').length, 0);
     assert.equal(rendered('PostMediaGallery').length, 0);
   });
