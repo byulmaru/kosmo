@@ -1,0 +1,53 @@
+{{- if eq .Values.env "prod" }}
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: kosmo-public-web
+  labels:
+    helm.sh/chart: {{ include "kosmo.chart" . }}
+    app.kubernetes.io/name: monitoring
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/version: {{ .Values.version | quote }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  jobName: kosmo-public
+  interval: 30s
+  scrapeTimeout: 10s
+  module: http_2xx
+  prober:
+    url: prometheus-blackbox-exporter.prometheus.svc:9115
+    scheme: http
+    path: /probe
+  targets:
+    staticConfig:
+      static:
+        - https://kos.moe/health
+      labels:
+        target: kosmo-web
+---
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: kosmo-public-api
+  labels:
+    helm.sh/chart: {{ include "kosmo.chart" . }}
+    app.kubernetes.io/name: monitoring
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/version: {{ .Values.version | quote }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  jobName: kosmo-public
+  interval: 30s
+  scrapeTimeout: 10s
+  module: http_2xx
+  prober:
+    url: prometheus-blackbox-exporter.prometheus.svc:9115
+    scheme: http
+    path: /probe
+  targets:
+    staticConfig:
+      static:
+        - https://api.kos.moe/health
+      labels:
+        target: kosmo-api
+{{- end }}
