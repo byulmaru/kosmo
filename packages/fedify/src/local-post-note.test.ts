@@ -551,6 +551,69 @@ describe('ActivityPub Local Post Note', () => {
     );
   });
 
+  test('uses the configured Local Instance actor URI for Mentions from another Local origin', async () => {
+    const authorOrigin = 'https://author.local.example';
+    const authorInstance = await db
+      .insert(Instances)
+      .values({
+        canonicalOrigin: authorOrigin,
+        domain: 'author.local.example',
+        kind: InstanceKind.LOCAL,
+        state: InstanceState.ACTIVE,
+      })
+      .returning()
+      .then(firstOrThrow);
+    testInstanceIds.push(authorInstance.id);
+    const author = await createProfile({
+      handle: 'other-origin-author',
+      instanceId: authorInstance.id,
+      kind: InstanceKind.LOCAL,
+    });
+    const target = await createProfile({ handle: 'configured-target', kind: InstanceKind.LOCAL });
+    const post = await createPost(author.id);
+    assert.ok(post.currentContentId);
+
+    await db
+      .update(PostContents)
+      .set({
+        document: {
+          body: {
+            content: [
+              {
+                content: [{ attrs: { profileId: target.id }, type: 'mention' }],
+                type: 'paragraph',
+              },
+            ],
+            type: 'doc',
+          },
+          summary: null,
+          version: 1,
+        },
+      })
+      .where(eq(PostContents.id, post.currentContentId));
+    await db.insert(PostMentions).values({
+      postContentId: post.currentContentId,
+      profileId: target.id,
+    });
+
+    const note = await dispatchLocalPostNote(createContext(authorOrigin), { id: post.id });
+    assert.ok(note);
+    assert.equal(note.id?.href, `${authorOrigin}/ap/note/${post.id}`);
+    assert.equal(note.attributionId?.href, `${authorOrigin}/ap/actor/${author.id}`);
+    assert.equal(
+      note.content?.toString(),
+      `<p><span class="h-card"><a href="${publicOrigin}/@configured-target" class="u-url mention">@configured-target</a></span></p>`,
+    );
+
+    const jsonLd = await note.toJsonLd();
+    const serializedTags = (jsonLd as { readonly tag?: unknown }).tag;
+    const serializedTagValues = Array.isArray(serializedTags) ? serializedTags : [serializedTags];
+    assert.deepEqual(
+      serializedTagValues.map((tag) => (tag as { readonly href?: string }).href),
+      [`${publicOrigin}/ap/actor/${target.id}`],
+    );
+  });
+
   test('does not project a partial Note when required Media is unavailable', async () => {
     const author = await createProfile({ handle: 'unavailable-media', kind: InstanceKind.LOCAL });
     const uploading = await createMedia(author.id, { state: MediaState.UPLOADING });
@@ -1288,14 +1351,14 @@ describe('ActivityPub Local Post Note', () => {
   });
 });
 
-const createContext = (): RequestContext<void> => {
-  const federation = createFederation<void>({ kv: new MemoryKvStore(), origin: publicOrigin });
+const createContext = (origin = publicOrigin): RequestContext<void> => {
+  const federation = createFederation<void>({ kv: new MemoryKvStore(), origin });
   federation.setActorDispatcher(
     '/ap/actor/{identifier}',
     (context, identifier) => new Person({ id: context.getActorUri(identifier) }),
   );
   return federation.createContext(
-    new Request(`${publicOrigin}/ap/note/00000000-0000-8000-8000-000000000001`),
+    new Request(`${origin}/ap/note/00000000-0000-8000-8000-000000000001`),
     undefined,
   );
 };

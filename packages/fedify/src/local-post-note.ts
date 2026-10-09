@@ -137,7 +137,6 @@ const parseHttpUrl = (value: string | null): URL | null => {
 };
 
 const projectLocalPostMentions = async (
-  context: LocalPostNoteContext,
   configuredLocalInstance: ConfiguredLocalInstance,
   contentId: string,
   document: PostContentDocumentV1,
@@ -180,7 +179,7 @@ const projectLocalPostMentions = async (
   for (const row of rows) {
     const isLocal = isConfiguredLocalProfile(row, configuredLocalInstance);
     const actorUri = isLocal
-      ? context.getActorUri(row.profileId)
+      ? new URL(`/ap/actor/${row.profileId}`, configuredLocalInstance.canonicalOrigin)
       : row.instanceKind === InstanceKind.ACTIVITYPUB
         ? parseHttpUrl(row.actorUri)
         : null;
@@ -339,7 +338,6 @@ export const projectLocalPostNote = async (
         : undefined;
   const configuredLocalInstance = await resolveConfiguredLocalInstance();
   const { mentionLinks, tags } = await projectLocalPostMentions(
-    context,
     configuredLocalInstance,
     note.contentId,
     note.contentDocument,
