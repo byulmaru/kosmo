@@ -23,7 +23,7 @@ Linear에 기록된 로컬 진단은 HEAD `e0be74da9445b618c1f1aec336f061b7ab573
 
 이번 구현은 공통 Web linking 경계의 좁은 Expo Router patch를 선택했다. 초기 history sync와 state 변경 처리에서 현재 route가 자식 state가 아직 준비되지 않은 실제 layout이고, 계산된 fallback 경로가 route에 보존된 요청 경로와 다를 때 history 쓰기를 건너뛴다. 자식 navigator가 준비되어 요청 경로를 직렬화할 수 있게 되면 일반 history 처리가 이어진다. 이미 같은 경로가 계산되거나 명시적인 nested screen이 전달된 흐름은 그대로 둔다. 이 방식은 Shell/Profile query 경계와 화면의 loading·인가 흐름을 바꾸지 않으면서 두 layout의 공통 Web serializer를 보호한다.
 
-patch 적용 후 runtime behavior와 PostHog payload는 아직 검증하지 않았다. Expo Router 버전 변경 시 patch 유지 여부를 다시 확인해야 한다. A/B 사용자 승인을 일괄 선행 조건으로 두지 않았고, 이전 guard를 그대로 복원하거나 dependency upgrade만으로 해결됐다고 가정하지 않는다.
+재작업한 head의 URL 이력 회귀 검증은 GitHub CI에서 확인한다. Expo Router 버전 변경 시 patch 유지 여부를 다시 확인해야 한다. A/B 사용자 승인을 일괄 선행 조건으로 두지 않았고, 이전 guard를 그대로 복원하거나 dependency upgrade만으로 해결됐다고 가정하지 않는다.
 
 ## 검증할 경계
 
@@ -31,4 +31,4 @@ patch 적용 후 runtime behavior와 PostHog payload는 아직 검증하지 않�
 
 실제 앱·API·격리 PostgreSQL fixture로 정상 응답과 Shell/Profile query 지연을 실행한다. 전체 history를 각 화면의 기대 URL과 비교하고 기존 query·hash와 의도된 redirect를 반영한다. URL 문자열에 `undefined`가 포함되는지만 검사하지 않는다.
 
-PostHog는 localhost에서 초기화하지 않으므로 로컬 analytics 요청 부재만으로 검증하지 않는다. SDK가 활성화된 격리 browser에서 전송을 가로채고 positive control로 정상 pageview 수집을 확인하고 잘못된 pageview가 없는지도 확인한다. 기존 event·identity 정책과 운영 telemetry는 변경하지 않는다.
+사용자의 재작업 지시에 따라 새로고침 전체 구간의 URL 변경 여부를 Playwright history 기록으로 검증한다. 별도 PostHog SDK 전송 E2E와 이를 위한 테스트용 호스트·origin·쿠키 변경은 제거했다. SDK payload나 운영 telemetry의 검증 결과로 해석하지 않는다.

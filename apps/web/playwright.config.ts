@@ -69,9 +69,6 @@ export default defineConfig({
   use: {
     baseURL: webOrigin,
     ...(browserChannel ? { channel: browserChannel } : {}),
-    launchOptions: {
-      args: ['--host-resolver-rules=MAP kosmo-e2e.localhost 127.0.0.1'],
-    },
     screenshot: 'only-on-failure',
     userAgent: browserUserAgent,
   },
