@@ -72,6 +72,22 @@ export const ContentReportDeliveryStatus = {
 } as const;
 export type ContentReportDeliveryStatus = keyof typeof ContentReportDeliveryStatus;
 
+export const HashtagMuteDecision = {
+  EXCLUDE: 'EXCLUDE',
+  COLLAPSE: 'COLLAPSE',
+} as const;
+export type HashtagMuteDecision = keyof typeof HashtagMuteDecision;
+
+export const HashtagMuteScope = {
+  HOME: 'HOME',
+  LOCAL: 'LOCAL',
+  PROFILE: 'PROFILE',
+  HASHTAG: 'HASHTAG',
+  SEARCH: 'SEARCH',
+  NOTIFICATION: 'NOTIFICATION',
+} as const;
+export type HashtagMuteScope = keyof typeof HashtagMuteScope;
+
 export const InstanceKind = {
   LOCAL: 'LOCAL',
   ACTIVITYPUB: 'ACTIVITYPUB',

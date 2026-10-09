@@ -14,6 +14,8 @@ createEnumRef('AccountProfileRole');
 createEnumRef('ContentReportDeliveryStatus');
 createEnumRef('ContentReportReason');
 createEnumRef('ContentReportTargetType');
+createEnumRef('HashtagMuteDecision');
+createEnumRef('HashtagMuteScope');
 createEnumRef('MediaState');
 createEnumRef('PostState');
 createEnumRef('PostVisibility');

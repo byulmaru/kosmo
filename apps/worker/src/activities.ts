@@ -10,6 +10,7 @@ export {
   followImportedProfileActivity,
   resolveImportedLocalProfileActivity,
 } from './activities/following-accounts-import';
+export { executeHashtagMuteRuleActivity } from './activities/hashtag-mute-rule';
 export { createNotificationActivity } from './activities/notification';
 export {
   executeProfileBlockTransitionActivity,
