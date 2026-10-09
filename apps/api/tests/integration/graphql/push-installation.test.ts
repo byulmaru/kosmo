@@ -35,11 +35,28 @@ type RegisterResult = {
   registerPushInstallation: { id: string };
 };
 
-const registerMutation = (platform: PushInstallationPlatform, token: string) =>
-  `mutation { registerPushInstallation(input: { platform: ${platform}, token: "${token}" }) { id } }`;
+const registerMutation = (
+  platform: PushInstallationPlatform,
+  token: string,
+  presentationVersion?: number | null,
+) =>
+  `mutation { registerPushInstallation(input: { platform: ${platform}, token: "${token}"${
+    presentationVersion === undefined
+      ? ''
+      : `, presentationVersion: ${presentationVersion === null ? 'null' : presentationVersion}`
+  } }) { id } }`;
 
-const updateMutation = (id: string, platform: PushInstallationPlatform, token: string) =>
-  `mutation { updatePushInstallation(input: { id: "${id}", platform: ${platform}, token: "${token}" }) { completed } }`;
+const updateMutation = (
+  id: string,
+  platform: PushInstallationPlatform,
+  token: string,
+  presentationVersion?: number | null,
+) =>
+  `mutation { updatePushInstallation(input: { id: "${id}", platform: ${platform}, token: "${token}"${
+    presentationVersion === undefined
+      ? ''
+      : `, presentationVersion: ${presentationVersion === null ? 'null' : presentationVersion}`
+  } }) { completed } }`;
 
 const unregisterMutation = (id: string) =>
   `mutation { unregisterPushInstallation(input: { id: "${id}" }) { completed } }`;
@@ -465,6 +482,59 @@ test('Account 소유권·동일 Account 다른 Session 관리와 token 이동을
     );
   } finally {
     await cleanup([owner.account.id, other.account.id]);
+  }
+});
+
+test('presentation capability는 등록 기본값·명시값과 갱신 정규화를 적용한다', async () => {
+  const { account, session } = await createSession();
+
+  try {
+    const legacy = await request<RegisterResult>(
+      registerMutation(PushInstallationPlatform.ANDROID, 'legacy-capability-token'),
+      session.token,
+    );
+    const legacyId = decodeInstallationId(legacy);
+    const native = await request<RegisterResult>(
+      registerMutation(PushInstallationPlatform.ANDROID, 'native-capability-token', 1),
+      session.token,
+    );
+    const nativeId = decodeInstallationId(native);
+
+    assert.deepEqual(
+      await db
+        .select({ presentationVersion: PushInstallations.presentationVersion })
+        .from(PushInstallations)
+        .where(inArray(PushInstallations.id, [legacyId, nativeId])),
+      [{ presentationVersion: 0 }, { presentationVersion: 1 }],
+    );
+
+    const reset = await request<{ updatePushInstallation: { completed: boolean } }>(
+      updateMutation(
+        native.data!.registerPushInstallation.id,
+        PushInstallationPlatform.ANDROID,
+        'native-capability-token-refreshed',
+      ),
+      session.token,
+    );
+    assert.deepEqual(reset, {
+      data: { updatePushInstallation: { completed: true } },
+    });
+    assert.deepEqual(
+      await db
+        .select({ presentationVersion: PushInstallations.presentationVersion })
+        .from(PushInstallations)
+        .where(eq(PushInstallations.id, nativeId)),
+      [{ presentationVersion: 0 }],
+    );
+
+    const invalid = await request<unknown>(
+      registerMutation(PushInstallationPlatform.ANDROID, 'invalid-capability-token', 2),
+      session.token,
+    );
+    assert.equal(invalid.data, null);
+    assert.equal(invalid.errors?.[0]?.extensions?.code, 'VALIDATION');
+  } finally {
+    await cleanup([account.id]);
   }
 });
 

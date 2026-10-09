@@ -644,6 +644,7 @@ type RegisterProfileMigrationSourcePayload {
 
 input RegisterPushInstallationInput {
   platform: PushInstallationPlatform!
+  presentationVersion: Int
   token: String!
 }
 
@@ -781,6 +782,7 @@ type UpdateProfilePayload {
 input UpdatePushInstallationInput {
   id: ID!
   platform: PushInstallationPlatform!
+  presentationVersion: Int
   token: String!
 }
 

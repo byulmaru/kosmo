@@ -17,6 +17,10 @@ builder.mutationField('registerPushInstallation', (t) =>
     }),
     input: {
       platform: t.input.field({ type: PushInstallationPlatform }),
+      presentationVersion: t.input.int({
+        required: false,
+        validate: z.number().int().min(0).max(1).optional(),
+      }),
       token: t.input.string({ validate: z.string().min(1).max(4096) }),
     },
     resolve: async (_, { input }, ctx) => {
@@ -55,6 +59,7 @@ builder.mutationField('registerPushInstallation', (t) =>
             .values({
               accountId: ctx.session.accountId,
               platform: input.platform,
+              presentationVersion: input.presentationVersion ?? 0,
               sessionId: ctx.session.id,
               token: input.token,
             })
