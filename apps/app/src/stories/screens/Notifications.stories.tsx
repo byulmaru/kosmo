@@ -20,6 +20,7 @@ import {
   notificationsProfile,
   post,
   profile,
+  quoteNotification,
   reactionNotification,
   replyNotification,
   repostNotification,
@@ -81,6 +82,27 @@ const operationalNotification = {
   readAt: null,
   title: '서비스 점검 안내',
 };
+
+const quoteNotificationPost = notificationPost({
+  bodyText: '알림에서 확인할 인용글 본문입니다.',
+  id: 'notification-quote-post',
+  profile: profile({
+    displayName: '인용 작성자',
+    handle: 'quote-author',
+    id: 'notification-quote-author',
+    relativeHandle: '@quote-author',
+  }),
+  repostSource: post({
+    bodyText: '인용된 원문 미리보기입니다.',
+    id: 'notification-quote-source',
+    profile: profile({
+      displayName: '원문 작성자',
+      handle: 'source-author',
+      id: 'notification-quote-source-author',
+      relativeHandle: '@source-author',
+    }),
+  }),
+});
 
 const emptyProfile = notificationsProfile([], {}, { id: 'notification-profile-empty' });
 const contentProfile = notificationsProfile(
@@ -159,6 +181,16 @@ const mentionProfile = notificationsProfile(
   {},
   { id: 'notification-profile-mention' },
 );
+const quoteProfile = notificationsProfile(
+  [
+    quoteNotification({
+      id: 'notification-quote',
+      post: quoteNotificationPost,
+    }),
+  ],
+  {},
+  { id: 'notification-profile-quote', unreadNotificationCount: 1 },
+);
 const paginationProfile = notificationsProfile(
   [followNotification({ id: 'notification-page-1', profile: unreadFollower })],
   { hasNext: true },
@@ -194,6 +226,7 @@ const storyProfiles = [
   profileA,
   profileB,
   mentionProfile,
+  quoteProfile,
 ];
 
 const NotificationsStoriesQuery = graphql`
@@ -291,6 +324,18 @@ function ReadNavigationList() {
   );
 }
 
+function QuoteReadNavigationList() {
+  const pathname = usePathname();
+  const profileNode = requireProfile(useStoryProfiles(), 6);
+
+  return (
+    <SessionProvider>
+      <Text>{pathname}</Text>
+      <NotificationList profile={profileNode.notificationList!} />
+    </SessionProvider>
+  );
+}
+
 function AuthenticatedReadNavigationList() {
   return (
     <SessionProvider>
@@ -350,6 +395,25 @@ const mentionReadMutationResponse = {
       {
         __typename: 'Profile',
         id: 'notification-profile-mention',
+        unreadNotificationCount: 0,
+      },
+    ],
+  },
+};
+
+const quoteReadMutationResponse = {
+  markNotificationRead: {
+    notifications: [
+      {
+        __typename: 'QuoteNotification',
+        id: 'notification-quote',
+        readAt: '2026-07-21T12:00:00Z',
+      },
+    ],
+    recipientProfiles: [
+      {
+        __typename: 'Profile',
+        id: 'notification-profile-quote',
         unreadNotificationCount: 0,
       },
     ],
@@ -1166,6 +1230,52 @@ export const MentionSelectedProfileScreen: Story = {
     await waitFor(() => expect(item).not.toHaveTextContent('읽지 않은 알림'));
   },
   render: () => <MentionSelectedProfileScreenContent />,
+};
+
+export const QuoteListActivationReadsNotification: Story = {
+  parameters: {
+    controls: { disable: true },
+    relay: {
+      data: { nodes: storyProfiles },
+      mutationRequestObserver: (request: RequestParameters, variables: Variables) =>
+        notificationMutationRequest(request.name, variables),
+      mutationResponse: quoteReadMutationResponse,
+      operationResponses: {
+        SessionProviderQuery: {
+          data: {
+            currentSession: {
+              id: 'notification-session',
+              selectedProfile: { id: 'notification-profile-quote' },
+            },
+            me: { id: 'notification-account', name: 'Notification Story' },
+          },
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    notificationMutationRequest.mockClear();
+    const canvas = within(canvasElement);
+    const quote = canvas.getByTestId('quote-notification-post');
+    const item = quote.closest('[data-testid="notification-list-item"]');
+
+    await expect(quote).toBeVisible();
+    await expect(quote).toHaveTextContent('인용 작성자');
+    await expect(quote).toHaveTextContent('알림에서 확인할 인용글 본문입니다.');
+    await expect(item).toHaveTextContent('읽지 않은 알림');
+
+    await userEvent.click(canvas.getByTestId('post-list-row-body'));
+    await expect(
+      canvas.findByText('/@quote-author/notification-quote-post'),
+    ).resolves.toBeVisible();
+    await expect(notificationMutationRequest).toHaveBeenCalledTimes(1);
+    await expect(notificationMutationRequest).toHaveBeenCalledWith(
+      'NotificationListItemMarkReadMutation',
+      { ids: ['notification-quote'] },
+    );
+    await waitFor(() => expect(item).not.toHaveTextContent('읽지 않은 알림'));
+  },
+  render: () => <QuoteReadNavigationList />,
 };
 
 export const NoSelectedProfileScreen: Story = {

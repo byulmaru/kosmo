@@ -424,6 +424,26 @@ export function repostNotification({
   };
 }
 
+export function quoteNotification({
+  createdAt = Temporal.Now.instant().subtract({ minutes: 2 }).toString(),
+  id = 'notification-quote-1',
+  post: relatedPost = post(),
+  readAt = null,
+}: {
+  createdAt?: string;
+  id?: string;
+  post?: StoryPost;
+  readAt?: string | null;
+} = {}) {
+  return {
+    __typename: 'QuoteNotification' as const,
+    createdAt,
+    id,
+    post: relatedPost,
+    readAt,
+  };
+}
+
 export function notificationsProfile(
   notifications: Array<
     | ReturnType<typeof followNotification>
@@ -432,6 +452,7 @@ export function notificationsProfile(
     | ReturnType<typeof mentionNotification>
     | ReturnType<typeof replyNotification>
     | ReturnType<typeof repostNotification>
+    | ReturnType<typeof quoteNotification>
     | {
         __typename: 'OperationalNotification';
         body: string | null;

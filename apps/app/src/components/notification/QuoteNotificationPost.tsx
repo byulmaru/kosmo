@@ -8,7 +8,6 @@ const QuoteNotificationPostFragment = graphql`
   }
 `;
 
-/** Presentation-only Quote surface until the concrete QuoteNotification API is available. */
 export function QuoteNotificationPost({
   onActivate,
   post: postKey,
