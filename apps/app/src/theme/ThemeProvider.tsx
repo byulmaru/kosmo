@@ -36,15 +36,16 @@ function useSystemReducedMotion(enabled: boolean): boolean {
     }
 
     let mounted = true;
+    let eventReceived = false;
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', (value) => {
+      eventReceived = true;
+      setReducedMotion(value);
+    });
     void AccessibilityInfo.isReduceMotionEnabled().then((value) => {
-      if (mounted) {
+      if (mounted && !eventReceived) {
         setReducedMotion(value);
       }
     });
-    const subscription = AccessibilityInfo.addEventListener(
-      'reduceMotionChanged',
-      setReducedMotion,
-    );
 
     return () => {
       mounted = false;
