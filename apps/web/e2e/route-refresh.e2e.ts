@@ -30,6 +30,15 @@ type PostHogPayload = {
   properties?: { $current_url?: string };
 };
 
+type PostHogRequestDiagnostic = {
+  url: string;
+  contentType: string | undefined;
+  compression: string | null;
+  bodyBytes: number;
+  events?: string[];
+  parseError?: string;
+};
+
 function parsePostHogEvents(
   body: Buffer,
   requestUrl: string,
@@ -101,6 +110,38 @@ async function expectHistoryAt(page: Page, expectedPath: string) {
 
 async function clearHistoryRecorder(page: Page) {
   await page.evaluate((storageKey) => sessionStorage.setItem(storageKey, '[]'), historyStorageKey);
+}
+
+async function expectPostHogPageview(
+  page: Page,
+  pageviews: Array<{ currentUrl?: string }>,
+  requests: PostHogRequestDiagnostic[],
+  expectedPath: string,
+  startIndex: number,
+) {
+  try {
+    await expect
+      .poll(() =>
+        pageviews
+          .slice(startIndex)
+          .some(({ currentUrl }) => getPageviewPath(currentUrl) === expectedPath),
+      )
+      .toBe(true);
+  } catch (cause) {
+    const runtime = await page.evaluate(() => ({
+      channel: (globalThis as typeof globalThis & { __KOSMO_CHANNEL__?: unknown })
+        .__KOSMO_CHANNEL__,
+      hostname: window.location.hostname,
+    }));
+    const failure = cause instanceof Error ? cause.message : String(cause);
+    throw new Error(
+      `PostHog pageview missing for ${expectedPath}. ${failure}\n${JSON.stringify({
+        runtime,
+        requests,
+        pageviews,
+      })}`,
+    );
+  }
 }
 
 async function createRoutes(): Promise<RouteCase[]> {
@@ -212,13 +253,16 @@ for (const delayed of [false, true]) {
       });
     }
 
-    // Establish this origin before clearing sessionStorage for the first measured document.
-    await page.goto('/');
     const routes = await createRoutes();
+    let hasLoadedRoute = false;
 
     for (const route of routes) {
-      await clearHistoryRecorder(page);
+      if (hasLoadedRoute) {
+        await clearHistoryRecorder(page);
+      }
+
       await page.goto(route.path);
+      hasLoadedRoute = true;
       await route.verify(page);
       await expect
         .poll(() => {
@@ -256,6 +300,7 @@ test('활성 PostHog SDK는 새로고침 중 잘못된 URL의 pageview를 보내
   await installHistoryRecorder(page);
 
   const pageviews: Array<{ currentUrl?: string }> = [];
+  const postHogRequests: PostHogRequestDiagnostic[] = [];
   await page.route('**/channel.js', (route) =>
     route.fulfill({
       body: 'globalThis.__KOSMO_CHANNEL__ = "prod";',
@@ -266,16 +311,24 @@ test('활성 PostHog SDK는 새로고침 중 잘못된 URL의 pageview를 보내
     const request = route.request();
     const body = request.postDataBuffer();
     if (body) {
+      const diagnostic: PostHogRequestDiagnostic = {
+        url: request.url(),
+        contentType: request.headers()['content-type'],
+        compression: new URL(request.url()).searchParams.get('compression'),
+        bodyBytes: body.length,
+      };
+      postHogRequests.push(diagnostic);
       try {
-        const payload = parsePostHogEvents(body, request.url(), request.headers()['content-type']);
+        const payload = parsePostHogEvents(body, diagnostic.url, diagnostic.contentType);
         const events = payload.batch ?? [payload];
+        diagnostic.events = events.map(({ event }) => event ?? '<missing event name>');
         for (const event of events) {
           if (event.event === '$pageview') {
             pageviews.push({ currentUrl: event.properties?.$current_url });
           }
         }
-      } catch {
-        // The SDK can use a transport encoding the JSON body; only parsed pageviews are counted.
+      } catch (cause) {
+        diagnostic.parseError = cause instanceof Error ? cause.message : String(cause);
       }
     }
 
@@ -318,13 +371,7 @@ test('활성 PostHog SDK는 새로고침 중 잘못된 URL의 pageview를 보내
     await page.goto(route.path);
     hasLoadedRoute = true;
     await route.verify(page);
-    await expect
-      .poll(() =>
-        pageviews
-          .slice(directPageviewStart)
-          .some(({ currentUrl }) => getPageviewPath(currentUrl) === route.path),
-      )
-      .toBe(true);
+    await expectPostHogPageview(page, pageviews, postHogRequests, route.path, directPageviewStart);
     expect(
       pageviews.every(({ currentUrl }) => validPaths.has(getPageviewPath(currentUrl))),
       JSON.stringify(pageviews),
@@ -335,13 +382,7 @@ test('활성 PostHog SDK는 새로고침 중 잘못된 URL의 pageview를 보내
     const reloadPageviewStart = pageviews.length;
     await page.reload();
     await route.verify(page);
-    await expect
-      .poll(() =>
-        pageviews
-          .slice(reloadPageviewStart)
-          .some(({ currentUrl }) => getPageviewPath(currentUrl) === route.path),
-      )
-      .toBe(true);
+    await expectPostHogPageview(page, pageviews, postHogRequests, route.path, reloadPageviewStart);
     expect(
       pageviews.every(({ currentUrl }) => validPaths.has(getPageviewPath(currentUrl))),
       JSON.stringify(pageviews),
@@ -354,11 +395,11 @@ test('존재하지 않는 route는 직접 접근과 새로고침에서 요청한
   await installHistoryRecorder(page);
   await page.goto('/e2e-route-refresh-not-found');
 
-  await expect(page.getByRole('heading', { name: '페이지를 찾을 수 없어요' })).toBeVisible();
+  await expect(page.getByText('페이지를 찾을 수 없어요', { exact: true })).toBeVisible();
   await expectHistoryAt(page, '/e2e-route-refresh-not-found');
   await clearHistoryRecorder(page);
   await page.reload();
 
-  await expect(page.getByRole('heading', { name: '페이지를 찾을 수 없어요' })).toBeVisible();
+  await expect(page.getByText('페이지를 찾을 수 없어요', { exact: true })).toBeVisible();
   await expectHistoryAt(page, '/e2e-route-refresh-not-found');
 });
