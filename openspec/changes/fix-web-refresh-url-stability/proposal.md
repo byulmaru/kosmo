@@ -1,50 +1,22 @@
-## Why
+# PROD-1103 버그 수정 계획
 
-새로고침과 직접 접근 중 주소창이 잠시 다른 경로로 바뀐다. 최종 화면이 정상이어도 사용자는 잘못된 주소를 보고, 같은 시점에 URL을 읽는 분석 도구에도 영향을 줄 수 있다. PROD-1103은 `/home`의 개별 링크가 아니라 공통 Web routing 경계를 수정하도록 요구한다.
+## 목표와 근거
 
-## Goal
+[PROD-1103](https://linear.app/byulmaru/issue/PROD-1103)에 기록된 Web 새로고침 URL 오류를 수정한다. 이 문서는 기존 동작을 복구하기 위한 작업 메모다. 완료 조건은 Linear와 적용되는 canonical 문서를 따르며, 별도의 delta spec은 만들지 않는다.
 
-유효한 정적·동적·중첩 Web route에 직접 접근하거나 새로고침할 때, 초기 로딩과 지연된 Relay 응답 중에도 원래 URL을 유지한다. 기존의 의도된 이동과 인증 redirect는 유지한다.
+새로고침 중 하위 navigation state가 준비되기 전에 URL을 계산하면서 정적 화면은 `/undefined/undefined`, 프로필은 `/@프로필/undefined`로 바뀐다. 게시물에서는 불필요한 query가 붙거나 `/reactions`가 잠시 사라진다. 최종 URL만 확인하면 이 오류를 놓친다.
 
-## What Changes
+## 범위와 제약
 
-- 공통 라우터 경계에서 준비되지 않은 navigation state 때문에 잘못된 URL을 기록하는 문제를 수정한다.
-- `undefined` 경로, 임의의 게시물·부모 경로, 불필요한 쿼리로의 일시 변경을 모두 검증한다.
-- document·pushState·replaceState 전체 이력과 PostHog `$pageview` 결과를 검증한다.
+- 특정 화면의 링크가 아니라 공통 Web routing 경계를 수정한다.
+- 기존 공개 URL, 의도된 redirect, Session·인가, loading·error 동작과 내부 이동·back/forward·not-found를 보존한다.
+- SDK 전체 upgrade, 새 routing 정책, DB 변경, analytics 정책 변경은 이 계획에 포함하지 않는다.
+- PR #688의 구현과 중단 의견은 참고 자료다. 사용자의 작업이나 이번 수정 방향에 대한 승인으로 취급하지 않는다.
 
-## Non-Goals
+기존 계약 안의 구현 방식과 파일·테스트 배치는 구현 단계에서 판단한다. 관찰 가능한 동작, 보안, 호환성, rollout 또는 유지 책임을 바꿔야 하는 선택이 생기면 그 차이와 영향을 설명하고 사용자에게 질문한다.
 
-- 전체 Expo Router 구조 개편, route 이름 변경, 화면별 URL 우회
-- 관련 없는 loading skeleton·화면 디자인 변경, 인증·Profile·Post 권한 변경
-- PostHog 수집 재개, taxonomy 변경, 과거 이벤트 삭제·보정, merge·배포
+## 검증과 현재 상태
 
-## Constraints
+직접 접근과 실제 새로고침을 실행하고 document·pushState·replaceState 전체 이력을 기대 URL과 비교한다. 정상 응답과 지연된 Relay 응답에서 정적·프로필·게시물·중첩 경로를 확인한다. PostHog SDK가 활성화된 격리 환경에서 실제 전송 payload도 확인한다.
 
-- 유효한 Profile·Post route, 내부 이동, 뒤로가기와 not-found 동작을 보존한다.
-- 공유 route tree와 현재 Session·Relay actor 경계를 유지한다. URL 안정화를 이유로 인증 또는 조회 정책을 우회하지 않는다.
-- 시각 구조·상태 표현·focus·scroll을 바꾸면 기존 design source와 대조한다.
-- 이전 PR #688은 참고 이력이다. 그 PR의 구현 선택·중단 의견·검증 결과를 이번 작업의 승인이나 수정 완료 증거로 상속하지 않는다.
-
-## Verification
-
-- 실제 앱·API와 격리 DB fixture를 사용하는 Web E2E에서 직접 접근과 실제 `page.reload()`를 각각 실행한다.
-- 일반 응답과 `UniversalShellQuery` 지연 응답에서 `/home`, `/search`, `/notifications`, `/bookmarks`, `/settings`, `/settings/theme`, Profile Home·following, Post detail·reactions를 확인한다. `/privacy`는 공통 Shell 밖의 비교 경로다.
-- 각 문서의 시작부터 준비된 화면까지 전체 URL 이력을 기대 URL과 비교한다. 의도된 `/` → `/home` 또는 guest redirect는 별도 사례로 구분한다.
-- 내부 이동·query-only 이동·뒤로/앞으로·missing Profile/Post·query 실패와 retry를 실행해 기존 결과를 확인한다.
-- PostHog SDK가 실제로 활성화된 격리 browser 환경에서 전송 payload를 받아 잘못된 `$pageview`가 없는지 확인한다. localhost의 analytics 미초기화 또는 과거 운영 집계는 이 검증을 대신하지 않는다.
-
-## Business Context
-
-- Product canonical: `docs/domain/objects/session.md`의 인증 경계를 보존한다. Web URL 안정화 요구사항의 직접 근거는 PROD-1103이며, 별도 routing ADR은 `docs/domain`의 현재 검색 범위에서 찾지 못했다.
-- Visual design source: `docs/design/breakpoints.md`. 기존 Shell·Profile 배치와 scroll·history 상호작용을 보존하는 기준이며 제품 권한의 근거로 사용하지 않는다.
-- Operations context: `docs/operations/posthog.md`. analytics 설정과 개인정보·운영 경계를 보존한다.
-- Linear: https://linear.app/byulmaru/issue/PROD-1103
-- User agreement: PROD-1103 Spec workflow 요청. 수정 방식은 아직 선택하지 않았다.
-
-## Session Status
-
-- Status: Active
-- Last updated: 2026-10-09
-- Issue scope: Confirmed
-- Implementation direction: Pending
-- Implementation / runtime verification: Not run
+원인과 수정 후보는 `design.md`, 실행 순서와 회귀 검증은 `tasks.md`에 정리한다. 현재는 계획 작성 단계이며 제품 수정, 수정 후 runtime 검증, CI, 배포는 실행하지 않았다.
