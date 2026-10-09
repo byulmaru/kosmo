@@ -11,6 +11,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { graphql, useFragment, useRelayEnvironment } from 'react-relay';
 import { getDataIDsFromFragment, getFragment } from 'relay-runtime';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
@@ -154,6 +155,7 @@ function ReplyComposerSurfaceContents({
   const { register: registerNavigationGuard } = useNavigationGuard();
   const { showToast } = useToast();
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const parent = useFragment(ReplyComposerSurfaceParentFragment, parentKey);
   const profile = useFragment(ReplyComposerSurfaceProfileFragment, profileKey);
   const quoteMode = mode === 'quote';
@@ -428,7 +430,8 @@ function ReplyComposerSurfaceContents({
                   </View>
                 ) : null}
                 <KeyboardAvoidingView
-                  behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                  behavior={Platform.OS === 'ios' ? 'height' : undefined}
+                  keyboardVerticalOffset={insets.top}
                   style={styles.composerFrame}
                 >
                   <PostComposerController
