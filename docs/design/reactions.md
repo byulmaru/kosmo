@@ -46,7 +46,7 @@ Reaction Quick Picker는 현재 제공된 Reaction option을 빠르게 선택하
 
 ## Full Reaction Picker
 
-Full Reaction Picker는 게시글 반응 버튼에서 바로 열리며, Emoji 16의 완전 수식 emoji 중 기본형 1,906개를 검색하거나 category별로 탐색한다. 피부색 변형 1,875개는 피커의 탐색·검색에서 숨기되, 서버는 전체 3,781개 Type을 계속 허용하고 기존 변형 반응의 이미지 표시·해제를 유지한다. Web·iOS·Android는 `emoji-datasource-google@16.0.0`의 Noto Emoji v2.048 이미지를 표시한다. 기존 Quick Picker의 여섯 Type은 `빠른 반응` 첫 영역에 유지한다. 피부색 선택 UI와 custom reaction은 후속 범위다.
+Full Reaction Picker는 게시글 반응 버튼에서 바로 열리며, Emoji 16의 완전 수식 emoji 중 기본형 1,906개를 검색하거나 category별로 탐색한다. 피부색 변형 1,875개는 피커의 탐색·검색에서 숨기되, 서버는 전체 3,781개 Type을 계속 허용하고 기존 변형 반응의 표시·해제를 유지한다. Web·iOS·Android는 Unicode 문자열을 시스템 이모지 글꼴로 표시하며, 모양과 지원 범위는 브라우저·OS 버전에 따라 달라질 수 있다. 기존 Quick Picker의 여섯 Type은 `빠른 반응` 첫 영역에 유지한다. 피부색 선택 UI와 custom reaction은 후속 범위다.
 
 - Figma source는 `Presentation=Web | Mobile`과 `State=Browse | SearchResults | Empty | Loading`을 조합한 8 variants다. `Browse`는 검색, 빠른 반응, category heading과 전체 emoji grid를 표시하고, `SearchResults`는 검색 결과만, `Empty`는 검색 결과 없음만, `Loading`은 spinner만 표시한다. 최근 반응이 없는 Browse 표본에는 최근 사용 section이 없다. Runtime은 최근 기록이 있으면 빠른 반응 아래에 `최근 사용`을 표시하며, 검색 중에는 숨긴다. Category shortcut control은 두지 않는다. Web은 `compact` 이상에서 최대 360×624px·8열, 모바일 레이아웃에서 최대 288×420px·6열로 표시하고 빠른 반응 6개를 아래 그리드의 첫 6열에 맞춘다. Mobile Figma 표본은 7열이며, runtime은 화면 너비와 시스템 글자 크기에 따라 48pt 이상의 터치 영역이 들어가는 열 수를 사용한다. Mobile 빠른 반응 6개와 category 행은 동일한 열 간격을 사용하며, 남는 열은 오른쪽에 비워 둔다. 마지막 덜 찬 category 행도 왼쪽 정렬한다. Picker 전체 `Error` variant는 만들지 않는다.
 - 최근 사용은 선택한 Profile별로 로컬 기기에만 최신 16개를 중복 없이 보관하고, 피커에는 해당 화면의 열 수에 맞춰 최대 두 줄을 표시한다. 반응 추가를 선택하면 가장 앞으로 옮기고, 해제는 순서를 바꾸지 않는다. 서버 동기화는 하지 않는다.

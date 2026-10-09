@@ -1,13 +1,8 @@
-import { reactionTypes } from '@kosmo/core/validation';
 import emojiData from 'emoji-datasource-google/emoji.json';
 import englishData from 'emojibase-data/en/data.json';
 import koreanData from 'emojibase-data/ko/data.json';
 
-export type ReactionEmojiAsset = Readonly<{ format: 'png'; path: string }>;
-
 export type ReactionEmojiCatalogOption = Readonly<{
-  assetFormat: ReactionEmojiAsset['format'];
-  assetPath: string;
   category: string;
   categoryLabel: string;
   emoji: string;
@@ -20,7 +15,7 @@ export type ReactionEmojiCatalogOption = Readonly<{
 }>;
 
 const quickReactionOrder = new Map<string, number>(
-  reactionTypes.map((emoji, index) => [emoji, index]),
+  ['🥹', '❤️', '🎉', '👀', '☘️', '🌈'].map((emoji, index) => [emoji, index]),
 );
 
 const categories: Record<string, readonly [string, string]> = {
@@ -81,8 +76,6 @@ export const reactionEmojiCatalog: readonly ReactionEmojiCatalogOption[] = emoji
         quick: quickReactionOrder.has(emoji),
         quickOrder: quickReactionOrder.get(emoji),
         keywords: [ko.label, en.label, ...ko.tags, ...en.tags, ...entry.short_names],
-        assetPath: `/reaction-emoji/emoji-16/${variant.image}`,
-        assetFormat: 'png' as const,
       };
     });
   });
@@ -91,14 +84,3 @@ const baseEmojiValues = new Set(emojiData.map((entry) => toEmoji(entry.unified))
 export const reactionEmojiPickerOptions = reactionEmojiCatalog.filter(({ id }) =>
   baseEmojiValues.has(id),
 );
-
-const reactionEmojiAssets = new Map<string, ReactionEmojiAsset>(
-  reactionEmojiCatalog.map(({ assetFormat, assetPath, id }) => [
-    id,
-    { format: assetFormat, path: assetPath },
-  ]),
-);
-
-export function getReactionEmojiAsset(type: string): ReactionEmojiAsset | null {
-  return reactionEmojiAssets.get(type) ?? null;
-}

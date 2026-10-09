@@ -345,7 +345,7 @@ export const MobileGridGeometryContract: Story = {
     const expressionsHeading = canvas.getByRole('heading', { name: '표정과 감정' });
     expect(rows).toHaveLength(2);
     for (const row of rows) {
-      expect(getComputedStyle(row).justifyContent).toBe('space-between');
+      expect(getComputedStyle(row).justifyContent).toBe('normal');
     }
     expect(
       rows[1]!.getBoundingClientRect().top - rows[0]!.getBoundingClientRect().bottom,
@@ -552,13 +552,17 @@ export const SequentialKeyboardBrowseContract: Story = {
     const scroll = canvas.getByTestId('full-reaction-picker-scroll') as HTMLElement;
     await waitFor(() => expect(search).toHaveFocus());
     await userEvent.tab();
-    const firstOption = canvas.getByRole('button', {
-      name: `${reactionEmojiPickerOptions[0]?.label} ${reactionEmojiPickerOptions[0]?.emoji}`,
+    const quickOptions = reactionEmojiPickerOptions
+      .filter((option) => option.quick)
+      .sort((left, right) => (left.quickOrder ?? 0) - (right.quickOrder ?? 0));
+    const quickRow = within(canvas.getByTestId('full-reaction-section-quick-row-0'));
+    const firstOption = quickRow.getByRole('button', {
+      name: `${quickOptions[0]?.label} ${quickOptions[0]?.emoji}`,
     });
     expect(firstOption).toHaveFocus();
     await userEvent.tab();
-    const secondOption = canvas.getByRole('button', {
-      name: `${reactionEmojiPickerOptions[1]?.label} ${reactionEmojiPickerOptions[1]?.emoji}`,
+    const secondOption = quickRow.getByRole('button', {
+      name: `${quickOptions[1]?.label} ${quickOptions[1]?.emoji}`,
     });
     expect(secondOption).toHaveFocus();
     await userEvent.tab({ shift: true });

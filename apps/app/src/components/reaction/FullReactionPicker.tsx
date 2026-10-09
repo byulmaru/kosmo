@@ -13,7 +13,6 @@ import {
 import { BottomSheetSurface } from '@/components/ui/BottomSheetSurface';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, breakpoints, iconSizes, radius, space, textStyles } from '@/theme/tokens';
-import { ReactionEmojiImage } from './ReactionEmojiImage';
 import { getMobileReactionGridLayout } from './reactionGridLayout';
 import { ReactionPendingSpinner } from './ReactionPendingSpinner';
 import type React from 'react';
@@ -281,13 +280,15 @@ function createBrowseSections(
     .slice(0, columns * 2);
   return [
     ...(options.some((option) => option.quick)
-      ? [{
-          id: 'quick',
-          title: '빠른 반응',
-          options: options
-            .filter((option) => option.quick)
-            .sort((left, right) => (left.quickOrder ?? 0) - (right.quickOrder ?? 0)),
-        }]
+      ? [
+          {
+            id: 'quick',
+            title: '빠른 반응',
+            options: options
+              .filter((option) => option.quick)
+              .sort((left, right) => (left.quickOrder ?? 0) - (right.quickOrder ?? 0)),
+          },
+        ]
       : []),
     ...(recentOptions.length > 0
       ? [{ id: 'recent', title: '최근 사용', options: recentOptions }]
@@ -374,7 +375,7 @@ function ReactionGridRow({
                   },
                 ]}
               >
-                <ReactionEmojiImage size={mobile ? targetSize / 2 : 20} type={option.emoji} />
+                <Text style={mobile ? styles.mobileEmoji : styles.webEmoji}>{option.emoji}</Text>
                 {pending ? (
                   <View accessibilityElementsHidden aria-hidden style={styles.pendingOverlay}>
                     <ReactionPendingSpinner />
@@ -402,8 +403,10 @@ function ReactionGridRow({
 const styles = StyleSheet.create({
   emptyDescription: textStyles.uiCopyM,
   emptyTitle: textStyles.uiLabelL,
+  mobileEmoji: { fontSize: 24, lineHeight: 32, textAlign: 'center' },
   fullGridRow: { justifyContent: 'space-between' },
   gridRow: { flexDirection: 'row' },
+  mobileGrid: { gap: 0 },
   mobileReactionTarget: { alignItems: 'center', justifyContent: 'center' },
   mobileRoot: { flex: 1, justifyContent: 'flex-end', minHeight: 0 },
   mobileSheetContent: {
@@ -461,6 +464,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   webGrid: { gap: space[8] },
+  webEmoji: { fontSize: 20, lineHeight: 24, textAlign: 'center' },
   webReaction: { height: 32, width: 32 },
   webReactionTarget: { height: 32, width: 32 },
   webSpinner: { transform: [{ scale: 1.25 }] },

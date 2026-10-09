@@ -5,7 +5,6 @@ import { ProfileListItem } from '@/components/profile/ProfileListItem';
 import { StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, spacing, typography } from '@/theme/tokens';
-import { getReactionEmojiLabel, ReactionEmojiImage } from './ReactionEmojiImage';
 import type React from 'react';
 import type { UseAutomaticPaginationResult } from '@/components/pagination/useAutomaticPagination';
 
@@ -93,14 +92,9 @@ export function ReactionProfileList({
                   { borderColor: theme.border },
                 ]}
               >
-                <View
-                  accessible
-                  accessibilityLabel={`${getReactionEmojiLabel(reactionType)} 반응`}
-                  accessibilityRole="image"
-                  style={styles.itemReaction}
-                >
-                  <ReactionEmojiImage size={20} type={reactionType} />
-                </View>
+                <Text accessibilityLabel={`${reactionType} 반응`} style={styles.itemReaction}>
+                  {reactionType}
+                </Text>
                 <ProfileListItem
                   linked
                   profile={item.profile}
@@ -145,13 +139,7 @@ const styles = StyleSheet.create({
   title: { fontFamily: fontFamilies.ui, fontWeight: '700', ...typography.lg },
   srOnly: { height: 1, left: 0, overflow: 'hidden', position: 'absolute', top: 0, width: 1 },
   item: { alignItems: 'center', flexDirection: 'row' },
-  itemReaction: {
-    alignItems: 'center',
-    height: 24,
-    justifyContent: 'center',
-    marginLeft: spacing.lg,
-    width: 20,
-  },
+  itemReaction: { fontSize: 20, lineHeight: 24, marginLeft: spacing.lg },
   itemSeparator: { borderBottomWidth: 1 },
   profileItem: { borderBottomWidth: 0, flex: 1, minWidth: 0 },
   pagination: { borderTopWidth: 1, gap: spacing.sm, paddingTop: spacing.md },

@@ -1469,7 +1469,7 @@ export const NoSelectedProfileDisablesReaction: Story = {
     const canvas = within(canvasElement);
     reactionMutationRequest.mockClear();
     const trigger = canvas.getByRole('button', { name: '반응' });
-    const heartSummary = await canvas.findByRole('button', { name: '빨간색 하트 반응 12개' });
+    const heartSummary = await canvas.findByRole('button', { name: '❤️ 반응 12개' });
     const moreProfiles = canvas.getByRole('link', { name: '반응한 프로필 보기' });
 
     expect(trigger).toBeDisabled();
@@ -1497,26 +1497,26 @@ export const NoSelectedProfileDisablesReaction: Story = {
 export const ReactionSummaryToggleContract: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const heart = await canvas.findByRole('button', { name: '빨간색 하트 반응 12개' });
+    const heart = await canvas.findByRole('button', { name: '❤️ 반응 12개' });
 
     await userEvent.click(heart);
     expect(screen.queryByRole('dialog', { name: '반응한 프로필' })).toBeNull();
     await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(1));
-    expect(canvas.getByRole('button', { name: '빨간색 하트 반응 12개, 처리 중' })).toBeDisabled();
+    expect(canvas.getByRole('button', { name: '❤️ 반응 12개, 처리 중' })).toBeDisabled();
     canvas.getByRole('button', { name: '요청 1 success' }).click();
     await waitFor(() =>
-      expect(canvas.getByRole('button', { name: '빨간색 하트 반응 13개' })).toHaveAttribute(
+      expect(canvas.getByRole('button', { name: '❤️ 반응 13개' })).toHaveAttribute(
         'aria-pressed',
         'true',
       ),
     );
 
-    await userEvent.click(canvas.getByRole('button', { name: '빨간색 하트 반응 13개' }));
+    await userEvent.click(canvas.getByRole('button', { name: '❤️ 반응 13개' }));
     await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(2));
-    expect(canvas.getByRole('button', { name: '빨간색 하트 반응 13개, 처리 중' })).toBeDisabled();
+    expect(canvas.getByRole('button', { name: '❤️ 반응 13개, 처리 중' })).toBeDisabled();
     canvas.getByRole('button', { name: '요청 2 success' }).click();
     await waitFor(() =>
-      expect(canvas.getByRole('button', { name: '빨간색 하트 반응 12개' })).toHaveAttribute(
+      expect(canvas.getByRole('button', { name: '❤️ 반응 12개' })).toHaveAttribute(
         'aria-pressed',
         'false',
       ),
@@ -1663,7 +1663,7 @@ export const ReactionDirectFullContract: Story = {
 
 export const ReactionRecentUseContract: Story = {
   play: async ({ canvasElement }) => {
-    const key = 'kosmo:recent-reactions:profile-1';
+    const key = 'kosmo:recent-reactions:profile-reaction-default';
     globalThis.localStorage?.removeItem(key);
     try {
       const canvas = within(canvasElement);
@@ -1723,9 +1723,7 @@ export const ReactionFailureRetryActorSwitchAndUnmount: Story = {
         quick.getByRole('button', { name: '빨간색 하트 반응, 오류, 다시 시도 ❤️' }),
       ).toBeVisible(),
     );
-    expect(
-      canvas.getByRole('button', { name: '빨간색 하트 반응 12개, 오류, 다시 시도' }),
-    ).toBeVisible();
+    expect(canvas.getByRole('button', { name: '❤️ 반응 12개, 오류, 다시 시도' })).toBeVisible();
     expect(quick.getByRole('button', { name: '파티 🎉' })).not.toBeDisabled();
 
     await userEvent.click(

@@ -1,10 +1,6 @@
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- Metro loads its config through CommonJS.
 const http = require('node:http');
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- Metro loads its config through CommonJS.
-const fs = require('node:fs');
-// eslint-disable-next-line @typescript-eslint/no-require-imports -- Metro loads its config through CommonJS.
-const path = require('node:path');
-// eslint-disable-next-line @typescript-eslint/no-require-imports -- Metro loads its config through CommonJS.
 const { getSentryExpoConfig } = require('@sentry/react-native/metro');
 
 const WEB_BFF_PORT = 5174;
@@ -100,30 +96,6 @@ config.server.enhanceMiddleware = (metroMiddleware, metroServer) => {
   const fallbackMiddleware = defaultEnhanceMiddleware(metroMiddleware, metroServer);
 
   return (request, response, next) => {
-    const pathname = new URL(request.url, 'http://localhost').pathname;
-    if (
-      (request.method === 'GET' || request.method === 'HEAD') &&
-      /^\/reaction-emoji\/emoji-16\/[a-f0-9-]+\.png$/.test(pathname)
-    ) {
-      const image = fs.createReadStream(path.join(__dirname, 'public', pathname.slice(1)));
-      image.on('open', () => {
-        response.writeHead(200, { 'content-type': 'image/png' });
-        if (request.method === 'HEAD') {
-          image.destroy();
-          response.end();
-        } else {
-          image.pipe(response);
-        }
-      });
-      image.on('error', () => {
-        if (!response.headersSent) {
-          response.writeHead(404);
-          response.end();
-        }
-      });
-      return;
-    }
-
     if (shouldProxyToWebBff(request.url, request.headers)) {
       proxyToWebBff(request, response);
       return;
