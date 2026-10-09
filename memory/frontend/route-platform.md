@@ -17,3 +17,4 @@ Read this entire file when working on Expo Router routes, the shared Web/Native 
 - 프로필 route에는 표시용 `relativeHandle`과 lookup용 bare/federated handle을 혼동하지 않는다. URL을 만들 때는 `relativeHandle`, GraphQL lookup/validation에는 정규화한 route parameter를 사용한다.
 - web shell은 `768px`와 `1280px` breakpoint를 사용한다. native shell은 화면 폭과 무관하게 mobile layout을 유지하고 safe area를 기준으로 한다. 값은 `apps/app/src/theme/tokens.ts`의 `breakpoints`를 사용하며 컴포넌트마다 같은 숫자를 다시 쓰지 않는다.
 - web 링크가 새 탭 열기, 주소 복사, 키보드 활성화 같은 browser 의미를 가져야 하면 Expo Router `Link`를 사용한다. local action은 `Pressable`/`Button`을 사용하고 접근성 role, label, state를 함께 지정한다.
+- `Link asChild`는 Web에서 `onClick`, Native에서 `onPress`를 주입한다. `NavigationLink`의 자식 handler·이동 guard는 두 경로에서 모두 실행되어야 한다. 특히 Web `Text`는 `onClick`이 있으면 `onPress`를 건너뛰므로 inline link의 전파 차단을 `onPress`에만 배선하지 않는다. 회귀 검증의 router mock도 이 플랫폼별 이벤트 경로를 유지한다.

@@ -1,4 +1,4 @@
-import { usePathname } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 import { Text, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { expect, fn, userEvent, within } from 'storybook/test';
@@ -32,6 +32,7 @@ const repeatedMentionDocument = {
       {
         type: 'paragraph',
         content: [
+          { type: 'text', text: '일반 본문 ' },
           { type: 'mention', attrs: { profileId: secondProfileId } },
           { type: 'text', text: ' ' },
           { type: 'mention', attrs: { profileId: firstProfileId } },
@@ -49,7 +50,7 @@ const repeatedMentionStoryData = {
     id: repeatedMentionPostId,
     content: {
       id: 'content-content-mention-story',
-      bodyText: '@second-profile @first-profile @second-profile',
+      bodyText: '일반 본문 @second-profile @first-profile @second-profile',
       contentWarning: null,
       document: repeatedMentionDocument,
       media: [],
@@ -116,6 +117,7 @@ const unavailableAndLongStoryData = {
 function PostContentMentionStory({ onBodyPress }: { onBodyPress?: () => void }) {
   const data = useLazyLoadQuery<PostContentMentionStoryQuery>(PostContentMentionStoryQuery, {});
   const pathname = usePathname();
+  const router = useRouter();
   if (data.node?.__typename !== 'Post' || !data.node.body) {
     return <Text>Post Mention fixture를 불러오지 못했어요.</Text>;
   }
@@ -124,7 +126,13 @@ function PostContentMentionStory({ onBodyPress }: { onBodyPress?: () => void }) 
     <>
       <Text testID="post-content-mention-route">{pathname}</Text>
       <View style={{ width: 240 }}>
-        <PostBody onBodyPress={onBodyPress} post={data.node.body} />
+        <PostBody
+          onBodyPress={() => {
+            onBodyPress?.();
+            router.push('/@author/post-content-mention-story');
+          }}
+          post={data.node.body}
+        />
       </View>
     </>
   );
@@ -141,6 +149,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const RepeatedTargetsLight: Story = {
+  name: 'Tests / Repeated Targets Light',
   globals: { theme: 'light' },
   parameters: { relay: { data: repeatedMentionStoryData } },
   play: async ({ args, canvasElement }) => {
@@ -161,10 +170,14 @@ export const RepeatedTargetsLight: Story = {
     await userEvent.click(links[0]);
     expect(route).toHaveTextContent('/@second-profile');
     expect(args.onBodyPress).not.toHaveBeenCalled();
+    await userEvent.click(canvas.getByTestId('post-list-row-body'));
+    expect(route).toHaveTextContent('/@author/post-content-mention-story');
+    expect(args.onBodyPress).toHaveBeenCalledTimes(1);
   },
 };
 
 export const RepeatedTargetsDark: Story = {
+  name: 'Tests / Repeated Targets Dark',
   globals: { theme: 'dark' },
   parameters: { relay: { data: repeatedMentionStoryData } },
   play: async ({ args, canvasElement }) => {
@@ -182,8 +195,9 @@ export const RepeatedTargetsDark: Story = {
 };
 
 export const UnavailableAndLongProfileFallback: Story = {
+  name: 'Tests / Unavailable And Long Profile Fallback',
   parameters: { relay: { data: unavailableAndLongStoryData } },
-  play: ({ canvasElement }) => {
+  play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
     expect(canvas.getByText('@알 수 없는 사용자', { exact: true })).toBeVisible();
     const links = canvas.getAllByRole('link');
@@ -195,5 +209,10 @@ export const UnavailableAndLongProfileFallback: Story = {
       }),
     ).toBeVisible();
     expect(canvas.getByText(longMentionHandle, { exact: true })).toBeVisible();
+    await userEvent.click(canvas.getByText('@알 수 없는 사용자', { exact: true }));
+    expect(canvas.getByTestId('post-content-mention-route')).toHaveTextContent(
+      '/@author/post-content-mention-story',
+    );
+    expect(args.onBodyPress).toHaveBeenCalledTimes(1);
   },
 };
