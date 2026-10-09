@@ -155,7 +155,31 @@ test(
 
     const taskQueue = `${KOSMO_TASK_QUEUE}-following-import-test-${process.pid}`;
     const followed: string[] = [];
+    const followAttempts: string[] = [];
+    const resolvedHandles: string[] = [];
     const lookupCalls: string[] = [];
+    const gatedFollowees = new Set(['local:parallelfirst', 'local:parallelsecond']);
+    const startedGatedFollowees = new Set<string>();
+    let signalBothGatedFolloweesStarted!: () => void;
+    let releaseGatedFollowees!: () => void;
+    const bothGatedFolloweesStarted = new Promise<void>((resolve) => {
+      signalBothGatedFolloweesStarted = resolve;
+    });
+    const gatedFolloweesGate = new Promise<void>((resolve) => {
+      releaseGatedFollowees = resolve;
+    });
+    let signalUnknownBatchWaitStarted!: () => void;
+    let releaseUnknownBatchWait!: () => void;
+    const unknownBatchWaitStarted = new Promise<void>((resolve) => {
+      signalUnknownBatchWaitStarted = resolve;
+    });
+    const unknownBatchWaitGate = new Promise<void>((resolve) => {
+      releaseUnknownBatchWait = resolve;
+    });
+    let signalUnknownFailureActivityRejected!: () => void;
+    const unknownFailureActivityRejected = new Promise<void>((resolve) => {
+      signalUnknownFailureActivityRejected = resolve;
+    });
     let pauseFirstLookup = true;
     let signalFirstLookupStarted!: () => void;
     let releaseFirstLookup!: () => void;
@@ -199,8 +223,23 @@ test(
           }
           return { needsRefresh: false, profileId: remoteProfileId };
         },
-        resolveImportedLocalProfileActivity: async ({ handle }) => `local:${handle}`,
+        resolveImportedLocalProfileActivity: async ({ handle }) => {
+          resolvedHandles.push(handle);
+          return `local:${handle}`;
+        },
         followImportedProfileActivity: async ({ followeeProfileId }) => {
+          followAttempts.push(followeeProfileId);
+          if (gatedFollowees.has(followeeProfileId)) {
+            startedGatedFollowees.add(followeeProfileId);
+            if (startedGatedFollowees.size === gatedFollowees.size) {
+              signalBothGatedFolloweesStarted();
+            }
+            await gatedFolloweesGate;
+          }
+          if (followeeProfileId === 'local:unknownwait') {
+            signalUnknownBatchWaitStarted();
+            await unknownBatchWaitGate;
+          }
           if (followeeProfileId === 'local:blockeduser') {
             throw ApplicationFailure.nonRetryable(
               'Profile pair is blocked',
@@ -208,6 +247,7 @@ test(
             );
           }
           if (followeeProfileId === 'local:unknownfailure') {
+            signalUnknownFailureActivityRejected();
             throw ApplicationFailure.nonRetryable('Unexpected import failure', 'UnexpectedFailure');
           }
           followed.push(followeeProfileId);
@@ -243,11 +283,41 @@ test(
     });
 
     await worker.runUntil(async () => {
+      const beforeParallelFollow = followed.length;
+      const parallelHandle = await start(
+        importInput(followerProfileId, [
+          { kind: 'local', handle: 'parallelfirst' },
+          { kind: 'local', handle: 'parallelsecond' },
+        ]),
+      );
+      let observedConcurrentFollows = false;
+      let concurrentWaitTimeout: ReturnType<typeof setTimeout> | undefined;
+      try {
+        observedConcurrentFollows = await Promise.race([
+          bothGatedFolloweesStarted.then(() => true),
+          new Promise<boolean>((resolve) => {
+            concurrentWaitTimeout = setTimeout(() => resolve(false), 5_000);
+          }),
+        ]);
+      } finally {
+        if (concurrentWaitTimeout) {
+          clearTimeout(concurrentWaitTimeout);
+        }
+        releaseGatedFollowees();
+      }
+      await parallelHandle.result();
+      assert.equal(observedConcurrentFollows, true);
+      assert.deepEqual(followed.slice(beforeParallelFollow).toSorted(), [
+        'local:parallelfirst',
+        'local:parallelsecond',
+      ]);
+
       const sharedAddress = [
         { kind: 'remote', handle: 'Alice', domain: 'remote.example' },
       ] as const;
       const firstInput = importInput(followerProfileId, sharedAddress);
       const firstWorkflowId = followingAccountsImportWorkflow.workflowIdFromArgs(firstInput);
+      const firstFollowIndex = followed.length;
       const firstHandle = await start(firstInput);
       await firstLookupStarted;
 
@@ -261,6 +331,7 @@ test(
         releaseFirstLookup();
       }
       await firstHandle.result();
+      assert.deepEqual(followed.slice(firstFollowIndex), [remoteProfileId]);
 
       const lookupInput = {
         domain: 'remote.example',
@@ -274,16 +345,17 @@ test(
 
       await execute(firstInput);
       assert.deepEqual(lookupCalls, ['Alice@remote.example', 'Alice@remote.example']);
-      assert.deepEqual(followed, [remoteProfileId, remoteProfileId]);
+      assert.deepEqual(followed.slice(firstFollowIndex), [remoteProfileId, remoteProfileId]);
       const repeatedChildRunId = (
         await environment.client.workflow.getHandle(firstLookupId).describe()
       ).runId;
       assert.notEqual(repeatedChildRunId, firstChildRunId);
 
       const otherInput = importInput(otherFollowerProfileId, sharedAddress);
+      const beforeCrossProfileImports = followed.length;
       await Promise.all([execute(firstInput), execute(otherInput)]);
       assert.equal(lookupCalls.length, 4);
-      assert.equal(followed.length, 4);
+      assert.equal(followed.length - beforeCrossProfileImports, 2);
 
       const otherLookupId = `${remoteProfileLookupWorkflow.workflowIdFromArgs({ ...lookupInput, profileId: otherFollowerProfileId })}:following-import:${followingAccountsImportWorkflow.workflowIdFromArgs(otherInput)}:0`;
       assert.notEqual(firstLookupId, otherLookupId);
@@ -316,27 +388,87 @@ test(
       );
       assert.deepEqual(followed.slice(beforeSkipped), ['local:gooduser']);
 
-      const beforeUnknownFailure = followed.length;
-      await assert.rejects(
-        execute(
-          importInput(followerProfileId, [
-            { kind: 'local', handle: 'unknownfailure' },
-            { kind: 'local', handle: 'mustnotrun' },
-          ]),
-        ),
+      const unknownFailureAddresses = [
+        { kind: 'local' as const, handle: 'unknownfailure' },
+        { kind: 'local' as const, handle: 'unknownwait' },
+        ...Array.from({ length: BATCH_SIZE_FOR_TEST - 3 }, (_, index) => ({
+          kind: 'local' as const,
+          handle: `unknownbatch${index.toString().padStart(2, '0')}`,
+        })),
+        { kind: 'local' as const, handle: 'nextbatch' },
+      ];
+      const beforeUnknownFailureFollowAttempts = followAttempts.length;
+      const beforeUnknownFailureResolutions = resolvedHandles.length;
+      const beforeUnknownFailureFollows = followed.length;
+      const unknownFailureInput = importInput(followerProfileId, unknownFailureAddresses);
+      const unknownFailureWorkflowId =
+        followingAccountsImportWorkflow.workflowIdFromArgs(unknownFailureInput);
+      let unknownFailureSettled = false;
+      const unknownFailure = execute(unknownFailureInput);
+      void unknownFailure.then(
+        () => {
+          unknownFailureSettled = true;
+        },
+        () => {
+          unknownFailureSettled = true;
+        },
       );
-      assert.equal(followed.length, beforeUnknownFailure);
+      let observedUnknownFailureWithSiblingPending = false;
+      let unknownWaitTimeout: ReturnType<typeof setTimeout> | undefined;
+      try {
+        observedUnknownFailureWithSiblingPending = await Promise.race([
+          Promise.all([unknownBatchWaitStarted, unknownFailureActivityRejected]).then(() => true),
+          new Promise<boolean>((resolve) => {
+            unknownWaitTimeout = setTimeout(() => resolve(false), 5_000);
+          }),
+        ]);
+        if (observedUnknownFailureWithSiblingPending) {
+          await new Promise<void>((resolve) => setImmediate(resolve));
+          const history = await environment.client.workflow
+            .getHandle(unknownFailureWorkflowId)
+            .fetchHistory();
+          assert.ok(history.events?.some((event) => event.activityTaskFailedEventAttributes));
+          assert.equal(unknownFailureSettled, false);
+        }
+      } finally {
+        if (unknownWaitTimeout) {
+          clearTimeout(unknownWaitTimeout);
+        }
+        releaseUnknownBatchWait();
+      }
+      assert.equal(observedUnknownFailureWithSiblingPending, true);
+      await assert.rejects(unknownFailure);
+      assert.deepEqual(
+        followAttempts.slice(beforeUnknownFailureFollowAttempts).toSorted(),
+        [
+          'local:unknownfailure',
+          'local:unknownwait',
+          ...Array.from(
+            { length: BATCH_SIZE_FOR_TEST - 3 },
+            (_, index) => `local:unknownbatch${index.toString().padStart(2, '0')}`,
+          ),
+        ].toSorted(),
+      );
+      assert.equal(
+        resolvedHandles.slice(beforeUnknownFailureResolutions).includes('nextbatch'),
+        false,
+      );
+      assert.equal(
+        followAttempts.slice(beforeUnknownFailureFollowAttempts).includes('local:nextbatch'),
+        false,
+      );
+      assert.equal(followed.length - beforeUnknownFailureFollows, BATCH_SIZE_FOR_TEST - 2);
 
       const beforeFatal = followed.length;
       await assert.rejects(
         execute(
           importInput(followerProfileId, [
             { kind: 'remote', handle: 'invalid', domain: 'bad-origin.example' },
-            { kind: 'local', handle: 'mustnotrun' },
+            { kind: 'local', handle: 'independentsibling' },
           ]),
         ),
       );
-      assert.equal(followed.length, beforeFatal);
+      assert.deepEqual(followed.slice(beforeFatal), ['local:independentsibling']);
     });
   },
 );
