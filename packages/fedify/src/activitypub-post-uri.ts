@@ -12,6 +12,7 @@ import { InstanceKind } from '@kosmo/core/enums';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Context } from '@fedify/fedify';
+import type { Transaction } from '@kosmo/core/db';
 
 const postIdSchema = z.uuid().refine((value) => value === value.toLowerCase());
 
@@ -104,6 +105,7 @@ export const findRemotePostByActivityPubUri = async (
   context: Pick<Context<unknown>, 'parseUri'>,
   uri: URL,
   expectedActorUri: URL,
+  transaction?: Transaction,
 ): Promise<RemotePostByActivityPubUri> => {
   if (uri.protocol !== 'http:' && uri.protocol !== 'https:') {
     return { status: 'author_mismatch' };
@@ -114,7 +116,7 @@ export const findRemotePostByActivityPubUri = async (
     return { status: 'author_mismatch' };
   }
 
-  const post = await db
+  const post = await (transaction ?? db)
     .select({
       authorUri: ActivityPubActors.uri,
       postId: Posts.id,

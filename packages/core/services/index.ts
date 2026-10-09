@@ -15,7 +15,8 @@ export {
   deleteRepostNotification,
 } from './notification';
 export { isNotificationSuppressed } from './notification-policy';
-export { createPost, deletePost, repostPost } from './post';
+export type { CreatePostTransactionResult } from './post';
+export { createPost, createPostInTransaction, deletePost, repostPost } from './post';
 export type { AppliedPostQuoteConsent, ApplyPostQuoteConsentInput } from './post-quote-consent';
 export { applyPostQuoteConsent } from './post-quote-consent';
 export { disableProfile } from './profile';
