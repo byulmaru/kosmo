@@ -195,7 +195,9 @@ async function createRoutes(): Promise<RouteCase[]> {
     {
       path: `/@${profile.handle}`,
       verify: async (page) => {
-        await expect(page.getByText(profile.displayName, { exact: true })).toBeVisible();
+        await expect(
+          page.getByRole('heading', { name: profile.displayName, exact: true }),
+        ).toBeVisible();
       },
     },
     {
