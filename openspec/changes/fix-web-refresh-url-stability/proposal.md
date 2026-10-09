@@ -19,4 +19,4 @@
 
 직접 접근과 실제 새로고침을 실행하고 document·pushState·replaceState 전체 이력을 기대 URL과 비교한다. 정상 응답과 지연된 Relay 응답에서 정적·프로필·게시물·중첩 경로를 확인한다. PostHog SDK가 활성화된 격리 환경에서 실제 전송 payload도 확인한다.
 
-원인과 수정 후보는 `design.md`, 실행 순서와 회귀 검증은 `tasks.md`에 정리한다. 현재는 계획 작성 단계이며 제품 수정, 수정 후 runtime 검증, CI, 배포는 실행하지 않았다.
+원인과 수정 후보는 `design.md`, 실행 순서와 회귀 검증은 `tasks.md`에 정리한다. 공통 Web linking 경계에 좁은 Expo Router patch와 회귀 E2E 코드를 추가했다. 수정 후 runtime과 CI 검증은 아직 실행하지 않았고 배포하지 않았다.

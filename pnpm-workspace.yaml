@@ -75,3 +75,4 @@ overrides:
 # TODO(PROD-916): Remove this patch, its override, and patch file after a compatible upstream update.
 patchedDependencies:
   decode-uri-component@0.5.0: patches/decode-uri-component@0.5.0.patch
+  expo-router@56.2.13: patches/expo-router@56.2.13.patch
