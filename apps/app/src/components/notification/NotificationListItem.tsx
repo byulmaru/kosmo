@@ -5,6 +5,7 @@ import { formatTimelineTimestamp } from '@/lib/date';
 import { MentionNotificationPost } from './MentionNotificationPost';
 import { parseNotificationHref } from './notificationHref';
 import { NotificationListItemView } from './NotificationListItemView';
+import { QuoteNotificationPost } from './QuoteNotificationPost';
 import { ReplyNotificationPost } from './ReplyNotificationPost';
 import type { PostMediaItem } from '@/components/post/PostMediaImage';
 import type { FollowRequestNotificationListItem_notification$key } from './__generated__/FollowRequestNotificationListItem_notification.graphql';
@@ -12,6 +13,7 @@ import type { MentionNotificationListItem_notification$key } from './__generated
 import type { NotificationListItem_notification$key } from './__generated__/NotificationListItem_notification.graphql';
 import type { NotificationListItemMarkReadMutation } from './__generated__/NotificationListItemMarkReadMutation.graphql';
 import type { OperationalNotificationListItem_notification$key } from './__generated__/OperationalNotificationListItem_notification.graphql';
+import type { QuoteNotificationListItem_notification$key } from './__generated__/QuoteNotificationListItem_notification.graphql';
 import type { ReactionNotificationListItem_notification$key } from './__generated__/ReactionNotificationListItem_notification.graphql';
 import type { ReplyNotificationListItem_notification$key } from './__generated__/ReplyNotificationListItem_notification.graphql';
 import type { RepostNotificationListItem_notification$key } from './__generated__/RepostNotificationListItem_notification.graphql';
@@ -282,6 +284,35 @@ export function ReplyNotificationListItem({
   return (
     <NotificationListItemView kind="reply" unread={data.readAt === null}>
       <ReplyNotificationPost onActivate={() => markRead(data.id)} post={data.post} />
+    </NotificationListItemView>
+  );
+}
+
+const quoteNotificationFragment = graphql`
+  fragment QuoteNotificationListItem_notification on QuoteNotification {
+    id
+    readAt
+    post {
+      ...QuoteNotificationPost_post
+    }
+  }
+`;
+
+export function QuoteNotificationListItem({
+  notification,
+}: {
+  notification: QuoteNotificationListItem_notification$key;
+}) {
+  const data = useFragment(quoteNotificationFragment, notification);
+  const markRead = useNotificationRead();
+
+  if (!data.post) {
+    return null;
+  }
+
+  return (
+    <NotificationListItemView kind="quote" unread={data.readAt === null}>
+      <QuoteNotificationPost onActivate={() => markRead(data.id)} post={data.post} />
     </NotificationListItemView>
   );
 }
