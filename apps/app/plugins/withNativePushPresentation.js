@@ -341,6 +341,9 @@ function withNativePushIosProject(config) {
       INFOPLIST_KEY_CFBundleVersion: '"$(CURRENT_PROJECT_VERSION)"',
       IPHONEOS_DEPLOYMENT_TARGET: '16.4',
       MARKETING_VERSION: '1.0',
+      // The extension context is registered when this framework loads. Protocol-only
+      // Swift imports do not retain it in the linked executable.
+      OTHER_LDFLAGS: '"$(inherited) -Wl,-needed_framework,UserNotificationsUI"',
       PRODUCT_BUNDLE_IDENTIFIER: IOS_EXTENSION_BUNDLE_IDENTIFIER,
       PRODUCT_NAME: IOS_EXTENSION_NAME,
       SKIP_INSTALL: 'YES',
