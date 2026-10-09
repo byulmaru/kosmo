@@ -45,8 +45,12 @@ Accepted — 사용자의 “Spec Gate 승인” 응답으로 PROD-903 정책 �
 - 자기 인용 억제는 Profile 단위다. 같은 Account의 서로 다른 Profile까지 억제하지 않는다.
 - Recipient가 Quote와 direct Source를 모두 조회할 수 있어야 알림을 생성·조회할 수 있다.
   Source가 조회 불가여도 Quote 자체 Content를 유지하는 Post 정책은 바꾸지 않는다.
-- Profile Mute는 Quote Author, Word·Hashtag Mute는 Quote 내용·Hashtag, Post Notification Mute는
-  direct Source가 속한 원문 thread를 검사한다. Word·Hashtag Mute에서 Source 내용을 다시 검사하지 않는다.
+- Profile Mute는 Quote Author, Word Mute와 게시물 기준 Hashtag Mute는 Quote 내용·Hashtag, Post Notification Mute는
+  direct Source가 속한 원문 thread를 검사한다. Word Mute와 게시물 기준 Hashtag Mute에서 Source 내용을 다시 검사하지 않는다.
+- 2026-10-02 [PROD-1048](https://linear.app/byulmaru/issue/PROD-1048)에 기록된 결정에 따라 Profile Tag 기준
+  Hashtag Mute는 생성 판단 시점에 저장된 Quote Author의 구조화된 Profile Tag를 검사한다. Source Author의
+  태그로 대신 판정하지 않는다. Recipient의 적용 중인 Notification Scope Rule과 canonical identity가 일치하면
+  Exclude·Collapse 모두 생성하지 않는다. 게시물 Hashtag 기준과 독립적으로 적용하며 기존 비소급 계약을 유지한다.
 - 각 Type의 생성·Mute 조건을 먼저 적용하고 남은 Reply·Quote·Mention 후보에 우선순위를 적용한다.
 - Remote Quote는 승인이 확인된 최초 한 번만 알림을 생성하며 같은 Quote의 재처리·재승인은 새 알림을 만들지 않는다.
 - Local 작성도 인용 관계 승인 후 Source를 정상 표시할 수 있을 때 최초 알림을 판단한다.
@@ -129,4 +133,4 @@ OpenSpec 검토는 다음 단계다.
 - [Notification](../objects/notification.md): 유형·원인·수신자·이동·자기 인용·조회·동시 중복 정책.
 - [Post](../objects/post.md): Quote 알림 정책의 소유 문서 연결.
 - [Post Notification Mute](../objects/post-notification-mute.md): direct Source의 원문 thread 기준.
-- [Word Mute Rule](../objects/word-mute-rule.md), [Hashtag Mute Rule](../objects/hashtag-mute-rule.md): Quote 내용·태그만 검사.
+- [Word Mute Rule](../objects/word-mute-rule.md), [Hashtag Mute Rule](../objects/hashtag-mute-rule.md): 게시물 기준은 Quote 내용·태그를, Profile Tag 기준은 Quote Author의 태그를 검사.

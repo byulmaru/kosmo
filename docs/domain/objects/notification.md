@@ -152,6 +152,13 @@ Recipient Profile은 Related Post의 direct Repost Source Author Profile이다. 
   새 Notification을 억제하지 않는다. 만료만으로 과거에 억제한 Notification을 소급 생성하지 않는다.
 - Notification Scope를 포함한 Word Mute Rule과 Hashtag Mute Rule이 일치하면 새 Notification을
   생성하지 않는다.
+- Hashtag Mute Rule의 Profile Tag 기준은 새 생성 판단 시점에 저장된 원인 행동자 Related Profile의
+  구조화된 Profile Tag를 검사한다. Recipient Profile이 Owner인 적용 중인 Notification Scope Rule의
+  Target Hashtag와 canonical identity가 하나라도 일치하면 Exclude·Collapse 모두 생성을 억제한다.
+  게시물에 해당 Hashtag가 없어도 적용하며, Related Profile을 가진 Profile 대상 알림에 적용한다.
+- Profile Tag 기준과 게시물 Hashtag 기준은 독립적인 억제 사유이며 어느 하나가 일치하면 생성하지 않는다.
+  Operational 알림에는 Profile Tag 기준을 적용하지 않고, 이후 태그·Rule 변경으로 기존 Notification의
+  존재와 Read State를 바꾸거나 기존 알림을 다시 판정하지 않는다.
 - Post Notification Mute의 Root Post thread에 속한 Reply, Reaction, Repost Notification은 생성하지
   않는다.
 - Domain Block Instance에서 온 원인 객체는 새 Notification을 만들지 않는다.
@@ -201,7 +208,9 @@ Recipient Profile은 Related Post의 direct Repost Source Author Profile이다. 
   이후 Quote 승인으로 알림을 추가하지 않고 기존 Reply Notification과 Read State·최초 읽음 시각을 보존한다.
 - Followee Post Notification은 이 중복 제거 대상에 포함하지 않고 기존 독립 정책을 따른다.
 - Profile Mute는 Quote Author를 대상으로 검사한다. Notification Scope의 Word Mute Rule과 Hashtag Mute Rule은
-  Quote의 내용과 Hashtag를 검사하며, direct Source의 내용과 Hashtag를 다시 검사하지 않는다.
+  게시물 기준으로 Quote의 내용과 Hashtag를 검사하며, direct Source의 내용과 Hashtag를 다시 검사하지 않는다.
+  Hashtag Mute의 Profile Tag 기준은 Quote Author의 Profile Tag를 검사하고 Source Author의 태그로 대신
+  판정하지 않는다.
 - Post Notification Mute는 direct Repost Source가 속한 원문 Root Post thread를 기준으로 검사한다.
   Quote 자체가 다른 thread에 속하더라도 이 기준은 바뀌지 않는다. Reply 후보는 자신의 Parent thread 기준을
   따르며, Quote의 thread Mute를 Mention 후보에 적용하지 않는다.
