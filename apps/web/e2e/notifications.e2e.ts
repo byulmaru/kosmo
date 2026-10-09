@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { db, Notifications } from '@kosmo/core/db';
 import { NotificationKind } from '@kosmo/core/enums';
 import { eq } from 'drizzle-orm';
@@ -190,6 +191,39 @@ test('Local Follow 알림은 Recipient Profile별로 격리되고 Read와 Unfoll
   } finally {
     await followerContext.close();
   }
+});
+
+test('Account Operational 알림은 Web 목록에 표시되고 내부 경로로 이동한다', async ({
+  context,
+  page,
+}) => {
+  const recipient = await createE2ESession({
+    displayName: 'E2E Operational Recipient',
+    handle: 'e2e-notification-operational',
+  });
+  const title = 'E2E Account Operational notification';
+  const body = 'E2E Account Operational body';
+
+  await db.insert(Notifications).values({
+    kind: NotificationKind.OPERATIONAL,
+    recipientAccountId: recipient.account.id,
+    sourceId: randomUUID(),
+    data: { body, href: '/home', title },
+  });
+
+  await setE2ESessionCookie(context, recipient.token);
+  await page.goto('/notifications');
+
+  await expect(page.getByText(title, { exact: true })).toBeVisible();
+  await expect(page.getByText(body, { exact: true })).toBeVisible();
+  const notificationLink = page.getByRole('link', {
+    name: /E2E Account Operational notification.*E2E Account Operational body/u,
+  });
+  await expect(notificationLink).toHaveAttribute('href', '/home');
+  await notificationLink.click();
+
+  await expect(page).toHaveURL('/home');
+  await expect(page.getByRole('heading', { name: '홈' })).toBeVisible();
 });
 
 test('Reply 알림 작성자 Ctrl/Cmd 새 탭과 본문 이동은 각각 한 번만 Read한다', async ({

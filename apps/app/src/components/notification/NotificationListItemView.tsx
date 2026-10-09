@@ -160,7 +160,7 @@ function OperationalNotificationTarget({
       }}
       onPointerDown={() => setFocusVisible(false)}
       onPress={onNavigate}
-      style={[
+      style={StyleSheet.flatten([
         styles.operationalTarget,
         {
           outlineColor: theme.stateFocusRing,
@@ -168,7 +168,7 @@ function OperationalNotificationTarget({
           outlineStyle: focusVisible ? 'solid' : 'none',
           outlineWidth: focusVisible ? 2 : 0,
         } as ViewStyle,
-      ]}
+      ])}
       testID="operational-notification-target"
     >
       <View style={styles.operationalSummary}>
