@@ -249,6 +249,7 @@ function postContentInlineFromText(
 ): PostContentInlineNode[] {
   const inline: PostContentInlineNode[] = [];
   const orderedMentions = [...mentions].sort((left, right) => left.start - right.start);
+  const links = postContentLinksFromText(bodyText);
   let previousEnd = 0;
   for (const mention of orderedMentions) {
     const { end, profileId, relativeHandle, start } = mention;
@@ -260,17 +261,95 @@ function postContentInlineFromText(
     }
 
     if (start > previousEnd) {
-      inline.push({ type: 'text', text: bodyText.slice(previousEnd, start) });
+      appendTextWithLinks(inline, bodyText, previousEnd, start, links);
     }
     inline.push({ type: 'mention', attrs: { profileId } });
     previousEnd = end;
   }
 
   if (previousEnd < bodyText.length) {
-    inline.push({ type: 'text', text: bodyText.slice(previousEnd) });
+    appendTextWithLinks(inline, bodyText, previousEnd, bodyText.length, links);
   }
 
   return inline;
+}
+
+function postContentLinksFromText(
+  bodyText: string,
+): Array<{ readonly end: number; readonly href: string; readonly start: number }> {
+  const links: Array<{ end: number; href: string; start: number }> = [];
+  for (const match of bodyText.matchAll(/(?<![\p{L}\p{N}_])https?:\/\/[^\s"'<>“”‘’«»]+/giu)) {
+    const start = match.index!;
+    let end = start + match[0].length;
+    const delimiterBalance: [number, number, number] = [0, 0, 0];
+    for (const character of bodyText.slice(start, end)) {
+      if (character === '(') {
+        delimiterBalance[0] += 1;
+      } else if (character === ')') {
+        delimiterBalance[0] -= 1;
+      } else if (character === '[') {
+        delimiterBalance[1] += 1;
+      } else if (character === ']') {
+        delimiterBalance[1] -= 1;
+      } else if (character === '{') {
+        delimiterBalance[2] += 1;
+      } else if (character === '}') {
+        delimiterBalance[2] -= 1;
+      }
+    }
+
+    while (end > start) {
+      const trailing = bodyText[end - 1]!;
+      if (/[.,!?;:]/u.test(trailing)) {
+        end -= 1;
+      } else if (trailing === ')' && delimiterBalance[0] < 0) {
+        delimiterBalance[0] += 1;
+        end -= 1;
+      } else if (trailing === ']' && delimiterBalance[1] < 0) {
+        delimiterBalance[1] += 1;
+        end -= 1;
+      } else if (trailing === '}' && delimiterBalance[2] < 0) {
+        delimiterBalance[2] += 1;
+        end -= 1;
+      } else {
+        break;
+      }
+    }
+
+    try {
+      links.push({ start, end, href: normalizeLinkHref(bodyText.slice(start, end)) });
+    } catch {
+      continue;
+    }
+  }
+  return links;
+}
+
+function appendTextWithLinks(
+  inline: PostContentInlineNode[],
+  bodyText: string,
+  start: number,
+  end: number,
+  links: readonly { readonly end: number; readonly href: string; readonly start: number }[],
+): void {
+  let previousEnd = start;
+  for (const link of links) {
+    if (link.start < start || link.end > end) {
+      continue;
+    }
+    if (link.start > previousEnd) {
+      inline.push({ type: 'text', text: bodyText.slice(previousEnd, link.start) });
+    }
+    inline.push({
+      type: 'text',
+      text: bodyText.slice(link.start, link.end),
+      marks: [postContentSchema.marks.link.create({ href: link.href }).toJSON()],
+    });
+    previousEnd = link.end;
+  }
+  if (previousEnd < end) {
+    inline.push({ type: 'text', text: bodyText.slice(previousEnd, end) });
+  }
 }
 
 function postContentBodyToText(document: PostContentBodyDocumentV1): string {
