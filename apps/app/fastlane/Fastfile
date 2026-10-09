@@ -3,6 +3,7 @@ require 'fileutils'
 require 'plist'
 require 'securerandom'
 require 'shellwords'
+require_relative 'ios_signing_profile'
 
 default_platform(:ios)
 opt_out_usage
@@ -104,6 +105,7 @@ platform :ios do
       'APPLE_API_KEY_ID',
       'APPLE_API_KEY_P8_BASE64',
       'IOS_APP_STORE_PROVISIONING_PROFILE_BASE64',
+      'IOS_PUSH_CONTENT_PROVISIONING_PROFILE_BASE64',
       'IOS_BUILD_NUMBER',
       'IOS_DISTRIBUTION_CERTIFICATE_BASE64',
       'IOS_DISTRIBUTION_CERTIFICATE_PASSWORD',
@@ -124,6 +126,7 @@ platform :ios do
     keychain_path = File.join(signing_dir, 'build.keychain-db')
     certificate_path = File.join(signing_dir, 'distribution.p12')
     profile_path = File.join(signing_dir, 'app-store.mobileprovision')
+    extension_profile_path = File.join(signing_dir, 'push-content.mobileprovision')
     api_key_path = File.join(signing_dir, 'app-store-connect.p8')
     artifact_dir = File.join(signing_dir, 'artifact')
     archive_path = File.join(signing_dir, 'Kosmo.xcarchive')
@@ -136,41 +139,50 @@ platform :ios do
       FileUtils.chmod(0o700, signing_dir)
       write_base64_secret!('IOS_DISTRIBUTION_CERTIFICATE_BASE64', certificate_path)
       write_base64_secret!('IOS_APP_STORE_PROVISIONING_PROFILE_BASE64', profile_path)
+      write_base64_secret!('IOS_PUSH_CONTENT_PROVISIONING_PROFILE_BASE64', extension_profile_path)
       write_base64_secret!('APPLE_API_KEY_P8_BASE64', api_key_path)
 
-      profile_plist_path = File.join(signing_dir, 'app-store.mobileprovision.plist')
       sh(
         "security cms -D -i #{Shellwords.escape(profile_path)} " \
-        "> #{Shellwords.escape(profile_plist_path)}",
+        "> #{Shellwords.escape("#{profile_path}.plist")}",
       )
-      profile = Plist.parse_xml(profile_plist_path)
-      UI.user_error!('The App Store provisioning profile is invalid.') unless profile
+      sh(
+        "security cms -D -i #{Shellwords.escape(extension_profile_path)} " \
+        "> #{Shellwords.escape("#{extension_profile_path}.plist")}",
+      )
+      host_profile = Plist.parse_xml("#{profile_path}.plist")
+      extension_profile = Plist.parse_xml("#{extension_profile_path}.plist")
+      UI.user_error!('The App Store provisioning profile is invalid.') unless host_profile
+      UI.user_error!('The content extension provisioning profile is invalid.') unless extension_profile
 
-      team_id = Array(profile.fetch('TeamIdentifier')).first.to_s
-      profile_uuid = profile.fetch('UUID').to_s
-      UI.user_error!('The provisioning profile has an invalid Team ID.') unless team_id.match?(/\A[A-Za-z0-9]{10}\z/)
-      UI.user_error!('The provisioning profile has an invalid UUID.') unless profile_uuid.match?(/\A[A-Fa-f0-9-]{36}\z/)
-      UI.user_error!('The provisioning profile does not target moe.kos.') unless profile.dig('Entitlements', 'application-identifier') == "#{team_id}.#{BUNDLE_IDENTIFIER}"
-      UI.user_error!('An Ad Hoc provisioning profile was supplied; an App Store profile is required.') if profile.key?('ProvisionedDevices')
-      UI.user_error!('A universal provisioning profile is not valid for App Store distribution.') if profile['ProvisionsAllDevices'] == true
-      UI.user_error!('A development provisioning profile is not valid for App Store distribution.') if profile.dig('Entitlements', 'get-task-allow') == true
-
-      profile_install_paths = [
-        File.join(FastlaneCore::ProvisioningProfile.profiles_path, "#{profile_uuid}.mobileprovision"),
-      ]
+      profile_pair = begin
+        KosmoIOSSigningProfile.validate_pair(
+          host_profile: host_profile,
+          extension_profile: extension_profile,
+        )
+      rescue ArgumentError => error
+        UI.user_error!(error.message)
+      end
+      team_id = profile_pair.fetch(:host).fetch(:team_id)
+      profile_install_paths = KosmoIOSSigningProfile.installed_profile_paths(
+        FastlaneCore::ProvisioningProfile.profiles_path,
+        profile_pair,
+      )
 
       ENV['APPLE_DEVELOPER_TEAM_ID'] = team_id
       sh('pnpm relay')
       sh('pnpm --dir .. exec expo prebuild --clean --platform ios')
-      update_code_signing_settings(
-        path: 'ios/Kosmo.xcodeproj',
-        targets: [SCHEME],
-        build_configurations: ['Release'],
-        use_automatic_signing: false,
-        team_id: team_id,
-        code_sign_identity: 'Apple Distribution',
-        profile_name: profile.fetch('Name'),
-      )
+      KosmoIOSSigningProfile.target_profiles(profile_pair).each do |target, target_profile|
+        update_code_signing_settings(
+          path: 'ios/Kosmo.xcodeproj',
+          targets: [target],
+          build_configurations: ['Release'],
+          use_automatic_signing: false,
+          team_id: team_id,
+          code_sign_identity: 'Apple Distribution',
+          profile_name: target_profile.fetch(:name),
+        )
+      end
 
       create_keychain(
         path: keychain_path,
@@ -190,8 +202,10 @@ platform :ios do
       )
       identity_output = sh("security find-identity -v -p codesigning #{Shellwords.escape(keychain_path)}")
       UI.user_error!('The temporary keychain does not contain an Apple Distribution identity.') unless identity_output.match?(/"Apple Distribution:/)
-      installed_profile_path = install_provisioning_profile(path: profile_path)
-      profile_install_paths << File.expand_path(installed_profile_path.to_s) unless installed_profile_path.to_s.empty?
+      [profile_path, extension_profile_path].each do |path|
+        installed_profile_path = install_provisioning_profile(path: path)
+        profile_install_paths << File.expand_path(installed_profile_path.to_s) unless installed_profile_path.to_s.empty?
+      end
 
       ENV['APPLE_API_KEY_PATH'] = api_key_path
       UI.user_error!('The App Store Connect API key is not a private key.') unless File.read(api_key_path).include?('-----BEGIN PRIVATE KEY-----')
@@ -207,7 +221,7 @@ platform :ios do
         export_team_id: team_id,
         export_options: {
           method: 'app-store',
-          provisioningProfiles: { BUNDLE_IDENTIFIER => profile_uuid },
+          provisioningProfiles: KosmoIOSSigningProfile.export_provisioning_profiles(profile_pair),
           signingStyle: 'manual',
           teamID: team_id,
         },

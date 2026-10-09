@@ -512,6 +512,7 @@ jobs:
             secret/data/kosmo/prod/ios-signing IOS_DISTRIBUTION_CERTIFICATE_BASE64 | IOS_DISTRIBUTION_CERTIFICATE_BASE64 ;
             secret/data/kosmo/prod/ios-signing IOS_DISTRIBUTION_CERTIFICATE_PASSWORD | IOS_DISTRIBUTION_CERTIFICATE_PASSWORD ;
             secret/data/kosmo/prod/ios-signing IOS_APP_STORE_PROVISIONING_PROFILE_BASE64 | IOS_APP_STORE_PROVISIONING_PROFILE_BASE64 ;
+            secret/data/kosmo/prod/ios-signing IOS_PUSH_CONTENT_PROVISIONING_PROFILE_BASE64 | IOS_PUSH_CONTENT_PROVISIONING_PROFILE_BASE64 ;
             secret/data/kosmo/prod/ios-signing APPLE_API_KEY_ID | APPLE_API_KEY_ID ;
             secret/data/kosmo/prod/ios-signing APPLE_API_ISSUER_ID | APPLE_API_ISSUER_ID ;
             secret/data/kosmo/prod/ios-signing APPLE_API_KEY_P8_BASE64 | APPLE_API_KEY_P8_BASE64
@@ -529,6 +530,7 @@ jobs:
           APPLE_API_KEY_ID: ${{ steps.ios_signing.outputs.APPLE_API_KEY_ID }}
           APPLE_API_KEY_P8_BASE64: ${{ steps.ios_signing.outputs.APPLE_API_KEY_P8_BASE64 }}
           IOS_APP_STORE_PROVISIONING_PROFILE_BASE64: ${{ steps.ios_signing.outputs.IOS_APP_STORE_PROVISIONING_PROFILE_BASE64 }}
+          IOS_PUSH_CONTENT_PROVISIONING_PROFILE_BASE64: ${{ steps.ios_signing.outputs.IOS_PUSH_CONTENT_PROVISIONING_PROFILE_BASE64 }}
           IOS_DISTRIBUTION_CERTIFICATE_BASE64: ${{ steps.ios_signing.outputs.IOS_DISTRIBUTION_CERTIFICATE_BASE64 }}
           IOS_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ steps.ios_signing.outputs.IOS_DISTRIBUTION_CERTIFICATE_PASSWORD }}
           CCACHE_COMPILERCHECK: content
