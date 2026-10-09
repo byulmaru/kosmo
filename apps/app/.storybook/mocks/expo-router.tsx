@@ -7,7 +7,7 @@ import {
   useMemo,
   useState,
 } from 'react';
-import { Text } from 'react-native';
+import { Platform, Text } from 'react-native';
 import type { PropsWithChildren, ReactNode } from 'react';
 
 export type Href = string | { params?: Record<string, string | undefined>; pathname: string };
@@ -100,7 +100,12 @@ export function Link({
   asChild,
   children,
   href,
-}: PropsWithChildren<{ asChild?: boolean; href: Href }>) {
+  onPress,
+}: PropsWithChildren<{
+  asChild?: boolean;
+  href: Href;
+  onPress?: (event: LinkPressEvent) => void;
+}>) {
   const { setPathname } = useContext(RouterContext);
   if (
     !asChild ||
@@ -112,16 +117,33 @@ export function Link({
     return <Fragment>{children}</Fragment>;
   }
 
+  const navigate = (event: LinkPressEvent) => {
+    const shouldNavigate = shouldHandleNavigation(event);
+    event.preventDefault?.();
+    if (shouldNavigate) {
+      setPathname(href);
+    }
+  };
+  const handlePress = (event: LinkPressEvent) => {
+    onPress?.(event);
+    navigate(event);
+  };
   return cloneElement(children, {
     href: typeof href === 'string' ? href : href.pathname,
-    onPress: (event: LinkPressEvent) => {
-      children.props.onPress?.(event);
-      const shouldNavigate = shouldHandleNavigation(event);
-      event.preventDefault?.();
-      if (shouldNavigate) {
-        setPathname(href);
-      }
-    },
+    ...(Platform.OS === 'web'
+      ? {
+          onClick: handlePress,
+          onPress: (event: LinkPressEvent) => {
+            children.props.onPress?.(event);
+            (onPress ?? navigate)(event);
+          },
+        }
+      : {
+          onPress: (event: LinkPressEvent) => {
+            children.props.onPress?.(event);
+            handlePress(event);
+          },
+        }),
   });
 }
 
