@@ -10,7 +10,13 @@ export type ReactionEmojiCatalogOption = Readonly<{
   keywords: ReadonlyArray<string>;
   label: string;
   labelEn: string;
+  quick: boolean;
+  quickOrder?: number;
 }>;
+
+const quickReactionOrder = new Map<string, number>(
+  ['🥹', '❤️', '🎉', '👀', '☘️', '🌈'].map((emoji, index) => [emoji, index]),
+);
 
 const categories: Record<string, readonly [string, string]> = {
   'Smileys & Emotion': ['expressions', '표정과 감정'],
@@ -67,7 +73,14 @@ export const reactionEmojiCatalog: readonly ReactionEmojiCatalogOption[] = emoji
         categoryLabel: category[1],
         label: ko.label,
         labelEn: en.label,
+        quick: quickReactionOrder.has(emoji),
+        quickOrder: quickReactionOrder.get(emoji),
         keywords: [ko.label, en.label, ...ko.tags, ...en.tags, ...entry.short_names],
       };
     });
   });
+
+const baseEmojiValues = new Set(emojiData.map((entry) => toEmoji(entry.unified)));
+export const reactionEmojiPickerOptions = reactionEmojiCatalog.filter(({ id }) =>
+  baseEmojiValues.has(id),
+);
