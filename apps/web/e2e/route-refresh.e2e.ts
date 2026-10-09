@@ -189,7 +189,7 @@ async function createRoutes(): Promise<RouteCase[]> {
     {
       path: '/settings/theme',
       verify: async (page) => {
-        await expect(page.getByRole('heading', { name: '테마' })).toBeVisible();
+        await expect(page.getByRole('heading', { name: '테마', exact: true })).toBeVisible();
       },
     },
     {
@@ -287,15 +287,22 @@ for (const delayed of [false, true]) {
 }
 
 test('활성 PostHog SDK는 새로고침 중 잘못된 URL의 pageview를 보내지 않는다', async ({
+  baseURL,
   context,
   page,
 }) => {
   test.setTimeout(180_000);
 
+  if (!baseURL) {
+    throw new Error('The PostHog E2E fixture requires a configured web origin.');
+  }
+
+  const postHogOrigin = new URL(baseURL);
+  postHogOrigin.hostname = 'kosmo-e2e.localhost';
   const viewer = await createE2ESession({ handle: 'e2e-route-refresh-analytics' });
   const routes = await createRoutes();
   const validPaths = new Set(routes.map(({ path }) => path));
-  await setE2ESessionCookie(context, viewer.token);
+  await setE2ESessionCookie(context, viewer.token, postHogOrigin.origin);
   await page.setViewportSize({ height: 900, width: 1440 });
   await installHistoryRecorder(page);
 
@@ -343,16 +350,6 @@ test('활성 PostHog SDK는 새로고침 중 잘못된 URL의 pageview를 보내
       status: 200,
     });
   });
-  await page.addInitScript(() => {
-    const descriptor = Object.getOwnPropertyDescriptor(Location.prototype, 'hostname');
-    if (!descriptor?.configurable || !descriptor.get) {
-      throw new Error('The isolated PostHog fixture requires an overridable Location hostname.');
-    }
-    Object.defineProperty(Location.prototype, 'hostname', {
-      ...descriptor,
-      get: () => 'kosmo-e2e.test',
-    });
-  });
   await page.route('**/graphql', async (route) => {
     const body = route.request().postData();
     if (shellQueries.some((operationName) => isGraphQLOperation(body, operationName))) {
@@ -368,7 +365,7 @@ test('활성 PostHog SDK는 새로고침 중 잘못된 URL의 pageview를 보내
     }
 
     const directPageviewStart = pageviews.length;
-    await page.goto(route.path);
+    await page.goto(new URL(route.path, postHogOrigin).toString());
     hasLoadedRoute = true;
     await route.verify(page);
     await expectPostHogPageview(page, pageviews, postHogRequests, route.path, directPageviewStart);
@@ -392,14 +389,15 @@ test('활성 PostHog SDK는 새로고침 중 잘못된 URL의 pageview를 보내
 });
 
 test('존재하지 않는 route는 직접 접근과 새로고침에서 요청한 URL을 유지한다', async ({ page }) => {
+  const path = '/e2e/route-refresh/unknown/unmatched';
   await installHistoryRecorder(page);
-  await page.goto('/e2e-route-refresh-not-found');
+  await page.goto(path);
 
   await expect(page.getByText('페이지를 찾을 수 없어요', { exact: true })).toBeVisible();
-  await expectHistoryAt(page, '/e2e-route-refresh-not-found');
+  await expectHistoryAt(page, path);
   await clearHistoryRecorder(page);
   await page.reload();
 
   await expect(page.getByText('페이지를 찾을 수 없어요', { exact: true })).toBeVisible();
-  await expectHistoryAt(page, '/e2e-route-refresh-not-found');
+  await expectHistoryAt(page, path);
 });
