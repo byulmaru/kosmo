@@ -46,7 +46,7 @@ export function useProfilePinAction(
 }> {
   const post = useFragment(profilePinFragment, postKey);
   const { selectedProfileId } = useSession();
-  const { available, firstPinnedPostId, pending, request } = useProfilePin();
+  const { available, firstPinnedPostId, pending, queryFailed, request, retry } = useProfilePin();
   const [selectedOperation, setSelectedOperation] = useState<SelectedProfilePinOperation | null>(
     null,
   );
@@ -56,14 +56,14 @@ export function useProfilePinAction(
   const cancelRef = useRef<View>(null);
   const focusTriggerRef = useRef<() => void>(() => undefined);
   const pinned = firstPinnedPostId === post.id;
-  const eligible = Boolean(
-    available &&
+  const ownEligible = Boolean(
     selectedProfileId === post.profile.id &&
     post.profile.instance.kind === 'LOCAL' &&
     post.state === 'ACTIVE' &&
     post.content &&
     ['PUBLIC', 'UNLISTED', 'FOLLOWERS'].includes(post.visibility),
   );
+  const eligible = available && ownEligible;
   const onSelect = useCallback(() => {
     if (!eligible || pending || selectedOperation) {
       return;
@@ -145,6 +145,19 @@ export function useProfilePinAction(
   ) : null;
 
   if (!eligible) {
+    if (queryFailed && ownEligible) {
+      return {
+        item: {
+          icon: Pin,
+          key: 'retry-profile-pin',
+          label: '고정 상태 다시 불러오기',
+          onSelect: retry,
+        },
+        confirmation,
+        onMoreTriggerReady,
+        pending: false,
+      };
+    }
     return { confirmation, onMoreTriggerReady, pending: false };
   }
 

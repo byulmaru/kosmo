@@ -242,7 +242,7 @@ export function PostList({
         <PostMediaViewerHostProvider>
           <View
             ref={listRef}
-            tabIndex={-1}
+            {...(Platform.OS === 'web' ? { tabIndex: -1 as const } : { focusable: true })}
             accessibilityLabel="게시글 목록"
             style={listContainerStyle}
           >

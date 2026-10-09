@@ -272,6 +272,8 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   `pinProfilePost`로 고정한다. mutation 응답은 `PostListItem_post`를 포함해 다음 visible pin의 normalized store
   필드를 유지한다. 해제로 고정 카드가 사라지면 목록으로 focus를 옮기고, chronology에서 실행한 경우에는 남아 있는
   More trigger의 focus를 유지한다.
+- 고정 상태의 최초 조회가 실패하면 본인 게시물 메뉴에 `고정 상태 다시 불러오기`를 제공한다.
+  같은 프로필에서 해당 조회를 재시도하고 성공하면 일반 고정·해제 메뉴로 복구한다.
 - 기존 `usePostMoreMenuItem`이 복사 URL·클립보드 실패 처리를 유지하고, `PostDeletionAction`이 삭제
   eligibility·확인창·mutation·cache·실패 처리를 유지한다. Storybook도 production 메뉴를 사용해 로그인 사용자의 신고와 visitor의 뮤트를 함께 검증한다. 실제 고정 자격·정책은 PROD-809의 Profile consumer와 서버 계약을 따른다.
 - 이 메뉴의 sheet 아이콘은 DSN-55 source에 맞춰 24px을 사용한다. 공용 `ActionMenu`의 다른 소비자는
