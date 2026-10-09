@@ -30,6 +30,9 @@ export { sendProfileFollow, sendProfileUnfollow } from './src/profile-follow-del
 export { closeFedifyQueue } from './src/queue';
 export { sendReaction, sendReactionUndo } from './src/reaction-delivery';
 export {
+  applyRemoteProfileActorDocument,
+  fetchRemoteProfileActor,
+  fetchRemoteProfileActorDocument,
   findOrMaterializeRemoteProfileActorByUri,
   findStoredRemoteProfileActorByUri,
   materializeRemoteProfileActor,

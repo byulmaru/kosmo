@@ -25,7 +25,6 @@ import { handleInboundUndoBlock } from './inbound-profile-block';
 import {
   findOrMaterializeRemoteProfileActorByUri,
   findStoredRemoteProfileActorByUri,
-  findUsableStoredRemoteProfileActorByUri,
   RemoteActorMaterializationError,
 } from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
@@ -73,7 +72,11 @@ export const handleInboundFollow = async (
   let remoteActor: Awaited<ReturnType<typeof findOrMaterializeRemoteProfileActorByUri>>;
 
   try {
-    remoteActor = await findOrMaterializeRemoteProfileActorByUri({ actorUri, context, now });
+    remoteActor = await findOrMaterializeRemoteProfileActorByUri({
+      actorUri,
+      contextOrigin: context.canonicalOrigin,
+      receipt: { activityUri: follow.id, receivedAt: now },
+    });
   } catch (error) {
     if (isExpectedRemoteActorRejection(error)) {
       observeInbound({
@@ -247,7 +250,11 @@ const handleInboundUndoAnnounce = async (
   return 'deleted';
 };
 
-export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo): Promise<void> => {
+export const handleInboundUndo = async (
+  context: InboxContext<void>,
+  undo: Undo,
+  receivedAt: Temporal.Instant = Temporal.Now.instant(),
+): Promise<void> => {
   const actorHref = uniqueHref(undo.actorIds);
   const actorUri = actorHref ? new URL(actorHref) : null;
   if (!isHttpUri(actorUri)) {
@@ -305,11 +312,14 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
     }
   }
 
-  // Undo never materializes or dereferences an unknown actor.
-  let remoteActor: Awaited<ReturnType<typeof findUsableStoredRemoteProfileActorByUri>>;
+  let remoteActor: Awaited<ReturnType<typeof findOrMaterializeRemoteProfileActorByUri>>;
 
   try {
-    remoteActor = await findUsableStoredRemoteProfileActorByUri(actorUri);
+    remoteActor = await findOrMaterializeRemoteProfileActorByUri({
+      actorUri,
+      contextOrigin: context.canonicalOrigin,
+      receipt: { activityUri: undo.id, receivedAt },
+    });
   } catch (error) {
     if (isExpectedRemoteActorRejection(error)) {
       observeInbound({
@@ -327,7 +337,7 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
     throw error;
   }
 
-  if (!remoteActor || remoteActor.instance.state !== InstanceState.ACTIVE) {
+  if (remoteActor.instance.state !== InstanceState.ACTIVE) {
     observeInbound({
       outcome: 'noop',
       activityType: 'Undo',

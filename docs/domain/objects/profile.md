@@ -259,7 +259,7 @@ Hashtag에는 영향을 주지 않는다.
 현재 단계에서는 [ADR 0017](../decisions/0017-profile-search-staged-visibility.md)의 제한된 staged exception을
 적용할 수 있다. 현재 저장된 Profile의 exact `profileByHandle` 직접 조회와 partial `searchProfiles` 후보는 같은 visibility를
 사용해 configured local Instance의 `Active` Profile과, 입력 domain의 ActivityPub Instance에 저장된 `Active`
-Remote Profile(단, `InstanceState.SUSPENDED` Instance 제외)만 반환한다. 이 예외는 최종 moderation 정책이
+Remote Profile 중 Service State가 Suspended인 Instance의 Profile은 제외한다. 이 예외는 최종 moderation 정책이
 Domain Limit/Profile Domain Block을 허용하거나 생략하도록 바꾸지 않으며, 공통 predicate가 준비되면 exact와
 partial lookup을 함께 전환해야 한다. 이 staged exception은 Profile Domain Block에 대한 기존 visibility 단계이며, Profile Block 정책과는
 구별된다. Profile Block은 `node(id:)`·`profileByHandle` 직접 조회의 기존 결과를 바꾸지 않고 `searchProfiles` exact-match·partial-match
@@ -268,16 +268,27 @@ partial lookup을 함께 전환해야 한다. 이 staged exception은 Profile Do
 인증된 Account가 `searchProfiles`에 명시적인 `@handle@instance` qualified handle 전체를 입력하고 해당 Remote
 Profile이 아직 저장되지 않은 경우에만, [ADR 0017](../decisions/0017-profile-search-staged-visibility.md)에 따라
 기존 원격 actor lookup과 Remote Profile 등록을 먼저 수행할 수 있다. 등록 뒤에도 기존 DB 검색과 같은
-visibility를 통과한 Profile만 반환한다. 같은 명시적 qualified handle 검색에서 이미 저장된 Remote Profile이
-stale한 경우에는 기존 DB 검색과 visibility를 먼저 적용한 결과를 즉시 반환하고, 결과를 기다리지 않는 Temporal
-refresh를 시작한다. refresh 실패는 기존 Profile 검색 결과를 실패로 바꾸거나 저장된 Profile을 제거하지
-않으며, 예상하지 못한 오류는 관측 가능하게 남긴다. 일반 텍스트, 부분 remote handle, local handle, malformed
+visibility를 통과한 Profile만 반환한다. 같은 명시적 qualified handle 검색에서 저장된 Remote Profile의 freshness는
+Instance Reachability State가 Reachable 또는 Unreachable인 경우 모두 같다. 마지막 성공 조회·갱신 시각이 있고 현재까지
+7일 미만인 저장 Profile은 fresh하며 기존 DB 검색과 visibility를 적용해 반환하고 원격 lookup이나 Instance Reachability
+회복을 강제하지 않는다. 성공 시각이 없거나 7일 이상 지난 저장 Profile은 stale하며 기존 DB 검색과 visibility를 먼저
+적용한 결과를 즉시 반환하고 결과를 기다리지 않는 기존 갱신을 시작한다. Qualified-handle 조회와 generic canonical actor
+URI 조회는 이 같은 7일 freshness 기준을 사용하며, stale URI 조회도 저장 Profile ID를 반환하고 별도 refresh를 시작한다.
+갱신 실패는 저장 Profile과 Instance
+Reachability State를 바꾸지 않으며, 예상하지 못한 오류는 관측 가능하게 남긴다. 일반 텍스트, 부분 remote handle, local handle, malformed
 handle은 원격 fetch·refresh를 시작하지 않는다. exact `profileByHandle`, 프로필 route와 그 하위 경로도 원격
 materialization이나 refresh 없이 저장된 Profile만 조회한다. 원격 lookup 실패, identity 충돌 또는 새 원격 요청을
-보낼 수 없는 Instance는 Profile이 없는 검색 결과로 처리하고 예상하지 못한 오류는 관측 가능하게 남긴다.
+보낼 수 없는 Instance는 Profile이 없는 검색 결과로 처리하며 Instance Reachability State를 바꾸지 않는다. 예상하지
+못한 오류는 관측 가능하게 남긴다.
 
-- Remote Profile lookup은 Instance의 Safety State가 Domain Block이 아니고 Reachability State가
-  Reachable이며 Service State가 Active일 때만 새 원격 요청을 보낼 수 있다.
+검증된 inbound receipt에 따른 reachability 복구는 canonical actor URI가 가리키는 기존 usable Remote Profile을 확인한
+경우에만 수행하고, 그 자체로 actor 표현 freshness를 갱신하지 않는다. 원격 fetch만으로는 freshness가 바뀌지 않으며,
+검증된 actor document apply가 성공한 경우에만 조회 관측 시각으로 7일 기준을 갱신한다. 검증된 inbound Update의
+document apply가 성공하면 수신 시각으로 freshness를 갱신하며 Unresponsive Instance를 복구할 수 있다.
+
+- Remote Profile lookup은 Instance의 Safety State가 Domain Block이 아니고 Service State가 Active여야 한다.
+  Reachability State가 Reachable이면 새 원격 요청을 보낼 수 있다. Unreachable이면 Remote Profile materialization·갱신에
+  필요한 해당 canonical actor URI의 exact lookup을 시도할 수 있다.
 
 ### Profile 고정 Post
 

@@ -25,11 +25,14 @@ import {
   ProfileMediaKind,
   ProfileState,
 } from '@kosmo/core/enums';
+import { temporalClient } from '@kosmo/core/temporal/client';
+import { remoteProfileLookupWorkflow } from '@kosmo/core/temporal/workflows';
 import { count, eq, ne } from 'drizzle-orm';
 import type { Context, DocumentLoader } from '@fedify/fedify';
 import type { Object as ActivityPubObject } from '@fedify/vocab';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
+import type { RemoteProfileLookupInput } from '@kosmo/core/temporal/workflows';
 import type * as Federation from './federation';
 import type * as Materialization from './remote-actor-materialization';
 import type * as Snapshot from './remote-featured-snapshot';
@@ -59,6 +62,7 @@ let Profiles: typeof CoreDb.Profiles;
 let seedDatabase: typeof CoreSeed.seedDatabase;
 let findOrMaterializeRemoteProfileActorByUri: typeof Materialization.findOrMaterializeRemoteProfileActorByUri;
 let materializeRemoteProfileActor: typeof Materialization.materializeRemoteProfileActor;
+let applyRemoteProfileActorDocument: typeof Materialization.applyRemoteProfileActorDocument;
 let RemoteActorMaterializationError: typeof Materialization.RemoteActorMaterializationError;
 let replaceRemoteFeaturedSnapshot: typeof Snapshot.replaceRemoteFeaturedSnapshot;
 let collectRemoteFeaturedPostIds: typeof Featured.collectRemoteFeaturedPostIds;
@@ -91,6 +95,7 @@ describe('remote actor materialization', () => {
     ({
       findOrMaterializeRemoteProfileActorByUri,
       materializeRemoteProfileActor,
+      applyRemoteProfileActorDocument,
       RemoteActorMaterializationError,
     } = await import('./remote-actor-materialization'));
     ({ replaceRemoteFeaturedSnapshot } = await import('./remote-featured-snapshot'));
@@ -551,108 +556,78 @@ describe('remote actor materialization', () => {
     }
   });
 
-  test('materializes an inbound actor URI directly', async () => {
+  test('dispatches a URI lookup once with the string origin and returns its stored result', async () => {
     const actor = createActor();
-    const lookupObject = mock.fn(async () => actor);
+    const seedLookupObject = mock.fn(async () => actor);
+    const storedProfile = await materializeRemoteProfileActor({
+      actorUri: actor.id!,
+      context: { lookupObject: seedLookupObject },
+    });
+    const input = {
+      actorUri: actor.id!.href,
+      contextOrigin: publicOrigin,
+    } satisfies RemoteProfileLookupInput;
+    const execute = mock.method(
+      temporalClient.workflow,
+      'execute',
+      async (workflow: unknown, options: unknown) => {
+        assert.equal(workflow, remoteProfileLookupWorkflow.workflow);
+        assert.ok(options && typeof options === 'object');
+        const workflowOptions = options as { args?: unknown[]; workflowId?: string };
+        assert.deepEqual(workflowOptions.args, [input]);
+        assert.equal(
+          workflowOptions.workflowId,
+          remoteProfileLookupWorkflow.workflowIdFromArgs(input),
+        );
+        return storedProfile.id;
+      },
+    );
 
     const result = await findOrMaterializeRemoteProfileActorByUri({
       actorUri: actor.id!,
-      context: { lookupObject },
+      contextOrigin: publicOrigin,
     });
 
     assert.equal(result.actor.uri, actor.id?.href);
-    assert.equal(
-      (lookupObject.mock.calls as unknown as Array<{ arguments: unknown[] }>)[0]?.arguments[0],
-      actor.id,
+    assert.equal(result.profile.id, storedProfile.id);
+    assert.equal(execute.mock.calls.length, 1);
+  });
+
+  test('omits a non-HTTP receipt activity ID and forwards its time as the dedup identity', async () => {
+    const stored = await createStoredRemoteActor();
+    const receivedAt = Temporal.Instant.from('2026-08-01T00:00:00Z');
+    const input = {
+      actorUri: stored.actor.uri,
+      contextOrigin: publicOrigin,
+      receipt: { receivedAt: receivedAt.toString() },
+    } satisfies RemoteProfileLookupInput;
+    const execute = mock.method(
+      temporalClient.workflow,
+      'execute',
+      async (workflow: unknown, options: unknown) => {
+        assert.equal(workflow, remoteProfileLookupWorkflow.workflow);
+        assert.ok(options && typeof options === 'object');
+        const workflowOptions = options as { args?: unknown[]; workflowId?: string };
+        assert.deepEqual(workflowOptions.args, [input]);
+        assert.equal(
+          workflowOptions.workflowId,
+          remoteProfileLookupWorkflow.workflowIdFromArgs(input),
+        );
+        return stored.profile.id;
+      },
     );
-  });
-
-  test('rejects an inbound actor URI mismatch before persisting the looked-up actor', async () => {
-    const expectedActorUri = new URL(`https://${remoteDomain}/users/alice`);
-    const returnedActor = createActor({
-      id: new URL(`https://${remoteDomain}/users/mallory`),
-    });
-    const lookupObject = mock.fn(async () => returnedActor);
-
-    await assert.rejects(
-      findOrMaterializeRemoteProfileActorByUri({
-        actorUri: expectedActorUri,
-        context: { lookupObject },
-      }),
-      RemoteActorMaterializationError,
-    );
-
-    assert.equal(await db.$count(ActivityPubActors), 0);
-    assert.equal(await db.$count(Profiles), 0);
-  });
-
-  test('reactivates an unknown actor instance only after materialization succeeds', async () => {
-    const instance = await createRemoteInstance({ state: InstanceState.UNRESPONSIVE });
-    const actor = createActor();
-    const lookupObject = mock.fn(async () => actor);
-
-    await findOrMaterializeRemoteProfileActorByUri({
-      actorUri: actor.id!,
-      context: { lookupObject },
-    });
-
-    const reactivated = await db
-      .select()
-      .from(Instances)
-      .where(eq(Instances.id, instance.id))
-      .limit(1)
-      .then(firstOrThrow);
-    assert.equal(reactivated.state, InstanceState.ACTIVE);
-  });
-
-  test('keeps an unknown actor instance UNRESPONSIVE when materialization fails', async () => {
-    const instance = await createRemoteInstance({ state: InstanceState.UNRESPONSIVE });
-    const actor = createActor();
-    const lookupObject = mock.fn(async () => null);
-
-    await assert.rejects(
-      findOrMaterializeRemoteProfileActorByUri({
-        actorUri: actor.id!,
-        context: { lookupObject },
-      }),
-      RemoteActorMaterializationError,
-    );
-
-    const preserved = await db
-      .select()
-      .from(Instances)
-      .where(eq(Instances.id, instance.id))
-      .limit(1)
-      .then(firstOrThrow);
-    assert.equal(preserved.state, InstanceState.UNRESPONSIVE);
-  });
-
-  test('reuses a stored inbound actor and reactivates UNRESPONSIVE with compare-and-set', async () => {
-    const stored = await createStoredRemoteActor({ instanceState: InstanceState.UNRESPONSIVE });
-    const lookupObject = mock.fn(async () => createActor());
 
     const result = await findOrMaterializeRemoteProfileActorByUri({
       actorUri: new URL(stored.actor.uri),
-      context: { lookupObject },
+      contextOrigin: publicOrigin,
+      receipt: {
+        activityUri: new URL('urn:activity:follow-1'),
+        receivedAt,
+      },
     });
 
     assert.equal(result.profile.id, stored.profile.id);
-    assert.equal(result.instance.state, InstanceState.ACTIVE);
-    assert.equal(lookupObject.mock.calls.length, 0);
-  });
-
-  test('ignores a stored SUSPENDED inbound actor without network access', async () => {
-    const stored = await createStoredRemoteActor({ instanceState: InstanceState.SUSPENDED });
-    const lookupObject = mock.fn(async () => createActor());
-
-    await assert.rejects(
-      findOrMaterializeRemoteProfileActorByUri({
-        actorUri: new URL(stored.actor.uri),
-        context: { lookupObject },
-      }),
-      /Profile not found/,
-    );
-    assert.equal(lookupObject.mock.calls.length, 0);
+    assert.equal(execute.mock.calls.length, 1);
   });
 
   test('preserves reserved remote handle casing during lookup', async () => {
@@ -713,17 +688,19 @@ describe('remote actor materialization', () => {
     const lookupError = new Error('lookup failed');
     const cases: Array<{
       expected: RegExp;
+      isPermanentActorFailure: boolean;
       result: ActivityPubObject | Error | null;
     }> = [
-      { expected: /lookup failed/, result: lookupError },
-      { expected: /did not return an actor/, result: null },
+      { expected: /lookup failed/, isPermanentActorFailure: false, result: lookupError },
+      { expected: /did not return an actor/, isPermanentActorFailure: false, result: null },
       {
         expected: /did not return an actor/,
+        isPermanentActorFailure: true,
         result: new Note({ id: new URL(`https://${remoteDomain}/notes/1`), content: 'note' }),
       },
     ];
 
-    for (const { expected, result } of cases) {
+    for (const { expected, isPermanentActorFailure, result } of cases) {
       const { context } = createLookupContext(async () => {
         if (result instanceof Error) {
           throw result;
@@ -733,7 +710,12 @@ describe('remote actor materialization', () => {
 
       await assert.rejects(
         materializeRemoteProfileActor({ context, actorUri: remoteActorUri }),
-        expected,
+        (error: unknown) => {
+          assert.ok(error instanceof Error);
+          assert.match(error.message, expected);
+          assert.equal(error instanceof RemoteActorMaterializationError, isPermanentActorFailure);
+          return true;
+        },
       );
       assert.equal(await countRows(Profiles), 0);
       assert.equal(await countRows(Instances), 1);
@@ -1010,6 +992,188 @@ describe('remote actor materialization', () => {
           url: `https://${remoteDomain}/media/avatar-newer.png`,
         },
       ],
+    );
+  });
+
+  test('applies newer actor Featured state before sync and ignores stale removals', async () => {
+    const stored = await createStoredRemoteActor();
+    const otherInstance = await createRemoteInstance({ domain: 'other.remote.example' });
+    const otherProfile = await createProfile({ handle: 'bob', instanceId: otherInstance.id });
+    const createPosts = (profileId: string, amount: number) =>
+      db
+        .insert(Posts)
+        .values(
+          Array.from({ length: amount }, () => ({
+            profileId,
+            state: PostState.ACTIVE,
+            visibility: PostVisibility.PUBLIC,
+          })),
+        )
+        .returning();
+    const [remotePin, manualPin, stalePin, equalPin] = await createPosts(stored.profile.id, 4);
+    const [otherPin] = await createPosts(otherProfile.id, 1);
+
+    await db.insert(ProfilePinnedPosts).values([
+      { position: 0, postId: remotePin!.id, profileId: stored.profile.id },
+      { postId: manualPin!.id, profileId: stored.profile.id },
+      { position: 0, postId: otherPin!.id, profileId: otherProfile.id },
+    ]);
+
+    const readPins = async (profileId: string) =>
+      (
+        await db
+          .select({ position: ProfilePinnedPosts.position, postId: ProfilePinnedPosts.postId })
+          .from(ProfilePinnedPosts)
+          .where(eq(ProfilePinnedPosts.profileId, profileId))
+          .orderBy(ProfilePinnedPosts.position)
+      ).map(({ position, postId }) => [position, postId] as const);
+
+    const advertisedAt = Temporal.Instant.from('2026-07-10T00:00:00Z');
+    const featuredUri = new URL(remoteActorUri.href + '/featured');
+    const advertisedDocument = await createActor({
+      featured: featuredUri,
+      name: 'Advertised Alice',
+    }).toJsonLd({ format: 'expand' });
+    let projectionAtStart:
+      | { displayName: string; lastFetchedAt: Temporal.Instant | null }
+      | undefined;
+    const start = mock.method(temporalClient.workflow, 'start', async () => {
+      projectionAtStart = await db
+        .select({
+          displayName: Profiles.displayName,
+          lastFetchedAt: ActivityPubActors.lastFetchedAt,
+        })
+        .from(Profiles)
+        .innerJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Profiles.id))
+        .where(eq(Profiles.id, stored.profile.id))
+        .limit(1)
+        .then(firstOrThrow);
+      return undefined as never;
+    });
+
+    await applyRemoteProfileActorDocument({
+      actorUri: remoteActorUri,
+      actorJsonLd: advertisedDocument,
+      observedAt: advertisedAt,
+    });
+
+    assert.equal(start.mock.callCount(), 1);
+    assert.equal(start.mock.calls[0]?.arguments[0], 'remoteProfileFeaturedWorkflow');
+    assert.deepEqual(
+      (start.mock.calls[0]?.arguments[1] as { args?: unknown[] } | undefined)?.args,
+      [
+        {
+          actorUri: remoteActorUri.href,
+          featuredUri: featuredUri.href,
+          profileId: stored.profile.id,
+        },
+      ],
+    );
+    assert.equal(projectionAtStart?.displayName, 'Advertised Alice');
+    assert.equal(projectionAtStart?.lastFetchedAt?.toString(), advertisedAt.toString());
+
+    const withoutFeaturedAt = Temporal.Instant.from('2026-07-11T00:00:00Z');
+    const withoutFeaturedDocument = await createActor({ name: 'No Featured Alice' }).toJsonLd({
+      format: 'expand',
+    });
+    await applyRemoteProfileActorDocument({
+      actorUri: remoteActorUri,
+      actorJsonLd: withoutFeaturedDocument,
+      observedAt: withoutFeaturedAt,
+    });
+
+    assert.deepEqual(await readPins(stored.profile.id), [[null, manualPin!.id]]);
+    assert.deepEqual(await readPins(otherProfile.id), [[0, otherPin!.id]]);
+
+    await db.insert(ProfilePinnedPosts).values({
+      position: 1,
+      postId: stalePin!.id,
+      profileId: stored.profile.id,
+    });
+    const olderDocument = await createActor({ name: 'Older Alice' }).toJsonLd({
+      format: 'expand',
+    });
+    await applyRemoteProfileActorDocument({
+      actorUri: remoteActorUri,
+      actorJsonLd: olderDocument,
+      observedAt: Temporal.Instant.from('2026-07-10T23:59:59Z'),
+    });
+    assert.deepEqual(await readPins(stored.profile.id), [
+      [1, stalePin!.id],
+      [null, manualPin!.id],
+    ]);
+
+    await db.insert(ProfilePinnedPosts).values({
+      position: 2,
+      postId: equalPin!.id,
+      profileId: stored.profile.id,
+    });
+    await applyRemoteProfileActorDocument({
+      actorUri: remoteActorUri,
+      actorJsonLd: olderDocument,
+      observedAt: withoutFeaturedAt,
+    });
+    assert.deepEqual(await readPins(stored.profile.id), [
+      [1, stalePin!.id],
+      [2, equalPin!.id],
+      [null, manualPin!.id],
+    ]);
+
+    for (const observedAt of [Temporal.Instant.from('2026-07-10T23:59:59Z'), withoutFeaturedAt]) {
+      await applyRemoteProfileActorDocument({
+        actorUri: remoteActorUri,
+        actorJsonLd: advertisedDocument,
+        observedAt,
+      });
+      assert.deepEqual(await readPins(stored.profile.id), [
+        [1, stalePin!.id],
+        [2, equalPin!.id],
+        [null, manualPin!.id],
+      ]);
+      assert.equal(start.mock.callCount(), 1);
+    }
+    assert.deepEqual(await readPins(otherProfile.id), [[0, otherPin!.id]]);
+  });
+
+  test('keeps the actor projection committed when Featured Workflow start fails', async () => {
+    const stored = await createStoredRemoteActor();
+    const observedAt = Temporal.Instant.from('2026-07-12T00:00:00Z');
+    const featuredUri = new URL(remoteActorUri.href + '/featured');
+    const actorJsonLd = await createActor({
+      featured: featuredUri,
+      name: 'Committed Alice',
+    }).toJsonLd({ format: 'expand' });
+    const startError = new Error('Temporal unavailable');
+    const start = mock.method(temporalClient.workflow, 'start', async () => {
+      throw startError;
+    });
+    const errorLog = mock.method(console, 'error', () => undefined);
+
+    const result = await applyRemoteProfileActorDocument({
+      actorUri: remoteActorUri,
+      actorJsonLd,
+      observedAt,
+    });
+
+    const persisted = await db
+      .select({ actor: ActivityPubActors, profile: Profiles })
+      .from(ActivityPubActors)
+      .innerJoin(Profiles, eq(Profiles.id, ActivityPubActors.profileId))
+      .where(eq(ActivityPubActors.uri, remoteActorUri.href))
+      .limit(1)
+      .then(firstOrThrow);
+    assert.equal(start.mock.callCount(), 1);
+    assert.equal(result.id, stored.profile.id);
+    assert.equal(persisted.profile.displayName, 'Committed Alice');
+    assert.equal(persisted.actor.lastFetchedAt?.toString(), observedAt.toString());
+    assert.equal(errorLog.mock.callCount(), 1);
+    assert.equal(
+      errorLog.mock.calls[0]?.arguments[0],
+      'Remote Profile Featured Workflow start failed',
+    );
+    assert.equal(
+      (errorLog.mock.calls[0]?.arguments[1] as { error?: unknown } | undefined)?.error,
+      startError,
     );
   });
 

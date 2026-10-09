@@ -21,8 +21,12 @@ export {
 } from './activities/push-notification';
 export { collectRemoteFeaturedActivity } from './activities/remote-profile-featured';
 export {
+  applyRemoteProfileActorActivity,
+  fetchRemoteProfileActorActivity,
+  getRemoteProfileActorStateActivity,
   lookupRemoteActorUriActivity,
   materializeRemoteProfileActorActivity,
+  recoverRemoteProfileActorActivity,
   refreshRemoteProfileActorActivity,
 } from './activities/remote-profile-materialization';
 export {
