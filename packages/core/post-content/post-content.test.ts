@@ -50,7 +50,7 @@ test('keeps one empty paragraph for an empty document', () => {
   });
 });
 
-test('auto-links explicit HTTP URLs and leaves delimiters and terminal punctuation as text', () => {
+test('auto-links explicit HTTP URLs with canonical hrefs and original text', () => {
   const bodyText =
     '(HTTPS://EXAMPLE.COM:443/a/../path?one=1&two=2), "<https://example.org/quoted?q=1&x=2>"\r\n' +
     'http://example.net/a_(b).';
@@ -88,27 +88,28 @@ test('auto-links explicit HTTP URLs and leaves delimiters and terminal punctuati
   );
 });
 
-test('trims punctuation before unmatched closing wrappers and keeps wrappers as text', () => {
-  for (const [bodyText, expectedHtml] of [
-    [
-      '(https://example.com/path.)',
-      '<p>(<a href="https://example.com/path">https://example.com/path</a>.)</p>',
+test('keeps linkify-it punctuation inside the matched URL before a closing wrapper', () => {
+  const bodyText = '(https://example.com/path.)';
+  const document = postContentDocumentFromText(bodyText);
+
+  assert.deepEqual(document.body.content[0], {
+    type: 'paragraph',
+    content: [
+      { type: 'text', text: '(' },
+      {
+        type: 'text',
+        text: 'https://example.com/path.',
+        marks: [{ type: 'link', attrs: { href: 'https://example.com/path.' } }],
+      },
+      { type: 'text', text: ')' },
     ],
-    [
-      '[https://example.com/path.]',
-      '<p>[<a href="https://example.com/path">https://example.com/path</a>.]</p>',
-    ],
-    [
-      '{https://example.com/path.}',
-      '<p>{<a href="https://example.com/path">https://example.com/path</a>.}</p>',
-    ],
-  ]) {
-    assert.equal(postContentDocumentToHtml(postContentDocumentFromText(bodyText)), expectedHtml);
-  }
+  });
+  assert.equal(postContentDocumentToText(document), bodyText);
 });
 
-test('keeps embedded, unsupported, and invalid URLs as plain text', () => {
-  const bodyText = 'foohttps://example.com ftp://example.com javascript:alert(1) http://[bad';
+test('keeps embedded, unsupported, fuzzy, and invalid URLs as plain text', () => {
+  const bodyText =
+    'foohttps://example.com www.example.com example.org user@example.com mailto:user@example.com ftp://example.com //example.com javascript:alert(1) http://[bad';
   const document = postContentDocumentFromText(bodyText);
 
   assert.deepEqual(document.body.content[0], {

@@ -1,5 +1,6 @@
 import { isDeepStrictEqual } from 'node:util';
 import { JSDOM } from 'jsdom';
+import { LinkifyIt } from 'linkify-it';
 import { DOMSerializer } from 'prosemirror-model';
 import { ValidationError } from '../error';
 import { postBodyMaxLength } from '../validation/post-policy';
@@ -12,6 +13,7 @@ import {
 } from './index';
 import { postContentSchema } from './schema';
 import { normalizeLinkHref } from './schema/marks/link';
+import type { Match } from 'linkify-it';
 import type { Mark, Node as ProseMirrorNode } from 'prosemirror-model';
 import type {
   PostContentBodyDocumentV1,
@@ -20,6 +22,11 @@ import type {
   PostContentMediaNode,
   PostContentSchemaVersion,
 } from './index';
+
+const postContentLinkify = new LinkifyIt({ fuzzyLink: false, fuzzyEmail: false })
+  .add('ftp:', null)
+  .add('mailto:', null)
+  .add('//', null);
 
 export interface PostContentMediaReference {
   readonly mediaId: string;
@@ -249,7 +256,7 @@ function postContentInlineFromText(
 ): PostContentInlineNode[] {
   const inline: PostContentInlineNode[] = [];
   const orderedMentions = [...mentions].sort((left, right) => left.start - right.start);
-  const links = postContentLinksFromText(bodyText);
+  const links = postContentLinkify.match(bodyText) ?? [];
   let previousEnd = 0;
   for (const mention of orderedMentions) {
     const { end, profileId, relativeHandle, start } = mention;
@@ -274,78 +281,34 @@ function postContentInlineFromText(
   return inline;
 }
 
-function postContentLinksFromText(
-  bodyText: string,
-): Array<{ readonly end: number; readonly href: string; readonly start: number }> {
-  const links: Array<{ end: number; href: string; start: number }> = [];
-  for (const match of bodyText.matchAll(/(?<![\p{L}\p{N}_])https?:\/\/[^\s"'<>“”‘’«»]+/giu)) {
-    const start = match.index!;
-    let end = start + match[0].length;
-    const delimiterBalance: [number, number, number] = [0, 0, 0];
-    for (const character of bodyText.slice(start, end)) {
-      if (character === '(') {
-        delimiterBalance[0] += 1;
-      } else if (character === ')') {
-        delimiterBalance[0] -= 1;
-      } else if (character === '[') {
-        delimiterBalance[1] += 1;
-      } else if (character === ']') {
-        delimiterBalance[1] -= 1;
-      } else if (character === '{') {
-        delimiterBalance[2] += 1;
-      } else if (character === '}') {
-        delimiterBalance[2] -= 1;
-      }
-    }
-
-    while (end > start) {
-      const trailing = bodyText[end - 1]!;
-      if (/[.,!?;:]/u.test(trailing)) {
-        end -= 1;
-      } else if (trailing === ')' && delimiterBalance[0] < 0) {
-        delimiterBalance[0] += 1;
-        end -= 1;
-      } else if (trailing === ']' && delimiterBalance[1] < 0) {
-        delimiterBalance[1] += 1;
-        end -= 1;
-      } else if (trailing === '}' && delimiterBalance[2] < 0) {
-        delimiterBalance[2] += 1;
-        end -= 1;
-      } else {
-        break;
-      }
-    }
-
-    try {
-      links.push({ start, end, href: normalizeLinkHref(bodyText.slice(start, end)) });
-    } catch {
-      continue;
-    }
-  }
-  return links;
-}
-
 function appendTextWithLinks(
   inline: PostContentInlineNode[],
   bodyText: string,
   start: number,
   end: number,
-  links: readonly { readonly end: number; readonly href: string; readonly start: number }[],
+  links: readonly Match[],
 ): void {
   let previousEnd = start;
   for (const link of links) {
-    if (link.start < start || link.end > end) {
+    if (link.index < previousEnd || link.lastIndex > end) {
       continue;
     }
-    if (link.start > previousEnd) {
-      inline.push({ type: 'text', text: bodyText.slice(previousEnd, link.start) });
+    const text = bodyText.slice(link.index, link.lastIndex);
+    let href: string;
+    try {
+      href = normalizeLinkHref(text);
+    } catch {
+      continue;
+    }
+    if (link.index > previousEnd) {
+      inline.push({ type: 'text', text: bodyText.slice(previousEnd, link.index) });
     }
     inline.push({
       type: 'text',
-      text: bodyText.slice(link.start, link.end),
-      marks: [postContentSchema.marks.link.create({ href: link.href }).toJSON()],
+      text,
+      marks: [postContentSchema.marks.link.create({ href }).toJSON()],
     });
-    previousEnd = link.end;
+    previousEnd = link.lastIndex;
   }
   if (previousEnd < end) {
     inline.push({ type: 'text', text: bodyText.slice(previousEnd, end) });
