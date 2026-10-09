@@ -17,6 +17,12 @@ export {
   withInboundObservability,
 } from './src/inbound-observability';
 export { handleInboundBlock, handleInboundUndoBlock } from './src/inbound-profile-block';
+export type { InboundQuoteRetryInput } from './src/inbound-quote';
+export {
+  handleInboundQuote,
+  resolveStoredInboundQuote,
+  revokeInboundQuote,
+} from './src/inbound-quote';
 export { sendLocalPostCreate, sendLocalPostDelete } from './src/local-post-delivery';
 export { sendLocalProfileUpdate } from './src/local-profile-update-delivery';
 export {

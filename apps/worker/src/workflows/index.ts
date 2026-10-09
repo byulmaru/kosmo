@@ -11,6 +11,7 @@ export { profileMigrationMoveWorkflow } from './profile-migration';
 export { profileUnblockWorkflow } from './profile-unblock';
 export { profileUpdateEffectsWorkflow } from './profile-update';
 export { pushNotificationDeliveryWorkflow } from './push-notification';
+export { activitypubQuoteResolutionWorkflow } from './quote-resolution';
 export { reactionCreateEffectsWorkflow } from './reaction-create';
 export { reactionDeleteEffectsWorkflow } from './reaction-delete';
 export { remoteProfileFeaturedWorkflow } from './remote-profile-featured';

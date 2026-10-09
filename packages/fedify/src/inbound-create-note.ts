@@ -12,7 +12,7 @@ import { postContentDocumentToText } from '@kosmo/core/post-content/server';
 import { createPost, ProfilePairBlockedError } from '@kosmo/core/services';
 import { runWorkflow } from '@kosmo/core/temporal/client';
 import { remoteProfileRefreshWorkflow } from '@kosmo/core/temporal/workflows';
-import { findPostByActivityPubUri } from './activitypub-post-uri';
+import { findPostByActivityPubUri, findRemotePostByActivityPubUri } from './activitypub-post-uri';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
 import {
   collectInboundMentionTargetHrefs,
@@ -222,15 +222,24 @@ type RemoteNoteMaterializationRejectionReason =
   | 'note_media_projection_rejected'
   | 'note_media_validation_rejected'
   | 'reply_profile_blocked'
+  | 'stored_author_mismatch'
   | 'unsupported_note_visibility'
   | 'unusable_author';
 
 type RemoteNotePostMaterializationResult =
   | {
-      postId?: string;
+      postId: string;
       replyParentFallback: boolean;
       status: 'created' | 'duplicate';
     }
+  | { reason: 'note_media_validation_rejected' | 'reply_profile_blocked'; status: 'rejected' };
+
+type RemoteNotePostCreationSuccess =
+  | { postId: string; replyParentFallback: boolean; status: 'created' }
+  | { replyParentFallback: boolean; status: 'duplicate' };
+
+type RemoteNotePostCreationResult =
+  | RemoteNotePostCreationSuccess
   | { reason: 'note_media_validation_rejected' | 'reply_profile_blocked'; status: 'rejected' };
 
 type RemoteNotePostMaterialized = Extract<
@@ -270,7 +279,7 @@ const createRemoteNotePost = async ({
   profileId: string;
   receivedAt: Temporal.Instant;
   visibility: PostVisibility;
-}): Promise<RemoteNotePostMaterializationResult> => {
+}): Promise<RemoteNotePostCreationResult> => {
   const replyParentId = await resolveReplyParentId(context, note);
   const input = {
     document,
@@ -283,7 +292,9 @@ const createRemoteNotePost = async ({
     receivedAt,
     visibility,
   } satisfies Parameters<typeof createPost>[0];
-  const toResult = (result: Awaited<ReturnType<typeof createPost>>): RemoteNotePostMaterialized => {
+  const toResult = (
+    result: Awaited<ReturnType<typeof createPost>>,
+  ): RemoteNotePostCreationSuccess => {
     if (result.created) {
       return { postId: result.post.id, replyParentFallback: false, status: 'created' };
     }
@@ -311,7 +322,7 @@ const createRemoteNotePost = async ({
     }
 
     const result = await createPost(input);
-    const fallbackResult = await toResult(result);
+    const fallbackResult = toResult(result);
     return { ...fallbackResult, replyParentFallback: true };
   }
 };
@@ -354,6 +365,13 @@ const materializeRemoteNote = async ({
   const attributionUri = new URL(attributionHref);
   if (source.kind === 'hydrated' && !isHttpUri(attributionUri)) {
     return { reason: 'note_attribution_mismatch', status: 'rejected' };
+  }
+
+  if (
+    (await findRemotePostByActivityPubUri(context, objectUri, attributionUri)).status ===
+    'author_mismatch'
+  ) {
+    return { reason: 'stored_author_mismatch', status: 'rejected' };
   }
 
   let storedActor: StoredRemoteProfileActor | undefined;
@@ -446,7 +464,23 @@ const materializeRemoteNote = async ({
     receivedAt,
     visibility,
   });
-  return result;
+  if (result.status === 'rejected' || result.status === 'created') {
+    return result;
+  }
+
+  const winner = await findRemotePostByActivityPubUri(context, objectUri, attributionUri);
+  if (winner.status === 'author_mismatch') {
+    return { reason: 'stored_author_mismatch', status: 'rejected' };
+  }
+  if (winner.status === 'missing') {
+    throw new Error('Remote Note Post not found after duplicate materialization');
+  }
+
+  return {
+    postId: winner.postId,
+    replyParentFallback: result.replyParentFallback,
+    status: 'duplicate',
+  };
 };
 
 export const materializeHydratedRemoteNote = async ({
@@ -490,15 +524,7 @@ export const materializeHydratedRemoteNote = async ({
     }
     return { reason: 'invalid_note', status: 'rejected' };
   }
-  if (result.status === 'created') {
-    return { postId: result.postId!, status: result.status };
-  }
-
-  const postId = await findPostByActivityPubUri(context, objectUri);
-  if (!postId) {
-    throw new Error('Remote Note Post not found after duplicate materialization');
-  }
-  return { postId, status: result.status };
+  return { postId: result.postId, status: result.status };
 };
 
 export const handleInboundCreateNote = async ({
@@ -515,7 +541,7 @@ export const handleInboundCreateNote = async ({
   objectUri: string;
   storedActor: StoredRemoteProfileActor;
   receivedAt: Temporal.Instant;
-}): Promise<void> => {
+}): Promise<RemoteNoteMaterializationResult> => {
   const result = await materializeRemoteNote({
     context,
     note,
@@ -527,6 +553,7 @@ export const handleInboundCreateNote = async ({
     const phase =
       result.reason === 'note_identity_mismatch' ||
       result.reason === 'note_attribution_mismatch' ||
+      result.reason === 'stored_author_mismatch' ||
       result.reason === 'unsupported_note_visibility'
         ? 'validation'
         : 'projection';
@@ -539,7 +566,7 @@ export const handleInboundCreateNote = async ({
       phase,
       reasonCode: result.reason,
     });
-    return;
+    return result;
   }
   if (result.replyParentFallback) {
     observeInbound({
@@ -563,4 +590,5 @@ export const handleInboundCreateNote = async ({
       reasonCode: 'duplicate_create_noop',
     });
   }
+  return result;
 };

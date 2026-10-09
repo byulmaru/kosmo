@@ -19,6 +19,7 @@ export {
   listPushNotificationInstallations as listPushNotificationInstallationsActivity,
   sendPushNotification as sendPushNotificationActivity,
 } from './activities/push-notification';
+export { resolveActivityPubQuoteActivity } from './activities/quote-resolution';
 export { collectRemoteFeaturedActivity } from './activities/remote-profile-featured';
 export {
   lookupRemoteActorUriActivity,
