@@ -39,6 +39,7 @@ const toasts: string[] = [];
 let renderer: ReactTestRenderer | null = null;
 let useProfilePin: typeof useProfilePinType;
 let ProfilePinProvider: (props: { children?: ReactNode }) => ReactNode;
+let selectedProfileId = profileId;
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -65,7 +66,7 @@ mockModule('@/components/ui/ToastProvider', {
   }),
 });
 mockModule('@/session/SessionProvider', {
-  useSession: () => ({ selectedProfileId: profileId }),
+  useSession: () => ({ selectedProfileId }),
 });
 
 before(async () => {
@@ -78,6 +79,7 @@ beforeEach(() => {
   mock.timers.enable({ apis: ['setTimeout'] });
   requests.length = 0;
   toasts.length = 0;
+  selectedProfileId = profileId;
 });
 
 afterEach(async () => {
@@ -87,11 +89,11 @@ afterEach(async () => {
   renderer = null;
 });
 
-function createEnvironment() {
+function createEnvironment(targetRequests = requests) {
   return new Environment({
     network: Network.create((request: RequestParameters, variables: Variables) =>
       Observable.create<GraphQLResponse>((sink) => {
-        requests.push({ name: request.name, sink, variables });
+        targetRequests.push({ name: request.name, sink, variables });
       }),
     ),
     store: new Store(new RecordSource()),
@@ -112,8 +114,12 @@ function Harness() {
   );
 }
 
-async function renderProvider() {
-  const environment = createEnvironment();
+async function renderProvider(
+  environment = createEnvironment(),
+  targetRequests = requests,
+  ownerId = selectedProfileId,
+  relativeHandle = '@pin-owner',
+) {
   await act(async () => {
     renderer = create(
       createElement(ReactRelay.RelayEnvironmentProvider, {
@@ -127,20 +133,10 @@ async function renderProvider() {
     );
   });
   assert.deepEqual(
-    requests.map((request) => request.name),
+    targetRequests.map((request) => request.name),
     ['ProfilePinProviderQuery'],
   );
-  await respond({
-    data: {
-      node: {
-        __typename: 'Profile',
-        id: profileId,
-        pinnedPosts: {
-          edges: [],
-        },
-      },
-    },
-  });
+  await respond(profileQueryResponse(ownerId, relativeHandle), targetRequests.at(-1));
 }
 
 function states(): ReactTestInstance[] {
@@ -150,13 +146,25 @@ function states(): ReactTestInstance[] {
   return result;
 }
 
-async function respond(response: GraphQLResponse) {
-  const request = requests.at(-1);
+async function respond(response: GraphQLResponse, request = requests.at(-1)) {
   assert.ok(request);
   await act(async () => {
     request.sink.next(response);
     request.sink.complete();
   });
+}
+
+function profileQueryResponse(ownerId: string, relativeHandle: string): GraphQLResponse {
+  return {
+    data: {
+      node: {
+        __typename: 'Profile',
+        id: ownerId,
+        relativeHandle,
+        pinnedPosts: { edges: [] },
+      },
+    },
+  };
 }
 
 async function failLatestRequest(message: string) {
@@ -255,6 +263,7 @@ describe('ProfilePinProvider owner lifecycle', () => {
         node: {
           __typename: 'Profile',
           id: profileId,
+          relativeHandle: '@pin-owner',
           pinnedPosts: { edges: [] },
         },
       },
@@ -319,8 +328,30 @@ describe('ProfilePinProvider owner lifecycle', () => {
     });
     assert.equal(states()[0]?.props.pending, false);
     assert.deepEqual(toasts, [
-      '기존 고정은 해제됐지만 새 게시글을 고정하지 못했어요. 다시 시도해 주세요.',
+      '@pin-owner의 기존 고정은 해제됐지만 새 게시글을 고정하지 못했어요. 다시 시도해 주세요.',
     ]);
+  });
+
+  it('keeps the request owner in a failure toast after switching profiles', async () => {
+    const requestsA: typeof requests = [];
+    const environmentA = createEnvironment(requestsA);
+    await renderProvider(environmentA, requestsA, profileId, '@profile-a');
+    await act(async () => states()[0]?.props.request({ kind: 'pin', postId: targetPostId }));
+    const mutationA = requestsA.at(-1);
+    assert.equal(mutationA?.name, 'ProfilePinProviderPinProfilePostMutation');
+
+    await act(async () => renderer?.unmount());
+    renderer = null;
+
+    selectedProfileId = 'profile-pin-owner-b';
+    const requestsB: typeof requests = [];
+    const environmentB = createEnvironment(requestsB);
+    await renderProvider(environmentB, requestsB, selectedProfileId, '@profile-b');
+    assert.equal(states()[0]?.props.available, true);
+
+    assert.ok(mutationA);
+    await act(async () => mutationA.sink.error(new Error('profile A mutation failed')));
+    assert.deepEqual(toasts, ['@profile-a의 고정 상태를 변경하지 못했어요. 다시 시도해 주세요.']);
   });
 });
 

@@ -243,6 +243,7 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   `프로필에 고정` 또는 `프로필 고정 해제`로 전환한다. `삭제`는 마지막에 두며 기존 eligibility가 있을 때만 표시한다.
 - 고정·해제에는 같은 `Pin` glyph를 사용하고 `PinOff`는 사용하지 않는다. attribution은 `16`/`secondary`,
   Web menu는 `18`/`primary`, Native menu는 `24`/`primary`를 사용하며 삭제의 `danger` 색은 유지한다.
+- 고정·해제 요청 중에도 Profile 전환을 허용한다. 실패 알림에는 요청을 시작한 Profile을 표시하고, 교체 도중 실패했다면 기존 고정 해제 여부도 안내한다.
 - 고정 Post는 Profile 목록에만 우선 표시하고 Home timeline 순서는 변경하지 않는다.
 - 저장·API projection은 ordered 0..N collection이다. 현재 Local first-party UI는 server-authoritative order의 첫 visible
   pinned Post만 렌더하고 관리한다. 기본 Local pin mutation은 ordered set에 추가하고 지정한 Post만 해제한다. 같은 Post 재고정과
@@ -285,7 +286,7 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - 고정, 기존 pin 교체, 고정 해제는 선택 즉시 요청하지 않고 각각 `프로필에 고정할까요?`·
   `고정 게시글을 바꿀까요?`·`프로필 고정을 해제할까요?` alertdialog에서 `취소`와
   `고정`·`고정 해제`를 확인한다. 교체는 기존 해제가 성공한 뒤에만 새 고정을 요청하며, 해제 실패 시 중단한다.
-  해제 후 새 고정이 실패하면 `기존 고정은 해제됐지만 새 게시글을 고정하지 못했어요. 다시 시도해 주세요.`를
+  해제 후 새 고정이 실패하면 `{프로필}의 기존 고정은 해제됐지만 새 게시글을 고정하지 못했어요. 다시 시도해 주세요.`를
   표시하고 자동 롤백하지 않는다. 교체 설명은 `기존 고정을 해제하고 이 게시글을 고정해요.`로 간결하게
   안내한다. 취소하면 요청 없이 닫고 More trigger로 focus를 복원한다. 확인하면 dialog를 닫은 뒤 요청하며
   두 순차 요청 사이에도 pending 중 More의 중복 실행을 막는다. 고정 목록에서 제거되는 해제 경로는 기존

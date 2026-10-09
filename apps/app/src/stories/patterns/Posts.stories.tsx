@@ -3051,6 +3051,7 @@ const profilePinProviderQueryResponse = (selectedProfileId: string | null) => ({
     ? {
         __typename: 'Profile' as const,
         id: selectedProfileId,
+        relativeHandle: profile().relativeHandle,
         pinnedPosts: profile().pinnedPosts,
       }
     : null,

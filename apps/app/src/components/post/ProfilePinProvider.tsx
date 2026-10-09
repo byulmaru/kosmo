@@ -14,6 +14,7 @@ const ProfilePinProviderQuery = graphql`
       __typename
       ... on Profile {
         id
+        relativeHandle
         pinnedPosts(first: 20) {
           edges {
             node {
@@ -164,8 +165,8 @@ function ProfilePinProviderContent({
   const available = data.node?.__typename === 'Profile' && data.node.id === profileId;
   const pending = isPinning || isUnpinning;
   const showFailure = useCallback(
-    (message: string) => {
-      showToast(message, { tone: 'danger' });
+    (relativeHandle: string, message: string) => {
+      showToast(`${relativeHandle}의 ${message}`, { tone: 'danger' });
     },
     [showToast],
   );
@@ -175,15 +176,16 @@ function ProfilePinProviderContent({
       if (pending || data.node?.__typename !== 'Profile' || data.node.id !== profileId) {
         return;
       }
+      const requestProfileHandle = data.node.relativeHandle;
 
       const commitPinRequest = (postId: string, errorMessage: string) => {
         commitPin({
           onCompleted: (response) => {
             if (!isDurableProfilePinResult(response.pinProfilePost, profileId)) {
-              showFailure(errorMessage);
+              showFailure(requestProfileHandle, errorMessage);
             }
           },
-          onError: () => showFailure(errorMessage),
+          onError: () => showFailure(requestProfileHandle, errorMessage),
           variables: { postId },
         });
       };
@@ -192,12 +194,12 @@ function ProfilePinProviderContent({
         commitUnpin({
           onCompleted: (response) => {
             if (!isDurableProfilePinResult(response.unpinProfilePost, profileId)) {
-              showFailure(failureMessage);
+              showFailure(requestProfileHandle, failureMessage);
               return;
             }
             operation.onCompleted?.();
           },
-          onError: () => showFailure(failureMessage),
+          onError: () => showFailure(requestProfileHandle, failureMessage),
           variables: { postId: operation.postId },
         });
         return;
@@ -207,12 +209,12 @@ function ProfilePinProviderContent({
         commitUnpin({
           onCompleted: (response) => {
             if (!isDurableProfilePinResult(response.unpinProfilePost, profileId)) {
-              showFailure(failureMessage);
+              showFailure(requestProfileHandle, failureMessage);
               return;
             }
             commitPinRequest(operation.postId, replacementFailureMessage);
           },
-          onError: () => showFailure(failureMessage),
+          onError: () => showFailure(requestProfileHandle, failureMessage),
           variables: { postId: operation.existingPostId },
         });
         return;
