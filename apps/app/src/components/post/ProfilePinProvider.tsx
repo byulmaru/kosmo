@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo } from 'react';
+import { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import { graphql, useLazyLoadQuery, useMutation } from 'react-relay';
 import { RelayFailOpenBoundary } from '@/components/RelayFailOpenBoundary';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -93,20 +93,32 @@ type ProfilePinContextValue = Readonly<{
   available: boolean;
   firstPinnedPostId: string | null;
   pending: boolean;
+  queryFailed: boolean;
   request: (request: ProfilePinRequest) => void;
+  retry: () => void;
 }>;
 
 const unavailableValue: ProfilePinContextValue = {
   available: false,
   firstPinnedPostId: null,
   pending: false,
+  queryFailed: false,
   request: () => undefined,
+  retry: () => undefined,
 };
 
 const ProfilePinContext = createContext<ProfilePinContextValue>(unavailableValue);
 
 export function ProfilePinProvider({ children }: PropsWithChildren) {
   const { selectedProfileId } = useSession();
+  const [retryKey, setRetryKey] = useState(0);
+  const retry = useCallback(() => {
+    setRetryKey((current) => current + 1);
+  }, []);
+  const fallbackValue = useMemo<ProfilePinContextValue>(
+    () => ({ ...unavailableValue, queryFailed: true, retry }),
+    [retry],
+  );
 
   if (!selectedProfileId) {
     return (
@@ -115,11 +127,15 @@ export function ProfilePinProvider({ children }: PropsWithChildren) {
   }
 
   const fallback = (
-    <ProfilePinContext.Provider value={unavailableValue}>{children}</ProfilePinContext.Provider>
+    <ProfilePinContext.Provider value={fallbackValue}>{children}</ProfilePinContext.Provider>
   );
   return (
-    <RelayFailOpenBoundary fallback={fallback}>
-      <ProfilePinProviderContent key={selectedProfileId} profileId={selectedProfileId}>
+    <RelayFailOpenBoundary fallback={fallback} resetKey={retryKey}>
+      <ProfilePinProviderContent
+        key={selectedProfileId}
+        fetchKey={retryKey}
+        profileId={selectedProfileId}
+      >
         {children}
       </ProfilePinProviderContent>
     </RelayFailOpenBoundary>
@@ -129,11 +145,12 @@ export function ProfilePinProvider({ children }: PropsWithChildren) {
 function ProfilePinProviderContent({
   children,
   profileId,
-}: PropsWithChildren<{ profileId: string }>) {
+  fetchKey,
+}: PropsWithChildren<{ fetchKey: number; profileId: string }>) {
   const data = useLazyLoadQuery<ProfilePinProviderQueryType>(
     ProfilePinProviderQuery,
     { profileId },
-    { fetchPolicy: 'store-or-network' },
+    { fetchKey, fetchPolicy: 'store-or-network' },
   );
   const [commitPin, isPinning] = useMutation<ProfilePinProviderPinProfilePostMutation>(pinMutation);
   const [commitUnpin, isUnpinning] =
@@ -207,7 +224,14 @@ function ProfilePinProviderContent({
   );
 
   const value = useMemo<ProfilePinContextValue>(
-    () => ({ available, firstPinnedPostId, pending, request }),
+    () => ({
+      available,
+      firstPinnedPostId,
+      pending,
+      queryFailed: false,
+      request,
+      retry: unavailableValue.retry,
+    }),
     [available, firstPinnedPostId, pending, request],
   );
 

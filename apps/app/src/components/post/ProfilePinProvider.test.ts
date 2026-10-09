@@ -32,7 +32,7 @@ const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
 const requests: Array<{
   name: string;
-  sink: { next(response: GraphQLResponse): void; complete(): void };
+  sink: { next(response: GraphQLResponse): void; complete(): void; error(error: Error): void };
   variables: Variables;
 }> = [];
 const toasts: string[] = [];
@@ -50,8 +50,11 @@ mockModule('react-relay', {
     return require(`./__generated__/${name}.graphql.ts`).default;
   },
 });
-mockModule('@/components/RelayFailOpenBoundary', {
-  RelayFailOpenBoundary: ({ children }: { children: ReactNode }) => children,
+mockModule('@/observability/UnexpectedErrorContext', {
+  useUnexpectedErrorReporter: () => () => undefined,
+});
+mockModule('@/relay/RelayActorProvider', {
+  useRelayActorLifecycleKey: () => 'profile-pin-test-actor',
 });
 mockModule('@/components/ui/ToastProvider', {
   useToast: () => ({
@@ -66,16 +69,21 @@ mockModule('@/session/SessionProvider', {
 });
 
 before(async () => {
+  const { RelayFailOpenBoundary } = await import('../RelayFailOpenBoundary');
+  mockModule('@/components/RelayFailOpenBoundary', { RelayFailOpenBoundary });
   ({ ProfilePinProvider, useProfilePin } = await import('./ProfilePinProvider'));
 });
 
 beforeEach(() => {
+  mock.timers.enable({ apis: ['setTimeout'] });
   requests.length = 0;
   toasts.length = 0;
 });
 
 afterEach(async () => {
   await act(async () => renderer?.unmount());
+  await act(async () => mock.timers.tick(300_001));
+  mock.timers.reset();
   renderer = null;
 });
 
@@ -151,6 +159,14 @@ async function respond(response: GraphQLResponse) {
   });
 }
 
+async function failLatestRequest(message: string) {
+  const request = requests.at(-1);
+  assert.ok(request);
+  await act(async () => {
+    request.sink.error(new Error(message));
+  });
+}
+
 function mutationResponse(field: 'pinProfilePost' | 'unpinProfilePost', postId: string | null) {
   const node = postId
     ? {
@@ -202,6 +218,52 @@ function mutationResponse(field: 'pinProfilePost' | 'unpinProfilePost', postId: 
 }
 
 describe('ProfilePinProvider owner lifecycle', () => {
+  it('exposes a retry after the profile query fails and restores pin state', async (t) => {
+    t.mock.method(console, 'error', () => undefined);
+    const environment = createEnvironment();
+    await act(async () => {
+      renderer = create(
+        createElement(ReactRelay.RelayEnvironmentProvider, {
+          children: createElement(
+            Suspense,
+            { fallback: createElement('Loading') },
+            createElement(ProfilePinProvider, null, createElement(Harness)),
+          ),
+          environment,
+        }),
+      );
+    });
+    assert.deepEqual(
+      requests.map((request) => request.name),
+      ['ProfilePinProviderQuery'],
+    );
+
+    await failLatestRequest('profile pin query failed');
+    assert.equal(states()[0]?.props.queryFailed, true);
+    assert.equal(states()[0]?.props.available, false);
+
+    await act(async () => {
+      states()[0]?.props.retry();
+      await Promise.resolve();
+    });
+    assert.deepEqual(
+      requests.map((request) => request.name),
+      ['ProfilePinProviderQuery', 'ProfilePinProviderQuery'],
+    );
+    await respond({
+      data: {
+        node: {
+          __typename: 'Profile',
+          id: profileId,
+          pinnedPosts: { edges: [] },
+        },
+      },
+    });
+    await act(async () => Promise.resolve());
+    assert.equal(states()[0]?.props.queryFailed, false);
+    assert.equal(states()[0]?.props.available, true);
+  });
+
   it('reads selected profile pins once and shares pending across cards', async () => {
     await renderProvider();
     assert.equal(states()[0]?.props.available, true);

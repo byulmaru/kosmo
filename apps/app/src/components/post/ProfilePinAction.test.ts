@@ -19,7 +19,10 @@ const profilePinState = {
   available: true,
   firstPinnedPostId: null as string | null,
   pending: false,
+  queryFailed: false,
 };
+const sessionState = { selectedProfileId: profileId as string | null };
+let retryCount = 0;
 let renderer: ReactTestRenderer | null = null;
 let useProfilePinAction: typeof useProfilePinActionType;
 
@@ -38,12 +41,15 @@ mockModule('lucide-react-native', { Pin: 'Pin' });
 mockModule(require.resolve('lucide-react-native'), { Pin: 'Pin' });
 mockModule('react-native', { Platform: { OS: 'web' } });
 mockModule('@/session/SessionProvider', {
-  useSession: () => ({ selectedProfileId: profileId }),
+  useSession: () => sessionState,
 });
 mockModule('./ProfilePinProvider', {
   useProfilePin: () => ({
     ...profilePinState,
     request: (request: Record<string, unknown>) => requests.push(request),
+    retry: () => {
+      retryCount += 1;
+    },
   }),
 });
 mockModule('@/components/ui/ConfirmationContent', {
@@ -64,6 +70,9 @@ beforeEach(() => {
   profilePinState.available = true;
   profilePinState.firstPinnedPostId = null;
   profilePinState.pending = false;
+  profilePinState.queryFailed = false;
+  sessionState.selectedProfileId = profileId;
+  retryCount = 0;
 });
 
 afterEach(async () => {
@@ -169,5 +178,25 @@ describe('ProfilePinAction interaction lifecycle', () => {
     });
     assert.equal(actionState().props.item, undefined);
     assert.equal(actionState().props.pending, false);
+  });
+
+  it('shows query retry only for an eligible own post', async () => {
+    profilePinState.available = false;
+    profilePinState.queryFailed = true;
+    await renderAction();
+    assert.equal(actionState().props.item?.label, '고정 상태 다시 불러오기');
+    await act(async () => actionState().props.item.onSelect());
+    assert.equal(retryCount, 1);
+    assert.equal(requests.length, 0);
+
+    await renderAction({
+      ...actionPost,
+      profile: { id: 'other-profile', instance: { kind: 'LOCAL' } },
+    });
+    assert.equal(actionState().props.item, undefined);
+
+    sessionState.selectedProfileId = null;
+    await renderAction();
+    assert.equal(actionState().props.item, undefined);
   });
 });
