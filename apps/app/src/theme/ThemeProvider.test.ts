@@ -8,6 +8,22 @@ import type * as ThemeModule from './ThemeProvider';
 let reduceMotionListener: ((enabled: boolean) => void) | undefined;
 let osReduceMotion = false;
 let pendingOsReduceMotion: Promise<boolean> | undefined;
+let reduceMotionQueryCount = 0;
+
+type ReduceMotionSubscription = {
+  listener: (enabled: boolean) => void;
+  removed: boolean;
+};
+
+let reduceMotionSubscriptions: ReduceMotionSubscription[] = [];
+
+function resetAccessibilityMock() {
+  reduceMotionListener = undefined;
+  osReduceMotion = false;
+  pendingOsReduceMotion = undefined;
+  reduceMotionQueryCount = 0;
+  reduceMotionSubscriptions = [];
+}
 
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, {
@@ -19,10 +35,25 @@ const mockModule = (specifier: string | URL, exports: object) =>
 mockModule('react-native', {
   AccessibilityInfo: {
     addEventListener: (_event: string, listener: (enabled: boolean) => void) => {
+      const subscription: ReduceMotionSubscription = {
+        listener,
+        removed: false,
+      };
       reduceMotionListener = listener;
-      return { remove: () => (reduceMotionListener = undefined) };
+      reduceMotionSubscriptions.push(subscription);
+      return {
+        remove: () => {
+          subscription.removed = true;
+          if (reduceMotionListener === listener) {
+            reduceMotionListener = undefined;
+          }
+        },
+      };
     },
-    isReduceMotionEnabled: async () => pendingOsReduceMotion ?? osReduceMotion,
+    isReduceMotionEnabled: async () => {
+      reduceMotionQueryCount += 1;
+      return pendingOsReduceMotion ?? osReduceMotion;
+    },
   },
 });
 
@@ -40,6 +71,7 @@ test('Light canvas and elevated use white while surface uses neutral 0', () => {
 
 test('explicit Dark mode selects production semantic colors without activating it app-wide', async () => {
   assert.ok(themeModule);
+  resetAccessibilityMock();
   const { ThemeProvider, useReducedMotion, useTheme } = themeModule;
   let backgroundCanvas: string | undefined;
   let backgroundSurface: string | undefined;
@@ -138,6 +170,7 @@ test('explicit Dark mode selects production semantic colors without activating i
 
 test('OS reduced-motion preference is the default input and follows changes', async () => {
   assert.ok(themeModule);
+  resetAccessibilityMock();
   const { ThemeProvider, useReducedMotion } = themeModule;
   osReduceMotion = true;
   let reducedMotion: boolean | undefined;
@@ -158,8 +191,209 @@ test('OS reduced-motion preference is the default input and follows changes', as
   await act(async () => renderer?.unmount());
 });
 
+test('a late initial ON response cannot overwrite a newer OFF event', async () => {
+  assert.ok(themeModule);
+  resetAccessibilityMock();
+  const { ThemeProvider, useReducedMotion } = themeModule;
+  let resolvePreference: ((value: boolean) => void) | undefined;
+  pendingOsReduceMotion = new Promise<boolean>((resolve) => {
+    resolvePreference = resolve;
+  });
+  let reducedMotion: boolean | undefined;
+
+  function CapturePreference() {
+    reducedMotion = useReducedMotion();
+    return null;
+  }
+
+  let renderer: ReturnType<typeof create> | undefined;
+  act(() => {
+    renderer = create(createElement(ThemeProvider, null, createElement(CapturePreference)));
+  });
+  await act(async () => reduceMotionListener?.(false));
+  assert.equal(reducedMotion, false);
+
+  await act(async () => resolvePreference?.(true));
+  assert.equal(reducedMotion, false);
+  pendingOsReduceMotion = undefined;
+  await act(async () => renderer?.unmount());
+});
+
+test('a late initial OFF response cannot overwrite a newer ON event', async () => {
+  assert.ok(themeModule);
+  resetAccessibilityMock();
+  const { ThemeProvider, useReducedMotion } = themeModule;
+  let resolvePreference: ((value: boolean) => void) | undefined;
+  pendingOsReduceMotion = new Promise<boolean>((resolve) => {
+    resolvePreference = resolve;
+  });
+  let reducedMotion: boolean | undefined;
+
+  function CapturePreference() {
+    reducedMotion = useReducedMotion();
+    return null;
+  }
+
+  let renderer: ReturnType<typeof create> | undefined;
+  act(() => {
+    renderer = create(createElement(ThemeProvider, null, createElement(CapturePreference)));
+  });
+  await act(async () => reduceMotionListener?.(true));
+  assert.equal(reducedMotion, true);
+
+  await act(async () => resolvePreference?.(false));
+  assert.equal(reducedMotion, true);
+  pendingOsReduceMotion = undefined;
+  await act(async () => renderer?.unmount());
+});
+
+test('successive OS reduced-motion events update the current preference', async () => {
+  assert.ok(themeModule);
+  resetAccessibilityMock();
+  const { ThemeProvider, useReducedMotion } = themeModule;
+  let resolvePreference: ((value: boolean) => void) | undefined;
+  pendingOsReduceMotion = new Promise<boolean>((resolve) => {
+    resolvePreference = resolve;
+  });
+  let reducedMotion: boolean | undefined;
+
+  function CapturePreference() {
+    reducedMotion = useReducedMotion();
+    return null;
+  }
+
+  let renderer: ReturnType<typeof create> | undefined;
+  act(() => {
+    renderer = create(createElement(ThemeProvider, null, createElement(CapturePreference)));
+  });
+  assert.equal(reducedMotion, true);
+
+  await act(async () => reduceMotionListener?.(true));
+  assert.equal(reducedMotion, true);
+  await act(async () => reduceMotionListener?.(false));
+  assert.equal(reducedMotion, false);
+  await act(async () => reduceMotionListener?.(true));
+  assert.equal(reducedMotion, true);
+
+  await act(async () => resolvePreference?.(false));
+  assert.equal(reducedMotion, true);
+  pendingOsReduceMotion = undefined;
+  await act(async () => renderer?.unmount());
+});
+
+test('unmount cleanup removes the subscription and ignores a late old response', async () => {
+  assert.ok(themeModule);
+  resetAccessibilityMock();
+  const { ThemeProvider, useReducedMotion } = themeModule;
+  let resolveOldPreference: ((value: boolean) => void) | undefined;
+  pendingOsReduceMotion = new Promise<boolean>((resolve) => {
+    resolveOldPreference = resolve;
+  });
+  let reducedMotion: boolean | undefined;
+
+  function CapturePreference() {
+    reducedMotion = useReducedMotion();
+    return null;
+  }
+
+  let firstRenderer: ReturnType<typeof create> | undefined;
+  act(() => {
+    firstRenderer = create(createElement(ThemeProvider, null, createElement(CapturePreference)));
+  });
+  const oldSubscription = reduceMotionSubscriptions[reduceMotionSubscriptions.length - 1];
+  assert.ok(oldSubscription);
+
+  await act(async () => firstRenderer?.unmount());
+  assert.equal(oldSubscription.removed, true);
+
+  let resolveCurrentPreference: ((value: boolean) => void) | undefined;
+  pendingOsReduceMotion = new Promise<boolean>((resolve) => {
+    resolveCurrentPreference = resolve;
+  });
+  let secondRenderer: ReturnType<typeof create> | undefined;
+  act(() => {
+    secondRenderer = create(createElement(ThemeProvider, null, createElement(CapturePreference)));
+  });
+
+  await act(async () => resolveOldPreference?.(false));
+  assert.equal(reducedMotion, true);
+  await act(async () => resolveCurrentPreference?.(false));
+  assert.equal(reducedMotion, false);
+  await act(async () => secondRenderer?.unmount());
+  pendingOsReduceMotion = undefined;
+});
+
+test('explicit true and false overrides disable OS input until OS mode returns', async () => {
+  assert.ok(themeModule);
+  resetAccessibilityMock();
+  const { ThemeProvider, useReducedMotion } = themeModule;
+  let reducedMotion: boolean | undefined;
+
+  function CapturePreference() {
+    reducedMotion = useReducedMotion();
+    return null;
+  }
+
+  let renderer: ReturnType<typeof create> | undefined;
+  await act(async () => {
+    renderer = create(
+      createElement(ThemeProvider, { reduceMotion: true }, createElement(CapturePreference)),
+    );
+  });
+  assert.equal(reducedMotion, true);
+  assert.equal(reduceMotionQueryCount, 0);
+  assert.equal(reduceMotionSubscriptions.length, 0);
+
+  await act(async () => {
+    renderer?.update(
+      createElement(ThemeProvider, { reduceMotion: false }, createElement(CapturePreference)),
+    );
+  });
+  assert.equal(reducedMotion, false);
+  assert.equal(reduceMotionQueryCount, 0);
+  assert.equal(reduceMotionSubscriptions.length, 0);
+
+  let resolveOldPreference: ((value: boolean) => void) | undefined;
+  pendingOsReduceMotion = new Promise<boolean>((resolve) => {
+    resolveOldPreference = resolve;
+  });
+  await act(async () => {
+    renderer?.update(createElement(ThemeProvider, null, createElement(CapturePreference)));
+  });
+  const oldSubscription = reduceMotionSubscriptions[reduceMotionSubscriptions.length - 1];
+  assert.ok(oldSubscription);
+  assert.equal(reduceMotionQueryCount, 1);
+
+  await act(async () => {
+    renderer?.update(
+      createElement(ThemeProvider, { reduceMotion: true }, createElement(CapturePreference)),
+    );
+  });
+  assert.equal(reducedMotion, true);
+  assert.equal(oldSubscription.removed, true);
+
+  let resolveCurrentPreference: ((value: boolean) => void) | undefined;
+  pendingOsReduceMotion = new Promise<boolean>((resolve) => {
+    resolveCurrentPreference = resolve;
+  });
+  await act(async () => {
+    renderer?.update(createElement(ThemeProvider, null, createElement(CapturePreference)));
+  });
+  assert.equal(reduceMotionQueryCount, 2);
+
+  await act(async () => reduceMotionListener?.(true));
+  await act(async () => resolveOldPreference?.(false));
+  assert.equal(reducedMotion, true);
+  await act(async () => resolveCurrentPreference?.(false));
+  assert.equal(reducedMotion, true);
+
+  pendingOsReduceMotion = undefined;
+  await act(async () => renderer?.unmount());
+});
+
 test('motion stays reduced until the OS preference is known', async () => {
   assert.ok(themeModule);
+  resetAccessibilityMock();
   const { ThemeProvider, useReducedMotion } = themeModule;
   let resolvePreference: ((value: boolean) => void) | undefined;
   pendingOsReduceMotion = new Promise<boolean>((resolve) => {
