@@ -275,6 +275,10 @@ public class MainApplication extends Application {
     assert.equal(unquote(settings.INFOPLIST_KEY_CFBundleVersion), '$(CURRENT_PROJECT_VERSION)');
     assert.equal(settings.IPHONEOS_DEPLOYMENT_TARGET, '16.4');
     assert.equal(settings.APPLICATION_EXTENSION_API_ONLY, 'YES');
+    assert.equal(
+      unquote(settings.OTHER_LDFLAGS),
+      '$(inherited) -Wl,-needed_framework,UserNotificationsUI',
+    );
     assert.equal(settings.MARKETING_VERSION, '1.0');
     assert.equal(unquote(settings.PRODUCT_NAME), 'KosmoPushContent');
   }
