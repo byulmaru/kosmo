@@ -2146,6 +2146,7 @@ function ContentWarningConsumerIntegrationStory() {
 
   return (
     <Catalog>
+      <StoryPathname testID="content-warning-list-pathname" />
       <View testID="content-warning-list-surface">
         <PostListItem
           post={requireFragment(post.listItem, 'Content Warning list item consumer')}
@@ -6731,7 +6732,17 @@ export const ContentWarningProductionConsumersShareRevealStateInteraction: Story
     const canvas = within(canvasElement);
     const listSurface = within(canvas.getByTestId('content-warning-list-surface'));
     const layoutSurface = within(canvas.getByTestId('content-warning-layout-surface'));
+    const detailPath = `/${contentWarningPost.profile.relativeHandle}/${contentWarningPost.id}`;
     expect(canvas.queryByText(contentWarningPost.content!.bodyText)).not.toBeInTheDocument();
+
+    await userEvent.click(listSurface.getByTestId('post-list-standard-row'));
+    expect(canvas.getByTestId('content-warning-list-pathname')).toHaveTextContent(detailPath);
+    expect(canvas.queryByText(contentWarningPost.content!.bodyText)).not.toBeInTheDocument();
+    expect(
+      listSurface.getByRole('button', {
+        name: /실제 Post 소비자 통합 검증 경고, 본문, 보기/,
+      }),
+    ).toBeVisible();
 
     await userEvent.click(
       listSurface.getByRole('button', {
@@ -6739,6 +6750,7 @@ export const ContentWarningProductionConsumersShareRevealStateInteraction: Story
       }),
     );
     expect(canvas.getAllByText(contentWarningPost.content!.bodyText)).toHaveLength(2);
+    expect(canvas.getByTestId('content-warning-list-pathname')).toHaveTextContent(detailPath);
     expect(
       layoutSurface.getByRole('button', {
         name: /실제 Post 소비자 통합 검증 경고, 본문, 다시 가리기/,
@@ -6751,6 +6763,7 @@ export const ContentWarningProductionConsumersShareRevealStateInteraction: Story
       }),
     );
     expect(canvas.queryByText(contentWarningPost.content!.bodyText)).not.toBeInTheDocument();
+    expect(canvas.getByTestId('content-warning-list-pathname')).toHaveTextContent(detailPath);
     expect(
       listSurface.getByRole('button', { name: /실제 Post 소비자 통합 검증 경고, 본문, 보기/ }),
     ).toBeVisible();
