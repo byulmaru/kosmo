@@ -80,7 +80,7 @@ Full Reaction Picker는 Quick Picker를 폐기하지 않고, Emoji 16의 완전 
 - 선택된 token은 Quick Picker와 동일하게 이모지·count와 분리한 `primary` 배경 layer를 70% opacity로 표시하고, pressed 상태에서는 `primaryHover`를 사용한다. 이모지와 count는 100% opacity를 유지한다.
 - 이미 다른 사용자가 남겨 둔 token도 선택한 Profile의 Reaction이 없으면 추가하고, 있으면 삭제한다. mutation이 성공하기 전에는 count나 선택 상태를 바꾸지 않는다.
 - selected Profile이 없으면 token은 보이지만 disabled이며 mutation을 시작하지 않는다.
-- 양수 count Type이 하나라도 있으면 token 뒤에 Reaction People 진입 control을 항상 한 개 표시한다. 모든 Type token과 `Ellipsis`가 한 줄에 완전히 들어가면 canonical `Ellipsis` icon을 사용하고 접근성 이름은 `반응한 프로필 보기`로 제공한다. 이 control은 selected Profile이 없어도 사용할 수 있다.
+- 양수 count Type이 하나라도 있으면 token 뒤에 Reaction People 진입 control을 항상 한 개 표시한다. 모든 Type token과 `Ellipsis`가 한 줄에 완전히 들어가면 canonical `Ellipsis` icon을 사용하고 접근성 이름은 `반응한 프로필 보기`로 제공한다. 이 control의 hover·pressed surface는 바깥 둥근 사각형과 같은 radius를 사용한다. 이 control은 selected Profile이 없어도 사용할 수 있다.
 - 모든 Type token과 `Ellipsis`가 들어가지 않으면 같은 item geometry의 `+N` control로 trailing control을 교체한다. `N`은 숨겨진 Reaction Type 수이며 숨겨진 Reaction count의 합이 아니다. 접근성 이름은 `숨겨진 반응 유형 N개, 반응한 프로필 보기`로 제공한다.
 - width-fit은 trailing People control의 폭을 항상 먼저 예약한다. 모든 Type과 `Ellipsis`가 들어가면 전체 token을 표시한다. 그렇지 않으면 Product 순서의 마지막 token부터 하나씩 제외하고, 제외할 때마다 새 `N`의 실제 렌더링 폭으로 다시 계산해 표시 token과 `+N`이 모두 완전히 들어갈 때까지 반복한다. token이나 trailing control을 축소·클리핑하지 않고 wrap이나 horizontal scroll도 사용하지 않는다.
 - 한 줄에 표시할 최대 Type 수와 viewer-selected Type의 우선 배치는 Product 정책이다. Figma의 viewer-priority 표본은 선택 반응을 overflow 앞에 보존할 수 있다는 후보만 보여 주며 정렬 규칙을 확정하지 않는다. `16`을 포함한 외부 서비스의 표시 수는 참고값일 뿐 KOSMO 상한이 아니다.

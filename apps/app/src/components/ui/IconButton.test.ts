@@ -29,7 +29,7 @@ mockModule('@/theme/tokens', {
     duration: { fast: 120, instant: 0 },
     easing: { standard: 'standard-easing' },
   },
-  radius: { full: 999 },
+  radius: { 12: 12, full: 999 },
 });
 
 type TestElementProps = {
@@ -38,7 +38,9 @@ type TestElementProps = {
   accessibilityState?: { busy?: boolean; disabled?: boolean; expanded?: boolean };
   children?: ReactNode | ((state: { pressed: boolean }) => ReactNode);
   disabled?: boolean;
+  focusable?: boolean;
   hitSlop?: number | { bottom: number; left: number; right: number; top: number };
+  onFocus?: () => void;
   onPressIn?: () => void;
   ref?: unknown;
   style?: unknown;
@@ -51,8 +53,11 @@ type IconButtonProps = {
   children: ReactNode | ((state: { pressed: boolean }) => ReactNode);
   controlRef?: unknown;
   disabled?: boolean;
+  feedbackRadius?: number;
   feedbackTone?: 'inverse';
+  focusable?: boolean;
   hitSlop?: number;
+  onFocus?: () => void;
   onPressIn?: () => void;
   style?: unknown;
   targetSize?: number;
@@ -362,6 +367,55 @@ test('a navigation adapter can preserve link semantics', () => {
   assert.equal(link.props.accessibilityRole, 'link');
 });
 
+test('consumer feedback radius changes only the temporary surface and preserves focus target', () => {
+  const onFocus = () => undefined;
+  const button = renderIconButton({
+    accessibilityLabel: '반응한 프로필 보기',
+    children: '…',
+    feedbackRadius: 12,
+    focusable: true,
+    onFocus,
+    targetSize: 44,
+  });
+  const children = button.props.children as (state: {
+    hovered: boolean;
+    pressed: boolean;
+  }) => ReactNode;
+  const getSurfaceStyle = (pressed: boolean) =>
+    flattenStyle(findElements(children({ hovered: false, pressed }), 'View')[1].props.style);
+  const targetStyle = flattenStyle(
+    (button.props.style as (state: { pressed: boolean }) => unknown)({ pressed: true }),
+  );
+
+  assert.equal(getSurfaceStyle(true).borderRadius, 12);
+  assert.equal(getSurfaceStyle(true).backgroundColor, 'pressed');
+  assert.equal(getSurfaceStyle(false).backgroundColor, 'transparent');
+  assert.equal(button.props.accessibilityLabel, '반응한 프로필 보기');
+  assert.equal(button.props.accessibilityRole, 'button');
+  assert.equal(button.props.focusable, true);
+  assert.equal(button.props.onFocus, onFocus);
+  assert.equal(button.props.hitSlop, undefined);
+  assert.equal(targetStyle.height, 44);
+  assert.equal(targetStyle.width, 44);
+
+  const disabledButton = renderIconButton({
+    accessibilityLabel: '반응한 프로필 보기',
+    children: '…',
+    disabled: true,
+    feedbackRadius: 12,
+    targetSize: 44,
+  });
+  const disabledChildren = disabledButton.props.children as (state: {
+    hovered: boolean;
+    pressed: boolean;
+  }) => ReactNode;
+  const disabledSurface = flattenStyle(
+    findElements(disabledChildren({ hovered: true, pressed: true }), 'View')[1].props.style,
+  );
+  assert.equal(disabledSurface.borderRadius, 12);
+  assert.equal(disabledSurface.backgroundColor, 'transparent');
+});
+
 test('default feedback owns a circular surface while preserving state and geometry', () => {
   const button = renderIconButton({
     accessibilityLabel: '닫기',
@@ -491,7 +545,12 @@ test('inverse feedback uses the media contrast while reduced motion is instant',
 test('Native pressed feedback is immediate and preserves the platform target', () => {
   mockPlatform.OS = 'ios';
   try {
-    const button = renderIconButton({ accessibilityLabel: '닫기', children: '×', targetSize: 44 });
+    const button = renderIconButton({
+      accessibilityLabel: '반응한 프로필 보기',
+      children: '…',
+      feedbackRadius: 12,
+      targetSize: 44,
+    });
     const children = button.props.children as (state: {
       hovered: boolean;
       pressed: boolean;
@@ -504,6 +563,7 @@ test('Native pressed feedback is immediate and preserves the platform target', (
     );
 
     assert.equal(surfaceStyle.backgroundColor, 'pressed');
+    assert.equal(surfaceStyle.borderRadius, 12);
     assert.equal(surfaceStyle.transitionDuration, undefined);
     assert.equal(targetStyle.height, 44);
     assert.equal(targetStyle.width, 44);
