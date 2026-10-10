@@ -86,6 +86,14 @@ Recipient Profile은 Related Post의 direct Repost Source Author Profile이다. 
   요청 시점의 전체 visible unread 집합으로 확장하지 않는다.
 - 처리 실패 시 입력 목록의 일부 Notification만 변경된 상태를 남기지 않는다.
 
+### Reaction/Repost 목록의 이동 · PROD-1078
+
+- 반응·재게시 알림의 프로필 사진을 활성화하면 사진에 표시된 행위자의 Profile로 한 번 이동한다.
+- 사진 외의 게시글 이동 영역은 기존 Related Post로 이동하며, 사진 활성화가 게시글 이동을 함께 실행하지 않는다.
+- 각 이동에서 지정된 Notification의 Best Effort Read를 한 번 시작한다. 읽음 요청의 지연이나 실패는 이동을 막지 않는다.
+- 사진을 여러 개 표시하는 경우 각 사진의 프로필을 독립적으로 선택할 수 있어야 한다. 이 표시 계약은 알림 집계나 생성 정책을 바꾸지 않는다.
+- 다른 알림 유형의 기존 이동과 읽음 처리는 유지한다. 사진 배치와 입력 영역은 [Notification presentation](../../design/notifications.md#반응재게시-사진의-독립-이동--prod-1078)을 따른다.
+
 ### Operational Notification 조회와 읽음 처리
 
 - Recipient Account가 ACTIVE이고 해당 Profile의 membership을 가지면 `Profile.notifications`와
