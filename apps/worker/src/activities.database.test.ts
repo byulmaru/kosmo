@@ -130,9 +130,9 @@ beforeEach(async () => {
 
 after(async () => pg.end());
 
-test('Account deletion Activity는 non-DISABLED Profile이 있으면 아무것도 변경하지 않는다', async () => {
+test('Account deletion Activity는 ACTIVE Profile이 있으면 아무것도 변경하지 않는다', async () => {
   const fixture = await createAccountDeletionFixture({
-    profileStates: [ProfileState.ACTIVE, ProfileState.DISABLED],
+    profileStates: [ProfileState.ACTIVE, ProfileState.DISABLED, ProfileState.SUSPENDED],
   });
 
   try {
@@ -178,6 +178,55 @@ test('Account deletion Activity는 non-DISABLED Profile이 있으면 아무것�
     );
   } finally {
     await cleanupAccountDeletionFixture(fixture);
+  }
+});
+
+test('Account deletion Activity는 SUSPENDED Profile만 있거나 DISABLED Profile과 함께 있어도 탈퇴를 허용한다', async () => {
+  for (const profileStates of [
+    [ProfileState.SUSPENDED],
+    [ProfileState.SUSPENDED, ProfileState.DISABLED],
+  ]) {
+    const fixture = await createAccountDeletionFixture({ profileStates });
+
+    try {
+      assert.equal(await deleteAccountActivity({ accountId: fixture.account.id }), true);
+      assert.equal(
+        (
+          await db
+            .select({ state: Accounts.state })
+            .from(Accounts)
+            .where(eq(Accounts.id, fixture.account.id))
+        )[0]?.state,
+        AccountState.DISABLED,
+      );
+      assert.deepEqual(
+        await db
+          .select({ id: Profiles.id, state: Profiles.state })
+          .from(Profiles)
+          .where(
+            inArray(
+              Profiles.id,
+              fixture.profiles.map(({ id }) => id),
+            ),
+          )
+          .orderBy(Profiles.id),
+        fixture.profiles
+          .map(({ id, state }) => ({ id, state }))
+          .sort((left, right) => left.id.localeCompare(right.id)),
+      );
+      assert.deepEqual(
+        await db
+          .select({ profileId: AccountProfiles.profileId, role: AccountProfiles.role })
+          .from(AccountProfiles)
+          .where(eq(AccountProfiles.accountId, fixture.account.id))
+          .orderBy(AccountProfiles.profileId),
+        fixture.profiles
+          .map(({ id }) => ({ profileId: id, role: AccountProfileRole.OWNER }))
+          .sort((left, right) => left.profileId.localeCompare(right.profileId)),
+      );
+    } finally {
+      await cleanupAccountDeletionFixture(fixture);
+    }
   }
 });
 
