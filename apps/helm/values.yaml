@@ -59,12 +59,20 @@ temporal:
       prod: 30d
 postgres:
   resources:
-    requests:
-      cpu: 250m
-      memory: 1Gi
-    limits:
-      cpu: 250m
-      memory: 1Gi
+    dev:
+      requests:
+        cpu: 50m
+        memory: 256Mi
+      limits:
+        cpu: 250m
+        memory: 768Mi
+    prod:
+      requests:
+        cpu: 250m
+        memory: 1536Mi
+      limits:
+        cpu: 250m
+        memory: 1536Mi
   pooler:
     replicas:
       dev: 1
