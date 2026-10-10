@@ -1,12 +1,12 @@
 # PostHog 제품 분석 운영
 
-Kosmo Web의 PostHog client는 `prod` 채널에서 공개 `posthogKey`와 `posthogHost`가 모두 주입된 경우에만 초기화한다. `dev` 채널과 설정이 없는 build에는 client와 분석 요청이 없어야 한다. 현재 이 변경의 production 수집·Dashboard 설정은 일시 중지 상태이며, 이 문서는 애플리케이션 계약과 배포 후 확인 절차를 기록한다.
+Kosmo Web의 PostHog client는 `prod` 채널에서 공개 `posthogKey`와 `posthogHost`가 모두 주입된 경우에만 초기화한다. `dev` 채널과 설정이 없는 build에는 client와 분석 요청이 없어야 한다. 승인된 production 분석 설정은 EU PostHog host(`https://eu.i.posthog.com`)를 사용하며 Session Replay는 수집하지 않는다. SDK의 `disable_session_recording: true`와 Cloud Replay OFF를 유지한다. 이는 목표 설정 계약이며 배포 증거는 아니다.
 
 ## Identity와 개인정보 경계
 
 - 로그인 후 identity는 내부 immutable Account ID로 `identify`한다. Profile ID를 Account identity로 사용하지 않는다.
 - Account 이름·handle·email과 같은 trait, 게시글 본문·미디어·대상 Post ID·대상/선택 Profile ID는 명시적 event property로 보내지 않는다.
-- 프로필 bio는 명시적 event property로 보내지 않는다. Web에서 렌더링되는 프로필 상세와 공유 프로필 목록의 bio DOM 영역은 Session Replay에서 마스킹하고 autocapture에서 제외한다. 표시명·handle과 나머지 화면은 기존 수집 동작을 유지한다.
+- 프로필 bio는 명시적 event property로 보내지 않는다. Web에서 렌더링되는 프로필 상세와 공유 프로필 목록의 bio DOM 영역은 autocapture에서 제외한다. 표시명·handle과 나머지 화면은 기존 수집 동작을 유지한다.
 - Reaction은 `❤️`만 `default`, `🥹`, `🎉`, `👀`, `☘️`, `🌈`와 앞으로 승인되지 않은 값은 `custom`으로 분류한다. 원문 emoji, ID, 이름, shortcode는 보내지 않는다.
 - PostHog SDK의 identity/session metadata는 SDK 경계에서 관리하며, 애플리케이션 event property allowlist와 혼동하지 않는다.
 
