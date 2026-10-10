@@ -113,7 +113,7 @@ export function PostContentRenderer({
     return null;
   }
   return (
-    <PostContentPrivacyBoundary style={styles.root}>
+    <PostContentPrivacyBoundary onBackgroundPress={onBodyPress} style={styles.root}>
       {showContentWarning ? (
         <PostContentWarning
           imageCount={media === null ? null : media.length}
