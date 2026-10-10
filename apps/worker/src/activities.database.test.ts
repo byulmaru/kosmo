@@ -136,6 +136,7 @@ after(async () => pg.end());
 
 test('Operational audience capture is stable across retries, payload mismatches, and later signups', async () => {
   const active = await createAccountDeletionFixture({ profileStates: [] });
+  const anotherActive = await createAccountDeletionFixture({ profileStates: [] });
   const disabled = await createAccountDeletionFixture({ profileStates: [] });
   const sendId = crypto.randomUUID();
   const data = { href: '/maintenance', title: 'Scheduled maintenance' };
@@ -158,30 +159,43 @@ test('Operational audience capture is stable across retries, payload mismatches,
       .select()
       .from(Notifications)
       .where(eq(Notifications.sourceId, sendId));
-    assert.equal(notifications.length, 1);
-    assert.equal(notifications[0]?.recipientAccountId, active.account.id);
-    assert.equal(notifications[0]?.recipientProfileId, null);
-    assert.equal(notifications[0]?.kind, NotificationKind.OPERATIONAL);
-    assert.deepEqual(notifications[0]?.data, data);
+    assert.equal(notifications.length, 2);
+    assert.deepEqual(
+      notifications.map(({ recipientAccountId }) => recipientAccountId).sort(),
+      [active.account.id, anotherActive.account.id].sort(),
+    );
+    for (const notification of notifications) {
+      assert.equal(notification.recipientProfileId, null);
+      assert.equal(notification.kind, NotificationKind.OPERATIONAL);
+      assert.deepEqual(notification.data, data);
+    }
+    const notificationIds = notifications.map(({ id }) => id).sort();
 
     const readAt = Temporal.Instant.from('2026-10-02T01:23:45.123456Z');
-    await db
-      .update(Notifications)
-      .set({ readAt })
-      .where(eq(Notifications.id, notifications[0]!.id));
+    const readNotificationId = notifications[0]!.id;
+    await db.update(Notifications).set({ readAt }).where(eq(Notifications.id, readNotificationId));
     lateSignup = await createAccountDeletionFixture({ profileStates: [] });
 
     assert.equal(await captureOperationalNotificationAudienceActivity({ sendId, data }), true);
-    assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, sendId)), 1);
+    const retriedNotifications = await db
+      .select({
+        id: Notifications.id,
+        recipientAccountId: Notifications.recipientAccountId,
+        readAt: Notifications.readAt,
+      })
+      .from(Notifications)
+      .where(eq(Notifications.sourceId, sendId));
+    assert.equal(retriedNotifications.length, 2);
+    assert.deepEqual(retriedNotifications.map(({ id }) => id).sort(), notificationIds);
+    assert.deepEqual(
+      retriedNotifications.map(({ recipientAccountId }) => recipientAccountId).sort(),
+      [active.account.id, anotherActive.account.id].sort(),
+    );
     assert.equal(
-      (
-        await db
-          .select({ readAt: Notifications.readAt })
-          .from(Notifications)
-          .where(eq(Notifications.id, notifications[0]!.id))
-      )[0]?.readAt?.toString(),
+      retriedNotifications.find(({ id }) => id === readNotificationId)?.readAt?.toString(),
       readAt.toString(),
     );
+    assert.equal(retriedNotifications.find(({ id }) => id !== readNotificationId)?.readAt, null);
     await assert.rejects(
       captureOperationalNotificationAudienceActivity({
         sendId,
@@ -194,6 +208,7 @@ test('Operational audience capture is stable across retries, payload mismatches,
       await cleanupAccountDeletionFixture(lateSignup);
     }
     await cleanupAccountDeletionFixture(active);
+    await cleanupAccountDeletionFixture(anotherActive);
     await cleanupAccountDeletionFixture(disabled);
   }
 });
@@ -333,6 +348,78 @@ test('Operational dispatch pages 51 stored recipients and retries failed Push st
     assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, sendId)), 51);
   } finally {
     await db.delete(Accounts).where(inArray(Accounts.id, accountIds));
+  }
+});
+
+test('Operational dispatch stops on exact 50 and 100 recipient page boundaries', async (t) => {
+  const startCalls: string[] = [];
+  const { dispatchOperationalNotificationPageActivity } = await import('./activities');
+  t.mock.method(
+    temporalClient.workflow,
+    'start',
+    async (_workflow: string | Workflow, options: WorkflowStartOptions) => {
+      const args = options.args as [{ readonly notificationId: string }];
+      startCalls.push(args[0]!.notificationId);
+      return { workflowId: options.workflowId } as never;
+    },
+  );
+
+  for (const recipientCount of [50, 100]) {
+    const sendId = crypto.randomUUID();
+    const data = { href: '/maintenance', title: 'Scheduled maintenance' };
+    const accounts = await db
+      .insert(Accounts)
+      .values(
+        Array.from({ length: recipientCount }, () => {
+          const suffix = crypto.randomUUID();
+          return {
+            displayName: suffix,
+            oidcSubject: `subject-${suffix}`,
+            state: AccountState.ACTIVE,
+          };
+        }),
+      )
+      .returning({ id: Accounts.id });
+    const accountIds = accounts.map(({ id }) => id);
+
+    try {
+      await db.insert(Notifications).values(
+        accounts.map(({ id }) => ({
+          data,
+          kind: NotificationKind.OPERATIONAL,
+          recipientAccountId: id,
+          sourceId: sendId,
+        })),
+      );
+      const expectedIds = await db
+        .select({ id: Notifications.id })
+        .from(Notifications)
+        .where(eq(Notifications.sourceId, sendId))
+        .orderBy(Notifications.id)
+        .then((rows) => rows.map(({ id }) => id));
+      const startIndex = startCalls.length;
+
+      const firstPage = await dispatchOperationalNotificationPageActivity({ sendId });
+      assert.deepEqual(firstPage, {
+        afterNotificationId: expectedIds[49],
+        hasMore: recipientCount > 50,
+      });
+
+      if (recipientCount === 100) {
+        const secondPage = await dispatchOperationalNotificationPageActivity({
+          sendId,
+          afterNotificationId: firstPage.afterNotificationId ?? undefined,
+        });
+        assert.deepEqual(secondPage, {
+          afterNotificationId: expectedIds[99],
+          hasMore: false,
+        });
+      }
+
+      assert.deepEqual(startCalls.slice(startIndex), expectedIds);
+    } finally {
+      await db.delete(Accounts).where(inArray(Accounts.id, accountIds));
+    }
   }
 });
 
