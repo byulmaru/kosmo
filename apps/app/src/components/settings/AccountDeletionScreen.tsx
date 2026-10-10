@@ -85,38 +85,18 @@ export function AccountDeletionScreen({
         pending={pending}
         tone="danger"
       >
-        <AccountDeletionAcknowledgement
-          acknowledged={acknowledged}
-          disabled={pending}
-          onAcknowledgementChange={onAcknowledgementChange ?? (() => undefined)}
-        />
+        <View style={styles.acknowledgement}>
+          <Checkbox
+            accessibilityLabel={ACKNOWLEDGEMENT_LABEL}
+            checked={acknowledged}
+            disabled={pending}
+            onCheckedChange={onAcknowledgementChange ?? (() => undefined)}
+          />
+          <Text style={[styles.acknowledgementLabel, { color: theme.foregroundSecondary }]}>
+            {ACKNOWLEDGEMENT_LABEL}
+          </Text>
+        </View>
       </ConfirmationContent>
-    </View>
-  );
-}
-
-function AccountDeletionAcknowledgement({
-  acknowledged,
-  disabled,
-  onAcknowledgementChange,
-}: {
-  acknowledged: boolean;
-  disabled: boolean;
-  onAcknowledgementChange: (checked: boolean) => void;
-}) {
-  const theme = useTheme();
-
-  return (
-    <View style={styles.acknowledgement}>
-      <Checkbox
-        accessibilityLabel={ACKNOWLEDGEMENT_LABEL}
-        checked={acknowledged}
-        disabled={disabled}
-        onCheckedChange={onAcknowledgementChange}
-      />
-      <Text style={[styles.acknowledgementLabel, { color: theme.foregroundSecondary }]}>
-        {ACKNOWLEDGEMENT_LABEL}
-      </Text>
     </View>
   );
 }
