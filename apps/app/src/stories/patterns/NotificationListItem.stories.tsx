@@ -31,6 +31,12 @@ const author = profile({
   handle: 'starlight',
   relativeHandle: '@starlight',
 });
+const reactionProfileActors = [
+  { id: 'reaction-actor-one', name: '반응자 하나', profileHref: '/@reaction-one' },
+  { id: 'reaction-actor-two', name: '반응자 둘', profileHref: '/@reaction-two' },
+  { id: 'reaction-actor-three', name: '반응자 셋', profileHref: '/@reaction-three' },
+  { id: 'reaction-actor-four', name: '반응자 넷', profileHref: '/@reaction-four' },
+] as const;
 const replyPost = {
   ...post({
     id: 'notification-reply-post',
@@ -119,7 +125,11 @@ function NullableReaction() {
 }
 
 export function NotificationExample(args: Args) {
-  const actor = { id: 'notification-actor', name: args.name };
+  const actor = {
+    id: 'notification-actor',
+    name: args.name,
+    profileHref: '/@notification-actor',
+  };
   const shared = {
     disabled: args.disabled,
     onNavigate: args.onNavigate,
@@ -150,8 +160,8 @@ export function NotificationExample(args: Args) {
   const actors = args.grouped
     ? ([
         actor,
-        { id: 'actor-2', name: '은하 관측자' },
-        { id: 'actor-3', name: '우주 여행자' },
+        { id: 'actor-2', name: '은하 관측자', profileHref: '/@actor-two' },
+        { id: 'actor-3', name: '우주 여행자', profileHref: '/@actor-three' },
       ] as const)
     : ([actor] as const);
   const summary = {
@@ -248,6 +258,7 @@ const meta = {
     'ReplyQuoteContract',
     'ReplyActionsContract',
     'ReplyRailActivationContract',
+    'ReactionRepostProfileTargetsContract',
   ],
   parameters: {
     layout: 'fullscreen',
@@ -367,6 +378,7 @@ export const NullableReactionPost: Story = {
                 id: 'notification-reaction-author',
                 displayName: '게시글 반응자',
                 handle: 'reaction-author',
+                relativeHandle: '@reaction-author',
                 avatar: null,
               },
               post: null,
@@ -412,6 +424,76 @@ export const ActivationContract: Story = {
     await expect(link).toHaveStyle({ outlineWidth: '2px' });
     await userEvent.keyboard('{Enter}');
     await expect(args.onNavigate).toHaveBeenCalledOnce();
+  },
+};
+
+export const ReactionRepostProfileTargetsContract: Story = {
+  args: { kind: 'reaction' },
+  parameters: { controls: { disable: true } },
+  render: (args) => (
+    <View>
+      {(['reaction', 'repost'] as const).map((kind) => (
+        <View key={kind} testID={`${kind}-profile-targets`}>
+          <NotificationListItemView
+            actors={reactionProfileActors}
+            href="/@notification-post-author/notification-post"
+            kind={kind}
+            onNavigate={args.onNavigate}
+            preview={{
+              bodyText: '프로필과 분리된 대상 게시글 내용입니다.',
+              contentWarning: null,
+              media: null,
+              sensitiveMedia: false,
+            }}
+            timestamp="5분 전"
+          />
+        </View>
+      ))}
+    </View>
+  ),
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const displayedActorNames = ['반응자 하나', '반응자 둘', '반응자 셋'];
+
+    for (const kind of ['reaction', 'repost'] as const) {
+      const group = within(canvas.getByTestId(`${kind}-profile-targets`));
+      const profileLinks = displayedActorNames.map((name) =>
+        group.getByRole('link', { name: `${name} 프로필로 이동` }),
+      );
+      const bounds = profileLinks.map((link) => link.getBoundingClientRect());
+
+      expect(group.queryByRole('link', { name: '반응자 넷 프로필로 이동' })).toBeNull();
+      for (const [index, link] of profileLinks.entries()) {
+        await expect(link).toHaveAttribute('href', reactionProfileActors[index]!.profileHref);
+        expect(bounds[index]!.width).toBe(28);
+        expect(bounds[index]!.height).toBe(28);
+        expect(bounds[index]!.width).toBeGreaterThanOrEqual(24);
+        if (index > 0) {
+          expect(bounds[index - 1]!.right).toBeLessThanOrEqual(bounds[index]!.left);
+        }
+      }
+
+      const postTargets = [
+        group.getByTestId('notification-kind-target'),
+        group.getByTestId('notification-post-time-target'),
+        group.getByTestId('notification-post-summary-target'),
+        group.getByTestId('notification-post-preview-target'),
+      ];
+      for (const postTarget of postTargets) {
+        await expect(postTarget).toHaveAttribute(
+          'href',
+          '/@notification-post-author/notification-post',
+        );
+      }
+      args.onNavigate.mockClear();
+      await userEvent.click(profileLinks[0]!);
+      await expect(args.onNavigate).toHaveBeenCalledOnce();
+      for (const postTarget of postTargets) {
+        args.onNavigate.mockClear();
+        await userEvent.click(postTarget);
+        await expect(args.onNavigate).toHaveBeenCalledOnce();
+      }
+    }
   },
 };
 
