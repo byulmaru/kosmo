@@ -99,6 +99,7 @@ export function BookmarkList({
         <PostMediaViewerHostProvider>
           <ScrollView
             {...scrollProps}
+            keyboardShouldPersistTaps="handled"
             contentContainerStyle={styles.root}
             testID="bookmark-list-scroll"
           >

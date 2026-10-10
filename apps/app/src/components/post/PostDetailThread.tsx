@@ -78,6 +78,7 @@ export function PostDetailFrame({ children, header, nativeScrollProps }: PostDet
   ) : (
     <ScrollView
       {...nativeScrollProps}
+      keyboardShouldPersistTaps="handled"
       contentContainerStyle={styles.frame}
       stickyHeaderIndices={[0]}
       testID="post-detail-scroll"
@@ -251,6 +252,7 @@ function PostDetailThreadContent({
           {presentation === 'viewer' ? (
             <ScrollView
               {...nativeScrollProps}
+              keyboardShouldPersistTaps="handled"
               contentContainerStyle={styles.frame}
               testID="post-media-viewer-thread-scroll"
             >

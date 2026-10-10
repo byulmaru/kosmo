@@ -156,6 +156,7 @@ export function NotificationList({ profile }: NotificationListProps) {
         <PostMediaViewerHostProvider>
           <ScrollView
             {...nativeScrollProps}
+            keyboardShouldPersistTaps="handled"
             contentContainerStyle={styles.root}
             refreshControl={
               Platform.OS === 'web' ? undefined : (

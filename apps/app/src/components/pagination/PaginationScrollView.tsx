@@ -114,6 +114,7 @@ export function PaginationScrollView({
     };
   }, []);
   const nativeScrollProps: RouteScrollContainerNativeProps = {
+    keyboardShouldPersistTaps: 'handled',
     ...callerNativeScrollProps,
     onContentSizeChange,
     onLayout,
