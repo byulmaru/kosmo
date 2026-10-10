@@ -74,6 +74,7 @@ export function InfiniteList<Item>({
       data={data}
       ListEmptyComponent={empty}
       keyExtractor={keyExtractor}
+      keyboardShouldPersistTaps="handled"
       ListFooterComponent={footer}
       onEndReached={onEndReached}
       onEndReachedThreshold={1}
