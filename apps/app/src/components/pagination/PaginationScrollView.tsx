@@ -1,11 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useRef } from 'react';
 import { Platform, ScrollView } from 'react-native';
 import { RouteScrollContainer } from '@/components/ui/RouteScrollContainer';
+import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import type { ScrollViewProps } from 'react-native';
 import type {
   RouteScrollContainerNativeProps,
   RouteScrollContainerProps,
 } from '@/components/ui/RouteScrollContainer';
+import type { NativeTabReselectionDestination } from '@/components/shell/ShellChromeContext';
 import type { UseAutomaticPaginationResult } from './useAutomaticPagination';
 
 type NativeScrollProps = UseAutomaticPaginationResult['nativeScrollProps'];
@@ -29,6 +31,7 @@ type PaginationScrollViewProps = {
     ScrollViewProps,
     'contentContainerStyle' | 'keyboardShouldPersistTaps' | 'style'
   >;
+  reselectDestination?: NativeTabReselectionDestination;
   webScrollable?: boolean;
   webStyle?: RouteScrollContainerProps['webStyle'];
 };
@@ -58,11 +61,28 @@ function snapshotScrollEvent(event: NativeScrollEvent): NativeScrollEvent {
 export function PaginationScrollView({
   children,
   nativeScrollProps: callerNativeScrollProps,
+  reselectDestination,
   webScrollable = false,
   webStyle,
 }: PaginationScrollViewProps) {
+  const scrollRef = useRef<ScrollView>(null);
+  const shellChrome = useShellChrome();
   const registrationRef = useRef<Registration | null>(null);
   const latestEventsRef = useRef<LatestEvent[]>([]);
+  const scrollToTop = useCallback(() => {
+    scrollRef.current?.scrollTo({ animated: true, y: 0 });
+  }, []);
+  useEffect(() => {
+    if (
+      Platform.OS !== 'ios' ||
+      !reselectDestination ||
+      !shellChrome?.registerNativeTabReselection
+    ) {
+      return;
+    }
+
+    return shellChrome.registerNativeTabReselection(reselectDestination, scrollToTop);
+  }, [reselectDestination, scrollToTop, shellChrome]);
   const onContentSizeChange = useCallback(
     (...args: Parameters<NativeScrollProps['onContentSizeChange']>) => {
       recordLatestEvent(latestEventsRef.current, { args, type: 'contentSize' });
@@ -124,9 +144,15 @@ export function PaginationScrollView({
   return (
     <PaginationScrollContext.Provider value={register}>
       {webScrollable && Platform.OS === 'web' ? (
-        <ScrollView {...nativeScrollProps}>{children}</ScrollView>
+        <ScrollView ref={scrollRef} {...nativeScrollProps}>
+          {children}
+        </ScrollView>
       ) : (
-        <RouteScrollContainer nativeScrollProps={nativeScrollProps} webStyle={webStyle}>
+        <RouteScrollContainer
+          nativeScrollProps={nativeScrollProps}
+          scrollRef={scrollRef}
+          webStyle={webStyle}
+        >
           {children}
         </RouteScrollContainer>
       )}

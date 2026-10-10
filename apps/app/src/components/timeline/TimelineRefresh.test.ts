@@ -16,6 +16,7 @@ const platform = { OS: 'ios' };
 const originalWindowDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'window');
 let activeProfileId = 'profile-a';
 let renderer: ReactTestRenderer | null = null;
+let nativeHomeReselectionHandler: (() => void) | null = null;
 let HomeTimelineScreen: ComponentType;
 let LocalTimelineScreen: ComponentType;
 
@@ -66,6 +67,15 @@ const localRefetch = (
   localRefetchRequests.push(options);
 };
 
+const registerHomeReselection = (handler: () => void) => {
+  nativeHomeReselectionHandler = handler;
+  return () => {
+    if (nativeHomeReselectionHandler === handler) {
+      nativeHomeReselectionHandler = null;
+    }
+  };
+};
+
 const showToast = (message: string, options: (typeof toasts)[number]['options']) => {
   toasts.push({ message, options });
   return () => {
@@ -112,7 +122,9 @@ mockModule('@/components/RouteBoundary', {
   RouteBoundary: ({ children }: { children: ReactNode }) => children,
   useRouteBoundary: () => ({ fetchKey: 0, refetch: () => undefined }),
 });
-mockModule('@/components/shell/ShellChromeContext', { useShellChrome: () => null });
+mockModule('@/components/shell/ShellChromeContext', {
+  useShellChrome: () => ({ registerHomeReselection, openProfileSwitcher: () => undefined }),
+});
 mockModule('@/components/shell/shellLayout', {
   getShellLayout: () => 'mobile',
   getWebMobileShellHeaderStickyOffset: () => 0,
@@ -147,6 +159,7 @@ afterEach(async () => {
   localRefetchRequests.length = 0;
   toasts.length = 0;
   toastCleanupCount = 0;
+  nativeHomeReselectionHandler = null;
   activeProfileId = 'profile-a';
   platform.OS = 'ios';
   if (originalWindowDescriptor) {
@@ -157,6 +170,36 @@ afterEach(async () => {
 });
 
 describe('Timeline refresh', () => {
+  it('iOS Home root 재선택은 pending refresh를 중복 요청하지 않고 완료 뒤 다시 처리한다', async () => {
+    await act(async () => {
+      renderer = create(createElement(HomeTimelineScreen));
+    });
+
+    assert.ok(nativeHomeReselectionHandler);
+    await act(async () => nativeHomeReselectionHandler?.());
+    await act(async () => nativeHomeReselectionHandler?.());
+    assert.equal(homeRequests.length, 1);
+
+    await act(async () => homeRequests[0]?.complete?.());
+    await act(async () => nativeHomeReselectionHandler?.());
+    assert.equal(homeRequests.length, 2);
+  });
+
+  it('iOS Local root 재선택은 pending refresh를 중복 요청하지 않고 완료 뒤 다시 처리한다', async () => {
+    await act(async () => {
+      renderer = create(createElement(LocalTimelineScreen));
+    });
+
+    assert.ok(nativeHomeReselectionHandler);
+    await act(async () => nativeHomeReselectionHandler?.());
+    await act(async () => nativeHomeReselectionHandler?.());
+    assert.equal(localRefetchRequests.length, 1);
+
+    await act(async () => localRefetchRequests[0]?.onComplete?.(null));
+    await act(async () => nativeHomeReselectionHandler?.());
+    assert.equal(localRefetchRequests.length, 2);
+  });
+
   for (const os of ['ios', 'web'] as const) {
     it(`Home refresh owner (${os})는 pending 중 중복을 막고 실패 retry를 연결한다`, async () => {
       platform.OS = os;

@@ -229,6 +229,7 @@ export function PostList({
             renderItem={({ item }) => (
               <PostListItem post={item.node} presentation={postListPresentation} />
             )}
+            reselectDestination={isHome || isLocal ? 'home' : undefined}
             refreshing={refreshing}
             style={styles.root}
           />

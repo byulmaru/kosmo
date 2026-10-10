@@ -501,6 +501,7 @@ export default function SearchScreen() {
         contentContainerStyle: [styles.root, web ? styles.webRoot : styles.nativeRoot],
         keyboardShouldPersistTaps: 'handled',
       }}
+      reselectDestination="search"
       webScrollable
     >
       {nativeSearchHeader}

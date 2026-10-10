@@ -1,5 +1,6 @@
-import { Fragment, useEffect } from 'react';
+import { Fragment, useCallback, useEffect, useRef } from 'react';
 import { FlatList, Platform, View } from 'react-native';
+import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import {
   usePaginationScrollContext,
   usePaginationScrollRegistration,
@@ -8,6 +9,7 @@ import { useAutomaticPagination } from './useAutomaticPagination';
 import type { ReactElement } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { LoadNext } from './useAutomaticPagination';
+import type { NativeTabReselectionDestination } from '@/components/shell/ShellChromeContext';
 
 export type InfiniteListProps<Item> = Readonly<{
   data: ReadonlyArray<Item>;
@@ -20,6 +22,7 @@ export type InfiniteListProps<Item> = Readonly<{
   pageSize: number;
   renderItem: (params: { index: number; item: Item }) => ReactElement | null;
   refreshing?: boolean;
+  reselectDestination?: NativeTabReselectionDestination;
   style?: StyleProp<ViewStyle>;
   footer?: ReactElement | null;
   empty?: ReactElement | null;
@@ -38,8 +41,11 @@ export function InfiniteList<Item>({
   footer,
   renderItem,
   refreshing,
+  reselectDestination,
   style,
 }: InfiniteListProps<Item>) {
+  const scrollRef = useRef<FlatList<Item>>(null);
+  const shellChrome = useShellChrome();
   const hasPaginationScrollContext = usePaginationScrollContext();
   const hasNativeScrollParent = Platform.OS !== 'web' && hasPaginationScrollContext;
   const { loadError, loadNextPage, nativeScrollProps, onEndReached } = useAutomaticPagination({
@@ -51,6 +57,21 @@ export function InfiniteList<Item>({
     pageSize,
   });
   usePaginationScrollRegistration(hasNativeScrollParent ? nativeScrollProps : null);
+  const scrollToTop = useCallback(() => {
+    scrollRef.current?.scrollToOffset({ animated: true, offset: 0 });
+  }, []);
+
+  useEffect(() => {
+    if (
+      Platform.OS !== 'ios' ||
+      !reselectDestination ||
+      !shellChrome?.registerNativeTabReselection
+    ) {
+      return;
+    }
+
+    return shellChrome.registerNativeTabReselection(reselectDestination, scrollToTop);
+  }, [reselectDestination, scrollToTop, shellChrome]);
 
   useEffect(() => {
     onLoadErrorChange?.(loadError, loadNextPage);
@@ -72,6 +93,7 @@ export function InfiniteList<Item>({
   return (
     <FlatList
       data={data}
+      ref={scrollRef}
       ListEmptyComponent={empty}
       keyExtractor={keyExtractor}
       ListFooterComponent={footer}

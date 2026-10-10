@@ -1,5 +1,6 @@
 import { ScrollView } from 'react-native';
 import type { ReactNode } from 'react';
+import type { Ref } from 'react';
 import type { ScrollViewProps, StyleProp, ViewStyle } from 'react-native';
 
 export type RouteScrollContainerNativeProps = Pick<
@@ -17,9 +18,18 @@ export type RouteScrollContainerNativeProps = Pick<
 export type RouteScrollContainerProps = {
   children?: ReactNode;
   nativeScrollProps?: RouteScrollContainerNativeProps;
+  scrollRef?: Ref<ScrollView>;
   webStyle?: StyleProp<ViewStyle>;
 };
 
-export function RouteScrollContainer({ children, nativeScrollProps }: RouteScrollContainerProps) {
-  return <ScrollView {...nativeScrollProps}>{children}</ScrollView>;
+export function RouteScrollContainer({
+  children,
+  nativeScrollProps,
+  scrollRef,
+}: RouteScrollContainerProps) {
+  return (
+    <ScrollView ref={scrollRef} {...nativeScrollProps}>
+      {children}
+    </ScrollView>
+  );
 }

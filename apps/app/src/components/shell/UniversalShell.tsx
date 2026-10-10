@@ -48,7 +48,12 @@ import { SidebarNavigation } from './SidebarNavigation';
 import type { ReactNode, RefObject } from 'react';
 import type { View as NativeView, ViewStyle } from 'react-native';
 import type { UniversalShellQuery } from './__generated__/UniversalShellQuery.graphql';
-import type { HomeReselectionHandler } from './ShellChromeContext';
+import type {
+  HomeReselectionHandler,
+  NativeTabReselectionDestination,
+  NativeTabReselectionHandler,
+} from './ShellChromeContext';
+import { createNativeTabReselectionRegistry } from './nativeTabNavigation';
 
 const ShellQuery = graphql`
   query UniversalShellQuery {
@@ -102,19 +107,33 @@ const webFixedBottomBar = {
 
 const webDocumentColumn = { minHeight: '100vh' } as unknown as ViewStyle;
 
-export function UniversalShell({ children }: { children?: ReactNode }) {
+export function UniversalShell({
+  children,
+  showBottomTabBar = true,
+}: {
+  children?: ReactNode;
+  showBottomTabBar?: boolean;
+}) {
   return (
     <NavigationGuardProvider>
       <PrimaryNavigationScrollProvider>
         <NotificationReadAllProvider>
-          <UniversalShellContent>{children}</UniversalShellContent>
+          <UniversalShellContent showBottomTabBar={showBottomTabBar}>
+            {children}
+          </UniversalShellContent>
         </NotificationReadAllProvider>
       </PrimaryNavigationScrollProvider>
     </NavigationGuardProvider>
   );
 }
 
-function UniversalShellContent({ children }: { children?: ReactNode }) {
+function UniversalShellContent({
+  children,
+  showBottomTabBar,
+}: {
+  children?: ReactNode;
+  showBottomTabBar: boolean;
+}) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
@@ -130,6 +149,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
   const menuButtonRef = useRef<NativeView>(null);
   const screenFallbackRef = useRef<NativeView>(null);
   const homeReselectionHandlerRef = useRef<HomeReselectionHandler | null>(null);
+  const nativeTabReselectionRegistryRef = useRef(createNativeTabReselectionRegistry());
   const pendingDrawerHomeReselectionRef = useRef(false);
   const registerHomeReselection = useCallback((handler: HomeReselectionHandler) => {
     homeReselectionHandlerRef.current = handler;
@@ -141,6 +161,15 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
   }, []);
   const reselectHome = useCallback(() => {
     homeReselectionHandlerRef.current?.();
+  }, []);
+  const registerNativeTabReselection = useCallback(
+    (destination: NativeTabReselectionDestination, handler: NativeTabReselectionHandler) => {
+      return nativeTabReselectionRegistryRef.current.register(destination, handler);
+    },
+    [],
+  );
+  const reselectNativeTab = useCallback((destination: NativeTabReselectionDestination) => {
+    nativeTabReselectionRegistryRef.current.reselect(destination);
   }, []);
   const queueDrawerHomeReselection = useCallback(() => {
     pendingDrawerHomeReselectionRef.current = true;
@@ -436,7 +465,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
             <RelayActorBoundary>{children}</RelayActorBoundary>
           </PostMediaViewerScreenFallbackProvider>
         </View>
-        {mobile ? (
+        {mobile && showBottomTabBar ? (
           <View aria-hidden={drawerOpen || undefined} style={web ? webFixedBottomBar : undefined}>
             <BottomTabBar
               onComposeOpen={openComposer}
@@ -514,10 +543,14 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
     <ShellChromeProvider
       navigationDrawerOpen={drawerOpen}
       navigationDrawerTriggerRef={menuButtonRef}
+      openComposer={openComposer}
       openNavigationDrawer={openNavigationDrawer}
       openProfileSwitcher={openProfileSwitcher}
       registerHomeReselection={registerHomeReselection}
+      registerNativeTabReselection={registerNativeTabReselection}
+      reselectNativeTab={reselectNativeTab}
       reselectHome={reselectHome}
+      selectedProfile={profile}
     >
       <PrimaryNavigationScrollReset pathname={pathname} />
       {nativeDrawer}
