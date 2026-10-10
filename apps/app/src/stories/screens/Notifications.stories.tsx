@@ -275,6 +275,16 @@ function notificationSurface(link: HTMLElement): HTMLElement {
   return surface;
 }
 
+function notificationPostSummary(canvasElement: HTMLElement, name: RegExp): HTMLElement {
+  const summary = within(canvasElement)
+    .getAllByRole('link', { name })
+    .find((link) => link.getAttribute('data-testid') === 'notification-post-summary-target');
+  if (!summary) {
+    throw new Error('Notification post summary is missing its accessible navigation target.');
+  }
+  return summary;
+}
+
 function storyColors(theme: unknown) {
   return theme === 'dark' ? colors.dark : colors.light;
 }
@@ -616,7 +626,7 @@ export const StatesAndFollowItems: Story = {
     expect(operationalLink).toHaveAttribute('href', '/home');
     expect(canvasElement.querySelector('a[href="/@starlight"]')).toBeInTheDocument();
     expect(
-      canvas.getByRole('link', { name: /별빛 여행자님이 이 게시글에 반응했습니다/ }),
+      notificationPostSummary(canvasElement, /별빛 여행자님이 이 게시글에 반응했습니다/),
     ).toHaveAttribute('href', '/@recipient/notification-related-post');
     expect(canvas.getByTestId('notification-post-author')).toHaveAttribute('href', '/@starlight');
     expect(canvas.getByRole('link', { name: '5분 전' })).toHaveAttribute(
@@ -624,7 +634,7 @@ export const StatesAndFollowItems: Story = {
       '/@starlight/notification-reply-post',
     );
     expect(
-      canvas.getByRole('link', { name: /은하 기록자님이 이 게시글을 재게시했습니다/ }),
+      notificationPostSummary(canvasElement, /은하 기록자님이 이 게시글을 재게시했습니다/),
     ).toHaveAttribute('href', '/@recipient/notification-repost-related-post');
   },
 };
@@ -829,14 +839,23 @@ export const RepostReadNormalizesAndNavigates: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(
-      canvas.getByRole('link', { name: /은하 기록자님이 이 게시글을 재게시했습니다/ }),
+      notificationPostSummary(canvasElement, /은하 기록자님이 이 게시글을 재게시했습니다/),
     );
     await expect(
       canvas.findByText('/@recipient/notification-repost-related-post'),
     ).resolves.toBeVisible();
-    await expect(
-      canvas.findByRole('link', { name: /은하 기록자님이 이 게시글을 재게시했습니다/ }),
-    ).resolves.toBeVisible();
+    await waitFor(() => {
+      const summary = notificationPostSummary(
+        canvasElement,
+        /은하 기록자님이 이 게시글을 재게시했습니다/,
+      );
+      expect(summary).toBeVisible();
+      expect(
+        within(notificationSurface(summary)).queryAllByRole('link', {
+          name: /읽지 않은 알림/,
+        }),
+      ).toHaveLength(0);
+    });
   },
   render: () => <ReadNavigationList />,
 };

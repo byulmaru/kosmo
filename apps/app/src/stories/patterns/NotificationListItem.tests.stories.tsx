@@ -4,6 +4,7 @@ import baseMeta, {
   OperationalActivationContract as operationalActivation,
   PendingContract as pending,
   ProtectionContract as protection,
+  ReactionRepostProfileTargetsContract as reactionRepostProfileTargets,
   ReplyActionsContract as replyActions,
   ReplyLayoutContract as replyLayout,
   ReplyQuoteContract as replyQuote,
@@ -28,3 +29,4 @@ export const ReplyLayoutContract: Story = replyLayout;
 export const ReplyQuoteContract: Story = replyQuote;
 
 export const ReplyActionsContract: Story = replyActions;
+export const ReactionRepostProfileTargetsContract: Story = reactionRepostProfileTargets;

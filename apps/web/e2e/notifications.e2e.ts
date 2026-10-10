@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { db, Notifications } from '@kosmo/core/db';
+import { db, Notifications, Reactions } from '@kosmo/core/db';
 import { NotificationKind } from '@kosmo/core/enums';
 import { eq } from 'drizzle-orm';
 import {
@@ -190,6 +190,166 @@ test('Local Follow 알림은 Recipient Profile별로 격리되고 Read와 Unfoll
     expect(payload.recipientProfiles).toEqual([]);
   } finally {
     await followerContext.close();
+  }
+});
+
+test('Reaction·Repost 알림 사진과 게시글은 각각 한 번 이동하고 Best Effort Read를 시작한다', async ({
+  context,
+  page,
+}) => {
+  const recipient = await createE2ESession({
+    displayName: 'E2E Notification Recipient',
+    handle: 'e2e-notification-recipient',
+  });
+  const reactionActor = await createE2ESession({
+    displayName: 'E2E Reaction Actor',
+    handle: 'e2e-reaction-actor',
+  });
+  const repostActor = await createE2ESession({
+    displayName: 'E2E Repost Actor',
+    handle: 'e2e-repost-actor',
+  });
+  if (!recipient.profile || !reactionActor.profile || !repostActor.profile) {
+    throw new Error('Reaction and Repost Notification fixtures require local profiles.');
+  }
+
+  const relatedPost = await createE2EPost({
+    body: 'E2E related notification post body',
+    profileId: recipient.profile.id,
+  });
+  const [reaction] = await db
+    .insert(Reactions)
+    .values({ postId: relatedPost.id, profileId: reactionActor.profile.id, type: '❤️' })
+    .returning();
+  const repost = await createE2EPost({
+    content: false,
+    profileId: repostActor.profile.id,
+    repostSourceId: relatedPost.id,
+  });
+  const [reactionNotification, repostNotification] = await db
+    .insert(Notifications)
+    .values([
+      {
+        kind: NotificationKind.REACTION,
+        recipientProfileId: recipient.profile.id,
+        sourceId: reaction!.id,
+      },
+      {
+        kind: NotificationKind.REPOST,
+        recipientProfileId: recipient.profile.id,
+        sourceId: repost.id,
+      },
+    ])
+    .returning();
+  const reactionNotificationId = toGlobalId('ReactionNotification', reactionNotification!.id);
+  const repostNotificationId = toGlobalId('RepostNotification', repostNotification!.id);
+  const relatedPostHref = `/@${recipient.profile.handle}/${toGlobalId('Post', relatedPost.id)}`;
+
+  await setE2ESessionCookie(context, recipient.token);
+
+  const readRequestIds: string[][] = [];
+  let readMode: 'pass' | 'delay' | 'fail' = 'pass';
+  let releaseDelayedRead!: () => void;
+  const delayedReadGate = new Promise<void>((resolve) => {
+    releaseDelayedRead = resolve;
+  });
+  await page.route('**/graphql', async (route) => {
+    const operation = readGraphQLOperation(route.request().postData());
+    if (operation?.operationName !== 'NotificationListItemMarkReadMutation') {
+      await route.fallback();
+      return;
+    }
+
+    readRequestIds.push((operation.variables?.ids as string[] | undefined) ?? []);
+    if (readMode === 'fail') {
+      await route.abort('failed');
+      return;
+    }
+    if (readMode === 'delay') {
+      const response = await route.fetch();
+      await delayedReadGate;
+      await route.fulfill({ response });
+      return;
+    }
+    await route.fallback();
+  });
+
+  try {
+    await page.goto('/notifications');
+
+    const reactionRow = page
+      .getByTestId('notification-list-item')
+      .filter({ hasText: 'E2E Reaction Actor' });
+    const reactionProfileLink = reactionRow.getByRole('link', {
+      name: 'E2E Reaction Actor 프로필로 이동',
+    });
+    const reactionPostLink = reactionRow.getByTestId('notification-post-summary-target');
+    await expect(reactionProfileLink).toHaveAttribute('href', '/@e2e-reaction-actor');
+    await expect(reactionPostLink).toHaveAttribute('href', relatedPostHref);
+    const reactionProfileBox = await reactionProfileLink.boundingBox();
+    expect(reactionProfileBox).not.toBeNull();
+    expect(reactionProfileBox!.width).toBeGreaterThanOrEqual(24);
+    expect(reactionProfileBox!.height).toBeGreaterThanOrEqual(24);
+
+    readMode = 'delay';
+    const reactionReadResponse = waitForGraphQLOperation(
+      page,
+      'NotificationListItemMarkReadMutation',
+    );
+    await reactionProfileLink.click();
+    await expect(page).toHaveURL('/@e2e-reaction-actor');
+    await expect.poll(() => readRequestIds.length).toBe(1);
+    expect(readRequestIds).toEqual([[reactionNotificationId]]);
+    await expect.poll(() => notificationReadAt(reactionNotification!.id)).not.toBeNull();
+    releaseDelayedRead();
+    await reactionReadResponse;
+
+    readRequestIds.length = 0;
+    readMode = 'pass';
+    await page.goto('/notifications');
+    const reactionPostTarget = page
+      .getByTestId('notification-list-item')
+      .filter({ hasText: 'E2E Reaction Actor' })
+      .getByTestId('notification-post-summary-target');
+    await reactionPostTarget.click();
+    await expect(page).toHaveURL(relatedPostHref);
+    await expect.poll(() => readRequestIds.length).toBe(1);
+    expect(readRequestIds).toEqual([[reactionNotificationId]]);
+    await expect.poll(() => notificationReadAt(reactionNotification!.id)).not.toBeNull();
+
+    readRequestIds.length = 0;
+    readMode = 'fail';
+    await page.goto('/notifications');
+    const repostRow = page
+      .getByTestId('notification-list-item')
+      .filter({ hasText: 'E2E Repost Actor' });
+    const repostProfileLink = repostRow.getByRole('link', {
+      name: 'E2E Repost Actor 프로필로 이동',
+    });
+    const repostPostTarget = repostRow.getByTestId('notification-post-summary-target');
+    await expect(repostProfileLink).toHaveAttribute('href', '/@e2e-repost-actor');
+    await expect(repostPostTarget).toHaveAttribute('href', relatedPostHref);
+    await repostProfileLink.click();
+    await expect(page).toHaveURL('/@e2e-repost-actor');
+    await expect.poll(() => readRequestIds.length).toBe(1);
+    expect(readRequestIds).toEqual([[repostNotificationId]]);
+    expect(await notificationReadAt(repostNotification!.id)).toBeNull();
+
+    readRequestIds.length = 0;
+    readMode = 'pass';
+    await page.goto('/notifications');
+    await page
+      .getByTestId('notification-list-item')
+      .filter({ hasText: 'E2E Repost Actor' })
+      .getByTestId('notification-post-summary-target')
+      .click();
+    await expect(page).toHaveURL(relatedPostHref);
+    await expect.poll(() => readRequestIds.length).toBe(1);
+    expect(readRequestIds).toEqual([[repostNotificationId]]);
+    await expect.poll(() => notificationReadAt(repostNotification!.id)).not.toBeNull();
+  } finally {
+    releaseDelayedRead();
+    await page.unroute('**/graphql');
   }
 });
 
