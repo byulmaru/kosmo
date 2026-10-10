@@ -595,7 +595,7 @@ export const ReplyLayoutContract: Story = {
     await userEvent.tab();
     await expect(document.activeElement).toHaveAttribute(
       'href',
-      '/@starlight/notification-reply-post',
+      '/@starlight/notification-reply-post?initialScroll=reply',
     );
   },
 };

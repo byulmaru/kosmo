@@ -621,7 +621,7 @@ export const StatesAndFollowItems: Story = {
     expect(canvas.getByTestId('notification-post-author')).toHaveAttribute('href', '/@starlight');
     expect(canvas.getByRole('link', { name: '5분 전' })).toHaveAttribute(
       'href',
-      '/@starlight/notification-reply-post',
+      '/@starlight/notification-reply-post?initialScroll=reply',
     );
     expect(
       canvas.getByRole('link', { name: /은하 기록자님이 이 게시글을 재게시했습니다/ }),
@@ -994,7 +994,7 @@ export const ReplyAuthorActivationReadsOnce: Story = {
       expect.anything(),
     );
 
-    const detailPath = '/@starlight/notification-reply-post';
+    const detailPath = '/@starlight/notification-reply-post?initialScroll=reply';
     const activations = [
       { target: canvas.getByTestId('notification-post-author'), path: '/@starlight' },
       { target: canvas.getByRole('link', { name: '5분 전' }), path: detailPath },
