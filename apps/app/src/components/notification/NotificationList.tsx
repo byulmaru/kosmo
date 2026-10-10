@@ -1,5 +1,5 @@
 import { usePathname, useSegments } from 'expo-router';
-import { useEffect, useTransition } from 'react';
+import { useCallback, useEffect, useRef, useTransition } from 'react';
 import {
   Platform,
   RefreshControl,
@@ -16,6 +16,7 @@ import { useAutomaticPagination } from '@/components/pagination/useAutomaticPagi
 import { PostActionAuthenticationProvider } from '@/components/post/PostActionAuthentication';
 import { PostComposerCoordinatorProvider } from '@/components/post/PostComposerCoordinator';
 import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHost';
+import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { getWebMobileShellHeader } from '@/components/shell/shellLayout';
 import { Skeleton, StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -83,6 +84,18 @@ const notificationListFragment = graphql`
 
 export function NotificationList({ profile }: NotificationListProps) {
   const theme = useTheme();
+  const scrollRef = useRef<ScrollView>(null);
+  const shellChrome = useShellChrome();
+  const scrollToTop = useCallback(() => {
+    scrollRef.current?.scrollTo({ animated: true, y: 0 });
+  }, []);
+  useEffect(() => {
+    if (Platform.OS !== 'ios' || !shellChrome?.registerNativeTabReselection) {
+      return;
+    }
+
+    return shellChrome.registerNativeTabReselection('notifications', scrollToTop);
+  }, [scrollToTop, shellChrome]);
   const pagination = usePaginationFragment<
     NotificationListNextPageQuery,
     NotificationList_profile$key
@@ -164,6 +177,7 @@ export function NotificationList({ profile }: NotificationListProps) {
           <ScrollView
             {...nativeScrollProps}
             contentContainerStyle={styles.root}
+            ref={scrollRef}
             refreshControl={
               Platform.OS === 'web' ? undefined : (
                 <RefreshControl

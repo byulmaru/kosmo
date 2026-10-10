@@ -2,6 +2,7 @@ import { createContext, useContext } from 'react';
 import { StyleSheet } from 'react-native';
 import { PaginationScrollView } from '@/components/pagination/PaginationScrollView';
 import type { ReactNode } from 'react';
+import type { NativeTabReselectionDestination } from '@/components/shell/ShellChromeContext';
 
 type ProfileRouteContextValue = Readonly<{
   chrome: ReactNode;
@@ -32,15 +33,18 @@ export function useProfileRoute(): ProfileRouteContextValue {
 
 export function ProfileRouteContainer({
   children,
+  reselectDestination,
   scrollKey,
 }: {
   children: ReactNode;
+  reselectDestination?: NativeTabReselectionDestination;
   scrollKey: string;
 }) {
   return (
     <PaginationScrollView
       key={scrollKey}
       nativeScrollProps={{ style: styles.nativeRoot }}
+      reselectDestination={reselectDestination}
       webStyle={styles.webRoot}
     >
       {children}

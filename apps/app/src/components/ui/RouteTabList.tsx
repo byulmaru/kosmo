@@ -8,12 +8,14 @@ export type RouteTabListProps<Value extends string> = Omit<TabListProps<Value>, 
   href: (value: Value) => Href;
   onReselect?: () => void;
   onValueChange?: (value: Value) => void;
+  iosAction?: 'replace' | 'setParams';
   param: string;
   webAction: 'push' | 'replace';
 };
 
 export function RouteTabList<Value extends string>({
   href,
+  iosAction = 'setParams',
   onReselect,
   onValueChange,
   param,
@@ -35,6 +37,8 @@ export function RouteTabList<Value extends string>({
         onValueChange?.(nextValue);
         if (Platform.OS === 'web') {
           router[webAction](href(nextValue));
+        } else if (Platform.OS === 'ios' && iosAction === 'replace') {
+          router.replace(href(nextValue));
         } else {
           router.setParams({ [param]: nextValue });
         }

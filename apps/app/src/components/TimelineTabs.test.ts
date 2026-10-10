@@ -71,7 +71,20 @@ describe('TimelineTabs', () => {
     );
   });
 
-  it('Native 비활성 route는 현재 화면의 파라미터만 바꾼다', async () => {
+  it('iOS route는 Home/Local 스택의 루트 화면을 교체한다', async () => {
+    await act(async () => {
+      renderer = create(createElement(TimelineTabs, { value: 'home' }));
+    });
+    assert.ok(onValueChange);
+
+    await act(async () => onValueChange?.('local'));
+
+    assert.deepEqual(navigations, [{ href: '/local', mode: 'replace' }]);
+  });
+
+  it('Android route는 기존처럼 timeline 파라미터만 갱신한다', async () => {
+    platform.OS = 'android';
+
     await act(async () => {
       renderer = create(createElement(TimelineTabs, { value: 'home' }));
     });

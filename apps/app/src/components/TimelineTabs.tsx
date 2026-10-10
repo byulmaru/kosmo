@@ -20,6 +20,7 @@ export function TimelineTabs({
     <RouteTabList
       accessibilityLabel="타임라인"
       href={(nextValue) => (nextValue === 'home' ? '/home' : '/local')}
+      iosAction="replace"
       onReselect={onReselect}
       param="timeline"
       value={value}
