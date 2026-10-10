@@ -15,6 +15,7 @@ import type { PostMediaItem } from '@/components/post/PostMediaImage';
 import type { NotificationHrefTarget } from './notificationHref';
 
 type Actor = { id: string; name: string; avatarUrl?: string | null };
+type ProfileActor = Actor & { profileHref: Href };
 
 type Preview = {
   bodyText: string;
@@ -23,25 +24,33 @@ type Preview = {
   sensitiveMedia: boolean;
 };
 
-type ActorSummary = {
-  actors: readonly [Actor, ...Actor[]];
+type ActorSummary<TActor extends Actor = Actor> = {
+  actors: readonly [TActor, ...TActor[]];
   /** Server-owned total; never infer grouping or actor order here. */
   totalActorCount?: number;
   actor?: never;
   children?: never;
 };
 
-type GroupedNotificationProps = {
+type FollowNotificationProps = {
   href: Href;
   onNavigate?: () => void;
   timestamp: string;
   unread?: boolean;
   disabled?: boolean;
   pending?: boolean;
-} & (
-  | (ActorSummary & { kind: 'follow' | 'followRequest'; preview?: never })
-  | (ActorSummary & { kind: 'reaction' | 'repost'; preview: Preview | null })
-);
+} & ActorSummary & { kind: 'follow' | 'followRequest'; preview?: never };
+
+type ReactionRepostNotificationProps = {
+  href: Href;
+  onNavigate?: () => void;
+  timestamp: string;
+  unread?: boolean;
+  disabled?: boolean;
+  pending?: boolean;
+} & (ActorSummary<ProfileActor> & { kind: 'reaction' | 'repost'; preview: Preview | null });
+
+type GroupedNotificationProps = FollowNotificationProps | ReactionRepostNotificationProps;
 
 type PostNotificationChildProps = {
   kind: 'mention' | 'reply' | 'quote';
@@ -124,6 +133,8 @@ export function NotificationListItemView(props: NotificationListItemViewProps) {
           </>
         ) : props.kind === 'operational' ? (
           <OperationalNotificationTarget {...props} />
+        ) : isReactionRepostNotification(props) ? (
+          <ReactionRepostNotificationTargets {...props} />
         ) : (
           <NotificationTarget {...props} />
         )}
@@ -204,7 +215,13 @@ function isPostNotificationChild(
   return props.kind === 'mention' || props.kind === 'reply' || props.kind === 'quote';
 }
 
-function NotificationTarget(props: GroupedNotificationProps) {
+function isReactionRepostNotification(
+  props: NotificationListItemViewProps,
+): props is ReactionRepostNotificationProps {
+  return props.kind === 'reaction' || props.kind === 'repost';
+}
+
+function NotificationTarget(props: FollowNotificationProps) {
   const {
     disabled = false,
     href,
@@ -227,25 +244,10 @@ function NotificationTarget(props: GroupedNotificationProps) {
   );
   const otherCount = count - 1;
   const subject = `${actor.name}${otherCount > 0 ? ` 외 ${otherCount}명이` : '님이'}`;
-  const destination =
-    kind === 'follow' ? '프로필' : kind === 'followRequest' ? '팔로우 요청 관리 화면' : '게시글';
-  const preview = kind === 'reaction' || kind === 'repost' ? props.preview : undefined;
-  const excerpt =
-    preview === null
-      ? '게시글을 볼 수 없습니다'
-      : preview?.contentWarning
-        ? `내용 경고: ${preview.contentWarning}`
-        : preview?.bodyText;
-  const media =
-    preview && !preview.contentWarning && !preview.sensitiveMedia ? preview.media?.[0] : undefined;
-  const label = `${subject} ${actions[kind]}. ${timestamp}.${unread ? ' 읽지 않은 알림.' : ''}${excerpt ? ` ${excerpt}.` : ''}${media ? ` ${media.altText?.trim() || '첨부 이미지'}.` : ''} ${destination}${kind === 'followRequest' ? '으로' : '로'} 이동`;
-  const KindIcon = kind === 'reaction' ? Smile : kind === 'repost' ? Repeat2 : UserRoundPlus;
-  const iconColor =
-    kind === 'reaction'
-      ? theme.actionReactionBase
-      : kind === 'repost'
-        ? theme.actionRepostBase
-        : theme.foregroundSecondary;
+  const destination = kind === 'follow' ? '프로필' : '팔로우 요청 관리 화면';
+  const label = `${subject} ${actions[kind]}. ${timestamp}.${unread ? ' 읽지 않은 알림.' : ''} ${destination}${kind === 'followRequest' ? '으로' : '로'} 이동`;
+  const KindIcon = UserRoundPlus;
+  const iconColor = theme.foregroundSecondary;
   const avatarStack = (
     <View style={styles.avatars}>
       {actors.slice(0, 3).map((item, index) => (
@@ -315,18 +317,198 @@ function NotificationTarget(props: GroupedNotificationProps) {
           {copy}
         </View>
       </View>
-      {preview !== undefined ? (
-        <View style={[styles.preview, web && styles.webPreview]}>
-          <Text numberOfLines={1} style={[styles.excerpt, { color: theme.foregroundSecondary }]}>
-            {excerpt}
-          </Text>
-          {media ? (
-            <View style={styles.thumbnail}>
-              <PostMediaImage fill index={0} interactive={false} item={media} />
-            </View>
-          ) : null}
+    </Pressable>
+  );
+
+  return blocked ? (
+    target
+  ) : (
+    <Link asChild href={href} push={Platform.OS !== 'web'}>
+      {target}
+    </Link>
+  );
+}
+
+function ReactionRepostNotificationTargets({
+  actors,
+  disabled = false,
+  href,
+  kind,
+  onNavigate,
+  pending = false,
+  preview,
+  timestamp,
+  totalActorCount,
+  unread = false,
+}: ReactionRepostNotificationProps) {
+  const theme = useTheme();
+  const actor = actors[0];
+  const suppliedCount = totalActorCount ?? actors.length;
+  const count = Math.max(
+    actors.length,
+    Number.isFinite(suppliedCount) ? Math.floor(suppliedCount) : actors.length,
+  );
+  const otherCount = count - 1;
+  const subject = `${actor.name}${otherCount > 0 ? ` 외 ${otherCount}명이` : '님이'}`;
+  const excerpt =
+    preview === null
+      ? '게시글을 볼 수 없습니다'
+      : preview.contentWarning
+        ? `내용 경고: ${preview.contentWarning}`
+        : preview.bodyText;
+  const media =
+    preview && !preview.contentWarning && !preview.sensitiveMedia ? preview.media?.[0] : undefined;
+  const label = `${subject} ${actions[kind]}. ${timestamp}.${unread ? ' 읽지 않은 알림.' : ''}${excerpt ? ` ${excerpt}.` : ''}${media ? ` ${media.altText?.trim() || '첨부 이미지'}.` : ''} 게시글로 이동`;
+  const KindIcon = kind === 'reaction' ? Smile : Repeat2;
+  const iconColor = kind === 'reaction' ? theme.actionReactionBase : theme.actionRepostBase;
+  const visibleActors = actors.slice(0, 3);
+  const profileTargetSize = Platform.OS === 'web' ? 28 : Platform.OS === 'ios' ? 44 : 48;
+  const copy = (
+    <Text style={[styles.copy, { color: theme.foregroundPrimary }]}>
+      <Text style={textStyles.uiLabelL}>
+        {actor.name}
+        {otherCount > 0 ? ` 외 ${otherCount}명` : ''}
+      </Text>
+      {otherCount > 0 ? '이 ' : '님이 '}
+      {actions[kind]}
+    </Text>
+  );
+
+  return (
+    <View style={[styles.row, styles.postActionRow, Platform.OS === 'web' && styles.webRow]}>
+      <NotificationLinkTarget
+        accessibilityLabel={label}
+        disabled={disabled}
+        href={href}
+        onActivate={onNavigate}
+        pending={pending}
+        style={styles.kindTarget}
+        testID="notification-kind-target"
+      >
+        <KindIcon color={iconColor} size={32} />
+      </NotificationLinkTarget>
+      <View style={styles.summary}>
+        <View style={styles.avatarAndTime}>
+          <View style={[styles.profileAvatars, { gap: Platform.OS === 'web' ? 0 : space[4] }]}>
+            {visibleActors.map((item) => (
+              <NotificationLinkTarget
+                key={item.id}
+                accessibilityLabel={`${item.name} 프로필로 이동`}
+                disabled={disabled}
+                href={item.profileHref}
+                onActivate={onNavigate}
+                pending={pending}
+                style={{
+                  ...styles.profileTarget,
+                  height: profileTargetSize,
+                  width: profileTargetSize,
+                }}
+              >
+                <Avatar imageUri={item.avatarUrl} label={item.name} size={28} />
+              </NotificationLinkTarget>
+            ))}
+          </View>
+          <NotificationLinkTarget
+            accessibilityLabel={label}
+            disabled={disabled}
+            href={href}
+            onActivate={onNavigate}
+            pending={pending}
+            style={styles.timeTarget}
+            testID="notification-post-time-target"
+          >
+            <TimestampText style={styles.time}>{timestamp}</TimestampText>
+          </NotificationLinkTarget>
         </View>
-      ) : null}
+        <NotificationLinkTarget
+          accessibilityLabel={label}
+          disabled={disabled}
+          href={href}
+          onActivate={onNavigate}
+          pending={pending}
+          style={styles.summaryTarget}
+          testID="notification-post-summary-target"
+        >
+          {copy}
+        </NotificationLinkTarget>
+        <NotificationLinkTarget
+          accessibilityLabel={label}
+          disabled={disabled}
+          href={href}
+          onActivate={onNavigate}
+          pending={pending}
+          style={styles.previewTarget}
+          testID="notification-post-preview-target"
+        >
+          <>
+            <Text numberOfLines={1} style={[styles.excerpt, { color: theme.foregroundSecondary }]}>
+              {excerpt}
+            </Text>
+            {media ? (
+              <View style={styles.thumbnail}>
+                <PostMediaImage fill index={0} interactive={false} item={media} />
+              </View>
+            ) : null}
+          </>
+        </NotificationLinkTarget>
+      </View>
+    </View>
+  );
+}
+
+function NotificationLinkTarget({
+  accessibilityLabel,
+  children,
+  disabled = false,
+  href,
+  onActivate,
+  pending = false,
+  style,
+  testID,
+}: {
+  accessibilityLabel: string;
+  children: ReactElement;
+  disabled?: boolean;
+  href: Href;
+  onActivate?: () => void;
+  pending?: boolean;
+  style: ViewStyle;
+  testID?: string;
+}) {
+  const theme = useTheme();
+  const web = Platform.OS === 'web';
+  const [focusVisible, setFocusVisible] = useState(false);
+  const blocked = disabled || pending;
+  const target = (
+    <Pressable
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole="link"
+      accessibilityState={{ busy: pending, disabled: blocked }}
+      aria-busy={pending}
+      aria-disabled={blocked}
+      disabled={blocked}
+      onBlur={() => setFocusVisible(false)}
+      onFocus={(event) => {
+        const control = event.currentTarget as unknown as {
+          matches?: (selector: string) => boolean;
+        };
+        setFocusVisible(web && Boolean(control.matches?.(':focus-visible')));
+      }}
+      onPointerDown={() => setFocusVisible(false)}
+      onPress={blocked ? undefined : onActivate}
+      style={StyleSheet.flatten([
+        style,
+        {
+          outlineColor: theme.stateFocusRing,
+          outlineOffset: -2,
+          outlineStyle: focusVisible ? 'solid' : 'none',
+          outlineWidth: focusVisible ? 2 : 0,
+          opacity: blocked ? 0.5 : 1,
+        } as ViewStyle,
+      ])}
+      testID={testID}
+    >
+      {children}
     </Pressable>
   );
 
@@ -342,6 +524,32 @@ function NotificationTarget(props: GroupedNotificationProps) {
 const styles = StyleSheet.create({
   root: { borderBottomWidth: borderWidths[1], minWidth: 0, width: '100%' },
   target: { minWidth: 0 },
+  kindTarget: {
+    alignItems: 'center',
+    flexShrink: 0,
+    height: 48,
+    justifyContent: 'center',
+    width: 48,
+  },
+  profileTarget: { alignItems: 'center', flexShrink: 0, justifyContent: 'center' },
+  profileAvatars: { alignItems: 'center', flexDirection: 'row' },
+  timeTarget: {
+    alignItems: 'center',
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    minHeight: Platform.OS === 'web' ? 28 : Platform.OS === 'ios' ? 44 : 48,
+    minWidth: 0,
+  },
+  summaryTarget: { alignItems: 'flex-start', minWidth: 0, width: '100%' },
+  previewTarget: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: space[12],
+    minWidth: 0,
+    paddingBottom: space[8],
+    width: '100%',
+  },
   operationalTarget: {
     minHeight: 80,
     paddingHorizontal: space[12],
@@ -365,6 +573,7 @@ const styles = StyleSheet.create({
     paddingBottom: space[8],
     minHeight: 80,
   },
+  postActionRow: { paddingBottom: 0 },
   webRow: { paddingLeft: space[12], paddingRight: space[24] },
   kind: { alignItems: 'center', justifyContent: 'center', width: 48, height: 48, flexShrink: 0 },
   summary: { flex: 1, minWidth: 0, gap: space[8] },
@@ -379,15 +588,6 @@ const styles = StyleSheet.create({
   overlap: { marginLeft: -space[12] },
   copy: { ...textStyles.uiCopyL, flexShrink: 1, minWidth: 0 },
   time: { flexShrink: 0 },
-  preview: {
-    flexDirection: 'row',
-    gap: space[12],
-    alignItems: 'flex-start',
-    paddingLeft: space[8] + 48 + space[12],
-    paddingRight: space[8],
-    paddingBottom: space[8],
-  },
-  webPreview: { paddingLeft: space[12] + 48 + space[12], paddingRight: space[24] },
   excerpt: { ...textStyles.contentM, flex: 1, minWidth: 0 },
   thumbnail: { height: 64, width: 64, flexShrink: 0, borderRadius: radius[8], overflow: 'hidden' },
   unreadRail: {
