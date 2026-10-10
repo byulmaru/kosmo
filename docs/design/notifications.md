@@ -55,6 +55,25 @@ composer control은 자체 동작만 수행한다. 모두 읽음, unread indicat
 
 이 결정은 표시 계약의 확정이며 구현·Figma 반영·Web/iOS/Android runtime 검증 완료를 뜻하지 않는다.
 
+## 반응·재게시 사진의 독립 이동 · PROD-1078
+
+[PROD-1078](https://linear.app/byulmaru/issue/PROD-1078)의 개선 범위와 2026-10-10 사용자 선택에 따라
+Reaction/Repost의 사진을 게시글 이동 영역에서 분리한다.
+
+- 표시된 각 사진은 해당 행위자의 프로필로 이동한다. 사진 외의 요약·시각·한 줄 미리보기·썸네일은 기존 대상
+  게시글로 이동하며, 한 번의 활성화가 두 목적지로 이동하지 않는다.
+- Reaction/Repost 사진은 28px 크기와 전달된 순서의 최대 3개 표시를 유지하고, 12px 겹침을 제거한다.
+  각 사진에는 서로 겹치지 않는 독립 입력 영역을 제공한다. Web은 최소 24×24 CSS px,
+  iOS는 44×44pt, Android는 48×48dp의 기존 [접근성 기준](./accessibility.md)을 따른다.
+  입력 영역을 확보하기 위해 사진 자체를 확대하지 않는다.
+- 각 사진 링크에는 행위자를 구분할 수 있는 접근 가능한 이름과 프로필 이동 의미를 제공한다.
+  Web keyboard focus와 Native 보조 기술이 각 사진을 독립적으로 탐색하고 활성화할 수 있어야 한다.
+- 사진과 게시글 영역은 같은 알림의 Read/Unread 배경·rail·hover를 공유한다. 각 활성화에서 Best Effort Read를
+  한 번 시작하며, 읽음 요청의 지연·실패가 이동을 막지 않는다. 기존 pending/disabled에서는 두 이동을 모두 차단한다.
+- Follow/FollowRequest의 사진 겹침과 이동, Reply/Mention/Quote의 게시글 구성, Operational 알림의 이동은 유지한다.
+
+이는 표시·상호작용 계약을 정렬한 기록이며 구현, Figma 반영, Web/iOS/Android runtime 검증 완료를 뜻하지 않는다.
+
 ## Account Operational Notification 표시 · PROD-1056
 
 - ACTIVE Account의 선택된 Profile 목록은 해당 Profile의 조회 가능한 social 알림과 Account의 Operational 알림을
@@ -145,7 +164,8 @@ composer control은 자체 동작만 수행한다. 모두 읽음, unread indicat
 ## 표시와 합성
 
 - Follow/FollowRequest/Reaction/Repost는 48px kind rail 안에 32px 아이콘을 표시한다. 원형 배경을
-  추가하지 않는다. 아바타는 28px, 겹침은 12px이고 전달된 순서의 최대 3개를 표시한다. 전체 actor 수는
+  추가하지 않는다. 아바타는 28px이고 전달된 순서의 최대 3개를 표시한다. Follow/FollowRequest의 겹침은
+  12px이며 Reaction/Repost는 위 PROD-1078 계약에 따라 겹침 없이 표시한다. 전체 actor 수는
   consumer 입력이며 컴포넌트에서 그룹을 만들지 않는다. invalid count는 전달된 actor 수 이상인 정수로
   정규화한다. Reply는 한 명만 허용한다.
 - Follow는 프로필, FollowRequest는 `/follow-requests`가 Target destination이며 inline 수락 버튼은
@@ -163,7 +183,7 @@ composer control은 자체 동작만 수행한다. 모두 읽음, unread indicat
   유지한다. Web hover는 기존 배경 위에 `stateHover`를 얹으며 Unread의 primary 배경을 지우지 않는다.
   따라서 Read와 Unread의 hover 색상이 구분된다. keyboard focus는 `stateFocusRing`이다. 이는 unread
   전용 semantic token 신설이 아니다.
-- Reaction/Repost는 요약 헤더·한 줄 미리보기·썸네일을 하나의 이동 target으로 취급한다.
+- Reaction/Repost는 사진별 프로필 이동과 사진 외의 게시글 이동 영역을 구분한다.
   hover·읽음 배경과 읽음 rail은 알림 전체에 적용한다. Reply/Mention도 게시글 전체를 하나의 알림 surface로
   표시하며 게시글 위에서 전체 hover 배경이 유지된다. 별도 header 이동 링크는 없으며 Post 내부 링크·
   Action Bar는 독립적으로 동작한다. 내부 버튼 클릭이 알림 이동을 함께 실행하지 않는다.
@@ -206,7 +226,8 @@ composer control은 자체 동작만 수행한다. 모두 읽음, unread indicat
   Reply/Mention의 이동과 Post action 상태는 해당 Post가 소유한다. 권한 상실로 Post를 숨겨야 하면 consumer가
   전체 item을 제거해야 한다.
 - Notification 활성화에 따른 Best Effort Read는 이동이나 열기를 기다리게 하지 않는다.
-  Follow/FollowRequest/Reaction/Repost는 단일 item target 활성화에서, Reply/Mention은 작성자 Profile·시각·본문의
+  Follow/FollowRequest는 단일 item target 활성화에서, Reaction/Repost는 사진별 프로필 또는 게시글 영역의
+  활성화에서, Reply/Mention은 작성자 Profile·시각·본문의
   link navigation과 미디어 열기에서 각각 한 번 시작한다. Reply/Mention의 Content Warning 공개, Action Bar와 열린
   composer의 control은 자체 동작만 수행하며 item navigation이나 Read를 함께 시작하지 않는다.
 
