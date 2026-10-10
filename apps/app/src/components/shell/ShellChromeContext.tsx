@@ -6,6 +6,7 @@ import type {
   NativeTabReselectionDestination,
   NativeTabReselectionHandler,
 } from './nativeTabNavigation';
+
 export type {
   NativeTabReselectionDestination,
   NativeTabReselectionHandler,

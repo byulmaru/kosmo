@@ -1,6 +1,5 @@
 import { ScrollView } from 'react-native';
-import type { ReactNode } from 'react';
-import type { Ref } from 'react';
+import type { ReactNode, Ref } from 'react';
 import type { ScrollViewProps, StyleProp, ViewStyle } from 'react-native';
 
 export type RouteScrollContainerNativeProps = Pick<

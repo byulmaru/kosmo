@@ -8,8 +8,8 @@ import {
 import { useAutomaticPagination } from './useAutomaticPagination';
 import type { ReactElement } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
-import type { LoadNext } from './useAutomaticPagination';
 import type { NativeTabReselectionDestination } from '@/components/shell/ShellChromeContext';
+import type { LoadNext } from './useAutomaticPagination';
 
 export type InfiniteListProps<Item> = Readonly<{
   data: ReadonlyArray<Item>;

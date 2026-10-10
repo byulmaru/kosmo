@@ -27,6 +27,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { returnToSettingsParent } from '../settings/settingsNavigation';
 import { BottomTabBar } from './BottomTabBar';
+import { createNativeTabReselectionRegistry } from './nativeTabNavigation';
 import { NavigationGuardProvider } from './NavigationGuardContext';
 import {
   PrimaryNavigationScrollProvider,
@@ -53,7 +54,6 @@ import type {
   NativeTabReselectionDestination,
   NativeTabReselectionHandler,
 } from './ShellChromeContext';
-import { createNativeTabReselectionRegistry } from './nativeTabNavigation';
 
 const ShellQuery = graphql`
   query UniversalShellQuery {

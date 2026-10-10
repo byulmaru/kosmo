@@ -1,19 +1,19 @@
-import { Tabs, usePathname, useRouter } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 import { cloneElement } from 'react';
 import { Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { graphql, useFragment } from 'react-relay';
 import { BottomTabBar as BottomTabBarPresentation } from '@/components/ui/BottomTabBar';
-import { useNavigationGuard } from './NavigationGuardContext';
-import { NavigationLink } from './NavigationLink';
-import { useShellChrome } from './ShellChromeContext';
 import {
   findTabStackToPopTarget,
   handleNativeTabPress,
   hasSelectedProfileRoute,
 } from './nativeTabNavigation';
+import { useNavigationGuard } from './NavigationGuardContext';
+import { NavigationLink } from './NavigationLink';
+import { useShellChrome } from './ShellChromeContext';
 import { isTimelineRoute } from './shellLayout';
-import type { Href, LinkProps } from 'expo-router';
+import type { Href, LinkProps, Tabs } from 'expo-router';
 import type { ComponentProps, ReactElement } from 'react';
 import type {
   BottomTabBarRenderControlProps,

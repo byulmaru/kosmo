@@ -1,13 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useRef } from 'react';
 import { Platform, ScrollView } from 'react-native';
-import { RouteScrollContainer } from '@/components/ui/RouteScrollContainer';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
+import { RouteScrollContainer } from '@/components/ui/RouteScrollContainer';
 import type { ScrollViewProps } from 'react-native';
+import type { NativeTabReselectionDestination } from '@/components/shell/ShellChromeContext';
 import type {
   RouteScrollContainerNativeProps,
   RouteScrollContainerProps,
 } from '@/components/ui/RouteScrollContainer';
-import type { NativeTabReselectionDestination } from '@/components/shell/ShellChromeContext';
 import type { UseAutomaticPaginationResult } from './useAutomaticPagination';
 
 type NativeScrollProps = UseAutomaticPaginationResult['nativeScrollProps'];
