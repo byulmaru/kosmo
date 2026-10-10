@@ -13,9 +13,14 @@ let session: { accountId: string; selectedProfileId: string | null; status: stri
 };
 let responseListener: ((response: unknown) => void) | null = null;
 const profileSelectionCalls: string[] = [];
-let writeProfile: (profileId: string) => Promise<void> = async () => undefined;
+const recordProfileWrite = async (profileId: string) => {
+  profileSelectionCalls.push(`persist:${profileId}`);
+};
+let writeProfile: (profileId: string) => Promise<void> = recordProfileWrite;
 const router = {
-  replace: mock.fn((href: string) => profileSelectionCalls.push(`navigate:${href}`)),
+  replace: mock.fn((href: string) => {
+    profileSelectionCalls.push(`navigate:${href}`);
+  }),
 };
 const defaultReplace = router.replace;
 let rejectNextOpenURL = false;
@@ -26,7 +31,6 @@ const openURL = mock.fn(async () => {
   }
 });
 const resetActor = mock.fn((profileId: string) => profileSelectionCalls.push(`reset:${profileId}`));
-const commitMutation = mock.fn();
 let renderer: ReactTestRenderer | null = null;
 let clearResponseCount = 0;
 let useNativePushNotificationResponses: () => void;
@@ -40,10 +44,6 @@ mockModule('react-native', {
     addEventListener: () => ({ remove: () => undefined }),
   },
   Linking: { openURL },
-});
-mockModule('react-relay', {
-  graphql: (parts: TemplateStringsArray) => parts.join(''),
-  useMutation: () => [commitMutation],
 });
 mockModule('@/relay/RelayActorProvider', { useRelayActor: () => ({ resetActor }) });
 mockModule('@/session/SessionProvider', { useSession: () => session });
@@ -76,14 +76,13 @@ afterEach(async () => {
   }
   session = { accountId: 'account-1', selectedProfileId: 'profile-1', status: 'valid' };
   responseListener = null;
-  writeProfile = async () => undefined;
+  writeProfile = recordProfileWrite;
   profileSelectionCalls.length = 0;
   router.replace = defaultReplace;
   router.replace.mock.resetCalls();
   openURL.mock.resetCalls();
   rejectNextOpenURL = false;
   resetActor.mock.resetCalls();
-  commitMutation.mock.resetCalls();
   clearResponseCount = 0;
   mock.restoreAll();
 });
@@ -104,7 +103,6 @@ describe('native push responses', () => {
     );
     assert.equal(openURL.mock.callCount(), 0);
     assert.equal(resetActor.mock.callCount(), 0);
-    assert.equal(commitMutation.mock.callCount(), 0);
     assert.equal(clearResponseCount, 1);
   });
 
@@ -123,7 +121,6 @@ describe('native push responses', () => {
     );
     assert.equal(router.replace.mock.callCount(), 0);
     assert.equal(resetActor.mock.callCount(), 0);
-    assert.equal(commitMutation.mock.callCount(), 0);
   });
 
   it('falls back to notifications when opening a matching external Account destination fails', async () => {
@@ -145,7 +142,6 @@ describe('native push responses', () => {
       [['/notifications']],
     );
     assert.equal(resetActor.mock.callCount(), 0);
-    assert.equal(commitMutation.mock.callCount(), 0);
   });
 
   it('opens Account notices for an active account without a selected Profile', async () => {
@@ -163,7 +159,6 @@ describe('native push responses', () => {
       [['/notifications?source=notice']],
     );
     assert.equal(resetActor.mock.callCount(), 0);
-    assert.equal(commitMutation.mock.callCount(), 0);
   });
 
   it('falls back to notifications when the push recipient account does not match', async () => {
@@ -181,54 +176,57 @@ describe('native push responses', () => {
     );
     assert.equal(openURL.mock.callCount(), 0);
     assert.equal(resetActor.mock.callCount(), 0);
-    assert.equal(commitMutation.mock.callCount(), 0);
   });
 
-  it('persists and resets the recipient Profile before navigating to its destination', async () => {
-    let resolveWriteStarted!: () => void;
-    let releaseWrite!: () => void;
-    const writeStarted = new Promise<void>((resolve) => {
-      resolveWriteStarted = resolve;
-    });
-    const writeGate = new Promise<void>((resolve) => {
-      releaseWrite = resolve;
-    });
-    let resolveNavigation!: () => void;
-    const navigation = new Promise<void>((resolve) => {
-      resolveNavigation = resolve;
-    });
-    router.replace = mock.fn((href: string) => {
-      profileSelectionCalls.push(`navigate:${href}`);
-      resolveNavigation();
-    });
-    writeProfile = async (profileId) => {
-      profileSelectionCalls.push(`persist:start:${profileId}`);
-      resolveWriteStarted();
-      await writeGate;
-      profileSelectionCalls.push(`persist:done:${profileId}`);
-    };
-    await renderHook();
+  it(
+    'persists and resets the recipient Profile before navigating to its destination',
+    { timeout: 2_000 },
+    async () => {
+      let resolveWriteStarted!: () => void;
+      let releaseWrite!: () => void;
+      const writeStarted = new Promise<void>((resolve) => {
+        resolveWriteStarted = resolve;
+      });
+      const writeGate = new Promise<void>((resolve) => {
+        releaseWrite = resolve;
+      });
+      let resolveNavigation!: () => void;
+      const navigation = new Promise<void>((resolve) => {
+        resolveNavigation = resolve;
+      });
+      router.replace = mock.fn((href: string) => {
+        profileSelectionCalls.push(`navigate:${href}`);
+        resolveNavigation();
+      });
+      writeProfile = async (profileId) => {
+        profileSelectionCalls.push(`persist:start:${profileId}`);
+        resolveWriteStarted();
+        await writeGate;
+        profileSelectionCalls.push(`persist:done:${profileId}`);
+      };
+      await renderHook();
 
-    const handling = handle({
-      href: '/@recipient/postId',
-      notificationId: 'notification-1',
-      recipientProfileId: 'profile-recipient',
-    });
-    await writeStarted;
-    assert.deepEqual(profileSelectionCalls, ['persist:start:profile-recipient']);
+      const handling = handle({
+        href: '/@recipient/postId',
+        notificationId: 'notification-1',
+        recipientProfileId: 'profile-recipient',
+      });
+      await writeStarted;
+      assert.deepEqual(profileSelectionCalls, ['persist:start:profile-recipient']);
 
-    releaseWrite();
-    await navigation;
-    await handling;
+      releaseWrite();
+      await navigation;
+      await handling;
 
-    assert.deepEqual(profileSelectionCalls, [
-      'persist:start:profile-recipient',
-      'persist:done:profile-recipient',
-      'reset:profile-recipient',
-      'clear-response',
-      'navigate:/@recipient/postId',
-    ]);
-  });
+      assert.deepEqual(profileSelectionCalls, [
+        'persist:start:profile-recipient',
+        'persist:done:profile-recipient',
+        'reset:profile-recipient',
+        'clear-response',
+        'navigate:/@recipient/postId',
+      ]);
+    },
+  );
 
   it('does not persist or reset when the notification recipient is already selected', async () => {
     session.selectedProfileId = 'profile-recipient';
@@ -250,10 +248,7 @@ describe('native push responses', () => {
     await navigation;
     await handling;
 
-    assert.deepEqual(profileSelectionCalls, [
-      'clear-response',
-      'navigate:/@recipient/postId',
-    ]);
+    assert.deepEqual(profileSelectionCalls, ['clear-response', 'navigate:/@recipient/postId']);
   });
 });
 
