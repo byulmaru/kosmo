@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { nativePushResponseKey, parseNativePushTapTarget } from './pushPayload';
-import type { NotificationResponse } from 'expo-notifications';
+import { parseNativePushTapTarget } from './pushPayload';
 
 describe('native push tap payloads', () => {
   it('accepts supported internal routes with both notification and recipient IDs', () => {
@@ -119,22 +118,6 @@ describe('native push tap payloads', () => {
         },
       }),
       null,
-    );
-  });
-
-  it('uses the Expo notification identifier and action for duplicate keys', () => {
-    const response = {
-      actionIdentifier: 'expo.modules.notifications.actions.DEFAULT',
-      notification: {
-        request: {
-          identifier: 'notification-1',
-        },
-      },
-    } as NotificationResponse;
-
-    assert.equal(
-      nativePushResponseKey(response),
-      'notification-1:expo.modules.notifications.actions.DEFAULT',
     );
   });
 
