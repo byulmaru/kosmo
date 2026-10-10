@@ -301,10 +301,148 @@ test('Reply 알림 작성자 Ctrl/Cmd 새 탭과 본문 이동은 각각 한 번
 
   markReadRequestCount = 0;
   await replyRow.getByTestId('post-list-row-body').click();
-  await expect(page).toHaveURL(`/@${replyAuthor.profile.handle}/${toGlobalId('Post', reply.id)}`);
+  await expect(page).toHaveURL(
+    `/@${replyAuthor.profile.handle}/${toGlobalId('Post', reply.id)}?initialScroll=reply`,
+  );
   await expect.poll(() => markReadRequestCount).toBe(1);
   await expect.poll(() => notificationReadAt(notification.id)).not.toBeNull();
   await page.unroute('**/graphql');
+});
+
+test('Reply 알림 상세는 늦게 배치되는 조상 이미지 뒤에도 source를 보이고 수동 이동을 보존한다', async ({
+  context,
+  page,
+}) => {
+  test.setTimeout(120_000);
+  await page.setViewportSize({ height: 844, width: 390 });
+
+  const recipient = await createE2ESession({
+    displayName: 'E2E Reply Scroll Recipient',
+    handle: 'e2e-reply-scroll-recipient',
+  });
+  const replyAuthor = await createE2ESession({
+    displayName: 'E2E Reply Scroll Author',
+    handle: 'e2e-reply-scroll-author',
+  });
+  if (!recipient.profile || !replyAuthor.profile) {
+    throw new Error('Reply Notification scroll fixture requires local profiles.');
+  }
+
+  const imageUrl = 'https://example.com/e2e-reply-scroll-ancestor.svg';
+  const rootBody = `E2E long reply ancestor ${'긴 조상 본문 '.repeat(80)}`;
+  const root = await createE2EPost({
+    body: rootBody,
+    media: [{ altText: '늦게 불러오는 조상 이미지', url: imageUrl }],
+    profileId: recipient.profile.id,
+  });
+  const middle = await createE2EPost({
+    body: `E2E middle reply ancestor ${'중간 조상 본문 '.repeat(12)}`,
+    profileId: recipient.profile.id,
+    replyParentId: root.id,
+  });
+  const sourceBody = 'E2E source reply should be visible on entry';
+  const source = await createE2EPost({
+    body: sourceBody,
+    profileId: replyAuthor.profile.id,
+    replyParentId: middle.id,
+  });
+  const sourceId = toGlobalId('Post', source.id);
+  for (let index = 0, parentId = source.id; index < 21; index += 1) {
+    const descendant = await createE2EPost({
+      body: `E2E source descendant ${index}`,
+      profileId: replyAuthor.profile.id,
+      replyParentId: parentId,
+    });
+    parentId = descendant.id;
+  }
+  await db.insert(Notifications).values({
+    kind: NotificationKind.REPLY,
+    recipientProfileId: recipient.profile.id,
+    sourceId: source.id,
+  });
+
+  let releaseAncestorImage!: () => void;
+  const ancestorImageGate = new Promise<void>((resolve) => {
+    releaseAncestorImage = resolve;
+  });
+  let markAncestorImageRequested!: () => void;
+  const ancestorImageRequested = new Promise<void>((resolve) => {
+    markAncestorImageRequested = resolve;
+  });
+  const assertQuerySuccess = async (
+    responsePromise: ReturnType<typeof waitForGraphQLOperation>,
+  ) => {
+    const response = await responsePromise;
+    const body = (await response.json()) as { errors?: unknown[] };
+    expect(response.ok(), JSON.stringify(body, null, 2)).toBe(true);
+    expect(body.errors, JSON.stringify(body, null, 2)).toBeUndefined();
+  };
+  await page.route(imageUrl, async (route) => {
+    markAncestorImageRequested();
+    await ancestorImageGate;
+    await route.fulfill({
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="1200"><rect width="320" height="1200" fill="#ddd"/></svg>',
+      contentType: 'image/svg+xml',
+    });
+  });
+
+  try {
+    await setE2ESessionCookie(context, recipient.token);
+    await page.goto('/home');
+    await expect(page.getByRole('heading', { name: '홈', exact: true })).toBeVisible();
+    const notificationsResponse = waitForGraphQLOperation(page, 'NotificationsPageQuery');
+    await page.getByRole('link', { name: /^알림/ }).first().click();
+    await expect(page).toHaveURL('/notifications');
+    await assertQuerySuccess(notificationsResponse);
+
+    const replyRow = page.getByTestId('reply-notification-post');
+    await expect(replyRow.getByTestId('post-list-row-body')).toContainText(sourceBody);
+    const detailResponse = waitForGraphQLOperation(page, 'PostDetailQuery');
+    await replyRow.getByTestId('post-list-row-body').click();
+    await assertQuerySuccess(detailResponse);
+    await ancestorImageRequested;
+
+    const sourceRow = page.getByTestId(`post-thread-current-${sourceId}`);
+    await expect(sourceRow).toBeInViewport();
+    const header = page.getByRole('heading', { name: '게시글', exact: true }).locator('..');
+    const sourceHeaderOffset = async () => {
+      const sourceBox = await sourceRow.boundingBox();
+      const headerBox = await header.boundingBox();
+      return sourceBox && headerBox ? sourceBox.y - (headerBox.y + headerBox.height) : -1;
+    };
+    await expect.poll(sourceHeaderOffset).toBeGreaterThanOrEqual(-1);
+
+    releaseAncestorImage();
+    const ancestorImage = page.locator(`img[src="${imageUrl}"]`).first();
+    await expect
+      .poll(() => ancestorImage.evaluate((image) => (image as HTMLImageElement).naturalHeight))
+      .toBe(1200);
+    await expect(sourceRow).toBeInViewport();
+    await expect.poll(sourceHeaderOffset).toBeGreaterThanOrEqual(-1);
+
+    const nextPageResponse = waitForGraphQLOperation(page, 'PostDetailThreadNextPageQuery');
+    const beforeManualScroll = await page.evaluate(() => window.scrollY);
+    await page.mouse.wheel(0, 10_000);
+    await expect
+      .poll(() => page.evaluate(() => window.scrollY))
+      .toBeGreaterThan(beforeManualScroll);
+    await assertQuerySuccess(nextPageResponse);
+    await expect(page.getByText('E2E source descendant 20', { exact: true })).toBeAttached();
+    await expect(sourceRow).not.toBeInViewport();
+
+    await page.goto('/home');
+    await expect(page.getByRole('heading', { name: '홈', exact: true })).toBeVisible();
+
+    const ordinaryDetailResponse = waitForGraphQLOperation(page, 'PostDetailQuery');
+    await page.goto(`/@${replyAuthor.handle}/${sourceId}`);
+    await assertQuerySuccess(ordinaryDetailResponse);
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+    await expect(page.getByTestId(`post-thread-current-${sourceId}`)).not.toBeInViewport();
+    await expect(page.getByText(rootBody, { exact: false })).toBeVisible();
+  } finally {
+    releaseAncestorImage();
+    await page.unroute(imageUrl);
+  }
 });
 
 test('Web 모두 읽음은 current loaded unread만 한 번 요청하고 실패 재시도에서 상태를 보존한다', async ({

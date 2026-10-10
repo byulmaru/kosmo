@@ -4,6 +4,8 @@ import { spacing } from '@/theme/tokens';
 import { postListMetrics } from './postListMetrics';
 import { PostThreadConnector } from './PostThreadConnector';
 import type React from 'react';
+import type { RefObject } from 'react';
+import type { LayoutChangeEvent, View as NativeView } from 'react-native';
 import type { PostListPresentation } from './postListMetrics';
 
 export type PostThreadRole = 'ancestor' | 'current' | 'descendant';
@@ -22,7 +24,10 @@ export type PostThreadRenderArgs<TPost> = Readonly<{
 export type PostThreadLayoutProps<TPost> = Readonly<{
   ancestors: ReadonlyArray<PostThreadItem<TPost>>;
   current: PostThreadItem<TPost>;
+  currentRef?: RefObject<NativeView | null>;
   descendants: ReadonlyArray<PostThreadItem<TPost>>;
+  onCurrentLayout?: (event: LayoutChangeEvent) => void;
+  onLayout?: (event: LayoutChangeEvent) => void;
   presentation: PostListPresentation;
   renderPost: (args: PostThreadRenderArgs<TPost>) => React.ReactNode;
 }>;
@@ -30,7 +35,10 @@ export type PostThreadLayoutProps<TPost> = Readonly<{
 export function PostThreadLayout<TPost>({
   ancestors,
   current,
+  currentRef,
   descendants,
+  onCurrentLayout,
+  onLayout,
   presentation,
   renderPost,
 }: PostThreadLayoutProps<TPost>): React.ReactElement {
@@ -43,7 +51,7 @@ export function PostThreadLayout<TPost>({
   ];
 
   return (
-    <View accessibilityLabel="Reply thread" testID="post-thread">
+    <View accessibilityLabel="Reply thread" onLayout={onLayout} testID="post-thread">
       {rows.map(({ item, role }, index) => {
         const previous = rows[index - 1];
         const next = rows[index + 1];
@@ -56,6 +64,8 @@ export function PostThreadLayout<TPost>({
           <View
             key={item.id}
             aria-current={role === 'current' ? true : undefined}
+            onLayout={role === 'current' ? onCurrentLayout : undefined}
+            ref={role === 'current' ? currentRef : undefined}
             role={role === 'current' ? 'article' : undefined}
             style={styles.row}
             testID={
