@@ -52,7 +52,11 @@ const PostQuery = graphql`
 `;
 
 export default function PostDetailScreen() {
-  const params = useLocalSearchParams<{ postId: string; profileHandle: string }>();
+  const params = useLocalSearchParams<{
+    initialScroll?: string;
+    postId: string;
+    profileHandle: string;
+  }>();
   const pathname = usePathname();
   const routeSegments = useSegments();
   const { width } = useWindowDimensions();
@@ -89,6 +93,7 @@ export default function PostDetailScreen() {
     >
       <PostDetailContent
         header={header}
+        initialScrollToCurrent={params.initialScroll === 'reply'}
         postId={postId}
         routeRelativeHandle={routeRelativeHandle}
       />
@@ -120,10 +125,12 @@ function PostDetailHeader() {
 
 function PostDetailContent({
   header,
+  initialScrollToCurrent,
   postId,
   routeRelativeHandle,
 }: {
   header: ReactNode;
+  initialScrollToCurrent: boolean;
   postId: string;
   routeRelativeHandle: string;
 }) {
@@ -179,6 +186,7 @@ function PostDetailContent({
     <PostDetailThread
       header={header}
       identity={postId}
+      initialScrollToCurrent={initialScrollToCurrent}
       onPostDeleted={() => setLocallyDeleted(true)}
       onReplyCreated={refetch}
       post={post.thread}
