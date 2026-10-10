@@ -28,7 +28,6 @@ const followButtonProfileFragment = graphql`
     viewerState {
       isSelf
       follow {
-        id
         follower {
           id
           followingCount
