@@ -394,7 +394,7 @@ function PostListRow({
   const profileHref = `/${post.profile.relativeHandle}` as const;
   const detailHref = `/${post.profile.relativeHandle}/${post.id}` as const;
   const openDetail = useCallback(() => router.push(detailHref), [detailHref, router]);
-  const backgroundResponder = createPostDetailBackgroundResponder(openDetail);
+  const backgroundResponder = () => createPostDetailBackgroundResponder(openDetail);
   const handleMediaOpen = useCallback<PostMediaOpenHandler>(
     (selectedIndex, originControl) => {
       openViewer({
@@ -407,7 +407,7 @@ function PostListRow({
     [openViewer, post.id, surfacePostId],
   );
   return (
-    <View {...backgroundResponder} style={styles.standardRow} testID="post-list-standard-row">
+    <View {...backgroundResponder()} style={styles.standardRow} testID="post-list-standard-row">
       <Link asChild href={profileHref} push={Platform.OS !== 'web'}>
         <Pressable
           aria-hidden
@@ -425,8 +425,8 @@ function PostListRow({
           />
         </Pressable>
       </Link>
-      <View {...backgroundResponder} style={styles.content}>
-        <View {...backgroundResponder} style={styles.header}>
+      <View {...backgroundResponder()} style={styles.content}>
+        <View {...backgroundResponder()} style={styles.header}>
           <ProfileNameBlock href={profileHref} profile={post.profile} />
           <Link asChild href={detailHref} push={Platform.OS !== 'web'}>
             <Pressable accessibilityRole="link" style={styles.timeLink}>
@@ -437,7 +437,7 @@ function PostListRow({
           </Link>
         </View>
         {post.content ? (
-          <View {...backgroundResponder} style={styles.bodyLink}>
+          <View {...backgroundResponder()} style={styles.bodyLink}>
             <PostBody onBodyPress={openDetail} onMediaOpen={handleMediaOpen} post={post} />
           </View>
         ) : null}
