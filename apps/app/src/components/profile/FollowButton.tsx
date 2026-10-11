@@ -27,6 +27,7 @@ const followButtonProfileFragment = graphql`
     followersCount
     viewerState {
       isSelf
+      # Relay adds id for normalization; optimistic follows omit the scalar, so this fragment only reads follower.
       follow {
         follower {
           id
