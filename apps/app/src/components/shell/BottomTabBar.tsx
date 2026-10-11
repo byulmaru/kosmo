@@ -1,20 +1,14 @@
-import { usePathname, useRouter } from 'expo-router';
+import { usePathname } from 'expo-router';
 import { cloneElement } from 'react';
 import { Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { graphql, useFragment } from 'react-relay';
 import { BottomTabBar as BottomTabBarPresentation } from '@/components/ui/BottomTabBar';
-import {
-  findTabStackToPopTarget,
-  handleNativeTabPress,
-  hasSelectedProfileRoute,
-} from './nativeTabNavigation';
-import { useNavigationGuard } from './NavigationGuardContext';
 import { NavigationLink } from './NavigationLink';
 import { useShellChrome } from './ShellChromeContext';
 import { isTimelineRoute } from './shellLayout';
-import type { Href, LinkProps, Tabs } from 'expo-router';
-import type { ComponentProps, ReactElement } from 'react';
+import type { Href, LinkProps } from 'expo-router';
+import type { ReactElement } from 'react';
 import type {
   BottomTabBarRenderControlProps,
   BottomTabDestination,
@@ -39,8 +33,6 @@ type Props = {
   profile?: BottomTabBar_profile$key | null;
 };
 
-type NativeTabBarProps = Parameters<NonNullable<ComponentProps<typeof Tabs>['tabBar']>>[0];
-
 const hrefs: Record<BottomTabDestination, Href | undefined> = {
   compose: undefined,
   home: '/home',
@@ -56,6 +48,7 @@ export function isBottomTabDestination(href: Href) {
 export function BottomTabBar({ onComposeOpen, onHomeReselect, profile: profileKey }: Props) {
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
+  const shellChrome = useShellChrome();
   const profile = useFragment(BottomTabBarFragment, profileKey ?? null);
   const unreadNotificationCount = profile?.unreadNotificationCount ?? null;
   const profileHref = profile ? (`/${profile.relativeHandle}` as Href) : undefined;
@@ -79,7 +72,7 @@ export function BottomTabBar({ onComposeOpen, onHomeReselect, profile: profileKe
     }
 
     const href = destination === 'profile' ? profileHref : hrefs[destination];
-    if (!href) {
+    if (!href || destination === 'compose') {
       return children;
     }
 
@@ -91,12 +84,24 @@ export function BottomTabBar({ onComposeOpen, onHomeReselect, profile: profileKe
       { accessibilityRole: 'link' },
     );
 
+    const onCurrentNavigate =
+      Platform.OS === 'ios'
+        ? () => {
+            shellChrome?.reselectNativeTab?.(destination);
+            if (destination === 'home') {
+              shellChrome?.reselectHome();
+            }
+          }
+        : destination === 'home'
+          ? onHomeReselect
+          : undefined;
+
     return (
       <NavigationLink
-        current={destination === 'home' ? selected : undefined}
+        current={selected}
         href={href}
         navigationMode="switch"
-        onCurrentNavigate={destination === 'home' ? onHomeReselect : undefined}
+        onCurrentNavigate={onCurrentNavigate}
         primary
       >
         {linkControl}
@@ -124,105 +129,6 @@ export function BottomTabBar({ onComposeOpen, onHomeReselect, profile: profileKe
   );
 }
 
-export function NativeBottomTabBar({ navigation, state }: NativeTabBarProps) {
-  const insets = useSafeAreaInsets();
-  const router = useRouter();
-  const shellChrome = useShellChrome();
-  const { request } = useNavigationGuard();
-  const profile = useFragment(BottomTabBarFragment, shellChrome?.selectedProfile ?? null);
-  const profileHref = profile
-    ? ({
-        pathname: '/(account)/[profileHandle]',
-        params: { profileHandle: profile.relativeHandle },
-      } as Href)
-    : undefined;
-  const selectedRoute = state.routes[state.index];
-  const currentDestination = selectedRoute ? getNativeDestination(selectedRoute.name) : null;
-
-  const renderControl = ({
-    children,
-    destination,
-  }: BottomTabBarRenderControlProps): ReactElement => {
-    const onPress = () => {
-      if (destination === 'compose') {
-        shellChrome?.openComposer?.();
-        return;
-      }
-
-      const routeName = nativeRouteNames[destination];
-      const routeIndex = state.routes.findIndex((route) => route.name === routeName);
-      const route = state.routes[routeIndex];
-      if (!route) {
-        return;
-      }
-
-      const focused = state.index === routeIndex;
-      const popTarget = findTabStackToPopTarget(route.state);
-      const emitTabPress = () =>
-        navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true })
-          .defaultPrevented;
-      const navigateToTab = () => {
-        if (
-          destination === 'profile' &&
-          profileHref &&
-          !hasSelectedProfileRoute(route.state, profile?.relativeHandle ?? '')
-        ) {
-          router.navigate(profileHref);
-          return;
-        }
-
-        navigation.navigate(route.name);
-      };
-
-      handleNativeTabPress({
-        focused,
-        stackIndex: popTarget ? 1 : 0,
-        emitTabPress,
-        navigateToTab,
-        onReselect: () => {
-          shellChrome?.reselectNativeTab?.(destination);
-          if (destination === 'home') {
-            shellChrome?.reselectHome();
-          }
-        },
-        popToTop: () => {
-          if (popTarget) {
-            navigation.dispatch({ type: 'POP_TO_TOP', target: popTarget });
-          }
-        },
-        requestNavigation: request,
-      });
-    };
-
-    return cloneElement(
-      children as ReactElement<{
-        accessibilityRole?: 'button' | 'link';
-        onPress?: () => void;
-      }>,
-      { accessibilityRole: 'button', onPress },
-    );
-  };
-
-  return (
-    <BottomTabBarPresentation
-      currentDestination={currentDestination}
-      onNavigate={() => undefined}
-      platform="ios"
-      profile={
-        profile
-          ? {
-              imageUri: profile.avatar?.url,
-              label: profile.displayName,
-            }
-          : null
-      }
-      renderControl={renderControl}
-      safeAreaBottom={insets.bottom}
-      unreadNotificationCount={profile?.unreadNotificationCount ?? null}
-    />
-  );
-}
-
 function getCurrentDestination(
   pathname: string,
   profileHref: Href | undefined,
@@ -240,16 +146,4 @@ function getCurrentDestination(
     return 'profile';
   }
   return null;
-}
-
-const nativeRouteNames: Record<Exclude<BottomTabDestination, 'compose'>, string> = {
-  home: '(home)',
-  notifications: '(notifications)',
-  profile: '(account)',
-  search: '(primary-search)',
-};
-
-function getNativeDestination(routeName: string): BottomTabDestination | null {
-  const destination = Object.entries(nativeRouteNames).find(([, name]) => name === routeName)?.[0];
-  return (destination as Exclude<BottomTabDestination, 'compose'> | undefined) ?? null;
 }

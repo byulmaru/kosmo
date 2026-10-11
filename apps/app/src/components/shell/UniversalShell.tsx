@@ -27,7 +27,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { returnToSettingsParent } from '../settings/settingsNavigation';
 import { BottomTabBar } from './BottomTabBar';
-import { createNativeTabReselectionRegistry } from './nativeTabNavigation';
+import { createNativeTabReselectionRegistry } from './nativeTabReselection';
 import { NavigationGuardProvider } from './NavigationGuardContext';
 import {
   PrimaryNavigationScrollProvider,
@@ -107,33 +107,19 @@ const webFixedBottomBar = {
 
 const webDocumentColumn = { minHeight: '100vh' } as unknown as ViewStyle;
 
-export function UniversalShell({
-  children,
-  showBottomTabBar = true,
-}: {
-  children?: ReactNode;
-  showBottomTabBar?: boolean;
-}) {
+export function UniversalShell({ children }: { children?: ReactNode }) {
   return (
     <NavigationGuardProvider>
       <PrimaryNavigationScrollProvider>
         <NotificationReadAllProvider>
-          <UniversalShellContent showBottomTabBar={showBottomTabBar}>
-            {children}
-          </UniversalShellContent>
+          <UniversalShellContent>{children}</UniversalShellContent>
         </NotificationReadAllProvider>
       </PrimaryNavigationScrollProvider>
     </NavigationGuardProvider>
   );
 }
 
-function UniversalShellContent({
-  children,
-  showBottomTabBar,
-}: {
-  children?: ReactNode;
-  showBottomTabBar: boolean;
-}) {
+function UniversalShellContent({ children }: { children?: ReactNode }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
@@ -465,7 +451,7 @@ function UniversalShellContent({
             <RelayActorBoundary>{children}</RelayActorBoundary>
           </PostMediaViewerScreenFallbackProvider>
         </View>
-        {mobile && showBottomTabBar ? (
+        {mobile ? (
           <View aria-hidden={drawerOpen || undefined} style={web ? webFixedBottomBar : undefined}>
             <BottomTabBar
               onComposeOpen={openComposer}
@@ -543,14 +529,12 @@ function UniversalShellContent({
     <ShellChromeProvider
       navigationDrawerOpen={drawerOpen}
       navigationDrawerTriggerRef={menuButtonRef}
-      openComposer={openComposer}
       openNavigationDrawer={openNavigationDrawer}
       openProfileSwitcher={openProfileSwitcher}
       registerHomeReselection={registerHomeReselection}
       registerNativeTabReselection={registerNativeTabReselection}
       reselectNativeTab={reselectNativeTab}
       reselectHome={reselectHome}
-      selectedProfile={profile}
     >
       <PrimaryNavigationScrollReset pathname={pathname} />
       {nativeDrawer}

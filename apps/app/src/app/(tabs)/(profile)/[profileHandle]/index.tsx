@@ -1,4 +1,4 @@
-import { useLocalSearchParams, useSegments } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { PostList } from '@/components/post/PostList';
@@ -33,13 +33,11 @@ export default function ProfilePostListPage() {
   const { profileHandle } = useLocalSearchParams<{
     profileHandle?: string | string[];
   }>();
-  const segments = useSegments();
   const handle = normalizeProfileHandle(profileHandle);
   const { chrome, scrollKey } = useProfileRoute();
-  const reselectDestination = segments.includes('(account)') ? 'profile' : undefined;
 
   return (
-    <ProfileRouteContainer reselectDestination={reselectDestination} scrollKey={scrollKey}>
+    <ProfileRouteContainer reselectDestination="profile" scrollKey={scrollKey}>
       {chrome}
       <RouteBoundary
         error={(retry) => <PostList error onRetry={retry} />}

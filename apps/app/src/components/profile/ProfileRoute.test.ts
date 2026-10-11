@@ -62,7 +62,6 @@ let globalParams: RouteParams = {};
 let layoutLocalParams: RouteParams = {};
 let screenLocalParams: RouteParams = {};
 let pathname = '/profile/';
-let routeSegments: string[] = [];
 let renderer: ReactTestRenderer | null = null;
 let SlotContent: ComponentType | null = null;
 let profileAvailable = true;
@@ -128,7 +127,6 @@ mockModule('expo-router', {
   useGlobalSearchParams: () => globalParams,
   useLocalSearchParams: () => useContext(LocalParamsContext),
   usePathname: () => pathname,
-  useSegments: () => routeSegments,
   useRouter: () => ({
     back: () => (routerBackCount += 1),
     canGoBack: () => routerCanGoBack,
@@ -465,7 +463,6 @@ afterEach(async () => {
   layoutLocalParams = {};
   screenLocalParams = {};
   pathname = '/profile/';
-  routeSegments = [];
   platform.OS = 'web';
   routerBackCount = 0;
   routerCanGoBack = true;
@@ -770,7 +767,6 @@ describe('profile route parameter lifecycle', () => {
 
   it('native layout은 route별 Stack과 screen-owned scroll owner를 교체한다', async () => {
     platform.OS = 'ios';
-    routeSegments = ['(tabs)', '(account)', '(profile)', '[profileHandle]'];
 
     await renderRoute('@local', '/profile/@local');
     assert.equal(rendered('Stack').length, 1);
