@@ -24,8 +24,9 @@ Accepted
 - Local Mention identity 자체는 Post Visibility를 선택하지 않는다. `PUBLIC`·`UNLISTED`는 기존 조회 범위를 유지하고,
   `FOLLOWERS`는 기존 Mentioned Profile 조회 권한을 유지한다. Post Visibility가 `Mentioned Profiles` (`DIRECT`)이면
   작성자와 현재 Content의 canonical Mentioned Profile 관계에 포함된 Profile이 읽을 수 있다. Author Profile과 Mentioned
-  Profile의 `Origin`은 조회 조건이 아니다. Local Post·Reply·Quote에서 이 Visibility를 명시적으로 선택해 작성하려면 현재
-  Content에 한 개 이상의 canonical Mentioned Profile 관계가 필요하며, 미확인·malformed·ineligible handle text는 수신자가 아니다.
+  Profile의 `Origin`은 조회 조건이 아니다. Local Post·Reply·Quote 작성에서 이 Visibility를 명시적으로 선택할 때
+  Mentioned Profile 관계는 선택 사항이며, 관계가 없으면 작성자만 읽을 수 있다. 미확인·malformed·ineligible handle text는
+  수신자가 아니다.
 - [PROD-1102](https://linear.app/byulmaru/issue/PROD-1102)의 outbound Local Note ActivityPub Mention content/tag projection은
   표현만 추가하며 ActivityPub `to`/`cc` audience, recipient routing, signed-fetch 권한 또는 Notification 정책을 추가하지 않는다.
   ActivityPub DIRECT/limited audience의 inbound 처리와 outbound delivery는 별도 [PROD-359](https://linear.app/byulmaru/issue/PROD-359)

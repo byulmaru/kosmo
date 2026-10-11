@@ -58,9 +58,7 @@ export const DirectSelection: Story = {
 
     const directOption = canvas.getByRole('menuitemradio', { name: '지정 멤버만' });
     expect(
-      within(directOption).getByText(
-        '본문에 멘션한 계정만 볼 수 있어요. 한 명 이상 멘션해 주세요.',
-      ),
+      within(directOption).getByText('작성자와 본문에 멘션한 계정만 볼 수 있어요.'),
     ).toBeVisible();
     await userEvent.click(directOption);
 

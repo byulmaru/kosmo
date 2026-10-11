@@ -607,16 +607,6 @@ export async function createPost(
 
       if (
         input.origin === 'LOCAL' &&
-        input.visibility === PostVisibility.DIRECT &&
-        mentionProfileIds.size === 0
-      ) {
-        throw new ValidationError('Direct Post requires a Mentioned Profile', {
-          field: 'mentions',
-        });
-      }
-
-      if (
-        input.origin === 'LOCAL' &&
         input.replyParentId !== undefined &&
         input.repostSourceId !== undefined
       ) {

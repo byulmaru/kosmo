@@ -585,7 +585,7 @@ describe('PostComposer local author', () => {
     });
   });
 
-  it('keeps a DIRECT draft and shows failure feedback when the server finds no recipients', async () => {
+  it('submits an author-only DIRECT post without Mentioned Profiles', async () => {
     await act(async () => {
       renderer = create(
         createElement(PostComposer, {
@@ -598,31 +598,63 @@ describe('PostComposer local author', () => {
       );
     });
 
-    await act(async () => targetProps?.onBodyChange('수신자 없는 글'));
+    await act(async () => targetProps?.onBodyChange('작성자만 읽을 수 있는 글'));
     await act(async () => targetProps?.onVisibilityChange('DIRECT'));
     await act(async () => targetProps?.onSubmit());
+    assert.equal(mutationCalls[0]?.variables.input.bodyText, '작성자만 읽을 수 있는 글');
     assert.equal(mutationCalls[0]?.variables.input.visibility, 'DIRECT');
     assert.equal(mutationCalls[0]?.variables.input.mentions, undefined);
+    await act(async () =>
+      mutationCalls[0]?.onCompleted({ createPost: { post: { id: 'post-author-only' } } }),
+    );
+    assert.equal(targetProps?.body, '');
+  });
 
+  it('keeps the draft and shows generic feedback for an invalid DIRECT mention', async () => {
+    const alice: PostComposerMentionCandidate = {
+      displayName: '앨리스',
+      id: 'profile-alice',
+      relativeHandle: '@alice',
+    };
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposer, {
+          onExpand: () => undefined,
+          onRequestClose: () => undefined,
+          presentation: 'rail',
+          profile: profileA as never,
+          profiles: candidates as never,
+          mentionCandidates: {
+            authorProfileId: profileA.id,
+            profiles: [alice],
+            query: 'ali',
+          },
+        }),
+      );
+    });
+
+    await act(async () => targetProps?.onBodyChange('@ali'));
+    await act(async () => targetProps?.onSelectMention(alice, { end: 4, query: 'ali', start: 0 }));
+    await act(async () => targetProps?.onVisibilityChange('DIRECT'));
+    await act(async () => targetProps?.onSubmit());
     await act(async () =>
       mutationCalls[0]?.onCompleted(null, [
         {
-          message: 'DIRECT requires a recipient',
+          message: 'The selected Mention is unavailable.',
           extensions: { code: 'VALIDATION', field: 'mentions' },
         },
       ]),
     );
 
-    assert.equal(toastCalls.length, 1);
-    assert.deepEqual(toastCalls[0], [
-      '한 명 이상의 유효한 프로필을 멘션해 주세요.',
-      { tone: 'danger' },
-    ]);
-    assert.equal(targetProps?.body, '수신자 없는 글');
+    assert.equal(targetProps?.body.trim(), '@alice');
     assert.equal(
       renderer?.root.findByType('PostComposerTarget' as never).props.visibility,
       'DIRECT',
     );
+    assert.deepEqual(toastCalls[0], [
+      '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+      { tone: 'danger' },
+    ]);
   });
 
   it('submits typed mentions as text with DIRECT while mention search is off', async () => {

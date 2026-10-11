@@ -24,9 +24,9 @@ Warning, Sensitive Media, Media 구성은 [Post Content](./post-content.md)가 �
 | Followers Only     | 작성자, 작성자를 팔로우한 Profile, 멘션된 Profile이 볼 수 있다                         |
 | Mentioned Profiles | 작성자와 현재 Content의 canonical Mentioned Profile 관계에 포함된 Profile만 볼 수 있다 |
 
-이 조회 규칙에서 Author Profile과 Mentioned Profile의 `Origin`은 조건이 아니다. Local Post
-작성에서 `Mentioned Profiles`는 작성자가 명시적으로 선택하는 Visibility이며, 최소 한 개의 Mentioned Profile 관계가
-필요하다. 이는 ActivityPub DIRECT audience 수신이나 outbound delivery를 지원한다는 뜻이 아니다.
+이 조회 규칙에서 Author Profile과 Mentioned Profile의 `Origin`은 조건이 아니다. Local Post 작성에서
+`Mentioned Profiles`는 작성자가 명시적으로 선택하는 Visibility이며, Mentioned Profile 관계는 선택 사항이다. 관계가
+없으면 작성자만 읽을 수 있다. 이는 ActivityPub DIRECT audience 수신이나 outbound delivery를 지원한다는 뜻이 아니다.
 
 ## 속성
 

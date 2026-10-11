@@ -25,7 +25,7 @@ export const postVisibilityPresentation = {
     label: '팔로워만',
   },
   [PostVisibility.DIRECT]: {
-    description: '본문에 멘션한 계정만 볼 수 있어요. 한 명 이상 멘션해 주세요.',
+    description: '작성자와 본문에 멘션한 계정만 볼 수 있어요.',
     icon: AtSignIcon,
     label: '지정 멤버만',
   },

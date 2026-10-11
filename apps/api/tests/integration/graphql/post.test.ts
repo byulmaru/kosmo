@@ -406,35 +406,35 @@ describe('Post Reply GraphQL 경계', () => {
     assert.equal(remoteDirectRead.data?.node?.content.bodyText, 'remote direct content');
   });
 
-  test('DIRECT createPost는 canonical recipient가 없으면 저장을 거부한다', async () => {
-    const auth = await createAuthenticatedSession();
-    const before = {
-      contents: await db.$count(PostContents),
-      mentions: await db.$count(PostMentions),
-      posts: await db.$count(Posts),
-    };
-
-    for (const bodyText of [
-      'private without a mention',
-      `@missing_${crypto.randomUUID().slice(0, 8)}`,
-    ]) {
-      const result = await requestCreatePost(
-        { bodyText, visibility: PostVisibility.DIRECT },
-        auth.token,
-      );
-      assert.equal(result.errors?.[0]?.extensions?.code, 'VALIDATION');
-      assert.equal(result.errors?.[0]?.extensions?.field, 'mentions');
-      assert.equal(result.data, null);
-    }
-
-    assert.deepEqual(
-      {
-        contents: await db.$count(PostContents),
-        mentions: await db.$count(PostMentions),
-        posts: await db.$count(Posts),
-      },
-      before,
+  test('DIRECT createPost는 Mention 없이 저장되고 author만 읽을 수 있다', async () => {
+    const author = await createAuthenticatedSession();
+    const stranger = await createAuthenticatedSession();
+    const created = await requestCreatePost(
+      { bodyText: 'private without a mention', visibility: PostVisibility.DIRECT },
+      author.token,
     );
+
+    assertNoGraphQLErrors(created);
+    const postId = created.data!.createPost.post.id;
+    const storedPost = await db.select().from(Posts).then(firstOrThrow);
+    assert.equal(storedPost.visibility, PostVisibility.DIRECT);
+    assert.ok(storedPost.currentContentId);
+    assert.deepEqual(
+      await db
+        .select()
+        .from(PostMentions)
+        .where(eq(PostMentions.postContentId, storedPost.currentContentId)),
+      [],
+    );
+
+    const [authorRead, strangerRead] = await Promise.all([
+      requestPostContent(postId, author.token),
+      requestPostContent(postId, stranger.token),
+    ]);
+    assertNoGraphQLErrors(authorRead);
+    assertNoGraphQLErrors(strangerRead);
+    assert.ok(authorRead.data?.node);
+    assert.equal(strangerRead.data?.node, null);
   });
 
   test('createPost resolves typed local and stored remote handles without normalizing their body text', async () => {
