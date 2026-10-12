@@ -24,6 +24,13 @@ export type AccountDeletionScreenProps = {
 
 const INITIAL_STATE: AccountDeletionState = { phase: 'loading' };
 const ACKNOWLEDGEMENT_LABEL = '탈퇴 후 처리 내용을 모두 확인했습니다.';
+const CONFIRMATION_MESSAGE = [
+  '탈퇴하면 이 코스모 계정은 더 이상 사용할 수 없고, 로그인된 모든 기기에서 로그아웃됩니다.',
+  '코스모에 저장된 계정·프로필·게시글 등의 정보는 탈퇴 완료일부터 30일 동안 보관한 뒤 파기합니다. ' +
+    '진행 중인 신고·분쟁·수사 처리에 필요한 기록은 필요성이 끝날 때까지 보관한 뒤 지체 없이 파기하며, 법령에 따른 보존 대상은 정해진 기간 동안 보관합니다.',
+  '별마루 ID 계정은 유지됩니다. 별마루 ID도 탈퇴하려면 해당 서비스에서 별도로 신청해야 합니다.',
+  '탈퇴는 취소할 수 없으며, 현재 같은 별마루 ID로 코스모에 다시 가입할 수 없습니다.',
+].join('\n\n');
 
 /** Controlled presentation only: the caller owns eligibility, mutation, credentials and navigation. */
 export function AccountDeletionScreen({
@@ -79,7 +86,7 @@ export function AccountDeletionScreen({
         cancelLabel="취소"
         confirmDisabled={pending ? undefined : !acknowledged}
         confirmLabel={error ? '다시 시도' : '코스모 탈퇴'}
-        message="탈퇴하면 Kosmo Account가 삭제된 상태로 남고 모든 로그인 세션이 종료됩니다. 유예기간 없이 즉시 처리되며, 같은 Byulmaru ID로 Kosmo에 다시 가입할 수 없습니다. 재가입 제한은 임시 조치입니다."
+        message={CONFIRMATION_MESSAGE}
         onCancel={onCancel ?? (() => undefined)}
         onConfirm={error ? (onRetry ?? (() => undefined)) : (onConfirm ?? (() => undefined))}
         pending={pending}
