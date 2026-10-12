@@ -10,6 +10,7 @@ import {
   PostContents,
   PostMentions,
   Posts,
+  ProfileBlocks,
   ProfileFollows,
   Profiles,
 } from '@kosmo/core/db';
@@ -18,6 +19,7 @@ import {
   InstanceState,
   MediaSource,
   MediaState,
+  PostQuoteConsentStatus,
   PostState,
   PostVisibility,
   ProfileState,
@@ -26,6 +28,11 @@ import { encodeGlobalId } from '@kosmo/core/global-id';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { postContentDocumentToHtml } from '@kosmo/core/post-content/server';
 import { isConfiguredLocalProfile } from '@kosmo/core/profile';
+import {
+  loadQuoteConsentForPost,
+  loadQuotePostIdentity,
+  loadQuoteSourceIdentity,
+} from '@kosmo/core/services';
 import { visibleProfileWhere } from '@kosmo/core/visibility';
 import { and, eq, inArray, ne } from 'drizzle-orm';
 import { escapeText } from 'entities/escape';
@@ -44,6 +51,9 @@ type LocalPostNote = {
   readonly createdAt: Temporal.Instant;
   readonly id: string;
   readonly mediaAttachments: readonly Image[];
+  readonly quoteAuthorizationUri: string | null;
+  readonly quoteProtocolEnabled: boolean;
+  readonly quoteSourceUri: string | null;
   readonly replyParentId: string | null;
   readonly summary: string | null;
   readonly sensitiveMedia: boolean;
@@ -56,7 +66,24 @@ type LocalPostNoteProjection = LocalPostNote & {
 
 type LocalPostNoteContext = Pick<Context<void>, 'canonicalOrigin' | 'getActorUri'>;
 
-const loadLocalPostNoteRow = async (context: LocalPostNoteContext, postId: string) => {
+// Outbound-only, after the caller verifies a REVOKED consent and its owner effect.
+// Ordinary Note fetch/authorization must retain the default active-author checks.
+type LocalPostNoteOptions = { readonly forQuoteRevocation?: boolean };
+
+const isHttpUrl = (value: string): boolean => {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+};
+
+const loadLocalPostNoteRow = async (
+  context: LocalPostNoteContext,
+  postId: string,
+  { forQuoteRevocation = false }: LocalPostNoteOptions = {},
+) => {
   if (!isCanonicalPostId(postId)) {
     return null;
   }
@@ -79,8 +106,8 @@ const loadLocalPostNoteRow = async (context: LocalPostNoteContext, postId: strin
         eq(Posts.state, PostState.ACTIVE),
         eq(Instances.kind, InstanceKind.LOCAL),
         eq(Instances.canonicalOrigin, context.canonicalOrigin),
-        eq(Profiles.state, ProfileState.ACTIVE),
-        eq(Instances.state, InstanceState.ACTIVE),
+        forQuoteRevocation ? undefined : eq(Profiles.state, ProfileState.ACTIVE),
+        forQuoteRevocation ? undefined : eq(Instances.state, InstanceState.ACTIVE),
       ),
     )
     .limit(1)
@@ -96,8 +123,9 @@ const loadLocalPostNoteRow = async (context: LocalPostNoteContext, postId: strin
 export const loadLocalPostNote = async (
   context: LocalPostNoteContext,
   postId: string,
+  options: LocalPostNoteOptions = {},
 ): Promise<LocalPostNote | null> => {
-  const row = await loadLocalPostNoteRow(context, postId);
+  const row = await loadLocalPostNoteRow(context, postId, options);
   if (!row) {
     return null;
   }
@@ -108,6 +136,15 @@ export const loadLocalPostNote = async (
     return null;
   }
 
+  const quote = options.forQuoteRevocation
+    ? { quoteAuthorizationUri: null, quoteProtocolEnabled: false, quoteSourceUri: null }
+    : await projectLocalQuote(
+        row.post.id,
+        row.profile.id,
+        row.post.repostSourceId,
+        row.post.visibility,
+      );
+
   return {
     authorHandle: row.profile.handle,
     authorProfileId: row.profile.id,
@@ -117,6 +154,9 @@ export const loadLocalPostNote = async (
     createdAt: row.post.createdAt,
     id: row.post.id,
     mediaAttachments,
+    quoteAuthorizationUri: quote.quoteAuthorizationUri,
+    quoteProtocolEnabled: quote.quoteProtocolEnabled,
+    quoteSourceUri: quote.quoteSourceUri,
     replyParentId: row.post.replyParentId,
     sensitiveMedia: row.contentDocument.body.attrs?.sensitiveMedia ?? false,
     summary: row.contentDocument.summary,
@@ -200,6 +240,82 @@ const projectLocalPostMentions = async (
   }
 
   return { mentionLinks, tags };
+};
+
+const projectLocalQuote = async (
+  quotePostId: string,
+  quoteAuthorProfileId: string,
+  sourcePostId: string | null,
+  quoteVisibility: PostVisibility,
+): Promise<{
+  readonly quoteAuthorizationUri: string | null;
+  readonly quoteProtocolEnabled: boolean;
+  readonly quoteSourceUri: string | null;
+}> => {
+  if (!sourcePostId) {
+    return { quoteAuthorizationUri: null, quoteProtocolEnabled: false, quoteSourceUri: null };
+  }
+
+  const source = await loadQuoteSourceIdentity(db, sourcePostId);
+  if (
+    !source ||
+    !source.sourceUri ||
+    source.sourceState !== PostState.ACTIVE ||
+    source.sourceContentId === null ||
+    source.authorProfileState !== ProfileState.ACTIVE ||
+    source.instanceState === InstanceState.SUSPENDED ||
+    (source.sourceVisibility !== PostVisibility.PUBLIC &&
+      source.sourceVisibility !== PostVisibility.UNLISTED &&
+      source.sourceVisibility !== PostVisibility.FOLLOWERS)
+  ) {
+    return { quoteAuthorizationUri: null, quoteProtocolEnabled: false, quoteSourceUri: null };
+  }
+
+  if (
+    source.sourceVisibility === PostVisibility.FOLLOWERS &&
+    source.authorProfileId !== quoteAuthorProfileId
+  ) {
+    return { quoteAuthorizationUri: null, quoteProtocolEnabled: false, quoteSourceUri: null };
+  }
+
+  if (source.authorProfileId === quoteAuthorProfileId) {
+    if (
+      source.sourceVisibility === PostVisibility.FOLLOWERS &&
+      quoteVisibility !== PostVisibility.FOLLOWERS
+    ) {
+      return { quoteAuthorizationUri: null, quoteProtocolEnabled: false, quoteSourceUri: null };
+    }
+    return {
+      quoteAuthorizationUri: null,
+      quoteProtocolEnabled: true,
+      quoteSourceUri: source.sourceUri,
+    };
+  }
+
+  const consent = await loadQuoteConsentForPost(db, quotePostId, sourcePostId);
+  const quoteIdentity = await loadQuotePostIdentity(db, quotePostId);
+  if (
+    !consent ||
+    !quoteIdentity ||
+    consent.sourcePostId !== sourcePostId ||
+    consent.quotePostId !== quotePostId ||
+    consent.quoteUri !== quoteIdentity.quoteUri ||
+    consent.requestUri !== quoteIdentity.requestUri ||
+    consent.quoteAuthorActorUri !== quoteIdentity.authorActorUri ||
+    consent.sourceAuthorActorUri !== source.authorActorUri ||
+    consent.sourceUri !== source.sourceUri ||
+    !consent.approvalUri ||
+    !isHttpUrl(consent.approvalUri) ||
+    consent.status !== PostQuoteConsentStatus.APPROVED
+  ) {
+    return { quoteAuthorizationUri: null, quoteProtocolEnabled: false, quoteSourceUri: null };
+  }
+
+  return {
+    quoteAuthorizationUri: consent.approvalUri,
+    quoteProtocolEnabled: true,
+    quoteSourceUri: source.sourceUri,
+  };
 };
 
 const projectLocalMediaAttachments = async (
@@ -293,11 +409,28 @@ export const authorizeLocalPostNote = async (
   if (!row) {
     return false;
   }
+  const signedActor = await context.getSignedKeyOwner();
+  if (signedActor?.id && signedActor.id.href !== context.getActorUri(row.profile.id).href) {
+    const sourceBlocksViewer = await db
+      .select({ id: ProfileBlocks.id })
+      .from(ProfileBlocks)
+      .innerJoin(ActivityPubActors, eq(ActivityPubActors.profileId, ProfileBlocks.targetProfileId))
+      .where(
+        and(
+          eq(ProfileBlocks.ownerProfileId, row.profile.id),
+          eq(ActivityPubActors.uri, signedActor.id.href),
+        ),
+      )
+      .limit(1)
+      .then(first);
+    if (sourceBlocksViewer) {
+      return false;
+    }
+  }
+
   if (row.post.visibility !== PostVisibility.FOLLOWERS) {
     return true;
   }
-
-  const signedActor = await context.getSignedKeyOwner();
   if (!signedActor?.id) {
     return false;
   }
@@ -318,8 +451,9 @@ export const dispatchLocalPostNote = async (
 export const projectLocalPostNote = async (
   context: LocalPostNoteContext,
   postId: string,
+  options: LocalPostNoteOptions = {},
 ): Promise<LocalPostNoteProjection | null> => {
-  const note = await loadLocalPostNote(context, postId);
+  const note = await loadLocalPostNote(context, postId, options);
   if (!note) {
     return null;
   }
@@ -347,7 +481,10 @@ export const projectLocalPostNote = async (
     attachments: [...note.mediaAttachments],
     attribution: authorUri,
     ...(cc ? { cc } : {}),
-    content: postContentDocumentToHtml(note.contentDocument, mentionLinks),
+    content: appendQuoteFallback(
+      postContentDocumentToHtml(note.contentDocument, mentionLinks),
+      note.quoteSourceUri && note.quoteProtocolEnabled ? note.quoteSourceUri : null,
+    ),
     id: new URL(`/ap/note/${note.id}`, note.canonicalOrigin),
     mediaType: 'text/html',
     emojiReactions: new URL(`/ap/note/${note.id}/emoji-reactions`, note.canonicalOrigin),
@@ -357,6 +494,15 @@ export const projectLocalPostNote = async (
     sensitive: note.sensitiveMedia,
     ...(tags.length > 0 ? { tags } : {}),
     to,
+    ...(note.quoteSourceUri && note.quoteProtocolEnabled
+      ? {
+          quote: new URL(note.quoteSourceUri),
+          quoteUrl: new URL(note.quoteSourceUri),
+          ...(note.quoteAuthorizationUri
+            ? { quoteAuthorization: new URL(note.quoteAuthorizationUri) }
+            : {}),
+        }
+      : {}),
     url: new URL(
       `/@${encodeURIComponent(note.authorHandle)}/${encodeGlobalId('Post', note.id)}`,
       configuredLocalInstance.canonicalOrigin,
@@ -364,4 +510,60 @@ export const projectLocalPostNote = async (
   });
 
   return { ...note, object };
+};
+
+const appendQuoteFallback = (content: string, sourceUri: string | null): string =>
+  sourceUri
+    ? `${content}<span class="quote-inline">RE: <a href="${escapeText(sourceUri)}">${escapeText(sourceUri)}</a></span>`
+    : content;
+
+/**
+ * Builds the request-only Note used as a FEP-044f QuoteRequest instrument.
+ *
+ * A pending quote must stay hidden from the ordinary Note projection, while a
+ * QuoteRequest still needs to carry the candidate source relationship to the
+ * source author. Keeping this as a separate projection prevents the pending
+ * relationship from leaking to normal audiences.
+ */
+export const projectLocalPostQuoteRequestInstrument = async (
+  context: LocalPostNoteContext,
+  postId: string,
+  sourceUri: string,
+  sourceAuthorActorUri: string,
+): Promise<Note | null> => {
+  let quoteUrl: URL;
+  try {
+    quoteUrl = new URL(sourceUri);
+  } catch {
+    return null;
+  }
+  if (quoteUrl.protocol !== 'http:' && quoteUrl.protocol !== 'https:') {
+    return null;
+  }
+
+  const projection = await projectLocalPostNote(context, postId);
+  if (!projection || !projection.object.id) {
+    return null;
+  }
+
+  const quote = projection.object.clone({
+    quote: quoteUrl,
+    quoteAuthorization: null,
+    quoteUrl,
+  });
+  const audience = [...quote.toIds, ...quote.ccIds].map(({ href }) => href);
+  if (audience.includes(PUBLIC_COLLECTION.href) || audience.includes(sourceAuthorActorUri)) {
+    return quote;
+  }
+
+  // A followers-only Quote may be visible to the local author but not to the
+  // remote Source author. Send the identity-only instrument in that case so
+  // the request does not widen the Quote's ordinary audience.
+  return new Note({
+    attribution: context.getActorUri(projection.authorProfileId),
+    id: projection.object.id,
+    mediaType: 'text/html',
+    quote: quoteUrl,
+    quoteUrl,
+  });
 };

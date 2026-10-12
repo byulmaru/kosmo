@@ -2,7 +2,17 @@ import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
 import { after, afterEach, before, beforeEach, describe, mock, test } from 'node:test';
-import { Create, Delete, Image, Note } from '@fedify/vocab';
+import {
+  Accept,
+  Create,
+  Delete,
+  Image,
+  Note,
+  QuoteAuthorization,
+  QuoteRequest,
+  Reject,
+  Update,
+} from '@fedify/vocab';
 import {
   AccountState,
   ActivityPubActorType,
@@ -10,11 +20,13 @@ import {
   InstanceState,
   MediaSource,
   MediaState,
+  PostQuoteConsentStatus,
   PostState,
   PostVisibility,
   ProfileFollowPolicy,
   ProfileState,
 } from '@kosmo/core/enums';
+import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { eq, inArray } from 'drizzle-orm';
 import type { Context } from '@fedify/fedify';
 import type { Activity, Recipient } from '@fedify/vocab';
@@ -22,6 +34,7 @@ import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type { localOutboundFederation as LocalOutboundFederation } from './local-outbound-federation';
 import type * as LocalPostDelivery from './local-post-delivery';
+import type { projectLocalPostNote as ProjectLocalPostNote } from './local-post-note';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
@@ -43,6 +56,11 @@ let ProfileFollows: typeof CoreDb.ProfileFollows;
 let Profiles: typeof CoreDb.Profiles;
 let sendLocalPostCreate: typeof LocalPostDelivery.sendLocalPostCreate;
 let sendLocalPostDelete: typeof LocalPostDelivery.sendLocalPostDelete;
+let sendLocalPostQuoteDecision: typeof LocalPostDelivery.sendLocalPostQuoteDecision;
+let sendLocalPostQuoteRevocation: typeof LocalPostDelivery.sendLocalPostQuoteRevocation;
+let sendLocalPostQuoteRevocations: typeof LocalPostDelivery.sendLocalPostQuoteRevocations;
+let sendLocalPostQuoteRequest: typeof LocalPostDelivery.sendLocalPostQuoteRequest;
+let projectLocalPostNote: typeof ProjectLocalPostNote;
 let testAccountIds: string[] = [];
 let testInstanceIds: string[] = [];
 let testProfileIds: string[] = [];
@@ -60,6 +78,7 @@ describe('ActivityPub Local Post delivery', () => {
       Instances,
       Media,
       pg,
+
       PostContents,
       PostMentions,
       Posts,
@@ -68,7 +87,15 @@ describe('ActivityPub Local Post delivery', () => {
     } = await import('@kosmo/core/db'));
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
     ({ localOutboundFederation } = await import('./local-outbound-federation'));
-    ({ sendLocalPostCreate, sendLocalPostDelete } = await import('./local-post-delivery'));
+    ({
+      sendLocalPostCreate,
+      sendLocalPostDelete,
+      sendLocalPostQuoteDecision,
+      sendLocalPostQuoteRequest,
+      sendLocalPostQuoteRevocation,
+      sendLocalPostQuoteRevocations,
+    } = await import('./local-post-delivery'));
+    ({ projectLocalPostNote } = await import('./local-post-note'));
     const { localInstance } = await seedDatabase({ publicOrigin });
     localInstanceId = localInstance.id;
   });
@@ -488,6 +515,411 @@ describe('ActivityPub Local Post delivery', () => {
     assert.equal(createContext.mock.callCount(), 0);
   });
 
+  test('pending QuoteRequest는 일반 Note와 분리된 Source 관계 instrument를 보낸다', async () => {
+    const quoteAuthor = await createProfile({ kind: InstanceKind.LOCAL });
+    const sourceAuthor = await createRemoteActor({ handle: 'quote-request-source' });
+    const source = await createPost(sourceAuthor.profile.id);
+    const sourceUri = `https://remote.example/notes/${source.id}`;
+    await db.insert(ActivityPubPosts).values({
+      postId: source.id,
+      receivedAt: Temporal.Instant.from('2026-08-02T00:00:00Z'),
+      uri: sourceUri,
+    });
+    const quote = await createPost(quoteAuthor.id, { repostSourceId: source.id });
+    const quoteUri = `${publicOrigin}/ap/note/${quote.id}`;
+    const requestUri = `${publicOrigin}/ap/quote-request/${quote.id}`;
+    await db
+      .update(Posts)
+      .set({
+        repostSourceId: source.id,
+        quoteConsentStatus: PostQuoteConsentStatus.PENDING,
+      })
+      .where(eq(Posts.id, quote.id))
+      .returning({ id: Posts.id })
+      .then(firstOrThrow);
+
+    const fixture = createContextFixture();
+    mock.method(localOutboundFederation, 'createContext', () => fixture.context);
+
+    const regularNote = await projectLocalPostNote(fixture.context, quote.id);
+    assert.ok(regularNote);
+    assert.equal(regularNote.object.quoteId, null);
+
+    await db
+      .update(ActivityPubActors)
+      .set({ inboxUri: null })
+      .where(eq(ActivityPubActors.profileId, sourceAuthor.profile.id));
+    await assert.rejects(
+      sendLocalPostQuoteRequest({
+        postId: quote.id,
+        sourcePostId: source.id,
+        effectId: 'test-consent',
+      }),
+      /delivery identity is incomplete/,
+    );
+    assert.equal(fixture.calls.length, 0);
+    await db
+      .update(ActivityPubActors)
+      .set({ inboxUri: 'https://remote.example/inbox' })
+      .where(eq(ActivityPubActors.profileId, sourceAuthor.profile.id));
+
+    await sendLocalPostQuoteRequest({
+      postId: quote.id,
+      sourcePostId: source.id,
+      effectId: 'test-consent',
+    });
+
+    assert.equal(fixture.calls.length, 1);
+    const activity = fixture.calls[0]?.activity;
+    assert.ok(activity instanceof QuoteRequest);
+    assert.equal(activity.id?.href, requestUri);
+    assert.equal(activity.objectId?.href, sourceUri);
+    const instrument = await activity.getInstrument();
+    assert.ok(instrument instanceof Note);
+    assert.equal(instrument.id?.href, quoteUri);
+    assert.equal(instrument.quoteId?.href, sourceUri);
+    assert.equal(instrument.quoteUrl?.href, sourceUri);
+    assert.equal(instrument.quoteAuthorizationId, null);
+    assert.deepEqual(
+      fixture.calls[0]?.recipients.map((recipient) => recipient.id?.href),
+      [sourceAuthor.actorUri],
+    );
+  });
+
+  test('production federation은 현재 Source-issued Authorization endpoint를 노출하고 철회 뒤 닫는다', async () => {
+    const sourceAuthor = await createProfile({
+      instanceId: localInstanceId,
+      kind: InstanceKind.LOCAL,
+    });
+    const source = await createPost(sourceAuthor.id);
+    const quoteAuthor = await createRemoteActor({ handle: 'authorization-endpoint' });
+    const quote = await createPost(quoteAuthor.profile.id);
+    const quoteUri = 'https://authorization-endpoint.example/notes/quote';
+    await db
+      .insert(ActivityPubPosts)
+      .values({ postId: quote.id, uri: quoteUri, receivedAt: Temporal.Now.instant() });
+    await db
+      .update(Posts)
+      .set({
+        repostSourceId: source.id,
+        quoteConsentStatus: PostQuoteConsentStatus.APPROVED,
+        quoteConsentApprovalUri: null,
+      })
+      .where(eq(Posts.id, quote.id));
+    const approvalUri = `${publicOrigin}/ap/quote-authorization/${quote.id}`;
+    const { createKosmoFederation } = await import('./federation');
+    const federation = createKosmoFederation();
+    const request = () =>
+      new Request(approvalUri, { headers: { accept: 'application/activity+json' } });
+    const response = await federation.fetch(request(), { contextData: undefined });
+    assert.equal(response.status, 200);
+    const authorization = await response.json();
+    assert.equal(authorization.id, approvalUri);
+    assert.equal(authorization.type, 'QuoteAuthorization');
+    assert.equal(authorization.interactionTarget, `${publicOrigin}/ap/note/${source.id}`);
+    assert.equal(authorization.interactingObject, quoteUri);
+    await db
+      .update(Posts)
+      .set({ quoteConsentStatus: PostQuoteConsentStatus.REVOKED })
+      .where(eq(Posts.id, quote.id));
+    const revoked = await federation.fetch(request(), { contextData: undefined });
+    assert.ok(revoked.status === 403 || revoked.status === 404);
+  });
+
+  test('Source Author의 승인·거절 응답은 동일 QuoteRequest 결속과 URI-only 승인을 사용한다', async () => {
+    const { canonicalOrigin: sourceOrigin, id: sourceInstanceId } = await createLocalInstance();
+    const sourceAuthor = await createProfile({
+      instanceId: sourceInstanceId,
+      kind: InstanceKind.LOCAL,
+    });
+    const remoteQuoteAuthor = await createRemoteActor({ handle: 'quote-decision-author' });
+    const source = await createPost(sourceAuthor.id);
+    const sourceUri = sourceOrigin + '/ap/note/' + source.id;
+    const quoteUri = 'https://quote-decision.example/notes/quote';
+    const requestUri = 'https://quote-decision.example/quote-requests/quote';
+    const remoteQuote = await createPost(remoteQuoteAuthor.profile.id);
+    const approvalUri = sourceOrigin + '/ap/quote-authorization/' + remoteQuote.id;
+    await db
+      .insert(ActivityPubPosts)
+      .values({
+        postId: remoteQuote.id,
+        uri: quoteUri,
+        receivedAt: Temporal.Instant.from('2026-09-17T00:00:00Z'),
+      })
+      .onConflictDoNothing();
+    const consent = await db
+      .update(Posts)
+      .set({
+        quoteConsentApprovalUri: null,
+
+        repostSourceId: source.id,
+        quoteConsentStatus: PostQuoteConsentStatus.APPROVED,
+      })
+      .where(eq(Posts.id, remoteQuote.id))
+      .returning({ id: Posts.id })
+      .then(firstOrThrow);
+    const fixture = createContextFixture(sourceOrigin);
+    mock.method(localOutboundFederation, 'createContext', () => fixture.context);
+
+    await sendLocalPostQuoteDecision({
+      postId: consent.id,
+      effectId: 'test-consent',
+      sourcePostId: source.id,
+      requestUri,
+    });
+
+    assert.equal(fixture.calls.length, 1);
+    const acceptance = fixture.calls[0]?.activity;
+    assert.ok(acceptance instanceof Accept);
+    assert.equal(acceptance.actorId?.href, sourceOrigin + '/ap/actor/' + sourceAuthor.id);
+    assert.equal(acceptance.objectId?.href, requestUri);
+    const authorization = await acceptance.getResult();
+    assert.ok(authorization instanceof QuoteAuthorization);
+    assert.equal(authorization.id?.href, approvalUri);
+    assert.equal(authorization.interactingObjectId?.href, quoteUri);
+    assert.equal(authorization.interactionTargetId?.href, sourceUri);
+    assert.deepEqual(
+      fixture.calls[0]?.recipients.map((recipient) => recipient.id?.href),
+      [remoteQuoteAuthor.actorUri],
+    );
+
+    await sendLocalPostQuoteDecision({
+      postId: consent.id,
+      sourcePostId: source.id,
+      requestUri,
+      effectId: 'test-consent',
+    });
+    assert.equal(fixture.calls.length, 2);
+    assert.equal(fixture.calls[1]?.activity.id?.href, acceptance.id?.href);
+
+    const rejectedSource = await createPost(sourceAuthor.id);
+    const rejectedRemoteQuoteAuthor = await createRemoteActor({ handle: 'quote-reject-author' });
+    const rejectedQuote = await createPost(rejectedRemoteQuoteAuthor.profile.id);
+    await db
+      .insert(ActivityPubPosts)
+      .values({
+        postId: rejectedQuote.id,
+        uri: 'https://quote-decision.example/notes/rejected',
+        receivedAt: Temporal.Instant.from('2026-09-17T00:00:00Z'),
+      })
+      .onConflictDoNothing();
+    const rejectedConsent = await db
+      .update(Posts)
+      .set({
+        repostSourceId: rejectedSource.id,
+        quoteConsentStatus: PostQuoteConsentStatus.REJECTED,
+      })
+      .where(eq(Posts.id, rejectedQuote.id))
+      .returning({ id: Posts.id })
+      .then(firstOrThrow);
+
+    await sendLocalPostQuoteDecision({
+      postId: rejectedConsent.id,
+      effectId: 'test-rejectedConsent',
+      sourcePostId: rejectedSource.id,
+      requestUri: 'https://quote-decision.example/quote-requests/rejected',
+    });
+    assert.equal(fixture.calls.length, 3);
+    assert.ok(fixture.calls[2]?.activity instanceof Reject);
+  });
+
+  test('Remote Source 삭제는 승인 전 Local Quote에도 Source 없는 Update를 보낸다', async () => {
+    const quoteAuthor = await createProfile({ kind: InstanceKind.LOCAL });
+    const sourceAuthor = await createRemoteActor({ handle: 'deleted-remote-source' });
+    const follower = await createRemoteActor({ handle: 'revoked-local-quote-follower' });
+    await db.insert(ProfileFollows).values({
+      followeeProfileId: quoteAuthor.id,
+      followerProfileId: follower.profile.id,
+    });
+    const source = await createPost(sourceAuthor.profile.id);
+    const sourceUri = `https://remote.example/notes/${source.id}`;
+    await db.insert(ActivityPubPosts).values({
+      postId: source.id,
+      receivedAt: Temporal.Instant.from('2026-09-17T00:00:00Z'),
+      uri: sourceUri,
+    });
+    const quote = await createPost(quoteAuthor.id, { repostSourceId: source.id });
+    const authoredContent = `own words ${sourceUri}`;
+    assert.ok(quote.currentContentId);
+    await db
+      .update(PostContents)
+      .set({ document: postContentDocumentFromText(authoredContent) })
+      .where(eq(PostContents.id, quote.currentContentId));
+    await db
+      .insert(ActivityPubPosts)
+      .values({
+        postId: quote.id,
+        uri: `${publicOrigin}/ap/note/${quote.id}`,
+        receivedAt: Temporal.Instant.from('2026-09-17T00:00:00Z'),
+      })
+      .onConflictDoNothing();
+    await db
+      .update(Posts)
+      .set({
+        quoteConsentApprovalUri: null,
+
+        repostSourceId: source.id,
+        quoteConsentStatus: PostQuoteConsentStatus.REVOKED,
+      })
+      .where(eq(Posts.id, quote.id));
+    await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, source.id));
+    const fixture = createContextFixture();
+    mock.method(localOutboundFederation, 'createContext', () => fixture.context);
+
+    await sendLocalPostQuoteRevocations(source.id);
+
+    assert.equal(fixture.calls.length, 1);
+    const activity = fixture.calls[0]?.activity;
+    assert.ok(activity instanceof Update);
+    const note = await activity.getObject();
+    assert.ok(note instanceof Note);
+    assert.equal(note.id?.href, `${publicOrigin}/ap/note/${quote.id}`);
+    assert.equal(note.quoteId, null);
+    assert.equal(note.quoteUrl, null);
+    assert.equal(note.quoteAuthorizationId, null);
+    assert.equal(note.content, `<p>${authoredContent}</p>`);
+    const serialized = await note.toJsonLd();
+    assert.ok(serialized !== null && typeof serialized === 'object');
+    for (const property of [
+      'quote',
+      'quoteAuthorization',
+      'quoteUrl',
+      'quoteUri',
+      '_misskey_quote',
+    ]) {
+      assert.equal(Object.hasOwn(serialized, property), false);
+    }
+    assert.doesNotMatch(note.content?.toString() ?? '', /quote-inline/);
+    assert.deepEqual(
+      fixture.calls[0]?.recipients.map((recipient) => recipient.id?.href),
+      [follower.actorUri],
+    );
+  });
+
+  for (const inactiveQuoteAuthor of ['profile', 'instance'] as const) {
+    test(`Source 삭제 철회는 비활성 ${inactiveQuoteAuthor}의 Local Quote에도 Source 없는 Update를 보낸다`, async () => {
+      const { canonicalOrigin: sourceOrigin, id: sourceInstanceId } = await createLocalInstance();
+      const sourceAuthor = await createProfile({
+        instanceId: sourceInstanceId,
+        kind: InstanceKind.LOCAL,
+      });
+      const remoteQuoteAuthor = await createRemoteActor({ handle: 'revocation-author' });
+      const source = await createPost(sourceAuthor.id);
+      const sourceUri = sourceOrigin + '/ap/note/' + source.id;
+      await db
+        .update(Posts)
+        .set({
+          deletedAt: Temporal.Instant.from('2026-09-17T01:00:00Z'),
+          state: PostState.DELETED,
+        })
+        .where(eq(Posts.id, source.id));
+      const remoteQuote = await createPost(remoteQuoteAuthor.profile.id);
+      await db
+        .insert(ActivityPubPosts)
+        .values({
+          postId: remoteQuote.id,
+          uri: 'https://revocation.example/notes/remote-quote',
+          receivedAt: Temporal.Instant.from('2026-09-17T00:00:00Z'),
+        })
+        .onConflictDoNothing();
+      const remoteConsent = await db
+        .update(Posts)
+        .set({
+          quoteConsentApprovalUri: null,
+
+          repostSourceId: source.id,
+          quoteConsentStatus: PostQuoteConsentStatus.REVOKED,
+        })
+        .where(eq(Posts.id, remoteQuote.id))
+        .returning({ id: Posts.id })
+        .then(firstOrThrow);
+      const { canonicalOrigin: quoteOrigin, id: quoteInstanceId } = await createLocalInstance();
+      const localQuoteAuthor = await createProfile({
+        instanceId: quoteInstanceId,
+        kind: InstanceKind.LOCAL,
+      });
+      const localQuoteFollower = await createRemoteActor({ handle: 'local-quote-follower' });
+      await db.insert(ProfileFollows).values({
+        followeeProfileId: localQuoteAuthor.id,
+        followerProfileId: localQuoteFollower.profile.id,
+      });
+      const localQuote = await createPost(localQuoteAuthor.id, { repostSourceId: source.id });
+      await db
+        .insert(ActivityPubPosts)
+        .values({
+          postId: localQuote.id,
+          uri: quoteOrigin + '/ap/note/' + localQuote.id,
+          receivedAt: Temporal.Instant.from('2026-09-17T00:00:00Z'),
+        })
+        .onConflictDoNothing();
+      const localConsent = await db
+        .update(Posts)
+        .set({
+          quoteConsentApprovalUri: null,
+
+          repostSourceId: source.id,
+          quoteConsentStatus: PostQuoteConsentStatus.REVOKED,
+        })
+        .where(eq(Posts.id, localQuote.id))
+        .returning({ id: Posts.id })
+        .then(firstOrThrow);
+      const fixture = createContextFixture(quoteOrigin);
+      mock.method(localOutboundFederation, 'createContext', () => fixture.context);
+      await db
+        .update(Profiles)
+        .set({ state: ProfileState.DISABLED })
+        .where(inArray(Profiles.id, [sourceAuthor.id, remoteQuoteAuthor.profile.id]));
+      await db
+        .update(Instances)
+        .set({ state: InstanceState.SUSPENDED })
+        .where(inArray(Instances.id, [sourceInstanceId, remoteQuoteAuthor.profile.instanceId]));
+      if (inactiveQuoteAuthor === 'profile') {
+        await db
+          .update(Profiles)
+          .set({ state: ProfileState.DISABLED })
+          .where(eq(Profiles.id, localQuoteAuthor.id));
+      } else {
+        await db
+          .update(Instances)
+          .set({ state: InstanceState.SUSPENDED })
+          .where(eq(Instances.id, quoteInstanceId));
+      }
+      assert.equal(await projectLocalPostNote(fixture.context, localQuote.id), null);
+
+      await sendLocalPostQuoteRevocation({
+        postId: remoteConsent.id,
+        effectId: 'test-remoteConsent',
+        sourcePostId: source.id,
+      });
+      assert.equal(fixture.calls.length, 1);
+      const deletion = fixture.calls[0]?.activity;
+      assert.ok(deletion instanceof Delete);
+      assert.equal(
+        deletion.objectId?.href,
+        sourceOrigin + '/ap/quote-authorization/' + remoteQuote.id,
+      );
+      assert.equal(deletion.targetId?.href, sourceUri);
+
+      await sendLocalPostQuoteRevocation({
+        postId: localConsent.id,
+        effectId: 'test-localConsent',
+        sourcePostId: source.id,
+      });
+      assert.equal(fixture.calls.length, 2);
+      assert.ok(fixture.calls[1]?.activity instanceof Update);
+      const updatedNote = await (fixture.calls[1]?.activity as Update).getObject();
+      assert.ok(updatedNote instanceof Note);
+      assert.equal(updatedNote.quoteId, null);
+      assert.equal(updatedNote.quoteUrl, null);
+      assert.equal(updatedNote.quoteAuthorizationId, null);
+      assert.equal(updatedNote.content, '<p>body</p>');
+      assert.deepEqual(
+        fixture.calls[1]?.recipients.map((recipient) => recipient.id?.href),
+        [localQuoteFollower.actorUri],
+      );
+    });
+  }
+
   test('Create Activity 실행 전에 삭제된 Post는 Create를 보내지 않는다', async () => {
     const { canonicalOrigin: authorOrigin, id: authorInstanceId } = await createLocalInstance();
     const author = await createProfile({ instanceId: authorInstanceId });
@@ -746,18 +1178,20 @@ const createPost = async (
   {
     media = [],
     replyParentId = null,
+    repostSourceId = null,
     sensitiveMedia = false,
     visibility = PostVisibility.PUBLIC,
   }: {
     media?: readonly { readonly altText: string | null; readonly mediaId: string }[];
     replyParentId?: string | null;
+    repostSourceId?: string | null;
     sensitiveMedia?: boolean;
     visibility?: PostVisibility;
   } = {},
 ) => {
   const post = await db
     .insert(Posts)
-    .values({ profileId, replyParentId, state: PostState.ACTIVE, visibility })
+    .values({ profileId, replyParentId, repostSourceId, state: PostState.ACTIVE, visibility })
     .returning()
     .then(firstOrThrow);
   for (const { altText, mediaId } of media) {

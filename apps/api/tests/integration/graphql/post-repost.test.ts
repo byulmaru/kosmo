@@ -272,6 +272,25 @@ describe('GraphQL Repost', () => {
       },
     });
 
+    const handle = temporalClient.workflow.getHandle(`post-delete-mutation:${repost.id}`);
+    await handle.result();
+    const history = await handle.fetchHistory();
+    const activities = (history.events ?? []).flatMap((event) => {
+      const type = event.activityTaskScheduledEventAttributes?.activityType?.name;
+      return type ? [type] : [];
+    });
+    assert.equal(activities.filter((type) => type === 'deletePostTransitionActivity').length, 1);
+    assert.equal(activities.filter((type) => type === 'sendRepostUndoActivity').length, 1);
+    assert.equal(
+      activities.filter((type) => type === 'deleteRepostNotificationActivity').length,
+      1,
+    );
+    const committed = await db
+      .select()
+      .from(Posts)
+      .where(eq(Posts.id, repost.id))
+      .then(firstOrThrow);
+
     const repeated = await requestDelete(repost.id, auth.token);
     assertNoGraphQLErrors(repeated);
     assert.deepEqual(repeated.data?.deletePost, {
@@ -283,12 +302,14 @@ describe('GraphQL Repost', () => {
       },
     });
 
+    await temporalClient.workflow.getHandle(`post-delete-mutation:${repost.id}`).result();
     const deleted = await db
       .select({ deletedAt: Posts.deletedAt, state: Posts.state })
       .from(Posts)
       .where(eq(Posts.id, repost.id))
       .then(firstOrThrow);
     assert.equal(deleted.state, PostState.DELETED);
+    assert.deepEqual(deleted.deletedAt, committed.deletedAt);
     assert.ok(deleted.deletedAt);
 
     const sourceState = await requestGraphQL<{
@@ -318,7 +339,7 @@ describe('GraphQL Repost', () => {
     });
   });
 
-  test('Repost effects Workflow start 실패는 Tombstone 결과를 유지한다', async (t) => {
+  test('Repost Delete admission 실패는 Repost와 Source count를 유지한다', async (t) => {
     const auth = await createAuthenticatedSession();
     const recipient = await createProfile('failed-delete-notification-recipient');
     const source = await createContentPost(recipient.id);
@@ -328,38 +349,25 @@ describe('GraphQL Repost', () => {
       .from(Posts)
       .where(and(eq(Posts.profileId, auth.profile.id), eq(Posts.repostSourceId, source.id)))
       .then(firstOrThrow);
-    const start = t.mock.method(temporalClient.workflow, 'start', async () => {
+    const admission = t.mock.method(temporalClient.workflow, 'executeUpdateWithStart', async () => {
       throw new Error('Temporal unavailable');
     });
-    const errorLog = t.mock.method(console, 'error', () => undefined);
     const result = await requestDelete(repost.id, auth.token);
-    assertNoGraphQLErrors(result);
-    assert.deepEqual(result.data?.deletePost, {
-      postId: globalId('Post', repost.id),
-      repostSource: {
-        id: globalId('Post', source.id),
-        repostCount: 0,
-        viewerRepost: null,
-      },
-    });
-
-    const deleted = await db
-      .select({ state: Posts.state })
-      .from(Posts)
-      .where(eq(Posts.id, repost.id))
-      .then(firstOrThrow);
-    assert.equal(deleted.state, PostState.DELETED);
-    assert.equal(start.mock.callCount(), 1);
-    assert.equal(errorLog.mock.callCount(), 1);
-    const errorLogCall = errorLog.mock.calls[0];
-    assert.ok(errorLogCall);
-    assert.equal(errorLogCall.arguments[0], '%s Workflow start failed');
-    assert.equal(errorLogCall.arguments[1], 'Repost Delete');
-    assert.deepEqual(errorLogCall.arguments[2], {
-      error: new Error('Temporal unavailable'),
-      origin: 'LOCAL',
-      postId: repost.id,
-    });
+    assert.ok(result.errors?.length);
+    assert.equal(admission.mock.callCount(), 1);
+    const stored = await db.select().from(Posts).where(eq(Posts.id, repost.id)).then(firstOrThrow);
+    assert.equal(stored.state, PostState.ACTIVE);
+    assert.equal(stored.deletedAt, null);
+    const sourceState = await requestGraphQL<{
+      nodes: Array<{ repostCount: number; viewerRepost: { id: string } | null }>;
+    }>(
+      `query($ids: [ID!]!) { nodes(ids: $ids) { ... on Post { repostCount viewerRepost { id } } } }`,
+      { ids: [globalId('Post', source.id)] },
+      auth.token,
+    );
+    assertNoGraphQLErrors(sourceState);
+    assert.equal(sourceState.data?.nodes[0]?.repostCount, 1);
+    assert.equal(sourceState.data?.nodes[0]?.viewerRepost?.id, globalId('Post', repost.id));
   });
 
   test('deletePost payload는 선택된 Profile의 viewerRepost와 최신 Source count만 반환한다', async () => {

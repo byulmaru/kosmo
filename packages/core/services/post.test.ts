@@ -35,12 +35,12 @@ import {
   postContentDocumentFromTextAndMedia,
 } from '../post-content/server';
 import { temporalClient } from '../temporal/client';
-import { createPost } from './post';
+import { createPost as createPostWithEffects, createPostPersisted } from './post';
 import { ProfilePairBlockedError } from './profile-block-policy';
 
 after(async () => pg.end());
 
-const createProfile = async (kind = InstanceKind.LOCAL) => {
+const createProfile = async (kind: InstanceKind = InstanceKind.LOCAL) => {
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const instance = await db
     .insert(Instances)
@@ -109,7 +109,7 @@ const createMedia = async ({
 
 test('createPost는 local Post와 최초 content 연결을 하나의 transaction으로 생성한다', async () => {
   const profile = await createProfile();
-  const result = await createPost({
+  const result = await createPostPersisted({
     document: postContentDocumentFromText('local post'),
     origin: 'LOCAL',
     profileId: profile.id,
@@ -152,7 +152,7 @@ test('createPost는 Local Mention node를 저장하고 반복 Profile relation�
     },
   ]);
 
-  const result = await createPost({
+  const result = await createPostPersisted({
     authoredBodyText: bodyText,
     document,
     origin: 'LOCAL',
@@ -182,7 +182,7 @@ test('createPost는 Local Post mention FK 실패 시 Post·Content·relation을 
   };
 
   await assert.rejects(
-    createPost({
+    createPostPersisted({
       authoredBodyText: bodyText,
       document,
       origin: 'LOCAL',
@@ -209,14 +209,14 @@ test('createPost는 Local Post mention FK 실패 시 Post·Content·relation을 
 test('createPost는 Source와 자체 Content를 원자적으로 연결하고 Reply Parent와의 조합을 거부한다', async () => {
   const sourceAuthor = await createProfile();
   const quoteAuthor = await createProfile();
-  const source = await createPost({
+  const source = await createPostPersisted({
     document: postContentDocumentFromText('source'),
     origin: 'LOCAL',
     profileId: sourceAuthor.id,
     visibility: PostVisibility.PUBLIC,
   });
 
-  const quote = await createPost({
+  const quote = await createPostPersisted({
     document: postContentDocumentFromText('quoted content'),
     origin: 'LOCAL',
     profileId: quoteAuthor.id,
@@ -229,7 +229,7 @@ test('createPost는 Source와 자체 Content를 원자적으로 연결하고 Rep
   assert.equal(quote.post.replyParentId, null);
 
   await assert.rejects(
-    createPost({
+    createPostPersisted({
       document: postContentDocumentFromText('invalid combined relation'),
       origin: 'LOCAL',
       profileId: quoteAuthor.id,
@@ -244,7 +244,7 @@ test('createPost는 Source와 자체 Content를 원자적으로 연결하고 Rep
 test('createPost는 승인 경계가 없는 ActivityPub Source Quote를 거부한다', async () => {
   const sourceAuthor = await createProfile(InstanceKind.ACTIVITYPUB);
   const quoteAuthor = await createProfile();
-  const source = await createPost({
+  const source = await createPostPersisted({
     document: postContentDocumentFromText('remote source'),
     mentionProfileIds: [],
     objectUri: `https://remote.example/notes/${sourceAuthor.id}`,
@@ -257,7 +257,7 @@ test('createPost는 승인 경계가 없는 ActivityPub Source Quote를 거부�
   const postCount = await db.$count(Posts);
 
   await assert.rejects(
-    createPost({
+    createPostPersisted({
       document: postContentDocumentFromText('quoted content'),
       origin: 'LOCAL',
       profileId: quoteAuthor.id,
@@ -276,7 +276,7 @@ test('createPost는 승인 경계가 없는 ActivityPub Source Quote를 거부�
 test('createPost는 타인의 Followers Only Source를 거부하고 자기 Source는 접근 범위를 넓히지 않는다', async () => {
   const sourceAuthor = await createProfile();
   const otherAuthor = await createProfile();
-  const source = await createPost({
+  const source = await createPostPersisted({
     document: postContentDocumentFromText('followers source'),
     origin: 'LOCAL',
     profileId: sourceAuthor.id,
@@ -289,7 +289,7 @@ test('createPost는 타인의 Followers Only Source를 거부하고 자기 Sourc
   });
 
   await assert.rejects(
-    createPost({
+    createPostPersisted({
       document: postContentDocumentFromText('not allowed quote'),
       origin: 'LOCAL',
       profileId: otherAuthor.id,
@@ -299,13 +299,13 @@ test('createPost는 타인의 Followers Only Source를 거부하고 자기 Sourc
     (error) => error instanceof ValidationError && error.field === 'repostSourceId',
   );
 
-  const ownSource = await createPost({
+  const ownSource = await createPostPersisted({
     document: postContentDocumentFromText('own followers source'),
     origin: 'LOCAL',
     profileId: sourceAuthor.id,
     visibility: PostVisibility.FOLLOWERS,
   });
-  const ownQuote = await createPost({
+  const ownQuote = await createPostPersisted({
     document: postContentDocumentFromText('own quote'),
     origin: 'LOCAL',
     profileId: sourceAuthor.id,
@@ -315,12 +315,30 @@ test('createPost는 타인의 Followers Only Source를 거부하고 자기 Sourc
 
   assert.equal(ownQuote.post.repostSourceId, ownSource.post.id);
   assert.equal(ownQuote.post.visibility, PostVisibility.PUBLIC);
+
+  const sourceVisibility = PostVisibility.DIRECT;
+  const restrictedSource = await createPostPersisted({
+    document: postContentDocumentFromText(`own ${sourceVisibility} source`),
+    origin: 'LOCAL',
+    profileId: sourceAuthor.id,
+    visibility: sourceVisibility,
+  });
+  await assert.rejects(
+    createPostPersisted({
+      document: postContentDocumentFromText(`quote would widen ${sourceVisibility} source`),
+      origin: 'LOCAL',
+      profileId: sourceAuthor.id,
+      repostSourceId: restrictedSource.post.id,
+      visibility: PostVisibility.PUBLIC,
+    }),
+    (error) => error instanceof ValidationError && error.field === 'repostSourceId',
+  );
 });
 
 test('createPost는 Source 작성자와 행동 Profile 사이의 Block을 새 Quote에서 우선한다', async () => {
   const sourceAuthor = await createProfile();
   const quoteAuthor = await createProfile();
-  const source = await createPost({
+  const source = await createPostPersisted({
     document: postContentDocumentFromText('blocked source'),
     origin: 'LOCAL',
     profileId: sourceAuthor.id,
@@ -332,7 +350,7 @@ test('createPost는 Source 작성자와 행동 Profile 사이의 Block을 새 Qu
   });
 
   await assert.rejects(
-    createPost({
+    createPostPersisted({
       document: postContentDocumentFromText('blocked quote'),
       origin: 'LOCAL',
       profileId: quoteAuthor.id,
@@ -351,7 +369,7 @@ test('createPost는 Quote Source 검증 실패 시 Media metadata와 작성 결�
   const initialContentCount = await db.$count(PostContents);
 
   await assert.rejects(
-    createPost({
+    createPostPersisted({
       accountId: account.id,
       document: postContentDocumentFromTextAndMedia('invalid quote', [{ mediaId: media.id }]),
       media: [{ altText: 'should rollback', mediaId: media.id }],
@@ -386,7 +404,7 @@ test('createPost는 같은 Upload Account의 Ready Local Media를 document 순�
   });
   const secondMedia = await createMedia({ accountId: account.id, profileId: author.id });
 
-  const result = await createPost({
+  const result = await createPostPersisted({
     accountId: account.id,
     document: postContentDocumentFromTextAndMedia(
       '',
@@ -452,7 +470,7 @@ test('createPost는 사용할 수 없는 Media를 같은 오류로 거부하고 
 
   for (const mediaId of [uploading.id, remote.id, otherAccountMedia.id, crypto.randomUUID()]) {
     await assert.rejects(
-      createPost({
+      createPostPersisted({
         accountId: account.id,
         document: postContentDocumentFromTextAndMedia('body', [{ mediaId }]),
         media: [{ altText: null, mediaId }],
@@ -478,7 +496,7 @@ test('createPost는 중복 Media와 Media Account 증거 누락을 원자적으�
   const initialPostCount = await db.$count(Posts);
 
   await assert.rejects(
-    createPost({
+    createPostPersisted({
       accountId: account.id,
       document: postContentDocumentFromTextAndMedia('body', [
         { mediaId: media.id },
@@ -495,7 +513,7 @@ test('createPost는 중복 Media와 Media Account 증거 누락을 원자적으�
     (error: unknown) => error instanceof ValidationError && error.field === 'media',
   );
   await assert.rejects(
-    createPost({
+    createPostPersisted({
       document: postContentDocumentFromTextAndMedia('body', [{ mediaId: media.id }]),
       media: [{ altText: null, mediaId: media.id }],
       origin: 'LOCAL',
@@ -513,7 +531,7 @@ test('createPost는 ActivityPub first-write-wins와 timestamp 계약을 보존�
   const objectUri = `https://remote.example/notes/${profile.id}`;
   const publishedAt = Temporal.Instant.from('2026-07-18T00:00:00Z');
   const receivedAt = Temporal.Instant.from('2026-07-19T00:00:00Z');
-  const first = await createPost({
+  const first = await createPostPersisted({
     document: postContentDocumentFromText('first'),
     mentionProfileIds: [],
     objectUri,
@@ -523,7 +541,7 @@ test('createPost는 ActivityPub first-write-wins와 timestamp 계약을 보존�
     receivedAt,
     visibility: PostVisibility.PUBLIC,
   });
-  const duplicate = await createPost({
+  const duplicate = await createPostPersisted({
     document: postContentDocumentFromText('changed'),
     mentionProfileIds: [],
     objectUri,
@@ -585,7 +603,7 @@ test('createPost는 검증된 Mention occurrence를 revision 관계로 한 번�
       ],
     },
   });
-  const result = await createPost({
+  const result = await createPostPersisted({
     document,
     mentionProfileIds: [mentioned.id, mentioned.id],
     objectUri: `https://remote.example/notes/${crypto.randomUUID()}`,
@@ -624,7 +642,7 @@ test('createPost는 ActivityPub relation을 document Mention node가 아닌 veri
   const author = await createProfile();
   const nodeOnlyProfile = await createProfile();
   const verifiedProfile = await createProfile();
-  const result = await createPost({
+  const result = await createPostPersisted({
     document: canonicalizePostContentDocument({
       version: 1,
       summary: null,
@@ -666,7 +684,7 @@ test('createPost는 변경된 Mention duplicate Create에서도 document·relati
   const objectUri = `https://remote.example/notes/${crypto.randomUUID()}`;
   const firstPublishedAt = Temporal.Instant.from('2026-09-10T00:00:00Z');
   const firstReceivedAt = Temporal.Instant.from('2026-09-10T00:01:00Z');
-  const first = await createPost({
+  const first = await createPostPersisted({
     document: canonicalizePostContentDocument({
       version: 1,
       summary: null,
@@ -695,7 +713,7 @@ test('createPost는 변경된 Mention duplicate Create에서도 document·relati
   });
   assert.ok(first.created);
 
-  const duplicate = await createPost({
+  const duplicate = await createPostPersisted({
     document: canonicalizePostContentDocument({
       version: 1,
       summary: null,
@@ -755,7 +773,7 @@ test('createPost는 서로 다른 Profile의 Mention을 occurrence 순서와 함
   const firstMention = await createProfile();
   const secondMention = await createProfile();
 
-  const result = await createPost({
+  const result = await createPostPersisted({
     document: canonicalizePostContentDocument({
       version: 1,
       summary: null,
@@ -828,7 +846,7 @@ test('createPost는 post_mentions Profile FK 저장 실패 시 Post·Content·po
   };
 
   await assert.rejects(
-    createPost({
+    createPostPersisted({
       document: canonicalizePostContentDocument({
         version: 1,
         summary: null,
@@ -911,7 +929,7 @@ test('createPost는 PostContent link 저장 실패 시 Post·Content·relation�
 
   try {
     await assert.rejects(
-      createPost({
+      createPostPersisted({
         document: canonicalizePostContentDocument({
           version: 1,
           summary: null,
@@ -972,7 +990,7 @@ test('createPost는 ActivityPub Remote Media를 생성하고 document 끝에 원
   const profile = await createProfile();
   const firstUrl = `https://remote.example/media/${crypto.randomUUID()}.png`;
   const secondUrl = `https://remote.example/media/${crypto.randomUUID()}.webp`;
-  const result = await createPost({
+  const result = await createPostPersisted({
     document: postContentDocumentFromText('remote images'),
     mentionProfileIds: [],
     media: [
@@ -1054,7 +1072,7 @@ test('createPost는 ActivityPub Remote Media를 생성하고 document 끝에 원
 test('createPost는 같은 Profile과 URL의 Remote Media도 attachment별로 저장한다', async () => {
   const profile = await createProfile();
   const url = `https://remote.example/media/${crypto.randomUUID()}.png`;
-  const first = await createPost({
+  const first = await createPostPersisted({
     document: postContentDocumentFromText('first'),
     mentionProfileIds: [],
     media: [{ altText: 'first alt', mediaType: 'image/png', url }],
@@ -1065,7 +1083,7 @@ test('createPost는 같은 Profile과 URL의 Remote Media도 attachment별로 �
     receivedAt: Temporal.Instant.from('2026-07-31T00:00:00Z'),
     visibility: PostVisibility.PUBLIC,
   });
-  const second = await createPost({
+  const second = await createPostPersisted({
     document: postContentDocumentFromText('second'),
     mentionProfileIds: [],
     media: [{ altText: 'second alt', mediaType: 'image/webp', url }],
@@ -1099,7 +1117,7 @@ test('createPost는 다른 Profile의 같은 Remote URL을 각 Profile 소유 Me
   const owner = await createProfile();
   const other = await createProfile();
   const url = `https://remote.example/media/${crypto.randomUUID()}.png`;
-  const ownerPost = await createPost({
+  const ownerPost = await createPostPersisted({
     document: postContentDocumentFromText('owner'),
     mentionProfileIds: [],
     media: [{ altText: null, mediaType: 'image/png', url }],
@@ -1110,7 +1128,7 @@ test('createPost는 다른 Profile의 같은 Remote URL을 각 Profile 소유 Me
     receivedAt: Temporal.Instant.from('2026-07-31T00:00:00Z'),
     visibility: PostVisibility.PUBLIC,
   });
-  const otherPost = await createPost({
+  const otherPost = await createPostPersisted({
     document: postContentDocumentFromText('other'),
     mentionProfileIds: [],
     media: [{ altText: null, mediaType: 'image/webp', url }],
@@ -1137,20 +1155,20 @@ test('createPost는 다른 Profile의 같은 Remote URL을 각 Profile 소유 Me
 
 test('createPost는 Local과 ActivityPub Reply Parent를 직접 저장한다', async () => {
   const profile = await createProfile();
-  const parent = await createPost({
+  const parent = await createPostPersisted({
     document: postContentDocumentFromText('parent'),
     origin: 'LOCAL',
     profileId: profile.id,
     visibility: PostVisibility.PUBLIC,
   });
-  const localReply = await createPost({
+  const localReply = await createPostPersisted({
     document: postContentDocumentFromText('local reply'),
     origin: 'LOCAL',
     profileId: profile.id,
     replyParentId: parent.post.id,
     visibility: PostVisibility.UNLISTED,
   });
-  const activityPubReply = await createPost({
+  const activityPubReply = await createPostPersisted({
     document: postContentDocumentFromText('remote reply'),
     mentionProfileIds: [],
     objectUri: `https://remote.example/notes/reply-${profile.id}`,
@@ -1170,7 +1188,7 @@ test('createPost는 Local과 ActivityPub Reply Parent를 직접 저장한다', a
 test('Active Profile Block은 Local과 ActivityPub Reply를 양방향으로 거부한다', async () => {
   const actor = await createProfile();
   const author = await createProfile();
-  const parent = await createPost({
+  const parent = await createPostPersisted({
     document: postContentDocumentFromText('second parent'),
     origin: 'LOCAL',
     profileId: author.id,
@@ -1191,14 +1209,14 @@ test('Active Profile Block은 Local과 ActivityPub Reply를 양방향으로 거�
     for (const origin of ['LOCAL', 'ACTIVITYPUB'] as const) {
       const promise =
         origin === 'LOCAL'
-          ? createPost({
+          ? createPostPersisted({
               document: postContentDocumentFromText('blocked reply'),
               origin,
               profileId: actor.id,
               replyParentId: parent.post.id,
               visibility: PostVisibility.PUBLIC,
             })
-          : createPost({
+          : createPostPersisted({
               document: postContentDocumentFromText('blocked remote reply'),
               objectUri: `https://remote.example/notes/${crypto.randomUUID()}`,
               origin,
@@ -1208,7 +1226,7 @@ test('Active Profile Block은 Local과 ActivityPub Reply를 양방향으로 거�
               replyParentId: parent.post.id,
               visibility: PostVisibility.PUBLIC,
             });
-      await assert.rejects(promise, ProfilePairBlockedError);
+      await assert.rejects(promise, origin === 'LOCAL' ? NotFoundError : ProfilePairBlockedError);
     }
 
     assert.equal(await db.$count(Posts), postsBefore);
@@ -1227,7 +1245,7 @@ test('Active Profile Block은 Local과 ActivityPub Reply를 양방향으로 거�
 test('ActivityPub Reply effects는 duplicate에서 backfill하지 않는다', async () => {
   const author = await createProfile();
   const recipient = await createProfile();
-  const parent = await createPost({
+  const parent = await createPostPersisted({
     document: postContentDocumentFromText('parent'),
     origin: 'LOCAL',
     profileId: recipient.id,
@@ -1245,14 +1263,14 @@ test('ActivityPub Reply effects는 duplicate에서 backfill하지 않는다', as
     visibility: PostVisibility.PUBLIC,
   };
 
-  const results = await Promise.all([createPost(input), createPost(input)]);
+  const results = await Promise.all([createPostPersisted(input), createPostPersisted(input)]);
   const created = results.find((result) => result.created);
   assert.ok(created);
   assert.deepEqual(results.map(({ created }) => created).sort(), [false, true]);
   assert.equal(created.created, true);
   assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, created.post.id)), 0);
 
-  const duplicate = await createPost(input);
+  const duplicate = await createPostPersisted(input);
 
   assert.equal(duplicate.created, false);
   assert.equal('postCommit' in duplicate, false);
@@ -1262,7 +1280,7 @@ test('ActivityPub Reply effects는 duplicate에서 backfill하지 않는다', as
 test('Post effects Workflow start 실패가 Post transaction과 호출을 실패시키지 않는다', async (t) => {
   const author = await createProfile();
   const recipient = await createProfile();
-  const parent = await createPost({
+  const parent = await createPostPersisted({
     document: postContentDocumentFromText('parent'),
     origin: 'LOCAL',
     profileId: recipient.id,
@@ -1275,7 +1293,7 @@ test('Post effects Workflow start 실패가 Post transaction과 호출을 실패
   });
 
   try {
-    const result = await createPost({
+    const result = await createPostWithEffects({
       document: postContentDocumentFromText('remote reply'),
       mentionProfileIds: [],
       objectUri,
@@ -1303,7 +1321,7 @@ test('createPost는 존재하지 않는 Reply Parent에서 ActivityPub transacti
   const objectUri = `https://remote.example/notes/orphan-${profile.id}`;
 
   await assert.rejects(
-    createPost({
+    createPostPersisted({
       document: postContentDocumentFromText('orphan reply'),
       mentionProfileIds: [],
       objectUri,
@@ -1337,7 +1355,7 @@ test('createPost는 존재하지 않는 Reply Parent에서 ActivityPub transacti
 
 test('createPost는 Content 없는 Reply Parent에서 field 오류와 함께 rollback한다', async () => {
   const profile = await createProfile();
-  const source = await createPost({
+  const source = await createPostPersisted({
     document: postContentDocumentFromText('source'),
     origin: 'LOCAL',
     profileId: profile.id,
@@ -1355,7 +1373,7 @@ test('createPost는 Content 없는 Reply Parent에서 field 오류와 함께 rol
     .then(firstOrThrow);
 
   await assert.rejects(
-    createPost({
+    createPostPersisted({
       document: postContentDocumentFromText('invalid reply'),
       origin: 'LOCAL',
       profileId: profile.id,

@@ -1,5 +1,13 @@
 import { Note } from '@fedify/vocab';
-import { ActivityPubPosts, db, first, Instances, Posts, Profiles } from '@kosmo/core/db';
+import {
+  ActivityPubActors,
+  ActivityPubPosts,
+  db,
+  first,
+  Instances,
+  Posts,
+  Profiles,
+} from '@kosmo/core/db';
 import { InstanceKind } from '@kosmo/core/enums';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
@@ -85,4 +93,44 @@ export const findPostByActivityPubUri = async (
     .then(first);
 
   return remotePost?.id;
+};
+
+type RemotePostByActivityPubUri =
+  | { postId: string; status: 'match' }
+  | { status: 'author_mismatch' }
+  | { status: 'missing' };
+
+export const findRemotePostByActivityPubUri = async (
+  context: Pick<Context<unknown>, 'parseUri'>,
+  uri: URL,
+  expectedActorUri: URL,
+): Promise<RemotePostByActivityPubUri> => {
+  if (uri.protocol !== 'http:' && uri.protocol !== 'https:') {
+    return { status: 'author_mismatch' };
+  }
+
+  const localObject = context.parseUri(uri);
+  if (localObject?.type === 'object' && localObject.class === Note) {
+    return { status: 'author_mismatch' };
+  }
+
+  const post = await db
+    .select({
+      authorUri: ActivityPubActors.uri,
+      postId: Posts.id,
+    })
+    .from(ActivityPubPosts)
+    .innerJoin(Posts, eq(Posts.id, ActivityPubPosts.postId))
+    .leftJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Posts.profileId))
+    .where(eq(ActivityPubPosts.uri, uri.href))
+    .limit(1)
+    .then(first);
+
+  if (!post) {
+    return { status: 'missing' };
+  }
+  if (post.authorUri !== expectedActorUri.href) {
+    return { status: 'author_mismatch' };
+  }
+  return { postId: post.postId, status: 'match' };
 };

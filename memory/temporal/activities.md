@@ -29,6 +29,16 @@
 
 - `materializeRemoteProfileActorActivity`는 stored/missing 판정과 현재 Profile/Instance state·actor TTL 확인을 소유하며 `{ profileId, needsRefresh }` non-null 최소 JSON-safe DTO를 반환한다. Activity 모듈의 private stored-state query에서 missing을 `null`로 관찰할 수 있지만, missing이면 refresh Activity의 fetch·persist를 ordinary call로 수행한 뒤 새 target ID를 `{ profileId: id, needsRefresh: false }` 의미로 반환한다. DTO의 `profileId`는 cached 또는 새로 생성한 target Profile ID이고 input의 optional `profileId`는 origin 선택용 행동 Profile ID다. 갱신 불필요 상태는 외부 fetch나 refresh child 없이 cached ID를 반환한다.
 
+## Quote Consent Owner
+
+- Quote consent의 변경 명령은 Quote ID별 owner의 FIFO admission을 통과한다. Handler는 enqueue만 수행한다.
+- 원격 proof 조회는 읽기 전용 Activity로 분리한다. 쓰기 Activity는 Source → Quote 잠금, 현재 Run/token Query fence,
+  기존 identity/state CAS를 같은 transaction에서 검사한다. Query 성공만으로 commit까지의 Temporal 소유권을 보장하지 않는다.
+- 정상 종료·Continue-As-New는 token 폐기와 DB drain을 수행한다. Source 삭제는 공유 잠금 순서를 따르는 제한된 다중 자원 transaction이다.
+- SDK Worker shutdown은 Workflow의 finish/drain과 다르다. 구형 writer admission 차단 및 미완료 작업·DB session·process 확인 뒤 writer를 전환한다. bootstrap의 행 잠금은 아직 시작하지 않은 구형 writer를 fence하지 않는다.
+- 강제 Terminate/Reset은 drain을 실행하지 않으므로 이미 fence를 통과한 늦은 commit을 취소하지 못한다.
+  새 Run bootstrap과 운영 복구의 보장 범위는 [ADR 0030](../../docs/architecture/decisions/0030-quote-consent-owner.md)을 따른다.
+
 ## Inputs And Identity
 
 - Workflow/Update wire input의 strict Zod schema는 해당 Workflow의 trust boundary 가까이에 둔다. Activity가
@@ -41,6 +51,12 @@
 - Workflow ID는 logical generation을 구분하는 immutable source ID를 포함한다. create/delete와 서로 다른 source kind가 완료된 같은 ID를 공유하지 않게 한다.
 
 ## Verification
+
+- Node test preload는 Node test 자식의 main thread에서만 runtime/client를 생성한다. runner와 SDK Worker thread는
+  `--import`와 `NODE_TEST_CONTEXT`를 상속할 수 있으므로 둘 다 소유권 경계에서 제외한다. suite 종료 summary와 process exit를 구분하고,
+  preload가 소유한 원래 connection만 정리한다. 테스트가 임시 environment의 client로 교체한 연결을 닫지 않는다.
+- 장기 실행 Quote owner를 사용하는 E2E의 DB reset은 finish Signal과 정상 drain 완료를 기다린다.
+  `result()`만 대기하거나 강제 Terminate로 정상 종료를 대체하지 않는다.
 
 - Worker build로 Workflow bundle과 Activity type wiring을 확인한다.
 - production registry를 사용하는 Workflow test로 origin/transition 분기, sibling Activity 전부 시도, retry와 restart 재개를 확인한다.
