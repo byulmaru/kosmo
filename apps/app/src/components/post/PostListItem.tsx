@@ -296,37 +296,41 @@ function PostListItemCard({
   style: StyleProp<ViewStyle>;
 }) {
   const theme = useTheme();
-  const { handlers, hovered, pressed, setSurfaceHoverSuppressed } = usePostSurfaceFeedback({
-    hover: true,
-    press: true,
-  });
+  const { handlers, hovered, setSurfaceHoverSuppressed } = usePostSurfaceFeedback({ hover: true });
 
   return (
-    <View
+    <Pressable
       {...handlers}
+      accessible={false}
+      focusable={false}
       role={article ? 'article' : undefined}
       style={style}
+      tabIndex={-1}
       testID="post-list-item-card"
     >
-      <View
-        accessibilityElementsHidden
-        importantForAccessibility="no-hide-descendants"
-        style={[
-          styles.surfaceFeedback,
-          {
-            backgroundColor: pressed
-              ? theme.statePressedSubtle
-              : hovered
-                ? theme.stateHover
-                : undefined,
-          },
-        ]}
-        testID="post-list-item-feedback"
-      />
-      <PostSurfaceHoverSuppressionContext.Provider value={setSurfaceHoverSuppressed}>
-        {children}
-      </PostSurfaceHoverSuppressionContext.Provider>
-    </View>
+      {({ pressed }) => (
+        <>
+          <View
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+            style={[
+              styles.surfaceFeedback,
+              {
+                backgroundColor: pressed
+                  ? theme.statePressedSubtle
+                  : hovered
+                    ? theme.stateHover
+                    : undefined,
+              },
+            ]}
+            testID="post-list-item-feedback"
+          />
+          <PostSurfaceHoverSuppressionContext.Provider value={setSurfaceHoverSuppressed}>
+            {children}
+          </PostSurfaceHoverSuppressionContext.Provider>
+        </>
+      )}
+    </Pressable>
   );
 }
 

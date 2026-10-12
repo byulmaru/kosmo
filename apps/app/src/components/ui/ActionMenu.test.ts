@@ -569,8 +569,10 @@ test('Web ActionMenu exposes static item geometry to asChild renderers', async (
   });
   await act(async () => renderer?.root.findByProps({ testID: 'trigger' }).props.onPress());
 
-  assert.equal(typeof itemStyle, 'object');
-  const mergedStyle = { ...(itemStyle as Record<string, unknown>) };
+  assert.equal(typeof itemStyle, 'function');
+  const mergedStyle = flattenStyle(
+    (itemStyle as (state: { pressed: boolean }) => unknown)({ pressed: false }),
+  );
   assert.equal(mergedStyle.height, 36);
   assert.equal(mergedStyle.minHeight, 36);
   assert.equal(mergedStyle.paddingHorizontal, 8);

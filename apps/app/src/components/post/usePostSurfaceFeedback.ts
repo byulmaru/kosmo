@@ -2,31 +2,17 @@ import { createContext, useContext, useState } from 'react';
 import { Platform } from 'react-native';
 import type { PointerEvent, ViewProps } from 'react-native';
 
-type SurfaceFeedbackOptions = Readonly<{
-  hover: boolean;
-  press: boolean;
-}>;
+type SurfaceFeedbackOptions = Readonly<{ hover: boolean }>;
 
 export const PostSurfaceHoverSuppressionContext = createContext<
   ((suppressed: boolean) => void) | null
 >(null);
 
-type SurfaceFeedbackHandlers = Pick<
-  ViewProps,
-  | 'onPointerCancel'
-  | 'onPointerDown'
-  | 'onPointerEnter'
-  | 'onPointerLeave'
-  | 'onPointerUp'
-  | 'onTouchCancel'
-  | 'onTouchEnd'
-  | 'onTouchStart'
->;
+type SurfaceFeedbackHandlers = Pick<ViewProps, 'onPointerEnter' | 'onPointerLeave'>;
 
-export function usePostSurfaceFeedback({ hover, press }: SurfaceFeedbackOptions) {
+export function usePostSurfaceFeedback({ hover }: SurfaceFeedbackOptions) {
   const [hovered, setHovered] = useState(false);
   const [hoverSuppressed, setHoverSuppressed] = useState(false);
-  const [pressed, setPressed] = useState(false);
   const setParentHoverSuppressed = useContext(PostSurfaceHoverSuppressionContext);
   const hoverEnabled = hover && Platform.OS === 'web';
   const setSurfaceHoverSuppressed = (suppressed: boolean) => {
@@ -40,31 +26,12 @@ export function usePostSurfaceFeedback({ hover, press }: SurfaceFeedbackOptions)
             event.nativeEvent.pointerType === 'mouse' || event.nativeEvent.pointerType === 'pen',
           )
       : undefined,
-    onPointerLeave: hoverEnabled
-      ? () => {
-          setHovered(false);
-          setPressed(false);
-        }
-      : undefined,
-    ...(press && Platform.OS === 'web'
-      ? {
-          onPointerCancel: () => setPressed(false),
-          onPointerDown: () => setPressed(true),
-          onPointerUp: () => setPressed(false),
-        }
-      : press
-        ? {
-            onTouchCancel: () => setPressed(false),
-            onTouchEnd: () => setPressed(false),
-            onTouchStart: () => setPressed(true),
-          }
-        : {}),
+    onPointerLeave: hoverEnabled ? () => setHovered(false) : undefined,
   };
 
   return {
     handlers,
     hovered: hovered && !hoverSuppressed,
-    pressed,
     setSurfaceHoverSuppressed,
   } as const;
 }

@@ -130,6 +130,7 @@ function ActionMenuStyleFixture({ mode }: { mode: 'dark' | 'light' }) {
           accessibilityLabel={`${label} 더 보기 메뉴`}
           items={[
             {
+              dismissOnSelect: false,
               icon: Link2,
               key: 'copy-link',
               label: '링크 복사',
@@ -142,6 +143,12 @@ function ActionMenuStyleFixture({ mode }: { mode: 'dark' | 'light' }) {
               label: '삭제',
               onSelect: () => undefined,
               tone: 'danger',
+            },
+            {
+              disabled: true,
+              key: 'disabled',
+              label: '비활성 항목',
+              onSelect: () => undefined,
             },
           ]}
           renderTrigger={({ expanded, onPress, ref }) => (
@@ -299,6 +306,7 @@ export const SurfaceAndDismissContract: Story = {
     });
 
     await step('메뉴 스타일과 비활성 상태 확인', async () => {
+      const pointerUser = userEvent.setup();
       for (const [label, mode] of [
         ['라이트', 'light'],
         ['다크', 'dark'],
@@ -342,6 +350,33 @@ export const SurfaceAndDismissContract: Story = {
       expect(getComputedStyle(deleteItem).borderTopColor).toBe(
         serializeColor(semanticColors.light.borderSubtle),
       );
+      await pointerUser.pointer({ keys: '[MouseLeft>]', target: copyItem });
+      await waitFor(() =>
+        expect(getComputedStyle(copyItem).backgroundColor).toBe(
+          serializeColor(semanticColors.light.statePressed),
+        ),
+      );
+      await pointerUser.pointer({ keys: '[/MouseLeft]', target: copyItem });
+      await waitFor(() =>
+        expect(getComputedStyle(copyItem).backgroundColor).not.toBe(
+          serializeColor(semanticColors.light.statePressed),
+        ),
+      );
+
+      await pointerUser.pointer({ keys: '[MouseLeft>]', target: copyItem });
+      await waitFor(() =>
+        expect(getComputedStyle(copyItem).backgroundColor).toBe(
+          serializeColor(semanticColors.light.statePressed),
+        ),
+      );
+      await pointerUser.pointer({ target: styleMenu });
+      await pointerUser.pointer({ keys: '[/MouseLeft]', target: styleMenu });
+      await waitFor(() =>
+        expect(getComputedStyle(copyItem).backgroundColor).not.toBe(
+          serializeColor(semanticColors.light.statePressed),
+        ),
+      );
+
       fireEvent.keyDown(copyItem, { key: 'Enter' });
       await waitFor(() =>
         expect(getComputedStyle(copyItem).backgroundColor).toBe(
@@ -349,13 +384,25 @@ export const SurfaceAndDismissContract: Story = {
         ),
       );
       fireEvent.keyUp(copyItem, { key: 'Enter' });
-      await userEvent.keyboard('{Enter}');
-      const hoveredMenu = await screen.findByRole('menu', { name: '라이트 더 보기 메뉴' });
+      await waitFor(() =>
+        expect(getComputedStyle(copyItem).backgroundColor).not.toBe(
+          serializeColor(semanticColors.light.statePressed),
+        ),
+      );
+
+      const hoveredMenu = styleMenu;
       const hoveredCopyItem = within(hoveredMenu).getByRole('menuitem', { name: '링크 복사' });
       await userEvent.hover(hoveredCopyItem);
       expect(getComputedStyle(hoveredCopyItem).backgroundColor).toBe(
         serializeColor(semanticColors.light.stateHover),
       );
+
+      const disabledItem = within(hoveredMenu).getByRole('menuitem', { name: '비활성 항목' });
+      expect(disabledItem).toHaveAttribute('aria-disabled', 'true');
+      expect(getComputedStyle(disabledItem).pointerEvents).toBe('none');
+      const disabledBackground = getComputedStyle(disabledItem).backgroundColor;
+      expect(disabledBackground).not.toBe(serializeColor(semanticColors.light.statePressed));
+      expect(disabledBackground).not.toBe(serializeColor(semanticColors.light.stateHover));
       await userEvent.keyboard('{Escape}');
 
       const disabledFixture = within(canvas.getByLabelText('비활성 메뉴 fixture'));

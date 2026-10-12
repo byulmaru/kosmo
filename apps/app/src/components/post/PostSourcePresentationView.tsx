@@ -224,7 +224,6 @@ export function PostSourcePreview({
   const theme = useTheme();
   const { handlers, hovered, setSurfaceHoverSuppressed } = usePostSurfaceFeedback({
     hover: interactive,
-    press: false,
   });
   const source = useFragment(PostSourcePreviewFragment, sourceKey);
   const sourceProfileHref = `/${source.profile.relativeHandle}` as Href;

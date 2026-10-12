@@ -28,6 +28,7 @@ const nativePlatforms = [
   ['ios', 44],
   ['android', 48],
 ] as const;
+let mockPressablePressed = false;
 const StubIcon = (props: { color: string; fill?: string; size: number; strokeWidth?: number }) =>
   createElement('Icon', props);
 
@@ -62,11 +63,9 @@ type PressableProps = {
 };
 
 function MockPressable({ children, ...props }: PressableProps) {
-  return createElement(
-    'Pressable',
-    props,
-    typeof children === 'function' ? children({ pressed: false }) : children,
-  );
+  const renderedChildren =
+    typeof children === 'function' ? children({ pressed: mockPressablePressed }) : children;
+  return createElement('Pressable', props, renderedChildren);
 }
 
 mockModule('react-native', {
@@ -157,6 +156,7 @@ before(async () => {
 afterEach(async () => {
   await act(async () => renderer?.unmount());
   renderer = null;
+  mockPressablePressed = false;
   platform.OS = 'web';
   windowWidth = 1_024;
 });
@@ -200,6 +200,19 @@ async function renderListItem(props: Parameters<typeof PostListItemExport>[0]) {
   await act(async () => {
     renderer?.unmount();
     renderer = create(createElement(PostListItem, props));
+  });
+  assert.ok(renderer);
+  return renderer.root;
+}
+
+async function updateListItemPressed(
+  props: Parameters<typeof PostListItemExport>[0],
+  pressed: boolean,
+) {
+  mockPressablePressed = pressed;
+  await act(async () => {
+    assert.ok(renderer);
+    renderer.update(createElement(PostListItem, props));
   });
   assert.ok(renderer);
   return renderer.root;
@@ -377,17 +390,22 @@ test('PostListItem uses the supplied list presentation', async () => {
   }
 });
 
-test('PostListItem uses Web pointer hover and Native touch pressed feedback', async () => {
+test('PostListItem uses Web hover and Pressable pressed feedback without adding a focus stop', async () => {
   platform.OS = 'web';
-  let root = await renderListItem({
+  const props = {
     post: {} as never,
     presentation: 'wide',
     showDivider: false,
-  });
+  } as const;
+  let root = await renderListItem(props);
   let card = findByTestID(root, 'post-list-item-card');
   let feedback = findByTestID(root, 'post-list-item-feedback');
 
   assert.equal(flattenStyle(card.props.style).backgroundColor, 'canvas');
+  assert.equal(card.props.role, 'article');
+  assert.equal(card.props.accessible, false);
+  assert.equal(card.props.focusable, false);
+  assert.equal(card.props.tabIndex, -1);
   assert.equal(flattenStyle(feedback.props.style).borderRadius, 12);
   assert.equal(flattenStyle(feedback.props.style).pointerEvents, 'none');
 
@@ -400,44 +418,35 @@ test('PostListItem uses Web pointer hover and Native touch pressed feedback', as
     await act(async () => card.props.onPointerEnter({ nativeEvent: { pointerType } }));
     assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'hover');
 
-    await act(async () => card.props.onPointerDown());
+    root = await updateListItemPressed(props, true);
+    card = findByTestID(root, 'post-list-item-card');
+    feedback = findByTestID(root, 'post-list-item-feedback');
     assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'pressed-subtle');
 
-    await act(async () => card.props.onPointerUp());
+    root = await updateListItemPressed(props, false);
+    card = findByTestID(root, 'post-list-item-card');
+    feedback = findByTestID(root, 'post-list-item-feedback');
     assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'hover');
 
     await act(async () => card.props.onPointerLeave());
     assert.equal(flattenStyle(feedback.props.style).backgroundColor, undefined);
   }
 
-  await act(async () => card.props.onPointerDown());
-  await act(async () => card.props.onPointerCancel());
-  assert.equal(flattenStyle(feedback.props.style).backgroundColor, undefined);
-  await act(async () => card.props.onPointerDown());
-  await act(async () => card.props.onPointerLeave());
-  assert.equal(flattenStyle(feedback.props.style).backgroundColor, undefined);
-
   for (const os of ['ios', 'android'] as const) {
     platform.OS = os;
-    root = await renderListItem({
-      post: {} as never,
-      presentation: 'wide',
-      showDivider: false,
-    });
+    root = await renderListItem(props);
     card = findByTestID(root, 'post-list-item-card');
     feedback = findByTestID(root, 'post-list-item-feedback');
 
     assert.equal(card.props.onPointerEnter, undefined);
     assert.equal(card.props.onPointerLeave, undefined);
 
-    await act(async () => card.props.onTouchStart());
+    root = await updateListItemPressed(props, true);
+    feedback = findByTestID(root, 'post-list-item-feedback');
     assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'pressed-subtle');
 
-    await act(async () => card.props.onTouchEnd());
-    assert.equal(flattenStyle(feedback.props.style).backgroundColor, undefined);
-
-    await act(async () => card.props.onTouchStart());
-    await act(async () => card.props.onTouchCancel());
+    root = await updateListItemPressed(props, false);
+    feedback = findByTestID(root, 'post-list-item-feedback');
     assert.equal(flattenStyle(feedback.props.style).backgroundColor, undefined);
   }
 });

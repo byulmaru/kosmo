@@ -6700,6 +6700,7 @@ export const ContentWarningCardHoverIsolationInteraction: Story = {
     const warning = within(card).getByRole('button', {
       name: /실제 Post 소비자 통합 검증 경고, 본문, 보기/,
     });
+    const pointerUser = userEvent.setup();
 
     await userEvent.hover(canvas.getByTestId('content-warning-layout-surface'));
     const restingCardColor = getComputedStyle(feedback).backgroundColor;
@@ -6712,6 +6713,18 @@ export const ContentWarningCardHoverIsolationInteraction: Story = {
     await userEvent.unhover(warning);
     await userEvent.hover(within(card).getAllByRole('link')[0]!);
     expect(getComputedStyle(feedback).backgroundColor).not.toBe(restingCardColor);
+
+    await pointerUser.pointer({ keys: '[MouseLeft>]', target: card });
+    await waitFor(() =>
+      expect(feedback).toHaveStyle({ backgroundColor: colors.light.statePressedSubtle }),
+    );
+    await pointerUser.pointer({ keys: '[/MouseLeft]', target: card });
+    await waitFor(() => expect(feedback).toHaveStyle({ backgroundColor: colors.light.stateHover }));
+    await userEvent.unhover(card);
+    expect(getComputedStyle(feedback).backgroundColor).toBe(restingCardColor);
+
+    await userEvent.click(warning);
+    expect(within(listSurface).getByText(contentWarningPost.content!.bodyText)).toBeVisible();
   },
 };
 
