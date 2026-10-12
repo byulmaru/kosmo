@@ -248,8 +248,14 @@ function IOSZoomableImage({
     () =>
       Gesture.Tap()
         .enabled(status === 'ready' && onBlankAreaTap != null)
-        .maxPointers(1)
+        .minPointers(1)
         .numberOfTaps(1)
+        .onTouchesDown((event, manager) => {
+          'worklet';
+          if (event.numberOfTouches > 1) {
+            manager.fail();
+          }
+        })
         .onEnd((event, success) => {
           'worklet';
           if (success) {

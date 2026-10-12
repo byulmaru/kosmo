@@ -118,6 +118,8 @@ type FakeGesture = {
   enabledValue?: boolean;
   gestures?: FakeGesture[];
   externalGestures?: FakeGesture[];
+  minPointers: (value: number) => FakeGesture;
+  minPointersValue?: number;
   maxPointers: (value: number) => FakeGesture;
   maxPointersValue?: number;
   name: string;
@@ -139,6 +141,10 @@ function fakeGesture(name: string): FakeGesture {
   const gesture = {
     enabled: (value: boolean) => {
       gesture.enabledValue = value;
+      return gesture;
+    },
+    minPointers: (value: number) => {
+      gesture.minPointersValue = value;
       return gesture;
     },
     maxPointers: (value: number) => {
@@ -872,7 +878,7 @@ describe('PostMediaViewerSurface', () => {
       exclusive?.gestures?.map((gesture) => gesture.numberOfTapsValue),
       [2, 1],
     );
-    assert.equal(getIOSBlankAreaTapGesture()?.maxPointersValue, 1);
+    assert.equal(getIOSBlankAreaTapGesture()?.minPointersValue, 1);
 
     await act(async () => getIOSBlankAreaTapGesture()?.onEndCallback?.({ x: 100, y: 300 }, true));
     assert.equal(closeCount, 0);
@@ -900,6 +906,22 @@ describe('PostMediaViewerSurface', () => {
     assert.equal(closeCount, 3);
     await act(async () => getIOSBlankAreaTapGesture()?.onEndCallback?.({ x: 200, y: 300 }, true));
     assert.equal(closeCount, 3);
+
+    let failedMultiPointerTap = false;
+    await act(async () =>
+      getIOSBlankAreaTapGesture()?.onTouchesDownCallback?.(
+        { numberOfTouches: 1 },
+        { fail: () => (failedMultiPointerTap = true) },
+      ),
+    );
+    assert.equal(failedMultiPointerTap, false);
+    await act(async () =>
+      getIOSBlankAreaTapGesture()?.onTouchesDownCallback?.(
+        { numberOfTouches: 2 },
+        { fail: () => (failedMultiPointerTap = true) },
+      ),
+    );
+    assert.equal(failedMultiPointerTap, true);
   });
 
   it('iOS image zoom uses the native ScrollView and locks pager while zoomed', async () => {
