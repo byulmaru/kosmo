@@ -100,12 +100,14 @@ export const materializeCoordinatedNotification = async (
       .select({
         notificationId: NotificationQuoteJudgments.representativeNotificationId,
         outcome: NotificationQuoteJudgments.outcome,
+        representativeKind: NotificationQuoteJudgments.representativeKind,
       })
       .from(NotificationQuoteJudgments)
       .where(judgmentCondition)
       .limit(1)
       .then((rows) => rows[0]);
-    return judgment?.outcome === QuoteNotificationJudgmentOutcome.EMITTED
+    return judgment?.outcome === QuoteNotificationJudgmentOutcome.EMITTED &&
+      judgment.representativeKind === kind
       ? judgment.notificationId
       : null;
   }

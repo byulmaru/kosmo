@@ -423,7 +423,7 @@ test('a local typed Mention materializes idempotently while a local Post without
   assert.equal(preserved?.readAt?.toString(), readAt.toString());
 });
 
-test('an eligible Quote wins over Mention from either start order and during concurrent generation', async () => {
+test('an eligible Mention wins over Quote from either start order and during concurrent generation', async () => {
   const recipient = await createProfile();
   const quoteAuthor = await createProfile();
 
@@ -433,27 +433,27 @@ test('an eligible Quote wins over Mention from either start order and during con
     repostSourceId: quoteFirstSource.id,
   });
   const quoteFirstId = await createQuoteNotification(quoteFirst.id);
-  assert.ok(quoteFirstId);
-  assert.deepEqual(await createMentionNotification(quoteFirst.id), []);
+  assert.equal(quoteFirstId, null);
   const quoteFirstNotifications = await readSourceNotifications(quoteFirst.id);
   assert.equal(quoteFirstNotifications.length, 1);
   const [quoteFirstNotification] = quoteFirstNotifications;
-  assert.equal(quoteFirstNotification?.kind, NotificationKind.QUOTE);
-  assert.equal(quoteFirstNotification?.id, quoteFirstId);
+  assert.equal(quoteFirstNotification?.kind, NotificationKind.MENTION);
+  assert.deepEqual(await createMentionNotification(quoteFirst.id), [quoteFirstNotification!.id]);
 
   const mentionFirstSource = await createPostForLocal(recipient.id);
   const mentionFirst = await createPostForLocal(quoteAuthor.id, {
     mentionProfileIds: [recipient.id],
     repostSourceId: mentionFirstSource.id,
   });
-  assert.deepEqual(await createMentionNotification(mentionFirst.id), []);
-  const mentionFirstId = await createQuoteNotification(mentionFirst.id);
-  assert.ok(mentionFirstId);
+  const [mentionFirstMentionId] = await createMentionNotification(mentionFirst.id);
+  assert.ok(mentionFirstMentionId);
+  const mentionFirstQuoteId = await createQuoteNotification(mentionFirst.id);
+  assert.equal(mentionFirstQuoteId, null);
   const mentionFirstNotifications = await readSourceNotifications(mentionFirst.id);
   assert.equal(mentionFirstNotifications.length, 1);
   const [mentionFirstNotification] = mentionFirstNotifications;
-  assert.equal(mentionFirstNotification?.kind, NotificationKind.QUOTE);
-  assert.equal(mentionFirstNotification?.id, mentionFirstId);
+  assert.equal(mentionFirstNotification?.kind, NotificationKind.MENTION);
+  assert.equal(mentionFirstNotification?.id, mentionFirstMentionId);
 
   const concurrentSource = await createPostForLocal(recipient.id);
   const concurrent = await createPostForLocal(quoteAuthor.id, {
@@ -464,13 +464,137 @@ test('an eligible Quote wins over Mention from either start order and during con
     createQuoteNotification(concurrent.id),
     createMentionNotification(concurrent.id),
   ]);
-  assert.ok(concurrentQuoteId);
-  assert.deepEqual(concurrentMentionIds, []);
+  assert.equal(concurrentQuoteId, null);
+  assert.equal(concurrentMentionIds.length, 1);
   const concurrentNotifications = await readSourceNotifications(concurrent.id);
   assert.equal(concurrentNotifications.length, 1);
   const [concurrentNotification] = concurrentNotifications;
-  assert.equal(concurrentNotification?.kind, NotificationKind.QUOTE);
-  assert.equal(concurrentNotification?.id, concurrentQuoteId);
+  assert.equal(concurrentNotification?.kind, NotificationKind.MENTION);
+  assert.equal(concurrentNotification?.id, concurrentMentionIds[0]);
+});
+
+test('a non-Source Author Mention does not displace the Quote', async () => {
+  const sourceAuthor = await createProfile();
+  const quoteAuthor = await createProfile();
+  const otherRecipient = await createProfile();
+  const source = await createPostForLocal(sourceAuthor.id);
+  const quote = await createPostForLocal(quoteAuthor.id, {
+    mentionProfileIds: [otherRecipient.id],
+    repostSourceId: source.id,
+  });
+
+  const quoteId = await createQuoteNotification(quote.id);
+  assert.ok(quoteId);
+  const afterQuote = await readSourceNotifications(quote.id);
+  assert.deepEqual(
+    afterQuote.map(({ kind, recipientProfileId }) => ({ kind, recipientProfileId })),
+    [{ kind: NotificationKind.QUOTE, recipientProfileId: sourceAuthor.id }],
+  );
+
+  const [mentionId] = await createMentionNotification(quote.id);
+  assert.ok(mentionId);
+  const notifications = await readSourceNotifications(quote.id);
+  assert.equal(notifications.length, 2);
+  assert.ok(
+    notifications.some(
+      ({ kind, recipientProfileId }) =>
+        kind === NotificationKind.QUOTE && recipientProfileId === sourceAuthor.id,
+    ),
+  );
+  assert.ok(
+    notifications.some(
+      ({ kind, recipientProfileId }) =>
+        kind === NotificationKind.MENTION && recipientProfileId === otherRecipient.id,
+    ),
+  );
+});
+
+test('a Direct Quote materializes its eligible Source Author Mention', async () => {
+  const sourceAuthor = await createProfile();
+  const quoteAuthor = await createProfile();
+  const source = await createPostForLocal(sourceAuthor.id);
+  const quote = await createPostForLocal(quoteAuthor.id, {
+    mentionProfileIds: [sourceAuthor.id],
+    repostSourceId: source.id,
+  });
+  await db.update(Posts).set({ visibility: PostVisibility.DIRECT }).where(eq(Posts.id, quote.id));
+
+  assert.equal(await createQuoteNotification(quote.id), null);
+  const [notification] = await readSourceNotifications(quote.id);
+  assert.equal(notification?.kind, NotificationKind.MENTION);
+  assert.equal(notification?.recipientProfileId, sourceAuthor.id);
+  assert.ok(notification);
+  assert.deepEqual(await createMentionNotification(quote.id), [notification.id]);
+  const [judgment] = await db
+    .select()
+    .from(NotificationQuoteJudgments)
+    .where(eq(NotificationQuoteJudgments.quotePostId, quote.id));
+  assert.equal(judgment?.outcome, 'REPRESENTED_BY_EXISTING');
+  assert.equal(judgment?.representativeKind, NotificationKind.MENTION);
+  assert.equal(judgment?.representativeNotificationId, notification.id);
+});
+
+test('an existing Quote stays representative when an eligible Mention arrives later', async () => {
+  const recipient = await createProfile();
+  const quoteAuthor = await createProfile();
+  const source = await createPostForLocal(recipient.id);
+  const quote = await createPostForLocal(quoteAuthor.id, {
+    mentionProfileIds: [recipient.id],
+    repostSourceId: source.id,
+  });
+  const readAt = Temporal.Instant.from('2026-10-02T02:34:56.654321Z');
+  const persistedQuote = await db
+    .insert(Notifications)
+    .values({
+      data: {},
+      kind: NotificationKind.QUOTE,
+      recipientProfileId: recipient.id,
+      sourceId: quote.id,
+      readAt,
+    })
+    .returning()
+    .then(firstOrThrow);
+
+  assert.deepEqual(await createMentionNotification(quote.id), []);
+  const notifications = await readSourceNotifications(quote.id);
+  assert.deepEqual(
+    notifications.map(({ id, kind, readAt: notificationReadAt }) => ({
+      id,
+      kind,
+      readAt: notificationReadAt?.toString(),
+    })),
+    [{ id: persistedQuote.id, kind: NotificationKind.QUOTE, readAt: readAt.toString() }],
+  );
+});
+
+test('an eligible Mention can notify its author', async () => {
+  const author = await createProfile();
+  const post = await createPostForLocal(author.id, { mentionProfileIds: [author.id] });
+
+  const [notificationId] = await createMentionNotification(post.id);
+
+  assert.ok(notificationId);
+  const [notification] = await readSourceNotifications(post.id);
+  assert.equal(notification?.kind, NotificationKind.MENTION);
+  assert.equal(notification?.recipientProfileId, author.id);
+});
+
+test('an emitted Quote judgment never returns its ID to a later Reply activity', async () => {
+  const recipient = await createProfile();
+  const quoteAuthor = await createProfile();
+  const source = await createPostForLocal(recipient.id);
+  const quote = await createPostForLocal(quoteAuthor.id, { repostSourceId: source.id });
+  const quoteId = await createQuoteNotification(quote.id);
+  assert.ok(quoteId);
+  const readAt = Temporal.Instant.from('2026-10-02T03:45:56.765432Z');
+  await db.update(Notifications).set({ readAt }).where(eq(Notifications.id, quoteId));
+  await db.update(Posts).set({ replyParentId: source.id }).where(eq(Posts.id, quote.id));
+
+  assert.equal(await createReplyNotification(quote.id), null);
+  const [notification] = await readSourceNotifications(quote.id);
+  assert.equal(notification?.kind, NotificationKind.QUOTE);
+  assert.equal(notification?.id, quoteId);
+  assert.equal(notification?.readAt?.toString(), readAt.toString());
 });
 
 test('an eligible Reply wins over Quote and Mention concurrently and preserves its read state', async () => {
