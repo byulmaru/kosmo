@@ -4,12 +4,17 @@ import type { PostComposerControllerProps as PostComposerProps } from './PostCom
 
 const typecheckPostComposerRelationships = () => {
   const profile = {} as PostComposerProps['profile'];
-  void ({ profile, replyParentId: 'post-parent' } satisfies PostComposerProps);
+  void ({
+    profile,
+    replyParentId: 'post-parent',
+    replyParentVisibility: 'UNLISTED',
+  } satisfies PostComposerProps);
   void ({ profile, repostSourceId: 'post-source' } satisfies PostComposerProps);
   // @ts-expect-error Reply와 Quote 관계 입력은 동시에 제공할 수 없다.
   const invalidRelationships: PostComposerProps = {
     profile,
     replyParentId: 'post-parent',
+    replyParentVisibility: 'UNLISTED',
     repostSourceId: 'post-source',
   };
   void invalidRelationships;

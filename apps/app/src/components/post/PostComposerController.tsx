@@ -148,7 +148,7 @@ type PostComposerPresentationProps =
 type PostComposerRelationshipProps =
   | {
       replyParentId: string;
-      replyParentVisibility?: PostVisibility | '%future added value' | null;
+      replyParentVisibility: PostVisibility | '%future added value';
       repostSourceId?: never;
     }
   | { replyParentId?: never; replyParentVisibility?: never; repostSourceId: string }

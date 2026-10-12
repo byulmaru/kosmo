@@ -344,6 +344,7 @@ describe('PostComposer initial body', () => {
       presentation: 'overlay' as const,
       profile: profileA as never,
       replyParentId: 'post-parent-a',
+      replyParentVisibility: 'UNLISTED' as const,
     };
 
     await act(async () => {

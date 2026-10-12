@@ -2510,6 +2510,7 @@ function ReplyComposerContextIsolationContents({
       onPostCreated={onPostCreated}
       profile={alternateProfile ? data.alternateComposerProfile : data.composerProfile}
       replyParentId={parentId}
+      replyParentVisibility="UNLISTED"
     />
   );
 }
