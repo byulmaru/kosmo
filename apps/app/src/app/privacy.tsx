@@ -12,7 +12,7 @@ import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
 
-const EFFECTIVE_DATE = '2026년 10월 8일';
+const EFFECTIVE_DATE = '2026년 10월 12일';
 const POLICY_TITLE = 'Kosmo 개인정보 처리방침';
 
 function SubsectionTitle({ children }: { children: ReactNode }) {
@@ -105,9 +105,8 @@ export default function PrivacyScreen() {
       title={POLICY_TITLE}
     >
       <PolicyParagraph>
-        별마루는 Kosmo 이용자의 개인정보를 중요하게 생각하며 개인정보 보호법 등 관계 법령을
-        준수합니다. 이 방침은 Kosmo가 어떤 개인정보를 왜, 어떻게 처리하는지와 이용자가 행사할 수
-        있는 권리를 안내합니다.
+        이 방침은 Kosmo가 어떤 개인정보를 왜, 어떻게 처리하는지와 이용자가 행사할 수 있는 권리를
+        안내합니다.
       </PolicyParagraph>
 
       <PolicySection title="1. 개인정보 처리 목적·항목·보유기간 및 근거">
@@ -208,9 +207,9 @@ export default function PrivacyScreen() {
           별마루는 서비스 제공을 위해 다음과 같이 개인정보를 국외로 이전합니다. Cloudflare의 글로벌
           네트워크 이용 과정에서 접속·전송 정보가 미국 및 유럽경제지역으로 이전될 수 있습니다.
           Cloudflare에 대한 국외 이전은 개인정보 보호법 제28조의8 제1항 제3호 가목에 따른 계약 이행
-          목적의 처리위탁으로 처리합니다. EU 리전 전환 이후 PostHog Cloud로 새로 수집하는 정보의
-          국외 이전은 개인정보 보호법 제28조의8 제1항 제5호에 따라 개인정보보호위원회가 동등한
-          개인정보 보호 수준을 인정한 유럽연합으로의 이전으로 처리합니다.
+          목적의 처리위탁으로 처리합니다. PostHog Cloud로의 개인정보 국외 이전은 개인정보 보호법
+          제28조의8 제1항 제5호에 따라 개인정보보호위원회가 동등한 개인정보 보호 수준을 인정한
+          유럽연합으로 이루어집니다.
         </PolicyParagraph>
         <PolicyTable
           headers={[
@@ -274,8 +273,6 @@ export default function PrivacyScreen() {
           법령이 정한 사유가 있는 경우 일부 요청이 제한될 수 있으며 그 사유를 안내합니다.
         </PolicyParagraph>
         <PolicyEmailLink />
-        <PolicyBullet>계정 정보의 열람·정정과 처리정지</PolicyBullet>
-        <PolicyBullet>그 밖의 개인정보 관련 요청</PolicyBullet>
         <PolicyParagraph>
           PostHog 분석 데이터의 열람·삭제·처리정지도 같은 연락처로 요청할 수 있습니다.
         </PolicyParagraph>
@@ -344,12 +341,12 @@ export default function PrivacyScreen() {
 
       <NavigationLink href={'/privacy/2026-09-09' as Href}>
         <Pressable
-          accessibilityLabel="이전 개인정보 처리방침 (2026년 9월 9일부터 2026년 10월 7일까지)"
+          accessibilityLabel="이전 개인정보 처리방침 (2026년 9월 9일부터 2026년 10월 11일까지)"
           accessibilityRole="link"
           style={styles.previousPolicyLinkControl}
         >
           <Text style={[styles.previousPolicyLink, { color: theme.textSecondary }]}>
-            이전 개인정보 처리방침 (2026년 9월 9일부터 2026년 10월 7일까지)
+            이전 개인정보 처리방침 (2026년 9월 9일부터 2026년 10월 11일까지)
           </Text>
         </Pressable>
       </NavigationLink>
