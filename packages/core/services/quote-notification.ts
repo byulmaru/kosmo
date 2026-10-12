@@ -16,6 +16,7 @@ import {
   PostVisibility,
   ProfileState,
 } from '../enums';
+import { materializeMentionNotificationIfEligible } from './mention-notification';
 import {
   materializeCoordinatedNotification,
   materializeReplyNotificationIfEligible,
@@ -132,6 +133,9 @@ export const materializeQuoteNotificationIfEligible = async (
   if (replyNotification?.recipientProfileId === source.sourceProfileId) {
     return null;
   }
+
+  // Only the Source Author's eligible typed Mention can represent this Quote.
+  await materializeMentionNotificationIfEligible(database, quotePostId, source.sourceProfileId);
 
   const followsQuoteAuthor =
     (

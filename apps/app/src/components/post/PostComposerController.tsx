@@ -452,7 +452,7 @@ function PostComposerContents({
           return;
         }
         setSubmitting(false);
-        const createdPost = response.createPost?.post;
+        const createdPost = response?.createPost?.post;
         if (!createdPost) {
           showToast(submitFailureMessage, { tone: 'danger' });
           return;

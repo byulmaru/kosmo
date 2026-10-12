@@ -32,8 +32,9 @@ Quote 동의와 federation 표현은 [ADR 0029](./0029-quote-consent-and-federat
 - Public은 ActivityStreams Public을 `to`, followers collection을 `cc`로 사용한다. Unlisted는 followers
   collection을 `to`, ActivityStreams Public을 `cc`로 사용한다. Followers Only는 followers collection만
   `to`로 사용하고 Author 또는 established Follower의 signed fetch에서만 역참조할 수 있다.
-- Mentioned Profiles audience는 recipient identity가 canonical 관계로 구현되기 전까지 Local Note로 제공하지
-  않는다.
+- Local `Mentioned Profiles` visibility는 canonical Mentioned Profile 관계([ADR 0030](./0030-post-content-mention-identity.md))를
+  사용하지만 ActivityPub `Note` audience로 투영하지 않는다. ActivityPub DIRECT/limited audience 수신 처리와 outbound delivery는
+  별도 [PROD-359](https://linear.app/byulmaru/issue/PROD-359) 범위다.
 - Reply Parent 관계가 있으면 requester의 Parent 조회 가능성과 무관하게 Parent의 ActivityPub Post identity를
   `inReplyTo`로 제공한다. Parent의 실제 표현은 Parent 자체의 역참조 권한으로 보호하며, Reply Parent 관계가
   없을 때만 `inReplyTo`를 생략한다. Parent의 Tombstone 전이는 저장 관계를 변경하지 않는다. 현재 physical
