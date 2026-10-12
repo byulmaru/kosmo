@@ -117,7 +117,6 @@ export function ActionMenu({
   const itemsRef = useRef(items);
   const pendingSelectionRef = useRef<(() => void) | null>(null);
   const triggerRef = useRef<View>(null);
-  const [hoveredWebItemKey, setHoveredWebItemKey] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [closingItems, setClosingItems] = useState(items);
   const previousOpenRef = useRef(open);
@@ -205,7 +204,6 @@ export function ActionMenu({
       if (disabled) {
         return;
       }
-      setHoveredWebItemKey(null);
       setClosingItems(itemsRef.current);
       setOpen(false);
       if (restoreFocus) {
@@ -216,7 +214,6 @@ export function ActionMenu({
   );
   const toggle = useCallback(() => {
     if (!disabled) {
-      setHoveredWebItemKey(null);
       if (open) {
         setClosingItems(items);
       }
@@ -448,24 +445,24 @@ export function ActionMenu({
                         key={item.key}
                         accessibilityState={{ busy: item.busy, disabled: item.disabled }}
                         disabled={item.disabled}
-                        onHoverIn={() => setHoveredWebItemKey(item.key)}
-                        onHoverOut={() =>
-                          setHoveredWebItemKey((current) => (current === item.key ? null : current))
-                        }
                         onPress={() => select(item)}
                         role="menuitem"
-                        style={({ pressed }) => [
-                          itemStyle,
-                          item.disabled
-                            ? undefined
-                            : {
-                                backgroundColor: pressed
-                                  ? theme.statePressed
-                                  : hoveredWebItemKey === item.key
-                                    ? theme.stateHover
-                                    : undefined,
-                              },
-                        ]}
+                        style={(state) => {
+                          const webState = state as { hovered?: boolean };
+                          const hovered = web && Boolean(webState.hovered);
+                          return [
+                            itemStyle,
+                            item.disabled
+                              ? undefined
+                              : {
+                                  backgroundColor: state.pressed
+                                    ? theme.statePressed
+                                    : hovered
+                                      ? theme.stateHover
+                                      : undefined,
+                                },
+                          ];
+                        }}
                       >
                         {index === 0 ? (
                           <View accessible={false} aria-hidden style={styles.webFirstItemHitArea} />

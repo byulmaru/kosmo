@@ -552,12 +552,15 @@ test('Web ActionMenu exposes static item geometry to asChild renderers', async (
     configurable: true,
     value: { addEventListener() {}, removeEventListener() {} },
   });
-  let itemStyle: unknown;
+  const itemStyles = new Map<string, unknown>();
   const props = {
     accessibilityLabel: '메뉴',
-    items: [{ key: 'settings', label: '설정', onSelect() {} }],
-    renderItem: ({ children }: { children: ReactElement }) => {
-      itemStyle = (children.props as { style?: unknown }).style;
+    items: [
+      { key: 'settings', label: '설정', onSelect() {} },
+      { disabled: true, key: 'disabled', label: '비활성', onSelect() {} },
+    ],
+    renderItem: ({ children, item }: { children: ReactElement; item: { key: string } }) => {
+      itemStyles.set(item.key, (children.props as { style?: unknown }).style);
       return children;
     },
     renderTrigger: ({ onPress }: { onPress: () => void }) =>
@@ -569,14 +572,31 @@ test('Web ActionMenu exposes static item geometry to asChild renderers', async (
   });
   await act(async () => renderer?.root.findByProps({ testID: 'trigger' }).props.onPress());
 
-  assert.equal(typeof itemStyle, 'function');
-  const mergedStyle = flattenStyle(
-    (itemStyle as (state: { pressed: boolean }) => unknown)({ pressed: false }),
-  );
+  const getItemStyle = itemStyles.get('settings') as
+    | ((state: { hovered?: boolean; pressed: boolean }) => unknown)
+    | undefined;
+  const getDisabledItemStyle = itemStyles.get('disabled') as
+    | ((state: { hovered?: boolean; pressed: boolean }) => unknown)
+    | undefined;
+  assert.ok(getItemStyle);
+  assert.ok(getDisabledItemStyle);
+  const mergedStyle = flattenStyle(getItemStyle({ hovered: false, pressed: false }));
   assert.equal(mergedStyle.height, 36);
   assert.equal(mergedStyle.minHeight, 36);
   assert.equal(mergedStyle.paddingHorizontal, 8);
   assert.equal(mergedStyle.position, 'relative');
+  assert.equal(
+    flattenStyle(getItemStyle({ hovered: true, pressed: false })).backgroundColor,
+    'hover',
+  );
+  assert.equal(
+    flattenStyle(getItemStyle({ hovered: true, pressed: true })).backgroundColor,
+    'pressed',
+  );
+  assert.equal(
+    flattenStyle(getDisabledItemStyle({ hovered: true, pressed: true })).backgroundColor,
+    undefined,
+  );
   await act(async () => renderer?.unmount());
 });
 

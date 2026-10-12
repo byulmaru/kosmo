@@ -390,14 +390,13 @@ export const SurfaceAndDismissContract: Story = {
         ),
       );
 
-      const hoveredMenu = styleMenu;
-      const hoveredCopyItem = within(hoveredMenu).getByRole('menuitem', { name: '링크 복사' });
+      const hoveredCopyItem = within(styleMenu).getByRole('menuitem', { name: '링크 복사' });
       await userEvent.hover(hoveredCopyItem);
       expect(getComputedStyle(hoveredCopyItem).backgroundColor).toBe(
         serializeColor(semanticColors.light.stateHover),
       );
 
-      const disabledItem = within(hoveredMenu).getByRole('menuitem', { name: '비활성 항목' });
+      const disabledItem = within(styleMenu).getByRole('menuitem', { name: '비활성 항목' });
       expect(disabledItem).toHaveAttribute('aria-disabled', 'true');
       expect(getComputedStyle(disabledItem).pointerEvents).toBe('none');
       const disabledBackground = getComputedStyle(disabledItem).backgroundColor;

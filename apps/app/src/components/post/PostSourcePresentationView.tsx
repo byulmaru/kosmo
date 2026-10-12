@@ -7,10 +7,6 @@ import { formatTimelineTimestamp } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
 import { PostContentRenderer } from './PostContentRenderer';
-import {
-  PostSurfaceHoverSuppressionContext,
-  usePostSurfaceFeedback,
-} from './usePostSurfaceFeedback';
 import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
@@ -222,12 +218,10 @@ export function PostSourcePreview({
   style?: StyleProp<ViewStyle>;
 }): ReactNode {
   const theme = useTheme();
-  const { handlers, hovered, setSurfaceHoverSuppressed } = usePostSurfaceFeedback({
-    hover: interactive,
-  });
   const source = useFragment(PostSourcePreviewFragment, sourceKey);
   const sourceProfileHref = `/${source.profile.relativeHandle}` as Href;
   const sourcePostHref = `/${source.profile.relativeHandle}/${source.id}` as Href;
+  const previewStyle = [styles.preview, style, { borderColor: theme.borderDefault }];
   const content = (
     <>
       <View style={styles.authorHeader}>
@@ -280,23 +274,30 @@ export function PostSourcePreview({
     </>
   );
 
+  if (!interactive || Platform.OS !== 'web') {
+    return (
+      <View style={previewStyle} testID="source-post-preview">
+        {content}
+      </View>
+    );
+  }
+
   return (
-    <View
-      {...handlers}
-      style={[
-        styles.preview,
-        style,
+    <Pressable
+      accessible={false}
+      focusable={false}
+      style={(state) => [
+        ...previewStyle,
         {
-          backgroundColor: hovered ? theme.stateHover : undefined,
-          borderColor: theme.borderDefault,
+          backgroundColor: (state as { hovered?: boolean }).hovered ? theme.stateHover : undefined,
+          cursor: 'auto',
         },
       ]}
+      tabIndex={-1}
       testID="source-post-preview"
     >
-      <PostSurfaceHoverSuppressionContext.Provider value={setSurfaceHoverSuppressed}>
-        {content}
-      </PostSurfaceHoverSuppressionContext.Provider>
-    </View>
+      {content}
+    </Pressable>
   );
 }
 
