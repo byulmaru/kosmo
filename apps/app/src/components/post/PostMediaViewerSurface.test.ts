@@ -120,6 +120,7 @@ type FakeGesture = {
   externalGestures?: FakeGesture[];
   minPointers: (value: number) => FakeGesture;
   minPointersValue?: number;
+  maxDistance: (value: number) => FakeGesture;
   maxPointers: (value: number) => FakeGesture;
   maxPointersValue?: number;
   name: string;
@@ -147,6 +148,7 @@ function fakeGesture(name: string): FakeGesture {
       gesture.minPointersValue = value;
       return gesture;
     },
+    maxDistance: () => gesture,
     maxPointers: (value: number) => {
       gesture.maxPointersValue = value;
       return gesture;
@@ -330,6 +332,86 @@ afterEach(async () => {
 });
 
 describe('PostMediaViewerSurface', () => {
+  it('Android blank taps dismiss only outside the transformed image and reject multi-touch', async () => {
+    mockPlatform.OS = 'android';
+    let closed = 0;
+    await render({
+      onClose: () => {
+        closed += 1;
+      },
+    });
+    await act(async () =>
+      byTestId('post-media-viewer-media-viewport').props.onLayout({
+        nativeEvent: { layout: { width: 390, height: 600 } },
+      }),
+    );
+    await act(async () => image().props.onLoad());
+    const animated = byTestId('post-media-viewer-android-zoom').find(
+      (node) => String(node.type) === 'AnimatedView',
+    );
+    const gestures = (): FakeGesture[] => {
+      const flatten = (gesture: FakeGesture): FakeGesture[] => [
+        gesture,
+        ...(gesture.gestures ?? []).flatMap(flatten),
+      ];
+      return flatten(
+        byTestId('post-media-viewer-android-zoom').find(
+          (node) => String(node.type) === 'GestureDetector',
+        ).props.gesture,
+      );
+    };
+    const tap = () => gestures().find((item) => item.numberOfTapsValue === 1);
+    const press = async (x: number, y: number, success = true) => {
+      await act(async () => tap()?.onEndCallback?.({ x, y }, success));
+    };
+    await act(async () =>
+      animated.props.onLayout({
+        nativeEvent: { layout: { width: 390, height: 200 } },
+      }),
+    );
+    await press(195, 300);
+    await press(195, 200);
+    assert.equal(closed, 0);
+    await press(195, 100);
+    assert.equal(closed, 1);
+    await press(195, 100, false);
+    assert.equal(closed, 1);
+
+    const pinch = () => gestures().find((item) => item.name === 'pinch');
+    await act(async () => pinch()?.onStartCallback?.({ focalX: 195, focalY: 300 }));
+    await act(async () => pinch()?.onUpdateCallback?.({ focalX: 195, focalY: 300, scale: 2 }));
+    await act(async () => pinch()?.onFinalizeCallback?.());
+    await press(195, 150);
+    assert.equal(closed, 1);
+    await press(195, 50);
+    assert.equal(closed, 2);
+
+    await act(async () =>
+      animated.props.onLayout({
+        nativeEvent: { layout: { width: 150, height: 600 } },
+      }),
+    );
+    const pan = () => gestures().find((item) => item.name === 'pan');
+    await act(async () => pan()?.onStartCallback?.());
+    await act(async () => pan()?.onUpdateCallback?.({ translationX: 100, translationY: -100 }));
+    await press(195, 300);
+    assert.equal(closed, 2);
+    await press(20, 300);
+    assert.equal(closed, 3);
+    let failed = false;
+    await act(async () =>
+      tap()?.onTouchesDownCallback?.(
+        { numberOfTouches: 2 },
+        {
+          fail: () => {
+            failed = true;
+          },
+        },
+      ),
+    );
+    assert.equal(failed, true);
+  });
+
   it('Android native zoom locks paging, clamps one-pointer pan, and releases on reset', async () => {
     const NativeZoom = androidZoomableImageModule?.ZoomableImage;
     const PagerGesture = androidZoomableImageModule?.ZoomableImagePagerGesture;
@@ -385,7 +467,7 @@ describe('PostMediaViewerSurface', () => {
     assert.deepEqual(zoomedChanges, [true]);
 
     const pan = () => gestures()?.find((gesture) => gesture.name === 'pan');
-    const tap = () => gestures()?.find((gesture) => gesture.name === 'tap');
+    const tap = () => gestures()?.find((gesture) => gesture.name === 'exclusive')?.gestures?.[0];
     assert.equal(pan()?.maxPointersValue, 1);
     assert.equal(pan()?.enabledValue, true);
     assert.equal(tap()?.numberOfTapsValue, 2);
@@ -482,7 +564,9 @@ describe('PostMediaViewerSurface', () => {
     await act(async () => resetPinch()?.onFinalizeCallback?.({}, false));
     assert.deepEqual(zoomedChanges.at(-1), false);
     const resetTap = () =>
-      detector()?.props.gesture.gestures.find((gesture: FakeGesture) => gesture.name === 'tap');
+      detector()?.props.gesture.gestures.find(
+        (gesture: FakeGesture) => gesture.name === 'exclusive',
+      )?.gestures?.[0];
     await act(async () => resetTap()?.onEndCallback?.({ x: 300, y: 100 }, true));
     assert.deepEqual(
       (resetImage.props.style[1] as () => { transform: Array<Record<string, number>> })().transform,
@@ -589,7 +673,7 @@ describe('PostMediaViewerSurface', () => {
       (node) => String(node.type) === 'GestureDetector' && node.props.gesture.name === 'native',
     ).props.gesture;
     assert.equal(gesture().gestures?.[0]?.externalGestures?.[0], pagerGesture);
-    const tap = () => gesture().gestures!.find((item) => item.name === 'tap')!;
+    const tap = () => gesture().gestures!.find((item) => item.name === 'exclusive')!.gestures![0]!;
     for (const scale of [2, 4, 1]) {
       await act(async () => tap().onEndCallback!({ x: 195, y: 300 }, true));
       assert.equal(byTestId('post-media-viewer-native-pager').props.scrollEnabled, scale === 1);

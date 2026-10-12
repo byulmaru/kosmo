@@ -195,7 +195,7 @@ export function PostMediaViewerSurface({
       <ZoomableImage
         key={zoomKey}
         accessibilityLabel={imageName}
-        onBlankAreaTap={Platform.OS === 'ios' ? onClose : undefined}
+        onBlankAreaTap={onClose}
         onStatus={settle}
         onZoomedChange={setZoomed}
         reducedMotion={reducedMotion}
