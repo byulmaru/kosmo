@@ -185,6 +185,10 @@ mock.module('react-native-gesture-handler', {
       Pinch: () => fakeGesture('pinch'),
       Tap: () => fakeGesture('tap'),
       Native: () => fakeGesture('native'),
+      Exclusive: (...gestures: FakeGesture[]) => ({
+        ...fakeGesture('exclusive'),
+        gestures,
+      }),
       Simultaneous: (...gestures: FakeGesture[]) => ({
         ...fakeGesture('simultaneous'),
         gestures,
@@ -244,13 +248,28 @@ let androidZoomableImageModule: ZoomableImageModule | undefined;
 let renderer: ReactTestRenderer | null = null;
 let androidRenderer: ReactTestRenderer | null = null;
 
+function collectGestureTree(gesture: FakeGesture): FakeGesture[] {
+  return [gesture, ...(gesture.gestures ?? []).flatMap(collectGestureTree)];
+}
+
 function getIOSDoubleTapGesture(
   target: ReactTestRenderer | null = renderer,
 ): FakeGesture | undefined {
   return target?.root
     .findAll((node) => String(node.type) === 'GestureDetector')
     .map((node) => node.props.gesture as FakeGesture)
+    .flatMap(collectGestureTree)
     .find((gesture) => gesture.name === 'tap' && gesture.numberOfTapsValue === 2);
+}
+
+function getIOSBlankAreaTapGesture(
+  target: ReactTestRenderer | null = renderer,
+): FakeGesture | undefined {
+  return target?.root
+    .findAll((node) => String(node.type) === 'GestureDetector')
+    .map((node) => node.props.gesture as FakeGesture)
+    .flatMap(collectGestureTree)
+    .find((gesture) => gesture.name === 'tap' && gesture.numberOfTapsValue === 1);
 }
 
 before(async () => {
@@ -795,9 +814,12 @@ describe('PostMediaViewerSurface', () => {
       renderer = create(createElement(NativeZoom, props));
     });
     const tap = getIOSDoubleTapGesture();
+    const blankAreaTap = getIOSBlankAreaTapGesture();
     assert.ok(tap);
+    assert.ok(blankAreaTap);
     assert.equal(tap.enabledValue, true);
     assert.equal(tap.numberOfTapsValue, 2);
+    assert.equal(blankAreaTap.enabledValue, false);
     await act(async () => tap.onEndCallback?.({ x: 120, y: 240 }, false));
     assert.deepEqual(zoomToCalls, []);
     await act(async () => tap.onEndCallback?.({ x: 120, y: 240 }, true));
@@ -810,6 +832,74 @@ describe('PostMediaViewerSurface', () => {
     });
     assert.deepEqual(zoomedChanges, [true]);
     assert.ok(renderer?.root.find((node) => String(node.type) === 'GestureHandlerRootView'));
+  });
+
+  it('iOS blank-area single taps close only outside the visible image after zoom and pan', async () => {
+    const NativeZoom = iosZoomableImageModule?.ZoomableImage;
+    assert.ok(NativeZoom);
+    let closeCount = 0;
+    const props: ZoomableImageProps = {
+      accessibilityLabel: 'Viewer image',
+      onBlankAreaTap: () => {
+        closeCount += 1;
+      },
+      onStatus: () => undefined,
+      onZoomedChange: () => undefined,
+      reducedMotion: false,
+      status: 'ready',
+      url: 'https://example.com/image.png',
+      viewportSize: { height: 600, width: 390 },
+    };
+    await act(async () => {
+      renderer = create(createElement(NativeZoom, props));
+    });
+    await act(async () =>
+      image().props.onLoad({ nativeEvent: { source: { height: 600, width: 300 } } }),
+    );
+    const imageFrame = image().parent;
+    assert.ok(imageFrame);
+    await act(async () =>
+      imageFrame.props.onLayout({
+        nativeEvent: { layout: { height: 600, width: 300, x: 45, y: 0 } },
+      }),
+    );
+
+    const exclusive = renderer!.root
+      .findAll((node) => String(node.type) === 'GestureDetector')
+      .map((node) => node.props.gesture as FakeGesture)
+      .find((gesture) => gesture.name === 'exclusive');
+    assert.deepEqual(
+      exclusive?.gestures?.map((gesture) => gesture.numberOfTapsValue),
+      [2, 1],
+    );
+    assert.equal(getIOSBlankAreaTapGesture()?.maxPointersValue, 1);
+
+    await act(async () => getIOSBlankAreaTapGesture()?.onEndCallback?.({ x: 100, y: 300 }, true));
+    assert.equal(closeCount, 0);
+    await act(async () => getIOSBlankAreaTapGesture()?.onEndCallback?.({ x: 20, y: 300 }, true));
+    assert.equal(closeCount, 1);
+    await act(async () => getIOSBlankAreaTapGesture()?.onEndCallback?.({ x: 380, y: 300 }, false));
+    assert.equal(closeCount, 1);
+
+    await act(async () =>
+      byTestId('post-media-viewer-ios-zoom').props.onScroll({
+        nativeEvent: { contentOffset: { x: 0, y: 0 }, zoomScale: 1.1 },
+      }),
+    );
+    await act(async () => getIOSBlankAreaTapGesture()?.onEndCallback?.({ x: 20, y: 300 }, true));
+    assert.equal(closeCount, 2);
+    await act(async () => getIOSBlankAreaTapGesture()?.onEndCallback?.({ x: 60, y: 300 }, true));
+    assert.equal(closeCount, 2);
+
+    await act(async () =>
+      byTestId('post-media-viewer-ios-zoom').props.onScroll({
+        nativeEvent: { contentOffset: { x: 100, y: 0 }, zoomScale: 1.1 },
+      }),
+    );
+    await act(async () => getIOSBlankAreaTapGesture()?.onEndCallback?.({ x: 350, y: 300 }, true));
+    assert.equal(closeCount, 3);
+    await act(async () => getIOSBlankAreaTapGesture()?.onEndCallback?.({ x: 200, y: 300 }, true));
+    assert.equal(closeCount, 3);
   });
 
   it('iOS image zoom uses the native ScrollView and locks pager while zoomed', async () => {
@@ -1342,9 +1432,10 @@ describe('PostMediaViewerSurface', () => {
     assert.equal(byTestId('post-media-viewer-position').children.join(''), '2 / 4');
   });
 
-  it('Web media pane 빈 stage만 닫고 Native에서는 기존 backdrop semantics를 유지한다', async () => {
-    const args: unknown[][] = [];
-    await render({ onClose: (...values: unknown[]) => args.push(values) });
+  it('Web blank-stage click and iOS image-stage blank tap use the existing close callback', async () => {
+    const closedOn: string[] = [];
+    const onClose = () => closedOn.push(mockPlatform.OS);
+    await render({ onClose });
 
     const dismissTarget = byTestId('post-media-viewer-media-pane-dismiss');
     assert.equal(dismissTarget.props.accessible, false);
@@ -1358,11 +1449,30 @@ describe('PostMediaViewerSurface', () => {
       top: 0,
     });
     dismissTarget.props.onPress({ type: 'press' });
-    assert.deepEqual(args, [[]]);
+    assert.deepEqual(closedOn, ['web']);
 
     mockPlatform.OS = 'ios';
-    await render();
+    await render({ onClose });
     assert.equal(queryByTestId('post-media-viewer-media-pane-dismiss'), null);
+    await act(async () =>
+      byTestId('post-media-viewer-media-viewport').props.onLayout({
+        nativeEvent: { layout: { height: 600, width: 390 } },
+      }),
+    );
+    await act(async () =>
+      image().props.onLoad({ nativeEvent: { source: { height: 600, width: 300 } } }),
+    );
+    const imageFrame = image().parent;
+    assert.ok(imageFrame);
+    await act(async () =>
+      imageFrame.props.onLayout({
+        nativeEvent: { layout: { height: 600, width: 300, x: 45, y: 0 } },
+      }),
+    );
+    await act(async () => getIOSBlankAreaTapGesture()?.onEndCallback?.({ x: 100, y: 300 }, true));
+    assert.deepEqual(closedOn, ['web']);
+    await act(async () => getIOSBlankAreaTapGesture()?.onEndCallback?.({ x: 20, y: 300 }, true));
+    assert.deepEqual(closedOn, ['web', 'ios']);
   });
 
   it('Ready image는 contain, trimmed alt name 또는 document fallback을 사용한다', async () => {

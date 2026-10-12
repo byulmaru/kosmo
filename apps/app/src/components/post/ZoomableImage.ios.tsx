@@ -5,11 +5,17 @@ import { runOnJS } from 'react-native-reanimated';
 import { getZoomAccessibilityProps } from './PostMediaViewerZoomAccessibility';
 import { ViewerImage } from './ViewerImage';
 import type { ReactElement } from 'react';
+import type { LayoutRectangle } from 'react-native';
 import type {
   ZoomAccessibilityActionName,
   ZoomAccessibilityState,
 } from './PostMediaViewerZoomAccessibility';
 import type { ImageSize, ImageStatus, ZoomableImageProps } from './ViewerImage';
+
+type ImageFrameMeasurement = Readonly<{
+  frame: LayoutRectangle;
+  viewportSize: ImageSize;
+}>;
 
 export function ZoomableImage(props: ZoomableImageProps) {
   return props.viewportSize ? (
@@ -25,6 +31,7 @@ export function ZoomableImagePagerGesture({ children }: { children: ReactElement
 
 function IOSZoomableImage({
   accessibilityLabel,
+  onBlankAreaTap,
   onStatus,
   onZoomedChange,
   reducedMotion,
@@ -34,6 +41,53 @@ function IOSZoomableImage({
 }: Omit<ZoomableImageProps, 'viewportSize'> & Readonly<{ viewportSize: ImageSize }>) {
   const scroll = useRef<ScrollView>(null);
   const [zoomState, setZoomState] = useState({ offsetX: 0, offsetY: 0, scale: 1 });
+  const [imageFrame, setImageFrame] = useState<ImageFrameMeasurement | null>(null);
+  const handleImageFrameLayout = useCallback(
+    (frame: LayoutRectangle) => {
+      setImageFrame((previous) => {
+        if (
+          previous?.frame.x === frame.x &&
+          previous.frame.y === frame.y &&
+          previous.frame.width === frame.width &&
+          previous.frame.height === frame.height &&
+          previous.viewportSize.width === viewportSize.width &&
+          previous.viewportSize.height === viewportSize.height
+        ) {
+          return previous;
+        }
+        return {
+          frame,
+          viewportSize: { height: viewportSize.height, width: viewportSize.width },
+        };
+      });
+    },
+    [viewportSize],
+  );
+  const handleBlankAreaTap = useCallback(
+    (point: Readonly<{ x: number; y: number }>) => {
+      if (
+        !onBlankAreaTap ||
+        status !== 'ready' ||
+        !imageFrame ||
+        imageFrame.viewportSize.width !== viewportSize.width ||
+        imageFrame.viewportSize.height !== viewportSize.height
+      ) {
+        return;
+      }
+      const { height, width, x, y } = imageFrame.frame;
+      if (width <= 0 || height <= 0) {
+        return;
+      }
+      const left = x * zoomState.scale - zoomState.offsetX;
+      const top = y * zoomState.scale - zoomState.offsetY;
+      const right = left + width * zoomState.scale;
+      const bottom = top + height * zoomState.scale;
+      if (point.x < left || point.x > right || point.y < top || point.y > bottom) {
+        onBlankAreaTap();
+      }
+    },
+    [imageFrame, onBlankAreaTap, status, viewportSize, zoomState],
+  );
   const resetZoom = useCallback(
     (animated: boolean) => {
       scroll.current?.scrollResponderZoomTo(
@@ -190,10 +244,28 @@ function IOSZoomableImage({
         }),
     [handleDoubleTap, status],
   );
+  const blankAreaTap = useMemo(
+    () =>
+      Gesture.Tap()
+        .enabled(status === 'ready' && onBlankAreaTap != null)
+        .maxPointers(1)
+        .numberOfTaps(1)
+        .onEnd((event, success) => {
+          'worklet';
+          if (success) {
+            runOnJS(handleBlankAreaTap)({ x: event.x, y: event.y });
+          }
+        }),
+    [handleBlankAreaTap, onBlankAreaTap, status],
+  );
+  const imageGestures = useMemo(
+    () => Gesture.Exclusive(doubleTap, blankAreaTap),
+    [blankAreaTap, doubleTap],
+  );
 
   return (
     <GestureHandlerRootView style={styles.gestureRoot}>
-      <GestureDetector gesture={doubleTap}>
+      <GestureDetector gesture={imageGestures}>
         <ScrollView
           bounces={false}
           bouncesZoom={false}
@@ -218,6 +290,7 @@ function IOSZoomableImage({
         >
           <ViewerImage
             accessibilityLabel={accessibilityLabel}
+            onFrameLayout={handleImageFrameLayout}
             onStatus={handleStatus}
             status={status}
             url={url}
