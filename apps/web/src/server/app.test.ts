@@ -512,7 +512,7 @@ describe('runtime routing', () => {
     '/account-deletion',
     '/child-safety',
   ])('serves the public policy %s as an SPA document without navigation headers', async (path) => {
-    for (const accept of [undefined, '*/*', 'text/html']) {
+    for (const accept of [undefined, '*/*', 'text/html', 'Text/HTML', 'TEXT/*']) {
       const headers = accept ? { accept } : undefined;
       const response = await app.request(path, { headers });
       const head = await app.request(path, { headers, method: 'HEAD' });
@@ -547,7 +547,15 @@ describe('runtime routing', () => {
     '/@kosmo/following',
     '/@kosmo/AaCx-8WAcbyBDtHc8M8Xg1Bvc3Q/reactions',
   ])('serves the public route %s without navigation headers', async (path) => {
-    for (const accept of [undefined, '*/*', 'text/html', 'text/html;q=0.8', 'text/*']) {
+    for (const accept of [
+      undefined,
+      '*/*',
+      'text/html',
+      'text/html;q=0.8',
+      'text/*',
+      'Text/HTML',
+      'TEXT/*',
+    ]) {
       for (const userAgent of ['Mozilla/5.0', 'Googlebot/2.1']) {
         const headers = { 'user-agent': userAgent, ...(accept ? { accept } : {}) };
         const response = await app.request(path, { headers });
@@ -566,7 +574,13 @@ describe('runtime routing', () => {
   test.each(['/child-safety', '/@kosmo', '/@kosmo/post-id'])(
     'keeps non-document representations of %s out of the SPA',
     async (path) => {
-      for (const accept of ['application/activity+json', 'text/html;q=0', 'text/html;q=0, */*']) {
+      for (const accept of [
+        'application/activity+json',
+        'text/html;q=0',
+        'text/html;q=0, */*',
+        'Text/HTML;q=0, */*',
+        'TEXT/*;q=0, */*',
+      ]) {
         for (const method of ['GET', 'HEAD']) {
           const response = await app.request(path, { headers: { accept }, method });
 

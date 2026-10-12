@@ -20,7 +20,10 @@ const acceptsDocument = (c: Context) => {
   if (!accept) {
     return true;
   }
-  const types = parseAccept(accept);
+  const types = parseAccept(accept).map((value) => ({
+    ...value,
+    type: value.type.toLowerCase(),
+  }));
   const document =
     types.find(({ type }) => type === 'text/html') ??
     types.find(({ type }) => type === 'text/*') ??
