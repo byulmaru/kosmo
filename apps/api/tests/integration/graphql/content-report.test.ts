@@ -15,7 +15,10 @@ import {
   SessionState,
 } from '@kosmo/core/enums';
 import { encodeGlobalId } from '@kosmo/core/global-id';
-import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
+import {
+  postContentDocumentFromText,
+  postContentDocumentFromTextAndMedia,
+} from '@kosmo/core/post-content/server';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -42,6 +45,7 @@ let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
 let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
+let PostMentions: typeof CoreDb.PostMentions;
 let ProfileBlocks: typeof CoreDb.ProfileBlocks;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
 let Posts: typeof CoreDb.Posts;
@@ -66,6 +70,16 @@ const mutation = `
   }
 `;
 
+const postContentQuery = `
+  query ReadPostContent($postId: ID!) {
+    node(id: $postId) {
+      ... on Post {
+        content { bodyText }
+      }
+    }
+  }
+`;
+
 before(async () => {
   ({
     AccountProfiles,
@@ -77,6 +91,7 @@ before(async () => {
     Instances,
     pg,
     PostContents,
+    PostMentions,
     ProfileBlocks,
     ProfileFollows,
     Posts,
@@ -517,6 +532,7 @@ test('Report eligibility preserves each stored Post visibility and the selected 
   const follower = await createAuthenticatedSession();
   const stranger = await createAuthenticatedSession();
   const unselected = await createAuthenticatedSession({ selectProfile: false });
+  const mentioned = await createAuthenticatedSession();
   await db.insert(ProfileFollows).values([
     { followerProfileId: follower.profile.id, followeeProfileId: author.profile.id },
     { followerProfileId: unselected.profile.id, followeeProfileId: author.profile.id },
@@ -533,14 +549,25 @@ test('Report eligibility preserves each stored Post visibility and the selected 
     return new Response('ok', { status: 200 });
   });
   const cases = [
-    { visibility: PostVisibility.PUBLIC, allowed: [true, true, true, true] },
-    { visibility: PostVisibility.UNLISTED, allowed: [true, true, true, true] },
-    { visibility: PostVisibility.FOLLOWERS, allowed: [true, true, false, false] },
-    { visibility: PostVisibility.DIRECT, allowed: [true, false, false, false] },
+    { visibility: PostVisibility.PUBLIC, allowed: [true, true, true, true, true] },
+    { visibility: PostVisibility.UNLISTED, allowed: [true, true, true, true, true] },
+    { visibility: PostVisibility.FOLLOWERS, allowed: [true, true, false, false, false] },
+    { visibility: PostVisibility.DIRECT, allowed: [true, false, false, false, true] },
   ];
   for (const { visibility, allowed } of cases) {
-    const post = await createPost(author.profile.id, visibility);
-    for (const [index, viewer] of [author, follower, stranger, unselected].entries()) {
+    const post = await createPost(
+      author.profile.id,
+      visibility,
+      visibility === PostVisibility.DIRECT ? mentioned : undefined,
+    );
+    if (visibility === PostVisibility.DIRECT) {
+      const read = await requestGraphQL<{
+        node: { content: { bodyText: string } | null } | null;
+      }>(postContentQuery, { postId: encodeGlobalId('Post', post.id) }, mentioned.token);
+      assert.equal(read.errors, undefined);
+      assert.ok(read.data?.node?.content);
+    }
+    for (const [index, viewer] of [author, follower, stranger, unselected, mentioned].entries()) {
       await t.test(`${visibility}, viewer ${index}`, async () => {
         const beforeCalls = calls;
         const result = await submitReport(post.id, 'POST', viewer.token);
@@ -551,6 +578,40 @@ test('Report eligibility preserves each stored Post visibility and the selected 
       });
     }
   }
+});
+
+test('An old DIRECT Mention does not authorize reporting the current Post Content', async (t) => {
+  const author = await createAuthenticatedSession();
+  const mentioned = await createAuthenticatedSession();
+  const post = await createPost(author.profile.id, PostVisibility.DIRECT, mentioned);
+  const replacementContent = await db
+    .insert(PostContents)
+    .values({
+      document: postContentDocumentFromText('revised reportable post'),
+      postId: post.id,
+    })
+    .returning()
+    .then(firstOrThrow);
+  await db
+    .update(Posts)
+    .set({ currentContentId: replacementContent.id })
+    .where(eq(Posts.id, post.id));
+
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls += 1;
+    return new Response('ok', { status: 200 });
+  });
+  const read = await requestGraphQL<{ node: { content: { bodyText: string } | null } | null }>(
+    postContentQuery,
+    { postId: encodeGlobalId('Post', post.id) },
+    mentioned.token,
+  );
+  assert.deepEqual(read, { data: { node: null } });
+  assert.deepEqual(await submitReport(post.id, 'POST', mentioned.token), {
+    data: { submitContentReport: { status: 'REJECTED' } },
+  });
+  assert.equal(calls, 0);
 });
 
 test('Report retries recheck Follow and visibility without borrowing stale access', async (t) => {
@@ -839,17 +900,45 @@ const createAuthenticatedSession = async ({
   return { account, handle, profile, token };
 };
 
-const createPost = async (profileId: string, visibility: PostVisibility) => {
+const createPost = async (
+  profileId: string,
+  visibility: PostVisibility,
+  mentioned?: { handle: string; profile: { id: string } },
+) => {
   const post = await db
     .insert(Posts)
     .values({ profileId, state: PostState.ACTIVE, visibility })
     .returning()
     .then(firstOrThrow);
+  const bodyText = mentioned ? `reportable post @${mentioned.handle}` : 'reportable post';
+  const mention = mentioned
+    ? { profileId: mentioned.profile.id, relativeHandle: `@${mentioned.handle}` }
+    : undefined;
+  const start = mention ? bodyText.indexOf(mention.relativeHandle) : -1;
+  const document = mention
+    ? postContentDocumentFromTextAndMedia(bodyText, [], false, null, [
+        {
+          end: start + mention.relativeHandle.length,
+          profileId: mention.profileId,
+          relativeHandle: mention.relativeHandle,
+          start,
+        },
+      ])
+    : postContentDocumentFromText(bodyText);
   const content = await db
     .insert(PostContents)
-    .values({ document: postContentDocumentFromText('reportable post'), postId: post.id })
+    .values({
+      document,
+      postId: post.id,
+    })
     .returning()
     .then(firstOrThrow);
+  if (mention) {
+    await db.insert(PostMentions).values({
+      postContentId: content.id,
+      profileId: mention.profileId,
+    });
+  }
 
   return db
     .update(Posts)
