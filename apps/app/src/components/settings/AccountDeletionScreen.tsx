@@ -1,3 +1,4 @@
+import { Info } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { ConfirmationContent } from '@/components/ui/ConfirmationContent';
@@ -24,13 +25,13 @@ export type AccountDeletionScreenProps = {
 
 const INITIAL_STATE: AccountDeletionState = { phase: 'loading' };
 const ACKNOWLEDGEMENT_LABEL = '탈퇴 후 처리 내용을 모두 확인했습니다.';
-const CONFIRMATION_MESSAGE = [
-  '탈퇴하면 이 코스모 계정은 더 이상 사용할 수 없고, 로그인된 모든 기기에서 로그아웃됩니다.',
-  '코스모에 저장된 계정·프로필·게시글 등의 정보는 탈퇴 완료일부터 30일 동안 보관한 뒤 파기합니다. ' +
-    '진행 중인 신고·분쟁·수사 처리에 필요한 기록은 필요성이 끝날 때까지 보관한 뒤 지체 없이 파기하며, 법령에 따른 보존 대상은 정해진 기간 동안 보관합니다.',
-  '별마루 ID 계정은 유지됩니다. 별마루 ID도 탈퇴하려면 해당 서비스에서 별도로 신청해야 합니다.',
-  '탈퇴는 취소할 수 없으며, 현재 같은 별마루 ID로 코스모에 다시 가입할 수 없습니다.',
-].join('\n\n');
+const ACCOUNT_DELETION_NOTICES = [
+  '코스모의 계정·프로필·게시글 정보는 탈퇴 완료일부터 30일간 보관한 뒤 파기해요.',
+  '진행 중인 신고·분쟁·수사기관 요청에 필요한 기록은 필요한 기간만 보관한 뒤 지체 없이 파기해요.',
+  '법에 따라 보관해야 하는 정보는 정해진 기간 동안 보관한 뒤 파기해요.',
+  '별마루 ID는 유지돼요. 별마루 ID 탈퇴는 따로 신청해야 해요.',
+  '현재 같은 별마루 ID로 코스모에 다시 가입할 수 없어요.',
+];
 
 /** Controlled presentation only: the caller owns eligibility, mutation, credentials and navigation. */
 export function AccountDeletionScreen({
@@ -86,12 +87,29 @@ export function AccountDeletionScreen({
         cancelLabel="취소"
         confirmDisabled={pending ? undefined : !acknowledged}
         confirmLabel={error ? '다시 시도' : '코스모 탈퇴'}
-        message={CONFIRMATION_MESSAGE}
+        message="탈퇴는 취소할 수 없어요."
         onCancel={onCancel ?? (() => undefined)}
         onConfirm={error ? (onRetry ?? (() => undefined)) : (onConfirm ?? (() => undefined))}
         pending={pending}
         tone="danger"
       >
+        <View style={styles.notices}>
+          {ACCOUNT_DELETION_NOTICES.map((notice) => (
+            <View key={notice} style={styles.notice}>
+              <View
+                accessible={false}
+                accessibilityElementsHidden
+                aria-hidden
+                importantForAccessibility="no-hide-descendants"
+              >
+                <Info color={theme.foregroundSecondary} size={20} strokeWidth={2} />
+              </View>
+              <Text style={[styles.noticeText, { color: theme.foregroundSecondary }]}>
+                {notice}
+              </Text>
+            </View>
+          ))}
+        </View>
         <View style={styles.acknowledgement}>
           <Checkbox
             accessibilityLabel={ACKNOWLEDGEMENT_LABEL}
@@ -111,6 +129,9 @@ export function AccountDeletionScreen({
 const styles = StyleSheet.create({
   root: { gap: space[12], padding: space[16], width: '100%' },
   error: textStyles.uiCopyM,
+  notices: { gap: space[12] },
+  notice: { alignItems: 'flex-start', flexDirection: 'row', gap: space[8] },
+  noticeText: { ...textStyles.uiCopyM, flex: 1, minWidth: 0 },
   acknowledgement: { alignItems: 'center', flexDirection: 'row', gap: space[8], minHeight: 48 },
   acknowledgementLabel: { ...textStyles.uiCopyM, flex: 1 },
 });
