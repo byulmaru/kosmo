@@ -1008,13 +1008,15 @@ test('derived consent identity preserves local URI bindings without storing them
   );
 });
 
-test('remote Reject uses the expected pending state and preserves authored content', async () => {
+test('local policy gates decisions and remote Reject uses the expected pending state', async () => {
+  const { PostQuotePolicy } = await import('../enums');
   const author = await createProfile();
   const quoter = await createProfile(InstanceKind.ACTIVITYPUB);
   const source = await createPost({
     document: postContentDocumentFromText('Source'),
     origin: 'LOCAL',
     profileId: author.profile.id,
+    quotePolicy: PostQuotePolicy.AUTHOR,
     visibility: PostVisibility.PUBLIC,
   });
   const uri = `https://${quoter.instance.domain}/notes/quote-policy`;
@@ -1027,6 +1029,15 @@ test('remote Reject uses the expected pending state and preserves authored conte
     sourceActorUri: author.actorUri,
     sourceUri: new URL(`/ap/note/${source.post.id}`, publicOrigin).href,
   });
+  assert.equal(
+    await applyPostQuoteConsent({
+      ...identity,
+      operation: 'DECIDE',
+      result: 'APPROVED',
+      issuerActorUri: author.actorUri,
+    }),
+    null,
+  );
   const pending = await applyPostQuoteConsent({
     ...identity,
     operation: 'RESOLVE',
@@ -1064,4 +1075,26 @@ test('remote Reject uses the expected pending state and preserves authored conte
     .where(eq(Posts.id, quote.post.id))
     .then(firstOrThrow);
   assert.equal(stored.currentContentId, quote.content.id);
+});
+
+test('new local Quote of a remote Source starts pending and preserves its Source and body', async () => {
+  const author = await createProfile();
+  const sourceAuthor = await createProfile(InstanceKind.ACTIVITYPUB);
+  const source = await createRemotePost(
+    sourceAuthor.profile.id,
+    `https://${sourceAuthor.instance.domain}/notes/new-source`,
+    'Remote Source',
+  );
+  const document = postContentDocumentFromText('Authored Quote https://example.com');
+  const quote = await createPost({
+    document,
+    origin: 'LOCAL',
+    profileId: author.profile.id,
+    repostSourceId: source.post.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  assert.equal(quote.post.quoteConsentStatus, PostQuoteConsentStatus.PENDING);
+  assert.equal(quote.post.quoteConsentApprovalUri, null);
+  assert.equal(quote.post.repostSourceId, source.post.id);
+  assert.deepEqual(quote.content.document, document);
 });

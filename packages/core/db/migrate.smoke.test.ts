@@ -193,7 +193,7 @@ try {
       FROM information_schema.columns
       WHERE table_schema = 'public'
         AND (
-          (table_name = 'post' AND column_name IN ('reply_parent_id', 'repost_source_id', 'quote_consent_approval_uri', 'quote_consent_status'))
+          (table_name = 'post' AND column_name IN ('reply_parent_id', 'repost_source_id', 'quote_policy', 'quote_consent_approval_uri', 'quote_consent_status'))
           OR (
             table_name = 'media'
             AND column_name IN ('source', 'state', 'storage_reference', 'media_type', 'url', 'ready_at', 'alt_text')
@@ -219,6 +219,7 @@ try {
       { tableName: 'media', columnName: 'url' },
       { tableName: 'post', columnName: 'quote_consent_approval_uri' },
       { tableName: 'post', columnName: 'quote_consent_status' },
+      { tableName: 'post', columnName: 'quote_policy' },
       { tableName: 'post', columnName: 'reply_parent_id' },
       { tableName: 'post', columnName: 'repost_source_id' },
       { tableName: 'profile_mute', columnName: 'created_at' },

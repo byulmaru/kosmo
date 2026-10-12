@@ -28,6 +28,7 @@ export const postQuoteConsentStatus = createPgEnum(
 );
 export const postState = createPgEnum('post_state', Enum.PostState);
 export const postVisibility = createPgEnum('post_visibility', Enum.PostVisibility);
+export const postQuotePolicy = createPgEnum('post_quote_policy_value', Enum.PostQuotePolicy);
 export const profileFollowPolicy = createPgEnum('profile_follow_policy', Enum.ProfileFollowPolicy);
 export const profileMediaKind = createPgEnum('profile_media_kind', Enum.ProfileMediaKind);
 export const profileState = createPgEnum('profile_state', Enum.ProfileState);

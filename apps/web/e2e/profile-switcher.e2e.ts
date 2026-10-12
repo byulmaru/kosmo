@@ -286,7 +286,7 @@ test('Home no-data 오류는 actor revision 변경으로 새 actor query와 time
   await expect(page.getByRole('progressbar')).toHaveCount(0);
   await page.waitForLoadState('networkidle');
 
-  let homeQueryCount = 0;
+  const homeRequestActors: Array<string | null> = [];
   await page.route('**/graphql', async (route) => {
     const operation = readGraphQLOperation(route.request().postData());
     if (operation?.operationName !== 'HomePageQuery') {
@@ -294,8 +294,11 @@ test('Home no-data 오류는 actor revision 변경으로 새 actor query와 time
       return;
     }
 
-    homeQueryCount += 1;
-    if (homeQueryCount === 1) {
+    const body = JSON.parse(route.request().postData() ?? '{}') as {
+      extensions?: { selectedProfileId?: string };
+    };
+    homeRequestActors.push(body.extensions?.selectedProfileId ?? null);
+    if (homeRequestActors.length === 1) {
       await route.abort('failed');
       return;
     }
@@ -335,6 +338,17 @@ test('Home no-data 오류는 actor revision 변경으로 새 actor query와 time
       selectedProfileId,
     );
     await expect(page.getByText(betaPostBody)).toBeVisible();
+    await page.waitForLoadState('networkidle');
+
+    // A cached Home mount may revalidate once with network-only policy.
+    // Bound that refresh while checking every recovered request uses the new actor.
+    expect(homeRequestActors.slice(1).length).toBeGreaterThanOrEqual(1);
+    expect(homeRequestActors.slice(1).length).toBeLessThanOrEqual(2);
+    expect(homeRequestActors.slice(1).every((actor) => actor === betaProfileId)).toBe(true);
+    const settledCount = homeRequestActors.length;
+    await expect(page.getByRole('progressbar')).toHaveCount(0);
+    await page.waitForLoadState('networkidle');
+    expect(homeRequestActors).toHaveLength(settledCount);
   } finally {
     await page.unroute('**/graphql');
   }

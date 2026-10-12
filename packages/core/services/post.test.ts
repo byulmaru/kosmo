@@ -3,6 +3,7 @@ import { after, mock, test } from 'node:test';
 import { and, DrizzleQueryError, eq } from 'drizzle-orm';
 import {
   Accounts,
+  ActivityPubActors,
   ActivityPubPosts,
   db,
   firstOrThrow,
@@ -19,10 +20,12 @@ import {
 } from '../db';
 import {
   AccountState,
+  ActivityPubActorType,
   InstanceKind,
   InstanceState,
   MediaSource,
   MediaState,
+  PostQuoteConsentStatus,
   PostState,
   PostVisibility,
   ProfileFollowPolicy,
@@ -241,9 +244,14 @@ test('createPost는 Source와 자체 Content를 원자적으로 연결하고 Rep
   );
 });
 
-test('createPost는 승인 경계가 없는 ActivityPub Source Quote를 거부한다', async () => {
+test('createPost는 ActivityPub Source Quote를 pending consent로 생성한다', async () => {
   const sourceAuthor = await createProfile(InstanceKind.ACTIVITYPUB);
   const quoteAuthor = await createProfile();
+  await db.insert(ActivityPubActors).values({
+    profileId: sourceAuthor.id,
+    type: ActivityPubActorType.PERSON,
+    uri: `https://remote.example/users/${sourceAuthor.id}`,
+  });
   const source = await createPostPersisted({
     document: postContentDocumentFromText('remote source'),
     mentionProfileIds: [],
@@ -254,23 +262,24 @@ test('createPost는 승인 경계가 없는 ActivityPub Source Quote를 거부�
     receivedAt: Temporal.Now.instant(),
     visibility: PostVisibility.PUBLIC,
   });
-  const postCount = await db.$count(Posts);
+  if (!source.created) {
+    throw new Error('Expected the remote source to be created');
+  }
+  const quote = await createPostPersisted({
+    document: postContentDocumentFromText('quoted content'),
+    origin: 'LOCAL',
+    profileId: quoteAuthor.id,
+    repostSourceId: source.post.id,
+    visibility: PostVisibility.PUBLIC,
+  });
 
-  await assert.rejects(
-    createPostPersisted({
-      document: postContentDocumentFromText('quoted content'),
-      origin: 'LOCAL',
-      profileId: quoteAuthor.id,
-      repostSourceId: source.post.id,
-      visibility: PostVisibility.PUBLIC,
-    }),
-    (error) =>
-      error instanceof ValidationError &&
-      error.field === 'repostSourceId' &&
-      error.message === 'Quote approval is not available',
-  );
-
-  assert.equal(await db.$count(Posts), postCount);
+  const consent = await db
+    .select({ sourcePostId: Posts.repostSourceId, status: Posts.quoteConsentStatus })
+    .from(Posts)
+    .where(eq(Posts.id, quote.post.id))
+    .then(firstOrThrow);
+  assert.equal(consent.sourcePostId, source.post.id);
+  assert.equal(consent.status, PostQuoteConsentStatus.PENDING);
 });
 
 test('createPost는 타인의 Followers Only Source를 거부하고 자기 Source는 접근 범위를 넓히지 않는다', async () => {

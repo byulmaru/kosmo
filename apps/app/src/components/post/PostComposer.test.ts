@@ -51,6 +51,8 @@ let targetProps:
       mentionSearchState?: 'error' | 'loading' | 'ready';
       onBodyChange: (value: string) => void;
       onContentWarningChange: (value: string) => void;
+      onQuotePolicyChange: (value: 'EVERYONE' | 'FOLLOWERS' | 'AUTHOR') => void;
+      quotePolicy: 'EVERYONE' | 'FOLLOWERS' | 'AUTHOR';
       onRetryMentionSearch?: () => void;
       onSelectionChange: (selection: { end: number; start: number }) => void;
       onSelectMention: (
@@ -380,6 +382,54 @@ describe('PostComposer initial body', () => {
 });
 
 describe('PostComposer local author', () => {
+  it('선택한 인용 정책을 게시 mutation에 포함한다', async () => {
+    await act(async () => {
+      renderer = create(createElement(PostComposer, { profile: profileA as never }));
+    });
+    await act(async () => targetProps?.onBodyChange('인용 설정 게시글'));
+    await act(async () => targetProps?.onQuotePolicyChange('AUTHOR'));
+    assert.equal(targetProps?.quotePolicy, 'AUTHOR');
+    await act(async () => targetProps?.onSubmit());
+    assert.equal(mutationCalls[0]?.variables.input.quotePolicy, 'AUTHOR');
+  });
+
+  it('실제 작성 Profile 전환에서만 quotePolicy를 EVERYONE으로 초기화한다', async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposer, {
+          onExpand: () => undefined,
+          onRequestClose: () => undefined,
+          presentation: 'rail',
+          profile: profileA as never,
+          profiles: candidates as never,
+        }),
+      );
+    });
+    await act(async () => targetProps?.onBodyChange('보존할 본문 @alice'));
+    await act(async () => targetProps?.onContentWarningChange('보존할 CW'));
+    await act(async () => targetProps?.onVisibilityChange('PUBLIC'));
+    await act(async () => targetProps?.onQuotePolicyChange('AUTHOR'));
+    await act(async () => switcherProps?.onSelectProfile(profileA.id, profileA));
+    assert.equal(targetProps?.quotePolicy, 'AUTHOR');
+    await act(async () => undefined);
+    assert.equal(targetProps?.quotePolicy, 'AUTHOR');
+    await act(async () => switcherProps?.onSelectProfile(profileB.id, profileB));
+    assert.equal(targetProps?.quotePolicy, 'EVERYONE');
+    assert.equal(targetProps?.body, '보존할 본문 @alice');
+    assert.equal(targetProps?.contentWarning, '보존할 CW');
+    assert.equal(
+      renderer?.root.findByType('PostComposerTarget' as never).props.visibility,
+      'PUBLIC',
+    );
+    await act(async () => targetProps?.onQuotePolicyChange('FOLLOWERS'));
+    await act(async () => switcherProps?.onSelectProfile(profileA.id, profileA));
+    assert.equal(targetProps?.quotePolicy, 'EVERYONE');
+    await act(async () => targetProps?.onSubmit());
+    assert.equal(mutationCalls[0]?.variables.input.quotePolicy, 'EVERYONE');
+    assert.deepEqual(mutationCalls[0]?.variables.input.media, mediaValue.items);
+    assert.equal(mutationCalls[0]?.variables.input.contentWarning, '보존할 CW');
+  });
+
   it('preserves the draft while switching author, sends the local id, isolates home, and unlocks failed media', async () => {
     let editorFocusCount = 0;
     const editorRef = { current: { focus: () => editorFocusCount++ } };
@@ -530,6 +580,7 @@ describe('PostComposer local author', () => {
       bodyText: '😀 @alice',
       media: mediaValue.items,
       mentions: [{ profileId: 'profile-alice', start: 3, end: 9 }],
+      quotePolicy: 'EVERYONE',
       sensitiveMedia: true,
       visibility: 'UNLISTED',
     });

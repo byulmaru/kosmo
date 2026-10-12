@@ -39,11 +39,17 @@ export const UniversalCompactComposerLifecycle: Story = {
     );
     expect(menu.getByRole('menuitemradio', { name: '조용한 공개' })).toHaveFocus();
     await userEvent.keyboard('{End}');
-    expect(menu.getByRole('menuitemradio', { name: '팔로워만' })).toHaveFocus();
-    expect(menu.getByRole('menuitemradio', { name: '팔로워만' })).toHaveAttribute(
+    expect(dialog.queryByRole('menu')).toBeNull();
+    expect(trigger).toHaveAccessibleName('공개 범위: 팔로워만');
+    expect(trigger).toHaveFocus();
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.click(trigger);
+    const followersMenu = within(dialog.getByRole('menu', { name: '공개 범위 선택' }));
+    expect(followersMenu.getByRole('menuitemradio', { name: '팔로워만' })).toHaveAttribute(
       'aria-checked',
       'true',
     );
+    expect(followersMenu.getByRole('menuitemradio', { name: '팔로워만' })).toHaveFocus();
     await userEvent.keyboard('{Home}{Shift>}{Tab}{/Shift}');
     expect(trigger).toHaveFocus();
     await userEvent.keyboard('{Escape}');
