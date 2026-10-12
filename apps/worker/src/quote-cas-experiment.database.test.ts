@@ -616,8 +616,11 @@ test(
             } else {
               await until(
                 async () =>
-                  (await queryClient.getHandle(x.workflowId).query<{ runId: string }>('active'))
-                    .runId !== oldRun,
+                  (
+                    await environment.client.workflow
+                      .getHandle(x.workflowId)
+                      .query<{ runId: string }>('active')
+                  ).runId !== oldRun,
                 'continued after drain',
               );
             }
@@ -643,8 +646,11 @@ test(
             await x.handle.signal('renew');
             await until(
               async () =>
-                (await queryClient.getHandle(x.workflowId).query<{ runId: string }>('active'))
-                  .runId !== oldRun,
+                (
+                  await environment.client.workflow
+                    .getHandle(x.workflowId)
+                    .query<{ runId: string }>('active')
+                ).runId !== oldRun,
               'new continued run',
             );
           } else {
