@@ -55,6 +55,20 @@ composer control은 자체 동작만 수행한다. 모두 읽음, unread indicat
 
 이 결정은 표시 계약의 확정이며 구현·Figma 반영·Web/iOS/Android runtime 검증 완료를 뜻하지 않는다.
 
+## Account Operational Notification 표시 · PROD-1056
+
+- ACTIVE Account의 선택된 Profile 목록은 해당 Profile의 조회 가능한 social 알림과 Account의 Operational 알림을
+  하나의 순서 있는 목록으로 표시하고, unread count도 같은 범위를 사용한다. Profile을 전환하면 social 알림은
+  Profile 기준으로 바뀌고 Account Operational 알림은 유지된다. 선택된 Profile이 없으면 기존 Profile 필수 화면
+  경계를 따르며 Account 알림 저장과 Push 전달은 Profile 선택에 의존하지 않는다.
+- Operational 알림은 actor 없는 전체 폭 링크 행으로 표시한다. 저장된 제목, 제공된 경우의 본문, 시각을 보여주며
+  읽지 않은 행에는 기존의 subtle surface와 rail을 사용한다.
+- 링크의 접근 가능한 이름은 제목, 선택적 본문, 시각, 읽지 않은 경우 `읽지 않은 알림`, `알림 열기` 순으로
+  구성한다. 링크 역할, 표준 키보드 활성화와 기존 focus ring을 제공한다.
+- 링크 활성화는 내부 앱 경로를 앱 내에서 열고 HTTP(S) 외부 링크를 브라우저로 연다. 활성화 직후 Best Effort
+  Read를 시작하며 이동이 Read 결과를 기다리게 하지 않는다. Push tap은 동일한 목적지 규칙을 따르지만 Read
+  State를 변경하지 않는다.
+
 ## Native FCM push 권한 요청과 잠금 화면 미리보기 · PROD-875
 
 - 앱 시작이나 로그인 완료 때 OS 권한을 자동 요청하지 않는다. 앱 설정의 알림 action은 OS 권한이 미결정이면
@@ -98,14 +112,17 @@ composer control은 자체 동작만 수행한다. 모두 읽음, unread indicat
   본문을 미리보기에 포함한다.
 - 앱이 foreground인 경우에도 OS 알림 배너를 표시한다. 별도의 custom in-app Push banner를 추가하지
   않는다.
-- Push payload는 `notificationId`,
-  `recipientProfileId`, 내부 앱 경로 문자열 `href`를 route data로 제공한다. Push를 탭하면 native client가 `href`가
-  현재 프로필 경로(하위 경로 포함)와 `/follow-requests` 중 하나의 내부 경로인지 검증한다. `href`가 없거나 유효하지 않으면
-  Profile을 전환하지 않고 일반 알림 목록을 연다. 유효하면
-  현재 선택된 Profile이 `recipientProfileId`와 다를 때 기존 Profile 전환 흐름에서 현재 Account의 Profile
-  membership를 확인해 전환한 뒤 `href`로 직접 이동한다. `notificationId`로 목적지를 조회하지 않는다.
-  실제 목적지가 없거나 삭제됐거나 접근할 수 없는 경우는 해당 화면의 기존 처리를 따른다. 로그인되지 않은 상태에서
-  Push를 탭하면 원래 target을 버리고 일반 로그인 흐름을 따르며, 로그인 뒤 Push target으로 자동 복귀하지 않는다.
+- Profile Notification Push payload는 `notificationId`, `recipientProfileId`, 내부 앱 경로 문자열 `href`를
+  route data로 제공한다. Push를 탭하면 native client가 `href`가 현재 Profile 경로(하위 경로 포함)와
+  `/follow-requests` 중 하나의 내부 경로인지 검증한다. `href`가 없거나 유효하지 않으면 Profile을 전환하지 않고
+  일반 알림 목록을 연다. 유효하면 현재 선택된 Profile이 `recipientProfileId`와 다를 때 기존 Profile 전환
+  흐름에서 현재 Account의 Profile membership를 확인해 전환한 뒤 `href`로 직접 이동한다.
+  `notificationId`로 목적지를 조회하지 않는다. 실제 목적지가 없거나 삭제됐거나 접근할 수 없는 경우는 해당 화면의
+  기존 처리를 따른다.
+- Operational Notification Push는 저장된 `href`로 직접 이동한다. 내부 앱 경로는 앱에서 열고 HTTP(S) 외부 링크는
+  브라우저에서 열며 Profile을 전환하지 않는다. 주소가 없거나 안전한 목적지 형식이 아니면 Profile을 전환하지 않고
+  일반 알림 목록을 연다. 로그인되지 않은 상태에서 Push를 탭하면 원래 target을 버리고 일반 로그인 흐름을 따르며,
+  로그인 뒤 Push target으로 자동 복귀하지 않는다. Push tap은 canonical Read State를 바꾸지 않는다.
 - Notification 생성 시각부터 24시간이 지나면 해당 Push의 전달을 시도하지 않는다. 이 24시간은 최초
   Notification 생성 시각을 기준으로 하며, 재시도나 token refresh로 연장하거나 다시 시작하지 않는다. 이
   만료는 원래 인앱 Notification lifecycle을 변경하지 않는다.

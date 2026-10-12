@@ -1,10 +1,17 @@
-import { db, Instances, Profiles } from '@kosmo/core/db';
-import { AccountProfileRole, InstanceKind, PostVisibility } from '@kosmo/core/enums';
+import { randomUUID } from 'node:crypto';
+import { db, firstOrThrow, Instances, Posts, Profiles } from '@kosmo/core/db';
+import {
+  AccountProfileRole,
+  InstanceKind,
+  PostQuotePolicy,
+  PostVisibility,
+} from '@kosmo/core/enums';
 import { ValidationError } from '@kosmo/core/error';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { normalizePostContentPlainText } from '@kosmo/core/post-content';
 import { postContentDocumentFromTextAndMedia } from '@kosmo/core/post-content/server';
-import { createPost } from '@kosmo/core/services';
+import { runWorkflow } from '@kosmo/core/temporal/client';
+import { postCreateWorkflow, unwrapPostTransition } from '@kosmo/core/temporal/post';
 import { postBodyMaxLength, postBodyTextOrEmptySchema } from '@kosmo/core/validation';
 import { profileBlockVisibilityWhere } from '@kosmo/core/visibility';
 import { and, eq, inArray, or } from 'drizzle-orm';
@@ -83,6 +90,7 @@ builder.mutationField('createPost', (t) =>
       actorProfileId: t.input.globalID({ for: Profile, required: false }),
       replyParentId: t.input.globalID({ for: Post, required: false }),
       repostSourceId: t.input.globalID({ for: Post, required: false }),
+      quotePolicy: t.input.field({ type: PostQuotePolicy, required: false }),
       sensitiveMedia: t.input.boolean({ required: false }),
       visibility: t.input.field({ type: PostVisibility }),
     },
@@ -256,30 +264,47 @@ builder.mutationField('createPost', (t) =>
         }
       }
 
-      const result = await createPost({
-        accountId: ctx.session.accountId,
-        ...(mentionReferences.length > 0 ? { authoredBodyText: input.bodyText } : {}),
-        document: postContentDocumentFromTextAndMedia(
-          input.bodyText,
-          media.map(({ mediaId }) => ({
-            mediaId: mediaId.id,
-          })),
-          input.sensitiveMedia ?? false,
-          contentWarning || null,
-          mentionReferences,
-        ),
-        media: media.map(({ altText, mediaId }) => ({
-          altText: altText ?? null,
-          mediaId: mediaId.id,
-        })),
-        origin: 'LOCAL',
-        profileId,
-        replyParentId: input.replyParentId?.id,
-        repostSourceId: input.repostSourceId?.id,
-        visibility: input.visibility,
-      });
+      const result = unwrapPostTransition(
+        await runWorkflow(postCreateWorkflow, {
+          args: [
+            {
+              admissionId: randomUUID(),
+              accountId: ctx.session.accountId,
+              ...(mentionReferences.length > 0 ? { authoredBodyText: input.bodyText } : {}),
+              document: postContentDocumentFromTextAndMedia(
+                input.bodyText,
+                media.map(({ mediaId }) => ({
+                  mediaId: mediaId.id,
+                })),
+                input.sensitiveMedia ?? false,
+                contentWarning || null,
+                mentionReferences,
+              ),
+              media: media.map(({ altText, mediaId }) => ({
+                altText: altText ?? null,
+                mediaId: mediaId.id,
+              })),
+              origin: 'LOCAL',
+              profileId,
+              replyParentId: input.replyParentId?.id,
+              repostSourceId: input.repostSourceId?.id,
+              quotePolicy: input.quotePolicy ?? undefined,
+              visibility: input.visibility,
+            },
+          ],
+          mode: 'update-with-start',
+          updateId: 'create',
+          workflowIdConflictPolicy: 'USE_EXISTING',
+          workflowIdReusePolicy: 'REJECT_DUPLICATE',
+        }),
+      );
 
-      return { post: result.post };
+      const post = await db
+        .select()
+        .from(Posts)
+        .where(eq(Posts.id, result.postId))
+        .then(firstOrThrow);
+      return { post };
     },
   }),
 );

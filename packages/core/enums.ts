@@ -101,6 +101,7 @@ export const NotificationKind = {
   FOLLOW: 'FOLLOW',
   FOLLOW_REQUEST: 'FOLLOW_REQUEST',
   MENTION: 'MENTION',
+  OPERATIONAL: 'OPERATIONAL',
   QUOTE: 'QUOTE',
   REACTION: 'REACTION',
   REPLY: 'REPLY',
@@ -136,6 +137,13 @@ export const PostVisibility = {
   DIRECT: 'DIRECT',
 } as const;
 export type PostVisibility = keyof typeof PostVisibility;
+
+export const PostQuotePolicy = {
+  EVERYONE: 'EVERYONE',
+  FOLLOWERS: 'FOLLOWERS',
+  AUTHOR: 'AUTHOR',
+} as const;
+export type PostQuotePolicy = keyof typeof PostQuotePolicy;
 
 export const ProfileFollowPolicy = {
   OPEN: 'OPEN',

@@ -20,10 +20,22 @@ export { handleInboundBlock, handleInboundUndoBlock } from './src/inbound-profil
 export type { InboundQuoteRetryInput } from './src/inbound-quote';
 export {
   handleInboundQuote,
+  materializeInboundQuoteSource,
+  prepareInboundQuoteDelete,
+  prepareInboundQuoteResponse,
+  prepareStoredInboundQuote,
   resolveStoredInboundQuote,
   revokeInboundQuote,
 } from './src/inbound-quote';
-export { sendLocalPostCreate, sendLocalPostDelete } from './src/local-post-delivery';
+export {
+  sendLocalPostConsentUpdate,
+  sendLocalPostCreate,
+  sendLocalPostDelete,
+  sendLocalPostQuoteDecision,
+  sendLocalPostQuoteRequest,
+  sendLocalPostQuoteRevocation,
+  sendLocalPostQuoteRevocations,
+} from './src/local-post-delivery';
 export { sendLocalProfileUpdate } from './src/local-profile-update-delivery';
 export {
   getProfileBlockActivityUri,

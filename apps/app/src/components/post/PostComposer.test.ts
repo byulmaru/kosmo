@@ -20,6 +20,7 @@ import type {
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const platform = { OS: 'web' };
+let mentionSearchEnabled = true;
 Object.assign(platform, {
   select: <T>(values: { default?: T; web?: T }) => values.web ?? values.default,
 });
@@ -50,6 +51,8 @@ let targetProps:
       mentionSearchState?: 'error' | 'loading' | 'ready';
       onBodyChange: (value: string) => void;
       onContentWarningChange: (value: string) => void;
+      onQuotePolicyChange: (value: 'EVERYONE' | 'FOLLOWERS' | 'AUTHOR') => void;
+      quotePolicy: 'EVERYONE' | 'FOLLOWERS' | 'AUTHOR';
       onRetryMentionSearch?: () => void;
       onSelectionChange: (selection: { end: number; start: number }) => void;
       onSelectMention: (
@@ -185,6 +188,7 @@ mockModule('relay-runtime', {
   ROOT_ID: 'root',
 });
 mockModule('@/analytics/client', { trackAnalytics: () => undefined });
+mockModule('@/components/FeatureFlagsContext', { useFeatureFlag: () => mentionSearchEnabled });
 mockModule('@/components/profile/ProfileNameBlock', {
   ProfileNameBlock: () => createElement('ProfileNameBlock'),
 });
@@ -302,6 +306,7 @@ before(async () => {
 });
 
 beforeEach(() => {
+  mentionSearchEnabled = true;
   requests = [];
   relayEnvironment = createRelayEnvironment();
   textInputMountCount = 0;
@@ -322,7 +327,109 @@ afterEach(async () => {
   mock.restoreAll();
 });
 
+describe('PostComposer initial body', () => {
+  it('seeds an editable reply and submits its plain text when mention search is off', async () => {
+    mentionSearchEnabled = false;
+    const seed = '@parent @remote@remote.example ';
+    const props = {
+      initialBodyText: seed,
+      onRequestClose: () => undefined,
+      presentation: 'overlay' as const,
+      profile: profileA as never,
+      replyParentId: 'post-parent-a',
+    };
+
+    await act(async () => {
+      renderer = create(createElement(PostComposer, props));
+    });
+    await act(async () => undefined);
+
+    assert.equal(targetProps?.body, seed);
+    assert.deepEqual(targetProps?.selection, { start: seed.length, end: seed.length });
+    assert.equal(requests.length, 0);
+
+    await act(async () => targetProps?.onBodyChange('@parent '));
+    assert.equal(targetProps?.body, '@parent ');
+
+    await act(async () => targetProps?.onSubmit());
+    assert.equal(mutationCalls[0]?.variables.input.bodyText, '@parent');
+    assert.equal(mutationCalls[0]?.variables.input.mentions, undefined);
+    assert.equal(mutationCalls[0]?.variables.input.replyParentId, 'post-parent-a');
+    assert.equal(requests.length, 0);
+
+    const nextSeed = '@new-parent ';
+    await act(async () => {
+      renderer?.update(
+        createElement(PostComposer, {
+          ...props,
+          initialBodyText: nextSeed,
+          replyParentId: 'post-parent-b',
+        }),
+      );
+    });
+    assert.equal(targetProps?.body, nextSeed);
+    assert.deepEqual(targetProps?.selection, { start: nextSeed.length, end: nextSeed.length });
+  });
+
+  it('keeps a normal Post empty without an initial body', async () => {
+    await act(async () => {
+      renderer = create(createElement(PostComposer, { profile: profileA as never }));
+    });
+
+    assert.equal(targetProps?.body, '');
+    assert.deepEqual(targetProps?.selection, { start: 0, end: 0 });
+  });
+});
+
 describe('PostComposer local author', () => {
+  it('선택한 인용 정책을 게시 mutation에 포함한다', async () => {
+    await act(async () => {
+      renderer = create(createElement(PostComposer, { profile: profileA as never }));
+    });
+    await act(async () => targetProps?.onBodyChange('인용 설정 게시글'));
+    await act(async () => targetProps?.onQuotePolicyChange('AUTHOR'));
+    assert.equal(targetProps?.quotePolicy, 'AUTHOR');
+    await act(async () => targetProps?.onSubmit());
+    assert.equal(mutationCalls[0]?.variables.input.quotePolicy, 'AUTHOR');
+  });
+
+  it('실제 작성 Profile 전환에서만 quotePolicy를 EVERYONE으로 초기화한다', async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposer, {
+          onExpand: () => undefined,
+          onRequestClose: () => undefined,
+          presentation: 'rail',
+          profile: profileA as never,
+          profiles: candidates as never,
+        }),
+      );
+    });
+    await act(async () => targetProps?.onBodyChange('보존할 본문 @alice'));
+    await act(async () => targetProps?.onContentWarningChange('보존할 CW'));
+    await act(async () => targetProps?.onVisibilityChange('PUBLIC'));
+    await act(async () => targetProps?.onQuotePolicyChange('AUTHOR'));
+    await act(async () => switcherProps?.onSelectProfile(profileA.id, profileA));
+    assert.equal(targetProps?.quotePolicy, 'AUTHOR');
+    await act(async () => undefined);
+    assert.equal(targetProps?.quotePolicy, 'AUTHOR');
+    await act(async () => switcherProps?.onSelectProfile(profileB.id, profileB));
+    assert.equal(targetProps?.quotePolicy, 'EVERYONE');
+    assert.equal(targetProps?.body, '보존할 본문 @alice');
+    assert.equal(targetProps?.contentWarning, '보존할 CW');
+    assert.equal(
+      renderer?.root.findByType('PostComposerTarget' as never).props.visibility,
+      'PUBLIC',
+    );
+    await act(async () => targetProps?.onQuotePolicyChange('FOLLOWERS'));
+    await act(async () => switcherProps?.onSelectProfile(profileA.id, profileA));
+    assert.equal(targetProps?.quotePolicy, 'EVERYONE');
+    await act(async () => targetProps?.onSubmit());
+    assert.equal(mutationCalls[0]?.variables.input.quotePolicy, 'EVERYONE');
+    assert.deepEqual(mutationCalls[0]?.variables.input.media, mediaValue.items);
+    assert.equal(mutationCalls[0]?.variables.input.contentWarning, '보존할 CW');
+  });
+
   it('preserves the draft while switching author, sends the local id, isolates home, and unlocks failed media', async () => {
     let editorFocusCount = 0;
     const editorRef = { current: { focus: () => editorFocusCount++ } };
@@ -473,6 +580,7 @@ describe('PostComposer local author', () => {
       bodyText: '😀 @alice',
       media: mediaValue.items,
       mentions: [{ profileId: 'profile-alice', start: 3, end: 9 }],
+      quotePolicy: 'EVERYONE',
       sensitiveMedia: true,
       visibility: 'UNLISTED',
     });

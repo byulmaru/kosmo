@@ -19,6 +19,7 @@ const readAt = '2026-07-21T12:00:00Z';
 type NotificationTypename =
   | 'FollowNotification'
   | 'FollowRequestNotification'
+  | 'OperationalNotification'
   | 'ReplyNotification'
   | 'RepostNotification';
 
@@ -42,7 +43,6 @@ function createEnvironment(typename: NotificationTypename = 'FollowNotification'
     id: otherRecipientId,
     unreadNotificationCount: 7,
   });
-
   return new Environment({
     network: Network.create(() => Promise.reject(new Error('network is not used'))),
     store: new Store(source),
@@ -52,6 +52,7 @@ function createEnvironment(typename: NotificationTypename = 'FollowNotification'
 function commitReadPayload(
   environment: Environment,
   typename: NotificationTypename = 'FollowNotification',
+  recipientProfiles = [{ id: recipientId, unreadNotificationCount: 1 }],
 ) {
   const operation = createOperationDescriptor(getRequest(MarkReadMutation), {
     ids: [notificationId],
@@ -59,13 +60,10 @@ function commitReadPayload(
   environment.commitPayload(operation, {
     markNotificationRead: {
       notifications: [{ __typename: typename, id: notificationId, readAt }],
-      recipientProfiles: [
-        {
-          __typename: 'Profile',
-          id: recipientId,
-          unreadNotificationCount: 1,
-        },
-      ],
+      recipientProfiles: recipientProfiles.map((profile) => ({
+        __typename: 'Profile',
+        ...profile,
+      })),
     },
   });
 }
@@ -77,7 +75,7 @@ function requireRecord(environment: Environment, id: string) {
 }
 
 describe('NotificationListItem Read cache', () => {
-  it('normalizes the exact Notification and Recipient Profile', () => {
+  it('normalizes the Notification and Recipient Profile', () => {
     const environment = createEnvironment();
 
     commitReadPayload(environment);
@@ -85,6 +83,20 @@ describe('NotificationListItem Read cache', () => {
     assert.equal(requireRecord(environment, notificationId).readAt, readAt);
     assert.equal(requireRecord(environment, recipientId).unreadNotificationCount, 1);
     assert.equal(requireRecord(environment, otherRecipientId).unreadNotificationCount, 7);
+  });
+
+  it('normalizes an Operational Notification across all Recipient Profiles', () => {
+    const environment = createEnvironment('OperationalNotification');
+
+    commitReadPayload(environment, 'OperationalNotification', [
+      { id: recipientId, unreadNotificationCount: 1 },
+      { id: otherRecipientId, unreadNotificationCount: 6 },
+    ]);
+
+    assert.equal(requireRecord(environment, notificationId).__typename, 'OperationalNotification');
+    assert.equal(requireRecord(environment, notificationId).readAt, readAt);
+    assert.equal(requireRecord(environment, recipientId).unreadNotificationCount, 1);
+    assert.equal(requireRecord(environment, otherRecipientId).unreadNotificationCount, 6);
   });
 
   it('normalizes a Repost Notification and Recipient Profile in the same actor Store', () => {

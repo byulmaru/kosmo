@@ -1,0 +1,44 @@
+name: Discord main commits
+
+on:
+  push:
+    branches:
+      - main
+
+permissions: {}
+
+jobs:
+  notify:
+    name: Notify Discord
+    if: github.repository == 'byulmaru/kosmo' && !github.event.deleted
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Send main push to Discord
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        with:
+          script: |
+            const webhookUrl = process.env.DISCORD_WEBHOOK_URL?.trim();
+            if (!webhookUrl) {
+              throw new Error("DISCORD_WEBHOOK_URL is not configured.");
+            }
+
+            const url = new URL(webhookUrl);
+            url.pathname = url.pathname.replace(/\/(github\/?)?$/, "") + "/github";
+            url.searchParams.set("wait", "true");
+
+            const response = await fetch(url, {
+              method: "POST",
+              headers: {
+                "content-type": "application/json",
+                "X-GitHub-Event": "push",
+              },
+              body: JSON.stringify(context.payload),
+              signal: AbortSignal.timeout(15000),
+            });
+
+            if (!response.ok) {
+              throw new Error(`Discord notification failed: HTTP ${response.status}`);
+            }

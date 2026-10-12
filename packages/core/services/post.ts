@@ -1,9 +1,11 @@
+import { randomUUID } from 'node:crypto';
 import { and, eq, inArray, isNotNull, isNull, ne, notExists, or, sql } from 'drizzle-orm';
 import {
   ActivityPubPosts,
   db,
   first,
   firstOrThrow,
+  getDatabaseConnection,
   Instances,
   isUniqueViolation,
   Media,
@@ -29,18 +31,27 @@ import {
   canonicalizePostContentDocument,
   validateLocalPostContentDocument,
 } from '../post-content/server';
-import { temporalClient } from '../temporal/client';
+import { runWorkflow, temporalClient } from '../temporal/client';
+import {
+  postCreateWorkflow,
+  postDeleteMutationWorkflow,
+  unwrapPostTransition,
+} from '../temporal/post';
 import { KOSMO_TASK_QUEUE } from '../temporal/task-queue';
 import { postVisibilityCondition } from '../visibility/post';
-import { noPostCommit, oncePostCommit } from './post-commit';
-import { revokePostQuoteConsentsForSource } from './post-quote-consent';
+import {
+  assertPostQuotePolicy,
+  defaultPostQuotePolicy,
+  isLocalQuoteAllowedByPolicy,
+  revokePostQuoteConsentsForSource,
+} from './post-quote-consent';
 import { validatePostStructure } from './post-structure';
 import { assertProfilePairIsNotBlocked } from './profile-block-policy';
-import type { Transaction } from '../db';
+import type { DatabaseHandle, Transaction } from '../db';
+import type { PostQuotePolicy } from '../enums';
 import type { PostContentDocumentV1 } from '../post-content';
-import type { PostCommit } from './post-commit';
 
-type LocalPostInput = {
+export type LocalPostInput = {
   accountId?: string;
   /**
    * Normalized authored body paired with `document`, supplied by the API after validating the
@@ -56,6 +67,7 @@ type LocalPostInput = {
   profileId: string;
   replyParentId?: string;
   repostSourceId?: string;
+  quotePolicy?: PostQuotePolicy | null;
   visibility: PostVisibility;
 };
 
@@ -109,10 +121,6 @@ type CreatedPost = {
 };
 
 type DuplicatePost = { created: false };
-
-export type CreatePostTransactionResult =
-  | (CreatedPost & { postCommit: PostCommit })
-  | { created: false; postCommit: PostCommit; postId: string };
 
 const isActivityPubPostUriConflict = (error: unknown): boolean => {
   if (!isUniqueViolation(error) || !error || typeof error !== 'object' || !('cause' in error)) {
@@ -228,6 +236,7 @@ const findVisibleQuoteSource = async (
       ),
     )
     .limit(1)
+    .for('share', { of: Posts })
     .then(first);
 
 const validateQuoteSource = async (
@@ -247,10 +256,16 @@ const validateQuoteSource = async (
   if (source.visibility === PostVisibility.DIRECT) {
     throw new ValidationError('Post cannot be quoted', { field: 'repostSourceId' });
   }
-  if (source.instanceKind === InstanceKind.ACTIVITYPUB) {
-    throw new ValidationError('Quote approval is not available', {
-      field: 'repostSourceId',
-    });
+  if (
+    source.instanceKind === InstanceKind.LOCAL &&
+    source.profileId !== actorProfileId &&
+    !(await isLocalQuoteAllowedByPolicy(tx, {
+      actorProfileId,
+      sourceAuthorProfileId: source.profileId,
+      sourcePostId: source.id,
+    }))
+  ) {
+    throw new ValidationError('Post cannot be quoted', { field: 'repostSourceId' });
   }
   return source;
 };
@@ -442,19 +457,19 @@ const materializeRemoteMedia = async (
   return materialized;
 };
 
-export const deletePost = async ({
+export const deletePostPersisted = async ({
   actorProfileId,
-  origin,
   postId,
 }: {
   readonly actorProfileId: string;
   readonly origin: PostOrigin;
   readonly postId: string;
-}): Promise<{ readonly postId: string; readonly sourcePostId: string | null }> => {
-  const { deleted, result } = await db.transaction(async (tx) => {
+}) => {
+  return db.transaction(async (tx) => {
     const post = await tx
       .select({
         currentContentId: Posts.currentContentId,
+        state: Posts.state,
         profileId: Posts.profileId,
         replyParentId: Posts.replyParentId,
         repostSourceId: Posts.repostSourceId,
@@ -462,6 +477,7 @@ export const deletePost = async ({
       .from(Posts)
       .where(eq(Posts.id, postId))
       .limit(1)
+      .for('update')
       .then(first);
     if (!post) {
       throw new NotFoundError('Post not found');
@@ -486,46 +502,35 @@ export const deletePost = async ({
       })
       .then(first);
 
-    if (deleted && post.currentContentId !== null) {
-      await revokePostQuoteConsentsForSource(tx, postId);
-    }
+    const revokedQuoteIds =
+      (deleted || post.state === PostState.DELETED) && post.currentContentId !== null
+        ? (await revokePostQuoteConsentsForSource(tx, postId)).map(({ id }) => id).sort()
+        : [];
 
     const sourcePostId =
       post.currentContentId === null && post.replyParentId === null ? post.repostSourceId : null;
-    return { deleted, result: { postId, sourcePostId } };
+    return { deleted, revokedQuoteIds, result: { postId, sourcePostId } };
   });
+};
 
-  if (deleted) {
-    const workflowInput = { postId: deleted.id, origin };
-    const isRepostDelete = result.sourcePostId !== null;
-    try {
-      await temporalClient.withDeadline(Date.now() + 5_000, () =>
-        isRepostDelete
-          ? temporalClient.workflow.start('repostDeleteWorkflow', {
-              args: [workflowInput],
-              taskQueue: KOSMO_TASK_QUEUE,
-              workflowId: `repost-delete:${workflowInput.postId}`,
-              workflowIdConflictPolicy: 'USE_EXISTING',
-              workflowIdReusePolicy: 'REJECT_DUPLICATE',
-            })
-          : temporalClient.workflow.start('postDeleteWorkflow', {
-              args: [workflowInput],
-              taskQueue: KOSMO_TASK_QUEUE,
-              workflowId: `post-delete:${workflowInput.postId}`,
-              workflowIdConflictPolicy: 'USE_EXISTING',
-              workflowIdReusePolicy: 'REJECT_DUPLICATE',
-            }),
-      );
-    } catch (error) {
-      console.error('%s Workflow start failed', isRepostDelete ? 'Repost Delete' : 'Post Delete', {
-        error,
-        origin,
-        postId: deleted.id,
-      });
-    }
-  }
-
-  return result;
+export const deletePost = async ({
+  actorProfileId,
+  origin,
+  postId,
+}: {
+  readonly actorProfileId: string;
+  readonly origin: PostOrigin;
+  readonly postId: string;
+}): Promise<{ readonly postId: string; readonly sourcePostId: string | null }> => {
+  return unwrapPostTransition(
+    await runWorkflow(postDeleteMutationWorkflow, {
+      args: [{ actorProfileId, origin, postId }],
+      mode: 'update-with-start',
+      updateId: 'delete',
+      workflowIdConflictPolicy: 'USE_EXISTING',
+      workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+    }),
+  );
 };
 
 export function repostPost(input: LocalRepostInput): Promise<RepostResult>;
@@ -585,12 +590,45 @@ export async function repostPost(input: RepostInput): Promise<RepostResult> {
 
   return result;
 }
-export const createPostInTransaction = async (
+export function createPostPersisted(
+  input: LocalPostInput,
+  postId?: string,
+  handle?: DatabaseHandle,
+): Promise<CreatedPost>;
+export function createPostPersisted(
+  input: ActivityPubPostInput,
+  postId?: string,
+  handle?: DatabaseHandle,
+): Promise<CreatedPost | DuplicatePost>;
+export async function createPostPersisted(
   input: LocalPostInput | ActivityPubPostInput,
-  tx: Transaction,
-): Promise<CreatePostTransactionResult> => {
+  postId?: string,
+  handle?: DatabaseHandle,
+): Promise<CreatedPost | DuplicatePost> {
+  const localQuotePolicy =
+    input.origin === 'LOCAL'
+      ? input.quotePolicy == null
+        ? defaultPostQuotePolicy
+        : assertPostQuotePolicy(input.quotePolicy)
+      : undefined;
+  let result: CreatedPost;
   try {
-    return await tx.transaction(async (savepoint) => {
+    result = await getDatabaseConnection(handle).transaction(async (tx) => {
+      if (postId) {
+        const existing = await tx.select().from(Posts).where(eq(Posts.id, postId)).then(first);
+        if (existing) {
+          if (existing.profileId !== input.profileId || !existing.currentContentId) {
+            throw new PermissionDeniedError('Post create identity does not match');
+          }
+          const content = await tx
+            .select()
+            .from(PostContents)
+            .where(eq(PostContents.id, existing.currentContentId))
+            .then(firstOrThrow);
+          return { created: true as const, post: existing, content };
+        }
+      }
+      let quoteSource: Awaited<ReturnType<typeof validateQuoteSource>> | undefined;
       let document =
         input.origin === 'LOCAL'
           ? validateLocalPostContentDocument(input.document, input.authoredBodyText)
@@ -624,7 +662,7 @@ export const createPostInTransaction = async (
           if (!input.accountId) {
             throw new ValidationError('Media cannot be attached', { field: 'media' });
           }
-          const attachableMedia = await savepoint
+          const attachableMedia = await tx
             .select({ id: Media.id })
             .from(Media)
             .where(
@@ -639,7 +677,7 @@ export const createPostInTransaction = async (
             throw new ValidationError('Media cannot be attached', { field: 'media' });
           }
           for (const { altText, mediaId } of media) {
-            await savepoint.update(Media).set({ altText }).where(eq(Media.id, mediaId));
+            await tx.update(Media).set({ altText }).where(eq(Media.id, mediaId));
           }
         }
       }
@@ -647,11 +685,11 @@ export const createPostInTransaction = async (
       if (input.replyParentId !== undefined) {
         const parent =
           input.origin === 'LOCAL'
-            ? await findVisiblePost(savepoint, {
+            ? await findVisiblePost(tx, {
                 actorProfileId: input.profileId,
                 postId: input.replyParentId,
               })
-            : await savepoint
+            : await tx
                 .select({
                   currentContentId: Posts.currentContentId,
                   id: Posts.id,
@@ -664,7 +702,7 @@ export const createPostInTransaction = async (
         if (!parent) {
           throw new NotFoundError('Post not found');
         }
-        await assertProfilePairIsNotBlocked(savepoint, {
+        await assertProfilePairIsNotBlocked(tx, {
           notFoundMessage: 'Post not found',
           firstProfileId: input.profileId,
           secondProfileId: parent.profileId,
@@ -677,7 +715,7 @@ export const createPostInTransaction = async (
       }
 
       if (input.origin === 'LOCAL' && input.repostSourceId !== undefined) {
-        await validateQuoteSource(savepoint, {
+        quoteSource = await validateQuoteSource(tx, {
           actorProfileId: input.profileId,
           postId: input.repostSourceId,
         });
@@ -692,7 +730,7 @@ export const createPostInTransaction = async (
             ? input.receivedAt
             : undefined;
       if (input.origin === 'ACTIVITYPUB') {
-        const media = await materializeRemoteMedia(savepoint, {
+        const media = await materializeRemoteMedia(tx, {
           candidates: input.media ?? [],
           profileId: input.profileId,
         });
@@ -713,7 +751,7 @@ export const createPostInTransaction = async (
         }
       }
 
-      const content = await savepoint
+      const content = await tx
         .insert(PostContents)
         .values({
           createdAt: input.origin === 'ACTIVITYPUB' ? input.receivedAt : undefined,
@@ -723,16 +761,21 @@ export const createPostInTransaction = async (
         .returning()
         .then(firstOrThrow);
 
-      const post = await savepoint
+      const post = await tx
         .insert(Posts)
         .values({
           createdAt,
+          id: postId,
           currentContentId: content.id,
+          quotePolicy: localQuotePolicy,
           profileId: input.profileId,
           repostSourceId: input.origin === 'LOCAL' ? (input.repostSourceId ?? null) : undefined,
           quoteConsentStatus:
             input.origin === 'LOCAL' && input.repostSourceId !== undefined
-              ? PostQuoteConsentStatus.APPROVED
+              ? quoteSource?.instanceKind === InstanceKind.LOCAL ||
+                quoteSource?.profileId === input.profileId
+                ? PostQuoteConsentStatus.APPROVED
+                : PostQuoteConsentStatus.PENDING
               : undefined,
           state: PostState.ACTIVE,
           visibility: input.visibility,
@@ -741,7 +784,7 @@ export const createPostInTransaction = async (
         .then(firstOrThrow);
 
       if (input.origin === 'ACTIVITYPUB') {
-        await savepoint.insert(ActivityPubPosts).values({
+        await tx.insert(ActivityPubPosts).values({
           postId: post.id,
           publishedAt: input.publishedAt,
           receivedAt: input.receivedAt,
@@ -761,7 +804,7 @@ export const createPostInTransaction = async (
             ),
       );
       if (mentionProfileIds.size > 0) {
-        await savepoint.insert(PostMentions).values(
+        await tx.insert(PostMentions).values(
           [...mentionProfileIds].map((profileId) => ({
             postContentId: content.id,
             profileId,
@@ -779,13 +822,13 @@ export const createPostInTransaction = async (
       const linkedPost =
         input.replyParentId === undefined
           ? post
-          : await savepoint
+          : await tx
               .update(Posts)
               .set({ replyParentId: input.replyParentId })
               .where(eq(Posts.id, post.id))
               .returning()
               .then(firstOrThrow);
-      const linkedContent = await savepoint
+      const linkedContent = await tx
         .update(PostContents)
         .set({ postId: post.id })
         .where(eq(PostContents.id, content.id))
@@ -796,26 +839,6 @@ export const createPostInTransaction = async (
         content: linkedContent,
         created: true,
         post: linkedPost,
-        postCommit: oncePostCommit(async () => {
-          const workflowInput = { postId: linkedPost.id, origin: input.origin };
-          try {
-            await temporalClient.withDeadline(Date.now() + 5_000, () =>
-              temporalClient.workflow.start('postCreateEffectsWorkflow', {
-                args: [workflowInput],
-                taskQueue: KOSMO_TASK_QUEUE,
-                workflowId: `post-create-effects:${workflowInput.postId}`,
-                workflowIdConflictPolicy: 'USE_EXISTING',
-                workflowIdReusePolicy: 'REJECT_DUPLICATE',
-              }),
-            );
-          } catch (error) {
-            console.error('Post Create effects Workflow start failed', {
-              error,
-              origin: input.origin,
-              postId: linkedPost.id,
-            });
-          }
-        }),
       };
     });
   } catch (error) {
@@ -823,28 +846,56 @@ export const createPostInTransaction = async (
       throw error;
     }
 
-    const existing = await tx
-      .select({ postId: ActivityPubPosts.postId })
-      .from(ActivityPubPosts)
-      .where(eq(ActivityPubPosts.uri, input.objectUri))
-      .limit(1)
-      .then(first);
-    if (!existing) {
-      throw error;
-    }
-    return { created: false, postCommit: noPostCommit, postId: existing.postId };
+    return { created: false };
   }
-};
+
+  return result;
+}
 
 export function createPost(input: LocalPostInput): Promise<CreatedPost>;
 export function createPost(input: ActivityPubPostInput): Promise<CreatedPost | DuplicatePost>;
 export async function createPost(
   input: LocalPostInput | ActivityPubPostInput,
 ): Promise<CreatedPost | DuplicatePost> {
-  const result = await db.transaction((tx) => createPostInTransaction(input, tx));
-  await result.postCommit();
+  if (input.origin === 'LOCAL') {
+    const { postId } = unwrapPostTransition(
+      await runWorkflow(postCreateWorkflow, {
+        args: [{ ...input, admissionId: randomUUID() }],
+        mode: 'update-with-start',
+        updateId: 'create',
+        workflowIdConflictPolicy: 'USE_EXISTING',
+        workflowIdReusePolicy: 'REJECT_DUPLICATE',
+      }),
+    );
+    const post = await db.select().from(Posts).where(eq(Posts.id, postId)).then(firstOrThrow);
+    const content = await db
+      .select()
+      .from(PostContents)
+      .where(eq(PostContents.id, post.currentContentId!))
+      .then(firstOrThrow);
+    return { created: true, post, content };
+  }
+  const result = await createPostPersisted(input);
   if (!result.created) {
-    return { created: false };
+    return result;
+  }
+  try {
+    const workflowInput = { postId: result.post.id, origin: input.origin };
+    await temporalClient.withDeadline(Date.now() + 5_000, () =>
+      temporalClient.workflow.start('postCreateEffectsWorkflow', {
+        args: [workflowInput],
+        taskQueue: KOSMO_TASK_QUEUE,
+        workflowId: `post-create-effects:${workflowInput.postId}`,
+        workflowIdConflictPolicy: 'USE_EXISTING',
+        workflowIdReusePolicy: 'REJECT_DUPLICATE',
+      }),
+    );
+  } catch (error) {
+    console.error('Post Create effects Workflow start failed', {
+      error,
+      origin: input.origin,
+      postId: result.post.id,
+    });
   }
 
   return { content: result.content, created: true, post: result.post };

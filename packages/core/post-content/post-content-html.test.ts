@@ -90,6 +90,69 @@ test('serializes Mention identities with the unavailable Profile fallback', () =
   );
 });
 
+test('serializes resolved Mentions as escaped links and keeps fallback for unmapped targets', () => {
+  const mappedProfileId = '019f6678-86fa-709b-984e-1520766b8441';
+  const unmappedProfileId = '019f6678-86fa-709b-984e-1520766b8442';
+
+  assert.equal(
+    postContentDocumentToHtml(
+      {
+        version: 1,
+        summary: null,
+        body: {
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                { type: 'text', text: 'Hello ' },
+                { type: 'mention', attrs: { profileId: mappedProfileId } },
+                { type: 'text', text: ' and ' },
+                { type: 'mention', attrs: { profileId: unmappedProfileId } },
+              ],
+            },
+          ],
+        },
+      },
+      new Map([[mappedProfileId, { href: 'https://profiles.example/@alice', label: '@alice<&' }]]),
+    ),
+    '<p>Hello <span class="h-card"><a href="https://profiles.example/@alice" class="u-url mention">@alice&lt;&amp;</a></span> and <span>@알 수 없는 사용자</span></p>',
+  );
+});
+
+test('rejects unsafe resolved Mention hrefs at the HTML serialization boundary', () => {
+  assert.throws(
+    () =>
+      postContentDocumentToHtml(
+        {
+          version: 1,
+          summary: null,
+          body: {
+            type: 'doc',
+            content: [
+              {
+                type: 'paragraph',
+                content: [
+                  {
+                    type: 'mention',
+                    attrs: { profileId: '019f6678-86fa-709b-984e-1520766b8441' },
+                  },
+                ],
+              },
+            ],
+          },
+        },
+        new Map([
+          [
+            '019f6678-86fa-709b-984e-1520766b8441',
+            { href: 'javascript:alert(1)', label: '@alice' },
+          ],
+        ]),
+      ),
+    /Link href must use http or https/u,
+  );
+});
+
 for (const [name, document] of [
   ['unsupported version', { ...canonicalFixture, version: 2 }],
   [

@@ -6,6 +6,7 @@ import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-re
 import { QueryRenderer } from 'react-relay/legacy';
 import { ConnectionHandler, ROOT_ID } from 'relay-runtime';
 import { trackAnalytics } from '@/analytics/client';
+import { useFeatureFlag } from '@/components/FeatureFlagsContext';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
 import { Form } from '@/components/ui/Form';
@@ -22,6 +23,7 @@ import { PostComposerProfileSwitcher } from './PostComposerProfileSwitcher';
 import {
   createPostComposerContextKey,
   createPostComposerMutationInput,
+  defaultPostComposerQuotePolicy,
   findPostComposerMentionQuery,
   normalizePostComposerMentionDraft,
   replacePostComposerMentionQuery,
@@ -44,6 +46,7 @@ import type {
   PostComposerMentionCandidateResults,
   PostComposerMentionQuery,
   PostComposerMentionSearchState,
+  PostComposerQuotePolicy,
   PostComposerTextSelection,
 } from './postComposerState';
 
@@ -113,6 +116,7 @@ type PostComposerBaseProps = {
   editorRef?: RefObject<TextInput | null>;
   expandControlRef?: RefObject<View | null>;
   focusOnMount?: boolean;
+  initialBodyText?: string;
   initialContentWarning?: string | null;
   mentionCandidates?: PostComposerMentionCandidateResults;
   onPostCreated?: (post: PostComposerCreatedPost) => void;
@@ -218,6 +222,7 @@ function PostComposerContents({
   expandControlRef,
   environmentGenerationRef,
   focusOnMount = false,
+  initialBodyText,
   initialContentWarning,
   onPostCreated,
   onRequestClose,
@@ -233,6 +238,7 @@ function PostComposerContents({
   replyParentId,
   repostSourceId,
 }: PostComposerContentsProps) {
+  const mentionSearchEnabled = useFeatureFlag('post-composer-mention-search');
   const environment = useRelayEnvironment();
   const [selectedProfileKey, setSelectedProfileKey] = useState<PostComposerProfileRef | null>(null);
   const globalProfile = useFragment(PostComposerFragment, profileKey);
@@ -243,16 +249,20 @@ function PostComposerContents({
   const resolvedPresentation = presentation ?? 'overlay';
   const internalEditorRef = useRef<TextInput>(null);
   const editor = editorRef ?? internalEditorRef;
-  const [draft, setDraft] = useState<PostComposerDraft>({
-    body: '',
-    mentionRanges: [],
-    previousSelection: { start: 0, end: 0 },
-    selection: { start: 0, end: 0 },
+  const [draft, setDraft] = useState<PostComposerDraft>(() => {
+    const end = initialBodyText?.length ?? 0;
+    return {
+      body: initialBodyText ?? '',
+      mentionRanges: [],
+      previousSelection: { start: end, end },
+      selection: { start: end, end },
+    };
   });
   const { body, mentionRanges, selection } = draft;
   const activeMentionQuery = findPostComposerMentionQuery(body, selection.start, selection.end);
   const mentionQuery = activeMentionQuery?.query ?? '';
-  const shouldSearchMentions = mentionCandidates === undefined && mentionQuery.trim().length > 0;
+  const shouldSearchMentions =
+    mentionSearchEnabled && mentionCandidates === undefined && mentionQuery.trim().length > 0;
   const onBodyChange = useCallback((nextBody: string) => {
     setDraft((previous) => updatePostComposerDraftBody(previous, nextBody));
   }, []);
@@ -318,6 +328,9 @@ function PostComposerContents({
   );
   const defaultVisibility = resolvePostComposerVisibility(profile.private?.defaultPostVisibility);
   const [visibility, setVisibility] = useState<Visibility>(() => defaultVisibility);
+  const [quotePolicy, setQuotePolicy] = useState<PostComposerQuotePolicy>(
+    defaultPostComposerQuotePolicy,
+  );
   const defaultVisibilityRef = useRef(defaultVisibility);
   const visibilityProfileIdRef = useRef(profile.id);
   const [media, setMedia] = useState<PostComposerMediaValue>(emptyPostComposerMediaValue);
@@ -345,7 +358,10 @@ function PostComposerContents({
     contentWarningText.length > 0 ||
     media.items.length > 0 ||
     media.hasPendingMedia;
-  const hasUnsavedDraft = hasDraftContent || visibility !== defaultVisibility;
+  const hasUnsavedDraft =
+    hasDraftContent ||
+    visibility !== defaultVisibility ||
+    quotePolicy !== defaultPostComposerQuotePolicy;
   const remaining = postBodyMaxLength - bodyText.length - contentWarningText.length;
   const disabled =
     submitting ||
@@ -356,6 +372,7 @@ function PostComposerContents({
   useEffect(() => {
     if (visibilityProfileIdRef.current !== profile.id) {
       visibilityProfileIdRef.current = profile.id;
+      setQuotePolicy(defaultPostComposerQuotePolicy);
       defaultVisibilityRef.current = defaultVisibility;
       return;
     }
@@ -428,6 +445,7 @@ function PostComposerContents({
             contentWarningText,
             repostSourceId,
             mentions,
+            quotePolicy,
           ),
           media: media.items,
           ...(profile.id !== globalProfileId ? { actorProfileId: profile.id } : {}),
@@ -463,6 +481,7 @@ function PostComposerContents({
         setMediaGeneration((generation) => generation + 1);
         setSelectedProfileKey(null);
         setVisibility(resolvePostComposerVisibility(globalProfile.private?.defaultPostVisibility));
+        setQuotePolicy(defaultPostComposerQuotePolicy);
         editor.current?.focus();
         submittedCallback?.(createdPost);
       },
@@ -669,6 +688,8 @@ function PostComposerContents({
                     }
                   },
                   onPollAction: () => undefined,
+                  onQuotePolicyChange: setQuotePolicy,
+                  quotePolicy,
                   onSubmit: submit,
                   onVisibilityChange: setVisibility,
                   remaining,

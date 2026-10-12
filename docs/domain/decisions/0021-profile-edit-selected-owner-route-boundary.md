@@ -37,10 +37,9 @@ Tag 계약과 backend 기반을 기다린다. 이 두 생명주기를 분리하�
   성공 navigation과 production 진입점을 함께 소유한다.
 - Profile Tag editor presentation은 UI 선제작 slice가 만들고, Profile Tag 연결 slice는 같은 component를
   재사용해 mutation·server validation·Relay와 공개 Profile 표시를 연결한다.
-- Follow Approval Policy는 Profile 객체의 정책으로 유지하며, Settings 진입점이 제공되기 전까지 Profile 편집
-  화면의 한 줄 Switch와 같은 draft/save 경계에서 다룬다. Switch는 `OPEN`/`APPROVAL_REQUIRED` enum으로
-  매핑되고 정책 변경은 기존 Pending Follow Request를 바꾸지 않는다. Settings 진입점이 제공되면
-  `PROD-531`이 이 제어를 Settings로 이전하고 Profile 편집의 중복 제어를 제거한다.
+- Follow Approval Policy는 Profile 객체의 정책으로 유지한다. `PROD-531`에서 제어를 `/settings/profile`로
+  이전하고 기본 Post Visibility와 함께 항목별 변경 즉시 자동 저장한다. Profile 편집의 중복 제어와 저장을 제거한다.
+  Switch는 `OPEN`/`APPROVAL_REQUIRED` enum으로 매핑되고 정책 변경은 기존 Pending Follow Request를 바꾸지 않는다.
 
 ## 이유
 

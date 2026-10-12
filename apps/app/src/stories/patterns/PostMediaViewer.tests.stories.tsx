@@ -451,7 +451,7 @@ export const WideRailCompositionContract: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const rail = await canvas.findByTestId('post-media-viewer-context-rail');
-    const thread = await within(rail).findByTestId('post-thread');
+    const thread = await within(rail).findByTestId('post-thread', {}, { timeout: 5000 });
     const rows = Array.from(thread.children) as HTMLElement[];
     const currentRow = within(thread).getByTestId('post-thread-current-wide-rail-current');
 

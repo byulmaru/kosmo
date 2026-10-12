@@ -32,6 +32,9 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   유지한다. 같은 Profile을 여러 번 선택한 경우 각 occurrence를 독립적으로 편집할 수 있다. 선택한 Profile을
   게시 시 이용할 수 없거나 본문 handle과 선택한 Profile이 일치하지 않으면 게시 전체가 실패한다. Mention은
   본문에 실제 작성한 문자열로 세는 기존 500자 합산에 별도 길이를 더하지 않는다.
+- 새 Reply 본문에는 direct Parent 작성자와 원글에서 멘션한 사람들을 미리 적는다. 현재 작성 Profile은
+  제외하고 같은 Profile은 한 번만 넣는다. 사용자는 문구를 수정하거나 지울 수 있고, 이 기본 문구는 Mention 검색 UI가
+  꺼져 있어도 제공하며 Profile을 새로 조회하지 않는다. 일반 Post와 Quote 본문은 기존처럼 비어 있다.
 - Parent가 일반 Post, Reply 또는 Quote이면 화면에 표시되는 direct Parent의 자체 Content와 Source preview를
   보여준다. Action Bar와 Post menu는 Parent 맥락 안에 중복 표시하지 않는다.
 
@@ -144,8 +147,11 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
 - 기본값은 선택한 Local Profile의 기본 Post Visibility다. 저장값이 없거나 설정 조회가 실패·unavailable이면
   다른 Profile의 값을 재사용하지 않고 `UNLISTED`를 사용한다.
 - 현재 Reply 작성 범위에서는 `PUBLIC`, `UNLISTED`, `FOLLOWERS`를 제공한다.
-- `DIRECT`/지정 멤버만 공개는 노출하지 않는다. Mentioned Profile recipient 결정과 작성 계약은 이 범위에
-  포함하지 않는다.
+- `DIRECT`/지정 멤버만 공개와 별도 수신자 선택 UI는 제공하지 않는다.
+- PROD-924는 공용 공개 범위 설정 UI에 인용 허용 정책을 추가한다. 현재 draft가 `PUBLIC` 또는
+  `UNLISTED`일 때만 `모두`·`팔로워`·`본인만`을 선택하며 Parent나 Source의 정책을 상속하지 않는다.
+- 이 정책은 작성할 Post가 인용되는 범위를 정하며 Reply+Quote 동시 작성을 추가하지 않는다. 초기값·draft 수명·
+  제출·오류 복구는 [Post Action Bar의 설정 계약](./post-action-bar.md#공개-범위-설정의-인용-정책-2026-09-11)을 따른다.
 
 ## Content Warning과 reveal 상태
 
@@ -205,6 +211,9 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   Session/Profile과 Relay actor를 바꾸지 않으며, 본문·선택된 Mention·Content Warning·Media·ALT·Sensitive Media·현재
   Visibility를 보존한 채 다음 mutation과 새 Media upload issue에 선택한 Profile을 사용한다.
   Reply·Quote Composer에는 이 local 전환을 제공하지 않는다.
+- 인용 허용 정책은 작성 Profile에 귀속한다. 실제 작성 Profile ID가 바뀌면 `모두`(`EVERYONE`)로
+  초기화하며, 같은 Profile 재선택과 picker 취소에는 현재 선택값을 유지한다. A→B→A 전환에서도 A의 과거
+  선택값을 복원하지 않는다. 본문·선택된 Mention·Content Warning·Visibility·Media는 위 local 전환 계약대로 보존한다.
 - local Profile 선택이 성공하면 본문 editor로 focus를 옮겨 Native에서는 키보드를 이어서 입력할 수 있게 한다. Profile
   picker의 Escape·취소는 작성 Profile을 바꾸지 않고 trigger로 focus를 복원한다.
 - 업로드·게시 중에는 작성 Profile 전환을 잠그고 요청이 끝나면 다시 허용한다. 실패한 첨부와 draft는 유지한다.
@@ -222,6 +231,9 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
 
 ## 접근성·입력
 
+- Profile 멘션 자동완성 검색 UI는 feature flag가 활성화된 경우에만 제공한다. 비활성화 중에도 직접 입력한
+  멘션 텍스트는 기존 게시 시 파싱 흐름을 유지한다.
+
 - Web modal은 공용 `글쓰기` heading과 관계 맥락을 포함한 modal dialog semantics, focus trap을
   제공한다.
 - Web modal은 닫힌 뒤 원래 Reply action으로 포커스를 복원하고, fullscreen은 editor에 포커스를 둔 채 열린다.
@@ -238,7 +250,7 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
 
 ## 제외 범위
 
-- Mentioned Profiles recipient와 `DIRECT` Reply
+- `DIRECT` Reply와 별도 수신자 선택 UI
 - Poll을 포함한 Reply 작성
 - `PostContentDocument` 구조 변경, Content Warning 전용 모델·DB 컬럼 또는 서버 동기화 reveal preference
 - 새 Media 형식·제한, Reply 전용 Media 모델·storage·API·uploader 또는 일반 Composer Media UI 재설계
@@ -272,6 +284,8 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
 - 일반 Post, Reply, Quote Parent의 Content/Source 표시와 Action Bar/menu 제외, thread connector를 확인한다.
 - Visibility 독립성, 선택 Profile의 기본값과 `UNLISTED` fallback, `DIRECT` 제외, 500자 count와
   disabled/pending/error 상태를 확인한다.
+- Reply 본문 초기값의 direct Parent 작성자와 저장된 Mention 포함, 현재 작성 Profile 제외, 중복 제거,
+  편집·삭제·제출과 일반 Post·Quote 빈 초기값을 확인한다.
 - 일반 Post와 Reply의 Content Warning 입력·제출, Parent Content Warning 초기값, 수정·제거, 합산 500자 검증과
   Reply-open discard/reset/error 유지 상태를 확인한다.
 - Home, Profile, Thread와 Reply Parent preview에서 같은 `Post.id`의 reveal·다시 가리기 상태가 공유되고 surface

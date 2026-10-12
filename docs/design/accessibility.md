@@ -117,6 +117,17 @@ library에 종속하지 않고 icon, glyph, 짧은 기호 문자 또는 loading 
   inner dialog semantics를 유지한다.
 - `onAccessibilityEscape`는 `dismissDisabled`가 false일 때만 `onClose`로 이어진다. backdrop, 닫기 button과
   platform back도 같은 dismiss 경계를 사용하며 pending 중에는 닫히지 않는다.
+- ModalSheet·Native ActionMenu는 취소·닫힘이 확정되면 닫힘 애니메이션 동안 남은 surface의 추가 입력을
+  차단한다. 포인터·키보드·접근성 활성화에 같은 결과를 적용하고, 정상적으로 선택한 action과 기존 focus 복귀는 유지한다.
+
+### Native 하단 시트
+
+- Reaction Full Picker와 Repost·Quote ActionMenu는 공용 하단 시트 손잡이를 사용한다. 손잡이는 이름이 있는 버튼이며,
+  피커에서는 펼치기·접기, ActionMenu에서는 닫기를 제공한다. 두 시트 모두 손잡이를 아래로 끌어 닫을 수 있다.
+- ActionMenu의 손잡이를 위로 끌면 시트가 최대 24pt 늘어나고, 놓으면 원래 높이로 돌아온다. 닫기가 비활성화된
+  동안에는 움직이지 않으며, reduced motion에서는 복귀 애니메이션을 생략한다.
+- 피커를 펼친 상태에서 손잡이를 아래로 끌면 먼저 초기 높이로 접는다. 목록 스크롤은 손잡이 제스처와 분리한다.
+  VoiceOver·TalkBack의 실제 포커스 순서, 제스처와 닫은 뒤 trigger 복귀는 Native runtime에서 확인한다.
 
 ### Post Action Bar의 플랫폼별 target
 

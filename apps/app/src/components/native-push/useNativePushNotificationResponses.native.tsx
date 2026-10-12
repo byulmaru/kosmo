@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef } from 'react';
-import { AppState } from 'react-native';
+import { AppState, Linking } from 'react-native';
 import { graphql, useMutation } from 'react-relay';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useSession } from '@/session/SessionProvider';
@@ -90,6 +90,25 @@ export function useNativePushNotificationResponses() {
       if (!envelope) {
         markResponseHandled(response);
         fallbackToNotifications();
+        return;
+      }
+
+      if (envelope.kind === 'operational') {
+        markResponseHandled(response);
+        if (currentSession.accountId !== envelope.recipientAccountId) {
+          fallbackToNotifications();
+          return;
+        }
+
+        if (envelope.href.kind === 'internal') {
+          router.replace(envelope.href.href);
+        } else {
+          try {
+            await Linking.openURL(envelope.href.href);
+          } catch {
+            fallbackToNotifications();
+          }
+        }
         return;
       }
 

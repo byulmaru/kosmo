@@ -13,6 +13,7 @@ import {
   MediaSource,
   MediaState,
   PostQuoteConsentStatus,
+  PostQuotePolicy,
   PostState,
   PostVisibility,
   ProfileFollowPolicy,
@@ -1199,10 +1200,41 @@ describe('Post Reply GraphQL 경계', () => {
     assert.equal(createContext.mock.callCount(), 0);
   });
 
-  test('Root Post Create effects Workflow start 실패는 commit된 Post와 GraphQL 성공을 바꾸지 않는다', async (t) => {
+  test('createPost는 기본·명시적 인용 정책을 저장하고 작성 본문과 링크를 유지한다', async () => {
     const auth = await createAuthenticatedSession();
-    const createContext = t.mock.method(localOutboundFederation, 'createContext');
-    t.mock.method(temporalClient.workflow, 'start', async () => {
+    const bodyText = 'authored quote policy https://kept.example/link';
+    for (const policy of [undefined, PostQuotePolicy.FOLLOWERS, PostQuotePolicy.AUTHOR]) {
+      const result = await requestGraphQL<{
+        createPost: { post: { id: string; quotePolicy: string; content: { bodyText: string } } };
+      }>(
+        `mutation($input: CreatePostInput!) {
+          createPost(input: $input) { post { id quotePolicy content { bodyText } } }
+        }`,
+        {
+          input: {
+            bodyText,
+            visibility: PostVisibility.PUBLIC,
+            ...(policy ? { quotePolicy: policy } : {}),
+          },
+        },
+        auth.token,
+      );
+      assertNoGraphQLErrors(result);
+      assert.equal(result.data?.createPost.post.quotePolicy, policy ?? PostQuotePolicy.EVERYONE);
+      assert.equal(result.data?.createPost.post.content.bodyText, bodyText);
+      const stored = await db
+        .select()
+        .from(Posts)
+        .where(eq(Posts.quotePolicy, policy ?? PostQuotePolicy.EVERYONE))
+        .then(firstOrThrow);
+      assert.equal(stored.profileId, auth.profile.id);
+      assert.equal(stored.state, PostState.ACTIVE);
+    }
+  });
+
+  test('Root Post Create Workflow admission 실패는 Post를 저장하지 않는다', async (t) => {
+    const auth = await createAuthenticatedSession();
+    const update = t.mock.method(temporalClient.workflow, 'executeUpdateWithStart', async () => {
       throw new Error('Temporal unavailable');
     });
 
@@ -1214,40 +1246,23 @@ describe('Post Reply GraphQL 경계', () => {
       auth.token,
     );
 
-    assertNoGraphQLErrors(result);
-
-    const committed = await db
-      .select({ currentContentId: Posts.currentContentId, state: Posts.state })
-      .from(Posts)
-      .then(firstOrThrow);
-    assert.equal(committed.state, PostState.ACTIVE);
-    assert.ok(committed.currentContentId);
-    assert.equal(createContext.mock.callCount(), 0);
+    assert.equal(result.errors?.[0]?.extensions?.code, 'INTERNAL_SERVER_ERROR');
+    assert.equal(update.mock.callCount(), 1);
+    assert.equal(await db.$count(Posts), 0);
   });
 
-  test('Root Post Delete Workflow start 실패는 commit된 Tombstone과 GraphQL 성공을 바꾸지 않는다', async (t) => {
+  test('Root Post Delete admission 실패는 Post를 ACTIVE로 유지하고 GraphQL 오류를 반환한다', async (t) => {
     const auth = await createAuthenticatedSession();
     const post = await createContentPost(auth.profile.id);
-    const start = t.mock.method(temporalClient.workflow, 'start', async () => {
+    const admission = t.mock.method(temporalClient.workflow, 'executeUpdateWithStart', async () => {
       throw new Error('Temporal unavailable');
     });
-    const errorLog = t.mock.method(console, 'error', () => undefined);
-
     const result = await requestDeletePost(post.id, auth.token);
-
-    assertNoGraphQLErrors(result);
-    assert.equal(result.data?.deletePost.postId, encodeGlobalId('Post', post.id));
-    assert.equal(start.mock.callCount(), 1);
-    assert.equal(errorLog.mock.callCount(), 1);
-    const errorLogCall = errorLog.mock.calls[0];
-    assert.ok(errorLogCall);
-    assert.equal(errorLogCall.arguments[0], '%s Workflow start failed');
-    assert.equal(errorLogCall.arguments[1], 'Post Delete');
-    assert.deepEqual(errorLogCall.arguments[2], {
-      error: new Error('Temporal unavailable'),
-      origin: 'LOCAL',
-      postId: post.id,
-    });
+    assert.ok(result.errors?.length);
+    assert.equal(admission.mock.callCount(), 1);
+    const stored = await db.select().from(Posts).where(eq(Posts.id, post.id)).then(firstOrThrow);
+    assert.equal(stored.state, PostState.ACTIVE);
+    assert.equal(stored.deletedAt, null);
   });
 
   test('Reply 삭제 transaction 실패는 ActivityPub delivery를 호출하지 않는다', async (t) => {
@@ -1272,33 +1287,44 @@ describe('Post Reply GraphQL 경계', () => {
     assert.equal(stored.deletedAt, null);
   });
 
-  test('모든 최초 Content Tombstone은 Post Delete Workflow를 한 번만 시작한다', async (t) => {
+  test('Content 삭제는 Source owner에서 commit·effects를 처리하고 재요청은 Tombstone을 유지한다', async () => {
     const auth = await createAuthenticatedSession();
     const replyParent = await createContentPost(auth.profile.id);
     const reply = await createContentPost(auth.profile.id, { replyParentId: replyParent.id });
     const rootPost = await createContentPost(auth.profile.id);
-    const starts: unknown[] = [];
-    t.mock.method(
-      temporalClient.workflow,
-      'start',
-      async (_type: string, options: { args: unknown[] }) => {
-        starts.push(options);
-        return undefined as never;
-      },
-    );
-
-    for (const post of [reply, reply, rootPost]) {
+    for (const post of [reply, rootPost]) {
       const result = await requestDeletePost(post.id, auth.token);
       assertNoGraphQLErrors(result);
+      const handle = temporalClient.workflow.getHandle(`post-delete-mutation:${post.id}`);
+      await handle.result();
+      const history = await handle.fetchHistory();
+      const activities = (history.events ?? []).flatMap((event) => {
+        const type = event.activityTaskScheduledEventAttributes?.activityType?.name;
+        return type ? [type] : [];
+      });
+      assert.equal(activities.filter((type) => type === 'deletePostTransitionActivity').length, 1);
+      assert.equal(activities.filter((type) => type === 'sendLocalPostDeleteActivity').length, 1);
+      assert.equal(
+        activities.filter((type) => type === 'sendLocalPostQuoteRevocationsActivity').length,
+        1,
+      );
+      const cached = await handle.getUpdateHandle('delete').result();
+      assert.equal((cached as { ok: boolean }).ok, true);
+      const stored = await db.select().from(Posts).where(eq(Posts.id, post.id)).then(firstOrThrow);
+      assert.equal(stored.state, PostState.DELETED);
+      assert.ok(stored.deletedAt);
+      const repeated = await requestDeletePost(post.id, auth.token);
+      assertNoGraphQLErrors(repeated);
+      await temporalClient.workflow.getHandle(`post-delete-mutation:${post.id}`).result();
+      const afterRetry = await db
+        .select()
+        .from(Posts)
+        .where(eq(Posts.id, post.id))
+        .then(firstOrThrow);
+      assert.equal(afterRetry.state, PostState.DELETED);
+      assert.deepEqual(afterRetry.deletedAt, stored.deletedAt);
+      assert.equal(afterRetry.currentContentId, stored.currentContentId);
     }
-
-    assert.deepEqual(
-      starts.map((options) => (options as { args: unknown[] }).args[0]),
-      [
-        { origin: 'LOCAL', postId: reply.id },
-        { origin: 'LOCAL', postId: rootPost.id },
-      ],
-    );
   });
 
   test('Content 없는 Repost Parent는 replyParentId VALIDATION으로 거부하고 rollback한다', async () => {
@@ -1491,7 +1517,8 @@ describe('Post Reply GraphQL 경계', () => {
 
   test('조상 Quote의 consent 상태에 따라 repostSource를 숨기거나 노출한다', async () => {
     const author = await createProfile('ancestor-quote-consent-author');
-    const source = await createContentfulPost(author.id);
+    const sourceAuthor = await createProfile('ancestor-quote-consent-source-author');
+    const source = await createContentfulPost(sourceAuthor.id);
     const statuses = [
       null,
       PostQuoteConsentStatus.REVOKED,
@@ -1506,10 +1533,8 @@ describe('Post Reply GraphQL 경계', () => {
       const quote = await createContentfulPost(author.id, {
         replyParentId,
         repostSourceId: source.id,
+        quoteConsentStatus: status,
       });
-      if (status !== null) {
-        await db.update(Posts).set({ quoteConsentStatus: status }).where(eq(Posts.id, quote.id));
-      }
       quotes.push({ id: quote.id, status });
       replyParentId = quote.id;
     }
@@ -1523,11 +1548,25 @@ describe('Post Reply GraphQL 경계', () => {
       [...quotes].reverse().map(({ id, status }) => ({
         id: encodeGlobalId('Post', id),
         repostSource:
-          status === null || status === PostQuoteConsentStatus.APPROVED
+          status === PostQuoteConsentStatus.APPROVED
             ? { id: encodeGlobalId('Post', source.id) }
             : null,
       })),
     );
+
+    const selfQuote = await createContentfulPost(sourceAuthor.id, {
+      repostSourceId: source.id,
+      quoteConsentStatus: PostQuoteConsentStatus.REVOKED,
+    });
+    const selfReply = await createContentfulPost(author.id, { replyParentId: selfQuote.id });
+    const selfResult = await requestPostAncestorsWithSources(selfReply.id);
+    assertNoGraphQLErrors(selfResult);
+    assert.deepEqual(selfResult.data?.node?.replyAncestors, [
+      {
+        id: encodeGlobalId('Post', selfQuote.id),
+        repostSource: { id: encodeGlobalId('Post', source.id) },
+      },
+    ]);
   });
 
   test('조회 불가능한 중간 Parent에서 조상 경로를 중단하고 그 위를 노출하지 않는다', async () => {
@@ -2180,6 +2219,7 @@ const createContentfulPost = async (
     mediaIds,
     replyParentId,
     repostSourceId,
+    quoteConsentStatus,
     state = PostState.ACTIVE,
     visibility = PostVisibility.PUBLIC,
   }: {
@@ -2189,13 +2229,23 @@ const createContentfulPost = async (
     mediaIds?: string[];
     replyParentId?: string;
     repostSourceId?: string;
+    quoteConsentStatus?: PostQuoteConsentStatus | null;
     state?: PostState;
     visibility?: PostVisibility;
   } = {},
 ) => {
   const post = await db
     .insert(Posts)
-    .values({ createdAt, id, profileId, replyParentId, repostSourceId, state, visibility })
+    .values({
+      createdAt,
+      id,
+      profileId,
+      replyParentId,
+      repostSourceId,
+      quoteConsentStatus,
+      state,
+      visibility,
+    })
     .returning()
     .then(firstOrThrow);
   const content = await db

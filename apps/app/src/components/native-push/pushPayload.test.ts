@@ -20,8 +20,27 @@ describe('native push tap payloads', () => {
         }),
         {
           href,
+          kind: 'profile',
           notificationId: 'RGVmYXVsdE5vdGlmaWNhdGlvbjox',
           recipientProfileId: 'UHJvZmlsZTox',
+        },
+      );
+    }
+  });
+
+  it('accepts Account operational destinations without a Profile recipient', () => {
+    for (const href of ['/notifications', 'https://any-domain.example/path']) {
+      assert.deepEqual(
+        parseNativePushTapTarget({
+          href,
+          notificationId: 'operational-notification',
+          recipientAccountId: 'account-1',
+        }),
+        {
+          href: href.startsWith('/') ? { href, kind: 'internal' } : { href, kind: 'external' },
+          kind: 'operational',
+          notificationId: 'operational-notification',
+          recipientAccountId: 'account-1',
         },
       );
     }
@@ -116,6 +135,18 @@ describe('native push tap payloads', () => {
     assert.equal(
       nativePushResponseKey(response),
       'notification-1:expo.modules.notifications.actions.DEFAULT',
+    );
+  });
+
+  it('rejects ambiguous Profile and Account recipient envelopes', () => {
+    assert.equal(
+      parseNativePushTapTarget({
+        href: '/@author',
+        notificationId: 'notification',
+        recipientAccountId: 'account',
+        recipientProfileId: 'profile',
+      }),
+      null,
     );
   });
 });

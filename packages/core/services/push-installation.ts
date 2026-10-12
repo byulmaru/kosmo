@@ -1,4 +1,5 @@
 import { and, eq, gt, lte } from 'drizzle-orm';
+import { unionAll } from 'drizzle-orm/pg-core';
 import {
   AccountProfiles,
   Accounts,
@@ -8,7 +9,7 @@ import {
   PushInstallations,
   Sessions,
 } from '../db';
-import { AccountState, ProfileState, SessionState } from '../enums';
+import { AccountState, NotificationKind, ProfileState, SessionState } from '../enums';
 import { KosmoError } from '../error';
 
 /**
@@ -58,15 +59,17 @@ export const findEligiblePushInstallations = async ({
 }) => {
   const expiryCutoff = Temporal.Now.instant().subtract({ hours: 24 });
 
-  return db
-    .select({
-      accountId: PushInstallations.accountId,
-      id: PushInstallations.id,
-      notificationCreatedAt: Notifications.createdAt,
-      platform: PushInstallations.platform,
-      sessionId: PushInstallations.sessionId,
-      token: PushInstallations.token,
-    })
+  const installationSelection = {
+    accountId: PushInstallations.accountId,
+    id: PushInstallations.id,
+    notificationCreatedAt: Notifications.createdAt,
+    platform: PushInstallations.platform,
+    sessionId: PushInstallations.sessionId,
+    token: PushInstallations.token,
+  };
+
+  const profileNotifications = db
+    .select(installationSelection)
     .from(Notifications)
     .innerJoin(Profiles, eq(Profiles.id, Notifications.recipientProfileId))
     .innerJoin(AccountProfiles, eq(AccountProfiles.profileId, Profiles.id))
@@ -82,6 +85,24 @@ export const findEligiblePushInstallations = async ({
         lte(PushInstallations.registrationEpoch, Notifications.createdAt),
         gt(Notifications.createdAt, expiryCutoff),
       ),
-    )
-    .orderBy(PushInstallations.id);
+    );
+
+  const operationalNotifications = db
+    .select(installationSelection)
+    .from(Notifications)
+    .innerJoin(Accounts, eq(Accounts.id, Notifications.recipientAccountId))
+    .innerJoin(PushInstallations, eq(PushInstallations.accountId, Accounts.id))
+    .innerJoin(Sessions, eq(Sessions.id, PushInstallations.sessionId))
+    .where(
+      and(
+        eq(Notifications.id, notificationId),
+        eq(Notifications.kind, NotificationKind.OPERATIONAL),
+        eq(Accounts.state, AccountState.ACTIVE),
+        eq(Sessions.state, SessionState.ACTIVE),
+        lte(PushInstallations.registrationEpoch, Notifications.createdAt),
+        gt(Notifications.createdAt, expiryCutoff),
+      ),
+    );
+
+  return unionAll(profileNotifications, operationalNotifications).orderBy(PushInstallations.id);
 };

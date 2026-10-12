@@ -169,6 +169,7 @@ const ShellStoriesQuery = graphql`
     ...RightRail_query
     ...SidebarNavigation_query
     currentSession {
+      id
       selectedProfile {
         ...BottomTabBar_profile
         ...RightRail_profile
@@ -2333,14 +2334,14 @@ export const UniversalMobileSettingsDetailHeaderReflow: Story = {
   parameters: {
     ...universalParameters,
     router: {
-      pathname: '/settings/default-post-visibility',
-      slotLabel: '공개 범위 설정 화면',
+      pathname: '/settings/profile',
+      slotLabel: '프로필 설정 화면',
     },
     viewport: {
       options: {
         settingsHeaderNarrow: {
           name: 'Settings header narrow reflow',
-          styles: { height: '844px', width: '200px' },
+          styles: { height: '844px', width: '140px' },
           type: 'mobile',
         },
       },
@@ -2348,10 +2349,10 @@ export const UniversalMobileSettingsDetailHeaderReflow: Story = {
   },
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const heading = canvas.getByRole('heading', { name: '게시물 기본 공개 범위' });
+    const heading = canvas.getByRole('heading', { name: '프로필 설정' });
     const pageHeader = heading.parentElement;
     const shellHeader = pageHeader?.parentElement;
-    const content = canvas.getByText('공개 범위 설정 화면');
+    const content = canvas.getByText('프로필 설정 화면');
     const pageHeaderRect = pageHeader?.getBoundingClientRect();
     const shellHeaderRect = shellHeader?.getBoundingClientRect();
 
@@ -2774,6 +2775,7 @@ export const UniversalFull: Story = {
     }
     const rightRailStyle = rightRail ? view?.getComputedStyle(rightRail) : undefined;
     const privacyLink = canvas.getByRole('link', { name: '개인정보 처리방침' });
+    const supportAcknowledgement = canvas.getByText(/이 성과는 2026년도/);
     const rightRailRect = rightRail?.getBoundingClientRect();
     const privacyLinkRect = privacyLink.getBoundingClientRect();
 
@@ -2786,7 +2788,12 @@ export const UniversalFull: Story = {
     expect(rightRail?.scrollWidth ?? 1).toBeLessThanOrEqual(rightRail?.clientWidth ?? 0);
     expect(privacyLink).toHaveAttribute('href', '/privacy');
     expect(canvas.queryByText(/^버전:/)).toBeNull();
-    expect((rightRailRect?.bottom ?? 0) - privacyLinkRect.bottom).toBeLessThanOrEqual(spacing.sm);
+    expect(supportAcknowledgement.getBoundingClientRect().top).toBeGreaterThanOrEqual(
+      privacyLinkRect.bottom,
+    );
+    expect(
+      (rightRailRect?.bottom ?? 0) - supportAcknowledgement.getBoundingClientRect().bottom,
+    ).toBeLessThanOrEqual(spacing.sm);
   },
   render: () => (
     <View style={{ height: 1800 }}>

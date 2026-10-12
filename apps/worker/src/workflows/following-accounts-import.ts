@@ -2,7 +2,7 @@ import {
   FOLLOWING_ACCOUNTS_IMPORT_MAX_ADDRESSES,
   remoteProfileLookupWorkflow,
 } from '@kosmo/core/temporal/workflows';
-import { localProfileHandleSchema, remoteProfileHandleSchema } from '@kosmo/core/validation';
+import { profileHandleSchema, remoteProfileHandleSchema } from '@kosmo/core/validation';
 import {
   ApplicationFailure,
   continueAsNew,
@@ -13,6 +13,7 @@ import {
 import { z } from 'zod';
 import { workflowActivityOptions } from './activity-options';
 import { runChildWorkflow } from './child';
+import { settleEffects } from './settle-effects';
 import type {
   FollowingAccountsImportInput,
   RemoteProfileLookupInput,
@@ -30,7 +31,7 @@ const followingAccountsImportInputSchema = z
     addresses: z
       .array(
         z.discriminatedUnion('kind', [
-          z.strictObject({ kind: z.literal('local'), handle: localProfileHandleSchema }),
+          z.strictObject({ kind: z.literal('local'), handle: profileHandleSchema }),
           z.strictObject({
             kind: z.literal('remote'),
             handle: remoteProfileHandleSchema,
@@ -99,7 +100,7 @@ export async function followingAccountsImportWorkflow(
   const start = parsed.data.afterIndex ?? 0;
   const end = Math.min(start + BATCH_SIZE, addresses.length);
 
-  for (let index = start; index < end; index += 1) {
+  const processAddress = async (index: number): Promise<void> => {
     const address = addresses[index]!;
     try {
       const followeeProfileId =
@@ -129,7 +130,7 @@ export async function followingAccountsImportWorkflow(
           index,
           reason: 'NotFoundError',
         });
-        continue;
+        return;
       }
 
       await followImportedProfileActivity({ followerProfileId, followeeProfileId });
@@ -145,7 +146,11 @@ export async function followingAccountsImportWorkflow(
         reason: failureType,
       });
     }
-  }
+  };
+
+  await settleEffects(
+    Array.from({ length: end - start }, (_, offset) => processAddress(start + offset)),
+  );
 
   if (end < addresses.length) {
     await continueAsNew<typeof followingAccountsImportWorkflow>({

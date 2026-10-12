@@ -2,8 +2,19 @@ import assert from 'node:assert/strict';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
+import {
+  commitMutation,
+  Environment,
+  Network,
+  Observable,
+  RecordSource,
+  Store,
+} from 'relay-runtime';
+import ImportFollowingAccountsMutation from './__generated__/SettingsFollowingImportDetailMutation.graphql';
 import type { ComponentType, ReactNode } from 'react';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
+import type { GraphQLResponse } from 'relay-runtime';
+import type { SettingsFollowingImportDetailMutation } from './__generated__/SettingsFollowingImportDetailMutation.graphql';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -17,7 +28,10 @@ type Profile = {
 type QueryData = { currentSession: { selectedProfile: Profile | null } | null };
 type MutationOptions = {
   variables: { input: { csv: string } };
-  onCompleted?: (response: { importFollowingAccounts: { accepted: boolean } | null }) => void;
+  onCompleted?: (
+    response: { importFollowingAccounts: { accepted: boolean } | null } | null,
+    errors?: ReadonlyArray<unknown> | null,
+  ) => void;
   onError?: (error: Error) => void;
 };
 
@@ -354,6 +368,41 @@ describe('SettingsFollowingImportDetail', () => {
       true,
     );
   });
+
+  it('CSV GraphQL validation 메시지를 표시하고 이후 성공하면 기존 오류를 지운다', async () => {
+    migrationEnabled = true;
+    queryData = { currentSession: { selectedProfile: localMember() } };
+    await render();
+    await press('CSV 파일 선택');
+    await press('이 Profile로 팔로잉 가져오기');
+
+    await respondToLatestMutation({
+      data: null,
+      errors: [
+        {
+          message: 'CSV 2번째 행의 계정을 확인해 주세요.',
+          extensions: { code: 'VALIDATION', field: 'csv' },
+        },
+      ],
+    } as unknown as GraphQLResponse);
+
+    assert.match(textContent(), /CSV 2번째 행의 계정을 확인해 주세요/);
+    assert.equal(textContent().includes('잠시 후 다시 시도해 주세요'), false);
+    assert.equal(
+      rendered('Text').some((node) => node.props.accessibilityRole === 'alert'),
+      true,
+    );
+
+    await press('CSV 파일 선택');
+    assert.equal(textContent().includes('CSV 2번째 행의 계정을 확인해 주세요'), false);
+    await press('이 Profile로 팔로잉 가져오기');
+    await respondToLatestMutation({
+      data: { importFollowingAccounts: { accepted: true } },
+    });
+
+    assert.match(textContent(), /팔로잉 가져오기를 시작했어요/);
+    assert.equal(textContent().includes('CSV 2번째 행의 계정을 확인해 주세요'), false);
+  });
 });
 
 async function render() {
@@ -420,4 +469,27 @@ function webResult() {
       },
     ],
   };
+}
+
+async function respondToLatestMutation(payload: GraphQLResponse) {
+  const mutation = mutationCalls.at(-1);
+  assert.ok(mutation);
+  const environment = new Environment({
+    network: Network.create(() =>
+      Observable.create<GraphQLResponse>((sink) => {
+        sink.next(payload);
+        sink.complete();
+      }),
+    ),
+    store: new Store(new RecordSource()),
+  });
+
+  await act(async () => {
+    commitMutation<SettingsFollowingImportDetailMutation>(environment, {
+      mutation: ImportFollowingAccountsMutation,
+      variables: mutation.variables,
+      onCompleted: mutation.onCompleted,
+      onError: mutation.onError,
+    });
+  });
 }

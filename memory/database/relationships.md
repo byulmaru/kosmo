@@ -25,11 +25,21 @@ relationship 금지 규칙에 다음 한정 예외를 둔다.
   허용한다. source-only cleanup용 `(kind, source_id)` index는 선제 추가하지 않고 실제 조회 경로가 이를
   요구할 때 별도 migration으로 결정한다.
 - `data jsonb`는 kind별 최소 추가 데이터만 저장한다. 범용 payload framework나 GIN index를 선제 추가하지
-  않으며 Follow는 `{}`를 사용하고 Profile ID·이름·handle snapshot을 복제하지 않는다.
+  않으며 Follow는 `{}`를 사용하고 Profile ID·이름·handle snapshot을 복제하지 않는다. Operational은 제목,
+  선택 본문, 목적지 링크만 저장하고 actor snapshot이나 원인 객체를 추가하지 않는다.
 - loose source가 없어지거나 Related Profile을 Recipient 기준으로 조회할 수 없으면 API는 해당 item을 목록,
   count, Node와 Read에서 숨긴다. 장기 비동기 물리 정리는 별도 capability가 소유한다.
 - 이 예외를 다른 domain relationship의 generic polymorphic association 근거로 확장하지 않는다.
-- Account-scoped Operational Notification의 저장 구조는 해당 kind를 구현하는 별도 change에서 결정한다.
+- Recipient는 Profile 또는 Account 중 정확히 하나다. `recipient_profile_id`와
+  `recipient_account_id`는 각 소유 테이블을 참조하며, DB CHECK는 두 컬럼 중 정확히 하나만 값이 있도록 한다.
+  `kind`와 Recipient의 조합은 알림 생성 경로가 결정하고, Operational producer는 Account를 대상으로 한다.
+- Operational Notification의 `source_id`는 UUID idempotency key이며 source 객체 foreign key가 아니다.
+  `(recipient_account_id, kind, source_id)`가 같은 수신자·요청의 중복 생성을 막는다. Operational은 loose
+  source 조회나 social source cleanup에 포함하지 않는다. `(kind, source_id, id)` index는 Worker의 send별
+  keyset page 조회를 지원하며 source cleanup 용도가 아니다.
+- 일반 Notification 조회는 Operational Recipient Account가 ACTIVE일 때 이를 노출한다.
+  source cleanup용 조회는 Recipient Account 상태를 검사하지 않으며, Operational에 source 관계가 있다고
+  가정하지 않는다.
 
 Drizzle query policy:
 

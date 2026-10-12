@@ -15,8 +15,23 @@ import { WorkflowIdConflictPolicy, WorkflowIdReusePolicy } from '@temporalio/cli
 import { match } from 'ts-pattern';
 
 type CreateNotificationInput = {
-  readonly kind: NotificationKind;
+  readonly kind: Exclude<NotificationKind, 'OPERATIONAL'>;
   readonly sourceId: string;
+};
+
+export const startPushNotificationWorkflow = async (notificationId: string): Promise<void> => {
+  try {
+    await runWorkflow(pushNotificationWorkflow, {
+      mode: 'start',
+      args: [{ notificationId }],
+      workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
+      workflowIdReusePolicy: WorkflowIdReusePolicy.REJECT_DUPLICATE,
+    });
+  } catch (error: unknown) {
+    if (!(error instanceof Error && error.name === 'WorkflowExecutionAlreadyStartedError')) {
+      throw error;
+    }
+  }
 };
 
 export async function createNotificationActivity({
@@ -37,19 +52,12 @@ export async function createNotificationActivity({
   await Promise.all(
     notificationIds.map(async (notificationId) => {
       try {
-        await runWorkflow(pushNotificationWorkflow, {
-          mode: 'start',
-          args: [{ notificationId }],
-          workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
-          workflowIdReusePolicy: WorkflowIdReusePolicy.REJECT_DUPLICATE,
-        });
+        await startPushNotificationWorkflow(notificationId);
       } catch (error: unknown) {
-        if (!(error instanceof Error && error.name === 'WorkflowExecutionAlreadyStartedError')) {
-          log.error('Push notification workflow failed to start', {
-            notificationId,
-            error,
-          });
-        }
+        log.error('Push notification workflow failed to start', {
+          notificationId,
+          error,
+        });
       }
     }),
   );

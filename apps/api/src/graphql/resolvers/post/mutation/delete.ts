@@ -1,5 +1,6 @@
 import { AccountProfileRole } from '@kosmo/core/enums';
-import { deletePost } from '@kosmo/core/services';
+import { runWorkflow } from '@kosmo/core/temporal/client';
+import { postDeleteMutationWorkflow, unwrapPostTransition } from '@kosmo/core/temporal/post';
 import { builder } from '@/graphql/builder';
 import { Post } from '../ref';
 
@@ -23,11 +24,21 @@ builder.mutationField('deletePost', (t) =>
       id: t.input.globalID({ for: Post }),
     },
     resolve: async (_, { input }, ctx) => {
-      const result = await deletePost({
-        actorProfileId: ctx.session.profile.id,
-        origin: 'LOCAL',
-        postId: input.id.id,
-      });
+      const result = unwrapPostTransition(
+        await runWorkflow(postDeleteMutationWorkflow, {
+          args: [
+            {
+              actorProfileId: ctx.session.profile.id,
+              origin: 'LOCAL',
+              postId: input.id.id,
+            },
+          ],
+          mode: 'update-with-start',
+          updateId: 'delete',
+          workflowIdConflictPolicy: 'USE_EXISTING',
+          workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+        }),
+      );
 
       return {
         postId: result.postId,

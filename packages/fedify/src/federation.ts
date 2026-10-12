@@ -11,6 +11,8 @@ import {
   Move,
   Note,
   Object as ActivityObject,
+  QuoteAuthorization,
+  QuoteRequest,
   Reject,
   Undo,
   Update,
@@ -32,6 +34,7 @@ import {
   withInboundObservability,
 } from './inbound-observability';
 import { handleInboundBlock } from './inbound-profile-block';
+import { handleInboundQuoteRequest } from './inbound-quote-command';
 import { handleInboundReaction } from './inbound-reaction';
 import { handleInboundReject } from './inbound-reject';
 import { handleInboundUpdate } from './inbound-update';
@@ -54,6 +57,10 @@ import {
 } from './local-profile-featured';
 import { dispatchLocalProfileFollow } from './local-profile-follow';
 import { createLocalProfilePerson } from './local-profile-person';
+import {
+  authorizeLocalQuoteAuthorization,
+  dispatchLocalQuoteAuthorization,
+} from './local-quote-authorization';
 import { fedifyQueue } from './queue';
 import { resolveLocalActorIdentifierByHandle } from './webfinger';
 import type { Context, Federation, FederationOptions, InboxContext } from '@fedify/fedify';
@@ -216,6 +223,14 @@ export const createKosmoFederation = (
     .setFirstCursor(firstLocalPostEmojiReactionsCursor)
     .authorize((context, values) => authorizeLocalPostNote(context, { id: values.id ?? '' }));
 
+  federation
+    .setObjectDispatcher(
+      QuoteAuthorization,
+      '/ap/quote-authorization/{id}',
+      dispatchLocalQuoteAuthorization,
+    )
+    .authorize(authorizeLocalQuoteAuthorization);
+
   federation.setObjectDispatcher(Follow, '/ap/follow/{id}', dispatchLocalProfileFollow);
 
   federation
@@ -239,6 +254,7 @@ export const createKosmoFederation = (
     .on(Follow, withInboundObservability('follow', handleInboundFollow))
     .on(Like, withInboundObservability('reaction', handleInboundReaction))
     .on(Move, withInboundObservability('move', handleInboundMove))
+    .on(QuoteRequest, withInboundObservability('quote', handleInboundQuoteRequest))
     .on(Reject, withInboundObservability('reject', handleInboundReject))
     .on(Undo, withInboundObservability('undo', handleInboundUndo))
     .on(

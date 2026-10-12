@@ -1,5 +1,6 @@
 import { proxyActivities } from '@temporalio/workflow';
 import { workflowActivityOptions } from './activity-options';
+import { settleEffects } from './settle-effects';
 import type * as activities from '../activities';
 
 type PostDeleteInput = {
@@ -11,6 +12,6 @@ const { sendLocalPostDeleteActivity } = proxyActivities<typeof activities>(workf
 
 export async function postDeleteWorkflow({ postId, origin }: PostDeleteInput): Promise<void> {
   if (origin === 'LOCAL') {
-    await sendLocalPostDeleteActivity(postId);
+    await settleEffects([sendLocalPostDeleteActivity(postId)]);
   }
 }

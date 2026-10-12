@@ -23,7 +23,6 @@ const initialDraft: ProfileEditDraft = {
   avatar: currentAvatar,
   bio: '창작과 개발을 좋아합니다.',
   displayName: '코스모',
-  followPolicy: 'OPEN',
   header: currentHeader,
   tags: ['공예', '개발'],
 };

@@ -5,7 +5,7 @@ import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, count, desc, eq, gt, isNull, lt } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/resolvers/profile';
-import { visibleNotificationWhere } from '../access/visibility';
+import { visibleViewerNotificationWhere } from '../access/visibility';
 import {
   Notification,
   NotificationConnection,
@@ -39,10 +39,7 @@ builder.objectField(Profile, 'notifications', (t) =>
         await requireProfileNotificationMembership(ctx.session.accountId, profile.id, db);
 
         return resolveCursorConnection<Promise<NotificationRow[]>>(
-          {
-            args,
-            toCursor: (notification) => notification.id,
-          },
+          { args, toCursor: ({ id }) => id },
           ({ before, after, limit, inverted }) =>
             db
               .select(notificationRowSelection)
@@ -56,8 +53,7 @@ builder.objectField(Profile, 'notifications', (t) =>
               )
               .where(
                 and(
-                  eq(Notifications.recipientProfileId, profile.id),
-                  visibleNotificationWhere({ ctx }),
+                  visibleViewerNotificationWhere({ ctx, profileId: profile.id }),
                   before ? gt(Notifications.id, before) : undefined,
                   after ? lt(Notifications.id, after) : undefined,
                 ),
@@ -84,9 +80,8 @@ builder.objectField(Profile, 'unreadNotificationCount', (t) =>
         .from(Notifications)
         .where(
           and(
-            eq(Notifications.recipientProfileId, profile.id),
+            visibleViewerNotificationWhere({ ctx, profileId: profile.id }),
             isNull(Notifications.readAt),
-            visibleNotificationWhere({ ctx }),
           ),
         );
 

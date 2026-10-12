@@ -318,11 +318,34 @@ export const QuoteModeContract: Story = {
     const body = canvas.getByRole('textbox', { name: '인용 게시글 본문' });
     const quote = canvas.getByTestId('quote-context-preview');
     expect(quote).toBeVisible();
+    const targetBounds = canvas.getByTestId('post-composer-target').getBoundingClientRect();
+    const quoteBounds = quote.getBoundingClientRect();
+    expect(quoteBounds.left - targetBounds.left).toBeCloseTo(
+      targetBounds.right - quoteBounds.right,
+      0,
+    );
     expect(body.compareDocumentPosition(quote) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
     expect(body).toHaveAttribute('placeholder', '무슨 일이 일어나고 있나요?');
     const submit = canvas.getByRole('button', { name: '인용 게시' });
     expect(submit).toHaveTextContent(/^게시$/);
     expect(submit).toBeDisabled();
+  },
+};
+
+export const KeyboardFollowersDismissContract: Story = {
+  ...playgroundContract,
+  args: { ...playgroundContract.args, surface: 'rail', visibility: 'UNLISTED' },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const trigger = canvas.getByRole('button', { name: '공개 범위: 조용한 공개' });
+    await userEvent.click(trigger);
+    expect(canvas.getByRole('group', { name: '인용 허용 정책' })).toBeVisible();
+    expect(canvas.getByRole('menuitemradio', { name: '조용한 공개' })).toHaveFocus();
+
+    await userEvent.keyboard('{ArrowDown}');
+
+    await waitFor(() => expect(canvas.queryByRole('menu')).toBeNull());
+    expect(canvas.getByRole('button', { name: '공개 범위: 팔로워만' })).toHaveFocus();
   },
 };
 

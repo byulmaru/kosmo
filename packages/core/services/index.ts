@@ -15,10 +15,24 @@ export {
   deleteRepostNotification,
 } from './notification';
 export { isNotificationSuppressed } from './notification-policy';
-export type { CreatePostTransactionResult } from './post';
-export { createPost, createPostInTransaction, deletePost, repostPost } from './post';
+export { createPost, deletePost, repostPost } from './post';
 export type { AppliedPostQuoteConsent, ApplyPostQuoteConsentInput } from './post-quote-consent';
-export { applyPostQuoteConsent } from './post-quote-consent';
+export {
+  assertPostQuotePolicy,
+  defaultPostQuotePolicy,
+  isLocalQuoteAllowedByPolicy,
+} from './post-quote-consent';
+export type { PostQuoteConsentRow, QuoteSource } from './post-quote-identity';
+export {
+  canDisplayQuoteSource,
+  loadPendingQuoteConsentByBinding,
+  loadQuoteConsentByApprovalUri,
+  loadQuoteConsentByRequestUri,
+  loadQuoteConsentForPost,
+  loadQuotePostIdentity,
+  loadQuoteSourceIdentity,
+  visibleQuoteSources,
+} from './post-quote-identity';
 export { disableProfile } from './profile';
 export { assertProfilePairIsNotBlocked, ProfilePairBlockedError } from './profile-block-policy';
 export { followProfile, unfollowProfile } from './profile-follow';

@@ -32,11 +32,12 @@ Warning, Sensitive Media, Media 구성은 [Post Content](./post-content.md)가 �
 | 값       | 의미                                                                      |
 | -------- | ------------------------------------------------------------------------- |
 | Pending  | 아직 승인을 검증하지 못했다. 신규 입력의 승인서 부재·검증 실패도 포함한다 |
-| Approved | 현재 유효한 승인 또는 자기 인용·레거시 호환 조건을 충족했다               |
+| Approved | 승인 또는 자기 인용·레거시 호환 조건을 확인했고 철회가 확정되지 않았다    |
 | Rejected | 명시적인 인용 거절을 확인했다                                             |
 | Revoked  | 앞서 확인한 인용 승인이 철회되었으며 현재 재승인을 확인하지 못했다        |
 
-검증 실패를 명시적 거절로 해석하지 않는다. 철회 뒤 재승인은 아래 공통 Quote Source 승인 조건과
+신규 승인의 검증 실패를 명시적 거절로 해석하지 않는다. 기존 Approved의 재검증 실패도 그 자체로
+철회나 Pending 전이의 근거가 아니다. 철회 뒤 재승인은 아래 공통 Quote Source 승인 조건과
 [ADR 0029](../decisions/0029-quote-consent-and-federation.md)를 따른다.
 
 ## 속성
@@ -50,6 +51,11 @@ Warning, Sensitive Media, Media 구성은 [Post Content](./post-content.md)가 �
 인용 허용 정책은 Content가 있는 Local Post에 적용하며, `모두`, `팔로워`, `본인만` 중 하나다.
 새 Post와 정책 도입 전 작성한 Local Post의 초기값은 `모두`다. 이 값은 이후 인용 요청을 판단하는 기준이며
 이미 발급한 인용 승인을 변경하지 않는다.
+
+Composer에서 선택한 인용 허용 정책은 현재 작성 Profile에 귀속된다. 실제 작성 Profile이 바뀌면 `모두`로
+초기화하고, 같은 Profile 재선택이나 picker 취소에서는 유지한다. 이전 Profile로 돌아가도 과거 선택값을
+복원하지 않는다. 본문·Content Warning·Media와 Post Visibility는 기존 작성 보존 정책을 따른다.
+Profile별 저장 기본값 설정을 제공한다는 뜻은 아니며, 상세 UI 계약은 [Post Composer](../../design/post-composer.md)를 따른다.
 
 Local Post의 ActivityPub Note는 이 정책을 `interactionPolicy.canQuote`에 광고한다. `모두`는
 `automaticApproval`에 ActivityStreams Public collection을, `팔로워`는 Author의 followers collection과
@@ -149,14 +155,15 @@ Notification이 소유하며, Quote·Reply Parent·Repost Source의 구조와 �
 - 타인의 원격 Quote는 자체 Content를 먼저 로컬에 게시하고 기존 Visibility에 따른 일반 전달도 수행한다.
   승인 전에는 Source를 정상 인용으로 노출하지 않고 원문 서버에 QuoteRequest를 별도로 전달한다.
 - 검증된 승인을 받으면 승인과 Source 관계를 연결하고 이미 전달한 Quote를 갱신한다. 거절·승인 철회 또는
-  Source 삭제 시에는 Quote 자체 Content를 유지하고 Source 카드·관계는 비노출한다. 비노출을 위해 저장
-  관계를 물리적으로 제거해야 하는지는 도메인 계약으로 고정하지 않는다.
+  Source 삭제 시에는 Quote 자체 Content와 작성한 링크 및 이미 연결된 Repost Source 관계를 유지하고
+  Source 카드·관계의 표시만 숨긴다.
 - 철회 뒤에는 현재 승인이 확인될 때까지 Quote를 미승인으로 취급하고 Source를 숨긴다. 같은 Quote는 Local
   Source Author의 현재 승인 결정이나 Remote Source Author의 현재 승인으로 검증된 QuoteAuthorization을 받아
   다시 승인할 수 있다. 승인 URI는 재사용하거나 새로 발급할 수 있으며, URI가 같거나 다르다는 사실만으로
   현재 승인을 판단하지 않는다. 재승인 뒤에도 Source 조회·차단 조건은 그대로 적용한다.
-- Local Source가 삭제되면 그 Source에 발급된 모든 유효한 QuoteAuthorization을 철회한다. Local·Remote Quote로의
-  전달은 아래 Quote federation 정책을 따른다.
+- Source가 삭제되면 해당 Source의 삭제와 관련 Quote들의 Pending·Approved 동의 철회를 원자적으로 반영한다.
+  승인과 삭제가 경쟁해도 삭제된 Source에 유효한 새 승인을 남기지 않는다. Local Source가 발급한 승인의
+  Local·Remote Quote 전달은 아래 Quote federation 정책을 따른다.
 - 전송 실패나 응답 부재를 승인으로 간주하지 않는다. 이전 승인을 위한 뒤늦은 응답이나 오래된 중복 전달은 더
   최근의 거절·철회를 무효화하지 않도록 한다. 세부 재시도와 전달 순서는 해당 lifecycle의 구현 계약에서 정한다.
 - 게시글별 인용 허용 설정의 변경은 이후 요청에만 적용한다. 기존 승인을 없애려면 별도 인용 승인 철회를
@@ -193,6 +200,21 @@ Notification이 소유하며, Quote·Reply Parent·Repost Source의 구조와 �
 - 승인 철회는 인용 작성자의 Content와 이미 연결된 Repost Source 관계를 보존한다. 같은 승인에 대한
   중복 철회와 철회 이전의 늦은 검증 결과가 철회를 취소하지 않는다. 현재 issuer의 승인을 새로 검증한 경우에는
   공통 Quote 동의 계약에 따라 같은 URI 또는 새 URI로 다시 승인할 수 있다.
+- Activity ID나 `target`이 없는 Delete도 발신자·Authorization·Source·Quote 결속을 확인하면 수신할 수 있다.
+  `target`이 있으면 대상 Quote와 일치해야 한다. Activity ID는 동일 이벤트 중복 판정에 사용할 수 있지만
+  승인 세대를 식별하는 근거는 아니다.
+- 유효한 현재 Delete가 명확하면 기존 철회 계약을 적용한다. 같은 Authorization URI 재승인 때문에 과거
+  Delete인지 현재 Delete인지 모호한 경우에는 issuer의 현재 QuoteAuthorization을 직접 재검증한다.
+  현재 유효한 승인이 확인되면 Approved를 유지하고, 현재 철회가 확인된 경우에만 Revoked로 전이한다.
+- 이 재검증에서 404·403·5xx·timeout·JSON-LD 또는 파싱 실패는 단독 철회 근거가 아니다. 200 응답의
+  type·binding 불일치도 현재 승인 객체의 유효성 문제이지 명시적 철회와 같지 않다. 기존 Approved와
+  Source 표시를 유지한 채 재검증하되 viewer별 Source 조회 정책은 계속 적용한다.
+- 410도 상태 코드만으로 철회하지 않는다. 현재 삭제의 증거로 사용하려면 issuer·Authorization URI와
+  redirect·cache의 신뢰 경계를 확인해야 하며, Tombstone이 있으면 type·id 일치도 검증해야 한다.
+  body 없는 410을 충분한 증거로 인정할지와 반복해서 현재 승인 무효를 확인한 뒤의 최종 표현은 후속 결정이다.
+- 기존 승인 유효성 확인은 Authorization 직접 재검증을 사용한다. Quote Note 재조회는 새 승인·재승인이나
+  승인 참조 변경 발견 경계에서 사용하며 기존 승인의 매 재검증에 필수로 요구하지 않는다. 재검증의
+  재시도는 새로운 승인 증거를 만들어내지 않는다. 보류·재검증을 위해 별도의 consent 상태를 도입하지 않는다.
 
 ## 권한
 
@@ -323,8 +345,22 @@ Notification이 소유하며, Quote·Reply Parent·Repost Source의 구조와 �
   `content`에 투영한다. Content Warning은 있으면 안전한 `summary`로 투영한다. Media node는 HTML에 `<img>`로
   중복하지 않고 document 순서대로 `attachment` Image에 투영하며 Alt Text와 조회 시점의 접근 가능한 URL·MIME
   type을 제공한다. document root의 Sensitive Media는 지원하는 ActivityPub sensitive 속성으로 투영한다. 이
-  Local Note 계약은 PostContent node, mark, canonicalization 또는 validation을 다시 정의하지 않는다. Mention,
-  custom emoji는 이 표현에 포함하지 않는다. Quote 전용 표현은 아래 Quote federation 정책을 따른다.
+  Local Note 계약은 PostContent node, mark, canonicalization 또는 validation을 다시 정의하지 않는다. Custom
+  emoji는 이 표현에 포함하지 않는다. Quote 전용 표현은 아래 Quote federation 정책을 따른다.
+- Local Note 역참조(`GET`), Featured collection, outbound `Create`는 같은 Current Content의 Mention projection을
+  사용한다. 해당 revision의 typed Mention node와 같은 revision의 저장된 Mentioned Profile 관계가 정확히 연결되고,
+  기존 Profile visibility 조건에서 Profile이 ACTIVE이며 연결 Instance가 SUSPENDED가 아닐 때만 본문 link와
+  ActivityPub `Mention` tag를 제공한다. Local Profile의 본문 label은 실제 `@handle`이고 link는 configured Local
+  Instance의 Profile human URL을 사용한다. Remote Profile의 label은 실제 `@handle@domain`이며 link는 저장된
+  `profileUrl`이 유효한 HTTP(S) URL일 때만 이를 사용하고, 아니면 canonical actor URI를 사용한다. `Mention.href`는
+  항상 canonical actor URI이고 `Mention.name`은 본문 label과 같다. 본문에 같은 Profile이 여러 번 나타나면 각
+  occurrence를 유지하고 tag는 target당 하나만 제공한다.
+- Mention relation이 없거나 target을 resolve할 수 없거나, visibility 조건을 통과하지 못하거나, target이
+  지원되지 않거나 malformed이면 본문에는 비링크 `@알 수 없는 사용자`를 표시하고 ActivityPub `Mention` tag를
+  생략한다. Projection 중 Remote Profile을 fetch하거나 refresh하지 않는다. 이는 `to`, `cc`, audience, recipients,
+  Mentioned Profiles/DIRECT visibility 또는 signed-fetch 권한, delivery routing, notification을 바꾸지 않는다.
+  Canonical Mention node는 `profileId`만 저장한다. 기존 글 backfill과 remote `Update(Note)` projection은 이 계약에
+  포함하지 않는다.
 - Reply Parent 관계가 있으면 Parent의 ActivityPub Post identity를 `inReplyTo`로 제공한다. Local Parent는
   같은 local Note URI 규칙을 사용하고 remote Parent는 저장된 ActivityPub Post URI를 사용한다. `inReplyTo`는
   requester별 Parent 조회 가능성에 따라 달라지지 않으며, Parent의 실제 표현은 Parent 자체의 역참조 권한으로
@@ -429,8 +465,9 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
   automatic/manual 여부, 정책 부재 또는 해석 실패와 관계없이 원문 서버에 `QuoteRequest`를 보낸다.
   본문만 먼저 전달한 뒤 검증된 `Accept`와 유효한 승인 객체를 받으면
   `quote`·`quoteAuthorization`을 반영한 `Update`를 전달한다.
-- 원문 작성자의 승인이 필요한 Quote에서 승인 증거가 없거나 유효하지 않거나 검증되지 않으면 승인 대기 상태로
-  두고 Source를 노출하지 않는다. 이를 원문 작성자의 거절로 해석하지 않으며, fetch 실패도 승인이 아니다.
+- 원문 작성자의 승인이 필요한 신규 Quote에서 승인 증거가 없거나 유효하지 않거나 검증되지 않으면 승인 대기
+  상태로 두고 Source를 노출하지 않는다. 철회 뒤 재승인도 현재 유효한 승인 증거가 있어야 허용하며, 재승인
+  검증 실패만으로 철회 상태를 되돌리지 않는다. 이를 원문 작성자의 거절로 해석하지 않으며 fetch 실패도 승인이 아니다.
   재시도 세부는 PROD-924의 lifecycle 및 PROD-792·PROD-793의 수신·fetch 구현 계약에서 정한다.
 - `interactionPolicy`는 작성 전 UI·eligibility 힌트로 사용할 수 있다. 요청자가
   `automaticApproval`과 `manualApproval` 어느 쪽에도 명백히 포함되지 않으면 승인되지 않을 것으로
@@ -439,7 +476,8 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
   Source 관계를 노출하지 않는다. Quote 작성자가 직접 작성한 Content를 Source lifecycle 때문에 삭제하지
   않는다.
 - Remote Source Author가 보낸 `Delete(QuoteAuthorization)`은 발신자가 해당 승인 발급자이고 승인·Source·Quote가
-  서로 결속됨을 확인한 뒤 Local Quote의 승인을 철회하고 Source를 숨긴다. 이 수신자는 원본 `Delete`를 Quote
+  서로 결속되고 현재 유효한 철회임을 확인한 뒤 Local Quote의 승인을 철회하고 Source를 숨긴다. 동일 URI
+  재승인으로 모호한 Delete와 재검증 실패는 위 원격 인용 승인 철회 반영 계약을 따른다. 이 수신자는 원본 `Delete`를 Quote
   audience에 중계하거나 대체 `Delete`를 만들지 않는다. 대신 기존 Quote audience에 Source와 승인 참조 및
   자동 생성한 FEP·legacy Quote 표현을 제외한 `Update(Note)`를 전달한다. Quote 작성자가 직접 작성한 본문과
   링크, Quote identity와 공개 범위는 유지되며, 전달 실패가 로컬 철회를 되돌리지 않는다.
@@ -463,6 +501,10 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
   Content, Reply Parent와 자체 Post Eligibility는 독립적으로 유지한다.
 - 미저장 Public·Unlisted 원문은 기존 원격 Note 저장 경계를 통해 확보할 수 있다. Followers Only 원문은
   이미 저장된 경우에만 연결하며, 조회 시점에는 현재 viewer의 권한을 다시 적용한다.
+  다만 미저장 Source를 URL만으로 참조하고 FEP-044f 승인 참조가 있는 경우에는 아래 승인 증거·
+  Local Follower 인증 조회 경계를 적용한다. Public·Unlisted일 수 있어도 공개 범위를 알아내기 위한
+  비인증 사전 조회를 하지 않으며, 적합한 Local Follower가 없으면 원문을 확보하지 않고 PENDING을 유지한다.
+  embedded Public 원문과 승인 참조 없는 URL-only·legacy 원문의 기존 저장 경계는 유지한다.
 - Source가 Reply여도 Source 자체의 identity·Author·Visibility로 판정한다. Parent가 없거나 조회 불가하다는
   이유로 Source를 Parent로 바꾸거나 Source 자체의 조회 권한을 제한하지 않는다.
 - 미저장 Followers Only Source의 후속 authenticated fetch는 인증된 선행 처리에서 검증한 Source URI와
@@ -475,6 +517,11 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
 
 ### 미저장 Followers Only Quote Source 조회
 
+- 미저장 Source의 URL-only FEP-044f 승인 참조는 현재 issuer 승인 증거를 검증한 뒤 저장된 Source
+  작성자와 established Follow가 있는 Active Local Profile의 identity로만 조회한다. 조회 전에는 원문
+  공개 범위를 알 수 없으므로 Public·Unlisted에도 같은 경계를 적용한다. 승인 증거·작성자 대응·
+  적합한 Follower·서명 key가 없으면 비인증 조회로 대체하지 않고 PENDING 및 작성 본문을 유지한다.
+  이 선택은 Follower 없는 URL-only Public 원문의 자동 확보보다 조회 전 인증 경계의 일관성을 우선한다.
 - 원격 Quote가 참조하는 Followers Only Source가 아직 저장되지 않았으면, 인증된 선행 처리에서 검증한
   Source URI와 작성자 Profile의 ActivityPub identity 사이의 대응이 있을 때만 원문을 조회한다. 작성자는
   ActivityPub identity가 이미 저장된 Remote Profile이어야 한다. Quote 작성자, Activity 전달 주체, URI의
@@ -544,8 +591,9 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
   갱신·제거할 수 있다. 기존 Post Content 수정, 운영자 또는 일괄 backfill은 수행하지 않는다. 원문 anchor의 표시 문자열은 수신 중 resource
   budget 계산에만 사용하고 저장하지 않는다. renderer는 같은 revision의 Profile `relativeHandle`에서 표시 문자열을 파생하며, Profile을
   조회할 수 없으면 비링크 `@알 수 없는 사용자`를 표시한다. `pre`와 일반 rich-text editor는 지원하지 않는다.
-- Mentioned Profiles audience와 ActivityPub outbound Mention projection·custom emoji는 후속
-  계약에서 정의한다. inbound Note의 typed Mention 보존은 별도 수신 계약을 따른다.
+- Mentioned Profiles audience와 custom emoji는 후속 계약에서 정의한다. Local Note outbound Mention
+  projection은 [ADR 0030](../decisions/0030-post-content-mention-identity.md) 계약을 따른다. inbound Note의 typed
+  Mention 보존은 별도 수신 계약을 따른다.
 - Quote 정책은 [ADR 0029](../decisions/0029-quote-consent-and-federation.md)과
   [PROD-902](https://linear.app/byulmaru/issue/PROD-902)를 따른다. 로컬 작성은 PROD-431,
   federation·승인 발급·철회는 PROD-924, 원격 Quote 수신·검증은 PROD-792가 구현한다.
@@ -553,4 +601,5 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
   [PROD-925](https://linear.app/byulmaru/issue/PROD-925)의 Backlog 범위이며 현재 출시를 막지 않는다.
 - Local Quote 작성·발신, Kosmo Source용 QuoteRequest와 승인 발급, 미저장 Followers Only Source의
   authenticated fetch, 주기적 승인 재검증, 역방향 인용 목록과 Quote 알림은 원격 Quote 수신과 별도 계약이다.
+  모호한 Delete의 현재 승인 재검증을 모든 승인에 대한 주기적 조회 의무로 확대하지 않는다.
 - Post Content 수정 후 원격 수신자에게 `Update(Note)`를 전달하는 lifecycle은 후속 계약에서 정의한다.

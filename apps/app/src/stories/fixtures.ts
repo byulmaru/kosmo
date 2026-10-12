@@ -1,4 +1,5 @@
 import { Temporal } from 'temporal-polyfill';
+import type { PostQuotePolicy } from '@kosmo/core/enums';
 import type { PostContentBodyDocumentV1 } from '@kosmo/core/post-content';
 
 export type StoryProfile = {
@@ -146,6 +147,7 @@ export type StoryPost = {
   createdAt: string;
   id: string;
   profile: StoryProfile;
+  quotePolicy: PostQuotePolicy;
   reactionCounts: Array<{ count: number; type: string }>;
   repostCount: number;
   replyParent: StoryReplyParentReference | null;
@@ -164,6 +166,7 @@ export function post({
   id = 'post-1',
   media = [],
   profile: author = profile(),
+  quotePolicy = 'EVERYONE',
   reactionCounts = [],
   repostCount = 0,
   replyParent = null,
@@ -178,6 +181,7 @@ export function post({
   id?: string;
   media?: StoryMedia[] | null;
   profile?: StoryProfile;
+  quotePolicy?: StoryPost['quotePolicy'];
   reactionCounts?: StoryPost['reactionCounts'];
   repostCount?: number;
   replyParent?: StoryReplyParentReference | null;
@@ -206,6 +210,7 @@ export function post({
     createdAt,
     id,
     profile: author,
+    quotePolicy,
     reactionCounts,
     repostCount,
     replyParent,
@@ -424,6 +429,26 @@ export function repostNotification({
   };
 }
 
+export function quoteNotification({
+  createdAt = Temporal.Now.instant().subtract({ minutes: 2 }).toString(),
+  id = 'notification-quote-1',
+  post: relatedPost = post(),
+  readAt = null,
+}: {
+  createdAt?: string;
+  id?: string;
+  post?: StoryPost;
+  readAt?: string | null;
+} = {}) {
+  return {
+    __typename: 'QuoteNotification' as const,
+    createdAt,
+    id,
+    post: relatedPost,
+    readAt,
+  };
+}
+
 export function notificationsProfile(
   notifications: Array<
     | ReturnType<typeof followNotification>
@@ -432,6 +457,16 @@ export function notificationsProfile(
     | ReturnType<typeof mentionNotification>
     | ReturnType<typeof replyNotification>
     | ReturnType<typeof repostNotification>
+    | ReturnType<typeof quoteNotification>
+    | {
+        __typename: 'OperationalNotification';
+        body: string | null;
+        createdAt: string;
+        href: string | null;
+        id: string;
+        readAt: string | null;
+        title: string;
+      }
   >,
   metadata: PaginationMetadata = {},
   overrides: Partial<StoryProfile> = {},
