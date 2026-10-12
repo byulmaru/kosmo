@@ -5,6 +5,13 @@ import {
 import type { PostVisibility } from '@kosmo/core/enums';
 
 export type PostComposerVisibility = 'DIRECT' | 'FOLLOWERS' | 'PUBLIC' | 'UNLISTED';
+
+const postComposerVisibilityRank: Record<PostComposerVisibility, number> = {
+  PUBLIC: 0,
+  UNLISTED: 1,
+  FOLLOWERS: 2,
+  DIRECT: 3,
+};
 export type PostComposerMentionRange = Readonly<{
   profileId: string;
   start: number;
@@ -163,14 +170,28 @@ export function replacePostComposerMentionQuery(
 
 export function resolvePostComposerVisibility(
   value: string | null | undefined,
+  replyParentVisibility?: PostVisibility | '%future added value' | null,
 ): PostComposerVisibility {
+  let profileVisibility: PostComposerVisibility;
   if (value === 'PUBLIC') {
-    return 'PUBLIC';
+    profileVisibility = 'PUBLIC';
+  } else if (value === 'FOLLOWERS') {
+    profileVisibility = 'FOLLOWERS';
+  } else {
+    profileVisibility = 'UNLISTED';
   }
-  if (value === 'FOLLOWERS') {
-    return 'FOLLOWERS';
+  if (
+    replyParentVisibility === 'PUBLIC' ||
+    replyParentVisibility === 'UNLISTED' ||
+    replyParentVisibility === 'FOLLOWERS' ||
+    replyParentVisibility === 'DIRECT'
+  ) {
+    return postComposerVisibilityRank[profileVisibility] >=
+      postComposerVisibilityRank[replyParentVisibility]
+      ? profileVisibility
+      : replyParentVisibility;
   }
-  return 'UNLISTED';
+  return profileVisibility;
 }
 
 export function createPostComposerMutationInput(
