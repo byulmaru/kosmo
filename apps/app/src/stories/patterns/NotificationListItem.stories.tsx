@@ -480,6 +480,9 @@ export const ReactionRepostProfileTargetsContract: Story = {
         group.getByTestId('notification-post-preview-target'),
       ];
       for (const postTarget of postTargets) {
+        const bounds = postTarget.getBoundingClientRect();
+        expect(bounds.width).toBeGreaterThanOrEqual(24);
+        expect(bounds.height).toBeGreaterThanOrEqual(24);
         await expect(postTarget).toHaveAttribute(
           'href',
           '/@notification-post-author/notification-post',

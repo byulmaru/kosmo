@@ -613,11 +613,17 @@ const styles = StyleSheet.create({
     minHeight: Platform.OS === 'web' ? 28 : Platform.OS === 'ios' ? 44 : 48,
     minWidth: 0,
   },
-  summaryTarget: { alignItems: 'flex-start', minWidth: 0, width: '100%' },
+  summaryTarget: {
+    alignItems: 'flex-start',
+    minHeight: Platform.OS === 'web' ? 24 : Platform.OS === 'ios' ? 44 : 48,
+    minWidth: 0,
+    width: '100%',
+  },
   previewTarget: {
     alignItems: 'flex-start',
     flexDirection: 'row',
     gap: space[12],
+    minHeight: Platform.OS === 'web' ? 24 : Platform.OS === 'ios' ? 44 : 48,
     minWidth: 0,
     paddingBottom: space[8],
     width: '100%',
