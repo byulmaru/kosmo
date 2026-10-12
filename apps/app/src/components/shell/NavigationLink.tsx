@@ -10,6 +10,7 @@ import type { PressableProps, View } from 'react-native';
 type ChildProps = {
   ref?: Ref<View>;
   onPress?: NonNullable<LinkProps['onPress']>;
+  onClick?: NonNullable<LinkProps['onPress']>;
   style?: PressableProps['style'];
 };
 
@@ -91,8 +92,9 @@ export function NavigationLink({
           : {})}
       asChild
       href={href}
+      onPress={handlePress}
     >
-      <NavigationLinkChild ref={children.props.ref} element={children} onPress={handlePress} />
+      <NavigationLinkChild ref={children.props.ref} element={children} />
     </Link>
   );
 }
@@ -101,6 +103,8 @@ export function NavigationLink({
 // Keep the child's style behind the Slot boundary so pressed styles still execute.
 function NavigationLinkChild({
   element,
+  onClick,
+  onPress,
   style,
   ...props
 }: Omit<ChildProps, 'style'> & {
@@ -110,6 +114,9 @@ function NavigationLinkChild({
   const childStyle = element.props.style;
   return cloneElement(element, {
     ...props,
+    // Expo Router injects onClick on Web. Route it through onPress so Text and
+    // Pressable both run the child's handler and navigation guard before Link.
+    onPress: onClick ?? onPress,
     style:
       typeof childStyle === 'function'
         ? (state) => [style, childStyle(state)]
