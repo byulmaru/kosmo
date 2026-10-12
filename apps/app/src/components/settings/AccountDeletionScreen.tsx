@@ -30,7 +30,6 @@ const ACCOUNT_DELETION_NOTICES = [
   '진행 중인 신고·분쟁·수사기관 요청에 필요한 기록은 필요한 기간만 보관한 뒤 지체 없이 파기해요.',
   '법에 따라 보관해야 하는 정보는 정해진 기간 동안 보관한 뒤 파기해요.',
   '별마루 ID는 유지돼요. 별마루 ID 탈퇴는 따로 신청해야 해요.',
-  '현재 같은 별마루 ID로 코스모에 다시 가입할 수 없어요.',
 ];
 
 /** Controlled presentation only: the caller owns eligibility, mutation, credentials and navigation. */
