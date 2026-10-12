@@ -13,6 +13,7 @@ import { getShellLayout, getWebMobileShellHeaderStickyOffset } from '../shell/sh
 import { PostThreadLayout } from './PostThreadLayout';
 import type { PropsWithChildren, ReactNode, RefObject } from 'react';
 import type {
+  LayoutChangeEvent,
   ScrollView as NativeScrollView,
   ScrollViewProps,
   View as NativeView,
@@ -53,7 +54,7 @@ const PostDetailThreadFragment = graphql`
 type PostDetailFrameProps = PropsWithChildren<{
   header: ReactNode;
   headerRef?: RefObject<NativeView | null>;
-  onHeaderLayout?: () => void;
+  onHeaderLayout?: (event: LayoutChangeEvent) => void;
   nativeScrollRef?: RefObject<NativeScrollView | null>;
   nativeScrollProps?: Pick<
     ScrollViewProps,
@@ -180,6 +181,7 @@ function PostDetailThreadContent({
   const headerRef = useRef<NativeView>(null);
   const nativeScrollRef = useRef<NativeScrollView>(null);
   const nativeScrollOffsetRef = useRef(0);
+  const nativeHeaderHeightRef = useRef(0);
   const lastProgrammaticScrollOffsetRef = useRef<number | null>(null);
   const initialScrollFrameRef = useRef<number | null>(null);
   const postListPresentation: PostListPresentation =
@@ -228,7 +230,13 @@ function PostDetailThreadContent({
         if (!shouldKeepCurrentInViewRef.current) {
           return;
         }
-        headerView.measureInWindow((_headerX, headerTop, _headerWidth, headerHeight) => {
+        // Native sticky-header measurements retain the scrolled content coordinate.
+        // Its viewport stays fixed; combine that origin with the laid-out header height.
+        const boundary =
+          Platform.OS === 'web' ? headerView : nativeScrollRef.current?.getNativeScrollRef();
+        boundary?.measureInWindow((_headerX, headerTop, _headerWidth, measuredHeight) => {
+          const headerHeight =
+            Platform.OS === 'web' ? measuredHeight : nativeHeaderHeightRef.current;
           if (!shouldKeepCurrentInViewRef.current) {
             return;
           }
@@ -260,6 +268,13 @@ function PostDetailThreadContent({
       });
     });
   }, []);
+  const headerLaidOut = useCallback(
+    (event: LayoutChangeEvent) => {
+      nativeHeaderHeightRef.current = event.nativeEvent.layout.height;
+      scheduleInitialScroll();
+    },
+    [scheduleInitialScroll],
+  );
   const nativeContentSizeChanged: NonNullable<ScrollViewProps['onContentSizeChange']> = useCallback(
     (contentWidth, contentHeight) => {
       nativeScrollProps.onContentSizeChange?.(contentWidth, contentHeight);
@@ -439,7 +454,7 @@ function PostDetailThreadContent({
                 onScrollBeginDrag: cancelInitialScroll,
               }}
               nativeScrollRef={nativeScrollRef}
-              onHeaderLayout={scheduleInitialScroll}
+              onHeaderLayout={headerLaidOut}
             >
               {thread}
             </PostDetailFrame>
