@@ -357,7 +357,7 @@ test('compose에서 공개 범위와 500자 제한을 적용해 createPost를 �
 
   await visibilityTrigger.click();
   await page.keyboard.press('End');
-  const directOption = visibilityMenu.getByRole('menuitemradio', { name: '지정 멤버만' });
+  const directOption = visibilityMenu.getByRole('menuitemradio', { name: '언급한 프로필만' });
   await expect(directOption).toBeFocused();
   await expect(directOption).toHaveAttribute('aria-checked', 'true');
   await page.keyboard.press('ArrowUp');

@@ -39,7 +39,7 @@ export const UniversalCompactComposerLifecycle: Story = {
     );
     expect(menu.getByRole('menuitemradio', { name: '조용한 공개' })).toHaveFocus();
     await userEvent.keyboard('{End}');
-    const directOption = menu.getByRole('menuitemradio', { name: '지정 멤버만' });
+    const directOption = menu.getByRole('menuitemradio', { name: '언급한 프로필만' });
     expect(directOption).toHaveFocus();
     expect(directOption).toHaveAttribute('aria-checked', 'true');
     await userEvent.keyboard('{ArrowUp}');
