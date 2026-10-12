@@ -8240,7 +8240,7 @@ export const QuoteModalFailureLifecycle: Story = {
     visibilityMenu = await within(dialog).findByRole('menu', { name: '공개 범위 선택' });
     await userEvent.keyboard('{ArrowDown}');
     await userEvent.keyboard('{ArrowDown}');
-    await userEvent.keyboard('{Enter}');
+    expect(within(dialog).queryByRole('menu', { name: '공개 범위 선택' })).toBeNull();
     const followersVisibilityButton = within(dialog).getByRole('button', {
       name: '공개 범위: 팔로워만',
     });

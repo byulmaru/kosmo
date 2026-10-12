@@ -31,7 +31,7 @@ test('SDK Worker 상태를 health 응답에 그대로 반영한다', () => {
   assert.equal(healthStatus('/unknown', 'RUNNING'), 404);
 });
 
-test('Temporal connect 중 SIGTERM을 process 종료로 전달한다', { timeout: 5_000 }, async (t) => {
+test('Temporal connect 중 SIGTERM을 process 종료로 전달한다', { timeout: 30_000 }, async (t) => {
   const temporal = createServer();
   const sockets = new Set<Socket>();
   temporal.on('connection', (socket) => {

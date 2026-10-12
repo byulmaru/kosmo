@@ -1476,7 +1476,8 @@ describe('Post Reply GraphQL 경계', () => {
 
   test('조상 Quote의 consent 상태에 따라 repostSource를 숨기거나 노출한다', async () => {
     const author = await createProfile('ancestor-quote-consent-author');
-    const source = await createContentfulPost(author.id);
+    const sourceAuthor = await createProfile('ancestor-quote-consent-source-author');
+    const source = await createContentfulPost(sourceAuthor.id);
     const statuses = [
       null,
       PostQuoteConsentStatus.REVOKED,
@@ -1491,10 +1492,8 @@ describe('Post Reply GraphQL 경계', () => {
       const quote = await createContentfulPost(author.id, {
         replyParentId,
         repostSourceId: source.id,
+        quoteConsentStatus: status,
       });
-      if (status !== null) {
-        await db.update(Posts).set({ quoteConsentStatus: status }).where(eq(Posts.id, quote.id));
-      }
       quotes.push({ id: quote.id, status });
       replyParentId = quote.id;
     }
@@ -1508,11 +1507,25 @@ describe('Post Reply GraphQL 경계', () => {
       [...quotes].reverse().map(({ id, status }) => ({
         id: encodeGlobalId('Post', id),
         repostSource:
-          status === null || status === PostQuoteConsentStatus.APPROVED
+          status === PostQuoteConsentStatus.APPROVED
             ? { id: encodeGlobalId('Post', source.id) }
             : null,
       })),
     );
+
+    const selfQuote = await createContentfulPost(sourceAuthor.id, {
+      repostSourceId: source.id,
+      quoteConsentStatus: PostQuoteConsentStatus.REVOKED,
+    });
+    const selfReply = await createContentfulPost(author.id, { replyParentId: selfQuote.id });
+    const selfResult = await requestPostAncestorsWithSources(selfReply.id);
+    assertNoGraphQLErrors(selfResult);
+    assert.deepEqual(selfResult.data?.node?.replyAncestors, [
+      {
+        id: encodeGlobalId('Post', selfQuote.id),
+        repostSource: { id: encodeGlobalId('Post', source.id) },
+      },
+    ]);
   });
 
   test('조회 불가능한 중간 Parent에서 조상 경로를 중단하고 그 위를 노출하지 않는다', async () => {
@@ -2165,6 +2178,7 @@ const createContentfulPost = async (
     mediaIds,
     replyParentId,
     repostSourceId,
+    quoteConsentStatus,
     state = PostState.ACTIVE,
     visibility = PostVisibility.PUBLIC,
   }: {
@@ -2174,13 +2188,23 @@ const createContentfulPost = async (
     mediaIds?: string[];
     replyParentId?: string;
     repostSourceId?: string;
+    quoteConsentStatus?: PostQuoteConsentStatus | null;
     state?: PostState;
     visibility?: PostVisibility;
   } = {},
 ) => {
   const post = await db
     .insert(Posts)
-    .values({ createdAt, id, profileId, replyParentId, repostSourceId, state, visibility })
+    .values({
+      createdAt,
+      id,
+      profileId,
+      replyParentId,
+      repostSourceId,
+      quoteConsentStatus,
+      state,
+      visibility,
+    })
     .returning()
     .then(firstOrThrow);
   const content = await db

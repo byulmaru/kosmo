@@ -21,6 +21,8 @@ import {
   InstanceKind,
   InstanceState,
   NotificationKind,
+  PostQuoteConsentStatus,
+  PostState,
   PostVisibility,
   ProfileFollowPolicy,
   ProfileState,
@@ -32,7 +34,7 @@ import {
 import { notificationSourceAvailabilityWhere } from '../visibility/notification';
 import { createReplyNotification } from './create-reply-notification';
 import { createMentionNotification } from './mention-notification';
-import { createPost as persistPost } from './post';
+import { createPostPersisted } from './post';
 import { createQuoteNotification } from './quote-notification';
 import type { TestContext } from 'node:test';
 
@@ -76,7 +78,7 @@ const createTestPost = async ({
   readonly replyParentId?: string;
   readonly visibility?: PostVisibility;
 }) => {
-  const result = await persistPost({
+  const result = await createPostPersisted({
     document: postContentDocumentFromText(`mention ${crypto.randomUUID()}`),
     mentionProfileIds,
     objectUri: `https://remote.example/notes/${crypto.randomUUID()}`,
@@ -107,63 +109,69 @@ const createPostForLocal = async (
     readonly repostSourceId?: string;
     readonly visibility?: PostVisibility;
   } = {},
-) => {
-  const result = await persistPost({
-    document: postContentDocumentFromText(`local mention ${crypto.randomUUID()}`),
-    origin: 'LOCAL',
-    profileId,
-    replyParentId,
-    repostSourceId,
-    visibility,
-  });
-  if (!result.created) {
-    throw new Error('Expected local Post to be created.');
-  }
-  postIds.push(result.post.id);
-  if (mentionProfileIds.length === 0) {
-    return result.post;
-  }
+) =>
+  db.transaction(async (tx) => {
+    const result = await createPostPersisted(
+      {
+        document: postContentDocumentFromText(`local mention ${crypto.randomUUID()}`),
+        origin: 'LOCAL',
+        profileId,
+        replyParentId,
+        repostSourceId,
+        visibility,
+      },
+      undefined,
+      tx,
+    );
+    if (!result.created) {
+      throw new Error('Expected local Post to be created.');
+    }
+    postIds.push(result.post.id);
+    if (mentionProfileIds.length === 0) {
+      return result.post;
+    }
 
-  // Seed the persisted typed-relation state directly; Local Mention input is not implemented.
-  const content = await db
-    .insert(PostContents)
-    .values({
-      document: canonicalizePostContentDocument({
-        version: 1,
-        summary: null,
-        body: {
-          type: 'doc',
-          content: [
-            {
-              type: 'paragraph',
-              content: [
-                { type: 'text', text: `local mention ${crypto.randomUUID()} ` },
-                ...mentionProfileIds.map((mentionProfileId) => ({
-                  type: 'mention',
-                  attrs: { profileId: mentionProfileId },
-                })),
-              ],
-            },
-          ],
-        },
-      }),
-      postId: result.post.id,
-    })
-    .returning()
-    .then(firstOrThrow);
-  await db.insert(PostMentions).values(
-    [...new Set(mentionProfileIds)].map((profileId) => ({
-      postContentId: content.id,
-      profileId,
-    })),
-  );
-  return db
-    .update(Posts)
-    .set({ currentContentId: content.id })
-    .where(eq(Posts.id, result.post.id))
-    .returning()
-    .then(firstOrThrow);
-};
+    // Complete the persisted typed relation before invoking notification policy;
+    // creation effects are exercised separately by API and Worker suites.
+    const content = await tx
+      .insert(PostContents)
+      .values({
+        document: canonicalizePostContentDocument({
+          version: 1,
+          summary: null,
+          body: {
+            type: 'doc',
+            content: [
+              {
+                type: 'paragraph',
+                content: [
+                  { type: 'text', text: `local mention ${crypto.randomUUID()} ` },
+                  ...mentionProfileIds.map((mentionProfileId) => ({
+                    type: 'mention',
+                    attrs: { profileId: mentionProfileId },
+                  })),
+                ],
+              },
+            ],
+          },
+        }),
+        postId: result.post.id,
+      })
+      .returning()
+      .then(firstOrThrow);
+    await tx.insert(PostMentions).values(
+      [...new Set(mentionProfileIds)].map((profileId) => ({
+        postContentId: content.id,
+        profileId,
+      })),
+    );
+    return tx
+      .update(Posts)
+      .set({ currentContentId: content.id })
+      .where(eq(Posts.id, result.post.id))
+      .returning()
+      .then(firstOrThrow);
+  });
 
 const withQuoteRollout = async (context: TestContext, enabled = true) => {
   const condition = eq(NotificationRollouts.key, 'QUOTE_NOTIFICATION');
@@ -419,12 +427,53 @@ test('an eligible Reply wins over Quote and Mention concurrently and preserves i
   const recipient = await createProfile();
   const replyAuthor = await createProfile();
   const parent = await createPostForLocal(recipient.id);
-  const replyQuote = await createPostForLocal(replyAuthor.id, {
-    mentionProfileIds: [recipient.id],
-    repostSourceId: parent.id,
+  // Seed the complete stored Reply+Quote shape atomically. The Local create
+  // capability rejects this pair and starts its own notification effects.
+  const replyQuote = await db.transaction(async (tx) => {
+    const post = await tx
+      .insert(Posts)
+      .values({
+        profileId: replyAuthor.id,
+        quoteConsentStatus: PostQuoteConsentStatus.APPROVED,
+        state: PostState.ACTIVE,
+        replyParentId: parent.id,
+        repostSourceId: parent.id,
+        visibility: PostVisibility.PUBLIC,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const content = await tx
+      .insert(PostContents)
+      .values({
+        document: canonicalizePostContentDocument({
+          version: 1,
+          summary: null,
+          body: {
+            type: 'doc',
+            content: [
+              {
+                type: 'paragraph',
+                content: [{ type: 'mention', attrs: { profileId: recipient.id } }],
+              },
+            ],
+          },
+        }),
+        postId: post.id,
+      })
+      .returning()
+      .then(firstOrThrow);
+    await tx.insert(PostMentions).values({
+      postContentId: content.id,
+      profileId: recipient.id,
+    });
+    return tx
+      .update(Posts)
+      .set({ currentContentId: content.id })
+      .where(eq(Posts.id, post.id))
+      .returning()
+      .then(firstOrThrow);
   });
-  // The canonical Post model allows this stored shape, but createPost currently rejects the pair.
-  await db.update(Posts).set({ replyParentId: parent.id }).where(eq(Posts.id, replyQuote.id));
+  postIds.push(replyQuote.id);
 
   const [, quoteId, mentionIds] = await Promise.all([
     createReplyNotification(replyQuote.id),

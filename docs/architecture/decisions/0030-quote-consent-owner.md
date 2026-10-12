@@ -89,13 +89,39 @@ retention 만료 후에는 remote Request URI와 최초 Source를 아직 연결�
 
 로컬 통합 기준은 #940 `6a2f1b682`, #961 `2d2d23115`, 병합된 #1094 `7248b8f27`이다.
 구형 per-command/revision Workflow에서 새 owner로 바뀌므로 이전 history와의 replay 호환을 주장하지 않는다.
-기존 실행은 기존 Worker 코드로 drain하고 writer admission을 전환해야 한다. 이전 Worker와 새 Worker가
-같은 Quote에 동시에 consent를 쓰는 배포는 허용하지 않는다. rollout inventory·기존 history replay·강제
+기존 실행은 기존 Worker 코드로 drain하고 writer admission을 전환해야 한다. **SDK Worker shutdown과
+Quote owner의 finish/drain은 서로 다른 경계다.** 실제 #961 writer가 DB UPDATE 뒤 commit을 기다리는 동안
+기존 Worker의 shutdown은 해당 Activity를 기다렸고, 새 owner bootstrap은 DB 잠금 뒤 기존 commit 상태를
+읽었다. production entrypoint의 SIGTERM은 Workflow를 종료하지 않는다. 대체 Worker는 같은 Run의 작업을
+재개하며, 쓰기 Activity가 PG 잠금 중 종료된 경우에도 Query 실패 rollback·retry 뒤 재개하는 것을 검증했다.
+Continue-As-New와 정상 finish 뒤 새 Run bootstrap도 로컬 실제 Temporal·PostgreSQL에서 확인했다.
+
+이 결과는 구형 writer 전체의 drain이나 history replay 호환성을 증명하지 않는다. 전환 시에는 기존
+writer admission을 먼저 차단하고, 기존 실행을 기존 Worker로 완료한 뒤 미완료 Activity/history, 열린 DB
+session과 구형 process가 남지 않았는지 확인해야 한다. 새 bootstrap은 이미 열린 transaction의 barrier일
+뿐, 아직 시작하지 않은 구형 writer의 이후 실행을 차단하지 않는다. 이전 Worker와 새 Worker가 같은
+Quote에 동시에 consent를 쓰는 배포는 허용하지 않는다. rollout inventory·실제 기존 history replay·강제
 종료 후 운영 복구는 프로덕션에서 아직 실행하지 않았다.
 
 - #1094 공통 모델: 두 consent 컬럼·identity CAS·fresh-proof 재승인 계약을 기반으로 유지한다.
-- #961: inbound Create/Update/Delete/Accept/Reject와 재검증을 Quote owner admission에 연결한다.
-- #940: local Quote 초기화/Request/decision, Source 삭제 경계, 정책 migration과 Composer 계약을 반영한다.
+- #961: inbound Create/Update/Delete/Accept/Reject·재검증, owner의 공통 read/write/drain/bootstrap 경계를 반영한다.
+  Source 삭제의 공통 잠금·bulk 철회·owner admission 안전 경계도 이 하위 계층과 함께 제공해야 한다.
+  owner 승인만 먼저 반영하고 잠금 없는 기존 Source 삭제를 남기는 조합은 안전하지 않다.
+- #940: local Quote 초기화/Request/decision·Source 삭제의 local orchestration, 정책 migration과 Composer 계약을 반영한다.
+  공통 Source 안전 경계의 책임은 #961과 공유한다. 기존 두 consent 컬럼 migration을 중복하지 않는다.
+
+#1094의 Source lookup index와 공통 consent schema를 먼저 유지하고, #940의 nullable `quote_policy` enum/column
+추가와 local ACTIVE Post 기본값 backfill은 해당 column을 조회하는 application 전환 전에 적용한다.
+이 정책 migration은 consent fencing column 추가가 아니다. 로컬 migration suite와 smoke는 통과했지만
+production의 lock 시간·backfill 규모·구버전 workload 호환 확인은 별도 rollout gate다.
+
+두 PR은 공유 파일을 통째로 분리하여 독립 반영할 수 없다. #961 공통 안전 계층 → #940 local 정책 계층의
+의존 순서를 권장한다. INITIALIZE/REQUEST/DECIDE 입력과 Activity, policy projection은 hunk 단위로 나누어야
+한다. 이 순서는 반영 계획이며, latest main에 재구성한 각 layer의 build·migration·Source 경쟁 검증은 아직
+실행하지 않았다. 통합본 검증 성공을 각 PR 독립 검증으로 간주하지 않는다.
+특히 통합 common applier의 `Posts.quotePolicy` 조회는 #940 schema에 의존한다. #961 계층에는 이를 그대로
+남기지 않고 기존 정책 판정 경계를 유지하며, #940에서 policy projection·조회와 local 명령 확장을 함께
+반영해야 한다. 공유 파일 전체를 #961에 복사한 뒤 #940 migration만 나중에 적용하는 분리는 허용하지 않는다.
 
 검증 명령과 실제 결과는 [검증 기록](../../testing/prod-924-owner-validation.md)에 구분해 기록한다.
 Temporal의 [Activity 실행 보장](https://docs.temporal.io/activity-execution),

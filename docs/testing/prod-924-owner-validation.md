@@ -1,9 +1,9 @@
 # PROD-924 로컬 owner 검증 기록
 
-검증일: 2026-10-09. 통합 기준: #940 `6a2f1b682`, #961 `2d2d23115`, 병합된 #1094 `7248b8f27`.
+검증일: 2026-10-09 및 2026-10-12. 통합 기준: #940 `6a2f1b682`, #961 `2d2d23115`, 병합된 #1094 `7248b8f27`.
 로컬 worktree `/private/tmp/kosmo-prod924-owner`에서 실행했다. 원격 push·리뷰·merge·배포는 하지 않았다.
 
-## 실행 결과
+## 2026-10-09 실행 결과
 
 | 검증                                                   | 결과  | 실제 실행 경계                                                                                                |
 | ------------------------------------------------------ | ----- | ------------------------------------------------------------------------------------------------------------- |
@@ -71,15 +71,151 @@ COMPOSE_PROJECT_NAME=kosmo node scripts/test-db.mjs run -- sh -c 'pnpm db:test:p
 ## 미완료 및 보장하지 않는 사항
 
 - 최초 전체 Workflow 실행에서 Quote resolution 두 건이 각 120초 timeout이었다. 이후 time-skipping 서버 bootstrap을 분리 확인하고 해당 5건 및 전체 suite를 재실행하여 각각 5/5·41/41을 확인했다. 최초 timeout의 정확한 원인은 확정하지 않았다.
-- 두 keyboard Storybook은 현재 통합본으로 실제 Chromium에서 통과했다. 기존 원격 CI의 Storybook 실패 두 건 전체가 이 결과로 해결됐다고 표시하지 않는다. Composer E2E는 OIDC·Temporal·Worker·API·Expo/BFF 서버 및 전체 build가 필요한 별도 gate로 미실행이다.
+- 10월 9일에는 두 keyboard Storybook만 실행했고 Composer E2E는 미실행이었다. 아래 10월 12일 결과가 이 gate의 최신 기록이다.
 - 모든 원격 issuer와의 HTTP/cache/redirect 상호운용, body 없는 410 및 반복 current-invalid 최종 상태는 확정하지 않았다.
 - 강제 Terminate/Reset의 이미 fence를 통과한 transaction 취소, 외부 exactly-once 및 Source/Quote의 외부 delivery 전체 순서는 보장하지 않는다.
 - retention 이후 Source-less Quote의 원래 target/Request 복구에는 원본 이벤트가 필요할 수 있다.
-- 구형 writer inventory, 실제 history replay, 기존 Worker drain과 admission 전환, production 장애 복구 검증은 남아 있다.
+- 구형 writer inventory·실제 history replay·production admission 전환과 장애 복구는 남아 있다. 로컬 실제 Worker lifecycle 검증은 아래 결과와 구분한다.
 
 배포·PR 반영 책임과 자세한 운영 경계는 [ADR 0030](../architecture/decisions/0030-quote-consent-owner.md)을 따른다.
 
-## 변경 파일
+## 2026-10-12 남은 Gate 재검증
+
+기준은 로컬 통합 `fb3177ef56a6c6e26ca45ef2b2a6dcb84d597375`이다. 소실된 임시 checkout을 동일 commit에서 복원했고,
+기존 `PROD-1053` checkout과 사용자 수정은 건드리지 않았다. Node 26.3.0·pnpm 11.27.1, 실제 로컬 Temporal·격리
+PostgreSQL·Playwright Chromium을 사용했다. CI의 Ubuntu ARM runner 자체나 원격 CI 성공을 증명하는 결과는 아니다.
+아래 최종 결과는 해당 기준에 이번 테스트·fixture·test-runtime 수선을 적용한 상태의 결과다.
+수선 전 실패와 assertion summary 뒤 정상 종료하지 못한 실행은 최종 성공과 구분한다.
+
+| Gate             | 실행 명령/경계                                                                                 | 결과                                                                              |
+| ---------------- | ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Composer E2E     | 실제 5개 서버, `playwright test e2e/compose.e2e.ts`                                            | 12/12 PASS; focused 1/1 PASS                                                      |
+| Worker lifecycle | 실제 #961 writer와 production `src/index.ts`, PG 잠금·SIGTERM·replacement·CAN·finish·fresh Run | 5/5 PASS                                                                          |
+| Root             | `pnpm test:eslint`                                                                             | 8/8 PASS                                                                          |
+| Admin            | `pnpm --filter @kosmo/admin test`                                                              | check PASS, unit 7/7·DB 3/3 PASS                                                  |
+| Web              | `pnpm --filter @kosmo/web check && pnpm --filter @kosmo/web test:unit`                         | check PASS, 46/46 PASS                                                            |
+| Helm             | CI의 dev/prod `helm lint`·`helm template` 4개 명령                                             | PASS                                                                              |
+| Admin Image      | `docker build --target runtime` 및 CI의 HTTP security assertions                               | PASS; 로컬 image tag, macOS의 GNU timeout 부재만 유한 대기로 대체                 |
+| Lint             | `pnpm run '/^lint:.*/'`·`pnpm --recursive --parallel --if-present run '/^lint:.*/'`            | PASS; thread guard 적용 후 전체 명령 exit 0                                       |
+| Fedify           | `pnpm --filter @kosmo/fedify test`                                                             | PASS; unit 352/352·Protocol 7/7·Consumer build/tsc 및 1/1, 전체 exit 0            |
+| Core             | `pnpm --filter @kosmo/core test`                                                               | PASS; unit 108/108·migration 19/19·smoke·service 254/254                          |
+| API              | `pnpm --filter @kosmo/api test`                                                                | PASS; unit 42/42·integration 340 PASS/1 SKIP (외부 Media Storage Service 미설정)  |
+| App              | `pnpm --filter @kosmo/app test` 및 전체 Storybook 재검증                                       | PASS; check/build·unit 920/920·Storybook 902/902                                  |
+| Worker           | `pnpm --filter @kosmo/worker test`                                                             | PASS; unit 10/10·workflow 41/41·DB 64/64·migration 21/21·Quote 41/41, 전체 exit 0 |
+| Web E2E          | CI의 `test:e2e:database --shard=N/3`                                                           | PASS; shard 1: 60/60·shard 2: 52/52·shard 3: 56/56 (168/168)                      |
+
+### 확인한 실패와 수선 경계
+
+- 기존 #940 CI run `37014379946`의 Composer FOLLOWERS focus assertion을 동일하게 재현했다. 승인된 keyboard
+  dismiss·trigger focus 계약을 테스트에 반영하고 메뉴 재열기로 기존 Tab-dismiss coverage를 유지했다.
+- 기존 Storybook `Quote Modal Failure Lifecycle`·`Universal Compact Composer Lifecycle`의 같은 계약 불일치를
+  수선했다. focused 3/3에서 이 두 건과 Media editor를 확인했다. 제품 메뉴 동작을 되돌리지 않았다.
+- 첫 전체 App 실행의 Media editor upload-ready timeout은 단독 재실행과 두 번째 전체 실행에서 통과했다.
+  두 번째·후속 전체 실행은 별도 Media Viewer의 lazy thread-loading timeout 1건이었다. 단독 실행은 통과했고, 유한 observation deadline을 1초에서 5초로 조정한 뒤 전체 902/902를 확인했다. UI assertions와 제품 timeout은 바꾸지 않았다. 각 실패를 최종 PASS와 별도 기록한다.
+- Core notification fixture가 Local create effects 시작 후 Reply 관계를 추가하던 경쟁을 제거했다. 완성된
+  Reply+Quote+Mention 저장 shape를 한 transaction으로 seed한 후 실제 notification materializer 경쟁과 readState를
+  검증했다(9/9). 제거된 consent DTO를 참조하던 `post.test.ts`는 기존 FK/status 조회로 정렬했다. 저장 rollback
+  테스트는 private persistence 경계(27/27), ActivityPub post-commit effects 실패는 public 경계를 유지한다.
+- 신규 Local Temporal admission의 저장 없음은 API mutation, Activity/effect ordering은 Worker Workflow suite가
+  별도로 검증한다. persistence 테스트 성공을 public owner admission 증명으로 대체하지 않는다.
+- `--ignore-scripts` install의 누락된 executable shim은 정상 frozen-lockfile install로 복구했다. manifest/lockfile은
+  변경하지 않았다. lifecycle legacy fixture의 30초 Activity timeout 및 Worker unit의 5초 cold-start deadline 실패는
+  테스트 환경 실패로 기록하고 fixture 90초·unit 30초로 조정했다. 제품 timeout은 바꾸지 않았다.
+
+- Worker database suite는 `KOSMO_TEST_TEMPORAL_RUNTIME=0` 때문에 새로운 Local admission을 실제 Worker 없이
+  기다려 실패했다. 실제 production test-runtime을 켜도록 테스트 script를 정렬했다. 해당 실패는 assertion
+  통과 뒤 무시한 것이 아니라 aggregate를 중단(exit 130)하고 처음부터 재검증했다.
+- 전체 Web 수집의 제거된 `createPostQuoteConsent` 참조는 Source 상세 navigation fixture의 atomic APPROVED seed로
+  교체했다. services barrel이 불필요한 JSON module을 로드하던 collection 오류도 해소했다. 이것은 신규 승인
+  검증을 우회한 acceptance 결과가 아닌, 이미 승인된 DB projection의 navigation 테스트다.
+- API ancestor fixture는 타인 Source와 같은 작성자를 혼동하던 기대값을 정렬했다. 타인의 NULL/PENDING/REJECTED/
+  REVOKED Source는 숨기고 APPROVED만 노출하며, 자기 인용 예외는 별도 assertion으로 유지했다.
+
+- Fedify 352건·Worker DB 63건의 assertion 완료 후 preload가 runtime을 유지해 다음 command로 진행하지 않는
+  종료 Gate를 재현했다. 최소 1개 test는 native/tsx 모두 exit 0이었지만 실제 inbound Quote 30개는 native에서도
+  summary 뒤 hang했다. CLI 교체로 해결을 주장하지 않고 공통 preload를 Node test child에만 적용했다. 생성 시의
+  owned connection만 after에서 닫으며, 테스트가 교체한 독립 environment 연결을 닫던 초기 수선의 반례도 수정했다.
+  이어 SDK Workflow thread가 `--import`와 `NODE_TEST_CONTEXT`를 상속해 별도 production runtime을 시작하는
+  실제 반례를 확인했다. `isMainThread` 가드를 추가하고 thread의 Temporal 주소가 main test 주소를 유지하는
+  behavior test 1/1·exit 0 및 실제 inbound Quote 30/30·exit 0으로 확인했다. runner 교체는 하지 않았다.
+- Web E2E shard 2의 Remote Block/follow timeout은 `beforeEach`였다. 거부된 Quote 명령의 장기 owner `result()`를
+  reset이 계속 기다린 것이다. owner에 finish Signal을 보내 정상 drain 완료를 기다린 뒤 DB를 reset한다.
+  강제 Terminate나 Remote Block·승인 policy 변경은 하지 않았다.
+- Web E2E shard 3은 55 PASS·1 FAIL이었다. 기존 #961과 동일한 Home/actor 코드 및 테스트에서 요청 count 2
+  기대값 대신 3을 재현했다. 첫 alpha 요청의 강제 실패 뒤 두 요청 모두 beta actor였다. 기존 cached Home
+  mount의 network-only 재검증을 허용하되 복구 요청 1~2회, 모든 요청·응답의 새 Profile 일치와 실제 timeline
+  복구 및 요청 안정성을 검증하도록 테스트만 정렬했다. Home 제품 코드는 변경하지 않았다.
+
+### lifecycle의 실제 보장 범위
+
+기존 #961 writer의 UPDATE 뒤 미commit transaction은 SDK Worker shutdown 중에도 존재했고, 새 owner bootstrap은
+그 DB 잠금 뒤 완료 상태를 읽었다. production Worker SIGTERM은 Workflow를 종료하지 않았으며 replacement는 같은
+Run을 재개했다. production write Activity가 PG 잠금을 기다릴 때 SIGTERM을 보내고 Query deadline rollback·retry
+뒤 replacement가 승인 완료하는 순서도 실행했다. CAN·정상 finish·fresh Run에서는 작성 document/link가 보존된다.
+
+SDK shutdown은 owner finish/drain의 대체 수단이 아니다. 구형 writer admission 차단과 미완료 Activity/history·DB
+session·process inventory가 전환 조건이며, 이 운영 전환을 production에서 실행한 것은 아니다. 강제 Terminate의
+Query 통과 후 늦은 commit은 기존 반례 그대로 남는다. 이번 정상 lifecycle PASS로 해결됐다고 표시하지 않는다.
+
+### PR별 반영 순서와 미실행 경계
+
+최신 확인 HEAD는 #940 `6a2f1b682`, #961 `2d2d231154`, 병합 #1094 `7248b8f2`, main `e15787c41`이다.
+통합본은 공유 DTO·registry·common applier·local policy 때문에 파일 단위 독립 반영이 불가능하다.
+
+1. #1094의 두 consent 컬럼·fresh-proof 공통 모델을 기반으로 유지한다.
+2. #961 하위 계층에 owner·inbound·reconciliation 및 Source 삭제의 **공통 안전 경계**를 함께 반영한다.
+   Source 공유 잠금과 atomic bulk 철회가 없는 상태에서 owner 승인만 독립 배포하면 안 된다.
+3. #940 상위 계층에 local INITIALIZE/REQUEST/DECIDE와 Source 삭제 local orchestration, policy-only migration,
+   API/Composer를 반영한다. 중복 consent migration을 추가하지 않는다.
+   #1094의 기존 Source lookup index를 유지하고, `20261009150000_prod_924_quote_policy`의 nullable column/enum
+   추가와 local ACTIVE Post backfill을 새 application 시작 전에 적용한다. production lock 시간·데이터 규모와
+   구버전 workload 호환은 별도 확인 대상이다.
+4. shared DTO/registry/policy projection을 hunk 단위로 나눈 뒤 각 layer의 build·migration·Source 경쟁을 다시 실행한다.
+   현재 common applier의 `Posts.quotePolicy` 조회와 local INITIALIZE 입력은 #940 책임이다. #961에는 기존 정책
+   경계를 유지하고, 이 column 조회를 schema 없이 먼저 배포하지 않는다. 공유 파일 전체를 하위 PR로 복사하는
+   방식은 독립 build·DB 호환을 보장하지 않는다.
+
+각 PR layer 재구성·독립 build, 실제 기존 production history replay·rollout inventory, 원격 CI/merge-group 및 Ubuntu
+runner·production 환경 검증은 미실행이다. 통합본의 로컬 Gate와 분리한다. 원격 push·리뷰 답글·resolve·merge·배포는
+이번 세션에서 수행하지 않았다.
+
+최종 로컬 로그는 `/private/tmp/prod924-compose-e2e-full.log`, `prod924-lifecycle-gate-final.log`,
+`prod924-worker-aggregate-gate.log`, `prod924-gate-fedify-thread-guard-verified.log`,
+`prod924-gate-core-threadguard-final.log`, `prod924-gate-api-threadguard-final.log`,
+`prod924-gate-app-final.log`, `prod924-web-shard-1-verified.log`, `prod924-web-shard-2-verified.log`,
+`prod924-web-shard-3-final.log`, `prod924-gate-lint-commit-final.log`에 남겼다.
+로컬 임시 로그의 보존을 원격 CI artifact 보존으로 간주하지 않는다.
+
+### 이번 Gate 수선 변경 파일
+
+`fb3177ef5` 이후의 변경은 아래 22개 파일이다. 제품 runtime·schema·dependency·lockfile은 추가 변경하지 않았다.
+
+```text
+apps/api/tests/integration/graphql/post.test.ts
+apps/app/src/stories/patterns/PostMediaViewer.tests.stories.tsx
+apps/app/src/stories/patterns/Posts.stories.tsx
+apps/app/src/stories/patterns/Shell.tests.stories.tsx
+apps/web/e2e/compose.e2e.ts
+apps/web/e2e/db-fixtures.ts
+apps/web/e2e/post-detail.e2e.ts
+apps/web/e2e/profile-switcher.e2e.ts
+apps/worker/package.json
+apps/worker/src/worker.test.ts
+apps/worker/src/quote-owner-lifecycle.database.test.ts
+apps/worker/src/test-runtime.database.test.ts
+apps/worker/src/test-fixtures/legacy-quote-consent-961.ts
+apps/worker/src/test-fixtures/legacy-quote-writer.ts
+apps/worker/src/test-fixtures/runtime-worker-thread.ts
+packages/core/services/mention-notification.test.ts
+packages/core/services/post.test.ts
+packages/core/temporal/test-client.ts
+packages/core/temporal/test-runtime.ts
+docs/architecture/decisions/0030-quote-consent-owner.md
+docs/testing/prod-924-owner-validation.md
+memory/temporal/activities.md
+```
+
+## 로컬 통합 변경 파일
 
 #961 HEAD 기준 로컬 통합 변경 목록이다. #940에서 수용한 기존 구현과 이번 owner 변경을 함께 포함한다.
 
