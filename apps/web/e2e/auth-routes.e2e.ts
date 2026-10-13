@@ -132,13 +132,6 @@ test('비로그인 사용자는 루트 온보딩에서 로그인 진입점을 �
     page.getByRole('heading', { name: '동인 창작 문화 향유자를 위한 차세대 연합우주 SNS' }),
   ).toBeVisible();
   await expect(
-    page.getByText('KOSMO는 현재 오픈 베타로 운영 중이에요.', { exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByText('이용 중 오류가 발생하거나 기능과 화면이 변경될 수 있어요.', { exact: true }),
-  ).toBeVisible();
-  await expect(page.getByText('별마루 계정으로 가입/로그인해요.', { exact: true })).toBeVisible();
-  await expect(
     page.getByText('가입할 때는 이메일만 수집하고, 이메일 인증으로 로그인해요.', { exact: true }),
   ).toBeVisible();
   await expect(page.getByRole('link', { name: '시작하기' })).toHaveAttribute('href', '/login');

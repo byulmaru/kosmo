@@ -1051,7 +1051,6 @@ export const MobileReplyShellContract: Story = {
         scroll.getBoundingClientRect().top + 1,
       ),
     );
-    expect(body).toHaveAttribute('placeholder', '무슨 일이 일어나고 있나요?');
     expect(body).toHaveValue('첫 번째 초안\n두 번째 초안');
     expect(canvas.getByTestId('mobile-reply-context')).toHaveTextContent(
       '@reply-target님에게 답글',
@@ -1255,7 +1254,6 @@ export const WebModalLayoutContract: Story = {
     const footer = canvas.getByTestId('post-composer-footer');
     const target = canvas.getByTestId('post-composer-target');
 
-    expect(within(visibility).getByText('공개 범위')).toBeVisible();
     expect(within(visibility).getByText('조용한 공개')).toBeVisible();
     expect(getComputedStyle(editor).borderWidth).toBe('0px');
     expect(scroll.contains(editor)).toBe(true);

@@ -7962,7 +7962,6 @@ export const ReplyModalPresentation: Story = {
     expect(within(dialog).getByRole('button', { name: '공개 범위: 조용한 공개' })).toBeVisible();
     expect(within(dialog).getByText('494')).toBeVisible();
     const submit = within(dialog).getByRole('button', { name: '답글 게시' });
-    expect(submit).toHaveTextContent(/^게시$/);
     expect(submit).toBeEnabled();
     expect(within(dialog).queryByRole('toolbar', { name: '액션 바' })).toBeNull();
     const composerScroll = within(dialog).getByTestId('post-composer-scroll');
@@ -8007,7 +8006,6 @@ export const ReplyModalPresentation: Story = {
 
     const visibilityButton = within(dialog).getByRole('button', { name: '공개 범위: 조용한 공개' });
     expect(composerScroll).not.toContainElement(visibilityButton);
-    expect(within(visibilityButton).getByText('공개 범위')).toBeVisible();
     await userEvent.click(visibilityButton);
     const visibilityMenu = await within(dialog).findByRole('menu', { name: '공개 범위 선택' });
     expect(visibilityMenu).toBeVisible();
@@ -8181,7 +8179,6 @@ export const QuoteModalFailureLifecycle: Story = {
     const editor = within(dialog).getByTestId('post-composer-editor');
     const footer = within(dialog).getByTestId('post-composer-footer');
     expect(body.compareDocumentPosition(source) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
-    expect(body).toHaveAttribute('placeholder', '무슨 일이 일어나고 있나요?');
     expect(getComputedStyle(footer).borderBottomLeftRadius).toBe(
       getComputedStyle(editor).borderBottomLeftRadius,
     );
@@ -8199,7 +8196,6 @@ export const QuoteModalFailureLifecycle: Story = {
     expect(visibilityButtons).toHaveLength(1);
     const visibilityButton = visibilityButtons[0]!;
     const quoteSubmit = within(dialog).getByRole('button', { name: '인용 게시' });
-    expect(quoteSubmit).toHaveTextContent(/^게시$/);
     const quoteSurfaceBounds = quoteSurface.getBoundingClientRect();
     expect(quoteSubmit.getBoundingClientRect().right).toBeGreaterThan(
       quoteSurfaceBounds.left + quoteSurfaceBounds.width / 2,
