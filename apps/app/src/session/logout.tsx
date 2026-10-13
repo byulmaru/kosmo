@@ -22,7 +22,31 @@ export type LogoutState = {
   pending: boolean;
 };
 
+/**
+ * Logs out the current Session and clears the local viewer state.
+ *
+ * Account deletion uses `useAccountDeletionCleanup` after the server has already revoked every
+ * Session. Keeping that path separate prevents a second native revoke against the revoked current
+ * Session while still allowing Web to clear its HttpOnly cookie through the idempotent BFF route.
+ */
 export function useLogout(): LogoutState {
+  return useLogoutLifecycle({ shouldRevokeNativeSession: true });
+}
+
+/**
+ * Clears the local credential/viewer state and returns to login after a server-confirmed Account
+ * deletion. Web clears its HttpOnly cookie through the idempotent BFF logout route; Native skips a
+ * second server revoke and only clears its local credential.
+ */
+export function useAccountDeletionCleanup(): LogoutState {
+  return useLogoutLifecycle({ shouldRevokeNativeSession: false });
+}
+
+function useLogoutLifecycle({
+  shouldRevokeNativeSession,
+}: {
+  shouldRevokeNativeSession: boolean;
+}): LogoutState {
   const router = useRouter();
   const { clearNativeSession, resetSession } = useRelayActor();
   const [commitNativeLogout] = useMutation<LogoutRevokeCurrentSessionMutationType>(
@@ -68,7 +92,9 @@ export function useLogout(): LogoutState {
           resetSession();
           clearAnalytics();
         } else {
-          await revokeNativeSession();
+          if (shouldRevokeNativeSession) {
+            await revokeNativeSession();
+          }
           await clearNativeSession();
           await deleteSelectedProfile();
         }
@@ -82,7 +108,7 @@ export function useLogout(): LogoutState {
         inFlight.current = false;
       }
     })();
-  }, [clearNativeSession, resetSession, revokeNativeSession, router]);
+  }, [clearNativeSession, resetSession, revokeNativeSession, router, shouldRevokeNativeSession]);
 
   return { error, logout, pending };
 }

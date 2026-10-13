@@ -39,11 +39,13 @@ export const UniversalCompactComposerLifecycle: Story = {
     );
     expect(menu.getByRole('menuitemradio', { name: '조용한 공개' })).toHaveFocus();
     await userEvent.keyboard('{End}');
-    expect(menu.getByRole('menuitemradio', { name: '팔로워만' })).toHaveFocus();
-    expect(menu.getByRole('menuitemradio', { name: '팔로워만' })).toHaveAttribute(
-      'aria-checked',
-      'true',
-    );
+    const directOption = menu.getByRole('menuitemradio', { name: '지정 멤버만' });
+    expect(directOption).toHaveFocus();
+    expect(directOption).toHaveAttribute('aria-checked', 'true');
+    await userEvent.keyboard('{ArrowUp}');
+    const followersOption = menu.getByRole('menuitemradio', { name: '팔로워만' });
+    expect(followersOption).toHaveFocus();
+    expect(followersOption).toHaveAttribute('aria-checked', 'true');
     await userEvent.keyboard('{Home}{Shift>}{Tab}{/Shift}');
     expect(trigger).toHaveFocus();
     await userEvent.keyboard('{Escape}');
@@ -76,8 +78,9 @@ export const UniversalCompactOverlayGeometry: Story = {
     const scroll = within(dialog).getByTestId('post-composer-scroll');
     await waitFor(() => expect(dialog.getBoundingClientRect().height).toBeCloseTo(maxHeight, 0));
     expect(scroll.scrollHeight).toBeGreaterThan(scroll.clientHeight);
-    expect(getComputedStyle(scroll).scrollbarGutter).toBe('stable');
     expect(getComputedStyle(scroll).scrollbarWidth).toBe('thin');
+    scroll.scrollTop = 24;
+    await waitFor(() => expect(scroll.scrollTop).toBe(24));
     await userEvent.clear(body);
     await waitFor(() => expect(dialog.getBoundingClientRect().height).toBeLessThan(maxHeight));
   },

@@ -1,6 +1,7 @@
 import './follow-notification';
 import './follow-request-notification';
 import './mention-notification';
+import './operational-notification';
 import './reaction-notification';
 import './quote-notification';
 import './reply-notification';

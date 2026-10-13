@@ -130,7 +130,7 @@ export function ProfileBlockAction({
     );
   };
   const request = () => {
-    if (pending) {
+    if (!open || pending) {
       return;
     }
     const finish = (status: 'success' | 'error') => {

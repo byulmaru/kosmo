@@ -1,6 +1,6 @@
 import '@kosmo/core/polyfill';
 
-import { Image, Note, PUBLIC_COLLECTION } from '@fedify/vocab';
+import { Image, Mention, Note, PUBLIC_COLLECTION } from '@fedify/vocab';
 import {
   ActivityPubActors,
   db,
@@ -8,6 +8,7 @@ import {
   Instances,
   Media,
   PostContents,
+  PostMentions,
   Posts,
   ProfileFollows,
   Profiles,
@@ -24,16 +25,21 @@ import {
 import { encodeGlobalId } from '@kosmo/core/global-id';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { postContentDocumentToHtml } from '@kosmo/core/post-content/server';
+import { isConfiguredLocalProfile } from '@kosmo/core/profile';
+import { visibleProfileWhere } from '@kosmo/core/visibility';
 import { and, eq, inArray, ne } from 'drizzle-orm';
 import { escapeText } from 'entities/escape';
 import { isCanonicalPostId, resolveActivityPubPostUri } from './activitypub-post-uri';
+import { isHttpUri } from './activitypub-uri';
 import type { Context, RequestContext } from '@fedify/fedify';
+import type { ConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import type { PostContentDocumentV1 } from '@kosmo/core/post-content';
 
 type LocalPostNote = {
   readonly authorHandle: string;
   readonly authorProfileId: string;
   readonly canonicalOrigin: string;
+  readonly contentId: string;
   readonly contentDocument: PostContentDocumentV1;
   readonly createdAt: Temporal.Instant;
   readonly id: string;
@@ -57,6 +63,7 @@ const loadLocalPostNoteRow = async (context: LocalPostNoteContext, postId: strin
 
   const row = await db
     .select({
+      contentId: PostContents.id,
       contentDocument: PostContents.document,
       instanceCanonicalOrigin: Instances.canonicalOrigin,
       post: Posts,
@@ -105,6 +112,7 @@ export const loadLocalPostNote = async (
     authorHandle: row.profile.handle,
     authorProfileId: row.profile.id,
     canonicalOrigin: row.instanceCanonicalOrigin,
+    contentId: row.contentId,
     contentDocument: row.contentDocument,
     createdAt: row.post.createdAt,
     id: row.post.id,
@@ -114,6 +122,84 @@ export const loadLocalPostNote = async (
     summary: row.contentDocument.summary,
     visibility: row.post.visibility,
   };
+};
+
+const parseHttpUrl = (value: string | null): URL | null => {
+  if (!value) {
+    return null;
+  }
+  try {
+    const url = new URL(value);
+    return isHttpUri(url) ? url : null;
+  } catch {
+    return null;
+  }
+};
+
+const projectLocalPostMentions = async (
+  configuredLocalInstance: ConfiguredLocalInstance,
+  contentId: string,
+  document: PostContentDocumentV1,
+) => {
+  const profileIds = document.body.content.flatMap((block) =>
+    block.type === 'paragraph'
+      ? (block.content ?? []).flatMap((node) =>
+          node.type === 'mention' ? [node.attrs.profileId] : [],
+        )
+      : [],
+  );
+  const mentionLinks = new Map<string, { readonly href: string; readonly label: string }>();
+  const tags: Mention[] = [];
+  if (profileIds.length === 0) {
+    return { mentionLinks, tags };
+  }
+
+  const rows = await db
+    .select({
+      actorUri: ActivityPubActors.uri,
+      domain: Instances.domain,
+      handle: Profiles.handle,
+      instanceKind: Instances.kind,
+      instanceId: Instances.id,
+      profileId: Profiles.id,
+      profileUrl: ActivityPubActors.profileUrl,
+    })
+    .from(PostMentions)
+    .innerJoin(Profiles, eq(Profiles.id, PostMentions.profileId))
+    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+    .leftJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Profiles.id))
+    .where(
+      and(
+        eq(PostMentions.postContentId, contentId),
+        inArray(PostMentions.profileId, profileIds),
+        visibleProfileWhere({ profile: Profiles, instance: Instances }),
+      ),
+    );
+
+  for (const row of rows) {
+    const isLocal = isConfiguredLocalProfile(row, configuredLocalInstance);
+    const actorUri = isLocal
+      ? new URL(`/ap/actor/${row.profileId}`, configuredLocalInstance.canonicalOrigin)
+      : row.instanceKind === InstanceKind.ACTIVITYPUB
+        ? parseHttpUrl(row.actorUri)
+        : null;
+    if (!actorUri || !isHttpUri(actorUri)) {
+      continue;
+    }
+
+    const label = isLocal ? `@${row.handle}` : `@${row.handle}@${row.domain}`;
+    const profileUrl = isLocal
+      ? new URL(`/@${encodeURIComponent(row.handle)}`, configuredLocalInstance.canonicalOrigin)
+      : (parseHttpUrl(row.profileUrl) ?? actorUri);
+    if (!isHttpUri(profileUrl)) {
+      continue;
+    }
+
+    mentionLinks.set(row.profileId, { href: profileUrl.href, label });
+    tags.push(new Mention({ href: actorUri, name: label }));
+  }
+
+  return { mentionLinks, tags };
 };
 
 const projectLocalMediaAttachments = async (
@@ -251,12 +337,17 @@ export const projectLocalPostNote = async (
         ? PUBLIC_COLLECTION
         : undefined;
   const configuredLocalInstance = await resolveConfiguredLocalInstance();
+  const { mentionLinks, tags } = await projectLocalPostMentions(
+    configuredLocalInstance,
+    note.contentId,
+    note.contentDocument,
+  );
 
   const object = new Note({
     attachments: [...note.mediaAttachments],
     attribution: authorUri,
     ...(cc ? { cc } : {}),
-    content: postContentDocumentToHtml(note.contentDocument),
+    content: postContentDocumentToHtml(note.contentDocument, mentionLinks),
     id: new URL(`/ap/note/${note.id}`, note.canonicalOrigin),
     mediaType: 'text/html',
     emojiReactions: new URL(`/ap/note/${note.id}/emoji-reactions`, note.canonicalOrigin),
@@ -264,6 +355,7 @@ export const projectLocalPostNote = async (
     ...(replyTarget ? { replyTarget } : {}),
     ...(note.summary ? { summary: escapeText(note.summary) } : {}),
     sensitive: note.sensitiveMedia,
+    ...(tags.length > 0 ? { tags } : {}),
     to,
     url: new URL(
       `/@${encodeURIComponent(note.authorHandle)}/${encodeGlobalId('Post', note.id)}`,

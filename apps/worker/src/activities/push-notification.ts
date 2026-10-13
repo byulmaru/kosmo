@@ -23,6 +23,7 @@ import { ApplicationFailure } from '@temporalio/activity';
 import { and, eq } from 'drizzle-orm';
 import { applicationDefault, FirebaseError, getApps, initializeApp } from 'firebase-admin/app';
 import { getMessaging } from 'firebase-admin/messaging';
+import type { OperationalNotificationData } from '@kosmo/core/db';
 import type { Message } from 'firebase-admin/messaging';
 
 const DAY_IN_MILLISECONDS = 24 * 60 * 60 * 1000;
@@ -33,13 +34,14 @@ const notificationTypes: Record<NotificationKind, string> = {
   FOLLOW: 'FollowNotification',
   FOLLOW_REQUEST: 'FollowRequestNotification',
   MENTION: 'MentionNotification',
+  OPERATIONAL: 'OperationalNotification',
   QUOTE: 'QuoteNotification',
   REACTION: 'ReactionNotification',
   REPLY: 'ReplyNotification',
   REPOST: 'RepostNotification',
 };
 
-const notificationMessages: Record<NotificationKind, string> = {
+const notificationMessages: Record<Exclude<NotificationKind, 'OPERATIONAL'>, string> = {
   FOLLOW: '팔로우했습니다',
   FOLLOW_REQUEST: '팔로우를 요청했습니다',
   MENTION: '회원님을 언급했습니다',
@@ -110,7 +112,24 @@ const loadNotificationSource = async (
         .where(eq(Posts.id, sourceId))
         .limit(1)
         .then((rows) => rows[0] ?? null);
+    case NotificationKind.OPERATIONAL:
+      return null;
   }
+};
+
+const isOperationalNotificationData = (value: unknown): value is OperationalNotificationData => {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false;
+  }
+
+  const data = value as Record<string, unknown>;
+  return (
+    typeof data.title === 'string' &&
+    data.title.trim().length > 0 &&
+    typeof data.href === 'string' &&
+    data.href.length > 0 &&
+    (data.body === undefined || typeof data.body === 'string')
+  );
 };
 
 const isInvalidRegistrationToken = (code: string) =>
@@ -125,6 +144,42 @@ const retryableProviderCodes = new Set([
   'messaging/topics-message-rate-exceeded',
   'messaging/unknown-error',
 ]);
+
+const sendPushMessage = async (
+  payload: Message,
+  projectId: string,
+  installation: { readonly accountId: string; readonly id: string; readonly token: string },
+) => {
+  const app =
+    getApps().find(({ name }) => name === '[DEFAULT]') ??
+    initializeApp({ credential: applicationDefault(), projectId });
+
+  try {
+    await getMessaging(app).send(payload);
+  } catch (error) {
+    if (error instanceof FirebaseError) {
+      if (isInvalidRegistrationToken(error.code)) {
+        await invalidatePushInstallation({
+          accountId: installation.accountId,
+          id: installation.id,
+          token: installation.token,
+        });
+        return;
+      }
+
+      if (error.code.startsWith('messaging/') && !retryableProviderCodes.has(error.code)) {
+        throw ApplicationFailure.create({
+          cause: error,
+          message: error.message,
+          nonRetryable: true,
+          type: error.code,
+        });
+      }
+    }
+
+    throw error;
+  }
+};
 
 /** Returns only eligible installation IDs so device tokens stay out of Workflow history. */
 export const listPushNotificationInstallations = async (
@@ -158,7 +213,9 @@ export const sendPushNotification = async (
   const notification = await db
     .select({
       createdAt: Notifications.createdAt,
+      data: Notifications.data,
       kind: Notifications.kind,
+      recipientAccountId: Notifications.recipientAccountId,
       recipientProfileId: Notifications.recipientProfileId,
       sourceId: Notifications.sourceId,
     })
@@ -172,6 +229,45 @@ export const sendPushNotification = async (
     .limit(1)
     .then(first);
   if (!notification) {
+    return;
+  }
+
+  const now = Temporal.Now.instant();
+  const expiresAt = notification.createdAt.add({ hours: 24 });
+  const ttl = Math.min(expiresAt.epochMilliseconds - now.epochMilliseconds, DAY_IN_MILLISECONDS);
+  if (ttl <= 0) {
+    return;
+  }
+
+  if (notification.kind === NotificationKind.OPERATIONAL) {
+    if (
+      notification.recipientAccountId === null ||
+      !isOperationalNotificationData(notification.data)
+    ) {
+      return;
+    }
+
+    await sendPushMessage(
+      {
+        android: { ttl },
+        apns: {
+          headers: { 'apns-expiration': String(Math.floor(expiresAt.epochMilliseconds / 1000)) },
+        },
+        data: {
+          href: notification.data.href,
+          notificationId: encodeGlobalId('OperationalNotification', notificationId),
+          recipientAccountId: encodeGlobalId('Account', notification.recipientAccountId),
+        },
+        notification: { body: notification.data.body ?? '', title: notification.data.title },
+        token: installation.token,
+      },
+      projectId,
+      installation,
+    );
+    return;
+  }
+
+  if (notification.recipientProfileId === null) {
     return;
   }
 
@@ -253,13 +349,6 @@ export const sendPushNotification = async (
     }
   }
 
-  const now = Temporal.Now.instant();
-  const expiresAt = notification.createdAt.add({ hours: 24 });
-  const ttl = Math.min(expiresAt.epochMilliseconds - now.epochMilliseconds, DAY_IN_MILLISECONDS);
-  if (ttl <= 0) {
-    return;
-  }
-
   const body = `${notificationMessages[notification.kind]}${preview ? `: ${preview}` : ''}`;
   const payload = {
     android: { ttl },
@@ -275,33 +364,5 @@ export const sendPushNotification = async (
     token: installation.token,
   } satisfies Message;
 
-  const app =
-    getApps().find(({ name }) => name === '[DEFAULT]') ??
-    initializeApp({ credential: applicationDefault(), projectId });
-
-  try {
-    await getMessaging(app).send(payload);
-  } catch (error) {
-    if (error instanceof FirebaseError) {
-      if (isInvalidRegistrationToken(error.code)) {
-        await invalidatePushInstallation({
-          accountId: installation.accountId,
-          id: installation.id,
-          token: installation.token,
-        });
-        return;
-      }
-
-      if (error.code.startsWith('messaging/') && !retryableProviderCodes.has(error.code)) {
-        throw ApplicationFailure.create({
-          cause: error,
-          message: error.message,
-          nonRetryable: true,
-          type: error.code,
-        });
-      }
-    }
-
-    throw error;
-  }
+  await sendPushMessage(payload, projectId, installation);
 };

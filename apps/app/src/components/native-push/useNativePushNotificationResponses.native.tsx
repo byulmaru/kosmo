@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef } from 'react';
-import { AppState } from 'react-native';
-import { graphql, useMutation } from 'react-relay';
+import { AppState, Linking } from 'react-native';
+import { writeSelectedProfile } from '@/auth/selectedProfileStorage';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useSession } from '@/session/SessionProvider';
 import {
@@ -9,28 +9,8 @@ import {
   getLastNativeNotificationResponse,
   subscribeToNativeNotificationResponses,
 } from './nativePushClient';
-import { prepareNativePushNavigation } from './pushNavigation';
-import { nativePushResponseKey, parseNativePushTapTarget } from './pushPayload';
+import { parseNativePushTapTarget } from './pushPayload';
 import type { NotificationResponse } from 'expo-notifications';
-import type { NativePushSelectProfileMutation as NativePushSelectProfileMutationType } from './__generated__/NativePushSelectProfileMutation.graphql';
-
-const NativePushSelectProfileMutation = graphql`
-  mutation NativePushSelectProfileMutation($id: ID!) {
-    selectProfile(input: { id: $id }) {
-      profile {
-        id
-      }
-    }
-  }
-`;
-
-type RetryablePushError = Error & { retryable: true };
-
-const markRetryable = (error: Error): RetryablePushError =>
-  Object.assign(error, { retryable: true as const });
-
-const isRetryablePushError = (error: unknown): error is RetryablePushError =>
-  error instanceof Error && 'retryable' in error && error.retryable === true;
 
 export function useNativePushNotificationResponses() {
   const router = useRouter();
@@ -39,83 +19,61 @@ export function useNativePushNotificationResponses() {
   const sessionRef = useRef(session);
   sessionRef.current = session;
   const tapQueueRef = useRef(Promise.resolve());
-  const handledResponseKeyRef = useRef<string | null>(null);
-  const [commitSelectProfile] = useMutation<NativePushSelectProfileMutationType>(
-    NativePushSelectProfileMutation,
-  );
 
   const fallbackToNotifications = useCallback(() => {
     router.replace('/notifications');
   }, [router]);
 
-  const selectProfile = useCallback(
-    (id: string) =>
-      new Promise<string>((resolve, reject) => {
-        commitSelectProfile({
-          onCompleted: (response, errors) => {
-            if (errors?.length) {
-              reject(errors[0]);
-              return;
-            }
-
-            resolve(response.selectProfile.profile.id);
-          },
-          onError: (error) => reject(markRetryable(error)),
-          variables: { id },
-        });
-      }),
-    [commitSelectProfile],
-  );
-
-  const markResponseHandled = useCallback((response: NotificationResponse) => {
-    handledResponseKeyRef.current = nativePushResponseKey(response);
-    clearLastNativeNotificationResponse();
-  }, []);
-
   const handleNotificationResponse = useCallback(
     async (response: NotificationResponse) => {
-      const key = nativePushResponseKey(response);
-      if (key && key === handledResponseKeyRef.current) {
-        return;
-      }
-
       const currentSession = sessionRef.current;
       if (currentSession.status !== 'valid') {
-        markResponseHandled(response);
+        clearLastNativeNotificationResponse();
         router.replace('/');
         return;
       }
 
       const envelope = parseNativePushTapTarget(response.notification.request.content.data);
       if (!envelope) {
-        markResponseHandled(response);
+        clearLastNativeNotificationResponse();
         fallbackToNotifications();
         return;
       }
 
-      let targetHref: Awaited<ReturnType<typeof prepareNativePushNavigation>>;
-      try {
-        targetHref = await prepareNativePushNavigation({
-          href: envelope.href,
-          recipientProfileId: envelope.recipientProfileId,
-          resetActor,
-          selectProfile,
-          selectedProfileId: sessionRef.current.selectedProfileId,
-        });
-      } catch (error) {
-        if (isRetryablePushError(error)) {
+      if (envelope.kind === 'operational') {
+        clearLastNativeNotificationResponse();
+        if (currentSession.accountId !== envelope.recipientAccountId) {
+          fallbackToNotifications();
           return;
         }
 
-        markResponseHandled(response);
+        if (envelope.href.kind === 'internal') {
+          router.replace(envelope.href.href);
+        } else {
+          try {
+            await Linking.openURL(envelope.href.href);
+          } catch {
+            fallbackToNotifications();
+          }
+        }
+        return;
+      }
+
+      try {
+        if (sessionRef.current.selectedProfileId !== envelope.recipientProfileId) {
+          await writeSelectedProfile(envelope.recipientProfileId);
+          resetActor(envelope.recipientProfileId);
+        }
+      } catch {
+        clearLastNativeNotificationResponse();
         fallbackToNotifications();
         return;
       }
 
-      markResponseHandled(response);
-      router.replace(targetHref);
+      clearLastNativeNotificationResponse();
+      router.replace(envelope.href);
     },
-    [fallbackToNotifications, markResponseHandled, resetActor, router, selectProfile],
+    [fallbackToNotifications, resetActor, router],
   );
 
   const enqueueNotificationResponse = useCallback(

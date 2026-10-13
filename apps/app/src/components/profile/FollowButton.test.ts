@@ -147,6 +147,28 @@ test('내가 차단한 Profile은 FollowButton이 차단 해제 lifecycle을 사
   );
 });
 
+test('차단 확인은 취소 후 요청을 거부하고 다시 열면 실행한다', async () => {
+  await act(async () => {
+    renderer = create(
+      createElement(ProfileBlockAction, {
+        nextBlocked: true,
+        profile: profile as never,
+        surface: 'button',
+      }),
+    );
+  });
+  const button = renderer!.root.findByType('Button' as never);
+  await act(async () => button.props.onPress());
+  const confirmation = renderer!.root.findByType('ConfirmationContent' as never);
+  await act(async () => confirmation.props.onCancel());
+  assert.equal(renderer!.root.findByType('ModalSheet' as never).props.visible, false);
+  await act(async () => confirmation.props.onConfirm());
+  assert.deepEqual(mutationCalls, []);
+  await act(async () => button.props.onPress());
+  await act(async () => confirmation.props.onConfirm());
+  assert.deepEqual(mutationCalls, [{ id: 'profile-kosmo' }]);
+});
+
 test('내가 차단한 Profile은 고정된 차단 해제 action을 표시한다', async () => {
   await act(async () => {
     renderer = create(

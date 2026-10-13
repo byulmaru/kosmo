@@ -14,7 +14,7 @@ KOSMO 제품 UI에서 같은 의미에 같은 glyph를 사용하기 위한 아�
 - Profile Avatar는 공통 `20px` 너비의 icon slot에 가운데 배치한다. `28px` 시각 크기는 유지하면서 다른 아이콘과 가로 중심선을 맞추고, full·drawer의 label 시작점도 동일하게 유지한다.
 - `BottomTabBar`는 Home·Search·Compose·Notifications의 미선택 상태에 Lucide outline을 유지하고, 선택 상태에는 `Icon/Custom/Filled/{House,Search,SquarePen,Bell}`을 사용한다. 선택 container에는 상시 fill을 두지 않고 filled glyph와 primary label로 선택을 표현하며, hover·pressed·focus 배경과 ring은 일시적인 interaction feedback으로만 사용한다. 네 filled source는 `lucide-react-native@1.23.0` outline에서 파생한 승인된 24×24 custom counterpart이며 Lucide ISC License를 따른다. Design owner 승인은 DSN-41(2026-08-18)에 기록하며, Profile은 선택 여부와 무관하게 Avatar를 유지한다.
 - Web `SearchToolbar`의 Menu·Back·Clear는 canonical `Menu`·`ArrowLeft`·`X`와 `44×44 CSS px` target을 사용한다. Rest는 no-fill, Hover·Pressed는 공용 transient state surface, FocusVisible은 `2px` focus ring이다. Leading control이 있는 variant는 왼쪽 `space/8`, 오른쪽 `space/16`을 사용하고 입력창 오른쪽 여백은 유지한다. Android/iOS에는 Web 검색 상단바 통합과 Menu를 적용하지 않으며, Native Back·Clear가 같은 glyph·state identity를 소비할 때 interaction target은 iOS `44×44pt`, Android `48×48dp` 최소값을 따른다. Figma source는 `__SearchToolbarControl`이 소유하며 실제 platform별 interaction은 Product 구현에서 검증한다.
-- 공용 `IconButton`은 모든 실제 icon-only action에 원형 상태 surface를 제공한다. Rest는 transparent, Web Hover는 약한 상태 배경, Web·Native Pressed는 더 강한 상태 배경을 사용하며 glyph color·opacity와 target geometry는 유지한다. Disabled는 배경을 표시하지 않고 공통 disabled opacity를 사용하며, reduced motion에서는 상태 전환을 즉시 반영한다. 기존 selected·base background, border, shadow와 focus 표시 및 brand mark는 유지한다. Media Viewer의 흰색 glyph control은 같은 원형 surface의 inverse contrast를 사용한다.
+- 공용 `IconButton`은 실제 icon-only action에 기본 원형 상태 surface를 제공한다. Rest는 transparent, Web Hover는 약한 상태 배경, Web·Native Pressed는 더 강한 상태 배경을 사용하며 glyph color·opacity와 target geometry는 유지한다. `ReactionSummary`의 trailing `Ellipsis`만 [Reaction 디자인](./reactions.md)의 둥근 사각형 geometry를 hover·pressed surface에도 사용한다. Disabled는 배경을 표시하지 않고 공통 disabled opacity를 사용하며, reduced motion에서는 상태 전환을 즉시 반영한다. 기존 selected·base background, border, shadow와 focus 표시 및 brand mark는 유지한다. Media Viewer의 흰색 glyph control은 기본 원형 surface의 inverse contrast를 사용한다.
 - 새 semantic role, 기존 role의 glyph 변경, custom icon 예외, visual size·stroke의 optical correction, active·filled variant를 결정하면 코드·Figma 변경과 같은 변경 단위에서 이 문서를 갱신한다. 최소한 의미, glyph·code export, source·version, visual size·stroke, control·상태, 소비처와 이관·검증 상태를 기록하며 문서 갱신 전에는 해당 이관을 완료로 보지 않는다.
 - 구현 전 확정한 결정은 Confirmed migration에, 현재 production 구현은 Current inventory에, 아직 Design owner 판단이 필요한 항목은 Review queue에 둔다. 코드·Figma 이관과 검증이 끝나면 Current inventory를 갱신하고 해당 migration을 제거한다.
 - 전체 redesign 중에는 semantic role과 glyph identity만 먼저 확정할 수 있다. size·stroke·container와 optical correction은 실제 component geometry, Light/Dark와 platform target을 함께 볼 수 있는 후속 redesign 범위로 남기며 semantic mapping 확정을 막지 않는다.
@@ -32,6 +32,7 @@ Lucide path를 별도 SVG 묶음으로 레포에 복제하지 않는다. lockfil
 | -------------------------------- | ------------------------------------------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
 | 새 글 작성                       | `SquarePen` / `SquarePen`                                     | canonical source `24×24`, stroke `2`                                              | Lucide 원본 path 유지; accessible name `글쓰기`                                                                                                                              | Figma·Production adapter 이관 완료; Android·iOS runtime 검증 대기                                 |
 | 재게시 attribution               | `Repeat2` / `Repeat2`                                         | 전체 redesign 후속                                                                | 장식 아이콘; 인접한 attribution 문장이 의미를 제공                                                                                                                           | `PostListItem`; 코드·Figma 이관 대기                                                              |
+| 탈퇴 보관 기간·계정 범위 안내    | `Info` / `Info`                                               | `lucide-react-native@1.23.0`, `20`, stroke `2`                                    | 장식 아이콘; 각 안내 문장이 의미를 제공                                                                                                                                      | `AccountDeletionScreen`; 코드 PR 반영, Figma 이관·Android·iOS runtime 검증 대기                   |
 | overflow 없는 반응한 프로필 보기 | `Ellipsis` / `MoreHorizontal`                                 | control target Web `32`, iOS `44`, Android `48`; glyph size·stroke는 Review queue | `ReactionSummary` trailing `IconButton`; 모든 Type과 control이 한 줄에 들어갈 때만 사용; accessible name `반응한 프로필 보기`; overflow에서는 같은 자리를 text `+N`으로 교체 | `ReactionSummary`; 조건부 코드·Figma 이관 대기                                                    |
 | 화면·하위 화면 뒤로              | `ArrowLeft` / `ArrowLeft`                                     | Profile Edit `24`, Composer media editor `20`, stroke `2`                         | `44×44` target; route·screen·overlay subview의 이전 view로 돌아갈 때 사용                                                                                                    | Profile Edit·`ComposerMediaEditor` Figma 이관 완료; 다른 route는 개별 검증                        |
 | Profile 이미지 편집              | `Camera` / `Camera`                                           | `20`, stroke `2`                                                                  | `40×40` affordance; 실제 focus target은 header·avatar preview 전체                                                                                                           | `ProfileEditImageFields` Figma 이관 완료; Production 코드·runtime 검증 대기                       |
@@ -68,41 +69,42 @@ back에 chevron을 사용하지 않는다.
 
 ## Current Lucide inventory
 
-| 영역             | semantic role    | Lucide glyph                   | 주요 production 소비처                                                                  |
-| ---------------- | ---------------- | ------------------------------ | --------------------------------------------------------------------------------------- |
-| Shell            | 홈               | `House`                        | `BottomTabBar`, `SidebarNavigation`                                                     |
-| Shell            | 검색             | `Search`                       | `BottomTabBar`, `SidebarNavigation`, Search input                                       |
-| Shell            | 글쓰기           | `SquarePen`                    | `BottomTabBar`, `SidebarNavigation`                                                     |
-| Shell            | 알림             | `Bell`                         | `BottomTabBar`, `SidebarNavigation`                                                     |
-| Shell            | 프로필           | Avatar `28` / `UserRound` `20` | `SidebarNavigation`                                                                     |
-| Shell            | 팔로우 요청      | `UserRoundPlus`                | Home, `SidebarNavigation`                                                               |
-| Shell            | 북마크           | `Bookmark`                     | `SidebarNavigation`, `PostActionBar`                                                    |
-| Shell            | 설정             | `Settings`                     | `SidebarNavigation`                                                                     |
-| Shell            | 피드백           | `Mail`                         | `SidebarNavigation`                                                                     |
-| Shell            | 메뉴·drawer 열기 | `Menu`                         | Search route, `UniversalShell`                                                          |
-| Shell            | 로그아웃         | `LogOut`                       | `SidebarNavigation`, `ActionMenu`                                                       |
-| Profile switcher | 펼치기·접기      | `ChevronDown`, `ChevronUp`     | `ProfileSwitcher`                                                                       |
-| Profile switcher | 프로필 추가      | `Plus`                         | `ProfileSwitcher`                                                                       |
-| Profile switcher | 선택됨           | `Check`                        | `ProfileSwitcher`                                                                       |
-| Navigation       | 뒤로             | `ArrowLeft` 또는 `ChevronLeft` | Search, Profile Edit, Post detail, Settings, `UniversalShell`; Confirmed migration 참고 |
-| Navigation       | 다음 destination | `ChevronRight`                 | Settings rows                                                                           |
-| Post action      | 답글             | `MessageCircle`                | `PostActionBar`, list metadata, reply notification                                      |
-| Post action      | 재게시           | `Repeat2`                      | `RepostAction`, repost notification                                                     |
-| Post action      | 인용             | `Quote`                        | `RepostAction` 인용하기 메뉴                                                            |
-| Post action      | 반응             | `Heart`                        | `PostActionBar`                                                                         |
-| Post action      | 더보기           | `MoreHorizontal`               | `PostActionBar`, deletion menu trigger                                                  |
-| Post action      | 삭제             | `Trash2`                       | `PostDeletionAction`                                                                    |
-| Post action      | 링크 복사        | `Link2`                        | `PostMoreMenu`                                                                          |
-| Media            | 이미지 추가      | `ImagePlus`                    | `PostComposerMediaControls`                                                             |
-| Media            | 업로드 다시 시도 | `RefreshCw`                    | `PostComposerMediaControls`                                                             |
-| Profile          | 이미지 편집      | `Camera`                       | `ProfileEditImageFields`                                                                |
-| Visibility       | 공개             | `Globe`                        | `postVisibilityPresentation`                                                            |
-| Visibility       | 조용한 공개      | `Moon`                         | `postVisibilityPresentation`                                                            |
-| Visibility       | 팔로워만         | `Lock`                         | `postVisibilityPresentation`                                                            |
-| Visibility       | 언급한 계정만    | `AtSign`                       | `postVisibilityPresentation`                                                            |
-| Search           | 최근 검색        | `History`                      | Search route                                                                            |
-| Notification     | 팔로우           | `UserPlus`                     | `NotificationListItem`                                                                  |
-| Notification     | 반응             | `Smile`                        | `NotificationListItem`                                                                  |
+| 영역             | semantic role             | Lucide glyph                   | 주요 production 소비처                                                                  |
+| ---------------- | ------------------------- | ------------------------------ | --------------------------------------------------------------------------------------- |
+| Shell            | 홈                        | `House`                        | `BottomTabBar`, `SidebarNavigation`                                                     |
+| Shell            | 검색                      | `Search`                       | `BottomTabBar`, `SidebarNavigation`, Search input                                       |
+| Shell            | 글쓰기                    | `SquarePen`                    | `BottomTabBar`, `SidebarNavigation`                                                     |
+| Shell            | 알림                      | `Bell`                         | `BottomTabBar`, `SidebarNavigation`                                                     |
+| Shell            | 프로필                    | Avatar `28` / `UserRound` `20` | `SidebarNavigation`                                                                     |
+| Shell            | 팔로우 요청               | `UserRoundPlus`                | Home, `SidebarNavigation`                                                               |
+| Shell            | 북마크                    | `Bookmark`                     | `SidebarNavigation`, `PostActionBar`                                                    |
+| Shell            | 설정                      | `Settings`                     | `SidebarNavigation`                                                                     |
+| Shell            | 모바일 앱 베타테스트 신청 | `Smartphone` (20, stroke 2)    | Web `SidebarNavigation`; Figma sync·runtime 검증 대기                                   |
+| Shell            | 피드백                    | `Mail`                         | `SidebarNavigation`                                                                     |
+| Shell            | 메뉴·drawer 열기          | `Menu`                         | Search route, `UniversalShell`                                                          |
+| Shell            | 로그아웃                  | `LogOut`                       | `SidebarNavigation`, `ActionMenu`                                                       |
+| Profile switcher | 펼치기·접기               | `ChevronDown`, `ChevronUp`     | `ProfileSwitcher`                                                                       |
+| Profile switcher | 프로필 추가               | `Plus`                         | `ProfileSwitcher`                                                                       |
+| Profile switcher | 선택됨                    | `Check`                        | `ProfileSwitcher`                                                                       |
+| Navigation       | 뒤로                      | `ArrowLeft` 또는 `ChevronLeft` | Search, Profile Edit, Post detail, Settings, `UniversalShell`; Confirmed migration 참고 |
+| Navigation       | 다음 destination          | `ChevronRight`                 | Settings rows                                                                           |
+| Post action      | 답글                      | `MessageCircle`                | `PostActionBar`, list metadata, reply notification                                      |
+| Post action      | 재게시                    | `Repeat2`                      | `RepostAction`, repost notification                                                     |
+| Post action      | 인용                      | `Quote`                        | `RepostAction` 인용하기 메뉴                                                            |
+| Post action      | 반응                      | `Heart`                        | `PostActionBar`                                                                         |
+| Post action      | 더보기                    | `MoreHorizontal`               | `PostActionBar`, deletion menu trigger                                                  |
+| Post action      | 삭제                      | `Trash2`                       | `PostDeletionAction`                                                                    |
+| Post action      | 링크 복사                 | `Link2`                        | `PostMoreMenu`                                                                          |
+| Media            | 이미지 추가               | `ImagePlus`                    | `PostComposerMediaControls`                                                             |
+| Media            | 업로드 다시 시도          | `RefreshCw`                    | `PostComposerMediaControls`                                                             |
+| Profile          | 이미지 편집               | `Camera`                       | `ProfileEditImageFields`                                                                |
+| Visibility       | 공개                      | `Globe`                        | `postVisibilityPresentation`                                                            |
+| Visibility       | 조용한 공개               | `Moon`                         | `postVisibilityPresentation`                                                            |
+| Visibility       | 팔로워만                  | `Lock`                         | `postVisibilityPresentation`                                                            |
+| Visibility       | 지정 멤버만               | `AtSign`                       | `postVisibilityPresentation`                                                            |
+| Search           | 최근 검색                 | `History`                      | Search route                                                                            |
+| Notification     | 팔로우                    | `UserPlus`                     | `NotificationListItem`                                                                  |
+| Notification     | 반응                      | `Smile`                        | `NotificationListItem`                                                                  |
 
 ## Confirmed migration
 

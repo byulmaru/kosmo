@@ -21,22 +21,27 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
 비로그인 landing의 기존 개인정보 처리방침 링크와 full Web 우측 레일의 기존 개인정보 처리방침 링크는
 유지하고, Sidebar·mobile drawer에 정책 링크를 추가하지 않는다.
 
+2026-09-16 PROD-970 결정으로 Kosmo Account 탈퇴를 `/settings/account-deletion` 내부 detail에서 제공한다.
+`코스모 탈퇴`는 Settings root/master의 마지막 행으로 항상 표시하며, Byulmaru ID의 외부 `계정 설정` 진입점과
+분리한다. 탈퇴가 완료되면 Kosmo login으로 이동하고, 같은 Byulmaru ID의 Kosmo 재가입은 후속 정책이 정해질
+때까지 임시로 막는다.
+
 ## Route와 진입점
 
 - Kosmo 설정 hub의 canonical route는 `/settings`다. 내부 설정 detail은 이 route 아래에서 열 수 있지만,
   Byulmaru ID Account 설정을 위한 Kosmo 내부 route나 form은 만들지 않는다.
-- Target의 Profile detail canonical route는 `/settings/profile`이다. 현재 runtime에 남은
-  `/settings/default-post-visibility`는 이 Target으로 이관할 구현 경로이지 별도 Target destination이 아니다.
+- Target의 Profile detail canonical route는 `/settings/profile`이다. 기존
+  `/settings/default-post-visibility`는 이 Target으로 이동하는 호환 경로이며 별도 편집 화면을 제공하지 않는다.
 - 다른 서비스에서 이전 detail의 canonical route는 `/settings/profile-migration`이며 명시적 parent는 `/settings`다.
   Target root에서는 `프로필 설정` 다음의 독립 destination으로 두며, `profile-migration` feature flag가 꺼져
   있거나 평가되지 않았으면 진입점과 destination control을 숨긴다. `팔로잉 가져오기`도 같은 flag가 켜진 경우에만
   진입점과 destination control을 표시한다.
-  현재 runtime의 legacy `게시물 기본 공개 범위` 행 바로 뒤에 migration 진입점을 배치하는 것은 구현 순서이며,
-  Target IA의 Profile destination을 변경하거나 별도 Profile 목적지를 추가하지 않는다.
 - 팔로잉 가져오기 detail의 canonical route는 `/settings/following-import`이며 명시적 parent는 `/settings`다.
   Root에서는 다른 서비스에서 이전 진입점 바로 뒤에 둔다.
 - 공개 정책 문서 진입점의 canonical Settings detail route는 `/settings/info`다. 이 route는 준비된 public
   `/privacy`, `/account-deletion`, `/child-safety`로 이동하는 링크를 제공하며 정책 문서 내용을 복제하지 않는다.
+- Kosmo Account 탈퇴 action의 canonical 내부 route는 `/settings/account-deletion`이다. `/settings/info`의
+  `계정 삭제 안내` public link는 안내 문서로 이동하는 기존 진입점이며 이 action route를 대체하지 않는다.
 - Mobile Target evidence는 [`Default`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6704-9409)와
   [`Profile required`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6704-9415) `390×844`
   consumer다. 이 조립 화면은 Product migration이나 실제 선택·저장 동작의 완료 증거가 아니다.
@@ -55,10 +60,12 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
 
 - Settings는 모든 control을 한 화면에 쌓는 긴 form이 아니라, 진입점 목록에서 category·하위 목록·detail로
   점진적으로 이동하는 탐색 구조를 사용한다.
-- Target root 목록은 `계정 설정 → 프로필 설정 → 다른 서비스에서 이전 → 팔로잉 가져오기 → 뮤트 및 차단 → 테마 → 정보`
-  순서다. `계정 설정`은 Byulmaru ID 외부 진입점이고 나머지는 내부 진입점이다. `테마`는 현재 선택값을 함께
-  표시한다. `게시물 기본 공개 범위`는 `/settings/profile` 안의 Profile 설정 field이며 root의 독립 destination으로
-  중복 배치하지 않는다. 항목 하나만 가진 `계정`·`화면 설정` 대분류를 만들지 않는다.
+- Target root 목록은 `계정 설정 → 프로필 설정 → 다른 서비스에서 이전 → 팔로잉 가져오기 → 뮤트 및 차단 → 테마 → 정보 → 코스모 탈퇴`
+  순서다. `계정 설정`은 Byulmaru ID 외부 진입점이고 나머지는 내부 진입점이다. `다른 서비스에서 이전`과
+  `팔로잉 가져오기`는 공개 feature flag가 활성화된 경우에만 표시한다. `테마`는 현재 선택값을 함께 표시한다.
+  `게시물 기본 공개 범위`는 `/settings/profile` 안의 Profile 설정 field이며 root의 독립 destination으로 중복
+  배치하지 않는다. `코스모 탈퇴`는 연결된 Profile 상태와 무관하게 항상 표시한다. 항목 하나만 가진 `계정`·
+  `화면 설정` 대분류를 만들지 않는다.
 - `정보`는 별도 category나 generic policy registry가 아닌 Settings root의 direct destination이다. `/settings/info`
   detail은 `개인정보 처리방침`, `계정 삭제 안내`, `아동 안전 정책`을 각각 public route로 여는 기존 Settings
   link-row 문법을 사용한다. 모든 플랫폼에서 세 policy link와 `개발 정보` link row를 제공하며 channel
@@ -117,6 +124,8 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   512 KiB보다 큰 파일은 읽거나 제출하지 않고
   한국어 오류를 표시한다. 제출 중에는 busy 상태를, 실패에는 안전한 오류를, accepted 응답에는 시작 확인만 알린다.
   작업 진행·결과 조회나 polling은 표시하지 않는다.
+- `코스모 탈퇴`는 Byulmaru ID의 Account Settings를 수정하지 않고 Kosmo Account만 대상으로 하는 별도 내부
+  action이다. 이 행은 `/settings/account-deletion`으로 이동하며, 외부 `계정 설정` 행을 바꾸거나 대체하지 않는다.
 - Profile target selector의 Figma lifecycle source는
   [`Mobile`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4867-13083),
   [`Compact`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4868-38112),
@@ -127,6 +136,20 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
 - selected Profile이 없으면 Profile detail은 대상이 없음을 설명하고 기존 Profile 선택·생성 흐름으로 이동할
   수 있는 action을 제공한다. 다른 Profile의 마지막 설정값을 대신 표시하지 않는다.
 
+## Profile 게시 설정
+
+- `/settings/profile`은 선택된 Active/Normal Local Profile의 `게시물 기본 공개 범위`와
+  `팔로우 요청 자동 승인`을 함께 제공한다. 서버가 확인한 Owner만 편집할 수 있다.
+- 기본 공개 범위는 `전체 공개`·`조용한 공개`·`팔로워만` 중 선택한다. 자동 승인 Switch는 켜짐을 `OPEN`,
+  꺼짐을 `APPROVAL_REQUIRED`로 표시한다.
+- 각 항목은 변경 즉시 자동 저장하며 별도 `저장` 버튼을 두지 않는다. 바꾼 항목만 저장하고 저장 중에는
+  두 control을 잠가 중복 제출을 막는다. 실패하면 마지막 저장값으로 되돌리고 오류를 안내하며, 사용자가
+  다시 변경해 재시도할 수 있다. 성공 후에는 저장된 값을 표시하며 별도 성공 안내는 표시하지 않는다.
+- 대상 전환 시 이전 Profile의 입력과 저장 결과를 새 Profile의 값으로 표시하지 않는다.
+- Profile 편집은 표시 이름·소개·이미지·태그를 계속 소유하며, 자동 승인 제어와 저장을 중복 제공하지 않는다.
+  정책 변경은 기존 Pending Follow Request를 바꾸지 않으며, 기본 공개 범위는 이미 열린 Composer의 draft를
+  바꾸지 않는다. 도메인 보장은 [Profile](../domain/objects/profile.md)을 따른다.
+
 ## Profile 설정의 후속 lifecycle 조립
 
 PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아 유지하고, optional `lifecycle`이
@@ -134,6 +157,26 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
 `WithLifecycle`에서 도입 후 구성을 검토한다. 비활성화는 Web·Native 모두 내용 전체를 교체하며,
 재활성화·영구 삭제는 확인 팝업을 사용한다. 자세한 계약은 [Profile lifecycle](./profile-lifecycle.md)을 따른다.
 이 Target presentation은 현재 `SettingsProfileDetail`과 Profile Edit의 저장·route를 교체하거나 기능을 활성화하지 않는다.
+
+## Kosmo Account 탈퇴
+
+`/settings/account-deletion`은 현재 인증된 Kosmo Account의 탈퇴를 처리하는 내부 detail이다. Web과 Android·iOS는
+같은 eligibility·확인·결과 계약을 사용하고, root/master 또는 one-pane route의 기존 Settings shell·header·back
+규칙을 재사용한다. 이 action은 별도 Figma source나 범용 Settings registry를 추가하지 않고 기존 Settings와
+[Profile lifecycle](./profile-lifecycle.md)의 확인·상태·접근성 패턴을 따른다.
+
+- 탈퇴 조건은 Account에 연결된 Profile 중 저장 State가 `ACTIVE`인 Profile이 없는 것이다. 화면에 표시한
+  eligibility와 별개로 탈퇴 확정 시 서버가 현재 Profile 목록으로 다시 확인하며, 하나라도 `ACTIVE` Profile이
+  남아 있으면 탈퇴할 수 없다. 이 확인은 Profile 또는 Membership을 삭제하거나 연결 해제하지 않는다.
+- 조건을 충족하지 못하면 detail에는 `ACTIVE` Profile의 개수와 탈퇴할 수 없는 이유만 표시한다. Profile 목록,
+  Profile action, Profile 관리 화면으로 가는 보조 진입점은 추가하지 않는다.
+- 조건을 충족하면 되돌릴 수 없는 Account 탈퇴 안내와 acknowledgement `checkbox`를 표시한다. 체크 전에는
+  확정 action을 disabled로 두며, 재인증·유예기간·탈퇴 사유 입력을 요구하지 않는다.
+- 기존 Profile 삭제 흐름과 같은 lifecycle을 사용한다. `pending`에서는 확인·checkbox·dismiss·navigation의
+  중복 조작을 막고, `error`에서는 확인 내용과 acknowledgement를 유지한 채 안전한 오류와 `다시 시도`를
+  제공한다. 성공은 서버가 Account를 `Deleted`로 확정한 뒤에만 표시하며, 완료 후 login route로 이동한다.
+- 탈퇴 성공 뒤 동일 Byulmaru ID의 Kosmo 재가입은 허용하지 않는다. 이 차단은 현재 임시 조치이며, 영구 재가입
+  정책이나 Byulmaru ID 자체의 상태 전이는 이 계약에 포함하지 않는다.
 
 ## SettingsItem
 
@@ -245,6 +288,9 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
 - Account 외부 진입점에는 Kosmo가 조회할 Account 값이나 외부 navigation 상태가 없으므로 Account 데이터 및
   외부 이동 loading·empty·save·error·retry·lock 상태를 만들지 않는다. 브라우저·OS가 소유하는 외부 이동을
   Kosmo Account 데이터 오류로 표현하지 않는다.
+- `/settings/account-deletion`은 확인된 Profile 상태를 기준으로 eligibility를 표시한다. 조회 중에는 미확인
+  상태를 탈퇴 가능으로 표시하지 않으며, 오류는 안전한 한국어 설명과 `다시 시도`를 제공한다. 성공·Deleted
+  상태를 추측하거나 optimistic하게 표시하지 않는다.
 - Profile detail, `/settings/profile-migration`, `/settings/following-import`은 각각 자기 Profile
   identity·loading·error·empty·content와 재시도 상태를 소유한다. migration feature flag가 꺼져 있거나 미평가
   상태에서 migration 또는 following import direct link를 열면 generic unavailable Settings state를 표시하고
@@ -256,8 +302,7 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
   값처럼 표시하지 않는다. 세부 request 상태와 늦은 응답 격리는 PROD-667 Profile 기능이 소유한다.
 - 테마 선택에는 저장 버튼·dirty·saving·success 화면을 만들지 않는다. 초기 local hydration은 기존 Splash가,
   local persistence 실패 feedback은 기존 `Toast`가 소유한다.
-- 기본 게시 공개 범위의 inline option·dropdown·sheet·즉시 저장·명시적 저장 여부는 page shell 계약으로
-  고정하지 않는다.
+- Profile 게시 설정의 자동 저장 상태는 Profile detail이 소유하며 page shell로 끌어올리지 않는다.
 
 ## 접근성
 
@@ -266,7 +311,7 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
   반복하지 않는다.
 - Target root/master 목록의 문서·보조기술 읽기 순서는 `설정` heading → `계정 설정` 외부 진입점 →
   `프로필 설정` → feature flag가 켜진 경우 `다른 서비스에서 이전`과 `팔로잉 가져오기` → `뮤트 및 차단` →
-  `테마`와 현재 선택값 → `정보`다. full Web에서는 이어서 detail heading과
+  `테마`와 현재 선택값 → `정보` → `코스모 탈퇴`다. full Web에서는 이어서 detail heading과
   현재 선택된 content를 읽는다. 모든 플랫폼의 `/settings/info`에서는 `정보` heading 다음에 세 public policy
   link를 문서 순서대로 읽고, 이어서 `개발 정보` link를 읽는다.
   `/settings/developer`에서는 `개발 정보` heading 다음에 Web은 `채널`의 현재 `dev`·`prod` 값을, Native는
@@ -275,6 +320,9 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
 - Account 진입점은 시각 label `계정 설정`과 link accessible name·canonical destination에서 Byulmaru ID 외부
   Account Settings로 이동한다는 사실을 전달한다. 내부 진입점은 선택·현재 상태와 destination을, Profile
   control은 Kosmo 내부 기능과 현재 대상을 전달한다.
+- `코스모 탈퇴`는 Kosmo 내부 action임을 accessible name과 destination에서 전달한다. 탈퇴 detail은 blocker의
+  `ACTIVE` Profile 개수와 이유, acknowledgement checkbox의 checked·disabled 상태, 확정 action의 busy·disabled
+  상태, 오류의 `다시 시도`와 완료 후 login 이동을 Web·Android·iOS에서 보조기술이 확인할 수 있게 한다.
 - Web keyboard focus는 현재 보이는 pane의 문서 순서를 따르며, full Web에서는 master의 interactive row 다음
   detail의 interactive control로 이동한다. heading과 비상호작용 identity는 tab stop이 아니다.
 - navigation과 page action은 실제 동작에 맞는 role, accessible name, current·disabled·busy 상태를 제공한다.
@@ -304,6 +352,8 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
 - PROD-667은 Profile 선택 대상, 기본 게시 공개 범위의 저장·권한·상태와 Composer 연결 및 해당 기능 검증을
   소유한다. PROD-648은 Backend DB·GraphQL 계약을 소유한다.
 - PROD-743은 위 Profile Migration source control의 Settings 시각 조립과 UI 검증을 소유한다.
+- PROD-531은 두 게시 설정의 항목별 자동 저장, `/settings/profile` 연결과 Profile 편집의 Follow Approval 제어
+  이전 및 중복 저장 제거를 소유한다. 기존 PROD-667의 Composer 초기값 계약을 유지한다.
 - `뮤트 및 차단`의 Figma IA·source·대표 consumer는 DSN-53이 소유한다. runtime의 Mute 진입점·목록·통합
   검증은 PROD-814, Block 진입점·목록과 Relay 수렴은 PROD-823, Block의 종단 간 검증·archive는 PROD-813이
   소유한다. 이 범위를 완료된 PROD-685·PROD-684에 소급해 귀속하지 않는다.
@@ -324,6 +374,12 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
 - PROD-889는 `/settings/info` direct destination과 세 public policy route link의 배치, 기존 landing·RightRail
   개인정보 처리방침 보존, Sidebar·mobile drawer 정책 링크 비노출을 소유한다. `/settings/info`는 새 정책 내용이나
   Account 관리 기능을 구현하지 않는다.
+- PROD-970은 Settings root/master 마지막의 `코스모 탈퇴` 행과 `/settings/account-deletion` detail의
+  기존 Profile 목록 기반 eligibility·authoritative server recheck·`ACTIVE` blocker 개수와 이유,
+  acknowledgement·pending/error/retry·서버 확정 success·완료 후 login 이동, Kosmo Account의 `Deleted` 전이,
+  접근성 이름·상태·root 읽기 순서 계약을 소유한다. public `/account-deletion` 안내는 #714가 소유하며,
+  이 이슈는 내부 Settings 탈퇴 action만 소유한다. Byulmaru ID 외부 `계정 설정`, 재인증·유예기간·탈퇴 사유 입력,
+  Profile 목록·관리 action과 Profile/Membership 삭제 흐름은 이 이슈의 범위가 아니다.
 - 자동화·source/unit 결과는 실제 Web keyboard·screen reader·zoom 또는 Android·iOS runtime 접근성·
   navigation 통과 증거로 일반화하지 않는다.
 
@@ -333,16 +389,16 @@ Figma 이름마다 public component를 추가하지 않는다. Switch는 기존 
 SearchField는 Production `TextField`·`IconButton`을 합성한다. Playground의 얇은 consumer fixture가
 입력 상태와 clear 뒤 입력 focus 복귀를 소유하며, route·검색 결과·debounce 정책은 포함하지 않는다.
 
-| Figma source                                                                               | Production 구현·consumer                                   | Storybook 표면                                                                                                 |
-| ------------------------------------------------------------------------------------------ | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| [Switch](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=3324-22405)     | `react-native` Switch                                      | `KOSMO/Components/Switch` Playground·RepresentativeStates·Tests                                                |
-| 같은 Switch                                                                                | `ProfileEditForm.tsx`의 Follow Approval                    | `screens/ProfileEdit.stories.tsx`의 `FollowPolicySwitchSubmitsEnum`·`FollowPolicyApprovalRequiredInitialState` |
-| 같은 Switch                                                                                | `PostComposerMediaControls.tsx`의 `PostComposerMediaItems` | `patterns/Posts.stories.tsx`의 `ComposerMediaStates`·`ComposerReplyMediaMutationContract`                      |
-| [SearchField](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=3899-1389) | `ui/TextField.tsx`·`ui/IconButton.tsx` 합성                | `KOSMO/Patterns/Search Field` Playground·RepresentativeStates·Tests                                            |
+| Figma source                                                                               | Production 구현·consumer                                   | Storybook 표면                                                                            |
+| ------------------------------------------------------------------------------------------ | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| [Switch](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=3324-22405)     | `react-native` Switch                                      | `KOSMO/Components/Switch` Playground·RepresentativeStates·Tests                           |
+| 같은 Switch                                                                                | `ProfilePostingSettings.tsx`의 Follow Approval             | `screens/ProfileSettings.stories.tsx`의 게시 설정 조합                                    |
+| 같은 Switch                                                                                | `PostComposerMediaControls.tsx`의 `PostComposerMediaItems` | `patterns/Posts.stories.tsx`의 `ComposerMediaStates`·`ComposerReplyMediaMutationContract` |
+| [SearchField](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=3899-1389) | `ui/TextField.tsx`·`ui/IconButton.tsx` 합성                | `KOSMO/Patterns/Search Field` Playground·RepresentativeStates·Tests                       |
 
 - Switch는 Off/On·Disabled와 boolean `onValueChange`를 유지한다. Figma의 40×20은 의도 표현이며
   Web·iOS·Android의 native 렌더 크기·모양·색상 차이를 허용한다. `OPEN`/`APPROVAL_REQUIRED` 변환은
-  [ProfileEdit consumer](./profile-edit.md)의 계약이다. 민감한 이미지 Switch는 별도의 boolean 값을 전달한다.
+  Profile 게시 설정 consumer의 계약이다. 민감한 이미지 Switch는 별도의 boolean 값을 전달한다.
 - SearchField는 TextField의 44px 높이·테마·focus ring을 재사용하며 Empty/Filled와
   Default/Focused/Disabled를 표현한다. Filled라도 disabled이면 clear를 숨긴다. Focused는 실제 입력
   focus로 도달하며 테스트 전용 state prop을 추가하지 않는다. Web 입력은 `searchbox`, Native 입력은
@@ -397,13 +453,15 @@ touch·focus, 빠른 연속 입력의 중간 frame은 확인하지 않았으며 
 
 ## 제외 범위
 
-- Byulmaru ID Account Settings 페이지 자체와 Account 데이터 조회·입력·저장·관리 기능
+- Byulmaru ID Account Settings 페이지 자체와 Byulmaru ID Account 데이터 조회·입력·저장·관리 기능
 - 브라우저·OS가 소유하는 외부 navigation 결과와 URL 지원 확인·loading·error·retry·lock 상태
+- Profile 목록·Profile action·Membership 정리 또는 Profile 삭제 흐름의 변경
+- `/settings/account-deletion`과 별도인 public `/account-deletion` page의 layout·design·action 및 Settings UI와
+  무관한 public route 구현
 - Profile 기본 게시 공개 범위의 DB, GraphQL, Relay와 Composer 계약
-- 공개 범위 control의 구체적인 선택·저장 UI
 - 홈 또는 다른 주요 route의 테마 toggle과 임시 진입점
 - 테마 선택값의 server·DB 저장, 계정 동기화와 기기 간 동기화
 - Primary Color 변경과 아직 필요하지 않은 `화면 설정`·`테마 설정` 중간 category
-- Follow Approval Policy와 아직 승인되지 않은 설정 category·placeholder
+- 아직 승인되지 않은 설정 category·placeholder
 - 미래 category 전체를 위한 범용 registry나 현재 승인되지 않은 destination route
 - settings 밖 기존 route의 전역 shell·RightRail 동작 변경

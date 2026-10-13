@@ -53,7 +53,6 @@ mockModule('lucide-react-native', { ArrowLeftIcon: 'span' });
 mockModule(require.resolve('lucide-react-native'), { ArrowLeftIcon: 'span' });
 mockModule(new URL('../../analytics/client.ts', import.meta.url), {
   identifyAnalytics: () => undefined,
-  getAnalyticsAccountId: () => 'account-a',
   trackAnalytics: (event: string, properties: Record<string, unknown>) =>
     events.push([event, properties]),
 });

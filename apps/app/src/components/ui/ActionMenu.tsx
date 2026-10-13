@@ -5,15 +5,12 @@ import {
   useContext,
   useEffect,
   useLayoutEffect,
-  useMemo,
   useRef,
   useState,
 } from 'react';
 import {
   ActivityIndicator,
   Animated,
-  Modal,
-  PanResponder,
   Platform,
   Pressable,
   StyleSheet,
@@ -25,6 +22,8 @@ import { ActionMenuPortal } from '@/components/ui/ActionMenuPortal';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, layoutRecipes, radius, space, textStyles } from '@/theme/tokens';
 import { useOverlayMotion } from '@/theme/useOverlayMotion';
+import { BottomSheetSurface } from './BottomSheetSurface';
+import { ModalSheetHost } from './ModalSheetHost';
 import type { ComponentType, ReactElement, ReactNode, RefObject } from 'react';
 
 type ActionMenuIcon = ComponentType<{
@@ -234,7 +233,7 @@ export function ActionMenu({
   }, [disabled, items, open, positionWebMenu]);
   const select = useCallback(
     (item: ActionMenuItem) => {
-      if (item.disabled) {
+      if (!open || item.disabled) {
         return;
       }
       if (item.dismissOnSelect === false) {
@@ -254,7 +253,7 @@ export function ActionMenu({
       pendingSelectionRef.current = item.onSelect;
       dismiss(false);
     },
-    [dismiss, web],
+    [dismiss, open, web],
   );
 
   useEffect(() => {
@@ -271,20 +270,6 @@ export function ActionMenu({
     focusTrigger();
     onSelect();
   }, [focusTrigger, open, overlayMotion.mounted, web]);
-
-  const sheetDismissResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onMoveShouldSetPanResponder: (_event, gesture) =>
-          gesture.dy > 8 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
-        onPanResponderRelease: (_event, gesture) => {
-          if (gesture.dy >= 56 || gesture.vy >= 0.5) {
-            dismiss();
-          }
-        },
-      }),
-    [dismiss],
-  );
 
   useLayoutEffect(() => {
     if (!web || !open || !overlayMotion.mounted) {
@@ -548,15 +533,21 @@ export function ActionMenu({
         onPress: toggle,
         ref: triggerRef,
       })}
-      <Modal
+      <ModalSheetHost
         accessibilityLabel={accessibilityLabel}
         animationType="none"
+        interactionDisabled={!open}
         onRequestClose={() => dismiss()}
         role="dialog"
         transparent
         visible={overlayMotion.mounted}
       >
-        <View style={styles.backdrop}>
+        <View
+          accessibilityElementsHidden={!open}
+          importantForAccessibility={open ? 'auto' : 'no-hide-descendants'}
+          pointerEvents={open ? 'auto' : 'none'}
+          style={styles.backdrop}
+        >
           <Animated.View
             pointerEvents="none"
             style={[
@@ -573,15 +564,8 @@ export function ActionMenu({
             testID="action-menu-backdrop"
           />
           <Animated.View
-            accessibilityViewIsModal
-            onAccessibilityEscape={() => dismiss()}
             style={[
-              styles.sheet,
-              elevation.overlay,
               {
-                backgroundColor: theme.backgroundElevated,
-                borderColor: theme.borderDefault,
-                paddingBottom: insets.bottom + space[8],
                 opacity: overlayMotion.progress,
                 transform: [
                   {
@@ -594,67 +578,70 @@ export function ActionMenu({
               },
             ]}
           >
-            <View {...sheetDismissResponder.panHandlers} style={styles.dragHandleTarget}>
-              <View style={[styles.dragHandle, { backgroundColor: theme.borderStrong }]} />
-            </View>
-            <View accessibilityLabel={accessibilityLabel} accessibilityRole="menu">
-              {items.map((item, index) => {
-                const Icon = item.icon;
-                const itemColor =
-                  item.tone === 'danger' ? theme.feedbackDangerOnSubtle : theme.foregroundPrimary;
-                const control = (
-                  <Pressable
-                    accessibilityLabel={item.accessibilityLabel ?? item.label}
-                    accessibilityRole="menuitem"
-                    aria-busy={item.busy || undefined}
-                    accessibilityState={{ busy: item.busy, disabled: item.disabled }}
-                    disabled={item.disabled}
-                    onPress={() => select(item)}
-                    style={[styles.item, styles.nativeItem]}
-                  >
-                    {item.busy ? (
-                      <ActivityIndicator color={itemColor} />
-                    ) : Icon ? (
-                      <Icon color={itemColor} size={sheetIconSize} strokeWidth={2} />
-                    ) : null}
-                    <Text
-                      style={[
-                        styles.label,
-                        {
-                          color: itemColor,
-                        },
-                      ]}
+            <BottomSheetSurface
+              closeDisabled={!open || disabled}
+              onClose={() => dismiss()}
+              style={[elevation.overlay, { paddingBottom: insets.bottom + space[8] }]}
+            >
+              <View accessibilityLabel={accessibilityLabel} accessibilityRole="menu">
+                {items.map((item, index) => {
+                  const Icon = item.icon;
+                  const itemColor =
+                    item.tone === 'danger' ? theme.feedbackDangerOnSubtle : theme.foregroundPrimary;
+                  const control = (
+                    <Pressable
+                      accessibilityLabel={item.accessibilityLabel ?? item.label}
+                      accessibilityRole="menuitem"
+                      aria-busy={item.busy || undefined}
+                      accessibilityState={{ busy: item.busy, disabled: !open || item.disabled }}
+                      disabled={!open || item.disabled}
+                      onPress={() => select(item)}
+                      style={[styles.item, styles.nativeItem]}
                     >
-                      {item.label}
-                    </Text>
-                  </Pressable>
-                );
-                return (
-                  <View key={item.key}>
-                    {index > 0 ? (
-                      <View
-                        style={[styles.nativeDivider, { borderTopColor: theme.borderSubtle }]}
-                      />
-                    ) : null}
-                    {renderItem
-                      ? renderItem({ children: control, item, onSelect: () => select(item) })
-                      : control}
-                  </View>
-                );
-              })}
-            </View>
-            {error ? (
-              <Text
-                accessibilityLiveRegion="polite"
-                accessibilityRole="alert"
-                style={[styles.error, { color: theme.danger }]}
-              >
-                {error}
-              </Text>
-            ) : null}
+                      {item.busy ? (
+                        <ActivityIndicator color={itemColor} />
+                      ) : Icon ? (
+                        <Icon color={itemColor} size={sheetIconSize} strokeWidth={2} />
+                      ) : null}
+                      <Text
+                        style={[
+                          styles.label,
+                          {
+                            color: itemColor,
+                          },
+                        ]}
+                      >
+                        {item.label}
+                      </Text>
+                    </Pressable>
+                  );
+                  return (
+                    <View key={item.key}>
+                      {index > 0 ? (
+                        <View
+                          style={[styles.nativeDivider, { borderTopColor: theme.borderSubtle }]}
+                        />
+                      ) : null}
+                      {renderItem
+                        ? renderItem({ children: control, item, onSelect: () => select(item) })
+                        : control}
+                    </View>
+                  );
+                })}
+              </View>
+              {error ? (
+                <Text
+                  accessibilityLiveRegion="polite"
+                  accessibilityRole="alert"
+                  style={[styles.error, { color: theme.danger }]}
+                >
+                  {error}
+                </Text>
+              ) : null}
+            </BottomSheetSurface>
           </Animated.View>
         </View>
-      </Modal>
+      </ModalSheetHost>
     </>
   );
 }
@@ -662,8 +649,6 @@ export function ActionMenu({
 const styles = StyleSheet.create({
   backdrop: { flex: 1, justifyContent: 'flex-end' },
   control: { position: 'relative' },
-  dragHandle: { borderRadius: radius.full, height: 4, width: 36 },
-  dragHandleTarget: { alignItems: 'center', height: 44, justifyContent: 'center' },
   error: { paddingHorizontal: space[12], paddingVertical: space[8], ...textStyles.uiCopyS },
   item: {
     justifyContent: 'center',
@@ -679,11 +664,6 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
   },
   label: textStyles.uiLabelL,
-  sheet: {
-    borderTopLeftRadius: radius[16],
-    borderTopRightRadius: radius[16],
-    borderWidth: borderWidths[1],
-  },
   webIcon: { alignItems: 'center', height: 18, justifyContent: 'center', width: 18 },
   webFirstItemHitArea: {
     bottom: -webMenuInset,

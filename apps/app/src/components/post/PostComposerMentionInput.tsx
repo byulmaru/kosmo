@@ -1,5 +1,6 @@
 import { useId, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useFeatureFlag } from '@/components/FeatureFlagsContext';
 import { Avatar } from '@/components/ui/Avatar';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, radius, space, textStyles } from '@/theme/tokens';
@@ -16,7 +17,7 @@ import type {
 
 type InputWebProps = {
   'aria-activedescendant'?: string;
-  'aria-autocomplete': 'list';
+  'aria-autocomplete'?: 'list';
   'aria-controls'?: string;
 };
 
@@ -62,12 +63,15 @@ export function PostComposerMentionInput({
   renderInput,
   selection,
 }: Props) {
+  const mentionSearchEnabled = useFeatureFlag('post-composer-mention-search');
   const theme = useTheme();
   const rawListboxId = useId();
   const listboxId = `post-composer-mention-list-${rawListboxId.replace(/[^a-zA-Z0-9_-]/g, '')}`;
   const [activeCandidateId, setActiveCandidateId] = useState<string | null>(null);
   const [dismissedQueryKey, setDismissedQueryKey] = useState<string | null>(null);
-  const activeQuery = findPostComposerMentionQuery(body, selection.start, selection.end);
+  const activeQuery = mentionSearchEnabled
+    ? findPostComposerMentionQuery(body, selection.start, selection.end)
+    : null;
   const queryKey = activeQuery
     ? `${body}\u0000${activeQuery.start}\u0000${activeQuery.end}\u0000${activeQuery.query}`
     : null;
@@ -144,11 +148,13 @@ export function PostComposerMentionInput({
     }
   };
 
-  const webProps: InputWebProps = {
-    'aria-activedescendant': activeDescendant,
-    'aria-autocomplete': 'list',
-    'aria-controls': visible && candidates.length > 0 ? listboxId : undefined,
-  };
+  const webProps: InputWebProps = mentionSearchEnabled
+    ? {
+        'aria-activedescendant': activeDescendant,
+        'aria-autocomplete': 'list',
+        'aria-controls': visible && candidates.length > 0 ? listboxId : undefined,
+      }
+    : {};
 
   return (
     <View style={[styles.root, grow ? styles.grow : null]}>

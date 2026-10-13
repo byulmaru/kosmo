@@ -98,10 +98,10 @@ afterEach(async () => {
 describe('SettingsLinkRow', () => {
   it('내부 링크는 현재 페이지에서 aria-current=page를 노출한다', async () => {
     await render({
-      accessibilityLabel: '게시물 기본 공개 범위 설정 열기',
+      accessibilityLabel: '프로필 설정 열기',
       currentPage: true,
-      href: '/settings/default-post-visibility',
-      label: '게시물 기본 공개 범위',
+      href: '/settings/profile',
+      label: '프로필 설정',
       primary: true,
       selected: true,
       testID: 'settings-row',
@@ -109,12 +109,12 @@ describe('SettingsLinkRow', () => {
 
     const row = byTestId('settings-row');
     const navigationLink = rendered('NavigationLink')[0];
-    assert.equal(navigationLink.props.href, '/settings/default-post-visibility');
+    assert.equal(navigationLink.props.href, '/settings/profile');
     assert.equal(navigationLink.props.primary, true);
     assert.equal(navigationLink.props.push, true);
-    assert.equal(row.props.href, '/settings/default-post-visibility');
+    assert.equal(row.props.href, '/settings/profile');
     assert.equal(row.props.accessibilityRole, 'link');
-    assert.equal(row.props.accessibilityLabel, '게시물 기본 공개 범위 설정 열기');
+    assert.equal(row.props.accessibilityLabel, '프로필 설정 열기');
     assert.equal(row.props['aria-current'], 'page');
     assert.deepEqual(row.props.accessibilityState, { selected: true });
     const rowStyle = flattenStyle(row.props.style({ hovered: false, pressed: false }));
@@ -201,8 +201,8 @@ describe('SettingsLinkRow', () => {
   it('selected row feedback uses selected, hover, then pressed precedence', async () => {
     await render({
       accessibilityLabel: '선택된 설정 링크',
-      href: '/settings/default-post-visibility',
-      label: '게시물 기본 공개 범위',
+      href: '/settings/profile',
+      label: '프로필 설정',
       selected: true,
       testID: 'selected-settings-row',
     });

@@ -1,6 +1,6 @@
 import { AccountProfiles, db, Notifications, Posts } from '@kosmo/core/db';
 import { notificationSourceAvailabilityWhere } from '@kosmo/core/visibility';
-import { and, eq, exists, sql } from 'drizzle-orm';
+import { and, eq, exists, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { Database } from '@kosmo/core/db';
 import type { UserContext } from '@/context';
@@ -27,6 +27,30 @@ export const visibleNotificationWhere = ({ ctx }: { ctx: UserContext }) => {
 
   return and(
     accountId ? notificationMembershipWhere(accountId, db) : sql`1=0`,
+    notificationSourceAvailabilityWhere(db, { includeRecipientAvailability: true }),
+  )!;
+};
+
+export const visibleViewerNotificationWhere = ({
+  ctx,
+  profileId,
+}: {
+  ctx: UserContext;
+  profileId?: string | null;
+}) => {
+  const profileNotifications =
+    ctx.session && profileId !== null
+      ? and(
+          profileId === undefined ? undefined : eq(Notifications.recipientProfileId, profileId),
+          notificationMembershipWhere(ctx.session.accountId, db),
+        )
+      : undefined;
+  const operationalNotifications = ctx.session
+    ? eq(Notifications.recipientAccountId, ctx.session.accountId)
+    : undefined;
+
+  return and(
+    or(profileNotifications, operationalNotifications) ?? sql`1=0`,
     notificationSourceAvailabilityWhere(db, { includeRecipientAvailability: true }),
   )!;
 };

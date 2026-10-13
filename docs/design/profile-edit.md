@@ -25,22 +25,16 @@
 2. header 이미지와 겹쳐 보이는 avatar 이미지 편집 영역
 3. 표시 이름
 4. 소개(bio)
-5. 팔로우 요청 자동 승인
-6. 프로필 태그
+5. 프로필 태그
 
-DSN-45 Figma Candidate는 `팔로우 요청 자동 승인`을 제외하고 프로필 태그 다음에 `프로필 추가 정보`를 둔다.
-Follow Approval 제어는 Settings 이관 전 production에만 남아 있으며, Figma의 Switch source는 후속 Settings
-화면에서 재사용한다.
+DSN-45 Figma Candidate는 프로필 태그 다음에 `프로필 추가 정보`를 둔다.
+`팔로우 요청 자동 승인`은 [프로필 설정](./settings.md#profile-게시-설정)에서 제공한다.
 
 - 표시 이름은 새로 입력하거나 변경할 때 Unicode code point 기준 1~40이다. 서버 구현 정렬 전의 호환 경계로,
   40 code point를 초과하는
   legacy 초기값은 form에 들어온 원문과 정확히 같은 값으로 남겨 둔 경우에만 다른 field와 함께 저장할 수 있다.
   40 code point를 초과한 이름을 한 글자라도 변경하면 같은 1~40 code point 규칙을 적용한다.
 - bio는 앞뒤 공백을 제거한 뒤 500자 이하이며 긴 텍스트 입력으로 표현한다.
-- `팔로우 요청 자동 승인`은 설명 없는 한 줄 Switch로 표현한다. 독립 설정에 가까운 시각적 위계를 위해
-  라벨은 SUIT `16/24`, weight `600`을 사용한다. Switch가 켜지면 `OPEN`, 꺼지면
-  `APPROVAL_REQUIRED`로 해석하며, 표시 이름·소개·avatar/header와 같은 Profile draft와 저장 동작에 포함한다.
-- Follow Approval Policy를 바꿔도 기존 Pending Follow Request의 상태나 존재는 바뀌지 않는다.
 - 프로필 태그는 [Profile Tag 디자인](./profile-tags.md)의 Hashtag Name 정규화·중복·접근성
   계약을 따른다. 개수 상한과 순서·재정렬 계약은 두지 않는다.
 - 표시 이름·소개·프로필 태그의 외부 label은 `UI/Label/L`(`16/24/600`)을 사용한다. displayName·bio의
@@ -65,16 +59,15 @@ Follow Approval 제어는 Settings 이관 전 production에만 남아 있으며,
 - handle, location, gender, pronouns, contacts와 고정 게시물은 전용 field로 추가하지 않는다. DSN-45 Figma
   Candidate의 `프로필 추가 정보`는 website를 포함한 임의의 label과 value 쌍을 표현할 수 있지만, production
   저장·검증·공개 표시 계약은 `PROD-514`가 소유한다.
-- Settings 진입점이 제공되기 전까지 production의 Follow Approval Policy 조회·변경은 Profile 편집이 소유한다.
-  DSN-45 Figma에서는 이미 이 field를 제거하며, `PROD-531`이 Settings로 제어를 이전한 뒤 production
-  Profile 편집에서도 중복 저장 소유권을 제거한다.
+- Follow Approval Policy 조회·변경은 `/settings/profile`이 소유한다. Profile 편집은 이 값을 draft나 저장
+  입력에 포함하지 않아 설정 화면에서 변경한 정책을 덮어쓰지 않는다. `/profile-edit` 경로와 나머지 필드는 유지한다.
 
 ## 화면과 연결 경계
 
 ### Presentation
 
 - `ProfileEditScreen`과 `ProfileEditForm`은 route나 Relay Environment를 직접 읽지 않는다.
-- 값, validation, 이미지 상태, `followPolicy` draft, 저장 상태와 callback을 controlled prop으로 받는다.
+- 값, validation, 이미지 상태, 저장 상태와 callback을 controlled prop으로 받는다.
 - 제출 callback이 없거나 초기값에서 바뀐 draft가 없으면 저장 action을 disabled로 표현한다. 사용자가 원하는
   field만 편집하면 해당 draft가 dirty가 되고, 저장은 현재 draft 전체를 제출한다. 성공을 가장하거나 임시 local
   persistence를 만들지 않는다.
@@ -82,8 +75,6 @@ Follow Approval 제어는 Settings 이관 전 production에만 남아 있으며,
   동작하게 한다.
 - dirty, validation, 이미지 업로드 대기·오류, saving, failure와 retry는 production 연결 전에는
   Storybook의 controlled state로 검증한다.
-- Switch는 `followPolicy` enum을 controlled draft로 유지하며 별도 즉시 저장하지 않는다. 토글만 바꿔도
-  draft가 dirty가 되고, 저장 callback에는 다른 Profile draft와 함께 현재 enum 값이 전달된다.
 - 이미지 업로드 오류는 [공통 이미지 업로드 오류 안내](./media-upload-errors.md)의 단계·원인 분류와 안전한
   한국어 문구를 사용하고 현재 image draft를 보존한다. `{subject}`는 `아바타 이미지` 또는 `헤더 이미지`로
   한정하며 Storage Service 원문 message나 caller가 제공한 임의 문구를 사용자에게 그대로 표시하지 않는다.
@@ -119,8 +110,6 @@ Follow Approval 제어는 Settings 이관 전 production에만 남아 있으며,
   avatar/header·Tag 표시, 성공 navigation과 production 진입점을 연결한다.
 - `Profile.viewerState.isSelf`, `follow`, `followRequest`와 FollowButton의 self·follow·pending 동작은 변경하지
   않는다.
-- route는 현재 `followPolicy`를 초기 draft로 조회하고 표시 이름·소개·Media 관계와 같은 저장 동작으로
-  제출한다. Settings 이전 전까지 이 Profile 편집 경계를 우회하는 별도 정책 저장을 만들지 않는다.
 - production route는 현재 Profile Tag를 초기 draft로 조회해 기존 editor를 렌더하고 다른 Profile 값과 전체 Tag
   목록을 같은 update input으로 제출한다. server validation은 Tag field에 연결하고 성공 payload의 Hashtag Node
   목록으로 편집 baseline과 공개 Profile Relay record를 동기화한다.
@@ -131,7 +120,7 @@ Follow Approval 제어는 Settings 이관 전 production에만 남아 있으며,
   `profile_id`, `media_id`, `AVATAR | HEADER` kind와 생성 시각을 가지며 Profile마다 kind 하나만 존재한다.
   Profile 삭제는 관계만 cascade하고 Media row/blob은 삭제하지 않는다. 기존 Profile backfill은 수행하지 않는다.
 - update input에서 avatar/header field 생략은 관계 유지, Media global ID는 교체, `null`은 해당 kind 관계 제거다.
-  요청에 포함된 두 Media를 먼저 모두 검증한 뒤 displayName, bio, `followPolicy`와 관계 upsert/delete를 하나의
+  요청에 포함된 두 Media를 먼저 모두 검증한 뒤 displayName, bio와 관계 upsert/delete를 하나의
   transaction에서 반영한다. 하나라도 존재하지 않거나 다른 Profile 소유, Remote 또는 Ready가 아니면 전체를
   rollback한다.
 - Profile 연결은 `PROD-581`이 완료 시 저장한 공개 URL과 media type persistence를 소비한다. 공개 Profile
@@ -148,7 +137,7 @@ Follow Approval 제어는 Settings 이관 전 production에만 남아 있으며,
   선택 즉시 local preview를 표시하고 `issueMediaUploadUrl → PUT → completeMediaUpload`을 실행한다. field가
   교체되거나 route가 unmount된 뒤 도착한 stale completion은 draft에 반영하지 않으며 Web object preview는
   교체·삭제·unmount 때 해제한다.
-- 업로드 중이거나 실패한 field가 있으면 저장을 disabled로 둔다. 업로드 실패는 text·policy와 다른 image draft를
+- 업로드 중이거나 실패한 field가 있으면 저장을 disabled로 둔다. 업로드 실패는 text와 다른 image draft를
   보존하고 `updateProfile`을 호출하지 않는다. `다시 시도`는 실패한 field의 upload sequence만 다시 수행한다.
   Profile 저장 실패는 이미 Ready인 Media ID를 포함한 전체 draft를 보존하므로 저장 재시도에서 재업로드하지 않는다.
 - dirty draft에서 route navigation, Web browser back과 Android hardware back을 시도하면 공통 confirmation UI로
@@ -163,7 +152,7 @@ Follow Approval 제어는 Settings 이관 전 production에만 남아 있으며,
 - 실제 route commit 전에 사용자가 새 draft를 만들면 그 입력의 보호가 성공 REPLACE보다 우선한다. route는
   dirty guard를 다시 활성화해 대기 중인 REPLACE를 공통 discard confirmation으로 가로채며, 새 입력을 버리고
   강제로 이동하지 않는다.
-- 성공 REPLACE가 no-op이거나 완료되지 않아도 편집 화면은 잠금 상태에 남지 않으며 현재 text·policy와 Ready
+- 성공 REPLACE가 no-op이거나 완료되지 않아도 편집 화면은 잠금 상태에 남지 않으며 현재 text와 Ready
   avatar/header Media ID를 보존한다. mutation 자동 재전송이나 이미지 자동 재업로드는 실행하지 않는다.
 - 표시 이름은 client omission에 의존하지 않는다. 서버는 기존 저장 원문과 정확히 같은 40 code point 초과
   displayName을 허용하고, 원문과 달라진 값에만 Unicode code point 기준 1~40 규칙을 적용한다. Remote Profile
@@ -244,7 +233,7 @@ Follow Approval 제어는 Settings 이관 전 production에만 남아 있으며,
 - presentation은 저장 성공 문구를 남기지 않는다. production route가 성공 payload로 갱신된 Profile을 확보한 뒤
   해당 Profile로 복귀한다.
 - presentation 상태 카탈로그와 production route는 실패 뒤 표시 이름·bio·Profile Tag·이미지 선택 상태를
-  보존한다. production은 text·policy·Tag·Ready image draft를 같은 저장 action으로 다시 제출할 수 있게 한다.
+  보존한다. production은 text·Tag·Ready image draft를 같은 저장 action으로 다시 제출할 수 있게 한다.
 - 긴 표시 이름·bio, 빈 값, 여러 개·긴 태그, 이미지 없음과 오류, compact/desktop 폭을 상태 카탈로그에서
   확인한다.
 - Storybook `KOSMO/Screens/Profile Edit/Catalog`는 실제 Production component의 수동 Playground와 Mobile
@@ -298,8 +287,8 @@ Follow Approval 제어는 Settings 이관 전 production에만 남아 있으며,
 - `PROD-492`: `PROD-581` 위에서 Profile Media 관계, protected route와 entrypoint, 초기값, submit/Relay,
   Media picker·upload, 공개 ProfileHero 이미지와 성공 navigation을 연결한 기존 결과를 소유한다.
 - `PROD-527`: `PROD-491`의 Profile Tag editor를 재사용한 저장·서버 오류·Relay 연결과 공개 Profile 표시.
-- `PROD-531`: Settings 진입점이 제공된 뒤 Follow Approval Policy 제어를 이전하고 Profile 편집과의 중복
-  저장 소유권을 제거한다.
+- `PROD-531`: `/settings/profile`에 Follow Approval Policy 제어를 이전하고 Profile 편집과의 중복 저장
+  소유권을 제거한다. 프로필 편집 화면 전체의 Settings 이관은 포함하지 않는다.
 - `PROD-490`: 두 Profile 편집 slice의 통합 검증, OpenSpec 정합성 확인과 archive.
 - `PROD-705`: `Profile.viewerState.membership`의 account-scoped 관계 projection, 기존 공개 Profile route와
   protected `ProfileEditRoute` 전환, `selectedProfileForEdit` 제거와 관련 schema·Relay·테스트·문서 정합성을

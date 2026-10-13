@@ -16,6 +16,7 @@ import {
   PostVisibility,
   ProfileState,
 } from '../enums';
+import { materializeMentionNotificationIfEligible } from './mention-notification';
 import {
   materializeCoordinatedNotification,
   materializeReplyNotificationIfEligible,
@@ -108,13 +109,7 @@ export const materializeQuoteNotificationIfEligible = async (
       QuoteNotificationSourceAuthorInstances,
       eq(QuoteNotificationSourceAuthorInstances.id, QuoteNotificationSourceAuthors.instanceId),
     )
-    .innerJoin(
-      NotificationRollouts,
-      and(
-        eq(NotificationRollouts.key, QUOTE_NOTIFICATION_ROLLOUT_KEY),
-        eq(NotificationRollouts.enabled, true),
-      ),
-    )
+    .leftJoin(NotificationRollouts, eq(NotificationRollouts.key, QUOTE_NOTIFICATION_ROLLOUT_KEY))
     .where(eq(Posts.id, quotePostId))
     .limit(1)
     .then((rows) => rows[0]);
@@ -138,6 +133,9 @@ export const materializeQuoteNotificationIfEligible = async (
   if (replyNotification?.recipientProfileId === source.sourceProfileId) {
     return null;
   }
+
+  // Only the Source Author's eligible typed Mention can represent this Quote.
+  await materializeMentionNotificationIfEligible(database, quotePostId, source.sourceProfileId);
 
   const followsQuoteAuthor =
     (
@@ -170,7 +168,9 @@ export const materializeQuoteNotificationIfEligible = async (
   const quoteAuthorIsAvailable =
     source.quoteAuthorState === ProfileState.ACTIVE &&
     source.quoteAuthorInstanceState !== InstanceState.SUSPENDED;
-  const isPrelaunch = Temporal.Instant.compare(source.quoteCreatedAt, source.activatedAt) < 0;
+  const isPrelaunch =
+    source.activatedAt !== null &&
+    Temporal.Instant.compare(source.quoteCreatedAt, source.activatedAt) < 0;
 
   return materializeCoordinatedNotification(database, {
     eligible: quoteIsVisible && sourceIsAvailable && quoteAuthorIsAvailable,

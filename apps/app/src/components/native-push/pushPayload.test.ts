@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { nativePushResponseKey, parseNativePushTapTarget } from './pushPayload';
-import type { NotificationResponse } from 'expo-notifications';
+import { parseNativePushTapTarget } from './pushPayload';
 
 describe('native push tap payloads', () => {
   it('accepts supported internal routes with both notification and recipient IDs', () => {
@@ -20,8 +19,27 @@ describe('native push tap payloads', () => {
         }),
         {
           href,
+          kind: 'profile',
           notificationId: 'RGVmYXVsdE5vdGlmaWNhdGlvbjox',
           recipientProfileId: 'UHJvZmlsZTox',
+        },
+      );
+    }
+  });
+
+  it('accepts Account operational destinations without a Profile recipient', () => {
+    for (const href of ['/notifications', 'https://any-domain.example/path']) {
+      assert.deepEqual(
+        parseNativePushTapTarget({
+          href,
+          notificationId: 'operational-notification',
+          recipientAccountId: 'account-1',
+        }),
+        {
+          href: href.startsWith('/') ? { href, kind: 'internal' } : { href, kind: 'external' },
+          kind: 'operational',
+          notificationId: 'operational-notification',
+          recipientAccountId: 'account-1',
         },
       );
     }
@@ -103,19 +121,15 @@ describe('native push tap payloads', () => {
     );
   });
 
-  it('uses the Expo notification identifier and action for duplicate keys', () => {
-    const response = {
-      actionIdentifier: 'expo.modules.notifications.actions.DEFAULT',
-      notification: {
-        request: {
-          identifier: 'notification-1',
-        },
-      },
-    } as NotificationResponse;
-
+  it('rejects ambiguous Profile and Account recipient envelopes', () => {
     assert.equal(
-      nativePushResponseKey(response),
-      'notification-1:expo.modules.notifications.actions.DEFAULT',
+      parseNativePushTapTarget({
+        href: '/@author',
+        notificationId: 'notification',
+        recipientAccountId: 'account',
+        recipientProfileId: 'profile',
+      }),
+      null,
     );
   });
 });

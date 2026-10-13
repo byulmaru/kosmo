@@ -11,6 +11,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { graphql, useFragment, useRelayEnvironment } from 'react-relay';
 import { getDataIDsFromFragment, getFragment } from 'relay-runtime';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
@@ -42,12 +43,18 @@ const ReplyComposerSurfaceParentFragment = graphql`
   fragment ReplyComposerSurface_parent on Post {
     ...PostSourcePreview_source
     id
+    visibility
     createdAt
     content {
       bodyText
       contentWarning
+      mentionedProfiles {
+        id
+        relativeHandle
+      }
     }
     profile {
+      id
       displayName
       handle
       relativeHandle
@@ -66,6 +73,7 @@ const ReplyComposerSurfaceParentFragment = graphql`
 
 const ReplyComposerSurfaceProfileFragment = graphql`
   fragment ReplyComposerSurface_profile on Profile {
+    id
     relativeHandle
     ...PostComposer_profile @alias(as: "composer")
   }
@@ -148,9 +156,21 @@ function ReplyComposerSurfaceContents({
   const { register: registerNavigationGuard } = useNavigationGuard();
   const { showToast } = useToast();
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const parent = useFragment(ReplyComposerSurfaceParentFragment, parentKey);
   const profile = useFragment(ReplyComposerSurfaceProfileFragment, profileKey);
   const quoteMode = mode === 'quote';
+  const initialBodyText = quoteMode
+    ? undefined
+    : [
+        ...new Map(
+          [parent.profile, ...(parent.content?.mentionedProfiles ?? [])]
+            .filter(({ id }) => id !== profile.id)
+            .map(({ id, relativeHandle }) => [id, relativeHandle] as const),
+        ).values(),
+      ]
+        .map((relativeHandle) => `${relativeHandle} `)
+        .join('');
   const composerName = quoteMode ? '인용 게시글' : '답글';
   const [submitting, setSubmitting] = useState(false);
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
@@ -411,7 +431,8 @@ function ReplyComposerSurfaceContents({
                   </View>
                 ) : null}
                 <KeyboardAvoidingView
-                  behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                  behavior={Platform.OS === 'ios' ? 'height' : undefined}
+                  keyboardVerticalOffset={insets.top}
                   style={styles.composerFrame}
                 >
                   <PostComposerController
@@ -473,13 +494,16 @@ function ReplyComposerSurfaceContents({
                     editorRef={editorRef}
                     focusOnMount
                     onRequestClose={() => requestClose()}
+                    initialBodyText={initialBodyText}
                     initialContentWarning={quoteMode ? undefined : parent.content?.contentWarning}
                     presentation={presentation === 'fullscreen' ? 'mobile' : 'overlay'}
                     onPostCreated={handlePostCreated}
                     onSubmittingChange={setSubmitting}
                     profile={profile.composer}
                     registerNativeBackHandler={registerNativeBackHandler}
-                    {...(quoteMode ? { repostSourceId: parent.id } : { replyParentId: parent.id })}
+                    {...(quoteMode
+                      ? { repostSourceId: parent.id }
+                      : { replyParentId: parent.id, replyParentVisibility: parent.visibility })}
                   >
                     {quoteMode ? (
                       <PostSourcePreview

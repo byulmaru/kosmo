@@ -8,9 +8,11 @@ import type { ProfilePostingSettingsValue } from './ProfilePostingSettings';
 const options = ['PUBLIC', 'UNLISTED', 'FOLLOWERS'] as const;
 
 export function ProfileVisibilitySelect({
+  disabled = false,
   value,
   onChange,
 }: {
+  disabled?: boolean;
   value: ProfilePostingSettingsValue['defaultPostVisibility'];
   onChange: (value: ProfilePostingSettingsValue['defaultPostVisibility']) => void;
 }) {
@@ -19,6 +21,8 @@ export function ProfileVisibilitySelect({
     <View style={{ width: 160 }}>
       <select
         aria-label="게시물 기본 공개 범위"
+        aria-disabled={disabled}
+        disabled={disabled}
         value={value}
         onChange={(event) => {
           const selected = options.find((option) => option === event.currentTarget.value);
@@ -32,7 +36,7 @@ export function ProfileVisibilitySelect({
           border: `${borderWidths[1]}px solid ${theme.borderDefault}`,
           borderRadius: radius[12],
           color: theme.foregroundPrimary,
-          cursor: 'pointer',
+          cursor: disabled ? 'not-allowed' : 'pointer',
           fontFamily: textStyles.uiCopyL.fontFamily,
           fontSize: textStyles.uiCopyL.fontSize,
           minHeight: 48,

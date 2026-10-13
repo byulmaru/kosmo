@@ -276,7 +276,7 @@ test('Home no-data 오류는 actor revision 변경으로 새 actor query와 time
   await page.waitForURL('**/home');
 
   await createProfileFromSwitcher(page, 'revisionalpha');
-  await createProfileFromSwitcher(page, 'revisionbeta');
+  const betaProfileId = await createProfileFromSwitcher(page, 'revisionbeta');
   await createPost(page, betaPostBody);
   await page.goto('/home');
   await expect(page.getByText(betaPostBody)).toBeVisible();
@@ -284,6 +284,7 @@ test('Home no-data 오류는 actor revision 변경으로 새 actor query와 time
   await selectProfileFromSwitcher(page, 'revisionalpha');
   await page.goto('/home');
   await expect(page.getByRole('progressbar')).toHaveCount(0);
+  await page.waitForLoadState('networkidle');
 
   let homeQueryCount = 0;
   await page.route('**/graphql', async (route) => {
@@ -305,9 +306,34 @@ test('Home no-data 오류는 actor revision 변경으로 새 actor query와 time
     await page.reload();
     await expect(page.getByRole('alert')).toContainText('홈을 불러오지 못했어요');
 
-    await selectProfileFromSwitcher(page, 'revisionbeta');
+    const betaHomeQueryResponse = page.waitForResponse((response) => {
+      if (!isGraphQLResponse(response.url())) {
+        return false;
+      }
+      const requestBody = JSON.parse(response.request().postData() ?? '{}') as {
+        extensions?: { selectedProfileId?: string | null } | null;
+        operationName?: string | null;
+      };
+      return (
+        requestBody.operationName === 'HomePageQuery' &&
+        requestBody.extensions?.selectedProfileId === betaProfileId
+      );
+    });
+    const selectProfileResponse = await selectProfileFromSwitcher(page, 'revisionbeta');
+    const selectedProfileId = selectProfileResponse.data?.selectProfile?.profile?.id;
+    expect(selectedProfileId).toBe(betaProfileId);
 
-    await expect.poll(() => homeQueryCount).toBe(2);
+    const betaHomeQueryResponseBody = (await (await betaHomeQueryResponse).json()) as {
+      data?: { currentSession?: { selectedProfile?: { id?: string | null } | null } | null };
+      errors?: unknown[];
+    };
+    expect(
+      betaHomeQueryResponseBody.errors,
+      JSON.stringify(betaHomeQueryResponseBody, null, 2),
+    ).toBeUndefined();
+    expect(betaHomeQueryResponseBody.data?.currentSession?.selectedProfile?.id).toBe(
+      selectedProfileId,
+    );
     await expect(page.getByText(betaPostBody)).toBeVisible();
   } finally {
     await page.unroute('**/graphql');

@@ -15,6 +15,7 @@ describe('Settings detail back navigation', () => {
       dismissTo: (href) => dismissedTo.push(String(href)),
     };
     const routes = [
+      ['/settings/profile', '/settings'],
       ['/settings/default-post-visibility', '/settings'],
       ['/settings/profile-migration', '/settings'],
       ['/settings/following-import', '/settings'],

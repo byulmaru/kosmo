@@ -3,6 +3,7 @@ import '@kosmo/core/polyfill';
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, test } from 'node:test';
 import {
+  AccountState,
   InstanceKind,
   InstanceState,
   NotificationKind,
@@ -21,6 +22,7 @@ import type { cleanupUnavailableNotificationsActivity as CleanupUnavailableNotif
 process.env.DATABASE_URL ??= 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 
 let db: typeof CoreDb.db;
+let Accounts: typeof CoreDb.Accounts;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
 let NotificationQuoteJudgments: typeof CoreDb.NotificationQuoteJudgments;
@@ -36,6 +38,7 @@ let cleanupUnavailableNotificationsActivity: typeof CleanupUnavailableNotificati
 
 before(async () => {
   ({
+    Accounts,
     db,
     firstOrThrow,
     Instances,
@@ -70,6 +73,39 @@ after(async () => pg.end());
 
 const runCleanup = (): Promise<void> =>
   new MockActivityEnvironment().run(cleanupUnavailableNotificationsActivity) as Promise<void>;
+
+test('cleanup leaves Operational notifications out of source cleanup even for disabled Accounts', async () => {
+  const suffix = crypto.randomUUID();
+  const account = await db
+    .insert(Accounts)
+    .values({ displayName: suffix, oidcSubject: `subject-${suffix}`, state: AccountState.DISABLED })
+    .returning()
+    .then(firstOrThrow);
+  try {
+    const notification = await db
+      .insert(Notifications)
+      .values({
+        data: { href: '/maintenance', title: 'Scheduled maintenance' },
+        kind: NotificationKind.OPERATIONAL,
+        recipientAccountId: account.id,
+        sourceId: crypto.randomUUID(),
+      })
+      .returning()
+      .then(firstOrThrow);
+
+    await runCleanup();
+
+    assert.deepEqual(
+      await db
+        .select({ id: Notifications.id })
+        .from(Notifications)
+        .where(eq(Notifications.id, notification.id)),
+      [{ id: notification.id }],
+    );
+  } finally {
+    await db.delete(Accounts).where(eq(Accounts.id, account.id));
+  }
+});
 
 test('cleanup deletes unavailable sources but preserves available and recipient-only inactive rows', async () => {
   const follower = await createProfile();

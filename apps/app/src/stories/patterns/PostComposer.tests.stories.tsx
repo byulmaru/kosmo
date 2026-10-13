@@ -318,6 +318,12 @@ export const QuoteModeContract: Story = {
     const body = canvas.getByRole('textbox', { name: '인용 게시글 본문' });
     const quote = canvas.getByTestId('quote-context-preview');
     expect(quote).toBeVisible();
+    const targetBounds = canvas.getByTestId('post-composer-target').getBoundingClientRect();
+    const quoteBounds = quote.getBoundingClientRect();
+    expect(quoteBounds.left - targetBounds.left).toBeCloseTo(
+      targetBounds.right - quoteBounds.right,
+      0,
+    );
     expect(body.compareDocumentPosition(quote) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
     expect(body).toHaveAttribute('placeholder', '무슨 일이 일어나고 있나요?');
     const submit = canvas.getByRole('button', { name: '인용 게시' });

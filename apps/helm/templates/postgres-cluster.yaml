@@ -17,7 +17,7 @@ spec:
   enablePDB: false
 {{- end }}
   resources:
-{{ toYaml .Values.postgres.resources | indent 4 }}
+{{ toYaml (ternary .Values.postgres.resources.prod .Values.postgres.resources.dev (eq .Values.env "prod")) | indent 4 }}
   postgresql:
     parameters:
       log_min_duration_statement: 1s

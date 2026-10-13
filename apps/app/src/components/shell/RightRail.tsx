@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { PostComposerHost } from '@/components/post/PostComposerHost';
+import { SupportAcknowledgement } from '@/components/SupportAcknowledgement';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import { NavigationLink } from './NavigationLink';
@@ -66,36 +67,44 @@ export function RightRailFooter() {
 
   return (
     <View style={styles.footer}>
-      <NavigationLink href="/privacy">
-        <Pressable
-          accessibilityLabel="개인정보 처리방침"
-          accessibilityRole="link"
-          style={styles.privacyLink}
-        >
-          <Text style={[styles.footerText, { color: theme.textSecondary }]}>개인정보 처리방침</Text>
-        </Pressable>
-      </NavigationLink>
-      {/* PROD-764: 표시 tag 공급 방식을 결정할 때 버전 표시를 복원한다. */}
-      {/* <Text aria-hidden style={[styles.footerText, { color: theme.textSecondary }]}> */}
-      {/*   · */}
-      {/* </Text> */}
-      {/* <Text style={[styles.footerText, styles.versionText, { color: theme.textSecondary }]}> */}
-      {/*   버전: {getBuildVersionLabel(process.env.EXPO_PUBLIC_RELEASE_TAG)} */}
-      {/* </Text> */}
+      <View style={styles.footerLinks}>
+        <NavigationLink href="/privacy">
+          <Pressable
+            accessibilityLabel="개인정보 처리방침"
+            accessibilityRole="link"
+            style={styles.privacyLink}
+          >
+            <Text style={[styles.footerText, { color: theme.textSecondary }]}>
+              개인정보 처리방침
+            </Text>
+          </Pressable>
+        </NavigationLink>
+        {/* PROD-764: 표시 tag 공급 방식을 결정할 때 버전 표시를 복원한다. */}
+        {/* <Text aria-hidden style={[styles.footerText, { color: theme.textSecondary }]}> */}
+        {/*   · */}
+        {/* </Text> */}
+        {/* <Text style={[styles.footerText, styles.versionText, { color: theme.textSecondary }]}> */}
+        {/*   버전: {getBuildVersionLabel(process.env.EXPO_PUBLIC_RELEASE_TAG)} */}
+        {/* </Text> */}
+      </View>
+      <SupportAcknowledgement breakBeforeInstitute />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   footer: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: spacing.xs,
     marginBottom: spacing.sm,
     marginTop: 'auto',
     minHeight: 32,
     paddingHorizontal: spacing.lg,
+  },
+  footerLinks: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
   },
   privacyLink: {
     justifyContent: 'center',

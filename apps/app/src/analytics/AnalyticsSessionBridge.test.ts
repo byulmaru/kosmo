@@ -70,3 +70,18 @@ test('actor 전환 중 임시 error는 identity를 초기화하지 않고 Profil
   await act(async () => renderer!.update(createElement(Bridge)));
   assert.deepEqual(calls, ['profile:account-a:none', 'identify:account-a']);
 });
+
+test('active accounts without a selected Profile retain account analytics identity', async () => {
+  session.accountId = 'account-without-profile';
+  session.selectedProfileId = null;
+  session.status = 'valid';
+
+  await act(async () => {
+    renderer = create(createElement(Bridge));
+  });
+
+  assert.deepEqual(calls, [
+    'profile:account-without-profile:none',
+    'identify:account-without-profile',
+  ]);
+});

@@ -23,7 +23,10 @@ import {
   ProfileState,
 } from '../enums';
 import { NotFoundError, PermissionDeniedError, ValidationError } from '../error';
-import { postContentDocumentFromText } from '../post-content/server';
+import {
+  postContentDocumentFromText,
+  postContentDocumentFromTextAndMedia,
+} from '../post-content/server';
 import { createPost, deletePost as deletePostAction, repostPost as repostPostAction } from './post';
 import { ProfilePairBlockedError } from './profile-block-policy';
 
@@ -138,7 +141,21 @@ test('repostPost는 조회 가능한 허용 불가 Source를 sourceId VALIDATION
     followerProfileId: actor.profile.id,
   });
   const followersSource = await createContentPost(author.profile.id, PostVisibility.FOLLOWERS);
-  const directSource = await createContentPost(actor.profile.id, PostVisibility.DIRECT);
+  const directRecipientHandle = `@${author.profile.handle}`;
+  const directSource = await createPost({
+    authoredBodyText: directRecipientHandle,
+    document: postContentDocumentFromTextAndMedia(directRecipientHandle, [], false, null, [
+      {
+        end: directRecipientHandle.length,
+        profileId: author.profile.id,
+        relativeHandle: directRecipientHandle,
+        start: 0,
+      },
+    ]),
+    origin: 'LOCAL',
+    profileId: actor.profile.id,
+    visibility: PostVisibility.DIRECT,
+  }).then(({ post }) => post);
   const contentSource = await createContentPost(author.profile.id);
   const contentlessSource = await db
     .insert(Posts)

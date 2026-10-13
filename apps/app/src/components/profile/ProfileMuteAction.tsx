@@ -201,7 +201,7 @@ function ProfileMuteActionContent({
     }
   };
   const request = async (nextMuted: boolean) => {
-    if (inFlight.current) {
+    if (!open || inFlight.current) {
       return;
     }
     inFlight.current = true;

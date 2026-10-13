@@ -39,18 +39,35 @@ export type ProfileSettingsLifecycle = {
   onRetry: (action: ProfileLifecycleAction) => void;
 };
 
-type Props = {
+type SharedProps = {
   profile: ProfileLifecycleProfile;
   children: ReactNode;
-  lifecycle?: ProfileSettingsLifecycle;
+  identityAction?: ReactNode;
 };
+type Props = SharedProps &
+  (
+    | {
+        embedded?: false;
+        lifecycle?: ProfileSettingsLifecycle;
+      }
+    | {
+        embedded: true;
+        lifecycle?: never;
+      }
+  );
 
 /** Controlled presentation only: the caller owns request results, authentication and navigation. */
 export function ProfileSettingsScreen(props: Props) {
   return <ProfileSettingsSurface key={props.profile.id} {...props} />;
 }
 
-function ProfileSettingsSurface({ profile, children, lifecycle }: Props) {
+function ProfileSettingsSurface({
+  embedded = false,
+  identityAction,
+  profile,
+  children,
+  lifecycle,
+}: Props) {
   const state = lifecycle?.state ?? { action: 'deactivate', phase: 'entry' };
   const { onAction, onCancel, onConfirm, onRetry } = lifecycle ?? {};
   const theme = useTheme();
@@ -102,127 +119,124 @@ function ProfileSettingsSurface({ profile, children, lifecycle }: Props) {
     }
   };
 
-  return (
-    <View style={[styles.root, { backgroundColor: theme.backgroundCanvas }]}>
-      <View ref={headingRef} tabIndex={-1}>
-        <PageHeader
-          leading={
-            inlineConfirmation ? (
-              <IconButton
-                accessibilityLabel="취소하고 프로필 설정으로 돌아가기"
-                disabled={pending}
-                onPress={cancel}
-                targetSize={48}
-                visualSize={44}
+  const content = inlineConfirmation ? (
+    <LifecycleConfirmation
+      key={`${profile.id}:${action}`}
+      cancelRef={cancelRef}
+      onCancel={cancel}
+      onConfirm={confirm}
+      profile={profile}
+      state={state}
+    />
+  ) : deleted ? (
+    <StateView title="프로필을 삭제했어요" description="삭제한 프로필은 복구할 수 없습니다." />
+  ) : (
+    <>
+      <ProfileLifecycleIdentity deactivated={deactivated} profile={profile}>
+        {identityAction}
+      </ProfileLifecycleIdentity>
+      {deactivated ? (
+        <>
+          <Text style={[textStyles.uiLabelM, { color: theme.foregroundSecondary }]}>
+            프로필 상태
+          </Text>
+          <View style={[styles.status, { borderColor: theme.borderSubtle }]}>
+            <Text style={[textStyles.uiLabelL, { color: theme.foregroundPrimary }]}>
+              이 프로필은 비활성 상태예요
+            </Text>
+            <Text style={[textStyles.uiCopyM, { color: theme.foregroundSecondary }]}>
+              게시하거나 다른 사람과 상호작용할 수 없고, 프로필도 공개되지 않습니다.
+            </Text>
+            <View style={styles.buttonTarget}>
+              <Button
+                controlRef={reactivateRef}
+                onPress={() => selectAction('reactivate')}
+                style={styles.fullWidth}
+                tone="primary"
+                hitSlop={Platform.OS === 'web' ? undefined : 4}
               >
-                <ArrowLeft color={theme.foregroundPrimary} size={iconSizes[24]} />
-              </IconButton>
-            ) : undefined
-          }
-          title={inlineConfirmation ? '비활성화' : '프로필 설정'}
-        />
-      </View>
-      <ScrollView contentContainerStyle={styles.body}>
-        {inlineConfirmation ? (
-          <LifecycleConfirmation
-            key={`${profile.id}:${action}`}
-            cancelRef={cancelRef}
-            onCancel={cancel}
-            onConfirm={confirm}
-            profile={profile}
-            state={state}
-          />
-        ) : deleted ? (
-          <StateView
-            title="프로필을 삭제했어요"
-            description="삭제한 프로필은 복구할 수 없습니다."
-          />
-        ) : (
-          <>
-            <ProfileLifecycleIdentity deactivated={deactivated} profile={profile} />
-            {deactivated ? (
-              <>
-                <Text style={[textStyles.uiLabelM, { color: theme.foregroundSecondary }]}>
-                  프로필 상태
-                </Text>
-                <View style={[styles.status, { borderColor: theme.borderSubtle }]}>
-                  <Text style={[textStyles.uiLabelL, { color: theme.foregroundPrimary }]}>
-                    이 프로필은 비활성 상태예요
+                다시 활성화
+              </Button>
+            </View>
+          </View>
+          <Text style={[textStyles.uiLabelM, { color: theme.foregroundSecondary }]}>
+            Danger zone
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            ref={deleteRef}
+            onPress={() => selectAction('delete')}
+            style={[styles.actionRow, { borderColor: theme.borderSubtle }]}
+          >
+            <View style={styles.rowCopy}>
+              <Text style={[textStyles.uiLabelL, { color: theme.feedbackDangerBase }]}>
+                영구 삭제
+              </Text>
+              <Text style={[textStyles.uiCopyM, { color: theme.foregroundSecondary }]}>
+                프로필과 관련된 데이터를 복구할 수 없게 삭제합니다.
+              </Text>
+            </View>
+            <ChevronRight aria-hidden color={theme.foregroundSecondary} size={iconSizes[24]} />
+          </Pressable>
+        </>
+      ) : (
+        <>
+          {children}
+          {lifecycle ? (
+            <>
+              <Text style={[textStyles.uiLabelM, { color: theme.foregroundSecondary }]}>
+                프로필 관리
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                ref={deactivateRef}
+                onPress={() => selectAction('deactivate')}
+                style={[styles.actionRow, { borderColor: theme.borderSubtle }]}
+              >
+                <View style={styles.rowCopy}>
+                  <Text style={[textStyles.uiLabelL, { color: theme.feedbackDangerBase }]}>
+                    프로필 비활성화
                   </Text>
                   <Text style={[textStyles.uiCopyM, { color: theme.foregroundSecondary }]}>
-                    게시하거나 다른 사람과 상호작용할 수 없고, 프로필도 공개되지 않습니다.
+                    프로필 활동과 공개를 일시적으로 중지합니다.
                   </Text>
-                  <View style={styles.buttonTarget}>
-                    <Button
-                      controlRef={reactivateRef}
-                      onPress={() => selectAction('reactivate')}
-                      style={styles.fullWidth}
-                      tone="primary"
-                      hitSlop={Platform.OS === 'web' ? undefined : 4}
-                    >
-                      다시 활성화
-                    </Button>
-                  </View>
                 </View>
-                <Text style={[textStyles.uiLabelM, { color: theme.foregroundSecondary }]}>
-                  Danger zone
-                </Text>
-                <Pressable
-                  accessibilityRole="button"
-                  ref={deleteRef}
-                  onPress={() => selectAction('delete')}
-                  style={[styles.actionRow, { borderColor: theme.borderSubtle }]}
+                <ChevronRight aria-hidden color={theme.foregroundSecondary} size={iconSizes[24]} />
+              </Pressable>
+            </>
+          ) : null}
+        </>
+      )}
+    </>
+  );
+
+  return (
+    <View style={[styles.root, { backgroundColor: theme.backgroundCanvas }]}>
+      {embedded ? null : (
+        <View ref={headingRef} tabIndex={-1}>
+          <PageHeader
+            leading={
+              inlineConfirmation ? (
+                <IconButton
+                  accessibilityLabel="취소하고 프로필 설정으로 돌아가기"
+                  disabled={pending}
+                  onPress={cancel}
+                  targetSize={48}
+                  visualSize={44}
                 >
-                  <View style={styles.rowCopy}>
-                    <Text style={[textStyles.uiLabelL, { color: theme.feedbackDangerBase }]}>
-                      영구 삭제
-                    </Text>
-                    <Text style={[textStyles.uiCopyM, { color: theme.foregroundSecondary }]}>
-                      프로필과 관련된 데이터를 복구할 수 없게 삭제합니다.
-                    </Text>
-                  </View>
-                  <ChevronRight
-                    aria-hidden
-                    color={theme.foregroundSecondary}
-                    size={iconSizes[24]}
-                  />
-                </Pressable>
-              </>
-            ) : (
-              <>
-                {children}
-                {lifecycle ? (
-                  <>
-                    <Text style={[textStyles.uiLabelM, { color: theme.foregroundSecondary }]}>
-                      프로필 관리
-                    </Text>
-                    <Pressable
-                      accessibilityRole="button"
-                      ref={deactivateRef}
-                      onPress={() => selectAction('deactivate')}
-                      style={[styles.actionRow, { borderColor: theme.borderSubtle }]}
-                    >
-                      <View style={styles.rowCopy}>
-                        <Text style={[textStyles.uiLabelL, { color: theme.feedbackDangerBase }]}>
-                          프로필 비활성화
-                        </Text>
-                        <Text style={[textStyles.uiCopyM, { color: theme.foregroundSecondary }]}>
-                          프로필 활동과 공개를 일시적으로 중지합니다.
-                        </Text>
-                      </View>
-                      <ChevronRight
-                        aria-hidden
-                        color={theme.foregroundSecondary}
-                        size={iconSizes[24]}
-                      />
-                    </Pressable>
-                  </>
-                ) : null}
-              </>
-            )}
-          </>
-        )}
-      </ScrollView>
+                  <ArrowLeft color={theme.foregroundPrimary} size={iconSizes[24]} />
+                </IconButton>
+              ) : undefined
+            }
+            title={inlineConfirmation ? '비활성화' : '프로필 설정'}
+          />
+        </View>
+      )}
+      {embedded ? (
+        <View style={styles.body}>{content}</View>
+      ) : (
+        <ScrollView contentContainerStyle={styles.body}>{content}</ScrollView>
+      )}
       <LifecycleFeedback
         action={action}
         phase={action === 'deactivate' || phase === 'success' ? phase : 'entry'}

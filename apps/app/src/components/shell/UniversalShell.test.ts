@@ -86,6 +86,7 @@ mockModule('react-native', {
   Platform: platform,
   Pressable: 'Pressable',
   StyleSheet: { create: (styles: unknown) => styles },
+  Text: 'Text',
   View: 'View',
   useWindowDimensions: () => ({ height: 800, width: 390 }),
 });
@@ -138,7 +139,10 @@ mockModule('@/components/ui/useSafeAreaPadding', {
 mockModule('@/relay/RelayActorProvider', { RelayActorBoundary: PassThrough });
 
 mockModule('@/session/SessionProvider', {
-  useSession: () => ({ accountId, status: accountId ? 'valid' : 'guest' }),
+  useSession: () => ({
+    accountId,
+    status: accountId ? 'valid' : 'guest',
+  }),
 });
 mockModule('@/theme/ThemeProvider', {
   useElevation: () => ({ overlay: {} }),
@@ -152,6 +156,7 @@ mockModule('@/theme/ThemeProvider', {
 });
 mockModule('@/theme/tokens', {
   spacing: { lg: 24, xl: 32 },
+  textStyles: { uiLabelL: {} },
 });
 
 mockModule('./BottomTabBar', {
@@ -183,11 +188,13 @@ mockModule('./SidebarNavigation', {
 });
 mockModule('./shellLayout', {
   getWebMobileShellHeader: (_web: boolean, _width: number, route: string) =>
-    route === '/settings/default-post-visibility'
-      ? { leading: 'back', title: '게시물 기본 공개 범위' }
+    route === '/settings/profile' || route === '/settings/default-post-visibility'
+      ? { leading: 'back', title: '프로필 설정' }
       : route === '/settings/profile-migration'
         ? { leading: 'back', title: '다른 서비스에서 이전' }
-        : null,
+        : route === '/settings/following-import'
+          ? { leading: 'back', title: '팔로잉 가져오기' }
+          : null,
   getShellRoutePresentation: () => ({
     layout,
     settingsWorkspace: false,
@@ -265,7 +272,7 @@ describe('UniversalShell screen fallback focus target', () => {
   it('mobile Web Settings shell back은 명시한 parent route로 dismiss한다', async () => {
     platform.OS = 'web';
     layout = 'mobile';
-    pathname = '/settings/default-post-visibility';
+    pathname = '/settings/profile';
     await renderShell();
 
     const back = renderer?.root.findByProps({ accessibilityLabel: '뒤로 가기' });

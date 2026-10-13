@@ -134,6 +134,19 @@ export function NotificationExample(args: Args) {
       </NotificationListItemView>
     );
   }
+  if (args.kind === 'operational') {
+    return (
+      <NotificationListItemView
+        body={args.bodyText || null}
+        href={{ href: '/notifications', kind: 'internal' }}
+        kind="operational"
+        onNavigate={args.onNavigate}
+        timestamp={args.timestamp}
+        title={args.name}
+        unread={args.unread}
+      />
+    );
+  }
   const actors = args.grouped
     ? ([
         actor,
@@ -197,7 +210,7 @@ const meta = {
   argTypes: {
     kind: {
       control: 'select',
-      options: ['follow', 'followRequest', 'reaction', 'repost', 'reply'],
+      options: ['follow', 'followRequest', 'reaction', 'repost', 'reply', 'operational'],
     },
     name: { control: 'text', if: { arg: 'kind', neq: 'reply' } },
     timestamp: { control: 'text', if: { arg: 'kind', neq: 'reply' } },
@@ -280,6 +293,15 @@ export const GroupedKinds: Story = {
 };
 
 export const Reply: Story = { args: { kind: 'reply' } };
+
+export const Operational: Story = {
+  args: {
+    kind: 'operational',
+    name: '서비스 점검 안내',
+    bodyText: '안정적인 서비스 제공을 위해 점검을 진행합니다.',
+    unread: true,
+  },
+};
 
 export const ReplyLongName: Story = {
   args: { kind: 'reply', containerWidth: 320, unread: true },
@@ -387,6 +409,57 @@ export const ActivationContract: Story = {
     await expect(link).toHaveStyle({ outlineWidth: '2px' });
     await userEvent.keyboard('{Enter}');
     await expect(args.onNavigate).toHaveBeenCalledOnce();
+  },
+};
+
+export const OperationalActivationContract: Story = {
+  args: {
+    kind: 'operational',
+    name: '서비스 점검 안내',
+    bodyText: '안정적인 서비스 제공을 위해 점검을 진행합니다.',
+    unread: true,
+  },
+  parameters: { controls: { disable: true } },
+  render: (args) => (
+    <View>
+      <NotificationListItemView
+        body="내부 서비스 공지 본문"
+        href={{ href: '/notifications?source=operational', kind: 'internal' }}
+        kind="operational"
+        onNavigate={args.onNavigate}
+        timestamp="5분 전"
+        title="내부 서비스 공지"
+        unread
+      />
+      <NotificationListItemView
+        body="외부 서비스 공지 본문"
+        href={{ href: 'https://status.example.com/notices/42', kind: 'external' }}
+        kind="operational"
+        onNavigate={args.onNavigate}
+        timestamp="1시간 전"
+        title="외부 서비스 공지"
+        unread
+      />
+    </View>
+  ),
+  play: async ({ args, canvasElement }) => {
+    args.onNavigate.mockClear();
+    const canvas = within(canvasElement);
+    const internalLink = canvas.getByRole('link', {
+      name: /내부 서비스 공지.*내부 서비스 공지 본문.*읽지 않은 알림.*알림 열기/,
+    });
+    const externalLink = canvas.getByRole('link', {
+      name: /외부 서비스 공지.*외부 서비스 공지 본문.*읽지 않은 알림.*알림 열기/,
+    });
+    await expect(internalLink).toHaveAttribute('href', '/notifications?source=operational');
+    await expect(externalLink).toHaveAttribute('href', 'https://status.example.com/notices/42');
+    await userEvent.tab();
+    await expect(internalLink).toHaveFocus();
+    await expect(internalLink).toHaveStyle({ outlineWidth: '2px' });
+    await userEvent.keyboard('{Enter}');
+    await expect(args.onNavigate).toHaveBeenCalledOnce();
+    await userEvent.click(externalLink);
+    await expect(args.onNavigate).toHaveBeenCalledTimes(2);
   },
 };
 

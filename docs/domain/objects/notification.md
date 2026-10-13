@@ -2,8 +2,8 @@
 
 ## 정의
 
-Notification은 다른 객체의 행동 결과를 Recipient Profile 또는 Recipient Account에게 직접 전달하는
-개별 알림이다.
+Notification은 도메인 활동의 결과 또는 운영 안내를 Recipient Profile 또는 Recipient Account에게 직접
+전달하는 개별 알림이다.
 
 ## 상태
 
@@ -30,11 +30,13 @@ Notification은 다른 객체의 행동 결과를 Recipient Profile 또는 Recip
 
 ## 속성
 
-| 속성        | 타입/nullability | 검증 정책                           | 존재 조건          | 조회 조건        | 조회 권한                |
-| ----------- | ---------------- | ----------------------------------- | ------------------ | ---------------- | ------------------------ |
-| 생성 시각   | 시각, 필수       | 생성 결과로 기록하며 변경 불가      | 항상               | Recipient만 조회 | `Notification.Recipient` |
-| 읽음 시각   | 시각, nullable   | Read 전이 결과로 기록하며 변경 불가 | Read State가 Read  | Recipient만 조회 | `Notification.Recipient` |
-| 운영 메시지 | 문자열, 필수     | 비어 있지 않은 운영 알림 본문       | Type이 Operational | Recipient만 조회 | `Notification.Recipient` |
+| 속성      | 타입/nullability | 검증 정책                                                 | 존재 조건          | 조회 조건        | 조회 권한                |
+| --------- | ---------------- | --------------------------------------------------------- | ------------------ | ---------------- | ------------------------ |
+| 생성 시각 | 시각, 필수       | 생성 결과로 기록하며 변경 불가                            | 항상               | Recipient만 조회 | `Notification.Recipient` |
+| 읽음 시각 | 시각, nullable   | Read 전이 결과로 기록하며 변경 불가                       | Read State가 Read  | Recipient만 조회 | `Notification.Recipient` |
+| 운영 제목 | 문자열, 필수     | Operational 알림 제목                                     | Type이 Operational | Recipient만 조회 | `Notification.Recipient` |
+| 운영 본문 | 문자열, 선택     | 본문이 제공되면 해당 본문                                 | Type이 Operational | Recipient만 조회 | `Notification.Recipient` |
+| 운영 링크 | 문자열, 필수     | 내부 경로 또는 HTTP(S) 외부 링크; 실행 가능한 scheme 거부 | Type이 Operational | Recipient만 조회 | `Notification.Recipient` |
 
 ## 관계
 
@@ -50,6 +52,8 @@ Notification은 다른 객체의 행동 결과를 Recipient Profile 또는 Recip
 | Related Follow Relationship | [Follow Relationship](./follow-relationship.md) | Notification -> Follow Relationship | 1 -> 0..1   | Type이 Follow 또는 Followee Post                                | Recipient만 조회 | `Notification.Recipient` |
 
 Notification은 Recipient Profile과 Recipient Account 중 정확히 하나를 가진다.
+Operational Notification은 Related Post·Related Profile이나 별도의 원인 객체 관계를 갖지 않으며,
+운영 링크가 활성화할 목적지다.
 Reply Notification의 Related Post는 원인 행동으로 생성된 Reply Post이고 Related Profile은 Reply Author
 Profile이다.
 Reaction Notification의 Source Reaction은 알림을 만든 원인 Reaction이다. Related Post와 Related Profile은
@@ -62,12 +66,12 @@ Recipient Profile은 Related Post의 direct Repost Source Author Profile이다. 
 
 ## 행동
 
-| 행동                                | 행동 주체 | 대상 객체         | 입력값                     | 권한                                       | 조건                                                                                                                                                 | 결과                                                                                                          |
-| ----------------------------------- | --------- | ----------------- | -------------------------- | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| Notification 생성                   | 시스템    | Notification      | Type, Recipient, 원인 객체 | `System.NotificationSource`                | Type별 필수 관계가 존재하고 Recipient가 원인 객체의 조회 정책을 통과하며 아래 억제 정책에 걸리지 않는다                                              | 입력 Notification Type과 Read State=Unread인 Notification 및 원인 관계가 생성된다                             |
-| 상호작용 Notification 정리          | 시스템    | Notification      | 정리 대상 Notification     | `System.NotificationSource`                | 지원 Type의 필수 원인 관계 결손·원인 Recipient 불일치·Recipient 기준 Related Post/Profile 비가용 (Recipient 자체의 복구 가능한 비활성화·정지는 제외) | 시점과 성공을 보장하지 않고 Notification 제거를 Best Effort로 시도한다                                        |
-| Profile Notification 지정 읽음 처리 | Account   | Notification 목록 | Notification ID 목록       | `Account.Active`, `Notification.Recipient` | Type이 Operational이 아닌 입력 항목 중 요청 Account가 현재 조회할 수 있는 Notification이다                                                           | 처리 가능한 입력 항목은 Read가 되고 읽음 시각이 최초 기록된다. 이미 Read이면 상태와 읽음 시각을 바꾸지 않는다 |
-| Account Notification 읽음 처리      | Account   | Notification      | 없음                       | `Notification.Recipient`                   | Type이 Operational이고 Recipient Account State가 Deleted가 아니며 Read State가 Unread다                                                              | Read State가 Read가 되고 읽음 시각이 기록된다                                                                 |
+| 행동                                       | 행동 주체 | 대상 객체                     | 입력값                                            | 권한                                       | 조건                                                                                                                                                        | 결과                                                                                                          |
+| ------------------------------------------ | --------- | ----------------------------- | ------------------------------------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Notification 생성                          | 시스템    | Notification                  | Type, Recipient, Type별 데이터와 필요한 원인 객체 | `System.NotificationSource`                | Type별 필수 데이터·관계가 유효하고 Recipient 조회 정책을 통과하며 아래 억제 정책에 걸리지 않는다                                                            | 입력 Notification Type과 Read State=Unread인 Notification이 생성된다                                          |
+| 상호작용 Notification 정리                 | 시스템    | Notification                  | 정리 대상 Notification                            | `System.NotificationSource`                | 원인 객체가 있는 Type의 필수 관계 결손·원인 Recipient 불일치·Recipient 기준 Related Post/Profile 비가용 (Recipient 자체의 복구 가능한 비활성화·정지는 제외) | 시점과 성공을 보장하지 않고 Notification 제거를 Best Effort로 시도한다                                        |
+| Profile Notification 지정 읽음 처리        | Account   | Notification 목록             | Notification ID 목록                              | `Account.Active`, `Notification.Recipient` | Type이 Operational이 아닌 입력 항목 중 요청 Account가 현재 조회할 수 있는 Notification이다                                                                  | 처리 가능한 입력 항목은 Read가 되고 읽음 시각이 최초 기록된다. 이미 Read이면 상태와 읽음 시각을 바꾸지 않는다 |
+| Account Operational Notification 읽음 처리 | Account   | Operational Notification 목록 | Notification ID 목록                              | `Account.Active`, `Notification.Recipient` | 요청 Account의 Operational Notification이다                                                                                                                 | 처리 가능한 입력 항목은 Read가 되고 최초 읽음 시각을 보존한다                                                 |
 
 ### Profile Notification 지정 읽음 처리
 
@@ -82,6 +86,28 @@ Recipient Profile은 Related Post의 direct Repost Source Author Profile이다. 
   요청 시점의 전체 visible unread 집합으로 확장하지 않는다.
 - 처리 실패 시 입력 목록의 일부 Notification만 변경된 상태를 남기지 않는다.
 
+### Operational Notification 조회와 읽음 처리
+
+- Recipient Account가 ACTIVE이고 해당 Profile의 membership을 가지면 `Profile.notifications`와
+  `Profile.unreadNotificationCount`는 그 Profile의 조회 가능한 Profile Notification과 해당 Account의
+  Operational Notification을 함께 포함한다. Account Operational Notification은 Account가 membership을 가진
+  각 Profile에서 조회되며, Profile에 속한 social Notification은 해당 Profile에 한정된다.
+- `markNotificationRead`는 요청에 지정된 ID 중 각 권한 범위에서 현재 조회 가능한 항목만 읽음 처리한다.
+  ACTIVE Account는 기존 Profile Notification과 자신의 Operational Notification을 지정할 수 있다. 존재하지 않거나
+  다른 Recipient에게 속하거나 현재 조회할 수 없는 ID는 조용히 제외한다.
+- 빈 ID 목록, 중복 ID와 이미 Read인 항목은 성공한 멱등 처리다. 최초 읽음 시각을 보존하며, 입력에 없는 항목을
+  요청 중 새로 생성된 알림까지 확장해 읽음 처리하지 않는다.
+- Operational Notification 목록에서 항목을 활성화하면 이동을 기다리게 하지 않고 Best Effort Read를 시작한다.
+  Push를 탭해 목적지로 이동하는 동작은 Read State를 바꾸지 않는다.
+
+### Operational Notification 수동 발송과 재시도
+
+- 각 수동 발송은 고유 UUID `sendId`로 식별한다. 최초 수신자 집합 capture가 성공한 시점에 ACTIVE인 Account를
+  대상으로 고정하며, 그 뒤 가입하거나 ACTIVE가 된 Account를 같은 발송의 재시도에 추가하지 않는다.
+- Operational Notification Push는 최초 capture 뒤에도 전달 시점에 Account State가 ACTIVE인 설치만 대상으로 한다.
+- 같은 `sendId`와 제목·본문·링크 데이터로 재시도해도 기존 Notification 행, 데이터와 `readAt`을 바꾸지 않는다.
+  같은 `sendId`를 다른 제목·본문·링크 데이터와 함께 재사용하면 발송을 실패 처리한다.
+
 ### Type별 생성 관계
 
 | Notification Type | Recipient                           | 필수 원인 관계                                                                     |
@@ -94,7 +120,7 @@ Recipient Profile은 Related Post의 direct Repost Source Author Profile이다. 
 | Follow            | Followee Profile                    | Follower인 Related Profile, Related Follow Relationship                            |
 | Follow Request    | Followee Profile                    | Related Follow Request, Follower인 Related Profile                                 |
 | Followee Post     | Follower Profile                    | Related Post, Followee인 Related Profile, Related Follow Relationship              |
-| Operational       | Account                             | 운영 메시지                                                                        |
+| Operational       | Account                             | 제목, 선택적 본문, 내부·외부 링크                                                  |
 
 ### Reply/Mention 수신자별 분류와 중복 처리
 
@@ -168,19 +194,15 @@ Recipient Profile은 Related Post의 direct Repost Source Author Profile이다. 
 - Recipient가 Quote와 direct Repost Source를 각각 조회할 수 있어야 새 Quote Notification을 생성한다.
   둘 중 하나라도 더 이상 조회할 수 없으면 목록, Unread count, Node 조회와 읽음 처리에서 없는 것으로 취급한다.
   Source를 조회할 수 없어도 Quote 자체를 조회할 수 있다는 Post 정책은 바꾸지 않는다.
-- 같은 Quote Post가 같은 Recipient Profile에게 Reply, Quote, Mention Notification을 동시에 발생시키면
-  각 Type의 생성·Mute 조건을 먼저 적용한 뒤 남은 후보에서 Reply, Quote, Mention 순서로 한 건만 제공한다.
-  Recipient가 서로 다르면 각각 판정한다.
-- 이 순서는 같은 글·수신자의 알림에서 수신자의 글에 생긴 답글·인용을 대표 정보로 전달하려는 선택이다.
-  Mention의 중요도를 낮추거나 Post 구조가 순서를 강제한다는 뜻은 아니다. 알림 이유와 게시글 안의 인용 내용
-  표시는 구분한다. 선택 배경과 이번 재검토의 이유는 [ADR 0028](../decisions/0028-quote-notification-policy.md#2026-09-09-재검토에서-확정한-유지-이유)에 기록한다.
-- 같은 Quote·Recipient의 Quote와 Mention이 동시에 생성 후보이면 각 Type의 생성·Mute 조건을 먼저
-  적용한다. 둘 다 남으면 Quote Notification 한 건만 제공한다. Reply도 후보이면 위 세 Type의 규칙을 적용한다.
-  인용 관계가 승인 대기여서 Mention Notification이 먼저 생성됐다면 이후 승인돼도 별도 Quote Notification을
-  추가하거나 기존 Mention의 Type을 교체하지 않는다. 이 승인 처리로 기존 Notification과 Read State·최초 읽음
-  시각을 변경하지 않는다. 다른 사유에 따른 조회·정리는 해당 Type의 기존 정책을 따른다.
-- 같은 Quote·Recipient의 Reply Notification이 먼저 생성된 경우에도 Mention과 동일하게 처리한다.
-  이후 Quote 승인으로 알림을 추가하지 않고 기존 Reply Notification과 Read State·최초 읽음 시각을 보존한다.
+- 같은 Quote Post가 같은 Recipient Profile에게 Reply, Mention, Quote Notification을 발생시키면 각 Type의
+  생성·Mute 조건을 먼저 적용하고, 최초 선택에서 남은 후보 중 Reply, Mention, Quote 순서로 한 건만 제공한다.
+  이 우선순위는 독립적인 비동기 처리의 도착 순서와 무관하게 적용하며 Recipient가 서로 다르면 각각 판정한다.
+- 우선순위는 최초 대표 Notification 선택에만 적용한다. 이미 저장된 대표 Notification은 ID, Type, Read State와
+  최초 읽음 시각을 유지하며, 이후 더 높은 우선순위 Type이 생성 가능해져도 추가·교체하거나 소급 생성하지 않는다.
+  따라서 Quote 승인 전에 Mention 또는 Reply가 먼저 생성된 경우 승인으로 Quote Notification을 추가하거나 기존
+  Notification의 Type을 바꾸지 않는다. 이 승인 처리로 기존 Notification과 Read State·최초 읽음 시각을 변경하지
+  않으며, 다른 사유에 따른 조회·정리는 해당 Type의 기존 정책을 따른다. 이 선택의 근거는
+  [ADR 0028](../decisions/0028-quote-notification-policy.md#2026-10-12-사용자-지정-우선순위)에 기록한다.
 - Followee Post Notification은 이 중복 제거 대상에 포함하지 않고 기존 독립 정책을 따른다.
 - Profile Mute는 Quote Author를 대상으로 검사한다. Notification Scope의 Word Mute Rule과 Hashtag Mute Rule은
   Quote의 내용과 Hashtag를 검사하며, direct Source의 내용과 Hashtag를 다시 검사하지 않는다.

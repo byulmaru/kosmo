@@ -59,6 +59,12 @@ export const ConsumerWidthsKeepOneCompleteRow: Story = {
           />
         </View>
       ))}
+      <View style={{ width: 240 }} testID="summary-width-fit">
+        <ReactionSummary
+          entries={canonicalReactionEntries.slice(0, 2)}
+          peopleHref="/@kosmo/reaction-post/reactions"
+        />
+      </View>
     </View>
   ),
   play: async ({ canvasElement }) => {
@@ -75,6 +81,9 @@ export const ConsumerWidthsKeepOneCompleteRow: Story = {
           ? `숨겨진 반응 유형 ${hiddenCount}개, 반응한 프로필 보기`
           : '반응한 프로필 보기',
       );
+      if (hiddenCount > 0) {
+        expect(people).toHaveTextContent(`+${hiddenCount}`);
+      }
       const bounds = container.getBoundingClientRect();
       expect(bounds.width).toBe(width);
       for (const token of [...tokens, people]) {
@@ -83,6 +92,21 @@ export const ConsumerWidthsKeepOneCompleteRow: Story = {
       }
       expect(container.scrollWidth).toBeLessThanOrEqual(container.clientWidth);
     }
+    const fullWidth = within(canvas.getByTestId('summary-width-fit'));
+    const peopleLink = fullWidth.getByRole('link', { name: '반응한 프로필 보기' });
+    peopleLink.focus();
+    expect(peopleLink).toHaveFocus();
+    expect(peopleLink).toHaveAttribute('tabindex', '0');
+
+    const getStyle = canvasElement.ownerDocument.defaultView!.getComputedStyle.bind(
+      canvasElement.ownerDocument.defaultView,
+    );
+    const feedbackSurface = [...peopleLink.querySelectorAll<HTMLElement>('*')].find(
+      (element) => getStyle(element).position === 'absolute',
+    );
+    expect(feedbackSurface).toBeDefined();
+    expect(getStyle(feedbackSurface!).borderRadius).toBe('12px');
+
     const documentElement = canvasElement.ownerDocument.documentElement;
     expect(documentElement.scrollWidth).toBeLessThanOrEqual(documentElement.clientWidth);
   },

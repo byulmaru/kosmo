@@ -116,12 +116,13 @@ mock.module(new URL('../ui/ToastProvider.tsx', import.meta.url), {
 let SettingsNavigationList: ComponentType<{
   pathname?: string;
   selected?:
-    | 'default-post-visibility'
+    | 'profile'
     | 'profile-migration'
     | 'following-import'
     | 'mute-and-block'
     | 'theme'
-    | 'info';
+    | 'info'
+    | 'account-deletion';
 }>;
 let SettingsMuteAndBlockNavigation: ComponentType<{
   selected?: 'blocked-profiles' | 'muted-profiles';
@@ -181,8 +182,8 @@ describe('SettingsNavigationList', () => {
       'Byulmaru ID Account Settings 외부 서비스로 이동',
     );
     assert.equal(links[0].props.href, 'https://id.byulmaru.co');
-    assert.equal(links[1].props.accessibilityLabel, '게시물 기본 공개 범위 설정 열기');
-    assert.equal(links[1].props.href, '/settings/default-post-visibility');
+    assert.equal(links[1].props.accessibilityLabel, '프로필 설정 열기');
+    assert.equal(links[1].props.href, '/settings/profile');
     assert.equal(links[2].props.accessibilityLabel, '다른 서비스에서 이전 설정 열기');
     assert.equal(links[2].props.href, '/settings/profile-migration');
     assert.equal(links[3].props.accessibilityLabel, '팔로잉 가져오기 설정 열기');
@@ -190,6 +191,12 @@ describe('SettingsNavigationList', () => {
     assert.ok(texts().includes('팔로잉 가져오기'));
     assert.equal(links[4].props.accessibilityLabel, '뮤트 및 차단 설정 열기');
     assert.equal(links[4].props.href, '/settings/mute-and-block');
+    assert.equal(links[5].props.accessibilityLabel, '테마 설정 열기, 시스템');
+    assert.equal(links[5].props.href, '/settings/theme');
+    assert.equal(links[6].props.accessibilityLabel, '정보 설정 열기');
+    assert.equal(links[6].props.href, '/settings/info');
+    assert.equal(links[7].props.accessibilityLabel, '코스모 탈퇴 설정 열기');
+    assert.equal(links[7].props.href, '/settings/account-deletion');
     assert.equal(
       links.some((node) => node.props.testID === 'native-notification-settings'),
       false,
@@ -377,8 +384,8 @@ describe('SettingsNavigationList', () => {
 
   it('현재 path와 같은 root detail만 page-current 상태를 받는다', async () => {
     await render({
-      pathname: '/settings/default-post-visibility',
-      selected: 'default-post-visibility',
+      pathname: '/settings/profile',
+      selected: 'profile',
     });
 
     const internal = rendered('Pressable')[1];
@@ -411,7 +418,7 @@ describe('SettingsNavigationList', () => {
   });
 
   it('root detail을 visual selected로 표시해도 root path에서는 current page가 아니다', async () => {
-    await render({ pathname: '/settings', selected: 'default-post-visibility' });
+    await render({ pathname: '/settings', selected: 'profile' });
 
     const profileSettings = rendered('Pressable')[1];
     assert.equal(profileSettings.props['aria-current'], undefined);
@@ -441,18 +448,28 @@ describe('SettingsNavigationList', () => {
     assert.equal(info.props['aria-current'], undefined);
     assert.deepEqual(info.props.accessibilityState, { selected: true });
   });
+
+  it('코스모 탈퇴는 마지막 root destination으로 current 상태를 전달한다', async () => {
+    await render({ pathname: '/settings/account-deletion', selected: 'account-deletion' });
+
+    const links = rendered('Pressable');
+    const deletion = links[links.length - 1];
+    assert.equal(deletion.props['aria-current'], 'page');
+    assert.deepEqual(deletion.props.accessibilityState, { selected: true });
+  });
 });
 
 async function render(
   props: {
     pathname?: string;
     selected?:
-      | 'default-post-visibility'
+      | 'profile'
       | 'profile-migration'
       | 'following-import'
       | 'mute-and-block'
       | 'theme'
-      | 'info';
+      | 'info'
+      | 'account-deletion';
   } = {},
 ) {
   await act(async () => {

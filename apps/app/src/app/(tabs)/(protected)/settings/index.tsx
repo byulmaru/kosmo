@@ -13,7 +13,7 @@ export default function SettingsRoute() {
   const content =
     layout === 'full' ? (
       <>
-        <PageHeader title="게시물 기본 공개 범위" />
+        <PageHeader title="프로필 설정" />
         <SettingsProfileDetail />
       </>
     ) : (

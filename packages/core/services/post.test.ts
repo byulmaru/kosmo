@@ -130,6 +130,23 @@ test('createPost는 local Post와 최초 content 연결을 하나의 transaction
   );
 });
 
+test('createPost는 Mention이 없는 local DIRECT Post를 저장한다', async () => {
+  const author = await createProfile();
+  const result = await createPost({
+    document: postContentDocumentFromText('private without a mention'),
+    origin: 'LOCAL',
+    profileId: author.id,
+    visibility: PostVisibility.DIRECT,
+  });
+
+  assert.equal(result.post.visibility, PostVisibility.DIRECT);
+  assert.equal(result.post.currentContentId, result.content.id);
+  assert.deepEqual(
+    await db.select().from(PostMentions).where(eq(PostMentions.postContentId, result.content.id)),
+    [],
+  );
+});
+
 test('createPost는 Local Mention node를 저장하고 반복 Profile relation을 하나로 만든다', async () => {
   const author = await createProfile();
   const mentioned = await createProfile();

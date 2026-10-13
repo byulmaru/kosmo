@@ -12,12 +12,13 @@ import { SettingsItem } from './SettingsItem';
 import { SettingsLinkRow } from './SettingsLinkRow';
 
 type SettingsDestination =
-  | 'default-post-visibility'
+  | 'profile'
   | 'profile-migration'
   | 'following-import'
   | 'mute-and-block'
   | 'theme'
-  | 'info';
+  | 'info'
+  | 'account-deletion';
 
 export function SettingsNavigationList({
   pathname,
@@ -36,12 +37,12 @@ export function SettingsNavigationList({
     >
       <ByulmaruIdAccountSettingsEntry />
       <SettingsLinkRow
-        accessibilityLabel="게시물 기본 공개 범위 설정 열기"
-        href="/settings/default-post-visibility"
-        label="게시물 기본 공개 범위"
+        accessibilityLabel="프로필 설정 열기"
+        href="/settings/profile"
+        label="프로필 설정"
         primary
-        currentPage={pathname === '/settings/default-post-visibility'}
-        selected={selected === 'default-post-visibility'}
+        currentPage={pathname === '/settings/profile'}
+        selected={selected === 'profile'}
       />
       {migrationEnabled ? (
         <>
@@ -88,6 +89,14 @@ export function SettingsNavigationList({
         primary
         currentPage={pathname === '/settings/info'}
         selected={selected === 'info'}
+      />
+      <SettingsLinkRow
+        accessibilityLabel="코스모 탈퇴 설정 열기"
+        href="/settings/account-deletion"
+        label="코스모 탈퇴"
+        primary
+        currentPage={pathname === '/settings/account-deletion'}
+        selected={selected === 'account-deletion'}
       />
     </View>
   );

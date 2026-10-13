@@ -29,7 +29,6 @@ const initialDraft: ProfileEditDraft = {
   avatar: currentAvatar,
   bio: '창작과 개발을 좋아합니다.',
   displayName: '코스모',
-  followPolicy: 'OPEN',
   header: currentHeader,
   tags: ['공예', '개발'],
 };
@@ -71,11 +70,9 @@ function ProfileEditSubmitStateHarness({ submitState }: { submitState: ProfileEd
   const dirtyDraft: ProfileEditDraft = {
     ...initialDraft,
     bio: '실패 뒤에도 보존할 소개',
-    followPolicy: 'APPROVAL_REQUIRED',
   };
   const [value, setValue] = useState(dirtyDraft);
   const [submittedBio, setSubmittedBio] = useState<string | null>(null);
-  const [submittedPolicy, setSubmittedPolicy] = useState<string | null>(null);
 
   return (
     <>
@@ -84,15 +81,11 @@ function ProfileEditSubmitStateHarness({ submitState }: { submitState: ProfileEd
         onChange={setValue}
         onSubmit={(draft) => {
           setSubmittedBio(draft.bio);
-          setSubmittedPolicy(draft.followPolicy);
         }}
         submitState={submitState}
         value={value}
       />
       {submittedBio ? <Text accessibilityLabel="마지막 제출 draft">{submittedBio}</Text> : null}
-      {submittedPolicy ? (
-        <Text accessibilityLabel="마지막 제출 팔로우 정책">{submittedPolicy}</Text>
-      ) : null}
     </>
   );
 }
@@ -126,7 +119,6 @@ function ProfileEditTagSubmitHarness({
 }) {
   const [value, setValue] = useState(initialValue);
   const [submittedTags, setSubmittedTags] = useState<ReadonlyArray<string>>();
-  const [submittedPolicy, setSubmittedPolicy] = useState<string | null>(null);
 
   return (
     <>
@@ -135,16 +127,11 @@ function ProfileEditTagSubmitHarness({
         onChange={setValue}
         onSubmit={(draft) => {
           setSubmittedTags(draft.tags);
-          setSubmittedPolicy(draft.followPolicy);
         }}
         value={value}
       />
-      <Text accessibilityLabel="현재 팔로우 정책">{value.followPolicy}</Text>
       {submittedTags ? (
         <Text accessibilityLabel="마지막 제출 태그">{submittedTags.join(',')}</Text>
-      ) : null}
-      {submittedPolicy ? (
-        <Text accessibilityLabel="마지막 제출 팔로우 정책">{submittedPolicy}</Text>
       ) : null}
     </>
   );
@@ -491,46 +478,6 @@ export const DiscardConfirmation: Story = {
   },
 };
 
-export const FollowPolicySwitchSubmitsEnum: Story = {
-  render: () => <ProfileEditTagSubmitHarness />,
-  play: async ({ canvasElement, userEvent }) => {
-    const canvas = within(canvasElement);
-    const toggle = canvas.getByRole('switch', { name: '팔로우 요청 자동 승인' });
-
-    expect(toggle).toBeChecked();
-    await userEvent.click(toggle);
-    expect(toggle).not.toBeChecked();
-    expect(canvas.getByRole('button', { name: '저장' })).toBeEnabled();
-    await userEvent.click(canvas.getByRole('button', { name: '저장' }));
-    expect(canvas.getByLabelText('마지막 제출 팔로우 정책')).toHaveTextContent('APPROVAL_REQUIRED');
-  },
-};
-
-export const FollowPolicyApprovalRequiredInitialState: Story = {
-  render: () => (
-    <ProfileEditTagSubmitHarness
-      initialValue={{ ...initialDraft, followPolicy: 'APPROVAL_REQUIRED' }}
-    />
-  ),
-  play: async ({ canvasElement, userEvent }) => {
-    const canvas = within(canvasElement);
-    const toggle = canvas.getByRole('switch', { name: '팔로우 요청 자동 승인' });
-    const save = canvas.getByRole('button', { name: '저장' });
-
-    expect(canvas.getByLabelText('현재 팔로우 정책')).toHaveTextContent('APPROVAL_REQUIRED');
-    expect(toggle).not.toBeChecked();
-    expect(save).toBeDisabled();
-
-    await userEvent.click(toggle);
-    expect(canvas.getByLabelText('현재 팔로우 정책')).toHaveTextContent('OPEN');
-    expect(toggle).toBeChecked();
-    expect(save).toBeEnabled();
-
-    await userEvent.click(save);
-    expect(canvas.getByLabelText('마지막 제출 팔로우 정책')).toHaveTextContent('OPEN');
-  },
-};
-
 export const DisconnectedSubmitStaysDisabled: Story = {
   render: () => <ProfileEditScreenHarness connected={false} />,
   play: async ({ canvasElement, userEvent }) => {
@@ -547,7 +494,6 @@ export const SavingKeepsDraftAndDisablesSubmit: Story = {
     const canvas = within(canvasElement);
 
     expect(canvas.getByRole('textbox', { name: '소개' })).toHaveValue('실패 뒤에도 보존할 소개');
-    expect(canvas.getByRole('switch', { name: '팔로우 요청 자동 승인' })).toBeDisabled();
     expect(canvas.getByRole('button', { name: '저장' })).toBeDisabled();
   },
 };
@@ -563,10 +509,8 @@ export const FailureKeepsDraftAndRetriesIt: Story = {
 
     expect(canvas.getByRole('alert')).toHaveTextContent('프로필을 저장하지 못했어요.');
     expect(canvas.getByRole('textbox', { name: '소개' })).toHaveValue('실패 뒤에도 보존할 소개');
-    expect(canvas.getByRole('switch', { name: '팔로우 요청 자동 승인' })).not.toBeChecked();
     await userEvent.click(canvas.getByRole('button', { name: '저장' }));
     expect(canvas.getByLabelText('마지막 제출 draft')).toHaveTextContent('실패 뒤에도 보존할 소개');
-    expect(canvas.getByLabelText('마지막 제출 팔로우 정책')).toHaveTextContent('APPROVAL_REQUIRED');
   },
 };
 
@@ -839,7 +783,6 @@ export const DisabledFormBlocksEveryAction: Story = {
     expect(canvas.getByRole('button', { name: '아바타 이미지 편집' })).toBeDisabled();
     expect(canvas.getByRole('button', { name: '#공예 제거' })).toBeDisabled();
     expect(canvas.getByRole('button', { name: '태그 추가' })).toBeDisabled();
-    expect(canvas.getByRole('switch', { name: '팔로우 요청 자동 승인' })).toBeDisabled();
     expect(canvas.getByRole('button', { name: '저장' })).toBeDisabled();
     for (const input of canvas.getAllByRole('textbox')) {
       expect(input).toHaveAttribute('readonly');

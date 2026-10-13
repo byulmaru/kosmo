@@ -16,7 +16,9 @@ import {
   NotificationRepostRelatedPosts,
   NotificationSourceReposts,
   visibleNotificationWhere,
+  visibleViewerNotificationWhere,
 } from './access/visibility';
+import type { OperationalNotificationData } from '@kosmo/core/db';
 import type { UserContext } from '@/context';
 
 export type NotificationRow = typeof Notifications.$inferSelect & {
@@ -35,6 +37,9 @@ export type RepostNotificationRow = NotificationRow;
 export type ReplyNotificationRow = NotificationRow;
 export type QuoteNotificationRow = NotificationRow;
 export type MentionNotificationRow = NotificationRow;
+export type OperationalNotificationRow = Omit<NotificationRow, 'data'> & {
+  data: OperationalNotificationData;
+};
 
 type NotificationSource = {
   followRequest?: typeof ProfileFollowRequests.$inferSelect;
@@ -295,7 +300,11 @@ export const getNotificationSource = async (
     .with(NotificationKind.REPLY, () =>
       replyNotificationSourceLoader(ctx).load(notification.sourceId),
     )
-    .otherwise(() => repostNotificationSourceLoader(ctx).load(notification.sourceId));
+    .with(NotificationKind.REPOST, () =>
+      repostNotificationSourceLoader(ctx).load(notification.sourceId),
+    )
+    .with(NotificationKind.OPERATIONAL, () => null)
+    .exhaustive();
 
   if (!source) {
     throw new Error('Notification source not found');
@@ -313,6 +322,7 @@ export const notificationNodeType = (kind: string) =>
     .with(NotificationKind.QUOTE, () => 'QuoteNotification' as const)
     .with(NotificationKind.REPLY, () => 'ReplyNotification' as const)
     .with(NotificationKind.MENTION, () => 'MentionNotification' as const)
+    .with(NotificationKind.OPERATIONAL, () => 'OperationalNotification' as const)
     .otherwise(() => null);
 
 export const notificationKindForNodeType = (typename: string) =>
@@ -324,6 +334,7 @@ export const notificationKindForNodeType = (typename: string) =>
     .with('QuoteNotification', () => NotificationKind.QUOTE)
     .with('ReplyNotification', () => NotificationKind.REPLY)
     .with('MentionNotification', () => NotificationKind.MENTION)
+    .with('OperationalNotification', () => NotificationKind.OPERATIONAL)
     .otherwise(() => null);
 
 export const Notification = builder.interfaceRef<NotificationRow>('Notification');
@@ -514,6 +525,30 @@ export const MentionNotification = createObjectRef<MentionNotificationRow>(
 );
 
 MentionNotification.implement({
+  interfaces: [Notification],
+  fields: (t) => ({
+    createdAt: t.expose('createdAt', { type: 'DateTime' }),
+    readAt: t.expose('readAt', { type: 'DateTime', nullable: true }),
+  }),
+});
+
+export const OperationalNotification = createObjectRef<OperationalNotificationRow>(
+  'OperationalNotification',
+  (ids, ctx) =>
+    db
+      .select(getColumns(Notifications))
+      .from(Notifications)
+      .where(
+        and(
+          inArray(Notifications.id, ids),
+          eq(Notifications.kind, NotificationKind.OPERATIONAL),
+          visibleViewerNotificationWhere({ ctx, profileId: null }),
+        ),
+      )
+      .then((rows) => rows as OperationalNotificationRow[]),
+);
+
+OperationalNotification.implement({
   interfaces: [Notification],
   fields: (t) => ({
     createdAt: t.expose('createdAt', { type: 'DateTime' }),

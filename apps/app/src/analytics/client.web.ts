@@ -35,6 +35,7 @@ function initializeAnalytics(): PostHog | null {
     client = posthogClient.init(configuredApiKey, {
       api_host: configuredApiHost,
       defaults: '2026-05-30',
+      disable_session_recording: true,
       mask_personal_data_properties: false,
       before_send: (event) => {
         if (
@@ -142,18 +143,5 @@ export function clearAnalytics(): void {
     analyticsClient.reset();
   } catch {
     // Analytics is best-effort and must not affect the product flow.
-  }
-}
-
-export function getAnalyticsAccountId(): string | null {
-  try {
-    const analyticsClient = initializeAnalytics();
-    if (!analyticsClient) {
-      return null;
-    }
-    const accountId = getPostHogAccountId(analyticsClient);
-    return analyticsClient.get_distinct_id() === accountId ? accountId : null;
-  } catch {
-    return null;
   }
 }

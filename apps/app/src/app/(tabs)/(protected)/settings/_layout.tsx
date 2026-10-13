@@ -28,8 +28,8 @@ export function SettingsRouteLayout({ children }: { children?: ReactNode }) {
   const layout = getShellLayout(web, width);
   const root = pathname === '/settings' || pathname === '/settings/';
   const selected =
-    root || pathname === '/settings/default-post-visibility'
-      ? 'default-post-visibility'
+    root || pathname === '/settings/profile' || pathname === '/settings/default-post-visibility'
+      ? 'profile'
       : pathname === '/settings/profile-migration'
         ? 'profile-migration'
         : pathname === '/settings/following-import'
@@ -42,7 +42,9 @@ export function SettingsRouteLayout({ children }: { children?: ReactNode }) {
               ? 'mute-and-block'
               : pathname === '/settings/theme'
                 ? 'theme'
-                : undefined;
+                : pathname === '/settings/account-deletion'
+                  ? 'account-deletion'
+                  : undefined;
   const detailHeaderMode: SettingsDetailHeaderMode =
     web && layout === 'mobile' ? 'hidden' : root ? 'plain' : 'back';
 
