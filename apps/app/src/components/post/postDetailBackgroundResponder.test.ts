@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { before, describe, it, mock } from 'node:test';
-import type { View, ViewProps } from 'react-native';
+import type { GestureResponderEvent, View } from 'react-native';
 import type { createPostDetailBackgroundResponder as CreatePostDetailBackgroundResponder } from './postDetailBackgroundResponder';
 
 const platform = { OS: 'web' };
@@ -16,51 +16,120 @@ before(async () => {
   ({ createPostDetailBackgroundResponder } = await import('./postDetailBackgroundResponder'));
 });
 
-type StartResponderEvent = Parameters<NonNullable<ViewProps['onStartShouldSetResponder']>>[0];
-type TerminationRequestEvent = Parameters<
-  NonNullable<ViewProps['onResponderTerminationRequest']>
->[0];
-type ReleaseEvent = Parameters<NonNullable<ViewProps['onResponderRelease']>>[0];
+function touch(x = 50, y = 50, target = 1): GestureResponderEvent {
+  return {
+    currentTarget: 1,
+    target,
+    nativeEvent: { target, pageX: x + 100, pageY: y + 200, locationX: x, locationY: y },
+  } as unknown as GestureResponderEvent;
+}
+
+function setup() {
+  let presses = 0;
+  const responder = createPostDetailBackgroundResponder(
+    () => {
+      presses += 1;
+    },
+    { width: 100, height: 100 },
+  );
+  return { responder, presses: () => presses };
+}
 
 describe('createPostDetailBackgroundResponder', () => {
-  it('claims only direct background touches, yields to scrolling, and opens on release', () => {
+  it('claims only direct background touches and yields to scrolling', () => {
     platform.OS = 'web';
-    const onPress = () => {
-      presses += 1;
-    };
-    let presses = 0;
-    const responder = createPostDetailBackgroundResponder(onPress);
-    const surface = 1;
-    const child = 2;
-    const directTouch = {
-      currentTarget: surface,
-      target: surface,
-    } as unknown as StartResponderEvent;
-    const childTouch = {
-      currentTarget: surface,
-      target: child,
-    } as unknown as StartResponderEvent;
+    const { responder } = setup();
+    assert.equal(responder.onStartShouldSetResponder?.(touch()), true);
+    assert.equal(responder.onStartShouldSetResponder?.(touch(50, 50, 2)), false);
+    assert.equal(responder.onResponderTerminationRequest?.(touch()), true);
+  });
 
-    assert.equal(responder.onStartShouldSetResponder?.(directTouch), true);
-    assert.equal(responder.onStartShouldSetResponder?.(childTouch), false);
-    assert.equal(presses, 0);
-    assert.equal(responder.onResponderTerminationRequest?.({} as TerminationRequestEvent), true);
+  it('opens once after a stationary tap or small finger jitter', () => {
+    const { responder, presses } = setup();
+    responder.onResponderGrant?.(touch());
+    responder.onResponderMove?.(touch(53, 52));
+    responder.onResponderRelease?.(touch(53, 52));
+    responder.onResponderRelease?.(touch(53, 52));
+    assert.equal(presses(), 1);
+  });
 
-    responder.onResponderRelease?.({} as ReleaseEvent);
-    assert.equal(presses, 1);
+  it('cancels a horizontal or vertical drag, including a return to the start', () => {
+    for (const [x, y] of [
+      [80, 50],
+      [50, 80],
+      [58, 58],
+    ]) {
+      const { responder, presses } = setup();
+      responder.onResponderGrant?.(touch());
+      responder.onResponderMove?.(touch(x, y));
+      responder.onResponderMove?.(touch());
+      responder.onResponderRelease?.(touch());
+      assert.equal(presses(), 0);
+    }
+  });
+
+  it('checks the final position even without a move event', () => {
+    const { responder, presses } = setup();
+    responder.onResponderGrant?.(touch());
+    responder.onResponderRelease?.(touch(80, 50));
+    assert.equal(presses(), 0);
+  });
+
+  it('cancels when crossing any edge even within the tap movement tolerance', () => {
+    for (const [startX, startY, endX, endY] of [
+      [1, 50, -1, 50],
+      [99, 50, 100, 50],
+      [50, 1, 50, -1],
+      [50, 99, 50, 100],
+    ]) {
+      const { responder, presses } = setup();
+      responder.onResponderGrant?.(touch(startX, startY));
+      responder.onResponderMove?.(touch(endX, endY));
+      responder.onResponderRelease?.(touch(startX, startY));
+      assert.equal(presses(), 0);
+    }
+  });
+
+  it('ignores target-relative move coordinates after crossing a child', () => {
+    const { responder, presses } = setup();
+    responder.onResponderGrant?.(touch());
+    const moved = touch(51, 50, 2);
+    moved.nativeEvent.locationX = 0;
+    moved.nativeEvent.locationY = 0;
+    responder.onResponderMove?.(moved);
+    responder.onResponderRelease?.(moved);
+    assert.equal(presses(), 1);
+  });
+
+  it('cancels termination and allows the next tap', () => {
+    const { responder, presses } = setup();
+    responder.onResponderGrant?.(touch());
+    responder.onResponderTerminate?.(touch());
+    responder.onResponderRelease?.(touch());
+    assert.equal(presses(), 0);
+    responder.onResponderGrant?.(touch());
+    responder.onResponderRelease?.(touch());
+    assert.equal(presses(), 1);
   });
 
   it('uses the Native host handle when responder negotiation has no currentTarget', () => {
     platform.OS = 'ios';
-    const responder = createPostDetailBackgroundResponder(() => undefined);
-    const touch = (target: number) =>
-      ({ currentTarget: null, nativeEvent: { target } }) as unknown as StartResponderEvent;
-
-    assert.equal(responder.onStartShouldSetResponder?.(touch(10)), false);
+    const { responder, presses } = setup();
+    const nativeTouch = (target: number) =>
+      ({
+        ...touch(),
+        currentTarget: null,
+        nativeEvent: { ...touch().nativeEvent, target },
+      }) as unknown as GestureResponderEvent;
+    assert.equal(responder.onStartShouldSetResponder?.(nativeTouch(10)), false);
     responder.ref({ nativeTag: 10 } as unknown as View);
-    assert.equal(responder.onStartShouldSetResponder?.(touch(10)), true);
-    assert.equal(responder.onStartShouldSetResponder?.(touch(11)), false);
+    assert.equal(responder.onStartShouldSetResponder?.(nativeTouch(10)), true);
+    assert.equal(responder.onStartShouldSetResponder?.(nativeTouch(11)), false);
+    responder.onResponderGrant?.(nativeTouch(10));
+    responder.onResponderRelease?.(nativeTouch(10));
+    assert.equal(presses(), 1);
     responder.ref(null);
-    assert.equal(responder.onStartShouldSetResponder?.(touch(10)), false);
+    assert.equal(responder.onStartShouldSetResponder?.(nativeTouch(10)), false);
+    platform.OS = 'web';
   });
 });

@@ -6735,7 +6735,44 @@ export const ContentWarningProductionConsumersShareRevealStateInteraction: Story
     const detailPath = `/${contentWarningPost.profile.relativeHandle}/${contentWarningPost.id}`;
     expect(canvas.queryByText(contentWarningPost.content!.bodyText)).not.toBeInTheDocument();
 
-    await userEvent.click(listSurface.getByTestId('post-list-standard-row'));
+    const row = listSurface.getByTestId('post-list-standard-row');
+    const pathname = canvas.getByTestId('content-warning-list-pathname');
+    const initialPath = pathname.textContent;
+    // Drive RN Web's real responder with coordinates on the empty avatar column.
+    await waitFor(() => expect(row.getBoundingClientRect().height).toBeGreaterThan(0));
+    const bounds = row.getBoundingClientRect();
+    // userEvent defaults pageX/Y to zero rather than deriving them from clientX/Y.
+    const coords = (clientX: number) => ({
+      clientX,
+      clientY: bounds.bottom - 2,
+      pageX: clientX + window.scrollX,
+      pageY: bounds.bottom - 2 + window.scrollY,
+    });
+    const start = coords(bounds.left + 2);
+    await userEvent.pointer([
+      { keys: '[MouseLeft>]', target: row, coords: start },
+      { target: row, coords: coords(bounds.left + 40) },
+      { target: row, coords: start },
+      { keys: '[/MouseLeft]', target: row, coords: start },
+    ]);
+    expect(pathname.textContent).toBe(initialPath);
+
+    await userEvent.pointer([
+      { keys: '[MouseLeft>]', target: row, coords: start },
+      { target: canvasElement, coords: coords(bounds.left - 2) },
+      {
+        keys: '[/MouseLeft]',
+        target: canvasElement,
+        coords: coords(bounds.left - 2),
+      },
+    ]);
+    expect(pathname.textContent).toBe(initialPath);
+    expect(canvas.queryByText(contentWarningPost.content!.bodyText)).not.toBeInTheDocument();
+
+    await userEvent.pointer([
+      { keys: '[MouseLeft>]', target: row, coords: start },
+      { keys: '[/MouseLeft]', target: row, coords: start },
+    ]);
     expect(canvas.getByTestId('content-warning-list-pathname')).toHaveTextContent(detailPath);
     expect(canvas.queryByText(contentWarningPost.content!.bodyText)).not.toBeInTheDocument();
     expect(
