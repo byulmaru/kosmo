@@ -16,7 +16,7 @@ export const Policy: Story = {
     const canvas = within(canvasElement);
     const tables = canvas.getAllByRole('table');
     const expectedTableDimensions = [
-      [5, 4],
+      [6, 4],
       [1, 4],
       [4, 2],
       [2, 5],
@@ -57,8 +57,25 @@ export const Policy: Story = {
         name: '콘텐츠 삭제·관계 종료 또는 목적 달성 시까지. 탈퇴 완료일부터 30일',
       }),
     ).toBeVisible();
-    expect(within(tables[0]!).getByRole('cell', { name: '수집일부터 12개월' })).toBeVisible();
+    expect(
+      within(tables[0]!).getByRole('cell', { name: '일반 분석 이벤트는 수집일부터 12개월' }),
+    ).toBeVisible();
+    expect(
+      within(tables[0]!).getByRole('cell', {
+        name: '분석용 사용자 정보(계정 식별자, 연결된 분석 식별자, 프로필 개수)',
+      }),
+    ).toBeVisible();
+    expect(
+      within(tables[0]!).getByRole('cell', {
+        name: '계정 이용 기간 및 탈퇴 완료일부터 30일',
+      }),
+    ).toBeVisible();
     expect(within(tables[3]!).getByRole('cell', { name: '독일(프랑크푸르트)' })).toBeVisible();
+    expect(
+      within(tables[3]!).getByRole('cell', {
+        name: '일반 분석 이벤트는 수집일부터 12개월, 분석용 사용자 정보는 계정 이용 기간 및 탈퇴 완료일부터 30일',
+      }),
+    ).toBeVisible();
     expect(canvas.getByText(/이용자와 법정대리인은 개인정보의 열람·전송/)).toBeVisible();
     expect(
       canvas.getAllByRole('link', { name: 'hello@byulmaru.co로 이메일 보내기' })[0],
