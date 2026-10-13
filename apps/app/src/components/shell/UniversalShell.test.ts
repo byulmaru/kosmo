@@ -181,7 +181,7 @@ mockModule('./RightRail', {
   },
 });
 mockModule('./ShellChromeContext', {
-  ShellChromeProvider: ({ children, ...props }: PropsWithChildren) => {
+  ShellChromeProvider: ({ children, ...props }: ComponentProps<typeof ShellChromeProvider>) => {
     shellChromeProps = props;
     return children;
   },
