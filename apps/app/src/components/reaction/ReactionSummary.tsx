@@ -155,6 +155,7 @@ export function ReactionSummary({
         accessibilityLabel={accessibilityLabel}
         accessibilityRole={peopleHref ? 'link' : 'button'}
         controlRef={peopleControlRef}
+        feedbackRadius={radii.md}
         nativeID={peopleControlId}
         onPress={peopleHref ? undefined : onMore}
         targetSize={summaryControlSize}

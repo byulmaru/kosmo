@@ -98,6 +98,7 @@ export type IconButtonProps = Omit<
   accessibilityRole?: 'button' | 'link';
   children: PressableProps['children'];
   controlRef?: Ref<View>;
+  feedbackRadius?: ViewStyle['borderRadius'];
   feedbackTone?: 'inverse';
   visualStyle?: PressableProps['style'];
 } & IconButtonSizeProps;
@@ -109,6 +110,7 @@ export function IconButton({
   children,
   controlRef,
   disabled = false,
+  feedbackRadius,
   feedbackTone,
   hitSlop,
   style,
@@ -192,6 +194,7 @@ export function IconButton({
                 visualSize === undefined
                   ? styles.feedbackFill
                   : { height: visualSize, width: visualSize },
+                feedbackRadius === undefined ? undefined : { borderRadius: feedbackRadius },
                 Platform.OS === 'web'
                   ? ({
                       transitionDuration: `${reducedMotion ? motion.duration.instant : motion.duration.fast}ms`,
