@@ -5,7 +5,12 @@ import type { Context } from 'hono';
 
 const HASHED_ASSET = /(?:^|[.-])[a-f\d]{32}(?=[.@]|$)/i;
 const STATIC_ROOT = process.env.EXPO_WEB_ROOT ?? '../app/dist';
-const PUBLIC_POLICY_PATHS = new Set(['/privacy', '/account-deletion', '/child-safety']);
+const PUBLIC_POLICY_PATHS = new Set([
+  '/privacy',
+  '/privacy/2026-09-09',
+  '/account-deletion',
+  '/child-safety',
+]);
 const acceptsDocument = (c: Context) => {
   const accept = c.req.header('accept');
   return !accept || accept === '*/*' || accept.includes('text/html');
