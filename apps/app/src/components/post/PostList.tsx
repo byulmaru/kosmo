@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Platform,
@@ -10,6 +10,7 @@ import {
 import { graphql, usePaginationFragment } from 'react-relay';
 import { InfiniteList } from '@/components/pagination/InfiniteList';
 import { getShellLayout } from '@/components/shell/shellLayout';
+import { Button } from '@/components/ui/Button';
 import { Skeleton, StateView } from '@/components/ui/StateView';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -18,12 +19,18 @@ import { PostActionAuthenticationProvider } from './PostActionAuthentication';
 import { PostComposerCoordinatorProvider } from './PostComposerCoordinator';
 import { PostListItem } from './PostListItem';
 import { PostMediaViewerHostProvider } from './PostMediaViewerHost';
+import type { LoadNext } from '@/components/pagination/useAutomaticPagination';
 import type { PostList_home$key } from './__generated__/PostList_home.graphql';
 import type { PostList_local$key } from './__generated__/PostList_local.graphql';
 import type { PostList_profile$key } from './__generated__/PostList_profile.graphql';
+import type {
+  PostList_profile_pinned$data,
+  PostList_profile_pinned$key,
+} from './__generated__/PostList_profile_pinned.graphql';
 import type { PostListHomeNextPageQuery } from './__generated__/PostListHomeNextPageQuery.graphql';
 import type { PostListLocalNextPageQuery } from './__generated__/PostListLocalNextPageQuery.graphql';
 import type { PostListProfileNextPageQuery } from './__generated__/PostListProfileNextPageQuery.graphql';
+import type { PostListProfilePinnedNextPageQuery } from './__generated__/PostListProfilePinnedNextPageQuery.graphql';
 import type { ReplyComposerSurface_profile$key } from './__generated__/ReplyComposerSurface_profile.graphql';
 import type { PostListPresentation } from './postListMetrics';
 
@@ -32,7 +39,27 @@ const PostListProfileFragment = graphql`
   @argumentDefinitions(count: { type: "Int", defaultValue: 20 }, cursor: { type: "String" })
   @refetchable(queryName: "PostListProfileNextPageQuery") {
     id
+    instance {
+      kind
+    }
     posts(first: $count, after: $cursor) @connection(key: "PostList_profile__posts") {
+      edges {
+        cursor
+        node {
+          id
+          ...PostListItem_post
+        }
+      }
+    }
+  }
+`;
+
+const PostListProfilePinnedFragment = graphql`
+  fragment PostList_profile_pinned on Profile
+  @argumentDefinitions(count: { type: "Int", defaultValue: 20 }, cursor: { type: "String" })
+  @refetchable(queryName: "PostListProfilePinnedNextPageQuery") {
+    id
+    pinnedPosts(first: $count, after: $cursor) @connection(key: "PostList_profile__pinnedPosts") {
       edges {
         cursor
         node {
@@ -84,7 +111,7 @@ type Props = {
   loading?: boolean;
   onRetry?: () => void;
   onRefresh?: () => void;
-  profile?: PostList_profile$key | null;
+  profile?: (PostList_profile$key & PostList_profile_pinned$key) | null;
   replyProfile?: ReplyComposerSurface_profile$key | null;
   refreshing?: boolean;
 };
@@ -102,6 +129,8 @@ export function PostList({
   refreshing = false,
 }: Props) {
   const theme = useTheme();
+  // A successful unpin can remove its trigger; keep a stable focus destination.
+  const listRef = useRef<View>(null);
   const { width } = useWindowDimensions();
   const postListPresentation: PostListPresentation =
     getShellLayout(Platform.OS === 'web', width) === 'mobile' ? 'mobile' : 'wide';
@@ -113,6 +142,10 @@ export function PostList({
     PostListProfileNextPageQuery,
     PostList_profile$key
   >(PostListProfileFragment, profileKey ?? null);
+  const profilePinnedPagination = usePaginationFragment<
+    PostListProfilePinnedNextPageQuery,
+    PostList_profile_pinned$key
+  >(PostListProfilePinnedFragment, profileKey ?? null);
   const localPagination = usePaginationFragment<PostListLocalNextPageQuery, PostList_local$key>(
     PostListLocalFragment,
     localKey ?? null,
@@ -122,6 +155,10 @@ export function PostList({
   const home = homePagination.data;
   const local = localPagination.data;
   const profile = profilePagination.data;
+  const pinnedProfile = profilePinnedPagination.data;
+  const pinnedEdges = (pinnedProfile?.pinnedPosts.edges ?? []).filter((edge) => edge.node != null);
+  const profileIsLocal = profile?.instance.kind === 'LOCAL';
+  const visiblePinnedEdges = profileIsLocal ? pinnedEdges.slice(0, 1) : pinnedEdges;
   const connection = isHome ? home?.homeTimeline : isLocal ? local?.localTimeline : profile?.posts;
   const edges = connection?.edges ?? [];
   // A successful delete can remove the node record before Relay prunes an
@@ -144,6 +181,7 @@ export function PostList({
     : isLocal
       ? localPagination.loadNext
       : profilePagination.loadNext;
+  const loadPinnedNext = profilePinnedPagination.loadNext;
   const { showToast } = useToast();
   const loadErrorToastCleanup = useRef<(() => void) | null>(null);
   const handleLoadErrorChange = useCallback(
@@ -160,7 +198,6 @@ export function PostList({
     },
     [showToast],
   );
-
   useEffect(
     () => () => {
       loadErrorToastCleanup.current?.();
@@ -170,6 +207,7 @@ export function PostList({
   );
 
   const listIdentityKey = identityKey ?? (isHome ? 'home' : isLocal ? 'local' : 'profile');
+  const listContainerStyle = profileKey || Platform.OS === 'web' ? styles.root : styles.flexRoot;
 
   if (loading && !hasData) {
     return <PostListSkeleton />;
@@ -202,39 +240,115 @@ export function PostList({
     <PostActionAuthenticationProvider>
       <PostComposerCoordinatorProvider owner="list" profile={replyProfile ?? null}>
         <PostMediaViewerHostProvider>
-          <InfiniteList
-            data={visibleEdges}
-            empty={emptyState}
-            hasNext={hasNext}
-            isLoadingNext={isLoadingNext}
-            key={listIdentityKey}
-            keyExtractor={(edge) => edge.node.id}
-            loadNext={loadNext}
-            onLoadErrorChange={handleLoadErrorChange}
-            onRefresh={onRefresh}
-            pageSize={20}
-            footer={
-              isLoadingNext ? (
-                <View style={styles.loadingNext}>
-                  <ActivityIndicator
-                    accessibilityLabel="게시글을 더 불러오는 중"
-                    color={theme.foregroundSecondary}
-                  />
-                  <Text accessibilityLiveRegion="polite" style={styles.srOnly}>
-                    게시글을 더 불러오는 중입니다.
-                  </Text>
-                </View>
-              ) : null
-            }
-            renderItem={({ item }) => (
-              <PostListItem post={item.node} presentation={postListPresentation} />
-            )}
-            refreshing={refreshing}
-            style={styles.root}
-          />
+          <View
+            ref={listRef}
+            {...(Platform.OS === 'web' ? { tabIndex: -1 as const } : { focusable: true })}
+            accessibilityLabel="게시글 목록"
+            style={listContainerStyle}
+          >
+            {profileKey ? (
+              <ProfilePinnedPostList
+                data={visiblePinnedEdges}
+                hasNext={!profileIsLocal && profilePinnedPagination.hasNext}
+                isLoadingNext={profilePinnedPagination.isLoadingNext}
+                loadNext={loadPinnedNext}
+                onProfileUnpinned={() => listRef.current?.focus()}
+                presentation={postListPresentation}
+              />
+            ) : null}
+            <InfiniteList
+              data={visibleEdges}
+              empty={
+                visibleEdges.length === 0 && visiblePinnedEdges.length === 0 ? emptyState : null
+              }
+              hasNext={hasNext}
+              isLoadingNext={isLoadingNext}
+              key={listIdentityKey}
+              keyExtractor={(edge) => edge.node.id}
+              loadNext={loadNext}
+              onLoadErrorChange={handleLoadErrorChange}
+              onRefresh={onRefresh}
+              pageSize={20}
+              footer={
+                isLoadingNext ? (
+                  <View style={styles.loadingNext}>
+                    <ActivityIndicator
+                      accessibilityLabel="게시글을 더 불러오는 중"
+                      color={theme.foregroundSecondary}
+                    />
+                    <Text accessibilityLiveRegion="polite" style={styles.srOnly}>
+                      게시글을 더 불러오는 중입니다.
+                    </Text>
+                  </View>
+                ) : null
+              }
+              renderItem={({ item }) => (
+                <PostListItem post={item.node} presentation={postListPresentation} />
+              )}
+              refreshing={refreshing}
+              style={listContainerStyle}
+            />
+          </View>
         </PostMediaViewerHostProvider>
       </PostComposerCoordinatorProvider>
     </PostActionAuthenticationProvider>
+  );
+}
+
+type ProfilePinnedPostListProps = Readonly<{
+  data: PostList_profile_pinned$data['pinnedPosts']['edges'];
+  hasNext: boolean;
+  isLoadingNext: boolean;
+  loadNext: LoadNext;
+  onProfileUnpinned: () => void;
+  presentation: PostListPresentation;
+}>;
+
+function ProfilePinnedPostList({
+  data,
+  hasNext,
+  isLoadingNext,
+  loadNext,
+  onProfileUnpinned,
+  presentation,
+}: ProfilePinnedPostListProps) {
+  const [loadError, setLoadError] = useState(false);
+  const handleLoadNext = useCallback(() => {
+    if (!hasNext || isLoadingNext) {
+      return;
+    }
+    setLoadError(false);
+    loadNext(20, {
+      onComplete: (error) => setLoadError(Boolean(error)),
+    });
+  }, [hasNext, isLoadingNext, loadNext]);
+
+  return (
+    <View style={styles.root}>
+      {data.map((edge) => (
+        <PostListItem
+          key={`pinned:${edge.node.id}`}
+          onProfileUnpinned={onProfileUnpinned}
+          pinned
+          post={edge.node}
+          presentation={presentation}
+        />
+      ))}
+      {hasNext ? (
+        <View style={styles.pinnedPagination}>
+          <Button
+            accessibilityLabel={loadError ? '고정된 게시글 다시 시도' : '고정된 게시글 더 보기'}
+            loading={isLoadingNext}
+            loadingText="고정된 게시글을 불러오는 중"
+            onPress={handleLoadNext}
+            size="compact"
+            tone="secondary"
+          >
+            {loadError ? '다시 시도' : '고정된 게시글 더 보기'}
+          </Button>
+        </View>
+      ) : null}
+    </View>
   );
 }
 
@@ -297,7 +411,9 @@ function PostListState({
 }
 
 const styles = StyleSheet.create({
+  flexRoot: { flex: 1, minHeight: 0, width: '100%' },
   loadingNext: { alignItems: 'center', padding: spacing.lg },
+  pinnedPagination: { alignItems: 'center', padding: spacing.md },
   root: { width: '100%' },
   skeletonItem: {
     alignItems: 'flex-start',

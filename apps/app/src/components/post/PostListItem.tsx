@@ -102,12 +102,14 @@ const PostListItemFragment = graphql`
 `;
 
 export function PostListItem({
+  onProfileUnpinned,
   pinned = false,
   post: postKey,
   presentation,
   showDivider = true,
   showReplyAttribution = true,
 }: {
+  onProfileUnpinned?: () => void;
   pinned?: boolean;
   post: PostListItem_post$key;
   presentation: PostListPresentation;
@@ -200,6 +202,7 @@ export function PostListItem({
         {replyAttribution}
         <PostListRow
           actionBarStyle={Platform.OS === 'web' ? styles.webActionBarSlot : styles.actionBarSlot}
+          onProfileUnpinned={onProfileUnpinned}
           post={post}
           reply={reply}
         />
@@ -237,6 +240,7 @@ export function PostListItem({
         </PostAttributionRow>
         <PostListRow
           actionBarStyle={Platform.OS === 'web' ? styles.webActionBarSlot : undefined}
+          onProfileUnpinned={onProfileUnpinned}
           post={source}
           reply={reply}
           surfacePostId={post.id}
@@ -276,6 +280,7 @@ export function PostListItem({
           />
           <PostActionSurface
             actionBarStyle={Platform.OS === 'web' ? styles.webQuoteActionBar : undefined}
+            onProfileUnpinned={onProfileUnpinned}
             reactionSummaryStyle={styles.quoteReactionSummary}
             reply={reply}
             socialActionTarget={post.actionSurface!}
@@ -341,11 +346,13 @@ function PostAttributionRow({ children, icon }: { children: ReactNode; icon: Rea
 
 function PostListRow({
   actionBarStyle,
+  onProfileUnpinned,
   post: postKey,
   reply,
   surfacePostId,
 }: {
   actionBarStyle?: StyleProp<ViewStyle>;
+  onProfileUnpinned?: () => void;
   post: PostListRow_post$key;
   reply?: PostActionBarProps['reply'];
   surfacePostId?: string;
@@ -410,6 +417,7 @@ function PostListRow({
         ) : null}
         <PostActionSurface
           actionBarStyle={actionBarStyle}
+          onProfileUnpinned={onProfileUnpinned}
           reactionSummaryStyle={styles.reactionSummary}
           reply={reply}
           socialActionTarget={post.actionSurface!}

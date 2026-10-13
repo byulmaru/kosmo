@@ -6,6 +6,7 @@ import { deleteSelectedProfile } from '@/auth/selectedProfileStorage';
 import { ContentReportProvider } from '@/components/content-report/ContentReportContext';
 import { FeatureFlagsProvider } from '@/components/FeatureFlagsContext';
 import { NativePushProvider } from '@/components/native-push/NativePushProvider';
+import { ProfilePinProvider } from '@/components/post/ProfilePinProvider';
 import { RelayActorProvider } from '@/relay/RelayActorProvider';
 import { SessionProvider } from '@/session/SessionProvider';
 import {
@@ -65,16 +66,18 @@ export function AppProviders({
             <GraphQLErrorBoundary>
               <RelayActorProvider>
                 <SessionProvider>
-                  <FeatureFlagsProvider>
-                    <AnalyticsSessionBridge />
-                    <NativePushProvider>
-                      <ContentReportProvider>
-                        <PostContentWarningRevealProvider>
-                          {children}
-                        </PostContentWarningRevealProvider>
-                      </ContentReportProvider>
-                    </NativePushProvider>
-                  </FeatureFlagsProvider>
+                  <ProfilePinProvider>
+                    <FeatureFlagsProvider>
+                      <AnalyticsSessionBridge />
+                      <NativePushProvider>
+                        <ContentReportProvider>
+                          <PostContentWarningRevealProvider>
+                            {children}
+                          </PostContentWarningRevealProvider>
+                        </ContentReportProvider>
+                      </NativePushProvider>
+                    </FeatureFlagsProvider>
+                  </ProfilePinProvider>
                 </SessionProvider>
               </RelayActorProvider>
             </GraphQLErrorBoundary>
