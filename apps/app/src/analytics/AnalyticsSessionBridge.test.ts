@@ -72,6 +72,7 @@ test('actor 전환 중 임시 error는 identity를 초기화하지 않고 Profil
 });
 
 test('active accounts without a selected Profile retain account analytics identity', async () => {
+  identityAccountId = 'account-without-profile';
   session.accountId = 'account-without-profile';
   session.selectedProfileId = null;
   session.status = 'valid';
