@@ -5,7 +5,7 @@ import {
   PublicPolicyDocument,
 } from '@/components/public-policy/PublicPolicyDocument';
 
-const EFFECTIVE_DATE = '2026년 10월 12일';
+const EFFECTIVE_DATE = '2026년 10월 13일';
 const POLICY_TITLE = 'Kosmo 계정 삭제 안내';
 
 export default function AccountDeletionScreen() {

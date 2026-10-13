@@ -12,17 +12,8 @@ import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
 
-const EFFECTIVE_DATE = '2026년 10월 12일';
+const EFFECTIVE_DATE = '2026년 10월 13일';
 const POLICY_TITLE = 'Kosmo 개인정보 처리방침';
-
-function SubsectionTitle({ children }: { children: ReactNode }) {
-  const theme = useTheme();
-  return (
-    <Text accessibilityRole="header" style={[styles.subsectionTitle, { color: theme.text }]}>
-      {children}
-    </Text>
-  );
-}
 
 function PolicyTable({
   headers,
@@ -104,89 +95,75 @@ export default function PrivacyScreen() {
       testID="privacy-policy"
       title={POLICY_TITLE}
     >
-      <PolicyParagraph>
-        이 방침은 Kosmo가 어떤 개인정보를 왜, 어떻게 처리하는지와 이용자가 행사할 수 있는 권리를
-        안내합니다.
-      </PolicyParagraph>
-
-      <PolicySection title="1. 개인정보 처리 목적·항목·보유기간 및 근거">
-        <SubsectionTitle>동의를 받아 처리하는 개인정보</SubsectionTitle>
-        <PolicyParagraph>별도의 동의를 받아 처리하는 항목은 없습니다.</PolicyParagraph>
-        <SubsectionTitle>동의 없이 처리하는 개인정보</SubsectionTitle>
+      <PolicySection title="1. 개인정보의 처리 목적·항목·보유기간">
+        <PolicyParagraph>
+          별마루는 아래 개인정보를 별도의 동의 없이 표에 기재한 법적 근거에 따라 처리합니다.
+        </PolicyParagraph>
         <PolicyTable
           headers={['처리 항목', '처리 목적', '보유 기간', '개인정보 처리의 법적 근거']}
           minWidth={900}
           rows={[
             [
-              '별마루 Account ID, Profile ID, handle, 표시명, 소개, 이미지와 선택 프로필 정보',
-              '로그인, 계정 식별, 프로필 생성·선택과 서비스 제공',
-              'Account 정보의 처리 시점과 탈퇴 절차는 계정 삭제 안내를 따릅니다. Profile 정보는 계정 탈퇴 처리 완료일부터 30일간 보관한 뒤 파기합니다.',
-              '개인정보 보호법 제15조 제1항 제4호(계약의 이행)',
+              '계정·프로필 식별자, 사용자 이름·표시명·소개·프로필 이미지와 선택 정보',
+              '로그인·이용자 식별과 프로필 관리',
+              '탈퇴 완료일부터 30일',
+              '개인정보 보호법 제15조 제1항 제4호(계약 이행)',
             ],
             [
-              '작성 콘텐츠와 공개 범위, 관계·반응·북마크·알림 기록, 작성·변경 일시',
-              '게시글·답글·인용, 팔로우, 반응, 북마크, 알림과 연합형 소셜 네트워크 제공',
-              '콘텐츠 삭제, 관계 종료 또는 처리 목적 달성 시까지. 계정 탈퇴 처리 완료일부터 관련 게시글과 관계 기록을 30일간 보관한 뒤 파기합니다. 다른 연합 서버에 이미 전달된 공개 정보는 해당 서버의 정책에 따라 별도로 남을 수 있습니다. 계정 삭제 요청에 따른 비공개 전환은 계정 삭제 안내를 따릅니다.',
-              '개인정보 보호법 제15조 제1항 제4호(계약의 이행)',
+              '프로필과 연결된 콘텐츠·공개 범위, 팔로우·반응·북마크·알림 기록과 작성·변경 시각',
+              '콘텐츠 게시·공유와 이용자 간 상호작용',
+              '콘텐츠 삭제·관계 종료 또는 목적 달성 시까지. 탈퇴 완료일부터 30일',
+              '개인정보 보호법 제15조 제1항 제4호(계약 이행)',
             ],
             [
-              'Session ID, 접속 일시, IP 주소, 요청·오류 기록, 기기·OS·브라우저 정보',
-              '인증 유지, 오류 조사, 부정 이용 방지와 서비스 보호',
-              '계정 이용 중 보안·오류 조사 목적에 필요한 기간 보관하고, 계정 탈퇴 처리 완료일부터 30일간 보관한 뒤 파기합니다.',
-              '개인정보 보호법 제15조 제1항 제6호(안전한 서비스 운영을 위한 정당한 이익)',
+              '세션 식별자, 접속 시각·IP 주소·요청·오류 기록, 기기·운영체제·브라우저 정보',
+              '로그인 유지·오류 조사·부정 이용 방지',
+              '이용 중 보안·오류 조사에 필요한 기간. 탈퇴 완료일부터 30일',
+              '개인정보 보호법 제15조 제1항 제6호(서비스 보호를 위한 정당한 이익)',
             ],
             [
-              '아래 7절의 이용 정보, 로그인한 경우 계정·프로필 식별자',
-              '기능 이용 현황 파악, 사용자 흐름 개선, 품질 문제 확인과 제품 우선순위 결정',
-              '일반 이벤트는 수집일부터 12개월간 보유하며, 보유 기간이 지나면 지체 없이 파기합니다.',
+              '페이지 주소·유입 경로(검색어가 포함될 수 있음), 클릭·스크롤 등 이용 기록, 기기·운영체제·브라우저 정보, 접속 시각·분석 식별자',
+              '서비스 이용 분석·개선(맞춤형 광고에 사용하지 않음)',
+              '수집일부터 12개월',
               '개인정보 보호법 제15조 제1항 제6호(서비스 개선을 위한 정당한 이익)',
             ],
             [
-              '이메일 주소, 문의·요청 내용, 본인 확인 정보와 처리 결과',
-              '문의 답변, 개인정보 권리 행사와 분쟁 대응',
-              '처리 완료 후 분쟁 대응에 필요한 기간 또는 관계 법령이 정한 기간',
-              '개인정보 보호법 제15조 제1항 제4호 및 제6호, 관계 법령상 의무',
+              '이메일 주소, 문의·요청 내용, 본인 확인 정보·처리 결과',
+              '문의 답변·권리 행사·분쟁 대응',
+              '처리 완료 후 분쟁 대응에 필요한 기간 또는 법령상 기간',
+              '개인정보 보호법 제15조 제1항 제4호·제6호 및 관계 법령상 의무',
             ],
           ]}
         />
         <PolicyParagraph>
-          별마루 ID 로그인과 Kosmo 이용 과정에서 이용자가 직접 입력하거나 서비스 동작으로 생성되는
-          정보를 수집합니다. 문의를 보내는 경우 이메일을 통해 정보를 수집합니다. Web 분석 정보는
-          PostHog가 자동으로 수집합니다.
+          정보는 이용자가 직접 입력하거나 서비스 이용 중 생성되며, 문의 정보는 이메일로 수집합니다.
+          웹 이용 분석 정보는 PostHog가 자동 수집하며, 로그인한 경우 계정·프로필 식별자와 이용
+          기록을 연결합니다.
         </PolicyParagraph>
       </PolicySection>
 
       <PolicySection title="2. 개인정보의 제3자 제공">
         <PolicyParagraph>
-          별마루는 이용자의 개인정보를 원칙적으로 제3자에게 제공하지 않습니다. 이용자가 공개 또는
-          연합 가능한 범위로 프로필과 콘텐츠를 게시하거나 다른 연합 사용자와 상호작용하면, 다음
-          범위에서 ActivityPub으로 연결된 외부 서버 운영자에게 전달될 수 있습니다.
+          이용자가 공개·연합형 기능을 이용하면 다음 정보를 외부 서버에 제공할 수 있습니다.
         </PolicyParagraph>
         <PolicyTable
           headers={['제공받는 자', '제공 목적', '제공 항목', '보유 기간']}
           minWidth={860}
           rows={[
             [
-              'ActivityPub으로 연결된 외부 서버 운영자',
+              '연합형 소셜 네트워크의 외부 서버 운영자',
               '이용자가 요청한 연합형 소셜 기능 제공',
-              '공개 정보와 Account를 직접 드러내지 않는 Profile 식별자, 콘텐츠 주소, 관계·활동 정보',
-              '외부 서버 운영자의 정책에 따릅니다.',
+              '공개한 프로필·콘텐츠, 프로필 식별자·콘텐츠 주소와 관계·활동 기록',
+              '외부 서버 정책에 따르며, 보관·재공개될 수 있습니다.',
             ],
           ]}
         />
         <PolicyParagraph>
-          외부 서버의 보유와 재공개에는 해당 운영자의 정책이 적용됩니다.
-        </PolicyParagraph>
-        <PolicyParagraph>
-          법령에 근거가 있거나 적법한 절차에 따른 요청이 있는 경우에는 관계 법령에 따라 개인정보를
-          제공할 수 있습니다.
+          법령에 따른 적법한 요청이 있으면 해당 법령에 따라 제공할 수 있습니다.
         </PolicyParagraph>
       </PolicySection>
 
       <PolicySection title="3. 개인정보 처리 업무의 위탁">
-        <PolicyParagraph>
-          별마루는 원활한 서비스 제공을 위해 다음과 같이 개인정보 처리 업무를 위탁합니다.
-        </PolicyParagraph>
         <PolicyTable
           headers={['수탁자', '위탁 업무']}
           minWidth={640}
@@ -197,18 +174,12 @@ export default function PrivacyScreen() {
             ['PostHog, Inc.', '제품 이용 분석 서비스'],
           ]}
         />
-        <PolicyParagraph>
-          PostHog Cloud에서 수집되는 제품 분석 정보는 7절에 설명합니다.
-        </PolicyParagraph>
       </PolicySection>
 
       <PolicySection title="4. 개인정보의 국외 이전">
         <PolicyParagraph>
-          별마루는 서비스 제공을 위해 다음과 같이 개인정보를 국외로 이전합니다. Cloudflare의 글로벌
-          네트워크 이용 과정에서 접속·전송 정보가 미국 및 유럽경제지역으로 이전될 수 있습니다.
-          Cloudflare에 대한 국외 이전은 개인정보 보호법 제28조의8 제1항 제3호 가목에 따른 계약 이행
-          목적의 처리위탁으로 처리합니다. PostHog Cloud로의 개인정보 국외 이전은 개인정보 보호법
-          제28조의8 제1항 제5호에 따라 개인정보보호위원회가 동등한 개인정보 보호 수준을 인정한
+          Cloudflare 이전은 개인정보 보호법 제28조의8 제1항 제3호 가목에 따른 계약 이행 목적의
+          처리위탁입니다. PostHog 이전은 같은 항 제5호에 따라 보호위원회가 동등한 보호 수준을 인정한
           유럽연합으로 이루어집니다.
         </PolicyParagraph>
         <PolicyTable
@@ -231,100 +202,65 @@ export default function PrivacyScreen() {
             [
               'PostHog, Inc.\nprivacy@posthog.com',
               '독일(프랑크푸르트)',
-              '7절의 제품 분석 정보, 제품 이용 분석 목적',
+              '1절의 웹 이용 분석 정보, 서비스 이용 분석 목적',
               '서비스 이용 시 암호화된 네트워크로 지속적으로 전송',
-              '일반 이벤트는 수집일부터 12개월간 보유하며, 보유 기간이 지나면 지체 없이 파기합니다.',
+              '수집일부터 12개월',
             ],
           ]}
         />
         <PolicyParagraph>
-          이용자는 hello@byulmaru.co로 국외 이전의 거부 또는 제한을 요청할 수 있습니다. Cloudflare
-          국외 이전을 거부하면 네트워크·보안·콘텐츠 제공이 제한되어 Kosmo의 전부 또는 일부를
-          이용하기 어려울 수 있습니다. PostHog 관련 이전은 같은 연락처로 거부 또는 제한을 요청할 수
-          있고, 브라우저 추적 방지 기능으로 분석 정보 전송을 제한할 수도 있습니다. 요청 시 본인 확인
-          후 PostHog 제품 분석 정보 전송을 제한하고 처리 결과를 안내합니다. PostHog 거부·제한 시
-          제품 이용 분석만 제한되며, Kosmo의 핵심 기능 이용에는 영향을 주지 않습니다.
+          국외 이전의 거부·제한은 hello@byulmaru.co로 요청할 수 있습니다. Cloudflare 이전을 거부하면
+          네트워크·보안·콘텐츠 제공이 제한되어 서비스의 전부 또는 일부를 이용하기 어려울 수
+          있습니다. PostHog 전송은 본인 확인 후 제한하고 처리 결과를 안내합니다. 브라우저 추적 방지
+          기능으로도 분석 전송을 제한할 수 있으며, 분석 제한은 핵심 기능 이용에 영향을 주지
+          않습니다.
         </PolicyParagraph>
       </PolicySection>
 
       <PolicySection title="5. 개인정보의 파기">
         <NumberedItem number={1}>
-          보유 기간이 지나거나 처리 목적이 달성되면 지체 없이 파기합니다. 다만 진행 중인 신고·분쟁
-          또는 수사기관 요청의 처리에 필요한 관련 기록만 예외적으로 필요성이 있는 동안 보관하고,
-          필요성이 끝나면 지체 없이 파기합니다.
-        </NumberedItem>
-        <NumberedItem number={2}>
-          관계 법령에 따라 보관해야 하는 정보는 다른 개인정보와 분리해 보관한 뒤 기간이 끝나면
+          보유 기간이 지나거나 처리 목적이 달성되면 지체 없이 파기합니다. 다만 진행 중인 신고·분쟁·
+          수사기관 요청에 필요한 기록은 필요한 기간만 보관하고, 필요성이 끝나면 지체 없이
           파기합니다.
         </NumberedItem>
+        <NumberedItem number={2}>
+          법령상 보관 대상은 다른 개인정보와 분리해 정해진 기간 동안 보관한 뒤 파기합니다.
+        </NumberedItem>
         <NumberedItem number={3}>
-          전자 파일과 데이터베이스 기록은 복구하기 어려운 방법으로 삭제하고, 백업은 정해진 순환
-          주기에 따라 삭제합니다.
+          전자 기록은 복구하기 어렵게 삭제하며, 백업은 정해진 순환 주기에 따라 삭제합니다.
         </NumberedItem>
       </PolicySection>
 
       <PolicySection title="6. 이용자와 법정대리인의 권리">
         <PolicyParagraph>
-          이용자와 법정대리인은 개인정보의 열람, 전송, 정정·삭제, 처리정지 또는 동의 철회를 요청할
-          수 있습니다. Kosmo 계정 탈퇴는 탈퇴하려는 Kosmo 계정으로 로그인한 뒤 Kosmo 내 설정에서
-          신청해 주세요. 해당 경로를 이용할 수 없는 경우 아래 이메일로 계정 탈퇴를 요청할 수 있으며,
-          이메일 요청은 계정 소유자 확인 후 처리합니다. 그 밖의 권리 행사 요청은 아래 연락처로
-          접수할 수 있으며, 본인 또는 정당한 대리인인지 확인한 뒤 관계 법령에 따라 처리합니다.
-          법령이 정한 사유가 있는 경우 일부 요청이 제한될 수 있으며 그 사유를 안내합니다.
+          이용자와 법정대리인은 개인정보의 열람·전송·정정·삭제·처리정지 또는 동의 철회를 요청할 수
+          있습니다. 요청은 아래 이메일로 접수하며, 본인 또는 정당한 대리인인지 확인한 뒤 법령에 따라
+          처리합니다. 법령상 제한 사유가 있으면 이유를 안내합니다.
         </PolicyParagraph>
         <PolicyEmailLink />
-        <PolicyParagraph>
-          PostHog 분석 데이터의 열람·삭제·처리정지도 같은 연락처로 요청할 수 있습니다.
-        </PolicyParagraph>
       </PolicySection>
 
-      <PolicySection title="7. 자동으로 저장되는 정보">
+      <PolicySection title="7. 자동 수집 장치의 설치·운영 및 거부">
         <PolicyParagraph>
-          별마루는 로그인 유지, 이용 편의와 서비스의 안전한 운영을 위해 이용자의 브라우저에 정보를
-          저장할 수 있습니다. 로그인 유지와 보안을 위한 cookie 또는 브라우저 저장소를 차단하거나
-          삭제하면 로그인 유지 등 일부 기능이 제한될 수 있습니다. PostHog 분석 식별자는 cookie 또는
-          localStorage에 저장될 수 있습니다. 브라우저 추적 차단 기능이나 해당 저장을 제한하면 분석
-          정보 전송이 제한될 수 있으며, Kosmo의 핵심 기능은 계속 이용할 수 있습니다.
+          Kosmo는 로그인 유지·보안과 이용 분석을 위해 쿠키 또는 브라우저 저장소를 사용할 수
+          있습니다. 브라우저 설정으로 저장을 차단하거나 삭제할 수 있으며, 로그인 유지 등 일부 기능이
+          제한될 수 있습니다. 브라우저 추적 방지 기능으로 분석 전송을 제한해도 핵심 기능은 계속
+          이용할 수 있습니다.
         </PolicyParagraph>
-        <SubsectionTitle>PostHog 제품 분석</SubsectionTitle>
-        <PolicyTable
-          headers={['구분', '내용']}
-          minWidth={720}
-          rows={[
-            ['운영 주체', 'PostHog, Inc.가 제공하는 PostHog Cloud'],
-            [
-              '수집 항목',
-              '방문한 페이지 주소와 유입 경로, 검색어가 포함될 수 있는 URL, 클릭·스크롤 등 서비스 이용 기록, 기기·운영체제·브라우저 정보, 접속 일시, 분석용 식별자',
-            ],
-            ['로그인 연결', '로그인한 경우 계정·프로필 식별자와 서비스 이용 기록을 연결합니다.'],
-            [
-              '이용 목적',
-              '서비스 이용을 분석하고 제품을 개선하는 데 사용하며, 맞춤형 광고에는 사용하지 않습니다.',
-            ],
-          ]}
-        />
       </PolicySection>
 
       <PolicySection title="8. 개인정보의 안전성 확보">
         <PolicyParagraph>
-          별마루는 접근 권한 최소화, 전송 구간 암호화, 비밀정보 분리, 접속 기록 관리, 취약점과
-          권한의 정기 점검, 침해사고 대응 절차 등 개인정보의 분실·도난·유출·위조·변조·훼손을
-          방지하기 위한 관리적·기술적 조치를 시행합니다.
+          개인정보 접근권한 최소화, 전송 구간 암호화, 비밀정보 분리, 접속기록 관리, 취약점·권한의
+          정기 점검과 침해사고 대응 절차를 운영합니다.
         </PolicyParagraph>
       </PolicySection>
 
-      <PolicySection title="9. 개인정보 보호책임자와 문의">
+      <PolicySection title="9. 개인정보 보호책임자 및 권익침해 구제">
         <PolicyBullet>개인정보 보호책임자: 박지유</PolicyBullet>
         <PolicyEmailLink />
         <PolicyParagraph>
-          개인정보 처리와 관련한 문의, 불만 또는 권리 행사 요청은 위 연락처로 접수할 수 있습니다.
-        </PolicyParagraph>
-      </PolicySection>
-
-      <PolicySection title="10. 권익침해 구제 방법">
-        <PolicyParagraph>
-          이용자는 개인정보 침해에 대한 상담이나 분쟁 조정을 위해 다음 기관에 도움을 요청할 수
-          있습니다.
+          개인정보 침해 상담·분쟁 조정은 아래 기관에 요청할 수 있습니다.
         </PolicyParagraph>
         <PolicyBullet>개인정보침해신고센터: 국번 없이 118</PolicyBullet>
         <PolicyBullet>개인정보분쟁조정위원회: 1833-6972</PolicyBullet>
@@ -332,21 +268,21 @@ export default function PrivacyScreen() {
         <PolicyBullet>경찰청: 국번 없이 182</PolicyBullet>
       </PolicySection>
 
-      <PolicySection title="11. 개인정보 처리방침의 변경">
+      <PolicySection title="10. 개인정보 처리방침의 변경">
         <PolicyParagraph>
-          본 방침이 변경되는 경우 변경 내용과 시행일을 서비스에 공개합니다. 이용자 권리에 중요한
-          변경은 시행일 전에 알립니다.
+          변경 내용과 시행일을 서비스에 공개합니다. 이용자 권리에 중요한 변경은 시행일 전에
+          알립니다.
         </PolicyParagraph>
       </PolicySection>
 
       <NavigationLink href={'/privacy/2026-09-09' as Href}>
         <Pressable
-          accessibilityLabel="이전 개인정보 처리방침 (2026년 9월 9일부터 2026년 10월 11일까지)"
+          accessibilityLabel="이전 개인정보 처리방침 (2026년 9월 9일부터 2026년 10월 12일까지)"
           accessibilityRole="link"
           style={styles.previousPolicyLinkControl}
         >
           <Text style={[styles.previousPolicyLink, { color: theme.textSecondary }]}>
-            이전 개인정보 처리방침 (2026년 9월 9일부터 2026년 10월 11일까지)
+            이전 개인정보 처리방침 (2026년 9월 9일부터 2026년 10월 12일까지)
           </Text>
         </Pressable>
       </NavigationLink>
@@ -355,11 +291,6 @@ export default function PrivacyScreen() {
 }
 
 const styles = StyleSheet.create({
-  subsectionTitle: {
-    fontFamily: fontFamilies.ui,
-    fontWeight: '800',
-    ...typography.md,
-  },
   bulletRow: { alignItems: 'flex-start', flexDirection: 'row', gap: spacing.sm },
   bulletMark: { fontFamily: fontFamilies.ui, ...typography.md },
   bulletText: { flex: 1, fontFamily: fontFamilies.ui, ...typography.md },
