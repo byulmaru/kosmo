@@ -1712,6 +1712,12 @@ describe('Notification GraphQL Node boundary', () => {
       title: 'Account notice',
     });
 
+    const foreignAccount = await createAuthenticatedSession();
+    await createOperationalNotification(foreignAccount.account.id, {
+      href: '/foreign-account-notice',
+      title: 'Foreign account notice',
+    });
+
     const selectedElsewhere = await loadUnreadNotificationCounts(profileIds, auth.token);
     assertNoGraphQLErrors(selectedElsewhere);
     assert.deepEqual(
