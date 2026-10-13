@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { before, describe, it, mock } from 'node:test';
+import { afterEach, before, describe, it, mock } from 'node:test';
 import type { GestureResponderEvent, View } from 'react-native';
 import type { createPostDetailBackgroundResponder as CreatePostDetailBackgroundResponder } from './postDetailBackgroundResponder';
 
@@ -36,6 +36,10 @@ function setup() {
 }
 
 describe('createPostDetailBackgroundResponder', () => {
+  afterEach(() => {
+    platform.OS = 'web';
+  });
+
   it('claims only direct background touches and yields to scrolling', () => {
     platform.OS = 'web';
     const { responder } = setup();
@@ -112,24 +116,25 @@ describe('createPostDetailBackgroundResponder', () => {
     assert.equal(presses(), 1);
   });
 
-  it('uses the Native host handle when responder negotiation has no currentTarget', () => {
-    platform.OS = 'ios';
-    const { responder, presses } = setup();
-    const nativeTouch = (target: number) =>
-      ({
-        ...touch(),
-        currentTarget: null,
-        nativeEvent: { ...touch().nativeEvent, target },
-      }) as unknown as GestureResponderEvent;
-    assert.equal(responder.onStartShouldSetResponder?.(nativeTouch(10)), false);
-    responder.ref({ nativeTag: 10 } as unknown as View);
-    assert.equal(responder.onStartShouldSetResponder?.(nativeTouch(10)), true);
-    assert.equal(responder.onStartShouldSetResponder?.(nativeTouch(11)), false);
-    responder.onResponderGrant?.(nativeTouch(10));
-    responder.onResponderRelease?.(nativeTouch(10));
-    assert.equal(presses(), 1);
-    responder.ref(null);
-    assert.equal(responder.onStartShouldSetResponder?.(nativeTouch(10)), false);
-    platform.OS = 'web';
-  });
+  for (const os of ['ios', 'android']) {
+    it(`uses the ${os} host handle when responder negotiation has no currentTarget`, () => {
+      platform.OS = os;
+      const { responder, presses } = setup();
+      const nativeTouch = (target: number) =>
+        ({
+          ...touch(),
+          currentTarget: null,
+          nativeEvent: { ...touch().nativeEvent, target },
+        }) as unknown as GestureResponderEvent;
+      assert.equal(responder.onStartShouldSetResponder?.(nativeTouch(10)), false);
+      responder.ref({ nativeTag: 10 } as unknown as View);
+      assert.equal(responder.onStartShouldSetResponder?.(nativeTouch(10)), true);
+      assert.equal(responder.onStartShouldSetResponder?.(nativeTouch(11)), false);
+      responder.onResponderGrant?.(nativeTouch(10));
+      responder.onResponderRelease?.(nativeTouch(10));
+      assert.equal(presses(), 1);
+      responder.ref(null);
+      assert.equal(responder.onStartShouldSetResponder?.(nativeTouch(10)), false);
+    });
+  }
 });
