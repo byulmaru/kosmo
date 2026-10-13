@@ -60,5 +60,9 @@ export const DirectSelection: Story = {
     await userEvent.click(directOption);
 
     expect(args.onVisibilityChange).toHaveBeenLastCalledWith('DIRECT');
+
+    await userEvent.click(canvas.getByRole('button', { name: /^공개 범위:/ }));
+    const selectedDirectOption = canvas.getByRole('menuitemradio', { name: '언급한 프로필만' });
+    expect(selectedDirectOption).toHaveAttribute('aria-checked', 'true');
   },
 };
