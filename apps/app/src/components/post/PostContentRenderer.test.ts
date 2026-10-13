@@ -15,9 +15,14 @@ const mockModule = (specifier: string | URL, exports: object) =>
     exports,
   } as unknown as Parameters<typeof mock.module>[1]);
 const require = createRequire(import.meta.url);
+const openedURLs: string[] = [];
 
 mockModule('react-native', {
-  Linking: { openURL: async () => undefined },
+  Linking: {
+    openURL: async (url: string) => {
+      openedURLs.push(url);
+    },
+  },
   Platform: { OS: 'android' },
   Pressable: 'Pressable',
   StyleSheet: {
@@ -95,9 +100,55 @@ afterEach(async () => {
     renderer = null;
   }
   mock.restoreAll();
+  openedURLs.length = 0;
 });
 
 describe('PostContentRenderer', () => {
+  it('일반 링크는 외부 URL을 열고 부모 본문으로 이벤트를 전파하지 않는다', async () => {
+    await render({
+      bodyText: '외부 링크',
+      contentWarning: null,
+      document: {
+        version: 1,
+        summary: null,
+        body: {
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                {
+                  type: 'text',
+                  text: '외부 링크',
+                  marks: [{ type: 'link', attrs: { href: 'https://example.com/post' } }],
+                },
+              ],
+            },
+          ],
+        },
+      },
+      media: [],
+      mentionedProfiles: [],
+      onBodyPress: () => assert.fail('부모 본문 이동은 실행하면 안 된다'),
+      postId: 'post-external-link',
+    });
+    const link = rendered('Text').find((node) => node.props.accessibilityRole === 'link');
+    assert.ok(link);
+    let stopped = false;
+    let prevented = false;
+    link.props.onPress({
+      stopPropagation: () => {
+        stopped = true;
+      },
+      preventDefault: () => {
+        prevented = true;
+      },
+    });
+    assert.equal(stopped, true);
+    assert.equal(prevented, true);
+    assert.deepEqual(openedURLs, ['https://example.com/post']);
+  });
+
   it('content warning row exposes its summary, metadata, action, and expanded state', async () => {
     await render({
       bodyText: '원문 본문',

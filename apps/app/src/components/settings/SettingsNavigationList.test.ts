@@ -121,7 +121,8 @@ let SettingsNavigationList: ComponentType<{
     | 'following-import'
     | 'mute-and-block'
     | 'theme'
-    | 'info';
+    | 'info'
+    | 'account-deletion';
 }>;
 let SettingsMuteAndBlockNavigation: ComponentType<{
   selected?: 'blocked-profiles' | 'muted-profiles';
@@ -190,6 +191,12 @@ describe('SettingsNavigationList', () => {
     assert.ok(texts().includes('팔로잉 가져오기'));
     assert.equal(links[4].props.accessibilityLabel, '뮤트 및 차단 설정 열기');
     assert.equal(links[4].props.href, '/settings/mute-and-block');
+    assert.equal(links[5].props.accessibilityLabel, '테마 설정 열기, 시스템');
+    assert.equal(links[5].props.href, '/settings/theme');
+    assert.equal(links[6].props.accessibilityLabel, '정보 설정 열기');
+    assert.equal(links[6].props.href, '/settings/info');
+    assert.equal(links[7].props.accessibilityLabel, '코스모 탈퇴 설정 열기');
+    assert.equal(links[7].props.href, '/settings/account-deletion');
     assert.equal(
       links.some((node) => node.props.testID === 'native-notification-settings'),
       false,
@@ -441,6 +448,15 @@ describe('SettingsNavigationList', () => {
     assert.equal(info.props['aria-current'], undefined);
     assert.deepEqual(info.props.accessibilityState, { selected: true });
   });
+
+  it('코스모 탈퇴는 마지막 root destination으로 current 상태를 전달한다', async () => {
+    await render({ pathname: '/settings/account-deletion', selected: 'account-deletion' });
+
+    const links = rendered('Pressable');
+    const deletion = links[links.length - 1];
+    assert.equal(deletion.props['aria-current'], 'page');
+    assert.deepEqual(deletion.props.accessibilityState, { selected: true });
+  });
 });
 
 async function render(
@@ -452,7 +468,8 @@ async function render(
       | 'following-import'
       | 'mute-and-block'
       | 'theme'
-      | 'info';
+      | 'info'
+      | 'account-deletion';
   } = {},
 ) {
   await act(async () => {

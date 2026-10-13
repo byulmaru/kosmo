@@ -52,7 +52,6 @@ let currentPathname = '/home';
 let consumeIntent: ((pathname: string) => boolean) | undefined;
 let linkPress: LinkPress | undefined;
 let composedLinkPress: LinkPress | undefined;
-let rootLinkPress: LinkPress | undefined;
 let renderer: ReactTestRenderer | null = null;
 
 const mockModule = (specifier: string | URL, exports: object) =>
@@ -62,17 +61,27 @@ const mockModule = (specifier: string | URL, exports: object) =>
 
 mockModule('expo-router', {
   Link: (props: RenderedLinkProps & { children: ReactNode }) => {
-    const childPress = props.children.props.onPress;
-    linkPress = childPress;
-    composedLinkPress = (event) => {
-      childPress?.(event as unknown as Parameters<LinkPress>[0]);
-      if (shouldHandleNavigation(event as unknown as LinkPressEvent)) {
+    const navigate = (event: LinkPressEvent) => {
+      if (shouldHandleNavigation(event)) {
         event.preventDefault();
         navigations.push(props.href);
       }
     };
-    rootLinkPress = props.onPress;
-    return createElement(Slot, { href: props.href, style: undefined }, props.children);
+    const handlePress = (event: Parameters<LinkPress>[0]) => {
+      props.onPress?.(event);
+      navigate(event as unknown as LinkPressEvent);
+    };
+    return createElement(
+      Slot,
+      {
+        href: props.href,
+        style: undefined,
+        ...(platform.OS === 'web'
+          ? { onClick: handlePress, onPress: props.onPress ?? navigate }
+          : { onPress: handlePress }),
+      },
+      props.children,
+    );
   },
   useRouter: () => ({
     navigate: (href: string) => {
@@ -108,7 +117,6 @@ afterEach(async () => {
   }
   linkPress = undefined;
   composedLinkPress = undefined;
-  rootLinkPress = undefined;
   consumeIntent = undefined;
   currentPathname = '/home';
   navigations.length = 0;
@@ -189,12 +197,28 @@ const renderLink = async (
       ),
     );
   });
-  assert.equal(rootLinkPress, undefined);
+  const control = renderer!.root.findAll((node) => (node.type as unknown) === 'Pressable')[0]!;
+  linkPress = control.props.onPress;
+  composedLinkPress = control.props.onClick ?? control.props.onPress;
   assert.ok(linkPress);
   assert.ok(composedLinkPress);
 };
 
 describe('NavigationLink', () => {
+  it('Web inline link는 Slot의 click에서도 자식의 전파 차단 후 목적지로 한 번만 이동한다', async () => {
+    const stopPropagation = mock.fn();
+    await renderLink(() => false, undefined, {
+      child: createElement('Pressable', {
+        onPress: (event: { stopPropagation: () => void }) => event.stopPropagation(),
+      }),
+      href: '/@mentioned-profile',
+    });
+    const event = { ...createPressEvent(), stopPropagation };
+    await act(async () => composedLinkPress?.(event as unknown as Parameters<LinkPress>[0]));
+    assert.equal(stopPropagation.mock.callCount(), 1);
+    assert.deepEqual(navigations, ['/@mentioned-profile']);
+  });
+
   it('Slot을 거쳐도 자식 ref로 포커스를 복원하고 unmount 시 해제한다', async () => {
     const focus = mock.fn();
     const childRef = createRef<View>();

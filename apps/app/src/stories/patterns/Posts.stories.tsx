@@ -2386,6 +2386,7 @@ function ReplyComposerContractContents({
       onPostCreated={onPostCreated}
       profile={composerProfile}
       replyParentId="post-parent"
+      replyParentVisibility="UNLISTED"
     />
   );
 }
@@ -2509,6 +2510,7 @@ function ReplyComposerContextIsolationContents({
       onPostCreated={onPostCreated}
       profile={alternateProfile ? data.alternateComposerProfile : data.composerProfile}
       replyParentId={parentId}
+      replyParentVisibility="UNLISTED"
     />
   );
 }
@@ -7349,9 +7351,7 @@ export const ComposerVisibilityAndSubmitInteraction: Story = {
 
     await userEvent.click(canvas.getByRole('button', { name: '공개 범위: 조용한 공개' }));
     menu = await canvas.findByRole('menu', { name: '공개 범위 선택' });
-    expect(
-      within(menu).queryByRole('menuitemradio', { name: /^언급한 계정만/ }),
-    ).not.toBeInTheDocument();
+    expect(within(menu).getByRole('menuitemradio', { name: '지정 멤버만' })).toBeVisible();
     await userEvent.click(within(menu).getByRole('menuitemradio', { name: /^공개/ }));
     await userEvent.click(
       within(within(menu).getByRole('group', { name: '인용 허용 정책' })).getByRole(
@@ -7421,8 +7421,8 @@ export const ComposerProfileDefaultVisibilitySeed: Story = {
     const menu = await canvas.findByRole('menu', { name: '공개 범위 선택' });
     expect(
       within(within(menu).getByRole('group', { name: '공개 범위' })).getAllByRole('menuitemradio'),
-    ).toHaveLength(3);
-    expect(within(menu).queryByRole('menuitemradio', { name: /^언급한 계정만/ })).toBeNull();
+    ).toHaveLength(4);
+    expect(within(menu).getByRole('menuitemradio', { name: '지정 멤버만' })).toBeVisible();
   },
   render: () => <ComposerStory />,
 };
@@ -7631,7 +7631,7 @@ export const ComposerReplyMutationContract: Story = {
 
     await userEvent.click(canvas.getByRole('button', { name: '공개 범위: 조용한 공개' }));
     const menu = await canvas.findByRole('menu', { name: '공개 범위 선택' });
-    expect(within(menu).queryByRole('menuitemradio', { name: /언급한 계정만/ })).toBeNull();
+    expect(within(menu).getByRole('menuitemradio', { name: '지정 멤버만' })).toBeVisible();
     await userEvent.click(within(menu).getByRole('menuitemradio', { name: /^팔로워만/ }));
     await userEvent.type(body, '부모 게시물에 작성한 답글입니다.');
     await userEvent.click(canvas.getByRole('button', { name: '답글 게시' }));
@@ -7661,13 +7661,13 @@ export const ComposerReplyMutationContract: Story = {
 export const ComposerReplyProfileDefaultVisibilitySeed: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    expect(canvas.getByRole('button', { name: '공개 범위: 공개' })).toBeVisible();
-    await userEvent.click(canvas.getByRole('button', { name: '공개 범위: 공개' }));
+    expect(canvas.getByRole('button', { name: '공개 범위: 조용한 공개' })).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: '공개 범위: 조용한 공개' }));
     const menu = await canvas.findByRole('menu', { name: '공개 범위 선택' });
     expect(
       within(within(menu).getByRole('group', { name: '공개 범위' })).getAllByRole('menuitemradio'),
-    ).toHaveLength(3);
-    expect(within(menu).queryByRole('menuitemradio', { name: /^언급한 계정만/ })).toBeNull();
+    ).toHaveLength(4);
+    expect(within(menu).getByRole('menuitemradio', { name: '지정 멤버만' })).toBeVisible();
   },
   render: () => <ReplyComposerContractStory defaultPostVisibility="PUBLIC" />,
 };

@@ -100,12 +100,14 @@ export const materializeCoordinatedNotification = async (
       .select({
         notificationId: NotificationQuoteJudgments.representativeNotificationId,
         outcome: NotificationQuoteJudgments.outcome,
+        representativeKind: NotificationQuoteJudgments.representativeKind,
       })
       .from(NotificationQuoteJudgments)
       .where(judgmentCondition)
       .limit(1)
       .then((rows) => rows[0]);
-    return judgment?.outcome === QuoteNotificationJudgmentOutcome.EMITTED
+    return judgment?.outcome === QuoteNotificationJudgmentOutcome.EMITTED &&
+      judgment.representativeKind === kind
       ? judgment.notificationId
       : null;
   }
@@ -227,6 +229,7 @@ export const materializeReplyNotificationIfEligible = async (
               eq(ReplyAuthors.state, ProfileState.ACTIVE),
               ne(ReplyAuthorInstances.state, InstanceState.SUSPENDED),
             )!,
+            postContentId: Posts.currentContentId,
             postState: Posts.state,
             postVisibility: Posts.visibility,
           },
