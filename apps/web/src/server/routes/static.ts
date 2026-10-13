@@ -8,6 +8,7 @@ const STATIC_ROOT = process.env.EXPO_WEB_ROOT ?? '../app/dist';
 const PUBLIC_POLICY_PATHS = new Set([
   '/privacy',
   '/privacy/2026-09-09',
+  '/privacy/changes/2026-10-13',
   '/account-deletion',
   '/child-safety',
 ]);
