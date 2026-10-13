@@ -32,6 +32,7 @@ import {
   updatePostComposerDraftSelection,
   updatePostComposerMentionRanges,
 } from './postComposerState';
+import type { PostVisibility } from '@kosmo/core/enums';
 import type { ReactNode, RefObject } from 'react';
 import type { TextInput } from 'react-native';
 import type { PostComposer_profile$key } from './__generated__/PostComposer_profile.graphql';
@@ -147,9 +148,13 @@ type PostComposerPresentationProps =
     };
 
 type PostComposerRelationshipProps =
-  | { replyParentId: string; repostSourceId?: never }
-  | { replyParentId?: never; repostSourceId: string }
-  | { replyParentId?: never; repostSourceId?: never };
+  | {
+      replyParentId: string;
+      replyParentVisibility: PostVisibility | '%future added value';
+      repostSourceId?: never;
+    }
+  | { replyParentId?: never; replyParentVisibility?: never; repostSourceId: string }
+  | { replyParentId?: never; replyParentVisibility?: never; repostSourceId?: never };
 
 export type PostComposerControllerProps = PostComposerBaseProps &
   PostComposerPresentationProps &
@@ -159,6 +164,7 @@ export function PostComposerController({
   profile: profileKey,
   profiles = [],
   replyParentId,
+  replyParentVisibility,
   repostSourceId,
   ...props
 }: PostComposerControllerProps) {
@@ -179,7 +185,7 @@ export function PostComposerController({
     contextGenerationRef.current += 1;
   }
   const relationshipProps: PostComposerRelationshipProps = replyParentId
-    ? { replyParentId }
+    ? { replyParentId, replyParentVisibility }
     : repostSourceId
       ? { repostSourceId }
       : {};
@@ -236,6 +242,7 @@ function PostComposerContents({
   replyContext,
   registerNativeBackHandler,
   replyParentId,
+  replyParentVisibility,
   repostSourceId,
 }: PostComposerContentsProps) {
   const mentionSearchEnabled = useFeatureFlag('post-composer-mention-search');
@@ -326,7 +333,10 @@ function PostComposerContents({
   const [contentWarningExpanded, setContentWarningExpanded] = useState(
     () => initialContentWarning !== null && initialContentWarning !== undefined,
   );
-  const defaultVisibility = resolvePostComposerVisibility(profile.private?.defaultPostVisibility);
+  const defaultVisibility = resolvePostComposerVisibility(
+    profile.private?.defaultPostVisibility,
+    replyParentVisibility,
+  );
   const [visibility, setVisibility] = useState<Visibility>(() => defaultVisibility);
   const [quotePolicy, setQuotePolicy] = useState<PostComposerQuotePolicy>(
     defaultPostComposerQuotePolicy,
@@ -462,7 +472,7 @@ function PostComposerContents({
           return;
         }
         setSubmitting(false);
-        const createdPost = response.createPost?.post;
+        const createdPost = response?.createPost?.post;
         if (!createdPost) {
           showToast(submitFailureMessage, { tone: 'danger' });
           return;
@@ -480,7 +490,12 @@ function PostComposerContents({
         setMedia(emptyPostComposerMediaValue);
         setMediaGeneration((generation) => generation + 1);
         setSelectedProfileKey(null);
-        setVisibility(resolvePostComposerVisibility(globalProfile.private?.defaultPostVisibility));
+        setVisibility(
+          resolvePostComposerVisibility(
+            globalProfile.private?.defaultPostVisibility,
+            replyParentVisibility,
+          ),
+        );
         setQuotePolicy(defaultPostComposerQuotePolicy);
         editor.current?.focus();
         submittedCallback?.(createdPost);

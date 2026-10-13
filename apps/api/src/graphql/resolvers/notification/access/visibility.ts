@@ -42,15 +42,15 @@ export const visibleViewerNotificationWhere = ({
     ctx.session && profileId !== null
       ? and(
           profileId === undefined ? undefined : eq(Notifications.recipientProfileId, profileId),
-          visibleNotificationWhere({ ctx }),
+          notificationMembershipWhere(ctx.session.accountId, db),
         )
       : undefined;
   const operationalNotifications = ctx.session
-    ? and(
-        eq(Notifications.recipientAccountId, ctx.session.accountId),
-        notificationSourceAvailabilityWhere(db, { includeRecipientAvailability: true }),
-      )
+    ? eq(Notifications.recipientAccountId, ctx.session.accountId)
     : undefined;
 
-  return or(profileNotifications, operationalNotifications) ?? sql`1=0`;
+  return and(
+    or(profileNotifications, operationalNotifications) ?? sql`1=0`,
+    notificationSourceAvailabilityWhere(db, { includeRecipientAvailability: true }),
+  )!;
 };

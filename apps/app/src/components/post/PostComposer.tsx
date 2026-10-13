@@ -58,6 +58,7 @@ const postComposerTargetVisibilityValues = [
   PostVisibility.PUBLIC,
   PostVisibility.UNLISTED,
   PostVisibility.FOLLOWERS,
+  PostVisibility.DIRECT,
 ] as const;
 
 export type PostComposerVisibility = (typeof postComposerTargetVisibilityValues)[number];

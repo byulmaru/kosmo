@@ -159,7 +159,7 @@ const meta = {
     showSubmit: { control: 'boolean' },
     submitting: { control: 'boolean' },
     surface: { control: 'inline-radio', options: ['rail', 'overlay'] },
-    visibility: { control: 'select', options: ['PUBLIC', 'UNLISTED', 'FOLLOWERS'] },
+    visibility: { control: 'select', options: ['PUBLIC', 'UNLISTED', 'FOLLOWERS', 'DIRECT'] },
   },
   component: PostComposer,
   excludeStories: [
@@ -1115,8 +1115,11 @@ export const MobilePlaygroundContract: Story = {
     const trigger = canvas.getByRole('button', { name: '공개 범위: 조용한 공개' });
     const visibilityGroup = within(menu).getByRole('group', { name: '공개 범위' });
     const quoteGroup = within(menu).getByRole('group', { name: '인용 허용 정책' });
-    expect(within(visibilityGroup).getAllByRole('menuitemradio')).toHaveLength(3);
+    expect(within(visibilityGroup).getAllByRole('menuitemradio')).toHaveLength(4);
     expect(within(quoteGroup).getAllByRole('menuitemradio')).toHaveLength(3);
+    expect(
+      within(visibilityGroup).getByRole('menuitemradio', { name: '지정 멤버만' }),
+    ).toBeVisible();
     expect(menu.getBoundingClientRect().right).toBe(trigger.getBoundingClientRect().right - 16);
 
     await userEvent.click(within(menu).getByRole('menuitemradio', { name: '공개' }));
