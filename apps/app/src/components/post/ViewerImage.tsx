@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 import { radius } from '@/theme/tokens';
-import type { ImageLoadEvent } from 'react-native';
+import type { ImageLoadEvent, LayoutRectangle } from 'react-native';
 import type { ZoomAccessibilityProps } from './PostMediaViewerZoomAccessibility';
 
 export type ImageStatus = 'loading' | 'ready' | 'error';
@@ -9,6 +9,7 @@ export type ImageSize = Readonly<{ height: number; width: number }>;
 
 export type ZoomableImageProps = Readonly<{
   accessibilityLabel: string;
+  onBlankAreaTap?: () => void;
   onStatus: (status: ImageStatus) => void;
   onZoomedChange: (zoomed: boolean) => void;
   reducedMotion: boolean;
@@ -20,6 +21,7 @@ export type ZoomableImageProps = Readonly<{
 export function ViewerImage({
   accessibilityLabel,
   testID = 'post-media-viewer-image',
+  onFrameLayout,
   onStatus,
   status,
   url,
@@ -28,6 +30,7 @@ export function ViewerImage({
 }: Readonly<{
   accessibilityLabel: string;
   testID?: string;
+  onFrameLayout?: (frame: LayoutRectangle) => void;
   onStatus: (status: ImageStatus) => void;
   status: ImageStatus;
   url: string;
@@ -84,6 +87,7 @@ export function ViewerImage({
       accessible={hasZoomAccessibility ? true : undefined}
       accessibilityLabel={hasZoomAccessibility ? accessibilityLabel : undefined}
       accessibilityRole={hasZoomAccessibility ? 'image' : undefined}
+      onLayout={(event) => onFrameLayout?.(event.nativeEvent.layout)}
       style={frameSize ? [styles.imageFrame, frameSize] : styles.imageFrameFallback}
     >
       <Image

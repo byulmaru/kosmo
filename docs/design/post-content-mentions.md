@@ -30,6 +30,7 @@
 
 ## 검증 경계
 
+- 타임라인 본문과 결합한 Web interaction 검증은 멘션 클릭·Enter 실행이 대상 Profile로만 이동하고 부모 본문 이동을 실행하지 않는지 확인한다. 일반 본문과 비활성 fallback 클릭은 기존 게시글 상세 이동을 유지한다.
 - component 또는 Storybook 검증은 valid·repeated·서로 다른 Profile identity, 일반 link, unresolved fallback, unavailable/deleted Profile, 긴 handle, Light·Dark와 link/non-link focus 상태를 확인한다. 전용 `PostContentMention` component test는 relative handle 표시, Profile route, parent propagation 차단, unavailable fallback, `interactive=false`와 inline link의 role·accessible name을 실행 검증한다. Renderer test는 exact Profile ID lookup, document occurrence order, fallback 결과와 inline 표현, 필요한 `numberOfLines` 전달을 확인한다.
 - API/integration 검증은 현재 revision의 node와 Profile 관계가 함께 조회되고 기존 Profile visibility predicate와 Post visibility·eligibility가 유지되는지 확인한다. viewer별 Profile Domain Block 정책을 이 change의 완료 증거로 주장하지 않으며, 과거 revision이나 관계가 없는 fallback에서 Profile 이동을 만들지 않는다.
 - Web runtime에서는 keyboard 이동, screen reader name/role, focus indicator와 reflow를 확인한다. Native inline Mention의 rendered role·name·route props는 component behavior evidence일 뿐 실제 touch target, focus boundary, VoiceOver·TalkBack focus·announcement runtime 완료를 의미하지 않는다. 이 component-specific inline exception은 다른 interactive control의 global accessibility baseline을 대체하지 않는다.

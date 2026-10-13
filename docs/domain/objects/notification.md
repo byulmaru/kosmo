@@ -194,19 +194,15 @@ Recipient Profile은 Related Post의 direct Repost Source Author Profile이다. 
 - Recipient가 Quote와 direct Repost Source를 각각 조회할 수 있어야 새 Quote Notification을 생성한다.
   둘 중 하나라도 더 이상 조회할 수 없으면 목록, Unread count, Node 조회와 읽음 처리에서 없는 것으로 취급한다.
   Source를 조회할 수 없어도 Quote 자체를 조회할 수 있다는 Post 정책은 바꾸지 않는다.
-- 같은 Quote Post가 같은 Recipient Profile에게 Reply, Quote, Mention Notification을 동시에 발생시키면
-  각 Type의 생성·Mute 조건을 먼저 적용한 뒤 남은 후보에서 Reply, Quote, Mention 순서로 한 건만 제공한다.
-  Recipient가 서로 다르면 각각 판정한다.
-- 이 순서는 같은 글·수신자의 알림에서 수신자의 글에 생긴 답글·인용을 대표 정보로 전달하려는 선택이다.
-  Mention의 중요도를 낮추거나 Post 구조가 순서를 강제한다는 뜻은 아니다. 알림 이유와 게시글 안의 인용 내용
-  표시는 구분한다. 선택 배경과 이번 재검토의 이유는 [ADR 0028](../decisions/0028-quote-notification-policy.md#2026-09-09-재검토에서-확정한-유지-이유)에 기록한다.
-- 같은 Quote·Recipient의 Quote와 Mention이 동시에 생성 후보이면 각 Type의 생성·Mute 조건을 먼저
-  적용한다. 둘 다 남으면 Quote Notification 한 건만 제공한다. Reply도 후보이면 위 세 Type의 규칙을 적용한다.
-  인용 관계가 승인 대기여서 Mention Notification이 먼저 생성됐다면 이후 승인돼도 별도 Quote Notification을
-  추가하거나 기존 Mention의 Type을 교체하지 않는다. 이 승인 처리로 기존 Notification과 Read State·최초 읽음
-  시각을 변경하지 않는다. 다른 사유에 따른 조회·정리는 해당 Type의 기존 정책을 따른다.
-- 같은 Quote·Recipient의 Reply Notification이 먼저 생성된 경우에도 Mention과 동일하게 처리한다.
-  이후 Quote 승인으로 알림을 추가하지 않고 기존 Reply Notification과 Read State·최초 읽음 시각을 보존한다.
+- 같은 Quote Post가 같은 Recipient Profile에게 Reply, Mention, Quote Notification을 발생시키면 각 Type의
+  생성·Mute 조건을 먼저 적용하고, 최초 선택에서 남은 후보 중 Reply, Mention, Quote 순서로 한 건만 제공한다.
+  이 우선순위는 독립적인 비동기 처리의 도착 순서와 무관하게 적용하며 Recipient가 서로 다르면 각각 판정한다.
+- 우선순위는 최초 대표 Notification 선택에만 적용한다. 이미 저장된 대표 Notification은 ID, Type, Read State와
+  최초 읽음 시각을 유지하며, 이후 더 높은 우선순위 Type이 생성 가능해져도 추가·교체하거나 소급 생성하지 않는다.
+  따라서 Quote 승인 전에 Mention 또는 Reply가 먼저 생성된 경우 승인으로 Quote Notification을 추가하거나 기존
+  Notification의 Type을 바꾸지 않는다. 이 승인 처리로 기존 Notification과 Read State·최초 읽음 시각을 변경하지
+  않으며, 다른 사유에 따른 조회·정리는 해당 Type의 기존 정책을 따른다. 이 선택의 근거는
+  [ADR 0028](../decisions/0028-quote-notification-policy.md#2026-10-12-사용자-지정-우선순위)에 기록한다.
 - Followee Post Notification은 이 중복 제거 대상에 포함하지 않고 기존 독립 정책을 따른다.
 - Profile Mute는 Quote Author를 대상으로 검사한다. Notification Scope의 Word Mute Rule과 Hashtag Mute Rule은
   Quote의 내용과 Hashtag를 검사하며, direct Source의 내용과 Hashtag를 다시 검사하지 않는다.

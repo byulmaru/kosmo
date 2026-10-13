@@ -45,7 +45,8 @@ export const captureOperationalNotificationAudienceActivity = async ({
             eq(Notifications.kind, NotificationKind.OPERATIONAL),
             eq(Notifications.sourceId, sendId),
           ),
-        );
+        )
+        .limit(1);
       if (existing.length) {
         return {
           captured: true,
@@ -83,7 +84,8 @@ export const captureOperationalNotificationAudienceActivity = async ({
           eq(Notifications.kind, NotificationKind.OPERATIONAL),
           eq(Notifications.sourceId, sendId),
         ),
-      );
+      )
+      .limit(1);
     if (existing.length > 0) {
       if (!existing.every(({ data: stored }) => sameOperationalData(stored, data))) {
         throw ApplicationFailure.nonRetryable(
@@ -117,18 +119,18 @@ export const dispatchOperationalNotificationPageActivity = async ({
       ),
     )
     .orderBy(Notifications.id)
-    .limit(OPERATIONAL_PAGE_SIZE);
+    .limit(OPERATIONAL_PAGE_SIZE + 1);
 
-  const starts = await Promise.allSettled(
-    notifications.map(({ id }) => startPushNotificationWorkflow(id)),
-  );
+  const page = notifications.slice(0, OPERATIONAL_PAGE_SIZE);
+
+  const starts = await Promise.allSettled(page.map(({ id }) => startPushNotificationWorkflow(id)));
   const failure = starts.find((result) => result.status === 'rejected');
   if (failure?.status === 'rejected') {
     throw failure.reason;
   }
 
   return {
-    afterNotificationId: notifications.at(-1)?.id ?? null,
-    hasMore: notifications.length === OPERATIONAL_PAGE_SIZE,
+    afterNotificationId: page.at(-1)?.id ?? null,
+    hasMore: notifications.length > OPERATIONAL_PAGE_SIZE,
   };
 };

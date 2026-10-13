@@ -4,12 +4,17 @@ import type { PostComposerControllerProps as PostComposerProps } from './PostCom
 
 const typecheckPostComposerRelationships = () => {
   const profile = {} as PostComposerProps['profile'];
-  void ({ profile, replyParentId: 'post-parent' } satisfies PostComposerProps);
+  void ({
+    profile,
+    replyParentId: 'post-parent',
+    replyParentVisibility: 'UNLISTED',
+  } satisfies PostComposerProps);
   void ({ profile, repostSourceId: 'post-source' } satisfies PostComposerProps);
   // @ts-expect-error Reply와 Quote 관계 입력은 동시에 제공할 수 없다.
   const invalidRelationships: PostComposerProps = {
     profile,
     replyParentId: 'post-parent',
+    replyParentVisibility: 'UNLISTED',
     repostSourceId: 'post-source',
   };
   void invalidRelationships;
@@ -87,25 +92,21 @@ describe('PostComposer Reply context contract', () => {
       },
     );
     assert.deepEqual(
-      createPostComposerMutationInput('본문 @alice', 'PUBLIC', undefined, undefined, undefined, [
-        { profileId: 'profile-alice', start: 3, end: 9 },
-      ]),
+      createPostComposerMutationInput(
+        '본문 @alice',
+        'DIRECT',
+        'post-parent',
+        undefined,
+        undefined,
+        [{ profileId: 'profile-alice', start: 3, end: 9 }],
+      ),
       {
         bodyText: '본문 @alice',
+        replyParentId: 'post-parent',
         mentions: [{ profileId: 'profile-alice', start: 3, end: 9 }],
-        visibility: 'PUBLIC',
+        visibility: 'DIRECT',
       },
     );
-  });
-
-  it('excludes DIRECT only while composing a Reply', async () => {
-    const { isPostComposerVisibilityAllowed } = await import('./postComposerState');
-
-    assert.equal(isPostComposerVisibilityAllowed('DIRECT'), true);
-    assert.equal(isPostComposerVisibilityAllowed('DIRECT', 'post-parent'), false);
-    for (const visibility of ['PUBLIC', 'UNLISTED', 'FOLLOWERS'] as const) {
-      assert.equal(isPostComposerVisibilityAllowed(visibility, 'post-parent'), true);
-    }
   });
 
   it('changes context identity when either selected Profile or Parent changes', async () => {
@@ -137,6 +138,44 @@ describe('PostComposer Reply context contract', () => {
     assert.equal(resolvePostComposerVisibility('UNLISTED'), 'UNLISTED');
     assert.equal(resolvePostComposerVisibility('DIRECT'), 'UNLISTED');
     assert.equal(resolvePostComposerVisibility(null), 'UNLISTED');
+  });
+
+  it('seeds Reply visibility at the more restrictive profile or Parent visibility', async () => {
+    const { resolvePostComposerVisibility } = await import('./postComposerState');
+    const pairs = [
+      ['PUBLIC', 'PUBLIC', 'PUBLIC'],
+      ['UNLISTED', 'PUBLIC', 'UNLISTED'],
+      ['FOLLOWERS', 'PUBLIC', 'FOLLOWERS'],
+      ['PUBLIC', 'UNLISTED', 'UNLISTED'],
+      ['UNLISTED', 'UNLISTED', 'UNLISTED'],
+      ['FOLLOWERS', 'UNLISTED', 'FOLLOWERS'],
+      ['PUBLIC', 'FOLLOWERS', 'FOLLOWERS'],
+      ['UNLISTED', 'FOLLOWERS', 'FOLLOWERS'],
+      ['FOLLOWERS', 'FOLLOWERS', 'FOLLOWERS'],
+      ['PUBLIC', 'DIRECT', 'DIRECT'],
+      ['UNLISTED', 'DIRECT', 'DIRECT'],
+      ['FOLLOWERS', 'DIRECT', 'DIRECT'],
+    ] as const;
+
+    for (const [profileDefault, parentVisibility, expected] of pairs) {
+      assert.equal(resolvePostComposerVisibility(profileDefault, parentVisibility), expected);
+    }
+
+    const fallbackResults = {
+      DIRECT: 'DIRECT',
+      FOLLOWERS: 'FOLLOWERS',
+      PUBLIC: 'UNLISTED',
+      UNLISTED: 'UNLISTED',
+    } as const;
+    for (const parentVisibility of ['PUBLIC', 'UNLISTED', 'FOLLOWERS', 'DIRECT'] as const) {
+      for (const profileDefault of [null, undefined, 'INVALID', 'DIRECT'] as const) {
+        assert.equal(
+          resolvePostComposerVisibility(profileDefault, parentVisibility),
+          fallbackResults[parentVisibility],
+        );
+      }
+    }
+    assert.equal(resolvePostComposerVisibility('FOLLOWERS', '%future added value'), 'FOLLOWERS');
   });
 
   it('shifts untouched repeated mention ranges and drops ranges changed by the edit', async () => {

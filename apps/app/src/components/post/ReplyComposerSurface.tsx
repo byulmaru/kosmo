@@ -43,6 +43,7 @@ const ReplyComposerSurfaceParentFragment = graphql`
   fragment ReplyComposerSurface_parent on Post {
     ...PostSourcePreview_source
     id
+    visibility
     createdAt
     content {
       bodyText
@@ -500,7 +501,9 @@ function ReplyComposerSurfaceContents({
                     onSubmittingChange={setSubmitting}
                     profile={profile.composer}
                     registerNativeBackHandler={registerNativeBackHandler}
-                    {...(quoteMode ? { repostSourceId: parent.id } : { replyParentId: parent.id })}
+                    {...(quoteMode
+                      ? { repostSourceId: parent.id }
+                      : { replyParentId: parent.id, replyParentVisibility: parent.visibility })}
                   >
                     {quoteMode ? (
                       <PostSourcePreview

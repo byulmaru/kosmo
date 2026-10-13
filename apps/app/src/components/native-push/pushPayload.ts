@@ -1,5 +1,4 @@
 import { parseNotificationHref } from '@/components/notification/notificationHref';
-import type { NotificationResponse } from 'expo-notifications';
 import type { Href } from 'expo-router';
 import type { NotificationHrefTarget } from '@/components/notification/notificationHref';
 
@@ -67,9 +66,4 @@ export function parseNativePushTapTarget(value: unknown): NativePushTapTarget | 
   }
 
   return null;
-}
-
-export function nativePushResponseKey(response: NotificationResponse): string | null {
-  const identifier = nonEmptyString(response.notification.request.identifier);
-  return identifier ? `${identifier}:${response.actionIdentifier}` : null;
 }

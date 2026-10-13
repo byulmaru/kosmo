@@ -160,6 +160,7 @@ const findVisiblePost = async (
               eq(Profiles.state, ProfileState.ACTIVE),
               ne(Instances.state, InstanceState.SUSPENDED),
             )!,
+            postContentId: Posts.currentContentId,
             postState: Posts.state,
             postVisibility: Posts.visibility,
           },
@@ -220,6 +221,7 @@ const findVisibleQuoteSource = async (
               eq(Profiles.state, ProfileState.ACTIVE),
               ne(Instances.state, InstanceState.SUSPENDED),
             )!,
+            postContentId: Posts.currentContentId,
             postState: Posts.state,
             postVisibility: Posts.visibility,
           },
@@ -611,6 +613,17 @@ export async function createPostPersisted(
         input.origin === 'LOCAL'
           ? validateLocalPostContentDocument(input.document, input.authoredBodyText)
           : input.document;
+      const mentionProfileIds = new Set(
+        input.origin === 'ACTIVITYPUB'
+          ? input.mentionProfileIds
+          : document.body.content.flatMap((block) =>
+              block.type === 'paragraph'
+                ? (block.content ?? []).flatMap((node) =>
+                    node.type === 'mention' ? [node.attrs.profileId] : [],
+                  )
+                : [],
+            ),
+      );
 
       if (
         input.origin === 'LOCAL' &&
@@ -766,17 +779,6 @@ export async function createPostPersisted(
         });
       }
 
-      const mentionProfileIds = new Set(
-        input.origin === 'ACTIVITYPUB'
-          ? input.mentionProfileIds
-          : document.body.content.flatMap((block) =>
-              block.type === 'paragraph'
-                ? (block.content ?? []).flatMap((node) =>
-                    node.type === 'mention' ? [node.attrs.profileId] : [],
-                  )
-                : [],
-            ),
-      );
       if (mentionProfileIds.size > 0) {
         await tx.insert(PostMentions).values(
           [...mentionProfileIds].map((profileId) => ({
