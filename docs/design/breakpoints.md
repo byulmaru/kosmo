@@ -274,14 +274,12 @@ KOSMO가 직접 소유하는 Web vertical scroller는 semantic `borderStrong` th
   요청을 중복 시작하지 않는다. 요청이 성공하거나 실패해 종료된 뒤의 다음 실행은 새 요청을 한 번 시작하며,
   이전 요청이 실패했어도 현재 timeline 데이터는 유지한다.
 - Home 재선택의 중복 요청 방지와 마지막 성공 데이터 보존은 `PROD-610` 계약을 유지한다. Local 재선택은
-  기존 `RouteBoundary.refetch()` 경로를 재사용하며 별도 요청 계층이나 상태 표시를 추가하지 않는다. 이 정책은
-  Web shell navigation과 compact·full Web 브랜드 마크에만 적용하고 Android/iOS Native navigation과 다른
-  현재 route의 재선택 정책은 변경하지 않는다.
+  기존 `RouteBoundary.refetch()` 경로를 재사용하며 별도 요청 계층이나 상태 표시를 추가하지 않는다. 하단 항목의 플랫폼 공통 재선택 정책은 아래 절을 따른다.
 - shell chrome에서 중앙 피드로 wheel 이벤트를 인위적으로 전달하지 않는다.
 
-## iOS 하단 내비게이션 재선택
+## 공통 하단 내비게이션 재선택
 
-PROD-1079의 2026-10-11 사용자 지시에 따라 기존 공용 route와 navigation 구조에서 하단 항목의
+PROD-1079의 2026-10-11 재선택 지시와 2026-10-13 플랫폼 공통화 지시에 따라 기존 공용 route와 navigation 구조에서 하단 항목의
 재선택 동작을 제공한다. 현재 홈 또는 로컬에서 홈을 다시 누르면 현재 타임라인 선택을 유지하고
 목록 최상단으로 이동한 뒤 기존 새로고침을 수행한다. 진행 중인 새로고침의 중복 요청 방지는
 PROD-610의 기존 계약을 유지한다.
@@ -292,7 +290,8 @@ PROD-610의 기존 계약을 유지한다.
 
 글쓰기는 기존 공용 작성기를 여는 action이다. 닫기·draft 처리·게시 성공 후 타임라인 복귀의 기존
 계약을 유지한다. 탭별 상세 계층 복원을 위한 별도 route tree나 navigator는 추가하지 않는다.
-Web과 Android의 기존 navigation·스크롤 계약을 유지한다.
+iOS·Android·Web에서 같은 재선택 동작을 제공한다. Web은 document scroll을, Native는 화면의
+실제 목록 scroll을 최상단으로 이동한다. Web 링크의 새 탭·modifier 활성화와 뒤로/앞으로 복원은 유지한다.
 
 ## 구현 위치
 

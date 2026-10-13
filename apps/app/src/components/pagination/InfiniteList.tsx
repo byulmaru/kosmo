@@ -8,7 +8,7 @@ import {
 import { useAutomaticPagination } from './useAutomaticPagination';
 import type { ReactElement } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
-import type { NativeTabReselectionDestination } from '@/components/shell/ShellChromeContext';
+import type { TabReselectionDestination } from '@/components/shell/ShellChromeContext';
 import type { LoadNext } from './useAutomaticPagination';
 
 export type InfiniteListProps<Item> = Readonly<{
@@ -22,7 +22,7 @@ export type InfiniteListProps<Item> = Readonly<{
   pageSize: number;
   renderItem: (params: { index: number; item: Item }) => ReactElement | null;
   refreshing?: boolean;
-  reselectDestination?: NativeTabReselectionDestination;
+  reselectDestination?: TabReselectionDestination;
   style?: StyleProp<ViewStyle>;
   footer?: ReactElement | null;
   empty?: ReactElement | null;
@@ -63,15 +63,16 @@ export function InfiniteList<Item>({
 
   useEffect(() => {
     if (
-      Platform.OS !== 'ios' ||
+      Platform.OS === 'web' ||
+      hasNativeScrollParent ||
       !reselectDestination ||
-      !shellChrome?.registerNativeTabReselection
+      !shellChrome?.registerTabReselection
     ) {
       return;
     }
 
-    return shellChrome.registerNativeTabReselection(reselectDestination, scrollToTop);
-  }, [reselectDestination, scrollToTop, shellChrome]);
+    return shellChrome.registerTabReselection(reselectDestination, scrollToTop);
+  }, [hasNativeScrollParent, reselectDestination, scrollToTop, shellChrome]);
 
   useEffect(() => {
     onLoadErrorChange?.(loadError, loadNextPage);

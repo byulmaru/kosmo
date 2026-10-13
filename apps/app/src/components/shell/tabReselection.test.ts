@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createNativeTabReselectionRegistry } from './nativeTabReselection';
+import { createTabReselectionRegistry } from './tabReselection';
 
 test('a mounted nested route temporarily takes precedence and cleanup restores the root handler', () => {
-  const registry = createNativeTabReselectionRegistry();
+  const registry = createTabReselectionRegistry();
   const calls: string[] = [];
   const unregisterRoot = registry.register('profile', () => calls.push('root'));
   const unregisterDetail = registry.register('profile', () => calls.push('detail'));

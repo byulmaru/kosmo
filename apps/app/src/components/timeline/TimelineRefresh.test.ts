@@ -200,7 +200,7 @@ describe('Timeline refresh', () => {
     assert.equal(localRefetchRequests.length, 2);
   });
 
-  for (const os of ['ios', 'web'] as const) {
+  for (const os of ['ios', 'android', 'web'] as const) {
     it(`Home refresh owner (${os})는 pending 중 중복을 막고 실패 retry를 연결한다`, async () => {
       platform.OS = os;
       if (os === 'web') {
@@ -243,7 +243,7 @@ describe('Timeline refresh', () => {
     });
   }
 
-  for (const os of ['ios', 'web'] as const) {
+  for (const os of ['ios', 'android', 'web'] as const) {
     it(`Local refresh owner (${os})는 pending 중 중복을 막고 실패 retry 뒤 새 refresh를 허용한다`, async () => {
       platform.OS = os;
       await act(async () => {

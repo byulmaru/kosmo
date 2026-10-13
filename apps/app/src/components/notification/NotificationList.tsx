@@ -90,11 +90,11 @@ export function NotificationList({ profile }: NotificationListProps) {
     scrollRef.current?.scrollTo({ animated: true, y: 0 });
   }, []);
   useEffect(() => {
-    if (Platform.OS !== 'ios' || !shellChrome?.registerNativeTabReselection) {
+    if (Platform.OS === 'web' || !shellChrome?.registerTabReselection) {
       return;
     }
 
-    return shellChrome.registerNativeTabReselection('notifications', scrollToTop);
+    return shellChrome.registerTabReselection('notifications', scrollToTop);
   }, [scrollToTop, shellChrome]);
   const pagination = usePaginationFragment<
     NotificationListNextPageQuery,

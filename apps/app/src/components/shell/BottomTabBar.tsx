@@ -29,7 +29,6 @@ const BottomTabBarFragment = graphql`
 
 type Props = {
   onComposeOpen?: () => void;
-  onHomeReselect?: () => void;
   profile?: BottomTabBar_profile$key | null;
 };
 
@@ -45,7 +44,7 @@ export function isBottomTabDestination(href: Href) {
   return typeof href === 'string' && Object.values(hrefs).some((tabHref) => tabHref === href);
 }
 
-export function BottomTabBar({ onComposeOpen, onHomeReselect, profile: profileKey }: Props) {
+export function BottomTabBar({ onComposeOpen, profile: profileKey }: Props) {
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
   const shellChrome = useShellChrome();
@@ -84,17 +83,12 @@ export function BottomTabBar({ onComposeOpen, onHomeReselect, profile: profileKe
       { accessibilityRole: 'link' },
     );
 
-    const onCurrentNavigate =
-      Platform.OS === 'ios'
-        ? () => {
-            shellChrome?.reselectNativeTab?.(destination);
-            if (destination === 'home') {
-              shellChrome?.reselectHome();
-            }
-          }
-        : destination === 'home'
-          ? onHomeReselect
-          : undefined;
+    const onCurrentNavigate = () => {
+      shellChrome?.reselectTab?.(destination);
+      if (destination === 'home') {
+        shellChrome?.reselectHome();
+      }
+    };
 
     return (
       <NavigationLink

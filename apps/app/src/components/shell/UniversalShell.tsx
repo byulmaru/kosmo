@@ -27,7 +27,6 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { returnToSettingsParent } from '../settings/settingsNavigation';
 import { BottomTabBar } from './BottomTabBar';
-import { createNativeTabReselectionRegistry } from './nativeTabReselection';
 import { NavigationGuardProvider } from './NavigationGuardContext';
 import {
   PrimaryNavigationScrollProvider,
@@ -46,13 +45,14 @@ import {
 } from './shellLayout';
 import { NativeNavigationDrawer, WebNavigationDrawer } from './ShellNavigationDrawer';
 import { SidebarNavigation } from './SidebarNavigation';
+import { createTabReselectionRegistry } from './tabReselection';
 import type { ReactNode, RefObject } from 'react';
 import type { View as NativeView, ViewStyle } from 'react-native';
 import type { UniversalShellQuery } from './__generated__/UniversalShellQuery.graphql';
 import type {
   HomeReselectionHandler,
-  NativeTabReselectionDestination,
-  NativeTabReselectionHandler,
+  TabReselectionDestination,
+  TabReselectionHandler,
 } from './ShellChromeContext';
 
 const ShellQuery = graphql`
@@ -135,7 +135,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
   const menuButtonRef = useRef<NativeView>(null);
   const screenFallbackRef = useRef<NativeView>(null);
   const homeReselectionHandlerRef = useRef<HomeReselectionHandler | null>(null);
-  const nativeTabReselectionRegistryRef = useRef(createNativeTabReselectionRegistry());
+  const tabReselectionRegistryRef = useRef(createTabReselectionRegistry());
   const pendingDrawerHomeReselectionRef = useRef(false);
   const registerHomeReselection = useCallback((handler: HomeReselectionHandler) => {
     homeReselectionHandlerRef.current = handler;
@@ -148,14 +148,20 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
   const reselectHome = useCallback(() => {
     homeReselectionHandlerRef.current?.();
   }, []);
-  const registerNativeTabReselection = useCallback(
-    (destination: NativeTabReselectionDestination, handler: NativeTabReselectionHandler) => {
-      return nativeTabReselectionRegistryRef.current.register(destination, handler);
+  const registerTabReselection = useCallback(
+    (destination: TabReselectionDestination, handler: TabReselectionHandler) => {
+      return tabReselectionRegistryRef.current.register(destination, handler);
     },
     [],
   );
-  const reselectNativeTab = useCallback((destination: NativeTabReselectionDestination) => {
-    nativeTabReselectionRegistryRef.current.reselect(destination);
+  const reselectTab = useCallback((destination: TabReselectionDestination) => {
+    if (Platform.OS === 'web') {
+      if (destination !== 'home') {
+        window.scrollTo({ behavior: 'auto', left: 0, top: 0 });
+      }
+      return;
+    }
+    tabReselectionRegistryRef.current.reselect(destination);
   }, []);
   const queueDrawerHomeReselection = useCallback(() => {
     pendingDrawerHomeReselectionRef.current = true;
@@ -453,11 +459,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
         </View>
         {mobile ? (
           <View aria-hidden={drawerOpen || undefined} style={web ? webFixedBottomBar : undefined}>
-            <BottomTabBar
-              onComposeOpen={openComposer}
-              onHomeReselect={web ? reselectHome : undefined}
-              profile={profile}
-            />
+            <BottomTabBar onComposeOpen={openComposer} profile={profile} />
           </View>
         ) : null}
       </View>
@@ -532,8 +534,8 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
       openNavigationDrawer={openNavigationDrawer}
       openProfileSwitcher={openProfileSwitcher}
       registerHomeReselection={registerHomeReselection}
-      registerNativeTabReselection={registerNativeTabReselection}
-      reselectNativeTab={reselectNativeTab}
+      registerTabReselection={registerTabReselection}
+      reselectTab={reselectTab}
       reselectHome={reselectHome}
     >
       <PrimaryNavigationScrollReset pathname={pathname} />

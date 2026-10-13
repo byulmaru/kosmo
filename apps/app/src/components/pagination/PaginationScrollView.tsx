@@ -3,7 +3,7 @@ import { Platform, ScrollView } from 'react-native';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { RouteScrollContainer } from '@/components/ui/RouteScrollContainer';
 import type { ScrollViewProps } from 'react-native';
-import type { NativeTabReselectionDestination } from '@/components/shell/ShellChromeContext';
+import type { TabReselectionDestination } from '@/components/shell/ShellChromeContext';
 import type {
   RouteScrollContainerNativeProps,
   RouteScrollContainerProps,
@@ -31,7 +31,7 @@ type PaginationScrollViewProps = {
     ScrollViewProps,
     'contentContainerStyle' | 'keyboardShouldPersistTaps' | 'style'
   >;
-  reselectDestination?: NativeTabReselectionDestination;
+  reselectDestination?: TabReselectionDestination;
   webScrollable?: boolean;
   webStyle?: RouteScrollContainerProps['webStyle'];
 };
@@ -73,15 +73,11 @@ export function PaginationScrollView({
     scrollRef.current?.scrollTo({ animated: true, y: 0 });
   }, []);
   useEffect(() => {
-    if (
-      Platform.OS !== 'ios' ||
-      !reselectDestination ||
-      !shellChrome?.registerNativeTabReselection
-    ) {
+    if (Platform.OS === 'web' || !reselectDestination || !shellChrome?.registerTabReselection) {
       return;
     }
 
-    return shellChrome.registerNativeTabReselection(reselectDestination, scrollToTop);
+    return shellChrome.registerTabReselection(reselectDestination, scrollToTop);
   }, [reselectDestination, scrollToTop, shellChrome]);
   const onContentSizeChange = useCallback(
     (...args: Parameters<NativeScrollProps['onContentSizeChange']>) => {

@@ -1,14 +1,11 @@
-export type NativeTabReselectionDestination = 'home' | 'notifications' | 'profile' | 'search';
-export type NativeTabReselectionHandler = () => void;
+export type TabReselectionDestination = 'home' | 'notifications' | 'profile' | 'search';
+export type TabReselectionHandler = () => void;
 
-export function createNativeTabReselectionRegistry() {
-  const handlers = new Map<
-    NativeTabReselectionDestination,
-    Map<symbol, NativeTabReselectionHandler>
-  >();
+export function createTabReselectionRegistry() {
+  const handlers = new Map<TabReselectionDestination, Map<symbol, TabReselectionHandler>>();
 
   return {
-    register(destination: NativeTabReselectionDestination, handler: NativeTabReselectionHandler) {
+    register(destination: TabReselectionDestination, handler: TabReselectionHandler) {
       let registeredHandlers = handlers.get(destination);
       if (!registeredHandlers) {
         registeredHandlers = new Map();
@@ -25,7 +22,7 @@ export function createNativeTabReselectionRegistry() {
         }
       };
     },
-    reselect(destination: NativeTabReselectionDestination) {
+    reselect(destination: TabReselectionDestination) {
       const registeredHandlers = handlers.get(destination);
       const latestHandler = registeredHandlers
         ? Array.from(registeredHandlers.values()).pop()

@@ -59,7 +59,7 @@ mockModule(new URL('./NavigationLink.tsx', import.meta.url), {
 mockModule(new URL('./ShellChromeContext.tsx', import.meta.url), {
   useShellChrome: () => ({
     reselectHome: () => calls.push('refresh-home'),
-    reselectNativeTab: (destination: string) => calls.push(`scroll-${destination}`),
+    reselectTab: (destination: string) => calls.push(`scroll-${destination}`),
   }),
 });
 let BottomTabBar: typeof Component;
@@ -78,7 +78,6 @@ async function render(os: string, path: string) {
     renderer = create(
       createElement(BottomTabBar, {
         profile: { relativeHandle: '@me', displayName: 'Me' } as never,
-        onHomeReselect: () => calls.push('web-home'),
         onComposeOpen: () => calls.push('compose'),
       }),
     );
@@ -91,43 +90,34 @@ function link(destination: BottomTabDestination) {
     .find((node) => (node.type as unknown) === 'NavigationLink');
 }
 describe('bottom navigation reselection', () => {
-  for (const [destination, path] of [
-    ['home', '/home'],
-    ['home', '/local'],
-    ['search', '/search'],
-    ['notifications', '/notifications'],
-    ['profile', '/@me'],
-  ] as const) {
-    it(`iOS ${path} keeps its route and invokes only its scroll/refresh actions`, async () => {
-      await render('ios', path);
-      const current = link(destination).props;
-      assert.equal(current.current, true);
-      assert.equal(current.navigationMode, 'switch');
-      current.onCurrentNavigate();
-      assert.deepEqual(
-        calls,
-        destination === 'home' ? ['scroll-home', 'refresh-home'] : [`scroll-${destination}`],
-      );
-      if (path === '/local') {
-        assert.equal(current.href, '/home');
-      }
-      assert.equal(
-        link(destination === 'search' ? 'notifications' : 'search').props.current,
-        false,
-      );
-    });
+  for (const os of ['ios', 'android', 'web']) {
+    for (const [destination, path] of [
+      ['home', '/home'],
+      ['home', '/local'],
+      ['search', '/search'],
+      ['notifications', '/notifications'],
+      ['profile', '/@me'],
+    ] as const) {
+      it(`${os} ${path} keeps its route and invokes only its scroll/refresh actions`, async () => {
+        await render(os, path);
+        const current = link(destination).props;
+        assert.equal(current.current, true);
+        assert.equal(current.navigationMode, 'switch');
+        current.onCurrentNavigate();
+        assert.deepEqual(
+          calls,
+          destination === 'home' ? ['scroll-home', 'refresh-home'] : [`scroll-${destination}`],
+        );
+        if (path === '/local') {
+          assert.equal(current.href, '/home');
+        }
+        assert.equal(
+          link(destination === 'search' ? 'notifications' : 'search').props.current,
+          false,
+        );
+      });
+    }
   }
-  it('Web keeps the existing Home action and other link behavior', async () => {
-    await render('web', '/home');
-    link('home').props.onCurrentNavigate();
-    assert.deepEqual(calls, ['web-home']);
-    assert.equal(link('search').props.onCurrentNavigate, undefined);
-  });
-  it('Android does not install native reselection actions', async () => {
-    await render('android', '/search');
-    assert.equal(link('search').props.onCurrentNavigate, undefined);
-    assert.deepEqual(calls, []);
-  });
   it('compose still opens the shared composer', async () => {
     await render('ios', '/search');
     const control = renderer!.root
