@@ -132,7 +132,7 @@ test('createPost는 local Post와 최초 content 연결을 하나의 transaction
 
 test('createPost는 Mention이 없는 local DIRECT Post를 저장한다', async () => {
   const author = await createProfile();
-  const result = await createPost({
+  const result = await createPostPersisted({
     document: postContentDocumentFromText('private without a mention'),
     origin: 'LOCAL',
     profileId: author.id,
