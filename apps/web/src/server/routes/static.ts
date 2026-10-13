@@ -1,7 +1,7 @@
 import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono } from 'hono';
 import { etag } from 'hono/etag';
-import { parseAccept } from 'hono/utils/accept';
+import Negotiator from 'negotiator';
 import type { Context } from 'hono';
 
 const HASHED_ASSET = /(?:^|[.-])[a-f\d]{32}(?=[.@]|$)/i;
@@ -20,15 +20,7 @@ const acceptsDocument = (c: Context) => {
   if (!accept) {
     return true;
   }
-  const types = parseAccept(accept).map((value) => ({
-    ...value,
-    type: value.type.toLowerCase(),
-  }));
-  const document =
-    types.find(({ type }) => type === 'text/html') ??
-    types.find(({ type }) => type === 'text/*') ??
-    types.find(({ type }) => type === '*/*');
-  return (document?.q ?? 0) > 0;
+  return new Negotiator({ headers: { accept } }).mediaType(['text/html']) === 'text/html';
 };
 const isSpaRequest = (c: Context) =>
   c.req.path === '/' ||

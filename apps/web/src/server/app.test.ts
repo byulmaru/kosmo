@@ -512,8 +512,8 @@ describe('runtime routing', () => {
     '/account-deletion',
     '/child-safety',
   ])('serves the public policy %s as an SPA document without navigation headers', async (path) => {
-    for (const accept of [undefined, '*/*', 'text/html', 'Text/HTML', 'TEXT/*']) {
-      const headers = accept ? { accept } : undefined;
+    for (const accept of [undefined, '', '*/*', 'text/html', 'Text/HTML', 'TEXT/*']) {
+      const headers = accept === undefined ? undefined : { accept };
       const response = await app.request(path, { headers });
       const head = await app.request(path, { headers, method: 'HEAD' });
 
@@ -549,15 +549,20 @@ describe('runtime routing', () => {
   ])('serves the public route %s without navigation headers', async (path) => {
     for (const accept of [
       undefined,
+      '',
       '*/*',
       'text/html',
       'text/html;q=0.8',
       'text/*',
       'Text/HTML',
       'TEXT/*',
+      'text/html;q=0.5, text/*;q=0',
     ]) {
       for (const userAgent of ['Mozilla/5.0', 'Googlebot/2.1']) {
-        const headers = { 'user-agent': userAgent, ...(accept ? { accept } : {}) };
+        const headers = {
+          'user-agent': userAgent,
+          ...(accept === undefined ? {} : { accept }),
+        };
         const response = await app.request(path, { headers });
         const head = await app.request(path, { headers, method: 'HEAD' });
 
@@ -580,6 +585,8 @@ describe('runtime routing', () => {
         'text/html;q=0, */*',
         'Text/HTML;q=0, */*',
         'TEXT/*;q=0, */*',
+        'text/html;Q=0',
+        'text/html;Q=0, */*',
       ]) {
         for (const method of ['GET', 'HEAD']) {
           const response = await app.request(path, { headers: { accept }, method });
