@@ -32,6 +32,7 @@ const protectedHeadingRoutes = [
 ] as const;
 const publicPolicyRoutes = [
   { heading: 'Kosmo 개인정보 처리방침', path: '/privacy' },
+  { heading: '개인정보처리방침 개정 안내', path: '/privacy/changes/2026-10-13' },
   { heading: 'Kosmo 계정 삭제 안내', path: '/account-deletion' },
   { heading: 'Kosmo 아동 안전 정책', path: '/child-safety' },
 ] as const;
