@@ -7,12 +7,14 @@ import baseMeta, {
   ContentWarningSourcePreviewRevealInteraction as contentWarningSourcePreviewInteraction,
   LinkedSourceQuote as linkedSourceQuote,
   LinkedSourceQuoteInteraction as linkedSourceQuoteInteraction,
+  ProductionMoreShareReferences as productionMoreShareReferences,
 } from './Posts.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 const meta = {
   ...baseMeta,
   excludeStories: [],
+  parameters: { ...baseMeta.parameters, controls: { disable: true } },
   title: 'KOSMO/Patterns/Post/Catalog/Tests',
 } satisfies Meta;
 
@@ -37,3 +39,5 @@ export const LinkedSourceQuoteDark: Story = {
   ...linkedSourceQuote,
   globals: { backgrounds: { value: 'kosmoDark' }, theme: 'dark' },
 };
+
+export const ProductionMoreShareReferences: Story = productionMoreShareReferences;

@@ -231,6 +231,8 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   `링크 복사`를 선택한다.
 - 왼쪽 viewport 가장자리와 충돌하면 menu를 화면 안으로 보정한다. 이 방향 선택은 More에만 적용하며
   Repost menu의 기존 시작 정렬과 Native bottom action sheet는 바꾸지 않는다.
+- `링크 복사`는 클립보드 요청이 완료되고 성공 결과를 확인한 뒤에만 `링크를 복사했어요` 성공 Toast를
+  표시한다. 대기 중이거나 실패한 요청에서는 성공 Toast를 표시하지 않으며 기존 실패 안내와 재시도 동작을 유지한다.
 
 ## Profile 고정 More menu와 attribution
 

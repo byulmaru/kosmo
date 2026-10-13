@@ -55,6 +55,8 @@ import {
 import {
   getCopiedStrings,
   resetClipboardMock,
+  resolvePendingClipboard,
+  setNextClipboardPending,
   setNextClipboardResult,
 } from '../../../.storybook/mocks/postClipboard';
 import appleTouchIconUrl from '../../../public/apple-touch-icon.png?url';
@@ -3059,6 +3061,7 @@ const meta = {
     'ContentWarningRevealInteraction',
     'ContentWarningSourcePreviewRevealInteraction',
     'LinkedSourceQuoteInteraction',
+    'ProductionMoreShareReferences',
   ],
   decorators: [
     (Story) => (
@@ -4323,7 +4326,19 @@ export const ProductionMoreShareReferences: Story = {
       },
     ];
 
-    for (const [index, { actionBar, reference }] of targets.entries()) {
+    setNextClipboardPending();
+    await userEvent.click(within(targets[0]!.actionBar).getByRole('button', { name: '더 보기' }));
+    await userEvent.click(
+      within(await screen.findByRole('menu', { name: '더 보기 메뉴' })).getByRole('menuitem', {
+        name: '링크 복사',
+      }),
+    );
+    expect(canvas.queryByText('링크를 복사했어요')).toBeNull();
+    resolvePendingClipboard(true);
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent('링크를 복사했어요');
+    await waitFor(() => expect(getCopiedStrings()[0]).toBe(targets[0]!.reference));
+
+    for (const [index, { actionBar, reference }] of targets.slice(1).entries()) {
       const more = within(actionBar).getByRole('button', { name: '더 보기' });
       await userEvent.click(more);
       expect(more).toHaveAttribute('aria-expanded', 'true');
@@ -4335,7 +4350,8 @@ export const ProductionMoreShareReferences: Story = {
       ).toEqual(['링크 복사', '게시물 신고', '뮤트']);
       await userEvent.click(within(menu).getByRole('menuitem', { name: '링크 복사' }));
       await waitFor(() => expect(more).toHaveAttribute('aria-expanded', 'false'));
-      await waitFor(() => expect(getCopiedStrings()[index]).toBe(reference));
+      await expect(canvas.findByRole('alert')).resolves.toHaveTextContent('링크를 복사했어요');
+      await waitFor(() => expect(getCopiedStrings()[index + 1]).toBe(reference));
     }
 
     const ordinaryMore = within(ordinaryActionBar).getByRole('button', { name: '더 보기' });
@@ -4349,6 +4365,7 @@ export const ProductionMoreShareReferences: Story = {
     await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
       '링크를 복사하지 못했습니다. 잠시 후 다시 시도해 주세요.',
     );
+    expect(canvas.queryByText('링크를 복사했어요')).toBeNull();
     expect(getCopiedStrings()).toHaveLength(3);
     expect(ordinaryMore).toHaveAttribute('aria-expanded', 'false');
 
@@ -4358,6 +4375,7 @@ export const ProductionMoreShareReferences: Story = {
         name: '링크 복사',
       }),
     );
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent('링크를 복사했어요');
     await waitFor(() => expect(getCopiedStrings()).toHaveLength(4));
     expect(getCopiedStrings()[3]).toBe(
       `${storyShareOrigin()}/${shortPost.profile.relativeHandle}/${shortPost.id}`,
