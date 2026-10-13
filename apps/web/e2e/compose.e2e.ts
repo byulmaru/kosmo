@@ -368,7 +368,7 @@ test('compose에서 공개 범위와 500자 제한을 적용해 createPost를 �
   await expect(visibilityTrigger).toBeFocused();
   await visibilityTrigger.click();
   await expect(visibilityMenu.getByRole('menuitemradio', { name: '팔로워만' })).toBeFocused();
-  await page.keyboard.press('Tab');
+  await page.keyboard.press('Enter');
   await expect(visibilityMenu).toHaveCount(0);
   await expect(composer.getByRole('button', { name: '공개 범위: 팔로워만' })).toBeVisible();
 
