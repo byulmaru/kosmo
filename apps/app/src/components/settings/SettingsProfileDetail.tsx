@@ -2,15 +2,18 @@ import { PostVisibility } from '@kosmo/core/enums';
 import { useState } from 'react';
 import { StyleSheet, Text } from 'react-native';
 import { graphql, useLazyLoadQuery, useMutation } from 'react-relay';
+import { deleteSelectedProfile } from '@/auth/selectedProfileStorage';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
+import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { textStyles } from '@/theme/tokens';
 import { resolveProfileDefaultVisibility } from '../profile/profileDefaultPostVisibilityState';
 import { ProfilePostingSettings } from './ProfilePostingSettings';
 import { ProfileSettingsScreen } from './ProfileSettingsScreen';
+import type { SettingsProfileDetailDeleteProfileMutation } from './__generated__/SettingsProfileDetailDeleteProfileMutation.graphql';
 import type { SettingsProfileDetailQuery } from './__generated__/SettingsProfileDetailQuery.graphql';
 import type { SettingsProfileDetailUpdateProfileMutation } from './__generated__/SettingsProfileDetailUpdateProfileMutation.graphql';
 import type { ProfilePostingSettingsValue } from './ProfilePostingSettings';
@@ -49,6 +52,14 @@ const updateProfileMutation = graphql`
           defaultPostVisibility
         }
       }
+    }
+  }
+`;
+
+const deleteProfileMutation = graphql`
+  mutation SettingsProfileDetailDeleteProfileMutation($input: DeleteProfileInput!) {
+    deleteProfile(input: $input) {
+      profileId
     }
   }
 `;
@@ -153,10 +164,14 @@ function SettingsProfileEditor({
   const baseline = getPostingSettings(profile);
   const [pendingValue, setPendingValue] = useState<ProfilePostingSettingsValue | null>(null);
   const [saveState, setSaveState] = useState<'idle' | 'error'>('idle');
+  const [lifecyclePhase, setLifecyclePhase] = useState<'entry' | 'idle' | 'error'>('entry');
+  const { resetCurrentActor } = useRelayActor();
   const [commit, isInFlight] =
     useMutation<SettingsProfileDetailUpdateProfileMutation>(updateProfileMutation);
+  const [commitDeleteProfile, isDeactivationInFlight] =
+    useMutation<SettingsProfileDetailDeleteProfileMutation>(deleteProfileMutation);
   const value = editable ? (pendingValue ?? baseline) : baseline;
-  const saving = isInFlight;
+  const saving = isInFlight || isDeactivationInFlight;
 
   const handleChange = (nextValue: ProfilePostingSettingsValue) => {
     if (!editable || saving) {
@@ -186,6 +201,32 @@ function SettingsProfileEditor({
     });
   };
 
+  const deactivateProfile = () => {
+    if (!editable || saving) {
+      return;
+    }
+
+    commitDeleteProfile({
+      onCompleted: (response) => {
+        if (response?.deleteProfile?.profileId !== profile.id) {
+          setLifecyclePhase('error');
+          return;
+        }
+
+        if (!resetCurrentActor(null)) {
+          setLifecyclePhase('error');
+          return;
+        }
+
+        void deleteSelectedProfile().catch(() => undefined);
+      },
+      onError: () => {
+        setLifecyclePhase('error');
+      },
+      variables: { input: { id: profile.id } },
+    });
+  };
+
   return (
     <ProfileSettingsScreen
       embedded
@@ -200,6 +241,28 @@ function SettingsProfileEditor({
             Profile 전환
           </Button>
         ) : null
+      }
+      lifecycle={
+        editable
+          ? {
+              state: {
+                action: 'deactivate',
+                phase: isDeactivationInFlight ? 'pending' : lifecyclePhase,
+              },
+              onAction: () => {
+                if (!saving) {
+                  setLifecyclePhase('idle');
+                }
+              },
+              onCancel: () => {
+                if (!saving) {
+                  setLifecyclePhase('entry');
+                }
+              },
+              onConfirm: deactivateProfile,
+              onRetry: deactivateProfile,
+            }
+          : undefined
       }
       profile={profile}
     >

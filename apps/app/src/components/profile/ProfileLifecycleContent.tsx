@@ -153,7 +153,7 @@ export function ProfileLifecycleDeleteConfirmContent({
       <Text style={[textStyles.uiCopyM, { color: theme.foregroundSecondary }]}>
         본인 확인은 id.byulmaru.co로 이동해 진행합니다.
       </Text>
-      <View style={styles.deleteActions}>
+      <View style={styles.actionButtons}>
         <Button
           controlRef={cancelRef}
           disabled={pending}
@@ -220,26 +220,44 @@ export function ProfileLifecycleReactivateContent({
 
 export function ProfileLifecycleDeactivateContent({
   acknowledged,
+  cancelRef,
+  headingRef,
   onAcknowledgementChange,
+  onCancel,
   onConfirm,
   pending,
   profile,
-}: Omit<ConfirmationProps, 'cancelRef' | 'onCancel'> & AcknowledgementProps) {
+  retry = false,
+  showCancelButton = false,
+}: ConfirmationProps &
+  AcknowledgementProps & {
+    headingRef?: Ref<View>;
+    retry?: boolean;
+    showCancelButton?: boolean;
+  }) {
   const theme = useTheme();
+  const heading = (
+    <Text
+      accessibilityRole="header"
+      style={[textStyles.uiHeadingS, { color: theme.foregroundPrimary }]}
+    >
+      프로필을 비활성화할까요?
+    </Text>
+  );
   return (
     <View style={styles.deactivation}>
       <View style={styles.impacts}>
         <ProfileLifecycleIdentity deactivated={false} profile={profile} />
-        <Text
-          accessibilityRole="header"
-          style={[textStyles.uiHeadingS, { color: theme.foregroundPrimary }]}
-        >
-          프로필을 비활성화할까요?
-        </Text>
+        {headingRef ? (
+          <View ref={headingRef} tabIndex={-1}>
+            {heading}
+          </View>
+        ) : (
+          heading
+        )}
         {[
           ['프로필이 공개되지 않아요', '프로필과 게시물이 다른 사람에게 표시되지 않습니다.'],
           ['활동할 수 없어요', '게시, 팔로우 및 다른 상호작용을 할 수 없습니다.'],
-          ['다시 활성화할 수 있어요', '일정 기간 안에 이 프로필을 다시 활성화할 수 있습니다.'],
         ].map(([title, description]) => (
           <View key={title} style={styles.identityCopy}>
             <Text style={[textStyles.uiLabelL, { color: theme.foregroundPrimary }]}>{title}</Text>
@@ -248,8 +266,8 @@ export function ProfileLifecycleDeactivateContent({
             </Text>
           </View>
         ))}
-        <Text style={[textStyles.uiLabelL, { color: theme.feedbackDangerBase }]}>
-          기간이 지나면 프로필이 영구 삭제될 수 있습니다.
+        <Text style={[textStyles.uiCopyM, { color: theme.feedbackDangerBase }]}>
+          비활성화는 되돌릴 수 없습니다.
         </Text>
       </View>
       <View style={styles.confirmation}>
@@ -259,22 +277,39 @@ export function ProfileLifecycleDeactivateContent({
           label="위 영향을 모두 확인했습니다."
           onAcknowledgementChange={onAcknowledgementChange}
         />
-        <View style={styles.deactivateTarget}>
-          <Button
-            aria-busy={pending || undefined}
-            disabled={pending ? undefined : !acknowledged}
-            loading={pending}
-            onPress={() => {
-              if (acknowledged && !pending) {
-                onConfirm();
-              }
-            }}
-            hitSlop={Platform.OS === 'web' ? undefined : { top: 4, bottom: 4 }}
-            style={styles.deactivateAction}
-            tone="danger"
+        <View style={showCancelButton ? styles.actionButtons : undefined}>
+          {showCancelButton ? (
+            <View style={[styles.deactivateTarget, styles.deactivateTargetWithCancel]}>
+              <Button
+                controlRef={cancelRef}
+                disabled={pending}
+                onPress={onCancel}
+                style={styles.deactivateAction}
+                tone="secondary"
+              >
+                취소
+              </Button>
+            </View>
+          ) : null}
+          <View
+            style={[styles.deactivateTarget, showCancelButton && styles.deactivateTargetWithCancel]}
           >
-            비활성화
-          </Button>
+            <Button
+              aria-busy={pending || undefined}
+              disabled={pending ? undefined : !acknowledged}
+              loading={pending}
+              onPress={() => {
+                if (acknowledged && !pending) {
+                  onConfirm();
+                }
+              }}
+              hitSlop={Platform.OS === 'web' ? undefined : { top: 4, bottom: 4 }}
+              style={styles.deactivateAction}
+              tone="danger"
+            >
+              {retry ? '다시 시도' : '비활성화'}
+            </Button>
+          </View>
         </View>
       </View>
     </View>
@@ -288,9 +323,10 @@ const styles = StyleSheet.create({
   confirmation: { gap: space[12] },
   deactivateAction: { width: '100%' },
   deactivateTarget: { justifyContent: 'center', minHeight: 48 },
+  deactivateTargetWithCancel: { flex: 1 },
   deactivation: { flex: 1, gap: space[32], justifyContent: 'space-between' },
   deleteAction: { flex: 1, height: 48, minWidth: 0 },
-  deleteActions: { flexDirection: 'row', gap: space[8] },
+  actionButtons: { flexDirection: 'row', gap: space[8] },
   identityCopy: { gap: space[4] },
   impacts: { gap: space[16] },
   indicator: {

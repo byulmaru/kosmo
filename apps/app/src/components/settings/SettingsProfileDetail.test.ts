@@ -23,9 +23,22 @@ type QueryData = {
   } | null;
 };
 
+const ownerProfile = {
+  displayName: 'Owner Profile',
+  followPolicy: 'OPEN' as const,
+  id: 'profile:owner',
+  instance: { kind: 'LOCAL' as const },
+  private: { defaultPostVisibility: 'PUBLIC' as const },
+  relativeHandle: '@owner',
+  viewerState: { membership: { role: 'OWNER' as const } },
+} satisfies NonNullable<NonNullable<QueryData['currentSession']>['selectedProfile']>;
+
 let queryData: QueryData;
 let queryFetchKeys: unknown[] = [];
 let openProfileSwitcherCalls = 0;
+let deleteSelectedProfileCalls = 0;
+let resetCurrentActorAccepted = true;
+const resetCurrentActorCalls: Array<string | null | undefined> = [];
 let queryMode: 'error' | 'success' = 'success';
 let relayActorLifecycleKey = 'actor-a';
 let mutationInFlight = false;
@@ -60,6 +73,13 @@ mock.module('react-relay', {
       },
       mutationInFlight,
     ],
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('../../auth/selectedProfileStorage.ts', import.meta.url), {
+  exports: {
+    deleteSelectedProfile: async () => {
+      deleteSelectedProfileCalls += 1;
+    },
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('./ProfileSettingsScreen.tsx', import.meta.url), {
@@ -103,7 +123,20 @@ mock.module(new URL('../../observability/UnexpectedErrorContext.ts', import.meta
   exports: { useUnexpectedErrorReporter: () => undefined },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../../relay/RelayActorProvider.tsx', import.meta.url), {
-  exports: { useRelayActorLifecycleKey: () => relayActorLifecycleKey },
+  exports: {
+    useRelayActor: () => ({
+      resetCurrentActor: (profileId?: string | null) => {
+        resetCurrentActorCalls.push(profileId);
+        if (!resetCurrentActorAccepted) {
+          return false;
+        }
+        queryData = { currentSession: { selectedProfile: null } };
+        relayActorLifecycleKey = 'session';
+        return true;
+      },
+    }),
+    useRelayActorLifecycleKey: () => relayActorLifecycleKey,
+  },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
   exports: {
@@ -121,6 +154,9 @@ afterEach(async () => {
   queryData = { currentSession: { selectedProfile: null } };
   queryFetchKeys = [];
   openProfileSwitcherCalls = 0;
+  deleteSelectedProfileCalls = 0;
+  resetCurrentActorAccepted = true;
+  resetCurrentActorCalls.length = 0;
   queryMode = 'success';
   relayActorLifecycleKey = 'actor-a';
   mutationInFlight = false;
@@ -277,6 +313,87 @@ describe('SettingsProfileDetail', () => {
     );
   });
 
+  it('owner의 비활성화 확인은 matching 서버 결과 뒤 actor와 저장 선택을 정리한다', async () => {
+    const profile = ownerProfile;
+    queryData = { currentSession: { selectedProfile: profile } };
+    await render();
+
+    const lifecycle = () => rendered('ProfileSettingsScreen')[0]?.props.lifecycle;
+    assert.equal(lifecycle()?.state.phase, 'entry');
+    await act(async () => lifecycle()?.onAction('deactivate'));
+    assert.equal(lifecycle()?.state.phase, 'idle');
+    await act(async () => lifecycle()?.onCancel());
+    assert.equal(lifecycle()?.state.phase, 'entry');
+    assert.equal(mutationCalls.length, 0);
+    assert.equal(deleteSelectedProfileCalls, 0);
+
+    await act(async () => lifecycle()?.onAction('deactivate'));
+    await act(async () => lifecycle()?.onConfirm('deactivate'));
+    assert.deepEqual(mutationCalls, [{ input: { id: profile.id } }]);
+    assert.equal(deleteSelectedProfileCalls, 0);
+
+    await act(async () =>
+      mutationConfigs[0]?.onCompleted({
+        deleteProfile: { profileId: profile.id },
+      } as never),
+    );
+
+    assert.deepEqual(resetCurrentActorCalls, [null]);
+    assert.equal(deleteSelectedProfileCalls, 1);
+    await act(async () => renderer?.update(createElement(SettingsProfileDetail)));
+    const noSelection = rendered('StateView')[0];
+    assert.equal(noSelection.props.title, '설정할 Profile이 없어요');
+    assert.equal(noSelection.props.actionLabel, 'Profile 선택하기');
+  });
+
+  it('stale actor result or unconfirmed server response never clears stored selection', async () => {
+    const profile = ownerProfile;
+    queryData = { currentSession: { selectedProfile: profile } };
+    await render();
+
+    const lifecycle = () => rendered('ProfileSettingsScreen')[0]?.props.lifecycle;
+    await act(async () => lifecycle()?.onAction('deactivate'));
+    await act(async () => lifecycle()?.onConfirm('deactivate'));
+    await act(async () =>
+      mutationConfigs[0]?.onCompleted({
+        deleteProfile: { profileId: 'profile:other' },
+      } as never),
+    );
+    assert.equal(lifecycle()?.state.phase, 'error');
+    assert.deepEqual(resetCurrentActorCalls, []);
+    assert.equal(deleteSelectedProfileCalls, 0);
+
+    resetCurrentActorAccepted = false;
+    await act(async () => lifecycle()?.onRetry('deactivate'));
+    await act(async () =>
+      mutationConfigs[1]?.onCompleted({
+        deleteProfile: { profileId: profile.id },
+      } as never),
+    );
+    assert.deepEqual(resetCurrentActorCalls, [null]);
+    assert.equal(deleteSelectedProfileCalls, 0);
+    assert.equal(lifecycle()?.state.phase, 'error');
+    assert.equal(queryData.currentSession?.selectedProfile?.id, profile.id);
+  });
+
+  it('network failure keeps the confirmation retryable and leaves actor and storage unchanged', async () => {
+    const profile = ownerProfile;
+    queryData = { currentSession: { selectedProfile: profile } };
+    await render();
+
+    const lifecycle = () => rendered('ProfileSettingsScreen')[0]?.props.lifecycle;
+    await act(async () => lifecycle()?.onAction('deactivate'));
+    await act(async () => lifecycle()?.onConfirm('deactivate'));
+    await act(async () => mutationConfigs[0]?.onError(new Error('network failure')));
+
+    assert.equal(lifecycle()?.state.phase, 'error');
+    assert.deepEqual(resetCurrentActorCalls, []);
+    assert.equal(deleteSelectedProfileCalls, 0);
+    await act(async () => lifecycle()?.onRetry('deactivate'));
+    assert.equal(mutationCalls.length, 2);
+    assert.deepEqual(mutationCalls[1], { input: { id: profile.id } });
+  });
+
   it('selected Member Profile에는 같은 control을 읽기 전용으로 연결한다', async () => {
     const profile = {
       displayName: 'Member Profile',
@@ -291,6 +408,7 @@ describe('SettingsProfileDetail', () => {
     await render();
 
     assert.equal(rendered('ProfilePostingSettings')[0].props.editable, false);
+    assert.equal(rendered('ProfileSettingsScreen')[0].props.lifecycle, undefined);
     assert.equal(
       rendered('Button').some((node) => node.props.accessibilityLabel === '프로필 게시 설정 저장'),
       false,

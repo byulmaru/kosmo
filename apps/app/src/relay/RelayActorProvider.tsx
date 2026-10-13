@@ -22,6 +22,7 @@ type RelayActorValue = {
   clearNativeSession: () => Promise<void>;
   nativeToken: string | null;
   resetActor: (profileId?: string | null) => void;
+  resetCurrentActor: (profileId?: string | null) => boolean;
   resetSession: () => void;
   selectedProfileId: string | null;
   setNativeSession: (token: string) => Promise<void>;
@@ -78,6 +79,19 @@ export function RelayActorProvider({
     setNativeToken(null);
   }, [resetSession]);
 
+  const environmentGeneration = environmentGenerationRef.current;
+  const resetCurrentActor = useCallback(
+    (profileId?: string | null) => {
+      if (environmentGenerationRef.current !== environmentGeneration) {
+        return false;
+      }
+
+      resetActor(profileId);
+      return true;
+    },
+    [environmentGeneration, resetActor],
+  );
+
   const environment = useMemo(
     () => createEnvironment(nativeToken ?? null, actor.id === 'session' ? null : actor.id),
     // Actor state identity intentionally invalidates selected-profile-scoped cached fields. Route
@@ -89,11 +103,20 @@ export function RelayActorProvider({
       clearNativeSession,
       nativeToken: nativeToken ?? null,
       resetActor,
+      resetCurrentActor,
       resetSession,
       selectedProfileId: actor.id === 'session' ? null : actor.id,
       setNativeSession,
     }),
-    [actor.id, clearNativeSession, nativeToken, resetActor, resetSession, setNativeSession],
+    [
+      actor.id,
+      clearNativeSession,
+      nativeToken,
+      resetActor,
+      resetCurrentActor,
+      resetSession,
+      setNativeSession,
+    ],
   );
 
   if (nativeToken === undefined) {

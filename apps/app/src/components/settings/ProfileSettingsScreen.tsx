@@ -44,17 +44,10 @@ type SharedProps = {
   children: ReactNode;
   identityAction?: ReactNode;
 };
-type Props = SharedProps &
-  (
-    | {
-        embedded?: false;
-        lifecycle?: ProfileSettingsLifecycle;
-      }
-    | {
-        embedded: true;
-        lifecycle?: never;
-      }
-  );
+type Props = SharedProps & {
+  embedded?: boolean;
+  lifecycle?: ProfileSettingsLifecycle;
+};
 
 /** Controlled presentation only: the caller owns request results, authentication and navigation. */
 export function ProfileSettingsScreen(props: Props) {
@@ -127,6 +120,8 @@ function ProfileSettingsSurface({
       onConfirm={confirm}
       profile={profile}
       state={state}
+      embedded={embedded}
+      headingRef={embedded ? headingRef : undefined}
     />
   ) : deleted ? (
     <StateView title="프로필을 삭제했어요" description="삭제한 프로필은 복구할 수 없습니다." />
@@ -198,7 +193,7 @@ function ProfileSettingsSurface({
                     프로필 비활성화
                   </Text>
                   <Text style={[textStyles.uiCopyM, { color: theme.foregroundSecondary }]}>
-                    프로필 활동과 공개를 일시적으로 중지합니다.
+                    프로필 활동과 공개를 중지합니다.
                   </Text>
                 </View>
                 <ChevronRight aria-hidden color={theme.foregroundSecondary} size={iconSizes[24]} />
@@ -264,6 +259,7 @@ function ProfileSettingsSurface({
                 onConfirm={confirm}
                 profile={profile}
                 state={state}
+                embedded={embedded}
               />
             ) : null}
           </ScrollView>
@@ -275,6 +271,8 @@ function ProfileSettingsSurface({
 }
 
 function LifecycleConfirmation({
+  embedded,
+  headingRef,
   profile,
   state,
   onConfirm,
@@ -282,6 +280,8 @@ function LifecycleConfirmation({
   cancelRef,
 }: Pick<Props, 'profile'> &
   Pick<ProfileSettingsLifecycle, 'state' | 'onCancel'> & {
+    embedded: boolean;
+    headingRef?: Ref<View>;
     onConfirm: () => void;
     cancelRef: Ref<View>;
   }) {
@@ -300,7 +300,15 @@ function LifecycleConfirmation({
   if (state.action === 'delete') {
     return <ProfileLifecycleDeleteConfirmContent {...props} {...acknowledgement} />;
   }
-  return <ProfileLifecycleDeactivateContent {...props} {...acknowledgement} />;
+  return (
+    <ProfileLifecycleDeactivateContent
+      {...props}
+      {...acknowledgement}
+      headingRef={headingRef}
+      retry={state.phase === 'error'}
+      showCancelButton={embedded}
+    />
+  );
 }
 
 function LifecycleFeedback({ action, phase }: ProfileLifecycleState) {

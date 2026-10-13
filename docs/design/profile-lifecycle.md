@@ -13,8 +13,10 @@
 - [삭제 실패와 확인 유지](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4868-37698)
 
 `ProfileSettingsScreen`은 대상 identity·설정 content와 선택적인 lifecycle을 합성하는 controlled presentation이다.
-Settings route·shell·target selector는 조립하지 않는다. 세션의 현재 활동 Profile을 바꾸지 않으며,
-실제 권한·보존 기간·재인증·mutation·session·navigation은 PROD-815가 소유한다.
+Settings route·shell·target selector는 조립하지 않는다. 실제 Settings의 비활성화 진입점은 선택된 Active/Normal
+Local Profile의 Owner에게만 제공하며, 비활성화 결과와 session·selected Profile·navigation 반영은
+[PROD-943](https://linear.app/byulmaru/issue/PROD-943/settings%EC%97%90%EC%84%9C-local-profile-%EB%B9%84%ED%99%9C%EC%84%B1%ED%99%94%EB%A5%BC-%EC%8B%A4%EC%A0%9C-%EA%B8%B0%EB%8A%A5%EC%97%90-%EC%97%B0%EA%B2%B0%ED%95%9C%EB%8B%A4)가 소유한다. 이 Settings 흐름은 실제 비활성화 결과만 안내하며,
+30일 시스템 파기는 별도 [PROD-1110](https://linear.app/byulmaru/issue/PROD-1110/%EB%B9%84%ED%99%9C%EC%84%B1%ED%99%94%EB%90%9C-local-profile%EC%9D%98-30%EC%9D%BC-%ED%9B%84-%EC%8B%9C%EC%8A%A4%ED%85%9C-%ED%8C%8C%EA%B8%B0%EB%A5%BC-%EA%B5%AC%ED%98%84%ED%95%9C%EB%8B%A4)에서 구현한다.
 기존 [Profile spec](../../openspec/specs/profile/spec.md)의 runtime 계약을 확장하지 않는다.
 이미 확정된 Linear/Figma 표현 계약의 이관이므로 새 OpenSpec이나 lifecycle 제품 정책을 추가하지 않는다.
 
@@ -35,8 +37,8 @@ Native는 기존 ModalSheet·RadioGroup을 사용하고 Switch는 플랫폼 기�
 - 비활성화 확인은 Web·Native 모두 화면 내용을 교체하고, 재활성화·영구 삭제 확인은 팝업으로 연다.
   비활성화 취소 후 caller가 보관한 설정값과 진입 버튼 focus를 복원한다.
 
-현재 앱의 `SettingsProfileDetail`은 기본 공개 범위 control을, Follow Approval은 Profile Edit를 사용한다.
-이번 Screen은 Figma Target 조립이며 기존 Settings route·목록·저장 consumer를 교체하지 않는다.
+현재 앱의 `SettingsProfileDetail`은 게시물 기본 공개 범위와 팔로우 요청 자동 승인의 두 게시 설정을 제공한다.
+이번 Screen은 Figma Target 조립이며 기존 Settings route·목록·두 게시 설정의 저장 동작을 교체하지 않는다.
 Profile identity는 `ProfileListItemContent`·Avatar, 재활성화는 `ConfirmationContent`,
 확인창은 `ModalSheet`, 삭제 완료는 `StateView`, 결과 알림은 `ToastProvider`를 재사용한다.
 영구 삭제의 대상·설명·acknowledgement·인증 안내·48px action 행은
@@ -91,5 +93,5 @@ identity Controls와 Actions를 제공하며 outcome은 caller의 요청 결과�
 브라우저로 검토한다. 관련 Storybook tests, 앱 타입 검사, 정적 Storybook·Web export를 실행한다.
 Storybook의 공통 a11y 설정은 color-contrast를 제외하므로 자동 통과를 전체 접근성 완료로 해석하지 않는다.
 
-PROD-815에는 실제 actor/target 선택, 권한, 인증 redirect, mutation·session 갱신, navigation,
-늦은 요청 결과 처리와 Web·iOS·Android runtime·screen reader 검증이 남는다.
+[PROD-943](https://linear.app/byulmaru/issue/PROD-943/settings%EC%97%90%EC%84%9C-local-profile-%EB%B9%84%ED%99%9C%EC%84%B1%ED%99%94%EB%A5%BC-%EC%8B%A4%EC%A0%9C-%EA%B8%B0%EB%8A%A5%EC%97%90-%EC%97%B0%EA%B2%B0%ED%95%9C%EB%8B%A4)는 실제 Settings 연결과 Web·지원 Native runtime 검증을 소유한다. 자동화 결과와 남은 기기·보조기술 QA는 별도 증거로 기록한다.
+30일 시스템 파기와 그에 필요한 data·relationship 정책은 [PROD-1110](https://linear.app/byulmaru/issue/PROD-1110/%EB%B9%84%ED%99%9C%EC%84%B1%ED%99%94%EB%90%9C-local-profile%EC%9D%98-30%EC%9D%BC-%ED%9B%84-%EC%8B%9C%EC%8A%A4%ED%85%9C-%ED%8C%8C%EA%B8%B0%EB%A5%BC-%EA%B5%AC%ED%98%84%ED%95%9C%EB%8B%A4)가 별도로 다룬다.

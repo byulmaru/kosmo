@@ -12,6 +12,7 @@ import type {
 
 type Args = {
   lifecycleEnabled: boolean;
+  embedded?: boolean;
   onSettingsChange: (value: ProfilePostingSettingsValue) => void;
   action: ProfileLifecycleAction;
   state: ProfileLifecycleState['phase'];
@@ -47,6 +48,7 @@ function ProfileSettingsExample(args: Args) {
   return (
     <View style={{ alignSelf: 'center', maxWidth: 640, minHeight: height, width: '100%' }}>
       <ProfileSettingsScreen
+        embedded={args.embedded}
         profile={{
           id: 'lifecycle-profile',
           displayName: args.displayName,
@@ -85,6 +87,7 @@ function ProfileSettingsExample(args: Args) {
 const meta = {
   args: {
     lifecycleEnabled: true,
+    embedded: false,
     onSettingsChange: fn(),
     action: 'deactivate',
     state: 'entry',
@@ -98,6 +101,7 @@ const meta = {
   },
   argTypes: {
     lifecycleEnabled: { control: 'boolean' },
+    embedded: { control: 'boolean' },
     action: {
       if: { arg: 'lifecycleEnabled' },
       control: 'inline-radio',
@@ -128,7 +132,7 @@ const meta = {
   parameters: { controls: { disable: true }, layout: 'fullscreen' },
   render: (args) => (
     <ProfileSettingsExample
-      key={`${args.action}:${args.state}:${args.outcome}:${args.lifecycleEnabled}`}
+      key={`${args.action}:${args.state}:${args.outcome}:${args.lifecycleEnabled}:${args.embedded}`}
       {...args}
     />
   ),
@@ -153,6 +157,50 @@ export const WithLifecycle: Story = {
 export const DeactivateConfirmation: Story = {
   args: { state: 'idle' },
   globals: { viewport: { value: 'kosmoMobile', isRotated: false } },
+};
+export const EmbeddedDeactivate: Story = {
+  args: { embedded: true, outcome: 'error' },
+  globals: { viewport: { value: 'kosmoMobile', isRotated: false } },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    const trigger = canvas.getByRole('button', { name: /프로필 비활성화/ });
+    await userEvent.click(trigger);
+    const heading = canvas.getByRole('heading', { name: '프로필을 비활성화할까요?' });
+    await waitFor(() => expect(heading.closest('[tabindex="-1"]')).toHaveFocus());
+    await expect(canvas.queryByRole('heading', { name: '프로필 설정' })).not.toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: '취소' })).toBeVisible();
+    await expect(
+      canvas.queryByRole('button', { name: '취소하고 프로필 설정으로 돌아가기' }),
+    ).toBeNull();
+
+    await userEvent.click(canvas.getByRole('button', { name: '취소' }));
+    await waitFor(() =>
+      expect(canvas.getByRole('button', { name: /프로필 비활성화/ })).toHaveFocus(),
+    );
+    await expect(args.onCancel).toHaveBeenCalledTimes(1);
+    await expect(canvas.getByRole('combobox', { name: '게시물 기본 공개 범위' })).toBeVisible();
+
+    await userEvent.click(canvas.getByRole('button', { name: /프로필 비활성화/ }));
+    const checkbox = canvas.getByRole('checkbox', { name: '위 영향을 모두 확인했습니다.' });
+    await userEvent.click(checkbox);
+    await userEvent.click(canvas.getByRole('button', { name: '비활성화' }));
+    const pendingButton = canvas.getByRole('button', { name: '비활성화' });
+    await expect(pendingButton).toHaveAttribute('aria-busy', 'true');
+    await expect(checkbox).toHaveAttribute('aria-disabled', 'true');
+    await waitFor(() => expect(canvas.getByRole('button', { name: '다시 시도' })).toBeVisible());
+    await expect(page.findByRole('alert')).resolves.toHaveTextContent(
+      '프로필을 비활성화하지 못했어요. 다시 시도해주세요.',
+    );
+    await userEvent.click(canvas.getByRole('button', { name: '다시 시도' }));
+    await expect(args.onRetry).toHaveBeenCalledTimes(1);
+    await waitFor(() =>
+      expect(canvas.getByRole('button', { name: '다시 시도' })).not.toHaveAttribute(
+        'aria-busy',
+        'true',
+      ),
+    );
+  },
 };
 export const ReactivateConfirmation: Story = {
   args: { action: 'reactivate', state: 'idle' },

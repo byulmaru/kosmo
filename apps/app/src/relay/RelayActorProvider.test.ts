@@ -15,6 +15,7 @@ type RelayActorSnapshot = {
   environment: Environment;
   nativeToken: string | null;
   resetActor: (profileId?: string | null) => void;
+  resetCurrentActor: (profileId?: string | null) => boolean;
   resetSession: () => void;
   selectedProfileId: string | null;
   setNativeSession: (token: string) => Promise<void>;
@@ -144,6 +145,7 @@ function Probe() {
     environment: useRelayEnvironment(),
     nativeToken: actor.nativeToken,
     resetActor: actor.resetActor,
+    resetCurrentActor: actor.resetCurrentActor,
     resetSession: actor.resetSession,
     selectedProfileId: actor.selectedProfileId,
     setNativeSession: actor.setNativeSession,
@@ -205,6 +207,51 @@ describe('RelayActorProvider session cleanup', () => {
     assert.equal(snapshot.environment.getStore().getSource().get('old-viewer'), undefined);
     assert.equal(actorSubtreeMountCount, 2);
     assert.equal(stableSubtreeMountCount, 1);
+  });
+
+  it('stale actor completion은 Profile 전환과 auth reset 뒤의 현재 actor를 바꾸지 않는다', async () => {
+    platform.OS = 'web';
+    await renderProvider();
+    await act(async () => snapshot?.resetActor('profile-a'));
+
+    assert.ok(snapshot);
+    const staleProfileAction = snapshot.resetCurrentActor;
+    await act(async () => snapshot?.resetActor('profile-b'));
+
+    assert.equal(staleProfileAction(null), false);
+    assert.equal(snapshot?.selectedProfileId, 'profile-b');
+
+    await act(async () => snapshot?.resetActor('profile-a'));
+
+    assert.equal(staleProfileAction(null), false);
+    assert.equal(snapshot?.selectedProfileId, 'profile-a');
+
+    const preAuthResetAction = snapshot?.resetCurrentActor;
+    await act(async () => snapshot?.resetSession());
+
+    assert.equal(preAuthResetAction?.(null), false);
+    assert.equal(snapshot?.selectedProfileId, null);
+  });
+
+  it('accepts the current actor reset and creates a fresh Session Environment', async () => {
+    platform.OS = 'web';
+    await renderProvider();
+    await act(async () => snapshot?.resetActor('last-profile'));
+
+    assert.ok(snapshot);
+    const previousEnvironment = snapshot.environment;
+    const previousActorLifecycleKey = snapshot.actorLifecycleKey;
+    let accepted = false;
+    await act(async () => {
+      accepted = snapshot?.resetCurrentActor(null) ?? false;
+    });
+
+    assert.equal(accepted, true);
+    assert.ok(snapshot);
+    assert.equal(snapshot.selectedProfileId, null);
+    assert.notEqual(snapshot.environment, previousEnvironment);
+    assert.notEqual(snapshot.actorLifecycleKey, previousActorLifecycleKey);
+    assert.equal(environmentInputs.at(-1)?.selectedProfileId, null);
   });
 
   it('SecureStore token을 삭제하고 이전 Store를 새 guest Store와 다음 Session에서 재사용하지 않는다', async () => {
