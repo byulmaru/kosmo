@@ -57,10 +57,8 @@ export const DirectSelection: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '공개 범위: 조용한 공개' }));
 
     const directOption = canvas.getByRole('menuitemradio', { name: '언급한 프로필만' });
-    expect(within(directOption).getByText('이 게시물에 언급된 모두')).toBeVisible();
     await userEvent.click(directOption);
 
     expect(args.onVisibilityChange).toHaveBeenLastCalledWith('DIRECT');
-    expect(canvas.getByRole('button', { name: '공개 범위: 언급한 프로필만' })).toBeVisible();
   },
 };

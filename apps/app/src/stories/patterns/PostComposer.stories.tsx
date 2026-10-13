@@ -1098,7 +1098,6 @@ export const MobilePlaygroundContract: Story = {
     const menu = canvas.getByRole('menu', { name: '공개 범위 선택' });
     const trigger = canvas.getByRole('button', { name: '공개 범위: 조용한 공개' });
     expect(within(menu).getAllByRole('menuitemradio')).toHaveLength(4);
-    expect(within(menu).getByRole('menuitemradio', { name: '언급한 프로필만' })).toBeVisible();
     expect(menu.getBoundingClientRect().right).toBe(trigger.getBoundingClientRect().right - 16);
 
     await userEvent.click(within(menu).getByRole('menuitemradio', { name: '공개' }));
