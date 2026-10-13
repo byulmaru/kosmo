@@ -1997,6 +1997,7 @@ export const UniversalMobile: Story = {
       homeHeader!.getBoundingClientRect().left + homeHeader!.getBoundingClientRect().width / 2,
       0,
     );
+    expect(menuButton.innerText.trim()).toBe('');
     expect(getComputedStyle(menuButton).borderTopWidth).toBe('0px');
     expect(menuButton.getBoundingClientRect().height).toBe(44);
     expect(menuButton.getBoundingClientRect().width).toBe(44);
