@@ -15,10 +15,6 @@ import { postListMetrics } from './postListMetrics';
 import { usePostMediaViewerHost } from './PostMediaViewerHost';
 import { usePostReplySurface } from './PostReplySurface';
 import { PostSourcePresentationView, PostSourcePreview } from './PostSourcePresentationView';
-import {
-  PostSurfaceHoverSuppressionContext,
-  usePostSurfaceFeedback,
-} from './usePostSurfaceFeedback';
 import type { ReactNode } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { PostListItem_post$key } from './__generated__/PostListItem_post.graphql';
@@ -296,37 +292,40 @@ function PostListItemCard({
   style: StyleProp<ViewStyle>;
 }) {
   const theme = useTheme();
-  const { handlers, hovered, pressed, setSurfaceHoverSuppressed } = usePostSurfaceFeedback({
-    hover: true,
-    press: true,
-  });
 
   return (
-    <View
-      {...handlers}
+    <Pressable
+      accessible={false}
+      focusable={false}
       role={article ? 'article' : undefined}
-      style={style}
+      style={[style, Platform.OS === 'web' ? { cursor: 'auto' } : undefined]}
+      tabIndex={-1}
       testID="post-list-item-card"
     >
-      <View
-        accessibilityElementsHidden
-        importantForAccessibility="no-hide-descendants"
-        style={[
-          styles.surfaceFeedback,
-          {
-            backgroundColor: pressed
-              ? theme.statePressedSubtle
-              : hovered
-                ? theme.stateHover
-                : undefined,
-          },
-        ]}
-        testID="post-list-item-feedback"
-      />
-      <PostSurfaceHoverSuppressionContext.Provider value={setSurfaceHoverSuppressed}>
-        {children}
-      </PostSurfaceHoverSuppressionContext.Provider>
-    </View>
+      {(state) => {
+        const hovered = Platform.OS === 'web' && Boolean((state as { hovered?: boolean }).hovered);
+        return (
+          <>
+            <View
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+              style={[
+                styles.surfaceFeedback,
+                {
+                  backgroundColor: state.pressed
+                    ? theme.statePressedSubtle
+                    : hovered
+                      ? theme.stateHover
+                      : undefined,
+                },
+              ]}
+              testID="post-list-item-feedback"
+            />
+            {children}
+          </>
+        );
+      }}
+    </Pressable>
   );
 }
 
