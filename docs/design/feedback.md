@@ -91,6 +91,8 @@ Form은 `{dirty, submitting}` 상태만 presentation에 알리고 overlay, navig
 - 입력 검증·이미지 읽기·SDK 초기화 등 준비 실패와 Web 전송 실패·응답 시간 초과는 오류, 재시도 action, 종류·본문·첨부를 유지한다.
 - Android·iOS는 기존 SDK capture 후 초기화 계약을 유지하며 서버 접수 완료를 보장하지 않는다.
 - route와 인증 경계, radio·status·busy semantics를 유지한다. 첨부 유무와 관계없이 Sentry User Feedback으로 접수한다.
+- 전송 본문 첫 줄에 선택한 종류의 폼 문구를 대괄호로 표시하고 빈 줄 뒤에 사용자 본문을 이어 붙인다.
+  예: `[아쉬워요]` 다음에 사용자 본문. 종류 태그도 함께 유지하며 입력 draft와 본문 길이 검증에는 이 표시를 포함하지 않는다.
 - 재현 환경을 별도 입력 필드로 추가하지 않는다. 기존 Sentry SDK의 기본 진단 context를 사용하며 자동 breadcrumb·Session Replay 수집은 추가하지 않는다.
 
 ## 선택적 이미지 첨부
