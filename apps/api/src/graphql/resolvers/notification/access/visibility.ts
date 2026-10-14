@@ -1,13 +1,8 @@
-import { AccountProfiles, db, Notifications, Posts } from '@kosmo/core/db';
-import { notificationSourceAvailabilityWhere } from '@kosmo/core/visibility';
-import { and, eq, exists, or, sql } from 'drizzle-orm';
-import { alias } from 'drizzle-orm/pg-core';
+import { AccountProfiles, Accounts, db, Notifications } from '@kosmo/core/db';
+import { AccountState, NotificationKind } from '@kosmo/core/enums';
+import { and, eq, exists, ne, or, sql } from 'drizzle-orm';
 import type { Database } from '@kosmo/core/db';
 import type { UserContext } from '@/context';
-
-/** Source-loader aliases remain here; availability aliases live privately in core. */
-export const NotificationSourceReposts = alias(Posts, 'notification_source_repost');
-export const NotificationRepostRelatedPosts = alias(Posts, 'notification_repost_related_post');
 
 export const notificationMembershipWhere = (accountId: string, database: Database) =>
   exists(
@@ -25,10 +20,7 @@ export const notificationMembershipWhere = (accountId: string, database: Databas
 export const visibleNotificationWhere = ({ ctx }: { ctx: UserContext }) => {
   const accountId = ctx.session?.accountId;
 
-  return and(
-    accountId ? notificationMembershipWhere(accountId, db) : sql`1=0`,
-    notificationSourceAvailabilityWhere(db, { includeRecipientAvailability: true }),
-  )!;
+  return accountId ? notificationMembershipWhere(accountId, db) : sql`1=0`;
 };
 
 export const visibleViewerNotificationWhere = ({
@@ -41,16 +33,28 @@ export const visibleViewerNotificationWhere = ({
   const profileNotifications =
     ctx.session && profileId !== null
       ? and(
+          ne(Notifications.kind, NotificationKind.OPERATIONAL),
           profileId === undefined ? undefined : eq(Notifications.recipientProfileId, profileId),
           notificationMembershipWhere(ctx.session.accountId, db),
         )
       : undefined;
   const operationalNotifications = ctx.session
-    ? eq(Notifications.recipientAccountId, ctx.session.accountId)
+    ? and(
+        eq(Notifications.kind, NotificationKind.OPERATIONAL),
+        eq(Notifications.recipientAccountId, ctx.session.accountId),
+        exists(
+          db
+            .select({ id: Accounts.id })
+            .from(Accounts)
+            .where(
+              and(
+                eq(Accounts.id, Notifications.recipientAccountId),
+                eq(Accounts.state, AccountState.ACTIVE),
+              ),
+            ),
+        ),
+      )
     : undefined;
 
-  return and(
-    or(profileNotifications, operationalNotifications) ?? sql`1=0`,
-    notificationSourceAvailabilityWhere(db, { includeRecipientAvailability: true }),
-  )!;
+  return or(profileNotifications, operationalNotifications) ?? sql`1=0`;
 };

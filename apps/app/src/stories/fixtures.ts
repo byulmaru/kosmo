@@ -300,7 +300,7 @@ export function followNotification({
 }: {
   createdAt?: string;
   id?: string;
-  profile?: StoryProfile;
+  profile?: StoryProfile | null;
   readAt?: string | null;
 } = {}) {
   return {
@@ -313,14 +313,14 @@ export function followNotification({
 }
 
 export function followRequestNotification({
-  createdAt = Temporal.Now.instant().subtract({ minutes: 4 }).toString(),
   id = 'notification-follow-request-1',
+  createdAt = Temporal.Now.instant().subtract({ minutes: 4 }).toString(),
   profile: relatedProfile = profile(),
   readAt = null,
 }: {
   createdAt?: string;
   id?: string;
-  profile?: StoryProfile;
+  profile?: StoryProfile | null;
   readAt?: string | null;
 } = {}) {
   return {
@@ -342,8 +342,8 @@ export function reactionNotification({
 }: {
   createdAt?: string;
   id?: string;
-  post?: StoryPost;
-  profile?: StoryProfile;
+  post?: StoryPost | null;
+  profile?: StoryProfile | null;
   readAt?: string | null;
   type?: string;
 } = {}) {
@@ -367,8 +367,8 @@ export function replyNotification({
 }: {
   createdAt?: string;
   id?: string;
-  post?: StoryPost;
-  profile?: StoryProfile;
+  post?: StoryPost | null;
+  profile?: StoryProfile | null;
   readAt?: string | null;
 } = {}) {
   return {
@@ -410,8 +410,8 @@ export function repostNotification({
 }: {
   createdAt?: string;
   id?: string;
-  post?: StoryPost;
-  profile?: StoryProfile;
+  post?: StoryPost | null;
+  profile?: StoryProfile | null;
   readAt?: string | null;
 } = {}) {
   return {
@@ -432,7 +432,7 @@ export function quoteNotification({
 }: {
   createdAt?: string;
   id?: string;
-  post?: StoryPost;
+  post?: StoryPost | null;
   readAt?: string | null;
 } = {}) {
   return {

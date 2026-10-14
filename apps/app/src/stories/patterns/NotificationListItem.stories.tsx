@@ -379,8 +379,10 @@ export const NullableReactionPost: Story = {
   render: () => <NullableReaction />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByText('게시글을 볼 수 없습니다')).toBeVisible();
-    await expect(canvas.getByRole('link')).toHaveAttribute('aria-disabled', 'true');
+    const fallback = canvas.getByTestId('notification-source-unavailable-reaction');
+    await expect(fallback).toBeVisible();
+    await expect(fallback).toHaveTextContent('반응 알림');
+    await expect(fallback.querySelector('a, button, [role="link"], [role="button"]')).toBeNull();
   },
 };
 

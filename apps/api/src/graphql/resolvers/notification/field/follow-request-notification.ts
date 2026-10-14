@@ -5,20 +5,18 @@ import { FollowRequestNotification, getNotificationSource } from '../ref';
 builder.objectField(FollowRequestNotification, 'profile', (t) =>
   t.field({
     type: Profile,
+    nullable: true,
     resolve: async (notification, _, ctx) =>
-      (await getNotificationSource(notification, ctx)).profileId,
+      (await getNotificationSource(notification, ctx))?.profileId ?? null,
   }),
 );
 
 builder.objectField(FollowRequestNotification, 'followRequest', (t) =>
   t.field({
     type: ProfileFollowRequest,
+    nullable: true,
     resolve: async (notification, _, ctx) => {
-      const source = await getNotificationSource(notification, ctx);
-      if (!source.followRequest) {
-        throw new Error('Follow Request Notification source not found');
-      }
-      return source.followRequest;
+      return (await getNotificationSource(notification, ctx))?.followRequest ?? null;
     },
   }),
 );

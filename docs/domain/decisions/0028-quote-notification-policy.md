@@ -11,6 +11,9 @@ Accepted — 사용자의 “Spec Gate 승인” 응답으로 PROD-903 정책 �
 2026-09-09의 이전 순서와 그 유지 이유는 역사적 기록이며 현재 우선순위의 근거가 아니다. 이 우선순위
 변경으로 이미 저장된 Notification의 ID, Type, Read State와 최초 읽음 시각을 바꾸거나 소급 교체·생성하지 않는다.
 
+2026-10-13 Notification 행의 API 조회 권한을 Quote/source 객체 조회 권한과 분리했다. 저장 행이 존재하는 동안에는
+Recipient 권한으로 조회하고, Quote/source 필드는 현재 요청의 기존 객체 조회 권한을 적용한다. 기존 비동기 정리 정책은 유지한다.
+
 ## 날짜
 
 2026-09-08
@@ -50,7 +53,8 @@ Accepted — 사용자의 “Spec Gate 승인” 응답으로 PROD-903 정책 �
   최초 읽음 시각을 유지하며 이후 더 높은 우선순위 Type이 생성 가능해져도 추가·교체하거나 소급 생성하지 않는다.
   Quote 승인이 늦어 이미 생성된 Reply 또는 Mention이 있을 때도 같다. Followee Post는 독립 정책을 유지한다.
 - 자기 인용 억제는 Profile 단위다. 같은 Account의 서로 다른 Profile까지 억제하지 않는다.
-- Recipient가 Quote와 direct Source를 모두 조회할 수 있어야 알림을 생성·조회할 수 있다.
+- Recipient가 Quote와 direct Source를 모두 조회할 수 있어야 새 알림을 생성한다. 저장된 Notification 행의 API 조회는
+  Recipient 권한을 따르며, Quote/source 필드는 현재 요청의 기존 객체 조회 권한을 적용한다.
   Source가 조회 불가여도 Quote 자체 Content를 유지하는 Post 정책은 바꾸지 않는다.
 - Profile Mute는 Quote Author, Word·Hashtag Mute는 Quote 내용·Hashtag, Post Notification Mute는
   direct Source가 속한 원문 thread를 검사한다. Word·Hashtag Mute에서 Source 내용을 다시 검사하지 않는다.
@@ -59,14 +63,16 @@ Accepted — 사용자의 “Spec Gate 승인” 응답으로 PROD-903 정책 �
 - Local 작성도 인용 관계 승인 후 Source를 정상 표시할 수 있을 때 최초 알림을 판단한다.
   승인 대기·거절 중에는 Quote 알림을 생성하지 않는다.
 - 첫 생성 판단에서 Mute·조회 권한으로 억제됐거나 기능 도입 전에 존재한 Quote에는 소급 알림을 만들지 않는다.
-  정책이 적용되는 Remote Quote의 최초 승인은 생성 판단 시점으로 인정한다. 보존된 알림의 숨김 해제는 새 생성이 아니다.
-- 승인 철회·Quote 또는 Source 삭제로 무효가 되면 모든 알림 조회 표면에서 즉시 숨기고 기존 unavailable
-  Notification 정책에 따라 비동기로 정리한다. 물리 정리 뒤에도 같은 Quote에 다시 알리지 않는다.
-- Block·공개 범위 변경 등으로 Quote 또는 direct Source를 현재 조회할 수 없으면 모든 조회·읽음 표면에서
-  즉시 숨기고 기존 unavailable Notification 정책에 따라 Best Effort로 비동기 정리할 수 있다.
-  삭제 전에 제한이 풀리면 남아 있는 알림이 다시 보일 수 있지만 Notification·Read State·최초 읽음 시각의
-  보존이나 이후 복원은 보장하지 않는다. 승인 철회·Quote/direct Source 삭제도 같은 정리 정책을 따른다.
-  물리 정리 뒤에도 재처리·재승인으로 새 알림을 생성하거나 복원하지 않는다.
+  정책이 적용되는 Remote Quote의 최초 승인은 생성 판단 시점으로 인정한다. 저장된 행의 Quote/source 필드가 다시 조회 가능해지는 것은 새 Notification 생성과 구분한다.
+- 승인 철회·Quote 또는 Source 삭제로 무효가 되면 기존 unavailable Notification 정책에 따라 비동기로 정리한다.
+  정리 전까지 저장 행은 Recipient 권한으로 조회할 수 있고 Quote/source 필드는 기존 객체 조회 권한에 따라 null/unavailable일 수 있다.
+  물리 정리 뒤에는 같은 Quote에 다시 알리지 않는다.
+- Block·공개 범위 변경 등으로 Quote 또는 direct Source를 현재 조회할 수 없어도 저장 행의 Node·목록·count·읽음 처리는
+  Recipient 권한을 따른다. Related Post와 source 필드는 기존 객체 조회 권한을 적용한다. 기존 unavailable Notification 정책에 따른
+  Best Effort 비동기 정리와 삭제 시점·성공의 비보장은 유지한다.
+- 비동기 정리 전에 조회 제한이 풀리면 저장된 행의 Quote/source 필드가 다시 조회 가능해질 수 있다. 이때 Notification ID,
+  Read State와 최초 읽음 시각은 유지된다. 물리 정리 뒤 보존이나 복원은 보장하지 않는다. 승인 철회·Quote/direct Source 삭제도
+  기존 정리 정책을 따르며, 정리 뒤 재처리·재승인으로 새 알림을 생성하거나 복원하지 않는다.
 - Quote 전용 cleanup 보존 예외는 제거한다. Recipient 자체의 일시 비활성화·정지에 대한 기존 공통 예외는
   유지하며 Quote/direct Source 조회 불가 전반으로 확대하지 않는다.
 

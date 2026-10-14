@@ -17,6 +17,7 @@ import type { QuoteNotificationListItem_notification$key } from './__generated__
 import type { ReactionNotificationListItem_notification$key } from './__generated__/ReactionNotificationListItem_notification.graphql';
 import type { ReplyNotificationListItem_notification$key } from './__generated__/ReplyNotificationListItem_notification.graphql';
 import type { RepostNotificationListItem_notification$key } from './__generated__/RepostNotificationListItem_notification.graphql';
+import type { SourceUnavailableNotificationKind } from './NotificationListItemView';
 
 type NotificationListItemProps = {
   notification: NotificationListItem_notification$key;
@@ -110,8 +111,12 @@ export function OperationalNotificationListItem({
 const mentionNotificationFragment = graphql`
   fragment MentionNotificationListItem_notification on MentionNotification {
     id
+    createdAt
     readAt
     post {
+      content {
+        id
+      }
       ...MentionNotificationPost_post
     }
   }
@@ -125,8 +130,14 @@ export function MentionNotificationListItem({
   const data = useFragment(mentionNotificationFragment, notification);
   const markRead = useNotificationRead();
 
-  if (!data.post) {
-    return null;
+  if (!data.post || !data.post.content) {
+    return (
+      <SourceUnavailableNotificationItem
+        createdAt={data.createdAt}
+        kind="mention"
+        readAt={data.readAt}
+      />
+    );
   }
 
   return (
@@ -152,6 +163,16 @@ function actor(profile: {
 export function NotificationListItem({ notification }: NotificationListItemProps) {
   const data = useFragment(notificationFragment, notification);
   const markRead = useNotificationRead();
+
+  if (!data.profile) {
+    return (
+      <SourceUnavailableNotificationItem
+        createdAt={data.createdAt}
+        kind="follow"
+        readAt={data.readAt}
+      />
+    );
+  }
 
   return (
     <NotificationListItemView
@@ -190,6 +211,16 @@ export function FollowRequestNotificationListItem({
 }) {
   const data = useFragment(followRequestNotificationFragment, notification);
   const markRead = useNotificationRead();
+
+  if (!data.profile) {
+    return (
+      <SourceUnavailableNotificationItem
+        createdAt={data.createdAt}
+        kind="followRequest"
+        readAt={data.readAt}
+      />
+    );
+  }
 
   return (
     <NotificationListItemView
@@ -245,14 +276,23 @@ export function ReactionNotificationListItem({
   const markRead = useNotificationRead();
   const post = data.post;
 
+  if (!data.profile || !post) {
+    return (
+      <SourceUnavailableNotificationItem
+        createdAt={data.createdAt}
+        kind="reaction"
+        readAt={data.readAt}
+      />
+    );
+  }
+
   return (
     <NotificationListItemView
       actors={[actor(data.profile)]}
-      disabled={!post}
-      href={post ? `/${post.profile.relativeHandle}/${post.id}` : '/'}
+      href={`/${post.profile.relativeHandle}/${post.id}`}
       kind="reaction"
       onNavigate={() => markRead(data.id)}
-      preview={post ? toPreview(post) : null}
+      preview={toPreview(post)}
       timestamp={formatTimelineTimestamp(data.createdAt)}
       unread={data.readAt === null}
     />
@@ -262,8 +302,12 @@ export function ReactionNotificationListItem({
 const replyNotificationFragment = graphql`
   fragment ReplyNotificationListItem_notification on ReplyNotification {
     id
+    createdAt
     readAt
     post {
+      content {
+        id
+      }
       ...ReplyNotificationPost_post
     }
   }
@@ -277,8 +321,14 @@ export function ReplyNotificationListItem({
   const data = useFragment(replyNotificationFragment, notification);
   const markRead = useNotificationRead();
 
-  if (!data.post) {
-    return null;
+  if (!data.post || !data.post.content) {
+    return (
+      <SourceUnavailableNotificationItem
+        createdAt={data.createdAt}
+        kind="reply"
+        readAt={data.readAt}
+      />
+    );
   }
 
   return (
@@ -291,8 +341,12 @@ export function ReplyNotificationListItem({
 const quoteNotificationFragment = graphql`
   fragment QuoteNotificationListItem_notification on QuoteNotification {
     id
+    createdAt
     readAt
     post {
+      content {
+        id
+      }
       ...QuoteNotificationPost_post
     }
   }
@@ -306,8 +360,14 @@ export function QuoteNotificationListItem({
   const data = useFragment(quoteNotificationFragment, notification);
   const markRead = useNotificationRead();
 
-  if (!data.post) {
-    return null;
+  if (!data.post || !data.post.content) {
+    return (
+      <SourceUnavailableNotificationItem
+        createdAt={data.createdAt}
+        kind="quote"
+        readAt={data.readAt}
+      />
+    );
   }
 
   return (
@@ -359,16 +419,44 @@ export function RepostNotificationListItem({
   const markRead = useNotificationRead();
   const post = data.post;
 
+  if (!data.profile || !post) {
+    return (
+      <SourceUnavailableNotificationItem
+        createdAt={data.createdAt}
+        kind="repost"
+        readAt={data.readAt}
+      />
+    );
+  }
+
   return (
     <NotificationListItemView
       actors={[actor(data.profile)]}
-      disabled={!post}
-      href={post ? `/${post.profile.relativeHandle}/${post.id}` : '/'}
+      href={`/${post.profile.relativeHandle}/${post.id}`}
       kind="repost"
       onNavigate={() => markRead(data.id)}
-      preview={post ? toPreview(post) : null}
+      preview={toPreview(post)}
       timestamp={formatTimelineTimestamp(data.createdAt)}
       unread={data.readAt === null}
+    />
+  );
+}
+
+function SourceUnavailableNotificationItem({
+  createdAt,
+  kind,
+  readAt,
+}: {
+  createdAt: string;
+  kind: SourceUnavailableNotificationKind;
+  readAt: string | null | undefined;
+}) {
+  return (
+    <NotificationListItemView
+      kind={kind}
+      sourceUnavailable
+      timestamp={formatTimelineTimestamp(createdAt)}
+      unread={readAt === null}
     />
   );
 }

@@ -7,11 +7,13 @@ builder.objectFields(ReactionNotification, (t) => ({
   post: t.field({
     type: Post,
     nullable: true,
-    resolve: async (notification, _, ctx) => (await getNotificationSource(notification, ctx)).post!,
+    resolve: async (notification, _, ctx) =>
+      (await getNotificationSource(notification, ctx))?.postId ?? null,
   }),
   profile: t.field({
     type: Profile,
+    nullable: true,
     resolve: async (notification, _, ctx) =>
-      (await getNotificationSource(notification, ctx)).profileId,
+      (await getNotificationSource(notification, ctx))?.profileId ?? null,
   }),
 }));
