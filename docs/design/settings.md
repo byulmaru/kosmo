@@ -150,15 +150,12 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   정책 변경은 기존 Pending Follow Request를 바꾸지 않으며, 기본 공개 범위는 이미 열린 Composer의 draft를
   바꾸지 않는다. 도메인 보장은 [Profile](../domain/objects/profile.md)을 따른다.
 
-## Profile 설정의 후속 lifecycle 조립
+## Profile 설정의 Profile 삭제
 
-PROD-860의 `ProfileSettingsScreen`은 설정 content를 유지하고 optional lifecycle presentation을 합성한다.
-기본 Storybook에는 lifecycle 진입점이 없고, `WithLifecycle`에서 조립 상태를 검토한다. 실제
-`/settings/profile`의 비활성화 진입점은 선택된 Active/Normal Local Profile의 Owner에게만 제공하며,
+`/settings/profile`은 선택된 Active/Normal Local Profile의 Owner에게 단일 `프로필 삭제` action을 제공한다.
 확인·취소·요청 중·오류·재시도와 성공 후 서버 상태 반영은 [PROD-943](https://linear.app/byulmaru/issue/PROD-943/settings%EC%97%90%EC%84%9C-local-profile-%EB%B9%84%ED%99%9C%EC%84%B1%ED%99%94%EB%A5%BC-%EC%8B%A4%EC%A0%9C-%EA%B8%B0%EB%8A%A5%EC%97%90-%EC%97%B0%EA%B2%B0%ED%95%9C%EB%8B%A4)가 소유한다.
-비활성화된 Profile은 더 이상 선택·사용할 수 없고, 사용 가능한 Profile 목록과 navigation은 서버 상태를 반영한다.
-이 Settings 흐름은 실제 비활성화 결과만 안내하며 재활성화나 Owner 영구 삭제 action을 제공하지 않는다.
-30일 시스템 파기는 별도 [PROD-1110](https://linear.app/byulmaru/issue/PROD-1110/%EB%B9%84%ED%99%9C%EC%84%B1%ED%99%94%EB%90%9C-local-profile%EC%9D%98-30%EC%9D%BC-%ED%9B%84-%EC%8B%9C%EC%8A%A4%ED%85%9C-%ED%8C%8C%EA%B8%B0%EB%A5%BC-%EA%B5%AC%ED%98%84%ED%95%9C%EB%8B%A4)가 다룬다. 실제 파기 동작이 구현되기 전까지 Settings UI는 30일 뒤 자동 삭제를 약속하지 않는다.
+사용자에게 보이는 Profile 삭제는 기존 소프트 딜리트 동작을 사용해 Lifecycle State를 `Deactivated`로 바꾸며, 해당 Profile은 더 이상 선택·사용할 수 없다. 사용 가능한 Profile 목록과 navigation은 서버 상태를 반영한다. 이 Settings 흐름에는 별도 비활성화, 재활성화, Owner 영구 삭제 action이 없다.
+30일 후 물리 파기는 별도 [PROD-1110](https://linear.app/byulmaru/issue/PROD-1110/%EB%B9%84%ED%99%9C%EC%84%B1%ED%99%94%EB%90%9C-local-profile%EC%9D%98-30%EC%9D%BC-%ED%9B%84-%EC%8B%9C%EC%8A%A4%ED%85%9C-%ED%8C%8C%EA%B8%B0%EB%A5%BC-%EA%B5%AC%ED%98%84%ED%95%9C%EB%8B%A4)가 다룬다. 실제 파기 동작이 구현되기 전까지 Settings UI는 30일 뒤 자동 삭제를 약속하지 않는다.
 자세한 presentation 계약은 [Profile lifecycle](./profile-lifecycle.md)을 따른다. 이 조립은 기존 `SettingsProfileDetail`과 Profile Edit의 게시 설정 저장·route를 교체하지 않는다.
 
 ## Kosmo Account 탈퇴

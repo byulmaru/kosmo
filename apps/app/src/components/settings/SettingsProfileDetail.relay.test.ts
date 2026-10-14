@@ -122,11 +122,27 @@ mockModule('@/components/PageHeader', { PageHeader: () => createElement('PageHea
 mockModule(new URL('../profile/ProfileListItemContent.tsx', import.meta.url), {
   ProfileListItemContent: ({
     children,
+    displayName,
     identity,
+    relativeHandle,
   }: {
     children?: ReactNode;
+    displayName: string;
     identity?: ReactNode;
-  }) => createElement('ProfileListItemContent', null, identity, children),
+    relativeHandle?: string;
+  }) =>
+    createElement(
+      'ProfileListItemContent',
+      null,
+      identity ??
+        createElement(
+          Fragment,
+          null,
+          createElement('Text', null, displayName),
+          relativeHandle ? createElement('Text', null, relativeHandle) : null,
+        ),
+      children,
+    ),
 });
 mockModule(new URL('./ProfilePostingSettings.tsx', import.meta.url), {
   ProfilePostingSettings: () => createElement('ProfilePostingSettings'),
@@ -318,8 +334,8 @@ function button(label: string) {
   return result;
 }
 
-describe('SettingsProfileDetail real Relay deactivation flow', () => {
-  it('last profile disable resets the actor, confirms a fresh Session, and unlocks account withdrawal', async () => {
+describe('SettingsProfileDetail real Relay profile deletion flow', () => {
+  it('deleting the last profile resets the actor, confirms a fresh Session, and unlocks account withdrawal', async () => {
     await act(async () => {
       renderer = create(createElement(TestTree));
     });
@@ -336,13 +352,13 @@ describe('SettingsProfileDetail real Relay deactivation flow', () => {
 
     assert.deepEqual(accountState, { activeProfileCount: 1, phase: 'blocked' });
     assert.equal(storedProfileId, 'profile:owner');
-    await act(async () => pressableForText('프로필 비활성화').props.onPress());
+    await act(async () => pressableForText('프로필 삭제').props.onPress());
     await act(async () => {
       const checkbox = all('Pressable').find((node) => node.props.accessibilityRole === 'checkbox');
       assert.ok(checkbox);
       checkbox.props.onPress();
     });
-    await act(async () => button('비활성화').props.onPress());
+    await act(async () => button('프로필 삭제').props.onPress());
 
     const mutation = latestRequest('profile:owner', 'SettingsProfileDetailDeleteProfileMutation');
     assert.deepEqual(mutation.variables, { input: { id: 'profile:owner' } });
@@ -370,23 +386,22 @@ describe('SettingsProfileDetail real Relay deactivation flow', () => {
     assert.equal(probe?.props.selectedProfileId, null);
     assert.ok(all('StateView').some((node) => node.props.title === '설정할 Profile이 없어요'));
     for (const type of ['Button', 'Pressable']) {
-      for (const label of ['다시 활성화', '영구 삭제', '프로필 비활성화']) {
-        assert.equal(
-          all(type).some(
-            (control) =>
-              control.children.includes(label) ||
-              control.findAll(
-                (child) => (child.type as unknown) === 'Text' && child.children.includes(label),
-              ).length > 0,
-          ),
-          false,
-        );
-      }
+      assert.equal(
+        all(type).some(
+          (control) =>
+            control.children.includes('프로필 삭제') ||
+            control.findAll(
+              (child) =>
+                (child.type as unknown) === 'Text' && child.children.includes('프로필 삭제'),
+            ).length > 0,
+        ),
+        false,
+      );
     }
     assert.deepEqual(accountState, { acknowledged: false, phase: 'idle' });
   });
 
-  it('disable selects the server-provided remaining Profile and preserves the account session', async () => {
+  it('deleting a Profile selects the server-provided remaining Profile and preserves the account session', async () => {
     await act(async () => {
       renderer = create(createElement(TestTree));
     });
@@ -403,13 +418,13 @@ describe('SettingsProfileDetail real Relay deactivation flow', () => {
 
     assert.deepEqual(accountState, { activeProfileCount: 2, phase: 'blocked' });
     assert.equal(storedProfileId, 'profile:owner');
-    await act(async () => pressableForText('프로필 비활성화').props.onPress());
+    await act(async () => pressableForText('프로필 삭제').props.onPress());
     await act(async () => {
       const checkbox = all('Pressable').find((node) => node.props.accessibilityRole === 'checkbox');
       assert.ok(checkbox);
       checkbox.props.onPress();
     });
-    await act(async () => button('비활성화').props.onPress());
+    await act(async () => button('프로필 삭제').props.onPress());
 
     const mutation = latestRequest('profile:owner', 'SettingsProfileDetailDeleteProfileMutation');
     await respond(mutation, {
@@ -442,7 +457,7 @@ describe('SettingsProfileDetail real Relay deactivation flow', () => {
     assert.deepEqual(accountState, { activeProfileCount: 1, phase: 'blocked' });
   });
 
-  it('reselects the next deactivation candidate when the first candidate is already unavailable', async () => {
+  it('reselects the next eligible Profile when the first fallback cannot be selected', async () => {
     await act(async () => {
       renderer = create(createElement(TestTree));
     });
@@ -460,13 +475,13 @@ describe('SettingsProfileDetail real Relay deactivation flow', () => {
       },
     });
 
-    await act(async () => pressableForText('프로필 비활성화').props.onPress());
+    await act(async () => pressableForText('프로필 삭제').props.onPress());
     await act(async () => {
       const checkbox = all('Pressable').find((node) => node.props.accessibilityRole === 'checkbox');
       assert.ok(checkbox);
       checkbox.props.onPress();
     });
-    await act(async () => button('비활성화').props.onPress());
+    await act(async () => button('프로필 삭제').props.onPress());
 
     const mutation = latestRequest('profile:owner', 'SettingsProfileDetailDeleteProfileMutation');
     await respond(mutation, {
@@ -503,7 +518,7 @@ describe('SettingsProfileDetail real Relay deactivation flow', () => {
     assert.ok(all('Text').some((node) => node.children.includes('Profile C')));
   });
 
-  it('clears the stored selection after every returned deactivation candidate is rejected', async () => {
+  it('clears the stored selection after every returned fallback Profile is rejected', async () => {
     await act(async () => {
       renderer = create(createElement(TestTree));
     });
@@ -518,13 +533,13 @@ describe('SettingsProfileDetail real Relay deactivation flow', () => {
       me: { id: 'account:owner', profiles: [{ id: 'profile:owner' }, { id: 'profile:b' }] },
     });
 
-    await act(async () => pressableForText('프로필 비활성화').props.onPress());
+    await act(async () => pressableForText('프로필 삭제').props.onPress());
     await act(async () => {
       const checkbox = all('Pressable').find((node) => node.props.accessibilityRole === 'checkbox');
       assert.ok(checkbox);
       checkbox.props.onPress();
     });
-    await act(async () => button('비활성화').props.onPress());
+    await act(async () => button('프로필 삭제').props.onPress());
 
     const mutation = latestRequest('profile:owner', 'SettingsProfileDetailDeleteProfileMutation');
     await respond(mutation, {
@@ -555,7 +570,7 @@ describe('SettingsProfileDetail real Relay deactivation flow', () => {
     assert.ok(all('StateView').some((node) => node.props.title === '설정할 Profile이 없어요'));
   });
 
-  it('replays a committed disable after a lost response and converges the fresh session actor', async () => {
+  it('retries a committed Profile deletion after a lost response and converges the fresh session actor', async () => {
     await act(async () => {
       renderer = create(createElement(TestTree));
     });
@@ -570,13 +585,13 @@ describe('SettingsProfileDetail real Relay deactivation flow', () => {
       me: { id: 'account:owner', profiles: [{ id: 'profile:owner' }] },
     });
 
-    await act(async () => pressableForText('프로필 비활성화').props.onPress());
+    await act(async () => pressableForText('프로필 삭제').props.onPress());
     await act(async () => {
       const checkbox = all('Pressable').find((node) => node.props.accessibilityRole === 'checkbox');
       assert.ok(checkbox);
       checkbox.props.onPress();
     });
-    await act(async () => button('비활성화').props.onPress());
+    await act(async () => button('프로필 삭제').props.onPress());
 
     const firstMutation = latestRequest(
       'profile:owner',
@@ -624,7 +639,7 @@ describe('SettingsProfileDetail real Relay deactivation flow', () => {
     assert.deepEqual(accountState, { acknowledged: false, phase: 'idle' });
   });
 
-  it('a late disable for Profile A preserves the selected Profile B and its settings UI', async () => {
+  it('a late Profile deletion for A preserves selected Profile B and its settings UI', async () => {
     await act(async () => {
       renderer = create(createElement(TestTree));
     });
@@ -640,13 +655,13 @@ describe('SettingsProfileDetail real Relay deactivation flow', () => {
     });
 
     assert.equal(storedProfileId, 'profile:owner');
-    await act(async () => pressableForText('프로필 비활성화').props.onPress());
+    await act(async () => pressableForText('프로필 삭제').props.onPress());
     await act(async () => {
       const checkbox = all('Pressable').find((node) => node.props.accessibilityRole === 'checkbox');
       assert.ok(checkbox);
       checkbox.props.onPress();
     });
-    await act(async () => button('비활성화').props.onPress());
+    await act(async () => button('프로필 삭제').props.onPress());
 
     const firstMutation = latestRequest(
       'profile:owner',
@@ -708,6 +723,6 @@ describe('SettingsProfileDetail real Relay deactivation flow', () => {
       true,
     );
     assert.deepEqual(accountState, { activeProfileCount: 1, phase: 'blocked' });
-    assert.ok(pressableForText('프로필 비활성화'));
+    assert.ok(pressableForText('프로필 삭제'));
   });
 });

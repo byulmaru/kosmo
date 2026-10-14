@@ -327,22 +327,22 @@ describe('SettingsProfileDetail', () => {
     );
   });
 
-  it('owner의 비활성화 확인은 matching 서버 결과 뒤 actor와 저장 선택을 정리한다', async () => {
+  it('owner의 프로필 삭제 확인은 matching 서버 결과 뒤 actor와 저장 선택을 정리한다', async () => {
     const profile = ownerProfile;
     queryData = { currentSession: { selectedProfile: profile } };
     await render();
 
-    const lifecycle = () => rendered('ProfileSettingsScreen')[0]?.props.lifecycle;
-    assert.equal(lifecycle()?.state.phase, 'entry');
-    await act(async () => lifecycle()?.onAction('deactivate'));
-    assert.equal(lifecycle()?.state.phase, 'idle');
-    await act(async () => lifecycle()?.onCancel());
-    assert.equal(lifecycle()?.state.phase, 'entry');
+    const deletion = () => rendered('ProfileSettingsScreen')[0]?.props.deletion;
+    assert.equal(deletion()?.phase, 'entry');
+    await act(async () => deletion()?.onStart());
+    assert.equal(deletion()?.phase, 'idle');
+    await act(async () => deletion()?.onCancel());
+    assert.equal(deletion()?.phase, 'entry');
     assert.equal(mutationCalls.length, 0);
     assert.equal(deleteSelectedProfileCalls, 0);
 
-    await act(async () => lifecycle()?.onAction('deactivate'));
-    await act(async () => lifecycle()?.onConfirm('deactivate'));
+    await act(async () => deletion()?.onStart());
+    await act(async () => deletion()?.onConfirm());
     assert.deepEqual(mutationCalls, [{ input: { id: profile.id } }]);
     assert.equal(deleteSelectedProfileCalls, 0);
 
@@ -366,9 +366,9 @@ describe('SettingsProfileDetail', () => {
     queryData = { currentSession: { selectedProfile: profile } };
     await render();
 
-    const lifecycle = () => rendered('ProfileSettingsScreen')[0]?.props.lifecycle;
-    await act(async () => lifecycle()?.onAction('deactivate'));
-    await act(async () => lifecycle()?.onConfirm('deactivate'));
+    const deletion = () => rendered('ProfileSettingsScreen')[0]?.props.deletion;
+    await act(async () => deletion()?.onStart());
+    await act(async () => deletion()?.onConfirm());
     await act(async () =>
       mutationConfigs[0]?.onCompleted({
         deleteProfile: {
@@ -390,9 +390,9 @@ describe('SettingsProfileDetail', () => {
     queryData = { currentSession: { selectedProfile: profile } };
     await render();
 
-    const lifecycle = () => rendered('ProfileSettingsScreen')[0]?.props.lifecycle;
-    await act(async () => lifecycle()?.onAction('deactivate'));
-    await act(async () => lifecycle()?.onConfirm('deactivate'));
+    const deletion = () => rendered('ProfileSettingsScreen')[0]?.props.deletion;
+    await act(async () => deletion()?.onStart());
+    await act(async () => deletion()?.onConfirm());
     await act(async () =>
       mutationConfigs[0]?.onCompleted({
         deleteProfile: {
@@ -402,12 +402,12 @@ describe('SettingsProfileDetail', () => {
         },
       } as never),
     );
-    assert.equal(lifecycle()?.state.phase, 'error');
+    assert.equal(deletion()?.phase, 'error');
     assert.deepEqual(resetCurrentActorCalls, []);
     assert.equal(deleteSelectedProfileCalls, 0);
 
     resetCurrentActorAccepted = false;
-    await act(async () => lifecycle()?.onRetry('deactivate'));
+    await act(async () => deletion()?.onConfirm());
     await act(async () =>
       mutationConfigs[1]?.onCompleted({
         deleteProfile: {
@@ -420,7 +420,7 @@ describe('SettingsProfileDetail', () => {
     assert.deepEqual(resetCurrentActorCalls, ['profile:c']);
     assert.equal(deleteSelectedProfileCalls, 0);
     assert.deepEqual(writeSelectedProfileCalls, []);
-    assert.equal(lifecycle()?.state.phase, 'error');
+    assert.equal(deletion()?.phase, 'error');
     assert.equal(queryData.currentSession?.selectedProfile?.id, profile.id);
   });
 
@@ -429,27 +429,27 @@ describe('SettingsProfileDetail', () => {
     queryData = { currentSession: { selectedProfile: profile } };
     await render();
 
-    const lifecycle = () => rendered('ProfileSettingsScreen')[0]?.props.lifecycle;
-    await act(async () => lifecycle()?.onAction('deactivate'));
-    await act(async () => lifecycle()?.onConfirm('deactivate'));
+    const deletion = () => rendered('ProfileSettingsScreen')[0]?.props.deletion;
+    await act(async () => deletion()?.onStart());
+    await act(async () => deletion()?.onConfirm());
     await act(async () =>
       mutationConfigs[0]?.onCompleted({
         deleteProfile: { success: false, profileId: profile.id, account: { profiles: [] } },
       } as never),
     );
 
-    assert.equal(lifecycle()?.state.phase, 'error');
+    assert.equal(deletion()?.phase, 'error');
     assert.deepEqual(resetCurrentActorCalls, []);
     assert.equal(deleteSelectedProfileCalls, 0);
 
-    await act(async () => lifecycle()?.onRetry('deactivate'));
+    await act(async () => deletion()?.onConfirm());
     await act(async () =>
       mutationConfigs[1]?.onCompleted({
         deleteProfile: { profileId: profile.id, account: { profiles: [] } },
       } as never),
     );
 
-    assert.equal(lifecycle()?.state.phase, 'error');
+    assert.equal(deletion()?.phase, 'error');
     assert.deepEqual(resetCurrentActorCalls, []);
     assert.equal(deleteSelectedProfileCalls, 0);
   });
@@ -459,15 +459,15 @@ describe('SettingsProfileDetail', () => {
     queryData = { currentSession: { selectedProfile: profile } };
     await render();
 
-    const lifecycle = () => rendered('ProfileSettingsScreen')[0]?.props.lifecycle;
-    await act(async () => lifecycle()?.onAction('deactivate'));
-    await act(async () => lifecycle()?.onConfirm('deactivate'));
+    const deletion = () => rendered('ProfileSettingsScreen')[0]?.props.deletion;
+    await act(async () => deletion()?.onStart());
+    await act(async () => deletion()?.onConfirm());
     await act(async () => mutationConfigs[0]?.onError(new Error('network failure')));
 
-    assert.equal(lifecycle()?.state.phase, 'error');
+    assert.equal(deletion()?.phase, 'error');
     assert.deepEqual(resetCurrentActorCalls, []);
     assert.equal(deleteSelectedProfileCalls, 0);
-    await act(async () => lifecycle()?.onRetry('deactivate'));
+    await act(async () => deletion()?.onConfirm());
     assert.equal(mutationCalls.length, 2);
     assert.deepEqual(mutationCalls[1], { input: { id: profile.id } });
   });
@@ -486,7 +486,7 @@ describe('SettingsProfileDetail', () => {
     await render();
 
     assert.equal(rendered('ProfilePostingSettings')[0].props.editable, false);
-    assert.equal(rendered('ProfileSettingsScreen')[0].props.lifecycle, undefined);
+    assert.equal(rendered('ProfileSettingsScreen')[0].props.deletion, undefined);
     assert.equal(
       rendered('Button').some((node) => node.props.accessibilityLabel === '프로필 게시 설정 저장'),
       false,

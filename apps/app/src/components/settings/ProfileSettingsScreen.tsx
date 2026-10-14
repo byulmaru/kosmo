@@ -1,52 +1,34 @@
-import { ArrowLeft, ChevronRight } from 'lucide-react-native';
+import { ArrowLeft, Check, ChevronRight } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
-import {
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
-import { ModalSheet } from '@/components/ui/ModalSheet';
-import { StateView } from '@/components/ui/StateView';
-import { ToastProvider, useToast } from '@/components/ui/ToastProvider';
 import { useTheme } from '@/theme/ThemeProvider';
-import { borderWidths, iconSizes, space, textStyles } from '@/theme/tokens';
-import {
-  ProfileLifecycleDeactivateContent,
-  ProfileLifecycleDeleteConfirmContent,
-  ProfileLifecycleIdentity,
-  ProfileLifecycleReactivateContent,
-} from '../profile/ProfileLifecycleContent';
+import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
+import { ProfileListItemContent } from '../profile/ProfileListItemContent';
 import type { ReactNode, Ref } from 'react';
-import type { ProfileLifecycleProfile } from '../profile/ProfileLifecycleContent';
 
-export type ProfileLifecycleAction = 'deactivate' | 'reactivate' | 'delete';
-export type ProfileLifecycleState = {
-  action: ProfileLifecycleAction;
-  phase: 'entry' | 'idle' | 'pending' | 'error' | 'success';
+type ProfileSettingsProfile = {
+  id: string;
+  displayName: string;
+  relativeHandle: string;
+  avatarUri?: string | null;
 };
-export type ProfileSettingsLifecycle = {
-  state: ProfileLifecycleState;
-  onAction: (action: ProfileLifecycleAction) => void;
+
+type ProfileSettingsDeletion = {
+  phase: 'entry' | 'idle' | 'pending' | 'error';
+  onStart: () => void;
   onCancel: () => void;
-  onConfirm: (action: ProfileLifecycleAction) => void;
-  onRetry: (action: ProfileLifecycleAction) => void;
+  onConfirm: () => void;
 };
 
-type SharedProps = {
-  profile: ProfileLifecycleProfile;
+type Props = {
+  embedded?: boolean;
+  profile: ProfileSettingsProfile;
   children: ReactNode;
   identityAction?: ReactNode;
-};
-type Props = SharedProps & {
-  embedded?: boolean;
-  lifecycle?: ProfileSettingsLifecycle;
+  deletion?: ProfileSettingsDeletion;
 };
 
 /** Controlled presentation only: the caller owns request results, authentication and navigation. */
@@ -59,149 +41,88 @@ function ProfileSettingsSurface({
   identityAction,
   profile,
   children,
-  lifecycle,
+  deletion,
 }: Props) {
-  const state = lifecycle?.state ?? { action: 'deactivate', phase: 'entry' };
-  const { onAction, onCancel, onConfirm, onRetry } = lifecycle ?? {};
   const theme = useTheme();
-  const { height } = useWindowDimensions();
-  const { action, phase } = state;
-  const confirming = phase === 'idle' || phase === 'pending' || phase === 'error';
+  const phase = deletion?.phase ?? 'entry';
+  const confirming = deletion !== undefined && phase !== 'entry';
   const pending = phase === 'pending';
-  const inlineConfirmation = confirming && action === 'deactivate';
-  const modalOpen = confirming && action !== 'deactivate';
-  const deleted = phase === 'success' && action === 'delete';
-  const deactivated = phase === 'success' ? action === 'deactivate' : action !== 'deactivate';
   const headingRef = useRef<View>(null);
-  const deactivateRef = useRef<View>(null);
-  const reactivateRef = useRef<View>(null);
   const deleteRef = useRef<View>(null);
-  const cancelRef = useRef<View>(null);
-  const previouslyInline = useRef(false);
-  const focusDestination = () => {
-    if (phase === 'success') {
-      headingRef.current?.focus();
-    } else {
-      ({ deactivate: deactivateRef, reactivate: reactivateRef, delete: deleteRef })[
-        action
-      ].current?.focus();
-    }
-  };
+  const previouslyConfirming = useRef(false);
   useEffect(() => {
-    if (inlineConfirmation && !previouslyInline.current) {
+    if (confirming && !previouslyConfirming.current) {
       headingRef.current?.focus();
     }
-    if (!inlineConfirmation && previouslyInline.current) {
-      focusDestination();
+    if (!confirming && previouslyConfirming.current) {
+      deleteRef.current?.focus();
     }
-    previouslyInline.current = inlineConfirmation;
-  });
+    previouslyConfirming.current = confirming;
+  }, [confirming]);
   const cancel = () => {
     if (confirming && !pending) {
-      onCancel?.();
+      deletion?.onCancel();
     }
   };
   const confirm = () => {
     if (confirming && !pending) {
-      (phase === 'error' ? onRetry : onConfirm)?.(action);
+      deletion?.onConfirm();
     }
   };
-  const selectAction = (nextAction: ProfileLifecycleAction) => {
-    if (!confirming) {
-      onAction?.(nextAction);
+  const start = () => {
+    if (deletion && !confirming) {
+      deletion.onStart();
     }
   };
 
-  const content = inlineConfirmation ? (
-    <LifecycleConfirmation
-      key={`${profile.id}:${action}`}
-      cancelRef={cancelRef}
+  const content = confirming ? (
+    <ProfileDeleteConfirmation
+      embedded={embedded}
       onCancel={cancel}
       onConfirm={confirm}
+      phase={phase}
       profile={profile}
-      state={state}
-      embedded={embedded}
       headingRef={embedded ? headingRef : undefined}
     />
-  ) : deleted ? (
-    <StateView title="프로필을 삭제했어요" description="삭제한 프로필은 복구할 수 없습니다." />
   ) : (
     <>
-      <ProfileLifecycleIdentity deactivated={deactivated} profile={profile}>
+      <ProfileListItemContent
+        avatarLabel={profile.displayName}
+        avatarUri={profile.avatarUri}
+        displayName={profile.displayName}
+        relativeHandle={profile.relativeHandle}
+        style={{ borderColor: theme.borderSubtle, minHeight: 72 }}
+      >
         {identityAction}
-      </ProfileLifecycleIdentity>
-      {deactivated ? (
+      </ProfileListItemContent>
+      {children}
+      {deletion ? (
         <>
           <Text style={[textStyles.uiLabelM, { color: theme.foregroundSecondary }]}>
-            프로필 상태
-          </Text>
-          <View style={[styles.status, { borderColor: theme.borderSubtle }]}>
-            <Text style={[textStyles.uiLabelL, { color: theme.foregroundPrimary }]}>
-              이 프로필은 비활성 상태예요
-            </Text>
-            <Text style={[textStyles.uiCopyM, { color: theme.foregroundSecondary }]}>
-              게시하거나 다른 사람과 상호작용할 수 없고, 프로필도 공개되지 않습니다.
-            </Text>
-            <View style={styles.buttonTarget}>
-              <Button
-                controlRef={reactivateRef}
-                onPress={() => selectAction('reactivate')}
-                style={styles.fullWidth}
-                tone="primary"
-                hitSlop={Platform.OS === 'web' ? undefined : 4}
-              >
-                다시 활성화
-              </Button>
-            </View>
-          </View>
-          <Text style={[textStyles.uiLabelM, { color: theme.foregroundSecondary }]}>
-            Danger zone
+            프로필 관리
           </Text>
           <Pressable
             accessibilityRole="button"
             ref={deleteRef}
-            onPress={() => selectAction('delete')}
-            style={[styles.actionRow, { borderColor: theme.borderSubtle }]}
+            onPress={start}
+            style={({ pressed }) => [
+              styles.actionRow,
+              {
+                backgroundColor: pressed ? theme.statePressed : undefined,
+                borderColor: theme.borderSubtle,
+              },
+              Platform.OS === 'web'
+                ? { outlineColor: theme.stateFocusRing, outlineOffset: 2 }
+                : undefined,
+            ]}
           >
-            <View style={styles.rowCopy}>
-              <Text style={[textStyles.uiLabelL, { color: theme.feedbackDangerBase }]}>
-                영구 삭제
-              </Text>
-              <Text style={[textStyles.uiCopyM, { color: theme.foregroundSecondary }]}>
-                프로필과 관련된 데이터를 복구할 수 없게 삭제합니다.
-              </Text>
-            </View>
+            <Text style={[textStyles.uiLabelL, { color: theme.feedbackDangerBase, flex: 1 }]}>
+              프로필 삭제
+            </Text>
             <ChevronRight aria-hidden color={theme.foregroundSecondary} size={iconSizes[24]} />
           </Pressable>
         </>
-      ) : (
-        <>
-          {children}
-          {lifecycle ? (
-            <>
-              <Text style={[textStyles.uiLabelM, { color: theme.foregroundSecondary }]}>
-                프로필 관리
-              </Text>
-              <Pressable
-                accessibilityRole="button"
-                ref={deactivateRef}
-                onPress={() => selectAction('deactivate')}
-                style={[styles.actionRow, { borderColor: theme.borderSubtle }]}
-              >
-                <View style={styles.rowCopy}>
-                  <Text style={[textStyles.uiLabelL, { color: theme.feedbackDangerBase }]}>
-                    프로필 비활성화
-                  </Text>
-                  <Text style={[textStyles.uiCopyM, { color: theme.foregroundSecondary }]}>
-                    프로필 활동과 공개를 중지합니다.
-                  </Text>
-                </View>
-                <ChevronRight aria-hidden color={theme.foregroundSecondary} size={iconSizes[24]} />
-              </Pressable>
-            </>
-          ) : null}
-        </>
-      )}
+      ) : null}
     </>
   );
 
@@ -211,7 +132,7 @@ function ProfileSettingsSurface({
         <View ref={headingRef} tabIndex={-1}>
           <PageHeader
             leading={
-              inlineConfirmation ? (
+              confirming ? (
                 <IconButton
                   accessibilityLabel="취소하고 프로필 설정으로 돌아가기"
                   disabled={pending}
@@ -223,7 +144,7 @@ function ProfileSettingsSurface({
                 </IconButton>
               ) : undefined
             }
-            title={inlineConfirmation ? '비활성화' : '프로필 설정'}
+            title={confirming ? '프로필 삭제' : '프로필 설정'}
           />
         </View>
       )}
@@ -232,106 +153,155 @@ function ProfileSettingsSurface({
       ) : (
         <ScrollView contentContainerStyle={styles.body}>{content}</ScrollView>
       )}
-      <LifecycleFeedback
-        action={action}
-        phase={action === 'deactivate' || phase === 'success' ? phase : 'entry'}
-      />
-      <ModalSheet
-        dismissDisabled={!confirming || pending}
-        onClose={cancel}
-        onDismiss={focusDestination}
-        onShow={() => cancelRef.current?.focus()}
-        role={action === 'delete' ? 'alertdialog' : 'dialog'}
-        title={action === 'delete' ? '프로필을 영구 삭제할까요?' : '프로필을 다시 활성화할까요?'}
-        visible={modalOpen}
-      >
-        {/* Native Modal is a separate presentation layer; its error announcement stays inside it. */}
-        <ToastProvider>
-          <ScrollView
-            style={{ maxHeight: Math.max(0, height - 160) }}
-            contentContainerStyle={styles.modalBody}
-          >
-            {modalOpen ? (
-              <LifecycleConfirmation
-                key={`${profile.id}:${action}`}
-                cancelRef={cancelRef}
-                onCancel={cancel}
-                onConfirm={confirm}
-                profile={profile}
-                state={state}
-                embedded={embedded}
-              />
-            ) : null}
-          </ScrollView>
-          <LifecycleFeedback action={action} phase={modalOpen ? phase : 'entry'} />
-        </ToastProvider>
-      </ModalSheet>
     </View>
   );
 }
 
-function LifecycleConfirmation({
+function ProfileDeleteConfirmation({
   embedded,
   headingRef,
   profile,
-  state,
+  phase,
   onConfirm,
   onCancel,
-  cancelRef,
-}: Pick<Props, 'profile'> &
-  Pick<ProfileSettingsLifecycle, 'state' | 'onCancel'> & {
-    embedded: boolean;
-    headingRef?: Ref<View>;
-    onConfirm: () => void;
-    cancelRef: Ref<View>;
-  }) {
-  const [acknowledged, setAcknowledged] = useState(
-    state.phase === 'pending' || state.phase === 'error',
+}: Pick<Props, 'profile'> & {
+  embedded: boolean;
+  headingRef?: Ref<View>;
+  phase: ProfileSettingsDeletion['phase'];
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const [acknowledged, setAcknowledged] = useState(phase === 'pending' || phase === 'error');
+  const pending = phase === 'pending';
+  const theme = useTheme();
+  const heading = (
+    <Text accessibilityRole="header" style={[styles.heading, { color: theme.foregroundPrimary }]}>
+      프로필을 삭제할까요?
+    </Text>
   );
-  const pending = state.phase === 'pending';
-  const props = { profile, pending, onConfirm, onCancel, cancelRef };
-  const acknowledgement = {
-    acknowledged: pending || acknowledged,
-    onAcknowledgementChange: setAcknowledged,
-  };
-  if (state.action === 'reactivate') {
-    return <ProfileLifecycleReactivateContent {...props} />;
-  }
-  if (state.action === 'delete') {
-    return <ProfileLifecycleDeleteConfirmContent {...props} {...acknowledgement} />;
-  }
   return (
-    <ProfileLifecycleDeactivateContent
-      {...props}
-      {...acknowledgement}
-      headingRef={headingRef}
-      retry={state.phase === 'error'}
-      showCancelButton={embedded}
-    />
+    <View style={styles.confirmation}>
+      {embedded ? (
+        <View ref={headingRef} tabIndex={-1}>
+          {heading}
+        </View>
+      ) : (
+        heading
+      )}
+      <ProfileListItemContent
+        avatarLabel={profile.displayName}
+        avatarUri={profile.avatarUri}
+        displayName={profile.displayName}
+        relativeHandle={profile.relativeHandle}
+        style={{ borderColor: theme.borderSubtle, minHeight: 72 }}
+      />
+      <Text style={[textStyles.uiCopyM, { color: theme.foregroundSecondary }]}>
+        삭제한 프로필은 복구할 수 없습니다.
+      </Text>
+      {phase === 'error' ? (
+        <Text accessibilityRole="alert" style={[styles.error, { color: theme.feedbackDangerBase }]}>
+          프로필을 삭제하지 못했어요. 다시 시도해주세요.
+        </Text>
+      ) : null}
+      <ProfileDeleteAcknowledgement
+        acknowledged={pending || acknowledged}
+        disabled={pending}
+        onAcknowledgementChange={setAcknowledged}
+      />
+      <View style={styles.actionButtons}>
+        <Button disabled={pending} onPress={onCancel} style={styles.deleteAction} tone="secondary">
+          취소
+        </Button>
+        <Button
+          aria-busy={pending || undefined}
+          disabled={pending ? undefined : !acknowledged}
+          loading={pending}
+          onPress={() => {
+            if (acknowledged && !pending) {
+              onConfirm();
+            }
+          }}
+          style={styles.deleteAction}
+          tone="danger"
+        >
+          {phase === 'error' ? '다시 시도' : '프로필 삭제'}
+        </Button>
+      </View>
+    </View>
   );
 }
 
-function LifecycleFeedback({ action, phase }: ProfileLifecycleState) {
-  const { showToast } = useToast();
-  useEffect(() => {
-    if (phase !== 'error' && phase !== 'success') {
-      return;
-    }
-    const message =
-      phase === 'error'
+function ProfileDeleteAcknowledgement({
+  acknowledged,
+  disabled,
+  onAcknowledgementChange,
+}: {
+  acknowledged: boolean;
+  disabled: boolean;
+  onAcknowledgementChange: (checked: boolean) => void;
+}) {
+  const theme = useTheme();
+  const label = '프로필을 복구할 수 없음을 확인했습니다.';
+  return (
+    <Pressable
+      accessibilityLabel={label}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: acknowledged, disabled }}
+      aria-checked={acknowledged}
+      aria-disabled={disabled}
+      disabled={disabled}
+      {...(Platform.OS === 'web'
         ? {
-            deactivate: '프로필을 비활성화하지 못했어요. 다시 시도해주세요.',
-            reactivate: '프로필을 다시 활성화하지 못했어요. 다시 시도해주세요.',
-            delete: '프로필을 삭제하지 못했어요. 다시 시도해주세요.',
-          }[action]
-        : {
-            deactivate: '프로필을 비활성화했어요.',
-            reactivate: '프로필을 다시 활성화했어요.',
-            delete: '프로필을 삭제했어요.',
-          }[action];
-    return showToast(message, { tone: phase === 'error' ? 'danger' : 'success' });
-  }, [action, phase, showToast]);
-  return null;
+            onKeyDown: (event: { key: string; repeat: boolean; preventDefault: () => void }) => {
+              if (event.key === ' ') {
+                event.preventDefault();
+                if (!disabled && !event.repeat) {
+                  onAcknowledgementChange(!acknowledged);
+                }
+              }
+            },
+          }
+        : undefined)}
+      onPress={() => {
+        if (!disabled) {
+          onAcknowledgementChange(!acknowledged);
+        }
+      }}
+      style={({ pressed }) => [
+        styles.acknowledgement,
+        { backgroundColor: pressed ? theme.statePressed : undefined },
+        Platform.OS === 'web'
+          ? { outlineColor: theme.stateFocusRing, outlineOffset: 2 }
+          : undefined,
+      ]}
+    >
+      <View aria-hidden importantForAccessibility="no-hide-descendants" style={styles.checkbox}>
+        <View
+          style={[
+            styles.indicator,
+            {
+              backgroundColor: disabled
+                ? theme.stateDisabledSurface
+                : acknowledged
+                  ? theme.actionPrimaryBase
+                  : theme.backgroundSurface,
+              borderColor: acknowledged ? 'transparent' : theme.borderStrong,
+            },
+          ]}
+        >
+          {acknowledged ? (
+            <Check
+              color={disabled ? theme.stateDisabledForeground : theme.actionPrimaryOnBase}
+              size={iconSizes[20]}
+            />
+          ) : null}
+        </View>
+      </View>
+      <Text style={[styles.acknowledgementLabel, { color: theme.foregroundSecondary }]}>
+        {label}
+      </Text>
+    </Pressable>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -340,14 +310,30 @@ const styles = StyleSheet.create({
     borderBottomWidth: borderWidths[1],
     flexDirection: 'row',
     gap: space[12],
-    minHeight: 96,
+    minHeight: 64,
     padding: space[16],
   },
+  acknowledgement: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: space[8],
+    minHeight: 48,
+  },
+  acknowledgementLabel: { ...textStyles.uiCopyM, flex: 1 },
+  actionButtons: { flexDirection: 'row', gap: space[8] },
   body: { flexGrow: 1, gap: space[8], padding: space[16] },
-  buttonTarget: { justifyContent: 'center', minHeight: 48, width: '100%' },
-  fullWidth: { width: '100%' },
-  modalBody: { paddingBottom: space[4] },
+  checkbox: { alignItems: 'center', height: 32, justifyContent: 'center', width: 32 },
+  confirmation: { gap: space[12] },
+  deleteAction: { flex: 1, height: 48, minWidth: 0 },
+  error: textStyles.uiCopyM,
+  heading: textStyles.uiHeadingS,
+  indicator: {
+    alignItems: 'center',
+    borderRadius: radius[4],
+    borderWidth: borderWidths[1],
+    height: 20,
+    justifyContent: 'center',
+    width: 20,
+  },
   root: { flex: 1, minHeight: 580, width: '100%' },
-  rowCopy: { flex: 1, gap: space[4] },
-  status: { borderBottomWidth: borderWidths[1], gap: space[12], padding: space[16] },
 });

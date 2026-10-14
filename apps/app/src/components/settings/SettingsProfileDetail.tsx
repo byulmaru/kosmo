@@ -170,14 +170,14 @@ function SettingsProfileEditor({
   const baseline = getPostingSettings(profile);
   const [pendingValue, setPendingValue] = useState<ProfilePostingSettingsValue | null>(null);
   const [saveState, setSaveState] = useState<'idle' | 'error'>('idle');
-  const [lifecyclePhase, setLifecyclePhase] = useState<'entry' | 'idle' | 'error'>('entry');
+  const [deletionPhase, setDeletionPhase] = useState<'entry' | 'idle' | 'error'>('entry');
   const { resetCurrentActor } = useRelayActor();
   const [commit, isInFlight] =
     useMutation<SettingsProfileDetailUpdateProfileMutation>(updateProfileMutation);
-  const [commitDeleteProfile, isDeactivationInFlight] =
+  const [commitDeleteProfile, isDeleteInFlight] =
     useMutation<SettingsProfileDetailDeleteProfileMutation>(deleteProfileMutation);
   const value = editable ? (pendingValue ?? baseline) : baseline;
-  const saving = isInFlight || isDeactivationInFlight;
+  const saving = isInFlight || isDeleteInFlight;
 
   const handleChange = (nextValue: ProfilePostingSettingsValue) => {
     if (!editable || saving) {
@@ -207,7 +207,7 @@ function SettingsProfileEditor({
     });
   };
 
-  const deactivateProfile = () => {
+  const confirmProfileDeletion = () => {
     if (!editable || saving) {
       return;
     }
@@ -216,7 +216,7 @@ function SettingsProfileEditor({
       onCompleted: (response) => {
         const result = response?.deleteProfile;
         if (result?.success !== true || result.profileId !== profile.id) {
-          setLifecyclePhase('error');
+          setDeletionPhase('error');
           return;
         }
 
@@ -224,7 +224,7 @@ function SettingsProfileEditor({
           ({ id }) => id,
         );
         if (!resetCurrentActor(selectedProfileId ?? null, remainingFallbackProfileIds)) {
-          setLifecyclePhase('error');
+          setDeletionPhase('error');
           return;
         }
 
@@ -235,7 +235,7 @@ function SettingsProfileEditor({
         }
       },
       onError: () => {
-        setLifecyclePhase('error');
+        setDeletionPhase('error');
       },
       variables: { input: { id: profile.id } },
     });
@@ -256,25 +256,21 @@ function SettingsProfileEditor({
           </Button>
         ) : null
       }
-      lifecycle={
+      deletion={
         editable
           ? {
-              state: {
-                action: 'deactivate',
-                phase: isDeactivationInFlight ? 'pending' : lifecyclePhase,
-              },
-              onAction: () => {
+              phase: isDeleteInFlight ? 'pending' : deletionPhase,
+              onStart: () => {
                 if (!saving) {
-                  setLifecyclePhase('idle');
+                  setDeletionPhase('idle');
                 }
               },
               onCancel: () => {
                 if (!saving) {
-                  setLifecyclePhase('entry');
+                  setDeletionPhase('entry');
                 }
               },
-              onConfirm: deactivateProfile,
-              onRetry: deactivateProfile,
+              onConfirm: confirmProfileDeletion,
             }
           : undefined
       }
