@@ -20,7 +20,12 @@ type Request = {
 type ActorProviderProps = PropsWithChildren<{
   createEnvironment?: (token: string | null, selectedProfileId: string | null) => Environment;
 }>;
-type SessionValue = { selectedProfileId: string | null; status: string };
+type SessionValue = {
+  accountId: string | null;
+  selectedProfileId: string | null;
+  sessionId: string | null;
+  status: string;
+};
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -341,7 +346,9 @@ describe('SettingsProfileDetail real Relay deactivation flow', () => {
 
     const mutation = latestRequest('profile:owner', 'SettingsProfileDetailDeleteProfileMutation');
     assert.deepEqual(mutation.variables, { input: { id: 'profile:owner' } });
-    await respond(mutation, { deleteProfile: { success: true, profileId: 'profile:owner' } });
+    await respond(mutation, {
+      deleteProfile: { success: true, profileId: 'profile:owner', selectedProfile: null },
+    });
 
     assert.equal(storedProfileId, null);
     await respond(latestRequest(null, 'SessionProviderQuery'), sessionData(null));
@@ -353,6 +360,9 @@ describe('SettingsProfileDetail real Relay deactivation flow', () => {
     });
 
     const probe = all('SessionProbe').at(-1);
+    assert.equal(probe?.props.status, 'valid');
+    assert.equal(probe?.props.accountId, 'account:owner');
+    assert.equal(probe?.props.sessionId, 'session:owner');
     assert.equal(probe?.props.selectedProfileId, null);
     assert.ok(all('StateView').some((node) => node.props.title === '설정할 Profile이 없어요'));
     for (const type of ['Button', 'Pressable']) {
@@ -370,6 +380,62 @@ describe('SettingsProfileDetail real Relay deactivation flow', () => {
       }
     }
     assert.deepEqual(accountState, { acknowledged: false, phase: 'idle' });
+  });
+
+  it('disable selects the server-provided remaining Profile and preserves the account session', async () => {
+    await act(async () => {
+      renderer = create(createElement(TestTree));
+    });
+
+    await respond(latestRequest(null, 'SessionProviderQuery'), sessionData('profile:owner'));
+    await respond(
+      latestRequest('profile:owner', 'SessionProviderQuery'),
+      sessionData('profile:owner'),
+    );
+    await respond(latestRequest('profile:owner', 'SettingsProfileDetailQuery'), detailData());
+    await respond(latestRequest('profile:owner', 'SettingsAccountDeletionQuery'), {
+      me: { id: 'account:owner', profiles: [{ id: 'profile:owner' }, { id: 'profile:b' }] },
+    });
+
+    assert.deepEqual(accountState, { activeProfileCount: 2, phase: 'blocked' });
+    assert.equal(storedProfileId, 'profile:owner');
+    await act(async () => pressableForText('프로필 비활성화').props.onPress());
+    await act(async () => {
+      const checkbox = all('Pressable').find((node) => node.props.accessibilityRole === 'checkbox');
+      assert.ok(checkbox);
+      checkbox.props.onPress();
+    });
+    await act(async () => button('비활성화').props.onPress());
+
+    const mutation = latestRequest('profile:owner', 'SettingsProfileDetailDeleteProfileMutation');
+    await respond(mutation, {
+      deleteProfile: {
+        success: true,
+        profileId: 'profile:owner',
+        selectedProfile: { id: 'profile:b' },
+      },
+    });
+
+    assert.equal(storedProfileId, 'profile:b');
+    await respond(latestRequest('profile:b', 'SessionProviderQuery'), sessionData('profile:b'));
+    await respond(
+      latestRequest('profile:b', 'SettingsProfileDetailQuery'),
+      detailData('profile:b', 'Profile B'),
+    );
+    await respond(latestRequest('profile:b', 'SettingsAccountDeletionQuery'), {
+      me: { id: 'account:owner', profiles: [{ id: 'profile:b' }] },
+    });
+
+    const probe = all('SessionProbe').at(-1);
+    assert.equal(probe?.props.status, 'valid');
+    assert.equal(probe?.props.accountId, 'account:owner');
+    assert.equal(probe?.props.sessionId, 'session:owner');
+    assert.equal(probe?.props.selectedProfileId, 'profile:b');
+    assert.equal(
+      all('Text').some((node) => node.children.includes('Profile B')),
+      true,
+    );
+    assert.deepEqual(accountState, { activeProfileCount: 1, phase: 'blocked' });
   });
 
   it('replays a committed disable after a lost response and converges the fresh session actor', async () => {
@@ -412,7 +478,11 @@ describe('SettingsProfileDetail real Relay deactivation flow', () => {
     );
     assert.deepEqual(retryMutation.variables, { input: { id: 'profile:owner' } });
     await respond(retryMutation, {
-      deleteProfile: { success: true, profileId: 'profile:owner' },
+      deleteProfile: {
+        success: true,
+        profileId: 'profile:owner',
+        selectedProfile: null,
+      },
     });
 
     assert.equal(storedProfileId, null);
@@ -424,7 +494,11 @@ describe('SettingsProfileDetail real Relay deactivation flow', () => {
       me: { id: 'account:owner', profiles: [] },
     });
 
-    assert.equal(all('SessionProbe').at(-1)?.props.selectedProfileId, null);
+    const probe = all('SessionProbe').at(-1);
+    assert.equal(probe?.props.status, 'valid');
+    assert.equal(probe?.props.accountId, 'account:owner');
+    assert.equal(probe?.props.sessionId, 'session:owner');
+    assert.equal(probe?.props.selectedProfileId, null);
     assert.ok(all('StateView').some((node) => node.props.title === '설정할 Profile이 없어요'));
     assert.equal(
       all('Text').some((node) => node.children.includes('Owner Profile')),
@@ -496,11 +570,19 @@ describe('SettingsProfileDetail real Relay deactivation flow', () => {
     assert.deepEqual(accountState, { activeProfileCount: 1, phase: 'blocked' });
 
     await respond(retryMutation, {
-      deleteProfile: { success: true, profileId: 'profile:owner' },
+      deleteProfile: {
+        success: true,
+        profileId: 'profile:owner',
+        selectedProfile: { id: 'profile:c' },
+      },
     });
 
     assert.equal(storedProfileId, 'profile:other');
     assert.equal(all('SessionProbe').at(-1)?.props.selectedProfileId, 'profile:other');
+    assert.equal(
+      requests.some((request) => request.actorId === 'profile:c'),
+      false,
+    );
     assert.equal(
       all('Text').some((node) => node.children.includes('Other Profile')),
       true,

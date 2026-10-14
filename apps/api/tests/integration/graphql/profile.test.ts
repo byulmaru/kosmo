@@ -27,7 +27,7 @@ import { profileHandlePolicyErrorMessage } from '@kosmo/core/validation';
 import { profileTagNormalizationParityCases } from '@kosmo/core/validation/profile-tag-parity-fixture';
 import * as Sentry from '@sentry/node';
 import { ApplicationFailure } from '@temporalio/client';
-import { and, asc, count, eq, ne } from 'drizzle-orm';
+import { and, asc, count, eq, ne, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { waitForProfileFollowWorkflows } from './temporal-test-helpers';
 import type * as CoreDb from '@kosmo/core/db';
@@ -73,6 +73,25 @@ let handleInboundDelete: typeof HandleInboundDelete;
 let app: Hono<Env>;
 let localInstanceId: string;
 let restoreSentryTransport: (() => void) | undefined;
+
+const waitForSessionProfileFallbackLock = async (blockingPid: number): Promise<void> => {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const [activity] = await db.execute<{ blocked: boolean }>(sql`
+      SELECT EXISTS (
+        SELECT 1
+        FROM pg_stat_activity
+        WHERE ${blockingPid} = ANY(pg_blocking_pids(pid))
+          AND query ILIKE '%active_profile_id" is null%'
+      ) AS blocked
+    `);
+    if (activity?.blocked) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+
+  assert.fail('deleteProfile fallback update did not reach the Session row lock barrier');
+};
 
 describe('GraphQL remote profile boundary', () => {
   before(async () => {
@@ -1750,11 +1769,16 @@ describe('GraphQL remote profile boundary', () => {
     const auth = await createAuthenticatedSession();
     const deleteProfile = () =>
       requestGraphQL<{
-        deleteProfile: { profileId: string; success: boolean };
+        deleteProfile: {
+          profileId: string;
+          selectedProfile: { id: string } | null;
+          success: boolean;
+        };
       }>(
         `mutation DeleteProfile($id: ID!) {
           deleteProfile(input: { id: $id }) {
             profileId
+            selectedProfile { id }
             success
           }
         }`,
@@ -1766,6 +1790,7 @@ describe('GraphQL remote profile boundary', () => {
     assertNoGraphQLErrors(first);
     assert.deepEqual(first.data?.deleteProfile, {
       profileId: globalId('Profile', auth.profile.id),
+      selectedProfile: null,
       success: true,
     });
     assert.equal(
@@ -1777,6 +1802,12 @@ describe('GraphQL remote profile boundary', () => {
         .then(({ activeProfileId }) => activeProfileId),
       null,
     );
+    const currentSession = await requestGraphQL<{
+      currentSession: { selectedProfile: { id: string } | null } | null;
+    }>('query { currentSession { selectedProfile { id } } }', {}, auth.token);
+    assertNoGraphQLErrors(currentSession);
+    assert.ok(currentSession.data?.currentSession);
+    assert.equal(currentSession.data?.currentSession?.selectedProfile, null);
 
     const retry = await deleteProfile();
     assertNoGraphQLErrors(retry);
@@ -1789,6 +1820,296 @@ describe('GraphQL remote profile boundary', () => {
         .then(firstOrThrow)
         .then(({ state }) => state),
       ProfileState.DISABLED,
+    );
+  });
+
+  test('deleteProfile selects the first remaining selectable Profile and preserves other Sessions', async () => {
+    const auth = await createAuthenticatedSession();
+    const suffix = crypto.randomUUID().slice(0, 8);
+    const suspendedInstance = await createLocalInstance({
+      domain: `suspended-${suffix}.example`,
+      state: InstanceState.SUSPENDED,
+    });
+    const disabledCandidate = await createProfile({
+      createdAt: Temporal.Instant.from('2024-01-01T00:00:00Z'),
+      handle: `disabled-${suffix}`,
+      instanceId: localInstanceId,
+      state: ProfileState.DISABLED,
+    });
+    const suspendedCandidate = await createProfile({
+      createdAt: Temporal.Instant.from('2024-02-01T00:00:00Z'),
+      handle: `suspended-${suffix}`,
+      instanceId: localInstanceId,
+      state: ProfileState.SUSPENDED,
+    });
+    await createProfile({
+      createdAt: Temporal.Instant.from('2024-03-01T00:00:00Z'),
+      handle: `nonmember-${suffix}`,
+      instanceId: localInstanceId,
+    });
+    const suspendedInstanceCandidate = await createProfile({
+      createdAt: Temporal.Instant.from('2024-04-01T00:00:00Z'),
+      handle: `suspended-instance-${suffix}`,
+      instanceId: suspendedInstance.id,
+    });
+    const firstSelectable = await createProfile({
+      createdAt: Temporal.Instant.from('2024-05-01T00:00:00Z'),
+      handle: `first-selectable-${suffix}`,
+      instanceId: localInstanceId,
+    });
+    const secondSelectable = await createProfile({
+      createdAt: Temporal.Instant.from('2024-06-01T00:00:00Z'),
+      handle: `second-selectable-${suffix}`,
+      instanceId: localInstanceId,
+    });
+    await db.insert(AccountProfiles).values([
+      {
+        accountId: auth.account.id,
+        profileId: disabledCandidate.id,
+        role: AccountProfileRole.OWNER,
+      },
+      {
+        accountId: auth.account.id,
+        profileId: suspendedCandidate.id,
+        role: AccountProfileRole.OWNER,
+      },
+      {
+        accountId: auth.account.id,
+        profileId: suspendedInstanceCandidate.id,
+        role: AccountProfileRole.OWNER,
+      },
+      {
+        accountId: auth.account.id,
+        profileId: firstSelectable.id,
+        role: AccountProfileRole.MEMBER,
+      },
+      {
+        accountId: auth.account.id,
+        profileId: secondSelectable.id,
+        role: AccountProfileRole.OWNER,
+      },
+    ]);
+    const otherSession = await db
+      .insert(Sessions)
+      .values({
+        accountId: auth.account.id,
+        activeProfileId: auth.profile.id,
+        state: SessionState.ACTIVE,
+        token: `token-${crypto.randomUUID()}`,
+      })
+      .returning()
+      .then(firstOrThrow);
+
+    const deleteProfile = () =>
+      requestGraphQL<{
+        deleteProfile: {
+          profileId: string;
+          selectedProfile: { id: string } | null;
+          success: boolean;
+        };
+      }>(
+        `mutation DeleteProfileWithFallback($id: ID!) {
+          deleteProfile(input: { id: $id }) {
+            profileId
+            selectedProfile { id }
+            success
+          }
+        }`,
+        { id: globalId('Profile', auth.profile.id) },
+        auth.token,
+      );
+
+    const result = await deleteProfile();
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.deleteProfile, {
+      profileId: globalId('Profile', auth.profile.id),
+      selectedProfile: { id: globalId('Profile', firstSelectable.id) },
+      success: true,
+    });
+    assert.equal(
+      await db
+        .select({ activeProfileId: Sessions.activeProfileId })
+        .from(Sessions)
+        .where(eq(Sessions.id, auth.session.id))
+        .then(firstOrThrow)
+        .then(({ activeProfileId }) => activeProfileId),
+      firstSelectable.id,
+    );
+    assert.equal(
+      await db
+        .select({ activeProfileId: Sessions.activeProfileId })
+        .from(Sessions)
+        .where(eq(Sessions.id, otherSession.id))
+        .then(firstOrThrow)
+        .then(({ activeProfileId }) => activeProfileId),
+      null,
+    );
+    const currentSession = await requestGraphQL<{
+      currentSession: { selectedProfile: { id: string } | null } | null;
+    }>('query { currentSession { selectedProfile { id } } }', {}, auth.token);
+    assertNoGraphQLErrors(currentSession);
+    assert.deepEqual(currentSession.data?.currentSession?.selectedProfile, {
+      id: globalId('Profile', firstSelectable.id),
+    });
+
+    const retry = await deleteProfile();
+    assertNoGraphQLErrors(retry);
+    assert.deepEqual(retry.data?.deleteProfile, result.data?.deleteProfile);
+    assert.equal(
+      await db
+        .select({ activeProfileId: Sessions.activeProfileId })
+        .from(Sessions)
+        .where(eq(Sessions.id, auth.session.id))
+        .then(firstOrThrow)
+        .then(({ activeProfileId }) => activeProfileId),
+      firstSelectable.id,
+    );
+  });
+
+  test('deleteProfile does not overwrite a concurrent Session Profile selection', async () => {
+    const auth = await createAuthenticatedSession({ selectedProfile: false });
+    const fallbackCandidate = await createProfile({
+      createdAt: Temporal.Instant.from('2024-05-01T00:00:00Z'),
+      handle: `fallback-candidate-${crypto.randomUUID().slice(0, 8)}`,
+      instanceId: localInstanceId,
+    });
+    const concurrentSelection = await createProfile({
+      createdAt: Temporal.Instant.from('2024-06-01T00:00:00Z'),
+      handle: `concurrent-selection-${crypto.randomUUID().slice(0, 8)}`,
+      instanceId: localInstanceId,
+    });
+    await db.insert(AccountProfiles).values([
+      {
+        accountId: auth.account.id,
+        profileId: fallbackCandidate.id,
+        role: AccountProfileRole.OWNER,
+      },
+      {
+        accountId: auth.account.id,
+        profileId: concurrentSelection.id,
+        role: AccountProfileRole.MEMBER,
+      },
+    ]);
+
+    const lockSession = await pg.reserve();
+    let lockHeld = false;
+    let deleting:
+      | Promise<{
+          data?: {
+            deleteProfile?: {
+              profileId: string;
+              selectedProfile: { id: string } | null;
+              success: boolean;
+            };
+          } | null;
+          errors?: Array<{ message: string }>;
+        }>
+      | undefined;
+
+    try {
+      await lockSession`BEGIN`;
+      lockHeld = true;
+      await lockSession`
+        UPDATE "session"
+        SET "active_profile_id" = ${concurrentSelection.id}
+        WHERE "id" = ${auth.session.id}
+      `;
+      const [connection] = await lockSession<{ pid: number }[]>`
+        SELECT pg_backend_pid()::int AS pid
+      `;
+      assert.ok(connection);
+
+      deleting = requestGraphQL(
+        `mutation DeleteProfileWithConcurrentSelection($id: ID!) {
+          deleteProfile(input: { id: $id }) {
+            profileId
+            selectedProfile { id }
+            success
+          }
+        }`,
+        { id: globalId('Profile', auth.profile.id) },
+        auth.token,
+      );
+      await waitForSessionProfileFallbackLock(connection.pid);
+
+      await lockSession`COMMIT`;
+      lockHeld = false;
+
+      const result = await deleting;
+      assertNoGraphQLErrors(result);
+      assert.deepEqual(result.data?.deleteProfile, {
+        profileId: globalId('Profile', auth.profile.id),
+        selectedProfile: { id: globalId('Profile', concurrentSelection.id) },
+        success: true,
+      });
+      assert.equal(
+        await db
+          .select({ activeProfileId: Sessions.activeProfileId })
+          .from(Sessions)
+          .where(eq(Sessions.id, auth.session.id))
+          .then(firstOrThrow)
+          .then(({ activeProfileId }) => activeProfileId),
+        concurrentSelection.id,
+      );
+    } finally {
+      if (lockHeld) {
+        await lockSession`ROLLBACK`;
+      }
+      if (deleting) {
+        await Promise.allSettled([deleting]);
+      }
+      lockSession.release();
+    }
+  });
+
+  test('deleteProfile retains an already-selected Profile when disabling another Profile', async () => {
+    const auth = await createAuthenticatedSession();
+    const selectedProfile = await createProfile({
+      handle: `selected-${crypto.randomUUID().slice(0, 8)}`,
+      instanceId: localInstanceId,
+    });
+    await db.insert(AccountProfiles).values({
+      accountId: auth.account.id,
+      profileId: selectedProfile.id,
+      role: AccountProfileRole.MEMBER,
+    });
+    await db
+      .update(Sessions)
+      .set({ activeProfileId: selectedProfile.id })
+      .where(eq(Sessions.id, auth.session.id));
+
+    const result = await requestGraphQL<{
+      deleteProfile: {
+        profileId: string;
+        selectedProfile: { id: string } | null;
+        success: boolean;
+      };
+    }>(
+      `mutation DeleteNonselectedProfile($id: ID!) {
+        deleteProfile(input: { id: $id }) {
+          profileId
+          selectedProfile { id }
+          success
+        }
+      }`,
+      { id: globalId('Profile', auth.profile.id) },
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.deleteProfile, {
+      profileId: globalId('Profile', auth.profile.id),
+      selectedProfile: { id: globalId('Profile', selectedProfile.id) },
+      success: true,
+    });
+    assert.equal(
+      await db
+        .select({ activeProfileId: Sessions.activeProfileId })
+        .from(Sessions)
+        .where(eq(Sessions.id, auth.session.id))
+        .then(firstOrThrow)
+        .then(({ activeProfileId }) => activeProfileId),
+      selectedProfile.id,
     );
   });
 
@@ -5363,6 +5684,7 @@ const createLocalInstance = async ({
     .then(firstOrThrow);
 
 const createProfile = async ({
+  createdAt,
   followPolicy = ProfileFollowPolicy.OPEN,
   followersCount,
   followingCount,
@@ -5371,6 +5693,7 @@ const createProfile = async ({
   instanceId,
   state = ProfileState.ACTIVE,
 }: {
+  createdAt?: Temporal.Instant;
   followPolicy?: ProfileFollowPolicy;
   followersCount?: number;
   followingCount?: number;
@@ -5382,6 +5705,7 @@ const createProfile = async ({
   db
     .insert(Profiles)
     .values({
+      ...(createdAt === undefined ? {} : { createdAt }),
       displayName: handle,
       followPolicy,
       ...(followersCount === undefined ? {} : { followersCount }),

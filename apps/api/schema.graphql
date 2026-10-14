@@ -180,6 +180,7 @@ input DeleteProfileInput {
 
 type DeleteProfilePayload {
   profileId: ID!
+  selectedProfile: Profile
   success: Boolean!
 }
 

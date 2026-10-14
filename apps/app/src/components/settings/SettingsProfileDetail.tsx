@@ -2,7 +2,7 @@ import { PostVisibility } from '@kosmo/core/enums';
 import { useState } from 'react';
 import { StyleSheet, Text } from 'react-native';
 import { graphql, useLazyLoadQuery, useMutation } from 'react-relay';
-import { deleteSelectedProfile } from '@/auth/selectedProfileStorage';
+import { deleteSelectedProfile, writeSelectedProfile } from '@/auth/selectedProfileStorage';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { Button } from '@/components/ui/Button';
@@ -61,6 +61,9 @@ const deleteProfileMutation = graphql`
     deleteProfile(input: $input) {
       success
       profileId
+      selectedProfile {
+        id
+      }
     }
   }
 `;
@@ -215,12 +218,17 @@ function SettingsProfileEditor({
           return;
         }
 
-        if (!resetCurrentActor(null)) {
+        const selectedProfileId = result.selectedProfile?.id ?? null;
+        if (!resetCurrentActor(selectedProfileId)) {
           setLifecyclePhase('error');
           return;
         }
 
-        void deleteSelectedProfile().catch(() => undefined);
+        if (selectedProfileId) {
+          void writeSelectedProfile(selectedProfileId);
+        } else {
+          void deleteSelectedProfile().catch(() => undefined);
+        }
       },
       onError: () => {
         setLifecyclePhase('error');

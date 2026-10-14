@@ -37,6 +37,7 @@ let queryData: QueryData;
 let queryFetchKeys: unknown[] = [];
 let openProfileSwitcherCalls = 0;
 let deleteSelectedProfileCalls = 0;
+const writeSelectedProfileCalls: string[] = [];
 let resetCurrentActorAccepted = true;
 const resetCurrentActorCalls: Array<string | null | undefined> = [];
 let queryMode: 'error' | 'success' = 'success';
@@ -79,6 +80,9 @@ mock.module(new URL('../../auth/selectedProfileStorage.ts', import.meta.url), {
   exports: {
     deleteSelectedProfile: async () => {
       deleteSelectedProfileCalls += 1;
+    },
+    writeSelectedProfile: async (profileId: string) => {
+      writeSelectedProfileCalls.push(profileId);
     },
   },
 } as unknown as Parameters<typeof mock.module>[1]);
@@ -130,8 +134,17 @@ mock.module(new URL('../../relay/RelayActorProvider.tsx', import.meta.url), {
         if (!resetCurrentActorAccepted) {
           return false;
         }
-        queryData = { currentSession: { selectedProfile: null } };
-        relayActorLifecycleKey = 'session';
+        queryData = {
+          currentSession: {
+            selectedProfile:
+              profileId === 'profile:remaining'
+                ? { ...ownerProfile, id: profileId, displayName: 'Remaining Profile' }
+                : profileId === null
+                  ? null
+                  : ownerProfile,
+          },
+        };
+        relayActorLifecycleKey = profileId ?? 'session';
         return true;
       },
     }),
@@ -155,6 +168,7 @@ afterEach(async () => {
   queryFetchKeys = [];
   openProfileSwitcherCalls = 0;
   deleteSelectedProfileCalls = 0;
+  writeSelectedProfileCalls.length = 0;
   resetCurrentActorAccepted = true;
   resetCurrentActorCalls.length = 0;
   queryMode = 'success';
@@ -334,16 +348,41 @@ describe('SettingsProfileDetail', () => {
 
     await act(async () =>
       mutationConfigs[0]?.onCompleted({
-        deleteProfile: { success: true, profileId: profile.id },
+        deleteProfile: { success: true, profileId: profile.id, selectedProfile: null },
       } as never),
     );
 
     assert.deepEqual(resetCurrentActorCalls, [null]);
     assert.equal(deleteSelectedProfileCalls, 1);
+    assert.deepEqual(writeSelectedProfileCalls, []);
     await act(async () => renderer?.update(createElement(SettingsProfileDetail)));
     const noSelection = rendered('StateView')[0];
     assert.equal(noSelection.props.title, '설정할 Profile이 없어요');
     assert.equal(noSelection.props.actionLabel, 'Profile 선택하기');
+  });
+
+  it('matching server result selects and persists the returned profile', async () => {
+    const profile = ownerProfile;
+    queryData = { currentSession: { selectedProfile: profile } };
+    await render();
+
+    const lifecycle = () => rendered('ProfileSettingsScreen')[0]?.props.lifecycle;
+    await act(async () => lifecycle()?.onAction('deactivate'));
+    await act(async () => lifecycle()?.onConfirm('deactivate'));
+    await act(async () =>
+      mutationConfigs[0]?.onCompleted({
+        deleteProfile: {
+          success: true,
+          profileId: profile.id,
+          selectedProfile: { id: 'profile:remaining' },
+        },
+      } as never),
+    );
+
+    assert.deepEqual(resetCurrentActorCalls, ['profile:remaining']);
+    assert.deepEqual(writeSelectedProfileCalls, ['profile:remaining']);
+    assert.equal(deleteSelectedProfileCalls, 0);
+    assert.equal(queryData.currentSession?.selectedProfile?.id, 'profile:remaining');
   });
 
   it('stale actor result or unconfirmed server response never clears stored selection', async () => {
@@ -356,7 +395,11 @@ describe('SettingsProfileDetail', () => {
     await act(async () => lifecycle()?.onConfirm('deactivate'));
     await act(async () =>
       mutationConfigs[0]?.onCompleted({
-        deleteProfile: { success: true, profileId: 'profile:other' },
+        deleteProfile: {
+          success: true,
+          profileId: 'profile:other',
+          selectedProfile: { id: 'profile:c' },
+        },
       } as never),
     );
     assert.equal(lifecycle()?.state.phase, 'error');
@@ -367,11 +410,16 @@ describe('SettingsProfileDetail', () => {
     await act(async () => lifecycle()?.onRetry('deactivate'));
     await act(async () =>
       mutationConfigs[1]?.onCompleted({
-        deleteProfile: { success: true, profileId: profile.id },
+        deleteProfile: {
+          success: true,
+          profileId: profile.id,
+          selectedProfile: { id: 'profile:c' },
+        },
       } as never),
     );
-    assert.deepEqual(resetCurrentActorCalls, [null]);
+    assert.deepEqual(resetCurrentActorCalls, ['profile:c']);
     assert.equal(deleteSelectedProfileCalls, 0);
+    assert.deepEqual(writeSelectedProfileCalls, []);
     assert.equal(lifecycle()?.state.phase, 'error');
     assert.equal(queryData.currentSession?.selectedProfile?.id, profile.id);
   });
@@ -386,7 +434,7 @@ describe('SettingsProfileDetail', () => {
     await act(async () => lifecycle()?.onConfirm('deactivate'));
     await act(async () =>
       mutationConfigs[0]?.onCompleted({
-        deleteProfile: { success: false, profileId: profile.id },
+        deleteProfile: { success: false, profileId: profile.id, selectedProfile: null },
       } as never),
     );
 
@@ -397,7 +445,7 @@ describe('SettingsProfileDetail', () => {
     await act(async () => lifecycle()?.onRetry('deactivate'));
     await act(async () =>
       mutationConfigs[1]?.onCompleted({
-        deleteProfile: { profileId: profile.id },
+        deleteProfile: { profileId: profile.id, selectedProfile: null },
       } as never),
     );
 
