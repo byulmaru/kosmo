@@ -14,6 +14,7 @@ Mute Scope는 여러 값을 동시에 가질 수 있다.
 | 값           | 의미                        |
 | ------------ | --------------------------- |
 | Home         | Home Post List에 적용       |
+| Local        | Local Post List에 적용      |
 | Profile      | Profile Post List에 적용    |
 | Hashtag      | Hashtag Post List에 적용    |
 | Search       | 검색 결과에 적용            |
@@ -60,6 +61,8 @@ Mute Scope는 여러 값을 동시에 가질 수 있다.
 - Rule은 선택된 Scope에서만 소비한다.
 - Post List와 검색에서는 Mute Decision을 적용하고 Notification Scope에서는 일치하는 새 Notification을
   생성하지 않는다.
+- Local Post List에서는 Local Scope가 선택된 Rule의 Collapse도 Exclude로 소비한다. 저장된 Mute Decision은
+  유지하며, 다른 Scope의 Decision 의미는 바꾸지 않는다.
 - 기존 Notification의 존재와 Read State는 바꾸지 않는다.
 - Quote Notification에서는 Quote의 Hashtag를 검사하고 인용된 direct Source의 Hashtag를 다시 검사하지 않는다.
 - 만료 시각이 지난 Rule은 조회 정책에 적용하지 않는다.
