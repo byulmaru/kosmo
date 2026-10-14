@@ -9,8 +9,9 @@ Push 만료와 첫 릴리스의 in-app 설정 부재를 확정했다. PROD-912�
 시각과 동일 Account의 재설치 중복 정리를 확정했다. 2026-09-29 사용자 승인으로 사전 안내 모달을 제거하고 앱
 설정에서 OS 권한을 직접 요청하도록 변경했다. 2026-09-29 사용자 승인으로 Push 탭은 payload의 내부 경로 `href`로
 직접 이동하도록 변경했고, registration 이후 전달 경계는 best-effort로 정리했다.
-2026-10-08 PROD-1061 사용자 결정으로 접힌 알림은 행위자·수신 Profile·행동 요약을 표시하고, 게시글 본문은
-펼친 알림에서만 표시하도록 변경했다. 묶인 알림은 후속 결정으로 남긴다.
+2026-10-14 사용자 승인으로 PROD-1061의 Profile Notification Push title/body를 행위자와 수신 Profile의 이름·핸들, 행동
+종류, Reaction 실제 emoji와 수신자가 조회 가능하고 sensitive 또는 Content Warning이 아닌 게시글 본문으로
+공통 구성하며, 줄 수·줄바꿈·자름·접힘·펼침은 OS가 소유하도록 정렬했다. 묶인 알림은 후속 결정으로 남긴다.
 
 ## 날짜
 
@@ -30,23 +31,12 @@ installation token lifecycle을 고정하므로 앱 설정의 권한 처리와 t
 - 앱 시작이나 로그인 완료 때 OS 권한을 자동 요청하지 않는다. 앱 설정의 알림 action은 OS 권한이 미결정이면
   OS 권한 요청을 시작하고, 이미 허용되거나 거부된 경우 OS 알림 설정을 연다. 허용된 로그인 세션은 로그인·앱
   활성화 때 FCM token을 자동 동기화하고, 권한 요청이 허용된 직후에도 token을 즉시 동기화한다.
-- OS 알림은 행위자와 수신 Profile의 이름·핸들, 알림 유형을 식별할 수 있어야 한다. 접힌 알림은 행동 요약만
-  표시하며 게시글 본문을 포함하지 않는다. 허용된 게시글 본문은 펼친 알림에서 표시한다.
-- Push 표시 capability가 있는 Android v1 installation은 data-only payload의 `data.title`·`data.message`를
-  native presentation에 사용한다. capability가 없는 Android와 모든 iOS는 기존 `notification`·`data` 조합을
-  사용한다. 두 경로 모두 route, privacy, expiry, retry·dedup와 recipient 계약을 유지한다.
-- iOS v1 presentation은 `KOSMO_PUSH_PRESENTATION_V1` category를 사용한다. 접힌 상태는 system icon과
-  header를 유지하고, 펼친 상태에서 actor avatar·reaction·허용된 게시글 본문을 표시한다. category 등록 실패는
-  token 동기화를 막지 않으며, 기존 앱은 OS 기본 표시를 사용한다.
+- Profile Notification Push의 title/body는 행위자와 수신 Profile의 이름·핸들, 행동 종류를 공통 정보로 구성한다.
+  Reaction은 실제 Reaction emoji를 사용한다. Recipient가 조회할 수 있고 sensitive 또는 Content Warning이 아닌
+  게시글 본문도 포함하며, 줄 수·줄바꿈·자름·접힘·펼침은 OS가 소유한다. 플랫폼별 별도 표시, 아바타, 수신자
+  전용 행, Reaction 배지는 요구하지 않는다.
 - Operational Notification은 저장된 제목·선택적 본문·href를 기존 Account target route 계약으로 전달한다.
 - Follow와 FollowRequest처럼 게시글 본문이 없는 알림은 본문 미리보기를 생략한다.
-- 원격 행위자 아바타는 Worker가 인증된 Media Storage Service의 `/v1/remote-avatars`에 원본 URL만 보내
-  준비한다. FCM에는 서비스가 반환한 `image/webp`의 `https://media.byulma.run` 저장 URL만 넣으며, 원본
-  URL을 단말에 전달하거나 단말이 원본 서버를 요청하게 하지 않는다. Account, Profile, token, notification ID와
-  기기 정보는 이 요청에 포함하지 않는다.
-- Media Storage Service의 실패, 설정 누락, 제한 시간 초과 또는 잘못된 응답·URL이면 행위자 아바타를
-  생략하고 기존 텍스트 Push를 계속 보낸다. Local Media는 같은 신뢰된 HTTPS origin으로 확인된 경우에만
-  재사용한다.
 - 공통 Worker Notification Activity는 Domain Workflow의 Notification 생성 요청을 받아 기존 Core materializer를
   호출한다. 저장된 Notification ID가 반환되면 그 ID로 기존 Push delivery Workflow를 시작하고 start
   acknowledgement만 기다린다. materializer가 Notification을 만들지 않거나 실패하면 Push를 시작하지 않는다.
@@ -87,9 +77,8 @@ installation token lifecycle을 고정하므로 앱 설정의 권한 처리와 t
 - 첫 릴리스에는 전역·알림 유형별·Profile별 in-app Push enable/disable control이나 preference API를
   두지 않는다. Push 수신 여부는 OS 알림 설정으로 제어하며, 기존 Notification의 Mute·Block·visibility
   억제 정책은 Push에도 적용한다.
-- 잠금 화면 본문 미리보기는 sensitive 또는 Content Warning인 경우 가린다. 이 예외는 본문에만 적용하며,
-  발신자·알림 유형·Recipient Profile 식별은 유지한다. 그 외에는 Recipient가 조회 권한을 가진 비공개
-  본문을 미리보기에 포함한다.
+- Profile Notification Push에 포함하는 게시글 본문은 Recipient가 조회할 수 있고 sensitive 또는 Content Warning이
+  아닌 경우에만 허용한다. 이 예외는 본문에만 적용하며, 발신자·행동 종류·Recipient Profile 식별은 유지한다.
 - 앱이 foreground인 경우에도 OS 알림 배너를 표시한다. 별도의 custom in-app Push banner를 추가하지
   않는다.
 - Profile Notification Push payload는 `notificationId`, `recipientProfileId`, 내부 앱 경로 문자열 `href`를
@@ -116,14 +105,14 @@ installation token lifecycle을 고정하므로 앱 설정의 권한 처리와 t
   있다는 보장도 없다. 이는 Provider·플랫폼의 관찰 가능한 경계다.
 - 이 결정은 공통 Worker Notification Activity가 저장된 Notification ID를 기존 Push delivery Workflow에
   연결하고, Push flow가 이후 수신 대상 fan-out과 전달 lifecycle을 소유한다는 경계와 앱 설정의 권한 상태별 동작,
-  현재 Push 대상 검증 범위, 기본 잠금 화면 정보와 본문 예외, foreground OS 배너, OS 설정 이동과 token 동기화,
+  현재 Push 대상 검증 범위, 공통 title/body 정보 구성과 본문 예외, foreground OS 배너, OS 설정 이동과 token 동기화,
   Profile 및 Operational target 처리, 다중 설치 fan-out, Push 만료와 read state 독립성을 고정한다.
   PROD-912가 소유하는 installation token의 저장·폐기 lifecycle은 위와 같이 정한다. Provider SDK,
   정확한 retry/backoff 정책과 route data 및 OS 표시용 title/body 밖의 provider payload는 이 ADR에서 정하지 않는다.
 
 ## 남은 결정
 
-- 영구적인 본문 미리보기 길이·자르기 계약은 정하지 않는다. 현재 구현 기본값은 기존 plain-text extraction 이후 Unicode code point 기준 최대 160자로 본문 미리보기를 만들고, 더 길면 말줄임표를 붙이는 것이다. 이는 영구 API 계약이 아니다.
+- OS가 소유하는 줄 수·줄바꿈·자름·접힘·펼침의 구체 규칙은 정하지 않는다.
 - PROD-911이 소유하는 향후 Mention 생성·통합과 유형별 source·표시 계약. 해당 type이 canonical Notification으로
   저장되면 공통 Push flow를 사용하며, 미래 generator 자체 구현은 이 ADR 범위가 아니다.
 

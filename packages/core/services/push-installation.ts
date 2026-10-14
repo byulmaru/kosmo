@@ -64,7 +64,6 @@ export const findEligiblePushInstallations = async ({
     id: PushInstallations.id,
     notificationCreatedAt: Notifications.createdAt,
     platform: PushInstallations.platform,
-    presentationVersion: PushInstallations.presentationVersion,
     sessionId: PushInstallations.sessionId,
     token: PushInstallations.token,
   };

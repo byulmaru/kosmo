@@ -2,24 +2,15 @@ import {
   db,
   first,
   Instances,
-  Media,
   Notifications,
   PostContents,
   Posts,
   ProfileFollowRequests,
   ProfileFollows,
-  ProfileMedia,
   Profiles,
   Reactions,
 } from '@kosmo/core/db';
-import {
-  InstanceKind,
-  MediaSource,
-  MediaState,
-  NotificationKind,
-  ProfileMediaKind,
-  PushInstallationPlatform,
-} from '@kosmo/core/enums';
+import { InstanceKind, NotificationKind } from '@kosmo/core/enums';
 import { encodeGlobalId } from '@kosmo/core/global-id';
 import { postContentDocumentToText } from '@kosmo/core/post-content/server';
 import {
@@ -38,72 +29,6 @@ import type { Message } from 'firebase-admin/messaging';
 const DAY_IN_MILLISECONDS = 24 * 60 * 60 * 1000;
 const PREVIEW_MAX_CODE_POINTS = 160;
 const DISPLAY_NAME_MAX_CODE_POINTS = 40;
-const FCM_MESSAGE_MAX_BYTES = 4096;
-const IOS_PUSH_CATEGORY_IDENTIFIER = 'KOSMO_PUSH_PRESENTATION_V1';
-const MEDIA_STORAGE_REQUEST_TIMEOUT_MS = 3_000;
-const TRUSTED_MEDIA_HOST = 'media.byulma.run';
-
-type FcmMessageWithoutToken = Pick<Message, 'android' | 'apns' | 'data' | 'notification'>;
-
-const getFcmMessageByteLength = (message: FcmMessageWithoutToken) =>
-  new TextEncoder().encode(JSON.stringify(message)).byteLength;
-
-const isTrustedMediaUrl = (value: unknown): value is string => {
-  if (typeof value !== 'string') {
-    return false;
-  }
-
-  try {
-    const url = new URL(value);
-    return (
-      url.protocol === 'https:' &&
-      url.hostname.toLowerCase() === TRUSTED_MEDIA_HOST &&
-      (url.port === '' || url.port === '443') &&
-      url.username === '' &&
-      url.password === ''
-    );
-  } catch {
-    return false;
-  }
-};
-
-const prepareRemoteAvatar = async (originalRemoteUrl: string): Promise<string | null> => {
-  const origin = process.env.MEDIA_STORAGE_SERVICE_ORIGIN;
-  const apiKey = process.env.MEDIA_STORAGE_SERVICE_API_KEY;
-  if (!origin || !apiKey) {
-    return null;
-  }
-
-  try {
-    const response = await fetch(new URL('/v1/remote-avatars', origin), {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ url: originalRemoteUrl }),
-      signal: AbortSignal.timeout(MEDIA_STORAGE_REQUEST_TIMEOUT_MS),
-    });
-    if (response.status !== 200 && response.status !== 201) {
-      return null;
-    }
-
-    const result: unknown = await response.json();
-    if (
-      typeof result !== 'object' ||
-      result === null ||
-      Array.isArray(result) ||
-      (result as { mediaType?: unknown }).mediaType !== 'image/webp'
-    ) {
-      return null;
-    }
-
-    const url = (result as { url?: unknown }).url;
-    return isTrustedMediaUrl(url) ? url : null;
-  } catch {
-    return null;
-  }
-};
 
 const notificationTypes: Record<NotificationKind, string> = {
   FOLLOW: 'FollowNotification',
@@ -378,6 +303,7 @@ export const sendPushNotification = async (
     actor.displayName || actor.handle,
     DISPLAY_NAME_MAX_CODE_POINTS,
   );
+  const actorHandle = relativeHandle(actor.handle, actor.instanceKind, actor.instanceDomain);
   const recipient = await db
     .select({
       displayName: Profiles.displayName,
@@ -393,42 +319,22 @@ export const sendPushNotification = async (
   if (!recipient) {
     return;
   }
-
   const recipientName = truncateCodePoints(
     recipient.displayName || recipient.handle,
     DISPLAY_NAME_MAX_CODE_POINTS,
   );
-  const actorHandle = relativeHandle(actor.handle, actor.instanceKind, actor.instanceDomain);
   const recipientHandle = relativeHandle(
     recipient.handle,
     recipient.instanceKind,
     recipient.instanceDomain,
   );
-  const actorAvatarUrl = await db
-    .select({ source: Media.source, url: Media.url })
-    .from(ProfileMedia)
-    .innerJoin(Media, eq(Media.id, ProfileMedia.mediaId))
-    .where(
-      and(
-        eq(ProfileMedia.profileId, source.actorProfileId),
-        eq(ProfileMedia.kind, ProfileMediaKind.AVATAR),
-        eq(Media.state, MediaState.READY),
-      ),
-    )
-    .limit(1)
-    .then(first);
-  const preparedAvatarUrl = actorAvatarUrl?.url
-    ? actorAvatarUrl.source === MediaSource.REMOTE
-      ? await prepareRemoteAvatar(actorAvatarUrl.url)
-      : actorAvatarUrl.source === MediaSource.LOCAL && isTrustedMediaUrl(actorAvatarUrl.url)
-        ? actorAvatarUrl.url
-        : null
-    : null;
+  const actorLabel = `${actorName}(${actorHandle})`;
+  const recipientLabel = `${recipientName}(${recipientHandle})`;
   let href =
     notification.kind === NotificationKind.FOLLOW_REQUEST
       ? '/follow-requests'
       : `/${relativeHandle(actor.handle, actor.instanceKind, actor.instanceDomain)}`;
-  let postText: string | null = null;
+  let preview: string | null = null;
 
   if (source.targetPostId) {
     const targetPost = await db
@@ -467,89 +373,39 @@ export const sendPushNotification = async (
         if (!document.summary && !isSensitive) {
           const text = postContentDocumentToText(document);
           if (text.trim()) {
-            postText = truncateCodePoints(text, PREVIEW_MAX_CODE_POINTS);
+            preview = truncateCodePoints(text, PREVIEW_MAX_CODE_POINTS);
           }
         }
       }
     }
   }
 
-  const recipientLabel = `${recipientName}(${recipientHandle})`;
-  const body =
+  const actionSummary =
     notification.kind === NotificationKind.REACTION
-      ? `${actorName} 님이 ${recipientLabel} 님에게 ${source.reaction}를 남겼습니다.`
+      ? `${actorLabel} 님이 ${recipientLabel} 님에게 ${source.reaction}를 남겼습니다.`
       : notification.kind === NotificationKind.FOLLOW
-        ? `${actorName} 님이 ${recipientLabel} 님을 팔로우했습니다.`
+        ? `${actorLabel} 님이 ${recipientLabel} 님을 팔로우했습니다.`
         : notification.kind === NotificationKind.FOLLOW_REQUEST
-          ? `${actorName} 님이 ${recipientLabel} 님에게 팔로우를 요청했습니다.`
+          ? `${actorLabel} 님이 ${recipientLabel} 님에게 팔로우를 요청했습니다.`
           : notification.kind === NotificationKind.REPOST
-            ? `${actorName} 님이 ${recipientLabel} 님의 게시글을 재게시했습니다.`
+            ? `${actorLabel} 님이 ${recipientLabel} 님의 게시글을 재게시했습니다.`
             : notification.kind === NotificationKind.REPLY
-              ? `${actorName} 님이 ${recipientLabel} 님의 게시글에 답글을 달았습니다.`
+              ? `${actorLabel} 님이 ${recipientLabel} 님의 게시글에 답글을 달았습니다.`
               : notification.kind === NotificationKind.QUOTE
-                ? `${actorName} 님이 ${recipientLabel} 님의 게시글을 인용했습니다.`
-                : `${actorName} 님이 ${recipientLabel} 님을 언급했습니다.`;
-  const baseData = {
-    actorHandle,
-    actorName,
-    href,
-    kind: notification.kind,
-    notificationId: encodeGlobalId(notificationTypes[notification.kind], notificationId),
-    presentationVersion: '1',
-    recipientHandle,
-    recipientName,
-    recipientProfileId: encodeGlobalId('Profile', notification.recipientProfileId),
-    ...(source.reaction ? { reaction: source.reaction } : {}),
-    ...(postText ? { postText } : {}),
-  };
-  const isNativeAndroid =
-    installation.platform === PushInstallationPlatform.ANDROID &&
-    installation.presentationVersion === 1;
-  const nativeData = {
-    ...baseData,
-    message: body,
-    title: actorName,
-  };
-  const apns = {
-    headers: { 'apns-expiration': String(Math.floor(expiresAt.epochMilliseconds / 1000)) },
-    ...(installation.platform === PushInstallationPlatform.IOS
-      ? { payload: { aps: { category: IOS_PUSH_CATEGORY_IDENTIFIER } } }
-      : {}),
-  };
-  const ttlAfterAvatarPreparation = Math.min(
-    expiresAt.epochMilliseconds - Temporal.Now.instant().epochMilliseconds,
-    DAY_IN_MILLISECONDS,
-  );
-  if (ttlAfterAvatarPreparation <= 0) {
-    return;
-  }
-  const basePayload = (
-    isNativeAndroid
-      ? {
-          android: { priority: 'high' as const, ttl: ttlAfterAvatarPreparation },
-          apns,
-          data: nativeData,
-        }
-      : {
-          android: { ttl: ttlAfterAvatarPreparation },
-          apns,
-          data: baseData,
-          notification: { body, title: actorName },
-        }
-  ) satisfies FcmMessageWithoutToken;
-  const avatarData = preparedAvatarUrl ? { ...baseData, actorAvatarUrl: preparedAvatarUrl } : null;
-  const nativeAvatarData = preparedAvatarUrl
-    ? { ...nativeData, actorAvatarUrl: preparedAvatarUrl }
-    : null;
-  const candidateAvatarData = isNativeAndroid ? nativeAvatarData : avatarData;
-  const data =
-    candidateAvatarData &&
-    getFcmMessageByteLength({ ...basePayload, data: candidateAvatarData }) <= FCM_MESSAGE_MAX_BYTES
-      ? candidateAvatarData
-      : basePayload.data;
+                ? `${actorLabel} 님이 ${recipientLabel} 님의 게시글을 인용했습니다.`
+                : `${actorLabel} 님이 ${recipientLabel} 님을 언급했습니다.`;
+  const body = `${actionSummary}${preview ? ` ${preview}` : ''}`;
   const payload = {
-    ...basePayload,
-    data,
+    android: { ttl },
+    apns: {
+      headers: { 'apns-expiration': String(Math.floor(expiresAt.epochMilliseconds / 1000)) },
+    },
+    data: {
+      href,
+      notificationId: encodeGlobalId(notificationTypes[notification.kind], notificationId),
+      recipientProfileId: encodeGlobalId('Profile', notification.recipientProfileId),
+    },
+    notification: { body, title: actorName },
     token: installation.token,
   } satisfies Message;
 

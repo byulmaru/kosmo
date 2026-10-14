@@ -1,7 +1,6 @@
 import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
-import { createServer } from 'node:http';
 import { after, before, beforeEach, test } from 'node:test';
 import {
   AccountProfileRole,
@@ -10,14 +9,11 @@ import {
   ApplicationType,
   InstanceKind,
   InstanceState,
-  MediaSource,
-  MediaState,
   NotificationKind,
   OAuthTokenState,
   PostState,
   PostVisibility,
   ProfileFollowPolicy,
-  ProfileMediaKind,
   ProfileState,
   PushInstallationPlatform,
   SessionState,
@@ -58,7 +54,6 @@ let Accounts: typeof CoreDb.Accounts;
 let ApplicationAuthorizations: typeof CoreDb.ApplicationAuthorizations;
 let Applications: typeof CoreDb.Applications;
 let Instances: typeof CoreDb.Instances;
-let Media: typeof CoreDb.Media;
 let NotificationQuoteJudgments: typeof CoreDb.NotificationQuoteJudgments;
 let Notifications: typeof CoreDb.Notifications;
 let OAuthAuthorizationCodes: typeof CoreDb.OAuthAuthorizationCodes;
@@ -70,7 +65,6 @@ let ProfileBlocks: typeof CoreDb.ProfileBlocks;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
 let ProfileFollowRequests: typeof CoreDb.ProfileFollowRequests;
 let ProfileMutes: typeof CoreDb.ProfileMutes;
-let ProfileMedia: typeof CoreDb.ProfileMedia;
 let Profiles: typeof CoreDb.Profiles;
 let PushInstallations: typeof CoreDb.PushInstallations;
 let Reactions: typeof CoreDb.Reactions;
@@ -98,7 +92,6 @@ before(async () => {
     db,
     firstOrThrow,
     Instances,
-    Media,
     NotificationQuoteJudgments,
     Notifications,
     OAuthAuthorizationCodes,
@@ -110,7 +103,6 @@ before(async () => {
     ProfileFollows,
     ProfileFollowRequests,
     ProfileMutes,
-    ProfileMedia,
     Profiles,
     PushInstallations,
     Reactions,
@@ -1384,60 +1376,15 @@ const createPost = (
     .returning()
     .then(firstOrThrow);
 
-const startRemoteAvatarService = async (
-  respond: (request: {
-    readonly headers: Record<string, string | string[] | undefined>;
-    readonly body: unknown;
-  }) => {
-    status: number;
-    body: unknown;
-  },
-) => {
-  const server = createServer((request, response) => {
-    let body = '';
-    request.setEncoding('utf8');
-    request.on('data', (chunk) => {
-      body += chunk;
-    });
-    request.on('end', () => {
-      const result = respond({
-        headers: request.headers,
-        body: JSON.parse(body),
-      });
-      response.statusCode = result.status;
-      response.setHeader('Content-Type', 'application/json');
-      response.end(JSON.stringify(result.body));
-    });
-  });
-  await new Promise<void>((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(0, '127.0.0.1', () => resolve());
-  });
-  const address = server.address();
-  if (!address || typeof address === 'string') {
-    throw new Error('Remote avatar test service did not expose a TCP address');
-  }
-  return {
-    origin: `http://127.0.0.1:${address.port}`,
-    close: () =>
-      new Promise<void>((resolve, reject) => {
-        server.close((error) => (error ? reject(error) : resolve()));
-      }),
-  };
-};
-
 test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, CW와 민감 미디어 마스킹을 유지한다', async (t) => {
   const previousProjectId = process.env.FIREBASE_PROJECT_ID;
   process.env.FIREBASE_PROJECT_ID = 'kosmo-push-test';
   const fixture = await createAccountDeletionFixture({ profileStates: [ProfileState.ACTIVE] });
   let postId: string | null = null;
-  let actorId: string | null = null;
-  let avatarId: string | null = null;
 
   try {
     const recipient = fixture.profiles[0]!;
     const actor = await createProfile();
-    actorId = actor.id;
     await db
       .update(Profiles)
       .set({ displayName: '예은', handle: 'yeeun', normalizedHandle: 'yeeun' })
@@ -1446,27 +1393,6 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
       .update(Profiles)
       .set({ displayName: '혜주', handle: 'hyeju', normalizedHandle: 'hyeju' })
       .where(eq(Profiles.id, actor.id));
-    const avatar = await db
-      .insert(Media)
-      .values({
-        mediaType: 'image/webp',
-        accountId: fixture.account.id,
-        profileId: actor.id,
-        source: MediaSource.LOCAL,
-        state: MediaState.READY,
-        storageReference: `avatar-${crypto.randomUUID()}`,
-        uploadExpiresAt: Temporal.Now.instant().add({ hours: 1 }),
-        url: 'https://media.byulma.run/avatar.webp',
-        readyAt: Temporal.Now.instant(),
-      })
-      .returning()
-      .then(firstOrThrow);
-    avatarId = avatar.id;
-    await db.insert(ProfileMedia).values({
-      kind: ProfileMediaKind.AVATAR,
-      mediaId: avatar.id,
-      profileId: actor.id,
-    });
     const document = {
       version: 1,
       summary: null,
@@ -1503,55 +1429,14 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
     assert.ok(notificationId);
 
     const installationRows = await db
-      .select({
-        id: PushInstallations.id,
-        platform: PushInstallations.platform,
-        token: PushInstallations.token,
-      })
+      .select({ id: PushInstallations.id, token: PushInstallations.token })
       .from(PushInstallations)
       .where(eq(PushInstallations.accountId, fixture.account.id));
-    const nativeAndroid = installationRows.find(
-      ({ platform }) => platform === PushInstallationPlatform.ANDROID,
-    );
-    const ios = installationRows.find(({ platform }) => platform === PushInstallationPlatform.IOS);
-    assert.ok(nativeAndroid);
-    assert.ok(ios);
-    await db
-      .update(PushInstallations)
-      .set({ presentationVersion: 1 })
-      .where(eq(PushInstallations.id, nativeAndroid.id));
-    const notificationCreatedAt = await db
-      .select({ createdAt: Notifications.createdAt })
-      .from(Notifications)
-      .where(eq(Notifications.id, notificationId))
-      .then(firstOrThrow)
-      .then(({ createdAt }) => createdAt);
-    const legacySession = await db
-      .select({ id: Sessions.id })
-      .from(Sessions)
-      .where(eq(Sessions.accountId, fixture.account.id))
-      .limit(1)
-      .then(firstOrThrow);
-    const legacyAndroid = await db
-      .insert(PushInstallations)
-      .values({
-        accountId: fixture.account.id,
-        platform: PushInstallationPlatform.ANDROID,
-        presentationVersion: 0,
-        registrationEpoch: notificationCreatedAt,
-        sessionId: legacySession.id,
-        token: `legacy-${crypto.randomUUID()}`,
-      })
-      .returning({ id: PushInstallations.id })
-      .then(firstOrThrow);
     const { listPushNotificationInstallationsActivity, sendPushNotificationActivity } =
       await import('./activities');
 
     const installationIds = await listPushNotificationInstallationsActivity(notificationId);
-    assert.deepEqual(
-      [...installationIds].sort(),
-      [...installationRows.map(({ id }) => id), legacyAndroid.id].sort(),
-    );
+    assert.deepEqual([...installationIds].sort(), installationRows.map(({ id }) => id).sort());
     assert.equal(
       installationIds.some((id) => installationRows.some(({ token }) => token === id)),
       false,
@@ -1573,93 +1458,71 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
       return 'projects/kosmo-push-test/messages/push-test';
     });
 
-    await sendPushNotificationActivity(notificationId, nativeAndroid.id);
-    await sendPushNotificationActivity(notificationId, legacyAndroid.id);
-    await sendPushNotificationActivity(notificationId, ios.id);
-    const nativePayload = sent[0];
-    assert.ok(nativePayload);
-    assert.equal(nativePayload.notification, undefined);
-    assert.equal(nativePayload.android?.priority, 'high');
-    assert.equal(nativePayload.apns?.payload?.aps?.category, undefined);
-    assert.equal(nativePayload.data?.title, '혜주');
-    assert.equal(nativePayload.data?.message, '혜주 님이 예은(@yeeun) 님에게 😂를 남겼습니다.');
-    const payload = sent[1];
+    await sendPushNotificationActivity(notificationId, installationIds[0]!);
+    const payload = sent[0];
     assert.ok(payload);
     const { encodeGlobalId } = await import('@kosmo/core/global-id');
     assert.deepEqual(payload.notification, {
       title: '혜주',
-      body: '혜주 님이 예은(@yeeun) 님에게 😂를 남겼습니다.',
+      body: '혜주(@hyeju) 님이 예은(@yeeun) 님에게 😂를 남겼습니다. Read the article',
     });
-    assert.equal(payload.apns?.payload?.aps?.category, undefined);
-    assert.equal(payload.android?.priority, undefined);
-    assert.deepEqual(sent[2]?.notification, payload.notification);
-    assert.equal(sent[2]?.apns?.payload?.aps?.category, 'KOSMO_PUSH_PRESENTATION_V1');
     assert.deepEqual(payload.data, {
-      actorAvatarUrl: 'https://media.byulma.run/avatar.webp',
-      actorHandle: '@hyeju',
-      actorName: '혜주',
-      href: `/@yeeun/${encodeGlobalId('Post', post.id)}`,
-      kind: NotificationKind.REACTION,
       notificationId: encodeGlobalId('ReactionNotification', notificationId),
-      postText: 'Read the article',
-      presentationVersion: '1',
-      reaction: '😂',
-      recipientHandle: '@yeeun',
-      recipientName: '예은',
       recipientProfileId: encodeGlobalId('Profile', recipient.id),
+      href: `/@yeeun/${encodeGlobalId('Post', post.id)}`,
     });
+    assert.equal(payload.android?.priority, undefined);
+    assert.equal(payload.apns?.payload, undefined);
     assert.ok((payload.android?.ttl ?? 0) > 0);
     assert.ok((payload.android?.ttl ?? Number.POSITIVE_INFINITY) <= 24 * 60 * 60 * 1000);
 
     const contentId = post.currentContentId;
     assert.ok(contentId);
-    const emojiText = '😀'.repeat(160);
-    const emojiDocument = {
-      version: 1,
-      summary: null,
-      body: {
-        type: 'doc',
-        content: [
-          {
-            type: 'paragraph',
-            content: [{ type: 'text', text: emojiText }],
-          },
-        ],
-      },
-    } as const;
+    const emojiText = '😀'.repeat(161);
     await db
       .update(PostContents)
-      .set({ document: emojiDocument })
+      .set({
+        document: {
+          version: 1,
+          summary: null,
+          body: {
+            type: 'doc',
+            content: [
+              {
+                type: 'paragraph',
+                content: [{ type: 'text', text: emojiText }],
+              },
+            ],
+          },
+        },
+      })
       .where(eq(PostContents.id, contentId));
-    await db
-      .update(Media)
-      .set({ url: `https://media.byulma.run/${'x'.repeat(4000)}` })
-      .where(eq(Media.id, avatarId));
-    await sendPushNotificationActivity(notificationId, nativeAndroid.id);
-    const oversizedAvatarPayload = sent[3];
-    assert.ok(oversizedAvatarPayload);
-    assert.equal(oversizedAvatarPayload.data?.actorAvatarUrl, undefined);
-    assert.equal(oversizedAvatarPayload.data?.href, `/@yeeun/${encodeGlobalId('Post', post.id)}`);
-    assert.equal(oversizedAvatarPayload.data?.postText, emojiText);
-    assert.equal(oversizedAvatarPayload.notification, undefined);
-    const serializedWithoutToken = {
-      android: oversizedAvatarPayload.android,
-      apns: oversizedAvatarPayload.apns,
-      data: oversizedAvatarPayload.data,
-      notification: oversizedAvatarPayload.notification,
-    };
-    assert.ok(new TextEncoder().encode(JSON.stringify(serializedWithoutToken)).byteLength < 4096);
-
+    await sendPushNotificationActivity(notificationId, installationIds[0]!);
+    assert.equal(
+      sent[1]?.notification?.body,
+      `혜주(@hyeju) 님이 예은(@yeeun) 님에게 😂를 남겼습니다. ${'😀'.repeat(159)}…`,
+    );
+    assert.ok(
+      new TextEncoder().encode(
+        JSON.stringify({
+          android: sent[1]?.android,
+          apns: sent[1]?.apns,
+          data: sent[1]?.data,
+          notification: sent[1]?.notification,
+        }),
+      ).byteLength < 4096,
+    );
     const warningDocument = { ...document, summary: 'Private warning text' };
     await db
       .update(PostContents)
       .set({ document: warningDocument })
       .where(eq(PostContents.id, contentId));
-    await sendPushNotificationActivity(notificationId, nativeAndroid.id);
-    assert.equal(sent[4]?.notification, undefined);
-    assert.equal(sent[4]?.data?.postText, undefined);
-    assert.equal(sent[4]?.data?.message, '혜주 님이 예은(@yeeun) 님에게 😂를 남겼습니다.');
-    assert.equal(sent[4]?.data?.message?.includes('Private warning text'), false);
+    await sendPushNotificationActivity(notificationId, installationIds[0]!);
+    assert.equal(
+      sent[2]?.notification?.body,
+      '혜주(@hyeju) 님이 예은(@yeeun) 님에게 😂를 남겼습니다.',
+    );
+    assert.equal(sent[2]?.notification?.body.includes('Private warning text'), false);
 
     const sensitiveDocument = {
       ...document,
@@ -1669,22 +1532,17 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
       .update(PostContents)
       .set({ document: sensitiveDocument })
       .where(eq(PostContents.id, contentId));
-    await sendPushNotificationActivity(notificationId, nativeAndroid.id);
-    assert.equal(sent[5]?.notification, undefined);
-    assert.equal(sent[5]?.data?.postText, undefined);
-    assert.equal(sent[5]?.data?.message, '혜주 님이 예은(@yeeun) 님에게 😂를 남겼습니다.');
-    assert.equal(sent[5]?.data?.message?.includes('Read the article'), false);
+    await sendPushNotificationActivity(notificationId, installationIds[0]!);
+    assert.equal(
+      sent[3]?.notification?.body,
+      '혜주(@hyeju) 님이 예은(@yeeun) 님에게 😂를 남겼습니다.',
+    );
+    assert.equal(sent[3]?.notification?.body.includes('Read the article'), false);
   } finally {
     if (postId) {
       await db.update(Posts).set({ currentContentId: null }).where(eq(Posts.id, postId));
       await db.delete(PostContents).where(eq(PostContents.postId, postId));
       await db.delete(Posts).where(eq(Posts.id, postId));
-    }
-    if (actorId) {
-      await db.delete(ProfileMedia).where(eq(ProfileMedia.profileId, actorId));
-    }
-    if (avatarId) {
-      await db.delete(Media).where(eq(Media.id, avatarId));
     }
     await cleanupAccountDeletionFixture(fixture);
     if (previousProjectId === undefined) {
@@ -1695,137 +1553,7 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
   }
 });
 
-test('Push Notification Activity는 원격 avatar를 Media Storage Service로 준비하고 실패해도 text push를 보낸다', async (t) => {
-  const previousProjectId = process.env.FIREBASE_PROJECT_ID;
-  const previousMediaOrigin = process.env.MEDIA_STORAGE_SERVICE_ORIGIN;
-  const previousMediaApiKey = process.env.MEDIA_STORAGE_SERVICE_API_KEY;
-  process.env.FIREBASE_PROJECT_ID = 'kosmo-push-test';
-  process.env.MEDIA_STORAGE_SERVICE_API_KEY = 'media-test-key';
-  const fixture = await createAccountDeletionFixture({ profileStates: [ProfileState.ACTIVE] });
-  let postId: string | null = null;
-  let actorId: string | null = null;
-  let avatarId: string | null = null;
-  let mediaService: Awaited<ReturnType<typeof startRemoteAvatarService>> | undefined;
-  let failService = false;
-
-  try {
-    const recipient = fixture.profiles[0]!;
-    const actor = await createProfile();
-    actorId = actor.id;
-    const { post } = await createCorePost({
-      document: postContentDocumentFromText('Remote avatar push'),
-      origin: 'LOCAL',
-      profileId: recipient.id,
-      visibility: PostVisibility.PUBLIC,
-    });
-    postId = post.id;
-    const avatar = await db
-      .insert(Media)
-      .values({
-        mediaType: 'image/png',
-        profileId: actor.id,
-        source: MediaSource.REMOTE,
-        state: MediaState.READY,
-        url: 'https://remote.example/avatar.png',
-      })
-      .returning()
-      .then(firstOrThrow);
-    avatarId = avatar.id;
-    await db.insert(ProfileMedia).values({
-      kind: ProfileMediaKind.AVATAR,
-      mediaId: avatar.id,
-      profileId: actor.id,
-    });
-    const reaction = await db
-      .insert(Reactions)
-      .values({ postId: post.id, profileId: actor.id, type: '❤️' })
-      .returning()
-      .then(firstOrThrow);
-    const notificationId = await createReactionNotificationActivity(reaction.id);
-    assert.ok(notificationId);
-
-    const requests: Array<{
-      readonly headers: Record<string, string | string[] | undefined>;
-      readonly body: unknown;
-    }> = [];
-    mediaService = await startRemoteAvatarService(({ headers, body }) => {
-      requests.push({ headers, body });
-      return failService
-        ? { status: 503, body: { error: 'unavailable' } }
-        : {
-            status: 201,
-            body: { mediaType: 'image/webp', url: 'https://media.byulma.run/avatar.webp' },
-          };
-    });
-    process.env.MEDIA_STORAGE_SERVICE_ORIGIN = mediaService.origin;
-
-    const { listPushNotificationInstallationsActivity, sendPushNotificationActivity } =
-      await import('./activities');
-    const installationIds = await listPushNotificationInstallationsActivity(notificationId);
-    assert.ok(installationIds[0]);
-    const { applicationDefault, getApps, initializeApp } = await import('firebase-admin/app');
-    const { getMessaging } = await import('firebase-admin/messaging');
-    const app =
-      getApps().find(({ name }) => name === '[DEFAULT]') ??
-      initializeApp({
-        credential: applicationDefault(),
-        projectId: process.env.FIREBASE_PROJECT_ID,
-      });
-    const messaging = getMessaging(app);
-    type FcmMessage = Parameters<typeof messaging.send>[0];
-    const sent: FcmMessage[] = [];
-    t.mock.method(messaging, 'send', async (message: FcmMessage) => {
-      sent.push(message);
-      return 'projects/kosmo-push-test/messages/remote-avatar-test';
-    });
-
-    await sendPushNotificationActivity(notificationId, installationIds[0]);
-    assert.equal(requests.length, 1);
-    assert.deepEqual(requests[0]?.body, { url: 'https://remote.example/avatar.png' });
-    assert.equal(requests[0]?.headers.authorization, 'Bearer media-test-key');
-    assert.deepEqual(Object.keys(requests[0]?.body as object), ['url']);
-    assert.equal(sent[0]?.data?.actorAvatarUrl, 'https://media.byulma.run/avatar.webp');
-    assert.notEqual(sent[0]?.data?.actorAvatarUrl, 'https://remote.example/avatar.png');
-
-    failService = true;
-    await sendPushNotificationActivity(notificationId, installationIds[0]);
-    assert.equal(requests.length, 2);
-    assert.equal(sent.length, 2);
-    assert.equal(sent[1]?.data?.actorAvatarUrl, undefined);
-    assert.ok(sent[1]?.data?.message ?? sent[1]?.notification?.body);
-  } finally {
-    await mediaService?.close();
-    if (postId) {
-      await db.update(Posts).set({ currentContentId: null }).where(eq(Posts.id, postId));
-      await db.delete(PostContents).where(eq(PostContents.postId, postId));
-      await db.delete(Posts).where(eq(Posts.id, postId));
-    }
-    if (actorId) {
-      await db.delete(ProfileMedia).where(eq(ProfileMedia.profileId, actorId));
-    }
-    if (avatarId) {
-      await db.delete(Media).where(eq(Media.id, avatarId));
-    }
-    await cleanupAccountDeletionFixture(fixture);
-    if (previousProjectId === undefined) {
-      delete process.env.FIREBASE_PROJECT_ID;
-    } else {
-      process.env.FIREBASE_PROJECT_ID = previousProjectId;
-    }
-    if (previousMediaOrigin === undefined) {
-      delete process.env.MEDIA_STORAGE_SERVICE_ORIGIN;
-    } else {
-      process.env.MEDIA_STORAGE_SERVICE_ORIGIN = previousMediaOrigin;
-    }
-    if (previousMediaApiKey === undefined) {
-      delete process.env.MEDIA_STORAGE_SERVICE_API_KEY;
-    } else {
-      process.env.MEDIA_STORAGE_SERVICE_API_KEY = previousMediaApiKey;
-    }
-  }
-});
-
-test('Push Notification Activity는 모든 Notification 종류의 접힌 행동 요약과 recipient를 표시한다', async (t) => {
+test('Profile Notification의 유형별 기본 notification payload를 전달한다', async (t) => {
   const previousProjectId = process.env.FIREBASE_PROJECT_ID;
   process.env.FIREBASE_PROJECT_ID = 'kosmo-push-test';
   const fixture = await createAccountDeletionFixture({ profileStates: [ProfileState.ACTIVE] });
@@ -1872,32 +1600,8 @@ test('Push Notification Activity는 모든 Notification 종류의 접힌 행동 
       sourcePostId: target.id,
     });
     postIds.push(repost.id);
-    const { post: mention } = await createCorePost({
-      document: {
-        body: {
-          content: [
-            {
-              content: [
-                { text: 'mention ', type: 'text' },
-                { attrs: { profileId: recipient.id }, type: 'mention' },
-              ],
-              type: 'paragraph',
-            },
-          ],
-          type: 'doc',
-        },
-        summary: null,
-        version: 1,
-      },
-      authoredBodyText: 'mention @recipient',
-      origin: 'LOCAL',
-      profileId: actor.id,
-      visibility: PostVisibility.PUBLIC,
-    });
-    postIds.push(mention.id);
     const { listPushNotificationInstallationsActivity, sendPushNotificationActivity } =
       await import('./activities');
-
     const follow = await db
       .insert(ProfileFollows)
       .values({ followerProfileId: actor.id, followeeProfileId: recipient.id })
@@ -1920,7 +1624,6 @@ test('Push Notification Activity는 모든 Notification 종류의 접힌 행동 
       [NotificationKind.REPOST, repost.id],
       [NotificationKind.REPLY, reply.id],
       [NotificationKind.QUOTE, quote.id],
-      [NotificationKind.MENTION, mention.id],
     ] as const;
     const notifications = await Promise.all(
       notificationSources.map(([kind, sourceId]) =>
@@ -1945,6 +1648,25 @@ test('Push Notification Activity는 모든 Notification 종류의 접힌 행동 
     const messaging = getMessaging(app);
     type FcmMessage = Parameters<typeof messaging.send>[0];
     const sent: FcmMessage[] = [];
+    const { encodeGlobalId } = await import('@kosmo/core/global-id');
+    const dataFor = (kind: NotificationKind, id: string) =>
+      encodeGlobalId(
+        (
+          {
+            [NotificationKind.FOLLOW]: 'FollowNotification',
+            [NotificationKind.FOLLOW_REQUEST]: 'FollowRequestNotification',
+            [NotificationKind.REACTION]: 'ReactionNotification',
+            [NotificationKind.REPOST]: 'RepostNotification',
+            [NotificationKind.REPLY]: 'ReplyNotification',
+            [NotificationKind.QUOTE]: 'QuoteNotification',
+            [NotificationKind.MENTION]: 'MentionNotification',
+            [NotificationKind.OPERATIONAL]: 'OperationalNotification',
+          } satisfies Record<NotificationKind, string>
+        )[kind],
+        id,
+      );
+    const encodeProfileId = (id: string) => encodeGlobalId('Profile', id);
+    const encodePostId = (id: string) => encodeGlobalId('Post', id);
     t.mock.method(messaging, 'send', async (message: FcmMessage) => {
       sent.push(message);
       return 'projects/kosmo-push-test/messages/summary-test';
@@ -1955,92 +1677,78 @@ test('Push Notification Activity는 모든 Notification 종류의 접힌 행동 
     }
 
     assert.deepEqual(
-      sent.map(({ data, notification }) => ({
+      sent.map(({ notification, data }) => ({
+        title: notification?.title,
         body: notification?.body,
-        data: {
-          actorName: data?.actorName,
-          kind: data?.kind,
-          recipientHandle: data?.recipientHandle,
-          recipientName: data?.recipientName,
-          reaction: data?.reaction,
-        },
+        data,
       })),
       [
         {
-          body: '행위자 님이 수신자(@recipient) 님을 팔로우했습니다.',
+          title: '행위자',
+          body: '행위자(@actor) 님이 수신자(@recipient) 님을 팔로우했습니다.',
           data: {
-            actorName: '행위자',
-            kind: NotificationKind.FOLLOW,
-            recipientHandle: '@recipient',
-            recipientName: '수신자',
-            reaction: undefined,
+            href: '/@actor',
+            notificationId: dataFor(NotificationKind.FOLLOW, notifications[0]!.id),
+            recipientProfileId: encodeProfileId(recipient.id),
           },
         },
         {
-          body: '행위자 님이 수신자(@recipient) 님에게 팔로우를 요청했습니다.',
+          title: '행위자',
+          body: '행위자(@actor) 님이 수신자(@recipient) 님에게 팔로우를 요청했습니다.',
           data: {
-            actorName: '행위자',
-            kind: NotificationKind.FOLLOW_REQUEST,
-            recipientHandle: '@recipient',
-            recipientName: '수신자',
-            reaction: undefined,
+            href: '/follow-requests',
+            notificationId: dataFor(NotificationKind.FOLLOW_REQUEST, notifications[1]!.id),
+            recipientProfileId: encodeProfileId(recipient.id),
           },
         },
         {
-          body: '행위자 님이 수신자(@recipient) 님에게 😂를 남겼습니다.',
+          title: '행위자',
+          body: '행위자(@actor) 님이 수신자(@recipient) 님에게 😂를 남겼습니다. target',
           data: {
-            actorName: '행위자',
-            kind: NotificationKind.REACTION,
-            recipientHandle: '@recipient',
-            recipientName: '수신자',
-            reaction: '😂',
+            href: `/@recipient/${encodePostId(target.id)}`,
+            notificationId: dataFor(NotificationKind.REACTION, notifications[2]!.id),
+            recipientProfileId: encodeProfileId(recipient.id),
           },
         },
         {
-          body: '행위자 님이 수신자(@recipient) 님의 게시글을 재게시했습니다.',
+          title: '행위자',
+          body: '행위자(@actor) 님이 수신자(@recipient) 님의 게시글을 재게시했습니다. target',
           data: {
-            actorName: '행위자',
-            kind: NotificationKind.REPOST,
-            recipientHandle: '@recipient',
-            recipientName: '수신자',
-            reaction: undefined,
+            href: `/@recipient/${encodePostId(target.id)}`,
+            notificationId: dataFor(NotificationKind.REPOST, notifications[3]!.id),
+            recipientProfileId: encodeProfileId(recipient.id),
           },
         },
         {
-          body: '행위자 님이 수신자(@recipient) 님의 게시글에 답글을 달았습니다.',
+          title: '행위자',
+          body: '행위자(@actor) 님이 수신자(@recipient) 님의 게시글에 답글을 달았습니다. reply',
           data: {
-            actorName: '행위자',
-            kind: NotificationKind.REPLY,
-            recipientHandle: '@recipient',
-            recipientName: '수신자',
-            reaction: undefined,
+            href: `/@actor/${encodePostId(reply.id)}`,
+            notificationId: dataFor(NotificationKind.REPLY, notifications[4]!.id),
+            recipientProfileId: encodeProfileId(recipient.id),
           },
         },
         {
-          body: '행위자 님이 수신자(@recipient) 님의 게시글을 인용했습니다.',
+          title: '행위자',
+          body: '행위자(@actor) 님이 수신자(@recipient) 님의 게시글을 인용했습니다. quote',
           data: {
-            actorName: '행위자',
-            kind: NotificationKind.QUOTE,
-            recipientHandle: '@recipient',
-            recipientName: '수신자',
-            reaction: undefined,
-          },
-        },
-        {
-          body: '행위자 님이 수신자(@recipient) 님을 언급했습니다.',
-          data: {
-            actorName: '행위자',
-            kind: NotificationKind.MENTION,
-            recipientHandle: '@recipient',
-            recipientName: '수신자',
-            reaction: undefined,
+            href: `/@actor/${encodePostId(quote.id)}`,
+            notificationId: dataFor(NotificationKind.QUOTE, notifications[5]!.id),
+            recipientProfileId: encodeProfileId(recipient.id),
           },
         },
       ],
     );
-    assert.equal(
-      sent.every(({ notification }) => !notification?.body?.includes('target')),
-      true,
+    assert.ok(
+      sent.every(
+        ({ android, apns, data, notification }) =>
+          android?.priority === undefined &&
+          apns?.payload === undefined &&
+          notification &&
+          data &&
+          new TextEncoder().encode(JSON.stringify({ android, apns, data, notification }))
+            .byteLength < 4096,
+      ),
     );
   } finally {
     for (const postId of [...postIds].reverse()) {
@@ -2269,6 +1977,13 @@ test('Mention Push Notification은 원인 Post의 Mention 타입·경로·안전
     }
     const { post } = createdPost;
     postId = post.id;
+    const authorInstance = await db
+      .select({ domain: Instances.domain })
+      .from(Instances)
+      .where(eq(Instances.id, author.instanceId))
+      .then(firstOrThrow);
+    const actorLabel = `${author.displayName}(@${author.handle}@${authorInstance.domain})`;
+    const recipientLabel = `${recipient.displayName}(@${recipient.handle})`;
     const {
       createMentionNotificationActivity,
       listPushNotificationInstallationsActivity,
@@ -2301,19 +2016,12 @@ test('Mention Push Notification은 원인 Post의 Mention 타입·경로·안전
     const { encodeGlobalId } = await import('@kosmo/core/global-id');
     assert.deepEqual(payload.notification, {
       title: author.displayName,
-      body: `${author.displayName} 님이 ${recipient.displayName}(@${recipient.handle}) 님을 언급했습니다.`,
+      body: `${actorLabel} 님이 ${recipientLabel} 님을 언급했습니다. Mention source preview`,
     });
     assert.deepEqual(payload.data, {
-      actorHandle: `@${author.handle}@${author.handle}.example`,
-      actorName: author.displayName,
-      href: `/@${author.handle}@${author.handle}.example/${encodeGlobalId('Post', post.id)}`,
-      kind: NotificationKind.MENTION,
       notificationId: encodeGlobalId('MentionNotification', notificationId),
-      postText: 'Mention source preview',
-      presentationVersion: '1',
-      recipientHandle: `@${recipient.handle}`,
-      recipientName: recipient.displayName,
       recipientProfileId: encodeGlobalId('Profile', recipient.id),
+      href: `/@${author.handle}@${authorInstance.domain}/${encodeGlobalId('Post', post.id)}`,
     });
   } finally {
     if (postId) {
