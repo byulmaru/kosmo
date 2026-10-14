@@ -299,10 +299,16 @@ function PostListItemCard({
     <Pressable
       accessible={false}
       focusable={false}
-      onPointerEnter={(event) =>
-        setPointerHovered(Platform.OS === 'web' && event.nativeEvent.pointerType !== 'touch')
-      }
-      onPointerLeave={() => setPointerHovered(false)}
+      onPointerEnter={(event) => {
+        if (Platform.OS === 'web' && event.nativeEvent.pointerType !== 'touch') {
+          setPointerHovered(true);
+        }
+      }}
+      onPointerLeave={(event) => {
+        if (Platform.OS === 'web' && event.nativeEvent.pointerType !== 'touch') {
+          setPointerHovered(false);
+        }
+      }}
       role={article ? 'article' : undefined}
       style={[style, Platform.OS === 'web' ? { cursor: 'auto' } : undefined]}
       tabIndex={-1}

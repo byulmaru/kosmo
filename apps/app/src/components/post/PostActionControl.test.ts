@@ -419,15 +419,9 @@ test('PostListItem keeps hover across nested pointer targets without adding a fo
     ];
     assert.equal(typeof eventHandler, 'function');
     await act(async () => {
-      if (boundary === 'enter') {
-        (
-          eventHandler as (event: {
-            nativeEvent: { pointerType: 'mouse' | 'pen' | 'touch' };
-          }) => void
-        )({ nativeEvent: { pointerType } });
-      } else {
-        (eventHandler as () => void)();
-      }
+      (
+        eventHandler as (event: { nativeEvent: { pointerType: 'mouse' | 'pen' | 'touch' } }) => void
+      )({ nativeEvent: { pointerType } });
     });
     assert.ok(renderer);
     root = renderer.root;
@@ -446,6 +440,12 @@ test('PostListItem keeps hover across nested pointer targets without adding a fo
     feedback = findByTestID(root, 'post-list-item-feedback');
     assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'hover');
 
+    await sendPointer('enter', 'touch');
+    assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'hover');
+
+    await sendPointer('leave', 'touch');
+    assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'hover');
+
     await sendPointer('leave', pointerType);
     assert.equal(flattenStyle(feedback.props.style).backgroundColor, undefined);
   }
@@ -453,6 +453,7 @@ test('PostListItem keeps hover across nested pointer targets without adding a fo
   await sendPointer('enter', 'touch');
   assert.equal(flattenStyle(feedback.props.style).backgroundColor, undefined);
   await sendPointer('leave', 'touch');
+  assert.equal(flattenStyle(feedback.props.style).backgroundColor, undefined);
 
   platform.OS = 'ios';
   root = await renderListItem(props);

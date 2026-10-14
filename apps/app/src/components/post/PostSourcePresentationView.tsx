@@ -292,8 +292,16 @@ export function PostSourcePreview({
     <Pressable
       accessible={false}
       focusable={false}
-      onPointerEnter={(event) => setPointerHovered(event.nativeEvent.pointerType !== 'touch')}
-      onPointerLeave={() => setPointerHovered(false)}
+      onPointerEnter={(event) => {
+        if (event.nativeEvent.pointerType !== 'touch') {
+          setPointerHovered(true);
+        }
+      }}
+      onPointerLeave={(event) => {
+        if (event.nativeEvent.pointerType !== 'touch') {
+          setPointerHovered(false);
+        }
+      }}
       style={[
         ...previewStyle,
         {

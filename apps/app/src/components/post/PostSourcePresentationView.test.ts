@@ -126,10 +126,12 @@ describe('PostSourcePresentationView mention relation wiring', () => {
       assert.equal(typeof handler, 'function');
       await act(async () => handler?.({ nativeEvent: { pointerType } }));
     };
-    const pointerLeave = async () => {
-      const handler = findRenderedPreview()?.props.onPointerLeave as (() => void) | undefined;
+    const pointerLeave = async (pointerType: 'mouse' | 'pen' | 'touch') => {
+      const handler = findRenderedPreview()?.props.onPointerLeave as
+        | ((event: { nativeEvent: { pointerType: 'mouse' | 'pen' | 'touch' } }) => void)
+        | undefined;
       assert.equal(typeof handler, 'function');
-      await act(async () => handler?.());
+      await act(async () => handler?.({ nativeEvent: { pointerType } }));
     };
 
     await pointerEnter('mouse');
@@ -137,7 +139,17 @@ describe('PostSourcePresentationView mention relation wiring', () => {
     assert.ok(preview);
     assert.equal(flattenStyle(preview.props.style).backgroundColor, '#eee');
 
-    await pointerLeave();
+    await pointerEnter('touch');
+    preview = findRenderedPreview();
+    assert.ok(preview);
+    assert.equal(flattenStyle(preview.props.style).backgroundColor, '#eee');
+
+    await pointerLeave('touch');
+    preview = findRenderedPreview();
+    assert.ok(preview);
+    assert.equal(flattenStyle(preview.props.style).backgroundColor, '#eee');
+
+    await pointerLeave('mouse');
     preview = findRenderedPreview();
     assert.ok(preview);
     assert.equal(flattenStyle(preview.props.style).backgroundColor, undefined);
@@ -148,6 +160,26 @@ describe('PostSourcePresentationView mention relation wiring', () => {
     assert.equal(flattenStyle(preview.props.style).backgroundColor, '#eee');
 
     await pointerEnter('touch');
+    preview = findRenderedPreview();
+    assert.ok(preview);
+    assert.equal(flattenStyle(preview.props.style).backgroundColor, '#eee');
+
+    await pointerLeave('touch');
+    preview = findRenderedPreview();
+    assert.ok(preview);
+    assert.equal(flattenStyle(preview.props.style).backgroundColor, '#eee');
+
+    await pointerLeave('pen');
+    preview = findRenderedPreview();
+    assert.ok(preview);
+    assert.equal(flattenStyle(preview.props.style).backgroundColor, undefined);
+
+    await pointerEnter('touch');
+    preview = findRenderedPreview();
+    assert.ok(preview);
+    assert.equal(flattenStyle(preview.props.style).backgroundColor, undefined);
+
+    await pointerLeave('touch');
     preview = findRenderedPreview();
     assert.ok(preview);
     assert.equal(flattenStyle(preview.props.style).backgroundColor, undefined);
