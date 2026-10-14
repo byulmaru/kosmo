@@ -404,7 +404,12 @@ test(
       const unknownFailureWorkflowId =
         followingAccountsImportWorkflow.workflowIdFromArgs(unknownFailureInput);
       let unknownFailureSettled = false;
-      const unknownFailure = execute(unknownFailureInput);
+      const unknownFailureHandle = await start(unknownFailureInput);
+      const unknownFailure = unknownFailureHandle.result();
+      const unknownFailureHistory = environment.client.workflow.getHandle(
+        unknownFailureWorkflowId,
+        unknownFailureHandle.firstExecutionRunId,
+      );
       void unknownFailure.then(
         () => {
           unknownFailureSettled = true;
@@ -415,21 +420,62 @@ test(
       );
       let observedUnknownFailureWithSiblingPending = false;
       let unknownWaitTimeout: ReturnType<typeof setTimeout> | undefined;
+      let unknownWaitTimedOut = false;
       try {
         observedUnknownFailureWithSiblingPending = await Promise.race([
-          Promise.all([unknownBatchWaitStarted, unknownFailureActivityRejected]).then(() => true),
+          Promise.all([unknownBatchWaitStarted, unknownFailureActivityRejected]).then(async () => {
+            while (!unknownWaitTimedOut) {
+              const events = (await unknownFailureHistory.fetchHistory()).events ?? [];
+              if (unknownWaitTimedOut) {
+                return false;
+              }
+
+              const activityTaskFailedEvent = events.find(
+                (event) => event.activityTaskFailedEventAttributes != null,
+              );
+              if (activityTaskFailedEvent) {
+                const failedScheduledEventId =
+                  activityTaskFailedEvent.activityTaskFailedEventAttributes?.scheduledEventId?.toString();
+                const failedActivityScheduledEvent = events.find(
+                  (event) =>
+                    event.eventId?.toString() === failedScheduledEventId &&
+                    event.activityTaskScheduledEventAttributes?.activityType?.name ===
+                      'followImportedProfileActivity',
+                );
+                assert.ok(failedActivityScheduledEvent);
+
+                const activityTaskFailedEventId = activityTaskFailedEvent.eventId?.toString();
+                // Match the start event because a later completion may belong to an older task.
+                if (
+                  activityTaskFailedEventId !== undefined &&
+                  events.some((event) => {
+                    const workflowTaskStartedEventId =
+                      event.workflowTaskCompletedEventAttributes?.startedEventId;
+                    return (
+                      workflowTaskStartedEventId != null &&
+                      BigInt(workflowTaskStartedEventId.toString()) >
+                        BigInt(activityTaskFailedEventId)
+                    );
+                  })
+                ) {
+                  assert.equal((await unknownFailureHistory.describe()).status.name, 'RUNNING');
+                  assert.equal(unknownFailureSettled, false);
+                  return true;
+                }
+              }
+
+              await new Promise<void>((resolve) => setImmediate(resolve));
+            }
+
+            return false;
+          }),
           new Promise<boolean>((resolve) => {
-            unknownWaitTimeout = setTimeout(() => resolve(false), 5_000);
+            unknownWaitTimeout = setTimeout(() => {
+              unknownWaitTimedOut = true;
+              resolve(false);
+            }, 5_000);
           }),
         ]);
-        if (observedUnknownFailureWithSiblingPending) {
-          await new Promise<void>((resolve) => setImmediate(resolve));
-          const history = await environment.client.workflow
-            .getHandle(unknownFailureWorkflowId)
-            .fetchHistory();
-          assert.ok(history.events?.some((event) => event.activityTaskFailedEventAttributes));
-          assert.equal(unknownFailureSettled, false);
-        }
       } finally {
         if (unknownWaitTimeout) {
           clearTimeout(unknownWaitTimeout);
