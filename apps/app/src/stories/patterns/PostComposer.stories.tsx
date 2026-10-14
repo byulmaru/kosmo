@@ -984,12 +984,14 @@ export const MobileReplyShellContract: Story = {
   args: { ...MobileEmpty.args, body: '', items: [], mode: 'reply' },
   render: (args) => {
     const [body, setBody] = useState(args.body);
+    const [items, setItems] = useState(args.items);
     const [parentResized, setParentResized] = useState(false);
     return (
       <>
         <MobileFullscreenComposerShellCandidate
           {...args}
           body={body}
+          items={items}
           beforeEditor={
             <View style={{ height: parentResized ? 260 : 180 }} testID="mobile-reply-parent">
               <Text>부모 게시글</Text>
@@ -999,6 +1001,10 @@ export const MobileReplyShellContract: Story = {
           onBodyChange={(value) => {
             args.onBodyChange(value);
             setBody(value);
+          }}
+          onMediaRemove={(key) => {
+            args.onMediaRemove(key);
+            setItems((current) => current.filter((item) => item.key !== key));
           }}
           onOverlayClose={onMobileClose}
           replyContext={<Text testID="mobile-reply-context">@reply-target님에게 답글</Text>}
@@ -1474,12 +1480,12 @@ export const MobileMediaFooterGeometryContract: Story = {
   ...MobilePlayground,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const body = canvas.getByRole('textbox', { name: '게시글 본문' });
     const gallery = canvas.getByLabelText('첨부 이미지 갤러리, 1개');
     const shelf = canvas.getByTestId('mobile-composer-media-shelf');
-    const footer = canvas.getByTestId('mobile-composer-footer');
 
     expect(shelf).toHaveStyle({ height: '164px', paddingBottom: '8px' });
-    expect(footer.getBoundingClientRect().top - gallery.getBoundingClientRect().bottom).toBe(8);
+    expect(gallery.getBoundingClientRect().top - body.getBoundingClientRect().bottom).toBe(8);
   },
 };
 
@@ -1487,12 +1493,12 @@ export const MobileKeyboardMediaFooterGeometryContract: Story = {
   ...MobileKeyboardMedia,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const body = canvas.getByRole('textbox', { name: '게시글 본문' });
     const gallery = canvas.getByLabelText('첨부 이미지 갤러리, 1개');
     const shelf = canvas.getByTestId('mobile-composer-media-shelf');
-    const footer = canvas.getByTestId('mobile-composer-footer');
 
     expect(shelf).toHaveStyle({ height: '164px', paddingBottom: '8px' });
-    expect(footer.getBoundingClientRect().top - gallery.getBoundingClientRect().bottom).toBe(8);
+    expect(gallery.getBoundingClientRect().top - body.getBoundingClientRect().bottom).toBe(8);
   },
 };
 
@@ -1545,7 +1551,7 @@ function expectMobileEditorFitsMediaShelf(canvasElement: HTMLElement) {
   const editor = canvas.getByRole('textbox', { name: '게시글 본문' });
   const shelf = canvas.getByLabelText('첨부 이미지 갤러리, 1개').parentElement;
 
-  expect(getComputedStyle(editor).flexGrow).toBe('1');
+  expect(getComputedStyle(editor).flexGrow).toBe('0');
   expect(shelf).not.toBeNull();
   expect(editor.getBoundingClientRect().bottom).toBeLessThanOrEqual(
     shelf!.getBoundingClientRect().top,

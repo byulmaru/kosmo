@@ -20,6 +20,7 @@ import baseMeta, {
   MobileKeyboardCWEditorGeometryContract as mobileKeyboardCWEditorGeometryContract,
   MobileKeyboardMediaEditorGeometryContract as mobileKeyboardMediaEditorGeometryContract,
   MobileKeyboardMediaFooterGeometryContract as mobileKeyboardMediaFooterGeometryContract,
+  MobileMedia as mobileMediaStory,
   MobileMediaFooterGeometryContract as mobileMediaFooterGeometryContract,
   MobilePlayground as mobilePlaygroundStory,
   MobilePlaygroundContract as mobilePlaygroundContract,
@@ -221,6 +222,82 @@ export const MobileKeyboardCWEditorGeometryContract: Story = mobileKeyboardCWEdi
 export const MobileKeyboardMediaEditorGeometryContract: Story =
   mobileKeyboardMediaEditorGeometryContract;
 export const MobileMediaFooterGeometryContract: Story = mobileMediaFooterGeometryContract;
+export const MobileMediaScrollContract: Story = {
+  ...mobileMediaStory,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = canvas.getByRole('textbox', { name: '게시글 본문' });
+    const scroll = canvas.getByTestId('mobile-fullscreen-composer-scroll');
+    const gallery = canvas.getByLabelText('첨부 이미지 갤러리, 1개');
+    const footer = canvas.getByTestId('mobile-composer-footer');
+    const initialBodyHeight = body.getBoundingClientRect().height;
+    const initialFooterTop = footer.getBoundingClientRect().top;
+
+    expect(initialBodyHeight).toBeLessThan(100);
+    expect(scroll.contains(body)).toBe(true);
+    expect(scroll.contains(gallery)).toBe(true);
+    await userEvent.type(body, '\n긴 본문\n'.repeat(20));
+    await waitFor(() => expect(scroll.scrollHeight).toBeGreaterThan(scroll.clientHeight));
+
+    scroll.scrollTop = scroll.scrollHeight;
+    expect(scroll.scrollTop).toBeGreaterThan(0);
+    expect(footer.getBoundingClientRect().top).toBe(initialFooterTop);
+
+    await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 1 제거' }));
+    await waitFor(() => expect(canvas.queryByLabelText('첨부 이미지 갤러리, 1개')).toBeNull());
+  },
+};
+export const MobileReplyMediaScrollContract: Story = {
+  ...mobileReplyShellContract,
+  args: {
+    ...mobileReplyShellContract.args,
+    items: mobileMediaStory.args?.items,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = canvas.getByRole('textbox', { name: '답글 본문' });
+    const gallery = canvas.getByLabelText('첨부 이미지 갤러리, 1개');
+    const parent = canvas.getByTestId('mobile-reply-parent');
+    const scroll = canvas.getByTestId('mobile-fullscreen-composer-scroll');
+    const footer = canvas.getByTestId('mobile-composer-footer');
+    const initialFooterTop = footer.getBoundingClientRect().top;
+
+    expect(scroll).toContainElement(body);
+    expect(scroll).toContainElement(gallery);
+    expect(gallery.getBoundingClientRect().top - body.getBoundingClientRect().bottom).toBe(8);
+    await waitFor(() =>
+      expect(parent.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+        scroll.getBoundingClientRect().top + 1,
+      ),
+    );
+
+    scroll.scrollTop = 0;
+    scroll.dispatchEvent(new Event('scroll'));
+    await waitFor(() =>
+      expect(parent.getBoundingClientRect().top).toBeGreaterThanOrEqual(
+        scroll.getBoundingClientRect().top - 1,
+      ),
+    );
+    await userEvent.click(body);
+    await waitFor(() => expect(body).toHaveFocus());
+    await waitFor(() =>
+      expect(parent.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+        scroll.getBoundingClientRect().top + 1,
+      ),
+    );
+
+    await userEvent.type(body, '\n긴 본문\n'.repeat(20));
+    await waitFor(() => expect(scroll.scrollHeight).toBeGreaterThan(scroll.clientHeight));
+    scroll.scrollTop = scroll.scrollHeight;
+    expect(scroll.scrollTop).toBeGreaterThan(0);
+    expect(footer.getBoundingClientRect().top).toBe(initialFooterTop);
+
+    await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 1 제거' }));
+    await waitFor(() => expect(canvas.queryByLabelText('첨부 이미지 갤러리, 1개')).toBeNull());
+    expect(scroll).toContainElement(body);
+    expect(footer.getBoundingClientRect().top).toBe(initialFooterTop);
+  },
+};
 export const MobilePlaygroundContract: Story = mobilePlaygroundContract;
 export const MobileFullPickerBackdropDismissContract: Story = {
   ...mobilePlaygroundStory,
