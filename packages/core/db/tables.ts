@@ -672,6 +672,10 @@ export const Sessions = pgTable(
       .notNull()
       .references(() => Accounts.id),
     applicationId: uuid('application_id').references(() => Applications.id),
+    /**
+     * @deprecated Selected Profile is client-owned via request extension and client storage; compatibility-only field.
+     * Keep existing fallback and legacy writes until a separate migration; do not add readers or writers.
+     */
     activeProfileId: uuid('active_profile_id').references(() => Profiles.id),
     oidcSessionKey: text('oidc_session_key'),
     token: text('token').unique().notNull(),

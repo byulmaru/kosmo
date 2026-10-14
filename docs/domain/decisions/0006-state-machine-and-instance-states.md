@@ -17,7 +17,7 @@ Accepted
 - 두 상태 차원은 독립이며 운영자 정지/해제는 Suspension State만 바꾼다.
 - Deleted는 terminal 상태다.
 - Owner는 Active Local Profile을 Deactivated로, Deactivated Local Profile을 Active로 바꿀 수 있다.
-- Profile 삭제는 Deactivated/Normal Local Profile에만 적용한다.
+- (2026-10-14 보충으로 superseded) Owner Profile 삭제는 Deactivated/Normal Local Profile에만 적용하며 Deleted로 전이한다.
 - 운영자는 Deleted가 아닌 Profile을 정지할 수 있고 Owner는 정지를 직접 해제할 수 없다.
 - Remote Profile 갱신은 Lifecycle/Suspension State를 바꾸지 않는다.
 
@@ -40,6 +40,12 @@ Accepted
   Activity를 받을 때만 Reachable로 바뀐다. WebFinger 결과, 저장된 actor·cache 존재, 다른 actor의 참조와 실패한
   lookup은 Reachability State를 바꾸지 않는다.
 - Instance 상태 변경은 기존 Notification의 존재와 Read State를 바꾸지 않는다.
+
+## 2026-10-14 보충: Settings Profile 삭제
+
+- Settings에서 Owner에게 제공하는 단일 Profile lifecycle action은 `Profile 삭제`다. 이 action은 기존 소프트 딜리트 동작으로 Active Local Profile을 `Deactivated` 상태로 바꾼다. 이미 `Deactivated`인 Profile에 대한 권한 있는 재시도는 기존 idempotent 동작을 따른다.
+- 위의 이전 `Deactivated -> Deleted` Owner action 규칙은 더 이상 현재 사용자 action을 정의하지 않는다. Lifecycle enum과 기존 `Deactivated -> Active` 내부 전이는 유지하며, 이 Settings 흐름은 별도 재활성화 또는 영구 삭제 action을 제공하지 않는다.
+- 30일 후 물리 파기는 별도 [PROD-1110](https://linear.app/byulmaru/issue/PROD-1110) 범위다. 이 보충은 파기 시점이나 동작을 보장하지 않는다.
 
 ## 문서 반영
 

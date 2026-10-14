@@ -205,6 +205,7 @@ function SessionQuery({
     clearNativeSession,
     nativeToken,
     resetActor,
+    resetRejectedCurrentActor,
     selectedProfileId: actorSelectedProfileId,
   } = useRelayActor();
   const data = useLazyLoadQuery<SessionProviderQueryType>(
@@ -285,7 +286,7 @@ function SessionQuery({
                 applied: true,
               };
             }
-            resetActor(null);
+            resetRejectedCurrentActor();
           }
         });
       }
@@ -340,6 +341,7 @@ function SessionQuery({
     authLifecycleKey,
     onSessionChange,
     resetActor,
+    resetRejectedCurrentActor,
     serverSelectedProfileId,
     session,
     sessionId,

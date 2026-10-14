@@ -198,7 +198,9 @@ input DeleteProfileInput {
 }
 
 type DeleteProfilePayload {
+  account: Account!
   profileId: ID!
+  success: Boolean!
 }
 
 input DeleteReactionInput {
