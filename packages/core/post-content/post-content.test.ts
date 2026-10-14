@@ -545,6 +545,10 @@ test('canonicalizes Mention identities and uses the unavailable Profile fallback
   };
 
   assert.equal(postContentDocumentToText(first), 'Hello @알 수 없는 사용자');
+  assert.equal(
+    postContentDocumentToText(first, new Map([[aliceProfileId, '@alice@example.com']])),
+    'Hello @alice@example.com',
+  );
   assert.equal(arePostContentRevisionsEqual(first, formattingEquivalent), true);
   assert.equal(
     arePostContentRevisionsEqual(first, {

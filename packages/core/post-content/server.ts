@@ -157,8 +157,11 @@ export function postContentDocumentFromTextAndMedia(
   });
 }
 
-export function postContentDocumentToText(value: unknown): string {
-  return postContentBodyToText(canonicalizePostContentDocument(value).body);
+export function postContentDocumentToText(
+  value: unknown,
+  mentionHandles?: ReadonlyMap<string, string>,
+): string {
+  return postContentBodyToText(canonicalizePostContentDocument(value).body, mentionHandles);
 }
 
 export function postContentDocumentToHtml(
@@ -273,7 +276,10 @@ function postContentInlineFromText(
   return inline;
 }
 
-function postContentBodyToText(document: PostContentBodyDocumentV1): string {
+function postContentBodyToText(
+  document: PostContentBodyDocumentV1,
+  mentionHandles?: ReadonlyMap<string, string>,
+): string {
   return document.content
     .filter((block) => block.type === 'paragraph')
     .map((paragraph) =>
@@ -283,7 +289,7 @@ function postContentBodyToText(document: PostContentBodyDocumentV1): string {
             return node.text;
           }
           if (node.type === 'mention') {
-            return postContentMentionFallbackText;
+            return mentionHandles?.get(node.attrs.profileId) ?? postContentMentionFallbackText;
           }
           return '\n';
         })

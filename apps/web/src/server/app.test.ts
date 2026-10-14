@@ -3,6 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gunzipSync, gzipSync } from 'node:zlib';
+import { encodeGlobalId } from '@kosmo/core/global-id';
 import { parse } from 'hono/utils/cookie';
 import { Configuration, enableNonRepudiationChecks } from 'openid-client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
@@ -694,6 +695,26 @@ describe('runtime routing', () => {
     });
 
     const response = await app.request('/@alice/post-id', {
+      headers: { accept: 'text/html', 'sec-fetch-mode': 'navigate' },
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe('<html>expo app</html>');
+  });
+
+  test('keeps explicit ActivityPub representations out of the HTML preview route', async () => {
+    const globalId = encodeGlobalId('Post', '00000000-0000-8000-8000-000000000001');
+    const response = await app.request(`/@alice/${globalId}`, {
+      headers: { accept: 'text/html, application/activity+json' },
+    });
+
+    expect(response.status).toBe(404);
+    expect(await response.text()).toBe('404 Not Found');
+  });
+
+  test('preserves the app shell fallback for a browser URL with a non-Post global ID', async () => {
+    const globalId = encodeGlobalId('Profile', '00000000-0000-8000-8000-000000000001');
+    const response = await app.request(`/@alice/${globalId}`, {
       headers: { accept: 'text/html', 'sec-fetch-mode': 'navigate' },
     });
 
