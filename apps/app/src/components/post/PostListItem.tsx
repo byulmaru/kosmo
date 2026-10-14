@@ -1,6 +1,6 @@
 import { Link, useRouter } from 'expo-router';
 import { MessageCircle, Pin } from 'lucide-react-native';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
@@ -292,39 +292,48 @@ function PostListItemCard({
   style: StyleProp<ViewStyle>;
 }) {
   const theme = useTheme();
+  const [pointerHovered, setPointerHovered] = useState(false);
 
+  // RNW suppresses an ancestor Pressable's hovered state under a nested Pressable.
   return (
     <Pressable
       accessible={false}
       focusable={false}
+      onPointerEnter={(event) => {
+        if (Platform.OS === 'web' && event.nativeEvent.pointerType !== 'touch') {
+          setPointerHovered(true);
+        }
+      }}
+      onPointerLeave={(event) => {
+        if (Platform.OS === 'web' && event.nativeEvent.pointerType !== 'touch') {
+          setPointerHovered(false);
+        }
+      }}
       role={article ? 'article' : undefined}
       style={[style, Platform.OS === 'web' ? { cursor: 'auto' } : undefined]}
       tabIndex={-1}
       testID="post-list-item-card"
     >
-      {(state) => {
-        const hovered = Platform.OS === 'web' && Boolean((state as { hovered?: boolean }).hovered);
-        return (
-          <>
-            <View
-              accessibilityElementsHidden
-              importantForAccessibility="no-hide-descendants"
-              style={[
-                styles.surfaceFeedback,
-                {
-                  backgroundColor: state.pressed
-                    ? theme.statePressedSubtle
-                    : hovered
-                      ? theme.stateHover
-                      : undefined,
-                },
-              ]}
-              testID="post-list-item-feedback"
-            />
-            {children}
-          </>
-        );
-      }}
+      {(state) => (
+        <>
+          <View
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+            style={[
+              styles.surfaceFeedback,
+              {
+                backgroundColor: state.pressed
+                  ? theme.statePressedSubtle
+                  : Platform.OS === 'web' && pointerHovered
+                    ? theme.stateHover
+                    : undefined,
+              },
+            ]}
+            testID="post-list-item-feedback"
+          />
+          {children}
+        </>
+      )}
     </Pressable>
   );
 }

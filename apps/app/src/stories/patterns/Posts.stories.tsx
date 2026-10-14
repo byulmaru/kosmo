@@ -1,5 +1,5 @@
 import { usePathname } from 'expo-router';
-import { Profiler, Suspense, useCallback, useMemo, useRef, useState } from 'react';
+import { act, Profiler, Suspense, useCallback, useMemo, useRef, useState } from 'react';
 import { Linking, Pressable, Text, View } from 'react-native';
 import {
   graphql,
@@ -77,6 +77,40 @@ const postMediaImageUri = ogDefaultUrl;
 
 const storyShareOrigin = () => window.location.origin;
 const quoteMutationRequestObserver = fn().mockName('Quote composer mutation');
+
+async function dispatchPointerBoundary(
+  target: HTMLElement,
+  boundary: 'enter' | 'leave',
+  pointerType: 'pen' | 'touch',
+  pointerId: number,
+) {
+  await act(async () => {
+    const entering = boundary === 'enter';
+    const relatedTarget = entering ? null : document.body;
+    const eventInit = { pointerId, pointerType, isPrimary: true, relatedTarget };
+
+    target.dispatchEvent(
+      new PointerEvent(entering ? 'pointerover' : 'pointerout', { ...eventInit, bubbles: true }),
+    );
+
+    const ancestors: HTMLElement[] = [];
+    for (let current: HTMLElement | null = target; current; current = current.parentElement) {
+      ancestors.push(current);
+    }
+    if (entering) {
+      ancestors.reverse();
+    }
+
+    for (const element of ancestors) {
+      element.dispatchEvent(
+        new PointerEvent(entering ? 'pointerenter' : 'pointerleave', {
+          ...eventInit,
+          bubbles: false,
+        }),
+      );
+    }
+  });
+}
 
 const shortPost = {
   ...post({
@@ -5351,6 +5385,9 @@ export const LinkedSourceQuoteInteraction: Story = {
     const canvas = within(canvasElement);
     const postBody = await canvas.findByTestId('post-body');
     const sourcePreview = await canvas.findByTestId('source-post-preview');
+    const sourcePreviewLink = within(sourcePreview).getByRole('link', {
+      name: '원문 게시글 보기',
+    });
     const openURL = fn(async () => undefined);
     const originalOpenURL = Linking.openURL;
     Linking.openURL = openURL;
@@ -5359,8 +5396,19 @@ export const LinkedSourceQuoteInteraction: Story = {
       expect(window.getComputedStyle(sourcePreview).backgroundColor).toBe('rgba(0, 0, 0, 0)');
       await userEvent.hover(sourcePreview);
       expect(window.getComputedStyle(sourcePreview).backgroundColor).toBe('rgba(0, 0, 0, 0.04)');
+      await userEvent.hover(sourcePreviewLink);
+      expect(window.getComputedStyle(sourcePreview).backgroundColor).toBe('rgba(0, 0, 0, 0.04)');
       await userEvent.unhover(sourcePreview);
       expect(window.getComputedStyle(sourcePreview).backgroundColor).toBe('rgba(0, 0, 0, 0)');
+
+      await userEvent.hover(sourcePreviewLink);
+      expect(window.getComputedStyle(sourcePreview).backgroundColor).toBe('rgba(0, 0, 0, 0.04)');
+      await userEvent.unhover(sourcePreviewLink);
+      expect(window.getComputedStyle(sourcePreview).backgroundColor).toBe('rgba(0, 0, 0, 0)');
+
+      await dispatchPointerBoundary(sourcePreviewLink, 'enter', 'touch', 81);
+      expect(window.getComputedStyle(sourcePreview).backgroundColor).toBe('rgba(0, 0, 0, 0)');
+      await dispatchPointerBoundary(sourcePreviewLink, 'leave', 'touch', 81);
 
       await userEvent.click(
         within(postBody).getByLabelText('안전한 외부 링크, https://example.com/path'),
@@ -6725,7 +6773,9 @@ export const ContentWarningCardPressableFeedbackInteraction: Story = {
     const restingCardColor = getComputedStyle(feedback).backgroundColor;
     const restingWarningColor = getComputedStyle(warning).backgroundColor;
 
+    await pointerUser.hover(warning);
     await pointerUser.pointer({ keys: '[MouseLeft>]', target: warning });
+    await waitFor(() => expect(feedback).toHaveStyle({ backgroundColor: colors.light.stateHover }));
     await pointerUser.pointer({ target: document.body });
     await pointerUser.pointer({ keys: '[/MouseLeft]', target: document.body });
     expect(warning).toHaveAttribute('aria-expanded', 'false');
@@ -6737,13 +6787,29 @@ export const ContentWarningCardPressableFeedbackInteraction: Story = {
       expect(getComputedStyle(warning).backgroundColor).toBe(restingWarningColor);
     });
 
-    await userEvent.hover(warning);
-    expect(getComputedStyle(warning).backgroundColor).not.toBe(restingWarningColor);
-
-    await userEvent.unhover(warning);
     await userEvent.hover(card);
     await waitFor(() => expect(feedback).toHaveStyle({ backgroundColor: colors.light.stateHover }));
+    await userEvent.hover(warning);
+    await waitFor(() => expect(feedback).toHaveStyle({ backgroundColor: colors.light.stateHover }));
+    await userEvent.unhover(card);
+    await waitFor(() => expect(getComputedStyle(feedback).backgroundColor).toBe(restingCardColor));
 
+    await userEvent.hover(warning);
+    expect(getComputedStyle(warning).backgroundColor).not.toBe(restingWarningColor);
+    await waitFor(() => expect(feedback).toHaveStyle({ backgroundColor: colors.light.stateHover }));
+
+    await userEvent.unhover(warning);
+    await waitFor(() => expect(getComputedStyle(feedback).backgroundColor).toBe(restingCardColor));
+
+    await dispatchPointerBoundary(warning, 'enter', 'pen', 82);
+    await waitFor(() => expect(feedback).toHaveStyle({ backgroundColor: colors.light.stateHover }));
+    await dispatchPointerBoundary(warning, 'leave', 'pen', 82);
+    await waitFor(() => expect(getComputedStyle(feedback).backgroundColor).toBe(restingCardColor));
+    await dispatchPointerBoundary(warning, 'enter', 'touch', 83);
+    expect(getComputedStyle(feedback).backgroundColor).toBe(restingCardColor);
+    await dispatchPointerBoundary(warning, 'leave', 'touch', 83);
+
+    await pointerUser.hover(card);
     await pointerUser.pointer({ keys: '[MouseLeft>]', target: card });
     await waitFor(() =>
       expect(feedback).toHaveStyle({ backgroundColor: colors.light.statePressedSubtle }),

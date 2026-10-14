@@ -389,7 +389,7 @@ test('PostListItem uses the supplied list presentation', async () => {
   }
 });
 
-test('PostListItem uses Pressable hover and pressed feedback without adding a focus stop', async () => {
+test('PostListItem keeps hover across nested pointer targets without adding a focus stop', async () => {
   platform.OS = 'web';
   const props = {
     post: {} as never,
@@ -410,21 +410,57 @@ test('PostListItem uses Pressable hover and pressed feedback without adding a fo
   assert.equal(card.props.onPress, undefined);
   assert.equal(flattenStyle(feedback.props.style).backgroundColor, undefined);
 
-  root = await updateListItemPressableState(props, { hovered: true, pressed: false });
-  feedback = findByTestID(root, 'post-list-item-feedback');
-  assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'hover');
+  const sendPointer = async (
+    boundary: 'enter' | 'leave',
+    pointerType: 'mouse' | 'pen' | 'touch',
+  ) => {
+    const eventHandler = findByTestID(root, 'post-list-item-card').props[
+      boundary === 'enter' ? 'onPointerEnter' : 'onPointerLeave'
+    ];
+    assert.equal(typeof eventHandler, 'function');
+    await act(async () => {
+      (
+        eventHandler as (event: { nativeEvent: { pointerType: 'mouse' | 'pen' | 'touch' } }) => void
+      )({ nativeEvent: { pointerType } });
+    });
+    assert.ok(renderer);
+    root = renderer.root;
+    feedback = findByTestID(root, 'post-list-item-feedback');
+  };
 
-  root = await updateListItemPressableState(props, { hovered: true, pressed: true });
-  feedback = findByTestID(root, 'post-list-item-feedback');
-  assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'pressed-subtle');
+  for (const pointerType of ['mouse', 'pen'] as const) {
+    await sendPointer('enter', pointerType);
+    assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'hover');
 
-  root = await updateListItemPressableState(props, { hovered: true, pressed: false });
-  feedback = findByTestID(root, 'post-list-item-feedback');
-  assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'hover');
+    root = await updateListItemPressableState(props, { hovered: false, pressed: true });
+    feedback = findByTestID(root, 'post-list-item-feedback');
+    assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'pressed-subtle');
+
+    root = await updateListItemPressableState(props, { hovered: false, pressed: false });
+    feedback = findByTestID(root, 'post-list-item-feedback');
+    assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'hover');
+
+    await sendPointer('enter', 'touch');
+    assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'hover');
+
+    await sendPointer('leave', 'touch');
+    assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'hover');
+
+    await sendPointer('leave', pointerType);
+    assert.equal(flattenStyle(feedback.props.style).backgroundColor, undefined);
+  }
+
+  await sendPointer('enter', 'touch');
+  assert.equal(flattenStyle(feedback.props.style).backgroundColor, undefined);
+  await sendPointer('leave', 'touch');
+  assert.equal(flattenStyle(feedback.props.style).backgroundColor, undefined);
 
   platform.OS = 'ios';
   root = await renderListItem(props);
   feedback = findByTestID(root, 'post-list-item-feedback');
+
+  await sendPointer('enter', 'mouse');
+  assert.equal(flattenStyle(feedback.props.style).backgroundColor, undefined);
 
   root = await updateListItemPressableState(props, { hovered: true, pressed: false });
   feedback = findByTestID(root, 'post-list-item-feedback');

@@ -1,4 +1,5 @@
 import { Link, useRouter } from 'expo-router';
+import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
@@ -218,10 +219,14 @@ export function PostSourcePreview({
   style?: StyleProp<ViewStyle>;
 }): ReactNode {
   const theme = useTheme();
+  const [pointerHovered, setPointerHovered] = useState(false);
   const source = useFragment(PostSourcePreviewFragment, sourceKey);
   const sourceProfileHref = `/${source.profile.relativeHandle}` as Href;
   const sourcePostHref = `/${source.profile.relativeHandle}/${source.id}` as Href;
   const previewStyle = [styles.preview, style, { borderColor: theme.borderDefault }];
+  if (!interactive && pointerHovered) {
+    setPointerHovered(false);
+  }
   const content = (
     <>
       <View style={styles.authorHeader}>
@@ -282,14 +287,25 @@ export function PostSourcePreview({
     );
   }
 
+  // RNW suppresses an ancestor Pressable's hovered state under a nested Pressable.
   return (
     <Pressable
       accessible={false}
       focusable={false}
-      style={(state) => [
+      onPointerEnter={(event) => {
+        if (event.nativeEvent.pointerType !== 'touch') {
+          setPointerHovered(true);
+        }
+      }}
+      onPointerLeave={(event) => {
+        if (event.nativeEvent.pointerType !== 'touch') {
+          setPointerHovered(false);
+        }
+      }}
+      style={[
         ...previewStyle,
         {
-          backgroundColor: (state as { hovered?: boolean }).hovered ? theme.stateHover : undefined,
+          backgroundColor: pointerHovered ? theme.stateHover : undefined,
           cursor: 'auto',
         },
       ]}
