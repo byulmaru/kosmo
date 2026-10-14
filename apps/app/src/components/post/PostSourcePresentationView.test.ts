@@ -17,30 +17,9 @@ const mockModule = (specifier: string | URL, exports: object) =>
   } as unknown as Parameters<typeof mock.module>[1]);
 
 const platform = { OS: 'web' };
-let mockPressableState = { hovered: false, pressed: false };
 
-function MockPressable({
-  children,
-  style,
-  ...props
-}: {
-  children?: ReactNode;
-  style?: unknown;
-  [key: string]: unknown;
-}) {
-  return createElement(
-    'Pressable',
-    {
-      ...props,
-      style:
-        typeof style === 'function'
-          ? (style as (state: { hovered: boolean; pressed: boolean }) => unknown)(
-              mockPressableState,
-            )
-          : style,
-    },
-    children,
-  );
+function MockPressable({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) {
+  return createElement('Pressable', props, children);
 }
 
 mockModule('expo-router', {
@@ -90,7 +69,6 @@ afterEach(async () => {
     renderer = null;
   }
   platform.OS = 'web';
-  mockPressableState = { hovered: false, pressed: false };
   mock.restoreAll();
 });
 
@@ -141,8 +119,40 @@ describe('PostSourcePresentationView mention relation wiring', () => {
     assert.equal(preview.props.onPress, undefined);
     assert.equal(flattenStyle(preview.props.style).backgroundColor, undefined);
 
-    mockPressableState = { hovered: true, pressed: false };
-    await update(createElement(PostSourcePreview, { source: source as never }));
+    const pointerEnter = async (pointerType: 'mouse' | 'pen' | 'touch') => {
+      const handler = findRenderedPreview()?.props.onPointerEnter as
+        | ((event: { nativeEvent: { pointerType: 'mouse' | 'pen' | 'touch' } }) => void)
+        | undefined;
+      assert.equal(typeof handler, 'function');
+      await act(async () => handler?.({ nativeEvent: { pointerType } }));
+    };
+    const pointerLeave = async () => {
+      const handler = findRenderedPreview()?.props.onPointerLeave as (() => void) | undefined;
+      assert.equal(typeof handler, 'function');
+      await act(async () => handler?.());
+    };
+
+    await pointerEnter('mouse');
+    preview = findRenderedPreview();
+    assert.ok(preview);
+    assert.equal(flattenStyle(preview.props.style).backgroundColor, '#eee');
+
+    await pointerLeave();
+    preview = findRenderedPreview();
+    assert.ok(preview);
+    assert.equal(flattenStyle(preview.props.style).backgroundColor, undefined);
+
+    await pointerEnter('pen');
+    preview = findRenderedPreview();
+    assert.ok(preview);
+    assert.equal(flattenStyle(preview.props.style).backgroundColor, '#eee');
+
+    await pointerEnter('touch');
+    preview = findRenderedPreview();
+    assert.ok(preview);
+    assert.equal(flattenStyle(preview.props.style).backgroundColor, undefined);
+
+    await pointerEnter('mouse');
     preview = findRenderedPreview();
     assert.ok(preview);
     assert.equal(flattenStyle(preview.props.style).backgroundColor, '#eee');
@@ -159,6 +169,12 @@ describe('PostSourcePresentationView mention relation wiring', () => {
     preview = findRenderedPreview();
     assert.ok(preview);
     assert.equal(preview.type as unknown, 'View');
+    assert.equal(flattenStyle(preview.props.style).backgroundColor, undefined);
+
+    await update(createElement(PostSourcePreview, { source: source as never }));
+    preview = findRenderedPreview();
+    assert.ok(preview);
+    assert.equal(preview.type as unknown, 'Pressable');
     assert.equal(flattenStyle(preview.props.style).backgroundColor, undefined);
   });
 });
