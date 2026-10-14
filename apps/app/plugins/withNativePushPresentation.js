@@ -309,6 +309,8 @@ function ensureIosSourceFile(project, filePath, targetUuid) {
 }
 
 function withNativePushIosProject(config) {
+  const extensionVersion = config.version ?? '1.0';
+  const extensionBuildNumber = config.ios?.buildNumber ?? '1';
   return withXcodeProject(config, (projectConfig) => {
     const project = projectConfig.modResults;
     const hostTargetUuid = project.getFirstTarget().uuid;
@@ -332,7 +334,7 @@ function withNativePushIosProject(config) {
     updateTargetBuildSettings(project, extensionTargetUuid, {
       APPLICATION_EXTENSION_API_ONLY: 'YES',
       CLANG_ENABLE_MODULES: 'YES',
-      CURRENT_PROJECT_VERSION: '1',
+      CURRENT_PROJECT_VERSION: extensionBuildNumber,
       GENERATE_INFOPLIST_FILE: 'YES',
       INFOPLIST_FILE: `${IOS_EXTENSION_SOURCE_ROOT}/${IOS_EXTENSION_NAME}-Info.plist`,
       INFOPLIST_KEY_CFBundleDisplayName: IOS_EXTENSION_NAME,
@@ -340,7 +342,7 @@ function withNativePushIosProject(config) {
       INFOPLIST_KEY_CFBundleShortVersionString: '"$(MARKETING_VERSION)"',
       INFOPLIST_KEY_CFBundleVersion: '"$(CURRENT_PROJECT_VERSION)"',
       IPHONEOS_DEPLOYMENT_TARGET: '16.4',
-      MARKETING_VERSION: '1.0',
+      MARKETING_VERSION: extensionVersion,
       // The extension context is registered when this framework loads. Protocol-only
       // Swift imports do not retain it in the linked executable.
       OTHER_LDFLAGS: '"$(inherited) -Wl,-needed_framework,UserNotificationsUI"',

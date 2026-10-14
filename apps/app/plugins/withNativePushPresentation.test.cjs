@@ -85,8 +85,8 @@ async function applyDangerousMod(platformProjectRoot) {
   });
 }
 
-async function applyXcodeProject(project) {
-  const config = plugin({ _internal: { isDebug: false } });
+async function applyXcodeProject(project, expoConfig = {}) {
+  const config = plugin({ _internal: { isDebug: false }, ...expoConfig });
   const result = await config.mods.ios.xcodeproj({
     modRequest: { platform: 'ios', modName: 'xcodeproj' },
     modResults: project,
@@ -282,6 +282,37 @@ public class MainApplication extends Application {
     assert.equal(settings.MARKETING_VERSION, '1.0');
     assert.equal(unquote(settings.PRODUCT_NAME), 'KosmoPushContent');
   }
+
+  const resolvedProject = xcode.project(fixturePath);
+  resolvedProject.parseSync();
+  const resolvedExpoConfig = { version: '9.8.7', ios: { buildNumber: '42' } };
+  const transformedResolvedProject = await applyXcodeProject(resolvedProject, resolvedExpoConfig);
+  const resolvedTargetEntry = Object.entries(
+    transformedResolvedProject.pbxNativeTargetSection(),
+  ).find(
+    ([key, target]) => !key.endsWith('_comment') && unquote(target.name) === 'KosmoPushContent',
+  );
+  assert.ok(resolvedTargetEntry, 'resolved iOS content extension target must be present');
+  const [, resolvedTarget] = resolvedTargetEntry;
+  const resolvedBuildConfigurations = transformedResolvedProject
+    .pbxXCConfigurationList()
+    [
+      resolvedTarget.buildConfigurationList
+    ].buildConfigurations.map(({ value }) => transformedResolvedProject.pbxXCBuildConfigurationSection()[value].buildSettings);
+  for (const settings of resolvedBuildConfigurations) {
+    assert.equal(settings.CURRENT_PROJECT_VERSION, '42');
+    assert.equal(settings.MARKETING_VERSION, '9.8.7');
+  }
+  const resolvedProjectOutput = transformedResolvedProject.writeSync();
+  const resolvedSecondProject = await applyXcodeProject(
+    transformedResolvedProject,
+    resolvedExpoConfig,
+  );
+  assert.equal(
+    resolvedSecondProject.writeSync(),
+    resolvedProjectOutput,
+    'resolved iOS version transform must be idempotent',
+  );
 
   const sourceFileReferenceEntry = Object.entries(
     transformedProject.pbxFileReferenceSection(),
