@@ -3,7 +3,7 @@ import { ArrowLeftIcon } from 'lucide-react-native';
 import { useCallback, useRef } from 'react';
 import { StyleSheet } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
-import { identifyAnalytics, trackAnalytics } from '@/analytics/client';
+import { trackAnalytics } from '@/analytics/client';
 import {
   HashtagRelatedProfileList,
   HashtagRelatedProfileListState,
@@ -70,7 +70,6 @@ function HashtagRelatedProfilesRoute({
         return;
       }
       recordedAccount.current = accountId;
-      identifyAnalytics(accountId);
       trackAnalytics('profile_hashtag_list_viewed', {
         hashtag_id: confirmedHashtagId,
         result_count: resultCount,
@@ -83,7 +82,6 @@ function HashtagRelatedProfilesRoute({
       if (!accountId) {
         return;
       }
-      identifyAnalytics(accountId);
       trackAnalytics('profile_hashtag_profile_selected', { hashtag_id: confirmedHashtagId });
     },
     [accountId],

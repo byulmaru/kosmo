@@ -58,7 +58,6 @@ mockModule(new URL('../shell/NavigationLink.tsx', import.meta.url), {
   }) => createElement('NavigationLink', { href, onExternalNavigate, onNavigate }, children),
 });
 mockModule('@/analytics/client', {
-  identifyAnalytics: () => undefined,
   trackAnalytics: trackEvent,
 });
 mockModule(new URL('../../session/SessionProvider.tsx', import.meta.url), {

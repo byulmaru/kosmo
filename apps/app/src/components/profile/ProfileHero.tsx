@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
-import { identifyAnalytics, trackAnalytics } from '@/analytics/client';
+import { trackAnalytics } from '@/analytics/client';
 import { setStringAsync } from '@/components/post/postClipboard';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { Avatar } from '@/components/ui/Avatar';
@@ -360,7 +360,6 @@ function ProfileTagLink({
   } as const;
   const recordClick = () => {
     if (accountId) {
-      identifyAnalytics(accountId);
       trackAnalytics('profile_hashtag_clicked', { hashtag_id: id });
     }
   };
