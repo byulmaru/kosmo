@@ -59,8 +59,27 @@ async function expectHistoryAt(page: Page, expectedPath: string) {
   ).toBe(true);
 }
 
+async function expectRoutePath(page: Page, expectedPath: string) {
+  await expect
+    .poll(() => {
+      const { hash, pathname, search } = new URL(page.url());
+      return `${pathname}${search}${hash}`;
+    })
+    .toBe(expectedPath);
+}
+
 async function clearHistoryRecorder(page: Page) {
   await page.evaluate((storageKey) => sessionStorage.setItem(storageKey, '[]'), historyStorageKey);
+}
+
+async function delayShellQueries(page: Page) {
+  await page.route('**/graphql', async (route) => {
+    const body = route.request().postData();
+    if (shellQueries.some((operationName) => isGraphQLOperation(body, operationName))) {
+      await new Promise((resolve) => setTimeout(resolve, 400));
+    }
+    await route.continue();
+  });
 }
 
 async function createRoutes(): Promise<RouteCase[]> {
@@ -165,13 +184,7 @@ for (const delayed of [false, true]) {
     await installHistoryRecorder(page);
 
     if (delayed) {
-      await page.route('**/graphql', async (route) => {
-        const body = route.request().postData();
-        if (shellQueries.some((operationName) => isGraphQLOperation(body, operationName))) {
-          await new Promise((resolve) => setTimeout(resolve, 400));
-        }
-        await route.continue();
-      });
+      await delayShellQueries(page);
     }
 
     const routes = await createRoutes();
@@ -185,25 +198,79 @@ for (const delayed of [false, true]) {
       await page.goto(route.path);
       hasLoadedRoute = true;
       await route.verify(page);
-      await expect
-        .poll(() => {
-          const { hash, pathname, search } = new URL(page.url());
-          return `${pathname}${search}${hash}`;
-        })
-        .toBe(route.path);
+      await expectRoutePath(page, route.path);
       await expectHistoryAt(page, route.path);
 
       await clearHistoryRecorder(page);
       await page.reload();
       await route.verify(page);
-      await expect
-        .poll(() => {
-          const { hash, pathname, search } = new URL(page.url());
-          return `${pathname}${search}${hash}`;
-        })
-        .toBe(route.path);
+      await expectRoutePath(page, route.path);
       await expectHistoryAt(page, route.path);
     }
+  });
+}
+
+for (const delayed of [false, true]) {
+  test(`실제 프로필 탐색은 ${delayed ? '지연된' : '정상'} 쿼리 완료 뒤 같은 문서의 이력을 복원한다`, async ({
+    context,
+    page,
+  }) => {
+    test.setTimeout(180_000);
+
+    const displayName = '동일 문서 탐색 프로필';
+    const handle = `e2e-route-history-${delayed ? 'delayed' : 'normal'}`;
+    const viewer = await createE2ESession({ displayName, handle });
+    await setE2ESessionCookie(context, viewer.token);
+    await page.setViewportSize({ height: 900, width: 1440 });
+    await installHistoryRecorder(page);
+
+    if (delayed) {
+      await delayShellQueries(page);
+    }
+
+    const profilePath = `/@${handle}`;
+    const followersPath = `${profilePath}/followers`;
+    const followingPath = `${profilePath}/following`;
+    await page.goto(profilePath);
+
+    await expect(page.getByRole('navigation', { name: '주요 메뉴' })).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: '프로필 목록' }).getByText(displayName, { exact: true }),
+    ).toBeVisible();
+    const profileHeading = page.getByRole('heading', { name: displayName, exact: true });
+    await expect(profileHeading).toBeVisible();
+    const followersLink = page.getByRole('link', { name: /팔로워/ }).last();
+    await expect(followersLink).toBeVisible();
+    await expectRoutePath(page, profilePath);
+
+    await followersLink.click();
+    await expect(
+      page.getByRole('heading', { name: `${displayName}님의 팔로워`, exact: true }),
+    ).toBeVisible();
+    await expectRoutePath(page, followersPath);
+
+    await page.getByRole('tab', { name: '팔로잉', exact: true }).click();
+    const followingHeading = page.getByRole('heading', {
+      name: `${displayName}님의 팔로잉`,
+      exact: true,
+    });
+    await expect(followingHeading).toBeVisible();
+    await expectRoutePath(page, followingPath);
+
+    await page.goBack();
+    await expect(profileHeading).toBeVisible();
+    await expectRoutePath(page, profilePath);
+
+    await page.goForward();
+    await expect(followingHeading).toBeVisible();
+    await expectRoutePath(page, followingPath);
+
+    const entries = await page.evaluate((storageKey) => {
+      return JSON.parse(sessionStorage.getItem(storageKey) ?? '[]') as HistoryEntry[];
+    }, historyStorageKey);
+    expect(entries.filter(({ method }) => method === 'document')).toHaveLength(1);
+    expect(entries).toContainEqual({ method: 'pushState', path: followersPath });
+    expect(entries).toContainEqual({ method: 'replaceState', path: followingPath });
   });
 }
 
