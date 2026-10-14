@@ -6755,6 +6755,7 @@ export const ContentWarningCardPressableFeedbackInteraction: Story = {
     const restingCardColor = getComputedStyle(feedback).backgroundColor;
     const restingWarningColor = getComputedStyle(warning).backgroundColor;
 
+    await pointerUser.hover(warning);
     await pointerUser.pointer({ keys: '[MouseLeft>]', target: warning });
     await waitFor(() => expect(feedback).toHaveStyle({ backgroundColor: colors.light.stateHover }));
     await pointerUser.pointer({ target: document.body });
@@ -6790,6 +6791,7 @@ export const ContentWarningCardPressableFeedbackInteraction: Story = {
     expect(getComputedStyle(feedback).backgroundColor).toBe(restingCardColor);
     await dispatchPointerBoundary(warning, 'leave', 'touch', 83);
 
+    await pointerUser.hover(card);
     await pointerUser.pointer({ keys: '[MouseLeft>]', target: card });
     await waitFor(() =>
       expect(feedback).toHaveStyle({ backgroundColor: colors.light.statePressedSubtle }),
