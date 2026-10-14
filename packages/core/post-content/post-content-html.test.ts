@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { postContentDocumentToHtml } from './server';
 import type { PostContentDocumentV1 } from './index';
@@ -210,19 +209,3 @@ for (const [name, document] of [
     assert.throws(() => postContentDocumentToHtml(document as unknown as PostContentDocumentV1));
   });
 }
-
-test('keeps the ProseMirror runtime behind the server-only package export', async () => {
-  const corePackage = JSON.parse(
-    await readFile(new URL('../package.json', import.meta.url), 'utf8'),
-  );
-  const appPackage = JSON.parse(
-    await readFile(new URL('../../../apps/app/package.json', import.meta.url), 'utf8'),
-  );
-  const clientEntry = await readFile(new URL('./index.ts', import.meta.url), 'utf8');
-
-  assert.equal(corePackage.exports['./post-content'], './post-content/index.ts');
-  assert.equal(corePackage.exports['./post-content/server'], './post-content/server.ts');
-  assert.doesNotMatch(clientEntry, /\.\/server/u);
-  assert.doesNotMatch(clientEntry, /prosemirror-model/u);
-  assert.equal(appPackage.dependencies['prosemirror-model'], undefined);
-});

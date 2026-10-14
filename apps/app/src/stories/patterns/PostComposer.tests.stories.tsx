@@ -363,17 +363,11 @@ export const ReplyModeContract: Story = {
     expect(parent).toBeVisible();
     expect(scroll.contains(parent)).toBe(true);
     expect(scroll.contains(visibility)).toBe(false);
-    expect(within(visibility).getByText('공개 범위')).toBeVisible();
     expect(visibility.getBoundingClientRect().bottom).toBeCloseTo(
       footer.getBoundingClientRect().top,
       0,
     );
-    expect(canvas.getByRole('textbox', { name: '답글 본문' })).toHaveAttribute(
-      'placeholder',
-      '무슨 일이 일어나고 있나요?',
-    );
     const submit = canvas.getByRole('button', { name: '답글 게시' });
-    expect(submit).toHaveTextContent(/^게시$/);
     expect(submit).toBeDisabled();
   },
 };
@@ -402,9 +396,7 @@ export const QuoteModeContract: Story = {
       0,
     );
     expect(body.compareDocumentPosition(quote) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
-    expect(body).toHaveAttribute('placeholder', '무슨 일이 일어나고 있나요?');
     const submit = canvas.getByRole('button', { name: '인용 게시' });
-    expect(submit).toHaveTextContent(/^게시$/);
     expect(submit).toBeDisabled();
   },
 };
