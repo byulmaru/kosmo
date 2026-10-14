@@ -1807,11 +1807,15 @@ describe('GraphQL Profile Block', () => {
 
     assertNoGraphQLErrors(result);
     assert.deepEqual(result.data?.nodes, [
-      { __typename: 'FollowNotification', id: hiddenIds[0], profile: null },
+      {
+        __typename: 'FollowNotification',
+        id: hiddenIds[0],
+        profile: { id: blockedSourceId },
+      },
       {
         __typename: 'FollowRequestNotification',
         id: hiddenIds[1],
-        profile: null,
+        profile: { id: blockedSourceId },
         followRequest: null,
       },
       {

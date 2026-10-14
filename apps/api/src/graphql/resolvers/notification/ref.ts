@@ -3,14 +3,17 @@ import { NotificationKind } from '@kosmo/core/enums';
 import { and, eq, getColumns, inArray } from 'drizzle-orm';
 import { match } from 'ts-pattern';
 import { builder } from '@/graphql/builder';
-import { Post } from '@/graphql/resolvers/post/ref';
-import { ProfileFollow, ProfileFollowRequest } from '@/graphql/resolvers/profile/ref';
 import { Reaction } from '@/graphql/resolvers/reaction/ref';
 import { createObjectRef } from '@/graphql/utils';
 import { visibleNotificationWhere, visibleViewerNotificationWhere } from './access/visibility';
+import {
+  followNotificationSourceByIdLoader,
+  followRequestNotificationSourceByIdLoader,
+  postNotificationSourceByIdLoader,
+  reactionNotificationSourceByIdLoader,
+} from './loader/source';
 import type { OperationalNotificationData } from '@kosmo/core/db';
 import type { UserContext } from '@/context';
-import type { ProfileFollowRequestRow } from '@/graphql/resolvers/profile/loader/follow-request';
 
 export type NotificationRow = typeof Notifications.$inferSelect;
 export type FollowNotificationRow = NotificationRow;
@@ -24,45 +27,42 @@ export type OperationalNotificationRow = Omit<NotificationRow, 'data'> & {
   data: OperationalNotificationData;
 };
 
-type NotificationSource = {
-  followRequest?: ProfileFollowRequestRow;
+type NotificationSourceMetadata = {
   postId?: string | null;
   profileId: string;
-  type?: string;
 };
 
-export const getNotificationSource = async (
+export const getNotificationSourceMetadata = async (
   notification: NotificationRow,
   ctx: UserContext,
-): Promise<NotificationSource | null> =>
+): Promise<NotificationSourceMetadata | null> =>
   match(notification.kind)
     .with(NotificationKind.FOLLOW, async () => {
-      const follow = await ProfileFollow.getDataloader(ctx).load(notification.sourceId);
-      return follow ? { profileId: follow.followerProfileId } : null;
+      const source = await followNotificationSourceByIdLoader(ctx).load(notification.sourceId);
+      return source ? { profileId: source.followerProfileId } : null;
     })
     .with(NotificationKind.FOLLOW_REQUEST, async () => {
-      const followRequest = await ProfileFollowRequest.getDataloader(ctx).load(
+      const source = await followRequestNotificationSourceByIdLoader(ctx).load(
         notification.sourceId,
       );
-      return followRequest ? { followRequest, profileId: followRequest.followerProfileId } : null;
+      return source ? { profileId: source.followerProfileId } : null;
     })
     .with(NotificationKind.REACTION, async () => {
-      const reaction = await Reaction.getDataloader(ctx).load(notification.sourceId);
-      return reaction
+      const source = await reactionNotificationSourceByIdLoader(ctx).load(notification.sourceId);
+      return source
         ? {
-            postId: reaction.postId,
-            profileId: reaction.profileId,
-            type: reaction.type,
+            postId: source.postId,
+            profileId: source.profileId,
           }
         : null;
     })
     .with(NotificationKind.QUOTE, NotificationKind.MENTION, NotificationKind.REPLY, async () => {
-      const post = await Post.getDataloader(ctx).load(notification.sourceId);
-      return post ? { postId: post.id, profileId: post.profileId } : null;
+      const source = await postNotificationSourceByIdLoader(ctx).load(notification.sourceId);
+      return source ? { profileId: source.profileId } : null;
     })
     .with(NotificationKind.REPOST, async () => {
-      const repost = await Post.getDataloader(ctx).load(notification.sourceId);
-      return repost ? { postId: repost.repostSourceId, profileId: repost.profileId } : null;
+      const source = await postNotificationSourceByIdLoader(ctx).load(notification.sourceId);
+      return source ? { postId: source.repostSourceId, profileId: source.profileId } : null;
     })
     .with(NotificationKind.OPERATIONAL, () => null)
     .exhaustive();
@@ -182,7 +182,7 @@ ReactionNotification.implement({
     type: t.string({
       nullable: true,
       resolve: async (notification, _, ctx) =>
-        (await getNotificationSource(notification, ctx))?.type ?? null,
+        (await Reaction.getDataloader(ctx).load(notification.sourceId))?.type ?? null,
     }),
   }),
 });

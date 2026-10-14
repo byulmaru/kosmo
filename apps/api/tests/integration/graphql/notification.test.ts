@@ -208,7 +208,10 @@ describe('Notification GraphQL Node boundary', () => {
       auth.token,
     );
     assertNoGraphQLErrors(boundary);
-    assert.deepEqual(boundary.data?.notification, { id: notificationId, profile: null });
+    assert.deepEqual(boundary.data?.notification, {
+      id: notificationId,
+      profile: { id: followerId },
+    });
     assert.equal(boundary.data?.source, null);
     assert.deepEqual(boundary.data?.follower, { id: followerId });
 
@@ -219,7 +222,7 @@ describe('Notification GraphQL Node boundary', () => {
         id: node.id,
         profile: node.profile,
       })),
-      [{ id: notificationId, profile: null }],
+      [{ id: notificationId, profile: { id: followerId } }],
     );
     const count = await loadUnreadNotificationCounts([recipientId], auth.token);
     assertNoGraphQLErrors(count);
@@ -229,7 +232,7 @@ describe('Notification GraphQL Node boundary', () => {
     assertNoGraphQLErrors(read);
     assert.deepEqual(
       read.data?.markNotificationRead.notifications.map(({ id, profile }) => ({ id, profile })),
-      [{ id: notificationId, profile: null }],
+      [{ id: notificationId, profile: { id: followerId } }],
     );
     assert.equal(read.data?.markNotificationRead.recipientProfiles[0]?.unreadNotificationCount, 0);
     assert.ok(await notificationReadAt(notification.id));
@@ -1114,8 +1117,16 @@ describe('Notification GraphQL Node boundary', () => {
       connection.data?.node?.notifications.edges.map(({ node }) => [node.id, node]) ?? [],
     );
     assert.deepEqual([...connectionNodes.keys()].sort(), [...ids].sort());
-    assert.equal(connectionNodes.get(ids[0]!)?.profile, null);
+    assert.deepEqual(connectionNodes.get(ids[0]!)?.profile, {
+      id: encodeGlobalId('Profile', visibleRequester.id),
+    });
     assert.equal(connectionNodes.get(ids[0]!)?.followRequest, null);
+    assert.equal(connectionNodes.get(ids[1]!)?.profile, null);
+    assert.equal(connectionNodes.get(ids[1]!)?.followRequest, null);
+    assert.deepEqual(connectionNodes.get(ids[2]!)?.profile, {
+      id: encodeGlobalId('Profile', visibleRequester.id),
+    });
+    assert.equal(connectionNodes.get(ids[2]!)?.followRequest, null);
     for (const id of [ids[3]!, ids[4]!]) {
       assert.equal(connectionNodes.get(id)?.profile, null);
       assert.equal(connectionNodes.get(id)?.followRequest, null);
@@ -1125,23 +1136,32 @@ describe('Notification GraphQL Node boundary', () => {
         followRequest: { id: string } | null;
         profile: { id: string } | null;
       } | null;
+      requester: { id: string } | null;
       source: { id: string } | null;
     }>(
-      `query UnselectedFollowRequestSource($notificationId: ID!, $sourceId: ID!) {
+      `query UnselectedFollowRequestSource($notificationId: ID!, $sourceId: ID!, $requesterId: ID!) {
         notification: node(id: $notificationId) {
           ... on FollowRequestNotification { profile { id } followRequest { id } }
         }
         source: node(id: $sourceId) { ... on ProfileFollowRequest { id } }
+        requester: node(id: $requesterId) { ... on Profile { id } }
       }`,
       {
         notificationId: ids[0],
         sourceId: encodeGlobalId('ProfileFollowRequest', visibleRequest.id),
+        requesterId: encodeGlobalId('Profile', visibleRequester.id),
       },
       auth.token,
     );
     assertNoGraphQLErrors(sourceNode);
     assert.equal(sourceNode.data?.source, null);
-    assert.deepEqual(sourceNode.data?.notification, { profile: null, followRequest: null });
+    assert.deepEqual(sourceNode.data?.notification, {
+      profile: { id: encodeGlobalId('Profile', visibleRequester.id) },
+      followRequest: null,
+    });
+    assert.deepEqual(sourceNode.data?.requester, {
+      id: encodeGlobalId('Profile', visibleRequester.id),
+    });
     const count = await loadUnreadNotificationCounts([recipientId], auth.token);
     assertNoGraphQLErrors(count);
     assert.equal(count.data?.nodes[0]?.unreadNotificationCount, ids.length);
@@ -1598,7 +1618,7 @@ describe('Notification GraphQL Node boundary', () => {
     assert.equal(read.data?.markNotificationRead.recipientProfiles[0]?.unreadNotificationCount, 0);
   });
 
-  test('rechecks Quote Post access through the Post loader', async () => {
+  test('keeps a Quote actor visible when the Post loader denies the source', async () => {
     const auth = await createAuthenticatedSession();
     const recipient = await createProfile('quote-loader-recipient');
     const quoteAuthor = await createProfile('quote-loader-author');
@@ -1633,33 +1653,61 @@ describe('Notification GraphQL Node boundary', () => {
       .then(firstOrThrow);
 
     const result = await requestGraphQL<{
-      node: {
-        notifications: { edges: Array<{ node: { post: { id: string } | null } }> };
+      node: { id: string } | null;
+      notification: {
+        post: { id: string } | null;
+        profile: { id: string } | null;
       } | null;
-      notification: { post: { id: string } | null } | null;
+      recipient: {
+        notifications: {
+          edges: Array<{
+            node: {
+              post: { id: string } | null;
+              profile: { id: string } | null;
+            };
+          }>;
+        };
+      } | null;
+      sourcePost: { id: string } | null;
     }>(
-      `query QuoteNotificationPostAccess($notificationId: ID!, $profileId: ID!) {
+      `query QuoteNotificationPostAccess($notificationId: ID!, $quoteAuthorId: ID!, $quotePostId: ID!, $recipientId: ID!) {
         notification: node(id: $notificationId) {
-          ... on QuoteNotification { post { id } }
+          ... on QuoteNotification { profile { id } post { id } }
         }
-        node(id: $profileId) {
+        node(id: $quoteAuthorId) { ... on Profile { id } }
+        sourcePost: node(id: $quotePostId) { ... on Post { id } }
+        recipient: node(id: $recipientId) {
           ... on Profile {
             notifications(first: 10) {
-              edges { node { ... on QuoteNotification { post { id } } } }
+              edges { node { ... on QuoteNotification { profile { id } post { id } } } }
             }
           }
         }
       }`,
       {
         notificationId: encodeGlobalId('QuoteNotification', notification.id),
-        profileId: encodeGlobalId('Profile', recipient.id),
+        quoteAuthorId: encodeGlobalId('Profile', quoteAuthor.id),
+        quotePostId: encodeGlobalId('Post', quote.id),
+        recipientId: encodeGlobalId('Profile', recipient.id),
       },
       auth.token,
     );
 
     assertNoGraphQLErrors(result);
-    assert.equal(result.data?.notification?.post, null);
-    assert.deepEqual(result.data?.node?.notifications.edges, [{ node: { post: null } }]);
+    assert.deepEqual(result.data?.notification, {
+      profile: { id: encodeGlobalId('Profile', quoteAuthor.id) },
+      post: null,
+    });
+    assert.deepEqual(result.data?.node, { id: encodeGlobalId('Profile', quoteAuthor.id) });
+    assert.equal(result.data?.sourcePost, null);
+    assert.deepEqual(result.data?.recipient?.notifications.edges, [
+      {
+        node: {
+          profile: { id: encodeGlobalId('Profile', quoteAuthor.id) },
+          post: null,
+        },
+      },
+    ]);
   });
 
   test('Reply Notification row를 GraphQL source로 읽는다', async () => {
@@ -2630,7 +2678,8 @@ describe('Notification GraphQL Node boundary', () => {
     assert.equal(directSourcesById.get(deletedReactionId), undefined);
     assert.equal(directSourcesById.get(deletedPostNodeId), undefined);
     assert.equal(connectionNodes.get(deletedPostId)?.type, null);
-    assert.equal(connectionNodes.get(deletedPostId)?.profile, null);
+    assert.equal(directSourcesById.get(mismatchProfileId)?.id, mismatchProfileId);
+    assert.equal(connectionNodes.get(deletedPostId)?.profile?.id, mismatchProfileId);
     assert.equal(connectionNodes.get(deletedPostId)?.post, null);
     assert.equal(
       connectionNodes.get(hiddenAuthorId)?.type,
@@ -2751,7 +2800,7 @@ describe('Notification GraphQL Node boundary', () => {
     );
   });
 
-  test('does not expose a visible Repost target through an unavailable direct source Post', async () => {
+  test('returns the actor and public target when the direct Repost Post is unavailable', async () => {
     const auth = await createAuthenticatedSession();
     const recipient = await createProfile('direct-repost-notification-recipient');
     const repostAuthor = await createProfile('direct-repost-notification-author');
@@ -2811,8 +2860,8 @@ describe('Notification GraphQL Node boundary', () => {
     assertNoGraphQLErrors(boundary);
     assert.deepEqual(boundary.data?.notification, {
       id: notificationId,
-      profile: null,
-      post: null,
+      profile: { id: repostAuthorId },
+      post: { id: originalPostId },
     });
     assert.equal(boundary.data?.repost, null);
     assert.deepEqual(boundary.data?.originalPost, { id: originalPostId });
@@ -2826,7 +2875,13 @@ describe('Notification GraphQL Node boundary', () => {
         profile: node.profile,
         post: node.post,
       })),
-      [{ id: notificationId, profile: null, post: null }],
+      [
+        {
+          id: notificationId,
+          profile: { id: repostAuthorId },
+          post: { id: originalPostId },
+        },
+      ],
     );
     const count = await loadUnreadNotificationCounts([recipientId], auth.token);
     assertNoGraphQLErrors(count);
@@ -2840,7 +2895,13 @@ describe('Notification GraphQL Node boundary', () => {
         profile,
         post,
       })),
-      [{ id: notificationId, profile: null, post: null }],
+      [
+        {
+          id: notificationId,
+          profile: { id: repostAuthorId },
+          post: { id: originalPostId },
+        },
+      ],
     );
     assert.equal(read.data?.markNotificationRead.recipientProfiles[0]?.unreadNotificationCount, 0);
     assert.ok(await notificationReadAt(notification.id));

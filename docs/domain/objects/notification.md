@@ -167,7 +167,8 @@ Recipient Profile은 Related Post의 direct Repost Source Author Profile이다. 
 - Follow Request Notification은 Related Follow Request가 존재하는 동안만 유지한다.
 - Follow Request가 승인, 거절 또는 취소되면 대응하는 Follow Request Notification을 제거한다.
 - Follow Request 또는 Follow Relationship이 제거되면 이를 직접 원인으로 가진 Notification도 제거한다.
-- Notification Node, 목록, Unread count와 읽음 처리는 저장 행의 Recipient 권한을 기준으로 한다. Related Post/Profile의 현재 조회 가능성은 저장 행을 숨기지 않는다. Related Post/Profile이나 source 필드는 현재 요청의 일반 객체 조회 권한을 적용하며, 조회할 수 없으면 null 또는 unavailable로 반환한다. Recipient 권한으로 원본 객체 접근을 우회하지 않는다.
+- Notification Node, 목록, Unread count와 읽음 처리는 저장 행의 Recipient 권한을 기준으로 한다. Related Post/Profile의 현재 조회 가능성은 저장 행을 숨기지 않는다. Related Post/Profile과 source 필드는 각각 현재 요청의 일반 객체 조회 권한을 적용하며, 조회할 수 없으면 null 또는 unavailable로 반환한다. Recipient 권한으로 원본 객체 접근을 우회하지 않는다.
+- 원인 Follow 관계, Follow Request, Reaction 또는 Post를 조회할 수 없다는 이유만으로 같은 Notification의 독립적으로 조회할 수 있는 Related Profile/Post를 숨기지 않는다. Follow Request와 Reaction 원본 필드는 각 원본 객체의 조회 권한을 따른다.
 - 필수 원인 관계 결손·Recipient 불일치·Related Post/Profile 비가용에 따른 기존 비동기 정리 정책은 유지한다. 정리 전까지 행이 존재하면 Recipient는 해당 Notification 행을 조회할 수 있으며, 정리 뒤까지 보존하는 계약은 아니다.
 - Profile Block pair 정책은 Related Post/Profile과 그 필드의 기존 접근 조건에 적용한다. Profile Block transaction은 새 Profile Block 관계를 만들면서 함께 제거한 Follow 객체를 직접 원인으로 가진 Notification을 같은 transaction에서 제거한다. 다른 Notification 행은 source 조회 불가만으로 API에서 숨기지 않으며 기존 비동기 정리 정책은 유지한다. duplicate Block 관찰이나 Unblock의 보상 cleanup으로 확장하지 않는다. commit 뒤 별도 effect의 성공·실패는 이미 성공한 Profile Block 관계와 그 transaction 결과를 바꾸지 않는다.
 - Mute가 나중에 생성되어도 기존 Notification의 존재와 Read State는 바꾸지 않는다.
