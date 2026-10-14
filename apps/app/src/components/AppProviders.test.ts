@@ -47,7 +47,7 @@ let relayActorMounts = 0;
 let relayActorUnmounts = 0;
 const analyticsCaptureAccounts: Array<string | null> = [];
 let identifiedAnalyticsAccountId: string | null = null;
-const trackAnalytics = (_event: string, _properties: Record<string, unknown>) => {
+const trackAnalytics: (event: string, properties: Record<string, unknown>) => void = () => {
   analyticsCaptureAccounts.push(identifiedAnalyticsAccountId);
 };
 let rootShouldThrow = false;
