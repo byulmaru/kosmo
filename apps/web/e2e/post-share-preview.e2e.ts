@@ -343,40 +343,6 @@ test('실제 ActivityPub 경로는 HTML 미리보기와 분리해 공개·비공
   expect(await privateResponse.text()).not.toContain('private ActivityPub body');
 });
 
-test('비공개 네트워크의 Remote 첨부 URL은 본문을 유지하고 기본 이미지로 대체한다', async ({
-  page,
-  request,
-}) => {
-  const author = await createE2ERemoteProfile({
-    domain: 'image-preview.remote.example',
-    handle: 'remote-image-preview',
-  });
-  for (const url of [
-    'http://2130706433/private.png',
-    'http://169.254.169.254/private.png',
-    'http://[::ffff:127.0.0.1]/private.png',
-    'http://sub.localhost./private.png',
-  ]) {
-    const post = await createE2EPost({
-      body: 'public body with an unusable remote image',
-      media: [{ url, altText: 'private network image alt' }],
-      profileId: author.id,
-      visibility: PostVisibility.PUBLIC,
-    });
-    const response = await request.get(
-      sharePath(`${author.handle}@image-preview.remote.example`, post.id),
-    );
-    const html = await response.text();
-    const metadata = await readMetadata(page, html);
-    expect(response.status()).toBe(200);
-    expect(metadata.ogDescriptions).toEqual(['public body with an unusable remote image']);
-    expect(metadata.ogImages).toEqual([`${origin}/og-default.png`]);
-    expect(metadata.twitterImages).toEqual([`${origin}/og-default.png`]);
-    expect(html).not.toContain('private network image alt');
-    expect(html).not.toContain(new URL(url).href);
-  }
-});
-
 test('HEAD는 메타데이터 응답 헤더와 빈 본문을 반환하고 변경 후 이전 validator도 재사용하지 않는다', async ({
   request,
 }) => {

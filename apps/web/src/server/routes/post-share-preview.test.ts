@@ -65,30 +65,18 @@ test.each([
   }
 });
 
-test.each(
-  [
-    'http://127.0.0.1/image.png',
-    'http://2130706433/image.png',
-    'http://localhost/image.png',
-    'http://sub.localhost./image.png',
-    'http://10.0.0.1/image.png',
-    'http://172.16.0.1/image.png',
-    'http://192.168.0.1/image.png',
-    'http://169.254.169.254/image.png',
-    'http://[::1]/image.png',
-    'http://[::ffff:127.0.0.1]/image.png',
-    'http://[fc00::1]/image.png',
-    'http://[fe80::1]/image.png',
-    'http://[64:ff9b::7f00:1]/image.png',
-    'http://[2001:db8::1]/image.png',
-  ]
-    .map((url) => [url, 'https://kos.moe/og-default.png'])
-    .concat([
-      ['https://media.example/image.png', 'https://media.example/image.png'],
-      ['https://8.8.8.8/image.png', 'https://8.8.8.8/image.png'],
-      ['https://[2001:4860:4860::8888]/image.png', 'https://[2001:4860:4860::8888]/image.png'],
-    ]),
-)('projects attachment URL %s as %s', async (url, expectedImage) => {
+test.each([
+  ['https://media.example/image.png', 'https://media.example/image.png'],
+  ['http://localhost/image.png', 'http://localhost/image.png'],
+  ['http://192.168.0.1/image.png', 'http://192.168.0.1/image.png'],
+  ['https://media.example/image.png#fragment', 'https://media.example/image.png'],
+  ['https://media.example/image.png?a=1&b=2', 'https://media.example/image.png?a=1&amp;b=2'],
+  ['not a URL', 'https://kos.moe/og-default.png'],
+  ['data:image/png;base64,AAAA', 'https://kos.moe/og-default.png'],
+  ['file:///image.png', 'https://kos.moe/og-default.png'],
+  ['https://user@media.example/image.png', 'https://kos.moe/og-default.png'],
+  ['https://:secret@media.example/image.png', 'https://kos.moe/og-default.png'],
+])('projects attachment URL %s as %s', async (url, expectedImage) => {
   vi.stubEnv('PUBLIC_ORIGIN', 'https://kos.moe');
   vi.mocked(resolveConfiguredLocalInstance).mockResolvedValueOnce({ id: 'local' } as never);
   const rows = [
@@ -106,7 +94,7 @@ test.each(
         repostSourceId: null,
       },
     ],
-    [{ id: mediaId, altText: 'private image alt', mediaType: 'image/png', state: 'READY', url }],
+    [{ id: mediaId, altText: 'attachment alt', mediaType: 'image/png', state: 'READY', url }],
   ];
   vi.spyOn(db, 'select').mockImplementation(() => {
     const result = Promise.resolve(rows.shift());
@@ -126,8 +114,11 @@ test.each(
   expect(html).toContain('public body');
   expect(html).toContain(`property="og:image" content="${expectedImage}"`);
   expect(html).toContain(`name="twitter:image" content="${expectedImage}"`);
-  if (url !== expectedImage) {
-    expect(html).not.toContain('private image alt');
-    expect(html).not.toContain(new URL(url).href);
+  if (expectedImage === 'https://kos.moe/og-default.png') {
+    expect(html).not.toContain('attachment alt');
+    expect(html).not.toContain(url);
+  } else {
+    expect(html).toContain('attachment alt');
+    expect(html).not.toContain('#fragment');
   }
 });

@@ -495,9 +495,6 @@ importers:
 
   apps/web:
     dependencies:
-      '@fedify/fedify':
-        specifier: ^2.4.0
-        version: 2.4.0
       '@hono/node-server':
         specifier: ^2.0.10
         version: 2.0.10(hono@4.13.7)
