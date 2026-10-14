@@ -82,7 +82,7 @@ mock.module('react-native', {
     Platform: platform,
     Pressable: MockPressable,
     ScrollView: 'ScrollView',
-    StyleSheet: { create: <T>(styles: T) => styles },
+    StyleSheet: { create: <T>(styles: T) => styles, flatten: flattenStyle },
     Text: 'Text',
     View: 'View',
     useWindowDimensions: () => ({ height: 800, width: viewportWidth }),

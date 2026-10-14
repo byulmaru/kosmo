@@ -997,6 +997,7 @@ export const ReplyAuthorActivationReadsOnce: Story = {
     const detailPath = '/@starlight/notification-reply-post';
     const activations = [
       { target: canvas.getByTestId('notification-post-author'), path: '/@starlight' },
+      { target: canvas.getByTestId('reply-notification-rail'), path: detailPath },
       { target: canvas.getByRole('link', { name: '5분 전' }), path: detailPath },
       { target: canvas.getByTestId('post-list-row-body'), path: detailPath },
       {
