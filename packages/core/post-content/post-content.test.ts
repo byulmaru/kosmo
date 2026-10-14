@@ -6,6 +6,7 @@ import {
   canonicalizePostContentDocument,
   postContentDocumentFromText,
   postContentDocumentFromTextAndMedia,
+  postContentDocumentToHtml,
   postContentDocumentToText,
   validateLocalPostContentDocument,
 } from './server';
@@ -47,6 +48,118 @@ test('keeps one empty paragraph for an empty document', () => {
     type: 'doc',
     content: [{ type: 'paragraph' }],
   });
+});
+
+test('auto-links explicit HTTP URLs with canonical hrefs and original text', () => {
+  const bodyText =
+    '(HTTPS://EXAMPLE.COM:443/a/../path?one=1&two=2), "<https://example.org/quoted?q=1&x=2>"\r\n' +
+    'http://example.net/a_(b).';
+  const document = postContentDocumentFromText(bodyText);
+
+  assert.deepEqual(document.body.content[0], {
+    type: 'paragraph',
+    content: [
+      { type: 'text', text: '(' },
+      {
+        type: 'text',
+        text: 'HTTPS://EXAMPLE.COM:443/a/../path?one=1&two=2',
+        marks: [{ type: 'link', attrs: { href: 'https://example.com/path?one=1&two=2' } }],
+      },
+      { type: 'text', text: '), "<' },
+      {
+        type: 'text',
+        text: 'https://example.org/quoted?q=1&x=2',
+        marks: [{ type: 'link', attrs: { href: 'https://example.org/quoted?q=1&x=2' } }],
+      },
+      { type: 'text', text: '>"' },
+      { type: 'hard_break' },
+      {
+        type: 'text',
+        text: 'http://example.net/a_(b)',
+        marks: [{ type: 'link', attrs: { href: 'http://example.net/a_(b)' } }],
+      },
+      { type: 'text', text: '.' },
+    ],
+  });
+  assert.equal(postContentDocumentToText(document), bodyText.replaceAll('\r\n', '\n'));
+  assert.equal(
+    postContentDocumentToHtml(document),
+    '<p>(<a href="https://example.com/path?one=1&amp;two=2">HTTPS://EXAMPLE.COM:443/a/../path?one=1&amp;two=2</a>), "&lt;<a href="https://example.org/quoted?q=1&amp;x=2">https://example.org/quoted?q=1&amp;x=2</a>&gt;"<br><a href="http://example.net/a_(b)">http://example.net/a_(b)</a>.</p>',
+  );
+});
+
+test('keeps linkify-it punctuation inside the matched URL before a closing wrapper', () => {
+  const bodyText = '(https://example.com/path.)';
+  const document = postContentDocumentFromText(bodyText);
+
+  assert.deepEqual(document.body.content[0], {
+    type: 'paragraph',
+    content: [
+      { type: 'text', text: '(' },
+      {
+        type: 'text',
+        text: 'https://example.com/path.',
+        marks: [{ type: 'link', attrs: { href: 'https://example.com/path.' } }],
+      },
+      { type: 'text', text: ')' },
+    ],
+  });
+  assert.equal(postContentDocumentToText(document), bodyText);
+});
+
+test('keeps embedded, unsupported, fuzzy, and invalid URLs as plain text', () => {
+  const bodyText =
+    'foohttps://example.com www.example.com example.org user@example.com mailto:user@example.com ftp://example.com //example.com javascript:alert(1) http://[bad';
+  const document = postContentDocumentFromText(bodyText);
+
+  assert.deepEqual(document.body.content[0], {
+    type: 'paragraph',
+    content: [{ type: 'text', text: bodyText }],
+  });
+  assert.equal(postContentDocumentToHtml(document), `<p>${bodyText}</p>`);
+});
+
+test('does not link URL fragments split by a Mention and preserves media metadata', () => {
+  const bodyText = 'https://example.com/@alice?x=1 then https://example.org/path';
+  const mentionStart = bodyText.indexOf('@alice');
+  const mediaId = '019f6678-86fa-709b-984e-1520766b8447';
+  const document = postContentDocumentFromTextAndMedia(bodyText, [{ mediaId }], true, 'warning', [
+    {
+      end: mentionStart + '@alice'.length,
+      profileId: aliceProfileId,
+      relativeHandle: '@alice',
+      start: mentionStart,
+    },
+  ]);
+
+  assert.deepEqual(document, {
+    version: 1,
+    summary: 'warning',
+    body: {
+      type: 'doc',
+      attrs: { sensitiveMedia: true },
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'https://example.com/' },
+            { type: 'mention', attrs: { profileId: aliceProfileId } },
+            { type: 'text', text: '?x=1 then ' },
+            {
+              type: 'text',
+              text: 'https://example.org/path',
+              marks: [{ type: 'link', attrs: { href: 'https://example.org/path' } }],
+            },
+          ],
+        },
+        { type: 'media', attrs: { mediaId } },
+      ],
+    },
+  });
+  assert.equal(
+    postContentDocumentToHtml(document),
+    '<p>https://example.com/<span>@알 수 없는 사용자</span>?x=1 then <a href="https://example.org/path">https://example.org/path</a></p>',
+  );
 });
 
 test('preserves ordered Media nodes and omits the default Sensitive Media attr', () => {
