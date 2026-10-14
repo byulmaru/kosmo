@@ -705,7 +705,7 @@ describe('runtime routing', () => {
   test('keeps explicit ActivityPub representations out of the HTML preview route', async () => {
     const globalId = encodeGlobalId('Post', '00000000-0000-8000-8000-000000000001');
     const response = await app.request(`/@alice/${globalId}`, {
-      headers: { accept: 'text/html, application/activity+json' },
+      headers: { accept: 'application/activity+json, text/html' },
     });
 
     expect(response.status).toBe(404);

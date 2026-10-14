@@ -1,5 +1,7 @@
 import { readFile } from 'node:fs/promises';
+import { isIP } from 'node:net';
 import { resolve } from 'node:path';
+import { isValidPublicIPv4Address, isValidPublicIPv6Address } from '@fedify/fedify';
 import { db, Instances, Media, PostContents, PostMentions, Posts, Profiles } from '@kosmo/core/db';
 import { MediaState } from '@kosmo/core/enums';
 import { decodeGlobalId, encodeGlobalId } from '@kosmo/core/global-id';
@@ -348,6 +350,16 @@ function parsePublicImageUrl(value: string): string | null {
     if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) {
       return null;
     }
+    const hostname = url.hostname.replace(/^\[|\]$/g, '').replace(/\.$/, '');
+    if (
+      hostname === 'localhost' ||
+      hostname.endsWith('.localhost') ||
+      hostname.startsWith('2001:db8:') ||
+      (isIP(hostname) === 4 && !isValidPublicIPv4Address(hostname)) ||
+      (isIP(hostname) === 6 && !isValidPublicIPv6Address(hostname))
+    ) {
+      return null;
+    }
     url.hash = '';
     return url.toString();
   } catch {
@@ -446,7 +458,7 @@ function acceptsHtmlPreview(accept: string | undefined): boolean {
     return true;
   }
 
-  const ranges = accept.split(',').flatMap((entry) => {
+  const ranges = accept.split(',').flatMap((entry, index) => {
     const [mediaType, ...parameters] = entry.trim().split(';');
     if (!mediaType) {
       return [];
@@ -454,14 +466,20 @@ function acceptsHtmlPreview(accept: string | undefined): boolean {
     const qualityParameter = parameters.find((parameter) => /^\s*q\s*=/i.test(parameter));
     const quality = qualityParameter ? Number(qualityParameter.split('=')[1]) : 1;
     return Number.isFinite(quality) && quality >= 0 && quality <= 1
-      ? [{ mediaType: mediaType.trim().toLowerCase(), quality }]
+      ? [{ mediaType: mediaType.trim().toLowerCase(), quality, index }]
       : [];
   });
+  const preferred = ranges
+    .filter(({ quality }) => quality > 0)
+    .sort((left, right) => right.quality - left.quality || left.index - right.index);
   if (
-    ranges.some(
-      ({ mediaType, quality }) =>
-        quality > 0 &&
-        (mediaType === 'application/activity+json' || mediaType === 'application/ld+json'),
+    preferred[0]?.mediaType !== 'text/html' &&
+    preferred[0]?.mediaType !== 'application/xhtml+xml' &&
+    preferred.some(
+      ({ mediaType }) =>
+        mediaType === 'application/activity+json' ||
+        mediaType === 'application/ld+json' ||
+        mediaType === 'application/json',
     )
   ) {
     return false;
