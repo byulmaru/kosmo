@@ -150,7 +150,7 @@ class KosmoPresentationDelegate(context: Context) : ExpoPresentationDelegate(con
   private suspend fun loadAvatar(avatarUrl: String?): Bitmap {
     val fallback = BitmapFactory.decodeResource(context.resources, android.R.drawable.sym_def_app_icon)
       ?: throw IllegalStateException("Android default avatar resource is unavailable")
-    val avatar = if (avatarUrl.isNullOrBlank() || !avatarUrl.startsWith("https://", ignoreCase = true)) {
+    val avatar = if (avatarUrl.isNullOrBlank() || !isTrustedAvatarUrl(avatarUrl)) {
       fallback
     } else {
       withContext(Dispatchers.IO) {
@@ -270,6 +270,18 @@ class KosmoPresentationDelegate(context: Context) : ExpoPresentationDelegate(con
     return (size.toLong() + sampleSize - 1L) / sampleSize
   }
 
+  private fun isTrustedAvatarUrl(value: String): Boolean {
+    return try {
+      val url = URL(value)
+      url.protocol.equals("https", ignoreCase = true) &&
+        url.host.equals(TRUSTED_MEDIA_HOST, ignoreCase = true) &&
+        (url.port == -1 || url.port == 443) &&
+        url.userInfo == null
+    } catch (_: Exception) {
+      false
+    }
+  }
+
   private data class Presentation(
     val title: String,
     val message: String,
@@ -284,6 +296,7 @@ class KosmoPresentationDelegate(context: Context) : ExpoPresentationDelegate(con
 
   companion object {
     private const val PRESENTATION_VERSION = 1
+    private const val TRUSTED_MEDIA_HOST = "media.byulma.run"
     private const val AVATAR_TIMEOUT_MILLISECONDS = 3_000
     private const val MAX_AVATAR_BYTES = 512 * 1024
     private const val MAX_AVATAR_DIMENSION = 512

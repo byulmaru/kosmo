@@ -75,10 +75,15 @@ Temporal helper processes receive neither PostgreSQL nor queue credentials.
 pnpm owns the child process lifecycle and one interrupt stops the development
 processes.
 
-The API uses `MEDIA_STORAGE_SERVICE_ORIGIN` and `MEDIA_STORAGE_SERVICE_API_KEY`
-to issue browser upload URLs and persist the completed public representation
-reported by Media Storage Service. These are server-only values loaded through
-the same Vault environment and must not be exposed to the browser bundle.
+The API and Worker use `MEDIA_STORAGE_SERVICE_ORIGIN` and
+`MEDIA_STORAGE_SERVICE_API_KEY` to issue browser upload URLs, persist the
+completed public representation reported by Media Storage Service, and prepare
+remote actor avatars for native push. These are server-only values loaded
+through the same Vault environment and must not be exposed to the browser
+bundle. Remote avatar preparation sends only the original image URL to the
+authenticated service; native push payloads receive only its stored
+`https://media.byulma.run` WebP URL. If preparation fails, the text push is
+still sent without an avatar.
 
 Run `pnpm dev`, then open `http://localhost:5173`. Local development uses Expo/Metro
 on public port `5173`, the Hono web BFF on internal port `5174`, and the API on

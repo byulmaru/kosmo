@@ -157,6 +157,11 @@ composer control은 자체 동작만 수행한다. 모두 읽음, unread indicat
   다음 줄에는 `{사용자명} {핸들}에게` 형식으로 수신 Profile을 표시한다.
 - Repost는 재게시된 게시글, Reply는 답글, Quote는 인용한 게시글, Mention은 언급이 담긴 게시글의
   허용된 본문을 펼친 알림에서 표시한다. Follow와 FollowRequest에는 게시글 본문을 추가하지 않는다.
+- 원격 행위자 아바타는 Worker가 인증된 Media Storage Service에 원본 URL만 전달해 준비한 뒤, 저장된
+  `https://media.byulma.run` WebP URL만 Native Push payload에 넣는다. Media Storage Service가 실패하거나
+  설정·응답·URL 검증·제한 시간 검증을 통과하지 못하면 아바타만 생략하고 텍스트 Push는 계속 보낸다.
+- 이 준비 요청에는 Account, Profile, token, notification ID 또는 기기 정보가 포함되지 않는다. Local Media도
+  같은 신뢰된 HTTPS origin으로 확인된 경우에만 payload에 재사용한다.
 - 묶인 알림의 표시와 집계 기준은 이번 결정 범위에서 제외한다. 묶인 알림을 다룰 때 별도로 결정하며,
   단일 알림 시안을 근거로 복수 행위자 아바타·요약 문구·집계 방식을 미리 확정하지 않는다.
 

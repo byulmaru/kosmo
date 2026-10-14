@@ -193,7 +193,10 @@ final class NotificationViewController: UIViewController, UNNotificationContentE
       if let avatarString = userInfo["actorAvatarUrl"] as? String,
          let url = URL(string: avatarString),
          url.scheme?.lowercased() == "https",
-         url.host != nil {
+         url.host?.lowercased() == "media.byulma.run",
+         url.port == nil || url.port == 443,
+         url.user == nil,
+         url.password == nil {
         avatarURL = url
       } else {
         avatarURL = nil

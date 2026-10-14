@@ -14,6 +14,7 @@ import {
 } from '@kosmo/core/db';
 import {
   InstanceKind,
+  MediaSource,
   MediaState,
   NotificationKind,
   ProfileMediaKind,
@@ -39,11 +40,70 @@ const PREVIEW_MAX_CODE_POINTS = 160;
 const DISPLAY_NAME_MAX_CODE_POINTS = 40;
 const FCM_MESSAGE_MAX_BYTES = 4096;
 const IOS_PUSH_CATEGORY_IDENTIFIER = 'KOSMO_PUSH_PRESENTATION_V1';
+const MEDIA_STORAGE_REQUEST_TIMEOUT_MS = 3_000;
+const TRUSTED_MEDIA_HOST = 'media.byulma.run';
 
 type FcmMessageWithoutToken = Pick<Message, 'android' | 'apns' | 'data' | 'notification'>;
 
 const getFcmMessageByteLength = (message: FcmMessageWithoutToken) =>
   new TextEncoder().encode(JSON.stringify(message)).byteLength;
+
+const isTrustedMediaUrl = (value: unknown): value is string => {
+  if (typeof value !== 'string') {
+    return false;
+  }
+
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === 'https:' &&
+      url.hostname.toLowerCase() === TRUSTED_MEDIA_HOST &&
+      (url.port === '' || url.port === '443') &&
+      url.username === '' &&
+      url.password === ''
+    );
+  } catch {
+    return false;
+  }
+};
+
+const prepareRemoteAvatar = async (originalRemoteUrl: string): Promise<string | null> => {
+  const origin = process.env.MEDIA_STORAGE_SERVICE_ORIGIN;
+  const apiKey = process.env.MEDIA_STORAGE_SERVICE_API_KEY;
+  if (!origin || !apiKey) {
+    return null;
+  }
+
+  try {
+    const response = await fetch(new URL('/v1/remote-avatars', origin), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ url: originalRemoteUrl }),
+      signal: AbortSignal.timeout(MEDIA_STORAGE_REQUEST_TIMEOUT_MS),
+    });
+    if (response.status !== 200 && response.status !== 201) {
+      return null;
+    }
+
+    const result: unknown = await response.json();
+    if (
+      typeof result !== 'object' ||
+      result === null ||
+      Array.isArray(result) ||
+      (result as { mediaType?: unknown }).mediaType !== 'image/webp'
+    ) {
+      return null;
+    }
+
+    const url = (result as { url?: unknown }).url;
+    return isTrustedMediaUrl(url) ? url : null;
+  } catch {
+    return null;
+  }
+};
 
 const notificationTypes: Record<NotificationKind, string> = {
   FOLLOW: 'FollowNotification',
@@ -345,7 +405,7 @@ export const sendPushNotification = async (
     recipient.instanceDomain,
   );
   const actorAvatarUrl = await db
-    .select({ url: Media.url })
+    .select({ source: Media.source, url: Media.url })
     .from(ProfileMedia)
     .innerJoin(Media, eq(Media.id, ProfileMedia.mediaId))
     .where(
@@ -357,6 +417,13 @@ export const sendPushNotification = async (
     )
     .limit(1)
     .then(first);
+  const preparedAvatarUrl = actorAvatarUrl?.url
+    ? actorAvatarUrl.source === MediaSource.REMOTE
+      ? await prepareRemoteAvatar(actorAvatarUrl.url)
+      : actorAvatarUrl.source === MediaSource.LOCAL && isTrustedMediaUrl(actorAvatarUrl.url)
+        ? actorAvatarUrl.url
+        : null
+    : null;
   let href =
     notification.kind === NotificationKind.FOLLOW_REQUEST
       ? '/follow-requests'
@@ -449,25 +516,30 @@ export const sendPushNotification = async (
       ? { payload: { aps: { category: IOS_PUSH_CATEGORY_IDENTIFIER } } }
       : {}),
   };
+  const ttlAfterAvatarPreparation = Math.min(
+    expiresAt.epochMilliseconds - Temporal.Now.instant().epochMilliseconds,
+    DAY_IN_MILLISECONDS,
+  );
+  if (ttlAfterAvatarPreparation <= 0) {
+    return;
+  }
   const basePayload = (
     isNativeAndroid
       ? {
-          android: { priority: 'high' as const, ttl },
+          android: { priority: 'high' as const, ttl: ttlAfterAvatarPreparation },
           apns,
           data: nativeData,
         }
       : {
-          android: { ttl },
+          android: { ttl: ttlAfterAvatarPreparation },
           apns,
           data: baseData,
           notification: { body, title: actorName },
         }
   ) satisfies FcmMessageWithoutToken;
-  const avatarData = actorAvatarUrl?.url
-    ? { ...baseData, actorAvatarUrl: actorAvatarUrl.url }
-    : null;
-  const nativeAvatarData = actorAvatarUrl?.url
-    ? { ...nativeData, actorAvatarUrl: actorAvatarUrl.url }
+  const avatarData = preparedAvatarUrl ? { ...baseData, actorAvatarUrl: preparedAvatarUrl } : null;
+  const nativeAvatarData = preparedAvatarUrl
+    ? { ...nativeData, actorAvatarUrl: preparedAvatarUrl }
     : null;
   const candidateAvatarData = isNativeAndroid ? nativeAvatarData : avatarData;
   const data =

@@ -40,6 +40,13 @@ installation token lifecycle을 고정하므로 앱 설정의 권한 처리와 t
   token 동기화를 막지 않으며, 기존 앱은 OS 기본 표시를 사용한다.
 - Operational Notification은 저장된 제목·선택적 본문·href를 기존 Account target route 계약으로 전달한다.
 - Follow와 FollowRequest처럼 게시글 본문이 없는 알림은 본문 미리보기를 생략한다.
+- 원격 행위자 아바타는 Worker가 인증된 Media Storage Service의 `/v1/remote-avatars`에 원본 URL만 보내
+  준비한다. FCM에는 서비스가 반환한 `image/webp`의 `https://media.byulma.run` 저장 URL만 넣으며, 원본
+  URL을 단말에 전달하거나 단말이 원본 서버를 요청하게 하지 않는다. Account, Profile, token, notification ID와
+  기기 정보는 이 요청에 포함하지 않는다.
+- Media Storage Service의 실패, 설정 누락, 제한 시간 초과 또는 잘못된 응답·URL이면 행위자 아바타를
+  생략하고 기존 텍스트 Push를 계속 보낸다. Local Media는 같은 신뢰된 HTTPS origin으로 확인된 경우에만
+  재사용한다.
 - 공통 Worker Notification Activity는 Domain Workflow의 Notification 생성 요청을 받아 기존 Core materializer를
   호출한다. 저장된 Notification ID가 반환되면 그 ID로 기존 Push delivery Workflow를 시작하고 start
   acknowledgement만 기다린다. materializer가 Notification을 만들지 않거나 실패하면 Push를 시작하지 않는다.

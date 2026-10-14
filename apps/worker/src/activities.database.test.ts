@@ -1,6 +1,7 @@
 import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
+import { createServer } from 'node:http';
 import { after, before, beforeEach, test } from 'node:test';
 import {
   AccountProfileRole,
@@ -1383,6 +1384,48 @@ const createPost = (
     .returning()
     .then(firstOrThrow);
 
+const startRemoteAvatarService = async (
+  respond: (request: {
+    readonly headers: Record<string, string | string[] | undefined>;
+    readonly body: unknown;
+  }) => {
+    status: number;
+    body: unknown;
+  },
+) => {
+  const server = createServer((request, response) => {
+    let body = '';
+    request.setEncoding('utf8');
+    request.on('data', (chunk) => {
+      body += chunk;
+    });
+    request.on('end', () => {
+      const result = respond({
+        headers: request.headers,
+        body: JSON.parse(body),
+      });
+      response.statusCode = result.status;
+      response.setHeader('Content-Type', 'application/json');
+      response.end(JSON.stringify(result.body));
+    });
+  });
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => resolve());
+  });
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Remote avatar test service did not expose a TCP address');
+  }
+  return {
+    origin: `http://127.0.0.1:${address.port}`,
+    close: () =>
+      new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      }),
+  };
+};
+
 test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, CW와 민감 미디어 마스킹을 유지한다', async (t) => {
   const previousProjectId = process.env.FIREBASE_PROJECT_ID;
   process.env.FIREBASE_PROJECT_ID = 'kosmo-push-test';
@@ -1407,10 +1450,14 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
       .insert(Media)
       .values({
         mediaType: 'image/webp',
+        accountId: fixture.account.id,
         profileId: actor.id,
-        source: MediaSource.REMOTE,
+        source: MediaSource.LOCAL,
         state: MediaState.READY,
-        url: 'https://media.example/avatar.webp',
+        storageReference: `avatar-${crypto.randomUUID()}`,
+        uploadExpiresAt: Temporal.Now.instant().add({ hours: 1 }),
+        url: 'https://media.byulma.run/avatar.webp',
+        readyAt: Temporal.Now.instant(),
       })
       .returning()
       .then(firstOrThrow);
@@ -1548,7 +1595,7 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
     assert.deepEqual(sent[2]?.notification, payload.notification);
     assert.equal(sent[2]?.apns?.payload?.aps?.category, 'KOSMO_PUSH_PRESENTATION_V1');
     assert.deepEqual(payload.data, {
-      actorAvatarUrl: 'https://media.example/avatar.webp',
+      actorAvatarUrl: 'https://media.byulma.run/avatar.webp',
       actorHandle: '@hyeju',
       actorName: '혜주',
       href: `/@yeeun/${encodeGlobalId('Post', post.id)}`,
@@ -1586,7 +1633,7 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
       .where(eq(PostContents.id, contentId));
     await db
       .update(Media)
-      .set({ url: `https://media.example/${'x'.repeat(4000)}` })
+      .set({ url: `https://media.byulma.run/${'x'.repeat(4000)}` })
       .where(eq(Media.id, avatarId));
     await sendPushNotificationActivity(notificationId, nativeAndroid.id);
     const oversizedAvatarPayload = sent[3];
@@ -1644,6 +1691,136 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
       delete process.env.FIREBASE_PROJECT_ID;
     } else {
       process.env.FIREBASE_PROJECT_ID = previousProjectId;
+    }
+  }
+});
+
+test('Push Notification Activity는 원격 avatar를 Media Storage Service로 준비하고 실패해도 text push를 보낸다', async (t) => {
+  const previousProjectId = process.env.FIREBASE_PROJECT_ID;
+  const previousMediaOrigin = process.env.MEDIA_STORAGE_SERVICE_ORIGIN;
+  const previousMediaApiKey = process.env.MEDIA_STORAGE_SERVICE_API_KEY;
+  process.env.FIREBASE_PROJECT_ID = 'kosmo-push-test';
+  process.env.MEDIA_STORAGE_SERVICE_API_KEY = 'media-test-key';
+  const fixture = await createAccountDeletionFixture({ profileStates: [ProfileState.ACTIVE] });
+  let postId: string | null = null;
+  let actorId: string | null = null;
+  let avatarId: string | null = null;
+  let mediaService: Awaited<ReturnType<typeof startRemoteAvatarService>> | undefined;
+  let failService = false;
+
+  try {
+    const recipient = fixture.profiles[0]!;
+    const actor = await createProfile();
+    actorId = actor.id;
+    const { post } = await createCorePost({
+      document: postContentDocumentFromText('Remote avatar push'),
+      origin: 'LOCAL',
+      profileId: recipient.id,
+      visibility: PostVisibility.PUBLIC,
+    });
+    postId = post.id;
+    const avatar = await db
+      .insert(Media)
+      .values({
+        mediaType: 'image/png',
+        profileId: actor.id,
+        source: MediaSource.REMOTE,
+        state: MediaState.READY,
+        url: 'https://remote.example/avatar.png',
+      })
+      .returning()
+      .then(firstOrThrow);
+    avatarId = avatar.id;
+    await db.insert(ProfileMedia).values({
+      kind: ProfileMediaKind.AVATAR,
+      mediaId: avatar.id,
+      profileId: actor.id,
+    });
+    const reaction = await db
+      .insert(Reactions)
+      .values({ postId: post.id, profileId: actor.id, type: '❤️' })
+      .returning()
+      .then(firstOrThrow);
+    const notificationId = await createReactionNotificationActivity(reaction.id);
+    assert.ok(notificationId);
+
+    const requests: Array<{
+      readonly headers: Record<string, string | string[] | undefined>;
+      readonly body: unknown;
+    }> = [];
+    mediaService = await startRemoteAvatarService(({ headers, body }) => {
+      requests.push({ headers, body });
+      return failService
+        ? { status: 503, body: { error: 'unavailable' } }
+        : {
+            status: 201,
+            body: { mediaType: 'image/webp', url: 'https://media.byulma.run/avatar.webp' },
+          };
+    });
+    process.env.MEDIA_STORAGE_SERVICE_ORIGIN = mediaService.origin;
+
+    const { listPushNotificationInstallationsActivity, sendPushNotificationActivity } =
+      await import('./activities');
+    const installationIds = await listPushNotificationInstallationsActivity(notificationId);
+    assert.ok(installationIds[0]);
+    const { applicationDefault, getApps, initializeApp } = await import('firebase-admin/app');
+    const { getMessaging } = await import('firebase-admin/messaging');
+    const app =
+      getApps().find(({ name }) => name === '[DEFAULT]') ??
+      initializeApp({
+        credential: applicationDefault(),
+        projectId: process.env.FIREBASE_PROJECT_ID,
+      });
+    const messaging = getMessaging(app);
+    type FcmMessage = Parameters<typeof messaging.send>[0];
+    const sent: FcmMessage[] = [];
+    t.mock.method(messaging, 'send', async (message: FcmMessage) => {
+      sent.push(message);
+      return 'projects/kosmo-push-test/messages/remote-avatar-test';
+    });
+
+    await sendPushNotificationActivity(notificationId, installationIds[0]);
+    assert.equal(requests.length, 1);
+    assert.deepEqual(requests[0]?.body, { url: 'https://remote.example/avatar.png' });
+    assert.equal(requests[0]?.headers.authorization, 'Bearer media-test-key');
+    assert.deepEqual(Object.keys(requests[0]?.body as object), ['url']);
+    assert.equal(sent[0]?.data?.actorAvatarUrl, 'https://media.byulma.run/avatar.webp');
+    assert.notEqual(sent[0]?.data?.actorAvatarUrl, 'https://remote.example/avatar.png');
+
+    failService = true;
+    await sendPushNotificationActivity(notificationId, installationIds[0]);
+    assert.equal(requests.length, 2);
+    assert.equal(sent.length, 2);
+    assert.equal(sent[1]?.data?.actorAvatarUrl, undefined);
+    assert.ok(sent[1]?.data?.message ?? sent[1]?.notification?.body);
+  } finally {
+    await mediaService?.close();
+    if (postId) {
+      await db.update(Posts).set({ currentContentId: null }).where(eq(Posts.id, postId));
+      await db.delete(PostContents).where(eq(PostContents.postId, postId));
+      await db.delete(Posts).where(eq(Posts.id, postId));
+    }
+    if (actorId) {
+      await db.delete(ProfileMedia).where(eq(ProfileMedia.profileId, actorId));
+    }
+    if (avatarId) {
+      await db.delete(Media).where(eq(Media.id, avatarId));
+    }
+    await cleanupAccountDeletionFixture(fixture);
+    if (previousProjectId === undefined) {
+      delete process.env.FIREBASE_PROJECT_ID;
+    } else {
+      process.env.FIREBASE_PROJECT_ID = previousProjectId;
+    }
+    if (previousMediaOrigin === undefined) {
+      delete process.env.MEDIA_STORAGE_SERVICE_ORIGIN;
+    } else {
+      process.env.MEDIA_STORAGE_SERVICE_ORIGIN = previousMediaOrigin;
+    }
+    if (previousMediaApiKey === undefined) {
+      delete process.env.MEDIA_STORAGE_SERVICE_API_KEY;
+    } else {
+      process.env.MEDIA_STORAGE_SERVICE_API_KEY = previousMediaApiKey;
     }
   }
 });
