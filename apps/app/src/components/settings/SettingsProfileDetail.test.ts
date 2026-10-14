@@ -334,7 +334,7 @@ describe('SettingsProfileDetail', () => {
 
     await act(async () =>
       mutationConfigs[0]?.onCompleted({
-        deleteProfile: { profileId: profile.id },
+        deleteProfile: { success: true, profileId: profile.id },
       } as never),
     );
 
@@ -356,7 +356,7 @@ describe('SettingsProfileDetail', () => {
     await act(async () => lifecycle()?.onConfirm('deactivate'));
     await act(async () =>
       mutationConfigs[0]?.onCompleted({
-        deleteProfile: { profileId: 'profile:other' },
+        deleteProfile: { success: true, profileId: 'profile:other' },
       } as never),
     );
     assert.equal(lifecycle()?.state.phase, 'error');
@@ -367,13 +367,43 @@ describe('SettingsProfileDetail', () => {
     await act(async () => lifecycle()?.onRetry('deactivate'));
     await act(async () =>
       mutationConfigs[1]?.onCompleted({
-        deleteProfile: { profileId: profile.id },
+        deleteProfile: { success: true, profileId: profile.id },
       } as never),
     );
     assert.deepEqual(resetCurrentActorCalls, [null]);
     assert.equal(deleteSelectedProfileCalls, 0);
     assert.equal(lifecycle()?.state.phase, 'error');
     assert.equal(queryData.currentSession?.selectedProfile?.id, profile.id);
+  });
+
+  it('requires an explicit true delete outcome before clearing the actor or stored selection', async () => {
+    const profile = ownerProfile;
+    queryData = { currentSession: { selectedProfile: profile } };
+    await render();
+
+    const lifecycle = () => rendered('ProfileSettingsScreen')[0]?.props.lifecycle;
+    await act(async () => lifecycle()?.onAction('deactivate'));
+    await act(async () => lifecycle()?.onConfirm('deactivate'));
+    await act(async () =>
+      mutationConfigs[0]?.onCompleted({
+        deleteProfile: { success: false, profileId: profile.id },
+      } as never),
+    );
+
+    assert.equal(lifecycle()?.state.phase, 'error');
+    assert.deepEqual(resetCurrentActorCalls, []);
+    assert.equal(deleteSelectedProfileCalls, 0);
+
+    await act(async () => lifecycle()?.onRetry('deactivate'));
+    await act(async () =>
+      mutationConfigs[1]?.onCompleted({
+        deleteProfile: { profileId: profile.id },
+      } as never),
+    );
+
+    assert.equal(lifecycle()?.state.phase, 'error');
+    assert.deepEqual(resetCurrentActorCalls, []);
+    assert.equal(deleteSelectedProfileCalls, 0);
   });
 
   it('network failure keeps the confirmation retryable and leaves actor and storage unchanged', async () => {

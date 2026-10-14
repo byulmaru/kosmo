@@ -341,7 +341,7 @@ describe('SettingsProfileDetail real Relay deactivation flow', () => {
 
     const mutation = latestRequest('profile:owner', 'SettingsProfileDetailDeleteProfileMutation');
     assert.deepEqual(mutation.variables, { input: { id: 'profile:owner' } });
-    await respond(mutation, { deleteProfile: { profileId: 'profile:owner' } });
+    await respond(mutation, { deleteProfile: { success: true, profileId: 'profile:owner' } });
 
     assert.equal(storedProfileId, null);
     await respond(latestRequest(null, 'SessionProviderQuery'), sessionData(null));
@@ -372,6 +372,67 @@ describe('SettingsProfileDetail real Relay deactivation flow', () => {
     assert.deepEqual(accountState, { acknowledged: false, phase: 'idle' });
   });
 
+  it('replays a committed disable after a lost response and converges the fresh session actor', async () => {
+    await act(async () => {
+      renderer = create(createElement(TestTree));
+    });
+
+    await respond(latestRequest(null, 'SessionProviderQuery'), sessionData('profile:owner'));
+    await respond(
+      latestRequest('profile:owner', 'SessionProviderQuery'),
+      sessionData('profile:owner'),
+    );
+    await respond(latestRequest('profile:owner', 'SettingsProfileDetailQuery'), detailData());
+    await respond(latestRequest('profile:owner', 'SettingsAccountDeletionQuery'), {
+      me: { id: 'account:owner', profiles: [{ id: 'profile:owner' }] },
+    });
+
+    await act(async () => pressableForText('프로필 비활성화').props.onPress());
+    await act(async () => {
+      const checkbox = all('Pressable').find((node) => node.props.accessibilityRole === 'checkbox');
+      assert.ok(checkbox);
+      checkbox.props.onPress();
+    });
+    await act(async () => button('비활성화').props.onPress());
+
+    const firstMutation = latestRequest(
+      'profile:owner',
+      'SettingsProfileDetailDeleteProfileMutation',
+    );
+    await act(async () => firstMutation.sink.error(new Error('response lost after server commit')));
+    assert.equal(storedProfileId, 'profile:owner');
+    assert.equal(all('SessionProbe').at(-1)?.props.selectedProfileId, 'profile:owner');
+    assert.ok(all('Text').some((node) => node.children.includes('Owner Profile')));
+    assert.ok(button('다시 시도'));
+
+    await act(async () => button('다시 시도').props.onPress());
+    const retryMutation = latestRequest(
+      'profile:owner',
+      'SettingsProfileDetailDeleteProfileMutation',
+    );
+    assert.deepEqual(retryMutation.variables, { input: { id: 'profile:owner' } });
+    await respond(retryMutation, {
+      deleteProfile: { success: true, profileId: 'profile:owner' },
+    });
+
+    assert.equal(storedProfileId, null);
+    await respond(latestRequest(null, 'SessionProviderQuery'), sessionData(null));
+    await respond(latestRequest(null, 'SettingsProfileDetailQuery'), {
+      currentSession: { id: 'session:owner', selectedProfile: null },
+    });
+    await respond(latestRequest(null, 'SettingsAccountDeletionQuery'), {
+      me: { id: 'account:owner', profiles: [] },
+    });
+
+    assert.equal(all('SessionProbe').at(-1)?.props.selectedProfileId, null);
+    assert.ok(all('StateView').some((node) => node.props.title === '설정할 Profile이 없어요'));
+    assert.equal(
+      all('Text').some((node) => node.children.includes('Owner Profile')),
+      false,
+    );
+    assert.deepEqual(accountState, { acknowledged: false, phase: 'idle' });
+  });
+
   it('a late disable for Profile A preserves the selected Profile B and its settings UI', async () => {
     await act(async () => {
       renderer = create(createElement(TestTree));
@@ -396,8 +457,20 @@ describe('SettingsProfileDetail real Relay deactivation flow', () => {
     });
     await act(async () => button('비활성화').props.onPress());
 
-    const mutation = latestRequest('profile:owner', 'SettingsProfileDetailDeleteProfileMutation');
-    assert.deepEqual(mutation.variables, { input: { id: 'profile:owner' } });
+    const firstMutation = latestRequest(
+      'profile:owner',
+      'SettingsProfileDetailDeleteProfileMutation',
+    );
+    await act(async () => firstMutation.sink.error(new Error('response lost after server commit')));
+    assert.equal(storedProfileId, 'profile:owner');
+    assert.ok(button('다시 시도'));
+    await act(async () => button('다시 시도').props.onPress());
+
+    const retryMutation = latestRequest(
+      'profile:owner',
+      'SettingsProfileDetailDeleteProfileMutation',
+    );
+    assert.deepEqual(retryMutation.variables, { input: { id: 'profile:owner' } });
 
     await act(async () => {
       const actorProbe = all('ActorProbe').at(-1);
@@ -422,7 +495,9 @@ describe('SettingsProfileDetail real Relay deactivation flow', () => {
     );
     assert.deepEqual(accountState, { activeProfileCount: 1, phase: 'blocked' });
 
-    await respond(mutation, { deleteProfile: { profileId: 'profile:owner' } });
+    await respond(retryMutation, {
+      deleteProfile: { success: true, profileId: 'profile:owner' },
+    });
 
     assert.equal(storedProfileId, 'profile:other');
     assert.equal(all('SessionProbe').at(-1)?.props.selectedProfileId, 'profile:other');

@@ -59,6 +59,7 @@ const updateProfileMutation = graphql`
 const deleteProfileMutation = graphql`
   mutation SettingsProfileDetailDeleteProfileMutation($input: DeleteProfileInput!) {
     deleteProfile(input: $input) {
+      success
       profileId
     }
   }
@@ -208,7 +209,8 @@ function SettingsProfileEditor({
 
     commitDeleteProfile({
       onCompleted: (response) => {
-        if (response?.deleteProfile?.profileId !== profile.id) {
+        const result = response?.deleteProfile;
+        if (result?.success !== true || result.profileId !== profile.id) {
           setLifecyclePhase('error');
           return;
         }

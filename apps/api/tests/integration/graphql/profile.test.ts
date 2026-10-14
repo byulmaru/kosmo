@@ -1746,6 +1746,116 @@ describe('GraphQL remote profile boundary', () => {
     });
   });
 
+  test('deleteProfile returns the target identity for first success and Owner retry', async () => {
+    const auth = await createAuthenticatedSession();
+    const deleteProfile = () =>
+      requestGraphQL<{
+        deleteProfile: { profileId: string; success: boolean };
+      }>(
+        `mutation DeleteProfile($id: ID!) {
+          deleteProfile(input: { id: $id }) {
+            profileId
+            success
+          }
+        }`,
+        { id: globalId('Profile', auth.profile.id) },
+        auth.token,
+      );
+
+    const first = await deleteProfile();
+    assertNoGraphQLErrors(first);
+    assert.deepEqual(first.data?.deleteProfile, {
+      profileId: globalId('Profile', auth.profile.id),
+      success: true,
+    });
+    assert.equal(
+      await db
+        .select({ activeProfileId: Sessions.activeProfileId })
+        .from(Sessions)
+        .where(eq(Sessions.id, auth.session.id))
+        .then(firstOrThrow)
+        .then(({ activeProfileId }) => activeProfileId),
+      null,
+    );
+
+    const retry = await deleteProfile();
+    assertNoGraphQLErrors(retry);
+    assert.deepEqual(retry.data?.deleteProfile, first.data?.deleteProfile);
+    assert.equal(
+      await db
+        .select({ state: Profiles.state })
+        .from(Profiles)
+        .where(eq(Profiles.id, auth.profile.id))
+        .then(firstOrThrow)
+        .then(({ state }) => state),
+      ProfileState.DISABLED,
+    );
+  });
+
+  test('deleteProfile preserves Owner, Profile state, and Instance availability checks', async () => {
+    const owner = await createAuthenticatedSession();
+    const other = await createAuthenticatedSession();
+    const member = await createAuthenticatedSession({ role: AccountProfileRole.MEMBER });
+    const deleteProfile = (profileId: string, token: string) =>
+      requestGraphQL(
+        `mutation DeleteProfile($id: ID!) {
+          deleteProfile(input: { id: $id }) { profileId success }
+        }`,
+        { id: globalId('Profile', profileId) },
+        token,
+      );
+
+    assertGraphQLErrorCode(await deleteProfile(owner.profile.id, other.token), 'NOT_FOUND');
+    assertGraphQLErrorCode(
+      await deleteProfile(member.profile.id, member.token),
+      'PERMISSION_DENIED',
+    );
+    assertGraphQLErrorCode(await deleteProfile(crypto.randomUUID(), owner.token), 'NOT_FOUND');
+
+    const ineligible = await createProfile({
+      handle: `ineligible-${crypto.randomUUID().slice(0, 8)}`,
+      instanceId: localInstanceId,
+      state: ProfileState.SUSPENDED,
+    });
+    await db.insert(AccountProfiles).values({
+      accountId: owner.account.id,
+      profileId: ineligible.id,
+      role: AccountProfileRole.OWNER,
+    });
+    assertGraphQLErrorCode(await deleteProfile(ineligible.id, owner.token), 'NOT_FOUND');
+
+    const suspendedInstance = await createLocalInstance({
+      domain: `suspended-${crypto.randomUUID().slice(0, 8)}.example`,
+    });
+    const disabledProfile = await createProfile({
+      handle: `disabled-${crypto.randomUUID().slice(0, 8)}`,
+      instanceId: suspendedInstance.id,
+      state: ProfileState.DISABLED,
+    });
+    await db.insert(AccountProfiles).values([
+      {
+        accountId: owner.account.id,
+        profileId: disabledProfile.id,
+        role: AccountProfileRole.OWNER,
+      },
+      {
+        accountId: member.account.id,
+        profileId: disabledProfile.id,
+        role: AccountProfileRole.MEMBER,
+      },
+    ]);
+    assertGraphQLErrorCode(await deleteProfile(disabledProfile.id, other.token), 'NOT_FOUND');
+    assertGraphQLErrorCode(
+      await deleteProfile(disabledProfile.id, member.token),
+      'PERMISSION_DENIED',
+    );
+    await db
+      .update(Instances)
+      .set({ state: InstanceState.SUSPENDED })
+      .where(eq(Instances.id, suspendedInstance.id));
+    assertGraphQLErrorCode(await deleteProfile(disabledProfile.id, owner.token), 'NOT_FOUND');
+  });
+
   test('Profile Update Workflow start 실패 뒤에도 committed GraphQL payload를 반환한다', async () => {
     const auth = await createAuthenticatedSession();
     const start = mock.method(temporalClient.workflow, 'start', async () => {
