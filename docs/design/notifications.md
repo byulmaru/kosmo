@@ -183,6 +183,9 @@ composer control은 자체 동작만 수행한다. 모두 읽음, unread indicat
   `foregroundSecondary`로 표시한다. 작성자 행은 24px Avatar와 `ProfileNameBlock`의
   `inline` variant를 사용한다. 이름과 핸들은 한 줄에 배치하며 이름을 우선한다. 공간이 부족하면 핸들이 먼저
   가려지고, 이름도 가용 폭을 넘으면 말줄임한다. 이 계약을 다른 Profile 표시 전체에 확대하지 않는다.
+- Reply의 kind rail은 게시글 구성 전체 높이로 늘어난 하나의 게시글 상세 이동 target이며, 아이콘은 기존
+  상단 48px × 48px geometry 안에 유지한다. 아이콘 아래 빈 rail 영역도 같은 상세 경로를 열고 Best Effort
+  Read를 한 번 시작한다. Mention과 Quote의 kind rail은 장식 요소로 유지한다.
 - Reply/Mention에는 별도의 알림 이유 문장을 표시하지 않는다. 이 결정은 Quote의 이유 문구를 정하지 않는다.
   알림 작성자 이름은 `foregroundPrimary`, 종류 아이콘·핸들·시각은
   `foregroundSecondary`를 사용한다. Light `#64646F`, Dark `#A3A3A3`이며 legacy `textSecondary`, Info 색상,
@@ -207,8 +210,9 @@ composer control은 자체 동작만 수행한다. 모두 읽음, unread indicat
   전체 item을 제거해야 한다.
 - Notification 활성화에 따른 Best Effort Read는 이동이나 열기를 기다리게 하지 않는다.
   Follow/FollowRequest/Reaction/Repost는 단일 item target 활성화에서, Reply/Mention은 작성자 Profile·시각·본문의
-  link navigation과 미디어 열기에서 각각 한 번 시작한다. Reply/Mention의 Content Warning 공개, Action Bar와 열린
-  composer의 control은 자체 동작만 수행하며 item navigation이나 Read를 함께 시작하지 않는다.
+  link navigation과 미디어 열기에서, Reply는 kind rail link navigation에서도 각각 한 번 시작한다.
+  Reply/Mention의 Content Warning 공개, Action Bar와 열린 composer의 control은 자체 동작만 수행하며 item
+  navigation이나 Read를 함께 시작하지 않는다.
 
 ## 검증 경계
 
