@@ -15,8 +15,8 @@ worker:
   health:
     port: 8080
   posthog:
-    host: https://us.i.posthog.com
-    captureKey: phc_vYTsfHrgz8wE6wQv5kfpQM5XPBnKKjvNQgaHabb6zdsS
+    host: https://eu.i.posthog.com
+    captureKey: phc_wtHL2JZViyDBizGfTYXqjHwejEwJiEwHoEzPZ3DtUmDS
   resources:
     requests:
       cpu: 100m
