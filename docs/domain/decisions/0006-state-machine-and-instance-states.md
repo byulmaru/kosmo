@@ -33,8 +33,12 @@ Accepted
 - 각 상태 변경 행동은 대상 상태 차원만 바꾸고 다른 차원은 유지한다.
 - Domain Limit은 공개 Post List와 검색 후보를 제한하지만 원격 요청 자체를 막지 않는다.
 - Domain Block은 콘텐츠와 관계 후보를 없는 것처럼 취급한다.
-- 새 원격 요청은 Safety State가 Domain Block이 아니고 Reachability/Service State가 Reachable/Active일 때만
-  보낸다.
+- 일반 새 원격 요청은 Safety State가 Domain Block이 아니고 Reachability/Service State가 Reachable/Active일 때만
+  보낸다. Service State가 Active인 Unreachable Instance는 Remote Profile materialization·갱신을 위한 exact canonical
+  actor URI lookup만 예외로 허용한다.
+- Unreachable은 해당 lookup이 요청한 canonical actor identity를 확인하거나, 같은 canonical actor가 직접 보낸 검증된
+  Activity를 받을 때만 Reachable로 바뀐다. WebFinger 결과, 저장된 actor·cache 존재, 다른 actor의 참조와 실패한
+  lookup은 Reachability State를 바꾸지 않는다.
 - Instance 상태 변경은 기존 Notification의 존재와 Read State를 바꾸지 않는다.
 
 ## 문서 반영
