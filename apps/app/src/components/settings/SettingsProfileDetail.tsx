@@ -61,8 +61,10 @@ const deleteProfileMutation = graphql`
     deleteProfile(input: $input) {
       success
       profileId
-      selectedProfile {
-        id
+      account {
+        profiles {
+          id
+        }
       }
     }
   }
@@ -218,8 +220,10 @@ function SettingsProfileEditor({
           return;
         }
 
-        const selectedProfileId = result.selectedProfile?.id ?? null;
-        if (!resetCurrentActor(selectedProfileId)) {
+        const [selectedProfileId, ...remainingFallbackProfileIds] = result.account.profiles.map(
+          ({ id }) => id,
+        );
+        if (!resetCurrentActor(selectedProfileId ?? null, remainingFallbackProfileIds)) {
           setLifecyclePhase('error');
           return;
         }

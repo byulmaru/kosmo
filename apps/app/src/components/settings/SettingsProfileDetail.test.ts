@@ -348,7 +348,7 @@ describe('SettingsProfileDetail', () => {
 
     await act(async () =>
       mutationConfigs[0]?.onCompleted({
-        deleteProfile: { success: true, profileId: profile.id, selectedProfile: null },
+        deleteProfile: { success: true, profileId: profile.id, account: { profiles: [] } },
       } as never),
     );
 
@@ -374,7 +374,7 @@ describe('SettingsProfileDetail', () => {
         deleteProfile: {
           success: true,
           profileId: profile.id,
-          selectedProfile: { id: 'profile:remaining' },
+          account: { profiles: [{ id: 'profile:remaining' }, { id: 'profile:later' }] },
         },
       } as never),
     );
@@ -398,7 +398,7 @@ describe('SettingsProfileDetail', () => {
         deleteProfile: {
           success: true,
           profileId: 'profile:other',
-          selectedProfile: { id: 'profile:c' },
+          account: { profiles: [{ id: 'profile:c' }] },
         },
       } as never),
     );
@@ -413,7 +413,7 @@ describe('SettingsProfileDetail', () => {
         deleteProfile: {
           success: true,
           profileId: profile.id,
-          selectedProfile: { id: 'profile:c' },
+          account: { profiles: [{ id: 'profile:c' }] },
         },
       } as never),
     );
@@ -434,7 +434,7 @@ describe('SettingsProfileDetail', () => {
     await act(async () => lifecycle()?.onConfirm('deactivate'));
     await act(async () =>
       mutationConfigs[0]?.onCompleted({
-        deleteProfile: { success: false, profileId: profile.id, selectedProfile: null },
+        deleteProfile: { success: false, profileId: profile.id, account: { profiles: [] } },
       } as never),
     );
 
@@ -445,7 +445,7 @@ describe('SettingsProfileDetail', () => {
     await act(async () => lifecycle()?.onRetry('deactivate'));
     await act(async () =>
       mutationConfigs[1]?.onCompleted({
-        deleteProfile: { profileId: profile.id, selectedProfile: null },
+        deleteProfile: { profileId: profile.id, account: { profiles: [] } },
       } as never),
     );
 

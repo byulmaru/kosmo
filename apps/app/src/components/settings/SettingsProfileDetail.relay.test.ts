@@ -347,7 +347,11 @@ describe('SettingsProfileDetail real Relay deactivation flow', () => {
     const mutation = latestRequest('profile:owner', 'SettingsProfileDetailDeleteProfileMutation');
     assert.deepEqual(mutation.variables, { input: { id: 'profile:owner' } });
     await respond(mutation, {
-      deleteProfile: { success: true, profileId: 'profile:owner', selectedProfile: null },
+      deleteProfile: {
+        success: true,
+        profileId: 'profile:owner',
+        account: { id: 'account:owner', profiles: [] },
+      },
     });
 
     assert.equal(storedProfileId, null);
@@ -412,7 +416,7 @@ describe('SettingsProfileDetail real Relay deactivation flow', () => {
       deleteProfile: {
         success: true,
         profileId: 'profile:owner',
-        selectedProfile: { id: 'profile:b' },
+        account: { id: 'account:owner', profiles: [{ id: 'profile:b' }] },
       },
     });
 
@@ -436,6 +440,119 @@ describe('SettingsProfileDetail real Relay deactivation flow', () => {
       true,
     );
     assert.deepEqual(accountState, { activeProfileCount: 1, phase: 'blocked' });
+  });
+
+  it('reselects the next deactivation candidate when the first candidate is already unavailable', async () => {
+    await act(async () => {
+      renderer = create(createElement(TestTree));
+    });
+
+    await respond(latestRequest(null, 'SessionProviderQuery'), sessionData('profile:owner'));
+    await respond(
+      latestRequest('profile:owner', 'SessionProviderQuery'),
+      sessionData('profile:owner'),
+    );
+    await respond(latestRequest('profile:owner', 'SettingsProfileDetailQuery'), detailData());
+    await respond(latestRequest('profile:owner', 'SettingsAccountDeletionQuery'), {
+      me: {
+        id: 'account:owner',
+        profiles: [{ id: 'profile:owner' }, { id: 'profile:b' }, { id: 'profile:c' }],
+      },
+    });
+
+    await act(async () => pressableForText('프로필 비활성화').props.onPress());
+    await act(async () => {
+      const checkbox = all('Pressable').find((node) => node.props.accessibilityRole === 'checkbox');
+      assert.ok(checkbox);
+      checkbox.props.onPress();
+    });
+    await act(async () => button('비활성화').props.onPress());
+
+    const mutation = latestRequest('profile:owner', 'SettingsProfileDetailDeleteProfileMutation');
+    await respond(mutation, {
+      deleteProfile: {
+        success: true,
+        profileId: 'profile:owner',
+        account: {
+          id: 'account:owner',
+          profiles: [{ id: 'profile:b' }, { id: 'profile:c' }],
+        },
+      },
+    });
+
+    assert.equal(storedProfileId, 'profile:b');
+    assert.ok(requests.some((request) => request.actorId === 'profile:b'));
+    await respond(latestRequest('profile:b', 'SessionProviderQuery'), sessionData(null));
+
+    assert.equal(storedProfileId, 'profile:c');
+    assert.ok(requests.some((request) => request.actorId === 'profile:c'));
+    await respond(latestRequest('profile:c', 'SessionProviderQuery'), sessionData('profile:c'));
+    await respond(
+      latestRequest('profile:c', 'SettingsProfileDetailQuery'),
+      detailData('profile:c', 'Profile C'),
+    );
+    await respond(latestRequest('profile:c', 'SettingsAccountDeletionQuery'), {
+      me: { id: 'account:owner', profiles: [{ id: 'profile:c' }] },
+    });
+
+    const probe = all('SessionProbe').at(-1);
+    assert.equal(probe?.props.status, 'valid');
+    assert.equal(probe?.props.accountId, 'account:owner');
+    assert.equal(probe?.props.selectedProfileId, 'profile:c');
+    assert.equal(storedProfileId, 'profile:c');
+    assert.ok(all('Text').some((node) => node.children.includes('Profile C')));
+  });
+
+  it('clears the stored selection after every returned deactivation candidate is rejected', async () => {
+    await act(async () => {
+      renderer = create(createElement(TestTree));
+    });
+
+    await respond(latestRequest(null, 'SessionProviderQuery'), sessionData('profile:owner'));
+    await respond(
+      latestRequest('profile:owner', 'SessionProviderQuery'),
+      sessionData('profile:owner'),
+    );
+    await respond(latestRequest('profile:owner', 'SettingsProfileDetailQuery'), detailData());
+    await respond(latestRequest('profile:owner', 'SettingsAccountDeletionQuery'), {
+      me: { id: 'account:owner', profiles: [{ id: 'profile:owner' }, { id: 'profile:b' }] },
+    });
+
+    await act(async () => pressableForText('프로필 비활성화').props.onPress());
+    await act(async () => {
+      const checkbox = all('Pressable').find((node) => node.props.accessibilityRole === 'checkbox');
+      assert.ok(checkbox);
+      checkbox.props.onPress();
+    });
+    await act(async () => button('비활성화').props.onPress());
+
+    const mutation = latestRequest('profile:owner', 'SettingsProfileDetailDeleteProfileMutation');
+    await respond(mutation, {
+      deleteProfile: {
+        success: true,
+        profileId: 'profile:owner',
+        account: { id: 'account:owner', profiles: [{ id: 'profile:b' }] },
+      },
+    });
+
+    assert.equal(storedProfileId, 'profile:b');
+    await respond(latestRequest('profile:b', 'SessionProviderQuery'), sessionData(null));
+
+    assert.equal(storedProfileId, null);
+    await respond(latestRequest(null, 'SessionProviderQuery'), sessionData(null));
+    await respond(latestRequest(null, 'SettingsProfileDetailQuery'), {
+      currentSession: { id: 'session:owner', selectedProfile: null },
+    });
+    await respond(latestRequest(null, 'SettingsAccountDeletionQuery'), {
+      me: { id: 'account:owner', profiles: [] },
+    });
+
+    const probe = all('SessionProbe').at(-1);
+    assert.equal(probe?.props.status, 'valid');
+    assert.equal(probe?.props.accountId, 'account:owner');
+    assert.equal(probe?.props.selectedProfileId, null);
+    assert.equal(storedProfileId, null);
+    assert.ok(all('StateView').some((node) => node.props.title === '설정할 Profile이 없어요'));
   });
 
   it('replays a committed disable after a lost response and converges the fresh session actor', async () => {
@@ -481,7 +598,7 @@ describe('SettingsProfileDetail real Relay deactivation flow', () => {
       deleteProfile: {
         success: true,
         profileId: 'profile:owner',
-        selectedProfile: null,
+        account: { id: 'account:owner', profiles: [] },
       },
     });
 
@@ -573,7 +690,10 @@ describe('SettingsProfileDetail real Relay deactivation flow', () => {
       deleteProfile: {
         success: true,
         profileId: 'profile:owner',
-        selectedProfile: { id: 'profile:c' },
+        account: {
+          id: 'account:owner',
+          profiles: [{ id: 'profile:c' }, { id: 'profile:other' }],
+        },
       },
     });
 

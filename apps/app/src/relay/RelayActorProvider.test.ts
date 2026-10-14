@@ -15,7 +15,11 @@ type RelayActorSnapshot = {
   environment: Environment;
   nativeToken: string | null;
   resetActor: (profileId?: string | null) => void;
-  resetCurrentActor: (profileId?: string | null) => boolean;
+  resetCurrentActor: (
+    profileId?: string | null,
+    remainingFallbackProfileIds?: readonly string[],
+  ) => boolean;
+  resetRejectedCurrentActor: () => boolean;
   resetSession: () => void;
   selectedProfileId: string | null;
   setNativeSession: (token: string) => Promise<void>;
@@ -146,6 +150,7 @@ function Probe() {
     nativeToken: actor.nativeToken,
     resetActor: actor.resetActor,
     resetCurrentActor: actor.resetCurrentActor,
+    resetRejectedCurrentActor: actor.resetRejectedCurrentActor,
     resetSession: actor.resetSession,
     selectedProfileId: actor.selectedProfileId,
     setNativeSession: actor.setNativeSession,
@@ -252,6 +257,65 @@ describe('RelayActorProvider session cleanup', () => {
     assert.notEqual(snapshot.environment, previousEnvironment);
     assert.notEqual(snapshot.actorLifecycleKey, previousActorLifecycleKey);
     assert.equal(environmentInputs.at(-1)?.selectedProfileId, null);
+  });
+
+  it('tries only the remaining deactivation candidates and clears storage after exhaustion', async () => {
+    await renderProvider();
+
+    await act(async () => {
+      assert.equal(snapshot?.resetCurrentActor('profile-b', ['profile-c']), true);
+    });
+    assert.equal(snapshot?.selectedProfileId, 'profile-b');
+
+    storedSelectedProfile = JSON.stringify({ profileId: 'profile-b' });
+    await act(async () => {
+      assert.equal(snapshot?.resetRejectedCurrentActor(), true);
+    });
+
+    assert.equal(snapshot?.selectedProfileId, 'profile-c');
+    assert.deepEqual(JSON.parse(storedSelectedProfile ?? 'null'), { profileId: 'profile-c' });
+
+    await act(async () => {
+      assert.equal(snapshot?.resetRejectedCurrentActor(), true);
+    });
+
+    assert.equal(snapshot?.selectedProfileId, null);
+    assert.equal(storedSelectedProfile, null);
+    assert.equal(environmentInputs.at(-1)?.selectedProfileId, null);
+  });
+
+  it('does not reuse deactivation fallback candidates after a manual or auth reset', async () => {
+    await renderProvider();
+    await act(async () => {
+      snapshot?.resetCurrentActor('profile-b', ['profile-c']);
+    });
+
+    const staleRejectedActor = snapshot?.resetRejectedCurrentActor;
+    await act(async () => snapshot?.resetActor('profile-manual'));
+    assert.equal(staleRejectedActor?.(), false);
+    await act(async () => {
+      snapshot?.resetRejectedCurrentActor();
+    });
+    assert.equal(snapshot?.selectedProfileId, null);
+    assert.equal(
+      environmentInputs.some((input) => input.selectedProfileId === 'profile-c'),
+      false,
+    );
+
+    await act(async () => {
+      snapshot?.resetCurrentActor('profile-b', ['profile-c']);
+    });
+    const staleAfterAuthReset = snapshot?.resetRejectedCurrentActor;
+    await act(async () => snapshot?.resetSession());
+    assert.equal(staleAfterAuthReset?.(), false);
+    await act(async () => {
+      snapshot?.resetRejectedCurrentActor();
+    });
+    assert.equal(snapshot?.selectedProfileId, null);
+    assert.equal(
+      environmentInputs.some((input) => input.selectedProfileId === 'profile-c'),
+      false,
+    );
   });
 
   it('SecureStore token을 삭제하고 이전 Store를 새 guest Store와 다음 Session에서 재사용하지 않는다', async () => {

@@ -9,7 +9,7 @@ import {
   useState,
 } from 'react';
 import { Platform } from 'react-native';
-import { deleteSelectedProfile } from '@/auth/selectedProfileStorage';
+import { deleteSelectedProfile, writeSelectedProfile } from '@/auth/selectedProfileStorage';
 import { deleteSessionToken, readSessionToken, writeSessionToken } from '@/auth/tokenStorage';
 import { Splash } from '@/components/Splash';
 import { initialActorState, reduceActorState } from './actorState';
@@ -22,7 +22,11 @@ type RelayActorValue = {
   clearNativeSession: () => Promise<void>;
   nativeToken: string | null;
   resetActor: (profileId?: string | null) => void;
-  resetCurrentActor: (profileId?: string | null) => boolean;
+  resetCurrentActor: (
+    profileId?: string | null,
+    remainingFallbackProfileIds?: readonly string[],
+  ) => boolean;
+  resetRejectedCurrentActor: () => boolean;
   resetSession: () => void;
   selectedProfileId: string | null;
   setNativeSession: (token: string) => Promise<void>;
@@ -53,10 +57,42 @@ export function RelayActorProvider({
     void readSessionToken().then(setNativeToken, () => setNativeToken(null));
   }, []);
 
-  const resetActor = useCallback((profileId?: string | null) => {
-    environmentGenerationRef.current += 1;
-    dispatchActor({ type: 'profile-selected', profileId });
-  }, []);
+  const environmentGeneration = environmentGenerationRef.current;
+  const transitionActor = useCallback(
+    (profileId?: string | null, remainingFallbackProfileIds?: readonly string[]) => {
+      environmentGenerationRef.current += 1;
+      dispatchActor({ type: 'profile-selected', profileId, remainingFallbackProfileIds });
+    },
+    [],
+  );
+
+  const resetActor = useCallback(
+    (profileId?: string | null) => {
+      transitionActor(profileId);
+    },
+    [transitionActor],
+  );
+
+  const resetRejectedCurrentActor = useCallback(() => {
+    if (environmentGenerationRef.current !== environmentGeneration) {
+      return false;
+    }
+
+    const [nextProfileId, ...remainingFallbackProfileIds] = actor.remainingFallbackProfileIds ?? [];
+    if (actor.remainingFallbackProfileIds === undefined) {
+      transitionActor(null);
+      return true;
+    }
+
+    if (nextProfileId) {
+      void writeSelectedProfile(nextProfileId);
+      transitionActor(nextProfileId, remainingFallbackProfileIds);
+    } else {
+      void deleteSelectedProfile();
+      transitionActor(null);
+    }
+    return true;
+  }, [actor.remainingFallbackProfileIds, environmentGeneration, transitionActor]);
 
   const resetSession = useCallback(() => {
     authLifecycleGenerationRef.current += 1;
@@ -79,17 +115,16 @@ export function RelayActorProvider({
     setNativeToken(null);
   }, [resetSession]);
 
-  const environmentGeneration = environmentGenerationRef.current;
   const resetCurrentActor = useCallback(
-    (profileId?: string | null) => {
+    (profileId?: string | null, remainingFallbackProfileIds?: readonly string[]) => {
       if (environmentGenerationRef.current !== environmentGeneration) {
         return false;
       }
 
-      resetActor(profileId);
+      transitionActor(profileId, remainingFallbackProfileIds);
       return true;
     },
-    [environmentGeneration, resetActor],
+    [environmentGeneration, transitionActor],
   );
 
   const environment = useMemo(
@@ -104,6 +139,7 @@ export function RelayActorProvider({
       nativeToken: nativeToken ?? null,
       resetActor,
       resetCurrentActor,
+      resetRejectedCurrentActor,
       resetSession,
       selectedProfileId: actor.id === 'session' ? null : actor.id,
       setNativeSession,
@@ -114,6 +150,7 @@ export function RelayActorProvider({
       nativeToken,
       resetActor,
       resetCurrentActor,
+      resetRejectedCurrentActor,
       resetSession,
       setNativeSession,
     ],
