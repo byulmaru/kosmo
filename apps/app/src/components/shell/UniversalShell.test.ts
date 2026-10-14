@@ -3,8 +3,9 @@ import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
 import { isNativeDrawerSwipeEnabled } from './shellLayout';
-import type { ElementType, PropsWithChildren, ReactNode } from 'react';
+import type { ComponentProps, ElementType, PropsWithChildren, ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
+import type { ShellChromeProvider } from './ShellChromeContext';
 import type { UniversalShell as UniversalShellComponent } from './UniversalShell';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -36,7 +37,10 @@ let rightRailProps: RightRailProps | undefined;
 let bottomTabBarProps: { onComposeOpen?: () => void } | undefined;
 let sidebarNavigationProps: { onComposeOpen?: () => void } | undefined;
 let shellChromeProps:
-  | { navigationDrawerOpen?: boolean; openNavigationDrawer?: () => void }
+  | Pick<
+      ComponentProps<typeof ShellChromeProvider>,
+      'navigationDrawerOpen' | 'openNavigationDrawer' | 'registerTabReselection' | 'reselectTab'
+    >
   | undefined;
 let rightRailFooterCount = 0;
 
@@ -177,7 +181,7 @@ mockModule('./RightRail', {
   },
 });
 mockModule('./ShellChromeContext', {
-  ShellChromeProvider: ({ children, ...props }: PropsWithChildren) => {
+  ShellChromeProvider: ({ children, ...props }: ComponentProps<typeof ShellChromeProvider>) => {
     shellChromeProps = props;
     return children;
   },
@@ -527,3 +531,77 @@ async function renderShell() {
   assert.ok(renderer);
   return renderer.root.findByProps({ testID: 'universal-shell-root' });
 }
+
+describe('UniversalShell tab reselection scroll owner', () => {
+  for (const destination of ['search', 'notifications', 'profile'] as const) {
+    it(`Web ${destination} scrolls the document once without invoking a Native handler`, async () => {
+      platform.OS = 'web';
+      pathname = destination === 'profile' ? '/@me' : `/${destination}`;
+      const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+      const scrollTo = mock.fn();
+      Object.defineProperty(globalThis, 'window', {
+        configurable: true,
+        value: { scrollTo, scrollX: 0, scrollY: 600 },
+      });
+      try {
+        await renderShell();
+        const nativeScroll = mock.fn();
+        shellChromeProps!.registerTabReselection!(destination, nativeScroll);
+        shellChromeProps!.reselectTab!(destination);
+
+        assert.equal(scrollTo.mock.callCount(), 1);
+        assert.deepEqual(scrollTo.mock.calls[0].arguments, [{ behavior: 'auto', left: 0, top: 0 }]);
+        assert.equal(nativeScroll.mock.callCount(), 0);
+        assert.equal(router.push.mock.callCount(), 0);
+        assert.equal(router.replace.mock.callCount(), 0);
+      } finally {
+        await act(async () => renderer?.unmount());
+        renderer = null;
+        if (previousWindow) {
+          Object.defineProperty(globalThis, 'window', previousWindow);
+        } else {
+          Reflect.deleteProperty(globalThis, 'window');
+        }
+      }
+    });
+  }
+
+  it('Web Home leaves document scrolling to the timeline refresh handler', async () => {
+    const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+    const scrollTo = mock.fn();
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: { scrollTo },
+    });
+    try {
+      await renderShell();
+      shellChromeProps!.reselectTab!('home');
+      assert.equal(scrollTo.mock.callCount(), 0);
+    } finally {
+      await act(async () => renderer?.unmount());
+      renderer = null;
+      if (previousWindow) {
+        Object.defineProperty(globalThis, 'window', previousWindow);
+      } else {
+        Reflect.deleteProperty(globalThis, 'window');
+      }
+    }
+  });
+
+  for (const os of ['ios', 'android']) {
+    it(`${os} reselection invokes only the registered destination and cleanup removes it`, async () => {
+      platform.OS = os;
+      await renderShell();
+      const scrollSearch = mock.fn();
+      const scrollProfile = mock.fn();
+      const unregister = shellChromeProps!.registerTabReselection!('search', scrollSearch);
+      shellChromeProps!.registerTabReselection!('profile', scrollProfile);
+      shellChromeProps!.reselectTab!('search');
+      assert.equal(scrollSearch.mock.callCount(), 1);
+      assert.equal(scrollProfile.mock.callCount(), 0);
+      unregister();
+      shellChromeProps!.reselectTab!('search');
+      assert.equal(scrollSearch.mock.callCount(), 1);
+    });
+  }
+});

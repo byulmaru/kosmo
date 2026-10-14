@@ -86,7 +86,7 @@ export default function LocalScreen() {
   }, [refresh]);
 
   useEffect(() => {
-    if (Platform.OS !== 'web' || !registerHomeReselection) {
+    if (!registerHomeReselection) {
       return;
     }
 
