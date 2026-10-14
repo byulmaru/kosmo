@@ -26,15 +26,17 @@ describe('API Sentry configuration', () => {
     assert.equal(reportError(new Error('disabled reporting')), null);
 
     setMetadata({
-      ENVIRONMENT: 'production',
+      ENVIRONMENT: 'prod',
       EXPO_PUBLIC_SENTRY_DSN: 'https://public@example.invalid/1',
       SENTRY_RELEASE: 'kosmo@abc123',
     });
     await import(`${sentryModule}?enabled`);
 
     const options = Sentry.getClient()?.getOptions();
-    assert.equal(options?.environment, 'production');
+    assert.equal(options?.environment, 'prod');
     assert.equal(options?.release, 'kosmo@abc123');
+    assert.equal(options?.tracesSampleRate, 0.1);
+    assert.ok(options?.integrations?.some((integration) => integration.name === 'PostgresJs'));
     assert.deepEqual(options?.initialScope, { tags: { runtime: 'api' } });
     assert.equal(options?.beforeSend, undefined);
     assert.equal(options?.beforeBreadcrumb?.({ category: 'test' }, {}), null);
@@ -49,6 +51,9 @@ describe('API Sentry configuration', () => {
       SENTRY_RELEASE: 'kosmo@test',
     });
     const { reportError } = await import(`${sentryModule}?report-error`);
+    const options = Sentry.getClient()?.getOptions();
+    assert.equal(options?.tracesSampleRate, undefined);
+    assert.ok(!options?.integrations?.some((integration) => integration.name === 'PostgresJs'));
     const transport = Sentry.getClient()?.getTransport();
     assert.ok(transport);
     const send = mock.method(transport, 'send', async () => ({ statusCode: 200 }));
