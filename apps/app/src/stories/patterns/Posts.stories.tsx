@@ -6707,6 +6707,18 @@ export const ContentWarningCardPressableFeedbackInteraction: Story = {
     const restingCardColor = getComputedStyle(feedback).backgroundColor;
     const restingWarningColor = getComputedStyle(warning).backgroundColor;
 
+    await pointerUser.pointer({ keys: '[MouseLeft>]', target: warning });
+    await pointerUser.pointer({ target: document.body });
+    await pointerUser.pointer({ keys: '[/MouseLeft]', target: document.body });
+    expect(warning).toHaveAttribute('aria-expanded', 'false');
+    expect(
+      within(listSurface).queryByText(contentWarningPost.content!.bodyText),
+    ).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(getComputedStyle(feedback).backgroundColor).toBe(restingCardColor);
+      expect(getComputedStyle(warning).backgroundColor).toBe(restingWarningColor);
+    });
+
     await userEvent.hover(warning);
     expect(getComputedStyle(warning).backgroundColor).not.toBe(restingWarningColor);
 
