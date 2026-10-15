@@ -38,10 +38,25 @@ const handlers: NativeScrollProps = {
   scrollEventThrottle: 16,
 };
 let renderer: ReactTestRenderer | null = null;
+const platform = { OS: 'ios' };
+let reselect: (() => void) | undefined;
+let scrollCalls: unknown[] = [];
+mock.module(new URL('../shell/ShellChromeContext.tsx', import.meta.url), {
+  exports: {
+    useShellChrome: () => ({
+      registerTabReselection: (_destination: string, handler: () => void) => {
+        reselect = handler;
+        return () => {
+          reselect = undefined;
+        };
+      },
+    }),
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
 
 mock.module('react-native', {
   exports: {
-    Platform: { OS: 'ios' },
+    Platform: platform,
     ScrollView: 'ScrollView',
   },
 } as unknown as Parameters<typeof mock.module>[1]);
@@ -224,3 +239,27 @@ describe('PaginationScrollView', () => {
     assert.equal(scrollOffset, 24);
   });
 });
+
+for (const os of ['ios', 'android']) {
+  it(`${os} reselection scrolls the outer container and unregisters on unmount`, async () => {
+    platform.OS = os;
+    scrollCalls = [];
+    await act(async () => {
+      renderer = create(
+        createElement(PaginationScrollView, {
+          reselectDestination: 'profile',
+        } as never),
+        {
+          createNodeMock: () => ({ scrollTo: (options: unknown) => scrollCalls.push(options) }),
+        },
+      );
+    });
+    assert.ok(reselect);
+    reselect();
+    assert.deepEqual(scrollCalls, [{ animated: true, y: 0 }]);
+    await act(async () => renderer?.unmount());
+    renderer = null;
+    assert.equal(reselect, undefined);
+    platform.OS = 'ios';
+  });
+}

@@ -27,8 +27,9 @@ relationship 금지 규칙에 다음 한정 예외를 둔다.
 - `data jsonb`는 kind별 최소 추가 데이터만 저장한다. 범용 payload framework나 GIN index를 선제 추가하지
   않으며 Follow는 `{}`를 사용하고 Profile ID·이름·handle snapshot을 복제하지 않는다. Operational은 제목,
   선택 본문, 목적지 링크만 저장하고 actor snapshot이나 원인 객체를 추가하지 않는다.
-- loose source가 없어지거나 Related Profile을 Recipient 기준으로 조회할 수 없으면 API는 해당 item을 목록,
-  count, Node와 Read에서 숨긴다. 장기 비동기 물리 정리는 별도 capability가 소유한다.
+- Notification API는 저장 행이 존재하는 동안 Recipient 권한에 따라 목록, count, Node와 Read에서 해당 item을
+  조회한다. Related Post/Profile과 source 필드는 현재 요청의 일반 객체 조회 권한을 적용하며 원본 접근을 우회하지 않는다.
+  기존 source 가용성 기반 정리와 물리 삭제 시점은 이 API 접근 규칙과 별도이며, 삭제 뒤까지 Notification 보존을 보장하지 않는다.
 - 이 예외를 다른 domain relationship의 generic polymorphic association 근거로 확장하지 않는다.
 - Recipient는 Profile 또는 Account 중 정확히 하나다. `recipient_profile_id`와
   `recipient_account_id`는 각 소유 테이블을 참조하며, DB CHECK는 두 컬럼 중 정확히 하나만 값이 있도록 한다.

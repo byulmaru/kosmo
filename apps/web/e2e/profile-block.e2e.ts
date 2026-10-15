@@ -501,11 +501,14 @@ for (const targetKind of ['Local', 'Remote'] as const) {
       expect(after.hashtag.relatedProfiles.edges).toContainEqual({
         node: { id: toGlobalId('Profile', control.id) },
       });
-      expect(after.notification).toBeNull();
-      expect(after.viewer.notifications.edges).toEqual([
-        { node: { id: toGlobalId('ReactionNotification', actor.visible.id) } },
-      ]);
-      expect(after.viewer.unreadNotificationCount).toBe(1);
+      expect(after.notification?.id).toBe(toGlobalId('ReactionNotification', actor.hidden.id));
+      expect(after.viewer.notifications.edges.map(({ node }) => node.id).sort()).toEqual(
+        [
+          toGlobalId('ReactionNotification', actor.hidden.id),
+          toGlobalId('ReactionNotification', actor.visible.id),
+        ].sort(),
+      );
+      expect(after.viewer.unreadNotificationCount).toBe(2);
       const marked = await requestGraphQL<{
         markNotificationRead: { notifications: { id: string }[] };
       }>(
@@ -514,10 +517,18 @@ for (const targetKind of ['Local', 'Remote'] as const) {
         'mutation ReadHiddenBlockNotification($id: ID!) { markNotificationRead(input: { ids: [$id] }) { notifications { id } } }',
         { id: toGlobalId('ReactionNotification', actor.hidden.id) },
       );
-      expect(marked.markNotificationRead.notifications).toEqual([]);
-      expect(
-        await db.select().from(Notifications).where(eq(Notifications.id, actor.hidden.id)),
-      ).toEqual([actor.hidden]);
+      expect(marked.markNotificationRead.notifications).toEqual([
+        { id: toGlobalId('ReactionNotification', actor.hidden.id) },
+      ]);
+      const [readNotification] = await db
+        .select()
+        .from(Notifications)
+        .where(eq(Notifications.id, actor.hidden.id));
+      expect(readNotification).toMatchObject({
+        ...actor.hidden,
+        readAt: expect.anything(),
+      });
+      expect((await readPolicy(actor)).viewer.unreadNotificationCount).toBe(1);
       const stateBefore = {
         follows: await db.$count(ProfileFollows),
         requests: await db.$count(ProfileFollowRequests),

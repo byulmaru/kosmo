@@ -40,16 +40,16 @@ Notification은 도메인 활동의 결과 또는 운영 안내를 Recipient Pro
 
 ## 관계
 
-| 관계                        | 대상                                            | 방향                                | cardinality | 존재 조건                                                       | 조회 조건        | 조회 권한                |
-| --------------------------- | ----------------------------------------------- | ----------------------------------- | ----------- | --------------------------------------------------------------- | ---------------- | ------------------------ |
-| Recipient Profile           | [Profile](./profile.md)                         | Notification -> Profile             | 1 -> 1      | Type이 Operational이 아님                                       | Recipient만 조회 | `Notification.Recipient` |
-| Recipient Account           | [Account](./account.md)                         | Notification -> Account             | 1 -> 1      | Type이 Operational                                              | Recipient만 조회 | `Notification.Recipient` |
-| Related Post                | [Post](./post.md)                               | Notification -> Post                | 1 -> 0..1   | Mention/Reply/Reaction/Repost/Quote/Followee Post               | Recipient만 조회 | `Notification.Recipient` |
-| Related Profile             | [Profile](./profile.md)                         | Notification -> Profile             | 1 -> 0..1   | Operational을 제외한 Type                                       | Recipient만 조회 | `Notification.Recipient` |
-| Source Reaction             | [Reaction](./reaction.md)                       | Notification -> Reaction            | 1 -> 0..1   | Type이 Reaction                                                 | Recipient만 조회 | `Notification.Recipient` |
-| Source Repost               | [Post](./post.md)                               | Notification -> Post                | 1 -> 0..1   | Type이 Repost, Content와 Reply Parent 없이 Repost Source가 있음 | Recipient만 조회 | `Notification.Recipient` |
-| Related Follow Request      | [Follow Request](./follow-request.md)           | Notification -> Follow Request      | 1 -> 0..1   | Type이 Follow Request                                           | Recipient만 조회 | `Notification.Recipient` |
-| Related Follow Relationship | [Follow Relationship](./follow-relationship.md) | Notification -> Follow Relationship | 1 -> 0..1   | Type이 Follow 또는 Followee Post                                | Recipient만 조회 | `Notification.Recipient` |
+| 관계                        | 대상                                            | 방향                                | cardinality | 존재 조건                                                       | 조회 조건        | 조회 권한                                            |
+| --------------------------- | ----------------------------------------------- | ----------------------------------- | ----------- | --------------------------------------------------------------- | ---------------- | ---------------------------------------------------- |
+| Recipient Profile           | [Profile](./profile.md)                         | Notification -> Profile             | 1 -> 1      | Type이 Operational이 아님                                       | Recipient만 조회 | `Notification.Recipient`                             |
+| Recipient Account           | [Account](./account.md)                         | Notification -> Account             | 1 -> 1      | Type이 Operational                                              | Recipient만 조회 | `Notification.Recipient`                             |
+| Related Post                | [Post](./post.md)                               | Notification -> Post                | 1 -> 0..1   | Mention/Reply/Reaction/Repost/Quote/Followee Post               | Recipient만 조회 | `Notification.Recipient`, 대상 객체의 일반 조회 권한 |
+| Related Profile             | [Profile](./profile.md)                         | Notification -> Profile             | 1 -> 0..1   | Operational을 제외한 Type                                       | Recipient만 조회 | `Notification.Recipient`, 대상 객체의 일반 조회 권한 |
+| Source Reaction             | [Reaction](./reaction.md)                       | Notification -> Reaction            | 1 -> 0..1   | Type이 Reaction                                                 | Recipient만 조회 | `Notification.Recipient`, 대상 객체의 일반 조회 권한 |
+| Source Repost               | [Post](./post.md)                               | Notification -> Post                | 1 -> 0..1   | Type이 Repost, Content와 Reply Parent 없이 Repost Source가 있음 | Recipient만 조회 | `Notification.Recipient`, 대상 객체의 일반 조회 권한 |
+| Related Follow Request      | [Follow Request](./follow-request.md)           | Notification -> Follow Request      | 1 -> 0..1   | Type이 Follow Request                                           | Recipient만 조회 | `Notification.Recipient`, 대상 객체의 일반 조회 권한 |
+| Related Follow Relationship | [Follow Relationship](./follow-relationship.md) | Notification -> Follow Relationship | 1 -> 0..1   | Type이 Follow 또는 Followee Post                                | Recipient만 조회 | `Notification.Recipient`, 대상 객체의 일반 조회 권한 |
 
 Notification은 Recipient Profile과 Recipient Account 중 정확히 하나를 가진다.
 Operational Notification은 Related Post·Related Profile이나 별도의 원인 객체 관계를 갖지 않으며,
@@ -167,22 +167,11 @@ Recipient Profile은 Related Post의 direct Repost Source Author Profile이다. 
 - Follow Request Notification은 Related Follow Request가 존재하는 동안만 유지한다.
 - Follow Request가 승인, 거절 또는 취소되면 대응하는 Follow Request Notification을 제거한다.
 - Follow Request 또는 Follow Relationship이 제거되면 이를 직접 원인으로 가진 Notification도 제거한다.
-- Recipient Profile 자체를 조회할 수 없거나 필수 원인 관계가 없거나 그 관계의 Recipient가 Notification의
-  Recipient와 일치하지 않거나 Recipient Profile 기준으로 Related Post 또는 Related Profile을 더 이상 조회할 수
-  없는 Notification은 목록, Unread count, Node 조회와 읽음 처리에서 존재하지 않는 것으로 취급한다.
-- Recipient Profile과 Related Profile 사이에 Profile Block이 있으면 양쪽 방향의 pair 정책으로 해당 Notification을
-  목록, Unread count, Node 조회와 읽음 처리에서 숨긴다. 이 정책은 Recipient가 Related Post를 직접 조회할 수 있는
-  방향의 Post·Media 정책과 독립적으로 적용한다.
-- 필수 원인 관계가 없거나 Recipient와 일치하지 않거나 Related Post/Profile을 Recipient 기준으로 조회할 수 없게
-  된 Notification은 비동기적으로 제거한다. 제거 전까지 저장 행과 Read State가 남을 수 있으며, 현재
-  delivery는 모든 API 표면에서 숨기는 것으로 이 간격을 격리한다.
-- Recipient Profile 자체가 일시적으로 조회 불가인 경우에도 item은 숨기되, 복구 가능한 Recipient Profile의
-  일시 비활성화·정지만으로는 Notification을 비동기 제거하지 않는다.
-- Mute가 나중에 생성되어도 기존 Notification의 존재와 Read State는 바꾸지 않는다. Profile Block transaction은 새 Profile Block
-  관계를 만드는 경우에만 같은 transaction에서 제거한 Follow 객체를 직접 원인으로 가진 Notification을 제거하고, 그 밖에 pair 정책
-  또는 Related Post/Profile 조회 조건을 충족하지 않는 item은 위 숨김·비동기 제거 정책을 따른다. 이미 Profile Block 관계가 존재한 뒤
-  동시성이나 후속 경로로 뒤늦게 관찰되는 item은 Active Block pair 정책으로 숨기며, duplicate Block 관찰이나 Unblock의 보상 cleanup으로
-  처리하지 않는다. commit 뒤 별도 effect의 성공·실패는 이미 성공한 Profile Block 관계와 그 transaction 결과를 바꾸지 않는다.
+- Notification Node, 목록, Unread count와 읽음 처리는 저장 행의 Recipient 권한을 기준으로 한다. Related Post/Profile의 현재 조회 가능성은 저장 행을 숨기지 않는다. Related Post/Profile과 source 필드는 각각 현재 요청의 일반 객체 조회 권한을 적용하며, 조회할 수 없으면 null 또는 unavailable로 반환한다. Recipient 권한으로 원본 객체 접근을 우회하지 않는다.
+- 원인 Follow 관계, Follow Request, Reaction 또는 Post를 조회할 수 없다는 이유만으로 같은 Notification의 독립적으로 조회할 수 있는 Related Profile/Post를 숨기지 않는다. Follow Request와 Reaction 원본 필드는 각 원본 객체의 조회 권한을 따른다.
+- 필수 원인 관계 결손·Recipient 불일치·Related Post/Profile 비가용에 따른 기존 비동기 정리 정책은 유지한다. 정리 전까지 행이 존재하면 Recipient는 해당 Notification 행을 조회할 수 있으며, 정리 뒤까지 보존하는 계약은 아니다.
+- Profile Block pair 정책은 Related Post/Profile과 그 필드의 기존 접근 조건에 적용한다. Profile Block transaction은 새 Profile Block 관계를 만들면서 함께 제거한 Follow 객체를 직접 원인으로 가진 Notification을 같은 transaction에서 제거한다. 다른 Notification 행은 source 조회 불가만으로 API에서 숨기지 않으며 기존 비동기 정리 정책은 유지한다. duplicate Block 관찰이나 Unblock의 보상 cleanup으로 확장하지 않는다. commit 뒤 별도 effect의 성공·실패는 이미 성공한 Profile Block 관계와 그 transaction 결과를 바꾸지 않는다.
+- Mute가 나중에 생성되어도 기존 Notification의 존재와 Read State는 바꾸지 않는다.
 
 ### Quote Notification
 
@@ -192,8 +181,8 @@ Recipient Profile은 Related Post의 direct Repost Source Author Profile이다. 
 - Quote Author와 Recipient가 같은 Profile이면 생성하지 않는다. 같은 Account에 속한 서로 다른 Profile의
   인용은 일반 인용으로 취급한다.
 - Recipient가 Quote와 direct Repost Source를 각각 조회할 수 있어야 새 Quote Notification을 생성한다.
-  둘 중 하나라도 더 이상 조회할 수 없으면 목록, Unread count, Node 조회와 읽음 처리에서 없는 것으로 취급한다.
-  Source를 조회할 수 없어도 Quote 자체를 조회할 수 있다는 Post 정책은 바꾸지 않는다.
+  저장된 Notification 행의 조회는 Recipient 권한을 따른다. Related Post와 direct Source 필드는 현재 요청의 일반 Post 조회
+  권한을 적용하며, 조회할 수 없어도 행이나 다른 접근 가능한 Post의 정책을 바꾸지 않는다.
 - 같은 Quote Post가 같은 Recipient Profile에게 Reply, Mention, Quote Notification을 발생시키면 각 Type의
   생성·Mute 조건을 먼저 적용하고, 최초 선택에서 남은 후보 중 Reply, Mention, Quote 순서로 한 건만 제공한다.
   이 우선순위는 독립적인 비동기 처리의 도착 순서와 무관하게 적용하며 Recipient가 서로 다르면 각각 판정한다.
@@ -215,15 +204,14 @@ Recipient Profile은 Related Post의 direct Repost Source Author Profile이다. 
   Remote Source의 승인 대기 중이거나 거절된 상태에서는 Quote Notification을 생성하지 않는다.
 - 최초 생성 판단에서 Mute·조회 권한 때문에 억제된 Quote는 나중에 조건이 풀려도 소급 생성하지 않는다.
   기능 도입 전의 Quote에도 소급 알림을 만들지 않는다. 이 정책이 적용되는 Remote Quote의 최초 승인 시점은
-  생성 판단 시점으로 인정하며, 이미 저장된 알림의 일시적인 숨김 해제와 구분한다.
-- Block·공개 범위 변경 등으로 Quote 또는 direct Source를 현재 조회할 수 없으면 목록, Unread count,
-  Node 조회와 읽음 처리에서 즉시 숨긴다. 이후에는 기존 unavailable Notification 정책에 따라
-  Best Effort로 비동기 정리할 수 있으며 삭제 시점과 성공은 보장하지 않는다.
-- 비동기 삭제 전에 조회 제한이 풀리고 다른 조회 조건도 충족하면 남아 있는 Notification이 다시 보일 수 있다.
-  이를 위한 Notification, Read State, 최초 읽음 시각의 보존이나 이후 복원은 보장하지 않는다.
-- 승인 철회·Quote 삭제·direct Source 삭제 등 확정적인 무효 사유도 즉시 숨김과 기존 unavailable
-  Notification의 Best Effort 비동기 정리 정책을 따른다. 물리 정리 뒤에도 같은 Quote의 재처리·재승인으로
-  새 알림을 만들거나 삭제된 알림을 복원하지 않는다.
+  생성 판단 시점으로 인정한다. 저장된 Notification의 Quote/source 필드가 다시 조회 가능해지는 것은 새 알림 생성과 구분한다.
+- Block·공개 범위 변경 등으로 Quote 또는 direct Source를 현재 조회할 수 없어도 저장된 Notification 행은 Recipient
+  권한으로 조회한다. Related Post와 source 필드는 현재 요청의 일반 Post 조회 권한을 적용해 null/unavailable이 될 수 있다.
+  기존 unavailable Notification 정책에 따른 Best Effort 비동기 정리와 삭제 시점·성공의 비보장은 유지한다.
+- 비동기 정리 전에 조회 제한이 풀리면 저장된 행의 Quote/source 필드가 다시 조회 가능해질 수 있다. 이때 Notification ID,
+  Read State와 최초 읽음 시각은 유지된다. 물리 정리 뒤 보존이나 복원을 보장하는 계약은 아니다.
+- 승인 철회·Quote 삭제·direct Source 삭제 등 기존 정리 조건은 유지한다. 정리 전에는 Recipient가 저장 행을 조회할 수 있으며,
+  물리 정리 뒤에는 같은 Quote의 재처리·재승인으로 새 알림을 만들거나 삭제된 알림을 복원하지 않는다.
 - Quote 전용 보존 예외는 두지 않는다. Recipient 자체의 일시 비활성화·정지만으로 제거하지 않는 공통
   정책은 그대로 적용하며, 이를 Quote나 direct Source 조회 불가 전반의 보존 보장으로 확대하지 않는다.
 

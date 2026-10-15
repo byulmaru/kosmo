@@ -1,0 +1,66 @@
+diff --git a/build/fork/useLinking.js b/build/fork/useLinking.js
+index 6911c31922fd72621bfaa46c47b83274216a4744..f8df3ff4fc25da6aa7fa45fecc17d2e1a0e0ea06 100644
+--- a/build/fork/useLinking.js
++++ b/build/fork/useLinking.js
+@@ -10,6 +10,7 @@ const fast_deep_equal_1 = __importDefault(require("fast-deep-equal"));
+ const react_1 = require("react");
+ const createMemoryHistory_1 = require("./createMemoryHistory");
+ const getPathFromState_1 = require("./getPathFromState");
++const constants_1 = require("../constants");
+ const serverLocationContext_1 = require("../global-state/serverLocationContext");
+ const storeContext_1 = require("../global-state/storeContext");
+ const utils_1 = require("../global-state/utils");
+@@ -54,6 +55,28 @@ const series = (cb) => {
+     return callback;
+ };
+ exports.series = series;
++const hasUnreadyLayoutState = (state, config, routeTree) => {
++    if (!state?.routes?.length || !config?.screens) {
++        return false;
++    }
++    const index = state.index ?? state.routes.length - 1;
++    const route = state.routes[index];
++    const routeConfig = route && config.screens[route.name];
++    const routeNode = route?.name === constants_1.INTERNAL_SLOT_NAME
++        ? routeTree
++        : routeTree?.children?.find((child) => child.route === route?.name);
++    const screens = routeConfig && typeof routeConfig === 'object' ? routeConfig.screens : undefined;
++    if (!route || !screens || Object.keys(screens).length === 0) {
++        return false;
++    }
++    const childState = route.state;
++    if (!childState?.routes?.length) {
++        const explicitScreen =
++            typeof route.params?.screen === 'string' && Object.hasOwn(screens, route.params.screen);
++        return routeNode?.type === 'layout' && !explicitScreen;
++    }
++    return hasUnreadyLayoutState(childState, routeConfig, routeNode);
++};
+ const linkingHandlers = [];
+ function useLinking(ref, { enabled = true, config, getStateFromPath = native_1.getStateFromPath, getPathFromState = native_1.getPathFromState, getActionFromState = native_1.getActionFromState, }, onUnhandledLinking) {
+     const independent = (0, native_1.useNavigationIndependentTree)();
+@@ -277,6 +300,11 @@ function useLinking(ref, { enabled = true, config, getStateFromPath = native_1.g
+             if (state) {
+                 const route = (0, native_1.findFocusedRoute)(state);
+                 const path = getPathForRoute(route, state);
++                if (hasUnreadyLayoutState(state, configRef.current, store.routeNode) &&
++                    !(route?.path && path === (0, getPathFromState_1.appendBaseUrl)(route.path))) {
++                    // Keep the loaded URL until its matching layout navigator can serialize its child route.
++                    return;
++                }
+                 if (previousStateRef.current === undefined) {
+                     // START FORK
+                     // previousStateRef.current = state;
+@@ -305,6 +333,12 @@ function useLinking(ref, { enabled = true, config, getStateFromPath = native_1.g
+             const pendingPath = pendingPopStatePathRef.current;
+             const route = (0, native_1.findFocusedRoute)(state);
+             const path = getPathForRoute(route, state);
++            if (hasUnreadyLayoutState(state, configRef.current, store.routeNode) &&
++                !(route?.path && path === (0, getPathFromState_1.appendBaseUrl)(route.path))) {
++                // Do not consume the state transition; once the child route mounts, classify the
++                // complete navigation against the last state that could be serialized safely.
++                return;
++            }
+             // START FORK
+             // previousStateRef.current = state;
+             previousStateRef.current = rootState;

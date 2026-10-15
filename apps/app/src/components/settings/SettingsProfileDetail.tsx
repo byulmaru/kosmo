@@ -2,15 +2,18 @@ import { PostVisibility } from '@kosmo/core/enums';
 import { useState } from 'react';
 import { StyleSheet, Text } from 'react-native';
 import { graphql, useLazyLoadQuery, useMutation } from 'react-relay';
+import { deleteSelectedProfile, writeSelectedProfile } from '@/auth/selectedProfileStorage';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
+import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { textStyles } from '@/theme/tokens';
 import { resolveProfileDefaultVisibility } from '../profile/profileDefaultPostVisibilityState';
 import { ProfilePostingSettings } from './ProfilePostingSettings';
 import { ProfileSettingsScreen } from './ProfileSettingsScreen';
+import type { SettingsProfileDetailDeleteProfileMutation } from './__generated__/SettingsProfileDetailDeleteProfileMutation.graphql';
 import type { SettingsProfileDetailQuery } from './__generated__/SettingsProfileDetailQuery.graphql';
 import type { SettingsProfileDetailUpdateProfileMutation } from './__generated__/SettingsProfileDetailUpdateProfileMutation.graphql';
 import type { ProfilePostingSettingsValue } from './ProfilePostingSettings';
@@ -47,6 +50,20 @@ const updateProfileMutation = graphql`
         followPolicy
         private {
           defaultPostVisibility
+        }
+      }
+    }
+  }
+`;
+
+const deleteProfileMutation = graphql`
+  mutation SettingsProfileDetailDeleteProfileMutation($input: DeleteProfileInput!) {
+    deleteProfile(input: $input) {
+      success
+      profileId
+      account {
+        profiles {
+          id
         }
       }
     }
@@ -153,10 +170,14 @@ function SettingsProfileEditor({
   const baseline = getPostingSettings(profile);
   const [pendingValue, setPendingValue] = useState<ProfilePostingSettingsValue | null>(null);
   const [saveState, setSaveState] = useState<'idle' | 'error'>('idle');
+  const [deletionPhase, setDeletionPhase] = useState<'entry' | 'idle' | 'error'>('entry');
+  const { resetCurrentActor } = useRelayActor();
   const [commit, isInFlight] =
     useMutation<SettingsProfileDetailUpdateProfileMutation>(updateProfileMutation);
+  const [commitDeleteProfile, isDeleteInFlight] =
+    useMutation<SettingsProfileDetailDeleteProfileMutation>(deleteProfileMutation);
   const value = editable ? (pendingValue ?? baseline) : baseline;
-  const saving = isInFlight;
+  const saving = isInFlight || isDeleteInFlight;
 
   const handleChange = (nextValue: ProfilePostingSettingsValue) => {
     if (!editable || saving) {
@@ -186,6 +207,40 @@ function SettingsProfileEditor({
     });
   };
 
+  const confirmProfileDeletion = () => {
+    if (!editable || saving) {
+      return;
+    }
+
+    commitDeleteProfile({
+      onCompleted: (response) => {
+        const result = response?.deleteProfile;
+        if (result?.success !== true || result.profileId !== profile.id) {
+          setDeletionPhase('error');
+          return;
+        }
+
+        const [selectedProfileId, ...remainingFallbackProfileIds] = result.account.profiles.map(
+          ({ id }) => id,
+        );
+        if (!resetCurrentActor(selectedProfileId ?? null, remainingFallbackProfileIds)) {
+          setDeletionPhase('error');
+          return;
+        }
+
+        if (selectedProfileId) {
+          void writeSelectedProfile(selectedProfileId);
+        } else {
+          void deleteSelectedProfile().catch(() => undefined);
+        }
+      },
+      onError: () => {
+        setDeletionPhase('error');
+      },
+      variables: { input: { id: profile.id } },
+    });
+  };
+
   return (
     <ProfileSettingsScreen
       embedded
@@ -200,6 +255,24 @@ function SettingsProfileEditor({
             Profile 전환
           </Button>
         ) : null
+      }
+      deletion={
+        editable
+          ? {
+              phase: isDeleteInFlight ? 'pending' : deletionPhase,
+              onStart: () => {
+                if (!saving) {
+                  setDeletionPhase('idle');
+                }
+              },
+              onCancel: () => {
+                if (!saving) {
+                  setDeletionPhase('entry');
+                }
+              },
+              onConfirm: confirmProfileDeletion,
+            }
+          : undefined
       }
       profile={profile}
     >

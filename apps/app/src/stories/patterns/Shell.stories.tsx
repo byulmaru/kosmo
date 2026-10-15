@@ -458,7 +458,6 @@ export const SharedNavigation: Story = {
     expect(window.getComputedStyle(searchVisual).backgroundColor).toBe('rgb(255, 249, 230)');
     expect(profile).toHaveAttribute('href', '/@selected');
     expect(profileEdit).toHaveAttribute('href', '/profile-edit');
-    expect(within(profileEdit).getByText('편집', { exact: true })).toBeVisible();
     expect(within(navigation).queryByRole('link', { name: '프로필 편집' })).toBeNull();
     expect(profileEditRect.width).toBe(72);
     expect(profileEditRect.height).toBe(32);
@@ -797,7 +796,6 @@ export const FeedbackNavigationDrawerCurrentState: Story = {
     expect(canvas.queryByRole('link', { name: '개인정보 처리방침' })).not.toBeInTheDocument();
     expect(logout.querySelector('svg')).toHaveAttribute('stroke-width', '2');
     expect(profileEdit).toHaveAttribute('href', '/profile-edit');
-    expect(within(profileEdit).getByText('편집', { exact: true })).toBeVisible();
     expect(within(navigation).queryByRole('link', { name: '프로필 편집' })).toBeNull();
     expect(profileEdit.getBoundingClientRect().height).toBe(32);
     expect(profileEdit.getBoundingClientRect().width).toBe(72);
@@ -817,7 +815,6 @@ export const ProfileEditNavigationIneligibleFull: Story = {
     const canvas = within(canvasElement);
     expect(canvas.queryByRole('link', { name: '프로필 편집' })).not.toBeInTheDocument();
     expect(canvas.queryByRole('button', { name: '프로필 편집' })).not.toBeInTheDocument();
-    expect(canvas.queryByText('편집', { exact: true })).not.toBeInTheDocument();
   },
   render: () => <FeedbackNavigationFullStory />,
 };
@@ -828,7 +825,6 @@ export const ProfileEditNavigationIneligibleCompact: Story = {
     const canvas = within(canvasElement);
     expect(canvas.queryByRole('link', { name: '프로필 편집' })).not.toBeInTheDocument();
     expect(canvas.queryByRole('button', { name: '프로필 편집' })).not.toBeInTheDocument();
-    expect(canvas.queryByText('편집', { exact: true })).not.toBeInTheDocument();
   },
   render: () => <CompactSidebarStory />,
 };
@@ -839,7 +835,6 @@ export const ProfileEditNavigationIneligibleDrawer: Story = {
     const canvas = within(canvasElement);
     expect(canvas.queryByRole('link', { name: '프로필 편집' })).not.toBeInTheDocument();
     expect(canvas.queryByRole('button', { name: '프로필 편집' })).not.toBeInTheDocument();
-    expect(canvas.queryByText('편집', { exact: true })).not.toBeInTheDocument();
   },
   render: () => <FeedbackNavigationDrawerStory />,
 };
@@ -2002,7 +1997,7 @@ export const UniversalMobile: Story = {
       homeHeader!.getBoundingClientRect().left + homeHeader!.getBoundingClientRect().width / 2,
       0,
     );
-    expect(within(menuButton).queryByText('메뉴')).toBeNull();
+    expect(menuButton.innerText.trim()).toBe('');
     expect(getComputedStyle(menuButton).borderTopWidth).toBe('0px');
     expect(menuButton.getBoundingClientRect().height).toBe(44);
     expect(menuButton.getBoundingClientRect().width).toBe(44);

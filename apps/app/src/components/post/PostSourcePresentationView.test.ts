@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type {
   PostSourcePresentationView as PostSourcePresentationViewComponent,
@@ -16,13 +16,19 @@ const mockModule = (specifier: string | URL, exports: object) =>
     exports,
   } as unknown as Parameters<typeof mock.module>[1]);
 
+const platform = { OS: 'web' };
+
+function MockPressable({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) {
+  return createElement('Pressable', props, children);
+}
+
 mockModule('expo-router', {
   Link: ({ children }: { children?: unknown }) => children,
   useRouter: () => ({ push: () => undefined }),
 });
 mockModule('react-native', {
-  Platform: { OS: 'web' },
-  Pressable: 'Pressable',
+  Platform: platform,
+  Pressable: MockPressable,
   StyleSheet: { create: <T>(styles: T) => styles },
   Text: 'Text',
   View: 'View',
@@ -62,6 +68,7 @@ afterEach(async () => {
     await act(async () => renderer?.unmount());
     renderer = null;
   }
+  platform.OS = 'web';
   mock.restoreAll();
 });
 
@@ -97,12 +104,139 @@ describe('PostSourcePresentationView mention relation wiring', () => {
     assert.equal(contentRenderer?.props.interactive, false);
     assert.equal(contentRenderer?.props.mentionedProfiles, mentionedProfiles);
   });
+
+  it('uses a Pressable only for interactive Web hover feedback', async () => {
+    const source = postWithContent([]);
+
+    await render(createElement(PostSourcePreview, { source: source as never }));
+
+    let preview = findRenderedPreview();
+    assert.ok(preview);
+    assert.equal(preview.type as unknown, 'Pressable');
+    assert.equal(preview.props.accessible, false);
+    assert.equal(preview.props.focusable, false);
+    assert.equal(preview.props.tabIndex, -1);
+    assert.equal(preview.props.onPress, undefined);
+    assert.equal(flattenStyle(preview.props.style).backgroundColor, undefined);
+
+    const pointerEnter = async (pointerType: 'mouse' | 'pen' | 'touch') => {
+      const handler = findRenderedPreview()?.props.onPointerEnter as
+        | ((event: { nativeEvent: { pointerType: 'mouse' | 'pen' | 'touch' } }) => void)
+        | undefined;
+      assert.equal(typeof handler, 'function');
+      await act(async () => handler?.({ nativeEvent: { pointerType } }));
+    };
+    const pointerLeave = async (pointerType: 'mouse' | 'pen' | 'touch') => {
+      const handler = findRenderedPreview()?.props.onPointerLeave as
+        | ((event: { nativeEvent: { pointerType: 'mouse' | 'pen' | 'touch' } }) => void)
+        | undefined;
+      assert.equal(typeof handler, 'function');
+      await act(async () => handler?.({ nativeEvent: { pointerType } }));
+    };
+
+    await pointerEnter('mouse');
+    preview = findRenderedPreview();
+    assert.ok(preview);
+    assert.equal(flattenStyle(preview.props.style).backgroundColor, '#eee');
+
+    await pointerEnter('touch');
+    preview = findRenderedPreview();
+    assert.ok(preview);
+    assert.equal(flattenStyle(preview.props.style).backgroundColor, '#eee');
+
+    await pointerLeave('touch');
+    preview = findRenderedPreview();
+    assert.ok(preview);
+    assert.equal(flattenStyle(preview.props.style).backgroundColor, '#eee');
+
+    await pointerLeave('mouse');
+    preview = findRenderedPreview();
+    assert.ok(preview);
+    assert.equal(flattenStyle(preview.props.style).backgroundColor, undefined);
+
+    await pointerEnter('pen');
+    preview = findRenderedPreview();
+    assert.ok(preview);
+    assert.equal(flattenStyle(preview.props.style).backgroundColor, '#eee');
+
+    await pointerEnter('touch');
+    preview = findRenderedPreview();
+    assert.ok(preview);
+    assert.equal(flattenStyle(preview.props.style).backgroundColor, '#eee');
+
+    await pointerLeave('touch');
+    preview = findRenderedPreview();
+    assert.ok(preview);
+    assert.equal(flattenStyle(preview.props.style).backgroundColor, '#eee');
+
+    await pointerLeave('pen');
+    preview = findRenderedPreview();
+    assert.ok(preview);
+    assert.equal(flattenStyle(preview.props.style).backgroundColor, undefined);
+
+    await pointerEnter('touch');
+    preview = findRenderedPreview();
+    assert.ok(preview);
+    assert.equal(flattenStyle(preview.props.style).backgroundColor, undefined);
+
+    await pointerLeave('touch');
+    preview = findRenderedPreview();
+    assert.ok(preview);
+    assert.equal(flattenStyle(preview.props.style).backgroundColor, undefined);
+
+    await pointerEnter('mouse');
+    preview = findRenderedPreview();
+    assert.ok(preview);
+    assert.equal(flattenStyle(preview.props.style).backgroundColor, '#eee');
+
+    platform.OS = 'ios';
+    await update(createElement(PostSourcePreview, { source: source as never }));
+    preview = findRenderedPreview();
+    assert.ok(preview);
+    assert.equal(preview.type as unknown, 'View');
+    assert.equal(flattenStyle(preview.props.style).backgroundColor, undefined);
+
+    platform.OS = 'web';
+    await update(createElement(PostSourcePreview, { interactive: false, source: source as never }));
+    preview = findRenderedPreview();
+    assert.ok(preview);
+    assert.equal(preview.type as unknown, 'View');
+    assert.equal(flattenStyle(preview.props.style).backgroundColor, undefined);
+
+    await update(createElement(PostSourcePreview, { source: source as never }));
+    preview = findRenderedPreview();
+    assert.ok(preview);
+    assert.equal(preview.type as unknown, 'Pressable');
+    assert.equal(flattenStyle(preview.props.style).backgroundColor, undefined);
+  });
 });
 
 async function render(element: ReactElement) {
   await act(async () => {
     renderer = create(element);
   });
+}
+
+async function update(element: ReactElement) {
+  await act(async () => {
+    assert.ok(renderer);
+    renderer.update(element);
+  });
+}
+
+function findRenderedPreview() {
+  return renderer?.root.findAll(
+    (node) =>
+      ((node.type as unknown) === 'Pressable' || (node.type as unknown) === 'View') &&
+      node.props.testID === 'source-post-preview',
+  )[0];
+}
+
+function flattenStyle(style: unknown): Record<string, unknown> {
+  if (!Array.isArray(style)) {
+    return style && typeof style === 'object' ? (style as Record<string, unknown>) : {};
+  }
+  return Object.assign({}, ...style.flat(Infinity).filter(Boolean));
 }
 
 function mentionedProfile(id: string) {

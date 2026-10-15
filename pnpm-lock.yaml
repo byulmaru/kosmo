@@ -28,6 +28,7 @@ overrides:
 
 patchedDependencies:
   decode-uri-component@0.5.0: 98948870151581b58082ba6d11049564c999baeb94af582330a6d69f0f3ab9af
+  expo-router@56.2.13: 6c5c6091df103b816cc62815cf1f555ba3528f3cdd9428dae700a1441ea58531
 
 importers:
 
@@ -343,7 +344,7 @@ importers:
         version: 56.0.25(expo@56.0.14)(react-native@0.85.3(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.85.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.15)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1)(typescript@6.0.3)
       expo-router:
         specifier: ~56.2.13
-        version: 56.2.13(0044c500ae72a7a266735a0000e6ce6b)
+        version: 56.2.13(patch_hash=6c5c6091df103b816cc62815cf1f555ba3528f3cdd9428dae700a1441ea58531)(0044c500ae72a7a266735a0000e6ce6b)
       expo-secure-store:
         specifier: ~56.0.4
         version: 56.0.4(expo@56.0.14)
@@ -513,6 +514,9 @@ importers:
       hono:
         specifier: ^4.13.7
         version: 4.13.7
+      negotiator:
+        specifier: ^1.0.0
+        version: 1.0.0
       openid-client:
         specifier: 6.8.4
         version: 6.8.4
@@ -523,6 +527,9 @@ importers:
       '@playwright/test':
         specifier: ^1.60.0
         version: 1.60.0
+      '@types/negotiator':
+        specifier: ^0.6.5
+        version: 0.6.5
       temporal-polyfill:
         specifier: ^0.3.2
         version: 0.3.2
@@ -599,6 +606,9 @@ importers:
       jsdom:
         specifier: ^29.1.1
         version: 29.1.1
+      linkify-it:
+        specifier: 6.1.0
+        version: 6.1.0
       postgres:
         specifier: ^3.4.9
         version: 3.4.9
@@ -4143,6 +4153,9 @@ packages:
   '@types/ms@2.1.0':
     resolution: {integrity: sha512-GsCCIZDE/p3i96vtEqx+7dBUGXrc7zeSK3wwPHIaRThS+9OhWIXRqzs4d6k1SVU8g91DrNRWxWUGhp5KXQb2VA==}
 
+  '@types/negotiator@0.6.5':
+    resolution: {integrity: sha512-MPOlB48mfWhoUlynY0ga7CFsXIPcH6vGPkjzXMn2p+4PH1QUyn2KPtw0hrLLmO6SaX4zse3X6h2x/083vveAlA==}
+
   '@types/node@25.6.2':
     resolution: {integrity: sha512-sokuT28dxf9JT5Kady1fsXOvI4HVpjZa95NKT5y9PNTIrs2AsobR4GFAA90ZG8M+nxVRLysCXsVj6eGC7Vbrlw==}
 
@@ -6706,6 +6719,9 @@ packages:
   lines-and-columns@1.2.4:
     resolution: {integrity: sha512-7ylylesZQ/PV29jhEDl3Ufjo6ZX7gCqJr5F7PKrqc93v7fzSymt1BpwEU8nAUXs8qzzvqhbjhK5QZg6Mt/HkBg==}
 
+  linkify-it@6.1.0:
+    resolution: {integrity: sha512-wJ/TwpSDTLepCrQoYWYIExIKg5Zchex2Nn5yk2mFnB+6PtdkHtyLx742md9csRjjOnGkKIS/RrbY7l8D6gT9Vw==}
+
   lint-staged@16.4.0:
     resolution: {integrity: sha512-lBWt8hujh/Cjysw5GYVmZpFHXDCgZzhrOm8vbcUdobADZNOK/bRshr2kM3DfgrrtR1DQhfupW9gnIXOfiFi+bw==}
     engines: {node: '>=20.17'}
@@ -8537,6 +8553,9 @@ packages:
     resolution: {integrity: sha512-k24RCVWlEcjkdOxYmVJgeD/0a1TiSpqLg+ZalVGV9lsnr4yqu0w7tX/x2xX6G4zpkgQnRf89lxuZ1wsbjXM8lw==}
     hasBin: true
 
+  uc.micro@3.0.0:
+    resolution: {integrity: sha512-U3PppEkleoTnIfi8BozMx3yju3qc/L6SwqWo2Sw+54PX+PX0q9I+r1Um5HCmqD7n9VDX5/v3vQH/AjA6deDdtw==}
+
   unbox-primitive@1.1.0:
     resolution: {integrity: sha512-nWJ91DjeOkej/TA8pXQ3myruKpKEYgqvpw9lz4OPHj/NWFNluYrjbz9j01CJ8yKQd2g4jFoOkINCTW2I5LEEyw==}
     engines: {node: '>= 0.4'}
@@ -9883,7 +9902,7 @@ snapshots:
       ws: 8.21.0
       zod: 3.25.76
     optionalDependencies:
-      expo-router: 56.2.13(0044c500ae72a7a266735a0000e6ce6b)
+      expo-router: 56.2.13(patch_hash=6c5c6091df103b816cc62815cf1f555ba3528f3cdd9428dae700a1441ea58531)(0044c500ae72a7a266735a0000e6ce6b)
       react-native: 0.85.3(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.85.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.15)(react@19.2.3)(supports-color@8.1.1)
     transitivePeerDependencies:
       - '@expo/dom-webview'
@@ -10196,7 +10215,7 @@ snapshots:
       react: 19.2.3
     optionalDependencies:
       '@expo/metro-runtime': 56.0.16(@expo/log-box@56.0.14)(expo@56.0.14)(react-dom@19.2.3(react@19.2.3))(react-native@0.85.3(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.85.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.15)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)
-      expo-router: 56.2.13(0044c500ae72a7a266735a0000e6ce6b)
+      expo-router: 56.2.13(patch_hash=6c5c6091df103b816cc62815cf1f555ba3528f3cdd9428dae700a1441ea58531)(0044c500ae72a7a266735a0000e6ce6b)
       react-dom: 19.2.3(react@19.2.3)
     transitivePeerDependencies:
       - supports-color
@@ -12806,6 +12825,8 @@ snapshots:
 
   '@types/ms@2.1.0': {}
 
+  '@types/negotiator@0.6.5': {}
+
   '@types/node@25.6.2':
     dependencies:
       undici-types: 7.19.2
@@ -14560,7 +14581,7 @@ snapshots:
       - supports-color
       - typescript
 
-  expo-router@56.2.13(0044c500ae72a7a266735a0000e6ce6b):
+  expo-router@56.2.13(patch_hash=6c5c6091df103b816cc62815cf1f555ba3528f3cdd9428dae700a1441ea58531)(0044c500ae72a7a266735a0000e6ce6b):
     dependencies:
       '@expo/log-box': 56.0.14(@expo/dom-webview@56.0.6)(expo@56.0.14)(react-native@0.85.3(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.85.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.15)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)
       '@expo/metro-runtime': 56.0.16(@expo/log-box@56.0.14)(expo@56.0.14)(react-dom@19.2.3(react@19.2.3))(react-native@0.85.3(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.85.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.15)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)
@@ -15775,6 +15796,10 @@ snapshots:
   limiter@1.1.5: {}
 
   lines-and-columns@1.2.4: {}
+
+  linkify-it@6.1.0:
+    dependencies:
+      uc.micro: 3.0.0
 
   lint-staged@16.4.0:
     dependencies:
@@ -17831,6 +17856,8 @@ snapshots:
   typescript@6.0.3: {}
 
   ua-parser-js@1.0.39: {}
+
+  uc.micro@3.0.0: {}
 
   unbox-primitive@1.1.0:
     dependencies:

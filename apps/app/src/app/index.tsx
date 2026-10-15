@@ -120,14 +120,6 @@ export default function IndexScreen() {
           >
             동인 창작 문화 향유자를 위한 차세대 연합우주 SNS
           </Text>
-          <View style={styles.betaNotice}>
-            <Text style={[styles.description, { color: theme.textSecondary }]}>
-              KOSMO는 현재 오픈 베타로 운영 중이에요.
-            </Text>
-            <Text style={[styles.description, { color: theme.textSecondary }]}>
-              이용 중 오류가 발생하거나 기능과 화면이 변경될 수 있어요.
-            </Text>
-          </View>
           <View style={styles.action}>
             {Platform.OS === 'web' ? (
               <Link asChild href={'/login' as Href}>
@@ -183,10 +175,8 @@ const styles = StyleSheet.create({
     gap: space[16],
     maxWidth: 620,
   },
-  betaNotice: { gap: spacing.xs },
   accountNotice: { gap: spacing.xs },
   title: { fontFamily: fontFamilies.ui, fontSize: 30, fontWeight: '700', lineHeight: 36 },
-  description: { fontFamily: fontFamilies.ui, ...typography.md },
   action: { alignItems: 'flex-start', gap: spacing.sm },
   startButton: { borderRadius: radii.sm, height: 48, width: 200 },
   hint: { fontFamily: fontFamilies.ui, ...typography.xsm },

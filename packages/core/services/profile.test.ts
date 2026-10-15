@@ -19,6 +19,7 @@ import {
   ProfileState,
   SessionState,
 } from '../enums';
+import { NotFoundError } from '../error';
 import { disableProfile } from './profile';
 import { followProfile } from './profile-follow.test-helpers';
 
@@ -47,6 +48,7 @@ test('disableProfile은 profile lifecycle과 active session 정리를 소유한�
   const profile = await createProfile(suffix);
   const followee = await createProfile(`${suffix}-followee`);
   const follower = await createProfile(`${suffix}-follower`);
+  const suspended = await createProfile(`${suffix}-suspended`);
   const account = await db
     .insert(Accounts)
     .values({ displayName: suffix, oidcSubject: suffix, state: AccountState.ACTIVE })
@@ -78,7 +80,7 @@ test('disableProfile은 profile lifecycle과 active session 정리를 소유한�
     }
     await db.update(Profiles).set({ followersCount: 0 }).where(eq(Profiles.id, followee.id));
 
-    await disableProfile(profile.id);
+    await Promise.all([disableProfile(profile.id), disableProfile(profile.id)]);
 
     const disabled = await db
       .select()
@@ -126,6 +128,32 @@ test('disableProfile은 profile lifecycle과 active session 정리를 소유한�
       followerProfileId: followee.id,
       followeeProfileId: follower.id,
     });
+    await disableProfile(profile.id);
+    assert.equal(
+      await db
+        .select()
+        .from(Profiles)
+        .where(eq(Profiles.id, followee.id))
+        .then(firstOrThrow)
+        .then(({ followersCount }) => followersCount),
+      1,
+    );
+    assert.equal(
+      await db
+        .select()
+        .from(Profiles)
+        .where(eq(Profiles.id, follower.id))
+        .then(firstOrThrow)
+        .then(({ followingCount }) => followingCount),
+      1,
+    );
+
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.SUSPENDED })
+      .where(eq(Profiles.id, suspended.id));
+    await assert.rejects(disableProfile(suspended.id), NotFoundError);
+    await assert.rejects(disableProfile(crypto.randomUUID()), NotFoundError);
     await pg`create sequence profile_disable_attempts`;
     await pg`
       create function delay_profile_disable() returns trigger
@@ -186,7 +214,9 @@ test('disableProfile은 profile lifecycle과 active session 정리를 소유한�
   } finally {
     await db.delete(Sessions).where(eq(Sessions.id, session.id));
     await db.delete(Accounts).where(eq(Accounts.id, account.id));
-    await db.delete(Profiles).where(inArray(Profiles.id, [profile.id, followee.id, follower.id]));
+    await db
+      .delete(Profiles)
+      .where(inArray(Profiles.id, [profile.id, followee.id, follower.id, suspended.id]));
     await db.delete(Instances).where(eq(Instances.id, instance.id));
   }
 });

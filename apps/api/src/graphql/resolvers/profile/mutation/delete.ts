@@ -1,22 +1,24 @@
 import { AccountProfiles, db, firstOrThrowWith, Instances, Profiles } from '@kosmo/core/db';
-import { AccountProfileRole } from '@kosmo/core/enums';
+import { AccountProfileRole, InstanceState, ProfileState } from '@kosmo/core/enums';
 import { NotFoundError, PermissionDeniedError } from '@kosmo/core/error';
 import { disableProfile } from '@kosmo/core/services';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray, ne } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
-import { visibleProfileWhere } from '@/profile/visibility';
+import { Account } from '@/graphql/resolvers/account';
 import { Profile } from '../ref';
 
 builder.mutationField('deleteProfile', (t) =>
   t.withAuth({ login: true }).fieldWithInput({
     type: builder.simpleObject('DeleteProfilePayload', {
       fields: (field) => ({
+        account: field.field({ type: Account }),
         profileId: field.globalID({
           resolve: (payload) => ({
             id: (payload as { profileId: string }).profileId,
             type: Profile,
           }),
         }),
+        success: field.boolean(),
       }),
     }),
     input: {
@@ -32,7 +34,8 @@ builder.mutationField('deleteProfile', (t) =>
           and(
             eq(Profiles.id, input.id.id),
             eq(AccountProfiles.accountId, ctx.session.accountId),
-            visibleProfileWhere({ profile: Profiles, instance: Instances }),
+            inArray(Profiles.state, [ProfileState.ACTIVE, ProfileState.DISABLED]),
+            ne(Instances.state, InstanceState.SUSPENDED),
           ),
         )
         .limit(1)
@@ -44,7 +47,11 @@ builder.mutationField('deleteProfile', (t) =>
 
       await disableProfile(input.id.id, db);
 
-      return { profileId: profile.id };
+      return {
+        account: ctx.session.accountId,
+        profileId: profile.id,
+        success: true,
+      };
     },
   }),
 );

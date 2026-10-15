@@ -300,7 +300,7 @@ export function followNotification({
 }: {
   createdAt?: string;
   id?: string;
-  profile?: StoryProfile;
+  profile?: StoryProfile | null;
   readAt?: string | null;
 } = {}) {
   return {
@@ -313,19 +313,25 @@ export function followNotification({
 }
 
 export function followRequestNotification({
-  createdAt = Temporal.Now.instant().subtract({ minutes: 4 }).toString(),
   id = 'notification-follow-request-1',
+  followRequest: relatedRequest = {
+    __typename: 'ProfileFollowRequest' as const,
+    id: `profile-follow-request-${id}`,
+  },
+  createdAt = Temporal.Now.instant().subtract({ minutes: 4 }).toString(),
   profile: relatedProfile = profile(),
   readAt = null,
 }: {
   createdAt?: string;
+  followRequest?: { __typename: 'ProfileFollowRequest'; id: string } | null;
   id?: string;
-  profile?: StoryProfile;
+  profile?: StoryProfile | null;
   readAt?: string | null;
 } = {}) {
   return {
     __typename: 'FollowRequestNotification' as const,
     createdAt,
+    followRequest: relatedRequest,
     id,
     profile: relatedProfile,
     readAt,
@@ -342,8 +348,8 @@ export function reactionNotification({
 }: {
   createdAt?: string;
   id?: string;
-  post?: StoryPost;
-  profile?: StoryProfile;
+  post?: StoryPost | null;
+  profile?: StoryProfile | null;
   readAt?: string | null;
   type?: string;
 } = {}) {
@@ -367,8 +373,8 @@ export function replyNotification({
 }: {
   createdAt?: string;
   id?: string;
-  post?: StoryPost;
-  profile?: StoryProfile;
+  post?: StoryPost | null;
+  profile?: StoryProfile | null;
   readAt?: string | null;
 } = {}) {
   return {
@@ -410,8 +416,8 @@ export function repostNotification({
 }: {
   createdAt?: string;
   id?: string;
-  post?: StoryPost;
-  profile?: StoryProfile;
+  post?: StoryPost | null;
+  profile?: StoryProfile | null;
   readAt?: string | null;
 } = {}) {
   return {
@@ -432,7 +438,7 @@ export function quoteNotification({
 }: {
   createdAt?: string;
   id?: string;
-  post?: StoryPost;
+  post?: StoryPost | null;
   readAt?: string | null;
 } = {}) {
   return {

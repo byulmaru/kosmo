@@ -39,6 +39,27 @@ describe('projectRemoteNoteContent', () => {
     });
   });
 
+  it('auto-links safe explicit HTTP URLs in incoming plain text', () => {
+    const result = projectRemoteNoteContent({
+      content: 'Visit HTTPS://EXAMPLE.COM:443/a/../path?one=1&two=2.',
+      summary: null,
+      mediaType: 'text/plain',
+    });
+
+    assert.deepEqual(result.body.content[0], {
+      type: 'paragraph',
+      content: [
+        { type: 'text', text: 'Visit ' },
+        {
+          type: 'text',
+          text: 'HTTPS://EXAMPLE.COM:443/a/../path?one=1&two=2',
+          marks: [{ type: 'link', attrs: { href: 'https://example.com/path?one=1&two=2' } }],
+        },
+        { type: 'text', text: '.' },
+      ],
+    });
+  });
+
   it('projects absent-media-type HTML into paragraphs and hard breaks', () => {
     const result = projectRemoteNoteContent({
       content: '<div><p>Hello <strong>world</strong><br>again</p><p>Second &amp; final</p></div>',
