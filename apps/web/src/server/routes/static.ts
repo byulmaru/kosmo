@@ -14,22 +14,31 @@ const PUBLIC_POLICY_PATHS = new Set([
   '/child-safety',
 ]);
 const PUBLIC_PROFILE_PATH =
-  /^\/@(?:\w{3,30}|[\w.]+@[\w.-]+(?::\d+)?)(?:\/[\w-]+(?:\/reactions)?)?\/?$/;
+  /^\/@(?:\w{3,30}|[\w.]+@(?:[\w.-]+|\[[\da-f:.]+\])(?::\d+)?)(?:\/[\w-]+(?:\/reactions)?)?\/?$/i;
+const isPublicDocumentPath = (path: string) =>
+  PUBLIC_POLICY_PATHS.has(path) || PUBLIC_PROFILE_PATH.test(path);
 const acceptsDocument = (c: Context) => {
   const accept = c.req.header('accept');
   if (!accept) {
     return true;
   }
-  return new Negotiator({ headers: { accept } }).mediaType(['text/html']) === 'text/html';
+  return (
+    new Negotiator({ headers: { accept } }).mediaType(['text/html; charset=UTF-8']) !== undefined
+  );
 };
 const isSpaRequest = (c: Context) =>
   c.req.path === '/' ||
   c.req.path === '/index.html' ||
   c.req.header('sec-fetch-mode') === 'navigate' ||
-  ((PUBLIC_POLICY_PATHS.has(c.req.path) || PUBLIC_PROFILE_PATH.test(c.req.path)) &&
-    acceptsDocument(c));
+  (isPublicDocumentPath(c.req.path) && acceptsDocument(c));
 
 const staticRoutes = new Hono();
+staticRoutes.on(['GET', 'HEAD'], '*', async (c, next) => {
+  await next();
+  if (isPublicDocumentPath(c.req.path)) {
+    c.header('Vary', 'Accept', { append: true });
+  }
+});
 const spaEtag = etag();
 const serveSpaFallback = serveStatic({
   onFound: (_path, c) => c.res.headers.set('Cache-Control', 'no-cache'),

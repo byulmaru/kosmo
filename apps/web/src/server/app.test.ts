@@ -520,6 +520,8 @@ describe('runtime routing', () => {
       expect(response.status).toBe(200);
       expect(response.headers.get('content-type')).toContain('text/html');
       expect(await response.text()).toBe('<html>expo app</html>');
+      expect(response.headers.get('vary')).toContain('Accept');
+      expect(head.headers.get('vary')).toContain('Accept');
       expect(head.status).toBe(200);
       expect(head.headers.get('content-type')).toContain('text/html');
       expect(await head.text()).toBe('');
@@ -542,6 +544,8 @@ describe('runtime routing', () => {
     '/@kosmo',
     '/@alice@example.org',
     '/@alice.remote@example.org',
+    '/@alice@[2001:db8::1]',
+    '/@alice@[::ffff:192.0.2.1]:8443/post-id',
     '/@kosmo/AaCx-8WAcbyBDtHc8M8Xg1Bvc3Q',
     '/@kosmo/followers',
     '/@kosmo/following',
@@ -553,6 +557,7 @@ describe('runtime routing', () => {
       '*/*',
       'text/html',
       'text/html;q=0.8',
+      'text/html;charset=UTF-8',
       'text/*',
       'Text/HTML',
       'TEXT/*',
@@ -569,8 +574,10 @@ describe('runtime routing', () => {
         expect(response.status).toBe(200);
         expect(response.headers.get('content-type')).toContain('text/html');
         expect(response.headers.get('cache-control')).toBe('no-cache');
+        expect(response.headers.get('vary')).toContain('Accept');
         expect(await response.text()).toBe('<html>expo app</html>');
         expect(head.status).toBe(200);
+        expect(head.headers.get('vary')).toContain('Accept');
         expect(await head.text()).toBe('');
       }
     }
@@ -587,11 +594,15 @@ describe('runtime routing', () => {
         'TEXT/*;q=0, */*',
         'text/html;Q=0',
         'text/html;Q=0, */*',
+        'text/html;charset=UTF-8;q=0, */*',
+        'text/html;charset=iso-8859-1',
+        'text/plain',
       ]) {
         for (const method of ['GET', 'HEAD']) {
           const response = await app.request(path, { headers: { accept }, method });
 
           expect(response.status).toBe(404);
+          expect(response.headers.get('vary')).toContain('Accept');
           expect(await response.text()).toBe(method === 'HEAD' ? '' : '404 Not Found');
         }
       }
@@ -602,6 +613,7 @@ describe('runtime routing', () => {
     '/@',
     '/@foo.js',
     '/@bad@',
+    '/@alice@[not-ip]',
     '/@kosmo/missing.js',
     '/@kosmo/post-id/unknown',
     '/@kosmo/a/b/c',
@@ -620,6 +632,28 @@ describe('runtime routing', () => {
     expect(await unknownPath.text()).toBe('404 Not Found');
     expect(missingAsset.status).toBe(404);
     expect(await missingAsset.text()).toBe('404 Not Found');
+  });
+
+  test('preserves public document cache variation for revalidation and compression', async () => {
+    const response = await app.request('/@kosmo', {
+      headers: { accept: 'text/html;charset=UTF-8' },
+    });
+    expect(response.headers.get('content-type')?.toLowerCase()).toBe('text/html; charset=utf-8');
+    const revalidated = await app.request('/@kosmo', {
+      headers: { accept: 'text/html', 'if-none-match': response.headers.get('etag')! },
+    });
+    expect(revalidated.status).toBe(304);
+    expect(revalidated.headers.get('vary')).toContain('Accept');
+
+    await writeFile(join(staticRoot, 'index.html.gz'), gzipSync('<html>expo app</html>'));
+    const compressed = await app.request('/@kosmo', {
+      headers: { accept: 'text/html', 'accept-encoding': 'gzip' },
+    });
+    expect(compressed.status).toBe(200);
+    expect(compressed.headers.get('content-encoding')).toBe('gzip');
+    expect(compressed.headers.get('vary')?.split(/,\s*/)).toEqual(
+      expect.arrayContaining(['Accept', 'Accept-Encoding']),
+    );
   });
 
   test('revalidates the SPA shell and caches content-hashed assets immutably', async () => {
