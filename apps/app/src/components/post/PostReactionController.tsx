@@ -2,12 +2,18 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
 import { useSession } from '@/session/SessionProvider';
+import {
+  createReactionDeleteUpdater,
+  createReactionOptimisticUpdater,
+} from './PostReactionController.optimistic';
 import type { ReactionToggleIntent } from '@/components/reaction/ReactionSelector';
 import type { PostReactionController_post$key } from './__generated__/PostReactionController_post.graphql';
 import type { PostReactionControllerAddReactionMutation } from './__generated__/PostReactionControllerAddReactionMutation.graphql';
 import type { PostReactionControllerDeleteReactionMutation } from './__generated__/PostReactionControllerDeleteReactionMutation.graphql';
 
 type ReactionCount = Readonly<{ count: number; type: string }>;
+
+let nextOptimisticOperationId = 0;
 
 export type PostReactionController = Readonly<{
   disabled: boolean;
@@ -131,6 +137,16 @@ export function usePostReactionController(
       }
 
       const requestIdentity = identity.current;
+      const optimisticOperationId = ++nextOptimisticOperationId;
+      const optimisticReactionId = `client:PostReaction:${postId}:${optimisticOperationId}:Reaction`;
+      const optimisticCountId = `client:PostReaction:${postId}:${optimisticOperationId}:ReactionCount`;
+      const optimisticUpdater = createReactionOptimisticUpdater({
+        nextSelected,
+        optimisticCountId,
+        optimisticReactionId,
+        postId,
+        type: optionId,
+      });
       inFlightTypes.current.add(optionId);
       setPendingTypes((current) => new Set(current).add(optionId));
       setErrorTypes((current) => {
@@ -179,12 +195,15 @@ export function usePostReactionController(
         commitAdd({
           onCompleted,
           onError: () => finish(false),
+          optimisticUpdater,
           variables: { postId, type: optionId },
         });
       } else {
         commitDelete({
           onCompleted,
           onError: () => finish(false),
+          optimisticUpdater,
+          updater: createReactionDeleteUpdater({ postId }),
           variables: { postId, type: optionId },
         });
       }
