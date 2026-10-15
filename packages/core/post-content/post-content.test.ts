@@ -160,6 +160,10 @@ test('does not link URL fragments split by a Mention and preserves media metadat
     postContentDocumentToHtml(document),
     '<p>https://example.com/<span>@알 수 없는 사용자</span>?x=1 then <a href="https://example.org/path">https://example.org/path</a></p>',
   );
+  assert.equal(
+    postContentDocumentToText(document, new Map([[aliceProfileId, '@alice@example.com']])),
+    'https://example.com/@alice@example.com?x=1 then https://example.org/path',
+  );
 });
 
 test('preserves ordered Media nodes and omits the default Sensitive Media attr', () => {
@@ -658,6 +662,10 @@ test('canonicalizes Mention identities and uses the unavailable Profile fallback
   };
 
   assert.equal(postContentDocumentToText(first), 'Hello @알 수 없는 사용자');
+  assert.equal(
+    postContentDocumentToText(first, new Map([[aliceProfileId, '@alice@example.com']])),
+    'Hello @alice@example.com',
+  );
   assert.equal(arePostContentRevisionsEqual(first, formattingEquivalent), true);
   assert.equal(
     arePostContentRevisionsEqual(first, {

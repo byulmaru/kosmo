@@ -3,6 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gunzipSync, gzipSync } from 'node:zlib';
+import { encodeGlobalId } from '@kosmo/core/global-id';
 import { parse } from 'hono/utils/cookie';
 import { Configuration, enableNonRepudiationChecks } from 'openid-client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
@@ -802,6 +803,32 @@ describe('runtime routing', () => {
     });
 
     const response = await app.request('/@alice/post-id', {
+      headers: { accept: 'text/html', 'sec-fetch-mode': 'navigate' },
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe('<html>expo app</html>');
+  });
+
+  test.each([
+    ['application/activity+json', 404, '404 Not Found'],
+    ['application/activity+json, text/html', 200, '<html>expo app</html>'],
+  ])(
+    'preserves static fallback after bypassing the preview for Accept %s',
+    async (accept, status, body) => {
+      const globalId = encodeGlobalId('Post', '00000000-0000-8000-8000-000000000001');
+      const response = await app.request(`/@alice/${globalId}`, {
+        headers: { accept },
+      });
+
+      expect(response.status).toBe(status);
+      expect(await response.text()).toBe(body);
+    },
+  );
+
+  test('preserves the app shell fallback for a browser URL with a non-Post global ID', async () => {
+    const globalId = encodeGlobalId('Profile', '00000000-0000-8000-8000-000000000001');
+    const response = await app.request(`/@alice/${globalId}`, {
       headers: { accept: 'text/html', 'sec-fetch-mode': 'navigate' },
     });
 
