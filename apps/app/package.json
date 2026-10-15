@@ -18,8 +18,9 @@
     "relay:watch": "relay-compiler --watch",
     "start": "expo start",
     "storybook:dev": "storybook dev -p 6006 --disable-telemetry",
-    "test": "pnpm check && pnpm test:config-plugins && pnpm test:unit && pnpm build-storybook && pnpm test:storybook",
+    "test": "pnpm check && pnpm test:config-plugins && pnpm test:unit && pnpm build-storybook && pnpm test:storybook && pnpm test:motion",
     "test:config-plugins": "node plugins/withIosResourceBundleDeploymentTarget.test.cjs",
+    "test:motion": "KOSMO_TEST_REAL_MOTION=1 vitest run --project=storybook src/stories/components/ControlMotion.tests.stories.tsx src/stories/components/SidebarNavigation.motion.tests.stories.tsx src/stories/components/ListboxOption.tests.stories.tsx",
     "test:storybook": "vitest run --project=storybook",
     "test:unit": "node --experimental-test-module-mocks --import tsx --test 'src/**/*.test.ts'",
     "web": "expo start --web --port 5173"
