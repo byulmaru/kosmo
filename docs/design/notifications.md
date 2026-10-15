@@ -206,8 +206,12 @@ composer control은 자체 동작만 수행한다. 모두 읽음, unread indicat
   중복 전달하지 않는다.
 - Follow/FollowRequest/Reaction/Repost의 pending/disabled는 알림 이동을 차단한다. consumer가 pending
   수명을 소유하며 presentation에서 읽음 mutation·cache 또는 실패 복구 정책을 실행하지 않는다.
-  Reply/Mention의 이동과 Post action 상태는 해당 Post가 소유한다. 권한 상실로 Post를 숨겨야 하면 consumer가
-  전체 item을 제거해야 한다.
+  Reply/Mention의 이동과 Post action 상태는 해당 Post가 소유한다. 권한 상실 등으로 source를 가져오지 못하면
+  consumer는 해당 알림 종류의 일반 문구와 시각을 표시한다. Follow, FollowRequest, Reaction, Reply, Quote,
+  Mention, Repost의 일반 문구는 각각 `팔로우 알림`, `팔로우 요청 알림`, `반응 알림`, `답글 알림`,
+  `인용 알림`, `멘션 알림`, `재게시 알림`이다. 이 행은 읽음/읽지 않음 상태와 모두 읽음 대상에 남지만
+  source 링크나 알림 활성화 동작은 제공하지 않는다. Post의 본문이 없을 때도 Reply/Mention/Quote wrapper를
+  비워 두지 않고 같은 일반 문구를 표시한다. source가 있으면 기존 종류별 표시와 이동 동작을 유지한다.
 - Notification 활성화에 따른 Best Effort Read는 이동이나 열기를 기다리게 하지 않는다.
   Follow/FollowRequest/Reaction/Repost는 단일 item target 활성화에서, Reply/Mention은 작성자 Profile·시각·본문의
   link navigation과 미디어 열기에서, Reply는 kind rail link navigation에서도 각각 한 번 시작한다.
@@ -220,8 +224,9 @@ composer control은 자체 동작만 수행한다. 모두 읽음, unread indicat
 표본을 시각 확인했다. Reply/Mention Storybook에서 중복 header와 별도 알림 이유 행 제거, 이름·핸들 overflow,
 Reply Parent 미리보기 부재, Action Bar의 독립 동작과 unread/hover 범위를 검증한다.
 답글 자체가 Quote를 포함하는 경우 기존 인용 내용은 유지하며 Reply Parent 미리보기와 구분한다.
-Mention Storybook은 선택 Profile의 실제 목록 fragment, 공용 읽음 mutation, 원인 게시글 경로와 Post 부재 시 숨김도
-검증한다. Storybook과 Web 자동화는 Native 실제 기기의 touch·focus 검증을 대체하지 않는다.
+Mention Storybook은 선택 Profile의 실제 목록 fragment, 공용 읽음 mutation, 원인 게시글 경로와 Post 부재 시
+일반 문구를 검증한다. Notification Storybook은 source가 없는 일곱 종류의 문구·읽음 상태·모두 읽음 대상과
+비활성 행을 검증한다. Storybook과 Web 자동화는 Native 실제 기기의 touch·focus 검증을 대체하지 않는다.
 
 PROD-811 통합 시 [현행 Notification OpenSpec](../../openspec/specs/notification/spec.md)의 기존
 Follow 표시 scenario(28px kind icon·image avatar와 복수 사용자 aggregation 없음)와 새 presentation의
