@@ -1,4 +1,4 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, ne } from 'drizzle-orm';
 import {
   AccountProfiles,
   Accounts,
@@ -117,6 +117,17 @@ export const createOidcSession = async (
   tx?: DatabaseHandle,
 ) => {
   return getDatabaseConnection(tx).transaction(async (tx) => {
+    const existingAccount = await tx
+      .select({ state: Accounts.state })
+      .from(Accounts)
+      .where(eq(Accounts.oidcSubject, oidcSubject))
+      .then(first);
+
+    if (existingAccount?.state === AccountState.SUSPENDED) {
+      throw new PermissionDeniedError();
+    }
+
+    const isRejoining = existingAccount?.state === AccountState.DISABLED;
     const account = await tx
       .insert(Accounts)
       .values({
@@ -126,21 +137,14 @@ export const createOidcSession = async (
       })
       .onConflictDoUpdate({
         target: [Accounts.oidcSubject],
-        set: { displayName },
+        set: { displayName, state: AccountState.ACTIVE },
+        setWhere: ne(Accounts.state, AccountState.SUSPENDED),
       })
-      .returning({ id: Accounts.id, state: Accounts.state })
-      .then(firstOrThrow);
+      .returning({ id: Accounts.id })
+      .then(first);
 
-    const isRejoining = account.state === AccountState.DISABLED;
-    if (!isRejoining && account.state !== AccountState.ACTIVE) {
+    if (!account) {
       throw new PermissionDeniedError();
-    }
-
-    if (isRejoining) {
-      await tx
-        .update(Accounts)
-        .set({ state: AccountState.ACTIVE })
-        .where(eq(Accounts.id, account.id));
     }
 
     const activeProfile = isRejoining
