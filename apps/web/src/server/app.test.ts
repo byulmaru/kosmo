@@ -512,14 +512,16 @@ describe('runtime routing', () => {
     '/account-deletion',
     '/child-safety',
   ])('serves the public policy %s as an SPA document without navigation headers', async (path) => {
-    for (const accept of [undefined, '*/*', 'text/html']) {
-      const headers = accept ? { accept } : undefined;
+    for (const accept of [undefined, '', '*/*', 'text/html', 'Text/HTML', 'TEXT/*']) {
+      const headers = accept === undefined ? undefined : { accept };
       const response = await app.request(path, { headers });
       const head = await app.request(path, { headers, method: 'HEAD' });
 
       expect(response.status).toBe(200);
       expect(response.headers.get('content-type')).toContain('text/html');
       expect(await response.text()).toBe('<html>expo app</html>');
+      expect(response.headers.get('vary')).toContain('Accept');
+      expect(head.headers.get('vary')).toContain('Accept');
       expect(head.status).toBe(200);
       expect(head.headers.get('content-type')).toContain('text/html');
       expect(await head.text()).toBe('');
@@ -538,6 +540,90 @@ describe('runtime routing', () => {
     },
   );
 
+  test.each([
+    '/@kosmo',
+    '/@alice@example.org',
+    '/@alice.remote@example.org',
+    '/@alice@[2001:db8::1]',
+    '/@alice@[::ffff:192.0.2.1]:8443/post-id',
+    '/@kosmo/AaCx-8WAcbyBDtHc8M8Xg1Bvc3Q',
+    '/@kosmo/followers',
+    '/@kosmo/following',
+    '/@kosmo/AaCx-8WAcbyBDtHc8M8Xg1Bvc3Q/reactions',
+  ])('serves the public route %s without navigation headers', async (path) => {
+    for (const accept of [
+      undefined,
+      '',
+      '*/*',
+      'text/html',
+      'text/html;q=0.8',
+      'text/html;charset=UTF-8',
+      'text/*',
+      'Text/HTML',
+      'TEXT/*',
+      'text/html;q=0.5, text/*;q=0',
+    ]) {
+      for (const userAgent of ['Mozilla/5.0', 'Googlebot/2.1']) {
+        const headers = {
+          'user-agent': userAgent,
+          ...(accept === undefined ? {} : { accept }),
+        };
+        const response = await app.request(path, { headers });
+        const head = await app.request(path, { headers, method: 'HEAD' });
+
+        expect(response.status).toBe(200);
+        expect(response.headers.get('content-type')).toContain('text/html');
+        expect(response.headers.get('cache-control')).toBe('no-cache');
+        expect(response.headers.get('vary')).toContain('Accept');
+        expect(await response.text()).toBe('<html>expo app</html>');
+        expect(head.status).toBe(200);
+        expect(head.headers.get('vary')).toContain('Accept');
+        expect(await head.text()).toBe('');
+      }
+    }
+  });
+
+  test.each(['/child-safety', '/@kosmo', '/@kosmo/post-id'])(
+    'keeps non-document representations of %s out of the SPA',
+    async (path) => {
+      for (const accept of [
+        'application/activity+json',
+        'text/html;q=0',
+        'text/html;q=0, */*',
+        'Text/HTML;q=0, */*',
+        'TEXT/*;q=0, */*',
+        'text/html;Q=0',
+        'text/html;Q=0, */*',
+        'text/html;charset=UTF-8;q=0, */*',
+        'text/html;charset=iso-8859-1',
+        'text/plain',
+      ]) {
+        for (const method of ['GET', 'HEAD']) {
+          const response = await app.request(path, { headers: { accept }, method });
+
+          expect(response.status).toBe(404);
+          expect(response.headers.get('vary')).toContain('Accept');
+          expect(await response.text()).toBe(method === 'HEAD' ? '' : '404 Not Found');
+        }
+      }
+    },
+  );
+
+  test.each([
+    '/@',
+    '/@foo.js',
+    '/@bad@',
+    '/@alice@[not-ip]',
+    '/@kosmo/missing.js',
+    '/@kosmo/post-id/unknown',
+    '/@kosmo/a/b/c',
+  ])('keeps unsupported public route shapes %s as 404', async (path) => {
+    const response = await app.request(path, { headers: { accept: 'text/html' } });
+
+    expect(response.status).toBe(404);
+    expect(await response.text()).toBe('404 Not Found');
+  });
+
   test('keeps unknown paths and missing assets as 404 without navigation headers', async () => {
     const unknownPath = await app.request('/unknown');
     const missingAsset = await app.request('/missing.js');
@@ -546,6 +632,28 @@ describe('runtime routing', () => {
     expect(await unknownPath.text()).toBe('404 Not Found');
     expect(missingAsset.status).toBe(404);
     expect(await missingAsset.text()).toBe('404 Not Found');
+  });
+
+  test('preserves public document cache variation for revalidation and compression', async () => {
+    const response = await app.request('/@kosmo', {
+      headers: { accept: 'text/html;charset=UTF-8' },
+    });
+    expect(response.headers.get('content-type')?.toLowerCase()).toBe('text/html; charset=utf-8');
+    const revalidated = await app.request('/@kosmo', {
+      headers: { accept: 'text/html', 'if-none-match': response.headers.get('etag')! },
+    });
+    expect(revalidated.status).toBe(304);
+    expect(revalidated.headers.get('vary')).toContain('Accept');
+
+    await writeFile(join(staticRoot, 'index.html.gz'), gzipSync('<html>expo app</html>'));
+    const compressed = await app.request('/@kosmo', {
+      headers: { accept: 'text/html', 'accept-encoding': 'gzip' },
+    });
+    expect(compressed.status).toBe(200);
+    expect(compressed.headers.get('content-encoding')).toBe('gzip');
+    expect(compressed.headers.get('vary')?.split(/,\s*/)).toEqual(
+      expect.arrayContaining(['Accept', 'Accept-Encoding']),
+    );
   });
 
   test('revalidates the SPA shell and caches content-hashed assets immutably', async () => {
