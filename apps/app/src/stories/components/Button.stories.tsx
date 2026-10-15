@@ -53,6 +53,12 @@ export const InteractionContract: Story = {
   play: async ({ args, canvasElement, step }) => {
     args.onPress?.mockClear();
     const button = within(canvasElement).getByRole('button', { name: String(args.children) });
+    const surface = Array.from(button.children).find(
+      (child) => getComputedStyle(child).backgroundColor !== 'rgba(0, 0, 0, 0)',
+    );
+    expect(surface).toBeDefined();
+    expect(surface!.getBoundingClientRect().width).toBe(button.clientWidth);
+    expect(surface!.getBoundingClientRect().height).toBe(button.clientHeight);
 
     await step('버튼 상태와 callback 확인', async () => {
       if (args.disabled || args.loading) {
