@@ -1,8 +1,18 @@
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import {
+  Animated,
+  Easing,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, motion, radius, space, textStyles } from '@/theme/tokens';
 import { LoadingIndicator } from './LoadingIndicator';
-import type { PropsWithChildren, Ref } from 'react';
+import { useAnimatedColorTransition } from './useAnimatedColorTransition';
+import type { PropsWithChildren, ReactNode, Ref } from 'react';
 import type { PressableProps, ViewStyle } from 'react-native';
 
 type ButtonProps = PropsWithChildren<
@@ -14,6 +24,112 @@ type ButtonProps = PropsWithChildren<
     tone?: 'primary' | 'secondary' | 'danger';
   }
 >;
+
+type ButtonVisualProps = {
+  accessibilityLabel?: string;
+  children: ReactNode;
+  disabled?: boolean;
+  hovered: boolean;
+  loading: boolean;
+  loadingText?: string;
+  pressed: boolean;
+  tone: 'primary' | 'secondary' | 'danger';
+};
+
+function ButtonVisual({
+  accessibilityLabel,
+  children,
+  disabled,
+  hovered,
+  loading,
+  loadingText,
+  pressed,
+  tone,
+}: ButtonVisualProps) {
+  const theme = useTheme();
+  const reducedMotion = useReducedMotion();
+  const backgroundColor = disabled
+    ? theme.stateDisabledSurface
+    : tone === 'primary'
+      ? pressed
+        ? theme.actionPrimaryPressed
+        : hovered
+          ? theme.actionPrimaryHover
+          : theme.actionPrimaryBase
+      : tone === 'danger'
+        ? theme.feedbackDangerBase
+        : pressed
+          ? theme.actionSecondaryPressed
+          : hovered
+            ? theme.actionSecondaryHover
+            : theme.actionSecondaryBase;
+  const color = disabled
+    ? theme.stateDisabledForeground
+    : tone === 'primary'
+      ? theme.actionPrimaryOnBase
+      : tone === 'danger'
+        ? theme.feedbackDangerOnBase
+        : theme.actionSecondaryOnBase;
+  const animatedBackground = useAnimatedColorTransition({
+    color: backgroundColor,
+    instantKey: theme,
+    reducedMotion,
+    role: disabled ? 'instant' : 'interaction',
+  });
+  const animatedOpacityRef = useRef<Animated.Value | null>(null);
+  if (animatedOpacityRef.current === null) {
+    animatedOpacityRef.current = new Animated.Value(1);
+  }
+  const animatedOpacity = animatedOpacityRef.current;
+  const dangerFeedback = tone === 'danger' && !disabled;
+  const opacity = dangerFeedback && (pressed || hovered) ? 0.9 : 1;
+
+  useEffect(() => {
+    animatedOpacity.stopAnimation();
+    if (reducedMotion || !dangerFeedback) {
+      animatedOpacity.setValue(opacity);
+      return;
+    }
+
+    const animation = Animated.timing(animatedOpacity, {
+      duration: motion.duration.fast,
+      easing: Easing.bezier(...motion.easingPoints.standard),
+      toValue: opacity,
+      useNativeDriver: true,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [animatedOpacity, dangerFeedback, opacity, reducedMotion]);
+
+  return (
+    <>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          StyleSheet.absoluteFill,
+          {
+            backgroundColor: animatedBackground,
+            borderRadius: radius[8],
+            opacity: animatedOpacity,
+          } as unknown as ViewStyle,
+        ]}
+      />
+      <Animated.View style={[styles.visual, { opacity: animatedOpacity }]}>
+        {loading ? (
+          <View style={styles.loadingContent}>
+            <LoadingIndicator
+              accessibilityLabel={`${accessibilityLabel ?? (typeof children === 'string' ? children : '요청')} 처리 중`}
+              color={color}
+            />
+            {loadingText ? <Text style={[styles.label, { color }]}>{loadingText}</Text> : null}
+          </View>
+        ) : (
+          <Text style={[styles.label, { color }]}>{children}</Text>
+        )}
+      </Animated.View>
+    </>
+  );
+}
 
 export function Button({
   accessibilityLabel,
@@ -29,15 +145,7 @@ export function Button({
   ...props
 }: ButtonProps) {
   const theme = useTheme();
-  const reducedMotion = useReducedMotion();
   const label = accessibilityLabel ?? (typeof children === 'string' ? children : undefined);
-  const color = disabled
-    ? theme.stateDisabledForeground
-    : tone === 'primary'
-      ? theme.actionPrimaryOnBase
-      : tone === 'danger'
-        ? theme.feedbackDangerOnBase
-        : theme.actionSecondaryOnBase;
   const borderColor = disabled
     ? theme.borderDisabled
     : tone === 'secondary'
@@ -57,40 +165,16 @@ export function Button({
       disabled={disabled || loading}
       ref={controlRef}
       style={(state) => {
-        const webState = state as { focused?: boolean; hovered?: boolean };
+        const webState = state as { focused?: boolean };
         const focused = Platform.OS === 'web' && Boolean(webState.focused);
-        const hovered = Platform.OS === 'web' && Boolean(webState.hovered);
         const customStyle = typeof style === 'function' ? style(state) : style;
         const minHeight = StyleSheet.flatten(customStyle)?.minHeight;
         return [
           styles.root,
           size === 'compact' ? styles.compact : styles.default,
-          Platform.OS === 'web'
-            ? ({
-                transitionDuration: `${reducedMotion ? motion.duration.instant : motion.duration.fast}ms`,
-                transitionProperty: 'background-color, border-color, opacity',
-                transitionTimingFunction: motion.easing.standard,
-              } as unknown as ViewStyle)
-            : undefined,
           {
-            backgroundColor: disabled
-              ? theme.stateDisabledSurface
-              : tone === 'primary'
-                ? state.pressed
-                  ? theme.actionPrimaryPressed
-                  : hovered
-                    ? theme.actionPrimaryHover
-                    : theme.actionPrimaryBase
-                : tone === 'danger'
-                  ? theme.feedbackDangerBase
-                  : state.pressed
-                    ? theme.actionSecondaryPressed
-                    : hovered
-                      ? theme.actionSecondaryHover
-                      : theme.actionSecondaryBase,
             borderColor,
             borderWidth,
-            opacity: tone === 'danger' && (state.pressed || hovered) ? 0.9 : 1,
             ...(focused
               ? ({
                   outlineColor: theme.stateFocusRing,
@@ -113,13 +197,18 @@ export function Button({
       }}
       {...props}
     >
-      {loading ? (
-        <View style={styles.loadingContent}>
-          <LoadingIndicator accessibilityLabel={`${label ?? '요청'} 처리 중`} color={color} />
-          {loadingText ? <Text style={[styles.label, { color }]}>{loadingText}</Text> : null}
-        </View>
-      ) : (
-        <Text style={[styles.label, { color }]}>{children}</Text>
+      {(state) => (
+        <ButtonVisual
+          accessibilityLabel={label}
+          disabled={disabled === true}
+          hovered={Platform.OS === 'web' && Boolean((state as { hovered?: boolean }).hovered)}
+          loading={loading}
+          loadingText={loadingText}
+          pressed={state.pressed}
+          tone={tone}
+        >
+          {children}
+        </ButtonVisual>
       )}
     </Pressable>
   );
@@ -129,6 +218,12 @@ const styles = StyleSheet.create({
   root: {
     alignItems: 'center',
     borderRadius: radius[8],
+    justifyContent: 'center',
+  },
+  visual: {
+    alignItems: 'center',
+    alignSelf: 'stretch',
+    flex: 1,
     justifyContent: 'center',
   },
   compact: {
