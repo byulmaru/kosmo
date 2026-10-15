@@ -77,7 +77,10 @@ export function createReactionOptimisticUpdater({
   };
 }
 
-export function createReactionDeleteUpdater({ postId }: Readonly<{ postId: string }>) {
+export function createReactionDeleteUpdater({
+  postId,
+  type,
+}: Readonly<{ postId: string; type: string }>) {
   return (
     store: RecordSourceSelectorProxy<PostReactionControllerDeleteReactionMutation['response']>,
     data: PostReactionControllerDeleteReactionMutation['response'] | null | undefined,
@@ -100,6 +103,7 @@ export function createReactionDeleteUpdater({ postId }: Readonly<{ postId: strin
       }
 
       return (
+        reaction.getValue('type') !== type &&
         reaction.getDataID() !== deleteReaction.reactionId &&
         reaction.getValue('id') !== deleteReaction.reactionId
       );

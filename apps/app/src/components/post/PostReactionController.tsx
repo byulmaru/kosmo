@@ -203,7 +203,7 @@ export function usePostReactionController(
           onCompleted,
           onError: () => finish(false),
           optimisticUpdater,
-          updater: createReactionDeleteUpdater({ postId }),
+          updater: createReactionDeleteUpdater({ postId, type: optionId }),
           variables: { postId, type: optionId },
         });
       }
