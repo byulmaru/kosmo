@@ -3,15 +3,15 @@
 ## 정의
 
 Admin Console Read Policy는 durable 객체가 아니라 Tailscale 접근 제어를 통과한 Admin Console Viewer와
-Account, Profile, Account-Profile Membership을 함께 소비해 운영자용 읽기 결과의 노출 필드를 결정하는 교차
-객체 조회 정책이다. 이 정책은 객체를 변경하지 않으며 Admin Console Viewer를 Kosmo 도메인의 Account 또는
-`Account.Operator`로 만들지 않는다.
+Account, Profile, Account-Profile Membership, Profile authored Post를 함께 소비해 운영자용 읽기 결과의 노출
+필드를 결정하는 교차 객체 조회 정책이다. 이 정책은 객체를 변경하지 않으며 Admin Console Viewer를 Kosmo
+도메인의 Account 또는 `Account.Operator`로 만들지 않는다.
 
 ## Admin Console Viewer
 
 Admin Console Viewer는 Tailscale 접근 정책에 따라 Admin Console 진입이 허용된 요청 주체다. 애플리케이션은
 별도의 app capability나 객체별 action을 계산하지 않는다. 진입이 허용된 Viewer는 v1의 Account, Profile,
-Account-Profile Membership 읽기 projection을 모두 사용할 수 있다.
+Account-Profile Membership, Profile authored Post 읽기 projection을 모두 사용할 수 있다.
 
 Tailscale proxy가 제공하는 login, display name과 같은 identity header는 현재 Viewer를 화면에 표시하기 위한
 선택적 metadata일 뿐이며 애플리케이션 인가의 근거가 아니다.
@@ -28,10 +28,10 @@ Tailscale proxy가 제공하는 login, display name과 같은 identity header는
 
 Admin Console v1은 객체별 권한을 나누지 않는 all-or-nothing 접근 모델을 사용한다.
 
-| 요청 경계                                                  | Account | Profile | Account-Profile Membership |
-| ---------------------------------------------------------- | :-----: | :-----: | :------------------------: |
-| Tailscale 접근 정책과 신뢰 경계를 통과함                   |  허용   |  허용   |            허용            |
-| 허용되지 않은 tailnet 주체 또는 일반 workload의 proxy 우회 |  금지   |  금지   |            금지            |
+| 요청 경계                                                  | Account | Profile | Account-Profile Membership | Profile authored Post |
+| ---------------------------------------------------------- | :-----: | :-----: | :------------------------: | :-------------------: |
+| Tailscale 접근 정책과 신뢰 경계를 통과함                   |  허용   |  허용   |            허용            |         허용          |
+| 허용되지 않은 tailnet 주체 또는 일반 workload의 proxy 우회 |  금지   |  금지   |            금지            |         금지          |
 
 Tailscale 접근 정책은 누가 Admin Console entry에 연결할 수 있는지를 결정한다. 애플리케이션은 그 결정을
 `account.read`, `profile.read` 같은 action으로 다시 나누거나 identity header에서 추론하지 않는다. 신뢰된
@@ -39,7 +39,7 @@ proxy를 우회한 일반 workload의 ClusterIP, Pod IP 또는 공개 ingress �
 Kubernetes node 자체와 kubelet을 포함한 node-origin 연결은 이미 node 권한을 가진 신뢰된 인프라 주체로 보고
 이번 위협 모델의 차단 대상에서 제외한다.
 
-세 projection은 같은 Viewer에게 열리지만 결과 구조에서는 분리한다. 한 projection에 다른 객체나 관계를
+네 projection은 같은 Viewer에게 열리지만 결과 구조에서는 분리한다. 한 projection에 다른 객체나 관계를
 `null`, `0`, 빈 placeholder로 암시하거나 편의상 합치지 않는다.
 
 ## Account 조회
@@ -74,8 +74,15 @@ Suspension State를 포함할 수 있다.
 
 ### 목록
 
-목록은 Profile ID, handle, 표시 handle, 표시 이름, avatar, Profile Origin, Lifecycle State, Suspension State를
-반환한다. `handle`과 `표시 handle`은 서로 다른 필드이며 둘 다 목록 projection에 포함한다.
+목록은 Profile ID, handle, 표시 handle, 표시 이름, avatar, Profile Origin, Lifecycle State, Suspension State,
+Followers Count, Following Count, 작성한 Post의 수와 조회 대상 Post 중 가장 최근 시각을 반환한다. `handle`과
+`표시 handle`은 서로 다른 필드이며 둘 다 목록 projection에 포함한다. 검색어는 handle 또는 표시 이름을 대상으로
+하고 Origin과 State를 각각 필터링할 수 있다. 기본 목록은 모든 Origin과 State를 포함한다.
+
+`Followers Count`와 `Following Count`는 저장된 best-effort Follow Relationship count다. Post 수와 가장 최근 시각은
+해당 Profile이 작성한 active Post 중 public 또는 unlisted인 결과에서 계산한다. Reply, Quote, Content 없는 Repost도
+포함하며 삭제되었거나 followers-only/direct Post는 제외한다. Lifecycle 또는 Suspension State는 해당 Post 목록과
+count의 필터가 아니므로 이 상태의 Profile이 작성한 위 조건에 해당하는 Post도 운영자가 조회할 수 있다.
 
 ### 상세
 
@@ -88,13 +95,13 @@ Suspension State를 포함할 수 있다.
 - Profile Link와 Remote URL
 - Profile Tag
 - Followers Count, Following Count
-- Profile Origin, Profile Lifecycle State, Profile Suspension State
+- Lifecycle State, Suspension State, Profile Origin
 - Instance Domain
+- 작성한 Post의 수와 조회 대상 Post 중 가장 최근 시각
 - 생성 시각
 
 현재 v1 projection은 Instance에서 Domain만 확정한다. Instance Type, Safety/Reachability/Service State와 각
-사유, Instance 생성 시각, Profile 역관계는 이번 PR 범위에 포함하지 않으며 영구 제외 여부는 결정하지
-않는다.
+사유, Instance 생성 시각, Profile 역관계는 이번 PR 범위에 포함하지 않으며 영구 제외 여부는 결정하지 않는다.
 
 단독 Profile projection은 다음을 반환하지 않는다.
 
@@ -105,6 +112,18 @@ Suspension State를 포함할 수 있다.
 Followers Count와 Following Count는 Profile의 소셜 관계 count이며 Membership count와 다르다. Profile의
 공개 조회에서 숨겨지는 상태를 Admin Console이 반환할 수 있다는 사실은 일반 공개 Profile 정책을 변경하지
 않는다. Account와 Membership은 아래의 별도 projection으로만 제공한다.
+
+### Profile Posts 조회
+
+Profile Posts 화면은 해당 Profile이 작성한 active public 또는 unlisted Post만 표시한다. 작성 Profile의 Lifecycle
+또는 Suspension State는 이 조건의 필터가 아니다. 현재 Post의 plain text, Content Warning, Sensitive Media 여부와
+Media 개수는 해당 Post의 Current Content에서만 읽는다. Reply Parent나 Repost Source의 ID 또는 내용은 projection에
+포함하지 않는다.
+
+각 Post 결과는 Post ID, Visibility, 생성 시각, 유형, 현재 Content의 plain text, Content Warning, Sensitive Media
+여부와 Media 개수만 제공한다. 유형은 일반 Post, Reply, Quote, Repost 또는 Reply와 Quote 관계를 함께 가진 Post를
+구분한다. 삭제되었거나 비공개인 Post와 그 Content는 반환하지 않는다. Content 없는 Repost는 Repost 자체만
+표시하며 Source 내용을 가져오지 않는다.
 
 ## Account-Profile Membership 조회
 

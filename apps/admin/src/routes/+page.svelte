@@ -1,5 +1,6 @@
 <script lang="ts">
   import UsersIcon from '@lucide/svelte/icons/users';
+  import UserRoundIcon from '@lucide/svelte/icons/user-round';
   import { resolve } from '$app/paths';
   import { Button } from '$lib/components/ui/button';
   import * as Card from '$lib/components/ui/card';
@@ -24,6 +25,17 @@
     </Card.Header>
     <Card.Footer>
       <Button href={resolve('/accounts')}>Accounts 열기</Button>
+    </Card.Footer>
+  </Card.Root>
+
+  <Card.Root class="max-w-xl">
+    <Card.Header>
+      <Card.Title class="flex items-center gap-2"
+        ><UserRoundIcon class="size-5" /> Profiles</Card.Title
+      >
+    </Card.Header>
+    <Card.Footer>
+      <Button href={resolve('/profiles')}>Profiles 열기</Button>
     </Card.Footer>
   </Card.Root>
 </div>
