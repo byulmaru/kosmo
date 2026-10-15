@@ -166,6 +166,40 @@ function LongContentFixture({
   );
 }
 
+function SharedAnchorFixture({ onClose, onComplete }: Pick<StoryArgs, 'onClose' | 'onComplete'>) {
+  const anchorRef = useRef<NativeView>(null);
+  const [step, setStep] = useState(0);
+  const [visible, setVisible] = useState(true);
+  return (
+    <View style={styles.stage}>
+      <Button
+        key={step}
+        controlRef={anchorRef}
+        testID="shared-anchor-target"
+        style={{ marginTop: step * space[48] }}
+      >
+        안내 대상
+      </Button>
+      <Coachmark
+        anchorRef={anchorRef}
+        visible={visible}
+        description="공용 대상 안내"
+        onClose={() => {
+          onClose();
+          setVisible(false);
+        }}
+        onComplete={() => {
+          onComplete();
+          setVisible(false);
+        }}
+        onNext={step === 0 ? () => setStep(1) : undefined}
+      >
+        {step === 0 ? 0 : '1 / 2'}
+      </Coachmark>
+    </View>
+  );
+}
+
 const meta = {
   args: {
     description: '여기서 프로필을 바꿀 수 있어요.',
@@ -182,6 +216,7 @@ const meta = {
   },
   component: CoachmarkFixture,
   excludeStories: [
+    'SharedAnchorContract',
     'Mobile320Contract',
     'Mobile360Contract',
     'Mobile390Contract',
@@ -343,6 +378,28 @@ export const StepsInteraction: Story = {
     expect(args.onClose).not.toHaveBeenCalled();
     await waitFor(() => expect(canvas.getByTestId('coachmark-step-target-2')).toHaveFocus());
     void canvasElement;
+  },
+};
+
+export const SharedAnchorContract: Story = {
+  render: (args) => <SharedAnchorFixture onClose={args.onClose} onComplete={args.onComplete} />,
+  play: async ({ canvasElement }) => {
+    const surface = await screen.findByTestId('coachmark-surface');
+    expect(within(surface).getByText('0')).toBeVisible();
+    await userEvent.click(within(surface).getByRole('button', { name: '다음' }));
+    const target = within(canvasElement).getByTestId('shared-anchor-target');
+    const arrow = await screen.findByTestId('coachmark-arrow');
+    await waitFor(() => {
+      const targetRect = target.getBoundingClientRect();
+      const arrowRect = arrow.getBoundingClientRect();
+      expect(
+        Math.abs(arrowRect.top + arrowRect.height / 2 - (targetRect.bottom + 12)),
+      ).toBeLessThanOrEqual(2);
+    });
+    expect(within(surface).getByText('1 / 2')).toBeVisible();
+    await userEvent.click(within(surface).getByRole('button', { name: '완료' }));
+    await waitFor(() => expect(screen.queryByTestId('coachmark-surface')).not.toBeInTheDocument());
+    expect(target).toHaveFocus();
   },
 };
 

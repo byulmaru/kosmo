@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { Children, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Platform,
@@ -84,7 +84,7 @@ export function Coachmark({
     preferredFocusRef: returnFocusRef,
   });
 
-  // Anchor measurement is the unavoidable platform layout handle for an anchored overlay.
+  // Measure the live platform target after each commit; a stable ref can point to a new step target.
   useEffect(() => {
     if (!visible) {
       return;
@@ -93,12 +93,19 @@ export function Coachmark({
     const frame = requestAnimationFrame(() => {
       returnFocusRef.current = anchorRef.current;
       anchorRef.current?.measureInWindow((x, y, anchorWidth, anchorHeight) => {
-        setAnchor({ height: anchorHeight, width: anchorWidth, x, y });
+        setAnchor((current) =>
+          current?.height === anchorHeight &&
+          current.width === anchorWidth &&
+          current.x === x &&
+          current.y === y
+            ? current
+            : { height: anchorHeight, width: anchorWidth, x, y },
+        );
       });
     });
 
     return () => cancelAnimationFrame(frame);
-  }, [anchorRef, height, insets.bottom, insets.left, insets.right, insets.top, visible, width]);
+  });
 
   const position = anchor
     ? getCoachmarkPosition({
@@ -114,6 +121,13 @@ export function Coachmark({
         },
       })
     : null;
+  const progress = Children.map(children, (child) =>
+    typeof child === 'string' || typeof child === 'number' ? (
+      <Text style={styles.footerLabel}>{child}</Text>
+    ) : (
+      child
+    ),
+  );
   const label = title?.trim() || description;
   const maxWidth = Math.min(
     MAX_WIDTH,
@@ -233,7 +247,7 @@ export function Coachmark({
                   </Text>
                 </View>
                 <View style={styles.footer}>
-                  {children ? <View style={styles.progress}>{children}</View> : null}
+                  {progress?.length ? <View style={styles.progress}>{progress}</View> : null}
                   <View style={styles.actions}>
                     <Button
                       accessibilityLabel="건너뛰기"

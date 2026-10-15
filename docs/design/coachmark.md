@@ -8,24 +8,24 @@
 
 `apps/app/src/components/ui/Coachmark.tsx`의 공개 props는 다음과 같다.
 
-| Prop          | 필수 | 타입                      | 역할                                                                          |
-| ------------- | ---- | ------------------------- | ----------------------------------------------------------------------------- |
-| `visible`     | 예   | `boolean`                 | 말풍선 표시와 퇴장 상태를 제어한다.                                           |
-| `anchorRef`   | 예   | `RefObject<View \| null>` | 실제 대상 `View`의 화면 좌표를 배치 기준으로 사용한다.                        |
-| `title`       | 선택 | `string`                  | 짧은 제목이다. 생략·공백이면 제목을 숨기고 본문을 접근성 이름으로 사용한다.   |
-| `description` | 예   | `string`                  | 짧은 안내 본문이다.                                                           |
-| `onClose`     | 예   | `() => void`              | 건너뛰기, Escape, Native back, backdrop dismiss의 공통 callback이다.          |
-| `onComplete`  | 예   | `() => void`              | 완료 action이다. 단일 안내와 마지막 단계에 사용하며 caller가 안내를 종료한다. |
-| `onPrevious`  | 선택 | `() => void`              | 이전 단계로 이동한다. 단계형 안내에서 생략하면 첫 단계의 이전이 비활성화된다. |
-| `onNext`      | 선택 | `() => void`              | 있으면 기본 action이 다음으로 바뀌며 caller가 다음 단계와 anchor를 선택한다.  |
-| `children`    | 선택 | `ReactNode`               | 하단 action 행에서 건너뛰기 왼쪽에 단계 번호 등 보조 내용을 합성한다.         |
+| Prop          | 필수 | 타입                      | 역할                                                                                                                   |
+| ------------- | ---- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `visible`     | 예   | `boolean`                 | 말풍선 표시와 퇴장 상태를 제어한다.                                                                                    |
+| `anchorRef`   | 예   | `RefObject<View \| null>` | 실제 대상 `View`의 화면 좌표를 배치 기준으로 사용한다.                                                                 |
+| `title`       | 선택 | `string`                  | 짧은 제목이다. 생략·공백이면 제목을 숨기고 본문을 접근성 이름으로 사용한다.                                            |
+| `description` | 예   | `string`                  | 짧은 안내 본문이다.                                                                                                    |
+| `onClose`     | 예   | `() => void`              | 건너뛰기, Escape, Native back, backdrop dismiss의 공통 callback이다.                                                   |
+| `onComplete`  | 예   | `() => void`              | 완료 action이다. 단일 안내와 마지막 단계에 사용하며 caller가 안내를 종료한다.                                          |
+| `onPrevious`  | 선택 | `() => void`              | 이전 단계로 이동한다. 단계형 안내에서 생략하면 첫 단계의 이전이 비활성화된다.                                          |
+| `onNext`      | 선택 | `() => void`              | 있으면 기본 action이 다음으로 바뀌며 caller가 다음 단계와 anchor를 선택한다.                                           |
+| `children`    | 선택 | `ReactNode`               | 하단 action 행에서 건너뛰기 왼쪽에 단계 번호 등 보조 내용을 합성한다. 문자열·숫자(0 포함)는 공용 Text로 감싸 표시한다. |
 
 단계 상태·진행 번호·최초 노출 저장은 caller가 소유한다. 공용 컴포넌트가 `이전`·`다음`·`완료`와 `건너뛰기` action을 렌더한다. `onNext`가 있으면 다음, 없으면 완료를 표시한다. `onNext` 또는 `onPrevious`가 있으면 단계형 이전·다음 묶음을 표시하고, 둘 다 없으면 단일 완료 버튼을 표시한다. 완료와 중단을 구분하도록 `onComplete`와 `onClose`는 분리한다. `width`, `height`, `style`, `size`, `placement` public prop은 제공하지 않는다.
 
 ## 배치와 동작
 
 - 말풍선 폭은 내용에 맞추되 256 logical unit 상한으로 하고, 좌우 safe area와 viewport 가장자리에서 16 logical unit 안으로 clamp한다. 높이는 콘텐츠에 따라 자동으로 정해지며 가용 공간을 상한으로 사용한다.
-- `anchorRef`의 실제 화면 좌표를 기준으로 anchor와 12 logical unit 간격을 두고 아래 공간이 부족하면 위에 배치한다. 가장자리 여백은 16 logical unit이다.
+- 단계마다 별도 ref 객체를 만들 필요는 없다. 같은 ref의 실제 대상이 React commit에서 교체되면 새 대상을 재측정하고 종료 시 현재 대상으로 focus를 복귀시킨다. `anchorRef`의 실제 화면 좌표를 기준으로 anchor와 12 logical unit 간격을 두고 아래 공간이 부족하면 위에 배치한다. 가장자리 여백은 16 logical unit이다.
 - 화살표는 변 길이 16 logical unit인 정사각형을 45도 회전하고, 위치 보정에는 half-size 8 logical unit을 사용한다. 화살표 중심은 대상 중심을 향하되 말풍선 좌우 경계에서 최소 16 logical unit 떨어지도록 제한한다. 본문·footer를 말풍선 내부 하나의 스크롤 영역에 둔다. 긴 안내와 매우 작은 높이에서도 설명과 버튼을 모두 접근할 수 있다.
 - 표면은 radius 16 logical unit, border 1 logical unit, 상단·좌우 padding 12 logical unit, 하단 padding 8 logical unit을 사용한다. 본문과 하단 action 행 사이는 8 logical unit이며 footer의 가로 action gap은 공용 `dialogActions` 규칙인 8 logical unit을 따른다.
 - 제목은 `uiLabelM`(14/20 logical unit), 본문은 `uiCopyM`(14/20 logical unit)을 사용하며 제목과 본문 사이 간격은 8이다. dialog 접근성 이름은 제목을 우선하고 제목이 없으면 본문을 사용한다. X 닫기는 제공하지 않는다.
@@ -47,5 +47,6 @@ Storybook 증거는 Web presentation·interaction 범위이며 iOS·Android runt
 ### Web 검증 기록 · 2026-10-15
 
 - 내장 Browser의 320×568 viewport에서 제목을 복원한 두 번째 단계 예시는 256×124 CSS px였다. 단계 표시의 줄 영역과 오른쪽 이동 버튼 묶음은 surface 하단에서 각각 9px(하단 padding 8 + border 1) 떨어져 있으며 가로 overflow가 없었다.
-- 최신 main 기준 전체 Storybook 142개 파일·928개 테스트, 배치 helper 4개 테스트, TypeScript, ESLint, Prettier, 정적 Storybook 빌드를 통과했다. 관련 Storybook 17개 테스트는 제목 없는 안내의 fallback 접근성 이름, 단계 이동·완료·중단, focus 복귀, 모바일 세 폭·작은 높이·본문 200% 확대를 포함한다.
+- 리뷰 반영 후 관련 Storybook 18개 테스트, TypeScript, ESLint, Prettier, 정적 Storybook 빌드를 통과했다. 제목 없는 안내의 fallback 접근성 이름, 단계 이동·완료·중단, 같은 ref의 대상 교체·현재 대상 focus 복귀, 문자열·숫자 0 표시, 모바일 세 폭·작은 높이·본문 200% 확대를 포함한다.
+- 전체 Storybook은 929개 중 928개 통과, 변경하지 않은 `Posts / Composer Before Unload Contract` 1개가 실패했다. 해당 테스트 단독 재실행은 통과했으며 전체 재통과는 확인하지 않았다.
 - Native 실기기·VoiceOver·TalkBack·Dynamic Type 검증은 별도다. Web 결과를 Native runtime 검증으로 간주하지 않는다.

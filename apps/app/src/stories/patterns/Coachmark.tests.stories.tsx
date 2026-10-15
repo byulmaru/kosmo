@@ -6,6 +6,7 @@ import baseMeta, {
   Mobile360Contract as mobile360Contract,
   Mobile390Contract as mobile390Contract,
   PlacementContract as placementContract,
+  SharedAnchorContract as sharedAnchorContract,
   StepsInteraction as stepsInteraction,
   TextScaleContract as textScaleContract,
   ViewportContract as viewportContract,
@@ -34,3 +35,5 @@ export const Mobile320Contract: Story = mobile320Contract;
 export const Mobile360Contract: Story = mobile360Contract;
 export const Mobile390Contract: Story = mobile390Contract;
 export const TextScaleContract: Story = textScaleContract;
+
+export const SharedAnchorContract: Story = sharedAnchorContract;
