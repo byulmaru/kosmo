@@ -1798,23 +1798,57 @@ export const ReactionSharedSurfaceConsistencyContract: Story = {
     const canvas = within(canvasElement);
     const hearts = await canvas.findAllByRole('button', { name: '❤️ 반응 12개' });
     expect(hearts).toHaveLength(2);
-    await userEvent.click(hearts[0]!);
+    unstable_batchedUpdates(() => {
+      hearts[0]!.click();
+      hearts[1]!.click();
+    });
     await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(1));
 
-    expect(canvas.getByRole('button', { name: '❤️ 반응 13개, 처리 중' })).toBeDisabled();
-    expect(canvas.getByRole('button', { name: '❤️ 반응 13개' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
+    const pendingHearts = canvas.getAllByRole('button', {
+      name: '❤️ 반응 13개, 처리 중',
+    });
+    expect(pendingHearts).toHaveLength(2);
+    pendingHearts.forEach((button) => expect(button).toBeDisabled());
+    pendingHearts.forEach((button) => expect(button).toHaveAttribute('aria-pressed', 'true'));
+
+    const party = await canvas.findAllByRole('button', { name: '🎉 반응 7개' });
+    expect(party).toHaveLength(2);
+    await userEvent.click(party[0]!);
+    await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(2));
+    const partyRequest = readReactionRequests(canvas).find((request) => request.type === '🎉')!;
+    canvas.getByRole('button', { name: `요청 ${partyRequest.id} success` }).click();
+    await waitFor(() =>
+      expect(canvas.getAllByRole('button', { name: '🎉 반응 8개' })).toHaveLength(2),
     );
 
-    canvas.getByRole('button', { name: '요청 1 network-error' }).click();
+    const heartRequest = readReactionRequests(canvas).find((request) => request.type === '❤️')!;
+    canvas.getByRole('button', { name: `요청 ${heartRequest.id} network-error` }).click();
     await waitFor(() =>
       expect(canvas.getAllByRole('button', { name: /❤️ 반응 12개/ })).toHaveLength(2),
     );
-    expect(canvas.getByRole('button', { name: '❤️ 반응 12개, 오류, 다시 시도' })).toBeVisible();
-    expect(canvas.getByRole('button', { name: '❤️ 반응 12개' })).toHaveAttribute(
-      'aria-pressed',
-      'false',
+    const successfulParty = canvas.getAllByRole('button', { name: '🎉 반응 8개' });
+    expect(successfulParty).toHaveLength(2);
+    successfulParty.forEach((button) => expect(button).toHaveAttribute('aria-pressed', 'true'));
+    await waitFor(() => {
+      const failedHeart = canvas.getByRole('button', {
+        name: '❤️ 반응 12개, 오류, 다시 시도',
+      });
+      expect(failedHeart).toBeVisible();
+      expect(failedHeart).toHaveAttribute('aria-busy', 'false');
+      expect(canvas.getByRole('button', { name: '❤️ 반응 12개' })).toHaveAttribute(
+        'aria-pressed',
+        'false',
+      );
+    });
+
+    await userEvent.click(canvas.getByRole('button', { name: '❤️ 반응 12개, 오류, 다시 시도' }));
+    await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(3));
+    const retryHeartRequest = readReactionRequests(canvas).find(
+      (request) => request.type === '❤️' && request.id !== heartRequest.id,
+    )!;
+    canvas.getByRole('button', { name: `요청 ${retryHeartRequest.id} success` }).click();
+    await waitFor(() =>
+      expect(canvas.getAllByRole('button', { name: '❤️ 반응 13개' })).toHaveLength(2),
     );
   },
   render: () => <ReactionContractHarness duplicateSurface />,
