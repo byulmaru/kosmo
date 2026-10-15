@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Animated, Easing, Pressable, StyleSheet, View } from 'react-native';
 import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, motion, radius, space, textStyles } from '@/theme/tokens';
 import { Avatar } from './Avatar';
@@ -8,7 +8,8 @@ import {
   getBottomTabBarContentHeight,
   getUnreadNotificationAccessibilityLabel,
 } from './navigationChrome';
-import type { ReactElement } from 'react';
+import { useAnimatedColorTransition } from './useAnimatedColorTransition';
+import type { ReactElement, ReactNode } from 'react';
 import type { ViewStyle } from 'react-native';
 import type {
   BottomTabBarProps,
@@ -17,6 +18,7 @@ import type {
   NavigationChromePlatform,
   NavigationProfile,
 } from './navigationChrome';
+import type { AnimatedColorValue } from './useAnimatedColorTransition';
 
 const items = [
   { destination: 'home', label: '홈' },
@@ -37,6 +39,66 @@ type BottomTabBarItemProps = {
   selected: boolean;
   unreadNotificationCount: number | null;
 };
+
+function BottomTabVisual({
+  children,
+  destination,
+  disabled,
+  hovered,
+  pressed,
+}: {
+  children: ReactNode;
+  destination: BottomTabDestination;
+  disabled: boolean;
+  hovered: boolean;
+  pressed: boolean;
+}) {
+  const theme = useTheme();
+  const reducedMotion = useReducedMotion();
+  const animatedColor = useAnimatedColorTransition({
+    color: disabled
+      ? 'transparent'
+      : pressed
+        ? theme.statePressed
+        : hovered
+          ? theme.stateHover
+          : 'transparent',
+    instantKey: theme,
+    reducedMotion,
+    role: disabled ? 'instant' : 'interaction',
+  });
+  const scale = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    scale.stopAnimation();
+    if (reducedMotion || disabled) {
+      scale.setValue(1);
+      return;
+    }
+    const animation = Animated.timing(scale, {
+      duration: motion.duration.fast,
+      easing: Easing.bezier(...motion.easingPoints.standard),
+      toValue: pressed ? 0.98 : 1,
+      useNativeDriver: true,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [disabled, pressed, reducedMotion, scale]);
+  return (
+    <Animated.View
+      style={[styles.visual, reducedMotion || disabled ? undefined : { transform: [{ scale }] }]}
+      testID={`bottom-tab-${destination}-visual`}
+    >
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          StyleSheet.absoluteFill,
+          { backgroundColor: animatedColor, borderRadius: radius.full } as unknown as ViewStyle,
+        ]}
+      />
+      {children}
+    </Animated.View>
+  );
+}
 
 function BottomTabBarItem({
   contentHeight,
@@ -65,6 +127,12 @@ function BottomTabBarItem({
       ? getUnreadNotificationAccessibilityLabel(unreadNotificationCount)
       : label;
   const hasUnreadNotifications = Boolean(unreadNotificationCount && unreadNotificationCount > 0);
+  const animatedForeground = useAnimatedColorTransition({
+    color,
+    instantKey: theme,
+    reducedMotion,
+    role: disabled ? 'instant' : 'selection',
+  });
 
   const control = (
     <Pressable
@@ -100,28 +168,11 @@ function BottomTabBarItem({
       {(state) => {
         const hovered = web && Boolean((state as { hovered?: boolean }).hovered);
         return (
-          <View
-            style={[
-              styles.visual,
-              web
-                ? ({
-                    transitionDuration: `${reducedMotion ? motion.duration.instant : motion.duration.fast}ms`,
-                    transitionProperty: 'background-color, transform',
-                    transitionTimingFunction: motion.easing.standard,
-                  } as unknown as ViewStyle)
-                : undefined,
-              {
-                backgroundColor: disabled
-                  ? 'transparent'
-                  : state.pressed
-                    ? theme.statePressed
-                    : hovered
-                      ? theme.stateHover
-                      : 'transparent',
-                transform: reducedMotion ? undefined : [{ scale: state.pressed ? 0.98 : 1 }],
-              },
-            ]}
-            testID={`bottom-tab-${destination}-visual`}
+          <BottomTabVisual
+            destination={destination}
+            disabled={disabled}
+            hovered={hovered}
+            pressed={state.pressed}
           >
             <View style={styles.iconFrame}>
               {destination === 'profile' ? (
@@ -138,7 +189,11 @@ function BottomTabBarItem({
                   />
                 </View>
               ) : (
-                <BottomTabBarIcon color={color} destination={destination} selected={active} />
+                <BottomTabBarIcon
+                  color={animatedForeground as AnimatedColorValue}
+                  destination={destination}
+                  selected={active}
+                />
               )}
               {destination === 'notifications' && hasUnreadNotifications ? (
                 <View
@@ -151,8 +206,12 @@ function BottomTabBarItem({
                 />
               ) : null}
             </View>
-            <Text style={[styles.label, { color }]}>{label}</Text>
-          </View>
+            <Animated.Text
+              style={[styles.label, { color: animatedForeground as unknown as string }] as never}
+            >
+              {label}
+            </Animated.Text>
+          </BottomTabVisual>
         );
       }}
     </Pressable>
@@ -224,6 +283,7 @@ const styles = StyleSheet.create({
     gap: space[4],
     height: 64,
     justifyContent: 'center',
+    position: 'relative',
     width: 64,
   },
   iconFrame: { height: 24, position: 'relative', width: 24 },

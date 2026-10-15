@@ -201,9 +201,6 @@ export const InteractionContract: Story = {
       await waitFor(() =>
         expect(getComputedStyle(visual).transform).toBe('matrix(0.98, 0, 0, 0.98, 0, 0)'),
       );
-      expect(getComputedStyle(visual).transitionDuration).toBe(
-        args.platform === 'web' ? '0.12s' : '0s',
-      );
       expect(visual).toHaveStyle({ height: '64px', width: '64px' });
       expect(notifications).toHaveStyle({
         height: args.platform === 'web' ? '80px' : '56px',
