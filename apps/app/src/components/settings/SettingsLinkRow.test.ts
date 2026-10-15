@@ -12,6 +12,26 @@ import type { SettingsLinkRowProps } from './SettingsLinkRow';
 const require = createRequire(import.meta.url);
 let platformOS: 'ios' | 'web' = 'web';
 let reducedMotion = false;
+const theme = {
+  borderSubtle: '#eeeeee',
+  foregroundPrimary: '#111111',
+  foregroundSecondary: '#666666',
+  stateFocusRing: '#005fcc',
+  stateSelectedSurface: '#fff8dc',
+  stateSelectedBorder: '#9a7800',
+  stateHover: '#f4f4f4',
+  statePressed: '#e8e8e8',
+};
+
+class AnimatedColorMock {
+  constructor(public value: string) {}
+  setValue(value: string) {
+    this.value = value;
+  }
+  stopAnimation(callback?: () => void) {
+    callback?.();
+  }
+}
 
 mock.module('expo-router', {
   exports: {
@@ -21,13 +41,38 @@ mock.module('expo-router', {
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module('react-native', {
   exports: {
+    processColor: () => undefined,
+    Animated: {
+      Color: AnimatedColorMock,
+      View: 'AnimatedView',
+      timing: (value: { setValue: (next: unknown) => void }, config: { toValue: unknown }) => ({
+        start: () =>
+          value.setValue(
+            config.toValue instanceof AnimatedColorMock ? config.toValue.value : config.toValue,
+          ),
+        stop: () => undefined,
+      }),
+    },
+    Easing: { bezier: () => () => 0 },
     Platform: {
       get OS() {
         return platformOS;
       },
     },
-    Pressable: 'Pressable',
+    Pressable: ({
+      children,
+      ...props
+    }: {
+      children?: ReactElement | ((state: { hovered: boolean; pressed: boolean }) => ReactElement);
+      [key: string]: unknown;
+    }) =>
+      createElement(
+        'Pressable',
+        props,
+        typeof children === 'function' ? children({ hovered: false, pressed: false }) : children,
+      ),
     StyleSheet: {
+      absoluteFill: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
       create: <T>(styles: T) => styles,
       flatten: (style: unknown) =>
         Array.isArray(style) ? Object.assign({}, ...style.filter(Boolean)) : style,
@@ -64,16 +109,8 @@ mock.module(new URL('../shell/NavigationLink.tsx', import.meta.url), {
 mock.module(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
   exports: {
     useReducedMotion: () => reducedMotion,
-    useTheme: () => ({
-      borderSubtle: '#eeeeee',
-      foregroundPrimary: '#111111',
-      foregroundSecondary: '#666666',
-      stateFocusRing: '#005fcc',
-      stateSelectedSurface: '#fff8dc',
-      stateSelectedBorder: '#9a7800',
-      stateHover: '#f4f4f4',
-      statePressed: '#e8e8e8',
-    }),
+    useThemeMode: () => 'light',
+    useTheme: () => theme,
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 let SettingsLinkRow: ComponentType<SettingsLinkRowProps>;
@@ -118,8 +155,9 @@ describe('SettingsLinkRow', () => {
     assert.equal(row.props['aria-current'], 'page');
     assert.deepEqual(row.props.accessibilityState, { selected: true });
     const rowStyle = flattenStyle(row.props.style({ hovered: false, pressed: false }));
-    assert.equal(rowStyle.backgroundColor, '#fff8dc');
-    assert.equal(rowStyle.borderColor, '#9a7800');
+    const feedbackStyle = flattenStyle(rendered('AnimatedView')[0].props.style);
+    assert.equal(colorValue(feedbackStyle.backgroundColor), '#fff8dc');
+    assert.equal(colorValue(feedbackStyle.borderColor), '#9a7800');
     assert.equal(rowStyle.borderWidth, 1);
     assert.equal(rowStyle.minHeight, 64);
     assert.equal(rowStyle.width, '100%');
@@ -144,9 +182,9 @@ describe('SettingsLinkRow', () => {
     const row = byTestId('selected-parent-settings-row');
     assert.equal(row.props['aria-current'], undefined);
     assert.deepEqual(row.props.accessibilityState, { selected: true });
-    const rowStyle = flattenStyle(row.props.style({ hovered: false, pressed: false }));
-    assert.equal(rowStyle.backgroundColor, '#fff8dc');
-    assert.equal(rowStyle.borderColor, '#9a7800');
+    const feedbackStyle = flattenStyle(rendered('AnimatedView')[0].props.style);
+    assert.equal(colorValue(feedbackStyle.backgroundColor), '#fff8dc');
+    assert.equal(colorValue(feedbackStyle.borderColor), '#9a7800');
   });
 
   it('외부 링크는 expo Link asChild와 exact href를 사용한다', async () => {
@@ -207,14 +245,10 @@ describe('SettingsLinkRow', () => {
       testID: 'selected-settings-row',
     });
 
-    const row = byTestId('selected-settings-row');
-    const idleStyle = flattenStyle(row.props.style({ hovered: false, pressed: false }));
-    const hoveredStyle = flattenStyle(row.props.style({ hovered: true, pressed: false }));
-    const pressedStyle = flattenStyle(row.props.style({ hovered: true, pressed: true }));
-    const pressedOnlyStyle = flattenStyle(row.props.style({ hovered: false, pressed: true }));
-    assert.notEqual(idleStyle.backgroundColor, hoveredStyle.backgroundColor);
-    assert.notDeepEqual(hoveredStyle, pressedOnlyStyle);
-    assert.deepEqual(pressedStyle, pressedOnlyStyle);
+    const idleStyle = flattenStyle(rendered('AnimatedView')[0].props.style);
+    assert.equal(colorValue(idleStyle.backgroundColor), '#fff8dc');
+    assert.equal(colorValue(idleStyle.borderColor), '#9a7800');
+    assert.equal(idleStyle.transitionDuration, undefined);
   });
 
   it('Web row feedback uses fast or selected timing and native omits CSS transitions', async () => {
@@ -226,11 +260,8 @@ describe('SettingsLinkRow', () => {
       testID: 'motion-settings-row',
     });
 
-    const row = byTestId('motion-settings-row');
-    let style = flattenStyle(row.props.style({ hovered: true, pressed: false }));
-    const hoverDuration = style.transitionDuration;
-    style = flattenStyle(row.props.style({ hovered: false, pressed: true }));
-    assert.equal(style.transitionDuration, hoverDuration);
+    let style = flattenStyle(rendered('AnimatedView')[0].props.style);
+    assert.equal(style.transitionDuration, undefined);
 
     await act(async () =>
       renderer?.update(
@@ -243,10 +274,9 @@ describe('SettingsLinkRow', () => {
         }),
       ),
     );
-    const selectedStyle = flattenStyle(
-      byTestId('motion-settings-row').props.style({ hovered: false, pressed: false }),
-    );
-    assert.notEqual(selectedStyle.transitionDuration, hoverDuration);
+    const selectedStyle = flattenStyle(rendered('AnimatedView')[0].props.style);
+    assert.equal(colorValue(selectedStyle.backgroundColor), '#fff8dc');
+    assert.equal(selectedStyle.transitionDuration, undefined);
 
     reducedMotion = true;
     await act(async () =>
@@ -260,11 +290,9 @@ describe('SettingsLinkRow', () => {
         }),
       ),
     );
-    style = flattenStyle(
-      byTestId('motion-settings-row').props.style({ hovered: false, pressed: false }),
-    );
-    assert.equal(style.transitionDuration, '0ms');
-    assert.notEqual(style.transitionDuration, selectedStyle.transitionDuration);
+    style = flattenStyle(rendered('AnimatedView')[0].props.style);
+    assert.equal(colorValue(style.backgroundColor), '#fff8dc');
+    assert.equal(style.transitionDuration, undefined);
 
     await act(async () => renderer?.unmount());
     renderer = null;
@@ -347,4 +375,8 @@ function flattenStyle(style: unknown): Record<string, unknown> {
   return Array.isArray(style)
     ? Object.assign({}, ...style.filter(Boolean))
     : (style as Record<string, unknown>);
+}
+
+function colorValue(value: unknown) {
+  return value instanceof AnimatedColorMock ? value.value : value;
 }

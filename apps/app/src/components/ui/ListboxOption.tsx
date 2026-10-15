@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
-import { borderWidths, motion, radius, space, textStyles } from '@/theme/tokens';
+import { borderWidths, radius, space, textStyles } from '@/theme/tokens';
+import { useAnimatedColorTransition } from './useAnimatedColorTransition';
 import type { PressableProps, ViewStyle } from 'react-native';
 
 export type ListboxOptionProps = {
@@ -23,6 +24,108 @@ type WebListboxOptionProps = {
   tabIndex: -1;
 };
 
+type ListboxOptionFeedbackProps = {
+  active: boolean;
+  disabled: boolean;
+  focusVisible: boolean;
+  hovered: boolean;
+  label: string;
+  description?: string;
+  pressed: boolean;
+  selected: boolean;
+};
+
+function ListboxOptionFeedback({
+  active,
+  description,
+  disabled,
+  focusVisible,
+  hovered,
+  label,
+  pressed,
+  selected,
+}: ListboxOptionFeedbackProps) {
+  const theme = useTheme();
+  const reducedMotion = useReducedMotion();
+  const interaction = pressed || active || hovered;
+  const backgroundColor = disabled
+    ? theme.stateDisabledSurface
+    : pressed
+      ? theme.statePressed
+      : selected
+        ? theme.stateSelectedSurface
+        : interaction
+          ? theme.stateHover
+          : 'transparent';
+  const role = disabled
+    ? 'instant'
+    : pressed
+      ? 'interaction'
+      : selected
+        ? 'selection'
+        : active || hovered
+          ? 'interaction'
+          : 'selection';
+  const animatedBackground = useAnimatedColorTransition({
+    color: backgroundColor,
+    instantKey: theme,
+    reducedMotion,
+    role: disabled ? 'instant' : role,
+  });
+  const borderColor = focusVisible
+    ? theme.stateFocusRing
+    : disabled
+      ? theme.borderDisabled
+      : selected
+        ? theme.stateSelectedBorder
+        : 'transparent';
+  const animatedBorder = useAnimatedColorTransition({
+    color: borderColor,
+    instantKey: theme,
+    reducedMotion,
+    role: focusVisible || disabled ? 'instant' : 'selection',
+  });
+  const borderWidth = focusVisible ? borderWidths[2] : borderWidths[1];
+
+  return (
+    <>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          StyleSheet.absoluteFill,
+          styles.feedback,
+          {
+            backgroundColor: animatedBackground,
+            borderColor: animatedBorder,
+            borderWidth,
+            padding: space[12] - borderWidth,
+          } as unknown as ViewStyle,
+        ]}
+      />
+      <View style={styles.content}>
+        <Text
+          style={[
+            styles.label,
+            { color: disabled ? theme.stateDisabledForeground : theme.foregroundPrimary },
+          ]}
+        >
+          {label}
+        </Text>
+        {description ? (
+          <Text
+            style={[
+              styles.description,
+              { color: disabled ? theme.stateDisabledForeground : theme.foregroundSecondary },
+            ]}
+          >
+            {description}
+          </Text>
+        ) : null}
+      </View>
+    </>
+  );
+}
+
 export function ListboxOption({
   active = false,
   description,
@@ -33,8 +136,6 @@ export function ListboxOption({
   selected = false,
   style,
 }: ListboxOptionProps) {
-  const theme = useTheme();
-  const reducedMotion = useReducedMotion();
   const [focusVisible, setFocusVisible] = useState(false);
   const web = Platform.OS === 'web';
   const accessibilityLabel = description ? `${label}: ${description}` : label;
@@ -62,50 +163,7 @@ export function ListboxOption({
         }
       }}
       style={(state) => {
-        const webState = state as { hovered?: boolean };
-        const hovered = web && Boolean(webState.hovered);
-        const borderWidth = focusVisible
-          ? borderWidths[2]
-          : selected || disabled
-            ? borderWidths[1]
-            : borderWidths[0];
-        const transitionDuration =
-          state.pressed || hovered
-            ? motion.duration.fast
-            : selected
-              ? motion.duration.standard
-              : motion.duration.fast;
-        return [
-          styles.root,
-          web
-            ? ({
-                transitionDuration: `${reducedMotion ? motion.duration.instant : transitionDuration}ms`,
-                transitionProperty: 'background-color, border-color',
-                transitionTimingFunction: motion.easing.standard,
-              } as unknown as ViewStyle)
-            : undefined,
-          {
-            backgroundColor: disabled
-              ? theme.stateDisabledSurface
-              : state.pressed
-                ? theme.statePressed
-                : selected
-                  ? theme.stateSelectedSurface
-                  : active || hovered
-                    ? theme.stateHover
-                    : undefined,
-            borderColor: focusVisible
-              ? theme.stateFocusRing
-              : disabled
-                ? theme.borderDisabled
-                : selected
-                  ? theme.stateSelectedBorder
-                  : 'transparent',
-            borderWidth,
-            padding: space[12] - borderWidth,
-          },
-          typeof style === 'function' ? style(state) : style,
-        ];
+        return [styles.root, typeof style === 'function' ? style(state) : style];
       }}
       {...(web
         ? ({
@@ -117,26 +175,21 @@ export function ListboxOption({
           } as WebListboxOptionProps)
         : undefined)}
     >
-      <View style={styles.content}>
-        <Text
-          style={[
-            styles.label,
-            { color: disabled ? theme.stateDisabledForeground : theme.foregroundPrimary },
-          ]}
-        >
-          {label}
-        </Text>
-        {description ? (
-          <Text
-            style={[
-              styles.description,
-              { color: disabled ? theme.stateDisabledForeground : theme.foregroundSecondary },
-            ]}
-          >
-            {description}
-          </Text>
-        ) : null}
-      </View>
+      {(state) => {
+        const hovered = web && Boolean((state as { hovered?: boolean }).hovered);
+        return (
+          <ListboxOptionFeedback
+            active={active}
+            description={description}
+            disabled={disabled}
+            focusVisible={focusVisible}
+            hovered={hovered}
+            label={label}
+            pressed={state.pressed}
+            selected={selected}
+          />
+        );
+      }}
     </Pressable>
   );
 }
@@ -144,10 +197,14 @@ export function ListboxOption({
 const styles = StyleSheet.create({
   content: { flex: 1, gap: space[4] },
   description: textStyles.uiCopyM,
+  feedback: { borderRadius: radius[12], width: '100%' },
   label: textStyles.uiLabelL,
   root: {
+    borderColor: 'transparent',
+    borderWidth: borderWidths[1],
     borderRadius: radius[12],
     minHeight: 48,
+    padding: space[12] - borderWidths[1],
     width: '100%',
   },
 });
