@@ -40,16 +40,16 @@ Notification은 도메인 활동의 결과 또는 운영 안내를 Recipient Pro
 
 ## 관계
 
-| 관계                        | 대상                                            | 방향                                | cardinality | 존재 조건                                                       | 조회 조건        | 조회 권한                |
-| --------------------------- | ----------------------------------------------- | ----------------------------------- | ----------- | --------------------------------------------------------------- | ---------------- | ------------------------ |
-| Recipient Profile           | [Profile](./profile.md)                         | Notification -> Profile             | 1 -> 1      | Type이 Operational이 아님                                       | Recipient만 조회 | `Notification.Recipient` |
-| Recipient Account           | [Account](./account.md)                         | Notification -> Account             | 1 -> 1      | Type이 Operational                                              | Recipient만 조회 | `Notification.Recipient` |
-| Related Post                | [Post](./post.md)                               | Notification -> Post                | 1 -> 0..1   | Mention/Reply/Reaction/Repost/Quote/Followee Post               | Recipient만 조회 | `Notification.Recipient` |
-| Related Profile             | [Profile](./profile.md)                         | Notification -> Profile             | 1 -> 0..1   | Operational을 제외한 Type                                       | Recipient만 조회 | `Notification.Recipient` |
-| Source Reaction             | [Reaction](./reaction.md)                       | Notification -> Reaction            | 1 -> 0..1   | Type이 Reaction                                                 | Recipient만 조회 | `Notification.Recipient` |
-| Source Repost               | [Post](./post.md)                               | Notification -> Post                | 1 -> 0..1   | Type이 Repost, Content와 Reply Parent 없이 Repost Source가 있음 | Recipient만 조회 | `Notification.Recipient` |
-| Related Follow Request      | [Follow Request](./follow-request.md)           | Notification -> Follow Request      | 1 -> 0..1   | Type이 Follow Request                                           | Recipient만 조회 | `Notification.Recipient` |
-| Related Follow Relationship | [Follow Relationship](./follow-relationship.md) | Notification -> Follow Relationship | 1 -> 0..1   | Type이 Follow 또는 Followee Post                                | Recipient만 조회 | `Notification.Recipient` |
+| 관계                        | 대상                                            | 방향                                | cardinality | 존재 조건                                                       | 조회 조건        | 조회 권한                                            |
+| --------------------------- | ----------------------------------------------- | ----------------------------------- | ----------- | --------------------------------------------------------------- | ---------------- | ---------------------------------------------------- |
+| Recipient Profile           | [Profile](./profile.md)                         | Notification -> Profile             | 1 -> 1      | Type이 Operational이 아님                                       | Recipient만 조회 | `Notification.Recipient`                             |
+| Recipient Account           | [Account](./account.md)                         | Notification -> Account             | 1 -> 1      | Type이 Operational                                              | Recipient만 조회 | `Notification.Recipient`                             |
+| Related Post                | [Post](./post.md)                               | Notification -> Post                | 1 -> 0..1   | Mention/Reply/Reaction/Repost/Quote/Followee Post               | Recipient만 조회 | `Notification.Recipient`, 대상 객체의 일반 조회 권한 |
+| Related Profile             | [Profile](./profile.md)                         | Notification -> Profile             | 1 -> 0..1   | Operational을 제외한 Type                                       | Recipient만 조회 | `Notification.Recipient`, 대상 객체의 일반 조회 권한 |
+| Source Reaction             | [Reaction](./reaction.md)                       | Notification -> Reaction            | 1 -> 0..1   | Type이 Reaction                                                 | Recipient만 조회 | `Notification.Recipient`, 대상 객체의 일반 조회 권한 |
+| Source Repost               | [Post](./post.md)                               | Notification -> Post                | 1 -> 0..1   | Type이 Repost, Content와 Reply Parent 없이 Repost Source가 있음 | Recipient만 조회 | `Notification.Recipient`, 대상 객체의 일반 조회 권한 |
+| Related Follow Request      | [Follow Request](./follow-request.md)           | Notification -> Follow Request      | 1 -> 0..1   | Type이 Follow Request                                           | Recipient만 조회 | `Notification.Recipient`, 대상 객체의 일반 조회 권한 |
+| Related Follow Relationship | [Follow Relationship](./follow-relationship.md) | Notification -> Follow Relationship | 1 -> 0..1   | Type이 Follow 또는 Followee Post                                | Recipient만 조회 | `Notification.Recipient`, 대상 객체의 일반 조회 권한 |
 
 Notification은 Recipient Profile과 Recipient Account 중 정확히 하나를 가진다.
 Operational Notification은 Related Post·Related Profile이나 별도의 원인 객체 관계를 갖지 않으며,
