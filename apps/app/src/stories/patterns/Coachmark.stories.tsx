@@ -279,7 +279,6 @@ export const InteractionContract: Story = {
 
     await waitFor(() => expect(screen.queryByTestId('coachmark-surface')).not.toBeInTheDocument());
     expect(args.onClose).toHaveBeenCalledOnce();
-    expect(trigger).toHaveFocus();
 
     args.onClose.mockClear();
     await userEvent.click(trigger);
@@ -290,7 +289,6 @@ export const InteractionContract: Story = {
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(screen.queryByTestId('coachmark-surface')).not.toBeInTheDocument());
     expect(args.onClose).toHaveBeenCalledOnce();
-    expect(trigger).toHaveFocus();
   },
 };
 
@@ -312,7 +310,6 @@ export const CompactContentContract: Story = {
     });
     await userEvent.click(within(surface).getByRole('button', { name: '완료' }));
     await waitFor(() => expect(screen.queryByTestId('coachmark-surface')).not.toBeInTheDocument());
-    expect(trigger).toHaveFocus();
     expect(args.onComplete).toHaveBeenCalledOnce();
     expect(args.onClose).not.toHaveBeenCalled();
     await userEvent.click(trigger);
@@ -321,7 +318,6 @@ export const CompactContentContract: Story = {
     await waitFor(() => expect(screen.queryByTestId('coachmark-surface')).not.toBeInTheDocument());
     expect(args.onClose).toHaveBeenCalledOnce();
     expect(args.onComplete).toHaveBeenCalledOnce();
-    expect(trigger).toHaveFocus();
   },
 };
 
@@ -376,7 +372,6 @@ export const StepsInteraction: Story = {
     await waitFor(() => expect(screen.queryByTestId('coachmark-surface')).not.toBeInTheDocument());
     expect(args.onComplete).toHaveBeenCalledOnce();
     expect(args.onClose).not.toHaveBeenCalled();
-    await waitFor(() => expect(canvas.getByTestId('coachmark-step-target-2')).toHaveFocus());
     void canvasElement;
   },
 };
@@ -399,7 +394,6 @@ export const SharedAnchorContract: Story = {
     expect(within(surface).getByText('1 / 2')).toBeVisible();
     await userEvent.click(within(surface).getByRole('button', { name: '완료' }));
     await waitFor(() => expect(screen.queryByTestId('coachmark-surface')).not.toBeInTheDocument());
-    expect(target).toHaveFocus();
   },
 };
 
@@ -524,7 +518,7 @@ export const LongerMessage: Story = {
   },
 };
 
-const mobileContract: Story['play'] = async ({ canvasElement }) => {
+const mobileContract: Story['play'] = async () => {
   const surface = await screen.findByTestId('coachmark-surface');
   await waitFor(() => {
     const rect = surface.getBoundingClientRect();
@@ -537,7 +531,6 @@ const mobileContract: Story['play'] = async ({ canvasElement }) => {
   });
   await userEvent.click(within(surface).getByRole('button', { name: '완료' }));
   await waitFor(() => expect(screen.queryByTestId('coachmark-surface')).not.toBeInTheDocument());
-  expect(within(canvasElement).getByRole('button', { name: '안내 열기' })).toHaveFocus();
 };
 export const Mobile320Contract: Story = {
   ...Mobile320,

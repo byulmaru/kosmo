@@ -25,7 +25,7 @@
 ## 배치와 동작
 
 - 말풍선 폭은 내용에 맞추되 256 logical unit 상한으로 하고, 좌우 safe area와 viewport 가장자리에서 16 logical unit 안으로 clamp한다. 높이는 콘텐츠에 따라 자동으로 정해지며 가용 공간을 상한으로 사용한다.
-- 단계마다 별도 ref 객체를 만들 필요는 없다. 같은 ref의 실제 대상이 React commit에서 교체되면 새 대상을 재측정하고 종료 시 현재 대상으로 focus를 복귀시킨다. `anchorRef`의 실제 화면 좌표를 기준으로 anchor와 12 logical unit 간격을 두고 아래 공간이 부족하면 위에 배치한다. 가장자리 여백은 16 logical unit이다.
+- 단계마다 별도 ref 객체를 만들 필요는 없다. 같은 ref의 실제 대상이 React commit에서 교체되면 새 대상을 재측정한다. `anchorRef`의 실제 화면 좌표를 기준으로 anchor와 12 logical unit 간격을 두고 아래 공간이 부족하면 위에 배치한다. 가장자리 여백은 16 logical unit이다.
 - 화살표는 변 길이 16 logical unit인 정사각형을 45도 회전하고, 위치 보정에는 half-size 8 logical unit을 사용한다. 화살표 중심은 대상 중심을 향하되 말풍선 좌우 경계에서 최소 16 logical unit 떨어지도록 제한한다. 본문·footer를 말풍선 내부 하나의 스크롤 영역에 둔다. 긴 안내와 매우 작은 높이에서도 설명과 버튼을 모두 접근할 수 있다.
 - 표면은 radius 16 logical unit, border 1 logical unit, 상단·좌우 padding 12 logical unit, 하단 padding 8 logical unit을 사용한다. 본문과 하단 action 행 사이는 8 logical unit이며 footer의 가로 action gap은 공용 `dialogActions` 규칙인 8 logical unit을 따른다.
 - 제목은 `uiLabelM`(14/20 logical unit), 본문은 `uiCopyM`(14/20 logical unit)을 사용하며 제목과 본문 사이 간격은 8이다. dialog 접근성 이름은 제목을 우선하고 제목이 없으면 본문을 사용한다. X 닫기는 제공하지 않는다.
@@ -34,19 +34,19 @@
 - 본문은 기본 두세 줄 이내로 작성하되, 확대·번역·좁은 화면에서 줄 수를 강제로 잘라내지 않는다. 긴 소개·동의·설정은 별도 sheet나 화면으로 구성한다.
 - 배경과 표면은 theme semantic color를 사용하고 표면 elevation은 `elevation.overlay`를 따른다.
 - 배경에는 `theme.overlayScrim`을 칠해 조작을 막고 target에는 spotlight 구멍을 만들지 않는다. 건너뛰기, Escape, Native back, backdrop dismiss는 `onClose`로 수렴한다. 대상도 backdrop 뒤에서 차단되므로 대상 터치로 투어를 진행하지 않는다.
-- 표시와 퇴장에는 `useOverlayMotion`과 `ModalSheetHost`를 사용한다. reduced-motion에서는 기존 overlay 계약에 따라 이동을 제거한다. Web focus entry·trap·restore와 body scroll lock은 기존 overlay lifecycle 및 Modal host 경계를 따른다. 단계의 anchor ref가 바뀌어도 안내 도중 focus를 배경으로 복귀시키지 않는다. 다음 이동 뒤 action focus를 유지하고 종료할 때 현재 단계의 대상으로 복귀한다.
+- 표시와 퇴장에는 `useOverlayMotion`과 `ModalSheetHost`를 사용한다. reduced-motion에서는 기존 overlay 계약에 따라 이동을 제거한다. Web focus entry·trap·restore와 body scroll lock은 기존 overlay lifecycle 및 Modal host 경계를 따른다. 단계의 anchor ref가 바뀌어도 안내 도중 focus를 배경으로 복귀시키지 않는다. 다음 이동 뒤 action focus를 유지한다. 종료 후 포커스 처리는 공용 overlay에 맡기며 특정 trigger 또는 현재 단계 대상으로의 복귀를 보장하지 않는다.
 
 ## Storybook 검증
 
 `KOSMO/Patterns/Coachmark`의 `Playground`는 Controls와 Actions를 통한 수동 검토용이다. 기본 args는 짧은 제목과 본문, 건너뛰기·완료를 표시하는 단일 안내다. `LongerMessage`, `Steps`, `LongContent`는 긴 문장·단계 이동·극단적인 긴 내용의 대표 상태다. `Mobile320`, `Mobile360`, `Mobile390`은 각각 320×568, 360×800, 390×844 Web viewport를 제공한다.
 
-`KOSMO/Patterns/Coachmark/Tests`는 기본 안내의 접근성 이름과 완료·건너뛰기의 분리 및 focus 복귀, 배경 차단, 단계 이동·완료, 모바일 3개 폭의 경계·가로 overflow, 긴 내용의 스크롤·action 접근, 작은 높이의 배치를 검증한다. `TextScaleContract`는 320px Web viewport에서 본문 font-size·line-height만 200%로 늘려 reflow와 완료를 검사하는 자동화 전용 probe다. Native Dynamic Type 검증을 대신하지 않는다.
+`KOSMO/Patterns/Coachmark/Tests`는 기본 안내의 접근성 이름과 완료·건너뛰기의 분리 및 안내 진입 focus, 배경 차단, 단계 이동·완료, 모바일 3개 폭의 경계·가로 overflow, 긴 내용의 스크롤·action 접근, 작은 높이의 배치를 검증한다. `TextScaleContract`는 320px Web viewport에서 본문 font-size·line-height만 200%로 늘려 reflow와 완료를 검사하는 자동화 전용 probe다. Native Dynamic Type 검증을 대신하지 않는다.
 
 Storybook 증거는 Web presentation·interaction 범위이며 iOS·Android runtime 또는 실제 화면 연결 완료를 의미하지 않는다. 자동 a11y의 전역 color-contrast 제외는 유지되므로 전체 WCAG 적합성이나 대비 검증 완료를 뜻하지 않는다.
 
 ### Web 검증 기록 · 2026-10-15
 
 - 내장 Browser의 320×568 viewport에서 제목을 복원한 두 번째 단계 예시는 256×124 CSS px였다. 단계 표시의 줄 영역과 오른쪽 이동 버튼 묶음은 surface 하단에서 각각 9px(하단 padding 8 + border 1) 떨어져 있으며 가로 overflow가 없었다.
-- 리뷰 반영 후 관련 Storybook 18개 테스트, TypeScript, ESLint, Prettier, 정적 Storybook 빌드를 통과했다. 제목 없는 안내의 fallback 접근성 이름, 단계 이동·완료·중단, 같은 ref의 대상 교체·현재 대상 focus 복귀, 문자열·숫자 0 표시, 모바일 세 폭·작은 높이·본문 200% 확대를 포함한다.
+- 리뷰 반영 후 관련 Storybook 18개 테스트, TypeScript, ESLint, Prettier, 정적 Storybook 빌드를 통과했다. 제목 없는 안내의 fallback 접근성 이름, 단계 이동·완료·중단, 같은 ref의 대상 교체·안내 진입 및 다음 action focus, 문자열·숫자 0 표시, 모바일 세 폭·작은 높이·본문 200% 확대를 포함한다.
 - 전체 Storybook은 929개 중 928개 통과, 변경하지 않은 `Posts / Composer Before Unload Contract` 1개가 실패했다. 해당 테스트 단독 재실행은 통과했으며 전체 재통과는 확인하지 않았다.
 - Native 실기기·VoiceOver·TalkBack·Dynamic Type 검증은 별도다. Web 결과를 Native runtime 검증으로 간주하지 않는다.

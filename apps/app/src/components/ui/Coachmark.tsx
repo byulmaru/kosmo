@@ -61,8 +61,6 @@ export function Coachmark({
   const insets = useSafeAreaInsets();
   const overlayMotion = useOverlayMotion(visible);
   const dialogRef = useRef<NativeView>(null);
-  // Keep the platform return-focus handle stable while a tour switches anchor refs.
-  const returnFocusRef = useRef<NativeView>(null);
   const [anchor, setAnchor] = useState<{
     height: number;
     width: number;
@@ -81,7 +79,6 @@ export function Coachmark({
     focusScopeRef: dialogRef,
     open: overlayMotion.mounted,
     onRequestClose: close,
-    preferredFocusRef: returnFocusRef,
   });
 
   // Measure the live platform target after each commit; a stable ref can point to a new step target.
@@ -91,7 +88,6 @@ export function Coachmark({
     }
 
     const frame = requestAnimationFrame(() => {
-      returnFocusRef.current = anchorRef.current;
       anchorRef.current?.measureInWindow((x, y, anchorWidth, anchorHeight) => {
         setAnchor((current) =>
           current?.height === anchorHeight &&
