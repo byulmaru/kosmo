@@ -4,8 +4,25 @@ import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { and, eq, inArray, sql } from 'drizzle-orm';
-import { AccountProfiles, Accounts, db, firstOrThrow, pg, Sessions } from '../db';
-import { AccountState, SessionState } from '../enums';
+import {
+  AccountProfiles,
+  Accounts,
+  db,
+  firstOrThrow,
+  Instances,
+  pg,
+  Profiles,
+  Sessions,
+} from '../db';
+import {
+  AccountProfileRole,
+  AccountState,
+  InstanceKind,
+  InstanceState,
+  ProfileFollowPolicy,
+  ProfileState,
+  SessionState,
+} from '../enums';
 import { PermissionDeniedError } from '../error';
 import { createOidcSession, revokeCurrentSession } from './session';
 
@@ -67,23 +84,115 @@ test('기존 Active Account는 표시 이름을 갱신하고 새 Session을 생�
   );
 });
 
-for (const state of [AccountState.SUSPENDED, AccountState.DISABLED]) {
-  test(`${state} Account는 Session을 생성하지 않는다`, async () => {
+for (const profileState of [ProfileState.DISABLED, ProfileState.ACTIVE]) {
+  test(`재가입은 Disabled Account를 같은 ID로 활성화하고 ${profileState} Profile을 선택하지 않는다`, async () => {
+    const suffix = crypto.randomUUID();
     const identity = createIdentity();
+    const instance = await db
+      .insert(Instances)
+      .values({
+        domain: `${suffix}.example`,
+        kind: InstanceKind.LOCAL,
+        state: InstanceState.ACTIVE,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const profile = await db
+      .insert(Profiles)
+      .values({
+        displayName: suffix,
+        followPolicy: ProfileFollowPolicy.OPEN,
+        handle: suffix,
+        instanceId: instance.id,
+        normalizedHandle: suffix,
+        state: profileState,
+      })
+      .returning()
+      .then(firstOrThrow);
     const account = await db
       .insert(Accounts)
-      .values({ ...identity, displayName: 'preserved display name', state })
+      .values({
+        ...identity,
+        displayName: 'withdrawn display name',
+        featureFlags: ['retained-test-flag'],
+        state: AccountState.DISABLED,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const oldSession = await db
+      .insert(Sessions)
+      .values({
+        accountId: account.id,
+        state: SessionState.REVOKED,
+        token: `revoked-${suffix}`,
+      })
       .returning()
       .then(firstOrThrow);
 
-    await assert.rejects(createOidcSession(identity), PermissionDeniedError);
+    await db.insert(AccountProfiles).values({
+      accountId: account.id,
+      profileId: profile.id,
+      role: AccountProfileRole.OWNER,
+    });
 
-    const persistedAccount = await loadAccount(identity.oidcSubject);
-    assert.equal(persistedAccount.displayName, 'preserved display name');
-    assert.equal(persistedAccount.state, state);
-    assert.deepEqual(await loadSessions(account.id), []);
+    try {
+      const token = await createOidcSession(identity);
+
+      const persistedAccount = await loadAccount(identity.oidcSubject);
+      const sessions = await loadSessions(account.id);
+      const rejoinedSession = sessions.find((session) => session.token === token);
+      const revokedSession = sessions.find((session) => session.id === oldSession.id);
+      assert.equal(persistedAccount.id, account.id);
+      assert.equal(persistedAccount.displayName, identity.displayName);
+      assert.equal(persistedAccount.featureFlags[0], 'retained-test-flag');
+      assert.equal(persistedAccount.state, AccountState.ACTIVE);
+      assert.notEqual(token, oldSession.token);
+      assert.equal(sessions.length, 2);
+      assert.equal(revokedSession?.state, SessionState.REVOKED);
+      assert.equal(rejoinedSession?.state, SessionState.ACTIVE);
+      assert.equal(rejoinedSession?.accountId, account.id);
+      assert.equal(rejoinedSession?.activeProfileId, null);
+      assert.equal(
+        (
+          await db
+            .select({ role: AccountProfiles.role })
+            .from(AccountProfiles)
+            .where(eq(AccountProfiles.accountId, account.id))
+        )[0]?.role,
+        AccountProfileRole.OWNER,
+      );
+      assert.equal(
+        (
+          await db
+            .select({ state: Profiles.state })
+            .from(Profiles)
+            .where(eq(Profiles.id, profile.id))
+        )[0]?.state,
+        profileState,
+      );
+    } finally {
+      await cleanup([account.id]);
+      await db.delete(Profiles).where(eq(Profiles.id, profile.id));
+      await db.delete(Instances).where(eq(Instances.id, instance.id));
+    }
   });
 }
+
+test('Suspended Account는 Session을 생성하지 않는다', async () => {
+  const identity = createIdentity();
+  const account = await db
+    .insert(Accounts)
+    .values({ ...identity, displayName: 'preserved display name', state: AccountState.SUSPENDED })
+    .returning()
+    .then(firstOrThrow);
+
+  await assert.rejects(createOidcSession(identity), PermissionDeniedError);
+
+  const persistedAccount = await loadAccount(identity.oidcSubject);
+  assert.equal(persistedAccount.displayName, 'preserved display name');
+  assert.equal(persistedAccount.state, AccountState.SUSPENDED);
+  assert.deepEqual(await loadSessions(account.id), []);
+});
 
 const createFixture = async ({
   accountState = AccountState.ACTIVE,

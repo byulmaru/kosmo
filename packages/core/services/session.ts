@@ -131,21 +131,34 @@ export const createOidcSession = async (
       .returning({ id: Accounts.id, state: Accounts.state })
       .then(firstOrThrow);
 
-    if (account.state !== AccountState.ACTIVE) {
+    const isRejoining = account.state === AccountState.DISABLED;
+    if (!isRejoining && account.state !== AccountState.ACTIVE) {
       throw new PermissionDeniedError();
     }
 
-    const activeProfile = await tx
-      .select({ id: Profiles.id })
-      .from(Profiles)
-      .innerJoin(
-        AccountProfiles,
-        and(eq(AccountProfiles.profileId, Profiles.id), eq(AccountProfiles.accountId, account.id)),
-      )
-      .where(eq(Profiles.state, ProfileState.ACTIVE))
-      .orderBy(desc(Profiles.id))
-      .limit(1)
-      .then(first);
+    if (isRejoining) {
+      await tx
+        .update(Accounts)
+        .set({ state: AccountState.ACTIVE })
+        .where(eq(Accounts.id, account.id));
+    }
+
+    const activeProfile = isRejoining
+      ? undefined
+      : await tx
+          .select({ id: Profiles.id })
+          .from(Profiles)
+          .innerJoin(
+            AccountProfiles,
+            and(
+              eq(AccountProfiles.profileId, Profiles.id),
+              eq(AccountProfiles.accountId, account.id),
+            ),
+          )
+          .where(eq(Profiles.state, ProfileState.ACTIVE))
+          .orderBy(desc(Profiles.id))
+          .limit(1)
+          .then(first);
 
     return tx
       .insert(Sessions)
