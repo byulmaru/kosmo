@@ -8,6 +8,7 @@ import { postContentDocumentToText } from '@kosmo/core/post-content/server';
 import { visiblePostWhere, visibleProfileWhere } from '@kosmo/core/visibility';
 import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
+import { html } from 'hono/html';
 import { captureUnexpectedError } from '../sentry';
 
 const STATIC_ROOT = process.env.EXPO_WEB_ROOT ?? '../app/dist';
@@ -73,12 +74,12 @@ shareRoutes.on(['GET', 'HEAD'], '/:relativeHandle/:globalId', async (c, next) =>
     captureUnexpectedError(cause);
   }
 
-  const html = replaceShareMetadata(appShell, renderMetadata(metadata));
-  if (!html) {
+  const renderedShell = replaceShareMetadata(appShell, await renderMetadata(metadata));
+  if (!renderedShell) {
     return next();
   }
 
-  return new Response(c.req.method === 'HEAD' ? null : html, {
+  return new Response(c.req.method === 'HEAD' ? null : renderedShell, {
     headers: {
       'Cache-Control': 'no-store',
       'Content-Type': 'text/html; charset=UTF-8',
@@ -383,46 +384,37 @@ function defaultImage(origin: string): ShareImage {
   };
 }
 
-function renderMetadata(metadata: ShareMetadata): string {
+function renderMetadata(metadata: ShareMetadata) {
   const firstImage = metadata.images[0] ?? defaultImage('https://kos.moe');
-  const imageTags = metadata.images.flatMap((image) => [
-    metaTag('property', 'og:image', image.url),
-    ...(image.mediaType ? [metaTag('property', 'og:image:type', image.mediaType)] : []),
-    ...(image.width ? [metaTag('property', 'og:image:width', String(image.width))] : []),
-    ...(image.height ? [metaTag('property', 'og:image:height', String(image.height))] : []),
-    ...(image.altText !== undefined ? [metaTag('property', 'og:image:alt', image.altText)] : []),
-  ]);
+  const imageTags = metadata.images.map(
+    (image) => html`
+      <meta property="og:image" content="${image.url}" />
+      ${image.mediaType ? html`<meta property="og:image:type" content="${image.mediaType}" />` : ''}
+      ${image.width ? html`<meta property="og:image:width" content="${image.width}" />` : ''}
+      ${image.height ? html`<meta property="og:image:height" content="${image.height}" />` : ''}
+      ${image.altText !== undefined
+        ? html`<meta property="og:image:alt" content="${image.altText}" />`
+        : ''}
+    `,
+  );
 
-  return [
-    `<title>${escapeHtml(metadata.title)}</title>`,
-    metaTag('name', 'description', metadata.description),
-    metaTag('property', 'og:type', metadata.type),
-    metaTag('property', 'og:url', metadata.canonicalUrl),
-    metaTag('property', 'og:site_name', 'KOSMO'),
-    metaTag('property', 'og:title', metadata.title),
-    metaTag('property', 'og:description', metadata.description),
-    ...imageTags,
-    metaTag('name', 'twitter:card', 'summary_large_image'),
-    metaTag('name', 'twitter:title', metadata.title),
-    metaTag('name', 'twitter:description', metadata.description),
-    metaTag('name', 'twitter:image', firstImage.url),
-    ...(firstImage.altText !== undefined
-      ? [metaTag('name', 'twitter:image:alt', firstImage.altText)]
-      : []),
-  ].join('\n    ');
-}
-
-function metaTag(attribute: 'name' | 'property', key: string, value: string): string {
-  return `<meta ${attribute}="${escapeHtml(key)}" content="${escapeHtml(value)}" />`;
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;');
+  return html`
+    <title>${metadata.title}</title>
+    <meta name="description" content="${metadata.description}" />
+    <meta property="og:type" content="${metadata.type}" />
+    <meta property="og:url" content="${metadata.canonicalUrl}" />
+    <meta property="og:site_name" content="KOSMO" />
+    <meta property="og:title" content="${metadata.title}" />
+    <meta property="og:description" content="${metadata.description}" />
+    ${imageTags}
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${metadata.title}" />
+    <meta name="twitter:description" content="${metadata.description}" />
+    <meta name="twitter:image" content="${firstImage.url}" />
+    ${firstImage.altText !== undefined
+      ? html`<meta name="twitter:image:alt" content="${firstImage.altText}" />`
+      : ''}
+  `;
 }
 
 function replaceShareMetadata(html: string, metadata: string): string | null {
