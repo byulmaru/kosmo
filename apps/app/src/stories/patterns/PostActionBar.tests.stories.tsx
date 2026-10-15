@@ -12,7 +12,9 @@ import baseMeta, {
   ProcessingAccessibility as processingAccessibility,
   ReactionConcurrentMutationContract as reactionConcurrentMutationContract,
   ReactionFailureRetryActorSwitchAndUnmount as reactionFailureRetryActorSwitchAndUnmount,
+  ReactionNullableDeleteSuccessContract as reactionNullableDeleteSuccessContract,
   ReactionPopoverDismissFocusAndPlacement as reactionPopoverDismissFocusAndPlacement,
+  ReactionSharedSurfaceConsistencyContract as reactionSharedSurfaceConsistencyContract,
   ReactionSummaryToggleContract as reactionSummaryToggleContract,
 } from './PostActionBar.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -42,5 +44,8 @@ export const ReactionSummaryToggleContract: Story = reactionSummaryToggleContrac
 export const ReactionConcurrentMutationContract: Story = reactionConcurrentMutationContract;
 export const ReactionFailureRetryActorSwitchAndUnmount: Story =
   reactionFailureRetryActorSwitchAndUnmount;
+export const ReactionNullableDeleteSuccessContract: Story = reactionNullableDeleteSuccessContract;
+export const ReactionSharedSurfaceConsistencyContract: Story =
+  reactionSharedSurfaceConsistencyContract;
 export const InteractionContract: Story = interactionContract;
 export const ProcessingAccessibility: Story = processingAccessibility;
