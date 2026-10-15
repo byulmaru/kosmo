@@ -16,6 +16,8 @@ import baseMeta, {
   ReactionFullDismissFocusAndPlacement as reactionFullDismissFocusAndPlacement,
   ReactionMobileWebTabClearance as reactionMobileWebTabClearance,
   ReactionRecentUseContract as reactionRecentUseContract,
+  ReactionNullableDeleteSuccessContract as reactionNullableDeleteSuccessContract,
+  ReactionSharedSurfaceConsistencyContract as reactionSharedSurfaceConsistencyContract,
   ReactionSummaryToggleContract as reactionSummaryToggleContract,
   ReactionViewerOverlayContract as reactionViewerOverlayContract,
 } from './PostActionBar.stories';
@@ -49,5 +51,8 @@ export const ReactionConcurrentMutationContract: Story = reactionConcurrentMutat
 export const ReactionFailureRetryActorSwitchAndUnmount: Story =
   reactionFailureRetryActorSwitchAndUnmount;
 export const ReactionDirectFullContract: Story = reactionDirectFullContract;
+export const ReactionNullableDeleteSuccessContract: Story = reactionNullableDeleteSuccessContract;
+export const ReactionSharedSurfaceConsistencyContract: Story =
+  reactionSharedSurfaceConsistencyContract;
 export const InteractionContract: Story = interactionContract;
 export const ProcessingAccessibility: Story = processingAccessibility;

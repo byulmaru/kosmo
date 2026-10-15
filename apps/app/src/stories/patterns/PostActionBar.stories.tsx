@@ -339,7 +339,12 @@ function PostActionBarFixtureLoaded({
   );
 }
 
-type ReactionRequestOutcome = 'data-errors-success' | 'network-error' | 'payload-error' | 'success';
+type ReactionRequestOutcome =
+  | 'data-errors-success'
+  | 'network-error'
+  | 'nullable-delete-success'
+  | 'payload-error'
+  | 'success';
 
 type ReactionMutationSink = Readonly<{
   complete: () => void;
@@ -364,8 +369,9 @@ type ReactionRequestSummary = Readonly<{
   type: string;
 }>;
 
-function ReactionContractHarness() {
+function ReactionContractHarness({ duplicateSurface = false }: { duplicateSurface?: boolean }) {
   const requestsRef = useRef<CapturedReactionRequest[]>([]);
+  const reactionIdsByActor = useRef(new Map<number, Map<string, string>>());
   const selectedTypesByActor = useRef(new Map<number, Set<string>>());
   const nextActorId = useRef(0);
   const nextRequestId = useRef(0);
@@ -376,6 +382,7 @@ function ReactionContractHarness() {
     (_nativeToken: string | null, selectedProfileId: string | null) => {
       const actorId = ++nextActorId.current;
       selectedTypesByActor.current.set(actorId, new Set());
+      reactionIdsByActor.current.set(actorId, new Map());
       const environment = new Environment({
         network: Network.create((request: RequestParameters, variables: Variables) => {
           if (request.operationKind !== 'mutation') {
@@ -468,11 +475,15 @@ function ReactionContractHarness() {
     }
 
     const selectedTypes = selectedTypesByActor.current.get(request.actorId)!;
+    const reactionIds = reactionIdsByActor.current.get(request.actorId)!;
     const add = request.name === 'PostReactionControllerAddReactionMutation';
+    const deletedReactionId = reactionIds.get(request.type) ?? null;
     if (add) {
       selectedTypes.add(request.type);
+      reactionIds.set(request.type, `reaction-${request.actorId}-${request.id}`);
     } else {
       selectedTypes.delete(request.type);
+      reactionIds.delete(request.type);
     }
     const post = {
       __typename: 'Post',
@@ -483,7 +494,7 @@ function ReactionContractHarness() {
       })),
       viewerReactions: [...selectedTypes].map((type, index) => ({
         __typename: 'Reaction',
-        id: `reaction-${request.actorId}-${index}-${type}`,
+        id: reactionIds.get(type) ?? `reaction-${request.actorId}-${index}-${type}`,
         type,
       })),
     };
@@ -500,8 +511,8 @@ function ReactionContractHarness() {
         }
       : {
           deleteReaction: {
-            post,
-            reactionId: null,
+            post: outcome === 'nullable-delete-success' ? null : post,
+            reactionId: outcome === 'nullable-delete-success' ? deletedReactionId : null,
           },
         };
     request.sink.next({
@@ -520,6 +531,7 @@ function ReactionContractHarness() {
           mounted={mounted}
           onMountedChange={setMounted}
           onSettleRequest={settleRequest}
+          duplicateSurface={duplicateSurface}
           requests={requests}
         />
       </RelayActorBoundary>
@@ -531,11 +543,13 @@ function ReactionContractControls({
   mounted,
   onMountedChange,
   onSettleRequest,
+  duplicateSurface,
   requests,
 }: {
   mounted: boolean;
   onMountedChange: (mounted: boolean) => void;
   onSettleRequest: (id: number, outcome: ReactionRequestOutcome) => void;
+  duplicateSurface: boolean;
   requests: ReadonlyArray<ReactionRequestSummary>;
 }) {
   const { resetActor } = useRelayActor();
@@ -560,24 +574,31 @@ function ReactionContractControls({
       <Text testID="reaction-request-log">{JSON.stringify(requests)}</Text>
       {requests.map((request) => (
         <View key={request.id}>
-          {(['success', 'payload-error', 'data-errors-success', 'network-error'] as const).map(
-            (outcome) => (
-              <Text
-                accessibilityLabel={`요청 ${request.id} ${outcome}`}
-                accessibilityRole="button"
-                key={outcome}
-                onPress={() => onSettleRequest(request.id, outcome)}
-              >
-                요청 {request.id} {outcome}
-              </Text>
-            ),
-          )}
+          {(
+            [
+              'success',
+              'payload-error',
+              'data-errors-success',
+              'network-error',
+              'nullable-delete-success',
+            ] as const
+          ).map((outcome) => (
+            <Text
+              accessibilityLabel={`요청 ${request.id} ${outcome}`}
+              accessibilityRole="button"
+              key={outcome}
+              onPress={() => onSettleRequest(request.id, outcome)}
+            >
+              요청 {request.id} {outcome}
+            </Text>
+          ))}
         </View>
       ))}
       {mounted ? (
         <Suspense fallback={<View />}>
           <SessionProvider>
             <PostActionBarFixtureContents showReactionSummary />
+            {duplicateSurface ? <PostActionBarFixtureContents showReactionSummary /> : null}
           </SessionProvider>
         </Suspense>
       ) : null}
@@ -791,6 +812,8 @@ const meta = {
     'ReactionMobileWebTabClearance',
     'ReactionViewerOverlayContract',
     'ReactionRecentUseContract',
+    'ReactionNullableDeleteSuccessContract',
+    'ReactionSharedSurfaceConsistencyContract',
     'ReactionSummaryToggleContract',
   ],
   parameters: { controls: { disable: true } },
@@ -1718,7 +1741,7 @@ export const ReactionSummaryToggleContract: Story = {
     await userEvent.click(heart);
     expect(screen.queryByRole('dialog', { name: '반응한 프로필' })).toBeNull();
     await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(1));
-    expect(canvas.getByRole('button', { name: '❤️ 반응 12개, 처리 중' })).toBeDisabled();
+    expect(canvas.getByRole('button', { name: '❤️ 반응 13개, 처리 중' })).toBeDisabled();
     canvas.getByRole('button', { name: '요청 1 success' }).click();
     await waitFor(() =>
       expect(canvas.getByRole('button', { name: '❤️ 반응 13개' })).toHaveAttribute(
@@ -1729,7 +1752,7 @@ export const ReactionSummaryToggleContract: Story = {
 
     await userEvent.click(canvas.getByRole('button', { name: '❤️ 반응 13개' }));
     await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(2));
-    expect(canvas.getByRole('button', { name: '❤️ 반응 13개, 처리 중' })).toBeDisabled();
+    expect(canvas.getByRole('button', { name: '❤️ 반응 12개, 처리 중' })).toBeDisabled();
     canvas.getByRole('button', { name: '요청 2 success' }).click();
     await waitFor(() =>
       expect(canvas.getByRole('button', { name: '❤️ 반응 12개' })).toHaveAttribute(
@@ -1739,6 +1762,62 @@ export const ReactionSummaryToggleContract: Story = {
     );
   },
   render: () => <ReactionContractHarness />,
+};
+
+export const ReactionNullableDeleteSuccessContract: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole('button', { name: '❤️ 반응 12개' }));
+    await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(1));
+    canvas.getByRole('button', { name: '요청 1 success' }).click();
+    await waitFor(() =>
+      expect(canvas.getByRole('button', { name: '❤️ 반응 13개' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      ),
+    );
+
+    await userEvent.click(canvas.getByRole('button', { name: '❤️ 반응 13개' }));
+    await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(2));
+    expect(canvas.getByRole('button', { name: '❤️ 반응 12개, 처리 중' })).toBeDisabled();
+    canvas.getByRole('button', { name: '요청 2 nullable-delete-success' }).click();
+    await waitFor(() =>
+      expect(canvas.getByRole('button', { name: '❤️ 반응 13개' })).toHaveAttribute(
+        'aria-pressed',
+        'false',
+      ),
+    );
+    expect(canvas.queryByRole('button', { name: '❤️ 반응 13개, 오류, 다시 시도' })).toBeNull();
+    expect(canvas.queryByRole('button', { name: '❤️ 반응 12개' })).toBeNull();
+  },
+  render: () => <ReactionContractHarness />,
+};
+
+export const ReactionSharedSurfaceConsistencyContract: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const hearts = await canvas.findAllByRole('button', { name: '❤️ 반응 12개' });
+    expect(hearts).toHaveLength(2);
+    await userEvent.click(hearts[0]!);
+    await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(1));
+
+    expect(canvas.getByRole('button', { name: '❤️ 반응 13개, 처리 중' })).toBeDisabled();
+    expect(canvas.getByRole('button', { name: '❤️ 반응 13개' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+
+    canvas.getByRole('button', { name: '요청 1 network-error' }).click();
+    await waitFor(() =>
+      expect(canvas.getAllByRole('button', { name: /❤️ 반응 12개/ })).toHaveLength(2),
+    );
+    expect(canvas.getByRole('button', { name: '❤️ 반응 12개, 오류, 다시 시도' })).toBeVisible();
+    expect(canvas.getByRole('button', { name: '❤️ 반응 12개' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+  },
+  render: () => <ReactionContractHarness duplicateSurface />,
 };
 
 export const ReactionConcurrentMutationContract: Story = {
