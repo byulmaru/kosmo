@@ -245,7 +245,8 @@ export function FullReactionPicker({
           showsVerticalScrollIndicator={false}
           testID="full-reaction-picker-scroll"
           updateCellsBatchingPeriod={16}
-          windowSize={100}
+          // Web keeps a wide window for Tab traversal; Native mounts nearby rows.
+          windowSize={Platform.OS === 'web' ? 100 : 5}
         />
       )}
     </View>

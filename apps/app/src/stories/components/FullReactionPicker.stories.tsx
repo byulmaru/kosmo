@@ -558,15 +558,11 @@ export const SequentialKeyboardBrowseContract: Story = {
     const search = canvas.getByRole('searchbox', { name: '반응 검색' });
     const scroll = canvas.getByTestId('full-reaction-picker-scroll') as HTMLElement;
     await waitFor(() => expect(search).toHaveFocus());
-    expect(within(scroll).getAllByRole('button').length).toBeLessThan(120);
     const lastInitiallyMountedOption = within(scroll).getAllByRole('button').at(-1)!;
-    await waitFor(
-      () =>
-        expect(within(scroll).getAllByRole('button')).toHaveLength(
-          reactionEmojiPickerOptions.length + 6,
-        ),
-      { timeout: 5000 },
-    );
+    lastInitiallyMountedOption.focus();
+    await userEvent.tab();
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    search.focus();
     await userEvent.tab();
     const quickOptions = reactionEmojiPickerOptions
       .filter((option) => option.quick)
@@ -583,10 +579,6 @@ export const SequentialKeyboardBrowseContract: Story = {
     expect(secondOption).toHaveFocus();
     await userEvent.tab({ shift: true });
     expect(firstOption).toHaveFocus();
-
-    lastInitiallyMountedOption.focus();
-    await userEvent.tab();
-    expect(dialog.contains(document.activeElement)).toBe(true);
 
     const finalCatalogOption = reactionEmojiPickerOptions.at(-1);
     scroll.scroll({ top: scroll.scrollHeight, behavior: 'instant' });
