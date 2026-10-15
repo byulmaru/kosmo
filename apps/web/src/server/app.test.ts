@@ -810,15 +810,21 @@ describe('runtime routing', () => {
     expect(await response.text()).toBe('<html>expo app</html>');
   });
 
-  test('keeps explicit ActivityPub representations out of the HTML preview route', async () => {
-    const globalId = encodeGlobalId('Post', '00000000-0000-8000-8000-000000000001');
-    const response = await app.request(`/@alice/${globalId}`, {
-      headers: { accept: 'application/activity+json, text/html' },
-    });
+  test.each([
+    ['application/activity+json', 404, '404 Not Found'],
+    ['application/activity+json, text/html', 200, '<html>expo app</html>'],
+  ])(
+    'preserves static fallback after bypassing the preview for Accept %s',
+    async (accept, status, body) => {
+      const globalId = encodeGlobalId('Post', '00000000-0000-8000-8000-000000000001');
+      const response = await app.request(`/@alice/${globalId}`, {
+        headers: { accept },
+      });
 
-    expect(response.status).toBe(404);
-    expect(await response.text()).toBe('404 Not Found');
-  });
+      expect(response.status).toBe(status);
+      expect(await response.text()).toBe(body);
+    },
+  );
 
   test('preserves the app shell fallback for a browser URL with a non-Post global ID', async () => {
     const globalId = encodeGlobalId('Profile', '00000000-0000-8000-8000-000000000001');
