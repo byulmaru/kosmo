@@ -55,7 +55,7 @@ export function FullReactionOverlay({
   const compactWeb = web && viewportWidth < breakpoints.compact;
   const overlayMotion = useOverlayMotion(web ? false : open);
   const [anchor, setAnchor] = useState<Anchor | null>(null);
-  const [content, setContent] = useState<Pick<LayoutRectangle, 'height' | 'width'> | null>(null);
+  const [contentHeight, setContentHeight] = useState<number | null>(null);
   const contentRef = useRef<ViewType>(null);
   const wasNativeMounted = useRef(false);
 
@@ -85,10 +85,7 @@ export function FullReactionOverlay({
     }
   }, [overlayMotion.mounted, triggerRef, web]);
   const onContentLayout = useCallback((event: LayoutChangeEvent) => {
-    const { height, width } = event.nativeEvent.layout;
-    setContent((current) =>
-      current?.height === height && current.width === width ? current : { height, width },
-    );
+    setContentHeight(event.nativeEvent.layout.height);
   }, []);
 
   useEffect(() => {
@@ -144,17 +141,17 @@ export function FullReactionOverlay({
   const minLeft = insets.left + spacing.sm;
   const maxRight = viewportWidth - insets.right - spacing.sm;
   const availableWidth = Math.max(0, maxRight - minLeft);
-  const shellWidth = Math.min(content?.width ?? (compactWeb ? 288 : 360), availableWidth);
+  const shellWidth = Math.min(compactWeb ? 288 : 360, availableWidth);
   const left = anchor ? Math.min(Math.max(anchor.x, minLeft), maxRight - shellWidth) : minLeft;
   const requestedTop = anchor
     ? placement === 'bottom'
       ? anchor.y + anchor.height + spacing.xs
-      : anchor.y - (content?.height ?? 0) - spacing.xs
+      : anchor.y - (contentHeight ?? 0) - spacing.xs
     : insets.top + spacing.sm;
   const minTop = insets.top + spacing.sm;
   const maxTop = Math.max(
     minTop,
-    viewportHeight - insets.bottom - (content?.height ?? 0) - spacing.sm,
+    viewportHeight - insets.bottom - (contentHeight ?? 0) - spacing.sm,
   );
   const top = Math.min(Math.max(requestedTop, minTop), maxTop);
   const webPlacementProps: Record<string, unknown> = { dataSet: { placement } };
