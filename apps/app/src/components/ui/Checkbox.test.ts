@@ -13,11 +13,45 @@ const mockModule = (specifier: string | URL, exports: object) =>
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 let platformOS: 'android' | 'ios' | 'web' = 'web';
+let reducedMotion = false;
 const PressableHost = 'Pressable' as unknown as ElementType;
 const ViewHost = 'View' as unknown as ElementType;
 
 mockModule(createRequire(import.meta.url).resolve('lucide-react-native'), { Check: 'Check' });
 mockModule('react-native', {
+  Animated: {
+    Color: class {
+      value: string;
+      constructor(value: string) {
+        this.value = value;
+      }
+      setValue(value: string) {
+        this.value = value;
+      }
+      stopAnimation(callback?: () => void) {
+        callback?.();
+      }
+    },
+    View: ViewHost,
+    Value: class {
+      value: number;
+      constructor(value: number) {
+        this.value = value;
+      }
+      interpolate() {
+        return this.value;
+      }
+      setValue(value: number) {
+        this.value = value;
+      }
+      stopAnimation() {}
+    },
+    timing: () => ({
+      start: (callback?: () => void) => callback?.(),
+      stop: () => undefined,
+    }),
+  },
+  Easing: { bezier: () => () => 0 },
   Platform: {
     get OS() {
       return platformOS;
@@ -30,31 +64,41 @@ mockModule('react-native', {
       typeof children === 'function' ? children({ hovered: false, pressed: false }) : children,
     ),
   StyleSheet: {
+    absoluteFill: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
     absoluteFillObject: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
     create: <T>(styles: T) => styles,
   },
   View: ViewHost,
 });
+const theme = {
+  actionPrimaryBase: 'primary',
+  actionPrimaryDisabled: 'primary-disabled',
+  actionPrimaryHover: 'primary-hover',
+  actionPrimaryOnBase: 'on-primary',
+  actionPrimaryOnDisabled: 'on-disabled',
+  actionPrimaryPressed: 'primary-pressed',
+  backgroundSurface: 'surface',
+  borderDisabled: 'border-disabled',
+  borderStrong: 'border-strong',
+  stateDisabledSurface: 'disabled-surface',
+  stateFocusRing: 'focus-ring',
+  stateHover: 'hover',
+  statePressed: 'pressed',
+};
+
 mockModule('@/theme/ThemeProvider', {
-  useTheme: () => ({
-    actionPrimaryBase: 'primary',
-    actionPrimaryDisabled: 'primary-disabled',
-    actionPrimaryHover: 'primary-hover',
-    actionPrimaryOnBase: 'on-primary',
-    actionPrimaryOnDisabled: 'on-disabled',
-    actionPrimaryPressed: 'primary-pressed',
-    backgroundSurface: 'surface',
-    borderDisabled: 'border-disabled',
-    borderStrong: 'border-strong',
-    stateDisabledSurface: 'disabled-surface',
-    stateFocusRing: 'focus-ring',
-    stateHover: 'hover',
-    statePressed: 'pressed',
-  }),
+  useReducedMotion: () => reducedMotion,
+  useThemeMode: () => 'light',
+  useTheme: () => theme,
 });
 mockModule('@/theme/tokens', {
   borderWidths: { 1: 1, 2: 2 },
   iconSizes: { 20: 20 },
+  motion: {
+    duration: { fast: 120, instant: 0, standard: 200 },
+    easing: { standard: 'standard-easing' },
+    easingPoints: { standard: [0.17, 0.73, 0.14, 1] },
+  },
   radius: { 4: 4, 8: 8, full: 999 },
 });
 
@@ -66,6 +110,7 @@ before(async () => {
 
 beforeEach(() => {
   platformOS = 'web';
+  reducedMotion = false;
 });
 
 function renderCheckbox(
@@ -121,7 +166,13 @@ test('Checkbox preserves its visual box inside the platform target size', () => 
       },
       { height: targetSize, width: targetSize },
     ]);
-    const [visual, indicator] = checkbox.findAllByType(ViewHost);
+    const views = checkbox.findAllByType(ViewHost);
+    const visual = views.find((node) => node.props.style?.height === 32);
+    const indicator = views.find(
+      (node) => Array.isArray(node.props.style) && node.props.style[0]?.height === 20,
+    );
+    assert.ok(visual);
+    assert.ok(indicator);
     assert.deepEqual(visual.props.style, {
       alignItems: 'center',
       height: 32,
@@ -131,6 +182,30 @@ test('Checkbox preserves its visual box inside the platform target size', () => 
     assert.equal(indicator.props.style[0].height, 20);
     assert.equal(indicator.props.style[0].width, 20);
   }
+});
+
+test('Checkbox checked fill uses selected timing and reduced motion is immediate', () => {
+  const selected = renderCheckbox(true);
+  const selectedIndicator = selected
+    .findAllByType(ViewHost)
+    .find((node) => Array.isArray(node.props.style) && node.props.style[0]?.height === 20);
+  assert.ok(selectedIndicator);
+  assert.equal(selectedIndicator.props.style[1].backgroundColor, 'primary');
+
+  const unchecked = renderCheckbox(false);
+  const uncheckedIndicator = unchecked
+    .findAllByType(ViewHost)
+    .find((node) => Array.isArray(node.props.style) && node.props.style[0]?.height === 20);
+  assert.ok(uncheckedIndicator);
+  assert.equal(uncheckedIndicator.props.style[1].backgroundColor, 'surface');
+
+  reducedMotion = true;
+  const reduced = renderCheckbox(true);
+  const reducedIndicator = reduced
+    .findAllByType(ViewHost)
+    .find((node) => Array.isArray(node.props.style) && node.props.style[0]?.height === 20);
+  assert.ok(reducedIndicator);
+  assert.equal(reducedIndicator.props.style[1].backgroundColor, 'primary');
 });
 
 test('Web keyboard toggles Checkbox once and ignores repeated Space', () => {

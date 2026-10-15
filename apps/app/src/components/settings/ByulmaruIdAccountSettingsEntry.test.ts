@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { cloneElement, createElement } from 'react';
 import { act, create } from 'react-test-renderer';
-import type { ComponentType, ReactElement } from 'react';
+import type { ComponentType, ReactElement, ReactNode } from 'react';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -28,10 +28,25 @@ mock.module('expo-router', {
     },
   },
 } as unknown as Parameters<typeof mock.module>[1]);
+
+const Pressable = ({
+  children,
+  ...props
+}: {
+  children?: ReactNode | ((state: { hovered: boolean; pressed: boolean }) => ReactNode);
+  [key: string]: unknown;
+}) =>
+  createElement(
+    'Pressable',
+    props,
+    typeof children === 'function' ? children({ hovered: false, pressed: false }) : children,
+  );
+
 mock.module('react-native', {
   exports: {
+    Animated: { View: 'View' },
     Platform: { OS: 'web' },
-    Pressable: 'Pressable',
+    Pressable,
     StyleSheet: {
       create: <T>(styles: T) => styles,
       flatten: (style: unknown) =>
@@ -57,6 +72,11 @@ mock.module(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
       text: '#111111',
       textSecondary: '#666666',
     }),
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('../ui/useAnimatedColorTransition', import.meta.url), {
+  exports: {
+    useAnimatedColorTransition: ({ color }: { color: string }) => color,
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 

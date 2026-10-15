@@ -15,11 +15,12 @@ const mockModule = (specifier: string | URL, exports: object) =>
 
 type PressableProps = {
   accessibilityLabel?: string;
-  children?: ReactNode;
+  children?: ReactNode | ((state: { hovered: boolean; pressed: boolean }) => ReactNode);
   style?: unknown;
 };
 
 const focusedLabels: string[] = [];
+let pressState = { hovered: false, pressed: false };
 const PressableHost = forwardRef<{ focus: () => void }, PressableProps>(function PressableMock(
   props,
   ref: Ref<{ focus: () => void }>,
@@ -31,42 +32,96 @@ const PressableHost = forwardRef<{ focus: () => void }, PressableProps>(function
     }),
     [props.accessibilityLabel],
   );
-  return createElement('Pressable', props, props.children);
+  return createElement(
+    'Pressable',
+    props,
+    typeof props.children === 'function' ? props.children(pressState) : props.children,
+  );
 });
 const TextHost = 'Text' as unknown as ElementType;
 const ViewHost = 'View' as unknown as ElementType;
+const theme = {
+  borderDisabled: 'disabled-border',
+  foregroundPrimary: 'primary',
+  foregroundSecondary: 'secondary',
+  stateDisabledForeground: 'disabled-foreground',
+  stateDisabledSurface: 'disabled-surface',
+  stateFocusRing: 'focus-ring',
+  stateHover: 'hover',
+  statePressed: 'pressed',
+  stateSelectedBorder: 'selected-border',
+};
 
 let platformOS: 'ios' | 'web' = 'web';
+let reducedMotion = false;
+const timingCalls: Array<{ duration: number; toValue: number }> = [];
+
+class AnimatedColorMock {
+  constructor(public value: string) {}
+  setValue(value: string) {
+    this.value = value;
+  }
+  stopAnimation(callback?: () => void) {
+    callback?.();
+  }
+}
 
 mockModule('react-native', {
+  processColor: () => undefined,
+  Animated: {
+    Color: AnimatedColorMock,
+    View: ViewHost,
+    Value: class {
+      value: number;
+      constructor(value: number) {
+        this.value = value;
+      }
+      interpolate({ outputRange }: { outputRange: string[] }) {
+        return outputRange[this.value] ?? outputRange[0];
+      }
+      setValue(value: number) {
+        this.value = value;
+      }
+      stopAnimation() {}
+    },
+    createAnimatedComponent: <T>(component: T) => component,
+    timing: (_value: unknown, config: { duration: number; toValue: number }) => {
+      timingCalls.push(config);
+      return {
+        start: (callback?: () => void) => callback?.(),
+        stop: () => undefined,
+      };
+    },
+  },
+  Easing: { bezier: () => () => 0 },
   Platform: {
     get OS() {
       return platformOS;
     },
   },
   Pressable: PressableHost,
-  StyleSheet: { create: <T>(styles: T) => styles },
+  StyleSheet: {
+    absoluteFill: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
+    create: <T>(styles: T) => styles,
+  },
   Text: TextHost,
   View: ViewHost,
 });
 mockModule('react-native-svg', { Svg: 'Svg', Circle: 'Circle' });
 mockModule('@/theme/ThemeProvider', {
-  useTheme: () => ({
-    borderDisabled: 'disabled-border',
-    foregroundPrimary: 'primary',
-    foregroundSecondary: 'secondary',
-    stateDisabledForeground: 'disabled-foreground',
-    stateDisabledSurface: 'disabled-surface',
-    stateFocusRing: 'focus-ring',
-    stateHover: 'hover',
-    statePressed: 'pressed',
-    stateSelectedBorder: 'selected-border',
-  }),
+  useReducedMotion: () => reducedMotion,
+  useThemeMode: () => 'light',
+  useTheme: () => theme,
 });
 mockModule('@/theme/tokens', {
   borderWidths: { 0: 0, 1: 1, 2: 2 },
   iconSizes: { 20: 20 },
   layoutRecipes: { labelSupportStack: { flexDirection: 'column', gap: 4 } },
+  motion: {
+    duration: { fast: 120, instant: 0, standard: 200 },
+    easing: { standard: 'standard-easing' },
+    easingPoints: { standard: [0.17, 0.73, 0.14, 1] },
+  },
   radius: { 12: 12, full: 999 },
   space: { 4: 4, 12: 12 },
   textStyles: {
@@ -83,7 +138,10 @@ before(async () => {
 
 beforeEach(() => {
   focusedLabels.length = 0;
+  timingCalls.length = 0;
+  pressState = { hovered: false, pressed: false };
   platformOS = 'web';
+  reducedMotion = false;
 });
 
 type OptionValue = 'email' | 'push' | 'sms' | 'disabled';
@@ -174,6 +232,14 @@ function radioStyle(renderer: ReactTestRenderer, label: string, state: Pressable
   return flattenStyle(typeof style === 'function' ? style(state) : style);
 }
 
+function radioFeedbackStyle(renderer: ReactTestRenderer, label: string) {
+  const feedback = radioByLabel(renderer, label)
+    .findAllByType(ViewHost)
+    .find((node) => node.props.pointerEvents === 'none');
+  assert.ok(feedback);
+  return flattenStyle(feedback.props.style);
+}
+
 test('RadioOption owns canonical presentation and semantic visual states', () => {
   const renderer = renderGroup({ value: 'email' });
   const selected = radioByLabel(renderer, '이메일');
@@ -207,21 +273,24 @@ test('RadioOption owns canonical presentation and semantic visual states', () =>
   assert.equal(labelStyle.lineHeight, 24);
 
   const resting = radioStyle(renderer, '이메일', { pressed: false });
-  assert.equal(resting.padding, 12);
+  assert.equal(resting.padding, 11);
   assert.equal(resting.gap, 12);
   assert.equal(resting.borderRadius, 12);
   assert.equal(resting.backgroundColor, undefined);
-  const uncheckedCircles = radioByLabel(renderer, '문자').findAllByType('Circle' as ElementType);
+  assert.equal(resting.transitionDuration, undefined);
+  const uncheckedCircles = radioByLabel(renderer, '문자')
+    .findAllByType('Circle' as ElementType)
+    .filter((circle) => {
+      const opacity = circle.props.opacity as number | { value?: number } | undefined;
+      return typeof opacity === 'number' ? opacity !== 0 : opacity?.value !== 0;
+    });
   assert.equal(uncheckedCircles.length, 1);
   assert.equal(uncheckedCircles[0].props.stroke, 'secondary');
-  assert.equal(
-    radioStyle(renderer, '문자', { hovered: true, pressed: false }).backgroundColor,
-    'hover',
-  );
-  assert.equal(
-    radioStyle(renderer, '문자', { hovered: true, pressed: true }).backgroundColor,
-    'pressed',
-  );
+  const feedback = radioByLabel(renderer, '문자')
+    .findAllByType(ViewHost)
+    .find((node) => node.props.pointerEvents === 'none');
+  assert.ok(feedback);
+  assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'transparent');
   assert.equal(
     radioStyle(renderer, '이메일', { focused: true, pressed: false }).backgroundColor,
     undefined,
@@ -232,9 +301,83 @@ test('RadioOption owns canonical presentation and semantic visual states', () =>
   const [disabledRing, disabledDot] = disabledRadio.findAllByType('Circle' as ElementType);
   assert.equal(disabledRing.props.stroke, 'disabled-foreground');
   assert.equal(disabledDot.props.fill, 'disabled-foreground');
+  const disabledFeedback = radioFeedbackStyle(disabledSelected, '푸시');
+  assert.equal(disabledFeedback.backgroundColor, 'disabled-surface');
+  assert.equal(disabledFeedback.borderColor, 'disabled-border');
+  assert.equal(disabledFeedback.borderWidth, 1);
+});
+
+test('RadioOption hover and reduced motion timing stay immediate at the visual boundary', () => {
+  const renderer = renderGroup({ value: 'email' });
+  pressState = { hovered: true, pressed: false };
+  act(() =>
+    renderer.update(
+      createElement(
+        radioGroupModule!.RadioGroup,
+        {
+          accessibilityLabel: '알림 방식',
+          disabled: false,
+          onChange: () => undefined,
+          value: 'email',
+        },
+        options.map((option) =>
+          createElement(radioGroupModule!.RadioOption, { key: option.value, option }),
+        ),
+      ),
+    ),
+  );
   assert.equal(
-    radioStyle(disabledSelected, '푸시', { hovered: true, pressed: true }).backgroundColor,
-    'disabled-surface',
+    timingCalls.some(({ duration }) => duration === 120),
+    true,
+  );
+
+  reducedMotion = true;
+  const reduced = renderGroup({ value: 'email' });
+  assert.equal(radioStyle(reduced, '이메일', { pressed: false }).transitionDuration, undefined);
+});
+
+test('RadioOption animates selected indicator in both directions and stops for reduced motion', () => {
+  platformOS = 'ios';
+  const renderer = renderGroup({ value: 'email' });
+  pressState = { hovered: false, pressed: true };
+  act(() =>
+    renderer.update(
+      createElement(
+        radioGroupModule!.RadioGroup,
+        {
+          accessibilityLabel: '알림 방식',
+          disabled: false,
+          onChange: () => undefined,
+          value: 'email',
+        },
+        options.map((option) =>
+          createElement(radioGroupModule!.RadioOption, { key: option.value, option }),
+        ),
+      ),
+    ),
+  );
+  assert.ok(timingCalls.some(({ duration }) => duration === 120));
+
+  reducedMotion = true;
+  act(() =>
+    renderer.update(
+      createElement(
+        radioGroupModule!.RadioGroup,
+        {
+          accessibilityLabel: '알림 방식',
+          disabled: false,
+          onChange: () => undefined,
+          value: 'sms',
+        },
+        options.map((option) =>
+          createElement(radioGroupModule!.RadioOption, { key: option.value, option }),
+        ),
+      ),
+    ),
+  );
+  assert.equal(
+    timingCalls.some(({ duration }) => duration === 0),
+    false,
   );
 });
 
@@ -253,9 +396,9 @@ test('RadioOption uses internal focus and disabled strokes without changing oute
 
   act(() => radio.props.onFocus(focusEvent));
   const pointerFocused = radioStyle(renderer, '이메일', { pressed: false });
-  assert.equal(pointerFocused.borderColor, undefined);
-  assert.equal(pointerFocused.borderWidth, 0);
-  assert.equal(pointerFocused.padding, 12);
+  assert.equal(pointerFocused.borderColor, 'transparent');
+  assert.equal(pointerFocused.borderWidth, 1);
+  assert.equal(pointerFocused.padding, 11);
 
   matchesFocusVisible = true;
   act(() => radio.props.onFocus(focusEvent));
@@ -271,13 +414,13 @@ test('RadioOption uses internal focus and disabled strokes without changing oute
 
   act(() => radio.props.onBlur());
   const blurred = radioStyle(renderer, '이메일', { pressed: false });
-  assert.equal(blurred.borderColor, undefined);
-  assert.equal(blurred.borderWidth, 0);
-  assert.equal(blurred.padding, 12);
+  assert.equal(blurred.borderWidth, 1);
+  assert.equal(blurred.padding, 11);
 
   const descriptionRadio = radioByLabel(renderer, '문자');
   act(() => descriptionRadio.props.onFocus(focusEvent));
   const focusedDescription = radioStyle(renderer, '문자', { pressed: false });
+  assert.equal(focusedDescription.borderColor, 'focus-ring');
   assert.equal(focusedDescription.borderWidth, 2);
   assert.equal(focusedDescription.padding, 10);
   assert.equal(
@@ -286,11 +429,14 @@ test('RadioOption uses internal focus and disabled strokes without changing oute
   );
 
   const disabled = radioStyle(renderer, '푸시', { pressed: false });
-  assert.equal(disabled.backgroundColor, 'disabled-surface');
-  assert.equal(disabled.borderColor, 'disabled-border');
+  assert.equal(disabled.backgroundColor, undefined);
+  assert.equal(disabled.borderColor, 'transparent');
   assert.equal(disabled.borderWidth, 1);
   assert.equal(disabled.padding, 11);
   assert.equal(2 * (Number(disabled.padding) + Number(disabled.borderWidth)) + 24, 48);
+  const disabledFeedback = radioFeedbackStyle(renderer, '푸시');
+  assert.equal(disabledFeedback.backgroundColor, 'disabled-surface');
+  assert.equal(disabledFeedback.borderColor, 'disabled-border');
 
   const disabledDescriptionRenderer = renderGroup({
     options: [

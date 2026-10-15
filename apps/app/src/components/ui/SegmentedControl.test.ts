@@ -23,6 +23,19 @@ const timingCalls: {
   toValue: number;
   useNativeDriver: boolean;
 }[] = [];
+const theme = {
+  backgroundSurface: 'surface',
+  borderDefault: 'border',
+  borderDisabled: 'border-disabled',
+  foregroundPrimary: 'foreground',
+  stateDisabledForeground: 'disabled-foreground',
+  stateDisabledSurface: 'disabled-surface',
+  stateFocusRing: 'focus-ring',
+  stateHover: 'hover',
+  statePressed: 'pressed',
+  stateSelectedBorder: 'selected-border',
+  stateSelectedSurface: 'selected-surface',
+};
 const PressableHost = forwardRef<{ focus: () => void }, PressableProps>(function PressableMock(
   { children, ...props },
   ref: Ref<{ focus: () => void }>,
@@ -57,12 +70,25 @@ class AnimatedValueMock {
   }
 }
 
+class AnimatedColorMock {
+  constructor(public value: string) {}
+  setValue(value: string) {
+    this.value = value;
+  }
+  stopAnimation(callback?: () => void) {
+    callback?.();
+  }
+}
+
 type AnimationMock = { start: () => void; stop: () => void };
 
 mockModule('react-native', {
+  processColor: () => undefined,
   Animated: {
+    Color: AnimatedColorMock,
     Value: AnimatedValueMock,
     View: ViewHost,
+    Text: 'Text',
     parallel: (animations: AnimationMock[]): AnimationMock => ({
       start: () => animations.forEach((animation) => animation.start()),
       stop: () => animations.forEach((animation) => animation.stop()),
@@ -86,30 +112,23 @@ mockModule('react-native', {
     },
   },
   Pressable: PressableHost,
-  StyleSheet: { create: <T>(styles: T) => styles },
+  StyleSheet: {
+    absoluteFill: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
+    create: <T>(styles: T) => styles,
+  },
   Text: 'Text',
   View: ViewHost,
 });
 mockModule('@/theme/ThemeProvider', {
   useReducedMotion: () => reducedMotion,
-  useTheme: () => ({
-    backgroundSurface: 'surface',
-    borderDefault: 'border',
-    borderDisabled: 'border-disabled',
-    foregroundPrimary: 'foreground',
-    stateDisabledForeground: 'disabled-foreground',
-    stateDisabledSurface: 'disabled-surface',
-    stateFocusRing: 'focus-ring',
-    stateHover: 'hover',
-    statePressed: 'pressed',
-    stateSelectedBorder: 'selected-border',
-    stateSelectedSurface: 'selected-surface',
-  }),
+  useThemeMode: () => 'light',
+  useTheme: () => theme,
 });
 mockModule('@/theme/tokens', {
   borderWidths: { 1: 1, 2: 2 },
   motion: {
-    duration: { standard: 200 },
+    duration: { fast: 120, instant: 0, standard: 200 },
+    easing: { standard: 'standard-easing' },
     easingPoints: { standard: [0.17, 0.73, 0.14, 1] },
   },
   radius: { 8: 8, 12: 12 },
@@ -178,7 +197,13 @@ function layOutItems(renderer: ReactTestRenderer) {
 
 function selectionFrame(renderer: ReactTestRenderer) {
   const selection = renderer.root.find(
-    (node) => node.type === ViewHost && node.props.pointerEvents === 'none',
+    (node) =>
+      node.type === ViewHost &&
+      Array.isArray(node.props.style) &&
+      node.props.style.some(
+        (style: unknown) =>
+          style && typeof style === 'object' && 'left' in style && 'width' in style,
+      ),
   );
   const frame = selection.props.style.at(-1) as {
     left: AnimatedValueMock;
@@ -253,8 +278,10 @@ test('Selection pill stretch stays subtle across distance and direction', () => 
     );
   });
 
+  const selectionTimingCalls = timingCalls.filter(({ toValue }) => typeof toValue === 'number');
+  assert.equal(timingCalls.length, 4);
   assert.deepEqual(
-    timingCalls.map(({ duration, easing, toValue, useNativeDriver }) => ({
+    selectionTimingCalls.map(({ duration, easing, toValue, useNativeDriver }) => ({
       duration,
       easing,
       toValue,
@@ -281,8 +308,12 @@ test('Selection pill stretch stays subtle across distance and direction', () => 
     );
   });
 
+  const reverseSelectionTimingCalls = timingCalls.filter(
+    ({ toValue }) => typeof toValue === 'number',
+  );
+  assert.equal(timingCalls.length, 4);
   assert.deepEqual(
-    timingCalls.map(({ duration, toValue }) => ({ duration, toValue })),
+    reverseSelectionTimingCalls.map(({ duration, toValue }) => ({ duration, toValue })),
     [
       { duration: 60, toValue: 196 },
       { duration: 60, toValue: 100 },
