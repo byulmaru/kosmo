@@ -1,4 +1,4 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, ne } from 'drizzle-orm';
 import {
   AccountProfiles,
   Accounts,
@@ -117,6 +117,17 @@ export const createOidcSession = async (
   tx?: DatabaseHandle,
 ) => {
   return getDatabaseConnection(tx).transaction(async (tx) => {
+    const existingAccount = await tx
+      .select({ state: Accounts.state })
+      .from(Accounts)
+      .where(eq(Accounts.oidcSubject, oidcSubject))
+      .then(first);
+
+    if (existingAccount?.state === AccountState.SUSPENDED) {
+      throw new PermissionDeniedError();
+    }
+
+    const isRejoining = existingAccount?.state === AccountState.DISABLED;
     const account = await tx
       .insert(Accounts)
       .values({
@@ -126,26 +137,32 @@ export const createOidcSession = async (
       })
       .onConflictDoUpdate({
         target: [Accounts.oidcSubject],
-        set: { displayName },
+        set: { displayName, state: AccountState.ACTIVE },
+        setWhere: ne(Accounts.state, AccountState.SUSPENDED),
       })
-      .returning({ id: Accounts.id, state: Accounts.state })
-      .then(firstOrThrow);
+      .returning({ id: Accounts.id })
+      .then(first);
 
-    if (account.state !== AccountState.ACTIVE) {
+    if (!account) {
       throw new PermissionDeniedError();
     }
 
-    const activeProfile = await tx
-      .select({ id: Profiles.id })
-      .from(Profiles)
-      .innerJoin(
-        AccountProfiles,
-        and(eq(AccountProfiles.profileId, Profiles.id), eq(AccountProfiles.accountId, account.id)),
-      )
-      .where(eq(Profiles.state, ProfileState.ACTIVE))
-      .orderBy(desc(Profiles.id))
-      .limit(1)
-      .then(first);
+    const activeProfile = isRejoining
+      ? undefined
+      : await tx
+          .select({ id: Profiles.id })
+          .from(Profiles)
+          .innerJoin(
+            AccountProfiles,
+            and(
+              eq(AccountProfiles.profileId, Profiles.id),
+              eq(AccountProfiles.accountId, account.id),
+            ),
+          )
+          .where(eq(Profiles.state, ProfileState.ACTIVE))
+          .orderBy(desc(Profiles.id))
+          .limit(1)
+          .then(first);
 
     return tx
       .insert(Sessions)

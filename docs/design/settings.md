@@ -23,8 +23,7 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
 
 2026-09-16 PROD-970 결정으로 Kosmo Account 탈퇴를 `/settings/account-deletion` 내부 detail에서 제공한다.
 `코스모 탈퇴`는 Settings root/master의 마지막 행으로 항상 표시하며, Byulmaru ID의 외부 `계정 설정` 진입점과
-분리한다. 탈퇴가 완료되면 Kosmo login으로 이동하고, 같은 Byulmaru ID의 Kosmo 재가입은 후속 정책이 정해질
-때까지 임시로 막는다.
+분리한다. 탈퇴가 완료되면 Kosmo login으로 이동한다.
 
 ## Route와 진입점
 
@@ -175,8 +174,8 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
 - 기존 Profile 삭제 흐름과 같은 lifecycle을 사용한다. `pending`에서는 확인·checkbox·dismiss·navigation의
   중복 조작을 막고, `error`에서는 확인 내용과 acknowledgement를 유지한 채 안전한 오류와 `다시 시도`를
   제공한다. 성공은 서버가 Account를 `Deleted`로 확정한 뒤에만 표시하며, 완료 후 login route로 이동한다.
-- 탈퇴 성공 뒤 동일 Byulmaru ID의 Kosmo 재가입은 허용하지 않는다. 이 차단은 현재 임시 조치이며, 영구 재가입
-  정책이나 Byulmaru ID 자체의 상태 전이는 이 계약에 포함하지 않는다.
+- 탈퇴 후 동일 Byulmaru ID로 신규 가입할 수 있으며, 삭제한 Profile은 복구하지 않는다. 자세한 재가입 계약은
+  [Account 객체](../domain/objects/account.md#행동)를 따른다.
 
 ## SettingsItem
 

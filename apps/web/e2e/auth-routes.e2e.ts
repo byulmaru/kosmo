@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { Accounts, db, Sessions } from '@kosmo/core/db';
+import { Accounts, db, firstOrThrow, Sessions } from '@kosmo/core/db';
 import { AccountState, SessionState } from '@kosmo/core/enums';
 import { eq } from 'drizzle-orm';
 import {
@@ -314,60 +314,112 @@ test('mock OIDC로 로그인하면 보호 홈으로 이동하고 세션이 유�
   await expect(page).toHaveURL(/\/home$/);
 });
 
-test('Deleted Account의 Web OIDC callback은 Session 없이 일반 오류로 거부된다', async ({
+test('Deleted Account의 Web OIDC callback은 같은 Account에 새 Session을 만들고 Profile 생성으로 이동한다', async ({
   context,
   page,
 }) => {
-  await db.insert(Accounts).values({
-    displayName: 'Deleted E2E User',
-    oidcSubject: 'oidc-mock-e2e-user',
-    state: AccountState.DISABLED,
-  });
+  const deletedAccount = await db
+    .insert(Accounts)
+    .values({
+      displayName: 'Deleted E2E User',
+      oidcSubject: 'oidc-mock-e2e-user',
+      state: AccountState.DISABLED,
+    })
+    .returning({ id: Accounts.id })
+    .then(firstOrThrow);
 
   const response = await page.goto('/login');
 
-  expect(response?.status()).toBe(500);
-  expect(await response?.text()).toBe('Internal Server Error');
-  expect(await db.select().from(Sessions)).toEqual([]);
-  expect((await context.cookies()).some(({ name }) => name === 'kosmo_session')).toBe(false);
-  expect(await page.textContent('body')).not.toContain('oidc-mock-e2e-user');
-});
+  expect(response?.status()).toBe(200);
+  await expect(page).toHaveURL(/\/home$/);
+  await expect(page.getByRole('heading', { name: '프로필을 만들어 시작하세요' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '프로필 만들기' })).toBeVisible();
 
-test('API는 shared confidential PKCE code를 cookie 없이 Kosmo 세션으로 교환한다', async ({
-  request,
-}) => {
-  const codeVerifier = 'v'.repeat(43);
-  const callbackUrl = await authorizeNativeCode(request, codeVerifier);
-  const response = await exchangeNativeOidcSession(request, {
-    code: callbackUrl.searchParams.get('code'),
-    codeVerifier,
-    redirectUri: 'kosmo://login/callback',
-  });
-  const body = (await response.json()) as NativeSessionGraphQLResponse;
-
-  expect(response.status()).toBe(200);
-  expect(body.errors, JSON.stringify(body.errors)).toBeUndefined();
-
-  const token = body.data?.exchangeNativeOidcSession?.token;
-
-  expect(typeof token).toBe('string');
-
-  if (typeof token !== 'string') {
-    throw new Error('Native session response did not contain a token.');
-  }
-
-  const session = await db
-    .select({ oidcSessionKey: Sessions.oidcSessionKey })
+  const account = await db
+    .select({ id: Accounts.id, state: Accounts.state })
+    .from(Accounts)
+    .where(eq(Accounts.oidcSubject, 'oidc-mock-e2e-user'))
+    .then((accounts) => accounts[0]);
+  const sessions = await db
+    .select()
     .from(Sessions)
-    .where(eq(Sessions.token, token))
-    .then((sessions) => sessions[0]);
+    .where(eq(Sessions.accountId, deletedAccount.id));
 
-  expect(session).toBeDefined();
-  expect(session?.oidcSessionKey).toBeNull();
-  expect(response.headers()['cache-control']).toContain('no-store');
-  expect(response.headers().pragma).toBe('no-cache');
-  expect(response.headers()['set-cookie']).toBeUndefined();
+  expect(account).toEqual({ id: deletedAccount.id, state: AccountState.ACTIVE });
+  expect(sessions).toHaveLength(1);
+  expect(sessions[0]?.state).toBe(SessionState.ACTIVE);
+  expect(sessions[0]?.activeProfileId).toBeNull();
+  expect((await context.cookies()).some(({ name }) => name === 'kosmo_session')).toBe(true);
 });
+
+for (const initialAccountState of [undefined, AccountState.DISABLED] as const) {
+  test(`API는 ${initialAccountState ?? '신규'} Account에 shared confidential PKCE code로 cookie 없이 Kosmo 세션을 발급한다`, async ({
+    request,
+  }) => {
+    const existingAccount = initialAccountState
+      ? await db
+          .insert(Accounts)
+          .values({
+            displayName: 'Deleted Native E2E User',
+            oidcSubject: 'oidc-mock-e2e-user',
+            state: initialAccountState,
+          })
+          .returning({ id: Accounts.id })
+          .then(firstOrThrow)
+      : undefined;
+    const codeVerifier = 'v'.repeat(43);
+    const callbackUrl = await authorizeNativeCode(request, codeVerifier);
+    const response = await exchangeNativeOidcSession(request, {
+      code: callbackUrl.searchParams.get('code'),
+      codeVerifier,
+      redirectUri: 'kosmo://login/callback',
+    });
+    const body = (await response.json()) as NativeSessionGraphQLResponse;
+
+    expect(response.status()).toBe(200);
+    expect(body.errors, JSON.stringify(body.errors)).toBeUndefined();
+
+    const token = body.data?.exchangeNativeOidcSession?.token;
+
+    expect(typeof token).toBe('string');
+
+    if (typeof token !== 'string') {
+      throw new Error('Native session response did not contain a token.');
+    }
+
+    const session = await db
+      .select({
+        accountId: Sessions.accountId,
+        activeProfileId: Sessions.activeProfileId,
+        oidcSessionKey: Sessions.oidcSessionKey,
+      })
+      .from(Sessions)
+      .where(eq(Sessions.token, token))
+      .then((sessions) => sessions[0]);
+
+    expect(session).toBeDefined();
+
+    if (!session) {
+      throw new Error('Native session response did not persist a Session.');
+    }
+
+    const account = await db
+      .select({ state: Accounts.state })
+      .from(Accounts)
+      .where(eq(Accounts.id, session.accountId))
+      .then((accounts) => accounts[0]);
+
+    expect(account?.state).toBe(AccountState.ACTIVE);
+    if (existingAccount) {
+      expect(session.accountId).toBe(existingAccount.id);
+    }
+    expect(session.activeProfileId).toBeNull();
+    expect(session.oidcSessionKey).toBeNull();
+    expect(response.headers()['cache-control']).toContain('no-store');
+    expect(response.headers().pragma).toBe('no-cache');
+    expect(response.headers()['set-cookie']).toBeUndefined();
+  });
+}
 
 test('Suspended Account의 Native exchange는 Session 없이 일반 권한 오류로 거부된다', async ({
   request,
