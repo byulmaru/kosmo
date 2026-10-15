@@ -118,9 +118,10 @@ Quote와 Mention만 최초 선택 후보인 경우에도 Type별 생성·Mute �
 교체하지 않는다. 이미 저장된 알림의 ID, Type, Read State와 최초 읽음 시각을 그 승인 처리에서 변경하지 않는 규칙이며,
 조회 불가에 따른 물리 보존·복원 보장과는 별개다. Followee Post는 독립 정책을 따른다.
 
-조회 제한의 보존 보장은 PR #803의 제안과 후속 사람의 결정을 받아들여 완화했다. 조회 불가 시 즉시 숨기는
-결과를 보장하고, 물리 정리는 기존 unavailable 정책에 맡긴다. cleanup 실행 시점에 따라 제한 해제 후 알림이
-다시 보이거나 이미 삭제되어 보이지 않을 수 있다는 결과를 허용한다.
+2026-09-09 당시에는 PR #803의 제안과 후속 사람의 결정을 받아들여 조회 제한의 보존 보장을 완화했다. 조회 불가 시
+즉시 숨기는 결과를 보장했고, 물리 정리는 기존 unavailable 정책에 맡겼다. cleanup 실행 시점에 따라 제한 해제 후
+알림이 다시 보이거나 이미 삭제되어 보이지 않을 수 있다는 결과를 허용했다. 이 즉시 숨김 설명은 위 2026-10-13
+행·source 필드 권한 결정으로 대체됐다.
 
 알림 제공 여부는 원문과 인용글의 조회 권한을 넓히지 않는다. 기본 행동 주체인 Profile로 자기 인용을 판단하며,
 Account를 공유한다는 이유로 다른 Profile의 알림까지 억제하지 않는다.
@@ -140,7 +141,9 @@ Account를 공유한다는 이유로 다른 Profile의 알림까지 억제하지
 현재 Post 구조는 Reply와 Quote의 동시 성립을 허용하므로 해당 구조 전제는 제거하지 않는다. 최초 후보는
 Reply → Mention → Quote 순서로 선택하며, 이미 저장된 대표 Notification은 뒤늦게 더 높은 우선순위 Type이
 생성 가능해져도 보존한다. PROD-903 자체의 제품 정책상 미결정 사항은 없다.
-Followee Post 독립, 조회 제한의 즉시 숨김과 Best Effort 정리도 확정했다.
+Followee Post는 독립 정책을 따르며, 저장 Notification 행은 존재하는 동안 Recipient 권한으로 조회하고 Related
+Profile·Related Post·source 필드는 각각의 일반 객체 조회 권한을 따른다. 기존 unavailable Notification 정책의
+Best Effort 정리는 유지한다.
 원격 관계의 legacy 승인·재승인 허용 조건은 해당 관계 owner가 확정해야 하며, 알림의 재승인 시 재생성 금지와
 구분한다. 후속 구현·OpenSpec·통합 검증·archive owner는 정혜주로 승인됐고,
 [PROD-926](https://linear.app/byulmaru/issue/PROD-926)으로 생성·배정했다. 해당 이슈의 Issue Gate와

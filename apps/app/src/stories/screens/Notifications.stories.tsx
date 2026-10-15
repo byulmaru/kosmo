@@ -192,11 +192,15 @@ const quoteProfile = notificationsProfile(
   { id: 'notification-profile-quote', unreadNotificationCount: 1 },
 );
 const sourceUnavailableNotifications = [
-  followNotification({ id: 'notification-unavailable-follow', profile: null }),
-  followRequestNotification({
-    id: 'notification-unavailable-follow-request',
+  followNotification({
+    id: 'notification-unavailable-follow',
     profile: null,
     readAt: '2026-07-21T12:00:00Z',
+  }),
+  followRequestNotification({
+    id: 'notification-unavailable-follow-request',
+    followRequest: null,
+    profile: followRequestFollower,
   }),
   reactionNotification({
     id: 'notification-unavailable-reaction',
@@ -773,12 +777,19 @@ export const SourceUnavailableNotificationFallbacks: Story = {
       expect(fallback.querySelector('a, button, [role="link"], [role="button"]')).toBeNull();
     }
 
-    expect(canvas.getByTestId('notification-source-unavailable-follow')).toHaveTextContent(
+    expect(canvas.getByTestId('notification-source-unavailable-follow')).not.toHaveTextContent(
       '읽지 않은 알림',
     );
-    expect(
-      canvas.getByTestId('notification-source-unavailable-followRequest'),
-    ).not.toHaveTextContent('읽지 않은 알림');
+    const unavailableFollowRequest = canvas.getByTestId(
+      'notification-source-unavailable-followRequest',
+    );
+    expect(unavailableFollowRequest).toHaveTextContent('읽지 않은 알림');
+    expect(unavailableFollowRequest).not.toHaveTextContent('새 요청자');
+    await userEvent.click(unavailableFollowRequest);
+    expect(notificationMutationRequest).not.toHaveBeenCalledWith(
+      'NotificationListItemMarkReadMutation',
+      expect.anything(),
+    );
     expect(canvas.getByRole('button', { name: '모두 읽음' })).toBeEnabled();
 
     await userEvent.click(canvas.getByRole('button', { name: '모두 읽음' }));
@@ -787,7 +798,7 @@ export const SourceUnavailableNotificationFallbacks: Story = {
         'NotificationListMarkAllReadMutation',
         {
           ids: [
-            'notification-unavailable-follow',
+            'notification-unavailable-follow-request',
             'notification-unavailable-reaction',
             'notification-unavailable-reply',
             'notification-unavailable-quote',

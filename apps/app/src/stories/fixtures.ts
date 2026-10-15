@@ -314,11 +314,16 @@ export function followNotification({
 
 export function followRequestNotification({
   id = 'notification-follow-request-1',
+  followRequest: relatedRequest = {
+    __typename: 'ProfileFollowRequest' as const,
+    id: `profile-follow-request-${id}`,
+  },
   createdAt = Temporal.Now.instant().subtract({ minutes: 4 }).toString(),
   profile: relatedProfile = profile(),
   readAt = null,
 }: {
   createdAt?: string;
+  followRequest?: { __typename: 'ProfileFollowRequest'; id: string } | null;
   id?: string;
   profile?: StoryProfile | null;
   readAt?: string | null;
@@ -326,6 +331,7 @@ export function followRequestNotification({
   return {
     __typename: 'FollowRequestNotification' as const,
     createdAt,
+    followRequest: relatedRequest,
     id,
     profile: relatedProfile,
     readAt,

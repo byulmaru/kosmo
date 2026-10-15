@@ -191,6 +191,9 @@ const followRequestNotificationFragment = graphql`
     id
     createdAt
     readAt
+    followRequest {
+      id
+    }
     profile {
       id
       displayName
@@ -212,7 +215,7 @@ export function FollowRequestNotificationListItem({
   const data = useFragment(followRequestNotificationFragment, notification);
   const markRead = useNotificationRead();
 
-  if (!data.profile) {
+  if (!data.profile || !data.followRequest) {
     return (
       <SourceUnavailableNotificationItem
         createdAt={data.createdAt}
