@@ -23,7 +23,7 @@ Figma의 active collection은 `KOSMO Motion`이며 단일 `Value` mode를 사용
 | `motion/easing/exit`            |      `.4, 0, 1, 1` | 주의를 끌지 않고 빠르게 퇴장          |
 | `motion/easing/linear`          |           `linear` | indeterminate spinner의 일정한 회전   |
 
-`motion/duration/loading-cycle`은 finite transition에 사용하지 않는다. Toast의 기본 체류시간 `3000ms`도 motion token이 아니라 제품 lifecycle 값이다.
+`motion/duration/loading-cycle`은 finite transition에 사용하지 않는다. Toast의 기본 체류시간 `3000ms`는 최초 enter 완료 후 시작하고 이후 reduced-motion 설정 변경으로 연장·재시작하지 않는 제품 lifecycle 값이며 motion token이 아니다. 지속 Toast는 자동 종료하지 않으며 임시 Toast가 닫히면 복원한다. 소유 화면·세션 종료로 정리된 Toast는 복원하거나 action을 실행하지 않는다.
 
 ## Component 사용표
 

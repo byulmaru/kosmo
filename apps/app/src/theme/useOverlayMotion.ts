@@ -25,6 +25,9 @@ function usePresenceMotion(
       return;
     }
 
+    if (visible && entered) {
+      return;
+    }
     setEntered(false);
     if (visible) {
       setMounted(true);
