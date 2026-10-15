@@ -1,9 +1,9 @@
 import { Search } from 'lucide-react-native';
 import { useEffect, useRef } from 'react';
 import {
+  FlatList,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -88,6 +88,34 @@ export function FullReactionPicker({
       : state === 'browse'
         ? createBrowseSections(options, recentValues, columns)
         : [];
+  const gridItems = [
+    ...(state === 'searchResults'
+      ? [{ kind: 'count' as const, count: searchResults.length, query }]
+      : []),
+    ...gridSections.flatMap((section, sectionIndex) => [
+      { kind: 'heading' as const, sectionId: section.id, sectionIndex, title: section.title },
+      ...Array.from({ length: Math.ceil(section.options.length / columns) }, (_, rowIndex) => ({
+        kind: 'row' as const,
+        options: section.options.slice(rowIndex * columns, (rowIndex + 1) * columns),
+        rowIndex,
+        sectionId: section.id,
+      })),
+    ]),
+  ];
+  let itemOffset = 0;
+  const itemLayouts = gridItems.map((item) => {
+    const length =
+      item.kind === 'count'
+        ? (textStyles.uiCopyS.lineHeight ?? 0) + space[16]
+        : item.kind === 'heading'
+          ? (textStyles.uiLabelM.lineHeight ?? 0) +
+            space[8] +
+            (item.sectionIndex > 0 ? space[16] : 0)
+          : targetSize + (item.rowIndex > 0 && !mobile ? space[8] : 0);
+    const layout = { length, offset: itemOffset };
+    itemOffset += length;
+    return layout;
+  });
   useEffect(() => {
     if (mobile) {
       return;
@@ -158,52 +186,67 @@ export function FullReactionPicker({
           </Text>
         </View>
       ) : (
-        <ScrollView
+        <FlatList
           contentContainerStyle={styles.scrollContent}
+          data={gridItems}
+          getItemLayout={
+            Platform.OS === 'web'
+              ? (_data, index) => ({ ...itemLayouts[index]!, index })
+              : undefined
+          }
+          initialNumToRender={12}
+          keyExtractor={(item) =>
+            item.kind === 'count'
+              ? 'count'
+              : `${item.sectionId}-${item.kind}-${item.kind === 'row' ? item.rowIndex : 'heading'}`
+          }
+          maxToRenderPerBatch={8}
+          renderItem={({ item }) =>
+            item.kind === 'count' ? (
+              <Text
+                style={[
+                  styles.resultCount,
+                  styles.resultCountSpacing,
+                  { color: theme.foregroundSecondary },
+                ]}
+              >
+                ‘{item.query}’ 검색 결과 {item.count}개
+              </Text>
+            ) : item.kind === 'heading' ? (
+              <View
+                style={[styles.sectionHeading, item.sectionIndex > 0 && styles.sectionSpacing]}
+                testID={`full-reaction-section-${item.sectionId}`}
+              >
+                <Text
+                  accessibilityRole="header"
+                  style={[styles.sectionTitle, { color: theme.foregroundPrimary }]}
+                >
+                  {item.title}
+                </Text>
+              </View>
+            ) : (
+              <View style={item.rowIndex > 0 && !mobile && styles.webRowSpacing}>
+                <ReactionGridRow
+                  columnGap={columnGap}
+                  columns={columns}
+                  mobile={mobile}
+                  onSelect={onSelect}
+                  options={item.options}
+                  rowIndex={item.rowIndex}
+                  sectionId={item.sectionId}
+                  targetSize={targetSize}
+                  selectedValues={selectedValues}
+                  pendingValues={pendingOptionIds}
+                  errorValues={errorOptionIds}
+                />
+              </View>
+            )
+          }
           showsVerticalScrollIndicator={false}
           testID="full-reaction-picker-scroll"
-        >
-          {state === 'searchResults' ? (
-            <Text style={[styles.resultCount, { color: theme.foregroundSecondary }]}>
-              ‘{query}’ 검색 결과 {searchResults.length}개
-            </Text>
-          ) : null}
-          {gridSections.map((section) => (
-            <View
-              key={`${section.id}-heading`}
-              style={styles.section}
-              testID={`full-reaction-section-${section.id}`}
-            >
-              <Text
-                accessibilityRole="header"
-                style={[styles.sectionTitle, { color: theme.foregroundPrimary }]}
-              >
-                {section.title}
-              </Text>
-              <View style={mobile ? styles.mobileGrid : styles.webGrid}>
-                {Array.from(
-                  { length: Math.ceil(section.options.length / columns) },
-                  (_, rowIndex) => (
-                    <ReactionGridRow
-                      key={`${section.id}-row-${rowIndex}`}
-                      columnGap={columnGap}
-                      columns={columns}
-                      mobile={mobile}
-                      onSelect={onSelect}
-                      options={section.options.slice(rowIndex * columns, (rowIndex + 1) * columns)}
-                      rowIndex={rowIndex}
-                      sectionId={section.id}
-                      targetSize={targetSize}
-                      selectedValues={selectedValues}
-                      pendingValues={pendingOptionIds}
-                      errorValues={errorOptionIds}
-                    />
-                  ),
-                )}
-              </View>
-            </View>
-          ))}
-        </ScrollView>
+          updateCellsBatchingPeriod={16}
+          windowSize={100}
+        />
       )}
     </View>
   );
@@ -360,7 +403,7 @@ function ReactionGridRow({
                 : styles.webReactionTarget
             }
           >
-            {({ pressed }) => (
+            {(state) => (
               <View
                 style={[
                   styles.reaction,
@@ -368,9 +411,11 @@ function ReactionGridRow({
                   {
                     backgroundColor: selected
                       ? theme.stateSelectedSurface
-                      : pressed
+                      : state.pressed
                         ? theme.statePressed
-                        : 'transparent',
+                        : Platform.OS === 'web' && Boolean((state as { hovered?: boolean }).hovered)
+                          ? theme.stateHover
+                          : 'transparent',
                     borderColor: selected ? theme.stateSelectedBorder : 'transparent',
                   },
                 ]}
@@ -406,7 +451,6 @@ const styles = StyleSheet.create({
   mobileEmoji: { fontSize: 24, lineHeight: 32, textAlign: 'center' },
   fullGridRow: { justifyContent: 'space-between' },
   gridRow: { flexDirection: 'row' },
-  mobileGrid: { gap: 0 },
   mobileReactionTarget: { alignItems: 'center', justifyContent: 'center' },
   mobileRoot: { flex: 1, justifyContent: 'flex-end', minHeight: 0 },
   mobileSheetContent: {
@@ -440,8 +484,9 @@ const styles = StyleSheet.create({
     borderWidth: borderWidths[1],
     justifyContent: 'center',
   },
-  scrollContent: { gap: space[16], paddingBottom: space[8] },
+  scrollContent: { paddingBottom: space[8] },
   resultCount: textStyles.uiCopyS,
+  resultCountSpacing: { marginBottom: space[16] },
   search: {
     alignItems: 'center',
     borderRadius: radius[12],
@@ -452,7 +497,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: space[12],
   },
   searchInput: { flex: 1, padding: 0, ...textStyles.uiCopyM },
-  section: { gap: space[8] },
+  sectionHeading: { marginBottom: space[8] },
+  sectionSpacing: { marginTop: space[16] },
   sectionTitle: textStyles.uiLabelM,
   state: { alignItems: 'center', flex: 1, gap: space[8], justifyContent: 'center' },
   webDialog: {
@@ -464,6 +510,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   webGrid: { gap: space[8] },
+  webRowSpacing: { marginTop: space[8] },
   webEmoji: { fontSize: 20, lineHeight: 24, textAlign: 'center' },
   webReaction: { height: 32, width: 32 },
   webReactionTarget: { height: 32, width: 32 },

@@ -508,6 +508,13 @@ export const InteractionContract: Story = {
 
     const heartButton = canvas.getAllByRole('button', { name: '빨간 하트 ❤️' })[0];
     const movedButton = canvas.getAllByRole('button', { name: '감동 🥹' })[0];
+    const heartSurface = heartButton.firstElementChild!;
+    const idleBackground = getComputedStyle(heartSurface).backgroundColor;
+    await userEvent.hover(heartButton);
+    await waitFor(() =>
+      expect(getComputedStyle(heartSurface).backgroundColor).not.toBe(idleBackground),
+    );
+    await userEvent.unhover(heartButton);
     expect(within(heartButton).getByText('❤️')).toBeVisible();
     expect(heartButton).toHaveAttribute('aria-pressed', 'false');
     expect(movedButton).toHaveAttribute('aria-pressed', 'false');
@@ -551,6 +558,15 @@ export const SequentialKeyboardBrowseContract: Story = {
     const search = canvas.getByRole('searchbox', { name: '반응 검색' });
     const scroll = canvas.getByTestId('full-reaction-picker-scroll') as HTMLElement;
     await waitFor(() => expect(search).toHaveFocus());
+    expect(within(scroll).getAllByRole('button').length).toBeLessThan(120);
+    const lastInitiallyMountedOption = within(scroll).getAllByRole('button').at(-1)!;
+    await waitFor(
+      () =>
+        expect(within(scroll).getAllByRole('button')).toHaveLength(
+          reactionEmojiPickerOptions.length + 6,
+        ),
+      { timeout: 5000 },
+    );
     await userEvent.tab();
     const quickOptions = reactionEmojiPickerOptions
       .filter((option) => option.quick)
@@ -568,13 +584,15 @@ export const SequentialKeyboardBrowseContract: Story = {
     await userEvent.tab({ shift: true });
     expect(firstOption).toHaveFocus();
 
+    lastInitiallyMountedOption.focus();
+    await userEvent.tab();
+    expect(dialog.contains(document.activeElement)).toBe(true);
+
     const finalCatalogOption = reactionEmojiPickerOptions.at(-1);
-    const tailOption = canvas.getByRole('button', {
+    scroll.scroll({ top: scroll.scrollHeight, behavior: 'instant' });
+    const tailOption = await within(scroll).findByRole('button', {
       name: `${finalCatalogOption?.label} ${finalCatalogOption?.emoji}`,
     });
-    expect(scroll.contains(tailOption)).toBe(true);
-    expect(tailOption).toBeInTheDocument();
-    scroll.scroll({ top: scroll.scrollHeight, behavior: 'instant' });
     await waitFor(() => {
       const tailRect = tailOption.getBoundingClientRect();
       const scrollRect = scroll.getBoundingClientRect();

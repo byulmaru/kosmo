@@ -58,6 +58,7 @@ Full Reaction Picker는 게시글 반응 버튼에서 바로 열리며, Emoji 16
   다른 Full Picker source state를 늘리거나 runtime focus·dismiss·keyboard 동작 완료를 뜻하지 않는다.
 - Mobile은 열릴 때 software keyboard를 자동으로 띄우지 않고 sheet title부터 탐색한다. backdrop tap, 손잡이 drag dismiss, Android back으로 닫고 focus를 원래 trigger로 복원한다. 목록 scroll은 손잡이 drag와 독립적으로 동작한다.
 - dialog의 접근성 이름은 `반응 선택`이다. 검색 field, category heading과 Reaction button은 식별 가능한 이름을 제공하고, Reaction button은 selected 상태를 제공한다. 결과 영역은 Loading에서 busy 상태와 시각적으로 숨긴 `반응을 불러오는 중` 문구를 함께 노출한다.
+- Web의 미선택 Reaction button은 hover에서 `stateHover`, press에서 `statePressed` 배경을 표시한다. 선택 배경과 pending 표시는 유지한다.
 - spinner는 `motion/duration/loading-cycle` 800ms마다 linear하게 회전한다. reduced motion에서는 회전을 제거하고 정적인 `···`로 대체한다.
 - sticky header·category, grid scroll, safe area, software keyboard, Web keyboard, VoiceOver·TalkBack의 실제 focus·dismiss·reflow는 Production runtime QA에서 검증한다.
 
