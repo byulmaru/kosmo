@@ -239,8 +239,63 @@ const waitUntilBlockedBy = async (blockingPid: number) => {
     await delay(20);
   }
 
-  assert.fail('Session revoke did not wait for the expiration transaction');
+  assert.fail('Database operation did not wait for the blocking transaction');
 };
+
+test('OIDC Session 생성 중 Suspended된 Account는 활성화하지 않고 Session도 생성하지 않는다', async () => {
+  const identity = createIdentity();
+  const account = await db
+    .insert(Accounts)
+    .values({ ...identity, displayName: 'preserved display name', state: AccountState.ACTIVE })
+    .returning()
+    .then(firstOrThrow);
+  const suspensionLocked = Promise.withResolvers<number>();
+  const allowSuspension = Promise.withResolvers<void>();
+  const suspensionTransaction = db.transaction(async (tx) => {
+    const [connection] = await tx.execute<{ pid: number }>(
+      sql`SELECT pg_backend_pid()::int AS pid`,
+    );
+    assert.ok(connection);
+    await tx
+      .select({ id: Accounts.id })
+      .from(Accounts)
+      .where(eq(Accounts.id, account.id))
+      .for('update');
+    suspensionLocked.resolve(connection.pid);
+    await allowSuspension.promise;
+
+    await tx
+      .update(Accounts)
+      .set({ state: AccountState.SUSPENDED })
+      .where(eq(Accounts.id, account.id));
+  });
+  let sessionCreation: ReturnType<typeof createOidcSession> | undefined;
+
+  try {
+    const blockingPid = await Promise.race([
+      suspensionLocked.promise,
+      suspensionTransaction.then(() => assert.fail('Suspension transaction ended before locking')),
+    ]);
+    sessionCreation = createOidcSession(identity);
+    await waitUntilBlockedBy(blockingPid);
+    allowSuspension.resolve();
+
+    await assert.rejects(sessionCreation, PermissionDeniedError);
+    await suspensionTransaction;
+
+    const persistedAccount = await loadAccount(identity.oidcSubject);
+    assert.equal(persistedAccount.displayName, 'preserved display name');
+    assert.equal(persistedAccount.state, AccountState.SUSPENDED);
+    assert.deepEqual(await loadSessions(account.id), []);
+  } finally {
+    allowSuspension.resolve();
+    await Promise.allSettled([
+      suspensionTransaction,
+      ...(sessionCreation ? [sessionCreation] : []),
+    ]);
+    await cleanup([account.id]);
+  }
+});
 
 test('현재 Active Session만 폐기하고 같은 Account의 다른 Session을 보존한다', async () => {
   const { account, session } = await createFixture();
