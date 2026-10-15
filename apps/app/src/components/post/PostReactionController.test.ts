@@ -257,11 +257,33 @@ describe('PostReactionController Relay cache contract', () => {
       environment,
       undefined,
       'HEART',
-      createReactionDeleteUpdater({ postId }),
+      createReactionDeleteUpdater({ postId, type: 'HEART' }),
     );
     respond({
       data: {
         deleteReaction: { post: null, reactionId: 'reaction-heart' },
+      },
+    });
+    await completion;
+
+    assert.deepEqual(viewerReactionIds(environment), ['reaction-eyes']);
+    assert.deepEqual(reactionCounts(environment), [
+      { count: 1, type: 'HEART' },
+      { count: 1, type: 'EYES' },
+    ]);
+  });
+
+  it('unlinks the requested Type when the server delete ID differs from the cached ID', async () => {
+    const { environment, respond } = createEnvironment();
+    const completion = startDelete(
+      environment,
+      undefined,
+      'HEART',
+      createReactionDeleteUpdater({ postId, type: 'HEART' }),
+    );
+    respond({
+      data: {
+        deleteReaction: { post: null, reactionId: 'reaction-heart-server' },
       },
     });
     await completion;
