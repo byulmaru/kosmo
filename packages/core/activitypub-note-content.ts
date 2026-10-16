@@ -2,9 +2,11 @@ import { MIMEType } from 'node:util';
 import { JSDOM } from 'jsdom';
 import { DOMParser as ProseMirrorDOMParser } from 'prosemirror-model';
 import {
+  isPostContentMentionHandleUsernameWithinLimit,
   normalizePostContentMentionHandle,
   normalizePostContentPlainText,
   normalizePostContentProfileId,
+  postContentMentionMaxOccurrences,
   postContentSchemaVersion,
 } from './post-content/index';
 import { postContentSchema } from './post-content/schema';
@@ -36,6 +38,13 @@ export const remoteNoteContentMaxLength = 10_000;
 export class RemoteNoteContentLengthExceededError extends RangeError {
   constructor() {
     super(`Remote Note content exceeds ${remoteNoteContentMaxLength} characters`);
+    this.name = new.target.name;
+  }
+}
+
+export class RemoteNoteMentionLimitExceededError extends RangeError {
+  constructor() {
+    super('Remote Note Mention exceeds its limits');
     this.name = new.target.name;
   }
 }
@@ -83,6 +92,7 @@ function htmlToBodyDocument(
     profilesByTargetHref.set(candidate.targetHref, profiles);
   }
 
+  let mentionCount = 0;
   const remoteNoteDOMParser = new ProseMirrorDOMParser(postContentSchema, [
     { tag: 'pre', node: 'paragraph', preserveWhitespace: 'full' },
     {
@@ -103,6 +113,14 @@ function htmlToBodyDocument(
           }
 
           const [profileId, relativeHandle] = profiles.entries().next().value!;
+          if (
+            mentionCount >= postContentMentionMaxOccurrences ||
+            (relativeHandle !== undefined &&
+              !isPostContentMentionHandleUsernameWithinLimit(relativeHandle))
+          ) {
+            throw new RemoteNoteMentionLimitExceededError();
+          }
+          mentionCount += 1;
           return {
             ...(relativeHandle === undefined ? {} : { handle: relativeHandle }),
             profileId,

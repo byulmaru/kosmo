@@ -3270,6 +3270,111 @@ describe('inbound Create dispatch', () => {
     assert.equal(await db.$count(Posts), 0);
   });
 
+  test('rejects an embedded Note with more than 16 matched Mention nodes as a whole', async () => {
+    const mentionActorUri = new URL('https://mentions.example/users/mention-limit');
+    const objectUri = new URL('https://remote.example/notes/mention-node-limit');
+    const logs: unknown[] = [];
+    const restoreReporter = setInboundObservabilityReporter({
+      log: (observation) => logs.push(observation),
+    });
+
+    try {
+      await createStoredRemoteActor();
+      await createStoredRemoteActor({ actorUri: mentionActorUri, handle: 'mention-limit' });
+      await handleInboundCreate(
+        createContext(),
+        new Create({
+          actor: remoteActorUri,
+          object: new Note({
+            attribution: remoteActorUri,
+            content: `<p>${Array.from(
+              { length: 17 },
+              () => `<a href="${mentionActorUri.href}">@mention-limit</a>`,
+            ).join(' ')}</p>`,
+            id: objectUri,
+            mediaType: 'text/html',
+            tags: [new Mention({ href: mentionActorUri, name: '@ignored' })],
+            to: PUBLIC_COLLECTION,
+          }),
+        }),
+        receivedAt,
+      );
+    } finally {
+      restoreReporter();
+    }
+
+    assert.deepEqual(logs, [
+      {
+        activityType: 'Create',
+        actorOrigin: remoteActorUri.origin,
+        handler: 'create',
+        objectOrigin: objectUri.origin,
+        outcome: 'rejected',
+        phase: 'projection',
+        reasonCode: 'note_mention_limit_exceeded',
+      },
+    ]);
+    assert.equal(await db.$count(Media), 0);
+    assert.equal(await db.$count(ActivityPubPosts), 0);
+    assert.equal(await db.$count(Posts), 0);
+    assert.equal(await db.$count(PostContents), 0);
+    assert.equal(await db.$count(PostMentions), 0);
+  });
+
+  test('rejects a hydrated Note with an oversized Mention username as a whole', async () => {
+    const mentionActorUri = new URL('https://mentions.example/users/long-handle');
+    const objectUri = new URL('https://objects.example/notes/long-mention-handle');
+    const logs: unknown[] = [];
+    const restoreReporter = setInboundObservabilityReporter({
+      log: (observation) => logs.push(observation),
+    });
+    const note = new Note({
+      attribution: remoteActorUri,
+      content: `<p><a href="${mentionActorUri.href}">@long-handle</a></p>`,
+      id: objectUri,
+      mediaType: 'text/html',
+      tags: [new Mention({ href: mentionActorUri, name: '@ignored' })],
+      to: PUBLIC_COLLECTION,
+    });
+
+    try {
+      await createStoredRemoteActor({
+        actorUri: mentionActorUri,
+        handle: 'a'.repeat(65),
+      });
+      const result = await materializeHydratedRemoteNote({
+        context: createContext(),
+        note,
+        objectUri,
+        observation: { activityType: 'Unknown', handler: 'create' },
+        receivedAt,
+      });
+
+      assert.deepEqual(result, {
+        reason: 'note_mention_limit_exceeded',
+        status: 'rejected',
+      });
+    } finally {
+      restoreReporter();
+    }
+
+    assert.deepEqual(logs, [
+      {
+        activityType: 'Unknown',
+        handler: 'create',
+        objectOrigin: objectUri.origin,
+        outcome: 'rejected',
+        phase: 'projection',
+        reasonCode: 'note_mention_limit_exceeded',
+      },
+    ]);
+    assert.equal(await db.$count(Media), 0);
+    assert.equal(await db.$count(ActivityPubPosts), 0);
+    assert.equal(await db.$count(Posts), 0);
+    assert.equal(await db.$count(PostContents), 0);
+    assert.equal(await db.$count(PostMentions), 0);
+  });
+
   test('converges unsaved Actor and Post identity for concurrent hydrated materialization without loser Media', async () => {
     const objectUri = new URL('https://objects.example/notes/concurrent-new-materialization');
     const mediaUrl = new URL('https://remote.example/media/concurrent-new-materialization.webp');

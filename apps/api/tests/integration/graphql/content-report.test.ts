@@ -912,13 +912,18 @@ const createPost = async (
     .then(firstOrThrow);
   const bodyText = mentioned ? `reportable post @${mentioned.handle}` : 'reportable post';
   const mention = mentioned
-    ? { profileId: mentioned.profile.id, relativeHandle: `@${mentioned.handle}` }
+    ? {
+        handle: `@${mentioned.handle}`,
+        profileId: mentioned.profile.id,
+        relativeHandle: `@${mentioned.handle}`,
+      }
     : undefined;
   const start = mention ? bodyText.indexOf(mention.relativeHandle) : -1;
   const document = mention
     ? postContentDocumentFromTextAndMedia(bodyText, [], false, null, [
         {
           end: start + mention.relativeHandle.length,
+          handle: mention.handle,
           profileId: mention.profileId,
           relativeHandle: mention.relativeHandle,
           start,

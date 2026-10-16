@@ -32,6 +32,17 @@ UTF-16 길이(`.length`) 합계가 10,000자 이하일 때 수신할 수 있다.
 원격 수신의 입력 byte, HTML 구조, 저장 JSON과 hydration 응답 크기를 보호하는 resource budget은
 이 문자 수 정책과 구분한다. 문자 수 검사만으로 파싱이나 네트워크 자원 소비가 제한되지는 않는다.
 
+새 Local Post·Reply·Quote와 수신하는 Remote Note는 Content Document body에 새 Mention node를 최대 16개까지 저장할
+수 있다. 같은 Profile의 반복 출현도 각각 세며 deduplicated relation 수는 한도 계산에 사용하지 않는다. 각 node의
+`handle` snapshot은 검증된 Profile의 `relativeHandle`에서만 가져오고 username 부분은 최대 64자다. 선행 `@`와
+qualified handle의 `@domain` 부분은 이 64자 username 상한에 포함하지 않는다.
+새 Local Content가 17번째 matched Mention node를 만들거나 snapshot username이 64자를 넘으면 작성 요청 전체를
+validation error로 거부한다. Inbound Note가 17번째 matched Mention node를 만들거나 snapshot username이 64자를
+넘으면 부분 저장이나 자르기 없이 Note 전체를 거부한다. 일치하지 않은 authored token이나 inbound anchor는 기존처럼
+일반 text 또는 link로 남고 한도에 세지 않는다. Inbound typed Mention identity relation은 body node와 독립적으로
+유지하며, 이 한도는 새로 저장하는 body node에만 적용한다. 기존 revision 조회 결과는 바꾸지 않으며 기존 revision을
+backfill하지 않는다.
+
 ActivityPub 표현은 Content Document의 저장 구조를 그대로 직렬화하지 않는다. paragraph, text, hard break와
 link는 Media node를 제외한 안전한 HTML `Note.content`로 투영하고, Media node는 document 순서대로
 `Note.attachment`의 Image로 투영한다. `mediaId`는 외부에 노출하지 않고 조회 시점에 접근 가능한 Media URL과
@@ -60,9 +71,10 @@ Source=Local, State=Ready와 Upload Account 조건을 검증한다. Media row의
 
 Mentioned Profile은 Local 작성에서 본문에 입력된 eligible Profile의 handle token이나 작성자가 명시적으로 선택해 본문 범위와 일치하는 Profile identity, 또는 inbound typed `Mention.href`에서
 확인한 stable Profile identity를 immutable revision에 저장하는 관계이며 `post_mentions` DB table에 persisted projection으로 저장한다. Local 작성은 bare handle과 configured Local domain을 configured Local Instance에서만 찾고, qualified remote handle은 이미 저장된 ActivityPub Profile에서만 찾는다. 작성 중 remote resolve/fetch는 하지 않는다. Unknown, malformed, ineligible token은 일반 text로 남는다. 실제 작성 Profile 기준으로 typed·selected target의 visibility와 양방향 Block 정책을 검증하며, 명시적으로 선택한 범위가 본문과 일치하지 않거나 selected target을 이용할 수 없으면 Post 전체를 거부한다. 같은 Profile이 여러 번 나타나면 각 Mention node는 남지만 Profile relation은
-한 번만 저장한다. Local authored body text는 문서 검증과 500자 길이 계산에 사용하고 저장하지 않는다. Inbound typed Mention의 관계 입력은 body
+한 번만 저장한다. Local authored body text는 문서 검증과 500자 길이 계산에 사용하고 저장하지 않는다. Authored token과 선택 Mention
+range는 기존대로 본문 기준 검증을 통과해야 하며, token 원문은 snapshot 출처가 아니다. Inbound typed Mention의 관계 입력은 body
 conversion과 독립된 typed identity 집합이다. 두 작성 경계 모두 canonical Mention node에 저장된 Profile identity인 `profileId`와
-optional `handle` attr를 가진다. `handle`은 node를 만든 시점에 확인된 Profile의 `relativeHandle` snapshot이며,
+optional `handle` attr를 가진다. `handle`은 검증된 Profile의 `relativeHandle`에서만 가져오는 node 생성 시점의 snapshot이며,
 identity나 relation 입력으로 사용하지 않는다. Inbound anchor label과 `Mention.name`은 이 값을 채우지 않는다. 원문 anchor의 표시
 문자열은 수신 중 loose resource/length budget을 계산하는 동안만 사용할 수 있고 canonical document, 관계, GraphQL 응답 또는
 renderer 입력으로 저장하지 않는다. Text projection은 현재 변환에 사용할 수 있는 Profile `relativeHandle`을 우선하고, 없으면

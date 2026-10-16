@@ -147,6 +147,7 @@ test('repostPost는 조회 가능한 허용 불가 Source를 sourceId VALIDATION
     document: postContentDocumentFromTextAndMedia(directRecipientHandle, [], false, null, [
       {
         end: directRecipientHandle.length,
+        handle: directRecipientHandle,
         profileId: author.profile.id,
         relativeHandle: directRecipientHandle,
         start: 0,

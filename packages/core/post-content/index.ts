@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
 export const postContentSchemaVersion = 1 as const;
+export const postContentMentionMaxOccurrences = 16;
+export const postContentMentionHandleUsernameMaxLength = 64;
 
 export const postContentMentionFallbackText = '@알 수 없는 사용자';
 
@@ -150,6 +152,13 @@ function splitsPostContentSurrogatePair(value: string, offset: number): boolean 
 
 const postContentProfileIdSchema = z.uuid();
 const postContentMentionHandleSchema = z.string().min(1);
+
+export function isPostContentMentionHandleUsernameWithinLimit(handle: string): boolean {
+  const usernameStart = handle.startsWith('@') ? 1 : 0;
+  const domainSeparator = handle.indexOf('@', usernameStart);
+  const usernameEnd = domainSeparator === -1 ? handle.length : domainSeparator;
+  return usernameEnd - usernameStart <= postContentMentionHandleUsernameMaxLength;
+}
 
 export function normalizePostContentProfileId(value: unknown): string {
   const result = postContentProfileIdSchema.safeParse(value);

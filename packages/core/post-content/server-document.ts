@@ -1,10 +1,12 @@
 import { ValidationError } from '../error';
 import { postBodyMaxLength } from '../validation/post-policy';
 import {
+  isPostContentMentionHandleUsernameWithinLimit,
   normalizePostContentMentionHandle,
   normalizePostContentPlainText,
   normalizePostContentProfileId,
   postContentMentionFallbackText,
+  postContentMentionMaxOccurrences,
   postContentSchemaVersion,
 } from './index';
 import { postContentSchema } from './schema';
@@ -116,12 +118,23 @@ export function validateLocalPostContentDocument(
   authoredBodyText?: string,
 ): PostContentDocumentV1 {
   const document = canonicalizePostContentDocument(value);
-  const hasMentions = document.body.content.some(
-    (block) =>
-      block.type === 'paragraph' && (block.content ?? []).some((node) => node.type === 'mention'),
+  const mentionNodes = document.body.content.flatMap((block) =>
+    block.type === 'paragraph'
+      ? (block.content ?? []).flatMap((node) => (node.type === 'mention' ? [node] : []))
+      : [],
   );
+  const hasMentions = mentionNodes.length > 0;
   if (hasMentions && authoredBodyText === undefined) {
     throw new TypeError('Local PostContent Mention nodes require the authored body text');
+  }
+  if (
+    mentionNodes.length > postContentMentionMaxOccurrences ||
+    mentionNodes.some(
+      ({ attrs }) =>
+        attrs.handle !== undefined && !isPostContentMentionHandleUsernameWithinLimit(attrs.handle),
+    )
+  ) {
+    throw new ValidationError('PostContent Mention exceeds its limits', { field: 'mentions' });
   }
   const mediaCount = document.body.content.filter((block) => block.type === 'media').length;
   const bodyText =

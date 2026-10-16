@@ -5,6 +5,7 @@ import {
   projectRemoteNoteContent,
   RemoteNoteContentLengthExceededError,
   remoteNoteContentMaxLength,
+  RemoteNoteMentionLimitExceededError,
 } from './activitypub-note-content';
 import { postContentDocumentToHtml, postContentDocumentToText } from './post-content/server';
 
@@ -570,6 +571,83 @@ describe('projectRemoteNoteContent', () => {
         content: [{ type: 'text', text: 'before @alice after' }],
       },
     ]);
+  });
+
+  it('allows 16 matched Mention body nodes and rejects a 17th repeated occurrence', () => {
+    const targetHref = 'https://remote.example/users/alice';
+    const project = (count: number) =>
+      projectRemoteNoteContent({
+        content: `<p>${Array.from({ length: count }, () => `<a href="${targetHref}"></a>`).join(
+          '',
+        )}</p>`,
+        mentions: [{ profileId: aliceProfileId, relativeHandle: '@alice', targetHref }],
+        summary: null,
+        mediaType: 'text/html',
+      });
+
+    const allowed = project(16);
+    const paragraph = allowed.body.content[0];
+    assert.equal(
+      paragraph?.type === 'paragraph'
+        ? paragraph.content?.filter((node) => node.type === 'mention').length
+        : 0,
+      16,
+    );
+    assert.throws(() => project(17), RemoteNoteMentionLimitExceededError);
+  });
+
+  it('counts only matched Mention nodes and excludes qualified-handle domain length', () => {
+    const targetHref = 'https://remote.example/users/alice';
+    const unmatched = projectRemoteNoteContent({
+      content: `<p>${Array.from(
+        { length: 17 },
+        () => '<a href="https://other.example/users/alice">@alice</a>',
+      ).join('')}</p>`,
+      mentions: [{ profileId: aliceProfileId, relativeHandle: '@alice', targetHref }],
+      summary: null,
+      mediaType: 'text/html',
+    });
+    assert.equal(
+      unmatched.body.content.flatMap((block) =>
+        block.type === 'paragraph'
+          ? (block.content ?? []).filter((node) => node.type === 'mention')
+          : [],
+      ).length,
+      0,
+    );
+    assert.equal(postContentDocumentToText(unmatched), '@alice'.repeat(17));
+
+    const qualifiedHandle = `@${'a'.repeat(64)}@${'long-domain-'.repeat(10)}.example`;
+    const allowed = projectRemoteNoteContent({
+      content: `<p><a href="${targetHref}"></a></p>`,
+      mentions: [{ profileId: aliceProfileId, relativeHandle: qualifiedHandle, targetHref }],
+      summary: null,
+      mediaType: 'text/html',
+    });
+    assert.deepEqual(allowed.body.content[0], {
+      type: 'paragraph',
+      content: [{ type: 'mention', attrs: { handle: qualifiedHandle, profileId: aliceProfileId } }],
+    });
+  });
+
+  it('rejects a matched Mention whose username exceeds 64 characters', () => {
+    const targetHref = 'https://remote.example/users/alice';
+    assert.throws(
+      () =>
+        projectRemoteNoteContent({
+          content: `<p><a href="${targetHref}"></a></p>`,
+          mentions: [
+            {
+              profileId: aliceProfileId,
+              relativeHandle: `@${'a'.repeat(65)}@example.com`,
+              targetHref,
+            },
+          ],
+          summary: null,
+          mediaType: 'text/html',
+        }),
+      RemoteNoteMentionLimitExceededError,
+    );
   });
 });
 

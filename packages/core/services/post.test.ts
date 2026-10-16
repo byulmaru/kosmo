@@ -157,12 +157,14 @@ test('createPost는 Local Mention node를 저장하고 반복 Profile relation�
   const document = postContentDocumentFromTextAndMedia(bodyText, [], false, null, [
     {
       end: firstStart + relativeHandle.length,
+      handle: relativeHandle,
       profileId: mentioned.id,
       relativeHandle,
       start: firstStart,
     },
     {
       end: secondStart + relativeHandle.length,
+      handle: relativeHandle,
       profileId: mentioned.id,
       relativeHandle,
       start: secondStart,
@@ -190,7 +192,13 @@ test('createPost는 Local Post mention FK 실패 시 Post·Content·relation을 
   const relativeHandle = '@missing';
   const bodyText = relativeHandle;
   const document = postContentDocumentFromTextAndMedia(bodyText, [], false, null, [
-    { end: relativeHandle.length, profileId: missingProfileId, relativeHandle, start: 0 },
+    {
+      end: relativeHandle.length,
+      handle: relativeHandle,
+      profileId: missingProfileId,
+      relativeHandle,
+      start: 0,
+    },
   ]);
   const counts = {
     content: await db.$count(PostContents),
