@@ -1,22 +1,44 @@
 import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono } from 'hono';
 import { etag } from 'hono/etag';
+import Negotiator from 'negotiator';
 import type { Context } from 'hono';
 
 const HASHED_ASSET = /(?:^|[.-])[a-f\d]{32}(?=[.@]|$)/i;
 const STATIC_ROOT = process.env.EXPO_WEB_ROOT ?? '../app/dist';
-const PUBLIC_POLICY_PATHS = new Set(['/privacy', '/account-deletion', '/child-safety']);
+const PUBLIC_POLICY_PATHS = new Set([
+  '/privacy',
+  '/privacy/2026-09-09',
+  '/privacy/changes/2026-10-13',
+  '/account-deletion',
+  '/child-safety',
+]);
+const PUBLIC_PROFILE_PATH =
+  /^\/@(?:\w{3,30}|[\w.]+@(?:[\w.-]+|\[[\da-f:.]+\])(?::\d+)?)(?:\/[\w-]+(?:\/reactions)?)?\/?$/i;
+const isPublicDocumentPath = (path: string) =>
+  PUBLIC_POLICY_PATHS.has(path) || PUBLIC_PROFILE_PATH.test(path);
 const acceptsDocument = (c: Context) => {
   const accept = c.req.header('accept');
-  return !accept || accept === '*/*' || accept.includes('text/html');
+  if (!accept) {
+    return true;
+  }
+  return (
+    new Negotiator({ headers: { accept } }).mediaType(['text/html; charset=UTF-8']) !== undefined
+  );
 };
 const isSpaRequest = (c: Context) =>
   c.req.path === '/' ||
   c.req.path === '/index.html' ||
   c.req.header('sec-fetch-mode') === 'navigate' ||
-  (PUBLIC_POLICY_PATHS.has(c.req.path) && acceptsDocument(c));
+  (isPublicDocumentPath(c.req.path) && acceptsDocument(c));
 
 const staticRoutes = new Hono();
+staticRoutes.on(['GET', 'HEAD'], '*', async (c, next) => {
+  await next();
+  if (isPublicDocumentPath(c.req.path)) {
+    c.header('Vary', 'Accept', { append: true });
+  }
+});
 const spaEtag = etag();
 const serveSpaFallback = serveStatic({
   onFound: (_path, c) => c.res.headers.set('Cache-Control', 'no-cache'),

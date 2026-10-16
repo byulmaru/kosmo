@@ -1,7 +1,7 @@
 import { builder } from '@/graphql/builder';
 import { Post } from '@/graphql/resolvers/post';
 import { Profile } from '@/graphql/resolvers/profile';
-import { getNotificationSource, QuoteNotification } from '../ref';
+import { getNotificationSourceMetadata, QuoteNotification } from '../ref';
 
 builder.objectFields(QuoteNotification, (t) => ({
   post: t.field({
@@ -11,7 +11,8 @@ builder.objectFields(QuoteNotification, (t) => ({
   }),
   profile: t.field({
     type: Profile,
+    nullable: true,
     resolve: async (notification, _, ctx) =>
-      (await getNotificationSource(notification, ctx)).profileId,
+      (await getNotificationSourceMetadata(notification, ctx))?.profileId ?? null,
   }),
 }));

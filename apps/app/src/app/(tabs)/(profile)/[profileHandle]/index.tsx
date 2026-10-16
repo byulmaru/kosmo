@@ -37,7 +37,7 @@ export default function ProfilePostListPage() {
   const { chrome, scrollKey } = useProfileRoute();
 
   return (
-    <ProfileRouteContainer scrollKey={scrollKey}>
+    <ProfileRouteContainer reselectDestination="profile" scrollKey={scrollKey}>
       {chrome}
       <RouteBoundary
         error={(retry) => <PostList error onRetry={retry} />}

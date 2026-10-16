@@ -1,17 +1,21 @@
 import '@kosmo/core/polyfill';
 
 import { Follow } from '@fedify/vocab';
-import { NotFoundError } from '@kosmo/core/error';
+import { ConflictError, NotFoundError } from '@kosmo/core/error';
 import { isHttpUri } from './activitypub-uri';
 import { observeInbound } from './inbound-observability';
 import { handleInboundRejectFollow } from './inbound-reject-follow';
-import { findUsableStoredRemoteProfileActorByUri } from './remote-actor-materialization';
+import {
+  findOrMaterializeRemoteProfileActorByUri,
+  RemoteActorMaterializationError,
+} from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
 import type { Reject } from '@fedify/vocab';
 
 export const handleInboundReject = async (
   context: InboxContext<void>,
   reject: Reject,
+  receivedAt: Temporal.Instant = Temporal.Now.instant(),
 ): Promise<void> => {
   const actorUri = reject.actorId;
   if (!isHttpUri(actorUri)) {
@@ -25,9 +29,13 @@ export const handleInboundReject = async (
     return;
   }
 
-  let remoteActor: Awaited<ReturnType<typeof findUsableStoredRemoteProfileActorByUri>>;
+  let remoteActor: Awaited<ReturnType<typeof findOrMaterializeRemoteProfileActorByUri>>;
   try {
-    remoteActor = await findUsableStoredRemoteProfileActorByUri(actorUri);
+    remoteActor = await findOrMaterializeRemoteProfileActorByUri({
+      actorUri,
+      contextOrigin: context.canonicalOrigin,
+      receipt: { activityUri: reject.id, receivedAt },
+    });
   } catch (error) {
     if (error instanceof NotFoundError) {
       observeInbound({
@@ -41,20 +49,21 @@ export const handleInboundReject = async (
       });
       return;
     }
+    if (error instanceof RemoteActorMaterializationError || error instanceof ConflictError) {
+      observeInbound({
+        outcome: 'external_failure',
+        activityType: 'Reject',
+        actorOrigin: actorUri.origin,
+        error,
+        handler: 'reject',
+        objectOrigin: reject.objectId?.origin,
+        phase: 'actor_lookup',
+        reasonCode: 'remote_actor_lookup_rejected',
+      });
+      return;
+    }
     throw error;
   }
-  if (!remoteActor) {
-    observeInbound({
-      outcome: 'noop',
-      activityType: 'Reject',
-      actorOrigin: actorUri.origin,
-      handler: 'reject',
-      phase: 'actor_lookup',
-      reasonCode: 'remote_actor_missing',
-    });
-    return;
-  }
-
   const object = await reject.getObject({
     documentLoader: context.documentLoader,
     suppressError: true,

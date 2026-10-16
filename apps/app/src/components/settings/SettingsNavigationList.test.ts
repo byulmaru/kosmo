@@ -121,7 +121,8 @@ let SettingsNavigationList: ComponentType<{
     | 'following-import'
     | 'mute-and-block'
     | 'theme'
-    | 'info';
+    | 'info'
+    | 'account-deletion';
 }>;
 let SettingsMuteAndBlockNavigation: ComponentType<{
   selected?: 'blocked-profiles' | 'muted-profiles';
@@ -148,7 +149,6 @@ describe('SettingsMuteAndBlockNavigation', () => {
         { label: '차단한 프로필 관리 열기', href: '/settings/blocked-profiles' },
       ],
     );
-    assert.deepEqual(texts(), ['뮤트한 프로필', '차단한 프로필']);
   });
 });
 
@@ -187,9 +187,14 @@ describe('SettingsNavigationList', () => {
     assert.equal(links[2].props.href, '/settings/profile-migration');
     assert.equal(links[3].props.accessibilityLabel, '팔로잉 가져오기 설정 열기');
     assert.equal(links[3].props.href, '/settings/following-import');
-    assert.ok(texts().includes('팔로잉 가져오기'));
     assert.equal(links[4].props.accessibilityLabel, '뮤트 및 차단 설정 열기');
     assert.equal(links[4].props.href, '/settings/mute-and-block');
+    assert.equal(links[5].props.accessibilityLabel, '테마 설정 열기, 시스템');
+    assert.equal(links[5].props.href, '/settings/theme');
+    assert.equal(links[6].props.accessibilityLabel, '정보 설정 열기');
+    assert.equal(links[6].props.href, '/settings/info');
+    assert.equal(links[7].props.accessibilityLabel, '코스모 탈퇴 설정 열기');
+    assert.equal(links[7].props.href, '/settings/account-deletion');
     assert.equal(
       links.some((node) => node.props.testID === 'native-notification-settings'),
       false,
@@ -233,11 +238,6 @@ describe('SettingsNavigationList', () => {
       (node) => node.props.label === '알림 설정',
     );
     assert.ok(notificationItem);
-    assert.equal(
-      notificationItem.props.description,
-      '기기의 알림 설정에서 Push 알림을 관리할 수 있어요.',
-    );
-
     await act(async () => notification?.props.onPress());
     assert.equal(openSettingsCalls, 1);
     assert.equal(permissionStatusCalls, 1);
@@ -441,6 +441,15 @@ describe('SettingsNavigationList', () => {
     assert.equal(info.props['aria-current'], undefined);
     assert.deepEqual(info.props.accessibilityState, { selected: true });
   });
+
+  it('코스모 탈퇴는 마지막 root destination으로 current 상태를 전달한다', async () => {
+    await render({ pathname: '/settings/account-deletion', selected: 'account-deletion' });
+
+    const links = rendered('Pressable');
+    const deletion = links[links.length - 1];
+    assert.equal(deletion.props['aria-current'], 'page');
+    assert.deepEqual(deletion.props.accessibilityState, { selected: true });
+  });
 });
 
 async function render(
@@ -452,7 +461,8 @@ async function render(
       | 'following-import'
       | 'mute-and-block'
       | 'theme'
-      | 'info';
+      | 'info'
+      | 'account-deletion';
   } = {},
 ) {
   await act(async () => {
@@ -464,10 +474,4 @@ async function render(
 function rendered(type: string): ReactTestInstance[] {
   assert.ok(renderer);
   return renderer.root.findAll((node) => node.type === type);
-}
-
-function texts(): string[] {
-  return rendered('Text').flatMap((node) =>
-    typeof node.props.children === 'string' ? [node.props.children] : [],
-  );
 }

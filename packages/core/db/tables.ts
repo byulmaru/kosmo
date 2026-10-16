@@ -184,6 +184,31 @@ export const Hashtags = pgTable('hashtag', {
   createdAt: createdAt(),
 });
 
+export const HashtagMuteRules = pgTable(
+  'hashtag_mute_rule',
+  {
+    id: id(),
+    ownerProfileId: uuid('owner_profile_id')
+      .notNull()
+      .references(() => Profiles.id, { onDelete: 'cascade' }),
+    targetHashtagId: uuid('target_hashtag_id')
+      .notNull()
+      .references(() => Hashtags.id, { onDelete: 'cascade' }),
+    scopes: Enum.hashtagMuteScope('scopes').array().notNull(),
+    decision: Enum.hashtagMuteDecision('decision').notNull(),
+    expiresAt: datetime('expires_at'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    unique().on(table.ownerProfileId, table.targetHashtagId),
+    index().on(table.ownerProfileId, table.id.desc()),
+    index().on(table.targetHashtagId),
+    check('hashtag_mute_rule_scopes_nonempty', sql`cardinality(${table.scopes}) > 0`),
+    check('hashtag_mute_rule_scopes_no_null', sql`array_position(${table.scopes}, NULL) IS NULL`),
+  ],
+);
+
 export const Instances = pgTable(
   'instance',
   {
@@ -647,6 +672,10 @@ export const Sessions = pgTable(
       .notNull()
       .references(() => Accounts.id),
     applicationId: uuid('application_id').references(() => Applications.id),
+    /**
+     * @deprecated Selected Profile is client-owned via request extension and client storage; compatibility-only field.
+     * Keep existing fallback and legacy writes until a separate migration; do not add readers or writers.
+     */
     activeProfileId: uuid('active_profile_id').references(() => Profiles.id),
     oidcSessionKey: text('oidc_session_key'),
     token: text('token').unique().notNull(),

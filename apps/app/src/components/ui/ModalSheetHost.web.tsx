@@ -32,6 +32,7 @@ function AlertDialog({
   closeRequestDisabled,
   interactionDisabled,
   onRequestClose,
+  onDismiss,
   onShow,
   visible,
 }: ModalSheetHostProps) {
@@ -58,8 +59,9 @@ function AlertDialog({
       onShow?.();
     } else if (!visible && dialog.open) {
       dialog.close();
+      onDismiss?.();
     }
-  }, [onShow, visible]);
+  }, [onDismiss, onShow, visible]);
   return (
     <dialog
       aria-label={accessibilityLabel}

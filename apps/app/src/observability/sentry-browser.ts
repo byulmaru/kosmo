@@ -81,17 +81,15 @@ export const captureFeedback = (
   message: string,
   kind: FeedbackKind,
   attachments: readonly FeedbackAttachment[] = [],
-): string => {
+): Promise<string> => {
   if (!enabled || !Sentry.getClient()) {
     throw new Error('Sentry feedback is not initialized.');
   }
 
-  const eventId = Sentry.captureFeedback(
-    { message, tags: { feedback_kind: kind } },
-    { attachments: [...attachments] },
+  return Sentry.withScope(() =>
+    Sentry.sendFeedback(
+      { message, tags: { feedback_kind: kind } },
+      { attachments: [...attachments], includeReplay: false },
+    ),
   );
-  if (!eventId) {
-    throw new Error('Sentry feedback was not captured.');
-  }
-  return eventId;
 };

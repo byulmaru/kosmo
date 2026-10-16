@@ -30,7 +30,9 @@ import type {
   repostPost as RepostPost,
 } from '@kosmo/core/services';
 import type { temporalClient as TemporalClient } from '@kosmo/core/temporal/client';
+import type { Workflow, WorkflowStartOptions } from '@temporalio/client';
 import type {
+  captureOperationalNotificationAudienceActivity as CaptureOperationalNotificationAudienceActivity,
   createNotificationActivity as CreateNotificationActivity,
   createQuoteNotificationActivity as CreateQuoteNotificationActivity,
   createReactionNotificationActivity as CreateReactionNotificationActivity,
@@ -61,6 +63,7 @@ let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
 let ProfileBlocks: typeof CoreDb.ProfileBlocks;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
+let ProfileFollowRequests: typeof CoreDb.ProfileFollowRequests;
 let ProfileMutes: typeof CoreDb.ProfileMutes;
 let Profiles: typeof CoreDb.Profiles;
 let PushInstallations: typeof CoreDb.PushInstallations;
@@ -77,6 +80,7 @@ let createRepostNotificationActivity: typeof CreateRepostNotificationActivity;
 let deleteRepostNotificationActivity: typeof DeleteRepostNotificationActivity;
 let repostPost: typeof RepostPost;
 let createNotificationActivity: typeof CreateNotificationActivity;
+let captureOperationalNotificationAudienceActivity: typeof CaptureOperationalNotificationAudienceActivity;
 let temporalClient: typeof TemporalClient;
 
 before(async () => {
@@ -97,6 +101,7 @@ before(async () => {
     Posts,
     ProfileBlocks,
     ProfileFollows,
+    ProfileFollowRequests,
     ProfileMutes,
     Profiles,
     PushInstallations,
@@ -109,6 +114,7 @@ before(async () => {
     createQuoteNotificationActivity,
     createReplyNotificationActivity,
     createRepostNotificationActivity,
+    captureOperationalNotificationAudienceActivity,
     deleteAccountActivity,
     deleteReactionNotificationActivity,
     deleteRepostNotificationActivity,
@@ -130,9 +136,298 @@ beforeEach(async () => {
 
 after(async () => pg.end());
 
-test('Account deletion Activity는 non-DISABLED Profile이 있으면 아무것도 변경하지 않는다', async () => {
+test('Operational audience capture is stable across retries, payload mismatches, and later signups', async () => {
+  const active = await createAccountDeletionFixture({ profileStates: [] });
+  const anotherActive = await createAccountDeletionFixture({ profileStates: [] });
+  const disabled = await createAccountDeletionFixture({ profileStates: [] });
+  const sendId = crypto.randomUUID();
+  const data = { href: '/maintenance', title: 'Scheduled maintenance' };
+  let lateSignup: Awaited<ReturnType<typeof createAccountDeletionFixture>> | undefined;
+
+  try {
+    await db
+      .update(Accounts)
+      .set({ state: AccountState.DISABLED })
+      .where(eq(Accounts.id, disabled.account.id));
+    assert.deepEqual(
+      await Promise.all([
+        captureOperationalNotificationAudienceActivity({ sendId, data }),
+        captureOperationalNotificationAudienceActivity({ sendId, data }),
+      ]),
+      [true, true],
+    );
+
+    const notifications = await db
+      .select()
+      .from(Notifications)
+      .where(eq(Notifications.sourceId, sendId));
+    assert.equal(notifications.length, 2);
+    assert.deepEqual(
+      notifications.map(({ recipientAccountId }) => recipientAccountId).sort(),
+      [active.account.id, anotherActive.account.id].sort(),
+    );
+    for (const notification of notifications) {
+      assert.equal(notification.recipientProfileId, null);
+      assert.equal(notification.kind, NotificationKind.OPERATIONAL);
+      assert.deepEqual(notification.data, data);
+    }
+    const notificationIds = notifications.map(({ id }) => id).sort();
+
+    const readAt = Temporal.Instant.from('2026-10-02T01:23:45.123456Z');
+    const readNotificationId = notifications[0]!.id;
+    await db.update(Notifications).set({ readAt }).where(eq(Notifications.id, readNotificationId));
+    lateSignup = await createAccountDeletionFixture({ profileStates: [] });
+
+    assert.equal(await captureOperationalNotificationAudienceActivity({ sendId, data }), true);
+    const retriedNotifications = await db
+      .select({
+        id: Notifications.id,
+        recipientAccountId: Notifications.recipientAccountId,
+        readAt: Notifications.readAt,
+      })
+      .from(Notifications)
+      .where(eq(Notifications.sourceId, sendId));
+    assert.equal(retriedNotifications.length, 2);
+    assert.deepEqual(retriedNotifications.map(({ id }) => id).sort(), notificationIds);
+    assert.deepEqual(
+      retriedNotifications.map(({ recipientAccountId }) => recipientAccountId).sort(),
+      [active.account.id, anotherActive.account.id].sort(),
+    );
+    assert.equal(
+      retriedNotifications.find(({ id }) => id === readNotificationId)?.readAt?.toString(),
+      readAt.toString(),
+    );
+    assert.equal(retriedNotifications.find(({ id }) => id !== readNotificationId)?.readAt, null);
+    await assert.rejects(
+      captureOperationalNotificationAudienceActivity({
+        sendId,
+        data: { ...data, title: 'Different message' },
+      }),
+      /Operational notification send ID already exists with different data/,
+    );
+  } finally {
+    if (lateSignup) {
+      await cleanupAccountDeletionFixture(lateSignup);
+    }
+    await cleanupAccountDeletionFixture(active);
+    await cleanupAccountDeletionFixture(anotherActive);
+    await cleanupAccountDeletionFixture(disabled);
+  }
+});
+
+test('Operational audience capture leaves no marker for an empty audience', async () => {
+  const disabled = await createAccountDeletionFixture({ profileStates: [] });
+  const sendId = crypto.randomUUID();
+  const data = { href: '/maintenance', title: 'Scheduled maintenance' };
+  let lateSignup: Awaited<ReturnType<typeof createAccountDeletionFixture>> | undefined;
+
+  try {
+    await db
+      .update(Accounts)
+      .set({ state: AccountState.DISABLED })
+      .where(eq(Accounts.id, disabled.account.id));
+    assert.equal(await captureOperationalNotificationAudienceActivity({ sendId, data }), false);
+    assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, sendId)), 0);
+
+    lateSignup = await createAccountDeletionFixture({ profileStates: [] });
+    assert.equal(await captureOperationalNotificationAudienceActivity({ sendId, data }), true);
+    const notification = await db
+      .select({ recipientAccountId: Notifications.recipientAccountId })
+      .from(Notifications)
+      .where(eq(Notifications.sourceId, sendId))
+      .then(firstOrThrow);
+    assert.equal(notification.recipientAccountId, lateSignup.account.id);
+  } finally {
+    if (lateSignup) {
+      await cleanupAccountDeletionFixture(lateSignup);
+    }
+    await cleanupAccountDeletionFixture(disabled);
+  }
+});
+
+test('Operational dispatch pages 51 stored recipients and retries failed Push starts from the same cursor', async (t) => {
+  const sendId = crypto.randomUUID();
+  const data = { href: '/maintenance', title: 'Scheduled maintenance' };
+  const accounts = await db
+    .insert(Accounts)
+    .values(
+      Array.from({ length: 51 }, () => {
+        const suffix = crypto.randomUUID();
+        return {
+          displayName: suffix,
+          oidcSubject: `subject-${suffix}`,
+          state: AccountState.ACTIVE,
+        };
+      }),
+    )
+    .returning({ id: Accounts.id });
+  const accountIds = accounts.map(({ id }) => id);
+
+  try {
+    await db.insert(Notifications).values(
+      accounts.map(({ id }) => ({
+        data,
+        kind: NotificationKind.OPERATIONAL,
+        recipientAccountId: id,
+        sourceId: sendId,
+      })),
+    );
+    const expectedIds = await db
+      .select({ id: Notifications.id })
+      .from(Notifications)
+      .where(eq(Notifications.sourceId, sendId))
+      .orderBy(Notifications.id)
+      .then((rows) => rows.map(({ id }) => id));
+    const startCalls: Array<{
+      readonly notificationId: string;
+      readonly workflowId: string | undefined;
+    }> = [];
+    const started = new Set<string>();
+    const { dispatchOperationalNotificationPageActivity } = await import('./activities');
+    let injectedFailure = false;
+    const start = t.mock.method(
+      temporalClient.workflow,
+      'start',
+      async (workflow: string | Workflow, options: WorkflowStartOptions) => {
+        assert.equal(workflow, 'pushNotificationDeliveryWorkflow');
+        assert.equal(options.taskQueue, KOSMO_TASK_QUEUE);
+        const args = options.args as [{ readonly notificationId: string }];
+        const notificationId = args[0]?.notificationId;
+        assert.ok(notificationId);
+        startCalls.push({ notificationId, workflowId: options.workflowId });
+
+        if (!injectedFailure && notificationId === expectedIds[0]) {
+          injectedFailure = true;
+          throw new Error('temporary Push workflow start failure');
+        }
+        if (started.has(notificationId)) {
+          const duplicate = new Error('Push workflow already started');
+          duplicate.name = 'WorkflowExecutionAlreadyStartedError';
+          throw duplicate;
+        }
+        started.add(notificationId);
+        return { workflowId: options.workflowId } as never;
+      },
+    );
+
+    await assert.rejects(
+      dispatchOperationalNotificationPageActivity({ sendId }),
+      /temporary Push workflow start failure/,
+    );
+    assert.equal(startCalls.length, 50);
+    assert.deepEqual(
+      startCalls.slice(0, 50).map(({ notificationId }) => notificationId),
+      expectedIds.slice(0, 50),
+    );
+
+    const firstPage = await dispatchOperationalNotificationPageActivity({ sendId });
+    assert.deepEqual(firstPage, { afterNotificationId: expectedIds[49], hasMore: true });
+    assert.deepEqual(
+      startCalls.slice(50, 100).map(({ notificationId }) => notificationId),
+      expectedIds.slice(0, 50),
+    );
+    assert.ok(
+      startCalls
+        .slice(50, 100)
+        .every(
+          ({ notificationId, workflowId }) => workflowId === `push-notification:${notificationId}`,
+        ),
+    );
+
+    const secondPage = await dispatchOperationalNotificationPageActivity({
+      sendId,
+      afterNotificationId: firstPage.afterNotificationId ?? undefined,
+    });
+    assert.deepEqual(secondPage, {
+      afterNotificationId: expectedIds[50],
+      hasMore: false,
+    });
+    assert.deepEqual(
+      startCalls.slice(100).map(({ notificationId }) => notificationId),
+      [expectedIds[50]],
+    );
+    assert.equal(start.mock.calls.length, 101);
+    assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, sendId)), 51);
+  } finally {
+    await db.delete(Accounts).where(inArray(Accounts.id, accountIds));
+  }
+});
+
+test('Operational dispatch stops on exact 50 and 100 recipient page boundaries', async (t) => {
+  const startCalls: string[] = [];
+  const { dispatchOperationalNotificationPageActivity } = await import('./activities');
+  t.mock.method(
+    temporalClient.workflow,
+    'start',
+    async (_workflow: string | Workflow, options: WorkflowStartOptions) => {
+      const args = options.args as [{ readonly notificationId: string }];
+      startCalls.push(args[0]!.notificationId);
+      return { workflowId: options.workflowId } as never;
+    },
+  );
+
+  for (const recipientCount of [50, 100]) {
+    const sendId = crypto.randomUUID();
+    const data = { href: '/maintenance', title: 'Scheduled maintenance' };
+    const accounts = await db
+      .insert(Accounts)
+      .values(
+        Array.from({ length: recipientCount }, () => {
+          const suffix = crypto.randomUUID();
+          return {
+            displayName: suffix,
+            oidcSubject: `subject-${suffix}`,
+            state: AccountState.ACTIVE,
+          };
+        }),
+      )
+      .returning({ id: Accounts.id });
+    const accountIds = accounts.map(({ id }) => id);
+
+    try {
+      await db.insert(Notifications).values(
+        accounts.map(({ id }) => ({
+          data,
+          kind: NotificationKind.OPERATIONAL,
+          recipientAccountId: id,
+          sourceId: sendId,
+        })),
+      );
+      const expectedIds = await db
+        .select({ id: Notifications.id })
+        .from(Notifications)
+        .where(eq(Notifications.sourceId, sendId))
+        .orderBy(Notifications.id)
+        .then((rows) => rows.map(({ id }) => id));
+      const startIndex = startCalls.length;
+
+      const firstPage = await dispatchOperationalNotificationPageActivity({ sendId });
+      assert.deepEqual(firstPage, {
+        afterNotificationId: expectedIds[49],
+        hasMore: recipientCount > 50,
+      });
+
+      if (recipientCount === 100) {
+        const secondPage = await dispatchOperationalNotificationPageActivity({
+          sendId,
+          afterNotificationId: firstPage.afterNotificationId ?? undefined,
+        });
+        assert.deepEqual(secondPage, {
+          afterNotificationId: expectedIds[99],
+          hasMore: false,
+        });
+      }
+
+      assert.deepEqual(startCalls.slice(startIndex), expectedIds);
+    } finally {
+      await db.delete(Accounts).where(inArray(Accounts.id, accountIds));
+    }
+  }
+});
+
+test('Account deletion Activity는 ACTIVE Profile이 있으면 아무것도 변경하지 않는다', async () => {
   const fixture = await createAccountDeletionFixture({
-    profileStates: [ProfileState.ACTIVE, ProfileState.DISABLED],
+    profileStates: [ProfileState.ACTIVE, ProfileState.DISABLED, ProfileState.SUSPENDED],
   });
 
   try {
@@ -178,6 +473,55 @@ test('Account deletion Activity는 non-DISABLED Profile이 있으면 아무것�
     );
   } finally {
     await cleanupAccountDeletionFixture(fixture);
+  }
+});
+
+test('Account deletion Activity는 SUSPENDED Profile만 있거나 DISABLED Profile과 함께 있어도 탈퇴를 허용한다', async () => {
+  for (const profileStates of [
+    [ProfileState.SUSPENDED],
+    [ProfileState.SUSPENDED, ProfileState.DISABLED],
+  ]) {
+    const fixture = await createAccountDeletionFixture({ profileStates });
+
+    try {
+      assert.equal(await deleteAccountActivity({ accountId: fixture.account.id }), true);
+      assert.equal(
+        (
+          await db
+            .select({ state: Accounts.state })
+            .from(Accounts)
+            .where(eq(Accounts.id, fixture.account.id))
+        )[0]?.state,
+        AccountState.DISABLED,
+      );
+      assert.deepEqual(
+        await db
+          .select({ id: Profiles.id, state: Profiles.state })
+          .from(Profiles)
+          .where(
+            inArray(
+              Profiles.id,
+              fixture.profiles.map(({ id }) => id),
+            ),
+          )
+          .orderBy(Profiles.id),
+        fixture.profiles
+          .map(({ id, state }) => ({ id, state }))
+          .sort((left, right) => left.id.localeCompare(right.id)),
+      );
+      assert.deepEqual(
+        await db
+          .select({ profileId: AccountProfiles.profileId, role: AccountProfiles.role })
+          .from(AccountProfiles)
+          .where(eq(AccountProfiles.accountId, fixture.account.id))
+          .orderBy(AccountProfiles.profileId),
+        fixture.profiles
+          .map(({ id }) => ({ profileId: id, role: AccountProfileRole.OWNER }))
+          .sort((left, right) => left.profileId.localeCompare(right.profileId)),
+      );
+    } finally {
+      await cleanupAccountDeletionFixture(fixture);
+    }
   }
 });
 
@@ -1041,6 +1385,14 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
   try {
     const recipient = fixture.profiles[0]!;
     const actor = await createProfile();
+    await db
+      .update(Profiles)
+      .set({ displayName: '예은', handle: 'yeeun', normalizedHandle: 'yeeun' })
+      .where(eq(Profiles.id, recipient.id));
+    await db
+      .update(Profiles)
+      .set({ displayName: '혜주', handle: 'hyeju', normalizedHandle: 'hyeju' })
+      .where(eq(Profiles.id, actor.id));
     const document = {
       version: 1,
       summary: null,
@@ -1070,7 +1422,7 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
     postId = post.id;
     const reaction = await db
       .insert(Reactions)
-      .values({ postId: post.id, profileId: actor.id, type: '❤️' })
+      .values({ postId: post.id, profileId: actor.id, type: '😂' })
       .returning()
       .then(firstOrThrow);
     const notificationId = await createReactionNotificationActivity(reaction.id);
@@ -1111,27 +1463,66 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
     assert.ok(payload);
     const { encodeGlobalId } = await import('@kosmo/core/global-id');
     assert.deepEqual(payload.notification, {
-      title: actor.displayName,
-      body: '이 게시글에 반응했습니다: Read the article',
+      title: '혜주',
+      body: '혜주(@hyeju) 님이 예은(@yeeun) 님에게 😂를 남겼습니다. Read the article',
     });
     assert.deepEqual(payload.data, {
       notificationId: encodeGlobalId('ReactionNotification', notificationId),
       recipientProfileId: encodeGlobalId('Profile', recipient.id),
-      href: `/@${recipient.handle}/${encodeGlobalId('Post', post.id)}`,
+      href: `/@yeeun/${encodeGlobalId('Post', post.id)}`,
     });
+    assert.equal(payload.android?.priority, undefined);
+    assert.equal(payload.apns?.payload, undefined);
     assert.ok((payload.android?.ttl ?? 0) > 0);
     assert.ok((payload.android?.ttl ?? Number.POSITIVE_INFINITY) <= 24 * 60 * 60 * 1000);
 
     const contentId = post.currentContentId;
     assert.ok(contentId);
+    const emojiText = '😀'.repeat(161);
+    await db
+      .update(PostContents)
+      .set({
+        document: {
+          version: 1,
+          summary: null,
+          body: {
+            type: 'doc',
+            content: [
+              {
+                type: 'paragraph',
+                content: [{ type: 'text', text: emojiText }],
+              },
+            ],
+          },
+        },
+      })
+      .where(eq(PostContents.id, contentId));
+    await sendPushNotificationActivity(notificationId, installationIds[0]!);
+    assert.equal(
+      sent[1]?.notification?.body,
+      `혜주(@hyeju) 님이 예은(@yeeun) 님에게 😂를 남겼습니다. ${'😀'.repeat(159)}…`,
+    );
+    assert.ok(
+      new TextEncoder().encode(
+        JSON.stringify({
+          android: sent[1]?.android,
+          apns: sent[1]?.apns,
+          data: sent[1]?.data,
+          notification: sent[1]?.notification,
+        }),
+      ).byteLength < 4096,
+    );
     const warningDocument = { ...document, summary: 'Private warning text' };
     await db
       .update(PostContents)
       .set({ document: warningDocument })
       .where(eq(PostContents.id, contentId));
     await sendPushNotificationActivity(notificationId, installationIds[0]!);
-    assert.equal(sent[1]?.notification?.body, '이 게시글에 반응했습니다');
-    assert.equal(sent[1]?.notification?.body.includes('Private warning text'), false);
+    assert.equal(
+      sent[2]?.notification?.body,
+      '혜주(@hyeju) 님이 예은(@yeeun) 님에게 😂를 남겼습니다.',
+    );
+    assert.equal(sent[2]?.notification?.body.includes('Private warning text'), false);
 
     const sensitiveDocument = {
       ...document,
@@ -1142,10 +1533,225 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
       .set({ document: sensitiveDocument })
       .where(eq(PostContents.id, contentId));
     await sendPushNotificationActivity(notificationId, installationIds[0]!);
-    assert.equal(sent[2]?.notification?.body, '이 게시글에 반응했습니다');
-    assert.equal(sent[2]?.notification?.body.includes('Read the article'), false);
+    assert.equal(
+      sent[3]?.notification?.body,
+      '혜주(@hyeju) 님이 예은(@yeeun) 님에게 😂를 남겼습니다.',
+    );
+    assert.equal(sent[3]?.notification?.body.includes('Read the article'), false);
   } finally {
     if (postId) {
+      await db.update(Posts).set({ currentContentId: null }).where(eq(Posts.id, postId));
+      await db.delete(PostContents).where(eq(PostContents.postId, postId));
+      await db.delete(Posts).where(eq(Posts.id, postId));
+    }
+    await cleanupAccountDeletionFixture(fixture);
+    if (previousProjectId === undefined) {
+      delete process.env.FIREBASE_PROJECT_ID;
+    } else {
+      process.env.FIREBASE_PROJECT_ID = previousProjectId;
+    }
+  }
+});
+
+test('Profile Notification의 유형별 기본 notification payload를 전달한다', async (t) => {
+  const previousProjectId = process.env.FIREBASE_PROJECT_ID;
+  process.env.FIREBASE_PROJECT_ID = 'kosmo-push-test';
+  const fixture = await createAccountDeletionFixture({ profileStates: [ProfileState.ACTIVE] });
+  const postIds: string[] = [];
+
+  try {
+    const recipient = fixture.profiles[0]!;
+    const actor = await createProfile();
+    await db
+      .update(Profiles)
+      .set({ displayName: '수신자', handle: 'recipient', normalizedHandle: 'recipient' })
+      .where(eq(Profiles.id, recipient.id));
+    await db
+      .update(Profiles)
+      .set({ displayName: '행위자', handle: 'actor', normalizedHandle: 'actor' })
+      .where(eq(Profiles.id, actor.id));
+
+    const { post: target } = await createCorePost({
+      document: postContentDocumentFromText('target'),
+      origin: 'LOCAL',
+      profileId: recipient.id,
+      visibility: PostVisibility.PUBLIC,
+    });
+    postIds.push(target.id);
+    const { post: reply } = await createCorePost({
+      document: postContentDocumentFromText('reply'),
+      origin: 'LOCAL',
+      profileId: actor.id,
+      replyParentId: target.id,
+      visibility: PostVisibility.PUBLIC,
+    });
+    postIds.push(reply.id);
+    const { post: quote } = await createCorePost({
+      document: postContentDocumentFromText('quote'),
+      origin: 'LOCAL',
+      profileId: actor.id,
+      repostSourceId: target.id,
+      visibility: PostVisibility.PUBLIC,
+    });
+    postIds.push(quote.id);
+    const { repost } = await repostPost({
+      actorProfileId: actor.id,
+      origin: 'LOCAL',
+      sourcePostId: target.id,
+    });
+    postIds.push(repost.id);
+    const { listPushNotificationInstallationsActivity, sendPushNotificationActivity } =
+      await import('./activities');
+    const follow = await db
+      .insert(ProfileFollows)
+      .values({ followerProfileId: actor.id, followeeProfileId: recipient.id })
+      .returning()
+      .then(firstOrThrow);
+    const followRequest = await db
+      .insert(ProfileFollowRequests)
+      .values({ followerProfileId: actor.id, followeeProfileId: recipient.id })
+      .returning()
+      .then(firstOrThrow);
+    const reaction = await db
+      .insert(Reactions)
+      .values({ postId: target.id, profileId: actor.id, type: '😂' })
+      .returning()
+      .then(firstOrThrow);
+    const notificationSources = [
+      [NotificationKind.FOLLOW, follow.id],
+      [NotificationKind.FOLLOW_REQUEST, followRequest.id],
+      [NotificationKind.REACTION, reaction.id],
+      [NotificationKind.REPOST, repost.id],
+      [NotificationKind.REPLY, reply.id],
+      [NotificationKind.QUOTE, quote.id],
+    ] as const;
+    const notifications = await Promise.all(
+      notificationSources.map(([kind, sourceId]) =>
+        db
+          .insert(Notifications)
+          .values({ kind, recipientProfileId: recipient.id, sourceId })
+          .returning({ id: Notifications.id })
+          .then(firstOrThrow),
+      ),
+    );
+
+    const installationIds = await listPushNotificationInstallationsActivity(notifications[0]!.id);
+    assert.ok(installationIds[0]);
+    const { applicationDefault, getApps, initializeApp } = await import('firebase-admin/app');
+    const { getMessaging } = await import('firebase-admin/messaging');
+    const app =
+      getApps().find(({ name }) => name === '[DEFAULT]') ??
+      initializeApp({
+        credential: applicationDefault(),
+        projectId: process.env.FIREBASE_PROJECT_ID,
+      });
+    const messaging = getMessaging(app);
+    type FcmMessage = Parameters<typeof messaging.send>[0];
+    const sent: FcmMessage[] = [];
+    const { encodeGlobalId } = await import('@kosmo/core/global-id');
+    const dataFor = (kind: NotificationKind, id: string) =>
+      encodeGlobalId(
+        (
+          {
+            [NotificationKind.FOLLOW]: 'FollowNotification',
+            [NotificationKind.FOLLOW_REQUEST]: 'FollowRequestNotification',
+            [NotificationKind.REACTION]: 'ReactionNotification',
+            [NotificationKind.REPOST]: 'RepostNotification',
+            [NotificationKind.REPLY]: 'ReplyNotification',
+            [NotificationKind.QUOTE]: 'QuoteNotification',
+            [NotificationKind.MENTION]: 'MentionNotification',
+            [NotificationKind.OPERATIONAL]: 'OperationalNotification',
+          } satisfies Record<NotificationKind, string>
+        )[kind],
+        id,
+      );
+    const encodeProfileId = (id: string) => encodeGlobalId('Profile', id);
+    const encodePostId = (id: string) => encodeGlobalId('Post', id);
+    t.mock.method(messaging, 'send', async (message: FcmMessage) => {
+      sent.push(message);
+      return 'projects/kosmo-push-test/messages/summary-test';
+    });
+
+    for (const notification of notifications) {
+      await sendPushNotificationActivity(notification.id, installationIds[0]);
+    }
+
+    assert.deepEqual(
+      sent.map(({ notification, data }) => ({
+        title: notification?.title,
+        body: notification?.body,
+        data,
+      })),
+      [
+        {
+          title: '행위자',
+          body: '행위자(@actor) 님이 수신자(@recipient) 님을 팔로우했습니다.',
+          data: {
+            href: '/@actor',
+            notificationId: dataFor(NotificationKind.FOLLOW, notifications[0]!.id),
+            recipientProfileId: encodeProfileId(recipient.id),
+          },
+        },
+        {
+          title: '행위자',
+          body: '행위자(@actor) 님이 수신자(@recipient) 님에게 팔로우를 요청했습니다.',
+          data: {
+            href: '/follow-requests',
+            notificationId: dataFor(NotificationKind.FOLLOW_REQUEST, notifications[1]!.id),
+            recipientProfileId: encodeProfileId(recipient.id),
+          },
+        },
+        {
+          title: '행위자',
+          body: '행위자(@actor) 님이 수신자(@recipient) 님에게 😂를 남겼습니다. target',
+          data: {
+            href: `/@recipient/${encodePostId(target.id)}`,
+            notificationId: dataFor(NotificationKind.REACTION, notifications[2]!.id),
+            recipientProfileId: encodeProfileId(recipient.id),
+          },
+        },
+        {
+          title: '행위자',
+          body: '행위자(@actor) 님이 수신자(@recipient) 님의 게시글을 재게시했습니다. target',
+          data: {
+            href: `/@recipient/${encodePostId(target.id)}`,
+            notificationId: dataFor(NotificationKind.REPOST, notifications[3]!.id),
+            recipientProfileId: encodeProfileId(recipient.id),
+          },
+        },
+        {
+          title: '행위자',
+          body: '행위자(@actor) 님이 수신자(@recipient) 님의 게시글에 답글을 달았습니다. reply',
+          data: {
+            href: `/@actor/${encodePostId(reply.id)}`,
+            notificationId: dataFor(NotificationKind.REPLY, notifications[4]!.id),
+            recipientProfileId: encodeProfileId(recipient.id),
+          },
+        },
+        {
+          title: '행위자',
+          body: '행위자(@actor) 님이 수신자(@recipient) 님의 게시글을 인용했습니다. quote',
+          data: {
+            href: `/@actor/${encodePostId(quote.id)}`,
+            notificationId: dataFor(NotificationKind.QUOTE, notifications[5]!.id),
+            recipientProfileId: encodeProfileId(recipient.id),
+          },
+        },
+      ],
+    );
+    assert.ok(
+      sent.every(
+        ({ android, apns, data, notification }) =>
+          android?.priority === undefined &&
+          apns?.payload === undefined &&
+          notification &&
+          data &&
+          new TextEncoder().encode(JSON.stringify({ android, apns, data, notification }))
+            .byteLength < 4096,
+      ),
+    );
+  } finally {
+    for (const postId of [...postIds].reverse()) {
       await db.update(Posts).set({ currentContentId: null }).where(eq(Posts.id, postId));
       await db.delete(PostContents).where(eq(PostContents.postId, postId));
       await db.delete(Posts).where(eq(Posts.id, postId));
@@ -1371,6 +1977,13 @@ test('Mention Push Notification은 원인 Post의 Mention 타입·경로·안전
     }
     const { post } = createdPost;
     postId = post.id;
+    const authorInstance = await db
+      .select({ domain: Instances.domain })
+      .from(Instances)
+      .where(eq(Instances.id, author.instanceId))
+      .then(firstOrThrow);
+    const actorLabel = `${author.displayName}(@${author.handle}@${authorInstance.domain})`;
+    const recipientLabel = `${recipient.displayName}(@${recipient.handle})`;
     const {
       createMentionNotificationActivity,
       listPushNotificationInstallationsActivity,
@@ -1403,12 +2016,12 @@ test('Mention Push Notification은 원인 Post의 Mention 타입·경로·안전
     const { encodeGlobalId } = await import('@kosmo/core/global-id');
     assert.deepEqual(payload.notification, {
       title: author.displayName,
-      body: '회원님을 언급했습니다: Mention source preview',
+      body: `${actorLabel} 님이 ${recipientLabel} 님을 언급했습니다. Mention source preview`,
     });
     assert.deepEqual(payload.data, {
       notificationId: encodeGlobalId('MentionNotification', notificationId),
       recipientProfileId: encodeGlobalId('Profile', recipient.id),
-      href: `/@${author.handle}@${author.handle}.example/${encodeGlobalId('Post', post.id)}`,
+      href: `/@${author.handle}@${authorInstance.domain}/${encodeGlobalId('Post', post.id)}`,
     });
   } finally {
     if (postId) {

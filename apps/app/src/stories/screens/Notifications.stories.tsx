@@ -20,6 +20,7 @@ import {
   notificationsProfile,
   post,
   profile,
+  quoteNotification,
   reactionNotification,
   replyNotification,
   repostNotification,
@@ -81,6 +82,27 @@ const operationalNotification = {
   readAt: null,
   title: '서비스 점검 안내',
 };
+
+const quoteNotificationPost = notificationPost({
+  bodyText: '알림에서 확인할 인용글 본문입니다.',
+  id: 'notification-quote-post',
+  profile: profile({
+    displayName: '인용 작성자',
+    handle: 'quote-author',
+    id: 'notification-quote-author',
+    relativeHandle: '@quote-author',
+  }),
+  repostSource: post({
+    bodyText: '인용된 원문 미리보기입니다.',
+    id: 'notification-quote-source',
+    profile: profile({
+      displayName: '원문 작성자',
+      handle: 'source-author',
+      id: 'notification-quote-source-author',
+      relativeHandle: '@source-author',
+    }),
+  }),
+});
 
 const emptyProfile = notificationsProfile([], {}, { id: 'notification-profile-empty' });
 const contentProfile = notificationsProfile(
@@ -159,6 +181,49 @@ const mentionProfile = notificationsProfile(
   {},
   { id: 'notification-profile-mention' },
 );
+const quoteProfile = notificationsProfile(
+  [
+    quoteNotification({
+      id: 'notification-quote',
+      post: quoteNotificationPost,
+    }),
+  ],
+  {},
+  { id: 'notification-profile-quote', unreadNotificationCount: 1 },
+);
+const sourceUnavailableNotifications = [
+  followNotification({
+    id: 'notification-unavailable-follow',
+    profile: null,
+    readAt: '2026-07-21T12:00:00Z',
+  }),
+  followRequestNotification({
+    id: 'notification-unavailable-follow-request',
+    followRequest: null,
+    profile: followRequestFollower,
+  }),
+  reactionNotification({
+    id: 'notification-unavailable-reaction',
+    post: null,
+    profile: unreadFollower,
+  }),
+  replyNotification({ id: 'notification-unavailable-reply', post: null, profile: unreadFollower }),
+  quoteNotification({
+    id: 'notification-unavailable-quote',
+    post: notificationPost({ bodyText: null, id: 'notification-unavailable-quote-post' }),
+  }),
+  mentionNotification({ id: 'notification-unavailable-mention', post: null }),
+  repostNotification({
+    id: 'notification-unavailable-repost',
+    post: null,
+    profile: null,
+  }),
+];
+const sourceUnavailableProfile = notificationsProfile(
+  sourceUnavailableNotifications,
+  {},
+  { id: 'notification-profile-source-unavailable', unreadNotificationCount: 6 },
+);
 const paginationProfile = notificationsProfile(
   [followNotification({ id: 'notification-page-1', profile: unreadFollower })],
   { hasNext: true },
@@ -194,6 +259,8 @@ const storyProfiles = [
   profileA,
   profileB,
   mentionProfile,
+  quoteProfile,
+  sourceUnavailableProfile,
 ];
 
 const NotificationsStoriesQuery = graphql`
@@ -291,6 +358,23 @@ function ReadNavigationList() {
   );
 }
 
+function QuoteReadNavigationList() {
+  const pathname = usePathname();
+  const profileNode = requireProfile(useStoryProfiles(), 6);
+
+  return (
+    <SessionProvider>
+      <Text>{pathname}</Text>
+      <NotificationList profile={profileNode.notificationList!} />
+    </SessionProvider>
+  );
+}
+
+function SourceUnavailableList() {
+  const profileNode = requireProfile(useStoryProfiles(), 7);
+  return <NotificationList profile={profileNode.notificationList!} />;
+}
+
 function AuthenticatedReadNavigationList() {
   return (
     <SessionProvider>
@@ -350,6 +434,25 @@ const mentionReadMutationResponse = {
       {
         __typename: 'Profile',
         id: 'notification-profile-mention',
+        unreadNotificationCount: 0,
+      },
+    ],
+  },
+};
+
+const quoteReadMutationResponse = {
+  markNotificationRead: {
+    notifications: [
+      {
+        __typename: 'QuoteNotification',
+        id: 'notification-quote',
+        readAt: '2026-07-21T12:00:00Z',
+      },
+    ],
+    recipientProfiles: [
+      {
+        __typename: 'Profile',
+        id: 'notification-profile-quote',
         unreadNotificationCount: 0,
       },
     ],
@@ -645,6 +748,74 @@ export const ReadAllLoadedUnread: Story = {
   render: () => <RefreshList />,
 };
 
+export const SourceUnavailableNotificationFallbacks: Story = {
+  parameters: {
+    controls: { disable: true },
+    relay: {
+      mutationLoading: true,
+      mutationRequestObserver: (request: RequestParameters, variables: Variables) =>
+        notificationMutationRequest(request.name, variables),
+    },
+  },
+  play: async ({ canvasElement }) => {
+    notificationMutationRequest.mockClear();
+    const canvas = within(canvasElement);
+    const fallbackLabels = [
+      ['notification-source-unavailable-follow', '팔로우 알림'],
+      ['notification-source-unavailable-followRequest', '팔로우 요청 알림'],
+      ['notification-source-unavailable-reaction', '반응 알림'],
+      ['notification-source-unavailable-reply', '답글 알림'],
+      ['notification-source-unavailable-quote', '인용 알림'],
+      ['notification-source-unavailable-mention', '멘션 알림'],
+      ['notification-source-unavailable-repost', '재게시 알림'],
+    ] as const;
+
+    for (const [testId, label] of fallbackLabels) {
+      const fallback = canvas.getByTestId(testId);
+      expect(fallback).toBeVisible();
+      expect(fallback).toHaveTextContent(label);
+      expect(fallback.querySelector('a, button, [role="link"], [role="button"]')).toBeNull();
+    }
+
+    expect(canvas.getByTestId('notification-source-unavailable-follow')).not.toHaveTextContent(
+      '읽지 않은 알림',
+    );
+    const unavailableFollowRequest = canvas.getByTestId(
+      'notification-source-unavailable-followRequest',
+    );
+    expect(unavailableFollowRequest).toHaveTextContent('읽지 않은 알림');
+    expect(unavailableFollowRequest).not.toHaveTextContent('새 요청자');
+    await userEvent.click(unavailableFollowRequest);
+    expect(notificationMutationRequest).not.toHaveBeenCalledWith(
+      'NotificationListItemMarkReadMutation',
+      expect.anything(),
+    );
+    expect(canvas.getByRole('button', { name: '모두 읽음' })).toBeEnabled();
+
+    await userEvent.click(canvas.getByRole('button', { name: '모두 읽음' }));
+    await waitFor(() =>
+      expect(notificationMutationRequest).toHaveBeenCalledWith(
+        'NotificationListMarkAllReadMutation',
+        {
+          ids: [
+            'notification-unavailable-follow-request',
+            'notification-unavailable-reaction',
+            'notification-unavailable-reply',
+            'notification-unavailable-quote',
+            'notification-unavailable-mention',
+            'notification-unavailable-repost',
+          ],
+        },
+      ),
+    );
+    expect(notificationMutationRequest).not.toHaveBeenCalledWith(
+      'NotificationListItemMarkReadMutation',
+      expect.anything(),
+    );
+  },
+  render: () => <SourceUnavailableList />,
+};
+
 export const ReadAllLoadedZero: Story = {
   play: ({ canvasElement }) => {
     const action = within(canvasElement).getByRole('button', { name: '모두 읽음' });
@@ -933,6 +1104,7 @@ export const ReplyAuthorActivationReadsOnce: Story = {
     const detailPath = '/@starlight/notification-reply-post';
     const activations = [
       { target: canvas.getByTestId('notification-post-author'), path: '/@starlight' },
+      { target: canvas.getByTestId('reply-notification-rail'), path: detailPath },
       { target: canvas.getByRole('link', { name: '5분 전' }), path: detailPath },
       { target: canvas.getByTestId('post-list-row-body'), path: detailPath },
       {
@@ -1150,6 +1322,12 @@ export const MentionSelectedProfileScreen: Story = {
 
     await expect(mention).toBeVisible();
     await expect(canvas.getAllByTestId('mention-notification-post')).toHaveLength(1);
+    const unavailableMention = canvas.getByTestId('notification-source-unavailable-mention');
+    await expect(unavailableMention).toBeVisible();
+    await expect(unavailableMention).toHaveTextContent('멘션 알림');
+    await expect(
+      unavailableMention.querySelector('a, button, [role="link"], [role="button"]'),
+    ).toBeNull();
     await expect(mention).toHaveTextContent('멘션 알림');
     await expect(mention).toHaveTextContent('이 글에서 회원님을 멘션했습니다.');
     await expect(mention).not.toHaveTextContent('답글 원문 미리보기는 표시하지 않습니다.');
@@ -1166,6 +1344,52 @@ export const MentionSelectedProfileScreen: Story = {
     await waitFor(() => expect(item).not.toHaveTextContent('읽지 않은 알림'));
   },
   render: () => <MentionSelectedProfileScreenContent />,
+};
+
+export const QuoteListActivationReadsNotification: Story = {
+  parameters: {
+    controls: { disable: true },
+    relay: {
+      data: { nodes: storyProfiles },
+      mutationRequestObserver: (request: RequestParameters, variables: Variables) =>
+        notificationMutationRequest(request.name, variables),
+      mutationResponse: quoteReadMutationResponse,
+      operationResponses: {
+        SessionProviderQuery: {
+          data: {
+            currentSession: {
+              id: 'notification-session',
+              selectedProfile: { id: 'notification-profile-quote' },
+            },
+            me: { id: 'notification-account', name: 'Notification Story' },
+          },
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    notificationMutationRequest.mockClear();
+    const canvas = within(canvasElement);
+    const quote = canvas.getByTestId('quote-notification-post');
+    const item = quote.closest('[data-testid="notification-list-item"]');
+
+    await expect(quote).toBeVisible();
+    await expect(quote).toHaveTextContent('인용 작성자');
+    await expect(quote).toHaveTextContent('알림에서 확인할 인용글 본문입니다.');
+    await expect(item).toHaveTextContent('읽지 않은 알림');
+
+    await userEvent.click(canvas.getByTestId('post-list-row-body'));
+    await expect(
+      canvas.findByText('/@quote-author/notification-quote-post'),
+    ).resolves.toBeVisible();
+    await expect(notificationMutationRequest).toHaveBeenCalledTimes(1);
+    await expect(notificationMutationRequest).toHaveBeenCalledWith(
+      'NotificationListItemMarkReadMutation',
+      { ids: ['notification-quote'] },
+    );
+    await waitFor(() => expect(item).not.toHaveTextContent('읽지 않은 알림'));
+  },
+  render: () => <QuoteReadNavigationList />,
 };
 
 export const NoSelectedProfileScreen: Story = {

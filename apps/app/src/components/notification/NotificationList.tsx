@@ -1,5 +1,5 @@
 import { usePathname, useSegments } from 'expo-router';
-import { useEffect, useTransition } from 'react';
+import { useCallback, useEffect, useRef, useTransition } from 'react';
 import {
   Platform,
   RefreshControl,
@@ -16,6 +16,7 @@ import { useAutomaticPagination } from '@/components/pagination/useAutomaticPagi
 import { PostActionAuthenticationProvider } from '@/components/post/PostActionAuthentication';
 import { PostComposerCoordinatorProvider } from '@/components/post/PostComposerCoordinator';
 import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHost';
+import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { getWebMobileShellHeader } from '@/components/shell/shellLayout';
 import { Skeleton, StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -25,6 +26,7 @@ import {
   MentionNotificationListItem,
   NotificationListItem,
   OperationalNotificationListItem,
+  QuoteNotificationListItem,
   ReactionNotificationListItem,
   ReplyNotificationListItem,
   RepostNotificationListItem,
@@ -68,6 +70,9 @@ const notificationListFragment = graphql`
           ... on RepostNotification {
             ...RepostNotificationListItem_notification @alias(as: "repost")
           }
+          ... on QuoteNotification {
+            ...QuoteNotificationListItem_notification @alias(as: "quote")
+          }
           ... on OperationalNotification {
             ...OperationalNotificationListItem_notification @alias(as: "operational")
           }
@@ -79,6 +84,18 @@ const notificationListFragment = graphql`
 
 export function NotificationList({ profile }: NotificationListProps) {
   const theme = useTheme();
+  const scrollRef = useRef<ScrollView>(null);
+  const shellChrome = useShellChrome();
+  const scrollToTop = useCallback(() => {
+    scrollRef.current?.scrollTo({ animated: true, y: 0 });
+  }, []);
+  useEffect(() => {
+    if (Platform.OS === 'web' || !shellChrome?.registerTabReselection) {
+      return;
+    }
+
+    return shellChrome.registerTabReselection('notifications', scrollToTop);
+  }, [scrollToTop, shellChrome]);
   const pagination = usePaginationFragment<
     NotificationListNextPageQuery,
     NotificationList_profile$key
@@ -120,6 +137,9 @@ export function NotificationList({ profile }: NotificationListProps) {
     if (node.__typename === 'RepostNotification' && node.repost) {
       return <RepostNotificationListItem key={node.id} notification={node.repost} />;
     }
+    if (node.__typename === 'QuoteNotification' && node.quote) {
+      return <QuoteNotificationListItem key={node.id} notification={node.quote} />;
+    }
     if (node.__typename === 'OperationalNotification' && node.operational) {
       return <OperationalNotificationListItem key={node.id} notification={node.operational} />;
     }
@@ -156,7 +176,9 @@ export function NotificationList({ profile }: NotificationListProps) {
         <PostMediaViewerHostProvider>
           <ScrollView
             {...nativeScrollProps}
+            keyboardShouldPersistTaps="handled"
             contentContainerStyle={styles.root}
+            ref={scrollRef}
             refreshControl={
               Platform.OS === 'web' ? undefined : (
                 <RefreshControl
@@ -172,7 +194,7 @@ export function NotificationList({ profile }: NotificationListProps) {
               notifications
             ) : (
               <StateView
-                description="새로운 계정 공지나 팔로우, 팔로우 요청, 답글, 반응 또는 재게시 알림이 생기면 여기에 표시돼요."
+                description="새로운 계정 공지나 팔로우, 팔로우 요청, 답글, 인용, 반응 또는 재게시 알림이 생기면 여기에 표시돼요."
                 style={styles.state}
                 title="아직 알림이 없어요"
               />

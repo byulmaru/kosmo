@@ -15,8 +15,8 @@ worker:
   health:
     port: 8080
   posthog:
-    host: https://us.i.posthog.com
-    captureKey: phc_vYTsfHrgz8wE6wQv5kfpQM5XPBnKKjvNQgaHabb6zdsS
+    host: https://eu.i.posthog.com
+    captureKey: phc_wtHL2JZViyDBizGfTYXqjHwejEwJiEwHoEzPZ3DtUmDS
   resources:
     requests:
       cpu: 100m
@@ -59,12 +59,20 @@ temporal:
       prod: 30d
 postgres:
   resources:
-    requests:
-      cpu: 250m
-      memory: 1Gi
-    limits:
-      cpu: 250m
-      memory: 1Gi
+    dev:
+      requests:
+        cpu: 50m
+        memory: 256Mi
+      limits:
+        cpu: 250m
+        memory: 768Mi
+    prod:
+      requests:
+        cpu: 250m
+        memory: 1536Mi
+      limits:
+        cpu: 250m
+        memory: 1536Mi
   pooler:
     replicas:
       dev: 1

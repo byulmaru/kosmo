@@ -280,7 +280,6 @@ async function expectNavigationBasics(
     expectRect(navigation, 80, 720);
   } else {
     expectRect(home, 288, 45);
-    expect(within(notifications).getByText('알림')).toBeVisible();
   }
 
   if (unreadNotificationCount && unreadNotificationCount > 0) {

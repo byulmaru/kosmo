@@ -10,12 +10,16 @@ import type { ReplyComposerSurface as ReplyComposerSurfaceComponent } from './Re
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const platform = { OS: 'android' };
+const safeAreaInsets = { bottom: 0, left: 0, right: 0, top: 0 };
 let composerProps:
   | {
       initialBodyText?: string;
       onRequestClose?: (event?: unknown) => void;
       onSubmittingChange?: (submitting: boolean) => void;
       registerNativeBackHandler?: (handler: (() => void) | null) => void;
+      replyParentId?: string;
+      replyParentVisibility?: 'DIRECT' | 'FOLLOWERS' | 'PUBLIC' | 'UNLISTED' | null;
+      repostSourceId?: string;
       editorRef?: { current: unknown };
     }
   | undefined;
@@ -36,6 +40,9 @@ mockModule('react-native', {
   Text: 'Text',
   View: 'View',
   useWindowDimensions: () => ({ width: 360 }),
+});
+mockModule('react-native-safe-area-context', {
+  useSafeAreaInsets: () => safeAreaInsets,
 });
 mockModule('react-relay', {
   graphql: () => ({}),
@@ -103,6 +110,7 @@ afterEach(async () => {
   renderer = null;
   composerProps = undefined;
   platform.OS = 'android';
+  safeAreaInsets.top = 0;
 });
 
 test('답글 본문은 direct Parent 작성자와 저장된 mention을 미리 채운다', async () => {
@@ -118,6 +126,7 @@ test('답글 본문은 direct Parent 작성자와 저장된 mention을 미리 �
     },
     createdAt: '2026-10-08T00:00:00.000Z',
     id: 'post-parent',
+    visibility: 'FOLLOWERS',
     profile: {
       avatar: null,
       displayName: 'Parent',
@@ -143,6 +152,8 @@ test('답글 본문은 direct Parent 작성자와 저장된 mention을 미리 �
     '@parent',
     '@remote@remote.example',
   ]);
+  assert.equal(composerProps?.replyParentId, parent.id);
+  assert.equal(composerProps?.replyParentVisibility, parent.visibility);
 
   await act(async () => {
     renderer?.update(
@@ -154,6 +165,8 @@ test('답글 본문은 direct Parent 작성자와 저장된 mention을 미리 �
   });
 
   assert.equal(composerProps?.initialBodyText, undefined);
+  assert.equal(composerProps?.replyParentVisibility, undefined);
+  assert.equal(composerProps?.repostSourceId, parent.id);
 
   await act(async () => {
     renderer?.update(
@@ -180,6 +193,45 @@ test('답글 본문은 direct Parent 작성자와 저장된 mention을 미리 �
   });
 
   assert.equal(composerProps?.initialBodyText, '');
+});
+
+test('iOS Reply와 Quote는 키보드 회피에 safe-area 화면 offset을 사용한다', async () => {
+  platform.OS = 'ios';
+  safeAreaInsets.top = 59;
+  const props = {
+    onRequestClose: () => undefined,
+    open: true,
+    parent: {
+      content: { bodyText: 'Parent 본문', contentWarning: null, mentionedProfiles: [] },
+      createdAt: '2026-10-08T00:00:00.000Z',
+      id: 'post-parent',
+      profile: {
+        avatar: null,
+        displayName: 'Parent',
+        handle: 'parent',
+        id: 'profile-parent',
+        relativeHandle: '@parent',
+      },
+      repostSource: null,
+    } as never,
+    profile: { composer: {}, id: 'profile-writing', relativeHandle: '@writing' } as never,
+  };
+
+  await act(async () => {
+    renderer = create(createElement(ReplyComposerSurface, props));
+  });
+
+  let keyboardAvoidingView = renderer?.root.findByType('KeyboardAvoidingView' as ElementType);
+  assert.equal(keyboardAvoidingView?.props.behavior, 'height');
+  assert.equal(keyboardAvoidingView?.props.keyboardVerticalOffset, 59);
+
+  await act(async () => {
+    renderer?.update(createElement(ReplyComposerSurface, { ...props, mode: 'quote' }));
+  });
+
+  keyboardAvoidingView = renderer?.root.findByType('KeyboardAvoidingView' as ElementType);
+  assert.equal(keyboardAvoidingView?.props.behavior, 'height');
+  assert.equal(keyboardAvoidingView?.props.keyboardVerticalOffset, 59);
 });
 
 test('미디어 편집 중 Native back은 작성 surface 대신 편집기만 닫는다', async () => {

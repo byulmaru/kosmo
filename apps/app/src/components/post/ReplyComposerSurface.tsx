@@ -11,6 +11,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { graphql, useFragment, useRelayEnvironment } from 'react-relay';
 import { getDataIDsFromFragment, getFragment } from 'relay-runtime';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
@@ -42,6 +43,7 @@ const ReplyComposerSurfaceParentFragment = graphql`
   fragment ReplyComposerSurface_parent on Post {
     ...PostSourcePreview_source
     id
+    visibility
     createdAt
     content {
       bodyText
@@ -154,6 +156,7 @@ function ReplyComposerSurfaceContents({
   const { register: registerNavigationGuard } = useNavigationGuard();
   const { showToast } = useToast();
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const parent = useFragment(ReplyComposerSurfaceParentFragment, parentKey);
   const profile = useFragment(ReplyComposerSurfaceProfileFragment, profileKey);
   const quoteMode = mode === 'quote';
@@ -428,7 +431,8 @@ function ReplyComposerSurfaceContents({
                   </View>
                 ) : null}
                 <KeyboardAvoidingView
-                  behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                  behavior={Platform.OS === 'ios' ? 'height' : undefined}
+                  keyboardVerticalOffset={insets.top}
                   style={styles.composerFrame}
                 >
                   <PostComposerController
@@ -497,7 +501,9 @@ function ReplyComposerSurfaceContents({
                     onSubmittingChange={setSubmitting}
                     profile={profile.composer}
                     registerNativeBackHandler={registerNativeBackHandler}
-                    {...(quoteMode ? { repostSourceId: parent.id } : { replyParentId: parent.id })}
+                    {...(quoteMode
+                      ? { repostSourceId: parent.id }
+                      : { replyParentId: parent.id, replyParentVisibility: parent.visibility })}
                   >
                     {quoteMode ? (
                       <PostSourcePreview

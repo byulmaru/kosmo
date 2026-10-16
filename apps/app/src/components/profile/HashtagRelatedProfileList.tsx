@@ -1,9 +1,11 @@
+import { useEffect } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { graphql, usePaginationFragment } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
 import { PaginationSurface } from '@/components/pagination/PaginationSurface';
 import { useAutomaticPagination } from '@/components/pagination/useAutomaticPagination';
 import { ProfileListItem } from '@/components/profile/ProfileListItem';
+import { ProfileTagMuteAction } from '@/components/profile/ProfileTagMuteAction';
 import { StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
@@ -17,6 +19,7 @@ const hashtagRelatedProfileListFragment = graphql`
   @refetchable(queryName: "HashtagRelatedProfilesNextPageQuery") {
     id
     name
+    ...ProfileTagMuteAction_tag
     relatedProfiles(first: $count, after: $cursor)
       @connection(key: "HashtagRelatedProfileList_relatedProfiles") {
       edges {
@@ -31,11 +34,15 @@ const hashtagRelatedProfileListFragment = graphql`
 `;
 
 export function HashtagRelatedProfileList({
+  onVisibleResults,
+  onResultSelected,
   hashtag,
   leading,
 }: {
   hashtag: HashtagRelatedProfileList_hashtag$key;
   leading?: ReactNode;
+  onVisibleResults?: (hashtagId: string, resultCount: number) => void;
+  onResultSelected?: (hashtagId: string) => void;
 }) {
   const pagination = usePaginationFragment<
     HashtagRelatedProfilesNextPageQuery,
@@ -51,13 +58,27 @@ export function HashtagRelatedProfileList({
     pageSize: 20,
     webScrollTarget: 'container',
   });
+  useEffect(() => {
+    onVisibleResults?.(pagination.data.id, Math.min(profiles.length, 20));
+  }, [onVisibleResults, pagination.data.id, profiles.length]);
 
   return (
     <ScrollView {...nativeScrollProps} contentContainerStyle={styles.root}>
-      <PageHeader leading={leading} title={`#${pagination.data.name} 관련 프로필`} />
+      <PageHeader
+        leading={leading}
+        title={`#${pagination.data.name} 관련 프로필`}
+        titleLines={1}
+        trailing={<ProfileTagMuteAction hashtag={pagination.data} key={pagination.data.id} />}
+      />
       {profiles.length ? (
         profiles.map((edge) => (
-          <ProfileListItem key={edge.cursor} linked profile={edge.node} showBio />
+          <ProfileListItem
+            key={edge.cursor}
+            linked
+            onPress={() => onResultSelected?.(pagination.data.id)}
+            profile={edge.node}
+            showBio
+          />
         ))
       ) : (
         <StateView

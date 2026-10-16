@@ -21,7 +21,6 @@ import {
 import { isExternalInboundError, observeInbound } from './inbound-observability';
 import {
   findOrMaterializeRemoteProfileActorByUri,
-  findUsableStoredRemoteProfileActorByUri,
   RemoteActorMaterializationError,
 } from './remote-actor-materialization';
 import type { Context, InboxContext } from '@fedify/fedify';
@@ -359,13 +358,10 @@ const materializeRemoteNote = async ({
   let storedActor: StoredRemoteProfileActor | undefined;
   if (source.kind === 'hydrated' && source.advertisingActorUri !== undefined) {
     try {
-      storedActor =
-        (await findUsableStoredRemoteProfileActorByUri(attributionUri)) ??
-        (await findOrMaterializeRemoteProfileActorByUri({
-          actorUri: attributionUri,
-          context,
-          now: receivedAt,
-        }));
+      storedActor = await findOrMaterializeRemoteProfileActorByUri({
+        actorUri: attributionUri,
+        contextOrigin: context.canonicalOrigin,
+      });
     } catch (error) {
       if (
         error instanceof RemoteActorMaterializationError ||
@@ -416,13 +412,10 @@ const materializeRemoteNote = async ({
     storedActor = source.storedActor;
   } else if (!storedActor) {
     try {
-      storedActor =
-        (await findUsableStoredRemoteProfileActorByUri(attributionUri)) ??
-        (await findOrMaterializeRemoteProfileActorByUri({
-          actorUri: attributionUri,
-          context,
-          now: receivedAt,
-        }));
+      storedActor = await findOrMaterializeRemoteProfileActorByUri({
+        actorUri: attributionUri,
+        contextOrigin: context.canonicalOrigin,
+      });
     } catch (error) {
       if (
         error instanceof RemoteActorMaterializationError ||

@@ -1,4 +1,5 @@
 import { Link, useRouter } from 'expo-router';
+import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
@@ -7,10 +8,6 @@ import { formatTimelineTimestamp } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
 import { PostContentRenderer } from './PostContentRenderer';
-import {
-  PostSurfaceHoverSuppressionContext,
-  usePostSurfaceFeedback,
-} from './usePostSurfaceFeedback';
 import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
@@ -222,13 +219,14 @@ export function PostSourcePreview({
   style?: StyleProp<ViewStyle>;
 }): ReactNode {
   const theme = useTheme();
-  const { handlers, hovered, setSurfaceHoverSuppressed } = usePostSurfaceFeedback({
-    hover: interactive,
-    press: false,
-  });
+  const [pointerHovered, setPointerHovered] = useState(false);
   const source = useFragment(PostSourcePreviewFragment, sourceKey);
   const sourceProfileHref = `/${source.profile.relativeHandle}` as Href;
   const sourcePostHref = `/${source.profile.relativeHandle}/${source.id}` as Href;
+  const previewStyle = [styles.preview, style, { borderColor: theme.borderDefault }];
+  if (!interactive && pointerHovered) {
+    setPointerHovered(false);
+  }
   const content = (
     <>
       <View style={styles.authorHeader}>
@@ -281,23 +279,41 @@ export function PostSourcePreview({
     </>
   );
 
+  if (!interactive || Platform.OS !== 'web') {
+    return (
+      <View style={previewStyle} testID="source-post-preview">
+        {content}
+      </View>
+    );
+  }
+
+  // RNW suppresses an ancestor Pressable's hovered state under a nested Pressable.
   return (
-    <View
-      {...handlers}
+    <Pressable
+      accessible={false}
+      focusable={false}
+      onPointerEnter={(event) => {
+        if (event.nativeEvent.pointerType !== 'touch') {
+          setPointerHovered(true);
+        }
+      }}
+      onPointerLeave={(event) => {
+        if (event.nativeEvent.pointerType !== 'touch') {
+          setPointerHovered(false);
+        }
+      }}
       style={[
-        styles.preview,
-        style,
+        ...previewStyle,
         {
-          backgroundColor: hovered ? theme.stateHover : undefined,
-          borderColor: theme.borderDefault,
+          backgroundColor: pointerHovered ? theme.stateHover : undefined,
+          cursor: 'auto',
         },
       ]}
+      tabIndex={-1}
       testID="source-post-preview"
     >
-      <PostSurfaceHoverSuppressionContext.Provider value={setSurfaceHoverSuppressed}>
-        {content}
-      </PostSurfaceHoverSuppressionContext.Provider>
-    </View>
+      {content}
+    </Pressable>
   );
 }
 

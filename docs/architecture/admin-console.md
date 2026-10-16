@@ -2,8 +2,8 @@
 
 ## 목적과 범위
 
-Admin Console은 신뢰된 Tailscale proxy 뒤에서 KOSMO의 Account와 Profile 운영 정보를 읽는 내부 Web
-surface다. v1은 Account, Profile과 Account-Profile Membership을 변경하지 않는다.
+Admin Console은 신뢰된 Tailscale proxy 뒤에서 KOSMO의 Account, Profile, Account-Profile Membership과 Profile authored Post 운영 정보를 읽는 내부 Web
+surface다. v1은 Account, Profile, Account-Profile Membership과 Profile authored Post를 변경하지 않는다.
 
 이 문서는 요청이 Tailscale 접근 경계를 통과해 read projection으로 변환되는 구조를 정의한다. 객체별 허용
 필드와 제외 필드는 [Admin Console Read Policy](../domain/policies/admin-console-read.md), Admin Console
@@ -18,7 +18,7 @@ Operator Ingress와 Admin Service의 네트워크 경계를 통해 runtime에 �
 Capabilities나 객체별 action을 추가로 계산하지 않는다.
 
 - Admin Console Viewer는 Kosmo Account가 아니며 `Account.Operator` 권한을 얻지 않는다.
-- 진입이 허용된 Viewer는 Account, Profile, Account-Profile Membership projection을 모두 읽을 수 있다.
+- 진입이 허용된 Viewer는 Account, Profile, Account-Profile Membership, Profile authored Post projection을 모두 읽을 수 있다.
 - proxy identity header의 login과 display name은 선택적 표시 metadata이며 인가, Account 매핑, 조회 filter
   또는 projection 계산에 사용하지 않는다.
 - client가 직접 주입한 identity header나 일반 workload가 신뢰된 proxy를 우회한 ClusterIP·Pod IP 요청은
@@ -49,7 +49,7 @@ Tailscale access policy
    연결은 차단 대상으로 삼지 않는다. 실제 operator-generated proxy label은 배포 대상 버전과 live cluster에서
    확인한 뒤 selector로 고정한다.
 4. query 계층은 [Admin Console Read Policy](../domain/policies/admin-console-read.md)의 projection을 적용한다.
-5. response 조합은 Account, Profile, Membership projection을 구조적으로 분리한다.
+5. response 조합은 Account, Profile, Membership, Profile authored Post projection을 구조적으로 분리한다.
 
 read-only query는 state-changing application action이 아니므로 불필요한 `packages/core/services`
 pass-through service를 만들지 않는다. 구현은 [Core 서비스 경계](./core-services.md)의 read query/loader 방향을
@@ -57,16 +57,17 @@ pass-through service를 만들지 않는다. 구현은 [Core 서비스 경계](.
 
 ## Projection 분리
 
-세 projection은 같은 Admin Console Viewer에게 열리지만 응답 책임은 분리한다.
+네 projection은 같은 Admin Console Viewer에게 열리지만 응답 책임은 분리한다.
 
 | projection                 | 책임                              |
 | -------------------------- | --------------------------------- |
 | Account                    | Account 목록·상세                 |
 | Profile                    | Profile 목록·상세                 |
 | Account-Profile Membership | 두 객체 사이의 관계와 양방향 탐색 |
+| Profile authored Post      | Profile이 작성한 Post 목록        |
 
 Account와 Profile projection은 상대 객체의 존재, Membership, 관계 count를 포함하지 않는다. 관계 정보는 별도
-Membership projection으로만 받는다. selected Profile은 Membership이 아니라 Session 상태이므로 세
+Membership projection으로만 받는다. selected Profile은 Membership이 아니라 Session 상태이므로 네
 projection 모두에 포함하지 않는다.
 
 OIDC subject, credential, Session token, private key를 포함한 세부 필드 경계는 architecture 문서에서 반복하지
@@ -91,7 +92,7 @@ Admin-specific logging, audit 또는 security-event contract를 만들지 않는
 ## 전달 경계
 
 - `PROD-690`은 독립 runtime, Tailscale Operator Ingress와 직접 접근 차단 기반을 소유한다.
-- `PROD-691`과 `PROD-692`는 각각 Account와 Profile read projection을 소유한다.
+- `PROD-691`은 Account read projection을, `PROD-692`는 Profile과 그 authored Post read projection을 소유한다.
 - `PROD-693`은 Membership relation projection을 소유한다.
 - OpenSpec, 애플리케이션 구현, Figma와 배포는 PROD-689 및 이 문서의 범위가 아니다.
 - 취소된 `DSN-59`의 화면·검토·구현 범위는 이 architecture 문서로 복원하지 않는다.

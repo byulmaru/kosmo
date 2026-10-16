@@ -1,5 +1,5 @@
 import { Link } from 'expo-router';
-import { Repeat2, Smile, UserRoundPlus } from 'lucide-react-native';
+import { AtSign, MessageCircle, Quote, Repeat2, Smile, UserRoundPlus } from 'lucide-react-native';
 import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { PostContentPrivacyBoundary } from '@/components/post/PostContentPrivacyBoundary';
@@ -76,10 +76,27 @@ type OperationalNotificationProps = {
   pending?: never;
 };
 
+export type SourceUnavailableNotificationKind =
+  | 'follow'
+  | 'followRequest'
+  | 'reaction'
+  | 'repost'
+  | 'mention'
+  | 'reply'
+  | 'quote';
+
+type SourceUnavailableNotificationProps = {
+  kind: SourceUnavailableNotificationKind;
+  sourceUnavailable: true;
+  timestamp: string;
+  unread?: boolean;
+};
+
 export type NotificationListItemViewProps =
   | GroupedNotificationProps
   | PostNotificationChildProps
-  | OperationalNotificationProps;
+  | OperationalNotificationProps
+  | SourceUnavailableNotificationProps;
 
 const actions = {
   follow: '팔로우했습니다',
@@ -88,11 +105,22 @@ const actions = {
   repost: '이 게시글을 재게시했습니다',
 } as const;
 
+const sourceUnavailableKinds = {
+  follow: { Icon: UserRoundPlus, label: '팔로우 알림' },
+  followRequest: { Icon: UserRoundPlus, label: '팔로우 요청 알림' },
+  reaction: { Icon: Smile, label: '반응 알림' },
+  repost: { Icon: Repeat2, label: '재게시 알림' },
+  mention: { Icon: AtSign, label: '멘션 알림' },
+  reply: { Icon: MessageCircle, label: '답글 알림' },
+  quote: { Icon: Quote, label: '인용 알림' },
+} as const;
+
 /** Presentation only. The consumer owns navigation and Read state. */
 export function NotificationListItemView(props: NotificationListItemViewProps) {
   const theme = useTheme();
   const web = Platform.OS === 'web';
   const unread = props.unread ?? false;
+  const sourceUnavailable = isSourceUnavailableNotification(props);
   const [hovered, setHovered] = useState(false);
   return (
     <PostContentPrivacyBoundary
@@ -100,14 +128,14 @@ export function NotificationListItemView(props: NotificationListItemViewProps) {
       testID="notification-list-item"
     >
       <View
-        onPointerEnter={() => setHovered(true)}
-        onPointerLeave={() => setHovered(false)}
+        onPointerEnter={sourceUnavailable ? undefined : () => setHovered(true)}
+        onPointerLeave={sourceUnavailable ? undefined : () => setHovered(false)}
         style={{
           backgroundColor: unread ? theme.actionPrimarySubtle : 'transparent',
         }}
         testID="notification-item-surface"
       >
-        {web && hovered ? (
+        {web && hovered && !sourceUnavailable ? (
           <View
             aria-hidden
             pointerEvents="none"
@@ -115,7 +143,9 @@ export function NotificationListItemView(props: NotificationListItemViewProps) {
             testID="notification-hover-overlay"
           />
         ) : null}
-        {isPostNotificationChild(props) ? (
+        {sourceUnavailable ? (
+          <SourceUnavailableNotificationTarget {...props} />
+        ) : isPostNotificationChild(props) ? (
           <>
             {unread ? <Text style={styles.srOnly}>읽지 않은 알림</Text> : null}
             <View style={styles.replyInset} testID="reply-notification-inset">
@@ -132,6 +162,48 @@ export function NotificationListItemView(props: NotificationListItemViewProps) {
         ) : null}
       </View>
     </PostContentPrivacyBoundary>
+  );
+}
+
+function isSourceUnavailableNotification(
+  props: NotificationListItemViewProps,
+): props is SourceUnavailableNotificationProps {
+  return 'sourceUnavailable' in props && props.sourceUnavailable;
+}
+
+function SourceUnavailableNotificationTarget({
+  kind,
+  timestamp,
+  unread = false,
+}: SourceUnavailableNotificationProps) {
+  const theme = useTheme();
+  const { Icon, label } = sourceUnavailableKinds[kind];
+  const iconColor =
+    kind === 'reaction'
+      ? theme.actionReactionBase
+      : kind === 'repost'
+        ? theme.actionRepostBase
+        : theme.foregroundSecondary;
+
+  return (
+    <View
+      style={[styles.row, styles.sourceUnavailableRow, Platform.OS === 'web' && styles.webRow]}
+      testID={`notification-source-unavailable-${kind}`}
+    >
+      <View
+        aria-hidden
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        style={styles.kind}
+      >
+        <Icon color={iconColor} size={32} />
+      </View>
+      <View style={styles.sourceUnavailableSummary}>
+        <Text style={[styles.copy, { color: theme.foregroundPrimary }]}>{label}</Text>
+        <TimestampText style={styles.time}>{timestamp}</TimestampText>
+        {unread ? <Text style={styles.srOnly}>읽지 않은 알림</Text> : null}
+      </View>
+    </View>
   );
 }
 
@@ -365,9 +437,17 @@ const styles = StyleSheet.create({
     paddingBottom: space[8],
     minHeight: 80,
   },
+  sourceUnavailableRow: { alignItems: 'center' },
   webRow: { paddingLeft: space[12], paddingRight: space[24] },
   kind: { alignItems: 'center', justifyContent: 'center', width: 48, height: 48, flexShrink: 0 },
   summary: { flex: 1, minWidth: 0, gap: space[8] },
+  sourceUnavailableSummary: {
+    alignItems: 'center',
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    minWidth: 0,
+  },
   avatarAndTime: {
     alignItems: 'center',
     flexDirection: 'row',

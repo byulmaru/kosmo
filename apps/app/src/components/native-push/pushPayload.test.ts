@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { nativePushResponseKey, parseNativePushTapTarget } from './pushPayload';
+import { parseNativePushResponseTapTarget, parseNativePushTapTarget } from './pushPayload';
 import type { NotificationResponse } from 'expo-notifications';
 
 describe('native push tap payloads', () => {
@@ -122,20 +122,79 @@ describe('native push tap payloads', () => {
     );
   });
 
-  it('uses the Expo notification identifier and action for duplicate keys', () => {
+  it('recovers iOS push route fields from the raw push trigger payload', () => {
     const response = {
-      actionIdentifier: 'expo.modules.notifications.actions.DEFAULT',
       notification: {
         request: {
-          identifier: 'notification-1',
+          identifier: 'ios-push-1',
+          content: {
+            data: {},
+          },
+          trigger: {
+            type: 'push',
+            payload: {
+              href: '/@author/postId',
+              notificationId: 'notification',
+              recipientProfileId: 'profile',
+            },
+          },
         },
       },
-    } as NotificationResponse;
+      actionIdentifier: 'expo.modules.notifications.actions.DEFAULT',
+    } as unknown as NotificationResponse;
 
-    assert.equal(
-      nativePushResponseKey(response),
-      'notification-1:expo.modules.notifications.actions.DEFAULT',
-    );
+    assert.deepEqual(parseNativePushResponseTapTarget(response), {
+      href: '/@author/postId',
+      kind: 'profile',
+      notificationId: 'notification',
+      recipientProfileId: 'profile',
+    });
+  });
+
+  it('prefers valid content data and rejects malformed non-push triggers', () => {
+    const contentDataResponse = {
+      notification: {
+        request: {
+          identifier: 'ios-push-2',
+          content: {
+            data: {
+              href: '/@content/postId',
+              notificationId: 'content-notification',
+              recipientProfileId: 'content-profile',
+            },
+          },
+          trigger: {
+            type: 'push',
+            payload: {
+              href: '/@trigger/postId',
+              notificationId: 'trigger-notification',
+              recipientProfileId: 'trigger-profile',
+            },
+          },
+        },
+      },
+      actionIdentifier: 'expo.modules.notifications.actions.DEFAULT',
+    } as unknown as NotificationResponse;
+    assert.deepEqual(parseNativePushResponseTapTarget(contentDataResponse), {
+      href: '/@content/postId',
+      kind: 'profile',
+      notificationId: 'content-notification',
+      recipientProfileId: 'content-profile',
+    });
+
+    const malformedResponse = {
+      notification: {
+        request: {
+          identifier: 'ios-push-3',
+          content: {
+            data: { href: '/external', notificationId: '', recipientProfileId: '' },
+          },
+          trigger: { type: 'calendar' },
+        },
+      },
+      actionIdentifier: 'expo.modules.notifications.actions.DEFAULT',
+    } as unknown as NotificationResponse;
+    assert.equal(parseNativePushResponseTapTarget(malformedResponse), null);
   });
 
   it('rejects ambiguous Profile and Account recipient envelopes', () => {

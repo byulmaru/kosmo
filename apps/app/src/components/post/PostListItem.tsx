@@ -1,6 +1,6 @@
 import { Link, useRouter } from 'expo-router';
 import { MessageCircle, Pin } from 'lucide-react-native';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
@@ -15,10 +15,6 @@ import { postListMetrics } from './postListMetrics';
 import { usePostMediaViewerHost } from './PostMediaViewerHost';
 import { usePostReplySurface } from './PostReplySurface';
 import { PostSourcePresentationView, PostSourcePreview } from './PostSourcePresentationView';
-import {
-  PostSurfaceHoverSuppressionContext,
-  usePostSurfaceFeedback,
-} from './usePostSurfaceFeedback';
 import type { ReactNode } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { PostListItem_post$key } from './__generated__/PostListItem_post.graphql';
@@ -296,37 +292,49 @@ function PostListItemCard({
   style: StyleProp<ViewStyle>;
 }) {
   const theme = useTheme();
-  const { handlers, hovered, pressed, setSurfaceHoverSuppressed } = usePostSurfaceFeedback({
-    hover: true,
-    press: true,
-  });
+  const [pointerHovered, setPointerHovered] = useState(false);
 
+  // RNW suppresses an ancestor Pressable's hovered state under a nested Pressable.
   return (
-    <View
-      {...handlers}
+    <Pressable
+      accessible={false}
+      focusable={false}
+      onPointerEnter={(event) => {
+        if (Platform.OS === 'web' && event.nativeEvent.pointerType !== 'touch') {
+          setPointerHovered(true);
+        }
+      }}
+      onPointerLeave={(event) => {
+        if (Platform.OS === 'web' && event.nativeEvent.pointerType !== 'touch') {
+          setPointerHovered(false);
+        }
+      }}
       role={article ? 'article' : undefined}
-      style={style}
+      style={[style, Platform.OS === 'web' ? { cursor: 'auto' } : undefined]}
+      tabIndex={-1}
       testID="post-list-item-card"
     >
-      <View
-        accessibilityElementsHidden
-        importantForAccessibility="no-hide-descendants"
-        style={[
-          styles.surfaceFeedback,
-          {
-            backgroundColor: pressed
-              ? theme.statePressedSubtle
-              : hovered
-                ? theme.stateHover
-                : undefined,
-          },
-        ]}
-        testID="post-list-item-feedback"
-      />
-      <PostSurfaceHoverSuppressionContext.Provider value={setSurfaceHoverSuppressed}>
-        {children}
-      </PostSurfaceHoverSuppressionContext.Provider>
-    </View>
+      {(state) => (
+        <>
+          <View
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+            style={[
+              styles.surfaceFeedback,
+              {
+                backgroundColor: state.pressed
+                  ? theme.statePressedSubtle
+                  : Platform.OS === 'web' && pointerHovered
+                    ? theme.stateHover
+                    : undefined,
+              },
+            ]}
+            testID="post-list-item-feedback"
+          />
+          {children}
+        </>
+      )}
+    </Pressable>
   );
 }
 

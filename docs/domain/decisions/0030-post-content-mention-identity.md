@@ -13,6 +13,7 @@ Accepted
 - [PROD-340](https://linear.app/byulmaru/issue/PROD-340)의 2026-09-14 계약 정정.
 - [PROD-652](https://linear.app/byulmaru/issue/PROD-652)의 2026-10-06 Local Mention 작성 계약 확장.
 - [PROD-1102](https://linear.app/byulmaru/issue/PROD-1102)의 Local Note ActivityPub Mention projection 계약.
+- [PROD-462](https://linear.app/byulmaru/issue/PROD-462)의 Local Post·Reply·Quote `DIRECT` 작성 범위.
 - [Post](../objects/post.md)와 [Post Content](../objects/post-content.md)의 Mentioned Profile 소유권과
   canonical document 규칙.
 - 기존 ActivityPub actor materialization·refresh가 보유한 Profile URL metadata 경계.
@@ -20,7 +21,18 @@ Accepted
 ## 결정
 
 - Local Post, Reply, Quote 작성은 본문에 입력된 bare `@handle` 또는 qualified `@handle@domain`이 이미 저장된 eligible Local/Remote Profile과 정확히 일치할 때 Mention relation을 만든다. Bare handle과 configured Local domain은 configured Local Instance의 Profile만 찾고, qualified remote handle은 저장된 ActivityPub Profile만 찾으며 작성 중 remote actor를 resolve하지 않는다. Unknown, malformed, ineligible token은 일반 text로 남는다. 작성자가 명시적으로 선택한 Mention range는 같은 typed token보다 우선하고 기존의 strict target·range 검증을 유지한다. 서버는 실제 작성 Profile 기준으로 typed/selected Profile의 visibility와 양방향 Block 정책을 검증한다. 명시적으로 선택했으나 본문과 일치하지 않거나 이용할 수 없는 Profile은 전체 작성 요청을 거부한다. 같은 Profile의 여러 occurrence는 각 canonical Mention node로 남고 relation은 중복 저장하지 않는다. Local authored body는 document 및 길이 검증에 사용하고 저장하지 않는다. Canonical Mention node는 inbound와 동일하게 `profileId`만 저장한다.
-- Local Mention은 Post Visibility, ActivityPub `to`/`cc` audience, recipients, Mentioned Profiles/DIRECT visibility와 signed-fetch 권한, delivery routing, 알림 정책을 변경하지 않는다. Outbound ActivityPub `Mention` tag는 Local Note 표현을 보강한다.
+- Local Mention identity 자체는 Post Visibility를 선택하지 않는다. `PUBLIC`·`UNLISTED`는 기존 조회 범위를 유지하고,
+  `FOLLOWERS`는 기존 Mentioned Profile 조회 권한을 유지한다. Post Visibility가 `Mentioned Profiles` (`DIRECT`)이면
+  작성자와 현재 Content의 canonical Mentioned Profile 관계에 포함된 Profile이 읽을 수 있다. Author Profile과 Mentioned
+  Profile의 `Origin`은 조회 조건이 아니다. Local Post·Reply·Quote 작성에서 이 Visibility를 명시적으로 선택할 때
+  Mentioned Profile 관계는 선택 사항이며, 관계가 없으면 작성자만 읽을 수 있다. 미확인·malformed·ineligible handle text는
+  수신자가 아니다.
+- [PROD-1102](https://linear.app/byulmaru/issue/PROD-1102)의 Local Note Mention body/tag projection은 표현을 제공한다.
+  별도로, `DIRECT` Post의 outbound `Create(Note)`는 현재 Content의 eligible remote ActivityPub Mentioned Profile actor URI만
+  `to`에 사용하고 `cc`를 생략한다. 해당 Post의 outbound `Delete`도 같은 remote Mentioned Profiles에게만 전달한다. eligible
+  remote actor URI가 없으면 두 Activity 모두 delivery recipient가 없다. 이는 `PUBLIC`·`UNLISTED`·`FOLLOWERS` recipient
+  routing, signed-fetch 권한이나 Notification 정책을 바꾸지 않는다. DIRECT/limited audience의 inbound 처리는 별도
+  [PROD-359](https://linear.app/byulmaru/issue/PROD-359) 범위다.
 - inbound typed `Mention.href`는 먼저 기존 ActivityPub actor/Profile mapping을 확인한다. 이미 알려진 Local/Remote Profile은
   현재 mapping을 그대로 사용한다. 알려지지 않은 remote actor target은 Note당 최대 32개의 고유 remote actor URI까지 typed href를 통해
   resolve하고 materialize할 수 있다. 한도 내 target의 remote actor 조회는 모두 동시에 시작하며, 각 조회는 기존 actor URI 기반 Temporal
@@ -50,7 +62,7 @@ Accepted
 - `post_mentions`는 기존 revision-owned persisted projection 경계를 유지하며, relation과 Current Content pointer는 같은
   저장 경계에서 처리한다. 구체적인 node/table shape는 구현 artifact에서 검증한다.
 - `PROD-910`은 canonical node와 revision-owned relation을 소비하는 renderer·Profile 이동을 별도로 구현한다.
-- Local Note의 ActivityPub Mention content/tag projection은 [PROD-1102](https://linear.app/byulmaru/issue/PROD-1102)와 [Post](../objects/post.md)의 Local Note 표현 계약을 따른다. 일반 link projection, remote Update(Note), Mentioned Profiles audience, custom emoji, Notification/FCM은 각 후속 계약의 책임으로 남긴다.
+- Local Note의 ActivityPub Mention content/tag projection은 [PROD-1102](https://linear.app/byulmaru/issue/PROD-1102)와 [Post](../objects/post.md)의 Local Note 표현 계약을 따른다. 일반 link projection, remote Update(Note), Mentioned Profiles inbound audience, custom emoji, Notification/FCM은 각 후속 계약의 책임으로 남긴다.
 
 ## 참고
 

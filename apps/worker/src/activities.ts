@@ -10,7 +10,12 @@ export {
   followImportedProfileActivity,
   resolveImportedLocalProfileActivity,
 } from './activities/following-accounts-import';
+export { executeHashtagMuteRuleActivity } from './activities/hashtag-mute-rule';
 export { createNotificationActivity } from './activities/notification';
+export {
+  captureOperationalNotificationAudienceActivity,
+  dispatchOperationalNotificationPageActivity,
+} from './activities/operational-notification';
 export {
   executeProfileBlockTransitionActivity,
   executeProfileUnblockTransitionActivity,
@@ -21,8 +26,12 @@ export {
 } from './activities/push-notification';
 export { collectRemoteFeaturedActivity } from './activities/remote-profile-featured';
 export {
+  applyRemoteProfileActorActivity,
+  fetchRemoteProfileActorActivity,
+  getRemoteProfileActorStateActivity,
   lookupRemoteActorUriActivity,
   materializeRemoteProfileActorActivity,
+  recoverRemoteProfileActorActivity,
   refreshRemoteProfileActorActivity,
 } from './activities/remote-profile-materialization';
 export {

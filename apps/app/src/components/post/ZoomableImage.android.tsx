@@ -71,6 +71,7 @@ function clampZoomOffset(
 
 function AndroidZoomImage({
   accessibilityLabel,
+  onBlankAreaTap,
   onStatus,
   onZoomedChange,
   status,
@@ -348,7 +349,38 @@ function AndroidZoomImage({
     [imageSize, offsetX, offsetY, pagerGesture, scale, status, syncZoomed, viewportSize],
   );
 
-  const gesture = useMemo(() => Gesture.Simultaneous(pinch, pan, tap), [pan, pinch, tap]);
+  const blankAreaTap = useMemo(
+    () =>
+      Gesture.Tap()
+        .simultaneousWithExternalGesture(...(pagerGesture ? [pagerGesture] : []))
+        .enabled(status === 'ready' && onBlankAreaTap != null)
+        .numberOfTaps(1)
+        .maxDistance(10)
+        .onTouchesDown((event, manager) => {
+          'worklet';
+          if (event.numberOfTouches > 1) {
+            manager.fail();
+          }
+        })
+        .onEnd((event, success) => {
+          'worklet';
+          if (!success || !imageSize || !onBlankAreaTap) {
+            return;
+          }
+          const halfWidth = (imageSize.width * scale.value) / 2;
+          const halfHeight = (imageSize.height * scale.value) / 2;
+          const x = event.x - viewportSize.width / 2 - offsetX.value;
+          const y = event.y - viewportSize.height / 2 - offsetY.value;
+          if (Math.abs(x) > halfWidth || Math.abs(y) > halfHeight) {
+            runOnJS(onBlankAreaTap)();
+          }
+        }),
+    [imageSize, offsetX, offsetY, onBlankAreaTap, pagerGesture, scale, status, viewportSize],
+  );
+  const gesture = useMemo(
+    () => Gesture.Simultaneous(pinch, pan, Gesture.Exclusive(tap, blankAreaTap)),
+    [blankAreaTap, pan, pinch, tap],
+  );
   const animatedImageStyle = useAnimatedStyle(() => ({
     transform: [
       { translateX: offsetX.value },

@@ -22,6 +22,14 @@ Remote 선택 capability를 명시한 문구와 selected Profile이 Remote일 �
 명시적 로그아웃, 서버에서 확인된 guest/session 만료 또는 현재 Account가 달라진 것이 관측되었을 때 초기화한다.
 프로필 actor 전환, 일반 reload/requery, 일시적인 네트워크 오류만으로는 초기화하지 않는다.
 
+## 2026-10-14 보완
+
+selected Profile 선택은 클라이언트가 소유한다. 클라이언트는 사용 가능한 Profile 중 하나를 선택해 actor와
+클라이언트 저장소에 유지하거나 선택 없음 상태를 유지할 수 있다. 이 상태에서도 아래 Deprecated 호환 fallback은
+별도 전환까지 적용될 수 있다. 선택 순서나 여러 탭에서 하나의 Session 선택을 공유하는 보장은 두지 않는다.
+먼저 시작한 요청의 늦은 결과는 더 최근에 선택된 Profile이나 Account 상태를 덮어쓰지 않는다. 서버는 요청에 제시된
+Profile의 Account-Profile Membership, 조회 가능 상태와 Membership 역할을 계속 검증한다.
+
 ## 결정
 
 - Account 요청의 selected Profile 자격은 요청 Account와 Profile 사이의 Account-Profile Membership 존재로만
@@ -31,7 +39,7 @@ Remote 선택 capability를 명시한 문구와 selected Profile이 Remote일 �
   Profile의 조회 가능 상태를 공통으로 확인한다. 이 경계를 통과한 resolver와 application action은 같은 Account,
   Membership, Profile visibility를 중복 조회하거나 권한 조건으로 다시 만들지 않는다.
 - Active Account 요청에서 요청에 제시된 Profile이 요청 Account와의 Account-Profile Membership 및 조회 가능 조건을 충족하면 해당 요청의 행위 주체로 사용한다. Profile의 역할은 Membership에서 파생하며, 요청이 제시한 역할 값은 권한 근거로 사용하지 않는다. 요청별 선택은 Session의 저장된 selected Profile을 변경하지 않는다.
-- 요청에 유효한 Profile이 제시되지 않거나 선택 자격을 통과하지 못하면 오류 없이 현재 Session에 연결된 기존 Profile을 행위 주체로 유지한다. 이 호환 fallback의 제거는 별도 결정과 전환에서 다룬다.
+- 요청에 유효한 Profile이 제시되지 않거나 선택 자격을 통과하지 못했을 때 현재 Session에 연결된 Profile을 행위 주체로 유지하는 fallback은 Deprecated 호환 동작이다. 이 저장값은 클라이언트 선택의 source of truth가 아니며, fallback과 저장값의 제거는 별도 전환에서 다룬다.
 - application action은 검증된 Profile identity를 받고 행동에 고유한 상태, 관계, 대상, transaction과
   persistence 조건을 검증한다. Profile Origin, Instance Reachability 또는 Instance Type은 해당 행동의
   의미가 명시적으로 요구할 때만 조건으로 사용한다.
