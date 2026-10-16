@@ -195,11 +195,11 @@ describe('Post Reply GraphQL 경계', () => {
     assert.ok(paragraph?.type === 'paragraph');
     assert.deepEqual(paragraph.content, [
       { type: 'text', text: '😀 hi ' },
-      { type: 'mention', attrs: { profileId: mentioned.id } },
+      { type: 'mention', attrs: { handle: relativeHandle, profileId: mentioned.id } },
       { type: 'text', text: ', and ' },
-      { type: 'mention', attrs: { profileId: mentioned.id } },
+      { type: 'mention', attrs: { handle: relativeHandle, profileId: mentioned.id } },
       { type: 'text', text: '; also ' },
-      { type: 'mention', attrs: { profileId: remoteMentioned.id } },
+      { type: 'mention', attrs: { handle: remoteRelativeHandle, profileId: remoteMentioned.id } },
     ]);
     const storedMentions = await db
       .select()
