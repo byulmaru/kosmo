@@ -89,8 +89,9 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   넓은 surface용 `color/state/pressed-subtle` overlay를 적용한다. overlay는 `radius/md`로 둥글게 처리하고 row divider는 직선으로 유지한다.
   pressed가 hover보다 우선하며 release·cancel·leave 뒤에는 남은 입력
   상태 또는 resting canvas로 돌아간다.
-- Web에서 Content Warning 버튼에 hover하는 동안에는 버튼 자체의 hover만 표시하고 해당 경고를 감싼 모든 카드와 Source preview의 hover overlay는 숨긴다. 버튼에서 해당 surface의 다른 영역으로 이동하면 hover overlay를 다시 표시한다.
-- 이 feedback은 새 navigation target이나 접근성 role을 만들지 않는다. 작성자·시간·본문·미디어·Action Bar의
+- 카드 hover는 Web의 touch가 아닌 mouse·pen pointer가 카드 root host 안에 있는 동안 중첩 control 위에서도 유지한다. 중첩 control의 hover·pressed feedback은 각 Pressable의 platform input state를 따르고, 카드 pressed는 root Pressable 자체 입력만 따른다. Content Warning은 조상 hover 억제 계약이 없다.
+- 이 feedback surface는 별도 navigation target이나 접근성 role을 추가하지 않는다. Action Bar는 실제 PostBody·Source
+  navigation target과 content-level sibling으로 남는다. 작성자·시간·본문·미디어·Action Bar의
   기존 입력과 이벤트 분리, 구분선 및 Light·Dark token mapping을 그대로 유지한다.
 
 ## Surface 배치
@@ -113,7 +114,7 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - 2026-09-12 사용자 승인 후 Figma `PostListItem` Center 4종과 `PostLayout` Center 3종을 기존 `space/8`·`space/12`
   토큰으로 동기화했다. 목록 위12·아래8, 상세 frame 상하12와 Native 원본 비변경을 readback했다.
 - Action Bar는 `PostBody` 또는 Source presentation과 같은 content-level sibling이며 본문, 작성자, 생성 시각,
-  Source preview의 `Link`나 `Pressable` 안에 중첩하지 않는다.
+  Source preview의 실제 navigation `Link`나 action `Pressable` 안에 중첩하지 않는다.
 - 일반 Post는 본문 뒤, 순수 Repost는 Source presentation 뒤, Quote는 자체 본문과 Source preview 뒤에 Action
   Bar를 둔다. 상세의 metadata가 있으면 metadata 뒤에 둔다.
 - Quote 목록은 Source preview의 내부 하단 padding 4px을 유지하고 마지막 presentation과 Action Bar 사이를
@@ -122,10 +123,10 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - Center·Mobile Quote의 `Quote article` wrapper는 `PostContent` 높이를 Hug한다. 자체 본문이 줄바꿈되면
   Source preview와 Action Bar를 함께 아래로 밀어 Source preview의 하단 1px border와 둥근 모서리를 자르지 않는다.
 - direct Quote Source preview는 기본 fill을 갖지 않고 주변 Post background와 같은 평면을 유지하며 semantic
-  border로만 경계를 구분한다. Web에서 source navigation이 활성인 preview는 pointer hover 동안 root 전체에
-  semantic `stateHover` overlay를 적용한다. `interactive=false`인 Composer preview와 Native에는 hover fill을
-  적용하지 않는다. 본문과 Source preview 안의 클릭 가능한 외부 링크는 mode별 semantic `actionLinkBase`와
-  기존 밑줄을 사용하며 Post·Source navigation과 입력을 분리한다.
+  border로만 경계를 구분한다. Web에서 source navigation이 활성인 preview는 root 전체에 semantic
+  `stateHover` overlay를 적용한다. `interactive=false`인 Composer preview와 Native에는 hover fill을 적용하지
+  않는다. 본문과 Source preview 안의 클릭 가능한 외부 링크는 mode별
+  semantic `actionLinkBase`와 기존 밑줄을 사용하며 Post·Source navigation과 입력을 분리한다.
 - 순수 Repost의 본문·생성 시각 affordance는 Repost 자체가 아니라 Source detail로 이동한다. Repost Author와
   Source Author affordance는 각각 해당 Profile로 이동한다.
 - 순수 Repost 아래 Action Bar의 Reply는 바깥 contentless Repost의 Reply 계약을 유지해 disabled로 표시한다.
@@ -231,6 +232,8 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   `링크 복사`를 선택한다.
 - 왼쪽 viewport 가장자리와 충돌하면 menu를 화면 안으로 보정한다. 이 방향 선택은 More에만 적용하며
   Repost menu의 기존 시작 정렬과 Native bottom action sheet는 바꾸지 않는다.
+- `링크 복사`는 클립보드 요청이 완료되고 성공 결과를 확인한 뒤에만 `링크를 복사했어요` 성공 Toast를
+  표시한다. 대기 중이거나 실패한 요청에서는 성공 Toast를 표시하지 않으며 기존 실패 안내와 재시도 동작을 유지한다.
 
 ## Profile 고정 More menu와 attribution
 
@@ -367,7 +370,7 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 ## 검증
 
 - 일반 Post, 순수 Repost, Quote 목록에서는 Action Bar slot이, 상세에서는 Action Bar가 content grid의 마지막
-  sibling이고 navigation Link/Pressable의 descendant가 아닌지 검증한다.
+  sibling이고 실제 navigation Link/Pressable의 descendant가 아닌지 검증한다.
 - Web 일반 Text·Media에서 카드 상단 12px·하단 8px, Action Bar slot 상단 8px·하단 0을 검증한다.
   순수 Repost와 Quote는 카드 상단 8px을 유지하며, 모든 Web 목록 유형은 마지막 presentation에서 Bar까지
   12px, Bar 하단에서 구분선 안쪽까지 8px이어야 한다. 1px 구분선은 semantic `divider` color를 사용해야 한다.

@@ -1,24 +1,20 @@
 import { builder } from '@/graphql/builder';
 import { Profile, ProfileFollowRequest } from '@/graphql/resolvers/profile';
-import { FollowRequestNotification, getNotificationSource } from '../ref';
+import { FollowRequestNotification, getNotificationSourceMetadata } from '../ref';
 
 builder.objectField(FollowRequestNotification, 'profile', (t) =>
   t.field({
     type: Profile,
+    nullable: true,
     resolve: async (notification, _, ctx) =>
-      (await getNotificationSource(notification, ctx)).profileId,
+      (await getNotificationSourceMetadata(notification, ctx))?.profileId ?? null,
   }),
 );
 
 builder.objectField(FollowRequestNotification, 'followRequest', (t) =>
   t.field({
     type: ProfileFollowRequest,
-    resolve: async (notification, _, ctx) => {
-      const source = await getNotificationSource(notification, ctx);
-      if (!source.followRequest) {
-        throw new Error('Follow Request Notification source not found');
-      }
-      return source.followRequest;
-    },
+    nullable: true,
+    resolve: (notification) => notification.sourceId,
   }),
 );

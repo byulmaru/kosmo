@@ -1658,7 +1658,7 @@ describe('GraphQL Profile Block', () => {
     );
   });
 
-  test('hides blocked Notification sources across mixed Node, connection, unread and Read paths', async () => {
+  test('keeps membership-owned Notifications visible while source fields follow ordinary access', async () => {
     const auth = await createAuthenticatedSession();
     const secondRecipient = await createProfile('block-notification-second-recipient');
     await db.insert(AccountProfiles).values({
@@ -1736,16 +1736,58 @@ describe('GraphQL Profile Block', () => {
     const secondRecipientId = globalId('FollowNotification', secondRecipientFollow.id);
     const recipientId = globalId('Profile', auth.profile.id);
     const secondRecipientProfileId = globalId('Profile', secondRecipient.id);
+    const sourceIds = [
+      globalId('ProfileFollow', hiddenFollow.sourceId),
+      globalId('ProfileFollowRequest', hiddenFollowRequest.id),
+      globalId('Reaction', hiddenReaction.id),
+      globalId('Post', recipientPost.post.id),
+      globalId('Post', hiddenRepost.id),
+      globalId('Post', hiddenReply.id),
+      globalId('ProfileFollow', secondRecipientFollow.sourceId),
+    ];
+    const blockedSourceId = globalId('Profile', blockedSource.id);
 
     const result = await requestGraphQL<{
-      nodes: Array<{ __typename: string; id: string } | null>;
+      nodes: Array<{
+        __typename: string;
+        id: string;
+        followRequest?: { id: string } | null;
+        post?: { id: string } | null;
+        profile?: { id: string } | null;
+        type?: string | null;
+      } | null>;
+      sourceNodes: Array<{
+        __typename: string;
+        id: string;
+        follower?: { id: string } | null;
+        profile?: { id: string } | null;
+        repostSource?: { id: string } | null;
+        replyParent?: { id: string } | null;
+        type?: string;
+      } | null>;
+      sourceProfile: { id: string } | null;
       recipient: {
         notifications: { edges: Array<{ node: { id: string } }> };
       } | null;
       unread: Array<{ id: string; unreadNotificationCount: number } | null>;
     }>(
-      `query BlockedNotifications($ids: [ID!]!, $recipientId: ID!, $unreadIds: [ID!]!) {
-        nodes(ids: $ids) { __typename id }
+      `query BlockedNotifications($ids: [ID!]!, $recipientId: ID!, $unreadIds: [ID!]!, $sourceIds: [ID!]!, $blockedSourceId: ID!) {
+        nodes(ids: $ids) {
+          __typename id
+          ... on FollowNotification { profile { id } }
+          ... on FollowRequestNotification { profile { id } followRequest { id } }
+          ... on ReactionNotification { type profile { id } post { id } }
+          ... on RepostNotification { profile { id } post { id } }
+          ... on ReplyNotification { profile { id } post { id } }
+        }
+        sourceNodes: nodes(ids: $sourceIds) {
+          __typename id
+          ... on ProfileFollow { follower { id } }
+          ... on ProfileFollowRequest { follower { id } }
+          ... on Reaction { type }
+          ... on Post { profile { id } repostSource { id } replyParent { id } }
+        }
+        sourceProfile: node(id: $blockedSourceId) { ... on Profile { id } }
         recipient: node(id: $recipientId) {
           ... on Profile { notifications(first: 10) { edges { node { id } } } }
         }
@@ -1757,27 +1799,101 @@ describe('GraphQL Profile Block', () => {
         ids: [...hiddenIds, visibleId, secondRecipientId, secondRecipientProfileId],
         recipientId,
         unreadIds: [recipientId, secondRecipientProfileId],
+        sourceIds,
+        blockedSourceId,
       },
       auth.token,
     );
 
     assertNoGraphQLErrors(result);
     assert.deepEqual(result.data?.nodes, [
-      null,
-      null,
-      null,
-      null,
-      null,
-      { __typename: 'FollowNotification', id: visibleId },
-      { __typename: 'FollowNotification', id: secondRecipientId },
+      {
+        __typename: 'FollowNotification',
+        id: hiddenIds[0],
+        profile: { id: blockedSourceId },
+      },
+      {
+        __typename: 'FollowRequestNotification',
+        id: hiddenIds[1],
+        profile: { id: blockedSourceId },
+        followRequest: null,
+      },
+      {
+        __typename: 'ReactionNotification',
+        id: hiddenIds[2],
+        type: '❤️',
+        profile: { id: blockedSourceId },
+        post: { id: globalId('Post', recipientPost.post.id) },
+      },
+      {
+        __typename: 'RepostNotification',
+        id: hiddenIds[3],
+        profile: { id: blockedSourceId },
+        post: { id: globalId('Post', recipientPost.post.id) },
+      },
+      {
+        __typename: 'ReplyNotification',
+        id: hiddenIds[4],
+        profile: { id: blockedSourceId },
+        post: { id: globalId('Post', hiddenReply.id) },
+      },
+      {
+        __typename: 'FollowNotification',
+        id: visibleId,
+        profile: { id: globalId('Profile', visibleSource.id) },
+      },
+      {
+        __typename: 'FollowNotification',
+        id: secondRecipientId,
+        profile: { id: blockedSourceId },
+      },
       { __typename: 'Profile', id: secondRecipientProfileId },
     ]);
+    const directSourceNodes = new Map(
+      result.data?.sourceNodes
+        .filter((source): source is NonNullable<typeof source> => source !== null)
+        .map((source) => [source.id, source]) ?? [],
+    );
+    assert.deepEqual(result.data?.sourceProfile, { id: blockedSourceId });
+    assert.equal(directSourceNodes.get(sourceIds[0]!), undefined);
+    assert.equal(directSourceNodes.get(sourceIds[1]!), undefined);
+    assert.equal(directSourceNodes.get(sourceIds[2]!)?.type, '❤️');
+    assert.equal(directSourceNodes.get(sourceIds[3]!)?.id, globalId('Post', recipientPost.post.id));
+    assert.deepEqual(directSourceNodes.get(sourceIds[4]!)?.repostSource, {
+      id: globalId('Post', recipientPost.post.id),
+    });
+    assert.equal(directSourceNodes.get(sourceIds[4]!)?.profile?.id, blockedSourceId);
+    assert.deepEqual(directSourceNodes.get(sourceIds[5]!)?.replyParent, {
+      id: globalId('Post', recipientPost.post.id),
+    });
+    assert.equal(directSourceNodes.get(sourceIds[5]!)?.profile?.id, blockedSourceId);
+    assert.equal(directSourceNodes.get(sourceIds[6]!)?.follower?.id, blockedSourceId);
+    assert.equal(result.data?.nodes[2]?.type, directSourceNodes.get(sourceIds[2]!)?.type);
+    assert.equal(result.data?.nodes[2]?.profile?.id, result.data?.sourceProfile?.id);
+    assert.equal(result.data?.nodes[2]?.post?.id, directSourceNodes.get(sourceIds[3]!)?.id);
+    assert.equal(
+      result.data?.nodes[3]?.profile?.id,
+      directSourceNodes.get(sourceIds[4]!)?.profile?.id,
+    );
+    assert.equal(
+      result.data?.nodes[3]?.post?.id,
+      directSourceNodes.get(sourceIds[4]!)?.repostSource?.id,
+    );
+    assert.equal(
+      result.data?.nodes[4]?.profile?.id,
+      directSourceNodes.get(sourceIds[5]!)?.profile?.id,
+    );
+    assert.equal(result.data?.nodes[4]?.post?.id, directSourceNodes.get(sourceIds[5]!)?.id);
+    assert.equal(
+      result.data?.nodes[6]?.profile?.id,
+      directSourceNodes.get(sourceIds[6]!)?.follower?.id,
+    );
     assert.deepEqual(
-      result.data?.recipient?.notifications.edges.map(({ node }) => node.id),
-      [visibleId],
+      result.data?.recipient?.notifications.edges.map(({ node }) => node.id).toSorted(),
+      [...hiddenIds, visibleId].toSorted(),
     );
     assert.deepEqual(result.data?.unread, [
-      { id: recipientId, unreadNotificationCount: 1 },
+      { id: recipientId, unreadNotificationCount: 6 },
       { id: secondRecipientProfileId, unreadNotificationCount: 1 },
     ]);
 
@@ -1788,7 +1904,7 @@ describe('GraphQL Profile Block', () => {
     assertNoGraphQLErrors(marked);
     assert.deepEqual(
       marked.data?.markNotificationRead.notifications.map(({ id }) => id).toSorted(),
-      [visibleId, secondRecipientId].toSorted(),
+      [...hiddenIds, visibleId, secondRecipientId].toSorted(),
     );
     assert.deepEqual(
       marked.data?.markNotificationRead.recipientProfiles
@@ -1815,15 +1931,14 @@ describe('GraphQL Profile Block', () => {
         ]),
       );
     const readAtById = new Map(persistedReads.map(({ id, readAt }) => [id, readAt]));
-    assert.deepEqual(
+    assert.ok(
       [
         hiddenFollow.id,
         hiddenFollowRequestNotification.id,
         hiddenReactionNotification.id,
         hiddenRepostNotification.id,
         hiddenReplyNotification.id,
-      ].map((id) => readAtById.get(id)),
-      [null, null, null, null, null],
+      ].every((id) => readAtById.get(id)),
     );
     assert.ok(readAtById.get(visibleFollow.id));
     assert.ok(readAtById.get(secondRecipientFollow.id));

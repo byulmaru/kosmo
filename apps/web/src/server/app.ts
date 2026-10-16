@@ -5,6 +5,7 @@ import { OidcAuthError } from './auth';
 import graphqlRoutes from './routes/graphql';
 import loginRoutes from './routes/login';
 import logoutRoutes from './routes/logout';
+import postSharePreviewRoutes from './routes/post-share-preview';
 import staticRoutes from './routes/static';
 import { captureUnexpectedError, countMetric } from './sentry';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
@@ -87,6 +88,7 @@ app.all('/channel.js', (c) => c.text('Method Not Allowed', 405, { Allow: 'GET' }
 app.route('/', loginRoutes);
 app.route('/', logoutRoutes);
 app.route('/', graphqlRoutes);
+app.route('/', postSharePreviewRoutes);
 app.route('/', staticRoutes);
 
 export default app;

@@ -51,6 +51,8 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   유지하며, Reply/Quote surface만 modal로 분리한다.
 - Web `< compact`와 Android/iOS의 목록·상세 surface는 같은 공용 전체 화면 작성기를 사용한다.
   Reply Parent는 공개 범위 행 위에, Quote Source는 본문 아래에 표시한다.
+- 전체 화면 작성기에서 첨부 이미지는 본문 바로 아래에 이어지고, 본문과 이미지가 하나의 중앙 영역에서
+  함께 스크롤한다. 짧은 본문과 이미지 사이를 남는 화면 높이로 늘리지 않으며 작성 도구 footer는 고정한다.
 - Reply 연결선은 Parent Avatar 아래에서 `4px` 띄워 시작하고 공개 범위 행의 위 border까지 이어진다.
 - Focused/Keyboard는 입력과 keyboard를 우선하고 `@kosmo님에게 답글` 같은 최소 맥락을 표시한다.
 - 비키보드 Initial anchor에서도 direct Parent는 작성 영역 아래로 내려오지 않으며 기본

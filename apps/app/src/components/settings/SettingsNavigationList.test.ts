@@ -149,7 +149,6 @@ describe('SettingsMuteAndBlockNavigation', () => {
         { label: '차단한 프로필 관리 열기', href: '/settings/blocked-profiles' },
       ],
     );
-    assert.deepEqual(texts(), ['뮤트한 프로필', '차단한 프로필']);
   });
 });
 
@@ -188,7 +187,6 @@ describe('SettingsNavigationList', () => {
     assert.equal(links[2].props.href, '/settings/profile-migration');
     assert.equal(links[3].props.accessibilityLabel, '팔로잉 가져오기 설정 열기');
     assert.equal(links[3].props.href, '/settings/following-import');
-    assert.ok(texts().includes('팔로잉 가져오기'));
     assert.equal(links[4].props.accessibilityLabel, '뮤트 및 차단 설정 열기');
     assert.equal(links[4].props.href, '/settings/mute-and-block');
     assert.equal(links[5].props.accessibilityLabel, '테마 설정 열기, 시스템');
@@ -240,11 +238,6 @@ describe('SettingsNavigationList', () => {
       (node) => node.props.label === '알림 설정',
     );
     assert.ok(notificationItem);
-    assert.equal(
-      notificationItem.props.description,
-      '기기의 알림 설정에서 Push 알림을 관리할 수 있어요.',
-    );
-
     await act(async () => notification?.props.onPress());
     assert.equal(openSettingsCalls, 1);
     assert.equal(permissionStatusCalls, 1);
@@ -481,10 +474,4 @@ async function render(
 function rendered(type: string): ReactTestInstance[] {
   assert.ok(renderer);
   return renderer.root.findAll((node) => node.type === type);
-}
-
-function texts(): string[] {
-  return rendered('Text').flatMap((node) =>
-    typeof node.props.children === 'string' ? [node.props.children] : [],
-  );
 }

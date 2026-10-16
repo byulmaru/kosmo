@@ -65,7 +65,7 @@ export type NotificationStoryArgs = {
 };
 type Args = NotificationStoryArgs;
 
-function ReplyPost() {
+function ReplyPost({ onActivate }: { onActivate?: ReturnType<typeof fn> }) {
   const data = useLazyLoadQuery<Query>(
     graphql`
       query NotificationListItemStoriesQuery {
@@ -91,7 +91,7 @@ function ReplyPost() {
       <PostActionAuthenticationProvider>
         <PostComposerCoordinatorProvider owner="list" profile={data.composer?.replyProfile ?? null}>
           <PostMediaViewerHostProvider>
-            <ReplyNotificationPost post={data.node.post} />
+            <ReplyNotificationPost onActivate={onActivate} post={data.node.post} />
           </PostMediaViewerHostProvider>
         </PostComposerCoordinatorProvider>
       </PostActionAuthenticationProvider>
@@ -130,7 +130,7 @@ export function NotificationExample(args: Args) {
   if (args.kind === 'reply') {
     return (
       <NotificationListItemView kind="reply" unread={args.unread}>
-        <ReplyPost />
+        <ReplyPost onActivate={args.onNavigate} />
       </NotificationListItemView>
     );
   }
@@ -247,6 +247,7 @@ const meta = {
     'ReplyLayoutContract',
     'ReplyQuoteContract',
     'ReplyActionsContract',
+    'ReplyRailActivationContract',
   ],
   parameters: {
     layout: 'fullscreen',
@@ -378,8 +379,10 @@ export const NullableReactionPost: Story = {
   render: () => <NullableReaction />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByText('게시글을 볼 수 없습니다')).toBeVisible();
-    await expect(canvas.getByRole('link')).toHaveAttribute('aria-disabled', 'true');
+    const fallback = canvas.getByTestId('notification-source-unavailable-reaction');
+    await expect(fallback).toBeVisible();
+    await expect(fallback).toHaveTextContent('반응 알림');
+    await expect(fallback.querySelector('a, button, [role="link"], [role="button"]')).toBeNull();
   },
 };
 
@@ -590,6 +593,10 @@ export const ReplyLayoutContract: Story = {
       author.getBoundingClientRect().right,
     );
     await expect(canvas.getByRole('toolbar', { name: '액션 바' })).toBeVisible();
+    const rail = canvas.getByTestId('reply-notification-rail');
+    await userEvent.tab();
+    await expect(rail).toHaveFocus();
+    await expect(rail).toHaveStyle({ outlineWidth: '2px' });
     await userEvent.tab();
     await expect(author).toHaveFocus();
     await userEvent.tab();
@@ -652,7 +659,8 @@ export const ReplyActionsContract: Story = {
   parameters: {
     controls: { disable: true },
   },
-  play: async ({ canvasElement }) => {
+  play: async ({ args, canvasElement }) => {
+    args.onNavigate.mockClear();
     const canvas = within(canvasElement);
     const reply = canvas.getByRole('button', { name: '답글' });
     await userEvent.click(reply);
@@ -663,12 +671,14 @@ export const ReplyActionsContract: Story = {
     await userEvent.click(within(confirm).getByRole('button', { name: '작성 취소' }));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).toBeNull());
     await expect(reply).toHaveFocus();
+    await expect(args.onNavigate).not.toHaveBeenCalled();
 
     await userEvent.click(canvas.getByRole('button', { name: '재게시' }));
     const repostMenu = await screen.findByRole('menu', { name: '재게시 메뉴' });
     await expect(within(repostMenu).queryByRole('menuitem', { name: '인용하기' })).toBeNull();
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(screen.queryByRole('menu', { name: '재게시 메뉴' })).toBeNull());
+    await expect(args.onNavigate).not.toHaveBeenCalled();
 
     resetClipboardMock();
     await userEvent.click(canvas.getByRole('button', { name: '더 보기' }));
@@ -679,8 +689,84 @@ export const ReplyActionsContract: Story = {
         `${window.location.origin}/@starlight/notification-reply-post`,
       ]),
     );
+    await expect(args.onNavigate).not.toHaveBeenCalled();
     await userEvent.click(canvas.getByRole('button', { name: '더 보기' }));
     const reopenedMenu = await screen.findByRole('menu', { name: '더 보기 메뉴' });
     await expect(within(reopenedMenu).queryByRole('menuitem', { name: '게시글 삭제' })).toBeNull();
+    await expect(args.onNavigate).not.toHaveBeenCalled();
+  },
+};
+
+export const ReplyRailActivationContract: Story = {
+  args: { kind: 'reply', unread: true },
+  parameters: {
+    controls: { disable: true },
+    relay: {
+      operationResponses: {
+        NotificationListItemStoriesQuery: {
+          data: {
+            node: {
+              ...replyPost,
+              content: replyPost.content
+                ? {
+                    ...replyPost.content,
+                    contentWarning: '답글 본문을 확인하기 전에 주의해 주세요',
+                  }
+                : null,
+            },
+            composer: profile({ id: 'notification-viewer' }),
+          },
+        },
+      },
+    },
+  },
+  play: async ({ args, canvasElement }) => {
+    args.onNavigate.mockClear();
+    const canvas = within(canvasElement);
+    const rail = canvas.getByTestId('reply-notification-rail');
+    const kind = canvas.getByTestId('reply-notification-kind');
+    await expect(rail).toHaveAttribute('href', '/@starlight/notification-reply-post');
+    await expect(kind).toHaveStyle({ height: '48px', width: '48px' });
+    await expect(rail.getBoundingClientRect().height).toBeGreaterThan(
+      kind.getBoundingClientRect().height,
+    );
+    const warning = canvas.getByRole('button', {
+      name: /답글 본문을 확인하기 전에 주의해 주세요.*보기/,
+    });
+    await expect(warning).toHaveAttribute('aria-expanded', 'false');
+
+    await userEvent.click(rail);
+    await expect(args.onNavigate).toHaveBeenCalledOnce();
+
+    await userEvent.click(warning);
+    await expect(warning).toHaveAttribute('aria-expanded', 'true');
+    await expect(
+      canvas.getByText('코스모에서 함께 나누고 싶은 오늘의 이야기입니다.'),
+    ).toBeVisible();
+    await expect(rail.getBoundingClientRect().height).toBeGreaterThan(
+      kind.getBoundingClientRect().height,
+    );
+    await expect(args.onNavigate).toHaveBeenCalledOnce();
+
+    await userEvent.click(rail);
+    await expect(args.onNavigate).toHaveBeenCalledTimes(2);
+
+    await userEvent.click(warning);
+    await expect(warning).toHaveAttribute('aria-expanded', 'false');
+    await expect(args.onNavigate).toHaveBeenCalledTimes(2);
+    await expect(rail.getBoundingClientRect().height).toBeGreaterThan(
+      kind.getBoundingClientRect().height,
+    );
+
+    await userEvent.click(warning);
+    await expect(warning).toHaveAttribute('aria-expanded', 'true');
+
+    const author = canvas.getByTestId('notification-post-author');
+    await userEvent.click(author);
+    await expect(args.onNavigate).toHaveBeenCalledTimes(3);
+    await userEvent.click(canvas.getByText('5분 전'));
+    await expect(args.onNavigate).toHaveBeenCalledTimes(4);
+    await userEvent.click(canvas.getByText('코스모에서 함께 나누고 싶은 오늘의 이야기입니다.'));
+    await expect(args.onNavigate).toHaveBeenCalledTimes(5);
   },
 };

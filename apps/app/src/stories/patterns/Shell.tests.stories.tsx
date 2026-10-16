@@ -40,12 +40,12 @@ export const UniversalCompactComposerLifecycle: Story = {
     expect(menu.getByRole('menuitemradio', { name: '조용한 공개' })).toHaveFocus();
     await userEvent.keyboard('{End}');
     expect(dialog.queryByRole('menu')).toBeNull();
-    expect(trigger).toHaveAccessibleName('공개 범위: 지정 멤버만');
+    expect(trigger).toHaveAccessibleName('공개 범위: 언급한 프로필만');
     expect(trigger).toHaveFocus();
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
     await userEvent.click(trigger);
     const directMenu = within(dialog.getByRole('menu', { name: '공개 범위 선택' }));
-    expect(directMenu.getByRole('menuitemradio', { name: '지정 멤버만' })).toHaveFocus();
+    expect(directMenu.getByRole('menuitemradio', { name: '언급한 프로필만' })).toHaveFocus();
     await userEvent.keyboard('{ArrowUp}');
     expect(dialog.queryByRole('menu')).toBeNull();
     expect(trigger).toHaveAccessibleName('공개 범위: 팔로워만');

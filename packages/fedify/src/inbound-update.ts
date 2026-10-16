@@ -1,19 +1,21 @@
 import '@kosmo/core/polyfill';
 
 import { isActor, Note } from '@fedify/vocab';
-import { ProfileState } from '@kosmo/core/enums';
-import { ConflictError } from '@kosmo/core/error';
+import { ConflictError, NotFoundError } from '@kosmo/core/error';
+import { runWorkflow } from '@kosmo/core/temporal/client';
+import { remoteProfileUpdateWorkflow } from '@kosmo/core/temporal/workflows';
 import { findRemotePostByActivityPubUri } from './activitypub-post-uri';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
 import { observeInbound } from './inbound-observability';
 import { handleInboundQuote, hasInboundQuote } from './inbound-quote';
 import {
-  findStoredRemoteProfileActorByUri,
-  materializeRemoteProfileActor,
   RemoteActorMaterializationError,
+  rethrowRemoteActorWorkflowError,
+  serializeReceipt,
 } from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
-import type { Object as ActivityPubObject, Update } from '@fedify/vocab';
+import type { Update } from '@fedify/vocab';
+import type { RemoteProfileUpdateInput } from '@kosmo/core/temporal/workflows';
 
 const noNetworkDocumentLoader = async (url: string) => {
   throw new Error(`Network lookup is disabled for inbound Update: ${url}`);
@@ -147,30 +149,56 @@ export const handleInboundUpdate = async (
     return;
   }
 
-  const stored = await findStoredRemoteProfileActorByUri(actorUri);
-  if (!stored || stored.profile.state !== ProfileState.ACTIVE) {
+  let actorJsonLd: unknown;
+  try {
+    actorJsonLd = await actorObject.toJsonLd({
+      contextLoader: noNetworkDocumentLoader,
+      format: 'expand',
+    });
+  } catch (error) {
     observeInbound({
-      outcome: 'noop',
+      outcome: 'external_failure',
       activityType: 'Update',
       actorOrigin: actorUri.origin,
+      error,
       handler: 'update',
       objectOrigin: objectUri.origin,
-      phase: 'actor_lookup',
-      reasonCode: 'remote_actor_missing',
+      phase: 'projection',
+      reasonCode: 'remote_actor_projection_rejected',
     });
     return;
   }
 
   try {
-    await materializeRemoteProfileActor({
-      context: {
-        lookupObject: async (): Promise<ActivityPubObject> => actorObject,
-      },
-      actorUri,
-      now: receivedAt,
-      reactivateUnresponsive: true,
-    });
+    const input: RemoteProfileUpdateInput = {
+      actorUri: actorUri.href,
+      actorJsonLd,
+      receipt: serializeReceipt({ activityUri: update.id, receivedAt }),
+    };
+    const profileId = await runWorkflow(remoteProfileUpdateWorkflow, {
+      args: [input],
+      mode: 'execute',
+      workflowIdConflictPolicy: 'USE_EXISTING',
+      workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+    }).catch(rethrowRemoteActorWorkflowError);
+
+    if (profileId === null) {
+      throw new NotFoundError('Profile not found');
+    }
   } catch (error) {
+    if (error instanceof NotFoundError) {
+      observeInbound({
+        outcome: 'noop',
+        activityType: 'Update',
+        actorOrigin: actorUri.origin,
+        handler: 'update',
+        objectOrigin: objectUri.origin,
+        phase: 'actor_lookup',
+        reasonCode: 'remote_actor_missing',
+      });
+      return;
+    }
+
     if (error instanceof ConflictError || error instanceof RemoteActorMaterializationError) {
       observeInbound({
         outcome: 'external_failure',

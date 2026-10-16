@@ -191,6 +191,39 @@ const quoteProfile = notificationsProfile(
   {},
   { id: 'notification-profile-quote', unreadNotificationCount: 1 },
 );
+const sourceUnavailableNotifications = [
+  followNotification({
+    id: 'notification-unavailable-follow',
+    profile: null,
+    readAt: '2026-07-21T12:00:00Z',
+  }),
+  followRequestNotification({
+    id: 'notification-unavailable-follow-request',
+    followRequest: null,
+    profile: followRequestFollower,
+  }),
+  reactionNotification({
+    id: 'notification-unavailable-reaction',
+    post: null,
+    profile: unreadFollower,
+  }),
+  replyNotification({ id: 'notification-unavailable-reply', post: null, profile: unreadFollower }),
+  quoteNotification({
+    id: 'notification-unavailable-quote',
+    post: notificationPost({ bodyText: null, id: 'notification-unavailable-quote-post' }),
+  }),
+  mentionNotification({ id: 'notification-unavailable-mention', post: null }),
+  repostNotification({
+    id: 'notification-unavailable-repost',
+    post: null,
+    profile: null,
+  }),
+];
+const sourceUnavailableProfile = notificationsProfile(
+  sourceUnavailableNotifications,
+  {},
+  { id: 'notification-profile-source-unavailable', unreadNotificationCount: 6 },
+);
 const paginationProfile = notificationsProfile(
   [followNotification({ id: 'notification-page-1', profile: unreadFollower })],
   { hasNext: true },
@@ -227,6 +260,7 @@ const storyProfiles = [
   profileB,
   mentionProfile,
   quoteProfile,
+  sourceUnavailableProfile,
 ];
 
 const NotificationsStoriesQuery = graphql`
@@ -334,6 +368,11 @@ function QuoteReadNavigationList() {
       <NotificationList profile={profileNode.notificationList!} />
     </SessionProvider>
   );
+}
+
+function SourceUnavailableList() {
+  const profileNode = requireProfile(useStoryProfiles(), 7);
+  return <NotificationList profile={profileNode.notificationList!} />;
 }
 
 function AuthenticatedReadNavigationList() {
@@ -709,6 +748,74 @@ export const ReadAllLoadedUnread: Story = {
   render: () => <RefreshList />,
 };
 
+export const SourceUnavailableNotificationFallbacks: Story = {
+  parameters: {
+    controls: { disable: true },
+    relay: {
+      mutationLoading: true,
+      mutationRequestObserver: (request: RequestParameters, variables: Variables) =>
+        notificationMutationRequest(request.name, variables),
+    },
+  },
+  play: async ({ canvasElement }) => {
+    notificationMutationRequest.mockClear();
+    const canvas = within(canvasElement);
+    const fallbackLabels = [
+      ['notification-source-unavailable-follow', '팔로우 알림'],
+      ['notification-source-unavailable-followRequest', '팔로우 요청 알림'],
+      ['notification-source-unavailable-reaction', '반응 알림'],
+      ['notification-source-unavailable-reply', '답글 알림'],
+      ['notification-source-unavailable-quote', '인용 알림'],
+      ['notification-source-unavailable-mention', '멘션 알림'],
+      ['notification-source-unavailable-repost', '재게시 알림'],
+    ] as const;
+
+    for (const [testId, label] of fallbackLabels) {
+      const fallback = canvas.getByTestId(testId);
+      expect(fallback).toBeVisible();
+      expect(fallback).toHaveTextContent(label);
+      expect(fallback.querySelector('a, button, [role="link"], [role="button"]')).toBeNull();
+    }
+
+    expect(canvas.getByTestId('notification-source-unavailable-follow')).not.toHaveTextContent(
+      '읽지 않은 알림',
+    );
+    const unavailableFollowRequest = canvas.getByTestId(
+      'notification-source-unavailable-followRequest',
+    );
+    expect(unavailableFollowRequest).toHaveTextContent('읽지 않은 알림');
+    expect(unavailableFollowRequest).not.toHaveTextContent('새 요청자');
+    await userEvent.click(unavailableFollowRequest);
+    expect(notificationMutationRequest).not.toHaveBeenCalledWith(
+      'NotificationListItemMarkReadMutation',
+      expect.anything(),
+    );
+    expect(canvas.getByRole('button', { name: '모두 읽음' })).toBeEnabled();
+
+    await userEvent.click(canvas.getByRole('button', { name: '모두 읽음' }));
+    await waitFor(() =>
+      expect(notificationMutationRequest).toHaveBeenCalledWith(
+        'NotificationListMarkAllReadMutation',
+        {
+          ids: [
+            'notification-unavailable-follow-request',
+            'notification-unavailable-reaction',
+            'notification-unavailable-reply',
+            'notification-unavailable-quote',
+            'notification-unavailable-mention',
+            'notification-unavailable-repost',
+          ],
+        },
+      ),
+    );
+    expect(notificationMutationRequest).not.toHaveBeenCalledWith(
+      'NotificationListItemMarkReadMutation',
+      expect.anything(),
+    );
+  },
+  render: () => <SourceUnavailableList />,
+};
+
 export const ReadAllLoadedZero: Story = {
   play: ({ canvasElement }) => {
     const action = within(canvasElement).getByRole('button', { name: '모두 읽음' });
@@ -997,6 +1104,7 @@ export const ReplyAuthorActivationReadsOnce: Story = {
     const detailPath = '/@starlight/notification-reply-post';
     const activations = [
       { target: canvas.getByTestId('notification-post-author'), path: '/@starlight' },
+      { target: canvas.getByTestId('reply-notification-rail'), path: detailPath },
       { target: canvas.getByRole('link', { name: '5분 전' }), path: detailPath },
       { target: canvas.getByTestId('post-list-row-body'), path: detailPath },
       {
@@ -1214,6 +1322,12 @@ export const MentionSelectedProfileScreen: Story = {
 
     await expect(mention).toBeVisible();
     await expect(canvas.getAllByTestId('mention-notification-post')).toHaveLength(1);
+    const unavailableMention = canvas.getByTestId('notification-source-unavailable-mention');
+    await expect(unavailableMention).toBeVisible();
+    await expect(unavailableMention).toHaveTextContent('멘션 알림');
+    await expect(
+      unavailableMention.querySelector('a, button, [role="link"], [role="button"]'),
+    ).toBeNull();
     await expect(mention).toHaveTextContent('멘션 알림');
     await expect(mention).toHaveTextContent('이 글에서 회원님을 멘션했습니다.');
     await expect(mention).not.toHaveTextContent('답글 원문 미리보기는 표시하지 않습니다.');

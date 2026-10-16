@@ -65,7 +65,7 @@ const visibilityLabels: Record<string, string> = {
   PUBLIC: '전체 공개',
   UNLISTED: '조용히 공개',
   FOLLOWERS: '팔로워 공개',
-  DIRECT: '다이렉트',
+  DIRECT: '언급한 프로필만',
 };
 
 export function PostLayout({

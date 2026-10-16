@@ -95,11 +95,12 @@ Inbound Undo 경로는 embedded object가 실제 `Block`일 때만 처리하며,
   제3자의 Source를 일괄 숨기지 않는다. [Post](./post.md)의 원격 승인 철회 수신·Source 삭제 lifecycle은
   유지하며 Author의 개별 승인 철회는 현재 제공하지 않는다.
 - 이번 Block transaction에서 제거한 Follow Request/Relationship을 원인으로 가진 Notification도 같은 transaction에서 함께 제거한다.
-  다른 기존 Notification Item과 Read State는 Block action에서 변경하지 않으며, Notification 조회는 Recipient·Related
-  Profile pair 정책과 Recipient 기준 Related Post/Profile 조회 정책을 적용한다. commit 뒤 별도 effect가 실패해도
-  이미 성공한 Profile Block 관계는 유지된다.
+  다른 기존 Notification Item과 Read State는 Block action에서 변경하지 않는다. 저장 행의 Node·목록·Unread count·읽음 처리 접근은
+  Recipient 권한을 따르며, Related Post/Profile 필드는 현재 요청의 일반 객체 조회 정책을 적용한다. 기존 비동기 정리 정책도
+  유지한다. commit 뒤 별도 effect가 실패해도 이미 성공한 Profile Block 관계는 유지된다.
 - Block 실행 중 이미 진입한 Follow transition이 cleanup 뒤 Follow/Request 또는 그 직접 원인 Notification을 남길 수 있다. Active Block 동안
-  공통 정책은 이 잔존 row를 inactive/invisible로 취급한다.
+  기존 Follow/Request 상호작용과 관련 객체 조회 정책은 계속 적용된다. Notification 행은 Recipient가 권한을 가진 동안 조회할 수 있고,
+  관련 필드는 일반 객체 조회 정책에 따른다. 기존 비동기 cleanup은 별도 정책대로 동작한다.
   잔존 Follow는 `FOLLOWERS` Post 접근 권한의 근거가 될 수 없다.
   차단 뒤 모든 Notification source에 신규 생성 억제 정책을 연결하는 일은 `PROD-327`의 후속 범위다. 이 객체의 현재
   cleanup·조회 계약은 해당 source 연결을 전제로 하지 않는다.

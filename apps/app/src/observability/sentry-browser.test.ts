@@ -5,6 +5,7 @@ import * as Sentry from '@sentry/react';
 
 const capturedEvents: unknown[] = [];
 const capturedAttachments: unknown[] = [];
+let transportResponse = async (): Promise<{ statusCode: number }> => ({ statusCode: 200 });
 const initializeSentry = Sentry.init;
 const sentryMock = {
   exports: {
@@ -22,7 +23,7 @@ const sentryMock = {
                 capturedAttachments.push(payload);
               }
             }
-            return { statusCode: 200 };
+            return transportResponse();
           },
           flush: async () => true,
         }),
@@ -78,6 +79,7 @@ after(() => {
 
 describe('Web app Sentry configuration', { concurrency: false }, () => {
   beforeEach(() => {
+    transportResponse = async () => ({ statusCode: 200 });
     capturedEvents.length = 0;
     capturedAttachments.length = 0;
     delete process.env.EXPO_PUBLIC_SENTRY_RELEASE;
@@ -133,7 +135,7 @@ describe('Web app Sentry configuration', { concurrency: false }, () => {
       filename: 'feedback-1.png',
     };
 
-    assert.match(captureFeedback('피드백 본문', 'BUG_REPORT', [attachment]), /^[\da-f-]+$/u);
+    assert.match(await captureFeedback('피드백 본문', 'BUG_REPORT', [attachment]), /^[\da-f-]+$/u);
     assert.equal(await Sentry.flush(1_000), true);
     assert.equal(capturedAttachments.length, 1);
     assert.partialDeepStrictEqual(capturedEvents[0], {
@@ -141,6 +143,49 @@ describe('Web app Sentry configuration', { concurrency: false }, () => {
       tags: { feedback_kind: 'BUG_REPORT' },
     });
   });
+
+  it('waits for the feedback server response before reporting success', async (context) => {
+    context.after(async () => {
+      await Sentry.close(0);
+    });
+    setBrowserRuntimeGlobals('prod');
+    process.env.EXPO_PUBLIC_SENTRY_RELEASE = 'kosmo@abc123';
+    const response = Promise.withResolvers<{ statusCode: number }>();
+    transportResponse = () => response.promise;
+    const { captureFeedback } = await import(`${sentryModule}?feedback-pending`);
+    let settled = false;
+    const submission = Promise.resolve(captureFeedback('서버 응답 대기', 'BUG_REPORT')).then(
+      (eventId) => {
+        settled = true;
+        return eventId;
+      },
+    );
+    try {
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      assert.equal(settled, false);
+    } finally {
+      response.resolve({ statusCode: 200 });
+      await submission;
+    }
+  });
+
+  for (const failure of ['server-rejection', 'network-failure'] as const) {
+    it(`rejects feedback on ${failure}`, async (context) => {
+      context.after(async () => {
+        await Sentry.close(0);
+      });
+      setBrowserRuntimeGlobals('prod');
+      process.env.EXPO_PUBLIC_SENTRY_RELEASE = 'kosmo@abc123';
+      transportResponse = async () => {
+        if (failure === 'network-failure') {
+          throw new TypeError('Failed to fetch');
+        }
+        return { statusCode: 403 };
+      };
+      const { captureFeedback } = await import(`${sentryModule}?feedback-${failure}`);
+      await assert.rejects(async () => captureFeedback('실패한 피드백', 'BUG_REPORT'));
+    });
+  }
 
   it('fails closed when feedback capture is not initialized', async () => {
     delete process.env.EXPO_PUBLIC_SENTRY_RELEASE;

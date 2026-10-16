@@ -9,7 +9,7 @@ import {
   Reject,
   Update,
 } from '@fedify/vocab';
-import { ActivityPubActors, db, first, Instances, Posts, Profiles } from '@kosmo/core/db';
+import { ActivityPubActors, db, first, Instances, PostMentions, Posts, Profiles } from '@kosmo/core/db';
 import {
   InstanceKind,
   InstanceState,
@@ -21,6 +21,7 @@ import {
 import { loadQuoteConsentForPost } from '@kosmo/core/services';
 import { and, eq, isNotNull, ne } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
+import { isHttpUri } from './activitypub-uri';
 import { localOutboundFederation } from './local-outbound-federation';
 import { projectLocalPostNote, projectLocalPostQuoteRequestInstrument } from './local-post-note';
 import { dispatchActivityPubActivity } from './outbound-recipient-dispatch';
@@ -35,6 +36,55 @@ const noteUri = (canonicalOrigin: string | URL, postId: string): URL =>
 const getFollowersUri = (actorUri: URL): URL =>
   new URL(`${actorUri.pathname.replace(/\/$/, '')}/followers`, actorUri);
 
+const parseHttpUri = (value: string | null): URL | null => {
+  try {
+    const uri = new URL(value ?? '');
+    return isHttpUri(uri) ? uri : null;
+  } catch {
+    return null;
+  }
+};
+
+const getDirectMentionRecipients = async (postId: string) => {
+  const mentions = await db
+    .select({
+      contentId: Posts.currentContentId,
+      inboxUri: ActivityPubActors.inboxUri,
+      profileId: Profiles.id,
+      uri: ActivityPubActors.uri,
+    })
+    .from(Posts)
+    .innerJoin(PostMentions, eq(PostMentions.postContentId, Posts.currentContentId))
+    .innerJoin(Profiles, eq(Profiles.id, PostMentions.profileId))
+    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+    .innerJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Profiles.id))
+    .where(
+      and(
+        eq(Posts.id, postId),
+        eq(Posts.visibility, PostVisibility.DIRECT),
+        eq(Profiles.state, ProfileState.ACTIVE),
+        eq(Instances.kind, InstanceKind.ACTIVITYPUB),
+        eq(Instances.state, InstanceState.ACTIVE),
+        isNotNull(ActivityPubActors.inboxUri),
+      ),
+    );
+  const profileIds = new Set<string>();
+  const actorUris = new Map<string, URL>();
+  for (const mention of mentions) {
+    const actorUri = parseHttpUri(mention.uri);
+    if (!actorUri || !parseHttpUri(mention.inboxUri)) {
+      continue;
+    }
+    profileIds.add(mention.profileId);
+    actorUris.set(actorUri.href, actorUri);
+  }
+  return {
+    actorUris: [...actorUris.values()],
+    contentId: mentions[0]?.contentId ?? null,
+    profileIds: [...profileIds],
+  };
+};
+
 export const sendLocalPostCreate = async (postId: string): Promise<void> => {
   const source = await db
     .select({
@@ -42,6 +92,7 @@ export const sendLocalPostCreate = async (postId: string): Promise<void> => {
       localInstanceId: Instances.id,
       parentInstanceKind: ReplyParentInstances.kind,
       parentProfileId: ReplyParentProfiles.id,
+      visibility: Posts.visibility,
     })
     .from(Posts)
     .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
@@ -54,7 +105,6 @@ export const sendLocalPostCreate = async (postId: string): Promise<void> => {
         eq(Posts.id, postId),
         eq(Posts.state, PostState.ACTIVE),
         isNotNull(Posts.currentContentId),
-        ne(Posts.visibility, PostVisibility.DIRECT),
         eq(Instances.kind, InstanceKind.LOCAL),
         eq(Instances.state, InstanceState.ACTIVE),
         isNotNull(Instances.canonicalOrigin),
@@ -68,11 +118,30 @@ export const sendLocalPostCreate = async (postId: string): Promise<void> => {
     return;
   }
 
+  const directMentionRecipients =
+    source.visibility === PostVisibility.DIRECT ? await getDirectMentionRecipients(postId) : null;
+  if (directMentionRecipients && directMentionRecipients.profileIds.length === 0) {
+    return;
+  }
+
   const context = localOutboundFederation.createContext(new URL(source.canonicalOrigin), {
     localInstanceId: source.localInstanceId,
   });
-  const projection = await projectLocalPostNote(context, postId);
+  const projection = await projectLocalPostNote(
+    context,
+    postId,
+    directMentionRecipients
+      ? { directRecipientUris: directMentionRecipients.actorUris }
+      : undefined,
+  );
   if (!projection) {
+    return;
+  }
+  if (
+    directMentionRecipients &&
+    (projection.contentId !== directMentionRecipients.contentId ||
+      projection.visibility !== PostVisibility.DIRECT)
+  ) {
     return;
   }
 
@@ -96,7 +165,12 @@ export const sendLocalPostCreate = async (postId: string): Promise<void> => {
     activity,
     actorProfileId: projection.authorProfileId,
     context,
-    directProfileIds: directProfileId ? [directProfileId] : [],
+    directProfileIds: directMentionRecipients
+      ? directMentionRecipients.profileIds
+      : directProfileId
+        ? [directProfileId]
+        : [],
+    ...(directMentionRecipients ? { directOnly: true } : {}),
   });
 };
 
@@ -411,7 +485,6 @@ export const sendLocalPostDelete = async (postId: string): Promise<void> => {
         eq(Posts.state, PostState.DELETED),
         isNotNull(Posts.currentContentId),
         isNotNull(Posts.deletedAt),
-        ne(Posts.visibility, PostVisibility.DIRECT),
         eq(Instances.kind, InstanceKind.LOCAL),
         eq(Instances.state, InstanceState.ACTIVE),
         isNotNull(Instances.canonicalOrigin),
@@ -423,6 +496,12 @@ export const sendLocalPostDelete = async (postId: string): Promise<void> => {
     return;
   }
 
+  const directMentionRecipients =
+    source.visibility === PostVisibility.DIRECT ? await getDirectMentionRecipients(postId) : null;
+  if (directMentionRecipients && directMentionRecipients.profileIds.length === 0) {
+    return;
+  }
+
   const context = localOutboundFederation.createContext(new URL(source.canonicalOrigin), {
     localInstanceId: source.localInstanceId,
   });
@@ -431,8 +510,9 @@ export const sendLocalPostDelete = async (postId: string): Promise<void> => {
   const objectUri = noteUri(source.canonicalOrigin, postId);
   const activity = new Delete({
     actor: actorUri,
-    ccs:
-      source.visibility === PostVisibility.PUBLIC
+    ccs: directMentionRecipients
+      ? []
+      : source.visibility === PostVisibility.PUBLIC
         ? [followersUri]
         : source.visibility === PostVisibility.UNLISTED
           ? [PUBLIC_COLLECTION]
@@ -440,7 +520,11 @@ export const sendLocalPostDelete = async (postId: string): Promise<void> => {
     id: new URL('#delete', objectUri),
     object: objectUri,
     published: source.deletedAt,
-    tos: source.visibility === PostVisibility.PUBLIC ? [PUBLIC_COLLECTION] : [followersUri],
+    tos: directMentionRecipients
+      ? directMentionRecipients.actorUris
+      : source.visibility === PostVisibility.PUBLIC
+        ? [PUBLIC_COLLECTION]
+        : [followersUri],
   });
   const directProfileId =
     source.replyParentId &&
@@ -453,6 +537,11 @@ export const sendLocalPostDelete = async (postId: string): Promise<void> => {
     activity,
     actorProfileId: source.authorProfileId,
     context,
-    directProfileIds: directProfileId ? [directProfileId] : [],
+    directProfileIds: directMentionRecipients
+      ? directMentionRecipients.profileIds
+      : directProfileId
+        ? [directProfileId]
+        : [],
+    ...(directMentionRecipients ? { directOnly: true } : {}),
   });
 };

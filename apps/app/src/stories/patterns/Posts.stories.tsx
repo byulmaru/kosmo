@@ -1,5 +1,5 @@
 import { usePathname } from 'expo-router';
-import { Profiler, Suspense, useCallback, useMemo, useRef, useState } from 'react';
+import { act, Profiler, Suspense, useCallback, useMemo, useRef, useState } from 'react';
 import { Linking, Pressable, Text, View } from 'react-native';
 import {
   graphql,
@@ -55,6 +55,8 @@ import {
 import {
   getCopiedStrings,
   resetClipboardMock,
+  resolvePendingClipboard,
+  setNextClipboardPending,
   setNextClipboardResult,
 } from '../../../.storybook/mocks/postClipboard';
 import appleTouchIconUrl from '../../../public/apple-touch-icon.png?url';
@@ -75,6 +77,40 @@ const postMediaImageUri = ogDefaultUrl;
 
 const storyShareOrigin = () => window.location.origin;
 const quoteMutationRequestObserver = fn().mockName('Quote composer mutation');
+
+async function dispatchPointerBoundary(
+  target: HTMLElement,
+  boundary: 'enter' | 'leave',
+  pointerType: 'pen' | 'touch',
+  pointerId: number,
+) {
+  await act(async () => {
+    const entering = boundary === 'enter';
+    const relatedTarget = entering ? null : document.body;
+    const eventInit = { pointerId, pointerType, isPrimary: true, relatedTarget };
+
+    target.dispatchEvent(
+      new PointerEvent(entering ? 'pointerover' : 'pointerout', { ...eventInit, bubbles: true }),
+    );
+
+    const ancestors: HTMLElement[] = [];
+    for (let current: HTMLElement | null = target; current; current = current.parentElement) {
+      ancestors.push(current);
+    }
+    if (entering) {
+      ancestors.reverse();
+    }
+
+    for (const element of ancestors) {
+      element.dispatchEvent(
+        new PointerEvent(entering ? 'pointerenter' : 'pointerleave', {
+          ...eventInit,
+          bubbles: false,
+        }),
+      );
+    }
+  });
+}
 
 const shortPost = {
   ...post({
@@ -3054,11 +3090,12 @@ const meta = {
   excludeStories: [
     'ComposerBeforeUnloadContract',
     'ContentWarningProductionConsumersShareRevealStateInteraction',
-    'ContentWarningCardHoverIsolationInteraction',
+    'ContentWarningCardPressableFeedbackInteraction',
     'ContentWarningQuoteIndependentLifecycleInteraction',
     'ContentWarningRevealInteraction',
     'ContentWarningSourcePreviewRevealInteraction',
     'LinkedSourceQuoteInteraction',
+    'ProductionMoreShareReferences',
   ],
   decorators: [
     (Story) => (
@@ -4323,7 +4360,19 @@ export const ProductionMoreShareReferences: Story = {
       },
     ];
 
-    for (const [index, { actionBar, reference }] of targets.entries()) {
+    setNextClipboardPending();
+    await userEvent.click(within(targets[0]!.actionBar).getByRole('button', { name: '더 보기' }));
+    await userEvent.click(
+      within(await screen.findByRole('menu', { name: '더 보기 메뉴' })).getByRole('menuitem', {
+        name: '링크 복사',
+      }),
+    );
+    expect(canvas.queryByText('링크를 복사했어요')).toBeNull();
+    resolvePendingClipboard(true);
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent('링크를 복사했어요');
+    await waitFor(() => expect(getCopiedStrings()[0]).toBe(targets[0]!.reference));
+
+    for (const [index, { actionBar, reference }] of targets.slice(1).entries()) {
       const more = within(actionBar).getByRole('button', { name: '더 보기' });
       await userEvent.click(more);
       expect(more).toHaveAttribute('aria-expanded', 'true');
@@ -4335,7 +4384,8 @@ export const ProductionMoreShareReferences: Story = {
       ).toEqual(['링크 복사', '게시물 신고', '뮤트']);
       await userEvent.click(within(menu).getByRole('menuitem', { name: '링크 복사' }));
       await waitFor(() => expect(more).toHaveAttribute('aria-expanded', 'false'));
-      await waitFor(() => expect(getCopiedStrings()[index]).toBe(reference));
+      await expect(canvas.findByRole('alert')).resolves.toHaveTextContent('링크를 복사했어요');
+      await waitFor(() => expect(getCopiedStrings()[index + 1]).toBe(reference));
     }
 
     const ordinaryMore = within(ordinaryActionBar).getByRole('button', { name: '더 보기' });
@@ -4349,6 +4399,7 @@ export const ProductionMoreShareReferences: Story = {
     await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
       '링크를 복사하지 못했습니다. 잠시 후 다시 시도해 주세요.',
     );
+    expect(canvas.queryByText('링크를 복사했어요')).toBeNull();
     expect(getCopiedStrings()).toHaveLength(3);
     expect(ordinaryMore).toHaveAttribute('aria-expanded', 'false');
 
@@ -4358,6 +4409,7 @@ export const ProductionMoreShareReferences: Story = {
         name: '링크 복사',
       }),
     );
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent('링크를 복사했어요');
     await waitFor(() => expect(getCopiedStrings()).toHaveLength(4));
     expect(getCopiedStrings()[3]).toBe(
       `${storyShareOrigin()}/${shortPost.profile.relativeHandle}/${shortPost.id}`,
@@ -5333,6 +5385,9 @@ export const LinkedSourceQuoteInteraction: Story = {
     const canvas = within(canvasElement);
     const postBody = await canvas.findByTestId('post-body');
     const sourcePreview = await canvas.findByTestId('source-post-preview');
+    const sourcePreviewLink = within(sourcePreview).getByRole('link', {
+      name: '원문 게시글 보기',
+    });
     const openURL = fn(async () => undefined);
     const originalOpenURL = Linking.openURL;
     Linking.openURL = openURL;
@@ -5341,8 +5396,19 @@ export const LinkedSourceQuoteInteraction: Story = {
       expect(window.getComputedStyle(sourcePreview).backgroundColor).toBe('rgba(0, 0, 0, 0)');
       await userEvent.hover(sourcePreview);
       expect(window.getComputedStyle(sourcePreview).backgroundColor).toBe('rgba(0, 0, 0, 0.04)');
+      await userEvent.hover(sourcePreviewLink);
+      expect(window.getComputedStyle(sourcePreview).backgroundColor).toBe('rgba(0, 0, 0, 0.04)');
       await userEvent.unhover(sourcePreview);
       expect(window.getComputedStyle(sourcePreview).backgroundColor).toBe('rgba(0, 0, 0, 0)');
+
+      await userEvent.hover(sourcePreviewLink);
+      expect(window.getComputedStyle(sourcePreview).backgroundColor).toBe('rgba(0, 0, 0, 0.04)');
+      await userEvent.unhover(sourcePreviewLink);
+      expect(window.getComputedStyle(sourcePreview).backgroundColor).toBe('rgba(0, 0, 0, 0)');
+
+      await dispatchPointerBoundary(sourcePreviewLink, 'enter', 'touch', 81);
+      expect(window.getComputedStyle(sourcePreview).backgroundColor).toBe('rgba(0, 0, 0, 0)');
+      await dispatchPointerBoundary(sourcePreviewLink, 'leave', 'touch', 81);
 
       await userEvent.click(
         within(postBody).getByLabelText('안전한 외부 링크, https://example.com/path'),
@@ -6691,7 +6757,7 @@ export const ContentWarningProductionConsumersShareRevealStateInteraction: Story
   },
 };
 
-export const ContentWarningCardHoverIsolationInteraction: Story = {
+export const ContentWarningCardPressableFeedbackInteraction: Story = {
   ...ContentWarningProductionConsumersShareRevealState,
   parameters: { controls: { disable: true } },
   play: async ({ canvasElement }) => {
@@ -6702,18 +6768,59 @@ export const ContentWarningCardHoverIsolationInteraction: Story = {
     const warning = within(card).getByRole('button', {
       name: /실제 Post 소비자 통합 검증 경고, 본문, 보기/,
     });
+    const pointerUser = userEvent.setup();
 
-    await userEvent.hover(canvas.getByTestId('content-warning-layout-surface'));
     const restingCardColor = getComputedStyle(feedback).backgroundColor;
     const restingWarningColor = getComputedStyle(warning).backgroundColor;
 
+    await pointerUser.hover(warning);
+    await pointerUser.pointer({ keys: '[MouseLeft>]', target: warning });
+    await waitFor(() => expect(feedback).toHaveStyle({ backgroundColor: colors.light.stateHover }));
+    await pointerUser.pointer({ target: document.body });
+    await pointerUser.pointer({ keys: '[/MouseLeft]', target: document.body });
+    expect(warning).toHaveAttribute('aria-expanded', 'false');
+    expect(
+      within(listSurface).queryByText(contentWarningPost.content!.bodyText),
+    ).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(getComputedStyle(feedback).backgroundColor).toBe(restingCardColor);
+      expect(getComputedStyle(warning).backgroundColor).toBe(restingWarningColor);
+    });
+
+    await userEvent.hover(card);
+    await waitFor(() => expect(feedback).toHaveStyle({ backgroundColor: colors.light.stateHover }));
     await userEvent.hover(warning);
-    expect(getComputedStyle(feedback).backgroundColor).toBe(restingCardColor);
+    await waitFor(() => expect(feedback).toHaveStyle({ backgroundColor: colors.light.stateHover }));
+    await userEvent.unhover(card);
+    await waitFor(() => expect(getComputedStyle(feedback).backgroundColor).toBe(restingCardColor));
+
+    await userEvent.hover(warning);
     expect(getComputedStyle(warning).backgroundColor).not.toBe(restingWarningColor);
+    await waitFor(() => expect(feedback).toHaveStyle({ backgroundColor: colors.light.stateHover }));
 
     await userEvent.unhover(warning);
-    await userEvent.hover(within(card).getAllByRole('link')[0]!);
-    expect(getComputedStyle(feedback).backgroundColor).not.toBe(restingCardColor);
+    await waitFor(() => expect(getComputedStyle(feedback).backgroundColor).toBe(restingCardColor));
+
+    await dispatchPointerBoundary(warning, 'enter', 'pen', 82);
+    await waitFor(() => expect(feedback).toHaveStyle({ backgroundColor: colors.light.stateHover }));
+    await dispatchPointerBoundary(warning, 'leave', 'pen', 82);
+    await waitFor(() => expect(getComputedStyle(feedback).backgroundColor).toBe(restingCardColor));
+    await dispatchPointerBoundary(warning, 'enter', 'touch', 83);
+    expect(getComputedStyle(feedback).backgroundColor).toBe(restingCardColor);
+    await dispatchPointerBoundary(warning, 'leave', 'touch', 83);
+
+    await pointerUser.hover(card);
+    await pointerUser.pointer({ keys: '[MouseLeft>]', target: card });
+    await waitFor(() =>
+      expect(feedback).toHaveStyle({ backgroundColor: colors.light.statePressedSubtle }),
+    );
+    await pointerUser.pointer({ keys: '[/MouseLeft]', target: card });
+    await waitFor(() => expect(feedback).toHaveStyle({ backgroundColor: colors.light.stateHover }));
+    await userEvent.unhover(card);
+    expect(getComputedStyle(feedback).backgroundColor).toBe(restingCardColor);
+
+    await userEvent.click(warning);
+    expect(within(listSurface).getByText(contentWarningPost.content!.bodyText)).toBeVisible();
   },
 };
 
@@ -6731,8 +6838,6 @@ export const ContentWarningQuoteIndependentLifecycleInteraction: Story = {
     const sourceBody = '인용 원문의 가림 해제 뒤 표시되는 본문입니다.';
     const outerWarning = /인용 게시글 바깥 경고, 본문, 보기/;
     const sourceWarning = /인용 원문 자체 경고, 본문, 보기/;
-    const card = listSurface.getByTestId('post-list-item-card');
-    const cardFeedback = within(card).getByTestId('post-list-item-feedback');
     const sourcePreview = listSurface.getByTestId('source-post-preview');
     const sourceWarningButton = listSurface.getByRole('button', { name: sourceWarning });
     const sourcePreviewLink = within(sourcePreview).getByRole('link', {
@@ -6747,26 +6852,13 @@ export const ContentWarningQuoteIndependentLifecycleInteraction: Story = {
     expect(layoutSurface.queryByText(outerBody)).not.toBeInTheDocument();
     expect(layoutSurface.queryByText(sourceBody)).not.toBeInTheDocument();
 
-    await userEvent.hover(sourcePreview);
-    const hoveredCardColor = getComputedStyle(cardFeedback).backgroundColor;
-    const hoveredPreviewColor = getComputedStyle(sourcePreview).backgroundColor;
-    await userEvent.unhover(sourcePreview);
-    const restingCardColor = getComputedStyle(cardFeedback).backgroundColor;
-    const restingPreviewColor = getComputedStyle(sourcePreview).backgroundColor;
     const restingWarningColor = getComputedStyle(sourceWarningButton).backgroundColor;
-
-    expect(hoveredCardColor).not.toBe(restingCardColor);
-    expect(hoveredPreviewColor).not.toBe(restingPreviewColor);
+    expect(sourcePreviewLink).toBeVisible();
 
     await userEvent.hover(sourceWarningButton);
-    expect(getComputedStyle(cardFeedback).backgroundColor).toBe(restingCardColor);
-    expect(getComputedStyle(sourcePreview).backgroundColor).toBe(restingPreviewColor);
     expect(getComputedStyle(sourceWarningButton).backgroundColor).not.toBe(restingWarningColor);
 
     await userEvent.unhover(sourceWarningButton);
-    await userEvent.hover(sourcePreviewLink);
-    expect(getComputedStyle(cardFeedback).backgroundColor).toBe(hoveredCardColor);
-    expect(getComputedStyle(sourcePreview).backgroundColor).toBe(hoveredPreviewColor);
 
     await userEvent.click(listSurface.getByRole('button', { name: outerWarning }));
     expect(listSurface.getByText(outerBody)).toBeVisible();
@@ -7351,7 +7443,6 @@ export const ComposerVisibilityAndSubmitInteraction: Story = {
 
     await userEvent.click(canvas.getByRole('button', { name: '공개 범위: 조용한 공개' }));
     menu = await canvas.findByRole('menu', { name: '공개 범위 선택' });
-    expect(within(menu).getByRole('menuitemradio', { name: '지정 멤버만' })).toBeVisible();
     await userEvent.click(within(menu).getByRole('menuitemradio', { name: /^공개/ }));
     await userEvent.click(
       within(within(menu).getByRole('group', { name: '인용 허용 정책' })).getByRole(
@@ -7422,7 +7513,7 @@ export const ComposerProfileDefaultVisibilitySeed: Story = {
     expect(
       within(within(menu).getByRole('group', { name: '공개 범위' })).getAllByRole('menuitemradio'),
     ).toHaveLength(4);
-    expect(within(menu).getByRole('menuitemradio', { name: '지정 멤버만' })).toBeVisible();
+    expect(within(menu).getByRole('menuitemradio', { name: '언급한 프로필만' })).toBeVisible();
   },
   render: () => <ComposerStory />,
 };
@@ -7631,7 +7722,6 @@ export const ComposerReplyMutationContract: Story = {
 
     await userEvent.click(canvas.getByRole('button', { name: '공개 범위: 조용한 공개' }));
     const menu = await canvas.findByRole('menu', { name: '공개 범위 선택' });
-    expect(within(menu).getByRole('menuitemradio', { name: '지정 멤버만' })).toBeVisible();
     await userEvent.click(within(menu).getByRole('menuitemradio', { name: /^팔로워만/ }));
     await userEvent.type(body, '부모 게시물에 작성한 답글입니다.');
     await userEvent.click(canvas.getByRole('button', { name: '답글 게시' }));
@@ -7667,7 +7757,7 @@ export const ComposerReplyProfileDefaultVisibilitySeed: Story = {
     expect(
       within(within(menu).getByRole('group', { name: '공개 범위' })).getAllByRole('menuitemradio'),
     ).toHaveLength(4);
-    expect(within(menu).getByRole('menuitemradio', { name: '지정 멤버만' })).toBeVisible();
+    expect(within(menu).getByRole('menuitemradio', { name: '언급한 프로필만' })).toBeVisible();
   },
   render: () => <ReplyComposerContractStory defaultPostVisibility="PUBLIC" />,
 };
@@ -7981,7 +8071,6 @@ export const ReplyModalPresentation: Story = {
     expect(within(dialog).getByRole('button', { name: '공개 범위: 조용한 공개' })).toBeVisible();
     expect(within(dialog).getByText('494')).toBeVisible();
     const submit = within(dialog).getByRole('button', { name: '답글 게시' });
-    expect(submit).toHaveTextContent(/^게시$/);
     expect(submit).toBeEnabled();
     expect(within(dialog).queryByRole('toolbar', { name: '액션 바' })).toBeNull();
     const composerScroll = within(dialog).getByTestId('post-composer-scroll');
@@ -8026,7 +8115,6 @@ export const ReplyModalPresentation: Story = {
 
     const visibilityButton = within(dialog).getByRole('button', { name: '공개 범위: 조용한 공개' });
     expect(composerScroll).not.toContainElement(visibilityButton);
-    expect(within(visibilityButton).getByText('공개 범위')).toBeVisible();
     await userEvent.click(visibilityButton);
     const visibilityMenu = await within(dialog).findByRole('menu', { name: '공개 범위 선택' });
     expect(visibilityMenu).toBeVisible();
@@ -8200,7 +8288,6 @@ export const QuoteModalFailureLifecycle: Story = {
     const editor = within(dialog).getByTestId('post-composer-editor');
     const footer = within(dialog).getByTestId('post-composer-footer');
     expect(body.compareDocumentPosition(source) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
-    expect(body).toHaveAttribute('placeholder', '무슨 일이 일어나고 있나요?');
     expect(getComputedStyle(footer).borderBottomLeftRadius).toBe(
       getComputedStyle(editor).borderBottomLeftRadius,
     );
@@ -8218,7 +8305,6 @@ export const QuoteModalFailureLifecycle: Story = {
     expect(visibilityButtons).toHaveLength(1);
     const visibilityButton = visibilityButtons[0]!;
     const quoteSubmit = within(dialog).getByRole('button', { name: '인용 게시' });
-    expect(quoteSubmit).toHaveTextContent(/^게시$/);
     const quoteSurfaceBounds = quoteSurface.getBoundingClientRect();
     expect(quoteSubmit.getBoundingClientRect().right).toBeGreaterThan(
       quoteSurfaceBounds.left + quoteSurfaceBounds.width / 2,

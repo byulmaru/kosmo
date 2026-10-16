@@ -1,10 +1,11 @@
 # 피드백 Sentry 접수 운영
 
-PROD-1006은 기존 Web·Android·iOS 피드백 폼을 유지하면서 텍스트와 선택적 이미지를 Sentry User Feedback으로 통합한다. SDK의 기본 제출 동작을 사용하며 전용 첨부 API·BFF와 기존 텍스트 GraphQL mutation, Slack 직접 파일 업로드·웹훅 전달은 제거한다.
+PROD-1006은 기존 Web·Android·iOS 피드백 폼을 유지하면서 텍스트와 선택적 이미지를 Sentry User Feedback으로 통합한다. Web은 SDK의 서버 응답 확인을 사용하고 Android·iOS는 기존 capture 동작을 유지하며 전용 첨부 API·BFF와 기존 텍스트 GraphQL mutation, Slack 직접 파일 업로드·웹훅 전달은 제거한다.
 
 ## 접수와 데이터
 
 - 본문과 피드백 종류, 선택적 이미지 최대 3장을 함께 제출한다. 정적 JPEG·PNG·WebP, 장당 5MB·합계 15MB 제한과 원본 바이트를 유지한다.
+- 새 제출의 본문은 `[좋아요]`, `[아쉬워요]`, `[이 기능이 필요해요]`, `[버그를 발견했어요]` 중 선택한 문구로 시작하며, 빈 줄 뒤에 사용자 본문이 이어진다. `feedback_kind` 태그도 유지한다. 기존 접수된 피드백은 변경하지 않는다.
 - KOSMO DB·Media·자체 저장소에는 피드백과 첨부를 영속 저장하지 않는다. Sentry 프로젝트의 접근·보관·첨부 용량 정책을 따른다.
 - 기존 [Sentry 설정](./sentry.md)의 공개 DSN·environment·release 활성화 조건을 사용한다. 업로드용 `SENTRY_AUTH_TOKEN`이나 Slack 토큰을 클라이언트에 전달하지 않는다.
 - 기존 SDK 기본 진단 context를 사용한다. 이메일·인증 정보·원본 파일명 등 추가 개인정보를 명시적으로 첨부하지 않고, 자동 breadcrumb·Session Replay·자동 스크린샷 수집도 새로 켜지 않는다.
@@ -12,7 +13,9 @@ PROD-1006은 기존 Web·Android·iOS 피드백 폼을 유지하면서 텍스트
 
 ## 제출 결과의 의미
 
-이미지 준비와 SDK 호출이 끝나면 폼을 초기화한다. 이벤트 ID 반환은 Sentry 서버 접수 완료를 보장하지 않는다. 입력 검증·이미지 읽기·SDK 초기화 등 로컬에서 확인 가능한 오류는 draft를 보존하지만, 이후 네트워크 전송은 SDK 기본 동작에 맡긴다. 별도 접수 확인·재전송 큐·Slack fallback은 제공하지 않는다.
+Web은 이미지 준비 후 Sentry 서버의 성공 응답을 기다리고, 성공한 경우에만 폼을 초기화한다. 전송 중에는 입력과 중복 제출, overlay 닫기를 차단한다. 서버 거절·네트워크 실패·SDK 응답 시간 초과 시 본문·종류·첨부를 보존하고 사용자가 다시 시도할 수 있다. 서버 성공 응답은 이후 스팸 분류나 Slack 알림 도착을 보장하지 않는다. 응답 시간 초과 시 서버가 이미 접수했을 수도 있으므로 재시도로 중복 접수될 수 있다.
+
+Android·iOS는 기존 SDK capture 후 초기화 계약을 유지한다. 이벤트 ID 반환은 Sentry 서버 접수 완료를 보장하지 않으며 이후 네트워크 전송은 SDK 기본 동작에 맡긴다. 모든 플랫폼에서 입력 검증·이미지 읽기·SDK 초기화 등 준비 오류는 draft를 보존한다. 별도 자동 재전송 큐·Slack fallback은 제공하지 않는다.
 
 ## Slack 알림과 요금제
 
