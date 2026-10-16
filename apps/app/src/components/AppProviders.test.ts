@@ -676,7 +676,6 @@ describe('AppProviders runtime composition', () => {
     );
     assert.equal(browserWindow.location.href, 'https://kos.moe/home');
   });
-  });
 
   it('clears the cached Web profile before restoring the post-login Session', async () => {
     selectedProfileCache = 'profile-b';
