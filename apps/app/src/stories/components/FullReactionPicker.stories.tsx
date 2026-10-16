@@ -267,6 +267,7 @@ const meta = {
   component: FullReactionPicker,
   excludeStories: [
     'InteractionContract',
+    'SearchScrollResetContract',
     'LoadingContract',
     'MobileGridGeometryContract',
     'MobileBrowseGeometryContract',
@@ -546,6 +547,74 @@ export const InteractionContract: Story = {
     expect(canvas.getByText('다른 이름이나 이모지로 검색해 보세요.')).toBeVisible();
   },
   render: (args) => <InteractivePicker {...args} />,
+};
+
+export const SearchScrollResetContract: Story = {
+  args: { options: reactionEmojiPickerOptions, selectedValues: ['❤️'] },
+  render: (args) => <InteractivePicker {...args} />,
+  play: async ({ args, canvasElement }) => {
+    args.onQueryChange.mockClear();
+    args.onSelect.mockClear();
+    const canvas = within(canvasElement);
+    const search = canvas.getByRole('searchbox', { name: '반응 검색' });
+    await waitFor(() => expect(search).toHaveFocus());
+
+    const browseScroll = canvas.getByTestId('full-reaction-picker-scroll') as HTMLElement;
+    browseScroll.scroll({ top: browseScroll.scrollHeight, behavior: 'instant' });
+    await waitFor(() => expect(browseScroll.scrollTop).toBeGreaterThan(0));
+
+    await userEvent.type(search, 'a');
+    expect(search).toHaveValue('a');
+    expect(search).toHaveFocus();
+    expect(args.onQueryChange).toHaveBeenLastCalledWith('a');
+
+    let resultsScroll = canvas.getByTestId('full-reaction-picker-scroll') as HTMLElement;
+    await waitFor(() => expect(resultsScroll.scrollTop).toBe(0));
+    expect(resultsScroll.scrollHeight).toBeGreaterThan(resultsScroll.clientHeight);
+    let firstResultRow = await within(resultsScroll).findByTestId(
+      'full-reaction-section-results-row-0',
+    );
+    let listBounds = resultsScroll.getBoundingClientRect();
+    let firstRowBounds = firstResultRow.getBoundingClientRect();
+    expect(firstRowBounds.top).toBeGreaterThanOrEqual(listBounds.top);
+    expect(firstRowBounds.bottom).toBeLessThanOrEqual(listBounds.bottom);
+
+    resultsScroll.scroll({ top: resultsScroll.scrollHeight, behavior: 'instant' });
+    await waitFor(() => expect(resultsScroll.scrollTop).toBeGreaterThan(0));
+    await userEvent.type(search, 'n');
+    expect(search).toHaveValue('an');
+    expect(search).toHaveFocus();
+    expect(args.onQueryChange).toHaveBeenLastCalledWith('an');
+
+    resultsScroll = canvas.getByTestId('full-reaction-picker-scroll') as HTMLElement;
+    await waitFor(() => expect(resultsScroll.scrollTop).toBe(0));
+    expect(resultsScroll.scrollHeight).toBeGreaterThan(resultsScroll.clientHeight);
+    firstResultRow = await within(resultsScroll).findByTestId(
+      'full-reaction-section-results-row-0',
+    );
+    listBounds = resultsScroll.getBoundingClientRect();
+    firstRowBounds = firstResultRow.getBoundingClientRect();
+    expect(firstRowBounds.top).toBeGreaterThanOrEqual(listBounds.top);
+    expect(firstRowBounds.bottom).toBeLessThanOrEqual(listBounds.bottom);
+
+    resultsScroll.scroll({ top: resultsScroll.scrollHeight, behavior: 'instant' });
+    await waitFor(() => expect(resultsScroll.scrollTop).toBeGreaterThan(0));
+    await userEvent.clear(search);
+    expect(search).toHaveValue('');
+    expect(search).toHaveFocus();
+    expect(args.onQueryChange).toHaveBeenLastCalledWith('');
+
+    const clearedBrowseScroll = canvas.getByTestId('full-reaction-picker-scroll') as HTMLElement;
+    await waitFor(() => expect(clearedBrowseScroll.scrollTop).toBe(0));
+    const selectedHearts = within(clearedBrowseScroll)
+      .getAllByRole('button')
+      .filter((button) => button.textContent === '❤️');
+    expect(selectedHearts.length).toBeGreaterThan(0);
+    expect(selectedHearts.every((button) => button.getAttribute('aria-pressed') === 'true')).toBe(
+      true,
+    );
+    expect(args.onSelect).not.toHaveBeenCalled();
+  },
 };
 
 export const SequentialKeyboardBrowseContract: Story = {

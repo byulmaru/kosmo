@@ -187,6 +187,7 @@ export function FullReactionPicker({
         </View>
       ) : (
         <FlatList
+          key={normalizedQuery}
           contentContainerStyle={styles.scrollContent}
           data={gridItems}
           getItemLayout={

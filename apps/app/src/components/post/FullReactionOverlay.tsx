@@ -11,11 +11,12 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FullReactionPicker } from '@/components/reaction/FullReactionPicker';
 import { getBottomTabBarContentHeight } from '@/components/ui/navigationChrome';
+import { OverlayPortal } from '@/components/ui/OverlayPortal';
 import { useTheme } from '@/theme/ThemeProvider';
 import { breakpoints, spacing } from '@/theme/tokens';
 import { useOverlayMotion } from '@/theme/useOverlayMotion';
 import type React from 'react';
-import type { LayoutChangeEvent, LayoutRectangle, View as ViewType } from 'react-native';
+import type { LayoutChangeEvent, LayoutRectangle, View as ViewType, ViewStyle } from 'react-native';
 import type { FullReactionPickerOption } from '@/components/reaction/FullReactionPicker';
 
 export type FullReactionOverlayProps = Readonly<{
@@ -154,7 +155,18 @@ export function FullReactionOverlay({
     viewportHeight - insets.bottom - (contentHeight ?? 0) - spacing.sm,
   );
   const top = Math.min(Math.max(requestedTop, minTop), maxTop);
-  const webPlacementProps: Record<string, unknown> = { dataSet: { placement } };
+  const webPlacementProps: Record<string, unknown> = {
+    dataSet: { placement },
+    ...(web
+      ? {
+          onKeyDown: (event: React.KeyboardEvent<HTMLElement>) => {
+            if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+              event.stopPropagation();
+            }
+          },
+        }
+      : {}),
+  };
   const picker = (
     <View onLayout={onContentLayout} ref={contentRef} style={!web && styles.nativeContent}>
       <FullReactionPicker
@@ -174,28 +186,10 @@ export function FullReactionOverlay({
     </View>
   );
 
-  return (
-    <Modal
-      accessibilityLabel="반응 선택 창"
-      animationType="none"
-      onRequestClose={close}
-      transparent
-      visible
-    >
-      {web ? (
-        <View style={styles.webRoot}>
-          {anchor ? (
-            <Pressable
-              accessible={false}
-              aria-hidden
-              onPress={close}
-              style={[
-                styles.triggerDismiss,
-                { height: anchor.height, left: anchor.x, top: anchor.y, width: anchor.width },
-              ]}
-              testID="full-reaction-overlay-trigger-dismiss"
-            />
-          ) : null}
+  if (web) {
+    return (
+      <OverlayPortal>
+        <View style={[styles.webRoot, webFixedPositionStyle]}>
           <View
             {...webPlacementProps}
             style={[styles.webPosition, { left, top, width: shellWidth }]}
@@ -204,43 +198,53 @@ export function FullReactionOverlay({
             {picker}
           </View>
         </View>
-      ) : (
-        <View style={styles.nativeRoot}>
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              StyleSheet.absoluteFill,
-              { backgroundColor: theme.overlayScrim, opacity: overlayMotion.progress },
-            ]}
-          />
-          <Pressable
-            accessibilityElementsHidden
-            aria-hidden
-            onPress={close}
-            style={StyleSheet.absoluteFill}
-            testID="full-reaction-overlay-backdrop"
-          />
-          <Animated.View
-            pointerEvents={open ? 'auto' : 'none'}
-            style={[
-              styles.nativePicker,
-              {
-                opacity: overlayMotion.progress,
-                transform: [
-                  {
-                    translateY: overlayMotion.progress.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [24, 0],
-                    }),
-                  },
-                ],
-              },
-            ]}
-          >
-            {picker}
-          </Animated.View>
-        </View>
-      )}
+      </OverlayPortal>
+    );
+  }
+
+  return (
+    <Modal
+      accessibilityLabel="반응 선택 창"
+      animationType="none"
+      onRequestClose={close}
+      transparent
+      visible
+    >
+      <View style={styles.nativeRoot}>
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            StyleSheet.absoluteFill,
+            { backgroundColor: theme.overlayScrim, opacity: overlayMotion.progress },
+          ]}
+        />
+        <Pressable
+          accessibilityElementsHidden
+          aria-hidden
+          onPress={close}
+          style={StyleSheet.absoluteFill}
+          testID="full-reaction-overlay-backdrop"
+        />
+        <Animated.View
+          pointerEvents={open ? 'auto' : 'none'}
+          style={[
+            styles.nativePicker,
+            {
+              opacity: overlayMotion.progress,
+              transform: [
+                {
+                  translateY: overlayMotion.progress.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [24, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          {picker}
+        </Animated.View>
+      </View>
     </Modal>
   );
 }
@@ -249,7 +253,8 @@ const styles = StyleSheet.create({
   nativeContent: { flex: 1 },
   nativePicker: { flex: 1 },
   nativeRoot: { flex: 1 },
-  triggerDismiss: { position: 'absolute' },
-  webPosition: { position: 'absolute' },
-  webRoot: { flex: 1 },
+  webPosition: { pointerEvents: 'auto', position: 'absolute' },
+  webRoot: { bottom: 0, left: 0, pointerEvents: 'box-none', right: 0, top: 0, zIndex: 5 },
 });
+
+const webFixedPositionStyle = { position: 'fixed' } as unknown as ViewStyle;

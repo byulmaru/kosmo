@@ -25,6 +25,7 @@ import { PostMediaViewerSurface } from '@/components/post/PostMediaViewerSurface
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
 import { IconButton } from '@/components/ui/IconButton';
+import { OverlayPortalProvider } from '@/components/ui/OverlayPortal';
 import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { useTheme } from '@/theme/ThemeProvider';
 import {
@@ -246,9 +247,11 @@ export function PostMediaViewer({
           >
             <XIcon color="#ffffff" size={30} strokeWidth={2.5} />
           </IconButton>
-          <PostMediaViewerStateContext.Provider value={viewerState}>
-            {children}
-          </PostMediaViewerStateContext.Provider>
+          <OverlayPortalProvider hostRef={dialogRef}>
+            <PostMediaViewerStateContext.Provider value={viewerState}>
+              {children}
+            </PostMediaViewerStateContext.Provider>
+          </OverlayPortalProvider>
         </View>
       </View>
     </Modal>

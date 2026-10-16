@@ -1,6 +1,6 @@
 import { Suspense, useCallback, useRef, useState } from 'react';
 import { unstable_batchedUpdates } from 'react-dom';
-import { Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import {
   createOperationDescriptor,
@@ -14,12 +14,15 @@ import {
 import { expect, fireEvent, fn, screen, spyOn, userEvent, waitFor, within } from 'storybook/test';
 import { PostActionBar } from '@/components/post/PostActionBar';
 import { formatPostActionCount } from '@/components/post/postActionCount';
+import { PostMediaViewer, PostMediaViewerContent } from '@/components/post/PostMediaViewer';
 import { usePostMoreMenuItem } from '@/components/post/PostMoreMenu';
 import { usePostReactionController } from '@/components/post/PostReactionController';
 import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
 import { RelayActorBoundary, RelayActorProvider, useRelayActor } from '@/relay/RelayActorProvider';
 import { SessionProvider } from '@/session/SessionProvider';
 import { colors, fontFamilies, spacing, typography } from '@/theme/tokens';
+import viewerMediaUrl from '../../../public/og-default.png?url';
+import { post as storyPost } from '../fixtures';
 import { Catalog, Section } from '../StoryFrame';
 import PostActionBarStoryQueryNode from './__generated__/PostActionBarStoryQuery.graphql';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -27,6 +30,7 @@ import type { ViewStyle } from 'react-native';
 import type { GraphQLResponse, RequestParameters, Variables } from 'relay-runtime';
 import type { PostActionBarProps } from '@/components/post/PostActionBar';
 import type { PostActionProcessingState } from '@/components/post/PostActionControl';
+import type { PostActionBarReactionViewerStoryQuery } from './__generated__/PostActionBarReactionViewerStoryQuery.graphql';
 import type { PostActionBarStoryQuery } from './__generated__/PostActionBarStoryQuery.graphql';
 
 const reply = fn();
@@ -82,6 +86,17 @@ const postActionBarStoryQuery = graphql`
   }
 `;
 
+const postActionBarReactionViewerStoryQuery = graphql`
+  query PostActionBarReactionViewerStoryQuery($id: ID!) {
+    node(id: $id) {
+      __typename
+      ... on Post {
+        ...PostMediaViewer_post @alias(as: "viewer")
+      }
+    }
+  }
+`;
+
 const unselectedSource = {
   __typename: 'Post',
   content: { __typename: 'PostContent', id: 'content-source' },
@@ -107,6 +122,23 @@ const selectedSource = {
   viewerRepost: { __typename: 'Post', id: activeRepostId },
   viewerReactions: [{ __typename: 'Reaction', id: 'reaction-story', type: '🥹' }],
 };
+const reactionViewerStoryPost = storyPost({
+  id: sourcePostId,
+  media: [
+    {
+      __typename: 'Media',
+      altText: '첫 번째 첨부 이미지',
+      id: 'reaction-viewer-media-1',
+      url: viewerMediaUrl,
+    },
+    {
+      __typename: 'Media',
+      altText: '두 번째 첨부 이미지',
+      id: 'reaction-viewer-media-2',
+      url: viewerMediaUrl,
+    },
+  ],
+});
 
 function PostActionBarFixture({
   deleteOutcome = 'success',
@@ -216,6 +248,54 @@ function PostActionBarFixture({
         </Suspense>
       </RelayActorBoundary>
     </RelayActorProvider>
+  );
+}
+
+function ReactionViewerOverlayFixture() {
+  const originControl = useRef<View>(null);
+  const [viewerOpen, setViewerOpen] = useState(true);
+  const [outsideClickCount, setOutsideClickCount] = useState(0);
+  const data = useLazyLoadQuery<PostActionBarReactionViewerStoryQuery>(
+    postActionBarReactionViewerStoryQuery,
+    { id: sourcePostId },
+    { fetchPolicy: 'store-or-network' },
+  );
+
+  if (data.node?.__typename !== 'Post' || !data.node.viewer) {
+    throw new Error('Reaction viewer story requires a Post.');
+  }
+
+  if (!viewerOpen) {
+    return <Text testID="reaction-viewer-closed">Viewer closed</Text>;
+  }
+
+  return (
+    <PostMediaViewer
+      onClose={() => setViewerOpen(false)}
+      originControl={originControl}
+      selectedIndex={0}
+    >
+      <ScrollView style={styles.reactionViewerScroll} testID="reaction-viewer-scroll">
+        <View style={styles.reactionViewerSpacer} />
+        <View style={styles.reactionViewerColumn} testID="reaction-viewer-column">
+          <PostMediaViewerContent
+            actionBar={<PostActionBarFixture />}
+            post={data.node.viewer}
+            wideDetail={<View />}
+          />
+          <Pressable
+            accessibilityLabel="뷰어 내부 바깥"
+            accessibilityRole="button"
+            onPress={() => setOutsideClickCount((count) => count + 1)}
+            style={styles.reactionViewerOutsideButton}
+          >
+            <Text>뷰어 내부 바깥</Text>
+          </Pressable>
+          <Text testID="reaction-viewer-outside-click-count">{outsideClickCount}</Text>
+        </View>
+        <View style={styles.reactionViewerSpacer} />
+      </ScrollView>
+    </PostMediaViewer>
   );
 }
 
@@ -709,6 +789,7 @@ const meta = {
     'ReactionFailureRetryActorSwitchAndUnmount',
     'ReactionFullDismissFocusAndPlacement',
     'ReactionMobileWebTabClearance',
+    'ReactionViewerOverlayContract',
     'ReactionRecentUseContract',
     'ReactionSummaryToggleContract',
   ],
@@ -1409,8 +1490,15 @@ export const ReactionFullDismissFocusAndPlacement: Story = {
     expect(position.getBoundingClientRect().width).toBeLessThanOrEqual(288);
     expect(position.getBoundingClientRect().height).toBeLessThanOrEqual(420);
     expect(within(dialog).getByRole('heading', { name: '빠른 반응' })).toBeVisible();
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    expect(dialog).not.toHaveAttribute('aria-modal', 'true');
+    expect(canvasElement.ownerDocument.querySelectorAll('[aria-modal="true"]')).toHaveLength(0);
+    await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
+    await waitFor(() =>
+      expect(dialog.contains(canvasElement.ownerDocument.activeElement)).toBe(false),
+    );
 
-    await userEvent.click(screen.getByTestId('full-reaction-overlay-trigger-dismiss'));
+    await userEvent.click(topLeftTrigger!);
     expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull();
     await waitFor(() => expect(canvasElement.ownerDocument.activeElement).toBe(topLeftTrigger));
     await userEvent.click(topLeftTrigger!);
@@ -1441,6 +1529,134 @@ export const ReactionFullDismissFocusAndPlacement: Story = {
       </View>
     </View>
   ),
+};
+
+export const ReactionViewerOverlayContract: Story = {
+  globals: { viewport: { isRotated: false, value: 'reactionNarrow' } },
+  parameters: {
+    layout: 'fullscreen',
+    relay: { data: { node: reactionViewerStoryPost } },
+    viewport: {
+      options: {
+        reactionNarrow: {
+          name: 'Reaction narrow',
+          styles: { height: '640px', width: '320px' },
+          type: 'mobile',
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const document = canvasElement.ownerDocument;
+    const viewer = await screen.findByRole('dialog', { name: '이미지 뷰어' });
+    const trigger = await within(viewer).findByRole('button', { name: '반응' });
+    const previousImage = within(viewer).getByRole('button', { name: '이전 이미지' });
+    expect(previousImage).toBeDisabled();
+
+    await userEvent.click(trigger);
+    let picker = await screen.findByRole('dialog', { name: '반응 선택' });
+    expect(viewer).toContainElement(picker);
+    expect(picker).not.toHaveAttribute('aria-modal', 'true');
+    expect(document.querySelectorAll('[aria-modal="true"]')).toHaveLength(1);
+    expect(within(viewer).getAllByRole('dialog')).toHaveLength(1);
+
+    const search = within(picker).getByRole('searchbox', { name: '반응 검색' });
+    const outsideButton = within(viewer).getByRole('button', { name: '뷰어 내부 바깥' });
+    expect(document.activeElement).toBe(search);
+    await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
+    await waitFor(() => expect(document.activeElement).toBe(outsideButton));
+
+    await userEvent.click(trigger);
+    expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(trigger));
+
+    await userEvent.click(trigger);
+    picker = await screen.findByRole('dialog', { name: '반응 선택' });
+    const position = screen.getByTestId('full-reaction-overlay-position');
+    const overlayRoot = position.parentElement!;
+    const scroll = screen.getByTestId('reaction-viewer-scroll') as HTMLDivElement;
+    const column = screen.getByTestId('reaction-viewer-column') as HTMLDivElement;
+    const positionIsAnchored = () => {
+      const positionBounds = position.getBoundingClientRect();
+      const triggerBounds = trigger.getBoundingClientRect();
+      const belowGap = Math.abs(positionBounds.top - triggerBounds.bottom - spacing.xs);
+      const aboveGap = Math.abs(positionBounds.bottom - triggerBounds.top + spacing.xs);
+      expect(Math.min(belowGap, aboveGap)).toBeLessThanOrEqual(1);
+    };
+
+    expect(viewer).toContainElement(position);
+    expect(document.defaultView!.getComputedStyle(overlayRoot).position).toBe('fixed');
+    positionIsAnchored();
+
+    scroll.scrollTop = 48;
+    fireEvent.scroll(scroll);
+    await waitFor(positionIsAnchored);
+    const positionAfterScroll = position.getBoundingClientRect();
+    expect(positionAfterScroll.top).toBeGreaterThanOrEqual(0);
+    expect(positionAfterScroll.bottom).toBeLessThanOrEqual(document.documentElement.clientHeight);
+    expect(
+      picker.contains(
+        document.elementFromPoint(
+          positionAfterScroll.left + positionAfterScroll.width / 2,
+          positionAfterScroll.top + positionAfterScroll.height / 2,
+        ),
+      ),
+    ).toBe(true);
+
+    const heartOption = within(screen.getByTestId('full-reaction-section-quick-row-0')).getByRole(
+      'button',
+      { name: '빨간색 하트 ❤️' },
+    );
+    heartOption.focus();
+    expect(document.activeElement).toBe(heartOption);
+    await userEvent.keyboard('{ArrowRight}');
+    expect(previousImage).toBeDisabled();
+
+    column.style.width = '240px';
+    const view = document.defaultView!;
+    fireEvent(view, new view.Event('resize'));
+    await waitFor(positionIsAnchored);
+    expect(position.getBoundingClientRect().left).toBeGreaterThanOrEqual(0);
+    expect(position.getBoundingClientRect().right).toBeLessThanOrEqual(
+      document.documentElement.clientWidth,
+    );
+
+    const outsideBounds = outsideButton.getBoundingClientRect();
+    const hitOutsideButton = document.elementFromPoint(
+      outsideBounds.left + outsideBounds.width / 2,
+      outsideBounds.top + outsideBounds.height / 2,
+    );
+    expect(outsideButton.contains(hitOutsideButton)).toBe(true);
+    await userEvent.click(outsideButton);
+    expect(screen.getByTestId('reaction-viewer-outside-click-count')).toHaveTextContent('1');
+    expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull();
+    expect(screen.getByRole('dialog', { name: '이미지 뷰어' })).toBe(viewer);
+    await waitFor(() => expect(document.activeElement).toBe(trigger));
+
+    await userEvent.click(trigger);
+    await screen.findByRole('dialog', { name: '반응 선택' });
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(document.activeElement).toBe(trigger));
+    await userEvent.click(within(viewer).getByRole('button', { name: '다음 이미지' }));
+    expect(previousImage).toBeEnabled();
+    await userEvent.click(trigger);
+    picker = await screen.findByRole('dialog', { name: '반응 선택' });
+    const lastOption = within(screen.getByTestId('full-reaction-section-quick-row-0')).getByRole(
+      'button',
+      { name: '빨간색 하트 ❤️' },
+    );
+    lastOption.focus();
+    await userEvent.keyboard('{ArrowLeft}');
+    expect(previousImage).toBeEnabled();
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull();
+    expect(screen.getByRole('dialog', { name: '이미지 뷰어' })).toBe(viewer);
+    expect(screen.queryByTestId('reaction-viewer-closed')).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(trigger));
+    await userEvent.keyboard('{Escape}');
+    expect(screen.getByTestId('reaction-viewer-closed')).toBeVisible();
+  },
+  render: () => <ReactionViewerOverlayFixture />,
 };
 
 export const ReactionMobileWebTabClearance: Story = {
@@ -1647,7 +1863,8 @@ export const ReactionDirectFullContract: Story = {
     await waitFor(() => expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull());
     canvas.getByRole('button', { name: `요청 ${previousActorRequest.id} success` }).click();
 
-    await userEvent.click(await canvas.findByRole('button', { name: '반응' }));
+    const nextTrigger = await canvas.findByRole('button', { name: '반응' });
+    await userEvent.click(nextTrigger);
     const nextFull = await screen.findByRole('dialog', { name: '반응 선택' });
     const nextSearch = within(nextFull).getByRole('searchbox', { name: '반응 검색' });
     await userEvent.type(nextSearch, 'heart hands');
@@ -1655,7 +1872,7 @@ export const ReactionDirectFullContract: Story = {
       within(nextFull).findByRole('button', { name: '손 하트 🫶' }),
     ).resolves.toHaveAttribute('aria-pressed', 'false');
 
-    await userEvent.click(screen.getByTestId('full-reaction-overlay-trigger-dismiss'));
+    await userEvent.click(nextTrigger);
     expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull();
   },
   render: () => <ReactionContractHarness />,
@@ -2001,6 +2218,10 @@ const styles = {
     position: 'relative',
     width: '100%',
   } satisfies ViewStyle,
+  reactionViewerScroll: { flex: 1, minHeight: 0 } satisfies ViewStyle,
+  reactionViewerSpacer: { height: 200 } satisfies ViewStyle,
+  reactionViewerColumn: { alignSelf: 'center', width: 288 } satisfies ViewStyle,
+  reactionViewerOutsideButton: { marginTop: spacing.lg, minHeight: 44 } satisfies ViewStyle,
   mobileMidAction: { position: 'absolute', right: 0, top: 380, width: 88 } satisfies ViewStyle,
   mobileMidFixture: { height: 844, position: 'relative', width: '100%' } satisfies ViewStyle,
   topLeftAction: {

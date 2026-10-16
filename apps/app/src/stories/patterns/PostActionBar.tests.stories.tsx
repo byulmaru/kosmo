@@ -17,6 +17,7 @@ import baseMeta, {
   ReactionMobileWebTabClearance as reactionMobileWebTabClearance,
   ReactionRecentUseContract as reactionRecentUseContract,
   ReactionSummaryToggleContract as reactionSummaryToggleContract,
+  ReactionViewerOverlayContract as reactionViewerOverlayContract,
 } from './PostActionBar.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
@@ -41,6 +42,7 @@ export const ControlledReply: Story = controlledReply;
 export const ReactionFullDismissFocusAndPlacement: Story = reactionFullDismissFocusAndPlacement;
 export const ReactionMobileWebTabClearance: Story = reactionMobileWebTabClearance;
 export const ReactionRecentUseContract: Story = reactionRecentUseContract;
+export const ReactionViewerOverlayContract: Story = reactionViewerOverlayContract;
 export const NoSelectedProfileDisablesReaction: Story = noSelectedProfileDisablesReaction;
 export const ReactionSummaryToggleContract: Story = reactionSummaryToggleContract;
 export const ReactionConcurrentMutationContract: Story = reactionConcurrentMutationContract;
