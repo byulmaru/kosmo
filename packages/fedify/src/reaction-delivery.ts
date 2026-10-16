@@ -215,6 +215,7 @@ export const sendReaction = async (reactionId: string): Promise<void> => {
 
 export const sendReactionUndo = async (snapshot: ReactionDeliverySnapshot): Promise<void> => {
   const reaction: OutboundReaction = {
+    actorAccountId: null,
     createdAt: Temporal.Instant.from(snapshot.createdAt),
     id: snapshot.id,
     postId: snapshot.postId,

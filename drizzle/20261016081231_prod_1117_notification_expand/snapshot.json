@@ -1,124 +1,77 @@
 {
   "dialect": "postgres",
   "id": "15ed4eee-5eaf-41bd-9ff0-a8c5cb156351",
-  "prevIds": [
-    "1adf799f-dab8-4b4f-97d7-6fe1fe5cd41b"
-  ],
+  "prevIds": ["1adf799f-dab8-4b4f-97d7-6fe1fe5cd41b"],
   "version": "8",
   "ddl": [
     {
-      "values": [
-        "OWNER",
-        "MEMBER"
-      ],
+      "values": ["OWNER", "MEMBER"],
       "name": "account_profile_role",
       "entityType": "enums",
       "schema": "public"
     },
     {
-      "values": [
-        "ACTIVE",
-        "DISABLED",
-        "SUSPENDED"
-      ],
+      "values": ["ACTIVE", "DISABLED", "SUSPENDED"],
       "name": "account_state",
       "entityType": "enums",
       "schema": "public"
     },
     {
-      "values": [
-        "RSA_PKCS1_V1_5",
-        "ED25519"
-      ],
+      "values": ["RSA_PKCS1_V1_5", "ED25519"],
       "name": "activitypub_actor_key_kind",
       "entityType": "enums",
       "schema": "public"
     },
     {
-      "values": [
-        "APPLICATION",
-        "GROUP",
-        "ORGANIZATION",
-        "PERSON",
-        "SERVICE"
-      ],
+      "values": ["APPLICATION", "GROUP", "ORGANIZATION", "PERSON", "SERVICE"],
       "name": "activitypub_actor_type",
       "entityType": "enums",
       "schema": "public"
     },
     {
-      "values": [
-        "ACTIVE",
-        "DISABLED"
-      ],
+      "values": ["ACTIVE", "DISABLED"],
       "name": "application_state",
       "entityType": "enums",
       "schema": "public"
     },
     {
-      "values": [
-        "CONFIDENTIAL",
-        "PUBLIC"
-      ],
+      "values": ["CONFIDENTIAL", "PUBLIC"],
       "name": "application_type",
       "entityType": "enums",
       "schema": "public"
     },
     {
-      "values": [
-        "EXCLUDE",
-        "COLLAPSE"
-      ],
+      "values": ["EXCLUDE", "COLLAPSE"],
       "name": "hashtag_mute_decision",
       "entityType": "enums",
       "schema": "public"
     },
     {
-      "values": [
-        "HOME",
-        "LOCAL",
-        "PROFILE",
-        "HASHTAG",
-        "SEARCH",
-        "NOTIFICATION"
-      ],
+      "values": ["HOME", "LOCAL", "PROFILE", "HASHTAG", "SEARCH", "NOTIFICATION"],
       "name": "hashtag_mute_scope",
       "entityType": "enums",
       "schema": "public"
     },
     {
-      "values": [
-        "LOCAL",
-        "ACTIVITYPUB"
-      ],
+      "values": ["LOCAL", "ACTIVITYPUB"],
       "name": "instance_kind",
       "entityType": "enums",
       "schema": "public"
     },
     {
-      "values": [
-        "ACTIVE",
-        "UNRESPONSIVE",
-        "SUSPENDED"
-      ],
+      "values": ["ACTIVE", "UNRESPONSIVE", "SUSPENDED"],
       "name": "instance_state",
       "entityType": "enums",
       "schema": "public"
     },
     {
-      "values": [
-        "LOCAL",
-        "REMOTE"
-      ],
+      "values": ["LOCAL", "REMOTE"],
       "name": "media_source",
       "entityType": "enums",
       "schema": "public"
     },
     {
-      "values": [
-        "UPLOADING",
-        "READY"
-      ],
+      "values": ["UPLOADING", "READY"],
       "name": "media_state",
       "entityType": "enums",
       "schema": "public"
@@ -139,89 +92,55 @@
       "schema": "public"
     },
     {
-      "values": [
-        "ACTIVE",
-        "REVOKED",
-        "EXPIRED"
-      ],
+      "values": ["ACTIVE", "REVOKED", "EXPIRED"],
       "name": "oauth_token_state",
       "entityType": "enums",
       "schema": "public"
     },
     {
-      "values": [
-        "PENDING",
-        "APPROVED",
-        "REJECTED",
-        "REVOKED"
-      ],
+      "values": ["PENDING", "APPROVED", "REJECTED", "REVOKED"],
       "name": "post_quote_consent_status",
       "entityType": "enums",
       "schema": "public"
     },
     {
-      "values": [
-        "ACTIVE",
-        "DELETED"
-      ],
+      "values": ["ACTIVE", "DELETED"],
       "name": "post_state",
       "entityType": "enums",
       "schema": "public"
     },
     {
-      "values": [
-        "PUBLIC",
-        "UNLISTED",
-        "FOLLOWERS",
-        "DIRECT"
-      ],
+      "values": ["PUBLIC", "UNLISTED", "FOLLOWERS", "DIRECT"],
       "name": "post_visibility",
       "entityType": "enums",
       "schema": "public"
     },
     {
-      "values": [
-        "OPEN",
-        "APPROVAL_REQUIRED"
-      ],
+      "values": ["OPEN", "APPROVAL_REQUIRED"],
       "name": "profile_follow_policy",
       "entityType": "enums",
       "schema": "public"
     },
     {
-      "values": [
-        "AVATAR",
-        "HEADER"
-      ],
+      "values": ["AVATAR", "HEADER"],
       "name": "profile_media_kind",
       "entityType": "enums",
       "schema": "public"
     },
     {
-      "values": [
-        "ACTIVE",
-        "DISABLED",
-        "SUSPENDED"
-      ],
+      "values": ["ACTIVE", "DISABLED", "SUSPENDED"],
       "name": "profile_state",
       "entityType": "enums",
       "schema": "public"
     },
     {
-      "values": [
-        "ANDROID",
-        "IOS"
-      ],
+      "values": ["ANDROID", "IOS"],
       "name": "push_installation_platform",
       "entityType": "enums",
       "schema": "public"
     },
     {
-      "values": [
-        "ACTIVE",
-        "REVOKED",
-        "EXPIRED"
-      ],
+      "values": ["ACTIVE", "REVOKED", "EXPIRED"],
       "name": "session_state",
       "entityType": "enums",
       "schema": "public"
@@ -4407,14 +4326,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "account_id"
-      ],
+      "columns": ["account_id"],
       "schemaTo": "public",
       "tableTo": "account",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "account_profile_account_id_account_id_fkey",
@@ -4424,14 +4339,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "profile_id"
-      ],
+      "columns": ["profile_id"],
       "schemaTo": "public",
       "tableTo": "profile",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "account_profile_profile_id_profile_id_fkey",
@@ -4441,14 +4352,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "activitypub_actor_id"
-      ],
+      "columns": ["activitypub_actor_id"],
       "schemaTo": "public",
       "tableTo": "activitypub_actor",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "activitypub_actor_key_3AGM4mAJxly8_fkey",
@@ -4458,14 +4365,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "profile_id"
-      ],
+      "columns": ["profile_id"],
       "schemaTo": "public",
       "tableTo": "profile",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "activitypub_actor_profile_id_profile_id_fkey",
@@ -4475,14 +4378,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "post_id"
-      ],
+      "columns": ["post_id"],
       "schemaTo": "public",
       "tableTo": "post",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "activitypub_post_post_id_post_id_fkey",
@@ -4492,14 +4391,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "reaction_id"
-      ],
+      "columns": ["reaction_id"],
       "schemaTo": "public",
       "tableTo": "reaction",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "activitypub_reaction_reaction_id_reaction_id_fkey",
@@ -4509,14 +4404,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "application_id"
-      ],
+      "columns": ["application_id"],
       "schemaTo": "public",
       "tableTo": "application",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "application_authorization_application_id_application_id_fkey",
@@ -4526,14 +4417,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "account_id"
-      ],
+      "columns": ["account_id"],
       "schemaTo": "public",
       "tableTo": "account",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "application_authorization_account_id_account_id_fkey",
@@ -4543,14 +4430,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "profile_id"
-      ],
+      "columns": ["profile_id"],
       "schemaTo": "public",
       "tableTo": "profile",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "SET NULL",
       "name": "application_authorization_profile_id_profile_id_fkey",
@@ -4560,14 +4443,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "owner_account_id"
-      ],
+      "columns": ["owner_account_id"],
       "schemaTo": "public",
       "tableTo": "account",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "SET NULL",
       "name": "application_owner_account_id_account_id_fkey",
@@ -4577,14 +4456,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "profile_id"
-      ],
+      "columns": ["profile_id"],
       "schemaTo": "public",
       "tableTo": "profile",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "bookmark_profile_id_profile_id_fkey",
@@ -4594,14 +4469,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "post_id"
-      ],
+      "columns": ["post_id"],
       "schemaTo": "public",
       "tableTo": "post",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "bookmark_post_id_post_id_fkey",
@@ -4611,14 +4482,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "owner_profile_id"
-      ],
+      "columns": ["owner_profile_id"],
       "schemaTo": "public",
       "tableTo": "profile",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "hashtag_mute_rule_owner_profile_id_profile_id_fkey",
@@ -4628,14 +4495,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "target_hashtag_id"
-      ],
+      "columns": ["target_hashtag_id"],
       "schemaTo": "public",
       "tableTo": "hashtag",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "hashtag_mute_rule_target_hashtag_id_hashtag_id_fkey",
@@ -4645,14 +4508,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "account_id"
-      ],
+      "columns": ["account_id"],
       "schemaTo": "public",
       "tableTo": "account",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "NO ACTION",
       "name": "media_account_id_account_id_fkey",
@@ -4662,14 +4521,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "profile_id"
-      ],
+      "columns": ["profile_id"],
       "schemaTo": "public",
       "tableTo": "profile",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "NO ACTION",
       "name": "media_profile_id_profile_id_fkey",
@@ -4679,14 +4534,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "quote_post_id"
-      ],
+      "columns": ["quote_post_id"],
       "schemaTo": "public",
       "tableTo": "post",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "notification_quote_judgment_quote_post_id_post_id_fkey",
@@ -4696,14 +4547,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "recipient_profile_id"
-      ],
+      "columns": ["recipient_profile_id"],
       "schemaTo": "public",
       "tableTo": "profile",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "notification_quote_judgment_Pmd8PxLJM9hf_fkey",
@@ -4713,14 +4560,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "recipient_profile_id"
-      ],
+      "columns": ["recipient_profile_id"],
       "schemaTo": "public",
       "tableTo": "profile",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "notification_recipient_profile_id_profile_id_fkey",
@@ -4730,14 +4573,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "recipient_account_id"
-      ],
+      "columns": ["recipient_account_id"],
       "schemaTo": "public",
       "tableTo": "account",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "notification_recipient_account_id_account_id_fkey",
@@ -4747,14 +4586,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "application_id"
-      ],
+      "columns": ["application_id"],
       "schemaTo": "public",
       "tableTo": "application",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "oauth_authorization_code_application_id_application_id_fkey",
@@ -4764,14 +4599,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "account_id"
-      ],
+      "columns": ["account_id"],
       "schemaTo": "public",
       "tableTo": "account",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "oauth_authorization_code_account_id_account_id_fkey",
@@ -4781,14 +4612,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "profile_id"
-      ],
+      "columns": ["profile_id"],
       "schemaTo": "public",
       "tableTo": "profile",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "SET NULL",
       "name": "oauth_authorization_code_profile_id_profile_id_fkey",
@@ -4798,14 +4625,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "application_id"
-      ],
+      "columns": ["application_id"],
       "schemaTo": "public",
       "tableTo": "application",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "oauth_token_application_id_application_id_fkey",
@@ -4815,14 +4638,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "account_id"
-      ],
+      "columns": ["account_id"],
       "schemaTo": "public",
       "tableTo": "account",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "oauth_token_account_id_account_id_fkey",
@@ -4832,14 +4651,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "profile_id"
-      ],
+      "columns": ["profile_id"],
       "schemaTo": "public",
       "tableTo": "profile",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "SET NULL",
       "name": "oauth_token_profile_id_profile_id_fkey",
@@ -4849,14 +4664,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "post_id"
-      ],
+      "columns": ["post_id"],
       "schemaTo": "public",
       "tableTo": "post",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "NO ACTION",
       "name": "post_content_post_id_post_id_fkey",
@@ -4866,14 +4677,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "post_content_id"
-      ],
+      "columns": ["post_content_id"],
       "schemaTo": "public",
       "tableTo": "post_content",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "post_mentions_post_content_id_post_content_id_fkey",
@@ -4883,14 +4690,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "profile_id"
-      ],
+      "columns": ["profile_id"],
       "schemaTo": "public",
       "tableTo": "profile",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "post_mentions_profile_id_profile_id_fkey",
@@ -4900,14 +4703,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "actor_account_id"
-      ],
+      "columns": ["actor_account_id"],
       "schemaTo": "public",
       "tableTo": "account",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "SET NULL",
       "name": "post_actor_account_id_account_id_fkey",
@@ -4917,14 +4716,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "profile_id"
-      ],
+      "columns": ["profile_id"],
       "schemaTo": "public",
       "tableTo": "profile",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "NO ACTION",
       "name": "post_profile_id_profile_id_fkey",
@@ -4934,14 +4729,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "current_content_id"
-      ],
+      "columns": ["current_content_id"],
       "schemaTo": "public",
       "tableTo": "post_content",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "NO ACTION",
       "name": "post_current_content_id_post_content_id_fkey",
@@ -4951,14 +4742,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "reply_parent_id"
-      ],
+      "columns": ["reply_parent_id"],
       "schemaTo": "public",
       "tableTo": "post",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "SET NULL",
       "name": "post_reply_parent_id_post_id_fkey",
@@ -4968,14 +4755,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "repost_source_id"
-      ],
+      "columns": ["repost_source_id"],
       "schemaTo": "public",
       "tableTo": "post",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "NO ACTION",
       "name": "post_repost_source_id_post_id_fkey",
@@ -4985,14 +4768,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "owner_profile_id"
-      ],
+      "columns": ["owner_profile_id"],
       "schemaTo": "public",
       "tableTo": "profile",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "profile_block_owner_profile_id_profile_id_fkey",
@@ -5002,14 +4781,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "target_profile_id"
-      ],
+      "columns": ["target_profile_id"],
       "schemaTo": "public",
       "tableTo": "profile",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "profile_block_target_profile_id_profile_id_fkey",
@@ -5019,14 +4794,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "actor_account_id"
-      ],
+      "columns": ["actor_account_id"],
       "schemaTo": "public",
       "tableTo": "account",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "SET NULL",
       "name": "profile_follow_request_actor_account_id_account_id_fkey",
@@ -5036,14 +4807,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "follower_profile_id"
-      ],
+      "columns": ["follower_profile_id"],
       "schemaTo": "public",
       "tableTo": "profile",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "profile_follow_request_follower_profile_id_profile_id_fkey",
@@ -5053,14 +4820,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "followee_profile_id"
-      ],
+      "columns": ["followee_profile_id"],
       "schemaTo": "public",
       "tableTo": "profile",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "profile_follow_request_followee_profile_id_profile_id_fkey",
@@ -5070,14 +4833,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "actor_account_id"
-      ],
+      "columns": ["actor_account_id"],
       "schemaTo": "public",
       "tableTo": "account",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "SET NULL",
       "name": "profile_follow_actor_account_id_account_id_fkey",
@@ -5087,14 +4846,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "follower_profile_id"
-      ],
+      "columns": ["follower_profile_id"],
       "schemaTo": "public",
       "tableTo": "profile",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "profile_follow_follower_profile_id_profile_id_fkey",
@@ -5104,14 +4859,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "followee_profile_id"
-      ],
+      "columns": ["followee_profile_id"],
       "schemaTo": "public",
       "tableTo": "profile",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "profile_follow_followee_profile_id_profile_id_fkey",
@@ -5121,14 +4872,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "profile_id"
-      ],
+      "columns": ["profile_id"],
       "schemaTo": "public",
       "tableTo": "profile",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "profile_hashtag_profile_id_profile_id_fkey",
@@ -5138,14 +4885,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "hashtag_id"
-      ],
+      "columns": ["hashtag_id"],
       "schemaTo": "public",
       "tableTo": "hashtag",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "profile_hashtag_hashtag_id_hashtag_id_fkey",
@@ -5155,14 +4898,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "profile_id"
-      ],
+      "columns": ["profile_id"],
       "schemaTo": "public",
       "tableTo": "profile",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "profile_media_profile_id_profile_id_fkey",
@@ -5172,14 +4911,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "media_id"
-      ],
+      "columns": ["media_id"],
       "schemaTo": "public",
       "tableTo": "media",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "profile_media_media_id_media_id_fkey",
@@ -5189,14 +4924,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "target_profile_id"
-      ],
+      "columns": ["target_profile_id"],
       "schemaTo": "public",
       "tableTo": "profile",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "profile_migration_target_profile_id_profile_id_fkey",
@@ -5206,14 +4937,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "source_profile_id"
-      ],
+      "columns": ["source_profile_id"],
       "schemaTo": "public",
       "tableTo": "profile",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "profile_migration_source_profile_id_profile_id_fkey",
@@ -5223,14 +4950,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "owner_profile_id"
-      ],
+      "columns": ["owner_profile_id"],
       "schemaTo": "public",
       "tableTo": "profile",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "profile_mute_owner_profile_id_profile_id_fkey",
@@ -5240,14 +4963,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "target_profile_id"
-      ],
+      "columns": ["target_profile_id"],
       "schemaTo": "public",
       "tableTo": "profile",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "profile_mute_target_profile_id_profile_id_fkey",
@@ -5257,14 +4976,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "profile_id"
-      ],
+      "columns": ["profile_id"],
       "schemaTo": "public",
       "tableTo": "profile",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "profile_pinned_post_profile_id_profile_id_fkey",
@@ -5274,14 +4989,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "post_id"
-      ],
+      "columns": ["post_id"],
       "schemaTo": "public",
       "tableTo": "post",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "profile_pinned_post_post_id_post_id_fkey",
@@ -5291,14 +5002,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "instance_id"
-      ],
+      "columns": ["instance_id"],
       "schemaTo": "public",
       "tableTo": "instance",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "NO ACTION",
       "name": "profile_instance_id_instance_id_fkey",
@@ -5308,14 +5015,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "account_id"
-      ],
+      "columns": ["account_id"],
       "schemaTo": "public",
       "tableTo": "account",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "push_installation_account_id_account_id_fkey",
@@ -5325,14 +5028,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "session_id"
-      ],
+      "columns": ["session_id"],
       "schemaTo": "public",
       "tableTo": "session",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "push_installation_session_id_session_id_fkey",
@@ -5342,14 +5041,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "actor_account_id"
-      ],
+      "columns": ["actor_account_id"],
       "schemaTo": "public",
       "tableTo": "account",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "SET NULL",
       "name": "reaction_actor_account_id_account_id_fkey",
@@ -5359,14 +5054,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "profile_id"
-      ],
+      "columns": ["profile_id"],
       "schemaTo": "public",
       "tableTo": "profile",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "reaction_profile_id_profile_id_fkey",
@@ -5376,14 +5067,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "post_id"
-      ],
+      "columns": ["post_id"],
       "schemaTo": "public",
       "tableTo": "post",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "reaction_post_id_post_id_fkey",
@@ -5393,14 +5080,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "account_id"
-      ],
+      "columns": ["account_id"],
       "schemaTo": "public",
       "tableTo": "account",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "NO ACTION",
       "name": "session_account_id_account_id_fkey",
@@ -5410,14 +5093,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "application_id"
-      ],
+      "columns": ["application_id"],
       "schemaTo": "public",
       "tableTo": "application",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "NO ACTION",
       "name": "session_application_id_application_id_fkey",
@@ -5427,14 +5106,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "active_profile_id"
-      ],
+      "columns": ["active_profile_id"],
       "schemaTo": "public",
       "tableTo": "profile",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "NO ACTION",
       "name": "session_active_profile_id_profile_id_fkey",
@@ -5443,10 +5118,7 @@
       "table": "session"
     },
     {
-      "columns": [
-        "quote_post_id",
-        "recipient_profile_id"
-      ],
+      "columns": ["quote_post_id", "recipient_profile_id"],
       "nameExplicit": false,
       "name": "notification_quote_judgment_pkey",
       "entityType": "pks",
@@ -5454,10 +5126,7 @@
       "table": "notification_quote_judgment"
     },
     {
-      "columns": [
-        "post_content_id",
-        "profile_id"
-      ],
+      "columns": ["post_content_id", "profile_id"],
       "nameExplicit": false,
       "name": "post_mentions_pkey",
       "entityType": "pks",
@@ -5465,9 +5134,7 @@
       "table": "post_mentions"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "account_profile_pkey",
       "schema": "public",
@@ -5475,9 +5142,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "account_pkey",
       "schema": "public",
@@ -5485,9 +5150,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "activitypub_actor_key_pkey",
       "schema": "public",
@@ -5495,9 +5158,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "activitypub_actor_pkey",
       "schema": "public",
@@ -5505,9 +5166,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "activitypub_post_pkey",
       "schema": "public",
@@ -5515,9 +5174,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "reaction_id"
-      ],
+      "columns": ["reaction_id"],
       "nameExplicit": false,
       "name": "activitypub_reaction_pkey",
       "schema": "public",
@@ -5525,9 +5182,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "application_authorization_pkey",
       "schema": "public",
@@ -5535,9 +5190,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "application_pkey",
       "schema": "public",
@@ -5545,9 +5198,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "bookmark_pkey",
       "schema": "public",
@@ -5555,9 +5206,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "hashtag_mute_rule_pkey",
       "schema": "public",
@@ -5565,9 +5214,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "hashtag_pkey",
       "schema": "public",
@@ -5575,9 +5222,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "instance_pkey",
       "schema": "public",
@@ -5585,9 +5230,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "media_pkey",
       "schema": "public",
@@ -5595,9 +5238,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "key"
-      ],
+      "columns": ["key"],
       "nameExplicit": false,
       "name": "notification_rollout_pkey",
       "schema": "public",
@@ -5605,9 +5246,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "notification_pkey",
       "schema": "public",
@@ -5615,9 +5254,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "oauth_authorization_code_pkey",
       "schema": "public",
@@ -5625,9 +5262,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "oauth_token_pkey",
       "schema": "public",
@@ -5635,9 +5270,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "post_content_pkey",
       "schema": "public",
@@ -5645,9 +5278,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "post_pkey",
       "schema": "public",
@@ -5655,9 +5286,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "profile_block_pkey",
       "schema": "public",
@@ -5665,9 +5294,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "profile_follow_request_pkey",
       "schema": "public",
@@ -5675,9 +5302,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "profile_follow_pkey",
       "schema": "public",
@@ -5685,9 +5310,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "profile_hashtag_pkey",
       "schema": "public",
@@ -5695,9 +5318,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "profile_media_pkey",
       "schema": "public",
@@ -5705,9 +5326,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "profile_migration_pkey",
       "schema": "public",
@@ -5715,9 +5334,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "profile_mute_pkey",
       "schema": "public",
@@ -5725,9 +5342,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "profile_pinned_post_pkey",
       "schema": "public",
@@ -5735,9 +5350,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "profile_pkey",
       "schema": "public",
@@ -5745,9 +5358,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "push_installation_pkey",
       "schema": "public",
@@ -5755,9 +5366,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "reaction_pkey",
       "schema": "public",
@@ -5765,9 +5374,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "session_pkey",
       "schema": "public",
@@ -5776,10 +5383,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "account_id",
-        "profile_id"
-      ],
+      "columns": ["account_id", "profile_id"],
       "nullsNotDistinct": false,
       "name": "account_profile_account_id_profile_id_unique",
       "entityType": "uniques",
@@ -5788,10 +5392,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "activitypub_actor_id",
-        "kind"
-      ],
+      "columns": ["activitypub_actor_id", "kind"],
       "nullsNotDistinct": false,
       "name": "activitypub_actor_key_activitypub_actor_id_kind_unique",
       "entityType": "uniques",
@@ -5800,9 +5401,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "profile_id"
-      ],
+      "columns": ["profile_id"],
       "nullsNotDistinct": false,
       "name": "activitypub_actor_profile_id_unique",
       "entityType": "uniques",
@@ -5811,11 +5410,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "application_id",
-        "account_id",
-        "profile_id"
-      ],
+      "columns": ["application_id", "account_id", "profile_id"],
       "nullsNotDistinct": false,
       "name": "application_authorization_application_id_account_id_profile_id_unique",
       "entityType": "uniques",
@@ -5824,9 +5419,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "client_id"
-      ],
+      "columns": ["client_id"],
       "nullsNotDistinct": false,
       "name": "application_client_id_unique",
       "entityType": "uniques",
@@ -5835,10 +5428,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "profile_id",
-        "post_id"
-      ],
+      "columns": ["profile_id", "post_id"],
       "nullsNotDistinct": false,
       "name": "bookmark_profile_id_post_id_unique",
       "entityType": "uniques",
@@ -5847,10 +5437,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "owner_profile_id",
-        "target_hashtag_id"
-      ],
+      "columns": ["owner_profile_id", "target_hashtag_id"],
       "nullsNotDistinct": false,
       "name": "hashtag_mute_rule_owner_profile_id_target_hashtag_id_unique",
       "entityType": "uniques",
@@ -5859,11 +5446,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "recipient_profile_id",
-        "kind",
-        "source_id"
-      ],
+      "columns": ["recipient_profile_id", "kind", "source_id"],
       "nullsNotDistinct": false,
       "name": "notification_recipient_profile_id_kind_source_id_unique",
       "entityType": "uniques",
@@ -5872,9 +5455,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "code_hash"
-      ],
+      "columns": ["code_hash"],
       "nullsNotDistinct": false,
       "name": "oauth_authorization_code_code_hash_unique",
       "entityType": "uniques",
@@ -5883,9 +5464,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "access_token_hash"
-      ],
+      "columns": ["access_token_hash"],
       "nullsNotDistinct": false,
       "name": "oauth_token_access_token_hash_unique",
       "entityType": "uniques",
@@ -5894,9 +5473,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "refresh_token_hash"
-      ],
+      "columns": ["refresh_token_hash"],
       "nullsNotDistinct": false,
       "name": "oauth_token_refresh_token_hash_unique",
       "entityType": "uniques",
@@ -5905,10 +5482,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "owner_profile_id",
-        "target_profile_id"
-      ],
+      "columns": ["owner_profile_id", "target_profile_id"],
       "nullsNotDistinct": false,
       "name": "profile_block_owner_profile_id_target_profile_id_unique",
       "entityType": "uniques",
@@ -5917,10 +5491,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "follower_profile_id",
-        "followee_profile_id"
-      ],
+      "columns": ["follower_profile_id", "followee_profile_id"],
       "nullsNotDistinct": false,
       "name": "profile_follow_request_follower_profile_id_followee_profile_id_unique",
       "entityType": "uniques",
@@ -5929,10 +5500,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "follower_profile_id",
-        "followee_profile_id"
-      ],
+      "columns": ["follower_profile_id", "followee_profile_id"],
       "nullsNotDistinct": false,
       "name": "profile_follow_follower_profile_id_followee_profile_id_unique",
       "entityType": "uniques",
@@ -5941,10 +5509,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "profile_id",
-        "hashtag_id"
-      ],
+      "columns": ["profile_id", "hashtag_id"],
       "nullsNotDistinct": false,
       "name": "profile_hashtag_profile_id_hashtag_id_unique",
       "entityType": "uniques",
@@ -5953,10 +5518,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "profile_id",
-        "kind"
-      ],
+      "columns": ["profile_id", "kind"],
       "nullsNotDistinct": false,
       "name": "profile_media_profile_id_kind_unique",
       "entityType": "uniques",
@@ -5965,9 +5527,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "target_profile_id"
-      ],
+      "columns": ["target_profile_id"],
       "nullsNotDistinct": false,
       "name": "profile_migration_target_profile_id_unique",
       "entityType": "uniques",
@@ -5976,9 +5536,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "source_profile_id"
-      ],
+      "columns": ["source_profile_id"],
       "nullsNotDistinct": false,
       "name": "profile_migration_source_profile_id_unique",
       "entityType": "uniques",
@@ -5987,10 +5545,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "owner_profile_id",
-        "target_profile_id"
-      ],
+      "columns": ["owner_profile_id", "target_profile_id"],
       "nullsNotDistinct": false,
       "name": "profile_mute_owner_profile_id_target_profile_id_unique",
       "entityType": "uniques",
@@ -5999,10 +5554,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "profile_id",
-        "post_id"
-      ],
+      "columns": ["profile_id", "post_id"],
       "nullsNotDistinct": false,
       "name": "profile_pinned_post_profile_id_post_id_unique",
       "entityType": "uniques",
@@ -6011,10 +5563,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "profile_id",
-        "position"
-      ],
+      "columns": ["profile_id", "position"],
       "nullsNotDistinct": false,
       "name": "profile_pinned_post_profile_id_position_unique",
       "entityType": "uniques",
@@ -6023,10 +5572,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "instance_id",
-        "normalized_handle"
-      ],
+      "columns": ["instance_id", "normalized_handle"],
       "nullsNotDistinct": false,
       "name": "profile_instance_id_normalized_handle_unique",
       "entityType": "uniques",
@@ -6035,11 +5581,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "post_id",
-        "type",
-        "profile_id"
-      ],
+      "columns": ["post_id", "type", "profile_id"],
       "nullsNotDistinct": false,
       "name": "reaction_post_id_type_profile_id_unique",
       "entityType": "uniques",
@@ -6048,9 +5590,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "oidc_subject"
-      ],
+      "columns": ["oidc_subject"],
       "nullsNotDistinct": false,
       "name": "account_oidc_subject_key",
       "schema": "public",
@@ -6059,9 +5599,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "uri"
-      ],
+      "columns": ["uri"],
       "nullsNotDistinct": false,
       "name": "activitypub_actor_uri_key",
       "schema": "public",
@@ -6070,9 +5608,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "uri"
-      ],
+      "columns": ["uri"],
       "nullsNotDistinct": false,
       "name": "activitypub_post_uri_key",
       "schema": "public",
@@ -6081,9 +5617,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "post_id"
-      ],
+      "columns": ["post_id"],
       "nullsNotDistinct": false,
       "name": "activitypub_post_post_id_key",
       "schema": "public",
@@ -6092,9 +5626,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "uri"
-      ],
+      "columns": ["uri"],
       "nullsNotDistinct": false,
       "name": "activitypub_reaction_uri_key",
       "schema": "public",
@@ -6103,9 +5635,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "name"
-      ],
+      "columns": ["name"],
       "nullsNotDistinct": false,
       "name": "hashtag_name_key",
       "schema": "public",
@@ -6114,9 +5644,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "domain"
-      ],
+      "columns": ["domain"],
       "nullsNotDistinct": false,
       "name": "instance_domain_key",
       "schema": "public",
@@ -6125,9 +5653,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "storage_reference"
-      ],
+      "columns": ["storage_reference"],
       "nullsNotDistinct": false,
       "name": "media_storage_reference_key",
       "schema": "public",
@@ -6136,9 +5662,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "token"
-      ],
+      "columns": ["token"],
       "nullsNotDistinct": false,
       "name": "session_token_key",
       "schema": "public",

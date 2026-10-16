@@ -106,10 +106,10 @@ test('알림 Expand 뒤 구버전 Profile 알림 쓰기가 유지된다', async 
         ON CONFLICT (recipient_profile_id, kind, source_id) DO NOTHING
         RETURNING id::text AS id
       `;
-    assert.deepEqual(await insertProfileNotification(firstNotificationId), [
+    assert.deepEqual(Array.from(await insertProfileNotification(firstNotificationId)), [
       { id: firstNotificationId },
     ]);
-    assert.deepEqual(await insertProfileNotification(duplicateNotificationId), []);
+    assert.deepEqual(Array.from(await insertProfileNotification(duplicateNotificationId)), []);
 
     const [{ profileNotificationCount }] = await control<{ profileNotificationCount: number }[]>`
       SELECT count(*)::int AS "profileNotificationCount"
