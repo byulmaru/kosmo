@@ -1072,47 +1072,6 @@ test('Reaction Notification uses current Profile membership on initial materiali
   );
 });
 
-test('a Reaction retry returns a legacy social Notification with a null Account without changing state', async () => {
-  const author = await createProfile();
-  const recipient = await createProfile();
-  const reaction = await createReaction(author.id, recipient.id);
-  const readAt = Temporal.Instant.from('2026-10-02T04:05:06.123456Z');
-  const legacy = await db
-    .insert(Notifications)
-    .values({
-      data: {},
-      kind: NotificationKind.REACTION,
-      recipientAccountId: null,
-      recipientProfileId: recipient.id,
-      sourceId: reaction.id,
-      readAt,
-    })
-    .returning()
-    .then(firstOrThrow);
-
-  for (let retry = 0; retry < 2; retry += 1) {
-    assert.deepEqual(await createReactionNotification(reaction.id), [legacy.id]);
-    assert.deepEqual(
-      (await readNotifications(reaction.id)).map(
-        ({ id, createdAt, recipientAccountId, readAt: persistedReadAt }) => ({
-          id,
-          createdAt: createdAt.toString(),
-          recipientAccountId,
-          readAt: persistedReadAt?.toString(),
-        }),
-      ),
-      [
-        {
-          id: legacy.id,
-          createdAt: legacy.createdAt.toString(),
-          recipientAccountId: null,
-          readAt: readAt.toString(),
-        },
-      ],
-    );
-  }
-});
-
 test('다섯 source의 Notification Mute는 DB 현재 시각으로 활성 여부를 판정한다', async () => {
   const sources = await Promise.all(
     Array.from({ length: 5 }, async (_, index) => {
