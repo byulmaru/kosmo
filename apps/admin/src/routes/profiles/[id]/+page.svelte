@@ -148,7 +148,7 @@
                 <a
                   href={safeHttpUrl(data.profile.headerUrl) ?? undefined}
                   target="_blank"
-                  rel="noopener noreferrer"
+                  rel="external noopener noreferrer"
                   class="rounded-sm text-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {data.profile.headerUrl}
@@ -169,7 +169,7 @@
                 <a
                   href={safeHttpUrl(data.profile.remoteUrl) ?? undefined}
                   target="_blank"
-                  rel="noopener noreferrer"
+                  rel="external noopener noreferrer"
                   class="rounded-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {data.profile.remoteUrl}

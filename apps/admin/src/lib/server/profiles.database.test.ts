@@ -2,16 +2,16 @@ import '@kosmo/core/polyfill';
 
 import {
   ActivityPubActors,
+  db,
   Hashtags,
   Instances,
   Media,
+  pg,
   PostContents,
   Posts,
   ProfileHashtags,
   ProfileMedia,
   Profiles,
-  db,
-  pg,
 } from '@kosmo/core/db';
 import {
   ActivityPubActorType,
@@ -423,6 +423,35 @@ describe('Admin Profile read projections', () => {
     const remoteOnly = await listProfiles({ origin: 'REMOTE', state: 'SUSPENDED', q: token });
     expect(remoteOnly.profiles.map(({ id }) => id)).toEqual([suspendedProfileId]);
 
+    const localProfiles = await loadProfiles({
+      url: new URL(`http://admin.test/profiles?q=state-group-${token}&origin=LOCAL`),
+    } as Parameters<typeof loadProfiles>[0]);
+    if (!localProfiles) {
+      throw new Error('Expected filtered Profile list loader data');
+    }
+    expect(localProfiles.profiles.map(({ id }: { id: string }) => id)).toEqual([
+      disabledProfileId,
+      targetProfileId,
+    ]);
+    expect(localProfiles.filters).toEqual({
+      q: `state-group-${token}`,
+      origin: 'LOCAL',
+      state: '',
+    });
+
+    const activeProfiles = await loadProfiles({
+      url: new URL(`http://admin.test/profiles?q=state-group-${token}&state=ACTIVE`),
+    } as Parameters<typeof loadProfiles>[0]);
+    if (!activeProfiles) {
+      throw new Error('Expected filtered Profile list loader data');
+    }
+    expect(activeProfiles.profiles.map(({ id }: { id: string }) => id)).toEqual([targetProfileId]);
+    expect(activeProfiles.filters).toEqual({
+      q: `state-group-${token}`,
+      origin: '',
+      state: 'ACTIVE',
+    });
+
     const loaded = await loadProfiles({
       url: new URL(`http://admin.test/profiles?q=${filters.q}&origin=LOCAL&state=ACTIVE`),
     } as Parameters<typeof loadProfiles>[0]);
@@ -431,6 +460,36 @@ describe('Admin Profile read projections', () => {
     }
     expect(loaded.profiles).toEqual(firstPage.profiles);
     expect(loaded.filters).toEqual(filters);
+
+    const loadedNextPage = await loadProfiles({
+      url: new URL(
+        `http://admin.test/profiles?q=${filters.q}&origin=LOCAL&state=ACTIVE&cursor=${paginationProfileIds[1]}`,
+      ),
+    } as Parameters<typeof loadProfiles>[0]);
+    if (!loadedNextPage) {
+      throw new Error('Expected next Profile list loader data');
+    }
+    expect(loadedNextPage.profiles.map(({ id }: { id: string }) => id)).toEqual([
+      paginationProfileIds[0],
+    ]);
+    expect(loadedNextPage.previousCursor).toBe(paginationProfileIds[0]);
+    expect(loadedNextPage.nextCursor).toBeNull();
+    expect(loadedNextPage.filters).toEqual(filters);
+
+    const loadedPreviousPage = await loadProfiles({
+      url: new URL(
+        `http://admin.test/profiles?q=${filters.q}&origin=LOCAL&state=ACTIVE&cursor=${paginationProfileIds[0]}&direction=previous`,
+      ),
+    } as Parameters<typeof loadProfiles>[0]);
+    if (!loadedPreviousPage) {
+      throw new Error('Expected previous Profile list loader data');
+    }
+    expect(loadedPreviousPage.profiles.map(({ id }: { id: string }) => id)).toEqual(
+      paginationProfileIds.slice().reverse().slice(0, 50),
+    );
+    expect(loadedPreviousPage.previousCursor).toBeNull();
+    expect(loadedPreviousPage.nextCursor).toBe(paginationProfileIds[1]);
+    expect(loadedPreviousPage.filters).toEqual(filters);
   });
 
   test('returns Profile detail fields and uses only stored remote actor URLs', async () => {
@@ -567,6 +626,34 @@ describe('Admin Profile read projections', () => {
     );
     expect(previousPage.previousCursor).toBeNull();
     expect(previousPage.nextCursor).toBe(paginationPostIds[1]);
+
+    const loadedNextPage = await loadProfilePosts({
+      params: { id: profileId },
+      url: new URL(`http://admin.test/profiles/${profileId}/posts?cursor=${paginationPostIds[1]}`),
+    } as Parameters<typeof loadProfilePosts>[0]);
+    if (!loadedNextPage) {
+      throw new Error('Expected next Profile Posts loader data');
+    }
+    expect(loadedNextPage.posts.map(({ id }: { id: string }) => id)).toEqual([
+      paginationPostIds[0],
+    ]);
+    expect(loadedNextPage.previousCursor).toBe(paginationPostIds[0]);
+    expect(loadedNextPage.nextCursor).toBeNull();
+
+    const loadedPreviousPage = await loadProfilePosts({
+      params: { id: profileId },
+      url: new URL(
+        `http://admin.test/profiles/${profileId}/posts?cursor=${paginationPostIds[0]}&direction=previous`,
+      ),
+    } as Parameters<typeof loadProfilePosts>[0]);
+    if (!loadedPreviousPage) {
+      throw new Error('Expected previous Profile Posts loader data');
+    }
+    expect(loadedPreviousPage.posts.map(({ id }: { id: string }) => id)).toEqual(
+      paginationPostIds.slice(0, 51).reverse().slice(0, 50),
+    );
+    expect(loadedPreviousPage.previousCursor).toBeNull();
+    expect(loadedPreviousPage.nextCursor).toBe(paginationPostIds[1]);
 
     const profile = await getProfile(profileId);
     expect(profile?.postCount).toBe(51);

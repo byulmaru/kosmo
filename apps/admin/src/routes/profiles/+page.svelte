@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { SvelteURLSearchParams } from 'svelte/reactivity';
   import { resolve } from '$app/paths';
   import { Badge } from '$lib/components/ui/badge';
   import { Button } from '$lib/components/ui/button';
@@ -10,12 +11,20 @@
   let { data }: { data: PageData } = $props();
 
   function cursorHref(cursor: string, direction: 'previous' | undefined) {
-    const params = new URLSearchParams();
-    if (data.filters.q) params.set('q', data.filters.q);
-    if (data.filters.origin) params.set('origin', data.filters.origin);
-    if (data.filters.state) params.set('state', data.filters.state);
+    const params = new SvelteURLSearchParams();
+    if (data.filters.q) {
+      params.set('q', data.filters.q);
+    }
+    if (data.filters.origin) {
+      params.set('origin', data.filters.origin);
+    }
+    if (data.filters.state) {
+      params.set('state', data.filters.state);
+    }
     params.set('cursor', cursor);
-    if (direction) params.set('direction', direction);
+    if (direction) {
+      params.set('direction', direction);
+    }
 
     return resolve(`/profiles?${params.toString()}`);
   }

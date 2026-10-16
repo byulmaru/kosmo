@@ -1,5 +1,7 @@
 import {
   ActivityPubActors,
+  db,
+  first,
   Hashtags,
   Instances,
   Media,
@@ -8,8 +10,6 @@ import {
   ProfileHashtags,
   ProfileMedia,
   Profiles,
-  db,
-  first,
 } from '@kosmo/core/db';
 import {
   InstanceKind,
