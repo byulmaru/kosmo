@@ -1689,7 +1689,12 @@ test('Profile Notification의 유형별 기본 notification payload를 전달한
       notificationSources.map(([kind, sourceId]) =>
         db
           .insert(Notifications)
-          .values({ kind, recipientProfileId: recipient.id, sourceId })
+          .values({
+            kind,
+            recipientAccountId: fixture.account.id,
+            recipientProfileId: recipient.id,
+            sourceId,
+          })
           .returning({ id: Notifications.id })
           .then(firstOrThrow),
       ),
