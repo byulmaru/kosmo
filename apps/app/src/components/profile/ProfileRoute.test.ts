@@ -57,6 +57,8 @@ const reportMenuItem: ReportMenuItem = {
 
 const LocalParamsContext = createContext<RouteParams>({});
 const platform: { OS: 'web' | 'ios' } = { OS: 'web' };
+let windowWidth = 1_280;
+let windowHeight = 800;
 
 let globalParams: RouteParams = {};
 let layoutLocalParams: RouteParams = {};
@@ -158,6 +160,7 @@ mockModule('react-native', {
   ScrollView: 'ScrollView',
   StyleSheet: { create: <T>(styles: T) => styles },
   Text: 'Text',
+  useWindowDimensions: () => ({ height: windowHeight, width: windowWidth }),
   View: 'View',
 });
 mockModule('react-relay', {
@@ -360,6 +363,9 @@ mockModule(new URL('../PageHeader.tsx', import.meta.url), {
   PageHeader: ({ leading, ...props }: { leading?: ReactNode }) =>
     createElement('PageHeader', { ...props, leading }, leading),
 });
+mockModule(new URL('../shell/NavigationDrawerTrigger.tsx', import.meta.url), {
+  NavigationDrawerTrigger: 'NavigationDrawerTrigger',
+});
 mockModule(new URL('../ui/ActionMenu.tsx', import.meta.url), {
   ActionMenu: (props: object) => createElement('ActionMenu', props),
 });
@@ -428,7 +434,11 @@ mockModule(new URL('../../observability/UnexpectedErrorContext.ts', import.meta.
   useUnexpectedErrorReporter: () => undefined,
 });
 mockModule(new URL('../../session/SessionProvider.tsx', import.meta.url), {
-  useSession: () => ({ selectedProfileId, sessionId }),
+  useSession: () => ({
+    selectedProfileId,
+    sessionId,
+    status: sessionId ? 'valid' : 'guest',
+  }),
 });
 mockModule(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
   useTheme: () => ({ foregroundPrimary: '#111111' }),
@@ -464,6 +474,8 @@ afterEach(async () => {
   screenLocalParams = {};
   pathname = '/profile/';
   platform.OS = 'web';
+  windowWidth = 1_280;
+  windowHeight = 800;
   routerBackCount = 0;
   routerCanGoBack = true;
   routerHistory.length = 0;
@@ -547,6 +559,14 @@ function requireRendered(type: string) {
 }
 
 describe('profile route parameter lifecycle', () => {
+  it('guest mobile Web Profile Home uses the drawer trigger in the route header', async () => {
+    windowWidth = 390;
+    await renderRoute('@guest', '/@guest');
+
+    const leading = requireRendered('PageHeader').props.leading as { type?: unknown };
+    assert.equal(leading.type, 'NavigationDrawerTrigger');
+  });
+
   it('canonical Profile Home places the full display name header before the existing content', async () => {
     await renderRoute('@local', '/@local');
 

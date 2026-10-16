@@ -1,3 +1,5 @@
-export function startWebLogin(): void {
-  window.location.assign('/login');
+import { buildWebLoginHref } from './publicContentReturn';
+
+export function startWebLogin(returnTarget?: string | null): void {
+  window.location.assign(buildWebLoginHref(returnTarget));
 }

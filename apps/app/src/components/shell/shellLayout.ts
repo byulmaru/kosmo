@@ -77,6 +77,7 @@ export function getWebMobileShellHeader(
   width: number,
   pathname: string,
   routeSegments: readonly string[],
+  guestPublicContent = false,
 ): WebMobileShellHeader | null {
   if (!web || getShellLayout(web, width) !== 'mobile') {
     return null;
@@ -117,7 +118,7 @@ export function getWebMobileShellHeader(
   }
 
   if (routeSegments.at(-2) === '[profileHandle]' && routeSegments.at(-1) === '[postId]') {
-    return { leading: 'back', title: '게시글' };
+    return { leading: guestPublicContent ? 'menu' : 'back', title: '게시글' };
   }
 
   return null;
@@ -138,6 +139,19 @@ export function isWebMobileRouteOwnedHeader(web: boolean, width: number, pathnam
       isReactionPeopleRoute ||
       getProfileConnectionKind(pathname) !== null)
   );
+}
+
+export function isGuestPublicProfileHome(
+  web: boolean,
+  width: number,
+  pathname: string,
+  status: 'error' | 'guest' | 'valid',
+) {
+  const segments = pathname.split('/').filter(Boolean);
+  const isProfileHome =
+    segments.length === 1 && (segments[0]?.length ?? 0) > 1 && segments[0]?.startsWith('@');
+
+  return web && getShellLayout(web, width) === 'mobile' && status === 'guest' && isProfileHome;
 }
 
 export function getWebMobileShellHeaderStickyOffset(width: number) {
