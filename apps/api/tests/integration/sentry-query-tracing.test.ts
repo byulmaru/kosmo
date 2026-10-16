@@ -6,15 +6,6 @@ process.env.DATABASE_URL ??= 'postgres://kosmo:kosmo@localhost:54329/kosmo_test'
 
 test('records sanitized Postgres.js query spans under sampled request spans', async (context) => {
   const envelopes: unknown[] = [];
-  let pg: typeof import('@kosmo/core/db').pg | undefined;
-  let restoreSend: (() => void) | undefined;
-
-  context.after(async () => {
-    await pg?.end();
-    await Sentry.close(1_000);
-    restoreSend?.();
-  });
-
   Sentry.init({
     dsn: 'https://public@example.invalid/1',
     environment: 'test',
@@ -26,16 +17,23 @@ test('records sanitized Postgres.js query spans under sampled request spans', as
 
   const transport = Sentry.getClient()?.getTransport();
   assert.ok(transport);
-  const send = mock.method(transport, 'send', async (envelope) => {
-    envelopes.push(envelope);
-    return { statusCode: 200 };
+  const send = mock.method(
+    transport,
+    'send',
+    async (envelope: Parameters<typeof transport.send>[0]) => {
+      envelopes.push(envelope);
+      return { statusCode: 200 };
+    },
+  );
+  context.after(async () => {
+    await Sentry.close(1_000);
+    send.mock.restore();
   });
-  restoreSend = () => send.mock.restore();
 
   // Install Sentry's ESM integration before postgres is imported.
   const coreDb = await import('@kosmo/core/db');
   const { sql } = await import('drizzle-orm');
-  pg = coreDb.pg;
+  context.after(() => coreDb.pg.end());
 
   const collectDatabaseSpans = (rootSpan: Sentry.Span) =>
     Sentry.getSpanDescendants(rootSpan)
@@ -91,7 +89,9 @@ test('records sanitized Postgres.js query spans under sampled request spans', as
   const allDatabaseSpans = requestSpans.flatMap((request) => request.databaseSpans);
   const matchingQuerySpans = (alias: string) =>
     allDatabaseSpans.filter((span) =>
-      String(span.data?.['db.query.text'] ?? '').toLowerCase().includes(alias.toLowerCase()),
+      String(span.data?.['db.query.text'] ?? '')
+        .toLowerCase()
+        .includes(alias.toLowerCase()),
     );
   const queryAliases = [
     'primary_value',
