@@ -1,6 +1,7 @@
 import { ValidationError } from '../error';
 import { postBodyMaxLength } from '../validation/post-policy';
 import {
+  normalizePostContentMentionHandle,
   normalizePostContentPlainText,
   normalizePostContentProfileId,
   postContentMentionFallbackText,
@@ -68,8 +69,10 @@ function canonicalizePostContentBody(
       if (node.isText) {
         appendNormalizedText(inline, node.text!, node.marks);
       } else if (node.type === postContentSchema.nodes.mention) {
+        const handle = normalizePostContentMentionHandle(node.attrs.handle);
         inline.push(
           postContentSchema.nodes.mention.create({
+            ...(handle === undefined ? {} : { handle }),
             profileId: normalizePostContentProfileId(node.attrs.profileId),
           }),
         );
@@ -160,7 +163,11 @@ function postContentBodyToText(
             return node.text;
           }
           if (node.type === 'mention') {
-            return mentionHandles?.get(node.attrs.profileId) ?? postContentMentionFallbackText;
+            return (
+              mentionHandles?.get(node.attrs.profileId) ??
+              node.attrs.handle ??
+              postContentMentionFallbackText
+            );
           }
           return '\n';
         })
@@ -275,11 +282,12 @@ function assertPostContentJsonKeys(value: unknown): void {
     if (!isRecord(value.attrs)) {
       throw new TypeError('Mention attrs must be an object');
     }
-    assertOnlyKeys(value.attrs, ['profileId', 'label']);
+    assertOnlyKeys(value.attrs, ['profileId', 'label', 'handle']);
     normalizePostContentProfileId(value.attrs.profileId);
     if (value.attrs.label !== undefined && typeof value.attrs.label !== 'string') {
       throw new TypeError('Legacy Mention label must be a string');
     }
+    normalizePostContentMentionHandle(value.attrs.handle);
   }
 }
 

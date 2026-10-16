@@ -143,7 +143,7 @@ test('does not link URL fragments split by a Mention and preserves media metadat
           type: 'paragraph',
           content: [
             { type: 'text', text: 'https://example.com/' },
-            { type: 'mention', attrs: { profileId: aliceProfileId } },
+            { type: 'mention', attrs: { handle: '@alice', profileId: aliceProfileId } },
             { type: 'text', text: '?x=1 then ' },
             {
               type: 'text',
@@ -158,7 +158,11 @@ test('does not link URL fragments split by a Mention and preserves media metadat
   });
   assert.equal(
     postContentDocumentToHtml(document),
-    '<p>https://example.com/<span>@알 수 없는 사용자</span>?x=1 then <a href="https://example.org/path">https://example.org/path</a></p>',
+    '<p>https://example.com/<span>@alice</span>?x=1 then <a href="https://example.org/path">https://example.org/path</a></p>',
+  );
+  assert.equal(
+    postContentDocumentToText(document),
+    'https://example.com/@alice?x=1 then https://example.org/path',
   );
   assert.equal(
     postContentDocumentToText(document, new Map([[aliceProfileId, '@alice@example.com']])),
@@ -216,11 +220,33 @@ test('creates canonical Mention nodes from exact UTF-16 authored-body ranges', (
     type: 'paragraph',
     content: [
       { type: 'text', text: '🙂 hi ' },
-      { type: 'mention', attrs: { profileId: aliceProfileId } },
+      { type: 'mention', attrs: { handle: handle, profileId: aliceProfileId } },
       { type: 'text', text: ' and ' },
-      { type: 'mention', attrs: { profileId: aliceProfileId } },
+      { type: 'mention', attrs: { handle: handle, profileId: aliceProfileId } },
     ],
   });
+  assert.equal(
+    postContentDocumentToText(document),
+    '🙂 hi @alice@remote.example and @alice@remote.example',
+  );
+  assert.equal(
+    postContentDocumentToText(document, new Map([[aliceProfileId, '@renamed@example.com']])),
+    '🙂 hi @renamed@example.com and @renamed@example.com',
+  );
+  assert.equal(
+    postContentDocumentToHtml(document),
+    '<p>🙂 hi <span>@alice@remote.example</span> and <span>@alice@remote.example</span></p>',
+  );
+  assert.equal(
+    postContentDocumentToHtml(
+      document,
+      new Map([
+        [aliceProfileId, { href: 'https://remote.example/@alice', label: '@renamed@example.com' }],
+      ]),
+    ),
+    '<p>🙂 hi <span class="h-card"><a href="https://remote.example/@alice" class="u-url mention">@renamed@example.com</a></span> and ' +
+      '<span class="h-card"><a href="https://remote.example/@alice" class="u-url mention">@renamed@example.com</a></span></p>',
+  );
 });
 
 test('rejects invalid authored Mention ranges', () => {
@@ -724,8 +750,12 @@ test('canonicalizes Mention identities and uses the unavailable Profile fallback
   );
 });
 
-test('rejects Mention attrs without a valid Profile identity or with a malformed legacy label', () => {
-  for (const attrs of [{ profileId: 'not-a-uuid' }, { label: 123, profileId: aliceProfileId }]) {
+test('rejects Mention attrs without a valid Profile identity or with malformed fallback data', () => {
+  for (const attrs of [
+    { profileId: 'not-a-uuid' },
+    { label: 123, profileId: aliceProfileId },
+    { handle: '', profileId: aliceProfileId },
+  ]) {
     assert.throws(() =>
       canonicalizePostContentDocument({
         version: 1,
@@ -737,6 +767,46 @@ test('rejects Mention attrs without a valid Profile identity or with a malformed
       }),
     );
   }
+  assert.equal(
+    isPostContentDocumentV1({
+      version: 1,
+      summary: null,
+      body: {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [{ type: 'mention', attrs: { handle: '', profileId: aliceProfileId } }],
+          },
+        ],
+      },
+    }),
+    false,
+  );
+});
+
+test('escapes captured Mention fallback text in unlinked HTML', () => {
+  const document = canonicalizePostContentDocument({
+    version: 1,
+    summary: null,
+    body: {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            {
+              type: 'mention',
+              attrs: { handle: '<img src=x>', profileId: aliceProfileId },
+            },
+          ],
+        },
+      ],
+    },
+  });
+
+  assert.equal(postContentDocumentToText(document), '<img src=x>');
+  assert.equal(postContentDocumentToHtml(document), '<p><span>&lt;img src=x&gt;</span></p>');
 });
 
 test('native-safe guard accepts additive V1 properties while validating consumed values', () => {
@@ -900,7 +970,7 @@ test('requires authored body text and counts its actual length for local Mention
     () => validateLocalPostContentDocument(document, '가'.repeat(501)),
     /exceeds 500 characters/,
   );
-  assert.equal(postContentDocumentToText(document).length > bodyText.length, true);
+  assert.equal(postContentDocumentToText(document), bodyText);
 });
 
 test('rejects local Mention nodes when authored body text is missing', () => {

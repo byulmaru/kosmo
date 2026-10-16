@@ -41,6 +41,7 @@ import {
 } from '@kosmo/core/temporal/workflows';
 import { eq, ne } from 'drizzle-orm';
 import { setInboundObservabilityReporter } from './inbound-observability';
+import { resolveStoredInboundMentionCandidates } from './inbound-mention';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
@@ -475,6 +476,50 @@ describe('inbound Create dispatch', () => {
         { postContentId: content.id, profileId: bob.id },
       ].sort((left, right) => left.profileId.localeCompare(right.profileId)),
     );
+  });
+
+  test('captures stored relative handles using configured Profile identity', async () => {
+    const remoteActor = new URL('https://remote.example/users/mention-target');
+    const remoteProfile = await createStoredRemoteActor({
+      actorUri: remoteActor,
+      handle: 'remote-target',
+    });
+    const localProfile = await createLocalFollowerProfile('local-target');
+    const localActor = new URL(`/ap/actor/${localProfile.id}`, publicOrigin);
+    await ensureDrizzleLocalProfileActor({
+      actorUri: localActor,
+      localInstanceId,
+      profileId: localProfile.id,
+    });
+    const otherLocalActor = new URL('https://other-local.example/ap/actor/target');
+    const otherLocalProfile = await createStoredRemoteActor({
+      actorUri: otherLocalActor,
+      handle: 'other-local-target',
+      instanceKind: InstanceKind.LOCAL,
+    });
+
+    const { candidates } = await resolveStoredInboundMentionCandidates([
+      remoteActor.href,
+      localActor.href,
+      otherLocalActor.href,
+    ]);
+
+    const actorHrefs = new Set([remoteActor.href, localActor.href, otherLocalActor.href]);
+    const actual = candidates
+      .filter(({ targetHref }) => actorHrefs.has(targetHref))
+      .map(({ profileId, relativeHandle }) => {
+        assert.ok(relativeHandle);
+        return [profileId, relativeHandle] as const;
+      })
+      .sort(([left], [right]) => left.localeCompare(right));
+    const expected: [string, string][] = [
+      [remoteProfile.id, '@remote-target@remote.example'],
+      [localProfile.id, '@local-target'],
+      [otherLocalProfile.id, '@other-local-target@other-local.example'],
+    ];
+    expected.sort(([left], [right]) => left.localeCompare(right));
+
+    assert.deepEqual(actual, expected);
   });
 
   test('projects a local Profile Mention when the actor URI and human URL use different forms', async () => {

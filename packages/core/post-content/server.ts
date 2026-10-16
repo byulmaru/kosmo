@@ -105,7 +105,7 @@ export function postContentDocumentToHtml(
                     mention.label,
                   ],
                 ]
-              : ['span', postContentMentionFallbackText];
+              : ['span', mentionNode.attrs.handle ?? postContentMentionFallbackText];
           },
         },
         baseSerializer.marks,
@@ -139,7 +139,7 @@ function postContentInlineFromText(
     if (start > previousEnd) {
       appendTextWithLinks(inline, bodyText, previousEnd, start, links);
     }
-    inline.push({ type: 'mention', attrs: { profileId } });
+    inline.push({ type: 'mention', attrs: { handle: relativeHandle, profileId } });
     previousEnd = end;
   }
 
