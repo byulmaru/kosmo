@@ -89,10 +89,7 @@ export const materializeNotification = async (
         eq(Notifications.kind, kind),
         eq(Notifications.recipientProfileId, recipientProfileId),
         eq(Notifications.sourceId, sourceId),
-        or(
-          inArray(Notifications.recipientAccountId, recipientAccountIds),
-          isNull(Notifications.recipientAccountId),
-        ),
+        inArray(Notifications.recipientAccountId, recipientAccountIds),
       ),
     )
     .orderBy(Notifications.recipientAccountId, Notifications.id)
