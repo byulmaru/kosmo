@@ -163,7 +163,7 @@ export const SelectedImagesSubmission: Story = {
       mock: { calls: unknown[][] };
     };
     const [message, kind, attachments] = captureFeedbackMock.mock.calls.at(-1) ?? [];
-    expect(message).toBe('이미지 첨부 피드백');
+    expect(message).toBe('[좋아요]\n\n이미지 첨부 피드백');
     expect(kind).toBe('POSITIVE');
     expect(attachments).toHaveLength(1);
     expect(attachments).toSatisfy((value) => {

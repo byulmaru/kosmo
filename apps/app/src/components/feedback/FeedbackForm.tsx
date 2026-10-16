@@ -201,7 +201,8 @@ export function FeedbackForm({ onStateChange }: Props) {
     void prepareFeedbackAttachments(attachments).then(
       async (prepared) => {
         try {
-          await captureFeedback(parsedBody.data, kind, prepared);
+          const kindLabel = feedbackOptions.find((option) => option.value === kind)?.label ?? kind;
+          await captureFeedback(`[${kindLabel}]\n\n${parsedBody.data}`, kind, prepared);
         } catch {
           failSubmission();
           return;
