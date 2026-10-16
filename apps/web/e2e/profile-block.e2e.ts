@@ -40,10 +40,6 @@ test('UI Block 성공은 양방향 Follow·Request cleanup을 완료하고 보�
   });
   const ownerId = owner.profile!.id;
   const targetId = target.profile!.id;
-  const accountIdByProfileId = new Map([
-    [ownerId, owner.account.id],
-    [targetId, target.account.id],
-  ]);
   const ownerPost = await createE2EPost({
     body: 'E2E owner private direction',
     profileId: ownerId,
@@ -65,7 +61,6 @@ test('UI Block 성공은 양방향 Follow·Request cleanup을 완료하고 보�
   await db.insert(Notifications).values(
     requests.map((request) => ({
       kind: NotificationKind.FOLLOW_REQUEST,
-      recipientAccountId: accountIdByProfileId.get(request.followeeProfileId)!,
       recipientProfileId: request.followeeProfileId,
       sourceId: request.id,
     })),
@@ -91,7 +86,6 @@ test('UI Block 성공은 양방향 Follow·Request cleanup을 완료하고 보�
     .insert(Notifications)
     .values({
       kind: NotificationKind.REACTION,
-      recipientAccountId: target.account.id,
       recipientProfileId: targetId,
       sourceId: reaction!.id,
       readAt: null,
@@ -352,7 +346,6 @@ for (const targetKind of ['Local', 'Remote'] as const) {
     const actors = [
       {
         profile: owner.profile!,
-        recipientAccountId: owner.account.id,
         token: owner.token,
         post: ownerPost,
         other: target,
@@ -362,7 +355,6 @@ for (const targetKind of ['Local', 'Remote'] as const) {
         ? [
             {
               profile: target,
-              recipientAccountId: targetSession.account.id,
               token: targetSession.token,
               post: targetPost,
               other: owner.profile!,
@@ -397,13 +389,11 @@ for (const targetKind of ['Local', 'Remote'] as const) {
         .values([
           {
             kind: NotificationKind.REACTION,
-            recipientAccountId: actor.recipientAccountId,
             recipientProfileId: actor.profile.id,
             sourceId: hiddenReaction!.id,
           },
           {
             kind: NotificationKind.REACTION,
-            recipientAccountId: actor.recipientAccountId,
             recipientProfileId: actor.profile.id,
             sourceId: visibleReaction!.id,
           },

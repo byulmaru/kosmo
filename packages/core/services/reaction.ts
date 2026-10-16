@@ -8,7 +8,6 @@ import { reactionTypeSchema } from '../validation';
 import { assertProfilePairIsNotBlocked } from './profile-block-policy';
 
 type AddReactionInput = {
-  readonly actorAccountId?: string;
   readonly actorProfileId: string;
   readonly origin: 'LOCAL' | 'ACTIVITYPUB';
   readonly postId: string;
@@ -29,7 +28,6 @@ type AddReactionResult = {
 };
 
 export const addReaction = async ({
-  actorAccountId,
   actorProfileId,
   origin,
   postId,
@@ -58,12 +56,7 @@ export const addReaction = async ({
 
     const inserted = await tx
       .insert(Reactions)
-      .values({
-        actorAccountId: origin === 'LOCAL' ? (actorAccountId ?? null) : null,
-        postId,
-        profileId: actorProfileId,
-        type: parsedType.data,
-      })
+      .values({ postId, profileId: actorProfileId, type: parsedType.data })
       .onConflictDoNothing({
         target: [Reactions.postId, Reactions.type, Reactions.profileId],
       })

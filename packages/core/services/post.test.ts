@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { after, mock, test } from 'node:test';
 import { and, DrizzleQueryError, eq } from 'drizzle-orm';
 import {
-  AccountProfiles,
   Accounts,
   ActivityPubPosts,
   db,
@@ -19,7 +18,6 @@ import {
   Profiles,
 } from '../db';
 import {
-  AccountProfileRole,
   AccountState,
   InstanceKind,
   InstanceState,
@@ -79,13 +77,6 @@ const createAccount = () =>
     .returning()
     .then(firstOrThrow);
 
-const addAccountProfile = async (accountId: string, profileId: string) =>
-  db
-    .insert(AccountProfiles)
-    .values({ accountId, profileId, role: AccountProfileRole.MEMBER })
-    .returning()
-    .then(firstOrThrow);
-
 const createMedia = async ({
   accountId,
   profileId,
@@ -137,22 +128,6 @@ test('createPost는 local Post와 최초 content 연결을 하나의 transaction
       .then((rows) => rows.length),
     0,
   );
-});
-
-test('createPost stores the original Account on its local Post source', async () => {
-  const author = await createProfile();
-  const actor = await createAccount();
-  await addAccountProfile(actor.id, author.id);
-
-  const { post } = await createPost({
-    accountId: actor.id,
-    document: postContentDocumentFromText('post without notification targets'),
-    origin: 'LOCAL',
-    profileId: author.id,
-    visibility: PostVisibility.PUBLIC,
-  });
-
-  assert.equal(post.actorAccountId, actor.id);
 });
 
 test('createPost는 Mention이 없는 local DIRECT Post를 저장한다', async () => {
@@ -552,13 +527,12 @@ test('createPost는 중복 Media와 Media Account 증거 누락을 원자적으�
 
 test('createPost는 ActivityPub first-write-wins와 timestamp 계약을 보존한다', async () => {
   const profile = await createProfile();
-  const recipient = await createProfile();
   const objectUri = `https://remote.example/notes/${profile.id}`;
   const publishedAt = Temporal.Instant.from('2026-07-18T00:00:00Z');
   const receivedAt = Temporal.Instant.from('2026-07-19T00:00:00Z');
   const first = await createPost({
     document: postContentDocumentFromText('first'),
-    mentionProfileIds: [recipient.id],
+    mentionProfileIds: [],
     objectUri,
     origin: 'ACTIVITYPUB',
     profileId: profile.id,
@@ -582,7 +556,6 @@ test('createPost는 ActivityPub first-write-wins와 timestamp 계약을 보존�
   assert.equal(first.post.currentContentId, first.content.id);
   assert.equal(first.post.createdAt.toString(), publishedAt.toString());
   assert.equal(first.content.createdAt.toString(), receivedAt.toString());
-  assert.equal(first.post.actorAccountId, null);
   assert.equal(
     await db
       .select()

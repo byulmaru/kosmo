@@ -847,7 +847,6 @@ test(
     };
     const requestId = '00000000-0000-8000-8000-000000000604';
     const followId = '00000000-0000-8000-8000-000000000603';
-    const actorAccountId = '00000000-0000-8000-8000-000000000605';
     const calls: string[] = [];
     let releaseEffect!: () => void;
     const effectReleased = new Promise<void>((resolve) => {
@@ -894,10 +893,6 @@ test(
           input: ProfileFollowPairTransitionInput,
         ) => {
           assert.equal(input.pendingRequestId, requestId);
-          assert.equal(input.command.kind, 'FOLLOW');
-          if (input.command.kind === 'FOLLOW') {
-            assert.equal(input.command.actorAccountId, actorAccountId);
-          }
           assert.equal('candidateRowId' in input, false);
           assert.equal('followCandidateId' in input, false);
           return execution;
@@ -937,7 +932,6 @@ test(
           {
             args: [
               {
-                actorAccountId,
                 kind: 'FOLLOW' as const,
                 origin: 'LOCAL' as const,
               },

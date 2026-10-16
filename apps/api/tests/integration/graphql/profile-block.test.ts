@@ -1709,13 +1709,11 @@ describe('GraphQL Profile Block', () => {
       .returning()
       .then(firstOrThrow);
     const createHiddenNotification = (kind: NotificationKind, sourceId: string) =>
-      notificationRecipientAccountId(auth.profile.id).then((recipientAccountId) =>
-        db
-          .insert(Notifications)
-          .values({ kind, recipientAccountId, recipientProfileId: auth.profile.id, sourceId })
-          .returning()
-          .then(firstOrThrow),
-      );
+      db
+        .insert(Notifications)
+        .values({ kind, recipientProfileId: auth.profile.id, sourceId })
+        .returning()
+        .then(firstOrThrow);
     const [
       hiddenFollowRequestNotification,
       hiddenReactionNotification,
@@ -2034,44 +2032,15 @@ const createFollowNotification = async (recipientProfileId: string, relatedProfi
     .values({ followerProfileId: relatedProfileId, followeeProfileId: recipientProfileId })
     .returning()
     .then(firstOrThrow);
-  const recipientAccountId = await notificationRecipientAccountId(recipientProfileId);
   return db
     .insert(Notifications)
     .values({
       kind: NotificationKind.FOLLOW,
-      recipientAccountId,
       recipientProfileId,
       sourceId: follow.id,
     })
     .returning()
     .then(firstOrThrow);
-};
-
-const notificationRecipientAccountId = async (profileId: string) => {
-  const [membership] = await db
-    .select({ accountId: AccountProfiles.accountId })
-    .from(AccountProfiles)
-    .where(eq(AccountProfiles.profileId, profileId))
-    .limit(1);
-  if (membership) {
-    return membership.accountId;
-  }
-
-  const account = await db
-    .insert(Accounts)
-    .values({
-      displayName: 'Notification Fixture Account',
-      oidcSubject: `notification-fixture-${crypto.randomUUID()}`,
-      state: AccountState.ACTIVE,
-    })
-    .returning()
-    .then(firstOrThrow);
-  await db.insert(AccountProfiles).values({
-    accountId: account.id,
-    profileId,
-    role: AccountProfileRole.OWNER,
-  });
-  return account.id;
 };
 
 const markNotificationRead = (ids: string[], token?: string) =>

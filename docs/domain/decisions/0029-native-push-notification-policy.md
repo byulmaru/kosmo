@@ -13,10 +13,6 @@ Push 만료와 첫 릴리스의 in-app 설정 부재를 확정했다. PROD-912�
 종류, Reaction 실제 emoji와 수신자가 조회 가능하고 sensitive 또는 Content Warning이 아닌 게시글 본문으로
 공통 구성하며, 줄 수·줄바꿈·자름·접힘·펼침은 OS가 소유하도록 정렬했다. 묶인 알림은 후속 결정으로 남긴다.
 
-2026-10-16 사용자의 승인으로 Profile Notification Push는 저장된 Recipient Account와 대상 Profile의
-현재 Membership을 함께 확인하도록 정했다. 기존 경로, Profile 전환, payload privacy, Push 만료와 Provider의
-전달·회수 경계는 변경하지 않는다.
-
 ## 날짜
 
 2026-09-10
@@ -54,17 +50,11 @@ installation token lifecycle을 고정하므로 앱 설정의 권한 처리와 t
   target 정보를 공통 flow에 연결한 저장 성공 결과로 같은 공통 Push flow를 거치며, 새 type을 추가할 때 Push
   transport 전체나 source workflow별 전달 lifecycle을 복제하지 않는다. 미래 generator 자체의 구현·통합은 이
   ADR에서 확정하지 않는다.
-- 현재 Account는 자신이 Recipient Account이고 대상 Profile의 현재 Membership을 가진 Profile Notification의
-  Push를 받는다. 각 Push에는 어느 대상 Profile의 알림인지 식별할 수 있는 정보가 포함되며, 선택한 Profile만을
-  기준으로 Push 수신 범위를 줄이지 않는다.
+- 현재 Account는 자신에게 속한 모든 Profile의 Push를 받으며, 각 Push에는 어느 Recipient Profile의
+  알림인지 식별할 수 있는 정보가 포함되어야 한다. selected Profile만을 기준으로 Push 수신 범위를
+  줄이지 않는다.
 - 현재 Account에 로그인되어 있고 OS 알림을 허용한 모든 앱 설치를 Push 대상으로 한다. 가장 최근 설치 하나만
   대상으로 선택하지 않는다.
-- Profile Notification Push를 Provider에 보내기 직전에 최종 수신 자격을 확인한다. Recipient Account가 ACTIVE이고,
-  해당 installation과 등록 당시 연결된 Session이 기존 lifecycle 조건을 충족하며, Account가 대상 Profile의 현재
-  Membership을 가지고, 기존 알림 privacy와 24시간 만료 조건을 통과해야 전송을 시도한다. 어느 조건이든 충족하지
-  않으면 전송 시도를 생략한다. Operational Notification은 Account 단독이므로 대상 Profile Membership 없이
-  Recipient Account와 installation 조건을 따른다. Membership을 잃은 Account에 과거 Push를 재생하지 않는다.
-  이 최종 점검은 상태 변경과 Provider 전달 사이의 취소나 Provider가 받은 Push의 회수를 보장하지 않는다.
 - Active installation row만 opaque FCM token을 보관한다. 최초 등록은 외부 installation ID를 받지 않고 서버가
   새 installation row ID를 발급해 반환한다. 갱신은 반환된 row ID와 인증된 현재 Account 소유권만 확인하며,
   알 수 없거나 삭제된 ID와 다른 Account 소유 ID는 row 존재 여부를 노출하지 않는 동일한

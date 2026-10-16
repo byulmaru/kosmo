@@ -242,7 +242,7 @@ export const sendPushNotification = async (
 
   if (notification.kind === NotificationKind.OPERATIONAL) {
     if (
-      notification.recipientProfileId !== null ||
+      notification.recipientAccountId === null ||
       !isOperationalNotificationData(notification.data)
     ) {
       return;

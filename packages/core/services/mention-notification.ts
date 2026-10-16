@@ -22,7 +22,6 @@ const MentionRecipients = alias(Profiles, 'mention_notification_recipient');
 const MentionRecipientInstances = alias(Instances, 'mention_notification_recipient_instance');
 
 type EligibleMentionCandidate = {
-  readonly actorAccountId: string | null;
   readonly recipientProfileId: string;
   readonly relatedProfileId: string;
 };
@@ -33,11 +32,7 @@ const findEligibleMentionCandidates = async (
   recipientProfileId?: string,
 ): Promise<EligibleMentionCandidate[]> =>
   database
-    .select({
-      actorAccountId: Posts.actorAccountId,
-      recipientProfileId: PostMentions.profileId,
-      relatedProfileId: Posts.profileId,
-    })
+    .select({ recipientProfileId: PostMentions.profileId, relatedProfileId: Posts.profileId })
     .from(Posts)
     .innerJoin(
       PostContents,
@@ -85,8 +80,8 @@ const findEligibleMentionCandidates = async (
 const materializeMentionCandidateIfEligible = async (
   database: Transaction,
   postId: string,
-  { actorAccountId, recipientProfileId, relatedProfileId }: EligibleMentionCandidate,
-): Promise<string[]> => {
+  { recipientProfileId, relatedProfileId }: EligibleMentionCandidate,
+): Promise<string | null> => {
   const existingRepresentative = await database
     .select({ id: Notifications.id })
     .from(Notifications)
@@ -101,11 +96,10 @@ const materializeMentionCandidateIfEligible = async (
     .then((rows) => rows[0]);
 
   if (existingRepresentative) {
-    return [];
+    return null;
   }
 
   return materializeNotification(database, {
-    actorAccountId,
     kind: NotificationKind.MENTION,
     recipientProfileId,
     relatedProfileId,
@@ -118,12 +112,12 @@ export const materializeMentionNotificationIfEligible = async (
   database: Transaction,
   postId: string,
   recipientProfileId: string,
-): Promise<string[]> => {
+): Promise<string | null> => {
   const [candidate] = await findEligibleMentionCandidates(database, postId, recipientProfileId);
-  return candidate ? materializeMentionCandidateIfEligible(database, postId, candidate) : [];
+  return candidate ? materializeMentionCandidateIfEligible(database, postId, candidate) : null;
 };
 
-/** Materialize Mention inbox rows for each eligible local Account recipient of a stored Post. */
+/** Materialize one Mention inbox row for each eligible local recipient of a stored Post. */
 export const createMentionNotification = async (
   postId: string,
   handle?: Database,
@@ -142,7 +136,10 @@ export const createMentionNotification = async (
 
     const notificationIds: string[] = [];
     for (const candidate of candidates) {
-      notificationIds.push(...(await materializeMentionCandidateIfEligible(tx, postId, candidate)));
+      const notificationId = await materializeMentionCandidateIfEligible(tx, postId, candidate);
+      if (notificationId) {
+        notificationIds.push(notificationId);
+      }
     }
 
     return notificationIds;

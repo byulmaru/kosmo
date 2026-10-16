@@ -29,10 +29,7 @@ const SenderProfiles = alias(Profiles, 'outbound_reaction_sender_profile');
 const SenderInstances = alias(Instances, 'outbound_reaction_sender_instance');
 const TargetActors = alias(ActivityPubActors, 'outbound_reaction_target_actor');
 
-type OutboundReaction = Pick<
-  typeof Reactions.$inferSelect,
-  'createdAt' | 'id' | 'postId' | 'profileId' | 'type'
->;
+type OutboundReaction = typeof Reactions.$inferSelect;
 
 /**
  * The immutable values returned by the Reaction delete transaction. This is

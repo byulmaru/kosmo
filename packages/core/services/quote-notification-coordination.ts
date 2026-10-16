@@ -10,7 +10,7 @@ import {
 } from '../db';
 import { InstanceKind, InstanceState, NotificationKind, ProfileState } from '../enums';
 import { postVisibilityCondition } from '../visibility/post';
-import { materializeNotification } from './notification-policy';
+import { isNotificationSuppressed, materializeNotification } from './notification-policy';
 import type { Transaction } from '../db';
 
 export const QuoteNotificationJudgmentOutcome = {
@@ -26,7 +26,6 @@ export type QuoteNotificationJudgmentOutcome =
 type CoordinatedNotificationKind = Extract<NotificationKind, 'QUOTE' | 'REPLY'>;
 
 type MaterializeCoordinatedNotificationInput = {
-  readonly actorAccountId: string | null;
   readonly eligible: boolean;
   readonly kind: CoordinatedNotificationKind;
   readonly quotePostId: string;
@@ -37,7 +36,7 @@ type MaterializeCoordinatedNotificationInput = {
 };
 
 export type MaterializedReplyNotification = {
-  readonly notificationIds: string[];
+  readonly notificationId: string | null;
   readonly recipientProfileId: string;
 };
 
@@ -62,14 +61,12 @@ const quoteNotificationCandidates = async (
           sql`${Notifications.kind}::text = 'MENTION'`,
         ),
       ),
-    )
-    .orderBy(Notifications.kind, Notifications.recipientAccountId, Notifications.id);
+    );
 
 /** Must run inside the transaction that owns the judgment and projection writes. */
 export const materializeCoordinatedNotification = async (
   database: Transaction,
   {
-    actorAccountId,
     eligible,
     kind,
     quotePostId,
@@ -78,7 +75,7 @@ export const materializeCoordinatedNotification = async (
     sourceId,
     suppressedOutcome,
   }: MaterializeCoordinatedNotificationInput,
-): Promise<string[]> => {
+): Promise<string | null> => {
   const judgmentCondition = and(
     eq(NotificationQuoteJudgments.quotePostId, quotePostId),
     eq(NotificationQuoteJudgments.recipientProfileId, recipientProfileId),
@@ -109,88 +106,73 @@ export const materializeCoordinatedNotification = async (
       .where(judgmentCondition)
       .limit(1)
       .then((rows) => rows[0]);
-    if (
-      judgment?.outcome !== QuoteNotificationJudgmentOutcome.EMITTED ||
-      judgment.representativeKind !== kind
-    ) {
-      return [];
-    }
-
-    return database
-      .select({ id: Notifications.id })
-      .from(Notifications)
-      .where(
-        and(
-          eq(Notifications.kind, kind),
-          eq(Notifications.recipientProfileId, recipientProfileId),
-          eq(Notifications.sourceId, sourceId),
-        ),
-      )
-      .orderBy(Notifications.recipientAccountId, Notifications.id)
-      .then((rows) => rows.map(({ id }) => id));
+    return judgment?.outcome === QuoteNotificationJudgmentOutcome.EMITTED &&
+      judgment.representativeKind === kind
+      ? judgment.notificationId
+      : null;
   }
 
   const candidates = await quoteNotificationCandidates(database, quotePostId, recipientProfileId);
   if (candidates.length > 0) {
-    const candidateKinds = [...new Set(candidates.map(({ kind: candidateKind }) => candidateKind))];
-    if (candidateKinds.length > 1) {
+    if (candidates.length > 1) {
       console.warn('Multiple notification representatives found for Quote', {
         quotePostId,
         recipientProfileId,
       });
     }
 
-    const representative = candidateKinds.length === 1 ? candidates[0] : undefined;
+    const representative = candidates.length === 1 ? candidates[0] : undefined;
     await database
       .update(NotificationQuoteJudgments)
       .set({
         outcome: QuoteNotificationJudgmentOutcome.REPRESENTED_BY_EXISTING,
-        representativeKind: representative ? candidateKinds[0]! : null,
+        representativeKind: representative?.kind ?? null,
         representativeNotificationId: representative?.id ?? null,
       })
       .where(judgmentCondition);
-    return [];
+    return null;
   }
 
   if (suppressedOutcome || !eligible) {
-    return [];
+    return null;
   }
 
-  if (relatedProfileId === recipientProfileId) {
-    return [];
+  if (
+    relatedProfileId === recipientProfileId ||
+    (await isNotificationSuppressed(database, recipientProfileId, relatedProfileId))
+  ) {
+    return null;
   }
 
-  const notificationIds = await materializeNotification(database, {
-    actorAccountId,
-    kind,
-    recipientProfileId,
-    relatedProfileId,
-    sourceId,
-  });
+  const [notification] = await database
+    .insert(Notifications)
+    .values({
+      data: {},
+      kind,
+      recipientProfileId,
+      sourceId,
+    })
+    .onConflictDoNothing({
+      target: [Notifications.recipientProfileId, Notifications.kind, Notifications.sourceId],
+    })
+    .returning({ id: Notifications.id });
 
-  if (notificationIds.length === 0) {
+  if (!notification) {
     const concurrentCandidate = await quoteNotificationCandidates(
       database,
       quotePostId,
       recipientProfileId,
     );
-    if (concurrentCandidate.length === 0) {
-      return [];
-    }
-
-    const candidateKinds = [
-      ...new Set(concurrentCandidate.map(({ kind: candidateKind }) => candidateKind)),
-    ];
-    const representative = candidateKinds.length === 1 ? concurrentCandidate[0] : undefined;
+    const representative = concurrentCandidate.length === 1 ? concurrentCandidate[0] : undefined;
     await database
       .update(NotificationQuoteJudgments)
       .set({
         outcome: QuoteNotificationJudgmentOutcome.REPRESENTED_BY_EXISTING,
-        representativeKind: representative ? candidateKinds[0]! : null,
+        representativeKind: representative?.kind ?? null,
         representativeNotificationId: representative?.id ?? null,
       })
       .where(judgmentCondition);
-    return [];
+    return null;
   }
 
   await database
@@ -198,10 +180,10 @@ export const materializeCoordinatedNotification = async (
     .set({
       outcome: QuoteNotificationJudgmentOutcome.EMITTED,
       representativeKind: kind,
-      representativeNotificationId: notificationIds[0]!,
+      representativeNotificationId: notification.id,
     })
     .where(judgmentCondition);
-  return notificationIds;
+  return notification.id;
 };
 
 /**
@@ -215,7 +197,6 @@ export const materializeReplyNotificationIfEligible = async (
 ): Promise<MaterializedReplyNotification | null> => {
   const source = await database
     .select({
-      actorAccountId: Posts.actorAccountId,
       id: Posts.id,
       relatedProfileId: Posts.profileId,
       recipientProfileId: ReplyParents.profileId,
@@ -265,8 +246,7 @@ export const materializeReplyNotificationIfEligible = async (
   }
 
   if (source.repostSourceId !== null) {
-    const notificationIds = await materializeCoordinatedNotification(database, {
-      actorAccountId: source.actorAccountId,
+    const notificationId = await materializeCoordinatedNotification(database, {
       eligible: true,
       kind: NotificationKind.REPLY,
       quotePostId: source.id,
@@ -274,15 +254,14 @@ export const materializeReplyNotificationIfEligible = async (
       relatedProfileId: source.relatedProfileId,
       sourceId: source.id,
     });
-    return { notificationIds, recipientProfileId: source.recipientProfileId };
+    return { notificationId, recipientProfileId: source.recipientProfileId };
   }
 
-  const notificationIds = await materializeNotification(database, {
-    actorAccountId: source.actorAccountId,
+  const notificationId = await materializeNotification(database, {
     kind: NotificationKind.REPLY,
     recipientProfileId: source.recipientProfileId,
     relatedProfileId: source.relatedProfileId,
     sourceId: source.id,
   });
-  return { notificationIds, recipientProfileId: source.recipientProfileId };
+  return { notificationId, recipientProfileId: source.recipientProfileId };
 };

@@ -49,7 +49,7 @@ builder.mutationField('markNotificationRead', (t) =>
           recipientProfileId === null ? [] : [recipientProfileId],
         ),
       );
-      if (notifications.some(({ recipientProfileId }) => recipientProfileId === null)) {
+      if (notifications.some(({ recipientAccountId }) => recipientAccountId !== null)) {
         const accountProfiles = await db
           .select({ profileId: AccountProfiles.profileId })
           .from(AccountProfiles)

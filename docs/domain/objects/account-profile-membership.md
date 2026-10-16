@@ -33,9 +33,6 @@ Account-Profile Membership은 Account와 Profile의 역할 기반 관계다. Loc
 Account가 Profile을 선택할 수 있는 자격은 이 Membership의 존재로만 결정한다. Profile Origin, Membership
 Role 또는 Profile 생성자 여부를 선택 조건으로 추가하지 않는다.
 
-Profile 대상 Notification의 Account 수신과 현재 조회 자격도 이 Membership의 존재로 결정하며 Owner와 Member
-Role을 구분하지 않는다. 수신 집합과 Notification 조회 정책은 [Notification](./notification.md)이 소유한다.
-
 Account 삭제는 Membership을 제거하거나 Role을 변경하지 않는다. Account가 Active이고 연결된 Profile의 저장
 State가 `ACTIVE`인 경우가 없을 때만 Account 삭제가 가능하며, 삭제 후에도 Membership과 Profile은 보존된다.
 

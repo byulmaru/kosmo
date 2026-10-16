@@ -126,11 +126,9 @@ const cleanupFixture = async ({ account, instance, profiles, sessions }: Fixture
 
 const insertNotification = async ({
   createdAt,
-  recipientAccountId,
   recipientProfileId,
 }: {
   readonly createdAt: Temporal.Instant;
-  readonly recipientAccountId: string;
   readonly recipientProfileId: string;
 }) =>
   db
@@ -139,7 +137,6 @@ const insertNotification = async ({
       createdAt,
       data: {},
       kind: NotificationKind.FOLLOW,
-      recipientAccountId,
       recipientProfileId,
       sourceId: crypto.randomUUID(),
     })
@@ -167,17 +164,14 @@ test('eligible delivery enforces epoch, read-state, and TTL boundaries', async (
 
     const before = await insertNotification({
       createdAt: historicalEpoch.subtract({ seconds: 1 }),
-      recipientAccountId: fixture.account.id,
       recipientProfileId: fixture.profiles[0]!.id,
     });
     const after = await insertNotification({
       createdAt: Temporal.Now.instant(),
-      recipientAccountId: fixture.account.id,
       recipientProfileId: fixture.profiles[0]!.id,
     });
     const expired = await insertNotification({
       createdAt: Temporal.Now.instant().subtract({ hours: 25 }),
-      recipientAccountId: fixture.account.id,
       recipientProfileId: fixture.profiles[0]!.id,
     });
     await db
@@ -215,7 +209,7 @@ test('eligible delivery enforces epoch, read-state, and TTL boundaries', async (
   }
 });
 
-test('profile Notifications target only installations for their saved Account recipient', async () => {
+test('all active installations fan out for every Account Profile', async () => {
   const fixture = await createFixture({ profileCount: 2, sessionCount: 2 });
   const [firstSession, secondSession] = fixture.sessions;
   assert.ok(firstSession);
@@ -246,7 +240,6 @@ test('profile Notifications target only installations for their saved Account re
     assert.ok(secondInstallation);
     const notification = await insertNotification({
       createdAt: Temporal.Now.instant(),
-      recipientAccountId: fixture.account.id,
       recipientProfileId: fixture.profiles[1]!.id,
     });
 
@@ -263,7 +256,6 @@ test('profile Notifications target only installations for their saved Account re
       .where(eq(Sessions.id, secondSession.id));
     const revokedSessionNotification = await insertNotification({
       createdAt: Temporal.Now.instant(),
-      recipientAccountId: fixture.account.id,
       recipientProfileId: fixture.profiles[1]!.id,
     });
     assert.deepEqual(
@@ -283,7 +275,6 @@ test('profile Notifications target only installations for their saved Account re
       .where(eq(Profiles.id, fixture.profiles[1]!.id));
     const disabledProfileNotification = await insertNotification({
       createdAt: Temporal.Now.instant(),
-      recipientAccountId: fixture.account.id,
       recipientProfileId: fixture.profiles[1]!.id,
     });
     assert.deepEqual(
@@ -301,7 +292,6 @@ test('profile Notifications target only installations for their saved Account re
       .where(eq(Accounts.id, fixture.account.id));
     const disabledAccountNotification = await insertNotification({
       createdAt: Temporal.Now.instant(),
-      recipientAccountId: fixture.account.id,
       recipientProfileId: fixture.profiles[0]!.id,
     });
     assert.deepEqual(
@@ -309,101 +299,6 @@ test('profile Notifications target only installations for their saved Account re
       [],
     );
   } finally {
-    await cleanupFixture(fixture);
-  }
-});
-
-test('shared Profile delivery follows the saved recipient Account and current membership', async () => {
-  const fixture = await createFixture();
-  const profile = fixture.profiles[0];
-  const [firstSession] = fixture.sessions;
-  assert.ok(profile);
-  assert.ok(firstSession);
-  const suffix = crypto.randomUUID();
-  const recipientAccount = await db
-    .insert(Accounts)
-    .values({
-      displayName: suffix,
-      oidcSubject: `subject-${suffix}`,
-      state: AccountState.ACTIVE,
-    })
-    .returning()
-    .then(firstOrThrow);
-
-  try {
-    await db.insert(AccountProfiles).values({
-      accountId: recipientAccount.id,
-      profileId: profile.id,
-      role: AccountProfileRole.OWNER,
-    });
-    const recipientSession = await db
-      .insert(Sessions)
-      .values({
-        accountId: recipientAccount.id,
-        state: SessionState.ACTIVE,
-        token: `token-${suffix}`,
-      })
-      .returning()
-      .then(firstOrThrow);
-    const installations = await db
-      .insert(PushInstallations)
-      .values([
-        {
-          accountId: fixture.account.id,
-          platform: PushInstallationPlatform.ANDROID,
-          registrationEpoch: Temporal.Now.instant().subtract({ seconds: 1 }),
-          sessionId: firstSession.id,
-          token: `token-${crypto.randomUUID()}`,
-        },
-        {
-          accountId: recipientAccount.id,
-          platform: PushInstallationPlatform.IOS,
-          registrationEpoch: Temporal.Now.instant().subtract({ seconds: 1 }),
-          sessionId: recipientSession.id,
-          token: `token-${crypto.randomUUID()}`,
-        },
-      ])
-      .returning({ accountId: PushInstallations.accountId, id: PushInstallations.id });
-    const firstInstallation = installations.find(
-      ({ accountId }) => accountId === fixture.account.id,
-    );
-    const recipientInstallation = installations.find(
-      ({ accountId }) => accountId === recipientAccount.id,
-    );
-    assert.ok(firstInstallation);
-    assert.ok(recipientInstallation);
-    const notification = await insertNotification({
-      createdAt: Temporal.Now.instant(),
-      recipientAccountId: recipientAccount.id,
-      recipientProfileId: profile.id,
-    });
-
-    assert.deepEqual(
-      await findEligiblePushInstallations({ notificationId: notification.id }).then((rows) =>
-        rows.map(({ id }) => id),
-      ),
-      [recipientInstallation.id],
-    );
-
-    await db.delete(AccountProfiles).where(eq(AccountProfiles.accountId, recipientAccount.id));
-    assert.deepEqual(await findEligiblePushInstallations({ notificationId: notification.id }), []);
-
-    await db.insert(AccountProfiles).values({
-      accountId: recipientAccount.id,
-      profileId: profile.id,
-      role: AccountProfileRole.OWNER,
-    });
-    assert.deepEqual(
-      await findEligiblePushInstallations({ notificationId: notification.id }).then((rows) =>
-        rows.map(({ id }) => id),
-      ),
-      [recipientInstallation.id],
-    );
-  } finally {
-    await db.delete(PushInstallations).where(eq(PushInstallations.accountId, recipientAccount.id));
-    await db.delete(Sessions).where(eq(Sessions.accountId, recipientAccount.id));
-    await db.delete(AccountProfiles).where(eq(AccountProfiles.accountId, recipientAccount.id));
-    await db.delete(Accounts).where(eq(Accounts.id, recipientAccount.id));
     await cleanupFixture(fixture);
   }
 });

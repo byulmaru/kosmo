@@ -2,8 +2,6 @@ import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import {
-  AccountProfiles,
-  Accounts,
   Bookmarks,
   db,
   firstOrThrow,
@@ -19,8 +17,6 @@ import {
   Reactions,
 } from '../db';
 import {
-  AccountProfileRole,
-  AccountState,
   InstanceKind,
   InstanceState,
   NotificationKind,
@@ -34,8 +30,6 @@ import { muteProfile, unmuteProfile } from './profile-mute';
 
 after(async () => pg.end());
 
-const profileAccountIds = new Map<string, string>();
-
 const createProfile = async ({
   kind = InstanceKind.LOCAL,
   instanceState = InstanceState.ACTIVE,
@@ -46,11 +40,6 @@ const createProfile = async ({
   profileState?: ProfileState;
 } = {}) => {
   const suffix = crypto.randomUUID();
-  const account = await db
-    .insert(Accounts)
-    .values({ displayName: suffix, oidcSubject: `subject-${suffix}`, state: AccountState.ACTIVE })
-    .returning()
-    .then(firstOrThrow);
   const instance = await db
     .insert(Instances)
     .values({ domain: `${suffix}.example`, kind, state: instanceState })
@@ -68,27 +57,13 @@ const createProfile = async ({
     })
     .returning()
     .then(firstOrThrow);
-  await db.insert(AccountProfiles).values({
-    accountId: account.id,
-    profileId: profile.id,
-    role: AccountProfileRole.OWNER,
-  });
-  profileAccountIds.set(profile.id, account.id);
 
-  return { account, instance, profile };
+  return { instance, profile };
 };
 
 const cleanupProfiles = async (profileIds: readonly string[], instanceIds: readonly string[]) => {
-  const accountIds = profileIds.flatMap((profileId) => {
-    const accountId = profileAccountIds.get(profileId);
-    return accountId == null ? [] : [accountId];
-  });
   await db.delete(Profiles).where(inArray(Profiles.id, profileIds));
-  await db.delete(Accounts).where(inArray(Accounts.id, accountIds));
   await db.delete(Instances).where(inArray(Instances.id, instanceIds));
-  for (const profileId of profileIds) {
-    profileAccountIds.delete(profileId);
-  }
 };
 
 test('Profile Mute는 Owner·Target과 nullable expiresAt을 저장한다', async () => {
@@ -475,7 +450,6 @@ test('Mute 생성·해제는 기존 관계·상호작용·Notification 상태를
     .values({
       kind: NotificationKind.FOLLOW,
       readAt: Temporal.Instant.from('2026-01-01T00:00:00Z'),
-      recipientAccountId: owner.account.id,
       recipientProfileId: owner.profile.id,
       sourceId: follow.id,
     })
@@ -508,7 +482,6 @@ test('Mute 생성·해제는 기존 관계·상호작용·Notification 상태를
         id: Notifications.id,
         kind: Notifications.kind,
         readAt: Notifications.readAt,
-        recipientAccountId: Notifications.recipientAccountId,
         recipientProfileId: Notifications.recipientProfileId,
         sourceId: Notifications.sourceId,
       })
