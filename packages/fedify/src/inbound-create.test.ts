@@ -40,8 +40,8 @@ import {
   remoteProfileRefreshWorkflow,
 } from '@kosmo/core/temporal/workflows';
 import { eq, ne } from 'drizzle-orm';
-import { setInboundObservabilityReporter } from './inbound-observability';
 import { resolveStoredInboundMentionCandidates } from './inbound-mention';
+import { setInboundObservabilityReporter } from './inbound-observability';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';

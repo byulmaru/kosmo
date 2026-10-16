@@ -258,7 +258,9 @@ function isMentionAttrs(value: unknown): value is PostContentMentionNode['attrs'
     isRecordWithKeys(value, ['profileId']) &&
     typeof value.profileId === 'string' &&
     value.profileId.length > 0 &&
-    (value.handle === undefined || postContentMentionHandleSchema.safeParse(value.handle).success)
+    (!('handle' in value) ||
+      value.handle === undefined ||
+      postContentMentionHandleSchema.safeParse(value.handle).success)
   );
 }
 
