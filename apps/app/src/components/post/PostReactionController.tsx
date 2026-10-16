@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
 import { useSession } from '@/session/SessionProvider';
@@ -6,13 +6,6 @@ import {
   createReactionDeleteUpdater,
   createReactionOptimisticUpdater,
 } from './PostReactionController.optimistic';
-import {
-  finishReactionPending,
-  getReactionPendingServerSnapshot,
-  getReactionPendingSnapshot,
-  subscribeReactionPending,
-  tryStartReactionPending,
-} from './PostReactionController.pending';
 import type { ReactionToggleIntent } from '@/components/reaction/ReactionSelector';
 import type { PostReactionController_post$key } from './__generated__/PostReactionController_post.graphql';
 import type { PostReactionControllerAddReactionMutation } from './__generated__/PostReactionControllerAddReactionMutation.graphql';
@@ -103,7 +96,9 @@ export function usePostReactionController(
   const [commitAdd] = useMutation<PostReactionControllerAddReactionMutation>(addReactionMutation);
   const [commitDelete] =
     useMutation<PostReactionControllerDeleteReactionMutation>(deleteReactionMutation);
+  const [pendingTypes, setPendingTypes] = useState<Set<string>>(() => new Set());
   const [errorTypes, setErrorTypes] = useState<Set<string>>(() => new Set());
+  const inFlightTypes = useRef(new Set<string>());
   const mounted = useRef(false);
   const postId = data.id;
   const identity = useRef({ environment, epoch: 0, postId });
@@ -121,34 +116,23 @@ export function usePostReactionController(
     [],
   );
 
-  const subscribePending = useCallback(
-    (listener: () => void) => subscribeReactionPending(environment, postId, listener),
-    [environment, postId],
-  );
-  const getPendingSnapshot = useCallback(
-    () => getReactionPendingSnapshot(environment, postId),
-    [environment, postId],
-  );
-  const pendingTypeIds = useSyncExternalStore(
-    subscribePending,
-    getPendingSnapshot,
-    getReactionPendingServerSnapshot,
-  );
-
   useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
+      inFlightTypes.current.clear();
     };
   }, []);
 
   useEffect(() => {
+    inFlightTypes.current.clear();
+    setPendingTypes(new Set());
     setErrorTypes(new Set());
   }, [environment, postId]);
 
   const toggleReaction = useCallback(
     ({ nextSelected, optionId }: ReactionToggleIntent) => {
-      if (!resolvedEnabled || !tryStartReactionPending(environment, postId, optionId)) {
+      if (!resolvedEnabled || inFlightTypes.current.has(optionId)) {
         return;
       }
 
@@ -163,6 +147,8 @@ export function usePostReactionController(
         postId,
         type: optionId,
       });
+      inFlightTypes.current.add(optionId);
+      setPendingTypes((current) => new Set(current).add(optionId));
       setErrorTypes((current) => {
         const next = new Set(current);
         next.delete(optionId);
@@ -170,7 +156,6 @@ export function usePostReactionController(
       });
 
       const finish = (succeeded: boolean) => {
-        finishReactionPending(requestIdentity.environment, requestIdentity.postId, optionId);
         if (
           !isCurrentIdentity(
             requestIdentity.environment,
@@ -181,6 +166,12 @@ export function usePostReactionController(
           return;
         }
 
+        inFlightTypes.current.delete(optionId);
+        setPendingTypes((current) => {
+          const next = new Set(current);
+          next.delete(optionId);
+          return next;
+        });
         if (!succeeded) {
           setErrorTypes((current) => new Set(current).add(optionId));
         }
@@ -204,8 +195,6 @@ export function usePostReactionController(
         commitAdd({
           onCompleted,
           onError: () => finish(false),
-          onUnsubscribe: () =>
-            finishReactionPending(requestIdentity.environment, requestIdentity.postId, optionId),
           optimisticUpdater,
           variables: { postId, type: optionId },
         });
@@ -213,21 +202,19 @@ export function usePostReactionController(
         commitDelete({
           onCompleted,
           onError: () => finish(false),
-          onUnsubscribe: () =>
-            finishReactionPending(requestIdentity.environment, requestIdentity.postId, optionId),
           optimisticUpdater,
           updater: createReactionDeleteUpdater({ postId, type: optionId }),
           variables: { postId, type: optionId },
         });
       }
     },
-    [commitAdd, commitDelete, environment, isCurrentIdentity, postId, resolvedEnabled],
+    [commitAdd, commitDelete, isCurrentIdentity, postId, resolvedEnabled],
   );
 
   return {
     disabled: !resolvedEnabled,
     errorTypeIds: [...errorTypes],
-    pendingTypeIds,
+    pendingTypeIds: [...pendingTypes],
     postId,
     relativeHandle: data.profile.relativeHandle,
     reactionCounts: data.reactionCounts,

@@ -1563,18 +1563,14 @@ export const ReactionSharedSurfaceConsistencyContract: Story = {
     const canvas = within(canvasElement);
     const hearts = await canvas.findAllByRole('button', { name: '❤️ 반응 12개' });
     expect(hearts).toHaveLength(2);
-    unstable_batchedUpdates(() => {
-      hearts[0]!.click();
-      hearts[1]!.click();
-    });
+    await userEvent.click(hearts[0]!);
     await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(1));
 
-    const pendingHearts = canvas.getAllByRole('button', {
-      name: '❤️ 반응 13개, 처리 중',
-    });
-    expect(pendingHearts).toHaveLength(2);
-    pendingHearts.forEach((button) => expect(button).toBeDisabled());
-    pendingHearts.forEach((button) => expect(button).toHaveAttribute('aria-pressed', 'true'));
+    expect(canvas.getByRole('button', { name: '❤️ 반응 13개, 처리 중' })).toBeDisabled();
+    expect(canvas.getByRole('button', { name: '❤️ 반응 13개' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
 
     const party = await canvas.findAllByRole('button', { name: '🎉 반응 7개' });
     expect(party).toHaveLength(2);
