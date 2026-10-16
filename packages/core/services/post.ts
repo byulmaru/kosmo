@@ -19,6 +19,7 @@ import {
   InstanceState,
   MediaSource,
   MediaState,
+  NotificationKind,
   PostQuoteConsentStatus,
   PostState,
   PostVisibility,
@@ -32,6 +33,7 @@ import {
 import { temporalClient } from '../temporal/client';
 import { KOSMO_TASK_QUEUE } from '../temporal/task-queue';
 import { postVisibilityCondition } from '../visibility/post';
+import { captureNotificationRecipients } from './notification-recipient-snapshot';
 import { revokePostQuoteConsentsForSource } from './post-quote-consent';
 import { validatePostStructure } from './post-structure';
 import { assertProfilePairIsNotBlocked } from './profile-block-policy';
@@ -79,6 +81,7 @@ type RemoteMediaCandidate = {
 type PostOrigin = 'LOCAL' | 'ACTIVITYPUB';
 
 type LocalRepostInput = {
+  actorAccountId?: string;
   actorProfileId: string;
   origin: 'LOCAL';
   sourcePostId: string;
@@ -273,9 +276,11 @@ const resolveRepostVisibility = (
 const createOrFindRepost = async (
   tx: Transaction,
   {
+    actorAccountId,
     actorProfileId,
     sourcePostId,
   }: {
+    readonly actorAccountId: string | null;
     readonly actorProfileId: string;
     readonly sourcePostId: string;
   },
@@ -309,6 +314,12 @@ const createOrFindRepost = async (
     .returning()
     .then(first);
   if (inserted) {
+    await captureNotificationRecipients(tx, {
+      actorAccountId,
+      kind: NotificationKind.REPOST,
+      recipientProfileIds: [source.profileId],
+      sourceId: inserted.id,
+    });
     return { created: true as const, repost: inserted };
   }
 
@@ -529,6 +540,7 @@ export function repostPost(input: ActivityPubRepostInput): Promise<RepostResult>
 export async function repostPost(input: RepostInput): Promise<RepostResult> {
   const result = await db.transaction(async (tx) => {
     let materialized = await createOrFindRepost(tx, {
+      actorAccountId: input.origin === 'LOCAL' ? (input.actorAccountId ?? null) : null,
       actorProfileId: input.actorProfileId,
       sourcePostId: input.sourcePostId,
     });
@@ -546,6 +558,7 @@ export async function repostPost(input: RepostInput): Promise<RepostResult> {
 
       if (!(await save(materialized.repost.id))) {
         materialized = await createOrFindRepost(tx, {
+          actorAccountId: null,
           actorProfileId: input.actorProfileId,
           sourcePostId: input.sourcePostId,
         });
@@ -604,6 +617,8 @@ export async function createPost(
                 : [],
             ),
       );
+      let replyRecipientProfileId: string | undefined;
+      let quoteRecipientProfileId: string | undefined;
 
       if (
         input.origin === 'LOCAL' &&
@@ -683,13 +698,15 @@ export async function createPost(
             field: 'replyParentId',
           });
         }
+        replyRecipientProfileId = parent.profileId;
       }
 
       if (input.origin === 'LOCAL' && input.repostSourceId !== undefined) {
-        await validateQuoteSource(tx, {
+        const source = await validateQuoteSource(tx, {
           actorProfileId: input.profileId,
           postId: input.repostSourceId,
         });
+        quoteRecipientProfileId = source.profileId;
       }
 
       const createdAt =
@@ -789,6 +806,26 @@ export async function createPost(
         .where(eq(PostContents.id, content.id))
         .returning()
         .then(firstOrThrow);
+
+      const actorAccountId = input.origin === 'LOCAL' ? (input.accountId ?? null) : null;
+      await captureNotificationRecipients(tx, {
+        actorAccountId,
+        kind: NotificationKind.REPLY,
+        recipientProfileIds: replyRecipientProfileId ? [replyRecipientProfileId] : [],
+        sourceId: linkedPost.id,
+      });
+      await captureNotificationRecipients(tx, {
+        actorAccountId,
+        kind: NotificationKind.MENTION,
+        recipientProfileIds: [...mentionProfileIds],
+        sourceId: linkedPost.id,
+      });
+      await captureNotificationRecipients(tx, {
+        actorAccountId,
+        kind: NotificationKind.QUOTE,
+        recipientProfileIds: quoteRecipientProfileId ? [quoteRecipientProfileId] : [],
+        sourceId: linkedPost.id,
+      });
 
       return { content: linkedContent, created: true, post: linkedPost };
     });

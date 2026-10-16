@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { after, mock, test } from 'node:test';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import {
+  AccountProfiles,
+  Accounts,
   db,
   firstOrThrow,
   Instances,
@@ -13,6 +15,8 @@ import {
   Reactions,
 } from '../db';
 import {
+  AccountProfileRole,
+  AccountState,
   InstanceKind,
   InstanceState,
   NotificationKind,
@@ -23,12 +27,33 @@ import {
 } from '../enums';
 import { NotFoundError, ValidationError } from '../error';
 import { temporalClient } from '../temporal/client';
+import { getNotificationRecipientSnapshot } from './notification-recipient-snapshot';
 import { ProfilePairBlockedError } from './profile-block-policy';
 import { addReaction, deleteReaction } from './reaction';
 
+const accountIds: string[] = [];
+
 after(async () => {
+  if (accountIds.length > 0) {
+    await db.delete(AccountProfiles).where(inArray(AccountProfiles.accountId, accountIds));
+    await db.delete(Accounts).where(inArray(Accounts.id, accountIds));
+  }
   await pg.end();
 });
+
+const createAccount = async () => {
+  const account = await db
+    .insert(Accounts)
+    .values({
+      displayName: crypto.randomUUID(),
+      oidcSubject: crypto.randomUUID(),
+      state: AccountState.ACTIVE,
+    })
+    .returning()
+    .then(firstOrThrow);
+  accountIds.push(account.id);
+  return account;
+};
 
 const createFixture = async ({
   instanceKind = InstanceKind.LOCAL,
@@ -170,6 +195,52 @@ test('addReaction 결과는 새 source만 구분한다', async () => {
   assert.equal(first.created, true);
   assert.equal(repeated.created, false);
   assert.equal(repeated.reaction.id, first.reaction.id);
+});
+
+test('Reaction 수신자 스냅샷은 행동 Account만 제외하고 재시도에서 멤버십을 확장하지 않는다', async () => {
+  const actor = await createFixture();
+  const target = await createFixture();
+  const [actorAccount, targetOperator, laterMember] = await Promise.all([
+    createAccount(),
+    createAccount(),
+    createAccount(),
+  ]);
+  await db.insert(AccountProfiles).values([
+    { accountId: actorAccount.id, profileId: actor.profile.id, role: AccountProfileRole.OWNER },
+    { accountId: actorAccount.id, profileId: target.profile.id, role: AccountProfileRole.MEMBER },
+    { accountId: targetOperator.id, profileId: target.profile.id, role: AccountProfileRole.OWNER },
+  ]);
+
+  const input = {
+    actorAccountId: actorAccount.id,
+    actorProfileId: actor.profile.id,
+    origin: 'LOCAL' as const,
+    postId: target.post.id,
+    type: '🎉',
+  };
+  const created = await addReaction(input);
+  const originalSnapshot = await getNotificationRecipientSnapshot(
+    db,
+    NotificationKind.REACTION,
+    created.reaction.id,
+  );
+  assert.equal(originalSnapshot?.actorAccountId, actorAccount.id);
+  assert.deepEqual(originalSnapshot?.recipients, { [target.profile.id]: [targetOperator.id] });
+
+  await db.insert(AccountProfiles).values({
+    accountId: laterMember.id,
+    profileId: target.profile.id,
+    role: AccountProfileRole.MEMBER,
+  });
+  const retried = await addReaction(input);
+  const retriedSnapshot = await getNotificationRecipientSnapshot(
+    db,
+    NotificationKind.REACTION,
+    created.reaction.id,
+  );
+
+  assert.equal(retried.created, false);
+  assert.deepEqual(retriedSnapshot, originalSnapshot);
 });
 
 test('core는 entry에서 검증된 actor의 Profile/Instance 상태를 다시 조회하지 않는다', async () => {

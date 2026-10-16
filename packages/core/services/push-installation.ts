@@ -1,4 +1,4 @@
-import { and, eq, gt, lte } from 'drizzle-orm';
+import { and, eq, gt, isNull, lte, ne } from 'drizzle-orm';
 import { unionAll } from 'drizzle-orm/pg-core';
 import {
   AccountProfiles,
@@ -43,7 +43,8 @@ export const invalidatePushInstallation = async (input: {
 
 /**
  * Finds installation candidates for a committed Notification using registration,
- * AccountProfile/Session eligibility, and the original 24-hour delivery cutoff.
+ * saved Account, current AccountProfile/Session eligibility, and the original
+ * 24-hour delivery cutoff.
  *
  * The query intentionally does not inspect `Notifications.readAt`: Push
  * delivery is independent from the canonical in-app read state. The
@@ -72,13 +73,20 @@ export const findEligiblePushInstallations = async ({
     .select(installationSelection)
     .from(Notifications)
     .innerJoin(Profiles, eq(Profiles.id, Notifications.recipientProfileId))
-    .innerJoin(AccountProfiles, eq(AccountProfiles.profileId, Profiles.id))
-    .innerJoin(Accounts, eq(Accounts.id, AccountProfiles.accountId))
-    .innerJoin(PushInstallations, eq(PushInstallations.accountId, AccountProfiles.accountId))
+    .innerJoin(
+      AccountProfiles,
+      and(
+        eq(AccountProfiles.accountId, Notifications.recipientAccountId),
+        eq(AccountProfiles.profileId, Notifications.recipientProfileId),
+      ),
+    )
+    .innerJoin(Accounts, eq(Accounts.id, Notifications.recipientAccountId))
+    .innerJoin(PushInstallations, eq(PushInstallations.accountId, Notifications.recipientAccountId))
     .innerJoin(Sessions, eq(Sessions.id, PushInstallations.sessionId))
     .where(
       and(
         eq(Notifications.id, notificationId),
+        ne(Notifications.kind, NotificationKind.OPERATIONAL),
         eq(Profiles.state, ProfileState.ACTIVE),
         eq(Accounts.state, AccountState.ACTIVE),
         eq(Sessions.state, SessionState.ACTIVE),
@@ -91,12 +99,13 @@ export const findEligiblePushInstallations = async ({
     .select(installationSelection)
     .from(Notifications)
     .innerJoin(Accounts, eq(Accounts.id, Notifications.recipientAccountId))
-    .innerJoin(PushInstallations, eq(PushInstallations.accountId, Accounts.id))
+    .innerJoin(PushInstallations, eq(PushInstallations.accountId, Notifications.recipientAccountId))
     .innerJoin(Sessions, eq(Sessions.id, PushInstallations.sessionId))
     .where(
       and(
         eq(Notifications.id, notificationId),
         eq(Notifications.kind, NotificationKind.OPERATIONAL),
+        isNull(Notifications.recipientProfileId),
         eq(Accounts.state, AccountState.ACTIVE),
         eq(Sessions.state, SessionState.ACTIVE),
         lte(PushInstallations.registrationEpoch, Notifications.createdAt),

@@ -1,11 +1,12 @@
-import { and, eq, gt, isNull, or, sql } from 'drizzle-orm';
-import { first, Notifications, ProfileBlocks, ProfileMutes } from '../db';
+import { and, eq, gt, inArray, isNull, or, sql } from 'drizzle-orm';
+import { Accounts, first, Notifications, ProfileBlocks, ProfileMutes } from '../db';
 import { profileBlockPairWhere } from '../visibility/profile-block';
 import type { DatabaseHandle } from '../db';
 import type { NotificationKind } from '../enums';
 
 type MaterializeNotificationInput = {
   readonly kind: NotificationKind;
+  readonly recipientAccountIds: readonly string[];
   readonly recipientProfileId: string;
   readonly relatedProfileId: string;
   readonly sourceId: string;
@@ -21,28 +22,44 @@ type MaterializeNotificationInput = {
  */
 export const materializeNotification = async (
   database: DatabaseHandle,
-  { kind, recipientProfileId, relatedProfileId, sourceId }: MaterializeNotificationInput,
-): Promise<string | null> => {
-  if (await isNotificationSuppressed(database, recipientProfileId, relatedProfileId)) {
-    return null;
+  {
+    kind,
+    recipientAccountIds,
+    recipientProfileId,
+    relatedProfileId,
+    sourceId,
+  }: MaterializeNotificationInput,
+): Promise<string[]> => {
+  if (
+    recipientAccountIds.length === 0 ||
+    (await isNotificationSuppressed(database, recipientProfileId, relatedProfileId))
+  ) {
+    return [];
   }
 
-  const [inserted] = await database
+  const accountIds = [...new Set(recipientAccountIds)].sort();
+  const existingAccounts = await database
+    .select({ id: Accounts.id })
+    .from(Accounts)
+    .where(inArray(Accounts.id, accountIds))
+    .then((rows) => rows.map(({ id }) => id));
+
+  if (existingAccounts.length === 0) {
+    return [];
+  }
+
+  await database
     .insert(Notifications)
-    .values({
-      data: {},
-      kind,
-      recipientProfileId,
-      sourceId,
-    })
-    .onConflictDoNothing({
-      target: [Notifications.recipientProfileId, Notifications.kind, Notifications.sourceId],
-    })
-    .returning({ id: Notifications.id });
-
-  if (inserted) {
-    return inserted.id;
-  }
+    .values(
+      existingAccounts.map((recipientAccountId) => ({
+        data: {},
+        kind,
+        recipientAccountId,
+        recipientProfileId,
+        sourceId,
+      })),
+    )
+    .onConflictDoNothing();
 
   return database
     .select({ id: Notifications.id })
@@ -52,10 +69,11 @@ export const materializeNotification = async (
         eq(Notifications.kind, kind),
         eq(Notifications.recipientProfileId, recipientProfileId),
         eq(Notifications.sourceId, sourceId),
+        inArray(Notifications.recipientAccountId, existingAccounts),
       ),
     )
-    .limit(1)
-    .then((rows) => rows[0]?.id ?? null);
+    .orderBy(Notifications.recipientAccountId, Notifications.id)
+    .then((rows) => rows.map(({ id }) => id));
 };
 
 export const isNotificationSuppressed = async (

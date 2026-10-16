@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import {
+  AccountProfiles,
+  Accounts,
   ActivityPubActors,
   db,
   firstOrThrow,
@@ -13,13 +15,17 @@ import {
   Profiles,
 } from '../db';
 import {
+  AccountProfileRole,
+  AccountState,
   ActivityPubActorType,
   InstanceKind,
   InstanceState,
+  NotificationKind,
   ProfileFollowPolicy,
   ProfileState,
 } from '../enums';
 import { NotFoundError } from '../error';
+import { getNotificationRecipientSnapshot } from './notification-recipient-snapshot';
 import { ProfilePairBlockedError } from './profile-block-policy';
 import {
   executeProfileFollowPairTransition,
@@ -33,6 +39,27 @@ import type { ProfileFollowPairTransitionInput } from './profile-follow-command'
 
 const profileIds: string[] = [];
 const instanceIds: string[] = [];
+const accountIds: string[] = [];
+
+const createAccount = async () => {
+  const account = await db
+    .insert(Accounts)
+    .values({
+      displayName: crypto.randomUUID(),
+      oidcSubject: crypto.randomUUID(),
+      state: AccountState.ACTIVE,
+    })
+    .returning()
+    .then(firstOrThrow);
+  accountIds.push(account.id);
+  return account;
+};
+
+const connectAccountToProfile = (
+  accountId: string,
+  profileId: string,
+  role: AccountProfileRole = AccountProfileRole.MEMBER,
+) => db.insert(AccountProfiles).values({ accountId, profileId, role });
 
 const createProfile = async (followPolicy: ProfileFollowPolicy = ProfileFollowPolicy.OPEN) => {
   const suffix = crypto.randomUUID();
@@ -108,6 +135,10 @@ const readUuidVersion = async (id: string) => {
 };
 
 after(async () => {
+  if (accountIds.length > 0) {
+    await db.delete(AccountProfiles).where(inArray(AccountProfiles.accountId, accountIds));
+    await db.delete(Accounts).where(inArray(Accounts.id, accountIds));
+  }
   if (profileIds.length > 0) {
     await db
       .delete(ProfileFollowRequests)
@@ -319,6 +350,156 @@ test('approval-required Follow uses the PostgreSQL-generated request ID and dedu
     assert.equal(duplicate.pendingRequestId, profileFollowRequest.id);
     assert.deepEqual(duplicate.effectPlan, []);
   }
+});
+
+test('Follow Request approval keeps the original requester Account as the Follow actor', async () => {
+  const follower = await createProfile();
+  const followee = await createProfile(ProfileFollowPolicy.APPROVAL_REQUIRED);
+  const [requester, approvingOperator, otherOperator] = await Promise.all([
+    createAccount(),
+    createAccount(),
+    createAccount(),
+  ]);
+  await Promise.all([
+    connectAccountToProfile(requester.id, follower.id, AccountProfileRole.OWNER),
+    connectAccountToProfile(requester.id, followee.id),
+    connectAccountToProfile(approvingOperator.id, followee.id, AccountProfileRole.OWNER),
+    connectAccountToProfile(otherOperator.id, followee.id),
+  ]);
+
+  const pair = { followerProfileId: follower.id, followeeProfileId: followee.id };
+  const pending = await executeProfileFollowPairTransition({
+    pair,
+    command: { kind: 'FOLLOW', actorAccountId: requester.id, origin: 'LOCAL' },
+  });
+  assert.equal(pending.ok, true);
+  if (!pending.ok) {
+    return;
+  }
+  const requestId =
+    pending.result.commandKind === 'FOLLOW' && pending.result.kind === 'PENDING'
+      ? pending.result.profileFollowRequestId
+      : undefined;
+  assert.ok(requestId);
+  const requestSnapshot = await getNotificationRecipientSnapshot(
+    db,
+    NotificationKind.FOLLOW_REQUEST,
+    requestId,
+  );
+  assert.equal(requestSnapshot?.actorAccountId, requester.id);
+  assert.deepEqual(requestSnapshot?.recipients, {
+    [followee.id]: [approvingOperator.id, otherOperator.id].sort(),
+  });
+
+  const laterOperator = await createAccount();
+  await connectAccountToProfile(laterOperator.id, followee.id);
+  const approvalCommand = {
+    kind: 'APPROVE' as const,
+    actorProfileId: followee.id,
+    expectedRowId: requestId,
+    origin: 'LOCAL' as const,
+  };
+  const approved = await executeProfileFollowPairTransition({
+    pair,
+    pendingRequestId: requestId,
+    command: approvalCommand,
+  });
+  assert.equal(approved.ok, true);
+  if (!approved.ok) {
+    return;
+  }
+  const followId =
+    approved.result.commandKind === 'APPROVE' || approved.result.commandKind === 'ACCEPT'
+      ? approved.result.profileFollowId
+      : undefined;
+  assert.ok(followId);
+
+  const followSnapshot = await getNotificationRecipientSnapshot(
+    db,
+    NotificationKind.FOLLOW,
+    followId,
+  );
+  assert.equal(followSnapshot?.actorAccountId, requester.id);
+  assert.deepEqual(followSnapshot?.recipients, {
+    [followee.id]: [approvingOperator.id, otherOperator.id, laterOperator.id].sort(),
+  });
+
+  const joinedBeforeRetry = await createAccount();
+  await connectAccountToProfile(joinedBeforeRetry.id, followee.id);
+  const retry = await executeProfileFollowPairTransition({
+    pair,
+    pendingRequestId: requestId,
+    command: approvalCommand,
+  });
+  assert.equal(retry.ok, true);
+  if (!retry.ok) {
+    return;
+  }
+  assert.equal(retry.result.commandKind, 'APPROVE');
+  assert.deepEqual(retry.effectPlan, []);
+  assert.deepEqual(
+    await getNotificationRecipientSnapshot(db, NotificationKind.FOLLOW, followId),
+    followSnapshot,
+  );
+  assert.deepEqual(
+    await getNotificationRecipientSnapshot(db, NotificationKind.FOLLOW_REQUEST, requestId),
+    requestSnapshot,
+  );
+});
+
+test('open-policy promotion keeps the original Follow Request actor Account', async () => {
+  const follower = await createProfile();
+  const followee = await createProfile(ProfileFollowPolicy.APPROVAL_REQUIRED);
+  const [requester, laterCaller, otherOperator] = await Promise.all([
+    createAccount(),
+    createAccount(),
+    createAccount(),
+  ]);
+  await Promise.all([
+    connectAccountToProfile(requester.id, follower.id, AccountProfileRole.OWNER),
+    connectAccountToProfile(requester.id, followee.id),
+    connectAccountToProfile(laterCaller.id, follower.id),
+    connectAccountToProfile(laterCaller.id, followee.id),
+    connectAccountToProfile(otherOperator.id, followee.id, AccountProfileRole.OWNER),
+  ]);
+
+  const pair = { followerProfileId: follower.id, followeeProfileId: followee.id };
+  const pending = await executeProfileFollowPairTransition({
+    pair,
+    command: { kind: 'FOLLOW', actorAccountId: requester.id, origin: 'LOCAL' },
+  });
+  assert.equal(pending.ok, true);
+  if (!pending.ok) {
+    return;
+  }
+  const requestId =
+    pending.result.commandKind === 'FOLLOW' && pending.result.kind === 'PENDING'
+      ? pending.result.profileFollowRequestId
+      : undefined;
+  assert.ok(requestId);
+
+  await db
+    .update(Profiles)
+    .set({ followPolicy: ProfileFollowPolicy.OPEN })
+    .where(eq(Profiles.id, followee.id));
+  const promoted = await executeProfileFollowPairTransition({
+    pair,
+    pendingRequestId: requestId,
+    command: { kind: 'FOLLOW', actorAccountId: laterCaller.id, origin: 'LOCAL' },
+  });
+  assert.equal(promoted.ok, true);
+  if (!promoted.ok) {
+    return;
+  }
+  const followId =
+    promoted.result.commandKind === 'FOLLOW' ? promoted.result.profileFollowId : undefined;
+  assert.ok(followId);
+
+  const snapshot = await getNotificationRecipientSnapshot(db, NotificationKind.FOLLOW, followId);
+  assert.equal(snapshot?.actorAccountId, requester.id);
+  assert.deepEqual(snapshot?.recipients, {
+    [followee.id]: [laterCaller.id, otherOperator.id].sort(),
+  });
 });
 
 test('promoting an existing request deletes it by ID and creates the Follow effect', async () => {

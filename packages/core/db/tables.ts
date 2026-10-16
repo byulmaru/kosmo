@@ -288,9 +288,9 @@ export const Notifications = pgTable(
     recipientProfileId: uuid('recipient_profile_id').references(() => Profiles.id, {
       onDelete: 'cascade',
     }),
-    recipientAccountId: uuid('recipient_account_id').references(() => Accounts.id, {
-      onDelete: 'cascade',
-    }),
+    recipientAccountId: uuid('recipient_account_id')
+      .notNull()
+      .references(() => Accounts.id, { onDelete: 'cascade' }),
     kind: Enum.notificationKind('kind').notNull(),
     sourceId: uuid('source_id').notNull(),
     data: jsonb('data').$type<NotificationData>().notNull().default({}),
@@ -298,18 +298,33 @@ export const Notifications = pgTable(
     readAt: datetime('read_at'),
   },
   (table) => [
-    check(
-      'notification_recipient_check',
-      sql`(${table.recipientProfileId} IS NOT NULL) <> (${table.recipientAccountId} IS NOT NULL)`,
-    ),
-    unique().on(table.recipientProfileId, table.kind, table.sourceId),
-    unique().on(table.recipientAccountId, table.kind, table.sourceId),
-    index().on(table.recipientProfileId, table.id.desc()),
+    uniqueIndex()
+      .on(table.recipientAccountId, table.recipientProfileId, table.kind, table.sourceId)
+      .where(sql`${table.recipientProfileId} IS NOT NULL`),
+    uniqueIndex()
+      .on(table.recipientAccountId, table.kind, table.sourceId)
+      .where(sql`${table.recipientProfileId} IS NULL`),
+    index().on(table.recipientProfileId, table.createdAt.desc(), table.id.desc()),
+    index().on(table.recipientAccountId, table.createdAt.desc(), table.id.desc()),
     index()
       .on(table.recipientProfileId)
       .where(sql`${table.readAt} IS NULL`),
     index().on(table.kind, table.sourceId, table.id),
   ],
+);
+
+export const NotificationRecipientSnapshots = pgTable(
+  'notification_recipient_snapshot',
+  {
+    kind: Enum.notificationKind('kind').notNull(),
+    sourceId: uuid('source_id').notNull(),
+    actorAccountId: uuid('actor_account_id').references(() => Accounts.id, {
+      onDelete: 'set null',
+    }),
+    recipients: jsonb('recipients').$type<Readonly<Record<string, readonly string[]>>>().notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [primaryKey({ columns: [table.kind, table.sourceId] })],
 );
 
 export type OperationalNotificationData = {

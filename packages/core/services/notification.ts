@@ -12,7 +12,25 @@ import {
 } from '../db';
 import { InstanceKind, InstanceState, NotificationKind, PostState, ProfileState } from '../enums';
 import { materializeNotification } from './notification-policy';
-import type { Database } from '../db';
+import { captureNotificationRecipients } from './notification-recipient-snapshot';
+import type { Database, DatabaseHandle } from '../db';
+
+const getRecipientAccountIds = async (
+  database: DatabaseHandle,
+  kind: NotificationKind,
+  sourceId: string,
+  recipientProfileId: string,
+  sourceCreatedAt: Temporal.Instant,
+): Promise<string[]> => {
+  const snapshot = await captureNotificationRecipients(database, {
+    kind,
+    legacyMembershipCutoff: sourceCreatedAt,
+    recipientProfileIds: [recipientProfileId],
+    sourceId,
+  });
+
+  return [...(snapshot.recipients[recipientProfileId] ?? [])];
+};
 
 const NotificationRepostAuthors = alias(Profiles, 'notification_repost_author');
 const NotificationRepostAuthorInstances = alias(Instances, 'notification_repost_author_instance');
@@ -23,10 +41,11 @@ const NotificationRepostRecipientInstances = alias(
   'notification_repost_recipient_instance',
 );
 
-export const createFollowNotification = async (sourceId: string): Promise<string | null> =>
+export const createFollowNotification = async (sourceId: string): Promise<string[]> =>
   getDatabaseConnection().transaction(async (tx) => {
     const source = await tx
       .select({
+        createdAt: ProfileFollows.createdAt,
         id: ProfileFollows.id,
         recipientProfileId: ProfileFollows.followeeProfileId,
         relatedProfileId: ProfileFollows.followerProfileId,
@@ -41,21 +60,29 @@ export const createFollowNotification = async (sourceId: string): Promise<string
     // The relation may be consumed by a concurrent terminal action before this
     // post-commit projection is materialized. There is no Notification to project.
     if (!source) {
-      return null;
+      return [];
     }
 
     return materializeNotification(tx, {
       kind: NotificationKind.FOLLOW,
+      recipientAccountIds: await getRecipientAccountIds(
+        tx,
+        NotificationKind.FOLLOW,
+        source.id,
+        source.recipientProfileId,
+        source.createdAt,
+      ),
       recipientProfileId: source.recipientProfileId,
       relatedProfileId: source.relatedProfileId,
       sourceId: source.id,
     });
   });
 
-export const createFollowRequestNotification = async (sourceId: string): Promise<string | null> =>
+export const createFollowRequestNotification = async (sourceId: string): Promise<string[]> =>
   getDatabaseConnection().transaction(async (tx) => {
     const source = await tx
       .select({
+        createdAt: ProfileFollowRequests.createdAt,
         id: ProfileFollowRequests.id,
         recipientProfileId: ProfileFollowRequests.followeeProfileId,
         relatedProfileId: ProfileFollowRequests.followerProfileId,
@@ -77,11 +104,18 @@ export const createFollowRequestNotification = async (sourceId: string): Promise
     // The source may have reached a terminal state between the source commit and this
     // post-commit effect. In that case there is no Notification to project.
     if (!source) {
-      return null;
+      return [];
     }
 
     return materializeNotification(tx, {
       kind: NotificationKind.FOLLOW_REQUEST,
+      recipientAccountIds: await getRecipientAccountIds(
+        tx,
+        NotificationKind.FOLLOW_REQUEST,
+        source.id,
+        source.recipientProfileId,
+        source.createdAt,
+      ),
       recipientProfileId: source.recipientProfileId,
       relatedProfileId: source.relatedProfileId,
       sourceId: source.id,
@@ -91,11 +125,12 @@ export const createFollowRequestNotification = async (sourceId: string): Promise
 export const createReactionNotification = async (
   sourceId: string,
   handle?: Database,
-): Promise<string | null> =>
+): Promise<string[]> =>
   getDatabaseConnection(handle).transaction(async (tx) => {
     const source = await tx
       .select({
         actorProfileId: Reactions.profileId,
+        createdAt: Reactions.createdAt,
         id: Reactions.id,
         recipientInstanceKind: Instances.kind,
         recipientProfileId: Posts.profileId,
@@ -111,18 +146,25 @@ export const createReactionNotification = async (
     // An inbound Undo may remove the source before notification materialization.
     // The committed reaction lifecycle remains authoritative, so this is an expected no-op.
     if (!source) {
-      return null;
+      return [];
     }
 
     if (
       source.actorProfileId === source.recipientProfileId ||
       source.recipientInstanceKind !== InstanceKind.LOCAL
     ) {
-      return null;
+      return [];
     }
 
     return materializeNotification(tx, {
       kind: NotificationKind.REACTION,
+      recipientAccountIds: await getRecipientAccountIds(
+        tx,
+        NotificationKind.REACTION,
+        source.id,
+        source.recipientProfileId,
+        source.createdAt,
+      ),
       recipientProfileId: source.recipientProfileId,
       relatedProfileId: source.actorProfileId,
       sourceId: source.id,
@@ -132,11 +174,12 @@ export const createReactionNotification = async (
 export const createRepostNotification = async (
   sourceId: string,
   handle?: Database,
-): Promise<string | null> => {
+): Promise<string[]> => {
   const connection = getDatabaseConnection(handle);
   const source = await connection
     .select({
       actorProfileId: Posts.profileId,
+      createdAt: Posts.createdAt,
       id: Posts.id,
       recipientInstanceKind: NotificationRepostRecipientInstances.kind,
       recipientProfileId: NotificationRepostRelatedPosts.profileId,
@@ -180,18 +223,25 @@ export const createRepostNotification = async (
   // A delete or visibility transition may win before this retried effect runs.
   // The committed lifecycle is authoritative, so there is no Notification to project.
   if (!source) {
-    return null;
+    return [];
   }
 
   if (
     source.actorProfileId === source.recipientProfileId ||
     source.recipientInstanceKind !== InstanceKind.LOCAL
   ) {
-    return null;
+    return [];
   }
 
   return materializeNotification(connection, {
     kind: NotificationKind.REPOST,
+    recipientAccountIds: await getRecipientAccountIds(
+      connection,
+      NotificationKind.REPOST,
+      source.id,
+      source.recipientProfileId,
+      source.createdAt,
+    ),
     recipientProfileId: source.recipientProfileId,
     relatedProfileId: source.actorProfileId,
     sourceId: source.id,

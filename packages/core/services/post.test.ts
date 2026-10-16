@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { after, mock, test } from 'node:test';
 import { and, DrizzleQueryError, eq } from 'drizzle-orm';
 import {
+  AccountProfiles,
   Accounts,
   ActivityPubPosts,
   db,
@@ -18,11 +19,13 @@ import {
   Profiles,
 } from '../db';
 import {
+  AccountProfileRole,
   AccountState,
   InstanceKind,
   InstanceState,
   MediaSource,
   MediaState,
+  NotificationKind,
   PostState,
   PostVisibility,
   ProfileFollowPolicy,
@@ -35,6 +38,7 @@ import {
   postContentDocumentFromTextAndMedia,
 } from '../post-content/server';
 import { temporalClient } from '../temporal/client';
+import { getNotificationRecipientSnapshot } from './notification-recipient-snapshot';
 import { createPost } from './post';
 import { ProfilePairBlockedError } from './profile-block-policy';
 
@@ -74,6 +78,13 @@ const createAccount = () =>
       oidcSubject: crypto.randomUUID(),
       state: AccountState.ACTIVE,
     })
+    .returning()
+    .then(firstOrThrow);
+
+const addAccountProfile = async (accountId: string, profileId: string) =>
+  db
+    .insert(AccountProfiles)
+    .values({ accountId, profileId, role: AccountProfileRole.MEMBER })
     .returning()
     .then(firstOrThrow);
 
@@ -128,6 +139,185 @@ test('createPost는 local Post와 최초 content 연결을 하나의 transaction
       .then((rows) => rows.length),
     0,
   );
+});
+
+test('createPost는 대상이 없어도 Reply·Mention·Quote snapshot을 원인 Post와 함께 저장한다', async () => {
+  const author = await createProfile();
+  const actor = await createAccount();
+  await addAccountProfile(actor.id, author.id);
+
+  const { post } = await createPost({
+    accountId: actor.id,
+    document: postContentDocumentFromText('post without notification targets'),
+    origin: 'LOCAL',
+    profileId: author.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+
+  for (const kind of [NotificationKind.REPLY, NotificationKind.MENTION, NotificationKind.QUOTE]) {
+    const snapshot = await getNotificationRecipientSnapshot(db, kind, post.id);
+    assert.ok(snapshot, `${kind} snapshot should be persisted with the Post`);
+    assert.equal(snapshot.actorAccountId, actor.id);
+    assert.deepEqual(snapshot.recipients, {});
+  }
+});
+
+test('createPost는 원인 시점의 Reply·Mention·Quote Profile 멤버를 정확한 Account로 고정한다', async () => {
+  const author = await createProfile();
+  const replyAuthor = await createProfile();
+  const mentionTarget = await createProfile();
+  const secondMentionTarget = await createProfile();
+  const quoteAuthor = await createProfile();
+  const actor = await createAccount();
+  const replyRecipient = await createAccount();
+  const secondReplyRecipient = await createAccount();
+  const mentionRecipient = await createAccount();
+  const secondMentionRecipient = await createAccount();
+  const secondTargetMentionRecipient = await createAccount();
+  const quoteRecipient = await createAccount();
+  const secondQuoteRecipient = await createAccount();
+  const lateReplyMember = await createAccount();
+  const lateMentionMember = await createAccount();
+  const lateQuoteMember = await createAccount();
+
+  await db.insert(AccountProfiles).values([
+    { accountId: actor.id, profileId: author.id, role: AccountProfileRole.OWNER },
+    { accountId: actor.id, profileId: replyAuthor.id, role: AccountProfileRole.MEMBER },
+    { accountId: actor.id, profileId: mentionTarget.id, role: AccountProfileRole.MEMBER },
+    { accountId: actor.id, profileId: secondMentionTarget.id, role: AccountProfileRole.MEMBER },
+    { accountId: actor.id, profileId: quoteAuthor.id, role: AccountProfileRole.MEMBER },
+    {
+      accountId: replyRecipient.id,
+      profileId: replyAuthor.id,
+      role: AccountProfileRole.MEMBER,
+    },
+    {
+      accountId: secondReplyRecipient.id,
+      profileId: replyAuthor.id,
+      role: AccountProfileRole.MEMBER,
+    },
+    {
+      accountId: mentionRecipient.id,
+      profileId: mentionTarget.id,
+      role: AccountProfileRole.MEMBER,
+    },
+    {
+      accountId: secondMentionRecipient.id,
+      profileId: mentionTarget.id,
+      role: AccountProfileRole.MEMBER,
+    },
+    {
+      accountId: secondTargetMentionRecipient.id,
+      profileId: secondMentionTarget.id,
+      role: AccountProfileRole.MEMBER,
+    },
+    { accountId: quoteRecipient.id, profileId: quoteAuthor.id, role: AccountProfileRole.MEMBER },
+    {
+      accountId: secondQuoteRecipient.id,
+      profileId: quoteAuthor.id,
+      role: AccountProfileRole.MEMBER,
+    },
+  ]);
+
+  const replyParent = await createPost({
+    document: postContentDocumentFromText('reply parent'),
+    origin: 'LOCAL',
+    profileId: replyAuthor.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const quoteSource = await createPost({
+    document: postContentDocumentFromText('quote source'),
+    origin: 'LOCAL',
+    profileId: quoteAuthor.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const reply = await createPost({
+    accountId: actor.id,
+    document: postContentDocumentFromText('reply'),
+    origin: 'LOCAL',
+    profileId: author.id,
+    replyParentId: replyParent.post.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const mentionText = `Hello @${mentionTarget.handle} and @${secondMentionTarget.handle}`;
+  const firstMentionHandle = `@${mentionTarget.handle}`;
+  const secondMentionHandle = `@${secondMentionTarget.handle}`;
+  const mention = await createPost({
+    accountId: actor.id,
+    authoredBodyText: mentionText,
+    document: postContentDocumentFromTextAndMedia(mentionText, [], false, null, [
+      {
+        end: mentionText.indexOf(firstMentionHandle) + firstMentionHandle.length,
+        profileId: mentionTarget.id,
+        relativeHandle: firstMentionHandle,
+        start: mentionText.indexOf(firstMentionHandle),
+      },
+      {
+        end: mentionText.indexOf(secondMentionHandle) + secondMentionHandle.length,
+        profileId: secondMentionTarget.id,
+        relativeHandle: secondMentionHandle,
+        start: mentionText.indexOf(secondMentionHandle),
+      },
+    ]),
+    origin: 'LOCAL',
+    profileId: author.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const quote = await createPost({
+    accountId: actor.id,
+    document: postContentDocumentFromText('quote'),
+    origin: 'LOCAL',
+    profileId: author.id,
+    repostSourceId: quoteSource.post.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+
+  await db.insert(AccountProfiles).values([
+    {
+      accountId: lateReplyMember.id,
+      profileId: replyAuthor.id,
+      role: AccountProfileRole.MEMBER,
+    },
+    {
+      accountId: lateMentionMember.id,
+      profileId: mentionTarget.id,
+      role: AccountProfileRole.MEMBER,
+    },
+    { accountId: lateQuoteMember.id, profileId: quoteAuthor.id, role: AccountProfileRole.MEMBER },
+  ]);
+
+  const replySnapshot = await getNotificationRecipientSnapshot(
+    db,
+    NotificationKind.REPLY,
+    reply.post.id,
+  );
+  const mentionSnapshot = await getNotificationRecipientSnapshot(
+    db,
+    NotificationKind.MENTION,
+    mention.post.id,
+  );
+  const quoteSnapshot = await getNotificationRecipientSnapshot(
+    db,
+    NotificationKind.QUOTE,
+    quote.post.id,
+  );
+
+  assert.ok(replySnapshot);
+  assert.ok(mentionSnapshot);
+  assert.ok(quoteSnapshot);
+  for (const snapshot of [replySnapshot, mentionSnapshot, quoteSnapshot]) {
+    assert.equal(snapshot.actorAccountId, actor.id);
+  }
+  assert.deepEqual(replySnapshot.recipients, {
+    [replyAuthor.id]: [replyRecipient.id, secondReplyRecipient.id].toSorted(),
+  });
+  assert.deepEqual(mentionSnapshot.recipients, {
+    [mentionTarget.id]: [mentionRecipient.id, secondMentionRecipient.id].toSorted(),
+    [secondMentionTarget.id]: [secondTargetMentionRecipient.id],
+  });
+  assert.deepEqual(quoteSnapshot.recipients, {
+    [quoteAuthor.id]: [quoteRecipient.id, secondQuoteRecipient.id].toSorted(),
+  });
 });
 
 test('createPost는 Mention이 없는 local DIRECT Post를 저장한다', async () => {
@@ -527,12 +717,16 @@ test('createPost는 중복 Media와 Media Account 증거 누락을 원자적으�
 
 test('createPost는 ActivityPub first-write-wins와 timestamp 계약을 보존한다', async () => {
   const profile = await createProfile();
+  const recipient = await createProfile();
+  const originalRecipientAccount = await createAccount();
+  const lateRecipientAccount = await createAccount();
+  await addAccountProfile(originalRecipientAccount.id, recipient.id);
   const objectUri = `https://remote.example/notes/${profile.id}`;
   const publishedAt = Temporal.Instant.from('2026-07-18T00:00:00Z');
   const receivedAt = Temporal.Instant.from('2026-07-19T00:00:00Z');
   const first = await createPost({
     document: postContentDocumentFromText('first'),
-    mentionProfileIds: [],
+    mentionProfileIds: [recipient.id],
     objectUri,
     origin: 'ACTIVITYPUB',
     profileId: profile.id,
@@ -540,6 +734,7 @@ test('createPost는 ActivityPub first-write-wins와 timestamp 계약을 보존�
     receivedAt,
     visibility: PostVisibility.PUBLIC,
   });
+  await addAccountProfile(lateRecipientAccount.id, recipient.id);
   const duplicate = await createPost({
     document: postContentDocumentFromText('changed'),
     mentionProfileIds: [],
@@ -556,6 +751,14 @@ test('createPost는 ActivityPub first-write-wins와 timestamp 계약을 보존�
   assert.equal(first.post.currentContentId, first.content.id);
   assert.equal(first.post.createdAt.toString(), publishedAt.toString());
   assert.equal(first.content.createdAt.toString(), receivedAt.toString());
+  const mentionSnapshot = await getNotificationRecipientSnapshot(
+    db,
+    NotificationKind.MENTION,
+    first.post.id,
+  );
+  assert.ok(mentionSnapshot);
+  assert.equal(mentionSnapshot.actorAccountId, null);
+  assert.deepEqual(mentionSnapshot.recipients, { [recipient.id]: [originalRecipientAccount.id] });
   assert.equal(
     await db
       .select()

@@ -1,13 +1,15 @@
 import { and, eq } from 'drizzle-orm';
 import { db, first, Posts, Reactions } from '../db';
-import { PostState } from '../enums';
+import { NotificationKind, PostState } from '../enums';
 import { NotFoundError, ValidationError } from '../error';
 import { temporalClient } from '../temporal/client';
 import { KOSMO_TASK_QUEUE } from '../temporal/task-queue';
 import { reactionTypeSchema } from '../validation';
+import { captureNotificationRecipients } from './notification-recipient-snapshot';
 import { assertProfilePairIsNotBlocked } from './profile-block-policy';
 
 type AddReactionInput = {
+  readonly actorAccountId?: string;
   readonly actorProfileId: string;
   readonly origin: 'LOCAL' | 'ACTIVITYPUB';
   readonly postId: string;
@@ -28,6 +30,7 @@ type AddReactionResult = {
 };
 
 export const addReaction = async ({
+  actorAccountId,
   actorProfileId,
   origin,
   postId,
@@ -78,6 +81,15 @@ export const addReaction = async ({
         .then(first));
     if (!reaction) {
       throw new Error('Reaction not found after insert conflict');
+    }
+
+    if (inserted) {
+      await captureNotificationRecipients(tx, {
+        actorAccountId,
+        kind: NotificationKind.REACTION,
+        recipientProfileIds: [post.profileId],
+        sourceId: reaction.id,
+      });
     }
 
     return { created: inserted !== undefined, reaction };

@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { after, afterEach, before, mock, test } from 'node:test';
 import { and, eq, isNull } from 'drizzle-orm';
 import {
+  AccountProfiles,
+  Accounts,
   ActivityPubPosts,
   db,
   firstOrThrow,
@@ -14,6 +16,8 @@ import {
   Profiles,
 } from '../db';
 import {
+  AccountProfileRole,
+  AccountState,
   InstanceKind,
   InstanceState,
   NotificationKind,
@@ -27,6 +31,7 @@ import {
   postContentDocumentFromText,
   postContentDocumentFromTextAndMedia,
 } from '../post-content/server';
+import { getNotificationRecipientSnapshot } from './notification-recipient-snapshot';
 import { createPost, deletePost as deletePostAction, repostPost as repostPostAction } from './post';
 import { ProfilePairBlockedError } from './profile-block-policy';
 
@@ -89,8 +94,22 @@ const createContentPost = async (
     visibility,
   }).then(({ post }) => post);
 
-const runRepost = async (input: { actorProfileId: string; sourcePostId: string }) =>
-  repostPostAction({ ...input, origin: 'LOCAL' });
+const createAccount = () =>
+  db
+    .insert(Accounts)
+    .values({
+      displayName: crypto.randomUUID(),
+      oidcSubject: crypto.randomUUID(),
+      state: AccountState.ACTIVE,
+    })
+    .returning()
+    .then(firstOrThrow);
+
+const runRepost = async (input: {
+  actorAccountId?: string;
+  actorProfileId: string;
+  sourcePostId: string;
+}) => repostPostAction({ ...input, origin: 'LOCAL' });
 
 const runDelete = async (input: {
   actorProfileId: string;
@@ -118,6 +137,74 @@ test('repostPost는 Public과 Unlisted Source를 direct Unlisted Repost로 생�
     assert.equal(repost.state, PostState.ACTIVE);
     assert.equal(repost.visibility, PostVisibility.UNLISTED);
   }
+});
+
+test('repostPost는 원래 Account와 Source Profile의 계정을 최초 Repost snapshot에 고정한다', async () => {
+  const actor = await createProfile();
+  const sourceAuthor = await createProfile();
+  const actorAccount = await createAccount();
+  const sourceAccount = await createAccount();
+  const secondSourceAccount = await createAccount();
+  const lateMember = await createAccount();
+  await db.insert(AccountProfiles).values([
+    { accountId: actorAccount.id, profileId: actor.profile.id, role: AccountProfileRole.OWNER },
+    {
+      accountId: actorAccount.id,
+      profileId: sourceAuthor.profile.id,
+      role: AccountProfileRole.MEMBER,
+    },
+    {
+      accountId: sourceAccount.id,
+      profileId: sourceAuthor.profile.id,
+      role: AccountProfileRole.MEMBER,
+    },
+    {
+      accountId: secondSourceAccount.id,
+      profileId: sourceAuthor.profile.id,
+      role: AccountProfileRole.MEMBER,
+    },
+  ]);
+  const source = await createContentPost(sourceAuthor.profile.id);
+
+  const first = await runRepost({
+    actorAccountId: actorAccount.id,
+    actorProfileId: actor.profile.id,
+    sourcePostId: source.id,
+  });
+  const snapshot = await getNotificationRecipientSnapshot(
+    db,
+    NotificationKind.REPOST,
+    first.repost.id,
+  );
+
+  assert.equal(first.created, true);
+  assert.ok(snapshot);
+  assert.equal(snapshot.actorAccountId, actorAccount.id);
+  assert.deepEqual(snapshot.recipients, {
+    [sourceAuthor.profile.id]: [sourceAccount.id, secondSourceAccount.id].toSorted(),
+  });
+
+  await db.insert(AccountProfiles).values({
+    accountId: lateMember.id,
+    profileId: sourceAuthor.profile.id,
+    role: AccountProfileRole.MEMBER,
+  });
+  const duplicate = await runRepost({
+    actorAccountId: actorAccount.id,
+    actorProfileId: actor.profile.id,
+    sourcePostId: source.id,
+  });
+  const preserved = await getNotificationRecipientSnapshot(
+    db,
+    NotificationKind.REPOST,
+    first.repost.id,
+  );
+
+  assert.equal(duplicate.created, false);
+  assert.ok(preserved);
+  assert.equal(preserved.createdAt, snapshot.createdAt);
+  assert.equal(preserved.actorAccountId, snapshot.actorAccountId);
+  assert.deepEqual(preserved.recipients, snapshot.recipients);
 });
 
 test('repostPost는 자신의 Followers Only Source를 Followers Only로 생성한다', async () => {
@@ -612,6 +699,12 @@ test('deletePost의 반복·동시 호출은 최초 삭제 시각을 보존하�
 test('deletePost는 pure Repost 구조가 아니면 Repost Notification cleanup을 만들지 않는다', async () => {
   const author = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
   const recipient = await createProfile();
+  const recipientAccount = await createAccount();
+  await db.insert(AccountProfiles).values({
+    accountId: recipientAccount.id,
+    profileId: recipient.profile.id,
+    role: AccountProfileRole.OWNER,
+  });
   const created = await createPost({
     document: postContentDocumentFromText('remote post'),
     mentionProfileIds: [],
@@ -625,6 +718,7 @@ test('deletePost는 pure Repost 구조가 아니면 Repost Notification cleanup�
   assert.equal(created.created, true);
   await db.insert(Notifications).values({
     kind: NotificationKind.REPOST,
+    recipientAccountId: recipientAccount.id,
     recipientProfileId: recipient.profile.id,
     sourceId: created.post.id,
   });
