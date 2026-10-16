@@ -5,11 +5,11 @@ import { ConflictError, NotFoundError } from '@kosmo/core/error';
 import { isHttpUri } from './activitypub-uri';
 import { handleInboundAcceptFollow } from './inbound-accept-follow';
 import { observeInbound } from './inbound-observability';
+import { handleInboundQuoteAccept } from './inbound-quote-command';
 import {
   findOrMaterializeRemoteProfileActorByUri,
   RemoteActorMaterializationError,
 } from './remote-actor-materialization';
-import { handleInboundQuoteAccept } from './inbound-quote-command';
 import type { InboxContext } from '@fedify/fedify';
 import type { Accept } from '@fedify/vocab';
 
