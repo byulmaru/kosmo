@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "81b41486-b1f2-4104-bbcf-421236a1891b",
+  "id": "8dff72d9-c2c5-45cc-9b84-3255e28460ff",
   "prevIds": ["1adf799f-dab8-4b4f-97d7-6fe1fe5cd41b"],
   "ddl": [
     {
@@ -226,12 +226,6 @@
     {
       "isRlsEnabled": false,
       "name": "notification_quote_judgment",
-      "entityType": "tables",
-      "schema": "public"
-    },
-    {
-      "isRlsEnabled": false,
-      "name": "notification_recipient_snapshot",
       "entityType": "tables",
       "schema": "public"
     },
@@ -1585,71 +1579,6 @@
       "table": "notification_quote_judgment"
     },
     {
-      "type": "notification_kind",
-      "typeSchema": "public",
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "kind",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "notification_recipient_snapshot"
-    },
-    {
-      "type": "uuid",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "source_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "notification_recipient_snapshot"
-    },
-    {
-      "type": "uuid",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "actor_account_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "notification_recipient_snapshot"
-    },
-    {
-      "type": "jsonb",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "recipients",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "notification_recipient_snapshot"
-    },
-    {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "now()",
-      "generated": null,
-      "identity": null,
-      "name": "created_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "notification_recipient_snapshot"
-    },
-    {
       "type": "text",
       "typeSchema": null,
       "notNull": true,
@@ -2198,6 +2127,19 @@
     {
       "type": "uuid",
       "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "actor_account_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "post"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
       "default": null,
@@ -2393,6 +2335,19 @@
     {
       "type": "uuid",
       "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "actor_account_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "profile_follow_request"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
       "default": null,
@@ -2438,6 +2393,19 @@
       "generated": null,
       "identity": null,
       "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "profile_follow"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "actor_account_id",
       "entityType": "columns",
       "schema": "public",
       "table": "profile_follow"
@@ -3036,6 +3004,19 @@
       "generated": null,
       "identity": null,
       "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "reaction"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "actor_account_id",
       "entityType": "columns",
       "schema": "public",
       "table": "reaction"
@@ -4551,19 +4532,6 @@
     },
     {
       "nameExplicit": false,
-      "columns": ["actor_account_id"],
-      "schemaTo": "public",
-      "tableTo": "account",
-      "columnsTo": ["id"],
-      "onUpdate": "NO ACTION",
-      "onDelete": "SET NULL",
-      "name": "notification_recipient_snapshot_ffEW8RmYWXv4_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "notification_recipient_snapshot"
-    },
-    {
-      "nameExplicit": false,
       "columns": ["recipient_profile_id"],
       "schemaTo": "public",
       "tableTo": "profile",
@@ -4707,6 +4675,19 @@
     },
     {
       "nameExplicit": false,
+      "columns": ["actor_account_id"],
+      "schemaTo": "public",
+      "tableTo": "account",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "name": "post_actor_account_id_account_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "post"
+    },
+    {
+      "nameExplicit": false,
       "columns": ["profile_id"],
       "schemaTo": "public",
       "tableTo": "profile",
@@ -4785,6 +4766,19 @@
     },
     {
       "nameExplicit": false,
+      "columns": ["actor_account_id"],
+      "schemaTo": "public",
+      "tableTo": "account",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "name": "profile_follow_request_actor_account_id_account_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "profile_follow_request"
+    },
+    {
+      "nameExplicit": false,
       "columns": ["follower_profile_id"],
       "schemaTo": "public",
       "tableTo": "profile",
@@ -4808,6 +4802,19 @@
       "entityType": "fks",
       "schema": "public",
       "table": "profile_follow_request"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["actor_account_id"],
+      "schemaTo": "public",
+      "tableTo": "account",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "name": "profile_follow_actor_account_id_account_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "profile_follow"
     },
     {
       "nameExplicit": false,
@@ -5006,6 +5013,19 @@
     },
     {
       "nameExplicit": false,
+      "columns": ["actor_account_id"],
+      "schemaTo": "public",
+      "tableTo": "account",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "name": "reaction_actor_account_id_account_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "reaction"
+    },
+    {
+      "nameExplicit": false,
       "columns": ["profile_id"],
       "schemaTo": "public",
       "tableTo": "profile",
@@ -5076,14 +5096,6 @@
       "entityType": "pks",
       "schema": "public",
       "table": "notification_quote_judgment"
-    },
-    {
-      "columns": ["kind", "source_id"],
-      "nameExplicit": false,
-      "name": "notification_recipient_snapshot_pkey",
-      "entityType": "pks",
-      "schema": "public",
-      "table": "notification_recipient_snapshot"
     },
     {
       "columns": ["post_content_id", "profile_id"],

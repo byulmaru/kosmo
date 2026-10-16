@@ -58,9 +58,9 @@ Recipient 권한으로 조회하고, Quote/source 필드는 현재 요청의 기
 - 우선순위는 최초 대표 Notification 선택에만 적용한다. 이미 저장된 대표 Notification은 ID, Type, Read State와
   최초 읽음 시각을 유지하며 이후 더 높은 우선순위 Type이 생성 가능해져도 추가·교체하거나 소급 생성하지 않는다.
   Quote 승인이 늦어 이미 생성된 Reply 또는 Mention이 있을 때도 같다. Followee Post는 독립 정책을 유지한다.
-- Quote Notification의 Recipient Account는 direct Source Author Profile의 현재 Membership에서 최초로 알림 생성
-  조건을 통과한 승인 시 정하며, 빈 수신 집합도 확정한다. 대상 Profile Membership과 자기 인용 억제는 위 Notification
-  정책을 따른다.
+- Quote Notification은 생성 시도마다 direct Source Author Profile의 현재 Membership으로 수신자를 정한다. 원래 행동
+  Account 제외와 자기 인용 억제는 위 Notification 정책을 따른다. Quote의 최초 알림 생성 판단, 재처리·재승인·정리 뒤
+  재생성 금지 정책은 그대로 적용한다.
 - Recipient가 Quote와 direct Source를 모두 조회할 수 있어야 새 알림을 생성한다. 저장된 Notification 행의 API 조회는
   Recipient 권한을 따르며, Quote/source 필드는 현재 요청의 기존 객체 조회 권한을 적용한다.
   Source가 조회 불가여도 Quote 자체 Content를 유지하는 Post 정책은 바꾸지 않는다.

@@ -1,12 +1,7 @@
-CREATE TABLE "notification_recipient_snapshot" (
-	"kind" "notification_kind",
-	"source_id" uuid,
-	"actor_account_id" uuid,
-	"recipients" jsonb NOT NULL,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "notification_recipient_snapshot_pkey" PRIMARY KEY("kind","source_id")
-);
---> statement-breakpoint
+ALTER TABLE "post" ADD COLUMN "actor_account_id" uuid;--> statement-breakpoint
+ALTER TABLE "profile_follow_request" ADD COLUMN "actor_account_id" uuid;--> statement-breakpoint
+ALTER TABLE "profile_follow" ADD COLUMN "actor_account_id" uuid;--> statement-breakpoint
+ALTER TABLE "reaction" ADD COLUMN "actor_account_id" uuid;--> statement-breakpoint
 DO $$
 DECLARE
 	orphan_notification_count bigint;
@@ -29,6 +24,7 @@ END $$;--> statement-breakpoint
 ALTER TABLE "notification" DROP CONSTRAINT "notification_recipient_profile_id_kind_source_id_unique";--> statement-breakpoint
 ALTER TABLE "notification" DROP CONSTRAINT "notification_recipient_account_id_kind_source_id_unique";--> statement-breakpoint
 ALTER TABLE "notification" DROP CONSTRAINT "notification_recipient_check";--> statement-breakpoint
+DROP INDEX "notification_recipient_profile_id_id_index";--> statement-breakpoint
 WITH ranked_recipients AS (
 	SELECT
 		notification."id",
@@ -73,9 +69,11 @@ WHERE notification."recipient_profile_id" IS NOT NULL
 	AND account_profile."account_id" <> notification."recipient_account_id"
 ORDER BY notification."id", account_profile."account_id";--> statement-breakpoint
 ALTER TABLE "notification" ALTER COLUMN "recipient_account_id" SET NOT NULL;--> statement-breakpoint
-DROP INDEX "notification_recipient_profile_id_id_index";--> statement-breakpoint
 CREATE UNIQUE INDEX "notification_account_profile_kind_source_unique" ON "notification" ("recipient_account_id","recipient_profile_id","kind","source_id") WHERE "recipient_profile_id" IS NOT NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX "notification_recipient_account_id_kind_source_id_index" ON "notification" ("recipient_account_id","kind","source_id") WHERE "recipient_profile_id" IS NULL;--> statement-breakpoint
 CREATE INDEX "notification_recipient_profile_id_created_at_id_index" ON "notification" ("recipient_profile_id","created_at" DESC NULLS LAST,"id" DESC NULLS LAST);--> statement-breakpoint
 CREATE INDEX "notification_recipient_account_id_created_at_id_index" ON "notification" ("recipient_account_id","created_at" DESC NULLS LAST,"id" DESC NULLS LAST);--> statement-breakpoint
-ALTER TABLE "notification_recipient_snapshot" ADD CONSTRAINT "notification_recipient_snapshot_ffEW8RmYWXv4_fkey" FOREIGN KEY ("actor_account_id") REFERENCES "account"("id") ON DELETE SET NULL;
+ALTER TABLE "post" ADD CONSTRAINT "post_actor_account_id_account_id_fkey" FOREIGN KEY ("actor_account_id") REFERENCES "account"("id") ON DELETE SET NULL;--> statement-breakpoint
+ALTER TABLE "profile_follow_request" ADD CONSTRAINT "profile_follow_request_actor_account_id_account_id_fkey" FOREIGN KEY ("actor_account_id") REFERENCES "account"("id") ON DELETE SET NULL;--> statement-breakpoint
+ALTER TABLE "profile_follow" ADD CONSTRAINT "profile_follow_actor_account_id_account_id_fkey" FOREIGN KEY ("actor_account_id") REFERENCES "account"("id") ON DELETE SET NULL;--> statement-breakpoint
+ALTER TABLE "reaction" ADD CONSTRAINT "reaction_actor_account_id_account_id_fkey" FOREIGN KEY ("actor_account_id") REFERENCES "account"("id") ON DELETE SET NULL;

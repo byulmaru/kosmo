@@ -7,7 +7,6 @@ import {
   db,
   firstOrThrow,
   Instances,
-  NotificationRecipientSnapshots,
   Notifications,
   pg,
   PostContents,
@@ -40,7 +39,6 @@ import {
   deleteNotificationBySource,
 } from './notification';
 import { materializeNotification } from './notification-policy';
-import { captureNotificationRecipients } from './notification-recipient-snapshot';
 import { createPost, repostPost } from './post';
 import { followProfile, removeInboundFollow, unfollowProfile } from './profile-follow.test-helpers';
 import { muteProfile, unmuteProfile } from './profile-mute';
@@ -49,7 +47,6 @@ const instanceIds: string[] = [];
 const profileIds: string[] = [];
 const accountIds: string[] = [];
 const accountIdsByProfile = new Map<string, string>();
-const notificationRecipientSnapshotSourceIds: string[] = [];
 
 const getAccountId = (profileId: string) => {
   const accountId = accountIdsByProfile.get(profileId);
@@ -121,7 +118,12 @@ const createReaction = async (authorProfileId: string, recipientProfileId: strin
 
   return db
     .insert(Reactions)
-    .values({ postId: post.id, profileId: authorProfileId, type: '🎉' })
+    .values({
+      actorAccountId: accountIdsByProfile.get(authorProfileId) ?? null,
+      postId: post.id,
+      profileId: authorProfileId,
+      type: '🎉',
+    })
     .returning()
     .then(firstOrThrow);
 };
@@ -290,13 +292,6 @@ const runReactionNotificationDeleteRace = async (sourceId: string): Promise<void
 };
 
 after(async () => {
-  if (notificationRecipientSnapshotSourceIds.length > 0) {
-    await db
-      .delete(NotificationRecipientSnapshots)
-      .where(
-        inArray(NotificationRecipientSnapshots.sourceId, notificationRecipientSnapshotSourceIds),
-      );
-  }
   if (profileIds.length > 0) {
     await db.delete(Notifications).where(inArray(Notifications.recipientProfileId, profileIds));
     await db.delete(Reactions).where(inArray(Reactions.profileId, profileIds));
@@ -941,51 +936,140 @@ test('Reaction 알림은 존재하지 않는 source를 post-commit no-op으로 �
   assert.deepEqual(await readNotifications(sourceId), []);
 });
 
-test('Reaction Notification retry는 capture 뒤 가입한 Account를 알림 대상에 추가하지 않는다', async () => {
+test('one Account receives independent Notifications under each recipient Profile', async () => {
+  const author = await createProfile();
+  const firstRecipient = await createProfile();
+  const secondRecipient = await createProfile();
+  const sharedAccountId = getAccountId(firstRecipient.id);
+  const sourceId = crypto.randomUUID();
+  await db.insert(AccountProfiles).values({
+    accountId: sharedAccountId,
+    profileId: secondRecipient.id,
+    role: AccountProfileRole.MEMBER,
+  });
+
+  const firstIds = await materializeNotification(db, {
+    actorAccountId: null,
+    kind: NotificationKind.MENTION,
+    recipientProfileId: firstRecipient.id,
+    relatedProfileId: author.id,
+    sourceId,
+  });
+  const firstSharedId = (await readNotifications(sourceId)).find(
+    ({ recipientAccountId, recipientProfileId }) =>
+      recipientAccountId === sharedAccountId && recipientProfileId === firstRecipient.id,
+  )?.id;
+  assert.ok(firstSharedId);
+  assert.ok(firstIds.includes(firstSharedId));
+
+  const readAt = Temporal.Instant.from('2026-10-02T04:05:06.123456Z');
+  await db.update(Notifications).set({ readAt }).where(eq(Notifications.id, firstSharedId));
+
+  const secondIds = await materializeNotification(db, {
+    actorAccountId: null,
+    kind: NotificationKind.MENTION,
+    recipientProfileId: secondRecipient.id,
+    relatedProfileId: author.id,
+    sourceId,
+  });
+  const notifications = await readNotifications(sourceId);
+  const firstShared = notifications.find(
+    ({ recipientAccountId, recipientProfileId }) =>
+      recipientAccountId === sharedAccountId && recipientProfileId === firstRecipient.id,
+  );
+  const secondShared = notifications.find(
+    ({ recipientAccountId, recipientProfileId }) =>
+      recipientAccountId === sharedAccountId && recipientProfileId === secondRecipient.id,
+  );
+
+  assert.ok(secondShared);
+  assert.ok(secondIds.includes(secondShared.id));
+  assert.notEqual(secondShared.id, firstSharedId);
+  assert.equal(firstShared?.readAt?.toString(), readAt.toString());
+  assert.equal(secondShared.readAt, null);
+});
+
+test('Reaction Notification uses current Profile membership on initial materialization and retry', async () => {
   const author = await createProfile();
   const recipient = await createProfile();
-  const originalAccountId = getAccountId(recipient.id);
+  const actorAccountId = getAccountId(author.id);
   await db.insert(AccountProfiles).values({
-    accountId: originalAccountId,
-    profileId: author.id,
+    accountId: actorAccountId,
+    profileId: recipient.id,
     role: AccountProfileRole.MEMBER,
   });
 
   const reaction = await createReaction(author.id, recipient.id);
-  notificationRecipientSnapshotSourceIds.push(reaction.id);
+  const addRecipientAccount = async () => {
+    const account = await db
+      .insert(Accounts)
+      .values({
+        displayName: crypto.randomUUID(),
+        oidcSubject: crypto.randomUUID(),
+        state: AccountState.ACTIVE,
+      })
+      .returning()
+      .then(firstOrThrow);
+    accountIds.push(account.id);
+    await db.insert(AccountProfiles).values({
+      accountId: account.id,
+      profileId: recipient.id,
+      role: AccountProfileRole.MEMBER,
+    });
+    return account.id;
+  };
 
-  const originalSnapshot = await captureNotificationRecipients(db, {
-    actorAccountId: originalAccountId,
-    kind: NotificationKind.REACTION,
-    recipientProfileIds: [recipient.id],
-    sourceId: reaction.id,
-  });
-  assert.equal(originalSnapshot.actorAccountId, originalAccountId);
-  assert.deepEqual(originalSnapshot.recipients, { [recipient.id]: [] });
+  // The Post source already exists; a current member who joins before its first
+  // materialization should receive the projection.
+  const beforeMaterializationAccountId = await addRecipientAccount();
+  const firstIds = await createReactionNotification(reaction.id);
+  const firstNotifications = await readNotifications(reaction.id);
+  assert.deepEqual(
+    firstNotifications.map(({ recipientAccountId }) => recipientAccountId).sort(),
+    [getAccountId(recipient.id), beforeMaterializationAccountId].sort(),
+  );
+  assert.ok(
+    !firstNotifications.some(({ recipientAccountId }) => recipientAccountId === actorAccountId),
+  );
+  assert.deepEqual(firstIds.slice().sort(), firstNotifications.map(({ id }) => id).sort());
 
-  const lateAccount = await db
-    .insert(Accounts)
-    .values({
-      displayName: crypto.randomUUID(),
-      oidcSubject: crypto.randomUUID(),
-      state: AccountState.ACTIVE,
-    })
-    .returning()
-    .then(firstOrThrow);
-  accountIds.push(lateAccount.id);
-  await db.insert(AccountProfiles).values({
-    accountId: lateAccount.id,
-    profileId: recipient.id,
-    role: AccountProfileRole.OWNER,
-  });
+  const readAt = Temporal.Instant.from('2026-10-02T01:23:45.123456Z');
+  await db
+    .update(Notifications)
+    .set({ readAt })
+    .where(
+      and(
+        eq(Notifications.sourceId, reaction.id),
+        eq(Notifications.recipientAccountId, getAccountId(recipient.id)),
+      ),
+    );
+  const afterMaterializationAccountId = await addRecipientAccount();
 
-  assert.deepEqual(await createReactionNotification(reaction.id), []);
-  assert.deepEqual(await readNotifications(reaction.id), []);
-  const [savedSnapshot] = await db
-    .select()
-    .from(NotificationRecipientSnapshots)
-    .where(eq(NotificationRecipientSnapshots.sourceId, reaction.id));
-  assert.deepEqual(savedSnapshot?.recipients, { [recipient.id]: [] });
+  const retryIds = await createReactionNotification(reaction.id);
+  const retriedNotifications = await readNotifications(reaction.id);
+  assert.deepEqual(
+    retriedNotifications.map(({ recipientAccountId }) => recipientAccountId).sort(),
+    [
+      getAccountId(recipient.id),
+      beforeMaterializationAccountId,
+      afterMaterializationAccountId,
+    ].sort(),
+  );
+  assert.ok(
+    !retriedNotifications.some(({ recipientAccountId }) => recipientAccountId === actorAccountId),
+  );
+  assert.deepEqual(retryIds.slice().sort(), retriedNotifications.map(({ id }) => id).sort());
+  assert.equal(
+    retriedNotifications
+      .find(({ recipientAccountId }) => recipientAccountId === getAccountId(recipient.id))
+      ?.readAt?.toString(),
+    readAt.toString(),
+  );
+  assert.ok(
+    retriedNotifications
+      .filter(({ recipientAccountId }) => recipientAccountId !== getAccountId(recipient.id))
+      .every(({ readAt: persistedReadAt }) => persistedReadAt === null),
+  );
 });
 
 test('다섯 source의 Notification Mute는 DB 현재 시각으로 활성 여부를 판정한다', async () => {
@@ -1152,8 +1236,8 @@ test('다섯 source의 Notification Mute는 DB 현재 시각으로 활성 여부
           ),
         );
       await materializeNotification(tx, {
+        actorAccountId: null,
         kind: source.kind,
-        recipientAccountIds: [getAccountId(source.recipientProfileId)],
         recipientProfileId: source.recipientProfileId,
         relatedProfileId: source.relatedProfileId,
         sourceId: source.sourceId,

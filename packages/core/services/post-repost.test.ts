@@ -31,7 +31,6 @@ import {
   postContentDocumentFromText,
   postContentDocumentFromTextAndMedia,
 } from '../post-content/server';
-import { getNotificationRecipientSnapshot } from './notification-recipient-snapshot';
 import { createPost, deletePost as deletePostAction, repostPost as repostPostAction } from './post';
 import { ProfilePairBlockedError } from './profile-block-policy';
 
@@ -139,72 +138,29 @@ test('repostPost는 Public과 Unlisted Source를 direct Unlisted Repost로 생�
   }
 });
 
-test('repostPost는 원래 Account와 Source Profile의 계정을 최초 Repost snapshot에 고정한다', async () => {
+test('repostPost keeps its original actor Account across duplicate calls', async () => {
   const actor = await createProfile();
   const sourceAuthor = await createProfile();
-  const actorAccount = await createAccount();
-  const sourceAccount = await createAccount();
-  const secondSourceAccount = await createAccount();
-  const lateMember = await createAccount();
-  await db.insert(AccountProfiles).values([
-    { accountId: actorAccount.id, profileId: actor.profile.id, role: AccountProfileRole.OWNER },
-    {
-      accountId: actorAccount.id,
-      profileId: sourceAuthor.profile.id,
-      role: AccountProfileRole.MEMBER,
-    },
-    {
-      accountId: sourceAccount.id,
-      profileId: sourceAuthor.profile.id,
-      role: AccountProfileRole.MEMBER,
-    },
-    {
-      accountId: secondSourceAccount.id,
-      profileId: sourceAuthor.profile.id,
-      role: AccountProfileRole.MEMBER,
-    },
-  ]);
+  const originalActor = await createAccount();
+  const retryActor = await createAccount();
   const source = await createContentPost(sourceAuthor.profile.id);
 
   const first = await runRepost({
-    actorAccountId: actorAccount.id,
+    actorAccountId: originalActor.id,
     actorProfileId: actor.profile.id,
     sourcePostId: source.id,
   });
-  const snapshot = await getNotificationRecipientSnapshot(
-    db,
-    NotificationKind.REPOST,
-    first.repost.id,
-  );
-
   assert.equal(first.created, true);
-  assert.ok(snapshot);
-  assert.equal(snapshot.actorAccountId, actorAccount.id);
-  assert.deepEqual(snapshot.recipients, {
-    [sourceAuthor.profile.id]: [sourceAccount.id, secondSourceAccount.id].toSorted(),
-  });
+  assert.equal(first.repost.actorAccountId, originalActor.id);
 
-  await db.insert(AccountProfiles).values({
-    accountId: lateMember.id,
-    profileId: sourceAuthor.profile.id,
-    role: AccountProfileRole.MEMBER,
-  });
   const duplicate = await runRepost({
-    actorAccountId: actorAccount.id,
+    actorAccountId: retryActor.id,
     actorProfileId: actor.profile.id,
     sourcePostId: source.id,
   });
-  const preserved = await getNotificationRecipientSnapshot(
-    db,
-    NotificationKind.REPOST,
-    first.repost.id,
-  );
-
   assert.equal(duplicate.created, false);
-  assert.ok(preserved);
-  assert.equal(preserved.createdAt.epochNanoseconds, snapshot.createdAt.epochNanoseconds);
-  assert.equal(preserved.actorAccountId, snapshot.actorAccountId);
-  assert.deepEqual(preserved.recipients, snapshot.recipients);
+  assert.equal(duplicate.repost.id, first.repost.id);
+  assert.equal(duplicate.repost.actorAccountId, originalActor.id);
 });
 
 test('repostPost는 자신의 Followers Only Source를 Followers Only로 생성한다', async () => {

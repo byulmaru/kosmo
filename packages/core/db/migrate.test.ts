@@ -1185,6 +1185,10 @@ test('알림 계정 수신자로 마이그레이션하고 고아 프로필이면
           "role" "account_profile_role" NOT NULL,
           PRIMARY KEY ("account_id", "profile_id")
         );--> statement-breakpoint
+        CREATE TABLE "post" ("id" uuid PRIMARY KEY);--> statement-breakpoint
+        CREATE TABLE "reaction" ("id" uuid PRIMARY KEY);--> statement-breakpoint
+        CREATE TABLE "profile_follow" ("id" uuid PRIMARY KEY);--> statement-breakpoint
+        CREATE TABLE "profile_follow_request" ("id" uuid PRIMARY KEY);--> statement-breakpoint
         CREATE TABLE "notification" (
           "id" uuid PRIMARY KEY,
           "recipient_profile_id" uuid REFERENCES "profile"("id") ON DELETE CASCADE,
@@ -1218,12 +1222,17 @@ test('알림 계정 수신자로 마이그레이션하고 고아 프로필이면
   const accountA = '10000000-0000-0000-0000-000000000001';
   const accountB = '10000000-0000-0000-0000-000000000002';
   const accountC = '10000000-0000-0000-0000-000000000003';
+  const accountD = '10000000-0000-0000-0000-000000000004';
   const sharedProfile = '20000000-0000-0000-0000-000000000001';
   const uniqueProfile = '20000000-0000-0000-0000-000000000002';
   const sharedUnreadId = '30000000-0000-0000-0000-000000000001';
   const sharedReadId = '30000000-0000-0000-0000-000000000002';
   const uniqueMemberId = '30000000-0000-0000-0000-000000000003';
   const operationalId = '30000000-0000-0000-0000-000000000004';
+  const postId = '50000000-0000-0000-0000-000000000001';
+  const reactionId = '50000000-0000-0000-0000-000000000002';
+  const profileFollowId = '50000000-0000-0000-0000-000000000003';
+  const profileFollowRequestId = '50000000-0000-0000-0000-000000000004';
   const sharedUnreadSource = '40000000-0000-0000-0000-000000000001';
   const sharedReadSource = '40000000-0000-0000-0000-000000000002';
   const uniqueSource = '40000000-0000-0000-0000-000000000003';
@@ -1238,13 +1247,17 @@ test('알림 계정 수신자로 마이그레이션하고 고아 프로필이면
     await runDatabaseMigrations({ databaseUrl, migrationsFolder: baseMigrations });
     await control.unsafe(`
       INSERT INTO "account" ("id") VALUES
-        ('${accountA}'), ('${accountB}'), ('${accountC}');
+        ('${accountA}'), ('${accountB}'), ('${accountC}'), ('${accountD}');
       INSERT INTO "profile" ("id") VALUES
         ('${sharedProfile}'), ('${uniqueProfile}');
       INSERT INTO "account_profile" ("account_id", "profile_id", "role") VALUES
         ('${accountA}', '${sharedProfile}', 'MEMBER'),
         ('${accountB}', '${sharedProfile}', 'OWNER'),
         ('${accountC}', '${uniqueProfile}', 'MEMBER');
+      INSERT INTO "post" ("id") VALUES ('${postId}');
+      INSERT INTO "reaction" ("id") VALUES ('${reactionId}');
+      INSERT INTO "profile_follow" ("id") VALUES ('${profileFollowId}');
+      INSERT INTO "profile_follow_request" ("id") VALUES ('${profileFollowRequestId}');
       INSERT INTO "notification" (
         "id", "recipient_profile_id", "recipient_account_id", "kind", "source_id", "data", "created_at", "read_at"
       ) VALUES
@@ -1337,13 +1350,112 @@ test('알림 계정 수신자로 마이그레이션하고 고아 프로필이면
     `;
     assert.equal(isNullable, 'NO');
 
-    const [{ definition }] = await control<{ definition: string }[]>`
-      SELECT pg_get_constraintdef(oid) AS definition
-      FROM pg_constraint
-      WHERE conrelid = 'public.notification_recipient_snapshot'::regclass
-        AND contype = 'p'
+    const actorAccountColumns = await control<{ tableName: string; isNullable: string }[]>`
+      SELECT table_name AS "tableName", is_nullable AS "isNullable"
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name IN ('post', 'reaction', 'profile_follow', 'profile_follow_request')
+        AND column_name = 'actor_account_id'
+      ORDER BY table_name
     `;
-    assert.match(definition, /PRIMARY KEY \(kind, source_id\)/);
+    assert.deepEqual(
+      actorAccountColumns.map(({ tableName, isNullable }) => [tableName, isNullable]),
+      [
+        ['post', 'YES'],
+        ['profile_follow', 'YES'],
+        ['profile_follow_request', 'YES'],
+        ['reaction', 'YES'],
+      ],
+    );
+
+    const [
+      {
+        postActorAccountId,
+        reactionActorAccountId,
+        profileFollowActorAccountId,
+        profileFollowRequestActorAccountId,
+      },
+    ] = await control<
+      {
+        postActorAccountId: string | null;
+        reactionActorAccountId: string | null;
+        profileFollowActorAccountId: string | null;
+        profileFollowRequestActorAccountId: string | null;
+      }[]
+    >`
+        SELECT
+          (SELECT actor_account_id::text FROM post WHERE id = ${postId}) AS "postActorAccountId",
+          (SELECT actor_account_id::text FROM reaction WHERE id = ${reactionId}) AS "reactionActorAccountId",
+          (SELECT actor_account_id::text FROM profile_follow WHERE id = ${profileFollowId}) AS "profileFollowActorAccountId",
+          (SELECT actor_account_id::text FROM profile_follow_request WHERE id = ${profileFollowRequestId}) AS "profileFollowRequestActorAccountId"
+      `;
+    assert.deepEqual(
+      {
+        postActorAccountId,
+        reactionActorAccountId,
+        profileFollowActorAccountId,
+        profileFollowRequestActorAccountId,
+      },
+      {
+        postActorAccountId: null,
+        reactionActorAccountId: null,
+        profileFollowActorAccountId: null,
+        profileFollowRequestActorAccountId: null,
+      },
+    );
+
+    await control.unsafe(`
+      UPDATE "post" SET "actor_account_id" = '${accountD}' WHERE "id" = '${postId}';
+      UPDATE "reaction" SET "actor_account_id" = '${accountD}' WHERE "id" = '${reactionId}';
+      UPDATE "profile_follow" SET "actor_account_id" = '${accountD}' WHERE "id" = '${profileFollowId}';
+      UPDATE "profile_follow_request" SET "actor_account_id" = '${accountD}' WHERE "id" = '${profileFollowRequestId}';
+      DELETE FROM "account" WHERE "id" = '${accountD}';
+    `);
+    const [
+      {
+        postCount,
+        reactionCount,
+        profileFollowCount,
+        profileFollowRequestCount,
+        remainingActorAccounts,
+      },
+    ] = await control<
+      {
+        postCount: number;
+        reactionCount: number;
+        profileFollowCount: number;
+        profileFollowRequestCount: number;
+        remainingActorAccounts: number;
+      }[]
+    >`
+        SELECT
+          (SELECT count(*)::int FROM post WHERE id = ${postId}) AS "postCount",
+          (SELECT count(*)::int FROM reaction WHERE id = ${reactionId}) AS "reactionCount",
+          (SELECT count(*)::int FROM profile_follow WHERE id = ${profileFollowId}) AS "profileFollowCount",
+          (SELECT count(*)::int FROM profile_follow_request WHERE id = ${profileFollowRequestId}) AS "profileFollowRequestCount",
+          (SELECT count(*)::int FROM (
+            SELECT actor_account_id FROM post WHERE id = ${postId}
+            UNION ALL SELECT actor_account_id FROM reaction WHERE id = ${reactionId}
+            UNION ALL SELECT actor_account_id FROM profile_follow WHERE id = ${profileFollowId}
+            UNION ALL SELECT actor_account_id FROM profile_follow_request WHERE id = ${profileFollowRequestId}
+          ) AS actor_account_refs WHERE actor_account_id IS NOT NULL) AS "remainingActorAccounts"
+      `;
+    assert.deepEqual(
+      {
+        postCount,
+        reactionCount,
+        profileFollowCount,
+        profileFollowRequestCount,
+        remainingActorAccounts,
+      },
+      {
+        postCount: 1,
+        reactionCount: 1,
+        profileFollowCount: 1,
+        profileFollowRequestCount: 1,
+        remainingActorAccounts: 0,
+      },
+    );
 
     await runDatabaseMigrations({ databaseUrl, migrationsFolder: migrations });
     assert.equal((await readNotifications()).length, 6);
@@ -1370,10 +1482,14 @@ test('알림 계정 수신자로 마이그레이션하고 고아 프로필이면
       runDatabaseMigrations({ databaseUrl, migrationsFolder: migrations }),
       /no linked account.*Add an account_profile membership/i,
     );
-    const [{ tableName }] = await control<{ tableName: string | null }[]>`
-      SELECT to_regclass('public.notification_recipient_snapshot')::text AS "tableName"
+    const [{ actorColumnCount }] = await control<{ actorColumnCount: number }[]>`
+      SELECT count(*)::int AS "actorColumnCount"
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name IN ('post', 'reaction', 'profile_follow', 'profile_follow_request')
+        AND column_name = 'actor_account_id'
     `;
-    assert.equal(tableName, null);
+    assert.equal(actorColumnCount, 0);
     const [{ isNullable: nullableAfterFailure }] = await control<{ isNullable: string }[]>`
       SELECT is_nullable AS "isNullable"
       FROM information_schema.columns

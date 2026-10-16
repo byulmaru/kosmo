@@ -11,7 +11,6 @@ import {
 import { InstanceKind, InstanceState, NotificationKind, ProfileState } from '../enums';
 import { postVisibilityCondition } from '../visibility/post';
 import { materializeNotification } from './notification-policy';
-import { captureNotificationRecipients } from './notification-recipient-snapshot';
 import type { Transaction } from '../db';
 
 export const QuoteNotificationJudgmentOutcome = {
@@ -27,10 +26,10 @@ export type QuoteNotificationJudgmentOutcome =
 type CoordinatedNotificationKind = Extract<NotificationKind, 'QUOTE' | 'REPLY'>;
 
 type MaterializeCoordinatedNotificationInput = {
+  readonly actorAccountId: string | null;
   readonly eligible: boolean;
   readonly kind: CoordinatedNotificationKind;
   readonly quotePostId: string;
-  readonly recipientAccountIds: readonly string[];
   readonly recipientProfileId: string;
   readonly relatedProfileId: string;
   readonly sourceId: string;
@@ -70,10 +69,10 @@ const quoteNotificationCandidates = async (
 export const materializeCoordinatedNotification = async (
   database: Transaction,
   {
+    actorAccountId,
     eligible,
     kind,
     quotePostId,
-    recipientAccountIds,
     recipientProfileId,
     relatedProfileId,
     sourceId,
@@ -162,8 +161,8 @@ export const materializeCoordinatedNotification = async (
   }
 
   const notificationIds = await materializeNotification(database, {
+    actorAccountId,
     kind,
-    recipientAccountIds,
     recipientProfileId,
     relatedProfileId,
     sourceId,
@@ -216,7 +215,7 @@ export const materializeReplyNotificationIfEligible = async (
 ): Promise<MaterializedReplyNotification | null> => {
   const source = await database
     .select({
-      createdAt: Posts.createdAt,
+      actorAccountId: Posts.actorAccountId,
       id: Posts.id,
       relatedProfileId: Posts.profileId,
       recipientProfileId: ReplyParents.profileId,
@@ -265,20 +264,12 @@ export const materializeReplyNotificationIfEligible = async (
     return null;
   }
 
-  const snapshot = await captureNotificationRecipients(database, {
-    kind: NotificationKind.REPLY,
-    legacyMembershipCutoff: source.createdAt,
-    recipientProfileIds: [source.recipientProfileId],
-    sourceId: source.id,
-  });
-  const recipientAccountIds = snapshot.recipients[source.recipientProfileId] ?? [];
-
   if (source.repostSourceId !== null) {
     const notificationIds = await materializeCoordinatedNotification(database, {
+      actorAccountId: source.actorAccountId,
       eligible: true,
       kind: NotificationKind.REPLY,
       quotePostId: source.id,
-      recipientAccountIds,
       recipientProfileId: source.recipientProfileId,
       relatedProfileId: source.relatedProfileId,
       sourceId: source.id,
@@ -287,8 +278,8 @@ export const materializeReplyNotificationIfEligible = async (
   }
 
   const notificationIds = await materializeNotification(database, {
+    actorAccountId: source.actorAccountId,
     kind: NotificationKind.REPLY,
-    recipientAccountIds,
     recipientProfileId: source.recipientProfileId,
     relatedProfileId: source.relatedProfileId,
     sourceId: source.id,

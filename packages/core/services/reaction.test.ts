@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { after, mock, test } from 'node:test';
 import { and, eq, inArray } from 'drizzle-orm';
 import {
-  AccountProfiles,
   Accounts,
   db,
   firstOrThrow,
@@ -15,7 +14,6 @@ import {
   Reactions,
 } from '../db';
 import {
-  AccountProfileRole,
   AccountState,
   InstanceKind,
   InstanceState,
@@ -27,7 +25,6 @@ import {
 } from '../enums';
 import { NotFoundError, ValidationError } from '../error';
 import { temporalClient } from '../temporal/client';
-import { getNotificationRecipientSnapshot } from './notification-recipient-snapshot';
 import { ProfilePairBlockedError } from './profile-block-policy';
 import { addReaction, deleteReaction } from './reaction';
 
@@ -35,7 +32,6 @@ const accountIds: string[] = [];
 
 after(async () => {
   if (accountIds.length > 0) {
-    await db.delete(AccountProfiles).where(inArray(AccountProfiles.accountId, accountIds));
     await db.delete(Accounts).where(inArray(Accounts.id, accountIds));
   }
   await pg.end();
@@ -197,50 +193,26 @@ test('addReaction 결과는 새 source만 구분한다', async () => {
   assert.equal(repeated.reaction.id, first.reaction.id);
 });
 
-test('Reaction 수신자 스냅샷은 행동 Account만 제외하고 재시도에서 멤버십을 확장하지 않는다', async () => {
+test('addReaction keeps the original actor Account across duplicate calls', async () => {
   const actor = await createFixture();
   const target = await createFixture();
-  const [actorAccount, targetOperator, laterMember] = await Promise.all([
-    createAccount(),
-    createAccount(),
-    createAccount(),
-  ]);
-  await db.insert(AccountProfiles).values([
-    { accountId: actorAccount.id, profileId: actor.profile.id, role: AccountProfileRole.OWNER },
-    { accountId: actorAccount.id, profileId: target.profile.id, role: AccountProfileRole.MEMBER },
-    { accountId: targetOperator.id, profileId: target.profile.id, role: AccountProfileRole.OWNER },
-  ]);
+  const [originalActor, retryActor] = await Promise.all([createAccount(), createAccount()]);
 
   const input = {
-    actorAccountId: actorAccount.id,
+    actorAccountId: originalActor.id,
     actorProfileId: actor.profile.id,
     origin: 'LOCAL' as const,
     postId: target.post.id,
     type: '🎉',
   };
   const created = await addReaction(input);
-  const originalSnapshot = await getNotificationRecipientSnapshot(
-    db,
-    NotificationKind.REACTION,
-    created.reaction.id,
-  );
-  assert.equal(originalSnapshot?.actorAccountId, actorAccount.id);
-  assert.deepEqual(originalSnapshot?.recipients, { [target.profile.id]: [targetOperator.id] });
+  assert.equal(created.created, true);
+  assert.equal(created.reaction.actorAccountId, originalActor.id);
 
-  await db.insert(AccountProfiles).values({
-    accountId: laterMember.id,
-    profileId: target.profile.id,
-    role: AccountProfileRole.MEMBER,
-  });
-  const retried = await addReaction(input);
-  const retriedSnapshot = await getNotificationRecipientSnapshot(
-    db,
-    NotificationKind.REACTION,
-    created.reaction.id,
-  );
-
+  const retried = await addReaction({ ...input, actorAccountId: retryActor.id });
   assert.equal(retried.created, false);
-  assert.deepEqual(retriedSnapshot, originalSnapshot);
+  assert.equal(retried.reaction.id, created.reaction.id);
+  assert.equal(retried.reaction.actorAccountId, originalActor.id);
 });
 
 test('core는 entry에서 검증된 actor의 Profile/Instance 상태를 다시 조회하지 않는다', async () => {

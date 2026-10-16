@@ -25,11 +25,8 @@ Social Notification은 여러 source의 사용자용 projection이므로 일반�
 - Social source 중복은 `(recipient_account_id, recipient_profile_id, kind, source_id)` unique constraint로
   막는다. Recipient Profile이 없는 Operational Notification은 `(recipient_account_id, kind, source_id)` partial unique로
   중복을 막는다. 정상 source 생성·삭제 action이 Notification 저장·정리를 호출한다.
-- `NotificationRecipientSnapshots`는 `(kind, source_id)`별 원래 event provenance를 immutable하게 기록한다.
-  선택적 `actor_account_id`와 대상 Profile별 Recipient Account 집합을 저장하며 빈 집합도 기록한다. 이 snapshot은
-  원인 action과 원자적으로 capture한다. source ID에는 같은 좁은 projection 예외에 따라 foreign key를 두지 않는다.
-  Snapshot은 event-time recipient set만 고정하며 기존 Notification cleanup, 물리 삭제 뒤의 보존·재생성 동작이나
-  다른 kind의 source 재구성 정책을 바꾸지 않는다.
+- `Posts`, `Reactions`, `ProfileFollows`, `ProfileFollowRequests`는 확인된 원래 행동 Account를 nullable
+  `actor_account_id` foreign key로 행 생성 시 기록하고 이후 바꾸지 않는다. 과거 행에서 추정하거나 backfill하지 않는다.
 - 같은 source가 여러 Account·Profile Recipient에게 투영되는 kind를 허용한다. source-only cleanup용
   `(kind, source_id)` index는 선제 추가하지 않고 실제 조회 경로가 이를 요구할 때 별도 migration으로 결정한다.
 - `data jsonb`는 kind별 최소 추가 데이터만 저장한다. 범용 payload framework나 GIN index를 선제 추가하지

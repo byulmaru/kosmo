@@ -17,7 +17,6 @@ import {
   ProfileState,
 } from '../enums';
 import { materializeMentionNotificationIfEligible } from './mention-notification';
-import { captureNotificationRecipients } from './notification-recipient-snapshot';
 import {
   materializeCoordinatedNotification,
   materializeReplyNotificationIfEligible,
@@ -75,6 +74,7 @@ export const materializeQuoteNotificationIfEligible = async (
   const source = await database
     .select({
       activatedAt: NotificationRollouts.activatedAt,
+      actorAccountId: Posts.actorAccountId,
       quoteAuthorId: Posts.profileId,
       quoteAuthorInstanceKind: QuoteNotificationQuoteAuthorInstances.kind,
       quoteAuthorInstanceState: QuoteNotificationQuoteAuthorInstances.state,
@@ -173,18 +173,11 @@ export const materializeQuoteNotificationIfEligible = async (
     source.activatedAt !== null &&
     Temporal.Instant.compare(source.quoteCreatedAt, source.activatedAt) < 0;
 
-  const snapshot = await captureNotificationRecipients(database, {
-    kind: NotificationKind.QUOTE,
-    legacyMembershipCutoff: source.quoteCreatedAt,
-    recipientProfileIds: [source.sourceProfileId],
-    sourceId: source.quotePostId,
-  });
-
   return materializeCoordinatedNotification(database, {
+    actorAccountId: source.actorAccountId,
     eligible: quoteIsVisible && sourceIsAvailable && quoteAuthorIsAvailable,
     kind: NotificationKind.QUOTE,
     quotePostId: source.quotePostId,
-    recipientAccountIds: snapshot.recipients[source.sourceProfileId] ?? [],
     recipientProfileId: source.sourceProfileId,
     relatedProfileId: source.quoteAuthorId,
     sourceId: quotePostId,

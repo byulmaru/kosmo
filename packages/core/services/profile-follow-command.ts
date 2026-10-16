@@ -1,6 +1,6 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { db, first, Instances, ProfileFollowRequests, ProfileFollows, Profiles } from '../db';
-import { InstanceKind, InstanceState, NotificationKind } from '../enums';
+import { InstanceKind, InstanceState } from '../enums';
 import {
   ConflictError,
   KosmoError,
@@ -8,10 +8,6 @@ import {
   PermissionDeniedError,
   ValidationError,
 } from '../error';
-import {
-  captureNotificationRecipients,
-  getNotificationRecipientSnapshot,
-} from './notification-recipient-snapshot';
 import { assertProfilePairIsNotBlocked, ProfilePairBlockedError } from './profile-block-policy';
 import {
   acceptProfileFollowRequestInTransaction,
@@ -304,24 +300,22 @@ const executeFollow = async (
     throw new Error('Invalid Follow command');
   }
 
-  const requestToDeleteId =
-    (
-      await tx
-        .select({ id: ProfileFollowRequests.id })
-        .from(ProfileFollowRequests)
-        .where(pairCondition(ProfileFollowRequests, input.pair))
-        .limit(1)
-        .then(first)
-    )?.id ?? input.pendingRequestId;
-  const requestSnapshot =
-    requestToDeleteId === undefined
-      ? undefined
-      : await getNotificationRecipientSnapshot(
-          tx,
-          NotificationKind.FOLLOW_REQUEST,
-          requestToDeleteId,
-        );
-  const followed = await followProfileInTransaction(input.pair, tx);
+  const currentRequest = await tx
+    .select({ actorAccountId: ProfileFollowRequests.actorAccountId, id: ProfileFollowRequests.id })
+    .from(ProfileFollowRequests)
+    .where(pairCondition(ProfileFollowRequests, input.pair))
+    .limit(1)
+    .then(first);
+  const requestToDeleteId = currentRequest?.id ?? input.pendingRequestId;
+  const followed = await followProfileInTransaction(
+    {
+      ...input.pair,
+      actorAccountId: currentRequest
+        ? currentRequest.actorAccountId
+        : (command.actorAccountId ?? null),
+    },
+    tx,
+  );
   const followResult = followed.result;
   const profileFollowId =
     followResult.kind === 'ESTABLISHED' ? followResult.profileFollow.id : undefined;
@@ -340,24 +334,6 @@ const executeFollow = async (
     );
   }
   if (created) {
-    if (followResult.kind === 'ESTABLISHED') {
-      await captureNotificationRecipients(tx, {
-        actorAccountId:
-          requestToDeleteId === undefined
-            ? command.actorAccountId
-            : (requestSnapshot?.actorAccountId ?? null),
-        kind: NotificationKind.FOLLOW,
-        recipientProfileIds: [input.pair.followeeProfileId],
-        sourceId: followResult.profileFollow.id,
-      });
-    } else {
-      await captureNotificationRecipients(tx, {
-        actorAccountId: command.actorAccountId,
-        kind: NotificationKind.FOLLOW_REQUEST,
-        recipientProfileIds: [input.pair.followeeProfileId],
-        sourceId: followResult.profileFollowRequest.id,
-      });
-    }
     effectPlan.push({
       kind: 'CREATE',
       input: {
@@ -464,12 +440,6 @@ const executeApproveOrAccept = async (
   }
 
   const effectPlan: ProfileFollowPairEffect[] = [];
-  const requestSnapshot = await getNotificationRecipientSnapshot(
-    tx,
-    NotificationKind.FOLLOW_REQUEST,
-    expectedRowId,
-  );
-  const actorAccountId = requestSnapshot?.actorAccountId ?? null;
   let kind: 'ACCEPTED' | 'ALREADY_ESTABLISHED' | 'NOOP';
   let committedFollowId: string | undefined;
   let committedRequestId = currentRequest.id;
@@ -492,12 +462,6 @@ const executeApproveOrAccept = async (
       }),
     );
     if (approved.created) {
-      await captureNotificationRecipients(tx, {
-        actorAccountId,
-        kind: NotificationKind.FOLLOW,
-        recipientProfileIds: [input.pair.followeeProfileId],
-        sourceId: approved.profileFollow.id,
-      });
       effectPlan.push({
         kind: 'CREATE',
         input: { sourceId: committedFollowId, sourceKind: 'FOLLOW' },
@@ -524,12 +488,6 @@ const executeApproveOrAccept = async (
       );
     }
     if (accepted.createdFollowId !== undefined) {
-      await captureNotificationRecipients(tx, {
-        actorAccountId,
-        kind: NotificationKind.FOLLOW,
-        recipientProfileIds: [input.pair.followeeProfileId],
-        sourceId: accepted.createdFollowId,
-      });
       effectPlan.push({
         kind: 'CREATE',
         input: { sourceId: accepted.createdFollowId, sourceKind: 'FOLLOW' },

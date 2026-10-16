@@ -313,20 +313,6 @@ export const Notifications = pgTable(
   ],
 );
 
-export const NotificationRecipientSnapshots = pgTable(
-  'notification_recipient_snapshot',
-  {
-    kind: Enum.notificationKind('kind').notNull(),
-    sourceId: uuid('source_id').notNull(),
-    actorAccountId: uuid('actor_account_id').references(() => Accounts.id, {
-      onDelete: 'set null',
-    }),
-    recipients: jsonb('recipients').$type<Readonly<Record<string, readonly string[]>>>().notNull(),
-    createdAt: createdAt(),
-  },
-  (table) => [primaryKey({ columns: [table.kind, table.sourceId] })],
-);
-
 export type OperationalNotificationData = {
   readonly title: string;
   readonly body?: string;
@@ -401,6 +387,9 @@ export const Posts = pgTable(
   'post',
   {
     id: id(),
+    actorAccountId: uuid('actor_account_id').references(() => Accounts.id, {
+      onDelete: 'set null',
+    }),
     profileId: uuid('profile_id')
       .notNull()
       .references(() => Profiles.id),
@@ -551,6 +540,9 @@ export const ProfileFollows = pgTable(
   'profile_follow',
   {
     id: id(),
+    actorAccountId: uuid('actor_account_id').references(() => Accounts.id, {
+      onDelete: 'set null',
+    }),
     followerProfileId: uuid('follower_profile_id')
       .notNull()
       .references(() => Profiles.id, { onDelete: 'cascade' }),
@@ -570,6 +562,9 @@ export const ProfileFollowRequests = pgTable(
   'profile_follow_request',
   {
     id: id(),
+    actorAccountId: uuid('actor_account_id').references(() => Accounts.id, {
+      onDelete: 'set null',
+    }),
     followerProfileId: uuid('follower_profile_id')
       .notNull()
       .references(() => Profiles.id, { onDelete: 'cascade' }),
@@ -663,6 +658,9 @@ export const Reactions = pgTable(
   'reaction',
   {
     id: id(),
+    actorAccountId: uuid('actor_account_id').references(() => Accounts.id, {
+      onDelete: 'set null',
+    }),
     profileId: uuid('profile_id')
       .notNull()
       .references(() => Profiles.id, { onDelete: 'cascade' }),

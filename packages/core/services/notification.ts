@@ -12,25 +12,7 @@ import {
 } from '../db';
 import { InstanceKind, InstanceState, NotificationKind, PostState, ProfileState } from '../enums';
 import { materializeNotification } from './notification-policy';
-import { captureNotificationRecipients } from './notification-recipient-snapshot';
-import type { Database, DatabaseHandle } from '../db';
-
-const getRecipientAccountIds = async (
-  database: DatabaseHandle,
-  kind: NotificationKind,
-  sourceId: string,
-  recipientProfileId: string,
-  sourceCreatedAt: Temporal.Instant,
-): Promise<string[]> => {
-  const snapshot = await captureNotificationRecipients(database, {
-    kind,
-    legacyMembershipCutoff: sourceCreatedAt,
-    recipientProfileIds: [recipientProfileId],
-    sourceId,
-  });
-
-  return [...(snapshot.recipients[recipientProfileId] ?? [])];
-};
+import type { Database } from '../db';
 
 const NotificationRepostAuthors = alias(Profiles, 'notification_repost_author');
 const NotificationRepostAuthorInstances = alias(Instances, 'notification_repost_author_instance');
@@ -45,7 +27,7 @@ export const createFollowNotification = async (sourceId: string): Promise<string
   getDatabaseConnection().transaction(async (tx) => {
     const source = await tx
       .select({
-        createdAt: ProfileFollows.createdAt,
+        actorAccountId: ProfileFollows.actorAccountId,
         id: ProfileFollows.id,
         recipientProfileId: ProfileFollows.followeeProfileId,
         relatedProfileId: ProfileFollows.followerProfileId,
@@ -64,14 +46,8 @@ export const createFollowNotification = async (sourceId: string): Promise<string
     }
 
     return materializeNotification(tx, {
+      actorAccountId: source.actorAccountId,
       kind: NotificationKind.FOLLOW,
-      recipientAccountIds: await getRecipientAccountIds(
-        tx,
-        NotificationKind.FOLLOW,
-        source.id,
-        source.recipientProfileId,
-        source.createdAt,
-      ),
       recipientProfileId: source.recipientProfileId,
       relatedProfileId: source.relatedProfileId,
       sourceId: source.id,
@@ -82,7 +58,7 @@ export const createFollowRequestNotification = async (sourceId: string): Promise
   getDatabaseConnection().transaction(async (tx) => {
     const source = await tx
       .select({
-        createdAt: ProfileFollowRequests.createdAt,
+        actorAccountId: ProfileFollowRequests.actorAccountId,
         id: ProfileFollowRequests.id,
         recipientProfileId: ProfileFollowRequests.followeeProfileId,
         relatedProfileId: ProfileFollowRequests.followerProfileId,
@@ -108,14 +84,8 @@ export const createFollowRequestNotification = async (sourceId: string): Promise
     }
 
     return materializeNotification(tx, {
+      actorAccountId: source.actorAccountId,
       kind: NotificationKind.FOLLOW_REQUEST,
-      recipientAccountIds: await getRecipientAccountIds(
-        tx,
-        NotificationKind.FOLLOW_REQUEST,
-        source.id,
-        source.recipientProfileId,
-        source.createdAt,
-      ),
       recipientProfileId: source.recipientProfileId,
       relatedProfileId: source.relatedProfileId,
       sourceId: source.id,
@@ -129,8 +99,8 @@ export const createReactionNotification = async (
   getDatabaseConnection(handle).transaction(async (tx) => {
     const source = await tx
       .select({
+        actorAccountId: Reactions.actorAccountId,
         actorProfileId: Reactions.profileId,
-        createdAt: Reactions.createdAt,
         id: Reactions.id,
         recipientInstanceKind: Instances.kind,
         recipientProfileId: Posts.profileId,
@@ -157,14 +127,8 @@ export const createReactionNotification = async (
     }
 
     return materializeNotification(tx, {
+      actorAccountId: source.actorAccountId,
       kind: NotificationKind.REACTION,
-      recipientAccountIds: await getRecipientAccountIds(
-        tx,
-        NotificationKind.REACTION,
-        source.id,
-        source.recipientProfileId,
-        source.createdAt,
-      ),
       recipientProfileId: source.recipientProfileId,
       relatedProfileId: source.actorProfileId,
       sourceId: source.id,
@@ -178,8 +142,8 @@ export const createRepostNotification = async (
   const connection = getDatabaseConnection(handle);
   const source = await connection
     .select({
+      actorAccountId: Posts.actorAccountId,
       actorProfileId: Posts.profileId,
-      createdAt: Posts.createdAt,
       id: Posts.id,
       recipientInstanceKind: NotificationRepostRecipientInstances.kind,
       recipientProfileId: NotificationRepostRelatedPosts.profileId,
@@ -234,14 +198,8 @@ export const createRepostNotification = async (
   }
 
   return materializeNotification(connection, {
+    actorAccountId: source.actorAccountId,
     kind: NotificationKind.REPOST,
-    recipientAccountIds: await getRecipientAccountIds(
-      connection,
-      NotificationKind.REPOST,
-      source.id,
-      source.recipientProfileId,
-      source.createdAt,
-    ),
     recipientProfileId: source.recipientProfileId,
     relatedProfileId: source.actorProfileId,
     sourceId: source.id,

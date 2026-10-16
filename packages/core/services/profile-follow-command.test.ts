@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import {
-  AccountProfiles,
   Accounts,
   ActivityPubActors,
   db,
@@ -15,17 +14,14 @@ import {
   Profiles,
 } from '../db';
 import {
-  AccountProfileRole,
   AccountState,
   ActivityPubActorType,
   InstanceKind,
   InstanceState,
-  NotificationKind,
   ProfileFollowPolicy,
   ProfileState,
 } from '../enums';
 import { NotFoundError } from '../error';
-import { getNotificationRecipientSnapshot } from './notification-recipient-snapshot';
 import { ProfilePairBlockedError } from './profile-block-policy';
 import {
   executeProfileFollowPairTransition,
@@ -54,12 +50,6 @@ const createAccount = async () => {
   accountIds.push(account.id);
   return account;
 };
-
-const connectAccountToProfile = (
-  accountId: string,
-  profileId: string,
-  role: AccountProfileRole = AccountProfileRole.MEMBER,
-) => db.insert(AccountProfiles).values({ accountId, profileId, role });
 
 const createProfile = async (followPolicy: ProfileFollowPolicy = ProfileFollowPolicy.OPEN) => {
   const suffix = crypto.randomUUID();
@@ -136,7 +126,6 @@ const readUuidVersion = async (id: string) => {
 
 after(async () => {
   if (accountIds.length > 0) {
-    await db.delete(AccountProfiles).where(inArray(AccountProfiles.accountId, accountIds));
     await db.delete(Accounts).where(inArray(Accounts.id, accountIds));
   }
   if (profileIds.length > 0) {
@@ -352,21 +341,10 @@ test('approval-required Follow uses the PostgreSQL-generated request ID and dedu
   }
 });
 
-test('Follow Request approval keeps the original requester Account as the Follow actor', async () => {
+test('Follow Request approval copies the requester Account onto the Follow source', async () => {
   const follower = await createProfile();
   const followee = await createProfile(ProfileFollowPolicy.APPROVAL_REQUIRED);
-  const [requester, approvingOperator, otherOperator] = await Promise.all([
-    createAccount(),
-    createAccount(),
-    createAccount(),
-  ]);
-  await Promise.all([
-    connectAccountToProfile(requester.id, follower.id, AccountProfileRole.OWNER),
-    connectAccountToProfile(requester.id, followee.id),
-    connectAccountToProfile(approvingOperator.id, followee.id, AccountProfileRole.OWNER),
-    connectAccountToProfile(otherOperator.id, followee.id),
-  ]);
-
+  const requester = await createAccount();
   const pair = { followerProfileId: follower.id, followeeProfileId: followee.id };
   const pending = await executeProfileFollowPairTransition({
     pair,
@@ -381,18 +359,13 @@ test('Follow Request approval keeps the original requester Account as the Follow
       ? pending.result.profileFollowRequestId
       : undefined;
   assert.ok(requestId);
-  const requestSnapshot = await getNotificationRecipientSnapshot(
-    db,
-    NotificationKind.FOLLOW_REQUEST,
-    requestId,
-  );
-  assert.equal(requestSnapshot?.actorAccountId, requester.id);
-  assert.deepEqual(requestSnapshot?.recipients, {
-    [followee.id]: [approvingOperator.id, otherOperator.id].sort(),
-  });
+  const request = await db
+    .select()
+    .from(ProfileFollowRequests)
+    .where(eq(ProfileFollowRequests.id, requestId))
+    .then(firstOrThrow);
+  assert.equal(request.actorAccountId, requester.id);
 
-  const laterOperator = await createAccount();
-  await connectAccountToProfile(laterOperator.id, followee.id);
   const approvalCommand = {
     kind: 'APPROVE' as const,
     actorProfileId: followee.id,
@@ -413,19 +386,13 @@ test('Follow Request approval keeps the original requester Account as the Follow
       ? approved.result.profileFollowId
       : undefined;
   assert.ok(followId);
+  const follow = await db
+    .select()
+    .from(ProfileFollows)
+    .where(eq(ProfileFollows.id, followId))
+    .then(firstOrThrow);
+  assert.equal(follow.actorAccountId, requester.id);
 
-  const followSnapshot = await getNotificationRecipientSnapshot(
-    db,
-    NotificationKind.FOLLOW,
-    followId,
-  );
-  assert.equal(followSnapshot?.actorAccountId, requester.id);
-  assert.deepEqual(followSnapshot?.recipients, {
-    [followee.id]: [approvingOperator.id, otherOperator.id, laterOperator.id].sort(),
-  });
-
-  const joinedBeforeRetry = await createAccount();
-  await connectAccountToProfile(joinedBeforeRetry.id, followee.id);
   const retry = await executeProfileFollowPairTransition({
     pair,
     pendingRequestId: requestId,
@@ -437,32 +404,18 @@ test('Follow Request approval keeps the original requester Account as the Follow
   }
   assert.equal(retry.result.commandKind, 'APPROVE');
   assert.deepEqual(retry.effectPlan, []);
-  assert.deepEqual(
-    await getNotificationRecipientSnapshot(db, NotificationKind.FOLLOW, followId),
-    followSnapshot,
-  );
-  assert.deepEqual(
-    await getNotificationRecipientSnapshot(db, NotificationKind.FOLLOW_REQUEST, requestId),
-    requestSnapshot,
-  );
+  const followAfterRetry = await db
+    .select()
+    .from(ProfileFollows)
+    .where(eq(ProfileFollows.id, followId))
+    .then(firstOrThrow);
+  assert.equal(followAfterRetry.actorAccountId, requester.id);
 });
 
-test('open-policy promotion keeps the original Follow Request actor Account', async () => {
+test('open-policy promotion copies the original Follow Request actor', async () => {
   const follower = await createProfile();
   const followee = await createProfile(ProfileFollowPolicy.APPROVAL_REQUIRED);
-  const [requester, laterCaller, otherOperator] = await Promise.all([
-    createAccount(),
-    createAccount(),
-    createAccount(),
-  ]);
-  await Promise.all([
-    connectAccountToProfile(requester.id, follower.id, AccountProfileRole.OWNER),
-    connectAccountToProfile(requester.id, followee.id),
-    connectAccountToProfile(laterCaller.id, follower.id),
-    connectAccountToProfile(laterCaller.id, followee.id),
-    connectAccountToProfile(otherOperator.id, followee.id, AccountProfileRole.OWNER),
-  ]);
-
+  const [requester, laterCaller] = await Promise.all([createAccount(), createAccount()]);
   const pair = { followerProfileId: follower.id, followeeProfileId: followee.id };
   const pending = await executeProfileFollowPairTransition({
     pair,
@@ -494,12 +447,12 @@ test('open-policy promotion keeps the original Follow Request actor Account', as
   const followId =
     promoted.result.commandKind === 'FOLLOW' ? promoted.result.profileFollowId : undefined;
   assert.ok(followId);
-
-  const snapshot = await getNotificationRecipientSnapshot(db, NotificationKind.FOLLOW, followId);
-  assert.equal(snapshot?.actorAccountId, requester.id);
-  assert.deepEqual(snapshot?.recipients, {
-    [followee.id]: [laterCaller.id, otherOperator.id].sort(),
-  });
+  const follow = await db
+    .select()
+    .from(ProfileFollows)
+    .where(eq(ProfileFollows.id, followId))
+    .then(firstOrThrow);
+  assert.equal(follow.actorAccountId, requester.id);
 });
 
 test('promoting an existing request deletes it by ID and creates the Follow effect', async () => {
@@ -803,11 +756,16 @@ test('Approve completion-loss retry converges to the existing Follow without dup
 
 test('Accept completion-loss retry converges to the existing Follow without duplicate effects', async () => {
   const follower = await createProfile();
-  const followee = await createProfile(ProfileFollowPolicy.APPROVAL_REQUIRED);
+  const followee = await createRemoteProfile(
+    InstanceState.ACTIVE,
+    ProfileFollowPolicy.APPROVAL_REQUIRED,
+  );
+  const requester = await createAccount();
   const pending = await executeProfileFollowPairTransition({
     pair: { followerProfileId: follower.id, followeeProfileId: followee.id },
     command: {
       kind: 'FOLLOW',
+      actorAccountId: requester.id,
       origin: 'LOCAL',
     },
   });
@@ -818,6 +776,12 @@ test('Accept completion-loss retry converges to the existing Follow without dupl
   assert.equal(pending.result.kind, 'PENDING');
   assert.ok(pending.result.profileFollowRequestId);
   const requestId = pending.result.profileFollowRequestId;
+  const request = await db
+    .select()
+    .from(ProfileFollowRequests)
+    .where(eq(ProfileFollowRequests.id, requestId))
+    .then(firstOrThrow);
+  assert.equal(request.actorAccountId, requester.id);
   const input: ProfileFollowPairTransitionInput = {
     pair: { followerProfileId: follower.id, followeeProfileId: followee.id },
     pendingRequestId: requestId,
@@ -841,6 +805,7 @@ test('Accept completion-loss retry converges to the existing Follow without dupl
     .from(ProfileFollows)
     .where(eq(ProfileFollows.id, accepted.result.profileFollowId))
     .then(firstOrThrow);
+  assert.equal(profileFollow.actorAccountId, requester.id);
   assert.deepEqual(accepted.effectPlan, [
     {
       kind: 'DELETE',
@@ -867,6 +832,12 @@ test('Accept completion-loss retry converges to the existing Follow without dupl
   assert.equal(retry.result.kind, 'ACCEPTED');
   assert.equal(retry.result.profileFollowId, profileFollow.id);
   assert.deepEqual(retry.effectPlan, []);
+  const followAfterRetry = await db
+    .select()
+    .from(ProfileFollows)
+    .where(eq(ProfileFollows.id, profileFollow.id))
+    .then(firstOrThrow);
+  assert.equal(followAfterRetry.actorAccountId, requester.id);
   assert.equal(
     await db
       .select()

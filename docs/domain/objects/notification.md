@@ -69,7 +69,7 @@ Quote Notification의 Recipient Profile은 Related Post의 direct Repost Source 
 
 | 행동                                       | 행동 주체 | 대상 객체                     | 입력값                                                                  | 권한                                       | 조건                                                                                                                                                        | 결과                                                                                                          |
 | ------------------------------------------ | --------- | ----------------------------- | ----------------------------------------------------------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| Notification 생성                          | 시스템    | Notification                  | Type, Recipient Account, 대상 Profile, Type별 데이터와 필요한 원인 객체 | `System.NotificationSource`                | Type별 필수 데이터·관계가 유효하고 원래 수신 집합과 현재 억제 정책을 적용한다                                                                               | 입력 Notification Type과 Read State=Unread인 Notification이 생성된다                                          |
+| Notification 생성                          | 시스템    | Notification                  | Type, Recipient Account, 대상 Profile, Type별 데이터와 필요한 원인 객체 | `System.NotificationSource`                | Profile 범위는 생성 시 대상 Profile의 현재 Membership으로 수신 집합을 정하고 Type별 억제 정책을 적용한다                                                    | 입력 Notification Type과 Read State=Unread인 Notification이 생성된다                                          |
 | 상호작용 Notification 정리                 | 시스템    | Notification                  | 정리 대상 Notification                                                  | `System.NotificationSource`                | 원인 객체가 있는 Type의 필수 관계 결손·원인 Recipient 불일치·Recipient 기준 Related Post/Profile 비가용 (Recipient 자체의 복구 가능한 비활성화·정지는 제외) | 시점과 성공을 보장하지 않고 Notification 제거를 Best Effort로 시도한다                                        |
 | Profile Notification 지정 읽음 처리        | Account   | Notification 목록             | Notification ID 목록                                                    | `Account.Active`, `Notification.Recipient` | Type이 Operational이 아닌 입력 항목 중 요청 Account가 현재 조회할 수 있는 Notification이다                                                                  | 처리 가능한 입력 항목은 Read가 되고 읽음 시각이 최초 기록된다. 이미 Read이면 상태와 읽음 시각을 바꾸지 않는다 |
 | Account Operational Notification 읽음 처리 | Account   | Operational Notification 목록 | Notification ID 목록                                                    | `Account.Active`, `Notification.Recipient` | 요청 Account의 Operational Notification이다                                                                                                                 | 처리 가능한 입력 항목은 Read가 되고 최초 읽음 시각을 보존한다                                                 |
@@ -113,26 +113,26 @@ Quote Notification의 Recipient Profile은 Related Post의 direct Repost Source 
 
 ### Profile 범위 Notification 수신 Account
 
-- Profile 범위 Notification의 Recipient Account 집합은 원인 이벤트 시점에 대상 Profile의 Membership을 가진
-  Account로 정한다. Owner와 Member 역할은 수신 자격을 바꾸지 않는다. 수신 Account가 없으면 빈 집합으로 확정한다.
-- Reaction, Reply, Mention, Repost, 그리고 요청 없이 즉시 성립하는 Follow는 원인 행동이 확정될 때 수신 집합을
-  정한다. Follow Request는 요청 생성 시, 승인된 Follow는 Follow Relationship이 성립할 때 정한다. Quote는
-  최초로 알림 생성 조건을 통과한 승인 시점에 정한다. 승인된 Follow의 원래 행동 Account는 Follow Request를 만든
-  follower Account이며 승인 Account로 바꾸지 않는다.
-- 원래 행동을 한 Account를 확인할 수 있으면 그 Account는 대상 Profile의 수신 집합에서 제외한다. 이 제외는
-  같은 Account가 속한 다른 대상 Profile에도 적용한다. Remote 또는 legacy 원인에서 행동 Account를 알 수 없으면
-  Profile Membership만으로 추정하지 않는다.
+- 각 Profile 범위 Notification 생성 시도는 대상 Profile의 현재 Membership을 가진 Account를 기준으로 수신자를
+  정한다. Owner와 Member 역할은 수신 자격을 바꾸지 않는다. 지연되거나 실제 재시도된 생성 시점에 원인 행동 뒤 합류한
+  Account도 수신자가 될 수 있다. Membership 변경만으로 Notification 생성이나 재시도를 시작하지 않으며, 이후 생성
+  시도의 수신 집합도 고정하지 않는다.
+- 원래 행동을 한 Account를 확인할 수 있으면 그 Account는 대상 Profile의 수신 집합에서 제외하며, 같은 Account가 속한
+  다른 대상 Profile에도 동일하게 적용한다. Follow Request의 원래 행동 Account는 요청자이며, 승인된 Follow도 이 Account를
+  유지하고 승인 Account로 바꾸지 않는다. Remote·legacy 원인에서 행동 Account를 알 수 없으면 Profile Membership만으로
+  추정하지 않는다. CSV following import는
+  원래 행동 Account를 전달하지 않으므로 같은 Account의 다른 Local Profile이 Follow 또는 Follow Request 알림을 받을
+  수 있다. 이 경우에도 기존 Membership 조회 권한은 바뀌지 않는다.
 - Reply, Reaction, Repost, Quote에서 원인 행동 Profile과 대상 Profile이 같아 기존 정책상 자기 행동을 억제하는
   경우에는 그 대상 Profile의 모든 Account 수신자를 억제한다. Profile이 다르면 원래 행동 Account만 제외하고
   다른 대상 Profile Membership Account는 수신 자격을 유지한다.
 - 같은 Profile 범위 Notification의 각 Recipient Account는 해당 Profile과 묶인 별도 행, ID, Read State를 가진다.
-  Account 단독 Operational Notification은 한 행과 Read State를 Account의 모든 Profile inbox에서 공유한다.
-- 위에서 수신 시점을 정한 Notification의 수신 집합은 이후 Membership 추가·제거로 바뀌지 않는다. 재시도나 지연 처리로 새로 참여한
-  Account를 추가하지 않으며, 같은 원인·Account·대상 Profile 행이 남아 있으면 중복 행을 만들거나 ID·Read State·최초
-  읽음 시각을 바꾸지 않는다. 기존 Best Effort cleanup 정책은 그대로 적용한다. Membership 변경만으로 이전 Notification을
-  새로 만들거나 재구성하지 않는다. Membership을 다시 얻으면 현재 남아 있는 자기 Account·Profile Notification만 기존 ID와
-  Read State로 다시 조회할 수 있다. 부재 기간의 Notification을 backfill하지 않으며 이력·보존·복구를 기존 cleanup 범위
-  이상 보장하지 않는다. Followee Post는 기존의 독립 정책을 따른다.
+  재시도 때 같은 원인·Account·대상 Profile 행이 남아 있으면 중복 행을 만들지 않고 기존 ID, Read State와 최초 읽음 시각을
+  유지한다. Account 단독 Operational Notification은 한 행과 Read State를 Account의 모든 Profile inbox에서 공유한다.
+- Membership이 없어지면 해당 Profile Notification은 현재 조회할 수 없고, 다시 Membership을 얻으면 아직 남아 있는
+  자기 Account·Profile 행만 기존 ID와 Read State로 조회할 수 있다. Membership 변경만으로 이미 저장된 Notification을
+  다른 Account에게 복사하거나 소급 생성·재구성·backfill하지 않는다. 기존 Best Effort cleanup 정책은 그대로 적용하며,
+  이력·보존·복구는 그 범위를 넘어 보장하지 않는다. Followee Post는 기존의 독립 정책을 따른다.
 
 ### Type별 생성 관계
 

@@ -8,7 +8,6 @@ import {
   firstOrThrow,
   Instances,
   NotificationQuoteJudgments,
-  NotificationRecipientSnapshots,
   NotificationRollouts,
   Notifications,
   pg,
@@ -215,9 +214,6 @@ test('the fixed DB cutoff excludes the preceding microsecond but includes equali
 after(async () => {
   try {
     if (postIds.length > 0) {
-      await db
-        .delete(NotificationRecipientSnapshots)
-        .where(inArray(NotificationRecipientSnapshots.sourceId, postIds));
       await db
         .delete(NotificationQuoteJudgments)
         .where(inArray(NotificationQuoteJudgments.quotePostId, postIds));

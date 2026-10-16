@@ -8,7 +8,6 @@ import {
   firstOrThrow,
   Instances,
   NotificationQuoteJudgments,
-  NotificationRecipientSnapshots,
   Notifications,
   pg,
   PostContents,
@@ -211,9 +210,6 @@ const isAvailable = async (notificationId: string, includeRecipientAvailability:
 after(async () => {
   try {
     if (postIds.length > 0) {
-      await db
-        .delete(NotificationRecipientSnapshots)
-        .where(inArray(NotificationRecipientSnapshots.sourceId, postIds));
       await db
         .delete(NotificationQuoteJudgments)
         .where(inArray(NotificationQuoteJudgments.quotePostId, postIds));
