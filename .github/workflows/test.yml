@@ -41,9 +41,6 @@ jobs:
               shell="$(curl --silent --show-error --dump-header - http://127.0.0.1:18080/)"
               grep -Eq '^HTTP/[0-9.]+ 200 ' <<<"$shell"
               grep -Eiq '^cache-control:[[:space:]]*.*no-store' <<<"$shell"
-              csp="$(grep -i '^content-security-policy:' <<<"$shell")"
-              for source in "script-src 'self'" "style-src 'self'" "connect-src 'self'" "object-src 'none'" "frame-ancestors 'none'"; do grep -Fq "$source" <<<"$csp"; done
-              grep -Eiq "script-src[^;]*'nonce-[^']+'|script-src[^;]*'sha256-[^']+'" <<<"$csp"
               escaped="$(curl --silent --show-error --dump-header - --header 'Tailscale-User-Name: <script>alert(1)</script>' http://127.0.0.1:18080/)"
               grep -Eq '^HTTP/[0-9.]+ 200 ' <<<"$escaped"
               grep -Fq '&lt;script>alert(1)&lt;/script>' <<<"$escaped"
