@@ -27,6 +27,6 @@ export const postVisibilityPresentation = {
   [PostVisibility.DIRECT]: {
     description: '이 게시물에 언급된 모두',
     icon: AtSignIcon,
-    label: '언급한 프로필만',
+    label: '개인 멘션만',
   },
 } as const satisfies Record<PostVisibility, PostVisibilityPresentation>;
