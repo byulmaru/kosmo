@@ -26,19 +26,12 @@ export type SettingsLinkRowProps = {
 
 type SettingsLinkFeedbackProps = {
   children: ReactNode;
-  focusVisible: boolean;
   hovered: boolean;
   pressed: boolean;
   selected: boolean;
 };
 
-function SettingsLinkFeedback({
-  children,
-  focusVisible,
-  hovered,
-  pressed,
-  selected,
-}: SettingsLinkFeedbackProps) {
+function SettingsLinkFeedback({ children, hovered, pressed, selected }: SettingsLinkFeedbackProps) {
   const theme = useTheme();
   const reducedMotion = useReducedMotion();
   const interaction = pressed || hovered;
@@ -49,18 +42,17 @@ function SettingsLinkFeedback({
       : selected
         ? theme.stateSelectedSurface
         : 'transparent';
-  const role = focusVisible ? 'instant' : interaction ? 'interaction' : 'selection';
   const animatedBackground = useAnimatedColorTransition({
     color: backgroundColor,
     instantKey: theme,
     reducedMotion,
-    role,
+    role: interaction ? 'interaction' : 'selection',
   });
   const animatedBorder = useAnimatedColorTransition({
     color: selected ? theme.stateSelectedBorder : 'transparent',
     instantKey: theme,
     reducedMotion,
-    role,
+    role: 'selection',
   });
 
   return (
@@ -131,12 +123,7 @@ export function SettingsLinkRow({
         const hovered = web && Boolean((state as { hovered?: boolean }).hovered);
         const pressed = Boolean(state.pressed);
         return (
-          <SettingsLinkFeedback
-            focusVisible={focusVisible}
-            hovered={hovered}
-            pressed={pressed}
-            selected={selected}
-          >
+          <SettingsLinkFeedback hovered={hovered} pressed={pressed} selected={selected}>
             <SettingsItem
               description={description}
               label={label}
