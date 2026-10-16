@@ -1,6 +1,6 @@
 # PostHog 제품 분석 운영
 
-Kosmo Web의 PostHog client는 `prod` 채널에서 공개 `posthogKey`와 `posthogHost`가 모두 주입된 경우에만 초기화한다. `dev` 채널과 설정이 없는 build에는 client와 분석 요청이 없어야 한다. 승인된 production 분석 설정은 EU PostHog host(`https://eu.i.posthog.com`)를 사용하며 Session Replay는 수집하지 않는다. SDK의 `disable_session_recording: true`와 Cloud Replay OFF를 유지한다. 이는 목표 설정 계약이며 배포 증거는 아니다.
+Kosmo Web·Native의 PostHog client는 `prod` 채널에서 공개 `posthogKey`와 `posthogHost`가 모두 주입된 경우에만 초기화한다. `dev` 채널과 설정이 없는 build에는 client와 분석 요청이 없어야 한다. 승인된 production 분석 설정은 EU PostHog host(`https://eu.i.posthog.com`)를 사용한다. Web은 `disable_session_recording: true`와 Cloud Replay OFF로 Session Replay를 수집하지 않는다. Native는 명시적으로 호출된 앱 event만 전달하고 app lifecycle event와 Session Replay를 수집하지 않는다. Native는 기존 session bridge에서 로그인 Account를 identify하고, 성공한 로그아웃 또는 Account 삭제 뒤 local session 정리에서 reset한다. 이는 목표 설정 계약이며 배포 증거는 아니다.
 
 ## Identity와 개인정보 경계
 
@@ -22,7 +22,7 @@ Kosmo Web의 PostHog client는 `prod` 채널에서 공개 `posthogKey`와 `posth
 
 각 성공 mutation 결과는 해당 callback에서 한 번만 capture한다. 클릭, 메뉴 open, optimistic state, render, count 변화만으로 event를 만들지 않는다. Network error, GraphQL error로 성공 경계를 확인할 수 없는 경우, 필요한 success payload가 없는 경우, 재게시·북마크 대상 ID가 일치하지 않는 경우에는 event를 만들지 않는다. 핵심 성공 ID와 별도 projection 오류가 함께 반환되면 성공 이벤트는 기록하되 기존 UI 오류 처리는 유지한다. Analytics 초기화·identify·capture 실패는 mutation 결과와 기존 오류 처리를 변경하지 않는다.
 
-Account가 바뀐 뒤 늦게 완료된 이전 요청은 새 Account에 귀속하지 않는다. 같은 Account에서 Profile만 바뀐 경우에는 Account identity를 유지한다. Account 전환·로그아웃 중 SDK의 reset 또는 identify가 실패하면 제품 흐름은 계속하되, SDK의 실제 `$user_id`와 distinct ID가 현재 Account와 다시 일치할 때까지 명시적 custom event를 보내지 않는다.
+Account가 바뀐 뒤 늦게 완료된 이전 요청은 새 Account에 귀속하지 않는다. 같은 Account에서 Profile만 바뀐 경우에는 Account identity를 유지한다. Web에서 Account 전환·로그아웃 중 SDK의 reset 또는 identify가 실패하면 제품 흐름은 계속하되, SDK의 실제 `$user_id`와 distinct ID가 현재 Account와 다시 일치할 때까지 명시적 custom event를 보내지 않는다.
 
 ## Worker 데이터베이스 집계 스냅샷
 
@@ -82,4 +82,4 @@ Saved event-backed views: [production database counts dashboard](https://us.post
 5. Reaction 원문과 Post·Profile 식별자가 explicit property에 포함되지 않는지 확인한다.
 6. PostHog endpoint를 차단한 상태에서도 재게시·Reaction·북마크가 동일하게 완료되는지 확인한다.
 
-Web event의 집계 Dashboard, funnel 정의, native analytics, emoji별 분석은 Worker 스냅샷과 별도 범위다. Web 수집을 재개하거나 event taxonomy를 바꿀 때는 이 문서와 canonical product contract를 함께 갱신한다.
+Web event의 집계 Dashboard·funnel 정의, Native event의 추가 집계·funnel 분석, emoji별 분석은 Worker 스냅샷과 별도 범위다. Native client의 명시적 event 수집과 Account identity/reset은 위 계약을 따른다. Web·Native 수집을 재개하거나 event taxonomy를 바꿀 때는 이 문서와 canonical product contract를 함께 갱신한다.

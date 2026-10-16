@@ -147,6 +147,7 @@ describe('useLogout production composition', () => {
     assert.deepEqual(state.events, [
       'request-native-logout',
       'clear-native-session',
+      'clear-analytics',
       'delete-selected-profile',
       'replace-root',
     ]);
@@ -226,6 +227,7 @@ describe('useLogout production composition', () => {
 
     assert.deepEqual(state.events, [
       'clear-native-session',
+      'clear-analytics',
       'delete-selected-profile',
       'replace-root',
     ]);
