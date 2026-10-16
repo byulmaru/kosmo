@@ -56,7 +56,11 @@ type LocalPostNoteProjection = LocalPostNote & {
 
 type LocalPostNoteContext = Pick<Context<void>, 'canonicalOrigin' | 'getActorUri'>;
 
-const loadLocalPostNoteRow = async (context: LocalPostNoteContext, postId: string) => {
+const loadLocalPostNoteRow = async (
+  context: LocalPostNoteContext,
+  postId: string,
+  allowDirect = false,
+) => {
   if (!isCanonicalPostId(postId)) {
     return null;
   }
@@ -86,18 +90,22 @@ const loadLocalPostNoteRow = async (context: LocalPostNoteContext, postId: strin
     .limit(1)
     .then(first);
 
-  if (!row?.instanceCanonicalOrigin || row.post.visibility === PostVisibility.DIRECT) {
+  if (
+    !row?.instanceCanonicalOrigin ||
+    (!allowDirect && row.post.visibility === PostVisibility.DIRECT)
+  ) {
     return null;
   }
 
   return { ...row, instanceCanonicalOrigin: row.instanceCanonicalOrigin };
 };
 
-export const loadLocalPostNote = async (
+const loadLocalPostNoteForProjection = async (
   context: LocalPostNoteContext,
   postId: string,
+  allowDirect = false,
 ): Promise<LocalPostNote | null> => {
-  const row = await loadLocalPostNoteRow(context, postId);
+  const row = await loadLocalPostNoteRow(context, postId, allowDirect);
   if (!row) {
     return null;
   }
@@ -123,6 +131,11 @@ export const loadLocalPostNote = async (
     visibility: row.post.visibility,
   };
 };
+
+export const loadLocalPostNote = async (
+  context: LocalPostNoteContext,
+  postId: string,
+): Promise<LocalPostNote | null> => loadLocalPostNoteForProjection(context, postId);
 
 const parseHttpUrl = (value: string | null): URL | null => {
   if (!value) {
@@ -318,8 +331,9 @@ export const dispatchLocalPostNote = async (
 export const projectLocalPostNote = async (
   context: LocalPostNoteContext,
   postId: string,
+  outbound?: { readonly directRecipientUris: readonly URL[] },
 ): Promise<LocalPostNoteProjection | null> => {
-  const note = await loadLocalPostNote(context, postId);
+  const note = await loadLocalPostNoteForProjection(context, postId, outbound !== undefined);
   if (!note) {
     return null;
   }
@@ -329,7 +343,15 @@ export const projectLocalPostNote = async (
   const replyTarget = note.replyParentId
     ? await resolveActivityPubPostUri(note.replyParentId)
     : undefined;
-  const to = note.visibility === PostVisibility.PUBLIC ? PUBLIC_COLLECTION : followersUri;
+  const audience =
+    note.visibility === PostVisibility.DIRECT
+      ? outbound
+        ? { tos: [...outbound.directRecipientUris] }
+        : null
+      : { to: note.visibility === PostVisibility.PUBLIC ? PUBLIC_COLLECTION : followersUri };
+  if (!audience) {
+    return null;
+  }
   const cc =
     note.visibility === PostVisibility.PUBLIC
       ? followersUri
@@ -347,6 +369,7 @@ export const projectLocalPostNote = async (
     attachments: [...note.mediaAttachments],
     attribution: authorUri,
     ...(cc ? { cc } : {}),
+    ...audience,
     content: postContentDocumentToHtml(note.contentDocument, mentionLinks),
     id: new URL(`/ap/note/${note.id}`, note.canonicalOrigin),
     mediaType: 'text/html',
@@ -356,7 +379,6 @@ export const projectLocalPostNote = async (
     ...(note.summary ? { summary: escapeText(note.summary) } : {}),
     sensitive: note.sensitiveMedia,
     ...(tags.length > 0 ? { tags } : {}),
-    to,
     url: new URL(
       `/@${encodeURIComponent(note.authorHandle)}/${encodeGlobalId('Post', note.id)}`,
       configuredLocalInstance.canonicalOrigin,
