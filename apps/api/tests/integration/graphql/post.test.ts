@@ -214,7 +214,7 @@ describe('Post Reply GraphQL 경계', () => {
     assertNoGraphQLErrors(projected);
     assert.equal(
       projected.data?.node?.content.bodyText,
-      '😀 hi @알 수 없는 사용자, and @알 수 없는 사용자; also @알 수 없는 사용자',
+      `😀 hi ${relativeHandle}, and ${relativeHandle}; also ${remoteRelativeHandle}`,
     );
     assert.deepEqual(
       projected.data?.node?.content.mentionedProfiles
