@@ -14,6 +14,16 @@ const disableProfileOnce = (profileId: string, handle?: Database) =>
       .then(first);
 
     if (!disabled) {
+      const existing = await tx
+        .select({ state: Profiles.state })
+        .from(Profiles)
+        .where(eq(Profiles.id, profileId))
+        .then(first);
+
+      if (existing?.state === ProfileState.DISABLED) {
+        return;
+      }
+
       throw new NotFoundError('Profile not found');
     }
 

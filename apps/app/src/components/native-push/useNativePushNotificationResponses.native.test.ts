@@ -228,6 +228,39 @@ describe('native push responses', () => {
     },
   );
 
+  it('switches to the recipient Profile recovered from an iOS push trigger before navigating', async () => {
+    await renderHook();
+    assert.ok(responseListener);
+    const listener = responseListener;
+
+    await act(async () => {
+      listener({
+        actionIdentifier: 'default',
+        notification: {
+          request: {
+            content: { data: {} },
+            identifier: 'ios-push-1',
+            trigger: {
+              type: 'push',
+              payload: {
+                href: '/@recipient/postId',
+                notificationId: 'notification-1',
+                recipientProfileId: 'profile-recipient',
+              },
+            },
+          },
+        },
+      });
+    });
+
+    assert.deepEqual(profileSelectionCalls, [
+      'persist:profile-recipient',
+      'reset:profile-recipient',
+      'clear-response',
+      'navigate:/@recipient/postId',
+    ]);
+  });
+
   it('does not persist or reset when the notification recipient is already selected', async () => {
     session.selectedProfileId = 'profile-recipient';
     let resolveNavigation!: () => void;

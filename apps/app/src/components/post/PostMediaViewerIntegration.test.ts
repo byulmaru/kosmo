@@ -3,7 +3,7 @@ import { afterEach, before, describe, it, mock } from 'node:test';
 import { createContext, createElement } from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
 import { act, create } from 'react-test-renderer';
-import type { PropsWithChildren, ReactElement, RefObject } from 'react';
+import type { PropsWithChildren, ReactElement, ReactNode, RefObject } from 'react';
 import type { View as NativeView } from 'react-native';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { ReplyNotificationPost_post$key } from '@/components/notification/__generated__/ReplyNotificationPost_post.graphql';
@@ -34,6 +34,20 @@ let renderer: ReactTestRenderer | null = null;
 const platform = { OS: 'web' };
 let fontScale = 1;
 let viewportWidth = 767;
+
+function MockPressable({
+  children,
+  ...props
+}: {
+  children?: ReactNode | ((state: { pressed: boolean }) => ReactNode);
+  [key: string]: unknown;
+}) {
+  return createElement(
+    'Pressable',
+    props,
+    typeof children === 'function' ? children({ pressed: false }) : children,
+  );
+}
 
 Object.assign(globalThis, {
   cancelAnimationFrame: () => undefined,
@@ -66,9 +80,9 @@ mock.module('react-native', {
     PanResponder: { create: () => ({ panHandlers: {} }) },
     PixelRatio: { getFontScale: () => fontScale },
     Platform: platform,
-    Pressable: 'Pressable',
+    Pressable: MockPressable,
     ScrollView: 'ScrollView',
-    StyleSheet: { create: <T>(styles: T) => styles },
+    StyleSheet: { create: <T>(styles: T) => styles, flatten: flattenStyle },
     Text: 'Text',
     View: 'View',
     useWindowDimensions: () => ({ height: 800, width: viewportWidth }),

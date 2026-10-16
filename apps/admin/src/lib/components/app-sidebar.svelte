@@ -1,5 +1,6 @@
 <script lang="ts">
   import LayoutDashboardIcon from '@lucide/svelte/icons/layout-dashboard';
+  import UserRoundIcon from '@lucide/svelte/icons/user-round';
   import UsersIcon from '@lucide/svelte/icons/users';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
@@ -67,6 +68,23 @@
                 >
                   <UsersIcon />
                   <span>Accounts</span>
+                </a>
+              {/snippet}
+            </Sidebar.MenuButton>
+          </Sidebar.MenuItem>
+          <Sidebar.MenuItem>
+            <Sidebar.MenuButton
+              isActive={page.url.pathname.startsWith('/profiles')}
+              tooltipContent="Profiles"
+            >
+              {#snippet child({ props })}
+                <a
+                  {...props}
+                  aria-current={page.url.pathname.startsWith('/profiles') ? 'page' : undefined}
+                  href={resolve('/profiles')}
+                >
+                  <UserRoundIcon />
+                  <span>Profiles</span>
                 </a>
               {/snippet}
             </Sidebar.MenuButton>

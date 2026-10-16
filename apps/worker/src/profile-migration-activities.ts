@@ -1,4 +1,3 @@
-import { isActor } from '@fedify/vocab';
 import {
   ActivityPubActors,
   db,
@@ -20,6 +19,7 @@ import {
 import { executeProfileFollowRemoval } from '@kosmo/core/temporal/follow-command';
 import {
   federation,
+  fetchRemoteProfileActor,
   findOrMaterializeRemoteProfileActorByUri,
   findStoredRemoteProfileActorByUri,
   observeInbound,
@@ -118,21 +118,18 @@ export const prepareProfileMigrationMoveActivity = async (
     return null;
   }
 
-  const fedifyContext = federation.createContext(new URL(localInstance.canonicalOrigin), undefined);
-  const lookupObject = async (...args: Parameters<typeof fedifyContext.lookupObject>) => {
-    const actor = await fedifyContext.lookupObject(...args);
-    if (actor === null) {
-      throw new Error('Remote Move actor lookup returned no actor');
-    }
-    return actor;
-  };
-  const lookupContext = { lookupObject };
+  const contextOrigin = localInstance.canonicalOrigin;
+  const fedifyContext = federation.createContext(new URL(contextOrigin), undefined);
 
   if (targetProfileId === undefined) {
-    const targetActor = await lookupContext.lookupObject(targetActorUri);
-
-    if (!isActor(targetActor) || targetActor.id?.href !== targetActorUri.href) {
-      observeMoveRejection(input, 'protocol', 'move_target_not_matching_actor');
+    let targetActor: Awaited<ReturnType<typeof fetchRemoteProfileActor>>;
+    try {
+      targetActor = await fetchRemoteProfileActor(fedifyContext, targetActorUri);
+    } catch (error) {
+      if (!(error instanceof RemoteActorMaterializationError)) {
+        throw error;
+      }
+      observeMoveRejection(input, 'protocol', 'move_target_not_matching_actor', error);
       return null;
     }
 
@@ -144,7 +141,7 @@ export const prepareProfileMigrationMoveActivity = async (
     try {
       const target = await findOrMaterializeRemoteProfileActorByUri({
         actorUri: targetActorUri,
-        context: lookupContext,
+        contextOrigin,
       });
       targetProfileId = target.profile.id;
     } catch (error) {
@@ -159,7 +156,7 @@ export const prepareProfileMigrationMoveActivity = async (
   try {
     const source = await findOrMaterializeRemoteProfileActorByUri({
       actorUri: sourceActorUri,
-      context: lookupContext,
+      contextOrigin,
     });
     return { sourceProfileId: source.profile.id, targetProfileId };
   } catch (error) {

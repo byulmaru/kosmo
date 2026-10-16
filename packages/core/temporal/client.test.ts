@@ -13,13 +13,14 @@ import {
 } from '@temporalio/client';
 import type { WorkflowHandleWithStartDetails } from '@temporalio/client';
 import type { WorkflowDefinition, WorkflowUpdateDefinition } from './client';
-import type { RemoteProfileLookupInput } from './remote-profile';
+import type { RemoteProfileLookupInput, RemoteProfileUpdateInput } from './remote-profile';
 
 process.env.TEMPORAL_ADDRESS ??= '127.0.0.1:7233';
 process.env.TEMPORAL_NAMESPACE ??= 'test';
 
 const { runWorkflow, temporalClient } = await import('./client');
-const { remoteProfileLookupWorkflow } = await import('./remote-profile');
+const { remoteProfileLookupWorkflow, remoteProfileRefreshWorkflow, remoteProfileUpdateWorkflow } =
+  await import('./remote-profile');
 
 const importClient = (environment: NodeJS.ProcessEnv) =>
   spawnSync(
@@ -399,6 +400,149 @@ test('remote Profile Workflow builder는 normalized handle과 profileId를 실�
     deadline.mock.restore();
     execute.mock.restore();
   }
+});
+
+test('Remote Profile lookup ID stability', () => {
+  const actorUri = 'https://remote.example/users/alice';
+  const contextOrigin = 'https://local.example';
+  const receivedAt = '2026-08-01T00:00:01Z';
+  const profileId = '00000000-0000-8000-8000-000000000001';
+  const otherProfileId = '00000000-0000-8000-8000-000000000002';
+  const activityUri = 'https://remote.example/activities/follow-1';
+  const workflowIdFromArgs = remoteProfileLookupWorkflow.workflowIdFromArgs;
+  const inputs = [
+    {
+      domain: 'remote.example',
+      handle: 'alice',
+    },
+    {
+      actorUri,
+    },
+    {
+      actorUri,
+      contextOrigin,
+    },
+    {
+      actorUri,
+      contextOrigin,
+      profileId,
+      receipt: {
+        activityUri,
+        receivedAt,
+      },
+    },
+    {
+      actorUri,
+      contextOrigin,
+      profileId,
+      receipt: {
+        activityUri,
+        receivedAt: '2026-08-01T00:00:02Z',
+      },
+    },
+    {
+      actorUri,
+      contextOrigin,
+      profileId: otherProfileId,
+      receipt: {
+        activityUri,
+        receivedAt,
+      },
+    },
+    {
+      actorUri,
+      contextOrigin,
+      profileId,
+      receipt: {
+        receivedAt,
+      },
+    },
+  ] satisfies RemoteProfileLookupInput[];
+  const ids = inputs.map((input) => workflowIdFromArgs(input));
+
+  const workflowName = remoteProfileLookupWorkflow.workflow;
+  assert.deepEqual(ids, [
+    `${workflowName}:["remote.example","alice","configured-local"]`,
+    `${workflowName}:["${actorUri}","configured-local","configured-local","without-receipt"]`,
+    `${workflowName}:["${actorUri}","configured-local","${contextOrigin}","without-receipt"]`,
+    `${workflowName}:["${actorUri}","${profileId}","${contextOrigin}","${activityUri}"]`,
+    `${workflowName}:["${actorUri}","${profileId}","${contextOrigin}","${activityUri}"]`,
+    `${workflowName}:["${actorUri}","${otherProfileId}","${contextOrigin}","${activityUri}"]`,
+    `${workflowName}:["${actorUri}","${profileId}","${contextOrigin}","${receivedAt}"]`,
+  ]);
+  assert.equal(workflowIdFromArgs(inputs[3]!), ids[3]);
+  assert.equal(workflowIdFromArgs(inputs[4]!), ids[3]);
+  assert.notEqual(ids[3], ids[5]);
+  assert.notEqual(
+    workflowIdFromArgs({
+      ...inputs[3]!,
+      contextOrigin: 'https://other-local.example',
+    }),
+    ids[3],
+  );
+});
+
+test('Remote Profile Update ID는 같은 receipt에서 안정적이고 actor·receipt 변경을 구분한다', () => {
+  const input: RemoteProfileUpdateInput = {
+    actorUri: 'https://remote.example/users/alice',
+    actorJsonLd: { id: 'https://remote.example/users/alice', type: 'Person' },
+    receipt: {
+      activityUri: 'https://remote.example/activities/update-1',
+      receivedAt: '2026-08-01T00:00:02Z',
+    },
+  };
+  const workflowIdFromArgs = remoteProfileUpdateWorkflow.workflowIdFromArgs;
+  const id = workflowIdFromArgs(input);
+
+  assert.equal(
+    id,
+    `${remoteProfileUpdateWorkflow.workflow}:["${input.actorUri}","${input.receipt.activityUri}","${input.receipt.receivedAt}"]`,
+  );
+  assert.equal(workflowIdFromArgs(input), id);
+  const receiptWithoutActivityId: RemoteProfileUpdateInput = {
+    ...input,
+    receipt: { receivedAt: input.receipt.receivedAt },
+  };
+  const fallbackId = workflowIdFromArgs(receiptWithoutActivityId);
+  assert.equal(
+    fallbackId,
+    `${remoteProfileUpdateWorkflow.workflow}:["${input.actorUri}","${input.receipt.receivedAt}","${input.receipt.receivedAt}"]`,
+  );
+  assert.equal(workflowIdFromArgs(receiptWithoutActivityId), fallbackId);
+  assert.notEqual(fallbackId, id);
+  assert.notEqual(
+    workflowIdFromArgs({ ...input, actorUri: 'https://remote.example/users/mallory' }),
+    id,
+  );
+  assert.notEqual(
+    workflowIdFromArgs({
+      ...input,
+      receipt: { ...input.receipt, activityUri: 'https://remote.example/activities/update-2' },
+    }),
+    id,
+  );
+  assert.notEqual(
+    workflowIdFromArgs({
+      ...input,
+      receipt: { ...input.receipt, receivedAt: '2026-08-01T00:00:03Z' },
+    }),
+    id,
+  );
+});
+
+test('Remote Profile refresh ID는 기존 actor·profile identity를 유지한다', () => {
+  const actorUri = 'https://remote.example/users/alice';
+  const workflowIdFromArgs = remoteProfileRefreshWorkflow.workflowIdFromArgs;
+  const legacyId = workflowIdFromArgs({ actorUri });
+
+  assert.equal(
+    legacyId,
+    `${remoteProfileRefreshWorkflow.workflow}:["${actorUri}","configured-local"]`,
+  );
+  assert.notEqual(
+    workflowIdFromArgs({ actorUri, profileId: '00000000-0000-8000-8000-000000000001' }),
+    legacyId,
+  );
 });
 
 test('공용 task queue를 적용한다', async () => {

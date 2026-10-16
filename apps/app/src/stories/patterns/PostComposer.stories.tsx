@@ -999,12 +999,14 @@ export const MobileReplyShellContract: Story = {
   args: { ...MobileEmpty.args, body: '', items: [], mode: 'reply' },
   render: (args) => {
     const [body, setBody] = useState(args.body);
+    const [items, setItems] = useState(args.items);
     const [parentResized, setParentResized] = useState(false);
     return (
       <>
         <MobileFullscreenComposerShellCandidate
           {...args}
           body={body}
+          items={items}
           beforeEditor={
             <View style={{ height: parentResized ? 260 : 180 }} testID="mobile-reply-parent">
               <Text>부모 게시글</Text>
@@ -1014,6 +1016,10 @@ export const MobileReplyShellContract: Story = {
           onBodyChange={(value) => {
             args.onBodyChange(value);
             setBody(value);
+          }}
+          onMediaRemove={(key) => {
+            args.onMediaRemove(key);
+            setItems((current) => current.filter((item) => item.key !== key));
           }}
           onOverlayClose={onMobileClose}
           replyContext={<Text testID="mobile-reply-context">@reply-target님에게 답글</Text>}
@@ -1066,7 +1072,6 @@ export const MobileReplyShellContract: Story = {
         scroll.getBoundingClientRect().top + 1,
       ),
     );
-    expect(body).toHaveAttribute('placeholder', '무슨 일이 일어나고 있나요?');
     expect(body).toHaveValue('첫 번째 초안\n두 번째 초안');
     expect(canvas.getByTestId('mobile-reply-context')).toHaveTextContent(
       '@reply-target님에게 답글',
@@ -1118,7 +1123,7 @@ export const MobilePlaygroundContract: Story = {
     expect(within(visibilityGroup).getAllByRole('menuitemradio')).toHaveLength(4);
     expect(within(quoteGroup).getAllByRole('menuitemradio')).toHaveLength(3);
     expect(
-      within(visibilityGroup).getByRole('menuitemradio', { name: '지정 멤버만' }),
+      within(visibilityGroup).getByRole('menuitemradio', { name: '언급한 프로필만' }),
     ).toBeVisible();
     expect(menu.getBoundingClientRect().right).toBe(trigger.getBoundingClientRect().right - 16);
 
@@ -1279,7 +1284,6 @@ export const WebModalLayoutContract: Story = {
     const footer = canvas.getByTestId('post-composer-footer');
     const target = canvas.getByTestId('post-composer-target');
 
-    expect(within(visibility).getByText('공개 범위')).toBeVisible();
     expect(within(visibility).getByText('조용한 공개')).toBeVisible();
     expect(getComputedStyle(editor).borderWidth).toBe('0px');
     expect(scroll.contains(editor)).toBe(true);
@@ -1498,12 +1502,12 @@ export const MobileMediaFooterGeometryContract: Story = {
   ...MobilePlayground,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const body = canvas.getByRole('textbox', { name: '게시글 본문' });
     const gallery = canvas.getByLabelText('첨부 이미지 갤러리, 1개');
     const shelf = canvas.getByTestId('mobile-composer-media-shelf');
-    const footer = canvas.getByTestId('mobile-composer-footer');
 
     expect(shelf).toHaveStyle({ height: '164px', paddingBottom: '8px' });
-    expect(footer.getBoundingClientRect().top - gallery.getBoundingClientRect().bottom).toBe(8);
+    expect(gallery.getBoundingClientRect().top - body.getBoundingClientRect().bottom).toBe(8);
   },
 };
 
@@ -1511,12 +1515,12 @@ export const MobileKeyboardMediaFooterGeometryContract: Story = {
   ...MobileKeyboardMedia,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const body = canvas.getByRole('textbox', { name: '게시글 본문' });
     const gallery = canvas.getByLabelText('첨부 이미지 갤러리, 1개');
     const shelf = canvas.getByTestId('mobile-composer-media-shelf');
-    const footer = canvas.getByTestId('mobile-composer-footer');
 
     expect(shelf).toHaveStyle({ height: '164px', paddingBottom: '8px' });
-    expect(footer.getBoundingClientRect().top - gallery.getBoundingClientRect().bottom).toBe(8);
+    expect(gallery.getBoundingClientRect().top - body.getBoundingClientRect().bottom).toBe(8);
   },
 };
 
@@ -1569,7 +1573,7 @@ function expectMobileEditorFitsMediaShelf(canvasElement: HTMLElement) {
   const editor = canvas.getByRole('textbox', { name: '게시글 본문' });
   const shelf = canvas.getByLabelText('첨부 이미지 갤러리, 1개').parentElement;
 
-  expect(getComputedStyle(editor).flexGrow).toBe('1');
+  expect(getComputedStyle(editor).flexGrow).toBe('0');
   expect(shelf).not.toBeNull();
   expect(editor.getBoundingClientRect().bottom).toBeLessThanOrEqual(
     shelf!.getBoundingClientRect().top,

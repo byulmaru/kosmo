@@ -61,6 +61,7 @@ let Instances: typeof CoreDb.Instances;
 let localInstanceId: string;
 let Media: typeof CoreDb.Media;
 let pg: typeof CoreDb.pg;
+let projectLocalPostNote: typeof LocalPostNoteModule.projectLocalPostNote;
 let PostContents: typeof CoreDb.PostContents;
 let PostMentions: typeof CoreDb.PostMentions;
 let Posts: typeof CoreDb.Posts;
@@ -105,7 +106,8 @@ describe('ActivityPub Local Post Note', () => {
     } = await import('@kosmo/core/db'));
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
     ({ isCanonicalPostId, resolveActivityPubPostUri } = await import('./activitypub-post-uri'));
-    ({ authorizeLocalPostNote, dispatchLocalPostNote } = await import('./local-post-note'));
+    ({ authorizeLocalPostNote, dispatchLocalPostNote, projectLocalPostNote } =
+      await import('./local-post-note'));
     ({
       authorizeLocalProfileFeatured,
       countLocalProfileFeatured,
@@ -711,6 +713,29 @@ describe('ActivityPub Local Post Note', () => {
         .set({ state: InstanceState.ACTIVE })
         .where(eq(Instances.id, localInstanceId));
     }
+  });
+
+  test('projects DIRECT only for outbound delivery to explicit recipient actor URIs', async () => {
+    const author = await createProfile({ kind: InstanceKind.LOCAL });
+    const direct = await createPost(author.id, { visibility: PostVisibility.DIRECT });
+    const context = createContext();
+    const directRecipientUris = [
+      new URL('https://first.remote.example/users/first'),
+      new URL('https://second.remote.example/users/second'),
+    ];
+
+    const projection = await projectLocalPostNote(context, direct.id, { directRecipientUris });
+    assert.ok(projection);
+    assert.equal(projection.visibility, PostVisibility.DIRECT);
+    assert.deepEqual(
+      projection.object.toIds.map((uri) => uri.href),
+      directRecipientUris.map((uri) => uri.href),
+    );
+    assert.deepEqual(projection.object.ccIds, []);
+
+    assert.equal(await projectLocalPostNote(context, direct.id), null);
+    assert.equal(await authorizeLocalPostNote(context, { id: direct.id }), false);
+    assert.equal((await (await createSignedFederation()).fetch(direct.id)).status, 404);
   });
 
   test('allows only Author or established Follower signed fetch', async () => {

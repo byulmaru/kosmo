@@ -9,6 +9,10 @@ durable 객체다. Session은 credential을 사용하는 한 클라이언트 환
 일반적인 Session 폐기는 OIDC provider의 전역 로그인 상태나 다른 Session을 함께 종료하지 않는다. Account 삭제는
 예외로 해당 Account에 속한 모든 Active Session을 Revoked로 만든다.
 
+selected Profile 선택은 클라이언트가 소유하며 Session 간 공유 상태가 아니다. 기존 Session 연결 Profile 저장값과
+read fallback은 Deprecated 호환 동작으로 별도 전환 전까지 남을 수 있다. 기존 호환 쓰기와 clear 동작을 유지할 수
+있지만 새 소비자나 쓰기를 추가하지 않는다.
+
 ## 상태
 
 ### Session State

@@ -23,8 +23,7 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
 
 2026-09-16 PROD-970 결정으로 Kosmo Account 탈퇴를 `/settings/account-deletion` 내부 detail에서 제공한다.
 `코스모 탈퇴`는 Settings root/master의 마지막 행으로 항상 표시하며, Byulmaru ID의 외부 `계정 설정` 진입점과
-분리한다. 탈퇴가 완료되면 Kosmo login으로 이동하고, 같은 Byulmaru ID의 Kosmo 재가입은 후속 정책이 정해질
-때까지 임시로 막는다.
+분리한다. 탈퇴가 완료되면 Kosmo login으로 이동한다.
 
 ## Route와 진입점
 
@@ -150,13 +149,13 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   정책 변경은 기존 Pending Follow Request를 바꾸지 않으며, 기본 공개 범위는 이미 열린 Composer의 draft를
   바꾸지 않는다. 도메인 보장은 [Profile](../domain/objects/profile.md)을 따른다.
 
-## Profile 설정의 후속 lifecycle 조립
+## Profile 설정의 Profile 삭제
 
-PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아 유지하고, optional `lifecycle`이
-주어진 경우에만 비활성화·재활성화·영구 삭제 흐름을 조립한다. 기본 Storybook에는 lifecycle 진입점이 없고,
-`WithLifecycle`에서 도입 후 구성을 검토한다. 비활성화는 Web·Native 모두 내용 전체를 교체하며,
-재활성화·영구 삭제는 확인 팝업을 사용한다. 자세한 계약은 [Profile lifecycle](./profile-lifecycle.md)을 따른다.
-이 Target presentation은 현재 `SettingsProfileDetail`과 Profile Edit의 저장·route를 교체하거나 기능을 활성화하지 않는다.
+`/settings/profile`은 선택된 Active/Normal Local Profile의 Owner에게 단일 `프로필 삭제` action을 제공한다.
+확인·취소·요청 중·오류·재시도와 성공 후 서버 상태 반영은 [PROD-943](https://linear.app/byulmaru/issue/PROD-943/settings%EC%97%90%EC%84%9C-local-profile-%EB%B9%84%ED%99%9C%EC%84%B1%ED%99%94%EB%A5%BC-%EC%8B%A4%EC%A0%9C-%EA%B8%B0%EB%8A%A5%EC%97%90-%EC%97%B0%EA%B2%B0%ED%95%9C%EB%8B%A4)가 소유한다.
+사용자에게 보이는 Profile 삭제는 기존 소프트 딜리트 동작을 사용해 Lifecycle State를 `Deactivated`로 바꾸며, 해당 Profile은 더 이상 선택·사용할 수 없다. 사용 가능한 Profile 목록과 navigation은 서버 상태를 반영한다. 이 Settings 흐름에는 별도 비활성화, 재활성화, Owner 영구 삭제 action이 없다.
+30일 후 물리 파기는 별도 [PROD-1110](https://linear.app/byulmaru/issue/PROD-1110/%EB%B9%84%ED%99%9C%EC%84%B1%ED%99%94%EB%90%9C-local-profile%EC%9D%98-30%EC%9D%BC-%ED%9B%84-%EC%8B%9C%EC%8A%A4%ED%85%9C-%ED%8C%8C%EA%B8%B0%EB%A5%BC-%EA%B5%AC%ED%98%84%ED%95%9C%EB%8B%A4)가 다룬다. 실제 파기 동작이 구현되기 전까지 Settings UI는 30일 뒤 자동 삭제를 약속하지 않는다.
+자세한 presentation 계약은 [Profile lifecycle](./profile-lifecycle.md)을 따른다. 이 조립은 기존 `SettingsProfileDetail`과 Profile Edit의 게시 설정 저장·route를 교체하지 않는다.
 
 ## Kosmo Account 탈퇴
 
@@ -175,8 +174,8 @@ PROD-860의 `ProfileSettingsScreen`은 설정 content를 `children`으로 받아
 - 기존 Profile 삭제 흐름과 같은 lifecycle을 사용한다. `pending`에서는 확인·checkbox·dismiss·navigation의
   중복 조작을 막고, `error`에서는 확인 내용과 acknowledgement를 유지한 채 안전한 오류와 `다시 시도`를
   제공한다. 성공은 서버가 Account를 `Deleted`로 확정한 뒤에만 표시하며, 완료 후 login route로 이동한다.
-- 탈퇴 성공 뒤 동일 Byulmaru ID의 Kosmo 재가입은 허용하지 않는다. 이 차단은 현재 임시 조치이며, 영구 재가입
-  정책이나 Byulmaru ID 자체의 상태 전이는 이 계약에 포함하지 않는다.
+- 탈퇴 후 동일 Byulmaru ID로 신규 가입할 수 있으며, 삭제한 Profile은 복구하지 않는다. 자세한 재가입 계약은
+  [Account 객체](../domain/objects/account.md#행동)를 따른다.
 
 ## SettingsItem
 

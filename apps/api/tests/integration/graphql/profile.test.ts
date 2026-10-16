@@ -1746,6 +1746,300 @@ describe('GraphQL remote profile boundary', () => {
     });
   });
 
+  test('deleteProfile returns the target identity for first success and Owner retry', async () => {
+    const auth = await createAuthenticatedSession();
+    const deleteProfile = () =>
+      requestGraphQL<{
+        deleteProfile: {
+          account: { id: string };
+          profileId: string;
+          success: boolean;
+        };
+      }>(
+        `mutation DeleteProfile($id: ID!) {
+          deleteProfile(input: { id: $id }) {
+            account { id }
+            profileId
+            success
+          }
+        }`,
+        { id: globalId('Profile', auth.profile.id) },
+        auth.token,
+      );
+
+    const first = await deleteProfile();
+    assertNoGraphQLErrors(first);
+    assert.deepEqual(first.data?.deleteProfile, {
+      account: { id: globalId('Account', auth.account.id) },
+      profileId: globalId('Profile', auth.profile.id),
+      success: true,
+    });
+    assert.equal(
+      await db
+        .select({ activeProfileId: Sessions.activeProfileId })
+        .from(Sessions)
+        .where(eq(Sessions.id, auth.session.id))
+        .then(firstOrThrow)
+        .then(({ activeProfileId }) => activeProfileId),
+      null,
+    );
+    const currentSession = await requestGraphQL<{
+      currentSession: { selectedProfile: { id: string } | null } | null;
+    }>('query { currentSession { selectedProfile { id } } }', {}, auth.token);
+    assertNoGraphQLErrors(currentSession);
+    assert.ok(currentSession.data?.currentSession);
+    assert.equal(currentSession.data?.currentSession?.selectedProfile, null);
+
+    const retry = await deleteProfile();
+    assertNoGraphQLErrors(retry);
+    assert.deepEqual(retry.data?.deleteProfile, first.data?.deleteProfile);
+    assert.equal(
+      await db
+        .select({ state: Profiles.state })
+        .from(Profiles)
+        .where(eq(Profiles.id, auth.profile.id))
+        .then(firstOrThrow)
+        .then(({ state }) => state),
+      ProfileState.DISABLED,
+    );
+  });
+
+  test('deleteProfile returns available Account profiles without selecting one', async () => {
+    const auth = await createAuthenticatedSession();
+    const suffix = crypto.randomUUID().slice(0, 8);
+    const suspendedInstance = await createLocalInstance({
+      domain: `suspended-${suffix}.example`,
+      state: InstanceState.SUSPENDED,
+    });
+    const disabledCandidate = await createProfile({
+      handle: `disabled-${suffix}`,
+      instanceId: localInstanceId,
+      state: ProfileState.DISABLED,
+    });
+    const suspendedCandidate = await createProfile({
+      handle: `suspended-${suffix}`,
+      instanceId: localInstanceId,
+      state: ProfileState.SUSPENDED,
+    });
+    await createProfile({
+      handle: `nonmember-${suffix}`,
+      instanceId: localInstanceId,
+    });
+    const suspendedInstanceCandidate = await createProfile({
+      handle: `suspended-instance-${suffix}`,
+      instanceId: suspendedInstance.id,
+    });
+    const memberCandidate = await createProfile({
+      handle: `member-${suffix}`,
+      instanceId: localInstanceId,
+    });
+    const ownerCandidate = await createProfile({
+      handle: `owner-${suffix}`,
+      instanceId: localInstanceId,
+    });
+    await db.insert(AccountProfiles).values([
+      {
+        accountId: auth.account.id,
+        profileId: disabledCandidate.id,
+        role: AccountProfileRole.OWNER,
+      },
+      {
+        accountId: auth.account.id,
+        profileId: suspendedCandidate.id,
+        role: AccountProfileRole.OWNER,
+      },
+      {
+        accountId: auth.account.id,
+        profileId: suspendedInstanceCandidate.id,
+        role: AccountProfileRole.OWNER,
+      },
+      {
+        accountId: auth.account.id,
+        profileId: memberCandidate.id,
+        role: AccountProfileRole.MEMBER,
+      },
+      {
+        accountId: auth.account.id,
+        profileId: ownerCandidate.id,
+        role: AccountProfileRole.OWNER,
+      },
+    ]);
+    const otherSession = await db
+      .insert(Sessions)
+      .values({
+        accountId: auth.account.id,
+        activeProfileId: auth.profile.id,
+        state: SessionState.ACTIVE,
+        token: `token-${crypto.randomUUID()}`,
+      })
+      .returning()
+      .then(firstOrThrow);
+
+    const result = await requestGraphQL<{
+      deleteProfile: {
+        account: { id: string; profiles: Array<{ id: string }> };
+        profileId: string;
+        success: boolean;
+      };
+    }>(
+      `mutation DeleteProfile($id: ID!) {
+        deleteProfile(input: { id: $id }) {
+          account {
+            id
+            profiles { id }
+          }
+          profileId
+          success
+        }
+      }`,
+      { id: globalId('Profile', auth.profile.id) },
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.equal(result.data?.deleteProfile.profileId, globalId('Profile', auth.profile.id));
+    assert.equal(result.data?.deleteProfile.success, true);
+    assert.equal(result.data?.deleteProfile.account.id, globalId('Account', auth.account.id));
+    assert.deepEqual(
+      result.data?.deleteProfile.account.profiles.map(({ id }) => id).sort(),
+      [memberCandidate.id, ownerCandidate.id].map((id) => globalId('Profile', id)).sort(),
+    );
+    assert.equal(
+      await db
+        .select({ activeProfileId: Sessions.activeProfileId })
+        .from(Sessions)
+        .where(eq(Sessions.id, auth.session.id))
+        .then(firstOrThrow)
+        .then(({ activeProfileId }) => activeProfileId),
+      null,
+    );
+    assert.equal(
+      await db
+        .select({ activeProfileId: Sessions.activeProfileId })
+        .from(Sessions)
+        .where(eq(Sessions.id, otherSession.id))
+        .then(firstOrThrow)
+        .then(({ activeProfileId }) => activeProfileId),
+      null,
+    );
+  });
+
+  test('deleteProfile keeps an unrelated Session Profile when disabling another Profile', async () => {
+    const auth = await createAuthenticatedSession();
+    const remainingProfile = await createProfile({
+      handle: `selected-${crypto.randomUUID().slice(0, 8)}`,
+      instanceId: localInstanceId,
+    });
+    await db.insert(AccountProfiles).values({
+      accountId: auth.account.id,
+      profileId: remainingProfile.id,
+      role: AccountProfileRole.MEMBER,
+    });
+    await db
+      .update(Sessions)
+      .set({ activeProfileId: remainingProfile.id })
+      .where(eq(Sessions.id, auth.session.id));
+
+    const result = await requestGraphQL<{
+      deleteProfile: {
+        account: { id: string; profiles: Array<{ id: string }> };
+        profileId: string;
+        success: boolean;
+      };
+    }>(
+      `mutation DeleteNonselectedProfile($id: ID!) {
+        deleteProfile(input: { id: $id }) {
+          account { id profiles { id } }
+          profileId
+          success
+        }
+      }`,
+      { id: globalId('Profile', auth.profile.id) },
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.equal(result.data?.deleteProfile.profileId, globalId('Profile', auth.profile.id));
+    assert.equal(result.data?.deleteProfile.success, true);
+    assert.deepEqual(
+      result.data?.deleteProfile.account.profiles.map(({ id }) => id),
+      [globalId('Profile', remainingProfile.id)],
+    );
+    assert.equal(
+      await db
+        .select({ activeProfileId: Sessions.activeProfileId })
+        .from(Sessions)
+        .where(eq(Sessions.id, auth.session.id))
+        .then(firstOrThrow)
+        .then(({ activeProfileId }) => activeProfileId),
+      remainingProfile.id,
+    );
+  });
+
+  test('deleteProfile preserves Owner, Profile state, and Instance availability checks', async () => {
+    const owner = await createAuthenticatedSession();
+    const other = await createAuthenticatedSession();
+    const member = await createAuthenticatedSession({ role: AccountProfileRole.MEMBER });
+    const deleteProfile = (profileId: string, token: string) =>
+      requestGraphQL(
+        `mutation DeleteProfile($id: ID!) {
+          deleteProfile(input: { id: $id }) { profileId success }
+        }`,
+        { id: globalId('Profile', profileId) },
+        token,
+      );
+
+    assertGraphQLErrorCode(await deleteProfile(owner.profile.id, other.token), 'NOT_FOUND');
+    assertGraphQLErrorCode(
+      await deleteProfile(member.profile.id, member.token),
+      'PERMISSION_DENIED',
+    );
+    assertGraphQLErrorCode(await deleteProfile(crypto.randomUUID(), owner.token), 'NOT_FOUND');
+
+    const ineligible = await createProfile({
+      handle: `ineligible-${crypto.randomUUID().slice(0, 8)}`,
+      instanceId: localInstanceId,
+      state: ProfileState.SUSPENDED,
+    });
+    await db.insert(AccountProfiles).values({
+      accountId: owner.account.id,
+      profileId: ineligible.id,
+      role: AccountProfileRole.OWNER,
+    });
+    assertGraphQLErrorCode(await deleteProfile(ineligible.id, owner.token), 'NOT_FOUND');
+
+    const suspendedInstance = await createLocalInstance({
+      domain: `suspended-${crypto.randomUUID().slice(0, 8)}.example`,
+    });
+    const disabledProfile = await createProfile({
+      handle: `disabled-${crypto.randomUUID().slice(0, 8)}`,
+      instanceId: suspendedInstance.id,
+      state: ProfileState.DISABLED,
+    });
+    await db.insert(AccountProfiles).values([
+      {
+        accountId: owner.account.id,
+        profileId: disabledProfile.id,
+        role: AccountProfileRole.OWNER,
+      },
+      {
+        accountId: member.account.id,
+        profileId: disabledProfile.id,
+        role: AccountProfileRole.MEMBER,
+      },
+    ]);
+    assertGraphQLErrorCode(await deleteProfile(disabledProfile.id, other.token), 'NOT_FOUND');
+    assertGraphQLErrorCode(
+      await deleteProfile(disabledProfile.id, member.token),
+      'PERMISSION_DENIED',
+    );
+    await db
+      .update(Instances)
+      .set({ state: InstanceState.SUSPENDED })
+      .where(eq(Instances.id, suspendedInstance.id));
+    assertGraphQLErrorCode(await deleteProfile(disabledProfile.id, owner.token), 'NOT_FOUND');
+  });
+
   test('Profile Update Workflow start 실패 뒤에도 committed GraphQL payload를 반환한다', async () => {
     const auth = await createAuthenticatedSession();
     const start = mock.method(temporalClient.workflow, 'start', async () => {

@@ -11,6 +11,7 @@ import {
   Media,
   pg,
   PostContents,
+  PostMentions,
   Posts,
   ProfileHashtags,
   ProfileMedia,
@@ -43,6 +44,7 @@ import { executeProfileFollowPairTransition } from '@kosmo/core/temporal/follow-
 import { postQuoteOwnerWorkflow } from '@kosmo/core/temporal/post-quote-owner';
 import { eq } from 'drizzle-orm';
 import { Temporal } from 'temporal-polyfill';
+import type { PostContentMentionReference } from '@kosmo/core/post-content/server';
 import type { BrowserContext } from '@playwright/test';
 
 const webOrigin = process.env.PUBLIC_ORIGIN ?? 'http://127.0.0.1:4173';
@@ -95,10 +97,12 @@ type CreateE2EPostOptions = {
   content?: boolean;
   contentWarning?: string;
   createdAt?: string;
-  media?: readonly Readonly<{ altText?: string; url: string }>[];
+  media?: readonly Readonly<{ altText?: string; mediaType?: string | null; url: string }>[];
+  mentions?: readonly PostContentMentionReference[];
   profileId: string;
   replyParentId?: string;
   repostSourceId?: string;
+  sensitiveMedia?: boolean;
   state?: PostState;
   visibility?: PostVisibility;
 };
@@ -494,9 +498,9 @@ export async function createE2EPost(options: CreateE2EPostOptions) {
       ? await tx
           .insert(Media)
           .values(
-            options.media.map(({ altText, url }) => ({
+            options.media.map(({ altText, mediaType, url }) => ({
               altText: altText ?? null,
-              mediaType: 'image/png',
+              mediaType: mediaType === undefined ? 'image/png' : mediaType,
               profileId: options.profileId,
               source: MediaSource.REMOTE,
               state: MediaState.READY,
@@ -505,14 +509,16 @@ export async function createE2EPost(options: CreateE2EPostOptions) {
           )
           .returning()
       : [];
-    const document = media.length
-      ? postContentDocumentFromTextAndMedia(
-          bodyText,
-          media.map(({ id }) => ({ mediaId: id })),
-          false,
-          options.contentWarning ?? null,
-        )
-      : postContentDocumentFromText(bodyText, options.contentWarning ?? null);
+    const document =
+      media.length || options.sensitiveMedia || options.mentions?.length
+        ? postContentDocumentFromTextAndMedia(
+            bodyText,
+            media.map(({ id }) => ({ mediaId: id })),
+            options.sensitiveMedia ?? false,
+            options.contentWarning ?? null,
+            options.mentions ?? [],
+          )
+        : postContentDocumentFromText(bodyText, options.contentWarning ?? null);
     const content = await tx
       .insert(PostContents)
       .values({
@@ -522,6 +528,15 @@ export async function createE2EPost(options: CreateE2EPostOptions) {
       })
       .returning()
       .then(firstOrThrow);
+
+    if (options.mentions?.length) {
+      await tx.insert(PostMentions).values(
+        [...new Set(options.mentions.map(({ profileId }) => profileId))].map((profileId) => ({
+          postContentId: content.id,
+          profileId,
+        })),
+      );
+    }
 
     return await tx
       .update(Posts)

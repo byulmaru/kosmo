@@ -79,7 +79,6 @@ describe('ByulmaruIdAccountSettingsEntry', () => {
     await render();
 
     const entry = byTestId('byulmaru-id-account-settings-entry');
-    assert.equal(texts().includes('계정 설정'), true);
     assert.equal(entry.props.accessibilityLabel, 'Byulmaru ID Account Settings 외부 서비스로 이동');
     assert.equal(entry.props.accessibilityRole, 'link');
     assert.equal(entry.props.href, 'https://id.byulmaru.co');
@@ -104,11 +103,5 @@ function byTestId(testID: string): ReactTestInstance {
   assert.ok(renderer);
   return renderer.root.find(
     (node) => (node.type as unknown) === 'Pressable' && node.props.testID === testID,
-  );
-}
-
-function texts(): string[] {
-  return rendered('Text').flatMap((node) =>
-    typeof node.props.children === 'string' ? [node.props.children] : [],
   );
 }

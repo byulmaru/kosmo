@@ -1,20 +1,23 @@
 import { useEffect } from 'react';
-import { useSession } from '@/session/SessionProvider';
+import { useAnalyticsIdentityAccountId, useSession } from '@/session/SessionProvider';
 import { clearAnalytics, identifyAnalytics, setAnalyticsSelectedProfile } from './client';
 
 export function AnalyticsSessionBridge(): null {
-  const { accountId, selectedProfileId, status } = useSession();
+  const accountId = useAnalyticsIdentityAccountId();
+  const { accountId: visibleAccountId, selectedProfileId, status } = useSession();
 
   useEffect(() => {
-    if (status !== 'valid' || !accountId) {
+    if (!accountId) {
       setAnalyticsSelectedProfile(null, null);
       clearAnalytics();
       return;
     }
-
-    setAnalyticsSelectedProfile(accountId, selectedProfileId);
+    setAnalyticsSelectedProfile(
+      accountId,
+      status === 'valid' && visibleAccountId === accountId ? selectedProfileId : null,
+    );
     identifyAnalytics(accountId);
-  }, [accountId, selectedProfileId, status]);
+  }, [accountId, selectedProfileId, status, visibleAccountId]);
 
   return null;
 }

@@ -27,6 +27,7 @@ type ProfileData = {
 };
 
 let fragmentData: ProfileData;
+const trackEvent = mock.fn();
 const platformSelections: Array<Record<string, number>> = [];
 let renderer: ReactTestRenderer | null = null;
 let windowWidth = 1280;
@@ -47,10 +48,20 @@ mockModule(new URL('../shell/NavigationLink.tsx', import.meta.url), {
   NavigationLink: ({
     children,
     href,
+    onExternalNavigate,
+    onNavigate,
   }: {
     children: ReturnType<typeof createElement>;
     href: unknown;
-  }) => createElement('NavigationLink', { href }, children),
+    onExternalNavigate?: () => void;
+    onNavigate?: () => void;
+  }) => createElement('NavigationLink', { href, onExternalNavigate, onNavigate }, children),
+});
+mockModule('@/analytics/client', {
+  trackAnalytics: trackEvent,
+});
+mockModule(new URL('../../session/SessionProvider.tsx', import.meta.url), {
+  useSession: () => ({ accountId: 'account-a' }),
 });
 mockModule('react-native', {
   Image: 'Image',
@@ -118,6 +129,9 @@ mockModule(new URL('./ProfileBlockAction.tsx', import.meta.url), {
 mockModule(new URL('./ProfileMuteAction.tsx', import.meta.url), {
   ProfileMuteAction: 'ProfileMuteAction',
 });
+mockModule(new URL('./ProfileTagMuteAction.tsx', import.meta.url), {
+  ProfileTagMuteAction: 'ProfileTagMuteAction',
+});
 mockModule(new URL('./ProfileMoreMenu.tsx', import.meta.url), {
   ProfileMoreMenu: 'ProfileMoreMenu',
 });
@@ -134,6 +148,7 @@ afterEach(async () => {
     renderer = null;
   }
   platformSelections.length = 0;
+  trackEvent.mock.resetCalls();
   windowWidth = 1280;
   platform.OS = 'web';
 });
@@ -478,6 +493,17 @@ describe('ProfileHero Profile Tag presentation', () => {
         },
       ],
     );
+    assert.ok(links.every((node) => node.props.onNavigate === node.props.onExternalNavigate));
+    links[0]?.props.onNavigate?.();
+    assert.deepEqual(trackEvent.mock.calls[0]?.arguments, [
+      'profile_hashtag_clicked',
+      { hashtag_id: 'hashtag-fediverse' },
+    ]);
+    links[0]?.props.onExternalNavigate?.();
+    assert.deepEqual(trackEvent.mock.calls[1]?.arguments, [
+      'profile_hashtag_clicked',
+      { hashtag_id: 'hashtag-fediverse' },
+    ]);
     assert.deepEqual(
       targets.map((node) => ({
         label: node.props.accessibilityLabel,
@@ -500,6 +526,10 @@ describe('ProfileHero Profile Tag presentation', () => {
         },
       ],
     );
+    const muteActions = tagList.findAll(
+      (node) => (node.type as unknown) === 'ProfileTagMuteAction',
+    );
+    assert.equal(muteActions.length, 0);
     assert.deepEqual(platformSelections, [
       { android: 48, default: 48, ios: 44, web: 32 },
       { android: 48, default: 48, ios: 44, web: 32 },

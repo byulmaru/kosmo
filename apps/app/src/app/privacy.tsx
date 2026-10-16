@@ -143,7 +143,7 @@ export default function PrivacyScreen() {
         />
         <PolicyParagraph>
           정보는 이용자가 직접 입력하거나 서비스 이용 중 생성되며, 문의 정보는 이메일로 수집합니다.
-          웹 이용 분석 정보는 PostHog가 자동 수집하며, 로그인한 경우 계정·프로필 식별자와 이용
+          웹·앱 이용 분석 정보는 PostHog를 통해 수집하며, 로그인한 경우 계정·프로필 식별자와 이용
           기록을 연결합니다.
         </PolicyParagraph>
       </PolicySection>
@@ -208,7 +208,7 @@ export default function PrivacyScreen() {
             [
               'PostHog, Inc.\nprivacy@posthog.com',
               '독일(프랑크푸르트)',
-              '1절의 웹 이용 분석 이벤트와 분석용 사용자 정보, 서비스 이용 분석 목적',
+              '1절의 웹·앱 이용 분석 이벤트와 분석용 사용자 정보, 서비스 이용 분석 목적',
               '서비스 이용 시 암호화된 네트워크로 지속적으로 전송',
               '일반 분석 이벤트는 수집일부터 12개월, 분석용 사용자 정보는 계정 이용 기간 및 탈퇴 완료일부터 30일',
             ],
@@ -217,9 +217,9 @@ export default function PrivacyScreen() {
         <PolicyParagraph>
           국외 이전의 거부·제한은 hello@byulmaru.co로 요청할 수 있습니다. Cloudflare 이전을 거부하면
           네트워크·보안·콘텐츠 제공이 제한되어 서비스의 전부 또는 일부를 이용하기 어려울 수
-          있습니다. PostHog 전송은 본인 확인 후 제한하고 처리 결과를 안내합니다. 브라우저 추적 방지
-          기능으로도 분석 전송을 제한할 수 있으며, 분석 제한은 핵심 기능 이용에 영향을 주지
-          않습니다.
+          있습니다. PostHog 전송은 본인 확인 후 제한하고 처리 결과를 안내합니다. 웹에서는 브라우저
+          추적 방지 기능으로도 분석 전송을 제한할 수 있으며, 분석 제한은 핵심 기능 이용에 영향을
+          주지 않습니다.
         </PolicyParagraph>
       </PolicySection>
 
@@ -279,6 +279,17 @@ export default function PrivacyScreen() {
           변경 내용과 시행일을 서비스에 공개합니다. 이용자 권리에 중요한 변경은 시행일 전에
           알립니다.
         </PolicyParagraph>
+        <NavigationLink href={'/privacy/changes/2026-10-13' as Href}>
+          <Pressable
+            accessibilityLabel="2026년 10월 13일 개인정보처리방침 개정 안내"
+            accessibilityRole="link"
+            style={styles.previousPolicyLinkControl}
+          >
+            <Text style={[styles.previousPolicyLink, { color: theme.textSecondary }]}>
+              2026년 10월 13일 개인정보처리방침 개정 안내
+            </Text>
+          </Pressable>
+        </NavigationLink>
       </PolicySection>
 
       <NavigationLink href={'/privacy/2026-09-09' as Href}>

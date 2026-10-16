@@ -78,7 +78,7 @@ type LocalPostNoteContext = Pick<Context<void>, 'canonicalOrigin' | 'getActorUri
 
 // Outbound-only, after the caller verifies a REVOKED consent and its owner effect.
 // Ordinary Note fetch/authorization must retain the default active-author checks.
-type LocalPostNoteOptions = { readonly forQuoteRevocation?: boolean };
+type LocalPostNoteOptions = { readonly forQuoteRevocation?: boolean; readonly directRecipientUris?: readonly URL[] };
 
 const isHttpUrl = (value: string): boolean => {
   try {
@@ -92,7 +92,7 @@ const isHttpUrl = (value: string): boolean => {
 const loadLocalPostNoteRow = async (
   context: LocalPostNoteContext,
   postId: string,
-  { forQuoteRevocation = false }: LocalPostNoteOptions = {},
+  { forQuoteRevocation = false, directRecipientUris }: LocalPostNoteOptions = {},
 ) => {
   if (!isCanonicalPostId(postId)) {
     return null;
@@ -123,14 +123,17 @@ const loadLocalPostNoteRow = async (
     .limit(1)
     .then(first);
 
-  if (!row?.instanceCanonicalOrigin || row.post.visibility === PostVisibility.DIRECT) {
+  if (
+    !row?.instanceCanonicalOrigin ||
+    (!directRecipientUris && row.post.visibility === PostVisibility.DIRECT)
+  ) {
     return null;
   }
 
   return { ...row, instanceCanonicalOrigin: row.instanceCanonicalOrigin };
 };
 
-export const loadLocalPostNote = async (
+const loadLocalPostNoteForProjection = async (
   context: LocalPostNoteContext,
   postId: string,
   options: LocalPostNoteOptions = {},
@@ -174,6 +177,11 @@ export const loadLocalPostNote = async (
     visibility: row.post.visibility,
   };
 };
+
+export const loadLocalPostNote = async (
+  context: LocalPostNoteContext,
+  postId: string,
+): Promise<LocalPostNote | null> => loadLocalPostNoteForProjection(context, postId);
 
 const parseHttpUrl = (value: string | null): URL | null => {
   if (!value) {
@@ -464,7 +472,7 @@ export const projectLocalPostNote = async (
   postId: string,
   options: LocalPostNoteOptions = {},
 ): Promise<LocalPostNoteProjection | null> => {
-  const note = await loadLocalPostNote(context, postId, options);
+  const note = await loadLocalPostNoteForProjection(context, postId, options);
   if (!note) {
     return null;
   }
@@ -474,7 +482,15 @@ export const projectLocalPostNote = async (
   const replyTarget = note.replyParentId
     ? await resolveActivityPubPostUri(note.replyParentId)
     : undefined;
-  const to = note.visibility === PostVisibility.PUBLIC ? PUBLIC_COLLECTION : followersUri;
+  const audience =
+    note.visibility === PostVisibility.DIRECT
+      ? options.directRecipientUris
+        ? { tos: [...options.directRecipientUris] }
+        : null
+      : { to: note.visibility === PostVisibility.PUBLIC ? PUBLIC_COLLECTION : followersUri };
+  if (!audience) {
+    return null;
+  }
   const cc =
     note.visibility === PostVisibility.PUBLIC
       ? followersUri
@@ -500,6 +516,7 @@ export const projectLocalPostNote = async (
     attachments: [...note.mediaAttachments],
     attribution: authorUri,
     ...(cc ? { cc } : {}),
+    ...audience,
     content: appendQuoteFallback(
       postContentDocumentToHtml(note.contentDocument, mentionLinks),
       note.quoteSourceUri && note.quoteProtocolEnabled ? note.quoteSourceUri : null,
@@ -513,7 +530,6 @@ export const projectLocalPostNote = async (
     ...(note.summary ? { summary: escapeText(note.summary) } : {}),
     sensitive: note.sensitiveMedia,
     ...(tags.length > 0 ? { tags } : {}),
-    to,
     ...(note.quoteSourceUri && note.quoteProtocolEnabled
       ? {
           quote: new URL(note.quoteSourceUri),

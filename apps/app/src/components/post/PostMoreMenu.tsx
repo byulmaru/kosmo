@@ -12,6 +12,7 @@ type Props = Readonly<{
 }>;
 
 const copyFailureMessage = '링크를 복사하지 못했습니다. 잠시 후 다시 시도해 주세요.';
+const copySuccessMessage = '링크를 복사했어요';
 
 export function usePostMoreMenuItem({ postId, relativeHandle }: Props): ActionMenuItem {
   const { showToast } = useToast();
@@ -22,6 +23,7 @@ export function usePostMoreMenuItem({ postId, relativeHandle }: Props): ActionMe
       if (!copied) {
         throw new Error('Clipboard did not confirm the copy.');
       }
+      showToast(copySuccessMessage, { tone: 'success' });
     } catch {
       showToast(copyFailureMessage, { tone: 'danger' });
     }
