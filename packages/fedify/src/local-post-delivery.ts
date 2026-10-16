@@ -9,7 +9,15 @@ import {
   Reject,
   Update,
 } from '@fedify/vocab';
-import { ActivityPubActors, db, first, Instances, PostMentions, Posts, Profiles } from '@kosmo/core/db';
+import {
+  ActivityPubActors,
+  db,
+  first,
+  Instances,
+  PostMentions,
+  Posts,
+  Profiles,
+} from '@kosmo/core/db';
 import {
   InstanceKind,
   InstanceState,
@@ -19,7 +27,7 @@ import {
   ProfileState,
 } from '@kosmo/core/enums';
 import { loadQuoteConsentForPost } from '@kosmo/core/services';
-import { and, eq, isNotNull, ne } from 'drizzle-orm';
+import { and, eq, isNotNull } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { isHttpUri } from './activitypub-uri';
 import { localOutboundFederation } from './local-outbound-federation';

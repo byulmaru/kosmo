@@ -139,6 +139,12 @@ beforeEach(async () => {
     await owner.signal('finishQuoteOwner');
     await owner.result();
   }
+  for await (const info of environment.client.workflow.list({
+    query:
+      'ExecutionStatus = "Running" AND (WorkflowType = "remoteProfileLookupWorkflow" OR WorkflowType = "remoteProfileRefreshWorkflow")',
+  })) {
+    await environment.client.workflow.getHandle(info.workflowId).terminate('Test fixture reset');
+  }
   currentContext = createContext();
   mock.method(federation, 'createContext', () => currentContext);
   await db.update(Posts).set({ currentContentId: null, repostSourceId: null });
@@ -912,7 +918,14 @@ test('target lookup의 transient 오류만 retryable PENDING이고 영구 object
   assert.equal(permanentLookup.mock.calls.length, 2);
 });
 
-test('Source 작성자 discovery 장애는 transient PENDING으로 분류한다', async () => {
+test('Source 작성자 discovery Workflow 장애는 transient PENDING으로 분류한다', async () => {
+  const execute = temporalClient.workflow.execute.bind(temporalClient.workflow);
+  mock.method(temporalClient.workflow, 'execute', (...args: Parameters<typeof execute>) => {
+    if (args[0] === 'remoteProfileLookupWorkflow') {
+      throw new Error('temporary actor lookup outage');
+    }
+    return execute(...args);
+  });
   const quoteActor = await createRemoteActor(
     'author-discovery-quote',
     'https://quote.example/users/author-discovery',

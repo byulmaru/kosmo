@@ -78,7 +78,10 @@ type LocalPostNoteContext = Pick<Context<void>, 'canonicalOrigin' | 'getActorUri
 
 // Outbound-only, after the caller verifies a REVOKED consent and its owner effect.
 // Ordinary Note fetch/authorization must retain the default active-author checks.
-type LocalPostNoteOptions = { readonly forQuoteRevocation?: boolean; readonly directRecipientUris?: readonly URL[] };
+type LocalPostNoteOptions = {
+  readonly forQuoteRevocation?: boolean;
+  readonly directRecipientUris?: readonly URL[];
+};
 
 const isHttpUrl = (value: string): boolean => {
   try {
