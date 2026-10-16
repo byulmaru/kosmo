@@ -932,7 +932,7 @@ describe('ActivityPub Local Post delivery', () => {
     assert.equal(note.quoteId, null);
     assert.equal(note.quoteUrl, null);
     assert.equal(note.quoteAuthorizationId, null);
-    assert.equal(note.content, `<p>${authoredContent}</p>`);
+    assert.equal(note.content, `<p>own words <a href="${sourceUri}">${sourceUri}</a></p>`);
     const serialized = await note.toJsonLd();
     assert.ok(serialized !== null && typeof serialized === 'object');
     for (const property of [

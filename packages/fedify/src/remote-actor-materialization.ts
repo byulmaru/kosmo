@@ -378,7 +378,18 @@ const lookupRemoteProfileActor = async (input: RemoteProfileActorLookupInput) =>
       workflowIdReusePolicy: 'ALLOW_DUPLICATE',
     });
   } catch (error) {
-    return rethrowRemoteActorWorkflowError(error);
+    try {
+      rethrowRemoteActorWorkflowError(error);
+    } catch (cause) {
+      if (
+        cause instanceof ConflictError ||
+        cause instanceof NotFoundError ||
+        cause instanceof RemoteActorMaterializationError
+      ) {
+        throw cause;
+      }
+      throw new RemoteActorDiscoveryUnavailableError('Remote actor lookup failed.', { cause });
+    }
   }
 };
 

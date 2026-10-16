@@ -272,8 +272,8 @@ export const handleInboundQuoteRequest = async (
   try {
     remoteActor = await findOrMaterializeRemoteProfileActorByUri({
       actorUri: verified.actorUri,
-      context,
-      now: receivedAt,
+      contextOrigin: context.canonicalOrigin,
+      receipt: { activityUri: request.id, receivedAt },
     });
   } catch (error) {
     if (
