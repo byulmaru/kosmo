@@ -45,6 +45,9 @@ mockModule('react-relay', {
 mockModule(new URL('../PageHeader.tsx', import.meta.url), {
   PageHeader: (props: object) => createElement('PageHeader', props),
 });
+mockModule(new URL('./ProfileTagMuteAction.tsx', import.meta.url), {
+  ProfileTagMuteAction: 'ProfileTagMuteAction',
+});
 mockModule(new URL('./ProfileListItem.tsx', import.meta.url), {
   ProfileListItem: ({ onPress, profile }: { onPress?: () => void; profile: { id: string } }) =>
     createElement('ProfileListItem', { identity: profile.id, onPress }),
@@ -145,6 +148,18 @@ describe('Hashtag 관련 Profile 목록 viewport', () => {
         leading,
       );
     }
+  });
+
+  it('상세 헤더 우측 action에 목록과 같은 Hashtag를 전달한다', async () => {
+    await act(async () => {
+      renderer = create(createElement(HashtagRelatedProfileList, { hashtag: {} }));
+    });
+    assert.ok(renderer);
+    const header = renderer.root.find((node) => (node.type as unknown) === 'PageHeader');
+    assert.equal(header.props.title, '#Fediverse 관련 프로필');
+    assert.equal(header.props.titleLines, 1);
+    assert.equal(header.props.trailing.type, 'ProfileTagMuteAction');
+    assert.equal(header.props.trailing.props.hashtag.id, 'opaque-hashtag');
   });
 
   it('목록 항목과 자동 pagination 표식을 같은 ScrollView 안에 렌더한다', async () => {

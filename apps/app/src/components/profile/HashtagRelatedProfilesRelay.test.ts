@@ -71,6 +71,9 @@ mockModule(new URL('../PageHeader.tsx', import.meta.url), {
 mockModule(new URL('../ui/StateView.tsx', import.meta.url), {
   StateView: (props: object) => createElement('p', props),
 });
+mockModule(new URL('./ProfileTagMuteAction.tsx', import.meta.url), {
+  ProfileTagMuteAction: () => null,
+});
 mockModule(new URL('./ProfileListItem.tsx', import.meta.url), {
   ProfileListItem: (props: object) => createElement('a', props),
 });
@@ -106,6 +109,7 @@ const payload = (count: number, id = 'tag-a') => ({
       __typename: 'Hashtag',
       id,
       name: 'Topic',
+      viewerMuteRule: null,
       relatedProfiles: {
         edges: Array.from({ length: count }, (_, i) => ({
           cursor: `cursor-${i}`,
