@@ -33,8 +33,11 @@ Quote 동의와 federation 표현은 [ADR 0029](./0029-quote-consent-and-federat
   collection을 `to`, ActivityStreams Public을 `cc`로 사용한다. Followers Only는 followers collection만
   `to`로 사용하고 Author 또는 established Follower의 signed fetch에서만 역참조할 수 있다.
 - Local `Mentioned Profiles` visibility는 canonical Mentioned Profile 관계([ADR 0030](./0030-post-content-mention-identity.md))를
-  사용하지만 ActivityPub `Note` audience로 투영하지 않는다. ActivityPub DIRECT/limited audience 수신 처리와 outbound delivery는
-  별도 [PROD-359](https://linear.app/byulmaru/issue/PROD-359) 범위다.
+  사용한다. Local Note의 역참조와 Featured collection은 이 visibility를 제공하지 않는다. outbound `Create(Note)`만 현재
+  Content의 eligible remote ActivityPub Mentioned Profile actor URI만 `to`로 사용하며, `cc`에는 Public이나 followers
+  collection을 넣지 않는다. 해당 Post의 outbound `Delete`도 같은 remote Mentioned Profiles에게만 전달한다. eligible remote
+  actor URI가 없으면 두 Activity 모두 delivery recipient가 없다. 이 outbound 예외는 signed-fetch 권한을 부여하지 않으며,
+  ActivityPub DIRECT/limited audience의 inbound 처리는 별도 [PROD-359](https://linear.app/byulmaru/issue/PROD-359) 범위다.
 - Reply Parent 관계가 있으면 requester의 Parent 조회 가능성과 무관하게 Parent의 ActivityPub Post identity를
   `inReplyTo`로 제공한다. Parent의 실제 표현은 Parent 자체의 역참조 권한으로 보호하며, Reply Parent 관계가
   없을 때만 `inReplyTo`를 생략한다. Parent의 Tombstone 전이는 저장 관계를 변경하지 않는다. 현재 physical
@@ -90,8 +93,8 @@ Note 역참조 권한이 독립적으로 제한하므로, Reply를 조회한 req
   유지된다.
 - Parent의 Tombstone 전이는 `inReplyTo`를 제거하지 않는다. 현재 physical delete 행동을 추가하지 않고 Reply
   Parent FK만 향후 실제 row 삭제에 대비해 `SET NULL`로 정의하며 Reply Post에는 cascade delete를 적용하지 않는다.
-- Mentioned Profiles, custom emoji와 실제 Activity delivery는 독립 후속 계약으로
-  남는다. Media federation 표현은 [ADR 0022](./0022-post-content-revision-media-nodes.md)가 정의한다.
+- 다른 Activity delivery와 custom emoji는 독립 후속 계약으로 남는다. Media federation 표현은
+  [ADR 0022](./0022-post-content-revision-media-nodes.md)가 정의한다.
 
 ## 문서 반영
 

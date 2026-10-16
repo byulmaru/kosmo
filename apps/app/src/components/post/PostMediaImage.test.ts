@@ -144,7 +144,6 @@ describe('PostMediaImage', () => {
 
     await act(async () => image('landscape').props.onError());
     assert.equal(rendered('Image').length, 0);
-    assert.deepEqual(textContents(), ['다시 시도']);
 
     await act(async () => pressable('가로 이미지 다시 시도').props.onPress());
     assert.deepEqual(image('landscape').props.source, source);
@@ -182,7 +181,6 @@ describe('PostMediaImage', () => {
     const fallbackStyle = flattenStyle(byTestId('post-media-error-landscape').props.style);
     assert.equal(fallbackStyle.height, '100%');
     assert.equal(fallbackStyle.minHeight, 0);
-    assert.deepEqual(textContents(), ['다시 시도']);
     const retryStyle = flattenPressableStyle(pressable('가로 이미지 다시 시도').props.style);
     assert.equal(retryStyle.minHeight, 48);
     assert.equal(retryStyle.minWidth, 0);

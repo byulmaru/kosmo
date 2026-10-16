@@ -56,13 +56,13 @@ export const DirectSelection: Story = {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: '공개 범위: 조용한 공개' }));
 
-    const directOption = canvas.getByRole('menuitemradio', { name: '지정 멤버만' });
-    expect(
-      within(directOption).getByText('작성자와 본문에 멘션한 계정만 볼 수 있어요.'),
-    ).toBeVisible();
+    const directOption = canvas.getByRole('menuitemradio', { name: '언급한 프로필만' });
     await userEvent.click(directOption);
 
     expect(args.onVisibilityChange).toHaveBeenLastCalledWith('DIRECT');
-    expect(canvas.getByRole('button', { name: '공개 범위: 지정 멤버만' })).toBeVisible();
+
+    await userEvent.click(canvas.getByRole('button', { name: /^공개 범위:/ }));
+    const selectedDirectOption = canvas.getByRole('menuitemradio', { name: '언급한 프로필만' });
+    expect(selectedDirectOption).toHaveAttribute('aria-checked', 'true');
   },
 };

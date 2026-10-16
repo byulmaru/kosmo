@@ -102,7 +102,7 @@ function ActionMenuCollisionFixtures({ onSelect }: { onSelect?: (key: string) =>
   );
 }
 
-function ActionMenuBehaviorFixtures() {
+function ActionMenuBehaviorFixtures({ onSelect }: { onSelect?: (key: string) => void }) {
   return (
     <View style={styles.fixture}>
       <View accessibilityLabel="외부 상호작용 fixture">
@@ -114,13 +114,19 @@ function ActionMenuBehaviorFixtures() {
       <View accessibilityLabel="비활성 메뉴 fixture">
         <ActionMenuFixture {...repostFixtureProps} disabled />
       </View>
-      <ActionMenuStyleFixture mode="light" />
-      <ActionMenuStyleFixture mode="dark" />
+      <ActionMenuStyleFixture mode="light" onSelect={onSelect} />
+      <ActionMenuStyleFixture mode="dark" onSelect={onSelect} />
     </View>
   );
 }
 
-function ActionMenuStyleFixture({ mode }: { mode: 'dark' | 'light' }) {
+function ActionMenuStyleFixture({
+  mode,
+  onSelect,
+}: {
+  mode: 'dark' | 'light';
+  onSelect?: (key: string) => void;
+}) {
   const label = mode === 'dark' ? '다크' : '라이트';
 
   return (
@@ -130,18 +136,25 @@ function ActionMenuStyleFixture({ mode }: { mode: 'dark' | 'light' }) {
           accessibilityLabel={`${label} 더 보기 메뉴`}
           items={[
             {
+              dismissOnSelect: false,
               icon: Link2,
               key: 'copy-link',
               label: '링크 복사',
-              onSelect: () => undefined,
+              onSelect: () => onSelect?.('copy-link'),
             },
             {
               accessibilityLabel: '게시글 삭제',
               icon: Trash2,
               key: 'delete-post',
               label: '삭제',
-              onSelect: () => undefined,
+              onSelect: () => onSelect?.('delete-post'),
               tone: 'danger',
+            },
+            {
+              disabled: true,
+              key: 'disabled',
+              label: '비활성 항목',
+              onSelect: () => onSelect?.('disabled'),
             },
           ]}
           renderTrigger={({ expanded, onPress, ref }) => (
@@ -251,19 +264,30 @@ export const InteractionContract: Story = {
     });
 
     await step('항목 선택과 callback 확인', async () => {
+      onOpenChange.mockClear();
       await userEvent.click(trigger);
+      expect(onOpenChange).toHaveBeenLastCalledWith(true);
       const menu = await screen.findByRole('menu', { name: `${triggerLabel} 메뉴` });
       await userEvent.click(within(menu).getByRole('menuitem', { name: itemLabels[0] }));
       expect(args.onSelect).toHaveBeenCalledOnce();
       expect(args.onSelect).toHaveBeenLastCalledWith('item-1');
+      await waitFor(() =>
+        expect(
+          screen.queryByRole('menu', { name: `${triggerLabel} 메뉴` }),
+        ).not.toBeInTheDocument(),
+      );
+      expect(trigger).toHaveAttribute('aria-expanded', 'false');
+      expect(onOpenChange).toHaveBeenLastCalledWith(false);
       expect(trigger).toHaveFocus();
     });
   },
 };
 
 export const SurfaceAndDismissContract: Story = {
-  render: () => <ActionMenuBehaviorFixtures />,
-  play: async ({ canvasElement, step }) => {
+  render: (args) => <ActionMenuBehaviorFixtures onSelect={args.onSelect} />,
+  play: async ({ args, canvasElement, step }) => {
+    const onSelect = mocked(args.onSelect!);
+    onSelect.mockClear();
     const canvas = within(canvasElement);
     const ownerDocument = canvasElement.ownerDocument;
     const serializeColor = (color: string) => {
@@ -299,6 +323,7 @@ export const SurfaceAndDismissContract: Story = {
     });
 
     await step('메뉴 스타일과 비활성 상태 확인', async () => {
+      const pointerUser = userEvent.setup();
       for (const [label, mode] of [
         ['라이트', 'light'],
         ['다크', 'dark'],
@@ -319,7 +344,8 @@ export const SurfaceAndDismissContract: Story = {
       }
 
       const styleFixture = within(canvas.getByLabelText('라이트 공용 메뉴 스타일 fixture'));
-      await userEvent.click(styleFixture.getByRole('button', { name: '라이트 더 보기' }));
+      const styleTrigger = styleFixture.getByRole('button', { name: '라이트 더 보기' });
+      await userEvent.click(styleTrigger);
       const styleMenu = await screen.findByRole('menu', { name: '라이트 더 보기 메뉴' });
       const copyItem = within(styleMenu).getByRole('menuitem', { name: '링크 복사' });
       const deleteItem = within(styleMenu).getByRole('menuitem', { name: '게시글 삭제' });
@@ -342,6 +368,40 @@ export const SurfaceAndDismissContract: Story = {
       expect(getComputedStyle(deleteItem).borderTopColor).toBe(
         serializeColor(semanticColors.light.borderSubtle),
       );
+      await pointerUser.pointer({ keys: '[MouseLeft>]', target: copyItem });
+      await waitFor(() =>
+        expect(getComputedStyle(copyItem).backgroundColor).toBe(
+          serializeColor(semanticColors.light.statePressed),
+        ),
+      );
+      await pointerUser.pointer({ keys: '[/MouseLeft]', target: copyItem });
+      await waitFor(() =>
+        expect(getComputedStyle(copyItem).backgroundColor).not.toBe(
+          serializeColor(semanticColors.light.statePressed),
+        ),
+      );
+      expect(onSelect).toHaveBeenCalledOnce();
+      expect(onSelect).toHaveBeenLastCalledWith('copy-link');
+      expect(styleMenu).toBeVisible();
+
+      onSelect.mockClear();
+      await pointerUser.pointer({ keys: '[MouseLeft>]', target: copyItem });
+      await waitFor(() =>
+        expect(getComputedStyle(copyItem).backgroundColor).toBe(
+          serializeColor(semanticColors.light.statePressed),
+        ),
+      );
+      await pointerUser.pointer({ target: styleMenu });
+      await pointerUser.pointer({ keys: '[/MouseLeft]', target: styleMenu });
+      await waitFor(() =>
+        expect(getComputedStyle(copyItem).backgroundColor).not.toBe(
+          serializeColor(semanticColors.light.statePressed),
+        ),
+      );
+      expect(onSelect).not.toHaveBeenCalled();
+      expect(styleMenu).toBeVisible();
+
+      expect(copyItem).toHaveFocus();
       fireEvent.keyDown(copyItem, { key: 'Enter' });
       await waitFor(() =>
         expect(getComputedStyle(copyItem).backgroundColor).toBe(
@@ -349,14 +409,73 @@ export const SurfaceAndDismissContract: Story = {
         ),
       );
       fireEvent.keyUp(copyItem, { key: 'Enter' });
-      await userEvent.keyboard('{Enter}');
-      const hoveredMenu = await screen.findByRole('menu', { name: '라이트 더 보기 메뉴' });
-      const hoveredCopyItem = within(hoveredMenu).getByRole('menuitem', { name: '링크 복사' });
+      await waitFor(() =>
+        expect(getComputedStyle(copyItem).backgroundColor).not.toBe(
+          serializeColor(semanticColors.light.statePressed),
+        ),
+      );
+      expect(onSelect).toHaveBeenCalledOnce();
+      expect(onSelect).toHaveBeenLastCalledWith('copy-link');
+      expect(styleMenu).toBeVisible();
+      onSelect.mockClear();
+
+      const keyboardUser = userEvent.setup();
+      await keyboardUser.keyboard('{Enter}');
+      expect(onSelect).toHaveBeenCalledOnce();
+      expect(onSelect).toHaveBeenLastCalledWith('copy-link');
+      expect(styleMenu).toBeVisible();
+      onSelect.mockClear();
+
+      const hoveredCopyItem = within(styleMenu).getByRole('menuitem', { name: '링크 복사' });
       await userEvent.hover(hoveredCopyItem);
       expect(getComputedStyle(hoveredCopyItem).backgroundColor).toBe(
         serializeColor(semanticColors.light.stateHover),
       );
-      await userEvent.keyboard('{Escape}');
+
+      const disabledItem = within(styleMenu).getByRole('menuitem', { name: '비활성 항목' });
+      expect(disabledItem).toHaveAttribute('aria-disabled', 'true');
+      expect(disabledItem).toHaveAttribute('tabindex', '-1');
+      expect(getComputedStyle(disabledItem).pointerEvents).toBe('none');
+      const disabledBackground = getComputedStyle(disabledItem).backgroundColor;
+      expect(disabledBackground).not.toBe(serializeColor(semanticColors.light.statePressed));
+      expect(disabledBackground).not.toBe(serializeColor(semanticColors.light.stateHover));
+
+      expect(copyItem).toHaveFocus();
+      await keyboardUser.keyboard('{ArrowDown}');
+      expect(deleteItem).toHaveFocus();
+      await keyboardUser.keyboard('{ArrowDown}');
+      expect(disabledItem).toHaveFocus();
+      await keyboardUser.keyboard('{Enter}');
+      expect(onSelect).not.toHaveBeenCalled();
+      expect(styleMenu).toBeVisible();
+
+      const disabledBounds = disabledItem.getBoundingClientRect();
+      const disabledPoint = {
+        x: disabledBounds.left + disabledBounds.width / 2,
+        y: disabledBounds.top + disabledBounds.height / 2,
+      };
+      const disabledHitTarget = ownerDocument.elementFromPoint(disabledPoint.x, disabledPoint.y);
+      expect(disabledHitTarget).not.toBeNull();
+      await pointerUser.pointer({
+        coords: disabledPoint,
+        keys: '[MouseLeft>]',
+        target: disabledHitTarget as Element,
+      });
+      await pointerUser.pointer({
+        coords: disabledPoint,
+        keys: '[/MouseLeft]',
+        target: disabledHitTarget as Element,
+      });
+      expect(onSelect).not.toHaveBeenCalled();
+      expect(styleMenu).toBeVisible();
+
+      await userEvent.click(deleteItem);
+      expect(onSelect).toHaveBeenCalledOnce();
+      expect(onSelect).toHaveBeenLastCalledWith('delete-post');
+      await waitFor(() =>
+        expect(screen.queryByRole('menu', { name: '라이트 더 보기 메뉴' })).not.toBeInTheDocument(),
+      );
+      expect(styleTrigger).toHaveFocus();
 
       const disabledFixture = within(canvas.getByLabelText('비활성 메뉴 fixture'));
       const disabledTrigger = disabledFixture.getByRole('button', { name: '재게시' });

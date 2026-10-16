@@ -68,7 +68,7 @@ export default function HomeScreen() {
   }, []);
 
   useEffect(() => {
-    if (Platform.OS !== 'web' || !registerHomeReselection) {
+    if (!registerHomeReselection) {
       return;
     }
 

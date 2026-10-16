@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { graphql, useFragment } from 'react-relay';
 import { BottomTabBar as BottomTabBarPresentation } from '@/components/ui/BottomTabBar';
 import { NavigationLink } from './NavigationLink';
+import { useShellChrome } from './ShellChromeContext';
 import { isTimelineRoute } from './shellLayout';
 import type { Href, LinkProps } from 'expo-router';
 import type { ReactElement } from 'react';
@@ -28,7 +29,6 @@ const BottomTabBarFragment = graphql`
 
 type Props = {
   onComposeOpen?: () => void;
-  onHomeReselect?: () => void;
   profile?: BottomTabBar_profile$key | null;
 };
 
@@ -44,9 +44,10 @@ export function isBottomTabDestination(href: Href) {
   return typeof href === 'string' && Object.values(hrefs).some((tabHref) => tabHref === href);
 }
 
-export function BottomTabBar({ onComposeOpen, onHomeReselect, profile: profileKey }: Props) {
+export function BottomTabBar({ onComposeOpen, profile: profileKey }: Props) {
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
+  const shellChrome = useShellChrome();
   const profile = useFragment(BottomTabBarFragment, profileKey ?? null);
   const unreadNotificationCount = profile?.unreadNotificationCount ?? null;
   const profileHref = profile ? (`/${profile.relativeHandle}` as Href) : undefined;
@@ -70,7 +71,7 @@ export function BottomTabBar({ onComposeOpen, onHomeReselect, profile: profileKe
     }
 
     const href = destination === 'profile' ? profileHref : hrefs[destination];
-    if (!href) {
+    if (!href || destination === 'compose') {
       return children;
     }
 
@@ -82,12 +83,19 @@ export function BottomTabBar({ onComposeOpen, onHomeReselect, profile: profileKe
       { accessibilityRole: 'link' },
     );
 
+    const onCurrentNavigate = () => {
+      shellChrome?.reselectTab?.(destination);
+      if (destination === 'home') {
+        shellChrome?.reselectHome();
+      }
+    };
+
     return (
       <NavigationLink
-        current={destination === 'home' ? selected : undefined}
+        current={selected}
         href={href}
         navigationMode="switch"
-        onCurrentNavigate={destination === 'home' ? onHomeReselect : undefined}
+        onCurrentNavigate={onCurrentNavigate}
         primary
       >
         {linkControl}

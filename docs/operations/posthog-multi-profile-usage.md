@@ -53,8 +53,9 @@ HogQL은 `direct`이고 이전 ID가 있으며 성공한 도착 ID와 다를 때
 `post_created`와 `follow_succeeded`도 성공 이벤트의 행동 Profile ID를 그대로 재사용한다.
 
 `uuid`와 capture 시각은 PostHog SDK가 생성한다. 성공 행동은 기존 main의 이벤트를 그대로 사용한다.
-Native client는 typed no-op이다. PostHog SDK가 관리하는 URL·referrer 같은 standard metadata는 이 계약
-때문에 제거하거나 필터링하지 않는다.
+Native client는 위에 승인된 명시적 앱 event를 전달하며, 이 Web 주간 집계 계약은 Native 분석 범위를
+정의하지 않는다. PostHog SDK가 관리하는 URL·referrer 같은 standard metadata는 이 계약 때문에 제거하거나
+필터링하지 않는다.
 
 ## 집계 규칙
 

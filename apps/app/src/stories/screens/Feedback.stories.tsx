@@ -40,7 +40,7 @@ const meta = {
       mockImplementation: (implementation: typeof captureFeedback) => void;
       mockReset: () => void;
     };
-    captureFeedbackMock.mockImplementation(() => 'storybook-feedback-event');
+    captureFeedbackMock.mockImplementation(async () => 'storybook-feedback-event');
     return () => captureFeedbackMock.mockReset();
   },
   component: FeedbackPage,

@@ -59,6 +59,8 @@ DSN-18은 현재 구현을 그대로 정본으로 승인하지 않는다. 아래
 
 프로덕션 계약은 Web의 `prefers-reduced-motion`과 Android·iOS의 OS reduced-motion 설정만 입력으로 사용한다. `ThemeProvider`가 React Native `AccessibilityInfo`를 단일 입력 adapter로 제공하며, Storybook의 override는 검증 전용이다. 앱 내부 사용자 설정은 이번 범위에서 제공하지 않고, 장기 후속은 [PROD-745](https://linear.app/byulmaru/issue/PROD-745/kosmo-앱-내-motion-축소-사용자-설정-지원)가 소유한다.
 
+`ThemeProvider`는 최초 OS 설정 확인 전까지 reduced-motion을 유지한다. 현재 OS 입력에서 관찰한 최신 변경은 늦게 도착한 초기 조회보다 우선하며, 구독 해제 뒤 도착한 초기 조회 응답은 현재 preference를 갱신하지 않는다. 명시적 Storybook override의 `true`·`false` 값은 OS 입력을 사용하지 않으며, override를 해제하면 OS 설정을 다시 따른다.
+
 | 일반 표현                | OS reduced-motion에서의 대체                      |
 | ------------------------ | ------------------------------------------------- |
 | hover·pressed scale      | scale 제거, color·opacity 상태는 즉시 반영        |

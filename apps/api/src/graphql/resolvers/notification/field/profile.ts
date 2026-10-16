@@ -1,17 +1,11 @@
-import { AccountProfiles, db, Notifications, ProfileFollowRequests } from '@kosmo/core/db';
-import { NotificationKind } from '@kosmo/core/enums';
+import { AccountProfiles, db, Notifications } from '@kosmo/core/db';
 import { PermissionDeniedError } from '@kosmo/core/error';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
-import { and, asc, count, desc, eq, gt, isNull, lt } from 'drizzle-orm';
+import { and, asc, count, desc, eq, getColumns, gt, isNull, lt } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/resolvers/profile';
 import { visibleViewerNotificationWhere } from '../access/visibility';
-import {
-  Notification,
-  NotificationConnection,
-  notificationRowFromSelection,
-  notificationRowSelection,
-} from '../ref';
+import { Notification, NotificationConnection } from '../ref';
 import type { Database } from '@kosmo/core/db';
 import type { NotificationRow } from '../ref';
 
@@ -42,15 +36,8 @@ builder.objectField(Profile, 'notifications', (t) =>
           { args, toCursor: ({ id }) => id },
           ({ before, after, limit, inverted }) =>
             db
-              .select(notificationRowSelection)
+              .select(getColumns(Notifications))
               .from(Notifications)
-              .leftJoin(
-                ProfileFollowRequests,
-                and(
-                  eq(ProfileFollowRequests.id, Notifications.sourceId),
-                  eq(Notifications.kind, NotificationKind.FOLLOW_REQUEST),
-                ),
-              )
               .where(
                 and(
                   visibleViewerNotificationWhere({ ctx, profileId: profile.id }),
@@ -59,8 +46,7 @@ builder.objectField(Profile, 'notifications', (t) =>
                 ),
               )
               .orderBy(inverted ? asc(Notifications.id) : desc(Notifications.id))
-              .limit(limit)
-              .then((rows) => rows.map(notificationRowFromSelection)),
+              .limit(limit),
         );
       },
     },

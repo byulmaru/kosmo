@@ -23,9 +23,23 @@ type QueryData = {
   } | null;
 };
 
+const ownerProfile = {
+  displayName: 'Owner Profile',
+  followPolicy: 'OPEN' as const,
+  id: 'profile:owner',
+  instance: { kind: 'LOCAL' as const },
+  private: { defaultPostVisibility: 'PUBLIC' as const },
+  relativeHandle: '@owner',
+  viewerState: { membership: { role: 'OWNER' as const } },
+} satisfies NonNullable<NonNullable<QueryData['currentSession']>['selectedProfile']>;
+
 let queryData: QueryData;
 let queryFetchKeys: unknown[] = [];
 let openProfileSwitcherCalls = 0;
+let deleteSelectedProfileCalls = 0;
+const writeSelectedProfileCalls: string[] = [];
+let resetCurrentActorAccepted = true;
+const resetCurrentActorCalls: Array<string | null | undefined> = [];
 let queryMode: 'error' | 'success' = 'success';
 let relayActorLifecycleKey = 'actor-a';
 let mutationInFlight = false;
@@ -60,6 +74,16 @@ mock.module('react-relay', {
       },
       mutationInFlight,
     ],
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('../../auth/selectedProfileStorage.ts', import.meta.url), {
+  exports: {
+    deleteSelectedProfile: async () => {
+      deleteSelectedProfileCalls += 1;
+    },
+    writeSelectedProfile: async (profileId: string) => {
+      writeSelectedProfileCalls.push(profileId);
+    },
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('./ProfileSettingsScreen.tsx', import.meta.url), {
@@ -103,7 +127,29 @@ mock.module(new URL('../../observability/UnexpectedErrorContext.ts', import.meta
   exports: { useUnexpectedErrorReporter: () => undefined },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../../relay/RelayActorProvider.tsx', import.meta.url), {
-  exports: { useRelayActorLifecycleKey: () => relayActorLifecycleKey },
+  exports: {
+    useRelayActor: () => ({
+      resetCurrentActor: (profileId?: string | null) => {
+        resetCurrentActorCalls.push(profileId);
+        if (!resetCurrentActorAccepted) {
+          return false;
+        }
+        queryData = {
+          currentSession: {
+            selectedProfile:
+              profileId === 'profile:remaining'
+                ? { ...ownerProfile, id: profileId, displayName: 'Remaining Profile' }
+                : profileId === null
+                  ? null
+                  : ownerProfile,
+          },
+        };
+        relayActorLifecycleKey = profileId ?? 'session';
+        return true;
+      },
+    }),
+    useRelayActorLifecycleKey: () => relayActorLifecycleKey,
+  },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
   exports: {
@@ -121,6 +167,10 @@ afterEach(async () => {
   queryData = { currentSession: { selectedProfile: null } };
   queryFetchKeys = [];
   openProfileSwitcherCalls = 0;
+  deleteSelectedProfileCalls = 0;
+  writeSelectedProfileCalls.length = 0;
+  resetCurrentActorAccepted = true;
+  resetCurrentActorCalls.length = 0;
   queryMode = 'success';
   relayActorLifecycleKey = 'actor-a';
   mutationInFlight = false;
@@ -277,6 +327,151 @@ describe('SettingsProfileDetail', () => {
     );
   });
 
+  it('owner의 프로필 삭제 확인은 matching 서버 결과 뒤 actor와 저장 선택을 정리한다', async () => {
+    const profile = ownerProfile;
+    queryData = { currentSession: { selectedProfile: profile } };
+    await render();
+
+    const deletion = () => rendered('ProfileSettingsScreen')[0]?.props.deletion;
+    assert.equal(deletion()?.phase, 'entry');
+    await act(async () => deletion()?.onStart());
+    assert.equal(deletion()?.phase, 'idle');
+    await act(async () => deletion()?.onCancel());
+    assert.equal(deletion()?.phase, 'entry');
+    assert.equal(mutationCalls.length, 0);
+    assert.equal(deleteSelectedProfileCalls, 0);
+
+    await act(async () => deletion()?.onStart());
+    await act(async () => deletion()?.onConfirm());
+    assert.deepEqual(mutationCalls, [{ input: { id: profile.id } }]);
+    assert.equal(deleteSelectedProfileCalls, 0);
+
+    await act(async () =>
+      mutationConfigs[0]?.onCompleted({
+        deleteProfile: { success: true, profileId: profile.id, account: { profiles: [] } },
+      } as never),
+    );
+
+    assert.deepEqual(resetCurrentActorCalls, [null]);
+    assert.equal(deleteSelectedProfileCalls, 1);
+    assert.deepEqual(writeSelectedProfileCalls, []);
+    await act(async () => renderer?.update(createElement(SettingsProfileDetail)));
+    const noSelection = rendered('StateView')[0];
+    assert.equal(noSelection.props.title, '설정할 Profile이 없어요');
+    assert.equal(noSelection.props.actionLabel, 'Profile 선택하기');
+  });
+
+  it('matching server result selects and persists the returned profile', async () => {
+    const profile = ownerProfile;
+    queryData = { currentSession: { selectedProfile: profile } };
+    await render();
+
+    const deletion = () => rendered('ProfileSettingsScreen')[0]?.props.deletion;
+    await act(async () => deletion()?.onStart());
+    await act(async () => deletion()?.onConfirm());
+    await act(async () =>
+      mutationConfigs[0]?.onCompleted({
+        deleteProfile: {
+          success: true,
+          profileId: profile.id,
+          account: { profiles: [{ id: 'profile:remaining' }, { id: 'profile:later' }] },
+        },
+      } as never),
+    );
+
+    assert.deepEqual(resetCurrentActorCalls, ['profile:remaining']);
+    assert.deepEqual(writeSelectedProfileCalls, ['profile:remaining']);
+    assert.equal(deleteSelectedProfileCalls, 0);
+    assert.equal(queryData.currentSession?.selectedProfile?.id, 'profile:remaining');
+  });
+
+  it('stale actor result or unconfirmed server response never clears stored selection', async () => {
+    const profile = ownerProfile;
+    queryData = { currentSession: { selectedProfile: profile } };
+    await render();
+
+    const deletion = () => rendered('ProfileSettingsScreen')[0]?.props.deletion;
+    await act(async () => deletion()?.onStart());
+    await act(async () => deletion()?.onConfirm());
+    await act(async () =>
+      mutationConfigs[0]?.onCompleted({
+        deleteProfile: {
+          success: true,
+          profileId: 'profile:other',
+          account: { profiles: [{ id: 'profile:c' }] },
+        },
+      } as never),
+    );
+    assert.equal(deletion()?.phase, 'error');
+    assert.deepEqual(resetCurrentActorCalls, []);
+    assert.equal(deleteSelectedProfileCalls, 0);
+
+    resetCurrentActorAccepted = false;
+    await act(async () => deletion()?.onConfirm());
+    await act(async () =>
+      mutationConfigs[1]?.onCompleted({
+        deleteProfile: {
+          success: true,
+          profileId: profile.id,
+          account: { profiles: [{ id: 'profile:c' }] },
+        },
+      } as never),
+    );
+    assert.deepEqual(resetCurrentActorCalls, ['profile:c']);
+    assert.equal(deleteSelectedProfileCalls, 0);
+    assert.deepEqual(writeSelectedProfileCalls, []);
+    assert.equal(deletion()?.phase, 'error');
+    assert.equal(queryData.currentSession?.selectedProfile?.id, profile.id);
+  });
+
+  it('requires an explicit true delete outcome before clearing the actor or stored selection', async () => {
+    const profile = ownerProfile;
+    queryData = { currentSession: { selectedProfile: profile } };
+    await render();
+
+    const deletion = () => rendered('ProfileSettingsScreen')[0]?.props.deletion;
+    await act(async () => deletion()?.onStart());
+    await act(async () => deletion()?.onConfirm());
+    await act(async () =>
+      mutationConfigs[0]?.onCompleted({
+        deleteProfile: { success: false, profileId: profile.id, account: { profiles: [] } },
+      } as never),
+    );
+
+    assert.equal(deletion()?.phase, 'error');
+    assert.deepEqual(resetCurrentActorCalls, []);
+    assert.equal(deleteSelectedProfileCalls, 0);
+
+    await act(async () => deletion()?.onConfirm());
+    await act(async () =>
+      mutationConfigs[1]?.onCompleted({
+        deleteProfile: { profileId: profile.id, account: { profiles: [] } },
+      } as never),
+    );
+
+    assert.equal(deletion()?.phase, 'error');
+    assert.deepEqual(resetCurrentActorCalls, []);
+    assert.equal(deleteSelectedProfileCalls, 0);
+  });
+
+  it('network failure keeps the confirmation retryable and leaves actor and storage unchanged', async () => {
+    const profile = ownerProfile;
+    queryData = { currentSession: { selectedProfile: profile } };
+    await render();
+
+    const deletion = () => rendered('ProfileSettingsScreen')[0]?.props.deletion;
+    await act(async () => deletion()?.onStart());
+    await act(async () => deletion()?.onConfirm());
+    await act(async () => mutationConfigs[0]?.onError(new Error('network failure')));
+
+    assert.equal(deletion()?.phase, 'error');
+    assert.deepEqual(resetCurrentActorCalls, []);
+    assert.equal(deleteSelectedProfileCalls, 0);
+    await act(async () => deletion()?.onConfirm());
+    assert.equal(mutationCalls.length, 2);
+    assert.deepEqual(mutationCalls[1], { input: { id: profile.id } });
+  });
+
   it('selected Member Profile에는 같은 control을 읽기 전용으로 연결한다', async () => {
     const profile = {
       displayName: 'Member Profile',
@@ -291,6 +486,7 @@ describe('SettingsProfileDetail', () => {
     await render();
 
     assert.equal(rendered('ProfilePostingSettings')[0].props.editable, false);
+    assert.equal(rendered('ProfileSettingsScreen')[0].props.deletion, undefined);
     assert.equal(
       rendered('Button').some((node) => node.props.accessibilityLabel === '프로필 게시 설정 저장'),
       false,

@@ -741,7 +741,8 @@ export function MobileFullscreenComposerShellCandidate({
   const [bodyContentHeight, setBodyContentHeight] = useState(0);
   const [bodyFocused, setBodyFocused] = useState(false);
   const [scrollViewportHeight, setScrollViewportHeight] = useState(0);
-  const hasTrailingContent = children !== undefined && children !== null;
+  const hasMedia = items.length > 0;
+  const hasTrailingContent = (children !== undefined && children !== null) || hasMedia;
   const hasParent = beforeEditor !== undefined && beforeEditor !== null;
   const isReplyShell = mode === 'reply' && hasParent;
   const shouldAutoSizeBody = Platform.OS === 'web' && (hasTrailingContent || mode === 'reply');
@@ -810,7 +811,8 @@ export function MobileFullscreenComposerShellCandidate({
     <View
       style={[
         styles.mobileComposerBody,
-        isReplyShell ? { minHeight: Math.max(160, scrollViewportHeight) } : null,
+        hasMedia ? styles.mobileComposerBodyWithMedia : null,
+        isReplyShell && !hasMedia ? { minHeight: Math.max(160, scrollViewportHeight) } : null,
       ]}
       testID="mobile-composer-body"
     >
@@ -868,7 +870,7 @@ export function MobileFullscreenComposerShellCandidate({
               }}
               onChangeText={mentionInput.onChangeText}
               onContentSizeChange={(event) =>
-                hasTrailingContent &&
+                shouldAutoSizeBody &&
                 setBodyContentHeight(Math.ceil(event.nativeEvent.contentSize.height))
               }
               onFocus={() => {
@@ -883,13 +885,12 @@ export function MobileFullscreenComposerShellCandidate({
                 submitting ? theme.stateDisabledForeground : theme.foregroundMuted
               }
               ref={bodyRef ?? bodyInputRef}
+              scrollEnabled={bodyUsesTrailingContentLayout ? false : undefined}
               selection={mentionInput.selection}
               style={[
                 styles.mobileBody,
                 bodyUsesTrailingContentLayout ? styles.mobileTrailingContentBody : null,
-                bodyUsesTrailingContentLayout && bodyContentHeight > 0
-                  ? { height: bodyContentHeight }
-                  : null,
+                shouldAutoSizeBody && bodyContentHeight > 0 ? { height: bodyContentHeight } : null,
                 {
                   backgroundColor: theme.backgroundCanvas,
                   color: theme.foregroundPrimary,
@@ -948,6 +949,29 @@ export function MobileFullscreenComposerShellCandidate({
           value={visibility}
         />
       ) : null}
+    </View>
+  );
+  const mediaShelf = hasMedia ? (
+    <View style={styles.mobileMediaShelf} testID="mobile-composer-media-shelf">
+      <PostComposerMediaItemsTarget
+        disabled={submitting}
+        media={items}
+        onEdit={onMediaEdit}
+        onRemove={onMediaRemove}
+        onRetry={(item) => onMediaRetry(item.key)}
+        sensitiveMedia={sensitiveMedia}
+      />
+    </View>
+  ) : null;
+  const editorContent = (
+    <View
+      style={[
+        styles.mobileComposerEditorContent,
+        isReplyShell && hasMedia ? { minHeight: Math.max(160, scrollViewportHeight) } : null,
+      ]}
+    >
+      {bodySection}
+      {mediaShelf}
     </View>
   );
   return (
@@ -1028,20 +1052,7 @@ export function MobileFullscreenComposerShellCandidate({
           </View>
         ) : null}
         {isReplyShell ? visibilityControl : null}
-        {bodySection}
-
-        {items.length > 0 ? (
-          <View style={styles.mobileMediaShelf} testID="mobile-composer-media-shelf">
-            <PostComposerMediaItemsTarget
-              disabled={submitting}
-              media={items}
-              onEdit={onMediaEdit}
-              onRemove={onMediaRemove}
-              onRetry={(item) => onMediaRetry(item.key)}
-              sensitiveMedia={sensitiveMedia}
-            />
-          </View>
-        ) : null}
+        {editorContent}
       </ScrollView>
 
       <View
@@ -1395,6 +1406,7 @@ const styles = StyleSheet.create({
   },
   mobileTrailingContentBody: {
     flexBasis: 'auto',
+    flex: 0,
     flexGrow: 0,
     flexShrink: 0,
     minHeight: 44,
@@ -1409,6 +1421,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: space[16],
     paddingTop: space[16],
   },
+  mobileComposerEditorContent: { flexGrow: 1, flexShrink: 0 },
+  mobileComposerBodyWithMedia: { flexGrow: 0, minHeight: 0 },
   mobileParentContainer: { flexShrink: 0 },
   mobileReplyContext: { minHeight: 24 },
   mobileContentWarning: { borderRadius: radius[0], minHeight: 44 },

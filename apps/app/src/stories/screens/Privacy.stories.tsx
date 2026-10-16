@@ -51,6 +51,9 @@ export const Policy: Story = {
         name: '이전 개인정보 처리방침 (2026년 9월 9일부터 2026년 10월 12일까지)',
       }),
     ).toBeVisible();
+    expect(
+      canvas.getByRole('link', { name: '2026년 10월 13일 개인정보처리방침 개정 안내' }),
+    ).toHaveAttribute('href', '/privacy/changes/2026-10-13');
     expect(within(tables[0]!).getByRole('cell', { name: '탈퇴 완료일부터 30일' })).toBeVisible();
     expect(
       within(tables[0]!).getByRole('cell', {

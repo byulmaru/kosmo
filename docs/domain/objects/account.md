@@ -9,11 +9,11 @@ Account가 아니라 Profile이다.
 
 ### Account State
 
-| 값        | 의미                          |
-| --------- | ----------------------------- |
-| Active    | Account를 사용할 수 있는 상태 |
-| Suspended | Account 사용이 정지된 상태    |
-| Deleted   | 되돌릴 수 없는 terminal 상태  |
+| 값        | 의미                                                       |
+| --------- | ---------------------------------------------------------- |
+| Active    | Account를 사용할 수 있는 상태                              |
+| Suspended | Account 사용이 정지된 상태                                 |
+| Deleted   | 탈퇴 완료되어 재가입 전까지 공개 인증을 허용하지 않는 상태 |
 
 ## 속성
 
@@ -44,7 +44,14 @@ Admin Console의 Account 목록·상세는 일반 Account 조회 권한을 확�
 탈퇴 허용 여부는 연결된 모든 Profile 저장 State를 요청 시점에 서버가 다시 확인하며, 하나라도 `ACTIVE`이면
 Account와 관계를 변경하지 않고 거부한다. `SUSPENDED`와 `DISABLED` Profile은 이 조건만으로 탈퇴를 막지 않는다.
 
-Deleted Account는 되돌릴 수 없는 terminal 상태이며 공개 인증과 탈퇴 재요청을 허용하지 않는다.
+Deleted Account는 재가입이 완료되기 전까지 공개 인증과 탈퇴 재요청을 허용하지 않는다. 동일한 OIDC subject를
+포함한 검증된 인증 결과로 신규 가입을 완료하면 기존 Account를 재사용하고 Account State를 Active로 전환한다. 탈퇴 완료 뒤
+재가입 대기 기간이나 별도의 계정 복구 확인은 없다.
+
+재가입은 기존 탈퇴를 취소하거나 과거 상태를 복구하는 동작이 아니다. 폐기된 Session은 재사용하지 않으며,
+새 Session을 발급한다. 신규 가입은 Profile을 선택하지 않은 상태로 시작해 새 Profile을 만들고, 이전 Profile의 삭제·비활성화
+상태를 바꾸거나 이전 Profile의 게시물·소셜 관계를 복구하지 않는다. Suspended Account는 재가입으로 Active가
+되지 않으며 Suspended 상태를 유지한다.
 
 ## 권한
 
