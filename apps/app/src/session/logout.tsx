@@ -96,6 +96,7 @@ function useLogoutLifecycle({
             await revokeNativeSession();
           }
           await clearNativeSession();
+          clearAnalytics();
           await deleteSelectedProfile();
         }
 
