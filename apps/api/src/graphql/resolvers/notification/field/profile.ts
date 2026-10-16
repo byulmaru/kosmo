@@ -5,61 +5,23 @@ import { and, asc, count, desc, eq, getColumns, gt, isNull, lt, or } from 'drizz
 import { parse as parseUuid } from 'uuid';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/resolvers/profile';
+import { decodeTimestampIdCursor, encodeTimestampIdCursor } from '@/graphql/timestamp-id-cursor';
 import { visibleViewerNotificationWhere } from '../access/visibility';
 import { Notification, NotificationConnection } from '../ref';
 import type { Database } from '@kosmo/core/db';
 import type { UserContext } from '@/context';
+import type { TimestampIdCursor } from '@/graphql/timestamp-id-cursor';
 import type { NotificationRow } from '../ref';
-
-type NotificationCursor = {
-  readonly createdAt: Temporal.Instant;
-  readonly id: string;
-};
-
-const base64UrlPattern = /^[A-Za-z0-9_-]+$/;
-
-const encodeNotificationCursor = ({ createdAt, id }: NotificationRow) =>
-  Buffer.from(JSON.stringify([createdAt.toString(), id])).toString('base64url');
-
-const decodeNotificationCursor = (cursor: string): NotificationCursor => {
-  try {
-    if (!base64UrlPattern.test(cursor)) {
-      throw new Error('Invalid base64url');
-    }
-
-    const decoded = Buffer.from(cursor, 'base64url');
-    if (decoded.toString('base64url') !== cursor) {
-      throw new Error('Non-canonical base64url');
-    }
-
-    const value: unknown = JSON.parse(decoded.toString('utf8'));
-    if (
-      !Array.isArray(value) ||
-      value.length !== 2 ||
-      typeof value[0] !== 'string' ||
-      typeof value[1] !== 'string'
-    ) {
-      throw new Error('Invalid cursor payload');
-    }
-
-    const [createdAt, id] = value;
-    parseUuid(id);
-
-    return { createdAt: Temporal.Instant.from(createdAt), id };
-  } catch {
-    throw new ValidationError('Invalid Notification cursor');
-  }
-};
 
 const resolveNotificationCursor = async (
   cursor: string,
   profileId: string,
   ctx: UserContext,
-): Promise<NotificationCursor> => {
+): Promise<TimestampIdCursor> => {
   try {
     parseUuid(cursor);
   } catch {
-    return decodeNotificationCursor(cursor);
+    return decodeTimestampIdCursor(cursor, 'Invalid Notification cursor');
   }
 
   const [notification] = await db
@@ -122,7 +84,7 @@ builder.objectField(Profile, 'notifications', (t) =>
         await requireProfileNotificationMembership(ctx.session.accountId, profile.id, db);
 
         return resolveCursorConnection<Promise<NotificationRow[]>>(
-          { args, toCursor: encodeNotificationCursor },
+          { args, toCursor: encodeTimestampIdCursor },
           async ({ before, after, limit, inverted }) => {
             const [beforeWhere, afterWhere] = await Promise.all([
               notificationCursorWhere(before, 'before', profile.id, ctx),
