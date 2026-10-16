@@ -109,6 +109,7 @@ const payload = (count: number, id = 'tag-a') => ({
       __typename: 'Hashtag',
       id,
       name: 'Topic',
+      viewerMuteRule: null,
       relatedProfiles: {
         edges: Array.from({ length: count }, (_, i) => ({
           cursor: `cursor-${i}`,
