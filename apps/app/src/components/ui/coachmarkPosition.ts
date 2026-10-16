@@ -51,7 +51,10 @@ export function getCoachmarkPosition({
   const topSpace = Math.max(0, anchor.y - safeTop - ANCHOR_GAP);
   const bottomSpace = Math.max(0, safeBottom - (anchor.y + anchor.height) - ANCHOR_GAP);
   const placement = bubble.height <= bottomSpace || bottomSpace >= topSpace ? 'bottom' : 'top';
-  const maxHeight = placement === 'bottom' ? bottomSpace : topSpace;
+  const maxHeight = Math.min(
+    placement === 'bottom' ? bottomSpace : topSpace,
+    Math.max(0, safeBottom - safeTop),
+  );
   const height = Math.min(bubble.height, maxHeight);
   const top = clamp(
     placement === 'bottom' ? anchor.y + anchor.height + ANCHOR_GAP : anchor.y - ANCHOR_GAP - height,

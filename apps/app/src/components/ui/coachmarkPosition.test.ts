@@ -49,9 +49,9 @@ test('limits long content to the safe viewport while keeping the bubble in bound
     }),
     {
       arrowLeft: 184,
-      height: 260,
+      height: 256,
       left: 16,
-      maxHeight: 260,
+      maxHeight: 256,
       placement: 'top',
       top: 28,
       width: 328,
@@ -84,3 +84,18 @@ test('keeps the bubble inside horizontal safe-area insets', () => {
     },
   );
 });
+
+for (const anchorY of [-600, 600]) {
+  test(`keeps long content within the safe viewport when the anchor is at y=${anchorY}`, () => {
+    const position = getCoachmarkPosition({
+      anchor: { x: 160, y: anchorY, width: 80, height: 40 },
+      bubble: { width: 360, height: 900 },
+      viewport: { width: 360, height: 320, topInset: 12, bottomInset: 20 },
+    });
+
+    assert.equal(position.maxHeight, 256);
+    assert.equal(position.height, 256);
+    assert.ok(position.top >= 28);
+    assert.ok(position.top + position.height <= 284);
+  });
+}

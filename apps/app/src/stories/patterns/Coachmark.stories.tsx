@@ -344,6 +344,15 @@ export const StepsInteraction: Story = {
     const previous = within(surface).getByRole('button', { name: '이전' });
     const next = within(surface).getByRole('button', { name: '다음' });
     expect(previous).toBeDisabled();
+    await waitFor(() => expect(next).toHaveFocus());
+    await waitFor(() => {
+      const focusStyle = getComputedStyle(next);
+      expect(focusStyle.outlineStyle).not.toBe('none');
+      expect(parseFloat(focusStyle.outlineWidth)).toBeGreaterThan(0);
+      expect(parseFloat(focusStyle.outlineOffset)).toBeLessThanOrEqual(
+        -parseFloat(focusStyle.outlineWidth),
+      );
+    });
     const previousRect = previous.getBoundingClientRect();
     const nextRect = next.getBoundingClientRect();
     expect(nextRect.left - previousRect.right).toBeLessThanOrEqual(1);
@@ -455,11 +464,19 @@ export const CompactViewportContract: Story = {
       },
     },
   },
-  render: (args) => <LongContentFixture onClose={args.onClose} onComplete={args.onComplete} />,
+  render: (args) => (
+    <LongContentFixture
+      onClose={args.onClose}
+      onComplete={args.onComplete}
+      targetPosition="lower"
+    />
+  ),
   play: async () => {
     expect(window.innerWidth).toBe(320);
     expect(window.innerHeight).toBe(240);
 
+    const target = await screen.findByRole('button', { name: '화면 끝 대상' });
+    expect(target.getBoundingClientRect().top).toBeGreaterThan(window.innerHeight);
     const surface = await screen.findByTestId('coachmark-surface');
     const body = await screen.findByTestId('coachmark-body');
     await waitFor(() => {
@@ -467,7 +484,8 @@ export const CompactViewportContract: Story = {
       expect(rect.width).toBeGreaterThan(0);
       expect(rect.height).toBeGreaterThan(0);
       expect(rect.right).toBeLessThanOrEqual(window.innerWidth);
-      expect(rect.bottom).toBeLessThanOrEqual(window.innerHeight);
+      expect(rect.top).toBeGreaterThanOrEqual(16);
+      expect(rect.bottom).toBeLessThanOrEqual(window.innerHeight - 16);
       expect(body.clientHeight).toBeGreaterThan(0);
     });
 

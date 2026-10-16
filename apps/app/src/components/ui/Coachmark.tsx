@@ -57,6 +57,13 @@ export function Coachmark({
 }: CoachmarkProps) {
   const theme = useTheme();
   const elevation = useElevation();
+  const actionFocusStyle =
+    Platform.OS === 'web'
+      ? {
+          outlineOffset: -borderWidths[1],
+          outlineWidth: borderWidths[1],
+        }
+      : undefined;
   const { height, width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const overlayMotion = useOverlayMotion(visible);
@@ -251,7 +258,7 @@ export function Coachmark({
                       onPress={close}
                       size="compact"
                       tone="secondary"
-                      style={styles.skip}
+                      style={[styles.skip, actionFocusStyle]}
                     >
                       <Text style={styles.footerLabel}>건너뛰기</Text>
                     </Button>
@@ -263,7 +270,7 @@ export function Coachmark({
                           onPress={onPrevious}
                           size="compact"
                           tone="secondary"
-                          style={[styles.segment, styles.previous]}
+                          style={[styles.segment, styles.previous, actionFocusStyle]}
                         >
                           <Text style={styles.controlLabel}>이전</Text>
                         </Button>
@@ -284,6 +291,7 @@ export function Coachmark({
                         style={[
                           styles.segment,
                           styles.next,
+                          actionFocusStyle,
                           !onNext && !onPrevious && styles.single,
                         ]}
                       >
