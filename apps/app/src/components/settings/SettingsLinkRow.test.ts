@@ -12,6 +12,14 @@ import type { SettingsLinkRowProps } from './SettingsLinkRow';
 const require = createRequire(import.meta.url);
 let platformOS: 'ios' | 'web' = 'web';
 let reducedMotion = false;
+let pressableState: { hovered: boolean; pressed: boolean } = {
+  hovered: false,
+  pressed: false,
+};
+const timingCalls: Array<{ duration: number; target: string }> = [];
+const pendingAnimations: Array<{ complete: () => void; stopped: boolean }> = [];
+let stopAnimationCalls = 0;
+let setValueCalls = 0;
 const theme = {
   borderSubtle: '#eeeeee',
   foregroundPrimary: '#111111',
@@ -26,9 +34,11 @@ const theme = {
 class AnimatedColorMock {
   constructor(public value: string) {}
   setValue(value: string) {
+    setValueCalls += 1;
     this.value = value;
   }
   stopAnimation(callback?: () => void) {
+    stopAnimationCalls += 1;
     callback?.();
   }
 }
@@ -54,13 +64,26 @@ mock.module('react-native', {
     Animated: {
       Color: AnimatedColorMock,
       View: 'AnimatedView',
-      timing: (value: { setValue: (next: unknown) => void }, config: { toValue: unknown }) => ({
-        start: () =>
-          value.setValue(
-            config.toValue instanceof AnimatedColorMock ? config.toValue.value : config.toValue,
-          ),
-        stop: () => undefined,
-      }),
+      timing: (
+        value: { setValue: (next: unknown) => void },
+        config: { duration: number; toValue: unknown },
+      ) => {
+        const target =
+          config.toValue instanceof AnimatedColorMock ? config.toValue.value : config.toValue;
+        const pending = {
+          complete: () => value.setValue(target),
+          stopped: false,
+        };
+        pendingAnimations.push(pending);
+        return {
+          start: () => {
+            timingCalls.push({ duration: config.duration, target: String(target) });
+          },
+          stop: () => {
+            pending.stopped = true;
+          },
+        };
+      },
     },
     Easing: { bezier: () => () => 0 },
     Platform: {
@@ -78,7 +101,7 @@ mock.module('react-native', {
       createElement(
         'Pressable',
         props,
-        typeof children === 'function' ? children({ hovered: false, pressed: false }) : children,
+        typeof children === 'function' ? children(pressableState) : children,
       ),
     StyleSheet: {
       absoluteFill: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
@@ -132,6 +155,11 @@ before(async () => {
 beforeEach(() => {
   platformOS = 'web';
   reducedMotion = false;
+  pressableState = { hovered: false, pressed: false };
+  timingCalls.length = 0;
+  pendingAnimations.length = 0;
+  stopAnimationCalls = 0;
+  setValueCalls = 0;
 });
 
 afterEach(async () => {
@@ -303,6 +331,7 @@ describe('SettingsLinkRow', () => {
         }),
       ),
     );
+    completePendingAnimations();
     const selectedStyle = flattenStyle(rendered('AnimatedView')[0].props.style);
     assert.equal(colorValue(selectedStyle.backgroundColor), '#fff8dc');
     assert.equal(selectedStyle.transitionDuration, undefined);
@@ -339,6 +368,75 @@ describe('SettingsLinkRow', () => {
     assert.equal(style.transitionDuration, undefined);
     assert.equal(style.transitionProperty, undefined);
     assert.equal(style.transitionTimingFunction, undefined);
+  });
+
+  it('hover 중 선택 상태가 바뀌어도 border 전이는 양방향 200ms를 유지한다', async () => {
+    pressableState = { hovered: true, pressed: false };
+    const props = {
+      accessibilityLabel: '설정 링크',
+      href: '/settings',
+      label: '설정',
+      selected: false,
+      testID: 'selected-transition-row',
+    } satisfies SettingsLinkRowProps;
+    await render(props);
+
+    timingCalls.length = 0;
+    await act(async () => {
+      renderer?.update(createElement(SettingsLinkRow, { ...props, selected: true }));
+    });
+    completePendingAnimations();
+    assert.equal(
+      timingCalls.some(({ duration, target }) => duration === 200 && target === '#9a7800'),
+      true,
+    );
+
+    timingCalls.length = 0;
+    await act(async () => {
+      renderer?.update(createElement(SettingsLinkRow, { ...props, selected: false }));
+    });
+    completePendingAnimations();
+    assert.equal(
+      timingCalls.some(({ duration, target }) => duration === 200 && target === 'transparent'),
+      true,
+    );
+    const finalStyle = flattenStyle(rendered('AnimatedView')[0].props.style);
+    assert.equal(colorValue(finalStyle.borderColor), 'transparent');
+  });
+
+  it('focus 진입은 진행 중 feedback 전이를 중단하거나 끝점으로 점프시키지 않는다', async () => {
+    const props = {
+      accessibilityLabel: '설정 링크',
+      href: '/settings',
+      label: '설정',
+      selected: false,
+      testID: 'focus-transition-row',
+    } satisfies SettingsLinkRowProps;
+    await render(props);
+
+    await act(async () => {
+      renderer?.update(createElement(SettingsLinkRow, { ...props, selected: true }));
+    });
+    const timingCount = timingCalls.length;
+    const stopCount = stopAnimationCalls;
+    const setValueCount = setValueCalls;
+    const row = byTestId('focus-transition-row');
+
+    await act(async () => {
+      row.props.onFocus({
+        currentTarget: { matches: () => true },
+      });
+    });
+
+    assert.equal(timingCalls.length, timingCount);
+    assert.equal(stopAnimationCalls, stopCount);
+    assert.equal(setValueCalls, setValueCount);
+
+    completePendingAnimations();
+    const finalStyle = flattenStyle(rendered('AnimatedView')[0].props.style);
+    assert.equal(colorValue(finalStyle.backgroundColor), '#fff8dc');
+    assert.equal(colorValue(finalStyle.borderColor), '#9a7800');
+    assert.equal(flattenStyle(row.props.style({ hovered: false, pressed: false })).outlineWidth, 2);
   });
 
   it('Web focus ring은 focus-visible일 때만 표시하고 pointer focus에서는 숨긴다', async () => {
@@ -408,4 +506,12 @@ function flattenStyle(style: unknown): Record<string, unknown> {
 
 function colorValue(value: unknown) {
   return value instanceof AnimatedColorMock ? value.value : value;
+}
+
+function completePendingAnimations() {
+  pendingAnimations.splice(0).forEach((animation) => {
+    if (!animation.stopped) {
+      animation.complete();
+    }
+  });
 }
