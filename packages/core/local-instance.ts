@@ -27,7 +27,10 @@ export const resolveConfiguredLocalInstance = async (options: LocalInstanceOptio
     return loadConfiguredLocalInstance(options);
   }
 
-  configuredLocalInstancePromise ??= loadConfiguredLocalInstance(options);
+  configuredLocalInstancePromise ??= loadConfiguredLocalInstance(options).catch((error) => {
+    configuredLocalInstancePromise = undefined;
+    throw error;
+  });
 
   return configuredLocalInstancePromise;
 };
