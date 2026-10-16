@@ -109,6 +109,25 @@ describe('PostHog Native client', () => {
     ]);
   });
 
+  it('keeps Native Reaction capture without adding Web-only emoji properties', () => {
+    analytics.identifyAnalytics('account-a');
+    analytics.trackAnalyticsForAccount('account-a', 'reaction_added', {
+      reaction_type: 'custom',
+      emoji_kind: 'unicode',
+      reaction_emoji_key: 'unicode:1f389',
+    });
+    analytics.trackAnalyticsForAccount('account-a', 'reaction_removed', {
+      reaction_type: 'default',
+    });
+    analytics.trackAnalyticsForAccount('', 'reaction_added', { reaction_type: 'default' });
+
+    assert.deepEqual(instances[0]?.calls, [
+      { kind: 'identify', accountId: 'account-a' },
+      { kind: 'capture', event: 'reaction_added', properties: { reaction_type: 'custom' } },
+      { kind: 'capture', event: 'reaction_removed', properties: { reaction_type: 'default' } },
+    ]);
+  });
+
   it('keeps SDK failures out of product flows', () => {
     analytics.trackAnalytics('profile_view_succeeded', {});
     const instance = instances[0];

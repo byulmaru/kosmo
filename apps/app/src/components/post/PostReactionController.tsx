@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
-import { trackAnalytics } from '@/analytics/client';
+import { trackAnalyticsForAccount } from '@/analytics/client';
+import { getReactionEmojiAnalyticsKey } from '@/analytics/reaction';
 import { useSession } from '@/session/SessionProvider';
 import type { ReactionToggleIntent } from '@/components/reaction/ReactionSelector';
 import type { PostReactionController_post$key } from './__generated__/PostReactionController_post.graphql';
@@ -94,6 +95,8 @@ export function usePostReactionController(
   const [errorTypes, setErrorTypes] = useState<Set<string>>(() => new Set());
   const inFlightTypes = useRef(new Set<string>());
   const mounted = useRef(false);
+  const accountIdRef = useRef(session.accountId);
+  accountIdRef.current = session.accountId;
   const postId = data.id;
   const identity = useRef({ environment, epoch: 0, postId });
 
@@ -131,6 +134,7 @@ export function usePostReactionController(
       }
 
       const requestIdentity = identity.current;
+      const requestAccountId = session.accountId;
       inFlightTypes.current.add(optionId);
       setPendingTypes((current) => new Set(current).add(optionId));
       setErrorTypes((current) => {
@@ -167,10 +171,23 @@ export function usePostReactionController(
           : (response as PostReactionControllerDeleteReactionMutation['response'] | null)
               ?.deleteReaction;
         const succeeded = Boolean(payload);
-        if (succeeded) {
-          trackAnalytics(nextSelected ? 'reaction_added' : 'reaction_removed', {
+        if (succeeded && requestAccountId && accountIdRef.current === requestAccountId) {
+          const eventName = nextSelected ? 'reaction_added' : 'reaction_removed';
+          const baseProperties = {
             reaction_type: optionId === '❤️' ? 'default' : 'custom',
-          });
+          } as const;
+          const reactionEmojiKey = getReactionEmojiAnalyticsKey(optionId);
+          trackAnalyticsForAccount(
+            requestAccountId,
+            eventName,
+            reactionEmojiKey
+              ? {
+                  ...baseProperties,
+                  emoji_kind: 'unicode',
+                  reaction_emoji_key: reactionEmojiKey,
+                }
+              : baseProperties,
+          );
         }
         finish(succeeded);
       };
@@ -189,7 +206,7 @@ export function usePostReactionController(
         });
       }
     },
-    [commitAdd, commitDelete, isCurrentIdentity, postId, resolvedEnabled],
+    [commitAdd, commitDelete, isCurrentIdentity, postId, resolvedEnabled, session.accountId],
   );
 
   return {
