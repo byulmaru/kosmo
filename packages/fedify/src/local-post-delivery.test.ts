@@ -211,6 +211,161 @@ describe('ActivityPub Local Post delivery', () => {
     );
   });
 
+  test('DIRECT Create/Delete는 현재 Content의 remote Mention만 대상으로 하고 follower와 Parent를 제외한다', async () => {
+    const author = await createProfile({ kind: InstanceKind.LOCAL });
+    const follower = await createRemoteActor({ handle: 'direct-follower' });
+    const parentAuthor = await createRemoteActor({ handle: 'direct-parent' });
+    const staleMention = await createRemoteActor({ handle: 'stale-direct-mention' });
+    const firstTarget = await createRemoteActor({ handle: 'direct-target-one', sharedInbox: true });
+    const secondTarget = await createRemoteActor({
+      handle: 'direct-target-two',
+      instanceId: firstTarget.profile.instanceId,
+      sharedInbox: true,
+    });
+    await db.insert(ProfileFollows).values({
+      followeeProfileId: author.id,
+      followerProfileId: follower.profile.id,
+    });
+    const parent = await createPost(parentAuthor.profile.id);
+    const post = await createPost(author.id, {
+      replyParentId: parent.id,
+      visibility: PostVisibility.DIRECT,
+    });
+    assert.ok(post.currentContentId);
+    await addPostMentions(post.currentContentId, [staleMention.profile.id]);
+    const currentContentId = await createPostContentWithMentions(post.id, [
+      firstTarget.profile.id,
+      secondTarget.profile.id,
+    ]);
+    await db.update(Posts).set({ currentContentId }).where(eq(Posts.id, post.id));
+    const fixture = createContextFixture();
+    mock.method(localOutboundFederation, 'createContext', () => fixture.context);
+
+    await sendLocalPostCreate(post.id);
+
+    const expectedActorUris = [firstTarget.actorUri, secondTarget.actorUri].sort();
+    assert.equal(fixture.calls.length, 1);
+    assert.ok(fixture.calls[0]?.activity instanceof Create);
+    assert.deepEqual(
+      fixture.calls[0]?.recipients.map((recipient) => recipient.id?.href).sort(),
+      expectedActorUris,
+    );
+    assert.deepEqual(
+      fixture.calls[0]?.recipients.map((recipient) => recipient.endpoints?.sharedInbox?.href),
+      [firstTarget.sharedInboxUri, secondTarget.sharedInboxUri],
+    );
+    assert.deepEqual(
+      fixture.calls[0]?.activity.toIds.map((uri) => uri.href).sort(),
+      expectedActorUris,
+    );
+    assert.deepEqual(fixture.calls[0]?.activity.ccIds, []);
+    const note = await fixture.calls[0]?.activity.getObject();
+    assert.ok(note instanceof Note);
+    assert.deepEqual(note.toIds.map((uri) => uri.href).sort(), expectedActorUris);
+    assert.deepEqual(note.ccIds, []);
+
+    await db
+      .update(Posts)
+      .set({ deletedAt: Temporal.Now.instant(), state: PostState.DELETED })
+      .where(eq(Posts.id, post.id));
+    await sendLocalPostDelete(post.id);
+
+    assert.equal(fixture.calls.length, 2);
+    assert.ok(fixture.calls[1]?.activity instanceof Delete);
+    assert.deepEqual(
+      fixture.calls[1]?.recipients.map((recipient) => recipient.id?.href).sort(),
+      expectedActorUris,
+    );
+    assert.deepEqual(
+      fixture.calls[1]?.activity.toIds.map((uri) => uri.href).sort(),
+      expectedActorUris,
+    );
+    assert.deepEqual(fixture.calls[1]?.activity.ccIds, []);
+  });
+
+  test('Mention이 없거나 local Profile만 언급한 DIRECT Create/Delete는 전송하지 않는다', async () => {
+    const author = await createProfile({ kind: InstanceKind.LOCAL });
+    const localMention = await createProfile({ kind: InstanceKind.LOCAL });
+    const noMentions = await createPost(author.id, { visibility: PostVisibility.DIRECT });
+    const localOnly = await createPost(author.id, { visibility: PostVisibility.DIRECT });
+    assert.ok(localOnly.currentContentId);
+    await addPostMentions(localOnly.currentContentId, [localMention.id]);
+    const fixture = createContextFixture();
+    mock.method(localOutboundFederation, 'createContext', () => fixture.context);
+
+    await sendLocalPostCreate(noMentions.id);
+    await sendLocalPostCreate(localOnly.id);
+    await db
+      .update(Posts)
+      .set({ deletedAt: Temporal.Now.instant(), state: PostState.DELETED })
+      .where(inArray(Posts.id, [noMentions.id, localOnly.id]));
+    await sendLocalPostDelete(noMentions.id);
+    await sendLocalPostDelete(localOnly.id);
+
+    assert.equal(fixture.calls.length, 0);
+  });
+
+  test('DIRECT recipients must have active profiles and instances plus valid actor and inbox HTTP URIs', async () => {
+    const author = await createProfile({ kind: InstanceKind.LOCAL });
+    const active = await createRemoteActor({ handle: 'direct-active' });
+    const unresponsive = await createRemoteActor({
+      handle: 'direct-unresponsive',
+      instanceState: InstanceState.UNRESPONSIVE,
+    });
+    const suspended = await createRemoteActor({
+      handle: 'direct-suspended',
+      instanceState: InstanceState.SUSPENDED,
+    });
+    const disabled = await createRemoteActor({ handle: 'direct-disabled' });
+    const invalidActor = await createRemoteActor({ handle: 'direct-invalid-actor' });
+    const invalidInbox = await createRemoteActor({ handle: 'direct-invalid-inbox' });
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.DISABLED })
+      .where(eq(Profiles.id, disabled.profile.id));
+    await db
+      .update(ActivityPubActors)
+      .set({ uri: 'ftp://remote.example/actor' })
+      .where(eq(ActivityPubActors.profileId, invalidActor.profile.id));
+    await db
+      .update(ActivityPubActors)
+      .set({ inboxUri: 'ftp://remote.example/inbox' })
+      .where(eq(ActivityPubActors.profileId, invalidInbox.profile.id));
+    const post = await createPost(author.id, { visibility: PostVisibility.DIRECT });
+    assert.ok(post.currentContentId);
+    await addPostMentions(post.currentContentId, [
+      active.profile.id,
+      unresponsive.profile.id,
+      suspended.profile.id,
+      disabled.profile.id,
+      invalidActor.profile.id,
+      invalidInbox.profile.id,
+    ]);
+    const fixture = createContextFixture();
+    mock.method(localOutboundFederation, 'createContext', () => fixture.context);
+
+    await sendLocalPostCreate(post.id);
+    await db
+      .update(Posts)
+      .set({ deletedAt: Temporal.Now.instant(), state: PostState.DELETED })
+      .where(eq(Posts.id, post.id));
+    await sendLocalPostDelete(post.id);
+
+    assert.equal(fixture.calls.length, 2);
+    for (const call of fixture.calls) {
+      assert.deepEqual(
+        call.recipients.map((recipient) => recipient.id?.href),
+        [active.actorUri],
+      );
+      assert.ok(call.activity instanceof Create || call.activity instanceof Delete);
+      assert.deepEqual(
+        call.activity.toIds.map((uri) => uri.href),
+        [active.actorUri],
+      );
+      assert.deepEqual(call.activity.ccIds, []);
+    }
+  });
+
   test('최초 Create(Note)가 조회 시점의 ordered Media 표현과 sensitive를 그대로 전달한다', async () => {
     const author = await createProfile({ kind: InstanceKind.LOCAL });
     const parentAuthor = await createRemoteActor({ handle: 'media-parent' });
@@ -460,7 +615,7 @@ describe('ActivityPub Local Post delivery', () => {
     );
   });
 
-  test('Content 없는 Repost와 Direct Post는 Local Note lifecycle에서 제외한다', async () => {
+  test('Content 없는 Repost와 Mention 없는 DIRECT Post는 Local Note lifecycle에서 제외한다', async () => {
     const author = await createProfile({ kind: InstanceKind.LOCAL });
     const source = await createPost(author.id);
     const repost = await db
@@ -711,23 +866,29 @@ const createProfile = async ({
 
 const createRemoteActor = async ({
   handle,
+  instanceId,
   instanceState = InstanceState.ACTIVE,
   sharedInbox = false,
 }: {
   handle: string;
+  instanceId?: string;
   instanceState?: InstanceState;
   sharedInbox?: boolean;
 }) => {
-  const instance = await db
-    .insert(Instances)
-    .values({
-      domain: `${crypto.randomUUID()}.remote.example`,
-      kind: InstanceKind.ACTIVITYPUB,
-      state: instanceState,
-    })
-    .returning()
-    .then(firstOrThrow);
-  testInstanceIds.push(instance.id);
+  const instance = instanceId
+    ? await db.select().from(Instances).where(eq(Instances.id, instanceId)).then(firstOrThrow)
+    : await db
+        .insert(Instances)
+        .values({
+          domain: `${crypto.randomUUID()}.remote.example`,
+          kind: InstanceKind.ACTIVITYPUB,
+          state: instanceState,
+        })
+        .returning()
+        .then(firstOrThrow);
+  if (!instanceId) {
+    testInstanceIds.push(instance.id);
+  }
   const profile = await createProfile({ handle, instanceId: instance.id });
   const actorUri = `https://${instance.domain}/users/${handle}`;
   const sharedInboxUri = sharedInbox ? `https://${instance.domain}/inbox` : null;
@@ -791,6 +952,45 @@ const createPost = async (
     .where(eq(Posts.id, post.id))
     .returning()
     .then(firstOrThrow);
+};
+
+const mentionDocument = (profileIds: readonly string[]) => ({
+  body: {
+    content: [
+      {
+        content: profileIds.map((profileId) => ({
+          attrs: { profileId },
+          type: 'mention' as const,
+        })),
+        type: 'paragraph' as const,
+      },
+    ],
+    type: 'doc' as const,
+  },
+  summary: null,
+  version: 1 as const,
+});
+
+const addPostMentions = async (postContentId: string, profileIds: readonly string[]) => {
+  await db
+    .update(PostContents)
+    .set({ document: mentionDocument(profileIds) })
+    .where(eq(PostContents.id, postContentId));
+  await db
+    .insert(PostMentions)
+    .values(profileIds.map((profileId) => ({ postContentId, profileId })));
+};
+
+const createPostContentWithMentions = async (postId: string, profileIds: readonly string[]) => {
+  const content = await db
+    .insert(PostContents)
+    .values({ document: mentionDocument(profileIds), postId })
+    .returning()
+    .then(firstOrThrow);
+  await db
+    .insert(PostMentions)
+    .values(profileIds.map((profileId) => ({ postContentId: content.id, profileId })));
+  return content.id;
 };
 
 const createMedia = async (

@@ -26,7 +26,8 @@ Warning, Sensitive Media, Media 구성은 [Post Content](./post-content.md)가 �
 
 이 조회 규칙에서 Author Profile과 Mentioned Profile의 `Origin`은 조건이 아니다. Local Post 작성에서
 `Mentioned Profiles`는 작성자가 명시적으로 선택하는 Visibility이며, Mentioned Profile 관계는 선택 사항이다. 관계가
-없으면 작성자만 읽을 수 있다. 이는 ActivityPub DIRECT audience 수신이나 outbound delivery를 지원한다는 뜻이 아니다.
+없으면 작성자만 읽을 수 있다. ActivityPub Local Note는 이 visibility로 역참조하거나 Featured에 포함하지 않으며,
+outbound Create와 Delete addressing은 아래 Local Note 표현 계약을 따른다.
 
 ## 속성
 
@@ -322,7 +323,7 @@ Notification이 소유하며, Quote·Reply Parent·Repost Source의 구조와 �
   type을 제공한다. document root의 Sensitive Media는 지원하는 ActivityPub sensitive 속성으로 투영한다. 이
   Local Note 계약은 PostContent node, mark, canonicalization 또는 validation을 다시 정의하지 않는다. Custom
   emoji는 이 표현에 포함하지 않는다. Quote 전용 표현은 아래 Quote federation 정책을 따른다.
-- Local Note 역참조(`GET`), Featured collection, outbound `Create`는 같은 Current Content의 Mention projection을
+- Local Note 역참조(`GET`), Featured collection, outbound `Create`는 같은 Current Content의 Mention body/tag projection을
   사용한다. 해당 revision의 typed Mention node와 같은 revision의 저장된 Mentioned Profile 관계가 정확히 연결되고,
   기존 Profile visibility 조건에서 Profile이 ACTIVE이며 연결 Instance가 SUSPENDED가 아닐 때만 본문 link와
   ActivityPub `Mention` tag를 제공한다. Local Profile의 본문 label은 실제 `@handle`이고 link는 configured Local
@@ -332,10 +333,12 @@ Notification이 소유하며, Quote·Reply Parent·Repost Source의 구조와 �
   occurrence를 유지하고 tag는 target당 하나만 제공한다.
 - Mention relation이 없거나 target을 resolve할 수 없거나, visibility 조건을 통과하지 못하거나, target이
   지원되지 않거나 malformed이면 본문에는 비링크 `@알 수 없는 사용자`를 표시하고 ActivityPub `Mention` tag를
-  생략한다. Projection 중 Remote Profile을 fetch하거나 refresh하지 않는다. 이는 `to`, `cc`, audience, recipients,
-  Mentioned Profiles/DIRECT visibility 또는 signed-fetch 권한, delivery routing, notification을 바꾸지 않는다.
-  Canonical Mention node는 `profileId`만 저장한다. 기존 글 backfill과 remote `Update(Note)` projection은 이 계약에
-  포함하지 않는다.
+  생략한다. Projection 중 Remote Profile을 fetch하거나 refresh하지 않는다. `DIRECT` Post의 outbound `Create(Note)`는
+  현재 Content의 eligible remote ActivityPub Mentioned Profile canonical actor URI만 `to`에 사용하고 `cc`, Public,
+  followers collection을 넣지 않는다. 해당 Post의 outbound `Delete`도 같은 remote Mentioned Profiles에게만 전달한다.
+  eligible remote actor URI가 없으면 두 Activity 모두 delivery recipient가 없다. 이 규칙은 DIRECT Note 역참조, Featured
+  membership, signed-fetch 권한, inbound DIRECT 처리나 Notification을 추가하지 않는다. Canonical Mention node는
+  `profileId`만 저장한다. 기존 글 backfill과 remote `Update(Note)` projection은 이 계약에 포함하지 않는다.
 - Reply Parent 관계가 있으면 Parent의 ActivityPub Post identity를 `inReplyTo`로 제공한다. Local Parent는
   같은 local Note URI 규칙을 사용하고 remote Parent는 저장된 ActivityPub Post URI를 사용한다. `inReplyTo`는
   requester별 Parent 조회 가능성에 따라 달라지지 않으며, Parent의 실제 표현은 Parent 자체의 역참조 권한으로
@@ -353,12 +356,12 @@ Notification이 소유하며, Quote·Reply Parent·Repost Source의 구조와 �
 
 ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
 
-| Post Visibility    | `to`                        | `cc`                        | Note 역참조 조건                                       |
-| ------------------ | --------------------------- | --------------------------- | ------------------------------------------------------ |
-| Public             | ActivityStreams Public      | Author followers collection | 인증 없이 허용                                         |
-| Unlisted           | Author followers collection | ActivityStreams Public      | 인증 없이 허용                                         |
-| Followers Only     | Author followers collection | 없음                        | Author 또는 established Follower의 signed fetch만 허용 |
-| Mentioned Profiles | 지원하지 않음               | 지원하지 않음               | 제공하지 않음                                          |
+| Post Visibility    | `to`                                | `cc`                        | Note 역참조 조건                                       |
+| ------------------ | ----------------------------------- | --------------------------- | ------------------------------------------------------ |
+| Public             | ActivityStreams Public              | Author followers collection | 인증 없이 허용                                         |
+| Unlisted           | Author followers collection         | ActivityStreams Public      | 인증 없이 허용                                         |
+| Followers Only     | Author followers collection         | 없음                        | Author 또는 established Follower의 signed fetch만 허용 |
+| Mentioned Profiles | remote Mentioned Profile actor URIs | 없음                        | 제공하지 않음                                          |
 
 - 수신 `Create(Note)`는 Note의 `to`·`cc`에서 인식 가능한 audience marker를 다음 우선순위로 분류한다. `to`에
   ActivityStreams Public이 있으면 Public, `to`에는 없고 `cc`에 Public이 있으면 Unlisted, 둘 다 없고 검증된
@@ -519,10 +522,11 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
   갱신·제거할 수 있다. 기존 Post Content 수정, 운영자 또는 일괄 backfill은 수행하지 않는다. 원문 anchor의 표시 문자열은 수신 중 resource
   budget 계산에만 사용하고 저장하지 않는다. renderer는 같은 revision의 Profile `relativeHandle`에서 표시 문자열을 파생하며, Profile을
   조회할 수 없으면 비링크 `@알 수 없는 사용자`를 표시한다. `pre`와 일반 rich-text editor는 지원하지 않는다.
-- ActivityPub DIRECT/limited audience의 inbound 처리와 outbound delivery는 별도 [PROD-359](https://linear.app/byulmaru/issue/PROD-359)
-  계약에서 정의한다. 기존 Local Note ActivityPub Mention content/tag projection은 [ADR 0030](../decisions/0030-post-content-mention-identity.md)과
-  [PROD-1102](https://linear.app/byulmaru/issue/PROD-1102)를 따르며, ActivityPub audience나 delivery를 추가하지 않는다. Custom emoji는
-  후속 계약에 남기고, inbound Note의 typed Mention 보존은 별도 수신 계약을 따른다.
+- ActivityPub DIRECT/limited audience의 inbound 처리는 별도 [PROD-359](https://linear.app/byulmaru/issue/PROD-359)
+  계약에서 정의한다. Local Note Mention body/tag projection은 [ADR 0030](../decisions/0030-post-content-mention-identity.md)과
+  [PROD-1102](https://linear.app/byulmaru/issue/PROD-1102)를 따르며, DIRECT outbound `Create(Note)` addressing은 위 규칙을
+  따른다. 다른 audience나 delivery는 Mention projection에서 파생하지 않는다. Custom emoji는 후속 계약에 남기고, inbound
+  Note의 typed Mention 보존은 별도 수신 계약을 따른다.
 - Quote 정책은 [ADR 0029](../decisions/0029-quote-consent-and-federation.md)과
   [PROD-902](https://linear.app/byulmaru/issue/PROD-902)를 따른다. 로컬 작성은 PROD-431,
   federation·승인 발급·철회는 PROD-924, 원격 Quote 수신·검증은 PROD-792가 구현한다.
