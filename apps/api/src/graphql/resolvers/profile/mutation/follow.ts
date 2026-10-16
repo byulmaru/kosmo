@@ -32,6 +32,7 @@ builder.mutationField('followProfile', (t) =>
     },
     resolve: async (_, { input }, ctx) => {
       const result = await followProfile({
+        actorAccountId: ctx.session.accountId,
         followerProfileId: ctx.session.profile.id,
         followeeProfileId: input.id.id,
       }).catch((error: unknown) => {

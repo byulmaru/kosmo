@@ -182,6 +182,7 @@ describe('Notification GraphQL Node boundary', () => {
       .insert(Notifications)
       .values({
         kind: NotificationKind.FOLLOW,
+        recipientAccountId: auth.account.id,
         recipientProfileId: recipient.id,
         sourceId: follow.id,
       })
@@ -238,10 +239,14 @@ describe('Notification GraphQL Node boundary', () => {
     assert.ok(await notificationReadAt(notification.id));
   });
 
-  test('keeps Notification kinds bound to their matching recipient column', async () => {
+  test('keeps Notification kinds bound to their matching GraphQL type and recipient scope', async () => {
     const auth = await createAuthenticatedSession();
     const related = await createProfile('cross-kind-recipient-related');
     const profileNotification = await createFollowNotification(auth.profile.id, related.id);
+    const operationalNotification = await createOperationalNotification(auth.account.id, {
+      href: '/maintenance',
+      title: 'Maintenance',
+    });
     const accountScopedFollow = await db
       .insert(Notifications)
       .values({
@@ -257,7 +262,7 @@ describe('Notification GraphQL Node boundary', () => {
       .values({
         data: { href: '/maintenance', title: 'Maintenance' },
         kind: NotificationKind.OPERATIONAL,
-        recipientAccountId: null,
+        recipientAccountId: auth.account.id,
         recipientProfileId: auth.profile.id,
         sourceId: crypto.randomUUID(),
       })
@@ -265,10 +270,9 @@ describe('Notification GraphQL Node boundary', () => {
       .then(firstOrThrow);
 
     const profileNotificationId = encodeGlobalId('FollowNotification', profileNotification.id);
-    const accountScopedFollowId = encodeGlobalId('FollowNotification', accountScopedFollow.id);
-    const profileScopedOperationalId = encodeGlobalId(
+    const operationalNotificationId = encodeGlobalId(
       'OperationalNotification',
-      profileScopedOperational.id,
+      operationalNotification.id,
     );
     const nodeResults = await requestGraphQL<{
       nodes: Array<{ __typename: string; id: string } | null>;
@@ -276,36 +280,60 @@ describe('Notification GraphQL Node boundary', () => {
       `query CrossKindNotificationNodes($ids: [ID!]!) {
         nodes(ids: $ids) { ... on Notification { __typename id } }
       }`,
-      { ids: [profileNotificationId, accountScopedFollowId, profileScopedOperationalId] },
+      {
+        ids: [
+          profileNotificationId,
+          encodeGlobalId('OperationalNotification', profileNotification.id),
+          operationalNotificationId,
+          encodeGlobalId('FollowNotification', operationalNotification.id),
+          encodeGlobalId('FollowNotification', accountScopedFollow.id),
+          encodeGlobalId('OperationalNotification', profileScopedOperational.id),
+        ],
+      },
       auth.token,
     );
     assertNoGraphQLErrors(nodeResults);
     assert.deepEqual(
       nodeResults.data?.nodes.map((node) => node && [node.__typename, node.id]),
-      [['FollowNotification', profileNotificationId], null, null],
+      [
+        ['FollowNotification', profileNotificationId],
+        null,
+        ['OperationalNotification', operationalNotificationId],
+        null,
+        null,
+        null,
+      ],
     );
 
     const profileId = encodeGlobalId('Profile', auth.profile.id);
     const connection = await loadNotificationConnection(profileId, auth.token, { first: 10 });
     assertNoGraphQLErrors(connection);
     assert.deepEqual(
-      connection.data?.node?.notifications.edges.map(({ node }) => node.id),
-      [profileNotificationId],
+      new Set(connection.data?.node?.notifications.edges.map(({ node }) => node.id)),
+      new Set([profileNotificationId, operationalNotificationId]),
     );
     const counts = await loadUnreadNotificationCounts([profileId], auth.token);
     assertNoGraphQLErrors(counts);
-    assert.equal(counts.data?.nodes[0]?.unreadNotificationCount, 1);
+    assert.equal(counts.data?.nodes[0]?.unreadNotificationCount, 2);
 
     const read = await markNotificationRead(
-      [profileNotificationId, accountScopedFollowId, profileScopedOperationalId],
+      [
+        profileNotificationId,
+        encodeGlobalId('OperationalNotification', profileNotification.id),
+        operationalNotificationId,
+        encodeGlobalId('FollowNotification', operationalNotification.id),
+        encodeGlobalId('FollowNotification', accountScopedFollow.id),
+        encodeGlobalId('OperationalNotification', profileScopedOperational.id),
+      ],
       auth.token,
     );
     assertNoGraphQLErrors(read);
     assert.deepEqual(
-      read.data?.markNotificationRead.notifications.map(({ id }) => id),
-      [profileNotificationId],
+      new Set(read.data?.markNotificationRead.notifications.map(({ id }) => id)),
+      new Set([profileNotificationId, operationalNotificationId]),
     );
     assert.ok(await notificationReadAt(profileNotification.id));
+    assert.ok(await notificationReadAt(operationalNotification.id));
     assert.equal(await notificationReadAt(accountScopedFollow.id), null);
     assert.equal(await notificationReadAt(profileScopedOperational.id), null);
   });
@@ -462,6 +490,362 @@ describe('Notification GraphQL Node boundary', () => {
       ),
       firstReadAts,
     );
+  });
+
+  test('isolates notifications for the same Profile by recipient Account', async () => {
+    const firstAuth = await createAuthenticatedSession();
+    const secondAuth = await createAuthenticatedSession();
+    const sharedProfile = await createProfile('shared-notification-recipient');
+    const firstRelated = await createProfile('shared-notification-first-source');
+    const secondRelated = await createProfile('shared-notification-second-source');
+    await addMembership(firstAuth.account.id, sharedProfile.id, AccountProfileRole.MEMBER);
+    await addMembership(secondAuth.account.id, sharedProfile.id, AccountProfileRole.OWNER);
+
+    const firstNotification = await createFollowNotification(
+      sharedProfile.id,
+      firstRelated.id,
+      undefined,
+      firstAuth.account.id,
+    );
+    const secondNotification = await createFollowNotification(
+      sharedProfile.id,
+      secondRelated.id,
+      undefined,
+      secondAuth.account.id,
+    );
+    const firstId = encodeGlobalId('FollowNotification', firstNotification.id);
+    const secondId = encodeGlobalId('FollowNotification', secondNotification.id);
+    const sharedProfileId = encodeGlobalId('Profile', sharedProfile.id);
+
+    assert.deepEqual(await loadNodes([firstId, secondId], firstAuth.token), [
+      { id: firstId },
+      null,
+    ]);
+    assert.deepEqual(await loadNodes([firstId, secondId], secondAuth.token), [
+      null,
+      { id: secondId },
+    ]);
+
+    const [firstFeed, secondFeed] = await Promise.all([
+      loadNotificationConnection(sharedProfileId, firstAuth.token, { first: 10 }),
+      loadNotificationConnection(sharedProfileId, secondAuth.token, { first: 10 }),
+    ]);
+    assertNoGraphQLErrors(firstFeed);
+    assertNoGraphQLErrors(secondFeed);
+    assert.deepEqual(
+      firstFeed.data?.node?.notifications.edges.map(({ node }) => node.id),
+      [firstId],
+    );
+    assert.deepEqual(
+      secondFeed.data?.node?.notifications.edges.map(({ node }) => node.id),
+      [secondId],
+    );
+
+    const [firstCount, secondCount] = await Promise.all([
+      loadUnreadNotificationCounts([sharedProfileId], firstAuth.token),
+      loadUnreadNotificationCounts([sharedProfileId], secondAuth.token),
+    ]);
+    assertNoGraphQLErrors(firstCount);
+    assertNoGraphQLErrors(secondCount);
+    assert.equal(firstCount.data?.nodes[0]?.unreadNotificationCount, 1);
+    assert.equal(secondCount.data?.nodes[0]?.unreadNotificationCount, 1);
+
+    const firstRead = await markNotificationRead([firstId, secondId], firstAuth.token);
+    assertNoGraphQLErrors(firstRead);
+    assert.deepEqual(
+      firstRead.data?.markNotificationRead.notifications.map(({ id }) => id),
+      [firstId],
+    );
+    assert.ok(await notificationReadAt(firstNotification.id));
+    assert.equal(await notificationReadAt(secondNotification.id), null);
+
+    const secondRead = await markNotificationRead([firstId, secondId], secondAuth.token);
+    assertNoGraphQLErrors(secondRead);
+    assert.deepEqual(
+      secondRead.data?.markNotificationRead.notifications.map(({ id }) => id),
+      [secondId],
+    );
+    assert.ok(await notificationReadAt(secondNotification.id));
+  });
+
+  test('keeps Profile-targeted notifications and read state independent within one Account', async () => {
+    const auth = await createAuthenticatedSession();
+    const secondRecipient = await createProfile('independent-notification-recipient');
+    const firstRelated = await createProfile('independent-notification-first-source');
+    const secondRelated = await createProfile('independent-notification-second-source');
+    await addMembership(auth.account.id, secondRecipient.id, AccountProfileRole.MEMBER);
+
+    const firstNotification = await createFollowNotification(
+      auth.profile.id,
+      firstRelated.id,
+      undefined,
+      auth.account.id,
+    );
+    const secondNotification = await createFollowNotification(
+      secondRecipient.id,
+      secondRelated.id,
+      undefined,
+      auth.account.id,
+    );
+    const firstId = encodeGlobalId('FollowNotification', firstNotification.id);
+    const firstRecipientId = encodeGlobalId('Profile', auth.profile.id);
+    const secondRecipientId = encodeGlobalId('Profile', secondRecipient.id);
+    assert.notEqual(firstNotification.id, secondNotification.id);
+
+    const firstRead = await markNotificationRead([firstId], auth.token);
+    assertNoGraphQLErrors(firstRead);
+    assert.deepEqual(
+      firstRead.data?.markNotificationRead.notifications.map(({ id }) => id),
+      [firstId],
+    );
+    assert.deepEqual(
+      firstRead.data?.markNotificationRead.recipientProfiles.map(({ id }) => id),
+      [firstRecipientId],
+    );
+    assert.ok(await notificationReadAt(firstNotification.id));
+    assert.equal(await notificationReadAt(secondNotification.id), null);
+
+    const counts = await loadUnreadNotificationCounts(
+      [firstRecipientId, secondRecipientId],
+      auth.token,
+    );
+    assertNoGraphQLErrors(counts);
+    assert.deepEqual(
+      counts.data?.nodes.map((profile) => profile?.unreadNotificationCount),
+      [0, 1],
+    );
+  });
+
+  test('hides a Profile notification after membership leave and preserves it on rejoin', async () => {
+    const auth = await createAuthenticatedSession();
+    const related = await createProfile('membership-notification-source');
+    const notification = await createFollowNotification(
+      auth.profile.id,
+      related.id,
+      undefined,
+      auth.account.id,
+    );
+    const notificationId = encodeGlobalId('FollowNotification', notification.id);
+    const profileId = encodeGlobalId('Profile', auth.profile.id);
+
+    const initialRead = await markNotificationRead([notificationId], auth.token);
+    assertNoGraphQLErrors(initialRead);
+    const originalReadAt = initialRead.data?.markNotificationRead.notifications[0]?.readAt;
+    assert.ok(originalReadAt);
+
+    await db
+      .delete(AccountProfiles)
+      .where(
+        and(
+          eq(AccountProfiles.accountId, auth.account.id),
+          eq(AccountProfiles.profileId, auth.profile.id),
+        ),
+      );
+
+    assert.deepEqual(await loadNodes([notificationId], auth.token), [null]);
+    const hiddenRead = await markNotificationRead([notificationId], auth.token);
+    assertNoGraphQLErrors(hiddenRead);
+    assert.deepEqual(hiddenRead.data?.markNotificationRead, {
+      notifications: [],
+      recipientProfiles: [],
+    });
+    assert.equal(
+      (await notificationReadAt(notification.id))?.toString({ smallestUnit: 'millisecond' }),
+      originalReadAt,
+    );
+
+    await addMembership(auth.account.id, auth.profile.id, AccountProfileRole.OWNER);
+    assert.deepEqual(await loadNodes([notificationId], auth.token), [{ id: notificationId }]);
+
+    const restored = await loadNotificationConnection(profileId, auth.token, { first: 10 });
+    assertNoGraphQLErrors(restored);
+    assert.deepEqual(
+      restored.data?.node?.notifications.edges.map(({ node }) => [node.id, node.readAt]),
+      [[notificationId, originalReadAt]],
+    );
+    const count = await loadUnreadNotificationCounts([profileId], auth.token);
+    assertNoGraphQLErrors(count);
+    assert.equal(count.data?.nodes[0]?.unreadNotificationCount, 0);
+    assert.equal(
+      (await notificationReadAt(notification.id))?.toString({ smallestUnit: 'millisecond' }),
+      originalReadAt,
+    );
+  });
+
+  test('paginates Notifications by createdAt and id and accepts only visible legacy ID cursors', async () => {
+    const auth = await createAuthenticatedSession();
+    const otherAuth = await createAuthenticatedSession();
+    await addMembership(otherAuth.account.id, auth.profile.id, AccountProfileRole.MEMBER);
+
+    const oldTimestamp = Temporal.Instant.from('2026-10-15T00:00:00Z');
+    const newTimestamp = Temporal.Instant.from('2026-10-16T00:00:00Z');
+    const olderLowId = '00000000-0000-8006-8000-000000000100';
+    const olderHighId = '00000000-0000-8006-8000-000000000200';
+    const newerLowId = '00000000-0000-8006-8000-000000000050';
+    await db.insert(Notifications).values([
+      {
+        id: olderLowId,
+        kind: NotificationKind.FOLLOW,
+        recipientAccountId: auth.account.id,
+        recipientProfileId: auth.profile.id,
+        sourceId: crypto.randomUUID(),
+        createdAt: oldTimestamp,
+      },
+      {
+        id: olderHighId,
+        kind: NotificationKind.FOLLOW,
+        recipientAccountId: auth.account.id,
+        recipientProfileId: auth.profile.id,
+        sourceId: crypto.randomUUID(),
+        createdAt: oldTimestamp,
+      },
+      {
+        id: newerLowId,
+        kind: NotificationKind.FOLLOW,
+        recipientAccountId: auth.account.id,
+        recipientProfileId: auth.profile.id,
+        sourceId: crypto.randomUUID(),
+        createdAt: newTimestamp,
+      },
+      {
+        kind: NotificationKind.FOLLOW,
+        recipientAccountId: otherAuth.account.id,
+        recipientProfileId: auth.profile.id,
+        sourceId: crypto.randomUUID(),
+      },
+    ]);
+
+    const profileId = encodeGlobalId('Profile', auth.profile.id);
+    const firstPage = await loadNotificationConnection(profileId, auth.token, { first: 2 });
+    assertNoGraphQLErrors(firstPage);
+    const firstEdges = firstPage.data?.node?.notifications.edges ?? [];
+    assert.deepEqual(
+      firstEdges.map(({ node }) => node.id),
+      [newerLowId, olderHighId].map((id) => encodeGlobalId('FollowNotification', id)),
+    );
+    assert.equal(firstPage.data?.node?.notifications.pageInfo.hasNextPage, true);
+
+    const secondPage = await loadNotificationConnection(profileId, auth.token, {
+      first: 2,
+      after: firstEdges[1]?.cursor,
+    });
+    assertNoGraphQLErrors(secondPage);
+    assert.deepEqual(
+      secondPage.data?.node?.notifications.edges.map(({ node }) => node.id),
+      [encodeGlobalId('FollowNotification', olderLowId)],
+    );
+    assert.equal(secondPage.data?.node?.notifications.pageInfo.hasNextPage, false);
+
+    const legacyCursorPage = await loadNotificationConnection(profileId, auth.token, {
+      first: 2,
+      after: olderHighId,
+    });
+    assertNoGraphQLErrors(legacyCursorPage);
+    assert.deepEqual(
+      legacyCursorPage.data?.node?.notifications.edges.map(({ node }) => node.id),
+      [encodeGlobalId('FollowNotification', olderLowId)],
+    );
+
+    for (const invalidCursor of [crypto.randomUUID(), '00000000-0000-8006-8000-000000000999']) {
+      const result = await loadNotificationConnection(profileId, auth.token, {
+        first: 2,
+        after: invalidCursor,
+      });
+      assert.equal(result.errors?.[0]?.extensions?.code, 'VALIDATION');
+      assert.equal(result.data?.node, null);
+    }
+
+    const unauthorizedCursor = await db
+      .insert(Notifications)
+      .values({
+        kind: NotificationKind.FOLLOW,
+        recipientAccountId: otherAuth.account.id,
+        recipientProfileId: auth.profile.id,
+        sourceId: crypto.randomUUID(),
+      })
+      .returning()
+      .then(firstOrThrow);
+    const unauthorizedCursorResult = await loadNotificationConnection(profileId, auth.token, {
+      first: 2,
+      after: unauthorizedCursor.id,
+    });
+    assert.equal(unauthorizedCursorResult.errors?.[0]?.extensions?.code, 'VALIDATION');
+    assert.equal(unauthorizedCursorResult.data?.node, null);
+  });
+
+  test('keeps legacy profile-only Notifications visible to current Profile members', async () => {
+    const auth = await createAuthenticatedSession();
+    const member = await createAuthenticatedSession();
+    await addMembership(member.account.id, auth.profile.id, AccountProfileRole.MEMBER);
+
+    const older = await db
+      .insert(Notifications)
+      .values({
+        kind: NotificationKind.FOLLOW,
+        recipientAccountId: null,
+        recipientProfileId: auth.profile.id,
+        sourceId: crypto.randomUUID(),
+        createdAt: Temporal.Instant.from('2026-10-15T00:00:00Z'),
+      })
+      .returning()
+      .then(firstOrThrow);
+    const newer = await db
+      .insert(Notifications)
+      .values({
+        kind: NotificationKind.FOLLOW,
+        recipientAccountId: null,
+        recipientProfileId: auth.profile.id,
+        sourceId: crypto.randomUUID(),
+        createdAt: Temporal.Instant.from('2026-10-16T00:00:00Z'),
+      })
+      .returning()
+      .then(firstOrThrow);
+
+    const profileId = encodeGlobalId('Profile', auth.profile.id);
+    const notificationIds = [older, newer].map(({ id }) =>
+      encodeGlobalId('FollowNotification', id),
+    );
+    assert.deepEqual(
+      await loadNodes(notificationIds, member.token),
+      notificationIds.map((id) => ({ id })),
+    );
+
+    const firstPage = await loadNotificationConnection(profileId, member.token, { first: 1 });
+    assertNoGraphQLErrors(firstPage);
+    assert.deepEqual(
+      firstPage.data?.node?.notifications.edges.map(({ node }) => node.id),
+      [encodeGlobalId('FollowNotification', newer.id)],
+    );
+    assert.equal(firstPage.data?.node?.notifications.pageInfo.hasNextPage, true);
+
+    const rawUuidCursorPage = await loadNotificationConnection(profileId, member.token, {
+      first: 1,
+      after: newer.id,
+    });
+    assertNoGraphQLErrors(rawUuidCursorPage);
+    assert.deepEqual(
+      rawUuidCursorPage.data?.node?.notifications.edges.map(({ node }) => node.id),
+      [encodeGlobalId('FollowNotification', older.id)],
+    );
+
+    const count = await loadUnreadNotificationCounts([profileId], member.token);
+    assertNoGraphQLErrors(count);
+    assert.equal(count.data?.nodes[0]?.unreadNotificationCount, 2);
+
+    const read = await markNotificationRead(
+      [encodeGlobalId('FollowNotification', older.id)],
+      member.token,
+    );
+    assertNoGraphQLErrors(read);
+    assert.deepEqual(
+      read.data?.markNotificationRead.notifications.map(({ id }) => id),
+      [encodeGlobalId('FollowNotification', older.id)],
+    );
+    assert.ok(await notificationReadAt(older.id));
+
+    const countAfterRead = await loadUnreadNotificationCounts([profileId], member.token);
+    assertNoGraphQLErrors(countAfterRead);
+    assert.equal(countAfterRead.data?.nodes[0]?.unreadNotificationCount, 1);
   });
 
   test('ACTIVE Account without Profiles can read its own Operational Notifications', async () => {
@@ -771,6 +1155,7 @@ describe('Notification GraphQL Node boundary', () => {
       .insert(Notifications)
       .values({
         kind: NotificationKind.FOLLOW_REQUEST,
+        recipientAccountId: await notificationRecipientAccountId(recipient.id),
         recipientProfileId: recipient.id,
         sourceId: request.id,
       })
@@ -877,6 +1262,7 @@ describe('Notification GraphQL Node boundary', () => {
       .insert(Notifications)
       .values({
         kind: NotificationKind.FOLLOW_REQUEST,
+        recipientAccountId: await notificationRecipientAccountId(recipient.id),
         recipientProfileId: recipient.id,
         sourceId: request.id,
       })
@@ -1030,6 +1416,7 @@ describe('Notification GraphQL Node boundary', () => {
       .insert(Notifications)
       .values({
         kind: NotificationKind.FOLLOW_REQUEST,
+        recipientAccountId: await notificationRecipientAccountId(recipient.id),
         recipientProfileId: recipient.id,
         sourceId: visibleRequest.id,
       })
@@ -1046,6 +1433,7 @@ describe('Notification GraphQL Node boundary', () => {
       .insert(Notifications)
       .values({
         kind: NotificationKind.FOLLOW_REQUEST,
+        recipientAccountId: await notificationRecipientAccountId(recipient.id),
         recipientProfileId: recipient.id,
         sourceId: hiddenRequest.id,
       })
@@ -1062,6 +1450,7 @@ describe('Notification GraphQL Node boundary', () => {
       .insert(Notifications)
       .values({
         kind: NotificationKind.FOLLOW_REQUEST,
+        recipientAccountId: await notificationRecipientAccountId(recipient.id),
         recipientProfileId: recipient.id,
         sourceId: mismatchedRequest.id,
       })
@@ -1072,6 +1461,7 @@ describe('Notification GraphQL Node boundary', () => {
       .insert(Notifications)
       .values({
         kind: NotificationKind.FOLLOW_REQUEST,
+        recipientAccountId: await notificationRecipientAccountId(recipient.id),
         recipientProfileId: recipient.id,
         sourceId: crypto.randomUUID(),
       })
@@ -1087,6 +1477,7 @@ describe('Notification GraphQL Node boundary', () => {
       .insert(Notifications)
       .values({
         kind: NotificationKind.FOLLOW_REQUEST,
+        recipientAccountId: await notificationRecipientAccountId(recipient.id),
         recipientProfileId: recipient.id,
         sourceId: deletedRequest.id,
       })
@@ -1229,6 +1620,7 @@ describe('Notification GraphQL Node boundary', () => {
           .then(firstOrThrow);
         await db.insert(Notifications).values({
           kind: NotificationKind.REPLY,
+          recipientAccountId: await notificationRecipientAccountId(recipient.id),
           recipientProfileId: recipient.id,
           sourceId: reply.id,
         });
@@ -1433,6 +1825,7 @@ describe('Notification GraphQL Node boundary', () => {
       .insert(Notifications)
       .values({
         kind: NotificationKind.QUOTE,
+        recipientAccountId: await notificationRecipientAccountId(recipient.id),
         recipientProfileId: recipient.id,
         sourceId: quote.id,
       })
@@ -1646,6 +2039,7 @@ describe('Notification GraphQL Node boundary', () => {
       .insert(Notifications)
       .values({
         kind: NotificationKind.QUOTE,
+        recipientAccountId: await notificationRecipientAccountId(recipient.id),
         recipientProfileId: recipient.id,
         sourceId: quote.id,
       })
@@ -1783,6 +2177,8 @@ describe('Notification GraphQL Node boundary', () => {
     const recipient = await createProfile('reply-hidden-recipient');
     await addMembership(viewer.account.id, recipient.id, AccountProfileRole.OWNER);
     const parent = await createContentPost(recipient.id);
+    const olderCreatedAt = Temporal.Instant.from('2026-10-15T00:00:00Z');
+    const newerCreatedAt = Temporal.Instant.from('2026-10-16T00:00:00Z');
     const visibleAuthor = await createAuthenticatedSession();
     assertNoGraphQLErrors(await requestCreateReply(parent.id, visibleAuthor.token));
     const visible = await db
@@ -1794,6 +2190,7 @@ describe('Notification GraphQL Node boundary', () => {
       recipient.id,
       visible.id,
       '00000000-0000-8006-8000-000000000800',
+      olderCreatedAt,
     );
     const hiddenAuthor = await createAuthenticatedSession();
     assertNoGraphQLErrors(await requestCreateReply(parent.id, hiddenAuthor.token));
@@ -1806,6 +2203,7 @@ describe('Notification GraphQL Node boundary', () => {
       recipient.id,
       hidden.id,
       '00000000-0000-8006-8000-000000000900',
+      newerCreatedAt,
     );
     await db
       .update(Profiles)
@@ -2159,6 +2557,7 @@ describe('Notification GraphQL Node boundary', () => {
 
     await db.insert(Notifications).values({
       kind: NotificationKind.FOLLOW,
+      recipientAccountId: auth.account.id,
       recipientProfileId: recipient.id,
       sourceId: crypto.randomUUID(),
     });
@@ -2168,6 +2567,7 @@ describe('Notification GraphQL Node boundary', () => {
     const mismatchSource = await createFollow(actualFollowee.id, mismatchRelated.id);
     await db.insert(Notifications).values({
       kind: NotificationKind.FOLLOW,
+      recipientAccountId: auth.account.id,
       recipientProfileId: recipient.id,
       sourceId: mismatchSource.id,
     });
@@ -2265,16 +2665,26 @@ describe('Notification GraphQL Node boundary', () => {
     assert.equal(inactiveResult.data?.node, null);
   });
 
-  test('paginates recipient-owned notifications by ID including unavailable sources', async () => {
+  test('paginates recipient-owned Notifications chronologically including unavailable sources', async () => {
     const auth = await createAuthenticatedSession();
     const recipient = await createProfile('page-recipient');
     await addMembership(auth.account.id, recipient.id, AccountProfileRole.OWNER);
+    const pageTimes = {
+      newest: Temporal.Instant.from('2026-10-16T00:00:05Z'),
+      missingSource: Temporal.Instant.from('2026-10-16T00:00:04Z'),
+      read: Temporal.Instant.from('2026-10-16T00:00:03Z'),
+      mismatch: Temporal.Instant.from('2026-10-16T00:00:02Z'),
+      oldest: Temporal.Instant.from('2026-10-16T00:00:01Z'),
+      hidden: Temporal.Instant.from('2026-10-16T00:00:00Z'),
+    };
 
     const newestRelated = await createProfile('page-newest-related');
     const newest = await createFollowNotification(
       recipient.id,
       newestRelated.id,
       '00000000-0000-8006-8000-000000000900',
+      auth.account.id,
+      pageTimes.newest,
     );
 
     const missingSource = await db
@@ -2282,8 +2692,10 @@ describe('Notification GraphQL Node boundary', () => {
       .values({
         id: '00000000-0000-8006-8000-000000000800',
         kind: NotificationKind.FOLLOW,
+        recipientAccountId: auth.account.id,
         recipientProfileId: recipient.id,
         sourceId: crypto.randomUUID(),
+        createdAt: pageTimes.missingSource,
       })
       .returning()
       .then(firstOrThrow);
@@ -2293,6 +2705,8 @@ describe('Notification GraphQL Node boundary', () => {
       recipient.id,
       readRelated.id,
       '00000000-0000-8006-8000-000000000700',
+      auth.account.id,
+      pageTimes.read,
     );
     const readResult = await markNotificationRead(
       [encodeGlobalId('FollowNotification', read.id)],
@@ -2308,8 +2722,10 @@ describe('Notification GraphQL Node boundary', () => {
       .values({
         id: '00000000-0000-8006-8000-000000000600',
         kind: NotificationKind.FOLLOW,
+        recipientAccountId: auth.account.id,
         recipientProfileId: recipient.id,
         sourceId: mismatchSource.id,
+        createdAt: pageTimes.mismatch,
       })
       .returning()
       .then(firstOrThrow);
@@ -2319,6 +2735,8 @@ describe('Notification GraphQL Node boundary', () => {
       recipient.id,
       oldestRelated.id,
       '00000000-0000-8006-8000-000000000500',
+      auth.account.id,
+      pageTimes.oldest,
     );
 
     const hiddenRelated = await createProfile('page-hidden-related');
@@ -2326,6 +2744,8 @@ describe('Notification GraphQL Node boundary', () => {
       recipient.id,
       hiddenRelated.id,
       '00000000-0000-8006-8000-000000000400',
+      auth.account.id,
+      pageTimes.hidden,
     );
     await db
       .update(Profiles)
@@ -2398,19 +2818,30 @@ describe('Notification GraphQL Node boundary', () => {
     const recipient = await createProfile('mixed-page-recipient');
     const author = await createProfile('mixed-page-author');
     await addMembership(auth.account.id, recipient.id, AccountProfileRole.OWNER);
+    const pageTimes = {
+      newest: Temporal.Instant.from('2026-10-16T00:00:05Z'),
+      unavailableRepost: Temporal.Instant.from('2026-10-16T00:00:04Z'),
+      reaction: Temporal.Instant.from('2026-10-16T00:00:03Z'),
+      repost: Temporal.Instant.from('2026-10-16T00:00:02Z'),
+      oldest: Temporal.Instant.from('2026-10-16T00:00:01Z'),
+    };
 
     const newest = await createFollowNotification(
       recipient.id,
       author.id,
       '00000000-0000-8006-8000-000000000900',
+      auth.account.id,
+      pageTimes.newest,
     );
     const unavailableRepost = await db
       .insert(Notifications)
       .values({
         id: '00000000-0000-8006-8000-000000000800',
         kind: NotificationKind.REPOST,
+        recipientAccountId: auth.account.id,
         recipientProfileId: recipient.id,
         sourceId: crypto.randomUUID(),
+        createdAt: pageTimes.unavailableRepost,
       })
       .returning()
       .then(firstOrThrow);
@@ -2419,16 +2850,20 @@ describe('Notification GraphQL Node boundary', () => {
       author.id,
       '👀',
       '00000000-0000-8006-8000-000000000700',
+      pageTimes.reaction,
     );
     const repost = await createRepostNotification(
       recipient.id,
       author.id,
       '00000000-0000-8006-8000-000000000600',
+      pageTimes.repost,
     );
     const oldest = await createFollowNotification(
       recipient.id,
       await createProfile('mixed-page-oldest-author').then(({ id }) => id),
       '00000000-0000-8006-8000-000000000500',
+      auth.account.id,
+      pageTimes.oldest,
     );
     const profileId = encodeGlobalId('Profile', recipient.id);
 
@@ -2509,6 +2944,7 @@ describe('Notification GraphQL Node boundary', () => {
       .insert(Notifications)
       .values({
         kind: NotificationKind.FOLLOW,
+        recipientAccountId: auth.account.id,
         recipientProfileId: missingSourceRecipient.id,
         sourceId: crypto.randomUUID(),
       })
@@ -2524,6 +2960,7 @@ describe('Notification GraphQL Node boundary', () => {
       .insert(Notifications)
       .values({
         kind: NotificationKind.FOLLOW,
+        recipientAccountId: auth.account.id,
         recipientProfileId: mismatchRecipient.id,
         sourceId: mismatchSource.id,
       })
@@ -2572,6 +3009,7 @@ describe('Notification GraphQL Node boundary', () => {
       .insert(Notifications)
       .values({
         kind: NotificationKind.REACTION,
+        recipientAccountId: auth.account.id,
         recipientProfileId: recipient.id,
         sourceId: crypto.randomUUID(),
       })
@@ -2582,7 +3020,7 @@ describe('Notification GraphQL Node boundary', () => {
     const mismatchSource = await createReactionNotification(actualRecipient.id, author.id, '👀');
     const mismatch = await db
       .update(Notifications)
-      .set({ recipientProfileId: recipient.id })
+      .set({ recipientAccountId: auth.account.id, recipientProfileId: recipient.id })
       .where(eq(Notifications.id, mismatchSource.notification.id))
       .returning()
       .then(firstOrThrow);
@@ -2720,6 +3158,7 @@ describe('Notification GraphQL Node boundary', () => {
       .insert(Notifications)
       .values({
         kind: NotificationKind.REPOST,
+        recipientAccountId: auth.account.id,
         recipientProfileId: recipient.id,
         sourceId: crypto.randomUUID(),
       })
@@ -2730,7 +3169,7 @@ describe('Notification GraphQL Node boundary', () => {
     const mismatchSource = await createRepostNotification(actualRecipient.id, author.id);
     const mismatch = await db
       .update(Notifications)
-      .set({ recipientProfileId: recipient.id })
+      .set({ recipientAccountId: auth.account.id, recipientProfileId: recipient.id })
       .where(eq(Notifications.id, mismatchSource.notification.id))
       .returning()
       .then(firstOrThrow);
@@ -2825,6 +3264,7 @@ describe('Notification GraphQL Node boundary', () => {
       .insert(Notifications)
       .values({
         kind: NotificationKind.REPOST,
+        recipientAccountId: auth.account.id,
         recipientProfileId: recipient.id,
         sourceId: repost.id,
       })
@@ -3135,6 +3575,7 @@ describe('Notification GraphQL Node boundary', () => {
       .insert(Notifications)
       .values({
         kind: NotificationKind.FOLLOW,
+        recipientAccountId: auth.account.id,
         recipientProfileId: missingSourceRecipient.id,
         sourceId: crypto.randomUUID(),
       })
@@ -3150,6 +3591,7 @@ describe('Notification GraphQL Node boundary', () => {
       .insert(Notifications)
       .values({
         kind: NotificationKind.FOLLOW,
+        recipientAccountId: auth.account.id,
         recipientProfileId: mismatchRecipient.id,
         sourceId: mismatchSource.id,
       })
@@ -3425,6 +3867,29 @@ const createProfile = (name: string) => {
 const addMembership = (accountId: string, profileId: string, role: AccountProfileRole) =>
   db.insert(AccountProfiles).values({ accountId, profileId, role });
 
+const notificationRecipientAccountId = async (profileId: string) => {
+  const [membership] = await db
+    .select({ accountId: AccountProfiles.accountId })
+    .from(AccountProfiles)
+    .where(eq(AccountProfiles.profileId, profileId))
+    .limit(1);
+  if (membership) {
+    return membership.accountId;
+  }
+
+  const account = await db
+    .insert(Accounts)
+    .values({
+      displayName: 'Notification Fixture Account',
+      oidcSubject: `notification-fixture-${crypto.randomUUID()}`,
+      state: AccountState.ACTIVE,
+    })
+    .returning()
+    .then(firstOrThrow);
+  await addMembership(account.id, profileId, AccountProfileRole.OWNER);
+  return account.id;
+};
+
 const createFollow = (followeeProfileId: string, followerProfileId: string) =>
   db
     .insert(ProfileFollows)
@@ -3436,11 +3901,21 @@ const createFollowNotification = async (
   recipientProfileId: string,
   relatedProfileId: string,
   id?: string,
+  recipientAccountId?: string,
+  createdAt?: Temporal.Instant,
 ) => {
   const source = await createFollow(recipientProfileId, relatedProfileId);
   return db
     .insert(Notifications)
-    .values({ id, kind: NotificationKind.FOLLOW, recipientProfileId, sourceId: source.id })
+    .values({
+      id,
+      kind: NotificationKind.FOLLOW,
+      recipientAccountId:
+        recipientAccountId ?? (await notificationRecipientAccountId(recipientProfileId)),
+      recipientProfileId,
+      sourceId: source.id,
+      ...(createdAt === undefined ? {} : { createdAt }),
+    })
     .returning()
     .then(firstOrThrow);
 };
@@ -3449,14 +3924,17 @@ const createReplyNotificationFixture = async (
   recipientProfileId: string,
   sourceId: string,
   id?: string,
+  createdAt?: Temporal.Instant,
 ) =>
   db
     .insert(Notifications)
     .values({
       id,
       kind: NotificationKind.REPLY,
+      recipientAccountId: await notificationRecipientAccountId(recipientProfileId),
       recipientProfileId,
       sourceId,
+      ...(createdAt === undefined ? {} : { createdAt }),
     })
     .returning()
     .then(firstOrThrow);
@@ -3491,6 +3969,7 @@ const createQuoteNotificationFixture = async (
     .insert(Notifications)
     .values({
       kind: NotificationKind.QUOTE,
+      recipientAccountId: await notificationRecipientAccountId(recipientProfileId),
       recipientProfileId,
       sourceId: quote.id,
     })
@@ -3505,6 +3984,7 @@ const createMentionNotification = async (recipientProfileId: string, sourceId: s
     .insert(Notifications)
     .values({
       kind: NotificationKind.MENTION,
+      recipientAccountId: await notificationRecipientAccountId(recipientProfileId),
       recipientProfileId,
       sourceId,
     })
@@ -3516,6 +3996,7 @@ const createReactionNotification = async (
   authorProfileId: string,
   type: string,
   id?: string,
+  createdAt?: Temporal.Instant,
 ) => {
   const post = await db
     .insert(Posts)
@@ -3536,8 +4017,10 @@ const createReactionNotification = async (
     .values({
       id,
       kind: NotificationKind.REACTION,
+      recipientAccountId: await notificationRecipientAccountId(recipientProfileId),
       recipientProfileId,
       sourceId: reaction.id,
+      ...(createdAt === undefined ? {} : { createdAt }),
     })
     .returning()
     .then(firstOrThrow);
@@ -3575,6 +4058,7 @@ const createRepostNotification = async (
   recipientProfileId: string,
   authorProfileId: string,
   id?: string,
+  createdAt?: Temporal.Instant,
 ) => {
   const post = await createContentPost(recipientProfileId);
   const repost = await db
@@ -3592,8 +4076,10 @@ const createRepostNotification = async (
     .values({
       id,
       kind: NotificationKind.REPOST,
+      recipientAccountId: await notificationRecipientAccountId(recipientProfileId),
       recipientProfileId,
       sourceId: repost.id,
+      ...(createdAt === undefined ? {} : { createdAt }),
     })
     .returning()
     .then(firstOrThrow);

@@ -20,15 +20,21 @@ type FollowProfileResult = {
 };
 
 export const followProfile = async ({
+  actorAccountId,
   followerProfileId,
   followeeProfileId,
 }: {
+  readonly actorAccountId?: string;
   readonly followerProfileId: string;
   readonly followeeProfileId: string;
 }): Promise<FollowProfileResult> => {
   const transition = await executeProfileFollowPairTransition({
     pair: { followerProfileId, followeeProfileId },
-    command: { kind: 'FOLLOW', origin: 'LOCAL' },
+    command: {
+      kind: 'FOLLOW',
+      origin: 'LOCAL',
+      ...(actorAccountId === undefined ? {} : { actorAccountId }),
+    },
   });
   const result = transition.result;
   if (result.commandKind !== 'FOLLOW') {
