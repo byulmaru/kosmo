@@ -3490,7 +3490,7 @@
       "table": "notification_quote_judgment"
     },
     {
-      "nameExplicit": false,
+      "nameExplicit": true,
       "columns": [
         {
           "value": "recipient_account_id",
@@ -3526,7 +3526,7 @@
       "with": "",
       "method": "btree",
       "concurrently": false,
-      "name": "notification_recipient_account_id_recipient_profile_id_kind_source_id_index",
+      "name": "notification_account_profile_kind_source_unique",
       "entityType": "indexes",
       "schema": "public",
       "table": "notification"

@@ -74,7 +74,7 @@ WHERE notification."recipient_profile_id" IS NOT NULL
 ORDER BY notification."id", account_profile."account_id";--> statement-breakpoint
 ALTER TABLE "notification" ALTER COLUMN "recipient_account_id" SET NOT NULL;--> statement-breakpoint
 DROP INDEX "notification_recipient_profile_id_id_index";--> statement-breakpoint
-CREATE UNIQUE INDEX "notification_recipient_account_id_recipient_profile_id_kind_source_id_index" ON "notification" ("recipient_account_id","recipient_profile_id","kind","source_id") WHERE "recipient_profile_id" IS NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "notification_account_profile_kind_source_unique" ON "notification" ("recipient_account_id","recipient_profile_id","kind","source_id") WHERE "recipient_profile_id" IS NOT NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX "notification_recipient_account_id_kind_source_id_index" ON "notification" ("recipient_account_id","kind","source_id") WHERE "recipient_profile_id" IS NULL;--> statement-breakpoint
 CREATE INDEX "notification_recipient_profile_id_created_at_id_index" ON "notification" ("recipient_profile_id","created_at" DESC NULLS LAST,"id" DESC NULLS LAST);--> statement-breakpoint
 CREATE INDEX "notification_recipient_account_id_created_at_id_index" ON "notification" ("recipient_account_id","created_at" DESC NULLS LAST,"id" DESC NULLS LAST);--> statement-breakpoint
