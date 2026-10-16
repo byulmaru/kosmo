@@ -1,4 +1,4 @@
-import { Bell, BellOff, RefreshCw } from 'lucide-react-native';
+import { RefreshCw, Volume2, VolumeOff } from 'lucide-react-native';
 import { useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { graphql, useMutation, useRefetchableFragment } from 'react-relay';
@@ -351,9 +351,9 @@ export function ProfileTagMuteAction({ hashtag }: Props) {
               size="small"
             />
           ) : muted ? (
-            <BellOff color={theme.foregroundPrimary} size={iconSizes[24]} />
+            <VolumeOff color={theme.foregroundPrimary} size={iconSizes[24]} />
           ) : (
-            <Bell color={theme.foregroundPrimary} size={iconSizes[24]} />
+            <Volume2 color={theme.foregroundPrimary} size={iconSizes[24]} />
           )}
         </IconButton>
       )}
