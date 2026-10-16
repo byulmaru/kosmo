@@ -6738,6 +6738,24 @@ export const ContentWarningProductionConsumersShareRevealStateInteraction: Story
     const row = listSurface.getByTestId('post-list-standard-row');
     const pathname = canvas.getByTestId('content-warning-list-pathname');
     const initialPath = pathname.textContent;
+    const card = listSurface.getByTestId('post-list-item-card');
+    await waitFor(() => expect(card.getBoundingClientRect().height).toBeGreaterThan(0));
+    const cardBounds = card.getBoundingClientRect();
+    const cardCoords = (x: number) => ({
+      clientX: x,
+      clientY: cardBounds.top + 2,
+      pageX: x + window.scrollX,
+      pageY: cardBounds.top + 2 + window.scrollY,
+    });
+    const cardStart = cardCoords(cardBounds.left + 2);
+    await userEvent.pointer([
+      { keys: '[MouseLeft>]', target: card, coords: cardStart },
+      { target: card, coords: cardCoords(cardBounds.left + 40) },
+      { target: card, coords: cardStart },
+      { keys: '[/MouseLeft]', target: card, coords: cardStart },
+    ]);
+    expect(pathname.textContent).toBe(initialPath);
+
     // Drive RN Web's real responder with coordinates on the empty avatar column.
     await waitFor(() => expect(row.getBoundingClientRect().height).toBeGreaterThan(0));
     const bounds = row.getBoundingClientRect();

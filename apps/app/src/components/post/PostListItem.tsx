@@ -313,13 +313,17 @@ function PostListItemCard({
   style: StyleProp<ViewStyle>;
 }) {
   const theme = useTheme();
+  const [pressed, setPressed] = useState(false);
   const [pointerHovered, setPointerHovered] = useState(false);
 
-  // RNW suppresses an ancestor Pressable's hovered state under a nested Pressable.
+  // Keep hover across child controls and press feedback on the background responder.
   return (
-    <Pressable
+    <PostDetailBackground
       accessible={false}
-      onPress={onBackgroundPress}
+      onBackgroundPress={onBackgroundPress}
+      onResponderGrant={() => setPressed(true)}
+      onResponderRelease={() => setPressed(false)}
+      onResponderTerminate={() => setPressed(false)}
       focusable={false}
       onPointerEnter={(event) => {
         if (Platform.OS === 'web' && event.nativeEvent.pointerType !== 'touch') {
@@ -336,27 +340,23 @@ function PostListItemCard({
       tabIndex={-1}
       testID="post-list-item-card"
     >
-      {(state) => (
-        <>
-          <View
-            accessibilityElementsHidden
-            importantForAccessibility="no-hide-descendants"
-            style={[
-              styles.surfaceFeedback,
-              {
-                backgroundColor: state.pressed
-                  ? theme.statePressedSubtle
-                  : Platform.OS === 'web' && pointerHovered
-                    ? theme.stateHover
-                    : undefined,
-              },
-            ]}
-            testID="post-list-item-feedback"
-          />
-          {children}
-        </>
-      )}
-    </Pressable>
+      <View
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        style={[
+          styles.surfaceFeedback,
+          {
+            backgroundColor: pressed
+              ? theme.statePressedSubtle
+              : Platform.OS === 'web' && pointerHovered
+                ? theme.stateHover
+                : undefined,
+          },
+        ]}
+        testID="post-list-item-feedback"
+      />
+      {children}
+    </PostDetailBackground>
   );
 }
 

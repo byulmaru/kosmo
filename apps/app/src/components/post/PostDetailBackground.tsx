@@ -6,6 +6,9 @@ import type { ViewProps } from 'react-native';
 export function PostDetailBackground({
   onBackgroundPress,
   onLayout,
+  onResponderGrant,
+  onResponderRelease,
+  onResponderTerminate,
   ...props
 }: ViewProps & { onBackgroundPress?: () => void }) {
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -19,6 +22,18 @@ export function PostDetailBackground({
     <View
       {...props}
       {...responder}
+      onResponderGrant={(event) => {
+        responder?.onResponderGrant?.(event);
+        onResponderGrant?.(event);
+      }}
+      onResponderRelease={(event) => {
+        responder?.onResponderRelease?.(event);
+        onResponderRelease?.(event);
+      }}
+      onResponderTerminate={(event) => {
+        responder?.onResponderTerminate?.(event);
+        onResponderTerminate?.(event);
+      }}
       onLayout={(event) => {
         const { width, height } = event.nativeEvent.layout;
         setSize((current) =>
