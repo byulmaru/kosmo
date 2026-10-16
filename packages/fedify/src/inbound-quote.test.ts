@@ -1914,123 +1914,139 @@ test('FEP self-quote는 승인서 없이 승인하되 다른 Post만 Source로 �
   );
 });
 
-test('검증된 Followers Only Source는 결정적인 Local Follower identity로 signed fetch한다', async () => {
-  const sourceActor = await createRemoteActor(
-    'private-source',
-    'https://source.example/users/private-source',
-  );
-  const sourceFollowersUri = 'https://source.example/users/private-source/followers';
-  await db
-    .update(ActivityPubActors)
-    .set({ followersUri: sourceFollowersUri })
-    .where(eq(ActivityPubActors.profileId, sourceActor.id));
+for (const sourceState of [InstanceState.ACTIVE, InstanceState.UNRESPONSIVE]) {
+  test(`검증된 Followers Only Source는 결정적인 Local Follower identity로 signed fetch한다: ${sourceState}`, async () => {
+    const sourceActor = await createRemoteActor(
+      'private-source',
+      'https://source.example/users/private-source',
+    );
+    await db
+      .update(Instances)
+      .set({ state: sourceState })
+      .where(eq(Instances.id, sourceActor.instanceId));
+    const sourceFollowersUri = 'https://source.example/users/private-source/followers';
+    await db
+      .update(ActivityPubActors)
+      .set({ followersUri: sourceFollowersUri })
+      .where(eq(ActivityPubActors.profileId, sourceActor.id));
 
-  const firstFollower = await createLocalProfile('private-first');
-  const secondFollower = await createLocalProfile('private-second');
-  await db.insert(ProfileFollows).values([
-    { followerProfileId: firstFollower.id, followeeProfileId: sourceActor.id },
-    { followerProfileId: secondFollower.id, followeeProfileId: sourceActor.id },
-  ]);
-  const quoteActor = await createRemoteActor(
-    'private-quote',
-    'https://quote.example/users/private-quote',
-  );
-  const quoteUri = new URL('https://quote.example/notes/private-quote');
-  const quote = await createRemotePost(quoteActor.id, quoteUri.href);
-  const sourceUri = new URL('https://source.example/notes/private-source');
-  const sourceNote = new Note({
-    attribution: new URL('https://source.example/users/private-source'),
-    content: 'private source body',
-    cc: new URL('https://mention.example/users/extra'),
-    id: sourceUri,
-    to: new URL(sourceFollowersUri),
-  });
-  const firstKeyPair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
-  const secondKeyPair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
-  const keyPairs = new Map([
-    [
-      firstFollower.id,
-      { ...firstKeyPair, keyId: new URL(`https://local.example/keys/${firstFollower.id}`) },
-    ],
-    [
-      secondFollower.id,
-      { ...secondKeyPair, keyId: new URL(`https://local.example/keys/${secondFollower.id}`) },
-    ],
-  ]);
-  const selectedFollower = [firstFollower.id, secondFollower.id].sort()[0]!;
-  const keyCalls: string[] = [];
-  const signedKeyIds: string[] = [];
-  const signedLoaderUrls: string[] = [];
-  const lookupObject = mock.fn(async (identifier: string | URL, options?: unknown) => {
-    assert.equal(identifier.toString(), sourceUri.href);
-    const loader = (options as { documentLoader?: (url: string) => Promise<unknown> } | undefined)
-      ?.documentLoader;
-    assert.ok(loader);
-    await loader(identifier.toString());
-    return sourceNote;
-  });
-  const authorized = await authorizeQuoteSource({
-    note: new Note({
-      attribution: new URL('https://quote.example/users/private-quote'),
-      id: quoteUri,
-      quote: sourceUri,
-      to: PUBLIC_COLLECTION,
-    }),
-    sourceAuthorUri: 'https://source.example/users/private-source',
-    sourceUri,
-  });
+    const firstFollower = await createLocalProfile('private-first');
+    const secondFollower = await createLocalProfile('private-second');
+    await db.insert(ProfileFollows).values([
+      { followerProfileId: firstFollower.id, followeeProfileId: sourceActor.id },
+      { followerProfileId: secondFollower.id, followeeProfileId: sourceActor.id },
+    ]);
+    const quoteActor = await createRemoteActor(
+      'private-quote',
+      'https://quote.example/users/private-quote',
+    );
+    const quoteUri = new URL('https://quote.example/notes/private-quote');
+    const quote = await createRemotePost(quoteActor.id, quoteUri.href);
+    const sourceUri = new URL('https://source.example/notes/private-source');
+    const sourceNote = new Note({
+      attribution: new URL('https://source.example/users/private-source'),
+      content: 'private source body',
+      cc: new URL('https://mention.example/users/extra'),
+      id: sourceUri,
+      to: new URL(sourceFollowersUri),
+    });
+    const firstKeyPair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
+    const secondKeyPair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
+    const keyPairs = new Map([
+      [
+        firstFollower.id,
+        { ...firstKeyPair, keyId: new URL(`https://local.example/keys/${firstFollower.id}`) },
+      ],
+      [
+        secondFollower.id,
+        { ...secondKeyPair, keyId: new URL(`https://local.example/keys/${secondFollower.id}`) },
+      ],
+    ]);
+    const selectedFollower = [firstFollower.id, secondFollower.id].sort()[0]!;
+    const keyCalls: string[] = [];
+    const signedKeyIds: string[] = [];
+    const signedLoaderUrls: string[] = [];
+    const lookupObject = mock.fn(async (identifier: string | URL, options?: unknown) => {
+      assert.equal(identifier.toString(), sourceUri.href);
+      const loader = (options as { documentLoader?: (url: string) => Promise<unknown> } | undefined)
+        ?.documentLoader;
+      assert.ok(loader);
+      await loader(identifier.toString());
+      return sourceNote;
+    });
+    const authorized = await authorizeQuoteSource({
+      note: new Note({
+        attribution: new URL('https://quote.example/users/private-quote'),
+        id: quoteUri,
+        quote: sourceUri,
+        to: PUBLIC_COLLECTION,
+      }),
+      sourceAuthorUri: 'https://source.example/users/private-source',
+      sourceUri,
+    });
 
-  const result = await handleInboundQuote({
-    actorUri: 'https://quote.example/users/private-quote',
-    context: Object.assign(
-      createSignedContext(
-        keyPairs,
-        keyCalls,
-        signedKeyIds,
-        lookupObject,
-        authorized.documents,
-        signedLoaderUrls,
-      ) as object,
-      {
-        documentLoader: async () => {
-          throw new Error('stale ordinary loader');
+    const result = await handleInboundQuote({
+      actorUri: 'https://quote.example/users/private-quote',
+      context: Object.assign(
+        createSignedContext(
+          keyPairs,
+          keyCalls,
+          signedKeyIds,
+          lookupObject,
+          authorized.documents,
+          signedLoaderUrls,
+        ) as object,
+        {
+          documentLoader: async () => {
+            throw new Error('stale ordinary loader');
+          },
         },
-      },
-    ) as never,
-    note: authorized.note,
-    postId: quote.post.id,
-    receivedAt,
-    startWorkflow: false,
-  });
+      ) as never,
+      note: authorized.note,
+      postId: quote.post.id,
+      receivedAt,
+      startWorkflow: false,
+    });
 
-  assert.deepEqual(result, { retryable: false, status: PostQuoteConsentStatus.APPROVED });
-  assert.deepEqual(keyCalls, [selectedFollower]);
-  assert.deepEqual(signedKeyIds, [`https://local.example/keys/${selectedFollower}`]);
-  assert.deepEqual(signedLoaderUrls, [sourceUri.href]);
-  assert.equal(lookupObject.mock.calls.length, 1);
-  const lookupOptions = lookupObject.mock.calls[0]?.arguments[1] as
-    | { documentLoader?: unknown }
-    | undefined;
-  assert.ok(lookupOptions?.documentLoader);
-  const sourcePost = await db
-    .select()
-    .from(ActivityPubPosts)
-    .where(eq(ActivityPubPosts.uri, sourceUri.href))
-    .then(firstOrThrow);
-  const storedSource = await db
-    .select()
-    .from(Posts)
-    .where(eq(Posts.id, sourcePost.postId))
-    .then(firstOrThrow);
-  const storedQuote = await db
-    .select()
-    .from(Posts)
-    .where(eq(Posts.id, quote.post.id))
-    .then(firstOrThrow);
-  assert.equal(storedSource.profileId, sourceActor.id);
-  assert.equal(storedSource.visibility, PostVisibility.FOLLOWERS);
-  assert.equal(storedQuote.repostSourceId, sourcePost.postId);
-});
+    assert.deepEqual(result, { retryable: false, status: PostQuoteConsentStatus.APPROVED });
+    assert.deepEqual(keyCalls, [selectedFollower]);
+    assert.deepEqual(signedKeyIds, [`https://local.example/keys/${selectedFollower}`]);
+    assert.deepEqual(signedLoaderUrls, [sourceUri.href]);
+    assert.equal(lookupObject.mock.calls.length, 1);
+    const lookupOptions = lookupObject.mock.calls[0]?.arguments[1] as
+      | { documentLoader?: unknown }
+      | undefined;
+    assert.ok(lookupOptions?.documentLoader);
+    const sourcePost = await db
+      .select()
+      .from(ActivityPubPosts)
+      .where(eq(ActivityPubPosts.uri, sourceUri.href))
+      .then(firstOrThrow);
+    const storedSource = await db
+      .select()
+      .from(Posts)
+      .where(eq(Posts.id, sourcePost.postId))
+      .then(firstOrThrow);
+    const storedQuote = await db
+      .select()
+      .from(Posts)
+      .where(eq(Posts.id, quote.post.id))
+      .then(firstOrThrow);
+    assert.equal(storedSource.profileId, sourceActor.id);
+    assert.equal(storedSource.visibility, PostVisibility.FOLLOWERS);
+    assert.equal(storedQuote.repostSourceId, sourcePost.postId);
+    assert.equal(
+      (
+        await db
+          .select()
+          .from(Instances)
+          .where(eq(Instances.id, sourceActor.instanceId))
+          .then(firstOrThrow)
+      ).state,
+      InstanceState.ACTIVE,
+    );
+  });
+}
 
 test('검증된 QuoteAuthorization의 Source 작성자가 production 경로의 signed fetch로 전달된다', async () => {
   const sourceActor = await createRemoteActor(
@@ -3474,6 +3490,7 @@ const createRemoteActor = async (handle: string, actorUri: string, instanceId?: 
     .returning()
     .then(firstOrThrow);
   await db.insert(ActivityPubActors).values({
+    lastFetchedAt: Temporal.Now.instant(),
     profileId: profile.id,
     type: ActivityPubActorType.PERSON,
     uri: actorUri,

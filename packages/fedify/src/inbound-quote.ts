@@ -37,7 +37,8 @@ import {
   prepareFollowersOnlyQuoteNote,
 } from './inbound-create-note';
 import {
-  findUsableStoredRemoteProfileActorByUri,
+  findOrMaterializeRemoteProfileActorByUri,
+  findStoredRemoteProfileActorByUri,
   RemoteActorDiscoveryUnavailableError,
 } from './remote-actor-materialization';
 import type { Context } from '@fedify/fedify';
@@ -584,7 +585,22 @@ const preparePrivateQuoteSource = async (
   const { author, verified } = binding;
   let actor;
   try {
-    actor = await findUsableStoredRemoteProfileActorByUri(author);
+    const stored = await findStoredRemoteProfileActorByUri(author);
+    if (
+      !stored ||
+      stored.profile.state !== ProfileState.ACTIVE ||
+      stored.instance.state === InstanceState.SUSPENDED
+    ) {
+      return { kind: 'NOOP', retryable: false };
+    }
+    actor =
+      stored.instance.state === InstanceState.UNRESPONSIVE
+        ? await findOrMaterializeRemoteProfileActorByUri({
+            actorUri: author,
+            contextOrigin: context.canonicalOrigin,
+            receipt: { receivedAt: Temporal.Now.instant() },
+          })
+        : stored;
   } catch (error) {
     if (error instanceof NotFoundError) {
       return { kind: 'NOOP', retryable: false };
