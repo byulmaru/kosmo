@@ -17,7 +17,7 @@ const meta = {
       mockImplementation: (implementation: typeof captureFeedback) => void;
       mockReset: () => void;
     };
-    captureFeedbackMock.mockImplementation(() => 'storybook-feedback-event');
+    captureFeedbackMock.mockImplementation(async () => 'storybook-feedback-event');
     return () => captureFeedbackMock.mockReset();
   },
   component: FeedbackPage,
@@ -274,6 +274,11 @@ async function verifyPendingSubmission(canvasElement: HTMLElement, overlay: bool
   const bytes = await (await fetch(ogImage)).arrayBuffer();
   const file = new File([bytes], 'pending.png', { type: 'image/png' });
   const read = Promise.withResolvers<ArrayBuffer>();
+  const response = Promise.withResolvers<string>();
+  const feedbackMock = captureFeedback as unknown as {
+    mockImplementation: (implementation: () => Promise<string>) => void;
+  };
+  feedbackMock.mockImplementation(() => response.promise);
   file.arrayBuffer = () => read.promise;
   setNextImagePickerResult({
     assets: [{ file, uri: ogImage, mimeType: 'image/png', width: 1, height: 1 }],
@@ -310,6 +315,15 @@ async function verifyPendingSubmission(canvasElement: HTMLElement, overlay: bool
       expect(body).toHaveValue('제출 중인 피드백');
     }
     read.resolve(bytes);
+    await waitFor(() => expect(captureFeedback).toHaveBeenCalledTimes(1));
+    expect(submit).toHaveAttribute('aria-busy', 'true');
+    expect(body).toHaveAttribute('readonly');
+    if (dialog) {
+      expect(canvas.getByRole('button', { name: '피드백 닫기' })).toBeDisabled();
+      await userEvent.keyboard('{Escape}');
+      expect(page.getByRole('dialog', { name: '피드백 보내기' })).toBeVisible();
+    }
+    response.resolve('feedback-event');
     await expect(canvas.findByText('피드백을 전달했습니다. 감사합니다!')).resolves.toBeVisible();
     expect(captureFeedback).toHaveBeenCalledTimes(1);
     expect(body).toHaveValue('');
@@ -320,6 +334,7 @@ async function verifyPendingSubmission(canvasElement: HTMLElement, overlay: bool
     }
   } finally {
     read.resolve(bytes);
+    response.resolve('feedback-event');
     resetImagePickerMock();
   }
 }
@@ -333,4 +348,46 @@ export const OverlaySubmittingCloseGuard: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
   render: () => <SubmittingOverlay />,
   play: async ({ canvasElement }) => verifyPendingSubmission(canvasElement, true),
+};
+
+export const ServerFailureKeepsDraftAndAllowsRetry: Story = {
+  beforeEach: SelectedImages.beforeEach,
+  render: () => <FeedbackPage />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = canvas.getByRole('textbox', { name: '피드백 내용' });
+    const bugReport = canvas.getByRole('radio', { name: '버그를 발견했어요' });
+    const message = '전송에 실패해도 본문과 이미지를 유지해요.';
+    const response = Promise.withResolvers<string>();
+    const feedbackMock = captureFeedback as unknown as {
+      mockImplementation: (implementation: () => Promise<string>) => void;
+    };
+    feedbackMock.mockImplementation(() => response.promise);
+    await userEvent.click(bugReport);
+    await userEvent.type(body, message);
+    await userEvent.click(canvas.getByRole('button', { name: '이미지 추가' }));
+    await canvas.findByLabelText('첨부 이미지 3, 선택됨');
+    const submit = canvas.getByRole('button', { name: '피드백 보내기' });
+    try {
+      await userEvent.click(submit);
+      await waitFor(() => expect(captureFeedback).toHaveBeenCalledTimes(1));
+      expect(submit).toBeDisabled();
+      expect(submit).toHaveAttribute('aria-busy', 'true');
+      expect(body).toHaveAttribute('readonly');
+      expect(body).toHaveValue(message);
+      expect(canvas.queryByText('피드백을 전달했습니다. 감사합니다!')).toBeNull();
+    } finally {
+      response.reject(new Error('Sentry server rejected feedback'));
+    }
+    await expect(canvas.findByRole('button', { name: '피드백 다시 시도' })).resolves.toBeEnabled();
+    expect(body).toHaveValue(message);
+    expect(bugReport).toBeChecked();
+    expect(canvas.getByLabelText('첨부 이미지 3, 선택됨')).toBeVisible();
+    feedbackMock.mockImplementation(async () => 'retry-feedback-event');
+    await userEvent.click(canvas.getByRole('button', { name: '피드백 다시 시도' }));
+    await expect(canvas.findByText('피드백을 전달했습니다. 감사합니다!')).resolves.toBeVisible();
+    expect(body).toHaveValue('');
+    expect(canvas.getByRole('radio', { name: '좋아요' })).toBeChecked();
+    expect(canvas.queryByLabelText('첨부 이미지 3, 선택됨')).toBeNull();
+  },
 };

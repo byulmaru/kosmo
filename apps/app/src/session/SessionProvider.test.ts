@@ -25,7 +25,9 @@ let nativeClearCalls = 0;
 let nativeClearFails = false;
 let strictMode = false;
 let deferActorReset = false;
+let rejectedActorResetAccepted = true;
 const resetActorCalls: Array<string | null | undefined> = [];
+let rejectedActorResetCalls = 0;
 const writes: string[] = [];
 const clearNativeSession = async () => {
   nativeClearCalls += 1;
@@ -38,6 +40,14 @@ const resetActor = (profileId?: string | null) => {
   if (!deferActorReset) {
     actorProfileId = profileId ?? null;
   }
+};
+const resetRejectedCurrentActor = () => {
+  rejectedActorResetCalls += 1;
+  if (!rejectedActorResetAccepted) {
+    return false;
+  }
+  resetActor(null);
+  return true;
 };
 let latestSessionErrorReporter: ReactElement<{
   actorLifecycleKey: string;
@@ -97,6 +107,7 @@ mockModule('@/relay/RelayActorProvider', {
     clearNativeSession,
     nativeToken,
     resetActor,
+    resetRejectedCurrentActor,
     selectedProfileId: actorProfileId,
   }),
   useRelayActorLifecycleKey: () => actorLifecycleKey,
@@ -126,8 +137,10 @@ beforeEach(() => {
   nativeClearFails = false;
   strictMode = false;
   deferActorReset = false;
+  rejectedActorResetAccepted = true;
   latestSessionErrorReporter = null;
   resetActorCalls.length = 0;
+  rejectedActorResetCalls = 0;
   writes.length = 0;
 });
 
@@ -387,6 +400,7 @@ describe('SessionProvider selected profile bootstrap', () => {
     actorLifecycleKey = 'actor-2';
     await updateProvider();
     assert.deepEqual(resetActorCalls, ['profile-client', null]);
+    assert.equal(rejectedActorResetCalls, 1);
     assert.equal(deleteCalls, 0);
 
     actorLifecycleKey = 'actor-3';
@@ -400,6 +414,18 @@ describe('SessionProvider selected profile bootstrap', () => {
     assert.equal(readCalls, 1);
     assert.deepEqual(writes, ['profile-server-later']);
     assert.deepEqual(resetActorCalls, ['profile-client', null, 'profile-server-later']);
+  });
+
+  it('does not issue an unguarded null reset when the rejected-actor transition is stale', async () => {
+    actorProfileId = 'profile-client';
+    serverSelectedProfileId = null;
+    rejectedActorResetAccepted = false;
+
+    await renderProvider();
+
+    assert.equal(rejectedActorResetCalls, 1);
+    assert.deepEqual(resetActorCalls, []);
+    assert.equal(actorProfileId, 'profile-client');
   });
 
   it('keeps verified guest identity and selected-profile cleanup when native token cleanup fails', async () => {

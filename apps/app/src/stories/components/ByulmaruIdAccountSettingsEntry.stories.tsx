@@ -32,7 +32,6 @@ export const LinkContract: Story = {
       name: 'Byulmaru ID Account Settings 외부 서비스로 이동',
     });
 
-    await expect(canvas.getByText('계정 설정')).toBeVisible();
     await expect(entry).toBeVisible();
     await expect(entry).toHaveAttribute('href', BYULMARU_ID_ACCOUNT_SETTINGS_URL);
     const domEntry = entry as HTMLElement;

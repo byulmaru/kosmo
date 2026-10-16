@@ -198,7 +198,9 @@ input DeleteProfileInput {
 }
 
 type DeleteProfilePayload {
+  account: Account!
   profileId: ID!
+  success: Boolean!
 }
 
 input DeleteReactionInput {
@@ -224,7 +226,7 @@ type ExchangeNativeOidcSessionPayload {
 type FollowNotification implements Node & Notification {
   createdAt: DateTime!
   id: ID!
-  profile: Profile!
+  profile: Profile
   readAt: DateTime
 }
 
@@ -240,9 +242,9 @@ type FollowProfilePayload {
 
 type FollowRequestNotification implements Node & Notification {
   createdAt: DateTime!
-  followRequest: ProfileFollowRequest!
+  followRequest: ProfileFollowRequest
   id: ID!
-  profile: Profile!
+  profile: Profile
   readAt: DateTime
 }
 
@@ -330,7 +332,7 @@ type MentionNotification implements Node & Notification {
   createdAt: DateTime!
   id: ID!
   post: Post
-  profile: Profile!
+  profile: Profile
   readAt: DateTime
 }
 
@@ -671,7 +673,7 @@ type QuoteNotification implements Node & Notification {
   createdAt: DateTime!
   id: ID!
   post: Post
-  profile: Profile!
+  profile: Profile
   readAt: DateTime
 }
 
@@ -690,9 +692,9 @@ type ReactionNotification implements Node & Notification {
   createdAt: DateTime!
   id: ID!
   post: Post
-  profile: Profile!
+  profile: Profile
   readAt: DateTime
-  type: String!
+  type: String
 }
 
 input RegisterProfileMigrationSourceInput {
@@ -725,7 +727,7 @@ type ReplyNotification implements Node & Notification {
   createdAt: DateTime!
   id: ID!
   post: Post
-  profile: Profile!
+  profile: Profile
   readAt: DateTime
 }
 
@@ -733,7 +735,7 @@ type RepostNotification implements Node & Notification {
   createdAt: DateTime!
   id: ID!
   post: Post
-  profile: Profile!
+  profile: Profile
   readAt: DateTime
 }
 

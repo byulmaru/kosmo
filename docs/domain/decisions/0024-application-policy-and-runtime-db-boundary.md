@@ -25,13 +25,15 @@ Accepted
   shared DB access 경계를 사용한다.
 - GraphQL HTTP endpoint는 request마다 하나의 operation만 실행하고 JSON array batching을 지원하지 않는다.
   request 인증에서 검증한 identity와 request-scoped DataLoader context를 해당 operation이 직접 사용하며,
-  별도의 operation context snapshot을 만들지 않는다. 호환 단계에서는 GraphQL
-  `extensions.selectedProfileId`가 Active Account의 Membership과 Profile 조회 가능 상태를 통과하고
-  Membership 역할을 서버에서 파생하여 해당 요청의 actor를 덮어쓴다. 클라이언트가 제시한 역할은
-  권한 근거가 아니다. Extension이 없거나 잘못되었거나 알 수 없거나 다른 Account에 속하거나 조회할 수
-  없는 Profile을 가리키면 오류 없이 `Sessions.activeProfileId`에서 파생한 기존 actor를 유지하며, 이 값은
-  Session에 저장하지 않는다. `selectProfile`로 바뀐 selected Profile은 같은 Mutation의 이후 직렬 top-level
-  field에 반영하고, 다음 HTTP request에서는 저장된 선택을 다시 인증한다.
+  별도의 operation context snapshot을 만들지 않는다. selected Profile 선택은 클라이언트가 소유한다. GraphQL
+  `extensions.selectedProfileId`로 제시된 Profile은 Active Account의 Membership과 Profile 조회 가능 상태를
+  통과해야 하며 Membership 역할은 서버가 파생한다. 클라이언트가 제시한 역할은 권한 근거가 아니다. Extension이
+  없거나 잘못되었거나 알 수 없거나 다른 Account에 속하거나 조회할 수 없는 Profile을 가리킬 때
+  `Sessions.activeProfileId`에서 파생한 기존 actor를 유지하는 동작은 Deprecated 호환 fallback이다. 해당
+  저장값과 fallback을 새 선택의 source of truth로 사용하지 않으며, 제거는 별도 전환에서 다룬다.
+  기존 `selectProfile` 쓰기와 Profile 비활성화 시 저장값을 비우는 동작은 그 전환 전까지 호환성을 위해 남을 수
+  있지만 새 소비자나 쓰기를 추가하지 않는다. 기존 `selectProfile`이 바꾼 actor는 같은 Mutation의 이후 직렬
+  top-level field에 반영되며, 클라이언트가 현재 선택 상태를 보유한다.
 - API, Web, Worker, Fedify consumer와 Admin application runtime은 표준 `PGHOST`, `PGPORT`, `PGUSER`,
   `PGDATABASE`, `PGPASSWORD`와 하나의 shared non-owner runtime role을 사용하며, `PGHOST`는 transaction-mode
   CloudNativePG Pooler를 가리킨다. Fedify MessageQueue의 별도 `FEDIFY_QUEUE_DATABASE_URL`은 direct read-write
@@ -59,8 +61,8 @@ Accepted
   shared application `PG*`의 transaction-mode frontend로 유지한다. 이 경로는 GraphQL operation 전용 DB
   session, actor GUC, operation-scoped `ctx.db` 또는 `OPERATION_DATABASE_URL`을 되살리지 않는다. 향후
   retirement는 별도 결정과 이슈가 소유한다.
-- GraphQL selected Profile extension의 request-local override와 `Sessions.activeProfileId` fallback은
-  호환 단계에서 유지한다. DB Session 저장값 또는 fallback 경계를 제거하는 작업은 별도 결정과 전환의 범위다.
+- `Sessions.activeProfileId` 저장값과 GraphQL의 호환 fallback은 Deprecated 상태로 별도 전환 전까지 유지할 수
+  있다. 이 기간에 새 소비자나 쓰기를 추가하지 않는다. 저장값 또는 fallback 경계의 제거는 별도 전환의 범위다.
 - runtime role 통합은 별도 구현 slice가 소유한다. production role drop, Secret sync/apply, cutover와 live
   verification은 이 결정의 실행 범위가 아니며 별도 승인이 필요하다.
 

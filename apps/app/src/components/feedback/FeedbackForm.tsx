@@ -199,9 +199,9 @@ export function FeedbackForm({ onStateChange }: Props) {
     setStatus('idle');
     setAttachmentError(null);
     void prepareFeedbackAttachments(attachments).then(
-      (prepared) => {
+      async (prepared) => {
         try {
-          captureFeedback(parsedBody.data, kind, prepared);
+          await captureFeedback(parsedBody.data, kind, prepared);
         } catch {
           failSubmission();
           return;

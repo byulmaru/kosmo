@@ -105,7 +105,7 @@ test('inbound Block and embedded Undo use the current pair without Activity IDs'
   assert.equal((await db.select().from(ProfileBlocks)).length, 0);
 });
 
-test('inbound Block requires a verified remote actor and the active local recipient', async () => {
+test('inbound Block rejects local-origin actors and requires the active local recipient', async () => {
   const fixture = await createFixture();
   const anotherRecipient = crypto.randomUUID();
   const block = new Block({ actor: fixture.remoteActorUri, object: fixture.localActorUri });
@@ -118,10 +118,11 @@ test('inbound Block requires a verified remote actor and the active local recipi
   await handleInboundBlock(
     createContext(fixture.localProfile.id),
     new Block({
-      actor: new URL('https://unverified.example/users/malice'),
+      actor: fixture.localActorUri,
       object: fixture.localActorUri,
     }),
   );
+  assert.equal((await db.select().from(ProfileBlocks)).length, 0);
   await db
     .update(Profiles)
     .set({ state: ProfileState.SUSPENDED })
@@ -234,6 +235,7 @@ const createFixture = async () => {
     },
     {
       inboxUri: `${remoteActorUri.href}/inbox`,
+      lastFetchedAt: Temporal.Now.instant(),
       profileId: remoteProfile.id,
       sharedInboxUri: `https://${remoteInstance.domain}/inbox`,
       type: ActivityPubActorType.PERSON,

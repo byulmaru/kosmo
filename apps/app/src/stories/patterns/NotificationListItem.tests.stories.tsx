@@ -7,6 +7,7 @@ import baseMeta, {
   ReplyActionsContract as replyActions,
   ReplyLayoutContract as replyLayout,
   ReplyQuoteContract as replyQuote,
+  ReplyRailActivationContract as replyRailActivation,
 } from './NotificationListItem.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { NotificationStoryArgs } from './NotificationListItem.stories';
@@ -28,3 +29,4 @@ export const ReplyLayoutContract: Story = replyLayout;
 export const ReplyQuoteContract: Story = replyQuote;
 
 export const ReplyActionsContract: Story = replyActions;
+export const ReplyRailActivationContract: Story = replyRailActivation;

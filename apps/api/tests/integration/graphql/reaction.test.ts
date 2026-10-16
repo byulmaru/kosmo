@@ -894,7 +894,7 @@ describe('GraphQL Reaction', () => {
     assert.deepEqual(result.data?.second?.reactionCounts, expected);
   });
 
-  test('Reaction count는 숨겨진 Repost source의 raw Post 경로에서 노출되지 않는다', async () => {
+  test('숨겨진 Repost source의 Reaction notification post는 null로 반환한다', async () => {
     const auth = await createAuthenticatedSession();
     const sourceAuthor = await createProfile('hidden-repost-source-author');
     const { post: source } = await createCorePost({
@@ -930,7 +930,9 @@ describe('GraphQL Reaction', () => {
       .where(eq(Posts.id, source.id));
 
     const result = await requestGraphQL<{
-      node: { post: { id: string; reactionCounts: Array<{ type: string; count: number }> } } | null;
+      node: {
+        post: { id: string; reactionCounts: Array<{ type: string; count: number }> } | null;
+      } | null;
     }>(
       `query ReactionNotificationRawPost($id: ID!) {
         node(id: $id) {
@@ -944,10 +946,7 @@ describe('GraphQL Reaction', () => {
     );
 
     assertNoGraphQLErrors(result);
-    assert.deepEqual(result.data?.node?.post, {
-      id: globalId('Post', repost.id),
-      reactionCounts: [],
-    });
+    assert.deepEqual(result.data?.node, { post: null });
   });
 });
 

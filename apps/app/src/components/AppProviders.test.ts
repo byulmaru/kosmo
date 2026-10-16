@@ -45,6 +45,11 @@ let navigationMounts = 0;
 let navigationUnmounts = 0;
 let relayActorMounts = 0;
 let relayActorUnmounts = 0;
+const analyticsCaptureAccounts: Array<string | null> = [];
+let identifiedAnalyticsAccountId: string | null = null;
+const trackAnalytics: (event: string, properties: Record<string, unknown>) => void = () => {
+  analyticsCaptureAccounts.push(identifiedAnalyticsAccountId);
+};
 let rootShouldThrow = false;
 let rootShouldSuspend = false;
 let AppProviders: ComponentType<PropsWithChildren>;
@@ -69,6 +74,7 @@ let useSession: () => {
   sessionId: string | null;
   status: string;
 };
+let useAnalyticsIdentityAccountId: () => string | null;
 let renderer: ReactTestRenderer | null = null;
 let originalFetch: typeof fetch;
 let originalWindowDescriptor: PropertyDescriptor | undefined;
@@ -264,10 +270,14 @@ mockModule('react-relay', {
 });
 mockModule(new URL('../analytics/client.ts', import.meta.url), {
   initializeAnalytics: () => undefined,
-  trackAnalytics: () => undefined,
-});
-mockModule(new URL('../analytics/AnalyticsSessionBridge.tsx', import.meta.url), {
-  AnalyticsSessionBridge: () => null,
+  clearAnalytics: () => {
+    identifiedAnalyticsAccountId = null;
+  },
+  identifyAnalytics: (accountId: string) => {
+    identifiedAnalyticsAccountId = accountId;
+  },
+  setAnalyticsSelectedProfile: () => undefined,
+  trackAnalytics,
 });
 mockModule(new URL('../components/post/PostContentWarningRevealContext.tsx', import.meta.url), {
   PostContentWarningRevealProvider: ({ children }: PropsWithChildren) => children,
@@ -380,7 +390,7 @@ before(async () => {
   ({ useFeatureFlag } = await import('./FeatureFlagsContext'));
   ({ UniversalShell } = await import('./shell/UniversalShell'));
   ({ RouteBoundary, useRouteBoundary } = await import('./RouteBoundary'));
-  ({ useSession } = await import('../session/SessionProvider'));
+  ({ useAnalyticsIdentityAccountId, useSession } = await import('../session/SessionProvider'));
   ({ useRelayActor, useRelayAuthLifecycleKey } = await import('../relay/RelayActorProvider'));
 });
 
@@ -392,6 +402,8 @@ beforeEach(() => {
   queryModes.ShellRecoveryQuery = 'success';
   queryModes.UniversalShellQuery = 'success';
   mockAccountId = 'account-1';
+  analyticsCaptureAccounts.length = 0;
+  identifiedAnalyticsAccountId = null;
   mockSelectedProfileId = 'profile-a';
   mockSessionId = 'session-1';
   selectedProfileCache = null;
@@ -468,6 +480,8 @@ function ShellRecoveryRoute() {
 
 function NativeSessionFixture() {
   const actor = useRelayActor();
+  const analyticsAccountId = useSession().accountId;
+  const analyticsIdentityAccountId = useAnalyticsIdentityAccountId();
   const session = useSession();
   useEffect(() => {
     navigationMounts += 1;
@@ -480,6 +494,8 @@ function NativeSessionFixture() {
     accountId: session.accountId,
     accountName: session.accountName,
     authLifecycleKey: useRelayAuthLifecycleKey(),
+    analyticsAccountId,
+    analyticsIdentityAccountId,
     nativeToken: actor.nativeToken,
     onPress: () => actor.setNativeSession('native-session-token'),
     onExpireSession: () => {
@@ -547,6 +563,21 @@ function FeatureFlagsAccountSwitchProbe() {
   });
 }
 
+function AnalyticsCaptureProbe() {
+  const { accountId } = useSession();
+
+  useEffect(() => {
+    if (accountId) {
+      trackAnalytics('profile_hashtag_list_viewed', {
+        hashtag_id: 'hashtag-a',
+        result_count: 1,
+      });
+    }
+  }, [accountId]);
+
+  return null;
+}
+
 async function captureOfrepRequest(
   input: RequestInfo | URL,
   init?: RequestInit,
@@ -589,6 +620,27 @@ function findByTestId(testID: string) {
 }
 
 describe('AppProviders runtime composition', () => {
+  it('identifies the account before initial and switched-account captures', async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(
+          AppProviders,
+          null,
+          createElement(AnalyticsCaptureProbe),
+          createElement(FeatureFlagsAccountSwitchProbe),
+        ),
+      );
+    });
+
+    assert.deepEqual(analyticsCaptureAccounts, ['account-1']);
+
+    await act(async () => {
+      await findTag('FeatureFlagsAccountSwitchProbe').props.onAccountChange('account-2');
+    });
+
+    assert.deepEqual(analyticsCaptureAccounts, ['account-1', 'account-2']);
+  });
+
   it('clears the cached Web profile before restoring the post-login Session', async () => {
     selectedProfileCache = 'profile-b';
     browserWindow.location.href = 'https://kos.moe/home?from=oidc&resetSelectedProfile=1#feed';
@@ -985,6 +1037,8 @@ describe('AppProviders runtime composition', () => {
       {
         accountId: duringTransition.props.accountId,
         accountName: duringTransition.props.accountName,
+        analyticsAccountId: duringTransition.props.analyticsAccountId,
+        analyticsIdentityAccountId: duringTransition.props.analyticsIdentityAccountId,
         nativeToken: duringTransition.props.nativeToken,
         selectedProfileId: duringTransition.props.selectedProfileId,
         sessionId: duringTransition.props.sessionId,
@@ -993,6 +1047,8 @@ describe('AppProviders runtime composition', () => {
       {
         accountId: null,
         accountName: null,
+        analyticsAccountId: null,
+        analyticsIdentityAccountId: 'account-1',
         nativeToken: 'native-session-token',
         selectedProfileId: null,
         sessionId: null,

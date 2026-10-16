@@ -1,18 +1,20 @@
 import baseMeta, {
   ComposerBeforeUnloadContract as composerBeforeUnloadContract,
-  ContentWarningCardHoverIsolationInteraction as contentWarningCardHoverIsolation,
+  ContentWarningCardPressableFeedbackInteraction as contentWarningCardPressableFeedback,
   ContentWarningProductionConsumersShareRevealStateInteraction as contentWarningConsumersInteraction,
   ContentWarningQuoteIndependentLifecycleInteraction as contentWarningQuoteInteraction,
   ContentWarningRevealInteraction as contentWarningRevealInteraction,
   ContentWarningSourcePreviewRevealInteraction as contentWarningSourcePreviewInteraction,
   LinkedSourceQuote as linkedSourceQuote,
   LinkedSourceQuoteInteraction as linkedSourceQuoteInteraction,
+  ProductionMoreShareReferences as productionMoreShareReferences,
 } from './Posts.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 const meta = {
   ...baseMeta,
   excludeStories: [],
+  parameters: { ...baseMeta.parameters, controls: { disable: true } },
   title: 'KOSMO/Patterns/Post/Catalog/Tests',
 } satisfies Meta;
 
@@ -29,7 +31,7 @@ export const ContentWarningSourcePreviewReveal: Story = contentWarningSourcePrev
 export const ContentWarningProductionConsumersShareRevealState: Story =
   contentWarningConsumersInteraction;
 
-export const ContentWarningCardHoverIsolation: Story = contentWarningCardHoverIsolation;
+export const ContentWarningCardPressableFeedback: Story = contentWarningCardPressableFeedback;
 
 export const ContentWarningQuoteIndependentLifecycle: Story = contentWarningQuoteInteraction;
 
@@ -37,3 +39,5 @@ export const LinkedSourceQuoteDark: Story = {
   ...linkedSourceQuote,
   globals: { backgrounds: { value: 'kosmoDark' }, theme: 'dark' },
 };
+
+export const ProductionMoreShareReferences: Story = productionMoreShareReferences;

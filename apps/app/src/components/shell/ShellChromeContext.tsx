@@ -1,6 +1,9 @@
 import { createContext, useContext } from 'react';
 import type { PropsWithChildren, RefObject } from 'react';
 import type { View as NativeView } from 'react-native';
+import type { TabReselectionDestination, TabReselectionHandler } from './tabReselection';
+
+export type { TabReselectionDestination, TabReselectionHandler } from './tabReselection';
 
 export type HomeReselectionHandler = () => void;
 
@@ -10,6 +13,11 @@ type ShellChromeActions = {
   openNavigationDrawer: () => void;
   openProfileSwitcher: () => void;
   registerHomeReselection: (handler: HomeReselectionHandler) => () => void;
+  registerTabReselection?: (
+    destination: TabReselectionDestination,
+    handler: TabReselectionHandler,
+  ) => () => void;
+  reselectTab?: (destination: TabReselectionDestination) => void;
   reselectHome: HomeReselectionHandler;
 };
 
@@ -24,6 +32,8 @@ export function ShellChromeProvider({
   openNavigationDrawer,
   openProfileSwitcher,
   registerHomeReselection,
+  registerTabReselection,
+  reselectTab,
   reselectHome,
 }: ShellChromeProviderProps) {
   return (
@@ -34,6 +44,8 @@ export function ShellChromeProvider({
         openNavigationDrawer,
         openProfileSwitcher,
         registerHomeReselection,
+        registerTabReselection,
+        reselectTab,
         reselectHome,
       }}
     >

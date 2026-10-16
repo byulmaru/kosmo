@@ -279,6 +279,17 @@ export default function PrivacyScreen() {
           변경 내용과 시행일을 서비스에 공개합니다. 이용자 권리에 중요한 변경은 시행일 전에
           알립니다.
         </PolicyParagraph>
+        <NavigationLink href={'/privacy/changes/2026-10-13' as Href}>
+          <Pressable
+            accessibilityLabel="2026년 10월 13일 개인정보처리방침 개정 안내"
+            accessibilityRole="link"
+            style={styles.previousPolicyLinkControl}
+          >
+            <Text style={[styles.previousPolicyLink, { color: theme.textSecondary }]}>
+              2026년 10월 13일 개인정보처리방침 개정 안내
+            </Text>
+          </Pressable>
+        </NavigationLink>
       </PolicySection>
 
       <NavigationLink href={'/privacy/2026-09-09' as Href}>

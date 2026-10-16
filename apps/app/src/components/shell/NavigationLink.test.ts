@@ -171,6 +171,7 @@ const renderLink = async (
     href?: Href;
     navigationMode?: 'push' | 'switch';
     onCurrentNavigate?: () => void;
+    onExternalNavigate?: () => void;
     primary?: boolean;
   } = {},
 ) => {
@@ -191,6 +192,7 @@ const renderLink = async (
             navigationMode: options.navigationMode,
             onNavigate,
             onCurrentNavigate: options.onCurrentNavigate,
+            onExternalNavigate: options.onExternalNavigate,
             primary: options.primary,
           }),
         ),
@@ -455,5 +457,21 @@ describe('NavigationLink', () => {
 
     assert.equal(handler.mock.callCount(), 0);
     assert.equal(onNavigate.mock.callCount(), 0);
+  });
+
+  it('Web modifier click은 external navigation intent만 기록하고 guard를 실행하지 않는다', async () => {
+    const guard = mock.fn(() => true);
+    const onExternalNavigate = mock.fn();
+    await renderLink(guard, undefined, { onExternalNavigate });
+
+    await act(async () =>
+      composedLinkPress?.(
+        createPressEvent({ metaKey: true }) as unknown as Parameters<LinkPress>[0],
+      ),
+    );
+
+    assert.equal(onExternalNavigate.mock.callCount(), 1);
+    assert.equal(guard.mock.callCount(), 0);
+    assert.equal(navigations.length, 0);
   });
 });
