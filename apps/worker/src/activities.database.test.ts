@@ -11,7 +11,6 @@ import {
   InstanceState,
   NotificationKind,
   OAuthTokenState,
-  PostQuoteConsentStatus,
   PostState,
   PostVisibility,
   ProfileFollowPolicy,
@@ -85,7 +84,6 @@ let captureOperationalNotificationAudienceActivity: typeof CaptureOperationalNot
 let temporalClient: typeof TemporalClient;
 let activityTestAccountId: string | undefined;
 let activityTestAccountPromise: Promise<string> | undefined;
-let activityFixtureAccountIds: string[] = [];
 
 before(async () => {
   ({
@@ -148,12 +146,8 @@ afterEach(async () => {
     await db.delete(AccountProfiles).where(eq(AccountProfiles.accountId, accountId));
     await db.delete(Accounts).where(eq(Accounts.id, accountId));
   }
-  if (activityFixtureAccountIds.length > 0) {
-    await db.delete(Accounts).where(inArray(Accounts.id, activityFixtureAccountIds));
-  }
   activityTestAccountId = undefined;
   activityTestAccountPromise = undefined;
-  activityFixtureAccountIds = [];
 });
 
 after(async () => {
@@ -905,19 +899,22 @@ test('Quote Notification Activity는 source author에게 한 건만 생성한다
 });
 
 test('Quote와 Reply 판단이 경합해도 Reply가 대표가 된다', async () => {
-  const recipient = await createProfileWithOwnAccount();
-  const author = await createProfileWithOwnAccount();
+  const recipient = await createProfile();
+  const author = await createProfile();
   const { post: source } = await createCorePost({
     document: postContentDocumentFromText('Combined source'),
     origin: 'LOCAL',
     profileId: recipient.id,
     visibility: PostVisibility.PUBLIC,
   });
-  const quote = await createLegacyReplyQuotePost({
-    authorProfileId: author.id,
-    parentPostId: source.id,
-    text: 'Combined quote',
+  const { post: quote } = await createCorePost({
+    document: postContentDocumentFromText('Combined quote'),
+    origin: 'LOCAL',
+    profileId: author.id,
+    repostSourceId: source.id,
+    visibility: PostVisibility.PUBLIC,
   });
+  await db.update(Posts).set({ replyParentId: source.id }).where(eq(Posts.id, quote.id));
 
   const notificationIds = await Promise.all([
     createQuoteNotificationActivity(quote.id),
@@ -932,9 +929,9 @@ test('Quote와 Reply 판단이 경합해도 Reply가 대표가 된다', async ()
 });
 
 test('Quote와 Reply의 recipient가 다르면 각 알림을 독립적으로 만든다', async () => {
-  const quoteRecipient = await createProfileWithOwnAccount();
-  const replyRecipient = await createProfileWithOwnAccount();
-  const author = await createProfileWithOwnAccount();
+  const quoteRecipient = await createProfile();
+  const replyRecipient = await createProfile();
+  const author = await createProfile();
   const { post: quoteSource } = await createCorePost({
     document: postContentDocumentFromText('Quote source'),
     origin: 'LOCAL',
@@ -942,12 +939,14 @@ test('Quote와 Reply의 recipient가 다르면 각 알림을 독립적으로 만
     visibility: PostVisibility.PUBLIC,
   });
   const replyParent = await createPost(replyRecipient.id);
-  const quote = await createLegacyReplyQuotePost({
-    authorProfileId: author.id,
-    parentPostId: replyParent.id,
+  const { post: quote } = await createCorePost({
+    document: postContentDocumentFromText('Quote and reply'),
+    origin: 'LOCAL',
+    profileId: author.id,
     repostSourceId: quoteSource.id,
-    text: 'Quote and reply',
+    visibility: PostVisibility.PUBLIC,
   });
+  await db.update(Posts).set({ replyParentId: replyParent.id }).where(eq(Posts.id, quote.id));
 
   const notificationIds = await Promise.all([
     createQuoteNotificationActivity(quote.id),
@@ -1265,27 +1264,6 @@ const createProfile = async ({
   return profile;
 };
 
-const createProfileWithOwnAccount = async () => {
-  const profile = await createProfile({ accountId: null });
-  const suffix = crypto.randomUUID();
-  const account = await db
-    .insert(Accounts)
-    .values({
-      displayName: `Notification activity profile ${suffix}`,
-      oidcSubject: `notification-activity-profile-${suffix}`,
-      state: AccountState.ACTIVE,
-    })
-    .returning()
-    .then(firstOrThrow);
-  activityFixtureAccountIds.push(account.id);
-  await db.insert(AccountProfiles).values({
-    accountId: account.id,
-    profileId: profile.id,
-    role: AccountProfileRole.OWNER,
-  });
-  return profile;
-};
-
 const createAccountDeletionFixture = async ({
   profileStates,
 }: {
@@ -1453,41 +1431,6 @@ const createPost = (
     })
     .returning()
     .then(firstOrThrow);
-
-const createLegacyReplyQuotePost = async ({
-  authorProfileId,
-  parentPostId,
-  repostSourceId = parentPostId,
-  text,
-}: {
-  readonly authorProfileId: string;
-  readonly parentPostId: string;
-  readonly repostSourceId?: string;
-  readonly text: string;
-}) => {
-  // Legacy stored mixed state: public Post creation rejects Reply+Quote, so seed both relations
-  // before any notification snapshot exists.
-  const content = await db
-    .insert(PostContents)
-    .values({ document: postContentDocumentFromText(text), postId: null })
-    .returning()
-    .then(firstOrThrow);
-  const post = await db
-    .insert(Posts)
-    .values({
-      currentContentId: content.id,
-      profileId: authorProfileId,
-      quoteConsentStatus: PostQuoteConsentStatus.APPROVED,
-      repostSourceId,
-      replyParentId: parentPostId,
-      state: PostState.ACTIVE,
-      visibility: PostVisibility.PUBLIC,
-    })
-    .returning()
-    .then(firstOrThrow);
-  await db.update(PostContents).set({ postId: post.id }).where(eq(PostContents.id, content.id));
-  return post;
-};
 
 test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, CW와 민감 미디어 마스킹을 유지한다', async (t) => {
   const previousProjectId = process.env.FIREBASE_PROJECT_ID;
