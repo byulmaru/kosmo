@@ -202,7 +202,7 @@ test('repostPost는 원래 Account와 Source Profile의 계정을 최초 Repost 
 
   assert.equal(duplicate.created, false);
   assert.ok(preserved);
-  assert.equal(preserved.createdAt, snapshot.createdAt);
+  assert.equal(preserved.createdAt.epochNanoseconds, snapshot.createdAt.epochNanoseconds);
   assert.equal(preserved.actorAccountId, snapshot.actorAccountId);
   assert.deepEqual(preserved.recipients, snapshot.recipients);
 });

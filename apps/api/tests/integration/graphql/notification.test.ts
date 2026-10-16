@@ -649,7 +649,10 @@ describe('Notification GraphQL Node boundary', () => {
       notifications: [],
       recipientProfiles: [],
     });
-    assert.equal(await notificationReadAt(notification.id), originalReadAt);
+    assert.equal(
+      (await notificationReadAt(notification.id))?.toString({ smallestUnit: 'millisecond' }),
+      originalReadAt,
+    );
 
     await addMembership(auth.account.id, auth.profile.id, AccountProfileRole.OWNER);
     assert.deepEqual(await loadNodes([notificationId], auth.token), [{ id: notificationId }]);
@@ -663,7 +666,10 @@ describe('Notification GraphQL Node boundary', () => {
     const count = await loadUnreadNotificationCounts([profileId], auth.token);
     assertNoGraphQLErrors(count);
     assert.equal(count.data?.nodes[0]?.unreadNotificationCount, 0);
-    assert.equal(await notificationReadAt(notification.id), originalReadAt);
+    assert.equal(
+      (await notificationReadAt(notification.id))?.toString({ smallestUnit: 'millisecond' }),
+      originalReadAt,
+    );
   });
 
   test('paginates Notifications by createdAt and id and accepts only visible legacy ID cursors', async () => {
@@ -2939,7 +2945,7 @@ describe('Notification GraphQL Node boundary', () => {
     const mismatchSource = await createReactionNotification(actualRecipient.id, author.id, '👀');
     const mismatch = await db
       .update(Notifications)
-      .set({ recipientProfileId: recipient.id })
+      .set({ recipientAccountId: auth.account.id, recipientProfileId: recipient.id })
       .where(eq(Notifications.id, mismatchSource.notification.id))
       .returning()
       .then(firstOrThrow);
@@ -3088,7 +3094,7 @@ describe('Notification GraphQL Node boundary', () => {
     const mismatchSource = await createRepostNotification(actualRecipient.id, author.id);
     const mismatch = await db
       .update(Notifications)
-      .set({ recipientProfileId: recipient.id })
+      .set({ recipientAccountId: auth.account.id, recipientProfileId: recipient.id })
       .where(eq(Notifications.id, mismatchSource.notification.id))
       .returning()
       .then(firstOrThrow);

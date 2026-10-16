@@ -626,14 +626,19 @@ test('an existing Quote stays representative when an eligible Mention arrives la
 
 test('an eligible Mention can notify its author', async () => {
   const author = await createProfile();
+  const actorAccountId = accountIdsByProfile.get(author.id)!;
+  const recipientAccountId = await addAccountToProfile(author.id);
   const post = await createPostForLocal(author.id, { mentionProfileIds: [author.id] });
 
-  const [notificationId] = await createMentionNotification(post.id);
+  const notificationIds = await createMentionNotification(post.id);
+  const notifications = await readSourceNotifications(post.id);
 
-  assert.ok(notificationId);
-  const [notification] = await readSourceNotifications(post.id);
-  assert.equal(notification?.kind, NotificationKind.MENTION);
-  assert.equal(notification?.recipientProfileId, author.id);
+  assert.equal(notifications.length, 1);
+  assert.equal(notifications[0]?.kind, NotificationKind.MENTION);
+  assert.equal(notifications[0]?.recipientProfileId, author.id);
+  assert.equal(notifications[0]?.recipientAccountId, recipientAccountId);
+  assert.ok(!notifications.some(({ recipientAccountId: id }) => id === actorAccountId));
+  assert.deepEqual(notificationIds, [notifications[0]?.id]);
 });
 
 test('an emitted Quote judgment never returns its ID to a later Reply activity', async () => {
