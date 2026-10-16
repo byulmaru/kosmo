@@ -33,6 +33,155 @@ async function migrationFolder(
   return root;
 }
 
+test('알림 Expand 뒤 구버전 Profile 알림 쓰기가 유지된다', async () => {
+  const control = postgres(databaseUrl, { max: 1 });
+  const migrationName = '20261016081231_prod_1117_notification_expand';
+  const expandMigration = await readFile(
+    new URL(`../../../drizzle/${migrationName}/migration.sql`, import.meta.url),
+    'utf8',
+  );
+  const baseMigration = {
+    name: '20261016040000_notification_expand_compatibility_base',
+    sql: `
+      CREATE TABLE account (id uuid PRIMARY KEY);
+      CREATE TABLE profile (id uuid PRIMARY KEY);
+      CREATE TABLE post (id uuid PRIMARY KEY);
+      CREATE TABLE profile_follow_request (id uuid PRIMARY KEY);
+      CREATE TABLE profile_follow (id uuid PRIMARY KEY);
+      CREATE TABLE reaction (id uuid PRIMARY KEY);
+      CREATE TABLE notification (
+        id uuid PRIMARY KEY,
+        recipient_profile_id uuid REFERENCES profile(id) ON DELETE CASCADE,
+        recipient_account_id uuid REFERENCES account(id) ON DELETE CASCADE,
+        kind text NOT NULL,
+        source_id uuid NOT NULL,
+        data jsonb NOT NULL DEFAULT '{}',
+        created_at timestamptz NOT NULL DEFAULT now(),
+        read_at timestamptz,
+        CONSTRAINT notification_recipient_check CHECK (
+          (recipient_profile_id IS NOT NULL) <> (recipient_account_id IS NOT NULL)
+        ),
+        CONSTRAINT notification_recipient_profile_id_kind_source_id_unique
+          UNIQUE (recipient_profile_id, kind, source_id),
+        CONSTRAINT notification_recipient_account_id_kind_source_id_unique
+          UNIQUE (recipient_account_id, kind, source_id)
+      );
+      CREATE INDEX notification_recipient_profile_id_id_index
+        ON notification (recipient_profile_id, id DESC);
+      CREATE INDEX notification_recipient_profile_id_index
+        ON notification (recipient_profile_id) WHERE read_at IS NULL;
+      CREATE INDEX notification_kind_source_id_id_index
+        ON notification (kind, source_id, id);
+    `,
+  };
+  const baseMigrations = await migrationFolder(baseMigration.name, baseMigration.sql);
+  const expandedMigrations = await migrationFolder([
+    baseMigration,
+    { name: migrationName, sql: expandMigration },
+  ]);
+
+  const accountId = '10000000-0000-0000-0000-000000000001';
+  const profileId = '20000000-0000-0000-0000-000000000001';
+  const firstNotificationId = '30000000-0000-0000-0000-000000000001';
+  const duplicateNotificationId = '30000000-0000-0000-0000-000000000002';
+  const operationalNotificationId = '30000000-0000-0000-0000-000000000003';
+  const operationalDuplicateId = '30000000-0000-0000-0000-000000000004';
+  const accountBoundNotificationId = '30000000-0000-0000-0000-000000000005';
+  const profileSourceId = '40000000-0000-0000-0000-000000000001';
+  const operationalSourceId = '40000000-0000-0000-0000-000000000002';
+  const accountBoundSourceId = '40000000-0000-0000-0000-000000000003';
+
+  try {
+    await control.unsafe('DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA public CASCADE;');
+    await control.unsafe('CREATE SCHEMA public;');
+    await runDatabaseMigrations({ databaseUrl, migrationsFolder: baseMigrations });
+    await control`INSERT INTO account (id) VALUES (${accountId})`;
+    await control`INSERT INTO profile (id) VALUES (${profileId})`;
+    await runDatabaseMigrations({ databaseUrl, migrationsFolder: expandedMigrations });
+
+    const insertProfileNotification = (id: string) =>
+      control<{ id: string }[]>`
+        INSERT INTO notification (id, recipient_profile_id, kind, source_id, data)
+        VALUES (${id}, ${profileId}, 'FOLLOW', ${profileSourceId}, '{}')
+        ON CONFLICT (recipient_profile_id, kind, source_id) DO NOTHING
+        RETURNING id::text AS id
+      `;
+    assert.deepEqual(await insertProfileNotification(firstNotificationId), [
+      { id: firstNotificationId },
+    ]);
+    assert.deepEqual(await insertProfileNotification(duplicateNotificationId), []);
+
+    const [{ profileNotificationCount }] = await control<{ profileNotificationCount: number }[]>`
+      SELECT count(*)::int AS "profileNotificationCount"
+      FROM notification
+      WHERE recipient_profile_id = ${profileId}
+        AND recipient_account_id IS NULL
+        AND kind = 'FOLLOW'
+        AND source_id = ${profileSourceId}
+    `;
+    assert.equal(profileNotificationCount, 1);
+
+    const [{ accountBoundId, accountBoundProfileId, accountBoundRecipientId }] = await control<
+      {
+        accountBoundId: string;
+        accountBoundProfileId: string | null;
+        accountBoundRecipientId: string | null;
+      }[]
+    >`
+      INSERT INTO notification (
+        id, recipient_profile_id, recipient_account_id, kind, source_id, data
+      ) VALUES (
+        ${accountBoundNotificationId}, ${profileId}, ${accountId}, 'FOLLOW',
+        ${accountBoundSourceId}, '{}'
+      )
+      RETURNING id::text AS "accountBoundId",
+        recipient_profile_id::text AS "accountBoundProfileId",
+        recipient_account_id::text AS "accountBoundRecipientId"
+    `;
+    assert.deepEqual(
+      { accountBoundId, accountBoundProfileId, accountBoundRecipientId },
+      {
+        accountBoundId: accountBoundNotificationId,
+        accountBoundProfileId: profileId,
+        accountBoundRecipientId: accountId,
+      },
+    );
+
+    const [{ id, recipientProfileId }] = await control<
+      { id: string; recipientProfileId: string | null }[]
+    >`
+      INSERT INTO notification (
+        id, recipient_account_id, kind, source_id, data
+      ) VALUES (
+        ${operationalNotificationId}, ${accountId}, 'OPERATIONAL', ${operationalSourceId},
+        '{"title":"Maintenance","href":"/"}'
+      )
+      RETURNING id::text AS id, recipient_profile_id::text AS "recipientProfileId"
+    `;
+    assert.equal(id, operationalNotificationId);
+    assert.equal(recipientProfileId, null);
+    await assert.rejects(
+      control`
+        INSERT INTO notification (
+          id, recipient_account_id, kind, source_id, data
+        ) VALUES (
+          ${operationalDuplicateId}, ${accountId}, 'OPERATIONAL', ${operationalSourceId},
+          '{"title":"Maintenance","href":"/"}'
+        )
+      `,
+      (error: unknown) => (error as { code?: string }).code === '23505',
+    );
+  } finally {
+    await control.unsafe(
+      'DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA IF EXISTS public CASCADE;',
+    );
+    await control.unsafe('CREATE SCHEMA public;');
+    await control.end({ timeout: 5 });
+    await rm(baseMigrations, { force: true, recursive: true });
+    await rm(expandedMigrations, { force: true, recursive: true });
+  }
+});
+
 async function migrationHistoryColumns(control: ReturnType<typeof postgres>) {
   return Array.from(
     await control<{ columnName: string }[]>`
@@ -1162,371 +1311,6 @@ test('database owner 로그인으로 연결해 session_user와 current_user가 �
 
     await control.end({ timeout: 5 });
     await rm(validMigrations, { force: true, recursive: true });
-  }
-});
-
-test('알림 계정 수신자로 마이그레이션하고 고아 프로필이면 전체 롤백한다', async () => {
-  const control = postgres(databaseUrl, { max: 1 });
-  const migrationName = '20261016042548_prod_1117_account_notifications';
-  const notificationMigration = await readFile(
-    new URL(`../../../drizzle/${migrationName}/migration.sql`, import.meta.url),
-    'utf8',
-  );
-  const baseMigration = {
-    name: '20260701000000_notification_base',
-    sql: `
-        CREATE TYPE "notification_kind" AS ENUM ('FOLLOW', 'OPERATIONAL');--> statement-breakpoint
-        CREATE TYPE "account_profile_role" AS ENUM ('OWNER', 'MEMBER');--> statement-breakpoint
-        CREATE TABLE "account" ("id" uuid PRIMARY KEY);--> statement-breakpoint
-        CREATE TABLE "profile" ("id" uuid PRIMARY KEY);--> statement-breakpoint
-        CREATE TABLE "account_profile" (
-          "account_id" uuid NOT NULL REFERENCES "account"("id") ON DELETE CASCADE,
-          "profile_id" uuid NOT NULL REFERENCES "profile"("id") ON DELETE CASCADE,
-          "role" "account_profile_role" NOT NULL,
-          PRIMARY KEY ("account_id", "profile_id")
-        );--> statement-breakpoint
-        CREATE TABLE "post" ("id" uuid PRIMARY KEY);--> statement-breakpoint
-        CREATE TABLE "reaction" ("id" uuid PRIMARY KEY);--> statement-breakpoint
-        CREATE TABLE "profile_follow" ("id" uuid PRIMARY KEY);--> statement-breakpoint
-        CREATE TABLE "profile_follow_request" ("id" uuid PRIMARY KEY);--> statement-breakpoint
-        CREATE TABLE "notification" (
-          "id" uuid PRIMARY KEY,
-          "recipient_profile_id" uuid REFERENCES "profile"("id") ON DELETE CASCADE,
-          "recipient_account_id" uuid REFERENCES "account"("id") ON DELETE CASCADE,
-          "kind" "notification_kind" NOT NULL,
-          "source_id" uuid NOT NULL,
-          "data" jsonb NOT NULL DEFAULT '{}',
-          "created_at" timestamp with time zone NOT NULL DEFAULT now(),
-          "read_at" timestamp with time zone,
-          CONSTRAINT "notification_recipient_profile_id_kind_source_id_unique"
-            UNIQUE ("recipient_profile_id", "kind", "source_id"),
-          CONSTRAINT "notification_recipient_account_id_kind_source_id_unique"
-            UNIQUE ("recipient_account_id", "kind", "source_id"),
-          CONSTRAINT "notification_recipient_check"
-            CHECK (("recipient_profile_id" IS NOT NULL) <> ("recipient_account_id" IS NOT NULL))
-        );--> statement-breakpoint
-        CREATE INDEX "notification_recipient_profile_id_id_index"
-          ON "notification" ("recipient_profile_id", "id" DESC NULLS LAST);--> statement-breakpoint
-        CREATE INDEX "notification_recipient_profile_id_index"
-          ON "notification" ("recipient_profile_id") WHERE "read_at" IS NULL;--> statement-breakpoint
-        CREATE INDEX "notification_kind_source_id_id_index"
-          ON "notification" ("kind", "source_id", "id");
-      `,
-  };
-  const baseMigrations = await migrationFolder(baseMigration.name, baseMigration.sql);
-  const migrations = await migrationFolder([
-    baseMigration,
-    { name: migrationName, sql: notificationMigration },
-  ]);
-
-  const accountA = '10000000-0000-0000-0000-000000000001';
-  const accountB = '10000000-0000-0000-0000-000000000002';
-  const accountC = '10000000-0000-0000-0000-000000000003';
-  const accountD = '10000000-0000-0000-0000-000000000004';
-  const sharedProfile = '20000000-0000-0000-0000-000000000001';
-  const uniqueProfile = '20000000-0000-0000-0000-000000000002';
-  const sharedUnreadId = '30000000-0000-0000-0000-000000000001';
-  const sharedReadId = '30000000-0000-0000-0000-000000000002';
-  const uniqueMemberId = '30000000-0000-0000-0000-000000000003';
-  const operationalId = '30000000-0000-0000-0000-000000000004';
-  const postId = '50000000-0000-0000-0000-000000000001';
-  const reactionId = '50000000-0000-0000-0000-000000000002';
-  const profileFollowId = '50000000-0000-0000-0000-000000000003';
-  const profileFollowRequestId = '50000000-0000-0000-0000-000000000004';
-  const sharedUnreadSource = '40000000-0000-0000-0000-000000000001';
-  const sharedReadSource = '40000000-0000-0000-0000-000000000002';
-  const uniqueSource = '40000000-0000-0000-0000-000000000003';
-  const operationalSource = '40000000-0000-0000-0000-000000000004';
-  const sharedCreatedAt = new Date('2026-10-10T00:00:00.000Z');
-  const sharedReadAt = new Date('2026-10-11T00:00:00.000Z');
-
-  try {
-    await control.unsafe('DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA public CASCADE;');
-    await control.unsafe('CREATE SCHEMA public;');
-
-    await runDatabaseMigrations({ databaseUrl, migrationsFolder: baseMigrations });
-    await control.unsafe(`
-      INSERT INTO "account" ("id") VALUES
-        ('${accountA}'), ('${accountB}'), ('${accountC}'), ('${accountD}');
-      INSERT INTO "profile" ("id") VALUES
-        ('${sharedProfile}'), ('${uniqueProfile}');
-      INSERT INTO "account_profile" ("account_id", "profile_id", "role") VALUES
-        ('${accountA}', '${sharedProfile}', 'MEMBER'),
-        ('${accountB}', '${sharedProfile}', 'OWNER'),
-        ('${accountC}', '${uniqueProfile}', 'MEMBER');
-      INSERT INTO "post" ("id") VALUES ('${postId}');
-      INSERT INTO "reaction" ("id") VALUES ('${reactionId}');
-      INSERT INTO "profile_follow" ("id") VALUES ('${profileFollowId}');
-      INSERT INTO "profile_follow_request" ("id") VALUES ('${profileFollowRequestId}');
-      INSERT INTO "notification" (
-        "id", "recipient_profile_id", "recipient_account_id", "kind", "source_id", "data", "created_at", "read_at"
-      ) VALUES
-        ('${sharedUnreadId}', '${sharedProfile}', NULL, 'FOLLOW', '${sharedUnreadSource}', '{"text":"unread"}', '${sharedCreatedAt.toISOString()}', NULL),
-        ('${sharedReadId}', '${sharedProfile}', NULL, 'FOLLOW', '${sharedReadSource}', '{"text":"read"}', '${sharedCreatedAt.toISOString()}', '${sharedReadAt.toISOString()}'),
-        ('${uniqueMemberId}', '${uniqueProfile}', NULL, 'FOLLOW', '${uniqueSource}', '{"text":"unique"}', '${sharedCreatedAt.toISOString()}', NULL),
-        ('${operationalId}', NULL, '${accountC}', 'OPERATIONAL', '${operationalSource}', '{"title":"Existing","href":"/"}', '${sharedCreatedAt.toISOString()}', NULL);
-    `);
-
-    type MigratedNotification = {
-      id: string;
-      profileId: string | null;
-      accountId: string;
-      kind: string;
-      sourceId: string;
-      data: Record<string, unknown>;
-      createdAt: Date;
-      readAt: Date | null;
-    };
-    const readNotifications = () =>
-      control<MigratedNotification[]>`
-        SELECT id::text AS id,
-          recipient_profile_id::text AS "profileId",
-          recipient_account_id::text AS "accountId",
-          kind::text AS kind,
-          source_id::text AS "sourceId",
-          data,
-          created_at AS "createdAt",
-          read_at AS "readAt"
-        FROM notification
-        ORDER BY id
-      `;
-
-    await runDatabaseMigrations({ databaseUrl, migrationsFolder: migrations });
-    const notifications = await readNotifications();
-    assert.equal(notifications.length, 6);
-
-    const sharedUnread = notifications.filter(({ sourceId }) => sourceId === sharedUnreadSource);
-    assert.equal(sharedUnread.length, 2);
-    assert.deepEqual(
-      sharedUnread.map(({ accountId }) => accountId).sort(),
-      [accountA, accountB].sort(),
-    );
-    const originalSharedUnread = sharedUnread.find(({ id }) => id === sharedUnreadId);
-    assert.equal(originalSharedUnread?.accountId, accountB);
-    assert.equal(originalSharedUnread?.profileId, sharedProfile);
-    assert.equal(originalSharedUnread?.createdAt.getTime(), sharedCreatedAt.getTime());
-    assert.equal(originalSharedUnread?.readAt, null);
-    assert.deepEqual(originalSharedUnread?.data, { text: 'unread' });
-    const copiedSharedUnread = sharedUnread.find(({ id }) => id !== sharedUnreadId);
-    assert.equal(copiedSharedUnread?.accountId, accountA);
-    assert.equal(copiedSharedUnread?.profileId, sharedProfile);
-    assert.equal(copiedSharedUnread?.createdAt.getTime(), sharedCreatedAt.getTime());
-    assert.equal(copiedSharedUnread?.readAt, null);
-    assert.deepEqual(copiedSharedUnread?.data, { text: 'unread' });
-
-    const sharedRead = notifications.filter(({ sourceId }) => sourceId === sharedReadSource);
-    assert.equal(sharedRead.length, 2);
-    assert.deepEqual(
-      sharedRead.map(({ accountId }) => accountId).sort(),
-      [accountA, accountB].sort(),
-    );
-    assert.ok(
-      sharedRead.every(({ createdAt }) => createdAt.getTime() === sharedCreatedAt.getTime()),
-    );
-    assert.ok(sharedRead.every(({ readAt }) => readAt?.getTime() === sharedReadAt.getTime()));
-    assert.ok(
-      sharedRead.some(({ id, accountId }) => id === sharedReadId && accountId === accountB),
-    );
-
-    const uniqueMember = notifications.filter(({ sourceId }) => sourceId === uniqueSource);
-    assert.equal(uniqueMember.length, 1);
-    assert.equal(uniqueMember[0]?.id, uniqueMemberId);
-    assert.equal(uniqueMember[0]?.profileId, uniqueProfile);
-    assert.equal(uniqueMember[0]?.accountId, accountC);
-
-    const operational = notifications.filter(({ kind }) => kind === 'OPERATIONAL');
-    assert.equal(operational.length, 1);
-    assert.equal(operational[0]?.id, operationalId);
-    assert.equal(operational[0]?.profileId, null);
-    assert.equal(operational[0]?.accountId, accountC);
-    assert.deepEqual(operational[0]?.data, { title: 'Existing', href: '/' });
-
-    const [{ isNullable }] = await control<{ isNullable: string }[]>`
-      SELECT is_nullable AS "isNullable"
-      FROM information_schema.columns
-      WHERE table_schema = 'public'
-        AND table_name = 'notification'
-        AND column_name = 'recipient_account_id'
-    `;
-    assert.equal(isNullable, 'NO');
-
-    const actorAccountColumns = await control<{ tableName: string; isNullable: string }[]>`
-      SELECT table_name AS "tableName", is_nullable AS "isNullable"
-      FROM information_schema.columns
-      WHERE table_schema = 'public'
-        AND table_name IN ('post', 'reaction', 'profile_follow', 'profile_follow_request')
-        AND column_name = 'actor_account_id'
-      ORDER BY table_name
-    `;
-    assert.deepEqual(
-      actorAccountColumns.map(({ tableName, isNullable }) => [tableName, isNullable]),
-      [
-        ['post', 'YES'],
-        ['profile_follow', 'YES'],
-        ['profile_follow_request', 'YES'],
-        ['reaction', 'YES'],
-      ],
-    );
-
-    const [
-      {
-        postActorAccountId,
-        reactionActorAccountId,
-        profileFollowActorAccountId,
-        profileFollowRequestActorAccountId,
-      },
-    ] = await control<
-      {
-        postActorAccountId: string | null;
-        reactionActorAccountId: string | null;
-        profileFollowActorAccountId: string | null;
-        profileFollowRequestActorAccountId: string | null;
-      }[]
-    >`
-        SELECT
-          (SELECT actor_account_id::text FROM post WHERE id = ${postId}) AS "postActorAccountId",
-          (SELECT actor_account_id::text FROM reaction WHERE id = ${reactionId}) AS "reactionActorAccountId",
-          (SELECT actor_account_id::text FROM profile_follow WHERE id = ${profileFollowId}) AS "profileFollowActorAccountId",
-          (SELECT actor_account_id::text FROM profile_follow_request WHERE id = ${profileFollowRequestId}) AS "profileFollowRequestActorAccountId"
-      `;
-    assert.deepEqual(
-      {
-        postActorAccountId,
-        reactionActorAccountId,
-        profileFollowActorAccountId,
-        profileFollowRequestActorAccountId,
-      },
-      {
-        postActorAccountId: null,
-        reactionActorAccountId: null,
-        profileFollowActorAccountId: null,
-        profileFollowRequestActorAccountId: null,
-      },
-    );
-
-    await control.unsafe(`
-      UPDATE "post" SET "actor_account_id" = '${accountD}' WHERE "id" = '${postId}';
-      UPDATE "reaction" SET "actor_account_id" = '${accountD}' WHERE "id" = '${reactionId}';
-      UPDATE "profile_follow" SET "actor_account_id" = '${accountD}' WHERE "id" = '${profileFollowId}';
-      UPDATE "profile_follow_request" SET "actor_account_id" = '${accountD}' WHERE "id" = '${profileFollowRequestId}';
-      DELETE FROM "account" WHERE "id" = '${accountD}';
-    `);
-    const [
-      {
-        postCount,
-        reactionCount,
-        profileFollowCount,
-        profileFollowRequestCount,
-        remainingActorAccounts,
-      },
-    ] = await control<
-      {
-        postCount: number;
-        reactionCount: number;
-        profileFollowCount: number;
-        profileFollowRequestCount: number;
-        remainingActorAccounts: number;
-      }[]
-    >`
-        SELECT
-          (SELECT count(*)::int FROM post WHERE id = ${postId}) AS "postCount",
-          (SELECT count(*)::int FROM reaction WHERE id = ${reactionId}) AS "reactionCount",
-          (SELECT count(*)::int FROM profile_follow WHERE id = ${profileFollowId}) AS "profileFollowCount",
-          (SELECT count(*)::int FROM profile_follow_request WHERE id = ${profileFollowRequestId}) AS "profileFollowRequestCount",
-          (SELECT count(*)::int FROM (
-            SELECT actor_account_id FROM post WHERE id = ${postId}
-            UNION ALL SELECT actor_account_id FROM reaction WHERE id = ${reactionId}
-            UNION ALL SELECT actor_account_id FROM profile_follow WHERE id = ${profileFollowId}
-            UNION ALL SELECT actor_account_id FROM profile_follow_request WHERE id = ${profileFollowRequestId}
-          ) AS actor_account_refs WHERE actor_account_id IS NOT NULL) AS "remainingActorAccounts"
-      `;
-    assert.deepEqual(
-      {
-        postCount,
-        reactionCount,
-        profileFollowCount,
-        profileFollowRequestCount,
-        remainingActorAccounts,
-      },
-      {
-        postCount: 1,
-        reactionCount: 1,
-        profileFollowCount: 1,
-        profileFollowRequestCount: 1,
-        remainingActorAccounts: 0,
-      },
-    );
-
-    await runDatabaseMigrations({ databaseUrl, migrationsFolder: migrations });
-    assert.equal((await readNotifications()).length, 6);
-    const [{ appliedCount }] = await control<{ appliedCount: number }[]>`
-      SELECT count(*)::int AS "appliedCount" FROM drizzle.__drizzle_migrations
-    `;
-    assert.equal(appliedCount, 2);
-
-    await control.unsafe(
-      'DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA IF EXISTS public CASCADE;',
-    );
-    await control.unsafe('CREATE SCHEMA public;');
-    await runDatabaseMigrations({ databaseUrl, migrationsFolder: baseMigrations });
-    await control.unsafe(`
-      INSERT INTO "profile" ("id") VALUES ('${sharedProfile}');
-      INSERT INTO "notification" (
-        "id", "recipient_profile_id", "recipient_account_id", "kind", "source_id", "data", "created_at", "read_at"
-      ) VALUES (
-        '${sharedUnreadId}', '${sharedProfile}', NULL, 'FOLLOW', '${sharedUnreadSource}', '{"text":"orphan"}', '${sharedCreatedAt.toISOString()}', NULL
-      );
-    `);
-
-    await assert.rejects(
-      runDatabaseMigrations({ databaseUrl, migrationsFolder: migrations }),
-      /no linked account.*Add an account_profile membership/i,
-    );
-    const [{ actorColumnCount }] = await control<{ actorColumnCount: number }[]>`
-      SELECT count(*)::int AS "actorColumnCount"
-      FROM information_schema.columns
-      WHERE table_schema = 'public'
-        AND table_name IN ('post', 'reaction', 'profile_follow', 'profile_follow_request')
-        AND column_name = 'actor_account_id'
-    `;
-    assert.equal(actorColumnCount, 0);
-    const [{ isNullable: nullableAfterFailure }] = await control<{ isNullable: string }[]>`
-      SELECT is_nullable AS "isNullable"
-      FROM information_schema.columns
-      WHERE table_schema = 'public'
-        AND table_name = 'notification'
-        AND column_name = 'recipient_account_id'
-    `;
-    assert.equal(nullableAfterFailure, 'YES');
-    const [{ recipientAccountId, rowCount }] = await control<
-      { recipientAccountId: string | null; rowCount: number }[]
-    >`
-      SELECT recipient_account_id::text AS "recipientAccountId", count(*)::int AS "rowCount"
-      FROM notification
-      WHERE id = ${sharedUnreadId}
-      GROUP BY recipient_account_id
-    `;
-    assert.equal(recipientAccountId, null);
-    assert.equal(rowCount, 1);
-    const [{ oldConstraintCount }] = await control<{ oldConstraintCount: number }[]>`
-      SELECT count(*)::int AS "oldConstraintCount"
-      FROM pg_constraint
-      WHERE conrelid = 'public.notification'::regclass
-        AND conname = 'notification_recipient_check'
-    `;
-    assert.equal(oldConstraintCount, 1);
-    const [{ appliedAfterFailure }] = await control<{ appliedAfterFailure: number }[]>`
-      SELECT count(*)::int AS "appliedAfterFailure" FROM drizzle.__drizzle_migrations
-    `;
-    assert.equal(appliedAfterFailure, 1);
-  } finally {
-    await control.unsafe(
-      'DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA IF EXISTS public CASCADE;',
-    );
-    await control.unsafe('CREATE SCHEMA public;');
-    await control.end({ timeout: 5 });
-    await rm(baseMigrations, { force: true, recursive: true });
-    await rm(migrations, { force: true, recursive: true });
   }
 });
 

@@ -288,9 +288,9 @@ export const Notifications = pgTable(
     recipientProfileId: uuid('recipient_profile_id').references(() => Profiles.id, {
       onDelete: 'cascade',
     }),
-    recipientAccountId: uuid('recipient_account_id')
-      .notNull()
-      .references(() => Accounts.id, { onDelete: 'cascade' }),
+    recipientAccountId: uuid('recipient_account_id').references(() => Accounts.id, {
+      onDelete: 'cascade',
+    }),
     kind: Enum.notificationKind('kind').notNull(),
     sourceId: uuid('source_id').notNull(),
     data: jsonb('data').$type<NotificationData>().notNull().default({}),
@@ -298,12 +298,14 @@ export const Notifications = pgTable(
     readAt: datetime('read_at'),
   },
   (table) => [
-    uniqueIndex('notification_account_profile_kind_source_unique')
-      .on(table.recipientAccountId, table.recipientProfileId, table.kind, table.sourceId)
-      .where(sql`${table.recipientProfileId} IS NOT NULL`),
+    unique().on(table.recipientProfileId, table.kind, table.sourceId),
     uniqueIndex()
       .on(table.recipientAccountId, table.kind, table.sourceId)
       .where(sql`${table.recipientProfileId} IS NULL`),
+    uniqueIndex('notification_account_profile_kind_source_unique')
+      .on(table.recipientAccountId, table.recipientProfileId, table.kind, table.sourceId)
+      .where(sql`${table.recipientProfileId} IS NOT NULL`),
+    index().on(table.recipientProfileId, table.id.desc()),
     index().on(table.recipientProfileId, table.createdAt.desc(), table.id.desc()),
     index().on(table.recipientAccountId, table.createdAt.desc(), table.id.desc()),
     index()
