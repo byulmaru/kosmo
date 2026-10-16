@@ -9,7 +9,7 @@ import {
   getLastNativeNotificationResponse,
   subscribeToNativeNotificationResponses,
 } from './nativePushClient';
-import { parseNativePushTapTarget } from './pushPayload';
+import { parseNativePushResponseTapTarget } from './pushPayload';
 import type { NotificationResponse } from 'expo-notifications';
 
 export function useNativePushNotificationResponses() {
@@ -33,7 +33,7 @@ export function useNativePushNotificationResponses() {
         return;
       }
 
-      const envelope = parseNativePushTapTarget(response.notification.request.content.data);
+      const envelope = parseNativePushResponseTapTarget(response);
       if (!envelope) {
         clearLastNativeNotificationResponse();
         fallbackToNotifications();

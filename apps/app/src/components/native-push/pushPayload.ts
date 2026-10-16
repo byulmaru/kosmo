@@ -1,4 +1,5 @@
 import { parseNotificationHref } from '@/components/notification/notificationHref';
+import type { NotificationResponse } from 'expo-notifications';
 import type { Href } from 'expo-router';
 import type { NotificationHrefTarget } from '@/components/notification/notificationHref';
 
@@ -66,4 +67,25 @@ export function parseNativePushTapTarget(value: unknown): NativePushTapTarget | 
   }
 
   return null;
+}
+
+export function parseNativePushResponseTapTarget(
+  response: NotificationResponse,
+): NativePushTapTarget | null {
+  const content = response.notification.request.content;
+  const contentTarget = parseNativePushTapTarget(content.data);
+  if (contentTarget) {
+    return contentTarget;
+  }
+
+  const trigger = response.notification.request.trigger;
+  if (!isRecord(trigger)) {
+    return null;
+  }
+  const triggerRecord = trigger as RecordValue;
+  if (triggerRecord.type !== 'push') {
+    return null;
+  }
+
+  return parseNativePushTapTarget(triggerRecord.payload);
 }

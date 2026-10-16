@@ -74,7 +74,8 @@ composer control은 자체 동작만 수행한다. 모두 읽음, unread indicat
 - 앱 시작이나 로그인 완료 때 OS 권한을 자동 요청하지 않는다. 앱 설정의 알림 action은 OS 권한이 미결정이면
   OS 권한 요청을 시작하고, 이미 허용되거나 거부된 경우 OS 알림 설정을 연다. 허용된 로그인 세션은 로그인·앱
   활성화 때 FCM token을 자동 동기화하고, 권한 요청이 허용된 직후에도 token을 즉시 동기화한다.
-- 기본 잠금 화면 FCM Push에는 발신자, 알림 유형과 게시글 본문 미리보기를 포함한다.
+- Profile Notification Push의 title/body는 아래 PROD-1061 공통 정보 구성 계약을 사용한다. 줄 수·줄바꿈·자름·
+  접힘·펼침은 OS가 소유한다. Operational Notification은 저장된 제목·선택적 본문 계약을 따른다.
 - Follow와 FollowRequest처럼 게시글 본문이 없는 알림은 본문 미리보기를 생략한다.
 - Push transport는 canonical Notification이 저장 성공한 결과를 받는 공통 전달 flow를 소유한다. 현재
   Notification runtime의 Follow, FollowRequest, Reaction, Repost, Reply와 inbound ActivityPub Mention은 이 flow의
@@ -107,9 +108,9 @@ composer control은 자체 동작만 수행한다. 모두 읽음, unread indicat
 - 첫 릴리스에는 전역·알림 유형별·Profile별 in-app Push enable/disable control이나 preference API를
   두지 않는다. Push 수신 여부는 OS 알림 설정으로 제어하며, 기존 Notification의 Mute·Block·visibility
   억제 정책은 계속 적용한다.
-- 잠금 화면 본문 미리보기는 sensitive 또는 Content Warning인 경우 가린다. 이 예외는 본문에만 적용하며,
-  발신자·알림 유형·Recipient Profile 식별은 유지한다. 그 외에는 Recipient가 조회 권한을 가진 비공개
-  본문을 미리보기에 포함한다.
+- 게시글 본문은 Recipient가 조회할 수 있고 sensitive 또는 Content Warning이 아닌 경우에만 Profile Notification
+  Push의 title/body 정보에 포함한다. 이 예외는 본문에만 적용하며, 발신자·알림 유형·Recipient Profile 식별은
+  유지한다.
 - 앱이 foreground인 경우에도 OS 알림 배너를 표시한다. 별도의 custom in-app Push banner를 추가하지
   않는다.
 - Profile Notification Push payload는 `notificationId`, `recipientProfileId`, 내부 앱 경로 문자열 `href`를
@@ -141,6 +142,31 @@ composer control은 자체 동작만 수행한다. 모두 읽음, unread indicat
   target 처리, Push 만료와 read state 독립성을 확정한다.
 - 저장된 Mention Notification은 같은 공통 Push flow를 사용하며, 이 연결은 FCM Provider의 수락이나
   기기 도착을 입증하지 않는다.
+
+## Native Push 공통 정보 구성 · PROD-1061
+
+2026-10-14 사용자 승인으로 Android/iOS Profile Notification Push의 title/body를 공통 정보 구성으로 정렬한다.
+인앱 알림 목록의 표시 계약에는 적용하지 않는다.
+
+- title/body에는 행위자와 수신 Profile의 이름·핸들, 행동 종류를 포함한다. Reaction은 실제 Reaction emoji를
+  사용한다.
+- Recipient가 조회할 수 있고 sensitive 또는 Content Warning이 아닌 게시글 본문은 title/body 정보에 포함한다.
+  Follow와 FollowRequest처럼 게시글 본문이 없는 알림은 본문을 포함하지 않는다.
+- 줄 수·줄바꿈·자름·접힘·펼침은 OS가 소유한다. 플랫폼별 별도 표시, 아바타, 수신자 전용 행, Reaction 배지,
+  접힘·펼침에 따른 다른 정보 구성은 요구하지 않는다.
+- 묶인 알림의 표시와 집계 기준은 이번 결정 범위에서 제외한다.
+
+행동 종류별 기존 문구는 다음과 같이 title/body 정보에 구성한다.
+
+| 종류          | 행동 요약                                                                                      |
+| ------------- | ---------------------------------------------------------------------------------------------- |
+| Follow        | `{행위자명}({행위자핸들}) 님이 {수신자명}({수신자핸들}) 님을 팔로우했습니다.`                  |
+| FollowRequest | `{행위자명}({행위자핸들}) 님이 {수신자명}({수신자핸들}) 님에게 팔로우를 요청했습니다.`         |
+| Reaction      | `{행위자명}({행위자핸들}) 님이 {수신자명}({수신자핸들}) 님에게 {Reaction emoji}를 남겼습니다.` |
+| Repost        | `{행위자명}({행위자핸들}) 님이 {수신자명}({수신자핸들}) 님의 게시글을 재게시했습니다.`         |
+| Reply         | `{행위자명}({행위자핸들}) 님이 {수신자명}({수신자핸들}) 님의 게시글에 답글을 달았습니다.`      |
+| Quote         | `{행위자명}({행위자핸들}) 님이 {수신자명}({수신자핸들}) 님의 게시글을 인용했습니다.`           |
+| Mention       | `{행위자명}({행위자핸들}) 님이 {수신자명}({수신자핸들}) 님을 언급했습니다.`                    |
 
 ## 표시와 합성
 
