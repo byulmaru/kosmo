@@ -707,7 +707,9 @@ const meta = {
     'ProcessingAccessibility',
     'ReactionConcurrentMutationContract',
     'ReactionFailureRetryActorSwitchAndUnmount',
-    'ReactionPopoverDismissFocusAndPlacement',
+    'ReactionFullDismissFocusAndPlacement',
+    'ReactionMobileWebTabClearance',
+    'ReactionRecentUseContract',
     'ReactionSummaryToggleContract',
   ],
   parameters: { controls: { disable: true } },
@@ -1373,7 +1375,7 @@ export const ControlledReply: Story = {
   render: () => <ControlledReplyStory />,
 };
 
-export const ReactionPopoverDismissFocusAndPlacement: Story = {
+export const ReactionFullDismissFocusAndPlacement: Story = {
   globals: { viewport: { isRotated: false, value: 'reactionNarrow' } },
   parameters: {
     layout: 'fullscreen',
@@ -1395,39 +1397,35 @@ export const ReactionPopoverDismissFocusAndPlacement: Story = {
     expect(topLeftTrigger).toHaveAttribute('aria-expanded', 'false');
     await userEvent.click(topLeftTrigger!);
     const dialog = await screen.findByRole('dialog', { name: '반응 선택' });
-    let position = screen.getByTestId('reaction-popover-position');
+    let position = screen.getByTestId('full-reaction-overlay-position');
     await waitFor(() => expect(position).toHaveAttribute('data-placement', 'bottom'));
-    expect(canvasElement.ownerDocument.activeElement).toHaveAttribute('aria-label', '🥹 반응');
+    expect(canvasElement.ownerDocument.activeElement).toBe(
+      within(dialog).getByRole('searchbox', { name: '반응 검색' }),
+    );
     expect(position.getBoundingClientRect().left).toBeGreaterThanOrEqual(0);
-
-    const shell = screen.getByTestId('reaction-popover-scroll');
-    expect(shell.getBoundingClientRect().left).toBeGreaterThanOrEqual(spacing.sm);
-    expect(shell.getBoundingClientRect().right).toBeLessThanOrEqual(
+    expect(position.getBoundingClientRect().right).toBeLessThanOrEqual(
       canvasElement.ownerDocument.documentElement.clientWidth - spacing.sm,
     );
-    expect(getComputedStyle(shell).overflowX).toBe('auto');
-    for (const option of within(dialog).getAllByRole('button', { name: /반응/ })) {
-      const bounds = option.getBoundingClientRect();
-      expect(bounds.width).toBe(32);
-      expect(bounds.height).toBe(32);
-    }
+    expect(position.getBoundingClientRect().width).toBeLessThanOrEqual(288);
+    expect(position.getBoundingClientRect().height).toBeLessThanOrEqual(420);
+    expect(within(dialog).getByRole('heading', { name: '빠른 반응' })).toBeVisible();
 
-    await userEvent.click(screen.getByTestId('reaction-popover-trigger-dismiss'));
+    await userEvent.click(screen.getByTestId('full-reaction-overlay-trigger-dismiss'));
     expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull();
-    expect(canvasElement.ownerDocument.activeElement).toBe(topLeftTrigger);
+    await waitFor(() => expect(canvasElement.ownerDocument.activeElement).toBe(topLeftTrigger));
     await userEvent.click(topLeftTrigger!);
-    await userEvent.click(screen.getByTestId('reaction-popover-backdrop'));
+    await userEvent.click(canvasElement.ownerDocument.body);
     expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull();
-    expect(canvasElement.ownerDocument.activeElement).toBe(topLeftTrigger);
+    await waitFor(() => expect(canvasElement.ownerDocument.activeElement).toBe(topLeftTrigger));
 
     await userEvent.click(topLeftTrigger!);
     await userEvent.keyboard('{Escape}');
     expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull();
-    expect(canvasElement.ownerDocument.activeElement).toBe(topLeftTrigger);
+    await waitFor(() => expect(canvasElement.ownerDocument.activeElement).toBe(topLeftTrigger));
 
     await userEvent.click(bottomRightTrigger!);
     await screen.findByRole('dialog', { name: '반응 선택' });
-    position = screen.getByTestId('reaction-popover-position');
+    position = screen.getByTestId('full-reaction-overlay-position');
     await waitFor(() => expect(position).toHaveAttribute('data-placement', 'top'));
     expect(position.getBoundingClientRect().right).toBeLessThanOrEqual(
       canvasElement.ownerDocument.documentElement.clientWidth - spacing.sm,
@@ -1439,6 +1437,27 @@ export const ReactionPopoverDismissFocusAndPlacement: Story = {
         <PostActionBarFixture />
       </View>
       <View style={styles.bottomRightAction}>
+        <PostActionBarFixture />
+      </View>
+    </View>
+  ),
+};
+
+export const ReactionMobileWebTabClearance: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: { layout: 'fullscreen' },
+  play: async ({ canvasElement }) => {
+    const trigger = within(canvasElement).getByRole('button', { name: '반응' });
+    await userEvent.click(trigger);
+    const position = await screen.findByTestId('full-reaction-overlay-position');
+    await waitFor(() => expect(position).toHaveAttribute('data-placement', 'top'));
+    expect(position.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+      trigger.getBoundingClientRect().top,
+    );
+  },
+  render: () => (
+    <View style={styles.mobileMidFixture}>
+      <View style={styles.mobileMidAction}>
         <PostActionBarFixture />
       </View>
     </View>
@@ -1510,8 +1529,9 @@ export const ReactionConcurrentMutationContract: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(await canvas.findByRole('button', { name: '반응' }));
-    const heart = await screen.findByRole('button', { name: '❤️ 반응' });
-    const party = screen.getByRole('button', { name: '🎉 반응' });
+    const quick = within(await screen.findByTestId('full-reaction-section-quick-row-0'));
+    const heart = quick.getByRole('button', { name: '빨간색 하트 ❤️' });
+    const party = quick.getByRole('button', { name: '파티 🎉' });
 
     unstable_batchedUpdates(() => {
       heart.click();
@@ -1522,30 +1542,30 @@ export const ReactionConcurrentMutationContract: Story = {
     let requests = readReactionRequests(canvas);
     expect(requests.filter((request) => request.type === '❤️')).toHaveLength(1);
     expect(requests.filter((request) => request.type === '🎉')).toHaveLength(1);
-    expect(screen.getByRole('button', { name: '❤️ 반응, 처리 중' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: '🎉 반응, 처리 중' })).toBeDisabled();
+    expect(quick.getByRole('button', { name: '빨간색 하트 반응, 처리 중 ❤️' })).toBeDisabled();
+    expect(quick.getByRole('button', { name: '파티 반응, 처리 중 🎉' })).toBeDisabled();
 
     const partyRequest = requests.find((request) => request.type === '🎉')!;
     canvas.getByRole('button', { name: `요청 ${partyRequest.id} success` }).click();
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: '🎉 반응' })).toHaveAttribute(
+      expect(quick.getByRole('button', { name: '파티 🎉' })).toHaveAttribute(
         'aria-pressed',
         'true',
       ),
     );
-    expect(screen.getByRole('button', { name: '❤️ 반응, 처리 중' })).toBeDisabled();
+    expect(quick.getByRole('button', { name: '빨간색 하트 반응, 처리 중 ❤️' })).toBeDisabled();
 
     const heartRequest = requests.find((request) => request.type === '❤️')!;
     canvas.getByRole('button', { name: `요청 ${heartRequest.id} success` }).click();
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: '❤️ 반응' })).toHaveAttribute(
+      expect(quick.getByRole('button', { name: '빨간색 하트 ❤️' })).toHaveAttribute(
         'aria-pressed',
         'true',
       ),
     );
     expect(screen.getByRole('dialog', { name: '반응 선택' })).toBeVisible();
 
-    await userEvent.click(screen.getByRole('button', { name: '❤️ 반응' }));
+    await userEvent.click(quick.getByRole('button', { name: '빨간색 하트 ❤️' }));
     await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(3));
     requests = readReactionRequests(canvas);
     const deleteHeart = requests.find(
@@ -1553,13 +1573,123 @@ export const ReactionConcurrentMutationContract: Story = {
     )!;
     canvas.getByRole('button', { name: `요청 ${deleteHeart.id} success` }).click();
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: '❤️ 반응' })).toHaveAttribute(
+      expect(quick.getByRole('button', { name: '빨간색 하트 ❤️' })).toHaveAttribute(
         'aria-pressed',
         'false',
       ),
     );
-    expect(screen.getByRole('button', { name: '🎉 반응' })).toHaveAttribute('aria-pressed', 'true');
+    expect(quick.getByRole('button', { name: '파티 🎉' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('dialog', { name: '반응 선택' })).toBeVisible();
+  },
+  render: () => <ReactionContractHarness />,
+};
+
+export const ReactionDirectFullContract: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole('button', { name: '반응' }));
+    const full = await screen.findByRole('dialog', { name: '반응 선택' });
+    expect(within(full).getByRole('heading', { name: '빠른 반응' })).toBeVisible();
+    expect(
+      within(within(full).getByTestId('full-reaction-section-quick-row-0')).getByRole('button', {
+        name: '빨간색 하트 ❤️',
+      }),
+    ).toBeVisible();
+    expect(within(full).queryByRole('button', { name: '전체 반응' })).toBeNull();
+    await waitFor(() => {
+      const bounds = full.getBoundingClientRect();
+      const trigger = canvas.getByRole('button', { name: '반응' }).getBoundingClientRect();
+      expect(
+        Math.min(Math.abs(bounds.top - trigger.bottom), Math.abs(trigger.top - bounds.bottom)),
+      ).toBeLessThanOrEqual(spacing.xs + 1);
+      expect(bounds.top).toBeGreaterThanOrEqual(0);
+      expect(bounds.bottom).toBeLessThanOrEqual(window.innerHeight);
+      expect(bounds.left).toBeGreaterThanOrEqual(0);
+      expect(bounds.right).toBeLessThanOrEqual(window.innerWidth);
+    });
+    const search = within(full).getByRole('searchbox', { name: '반응 검색' });
+    await userEvent.type(search, '👋🏽');
+    expect(within(full).getByText('검색 결과가 없어요')).toBeVisible();
+    await userEvent.clear(search);
+    await userEvent.type(search, 'heart hands');
+    const option = await within(full).findByRole('button', { name: '손 하트 🫶' });
+    await userEvent.click(option);
+    await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(1));
+    expect(readReactionRequests(canvas)[0]!.type).toBe('🫶');
+    const pending = await within(full).findByRole('button', {
+      name: '손 하트 반응, 처리 중 🫶',
+    });
+    expect(pending).toBeDisabled();
+    expect(readReactionRequests(canvas)).toHaveLength(1);
+    expect(screen.getByRole('dialog', { name: '반응 선택' })).toBeVisible();
+
+    canvas.getByRole('button', { name: '요청 1 success' }).click();
+    await waitFor(() =>
+      expect(within(full).getByRole('button', { name: '손 하트 🫶' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      ),
+    );
+    expect(screen.getByRole('dialog', { name: '반응 선택' })).toBeVisible();
+    expect(canvas.getByRole('button', { name: '반응' })).toHaveAttribute('aria-expanded', 'true');
+
+    await userEvent.click(within(full).getByRole('button', { name: '손 하트 🫶' }));
+    await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(2));
+    canvas.getByRole('button', { name: '요청 2 payload-error' }).click();
+    const retry = await within(full).findByRole('button', {
+      name: '손 하트 반응, 오류, 다시 시도 🫶',
+    });
+    await userEvent.click(retry);
+    await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(3));
+    const previousActorRequest = readReactionRequests(canvas)[2]!;
+
+    canvas.getByRole('button', { name: 'Reaction actor 전환' }).click();
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull());
+    canvas.getByRole('button', { name: `요청 ${previousActorRequest.id} success` }).click();
+
+    await userEvent.click(await canvas.findByRole('button', { name: '반응' }));
+    const nextFull = await screen.findByRole('dialog', { name: '반응 선택' });
+    const nextSearch = within(nextFull).getByRole('searchbox', { name: '반응 검색' });
+    await userEvent.type(nextSearch, 'heart hands');
+    await expect(
+      within(nextFull).findByRole('button', { name: '손 하트 🫶' }),
+    ).resolves.toHaveAttribute('aria-pressed', 'false');
+
+    await userEvent.click(screen.getByTestId('full-reaction-overlay-trigger-dismiss'));
+    expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull();
+  },
+  render: () => <ReactionContractHarness />,
+};
+
+export const ReactionRecentUseContract: Story = {
+  play: async ({ canvasElement }) => {
+    const key = 'kosmo:recent-reactions:profile-reaction-default';
+    globalThis.localStorage?.removeItem(key);
+    try {
+      const canvas = within(canvasElement);
+      await userEvent.click(await canvas.findByRole('button', { name: '반응' }));
+      const dialog = await screen.findByRole('dialog', { name: '반응 선택' });
+      const search = within(dialog).getByRole('searchbox', { name: '반응 검색' });
+      await userEvent.type(search, 'heart hands');
+      await userEvent.click(await within(dialog).findByRole('button', { name: '손 하트 🫶' }));
+      await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(1));
+      canvas.getByRole('button', { name: '요청 1 success' }).click();
+      await waitFor(() =>
+        expect(JSON.parse(globalThis.localStorage?.getItem(key) ?? '[]')).toEqual(['🫶']),
+      );
+      await userEvent.keyboard('{Escape}');
+      await userEvent.click(canvas.getByRole('button', { name: '반응' }));
+      const reopened = await screen.findByRole('dialog', { name: '반응 선택' });
+      expect(within(reopened).getByRole('searchbox', { name: '반응 검색' })).toHaveValue('');
+      expect(
+        within(await within(reopened).findByTestId('full-reaction-section-recent-row-0')).getByRole(
+          'button',
+          { name: '손 하트 🫶' },
+        ),
+      ).toBeVisible();
+    } finally {
+      globalThis.localStorage?.removeItem(key);
+    }
   },
   render: () => <ReactionContractHarness />,
 };
@@ -1584,23 +1714,28 @@ export const ReactionFailureRetryActorSwitchAndUnmount: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(await canvas.findByRole('button', { name: '반응' }));
-    await userEvent.click(await screen.findByRole('button', { name: '❤️ 반응' }));
+    let quick = within(await screen.findByTestId('full-reaction-section-quick-row-0'));
+    await userEvent.click(quick.getByRole('button', { name: '빨간색 하트 ❤️' }));
     await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(1));
     canvas.getByRole('button', { name: '요청 1 payload-error' }).click();
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: '❤️ 반응, 오류, 다시 시도' })).toBeVisible(),
+      expect(
+        quick.getByRole('button', { name: '빨간색 하트 반응, 오류, 다시 시도 ❤️' }),
+      ).toBeVisible(),
     );
     expect(canvas.getByRole('button', { name: '❤️ 반응 12개, 오류, 다시 시도' })).toBeVisible();
-    expect(screen.getByRole('button', { name: '🎉 반응' })).not.toBeDisabled();
+    expect(quick.getByRole('button', { name: '파티 🎉' })).not.toBeDisabled();
 
-    await userEvent.click(screen.getByRole('button', { name: '❤️ 반응, 오류, 다시 시도' }));
+    await userEvent.click(
+      quick.getByRole('button', { name: '빨간색 하트 반응, 오류, 다시 시도 ❤️' }),
+    );
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: '❤️ 반응, 처리 중' })).toBeDisabled(),
+      expect(quick.getByRole('button', { name: '빨간색 하트 반응, 처리 중 ❤️' })).toBeDisabled(),
     );
     await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(2));
     canvas.getByRole('button', { name: '요청 2 data-errors-success' }).click();
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: '❤️ 반응' })).toHaveAttribute(
+      expect(quick.getByRole('button', { name: '빨간색 하트 ❤️' })).toHaveAttribute(
         'aria-pressed',
         'true',
       ),
@@ -1608,8 +1743,8 @@ export const ReactionFailureRetryActorSwitchAndUnmount: Story = {
     expect(screen.queryByRole('button', { name: /오류, 다시 시도/ })).toBeNull();
 
     unstable_batchedUpdates(() => {
-      screen.getByRole('button', { name: '🎉 반응' }).click();
-      screen.getByRole('button', { name: '☘️ 반응' }).click();
+      quick.getByRole('button', { name: '파티 🎉' }).click();
+      quick.getByRole('button', { name: '토끼풀 ☘️' }).click();
     });
     await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(4));
     const oldActorRequests = readReactionRequests(canvas).slice(2, 4);
@@ -1620,25 +1755,26 @@ export const ReactionFailureRetryActorSwitchAndUnmount: Story = {
     await waitFor(() => expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull());
 
     await userEvent.click(await canvas.findByRole('button', { name: '반응' }));
-    await userEvent.click(await screen.findByRole('button', { name: '👀 반응' }));
+    quick = within(await screen.findByTestId('full-reaction-section-quick-row-0'));
+    await userEvent.click(quick.getByRole('button', { name: '왕눈이 눈알 👀' }));
     await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(5));
     const currentActorRequest = readReactionRequests(canvas)[4]!;
     expect(currentActorRequest.actorId).not.toBe(oldActorRequests[0]!.actorId);
     canvas.getByRole('button', { name: `요청 ${oldActorRequests[0]!.id} success` }).click();
     canvas.getByRole('button', { name: `요청 ${oldActorRequests[1]!.id} network-error` }).click();
-    expect(screen.getByRole('button', { name: '👀 반응, 처리 중' })).toBeDisabled();
+    expect(quick.getByRole('button', { name: '왕눈이 눈알 반응, 처리 중 👀' })).toBeDisabled();
     expect(screen.queryByRole('button', { name: /오류, 다시 시도/ })).toBeNull();
 
     canvas.getByRole('button', { name: `요청 ${currentActorRequest.id} success` }).click();
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: '👀 반응' })).toHaveAttribute(
+      expect(quick.getByRole('button', { name: '왕눈이 눈알 👀' })).toHaveAttribute(
         'aria-pressed',
         'true',
       ),
     );
     unstable_batchedUpdates(() => {
-      screen.getByRole('button', { name: '🌈 반응' }).click();
-      screen.getByRole('button', { name: '🥹 반응' }).click();
+      quick.getByRole('button', { name: '무지개 🌈' }).click();
+      quick.getByRole('button', { name: '눈물을 참는 얼굴 🥹' }).click();
     });
     await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(7));
     const unmountedRequests = readReactionRequests(canvas).slice(5, 7);
@@ -1865,6 +2001,8 @@ const styles = {
     position: 'relative',
     width: '100%',
   } satisfies ViewStyle,
+  mobileMidAction: { position: 'absolute', right: 0, top: 380, width: 88 } satisfies ViewStyle,
+  mobileMidFixture: { height: 844, position: 'relative', width: '100%' } satisfies ViewStyle,
   topLeftAction: {
     left: -44,
     position: 'absolute',
