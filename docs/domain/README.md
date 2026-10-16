@@ -96,6 +96,8 @@ Account 요청에서 Profile이 주체인 행동의 `Account.Active`는 해당 P
   생성·전환·핵심 행동 지표의 계산 규칙.
 - [Profile Hashtag 탐색 지표](./policies/profile-hashtag-exploration-analytics.md): 사용자 Funnel·최초 결과 Empty의 집계와 개인정보 경계.
 
+- [Public Content Onboarding Policy](./policies/public-content-onboarding.md): 공개 방문자의 안내와 인증·Profile 준비 후 콘텐츠 복귀.
+
 ## 결정과 기록
 
 - [ADR 0001: Core Ubiquitous Language](./decisions/0001-core-ubiquitous-language.md)

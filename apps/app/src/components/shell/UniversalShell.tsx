@@ -12,6 +12,11 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { identifyAnalytics } from '@/analytics/client';
+import {
+  isSafePublicContentReturnTarget,
+  readInvitationDismissed,
+  saveInvitationDismissed,
+} from '@/auth/publicContentReturn';
 import { FeedbackOverlay } from '@/components/feedback/FeedbackOverlay';
 import {
   NotificationReadAllAction,
@@ -32,6 +37,8 @@ import {
   PrimaryNavigationScrollProvider,
   PrimaryNavigationScrollReset,
 } from './PrimaryNavigationScrollContext';
+import { PublicContentInvitation } from './PublicContentInvitation';
+import { getPublicContentInvitationPlacement } from './publicContentInvitationLayout';
 import { RightRail, RightRailFooter } from './RightRail';
 import { ShellChromeProvider } from './ShellChromeContext';
 import {
@@ -125,12 +132,14 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
   const pathname = usePathname();
   const routeSegments = useSegments();
   const router = useRouter();
-  const { width } = useWindowDimensions();
+  const { height, width } = useWindowDimensions();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
   const composerTriggerFocusRef = useRef<HTMLElement | null>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [invitationDismissed, setInvitationDismissed] = useState(readInvitationDismissed);
+  const [invitationHeight, setInvitationHeight] = useState(0);
   const { accountId, status } = useSession();
   const menuButtonRef = useRef<NativeView>(null);
   const screenFallbackRef = useRef<NativeView>(null);
@@ -173,6 +182,15 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
   );
   const profile = data.currentSession?.selectedProfile ?? null;
   const web = Platform.OS === 'web';
+  const guestPublicContent = web && status === 'guest' && isSafePublicContentReturnTarget(pathname);
+  const invitationVisible = guestPublicContent && !invitationDismissed;
+  const invitationPlacement = getPublicContentInvitationPlacement({
+    height,
+    safeAreaBottom: insets.bottom,
+    width,
+  });
+  const invitationReservedHeight =
+    invitationVisible && invitationPlacement.mode === 'fixed' ? invitationHeight : 0;
   const availableProfileCount = data.me?.profiles.length;
   useEffect(() => {
     if (web && status === 'valid' && accountId && availableProfileCount !== undefined) {
@@ -192,7 +210,13 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
   const full = layout === 'full';
   const mobile = layout === 'mobile';
   const timeline = isTimelineRoute(pathname);
-  const mobileShellHeader = getWebMobileShellHeader(web, width, pathname, routeSegments);
+  const mobileShellHeader = getWebMobileShellHeader(
+    web,
+    width,
+    pathname,
+    routeSegments,
+    guestPublicContent,
+  );
   const routeOwnsMobileHeader = isWebMobileRouteOwnedHeader(web, width, pathname);
   const rootSafeAreaStyle = { paddingLeft: insets.left, paddingRight: insets.right };
   const centerSafeAreaStyle = !mobile
@@ -383,6 +407,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
           <SidebarNavigation
             compact={compact}
             feedbackActive={feedbackOverlayVisible}
+            guestPublicContent={guestPublicContent}
             onComposeOpen={layout === 'compact' ? openComposer : undefined}
             onFeedbackOpen={openFeedbackOverlay}
             onHomeReselect={web ? reselectHome : undefined}
@@ -444,11 +469,14 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
           style={[
             styles.route,
             !web && styles.nativeRoute,
+            web ? { paddingBottom: invitationReservedHeight } : null,
             mobile && web
               ? {
                   ...(routeOwnsMobileHeader ? { paddingTop: insets.top } : {}),
                   paddingBottom:
-                    getBottomTabBarContentHeight(Platform.OS) + (web ? 0 : insets.bottom),
+                    getBottomTabBarContentHeight(Platform.OS) +
+                    invitationReservedHeight +
+                    insets.bottom,
                 }
               : null,
           ]}
@@ -457,6 +485,20 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
             <RelayActorBoundary>{children}</RelayActorBoundary>
           </PostMediaViewerScreenFallbackProvider>
         </View>
+        <PublicContentInvitation
+          onDismiss={() => {
+            saveInvitationDismissed();
+            setInvitationDismissed(true);
+            setInvitationHeight(0);
+          }}
+          onLayout={(nextHeight) => {
+            setInvitationHeight((currentHeight) =>
+              Math.round(currentHeight) === Math.round(nextHeight) ? currentHeight : nextHeight,
+            );
+          }}
+          pathname={pathname}
+          visible={invitationVisible}
+        />
         {mobile ? (
           <View aria-hidden={drawerOpen || undefined} style={web ? webFixedBottomBar : undefined}>
             <BottomTabBar onComposeOpen={openComposer} profile={profile} />
@@ -504,6 +546,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
           onSwitcherOpenChange={setSwitcherOpen}
           query={data}
           switcherOpen={switcherOpen}
+          guestPublicContent={guestPublicContent}
         />
       ) : null}
     </View>

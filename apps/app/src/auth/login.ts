@@ -6,8 +6,9 @@ import {
   ResponseType,
 } from 'expo-auth-session';
 import { getNativeSessionConfiguration } from './nativeConfig';
+import { consumeHomeReturnTarget } from './publicContentReturn';
 import { startWebLogin } from './webLogin';
-import type { GestureResponderEvent } from 'react-native';
+import type { WebActivationEvent } from './publicContentReturn';
 
 export { startWebLogin } from './webLogin';
 
@@ -17,7 +18,10 @@ export type NativeOidcSessionExchangeInput = {
   redirectUri: string;
 };
 
-export function startWebLoginFromPress(event: GestureResponderEvent): void {
+export function startWebLoginFromPress(
+  event: WebActivationEvent,
+  returnTarget?: string | null,
+): void {
   const pointer = event.nativeEvent as unknown as MouseEvent;
 
   if (
@@ -31,7 +35,7 @@ export function startWebLoginFromPress(event: GestureResponderEvent): void {
   }
 
   event.preventDefault();
-  startWebLogin();
+  startWebLogin(returnTarget === undefined ? consumeHomeReturnTarget() : returnTarget);
 }
 
 export async function startNativeAuthorization(): Promise<NativeOidcSessionExchangeInput | null> {

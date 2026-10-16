@@ -78,6 +78,13 @@ let useAnalyticsIdentityAccountId: () => string | null;
 let renderer: ReactTestRenderer | null = null;
 let originalFetch: typeof fetch;
 let originalWindowDescriptor: PropertyDescriptor | undefined;
+let originalSessionStorageDescriptor: PropertyDescriptor | undefined;
+const browserSessionValues = new Map<string, string>();
+const browserSessionStorage = {
+  getItem: (key: string) => browserSessionValues.get(key) ?? null,
+  removeItem: (key: string) => browserSessionValues.delete(key),
+  setItem: (key: string, value: string) => browserSessionValues.set(key, value),
+};
 
 type MockBrowserWindow = {
   location: { href: string };
@@ -386,6 +393,7 @@ mockModule('@/auth/selectedProfileStorage', {
 
 before(async () => {
   originalWindowDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  originalSessionStorageDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'sessionStorage');
   ({ AppProviders } = await import('./AppProviders'));
   ({ useFeatureFlag } = await import('./FeatureFlagsContext'));
   ({ UniversalShell } = await import('./shell/UniversalShell'));
@@ -411,6 +419,7 @@ beforeEach(() => {
   selectedProfileDeleteCalls = 0;
   selectedProfileReads = [];
   selectedProfileWrites = [];
+  browserSessionValues.clear();
   routerReplacements.length = 0;
   browserWindow = {
     location: { href: 'https://kos.moe/home' },
@@ -419,6 +428,10 @@ beforeEach(() => {
     configurable: true,
     value: browserWindow,
     writable: true,
+  });
+  Object.defineProperty(globalThis, 'sessionStorage', {
+    configurable: true,
+    value: browserSessionStorage,
   });
   failNativeSessionDelete = false;
   nativeSessionDeleteAttempts = 0;
@@ -445,6 +458,11 @@ afterEach(async () => {
       Object.defineProperty(globalThis, 'window', originalWindowDescriptor);
     } else {
       Reflect.deleteProperty(globalThis, 'window');
+    }
+    if (originalSessionStorageDescriptor) {
+      Object.defineProperty(globalThis, 'sessionStorage', originalSessionStorageDescriptor);
+    } else {
+      Reflect.deleteProperty(globalThis, 'sessionStorage');
     }
   }
 });
@@ -639,6 +657,25 @@ describe('AppProviders runtime composition', () => {
     });
 
     assert.deepEqual(analyticsCaptureAccounts, ['account-1', 'account-2']);
+  });
+
+  it('stores only a validated callback return path while stripping callback parameters', async () => {
+    mockSelectedProfileId = null;
+    browserWindow.location.href =
+      'https://kos.moe/home?resetSelectedProfile=1&returnTo=%2F%40writer%2Fpost-id';
+
+    await act(async () => {
+      renderer = create(createElement(AppProviders, null, createElement(NativeSessionFixture)));
+    });
+    await act(async () => Promise.resolve());
+
+    assert.deepEqual(routerReplacements, ['/home']);
+    assert.equal(
+      browserSessionValues.get('kosmo:public-content-return-callback'),
+      '/@writer/post-id',
+    );
+    assert.equal(browserWindow.location.href, 'https://kos.moe/home');
+  });
   });
 
   it('clears the cached Web profile before restoring the post-login Session', async () => {
