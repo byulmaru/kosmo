@@ -29,6 +29,7 @@ export type ProfileFollowEffectOrigin = 'LOCAL' | 'ACTIVITYPUB';
 export type ProfileFollowPairCommand =
   | {
       readonly kind: 'FOLLOW';
+      readonly actorAccountId?: string;
       readonly origin: ProfileFollowEffectOrigin;
     }
   | {
@@ -299,16 +300,22 @@ const executeFollow = async (
     throw new Error('Invalid Follow command');
   }
 
-  const requestToDeleteId =
-    (
-      await tx
-        .select({ id: ProfileFollowRequests.id })
-        .from(ProfileFollowRequests)
-        .where(pairCondition(ProfileFollowRequests, input.pair))
-        .limit(1)
-        .then(first)
-    )?.id ?? input.pendingRequestId;
-  const followed = await followProfileInTransaction(input.pair, tx);
+  const currentRequest = await tx
+    .select({ actorAccountId: ProfileFollowRequests.actorAccountId, id: ProfileFollowRequests.id })
+    .from(ProfileFollowRequests)
+    .where(pairCondition(ProfileFollowRequests, input.pair))
+    .limit(1)
+    .then(first);
+  const requestToDeleteId = currentRequest?.id ?? input.pendingRequestId;
+  const followed = await followProfileInTransaction(
+    {
+      ...input.pair,
+      actorAccountId: currentRequest
+        ? currentRequest.actorAccountId
+        : (command.actorAccountId ?? null),
+    },
+    tx,
+  );
   const followResult = followed.result;
   const profileFollowId =
     followResult.kind === 'ESTABLISHED' ? followResult.profileFollow.id : undefined;
