@@ -113,6 +113,7 @@ type PostComposerBaseProps = {
   children?: ReactNode;
   contextGuard?: RefObject<number>;
   editorRef?: RefObject<TextInput | null>;
+  expanded?: boolean;
   expandControlRef?: RefObject<View | null>;
   focusOnMount?: boolean;
   initialBodyText?: string;
@@ -122,6 +123,7 @@ type PostComposerBaseProps = {
   onSubmittingChange?: (submitting: boolean) => void;
   profile: PostComposer_profile$key;
   profiles?: readonly PostComposerProfileRef[];
+  renderSurface?: (props: { form: ReactNode; mediaEditorOpen: boolean }) => ReactNode;
   registerNativeBackHandler?: (handler: (() => void) | null) => void;
 };
 
@@ -223,6 +225,7 @@ function PostComposerContents({
   contextGuard,
   contextGenerationRef,
   editorRef,
+  expanded = true,
   expandControlRef,
   environmentGenerationRef,
   focusOnMount = false,
@@ -242,6 +245,7 @@ function PostComposerContents({
   replyParentId,
   replyParentVisibility,
   repostSourceId,
+  renderSurface,
 }: PostComposerContentsProps) {
   const mentionSearchEnabled = useFeatureFlag('post-composer-mention-search');
   const environment = useRelayEnvironment();
@@ -343,6 +347,9 @@ function PostComposerContents({
     key: string;
     tool: 'alt' | 'sensitive';
   } | null>(null);
+  if (!expanded && mediaEditor !== null) {
+    setMediaEditor(null);
+  }
   const profilePickerDismissRef = useRef<(() => void) | null>(null);
   const [profilePickerOpen, setProfilePickerOpen] = useState(false);
   const onProfilePickerDismissChange = useCallback((dismiss: (() => void) | null) => {
@@ -530,7 +537,7 @@ function PostComposerContents({
       ? [...profiles, selectedProfileKey]
       : profiles;
 
-  return (
+  const form = (
     <Form
       accessibilityLabel={
         composerMode === 'reply'
@@ -628,7 +635,6 @@ function PostComposerContents({
                 );
                 const mediaEditorContent = mediaEditor ? (
                   <ComposerMediaEditor
-                    fillContainer
                     media={items}
                     mobileState={mediaEditor.tool === 'alt' ? 'alt' : 'sensitive'}
                     onAltTextChange={onAltTextChange}
@@ -741,6 +747,8 @@ function PostComposerContents({
       />
     </Form>
   );
+
+  return renderSurface ? renderSurface({ form, mediaEditorOpen: mediaEditor !== null }) : form;
 }
 
 const styles = StyleSheet.create({

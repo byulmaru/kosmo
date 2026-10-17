@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement, useState } from 'react';
 import { act, create } from 'react-test-renderer';
-import type { ElementType } from 'react';
+import type { ElementType, ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { PostComposerCreatedPost } from './PostComposerController';
 import type { PostComposerHost as PostComposerHostComponent } from './PostComposerHost';
@@ -18,6 +18,7 @@ let composerProps:
       onPostCreated?: (post: PostComposerCreatedPost) => void;
       onSubmittingChange?: (submitting: boolean) => void;
       registerNativeBackHandler?: (handler: (() => void) | null) => void;
+      renderSurface?: (props: { form: ReactNode; mediaEditorOpen: boolean }) => ReactNode;
     }
   | undefined;
 let renderer: ReactTestRenderer | null = null;
@@ -47,7 +48,8 @@ mockModule(require.resolve('./PostComposerController'), {
   ) => {
     const [body, setBody] = useState('');
     composerProps = { ...props, body, onBodyChange: setBody };
-    return createElement('PostComposer', composerProps);
+    const form = createElement('PostComposer', composerProps);
+    return props.renderSurface?.({ form, mediaEditorOpen: false }) ?? form;
   },
 });
 mockModule('@/components/ui/IconButton', {

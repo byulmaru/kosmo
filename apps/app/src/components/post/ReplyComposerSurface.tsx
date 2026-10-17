@@ -376,148 +376,143 @@ function ReplyComposerSurfaceContents({
             { backgroundColor: theme.overlayScrim },
           ]}
         >
-          <Pressable
-            accessible={false}
-            accessibilityViewIsModal
-            onAccessibilityEscape={requestNativeBack}
-            onPress={(event) => event.stopPropagation()}
-            ref={dialogRef}
-            style={[
-              styles.dialog,
-              elevation.overlay,
-              presentation === 'fullscreen' ? styles.fullscreen : styles.modal,
-              Platform.OS === 'web' && presentation === 'modal' ? styles.webModal : null,
-              {
-                backgroundColor: theme.backgroundElevated,
-                borderColor: theme.borderDefault,
-              },
-            ]}
-            testID={`${quoteMode ? 'quote' : 'reply'}-composer-dialog-surface`}
-          >
-            <View style={styles.contentFrame}>
-              <View
-                accessibilityElementsHidden={discardConfirmOpen}
-                aria-hidden={discardConfirmOpen || undefined}
-                importantForAccessibility={discardConfirmOpen ? 'no-hide-descendants' : 'auto'}
-                style={[styles.main, discardConfirmOpen ? styles.mainBlocked : null]}
-              >
-                {presentation === 'modal' ? (
-                  <View style={[styles.header, { borderColor: theme.borderDefault }]}>
-                    <Text
-                      accessibilityRole="header"
-                      style={[styles.title, { color: theme.foregroundPrimary }]}
-                    >
-                      글쓰기
-                    </Text>
-                    <IconButton
-                      accessibilityLabel="닫기"
-                      disabled={submitting}
-                      hitSlop={4}
-                      onPress={() => requestClose()}
-                      style={[
-                        styles.closeButton,
-                        {
-                          height: closeControlSize,
-                          transform: [{ translateY: -closeControlSize / 2 }],
-                          width: closeControlSize,
-                        },
-                      ]}
-                      targetSize={closeControlSize}
-                      visualSize={closeControlSize}
-                      visualStyle={styles.close}
-                    >
-                      <XIcon color={theme.foregroundPrimary} size={20} strokeWidth={2} />
-                    </IconButton>
-                  </View>
-                ) : null}
-                <KeyboardAvoidingView
-                  behavior={Platform.OS === 'ios' ? 'height' : undefined}
-                  keyboardVerticalOffset={insets.top}
-                  style={styles.composerFrame}
+          <PostComposerController
+            beforeEditor={
+              quoteMode ? undefined : (
+                <View
+                  style={[styles.parent, presentation === 'modal' ? styles.modalParent : null]}
+                  testID="reply-parent"
                 >
-                  <PostComposerController
-                    beforeEditor={
-                      quoteMode ? undefined : (
-                        <View
-                          style={[
-                            styles.parent,
-                            presentation === 'modal' ? styles.modalParent : null,
-                          ]}
-                          testID="reply-parent"
-                        >
-                          <View style={styles.parentAvatarColumn}>
-                            <Avatar
-                              imageUri={parent.profile.avatar?.url}
-                              label={parent.profile.displayName || parent.profile.handle}
-                              size={40}
-                            />
-                            <PostThreadConnector
-                              style={[
-                                styles.parentConnector,
-                                presentation === 'modal' ? styles.modalParentConnector : null,
-                                presentation === 'fullscreen'
-                                  ? styles.fullscreenParentConnector
-                                  : null,
-                              ]}
-                              testID="reply-parent-thread-connector"
-                            />
-                          </View>
-                          <View style={styles.parentContent}>
-                            <View style={styles.parentIdentity}>
-                              <ProfileNameBlock profile={parent.profile} />
-                              <Text
-                                style={[styles.timestamp, { color: theme.foregroundSecondary }]}
-                              >
-                                {formatTimelineTimestamp(parent.createdAt)}
-                              </Text>
-                            </View>
-                            <PostBody interactive={false} post={parent} />
-                            {parent.repostSource ? (
-                              <PostSourcePreview
-                                interactive={false}
-                                source={parent.repostSource}
-                                style={styles.source}
-                              />
-                            ) : null}
-                          </View>
-                        </View>
-                      )
-                    }
-                    replyContext={
-                      quoteMode ? undefined : (
-                        <Text style={[styles.replyContext, { color: theme.textSecondary }]}>
-                          {parent.profile.relativeHandle}님에게 답글
-                        </Text>
-                      )
-                    }
-                    contextGuard={contextGuard}
-                    editorRef={editorRef}
-                    focusOnMount
-                    onRequestClose={() => requestClose()}
-                    initialBodyText={initialBodyText}
-                    initialContentWarning={quoteMode ? undefined : parent.content?.contentWarning}
-                    presentation={presentation === 'fullscreen' ? 'mobile' : 'overlay'}
-                    onPostCreated={handlePostCreated}
-                    onSubmittingChange={setSubmitting}
-                    profile={profile.composer}
-                    registerNativeBackHandler={registerNativeBackHandler}
-                    {...(quoteMode
-                      ? { repostSourceId: parent.id }
-                      : { replyParentId: parent.id, replyParentVisibility: parent.visibility })}
-                  >
-                    {quoteMode ? (
+                  <View style={styles.parentAvatarColumn}>
+                    <Avatar
+                      imageUri={parent.profile.avatar?.url}
+                      label={parent.profile.displayName || parent.profile.handle}
+                      size={40}
+                    />
+                    <PostThreadConnector
+                      style={[
+                        styles.parentConnector,
+                        presentation === 'modal' ? styles.modalParentConnector : null,
+                        presentation === 'fullscreen' ? styles.fullscreenParentConnector : null,
+                      ]}
+                      testID="reply-parent-thread-connector"
+                    />
+                  </View>
+                  <View style={styles.parentContent}>
+                    <View style={styles.parentIdentity}>
+                      <ProfileNameBlock profile={parent.profile} />
+                      <Text style={[styles.timestamp, { color: theme.foregroundSecondary }]}>
+                        {formatTimelineTimestamp(parent.createdAt)}
+                      </Text>
+                    </View>
+                    <PostBody interactive={false} post={parent} />
+                    {parent.repostSource ? (
                       <PostSourcePreview
                         interactive={false}
-                        source={parent}
-                        style={styles.quoteSource}
+                        source={parent.repostSource}
+                        style={styles.source}
                       />
                     ) : null}
-                  </PostComposerController>
-                </KeyboardAvoidingView>
-              </View>
-              {discardConfirm}
-            </View>
-          </Pressable>
+                  </View>
+                </View>
+              )
+            }
+            replyContext={
+              quoteMode ? undefined : (
+                <Text style={[styles.replyContext, { color: theme.textSecondary }]}>
+                  {parent.profile.relativeHandle}님에게 답글
+                </Text>
+              )
+            }
+            contextGuard={contextGuard}
+            editorRef={editorRef}
+            focusOnMount
+            onRequestClose={() => requestClose()}
+            initialBodyText={initialBodyText}
+            initialContentWarning={quoteMode ? undefined : parent.content?.contentWarning}
+            presentation={presentation === 'fullscreen' ? 'mobile' : 'overlay'}
+            onPostCreated={handlePostCreated}
+            onSubmittingChange={setSubmitting}
+            profile={profile.composer}
+            registerNativeBackHandler={registerNativeBackHandler}
+            renderSurface={({ form, mediaEditorOpen }) => (
+              <Pressable
+                accessible={false}
+                accessibilityViewIsModal
+                onAccessibilityEscape={requestNativeBack}
+                onPress={(event) => event.stopPropagation()}
+                ref={dialogRef}
+                style={[
+                  styles.dialog,
+                  elevation.overlay,
+                  presentation === 'fullscreen' ? styles.fullscreen : styles.modal,
+                  Platform.OS === 'web' && presentation === 'modal' ? styles.webModal : null,
+                  mediaEditorOpen && Platform.OS === 'web' && presentation === 'modal'
+                    ? styles.webMediaEditorDialog
+                    : null,
+                  {
+                    backgroundColor: theme.backgroundElevated,
+                    borderColor: theme.borderDefault,
+                  },
+                ]}
+                testID={`${quoteMode ? 'quote' : 'reply'}-composer-dialog-surface`}
+              >
+                <View style={styles.contentFrame}>
+                  <View
+                    accessibilityElementsHidden={discardConfirmOpen}
+                    aria-hidden={discardConfirmOpen || undefined}
+                    importantForAccessibility={discardConfirmOpen ? 'no-hide-descendants' : 'auto'}
+                    style={[styles.main, discardConfirmOpen ? styles.mainBlocked : null]}
+                  >
+                    {presentation === 'modal' ? (
+                      <View style={[styles.header, { borderColor: theme.borderDefault }]}>
+                        <Text
+                          accessibilityRole="header"
+                          style={[styles.title, { color: theme.foregroundPrimary }]}
+                        >
+                          글쓰기
+                        </Text>
+                        <IconButton
+                          accessibilityLabel="닫기"
+                          disabled={submitting}
+                          hitSlop={4}
+                          onPress={() => requestClose()}
+                          style={[
+                            styles.closeButton,
+                            {
+                              height: closeControlSize,
+                              transform: [{ translateY: -closeControlSize / 2 }],
+                              width: closeControlSize,
+                            },
+                          ]}
+                          targetSize={closeControlSize}
+                          visualSize={closeControlSize}
+                          visualStyle={styles.close}
+                        >
+                          <XIcon color={theme.foregroundPrimary} size={20} strokeWidth={2} />
+                        </IconButton>
+                      </View>
+                    ) : null}
+                    <KeyboardAvoidingView
+                      behavior={Platform.OS === 'ios' ? 'height' : undefined}
+                      keyboardVerticalOffset={insets.top}
+                      style={styles.composerFrame}
+                    >
+                      {form}
+                    </KeyboardAvoidingView>
+                  </View>
+                  {discardConfirm}
+                </View>
+              </Pressable>
+            )}
+            {...(quoteMode
+              ? { repostSourceId: parent.id }
+              : { replyParentId: parent.id, replyParentVisibility: parent.visibility })}
+          >
+            {quoteMode ? (
+              <PostSourcePreview interactive={false} source={parent} style={styles.quoteSource} />
+            ) : null}
+          </PostComposerController>
         </OverlayBackdrop>
       </ToastProvider>
     </Modal>
@@ -547,6 +542,11 @@ const styles = StyleSheet.create({
     marginTop: spacing.xxl,
     maxHeight: 'calc(100dvh - 96px)' as never,
     overflow: 'clip' as never,
+  },
+  webMediaEditorDialog: {
+    height: 678,
+    maxWidth: 'min(920px, calc(100vw - 48px))' as never,
+    width: '100%',
   },
   fullscreen: {
     borderRadius: 0,

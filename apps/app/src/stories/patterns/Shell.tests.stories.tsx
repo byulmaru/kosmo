@@ -2,7 +2,12 @@ import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { spacing } from '@/theme/tokens';
 import baseMeta, {
   UniversalCompactComposerLifecycle as universalCompactComposerLifecycle,
+  UniversalCompactComposerMediaEditorGeometry as universalCompactComposerMediaEditorGeometry,
+  UniversalComposerMediaEditorResponsiveAt768 as universalComposerMediaEditorResponsiveAt768,
+  UniversalComposerMediaEditorResponsiveAt800 as universalComposerMediaEditorResponsiveAt800,
+  UniversalComposerMediaEditorResponsiveAt968 as universalComposerMediaEditorResponsiveAt968,
   UniversalFullComposerLifecycle as universalFullComposerLifecycle,
+  UniversalFullComposerMediaEditorLifecycle as universalFullComposerMediaEditorLifecycle,
   UniversalMobile as universalMobile,
   UniversalMobileComposerLifecycle as universalMobileComposerLifecycle,
   UniversalMobileGuardedProfilePicker as universalMobileGuardedProfilePicker,
@@ -58,6 +63,14 @@ export const UniversalCompactComposerLifecycle: Story = {
     expect(dialog.queryByRole('menu')).toBeNull();
   },
 };
+export const UniversalCompactComposerMediaEditorGeometry: Story =
+  universalCompactComposerMediaEditorGeometry;
+export const UniversalComposerMediaEditorResponsiveAt768: Story =
+  universalComposerMediaEditorResponsiveAt768;
+export const UniversalComposerMediaEditorResponsiveAt800: Story =
+  universalComposerMediaEditorResponsiveAt800;
+export const UniversalComposerMediaEditorResponsiveAt968: Story =
+  universalComposerMediaEditorResponsiveAt968;
 export const UniversalCompactOverlayGeometry: Story = {
   ...universalCompactComposerLifecycle,
   play: async ({ canvasElement }) => {
@@ -122,6 +135,8 @@ export const UniversalFullComposerLifecycle: Story = {
     expect(page.queryByRole('link', { name: '개인정보 처리방침' })).toBeNull();
   },
 };
+export const UniversalFullComposerMediaEditorLifecycle: Story =
+  universalFullComposerMediaEditorLifecycle;
 export const UniversalMobileComposerLifecycle: Story = {
   ...universalMobileComposerLifecycle,
   play: async (context) => {

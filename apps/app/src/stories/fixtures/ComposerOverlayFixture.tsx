@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 type ComposerOverlayFixtureProps = Readonly<{
   accessibilityLabel: string;
   children: ReactNode;
+  height?: number;
   maxWidth: number;
   onRequestClose: () => void;
   visible: boolean;
@@ -14,6 +15,7 @@ type ComposerOverlayFixtureProps = Readonly<{
 export function ComposerOverlayFixture({
   accessibilityLabel,
   children,
+  height,
   maxWidth,
   onRequestClose,
   visible,
@@ -35,9 +37,12 @@ export function ComposerOverlayFixture({
           accessibilityViewIsModal
           key={maxWidth}
           testID="composer-overlay-surface"
-          style={[styles.surface, { backgroundColor: theme.backgroundSurface, maxWidth }]}
+          style={[styles.surface, { backgroundColor: theme.backgroundSurface, height, maxWidth }]}
         >
-          <View testID="composer-overlay-scroll" style={styles.scroll}>
+          <View
+            testID="composer-overlay-scroll"
+            style={[styles.scroll, height === undefined ? null : styles.scrollFill]}
+          >
             {children}
           </View>
         </View>
@@ -61,4 +66,5 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   scroll: { maxHeight: '85dvh' as never, overflow: 'hidden' as never, width: '100%' },
+  scrollFill: { height: '100%' },
 });
