@@ -3,6 +3,9 @@ import { spacing } from '@/theme/tokens';
 import baseMeta, {
   UniversalCompactComposerLifecycle as universalCompactComposerLifecycle,
   UniversalCompactComposerMediaEditorGeometry as universalCompactComposerMediaEditorGeometry,
+  UniversalComposerMediaEditorResponsiveAt768 as universalComposerMediaEditorResponsiveAt768,
+  UniversalComposerMediaEditorResponsiveAt800 as universalComposerMediaEditorResponsiveAt800,
+  UniversalComposerMediaEditorResponsiveAt968 as universalComposerMediaEditorResponsiveAt968,
   UniversalFullComposerLifecycle as universalFullComposerLifecycle,
   UniversalFullComposerMediaEditorLifecycle as universalFullComposerMediaEditorLifecycle,
   UniversalMobile as universalMobile,
@@ -62,6 +65,12 @@ export const UniversalCompactComposerLifecycle: Story = {
 };
 export const UniversalCompactComposerMediaEditorGeometry: Story =
   universalCompactComposerMediaEditorGeometry;
+export const UniversalComposerMediaEditorResponsiveAt768: Story =
+  universalComposerMediaEditorResponsiveAt768;
+export const UniversalComposerMediaEditorResponsiveAt800: Story =
+  universalComposerMediaEditorResponsiveAt800;
+export const UniversalComposerMediaEditorResponsiveAt968: Story =
+  universalComposerMediaEditorResponsiveAt968;
 export const UniversalCompactOverlayGeometry: Story = {
   ...universalCompactComposerLifecycle,
   play: async ({ canvasElement }) => {

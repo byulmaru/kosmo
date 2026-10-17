@@ -2585,12 +2585,14 @@ export const UniversalCompactComposerMediaEditorGeometry: Story = {
       await userEvent.click(within(dialog).getByRole('button', { name: '첨부 이미지 1 편집' }));
 
       const editor = within(dialog).getByTestId('web-composer-media-editor');
+      expect(page.getAllByRole('dialog')).toHaveLength(1);
       const dialogBounds = dialog.getBoundingClientRect();
       const closeButton = within(editor).getByRole('button', { name: '미디어 편집 닫기' });
       const toolPanel = within(editor).getByTestId('composer-media-editor-tool-panel');
       const altTextInput = within(editor).getByRole('textbox', { name: '이미지 설명' });
       const doneButton = within(editor).getByRole('button', { name: '완료' });
 
+      expect(dialogBounds.width).toBe(920);
       expect(dialogBounds.height).toBeLessThanOrEqual(viewportHeight - 96);
       expectElementInsideBounds(editor, dialogBounds);
       expectElementInsideBounds(closeButton, dialogBounds);
@@ -2610,6 +2612,70 @@ export const UniversalCompactComposerMediaEditorGeometry: Story = {
     }
   },
 };
+
+function universalMediaEditorResponsiveStory(
+  viewportName: string,
+  expectedEditorWidth: number,
+): Story {
+  return {
+    ...UniversalCompact,
+    globals: { viewport: { isRotated: false, value: viewportName } },
+    parameters: {
+      ...universalParameters,
+      relay: { ...universalParameters.relay, operationResponses: composerMediaUploadResponses },
+    },
+    play: async ({ canvasElement }) => {
+      const canvas = within(canvasElement);
+      const page = within(canvasElement.ownerDocument.body);
+      const restoreFetch = installComposerMediaUploadFetch();
+      setNextImagePickerResult({
+        assets: [createComposerPickerAsset(`responsive-${viewportName}.svg`)],
+        canceled: false,
+      });
+
+      try {
+        await userEvent.click(canvas.getByRole('button', { name: '글쓰기' }));
+        const dialog = await page.findByRole('dialog', { name: '글쓰기' });
+        expect(dialog.getBoundingClientRect().width).toBe(640);
+        await userEvent.click(
+          within(dialog).getByRole('button', { name: '이미지 추가, 4개 더 선택 가능' }),
+        );
+        await expect(
+          within(dialog).findByLabelText('첨부 이미지 1, 업로드 완료'),
+        ).resolves.toBeVisible();
+        await userEvent.click(within(dialog).getByRole('button', { name: '첨부 이미지 1 편집' }));
+        await waitFor(() => expect(dialog.getBoundingClientRect().width).toBe(expectedEditorWidth));
+        const editor = within(dialog).getByTestId('web-composer-media-editor');
+        const toolPanel = within(editor).getByTestId('composer-media-editor-tool-panel');
+        const altTextInput = within(editor).getByRole('textbox', { name: '이미지 설명' });
+        const doneButton = within(editor).getByRole('button', { name: '완료' });
+        const dialogBounds = dialog.getBoundingClientRect();
+        expect(toolPanel.getBoundingClientRect().width).toBe(280);
+        expectElementInsideBounds(altTextInput, dialogBounds);
+        expectElementInsideBounds(doneButton, dialogBounds);
+
+        await userEvent.click(within(dialog).getByRole('button', { name: '미디어 편집에서 뒤로' }));
+        await waitFor(() => expect(dialog.getBoundingClientRect().width).toBe(640));
+        await userEvent.click(within(dialog).getByRole('button', { name: '첨부 이미지 1 편집' }));
+        await waitFor(() => expect(dialog.getBoundingClientRect().width).toBe(expectedEditorWidth));
+        await userEvent.click(within(dialog).getByRole('button', { name: '완료' }));
+        await waitFor(() => expect(dialog.getBoundingClientRect().width).toBe(640));
+      } finally {
+        restoreFetch();
+        resetImagePickerMock();
+      }
+    },
+  };
+}
+
+export const UniversalComposerMediaEditorResponsiveAt768: Story =
+  universalMediaEditorResponsiveStory('kosmoMediaEditor768', 720);
+
+export const UniversalComposerMediaEditorResponsiveAt800: Story =
+  universalMediaEditorResponsiveStory('kosmoMediaEditor800', 752);
+
+export const UniversalComposerMediaEditorResponsiveAt968: Story =
+  universalMediaEditorResponsiveStory('kosmoMediaEditor968', 920);
 
 export const UniversalMobileComposerBreakpointFocusFallback: Story = {
   ...UniversalCompact,

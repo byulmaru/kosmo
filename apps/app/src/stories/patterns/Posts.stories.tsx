@@ -8035,6 +8035,67 @@ export const ReplyModalMediaUploadDirtyClose: Story = {
   render: () => <ReplyModalPresentationStory />,
 };
 
+export const ReplyModalComposerMediaEditorGeometry: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMediaEditor768' } },
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostComposerCompleteMediaUploadMutation: {
+          data: {
+            completeMediaUpload: {
+              media: { id: 'media-reply-editor-geometry', state: 'READY' },
+            },
+          },
+        },
+        PostComposerIssueMediaUploadUrlMutation: {
+          data: {
+            issueMediaUploadUrl: {
+              media: { id: 'media-reply-editor-geometry' },
+              uploadUrl: 'https://upload.example/reply-editor-geometry',
+            },
+          },
+        },
+      },
+    },
+  },
+  play: async () => {
+    const { originalFetch } = installImageUploadFetch(
+      async () => new Response(null, { status: 200 }),
+    );
+    setNextImagePickerResult({
+      assets: [createComposerPickerAsset('reply-editor-geometry.svg')],
+      canceled: false,
+    });
+
+    try {
+      const dialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+      const surface = within(dialog).getByTestId('reply-composer-dialog-surface');
+      expect(surface.getBoundingClientRect().width).toBe(600);
+      await userEvent.click(
+        within(dialog).getByRole('button', { name: '이미지 추가, 4개 더 선택 가능' }),
+      );
+      await expect(
+        within(dialog).findByLabelText('첨부 이미지 1, 업로드 완료'),
+      ).resolves.toBeVisible();
+
+      await userEvent.click(within(dialog).getByRole('button', { name: '첨부 이미지 1 편집' }));
+      expect(screen.getAllByRole('dialog')).toHaveLength(1);
+      await waitFor(() => expect(surface.getBoundingClientRect().width).toBe(720));
+      await userEvent.click(within(dialog).getByRole('button', { name: '미디어 편집에서 뒤로' }));
+      await waitFor(() => expect(surface.getBoundingClientRect().width).toBe(600));
+
+      await userEvent.click(within(dialog).getByRole('button', { name: '첨부 이미지 1 편집' }));
+      await waitFor(() => expect(surface.getBoundingClientRect().width).toBe(720));
+      await userEvent.click(within(dialog).getByRole('button', { name: '완료' }));
+      await waitFor(() => expect(surface.getBoundingClientRect().width).toBe(600));
+    } finally {
+      globalThis.fetch = originalFetch;
+      resetImagePickerMock();
+    }
+  },
+  render: () => <ReplyModalPresentationStory />,
+};
+
 export const ReplyModalPresentation: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
   play: async ({ canvasElement }) => {
