@@ -1,5 +1,13 @@
-import { and, eq, gt, isNull, or, sql } from 'drizzle-orm';
-import { first, Notifications, ProfileBlocks, ProfileMutes } from '../db';
+import { and, arrayContains, eq, gt, isNull, or, sql } from 'drizzle-orm';
+import {
+  first,
+  HashtagMuteRules,
+  Notifications,
+  ProfileBlocks,
+  ProfileHashtags,
+  ProfileMutes,
+} from '../db';
+import { HashtagMuteScope } from '../enums';
 import { profileBlockPairWhere } from '../visibility/profile-block';
 import type { DatabaseHandle } from '../db';
 import type { NotificationKind } from '../enums';
@@ -12,12 +20,14 @@ type MaterializeNotificationInput = {
 };
 
 /**
- * Materializes a notification after applying the shared profile-pair policy.
+ * Materializes a notification after applying the shared profile and tag policy.
  *
  * Mute is recipient-owned and applies while it has no expiry or expires after
- * the database transaction timestamp. Block is pair-owned and applies in
- * either direction. Query errors intentionally propagate so the caller's
- * existing retry boundary can handle an incomplete post-commit projection.
+ * the database transaction timestamp. Profile Tag mute uses the same recipient
+ * ownership and expiry boundary, matching canonical Hashtag identities.
+ * Block is pair-owned and applies in either direction. Query errors
+ * intentionally propagate so the caller's existing retry boundary can handle
+ * an incomplete post-commit projection.
  */
 export const materializeNotification = async (
   database: DatabaseHandle,
@@ -91,5 +101,23 @@ export const isNotificationSuppressed = async (
     return true;
   }
 
-  return false;
+  const profileTagMute = await database
+    .select({ id: HashtagMuteRules.id })
+    .from(HashtagMuteRules)
+    .innerJoin(ProfileHashtags, eq(HashtagMuteRules.targetHashtagId, ProfileHashtags.hashtagId))
+    .where(
+      and(
+        eq(HashtagMuteRules.ownerProfileId, recipientProfileId),
+        eq(ProfileHashtags.profileId, relatedProfileId),
+        arrayContains(HashtagMuteRules.scopes, [HashtagMuteScope.NOTIFICATION]),
+        or(
+          isNull(HashtagMuteRules.expiresAt),
+          gt(HashtagMuteRules.expiresAt, sql`CURRENT_TIMESTAMP`),
+        ),
+      ),
+    )
+    .limit(1)
+    .then(first);
+
+  return Boolean(profileTagMute);
 };
