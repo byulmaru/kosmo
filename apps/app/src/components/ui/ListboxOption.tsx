@@ -3,7 +3,27 @@ import { Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-nat
 import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, radius, space, textStyles } from '@/theme/tokens';
 import { useAnimatedColorTransition } from './useAnimatedColorTransition';
-import type { PressableProps, ViewStyle } from 'react-native';
+import type { PressableProps, PressableStateCallbackType, ViewStyle } from 'react-native';
+
+const borderRadiusKeys = [
+  'borderRadius',
+  'borderTopLeftRadius',
+  'borderTopRightRadius',
+  'borderBottomLeftRadius',
+  'borderBottomRightRadius',
+  'borderTopStartRadius',
+  'borderTopEndRadius',
+  'borderBottomStartRadius',
+  'borderBottomEndRadius',
+] as const satisfies readonly (keyof ViewStyle)[];
+
+type FeedbackRadiusStyle = Pick<ViewStyle, (typeof borderRadiusKeys)[number]>;
+
+function getFeedbackRadius(style: ViewStyle): Partial<FeedbackRadiusStyle> {
+  return Object.fromEntries(
+    borderRadiusKeys.filter((key) => style[key] !== undefined).map((key) => [key, style[key]]),
+  ) as Partial<FeedbackRadiusStyle>;
+}
 
 export type ListboxOptionProps = {
   active?: boolean;
@@ -32,6 +52,7 @@ type ListboxOptionFeedbackProps = {
   label: string;
   description?: string;
   pressed: boolean;
+  radiusStyle: Partial<FeedbackRadiusStyle>;
   selected: boolean;
 };
 
@@ -43,6 +64,7 @@ function ListboxOptionFeedback({
   hovered,
   label,
   pressed,
+  radiusStyle,
   selected,
 }: ListboxOptionFeedbackProps) {
   const theme = useTheme();
@@ -94,6 +116,7 @@ function ListboxOptionFeedback({
         style={[
           StyleSheet.absoluteFill,
           styles.feedback,
+          radiusStyle,
           {
             backgroundColor: animatedBackground,
             borderColor: animatedBorder,
@@ -139,6 +162,8 @@ export function ListboxOption({
   const [focusVisible, setFocusVisible] = useState(false);
   const web = Platform.OS === 'web';
   const accessibilityLabel = description ? `${label}: ${description}` : label;
+  const resolveStyle = (state: PressableStateCallbackType) =>
+    StyleSheet.flatten([styles.root, typeof style === 'function' ? style(state) : style]);
 
   return (
     <Pressable
@@ -162,9 +187,7 @@ export function ListboxOption({
           onSelect();
         }
       }}
-      style={(state) => {
-        return [styles.root, typeof style === 'function' ? style(state) : style];
-      }}
+      style={resolveStyle}
       {...(web
         ? ({
             'aria-disabled': disabled,
@@ -177,6 +200,7 @@ export function ListboxOption({
     >
       {(state) => {
         const hovered = web && Boolean((state as { hovered?: boolean }).hovered);
+        const radiusStyle = getFeedbackRadius(resolveStyle(state));
         return (
           <ListboxOptionFeedback
             active={active}
@@ -186,6 +210,7 @@ export function ListboxOption({
             hovered={hovered}
             label={label}
             pressed={state.pressed}
+            radiusStyle={radiusStyle}
             selected={selected}
           />
         );
