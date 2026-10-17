@@ -304,6 +304,7 @@ export const Notifications = pgTable(
     uniqueIndex()
       .on(table.recipientAccountId, table.kind, table.sourceId)
       .where(sql`${table.recipientProfileId} IS NULL`),
+    index().on(table.recipientProfileId, table.id.desc()),
     index().on(table.recipientProfileId, table.createdAt.desc(), table.id.desc()),
     index().on(table.recipientAccountId, table.createdAt.desc(), table.id.desc()),
     index()
