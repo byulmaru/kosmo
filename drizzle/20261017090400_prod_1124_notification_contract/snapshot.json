@@ -1,7 +1,7 @@
 {
   "dialect": "postgres",
-  "id": "000d7c5f-44a7-4d2c-8b81-702b6c67c9ca",
-  "prevIds": ["15ed4eee-5eaf-41bd-9ff0-a8c5cb156351"],
+  "id": "78c8d229-d5df-4d4e-849e-4fc8dbf6f85d",
+  "prevIds": ["2af9d875-e648-44c8-8f21-881098b9b10a"],
   "version": "8",
   "ddl": [
     {
@@ -47,7 +47,14 @@
       "schema": "public"
     },
     {
-      "values": ["HOME", "LOCAL", "PROFILE", "HASHTAG", "SEARCH", "NOTIFICATION"],
+      "values": [
+        "HOME",
+        "LOCAL",
+        "PROFILE",
+        "HASHTAG",
+        "SEARCH",
+        "NOTIFICATION"
+      ],
       "name": "hashtag_mute_scope",
       "entityType": "enums",
       "schema": "public"
