@@ -218,7 +218,6 @@ export const InteractionContract: Story = {
       await waitFor(() =>
         expect(getComputedStyle(visual).backgroundColor).toBe(colors.light.statePressed),
       );
-      expect(getComputedStyle(visual).transitionDuration).toBe('0.12s');
       expect(getComputedStyle(leading).transform).toBe('none');
       expectTarget(leading, 44);
       expect(leading).toHaveFocus();

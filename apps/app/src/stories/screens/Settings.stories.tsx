@@ -160,7 +160,7 @@ export const FullMasterDetail: Story = {
     expect(canvas.queryByTestId('profile-migration-source-control')).toBeNull();
     expect(account).toHaveAttribute('href', BYULMARU_ID_ACCOUNT_SETTINGS_URL);
     expect(profileEntry).toHaveAttribute('href', '/settings/profile');
-    expect(profileEntry).toHaveStyle({
+    expect(profileEntry.firstElementChild).toHaveStyle({
       backgroundColor: colors.light.selectedSurface,
       borderColor: colors.light.selectedBorder,
     });
