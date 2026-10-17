@@ -95,6 +95,7 @@ export function PostComposerHost({
   const composer = (
     <PostComposerController
       expandControlRef={expandControlRef}
+      expanded={overlayVisible}
       focusOnMount={overlayVisible}
       onPostCreated={() => requestClose('created')}
       onSubmittingChange={setSubmitting}

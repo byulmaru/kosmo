@@ -75,9 +75,7 @@ export function ComposerMediaEditor(props: ComposerMediaEditorProps) {
     <View
       style={[
         styles.root,
-        mobile
-          ? { height, width: '100%' }
-          : { height: 678, maxWidth: 920, minWidth: 720, width: '100%' },
+        mobile ? { height, width: '100%' } : { height: 678, maxWidth: 920, width: '100%' },
         props.fillContainer && styles.fillContainer,
         { backgroundColor: theme.backgroundSurface },
       ]}
@@ -395,6 +393,7 @@ function WebToolPanel(
       contentContainerStyle={styles.webToolPanelContent}
       keyboardShouldPersistTaps="handled"
       style={[styles.webToolPanel, { borderColor: theme.borderSubtle }]}
+      testID="composer-media-editor-tool-panel"
     >
       {props.tool === 'alt' ? (
         <AltToolContent

@@ -113,6 +113,7 @@ type PostComposerBaseProps = {
   children?: ReactNode;
   contextGuard?: RefObject<number>;
   editorRef?: RefObject<TextInput | null>;
+  expanded?: boolean;
   expandControlRef?: RefObject<View | null>;
   focusOnMount?: boolean;
   initialBodyText?: string;
@@ -223,6 +224,7 @@ function PostComposerContents({
   contextGuard,
   contextGenerationRef,
   editorRef,
+  expanded = true,
   expandControlRef,
   environmentGenerationRef,
   focusOnMount = false,
@@ -343,6 +345,9 @@ function PostComposerContents({
     key: string;
     tool: 'alt' | 'sensitive';
   } | null>(null);
+  if (!expanded && mediaEditor !== null) {
+    setMediaEditor(null);
+  }
   const profilePickerDismissRef = useRef<(() => void) | null>(null);
   const [profilePickerOpen, setProfilePickerOpen] = useState(false);
   const onProfilePickerDismissChange = useCallback((dismiss: (() => void) | null) => {
