@@ -21,10 +21,14 @@ type PressableProps = {
 
 const PressableHost = forwardRef<unknown, PressableProps>(function PressableMock(props, ref) {
   const { children, ...rest } = props;
+  const state = { hovered: false, pressed: false };
+  if (typeof props.style === 'function') {
+    props.style(state);
+  }
   return createElement(
     'Pressable',
     { ...rest, ref },
-    typeof children === 'function' ? children({ hovered: false, pressed: false }) : children,
+    typeof children === 'function' ? children(state) : children,
   );
 });
 const TextHost = 'Text' as unknown as ElementType;
@@ -66,6 +70,7 @@ mockModule('react-native', {
   StyleSheet: {
     absoluteFill: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
     create: <T>(styles: T) => styles,
+    flatten: (style: unknown) => flattenStyle(style),
   },
   Text: TextHost,
   View: ViewHost,
@@ -122,6 +127,7 @@ function renderOption({
   nativeID,
   onSelect = () => undefined,
   selected = true,
+  style,
 }: Partial<ListboxOptionModule.ListboxOptionProps> = {}) {
   assert.ok(listboxOptionModule);
   let renderer: ReactTestRenderer | undefined;
@@ -135,6 +141,7 @@ function renderOption({
         nativeID,
         onSelect,
         selected,
+        style,
       }),
     );
   });
@@ -151,6 +158,14 @@ function flattenStyle(style: unknown): Record<string, unknown> {
     {},
     ...(Array.isArray(style) ? style.flat(Infinity).filter(Boolean) : [style]),
   );
+}
+
+function feedbackStyle(renderer: ReactTestRenderer) {
+  const feedback = renderer.root
+    .findAllByType(ViewHost)
+    .find((node) => node.props.pointerEvents === 'none');
+  assert.ok(feedback);
+  return flattenStyle(feedback.props.style);
 }
 
 test('ListboxOption exposes selected option semantics and selects on press', () => {
@@ -177,6 +192,52 @@ test('ListboxOption exposes selected option semantics and selects on press', () 
 
   act(() => option.props.onPress());
   assert.equal(selected, 1);
+});
+
+test('ListboxOption feedback follows static and stateful caller corner radii', () => {
+  const staticRenderer = renderOption({
+    style: { borderRadius: 20, borderTopLeftRadius: 6, width: '80%' },
+  });
+  const staticFeedback = feedbackStyle(staticRenderer);
+  assert.equal(
+    flattenStyle(optionNode(staticRenderer).props.style({ hovered: false, pressed: false })).width,
+    '80%',
+  );
+  assert.equal(staticFeedback.borderRadius, 20);
+  assert.equal(staticFeedback.borderTopLeftRadius, 6);
+  assert.equal(staticFeedback.width, '100%');
+
+  const callbackRenderer = renderOption({
+    style: (state) => {
+      return [
+        { borderRadius: 24, borderTopLeftRadius: 10, borderTopRightRadius: 12 },
+        {
+          borderBottomEndRadius: state.pressed ? 9 : 7,
+          borderBottomStartRadius: 8,
+          borderTopEndRadius: 5,
+          borderTopRightRadius: 4,
+          borderTopStartRadius: 3,
+          width: '70%',
+        },
+      ];
+    },
+  });
+  const callbackFeedback = feedbackStyle(callbackRenderer);
+  const statefulOption = optionNode(callbackRenderer);
+  const statefulRootStyle = flattenStyle(
+    statefulOption.props.style({ hovered: false, pressed: false }),
+  );
+
+  assert.equal(statefulRootStyle.width, '70%');
+  assert.equal(statefulRootStyle.borderTopRightRadius, 4);
+  assert.equal(callbackFeedback.borderRadius, 24);
+  assert.equal(callbackFeedback.borderTopLeftRadius, 10);
+  assert.equal(callbackFeedback.borderTopRightRadius, 4);
+  assert.equal(callbackFeedback.borderTopStartRadius, 3);
+  assert.equal(callbackFeedback.borderTopEndRadius, 5);
+  assert.equal(callbackFeedback.borderBottomStartRadius, 8);
+  assert.equal(callbackFeedback.borderBottomEndRadius, 7);
+  assert.equal(callbackFeedback.width, '100%');
 });
 
 test('ListboxOption uses supported native button semantics without Web option props', () => {
