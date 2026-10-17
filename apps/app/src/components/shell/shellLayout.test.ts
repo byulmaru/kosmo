@@ -185,8 +185,9 @@ describe('getShellLayout', () => {
     });
   });
 
-  it('assigns mobile Web search and Profile-owned screens to route-owned headers', () => {
+  it('assigns mobile Web search, Profile edit and Profile-owned screens to route-owned headers', () => {
     assert.equal(isWebMobileRouteOwnedHeader(true, 390, '/search'), true);
+    assert.equal(isWebMobileRouteOwnedHeader(true, 390, '/profile-edit'), true);
     assert.equal(isWebMobileRouteOwnedHeader(true, 390, '/@writer'), true);
     assert.equal(isWebMobileRouteOwnedHeader(true, 390, '/@writer/followers'), true);
     assert.equal(isWebMobileRouteOwnedHeader(true, 390, '/@writer/following'), true);
@@ -197,10 +198,12 @@ describe('getShellLayout', () => {
     assert.equal(isWebMobileRouteOwnedHeader(true, 390, '/@'), false);
     assert.equal(isWebMobileRouteOwnedHeader(true, 390, '/settings/followers'), false);
     assert.equal(isWebMobileRouteOwnedHeader(true, 768, '/search'), false);
+    assert.equal(isWebMobileRouteOwnedHeader(true, 768, '/profile-edit'), false);
     assert.equal(isWebMobileRouteOwnedHeader(true, 768, '/@writer'), false);
     assert.equal(isWebMobileRouteOwnedHeader(true, 768, '/@writer/followers'), false);
     assert.equal(isWebMobileRouteOwnedHeader(true, 1_280, '/search'), false);
     assert.equal(isWebMobileRouteOwnedHeader(false, 390, '/search'), false);
+    assert.equal(isWebMobileRouteOwnedHeader(false, 390, '/profile-edit'), false);
     assert.equal(isWebMobileRouteOwnedHeader(false, 390, '/@writer/following'), false);
   });
 });
