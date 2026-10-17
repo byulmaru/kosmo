@@ -14,24 +14,31 @@ const mockModule = (specifier: string | URL, exports: object) =>
 
 let platformOS: 'android' | 'ios' | 'web' = 'web';
 let reducedMotion = false;
+class AnimatedColorMock {
+  constructor(public value: string) {}
+
+  setValue(value: string) {
+    this.value = value;
+  }
+
+  stopAnimation(callback?: () => void) {
+    callback?.();
+  }
+}
+
+const timingCalls: Array<{
+  duration: number;
+  handle: AnimatedColorMock;
+  target: AnimatedColorMock;
+  stopped: boolean;
+}> = [];
 const PressableHost = 'Pressable' as unknown as ElementType;
 const ViewHost = 'View' as unknown as ElementType;
 
 mockModule(createRequire(import.meta.url).resolve('lucide-react-native'), { Check: 'Check' });
 mockModule('react-native', {
   Animated: {
-    Color: class {
-      value: string;
-      constructor(value: string) {
-        this.value = value;
-      }
-      setValue(value: string) {
-        this.value = value;
-      }
-      stopAnimation(callback?: () => void) {
-        callback?.();
-      }
-    },
+    Color: AnimatedColorMock,
     View: ViewHost,
     Value: class {
       value: number;
@@ -46,12 +53,27 @@ mockModule('react-native', {
       }
       stopAnimation() {}
     },
-    timing: () => ({
-      start: (callback?: () => void) => callback?.(),
-      stop: () => undefined,
-    }),
+    timing: (
+      handle: AnimatedColorMock,
+      config: { duration: number; toValue: AnimatedColorMock },
+    ) => {
+      const call = {
+        duration: config.duration,
+        handle,
+        target: config.toValue,
+        stopped: false,
+      };
+      timingCalls.push(call);
+      return {
+        start: (callback?: () => void) => callback?.(),
+        stop: () => {
+          call.stopped = true;
+        },
+      };
+    },
   },
   Easing: { bezier: () => () => 0 },
+  processColor: () => undefined,
   Platform: {
     get OS() {
       return platformOS;
@@ -111,27 +133,46 @@ before(async () => {
 beforeEach(() => {
   platformOS = 'web';
   reducedMotion = false;
+  timingCalls.length = 0;
 });
+
+function checkboxElement(
+  checked: CheckboxModule.CheckboxValue,
+  onCheckedChange: (next: boolean) => void = () => undefined,
+  disabled = false,
+) {
+  assert.ok(Checkbox);
+  return createElement(Checkbox!, {
+    accessibilityLabel: '모두 선택',
+    checked,
+    disabled,
+    onCheckedChange,
+  });
+}
+
+function renderCheckboxRenderer(
+  checked: CheckboxModule.CheckboxValue,
+  onCheckedChange: (next: boolean) => void = () => undefined,
+  disabled = false,
+): ReactTestRenderer {
+  let renderer: ReactTestRenderer | undefined;
+  act(() => {
+    renderer = create(checkboxElement(checked, onCheckedChange, disabled));
+  });
+  assert.ok(renderer);
+  return renderer;
+}
 
 function renderCheckbox(
   checked: CheckboxModule.CheckboxValue,
   onCheckedChange: (next: boolean) => void = () => undefined,
   disabled = false,
 ) {
-  assert.ok(Checkbox);
-  let renderer: ReactTestRenderer | undefined;
-  act(() => {
-    renderer = create(
-      createElement(Checkbox!, {
-        accessibilityLabel: '모두 선택',
-        checked,
-        disabled,
-        onCheckedChange,
-      }),
-    );
-  });
-  assert.ok(renderer);
-  return renderer.root.findByType(PressableHost);
+  return renderCheckboxRenderer(checked, onCheckedChange, disabled).root.findByType(PressableHost);
+}
+
+function updateCheckbox(renderer: ReactTestRenderer, checked: CheckboxModule.CheckboxValue) {
+  act(() => renderer.update(checkboxElement(checked)));
 }
 
 test('Checkbox exposes false, true, and mixed checked states and emits the next boolean', () => {
@@ -185,23 +226,44 @@ test('Checkbox preserves its visual box inside the platform target size', () => 
 });
 
 test('Checkbox checked fill uses selected timing and reduced motion is immediate', () => {
-  const selected = renderCheckbox(true);
-  const selectedIndicator = selected
-    .findAllByType(ViewHost)
-    .find((node) => Array.isArray(node.props.style) && node.props.style[0]?.height === 20);
-  assert.ok(selectedIndicator);
-  assert.equal(selectedIndicator.props.style[1].backgroundColor, 'primary');
+  const renderer = renderCheckboxRenderer(false);
 
-  const unchecked = renderCheckbox(false);
-  const uncheckedIndicator = unchecked
+  updateCheckbox(renderer, true);
+  let fillTransition = timingCalls.find(({ target }) => target.value === 'primary');
+  assert.ok(fillTransition);
+  assert.equal(fillTransition.duration, 200);
+
+  timingCalls.length = 0;
+  updateCheckbox(renderer, false);
+  const uncheckTransition = timingCalls.find(({ target }) => target.value === 'surface');
+  assert.ok(uncheckTransition);
+  assert.equal(uncheckTransition.duration, 200);
+  const uncheckedIndicator = renderer.root
     .findAllByType(ViewHost)
     .find((node) => Array.isArray(node.props.style) && node.props.style[0]?.height === 20);
   assert.ok(uncheckedIndicator);
-  assert.equal(uncheckedIndicator.props.style[1].backgroundColor, 'surface');
+  assert.equal(uncheckedIndicator.props.style[1].backgroundColor, uncheckTransition.handle);
+
+  timingCalls.length = 0;
+  updateCheckbox(renderer, true);
+  fillTransition = timingCalls.find(({ target }) => target.value === 'primary');
+  assert.ok(fillTransition);
+  assert.equal(fillTransition.duration, 200);
+  const selectedIndicator = renderer.root
+    .findAllByType(ViewHost)
+    .find((node) => Array.isArray(node.props.style) && node.props.style[0]?.height === 20);
+  assert.ok(selectedIndicator);
+  assert.equal(selectedIndicator.props.style[1].backgroundColor, fillTransition.handle);
+  fillTransition.handle.value = 'midpoint';
+  const activeCallCount = timingCalls.length;
 
   reducedMotion = true;
-  const reduced = renderCheckbox(true);
-  const reducedIndicator = reduced
+  updateCheckbox(renderer, true);
+
+  assert.equal(timingCalls.length, activeCallCount);
+  assert.equal(fillTransition.stopped, true);
+  assert.equal(fillTransition.handle.value, 'primary');
+  const reducedIndicator = renderer.root
     .findAllByType(ViewHost)
     .find((node) => Array.isArray(node.props.style) && node.props.style[0]?.height === 20);
   assert.ok(reducedIndicator);

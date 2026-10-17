@@ -54,7 +54,6 @@ const theme = {
 
 let platformOS: 'ios' | 'web' = 'web';
 let reducedMotion = false;
-const timingCalls: Array<{ duration: number; toValue: number }> = [];
 
 class AnimatedColorMock {
   constructor(public value: string) {}
@@ -65,6 +64,13 @@ class AnimatedColorMock {
     callback?.();
   }
 }
+
+const timingCalls: Array<{
+  duration: number;
+  handle: AnimatedColorMock;
+  target: AnimatedColorMock;
+  stopped: boolean;
+}> = [];
 
 mockModule('react-native', {
   processColor: () => undefined,
@@ -85,11 +91,22 @@ mockModule('react-native', {
       stopAnimation() {}
     },
     createAnimatedComponent: <T>(component: T) => component,
-    timing: (_value: unknown, config: { duration: number; toValue: number }) => {
-      timingCalls.push(config);
+    timing: (
+      handle: AnimatedColorMock,
+      config: { duration: number; toValue: AnimatedColorMock },
+    ) => {
+      const call = {
+        duration: config.duration,
+        handle,
+        target: config.toValue,
+        stopped: false,
+      };
+      timingCalls.push(call);
       return {
         start: (callback?: () => void) => callback?.(),
-        stop: () => undefined,
+        stop: () => {
+          call.stopped = true;
+        },
       };
     },
   },
@@ -154,7 +171,7 @@ const options: readonly RadioOption[] = [
   { label: '비활성', value: 'disabled' },
 ];
 
-function renderGroup({
+function groupElement({
   disabled = false,
   onChange = () => undefined,
   options: renderOptions = options,
@@ -166,25 +183,32 @@ function renderGroup({
   value?: OptionValue;
 } = {}) {
   assert.ok(radioGroupModule);
+  return createElement(
+    radioGroupModule!.RadioGroup,
+    {
+      accessibilityLabel: '알림 방식',
+      disabled,
+      onChange: onChange as (value: string) => void,
+      value,
+    },
+    renderOptions.map((option) =>
+      createElement(radioGroupModule!.RadioOption, { key: option.value, option }),
+    ),
+  );
+}
+
+function renderGroup(props: Parameters<typeof groupElement>[0] = {}) {
+  assert.ok(radioGroupModule);
   let renderer: ReactTestRenderer | undefined;
   act(() => {
-    renderer = create(
-      createElement(
-        radioGroupModule!.RadioGroup,
-        {
-          accessibilityLabel: '알림 방식',
-          disabled,
-          onChange: onChange as (value: string) => void,
-          value,
-        },
-        renderOptions.map((option) =>
-          createElement(radioGroupModule!.RadioOption, { key: option.value, option }),
-        ),
-      ),
-    );
+    renderer = create(groupElement(props));
   });
   assert.ok(renderer);
   return renderer;
+}
+
+function updateGroup(renderer: ReactTestRenderer, value: OptionValue) {
+  act(() => renderer.update(groupElement({ value })));
 }
 
 function radioNodes(renderer: ReactTestRenderer) {
@@ -339,46 +363,36 @@ test('RadioOption hover and reduced motion timing stay immediate at the visual b
 test('RadioOption animates selected indicator in both directions and stops for reduced motion', () => {
   platformOS = 'ios';
   const renderer = renderGroup({ value: 'email' });
-  pressState = { hovered: false, pressed: true };
-  act(() =>
-    renderer.update(
-      createElement(
-        radioGroupModule!.RadioGroup,
-        {
-          accessibilityLabel: '알림 방식',
-          disabled: false,
-          onChange: () => undefined,
-          value: 'email',
-        },
-        options.map((option) =>
-          createElement(radioGroupModule!.RadioOption, { key: option.value, option }),
-        ),
-      ),
-    ),
-  );
-  assert.ok(timingCalls.some(({ duration }) => duration === 120));
+  updateGroup(renderer, 'sms');
+  const emailUnselectedTransition = timingCalls.find(({ target }) => target.value === 'secondary');
+  assert.ok(emailUnselectedTransition);
+  assert.equal(emailUnselectedTransition.duration, 200);
+  const unselectedRadio = radioByLabel(renderer, '이메일');
+  const [unselectedRing] = unselectedRadio.findAllByType('Circle' as ElementType);
+  assert.equal(unselectedRing.props.stroke, emailUnselectedTransition.handle);
 
+  timingCalls.length = 0;
+  updateGroup(renderer, 'email');
+  const emailSelectedTransition = timingCalls.find(
+    ({ target, handle }) =>
+      target.value === 'selected-border' && handle === emailUnselectedTransition.handle,
+  );
+  assert.ok(emailSelectedTransition);
+  assert.equal(emailSelectedTransition.duration, 200);
+  const selectedRadio = radioByLabel(renderer, '이메일');
+  const [selectedRing] = selectedRadio.findAllByType('Circle' as ElementType);
+  assert.equal(selectedRing.props.stroke, emailSelectedTransition.handle);
+
+  emailSelectedTransition.handle.value = 'midpoint';
+  const activeTimingCalls = timingCalls.length;
   reducedMotion = true;
-  act(() =>
-    renderer.update(
-      createElement(
-        radioGroupModule!.RadioGroup,
-        {
-          accessibilityLabel: '알림 방식',
-          disabled: false,
-          onChange: () => undefined,
-          value: 'sms',
-        },
-        options.map((option) =>
-          createElement(radioGroupModule!.RadioOption, { key: option.value, option }),
-        ),
-      ),
-    ),
-  );
-  assert.equal(
-    timingCalls.some(({ duration }) => duration === 0),
-    false,
-  );
+  updateGroup(renderer, 'email');
+
+  assert.equal(timingCalls.length, activeTimingCalls);
+  assert.equal(emailSelectedTransition.stopped, true);
+  assert.equal(emailSelectedTransition.handle.value, 'selected-border');
+  const [reducedRing] = radioByLabel(renderer, '이메일').findAllByType('Circle' as ElementType);
+  assert.equal(reducedRing.props.stroke, 'selected-border');
 });
 
 test('RadioOption uses internal focus and disabled strokes without changing outer geometry', () => {
