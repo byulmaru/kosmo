@@ -69,8 +69,11 @@ const Probe = ({ value }: { value: unknown }) => createElement(probeHost, { valu
 
 type HarnessProps = {
   color: string;
+  interactionKey?: unknown;
+  instantKey?: unknown;
   reducedMotion?: boolean;
   role: 'instant' | 'interaction' | 'selection';
+  selectionKey?: unknown;
 };
 
 let useAnimatedColorTransition: typeof AnimatedColorTransitionModule.useAnimatedColorTransition;
@@ -82,12 +85,21 @@ beforeEach(async () => {
   }
 });
 
-function Harness({ color, reducedMotion = false, role }: HarnessProps) {
+function Harness({
+  color,
+  interactionKey,
+  instantKey = themeKey,
+  reducedMotion = false,
+  role,
+  selectionKey,
+}: HarnessProps) {
   const value = useAnimatedColorTransition({
     color,
-    instantKey: themeKey,
+    interactionKey,
+    instantKey,
     reducedMotion,
     role,
+    selectionKey,
   });
   return createElement(Probe, { value });
 }
@@ -120,6 +132,105 @@ test('selects 120ms for interaction changes and 200ms for selection changes', ()
   });
   assert.equal(timingCalls.at(-1)?.duration, 200);
   assert.equal(timingCalls.at(-1)?.useNativeDriver, false);
+});
+
+test('uses selected timing when only selection changes under stable interaction', () => {
+  const renderer = renderHarness({
+    color: 'surface',
+    interactionKey: 'idle',
+    role: 'selection',
+    selectionKey: false,
+  });
+
+  act(() => {
+    renderer.update(
+      createElement(Harness, {
+        color: 'surface',
+        interactionKey: 'hovered',
+        role: 'interaction',
+        selectionKey: false,
+      }),
+    );
+  });
+  assert.equal(timingCalls.length, 0);
+
+  act(() => {
+    renderer.update(
+      createElement(Harness, {
+        color: 'selected-hover',
+        interactionKey: 'hovered',
+        role: 'interaction',
+        selectionKey: true,
+      }),
+    );
+  });
+  assert.equal(timingCalls.at(-1)?.duration, 200);
+  assert.equal(timingCalls.at(-1)?.toValue.value, 'selected-hover');
+
+  act(() => {
+    renderer.update(
+      createElement(Harness, {
+        color: 'surface',
+        interactionKey: 'hovered',
+        role: 'interaction',
+        selectionKey: false,
+      }),
+    );
+  });
+  assert.equal(timingCalls.at(-1)?.duration, 200);
+  assert.equal(timingCalls.at(-1)?.toValue.value, 'surface');
+});
+
+test('keeps interaction timing when interaction changes with or without selection', () => {
+  const renderer = renderHarness({
+    color: 'primary',
+    interactionKey: 'idle',
+    role: 'selection',
+    selectionKey: true,
+  });
+
+  act(() => {
+    renderer.update(
+      createElement(Harness, {
+        color: 'primary-hover',
+        interactionKey: 'hovered',
+        role: 'interaction',
+        selectionKey: true,
+      }),
+    );
+  });
+  assert.equal(timingCalls.at(-1)?.duration, 120);
+
+  act(() => {
+    renderer.update(
+      createElement(Harness, {
+        color: 'primary-pressed',
+        interactionKey: 'pressed',
+        role: 'interaction',
+        selectionKey: true,
+      }),
+    );
+  });
+  assert.equal(timingCalls.at(-1)?.duration, 120);
+
+  timingCalls.length = 0;
+  const overlappingRenderer = renderHarness({
+    color: 'surface',
+    interactionKey: 'idle',
+    role: 'selection',
+    selectionKey: false,
+  });
+  act(() => {
+    overlappingRenderer.update(
+      createElement(Harness, {
+        color: 'primary-hover',
+        interactionKey: 'hovered',
+        role: 'interaction',
+        selectionKey: true,
+      }),
+    );
+  });
+  assert.equal(timingCalls.at(-1)?.duration, 120);
 });
 
 test('retargets the same Animated color from its current presentation to the latest value', () => {
@@ -198,6 +309,81 @@ test('instant and reduced transitions stop the active handle and set the latest 
   assert.equal(handle.value, 'reduced');
   assert.ok(handle.stopCalls >= 4);
   assert.equal(probeValue(renderer), 'reduced');
+});
+
+test('theme changes and reduced motion commit selected color immediately', () => {
+  const firstTheme = {};
+  const secondTheme = {};
+  const renderer = renderHarness({
+    color: 'surface',
+    interactionKey: 'hovered',
+    instantKey: firstTheme,
+    role: 'interaction',
+    selectionKey: false,
+  });
+  act(() => {
+    renderer.update(
+      createElement(Harness, {
+        color: 'selected-hover',
+        interactionKey: 'hovered',
+        instantKey: firstTheme,
+        role: 'interaction',
+        selectionKey: true,
+      }),
+    );
+  });
+  const transition = timingCalls.at(-1);
+  assert.ok(transition);
+  assert.equal(transition.duration, 200);
+  transition.handle.setValue('midpoint');
+  const activeCallCount = timingCalls.length;
+
+  act(() => {
+    renderer.update(
+      createElement(Harness, {
+        color: 'new-theme-selected',
+        interactionKey: 'hovered',
+        instantKey: secondTheme,
+        role: 'interaction',
+        selectionKey: true,
+      }),
+    );
+  });
+  assert.equal(timingCalls.length, activeCallCount);
+  assert.equal(transition.handle.value, 'new-theme-selected');
+
+  act(() => {
+    renderer.update(
+      createElement(Harness, {
+        color: 'unselected-hover',
+        interactionKey: 'hovered',
+        instantKey: secondTheme,
+        role: 'interaction',
+        selectionKey: false,
+      }),
+    );
+  });
+  const reducedTransition = timingCalls.at(-1);
+  assert.ok(reducedTransition);
+  assert.equal(reducedTransition.duration, 200);
+  reducedTransition.handle.setValue('midpoint');
+  const reducedCallCount = timingCalls.length;
+
+  act(() => {
+    renderer.update(
+      createElement(Harness, {
+        color: 'reduced-selected',
+        interactionKey: 'hovered',
+        instantKey: secondTheme,
+        reducedMotion: true,
+        role: 'interaction',
+        selectionKey: false,
+      }),
+    );
+  });
+  assert.equal(timingCalls.length, reducedCallCount);
+  assert.equal(reducedTransition.handle.value, 'reduced-selected');
+  assert.equal(probeValue(renderer), 'reduced-selected');
 });
 
 test('passes numeric RGBA endpoints without allocating tracking color channels', () => {
