@@ -526,7 +526,11 @@ test('사이드바 Profile 요약의 편집 action은 canonical route를 연다'
   await expect(page.getByRole('heading', { name: '프로필 수정', exact: true })).toBeVisible();
   await expect(drawer).toHaveCount(0);
 
-  await page.getByRole('button', { name: '메뉴 열기' }).click();
+  await page.mouse.move(1, 240);
+  await page.mouse.down();
+  await page.mouse.move(90, 240, { steps: 8 });
+  await page.mouse.up();
+  await expect(page.getByRole('dialog', { name: '메뉴' })).toBeVisible();
   const currentDrawer = page.locator('#mobile-sidebar');
   await expect(
     currentDrawer

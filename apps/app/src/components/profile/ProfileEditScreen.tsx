@@ -1,15 +1,11 @@
-import { ArrowLeft } from 'lucide-react-native';
-import { Platform, StyleSheet, Text, View } from 'react-native';
-import { PageHeader } from '@/components/PageHeader';
+import { StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
-import { iconSizes, space, textStyles } from '@/theme/tokens';
-import { Button } from '../ui/Button';
-import { IconButton } from '../ui/IconButton';
+import { space, textStyles } from '@/theme/tokens';
 import { RouteScrollContainer } from '../ui/RouteScrollContainer';
 import { ProfileEditForm } from './ProfileEditForm';
+import { ProfileEditHeader } from './ProfileEditHeader';
 import { canSubmitProfileEdit, validateProfileEditDraft } from './profileEditState';
 import type { RefObject } from 'react';
-import type { ViewStyle } from 'react-native';
 import type { ProfileEditFormProps } from './ProfileEditForm';
 import type {
   ProfileEditDraft,
@@ -24,12 +20,6 @@ export type ProfileEditScreenProps = ProfileEditFormProps & {
   onSubmit?: (draft: ProfileEditDraft) => void;
   submitState?: ProfileEditSubmitState;
 };
-
-const webStickyHeader = {
-  position: 'sticky',
-  top: 0,
-  zIndex: 10,
-} as unknown as ViewStyle;
 
 function mergeFieldErrors(
   local: ProfileEditFieldErrors,
@@ -109,47 +99,6 @@ export function ProfileEditScreen({
       <SubmitStatus state={submitState} />
     </>
   );
-  const header = (
-    <PageHeader>
-      <View testID="profile-edit-screen-header" style={styles.header}>
-        <View style={styles.actionSlot}>
-          {onBack ? (
-            <IconButton
-              accessibilityLabel="프로필 편집 닫기"
-              disabled={saving}
-              onPress={onBack}
-              style={styles.backAction}
-            >
-              <ArrowLeft color={theme.foregroundPrimary} size={iconSizes[24]} strokeWidth={2} />
-            </IconButton>
-          ) : null}
-        </View>
-
-        <Text
-          accessibilityRole="header"
-          ref={headingRef}
-          {...(Platform.OS === 'web' ? { tabIndex: -1 } : {})}
-          style={[styles.title, { color: theme.foregroundPrimary }]}
-        >
-          프로필 수정
-        </Text>
-
-        <View style={[styles.actionSlot, styles.trailingActionSlot]}>
-          <Button
-            accessibilityLabel="저장"
-            accessibilityState={{ busy: saving, disabled: !canSubmit }}
-            disabled={!canSubmit}
-            loading={saving}
-            onPress={() => onSubmit?.(value)}
-            style={styles.saveAction}
-          >
-            저장
-          </Button>
-        </View>
-      </View>
-    </PageHeader>
-  );
-
   return (
     <View
       testID="profile-edit-screen"
@@ -160,13 +109,13 @@ export function ProfileEditScreen({
         },
       ]}
     >
-      {Platform.OS === 'web' ? (
-        <View testID="profile-edit-screen-header-sticky" style={webStickyHeader}>
-          {header}
-        </View>
-      ) : (
-        header
-      )}
+      <ProfileEditHeader
+        headingRef={headingRef}
+        onBack={onBack}
+        onSubmit={() => onSubmit?.(value)}
+        saveDisabled={!canSubmit}
+        saving={saving}
+      />
 
       <RouteScrollContainer
         nativeScrollProps={{
@@ -189,35 +138,6 @@ const styles = StyleSheet.create({
     maxWidth: 600,
     minHeight: '100%',
     width: '100%',
-  },
-  header: {
-    alignItems: 'center',
-    alignSelf: 'stretch',
-    flex: 1,
-    flexDirection: 'row',
-  },
-  actionSlot: {
-    alignItems: 'flex-start',
-    alignSelf: 'stretch',
-    justifyContent: 'center',
-    width: 64,
-  },
-  backAction: {
-    alignItems: 'center',
-    height: 44,
-    justifyContent: 'center',
-    width: 44,
-  },
-  trailingActionSlot: {
-    alignItems: 'flex-end',
-  },
-  title: {
-    flex: 1,
-    textAlign: 'center',
-    ...textStyles.uiHeadingM,
-  },
-  saveAction: {
-    minWidth: 64,
   },
   content: { width: '100%' },
   nativeContent: { flexGrow: 1 },

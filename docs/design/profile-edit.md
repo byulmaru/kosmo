@@ -197,8 +197,9 @@ DSN-45 Figma Candidate는 프로필 태그 다음에 `프로필 추가 정보`�
 - 중앙 편집 surface는 최대 `600px`를 유지한다.
 - DSN-45 Figma source와 이를 이관한 current Production의 상단 navigation header는 공용 `PageHeader`를 사용하며,
   content 높이는 정확히 `64px`로 유지한다. Web route는 이를 inline sticky header로 렌더링하고, mobile Web shell은
-  fallback header를 생략하며 route top safe-area inset을 한 번 제공한다. Native는 같은 header를 Stack에 등록하고
-  `PageHeader`가 safe-area inset을 적용한다. Native Stack header는 viewport 전체 폭을 사용하며 편집 surface는
+  fallback header를 생략하며 route top safe-area inset을 한 번 제공한다. Web sticky offset은 같은 inset을 사용한다.
+  Loading, query error, 권한 거부 상태도 같은 제목·뒤로가기 header를 유지하며 저장은 disabled다. Native는 같은
+  header를 Stack에 등록하고 `PageHeader`가 safe-area inset을 적용한다. Native Stack header는 viewport 전체 폭을 사용하며 편집 surface는
   최대 `600px`를 유지한다. 뒤로가기 action은 `44×44` layout target 안의 canonical `ArrowLeft` `24px`를 사용하고
   제목은 `UI/Heading/M`(`24/27.6/700`)으로 좌우 `80px` side slot 안에서 정중앙에 두며, Web 저장 action은
   `64×40`으로 같은 행 안에서 정렬한다. iOS·Android의 실제 입력 target은 공용 `IconButton`·`Button`의

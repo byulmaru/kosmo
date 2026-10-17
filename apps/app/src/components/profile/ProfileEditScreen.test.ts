@@ -22,6 +22,7 @@ const mockModule = (specifier: string | URL, exports: object) =>
 const require = createRequire(import.meta.url);
 const platform = { OS: 'ios' };
 let textFocusCalls = 0;
+const safeAreaInsets = { top: 24 };
 
 class TextHost extends Component<Record<string, unknown> & { children?: ReactNode }> {
   focus() {
@@ -42,6 +43,9 @@ mockModule('react-native', {
   StyleSheet: { create: <T>(styles: T) => styles },
   Text: TextHost,
   View: 'View',
+});
+mockModule('react-native-safe-area-context', {
+  useSafeAreaInsets: () => safeAreaInsets,
 });
 const theme = {
   backgroundCanvas: '#fff',
@@ -118,6 +122,7 @@ before(async () => {
 afterEach(async () => {
   await unmountScreen();
   platform.OS = 'ios';
+  safeAreaInsets.top = 24;
   textFocusCalls = 0;
 });
 
@@ -127,7 +132,7 @@ test('native profile edit scroll keeps the focused field above the keyboard', as
   assert.equal(scroll.props.automaticallyAdjustKeyboardInsets, true);
 });
 
-test('native profile edit keeps its header actions and focus without consuming the top inset', async () => {
+test('native profile edit keeps its header actions and focus', async () => {
   const headingRef = createRef<Text>();
   const actions: string[] = [];
   const screen = await renderScreen({
@@ -138,20 +143,7 @@ test('native profile edit keeps its header actions and focus without consuming t
       actions.push('submit');
     },
   });
-  const screenStyle = flattenStyle(
-    screen.findByProps({ testID: 'profile-edit-screen' }).props.style,
-  );
-
-  assert.equal(screenStyle.paddingTop, undefined);
-
   const pageHeader = screen.findByType('PageHeader' as never);
-  const row = pageHeader.findByProps({ testID: 'profile-edit-screen-header' });
-  const rowStyle = flattenStyle(row.props.style);
-  assert.equal(rowStyle.alignSelf, 'stretch');
-  assert.equal(rowStyle.flex, 1);
-  assert.equal(rowStyle.height, undefined);
-  assert.equal(rowStyle.paddingHorizontal, undefined);
-  assert.equal(rowStyle.borderBottomWidth, undefined);
 
   assert.ok(headingRef.current);
   (headingRef.current as unknown as TextHost).focus();
@@ -170,13 +162,11 @@ test('web profile edit keeps its header content in a sticky, focusable region', 
   platform.OS = 'web';
 
   const screen = await renderScreen();
-  const rootStyle = flattenStyle(screen.findByProps({ testID: 'profile-edit-screen' }).props.style);
   const stickyStyle = flattenStyle(
     screen.findByProps({ testID: 'profile-edit-screen-header-sticky' }).props.style,
   );
-  assert.equal(rootStyle.paddingTop, undefined);
   assert.equal(stickyStyle.position, 'sticky');
-  assert.equal(stickyStyle.top, 0);
+  assert.equal(stickyStyle.top, 24);
 
   const heading = screen.findByProps({ accessibilityRole: 'header' });
   assert.equal(heading.props.tabIndex, -1);
