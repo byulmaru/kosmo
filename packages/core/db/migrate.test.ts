@@ -760,7 +760,15 @@ test('알림 Backfill은 OWNER가 없으면 가장 작은 Account ID를 원본�
     await runDatabaseMigrations({ databaseUrl, migrationsFolder: migrations.backfilled });
 
     const rows = Array.from(
-      await control.unsafe(`
+      await control.unsafe<
+        {
+          id: string;
+          account: string;
+          data: Record<string, unknown>;
+          created: string;
+          read: string;
+        }[]
+      >(`
       SELECT
         id::text AS id,
         recipient_account_id::text AS account,
@@ -773,7 +781,7 @@ test('알림 Backfill은 OWNER가 없으면 가장 작은 Account ID를 원본�
     );
     assert.equal(rows.length, 2);
     assert.deepEqual(
-      rows.map((row: { account: string }) => row.account),
+      rows.map(({ account }) => account),
       ['10000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000002'],
     );
     assert.equal(rows[0]?.id, '30000000-0000-0000-0000-000000000001');
