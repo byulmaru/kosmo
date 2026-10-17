@@ -4,10 +4,7 @@ import { afterEach, before, mock, test } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
-import type {
-  ProfileEditScreen as ProfileEditScreenExport,
-  ProfileEditScreenProps,
-} from './ProfileEditScreen';
+import type { ProfileEditScreen as ProfileEditScreenExport } from './ProfileEditScreen';
 import type { ProfileEditDraft } from './profileEditState';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -77,14 +74,13 @@ function flattenStyle(style: unknown): Record<string, unknown> {
   return style && typeof style === 'object' ? (style as Record<string, unknown>) : {};
 }
 
-async function renderScreen(overrides: Partial<ProfileEditScreenProps> = {}) {
+async function renderScreen() {
   await act(async () => {
     renderer = create(
       createElement(ProfileEditScreen, {
-        ...overrides,
-        initialValue: overrides.initialValue ?? draft,
-        onChange: overrides.onChange ?? (() => undefined),
-        value: overrides.value ?? draft,
+        initialValue: draft,
+        onChange: () => undefined,
+        value: draft,
       }),
     );
   });
@@ -108,7 +104,7 @@ afterEach(async () => {
 });
 
 test('native profile edit scroll keeps the focused field above the keyboard', async () => {
-  const screen = await renderScreen({ onSubmit: () => undefined });
+  const screen = await renderScreen();
   const scroll = screen.find((node) => (node.type as unknown) === 'ScrollView');
   assert.equal(scroll.props.automaticallyAdjustKeyboardInsets, true);
 });
