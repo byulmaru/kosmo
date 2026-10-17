@@ -11,9 +11,13 @@ import baseMeta, {
   PlaygroundInteraction as playgroundInteraction,
   ProcessingAccessibility as processingAccessibility,
   ReactionConcurrentMutationContract as reactionConcurrentMutationContract,
+  ReactionDirectFullContract as reactionDirectFullContract,
   ReactionFailureRetryActorSwitchAndUnmount as reactionFailureRetryActorSwitchAndUnmount,
-  ReactionPopoverDismissFocusAndPlacement as reactionPopoverDismissFocusAndPlacement,
+  ReactionFullDismissFocusAndPlacement as reactionFullDismissFocusAndPlacement,
+  ReactionMobileWebTabClearance as reactionMobileWebTabClearance,
+  ReactionRecentUseContract as reactionRecentUseContract,
   ReactionSummaryToggleContract as reactionSummaryToggleContract,
+  ReactionViewerOverlayContract as reactionViewerOverlayContract,
 } from './PostActionBar.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
@@ -35,12 +39,15 @@ export const AuthorPostDeletionPending: Story = authorPostDeletionPending;
 export const AuthorPostDeletionFailureRetry: Story = authorPostDeletionFailureRetry;
 export const AuthorPostDeletionGraphQLErrorRetry: Story = authorPostDeletionGraphQLErrorRetry;
 export const ControlledReply: Story = controlledReply;
-export const ReactionPopoverDismissFocusAndPlacement: Story =
-  reactionPopoverDismissFocusAndPlacement;
+export const ReactionFullDismissFocusAndPlacement: Story = reactionFullDismissFocusAndPlacement;
+export const ReactionMobileWebTabClearance: Story = reactionMobileWebTabClearance;
+export const ReactionRecentUseContract: Story = reactionRecentUseContract;
+export const ReactionViewerOverlayContract: Story = reactionViewerOverlayContract;
 export const NoSelectedProfileDisablesReaction: Story = noSelectedProfileDisablesReaction;
 export const ReactionSummaryToggleContract: Story = reactionSummaryToggleContract;
 export const ReactionConcurrentMutationContract: Story = reactionConcurrentMutationContract;
 export const ReactionFailureRetryActorSwitchAndUnmount: Story =
   reactionFailureRetryActorSwitchAndUnmount;
+export const ReactionDirectFullContract: Story = reactionDirectFullContract;
 export const InteractionContract: Story = interactionContract;
 export const ProcessingAccessibility: Story = processingAccessibility;
