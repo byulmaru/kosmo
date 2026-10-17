@@ -192,7 +192,9 @@ async function createPostMetadata(
   const body = postContentDocumentToText(document, mentionHandles);
   const isSensitive = Boolean(document.body.attrs?.sensitiveMedia);
   const description =
-    document.summary !== null ? `콘텐츠 경고: ${document.summary}` : body || EMPTY_POST_DESCRIPTION;
+    document.summary !== null
+      ? `열람 주의 문구: ${document.summary}`
+      : body || EMPTY_POST_DESCRIPTION;
   let images: readonly ShareImage[] = [defaultImage(origin)];
 
   if (document.summary === null && !isSensitive) {
@@ -206,7 +208,7 @@ async function createPostMetadata(
     }
   }
 
-  const title = `${target.authorDisplayName.trim() || relativeHandle} (${relativeHandle}) · KOSMO`;
+  const title = `${target.authorDisplayName.trim() || relativeHandle}(${relativeHandle}) on KOSMO`;
   const canonicalHandle = encodeURIComponent(relativeHandle).replace(/%40/gi, '@');
   const canonicalId = encodeURIComponent(encodeGlobalId('Post', target.postId));
 
