@@ -1,6 +1,6 @@
 {
   "dialect": "postgres",
-  "id": "15ed4eee-5eaf-41bd-9ff0-a8c5cb156351",
+  "id": "be134550-c4cb-4b43-b57e-4a440da70c91",
   "prevIds": ["1adf799f-dab8-4b4f-97d7-6fe1fe5cd41b"],
   "version": "8",
   "ddl": [
@@ -2127,19 +2127,6 @@
     {
       "type": "uuid",
       "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "actor_account_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post"
-    },
-    {
-      "type": "uuid",
-      "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
       "default": null,
@@ -2335,19 +2322,6 @@
     {
       "type": "uuid",
       "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "actor_account_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "profile_follow_request"
-    },
-    {
-      "type": "uuid",
-      "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
       "default": null,
@@ -2393,19 +2367,6 @@
       "generated": null,
       "identity": null,
       "name": "id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "profile_follow"
-    },
-    {
-      "type": "uuid",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "actor_account_id",
       "entityType": "columns",
       "schema": "public",
       "table": "profile_follow"
@@ -3004,19 +2965,6 @@
       "generated": null,
       "identity": null,
       "name": "id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "reaction"
-    },
-    {
-      "type": "uuid",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "actor_account_id",
       "entityType": "columns",
       "schema": "public",
       "table": "reaction"
@@ -4703,19 +4651,6 @@
     },
     {
       "nameExplicit": false,
-      "columns": ["actor_account_id"],
-      "schemaTo": "public",
-      "tableTo": "account",
-      "columnsTo": ["id"],
-      "onUpdate": "NO ACTION",
-      "onDelete": "SET NULL",
-      "name": "post_actor_account_id_account_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "post"
-    },
-    {
-      "nameExplicit": false,
       "columns": ["profile_id"],
       "schemaTo": "public",
       "tableTo": "profile",
@@ -4794,19 +4729,6 @@
     },
     {
       "nameExplicit": false,
-      "columns": ["actor_account_id"],
-      "schemaTo": "public",
-      "tableTo": "account",
-      "columnsTo": ["id"],
-      "onUpdate": "NO ACTION",
-      "onDelete": "SET NULL",
-      "name": "profile_follow_request_actor_account_id_account_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "profile_follow_request"
-    },
-    {
-      "nameExplicit": false,
       "columns": ["follower_profile_id"],
       "schemaTo": "public",
       "tableTo": "profile",
@@ -4830,19 +4752,6 @@
       "entityType": "fks",
       "schema": "public",
       "table": "profile_follow_request"
-    },
-    {
-      "nameExplicit": false,
-      "columns": ["actor_account_id"],
-      "schemaTo": "public",
-      "tableTo": "account",
-      "columnsTo": ["id"],
-      "onUpdate": "NO ACTION",
-      "onDelete": "SET NULL",
-      "name": "profile_follow_actor_account_id_account_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "profile_follow"
     },
     {
       "nameExplicit": false,
@@ -5038,19 +4947,6 @@
       "entityType": "fks",
       "schema": "public",
       "table": "push_installation"
-    },
-    {
-      "nameExplicit": false,
-      "columns": ["actor_account_id"],
-      "schemaTo": "public",
-      "tableTo": "account",
-      "columnsTo": ["id"],
-      "onUpdate": "NO ACTION",
-      "onDelete": "SET NULL",
-      "name": "reaction_actor_account_id_account_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "reaction"
     },
     {
       "nameExplicit": false,
@@ -5455,6 +5351,15 @@
     },
     {
       "nameExplicit": false,
+      "columns": ["recipient_account_id", "kind", "source_id"],
+      "nullsNotDistinct": false,
+      "name": "notification_recipient_account_id_kind_source_id_unique",
+      "entityType": "uniques",
+      "schema": "public",
+      "table": "notification"
+    },
+    {
+      "nameExplicit": false,
       "columns": ["code_hash"],
       "nullsNotDistinct": false,
       "name": "oauth_authorization_code_code_hash_unique",
@@ -5696,6 +5601,13 @@
       "entityType": "checks",
       "schema": "public",
       "table": "notification_quote_judgment"
+    },
+    {
+      "value": "(\"recipient_profile_id\" IS NOT NULL) <> (\"recipient_account_id\" IS NOT NULL)",
+      "name": "notification_recipient_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "notification"
     },
     {
       "value": "\"reply_parent_id\" IS NULL OR \"reply_parent_id\" <> \"id\"",

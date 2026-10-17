@@ -35,9 +35,14 @@ async function migrationFolder(
 
 test('알림 Expand 뒤 구버전 Profile 알림 쓰기가 유지된다', async () => {
   const control = postgres(databaseUrl, { max: 1 });
-  const migrationName = '20261016081231_prod_1117_notification_expand';
+  const indexPrepMigrationName = '20261017090000_prod_1117_notification_index_prep';
+  const expandMigrationName = '20261017090100_prod_1117_notification_expand';
+  const indexPrepMigration = await readFile(
+    new URL(`../../../drizzle/${indexPrepMigrationName}/migration.sql`, import.meta.url),
+    'utf8',
+  );
   const expandMigration = await readFile(
-    new URL(`../../../drizzle/${migrationName}/migration.sql`, import.meta.url),
+    new URL(`../../../drizzle/${expandMigrationName}/migration.sql`, import.meta.url),
     'utf8',
   );
   const baseMigration = {
@@ -77,7 +82,8 @@ test('알림 Expand 뒤 구버전 Profile 알림 쓰기가 유지된다', async 
   const baseMigrations = await migrationFolder(baseMigration.name, baseMigration.sql);
   const expandedMigrations = await migrationFolder([
     baseMigration,
-    { name: migrationName, sql: expandMigration },
+    { name: indexPrepMigrationName, sql: indexPrepMigration },
+    { name: expandMigrationName, sql: expandMigration },
   ]);
 
   const accountId = '10000000-0000-0000-0000-000000000001';
@@ -332,6 +338,203 @@ test('파일별 transaction으로 앞 파일을 보존하고 실패 파일부터
         `
       )[0]?.count,
       3,
+    );
+  } finally {
+    await control.end({ timeout: 5 });
+    await rm(migrations, { force: true, recursive: true });
+  }
+});
+
+test('비트랜잭션 파일에서 CREATE INDEX CONCURRENTLY를 적용하고 재실행을 건너뛴다', async () => {
+  const control = postgres(databaseUrl, { max: 1 });
+  const migration = {
+    name: '20260712000000_concurrent_index',
+    sql: `-- kosmo:transaction off
+CREATE TABLE migration_concurrent_index (id integer PRIMARY KEY);
+--> statement-breakpoint
+CREATE INDEX CONCURRENTLY migration_concurrent_index_idx ON migration_concurrent_index (id);`,
+  };
+  const migrations = await migrationFolder([migration]);
+  const [parsedMigration] = readMigrationFiles({ migrationsFolder: migrations });
+
+  try {
+    await control.unsafe('DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA public CASCADE;');
+    await control.unsafe('CREATE SCHEMA public;');
+
+    await runDatabaseMigrations({ databaseUrl, migrationsFolder: migrations });
+
+    const [{ isValid }] = await control<{ isValid: boolean }[]>`
+      SELECT indisvalid AS "isValid"
+      FROM pg_index
+      WHERE indexrelid = 'public.migration_concurrent_index_idx'::regclass
+    `;
+    assert.equal(isValid, true);
+    await runDatabaseMigrations({ databaseUrl, migrationsFolder: migrations });
+
+    assert.deepEqual(
+      Array.from(
+        await control<{ name: string; hash: string }[]>`
+          SELECT name, hash
+          FROM drizzle.__drizzle_migrations
+          ORDER BY id
+        `,
+      ),
+      [{ name: migration.name, hash: parsedMigration.hash }],
+    );
+  } finally {
+    await control.end({ timeout: 5 });
+    await rm(migrations, { force: true, recursive: true });
+  }
+});
+
+test('비트랜잭션 파일의 일부 DDL 실패를 수동 정리한 뒤 재시도한다', async () => {
+  const control = postgres(databaseUrl, { max: 1 });
+  const failedMigration = {
+    name: '20260712000000_nontransactional_partial',
+    sql: `-- kosmo:transaction off
+CREATE TABLE migration_nontransactional_partial (id integer PRIMARY KEY);
+--> statement-breakpoint
+CREATE INDEX CONCURRENTLY migration_nontransactional_partial_idx
+  ON migration_nontransactional_partial (id);
+--> statement-breakpoint
+SELECT * FROM migration_nontransactional_missing;`,
+  };
+  const laterMigration = {
+    name: '20260712000001_nontransactional_later',
+    sql: 'CREATE TABLE migration_nontransactional_later (id integer PRIMARY KEY);',
+  };
+  const migrations = await migrationFolder([failedMigration, laterMigration]);
+
+  try {
+    await control.unsafe('DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA public CASCADE;');
+    await control.unsafe('CREATE SCHEMA public;');
+
+    await assert.rejects(
+      runDatabaseMigrations({ databaseUrl, migrationsFolder: migrations }),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.match(error.message, new RegExp(failedMigration.name));
+        assert.match(error.message, /partially persisted/i);
+        assert.match(error.message, /documented recovery before retrying/i);
+        assert.match(
+          String((error as Error & { cause?: unknown }).cause),
+          /migration_nontransactional_missing/,
+        );
+        return true;
+      },
+    );
+
+    assert.deepEqual(
+      Array.from(
+        await control<{ objectName: string | null }[]>`
+          SELECT to_regclass(object_name)::text AS "objectName"
+          FROM unnest(ARRAY[
+            'public.migration_nontransactional_partial',
+            'public.migration_nontransactional_partial_idx'
+          ]) AS object_name
+        `,
+      ).map(({ objectName }) => objectName),
+      ['migration_nontransactional_partial', 'migration_nontransactional_partial_idx'],
+    );
+    assert.equal(
+      (
+        await control<{ count: number }[]>`
+          SELECT count(*)::int AS count
+          FROM drizzle.__drizzle_migrations
+          WHERE name = ${failedMigration.name}
+        `
+      )[0]?.count,
+      0,
+    );
+    assert.equal(
+      (
+        await control<{ tableName: string | null }[]>`
+          SELECT to_regclass('public.migration_nontransactional_later')::text AS "tableName"
+        `
+      )[0]?.tableName,
+      null,
+    );
+
+    await control.unsafe('DROP INDEX CONCURRENTLY migration_nontransactional_partial_idx');
+    await control.unsafe('DROP TABLE migration_nontransactional_partial');
+    await writeFile(
+      join(migrations, failedMigration.name, 'migration.sql'),
+      `-- kosmo:transaction off
+CREATE TABLE migration_nontransactional_partial (id integer PRIMARY KEY);
+--> statement-breakpoint
+CREATE INDEX CONCURRENTLY migration_nontransactional_partial_idx
+  ON migration_nontransactional_partial (id);`,
+    );
+
+    await runDatabaseMigrations({ databaseUrl, migrationsFolder: migrations });
+
+    const history = await control<{ name: string }[]>`
+      SELECT name
+      FROM drizzle.__drizzle_migrations
+      ORDER BY id
+    `;
+    assert.deepEqual(
+      Array.from(history).map(({ name }) => name),
+      [failedMigration.name, laterMigration.name],
+    );
+    assert.equal(
+      (
+        await control<{ tableName: string | null }[]>`
+          SELECT to_regclass('public.migration_nontransactional_later')::text AS "tableName"
+        `
+      )[0]?.tableName,
+      'migration_nontransactional_later',
+    );
+  } finally {
+    await control.end({ timeout: 5 });
+    await rm(migrations, { force: true, recursive: true });
+  }
+});
+
+test('잘못된 transaction directive가 있으면 pending SQL을 실행하지 않는다', async () => {
+  const control = postgres(databaseUrl, { max: 1 });
+  const migrations = await migrationFolder([
+    {
+      name: '20260712000000_malformed_directive_before',
+      sql: 'CREATE TABLE migration_malformed_directive_before (id integer PRIMARY KEY);',
+    },
+    {
+      name: '20260712000001_malformed_directive_invalid',
+      sql: `-- kosmo:transaction on
+CREATE TABLE migration_malformed_directive_invalid (id integer PRIMARY KEY);`,
+    },
+    {
+      name: '20260712000002_malformed_directive_after',
+      sql: 'CREATE TABLE migration_malformed_directive_after (id integer PRIMARY KEY);',
+    },
+  ]);
+
+  try {
+    await control.unsafe('DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA public CASCADE;');
+    await control.unsafe('CREATE SCHEMA public;');
+
+    await assert.rejects(
+      runDatabaseMigrations({ databaseUrl, migrationsFolder: migrations }),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.match(error.message, /20260712000001_malformed_directive_invalid/);
+        assert.match(error.message, /-- kosmo:transaction off/);
+        return true;
+      },
+    );
+
+    assert.deepEqual(
+      Array.from(
+        await control<{ tableName: string | null }[]>`
+          SELECT to_regclass(table_name)::text AS "tableName"
+          FROM unnest(ARRAY[
+            'public.migration_malformed_directive_before',
+            'public.migration_malformed_directive_invalid',
+            'public.migration_malformed_directive_after'
+          ]) AS table_name
+        `,
+      ).map(({ tableName }) => tableName),
+      [null, null, null],
     );
   } finally {
     await control.end({ timeout: 5 });

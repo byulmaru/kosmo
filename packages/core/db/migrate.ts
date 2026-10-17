@@ -60,6 +60,28 @@ function indexLocalMigrations(migrations: MigrationMeta[]): Map<string, Migratio
   return byName;
 }
 
+function findNonTransactionalMigrations(migrations: MigrationMeta[]): Set<MigrationMeta> {
+  const nonTransactionalMigrations = new Set<MigrationMeta>();
+
+  for (const migration of migrations) {
+    const firstLine = (migration.sql[0] ?? '').split(/\r?\n/u, 1)[0]?.trim() ?? '';
+
+    if (!/^--\s*kosmo:transaction/u.test(firstLine)) {
+      continue;
+    }
+
+    if (!/^--\s+kosmo:transaction\s+off$/u.test(firstLine)) {
+      throw new Error(
+        `Migration ${migration.name} has an invalid transaction directive; only the first-line "-- kosmo:transaction off" comment is supported.`,
+      );
+    }
+
+    nonTransactionalMigrations.add(migration);
+  }
+
+  return nonTransactionalMigrations;
+}
+
 function legacyCreatedAtToMillis(createdAt: LegacyMigrationHistoryRow['createdAt']): number | null {
   if (createdAt === null) {
     return null;
@@ -324,19 +346,38 @@ function validateMigrationHistory(
   return appliedNames;
 }
 
-async function applyMigrationFile(sql: MigrationClient, migration: MigrationMeta): Promise<void> {
-  const table = migrationTableReference(sql);
+async function applyMigrationFile(
+  sql: MigrationClient,
+  migration: MigrationMeta,
+  nonTransactional: boolean,
+): Promise<void> {
+  const apply = async (connection: MigrationClient) => {
+    const table = migrationTableReference(connection);
 
-  await runMigrationTransaction(sql, async (transaction) => {
     for (const statement of migration.sql) {
-      await transaction.unsafe(statement);
+      await connection.unsafe(statement);
     }
 
-    await transaction`
+    await connection`
       INSERT INTO ${table} (hash, created_at, name, applied_at)
       VALUES (${migration.hash}, ${migration.folderMillis}, ${migration.name}, now())
     `;
-  });
+  };
+
+  if (nonTransactional) {
+    try {
+      await apply(sql);
+    } catch (cause) {
+      throw new Error(
+        `Migration ${migration.name} failed without a transaction; database changes may have partially persisted. Inspect the partial state and follow this migration's documented recovery before retrying.`,
+        { cause },
+      );
+    }
+
+    return;
+  }
+
+  await runMigrationTransaction(sql, apply);
 }
 
 export async function runDatabaseMigrations({
@@ -385,13 +426,14 @@ export async function runDatabaseMigrations({
     lockAcquired = true;
 
     const migrations = readMigrationFiles({ migrationsFolder });
+    const nonTransactionalMigrations = findNonTransactionalMigrations(migrations);
     await ensureMigrationHistory(session, migrations);
     const history = await readMigrationHistory(session);
     const appliedNames = validateMigrationHistory(history, migrations);
 
     for (const migration of migrations) {
       if (!appliedNames.has(migration.name)) {
-        await applyMigrationFile(session, migration);
+        await applyMigrationFile(session, migration, nonTransactionalMigrations.has(migration));
       }
     }
   } finally {

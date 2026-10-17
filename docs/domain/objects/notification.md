@@ -5,15 +5,6 @@
 Notification은 도메인 활동의 결과 또는 운영 안내를 Recipient Profile 또는 Recipient Account에게 직접
 전달하는 개별 알림이다.
 
-## Rollout
-
-Recipient Account 전환은 [database migration workflow](../../../memory/database-migrations.md)에 따라 Expand,
-Transition, Contract로 진행한다. Expand는 기존 producer, reader, Push 동작과 Profile-only Notification write를
-유지한다. Transition은 기존 Account 미지정 Notification과 Account-bound Notification을 함께 조회한다. 새 social
-Notification에는 Recipient Profile과 Account를 기록하며, 혼재 기간의 구버전 writer는 Account 미지정 Notification을
-저장할 수 있다. Contract에서 Account recipient가 없는 legacy 행을 backfill하고 final Account-scoped 동작을 제공해
-이 기능을 완성한다.
-
 ## 상태
 
 ### Read State
