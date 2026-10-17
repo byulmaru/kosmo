@@ -35,7 +35,11 @@ type RightRailProps = {
 };
 let rightRailProps: RightRailProps | undefined;
 let bottomTabBarProps: { onComposeOpen?: () => void } | undefined;
-let sidebarNavigationProps: { onComposeOpen?: () => void } | undefined;
+let sidebarNavigationProps:
+  | { guestPublicContent?: boolean; onComposeOpen?: () => void }
+  | undefined;
+let invitationProps: { onDismiss?: () => void; visible?: boolean } | undefined;
+let sessionStatus: 'error' | 'guest' | 'valid' | null = null;
 let shellChromeProps:
   | Pick<
       ComponentProps<typeof ShellChromeProvider>,
@@ -50,10 +54,19 @@ function MockBottomTabBar(props: typeof bottomTabBarProps) {
 }
 
 function MockSidebarNavigation(props: typeof sidebarNavigationProps) {
-  if (props?.onComposeOpen) {
-    sidebarNavigationProps = props;
+  if (props) {
+    sidebarNavigationProps = {
+      ...sidebarNavigationProps,
+      guestPublicContent: props.guestPublicContent,
+      ...(Object.hasOwn(props, 'onComposeOpen') ? { onComposeOpen: props.onComposeOpen } : {}),
+    };
   }
   return null;
+}
+
+function MockPublicContentInvitation(props: typeof invitationProps) {
+  invitationProps = props ?? undefined;
+  return createElement('PublicContentInvitation', props);
 }
 
 const mockModule = (specifier: string | URL, exports: object) =>
@@ -145,7 +158,7 @@ mockModule('@/relay/RelayActorProvider', { RelayActorBoundary: PassThrough });
 mockModule('@/session/SessionProvider', {
   useSession: () => ({
     accountId,
-    status: accountId ? 'valid' : 'guest',
+    status: sessionStatus ?? (accountId ? 'valid' : 'guest'),
   }),
 });
 mockModule('@/theme/ThemeProvider', {
@@ -159,6 +172,7 @@ mockModule('@/theme/ThemeProvider', {
   }),
 });
 mockModule('@/theme/tokens', {
+  breakpoints: { compact: 768, full: 1280 },
   spacing: { lg: 24, xl: 32 },
   textStyles: { uiLabelL: {} },
 });
@@ -189,6 +203,9 @@ mockModule('./ShellChromeContext', {
 });
 mockModule('./SidebarNavigation', {
   SidebarNavigation: MockSidebarNavigation,
+});
+mockModule('./PublicContentInvitation', {
+  PublicContentInvitation: MockPublicContentInvitation,
 });
 mockModule('./shellLayout', {
   getWebMobileShellHeader: (_web: boolean, _width: number, route: string) =>
@@ -234,6 +251,8 @@ afterEach(async () => {
   bottomTabBarProps = undefined;
   rightRailProps = undefined;
   sidebarNavigationProps = undefined;
+  invitationProps = undefined;
+  sessionStatus = null;
   shellChromeProps = undefined;
   rightRailFooterCount = 0;
   router.back.mock.resetCalls();
@@ -245,6 +264,42 @@ afterEach(async () => {
 });
 
 describe('UniversalShell screen fallback focus target', () => {
+  it('shows the closable Web invitation and guest navigation only on public content', async () => {
+    platform.OS = 'web';
+    layout = 'mobile';
+    pathname = '/@writer/post-id';
+    sessionStatus = 'guest';
+    await renderShell();
+
+    assert.equal(invitationProps?.visible, true);
+    assert.equal(sidebarNavigationProps?.guestPublicContent, true);
+    await act(async () => invitationProps?.onDismiss?.());
+    assert.equal(invitationProps?.visible, false);
+
+    pathname = '/home';
+    await act(async () => renderer?.update(createElement(UniversalShell)));
+    assert.equal(invitationProps?.visible, false);
+    assert.equal(sidebarNavigationProps?.guestPublicContent, false);
+  });
+
+  it('does not show the invitation for session errors or authenticated visitors', async () => {
+    platform.OS = 'web';
+    pathname = '/@writer';
+    sessionStatus = 'error';
+    await renderShell();
+    assert.equal(invitationProps?.visible, false);
+
+    sessionStatus = 'valid';
+    await act(async () => renderer?.update(createElement(UniversalShell)));
+    assert.equal(invitationProps?.visible, false);
+    assert.equal(sidebarNavigationProps?.guestPublicContent, false);
+
+    sessionProfile = { id: 'profile-1' };
+    await act(async () => renderer?.update(createElement(UniversalShell)));
+    assert.equal(invitationProps?.visible, false);
+    assert.equal(sidebarNavigationProps?.guestPublicContent, false);
+  });
+
   it('알려진 Profile 수 0과 변경값만 현재 Account의 Person 속성으로 전달한다', async () => {
     accountId = 'account-a';
     await renderShell();

@@ -2,7 +2,7 @@ import { ContentReportTargetType } from '@kosmo/core/enums';
 import { Slot, Stack, useGlobalSearchParams, usePathname, useRouter } from 'expo-router';
 import { ArrowLeft, ChevronLeftIcon } from 'lucide-react-native';
 import { useEffect } from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
 import { useContentReportMenuItem } from '@/components/content-report/ContentReportContext';
@@ -16,7 +16,9 @@ import {
 } from '@/components/profile/ProfileRouteShell';
 import { getProfileConnectionKind, normalizeProfileHandle } from '@/components/profile/route';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
+import { NavigationDrawerTrigger } from '@/components/shell/NavigationDrawerTrigger';
 import { NavigationLink } from '@/components/shell/NavigationLink';
+import { isGuestPublicProfileHome } from '@/components/shell/shellLayout';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { StateView } from '@/components/ui/StateView';
@@ -67,6 +69,8 @@ export default function ProfileLayout() {
   }>();
   const handle = normalizeProfileHandle(profileHandle);
   const pathname = usePathname();
+  const { width } = useWindowDimensions();
+  const { status } = useSession();
   const connectionKind = getProfileConnectionKind(pathname);
   const scrollKey = pathname;
   const pathSegments = pathname.split('/').filter(Boolean);
@@ -88,6 +92,11 @@ export default function ProfileLayout() {
       <ChevronLeftIcon color={theme.foregroundPrimary} size={20} />
     </IconButton>
   );
+  const headerLeading = isGuestPublicProfileHome(Platform.OS === 'web', width, pathname, status) ? (
+    <NavigationDrawerTrigger />
+  ) : (
+    backButton
+  );
 
   return (
     <RouteBoundary
@@ -106,7 +115,7 @@ export default function ProfileLayout() {
           : isProfileHome
             ? (retry) => (
                 <ProfileRouteContainer scrollKey={scrollKey}>
-                  <PageHeader leading={backButton} title="" />
+                  <PageHeader leading={headerLeading} title="" />
                   <StateView
                     actionLabel="다시 시도"
                     alert
@@ -132,7 +141,7 @@ export default function ProfileLayout() {
             </>
           ) : (
             <>
-              {isProfileHome ? <PageHeader leading={backButton} title="" /> : null}
+              {isProfileHome ? <PageHeader leading={headerLeading} title="" /> : null}
               <ProfileHero loading />
             </>
           )}
@@ -141,7 +150,7 @@ export default function ProfileLayout() {
       title="프로필을 불러오지 못했어요"
     >
       <ProfileLayoutContent
-        backButton={backButton}
+        headerLeading={headerLeading}
         connectionKind={connectionKind}
         handle={handle}
         scrollKey={scrollKey}
@@ -152,13 +161,13 @@ export default function ProfileLayout() {
 }
 
 function ProfileLayoutContent({
-  backButton,
+  headerLeading,
   connectionKind,
   handle,
   scrollKey,
   showPageHeader,
 }: {
-  backButton: ReactNode;
+  headerLeading: ReactNode;
   connectionKind: ProfileConnectionKind | null;
   handle: string;
   scrollKey: string;
@@ -190,7 +199,7 @@ function ProfileLayoutContent({
 
     return showPageHeader ? (
       <ProfileRouteContainer scrollKey={scrollKey}>
-        <PageHeader leading={backButton} title="" />
+        <PageHeader leading={headerLeading} title="" />
         {missingState}
       </ProfileRouteContainer>
     ) : (
@@ -237,7 +246,7 @@ function ProfileLayoutContent({
     <>
       <ProfileViewAnalytics key={profile.id} />
       {showPageHeader ? (
-        <PageHeader leading={backButton} title={profile.displayName} titleLines={1} />
+        <PageHeader leading={headerLeading} title={profile.displayName} titleLines={1} />
       ) : null}
       <ProfileHero
         key={selectedProfileId}

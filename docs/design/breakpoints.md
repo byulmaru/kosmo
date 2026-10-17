@@ -15,7 +15,7 @@ KOSMO 웹의 메인 3분할 레이아웃은 트위터/X처럼 화면 폭에 따�
 - **`compact`(768px, 기존 `md`)** = 모바일 ↔ 데스크톱 경계. 미만은 하단 탭 바 + 드로어 사이드바, 이상은 사이드바가 항상 보인다.
 - **`full`(1280px, 기존 `xl`)** = 좌측 풀 사이드바(프로필 헤더 + 라벨)와 우측 컴포저(우측 레일)가 함께 등장해 풀 3분할이 된다. `compact`~`full`는 좌측이 아이콘 전용 레일이고 우측 레일이 없다.
 
-모바일 셸의 화면 헤더 높이는 `64px`이다. `< compact` Web에서 `/home`은 메뉴 버튼과 중앙 브랜드 마크를, `/notifications`는 메뉴 버튼과 화면 제목을 같은 app bar에 표시한다. 게시글 상세는 같은 위치에서 메뉴 대신 뒤로가기를 표시하고 `게시글` 제목을 함께 렌더링한다. 공개 Profile Home은 resolved·loading·query error·missing 상태 모두 route가 표시 이름 또는 빈 제목을 가진 공용 PageHeader를 소유하므로 셸 헤더를 중복 렌더링하지 않는다. 북마크 등 다른 route의 PageHeader 정책은 유지한다. Android/iOS에서는 route의 같은 `PageHeader` 선언을 Native Stack header에 표시하고 Native `PageHeader` wrapper가 safe area를 처리한다. leading이 없는 화면은 drawer trigger를 기본으로 사용하고, 프로필·게시글·설정 detail처럼 뒤로가기를 지정한 화면은 그 action을 유지한다. `UniversalShell`은 별도 menu-only header를 추가하지 않으므로 Native에서도 헤더가 한 줄만 존재한다. Native drawer의 leading-edge 열기 gesture는 `/home`, `/local`, `/search`, `/notifications`에서만 활성화하며, Profile Home, Post detail, Profile followers/following 및 하위 route, settings와 기타 pushed/detail route에서는 비활성화한다. 이 제한은 leading-edge gesture에만 적용하고, 모든 route에서 명시적으로 실행한 메뉴·context·profile-switcher 열기는 유지하며 gesture 비활성화 route로 전환해도 이미 열린 drawer를 자동으로 닫지 않는다. `compact`와 `full` Web에서는 모바일 셸 헤더가 없으므로 각 route가 기존 브랜드·텍스트·뒤로가기 헤더를 소유한다.
+모바일 셸의 화면 헤더 높이는 `64px`이다. `< compact` Web에서 `/home`은 메뉴 버튼과 중앙 브랜드 마크를, `/notifications`는 메뉴 버튼과 화면 제목을 같은 app bar에 표시한다. 게시글 상세는 같은 위치에서 메뉴 대신 뒤로가기를 표시하고 `게시글` 제목을 함께 렌더링한다. PROD-836의 비로그인 `< compact` Web 공개 Profile·Post는 헤더 왼쪽 햄버거 모양의 `메뉴 열기` 버튼과 제목을 사용해 하단 가입 안내를 닫은 뒤에도 drawer의 `가입하기`·`로그인`에 접근할 수 있게 한다. 이 guest 헤더에 별도의 뒤로가기나 오른쪽 메뉴 버튼은 추가하지 않는다. 별도 header 행은 추가하지 않는다. 공개 Profile Home은 resolved·loading·query error·missing 상태 모두 route가 표시 이름 또는 빈 제목을 가진 공용 PageHeader를 소유하므로 셸 헤더를 중복 렌더링하지 않는다. 북마크 등 다른 route의 PageHeader 정책은 유지한다. Android/iOS에서는 route의 같은 `PageHeader` 선언을 Native Stack header에 표시하고 Native `PageHeader` wrapper가 safe area를 처리한다. leading이 없는 화면은 drawer trigger를 기본으로 사용하고, 프로필·게시글·설정 detail처럼 뒤로가기를 지정한 화면은 그 action을 유지한다. `UniversalShell`은 별도 menu-only header를 추가하지 않으므로 Native에서도 헤더가 한 줄만 존재한다. Native drawer의 leading-edge 열기 gesture는 `/home`, `/local`, `/search`, `/notifications`에서만 활성화하며, Profile Home, Post detail, Profile followers/following 및 하위 route, settings와 기타 pushed/detail route에서는 비활성화한다. 이 제한은 leading-edge gesture에만 적용하고, 모든 route에서 명시적으로 실행한 메뉴·context·profile-switcher 열기는 유지하며 gesture 비활성화 route로 전환해도 이미 열린 drawer를 자동으로 닫지 않는다. `compact`와 `full` Web에서는 모바일 셸 헤더가 없으므로 각 route가 기존 브랜드·텍스트·뒤로가기 헤더를 소유한다.
 
 각 컬럼 폭(풀 사이드바 `320px` / 아이콘 레일 `80px`, 중앙 최대 `600px`, 우측 `320px`)을 더하면 `full`(1280px) 경계에서 풀 3분할(`320`+`600`+`320` = `1240px`)이 중앙 피드를 `600px`로 확보한 채 들어맞는다. 풀 3분할 등장을 1024px가 아닌 1280px로 둬, 1024~1279px 구간에서는 중앙 피드를 비좁게 누르는 대신 아이콘 레일 단계로 폭을 확보한다.
 
@@ -70,7 +70,8 @@ drawer에는 정책 링크를 추가하지 않는다.
   one-pane `정보` detail은 같은 세 링크와 accessible name·keyboard/focus 순서를 제공한다. Native channel
   row/selector는 [settings.md](./settings.md)의 Native channel 계약을 따른다.
   Web `정보` detail은 세 policy link만 유지한다.
-- 가입·로그인 온보딩에서는 기존 landing 개인정보 처리방침 링크만 유지하며 Native channel selector나 복구 진입점은
+- PROD-836의 비로그인 공개 Profile·Post에서는 모든 Web 폭에서 닫을 수 있는 하단 가입 안내를 표시하고 full 우측 레일의 중복 가입하기·로그인 버튼과 별도의 가입·소개 안내 카드는 표시하지 않는다. 하단 가입 안내의 `KOSMO에서 계속하기` 버튼 아래에 `팀 별마루 소개`와 `개인정보처리방침` 링크를 `·` 구분자 없이 표시한다. 팀 소개는 `https://byulmaru.co/about-us`, 개인정보처리방침은 기존 `/privacy`로 연결하며, sidebar·mobile drawer에는 정책 링크를 추가하지 않는다.
+- 그 밖의 가입·로그인 온보딩에서는 기존 landing 개인정보 처리방침 링크만 유지하며 Native channel selector나 복구 진입점은
   추가하지 않는다. 준비되지 않은 Account form,
   자동 삭제, 공통 신고 navigation은 추가하지 않는다.
 

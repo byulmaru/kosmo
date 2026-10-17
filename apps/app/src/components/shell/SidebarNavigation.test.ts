@@ -20,6 +20,10 @@ let currentSession: {
 let logoutError: string | null;
 let logoutPending: boolean;
 let presentationProps: PresentationProps | undefined;
+let pathname = '/home';
+const savedHomeTargets: string[] = [];
+const loginTargets: Array<string | null> = [];
+let switcherRenderCount = 0;
 let renderer: ReactTestRenderer | undefined;
 const logout = mock.fn();
 let pendingNavigationAction: (() => void) | undefined;
@@ -29,7 +33,11 @@ const requestNavigation = mock.fn((action: () => void) => {
   return shouldDeferNavigation;
 });
 
-mockModule('expo-router', { usePathname: () => '/home' });
+mockModule('expo-router', {
+  Link: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) =>
+    createElement('ExpoLinkMock', props, children),
+  usePathname: () => pathname,
+});
 mockModule('react-native', {
   Platform: { OS: 'web' },
   ScrollView: 'ScrollView',
@@ -56,10 +64,22 @@ mockModule(new URL('./NavigationGuardContext.tsx', import.meta.url), {
   useNavigationGuard: () => ({ request: requestNavigation }),
 });
 mockModule(new URL('./NavigationLink.tsx', import.meta.url), {
-  NavigationLink: ({ children }: { children: ReactNode }) => children,
+  NavigationLink: ({ children, ...props }: { children: ReactNode; [key: string]: unknown }) =>
+    createElement('NavigationLinkMock', props, children),
 });
 mockModule(new URL('./ProfileSwitcher.tsx', import.meta.url), {
-  ProfileSwitcher: () => null,
+  ProfileSwitcher: () => {
+    switcherRenderCount++;
+    return null;
+  },
+});
+mockModule('@/auth/publicContentReturn', {
+  buildWebLoginHref: (target: string) => `/login?returnTo=${encodeURIComponent(target)}`,
+  isPrimaryWebActivation: () => true,
+  saveHomeReturnTarget: (target: string) => savedHomeTargets.push(target),
+});
+mockModule('@/auth/login', {
+  startWebLoginFromPress: (_event: unknown, target: string | null) => loginTargets.push(target),
 });
 mockModule(new URL('./shellLayout.ts', import.meta.url), {
   isSettingsRoute: () => false,
@@ -84,6 +104,10 @@ beforeEach(() => {
   logoutError = '로그아웃하지 못했습니다.';
   logoutPending = true;
   presentationProps = undefined;
+  pathname = '/home';
+  savedHomeTargets.length = 0;
+  loginTargets.length = 0;
+  switcherRenderCount = 0;
   logout.mock.resetCalls();
   pendingNavigationAction = undefined;
   requestNavigation.mock.resetCalls();
@@ -95,9 +119,9 @@ afterEach(async () => {
   renderer = undefined;
 });
 
-async function renderSidebar() {
+async function renderSidebar(props: { guestPublicContent?: boolean } = {}) {
   await act(async () => {
-    renderer = create(createElement(SidebarNavigation, { query: {} as never }));
+    renderer = create(createElement(SidebarNavigation, { ...props, query: {} as never }));
   });
   assert.ok(presentationProps);
   return presentationProps;
@@ -132,4 +156,35 @@ test('Production adapter hides feedback without a current session', async () => 
   const props = await renderSidebar();
 
   assert.equal(props.showFeedback, false);
+});
+
+test('Production adapter links guest signup to Home and login to the BFF with the safe public path', async () => {
+  pathname = '/@writer/post-id';
+  const props = await renderSidebar({ guestPublicContent: true });
+
+  assert.equal(props.guestPublicContent, true);
+  assert.equal(props.showFeedback, false);
+  assert.equal(switcherRenderCount, 0);
+
+  const child = createElement('Pressable', { accessibilityRole: 'button' });
+  const signup = props.renderGuestAction?.({ action: 'signup', children: child as never });
+  const login = props.renderGuestAction?.({ action: 'login', children: child as never });
+  assert.equal((signup?.props as { href?: string }).href, '/');
+  assert.equal((login?.props as { href?: string }).href, '/login?returnTo=%2F%40writer%2Fpost-id');
+
+  const signupControl = (
+    signup?.props as {
+      children?: React.ReactElement<{ onPress?: (event: unknown) => void }>;
+    }
+  ).children;
+  signupControl?.props.onPress?.({ nativeEvent: { button: 0 } });
+  const loginControl = (
+    login?.props as {
+      children?: React.ReactElement<{ onPress?: (event: unknown) => void }>;
+    }
+  ).children;
+  loginControl?.props.onPress?.({ nativeEvent: { button: 0 } });
+
+  assert.deepEqual(savedHomeTargets, ['/@writer/post-id']);
+  assert.deepEqual(loginTargets, ['/@writer/post-id']);
 });

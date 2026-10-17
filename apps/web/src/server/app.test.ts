@@ -206,6 +206,95 @@ describe('browser login', () => {
     expect(setCookie).not.toContain('Secure');
   });
 
+  test('preserves only a public Profile or Post target in a short-lived callback cookie', async () => {
+    const target = '/@writer/post-id';
+    const response = await app.request(
+      `https://kos.moe/login?returnTo=${encodeURIComponent(target)}`,
+    );
+    const cookies = responseCookies(response.headers);
+    const setCookie = response.headers.get('set-cookie') ?? '';
+
+    expect(response.status).toBe(302);
+    expect(cookies.kosmo_public_content_return_target).toBe(target);
+    expect(setCookie).toContain('Max-Age=600');
+    expect(setCookie).toContain('Path=/login/callback');
+    expect(setCookie).toContain('HttpOnly');
+    expect(setCookie).toContain('SameSite=Lax');
+  });
+
+  test.each([
+    '//outside.example',
+    'https://outside.example/@writer',
+    '/login',
+    '/@writer?next=/settings',
+    '/@writer/%2Fsettings',
+    '/@writer/../settings',
+    '/@writer/%00',
+    '/@writer/%7f',
+  ])('does not preserve unsafe return target %s', async (target) => {
+    const response = await app.request(
+      `https://kos.moe/login?returnTo=${encodeURIComponent(target)}`,
+    );
+
+    expect(response.status).toBe(302);
+    expect(responseCookies(response.headers).kosmo_public_content_return_target).toBeFalsy();
+  });
+
+  test('a login without a return target clears a previous target from the same tab', async () => {
+    const first = await app.request('https://kos.moe/login?returnTo=%2F%40writer');
+    const firstCookies = responseCookies(first.headers);
+    const second = await app.request('https://kos.moe/login', {
+      headers: { cookie: cookieHeader(firstCookies) },
+    });
+
+    expect(responseCookies(second.headers).kosmo_public_content_return_target).toBe('');
+    expect(second.headers.get('set-cookie')).toContain('Max-Age=0');
+  });
+
+  test('returns to a validated public target after OIDC success and consumes the target cookie', async () => {
+    const login = await app.request('https://kos.moe/login?returnTo=%2F%40writer%2Fpost-id');
+    const cookies = responseCookies(login.headers);
+    const callback = await app.request(
+      `https://kos.moe/login/callback?code=oidc-code&state=${cookies.kosmo_oidc_state}`,
+      { headers: { cookie: cookieHeader(cookies) } },
+    );
+
+    expect(callback.status).toBe(302);
+    expect(callback.headers.get('location')).toBe(
+      '/home?resetSelectedProfile=1&returnTo=%2F%40writer%2Fpost-id',
+    );
+    expect(callback.headers.get('set-cookie')).toContain('kosmo_public_content_return_target=');
+    expect(callback.headers.get('set-cookie')).toContain('Max-Age=0');
+  });
+
+  test('falls back to Home when the callback return cookie is tampered with', async () => {
+    const login = await app.request('https://kos.moe/login?returnTo=%2F%40writer');
+    const cookies = responseCookies(login.headers);
+    cookies.kosmo_public_content_return_target = 'https://outside.example/@writer';
+    const callback = await app.request(
+      `https://kos.moe/login/callback?code=oidc-code&state=${cookies.kosmo_oidc_state}`,
+      { headers: { cookie: cookieHeader(cookies) } },
+    );
+
+    expect(callback.status).toBe(302);
+    expect(callback.headers.get('location')).toBe('/home?resetSelectedProfile=1');
+    expect(callback.headers.get('set-cookie')).toContain('Max-Age=0');
+  });
+
+  test('an OIDC cancellation clears the return target without creating a session', async () => {
+    const login = await app.request('https://kos.moe/login?returnTo=%2F%40writer');
+    const cookies = responseCookies(login.headers);
+    const response = await app.request(
+      `https://kos.moe/login/callback?error=access_denied&state=${cookies.kosmo_oidc_state}`,
+      { headers: { cookie: cookieHeader(cookies) } },
+    );
+
+    expect(response.status).toBe(400);
+    expect(createSession).not.toHaveBeenCalled();
+    expect(response.headers.get('set-cookie')).toContain('kosmo_public_content_return_target=');
+    expect(response.headers.get('set-cookie')).toContain('Max-Age=0');
+  });
+
   test('uses the public origin when TLS terminates before the Node server', async () => {
     vi.stubEnv('PUBLIC_ORIGIN', 'https://kos.moe');
     const login = await app.request('http://web:8080/login');
