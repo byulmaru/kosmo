@@ -118,8 +118,10 @@ Quote에 동시에 consent를 쓰는 배포는 허용하지 않는다. rollout i
 
 #1094 Source lookup index와 consent schema를 먼저 유지한다. 하위 #961에는 `quote_policy` schema나 조회가 없다.
 #940의 nullable enum/column 및 local ACTIVE Post backfill을 상위 application 시작 전에 적용해야 한다.
-이 정책 migration은 consent fencing 컬럼이 아니다. 실제 production lock 시간·backfill 규모·구버전 호환은
-별도 rollout Gate다.
+이 정책 migration은 consent fencing 컬럼이 아니다. 최신 main → 하위 → 상위의 실제 격리 DB에서
+이력 60 → 60 → 61, local ACTIVE contentful-only backfill·consent/Source/content 보존·멱등 재실행을 확인했다.
+정책 입력이 없는 하위 INSERT도 확장 스키마에서 동작한다. 이는 구형 consent writer 공존을 허용하지 않는다.
+실제 production lock 시간·backfill 규모·fleet 전환은 별도 rollout Gate다.
 
 구형 #961의 `20260917045804_young_mercury`는 현재 공통 모델에 필요하지 않으며 하위 최종 tree에 포함하지 않는다.
 runner는 최신 timestamp보다 오래된 파일도 name이 미적용이면 실행하므로, 최신 main DB에 이 파일을 추가하면

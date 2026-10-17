@@ -1,3 +1,4 @@
+import { PostQuotePolicy } from '@kosmo/core/enums';
 import {
   hasPostContentMentionTokenBoundaries,
   normalizePostContentPlainText,
@@ -168,6 +169,9 @@ export function replacePostComposerMentionQuery(
   return { body: nextBody, range };
 }
 
+export type PostComposerQuotePolicy = PostQuotePolicy;
+export const defaultPostComposerQuotePolicy = PostQuotePolicy.EVERYONE;
+
 export function resolvePostComposerVisibility(
   value: string | null | undefined,
   replyParentVisibility?: PostVisibility | '%future added value' | null,
@@ -201,6 +205,7 @@ export function createPostComposerMutationInput(
   contentWarning?: string | null,
   repostSourceId?: string,
   mentions?: readonly PostComposerMentionRange[],
+  quotePolicy?: PostComposerQuotePolicy,
 ) {
   const normalizedContentWarning = normalizePostContentPlainText(contentWarning ?? '');
 
@@ -209,6 +214,7 @@ export function createPostComposerMutationInput(
     ...(normalizedContentWarning ? { contentWarning: normalizedContentWarning } : {}),
     ...(replyParentId ? { replyParentId } : {}),
     ...(repostSourceId ? { repostSourceId } : {}),
+    ...(quotePolicy && isPostComposerQuotePolicyVisible(visibility) ? { quotePolicy } : {}),
     ...(mentions?.length ? { mentions } : {}),
     visibility,
   };
@@ -475,4 +481,8 @@ export function createPostComposerContextKey(
   repostSourceId?: string,
 ): string {
   return `${selectedProfileId}:${replyParentId ?? 'post'}:${repostSourceId ?? 'source-none'}`;
+}
+
+export function isPostComposerQuotePolicyVisible(visibility: PostVisibility): boolean {
+  return visibility === 'PUBLIC' || visibility === 'UNLISTED';
 }

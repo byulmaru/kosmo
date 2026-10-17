@@ -1,4 +1,6 @@
-import { PostVisibility } from '@kosmo/core/enums';
+import { db, Posts } from '@kosmo/core/db';
+import { PostQuoteConsentStatus, PostVisibility } from '@kosmo/core/enums';
+import { eq } from 'drizzle-orm';
 import {
   createE2EFollow,
   createE2EPost,
@@ -433,6 +435,16 @@ test('순수 Repost 상세는 Quote Source로 replace되고 한 단계 C preview
     profileId: quoteAuthor.id,
     repostSourceId: directSource.id,
     visibility: PostVisibility.PUBLIC,
+  });
+  // These DB-seeded Quotes bypass creation, so record the approvals required
+  // for the Source preview this navigation scenario exercises.
+  await db.transaction(async (tx) => {
+    for (const quotePost of [directSource, quote]) {
+      await tx
+        .update(Posts)
+        .set({ quoteConsentStatus: PostQuoteConsentStatus.APPROVED })
+        .where(eq(Posts.id, quotePost.id));
+    }
   });
   const quoteRepost = await createE2EPost({
     content: false,

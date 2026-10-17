@@ -2,10 +2,11 @@ import assert from 'node:assert/strict';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
-import type { ComponentType, ReactElement } from 'react';
+import type { ComponentType, ElementType, ReactElement } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+const actionBarType = 'PostActionBar' as ElementType;
 
 type Target = {
   content: { id: string };
@@ -17,7 +18,8 @@ type Target = {
     relativeHandle: string;
     viewerState: { profileMute: { id: string } | null };
   };
-  visibility: 'PUBLIC';
+  quotePolicy?: 'EVERYONE' | 'FOLLOWERS' | 'AUTHOR' | null;
+  visibility: 'PUBLIC' | 'UNLISTED' | 'FOLLOWERS';
   actionBar: object;
   reactionController: object;
 };
@@ -53,6 +55,7 @@ const target: Target = {
 };
 const capturedMute = { value: null as MuteProps | null };
 const capturedReport = { value: null as ReportMenuInput | null };
+let selectedProfileId = 'profile:viewer';
 let PostActionSurface: ComponentType<{ socialActionTarget: never }>;
 let renderer: ReactTestRenderer | null = null;
 
@@ -85,20 +88,20 @@ mock.module('@/components/content-report/ContentReportContext', {
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module('@/session/SessionProvider', {
-  exports: { useSession: () => ({ selectedProfileId: 'profile:viewer' }) },
+  exports: { useSession: () => ({ selectedProfileId }) },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module('./PostActionAuthentication', {
   exports: {
     usePostActionAuthentication: () => ({
       execution: { kind: 'enabled' },
       resolve: () => undefined,
-      selectedProfileId: 'profile:viewer',
+      selectedProfileId,
     }),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module('./PostActionBar', {
   exports: {
-    PostActionBar: () => createElement('PostActionBar'),
+    PostActionBar: (props: object) => createElement('PostActionBar', props),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module('./PostBookmarkAction', {
@@ -163,9 +166,28 @@ describe('PostActionSurface mute wiring', () => {
   });
 });
 
+describe('PostActionSurface published policy', () => {
+  it('자신의 게시물에도 인용 정책 편집 메뉴를 제공하지 않는다', async () => {
+    selectedProfileId = target.profile.id;
+    await act(async () => {
+      renderer = create(
+        createElement(PostActionSurface, {
+          socialActionTarget: { ...target, quotePolicy: 'FOLLOWERS' } as never,
+        }),
+      );
+    });
+    const items = renderer!.root.findByType(actionBarType).props.moreItems as { key: string }[];
+    assert.deepEqual(
+      items.map(({ key }) => key),
+      ['copy-link'],
+    );
+  });
+});
+
 afterEach(async () => {
   if (renderer) {
     await act(async () => renderer?.unmount());
     renderer = null;
   }
+  selectedProfileId = 'profile:viewer';
 });

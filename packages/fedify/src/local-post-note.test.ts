@@ -26,6 +26,7 @@ import {
   InstanceState,
   MediaSource,
   MediaState,
+  PostQuotePolicy,
   PostState,
   PostVisibility,
   ProfileFollowPolicy,
@@ -247,6 +248,33 @@ describe('ActivityPub Local Post Note', () => {
       tombstoneParentNote?.replyTargetId?.href,
       `${publicOrigin}/ap/note/${localParent.id}`,
     );
+  });
+
+  test('serializes each stored Quote policy without changing the Note audience', async () => {
+    const author = await createProfile({ handle: 'policy-author', kind: InstanceKind.LOCAL });
+    const authorUri = `${publicOrigin}/ap/actor/${author.id}`;
+    const followersUri = `${authorUri}/followers`;
+    for (const [quotePolicy, expected] of [
+      [PostQuotePolicy.EVERYONE, [PUBLIC_COLLECTION.href]],
+      [PostQuotePolicy.FOLLOWERS, [followersUri, authorUri]],
+      [PostQuotePolicy.AUTHOR, [authorUri]],
+    ] as const) {
+      const post = await createPost(author.id);
+      await db.update(Posts).set({ quotePolicy }).where(eq(Posts.id, post.id));
+      const note = await dispatchLocalPostNote(createContext(), { id: post.id });
+      assert.ok(note);
+      assert.equal(note.toId?.href, PUBLIC_COLLECTION.href);
+      assert.equal(note.ccId?.href, followersUri);
+      const expanded = await note.toJsonLd({ format: 'expand' });
+      const policy = (expanded as Record<string, unknown>[])[0]?.[
+        'https://gotosocial.org/ns#interactionPolicy'
+      ] as Record<string, unknown>[];
+      const rule = policy[0]?.['https://gotosocial.org/ns#canQuote'] as Record<string, unknown>[];
+      assert.deepEqual(
+        rule[0]?.['https://gotosocial.org/ns#automaticApproval'],
+        expected.map((id) => ({ '@id': id })),
+      );
+    }
   });
 
   test('projects stored ordered Ready Local Media as Image attachments without HTML duplication or network reads', async () => {
