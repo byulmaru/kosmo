@@ -1,6 +1,6 @@
 # Sentry 오류 수집 운영
 
-Kosmo는 API, Web BFF, Web browser와 Android·iOS Native의 처리되지 않은 오류를 기본적으로 Sentry에 수집한다. 앱은 승인된 처리된 실패도 공통 수집 진입점으로 명시적으로 보고할 수 있으며, 현재 첫 적용 대상은 Post Composer와 Local Profile이 공유하는 이미지 업로드 경계다. BFF에서는 예상된 4xx 인증 거절을 제외하되 설정 누락·upstream 실패 같은 5xx 인증 경로 오류는 수집하고, Web에서는 외부 GraphQL 경계와 오류를 소비하는 내부 route·session 경계를 모두 수집한다. Web 자동 session tracking도 비활성화한다. Native Store build와 OTA export는 각 artifact의 full commit SHA를 Sentry release로 사용하고, 선택된 channel을 Sentry environment로 사용한다. Source maps와 Native debug symbols는 각각의 release workflow에서 업로드한다. Prometheus SLI/SLO, tracing, Session Replay와 사용자 행동 분석도 이 설정의 범위가 아니다.
+Kosmo는 API, Web BFF, Web browser와 Android·iOS Native의 처리되지 않은 오류를 기본적으로 Sentry에 수집한다. 앱은 승인된 처리된 실패도 공통 수집 진입점으로 명시적으로 보고할 수 있으며, 현재 첫 적용 대상은 Post Composer와 Local Profile이 공유하는 이미지 업로드 경계다. BFF에서는 예상된 4xx 인증 거절을 제외하되 설정 누락·upstream 실패 같은 5xx 인증 경로 오류는 수집하고, Web에서는 외부 GraphQL 경계와 오류를 소비하는 내부 route·session 경계를 모두 수집한다. Web 자동 session tracking도 비활성화한다. Native Store build와 OTA export는 각 artifact의 full commit SHA를 Sentry release로 사용하고, 선택된 channel을 Sentry environment로 사용한다. Source maps와 Native debug symbols는 각각의 release workflow에서 업로드한다. Prometheus SLI/SLO, Session Replay와 사용자 행동 분석은 오류 수집 설정의 범위가 아니다. DB 요청 trace는 아래의 별도 운영 정책을 따른다.
 
 피드백 본문·선택적 이미지도 기존 SDK를 통해 User Feedback으로 접수한다. 제출 결과와 Slack 알림의 운영 조건은 [피드백 Sentry 접수 운영](./feedback-sentry.md)을 따른다.
 
@@ -109,9 +109,24 @@ history와 Worker runtime 경계가 소유한다. 이 Worker 경계는 Web BFF i
 
 Sentry의 기본 개인정보 전송은 활성화하지 않지만, SDK event에는 오류 진단을 위해 request metadata, exception message, mechanism data, source context, frame local variable와 애플리케이션이 추가한 context가 포함될 수 있다. 애플리케이션 오류나 명시적 Sentry context에 인증 정보 또는 불필요한 사용자 콘텐츠를 넣지 않아야 한다.
 
+## DB 요청 trace 운영 정책
+
+[PROD-1111](https://linear.app/byulmaru/issue/PROD-1111)의 2026-10-14 사용자 합의다. **코드 구현됨**. 실제 trace 수집과 production 측정은 아직 검증하지 않았다. API와 Web BFF의 운영 시작 명령은 앱 모듈을 불러오기 전에 Sentry를 preload하며, `ENVIRONMENT=prod`에서만 Postgres.js 계측과 상시 10% trace 샘플링을 켠다. 선택된 HTTP 요청 안의 DB 쿼리는 자식 span으로 기록된다. 로컬·개발·테스트에는 performance sampling을 설정하지 않으며 기존 오류 수집은 유지한다.
+
+- Postgres.js 계측은 Sentry의 `db.query.text` SQL 표현을 기록하고 문자열·숫자 literal과 주석을 제거하며 bound parameter 값을 별도 속성으로 붙이지 않는다. 소요 시간은 서버 실행 시간이나 전체 요청 통계가 아니라 서비스 관측 DB 왕복 시간이다.
+- API와 Web BFF의 대표 사용자 요청에서 실행되는 서비스 DB 쿼리를 측정한다.
+- 운영 요청은 상시 10% 확률로 샘플링한다. 선택된 요청의 쿼리 구간과 소요 시간을 요청·환경·릴리스와 함께 조회할 수 있어야 한다.
+- 기존 오류 수집 범위와 진단 정보 보존, 기본 PII 전송 비활성화, 로컬·테스트의 기본 외부 비전송 정책을 유지한다. 새 trace에 인증 정보나 불필요한 사용자 콘텐츠를 별도로 추가하지 않는다.
+- 측정 결과에는 지연이 큰 쿼리를 식별할 수 있는 정보, 소요 시간, 관측 기간, 표본 수와 trace 조회 근거를 남긴다. 샘플링과 수집 누락의 영향을 함께 표시한다.
+- 서비스가 관측한 쿼리 왕복 시간을 PostgreSQL 서버의 순수 실행 시간이나 전체 요청의 통계로 표현하지 않는다.
+- 쿼리 최적화, DB 구조 변경, 백그라운드 Worker·Fedify consumer, queue 전용 DB와 Web·Native client tracing은 이번 범위에 포함하지 않는다.
+- Production 반영은 기존 [Production release](./production-release.md)의 Environment 승인과 digest 승격 절차를 따른다. 구현·CI 통과와 실제 production trace 검증을 구분한다.
+
 ## Build와 source map
 
 `pnpm build:sentry-artifacts`는 Expo Web bundle과 external source map을 생성한다. 이어서 debug ID를 주입하고 source map의 `sourcesContent`를 정적으로 검증한다. 업로드 설정이 없는 로컬 실행은 외부 전송을 건너뛰지만 검증 뒤 map과 공개 JavaScript의 `sourceMappingURL`을 제거한다. API와 Web BFF는 기존 TypeScript source를 `tsx`로 직접 실행하며, server JavaScript/source map과 원본 TypeScript symbolication은 Backlog PROD-516에서 다룬다.
+
+API와 Web BFF production `start` 명령 및 `docker-entrypoint.sh`는 각각 API·Web BFF Sentry 모듈을 preload해 ESM Postgres.js instrumentation이 DB client보다 먼저 설치되도록 한다. 개발용 `dev` 명령은 이 preload를 사용하지 않는다.
 
 `Docker Build` workflow는 GitHub-hosted `ubuntu-24.04-arm` runner에서 `main` push마다 canonical image를 한 번 build하고, `sha-<full SHA>` tag와 동일한 full commit SHA release의 Web bundle source map을 생성·검증·업로드한다. Dev는 triggering `head_sha` tag의 GHCR digest를 사용한다. Production `workflow_dispatch`는 target SHA에 해당하는 성공한 main push Docker Build run을 확인한 뒤 GHCR SHA tag digest를 preflight에서 조회·고정하고, `prod` Environment 승인 뒤 image checkout·build·push·source map upload나 tag/digest 재조회 없이 그 digest만 배포한다. SHA tag 재빌드로 Dev와 Production의 조회 digest가 달라질 수 있으나, production approval 이후에는 preflight digest를 유지한다. 두 경로 모두 공개 client 설정을 Vault나 GitHub Variables에서 읽지 않으며, 코드의 채널 설정표가 Web bundle에 포함된다. Web runtime의 `ENVIRONMENT`는 Helm 값에서 주입되고 BFF의 same-origin `/channel.js`가 이를 검증해 bundle보다 먼저 채널을 선택한다. Sentry organization·project는 canonical build metadata로, repository secret의 `SENTRY_AUTH_TOKEN`은 canonical BuildKit secret mount로만 전달한다. `SENTRY_UPLOAD_REQUIRED=1`인 canonical CI에서는 token, organization, release 또는 project가 누락되면 source map upload와 image build가 실패한다. 최종 image에는 upload token이나 organization/project 설정을 남기지 않으며, 업로드가 성공한 뒤 Web static root에는 `.map` 파일이 남지 않는다. Tag push·`production` branch push·일반 branch push는 Docker Build나 production release를 시작하지 않는다.
 

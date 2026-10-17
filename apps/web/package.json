@@ -7,7 +7,7 @@
     "build": "tsc --noEmit",
     "check": "tsc --noEmit",
     "dev": "PORT=5174 tsx watch src/server/index.ts",
-    "start": "tsx src/server/index.ts",
+    "start": "node --import tsx --import ./src/server/sentry.ts src/server/index.ts",
     "test": "pnpm check && pnpm test:unit && pnpm --workspace-root test:e2e",
     "test:e2e": "playwright test --pass-with-no-tests",
     "test:unit": "vitest run"
