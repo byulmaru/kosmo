@@ -9,6 +9,11 @@ const defaultDatabaseUrl = 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 const startupTimeoutMs = 120_000;
 
 let runtimePromise: Promise<void> | undefined;
+let stopRuntime: (() => Promise<void>) | undefined;
+
+export const stopTestTemporalRuntime = async (): Promise<void> => {
+  await stopRuntime?.();
+};
 
 /**
  * Start the same Temporal CLI server and production Worker entrypoint used by
@@ -80,6 +85,14 @@ async function startRuntime(): Promise<void> {
   // down; the child entrypoints perform their own async cleanup.
   server.unref();
   worker.unref();
+  const ownedWorker = worker;
+  stopRuntime = async () => {
+    // Descendants inherit the test runner's stderr pipe. Await their normal
+    // shutdown before the test child exits, rather than leaving orphaned
+    // descendants keeping the runner's output stream open.
+    await stopChild(ownedWorker);
+    await stopChild(server);
+  };
   const terminateChildren = () => {
     terminate(worker);
     terminate(server);
@@ -193,4 +206,14 @@ function terminate(child: ChildProcess): void {
   if (child.exitCode === null && child.signalCode === null) {
     child.kill('SIGTERM');
   }
+}
+
+async function stopChild(child: ChildProcess): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) {
+    return;
+  }
+  const exited = once(child, 'exit');
+  child.ref();
+  terminate(child);
+  await exited;
 }

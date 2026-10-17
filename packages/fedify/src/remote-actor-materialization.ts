@@ -53,6 +53,13 @@ export class RemoteActorMaterializationError extends Error {
   }
 }
 
+export class RemoteActorDiscoveryUnavailableError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'RemoteActorDiscoveryUnavailableError';
+  }
+}
+
 type RemoteActorLookupContext = Pick<Context<void>, 'lookupObject'>;
 export type RemoteActorMaterializationOptions = {
   actorJsonLd?: unknown;
@@ -371,7 +378,18 @@ const lookupRemoteProfileActor = async (input: RemoteProfileActorLookupInput) =>
       workflowIdReusePolicy: 'ALLOW_DUPLICATE',
     });
   } catch (error) {
-    return rethrowRemoteActorWorkflowError(error);
+    try {
+      rethrowRemoteActorWorkflowError(error);
+    } catch (cause) {
+      if (
+        cause instanceof ConflictError ||
+        cause instanceof NotFoundError ||
+        cause instanceof RemoteActorMaterializationError
+      ) {
+        throw cause;
+      }
+      throw new RemoteActorDiscoveryUnavailableError('Remote actor lookup failed.', { cause });
+    }
   }
 };
 

@@ -35,6 +35,7 @@ minimumReleaseAgeExclude:
   - '@temporalio/workflow@1.22.0'
   # Allow only the requested Fedify 2.4.0 upgrade past the release-age gate.
   - '@fedify/fedify@2.4.0'
+  - '@fedify/interaction-controls@2.4.0'
   - '@fedify/postgres@2.4.0'
   - '@fedify/uri-template@2.4.0'
   - '@fedify/vocab-runtime@2.4.0'

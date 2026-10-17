@@ -1,10 +1,11 @@
-import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import {
   ActivityPubActors,
   ActivityPubPosts,
   getDatabaseConnection,
   Instances,
   Posts,
+  ProfileBlocks,
   Profiles,
 } from '../db';
 import {
@@ -72,6 +73,10 @@ type QuoteConsentOperation =
   | {
       readonly operation: 'DECIDE';
       readonly result: 'APPROVED' | 'REJECTED';
+      readonly issuerActorUri: string;
+    }
+  | {
+      readonly operation: 'REJECT';
       readonly issuerActorUri: string;
     }
   | QuoteConsentResolveOperation
@@ -209,6 +214,8 @@ const transitionAllowed = (input: ApplyPostQuoteConsentInput) => {
             expectedStatus === PostQuoteConsentStatus.REVOKED) &&
           expectedApprovalUri === null)
       );
+    case 'REJECT':
+      return expectedStatus === PostQuoteConsentStatus.PENDING;
     case 'RESOLVE':
       if (expectedStatus === PostQuoteConsentStatus.REVOKED) {
         return (
@@ -238,6 +245,8 @@ const getNextConsent = (
   switch (input.operation) {
     case 'DECIDE':
       return { status: input.result, approvalUri: null };
+    case 'REJECT':
+      return { status: PostQuoteConsentStatus.REJECTED, approvalUri: input.expectedApprovalUri };
     case 'RESOLVE':
       if (input.result === PostQuoteConsentStatus.PENDING) {
         return {
@@ -265,6 +274,7 @@ const getNextConsent = (
 const operationIssuerMatches = (input: ApplyPostQuoteConsentInput) => {
   switch (input.operation) {
     case 'DECIDE':
+    case 'REJECT':
     case 'REVOKE':
       return input.issuerActorUri === input.source.authorActorUri;
     case 'RESOLVE':
@@ -323,6 +333,18 @@ export const applyPostQuoteConsent = async (
   }
 
   return getDatabaseConnection(handle).transaction(async (tx) => {
+    // Source deletion uses this same order. Source SHARE prevents a deletion
+    // commit from missing an uncommitted approval in its bulk-Quote snapshot.
+    await tx
+      .select({ id: Posts.id })
+      .from(Posts)
+      .where(eq(Posts.id, input.source.postId))
+      .for('share');
+    await tx
+      .select({ id: Posts.id })
+      .from(Posts)
+      .where(eq(Posts.id, input.quote.postId))
+      .for('update');
     const quote = await loadPostIdentity(tx, input.quote.postId);
     const source = await loadPostIdentity(tx, input.source.postId);
     if (
@@ -352,7 +374,15 @@ export const applyPostQuoteConsent = async (
       (quote.repostSourceId !== null && quote.repostSourceId !== source.postId) ||
       quote.quoteConsentStatus !== input.expectedStatus ||
       quote.quoteConsentApprovalUri !== input.expectedApprovalUri ||
-      !operationIssuerMatches(input)
+      !operationIssuerMatches(input) ||
+      (input.operation === 'DECIDE' &&
+        input.result === PostQuoteConsentStatus.APPROVED &&
+        input.expectedStatus !== PostQuoteConsentStatus.APPROVED &&
+        !(await isLocalQuoteAllowedByPolicy(tx, {
+          actorProfileId: quote.profileId,
+          sourceAuthorProfileId: source.profileId,
+          sourcePostId: source.postId,
+        })))
     ) {
       return null;
     }
@@ -435,10 +465,12 @@ export const applyPostQuoteConsent = async (
 };
 
 /** Revokes consent attached to a Source as part of that Source's deletion transaction. */
-export const revokePostQuoteConsentsForSource = async (tx: Transaction, sourcePostId: string) =>
-  tx
-    .update(Posts)
-    .set({ quoteConsentStatus: PostQuoteConsentStatus.REVOKED })
+export const revokePostQuoteConsentsForSource = async (tx: Transaction, sourcePostId: string) => {
+  // The Source owner already holds its Source UPDATE lock. Lock affected Quotes
+  // in stable order before the bulk UPDATE; every grant holds Source SHARE first.
+  await tx
+    .select({ id: Posts.id })
+    .from(Posts)
     .where(
       and(
         eq(Posts.repostSourceId, sourcePostId),
@@ -447,4 +479,61 @@ export const revokePostQuoteConsentsForSource = async (tx: Transaction, sourcePo
           PostQuoteConsentStatus.APPROVED,
         ]),
       ),
-    );
+    )
+    .orderBy(Posts.id)
+    .for('update');
+  const affected = await tx
+    .update(Posts)
+    .set({ quoteConsentStatus: PostQuoteConsentStatus.REVOKED })
+    .where(
+      and(
+        eq(Posts.repostSourceId, sourcePostId),
+        sql`EXISTS (SELECT 1 FROM "post" AS deleted_source WHERE deleted_source.id = ${sourcePostId} AND deleted_source.state = 'DELETED')`,
+        inArray(Posts.quoteConsentStatus, [
+          PostQuoteConsentStatus.PENDING,
+          PostQuoteConsentStatus.APPROVED,
+        ]),
+      ),
+    )
+    .returning({ id: Posts.id });
+  return affected.sort((left, right) => left.id.localeCompare(right.id));
+};
+
+export const isLocalQuoteAllowedByPolicy = async (
+  tx: Transaction,
+  {
+    actorProfileId,
+    sourceAuthorProfileId,
+  }: {
+    readonly actorProfileId: string;
+    readonly sourceAuthorProfileId: string;
+    readonly sourcePostId: string;
+  },
+): Promise<boolean> => {
+  if (actorProfileId === sourceAuthorProfileId) {
+    return true;
+  }
+
+  const blocked = await tx
+    .select({ id: ProfileBlocks.id })
+    .from(ProfileBlocks)
+    .where(
+      or(
+        and(
+          eq(ProfileBlocks.ownerProfileId, actorProfileId),
+          eq(ProfileBlocks.targetProfileId, sourceAuthorProfileId),
+        ),
+        and(
+          eq(ProfileBlocks.ownerProfileId, sourceAuthorProfileId),
+          eq(ProfileBlocks.targetProfileId, actorProfileId),
+        ),
+      ),
+    )
+    .limit(1)
+    .then((rows) => rows[0]);
+  if (blocked) {
+    return false;
+  }
+
+  return true;
+};

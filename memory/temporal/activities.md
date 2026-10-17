@@ -32,6 +32,16 @@
 - `remoteProfileLookupWorkflow`와 `remoteProfileRefreshWorkflow`는 `patched('remote-profile-activity-split-v1')`를 사용한다. 신규 history는 split Activity sequence를 실행하고 marker 이전 history가 기록한 `materializeRemoteProfileActorActivity`와 `refreshRemoteProfileActorActivity` Activity name 및 call trace는 호환 adapter로 유지한다. Adapter는 해당 unpatched history가 drain될 때 제거한다. Legacy materialization은 cache hit의 receipt로만 recovery하고 Active·Unresponsive Instance 모두 같은 7일 TTL을 적용한다.
 - Lookup Workflow의 strict Zod schema는 handle input과 actor input의 optional strict `receipt` shape를 검증한다. Actor URI와 optional context origin은 HTTP(S), receipt timestamp는 ISO instant여야 하며 nested field가 부분적으로 malformed인 입력은 거부한다. Update Workflow는 HTTP(S) actor URI, JSON document, ISO receipt를 별도 strict schema로 검증하고 context origin을 받지 않는다. 알려진 projection·conflict·not-found 오류는 non-retryable Activity failure로 변환하며 transient 오류는 그대로 전파한다. Refresh input의 optional `profileId`는 origin 선택용 acting Profile ID이며, `profileId` 선택 로직을 우선 사용하고 없으면 optional `contextOrigin`과 configured origin fallback을 사용한다. Context origin이 없을 때 refresh Workflow ID는 기존 문자열을 유지하며, 제공되면 ID에 포함한다.
 
+## Quote Consent Owner
+
+- Quote consent의 변경 명령은 Quote ID별 owner의 FIFO admission을 통과한다. Handler는 enqueue만 수행한다.
+- 원격 proof 조회는 읽기 전용 Activity로 분리한다. 쓰기 Activity는 Source → Quote 잠금, 현재 Run/token Query fence,
+  기존 identity/state CAS를 같은 transaction에서 검사한다. Query 성공만으로 commit까지의 Temporal 소유권을 보장하지 않는다.
+- 정상 종료·Continue-As-New는 token 폐기와 DB drain을 수행한다. Source 삭제는 공유 잠금 순서를 따르는 제한된 다중 자원 transaction이다.
+- SDK Worker shutdown은 Workflow의 finish/drain과 다르다. 구형 writer admission 차단 및 미완료 작업·DB session·process 확인 뒤 writer를 전환한다. bootstrap의 행 잠금은 아직 시작하지 않은 구형 writer를 fence하지 않는다.
+- 강제 Terminate/Reset은 drain을 실행하지 않으므로 이미 fence를 통과한 늦은 commit을 취소하지 못한다.
+  새 Run bootstrap과 운영 복구의 보장 범위는 [ADR 0030](../../docs/architecture/decisions/0030-quote-consent-owner.md)을 따른다.
+
 ## Inputs And Identity
 
 - Workflow/Update wire input의 strict Zod schema는 해당 Workflow의 trust boundary 가까이에 둔다. Activity가
@@ -44,6 +54,12 @@
 - Workflow ID는 logical generation을 구분하는 immutable source ID를 포함한다. create/delete와 서로 다른 source kind가 완료된 같은 ID를 공유하지 않게 한다.
 
 ## Verification
+
+- Node test preload는 Node test 자식의 main thread에서만 runtime/client를 생성한다. runner와 SDK Worker thread는
+  `--import`와 `NODE_TEST_CONTEXT`를 상속할 수 있으므로 둘 다 소유권 경계에서 제외한다. suite 종료 summary와 process exit를 구분하고,
+  preload가 소유한 원래 connection만 정리한다. 테스트가 임시 environment의 client로 교체한 연결을 닫지 않는다.
+- 장기 실행 Quote owner를 사용하는 E2E의 DB reset은 finish Signal과 정상 drain 완료를 기다린다.
+  `result()`만 대기하거나 강제 Terminate로 정상 종료를 대체하지 않는다.
 
 - Worker build로 Workflow bundle과 Activity type wiring을 확인한다.
 - production registry를 사용하는 Workflow test로 origin/transition 분기, sibling Activity 전부 시도, retry와 restart 재개를 확인한다.

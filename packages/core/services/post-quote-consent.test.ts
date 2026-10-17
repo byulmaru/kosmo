@@ -23,10 +23,8 @@ import {
   ProfileState,
 } from '../enums';
 import { postContentDocumentFromText } from '../post-content/server';
-import { createPost, deletePost } from './post';
+import { createPostPersisted as createPost, deletePostPersisted as deletePost } from './post';
 import { applyPostQuoteConsent } from './post-quote-consent';
-import type { SQL } from 'drizzle-orm';
-import type { DatabaseHandle } from '../db';
 import type { InstanceKind as InstanceKindType } from '../enums';
 import type { PostContentDocumentV1 } from '../post-content';
 
@@ -256,55 +254,46 @@ test('remote Quote resolution stores pending Authorization references and CASes 
   assert.equal(directlyApproved?.approvalUri, directAuthorizationUri);
   assert.equal(directlyApproved?.repostSourceId, source.post.id);
 
-  const concurrentRevokeDatabase = {
-    transaction: (callback: (tx: unknown) => Promise<unknown>) =>
-      db.transaction((tx) =>
-        callback({
-          select: tx.select.bind(tx),
-          update: (table: typeof Posts) => ({
-            set: (values: unknown) => ({
-              where: (condition: unknown) => ({
-                returning: async (selection: unknown) => {
-                  await db
-                    .update(Posts)
-                    .set({ quoteConsentStatus: PostQuoteConsentStatus.REVOKED })
-                    .where(eq(Posts.id, directQuote.post.id));
-                  return tx
-                    .update(table)
-                    .set(values as never)
-                    .where(condition as SQL)
-                    .returning(selection as never);
-                },
-              }),
-            }),
-          }),
-        }),
-      ),
-  } as unknown as DatabaseHandle;
-  const staleIdenticalRefresh = await applyPostQuoteConsent(
-    {
-      ...expectation({
-        quote: directQuote.post,
-        quoteActorUri: quoteAuthor.actorUri,
-        quoteUri: directQuoteUri,
-        source: source.post,
-        sourceActorUri: sourceAuthor.actorUri,
-        sourceUri,
-        expectedApprovalUri: directAuthorizationUri,
-        expectedRepostSourceId: source.post.id,
-        expectedStatus: PostQuoteConsentStatus.APPROVED,
-      }),
-      operation: 'RESOLVE',
-      result: 'APPROVED',
-      quoteAuthorActorUri: quoteAuthor.actorUri,
-      proof: {
-        kind: 'AUTHORIZATION',
-        approvalUri: directAuthorizationUri,
-        issuerActorUri: sourceAuthor.actorUri,
-      },
+  // Capture the approved snapshot, then commit a real competing revocation.
+  // The shared lock boundary intentionally prevents the old test's mocked
+  // interleaving from mutating the row inside this transaction's UPDATE.
+  await applyPostQuoteConsent({
+    ...expectation({
+      quote: directQuote.post,
+      quoteActorUri: quoteAuthor.actorUri,
+      quoteUri: directQuoteUri,
+      source: source.post,
+      sourceActorUri: sourceAuthor.actorUri,
+      sourceUri,
+      expectedApprovalUri: directAuthorizationUri,
+      expectedRepostSourceId: source.post.id,
+      expectedStatus: PostQuoteConsentStatus.APPROVED,
+    }),
+    operation: 'REVOKE',
+    approvalUri: directAuthorizationUri,
+    issuerActorUri: sourceAuthor.actorUri,
+  });
+  const staleIdenticalRefresh = await applyPostQuoteConsent({
+    ...expectation({
+      quote: directQuote.post,
+      quoteActorUri: quoteAuthor.actorUri,
+      quoteUri: directQuoteUri,
+      source: source.post,
+      sourceActorUri: sourceAuthor.actorUri,
+      sourceUri,
+      expectedApprovalUri: directAuthorizationUri,
+      expectedRepostSourceId: source.post.id,
+      expectedStatus: PostQuoteConsentStatus.APPROVED,
+    }),
+    operation: 'RESOLVE',
+    result: 'APPROVED',
+    quoteAuthorActorUri: quoteAuthor.actorUri,
+    proof: {
+      kind: 'AUTHORIZATION',
+      approvalUri: directAuthorizationUri,
+      issuerActorUri: sourceAuthor.actorUri,
     },
-    concurrentRevokeDatabase,
-  );
+  });
   assert.equal(staleIdenticalRefresh, null);
 
   const afterConcurrentRevoke = await db
@@ -952,4 +941,127 @@ test('Quote decisions and local Authorization revocation preserve authored Quote
     .limit(1)
     .then(firstOrThrow);
   assert.deepEqual(persistedContent.document, localQuoteDocument);
+});
+
+test('derived consent identity preserves local URI bindings without storing them', async () => {
+  const {
+    loadQuoteConsentForPost,
+    loadQuoteConsentByRequestUri,
+    loadQuoteConsentByApprovalUri,
+    visibleQuoteSources,
+  } = await import('./post-quote-identity');
+  const author = await createProfile();
+  const quoteAuthor = await createProfile();
+  const source = await createPost({
+    document: postContentDocumentFromText('Source'),
+    origin: 'LOCAL',
+    profileId: author.profile.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const quote = await createPost({
+    document: postContentDocumentFromText('Authored body https://example.com'),
+    origin: 'LOCAL',
+    profileId: quoteAuthor.profile.id,
+    repostSourceId: source.post.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const requestUri = new URL(`/ap/quote-request/${quote.post.id}`, publicOrigin).href;
+  const approvalUri = new URL(`/ap/quote-authorization/${quote.post.id}`, publicOrigin).href;
+  const consent = await loadQuoteConsentForPost(db, quote.post.id);
+  assert.equal(consent?.requestUri, requestUri);
+  assert.equal(consent?.approvalUri, approvalUri);
+  assert.equal(quote.post.quoteConsentApprovalUri, null);
+  assert.equal((await loadQuoteConsentByRequestUri(db, requestUri))?.id, quote.post.id);
+  assert.equal(
+    await loadQuoteConsentByRequestUri(
+      db,
+      requestUri.replace(publicOrigin, 'https://forged.example'),
+    ),
+    null,
+  );
+  assert.equal((await loadQuoteConsentByApprovalUri(db, approvalUri))?.id, quote.post.id);
+  const binding = { quotePostId: quote.post.id, sourcePostId: source.post.id };
+  assert.deepEqual(await visibleQuoteSources(db, { quotes: [binding] }), [binding]);
+  await deletePost({ actorProfileId: author.profile.id, origin: 'LOCAL', postId: source.post.id });
+  assert.equal(
+    (await loadQuoteConsentForPost(db, quote.post.id))?.status,
+    PostQuoteConsentStatus.REVOKED,
+  );
+  assert.equal((await loadQuoteConsentByApprovalUri(db, approvalUri))?.id, quote.post.id);
+  assert.deepEqual(await visibleQuoteSources(db, { quotes: [binding] }), []);
+  // Existing data or a forced-close late commit can leave an approved child of
+  // a terminal Source. Repeating Source deletion repairs it atomically.
+  await db
+    .update(Posts)
+    .set({ quoteConsentStatus: PostQuoteConsentStatus.APPROVED })
+    .where(eq(Posts.id, quote.post.id));
+  const repaired = await deletePost({
+    actorProfileId: author.profile.id,
+    origin: 'LOCAL',
+    postId: source.post.id,
+  });
+  assert.equal(repaired.deleted, undefined);
+  assert.deepEqual(repaired.revokedQuoteIds, [quote.post.id]);
+  assert.equal(
+    (await loadQuoteConsentForPost(db, quote.post.id))?.status,
+    PostQuoteConsentStatus.REVOKED,
+  );
+});
+
+test('remote Reject uses the expected pending state and preserves authored content', async () => {
+  const author = await createProfile();
+  const quoter = await createProfile(InstanceKind.ACTIVITYPUB);
+  const source = await createPost({
+    document: postContentDocumentFromText('Source'),
+    origin: 'LOCAL',
+    profileId: author.profile.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const uri = `https://${quoter.instance.domain}/notes/quote-policy`;
+  const quote = await createRemotePost(quoter.profile.id, uri, 'Authored Quote');
+  const identity = expectation({
+    quote: quote.post,
+    quoteActorUri: quoter.actorUri,
+    quoteUri: uri,
+    source: source.post,
+    sourceActorUri: author.actorUri,
+    sourceUri: new URL(`/ap/note/${source.post.id}`, publicOrigin).href,
+  });
+  const pending = await applyPostQuoteConsent({
+    ...identity,
+    operation: 'RESOLVE',
+    result: 'PENDING',
+    approvalUri: null,
+    quoteAuthorActorUri: quoter.actorUri,
+  });
+  assert.equal(pending?.status, PostQuoteConsentStatus.PENDING);
+  const expected = {
+    ...identity,
+    expectedStatus: PostQuoteConsentStatus.PENDING,
+    expectedRepostSourceId: source.post.id,
+  };
+  assert.equal(
+    (
+      await applyPostQuoteConsent({
+        ...expected,
+        operation: 'REJECT',
+        issuerActorUri: author.actorUri,
+      })
+    )?.status,
+    PostQuoteConsentStatus.REJECTED,
+  );
+  assert.equal(
+    await applyPostQuoteConsent({
+      ...expected,
+      operation: 'REJECT',
+      issuerActorUri: author.actorUri,
+    }),
+    null,
+  );
+  const stored = await db
+    .select()
+    .from(Posts)
+    .where(eq(Posts.id, quote.post.id))
+    .then(firstOrThrow);
+  assert.equal(stored.currentContentId, quote.content.id);
 });
