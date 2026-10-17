@@ -38,6 +38,10 @@ const actorProfileIdSchema = z
   .string({ error: 'Profile Follow command actorProfileId is invalid' })
   .min(1, 'Profile Follow command actorProfileId is invalid');
 
+const actorAccountIdSchema = z
+  .string({ error: 'Profile Follow command actorAccountId is invalid' })
+  .min(1, 'Profile Follow command actorAccountId is invalid');
+
 const profileFollowEffectOriginSchema = z.enum(['LOCAL', 'ACTIVITYPUB'], {
   error: 'Profile Follow command origin is invalid',
 });
@@ -48,6 +52,7 @@ const profileFollowPairSchema = z.strictObject({
 }) satisfies z.ZodType<ProfileFollowPair>;
 
 const followCommandSchema = z.strictObject({
+  actorAccountId: actorAccountIdSchema.optional(),
   kind: z.literal('FOLLOW'),
   origin: profileFollowEffectOriginSchema,
 });
