@@ -1,6 +1,6 @@
 import { ArrowLeft } from 'lucide-react-native';
 import { Platform, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { PageHeader } from '@/components/PageHeader';
 import { useTheme } from '@/theme/ThemeProvider';
 import { iconSizes, space, textStyles } from '@/theme/tokens';
 import { Button } from '../ui/Button';
@@ -79,7 +79,6 @@ export function ProfileEditScreen({
   value,
 }: ProfileEditScreenProps) {
   const theme = useTheme();
-  const insets = useSafeAreaInsets();
   const errors = mergeFieldErrors(validateProfileEditDraft(value, initialValue), serverErrors);
   const saving = submitState.kind === 'saving';
   const canSubmit =
@@ -110,26 +109,9 @@ export function ProfileEditScreen({
       <SubmitStatus state={submitState} />
     </>
   );
-
-  return (
-    <View
-      testID="profile-edit-screen"
-      style={[
-        styles.root,
-        Platform.OS === 'web' ? undefined : { paddingTop: insets.top },
-        {
-          backgroundColor: theme.backgroundCanvas,
-        },
-      ]}
-    >
-      <View
-        testID="profile-edit-screen-header"
-        style={[
-          styles.header,
-          Platform.OS === 'web' && webStickyHeader,
-          { backgroundColor: theme.backgroundCanvas, borderColor: theme.borderDefault },
-        ]}
-      >
+  const header = (
+    <PageHeader>
+      <View testID="profile-edit-screen-header" style={styles.header}>
         <View style={styles.actionSlot}>
           {onBack ? (
             <IconButton
@@ -165,6 +147,26 @@ export function ProfileEditScreen({
           </Button>
         </View>
       </View>
+    </PageHeader>
+  );
+
+  return (
+    <View
+      testID="profile-edit-screen"
+      style={[
+        styles.root,
+        {
+          backgroundColor: theme.backgroundCanvas,
+        },
+      ]}
+    >
+      {Platform.OS === 'web' ? (
+        <View testID="profile-edit-screen-header-sticky" style={webStickyHeader}>
+          {header}
+        </View>
+      ) : (
+        header
+      )}
 
       <RouteScrollContainer
         nativeScrollProps={{
@@ -190,14 +192,13 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    borderBottomWidth: 1,
+    alignSelf: 'stretch',
+    flex: 1,
     flexDirection: 'row',
-    height: 64,
-    paddingHorizontal: space[16],
   },
   actionSlot: {
     alignItems: 'flex-start',
-    height: 64,
+    alignSelf: 'stretch',
     justifyContent: 'center',
     width: 64,
   },

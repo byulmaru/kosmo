@@ -195,12 +195,14 @@ DSN-45 Figma Candidate는 프로필 태그 다음에 `프로필 추가 정보`�
 
 - Web은 기존 KOSMO shell 안의 중앙 route로 제공하며 modal이나 별도 desktop-only route를 만들지 않는다.
 - 중앙 편집 surface는 최대 `600px`를 유지한다.
-- DSN-45 Figma source와 이를 이관한 current Production의 상단 navigation header는 shell이 소유하는 safe-area
-  inset을 제외한 content 높이를 정확히 `64px`로 유지한다. 뒤로가기 action은 `44×44` layout target 안의
-  canonical `ArrowLeft` `24px`를 사용하고 제목은 `UI/Heading/M`(`24/27.6/700`)으로 좌우 `80px` side slot
-  안에서 정중앙에 두며, Web 저장 action은 `64×40`으로
-  같은 행 안에서 정렬한다. iOS·Android의 실제 입력 target은 공용 `IconButton`·`Button`의 `44pt`·`48dp`
-  보정을 유지한다. navigation divider는 `border/default` `1px`을 사용한다.
+- DSN-45 Figma source와 이를 이관한 current Production의 상단 navigation header는 공용 `PageHeader`를 사용하며,
+  content 높이는 정확히 `64px`로 유지한다. Web route는 이를 inline sticky header로 렌더링하고, mobile Web shell은
+  fallback header를 생략하며 route top safe-area inset을 한 번 제공한다. Native는 같은 header를 Stack에 등록하고
+  `PageHeader`가 safe-area inset을 적용한다. Native Stack header는 viewport 전체 폭을 사용하며 편집 surface는
+  최대 `600px`를 유지한다. 뒤로가기 action은 `44×44` layout target 안의 canonical `ArrowLeft` `24px`를 사용하고
+  제목은 `UI/Heading/M`(`24/27.6/700`)으로 좌우 `80px` side slot 안에서 정중앙에 두며, Web 저장 action은
+  `64×40`으로 같은 행 안에서 정렬한다. iOS·Android의 실제 입력 target은 공용 `IconButton`·`Button`의
+  `44pt`·`48dp` 보정을 유지한다. navigation divider는 공용 `PageHeader`의 `border/subtle` `1px`을 사용한다.
 - navigation header와 screen fill은 `background/canvas`, title과 back icon은 `foreground/primary`를 사용한다.
 - header 이미지 변경 영역은 surface 폭을 기준으로 `aspect-ratio: 3 / 1`을 적용한다. 따라서 `600px`
   중앙 surface에서는 `600×200`, `390px` mobile에서는 `390×130`이며 임의 폭 `W`에서는 높이가

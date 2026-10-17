@@ -1,6 +1,6 @@
 # 공용 Page Header
 
-주요 화면의 상단 chrome은 `PageHeader`를 사용해 높이, 구분선, 제목 위계와 leading action 배치를 통일한다. 공용 헤더의 기본 시각 최소 높이는 `64px`이다. Web에서는 route 본문에 렌더링하고 Android/iOS에서는 같은 선언을 현재 Native Stack header에 렌더링해 safe area를 함께 처리한다.
+주요 화면의 상단 chrome은 `PageHeader`를 사용해 높이, 구분선, 제목 위계와 leading action 배치를 통일한다. 공용 헤더의 기본 시각 최소 높이는 `64px`이며 하단 구분선은 `border/subtle` 1px을 사용한다. Web에서는 route 본문에 렌더링하고 Android/iOS에서는 같은 선언을 현재 Native Stack header에 렌더링해 safe area를 함께 처리한다.
 
 ## Variant
 
@@ -80,6 +80,7 @@ Web `/search`는 모든 breakpoint에서 중앙 컬럼 최상단에 높이 `64px
 - `<768px` 모바일 Web `/notifications`와 `/settings` root: `UniversalShell`이 메뉴 버튼과 텍스트 제목을 하나의 app bar로 렌더링한다. `/notifications`에서는 같은 app bar가 `모두 읽음` trailing action도 소유하고, Settings 내부 category·detail destination에서는 같은 위치에 뒤로가기와 현재 destination 제목을 렌더링한다. route의 loading, error, empty와 content 상태는 셸 헤더 아래에서 전환하며 자체 PageHeader를 렌더링하지 않는다.
 - `<768px` 모바일 Web 게시글 상세: `UniversalShell`이 기존 `router.back()` 동작을 사용하는 뒤로가기 버튼과 `게시글` 제목을 하나의 app bar로 렌더링한다. route는 별도 sticky PageHeader와 그 offset을 만들지 않는다.
 - Android/iOS의 알림·게시글 상세·프로필·설정과 compact/full Web: route가 기존 텍스트·뒤로가기 `PageHeader`를 소유한다. Web에서는 본문 chrome으로, Android/iOS에서는 Native Stack header로 렌더링하며 `UniversalShell`은 별도 menu-only header를 추가하지 않는다. leading을 지정하지 않은 Native header는 drawer trigger를 기본으로 사용하고, route가 뒤로가기를 지정하면 그 action을 유지한다. `/notifications`는 같은 Native header에 `모두 읽음` trailing action도 소유한다.
+- `/profile-edit`: route가 뒤로가기·제목·저장 action을 공용 `PageHeader` custom content로 조합한다. Web에서는 inline sticky header를 사용하며 mobile Web shell은 fallback header를 생략하고 route top inset을 한 번 제공한다. Android/iOS에서는 같은 content가 viewport 전체 폭의 Native Stack header에 등록되고 `PageHeader`가 safe-area inset을 처리한다. 편집 surface의 최대 폭은 `600px`로 유지된다.
 - Mobile/compact/full Web과 Android/iOS의 `/[profileHandle]/followers`·`following`은 각 독립 route가
   `~님의 팔로워`·`~님의 팔로잉` PageHeader와 바로 아래 관계 TabList를 소유하며 ProfileHero를 표시하지 않는다.
   뒤로가기는 같은 Profile 홈으로, 탭 선택은 같은 Profile의 다른 관계 목록으로 이동한다. Mobile Web에서는
