@@ -56,9 +56,11 @@ function CheckboxVisual({
       : activeColor;
   const animatedBackground = useAnimatedColorTransition({
     color: backgroundColor,
+    interactionKey: pressed ? 'pressed' : hovered ? 'hovered' : 'idle',
     instantKey: theme,
     reducedMotion,
     role: disabled ? 'instant' : interaction ? 'interaction' : 'selection',
+    selectionKey: checked,
   });
   const borderColor =
     checked === false ? (disabled ? theme.borderDisabled : theme.borderStrong) : 'transparent';
