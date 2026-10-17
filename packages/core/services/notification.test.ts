@@ -630,6 +630,57 @@ test('다섯 source는 실제 정책 SELECT 실패를 전파하고 commit된 sou
   assert.equal((await readNotifications(mutePolicyFailureReaction.id)).length, 1);
 });
 
+test('같은 Account의 A1만 적용한 Mute는 A2 Recipient를 격리한다', async () => {
+  const account = await db
+    .insert(Accounts)
+    .values({
+      displayName: crypto.randomUUID(),
+      oidcSubject: crypto.randomUUID(),
+      state: AccountState.ACTIVE,
+    })
+    .returning()
+    .then(firstOrThrow);
+  accountIds.push(account.id);
+  const [recipientA1, recipientA2, related] = await Promise.all([
+    createProfile(),
+    createProfile(),
+    createProfile(),
+  ]);
+  await db.insert(AccountProfiles).values([
+    { accountId: account.id, profileId: recipientA1.id, role: AccountProfileRole.OWNER },
+    { accountId: account.id, profileId: recipientA2.id, role: AccountProfileRole.MEMBER },
+  ]);
+  const followA1 = getEstablishedFollow(
+    await followProfile({
+      followerProfileId: related.id,
+      followeeProfileId: recipientA1.id,
+    }),
+  );
+  const followA2 = getEstablishedFollow(
+    await followProfile({
+      followerProfileId: related.id,
+      followeeProfileId: recipientA2.id,
+    }),
+  );
+
+  await muteProfile({ ownerProfileId: recipientA1.id, targetProfileId: related.id });
+  await createFollowNotification(followA1.id);
+  await createFollowNotification(followA2.id);
+
+  assert.deepEqual(await readNotifications(followA1.id), []);
+  const a2Notifications = await readNotifications(followA2.id);
+  assert.deepEqual(
+    a2Notifications.map(({ recipientAccountId }) => recipientAccountId).sort(),
+    [account.id, getAccountId(recipientA2.id)].sort(),
+  );
+  assert.ok(
+    a2Notifications.every(
+      ({ recipientProfileId, sourceId }) =>
+        recipientProfileId === recipientA2.id && sourceId === followA2.id,
+    ),
+  );
+});
+
 test('Mute·mutual Block 관계 변경은 해제 후 새 source를 재평가한다', async () => {
   const author = await createProfile();
   const recipient = await createProfile();
@@ -936,6 +987,89 @@ test('one Account receives independent Notifications under each recipient Profil
   assert.notEqual(secondShared.id, firstSharedId);
   assert.equal(firstShared?.readAt?.toString(), readAt.toString());
   assert.equal(secondShared.readAt, null);
+});
+
+test('Reaction Notification uses current Profile membership on initial materialization and retry', async () => {
+  const author = await createProfile();
+  const recipient = await createProfile();
+  const actorAccountId = getAccountId(author.id);
+  await db.insert(AccountProfiles).values({
+    accountId: actorAccountId,
+    profileId: recipient.id,
+    role: AccountProfileRole.MEMBER,
+  });
+
+  const reaction = await createReaction(author.id, recipient.id);
+  const addRecipientAccount = async () => {
+    const account = await db
+      .insert(Accounts)
+      .values({
+        displayName: crypto.randomUUID(),
+        oidcSubject: crypto.randomUUID(),
+        state: AccountState.ACTIVE,
+      })
+      .returning()
+      .then(firstOrThrow);
+    accountIds.push(account.id);
+    await db.insert(AccountProfiles).values({
+      accountId: account.id,
+      profileId: recipient.id,
+      role: AccountProfileRole.MEMBER,
+    });
+    return account.id;
+  };
+
+  // The Post source already exists; a current member who joins before its first
+  // materialization should receive the projection.
+  const beforeMaterializationAccountId = await addRecipientAccount();
+  const firstIds = await createReactionNotification(reaction.id);
+  const firstNotifications = await readNotifications(reaction.id);
+  assert.deepEqual(
+    firstNotifications.map(({ recipientAccountId }) => recipientAccountId).sort(),
+    [getAccountId(recipient.id), beforeMaterializationAccountId].sort(),
+  );
+  assert.ok(
+    !firstNotifications.some(({ recipientAccountId }) => recipientAccountId === actorAccountId),
+  );
+  assert.deepEqual(firstIds.slice().sort(), firstNotifications.map(({ id }) => id).sort());
+
+  const readAt = Temporal.Instant.from('2026-10-02T01:23:45.123456Z');
+  await db
+    .update(Notifications)
+    .set({ readAt })
+    .where(
+      and(
+        eq(Notifications.sourceId, reaction.id),
+        eq(Notifications.recipientAccountId, getAccountId(recipient.id)),
+      ),
+    );
+  const afterMaterializationAccountId = await addRecipientAccount();
+
+  const retryIds = await createReactionNotification(reaction.id);
+  const retriedNotifications = await readNotifications(reaction.id);
+  assert.deepEqual(
+    retriedNotifications.map(({ recipientAccountId }) => recipientAccountId).sort(),
+    [
+      getAccountId(recipient.id),
+      beforeMaterializationAccountId,
+      afterMaterializationAccountId,
+    ].sort(),
+  );
+  assert.ok(
+    !retriedNotifications.some(({ recipientAccountId }) => recipientAccountId === actorAccountId),
+  );
+  assert.deepEqual(retryIds.slice().sort(), retriedNotifications.map(({ id }) => id).sort());
+  assert.equal(
+    retriedNotifications
+      .find(({ recipientAccountId }) => recipientAccountId === getAccountId(recipient.id))
+      ?.readAt?.toString(),
+    readAt.toString(),
+  );
+  assert.ok(
+    retriedNotifications
+      .filter(({ recipientAccountId }) => recipientAccountId !== getAccountId(recipient.id))
+      .every(({ readAt: persistedReadAt }) => persistedReadAt === null),
+  );
 });
 
 test('a Reaction retry returns a legacy social Notification with a null Account without changing state', async () => {

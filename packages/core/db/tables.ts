@@ -298,7 +298,6 @@ export const Notifications = pgTable(
     readAt: datetime('read_at'),
   },
   (table) => [
-    unique().on(table.recipientProfileId, table.kind, table.sourceId),
     uniqueIndex()
       .on(table.recipientAccountId, table.kind, table.sourceId)
       .where(sql`${table.recipientProfileId} IS NULL`),
