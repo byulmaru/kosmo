@@ -14,6 +14,8 @@ Accepted — 사용자의 “Spec Gate 승인” 응답으로 PROD-903 정책 �
 2026-10-13 Notification 행의 API 조회 권한을 Quote/source 객체 조회 권한과 분리했다. 저장 행이 존재하는 동안에는
 Recipient 권한으로 조회하고, Quote/source 필드는 현재 요청의 기존 객체 조회 권한을 적용한다. 기존 비동기 정리 정책은 유지한다.
 
+2026-10-16 사용자의 승인으로 Quote Notification에서 원래 행동 Account를 다른 대상 Profile에서도 제외하며, 기존 Profile 단위 자기 인용 억제는 유지한다. 현재 억제 범위는 [Notification](../objects/notification.md)에 정의한다.
+
 ## 날짜
 
 2026-09-08
@@ -27,7 +29,9 @@ Recipient 권한으로 조회하고, Quote/source 필드는 현재 요청의 기
   기록되지 않았다. 2026-09-09 리뷰 재검토 뒤 사람의 “PR에 반영” 요청으로 당시 순서의 유지 이유를 확정했다.
 - 2026-10-12 사용자가 Reply → Mention → Quote 순서를 명시적으로 요청해 기존 Reply → Quote → Mention을
   대체했다.
-- 같은 대화의 후속 질문에서 “Profile 단위 자기 인용 억제 + 두 글의 조회 권한 확인 (권장)” 선택.
+- 같은 대화의 후속 질문에서 당시 “Profile 단위 자기 인용 억제 + 두 글의 조회 권한 확인 (권장)”을 선택했다.
+  Profile 단위 자기 인용 억제는 유지하고, 같은 Account의 다른 Profile도 알림 대상에서 제외하지 않는다는 부분은
+  2026-10-16 승인으로 대체했다.
 - 같은 대화에서 Mute 적용 대상, Remote Quote 최초 1회 생성, 철회·삭제 시 숨김·정리와
   일시적인 조회 불가·Recipient 비활성화 시 물리 보존을 명시적으로 확정한 응답.
 - 후속 질문에서 “억제 후·기능 도입 전 Quote는 소급 생성하지 않음 (권장)” 선택.
@@ -52,7 +56,7 @@ Recipient 권한으로 조회하고, Quote/source 필드는 현재 요청의 기
 - 우선순위는 최초 대표 Notification 선택에만 적용한다. 이미 저장된 대표 Notification은 ID, Type, Read State와
   최초 읽음 시각을 유지하며 이후 더 높은 우선순위 Type이 생성 가능해져도 추가·교체하거나 소급 생성하지 않는다.
   Quote 승인이 늦어 이미 생성된 Reply 또는 Mention이 있을 때도 같다. Followee Post는 독립 정책을 유지한다.
-- 자기 인용 억제는 Profile 단위다. 같은 Account의 서로 다른 Profile까지 억제하지 않는다.
+- Quote 자기 행동 억제와 원래 행동 Account 제외는 [Notification](../objects/notification.md) 정책을 따른다.
 - Recipient가 Quote와 direct Source를 모두 조회할 수 있어야 새 알림을 생성한다. 저장된 Notification 행의 API 조회는
   Recipient 권한을 따르며, Quote/source 필드는 현재 요청의 기존 객체 조회 권한을 적용한다.
   Source가 조회 불가여도 Quote 자체 Content를 유지하는 Post 정책은 바꾸지 않는다.
@@ -123,8 +127,9 @@ Quote와 Mention만 최초 선택 후보인 경우에도 Type별 생성·Mute �
 알림이 다시 보이거나 이미 삭제되어 보이지 않을 수 있다는 결과를 허용했다. 이 즉시 숨김 설명은 위 2026-10-13
 행·source 필드 권한 결정으로 대체됐다.
 
-알림 제공 여부는 원문과 인용글의 조회 권한을 넓히지 않는다. 기본 행동 주체인 Profile로 자기 인용을 판단하며,
-Account를 공유한다는 이유로 다른 Profile의 알림까지 억제하지 않는다.
+알림 제공 여부는 원문과 인용글의 조회 권한을 넓히지 않는다. 2026-10-16 결정 전에는 Profile 단위 자기 인용
+억제를 적용하고 Account를 공유하는 다른 Profile은 억제하지 않는다고 결정했다. Account 공유에 관한 그 부분은
+역사적 결정이며 현재 규칙은 [Notification의 Profile 범위 수신 정책](../objects/notification.md)에 따른다.
 
 ## 검토한 대안
 
@@ -132,7 +137,8 @@ Account를 공유한다는 이유로 다른 Profile의 알림까지 억제하지
 - 원문 상세로 이동하는 안 대신 Quote 자체 상세로 이동하는 안을 선택했다.
 - 유형별 개별 알림 대신 최초 선택에서 한 건을 제공한다. 기존 Reply → Quote → Mention 순서는
   2026-10-12 사용자 요청으로 Reply → Mention → Quote로 대체했다.
-- Account 단위 자기 인용 억제와 Source 조회 불가 시 알림 유지 대신 Profile 단위 억제와 두 Post의 조회 확인을 선택했다.
+- 당시에는 Account 단위 자기 인용 억제 대신 Profile 단위 억제와 두 Post의 조회 확인을 선택했다. 같은 Account의
+  다른 Profile을 억제하지 않는다는 부분은 2026-10-16 결정으로 대체됐다.
 - 복구 가능한 제한에서 저장 상태와 복원을 보장하던 이전 선택은 철회했다. 기존 unavailable 정책과 같은
   Best Effort 정리를 선택했으며, 조회 제한 해제 후의 복원을 보장하지 않는 결과를 허용한다.
 
