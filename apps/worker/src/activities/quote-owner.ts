@@ -1,7 +1,22 @@
 import '@kosmo/core/polyfill';
 
-import { ActivityPubActors, ActivityPubPosts, db, first, Posts } from '@kosmo/core/db';
-import { PostQuoteConsentStatus, PostState } from '@kosmo/core/enums';
+import {
+  ActivityPubActors,
+  ActivityPubPosts,
+  db,
+  first,
+  Instances,
+  Posts,
+  ProfileFollows,
+  Profiles,
+} from '@kosmo/core/db';
+import {
+  InstanceKind,
+  InstanceState,
+  PostQuoteConsentStatus,
+  PostState,
+  ProfileState,
+} from '@kosmo/core/enums';
 import { KosmoError } from '@kosmo/core/error';
 import {
   isLocalQuoteAllowedByPolicy,
@@ -10,6 +25,7 @@ import {
   loadQuoteSourceIdentity,
 } from '@kosmo/core/services';
 import { temporalClient } from '@kosmo/core/temporal/client';
+import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
 import {
   federation,
   materializeInboundQuoteSource,
@@ -21,11 +37,13 @@ import {
   sendLocalPostQuoteRequest,
 } from '@kosmo/fedify';
 import { Context } from '@temporalio/activity';
-import { WorkflowClient } from '@temporalio/client';
+import { WorkflowClient, WorkflowExecutionAlreadyStartedError } from '@temporalio/client';
 import { and, eq, isNull, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { createPostPersisted } from '../../../../packages/core/services/post';
 import { applyPostQuoteConsent } from '../../../../packages/core/services/post-quote-consent';
 import type {
+  PreparedPrivateQuoteSource,
   PreparedQuoteConsent,
   QuoteOwnerCommand,
   QuoteOwnerResult,
@@ -160,7 +178,53 @@ export type QuoteWriteResult = QuoteOwnerResult & {
   readonly matched: boolean;
   readonly quoteAuthorActorUri?: string | null;
   readonly uncertainCommit?: boolean;
+  readonly privateSourceCreatedId?: string;
 };
+class PrivateQuoteSourceRaceError extends Error {}
+const LocalFollowerProfiles = alias(Profiles, 'quote_source_local_follower');
+const LocalFollowerInstances = alias(Instances, 'quote_source_local_instance');
+const privateFollowerIsCurrent = async (
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  source: PreparedPrivateQuoteSource,
+) =>
+  !!(await tx
+    .select({ id: Profiles.id })
+    .from(ActivityPubActors)
+    .innerJoin(Profiles, eq(Profiles.id, ActivityPubActors.profileId))
+    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+    .innerJoin(
+      ProfileFollows,
+      and(
+        eq(ProfileFollows.followeeProfileId, Profiles.id),
+        eq(ProfileFollows.followerProfileId, source.followerProfileId),
+      ),
+    )
+    .innerJoin(
+      LocalFollowerProfiles,
+      eq(LocalFollowerProfiles.id, ProfileFollows.followerProfileId),
+    )
+    .innerJoin(
+      LocalFollowerInstances,
+      eq(LocalFollowerInstances.id, LocalFollowerProfiles.instanceId),
+    )
+    .where(
+      and(
+        eq(Profiles.id, source.profileId),
+        eq(ActivityPubActors.uri, source.actorUri),
+        source.followersUri === null
+          ? isNull(ActivityPubActors.followersUri)
+          : eq(ActivityPubActors.followersUri, source.followersUri),
+        eq(Profiles.state, ProfileState.ACTIVE),
+        eq(Instances.kind, InstanceKind.ACTIVITYPUB),
+        eq(Instances.state, InstanceState.ACTIVE),
+        eq(LocalFollowerProfiles.state, ProfileState.ACTIVE),
+        eq(LocalFollowerInstances.kind, InstanceKind.LOCAL),
+        eq(LocalFollowerInstances.state, InstanceState.ACTIVE),
+      ),
+    )
+    .limit(1)
+    .then(first));
+
 export async function applyQuoteConsentActivity(input: QuoteWriteInput): Promise<QuoteWriteResult> {
   const { command, prepared } = input;
   const execution = Context.current().info.workflowExecution;
@@ -171,11 +235,58 @@ export async function applyQuoteConsentActivity(input: QuoteWriteInput): Promise
     return await db.transaction(async (tx) => {
       await tx.execute(sql`SET LOCAL lock_timeout = '3s'`);
       await tx.execute(sql`SET LOCAL idle_in_transaction_session_timeout = '5s'`);
+      let privateSourceCreatedId: string | undefined;
+      let privateSourceId: string | undefined;
+      const privateSource = prepared.kind === 'CHANGE' ? prepared.privateSource : undefined;
+      if (privateSource) {
+        if (!(await privateFollowerIsCurrent(tx, privateSource))) {
+          throw new PrivateQuoteSourceRaceError('Private Source follower is no longer current');
+        }
+        const saved = await createPostPersisted(
+          {
+            origin: 'ACTIVITYPUB',
+            profileId: privateSource.profileId,
+            objectUri: privateSource.objectUri,
+            document: privateSource.document,
+            media: privateSource.media,
+            mentionProfileIds: privateSource.mentionProfileIds,
+            visibility: privateSource.visibility,
+            publishedAt: privateSource.publishedAt
+              ? Temporal.Instant.from(privateSource.publishedAt)
+              : null,
+            receivedAt: Temporal.Instant.from(privateSource.receivedAt),
+            ...(privateSource.replyParentId ? { replyParentId: privateSource.replyParentId } : {}),
+          },
+          privateSource.postId,
+          tx,
+        );
+        const winner = await tx
+          .select({ post: Posts, actorUri: ActivityPubActors.uri })
+          .from(ActivityPubPosts)
+          .innerJoin(Posts, eq(Posts.id, ActivityPubPosts.postId))
+          .innerJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Posts.profileId))
+          .where(eq(ActivityPubPosts.uri, privateSource.objectUri))
+          .then(first);
+        if (
+          !winner ||
+          winner.post.profileId !== privateSource.profileId ||
+          winner.actorUri !== privateSource.actorUri ||
+          winner.post.visibility !== privateSource.visibility ||
+          winner.post.state !== PostState.ACTIVE ||
+          !winner.post.currentContentId
+        ) {
+          throw new PrivateQuoteSourceRaceError('Private Source URI winner does not match');
+        }
+        privateSourceId = winner.post.id;
+        if (saved.created) {
+          privateSourceCreatedId = winner.post.id;
+        }
+      }
       const sourceId =
         command.kind === 'INITIALIZE'
           ? command.input.repostSourceId
           : prepared.kind === 'CHANGE'
-            ? prepared.change.source.postId
+            ? (privateSourceId ?? prepared.change.source.postId)
             : null;
       if (sourceId) {
         await tx.select({ id: Posts.id }).from(Posts).where(eq(Posts.id, sourceId)).for('share');
@@ -220,10 +331,31 @@ export async function applyQuoteConsentActivity(input: QuoteWriteInput): Promise
       ) {
         throw new Error('Stale Quote owner write');
       }
+      if (privateSource && !(await privateFollowerIsCurrent(tx, privateSource))) {
+        throw new PrivateQuoteSourceRaceError('Private Source follower changed during owner fence');
+      }
+      if (privateSourceId) {
+        const source = await tx
+          .select()
+          .from(Posts)
+          .where(eq(Posts.id, privateSourceId))
+          .then(first);
+        if (
+          !source ||
+          source.visibility !== privateSource?.visibility ||
+          source.state !== PostState.ACTIVE ||
+          source.profileId !== privateSource?.profileId ||
+          !source.currentContentId
+        ) {
+          throw new PrivateQuoteSourceRaceError('Private Source changed during owner fence');
+        }
+      }
       let applied = created;
       let matched = created || existingCreation;
       if (prepared.kind === 'CHANGE') {
-        let change = prepared.change;
+        let change = privateSourceId
+          ? { ...prepared.change, source: { ...prepared.change.source, postId: privateSourceId } }
+          : prepared.change;
         if (command.kind === 'REQUEST' && change.operation === 'DECIDE') {
           const allowed = await isLocalQuoteAllowedByPolicy(tx, {
             actorProfileId: change.quote.profileId,
@@ -238,6 +370,9 @@ export async function applyQuoteConsentActivity(input: QuoteWriteInput): Promise
           }
         }
         const outcome = await applyPostQuoteConsent(change, tx);
+        if (privateSource && !outcome) {
+          throw new PrivateQuoteSourceRaceError('Private Source consent CAS did not match');
+        }
         matched = outcome !== null;
         applied = outcome?.changed ?? false;
       } else if (prepared.kind === 'PENDING_WITHOUT_SOURCE') {
@@ -276,6 +411,7 @@ export async function applyQuoteConsentActivity(input: QuoteWriteInput): Promise
       // Surface this gap rather than silently marking the effect delivered.
       return {
         postId: command.postId,
+        ...(privateSourceCreatedId ? { privateSourceCreatedId } : {}),
         applied,
         matched,
         quoteAuthorActorUri: quoteIdentity?.authorActorUri ?? null,
@@ -291,6 +427,24 @@ export async function applyQuoteConsentActivity(input: QuoteWriteInput): Promise
       };
     });
   } catch (error) {
+    if (error instanceof PrivateQuoteSourceRaceError) {
+      const row = await db.select().from(Posts).where(eq(Posts.id, command.postId)).then(first);
+      return {
+        postId: command.postId,
+        status: row?.quoteConsentStatus ?? null,
+        applied: false,
+        matched: false,
+        retryable: false,
+        sourcePostId: row?.repostSourceId ?? null,
+        approvalUri: row?.quoteConsentApprovalUri ?? null,
+        ...(prepared.kind === 'CHANGE' &&
+        prepared.privateSource &&
+        row?.repostSourceId === prepared.privateSource.postId
+          ? { privateSourceCreatedId: prepared.privateSource.postId }
+          : {}),
+        ...(Context.current().info.attempt > 1 ? { uncertainCommit: true } : {}),
+      };
+    }
     if (!(error instanceof KosmoError)) {
       throw error;
     }
@@ -315,6 +469,25 @@ export async function sendQuoteOwnerEffectActivity(
   result: QuoteWriteResult,
   effectId: string,
 ): Promise<void> {
+  if (result.privateSourceCreatedId && result.sourcePostId === result.privateSourceCreatedId) {
+    const postId = result.privateSourceCreatedId;
+    try {
+      await temporalClient.withDeadline(Date.now() + 5_000, () =>
+        temporalClient.workflow.start('postCreateEffectsWorkflow', {
+          args: [{ postId, origin: 'ACTIVITYPUB' }],
+          taskQueue: KOSMO_TASK_QUEUE,
+          workflowId: `post-create-effects:${postId}`,
+          workflowIdConflictPolicy: 'USE_EXISTING',
+          workflowIdReusePolicy: 'REJECT_DUPLICATE',
+        }),
+      );
+    } catch (error) {
+      if (!(error instanceof WorkflowExecutionAlreadyStartedError)) {
+        throw error;
+      }
+      // A completed Source creation effect has the same logical identity on retry.
+    }
+  }
   if (
     !result.sourcePostId ||
     (!result.applied && !(command.kind === 'REQUEST' && result.matched))

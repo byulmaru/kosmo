@@ -90,7 +90,10 @@ Accepted
   보내며, 이 lifecycle의 구현은 PROD-924가 담당한다.
 - [PROD-792](https://linear.app/byulmaru/issue/PROD-792)의 원격 Quote 수신과
   [PROD-793](https://linear.app/byulmaru/issue/PROD-793)의 Followers Only Source signed fetch 책임은 유지한다.
-  로컬 작성 제한을 원격 수신 계약의 축소로 적용하지 않는다.
+  로컬 작성 제한을 원격 수신 계약의 축소로 적용하지 않는다. 인증된 Followers Only Source는 exact URI·
+  author·canonical followers audience와 현재 Local Follower 접근을 확인한 뒤에만 저장·연결한다.
+  검증 중 Follow 해제·승인 상태 변경·Source URI 선점 불일치로 연결이 거부되면 새 private Source·Content·
+  Media를 남기지 않고 Quote 작성자의 기존 본문·링크를 보존한다.
 - Profile의 새 Post 인용 허용 기본값은 [PROD-925](https://linear.app/byulmaru/issue/PROD-925) Backlog에서
   다룬다. 기존 Post와 기존 승인을 소급 변경하지 않으며 이번 사이클의 완료 조건에 포함하지 않는다.
 
@@ -151,3 +154,12 @@ PROD-902 Spec 대화에서 사용자가 원격 `interactionPolicy`의 automatic/
 - 작성 중 인용 허용 정책은 현재 작성 Profile 기준이다. 실제 작성 Profile 변경 시 `모두`로 초기화하며 같은
   Profile 재선택·picker 취소는 유지한다. 이전 Profile로 돌아가도 과거 선택값을 복원하지 않는다. 본문·CW·
   Media·Visibility 보존 계약은 유지하며, Profile별 저장 기본값 기능은 기존 PROD-925 후속 범위다.
+
+## URL-only 승인 Source 조회 정정 (2026-10-12)
+
+미저장 Source의 URL-only FEP-044f 승인 참조는 현재 issuer 승인 증거 → 저장된 Source 작성자 →
+established Local Follower의 인증 조회 순서로 처리한다. 원문 공개 범위를 확인하기 위한 비인증
+사전 조회를 하지 않는다. 적합한 Active Local Follower나 서명 key가 없으면 Public·Unlisted 원문이어도
+확보하지 않고 Quote를 PENDING으로 유지한다. 이 동작은 조회 전 인증 경계의 일관성을 위해 Follower
+없는 URL-only Public 원문의 자동 확보를 제한하는 선택이다. 작성 본문·링크는 유지하며, embedded
+Public과 승인 참조 없는 URL-only·legacy 원문의 기존 hydration은 변경하지 않는다.

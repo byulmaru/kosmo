@@ -35,7 +35,15 @@
 ## Quote Consent Owner
 
 - Quote consent의 변경 명령은 Quote ID별 owner의 FIFO admission을 통과한다. Handler는 enqueue만 수행한다.
-- 원격 proof 조회는 읽기 전용 Activity로 분리한다. 쓰기 Activity는 Source → Quote 잠금, 현재 Run/token Query fence,
+- 원격 proof 조회는 Source/consent를 변경하지 않는 Activity로 분리한다. #962의 authenticated Source 준비는
+  serializable Content/Media/identity DTO를 반환하며 private Source 저장은 owner write transaction에 합류한다.
+  Source 저장/URI winner 확인 뒤 Source → Quote 잠금, Query fence와 현재 Local Follower 재확인을 거쳐 consent
+  CAS를 수행하며 실패하면 신규 Source/Content/Media도 rollback한다. 키/Fedify 객체는 History에 넣지 않는다.
+  일반 Public/Unlisted hydration은 private admission을 허용하지 않는다. 미저장 Source의 URL-only FEP
+  승인 참조는 generic probe를 건너뛰고 fresh issuer proof → stored author → established Local Follower/key
+  → signed fetch로 준비한다. 공개 범위를 알 수 없으므로 Public/Unlisted도 Follower/key가 없으면 PENDING이다.
+  embedded Public과 승인 참조 없는 URL-only/legacy hydration은 기존 경계를 유지한다.
+- 쓰기 Activity는 Source → Quote 잠금, 현재 Run/token Query fence,
   기존 identity/state CAS를 같은 transaction에서 검사한다. Query 성공만으로 commit까지의 Temporal 소유권을 보장하지 않는다.
 - 정상 종료·Continue-As-New는 token 폐기와 DB drain을 수행한다. Source 삭제는 공유 잠금 순서를 따르는 제한된 다중 자원 transaction이다.
 - SDK Worker shutdown은 Workflow의 finish/drain과 다르다. 구형 writer admission 차단 및 미완료 작업·DB session·process 확인 뒤 writer를 전환한다. bootstrap의 행 잠금은 아직 시작하지 않은 구형 writer를 fence하지 않는다.

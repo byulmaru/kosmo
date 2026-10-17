@@ -1,5 +1,6 @@
-import type { PostQuoteConsentStatus } from '../enums';
+import type { PostQuoteConsentStatus, PostVisibility } from '../enums';
 import type { ErrorCode } from '../error';
+import type { PostContentDocumentV1 } from '../post-content';
 import type { LocalPostInput } from '../services/post';
 import type { ApplyPostQuoteConsentInput } from '../services/post-quote-consent';
 import type { WorkflowUpdateDefinition } from './client';
@@ -54,10 +55,27 @@ export type QuotePendingWithoutSource = {
   readonly expectedApprovalUri: string | null;
   readonly approvalUri: string | null;
 };
+/** Read Activity projection; no protocol objects, keys or callbacks enter history. */
+export type PreparedPrivateQuoteSource = {
+  readonly postId: string;
+  readonly profileId: string;
+  readonly actorUri: string;
+  readonly followersUri: string | null;
+  readonly followerProfileId: string;
+  readonly objectUri: string;
+  readonly visibility: Extract<PostVisibility, 'PUBLIC' | 'UNLISTED' | 'FOLLOWERS'>;
+  readonly document: PostContentDocumentV1;
+  readonly media: readonly { altText: string | null; mediaType: string | null; url: string }[];
+  readonly mentionProfileIds: readonly string[];
+  readonly publishedAt: string | null;
+  readonly receivedAt: string;
+  readonly replyParentId?: string;
+};
 export type PreparedQuoteConsent =
   | {
       readonly kind: 'CHANGE';
       readonly change: ApplyPostQuoteConsentInput;
+      readonly privateSource?: PreparedPrivateQuoteSource;
       readonly retryable: boolean;
     }
   | {

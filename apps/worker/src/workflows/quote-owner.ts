@@ -243,7 +243,10 @@ export async function postQuoteOwnerWorkflow(input: QuoteOwnerState): Promise<vo
       activeCommandId = command.commandId;
       if (
         command.kind === 'NOTE' &&
-        command.authorizationUpdate &&
+        (command.authorizationUpdate ||
+          (command.format === 'FEP_044F' &&
+            command.approvalUri !== null &&
+            !command.embeddedSource)) &&
         !ignoredBindings.has(command.commandId) &&
         !invalidated.has(command.commandId)
       ) {
@@ -313,6 +316,10 @@ export async function postQuoteOwnerWorkflow(input: QuoteOwnerState): Promise<vo
           });
           result = {
             ...reconciled,
+            ...(result.privateSourceCreatedId &&
+            reconciled.sourcePostId === result.privateSourceCreatedId
+              ? { privateSourceCreatedId: result.privateSourceCreatedId }
+              : {}),
             applied:
               reconciled.applied ||
               (reconciled.matched && (fresh.kind === 'CHANGE' || command.kind === 'INITIALIZE')) ||
