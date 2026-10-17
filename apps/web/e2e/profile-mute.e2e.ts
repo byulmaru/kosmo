@@ -563,6 +563,7 @@ test('Mute·unmute 전후 Follow·Reaction·Bookmark·Repost와 Notification rea
     .values({
       kind: NotificationKind.FOLLOW,
       readAt: null,
+      recipientAccountId: viewer.account.id,
       recipientProfileId: viewer.profile!.id,
       sourceId: follow.id,
     })
@@ -587,6 +588,7 @@ test('Mute·unmute 전후 Follow·Reaction·Bookmark·Repost와 Notification rea
         id: Notifications.id,
         kind: Notifications.kind,
         readAt: Notifications.readAt,
+        recipientAccountId: Notifications.recipientAccountId,
         recipientProfileId: Notifications.recipientProfileId,
         sourceId: Notifications.sourceId,
       })

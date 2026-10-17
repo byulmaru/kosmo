@@ -1,0 +1,1 @@
+ALTER TABLE "notification" ALTER COLUMN "recipient_account_id" SET NOT NULL;
