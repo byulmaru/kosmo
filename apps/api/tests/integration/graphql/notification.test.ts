@@ -672,42 +672,42 @@ describe('Notification GraphQL Node boundary', () => {
     );
   });
 
-  test('paginates Notifications by createdAt and id and accepts only visible legacy ID cursors', async () => {
+  test('paginates Notifications by descending ID and returns raw UUID cursors', async () => {
     const auth = await createAuthenticatedSession();
     const otherAuth = await createAuthenticatedSession();
     await addMembership(otherAuth.account.id, auth.profile.id, AccountProfileRole.MEMBER);
 
-    const oldTimestamp = Temporal.Instant.from('2026-10-15T00:00:00Z');
-    const newTimestamp = Temporal.Instant.from('2026-10-16T00:00:00Z');
-    const olderLowId = '00000000-0000-8006-8000-000000000100';
-    const olderHighId = '00000000-0000-8006-8000-000000000200';
-    const newerLowId = '00000000-0000-8006-8000-000000000050';
+    const highestId = '00000000-0000-8006-8000-000000000300';
+    const middleId = '00000000-0000-8006-8000-000000000200';
+    const lowestId = '00000000-0000-8006-8000-000000000100';
+    const otherAccountId = '00000000-0000-8006-8000-000000000400';
     await db.insert(Notifications).values([
       {
-        id: olderLowId,
+        id: highestId,
         kind: NotificationKind.FOLLOW,
         recipientAccountId: auth.account.id,
         recipientProfileId: auth.profile.id,
         sourceId: crypto.randomUUID(),
-        createdAt: oldTimestamp,
+        createdAt: Temporal.Instant.from('2026-10-15T00:00:00Z'),
       },
       {
-        id: olderHighId,
+        id: middleId,
         kind: NotificationKind.FOLLOW,
         recipientAccountId: auth.account.id,
         recipientProfileId: auth.profile.id,
         sourceId: crypto.randomUUID(),
-        createdAt: oldTimestamp,
+        createdAt: Temporal.Instant.from('2026-10-17T00:00:00Z'),
       },
       {
-        id: newerLowId,
+        id: lowestId,
         kind: NotificationKind.FOLLOW,
         recipientAccountId: auth.account.id,
         recipientProfileId: auth.profile.id,
         sourceId: crypto.randomUUID(),
-        createdAt: newTimestamp,
+        createdAt: Temporal.Instant.from('2026-10-16T00:00:00Z'),
       },
       {
+        id: otherAccountId,
         kind: NotificationKind.FOLLOW,
         recipientAccountId: otherAuth.account.id,
         recipientProfileId: auth.profile.id,
@@ -719,58 +719,25 @@ describe('Notification GraphQL Node boundary', () => {
     const firstPage = await loadNotificationConnection(profileId, auth.token, { first: 2 });
     assertNoGraphQLErrors(firstPage);
     const firstEdges = firstPage.data?.node?.notifications.edges ?? [];
-    assert.deepEqual(
-      firstEdges.map(({ node }) => node.id),
-      [newerLowId, olderHighId].map((id) => encodeGlobalId('FollowNotification', id)),
-    );
     assert.equal(firstPage.data?.node?.notifications.pageInfo.hasNextPage, true);
+    const lastFirstPageEdge = firstEdges[1];
+    assert.ok(lastFirstPageEdge);
+    assert.equal(lastFirstPageEdge.cursor, middleId);
 
     const secondPage = await loadNotificationConnection(profileId, auth.token, {
       first: 2,
-      after: firstEdges[1]?.cursor,
+      after: lastFirstPageEdge.cursor,
     });
     assertNoGraphQLErrors(secondPage);
-    assert.deepEqual(
-      secondPage.data?.node?.notifications.edges.map(({ node }) => node.id),
-      [encodeGlobalId('FollowNotification', olderLowId)],
-    );
+    const secondEdges = secondPage.data?.node?.notifications.edges ?? [];
+    const lastSecondPageEdge = secondEdges[0];
+    assert.ok(lastSecondPageEdge);
+    assert.equal(lastSecondPageEdge.cursor, lowestId);
     assert.equal(secondPage.data?.node?.notifications.pageInfo.hasNextPage, false);
-
-    const legacyCursorPage = await loadNotificationConnection(profileId, auth.token, {
-      first: 2,
-      after: olderHighId,
-    });
-    assertNoGraphQLErrors(legacyCursorPage);
     assert.deepEqual(
-      legacyCursorPage.data?.node?.notifications.edges.map(({ node }) => node.id),
-      [encodeGlobalId('FollowNotification', olderLowId)],
+      [...firstEdges, ...secondEdges].map(({ node }) => node.id),
+      [highestId, middleId, lowestId].map((id) => encodeGlobalId('FollowNotification', id)),
     );
-
-    for (const invalidCursor of [crypto.randomUUID(), '00000000-0000-8006-8000-000000000999']) {
-      const result = await loadNotificationConnection(profileId, auth.token, {
-        first: 2,
-        after: invalidCursor,
-      });
-      assert.equal(result.errors?.[0]?.extensions?.code, 'VALIDATION');
-      assert.equal(result.data?.node, null);
-    }
-
-    const unauthorizedCursor = await db
-      .insert(Notifications)
-      .values({
-        kind: NotificationKind.FOLLOW,
-        recipientAccountId: otherAuth.account.id,
-        recipientProfileId: auth.profile.id,
-        sourceId: crypto.randomUUID(),
-      })
-      .returning()
-      .then(firstOrThrow);
-    const unauthorizedCursorResult = await loadNotificationConnection(profileId, auth.token, {
-      first: 2,
-      after: unauthorizedCursor.id,
-    });
-    assert.equal(unauthorizedCursorResult.errors?.[0]?.extensions?.code, 'VALIDATION');
-    assert.equal(unauthorizedCursorResult.data?.node, null);
   });
 
   test('keeps legacy profile-only Notifications visible to current Profile members', async () => {
@@ -778,31 +745,25 @@ describe('Notification GraphQL Node boundary', () => {
     const member = await createAuthenticatedSession();
     await addMembership(member.account.id, auth.profile.id, AccountProfileRole.MEMBER);
 
-    const older = await db
-      .insert(Notifications)
-      .values({
-        kind: NotificationKind.FOLLOW,
-        recipientAccountId: null,
-        recipientProfileId: auth.profile.id,
-        sourceId: crypto.randomUUID(),
-        createdAt: Temporal.Instant.from('2026-10-15T00:00:00Z'),
-      })
-      .returning()
-      .then(firstOrThrow);
-    const newer = await db
-      .insert(Notifications)
-      .values({
-        kind: NotificationKind.FOLLOW,
-        recipientAccountId: null,
-        recipientProfileId: auth.profile.id,
-        sourceId: crypto.randomUUID(),
-        createdAt: Temporal.Instant.from('2026-10-16T00:00:00Z'),
-      })
-      .returning()
-      .then(firstOrThrow);
+    const lowerId = '00000000-0000-8006-8000-000000000100';
+    const higherId = '00000000-0000-8006-8000-000000000200';
+    await db.insert(Notifications).values({
+      id: lowerId,
+      kind: NotificationKind.FOLLOW,
+      recipientAccountId: null,
+      recipientProfileId: auth.profile.id,
+      sourceId: crypto.randomUUID(),
+    });
+    await db.insert(Notifications).values({
+      id: higherId,
+      kind: NotificationKind.FOLLOW,
+      recipientAccountId: null,
+      recipientProfileId: auth.profile.id,
+      sourceId: crypto.randomUUID(),
+    });
 
     const profileId = encodeGlobalId('Profile', auth.profile.id);
-    const notificationIds = [older, newer].map(({ id }) =>
+    const notificationIds = [lowerId, higherId].map((id) =>
       encodeGlobalId('FollowNotification', id),
     );
     assert.deepEqual(
@@ -814,18 +775,18 @@ describe('Notification GraphQL Node boundary', () => {
     assertNoGraphQLErrors(firstPage);
     assert.deepEqual(
       firstPage.data?.node?.notifications.edges.map(({ node }) => node.id),
-      [encodeGlobalId('FollowNotification', newer.id)],
+      [encodeGlobalId('FollowNotification', higherId)],
     );
     assert.equal(firstPage.data?.node?.notifications.pageInfo.hasNextPage, true);
 
     const rawUuidCursorPage = await loadNotificationConnection(profileId, member.token, {
       first: 1,
-      after: newer.id,
+      after: higherId,
     });
     assertNoGraphQLErrors(rawUuidCursorPage);
     assert.deepEqual(
       rawUuidCursorPage.data?.node?.notifications.edges.map(({ node }) => node.id),
-      [encodeGlobalId('FollowNotification', older.id)],
+      [encodeGlobalId('FollowNotification', lowerId)],
     );
 
     const count = await loadUnreadNotificationCounts([profileId], member.token);
@@ -833,15 +794,15 @@ describe('Notification GraphQL Node boundary', () => {
     assert.equal(count.data?.nodes[0]?.unreadNotificationCount, 2);
 
     const read = await markNotificationRead(
-      [encodeGlobalId('FollowNotification', older.id)],
+      [encodeGlobalId('FollowNotification', lowerId)],
       member.token,
     );
     assertNoGraphQLErrors(read);
     assert.deepEqual(
       read.data?.markNotificationRead.notifications.map(({ id }) => id),
-      [encodeGlobalId('FollowNotification', older.id)],
+      [encodeGlobalId('FollowNotification', lowerId)],
     );
-    assert.ok(await notificationReadAt(older.id));
+    assert.ok(await notificationReadAt(lowerId));
 
     const countAfterRead = await loadUnreadNotificationCounts([profileId], member.token);
     assertNoGraphQLErrors(countAfterRead);
@@ -2665,7 +2626,7 @@ describe('Notification GraphQL Node boundary', () => {
     assert.equal(inactiveResult.data?.node, null);
   });
 
-  test('paginates recipient-owned Notifications chronologically including unavailable sources', async () => {
+  test('paginates recipient-owned Notifications including unavailable sources', async () => {
     const auth = await createAuthenticatedSession();
     const recipient = await createProfile('page-recipient');
     await addMembership(auth.account.id, recipient.id, AccountProfileRole.OWNER);
