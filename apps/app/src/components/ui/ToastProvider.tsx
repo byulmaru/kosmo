@@ -43,6 +43,17 @@ export function ToastProvider({ children }: PropsWithChildren): ReactNode {
     space[8];
   const toastMotion = useToastMotion(toastVisible);
 
+  useEffect(() => {
+    return () => {
+      if (timer.current) {
+        clearTimeout(timer.current);
+        timer.current = null;
+      }
+      toastRef.current = null;
+      suspendedPersistentToast.current = null;
+    };
+  }, []);
+
   const dismissToast = useCallback((id?: number) => {
     if (id !== undefined && suspendedPersistentToast.current?.id === id) {
       suspendedPersistentToast.current = null;
@@ -121,11 +132,15 @@ export function ToastProvider({ children }: PropsWithChildren): ReactNode {
           key={toast.id}
           accessibilityLiveRegion="assertive"
           accessibilityRole="alert"
+          accessibilityElementsHidden={!toastVisible}
+          aria-hidden={!toastVisible}
+          importantForAccessibility={toastVisible ? 'auto' : 'no-hide-descendants'}
           style={[
             Platform.OS === 'web' ? webHost : styles.nativeHost,
             {
               opacity: toastMotion.progress,
               paddingBottom: bottom,
+              pointerEvents: toastVisible ? 'box-none' : 'none',
               transform: [
                 {
                   translateY: toastMotion.progress.interpolate({
@@ -141,7 +156,7 @@ export function ToastProvider({ children }: PropsWithChildren): ReactNode {
             message={toast.message}
             tone={toast.tone}
             action={
-              toast.action
+              toastVisible && toast.action
                 ? {
                     label: toast.action.label,
                     onPress: () => {

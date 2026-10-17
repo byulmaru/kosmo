@@ -145,3 +145,41 @@ test('toast motion uses standard enter and fast exit timing', async () => {
   assert.equal(timingCalls.at(-1)?.duration, 120);
   await act(async () => renderer?.unmount());
 });
+
+test('reduced-motion changes after enter do not restart toast motion', async () => {
+  assert.ok(overlayMotionModule);
+  reducedMotion = false;
+  timingCalls.length = 0;
+  let result: ReturnType<typeof overlayMotionModule.useToastMotion> | undefined;
+
+  function Harness({ visible }: { visible: boolean }) {
+    result = overlayMotionModule?.useToastMotion(visible);
+    return null;
+  }
+
+  let renderer: ReactTestRenderer | undefined;
+  try {
+    await act(async () => {
+      renderer = create(createElement(Harness, { visible: false }));
+    });
+    timingCalls.length = 0;
+    await act(async () => renderer?.update(createElement(Harness, { visible: true })));
+    assert.equal(result?.entered, true);
+    assert.equal(timingCalls.length, 1);
+
+    reducedMotion = true;
+    await act(async () => renderer?.update(createElement(Harness, { visible: true })));
+    assert.equal(result?.entered, true);
+    reducedMotion = false;
+    await act(async () => renderer?.update(createElement(Harness, { visible: true })));
+    assert.equal(result?.entered, true);
+    reducedMotion = true;
+    await act(async () => renderer?.update(createElement(Harness, { visible: true })));
+    reducedMotion = false;
+    await act(async () => renderer?.update(createElement(Harness, { visible: true })));
+    assert.equal(timingCalls.length, 1);
+  } finally {
+    await act(async () => renderer?.unmount());
+    reducedMotion = false;
+  }
+});

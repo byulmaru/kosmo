@@ -11,19 +11,55 @@ const mockModule = (specifier: string | URL, exports: object) =>
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-let entered = false;
+let reducedMotion = false;
+let holdEnterAnimation = false;
+let holdExitAnimation = false;
+let pendingEnter: ((result: { finished: boolean }) => void) | undefined;
+let pendingExit: ((result: { finished: boolean }) => void) | undefined;
 let platformOS: 'android' | 'ios' | 'web' = 'web';
 let windowWidth = 1400;
 const PressableHost = 'Pressable' as unknown as ElementType;
 const TextHost = 'Text' as unknown as ElementType;
 const ViewHost = 'View' as unknown as ElementType;
 
+class AnimatedValue {
+  constructor(public value: number) {}
+
+  setValue(value: number) {
+    this.value = value;
+  }
+
+  interpolate() {
+    return 0;
+  }
+}
+
+function controlledTiming(value: AnimatedValue, config: Readonly<{ toValue: number }>) {
+  return {
+    start(callback?: (result: { finished: boolean }) => void) {
+      value.setValue(config.toValue);
+      if (config.toValue === 1 && holdEnterAnimation) {
+        pendingEnter = callback;
+      } else if (config.toValue === 0 && holdExitAnimation) {
+        pendingExit = callback;
+      } else {
+        callback?.({ finished: true });
+      }
+    },
+    stop() {
+      pendingEnter = undefined;
+      pendingExit = undefined;
+    },
+  };
+}
+
 function flattenStyle(style: unknown) {
   return Object.assign({}, ...(Array.isArray(style) ? style : [style]).filter(Boolean));
 }
 
 mockModule('react-native', {
-  Animated: { View: 'AnimatedView' },
+  Animated: { Value: AnimatedValue, View: 'AnimatedView', timing: controlledTiming },
+  Easing: { bezier: (...points: number[]) => points.join(',') },
   Platform: {
     get OS() {
       return platformOS;
@@ -37,6 +73,7 @@ mockModule('react-native', {
 });
 mockModule('react-native-safe-area-context', { useSafeAreaInsets: () => ({ bottom: 0 }) });
 mockModule('@/theme/ThemeProvider', {
+  useReducedMotion: () => reducedMotion,
   useElevation: () => ({ floating: {} }),
   useTheme: () => ({
     feedbackDangerBase: 'danger-base',
@@ -62,13 +99,10 @@ mockModule('@/theme/tokens', {
   radius: { 12: 12 },
   space: { 4: 4, 8: 8, 12: 12, 16: 16 },
   textStyles: { uiCopyM: {}, uiLabelM: {} },
-});
-mockModule('@/theme/useOverlayMotion', {
-  useToastMotion: (visible: boolean) => ({
-    entered: visible && entered,
-    mounted: visible,
-    progress: { interpolate: () => 0 },
-  }),
+  motion: {
+    duration: { emphasized: 360, fast: 120, standard: 200 },
+    easingPoints: { enter: [0.16, 1, 0.3, 1], exit: [0.4, 0, 1, 1] },
+  },
 });
 
 let toastProviderModule: typeof ToastProviderModule | undefined;
@@ -142,17 +176,12 @@ test('다른 토스트가 잠시 표시된 뒤 지속 재시도 토스트를 복
   await act(async () => renderer.unmount());
 });
 
-test('toast dwell timer starts after its enter motion finishes', async () => {
+test('toast dwell timer starts after its enter motion finishes', async (t) => {
   assert.ok(toastProviderModule);
   const { ToastProvider, useToast } = toastProviderModule;
-  const delays: number[] = [];
-  const originalSetTimeout = globalThis.setTimeout;
-  const originalClearTimeout = globalThis.clearTimeout;
-  globalThis.setTimeout = ((_: TimerHandler, delay?: number) => {
-    delays.push(delay ?? 0);
-    return delays.length as unknown as ReturnType<typeof setTimeout>;
-  }) as unknown as typeof setTimeout;
-  globalThis.clearTimeout = (() => undefined) as typeof clearTimeout;
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  holdEnterAnimation = true;
+  reducedMotion = false;
 
   let api: ReturnType<typeof useToast> | undefined;
   function Harness() {
@@ -172,13 +201,33 @@ test('toast dwell timer starts after its enter motion finishes', async () => {
     await act(async () => {
       api?.showToast('저장했습니다.', { tone: 'success' });
     });
-    assert.deepEqual(delays, []);
-
-    entered = true;
-    await act(async () =>
-      renderer?.update(createElement(ToastProvider, null, createElement(Harness))),
+    assert.equal(renderer?.root.findAllByType('AnimatedView' as ElementType).length, 1);
+    await act(async () => t.mock.timers.tick(3000));
+    assert.equal(
+      renderer?.root.findAllByType('AnimatedView' as ElementType).length,
+      1,
+      'enter motion이 끝나기 전에는 dwell 시간이 지나도 닫히지 않아야 한다',
     );
-    assert.deepEqual(delays, [3000]);
+
+    holdEnterAnimation = false;
+    await act(async () => pendingEnter?.({ finished: true }));
+    pendingEnter = undefined;
+
+    await act(async () => t.mock.timers.tick(2000));
+    holdEnterAnimation = true;
+    for (const nextReducedMotion of [true, false, true, false]) {
+      reducedMotion = nextReducedMotion;
+      await act(async () =>
+        renderer?.update(createElement(ToastProvider, null, createElement(Harness))),
+      );
+      await act(async () => pendingEnter?.({ finished: true }));
+      pendingEnter = undefined;
+    }
+    holdEnterAnimation = false;
+    await act(async () => t.mock.timers.tick(999));
+    assert.equal(renderer?.root.findAllByType('AnimatedView' as ElementType).length, 1);
+    await act(async () => t.mock.timers.tick(1));
+    assert.equal(renderer?.root.findAllByType('AnimatedView' as ElementType).length, 0);
     let dismiss: (() => void) | undefined;
     await act(async () => {
       dismiss = api?.showToast('이미지를 불러오지 못했어요.', {
@@ -187,14 +236,135 @@ test('toast dwell timer starts after its enter motion finishes', async () => {
         action: { label: '다시 시도', onPress: () => undefined },
       });
     });
-    assert.deepEqual(delays, [3000], 'persistent Action Toast에는 자동 닫힘 timer가 없어야 한다');
+    await act(async () => t.mock.timers.tick(3000));
+    assert.equal(
+      renderer?.root.findAllByType('AnimatedView' as ElementType).length,
+      1,
+      'persistent Action Toast에는 자동 닫힘 timer가 없어야 한다',
+    );
     await act(async () => dismiss?.());
     assert.equal(renderer?.root.findAllByType('AnimatedView' as ElementType).length, 0);
   } finally {
     await act(async () => renderer?.unmount());
-    globalThis.setTimeout = originalSetTimeout;
+    t.mock.timers.reset();
+    reducedMotion = false;
+    holdEnterAnimation = false;
+    pendingEnter = undefined;
+  }
+});
+
+test('dismissed action is removed from input and accessibility during exit', async () => {
+  assert.ok(toastProviderModule);
+  const { ToastProvider, useToast } = toastProviderModule;
+  let api: ReturnType<typeof useToast> | undefined;
+  let actionCalls = 0;
+  function Harness() {
+    api = useToast();
+    return null;
+  }
+
+  let renderer: ReactTestRenderer | undefined;
+  try {
+    await act(async () => {
+      renderer = create(createElement(ToastProvider, null, createElement(Harness)));
+    });
+    let dismiss: (() => void) | undefined;
+    await act(async () => {
+      dismiss = api?.showToast('다시 시도해 주세요.', {
+        action: { label: '다시 시도', onPress: () => actionCalls++ },
+        persistent: true,
+        tone: 'danger',
+      });
+    });
+    const action = renderer?.root
+      .findAllByType(PressableHost)
+      .find((node) => node.props.accessibilityRole === 'button');
+    assert.ok(action);
+    const onPress = action.props.onPress as () => void;
+
+    holdExitAnimation = true;
+    await act(async () => dismiss?.());
+    assert.equal(renderer?.root.findAllByType(PressableHost).length, 0);
+    const host = renderer?.root.findByType('AnimatedView' as ElementType);
+    assert.ok(host);
+    assert.equal(host.props['aria-hidden'], true);
+    assert.equal(host.props.accessibilityElementsHidden, true);
+    assert.equal(host.props.importantForAccessibility, 'no-hide-descendants');
+    assert.equal(flattenStyle(host.props.style).pointerEvents, 'none');
+    await act(async () => onPress());
+    assert.equal(actionCalls, 0);
+
+    holdExitAnimation = false;
+    await act(async () => pendingExit?.({ finished: true }));
+    pendingExit = undefined;
+  } finally {
+    holdExitAnimation = false;
+    pendingExit = undefined;
+    await act(async () => renderer?.unmount());
+  }
+});
+
+test('provider unmount invalidates stale toast timers and actions', async (t) => {
+  assert.ok(toastProviderModule);
+  const { ToastProvider, useToast } = toastProviderModule;
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const originalClearTimeout = globalThis.clearTimeout;
+  globalThis.clearTimeout = (() => undefined) as typeof clearTimeout;
+  reducedMotion = false;
+  let oldApi: ReturnType<typeof useToast> | undefined;
+  let oldActionCalls = 0;
+  function OldHarness() {
+    oldApi = useToast();
+    return null;
+  }
+
+  let oldRenderer: ReactTestRenderer | undefined;
+  let staleDismiss: (() => void) | undefined;
+  let staleAction: (() => void) | undefined;
+  let nextApi: ReturnType<typeof useToast> | undefined;
+  function NextHarness() {
+    nextApi = useToast();
+    return null;
+  }
+  let nextRenderer: ReactTestRenderer | undefined;
+  try {
+    await act(async () => {
+      oldRenderer = create(createElement(ToastProvider, null, createElement(OldHarness)));
+    });
+    await act(async () => {
+      staleDismiss = oldApi?.showToast('이전 알림', {
+        action: { label: '다시 시도', onPress: () => oldActionCalls++ },
+        tone: 'danger',
+      });
+    });
+    const oldAction = oldRenderer?.root
+      .findAllByType(PressableHost)
+      .find((node) => node.props.accessibilityRole === 'button');
+    assert.ok(oldAction);
+    staleAction = oldAction.props.onPress as () => void;
+    await act(async () => oldRenderer?.unmount());
+
+    await act(async () => {
+      nextRenderer = create(createElement(ToastProvider, null, createElement(NextHarness)));
+    });
+    await act(async () => {
+      nextApi?.showToast('새 알림', { persistent: true, tone: 'info' });
+    });
+    await act(async () => t.mock.timers.tick(3000));
+    await act(async () => staleAction?.());
+    assert.equal(oldActionCalls, 0);
+    await act(async () => staleDismiss?.());
+    assert.equal(oldActionCalls, 0);
+    assert.equal(
+      nextRenderer?.root.findAllByType(TextHost).some((node) => node.props.children === '새 알림'),
+      true,
+    );
+  } finally {
+    reducedMotion = false;
+    await act(async () => oldRenderer?.unmount());
+    await act(async () => nextRenderer?.unmount());
     globalThis.clearTimeout = originalClearTimeout;
-    entered = false;
+    t.mock.timers.reset();
   }
 });
 
