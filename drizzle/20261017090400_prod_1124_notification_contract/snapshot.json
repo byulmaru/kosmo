@@ -47,14 +47,7 @@
       "schema": "public"
     },
     {
-      "values": [
-        "HOME",
-        "LOCAL",
-        "PROFILE",
-        "HASHTAG",
-        "SEARCH",
-        "NOTIFICATION"
-      ],
+      "values": ["HOME", "LOCAL", "PROFILE", "HASHTAG", "SEARCH", "NOTIFICATION"],
       "name": "hashtag_mute_scope",
       "entityType": "enums",
       "schema": "public"
