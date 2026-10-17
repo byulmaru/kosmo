@@ -16,8 +16,10 @@ export type AnimatedColorValue = string | Animated.AnimatedColor;
 
 type AnimatedColorTransitionOptions = {
   color: string;
+  interactionKey?: unknown;
   reducedMotion: boolean;
   role: AnimatedColorRole;
+  selectionKey?: unknown;
   /** Theme changes replace the endpoint without animating the old theme into the new one. */
   instantKey?: unknown;
 };
@@ -25,13 +27,22 @@ type AnimatedColorTransitionOptions = {
 type TransitionState = {
   color: string;
   duration: number;
+  interactionKey?: unknown;
   instantKey?: unknown;
   role: AnimatedColorRole;
+  selectionKey?: unknown;
 };
 
-function durationForTransition(from: AnimatedColorRole, to: AnimatedColorRole): number {
+function durationForTransition(
+  from: AnimatedColorRole,
+  to: AnimatedColorRole,
+  selectionOnly: boolean,
+): number {
   if (from === 'instant' || to === 'instant') {
     return motion.duration.instant;
+  }
+  if (selectionOnly) {
+    return motion.duration.standard;
   }
   if (from === 'interaction' || to === 'interaction') {
     return motion.duration.fast;
@@ -45,15 +56,19 @@ function durationForTransition(from: AnimatedColorRole, to: AnimatedColorRole): 
  */
 export function useAnimatedColorTransition({
   color,
+  interactionKey,
   instantKey,
   reducedMotion,
   role,
+  selectionKey,
 }: AnimatedColorTransitionOptions): AnimatedColorValue {
   const [transition, setTransition] = useState<TransitionState>(() => ({
     color,
     duration: motion.duration.instant,
+    interactionKey,
     instantKey,
     role,
+    selectionKey,
   }));
 
   if (
@@ -68,17 +83,30 @@ export function useAnimatedColorTransition({
           ? motion.duration.instant
           : color === transition.color
             ? motion.duration.instant
-            : durationForTransition(transition.role, role),
+            : durationForTransition(
+                transition.role,
+                role,
+                selectionKey !== transition.selectionKey &&
+                  interactionKey === transition.interactionKey,
+              ),
+      interactionKey,
       instantKey,
       role,
+      selectionKey,
     });
-  } else if (transition.role !== role) {
+  } else if (
+    transition.role !== role ||
+    transition.selectionKey !== selectionKey ||
+    transition.interactionKey !== interactionKey
+  ) {
     // A hidden interaction/selection role must not interrupt the color already being presented;
     // an instant role is different because it must commit the endpoint immediately.
     setTransition({
       ...transition,
       duration: role === 'instant' ? motion.duration.instant : transition.duration,
+      interactionKey,
       role,
+      selectionKey,
     });
   }
 

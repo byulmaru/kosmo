@@ -48,16 +48,37 @@ class AnimatedColorMock {
 
 let platformOS: 'android' | 'ios' | 'web' = 'web';
 let reducedMotion = false;
-const timingCalls: Array<{ duration: number }> = [];
+const timingCalls: Array<{
+  active: boolean;
+  duration: number;
+  handle: AnimatedColorMock;
+  stopCalls: number;
+  target: unknown;
+}> = [];
 
 mockModule('react-native', {
   processColor: () => undefined,
   Animated: {
     Color: AnimatedColorMock,
     View: ViewHost,
-    timing: (_value: unknown, config: { duration: number }) => {
-      timingCalls.push({ duration: config.duration });
-      return { start: () => undefined, stop: () => undefined };
+    timing: (value: unknown, config: { duration: number; toValue: unknown }) => {
+      const timing = {
+        active: false,
+        duration: config.duration,
+        handle: value as AnimatedColorMock,
+        stopCalls: 0,
+        target: config.toValue,
+      };
+      timingCalls.push(timing);
+      return {
+        start: () => {
+          timing.active = true;
+        },
+        stop: () => {
+          timing.active = false;
+          timing.stopCalls += 1;
+        },
+      };
     },
   },
   Easing: { bezier: () => () => 0 },
@@ -260,7 +281,7 @@ test('ListboxOption uses supported native button semantics without Web option pr
   }
 });
 
-test('ListboxOption transitions Web feedback by state without affecting native styles', () => {
+test('ListboxOption stops Web selection feedback when reduced motion is enabled', () => {
   const hoverRenderer = renderOption({ active: true, selected: false });
   const hoverLayer = hoverRenderer.root
     .findAllByType(ViewHost)
@@ -269,20 +290,56 @@ test('ListboxOption transitions Web feedback by state without affecting native s
   assert.equal(flattenStyle(hoverLayer.props.style).backgroundColor, 'hover');
   assert.equal(flattenStyle(hoverLayer.props.style).transitionDuration, undefined);
 
-  const selectedRenderer = renderOption({ selected: true });
-  const selectedLayer = selectedRenderer.root
-    .findAllByType(ViewHost)
-    .find((node) => node.props.pointerEvents === 'none');
-  assert.ok(selectedLayer);
-  assert.equal(flattenStyle(selectedLayer.props.style).backgroundColor, 'selected-surface');
+  const renderer = renderOption({ active: false, selected: false });
+  const updateSelected = () =>
+    act(() =>
+      renderer.update(
+        createElement(listboxOptionModule!.ListboxOption, {
+          active: false,
+          description: '설명',
+          disabled: false,
+          label: '항목',
+          onSelect: () => undefined,
+          selected: true,
+        }),
+      ),
+    );
+  updateSelected();
 
+  const transitioningStyle = feedbackStyle(renderer);
+  const backgroundHandle = transitioningStyle.backgroundColor;
+  const borderHandle = transitioningStyle.borderColor;
+  assert.ok(backgroundHandle instanceof AnimatedColorMock);
+  assert.ok(borderHandle instanceof AnimatedColorMock);
+  assert.equal(timingCalls.length, 2);
+
+  const backgroundTiming = timingCalls.find(({ handle }) => handle === backgroundHandle);
+  assert.ok(backgroundTiming);
+  assert.equal(backgroundTiming.duration, 200);
+  assert.ok(backgroundTiming.target instanceof AnimatedColorMock);
+  assert.equal(backgroundTiming.target.value, 'selected-surface');
+  assert.equal(backgroundTiming.active, true);
+
+  const borderTiming = timingCalls.find(({ handle }) => handle === borderHandle);
+  assert.ok(borderTiming);
+  assert.equal(borderTiming.duration, 200);
+  assert.ok(borderTiming.target instanceof AnimatedColorMock);
+  assert.equal(borderTiming.target.value, 'selected-border');
+  assert.equal(borderTiming.active, true);
+
+  const timingCount = timingCalls.length;
   reducedMotion = true;
-  const reducedRenderer = renderOption({ selected: true });
-  const reducedLayer = reducedRenderer.root
-    .findAllByType(ViewHost)
-    .find((node) => node.props.pointerEvents === 'none');
-  assert.ok(reducedLayer);
-  assert.equal(flattenStyle(reducedLayer.props.style).backgroundColor, 'selected-surface');
+  updateSelected();
+
+  assert.equal(timingCalls.length, timingCount);
+  for (const timing of [backgroundTiming, borderTiming]) {
+    assert.equal(timing.active, false);
+    assert.ok(timing.stopCalls > 0);
+  }
+
+  const reducedStyle = feedbackStyle(renderer);
+  assert.equal(reducedStyle.backgroundColor, 'selected-surface');
+  assert.equal(reducedStyle.borderColor, 'selected-border');
 
   platformOS = 'ios';
   const nativeRenderer = renderOption({ selected: true });

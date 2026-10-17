@@ -14,6 +14,7 @@ const mockModule = (specifier: string | URL, exports: object) =>
 
 let platformOS: 'android' | 'ios' | 'web' = 'web';
 let reducedMotion = false;
+let pressableState = { hovered: false, pressed: false };
 class AnimatedColorMock {
   constructor(public value: string) {}
 
@@ -83,7 +84,7 @@ mockModule('react-native', {
     createElement(
       PressableHost,
       props,
-      typeof children === 'function' ? children({ hovered: false, pressed: false }) : children,
+      typeof children === 'function' ? children(pressableState) : children,
     ),
   StyleSheet: {
     absoluteFill: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
@@ -133,6 +134,7 @@ before(async () => {
 beforeEach(() => {
   platformOS = 'web';
   reducedMotion = false;
+  pressableState = { hovered: false, pressed: false };
   timingCalls.length = 0;
 });
 
@@ -171,8 +173,14 @@ function renderCheckbox(
   return renderCheckboxRenderer(checked, onCheckedChange, disabled).root.findByType(PressableHost);
 }
 
-function updateCheckbox(renderer: ReactTestRenderer, checked: CheckboxModule.CheckboxValue) {
-  act(() => renderer.update(checkboxElement(checked)));
+function updateCheckbox(
+  renderer: ReactTestRenderer,
+  checked: CheckboxModule.CheckboxValue,
+  disabled = false,
+  state = pressableState,
+) {
+  pressableState = state;
+  act(() => renderer.update(checkboxElement(checked, undefined, disabled)));
 }
 
 test('Checkbox exposes false, true, and mixed checked states and emits the next boolean', () => {
@@ -268,6 +276,74 @@ test('Checkbox checked fill uses selected timing and reduced motion is immediate
     .find((node) => Array.isArray(node.props.style) && node.props.style[0]?.height === 20);
   assert.ok(reducedIndicator);
   assert.equal(reducedIndicator.props.style[1].backgroundColor, 'primary');
+});
+
+test('Checkbox checked fill uses selected timing while hover stays active', () => {
+  const renderer = renderCheckboxRenderer(false);
+  const hovered = { hovered: true, pressed: false };
+
+  updateCheckbox(renderer, false, false, hovered);
+  timingCalls.length = 0;
+
+  updateCheckbox(renderer, true, false, hovered);
+  let fillTransition = timingCalls.find(({ target }) => target.value === 'primary-hover');
+  assert.ok(fillTransition);
+  assert.equal(fillTransition.duration, 200);
+  let indicator = renderer.root
+    .findAllByType(ViewHost)
+    .find((node) => Array.isArray(node.props.style) && node.props.style[0]?.height === 20);
+  assert.ok(indicator);
+  assert.equal(indicator.props.style[1].backgroundColor, fillTransition.handle);
+
+  timingCalls.length = 0;
+  updateCheckbox(renderer, false, false, hovered);
+  fillTransition = timingCalls.find(({ target }) => target.value === 'surface');
+  assert.ok(fillTransition);
+  assert.equal(fillTransition.duration, 200);
+  indicator = renderer.root
+    .findAllByType(ViewHost)
+    .find((node) => Array.isArray(node.props.style) && node.props.style[0]?.height === 20);
+  assert.ok(indicator);
+  assert.equal(indicator.props.style[1].backgroundColor, fillTransition.handle);
+});
+
+test('Checkbox hover, pressed, and overlapping changes use interaction timing', () => {
+  const renderer = renderCheckboxRenderer(true);
+  const hovered = { hovered: true, pressed: false };
+  const pressed = { hovered: true, pressed: true };
+
+  updateCheckbox(renderer, true, false, hovered);
+  let fillTransition = timingCalls.find(({ target }) => target.value === 'primary-hover');
+  assert.ok(fillTransition);
+  assert.equal(fillTransition.duration, 120);
+
+  timingCalls.length = 0;
+  updateCheckbox(renderer, true, false, pressed);
+  fillTransition = timingCalls.find(({ target }) => target.value === 'primary-pressed');
+  assert.ok(fillTransition);
+  assert.equal(fillTransition.duration, 120);
+
+  const overlapping = renderCheckboxRenderer(false);
+  timingCalls.length = 0;
+  updateCheckbox(overlapping, true, false, hovered);
+  fillTransition = timingCalls.find(({ target }) => target.value === 'primary-hover');
+  assert.ok(fillTransition);
+  assert.equal(fillTransition.duration, 120);
+});
+
+test('Checkbox becoming disabled commits its current color immediately', () => {
+  const renderer = renderCheckboxRenderer(false);
+  updateCheckbox(renderer, true);
+  const fillTransition = timingCalls.find(({ target }) => target.value === 'primary');
+  assert.ok(fillTransition);
+  fillTransition.handle.value = 'midpoint';
+  const callCount = timingCalls.length;
+
+  updateCheckbox(renderer, true, true);
+
+  assert.equal(timingCalls.length, callCount);
+  assert.equal(fillTransition.stopped, true);
+  assert.equal(fillTransition.handle.value, 'primary-disabled');
 });
 
 test('Web keyboard toggles Checkbox once and ignores repeated Space', () => {
