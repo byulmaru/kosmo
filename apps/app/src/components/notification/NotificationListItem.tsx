@@ -152,11 +152,13 @@ function actor(profile: {
   displayName: string;
   handle: string;
   id: string;
+  relativeHandle: string;
 }) {
   return {
     avatarUrl: profile.avatar?.url,
     id: profile.id,
     name: profile.displayName || profile.handle,
+    profileHref: `/${profile.relativeHandle}`,
   };
 }
 
@@ -246,6 +248,7 @@ const reactionNotificationFragment = graphql`
       id
       displayName
       handle
+      relativeHandle
       avatar {
         id
         url
@@ -389,6 +392,7 @@ const repostNotificationFragment = graphql`
       id
       displayName
       handle
+      relativeHandle
       avatar {
         id
         url
