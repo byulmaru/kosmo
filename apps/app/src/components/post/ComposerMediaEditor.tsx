@@ -8,7 +8,6 @@ import {
   StyleSheet,
   Switch,
   Text,
-  useWindowDimensions,
   View,
 } from 'react-native';
 import { Button } from '@/components/ui/Button';
@@ -25,7 +24,6 @@ export type ComposerMediaEditorTool = 'alt' | 'sensitive';
 export type ComposerMediaEditorMobileState = 'alt' | 'altKeyboard' | 'default' | 'sensitive';
 
 export type ComposerMediaEditorProps = {
-  readonly fillContainer?: boolean;
   readonly media: readonly ComposerMediaItem[];
   readonly mobileState?: ComposerMediaEditorMobileState;
   readonly onAltTextChange: (key: string, altText: string) => void;
@@ -51,7 +49,6 @@ const composerFieldFocusStyle = {
 
 export function ComposerMediaEditor(props: ComposerMediaEditorProps) {
   const theme = useTheme();
-  const { height } = useWindowDimensions();
   const backRef = useRef<View>(null);
   const selectedIndex = Math.max(
     0,
@@ -75,8 +72,8 @@ export function ComposerMediaEditor(props: ComposerMediaEditorProps) {
     <View
       style={[
         styles.root,
-        mobile ? { height, width: '100%' } : { height: 678, maxWidth: 920, width: '100%' },
-        props.fillContainer && styles.fillContainer,
+        styles.fillContainer,
+        { width: '100%' },
         { backgroundColor: theme.backgroundSurface },
       ]}
       testID={mobile ? 'mobile-composer-media-editor' : 'web-composer-media-editor'}
