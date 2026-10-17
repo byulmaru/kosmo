@@ -77,6 +77,7 @@ test('공개 Quote의 현재 작성자·본문·Mention·이미지 순서로 초
     mentions: [
       {
         end: mentionStart + mentionText.length,
+        handle: mentionText,
         profileId: mention.id,
         relativeHandle: mentionText,
         start: mentionStart,

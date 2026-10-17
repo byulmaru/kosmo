@@ -5,6 +5,7 @@ import { Document, Image, Link, PUBLIC_COLLECTION } from '@fedify/vocab';
 import {
   projectRemoteNoteContent,
   RemoteNoteContentLengthExceededError,
+  RemoteNoteMentionLimitExceededError,
 } from '@kosmo/core/activitypub-note-content/server';
 import { PostVisibility } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError, ValidationError } from '@kosmo/core/error';
@@ -197,6 +198,7 @@ type HydratedRemoteNoteMaterializationResult =
       reason:
         | 'invalid_note'
         | 'note_content_length_exceeded'
+        | 'note_mention_limit_exceeded'
         | 'unsupported_note'
         | 'unusable_author';
       status: 'rejected';
@@ -217,6 +219,7 @@ type RemoteNoteMaterializationRejectionReason =
   | 'empty_note'
   | 'note_attribution_mismatch'
   | 'note_content_length_exceeded'
+  | 'note_mention_limit_exceeded'
   | 'note_identity_mismatch'
   | 'note_media_projection_rejected'
   | 'note_media_validation_rejected'
@@ -394,6 +397,9 @@ const materializeRemoteNote = async ({
     if (error instanceof RemoteNoteContentLengthExceededError) {
       return { reason: 'note_content_length_exceeded', status: 'rejected' };
     }
+    if (error instanceof RemoteNoteMentionLimitExceededError) {
+      return { reason: 'note_mention_limit_exceeded', status: 'rejected' };
+    }
     if (error instanceof TypeError) {
       return { reason: 'note_media_projection_rejected', status: 'rejected' };
     }
@@ -465,7 +471,10 @@ export const materializeHydratedRemoteNote = async ({
     source: { advertisingActorUri, kind: 'hydrated' },
   });
   if (result.status === 'rejected') {
-    if (result.reason === 'note_content_length_exceeded') {
+    if (
+      result.reason === 'note_content_length_exceeded' ||
+      result.reason === 'note_mention_limit_exceeded'
+    ) {
       observeInbound({
         ...observation,
         objectOrigin: objectUri.href,
@@ -473,7 +482,7 @@ export const materializeHydratedRemoteNote = async ({
         phase: 'projection',
         reasonCode: result.reason,
       });
-      return { reason: 'note_content_length_exceeded', status: 'rejected' };
+      return { reason: result.reason, status: 'rejected' };
     }
     if (result.reason === 'empty_note' || result.reason === 'unsupported_note_visibility') {
       return { reason: 'unsupported_note', status: 'rejected' };

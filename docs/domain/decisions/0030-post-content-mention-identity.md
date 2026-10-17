@@ -20,7 +20,8 @@ Accepted
 
 ## 결정
 
-- Local Post, Reply, Quote 작성은 본문에 입력된 bare `@handle` 또는 qualified `@handle@domain`이 이미 저장된 eligible Local/Remote Profile과 정확히 일치할 때 Mention relation을 만든다. Bare handle과 configured Local domain은 configured Local Instance의 Profile만 찾고, qualified remote handle은 저장된 ActivityPub Profile만 찾으며 작성 중 remote actor를 resolve하지 않는다. Unknown, malformed, ineligible token은 일반 text로 남는다. 작성자가 명시적으로 선택한 Mention range는 같은 typed token보다 우선하고 기존의 strict target·range 검증을 유지한다. 서버는 실제 작성 Profile 기준으로 typed/selected Profile의 visibility와 양방향 Block 정책을 검증한다. 명시적으로 선택했으나 본문과 일치하지 않거나 이용할 수 없는 Profile은 전체 작성 요청을 거부한다. 같은 Profile의 여러 occurrence는 각 canonical Mention node로 남고 relation은 중복 저장하지 않는다. Local authored body는 document 및 길이 검증에 사용하고 저장하지 않는다. Canonical Mention node는 inbound와 동일하게 `profileId`만 저장한다.
+- Local Post, Reply, Quote 작성은 본문에 입력된 bare `@handle` 또는 qualified `@handle@domain`이 이미 저장된 eligible Local/Remote Profile과 정확히 일치할 때 Mention relation을 만든다. Bare handle과 configured Local domain은 configured Local Instance의 Profile만 찾고, qualified remote handle은 저장된 ActivityPub Profile만 찾으며 작성 중 remote actor를 resolve하지 않는다. Unknown, malformed, ineligible token은 일반 text로 남는다. 작성자가 명시적으로 선택한 Mention range는 같은 typed token보다 우선하고 기존의 strict target·range 검증을 유지한다. 서버는 실제 작성 Profile 기준으로 typed/selected Profile의 visibility와 양방향 Block 정책을 검증한다. 명시적으로 선택했으나 본문과 일치하지 않거나 이용할 수 없는 Profile은 전체 작성 요청을 거부한다. 같은 Profile의 여러 occurrence는 각 canonical Mention node로 남고 relation은 중복 저장하지 않는다. Local authored body는 document 및 길이 검증에 사용하고 저장하지 않는다. Canonical Mention node는 inbound와 동일하게 `profileId`와 optional `handle`을 저장하며, `handle`은 확인된 Profile의 `relativeHandle`에서만 가져오는 node 생성 시점의 snapshot이다. 작성된 token과 range는 별도로 검증하며, 작성된 token 원문은 snapshot 출처로 사용하지 않는다.
+- 새 Local Post·Reply·Quote와 수신하는 Remote Note는 Content Document body에 새 Mention node를 최대 16개까지 저장할 수 있으며 같은 Profile의 반복 node도 각각 센다. 각 node의 `handle` snapshot은 검증된 Profile의 `relativeHandle`에서만 가져오고 username 부분은 최대 64자다. 선행 `@`와 qualified handle의 `@domain` 부분은 이 64자 username 상한에 포함하지 않는다. 17번째 matched node 또는 username 상한을 넘는 snapshot이 생기면 Local 작성 요청은 validation error로 전체 거부하고, inbound Note는 일부 저장이나 자르기 없이 전체 거부한다. 일치하지 않은 token·anchor는 기존처럼 일반 text·link로 남고 한도에 세지 않는다. Inbound typed Mention identity relation은 body node와 독립적으로 유지하며 기존 32개 actor lookup 경계는 바꾸지 않는다. 기존 저장 revision 조회 결과는 바꾸지 않으며 기존 Mention에 backfill하지 않는다.
 - Local Mention identity 자체는 Post Visibility를 선택하지 않는다. `PUBLIC`·`UNLISTED`는 기존 조회 범위를 유지하고,
   `FOLLOWERS`는 기존 Mentioned Profile 조회 권한을 유지한다. Post Visibility가 `Mentioned Profiles` (`DIRECT`)이면
   작성자와 현재 Content의 canonical Mentioned Profile 관계에 포함된 Profile이 읽을 수 있다. Author Profile과 Mentioned
@@ -48,10 +49,14 @@ Accepted
 - Mentioned Profile 관계는 canonical node의 body conversion과 독립된 typed identity 집합에서 파생한다. 일반 link, `to`/`cc`
   audience와 제한된 resolve 후에도 확인되지 않은 typed target은 관계 입력이 아니다. 서로 다른 Profile이 같은 Profile URL alias를
   공유하면 해당 body anchor는 first match 없이 일반 link/text로 낮추지만 각 typed href의 확인된 Profile 관계는 유지한다.
-- canonical Mention node에는 `profileId`만 저장한다. 원문 anchor의 표시 문자열은 수신 중 loose resource/length budget 계산에
-  필요한 동안만 사용하고 canonical document, 관계, GraphQL 응답 또는 renderer 입력으로 저장하지 않는다. renderer는 같은
-  revision의 Profile `relativeHandle`에서 표시 문자열을 파생하며, 관계가 없거나 Profile을 조회할 수 없으면 Profile 이동 없는
-  `@알 수 없는 사용자`를 표시한다.
+- canonical Mention node에는 identity인 `profileId`와 optional display-only `handle`을 저장한다. `handle`은
+  local/inbound parser가 이미 확인한 Profile의 `relativeHandle`에서만 가져오며, raw anchor label이나 `Mention.name`에서
+  채우지 않는다. 기존 `profileId`-only node도 유효하게 유지하며 이 attr 추가로 schema version을 올리거나 backfill하지 않는다.
+  원문 anchor의 표시 문자열은 수신 중 loose resource/length budget 계산에 필요한 동안만 사용하고
+  canonical document, 관계, GraphQL 응답 또는 renderer 입력으로 저장하지 않는다. Text projection은 현재 변환에 사용할 수
+  있는 Profile `relativeHandle`을 우선하고, 없으면 node의 `handle` attr, 둘 다 없으면 기존 `@알 수 없는 사용자`를 사용한다. Dedicated
+  Mention renderer는 기존처럼 관계 Profile의 `relativeHandle`을 표시하고, 관계가 없거나 Profile을 조회할 수 없으면
+  node의 `handle` attr를 사용하지 않고 Profile 이동 없는 `@알 수 없는 사용자`를 표시한다.
 - 이미 알려진 Remote Profile의 URL alias가 비어 있거나 malformed이면 Mention receipt가 그 actor를 다시 fetch하거나 refresh하지 않으며,
   cached `profileUrl`을 채우지 않는다. 별도의 기존 actor materialization·refresh 경로는 alias를 갱신할 수 있다. typed `Mention.href`로
   제한적으로 resolve한 미확인 remote actor target만 새로 materialize할 수 있고, body anchor href나 `Mention.name` fetch, 기존 글의 자동

@@ -2,8 +2,11 @@ import { MIMEType } from 'node:util';
 import { JSDOM } from 'jsdom';
 import { DOMParser as ProseMirrorDOMParser } from 'prosemirror-model';
 import {
+  isPostContentMentionHandleUsernameWithinLimit,
+  normalizePostContentMentionHandle,
   normalizePostContentPlainText,
   normalizePostContentProfileId,
+  postContentMentionMaxOccurrences,
   postContentSchemaVersion,
 } from './post-content/index';
 import { postContentSchema } from './post-content/schema';
@@ -25,6 +28,7 @@ export interface RemoteNoteContentInput {
 export interface RemoteNoteMentionCandidate {
   readonly targetHref: string;
   readonly profileId: string;
+  readonly relativeHandle?: string;
 }
 
 const schemaDOMParser = ProseMirrorDOMParser.fromSchema(postContentSchema);
@@ -34,6 +38,13 @@ export const remoteNoteContentMaxLength = 10_000;
 export class RemoteNoteContentLengthExceededError extends RangeError {
   constructor() {
     super(`Remote Note content exceeds ${remoteNoteContentMaxLength} characters`);
+    this.name = new.target.name;
+  }
+}
+
+export class RemoteNoteMentionLimitExceededError extends RangeError {
+  constructor() {
+    super('Remote Note Mention exceeds its limits');
     this.name = new.target.name;
   }
 }
@@ -63,20 +74,25 @@ function htmlToBodyDocument(
       return [];
     }
 
-    return [
-      {
-        profileId,
-        targetHref,
-      },
-    ];
+    let relativeHandle: string | undefined;
+    try {
+      relativeHandle = normalizePostContentMentionHandle(candidate.relativeHandle);
+    } catch {
+      relativeHandle = undefined;
+    }
+
+    return [{ profileId, targetHref, relativeHandle }];
   });
-  const profileIdsByTargetHref = new Map<string, Set<string>>();
+  const profilesByTargetHref = new Map<string, Map<string, string | undefined>>();
   for (const candidate of normalizedCandidates) {
-    const profileIds = profileIdsByTargetHref.get(candidate.targetHref) ?? new Set<string>();
-    profileIds.add(candidate.profileId);
-    profileIdsByTargetHref.set(candidate.targetHref, profileIds);
+    const profiles = profilesByTargetHref.get(candidate.targetHref) ?? new Map();
+    if (!profiles.has(candidate.profileId) || profiles.get(candidate.profileId) === undefined) {
+      profiles.set(candidate.profileId, candidate.relativeHandle);
+    }
+    profilesByTargetHref.set(candidate.targetHref, profiles);
   }
 
+  let mentionCount = 0;
   const remoteNoteDOMParser = new ProseMirrorDOMParser(postContentSchema, [
     { tag: 'pre', node: 'paragraph', preserveWhitespace: 'full' },
     {
@@ -90,13 +106,25 @@ function htmlToBodyDocument(
           return false;
         }
 
-        const profileIds = profileIdsByTargetHref.get(href);
-        if (profileIds) {
-          if (profileIds.size !== 1) {
+        const profiles = profilesByTargetHref.get(href);
+        if (profiles) {
+          if (profiles.size !== 1) {
             return false;
           }
 
-          return { profileId: profileIds.values().next().value };
+          const [profileId, relativeHandle] = profiles.entries().next().value!;
+          if (
+            mentionCount >= postContentMentionMaxOccurrences ||
+            (relativeHandle !== undefined &&
+              !isPostContentMentionHandleUsernameWithinLimit(relativeHandle))
+          ) {
+            throw new RemoteNoteMentionLimitExceededError();
+          }
+          mentionCount += 1;
+          return {
+            ...(relativeHandle === undefined ? {} : { handle: relativeHandle }),
+            profileId,
+          };
         }
         return false;
       },

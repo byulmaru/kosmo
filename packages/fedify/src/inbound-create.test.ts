@@ -40,6 +40,7 @@ import {
   remoteProfileRefreshWorkflow,
 } from '@kosmo/core/temporal/workflows';
 import { eq, ne } from 'drizzle-orm';
+import { resolveStoredInboundMentionCandidates } from './inbound-mention';
 import { setInboundObservabilityReporter } from './inbound-observability';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
@@ -309,7 +310,7 @@ describe('inbound Create dispatch', () => {
         type: 'paragraph',
         content: [
           { text: 'Hello ', type: 'text' },
-          { attrs: { profileId: profile.id }, type: 'mention' },
+          { attrs: { handle: '@alice@remote.example', profileId: profile.id }, type: 'mention' },
         ],
       },
     ]);
@@ -409,7 +410,7 @@ describe('inbound Create dispatch', () => {
         type: 'paragraph',
         content: [
           { text: 'Hello ', type: 'text' },
-          { attrs: { profileId: profile.id }, type: 'mention' },
+          { attrs: { handle: '@alice@remote.example', profileId: profile.id }, type: 'mention' },
         ],
       },
     ]);
@@ -460,9 +461,9 @@ describe('inbound Create dispatch', () => {
             type: 'text',
           },
           { text: ' ', type: 'text' },
-          { attrs: { profileId: alice.id }, type: 'mention' },
+          { attrs: { handle: '@alice@remote.example', profileId: alice.id }, type: 'mention' },
           { text: ' ', type: 'text' },
-          { attrs: { profileId: bob.id }, type: 'mention' },
+          { attrs: { handle: '@bob@remote-b.example', profileId: bob.id }, type: 'mention' },
         ],
       },
     ]);
@@ -475,6 +476,50 @@ describe('inbound Create dispatch', () => {
         { postContentId: content.id, profileId: bob.id },
       ].sort((left, right) => left.profileId.localeCompare(right.profileId)),
     );
+  });
+
+  test('captures stored relative handles using configured Profile identity', async () => {
+    const remoteActor = new URL('https://remote.example/users/mention-target');
+    const remoteProfile = await createStoredRemoteActor({
+      actorUri: remoteActor,
+      handle: 'remote-target',
+    });
+    const localProfile = await createLocalFollowerProfile('local-target');
+    const localActor = new URL(`/ap/actor/${localProfile.id}`, publicOrigin);
+    await ensureDrizzleLocalProfileActor({
+      actorUri: localActor,
+      localInstanceId,
+      profileId: localProfile.id,
+    });
+    const otherLocalActor = new URL('https://other-local.example/ap/actor/target');
+    const otherLocalProfile = await createStoredRemoteActor({
+      actorUri: otherLocalActor,
+      handle: 'other-local-target',
+      instanceKind: InstanceKind.LOCAL,
+    });
+
+    const { candidates } = await resolveStoredInboundMentionCandidates([
+      remoteActor.href,
+      localActor.href,
+      otherLocalActor.href,
+    ]);
+
+    const actorHrefs = new Set([remoteActor.href, localActor.href, otherLocalActor.href]);
+    const actual = candidates
+      .filter(({ targetHref }) => actorHrefs.has(targetHref))
+      .map(({ profileId, relativeHandle }) => {
+        assert.ok(relativeHandle);
+        return [profileId, relativeHandle] as const;
+      })
+      .sort(([left], [right]) => left.localeCompare(right));
+    const expected: [string, string][] = [
+      [remoteProfile.id, '@remote-target@remote.example'],
+      [localProfile.id, '@local-target'],
+      [otherLocalProfile.id, '@other-local-target@other-local.example'],
+    ];
+    expected.sort(([left], [right]) => left.localeCompare(right));
+
+    assert.deepEqual(actual, expected);
   });
 
   test('projects a local Profile Mention when the actor URI and human URL use different forms', async () => {
@@ -519,7 +564,7 @@ describe('inbound Create dispatch', () => {
         type: 'paragraph',
         content: [
           {
-            attrs: { profileId: target.id },
+            attrs: { handle: '@test', profileId: target.id },
             type: 'mention',
           },
           { text: ' gdgd', type: 'text' },
@@ -579,7 +624,12 @@ describe('inbound Create dispatch', () => {
     assert.deepEqual(content.document.body.content, [
       {
         type: 'paragraph',
-        content: [{ attrs: { profileId: storedActor.profile.id }, type: 'mention' }],
+        content: [
+          {
+            attrs: { handle: '@bob@mentions.example', profileId: storedActor.profile.id },
+            type: 'mention',
+          },
+        ],
       },
     ]);
     assert.deepEqual(await db.select().from(PostMentions), [
@@ -666,7 +716,10 @@ describe('inbound Create dispatch', () => {
           type: 'paragraph',
           content: mentionActorUris.flatMap((actorUri, index) => [
             {
-              attrs: { profileId: profileIdsByUri.get(actorUri.href) },
+              attrs: {
+                handle: `@parallel${index}@mentions.example`,
+                profileId: profileIdsByUri.get(actorUri.href),
+              },
               type: 'mention',
             },
             ...(index < mentionActorUris.length - 1 ? [{ text: ' ', type: 'text' }] : []),
@@ -833,7 +886,10 @@ describe('inbound Create dispatch', () => {
             type: 'text',
           },
           { text: ' ', type: 'text' },
-          { attrs: { profileId: validProfile.id }, type: 'mention' },
+          {
+            attrs: { handle: '@valid@mentions.example', profileId: validProfile.id },
+            type: 'mention',
+          },
         ],
       },
     ]);
@@ -1019,7 +1075,10 @@ describe('inbound Create dispatch', () => {
             type: 'text',
           },
           { text: ' ', type: 'text' },
-          { attrs: { profileId: knownProfile.id }, type: 'mention' },
+          {
+            attrs: { handle: '@alice@remote.example', profileId: knownProfile.id },
+            type: 'mention',
+          },
         ],
       },
     ]);
@@ -1073,7 +1132,7 @@ describe('inbound Create dispatch', () => {
         type: 'paragraph',
         content: [
           {
-            attrs: { profileId: profile.id },
+            attrs: { handle: '@alice@remote.example', profileId: profile.id },
             type: 'mention',
           },
           { text: ' body', type: 'text' },
@@ -1081,7 +1140,7 @@ describe('inbound Create dispatch', () => {
       },
       { attrs: { mediaId: media.id }, type: 'media' },
     ]);
-    assert.equal(postContentDocumentToText(content.document), '@알 수 없는 사용자 body');
+    assert.equal(postContentDocumentToText(content.document), '@alice@remote.example body');
     assert.deepEqual(
       { altText: media.altText, mediaType: media.mediaType, url: media.url },
       { altText: 'Mention image', mediaType: 'image/webp', url: mediaUri.href },
@@ -1395,7 +1454,12 @@ describe('inbound Create dispatch', () => {
     assert.deepEqual(content.document.body.content, [
       {
         type: 'paragraph',
-        content: [{ attrs: { profileId: mentionProfile.id }, type: 'mention' }],
+        content: [
+          {
+            attrs: { handle: '@bob@mentions.example', profileId: mentionProfile.id },
+            type: 'mention',
+          },
+        ],
       },
     ]);
     assert.deepEqual(await db.select().from(PostMentions), [
@@ -3206,6 +3270,111 @@ describe('inbound Create dispatch', () => {
     assert.equal(await db.$count(Posts), 0);
   });
 
+  test('rejects an embedded Note with more than 16 matched Mention nodes as a whole', async () => {
+    const mentionActorUri = new URL('https://mentions.example/users/mention-limit');
+    const objectUri = new URL('https://remote.example/notes/mention-node-limit');
+    const logs: unknown[] = [];
+    const restoreReporter = setInboundObservabilityReporter({
+      log: (observation) => logs.push(observation),
+    });
+
+    try {
+      await createStoredRemoteActor();
+      await createStoredRemoteActor({ actorUri: mentionActorUri, handle: 'mention-limit' });
+      await handleInboundCreate(
+        createContext(),
+        new Create({
+          actor: remoteActorUri,
+          object: new Note({
+            attribution: remoteActorUri,
+            content: `<p>${Array.from(
+              { length: 17 },
+              () => `<a href="${mentionActorUri.href}">@mention-limit</a>`,
+            ).join(' ')}</p>`,
+            id: objectUri,
+            mediaType: 'text/html',
+            tags: [new Mention({ href: mentionActorUri, name: '@ignored' })],
+            to: PUBLIC_COLLECTION,
+          }),
+        }),
+        receivedAt,
+      );
+    } finally {
+      restoreReporter();
+    }
+
+    assert.deepEqual(logs, [
+      {
+        activityType: 'Create',
+        actorOrigin: remoteActorUri.origin,
+        handler: 'create',
+        objectOrigin: objectUri.origin,
+        outcome: 'rejected',
+        phase: 'projection',
+        reasonCode: 'note_mention_limit_exceeded',
+      },
+    ]);
+    assert.equal(await db.$count(Media), 0);
+    assert.equal(await db.$count(ActivityPubPosts), 0);
+    assert.equal(await db.$count(Posts), 0);
+    assert.equal(await db.$count(PostContents), 0);
+    assert.equal(await db.$count(PostMentions), 0);
+  });
+
+  test('rejects a hydrated Note with an oversized Mention username as a whole', async () => {
+    const mentionActorUri = new URL('https://mentions.example/users/long-handle');
+    const objectUri = new URL('https://objects.example/notes/long-mention-handle');
+    const logs: unknown[] = [];
+    const restoreReporter = setInboundObservabilityReporter({
+      log: (observation) => logs.push(observation),
+    });
+    const note = new Note({
+      attribution: remoteActorUri,
+      content: `<p><a href="${mentionActorUri.href}">@long-handle</a></p>`,
+      id: objectUri,
+      mediaType: 'text/html',
+      tags: [new Mention({ href: mentionActorUri, name: '@ignored' })],
+      to: PUBLIC_COLLECTION,
+    });
+
+    try {
+      await createStoredRemoteActor({
+        actorUri: mentionActorUri,
+        handle: 'a'.repeat(65),
+      });
+      const result = await materializeHydratedRemoteNote({
+        context: createContext(),
+        note,
+        objectUri,
+        observation: { activityType: 'Unknown', handler: 'create' },
+        receivedAt,
+      });
+
+      assert.deepEqual(result, {
+        reason: 'note_mention_limit_exceeded',
+        status: 'rejected',
+      });
+    } finally {
+      restoreReporter();
+    }
+
+    assert.deepEqual(logs, [
+      {
+        activityType: 'Unknown',
+        handler: 'create',
+        objectOrigin: objectUri.origin,
+        outcome: 'rejected',
+        phase: 'projection',
+        reasonCode: 'note_mention_limit_exceeded',
+      },
+    ]);
+    assert.equal(await db.$count(Media), 0);
+    assert.equal(await db.$count(ActivityPubPosts), 0);
+    assert.equal(await db.$count(Posts), 0);
+    assert.equal(await db.$count(PostContents), 0);
+    assert.equal(await db.$count(PostMentions), 0);
+  });
+
   test('converges unsaved Actor and Post identity for concurrent hydrated materialization without loser Media', async () => {
     const objectUri = new URL('https://objects.example/notes/concurrent-new-materialization');
     const mediaUrl = new URL('https://remote.example/media/concurrent-new-materialization.webp');
@@ -3335,7 +3504,7 @@ describe('inbound Create dispatch', () => {
     assert.equal(mapping.publishedAt?.toString(), publishedAt.toString());
     assert.equal(content.createdAt.toString(), receivedAt.toString());
     assert.equal(content.document.summary, 'Content warning');
-    assert.equal(postContentDocumentToText(content.document), 'First @알 수 없는 사용자');
+    assert.equal(postContentDocumentToText(content.document), 'First @alice@remote.example');
     assert.equal((await db.select().from(PostContents)).length, 1);
     assert.deepEqual(await db.select().from(PostMentions), [
       { postContentId: content.id, profileId: profile.id },

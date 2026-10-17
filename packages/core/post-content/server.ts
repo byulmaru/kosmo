@@ -32,6 +32,7 @@ export interface PostContentMediaReference {
 
 export interface PostContentMentionReference {
   readonly end: number;
+  readonly handle: string;
   readonly profileId: string;
   readonly relativeHandle: string;
   readonly start: number;
@@ -105,7 +106,7 @@ export function postContentDocumentToHtml(
                     mention.label,
                   ],
                 ]
-              : ['span', postContentMentionFallbackText];
+              : ['span', mentionNode.attrs.handle ?? postContentMentionFallbackText];
           },
         },
         baseSerializer.marks,
@@ -128,7 +129,7 @@ function postContentInlineFromText(
   const links = postContentLinkify.match(bodyText) ?? [];
   let previousEnd = 0;
   for (const mention of orderedMentions) {
-    const { end, profileId, relativeHandle, start } = mention;
+    const { end, handle, profileId, relativeHandle, start } = mention;
     if (
       start < previousEnd ||
       !hasPostContentMentionTokenBoundaries(bodyText, start, end, relativeHandle)
@@ -139,7 +140,7 @@ function postContentInlineFromText(
     if (start > previousEnd) {
       appendTextWithLinks(inline, bodyText, previousEnd, start, links);
     }
-    inline.push({ type: 'mention', attrs: { profileId } });
+    inline.push({ type: 'mention', attrs: { handle, profileId } });
     previousEnd = end;
   }
 
