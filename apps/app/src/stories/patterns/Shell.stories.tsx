@@ -23,6 +23,10 @@ import { UniversalShell } from '@/components/shell/UniversalShell';
 import { SessionProvider } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, elevations, semanticColors, spacing } from '@/theme/tokens';
+import {
+  resetImagePickerMock,
+  setNextImagePickerResult,
+} from '../../../.storybook/mocks/expo-image-picker';
 import appleTouchIconUrl from '../../../public/apple-touch-icon.png?url';
 import appIconUrl from '../../../public/icon-192.png?url';
 import ogDefaultUrl from '../../../public/og-default.png?url';
@@ -409,7 +413,9 @@ const meta = {
   component: NavigationCatalog,
   excludeStories: [
     'UniversalCompactComposerLifecycle',
+    'UniversalCompactComposerMediaEditorGeometry',
     'UniversalFullComposerLifecycle',
+    'UniversalFullComposerMediaEditorLifecycle',
     'UniversalMobileComposerLifecycle',
     'UniversalMobileGuardedProfilePicker',
   ],
@@ -1875,6 +1881,63 @@ const universalParameters = {
   router: { pathname: '/home', slotLabel: '홈 타임라인' },
 };
 
+const composerMediaAsset = {
+  height: 96,
+  uri: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="96" height="96"%3E%3Crect width="96" height="96" fill="%236b7280"/%3E%3C/svg%3E',
+  width: 96,
+};
+
+const composerMediaUploadResponses = {
+  PostComposerCompleteMediaUploadMutation: {
+    data: { completeMediaUpload: { media: { id: 'media-shell-composer', state: 'READY' } } },
+  },
+  PostComposerIssueMediaUploadUrlMutation: {
+    data: {
+      issueMediaUploadUrl: {
+        media: { id: 'media-shell-composer' },
+        uploadUrl: 'https://upload.example/shell-composer',
+      },
+    },
+  },
+};
+
+function createComposerPickerAsset(fileName: string) {
+  const encodedSvg = composerMediaAsset.uri.split(',', 2)[1];
+  if (!encodedSvg) {
+    throw new Error('Missing composer media fixture data.');
+  }
+
+  const file = new File([decodeURIComponent(encodedSvg)], fileName, { type: 'image/svg+xml' });
+  return {
+    ...composerMediaAsset,
+    file,
+    mimeType: file.type,
+    uri: URL.createObjectURL(file),
+  };
+}
+
+function installComposerMediaUploadFetch() {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init) =>
+    init?.method === 'PUT' && String(input).startsWith('https://upload.example/')
+      ? new Response(null, { status: 200 })
+      : originalFetch(input, init);
+  return () => {
+    globalThis.fetch = originalFetch;
+  };
+}
+
+function expectElementInsideBounds(element: HTMLElement, bounds: DOMRect) {
+  const elementBounds = element.getBoundingClientRect();
+  expect(element).toBeVisible();
+  expect(elementBounds.width).toBeGreaterThan(0);
+  expect(elementBounds.height).toBeGreaterThan(0);
+  expect(elementBounds.left).toBeGreaterThanOrEqual(bounds.left);
+  expect(elementBounds.right).toBeLessThanOrEqual(bounds.right);
+  expect(elementBounds.top).toBeGreaterThanOrEqual(bounds.top);
+  expect(elementBounds.bottom).toBeLessThanOrEqual(bounds.bottom);
+}
+
 function UniversalShellStory({ children }: { children?: ReactNode } = {}) {
   return (
     <SessionProvider>
@@ -2560,6 +2623,63 @@ export const UniversalCompactComposerLifecycle: Story = {
   },
 };
 
+export const UniversalCompactComposerMediaEditorGeometry: Story = {
+  ...UniversalCompact,
+  globals: { viewport: { isRotated: false, value: 'kosmoMediaViewerWide' } },
+  parameters: {
+    ...universalParameters,
+    relay: { ...universalParameters.relay, operationResponses: composerMediaUploadResponses },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    const viewportHeight = canvasElement.ownerDocument.defaultView?.innerHeight ?? 0;
+    const restoreFetch = installComposerMediaUploadFetch();
+    setNextImagePickerResult({
+      assets: [createComposerPickerAsset('compact-composer.svg')],
+      canceled: false,
+    });
+
+    try {
+      expect(viewportHeight).toBeGreaterThan(0);
+      expect(viewportHeight).toBeLessThanOrEqual(640);
+      await userEvent.click(canvas.getByRole('button', { name: '글쓰기' }));
+      const dialog = await page.findByRole('dialog', { name: '글쓰기' });
+      await userEvent.click(
+        within(dialog).getByRole('button', { name: '이미지 추가, 4개 더 선택 가능' }),
+      );
+      await expect(
+        within(dialog).findByLabelText('첨부 이미지 1, 업로드 완료'),
+      ).resolves.toBeVisible();
+      await userEvent.click(within(dialog).getByRole('button', { name: '첨부 이미지 1 편집' }));
+
+      const editor = within(dialog).getByTestId('web-composer-media-editor');
+      const dialogBounds = dialog.getBoundingClientRect();
+      const closeButton = within(editor).getByRole('button', { name: '미디어 편집 닫기' });
+      const toolPanel = within(editor).getByTestId('composer-media-editor-tool-panel');
+      const altTextInput = within(editor).getByRole('textbox', { name: '이미지 설명' });
+      const doneButton = within(editor).getByRole('button', { name: '완료' });
+
+      expect(dialogBounds.height).toBeLessThanOrEqual(viewportHeight - 96);
+      expectElementInsideBounds(editor, dialogBounds);
+      expectElementInsideBounds(closeButton, dialogBounds);
+      expectElementInsideBounds(toolPanel, dialogBounds);
+      expectElementInsideBounds(altTextInput, dialogBounds);
+      expectElementInsideBounds(doneButton, dialogBounds);
+
+      await userEvent.click(within(dialog).getByRole('button', { name: '글쓰기 닫기' }));
+      await waitFor(() => expect(page.queryByRole('dialog', { name: '글쓰기' })).toBeNull());
+      expect(page.queryByTestId('web-composer-media-editor')).toBeNull();
+      await userEvent.click(canvas.getByRole('button', { name: '글쓰기' }));
+      const reopenedDialog = await page.findByRole('dialog', { name: '글쓰기' });
+      expect(within(reopenedDialog).queryByTestId('web-composer-media-editor')).toBeNull();
+    } finally {
+      restoreFetch();
+      resetImagePickerMock();
+    }
+  },
+};
+
 export const UniversalMobileComposerBreakpointFocusFallback: Story = {
   ...UniversalCompact,
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
@@ -2887,6 +3007,65 @@ export const UniversalFullComposerLifecycle: Story = {
       expect(canvas.getByRole('button', { name: 'Composer 확장' })).toHaveFocus(),
     );
     expect(canvas.getByRole('textbox', { name: '게시글 본문' })).toHaveValue('rail draft');
+  },
+};
+
+export const UniversalFullComposerMediaEditorLifecycle: Story = {
+  ...UniversalFull,
+  parameters: {
+    ...universalParameters,
+    relay: { ...universalParameters.relay, operationResponses: composerMediaUploadResponses },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    const restoreFetch = installComposerMediaUploadFetch();
+    setNextImagePickerResult({
+      assets: [createComposerPickerAsset('full-composer.svg')],
+      canceled: false,
+    });
+
+    try {
+      const body = canvas.getByRole('textbox', { name: '게시글 본문' });
+      await userEvent.type(body, 'overlay rail reopen draft');
+      await userEvent.click(canvas.getByRole('button', { name: '이미지 추가, 4개 더 선택 가능' }));
+      await expect(canvas.findByLabelText('첨부 이미지 1, 업로드 완료')).resolves.toBeVisible();
+      await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 1 편집' }));
+
+      let dialog = await page.findByRole('dialog', { name: '글쓰기' });
+      await userEvent.type(
+        within(dialog).getByRole('textbox', { name: '이미지 설명' }),
+        '대체 텍스트 보존',
+      );
+      await userEvent.click(within(dialog).getByRole('tab', { name: '민감도' }));
+      await userEvent.click(within(dialog).getByRole('switch', { name: '민감한 이미지' }));
+
+      await userEvent.click(within(dialog).getByRole('button', { name: '글쓰기 닫기' }));
+      await waitFor(() => expect(page.queryByRole('dialog', { name: '글쓰기' })).toBeNull());
+      expect(canvas.queryByTestId('web-composer-media-editor')).toBeNull();
+      expect(canvas.getByRole('textbox', { name: '게시글 본문' })).toHaveValue(
+        'overlay rail reopen draft',
+      );
+      expect(canvas.getByLabelText('첨부 이미지 1, 업로드 완료')).toBeVisible();
+
+      await userEvent.click(canvas.getByRole('button', { name: 'Composer 확장' }));
+      dialog = await page.findByRole('dialog', { name: '글쓰기' });
+      expect(within(dialog).queryByTestId('web-composer-media-editor')).toBeNull();
+      expect(within(dialog).getByRole('textbox', { name: '게시글 본문' })).toHaveValue(
+        'overlay rail reopen draft',
+      );
+      await userEvent.click(
+        within(dialog).getByRole('button', { name: '첨부 이미지 1 대체 텍스트 편집' }),
+      );
+      expect(within(dialog).getByRole('textbox', { name: '이미지 설명' })).toHaveValue(
+        '대체 텍스트 보존',
+      );
+      await userEvent.click(within(dialog).getByRole('tab', { name: '민감도' }));
+      expect(within(dialog).getByRole('switch', { name: '민감한 이미지' })).toBeChecked();
+    } finally {
+      restoreFetch();
+      resetImagePickerMock();
+    }
   },
 };
 
