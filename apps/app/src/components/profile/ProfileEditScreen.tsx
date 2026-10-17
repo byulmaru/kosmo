@@ -1,5 +1,6 @@
 import { ArrowLeft } from 'lucide-react-native';
 import { Platform, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme/ThemeProvider';
 import { iconSizes, space, textStyles } from '@/theme/tokens';
 import { Button } from '../ui/Button';
@@ -78,6 +79,7 @@ export function ProfileEditScreen({
   value,
 }: ProfileEditScreenProps) {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const errors = mergeFieldErrors(validateProfileEditDraft(value, initialValue), serverErrors);
   const saving = submitState.kind === 'saving';
   const canSubmit =
@@ -114,6 +116,7 @@ export function ProfileEditScreen({
       testID="profile-edit-screen"
       style={[
         styles.root,
+        Platform.OS === 'web' ? undefined : { paddingTop: insets.top },
         {
           backgroundColor: theme.backgroundCanvas,
         },
