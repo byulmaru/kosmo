@@ -1,19 +1,23 @@
-import { View } from 'react-native';
+import { PostDetailBackground } from './PostDetailBackground';
 import type { ReactNode } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
 
 export function PostContentPrivacyBoundary({
   children,
+  onBackgroundPress,
   style,
   testID = 'post-content-renderer',
 }: {
   children?: ReactNode;
+  onBackgroundPress?: () => void;
   style: StyleProp<ViewStyle>;
   testID?: string;
 }) {
   return (
     <div className="ph-mask ph-no-capture" data-testid={testID} style={{ display: 'contents' }}>
-      <View style={style}>{children}</View>
+      <PostDetailBackground onBackgroundPress={onBackgroundPress} style={style}>
+        {children}
+      </PostDetailBackground>
     </div>
   );
 }

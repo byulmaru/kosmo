@@ -204,19 +204,6 @@ async function renderListItem(props: Parameters<typeof PostListItemExport>[0]) {
   return renderer.root;
 }
 
-async function updateListItemPressableState(
-  props: Parameters<typeof PostListItemExport>[0],
-  state: { hovered: boolean; pressed: boolean },
-) {
-  mockPressableState = state;
-  await act(async () => {
-    assert.ok(renderer);
-    renderer.update(createElement(PostListItem, props));
-  });
-  assert.ok(renderer);
-  return renderer.root;
-}
-
 async function renderThreadLayout(presentation: 'mobile' | 'wide') {
   await act(async () => {
     renderer?.unmount();
@@ -410,6 +397,19 @@ test('PostListItem keeps hover across nested pointer targets without adding a fo
   assert.equal(card.props.onPress, undefined);
   assert.equal(flattenStyle(feedback.props.style).backgroundColor, undefined);
 
+  const sendPress = async (pressed: boolean) => {
+    await act(async () => {
+      const host = root.findAll(
+        (node) => (node.type as unknown) === 'View' && node.props.testID === 'post-list-item-card',
+      )[0];
+      host.props[pressed ? 'onResponderGrant' : 'onResponderRelease']({
+        nativeEvent: { pageX: 0, pageY: 0, locationX: 0, locationY: 0 },
+      });
+    });
+    assert.ok(renderer);
+    return renderer.root;
+  };
+
   const sendPointer = async (
     boundary: 'enter' | 'leave',
     pointerType: 'mouse' | 'pen' | 'touch',
@@ -432,11 +432,11 @@ test('PostListItem keeps hover across nested pointer targets without adding a fo
     await sendPointer('enter', pointerType);
     assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'hover');
 
-    root = await updateListItemPressableState(props, { hovered: false, pressed: true });
+    root = await sendPress(true);
     feedback = findByTestID(root, 'post-list-item-feedback');
     assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'pressed-subtle');
 
-    root = await updateListItemPressableState(props, { hovered: false, pressed: false });
+    root = await sendPress(false);
     feedback = findByTestID(root, 'post-list-item-feedback');
     assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'hover');
 
@@ -462,15 +462,15 @@ test('PostListItem keeps hover across nested pointer targets without adding a fo
   await sendPointer('enter', 'mouse');
   assert.equal(flattenStyle(feedback.props.style).backgroundColor, undefined);
 
-  root = await updateListItemPressableState(props, { hovered: true, pressed: false });
+  root = await sendPress(false);
   feedback = findByTestID(root, 'post-list-item-feedback');
   assert.equal(flattenStyle(feedback.props.style).backgroundColor, undefined);
 
-  root = await updateListItemPressableState(props, { hovered: true, pressed: true });
+  root = await sendPress(true);
   feedback = findByTestID(root, 'post-list-item-feedback');
   assert.equal(flattenStyle(feedback.props.style).backgroundColor, 'pressed-subtle');
 
-  root = await updateListItemPressableState(props, { hovered: false, pressed: false });
+  root = await sendPress(false);
   feedback = findByTestID(root, 'post-list-item-feedback');
   assert.equal(flattenStyle(feedback.props.style).backgroundColor, undefined);
 });

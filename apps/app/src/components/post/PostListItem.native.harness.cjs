@@ -396,6 +396,7 @@ const nativeExports = {
   ActivityIndicator,
   Animated,
   Easing: { bezier: () => () => 1 },
+  findNodeHandle: renderer.findNodeHandle,
   PanResponder: { create: () => ({ panHandlers: {} }) },
   Modal,
   Platform,
