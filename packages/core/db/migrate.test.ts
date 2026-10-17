@@ -96,14 +96,110 @@ test('알림 Expand 뒤 구버전 Profile 알림 쓰기가 유지된다', async 
   const profileSourceId = '40000000-0000-0000-0000-000000000001';
   const operationalSourceId = '40000000-0000-0000-0000-000000000002';
   const accountBoundSourceId = '40000000-0000-0000-0000-000000000003';
+  const actorAccountId = '10000000-0000-0000-0000-000000000002';
+  const missingActorAccountId = '10000000-0000-0000-0000-000000000003';
+  const legacySourceRows = [
+    {
+      tableName: 'post',
+      id: '50000000-0000-0000-0000-000000000001',
+      actorAccountConstraint: 'post_actor_account_id_account_id_fkey',
+    },
+    {
+      tableName: 'profile_follow_request',
+      id: '50000000-0000-0000-0000-000000000002',
+      actorAccountConstraint: 'profile_follow_request_actor_account_id_account_id_fkey',
+    },
+    {
+      tableName: 'profile_follow',
+      id: '50000000-0000-0000-0000-000000000003',
+      actorAccountConstraint: 'profile_follow_actor_account_id_account_id_fkey',
+    },
+    {
+      tableName: 'reaction',
+      id: '50000000-0000-0000-0000-000000000004',
+      actorAccountConstraint: 'reaction_actor_account_id_account_id_fkey',
+    },
+  ] as const;
 
   try {
     await control.unsafe('DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA public CASCADE;');
     await control.unsafe('CREATE SCHEMA public;');
     await runDatabaseMigrations({ databaseUrl, migrationsFolder: baseMigrations });
     await control`INSERT INTO account (id) VALUES (${accountId})`;
+    await control`INSERT INTO account (id) VALUES (${actorAccountId})`;
     await control`INSERT INTO profile (id) VALUES (${profileId})`;
+    for (const { tableName, id } of legacySourceRows) {
+      await control.unsafe(`INSERT INTO "${tableName}" (id) VALUES ($1)`, [id]);
+    }
     await runDatabaseMigrations({ databaseUrl, migrationsFolder: expandedMigrations });
+
+    const expectedActorForeignKeys = legacySourceRows
+      .map(
+        ({ tableName, actorAccountConstraint }, index) =>
+          `(${index}, '${tableName}'::regclass, '${actorAccountConstraint}')`,
+      )
+      .join(', ');
+    const actorForeignKeys = Array.from(
+      await control.unsafe<{ constraintName: string; isValidated: boolean }[]>(
+        `WITH expected_actor_foreign_keys (ordinal, table_id, constraint_name) AS (
+           VALUES ${expectedActorForeignKeys}
+         )
+         SELECT actual.conname AS "constraintName", actual.convalidated AS "isValidated"
+         FROM expected_actor_foreign_keys AS expected
+         JOIN pg_constraint AS actual
+           ON actual.conrelid = expected.table_id
+           AND actual.conname = expected.constraint_name
+           AND actual.contype = 'f'
+         ORDER BY expected.ordinal`,
+      ),
+    );
+    assert.deepEqual(
+      actorForeignKeys,
+      legacySourceRows.map(({ actorAccountConstraint }) => ({
+        constraintName: actorAccountConstraint,
+        isValidated: true,
+      })),
+    );
+
+    for (const { tableName, id, actorAccountConstraint } of legacySourceRows) {
+      const table = `"${tableName}"`;
+      const legacyRows = Array.from(
+        await control.unsafe<{ id: string; actorAccountId: string | null }[]>(
+          `SELECT id::text AS id, actor_account_id::text AS "actorAccountId"
+           FROM ${table}
+           WHERE id = $1`,
+          [id],
+        ),
+      );
+      assert.deepEqual(legacyRows, [{ id, actorAccountId: null }]);
+
+      const linkedActorRows = Array.from(
+        await control.unsafe<{ actorAccountId: string | null }[]>(
+          `UPDATE ${table}
+           SET actor_account_id = $1
+           WHERE id = $2
+           RETURNING actor_account_id::text AS "actorAccountId"`,
+          [actorAccountId, id],
+        ),
+      );
+      assert.deepEqual(linkedActorRows, [{ actorAccountId }]);
+
+      await assert.rejects(
+        control.unsafe(
+          `UPDATE ${table}
+           SET actor_account_id = $1
+           WHERE id = $2`,
+          [missingActorAccountId, id],
+        ),
+        (error: unknown) => {
+          const postgresError = error as { code?: string; constraint_name?: string };
+          return (
+            postgresError.code === '23503' &&
+            postgresError.constraint_name === actorAccountConstraint
+          );
+        },
+      );
+    }
 
     const insertProfileNotification = (id: string) =>
       control<{ id: string }[]>`
@@ -177,6 +273,19 @@ test('알림 Expand 뒤 구버전 Profile 알림 쓰기가 유지된다', async 
       `,
       (error: unknown) => (error as { code?: string }).code === '23505',
     );
+
+    await control`DELETE FROM account WHERE id = ${actorAccountId}`;
+    for (const { tableName, id } of legacySourceRows) {
+      const remainingRows = Array.from(
+        await control.unsafe<{ id: string; actorAccountId: string | null }[]>(
+          `SELECT id::text AS id, actor_account_id::text AS "actorAccountId"
+           FROM "${tableName}"
+           WHERE id = $1`,
+          [id],
+        ),
+      );
+      assert.deepEqual(remainingRows, [{ id, actorAccountId: null }]);
+    }
   } finally {
     await control.unsafe(
       'DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA IF EXISTS public CASCADE;',
