@@ -152,6 +152,7 @@ afterEach(async () => {
     await act(async () => renderer?.unmount());
     renderer = null;
   }
+  platform.OS = 'web';
   documentElement.scrollHeight = 2401;
   documentScrollListener = null;
   loadNextCalls = 0;
@@ -288,3 +289,95 @@ async function render(presentation: 'route' | 'viewer') {
   });
   assert.ok(renderer);
 }
+
+describe('PostDetailThread Native initial source scroll', () => {
+  it('지연 조상 이미지의 높이가 바뀌어도 고정 viewport 아래 source를 유지한다', async () => {
+    platform.OS = 'ios';
+    let offset = 0;
+    let sourceContentTop = 2100;
+    const frames: FrameRequestCallback[] = [];
+    globalThis.requestAnimationFrame = (callback) => {
+      frames.push(callback);
+      return frames.length;
+    };
+    await act(async () => {
+      renderer = create(
+        createElement(PostDetailThread, {
+          header: createElement('Header'),
+          identity: 'native-source',
+          post: {} as never,
+          presentation: 'route',
+          initialScrollToCurrent: true,
+        }),
+        {
+          createNodeMock: (element) => {
+            if ((element.props as Record<string, unknown>).testID === 'post-detail-scroll') {
+              return {
+                getNativeScrollRef: () => ({
+                  measureInWindow: (done: (...args: number[]) => void) => done(0, 126, 390, 700),
+                }),
+                scrollTo: ({ y }: { y: number }) => {
+                  offset = y;
+                  renderer!.root.findByProps({ testID: 'post-detail-scroll' }).props.onScroll({
+                    nativeEvent: {
+                      contentOffset: { y },
+                      layoutMeasurement: { height: 700 },
+                      contentSize: { height: 8000 },
+                    },
+                  });
+                },
+              };
+            }
+            if (
+              (element.props as Record<string, unknown>).testID ===
+              'post-thread-current-post-current'
+            ) {
+              return {
+                measureInWindow: (done: (...args: number[]) => void) =>
+                  done(0, 126 + sourceContentTop - offset, 390, 200),
+              };
+            }
+            return {
+              measureInWindow: (done: (...args: number[]) => void) =>
+                done(0, 126 - offset, 390, 64),
+            };
+          },
+        },
+      );
+    });
+    const scroll = renderer!.root.findByProps({ testID: 'post-detail-scroll' });
+    const header = scroll
+      .findAllByType('View' as never)
+      .find((node) => node.props.style?.zIndex === 10)!;
+    const flush = async () => {
+      await act(async () => {
+        while (frames.length) {
+          frames.shift()!(0);
+        }
+      });
+    };
+    await act(async () => header.props.onLayout({ nativeEvent: { layout: { height: 64 } } }));
+    await flush();
+    assert.equal(offset, 2036);
+    sourceContentTop = 1800;
+    await act(async () => scroll.props.onContentSizeChange(390, 7700));
+    await flush();
+    assert.equal(offset, 1736);
+    assert.equal(126 + sourceContentTop - offset, 190);
+    await act(async () => scroll.props.onScrollBeginDrag());
+    offset = 2400;
+    await act(async () =>
+      scroll.props.onScroll({
+        nativeEvent: {
+          contentOffset: { y: offset },
+          layoutMeasurement: { height: 700 },
+          contentSize: { height: 7700 },
+        },
+      }),
+    );
+    sourceContentTop = 1600;
+    await act(async () => scroll.props.onContentSizeChange(390, 7500));
+    await flush();
+    assert.equal(offset, 2400);
+  });
+});
