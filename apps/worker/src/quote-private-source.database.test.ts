@@ -13,6 +13,7 @@ import {
   pg,
   PostContents,
   Posts,
+  ProfileBlocks,
   ProfileFollows,
   Profiles,
 } from '@kosmo/core/db';
@@ -332,6 +333,10 @@ test(
     try {
       for (const mode of [
         'success',
+        'parent-already-deleted',
+        'parent-deleted-after-preparation',
+        'parent-profile-blocked',
+        'parent-with-invalid-media',
         'fence-timeout',
         'cas-revoke',
         'unfollow',
@@ -345,6 +350,54 @@ test(
       ] as const) {
         await t.test(mode, async () => {
           const f = await fixture();
+          const parentMode = mode.startsWith('parent-');
+          if (parentMode) {
+            const { createPostPersisted, deletePostPersisted } =
+              await import('../../../packages/core/services/post');
+            const parent = await createPostPersisted({
+              document: postContentDocumentFromText('private Source Reply Parent'),
+              mentionProfileIds: [],
+              objectUri: `${f.sourceUri}/parent`,
+              origin: 'ACTIVITYPUB',
+              profileId: f.author.id,
+              publishedAt: null,
+              receivedAt: Temporal.Now.instant(),
+              visibility: PostVisibility.PUBLIC,
+            });
+            assert.ok(parent.created);
+            const removeParent = async () => {
+              await deletePostPersisted({
+                actorProfileId: f.author.id,
+                origin: 'ACTIVITYPUB',
+                postId: parent.post.id,
+              });
+            };
+            if (mode === 'parent-already-deleted') {
+              await removeParent();
+            }
+            assert.ok(f.prepared.kind === 'CHANGE' && f.prepared.privateSource);
+            const source = f.prepared.privateSource;
+            preparations.set(f.quote.id, {
+              ...f.prepared,
+              privateSource: {
+                ...source,
+                replyParentId: parent.post.id,
+                ...(mode === 'parent-with-invalid-media'
+                  ? { media: Array.from({ length: 5 }, () => source.media[0]!) }
+                  : {}),
+              },
+            });
+            if (mode === 'parent-deleted-after-preparation') {
+              // The already-prepared proof retains the Active Parent ID until the write.
+              mutations.set(f.quote.id, removeParent);
+            }
+            if (mode === 'parent-profile-blocked') {
+              await db.insert(ProfileBlocks).values({
+                ownerProfileId: f.source.id,
+                targetProfileId: f.author.id,
+              });
+            }
+          }
           const beforeContent = await db.$count(PostContents);
           const beforeMedia = await db.$count(Media);
           const beforeEffects = effectCount;
@@ -433,12 +486,25 @@ test(
           );
           if (
             mode === 'success' ||
+            mode === 'parent-already-deleted' ||
+            mode === 'parent-deleted-after-preparation' ||
             mode === 'fence-timeout' ||
             mode === 'response-loss' ||
             mode === 'response-loss-transient'
           ) {
             assert.equal(row.quoteConsentStatus, PostQuoteConsentStatus.APPROVED);
             assert.equal(row.repostSourceId, f.sourceId);
+            if (parentMode) {
+              const source = await db
+                .select()
+                .from(Posts)
+                .where(eq(Posts.id, f.sourceId))
+                .then(firstOrThrow);
+              assert.equal(source.replyParentId, null);
+              assert.equal(await db.$count(PostContents, eq(PostContents.postId, f.sourceId)), 1);
+              assert.equal(await db.$count(PostContents), beforeContent + 1);
+              assert.equal(await db.$count(Media), beforeMedia + 1);
+            }
             assert.equal(await db.$count(Media, eq(Media.url, f.mediaUrl)), 1);
             assert.equal(
               await db.$count(ActivityPubPosts, eq(ActivityPubPosts.uri, f.sourceUri)),
@@ -536,6 +602,13 @@ test(
             assert.equal(await db.$count(PostContents), beforeContent);
             assert.equal(await db.$count(Media), beforeMedia);
             assert.equal(effectCount, beforeEffects);
+            if (mode === 'parent-profile-blocked') {
+              assert.equal(results.get(f.quote.id)?.error?.code, 'NOT_FOUND');
+            }
+            if (mode === 'parent-with-invalid-media') {
+              assert.equal(results.get(f.quote.id)?.error?.code, 'VALIDATION');
+              assert.equal(results.get(f.quote.id)?.error?.field, 'media');
+            }
           }
           if (mode === 'success') {
             const { deletePostPersisted } = await import('../../../packages/core/services/post');

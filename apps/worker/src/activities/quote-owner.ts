@@ -17,12 +17,13 @@ import {
   PostState,
   ProfileState,
 } from '@kosmo/core/enums';
-import { KosmoError, ValidationError } from '@kosmo/core/error';
+import { KosmoError, NotFoundError, ValidationError } from '@kosmo/core/error';
 import {
   isLocalQuoteAllowedByPolicy,
   loadQuoteConsentForPost,
   loadQuotePostIdentity,
   loadQuoteSourceIdentity,
+  ProfilePairBlockedError,
 } from '@kosmo/core/services';
 import { temporalClient } from '@kosmo/core/temporal/client';
 import { postCreateIdentities } from '@kosmo/core/temporal/post-admission';
@@ -243,24 +244,41 @@ export async function applyQuoteConsentActivity(input: QuoteWriteInput): Promise
         if (!(await privateFollowerIsCurrent(tx, privateSource))) {
           throw new PrivateQuoteSourceRaceError('Private Source follower is no longer current');
         }
-        const saved = await createPostPersisted(
-          {
-            origin: 'ACTIVITYPUB',
-            profileId: privateSource.profileId,
-            objectUri: privateSource.objectUri,
-            document: privateSource.document,
-            media: privateSource.media,
-            mentionProfileIds: privateSource.mentionProfileIds,
-            visibility: privateSource.visibility,
-            publishedAt: privateSource.publishedAt
-              ? Temporal.Instant.from(privateSource.publishedAt)
-              : null,
-            receivedAt: Temporal.Instant.from(privateSource.receivedAt),
-            ...(privateSource.replyParentId ? { replyParentId: privateSource.replyParentId } : {}),
-          },
-          privateSource.postId,
-          tx,
-        );
+        const sourceInput = {
+          origin: 'ACTIVITYPUB',
+          profileId: privateSource.profileId,
+          objectUri: privateSource.objectUri,
+          document: privateSource.document,
+          media: privateSource.media,
+          mentionProfileIds: privateSource.mentionProfileIds,
+          visibility: privateSource.visibility,
+          publishedAt: privateSource.publishedAt
+            ? Temporal.Instant.from(privateSource.publishedAt)
+            : null,
+          receivedAt: Temporal.Instant.from(privateSource.receivedAt),
+        } satisfies Parameters<typeof createPostPersisted>[0];
+        let saved: Awaited<ReturnType<typeof createPostPersisted>>;
+        try {
+          saved = await createPostPersisted(
+            privateSource.replyParentId
+              ? { ...sourceInput, replyParentId: privateSource.replyParentId }
+              : sourceInput,
+            privateSource.postId,
+            tx,
+          );
+        } catch (error) {
+          if (
+            error instanceof ProfilePairBlockedError ||
+            !privateSource.replyParentId ||
+            !(
+              error instanceof NotFoundError ||
+              (error instanceof ValidationError && error.field === 'replyParentId')
+            )
+          ) {
+            throw error;
+          }
+          saved = await createPostPersisted(sourceInput, privateSource.postId, tx);
+        }
         const winner = await tx
           .select({ post: Posts, actorUri: ActivityPubActors.uri })
           .from(ActivityPubPosts)
