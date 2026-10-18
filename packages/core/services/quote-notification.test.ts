@@ -92,6 +92,22 @@ const createContentPost = async (profileId: string, repostSourceId?: string) => 
   return result.post;
 };
 
+const addAccountToProfile = async (profileId: string) => {
+  const suffix = crypto.randomUUID();
+  const account = await db
+    .insert(Accounts)
+    .values({ displayName: suffix, oidcSubject: `subject-${suffix}`, state: AccountState.ACTIVE })
+    .returning()
+    .then(firstOrThrow);
+  accountIds.push(account.id);
+  await db.insert(AccountProfiles).values({
+    accountId: account.id,
+    profileId,
+    role: AccountProfileRole.MEMBER,
+  });
+  return account.id;
+};
+
 before(async () => {
   await db
     .insert(NotificationRollouts)
@@ -223,6 +239,97 @@ after(async () => {
   } finally {
     await pg.end();
   }
+});
+
+test('approved Local Quote notifies the Source Author once and keeps its first judgment after deletion', async () => {
+  const sourceAuthor = await createProfile();
+  const recipientAccountIds = [
+    accountIdsByProfile.get(sourceAuthor.id)!,
+    await addAccountToProfile(sourceAuthor.id),
+  ];
+  const quoteAuthor = await createProfile();
+  const source = await createContentPost(sourceAuthor.id);
+  const quote = await createContentPost(quoteAuthor.id, source.id);
+
+  const notificationIds = await Promise.all([
+    createQuoteNotification(quote.id),
+    createQuoteNotification(quote.id),
+  ]);
+
+  const notifications = await db
+    .select()
+    .from(Notifications)
+    .where(
+      and(eq(Notifications.kind, NotificationKind.QUOTE), eq(Notifications.sourceId, quote.id)),
+    );
+  assert.equal(notifications.length, 2);
+  assert.ok(
+    notifications.every(({ recipientProfileId }) => recipientProfileId === sourceAuthor.id),
+  );
+  assert.deepEqual(
+    notifications.map(({ recipientAccountId }) => recipientAccountId).sort(),
+    [...recipientAccountIds].sort(),
+  );
+  const expectedIds = notifications.map(({ id }) => id).sort();
+  assert.deepEqual(
+    notificationIds.map((ids) => ids.slice().sort()),
+    [expectedIds, expectedIds],
+  );
+
+  const [judgment] = await db
+    .select()
+    .from(NotificationQuoteJudgments)
+    .where(eq(NotificationQuoteJudgments.quotePostId, quote.id));
+  assert.equal(judgment?.outcome, 'EMITTED');
+  assert.equal(judgment?.representativeNotificationId, notificationIds[0]?.[0]);
+
+  const readAt = Temporal.Instant.from('2026-10-02T01:23:45.123456Z');
+  await db.update(Notifications).set({ readAt }).where(inArray(Notifications.id, expectedIds));
+  const responseLossRetryIds = await createQuoteNotification(quote.id);
+  assert.deepEqual(responseLossRetryIds.slice().sort(), expectedIds);
+  const retried = await db
+    .select()
+    .from(Notifications)
+    .where(inArray(Notifications.id, expectedIds));
+  assert.deepEqual(
+    retried
+      .map(({ id, createdAt, readAt: persistedReadAt }) => ({
+        id,
+        createdAt: createdAt.toString(),
+        readAt: persistedReadAt?.toString(),
+      }))
+      .sort((left, right) => left.id.localeCompare(right.id)),
+    notifications
+      .map(({ id, createdAt }) => ({
+        id,
+        createdAt: createdAt.toString(),
+        readAt: readAt.toString(),
+      }))
+      .sort((left, right) => left.id.localeCompare(right.id)),
+  );
+
+  const deletedId = expectedIds[0]!;
+  const survivingId = expectedIds[1]!;
+  await db.delete(Notifications).where(eq(Notifications.id, deletedId));
+  assert.deepEqual(await createQuoteNotification(quote.id), [survivingId]);
+
+  assert.equal(
+    await db.$count(
+      Notifications,
+      and(eq(Notifications.kind, NotificationKind.QUOTE), eq(Notifications.sourceId, quote.id)),
+    ),
+    1,
+  );
+  assert.equal(
+    await db.$count(
+      NotificationQuoteJudgments,
+      and(
+        eq(NotificationQuoteJudgments.quotePostId, quote.id),
+        eq(NotificationQuoteJudgments.outcome, 'EMITTED'),
+      ),
+    ),
+    1,
+  );
 });
 
 test('active Profile Mute and bidirectional Profile Block suppress the first Quote judgment', async () => {

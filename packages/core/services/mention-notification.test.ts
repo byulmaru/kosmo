@@ -11,6 +11,7 @@ import {
   Notifications,
   pg,
   PostContents,
+  PostMentions,
   Posts,
   ProfileBlocks,
   ProfileFollows,
@@ -23,6 +24,8 @@ import {
   InstanceKind,
   InstanceState,
   NotificationKind,
+  PostQuoteConsentStatus,
+  PostState,
   PostVisibility,
   ProfileFollowPolicy,
   ProfileState,
@@ -325,6 +328,68 @@ test('social Notifications store Account and Profile recipients while Operationa
   assert.equal(accountNotification.recipientAccountId, account.id);
 });
 
+test('inbound typed Mention is per visible local Profile and concurrent retries return the stored IDs', async () => {
+  const author = await createProfile(InstanceKind.ACTIVITYPUB);
+  const follower = await createProfile();
+  const followerAccountIds = [
+    accountIdsByProfile.get(follower.id)!,
+    await addAccountToProfile(follower.id),
+  ];
+  const nonFollower = await createProfile();
+  await db.insert(ProfileFollows).values({
+    followerProfileId: follower.id,
+    followeeProfileId: author.id,
+  });
+  const post = await createTestPost({
+    authorProfileId: author.id,
+    mentionProfileIds: [follower.id, nonFollower.id],
+    visibility: PostVisibility.FOLLOWERS,
+  });
+
+  const [firstIds, retryIds] = await Promise.all([
+    createMentionNotification(post.id),
+    createMentionNotification(post.id),
+  ]);
+  const notifications = await readSourceNotifications(post.id);
+
+  assert.equal(notifications.length, 2);
+  assert.ok(
+    notifications.every(
+      ({ kind, recipientProfileId }) =>
+        kind === NotificationKind.MENTION && recipientProfileId === follower.id,
+    ),
+  );
+  assert.deepEqual(
+    notifications.map(({ recipientAccountId }) => recipientAccountId).sort(),
+    [...followerAccountIds].sort(),
+  );
+  const expectedIds = notifications.map(({ id }) => id).sort();
+  assert.deepEqual(firstIds.slice().sort(), expectedIds);
+  assert.deepEqual(retryIds.slice().sort(), expectedIds);
+  assert.ok(notifications.every(({ readAt }) => readAt === null));
+
+  const readAt = Temporal.Instant.from('2026-10-02T01:23:45.123456Z');
+  await db.update(Notifications).set({ readAt }).where(inArray(Notifications.id, expectedIds));
+  assert.deepEqual((await createMentionNotification(post.id)).slice().sort(), expectedIds);
+  const retried = await readSourceNotifications(post.id);
+  assert.deepEqual(
+    retried
+      .map(({ id, createdAt, readAt: persistedReadAt }) => ({
+        id,
+        createdAt: createdAt.toString(),
+        readAt: persistedReadAt?.toString(),
+      }))
+      .sort((left, right) => left.id.localeCompare(right.id)),
+    notifications
+      .map(({ id, createdAt }) => ({
+        id,
+        createdAt: createdAt.toString(),
+        readAt: readAt.toString(),
+      }))
+      .sort((left, right) => left.id.localeCompare(right.id)),
+  );
+});
+
 test('a valid parent-author Reply represents only its own recipient; an ineligible Reply does not consume another Mention', async () => {
   const author = await createProfile(InstanceKind.ACTIVITYPUB);
   const parentAuthor = await createProfile();
@@ -603,6 +668,103 @@ test('an emitted Quote judgment never returns its ID to a later Reply activity',
   assert.equal(notification?.kind, NotificationKind.QUOTE);
   assert.equal(notification?.id, quoteId);
   assert.equal(notification?.readAt?.toString(), readAt.toString());
+});
+
+test('an eligible Reply wins over Quote and Mention concurrently and preserves its read state', async () => {
+  const recipient = await createProfile();
+  const recipientAccountIds = [
+    accountIdsByProfile.get(recipient.id)!,
+    await addAccountToProfile(recipient.id),
+  ];
+  const replyAuthor = await createProfile();
+  const parent = await createPostForLocal(recipient.id);
+  // Seed the unsupported stored Reply+Quote shape as a legacy row with no original snapshots.
+  const relativeHandle = `@${recipient.handle}`;
+  const authoredBodyText = `synthetic reply ${crypto.randomUUID()} ${relativeHandle}`;
+  const end = authoredBodyText.length;
+  const document = postContentDocumentFromTextAndMedia(authoredBodyText, [], false, null, [
+    {
+      end,
+      profileId: recipient.id,
+      relativeHandle,
+      start: end - relativeHandle.length,
+    },
+  ]);
+  const content = await db
+    .insert(PostContents)
+    .values({ document, postId: null })
+    .returning()
+    .then(firstOrThrow);
+  const replyQuote = await db
+    .insert(Posts)
+    .values({
+      currentContentId: content.id,
+      profileId: replyAuthor.id,
+      quoteConsentStatus: PostQuoteConsentStatus.APPROVED,
+      repostSourceId: parent.id,
+      replyParentId: parent.id,
+      state: PostState.ACTIVE,
+      visibility: PostVisibility.PUBLIC,
+    })
+    .returning()
+    .then(firstOrThrow);
+  postIds.push(replyQuote.id);
+  await db.insert(PostMentions).values({ postContentId: content.id, profileId: recipient.id });
+  await db
+    .update(PostContents)
+    .set({ postId: replyQuote.id })
+    .where(eq(PostContents.id, content.id));
+
+  const [replyIds, quoteIds, mentionIds] = await Promise.all([
+    createReplyNotification(replyQuote.id),
+    createQuoteNotification(replyQuote.id),
+    createMentionNotification(replyQuote.id),
+  ]);
+  const notifications = await readSourceNotifications(replyQuote.id);
+  assert.equal(notifications.length, 2);
+  assert.ok(
+    notifications.every(
+      ({ kind, recipientProfileId }) =>
+        kind === NotificationKind.REPLY && recipientProfileId === recipient.id,
+    ),
+  );
+  assert.deepEqual(
+    notifications.map(({ recipientAccountId }) => recipientAccountId).sort(),
+    [...recipientAccountIds].sort(),
+  );
+  const expectedIds = notifications.map(({ id }) => id).sort();
+  assert.deepEqual(replyIds.slice().sort(), expectedIds);
+  assert.deepEqual(quoteIds, []);
+  assert.deepEqual(mentionIds, []);
+
+  const readAt = Temporal.Instant.from('2026-10-02T02:34:56.654321Z');
+  await db.update(Notifications).set({ readAt }).where(inArray(Notifications.id, expectedIds));
+  const [replyRetryIds, quoteRetryIds, mentionRetryIds] = await Promise.all([
+    createReplyNotification(replyQuote.id),
+    createQuoteNotification(replyQuote.id),
+    createMentionNotification(replyQuote.id),
+  ]);
+  assert.deepEqual(replyRetryIds.slice().sort(), expectedIds);
+  assert.deepEqual(quoteRetryIds, []);
+  assert.deepEqual(mentionRetryIds, []);
+  const retried = await readSourceNotifications(replyQuote.id);
+  assert.equal(retried.length, 2);
+  assert.deepEqual(
+    retried
+      .map(({ id, createdAt, readAt: persistedReadAt }) => ({
+        id,
+        createdAt: createdAt.toString(),
+        readAt: persistedReadAt?.toString(),
+      }))
+      .sort((left, right) => left.id.localeCompare(right.id)),
+    notifications
+      .map(({ id, createdAt }) => ({
+        id,
+        createdAt: createdAt.toString(),
+        readAt: readAt.toString(),
+      }))
+      .sort((left, right) => left.id.localeCompare(right.id)),
+  );
 });
 
 test('an ineligible Quote does not suppress an eligible typed Mention', async () => {
