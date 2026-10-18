@@ -71,15 +71,13 @@ export function PublicContentInvitation({ onDismiss, onLayout, pathname, visible
         <View style={styles.header}>
           <Text
             style={[
-              mobile ? textStyles.uiCopyM : textStyles.uiCopyL,
+              mobile ? textStyles.uiCopyS : textStyles.uiCopyL,
               styles.invitationText,
               { color: theme.foregroundPrimary },
             ]}
           >
             {mobile ? null : '지금 가입하고 '}
-            <Text style={styles.emphasis}>
-              {mobile ? '취향 맞는 사람들' : '취향이 통하는 사람들'}
-            </Text>
+            <Text style={styles.emphasis}>취향이 통하는 사람들</Text>
             {mobile ? '과 함께해요.' : '과 이야기를 나눠보세요.'}
           </Text>
           <IconButton

@@ -484,21 +484,21 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
           <PostMediaViewerScreenFallbackProvider fallbackFocus={screenFallbackRef}>
             <RelayActorBoundary>{children}</RelayActorBoundary>
           </PostMediaViewerScreenFallbackProvider>
+          <PublicContentInvitation
+            onDismiss={() => {
+              saveInvitationDismissed();
+              setInvitationDismissed(true);
+              setInvitationHeight(0);
+            }}
+            onLayout={(nextHeight) => {
+              setInvitationHeight((currentHeight) =>
+                Math.round(currentHeight) === Math.round(nextHeight) ? currentHeight : nextHeight,
+              );
+            }}
+            pathname={pathname}
+            visible={invitationVisible}
+          />
         </View>
-        <PublicContentInvitation
-          onDismiss={() => {
-            saveInvitationDismissed();
-            setInvitationDismissed(true);
-            setInvitationHeight(0);
-          }}
-          onLayout={(nextHeight) => {
-            setInvitationHeight((currentHeight) =>
-              Math.round(currentHeight) === Math.round(nextHeight) ? currentHeight : nextHeight,
-            );
-          }}
-          pathname={pathname}
-          visible={invitationVisible}
-        />
         {mobile ? (
           <View aria-hidden={drawerOpen || undefined} style={web ? webFixedBottomBar : undefined}>
             <BottomTabBar onComposeOpen={openComposer} profile={profile} />
