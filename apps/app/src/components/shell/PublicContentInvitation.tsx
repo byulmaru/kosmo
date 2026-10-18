@@ -59,6 +59,15 @@ export function PublicContentInvitation({ onDismiss, onLayout, pathname, visible
       testID="public-content-invitation"
     >
       <View style={styles.content}>
+        <IconButton
+          accessibilityLabel="가입 안내 닫기"
+          onPress={onDismiss}
+          style={styles.closeButton}
+          targetSize={44}
+          visualSize={44}
+        >
+          <X color={theme.foregroundPrimary} size={18} strokeWidth={2} />
+        </IconButton>
         <View style={styles.actions}>
           <NavigationLink href="/" primary>
             <Button
@@ -68,7 +77,6 @@ export function PublicContentInvitation({ onDismiss, onLayout, pathname, visible
                 }
               }}
               style={styles.ctaButton}
-              tone="inverse"
             >
               <Text style={textStyles.uiLabelL}>KOSMO에서 계속하기</Text>
             </Button>
@@ -95,14 +103,6 @@ export function PublicContentInvitation({ onDismiss, onLayout, pathname, visible
             </NavigationLink>
           </View>
         </View>
-        <IconButton
-          accessibilityLabel="가입 안내 닫기"
-          onPress={onDismiss}
-          targetSize={44}
-          visualSize={44}
-        >
-          <X color={theme.foregroundPrimary} size={18} strokeWidth={2} />
-        </IconButton>
       </View>
     </View>
   );
@@ -115,8 +115,9 @@ const styles = StyleSheet.create({
     paddingVertical: space[12],
   },
   flowRoot: { position: 'relative', width: '100%' },
-  content: { alignItems: 'flex-start', flexDirection: 'row', gap: space[8], minWidth: 0 },
-  actions: { alignItems: 'stretch', flex: 1, gap: space[8], minWidth: 0 },
+  content: { gap: space[8], minWidth: 0 },
+  closeButton: { alignSelf: 'flex-end' },
+  actions: { alignItems: 'stretch', gap: space[8], minWidth: 0 },
   ctaButton: { borderRadius: radius.full, minHeight: space[48], width: '100%' },
   links: {
     alignItems: 'center',

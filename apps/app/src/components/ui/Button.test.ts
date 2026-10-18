@@ -17,8 +17,6 @@ const theme = {
   actionSecondaryHover: 'secondary-hover',
   actionSecondaryOnBase: 'secondary-on-base',
   actionSecondaryPressed: 'secondary-pressed',
-  backgroundInverse: 'inverse-background',
-  foregroundInverse: 'inverse-foreground',
   feedbackDangerBase: 'danger-base',
   feedbackDangerOnBase: 'danger-on-base',
   stateDisabledForeground: 'disabled-foreground',
@@ -62,7 +60,7 @@ type ButtonComponent = (props: {
   loading?: boolean;
   size?: 'compact' | 'default';
   style?: { minHeight: number } | (() => { minHeight: number });
-  tone?: 'danger' | 'inverse' | 'primary' | 'secondary';
+  tone?: 'danger' | 'primary' | 'secondary';
 }) => TestElement;
 
 let Button: ButtonComponent | undefined;
@@ -79,7 +77,7 @@ function flattenStyle(style: unknown): Record<string, unknown> {
 }
 
 function render(
-  tone: 'danger' | 'inverse' | 'primary' | 'secondary' = 'primary',
+  tone: 'danger' | 'primary' | 'secondary' = 'primary',
   disabled = false,
   size: 'compact' | 'default' = 'default',
   style?: { minHeight: number } | (() => { minHeight: number }),
@@ -173,20 +171,4 @@ test('Native Button sizes provide the platform touch height without caller hitSl
   } finally {
     platform.OS = 'web';
   }
-});
-
-test('inverse Button keeps its contrast pair through interaction and supports disabled and focus states', () => {
-  const button = render('inverse');
-  assert.equal(button.resting.backgroundColor, 'inverse-background');
-  assert.equal(button.label.color, 'inverse-foreground');
-  assert.equal(button.resting.opacity, 1);
-  assert.equal(button.hovered.opacity, 0.9);
-  assert.equal(button.pressed.opacity, 0.8);
-  assert.equal(button.focused.outlineColor, 'focus-ring');
-
-  const disabled = render('inverse', true);
-  assert.equal(disabled.resting.backgroundColor, 'disabled-surface');
-  assert.equal(disabled.label.color, 'disabled-foreground');
-  assert.equal(disabled.hovered.opacity, 1);
-  assert.equal(disabled.pressed.opacity, 1);
 });

@@ -19,7 +19,7 @@ const meta = {
       description: '`compact`는 Web Post Composer footer 전용이며 Native에서는 사용하지 않습니다.',
       options: ['default', 'compact'],
     },
-    tone: { control: 'select', options: ['primary', 'secondary', 'danger', 'inverse'] },
+    tone: { control: 'select', options: ['primary', 'secondary', 'danger'] },
   },
   component: Button,
   excludeStories: ['InteractionContract'],
@@ -75,7 +75,6 @@ export const RepresentativeStates: Story = {
           <Button>기본</Button>
           <Button tone="secondary">보조</Button>
           <Button tone="danger">위험</Button>
-          <Button tone="inverse">역상</Button>
           <Button size="compact">기본 Compact</Button>
           <Button size="compact" tone="secondary">
             보조 Compact
