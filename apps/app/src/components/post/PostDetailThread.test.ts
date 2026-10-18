@@ -386,3 +386,49 @@ describe('PostDetailThread Native initial target scroll', () => {
     assert.equal(offset, 2400);
   });
 });
+
+describe('PostDetailThread Web initial target scroll cleanup', () => {
+  it('측정 중 상세를 떠나면 늦은 결과가 복원된 화면을 스크롤하지 않는다', async () => {
+    const frames: FrameRequestCallback[] = [];
+    let measureCurrent: ((...values: number[]) => void) | undefined;
+    const scrollTo = mock.fn();
+    globalThis.scrollTo = scrollTo;
+    globalThis.requestAnimationFrame = (callback) => {
+      frames.push(callback);
+      return frames.length;
+    };
+    await act(async () => {
+      renderer = create(
+        createElement(PostDetailThread, {
+          header: createElement('Header'),
+          identity: 'web-target',
+          post: {} as never,
+        }),
+        {
+          createNodeMock: (element) => ({
+            measureInWindow: (done: (...values: number[]) => void) => {
+              if (
+                (element.props as Record<string, unknown>).testID ===
+                'post-thread-current-post-current'
+              ) {
+                measureCurrent = done;
+              } else {
+                done(0, 0, 390, 64);
+              }
+            },
+          }),
+        },
+      );
+    });
+    await act(async () => {
+      while (frames.length) {
+        frames.shift()!(0);
+      }
+    });
+    assert.ok(measureCurrent);
+    await act(async () => renderer!.unmount());
+    renderer = null;
+    await act(async () => measureCurrent!(0, 1200, 390, 200));
+    assert.equal(scrollTo.mock.callCount(), 0);
+  });
+});

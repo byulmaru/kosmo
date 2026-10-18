@@ -610,6 +610,15 @@ test('답글 상세는 모든 진입에서 대상을 보이고 지연 이미지�
     await page.mouse.wheel(0, -10_000);
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
     await expect(page.getByText(rootBody, { exact: false })).toBeVisible();
+
+    await page.getByRole('link', { name: '홈', exact: true }).first().click();
+    await expect(page.getByRole('heading', { name: '홈', exact: true })).toBeVisible();
+    await page.goBack();
+    await expect(page).toHaveURL(`/@${replyAuthor.handle}/${sourceId}`);
+    await expect(sourceRow).toBeAttached();
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+    await expect(page.getByText(rootBody, { exact: false })).toBeVisible();
+    await expect(sourceRow).not.toBeInViewport();
   } finally {
     releaseAncestorImage();
     await page.unroute(imageUrl);

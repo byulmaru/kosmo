@@ -292,12 +292,8 @@ function PostDetailThreadContent({
     }
 
     scheduleInitialScroll();
-    return () => {
-      if (initialScrollFrameRef.current !== null) {
-        cancelAnimationFrame(initialScrollFrameRef.current);
-      }
-    };
-  }, [scheduleInitialScroll]);
+    return cancelInitialScroll;
+  }, [cancelInitialScroll, scheduleInitialScroll]);
 
   useEffect(() => {
     if (
