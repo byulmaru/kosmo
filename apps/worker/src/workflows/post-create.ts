@@ -1,9 +1,11 @@
 import { isPostContentDocumentV1 } from '@kosmo/core/post-content';
+import { postCreateInputKey } from '@kosmo/core/temporal/post';
 import {
   allHandlersFinished,
   ApplicationFailure,
   condition,
   defineUpdate,
+  patched,
   proxyActivities,
   setHandler,
 } from '@temporalio/workflow';
@@ -15,7 +17,7 @@ import type { PostCreateInput, PostTransitionOutcome } from '@kosmo/core/tempora
 import type * as activities from '../activities';
 
 const inputSchema = z.strictObject({
-  admissionId: z.uuid(),
+  admissionId: z.string(),
   accountId: z.uuid().optional(),
   authoredBodyText: z.string().optional(),
   document: z.custom<PostContentDocumentV1>(isPostContentDocumentV1),
@@ -29,6 +31,7 @@ const inputSchema = z.strictObject({
 const {
   reservePostIdActivity,
   createPostTransitionActivity,
+  createNotificationActivity,
   createReplyNotificationActivity,
   createQuoteNotificationActivity,
   sendLocalPostCreateActivity,
@@ -36,32 +39,53 @@ const {
 } = proxyActivities<typeof activities>(workflowActivityOptions);
 
 export async function postCreateWorkflow(input: PostCreateInput): Promise<void> {
+  const currentAdmission = patched('post-create-quote-admission-v1');
   const parsed = inputSchema.safeParse(input);
   if (!parsed.success) {
+    throw ApplicationFailure.nonRetryable('Invalid Post create input');
+  }
+  const admission = /^(\d{13}):(.+)$/.exec(parsed.data.admissionId);
+  if (currentAdmission && (!admission || !z.uuid().safeParse(admission[2]).success)) {
     throw ApplicationFailure.nonRetryable('Invalid Post create input');
   }
   let received = false;
   let execution: Awaited<ReturnType<typeof activities.createPostTransitionActivity>> | undefined;
   let failure: unknown;
   setHandler(
-    defineUpdate<PostTransitionOutcome<{ postId: string }>>('createPost'),
-    async () => {
+    defineUpdate<PostTransitionOutcome<{ postId: string }>, [PostCreateInput?]>('createPost'),
+    async (submitted = input) => {
+      const candidate = inputSchema.safeParse(submitted);
+      if (
+        !candidate.success ||
+        postCreateInputKey(candidate.data) !== postCreateInputKey(parsed.data)
+      ) {
+        return {
+          ok: false as const,
+          error: {
+            code: 'VALIDATION' as const,
+            message: 'Quote admission payload does not match its original submission',
+            field: 'admissionId',
+          },
+        };
+      }
+      if (received) {
+        await condition(() => execution !== undefined || failure !== undefined);
+        if (failure) {
+          throw failure;
+        }
+        return execution!;
+      }
       received = true;
       try {
-        const postId = await reservePostIdActivity();
+        const postId = currentAdmission
+          ? await reservePostIdActivity(parsed.data)
+          : await reservePostIdActivity();
         execution = await createPostTransitionActivity(parsed.data, postId);
         return execution.ok ? { ok: true as const, result: execution.result } : execution;
       } catch (error) {
         failure = error;
         throw error;
       }
-    },
-    {
-      validator: () => {
-        if (received) {
-          throw ApplicationFailure.nonRetryable('Post create already admitted');
-        }
-      },
     },
   );
   if (!(await condition(() => received, '1 minute'))) {
@@ -76,8 +100,13 @@ export async function postCreateWorkflow(input: PostCreateInput): Promise<void> 
   }
   const postId = execution.result.postId;
   await settleEffects([
-    createReplyNotificationActivity(postId),
-    createQuoteNotificationActivity(postId),
+    ...(currentAdmission
+      ? [
+          createNotificationActivity({ kind: 'REPLY', sourceId: postId }),
+          createNotificationActivity({ kind: 'QUOTE', sourceId: postId }),
+          createNotificationActivity({ kind: 'MENTION', sourceId: postId }),
+        ]
+      : [createReplyNotificationActivity(postId), createQuoteNotificationActivity(postId)]),
     sendLocalPostCreateActivity(postId),
     ...(execution.quoteRequest ? [sendLocalPostQuoteRequestActivity(execution.quoteRequest)] : []),
   ]);

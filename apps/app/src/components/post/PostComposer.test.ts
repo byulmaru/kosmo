@@ -89,6 +89,7 @@ let textInputMountCount = 0;
 let textInputUnmountCount = 0;
 let PostComposerMentionInput: typeof PostComposerMentionInputComponent;
 let toastCalls: Array<[string, { tone: string }]> = [];
+let quoteUUIDs: string[] = [];
 
 const profileA = {
   ' $fragmentSpreads': {
@@ -161,6 +162,9 @@ mockModule('react-native', {
   StyleSheet: { create: <T>(styles: T) => styles },
   Text: 'Text',
   View: 'View',
+});
+mockModule('expo-crypto', {
+  randomUUID: () => quoteUUIDs.shift() ?? '00000000-0000-4000-8000-000000000000',
 });
 mockModule(require.resolve('lucide-react-native'), {
   AtSignIcon: 'AtSignIcon',
@@ -318,6 +322,7 @@ beforeEach(() => {
   textInputMountCount = 0;
   textInputUnmountCount = 0;
   toastCalls = [];
+  quoteUUIDs = ['11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222'];
 });
 
 afterEach(async () => {
@@ -523,6 +528,186 @@ describe('PostComposer Reply visibility seed', () => {
     await act(async () => targetProps?.onSubmit());
     assert.equal(mutationCalls[0]?.variables.input.repostSourceId, 'post-source');
     assert.equal(mutationCalls[0]?.variables.input.visibility, 'PUBLIC');
+  });
+
+  it('uses one Quote admission when the submit handler runs twice before React rerenders', async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposer, {
+          onRequestClose: () => undefined,
+          presentation: 'overlay',
+          profile: profileA as never,
+          repostSourceId: 'post-source',
+        }),
+      );
+    });
+
+    await act(async () => targetProps?.onBodyChange('중복 제출 인용'));
+    await act(async () => {
+      targetProps?.onSubmit();
+      targetProps?.onSubmit();
+    });
+
+    assert.equal(mutationCalls.length, 2);
+    assert.equal(
+      mutationCalls[1]?.variables.input.admissionId,
+      mutationCalls[0]?.variables.input.admissionId,
+    );
+  });
+
+  it('keeps one Quote admission across an uncertain retry and starts the next draft with a new one', async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposer, {
+          onRequestClose: () => undefined,
+          presentation: 'overlay',
+          profile: profileA as never,
+          repostSourceId: 'post-source',
+        }),
+      );
+    });
+
+    assert.equal(quoteUUIDs.length, 2);
+    await act(async () => targetProps?.onBodyChange('첫 번째 인용'));
+    assert.equal(quoteUUIDs.length, 2);
+    await act(async () => targetProps?.onSubmit());
+    assert.equal(quoteUUIDs.length, 1);
+    const firstAdmissionId = mutationCalls[0]?.variables.input.admissionId;
+    assert.match(String(firstAdmissionId), /^\d+:11111111-1111-4111-8111-111111111111$/);
+
+    await act(async () => mutationCalls[0]?.onError(new Error('timeout')));
+    assert.equal(targetProps?.body, '첫 번째 인용');
+    await act(async () => targetProps?.onBodyChange('첫 번째 인용 편집'));
+    await act(async () => targetProps?.onSubmit());
+    assert.equal(mutationCalls[1]?.variables.input.admissionId, firstAdmissionId);
+    assert.equal(mutationCalls[1]?.variables.input.bodyText, '첫 번째 인용 편집');
+
+    await act(async () =>
+      mutationCalls[1]?.onCompleted({ createPost: { post: { id: 'quote-created' } } }),
+    );
+    assert.equal(targetProps?.body, '');
+
+    await act(async () => targetProps?.onBodyChange('두 번째 인용'));
+    await act(async () => targetProps?.onSubmit());
+    assert.match(
+      String(mutationCalls[2]?.variables.input.admissionId),
+      /^\d+:22222222-2222-4222-8222-222222222222$/,
+    );
+    assert.notEqual(mutationCalls[2]?.variables.input.admissionId, firstAdmissionId);
+  });
+
+  it('shows Quote result uncertainty when no post is confirmed and preserves the draft', async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposer, {
+          onRequestClose: () => undefined,
+          presentation: 'overlay',
+          profile: profileA as never,
+          repostSourceId: 'post-source',
+        }),
+      );
+    });
+
+    await act(async () => targetProps?.onBodyChange('확인할 수 없는 인용'));
+    await act(async () => targetProps?.onSubmit());
+    await act(async () => mutationCalls[0]?.onCompleted(null));
+
+    assert.equal(targetProps?.body, '확인할 수 없는 인용');
+    assert.deepEqual(toastCalls[0], [
+      '인용 게시 결과를 확인하지 못했습니다. 같은 내용으로 다시 시도해 주세요.',
+      { tone: 'danger' },
+    ]);
+  });
+
+  it('starts a new Quote admission after the composer is unmounted', async () => {
+    const props = {
+      onRequestClose: () => undefined,
+      presentation: 'overlay' as const,
+      profile: profileA as never,
+      repostSourceId: 'post-source',
+    };
+    await act(async () => {
+      renderer = create(createElement(PostComposer, props));
+    });
+    await act(async () => targetProps?.onBodyChange('닫힌 인용'));
+    await act(async () => targetProps?.onSubmit());
+    const firstAdmissionId = mutationCalls[0]?.variables.input.admissionId;
+    await act(async () => mutationCalls[0]?.onError(new Error('timeout')));
+
+    await act(async () => renderer?.unmount());
+    renderer = null;
+    await act(async () => {
+      renderer = create(createElement(PostComposer, props));
+    });
+    await act(async () => targetProps?.onBodyChange('새 인용'));
+    await act(async () => targetProps?.onSubmit());
+
+    assert.match(
+      String(mutationCalls[1]?.variables.input.admissionId),
+      /^\d+:22222222-2222-4222-8222-222222222222$/,
+    );
+    assert.notEqual(mutationCalls[1]?.variables.input.admissionId, firstAdmissionId);
+  });
+
+  it('shows a definite Quote admission conflict for an explicit server validation error', async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposer, {
+          onRequestClose: () => undefined,
+          presentation: 'overlay',
+          profile: profileA as never,
+          repostSourceId: 'post-source',
+        }),
+      );
+    });
+
+    await act(async () => targetProps?.onBodyChange('내용이 달라진 인용'));
+    await act(async () => targetProps?.onSubmit());
+    const admissionId = mutationCalls[0]?.variables.input.admissionId;
+    await act(async () =>
+      mutationCalls[0]?.onCompleted(null, [
+        {
+          extensions: { code: 'CONFLICT', field: 'admissionId' },
+          message: 'Quote admission payload does not match its original submission',
+        },
+      ]),
+    );
+
+    assert.equal(targetProps?.body, '내용이 달라진 인용');
+    assert.deepEqual(toastCalls[0], [
+      '인용 게시 시도가 만료되었거나 내용이 바뀌어 다시 게시할 수 없습니다. 현재 인용을 폐기하고 새로 작성해 주세요.',
+      { tone: 'danger' },
+    ]);
+    await act(async () => targetProps?.onSubmit());
+    assert.equal(mutationCalls[1]?.variables.input.admissionId, admissionId);
+  });
+  it('keeps a confirmed Source rejection distinct from an uncertain Quote result', async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposer, {
+          profile: profileA as never,
+          repostSourceId: 'post-source',
+        }),
+      );
+    });
+    await act(async () => targetProps?.onBodyChange('확정 거절'));
+    await act(async () => targetProps?.onSubmit());
+    const admissionId = mutationCalls[0]?.variables.input.admissionId;
+    await act(async () =>
+      mutationCalls[0]?.onCompleted(null, [
+        {
+          message: 'Post not found',
+          extensions: { code: 'NOT_FOUND' },
+        },
+      ]),
+    );
+    assert.deepEqual(toastCalls[0], [
+      '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+      { tone: 'danger' },
+    ]);
+    assert.equal(targetProps?.body, '확정 거절');
+    await act(async () => targetProps?.onSubmit());
+    assert.equal(mutationCalls[1]?.variables.input.admissionId, admissionId);
   });
 });
 
@@ -815,6 +1000,7 @@ describe('PostComposer local author', () => {
     assert.equal(mutationCalls[0]?.variables.input.bodyText, '본문 @alice');
     assert.equal(mutationCalls[0]?.variables.input.visibility, 'DIRECT');
     assert.equal(mutationCalls[0]?.variables.input.mentions, undefined);
+    assert.equal(mutationCalls[0]?.variables.input.admissionId, undefined);
   });
 
   it('restores the original author only after a successful post', async () => {

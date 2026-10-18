@@ -4780,11 +4780,37 @@ export const QuoteComposerListIntegration: Story = {
         input: expect.objectContaining({
           bodyText: '실제 메뉴에서 작성한 인용입니다.',
           repostSourceId: shortPost.id,
+          admissionId: expect.stringMatching(/^\d+:[0-9a-f-]{36}$/),
         }),
       }),
     );
-    expect(trigger).toHaveFocus();
+    const firstAdmissionId = (
+      quoteMutationRequestObserver.mock.calls[0]?.[1] as
+        | { input?: { admissionId?: string } }
+        | undefined
+    )?.input?.admissionId;
     expect(await screen.findByRole('alert')).toHaveTextContent('인용 게시글을 게시했어요');
+    await userEvent.click(trigger);
+    await userEvent.click(
+      within(await screen.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
+        name: '인용하기',
+      }),
+    );
+    const nextDialog = await screen.findByRole('dialog', { name: '인용 게시글 쓰기' });
+    await userEvent.type(
+      within(nextDialog).getByRole('textbox', { name: '인용 게시글 본문' }),
+      '다음 인용입니다.',
+    );
+    await userEvent.click(within(nextDialog).getByRole('button', { name: '인용 게시' }));
+    await waitFor(() => expect(quoteMutationRequestObserver).toHaveBeenCalledTimes(2));
+    const secondAdmissionId = (
+      quoteMutationRequestObserver.mock.calls[1]?.[1] as
+        | { input?: { admissionId?: string } }
+        | undefined
+    )?.input?.admissionId;
+    expect(secondAdmissionId).toMatch(/^\d+:[0-9a-f-]{36}$/);
+    expect(secondAdmissionId).not.toBe(firstAdmissionId);
+    expect(trigger).toHaveFocus();
   },
   render: () => <QuoteListSurfaceStory />,
 };
@@ -8334,7 +8360,7 @@ export const QuoteModalFailureLifecycle: Story = {
     await userEvent.click(within(dialog).getByRole('button', { name: '인용 게시' }));
 
     await expect(within(dialog).findByRole('alert')).resolves.toHaveTextContent(
-      '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+      '인용 게시 결과를 확인하지 못했습니다. 같은 내용으로 다시 시도해 주세요.',
     );
     expect(quoteMutationRequestObserver).toHaveBeenCalledTimes(1);
     expect(quoteMutationRequestObserver).toHaveBeenNthCalledWith(
@@ -8344,9 +8370,16 @@ export const QuoteModalFailureLifecycle: Story = {
         input: expect.objectContaining({
           repostSourceId: shortPost.id,
           visibility: 'FOLLOWERS',
+          admissionId: expect.stringMatching(/^\d+:[0-9a-f-]{36}$/),
         }),
       }),
     );
+    const firstAdmissionId = (
+      quoteMutationRequestObserver.mock.calls[0]?.[1] as
+        | { input?: { admissionId?: string } }
+        | undefined
+    )?.input?.admissionId;
+    expect(firstAdmissionId).toMatch(/^\d+:[0-9a-f-]{36}$/);
     expect(body).toHaveValue('실패 뒤 유지할 인용\n둘째 줄\n셋째 줄');
     expect(source).toBeVisible();
     expect(within(source).getByText('짧은 본문 한 줄.')).toBeVisible();
@@ -8361,11 +8394,12 @@ export const QuoteModalFailureLifecycle: Story = {
         input: expect.objectContaining({
           repostSourceId: shortPost.id,
           visibility: 'FOLLOWERS',
+          admissionId: firstAdmissionId,
         }),
       }),
     );
     expect(within(dialog).getByRole('alert')).toHaveTextContent(
-      '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+      '인용 게시 결과를 확인하지 못했습니다. 같은 내용으로 다시 시도해 주세요.',
     );
     expect(body).toHaveValue('실패 뒤 유지할 인용\n둘째 줄\n셋째 줄');
     expect(within(dialog).getByRole('button', { name: '공개 범위: 팔로워만' })).toBeVisible();
@@ -8416,7 +8450,7 @@ export const QuoteModalNullFailureLifecycle: Story = {
     await userEvent.click(within(dialog).getByRole('button', { name: '인용 게시' }));
 
     await expect(within(dialog).findByRole('alert')).resolves.toHaveTextContent(
-      '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+      '인용 게시 결과를 확인하지 못했습니다. 같은 내용으로 다시 시도해 주세요.',
     );
     expect(quoteMutationRequestObserver).toHaveBeenCalledTimes(1);
     expect(body).toHaveValue('null 응답 뒤 유지할 인용');
@@ -8427,7 +8461,7 @@ export const QuoteModalNullFailureLifecycle: Story = {
     await userEvent.click(retry);
     await waitFor(() => expect(quoteMutationRequestObserver).toHaveBeenCalledTimes(2));
     expect(screen.getByRole('alert')).toHaveTextContent(
-      '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+      '인용 게시 결과를 확인하지 못했습니다. 같은 내용으로 다시 시도해 주세요.',
     );
     expect(body).toHaveValue('null 응답 뒤 유지할 인용');
     expect(source).toBeVisible();

@@ -736,6 +736,33 @@ describe('Post Reply GraphQL 경계', () => {
     assert.equal((await db.select().from(Posts)).length, 1);
   });
 
+  test('Quote admission은 같은 결과를 회수하고 변경된 입력과 작성 Profile을 거절한다', async () => {
+    const auth = await createAuthenticatedSession();
+    const other = await createAuthenticatedSession();
+    const source = await createContentfulPost(auth.profile.id, { bodyText: 'stable source' });
+    const input = {
+      admissionId: `${Date.now()}:${crypto.randomUUID()}`,
+      bodyText: 'stable quote',
+      repostSourceId: encodeGlobalId('Post', source.id),
+      visibility: PostVisibility.PUBLIC,
+    };
+    const first = await requestCreatePost(input, auth.token);
+    const retry = await requestCreatePost(input, auth.token);
+    assertNoGraphQLErrors(first);
+    assertNoGraphQLErrors(retry);
+    assert.equal(first.data?.createPost.post.id, retry.data?.createPost.post.id);
+    assert.equal(await db.$count(Posts, eq(Posts.repostSourceId, source.id)), 1);
+    for (const [payload, token] of [
+      [{ ...input, bodyText: 'changed quote' }, auth.token],
+      [input, other.token],
+    ] as const) {
+      const denied = await requestCreatePost(payload, token);
+      assert.equal(denied.errors?.[0]?.extensions?.code, 'VALIDATION');
+      assert.equal(denied.errors?.[0]?.extensions?.field, 'admissionId');
+    }
+    assert.equal(await db.$count(Posts, eq(Posts.repostSourceId, source.id)), 1);
+  });
+
   test('repostSourceId는 기존 CreatePost mutation으로 자체 Content와 Source를 함께 저장하고 다시 조회한다', async () => {
     const auth = await createAuthenticatedSession();
     const sourceAuthor = await createProfile('quote-source-author');
@@ -764,6 +791,7 @@ describe('Post Reply GraphQL 경계', () => {
       {
         input: {
           bodyText: '인용 본문',
+          admissionId: `${Date.now()}:${crypto.randomUUID()}`,
           repostSourceId: encodeGlobalId('Post', source.id),
           visibility: PostVisibility.UNLISTED,
         },
@@ -2267,6 +2295,7 @@ const requestGraphQL = async <TData>(
 
 const requestCreatePost = (
   input: {
+    admissionId?: string;
     bodyText: string;
     contentWarning?: string | null;
     media?: Array<{ altText: string | null; mediaId: string }>;
@@ -2287,7 +2316,11 @@ const requestCreatePost = (
         post { __typename id state visibility }
       }
     }`,
-    { input },
+    {
+      input: input.repostSourceId
+        ? { admissionId: `${Date.now()}:${crypto.randomUUID()}`, ...input }
+        : input,
+    },
     token,
   );
 

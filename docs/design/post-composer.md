@@ -139,8 +139,13 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   같은 위치에 `업로드 실패` 상태와 재시도·제거 action을 남긴다. 상세 문구를 inline으로 중복하지 않는다.
 - 제출 중에는 button에 spinner와 `게시 중` 상태를 표시하고 본문·Content Warning·Visibility의 중복 변경과
   닫기를 막는다.
-- 게시 mutation의 network·GraphQL·미생성 실패는 공용 Danger Toast로 표시하고 작성 내용과 재시도 가능한
-  `게시` action을 유지한다. Media 업로드는 상세 원인을 공용 Danger Toast로 알리되 실패한 항목의 상태와
+- 일반 Post와 Reply의 게시 mutation network·GraphQL·미생성 실패는 공용 Danger Toast로 표시하고 작성 내용과
+  재시도 가능한 `게시` action을 유지한다. Quote는 network·timeout·post 미확인 응답에서 결과 미확인 문구를
+  표시하고 같은 draft를 유지해 사용자가 재시도할 수 있게 한다. Quote 작성 시도는 첫 제출에서 시작하며,
+  본문·Profile·Source·Media를 편집해도 진행 중인 시도를 바꾸지 않는다. 확인된 성공·명시적 폐기·새 draft에서만
+  새 시도를 시작한다. 서버가 시도 만료나 payload 불일치를 명시적으로 거부하면 결과 미확인 상태로 안내하지 않고
+  현재 Quote를 폐기해
+  새로 작성하도록 안내한다. Media 업로드는 상세 원인을 공용 Danger Toast로 알리되 실패한 항목의 상태와
   복구 action을 해당 위치에 유지한다.
 
 ## 공통 Visibility
@@ -209,6 +214,9 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   같은 close 요청으로 처리한다. dirty 상태에서는 확인 뒤 닫거나 Parent를 전환하고, Reply 제출 pending
   상태에서는 현재 작성과 active Parent를 유지한다.
 - 제출 실패 시 열린 modal·fullscreen surface, direct Parent 맥락, 본문, Content Warning, Visibility와 Media 작성 상태를 유지한다.
+  Quote의 결과 미확인 상태에서는 같은 작성 시도로 재시도할 수 있으며, 확인된 성공 뒤에만 다음 draft가 새
+  작성 시도를 만든다. 서버가 시도 만료나 payload 불일치를 명시적으로 거부한 경우에는 현재 draft와 작성
+  시도를 보존한 채 새 Quote 작성이 필요하다고 안내한다.
 - selected Profile, direct Parent 또는 Relay Environment가 바뀌면 새 문맥의 첫 Composer commit부터 본문,
   Content Warning, Visibility, Media, error와 pending을 초기 상태로 시작한다. Content
   Warning은 새 direct Parent 값에서 다시 한 번 초기화하며, 이전 Parent에서 수정한 값을 이어받지 않는다. 이전
@@ -297,6 +305,10 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   편집·삭제·제출과 일반 Post·Quote 빈 초기값을 확인한다.
 - 일반 Post와 Reply의 Content Warning 입력·제출, Parent Content Warning 초기값, 수정·제거, 합산 500자 검증과
   Reply-open discard/reset/error 유지 상태를 확인한다.
+- Quote 첫 제출이 하나의 작성 시도를 만들고, 결과 미확인 뒤 재시도에서 같은 시도를 유지하는지, 성공 뒤
+  다음 draft가 새 시도를 시작하는지 실행으로 확인한다. 일반 Post/Reply의 기존 제출 동작도 유지해야 한다.
+  Quote network·timeout·미생성 응답은 결과 미확인 문구를 표시하고 draft를 유지하며, 서버가 시도 만료나
+  payload 불일치를 명시적으로 거부하면 명확한 재작성 안내를 표시해야 한다.
 - Home, Profile, Thread와 Reply Parent preview에서 같은 `Post.id`의 reveal·다시 가리기 상태가 공유되고 surface
   remount로 초기화되지 않으며, 서로 다른 Post와 Sensitive Media 상태는 독립적인지 확인한다.
 - 모든 지원 Reply surface에서 이미지 선택·업로드·미리보기·제거·재시도, Alt Text, Sensitive Media와

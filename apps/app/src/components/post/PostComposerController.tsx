@@ -15,6 +15,7 @@ import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary'
 import { spacing } from '@/theme/tokens';
 import { ComposerMediaEditor } from './ComposerMediaEditor';
 import { MobileFullscreenComposerShellCandidate, PostComposer } from './PostComposer';
+import { createPostComposerAdmissionId } from './postComposerAdmission';
 import {
   emptyPostComposerMediaValue,
   PostComposerMediaControls,
@@ -53,6 +54,31 @@ type Visibility = PostComposerVisibility;
 export type PostComposerCreatedPost = Readonly<{ id: string }>;
 
 const submitFailureMessage = '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.';
+const quoteSubmitUncertainMessage =
+  '인용 게시 결과를 확인하지 못했습니다. 같은 내용으로 다시 시도해 주세요.';
+const quoteAdmissionConflictMessage =
+  '인용 게시 시도가 만료되었거나 내용이 바뀌어 다시 게시할 수 없습니다. 현재 인용을 폐기하고 새로 작성해 주세요.';
+
+type PostComposerMutationError = Readonly<{
+  message: string;
+  extensions?: Readonly<{
+    code?: unknown;
+    field?: unknown;
+  }>;
+}>;
+
+const hasQuoteAdmissionError = (
+  errors: readonly PostComposerMutationError[] | null | undefined,
+): boolean =>
+  Boolean(
+    errors?.some(({ extensions, message }) => {
+      const code = extensions?.code;
+      if (code !== 'VALIDATION' && code !== 'CONFLICT') {
+        return false;
+      }
+      return extensions?.field === 'admissionId' || /\badmission(?:\s+id|id)?\b/i.test(message);
+    }),
+  );
 
 const PostComposerFragment = graphql`
   fragment PostComposer_profile on Profile {
@@ -248,6 +274,8 @@ function PostComposerContents({
   const [selectedProfileKey, setSelectedProfileKey] = useState<PostComposerProfileRef | null>(null);
   const globalProfile = useFragment(PostComposerFragment, profileKey);
   const profile = useFragment(PostComposerFragment, selectedProfileKey ?? profileKey);
+  const replyMode = Boolean(replyParentId);
+  const quoteMode = Boolean(repostSourceId);
   const onSelectProfile = useCallback((_id: string, profileRef: PostComposerProfileRef) => {
     setSelectedProfileKey(profileRef);
   }, []);
@@ -351,10 +379,9 @@ function PostComposerContents({
   }, []);
   const [mediaGeneration, setMediaGeneration] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const quoteAdmissionIdRef = useRef<string | null>(null);
   const [commit] = useMutation<PostComposerCreatePostMutation>(CreatePostMutation);
   const { showToast } = useToast();
-  const replyMode = Boolean(replyParentId);
-  const quoteMode = Boolean(repostSourceId);
   const mountedRef = useRef(true);
   const { bodyText, mentions } = normalizePostComposerMentionDraft(body, mentionRanges);
   const contentWarningText = normalizePostContentPlainText(contentWarning);
@@ -425,12 +452,29 @@ function PostComposerContents({
     if (disabled) {
       return;
     }
+    const submissionAdmissionId = quoteMode
+      ? (quoteAdmissionIdRef.current ??= createPostComposerAdmissionId())
+      : undefined;
     setSubmitting(true);
     const submissionGeneration = contextGenerationRef.current;
     const submissionEnvironmentGeneration = environmentGenerationRef?.current;
     const submissionGuardGeneration = contextGuard?.current;
     const submittedCallback = onPostCreated;
     const submissionReplyMode = replyMode;
+    const input = {
+      ...createPostComposerMutationInput(
+        bodyText,
+        visibility,
+        replyParentId,
+        contentWarningText,
+        repostSourceId,
+        mentions,
+      ),
+      media: media.items,
+      ...(profile.id !== globalProfileId ? { actorProfileId: profile.id } : {}),
+      sensitiveMedia: media.sensitiveMedia,
+      ...(submissionAdmissionId ? { admissionId: submissionAdmissionId } : {}),
+    };
     commit({
       variables: {
         prependToHome: profile.id === globalProfileId,
@@ -438,21 +482,9 @@ function PostComposerContents({
           profile.id === globalProfileId
             ? [ConnectionHandler.getConnectionID(ROOT_ID, 'PostList_homeTimeline')]
             : [],
-        input: {
-          ...createPostComposerMutationInput(
-            bodyText,
-            visibility,
-            replyParentId,
-            contentWarningText,
-            repostSourceId,
-            mentions,
-          ),
-          media: media.items,
-          ...(profile.id !== globalProfileId ? { actorProfileId: profile.id } : {}),
-          sensitiveMedia: media.sensitiveMedia,
-        },
+        input,
       },
-      onCompleted: (response) => {
+      onCompleted: (response, errors) => {
         if (
           !mountedRef.current ||
           contextGenerationRef.current !== submissionGeneration ||
@@ -464,7 +496,20 @@ function PostComposerContents({
         setSubmitting(false);
         const createdPost = response?.createPost?.post;
         if (!createdPost) {
-          showToast(submitFailureMessage, { tone: 'danger' });
+          showToast(
+            quoteMode
+              ? hasQuoteAdmissionError(errors)
+                ? quoteAdmissionConflictMessage
+                : errors?.some(({ extensions }) =>
+                      ['VALIDATION', 'NOT_FOUND', 'PERMISSION_DENIED', 'CONFLICT'].includes(
+                        String(extensions?.code),
+                      ),
+                    )
+                  ? submitFailureMessage
+                  : quoteSubmitUncertainMessage
+              : submitFailureMessage,
+            { tone: 'danger' },
+          );
           return;
         }
 
@@ -479,6 +524,9 @@ function PostComposerContents({
         }
         setMedia(emptyPostComposerMediaValue);
         setMediaGeneration((generation) => generation + 1);
+        if (quoteMode) {
+          quoteAdmissionIdRef.current = null;
+        }
         setSelectedProfileKey(null);
         setVisibility(
           resolvePostComposerVisibility(
@@ -499,7 +547,9 @@ function PostComposerContents({
           return;
         }
         setSubmitting(false);
-        showToast(submitFailureMessage, { tone: 'danger' });
+        showToast(quoteMode ? quoteSubmitUncertainMessage : submitFailureMessage, {
+          tone: 'danger',
+        });
       },
     });
   };
@@ -508,6 +558,7 @@ function PostComposerContents({
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      quoteAdmissionIdRef.current = null;
     };
   }, []);
 

@@ -26,6 +26,7 @@ import type * as CoreSeed from '@kosmo/core/db/seed';
 import type { RemoteProfileLookupInput } from '@kosmo/core/temporal/workflows';
 import type * as FederationModule from './federation';
 import type * as InboundFollow from './inbound-follow';
+import type * as Materialization from './remote-actor-materialization';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
@@ -47,6 +48,7 @@ let federation: typeof FederationModule.federation;
 let createKosmoFederation: typeof FederationModule.createKosmoFederation;
 let handleInboundFollow: typeof InboundFollow.handleInboundFollow;
 let handleInboundUndo: typeof InboundFollow.handleInboundUndo;
+let RemoteActorDiscoveryUnavailableError: typeof Materialization.RemoteActorDiscoveryUnavailableError;
 let localInstanceId: string;
 
 describe('inbound Follow and Undo', () => {
@@ -68,6 +70,7 @@ describe('inbound Follow and Undo', () => {
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
     ({ handleInboundFollow, handleInboundUndo } = await import('./inbound-follow'));
     ({ createKosmoFederation, federation } = await import('./federation'));
+    ({ RemoteActorDiscoveryUnavailableError } = await import('./remote-actor-materialization'));
     const { localInstance } = await seedDatabase({ publicOrigin });
     localInstanceId = localInstance.id;
   });
@@ -795,7 +798,7 @@ describe('inbound Follow and Undo', () => {
     assert.equal((await db.select().from(ProfileFollows)).length, 0);
   });
 
-  test('propagates a retryable URI Workflow failure unchanged', async () => {
+  test('wraps a retryable URI Workflow failure with its original cause', async () => {
     await createFixture();
     const unknownActorUri = new URL('https://unknown.example/users/mallory');
     const follow = new Follow({ actor: unknownActorUri, object: localActorUri });
@@ -830,7 +833,11 @@ describe('inbound Follow and Undo', () => {
     try {
       await assert.rejects(
         handleInboundFollow(createContext({ recipient: localProfileId }), follow, receivedAt),
-        (error: unknown) => error === lookupFailure,
+        (error: unknown) => {
+          assert.ok(error instanceof RemoteActorDiscoveryUnavailableError);
+          assert.equal(error.cause, lookupFailure);
+          return true;
+        },
       );
     } finally {
       lookupWorkflow.mock.restore();

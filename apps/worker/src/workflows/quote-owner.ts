@@ -73,6 +73,7 @@ const schema = z.discriminatedUnion('kind', [
   z.strictObject({
     ...base,
     kind: z.literal('INITIALIZE'),
+    initialContentId: z.uuid().optional(),
     input: z.strictObject({
       origin: z.literal('LOCAL'),
       profileId: z.uuid(),
