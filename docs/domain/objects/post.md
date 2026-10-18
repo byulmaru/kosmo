@@ -410,10 +410,9 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
 ### ActivityPub Profile Featured collection
 
 - Local ActivityPub Profile은 자신의 canonical 표현에 `featured` URI를 광고한다. Featured collection은
-  ordered 0..N projection이며 기존 Local Note projection과 Note 역참조 authorization을 재사용한다. 현재 Local
-  first-party UI는 server-authoritative order의 첫 visible pinned Post만 렌더하지만, API·저장 관계는 이 cardinality에 고정되지 않는다.
-  새 pin은 기존 pin의 상대 순서를 보존한 한 위치에 저장하고, 관계 변경이 없으면 같은 order를 반환한다. 새 pin의 앞·뒤 배치와
-  별도 재정렬 UX는 현재 계약에서 고정하지 않는다.
+  ordered 0..N projection이며 기존 Local Note projection과 Note 역참조 authorization을 재사용한다. Local first-party UI는
+  server-authoritative 순서로 조회 가능한 고정 Post 전체를 표시하고, Remote는 검증된 Featured collection을 원격 순서로 표시한다.
+  새 pin은 기존 pin의 상대 순서를 보존해 추가한다. 새 pin의 앞·뒤 배치와 별도 재정렬 UX는 현재 계약에서 고정하지 않는다.
 - Public와 Unlisted Post는 공개 Featured collection과 Note 역참조에서 제공한다. Followers Only Post는 Author 또는
   established Follower의 signed fetch에서만 collection membership과 Note를 제공하며, 인증되지 않은 요청·비팔로워
   요청·Mentioned Profiles Post(ActivityPub Direct projection)는 제공하지 않는다. Post의 존재나 private membership을 URI, count 또는 빈 collection 외의 오류로

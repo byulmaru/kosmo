@@ -292,13 +292,12 @@ document apply가 성공하면 수신 시각으로 freshness를 갱신하며 Unr
 
 ### Profile 고정 Post
 
-- Profile의 고정 Post 관계와 API projection은 ordered 0..N collection이다. 현재 Local first-party UI는 server-authoritative
-  order의 첫 visible pinned Post만 pinned segment에서 렌더·관리하고, Remote는 검증된 Featured collection 전체를 pinned
-  segment에 표시한다. 이 별도 pinned segment는 기존 Profile chronology의 후보·순서·pagination을 바꾸지 않으며, 기존
-  chronology에도 포함되는 Post는 pinned segment와 원래 위치에 모두 표시될 수 있다. Home·Local·Hashtag 목록에는 pinned
-  ordering을 적용하지 않는다.
-- 현재 Local first-party UI에서 첫 visible pin만 pinned segment와 고정 표시를 사용한다. 나머지 Local pin은 pinned
-  presentation을 추가하지 않으며, 각 Post는 pin 관계와 무관하게 기존 Profile chronology 정책을 그대로 적용받는다.
+- Profile의 고정 Post 관계와 API projection은 ordered 0..N collection이다. Local first-party UI는 server-authoritative
+  순서로 조회 가능한 고정 Post 전체를 pinned segment에서 표시하고 개별 관리한다. Remote는 검증된 Featured collection
+  전체를 원격 순서로 표시한다. 기존 ordered 0..N 관계와 일치하는 다중 고정이 더 단순하다. 단일 고정으로 제한하면 별도의
+  교체 규칙과 그에 따른 부분 실패 처리가 필요하다. 이 별도 pinned segment는 기존 Profile chronology의 후보·순서·pagination을
+  바꾸지 않으며, chronology에도 포함되는 Post는 pinned segment와 원래 위치에 모두 표시될 수 있다. Home·Local·Hashtag
+  목록에는 pinned ordering을 적용하지 않는다.
 - 기존 Profile/Post visibility, lifecycle, block/domain 정책으로 조회할 수 없는 Profile 또는 Post는 pinned segment와
   pinned count에서 숨긴다. Profile이 unavailable이면 기존 Profile mutation 권한·상태 규칙을 적용하고, Post가 Tombstone,
   unavailable, author 또는 visibility 자격을 잃은 경우 해당 관계를 제품상 visible pin으로 간주하지 않아 새 pin을 막지

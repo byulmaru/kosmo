@@ -7,7 +7,13 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { graphql, usePaginationFragment } from 'react-relay';
+import {
+  graphql,
+  usePaginationFragment,
+  useRelayEnvironment,
+  useSubscribeToInvalidationState,
+} from 'react-relay';
+import { ConnectionHandler, fetchQuery } from 'relay-runtime';
 import { InfiniteList } from '@/components/pagination/InfiniteList';
 import { getShellLayout } from '@/components/shell/shellLayout';
 import { Button } from '@/components/ui/Button';
@@ -39,9 +45,6 @@ const PostListProfileFragment = graphql`
   @argumentDefinitions(count: { type: "Int", defaultValue: 20 }, cursor: { type: "String" })
   @refetchable(queryName: "PostListProfileNextPageQuery") {
     id
-    instance {
-      kind
-    }
     posts(first: $count, after: $cursor) @connection(key: "PostList_profile__posts") {
       edges {
         cursor
@@ -70,6 +73,18 @@ const PostListProfilePinnedFragment = graphql`
     }
   }
 `;
+
+const PostListProfilePinnedRefreshQuery = graphql`
+  query PostListProfilePinnedRefreshQuery($id: ID!, $count: Int!, $cursor: String) {
+    node(id: $id) {
+      ... on Profile {
+        ...PostList_profile_pinned @arguments(count: $count, cursor: $cursor) @alias(as: "profile")
+      }
+    }
+  }
+`;
+
+const profilePinnedPostsConnectionKey = 'PostList_profile__pinnedPosts';
 
 const PostListHomeFragment = graphql`
   fragment PostList_home on Query
@@ -157,8 +172,63 @@ export function PostList({
   const profile = profilePagination.data;
   const pinnedProfile = profilePinnedPagination.data;
   const pinnedEdges = (pinnedProfile?.pinnedPosts.edges ?? []).filter((edge) => edge.node != null);
-  const profileIsLocal = profile?.instance.kind === 'LOCAL';
-  const visiblePinnedEdges = profileIsLocal ? pinnedEdges.slice(0, 1) : pinnedEdges;
+  const pinnedProfileId = pinnedProfile?.id;
+  const pinnedConnectionId = pinnedProfileId
+    ? ConnectionHandler.getConnectionID(pinnedProfileId, profilePinnedPostsConnectionKey)
+    : null;
+  const loadedPinnedCount = Math.max(20, pinnedProfile?.pinnedPosts.edges.length ?? 0);
+  const environment = useRelayEnvironment();
+  const [pinnedRefreshFailed, setPinnedRefreshFailed] = useState(false);
+  const [pinnedRefreshRequested, setPinnedRefreshRequested] = useState(false);
+  const [pinnedRefreshInProgress, setPinnedRefreshInProgress] = useState(false);
+  const refreshPinnedPosts = useCallback(() => {
+    if (!pinnedConnectionId) {
+      return;
+    }
+    setPinnedRefreshFailed(false);
+    setPinnedRefreshRequested(true);
+  }, [pinnedConnectionId]);
+  // Query the existing connection without changing its fragment owner. Relay 21
+  // dedupes identical in-flight requests, so retain one follow-up for invalidations
+  // that arrive while this canonical refresh is still pending.
+  useEffect(() => {
+    if (!pinnedConnectionId || !pinnedRefreshRequested || pinnedRefreshInProgress) {
+      return;
+    }
+    setPinnedRefreshRequested(false);
+    setPinnedRefreshInProgress(true);
+    try {
+      fetchQuery(
+        environment,
+        PostListProfilePinnedRefreshQuery,
+        { count: loadedPinnedCount, cursor: null, id: pinnedProfileId! },
+        { fetchPolicy: 'network-only' },
+      ).subscribe({
+        complete: () => {
+          setPinnedRefreshInProgress(false);
+          setPinnedRefreshFailed(false);
+        },
+        error: () => {
+          setPinnedRefreshInProgress(false);
+          setPinnedRefreshFailed(true);
+        },
+      });
+    } catch {
+      setPinnedRefreshInProgress(false);
+      setPinnedRefreshFailed(true);
+    }
+  }, [
+    environment,
+    loadedPinnedCount,
+    pinnedConnectionId,
+    pinnedProfileId,
+    pinnedRefreshInProgress,
+    pinnedRefreshRequested,
+  ]);
+  useSubscribeToInvalidationState(
+    pinnedConnectionId ? [pinnedConnectionId] : [],
+    refreshPinnedPosts,
+  );
   const connection = isHome ? home?.homeTimeline : isLocal ? local?.localTimeline : profile?.posts;
   const edges = connection?.edges ?? [];
   // A successful delete can remove the node record before Relay prunes an
@@ -248,19 +318,21 @@ export function PostList({
           >
             {profileKey ? (
               <ProfilePinnedPostList
-                data={visiblePinnedEdges}
-                hasNext={!profileIsLocal && profilePinnedPagination.hasNext}
+                data={pinnedEdges}
+                hasNext={profilePinnedPagination.hasNext}
                 isLoadingNext={profilePinnedPagination.isLoadingNext}
                 loadNext={loadPinnedNext}
+                onRefresh={refreshPinnedPosts}
                 onProfileUnpinned={() => listRef.current?.focus()}
                 presentation={postListPresentation}
+                refreshFailed={
+                  pinnedRefreshFailed && !pinnedRefreshRequested && !pinnedRefreshInProgress
+                }
               />
             ) : null}
             <InfiniteList
               data={visibleEdges}
-              empty={
-                visibleEdges.length === 0 && visiblePinnedEdges.length === 0 ? emptyState : null
-              }
+              empty={visibleEdges.length === 0 && pinnedEdges.length === 0 ? emptyState : null}
               hasNext={hasNext}
               isLoadingNext={isLoadingNext}
               key={listIdentityKey}
@@ -301,8 +373,10 @@ type ProfilePinnedPostListProps = Readonly<{
   hasNext: boolean;
   isLoadingNext: boolean;
   loadNext: LoadNext;
+  onRefresh: () => void;
   onProfileUnpinned: () => void;
   presentation: PostListPresentation;
+  refreshFailed: boolean;
 }>;
 
 function ProfilePinnedPostList({
@@ -310,8 +384,10 @@ function ProfilePinnedPostList({
   hasNext,
   isLoadingNext,
   loadNext,
+  onRefresh,
   onProfileUnpinned,
   presentation,
+  refreshFailed,
 }: ProfilePinnedPostListProps) {
   const [loadError, setLoadError] = useState(false);
   const handleLoadNext = useCallback(() => {
@@ -346,6 +422,18 @@ function ProfilePinnedPostList({
             tone="secondary"
           >
             {loadError ? '다시 시도' : '고정된 게시글 더 보기'}
+          </Button>
+        </View>
+      ) : null}
+      {refreshFailed ? (
+        <View style={styles.pinnedPagination}>
+          <Button
+            accessibilityLabel="고정된 게시글 새로고침 다시 시도"
+            onPress={onRefresh}
+            size="compact"
+            tone="secondary"
+          >
+            고정된 게시글 다시 시도
           </Button>
         </View>
       ) : null}

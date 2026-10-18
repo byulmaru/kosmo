@@ -1,39 +1,72 @@
 import { Pin } from 'lucide-react-native';
 import { useCallback, useRef, useState } from 'react';
-import { graphql, useFragment } from 'react-relay';
+import { graphql, useMutation, useRefetchableFragment } from 'react-relay';
+import { ConnectionHandler } from 'relay-runtime';
 import { ConfirmationContent } from '@/components/ui/ConfirmationContent';
 import { ModalSheet } from '@/components/ui/ModalSheet';
+import { useToast } from '@/components/ui/ToastProvider';
 import { useSession } from '@/session/SessionProvider';
-import { useProfilePin } from './ProfilePinProvider';
 import type { ReactNode } from 'react';
 import type { View } from 'react-native';
 import type { ActionMenuItem } from '@/components/ui/ActionMenu';
 import type { ProfilePinAction_post$key } from './__generated__/ProfilePinAction_post.graphql';
+import type { ProfilePinActionPinMutation } from './__generated__/ProfilePinActionPinMutation.graphql';
+import type { ProfilePinActionRefetchQuery } from './__generated__/ProfilePinActionRefetchQuery.graphql';
+import type { ProfilePinActionUnpinMutation } from './__generated__/ProfilePinActionUnpinMutation.graphql';
 
 const profilePinFragment = graphql`
-  fragment ProfilePinAction_post on Post {
+  fragment ProfilePinAction_post on Post @refetchable(queryName: "ProfilePinActionRefetchQuery") {
     id
+    isPinned @catch(to: RESULT)
     state
     visibility
     content {
       id
     }
-    repostSource {
-      id
-    }
     profile {
       id
+      relativeHandle
       instance {
         kind
       }
     }
   }
 `;
-type ProfilePinOperation = 'pin' | 'replace' | 'unpin';
-type SelectedProfilePinOperation = Readonly<{
-  existingPostId: string | null;
-  operation: ProfilePinOperation;
-}>;
+
+const pinMutation = graphql`
+  mutation ProfilePinActionPinMutation($postId: ID!) {
+    pinProfilePost(input: { postId: $postId }) {
+      changed
+      profile {
+        id
+      }
+      post {
+        id
+        isPinned
+      }
+    }
+  }
+`;
+
+const unpinMutation = graphql`
+  mutation ProfilePinActionUnpinMutation($postId: ID!) {
+    unpinProfilePost(input: { postId: $postId }) {
+      changed
+      profile {
+        id
+      }
+      post {
+        id
+        isPinned
+      }
+    }
+  }
+`;
+
+const pinnedPostsConnectionKey = 'PostList_profile__pinnedPosts';
+const failureMessage = '고정 상태를 변경하지 못했어요. 다시 시도해 주세요.';
+
+type Operation = 'pin' | 'unpin';
 
 export function useProfilePinAction(
   postKey: ProfilePinAction_post$key,
@@ -44,18 +77,23 @@ export function useProfilePinAction(
   onMoreTriggerReady: (focus: () => void) => void;
   pending: boolean;
 }> {
-  const post = useFragment(profilePinFragment, postKey);
+  const [post, refetch] = useRefetchableFragment<
+    ProfilePinActionRefetchQuery,
+    ProfilePinAction_post$key
+  >(profilePinFragment, postKey);
   const { selectedProfileId } = useSession();
-  const { available, firstPinnedPostId, pending, queryFailed, request, retry } = useProfilePin();
-  const [selectedOperation, setSelectedOperation] = useState<SelectedProfilePinOperation | null>(
-    null,
-  );
+  const { showToast } = useToast();
+  const [commitPin, pinPending] = useMutation<ProfilePinActionPinMutation>(pinMutation);
+  const [commitUnpin, unpinPending] = useMutation<ProfilePinActionUnpinMutation>(unpinMutation);
+  const [selectedOperation, setSelectedOperation] = useState<Operation | null>(null);
   const [confirmationPhase, setConfirmationPhase] = useState<'open' | 'cancel' | 'confirm'>(
     'cancel',
   );
   const cancelRef = useRef<View>(null);
   const focusTriggerRef = useRef<() => void>(() => undefined);
-  const pinned = firstPinnedPostId === post.id;
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshFailed, setRefreshFailed] = useState(false);
+  const pending = pinPending || unpinPending;
   const ownEligible = Boolean(
     selectedProfileId === post.profile.id &&
     post.profile.instance.kind === 'LOCAL' &&
@@ -63,17 +101,39 @@ export function useProfilePinAction(
     post.content &&
     ['PUBLIC', 'UNLISTED', 'FOLLOWERS'].includes(post.visibility),
   );
-  const eligible = available && ownEligible;
-  const onSelect = useCallback(() => {
-    if (!eligible || pending || selectedOperation) {
+  const stateReadFailed = !post.isPinned.ok || post.isPinned.value == null || refreshFailed;
+  const pinned = post.isPinned.ok && post.isPinned.value === true;
+
+  const retry = useCallback(() => {
+    if (!ownEligible || refreshing) {
       return;
     }
-    setSelectedOperation({
-      existingPostId: pinned ? post.id : firstPinnedPostId,
-      operation: pinned ? 'unpin' : firstPinnedPostId ? 'replace' : 'pin',
-    });
+    setRefreshing(true);
+    setRefreshFailed(false);
+    try {
+      refetch(
+        {},
+        {
+          fetchPolicy: 'store-and-network',
+          onComplete: (error) => {
+            setRefreshing(false);
+            setRefreshFailed(Boolean(error));
+          },
+        },
+      );
+    } catch {
+      setRefreshing(false);
+      setRefreshFailed(true);
+    }
+  }, [ownEligible, refetch, refreshing]);
+
+  const onSelect = useCallback(() => {
+    if (!ownEligible || stateReadFailed || pending || selectedOperation) {
+      return;
+    }
+    setSelectedOperation(pinned ? 'unpin' : 'pin');
     setConfirmationPhase('open');
-  }, [eligible, firstPinnedPostId, pending, pinned, post.id, selectedOperation]);
+  }, [ownEligible, pending, pinned, selectedOperation, stateReadFailed]);
 
   const closeConfirmation = useCallback(() => {
     if (confirmationPhase === 'open') {
@@ -82,27 +142,73 @@ export function useProfilePinAction(
   }, [confirmationPhase]);
 
   const onDismiss = useCallback(() => {
-    const selection = selectedOperation;
+    const operation = selectedOperation;
     setSelectedOperation(null);
     focusTriggerRef.current();
-    if (!selection || confirmationPhase !== 'confirm' || pending || !eligible) {
+    if (!operation || confirmationPhase !== 'confirm' || pending || !ownEligible) {
       return;
     }
 
-    const { existingPostId, operation } = selection;
+    const relativeHandle = post.profile.relativeHandle;
+    const finishFailure = () => {
+      showToast(`${relativeHandle}의 ${failureMessage}`, { tone: 'danger' });
+    };
+    const variables = { postId: post.id };
+
     if (operation === 'unpin') {
-      request({ kind: 'unpin', onCompleted: onUnpinned, postId: post.id });
+      commitUnpin({
+        onCompleted: (response) => {
+          const result = response.unpinProfilePost;
+          if (typeof result?.changed !== 'boolean' || result.profile?.id !== selectedProfileId) {
+            finishFailure();
+            return;
+          }
+          onUnpinned?.();
+        },
+        onError: finishFailure,
+        updater: (store) => {
+          const connectionId = ConnectionHandler.getConnectionID(
+            post.profile.id,
+            pinnedPostsConnectionKey,
+          );
+          store.get(connectionId)?.invalidateRecord();
+        },
+        variables,
+      });
       return;
     }
-    if (operation === 'replace') {
-      if (!existingPostId) {
-        return;
-      }
-      request({ existingPostId, kind: 'replace', postId: post.id });
-      return;
-    }
-    request({ kind: 'pin', postId: post.id });
-  }, [confirmationPhase, eligible, pending, post.id, onUnpinned, request, selectedOperation]);
+
+    commitPin({
+      onCompleted: (response) => {
+        const result = response.pinProfilePost;
+        if (typeof result?.changed !== 'boolean' || result.profile?.id !== selectedProfileId) {
+          finishFailure();
+        }
+      },
+      onError: finishFailure,
+      updater: (store) => {
+        const connectionId = ConnectionHandler.getConnectionID(
+          post.profile.id,
+          pinnedPostsConnectionKey,
+        );
+        store.get(connectionId)?.invalidateRecord();
+      },
+      variables,
+    });
+  }, [
+    commitPin,
+    commitUnpin,
+    confirmationPhase,
+    onUnpinned,
+    ownEligible,
+    pending,
+    post.id,
+    post.profile.id,
+    post.profile.relativeHandle,
+    selectedOperation,
+    selectedProfileId,
+    showToast,
+  ]);
 
   const onMoreTriggerReady = useCallback((focus: () => void) => {
     focusTriggerRef.current = focus;
@@ -114,25 +220,17 @@ export function useProfilePinAction(
       onDismiss={onDismiss}
       onShow={() => cancelRef.current?.focus()}
       role="alertdialog"
-      title={
-        selectedOperation.operation === 'unpin'
-          ? '프로필 고정을 해제할까요?'
-          : selectedOperation.operation === 'replace'
-            ? '고정 게시글을 바꿀까요?'
-            : '프로필에 고정할까요?'
-      }
+      title={selectedOperation === 'unpin' ? '프로필 고정을 해제할까요?' : '프로필에 고정할까요?'}
       visible={confirmationPhase === 'open'}
     >
       <ConfirmationContent
         cancelLabel="취소"
         cancelRef={cancelRef}
-        confirmLabel={selectedOperation.operation === 'unpin' ? '고정 해제' : '고정'}
+        confirmLabel={selectedOperation === 'unpin' ? '고정 해제' : '고정'}
         message={
-          selectedOperation.operation === 'unpin'
+          selectedOperation === 'unpin'
             ? '프로필 상단에서 이 게시글을 제거해요. 게시글은 삭제되지 않아요.'
-            : selectedOperation.operation === 'replace'
-              ? '기존 고정을 해제하고 이 게시글을 고정해요.'
-              : '이 게시글을 프로필 상단에 표시해요. 게시글은 삭제되지 않아요.'
+            : '이 게시글을 프로필 상단에 표시해요. 게시글은 삭제되지 않아요.'
         }
         onCancel={closeConfirmation}
         onConfirm={() => {
@@ -144,21 +242,22 @@ export function useProfilePinAction(
     </ModalSheet>
   ) : null;
 
-  if (!eligible) {
-    if (queryFailed && ownEligible) {
-      return {
-        item: {
-          icon: Pin,
-          key: 'retry-profile-pin',
-          label: '고정 상태 다시 불러오기',
-          onSelect: retry,
-        },
-        confirmation,
-        onMoreTriggerReady,
-        pending: false,
-      };
-    }
+  if (!ownEligible) {
     return { confirmation, onMoreTriggerReady, pending: false };
+  }
+
+  if (stateReadFailed) {
+    return {
+      item: {
+        icon: Pin,
+        key: 'retry-profile-pin',
+        label: refreshing ? '고정 상태를 불러오는 중' : '고정 상태 다시 불러오기',
+        onSelect: retry,
+      },
+      confirmation,
+      onMoreTriggerReady,
+      pending: refreshing,
+    };
   }
 
   return {

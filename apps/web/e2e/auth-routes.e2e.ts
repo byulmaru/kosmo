@@ -909,11 +909,9 @@ test.describe('로그인 사용자 보호 라우트', () => {
 
     await page.route('**/graphql', async (route) => {
       const requestBody = route.request().postData();
-      const isProfilePinQuery = isGraphQLOperation(requestBody, 'ProfilePinProviderQuery');
       if (
         !isGraphQLOperation(requestBody, 'UniversalShellQuery') &&
-        !isGraphQLOperation(requestBody, 'HomePageQuery') &&
-        !isProfilePinQuery
+        !isGraphQLOperation(requestBody, 'HomePageQuery')
       ) {
         await route.continue();
         return;
@@ -941,16 +939,6 @@ test.describe('로그인 사용자 보호 라우트', () => {
           }
         }
         canonicalProfilePath = `/${selectedProfile.relativeHandle}`;
-      }
-
-      const profilePinNode = body.data?.node;
-      if (
-        isProfilePinQuery &&
-        profilePinNode?.__typename === 'Profile' &&
-        typeof profilePinNode.relativeHandle === 'string' &&
-        profilePinNode.relativeHandle.startsWith('@')
-      ) {
-        profilePinNode.relativeHandle = `${profilePinNode.relativeHandle}@remote.example`;
       }
 
       await route.fulfill({

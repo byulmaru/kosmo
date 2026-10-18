@@ -6,7 +6,6 @@ import { PostActionAuthenticationProvider } from '@/components/post/PostActionAu
 import { PostComposerCoordinatorProvider } from '@/components/post/PostComposerCoordinator';
 import { PostListItem } from '@/components/post/PostListItem';
 import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHost';
-import { ProfilePinProvider, useProfilePin } from '@/components/post/ProfilePinProvider';
 import { ActionMenuPresentationProvider } from '@/components/ui/ActionMenu';
 import { SessionProvider } from '@/session/SessionProvider';
 import { getCopiedStrings, resetClipboardMock } from '../../../.storybook/mocks/postClipboard';
@@ -18,7 +17,7 @@ import type { RequestParameters, Variables } from 'relay-runtime';
 import type { ProfilePinActionStoriesQuery as ProfilePinActionStoriesQueryType } from './__generated__/ProfilePinActionStoriesQuery.graphql';
 
 type Outcome = 'success' | 'error' | 'pending';
-type ProfilePinOperation = 'pin' | 'replace' | 'unpin';
+type ProfilePinOperation = 'pin' | 'unpin';
 
 type StoryArgs = {
   action: ProfilePinOperation;
@@ -36,6 +35,7 @@ const ProfilePinActionStoriesQuery = graphql`
       __typename
       ... on Post {
         id
+        isPinned
         profile {
           id
           instance {
@@ -56,56 +56,26 @@ const storyPost = {
   viewerReactions: [],
 };
 
-function storyPinnedPosts(isPinned: boolean) {
-  return {
-    edges: isPinned
-      ? [{ cursor: 'pin-cursor', node: { __typename: 'Post' as const, id: storyPost.id } }]
-      : [],
-    pageInfo: {
-      endCursor: isPinned ? 'pin-cursor' : null,
-      hasNextPage: false,
-      hasPreviousPage: false,
-      startCursor: isPinned ? 'pin-cursor' : null,
-    },
-  };
-}
-
-function storyPinnedPostsForAction(action: ProfilePinOperation) {
-  const pinnedPostId =
-    action === 'unpin' ? storyPost.id : action === 'replace' ? 'profile-pin-existing-post' : null;
-  return {
-    edges: pinnedPostId
-      ? [{ cursor: 'pin-cursor', node: { __typename: 'Post' as const, id: pinnedPostId } }]
-      : [],
-    pageInfo: {
-      endCursor: pinnedPostId ? 'pin-cursor' : null,
-      hasNextPage: false,
-      hasPreviousPage: false,
-      startCursor: pinnedPostId ? 'pin-cursor' : null,
-    },
-  };
-}
-
 function storyPostWithPinState(isPinned: boolean) {
   return {
     ...storyPost,
-    profile: {
-      ...storyPost.profile,
-      pinnedPosts: storyPinnedPosts(isPinned),
-    },
+    isPinned,
   };
 }
 
 function useStoryPost() {
   const data = useLazyLoadQuery<ProfilePinActionStoriesQueryType>(ProfilePinActionStoriesQuery, {});
   return data.node?.__typename === 'Post' && data.node.listItem
-    ? { post: data.node.listItem, profile: data.node.profile }
+    ? {
+        isPinned: data.node.isPinned === true,
+        post: data.node.listItem,
+        profile: data.node.profile,
+      }
     : null;
 }
 
 function Fixture({ presentation }: StoryArgs) {
   const postNode = useStoryPost();
-  const { firstPinnedPostId } = useProfilePin();
 
   if (!postNode) {
     return null;
@@ -113,72 +83,29 @@ function Fixture({ presentation }: StoryArgs) {
 
   return (
     <View style={styles.fixture}>
-      <PostListItem
-        pinned={firstPinnedPostId === storyPost.id}
-        post={postNode.post}
-        presentation={presentation}
-      />
+      <PostListItem pinned={postNode.isPinned} post={postNode.post} presentation={presentation} />
     </View>
   );
 }
 
 function createStoryData(action: ProfilePinOperation) {
-  return {
-    node: {
-      ...storyPost,
-      profile: {
-        ...storyPost.profile,
-        pinnedPosts: storyPinnedPostsForAction(action),
-      },
-    },
-  };
+  return { node: storyPostWithPinState(action === 'unpin') };
 }
 const deletionResponse = { deletePost: { postId: storyPost.id } };
 const pinResponse = {
   pinProfilePost: {
     changed: true,
-    profile: {
-      id: storyPost.profile.id,
-      pinnedPosts: {
-        edges: [{ cursor: 'pin-cursor', node: storyPostWithPinState(true) }],
-        pageInfo: {
-          endCursor: 'pin-cursor',
-          hasNextPage: false,
-          hasPreviousPage: false,
-          startCursor: 'pin-cursor',
-        },
-      },
-    },
+    profile: { __typename: 'Profile', id: storyPost.profile.id },
+    post: { __typename: 'Post', id: storyPost.id, isPinned: true },
   },
 };
 const unpinResponse = {
   unpinProfilePost: {
     changed: true,
-    profile: {
-      id: storyPost.profile.id,
-      pinnedPosts: {
-        edges: [],
-        pageInfo: {
-          endCursor: null,
-          hasNextPage: false,
-          hasPreviousPage: false,
-          startCursor: null,
-        },
-      },
-    },
+    profile: { __typename: 'Profile', id: storyPost.profile.id },
+    post: { __typename: 'Post', id: storyPost.id, isPinned: false },
   },
 };
-
-function profilePinQueryResponse(action: ProfilePinOperation) {
-  return {
-    node: {
-      __typename: 'Profile',
-      id: storyPost.profile.id,
-      relativeHandle: storyPost.profile.relativeHandle,
-      pinnedPosts: storyPinnedPostsForAction(action),
-    },
-  };
-}
 
 function StoryProviders({
   action,
@@ -220,11 +147,10 @@ function StoryProviders({
           me: { __typename: 'Account', id: 'account-story', name: 'Story' },
         },
       },
-      ProfilePinProviderPinProfilePostMutation: pinOperationResponse,
-      ProfilePinProviderQuery: { data: profilePinQueryResponse(action) },
-      ProfilePinProviderUnpinProfilePostMutation: unpinOperationResponse,
+      ProfilePinActionPinMutation: pinOperationResponse,
+      ProfilePinActionUnpinMutation: unpinOperationResponse,
     };
-  }, [action, outcome, viewer]);
+  }, [outcome, viewer]);
   const observeMutation = useCallback(
     (request: RequestParameters, variables: Variables) => {
       if (request.name === 'PostDeletionActionDeletePostMutation') {
@@ -233,8 +159,8 @@ function StoryProviders({
       }
       const action = request.name.includes('Unpin') ? 'unpin' : 'pin';
       if (
-        request.name === 'ProfilePinProviderPinProfilePostMutation' ||
-        request.name === 'ProfilePinProviderUnpinProfilePostMutation'
+        request.name === 'ProfilePinActionPinMutation' ||
+        request.name === 'ProfilePinActionUnpinMutation'
       ) {
         void (action === 'pin' ? onPin() : onUnpin());
       }
@@ -251,13 +177,11 @@ function StoryProviders({
       actorBoundary
     >
       <SessionProvider>
-        <ProfilePinProvider>
-          <PostActionAuthenticationProvider>
-            <PostComposerCoordinatorProvider owner="list" profile={null}>
-              <PostMediaViewerHostProvider>{children}</PostMediaViewerHostProvider>
-            </PostComposerCoordinatorProvider>
-          </PostActionAuthenticationProvider>
-        </ProfilePinProvider>
+        <PostActionAuthenticationProvider>
+          <PostComposerCoordinatorProvider owner="list" profile={null}>
+            <PostMediaViewerHostProvider>{children}</PostMediaViewerHostProvider>
+          </PostComposerCoordinatorProvider>
+        </PostActionAuthenticationProvider>
       </SessionProvider>
     </RelayStoryProvider>
   );
@@ -274,7 +198,7 @@ const meta = {
     viewer: 'owner',
   },
   argTypes: {
-    action: { control: 'inline-radio', options: ['pin', 'replace', 'unpin'] },
+    action: { control: 'inline-radio', options: ['pin', 'unpin'] },
     outcome: { control: 'inline-radio', options: ['success', 'error', 'pending'] },
     viewer: { control: 'inline-radio', options: ['owner', 'visitor'] },
   },
@@ -325,7 +249,6 @@ export const Playground: Story = {
   parameters: { controls: { disable: false } },
 };
 export const OwnerPinned: Story = { args: { action: 'unpin' } };
-export const OwnerReplacement: Story = { args: { action: 'replace' } };
 export const VisitorPinned: Story = { args: { viewer: 'visitor' } };
 export const Mobile: Story = {
   args: { action: 'unpin', presentation: 'mobile' },

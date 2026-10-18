@@ -147,7 +147,7 @@ export const profilePostListAccessWhere = ({
   viewerProfileId,
 }: {
   readonly db: DatabaseHandle;
-  readonly visitedProfileId: string;
+  readonly visitedProfileId: SQLWrapper | string;
   readonly viewerProfileId?: string | null;
 }): SQL<boolean> => {
   const postVisible = visiblePostWhere({

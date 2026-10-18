@@ -40,7 +40,6 @@ import {
   PostSourcePreview,
 } from '@/components/post/PostSourcePresentationView';
 import { PostThreadLayout } from '@/components/post/PostThreadLayout';
-import { ProfilePinProvider } from '@/components/post/ProfilePinProvider';
 import { ReplyComposerSurface } from '@/components/post/ReplyComposerSurface';
 import { ShellChromeProvider } from '@/components/shell/ShellChromeContext';
 import { formatTimelineTimestamp } from '@/lib/date';
@@ -1484,18 +1483,16 @@ function PostDeletionListEdgeSafety() {
 
   return (
     <SessionProvider>
-      <ProfilePinProvider>
-        <Catalog>
-          <View testID="post-deletion-home-list">
-            <PostList home={requireFragment(data.home, 'deletion home list')} />
-          </View>
-          <View testID="post-deletion-profile-list">
-            <PostList
-              profile={requireFragment(data.deletionProfile.profile, 'deletion profile list')}
-            />
-          </View>
-        </Catalog>
-      </ProfilePinProvider>
+      <Catalog>
+        <View testID="post-deletion-home-list">
+          <PostList home={requireFragment(data.home, 'deletion home list')} />
+        </View>
+        <View testID="post-deletion-profile-list">
+          <PostList
+            profile={requireFragment(data.deletionProfile.profile, 'deletion profile list')}
+          />
+        </View>
+      </Catalog>
     </SessionProvider>
   );
 }
@@ -3084,17 +3081,6 @@ const postListPaginationRelayData = {
   contentPostsProfile: paginationProfile,
   homeTimeline: paginationHomeTimeline,
 };
-const profilePinProviderQueryResponse = (selectedProfileId: string | null) => ({
-  node: selectedProfileId
-    ? {
-        __typename: 'Profile' as const,
-        id: selectedProfileId,
-        relativeHandle: profile().relativeHandle,
-        pinnedPosts: profile().pinnedPosts,
-      }
-    : null,
-});
-
 const meta = {
   beforeEach: () => {
     mocked(trackAnalytics).mockClear();
@@ -3855,11 +3841,6 @@ export const ProductionPostDeletionListEdgeSafety: Story = {
     relay: {
       data: deletionOwnerRelayData,
       mutationResponse: { deletePost: { postId: shortPost.id } },
-      operationResponses: {
-        ProfilePinProviderQuery: (selectedProfileId: string | null) => ({
-          data: profilePinProviderQueryResponse(selectedProfileId),
-        }),
-      },
     },
   },
   play: async ({ canvasElement }) => {

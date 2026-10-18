@@ -427,6 +427,7 @@ input PinProfilePostInput {
 
 type PinProfilePostPayload {
   changed: Boolean!
+  post: Post
   profile: Profile!
 }
 
@@ -434,6 +435,7 @@ type Post implements Node {
   content: PostContent
   createdAt: DateTime!
   id: ID!
+  isPinned: Boolean
   profile: Profile!
   reactionCounts: [ReactionCount!]!
   reactionProfiles(after: String, before: String, first: Int, last: Int, type: String!): ProfileConnection!
@@ -812,6 +814,7 @@ input UnpinProfilePostInput {
 
 type UnpinProfilePostPayload {
   changed: Boolean!
+  post: Post
   profile: Profile!
 }
 

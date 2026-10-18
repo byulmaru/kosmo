@@ -4,7 +4,14 @@ import { afterEach, before, beforeEach, it, mock } from 'node:test';
 import { createElement, Suspense } from 'react';
 import * as Relay from 'react-relay';
 import { act, create } from 'react-test-renderer';
-import { Environment, Network, Observable, RecordSource, Store } from 'relay-runtime';
+import {
+  ConnectionHandler,
+  Environment,
+  Network,
+  Observable,
+  RecordSource,
+  Store,
+} from 'relay-runtime';
 import query from '../../app/(tabs)/(profile)/[profileHandle]/__generated__/ProfilePostListPageQuery.graphql';
 import type { ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
@@ -75,7 +82,10 @@ stub(new URL('./PostListItem.tsx', import.meta.url).href, {
 before(async () => {
   ({ PostList } = await import('./PostList'));
 });
-beforeEach(() => mock.timers.enable({ apis: ['setTimeout'] }));
+beforeEach(() => {
+  focusList.mock.resetCalls();
+  mock.timers.enable({ apis: ['setTimeout'] });
+});
 afterEach(async () => {
   await act(async () => renderer?.unmount());
   await act(async () => mock.timers.tick(300_001));
@@ -109,12 +119,17 @@ async function start() {
   });
   return environment;
 }
-const connection = (ids: string[], hasNextPage = false) => ({
+const connection = (
+  ids: string[],
+  hasNextPage = false,
+  isPinned: boolean | ((id: string) => boolean) = false,
+) => ({
   edges: ids.map((id) => ({
     cursor: id,
     node: {
       __typename: 'Post',
       id,
+      isPinned: typeof isPinned === 'function' ? isPinned(id) : isPinned,
       createdAt: '2026-09-30T00:00:00Z',
       state: 'ACTIVE',
       visibility: 'PUBLIC',
@@ -165,29 +180,37 @@ const profile = (
   id: 'owner',
   instance: { kind },
   viewerState: null,
-  pinnedPosts: connection(pins, pinnedHasNext),
-  posts: connection(posts, postsHasNext),
+  pinnedPosts: connection(pins, pinnedHasNext, true),
+  posts: connection(posts, postsHasNext, (id) => pins.includes(id)),
 });
 async function respond(data: Record<string, unknown>) {
+  await respondAt(requests.length - 1, data);
+}
+async function respondAt(index: number, data: Record<string, unknown>) {
   await act(async () => {
-    requests.at(-1)!.sink.next({ data });
-    requests.at(-1)!.sink.complete();
+    requests[index]!.sink.next({ data });
+    requests[index]!.sink.complete();
   });
 }
 const all = (type: string) => renderer!.root.findAll((node) => node.type === type);
 const cards = () =>
   all('PostListItem').map((node) => [node.props.post.__id, Boolean(node.props.pinned)]);
-it('Local shows first pin, permits duplicates, and survives deleted records', async () => {
+it('Local shows every pin, permits chronology duplicates, and survives deleted records', async () => {
   const environment = await start();
+  assert.deepEqual(
+    requests.map((request) => request.name),
+    ['ProfilePostListPageQuery'],
+  );
   await respond({
     currentSession: null,
     profileByHandle: profile('LOCAL', ['first', 'second'], ['first']),
   });
   assert.deepEqual(cards(), [
     ['first', true],
+    ['second', true],
     ['first', false],
   ]);
-  assert.equal(all('PostListItem')[1]!.props.onProfileUnpinned, undefined);
+  assert.equal(typeof all('PostListItem')[1]!.props.onProfileUnpinned, 'function');
   all('PostListItem')[0]!.props.onProfileUnpinned();
   assert.equal(focusList.mock.callCount(), 1);
   await act(async () => environment.commitUpdate((store) => store.delete('first')));
@@ -195,6 +218,141 @@ it('Local shows first pin, permits duplicates, and survives deleted records', as
   assert.equal(all('StateView').length, 0);
   assert.equal(all('InfiniteList').length, 1);
   assert.equal(all('Button').length, 0);
+});
+it('Local pin pagination refreshes the whole loaded range after connection invalidation', async () => {
+  const environment = await start();
+  const firstPage = Array.from({ length: 20 }, (_, index) => `pin-${index}`);
+  await respond({
+    currentSession: null,
+    profileByHandle: profile('LOCAL', firstPage, [], true),
+  });
+  await act(async () => all('Button')[0]!.props.onPress());
+  await respond({
+    node: {
+      __typename: 'Profile',
+      id: 'owner',
+      pinnedPosts: connection(
+        Array.from({ length: 20 }, (_, index) => `pin-${index + 20}`),
+        false,
+        true,
+      ),
+    },
+  });
+  assert.equal(cards().length, 40);
+
+  const connectionId = ConnectionHandler.getConnectionID('owner', 'PostList_profile__pinnedPosts');
+  await act(async () =>
+    environment.commitUpdate((store) => store.get(connectionId)?.invalidateRecord()),
+  );
+  const refresh = requests.at(-1)!;
+  assert.equal(refresh.name, 'PostListProfilePinnedRefreshQuery');
+  assert.deepEqual(refresh.variables, { count: 40, cursor: null, id: 'owner' });
+  const loadedIds = cards().map(([id]) => id);
+  assert.equal(all('StateView').length, 0);
+  all('PostListItem')[0]!.props.onProfileUnpinned();
+  assert.equal(focusList.mock.callCount(), 1);
+  await act(async () => refresh.sink.error(new Error('offline')));
+  assert.deepEqual(
+    cards().map(([id]) => id),
+    loadedIds,
+  );
+  assert.equal(all('StateView').length, 0);
+  assert.equal(all('InfiniteList').length, 1);
+  assert.equal(all('Button')[0]!.props.accessibilityLabel, '고정된 게시글 새로고침 다시 시도');
+  all('PostListItem')[0]!.props.onProfileUnpinned();
+  assert.equal(focusList.mock.callCount(), 2);
+
+  await act(async () => all('Button')[0]!.props.onPress());
+  const retry = requests.at(-1)!;
+  assert.equal(retry.name, 'PostListProfilePinnedRefreshQuery');
+  assert.deepEqual(retry.variables, { count: 40, cursor: null, id: 'owner' });
+  const refreshed = [
+    ...firstPage,
+    ...Array.from({ length: 20 }, (_, index) => `pin-${index + 20}`),
+  ].reverse();
+  await respond({
+    node: { __typename: 'Profile', id: 'owner', pinnedPosts: connection(refreshed, false, true) },
+  });
+  assert.deepEqual(
+    cards().map(([id]) => id),
+    refreshed,
+  );
+});
+
+it('coalesces invalidations and refetches the canonical pin page after an in-flight refresh', async () => {
+  const environment = await start();
+  const firstPage = Array.from({ length: 20 }, (_, index) => `pin-${index}`);
+  const loadedPins = [
+    ...firstPage,
+    ...Array.from({ length: 20 }, (_, index) => `pin-${index + 20}`),
+  ];
+  await respond({
+    currentSession: null,
+    profileByHandle: profile('LOCAL', firstPage, ['chronology'], true),
+  });
+  await act(async () => all('Button')[0]!.props.onPress());
+  await respond({
+    node: { __typename: 'Profile', id: 'owner', pinnedPosts: connection(loadedPins) },
+  });
+  assert.equal(cards().filter(([, pinned]) => pinned).length, 40);
+
+  const connectionId = ConnectionHandler.getConnectionID('owner', 'PostList_profile__pinnedPosts');
+  const invalidatePins = () =>
+    environment.commitUpdate((store) => store.get(connectionId)?.invalidateRecord());
+
+  await act(async () => {
+    invalidatePins();
+    invalidatePins();
+  });
+  const staleRefresh = requests.at(-1)!;
+  assert.equal(staleRefresh.name, 'PostListProfilePinnedRefreshQuery');
+  assert.deepEqual(staleRefresh.variables, { count: 40, cursor: null, id: 'owner' });
+  await act(async () => invalidatePins());
+  assert.equal(requests.at(-1), staleRefresh);
+  const stalePins = ['pin-a', ...loadedPins.slice(0, 39)];
+  await respondAt(requests.indexOf(staleRefresh), {
+    node: {
+      __typename: 'Profile',
+      id: 'owner',
+      pinnedPosts: connection(stalePins, true, true),
+    },
+  });
+  const currentRefresh = requests.at(-1)!;
+  assert.notEqual(currentRefresh, staleRefresh);
+  assert.equal(currentRefresh.name, 'PostListProfilePinnedRefreshQuery');
+  assert.deepEqual(currentRefresh.variables, { count: 40, cursor: null, id: 'owner' });
+  assert.deepEqual(
+    cards().map(([id, pinned]) => [id, pinned]),
+    [...stalePins.map((id) => [id, true] as const), ['chronology', false]],
+  );
+
+  const currentPins = ['pin-b', 'pin-a', ...loadedPins.slice(0, 38)];
+  await respondAt(requests.indexOf(currentRefresh), {
+    node: {
+      __typename: 'Profile',
+      id: 'owner',
+      pinnedPosts: connection(currentPins, true, true),
+    },
+  });
+  assert.deepEqual(
+    cards().map(([id, pinned]) => [id, pinned]),
+    [...currentPins.map((id) => [id, true] as const), ['chronology', false]],
+  );
+  await act(async () => all('Button')[0]!.props.onPress());
+  assert.equal(requests.at(-1)!.variables.cursor, currentPins.at(-1));
+  await respond({
+    node: {
+      __typename: 'Profile',
+      id: 'owner',
+      pinnedPosts: connection(loadedPins.slice(38), false, true),
+    },
+  });
+  assert.deepEqual(
+    cards().map(([id, pinned]) => [id, pinned]),
+    [...currentPins, ...loadedPins.slice(38)]
+      .map((id) => [id, true])
+      .concat([['chronology', false]]),
+  );
 });
 it('ActivityPub paginates pins independently of chronology', async () => {
   await start();
@@ -211,7 +369,7 @@ it('ActivityPub paginates pins independently of chronology', async () => {
   assert.equal(all('Button')[0]!.props.accessibilityLabel, '고정된 게시글 다시 시도');
   await act(async () => all('Button')[0]!.props.onPress());
   await respond({
-    node: { __typename: 'Profile', id: 'owner', pinnedPosts: connection(['pin-20']) },
+    node: { __typename: 'Profile', id: 'owner', pinnedPosts: connection(['pin-20'], false, true) },
   });
   assert.deepEqual(
     cards(),
@@ -236,7 +394,7 @@ it('keeps the loaded pin next page when the profile chronology loads another pag
       __typename: 'Profile',
       id: 'owner',
       instance: { kind: 'ACTIVITYPUB' },
-      pinnedPosts: connection(['pin-20']),
+      pinnedPosts: connection(['pin-20'], false, true),
     },
   });
   assert.equal(all('Button').length, 0);
@@ -250,7 +408,6 @@ it('keeps the loaded pin next page when the profile chronology loads another pag
       __typename: 'Profile',
       id: 'owner',
       instance: { kind: 'ACTIVITYPUB' },
-      pinnedPosts: connection(pins),
       posts: connection(['chronology-1']),
     },
   });
