@@ -464,15 +464,13 @@ test('Reply 알림 작성자 Ctrl/Cmd 새 탭과 본문 이동은 각각 한 번
 
   markReadRequestCount = 0;
   await replyRow.getByTestId('post-list-row-body').click();
-  await expect(page).toHaveURL(
-    `/@${replyAuthor.profile.handle}/${toGlobalId('Post', reply.id)}?initialScroll=reply`,
-  );
+  await expect(page).toHaveURL(`/@${replyAuthor.profile.handle}/${toGlobalId('Post', reply.id)}`);
   await expect.poll(() => markReadRequestCount).toBe(1);
   await expect.poll(() => notificationReadAt(notification.id)).not.toBeNull();
   await page.unroute('**/graphql');
 });
 
-test('Reply 알림 상세는 늦게 배치되는 조상 이미지 뒤에도 source를 보이고 수동 이동을 보존한다', async ({
+test('답글 상세는 모든 진입에서 대상을 보이고 지연 이미지·수동 이동·handle 교정을 유지한다', async ({
   context,
   page,
 }) => {
@@ -599,8 +597,18 @@ test('Reply 알림 상세는 늦게 배치되는 조상 이미지 뒤에도 sour
     const ordinaryDetailResponse = waitForGraphQLOperation(page, 'PostDetailQuery');
     await page.goto(`/@${replyAuthor.handle}/${sourceId}`);
     await assertQuerySuccess(ordinaryDetailResponse);
+    await expect(sourceRow).toBeInViewport();
+    await expect.poll(sourceHeaderOffset).toBeGreaterThanOrEqual(-1);
+
+    const correctedDetailResponse = waitForGraphQLOperation(page, 'PostDetailQuery');
+    await page.goto(`/@stale-reply-author/${sourceId}`);
+    await assertQuerySuccess(correctedDetailResponse);
+    await expect(page).toHaveURL(`/@${replyAuthor.handle}/${sourceId}`);
+    await expect(sourceRow).toBeInViewport();
+    await expect.poll(sourceHeaderOffset).toBeGreaterThanOrEqual(-1);
+
+    await page.mouse.wheel(0, -10_000);
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
-    await expect(page.getByTestId(`post-thread-current-${sourceId}`)).not.toBeInViewport();
     await expect(page.getByText(rootBody, { exact: false })).toBeVisible();
   } finally {
     releaseAncestorImage();

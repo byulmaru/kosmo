@@ -117,7 +117,6 @@ export function PostDetailThread({
   currentPostReplySurfaceId,
   header,
   identity,
-  initialScrollToCurrent = false,
   onReplyCreated,
   onPostDeleted,
   post: postKey,
@@ -129,7 +128,6 @@ export function PostDetailThread({
   currentPostReplySurfaceId?: string;
   header: ReactNode;
   identity: string;
-  initialScrollToCurrent?: boolean;
   onReplyCreated?: (post: PostComposerCreatedPost) => void;
   onPostDeleted?: () => void;
   post: PostDetailThread_post$key;
@@ -143,7 +141,6 @@ export function PostDetailThread({
       currentPostReplySurfaceId={currentPostReplySurfaceId}
       header={header}
       key={identity}
-      initialScrollToCurrent={initialScrollToCurrent}
       onReplyCreated={onReplyCreated}
       onPostDeleted={onPostDeleted}
       post={postKey}
@@ -158,7 +155,6 @@ function PostDetailThreadContent({
   currentPostReplyOnPress,
   currentPostReplySurfaceId,
   header,
-  initialScrollToCurrent,
   onReplyCreated,
   onPostDeleted,
   post: postKey,
@@ -169,7 +165,6 @@ function PostDetailThreadContent({
   currentPostReplyOnPress?: () => void;
   currentPostReplySurfaceId?: string;
   header: ReactNode;
-  initialScrollToCurrent: boolean;
   onReplyCreated?: (post: PostComposerCreatedPost) => void;
   onPostDeleted?: () => void;
   post: PostDetailThread_post$key;
@@ -177,7 +172,7 @@ function PostDetailThreadContent({
   replyProfile?: ReplyComposerSurface_profile$key | null;
 }) {
   const { width } = useWindowDimensions();
-  const shouldKeepCurrentInViewRef = useRef(initialScrollToCurrent && presentation === 'route');
+  const shouldKeepCurrentInViewRef = useRef(presentation === 'route');
   const currentRowRef = useRef<NativeView>(null);
   const headerRef = useRef<NativeView>(null);
   const nativeScrollRef = useRef<NativeScrollView>(null);

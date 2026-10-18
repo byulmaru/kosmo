@@ -73,8 +73,7 @@ export function PostNotificationPost({
   const openViewer = usePostMediaViewerHost();
   const { reply, replySurface } = usePostReplySurface(post);
   const profileHref = `/${post.profile.relativeHandle}` as const;
-  const detailHref =
-    `/${post.profile.relativeHandle}/${post.id}${kind === 'reply' ? '?initialScroll=reply' : ''}` as const;
+  const detailHref = `/${post.profile.relativeHandle}/${post.id}` as const;
   const { Icon, label, reason } = presentations[kind];
   const [replyRailFocusVisible, setReplyRailFocusVisible] = useState(false);
   const onMediaOpen = useCallback<PostMediaOpenHandler>(

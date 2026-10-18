@@ -10,6 +10,7 @@ import type { PostDetailThread as PostDetailThreadComponent } from './PostDetail
 
 let renderer: ReactTestRenderer | null = null;
 let documentScrollListener: (() => void) | null = null;
+const documentScrollListeners = new Set<() => void>();
 let loadNextCalls = 0;
 let loadNextCompletions: Array<(error: Error | null) => void> = [];
 let loadNextCallsByKey: Record<string, number> = {};
@@ -31,12 +32,16 @@ Object.assign(globalThis, {
 
 globalThis.addEventListener = ((type: string, listener: EventListenerOrEventListenerObject) => {
   if (type === 'scroll') {
-    documentScrollListener = listener as () => void;
+    documentScrollListeners.add(listener as () => void);
+    documentScrollListener = () => documentScrollListeners.forEach((callback) => callback());
   }
 }) as typeof globalThis.addEventListener;
 globalThis.removeEventListener = ((type: string, listener: EventListenerOrEventListenerObject) => {
-  if (type === 'scroll' && documentScrollListener === listener) {
-    documentScrollListener = null;
+  if (type === 'scroll') {
+    documentScrollListeners.delete(listener as () => void);
+    if (documentScrollListeners.size === 0) {
+      documentScrollListener = null;
+    }
   }
 }) as typeof globalThis.removeEventListener;
 
@@ -155,6 +160,7 @@ afterEach(async () => {
   platform.OS = 'web';
   documentElement.scrollHeight = 2401;
   documentScrollListener = null;
+  documentScrollListeners.clear();
   loadNextCalls = 0;
   loadNextCompletions = [];
   loadNextCallsByKey = {};
@@ -290,8 +296,8 @@ async function render(presentation: 'route' | 'viewer') {
   assert.ok(renderer);
 }
 
-describe('PostDetailThread Native initial source scroll', () => {
-  it('지연 조상 이미지의 높이가 바뀌어도 고정 viewport 아래 source를 유지한다', async () => {
+describe('PostDetailThread Native initial target scroll', () => {
+  it('진입 prop 없이 대상 답글부터 표시하고 지연 이미지 보정과 수동 이동을 유지한다', async () => {
     platform.OS = 'ios';
     let offset = 0;
     let sourceContentTop = 2100;
@@ -307,7 +313,6 @@ describe('PostDetailThread Native initial source scroll', () => {
           identity: 'native-source',
           post: {} as never,
           presentation: 'route',
-          initialScrollToCurrent: true,
         }),
         {
           createNodeMock: (element) => {
