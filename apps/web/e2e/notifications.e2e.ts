@@ -595,7 +595,7 @@ test('답글 상세는 모든 진입에서 대상을 보이고 지연 이미지�
     await expect(page.getByRole('heading', { name: '홈', exact: true })).toBeVisible();
 
     const ordinaryDetailResponse = waitForGraphQLOperation(page, 'PostDetailQuery');
-    await page.goto(`/@${replyAuthor.handle}/${sourceId}`);
+    await page.goto(`/@${replyAuthor.profile.handle}/${sourceId}`);
     await assertQuerySuccess(ordinaryDetailResponse);
     await expect(sourceRow).toBeInViewport();
     await expect.poll(sourceHeaderOffset).toBeGreaterThanOrEqual(-1);
@@ -603,7 +603,7 @@ test('답글 상세는 모든 진입에서 대상을 보이고 지연 이미지�
     const correctedDetailResponse = waitForGraphQLOperation(page, 'PostDetailQuery');
     await page.goto(`/@stale-reply-author/${sourceId}`);
     await assertQuerySuccess(correctedDetailResponse);
-    await expect(page).toHaveURL(`/@${replyAuthor.handle}/${sourceId}`);
+    await expect(page).toHaveURL(`/@${replyAuthor.profile.handle}/${sourceId}`);
     await expect(sourceRow).toBeInViewport();
     await expect.poll(sourceHeaderOffset).toBeGreaterThanOrEqual(-1);
 
@@ -614,7 +614,7 @@ test('답글 상세는 모든 진입에서 대상을 보이고 지연 이미지�
     await page.getByRole('link', { name: '홈', exact: true }).first().click();
     await expect(page.getByRole('heading', { name: '홈', exact: true })).toBeVisible();
     await page.goBack();
-    await expect(page).toHaveURL(`/@${replyAuthor.handle}/${sourceId}`);
+    await expect(page).toHaveURL(`/@${replyAuthor.profile.handle}/${sourceId}`);
     await expect(sourceRow).toBeAttached();
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
     await expect(page.getByText(rootBody, { exact: false })).toBeVisible();
