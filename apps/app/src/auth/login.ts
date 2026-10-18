@@ -6,36 +6,14 @@ import {
   ResponseType,
 } from 'expo-auth-session';
 import { getNativeSessionConfiguration } from './nativeConfig';
-import { startWebLogin } from './webLogin';
-import type { WebActivationEvent } from './publicContentReturn';
 
-export { startWebLogin } from './webLogin';
+export { startWebLogin, startWebLoginFromPress } from './webLogin';
 
 export type NativeOidcSessionExchangeInput = {
   code: string;
   codeVerifier: string;
   redirectUri: string;
 };
-
-export function startWebLoginFromPress(
-  event: WebActivationEvent,
-  returnTarget?: string | null,
-): void {
-  const pointer = event.nativeEvent as unknown as MouseEvent;
-
-  if (
-    (typeof pointer.button === 'number' && pointer.button !== 0) ||
-    pointer.altKey ||
-    pointer.ctrlKey ||
-    pointer.metaKey ||
-    pointer.shiftKey
-  ) {
-    return;
-  }
-
-  event.preventDefault();
-  startWebLogin(returnTarget);
-}
 
 export async function startNativeAuthorization(): Promise<NativeOidcSessionExchangeInput | null> {
   const { clientId, issuer } = getNativeSessionConfiguration();

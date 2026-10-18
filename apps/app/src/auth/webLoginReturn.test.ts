@@ -1,24 +1,13 @@
 import assert from 'node:assert/strict';
-import { before, beforeEach, describe, it, mock } from 'node:test';
-import type { startWebLoginFromPress as StartWebLoginFromPress } from './login';
-import type { startWebLogin as StartWebLogin } from './webLogin';
+import { before, beforeEach, describe, it } from 'node:test';
+import type {
+  startWebLogin as StartWebLogin,
+  startWebLoginFromPress as StartWebLoginFromPress,
+} from './webLogin';
 
 const calls: string[] = [];
 let startWebLogin: typeof StartWebLogin;
 let startWebLoginFromPress: typeof StartWebLoginFromPress;
-const mockModule = (specifier: string | URL, exports: object) =>
-  mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
-
-mockModule('expo-auth-session', {
-  AuthRequest: class {},
-  CodeChallengeMethod: { S256: 'S256' },
-  fetchDiscoveryAsync: async () => ({}),
-  makeRedirectUri: () => 'kosmo://login/callback',
-  ResponseType: { Code: 'code' },
-});
-mockModule(new URL('./nativeConfig.ts', import.meta.url), {
-  getNativeSessionConfiguration: () => ({ clientId: 'client', issuer: 'https://issuer.test' }),
-});
 
 Object.defineProperty(globalThis, 'window', {
   configurable: true,
@@ -26,8 +15,7 @@ Object.defineProperty(globalThis, 'window', {
 });
 
 before(async () => {
-  ({ startWebLogin } = await import('./webLogin'));
-  ({ startWebLoginFromPress } = await import('./login'));
+  ({ startWebLogin, startWebLoginFromPress } = await import('./webLogin'));
 });
 
 beforeEach(() => {

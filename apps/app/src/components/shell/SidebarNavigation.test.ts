@@ -72,7 +72,7 @@ mockModule(new URL('./ProfileSwitcher.tsx', import.meta.url), {
     return null;
   },
 });
-mockModule('@/auth/login', {
+mockModule('@/auth/webLogin', {
   startWebLoginFromPress: (_event: unknown, target: string | null) => loginTargets.push(target),
 });
 mockModule(new URL('./shellLayout.ts', import.meta.url), {
