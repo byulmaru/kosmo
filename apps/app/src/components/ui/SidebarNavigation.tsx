@@ -169,7 +169,7 @@ function SidebarControl({
       style={StyleSheet.flatten([
         styles.control,
         compact ? styles.compactControl : styles.wideControl,
-        tone === 'primary' ? styles.primaryControl : undefined,
+        destination === 'compose' ? styles.composeControl : undefined,
         Platform.OS === 'web'
           ? ({
               outlineColor: focusVisible ? theme.stateFocusRing : undefined,
@@ -207,7 +207,7 @@ function SidebarControl({
               styles.visual,
               compact ? styles.compactVisual : styles.wideVisual,
               !compact && nested ? styles.nestedVisual : undefined,
-              tone === 'primary' ? styles.primaryControl : undefined,
+              destination === 'compose' ? styles.composeControl : undefined,
               Platform.OS === 'web'
                 ? ({
                     transitionDuration: `${reducedMotion ? motion.duration.instant : motion.duration.fast}ms`,
@@ -392,6 +392,7 @@ export function SidebarNavigation({
             label="가입하기"
             onPress={() => undefined}
             renderGuestAction={renderGuestAction}
+            tone="primary"
           />
           <SidebarControl
             compact={compact}
@@ -615,7 +616,7 @@ const styles = StyleSheet.create({
   },
   compactVisual: { justifyContent: 'center' },
   wideVisual: { justifyContent: 'flex-start', paddingHorizontal: space[8] },
-  primaryControl: { borderRadius: radius.full },
+  composeControl: { borderRadius: radius.full },
   iconFrame: { alignItems: 'center', position: 'relative', width: iconSizes[20] },
   trailingIcon: { marginLeft: 'auto', marginRight: space[16] },
   unread: {

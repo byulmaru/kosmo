@@ -30,7 +30,7 @@
 
 ## 좌측 안내와 상태
 
-비로그인 공개 화면은 보호 navigation과 계정 action 대신 계정 안내와 별도의 `가입하기`·`로그인` 버튼을 표시한다. 기존 인증 사용자와 선택 Profile이 없는 인증 사용자의 메뉴·ProfileSwitcher는 유지한다. 두 항목은 기존 공통 사이드바의 기본 메뉴 행과 같은 아이콘·라벨 정렬, 배경·모서리·입력 상태 및 행 간격을 사용한다. full 사이드바와 mobile drawer에는 두 버튼의 label을 표시한다. compact rail에도 두 action을 구분해 제공하고 accessible name은 각각 `가입하기`와 `로그인`으로 유지한다. drawer에서도 같은 상태와 목적지를 전달한다. `가입하기`는 `https://kos.moe/`의 홈(`/`)을 열고 `로그인`은 `/login`을 연다.
+비로그인 공개 화면은 보호 navigation과 계정 action 대신 계정 안내와 별도의 `가입하기`·`로그인` 버튼을 표시한다. 기존 인증 사용자와 선택 Profile이 없는 인증 사용자의 메뉴·ProfileSwitcher는 유지한다. 두 항목은 기존 공통 사이드바의 기본 메뉴 행과 같은 아이콘·라벨 정렬, 8px 둥근 모서리와 행 간격을 사용한다. 가입하기만 노란 Primary 색상과 해당 hover·pressed 색상을 적용하며 pill 형태로 바꾸지 않는다. 로그인은 기존 기본 메뉴 행의 hover·pressed 배경을 유지한다. full 사이드바와 mobile drawer에는 두 버튼의 label을 표시한다. compact rail에도 두 action을 구분해 제공하고 accessible name은 각각 `가입하기`와 `로그인`으로 유지한다. drawer에서도 같은 상태와 목적지를 전달한다. `가입하기`는 `https://kos.moe/`의 홈(`/`)을 열고 `로그인`은 `/login`을 연다.
 
 ## 모바일 사이드바 접근
 
