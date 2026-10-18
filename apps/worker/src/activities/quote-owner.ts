@@ -2,7 +2,7 @@ import '@kosmo/core/polyfill';
 
 import { ActivityPubActors, ActivityPubPosts, db, first, Posts } from '@kosmo/core/db';
 import { PostQuoteConsentStatus, PostState } from '@kosmo/core/enums';
-import { KosmoError } from '@kosmo/core/error';
+import { KosmoError, ValidationError } from '@kosmo/core/error';
 import {
   isLocalQuoteAllowedByPolicy,
   loadQuoteConsentForPost,
@@ -10,6 +10,7 @@ import {
   loadQuoteSourceIdentity,
 } from '@kosmo/core/services';
 import { temporalClient } from '@kosmo/core/temporal/client';
+import { postCreateIdentities } from '@kosmo/core/temporal/post-admission';
 import {
   federation,
   materializeInboundQuoteSource,
@@ -183,12 +184,43 @@ export async function applyQuoteConsentActivity(input: QuoteWriteInput): Promise
       let created = false;
       let existingCreation = false;
       if (command.kind === 'INITIALIZE') {
+        if (/^\d{13}:/.test(command.commandId)) {
+          const identities = postCreateIdentities({
+            ...command.input,
+            admissionId: command.commandId.slice(0, 50),
+          });
+          if (
+            identities.postId !== command.postId ||
+            identities.contentId !== command.initialContentId
+          ) {
+            throw new ValidationError(
+              'Quote admission payload does not match its original submission',
+              {
+                field: 'admissionId',
+              },
+            );
+          }
+        }
         const exists = await tx
           .select()
           .from(Posts)
           .where(eq(Posts.id, command.postId))
           .then(first);
         if (exists) {
+          if (
+            command.initialContentId &&
+            (exists.currentContentId !== command.initialContentId ||
+              exists.state !== PostState.ACTIVE ||
+              exists.visibility !== command.input.visibility ||
+              exists.replyParentId !== null)
+          ) {
+            throw new ValidationError(
+              'Quote admission payload does not match its original submission',
+              {
+                field: 'admissionId',
+              },
+            );
+          }
           if (
             exists.profileId !== command.input.profileId ||
             !exists.currentContentId ||
@@ -199,7 +231,7 @@ export async function applyQuoteConsentActivity(input: QuoteWriteInput): Promise
           existingCreation = true;
         }
         if (!exists) {
-          await createPostPersisted(command.input, command.postId, tx);
+          await createPostPersisted(command.input, command.postId, tx, command.initialContentId);
           created = true;
         }
       }

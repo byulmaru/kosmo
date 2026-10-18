@@ -27,11 +27,12 @@ export type PostTransitionOutcome<T> =
 
 export const postCreateWorkflow: WorkflowUpdateDefinition<
   (input: PostCreateInput) => Promise<void>,
-  PostTransitionOutcome<{ readonly postId: string }>
+  PostTransitionOutcome<{ readonly postId: string }>,
+  [PostCreateInput]
 > = {
   workflow: 'postCreateWorkflow',
   update: 'createPost',
-  workflowIdFromArgs: (input) => `post-create:${input.profileId}:${input.admissionId}`,
+  workflowIdFromArgs: (input) => `post-create:${input.admissionId}`,
 };
 export const postDeleteMutationWorkflow: WorkflowUpdateDefinition<
   (input: PostDeleteInput) => Promise<void>,
@@ -57,4 +58,22 @@ export function unwrapPostTransition<T>(outcome: PostTransitionOutcome<T>): T {
     case 'VALIDATION':
       throw new ValidationError(message, { field });
   }
+}
+
+/** Explicit business fields keep retries independent of object property insertion order. */
+export function postCreateInputKey(input: PostCreateInput): string {
+  return JSON.stringify({
+    accountId: input.accountId ?? null,
+    authoredBodyText: input.authoredBodyText ?? null,
+    document: input.document,
+    media: (input.media ?? []).map(({ mediaId, altText }) => ({ mediaId, altText })),
+    origin: input.origin,
+    profileId: input.profileId,
+    replyParentId: input.replyParentId ?? null,
+    repostSourceId: input.repostSourceId ?? null,
+    ...(input.quotePolicy && input.quotePolicy !== 'EVERYONE'
+      ? { quotePolicy: input.quotePolicy }
+      : {}),
+    visibility: input.visibility,
+  });
 }

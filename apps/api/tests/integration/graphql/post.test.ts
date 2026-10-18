@@ -737,6 +737,34 @@ describe('Post Reply GraphQL 경계', () => {
     assert.equal((await db.select().from(Posts)).length, 1);
   });
 
+  test('Quote admission은 같은 결과를 회수하고 변경된 입력과 작성 Profile을 거절한다', async () => {
+    const auth = await createAuthenticatedSession();
+    const other = await createAuthenticatedSession();
+    const source = await createContentfulPost(auth.profile.id, { bodyText: 'stable source' });
+    const input = {
+      admissionId: `${Date.now()}:${crypto.randomUUID()}`,
+      bodyText: 'stable quote',
+      repostSourceId: encodeGlobalId('Post', source.id),
+      visibility: PostVisibility.PUBLIC,
+    };
+    const first = await requestCreatePost(input, auth.token);
+    const retry = await requestCreatePost(input, auth.token);
+    assertNoGraphQLErrors(first);
+    assertNoGraphQLErrors(retry);
+    assert.equal(first.data?.createPost.post.id, retry.data?.createPost.post.id);
+    assert.equal(await db.$count(Posts, eq(Posts.repostSourceId, source.id)), 1);
+    for (const [payload, token] of [
+      [{ ...input, bodyText: 'changed quote' }, auth.token],
+      [{ ...input, quotePolicy: PostQuotePolicy.AUTHOR }, auth.token],
+      [input, other.token],
+    ] as const) {
+      const denied = await requestCreatePost(payload, token);
+      assert.equal(denied.errors?.[0]?.extensions?.code, 'VALIDATION');
+      assert.equal(denied.errors?.[0]?.extensions?.field, 'admissionId');
+    }
+    assert.equal(await db.$count(Posts, eq(Posts.repostSourceId, source.id)), 1);
+  });
+
   test('repostSourceId는 기존 CreatePost mutation으로 자체 Content와 Source를 함께 저장하고 다시 조회한다', async () => {
     const auth = await createAuthenticatedSession();
     const sourceAuthor = await createProfile('quote-source-author');
@@ -765,6 +793,7 @@ describe('Post Reply GraphQL 경계', () => {
       {
         input: {
           bodyText: '인용 본문',
+          admissionId: `${Date.now()}:${crypto.randomUUID()}`,
           repostSourceId: encodeGlobalId('Post', source.id),
           visibility: PostVisibility.UNLISTED,
         },
@@ -1454,7 +1483,7 @@ describe('Post Reply GraphQL 경계', () => {
     }
   });
 
-  test('Root Post Create Workflow admission 실패는 Post를 저장하지 않는다', async (t) => {
+  test('Root Post Create는 Quote owner 장애와 무관하게 직접 저장한다', async (t) => {
     const auth = await createAuthenticatedSession();
     const update = t.mock.method(temporalClient.workflow, 'executeUpdateWithStart', async () => {
       throw new Error('Temporal unavailable');
@@ -1468,9 +1497,9 @@ describe('Post Reply GraphQL 경계', () => {
       auth.token,
     );
 
-    assert.equal(result.errors?.[0]?.extensions?.code, 'INTERNAL_SERVER_ERROR');
-    assert.equal(update.mock.callCount(), 1);
-    assert.equal(await db.$count(Posts), 0);
+    assertNoGraphQLErrors(result);
+    assert.equal(update.mock.callCount(), 0);
+    assert.equal(await db.$count(Posts), 1);
   });
 
   test('Root Post Delete admission 실패는 Post를 ACTIVE로 유지하고 GraphQL 오류를 반환한다', async (t) => {
@@ -2306,6 +2335,8 @@ const requestGraphQL = async <TData>(
 
 const requestCreatePost = (
   input: {
+    admissionId?: string;
+    quotePolicy?: PostQuotePolicy | null;
     bodyText: string;
     contentWarning?: string | null;
     media?: Array<{ altText: string | null; mediaId: string }>;
@@ -2326,7 +2357,11 @@ const requestCreatePost = (
         post { __typename id state visibility }
       }
     }`,
-    { input },
+    {
+      input: input.repostSourceId
+        ? { admissionId: `${Date.now()}:${crypto.randomUUID()}`, ...input }
+        : input,
+    },
     token,
   );
 

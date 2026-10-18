@@ -1421,3 +1421,29 @@ test('createPost는 Content 없는 Reply Parent에서 field 오류와 함께 rol
     2,
   );
 });
+
+test('일반 Local Post와 Reply는 저장 Workflow 없이 commit하고 effects 실패도 결과를 유지한다', async (t) => {
+  const profile = await createProfile();
+  const admission = t.mock.method(temporalClient.workflow, 'executeUpdateWithStart', async () => {
+    throw new Error('Ordinary posts must not require an owner Worker');
+  });
+  const effects = t.mock.method(temporalClient.workflow, 'start', async () => {
+    throw new Error('Effects unavailable');
+  });
+  const errors = t.mock.method(console, 'error', () => {});
+  const input = {
+    origin: 'LOCAL' as const,
+    profileId: profile.id,
+    document: postContentDocumentFromText('ordinary'),
+    visibility: PostVisibility.PUBLIC,
+  };
+  const first = await createPostWithEffects(input);
+  const second = await createPostWithEffects({ ...input, replyParentId: first.post.id });
+  const resubmitted = await createPostWithEffects(input);
+  assert.notEqual(first.post.id, resubmitted.post.id);
+  assert.equal(second.post.replyParentId, first.post.id);
+  assert.equal(admission.mock.callCount(), 0);
+  assert.equal(effects.mock.callCount(), 3);
+  assert.equal(errors.mock.callCount(), 3);
+  assert.equal(await db.$count(Posts, eq(Posts.profileId, profile.id)), 3);
+});

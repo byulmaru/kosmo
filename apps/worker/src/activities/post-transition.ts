@@ -1,7 +1,10 @@
+import { createHash } from 'node:crypto';
 import { db, first, Posts } from '@kosmo/core/db';
 import { PostState } from '@kosmo/core/enums';
 import { KosmoError, NotFoundError, PermissionDeniedError } from '@kosmo/core/error';
 import { runWorkflow } from '@kosmo/core/temporal/client';
+import { postCreateInputKey } from '@kosmo/core/temporal/post';
+import { postCreateIdentities } from '@kosmo/core/temporal/post-admission';
 import { postQuoteOwnerWorkflow } from '@kosmo/core/temporal/post-quote-owner';
 import { eq, sql } from 'drizzle-orm';
 import { createPostPersisted, deletePostPersisted } from '../../../../packages/core/services/post';
@@ -12,7 +15,10 @@ import type {
   PostTransitionOutcome,
 } from '@kosmo/core/temporal/post';
 
-export const reservePostIdActivity = async (): Promise<string> => {
+export const reservePostIdActivity = async (input?: PostCreateInput): Promise<string> => {
+  if (input) {
+    return postCreateIdentities(input).postId;
+  }
   const [row] = await db.execute<{ id: string }>(sql`select uuidv7() as id`);
   if (!row) {
     throw new Error('Post identity allocation failed');
@@ -31,11 +37,26 @@ export const createPostTransitionActivity = async (
   try {
     if (input.repostSourceId) {
       const { admissionId, ...localInput } = input;
+      const identities = /^\d{13}:/.test(admissionId) ? postCreateIdentities(input) : undefined;
+      if (identities && identities.postId !== postId) {
+        throw new Error('Quote admission Post identity does not match');
+      }
+      const commandId = identities
+        ? `${admissionId}:${createHash('sha256').update(postCreateInputKey(input)).digest('hex')}`
+        : admissionId;
       const outcome = await runWorkflow(postQuoteOwnerWorkflow, {
         args: [{ postId, initialSourcePostId: input.repostSourceId }],
         mode: 'update-with-start',
-        updateId: admissionId,
-        updateArgs: [{ kind: 'INITIALIZE', postId, commandId: admissionId, input: localInput }],
+        updateId: commandId,
+        updateArgs: [
+          {
+            kind: 'INITIALIZE',
+            postId,
+            commandId,
+            input: localInput,
+            ...(identities ? { initialContentId: identities.contentId } : {}),
+          },
+        ],
         workflowIdConflictPolicy: 'USE_EXISTING',
         workflowIdReusePolicy: 'ALLOW_DUPLICATE',
       });
