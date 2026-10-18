@@ -124,6 +124,14 @@ function MockProfilePicker(props: Record<string, unknown>) {
   );
 }
 
+function MockButton({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) {
+  return createElement('Button', props, children);
+}
+
+function MockTextField(props: Record<string, unknown>) {
+  return createElement('TextField', props);
+}
+
 const resetActor = (profileId?: string | null) => {
   resetActorCalls.push(profileId);
 };
@@ -196,11 +204,10 @@ mockModule('@/components/profile/ProfileSwitcherUnread', {
 });
 mockModule('@/components/ui/Avatar', { Avatar: 'Avatar' });
 mockModule('@/components/ui/Button', {
-  Button: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) =>
-    createElement('Button', props, children),
+  Button: MockButton,
 });
 mockModule('@/components/ui/TextField', {
-  TextField: (props: Record<string, unknown>) => createElement('TextField', props),
+  TextField: MockTextField,
 });
 mockModule('@/components/ui/useSafeAreaPadding', {
   useSafeAreaPadding: () => ({ padding: 8 }),
@@ -319,14 +326,14 @@ describe('ProfileSwitcher profile creation errors', () => {
     await renderProfileSwitcher();
     await openPicker();
 
-    const picker = renderer?.root.findByType('ProfilePicker');
+    const picker = renderer?.root.findByType(MockProfilePicker);
     assert.ok(picker);
     await act(async () => picker.props.menuFooter.props.onPress());
 
-    let textField = renderer?.root.findByType('TextField');
+    let textField = renderer?.root.findByType(MockTextField);
     assert.ok(textField);
     await act(async () => textField?.props.onChangeText('newprofile'));
-    await act(async () => renderer?.root.findByType('Button').props.onPress());
+    await act(async () => renderer?.root.findByType(MockButton).props.onPress());
     assert.ok(pendingCreateMutation);
 
     await act(async () =>
@@ -341,7 +348,7 @@ describe('ProfileSwitcher profile creation errors', () => {
       ),
     );
 
-    textField = renderer?.root.findByType('TextField');
+    textField = renderer?.root.findByType(MockTextField);
     assert.ok(textField);
     assert.equal(textField.props.error, '프로필은 최대 10개까지 만들 수 있어요.');
     assert.equal(textField.props.value, 'newprofile');
