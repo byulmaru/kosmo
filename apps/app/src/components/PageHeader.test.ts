@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { before, mock, test } from 'node:test';
-import { createElement } from 'react';
+import { createElement, createRef } from 'react';
 import type { ReactElement, ReactNode } from 'react';
+import type { Text } from 'react-native';
+import type { PageHeaderProps } from './PageHeaderView';
 
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, {
@@ -29,25 +31,6 @@ mockModule(new URL('../theme/ThemeProvider.tsx', import.meta.url), {
   }),
 });
 
-type PageHeaderProps =
-  | {
-      leading?: ReactNode;
-      title: string;
-      titleRef?: unknown;
-      titleLines?: 1;
-      trailing?: ReactNode;
-      variant?: 'text';
-    }
-  | {
-      accessibilityLabel: string;
-      brandAccessibilityLabel?: string;
-      brandCurrent?: boolean;
-      brandHref?: string;
-      leading?: ReactNode;
-      onBrandCurrentNavigate?: () => void;
-      trailing?: ReactNode;
-      variant: 'brand';
-    };
 type TestElementProps = {
   'aria-hidden'?: boolean;
   accessibilityLabel?: string;
@@ -94,14 +77,12 @@ function findElements(node: ReactNode, type: string): TestElement[] {
   return [...matches, ...children.flatMap((child) => findElements(child, type))];
 }
 
-test('text variant exposes one visible heading in a 64px page bar', () => {
+test('text variant exposes one visible heading in the page bar', () => {
   const header = renderHeader({ title: '알림' });
   const headings = findElements(header, 'Text').filter(
     (element) => element.props.accessibilityRole === 'header',
   );
 
-  assert.equal(header.type, 'View');
-  assert.equal((header.props.style as Array<{ minHeight?: number }>)[0]?.minHeight, 64);
   assert.equal(headings.length, 1);
   assert.equal(headings[0]?.props.children, '알림');
   assert.equal((headings[0]?.props.style as Array<Record<string, unknown>>)[1]?.color, '#1a1a1a');
@@ -114,18 +95,40 @@ test('empty text variant keeps page bar chrome without an empty semantic heading
     (element) => element.props.accessibilityRole === 'header',
   );
 
-  assert.equal((header.props.style as Array<{ minHeight?: number }>)[0]?.minHeight, 64);
   assert.equal(headings.length, 0);
   assert.equal(findElements(header, 'Pressable').length, 1);
   assert.equal(findElements(header, 'Pressable')[0]?.props.accessibilityLabel, '메뉴 열기');
 });
 
-test('page bar stays on the route canvas and uses only a subtle boundary', () => {
-  const header = renderHeader({ title: '북마크' });
-  const themeStyle = (header.props.style as Array<Record<string, unknown>>)[1];
+test('all PageHeader variants share the same frame', () => {
+  const variants: PageHeaderProps[] = [
+    { title: '북마크' },
+    { leading: createElement('Pressable'), title: '' },
+    { accessibilityLabel: '홈', variant: 'brand' },
+    { children: '프로필 수정', variant: 'custom' },
+  ];
 
-  assert.equal(themeStyle?.backgroundColor, '#f7f7f8');
-  assert.equal(themeStyle?.borderColor, '#ececf0');
+  for (const props of variants) {
+    const header = renderHeader(props);
+    const [frameStyle, themeStyle] = header.props.style as Array<Record<string, unknown>>;
+
+    assert.equal(header.type, 'View');
+    assert.deepEqual(
+      {
+        minHeight: frameStyle?.minHeight,
+        borderBottomWidth: frameStyle?.borderBottomWidth,
+        paddingHorizontal: frameStyle?.paddingHorizontal,
+      },
+      { minHeight: 64, borderBottomWidth: 1, paddingHorizontal: 16 },
+    );
+    assert.deepEqual(
+      {
+        backgroundColor: themeStyle?.backgroundColor,
+        borderColor: themeStyle?.borderColor,
+      },
+      { backgroundColor: '#f7f7f8', borderColor: '#ececf0' },
+    );
+  }
 });
 
 test('text title shrinks and wraps within the available width beside a leading action', () => {
@@ -157,7 +160,7 @@ test('text title can opt into one-line tail ellipsis without changing its access
 });
 
 test('text title forwards its ref to the accessible heading', () => {
-  const titleRef = {};
+  const titleRef = createRef<Text>();
   const header = renderHeader({ title: '반응한 사람', titleRef });
   const heading = findElements(header, 'Text').find(
     (element) => element.props.accessibilityRole === 'header',

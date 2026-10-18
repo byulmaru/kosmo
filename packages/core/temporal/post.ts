@@ -1,4 +1,10 @@
-import { ConflictError, NotFoundError, PermissionDeniedError, ValidationError } from '../error';
+import {
+  ConflictError,
+  NotFoundError,
+  PermissionDeniedError,
+  ProfileLimitExceededError,
+  ValidationError,
+} from '../error';
 import type { ErrorCode } from '../error';
 import type { LocalPostInput } from '../services/post';
 import type { WorkflowUpdateDefinition } from './client';
@@ -55,6 +61,8 @@ export function unwrapPostTransition<T>(outcome: PostTransitionOutcome<T>): T {
       throw new NotFoundError(message);
     case 'PERMISSION_DENIED':
       throw new PermissionDeniedError(message);
+    case 'PROFILE_LIMIT_EXCEEDED':
+      throw new ProfileLimitExceededError();
     case 'VALIDATION':
       throw new ValidationError(message, { field });
   }

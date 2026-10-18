@@ -3,6 +3,7 @@ import '@kosmo/core/polyfill';
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, test } from 'node:test';
 import {
+  AccountProfileRole,
   AccountState,
   InstanceKind,
   InstanceState,
@@ -22,6 +23,7 @@ import type { cleanupUnavailableNotificationsActivity as CleanupUnavailableNotif
 process.env.DATABASE_URL ??= 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 
 let db: typeof CoreDb.db;
+let AccountProfiles: typeof CoreDb.AccountProfiles;
 let Accounts: typeof CoreDb.Accounts;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
@@ -36,8 +38,12 @@ let Profiles: typeof CoreDb.Profiles;
 let Reactions: typeof CoreDb.Reactions;
 let cleanupUnavailableNotificationsActivity: typeof CleanupUnavailableNotificationsActivity;
 
+const accountIds = new Set<string>();
+const profileAccountIds = new Map<string, string>();
+
 before(async () => {
   ({
+    AccountProfiles,
     Accounts,
     db,
     firstOrThrow,
@@ -66,6 +72,11 @@ beforeEach(async () => {
   await db.delete(PostContents);
   await db.delete(Posts);
   await db.delete(Profiles);
+  if (accountIds.size > 0) {
+    await db.delete(Accounts).where(inArray(Accounts.id, [...accountIds]));
+  }
+  accountIds.clear();
+  profileAccountIds.clear();
   await db.delete(Instances);
 });
 
@@ -81,6 +92,7 @@ test('cleanup leaves Operational notifications out of source cleanup even for di
     .values({ displayName: suffix, oidcSubject: `subject-${suffix}`, state: AccountState.DISABLED })
     .returning()
     .then(firstOrThrow);
+  accountIds.add(account.id);
   try {
     const notification = await db
       .insert(Notifications)
@@ -104,6 +116,7 @@ test('cleanup leaves Operational notifications out of source cleanup even for di
     );
   } finally {
     await db.delete(Accounts).where(eq(Accounts.id, account.id));
+    accountIds.delete(account.id);
   }
 });
 
@@ -430,13 +443,19 @@ const createProfile = async ({
   readonly state?: ProfileState;
 } = {}) => {
   const suffix = crypto.randomUUID();
+  const account = await db
+    .insert(Accounts)
+    .values({ displayName: suffix, oidcSubject: `subject-${suffix}`, state: AccountState.ACTIVE })
+    .returning()
+    .then(firstOrThrow);
+  accountIds.add(account.id);
   const instance = await db
     .insert(Instances)
     .values({ domain: `${suffix}.example`, kind: InstanceKind.LOCAL, state: instanceState })
     .returning()
     .then(firstOrThrow);
 
-  return db
+  const profile = await db
     .insert(Profiles)
     .values({
       displayName: suffix,
@@ -448,6 +467,13 @@ const createProfile = async ({
     })
     .returning()
     .then(firstOrThrow);
+  await db.insert(AccountProfiles).values({
+    accountId: account.id,
+    profileId: profile.id,
+    role: AccountProfileRole.OWNER,
+  });
+  profileAccountIds.set(profile.id, account.id);
+  return profile;
 };
 
 const createFollow = async (followerProfileId: string, followeeProfileId: string) =>
@@ -521,9 +547,22 @@ const createNotification = async ({
   readonly kind?: NotificationKind;
   readonly recipientProfileId: string;
   readonly sourceId?: string;
-}) =>
-  db
+}) => {
+  const recipientAccountId = profileAccountIds.get(recipientProfileId);
+  assert.ok(
+    recipientAccountId,
+    `Notification fixture recipient ${recipientProfileId} has no Account.`,
+  );
+  return db
     .insert(Notifications)
-    .values({ id, data: {}, kind, recipientProfileId, sourceId })
+    .values({
+      id,
+      data: {},
+      kind,
+      recipientAccountId,
+      recipientProfileId,
+      sourceId,
+    })
     .returning()
     .then(firstOrThrow);
+};

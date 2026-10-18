@@ -154,6 +154,8 @@ Recipient Profile은 Related Post의 direct Repost Source Author Profile이다. 
 - Recipient가 Related Post 또는 Related Profile을 볼 수 없는 경우 새 Notification을 생성하지 않는다.
 - Reply, Reaction, Repost, Quote의 Recipient Profile과 원인 행동의 Related Profile이 같으면 새 Notification을
   생성하지 않는다.
+- Profile 범위 Notification에서 원래 행동을 한 Account를 확인할 수 있으면 그 Account는 대상 Profile의 수신 집합에서 제외하며, 같은 Account가 속한 다른 대상 Profile에도 동일하게 적용한다. Follow Request의 원래 행동 Account는 요청자이며, 승인된 Follow도 이 Account를 유지하고 승인 Account로 바꾸지 않는다. Remote·legacy 원인에서 행동 Account를 알 수 없으면 Profile Membership만으로 추정하지 않는다. CSV following import는 원래 행동 Account를 전달하지 않으므로 같은 Account의 다른 Local Profile이 Follow 또는 Follow Request 알림을 받을 수 있다. 이 경우에도 기존 Membership 조회 권한은 바뀌지 않는다.
+- Reply, Reaction, Repost, Quote에서 원인 행동 Profile과 대상 Profile이 같아 기존 정책상 자기 행동을 억제하는 경우에는 그 대상 Profile의 모든 Account 수신자를 억제한다. Profile이 다르면 원래 행동 Account만 제외하고 다른 대상 Profile Membership Account는 수신 자격을 유지한다.
 - Recipient의 Profile Mute, Profile Block, Profile Domain Block을 적용한다.
 - Profile Mute는 Recipient가 Owner이고 Related Profile이 Target인 관계 중 만료 시각이 없거나
   DB 현재 시각보다 미래인 관계를 적용한다. 만료 시각이 DB 현재 시각과 같거나 과거이면 그 Mute로
@@ -178,8 +180,7 @@ Recipient Profile은 Related Post의 direct Repost Source Author Profile이다. 
 - Local 작성과 Remote 수신에서 발생한 Quote 모두 별도 Quote Notification Type으로 제공한다.
 - Quote Notification을 선택하면 Related Post인 Quote 자체의 canonical 상세로 이동한다. 인용된 Source의
   상세로 직접 이동하지 않는다.
-- Quote Author와 Recipient가 같은 Profile이면 생성하지 않는다. 같은 Account에 속한 서로 다른 Profile의
-  인용은 일반 인용으로 취급한다.
+- Quote 자기 행동 억제와 원래 행동 Account 제외는 위 Profile 범위 Notification 정책을 따른다.
 - Recipient가 Quote와 direct Repost Source를 각각 조회할 수 있어야 새 Quote Notification을 생성한다.
   저장된 Notification 행의 조회는 Recipient 권한을 따른다. Related Post와 direct Source 필드는 현재 요청의 일반 Post 조회
   권한을 적용하며, 조회할 수 없어도 행이나 다른 접근 가능한 Post의 정책을 바꾸지 않는다.

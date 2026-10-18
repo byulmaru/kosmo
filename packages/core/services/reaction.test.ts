@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { after, mock, test } from 'node:test';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import {
+  Accounts,
   db,
   firstOrThrow,
   Instances,
@@ -13,6 +14,7 @@ import {
   Reactions,
 } from '../db';
 import {
+  AccountState,
   InstanceKind,
   InstanceState,
   NotificationKind,
@@ -26,9 +28,28 @@ import { temporalClient } from '../temporal/client';
 import { ProfilePairBlockedError } from './profile-block-policy';
 import { addReaction, deleteReaction } from './reaction';
 
+const accountIds: string[] = [];
+
 after(async () => {
+  if (accountIds.length > 0) {
+    await db.delete(Accounts).where(inArray(Accounts.id, accountIds));
+  }
   await pg.end();
 });
+
+const createAccount = async () => {
+  const account = await db
+    .insert(Accounts)
+    .values({
+      displayName: crypto.randomUUID(),
+      oidcSubject: crypto.randomUUID(),
+      state: AccountState.ACTIVE,
+    })
+    .returning()
+    .then(firstOrThrow);
+  accountIds.push(account.id);
+  return account;
+};
 
 const createFixture = async ({
   instanceKind = InstanceKind.LOCAL,
@@ -170,6 +191,28 @@ test('addReaction 결과는 새 source만 구분한다', async () => {
   assert.equal(first.created, true);
   assert.equal(repeated.created, false);
   assert.equal(repeated.reaction.id, first.reaction.id);
+});
+
+test('addReaction keeps the original actor Account across duplicate calls', async () => {
+  const actor = await createFixture();
+  const target = await createFixture();
+  const [originalActor, retryActor] = await Promise.all([createAccount(), createAccount()]);
+
+  const input = {
+    actorAccountId: originalActor.id,
+    actorProfileId: actor.profile.id,
+    origin: 'LOCAL' as const,
+    postId: target.post.id,
+    type: '🎉',
+  };
+  const created = await addReaction(input);
+  assert.equal(created.created, true);
+  assert.equal(created.reaction.actorAccountId, originalActor.id);
+
+  const retried = await addReaction({ ...input, actorAccountId: retryActor.id });
+  assert.equal(retried.created, false);
+  assert.equal(retried.reaction.id, created.reaction.id);
+  assert.equal(retried.reaction.actorAccountId, originalActor.id);
 });
 
 test('core는 entry에서 검증된 actor의 Profile/Instance 상태를 다시 조회하지 않는다', async () => {

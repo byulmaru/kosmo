@@ -2,12 +2,14 @@ import { profileHandlePolicyErrorMessage } from '@kosmo/core/validation';
 import { Slot } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { graphql, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
 import { commitLocalUpdate } from 'relay-runtime';
 import { expect, fireEvent, fn, mocked, userEvent, waitFor, within } from 'storybook/test';
 import { trackAnalytics } from '@/analytics/client';
 import { FollowButton } from '@/components/profile/FollowButton';
 import { ProfileEditDiscardDialog } from '@/components/profile/ProfileEditDiscardDialog';
+import { ProfileEditScreen } from '@/components/profile/ProfileEditScreen';
 import { ProfileHero } from '@/components/profile/ProfileHero';
 import { BottomTabBar } from '@/components/shell/BottomTabBar';
 import {
@@ -27,6 +29,8 @@ import ogDefaultUrl from '../../../public/og-default.png?url';
 import { profile, shellQuery } from '../fixtures';
 import { Catalog, Section } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { ReactNode } from 'react';
+import type { ProfileEditDraft } from '@/components/profile/profileEditState';
 import type { GuardedNavigationAction } from '@/components/shell/NavigationGuardContext';
 import type { ShellStoriesQuery as ShellStoriesQueryType } from './__generated__/ShellStoriesQuery.graphql';
 
@@ -72,6 +76,17 @@ const followedProfile = profile({
 const query = {
   ...shellQuery({ profiles: [selectedProfile, secondProfile], selectedProfile }),
   node: followedProfile,
+};
+const stickyProfileEditDraft = {
+  avatar: { kind: 'current', previewUri: null },
+  bio: '창작과 개발을 좋아합니다. 웹에서 프로필을 편집하고 있어요. '.repeat(12),
+  displayName: '코스모',
+  header: { kind: 'current', previewUri: null },
+  tags: Array.from({ length: 24 }, (_, index) => `긴소개태그${index + 1}`),
+} satisfies ProfileEditDraft;
+const profileEditSafeAreaMetrics = {
+  frame: { height: 844, width: 390, x: 0, y: 0 },
+  insets: { bottom: 16, left: 0, right: 0, top: 24 },
 };
 const publicQuery = { ...query, currentSession: null, me: null };
 const firstProfileQuery = {
@@ -1860,12 +1875,10 @@ const universalParameters = {
   router: { pathname: '/home', slotLabel: '홈 타임라인' },
 };
 
-function UniversalShellStory() {
+function UniversalShellStory({ children }: { children?: ReactNode } = {}) {
   return (
     <SessionProvider>
-      <UniversalShell>
-        <Slot />
-      </UniversalShell>
+      <UniversalShell>{children ?? <Slot />}</UniversalShell>
     </SessionProvider>
   );
 }
@@ -2322,6 +2335,62 @@ export const UniversalMobileNonHomeHeader: Story = {
     ).toBeLessThanOrEqual(1);
   },
   render: () => <UniversalShellStory />,
+};
+
+export const UniversalMobileProfileEditStickySafeArea: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: {
+    ...universalParameters,
+    router: { pathname: '/profile-edit' },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const ownerDocument = canvasElement.ownerDocument;
+    const storyWindow = ownerDocument.defaultView;
+    const screen = canvas.getByTestId('profile-edit-screen');
+    const stickyHeader = canvas.getByTestId('profile-edit-screen-header-sticky');
+    const closeButton = canvas.getByRole('button', { name: '프로필 편집 닫기' });
+    const saveButton = canvas.getByRole('button', { name: '저장' });
+    const safeAreaTop = profileEditSafeAreaMetrics.insets.top;
+    const initialHeader = stickyHeader.getBoundingClientRect();
+    const initialCloseButton = closeButton.getBoundingClientRect();
+    const initialSaveButton = saveButton.getBoundingClientRect();
+
+    expect(canvas.getAllByRole('heading', { name: '프로필 수정' })).toHaveLength(1);
+    expect(canvas.queryByRole('button', { name: '메뉴 열기' })).not.toBeInTheDocument();
+    expect(screen.getBoundingClientRect().top).toBe(safeAreaTop);
+    expect(initialHeader.top).toBe(safeAreaTop);
+    expect(initialHeader.height).toBe(64);
+    expect(initialCloseButton.top).toBeGreaterThanOrEqual(safeAreaTop);
+    expect(initialSaveButton.top).toBeGreaterThanOrEqual(safeAreaTop);
+
+    const scrollElement = ownerDocument.scrollingElement;
+    expect(storyWindow).not.toBeNull();
+    expect(scrollElement).not.toBeNull();
+    expect(scrollElement!.scrollHeight).toBeGreaterThan(scrollElement!.clientHeight);
+    storyWindow!.scrollTo(0, 240);
+    await waitFor(() => expect(storyWindow!.scrollY).toBeGreaterThan(0));
+
+    expect(screen.getBoundingClientRect().top).toBeLessThan(safeAreaTop);
+    expect(stickyHeader.getBoundingClientRect().top).toBe(safeAreaTop);
+    expect(stickyHeader.getBoundingClientRect().height).toBe(64);
+    expect(closeButton.getBoundingClientRect().top).toBeCloseTo(initialCloseButton.top, 0);
+    expect(saveButton.getBoundingClientRect().top).toBeCloseTo(initialSaveButton.top, 0);
+    storyWindow!.scrollTo(0, 0);
+  },
+  render: () => (
+    <SafeAreaProvider initialMetrics={profileEditSafeAreaMetrics}>
+      <UniversalShellStory>
+        <ProfileEditScreen
+          initialValue={stickyProfileEditDraft}
+          onBack={() => undefined}
+          onChange={() => undefined}
+          onSubmit={() => undefined}
+          value={stickyProfileEditDraft}
+        />
+      </UniversalShellStory>
+    </SafeAreaProvider>
+  ),
 };
 
 export const UniversalMobileSettingsDetailHeaderReflow: Story = {

@@ -3787,6 +3787,149 @@ describe('GraphQL remote profile boundary', () => {
     assert.equal(await countRows(Profiles), profileCountBefore);
   });
 
+  test('limits Profile creation to 10 current Owner memberships per Account', async () => {
+    const auth = await createAuthenticatedSession();
+    for (let index = 0; index < 7; index += 1) {
+      await createOwnerMembershipProfile(auth.account.id);
+    }
+    await createOwnerMembershipProfile(auth.account.id, ProfileState.SUSPENDED);
+
+    const memberProfile = await createProfile({
+      handle: `member${crypto.randomUUID().replaceAll('-', '').slice(0, 8)}`,
+      instanceId: localInstanceId,
+    });
+    await db.insert(AccountProfiles).values({
+      accountId: auth.account.id,
+      profileId: memberProfile.id,
+      role: AccountProfileRole.MEMBER,
+    });
+
+    const otherAccount = await createAuthenticatedSession();
+    for (let index = 0; index < 9; index += 1) {
+      await createOwnerMembershipProfile(otherAccount.account.id);
+    }
+
+    const createProfileMutation = `mutation CreateProfileAtLimit($handle: String!) {
+      createProfile(input: { handle: $handle }) { profile { id } }
+    }`;
+    const first = await requestGraphQL<{ createProfile: { profile: { id: string } } }>(
+      createProfileMutation,
+      { handle: `quota${crypto.randomUUID().replaceAll('-', '').slice(0, 8)}` },
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(first);
+    assert.ok(first.data?.createProfile.profile.id);
+
+    const profileCountBeforeRejectedCreate = await countRows(Profiles);
+    const membershipCountBeforeRejectedCreate = await countAccountProfileMemberships(
+      auth.account.id,
+    );
+    const second = await requestGraphQL(
+      createProfileMutation,
+      { handle: `quota${crypto.randomUUID().replaceAll('-', '').slice(0, 8)}` },
+      auth.token,
+    );
+
+    assertGraphQLErrorCode(second, 'PROFILE_LIMIT_EXCEEDED');
+    assert.equal(await countRows(Profiles), profileCountBeforeRejectedCreate);
+    assert.equal(
+      await countAccountProfileMemberships(auth.account.id),
+      membershipCountBeforeRejectedCreate,
+    );
+  });
+
+  test('deleting an Owner Profile frees a Profile creation slot', async () => {
+    const auth = await createAuthenticatedSession();
+    for (let index = 0; index < 9; index += 1) {
+      await createOwnerMembershipProfile(auth.account.id);
+    }
+
+    const deleted = await requestGraphQL<{ deleteProfile: { success: boolean } }>(
+      `mutation DeleteProfileForQuota($id: ID!) {
+        deleteProfile(input: { id: $id }) { success }
+      }`,
+      { id: globalId('Profile', auth.profile.id) },
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(deleted);
+    assert.equal(deleted.data?.deleteProfile.success, true);
+    const disabledProfile = await db
+      .select({ state: Profiles.state })
+      .from(Profiles)
+      .where(eq(Profiles.id, auth.profile.id))
+      .then(firstOrThrow);
+    assert.equal(disabledProfile.state, ProfileState.DISABLED);
+
+    const created = await requestGraphQL<{ createProfile: { profile: { id: string } } }>(
+      `mutation CreateProfileAfterDelete($handle: String!) {
+        createProfile(input: { handle: $handle }) { profile { id } }
+      }`,
+      { handle: `quota${crypto.randomUUID().replaceAll('-', '').slice(0, 8)}` },
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(created);
+    assert.ok(created.data?.createProfile.profile.id);
+  });
+
+  test('rejects new Profile creation for an Account already over the limit without side effects', async () => {
+    const auth = await createAuthenticatedSession();
+    for (let index = 0; index < 10; index += 1) {
+      await createOwnerMembershipProfile(auth.account.id);
+    }
+
+    const profileCountBefore = await countRows(Profiles);
+    const membershipCountBefore = await countAccountProfileMemberships(auth.account.id);
+    const result = await requestGraphQL(
+      `mutation CreateProfileOverLimit($handle: String!) {
+        createProfile(input: { handle: $handle }) { profile { id } }
+      }`,
+      { handle: `quota${crypto.randomUUID().replaceAll('-', '').slice(0, 8)}` },
+      auth.token,
+    );
+
+    assertGraphQLErrorCode(result, 'PROFILE_LIMIT_EXCEEDED');
+    assert.equal(await countRows(Profiles), profileCountBefore);
+    assert.equal(await countAccountProfileMemberships(auth.account.id), membershipCountBefore);
+  });
+
+  test('keeps concurrent Profile creation requests within the Account limit', async () => {
+    const auth = await createAuthenticatedSession();
+    for (let index = 0; index < 8; index += 1) {
+      await createOwnerMembershipProfile(auth.account.id);
+    }
+
+    const profileCountBefore = await countRows(Profiles);
+    const membershipCountBefore = await countAccountProfileMemberships(auth.account.id);
+    const createProfileMutation = `mutation CreateProfileConcurrently($handle: String!) {
+      createProfile(input: { handle: $handle }) { profile { id } }
+    }`;
+    const results = await Promise.all(
+      ['first', 'second'].map((suffix) =>
+        requestGraphQL(
+          createProfileMutation,
+          { handle: `quota${suffix}${crypto.randomUUID().replaceAll('-', '').slice(0, 6)}` },
+          auth.token,
+        ),
+      ),
+    );
+
+    assert.equal(
+      results.filter((result) => !result.errors?.length).length,
+      1,
+      JSON.stringify(results),
+    );
+    assert.deepEqual(
+      results.flatMap((result) => result.errors?.map((error) => error.extensions?.code) ?? []),
+      ['PROFILE_LIMIT_EXCEEDED'],
+      JSON.stringify(results),
+    );
+    assert.equal(await countRows(Profiles), profileCountBefore + 1);
+    assert.equal(await countAccountProfileMemberships(auth.account.id), membershipCountBefore + 1);
+  });
+
   test('reads a materialized remote Post and its history without the ActivityPub mapping or network', async () => {
     const auth = await createAuthenticatedSession();
     const author = await createStoredActivityPubAuthor({
@@ -5771,6 +5914,31 @@ const createAuthenticatedSession = async ({
 
   return { account, profile, session, token };
 };
+
+const createOwnerMembershipProfile = async (
+  accountId: string,
+  state: ProfileState = ProfileState.ACTIVE,
+) => {
+  const profile = await createProfile({
+    handle: `quota${crypto.randomUUID().replaceAll('-', '').slice(0, 8)}`,
+    instanceId: localInstanceId,
+    state,
+  });
+  await db.insert(AccountProfiles).values({
+    accountId,
+    profileId: profile.id,
+    role: AccountProfileRole.OWNER,
+  });
+  return profile;
+};
+
+const countAccountProfileMemberships = async (accountId: string) =>
+  db
+    .select({ value: count() })
+    .from(AccountProfiles)
+    .where(eq(AccountProfiles.accountId, accountId))
+    .then(firstOrThrow)
+    .then(({ value }) => value);
 
 const createReadyMedia = async (accountId: string, profileId: string, label: string) =>
   db

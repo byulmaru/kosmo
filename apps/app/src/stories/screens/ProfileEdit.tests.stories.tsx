@@ -164,7 +164,7 @@ function expectResponsiveSurface(
   const surface = canvas.getByTestId('profile-edit-screen').getBoundingClientRect();
   const headerPreview = canvas.getByTestId('profile-edit-header-preview');
   const header = headerPreview.getBoundingClientRect();
-  const navigationHeaderElement = canvas.getByTestId('profile-edit-screen-header');
+  const navigationHeaderElement = canvas.getByTestId('profile-edit-screen-header').parentElement!;
   const navigationHeader = navigationHeaderElement.getBoundingClientRect();
   const title = canvas.getByRole('heading', { name: '프로필 수정' });
   const titleBounds = title.getBoundingClientRect();
@@ -208,7 +208,7 @@ function expectResponsiveSurface(
   expect(title).toHaveStyle({ color: colors.light.foregroundPrimary });
   expect(navigationHeaderElement).toHaveStyle({
     backgroundColor: colors.light.backgroundCanvas,
-    borderColor: colors.light.borderDefault,
+    borderColor: colors.light.borderSubtle,
     borderBottomWidth: 1,
   });
   expect(Math.round(backAction.width)).toBe(44);

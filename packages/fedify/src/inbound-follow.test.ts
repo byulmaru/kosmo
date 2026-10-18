@@ -6,6 +6,8 @@ import { generateCryptoKeyPair, signRequest } from '@fedify/fedify';
 import { Accept, CryptographicKey, Follow, Person, Undo } from '@fedify/vocab';
 import { getDocumentLoader } from '@fedify/vocab-runtime';
 import {
+  AccountProfileRole,
+  AccountState,
   ActivityPubActorType,
   InstanceKind,
   InstanceState,
@@ -18,7 +20,7 @@ import {
   profileFollowRemovalWorkflowId,
 } from '@kosmo/core/temporal/follow-command';
 import { remoteProfileLookupWorkflow } from '@kosmo/core/temporal/workflows';
-import { eq, ne } from 'drizzle-orm';
+import { eq, inArray, ne } from 'drizzle-orm';
 import { setInboundObservabilityReporter, withInboundObservability } from './inbound-observability';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
@@ -35,6 +37,8 @@ const localActorUri = new URL(`/ap/actor/${localProfileId}`, publicOrigin);
 const remoteActorUri = new URL('https://remote.example/users/alice');
 
 let ActivityPubActors: typeof CoreDb.ActivityPubActors;
+let AccountProfiles: typeof CoreDb.AccountProfiles;
+let Accounts: typeof CoreDb.Accounts;
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
@@ -50,6 +54,7 @@ let handleInboundFollow: typeof InboundFollow.handleInboundFollow;
 let handleInboundUndo: typeof InboundFollow.handleInboundUndo;
 let RemoteActorDiscoveryUnavailableError: typeof Materialization.RemoteActorDiscoveryUnavailableError;
 let localInstanceId: string;
+const recipientAccountIds: string[] = [];
 
 describe('inbound Follow and Undo', () => {
   before(async () => {
@@ -57,6 +62,8 @@ describe('inbound Follow and Undo', () => {
     process.env.PUBLIC_ORIGIN = publicOrigin;
     ({
       ActivityPubActors,
+      AccountProfiles,
+      Accounts,
       db,
       firstOrThrow,
       Instances,
@@ -78,6 +85,10 @@ describe('inbound Follow and Undo', () => {
   beforeEach(async () => {
     await waitForProfileFollowWorkflows({ terminateIdlePairs: true });
     await db.delete(Profiles);
+    if (recipientAccountIds.length > 0) {
+      await db.delete(Accounts).where(inArray(Accounts.id, recipientAccountIds));
+      recipientAccountIds.length = 0;
+    }
     await db.delete(Instances).where(ne(Instances.id, localInstanceId));
   });
 
@@ -181,7 +192,7 @@ describe('inbound Follow and Undo', () => {
   }
 
   test('routes personal Follow, sends Accept, and removes by actor pair despite a different Follow id', async () => {
-    const fixture = await createFixture();
+    const fixture = await createFixture({ withRecipientAccount: true });
     const sendActivity = mock.fn(async () => undefined);
     const context = createContext({ recipient: localProfileId, sendActivity });
     const follow = new Follow({
@@ -247,7 +258,7 @@ describe('inbound Follow and Undo', () => {
   });
 
   test('routes signed Follow and Undo through the production listener to Notification lifecycle', async () => {
-    const fixture = await createFixture({ remoteInbox: false });
+    const fixture = await createFixture({ remoteInbox: false, withRecipientAccount: true });
     const remoteKeyPair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
     const remoteKeyUri = new URL('#main-key', remoteActorUri);
     const remoteKey = new CryptographicKey({
@@ -406,7 +417,7 @@ describe('inbound Follow and Undo', () => {
   });
 
   test('deduplicates concurrent inbound Follow relation, counts, and Notification', async () => {
-    const fixture = await createFixture();
+    const fixture = await createFixture({ withRecipientAccount: true });
     const context = createContext({ recipient: localProfileId });
     const follow = new Follow({ actor: remoteActorUri, object: localActorUri });
     const results = await Promise.allSettled([
@@ -451,7 +462,10 @@ describe('inbound Follow and Undo', () => {
   });
 
   test('routes shared-inbox approval-required Follow without Accept', async () => {
-    await createFixture({ followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED });
+    await createFixture({
+      followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED,
+      withRecipientAccount: true,
+    });
     const sendActivity = mock.fn(async () => undefined);
     const context = createContext({ recipient: null, sendActivity });
 
@@ -529,7 +543,7 @@ describe('inbound Follow and Undo', () => {
   });
 
   test('rejects a blocked inbound Follow without reporting an internal failure', async () => {
-    const fixture = await createFixture();
+    const fixture = await createFixture({ withRecipientAccount: true });
     await db.insert(ProfileBlocks).values({
       ownerProfileId: fixture.localProfile.id,
       targetProfileId: fixture.remoteProfile.id,
@@ -568,7 +582,10 @@ describe('inbound Follow and Undo', () => {
   });
 
   test('logs a repeated pending Follow noop without duplicating its projection or Notification', async () => {
-    await createFixture({ followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED });
+    await createFixture({
+      followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED,
+      withRecipientAccount: true,
+    });
     const logs: unknown[] = [];
     const restore = setInboundObservabilityReporter({
       log: (observation) => logs.push(observation),
@@ -642,7 +659,7 @@ describe('inbound Follow and Undo', () => {
   });
 
   test('persists an inbound Follow projection and Notification', async () => {
-    const fixture = await createFixture();
+    const fixture = await createFixture({ withRecipientAccount: true });
     await handleInboundFollow(
       createContext({ recipient: localProfileId }),
       new Follow({ actor: remoteActorUri, object: localActorUri }),
@@ -664,7 +681,10 @@ describe('inbound Follow and Undo', () => {
   });
 
   test('persists a personal approval-required inbound Follow request and Notification', async () => {
-    const fixture = await createFixture({ followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED });
+    const fixture = await createFixture({
+      followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED,
+      withRecipientAccount: true,
+    });
     await handleInboundFollow(
       createContext({ recipient: localProfileId }),
       new Follow({ actor: remoteActorUri, object: localActorUri }),
@@ -688,7 +708,7 @@ describe('inbound Follow and Undo', () => {
   });
 
   test('removes the personal inbound Follow relation and Notification on Undo', async () => {
-    await createFixture();
+    await createFixture({ withRecipientAccount: true });
     const context = createContext({ recipient: localProfileId });
     await handleInboundFollow(
       context,
@@ -732,7 +752,10 @@ describe('inbound Follow and Undo', () => {
   });
 
   test('removes the personal approval request and Notification on Undo', async () => {
-    await createFixture({ followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED });
+    await createFixture({
+      followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED,
+      withRecipientAccount: true,
+    });
     const context = createContext({ recipient: localProfileId });
     await handleInboundFollow(
       context,
@@ -943,10 +966,12 @@ const createFixture = async ({
   followPolicy = ProfileFollowPolicy.OPEN,
   remoteInbox = true,
   remoteInstanceState = InstanceState.ACTIVE,
+  withRecipientAccount = false,
 }: {
   followPolicy?: ProfileFollowPolicy;
   remoteInbox?: boolean;
   remoteInstanceState?: InstanceState;
+  withRecipientAccount?: boolean;
 } = {}) => {
   const remoteInstance = await db
     .insert(Instances)
@@ -980,6 +1005,23 @@ const createFixture = async ({
     })
     .returning()
     .then(firstOrThrow);
+  if (withRecipientAccount) {
+    const account = await db
+      .insert(Accounts)
+      .values({
+        displayName: 'Local owner',
+        oidcSubject: `inbound-follow-${crypto.randomUUID()}`,
+        state: AccountState.ACTIVE,
+      })
+      .returning()
+      .then(firstOrThrow);
+    recipientAccountIds.push(account.id);
+    await db.insert(AccountProfiles).values({
+      accountId: account.id,
+      profileId: localProfile.id,
+      role: AccountProfileRole.OWNER,
+    });
+  }
   await db.insert(ActivityPubActors).values([
     {
       profileId: localProfile.id,

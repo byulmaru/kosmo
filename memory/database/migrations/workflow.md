@@ -63,6 +63,13 @@ merge와 배포 gate는 분리한다. OpenSpec session harness를 만들 수는 
 - production에서는 migration Job과 workload가 같은 immutable release를 사용해야 한다. 이 장치는 PROD-564가
   소유한다.
 
+기존 compatibility constraint가 Backfill을 막고 대체 uniqueness가 이미 유효·활성 상태인 경우에만, 해당
+constraint 제거와 Backfill을 독립 release로 분리할 수 있다. Transition이 실제 배포되고 이전 active·preview와
+rollback workload가 drain된 뒤, 보장한 rollback 기간 종료, backup/restore 준비와 명시적 production 승인을
+확인해야 제거를 시작할 수 있다. 이 release에서는 Backfill을 막는 constraint만 제거하고, final Contract에서
+제거할 조회 인덱스는 유지한다. 이 판단과 순서는 Linear에 기록한다. 아래 Contract gate는 그대로 적용하며,
+final Contract는 Backfill 검증이 끝나기 전에 진행하지 않는다.
+
 ### 3. Contract gate
 
 다음을 모두 근거로 확인하기 전에는 contract 이슈나 PR을 merge하지 않는다.
@@ -95,6 +102,10 @@ Breaking-change contract issue
   -> Transition and backfill implementation issue / PR / release
   -> Contract implementation issue / PR / release
 ```
+
+위 compatibility-constraint 의존성이 있는 경우에만 `Transition -> gated Backfill -> Contract`를 각각 별도
+이슈·PR·release로 전달한다. Backfill 이슈는 검증 결과를 소유하고, Contract는 그 결과를 확인한 뒤 시작한다.
+다른 migration은 표준 순서를 따른다.
 
 - 계약 이슈는 전체 호환성 목표, rollback window와 contract 완료 조건을 소유한다.
 - 구현 이슈는 한 단계의 독립 결과와 검증만 소유한다.

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -32,6 +32,270 @@ async function migrationFolder(
 
   return root;
 }
+
+test('알림 Expand 뒤 구버전 Profile 알림 쓰기가 유지된다', async () => {
+  const control = postgres(databaseUrl, { max: 1 });
+  const indexPrepMigrationName = '20261017090000_prod_1117_notification_index_prep';
+  const expandMigrationName = '20261017090100_prod_1117_notification_expand';
+  const indexPrepMigration = await readFile(
+    new URL(`../../../drizzle/${indexPrepMigrationName}/migration.sql`, import.meta.url),
+    'utf8',
+  );
+  const expandMigration = await readFile(
+    new URL(`../../../drizzle/${expandMigrationName}/migration.sql`, import.meta.url),
+    'utf8',
+  );
+  const baseMigration = {
+    name: '20261016040000_notification_expand_compatibility_base',
+    sql: `
+      CREATE TABLE account (id uuid PRIMARY KEY);
+      CREATE TABLE profile (id uuid PRIMARY KEY);
+      CREATE TABLE post (id uuid PRIMARY KEY);
+      CREATE TABLE profile_follow_request (id uuid PRIMARY KEY);
+      CREATE TABLE profile_follow (id uuid PRIMARY KEY);
+      CREATE TABLE reaction (id uuid PRIMARY KEY);
+      CREATE TABLE notification (
+        id uuid PRIMARY KEY,
+        recipient_profile_id uuid REFERENCES profile(id) ON DELETE CASCADE,
+        recipient_account_id uuid REFERENCES account(id) ON DELETE CASCADE,
+        kind text NOT NULL,
+        source_id uuid NOT NULL,
+        data jsonb NOT NULL DEFAULT '{}',
+        created_at timestamptz NOT NULL DEFAULT now(),
+        read_at timestamptz,
+        CONSTRAINT notification_recipient_check CHECK (
+          (recipient_profile_id IS NOT NULL) <> (recipient_account_id IS NOT NULL)
+        ),
+        CONSTRAINT notification_recipient_profile_id_kind_source_id_unique
+          UNIQUE (recipient_profile_id, kind, source_id),
+        CONSTRAINT notification_recipient_account_id_kind_source_id_unique
+          UNIQUE (recipient_account_id, kind, source_id)
+      );
+      CREATE INDEX notification_recipient_profile_id_id_index
+        ON notification (recipient_profile_id, id DESC);
+      CREATE INDEX notification_recipient_profile_id_index
+        ON notification (recipient_profile_id) WHERE read_at IS NULL;
+      CREATE INDEX notification_kind_source_id_id_index
+        ON notification (kind, source_id, id);
+    `,
+  };
+  const baseMigrations = await migrationFolder(baseMigration.name, baseMigration.sql);
+  const expandedMigrations = await migrationFolder([
+    baseMigration,
+    { name: indexPrepMigrationName, sql: indexPrepMigration },
+    { name: expandMigrationName, sql: expandMigration },
+  ]);
+
+  const accountId = '10000000-0000-0000-0000-000000000001';
+  const profileId = '20000000-0000-0000-0000-000000000001';
+  const firstNotificationId = '30000000-0000-0000-0000-000000000001';
+  const duplicateNotificationId = '30000000-0000-0000-0000-000000000002';
+  const operationalNotificationId = '30000000-0000-0000-0000-000000000003';
+  const operationalDuplicateId = '30000000-0000-0000-0000-000000000004';
+  const accountBoundNotificationId = '30000000-0000-0000-0000-000000000005';
+  const profileSourceId = '40000000-0000-0000-0000-000000000001';
+  const operationalSourceId = '40000000-0000-0000-0000-000000000002';
+  const accountBoundSourceId = '40000000-0000-0000-0000-000000000003';
+  const actorAccountId = '10000000-0000-0000-0000-000000000002';
+  const missingActorAccountId = '10000000-0000-0000-0000-000000000003';
+  const legacySourceRows = [
+    {
+      tableName: 'post',
+      id: '50000000-0000-0000-0000-000000000001',
+      actorAccountConstraint: 'post_actor_account_id_account_id_fkey',
+    },
+    {
+      tableName: 'profile_follow_request',
+      id: '50000000-0000-0000-0000-000000000002',
+      actorAccountConstraint: 'profile_follow_request_actor_account_id_account_id_fkey',
+    },
+    {
+      tableName: 'profile_follow',
+      id: '50000000-0000-0000-0000-000000000003',
+      actorAccountConstraint: 'profile_follow_actor_account_id_account_id_fkey',
+    },
+    {
+      tableName: 'reaction',
+      id: '50000000-0000-0000-0000-000000000004',
+      actorAccountConstraint: 'reaction_actor_account_id_account_id_fkey',
+    },
+  ] as const;
+
+  try {
+    await control.unsafe('DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA public CASCADE;');
+    await control.unsafe('CREATE SCHEMA public;');
+    await runDatabaseMigrations({ databaseUrl, migrationsFolder: baseMigrations });
+    await control`INSERT INTO account (id) VALUES (${accountId})`;
+    await control`INSERT INTO account (id) VALUES (${actorAccountId})`;
+    await control`INSERT INTO profile (id) VALUES (${profileId})`;
+    for (const { tableName, id } of legacySourceRows) {
+      await control.unsafe(`INSERT INTO "${tableName}" (id) VALUES ($1)`, [id]);
+    }
+    await runDatabaseMigrations({ databaseUrl, migrationsFolder: expandedMigrations });
+
+    const expectedActorForeignKeys = legacySourceRows
+      .map(
+        ({ tableName, actorAccountConstraint }, index) =>
+          `(${index}, '${tableName}'::regclass, '${actorAccountConstraint}')`,
+      )
+      .join(', ');
+    const actorForeignKeys = Array.from(
+      await control.unsafe<{ constraintName: string; isValidated: boolean }[]>(
+        `WITH expected_actor_foreign_keys (ordinal, table_id, constraint_name) AS (
+           VALUES ${expectedActorForeignKeys}
+         )
+         SELECT actual.conname AS "constraintName", actual.convalidated AS "isValidated"
+         FROM expected_actor_foreign_keys AS expected
+         JOIN pg_constraint AS actual
+           ON actual.conrelid = expected.table_id
+           AND actual.conname = expected.constraint_name
+           AND actual.contype = 'f'
+         ORDER BY expected.ordinal`,
+      ),
+    );
+    assert.deepEqual(
+      actorForeignKeys,
+      legacySourceRows.map(({ actorAccountConstraint }) => ({
+        constraintName: actorAccountConstraint,
+        isValidated: true,
+      })),
+    );
+
+    for (const { tableName, id, actorAccountConstraint } of legacySourceRows) {
+      const table = `"${tableName}"`;
+      const legacyRows = Array.from(
+        await control.unsafe<{ id: string; actorAccountId: string | null }[]>(
+          `SELECT id::text AS id, actor_account_id::text AS "actorAccountId"
+           FROM ${table}
+           WHERE id = $1`,
+          [id],
+        ),
+      );
+      assert.deepEqual(legacyRows, [{ id, actorAccountId: null }]);
+
+      const linkedActorRows = Array.from(
+        await control.unsafe<{ actorAccountId: string | null }[]>(
+          `UPDATE ${table}
+           SET actor_account_id = $1
+           WHERE id = $2
+           RETURNING actor_account_id::text AS "actorAccountId"`,
+          [actorAccountId, id],
+        ),
+      );
+      assert.deepEqual(linkedActorRows, [{ actorAccountId }]);
+
+      await assert.rejects(
+        control.unsafe(
+          `UPDATE ${table}
+           SET actor_account_id = $1
+           WHERE id = $2`,
+          [missingActorAccountId, id],
+        ),
+        (error: unknown) => {
+          const postgresError = error as { code?: string; constraint_name?: string };
+          return (
+            postgresError.code === '23503' &&
+            postgresError.constraint_name === actorAccountConstraint
+          );
+        },
+      );
+    }
+
+    const insertProfileNotification = (id: string) =>
+      control<{ id: string }[]>`
+        INSERT INTO notification (id, recipient_profile_id, kind, source_id, data)
+        VALUES (${id}, ${profileId}, 'FOLLOW', ${profileSourceId}, '{}')
+        ON CONFLICT (recipient_profile_id, kind, source_id) DO NOTHING
+        RETURNING id::text AS id
+      `;
+    assert.deepEqual(Array.from(await insertProfileNotification(firstNotificationId)), [
+      { id: firstNotificationId },
+    ]);
+    assert.deepEqual(Array.from(await insertProfileNotification(duplicateNotificationId)), []);
+
+    const [{ profileNotificationCount }] = await control<{ profileNotificationCount: number }[]>`
+      SELECT count(*)::int AS "profileNotificationCount"
+      FROM notification
+      WHERE recipient_profile_id = ${profileId}
+        AND recipient_account_id IS NULL
+        AND kind = 'FOLLOW'
+        AND source_id = ${profileSourceId}
+    `;
+    assert.equal(profileNotificationCount, 1);
+
+    const [{ accountBoundId, accountBoundProfileId, accountBoundRecipientId }] = await control<
+      {
+        accountBoundId: string;
+        accountBoundProfileId: string | null;
+        accountBoundRecipientId: string | null;
+      }[]
+    >`
+      INSERT INTO notification (
+        id, recipient_profile_id, recipient_account_id, kind, source_id, data
+      ) VALUES (
+        ${accountBoundNotificationId}, ${profileId}, ${accountId}, 'FOLLOW',
+        ${accountBoundSourceId}, '{}'
+      )
+      RETURNING id::text AS "accountBoundId",
+        recipient_profile_id::text AS "accountBoundProfileId",
+        recipient_account_id::text AS "accountBoundRecipientId"
+    `;
+    assert.deepEqual(
+      { accountBoundId, accountBoundProfileId, accountBoundRecipientId },
+      {
+        accountBoundId: accountBoundNotificationId,
+        accountBoundProfileId: profileId,
+        accountBoundRecipientId: accountId,
+      },
+    );
+
+    const [{ id, recipientProfileId }] = await control<
+      { id: string; recipientProfileId: string | null }[]
+    >`
+      INSERT INTO notification (
+        id, recipient_account_id, kind, source_id, data
+      ) VALUES (
+        ${operationalNotificationId}, ${accountId}, 'OPERATIONAL', ${operationalSourceId},
+        '{"title":"Maintenance","href":"/"}'
+      )
+      RETURNING id::text AS id, recipient_profile_id::text AS "recipientProfileId"
+    `;
+    assert.equal(id, operationalNotificationId);
+    assert.equal(recipientProfileId, null);
+    await assert.rejects(
+      control`
+        INSERT INTO notification (
+          id, recipient_account_id, kind, source_id, data
+        ) VALUES (
+          ${operationalDuplicateId}, ${accountId}, 'OPERATIONAL', ${operationalSourceId},
+          '{"title":"Maintenance","href":"/"}'
+        )
+      `,
+      (error: unknown) => (error as { code?: string }).code === '23505',
+    );
+
+    await control`DELETE FROM account WHERE id = ${actorAccountId}`;
+    for (const { tableName, id } of legacySourceRows) {
+      const remainingRows = Array.from(
+        await control.unsafe<{ id: string; actorAccountId: string | null }[]>(
+          `SELECT id::text AS id, actor_account_id::text AS "actorAccountId"
+           FROM "${tableName}"
+           WHERE id = $1`,
+          [id],
+        ),
+      );
+      assert.deepEqual(remainingRows, [{ id, actorAccountId: null }]);
+    }
+  } finally {
+    await control.unsafe(
+      'DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA IF EXISTS public CASCADE;',
+    );
+    await control.unsafe('CREATE SCHEMA public;');
+    await control.end({ timeout: 5 });
+    await rm(baseMigrations, { force: true, recursive: true });
+    await rm(expandedMigrations, { force: true, recursive: true });
+  }
+});
 
 async function migrationHistoryColumns(control: ReturnType<typeof postgres>) {
   return Array.from(
@@ -183,6 +447,203 @@ test('파일별 transaction으로 앞 파일을 보존하고 실패 파일부터
         `
       )[0]?.count,
       3,
+    );
+  } finally {
+    await control.end({ timeout: 5 });
+    await rm(migrations, { force: true, recursive: true });
+  }
+});
+
+test('비트랜잭션 파일에서 CREATE INDEX CONCURRENTLY를 적용하고 재실행을 건너뛴다', async () => {
+  const control = postgres(databaseUrl, { max: 1 });
+  const migration = {
+    name: '20260712000000_concurrent_index',
+    sql: `-- kosmo:transaction off
+CREATE TABLE migration_concurrent_index (id integer PRIMARY KEY);
+--> statement-breakpoint
+CREATE INDEX CONCURRENTLY migration_concurrent_index_idx ON migration_concurrent_index (id);`,
+  };
+  const migrations = await migrationFolder([migration]);
+  const [parsedMigration] = readMigrationFiles({ migrationsFolder: migrations });
+
+  try {
+    await control.unsafe('DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA public CASCADE;');
+    await control.unsafe('CREATE SCHEMA public;');
+
+    await runDatabaseMigrations({ databaseUrl, migrationsFolder: migrations });
+
+    const [{ isValid }] = await control<{ isValid: boolean }[]>`
+      SELECT indisvalid AS "isValid"
+      FROM pg_index
+      WHERE indexrelid = 'public.migration_concurrent_index_idx'::regclass
+    `;
+    assert.equal(isValid, true);
+    await runDatabaseMigrations({ databaseUrl, migrationsFolder: migrations });
+
+    assert.deepEqual(
+      Array.from(
+        await control<{ name: string; hash: string }[]>`
+          SELECT name, hash
+          FROM drizzle.__drizzle_migrations
+          ORDER BY id
+        `,
+      ),
+      [{ name: migration.name, hash: parsedMigration.hash }],
+    );
+  } finally {
+    await control.end({ timeout: 5 });
+    await rm(migrations, { force: true, recursive: true });
+  }
+});
+
+test('비트랜잭션 파일의 일부 DDL 실패를 수동 정리한 뒤 재시도한다', async () => {
+  const control = postgres(databaseUrl, { max: 1 });
+  const failedMigration = {
+    name: '20260712000000_nontransactional_partial',
+    sql: `-- kosmo:transaction off
+CREATE TABLE migration_nontransactional_partial (id integer PRIMARY KEY);
+--> statement-breakpoint
+CREATE INDEX CONCURRENTLY migration_nontransactional_partial_idx
+  ON migration_nontransactional_partial (id);
+--> statement-breakpoint
+SELECT * FROM migration_nontransactional_missing;`,
+  };
+  const laterMigration = {
+    name: '20260712000001_nontransactional_later',
+    sql: 'CREATE TABLE migration_nontransactional_later (id integer PRIMARY KEY);',
+  };
+  const migrations = await migrationFolder([failedMigration, laterMigration]);
+
+  try {
+    await control.unsafe('DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA public CASCADE;');
+    await control.unsafe('CREATE SCHEMA public;');
+
+    await assert.rejects(
+      runDatabaseMigrations({ databaseUrl, migrationsFolder: migrations }),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.match(error.message, new RegExp(failedMigration.name));
+        assert.match(error.message, /partially persisted/i);
+        assert.match(error.message, /documented recovery before retrying/i);
+        assert.match(
+          String((error as Error & { cause?: unknown }).cause),
+          /migration_nontransactional_missing/,
+        );
+        return true;
+      },
+    );
+
+    assert.deepEqual(
+      Array.from(
+        await control<{ objectName: string | null }[]>`
+          SELECT to_regclass(object_name)::text AS "objectName"
+          FROM unnest(ARRAY[
+            'public.migration_nontransactional_partial',
+            'public.migration_nontransactional_partial_idx'
+          ]) AS object_name
+        `,
+      ).map(({ objectName }) => objectName),
+      ['migration_nontransactional_partial', 'migration_nontransactional_partial_idx'],
+    );
+    assert.equal(
+      (
+        await control<{ count: number }[]>`
+          SELECT count(*)::int AS count
+          FROM drizzle.__drizzle_migrations
+          WHERE name = ${failedMigration.name}
+        `
+      )[0]?.count,
+      0,
+    );
+    assert.equal(
+      (
+        await control<{ tableName: string | null }[]>`
+          SELECT to_regclass('public.migration_nontransactional_later')::text AS "tableName"
+        `
+      )[0]?.tableName,
+      null,
+    );
+
+    await control.unsafe('DROP INDEX CONCURRENTLY migration_nontransactional_partial_idx');
+    await control.unsafe('DROP TABLE migration_nontransactional_partial');
+    await writeFile(
+      join(migrations, failedMigration.name, 'migration.sql'),
+      `-- kosmo:transaction off
+CREATE TABLE migration_nontransactional_partial (id integer PRIMARY KEY);
+--> statement-breakpoint
+CREATE INDEX CONCURRENTLY migration_nontransactional_partial_idx
+  ON migration_nontransactional_partial (id);`,
+    );
+
+    await runDatabaseMigrations({ databaseUrl, migrationsFolder: migrations });
+
+    const history = await control<{ name: string }[]>`
+      SELECT name
+      FROM drizzle.__drizzle_migrations
+      ORDER BY id
+    `;
+    assert.deepEqual(
+      Array.from(history).map(({ name }) => name),
+      [failedMigration.name, laterMigration.name],
+    );
+    assert.equal(
+      (
+        await control<{ tableName: string | null }[]>`
+          SELECT to_regclass('public.migration_nontransactional_later')::text AS "tableName"
+        `
+      )[0]?.tableName,
+      'migration_nontransactional_later',
+    );
+  } finally {
+    await control.end({ timeout: 5 });
+    await rm(migrations, { force: true, recursive: true });
+  }
+});
+
+test('잘못된 transaction directive가 있으면 pending SQL을 실행하지 않는다', async () => {
+  const control = postgres(databaseUrl, { max: 1 });
+  const migrations = await migrationFolder([
+    {
+      name: '20260712000000_malformed_directive_before',
+      sql: 'CREATE TABLE migration_malformed_directive_before (id integer PRIMARY KEY);',
+    },
+    {
+      name: '20260712000001_malformed_directive_invalid',
+      sql: `-- kosmo:transaction on
+CREATE TABLE migration_malformed_directive_invalid (id integer PRIMARY KEY);`,
+    },
+    {
+      name: '20260712000002_malformed_directive_after',
+      sql: 'CREATE TABLE migration_malformed_directive_after (id integer PRIMARY KEY);',
+    },
+  ]);
+
+  try {
+    await control.unsafe('DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA public CASCADE;');
+    await control.unsafe('CREATE SCHEMA public;');
+
+    await assert.rejects(
+      runDatabaseMigrations({ databaseUrl, migrationsFolder: migrations }),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.match(error.message, /20260712000001_malformed_directive_invalid/);
+        assert.match(error.message, /-- kosmo:transaction off/);
+        return true;
+      },
+    );
+
+    assert.deepEqual(
+      Array.from(
+        await control<{ tableName: string | null }[]>`
+          SELECT to_regclass(table_name)::text AS "tableName"
+          FROM unnest(ARRAY[
+            'public.migration_malformed_directive_before',
+            'public.migration_malformed_directive_invalid',
+            'public.migration_malformed_directive_after'
+          ]) AS table_name
+        `,
+      ).map(({ tableName }) => tableName),
+      [null, null, null],
     );
   } finally {
     await control.end({ timeout: 5 });
