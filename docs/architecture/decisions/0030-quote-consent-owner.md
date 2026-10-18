@@ -169,3 +169,38 @@ policy·local 기능 hunk와 공통 safety hunk로 분리한다. 통합 `3122940
 Temporal의 [Activity 실행 보장](https://docs.temporal.io/activity-execution),
 [Terminate와 cancellation](https://docs.temporal.io/workflow-execution#cancellation-and-termination),
 [Continue-As-New](https://docs.temporal.io/develop/typescript/continue-as-new)를 전제로 한다.
+
+## 2026-10-18 작성 admission 복구
+
+일반 Local Post와 Reply는 기존 직접 transaction 저장 뒤 effects-only Workflow를 시작한다.
+Quote의 최초 INSERT만 생성 Workflow에서 Quote owner INITIALIZE로 연결한다. 일반 작성의 HTTP 응답
+유실 중복과 effects 시작 전 process 종료 gap이 이 변경으로 해결됐다고 주장하지 않는다.
+
+Quote caller는 한 작성 시도에 timestamp와 UUID로 구성한 admission identity를 보존한다. Workflow ID는
+Profile별로 분리하지 않으며 Profile·Account·본문 document·Mention authored text·Visibility·Source·Media
+입력 전체를 최초 입력에 결속한다. payload별 Update ID를 사용해 다른 입력이 이전 Update의 cached result를
+받지 않게 한다. 진행 중에는 같은 결과를 기다리고 완료 후에는 같은 Update 결과를 회수한다.
+
+최초 제출 시각부터 5분 안의 identity만 새 생성 실행을 시작할 수 있다. 30초보다 미래인 시각은 거절한다.
+그 뒤에는 payload별 Update 결과를 조회할 뿐 새 실행을 시작하지 않는다. NotFound는 안전한 거절이며,
+연결 오류나 deadline은 결과 미확정으로 전파한다. 현재 namespace retention을 늘려도 이미 사라진 과거
+admission이 다시 유효해지지 않는다. 5분은 최초 시작 창이며 이미 진행 중이거나 보관된 결과의 회수 기한이 아니다.
+
+Post ID는 admission에서, 최초 Content ID는 admission과 canonical payload 전체에서 domain을 분리한
+SHA-256 bytes를 사용해 UUIDv7으로 결정한다. UUID bit layout은 기존 uuid 라이브러리에 맡긴다.
+기존 Post/Content primary key와 currentContentId FK로 결속하므로 새 DB 컬럼이나 consent 상태가 필요하지 않다.
+Quote owner INITIALIZE도 payload별 command ID를 쓰고, Activity는 기대 Post/Content ID를 다시 계산한다.
+기존 행은 ACTIVE·Profile·Source·Visibility·Reply 없음·최초 Content ID가 모두 일치해야 회수한다.
+수정·삭제된 Post 또는 payload 불일치는 안전하게 거절한다. 정상 history 보존 중에는 cached Update 결과가
+기존 Post ID를 반환하며, 현재 consent status가 바뀌었다고 원래 생성을 다시 수행하지 않는다.
+
+이력 소실 뒤에도 같은 admission은 같은 Post primary key로만 쓰므로 새 ID로 중복 생성하지 않는다.
+오래된 admission의 결과를 찾지 못하면 새 Post를 만들지 않는다. 영구 receipt 저장이나 보존 기간 이후의
+무조건적인 결과 회수는 보장하지 않는다. timestamp·UUID를 바꾸면 다른 명시적 작성 시도이며, caller가
+결과 미확정 요청의 identity를 자동 교체하면 안 된다.
+
+생성 결과가 미확정이면 caller는 초안·identity를 유지하고 결과 미확정으로 표시한다. 같은 ID에 다른
+payload를 보내면 validation으로 거절하며, 성공 확인 또는 명시적 초안 폐기 뒤 새 시도를 만든다.
+Quote effects는 공통 Notification Activity로 Reply·Quote·Mention projection과 Push dispatch를 실행한다.
+DB consent writer와 protocol effect의 소유권은 유지한다. Activity delivery는 재시도 가능하며 외부 서버의
+exactly-once 수신을 보장하지 않는다. 기존 생성 Workflow history의 effects trace는 patch marker로 보존한다.

@@ -1,5 +1,7 @@
-import { randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
+import { WorkflowExecutionAlreadyStartedError, WorkflowNotFoundError } from '@temporalio/client';
 import { and, eq, inArray, isNotNull, isNull, ne, notExists, or, sql } from 'drizzle-orm';
+import { z } from 'zod';
 import {
   ActivityPubPosts,
   db,
@@ -33,6 +35,7 @@ import {
 } from '../post-content/server';
 import { runWorkflow, temporalClient } from '../temporal/client';
 import {
+  postCreateInputKey,
   postCreateWorkflow,
   postDeleteMutationWorkflow,
   unwrapPostTransition,
@@ -52,6 +55,7 @@ import type { PostQuotePolicy } from '../enums';
 import type { PostContentDocumentV1 } from '../post-content';
 
 export type LocalPostInput = {
+  admissionId?: string;
   accountId?: string;
   /**
    * Normalized authored body paired with `document`, supplied by the API after validating the
@@ -596,16 +600,25 @@ export function createPostPersisted(
   input: LocalPostInput,
   postId?: string,
   handle?: DatabaseHandle,
+  initialContentId?: string,
 ): Promise<CreatedPost>;
 export function createPostPersisted(
   input: ActivityPubPostInput,
   postId?: string,
   handle?: DatabaseHandle,
+  initialContentId?: string,
+): Promise<CreatedPost | DuplicatePost>;
+export function createPostPersisted(
+  input: LocalPostInput | ActivityPubPostInput,
+  postId?: string,
+  handle?: DatabaseHandle,
+  initialContentId?: string,
 ): Promise<CreatedPost | DuplicatePost>;
 export async function createPostPersisted(
   input: LocalPostInput | ActivityPubPostInput,
   postId?: string,
   handle?: DatabaseHandle,
+  initialContentId?: string,
 ): Promise<CreatedPost | DuplicatePost> {
   const localQuotePolicy =
     input.origin === 'LOCAL'
@@ -619,6 +632,14 @@ export async function createPostPersisted(
       if (postId) {
         const existing = await tx.select().from(Posts).where(eq(Posts.id, postId)).then(first);
         if (existing) {
+          if (initialContentId && existing.currentContentId !== initialContentId) {
+            throw new ValidationError(
+              'Quote admission payload does not match its original submission',
+              {
+                field: 'admissionId',
+              },
+            );
+          }
           if (existing.profileId !== input.profileId || !existing.currentContentId) {
             throw new PermissionDeniedError('Post create identity does not match');
           }
@@ -767,6 +788,7 @@ export async function createPostPersisted(
       const content = await tx
         .insert(PostContents)
         .values({
+          id: initialContentId,
           createdAt: input.origin === 'ACTIVITYPUB' ? input.receivedAt : undefined,
           document,
           postId: null,
@@ -859,16 +881,82 @@ export function createPost(input: ActivityPubPostInput): Promise<CreatedPost | D
 export async function createPost(
   input: LocalPostInput | ActivityPubPostInput,
 ): Promise<CreatedPost | DuplicatePost> {
-  if (input.origin === 'LOCAL') {
-    const { postId } = unwrapPostTransition(
-      await runWorkflow(postCreateWorkflow, {
-        args: [{ ...input, admissionId: randomUUID() }],
-        mode: 'update-with-start',
-        updateId: 'create',
-        workflowIdConflictPolicy: 'USE_EXISTING',
-        workflowIdReusePolicy: 'REJECT_DUPLICATE',
-      }),
-    );
+  if (input.origin === 'LOCAL' && input.repostSourceId !== undefined) {
+    const admission = /^(\d{13}):(.+)$/.exec(input.admissionId ?? '');
+    if (!admission || !z.uuid().safeParse(admission[2]).success) {
+      throw new ValidationError('Quote creation requires its original admission identity', {
+        field: 'admissionId',
+      });
+    }
+    const issuedAt = Number(admission[1]);
+    // Only recent first submissions may start. Older attempts can recover retained results,
+    // but missing history (including a later retention increase) must never create a new Post.
+    const firstStartWindow = 5 * 60_000;
+    if (issuedAt > Date.now() + 30_000) {
+      throw new ValidationError('Quote admission timestamp is in the future', {
+        field: 'admissionId',
+      });
+    }
+    const command = {
+      ...input,
+      admissionId: input.admissionId!,
+      document: validateLocalPostContentDocument(input.document, input.authoredBodyText),
+    };
+    const updateId = createHash('sha256').update(postCreateInputKey(command)).digest('hex');
+    const recover = () =>
+      runWorkflow(postCreateWorkflow, {
+        args: [command],
+        updateId,
+        mode: 'update-result',
+      });
+    let postId: string;
+    try {
+      let outcome: Awaited<ReturnType<typeof recover>>;
+      try {
+        // Closed Runs cannot receive a new Update-with-Start, but their Update results remain readable.
+        outcome = await recover();
+      } catch (error) {
+        if (!(error instanceof WorkflowNotFoundError)) {
+          throw error;
+        }
+        if (Date.now() - issuedAt > firstStartWindow) {
+          throw new ValidationError(
+            'Quote admission expired; its result cannot be safely recreated',
+            {
+              field: 'admissionId',
+            },
+          );
+        }
+        try {
+          outcome = await runWorkflow(postCreateWorkflow, {
+            args: [command],
+            updateArgs: [command],
+            // A different payload must reach validation rather than replay a cached Update result.
+            updateId,
+            mode: 'update-with-start',
+            workflowIdConflictPolicy: 'USE_EXISTING',
+            workflowIdReusePolicy: 'REJECT_DUPLICATE',
+          });
+        } catch (startError) {
+          if (!(startError instanceof WorkflowExecutionAlreadyStartedError)) {
+            throw startError;
+          }
+          // Another caller may have started and completed between the lookup and start.
+          outcome = await recover();
+        }
+      }
+      ({ postId } = unwrapPostTransition(outcome));
+    } catch (error) {
+      if (error instanceof WorkflowNotFoundError) {
+        throw new ValidationError(
+          'Quote admission payload does not match its original submission',
+          {
+            field: 'admissionId',
+          },
+        );
+      }
+      throw error;
+    }
     const post = await db.select().from(Posts).where(eq(Posts.id, postId)).then(firstOrThrow);
     const content = await db
       .select()

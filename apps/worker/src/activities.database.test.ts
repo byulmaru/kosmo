@@ -22,7 +22,7 @@ import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
 import { WorkflowIdConflictPolicy, WorkflowIdReusePolicy } from '@temporalio/client';
 import { MockActivityEnvironment } from '@temporalio/testing';
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import type * as CoreDb from '@kosmo/core/db';
 import type {
   createPost as CreatePost,
@@ -60,6 +60,7 @@ let OAuthAuthorizationCodes: typeof CoreDb.OAuthAuthorizationCodes;
 let OAuthTokens: typeof CoreDb.OAuthTokens;
 let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
+let PostMentions: typeof CoreDb.PostMentions;
 let Posts: typeof CoreDb.Posts;
 let ProfileBlocks: typeof CoreDb.ProfileBlocks;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
@@ -98,6 +99,7 @@ before(async () => {
     OAuthTokens,
     pg,
     PostContents,
+    PostMentions,
     Posts,
     ProfileBlocks,
     ProfileFollows,
@@ -861,6 +863,7 @@ test('Quote Notification Activity는 source author에게 한 건만 생성한다
     visibility: PostVisibility.PUBLIC,
   });
   const { post: quote } = await createCorePost({
+    admissionId: `${Date.now()}:${crypto.randomUUID()}`,
     document: postContentDocumentFromText('Quote body'),
     origin: 'LOCAL',
     profileId: author.id,
@@ -888,6 +891,7 @@ test('Quote와 Reply 판단이 경합해도 Reply가 대표가 된다', async ()
     visibility: PostVisibility.PUBLIC,
   });
   const { post: quote } = await createCorePost({
+    admissionId: `${Date.now()}:${crypto.randomUUID()}`,
     document: postContentDocumentFromText('Combined quote'),
     origin: 'LOCAL',
     profileId: author.id,
@@ -920,6 +924,7 @@ test('Quote와 Reply의 recipient가 다르면 각 알림을 독립적으로 만
   });
   const replyParent = await createPost(replyRecipient.id);
   const { post: quote } = await createCorePost({
+    admissionId: `${Date.now()}:${crypto.randomUUID()}`,
     document: postContentDocumentFromText('Quote and reply'),
     origin: 'LOCAL',
     profileId: author.id,
@@ -1091,6 +1096,91 @@ test('공통 Notification Activity는 Push start 실패 뒤 저장된 알림을 
   assert.deepEqual(workflowIds, [
     `push-notification:${notifications[0]?.id}`,
     `push-notification:${notifications[0]?.id}`,
+  ]);
+});
+
+test('공통 Notification Activity는 Mention이 투영된 Quote를 안정적인 Push 하나로 연결한다', async (t) => {
+  const sourceAuthor = await createProfile();
+  const quoteAuthor = await createProfile();
+  const mentionedProfile = await createProfile();
+  const { post: source } = await createCorePost({
+    document: postContentDocumentFromText('Quote source'),
+    origin: 'LOCAL',
+    profileId: sourceAuthor.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const { post: quote, content } = await createCorePost({
+    admissionId: `${Date.now()}:${crypto.randomUUID()}`,
+    authoredBodyText: `Quote @${mentionedProfile.handle}`,
+    document: {
+      version: 1,
+      summary: null,
+      body: {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              { type: 'text', text: 'Quote ' },
+              { type: 'mention', attrs: { profileId: mentionedProfile.id } },
+            ],
+          },
+        ],
+      },
+    },
+    origin: 'LOCAL',
+    profileId: quoteAuthor.id,
+    repostSourceId: source.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const mentions = await db
+    .select()
+    .from(PostMentions)
+    .where(eq(PostMentions.postContentId, content.id));
+  assert.deepEqual(
+    mentions.map(({ profileId }) => profileId),
+    [mentionedProfile.id],
+  );
+
+  const duplicateStart = new Error('Push workflow already started');
+  duplicateStart.name = 'WorkflowExecutionAlreadyStartedError';
+  let startAttempts = 0;
+  const start = t.mock.method(
+    temporalClient.workflow,
+    'start',
+    async (workflow: string | Workflow) => {
+      assert.equal(workflow, 'pushNotificationDeliveryWorkflow');
+      startAttempts += 1;
+      if (startAttempts === 2) {
+        throw duplicateStart;
+      }
+      return undefined as never;
+    },
+  );
+
+  const input = { kind: NotificationKind.QUOTE, sourceId: quote.id } as const;
+  await new MockActivityEnvironment().run(createNotificationActivity, input);
+  await new MockActivityEnvironment().run(createNotificationActivity, input);
+
+  const notifications = await db
+    .select()
+    .from(Notifications)
+    .where(eq(Notifications.sourceId, quote.id));
+  assert.equal(notifications.length, 2);
+  assert.deepEqual(
+    new Set(notifications.map(({ kind, recipientProfileId }) => `${kind}:${recipientProfileId}`)),
+    new Set([
+      `${NotificationKind.MENTION}:${mentionedProfile.id}`,
+      `${NotificationKind.QUOTE}:${sourceAuthor.id}`,
+    ]),
+  );
+  const quoteNotification = notifications.find(({ kind }) => kind === NotificationKind.QUOTE);
+  assert.ok(quoteNotification);
+  assert.equal(start.mock.calls.length, 2);
+  const workflowIds = start.mock.calls.map((call) => call.arguments[1]?.workflowId);
+  assert.deepEqual(workflowIds, [
+    `push-notification:${quoteNotification.id}`,
+    `push-notification:${quoteNotification.id}`,
   ]);
 });
 
@@ -1587,6 +1677,7 @@ test('Profile Notification의 유형별 기본 notification payload를 전달한
     });
     postIds.push(reply.id);
     const { post: quote } = await createCorePost({
+      admissionId: `${Date.now()}:${crypto.randomUUID()}`,
       document: postContentDocumentFromText('quote'),
       origin: 'LOCAL',
       profileId: actor.id,
@@ -1626,13 +1717,29 @@ test('Profile Notification의 유형별 기본 notification payload를 전달한
       [NotificationKind.QUOTE, quote.id],
     ] as const;
     const notifications = await Promise.all(
-      notificationSources.map(([kind, sourceId]) =>
-        db
+      notificationSources.map(async ([kind, sourceId]) => {
+        const [inserted] = await db
           .insert(Notifications)
           .values({ kind, recipientProfileId: recipient.id, sourceId })
-          .returning({ id: Notifications.id })
-          .then(firstOrThrow),
-      ),
+          .onConflictDoNothing({
+            target: [Notifications.recipientProfileId, Notifications.kind, Notifications.sourceId],
+          })
+          .returning({ id: Notifications.id });
+        if (inserted) {
+          return inserted;
+        }
+        return db
+          .select({ id: Notifications.id })
+          .from(Notifications)
+          .where(
+            and(
+              eq(Notifications.kind, kind),
+              eq(Notifications.recipientProfileId, recipient.id),
+              eq(Notifications.sourceId, sourceId),
+            ),
+          )
+          .then(firstOrThrow);
+      }),
     );
 
     const installationIds = await listPushNotificationInstallationsActivity(notifications[0]!.id);

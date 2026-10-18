@@ -43,7 +43,11 @@ export type QuoteOwnerCommand = { readonly postId: string; readonly commandId: s
       readonly quoteUri: string;
     }
   | { readonly kind: 'REJECT'; readonly requestUri: string; readonly sourceAuthorActorUri: string }
-  | { readonly kind: 'INITIALIZE'; readonly input: LocalPostInput }
+  | {
+      readonly kind: 'INITIALIZE';
+      readonly input: LocalPostInput;
+      readonly initialContentId?: string;
+    }
 );
 export type QuotePendingWithoutSource = {
   readonly postId: string;

@@ -143,6 +143,12 @@ Local 작성과 Remote 수신의 Quote는 direct Repost Source Author를 수신�
 [Quote Notification](./notification.md#quote-notification)의 원인이다. 알림의 생성 조건과 중복 처리는
 Notification이 소유하며, Quote·Reply Parent·Repost Source의 구조와 독립적인 조회 정책은 바뀌지 않는다.
 
+로컬 Quote의 같은 작성 시도를 재제출하면 실행 중인 생성을 이어받거나 기존 생성 결과를 반환한다.
+작성 시도의 identity는 Profile·본문·Source·Media 등의 입력에 결속하며 다른 입력으로 재사용할 수 없다.
+요청 timeout은 저장 실패 확정이 아니다. 호출자는 결과 미확정으로 표시하고 초안과 작성 identity를
+보존한다. 서버의 결과 보존 기간을 지난 작성 시도는 새 게시물로 재생성하지 않고 안전하게 거절할 수 있다.
+일반 Post·Reply의 기존 HTTP 응답 유실 중복 가능성은 이 Quote 작성 보장에 포함하지 않는다.
+
 ### Quote Source 조건과 승인
 
 - 타인의 Source는 Public 또는 Unlisted이고 Content와 조회 권한이 있어야 한다. 타인의 Followers Only

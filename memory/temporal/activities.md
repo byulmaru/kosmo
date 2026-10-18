@@ -50,6 +50,10 @@
 - 강제 Terminate/Reset은 drain을 실행하지 않으므로 이미 fence를 통과한 늦은 commit을 취소하지 못한다.
   새 Run bootstrap과 운영 복구의 보장 범위는 [ADR 0030](../../docs/architecture/decisions/0030-quote-consent-owner.md)을 따른다.
 
+- Quote 최초 생성은 stable caller admission을 통해 Quote owner INITIALIZE에 연결한다. 일반 Local Post/Reply는
+  기존 non-Temporal 저장과 post-create effects 경로를 유지한다. Quote의 payload binding·Update 결과 회수와
+  retention 이후 안전한 거절은 `docs/architecture/decisions/0030-quote-consent-owner.md`를 따른다.
+
 ## Inputs And Identity
 
 - Workflow/Update wire input의 strict Zod schema는 해당 Workflow의 trust boundary 가까이에 둔다. Activity가
