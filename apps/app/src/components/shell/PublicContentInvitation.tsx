@@ -59,15 +59,22 @@ export function PublicContentInvitation({ onDismiss, onLayout, pathname, visible
       testID="public-content-invitation"
     >
       <View style={styles.content}>
-        <IconButton
-          accessibilityLabel="가입 안내 닫기"
-          onPress={onDismiss}
-          style={styles.closeButton}
-          targetSize={44}
-          visualSize={44}
-        >
-          <X color={theme.foregroundPrimary} size={18} strokeWidth={2} />
-        </IconButton>
+        <View style={styles.header}>
+          <Text
+            style={[textStyles.uiLabelM, styles.invitationText, { color: theme.foregroundPrimary }]}
+          >
+            지금 가입하고 취향이 통하는 사람들과 이야기를 나눠보세요.
+          </Text>
+          <IconButton
+            accessibilityLabel="가입 안내 닫기"
+            onPress={onDismiss}
+            style={styles.closeButton}
+            targetSize={44}
+            visualSize={44}
+          >
+            <X color={theme.foregroundPrimary} size={18} strokeWidth={2} />
+          </IconButton>
+        </View>
         <View style={styles.actions}>
           <NavigationLink href="/" primary>
             <Button
@@ -116,7 +123,9 @@ const styles = StyleSheet.create({
   },
   flowRoot: { position: 'relative', width: '100%' },
   content: { gap: space[8], minWidth: 0 },
-  closeButton: { alignSelf: 'flex-end' },
+  header: { alignItems: 'center', flexDirection: 'row', gap: space[8] },
+  invitationText: { flex: 1, minWidth: 0 },
+  closeButton: { flexShrink: 0 },
   actions: { alignItems: 'stretch', gap: space[8], minWidth: 0 },
   ctaButton: { borderRadius: radius.full, minHeight: space[48], width: '100%' },
   links: {
