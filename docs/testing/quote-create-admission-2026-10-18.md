@@ -73,11 +73,11 @@ Quote 중복 ID: `01a14f3b-bf06-7b65-9358-4c428b5e91c2`, `01a14f3b-bf87-7fcc-8ac
 | 구형 postCreateWorkflow history replay 및 transition | 4 tests PASS                                                                                 |
 | Composer 집중 단위 (#940)                            | 23 tests PASS                                                                                |
 | #940 API policy mismatch/직접 저장                   | 2 tests PASS                                                                                 |
-| Core 전체 (최상위)                                   | unit 122 / migration 19 / smoke PASS; 서비스 최종 재검증 중                                  |
-| Worker 전체 (최상위)                                 | 진행 중                                                                                      |
+| Core 전체 (최상위)                                   | unit 122 / migration 19 / smoke / 서비스 268 PASS                                            |
+| Worker 전체 (최상위)                                 | 전체 하위 그룹 242 PASS (단일 최종 aggregate 실행 아님; 아래 실행 이력 참조)                 |
 | Fedify 전체 (최상위)                                 | 381 + standalone consumer 1 PASS                                                             |
 | API 전체 (최상위)                                    | unit 44 PASS; integration 365 PASS / 외부 Media Storage 1 skip; Source 제거 경계 집중 1 PASS |
-| Web E2E 전체 (최상위)                                | 진행 중                                                                                      |
+| Web E2E 전체 (최상위)                                | 191 PASS                                                                                     |
 | App check/Posts Storybook (최상위)                   | Relay/TypeScript PASS; Composer unit 23 PASS; Storybook 114 PASS                             |
 
 일반 작성 집중 테스트는 Root Post 2개와 Reply 1개를 직접 commit하고 owner RPC 0회를 확인한다.
