@@ -34,23 +34,68 @@ export function PostMediaImage({
   const triggerRef = useRef<NativeView>(null);
   const [generation, setGeneration] = useState(0);
   const [aspectRatio, setAspectRatio] = useState(1);
-  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
-  const currentUrl = useRef(item.url);
+  const [loadState, setLoadState] = useState<{
+    generation: number;
+    id: string;
+    status: 'loading' | 'ready' | 'error';
+    url: string | null;
+  }>({ generation, id: item.id, status: 'loading', url: item.url });
+  const currentSource = useRef({ generation, id: item.id, url: item.url });
   const measuredUrl = useRef<string | null>(null);
-  currentUrl.current = item.url;
+  currentSource.current = { generation, id: item.id, url: item.url };
+  const status =
+    loadState.generation === generation && loadState.id === item.id && loadState.url === item.url
+      ? loadState.status
+      : 'loading';
   const accessibilityLabel = item.altText?.trim() || `${index + 1}번째 첨부 이미지`;
   const canRetry = Boolean(item.url) && Boolean(interactive);
-  const handleError = useCallback(() => setStatus('error'), []);
-  const handleLoadStart = useCallback(() => setStatus('loading'), []);
+  const handleError = useCallback(() => {
+    if (
+      currentSource.current.generation === generation &&
+      currentSource.current.id === item.id &&
+      currentSource.current.url === item.url
+    ) {
+      setLoadState({ generation, id: item.id, status: 'error', url: item.url });
+    }
+  }, [generation, item.id, item.url]);
+  const handleLoadStart = useCallback(() => {
+    if (
+      currentSource.current.generation !== generation ||
+      currentSource.current.id !== item.id ||
+      currentSource.current.url !== item.url
+    ) {
+      return;
+    }
+
+    setLoadState((current) => {
+      if (
+        current.generation === generation &&
+        current.id === item.id &&
+        current.url === item.url &&
+        current.status === 'ready'
+      ) {
+        return current;
+      }
+      return { generation, id: item.id, status: 'loading', url: item.url };
+    });
+  }, [generation, item.id, item.url]);
   const updateAspectRatio = useCallback((url: string, width: number, height: number) => {
-    if (currentUrl.current === url && height > 0 && width > 0) {
+    if (currentSource.current.url === url && height > 0 && width > 0) {
       measuredUrl.current = url;
       setAspectRatio(Math.max(width / height, 1));
     }
   }, []);
   const handleLoad = useCallback(
     (event?: ImageLoadEvent) => {
-      setStatus('ready');
+      if (
+        currentSource.current.generation !== generation ||
+        currentSource.current.id !== item.id ||
+        currentSource.current.url !== item.url
+      ) {
+        return;
+      }
+
+      setLoadState({ generation, id: item.id, status: 'ready', url: item.url });
       if (fill || !item.url || measuredUrl.current === item.url) {
         return;
       }
@@ -68,7 +113,7 @@ export function PostMediaImage({
         () => undefined,
       );
     },
-    [fill, item.url, updateAspectRatio],
+    [fill, generation, item.id, item.url, updateAspectRatio],
   );
 
   useEffect(() => {
@@ -114,7 +159,12 @@ export function PostMediaImage({
             accessibilityRole="button"
             onPress={() => {
               setGeneration((value) => value + 1);
-              setStatus('loading');
+              setLoadState({
+                generation: generation + 1,
+                id: item.id,
+                status: 'loading',
+                url: item.url,
+              });
             }}
             style={({ pressed }) => [
               styles.retryButton,
