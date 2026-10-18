@@ -1,4 +1,9 @@
-export type ErrorCode = 'CONFLICT' | 'NOT_FOUND' | 'PERMISSION_DENIED' | 'VALIDATION';
+export type ErrorCode =
+  | 'CONFLICT'
+  | 'NOT_FOUND'
+  | 'PERMISSION_DENIED'
+  | 'PROFILE_LIMIT_EXCEEDED'
+  | 'VALIDATION';
 
 type KosmoErrorOptions = {
   code: ErrorCode;
@@ -37,6 +42,12 @@ export class ValidationError extends FieldError {
 export class ConflictError extends FieldError {
   constructor({ message = 'Conflict', field }: { message?: string; field?: string } = {}) {
     super({ code: 'CONFLICT', message, field });
+  }
+}
+
+export class ProfileLimitExceededError extends KosmoError {
+  constructor() {
+    super({ code: 'PROFILE_LIMIT_EXCEEDED', message: 'Profile limit reached' });
   }
 }
 

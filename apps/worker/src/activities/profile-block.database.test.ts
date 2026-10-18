@@ -3,6 +3,8 @@ import '@kosmo/core/polyfill';
 import assert from 'node:assert/strict';
 import { after, afterEach, test } from 'node:test';
 import {
+  AccountProfiles,
+  Accounts,
   db,
   firstOrThrow,
   Instances,
@@ -14,6 +16,8 @@ import {
   Profiles,
 } from '@kosmo/core/db';
 import {
+  AccountProfileRole,
+  AccountState,
   InstanceKind,
   InstanceState,
   NotificationKind,
@@ -28,6 +32,7 @@ import {
 
 const profileIds = new Set<string>();
 const instanceIds = new Set<string>();
+const accountIds = new Set<string>();
 
 const createProfile = async ({
   instanceKind = InstanceKind.LOCAL,
@@ -37,6 +42,12 @@ const createProfile = async ({
   readonly instanceState?: InstanceState;
 } = {}) => {
   const suffix = crypto.randomUUID();
+  const account = await db
+    .insert(Accounts)
+    .values({ displayName: suffix, oidcSubject: `subject-${suffix}`, state: AccountState.ACTIVE })
+    .returning()
+    .then(firstOrThrow);
+  accountIds.add(account.id);
   const instance = await db
     .insert(Instances)
     .values({
@@ -61,7 +72,12 @@ const createProfile = async ({
     .returning()
     .then(firstOrThrow);
   profileIds.add(profile.id);
-  return { instance, profile };
+  await db.insert(AccountProfiles).values({
+    accountId: account.id,
+    profileId: profile.id,
+    role: AccountProfileRole.OWNER,
+  });
+  return { account, instance, profile };
 };
 
 const createFollow = async ({
@@ -121,8 +137,12 @@ afterEach(async () => {
   if (instanceIds.size > 0) {
     await db.delete(Instances).where(inArray(Instances.id, [...instanceIds]));
   }
+  if (accountIds.size > 0) {
+    await db.delete(Accounts).where(inArray(Accounts.id, [...accountIds]));
+  }
   profileIds.clear();
   instanceIds.clear();
+  accountIds.clear();
 });
 
 after(async () => {
@@ -130,8 +150,10 @@ after(async () => {
 });
 
 test('Block success removes current bidirectional Follow/Request and direct notifications atomically', async () => {
-  const { profile: owner } = await createProfile();
-  const { profile: target } = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
+  const { account: ownerAccount, profile: owner } = await createProfile();
+  const { account: targetAccount, profile: target } = await createProfile({
+    instanceKind: InstanceKind.ACTIVITYPUB,
+  });
   const requestOwnerToTargetId = '00000000-0000-4000-8000-000000000401';
   const requestTargetToOwnerId = '00000000-0000-4000-8000-000000000402';
 
@@ -161,26 +183,31 @@ test('Block success removes current bidirectional Follow/Request and direct noti
   await db.insert(Notifications).values([
     {
       kind: NotificationKind.FOLLOW,
+      recipientAccountId: targetAccount.id,
       recipientProfileId: target.id,
       sourceId: followOwnerToTargetId,
     },
     {
       kind: NotificationKind.FOLLOW,
+      recipientAccountId: ownerAccount.id,
       recipientProfileId: owner.id,
       sourceId: followTargetToOwnerId,
     },
     {
       kind: NotificationKind.FOLLOW_REQUEST,
+      recipientAccountId: targetAccount.id,
       recipientProfileId: target.id,
       sourceId: requestOwnerToTargetId,
     },
     {
       kind: NotificationKind.FOLLOW_REQUEST,
+      recipientAccountId: ownerAccount.id,
       recipientProfileId: owner.id,
       sourceId: requestTargetToOwnerId,
     },
     {
       kind: NotificationKind.REACTION,
+      recipientAccountId: ownerAccount.id,
       recipientProfileId: owner.id,
       sourceId: unrelatedNotificationSourceId,
     },
@@ -282,8 +309,8 @@ test('Block success removes current bidirectional Follow/Request and direct noti
 });
 
 test('Block duplicate observes the existing row without cleaning later sources', async () => {
-  const { profile: owner } = await createProfile();
-  const { profile: target } = await createProfile();
+  const { account: ownerAccount, profile: owner } = await createProfile();
+  const { account: targetAccount, profile: target } = await createProfile();
   const firstExecution = await executeProfileBlockTransitionActivity({
     ownerProfileId: owner.id,
     targetProfileId: target.id,
@@ -306,11 +333,13 @@ test('Block duplicate observes the existing row without cleaning later sources',
   await db.insert(Notifications).values([
     {
       kind: NotificationKind.FOLLOW,
+      recipientAccountId: targetAccount.id,
       recipientProfileId: target.id,
       sourceId: lateFollowId,
     },
     {
       kind: NotificationKind.FOLLOW_REQUEST,
+      recipientAccountId: ownerAccount.id,
       recipientProfileId: owner.id,
       sourceId: lateRequestId,
     },
@@ -360,8 +389,8 @@ test('Block duplicate observes the existing row without cleaning later sources',
 });
 
 test('Unblock deletes only the exact Profile Block relation and leaves Follow cleanup untouched', async () => {
-  const { profile: owner } = await createProfile();
-  const { profile: target } = await createProfile();
+  const { account: ownerAccount, profile: owner } = await createProfile();
+  const { account: targetAccount, profile: target } = await createProfile();
   const profileBlockId = '00000000-0000-4000-8000-000000000601';
   const replacementProfileBlockId = '00000000-0000-4000-8000-000000000602';
   const requestId = '00000000-0000-4000-8000-000000000603';
@@ -380,8 +409,18 @@ test('Unblock deletes only the exact Profile Block relation and leaves Follow cl
     followeeProfileId: owner.id,
   });
   await db.insert(Notifications).values([
-    { kind: NotificationKind.FOLLOW, recipientProfileId: target.id, sourceId: followId },
-    { kind: NotificationKind.FOLLOW_REQUEST, recipientProfileId: owner.id, sourceId: requestId },
+    {
+      kind: NotificationKind.FOLLOW,
+      recipientAccountId: targetAccount.id,
+      recipientProfileId: target.id,
+      sourceId: followId,
+    },
+    {
+      kind: NotificationKind.FOLLOW_REQUEST,
+      recipientAccountId: ownerAccount.id,
+      recipientProfileId: owner.id,
+      sourceId: requestId,
+    },
   ]);
 
   const unblock = await executeProfileUnblockTransitionActivity({

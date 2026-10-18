@@ -298,13 +298,15 @@ export const Notifications = pgTable(
     readAt: datetime('read_at'),
   },
   (table) => [
-    check(
-      'notification_recipient_check',
-      sql`(${table.recipientProfileId} IS NOT NULL) <> (${table.recipientAccountId} IS NOT NULL)`,
-    ),
-    unique().on(table.recipientProfileId, table.kind, table.sourceId),
-    unique().on(table.recipientAccountId, table.kind, table.sourceId),
+    uniqueIndex()
+      .on(table.recipientAccountId, table.kind, table.sourceId)
+      .where(sql`${table.recipientProfileId} IS NULL`),
+    uniqueIndex('notification_account_profile_kind_source_unique')
+      .on(table.recipientAccountId, table.recipientProfileId, table.kind, table.sourceId)
+      .where(sql`${table.recipientProfileId} IS NOT NULL`),
     index().on(table.recipientProfileId, table.id.desc()),
+    index().on(table.recipientProfileId, table.createdAt.desc(), table.id.desc()),
+    index().on(table.recipientAccountId, table.createdAt.desc(), table.id.desc()),
     index()
       .on(table.recipientProfileId)
       .where(sql`${table.readAt} IS NULL`),
@@ -386,6 +388,9 @@ export const Posts = pgTable(
   'post',
   {
     id: id(),
+    actorAccountId: uuid('actor_account_id').references(() => Accounts.id, {
+      onDelete: 'set null',
+    }),
     profileId: uuid('profile_id')
       .notNull()
       .references(() => Profiles.id),
@@ -537,6 +542,9 @@ export const ProfileFollows = pgTable(
   'profile_follow',
   {
     id: id(),
+    actorAccountId: uuid('actor_account_id').references(() => Accounts.id, {
+      onDelete: 'set null',
+    }),
     followerProfileId: uuid('follower_profile_id')
       .notNull()
       .references(() => Profiles.id, { onDelete: 'cascade' }),
@@ -556,6 +564,9 @@ export const ProfileFollowRequests = pgTable(
   'profile_follow_request',
   {
     id: id(),
+    actorAccountId: uuid('actor_account_id').references(() => Accounts.id, {
+      onDelete: 'set null',
+    }),
     followerProfileId: uuid('follower_profile_id')
       .notNull()
       .references(() => Profiles.id, { onDelete: 'cascade' }),
@@ -649,6 +660,9 @@ export const Reactions = pgTable(
   'reaction',
   {
     id: id(),
+    actorAccountId: uuid('actor_account_id').references(() => Accounts.id, {
+      onDelete: 'set null',
+    }),
     profileId: uuid('profile_id')
       .notNull()
       .references(() => Profiles.id, { onDelete: 'cascade' }),

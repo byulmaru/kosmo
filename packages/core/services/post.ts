@@ -97,6 +97,7 @@ type RemoteMediaCandidate = {
 type PostOrigin = 'LOCAL' | 'ACTIVITYPUB';
 
 type LocalRepostInput = {
+  actorAccountId?: string;
   actorProfileId: string;
   origin: 'LOCAL';
   sourcePostId: string;
@@ -298,9 +299,11 @@ const resolveRepostVisibility = (
 const createOrFindRepost = async (
   tx: Transaction,
   {
+    actorAccountId,
     actorProfileId,
     sourcePostId,
   }: {
+    readonly actorAccountId: string | null;
     readonly actorProfileId: string;
     readonly sourcePostId: string;
   },
@@ -325,6 +328,7 @@ const createOrFindRepost = async (
   const inserted = await tx
     .insert(Posts)
     .values({
+      actorAccountId,
       profileId: actorProfileId,
       repostSourceId: source.id,
       state: PostState.ACTIVE,
@@ -544,6 +548,7 @@ export function repostPost(input: ActivityPubRepostInput): Promise<RepostResult>
 export async function repostPost(input: RepostInput): Promise<RepostResult> {
   const result = await db.transaction(async (tx) => {
     let materialized = await createOrFindRepost(tx, {
+      actorAccountId: input.origin === 'LOCAL' ? (input.actorAccountId ?? null) : null,
       actorProfileId: input.actorProfileId,
       sourcePostId: input.sourcePostId,
     });
@@ -561,6 +566,7 @@ export async function repostPost(input: RepostInput): Promise<RepostResult> {
 
       if (!(await save(materialized.repost.id))) {
         materialized = await createOrFindRepost(tx, {
+          actorAccountId: null,
           actorProfileId: input.actorProfileId,
           sourcePostId: input.sourcePostId,
         });
@@ -667,7 +673,6 @@ export async function createPostPersisted(
                 : [],
             ),
       );
-
       if (
         input.origin === 'LOCAL' &&
         input.replyParentId !== undefined &&
@@ -799,6 +804,7 @@ export async function createPostPersisted(
       const post = await tx
         .insert(Posts)
         .values({
+          actorAccountId: input.origin === 'LOCAL' ? (input.accountId ?? null) : null,
           createdAt,
           id: postId,
           currentContentId: content.id,

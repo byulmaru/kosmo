@@ -4,12 +4,27 @@
 
 현재 `migrate` command는 runtime image의 `drizzle/` 아래에서 공개 Drizzle migration reader로 파일을
 version-control 순서대로 읽는다. `drizzle.__drizzle_migrations` history의 각 적용 name이 local migration에
-존재하고 hash가 같은지 검증한 뒤, 이미 적용된 name을 제외한 pending 파일을 version-control 순서로 파일마다
-독립 transaction으로 적용한다. 병렬 branch가 timestamp와 다른 순서로 merge·배포되어 DB 적용 순서가 local
-정렬과 달라도 같은 name/hash 집합이면 유효하다. Local에 없는 history, 같은 name의 hash 변경과 중복
-name/history는 새 SQL 실행 전에 거부한다.
-각 파일의 모든 statement와 history insert가 같은 transaction에 있으므로 파일 성공은 함께 commit되고 파일
-실패는 함께 rollback된다. PostgreSQL advisory lock은 동시 runner를 막지만 migration phase를 선택하지 않는다.
+존재하고 hash가 같은지 검증한 뒤, 이미 적용된 name을 제외한 pending 파일을 version-control 순서로 적용한다.
+병렬 branch가 timestamp와 다른 순서로 merge·배포되어 DB 적용 순서가 local 정렬과 달라도 같은 name/hash 집합이면
+유효하다. Local에 없는 history, 같은 name의 hash 변경과 중복 name/history는 새 SQL 실행 전에 거부한다.
+
+파일은 기본적으로 모든 statement와 history insert를 같은 transaction에서 실행하므로 성공은 함께 commit되고
+실패는 함께 rollback된다. Transaction을 지원하지 않는 작업은 migration SQL의 정확한 첫 줄 주석
+`-- kosmo:transaction off`로 해당 파일만 opt-out할 수 있다. 첫 줄 앞뒤의 whitespace와 LF/CRLF line ending은
+허용된다. 이 opt-out은 migration reader가 반환한 SQL과 hash를 바꾸지 않는다. `-- kosmo:transaction`으로
+시작하는 잘못된 첫 줄은 history 준비나 pending SQL 실행 전에 거부되며, 뒤쪽 줄에 적은 지시문은 적용되지 않는다.
+
+Opt-out 파일은 같은 reserved PostgreSQL session에서 advisory lock을 유지한 채 statement를 차례로 실행하고,
+모든 statement가 성공한 뒤에만 일반 migration history row를 삽입한다. 파일 전체를 감싸는 `BEGIN`은 없다.
+Statement 또는 history insert가 실패하면 앞선 DDL이나 data change가 일부 반영됐을 수 있다. Runner는 파일명과 함께
+partial state를 확인하고 migration에 문서화된 recovery를 따른 뒤 재시도하라는 오류를 던진다. Index 준비 파일은 이미
+생성한 valid/invalid index를 확인해 수동으로 `DROP`한 뒤 재실행해야 할 수 있다. 재개 가능한 backfill은 orphan
+membership을 복구하고 Account가 아직 `NULL`인 row만 다시 처리하며, 변환이 끝난 유효한 data는 삭제하지 않는다.
+Runner는 partial result를 자동으로 삭제하거나 복구하지 않는다.
+
+PostgreSQL advisory lock은 동시 runner를 막지만 migration phase를 선택하지 않는다. `lock_timeout=10s`는 lock
+획득을 기다리는 시간만 제한하고, 획득한 lock이 유지되는 시간을 제한하지 않는다. 기존 `statement_timeout=10m`은
+각 statement에 그대로 적용된다.
 Dev와 production은 PostgreSQL Cluster가 생성한 `<cluster>-app` Secret의 `password`로 schema/database owner
 `kosmo`에 직접 로그인해 migration을 실행한다. Production Cluster `kosmo-postgres`의 Secret은
 `kosmo-postgres-app`이며 `PGUSER=kosmo`를 고정한다. Runtime은 `kosmo_runtime` credential을 사용하고,

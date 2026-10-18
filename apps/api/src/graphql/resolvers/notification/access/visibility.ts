@@ -1,6 +1,6 @@
 import { AccountProfiles, Accounts, db, Notifications } from '@kosmo/core/db';
 import { AccountState, NotificationKind } from '@kosmo/core/enums';
-import { and, eq, exists, ne, or, sql } from 'drizzle-orm';
+import { and, eq, exists, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
 import type { Database } from '@kosmo/core/db';
 import type { UserContext } from '@/context';
 
@@ -17,11 +17,22 @@ export const notificationMembershipWhere = (accountId: string, database: Databas
       ),
   );
 
-export const visibleNotificationWhere = ({ ctx }: { ctx: UserContext }) => {
-  const accountId = ctx.session?.accountId;
+const activeAccountWhere = (accountId: string) =>
+  exists(
+    db
+      .select({ id: Accounts.id })
+      .from(Accounts)
+      .where(and(eq(Accounts.id, accountId), eq(Accounts.state, AccountState.ACTIVE))),
+  );
 
-  return accountId ? notificationMembershipWhere(accountId, db) : sql`1=0`;
-};
+const recipientAccountWhere = (accountId: string) =>
+  and(eq(Notifications.recipientAccountId, accountId), activeAccountWhere(accountId));
+
+const socialRecipientWhere = (accountId: string) =>
+  and(
+    activeAccountWhere(accountId),
+    or(eq(Notifications.recipientAccountId, accountId), isNull(Notifications.recipientAccountId)),
+  );
 
 export const visibleViewerNotificationWhere = ({
   ctx,
@@ -30,31 +41,41 @@ export const visibleViewerNotificationWhere = ({
   ctx: UserContext;
   profileId?: string | null;
 }) => {
-  const profileNotifications =
-    ctx.session && profileId !== null
-      ? and(
-          ne(Notifications.kind, NotificationKind.OPERATIONAL),
-          profileId === undefined ? undefined : eq(Notifications.recipientProfileId, profileId),
-          notificationMembershipWhere(ctx.session.accountId, db),
-        )
-      : undefined;
-  const operationalNotifications = ctx.session
-    ? and(
-        eq(Notifications.kind, NotificationKind.OPERATIONAL),
-        eq(Notifications.recipientAccountId, ctx.session.accountId),
-        exists(
-          db
-            .select({ id: Accounts.id })
-            .from(Accounts)
-            .where(
-              and(
-                eq(Accounts.id, Notifications.recipientAccountId),
-                eq(Accounts.state, AccountState.ACTIVE),
-              ),
-            ),
-        ),
-      )
-    : undefined;
+  const accountId = ctx.session?.accountId;
+  if (!accountId) {
+    return sql`1=0`;
+  }
 
-  return or(profileNotifications, operationalNotifications) ?? sql`1=0`;
+  const recipientAccount = recipientAccountWhere(accountId);
+  const accountOnlyNotifications = and(
+    recipientAccount,
+    eq(Notifications.kind, NotificationKind.OPERATIONAL),
+    isNull(Notifications.recipientProfileId),
+  );
+
+  if (profileId === null) {
+    return accountOnlyNotifications;
+  }
+
+  const profileNotifications = and(
+    socialRecipientWhere(accountId),
+    ne(Notifications.kind, NotificationKind.OPERATIONAL),
+    isNotNull(Notifications.recipientProfileId),
+    profileId === undefined ? undefined : eq(Notifications.recipientProfileId, profileId),
+    notificationMembershipWhere(accountId, db),
+  );
+
+  return or(profileNotifications, accountOnlyNotifications);
+};
+
+export const visibleNotificationWhere = ({ ctx }: { ctx: UserContext }) => {
+  const accountId = ctx.session?.accountId;
+  return accountId
+    ? and(
+        socialRecipientWhere(accountId),
+        ne(Notifications.kind, NotificationKind.OPERATIONAL),
+        isNotNull(Notifications.recipientProfileId),
+        notificationMembershipWhere(accountId, db),
+      )
+    : sql`1=0`;
 };

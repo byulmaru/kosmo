@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import { and, eq, inArray } from 'drizzle-orm';
 import {
+  AccountProfiles,
+  Accounts,
   db,
   firstOrThrow,
   Instances,
@@ -16,6 +18,8 @@ import {
   Profiles,
 } from '../db';
 import {
+  AccountProfileRole,
+  AccountState,
   InstanceKind,
   InstanceState,
   NotificationKind,
@@ -30,6 +34,8 @@ import { createQuoteNotification } from './quote-notification';
 const profileIds: string[] = [];
 const instanceIds: string[] = [];
 const postIds: string[] = [];
+const accountIds: string[] = [];
+const accountIdsByProfile = new Map<string, string>();
 
 const createProfile = async () => {
   const suffix = crypto.randomUUID();
@@ -58,11 +64,24 @@ const createProfile = async () => {
     .then(firstOrThrow);
 
   profileIds.push(profile.id);
+  const account = await db
+    .insert(Accounts)
+    .values({ displayName: suffix, oidcSubject: `subject-${suffix}`, state: AccountState.ACTIVE })
+    .returning()
+    .then(firstOrThrow);
+  accountIds.push(account.id);
+  accountIdsByProfile.set(profile.id, account.id);
+  await db.insert(AccountProfiles).values({
+    accountId: account.id,
+    profileId: profile.id,
+    role: AccountProfileRole.OWNER,
+  });
   return profile;
 };
 
 const createContentPost = async (profileId: string, repostSourceId?: string) => {
   const result = await createPostPersisted({
+    accountId: accountIdsByProfile.get(profileId)!,
     document: postContentDocumentFromText(crypto.randomUUID()),
     origin: 'LOCAL',
     profileId,
@@ -71,6 +90,22 @@ const createContentPost = async (profileId: string, repostSourceId?: string) => 
   });
   postIds.push(result.post.id);
   return result.post;
+};
+
+const addAccountToProfile = async (profileId: string) => {
+  const suffix = crypto.randomUUID();
+  const account = await db
+    .insert(Accounts)
+    .values({ displayName: suffix, oidcSubject: `subject-${suffix}`, state: AccountState.ACTIVE })
+    .returning()
+    .then(firstOrThrow);
+  accountIds.push(account.id);
+  await db.insert(AccountProfiles).values({
+    accountId: account.id,
+    profileId,
+    role: AccountProfileRole.MEMBER,
+  });
+  return account.id;
 };
 
 before(async () => {
@@ -195,6 +230,9 @@ after(async () => {
       await db.delete(ProfileMutes).where(inArray(ProfileMutes.ownerProfileId, profileIds));
       await db.delete(Profiles).where(inArray(Profiles.id, profileIds));
     }
+    if (accountIds.length > 0) {
+      await db.delete(Accounts).where(inArray(Accounts.id, accountIds));
+    }
     if (instanceIds.length > 0) {
       await db.delete(Instances).where(inArray(Instances.id, instanceIds));
     }
@@ -205,6 +243,10 @@ after(async () => {
 
 test('approved Local Quote notifies the Source Author once and keeps its first judgment after deletion', async () => {
   const sourceAuthor = await createProfile();
+  const recipientAccountIds = [
+    accountIdsByProfile.get(sourceAuthor.id)!,
+    await addAccountToProfile(sourceAuthor.id),
+  ];
   const quoteAuthor = await createProfile();
   const source = await createContentPost(sourceAuthor.id);
   const quote = await createContentPost(quoteAuthor.id, source.id);
@@ -220,26 +262,63 @@ test('approved Local Quote notifies the Source Author once and keeps its first j
     .where(
       and(eq(Notifications.kind, NotificationKind.QUOTE), eq(Notifications.sourceId, quote.id)),
     );
-  assert.equal(notifications.length, 1);
-  assert.equal(notifications[0]?.recipientProfileId, sourceAuthor.id);
-  assert.deepEqual(notificationIds, [notifications[0]?.id, notifications[0]?.id]);
+  assert.equal(notifications.length, 2);
+  assert.ok(
+    notifications.every(({ recipientProfileId }) => recipientProfileId === sourceAuthor.id),
+  );
+  assert.deepEqual(
+    notifications.map(({ recipientAccountId }) => recipientAccountId).sort(),
+    [...recipientAccountIds].sort(),
+  );
+  const expectedIds = notifications.map(({ id }) => id).sort();
+  assert.deepEqual(
+    notificationIds.map((ids) => ids.slice().sort()),
+    [expectedIds, expectedIds],
+  );
 
   const [judgment] = await db
     .select()
     .from(NotificationQuoteJudgments)
     .where(eq(NotificationQuoteJudgments.quotePostId, quote.id));
   assert.equal(judgment?.outcome, 'EMITTED');
-  assert.equal(judgment?.representativeNotificationId, notifications[0]?.id);
+  assert.equal(judgment?.representativeNotificationId, notificationIds[0]?.[0]);
 
-  await db.delete(Notifications).where(eq(Notifications.id, notifications[0]!.id));
-  await createQuoteNotification(quote.id);
+  const readAt = Temporal.Instant.from('2026-10-02T01:23:45.123456Z');
+  await db.update(Notifications).set({ readAt }).where(inArray(Notifications.id, expectedIds));
+  const responseLossRetryIds = await createQuoteNotification(quote.id);
+  assert.deepEqual(responseLossRetryIds.slice().sort(), expectedIds);
+  const retried = await db
+    .select()
+    .from(Notifications)
+    .where(inArray(Notifications.id, expectedIds));
+  assert.deepEqual(
+    retried
+      .map(({ id, createdAt, readAt: persistedReadAt }) => ({
+        id,
+        createdAt: createdAt.toString(),
+        readAt: persistedReadAt?.toString(),
+      }))
+      .sort((left, right) => left.id.localeCompare(right.id)),
+    notifications
+      .map(({ id, createdAt }) => ({
+        id,
+        createdAt: createdAt.toString(),
+        readAt: readAt.toString(),
+      }))
+      .sort((left, right) => left.id.localeCompare(right.id)),
+  );
+
+  const deletedId = expectedIds[0]!;
+  const survivingId = expectedIds[1]!;
+  await db.delete(Notifications).where(eq(Notifications.id, deletedId));
+  assert.deepEqual(await createQuoteNotification(quote.id), [survivingId]);
 
   assert.equal(
     await db.$count(
       Notifications,
       and(eq(Notifications.kind, NotificationKind.QUOTE), eq(Notifications.sourceId, quote.id)),
     ),
-    0,
+    1,
   );
   assert.equal(
     await db.$count(
@@ -397,6 +476,7 @@ test('an existing Reply remains the representative and keeps its read state', as
     .values({
       data: {},
       kind: NotificationKind.REPLY,
+      recipientAccountId: accountIdsByProfile.get(sourceAuthor.id)!,
       recipientProfileId: sourceAuthor.id,
       sourceId: quote.id,
       readAt,
@@ -424,7 +504,7 @@ test('an existing Reply remains the representative and keeps its read state', as
     .select({ readAt: Notifications.readAt })
     .from(Notifications)
     .where(eq(Notifications.id, reply.id));
-  assert.equal(preservedReply?.readAt?.epochMicroseconds, readAt.epochMicroseconds);
+  assert.equal(preservedReply?.readAt?.toString(), readAt.toString());
 });
 
 test('an existing Mention remains the representative when Quote coordination runs', async () => {
@@ -438,6 +518,7 @@ test('an existing Mention remains the representative when Quote coordination run
     .values({
       data: {},
       kind: NotificationKind.MENTION,
+      recipientAccountId: accountIdsByProfile.get(sourceAuthor.id)!,
       recipientProfileId: sourceAuthor.id,
       sourceId: quote.id,
       readAt,
@@ -445,7 +526,7 @@ test('an existing Mention remains the representative when Quote coordination run
     .returning()
     .then(firstOrThrow);
 
-  assert.equal(await createQuoteNotification(quote.id), null);
+  assert.deepEqual(await createQuoteNotification(quote.id), []);
 
   const notifications = await db
     .select()

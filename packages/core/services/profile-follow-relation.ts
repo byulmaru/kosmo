@@ -23,8 +23,16 @@ const pairCondition = (
     eq(table.followeeProfileId, followeeProfileId),
   );
 
-export const ensureProfileFollow = async (pair: ProfileFollowPair, tx?: Transaction) =>
+export const ensureProfileFollow = async (
+  {
+    actorAccountId,
+    followeeProfileId,
+    followerProfileId,
+  }: ProfileFollowPair & { readonly actorAccountId?: string | null },
+  tx?: Transaction,
+) =>
   getDatabaseConnection(tx).transaction(async (tx) => {
+    const pair = { followeeProfileId, followerProfileId };
     const existing = await tx
       .select()
       .from(ProfileFollows)
@@ -38,7 +46,7 @@ export const ensureProfileFollow = async (pair: ProfileFollowPair, tx?: Transact
 
     const inserted = await tx
       .insert(ProfileFollows)
-      .values(pair)
+      .values({ ...pair, actorAccountId: actorAccountId ?? null })
       .onConflictDoNothing({
         target: [ProfileFollows.followerProfileId, ProfileFollows.followeeProfileId],
       })

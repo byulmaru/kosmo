@@ -8,6 +8,7 @@ import { asImageUploadError } from '@/components/media/imageUploadErrors';
 import { StateView } from '@/components/ui/StateView';
 import { useToast } from '@/components/ui/ToastProvider';
 import { ProfileEditDiscardDialog } from './ProfileEditDiscardDialog';
+import { ProfileEditHeader } from './ProfileEditHeader';
 import {
   completeProfileEditImageUpload,
   createProfileEditRouteImage,
@@ -157,12 +158,18 @@ export function ProfileEditRoute({ fetchKey }: { fetchKey: string }) {
 
   if (!profile) {
     const returnHandle = selectedProfile?.relativeHandle;
+    const returnHref = (returnHandle ? `/${returnHandle}` : '/') as Href;
     return (
-      <StateView
-        actionLabel="프로필로 돌아가기"
-        onAction={() => router.replace((returnHandle ? `/${returnHandle}` : '/') as Href)}
-        title="이 프로필을 수정할 수 없어요"
-      />
+      <>
+        <ProfileEditHeader
+          onBack={() => (router.canGoBack() ? router.back() : router.replace(returnHref))}
+        />
+        <StateView
+          actionLabel="프로필로 돌아가기"
+          onAction={() => router.replace(returnHref)}
+          title="이 프로필을 수정할 수 없어요"
+        />
+      </>
     );
   }
 

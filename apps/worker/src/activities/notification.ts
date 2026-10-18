@@ -47,10 +47,8 @@ export async function createNotificationActivity({
     .with(NotificationKind.QUOTE, () => createQuoteNotification(sourceId))
     .with(NotificationKind.MENTION, () => createMentionNotification(sourceId))
     .exhaustive();
-  const notificationIds = typeof materialized === 'string' ? [materialized] : (materialized ?? []);
-
   await Promise.all(
-    notificationIds.map(async (notificationId) => {
+    materialized.map(async (notificationId) => {
       try {
         await startPushNotificationWorkflow(notificationId);
       } catch (error: unknown) {

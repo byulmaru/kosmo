@@ -133,6 +133,7 @@ export function isWebMobileRouteOwnedHeader(web: boolean, width: number, pathnam
     web &&
     getShellLayout(web, width) === 'mobile' &&
     (pathname === '/search' ||
+      pathname === '/profile-edit' ||
       isProfileHome ||
       isReactionPeopleRoute ||
       getProfileConnectionKind(pathname) !== null)

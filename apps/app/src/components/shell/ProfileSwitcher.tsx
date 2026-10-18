@@ -152,8 +152,17 @@ const isProfileHandlePolicyError = (error: unknown) => {
   );
 };
 
+const isProfileLimitExceededError = (error: unknown) =>
+  isRecord(error) &&
+  isRecord(error.extensions) &&
+  error.extensions.code === 'PROFILE_LIMIT_EXCEEDED';
+
 const profileCreationFieldError = (errors: ReadonlyArray<unknown> | null | undefined) =>
-  errors?.some(isProfileHandlePolicyError) ? profileHandlePolicyErrorMessage : null;
+  errors?.some(isProfileHandlePolicyError)
+    ? profileHandlePolicyErrorMessage
+    : errors?.some(isProfileLimitExceededError)
+      ? '프로필은 최대 10개까지 만들 수 있어요.'
+      : null;
 
 type Props = {
   onNavigate?: () => void;

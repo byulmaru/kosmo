@@ -1,7 +1,7 @@
 import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
-import { after, before, beforeEach, test } from 'node:test';
+import { after, afterEach, before, beforeEach, test } from 'node:test';
 import {
   AccountProfileRole,
   AccountState,
@@ -83,6 +83,8 @@ let repostPost: typeof RepostPost;
 let createNotificationActivity: typeof CreateNotificationActivity;
 let captureOperationalNotificationAudienceActivity: typeof CaptureOperationalNotificationAudienceActivity;
 let temporalClient: typeof TemporalClient;
+let activityTestAccountId: string | undefined;
+let activityTestAccountPromise: Promise<string> | undefined;
 
 before(async () => {
   ({
@@ -136,7 +138,23 @@ beforeEach(async () => {
   await db.delete(Instances);
 });
 
-after(async () => pg.end());
+afterEach(async () => {
+  const accountId =
+    activityTestAccountId ??
+    (activityTestAccountPromise
+      ? await activityTestAccountPromise.catch(() => undefined)
+      : undefined);
+  if (accountId) {
+    await db.delete(AccountProfiles).where(eq(AccountProfiles.accountId, accountId));
+    await db.delete(Accounts).where(eq(Accounts.id, accountId));
+  }
+  activityTestAccountId = undefined;
+  activityTestAccountPromise = undefined;
+});
+
+after(async () => {
+  await pg.end();
+});
 
 test('Operational audience capture is stable across retries, payload mismatches, and later signups', async () => {
   const active = await createAccountDeletionFixture({ profileStates: [] });
@@ -778,9 +796,10 @@ test('visible Reply는 정확한 recipient/source Notification을 한 번만 만
   const notifications = await db.select().from(Notifications);
   assert.equal(notifications.length, 1);
   assert.deepEqual(
-    notifications.map(({ data, kind, recipientProfileId, sourceId }) => ({
+    notifications.map(({ data, kind, recipientAccountId, recipientProfileId, sourceId }) => ({
       data,
       kind,
+      recipientAccountId,
       recipientProfileId,
       sourceId,
     })),
@@ -788,6 +807,7 @@ test('visible Reply는 정확한 recipient/source Notification을 한 번만 만
       {
         data: {},
         kind: NotificationKind.REPLY,
+        recipientAccountId: activityTestAccountId,
         recipientProfileId: recipient.id,
         sourceId: reply.id,
       },
@@ -909,7 +929,7 @@ test('Quote와 Reply 판단이 경합해도 Reply가 대표가 된다', async ()
   assert.equal(notifications.length, 1);
   assert.equal(notifications[0]?.kind, NotificationKind.REPLY);
   assert.equal(notifications[0]?.sourceId, quote.id);
-  assert.deepEqual(notificationIds, [null, notifications[0]?.id]);
+  assert.deepEqual(notificationIds.flat(), [notifications[0]?.id]);
 });
 
 test('Quote와 Reply의 recipient가 다르면 각 알림을 독립적으로 만든다', async () => {
@@ -946,7 +966,7 @@ test('Quote와 Reply의 recipient가 다르면 각 알림을 독립적으로 만
       `${NotificationKind.REPLY}:${replyRecipient.id}`,
     ]),
   );
-  assert.deepEqual(new Set(notificationIds), new Set(notifications.map(({ id }) => id)));
+  assert.deepEqual(new Set(notificationIds.flat()), new Set(notifications.map(({ id }) => id)));
 });
 
 test('공통 Notification Activity는 저장된 ID로 Push Workflow를 시작하고 전달 완료는 기다리지 않는다', async (t) => {
@@ -1209,14 +1229,16 @@ test('Reaction Notification Activities는 create와 delete retry에 멱등이다
 
   const notifications = await db.select().from(Notifications);
   assert.deepEqual(
-    notifications.map(({ kind, recipientProfileId, sourceId }) => ({
+    notifications.map(({ kind, recipientAccountId, recipientProfileId, sourceId }) => ({
       kind,
+      recipientAccountId,
       recipientProfileId,
       sourceId,
     })),
     [
       {
         kind: NotificationKind.REACTION,
+        recipientAccountId: activityTestAccountId,
         recipientProfileId: recipient.id,
         sourceId: reaction.id,
       },
@@ -1249,6 +1271,7 @@ test('Repost Notification Activities는 create와 delete retry에 멱등이다',
   const notifications = await db.select().from(Notifications);
   assert.equal(notifications.length, 1);
   assert.equal(notifications[0]?.kind, NotificationKind.REPOST);
+  assert.equal(notifications[0]?.recipientAccountId, activityTestAccountId);
   assert.equal(notifications[0]?.recipientProfileId, recipient.id);
   assert.equal(notifications[0]?.sourceId, repost.id);
 
@@ -1281,10 +1304,31 @@ test('Create Activity 전에 Repost가 Tombstone이면 성공한 no-op이다', a
   assert.equal(await db.$count(Notifications), 0);
 });
 
+const getActivityTestAccountId = () => {
+  if (!activityTestAccountPromise) {
+    const suffix = crypto.randomUUID();
+    activityTestAccountPromise = db
+      .insert(Accounts)
+      .values({
+        displayName: `Notification activity tests ${suffix}`,
+        oidcSubject: `notification-activity-tests-${suffix}`,
+        state: AccountState.ACTIVE,
+      })
+      .returning({ id: Accounts.id })
+      .then(firstOrThrow)
+      .then(({ id }) => {
+        activityTestAccountId = id;
+        return id;
+      });
+  }
+  return activityTestAccountPromise;
+};
+
 const createProfile = async ({
+  accountId,
   instanceKind = InstanceKind.LOCAL,
   state = ProfileState.ACTIVE,
-}: { instanceKind?: InstanceKind; state?: ProfileState } = {}) => {
+}: { accountId?: string | null; instanceKind?: InstanceKind; state?: ProfileState } = {}) => {
   const suffix = crypto.randomUUID();
   const instance = await db
     .insert(Instances)
@@ -1296,7 +1340,7 @@ const createProfile = async ({
     .returning()
     .then(firstOrThrow);
 
-  return db
+  const profile = await db
     .insert(Profiles)
     .values({
       displayName: suffix,
@@ -1308,6 +1352,16 @@ const createProfile = async ({
     })
     .returning()
     .then(firstOrThrow);
+  const membershipAccountId =
+    accountId === undefined ? await getActivityTestAccountId() : accountId;
+  if (membershipAccountId) {
+    await db.insert(AccountProfiles).values({
+      accountId: membershipAccountId,
+      profileId: profile.id,
+      role: AccountProfileRole.OWNER,
+    });
+  }
+  return profile;
 };
 
 const createAccountDeletionFixture = async ({
@@ -1316,7 +1370,9 @@ const createAccountDeletionFixture = async ({
   readonly profileStates: ReadonlyArray<ProfileState>;
 }) => {
   const suffix = crypto.randomUUID();
-  const profiles = await Promise.all(profileStates.map((state) => createProfile({ state })));
+  const profiles = await Promise.all(
+    profileStates.map((state) => createProfile({ accountId: null, state })),
+  );
   const account = await db
     .insert(Accounts)
     .values({
@@ -1525,7 +1581,7 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
       .values({ postId: post.id, profileId: actor.id, type: '😂' })
       .returning()
       .then(firstOrThrow);
-    const notificationId = await createReactionNotificationActivity(reaction.id);
+    const [notificationId] = await createReactionNotificationActivity(reaction.id);
     assert.ok(notificationId);
 
     const installationRows = await db
@@ -1638,6 +1694,10 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
       '혜주(@hyeju) 님이 예은(@yeeun) 님에게 😂를 남겼습니다.',
     );
     assert.equal(sent[3]?.notification?.body.includes('Read the article'), false);
+
+    await db.delete(AccountProfiles).where(eq(AccountProfiles.profileId, recipient.id));
+    await sendPushNotificationActivity(notificationId, installationIds[0]!);
+    assert.equal(sent.length, 4);
   } finally {
     if (postId) {
       await db.update(Posts).set({ currentContentId: null }).where(eq(Posts.id, postId));
@@ -1730,10 +1790,13 @@ test('Profile Notification의 유형별 기본 notification payload를 전달한
       notificationSources.map(async ([kind, sourceId]) => {
         const [inserted] = await db
           .insert(Notifications)
-          .values({ kind, recipientProfileId: recipient.id, sourceId })
-          .onConflictDoNothing({
-            target: [Notifications.recipientProfileId, Notifications.kind, Notifications.sourceId],
+          .values({
+            kind,
+            recipientAccountId: fixture.account.id,
+            recipientProfileId: recipient.id,
+            sourceId,
           })
+          .onConflictDoNothing()
           .returning({ id: Notifications.id });
         if (inserted) {
           return inserted;
@@ -1744,6 +1807,7 @@ test('Profile Notification의 유형별 기본 notification payload를 전달한
           .where(
             and(
               eq(Notifications.kind, kind),
+              eq(Notifications.recipientAccountId, fixture.account.id),
               eq(Notifications.recipientProfileId, recipient.id),
               eq(Notifications.sourceId, sourceId),
             ),
@@ -2176,7 +2240,7 @@ test('Push Notification Activity는 등록되지 않은 token만 정확히 제�
       .values({ postId: post.id, profileId: actor.id, type: '❤️' })
       .returning()
       .then(firstOrThrow);
-    const notificationId = await createReactionNotificationActivity(reaction.id);
+    const [notificationId] = await createReactionNotificationActivity(reaction.id);
     assert.ok(notificationId);
 
     const { applicationDefault, FirebaseError, getApps, initializeApp } =
