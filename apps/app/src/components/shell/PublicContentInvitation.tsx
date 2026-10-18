@@ -59,18 +59,7 @@ export function PublicContentInvitation({ onDismiss, onLayout, pathname, visible
       ]}
       testID="public-content-invitation"
     >
-      <View style={[styles.content, compact ? styles.mobileContent : styles.wideContent]}>
-        <View style={[styles.copy, compact ? styles.mobileCopy : undefined]}>
-          <Text
-            accessibilityRole="header"
-            style={[textStyles.uiLabelL, { color: theme.foregroundPrimary }]}
-          >
-            공개 콘텐츠를 보고 있어요
-          </Text>
-          <Text style={[textStyles.uiCopyS, { color: theme.textSecondary }]}>
-            로그인하면 프로필을 선택하거나 만들고 대화에 참여할 수 있어요.
-          </Text>
-        </View>
+      <View style={styles.content}>
         <View style={[styles.actions, compact ? styles.mobileActions : undefined]}>
           <NavigationLink href="/" primary>
             <Button
@@ -84,7 +73,7 @@ export function PublicContentInvitation({ onDismiss, onLayout, pathname, visible
               KOSMO에서 계속하기
             </Button>
           </NavigationLink>
-          <View style={[styles.links, compact ? styles.mobileLinks : undefined]}>
+          <View style={styles.links}>
             <Link
               asChild
               href="https://byulmaru.co/about-us"
@@ -106,16 +95,15 @@ export function PublicContentInvitation({ onDismiss, onLayout, pathname, visible
             </NavigationLink>
           </View>
         </View>
+        <IconButton
+          accessibilityLabel="가입 안내 닫기"
+          onPress={onDismiss}
+          targetSize={44}
+          visualSize={44}
+        >
+          <X color={theme.foregroundPrimary} size={18} strokeWidth={2} />
+        </IconButton>
       </View>
-      <IconButton
-        accessibilityLabel="가입 안내 닫기"
-        onPress={onDismiss}
-        style={styles.closeButton}
-        targetSize={44}
-        visualSize={44}
-      >
-        <X color={theme.foregroundPrimary} size={18} strokeWidth={2} />
-      </IconButton>
     </View>
   );
 }
@@ -127,24 +115,16 @@ const styles = StyleSheet.create({
     paddingVertical: space[12],
   },
   flowRoot: { position: 'relative', width: '100%' },
-  content: { gap: space[16], minWidth: 0 },
-  wideContent: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
-  mobileContent: { flexDirection: 'column' },
-  copy: { flex: 1, gap: space[8], minWidth: 0, paddingRight: 44 },
-  mobileCopy: { paddingRight: 44 },
-  actions: { alignItems: 'flex-start', gap: space[8] },
+  content: { alignItems: 'flex-start', flexDirection: 'row', gap: space[8], minWidth: 0 },
+  actions: { alignItems: 'center', flex: 1, gap: space[8], minWidth: 0 },
   mobileActions: { alignItems: 'stretch' },
   mobileCtaButton: { width: '100%' },
-  links: { alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
-  mobileLinks: { justifyContent: 'center' },
-  textLink: { justifyContent: 'center', minHeight: 36, paddingVertical: space[8] },
-  closeButton: {
+  links: {
     alignItems: 'center',
-    height: 44,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
     justifyContent: 'center',
-    position: 'absolute',
-    right: space[8],
-    top: space[8],
-    width: 44,
   },
+  textLink: { justifyContent: 'center', minHeight: 36, paddingVertical: space[8] },
 });
