@@ -755,6 +755,7 @@ describe('Post Reply GraphQL 경계', () => {
     assert.equal(await db.$count(Posts, eq(Posts.repostSourceId, source.id)), 1);
     for (const [payload, token] of [
       [{ ...input, bodyText: 'changed quote' }, auth.token],
+      [{ ...input, repostSourceId: undefined }, auth.token],
       [{ ...input, quotePolicy: PostQuotePolicy.AUTHOR }, auth.token],
       [input, other.token],
     ] as const) {

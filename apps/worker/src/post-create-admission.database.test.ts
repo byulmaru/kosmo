@@ -511,6 +511,7 @@ if (isChildProcess) {
             createPost({ ...base, document: postContentDocumentFromText('changed') }),
           );
           await assertMismatch(createPost({ ...base, repostSourceId: otherSource.id }));
+          await assertMismatch(createPost({ ...base, repostSourceId: undefined }));
           await assertMismatch(
             createPost({
               ...base,
@@ -815,6 +816,7 @@ if (isChildProcess) {
             readonly error?: { readonly field?: string };
             readonly postId: string;
           };
+          let acceptedContentId: string | undefined;
           try {
             const firstResult = ownerHandle.executeUpdate('quoteCommand', {
               args: [firstCommand],
@@ -824,13 +826,16 @@ if (isChildProcess) {
               args: [changedCommand],
               updateId: changedCommand.commandId,
             });
-            const [created, rejected] = (await Promise.all([
-              firstResult,
-              changedResult,
-            ])) as OwnerResult[];
+            const outcomes = (await Promise.all([firstResult, changedResult])) as OwnerResult[];
             await quoteApplyResponseLost.promise;
-            assert.equal(created.error, undefined);
-            assert.equal(rejected.error?.field, 'admissionId');
+            // RPC arrival determines admission order; concurrent callers need not arrive in JS call order.
+            const accepted = outcomes.flatMap((result, index) => (result.error ? [] : [index]));
+            assert.equal(accepted.length, 1);
+            const rejected = outcomes.filter((result) => result.error);
+            assert.equal(rejected.length, 1);
+            assert.equal(rejected[0]?.error?.field, 'admissionId');
+            acceptedContentId =
+              accepted[0] === 0 ? firstIdentity.contentId : changedIdentity.contentId;
           } finally {
             await ownerHandle.signal('finishQuoteOwner');
             await ownerHandle.result();
@@ -842,9 +847,10 @@ if (isChildProcess) {
             .from(PostContents)
             .where(eq(PostContents.postId, firstIdentity.postId));
           assert.equal(posts.length, 1);
-          assert.equal(posts[0]?.currentContentId, firstIdentity.contentId);
+          assert.ok(acceptedContentId);
+          assert.equal(posts[0]?.currentContentId, acceptedContentId);
           assert.equal(contents.length, 1);
-          assert.equal(contents[0]?.id, firstIdentity.contentId);
+          assert.equal(contents[0]?.id, acceptedContentId);
         },
       );
 
