@@ -18,9 +18,12 @@ type PressableProps = {
 
 const focusedLabels: string[] = [];
 const timingCalls: {
+  active: boolean;
   duration: number;
   easing: string;
-  toValue: number;
+  handle: AnimatedColorMock | AnimatedValueMock;
+  stopCalls: number;
+  toValue: number | AnimatedColorMock;
   useNativeDriver: boolean;
 }[] = [];
 const theme = {
@@ -46,13 +49,14 @@ const PressableHost = forwardRef<{ focus: () => void }, PressableProps>(function
   return createElement(
     'Pressable',
     props,
-    typeof children === 'function' ? children({ hovered: false, pressed: false }) : children,
+    typeof children === 'function' ? children(pressState) : children,
   );
 });
 const ViewHost = 'View' as unknown as ElementType;
 
 let platformOS: 'ios' | 'web' = 'web';
 let reducedMotion = false;
+let pressState = { hovered: false, pressed: false };
 
 class AnimatedValueMock {
   value: number;
@@ -98,11 +102,36 @@ mockModule('react-native', {
       stop: () => animations.forEach((animation) => animation.stop()),
     }),
     timing: (
-      value: AnimatedValueMock,
-      config: { duration: number; easing: string; toValue: number; useNativeDriver: boolean },
+      value: AnimatedColorMock | AnimatedValueMock,
+      config: {
+        duration: number;
+        easing: string;
+        toValue: number | AnimatedColorMock;
+        useNativeDriver: boolean;
+      },
     ): AnimationMock => {
-      timingCalls.push(config);
-      return { start: () => value.setValue(config.toValue), stop: () => undefined };
+      const timing = {
+        active: false,
+        duration: config.duration,
+        easing: config.easing,
+        handle: value,
+        stopCalls: 0,
+        toValue: config.toValue,
+        useNativeDriver: config.useNativeDriver,
+      };
+      timingCalls.push(timing);
+      return {
+        start: () => {
+          timing.active = true;
+          if (value instanceof AnimatedValueMock && typeof config.toValue === 'number') {
+            value.setValue(config.toValue);
+          }
+        },
+        stop: () => {
+          timing.active = false;
+          timing.stopCalls += 1;
+        },
+      };
     },
   },
   Easing: { bezier: () => 'standard-easing' },
@@ -147,6 +176,7 @@ beforeEach(() => {
   timingCalls.length = 0;
   platformOS = 'web';
   reducedMotion = false;
+  pressState = { hovered: false, pressed: false };
 });
 
 const options = [
@@ -210,6 +240,34 @@ function selectionFrame(renderer: ReactTestRenderer) {
     width: AnimatedValueMock;
   };
   return { left: frame.left.value, width: frame.width.value };
+}
+
+function updateControl(renderer: ReactTestRenderer, value = 'one') {
+  act(() => {
+    renderer.update(
+      createElement(SegmentedControl!, {
+        accessibilityLabel: '표시 방식',
+        onValueChange: () => undefined,
+        options,
+        value,
+      }),
+    );
+  });
+}
+
+function feedbackStyle(renderer: ReactTestRenderer, index = 0) {
+  const feedback = radios(renderer)
+    [index].findAllByType(ViewHost)
+    .find((node) => node.props.pointerEvents === 'none');
+  assert.ok(feedback);
+  return flattenStyle(feedback.props.style);
+}
+
+function flattenStyle(style: unknown): Record<string, unknown> {
+  return Object.assign(
+    {},
+    ...(Array.isArray(style) ? style.flat(Infinity).filter(Boolean) : [style]),
+  );
 }
 
 test('SegmentedControl exposes a radiogroup with exactly one selected radio', () => {
@@ -322,6 +380,87 @@ test('Selection pill stretch stays subtle across distance and direction', () => 
     ],
   );
   assert.deepEqual(selectionFrame(renderer), { left: 4, width: 92 });
+});
+
+test('Interaction feedback retargets transparent and hover or pressed colors at 120ms', () => {
+  const renderer = renderControl();
+
+  pressState = { hovered: true, pressed: false };
+  updateControl(renderer);
+  const hoverBackground = feedbackStyle(renderer);
+  assert.ok(hoverBackground.backgroundColor instanceof AnimatedColorMock);
+  const hoverTiming = timingCalls.find(
+    ({ handle, toValue }) =>
+      handle === hoverBackground.backgroundColor &&
+      toValue instanceof AnimatedColorMock &&
+      toValue.value === 'hover',
+  );
+  assert.ok(hoverTiming);
+  assert.equal(hoverTiming.duration, 120);
+  assert.equal(hoverTiming.active, true);
+
+  timingCalls.length = 0;
+  pressState = { hovered: false, pressed: false };
+  updateControl(renderer);
+  const idleBackground = feedbackStyle(renderer).backgroundColor;
+  assert.equal(idleBackground, hoverBackground.backgroundColor);
+  const hoverExitTiming = timingCalls.find(
+    ({ handle, toValue }) =>
+      handle === idleBackground &&
+      toValue instanceof AnimatedColorMock &&
+      toValue.value === 'transparent',
+  );
+  assert.ok(hoverExitTiming);
+  assert.equal(hoverExitTiming.duration, 120);
+  assert.equal(hoverExitTiming.active, true);
+
+  timingCalls.length = 0;
+  pressState = { hovered: false, pressed: true };
+  updateControl(renderer);
+  const pressedBackground = feedbackStyle(renderer).backgroundColor;
+  assert.equal(pressedBackground, idleBackground);
+  const pressedTiming = timingCalls.find(
+    ({ handle, toValue }) =>
+      handle === pressedBackground &&
+      toValue instanceof AnimatedColorMock &&
+      toValue.value === 'pressed',
+  );
+  assert.ok(pressedTiming);
+  assert.equal(pressedTiming.duration, 120);
+  assert.equal(pressedTiming.active, true);
+
+  timingCalls.length = 0;
+  pressState = { hovered: false, pressed: false };
+  updateControl(renderer);
+  const pressedExitTiming = timingCalls.find(
+    ({ handle, toValue }) =>
+      handle === feedbackStyle(renderer).backgroundColor &&
+      toValue instanceof AnimatedColorMock &&
+      toValue.value === 'transparent',
+  );
+  assert.ok(pressedExitTiming);
+  assert.equal(pressedExitTiming.duration, 120);
+  assert.equal(pressedExitTiming.active, true);
+});
+
+test('Reduced motion stops pending interaction feedback and commits the latest color', () => {
+  const renderer = renderControl();
+  pressState = { hovered: true, pressed: false };
+  updateControl(renderer);
+  const pendingTiming = timingCalls.find(({ toValue }) => toValue instanceof AnimatedColorMock);
+  assert.ok(pendingTiming);
+  const timingCount = timingCalls.length;
+  const reducedMotionTarget = pendingTiming.handle;
+
+  reducedMotion = true;
+  pressState = { hovered: false, pressed: true };
+  updateControl(renderer);
+
+  assert.equal(timingCalls.length, timingCount);
+  assert.equal(pendingTiming.active, false);
+  assert.ok(pendingTiming.stopCalls > 0);
+  assert.equal(feedbackStyle(renderer).backgroundColor, 'pressed');
+  assert.equal(reducedMotionTarget.value, 'pressed');
 });
 
 test('Reduced motion moves the selection pill immediately', () => {

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { before, mock, test } from 'node:test';
+import { before, beforeEach, mock, test } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ElementType, ReactElement, ReactNode } from 'react';
@@ -19,10 +19,19 @@ const mockPlatform: { OS: string } = { OS: 'web' };
 let reducedMotion = false;
 const theme = { stateHover: 'hover', statePressed: 'pressed' };
 let pressState = { hovered: false, pressed: false };
+const timingCalls: Array<{
+  active: boolean;
+  duration: number;
+  handle: AnimatedColorMock;
+  stopCalls: number;
+  target: AnimatedColorMock;
+}> = [];
+let setValueCalls = 0;
 
 class AnimatedColorMock {
   constructor(public value: string) {}
   setValue(value: string) {
+    setValueCalls += 1;
     this.value = value;
   }
   stopAnimation(callback?: () => void) {
@@ -48,10 +57,28 @@ mockModule('react-native', {
   Animated: {
     Color: AnimatedColorMock,
     View: 'AnimatedView',
-    timing: (value: AnimatedColorMock, config: { toValue: AnimatedColorMock }) => ({
-      start: () => value.setValue(config.toValue.value),
-      stop: () => undefined,
-    }),
+    timing: (
+      value: AnimatedColorMock,
+      config: { duration: number; toValue: AnimatedColorMock },
+    ) => {
+      const timing = {
+        active: false,
+        duration: config.duration,
+        handle: value,
+        stopCalls: 0,
+        target: config.toValue,
+      };
+      timingCalls.push(timing);
+      return {
+        start: () => {
+          timing.active = true;
+        },
+        stop: () => {
+          timing.active = false;
+          timing.stopCalls += 1;
+        },
+      };
+    },
   },
   Easing: { bezier: () => () => 0 },
   Platform: mockPlatform,
@@ -135,6 +162,14 @@ before(async () => {
   }
 });
 
+beforeEach(() => {
+  mockPlatform.OS = 'web';
+  pressState = { hovered: false, pressed: false };
+  reducedMotion = false;
+  timingCalls.length = 0;
+  setValueCalls = 0;
+});
+
 function renderIconButton(props: IconButtonProps): ReactTestInstance {
   assert.ok(IconButton, 'IconButton component must exist');
   pressState = { hovered: false, pressed: false };
@@ -155,6 +190,16 @@ function renderVisual(
     renderer = create(button.props.children(state) as ReactElement);
   });
   return renderer;
+}
+
+function updateVisual(
+  renderer: ReactTestRenderer,
+  button: ReactTestInstance,
+  state: { hovered: boolean; pressed: boolean },
+) {
+  act(() => {
+    renderer.update(button.props.children(state) as ReactElement);
+  });
 }
 
 function flattenStyle(style: unknown): Record<string, unknown> {
@@ -486,6 +531,77 @@ test('default feedback owns a circular surface while preserving state and geomet
   );
   assert.equal(flattenStyle(wrapper.props.style).height, 44);
   assert.equal(flattenStyle(wrapper.props.style).width, 44);
+});
+
+test('feedback retargets hover and pressed colors at 120ms on one visual handle', () => {
+  const button = renderIconButton({ accessibilityLabel: '닫기', children: '×', targetSize: 44 });
+  const renderer = renderVisual(button, { hovered: false, pressed: false });
+  const feedback = () => renderer.root.findByType(animatedViewHost);
+
+  updateVisual(renderer, button, { hovered: true, pressed: false });
+  const hoverHandle = flattenStyle(feedback().props.style).backgroundColor;
+  assert.ok(hoverHandle instanceof AnimatedColorMock);
+  const hoverTiming = timingCalls.at(-1);
+  assert.ok(hoverTiming);
+  assert.equal(hoverTiming.duration, 120);
+  assert.equal(hoverTiming.handle, hoverHandle);
+  assert.equal(hoverTiming.target.value, 'hover');
+  assert.equal(hoverTiming.active, true);
+
+  timingCalls.length = 0;
+  updateVisual(renderer, button, { hovered: false, pressed: true });
+  const pressedHandle = flattenStyle(feedback().props.style).backgroundColor;
+  assert.equal(pressedHandle, hoverHandle);
+  const pressedTiming = timingCalls.at(-1);
+  assert.ok(pressedTiming);
+  assert.equal(pressedTiming.duration, 120);
+  assert.equal(pressedTiming.handle, pressedHandle);
+  assert.equal(pressedTiming.target.value, 'pressed');
+  assert.equal(pressedTiming.active, true);
+
+  timingCalls.length = 0;
+  updateVisual(renderer, button, { hovered: true, pressed: false });
+  const hoverReturnHandle = flattenStyle(feedback().props.style).backgroundColor;
+  assert.equal(hoverReturnHandle, pressedHandle);
+  const hoverReturnTiming = timingCalls.at(-1);
+  assert.ok(hoverReturnTiming);
+  assert.equal(hoverReturnTiming.duration, 120);
+  assert.equal(hoverReturnTiming.handle, hoverReturnHandle);
+  assert.equal(hoverReturnTiming.target.value, 'hover');
+  assert.equal(hoverReturnTiming.active, true);
+
+  timingCalls.length = 0;
+  updateVisual(renderer, button, { hovered: false, pressed: false });
+  const finalIdleHandle = flattenStyle(feedback().props.style).backgroundColor;
+  assert.equal(finalIdleHandle, hoverReturnHandle);
+  const finalIdleTiming = timingCalls.at(-1);
+  assert.ok(finalIdleTiming);
+  assert.equal(finalIdleTiming.duration, 120);
+  assert.equal(finalIdleTiming.handle, finalIdleHandle);
+  assert.equal(finalIdleTiming.target.value, 'transparent');
+  assert.equal(finalIdleTiming.active, true);
+});
+
+test('reduced motion stops pending feedback and commits the latest color immediately', () => {
+  const button = renderIconButton({ accessibilityLabel: '닫기', children: '×', targetSize: 44 });
+  const renderer = renderVisual(button, { hovered: false, pressed: false });
+
+  updateVisual(renderer, button, { hovered: true, pressed: false });
+  const pendingTiming = timingCalls.at(-1);
+  assert.ok(pendingTiming);
+  const setValueCountBeforeReduced = setValueCalls;
+  reducedMotion = true;
+  updateVisual(renderer, button, { hovered: false, pressed: true });
+
+  assert.equal(timingCalls.length, 1);
+  assert.equal(pendingTiming.active, false);
+  assert.ok(pendingTiming.stopCalls > 0);
+  assert.ok(setValueCalls > setValueCountBeforeReduced);
+  assert.equal(
+    flattenStyle(renderer.root.findByType(animatedViewHost).props.style).backgroundColor,
+    'pressed',
+  );
+  reducedMotion = false;
 });
 
 test('disabled feedback keeps the common opacity and hides the surface', () => {
