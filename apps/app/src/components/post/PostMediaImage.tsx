@@ -30,72 +30,56 @@ export function PostMediaImage({
   readonly item: PostMediaItem;
   readonly onOpen?: PostMediaOpenHandler;
 }) {
-  const theme = useTheme();
   const triggerRef = useRef<NativeView>(null);
   const [generation, setGeneration] = useState(0);
+
+  return (
+    <PostMediaImageAttempt
+      key={`${item.id}:${item.url ?? ''}:${generation}`}
+      fill={fill}
+      index={index}
+      interactive={interactive}
+      item={item}
+      onOpen={onOpen}
+      onRetry={() => setGeneration((value) => value + 1)}
+      triggerRef={triggerRef}
+    />
+  );
+}
+
+function PostMediaImageAttempt({
+  fill,
+  index,
+  interactive,
+  item,
+  onOpen,
+  onRetry,
+  triggerRef,
+}: {
+  readonly fill: boolean;
+  readonly index: number;
+  readonly interactive: boolean;
+  readonly item: PostMediaItem;
+  readonly onOpen?: PostMediaOpenHandler;
+  readonly onRetry: () => void;
+  readonly triggerRef: RefObject<NativeView | null>;
+}) {
+  const theme = useTheme();
   const [aspectRatio, setAspectRatio] = useState(1);
-  const [loadState, setLoadState] = useState<{
-    generation: number;
-    id: string;
-    status: 'loading' | 'ready' | 'error';
-    url: string | null;
-  }>({ generation, id: item.id, status: 'loading', url: item.url });
-  const currentSource = useRef({ generation, id: item.id, url: item.url });
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const measuredUrl = useRef<string | null>(null);
-  currentSource.current = { generation, id: item.id, url: item.url };
-  const status =
-    loadState.generation === generation && loadState.id === item.id && loadState.url === item.url
-      ? loadState.status
-      : 'loading';
   const accessibilityLabel = item.altText?.trim() || `${index + 1}번째 첨부 이미지`;
   const canRetry = Boolean(item.url) && Boolean(interactive);
-  const handleError = useCallback(() => {
-    if (
-      currentSource.current.generation === generation &&
-      currentSource.current.id === item.id &&
-      currentSource.current.url === item.url
-    ) {
-      setLoadState({ generation, id: item.id, status: 'error', url: item.url });
-    }
-  }, [generation, item.id, item.url]);
-  const handleLoadStart = useCallback(() => {
-    if (
-      currentSource.current.generation !== generation ||
-      currentSource.current.id !== item.id ||
-      currentSource.current.url !== item.url
-    ) {
-      return;
-    }
-
-    setLoadState((current) => {
-      if (
-        current.generation === generation &&
-        current.id === item.id &&
-        current.url === item.url &&
-        current.status === 'ready'
-      ) {
-        return current;
-      }
-      return { generation, id: item.id, status: 'loading', url: item.url };
-    });
-  }, [generation, item.id, item.url]);
+  const handleError = useCallback(() => setStatus('error'), []);
   const updateAspectRatio = useCallback((url: string, width: number, height: number) => {
-    if (currentSource.current.url === url && height > 0 && width > 0) {
+    if (height > 0 && width > 0) {
       measuredUrl.current = url;
       setAspectRatio(Math.max(width / height, 1));
     }
   }, []);
   const handleLoad = useCallback(
     (event?: ImageLoadEvent) => {
-      if (
-        currentSource.current.generation !== generation ||
-        currentSource.current.id !== item.id ||
-        currentSource.current.url !== item.url
-      ) {
-        return;
-      }
-
-      setLoadState({ generation, id: item.id, status: 'ready', url: item.url });
+      setStatus('ready');
       if (fill || !item.url || measuredUrl.current === item.url) {
         return;
       }
@@ -113,7 +97,7 @@ export function PostMediaImage({
         () => undefined,
       );
     },
-    [fill, generation, item.id, item.url, updateAspectRatio],
+    [fill, item.url, updateAspectRatio],
   );
 
   useEffect(() => {
@@ -135,7 +119,7 @@ export function PostMediaImage({
     return () => {
       active = false;
     };
-  }, [fill, generation, item.url, updateAspectRatio]);
+  }, [fill, item.url, updateAspectRatio]);
 
   if (!item.url || status === 'error') {
     return (
@@ -157,15 +141,7 @@ export function PostMediaImage({
           <Pressable
             accessibilityLabel={`${accessibilityLabel} 다시 시도`}
             accessibilityRole="button"
-            onPress={() => {
-              setGeneration((value) => value + 1);
-              setLoadState({
-                generation: generation + 1,
-                id: item.id,
-                status: 'loading',
-                url: item.url,
-              });
-            }}
+            onPress={onRetry}
             style={({ pressed }) => [
               styles.retryButton,
               fill ? styles.fillRetryButton : null,
@@ -192,10 +168,8 @@ export function PostMediaImage({
         accessible={!onOpen || !interactive}
         accessibilityLabel={accessibilityLabel}
         accessibilityState={{ busy: status === 'loading' }}
-        key={`${item.id}:${generation}`}
         onError={handleError}
         onLoad={handleLoad}
-        onLoadStart={handleLoadStart}
         resizeMode="cover"
         source={{ uri: item.url }}
         style={styles.image}

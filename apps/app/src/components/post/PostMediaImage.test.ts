@@ -73,7 +73,7 @@ describe('PostMediaImage', () => {
     assert.equal(rendered('Skeleton')[0]?.props.width, '100%');
     assert.equal(image('landscape').props.accessibilityState.busy, true);
 
-    await act(async () => image('landscape').props.onLoadStart());
+    await act(async () => callImageEvent(image('landscape'), 'onLoadStart'));
     assert.equal(rendered('Skeleton').length, 1);
     assert.equal(image('landscape').props.accessibilityState.busy, true);
 
@@ -81,19 +81,24 @@ describe('PostMediaImage', () => {
     assert.equal(rendered('Skeleton').length, 0);
     assert.equal(image('landscape').props.accessibilityState.busy, false);
 
-    await act(async () => image('landscape').props.onLoadStart());
+    await act(async () => callImageEvent(image('landscape'), 'onLoadStart'));
     assert.equal(rendered('Skeleton').length, 0);
     assert.equal(image('landscape').props.accessibilityState.busy, false);
 
     await act(async () => {
       image('landscape').props.onLoad();
-      image('landscape').props.onLoadStart();
+      callImageEvent(image('landscape'), 'onLoadStart');
     });
     assert.equal(rendered('Skeleton').length, 0);
     assert.equal(image('landscape').props.accessibilityState.busy, false);
 
-    await act(async () => image('landscape').props.onError());
+    const failedAttempt = image('landscape');
+    await act(async () => {
+      failedAttempt.props.onError();
+      callImageEvent(failedAttempt, 'onLoadStart');
+    });
     assert.equal(rendered('Skeleton').length, 0);
+    assert.ok(byTestId('post-media-error-landscape'));
   });
 
   it('같은 Media ID의 새 URL은 다시 loading으로 시작하고 이전 source의 성공 이벤트는 무시한다', async () => {
@@ -202,7 +207,7 @@ describe('PostMediaImage', () => {
     assert.equal(rendered('Skeleton').length, 1);
     assert.equal(image('landscape').props.accessibilityState.busy, true);
 
-    await act(async () => image('landscape').props.onLoadStart());
+    await act(async () => callImageEvent(image('landscape'), 'onLoadStart'));
     await act(async () => image('landscape').props.onLoad());
     assert.equal(rendered('Skeleton').length, 0);
     assert.equal(image('landscape').props.accessibilityState.busy, false);
@@ -283,6 +288,11 @@ function pressable(accessibilityLabel: string): ReactTestInstance {
 
 function image(id: string): ReactTestInstance {
   return byTestId(`post-media-image-${id}`);
+}
+
+function callImageEvent(instance: ReactTestInstance, event: 'onError' | 'onLoad' | 'onLoadStart') {
+  const handler = instance.props[event] as (() => void) | undefined;
+  handler?.();
 }
 
 function frameAspectRatio(id: string): number | undefined {
