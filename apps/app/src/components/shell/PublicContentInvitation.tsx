@@ -7,9 +7,17 @@ import { NavigationLink } from '@/components/shell/NavigationLink';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { useTheme } from '@/theme/ThemeProvider';
-import { borderWidths, radius, space, spacing, textStyles } from '@/theme/tokens';
+import {
+  borderWidths,
+  breakpoints,
+  fontWeights,
+  radius,
+  space,
+  spacing,
+  textStyles,
+} from '@/theme/tokens';
 import { getPublicContentInvitationPlacement } from './publicContentInvitationLayout';
-import type { ViewStyle } from 'react-native';
+import type { TextStyle, ViewStyle } from 'react-native';
 
 type Props = {
   onDismiss: () => void;
@@ -61,9 +69,15 @@ export function PublicContentInvitation({ onDismiss, onLayout, pathname, visible
       <View style={styles.content}>
         <View style={styles.header}>
           <Text
-            style={[textStyles.uiLabelM, styles.invitationText, { color: theme.foregroundPrimary }]}
+            style={[
+              width < breakpoints.compact ? textStyles.uiCopyM : textStyles.uiCopyL,
+              styles.invitationText,
+              { color: theme.foregroundPrimary },
+            ]}
           >
-            지금 가입하고 취향이 통하는 사람들과 이야기를 나눠보세요.
+            {'지금 가입하고 '}
+            <Text style={styles.emphasis}>취향이 통하는 사람들</Text>
+            {'과 이야기를 나눠보세요.'}
           </Text>
           <IconButton
             accessibilityLabel="가입 안내 닫기"
@@ -123,9 +137,17 @@ const styles = StyleSheet.create({
   },
   flowRoot: { position: 'relative', width: '100%' },
   content: { gap: space[8], minWidth: 0 },
-  header: { alignItems: 'center', flexDirection: 'row', gap: space[8] },
-  invitationText: { flex: 1, minWidth: 0 },
-  closeButton: { flexShrink: 0 },
+  header: { justifyContent: 'center', minHeight: 44, paddingHorizontal: 44 + space[8] },
+  // This banner is Web-only: keep Korean words intact and balance wrapped lines.
+  invitationText: {
+    minWidth: 0,
+    textAlign: 'center',
+    textWrap: 'balance',
+    width: '100%',
+    wordBreak: 'keep-all',
+  } as TextStyle,
+  emphasis: { fontWeight: fontWeights.bold },
+  closeButton: { position: 'absolute', right: 0, top: 0 },
   actions: { alignItems: 'stretch', gap: space[8], minWidth: 0 },
   ctaButton: { borderRadius: radius.full, minHeight: space[48], width: '100%' },
   links: {

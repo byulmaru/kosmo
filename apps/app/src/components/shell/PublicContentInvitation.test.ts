@@ -49,10 +49,11 @@ mockModule('@/theme/ThemeProvider', {
 mockModule('@/theme/tokens', {
   borderWidths: { 1: 1 },
   breakpoints: { compact: 768, full: 1280 },
+  fontWeights: { bold: '700' },
   radius: { 12: 12, full: 999 },
   space: { 8: 8, 12: 12, 16: 16, 48: 48 },
   spacing: { lg: 24, md: 16, sm: 8 },
-  textStyles: { uiCopyS: {}, uiLabelL: {}, uiLabelM: {} },
+  textStyles: { uiCopyL: {}, uiCopyM: {}, uiCopyS: {}, uiLabelL: {}, uiLabelM: {} },
 });
 mockModule('@/components/shell/NavigationLink', {
   NavigationLink: ({ children, ...props }: { children?: unknown; [key: string]: unknown }) =>
