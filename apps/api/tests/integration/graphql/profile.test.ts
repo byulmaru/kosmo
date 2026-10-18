@@ -1589,9 +1589,7 @@ describe('GraphQL remote profile boundary', () => {
   test('Post.isPinned errors are nullable and preserve the Post', async () => {
     const auth = await createAuthenticatedSession();
     const post = await createContentfulPost({ profileId: auth.profile.id });
-    await pg.unsafe(
-      'ALTER TABLE profile_pinned_post RENAME TO profile_pinned_post_policy_failure',
-    );
+    await pg.unsafe('ALTER TABLE profile_pinned_post RENAME TO profile_pinned_post_policy_failure');
 
     let result: GraphQLResult<{
       node: { id: string; isPinned: boolean | null } | null;
