@@ -717,6 +717,141 @@ test('legacy Quote는 Source 검증 뒤 승인서 없이 승인된다', async ()
   );
 });
 
+test('inbound Quote Source는 Local actor mapping과 무관하게 canonical URI를 사용하고 원격 mapping을 보존한다', async () => {
+  const quoteActor = await createRemoteActor(
+    'local-source-quote',
+    'https://quote.example/users/local-source-quote',
+  );
+  const localParseUri = (uri: URL | null) => {
+    if (!uri || uri.origin !== publicOrigin || !uri.pathname.startsWith('/ap/note/')) {
+      return null;
+    }
+    return {
+      class: Note,
+      type: 'object',
+      values: { id: uri.pathname.slice('/ap/note/'.length) },
+    } as const;
+  };
+
+  for (const [suffix, withActor] of [
+    ['without-actor', false],
+    ['with-actor', true],
+  ] as const) {
+    const sourceProfile = await db
+      .insert(Profiles)
+      .values({
+        displayName: `local-source-${suffix}`,
+        followPolicy: ProfileFollowPolicy.OPEN,
+        handle: `local-source-${suffix}`,
+        instanceId: localInstanceId,
+        normalizedHandle: `local-source-${suffix}`,
+        state: ProfileState.ACTIVE,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const source = await createPost({
+      document: postContentDocumentFromText(`local source ${suffix}`),
+      origin: 'LOCAL',
+      profileId: sourceProfile.id,
+      visibility: PostVisibility.PUBLIC,
+    });
+    const sourceUri = `${publicOrigin}/ap/note/${source.post.id}`;
+    if (withActor) {
+      await db.insert(ActivityPubActors).values({
+        profileId: sourceProfile.id,
+        type: ActivityPubActorType.PERSON,
+        uri: `${publicOrigin}/ap/actor/${sourceProfile.id}`,
+      });
+    }
+
+    const quote = await createRemotePost(
+      quoteActor.id,
+      `https://quote.example/notes/local-source-${suffix}`,
+    );
+    const context = createContext(new Map(), async () => null, localParseUri);
+    const result = await handleInboundQuote({
+      actorUri: 'https://quote.example/users/local-source-quote',
+      context,
+      note: new Note({
+        attribution: new URL('https://quote.example/users/local-source-quote'),
+        id: new URL(`https://quote.example/notes/local-source-${suffix}`),
+        quoteUrl: new URL(sourceUri),
+        to: PUBLIC_COLLECTION,
+      }),
+      postId: quote.post.id,
+      receivedAt,
+    });
+
+    assert.deepEqual(result, { retryable: false, status: PostQuoteConsentStatus.APPROVED });
+    assert.equal(
+      (await db.select().from(Posts).where(eq(Posts.id, quote.post.id)).then(firstOrThrow))
+        .repostSourceId,
+      source.post.id,
+    );
+  }
+
+  const remoteSourceActor = await createRemoteActor(
+    'remote-source-preserved',
+    'https://source.example/users/remote-source-preserved',
+  );
+  const remoteSourceUri = new URL('https://source.example/notes/remote-source-preserved');
+  const remoteSource = await createRemotePost(remoteSourceActor.id, remoteSourceUri.href);
+  const remoteQuote = await createRemotePost(
+    quoteActor.id,
+    'https://quote.example/notes/remote-source-preserved',
+  );
+  const remoteContext = createContext(new Map(), async () => null, localParseUri);
+  const remoteResult = await handleInboundQuote({
+    actorUri: 'https://quote.example/users/local-source-quote',
+    context: remoteContext,
+    note: new Note({
+      attribution: new URL('https://quote.example/users/local-source-quote'),
+      id: new URL('https://quote.example/notes/remote-source-preserved'),
+      quoteUrl: remoteSourceUri,
+      to: PUBLIC_COLLECTION,
+    }),
+    postId: remoteQuote.post.id,
+    receivedAt,
+  });
+
+  assert.deepEqual(remoteResult, { retryable: false, status: PostQuoteConsentStatus.APPROVED });
+  assert.equal(
+    (
+      await db
+        .select({ uri: ActivityPubPosts.uri })
+        .from(ActivityPubPosts)
+        .where(eq(ActivityPubPosts.postId, remoteSource.post.id))
+        .then(firstOrThrow)
+    ).uri,
+    remoteSourceUri.href,
+  );
+  assert.equal(
+    (await db.select().from(Posts).where(eq(Posts.id, remoteQuote.post.id)).then(firstOrThrow))
+      .repostSourceId,
+    remoteSource.post.id,
+  );
+
+  const unresolvedQuote = await createRemotePost(
+    quoteActor.id,
+    'https://quote.example/notes/unresolved-source',
+  );
+  await db.delete(ActivityPubPosts).where(eq(ActivityPubPosts.postId, unresolvedQuote.post.id));
+  assert.deepEqual(
+    await resolveStoredInboundQuote({
+      approvalUri: null,
+      context: remoteContext,
+      expectedApprovalUri: null,
+      expectedRepostSourceId: null,
+      expectedStatus: null,
+      format: 'LEGACY',
+      postId: unresolvedQuote.post.id,
+      receivedAt,
+      targetUri: remoteSourceUri.href,
+    }),
+    { retryable: false, status: null },
+  );
+});
+
 test('malformed FEP가 있으면 legacy target을 조회하거나 materialize하지 않는다', async () => {
   await createRemoteActor('malformed-source', 'https://source.example/users/malformed');
   const quoteActor = await createRemoteActor(
@@ -2013,6 +2148,7 @@ for (const revokedDuringVerification of [false, true]) {
 const createContext = (
   documents = new Map<string, unknown>(),
   lookupObject: (identifier: string | URL) => Promise<unknown> = async () => null,
+  parseUri: (uri: URL | null) => unknown = () => null,
 ): TestQuoteContext => {
   const contextLoader = getDocumentLoader();
   const context = {
@@ -2026,7 +2162,7 @@ const createContext = (
       return { contextUrl: null, document, documentUrl: url };
     },
     lookupObject,
-    parseUri: () => null,
+    parseUri,
   };
   currentContext = {
     ...context,

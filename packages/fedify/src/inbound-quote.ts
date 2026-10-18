@@ -4,15 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { getDocumentLoader } from '@fedify/fedify/runtime';
 import { quoteInteraction } from '@fedify/interaction-controls';
 import { Note, QuoteAuthorization } from '@fedify/vocab';
-import {
-  ActivityPubActors,
-  ActivityPubPosts,
-  db,
-  first,
-  Instances,
-  Posts,
-  Profiles,
-} from '@kosmo/core/db';
+import { ActivityPubActors, db, first, Instances, Posts, Profiles } from '@kosmo/core/db';
 import { InstanceKind, PostQuoteConsentStatus, PostState } from '@kosmo/core/enums';
 import {
   loadPendingQuoteConsentByBinding,
@@ -22,7 +14,7 @@ import {
 import { runWorkflow } from '@kosmo/core/temporal/client';
 import { postQuoteOwnerWorkflow } from '@kosmo/core/temporal/post-quote-owner';
 import { and, eq, isNull } from 'drizzle-orm';
-import { findPostByActivityPubUri } from './activitypub-post-uri';
+import { findPostByActivityPubUri, resolveActivityPubPostUri } from './activitypub-post-uri';
 import { isHttpUri } from './activitypub-uri';
 import { materializeHydratedRemoteNote } from './inbound-create-note';
 import { RemoteActorDiscoveryUnavailableError } from './remote-actor-materialization';
@@ -237,13 +229,11 @@ const loadQuoteSource = async (postId: string): Promise<QuoteSource | null> => {
       postId: Posts.id,
       postState: Posts.state,
       profileId: Profiles.id,
-      uri: ActivityPubPosts.uri,
     })
     .from(Posts)
     .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
     .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
     .leftJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Profiles.id))
-    .leftJoin(ActivityPubPosts, eq(ActivityPubPosts.postId, Posts.id))
     .where(eq(Posts.id, postId))
     .limit(1)
     .then(first);
@@ -252,15 +242,20 @@ const loadQuoteSource = async (postId: string): Promise<QuoteSource | null> => {
     return null;
   }
 
-  if (row.actorUri === null && row.instanceKind === InstanceKind.LOCAL && row.canonicalOrigin) {
-    return {
-      ...row,
-      actorUri: new URL(`/ap/actor/${row.profileId}`, row.canonicalOrigin).href,
-      uri: new URL(`/ap/note/${row.postId}`, row.canonicalOrigin).href,
-    };
+  const uri = await resolveActivityPubPostUri(postId);
+  if (!uri) {
+    return null;
   }
 
-  return row.uri ? { ...row, uri: row.uri } : null;
+  return {
+    ...row,
+    actorUri:
+      row.actorUri ??
+      (row.instanceKind === InstanceKind.LOCAL && row.canonicalOrigin
+        ? new URL(`/ap/actor/${row.profileId}`, row.canonicalOrigin).href
+        : null),
+    uri: uri.href,
+  };
 };
 
 const materializeTarget = async ({
