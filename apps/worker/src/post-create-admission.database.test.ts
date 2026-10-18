@@ -4,6 +4,8 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { readFile, unlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { test } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
@@ -380,7 +382,7 @@ if (isChildProcess) {
         input: AdmissionLocalPostInput,
         expected: 'reject' | 'success',
       ): Promise<AdmissionChildResult> => {
-        const resultPath = `/private/tmp/post-admission-child-${randomUUID()}.json`;
+        const resultPath = join(tmpdir(), `post-admission-child-${randomUUID()}.json`);
         const child = spawn(
           process.execPath,
           ['--import', 'tsx', new URL(import.meta.url).pathname, JSON.stringify(input)],
@@ -392,16 +394,21 @@ if (isChildProcess) {
               POST_ADMISSION_CHILD_EXPECT: expected,
               POST_ADMISSION_CHILD_RESULT: resultPath,
             },
-            stdio: 'ignore',
+            stdio: ['ignore', 'ignore', 'pipe'],
           },
         );
+        let stderr = '';
+        child.stderr.setEncoding('utf8');
+        child.stderr.on('data', (chunk: string) => {
+          stderr += chunk;
+        });
         const exitCode = await new Promise<number>((resolve, reject) => {
           child.once('error', reject);
           child.once('exit', (code) => resolve(code ?? 1));
         });
         const raw = await readFile(resultPath, 'utf8').catch(() => '');
         await unlink(resultPath).catch(() => undefined);
-        assert.equal(exitCode, 0, raw);
+        assert.equal(exitCode, 0, raw || stderr || 'Admission child exited without a result');
         return JSON.parse(raw) as AdmissionChildResult;
       };
 
