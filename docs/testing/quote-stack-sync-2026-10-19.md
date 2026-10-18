@@ -39,6 +39,12 @@ private Parent 두 삭제 사례는 수정 전 실패했고, 수정 후 승인·
 하위 Worker 전체와 상위 Quote 그룹은 별도 실행이다. 최상위 Worker 전체 명령 한 번의 성공으로 표현하지 않는다.
 각 DB 실행은 `COMPOSE_PROJECT_NAME=kosmo node scripts/test-db.mjs run -- ...`로 격리했다. E2E는 `KOSMO_TEST_PORT_OFFSET=1000`으로 기존 개발 서버와 분리했다.
 
+## 첫 원격 CI 실패와 수정
+
+첫 반영 head `217cd94e` / `6bab6c17` / `b76c0fef`에서 Worker CI는 모두 같은 history 소실 child 검증에서 실패했다. 다른 기능 검사를 재실행해 실패를 숨기지 않고 로그를 대조했다.
+child 결과 파일에 macOS 전용 `/private/tmp`가 하드코딩돼 있어 Linux runner에 이식할 수 없었고, stderr까지 버려 원인을 확인할 결과도 없었다. `node:os.tmpdir()`와 `node:path.join()`을 사용하고 실패 시 stderr를 함께 표시하도록 테스트 harness를 수정했다. production admission 구현은 바꾸지 않았다.
+수정 후 실제 Temporal·PostgreSQL admission 13개, Worker typecheck·ESLint가 로컬에서 통과했다. Linux 검증 결과는 이 수정을 포함한 각 PR의 새 head CI에서 확인하며 실패한 이전 head의 결과와 구분한다.
+
 ## 남은 운영 경계
 
 - 실제 production history export/replay와 구형 writer admission 차단·Activity·DB session·process drain은 별도 배포 Gate다. SDK shutdown은 owner finish/drain이 아니다.
