@@ -21,7 +21,7 @@ import {
   ProfileFollowPolicy,
   ProfileState,
 } from '../enums';
-import { NotFoundError } from '../error';
+import { KosmoError, NotFoundError } from '../error';
 import { ProfilePairBlockedError } from './profile-block-policy';
 import {
   executeProfileFollowPairTransition,
@@ -190,6 +190,17 @@ test('Follow failure serialization preserves the blocked subtype and leaves ordi
   const missingError = rehydrateProfileFollowFailure(missing.error);
   assert.ok(missingError instanceof NotFoundError);
   assert.equal(missingError instanceof ProfilePairBlockedError, false);
+});
+
+test('Follow failure rehydration preserves newly introduced error codes', () => {
+  const error = rehydrateProfileFollowFailure({
+    code: 'PROFILE_LIMIT_EXCEEDED',
+    message: 'Profile limit reached',
+  });
+
+  assert.ok(error instanceof KosmoError);
+  assert.equal(error.code, 'PROFILE_LIMIT_EXCEEDED');
+  assert.equal(error.message, 'Profile limit reached');
 });
 
 test('open Follow uses the PostgreSQL-generated row ID and keeps duplicate retry effect-free', async () => {

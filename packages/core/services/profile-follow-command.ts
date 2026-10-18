@@ -213,6 +213,8 @@ export const rehydrateProfileFollowFailure = (
       return new PermissionDeniedError(failure.message);
     case 'VALIDATION':
       return new ValidationError(failure.message, { field: failure.field });
+    default:
+      return new KosmoError({ code: failure.code, message: failure.message });
   }
 };
 

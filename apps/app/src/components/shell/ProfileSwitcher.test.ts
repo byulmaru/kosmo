@@ -81,6 +81,7 @@ const queryData = {
 let fragmentData: typeof queryData = queryData;
 
 let pendingSelectMutation: MutationResult | null = null;
+let pendingCreateMutation: MutationResult | null = null;
 let renderer: ReactTestRenderer | null = null;
 let ProfileSwitcher: typeof ProfileSwitcherComponent;
 
@@ -115,7 +116,12 @@ function MockModal({ children, ...props }: { children?: ReactNode; [key: string]
 }
 
 function MockProfilePicker(props: Record<string, unknown>) {
-  return createElement('ProfilePicker', props);
+  return createElement(
+    'ProfilePicker',
+    props,
+    props.menuFooter as ReactNode,
+    props.footer as ReactNode,
+  );
 }
 
 const resetActor = (profileId?: string | null) => {
@@ -138,6 +144,9 @@ function useMockMutation(mutation: unknown) {
     };
     if (mutation === 'ProfileSwitcherSelectProfileMutation') {
       pendingSelectMutation = result;
+    }
+    if (mutation === 'ProfileSwitcherCreateProfileMutation') {
+      pendingCreateMutation = result;
     }
   };
 
@@ -238,6 +247,7 @@ afterEach(async () => {
   platform.OS = 'ios';
   fragmentData = queryData;
   pendingSelectMutation = null;
+  pendingCreateMutation = null;
   resetActorCalls.length = 0;
   analyticsCalls.length = 0;
   selectedProfileWrites.length = 0;
@@ -301,6 +311,45 @@ describe('ProfileSwitcher selection lifecycle', () => {
     await closePicker();
     assert.deepEqual(resetActorCalls, []);
     assert.equal(modal().props.visible, false);
+  });
+});
+
+describe('ProfileSwitcher profile creation errors', () => {
+  it('shows the profile limit error and preserves the entered handle', async () => {
+    await renderProfileSwitcher();
+    await openPicker();
+
+    const picker = renderer?.root.findByType('ProfilePicker');
+    assert.ok(picker);
+    await act(async () => picker.props.menuFooter.props.onPress());
+
+    let textField = renderer?.root.findByType('TextField');
+    assert.ok(textField);
+    await act(async () => textField?.props.onChangeText('newprofile'));
+    await act(async () => renderer?.root.findByType('Button').props.onPress());
+    assert.ok(pendingCreateMutation);
+
+    await act(async () =>
+      pendingCreateMutation?.fail(
+        Object.assign(new Error('GraphQL operation failed'), {
+          source: {
+            errors: [
+              { message: 'Profile limit reached', extensions: { code: 'PROFILE_LIMIT_EXCEEDED' } },
+            ],
+          },
+        }),
+      ),
+    );
+
+    textField = renderer?.root.findByType('TextField');
+    assert.ok(textField);
+    assert.equal(textField.props.error, '프로필은 최대 10개까지 만들 수 있어요.');
+    assert.equal(textField.props.value, 'newprofile');
+    assert.equal(modal().props.visible, true);
+    assert.equal(
+      renderer?.root.findAllByProps({ accessibilityLabel: '새 프로필 만들기' }).length,
+      1,
+    );
   });
 });
 

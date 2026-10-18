@@ -147,6 +147,12 @@ rename·disable·delete하지 않는다.
 | Profile Migration source 해제     | Account        | 현재 선택된 Profile | 없음                                                                          | `Account.Active`, `Profile.Owner`    | 현재 선택된 Profile을 target으로 사용하고 현재 context의 Owner 권한을 재사용한다. 준비 관계가 없어도 성공하는 idempotent no-op이다                                                                                                                                                                                            | 준비 관계와 그로부터 파생되는 Local Actor alias를 제거한다. 이미 이전된 follower 관계나 request는 롤백하지 않는다. 해당 Local target pair의 source-target 검증을 통과한 현재 follower 처리는 끝날 수 있지만, 관계가 없거나 달라지면 그 pair의 이후 follower 처리와 inbound Move는 계속되지 않는다                                                                                                                                                                           |
 | inbound ActivityPub Move 처리     | 시스템         | Profile             | 인증된 source actor/object URI, target canonical Actor URI                    | `System.RemoteProfileSource`         | 인증된 actor와 object가 같은 canonical URI이고 target actor의 `alsoKnownAs`에 exact source URI가 있으며 source는 Remote Profile이다                                                                                                                                                                                           | 검증된 remote-to-local 또는 remote-to-remote Move가 기존 Profile identity와 Follow lifecycle에 반영된다                                                                                                                                                                                                                                                                                                                                                                     |
 
+Account별 Profile 생성은 Lifecycle State가 Active인 Profile의 현재 Owner Membership이 10개 미만일 때만 허용한다.
+Suspension State가 Suspended인 Profile도 집계하고, Lifecycle State가 Deactivated 또는 Deleted인 Profile과
+Member Membership은 제외한다. Owner Profile을 삭제하면 상한에서 빠져 다시 생성할 수 있다. 동시 생성 요청도 이
+상한을 초과할 수 없다. 이미 상한을 넘은 Account의 기존 Profile은 보존하며, 상한에 도달한 새 생성은 Profile과
+Membership을 만들지 않고 거부한다.
+
 Profile Origin은 연결된 Instance Type과 같아야 한다. Follow Approval Policy 변경은 이미 존재하는 Pending Follow
 Request의 상태나 존재를 바꾸지 않는다.
 
