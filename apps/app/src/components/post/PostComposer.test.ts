@@ -20,6 +20,15 @@ import type {
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const platform = { OS: 'web' };
+const previousRequestAnimationFrame = globalThis.requestAnimationFrame;
+const previousCancelAnimationFrame = globalThis.cancelAnimationFrame;
+const appStateListeners = new Set<(nextState: string) => void>();
+let keyboardDismissCount = 0;
+const emitAppState = (nextState: string) => {
+  for (const listener of appStateListeners) {
+    listener(nextState);
+  }
+};
 let mentionSearchEnabled = true;
 Object.assign(platform, {
   select: <T>(values: { default?: T; web?: T }) => values.web ?? values.default,
@@ -154,6 +163,13 @@ const mockModule = (specifier: string | URL, exports: object) =>
   } as unknown as Parameters<typeof mock.module>[1]);
 
 mockModule('react-native', {
+  AppState: {
+    addEventListener: (_eventType: string, listener: (nextState: string) => void) => {
+      appStateListeners.add(listener);
+      return { remove: () => appStateListeners.delete(listener) };
+    },
+  },
+  Keyboard: { dismiss: () => keyboardDismissCount++ },
   Modal: 'Modal',
   Platform: platform,
   Pressable: 'Pressable',
@@ -312,7 +328,16 @@ before(async () => {
 });
 
 beforeEach(() => {
+  Object.assign(globalThis, {
+    cancelAnimationFrame: () => undefined,
+    requestAnimationFrame: (callback: FrameRequestCallback) => {
+      callback(0);
+      return 0;
+    },
+  });
   mentionSearchEnabled = true;
+  appStateListeners.clear();
+  keyboardDismissCount = 0;
   requests = [];
   relayEnvironment = createRelayEnvironment();
   textInputMountCount = 0;
@@ -325,6 +350,10 @@ afterEach(async () => {
     await act(async () => renderer?.unmount());
     renderer = null;
   }
+  Object.assign(globalThis, {
+    cancelAnimationFrame: previousCancelAnimationFrame,
+    requestAnimationFrame: previousRequestAnimationFrame,
+  });
   platform.OS = 'web';
   mediaState = 'ready';
   refreshMedia = undefined;
@@ -391,6 +420,85 @@ describe('PostComposer initial body', () => {
       renderer?.root.findByType('PostComposerTarget' as never).props.visibility,
       'PUBLIC',
     );
+  });
+});
+
+describe('PostComposer native background', () => {
+  it('dismisses the open native keyboard on background and keeps the mounted draft', async () => {
+    for (const nativePlatform of ['ios', 'android'] as const) {
+      platform.OS = nativePlatform;
+      const keyboardDismissCountBefore = keyboardDismissCount;
+      const textInputMountCountBefore = textInputMountCount;
+      const textInputUnmountCountBefore = textInputUnmountCount;
+      let closeCount = 0;
+      let editorFocusCount = 0;
+      const props = {
+        editorRef: { current: { focus: () => editorFocusCount++ } } as never,
+        focusOnMount: true,
+        onRequestClose: () => closeCount++,
+        presentation: 'overlay' as const,
+        profile: profileA as never,
+      };
+
+      await act(async () => {
+        renderer = create(createElement(PostComposer, props));
+      });
+      assert.equal(appStateListeners.size, 1);
+      assert.equal(editorFocusCount, 1);
+      await act(async () => targetProps?.onBodyChange('보존할 본문'));
+
+      await act(async () => {
+        emitAppState('inactive');
+        emitAppState('active');
+      });
+      assert.equal(keyboardDismissCount, keyboardDismissCountBefore);
+
+      await act(async () => emitAppState('background'));
+      assert.equal(keyboardDismissCount, keyboardDismissCountBefore + 1);
+      await act(async () => emitAppState('active'));
+
+      assert.equal(targetProps?.body, '보존할 본문');
+      assert.equal(
+        renderer?.root.findByType('PostComposerTarget' as never).props.body,
+        '보존할 본문',
+      );
+      assert.equal(textInputMountCount, textInputMountCountBefore + 1);
+      assert.equal(textInputUnmountCount, textInputUnmountCountBefore);
+      assert.equal(editorFocusCount, 1);
+      assert.equal(closeCount, 0);
+
+      await act(async () => {
+        renderer?.update(createElement(PostComposer, { ...props, focusOnMount: false }));
+      });
+      assert.equal(appStateListeners.size, 0);
+      await act(async () => renderer?.unmount());
+      renderer = null;
+      assert.equal(appStateListeners.size, 0);
+    }
+  });
+
+  it('does not subscribe for a hidden native composer or a Web composer', async () => {
+    platform.OS = 'ios';
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposer, { focusOnMount: false, profile: profileA as never }),
+      );
+    });
+    assert.equal(appStateListeners.size, 0);
+    await act(async () => emitAppState('background'));
+    assert.equal(keyboardDismissCount, 0);
+    await act(async () => renderer?.unmount());
+    renderer = null;
+
+    platform.OS = 'web';
+    await act(async () => {
+      renderer = create(
+        createElement(PostComposer, { focusOnMount: true, profile: profileA as never }),
+      );
+    });
+    assert.equal(appStateListeners.size, 0);
+    await act(async () => emitAppState('background'));
+    assert.equal(keyboardDismissCount, 0);
   });
 });
 

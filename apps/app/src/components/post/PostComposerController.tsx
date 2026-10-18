@@ -1,7 +1,7 @@
 import { normalizePostContentPlainText } from '@kosmo/core/post-content';
 import { postBodyMaxLength } from '@kosmo/core/validation/post-policy';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { AppState, Keyboard, Platform, StyleSheet, View } from 'react-native';
 import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
 import { QueryRenderer } from 'react-relay/legacy';
 import { ConnectionHandler, ROOT_ID } from 'relay-runtime';
@@ -522,6 +522,19 @@ function PostComposerContents({
     const frame = requestAnimationFrame(() => editor.current?.focus());
     return () => cancelAnimationFrame(frame);
   }, [focusOnMount, presentation]);
+
+  useEffect(() => {
+    if (!focusOnMount || Platform.OS === 'web') {
+      return;
+    }
+    // Keep the native composer stable when an app switch leaves its keyboard open.
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'background') {
+        Keyboard.dismiss();
+      }
+    });
+    return () => subscription.remove();
+  }, [focusOnMount]);
 
   const productionSurface: PostComposerVisibility = visibility;
   const composerMode: PostComposerMode = quoteMode ? 'quote' : replyMode ? 'reply' : 'post';
