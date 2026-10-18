@@ -350,6 +350,43 @@ test('ListboxOption stops Web selection feedback when reduced motion is enabled'
   assert.equal(flattenStyle(nativeLayer.props.style).backgroundColor, 'selected-surface');
 });
 
+test('ListboxOption transitions selection under a stable active state for 200ms', () => {
+  const renderer = renderOption({ active: true, selected: false });
+  const updateSelected = (selected: boolean) =>
+    act(() =>
+      renderer.update(
+        createElement(listboxOptionModule!.ListboxOption, {
+          active: true,
+          description: '설명',
+          label: '항목',
+          onSelect: () => undefined,
+          selected,
+        }),
+      ),
+    );
+
+  for (const [selected, target] of [
+    [true, 'selected-surface'],
+    [false, 'hover'],
+  ] as const) {
+    const previousTimingCount = timingCalls.length;
+    updateSelected(selected);
+
+    assert.equal(optionNode(renderer).props['aria-selected'], selected);
+    const backgroundHandle = feedbackStyle(renderer).backgroundColor;
+    assert.ok(backgroundHandle instanceof AnimatedColorMock);
+
+    const timing = timingCalls
+      .slice(previousTimingCount)
+      .find((call) => call.handle === backgroundHandle);
+    assert.ok(timing);
+    assert.equal(timing.duration, 200);
+    assert.ok(timing.target instanceof AnimatedColorMock);
+    assert.equal(timing.target.value, target);
+    assert.equal(timing.active, true);
+  }
+});
+
 test('Listbox selection keeps its 200ms color transition while focus makes only the border instant', () => {
   const renderer = renderOption({ active: false, selected: false });
   const option = optionNode(renderer);
