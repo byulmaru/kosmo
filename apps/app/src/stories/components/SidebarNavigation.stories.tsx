@@ -546,9 +546,9 @@ async function playInlineUtility({
   expect(feedback.parentElement).toBe(footer);
   expect(utility.parentElement).toBe(footer);
   expectRect(footer!, 288, 139);
-  expect(
-    discordCommunity.getBoundingClientRect().top - footer!.getBoundingClientRect().top,
-  ).toBe(4);
+  expect(discordCommunity.getBoundingClientRect().top - footer!.getBoundingClientRect().top).toBe(
+    4,
+  );
   expect(feedback.getBoundingClientRect().top - footer!.getBoundingClientRect().top).toBe(49);
   expect(utility.getBoundingClientRect().top - footer!.getBoundingClientRect().top).toBe(94);
   expect(
