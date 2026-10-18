@@ -10,7 +10,7 @@ type ButtonProps = PropsWithChildren<
     loading?: boolean;
     loadingText?: string;
     size?: 'compact' | 'default';
-    tone?: 'primary' | 'secondary' | 'danger';
+    tone?: 'primary' | 'secondary' | 'danger' | 'inverse';
   }
 >;
 
@@ -36,7 +36,9 @@ export function Button({
       ? theme.actionPrimaryOnBase
       : tone === 'danger'
         ? theme.feedbackDangerOnBase
-        : theme.actionSecondaryOnBase;
+        : tone === 'inverse'
+          ? theme.foregroundInverse
+          : theme.actionSecondaryOnBase;
   const borderColor = disabled
     ? theme.borderDisabled
     : tone === 'secondary'
@@ -82,14 +84,25 @@ export function Button({
                     : theme.actionPrimaryBase
                 : tone === 'danger'
                   ? theme.feedbackDangerBase
-                  : state.pressed
-                    ? theme.actionSecondaryPressed
-                    : hovered
-                      ? theme.actionSecondaryHover
-                      : theme.actionSecondaryBase,
+                  : tone === 'inverse'
+                    ? theme.backgroundInverse
+                    : state.pressed
+                      ? theme.actionSecondaryPressed
+                      : hovered
+                        ? theme.actionSecondaryHover
+                        : theme.actionSecondaryBase,
             borderColor,
             borderWidth,
-            opacity: tone === 'danger' && (state.pressed || hovered) ? 0.9 : 1,
+            opacity:
+              !disabled && tone === 'inverse'
+                ? state.pressed
+                  ? 0.8
+                  : hovered
+                    ? 0.9
+                    : 1
+                : tone === 'danger' && (state.pressed || hovered)
+                  ? 0.9
+                  : 1,
             ...(focused
               ? ({
                   outlineColor: theme.stateFocusRing,

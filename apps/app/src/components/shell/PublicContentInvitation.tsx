@@ -7,7 +7,7 @@ import { NavigationLink } from '@/components/shell/NavigationLink';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { useTheme } from '@/theme/ThemeProvider';
-import { borderWidths, breakpoints, space, spacing, textStyles } from '@/theme/tokens';
+import { borderWidths, radius, space, spacing, textStyles } from '@/theme/tokens';
 import { getPublicContentInvitationPlacement } from './publicContentInvitationLayout';
 import type { ViewStyle } from 'react-native';
 
@@ -32,7 +32,6 @@ export function PublicContentInvitation({ onDismiss, onLayout, pathname, visible
     return null;
   }
 
-  const compact = width < breakpoints.compact;
   const positionedStyle =
     placement.mode === 'fixed'
       ? ({
@@ -60,7 +59,7 @@ export function PublicContentInvitation({ onDismiss, onLayout, pathname, visible
       testID="public-content-invitation"
     >
       <View style={styles.content}>
-        <View style={[styles.actions, compact ? styles.mobileActions : undefined]}>
+        <View style={styles.actions}>
           <NavigationLink href="/" primary>
             <Button
               onPress={(event) => {
@@ -68,9 +67,10 @@ export function PublicContentInvitation({ onDismiss, onLayout, pathname, visible
                   saveHomeReturnTarget(pathname);
                 }
               }}
-              style={compact ? styles.mobileCtaButton : undefined}
+              style={styles.ctaButton}
+              tone="inverse"
             >
-              KOSMO에서 계속하기
+              <Text style={textStyles.uiLabelL}>KOSMO에서 계속하기</Text>
             </Button>
           </NavigationLink>
           <View style={styles.links}>
@@ -116,9 +116,8 @@ const styles = StyleSheet.create({
   },
   flowRoot: { position: 'relative', width: '100%' },
   content: { alignItems: 'flex-start', flexDirection: 'row', gap: space[8], minWidth: 0 },
-  actions: { alignItems: 'center', flex: 1, gap: space[8], minWidth: 0 },
-  mobileActions: { alignItems: 'stretch' },
-  mobileCtaButton: { width: '100%' },
+  actions: { alignItems: 'stretch', flex: 1, gap: space[8], minWidth: 0 },
+  ctaButton: { borderRadius: radius.full, minHeight: space[48], width: '100%' },
   links: {
     alignItems: 'center',
     flexDirection: 'row',

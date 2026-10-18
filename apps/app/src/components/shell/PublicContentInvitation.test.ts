@@ -49,8 +49,8 @@ mockModule('@/theme/ThemeProvider', {
 mockModule('@/theme/tokens', {
   borderWidths: { 1: 1 },
   breakpoints: { compact: 768, full: 1280 },
-  radius: { 12: 12 },
-  space: { 8: 8, 12: 12, 16: 16 },
+  radius: { 12: 12, full: 999 },
+  space: { 8: 8, 12: 12, 16: 16, 48: 48 },
   spacing: { lg: 24, md: 16, sm: 8 },
   textStyles: { uiCopyS: {}, uiLabelL: {}, uiLabelM: {} },
 });
