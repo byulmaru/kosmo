@@ -34,6 +34,7 @@ export type FollowProfileResult =
 type ProfileFollowInput = {
   followerProfileId: string;
   followeeProfileId: string;
+  actorAccountId?: string | null;
 };
 
 const loadProfileFollowParticipants = async (
@@ -90,7 +91,7 @@ const loadProfileFollowParticipants = async (
 };
 
 export const followProfileInTransaction = async (
-  { followerProfileId, followeeProfileId }: ProfileFollowInput,
+  { actorAccountId, followerProfileId, followeeProfileId }: ProfileFollowInput,
   tx: Transaction,
 ): Promise<{
   readonly sendActivityPub: boolean;
@@ -114,7 +115,7 @@ export const followProfileInTransaction = async (
   let followResult: FollowProfileResult;
   if (target.followPolicy === ProfileFollowPolicy.APPROVAL_REQUIRED) {
     const ensured = await ensureProfileFollowRequest(
-      { followeeProfileId: target.id, followerProfileId },
+      { actorAccountId, followeeProfileId: target.id, followerProfileId },
       tx,
     );
     created = ensured.created;
@@ -124,7 +125,7 @@ export const followProfileInTransaction = async (
         : { kind: 'PENDING', profileFollowRequest: ensured.profileFollowRequest };
   } else {
     const ensured = await ensureProfileFollow(
-      { followeeProfileId: target.id, followerProfileId },
+      { actorAccountId, followeeProfileId: target.id, followerProfileId },
       tx,
     );
     created = ensured.created;
@@ -364,7 +365,11 @@ export type AcceptProfileFollowRequestResult =
   | { readonly kind: 'NOOP' };
 
 export const ensureProfileFollowRequest = async (
-  pair: ProfileFollowPair,
+  {
+    actorAccountId,
+    followeeProfileId,
+    followerProfileId,
+  }: ProfileFollowPair & { readonly actorAccountId?: string | null },
   tx?: Transaction,
 ): Promise<
   | {
@@ -379,6 +384,7 @@ export const ensureProfileFollowRequest = async (
     }
 > =>
   getDatabaseConnection(tx).transaction(async (tx) => {
+    const pair = { followeeProfileId, followerProfileId };
     const profileFollow = await tx
       .select()
       .from(ProfileFollows)
@@ -395,7 +401,7 @@ export const ensureProfileFollowRequest = async (
 
     const inserted = await tx
       .insert(ProfileFollowRequests)
-      .values(pair)
+      .values({ ...pair, actorAccountId: actorAccountId ?? null })
       .onConflictDoNothing({
         target: [ProfileFollowRequests.followerProfileId, ProfileFollowRequests.followeeProfileId],
       })
@@ -450,7 +456,7 @@ export const acceptProfileFollowRequestInTransaction = async (
   }
 
   const pendingRequest = await tx
-    .select({ id: ProfileFollowRequests.id })
+    .select({ actorAccountId: ProfileFollowRequests.actorAccountId, id: ProfileFollowRequests.id })
     .from(ProfileFollowRequests)
     .where(
       and(
@@ -504,7 +510,10 @@ export const acceptProfileFollowRequestInTransaction = async (
     };
   }
 
-  const ensured = await ensureProfileFollow(pair, tx);
+  const ensured = await ensureProfileFollow(
+    { ...pair, actorAccountId: pendingRequest?.actorAccountId ?? null },
+    tx,
+  );
   return {
     createdFollowId: ensured.created ? ensured.profileFollow.id : undefined,
     deletedRequestId: deleted.id,
@@ -570,6 +579,7 @@ export const approveProfileFollowRequestInTransaction = async (
     {
       followeeProfileId: request.followeeProfileId,
       followerProfileId: request.followerProfileId,
+      actorAccountId: request.actorAccountId,
     },
     tx,
   );

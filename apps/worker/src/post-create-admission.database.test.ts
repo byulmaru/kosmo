@@ -24,6 +24,7 @@ process.env.PGPASSWORD ??= decodeURIComponent(databaseUrl.password);
 process.env.PGDATABASE ??= decodeURIComponent(databaseUrl.pathname.slice(1));
 
 type AdmissionLocalPostInput = {
+  readonly accountId?: string;
   readonly admissionId: string;
   readonly document: PostContentDocumentV1;
   readonly origin: 'LOCAL';
@@ -196,7 +197,17 @@ if (isChildProcess) {
       ]);
       const production = await import('./activities');
 
-      const { db, firstOrThrow, Instances, pg, PostContents, Posts, Profiles } = coreDb;
+      const {
+        Accounts,
+        AccountProfiles,
+        db,
+        firstOrThrow,
+        Instances,
+        pg,
+        PostContents,
+        Posts,
+        Profiles,
+      } = coreDb;
       const {
         InstanceKind,
         InstanceState,
@@ -412,7 +423,24 @@ if (isChildProcess) {
       await t.test(
         'timeout 뒤 late commit은 같은 identity 재전송에서 한 Post와 Content로 수렴한다',
         async () => {
-          const input = quoteInput(quoteProfile.id, source.id, 'late quote');
+          const account = await db
+            .insert(Accounts)
+            .values({
+              displayName: 'Quote timeout author',
+              oidcSubject: randomUUID(),
+              state: coreEnums.AccountState.ACTIVE,
+            })
+            .returning()
+            .then(firstOrThrow);
+          await db.insert(AccountProfiles).values({
+            accountId: account.id,
+            profileId: quoteProfile.id,
+            role: coreEnums.AccountProfileRole.OWNER,
+          });
+          const input = {
+            ...quoteInput(quoteProfile.id, source.id, 'late quote'),
+            accountId: account.id,
+          };
           const gate = deferred();
           transitionGate = gate;
           transitionEntered = deferred();
@@ -472,6 +500,9 @@ if (isChildProcess) {
           assert.equal(contents.length, 1);
           assert.equal(recovered.post.id, posts[0]?.id);
           assert.equal(recovered.content.id, contents[0]?.id);
+          assert.equal(posts[0]?.actorAccountId, account.id);
+          assert.equal(recovered.post.actorAccountId, account.id);
+          await assert.rejects(createPost({ ...input, accountId: randomUUID() }), ValidationError);
         },
       );
 

@@ -70,10 +70,11 @@ const isVisibleToProfile = ({
 export const materializeQuoteNotificationIfEligible = async (
   database: Transaction,
   quotePostId: string,
-): Promise<string | null> => {
+): Promise<string[]> => {
   const source = await database
     .select({
       activatedAt: NotificationRollouts.activatedAt,
+      actorAccountId: Posts.actorAccountId,
       quoteAuthorId: Posts.profileId,
       quoteAuthorInstanceKind: QuoteNotificationQuoteAuthorInstances.kind,
       quoteAuthorInstanceState: QuoteNotificationQuoteAuthorInstances.state,
@@ -122,7 +123,7 @@ export const materializeQuoteNotificationIfEligible = async (
     // This slice consumes only the synchronous Local-to-Local approval path.
     // Neither a Remote Quote nor a Remote Source FK proves approval. Leave
     // its judgment untouched until the actual upstream approval adapter exists.
-    return null;
+    return [];
   }
 
   // Local Quote creation commits this relation only after validateQuoteSource
@@ -131,7 +132,7 @@ export const materializeQuoteNotificationIfEligible = async (
 
   const replyNotification = await materializeReplyNotificationIfEligible(database, quotePostId);
   if (replyNotification?.recipientProfileId === source.sourceProfileId) {
-    return null;
+    return [];
   }
 
   // Only the Source Author's eligible typed Mention can represent this Quote.
@@ -173,6 +174,7 @@ export const materializeQuoteNotificationIfEligible = async (
     Temporal.Instant.compare(source.quoteCreatedAt, source.activatedAt) < 0;
 
   return materializeCoordinatedNotification(database, {
+    actorAccountId: source.actorAccountId,
     eligible: quoteIsVisible && sourceIsAvailable && quoteAuthorIsAvailable,
     kind: NotificationKind.QUOTE,
     quotePostId: source.quotePostId,
@@ -188,7 +190,7 @@ export const materializeQuoteNotificationIfEligible = async (
 export const createQuoteNotification = async (
   quotePostId: string,
   handle?: Database,
-): Promise<string | null> =>
+): Promise<string[]> =>
   getDatabaseConnection(handle).transaction((database) =>
     materializeQuoteNotificationIfEligible(database, quotePostId),
   );

@@ -6,7 +6,6 @@ import { quoteInteraction } from '@fedify/interaction-controls';
 import { Note, PUBLIC_COLLECTION, QuoteAuthorization } from '@fedify/vocab';
 import {
   ActivityPubActors,
-  ActivityPubPosts,
   db,
   first,
   Instances,
@@ -30,7 +29,7 @@ import {
 import { runWorkflow } from '@kosmo/core/temporal/client';
 import { postQuoteOwnerWorkflow } from '@kosmo/core/temporal/post-quote-owner';
 import { and, asc, eq, isNull } from 'drizzle-orm';
-import { findPostByActivityPubUri } from './activitypub-post-uri';
+import { findPostByActivityPubUri, resolveActivityPubPostUri } from './activitypub-post-uri';
 import { isHttpUri } from './activitypub-uri';
 import {
   materializeHydratedRemoteNote,
@@ -252,13 +251,11 @@ const loadQuoteSource = async (postId: string): Promise<QuoteSource | null> => {
       postId: Posts.id,
       postState: Posts.state,
       profileId: Profiles.id,
-      uri: ActivityPubPosts.uri,
     })
     .from(Posts)
     .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
     .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
     .leftJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Profiles.id))
-    .leftJoin(ActivityPubPosts, eq(ActivityPubPosts.postId, Posts.id))
     .where(eq(Posts.id, postId))
     .limit(1)
     .then(first);
@@ -267,15 +264,20 @@ const loadQuoteSource = async (postId: string): Promise<QuoteSource | null> => {
     return null;
   }
 
-  if (row.actorUri === null && row.instanceKind === InstanceKind.LOCAL && row.canonicalOrigin) {
-    return {
-      ...row,
-      actorUri: new URL(`/ap/actor/${row.profileId}`, row.canonicalOrigin).href,
-      uri: new URL(`/ap/note/${row.postId}`, row.canonicalOrigin).href,
-    };
+  const uri = await resolveActivityPubPostUri(postId);
+  if (!uri) {
+    return null;
   }
 
-  return row.uri ? { ...row, uri: row.uri } : null;
+  return {
+    ...row,
+    actorUri:
+      row.actorUri ??
+      (row.instanceKind === InstanceKind.LOCAL && row.canonicalOrigin
+        ? new URL(`/ap/actor/${row.profileId}`, row.canonicalOrigin).href
+        : null),
+    uri: uri.href,
+  };
 };
 
 const materializeTarget = async ({

@@ -10,10 +10,10 @@ import {
   Mail,
   Search,
   Settings as SettingsIcon,
-  Smartphone,
   SquarePen,
   UserRound,
   UserRoundPlus,
+  UsersRound,
 } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -401,9 +401,9 @@ export function SidebarNavigation({
         {showFeedback && Platform.OS === 'web' ? (
           <SidebarControl
             compact={compact}
-            href="https://forms.gle/hzuQTGab6JLAjbzb8"
-            Icon={Smartphone}
-            label="모바일 앱 베타테스트 신청"
+            href="https://discord.gg/Zjd7ENfuxz"
+            Icon={UsersRound}
+            label="디스코드 커뮤니티 참여하기"
             onPress={() => undefined}
           />
         ) : null}

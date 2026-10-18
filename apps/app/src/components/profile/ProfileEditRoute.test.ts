@@ -47,6 +47,9 @@ type DiscardDialogProps = {
   onDiscard: () => void;
   visible: boolean;
 };
+type HeaderProps = {
+  onBack?: () => void;
+};
 
 const mutationCalls = new Map<string, MutationConfig[]>();
 const mutationHandlers = new Map<string, (config: MutationConfig) => void>();
@@ -204,6 +207,9 @@ mockModule(new URL('./ProfileEditScreen.tsx', import.meta.url), {
     screenProps = props;
     return createElement('ProfileEditScreen');
   },
+});
+mockModule(new URL('./ProfileEditHeader.tsx', import.meta.url), {
+  ProfileEditHeader: (props: HeaderProps) => createElement('ProfileEditHeader', props),
 });
 mockModule(new URL('./ProfileEditDiscardDialog.tsx', import.meta.url), {
   ProfileEditDiscardDialog: (props: DiscardDialogProps) => {
@@ -380,6 +386,15 @@ describe('ProfileEditRoute', () => {
       assert.ok(state);
       assert.equal(state.props.title, '이 프로필을 수정할 수 없어요');
       assert.equal(state.props.actionLabel, '프로필로 돌아가기');
+      const header = renderer!.root.findAll(
+        (node) => (node.type as unknown) === 'ProfileEditHeader',
+      )[0];
+      assert.ok(header);
+      assert.equal(typeof header.props.onBack, 'function');
+      routerCanGoBack = false;
+      await act(async () => header.props.onBack());
+      assert.deepEqual(routerReplacements, [scenario.expectedReturn]);
+      routerReplacements.length = 0;
       await act(async () => state.props.onAction());
       assert.deepEqual(routerReplacements, [scenario.expectedReturn]);
       assert.equal(screenProps, null);

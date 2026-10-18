@@ -11,6 +11,7 @@ import {
 import { InstanceKind, InstanceState, NotificationKind } from '@kosmo/core/enums';
 import { ConflictError, KosmoError, NotFoundError } from '@kosmo/core/error';
 import { and, eq, inArray, or, sql } from 'drizzle-orm';
+import type { ErrorCode } from '@kosmo/core/error';
 import type {
   ProfileBlockInput,
   ProfileBlockTransitionResult,
@@ -32,7 +33,7 @@ type ProfileBlockUnfollowInput = {
 };
 
 type ProfileBlockTransitionFailure = {
-  readonly code: 'CONFLICT' | 'NOT_FOUND' | 'PERMISSION_DENIED' | 'VALIDATION';
+  readonly code: ErrorCode;
   readonly message: string;
   readonly field?: string;
 };

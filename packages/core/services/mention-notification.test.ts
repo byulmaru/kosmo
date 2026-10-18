@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
 import { and, eq, inArray, or } from 'drizzle-orm';
 import {
+  AccountProfiles,
   Accounts,
   db,
   firstOrThrow,
@@ -18,6 +19,7 @@ import {
   Profiles,
 } from '../db';
 import {
+  AccountProfileRole,
   AccountState,
   InstanceKind,
   InstanceState,
@@ -29,8 +31,8 @@ import {
   ProfileState,
 } from '../enums';
 import {
-  canonicalizePostContentDocument,
   postContentDocumentFromText,
+  postContentDocumentFromTextAndMedia,
 } from '../post-content/server';
 import { notificationSourceAvailabilityWhere } from '../visibility/notification';
 import { createReplyNotification } from './create-reply-notification';
@@ -42,6 +44,7 @@ const instanceIds: string[] = [];
 const profileIds: string[] = [];
 const postIds: string[] = [];
 const accountIds: string[] = [];
+const accountIdsByProfile = new Map<string, string>();
 
 const createProfile = async (kind: InstanceKind = InstanceKind.LOCAL) => {
   const suffix = crypto.randomUUID();
@@ -65,6 +68,20 @@ const createProfile = async (kind: InstanceKind = InstanceKind.LOCAL) => {
     .returning()
     .then(firstOrThrow);
   profileIds.push(profile.id);
+  if (kind === InstanceKind.LOCAL) {
+    const account = await db
+      .insert(Accounts)
+      .values({ displayName: suffix, oidcSubject: `subject-${suffix}`, state: AccountState.ACTIVE })
+      .returning()
+      .then(firstOrThrow);
+    accountIds.push(account.id);
+    accountIdsByProfile.set(profile.id, account.id);
+    await db.insert(AccountProfiles).values({
+      accountId: account.id,
+      profileId: profile.id,
+      role: AccountProfileRole.OWNER,
+    });
+  }
   return profile;
 };
 
@@ -110,69 +127,69 @@ const createPostForLocal = async (
     readonly repostSourceId?: string;
     readonly visibility?: PostVisibility;
   } = {},
-) =>
-  db.transaction(async (tx) => {
-    const result = await createPostPersisted(
-      {
-        document: postContentDocumentFromText(`local mention ${crypto.randomUUID()}`),
-        origin: 'LOCAL',
-        profileId,
-        replyParentId,
-        repostSourceId,
-        visibility,
-      },
-      undefined,
-      tx,
-    );
-    if (!result.created) {
-      throw new Error('Expected local Post to be created.');
+) => {
+  const uniqueMentionProfileIds = [...new Set(mentionProfileIds)];
+  const mentionedProfiles =
+    uniqueMentionProfileIds.length === 0
+      ? []
+      : await db
+          .select({ id: Profiles.id, handle: Profiles.handle })
+          .from(Profiles)
+          .where(inArray(Profiles.id, uniqueMentionProfileIds));
+  const mentionProfilesById = new Map(mentionedProfiles.map((profile) => [profile.id, profile]));
+  let authoredBodyText = `local mention ${crypto.randomUUID()}`;
+  const mentions = uniqueMentionProfileIds.map((mentionProfileId) => {
+    const profile = mentionProfilesById.get(mentionProfileId);
+    if (!profile) {
+      throw new Error(`Mention fixture Profile ${mentionProfileId} does not exist`);
     }
-    postIds.push(result.post.id);
-    if (mentionProfileIds.length === 0) {
-      return result.post;
-    }
-
-    // Complete the persisted typed relation before invoking notification policy;
-    // creation effects are exercised separately by API and Worker suites.
-    const content = await tx
-      .insert(PostContents)
-      .values({
-        document: canonicalizePostContentDocument({
-          version: 1,
-          summary: null,
-          body: {
-            type: 'doc',
-            content: [
-              {
-                type: 'paragraph',
-                content: [
-                  { type: 'text', text: `local mention ${crypto.randomUUID()} ` },
-                  ...mentionProfileIds.map((mentionProfileId) => ({
-                    type: 'mention',
-                    attrs: { profileId: mentionProfileId },
-                  })),
-                ],
-              },
-            ],
-          },
-        }),
-        postId: result.post.id,
-      })
-      .returning()
-      .then(firstOrThrow);
-    await tx.insert(PostMentions).values(
-      [...new Set(mentionProfileIds)].map((profileId) => ({
-        postContentId: content.id,
-        profileId,
-      })),
-    );
-    return tx
-      .update(Posts)
-      .set({ currentContentId: content.id })
-      .where(eq(Posts.id, result.post.id))
-      .returning()
-      .then(firstOrThrow);
+    const relativeHandle = `@${profile.handle}`;
+    authoredBodyText += ` ${relativeHandle}`;
+    const end = authoredBodyText.length;
+    return {
+      end,
+      profileId: profile.id,
+      relativeHandle,
+      start: end - relativeHandle.length,
+    };
   });
+  const document =
+    mentions.length > 0
+      ? postContentDocumentFromTextAndMedia(authoredBodyText, [], false, null, mentions)
+      : postContentDocumentFromText(authoredBodyText);
+
+  const result = await createPostPersisted({
+    accountId: accountIdsByProfile.get(profileId),
+    authoredBodyText: mentions.length > 0 ? authoredBodyText : undefined,
+    document,
+    origin: 'LOCAL',
+    profileId,
+    replyParentId,
+    repostSourceId,
+    visibility,
+  });
+  if (!result.created) {
+    throw new Error('Expected local Post to be created.');
+  }
+  postIds.push(result.post.id);
+  return result.post;
+};
+
+const addAccountToProfile = async (profileId: string) => {
+  const suffix = crypto.randomUUID();
+  const account = await db
+    .insert(Accounts)
+    .values({ displayName: suffix, oidcSubject: `subject-${suffix}`, state: AccountState.ACTIVE })
+    .returning()
+    .then(firstOrThrow);
+  accountIds.push(account.id);
+  await db.insert(AccountProfiles).values({
+    accountId: account.id,
+    profileId,
+    role: AccountProfileRole.MEMBER,
+  });
+  return account.id;
+};
 
 const readSourceNotifications = (sourceId: string) =>
   db.select().from(Notifications).where(eq(Notifications.sourceId, sourceId));
@@ -277,7 +294,7 @@ test('Operational notification visibility follows recipient Account state while 
   assert.equal(await isAvailable(notification.id, false), true);
 });
 
-test('Notification recipient constraint requires exactly one recipient independently of kind', async () => {
+test('social Notifications store Account and Profile recipients while Operational rows are Account-only', async () => {
   const profile = await createProfile();
   const suffix = crypto.randomUUID();
   const account = await db
@@ -289,7 +306,7 @@ test('Notification recipient constraint requires exactly one recipient independe
 
   const insertNotification = (
     recipientProfileId: string | null,
-    recipientAccountId: string | null,
+    recipientAccountId: string,
     kind: NotificationKind = NotificationKind.MENTION,
   ) =>
     db
@@ -297,41 +314,27 @@ test('Notification recipient constraint requires exactly one recipient independe
       .values({ kind, recipientAccountId, recipientProfileId, sourceId: crypto.randomUUID() })
       .returning()
       .then(firstOrThrow);
-  const assertRecipientCheckViolation = (error: Error) => {
-    const cause = error.cause as { code?: string; constraint_name?: string } | undefined;
-    assert.equal(cause?.code, '23514');
-    assert.equal(cause?.constraint_name, 'notification_recipient_check');
-    return true;
-  };
-
-  await assert.rejects(insertNotification(null, null), assertRecipientCheckViolation);
-  await assert.rejects(insertNotification(profile.id, account.id), assertRecipientCheckViolation);
-
-  const profileNotification = await insertNotification(profile.id, null);
+  const socialAccountId = accountIdsByProfile.get(profile.id)!;
+  const profileNotification = await insertNotification(profile.id, socialAccountId);
   const accountNotification = await insertNotification(
     null,
     account.id,
     NotificationKind.OPERATIONAL,
   );
-  const operationalProfileNotification = await insertNotification(
-    profile.id,
-    null,
-    NotificationKind.OPERATIONAL,
-  );
-  const mentionAccountNotification = await insertNotification(null, account.id);
   assert.equal(profileNotification.kind, NotificationKind.MENTION);
   assert.equal(profileNotification.recipientProfileId, profile.id);
+  assert.equal(profileNotification.recipientAccountId, socialAccountId);
   assert.equal(accountNotification.kind, NotificationKind.OPERATIONAL);
   assert.equal(accountNotification.recipientAccountId, account.id);
-  assert.equal(operationalProfileNotification.kind, NotificationKind.OPERATIONAL);
-  assert.equal(operationalProfileNotification.recipientProfileId, profile.id);
-  assert.equal(mentionAccountNotification.kind, NotificationKind.MENTION);
-  assert.equal(mentionAccountNotification.recipientAccountId, account.id);
 });
 
 test('inbound typed Mention is per visible local Profile and concurrent retries return the stored IDs', async () => {
   const author = await createProfile(InstanceKind.ACTIVITYPUB);
   const follower = await createProfile();
+  const followerAccountIds = [
+    accountIdsByProfile.get(follower.id)!,
+    await addAccountToProfile(follower.id),
+  ];
   const nonFollower = await createProfile();
   await db.insert(ProfileFollows).values({
     followerProfileId: follower.id,
@@ -349,18 +352,42 @@ test('inbound typed Mention is per visible local Profile and concurrent retries 
   ]);
   const notifications = await readSourceNotifications(post.id);
 
-  assert.equal(notifications.length, 1);
-  assert.equal(notifications[0]?.kind, NotificationKind.MENTION);
-  assert.equal(notifications[0]?.recipientProfileId, follower.id);
-  assert.deepEqual(new Set(firstIds), new Set([notifications[0]?.id]));
-  assert.deepEqual(new Set(retryIds), new Set([notifications[0]?.id]));
-  assert.equal(notifications[0]?.readAt, null);
+  assert.equal(notifications.length, 2);
+  assert.ok(
+    notifications.every(
+      ({ kind, recipientProfileId }) =>
+        kind === NotificationKind.MENTION && recipientProfileId === follower.id,
+    ),
+  );
+  assert.deepEqual(
+    notifications.map(({ recipientAccountId }) => recipientAccountId).sort(),
+    [...followerAccountIds].sort(),
+  );
+  const expectedIds = notifications.map(({ id }) => id).sort();
+  assert.deepEqual(firstIds.slice().sort(), expectedIds);
+  assert.deepEqual(retryIds.slice().sort(), expectedIds);
+  assert.ok(notifications.every(({ readAt }) => readAt === null));
 
   const readAt = Temporal.Instant.from('2026-10-02T01:23:45.123456Z');
-  await db.update(Notifications).set({ readAt }).where(eq(Notifications.id, notifications[0]!.id));
-  assert.deepEqual(await createMentionNotification(post.id), [notifications[0]!.id]);
-  const [preserved] = await readSourceNotifications(post.id);
-  assert.equal(preserved?.readAt?.toString(), readAt.toString());
+  await db.update(Notifications).set({ readAt }).where(inArray(Notifications.id, expectedIds));
+  assert.deepEqual((await createMentionNotification(post.id)).slice().sort(), expectedIds);
+  const retried = await readSourceNotifications(post.id);
+  assert.deepEqual(
+    retried
+      .map(({ id, createdAt, readAt: persistedReadAt }) => ({
+        id,
+        createdAt: createdAt.toString(),
+        readAt: persistedReadAt?.toString(),
+      }))
+      .sort((left, right) => left.id.localeCompare(right.id)),
+    notifications
+      .map(({ id, createdAt }) => ({
+        id,
+        createdAt: createdAt.toString(),
+        readAt: readAt.toString(),
+      }))
+      .sort((left, right) => left.id.localeCompare(right.id)),
+  );
 });
 
 test('a valid parent-author Reply represents only its own recipient; an ineligible Reply does not consume another Mention', async () => {
@@ -431,6 +458,38 @@ test('a local typed Mention materializes idempotently while a local Post without
   assert.equal(preserved?.readAt?.toString(), readAt.toString());
 });
 
+test('a self-Mention does not notify its sole posting Account', async () => {
+  const profile = await createProfile();
+  const actorAccountId = accountIdsByProfile.get(profile.id)!;
+  const post = await createPostForLocal(profile.id, { mentionProfileIds: [profile.id] });
+
+  const [storedPost] = await db
+    .select({ actorAccountId: Posts.actorAccountId })
+    .from(Posts)
+    .where(eq(Posts.id, post.id));
+
+  assert.equal(storedPost?.actorAccountId, actorAccountId);
+  assert.deepEqual(await createMentionNotification(post.id), []);
+  assert.deepEqual(await readSourceNotifications(post.id), []);
+});
+
+test('a self-Mention excludes the posting Account but keeps another Account on that Profile', async () => {
+  const profile = await createProfile();
+  const actorAccountId = accountIdsByProfile.get(profile.id)!;
+  const otherAccountId = await addAccountToProfile(profile.id);
+  const post = await createPostForLocal(profile.id, { mentionProfileIds: [profile.id] });
+
+  const notificationIds = await createMentionNotification(post.id);
+  const notifications = await readSourceNotifications(post.id);
+
+  assert.equal(notifications.length, 1);
+  assert.equal(notifications[0]?.kind, NotificationKind.MENTION);
+  assert.equal(notifications[0]?.recipientProfileId, profile.id);
+  assert.equal(notifications[0]?.recipientAccountId, otherAccountId);
+  assert.ok(!notifications.some(({ recipientAccountId }) => recipientAccountId === actorAccountId));
+  assert.deepEqual(notificationIds, [notifications[0]?.id]);
+});
+
 test('an eligible Mention wins over Quote from either start order and during concurrent generation', async () => {
   const recipient = await createProfile();
   const quoteAuthor = await createProfile();
@@ -441,7 +500,7 @@ test('an eligible Mention wins over Quote from either start order and during con
     repostSourceId: quoteFirstSource.id,
   });
   const quoteFirstId = await createQuoteNotification(quoteFirst.id);
-  assert.equal(quoteFirstId, null);
+  assert.deepEqual(quoteFirstId, []);
   const quoteFirstNotifications = await readSourceNotifications(quoteFirst.id);
   assert.equal(quoteFirstNotifications.length, 1);
   const [quoteFirstNotification] = quoteFirstNotifications;
@@ -456,7 +515,7 @@ test('an eligible Mention wins over Quote from either start order and during con
   const [mentionFirstMentionId] = await createMentionNotification(mentionFirst.id);
   assert.ok(mentionFirstMentionId);
   const mentionFirstQuoteId = await createQuoteNotification(mentionFirst.id);
-  assert.equal(mentionFirstQuoteId, null);
+  assert.deepEqual(mentionFirstQuoteId, []);
   const mentionFirstNotifications = await readSourceNotifications(mentionFirst.id);
   assert.equal(mentionFirstNotifications.length, 1);
   const [mentionFirstNotification] = mentionFirstNotifications;
@@ -472,7 +531,7 @@ test('an eligible Mention wins over Quote from either start order and during con
     createQuoteNotification(concurrent.id),
     createMentionNotification(concurrent.id),
   ]);
-  assert.equal(concurrentQuoteId, null);
+  assert.deepEqual(concurrentQuoteId, []);
   assert.equal(concurrentMentionIds.length, 1);
   const concurrentNotifications = await readSourceNotifications(concurrent.id);
   assert.equal(concurrentNotifications.length, 1);
@@ -491,7 +550,7 @@ test('a non-Source Author Mention does not displace the Quote', async () => {
     repostSourceId: source.id,
   });
 
-  const quoteId = await createQuoteNotification(quote.id);
+  const [quoteId] = await createQuoteNotification(quote.id);
   assert.ok(quoteId);
   const afterQuote = await readSourceNotifications(quote.id);
   assert.deepEqual(
@@ -527,7 +586,7 @@ test('a Direct Quote materializes its eligible Source Author Mention', async () 
   });
   await db.update(Posts).set({ visibility: PostVisibility.DIRECT }).where(eq(Posts.id, quote.id));
 
-  assert.equal(await createQuoteNotification(quote.id), null);
+  assert.deepEqual(await createQuoteNotification(quote.id), []);
   const [notification] = await readSourceNotifications(quote.id);
   assert.equal(notification?.kind, NotificationKind.MENTION);
   assert.equal(notification?.recipientProfileId, sourceAuthor.id);
@@ -556,6 +615,7 @@ test('an existing Quote stays representative when an eligible Mention arrives la
     .values({
       data: {},
       kind: NotificationKind.QUOTE,
+      recipientAccountId: accountIdsByProfile.get(recipient.id)!,
       recipientProfileId: recipient.id,
       sourceId: quote.id,
       readAt,
@@ -577,14 +637,19 @@ test('an existing Quote stays representative when an eligible Mention arrives la
 
 test('an eligible Mention can notify its author', async () => {
   const author = await createProfile();
+  const actorAccountId = accountIdsByProfile.get(author.id)!;
+  const recipientAccountId = await addAccountToProfile(author.id);
   const post = await createPostForLocal(author.id, { mentionProfileIds: [author.id] });
 
-  const [notificationId] = await createMentionNotification(post.id);
+  const notificationIds = await createMentionNotification(post.id);
+  const notifications = await readSourceNotifications(post.id);
 
-  assert.ok(notificationId);
-  const [notification] = await readSourceNotifications(post.id);
-  assert.equal(notification?.kind, NotificationKind.MENTION);
-  assert.equal(notification?.recipientProfileId, author.id);
+  assert.equal(notifications.length, 1);
+  assert.equal(notifications[0]?.kind, NotificationKind.MENTION);
+  assert.equal(notifications[0]?.recipientProfileId, author.id);
+  assert.equal(notifications[0]?.recipientAccountId, recipientAccountId);
+  assert.ok(!notifications.some(({ recipientAccountId: id }) => id === actorAccountId));
+  assert.deepEqual(notificationIds, [notifications[0]?.id]);
 });
 
 test('an emitted Quote judgment never returns its ID to a later Reply activity', async () => {
@@ -592,13 +657,13 @@ test('an emitted Quote judgment never returns its ID to a later Reply activity',
   const quoteAuthor = await createProfile();
   const source = await createPostForLocal(recipient.id);
   const quote = await createPostForLocal(quoteAuthor.id, { repostSourceId: source.id });
-  const quoteId = await createQuoteNotification(quote.id);
+  const [quoteId] = await createQuoteNotification(quote.id);
   assert.ok(quoteId);
   const readAt = Temporal.Instant.from('2026-10-02T03:45:56.765432Z');
   await db.update(Notifications).set({ readAt }).where(eq(Notifications.id, quoteId));
   await db.update(Posts).set({ replyParentId: source.id }).where(eq(Posts.id, quote.id));
 
-  assert.equal(await createReplyNotification(quote.id), null);
+  assert.deepEqual(await createReplyNotification(quote.id), []);
   const [notification] = await readSourceNotifications(quote.id);
   assert.equal(notification?.kind, NotificationKind.QUOTE);
   assert.equal(notification?.id, quoteId);
@@ -607,82 +672,99 @@ test('an emitted Quote judgment never returns its ID to a later Reply activity',
 
 test('an eligible Reply wins over Quote and Mention concurrently and preserves its read state', async () => {
   const recipient = await createProfile();
+  const recipientAccountIds = [
+    accountIdsByProfile.get(recipient.id)!,
+    await addAccountToProfile(recipient.id),
+  ];
   const replyAuthor = await createProfile();
   const parent = await createPostForLocal(recipient.id);
-  // Seed the complete stored Reply+Quote shape atomically. The Local create
-  // capability rejects this pair and starts its own notification effects.
-  const replyQuote = await db.transaction(async (tx) => {
-    const post = await tx
-      .insert(Posts)
-      .values({
-        profileId: replyAuthor.id,
-        quoteConsentStatus: PostQuoteConsentStatus.APPROVED,
-        state: PostState.ACTIVE,
-        replyParentId: parent.id,
-        repostSourceId: parent.id,
-        visibility: PostVisibility.PUBLIC,
-      })
-      .returning()
-      .then(firstOrThrow);
-    const content = await tx
-      .insert(PostContents)
-      .values({
-        document: canonicalizePostContentDocument({
-          version: 1,
-          summary: null,
-          body: {
-            type: 'doc',
-            content: [
-              {
-                type: 'paragraph',
-                content: [{ type: 'mention', attrs: { profileId: recipient.id } }],
-              },
-            ],
-          },
-        }),
-        postId: post.id,
-      })
-      .returning()
-      .then(firstOrThrow);
-    await tx.insert(PostMentions).values({
-      postContentId: content.id,
+  // Seed the unsupported stored Reply+Quote shape as a legacy row with no original snapshots.
+  const relativeHandle = `@${recipient.handle}`;
+  const authoredBodyText = `synthetic reply ${crypto.randomUUID()} ${relativeHandle}`;
+  const end = authoredBodyText.length;
+  const document = postContentDocumentFromTextAndMedia(authoredBodyText, [], false, null, [
+    {
+      end,
       profileId: recipient.id,
-    });
-    return tx
-      .update(Posts)
-      .set({ currentContentId: content.id })
-      .where(eq(Posts.id, post.id))
-      .returning()
-      .then(firstOrThrow);
-  });
+      relativeHandle,
+      start: end - relativeHandle.length,
+    },
+  ]);
+  const content = await db
+    .insert(PostContents)
+    .values({ document, postId: null })
+    .returning()
+    .then(firstOrThrow);
+  const replyQuote = await db
+    .insert(Posts)
+    .values({
+      currentContentId: content.id,
+      profileId: replyAuthor.id,
+      quoteConsentStatus: PostQuoteConsentStatus.APPROVED,
+      repostSourceId: parent.id,
+      replyParentId: parent.id,
+      state: PostState.ACTIVE,
+      visibility: PostVisibility.PUBLIC,
+    })
+    .returning()
+    .then(firstOrThrow);
   postIds.push(replyQuote.id);
+  await db.insert(PostMentions).values({ postContentId: content.id, profileId: recipient.id });
+  await db
+    .update(PostContents)
+    .set({ postId: replyQuote.id })
+    .where(eq(PostContents.id, content.id));
 
-  const [, quoteId, mentionIds] = await Promise.all([
+  const [replyIds, quoteIds, mentionIds] = await Promise.all([
     createReplyNotification(replyQuote.id),
     createQuoteNotification(replyQuote.id),
     createMentionNotification(replyQuote.id),
   ]);
   const notifications = await readSourceNotifications(replyQuote.id);
-  assert.equal(notifications.length, 1);
-  const [notification] = notifications;
-  assert.equal(notification?.kind, NotificationKind.REPLY);
-  assert.equal(notification?.recipientProfileId, recipient.id);
-  assert.equal(quoteId, null);
+  assert.equal(notifications.length, 2);
+  assert.ok(
+    notifications.every(
+      ({ kind, recipientProfileId }) =>
+        kind === NotificationKind.REPLY && recipientProfileId === recipient.id,
+    ),
+  );
+  assert.deepEqual(
+    notifications.map(({ recipientAccountId }) => recipientAccountId).sort(),
+    [...recipientAccountIds].sort(),
+  );
+  const expectedIds = notifications.map(({ id }) => id).sort();
+  assert.deepEqual(replyIds.slice().sort(), expectedIds);
+  assert.deepEqual(quoteIds, []);
   assert.deepEqual(mentionIds, []);
 
-  assert.ok(notification);
   const readAt = Temporal.Instant.from('2026-10-02T02:34:56.654321Z');
-  await db.update(Notifications).set({ readAt }).where(eq(Notifications.id, notification.id));
-  await Promise.all([
+  await db.update(Notifications).set({ readAt }).where(inArray(Notifications.id, expectedIds));
+  const [replyRetryIds, quoteRetryIds, mentionRetryIds] = await Promise.all([
     createReplyNotification(replyQuote.id),
     createQuoteNotification(replyQuote.id),
     createMentionNotification(replyQuote.id),
   ]);
+  assert.deepEqual(replyRetryIds.slice().sort(), expectedIds);
+  assert.deepEqual(quoteRetryIds, []);
+  assert.deepEqual(mentionRetryIds, []);
   const retried = await readSourceNotifications(replyQuote.id);
-  assert.equal(retried.length, 1);
-  assert.equal(retried[0]?.kind, NotificationKind.REPLY);
-  assert.equal(retried[0]?.id, notification.id);
-  assert.equal(retried[0]?.readAt?.toString(), readAt.toString());
+  assert.equal(retried.length, 2);
+  assert.deepEqual(
+    retried
+      .map(({ id, createdAt, readAt: persistedReadAt }) => ({
+        id,
+        createdAt: createdAt.toString(),
+        readAt: persistedReadAt?.toString(),
+      }))
+      .sort((left, right) => left.id.localeCompare(right.id)),
+    notifications
+      .map(({ id, createdAt }) => ({
+        id,
+        createdAt: createdAt.toString(),
+        readAt: readAt.toString(),
+      }))
+      .sort((left, right) => left.id.localeCompare(right.id)),
+  );
 });
 
 test('an ineligible Quote does not suppress an eligible typed Mention', async () => {
@@ -698,7 +780,7 @@ test('an ineligible Quote does not suppress an eligible typed Mention', async ()
     .set({ visibility: PostVisibility.FOLLOWERS })
     .where(eq(Posts.id, source.id));
 
-  assert.equal(await createQuoteNotification(quote.id), null);
+  assert.deepEqual(await createQuoteNotification(quote.id), []);
   const [mentionId] = await createMentionNotification(quote.id);
   assert.ok(mentionId);
   const notifications = await readSourceNotifications(quote.id);
@@ -727,7 +809,7 @@ test('an existing Mention and its read state survive later Quote eligibility', a
   await db.update(Notifications).set({ readAt }).where(eq(Notifications.id, mentionId));
 
   await db.update(Posts).set({ visibility: PostVisibility.PUBLIC }).where(eq(Posts.id, source.id));
-  assert.equal(await createQuoteNotification(quote.id), null);
+  assert.deepEqual(await createQuoteNotification(quote.id), []);
   const notifications = await readSourceNotifications(quote.id);
   assert.equal(notifications.length, 1);
   assert.equal(notifications[0]?.kind, NotificationKind.MENTION);
@@ -834,6 +916,7 @@ test('availability follows the exact current typed relation and excludes Recipie
     .values({
       data: {},
       kind: NotificationKind.MENTION,
+      recipientAccountId: accountIdsByProfile.get(recipient.id)!,
       recipientProfileId: recipient.id,
       sourceId: post.id,
     })

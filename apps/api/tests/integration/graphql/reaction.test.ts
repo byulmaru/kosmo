@@ -918,6 +918,7 @@ describe('GraphQL Reaction', () => {
       .insert(Notifications)
       .values({
         kind: NotificationKind.REACTION,
+        recipientAccountId: auth.account.id,
         recipientProfileId: auth.profile.id,
         sourceId: reaction.id,
       })

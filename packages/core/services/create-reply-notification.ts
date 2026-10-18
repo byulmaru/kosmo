@@ -7,8 +7,8 @@ import { materializeReplyNotificationIfEligible } from './quote-notification-coo
  * Root Posts, missing Posts and unavailable Replies are expected no-ops;
  * database failures are rethrown for the caller's retry boundary.
  */
-export const createReplyNotification = async (postId: string): Promise<string | null> =>
+export const createReplyNotification = async (postId: string): Promise<string[]> =>
   db.transaction(async (tx) => {
     const result = await materializeReplyNotificationIfEligible(tx, postId);
-    return result?.notificationId ?? null;
+    return result?.notificationIds ?? [];
   });
