@@ -192,7 +192,12 @@ export function PostList({
   // dedupes identical in-flight requests, so retain one follow-up for invalidations
   // that arrive while this canonical refresh is still pending.
   useEffect(() => {
-    if (!pinnedConnectionId || !pinnedRefreshRequested || pinnedRefreshInProgress) {
+    if (
+      !pinnedConnectionId ||
+      !pinnedRefreshRequested ||
+      pinnedRefreshInProgress ||
+      profilePinnedPagination.isLoadingNext
+    ) {
       return;
     }
     setPinnedRefreshRequested(false);
@@ -224,6 +229,7 @@ export function PostList({
     pinnedProfileId,
     pinnedRefreshInProgress,
     pinnedRefreshRequested,
+    profilePinnedPagination.isLoadingNext,
   ]);
   useSubscribeToInvalidationState(
     pinnedConnectionId ? [pinnedConnectionId] : [],
@@ -320,7 +326,11 @@ export function PostList({
               <ProfilePinnedPostList
                 data={pinnedEdges}
                 hasNext={profilePinnedPagination.hasNext}
-                isLoadingNext={profilePinnedPagination.isLoadingNext}
+                isLoadingNext={
+                  profilePinnedPagination.isLoadingNext ||
+                  pinnedRefreshRequested ||
+                  pinnedRefreshInProgress
+                }
                 loadNext={loadPinnedNext}
                 onRefresh={refreshPinnedPosts}
                 onProfileUnpinned={() => listRef.current?.focus()}

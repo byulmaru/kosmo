@@ -279,6 +279,73 @@ it('Local pin pagination refreshes the whole loaded range after connection inval
   );
 });
 
+it('blocks pinned pagination during refresh and allows the next page after refresh completes', async () => {
+  const environment = await start();
+  const firstPage = Array.from({ length: 20 }, (_, index) => `pin-${index}`);
+  await respond({
+    currentSession: null,
+    profileByHandle: profile('LOCAL', firstPage, [], true),
+  });
+
+  const connectionId = ConnectionHandler.getConnectionID('owner', 'PostList_profile__pinnedPosts');
+  await act(async () =>
+    environment.commitUpdate((store) => store.get(connectionId)?.invalidateRecord()),
+  );
+  const refresh = requests.at(-1)!;
+  assert.equal(refresh.name, 'PostListProfilePinnedRefreshQuery');
+
+  await act(async () => all('Button')[0]!.props.onPress());
+  assert.equal(requests.at(-1), refresh);
+  assert.equal(all('Button')[0]!.props.loading, true);
+
+  await respondAt(requests.indexOf(refresh), {
+    node: { __typename: 'Profile', id: 'owner', pinnedPosts: connection(firstPage, true, true) },
+  });
+  assert.equal(all('Button')[0]!.props.loading, false);
+
+  await act(async () => all('Button')[0]!.props.onPress());
+  assert.equal(requests.at(-1)!.name, 'PostListProfilePinnedNextPageQuery');
+});
+
+it('waits for pinned pagination before refreshing the complete loaded range', async () => {
+  const environment = await start();
+  const firstPage = Array.from({ length: 20 }, (_, index) => `pin-${index}`);
+  const secondPage = Array.from({ length: 20 }, (_, index) => `pin-${index + 20}`);
+  const loadedPins = [...firstPage, ...secondPage];
+  await respond({
+    currentSession: null,
+    profileByHandle: profile('LOCAL', firstPage, [], true),
+  });
+
+  await act(async () => all('Button')[0]!.props.onPress());
+  const nextPage = requests.at(-1)!;
+  assert.equal(nextPage.name, 'PostListProfilePinnedNextPageQuery');
+
+  const connectionId = ConnectionHandler.getConnectionID('owner', 'PostList_profile__pinnedPosts');
+  await act(async () =>
+    environment.commitUpdate((store) => store.get(connectionId)?.invalidateRecord()),
+  );
+  assert.equal(requests.at(-1), nextPage);
+
+  await respondAt(requests.indexOf(nextPage), {
+    node: { __typename: 'Profile', id: 'owner', pinnedPosts: connection(secondPage, true, true) },
+  });
+  const refresh = requests.at(-1)!;
+  assert.equal(refresh.name, 'PostListProfilePinnedRefreshQuery');
+  assert.equal(refresh.variables.count, 40);
+
+  const finalPins = ['pin-final', ...loadedPins.slice(0, 39)];
+  await respondAt(requests.indexOf(refresh), {
+    node: { __typename: 'Profile', id: 'owner', pinnedPosts: connection(finalPins, true, true) },
+  });
+  assert.deepEqual(
+    cards()
+      .filter(([, pinned]) => pinned)
+      .map(([id]) => id),
+    finalPins,
+  );
+});
+
 it('coalesces invalidations and refetches the canonical pin page after an in-flight refresh', async () => {
   const environment = await start();
   const firstPage = Array.from({ length: 20 }, (_, index) => `pin-${index}`);
