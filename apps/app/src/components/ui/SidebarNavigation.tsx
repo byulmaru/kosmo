@@ -371,7 +371,7 @@ export function SidebarNavigation({
       ]}
     >
       {guestPublicContent ? (
-        <View style={[styles.guestGroup, compact ? styles.compactGuestGroup : undefined]}>
+        <View style={[styles.group, compact ? styles.compactGroup : undefined]}>
           {!compact ? (
             <View style={styles.guestIntro}>
               <Text
@@ -392,7 +392,6 @@ export function SidebarNavigation({
             label="가입하기"
             onPress={() => undefined}
             renderGuestAction={renderGuestAction}
-            tone="primary"
           />
           <SidebarControl
             compact={compact}
@@ -596,8 +595,6 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   group: { gap: space[4] },
-  guestGroup: { gap: space[12] },
-  compactGuestGroup: { alignItems: 'center', gap: 0, width: 48 },
   guestIntro: { gap: space[8], marginBottom: space[8] },
   compactGroup: { alignItems: 'center', gap: 0, width: 48 },
   control: {
