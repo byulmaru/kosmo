@@ -1,16 +1,7 @@
 import * as ImagePicker from 'expo-image-picker';
 import { ImagePlusIcon, RefreshCwIcon, XIcon } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Image,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Switch,
-  Text,
-  View,
-} from 'react-native';
+import { Image, Platform, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { graphql, useMutation } from 'react-relay';
 import { releaseImagePreview, uploadImage } from '@/components/media/imageUpload';
 import {
@@ -23,6 +14,7 @@ import {
   getIconButtonOverlayGeometry,
   IconButton,
 } from '@/components/ui/IconButton';
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { TextField } from '@/components/ui/TextField';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -422,9 +414,10 @@ export function PostComposerMediaItems({
                 <View style={[StyleSheet.absoluteFill, styles.mediaOverlayBackdrop]} />
                 {item.state === 'uploading' ? (
                   <View style={[StyleSheet.absoluteFill, styles.mediaOverlay]}>
-                    <ActivityIndicator
+                    <LoadingIndicator
                       accessibilityLabel={`첨부 이미지 ${index + 1} 업로드 중`}
                       color={colors.light.fixedWhite}
+                      loadingText={null}
                     />
                   </View>
                 ) : (

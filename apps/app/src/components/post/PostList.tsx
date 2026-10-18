@@ -1,6 +1,5 @@
 import { memo, useCallback, useEffect, useRef } from 'react';
 import {
-  ActivityIndicator,
   Platform,
   StyleSheet,
   Text,
@@ -10,6 +9,7 @@ import {
 import { graphql, useFragment, usePaginationFragment } from 'react-relay';
 import { InfiniteList } from '@/components/pagination/InfiniteList';
 import { getShellLayout } from '@/components/shell/shellLayout';
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { Skeleton, StateView } from '@/components/ui/StateView';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -338,9 +338,10 @@ export const PostList = memo(function PostList({
               footer={
                 isLoadingNext ? (
                   <View style={styles.loadingNext}>
-                    <ActivityIndicator
+                    <LoadingIndicator
                       accessibilityLabel="게시글을 더 불러오는 중"
                       color={theme.foregroundSecondary}
+                      loadingText=""
                     />
                     <Text accessibilityLiveRegion="polite" style={styles.srOnly}>
                       게시글을 더 불러오는 중입니다.

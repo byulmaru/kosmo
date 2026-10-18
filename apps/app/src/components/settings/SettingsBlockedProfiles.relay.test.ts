@@ -75,6 +75,7 @@ mockModule(new URL('../pagination/PaginationScrollView.tsx', import.meta.url), {
   },
 });
 mockModule(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
+  useReducedMotion: () => false,
   useTheme: () => ({ foregroundPrimary: 'primary', foregroundSecondary: 'secondary' }),
 });
 mockModule(new URL('../profile/ProfileListItemContent.tsx', import.meta.url), {

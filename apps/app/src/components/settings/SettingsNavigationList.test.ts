@@ -87,6 +87,9 @@ mock.module(new URL('./SettingsItem.tsx', import.meta.url), {
       createElement('SettingsItem', props, createElement('Text', null, props.label as string)),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('../ui/LoadingIndicator.tsx', import.meta.url), {
+  exports: { LoadingIndicator: 'ActivityIndicator' },
+} as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
   exports: {
     useReducedMotion: () => false,

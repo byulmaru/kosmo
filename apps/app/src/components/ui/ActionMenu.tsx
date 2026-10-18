@@ -9,7 +9,6 @@ import {
   useState,
 } from 'react';
 import {
-  ActivityIndicator,
   Animated,
   Platform,
   Pressable,
@@ -23,6 +22,7 @@ import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, layoutRecipes, radius, space, textStyles } from '@/theme/tokens';
 import { useOverlayMotion } from '@/theme/useOverlayMotion';
 import { BottomSheetSurface } from './BottomSheetSurface';
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { ModalOverlay } from './ModalOverlay';
 import type { ComponentType, ReactElement, ReactNode, RefObject } from 'react';
 
@@ -462,7 +462,7 @@ export function ActionMenu({
                         ) : null}
                         {item.busy ? (
                           <View accessible={false} aria-hidden style={styles.webIcon}>
-                            <ActivityIndicator color={itemColor} />
+                            <LoadingIndicator color={itemColor} />
                           </View>
                         ) : Icon ? (
                           <View accessible={false} aria-hidden style={styles.webIcon}>
@@ -548,7 +548,7 @@ export function ActionMenu({
                   style={[styles.item, styles.nativeItem]}
                 >
                   {item.busy ? (
-                    <ActivityIndicator color={itemColor} />
+                    <LoadingIndicator color={itemColor} />
                   ) : Icon ? (
                     <Icon color={itemColor} size={sheetIconSize} strokeWidth={2} />
                   ) : null}
