@@ -881,6 +881,15 @@ export function createPost(input: ActivityPubPostInput): Promise<CreatedPost | D
 export async function createPost(
   input: LocalPostInput | ActivityPubPostInput,
 ): Promise<CreatedPost | DuplicatePost> {
+  if (
+    input.origin === 'LOCAL' &&
+    input.repostSourceId === undefined &&
+    input.admissionId !== undefined
+  ) {
+    throw new ValidationError('Quote admission requires its original Source', {
+      field: 'admissionId',
+    });
+  }
   if (input.origin === 'LOCAL' && input.repostSourceId !== undefined) {
     const admission = /^(\d{13}):(.+)$/.exec(input.admissionId ?? '');
     if (!admission || !z.uuid().safeParse(admission[2]).success) {
