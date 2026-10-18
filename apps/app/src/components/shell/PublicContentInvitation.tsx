@@ -2,7 +2,7 @@ import { Link } from 'expo-router';
 import { X } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { isPrimaryWebActivation, saveHomeReturnTarget } from '@/auth/publicContentReturn';
+import { buildSignupHomeHref } from '@/auth/publicContentReturn';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
@@ -91,15 +91,8 @@ export function PublicContentInvitation({ onDismiss, onLayout, pathname, visible
           </IconButton>
         </View>
         <View style={styles.actions}>
-          <NavigationLink href="/" primary>
-            <Button
-              onPress={(event) => {
-                if (isPrimaryWebActivation(event)) {
-                  saveHomeReturnTarget(pathname);
-                }
-              }}
-              style={styles.ctaButton}
-            >
+          <NavigationLink href={buildSignupHomeHref(pathname)} primary>
+            <Button style={styles.ctaButton}>
               <Text style={textStyles.uiLabelL}>KOSMO에서 계속하기</Text>
             </Button>
           </NavigationLink>

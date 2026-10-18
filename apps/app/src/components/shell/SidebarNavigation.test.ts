@@ -21,7 +21,6 @@ let logoutError: string | null;
 let logoutPending: boolean;
 let presentationProps: PresentationProps | undefined;
 let pathname = '/home';
-const savedHomeTargets: string[] = [];
 const loginTargets: Array<string | null> = [];
 let switcherRenderCount = 0;
 let renderer: ReactTestRenderer | undefined;
@@ -73,11 +72,6 @@ mockModule(new URL('./ProfileSwitcher.tsx', import.meta.url), {
     return null;
   },
 });
-mockModule('@/auth/publicContentReturn', {
-  buildWebLoginHref: (target: string) => `/login?returnTo=${encodeURIComponent(target)}`,
-  isPrimaryWebActivation: () => true,
-  saveHomeReturnTarget: (target: string) => savedHomeTargets.push(target),
-});
 mockModule('@/auth/login', {
   startWebLoginFromPress: (_event: unknown, target: string | null) => loginTargets.push(target),
 });
@@ -105,7 +99,6 @@ beforeEach(() => {
   logoutPending = true;
   presentationProps = undefined;
   pathname = '/home';
-  savedHomeTargets.length = 0;
   loginTargets.length = 0;
   switcherRenderCount = 0;
   logout.mock.resetCalls();
@@ -169,15 +162,9 @@ test('Production adapter links guest signup to Home and login to the BFF with th
   const child = createElement('Pressable', { accessibilityRole: 'button' });
   const signup = props.renderGuestAction?.({ action: 'signup', children: child as never });
   const login = props.renderGuestAction?.({ action: 'login', children: child as never });
-  assert.equal((signup?.props as { href?: string }).href, '/');
+  assert.equal((signup?.props as { href?: string }).href, '/?returnTo=%2F%40writer%2Fpost-id');
   assert.equal((login?.props as { href?: string }).href, '/login?returnTo=%2F%40writer%2Fpost-id');
 
-  const signupControl = (
-    signup?.props as {
-      children?: React.ReactElement<{ onPress?: (event: unknown) => void }>;
-    }
-  ).children;
-  signupControl?.props.onPress?.({ nativeEvent: { button: 0 } });
   const loginControl = (
     login?.props as {
       children?: React.ReactElement<{ onPress?: (event: unknown) => void }>;
@@ -185,6 +172,5 @@ test('Production adapter links guest signup to Home and login to the BFF with th
   ).children;
   loginControl?.props.onPress?.({ nativeEvent: { button: 0 } });
 
-  assert.deepEqual(savedHomeTargets, ['/@writer/post-id']);
   assert.deepEqual(loginTargets, ['/@writer/post-id']);
 });

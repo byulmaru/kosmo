@@ -1,16 +1,9 @@
 import assert from 'node:assert/strict';
 import { before, beforeEach, describe, it, mock } from 'node:test';
-import { getHomeReturnTarget, saveHomeReturnTarget } from './publicContentReturn';
 import type { startWebLoginFromPress as StartWebLoginFromPress } from './login';
 import type { startWebLogin as StartWebLogin } from './webLogin';
 
 const calls: string[] = [];
-const values = new Map<string, string>();
-const sessionStorage = {
-  getItem: (key: string) => values.get(key) ?? null,
-  removeItem: (key: string) => values.delete(key),
-  setItem: (key: string, value: string) => values.set(key, value),
-};
 let startWebLogin: typeof StartWebLogin;
 let startWebLoginFromPress: typeof StartWebLoginFromPress;
 const mockModule = (specifier: string | URL, exports: object) =>
@@ -27,10 +20,6 @@ mockModule(new URL('./nativeConfig.ts', import.meta.url), {
   getNativeSessionConfiguration: () => ({ clientId: 'client', issuer: 'https://issuer.test' }),
 });
 
-Object.defineProperty(globalThis, 'sessionStorage', {
-  configurable: true,
-  value: sessionStorage,
-});
 Object.defineProperty(globalThis, 'window', {
   configurable: true,
   value: { location: { assign: (href: string) => calls.push(`assign:${href}`) } },
@@ -43,7 +32,6 @@ before(async () => {
 
 beforeEach(() => {
   calls.length = 0;
-  values.clear();
 });
 
 const pressEvent = (nativeEvent: Partial<MouseEvent> = {}) =>
@@ -53,23 +41,17 @@ const pressEvent = (nativeEvent: Partial<MouseEvent> = {}) =>
   }) as never;
 
 describe('Web login return target', () => {
-  it('consumes the signup-home target when login starts in the same tab', () => {
-    saveHomeReturnTarget('/@writer/post-id', sessionStorage);
-
-    startWebLoginFromPress(pressEvent());
+  it('carries the explicit signup-home target when login starts', () => {
+    startWebLoginFromPress(pressEvent(), '/@writer/post-id');
 
     assert.deepEqual(calls, ['prevent', 'assign:/login?returnTo=%2F%40writer%2Fpost-id']);
-    assert.equal(getHomeReturnTarget(sessionStorage), null);
   });
 
-  it('leaves the tab target untouched for modified or middle clicks', () => {
-    saveHomeReturnTarget('/@writer', sessionStorage);
-
-    startWebLoginFromPress(pressEvent({ metaKey: true }));
-    startWebLoginFromPress(pressEvent({ button: 1 }));
+  it('leaves modified or middle clicks to the login href', () => {
+    startWebLoginFromPress(pressEvent({ metaKey: true }), '/@writer');
+    startWebLoginFromPress(pressEvent({ button: 1 }), '/@writer');
 
     assert.deepEqual(calls, []);
-    assert.equal(getHomeReturnTarget(sessionStorage), '/@writer');
   });
 
   it('includes only a safe public path in a direct login request', () => {

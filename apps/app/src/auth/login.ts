@@ -6,7 +6,6 @@ import {
   ResponseType,
 } from 'expo-auth-session';
 import { getNativeSessionConfiguration } from './nativeConfig';
-import { consumeHomeReturnTarget } from './publicContentReturn';
 import { startWebLogin } from './webLogin';
 import type { WebActivationEvent } from './publicContentReturn';
 
@@ -35,7 +34,7 @@ export function startWebLoginFromPress(
   }
 
   event.preventDefault();
-  startWebLogin(returnTarget === undefined ? consumeHomeReturnTarget() : returnTarget);
+  startWebLogin(returnTarget);
 }
 
 export async function startNativeAuthorization(): Promise<NativeOidcSessionExchangeInput | null> {

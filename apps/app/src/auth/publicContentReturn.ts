@@ -1,7 +1,6 @@
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import type { GestureResponderEvent } from 'react-native';
 
-const HOME_RETURN_TARGET_KEY = 'kosmo:public-content-return-home';
 const CALLBACK_RETURN_TARGET_KEY = 'kosmo:public-content-return-callback';
 const INVITATION_DISMISSED_KEY = 'kosmo:public-content-invitation-dismissed';
 
@@ -71,26 +70,6 @@ export function isSafePublicContentReturnTarget(value: string | null | undefined
   }
 }
 
-export function saveHomeReturnTarget(
-  value: string,
-  storage: PublicContentReturnStorage | null = getTabStorage(),
-): void {
-  const target = isSafePublicContentReturnTarget(value) ? value : null;
-  updateStoredValue(storage, HOME_RETURN_TARGET_KEY, target);
-}
-
-export function getHomeReturnTarget(
-  storage: PublicContentReturnStorage | null = getTabStorage(),
-): string | null {
-  return readStoredTarget(storage, HOME_RETURN_TARGET_KEY);
-}
-
-export function consumeHomeReturnTarget(
-  storage: PublicContentReturnStorage | null = getTabStorage(),
-): string | null {
-  return consumeStoredTarget(storage, HOME_RETURN_TARGET_KEY);
-}
-
 export function saveCallbackReturnTarget(
   value: string | null | undefined,
   storage: PublicContentReturnStorage | null = getTabStorage(),
@@ -136,6 +115,10 @@ export function saveInvitationDismissed(
   }
 }
 
+export function buildSignupHomeHref(value: string | null | undefined): string {
+  return isSafePublicContentReturnTarget(value) ? `/?returnTo=${encodeURIComponent(value)}` : '/';
+}
+
 export function buildWebLoginHref(value: string | null | undefined): string {
   if (!isSafePublicContentReturnTarget(value)) {
     return '/login';
@@ -144,17 +127,6 @@ export function buildWebLoginHref(value: string | null | undefined): string {
 }
 
 export type WebActivationEvent = GestureResponderEvent | ReactMouseEvent<HTMLAnchorElement>;
-
-export function isPrimaryWebActivation(event: WebActivationEvent): boolean {
-  const pointer = event.nativeEvent as unknown as MouseEvent;
-  return (
-    (typeof pointer.button !== 'number' || pointer.button === 0) &&
-    !pointer.altKey &&
-    !pointer.ctrlKey &&
-    !pointer.metaKey &&
-    !pointer.shiftKey
-  );
-}
 
 function getTabStorage(): PublicContentReturnStorage | null {
   try {

@@ -1,4 +1,4 @@
-import { Link, useRouter } from 'expo-router';
+import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   Platform,
@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { graphql, useMutation } from 'react-relay';
 import { startNativeAuthorization, startWebLoginFromPress } from '@/auth/login';
-import { buildWebLoginHref, getHomeReturnTarget } from '@/auth/publicContentReturn';
+import { buildWebLoginHref } from '@/auth/publicContentReturn';
 import { BrandLogo } from '@/components/BrandLogo';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { SupportAcknowledgement } from '@/components/SupportAcknowledgement';
@@ -42,7 +42,9 @@ export default function IndexScreen() {
   const { width } = useWindowDimensions();
   const { setNativeSession } = useRelayActor();
   const { status } = useSession();
-  const webLoginHref = buildWebLoginHref(Platform.OS === 'web' ? getHomeReturnTarget() : null);
+  const { returnTo } = useLocalSearchParams<{ returnTo?: string | string[] }>();
+  const returnTarget = Platform.OS === 'web' && typeof returnTo === 'string' ? returnTo : null;
+  const webLoginHref = buildWebLoginHref(returnTarget);
   const [commitSessionExchange] = useMutation<IndexScreenExchangeNativeOidcSessionMutation>(
     ExchangeNativeOidcSessionMutation,
   );
@@ -125,7 +127,10 @@ export default function IndexScreen() {
           <View style={styles.action}>
             {Platform.OS === 'web' ? (
               <Link asChild href={webLoginHref as Href}>
-                <Button onPress={startWebLoginFromPress} style={styles.startButton}>
+                <Button
+                  onPress={(event) => startWebLoginFromPress(event, returnTarget)}
+                  style={styles.startButton}
+                >
                   시작하기
                 </Button>
               </Link>

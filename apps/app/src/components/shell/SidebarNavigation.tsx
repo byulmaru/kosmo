@@ -3,11 +3,7 @@ import { cloneElement } from 'react';
 import { Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { startWebLoginFromPress } from '@/auth/login';
-import {
-  buildWebLoginHref,
-  isPrimaryWebActivation,
-  saveHomeReturnTarget,
-} from '@/auth/publicContentReturn';
+import { buildSignupHomeHref, buildWebLoginHref } from '@/auth/publicContentReturn';
 import { SidebarNavigation as SidebarNavigationPresentation } from '@/components/ui/SidebarNavigation';
 import { useLogout } from '@/session/logout';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -171,14 +167,9 @@ export function SidebarNavigation({
     }>;
     if (action === 'signup') {
       return (
-        <NavigationLink href="/" onNavigate={onNavigate} primary>
+        <NavigationLink href={buildSignupHomeHref(pathname)} onNavigate={onNavigate} primary>
           {cloneElement(childControl, {
             accessibilityRole: 'link',
-            onPress: (event) => {
-              if (isPrimaryWebActivation(event)) {
-                saveHomeReturnTarget(pathname);
-              }
-            },
           })}
         </NavigationLink>
       );

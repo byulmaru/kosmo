@@ -1,20 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import {
-  consumeHomeReturnTarget,
-  isSafePublicContentReturnTarget,
-  saveHomeReturnTarget,
-} from './publicContentReturn';
-
-function createStorage() {
-  const values = new Map<string, string>();
-
-  return {
-    getItem: (key: string) => values.get(key) ?? null,
-    removeItem: (key: string) => values.delete(key),
-    setItem: (key: string, value: string) => values.set(key, value),
-  };
-}
+import { buildSignupHomeHref, isSafePublicContentReturnTarget } from './publicContentReturn';
 
 describe('public content return targets', () => {
   it('accepts only public Profile and Post pathnames', () => {
@@ -31,20 +17,10 @@ describe('public content return targets', () => {
     assert.equal(isSafePublicContentReturnTarget('/login'), false);
   });
 
-  it('stores a valid public location for the signup home and consumes it once', () => {
-    const storage = createStorage();
-
-    saveHomeReturnTarget('/@writer/post-id', storage);
-
-    assert.equal(consumeHomeReturnTarget(storage), '/@writer/post-id');
-    assert.equal(consumeHomeReturnTarget(storage), null);
-  });
-
-  it('does not retain an invalid location for the signup home', () => {
-    const storage = createStorage();
-
-    saveHomeReturnTarget('//outside.example', storage);
-
-    assert.equal(consumeHomeReturnTarget(storage), null);
+  it('carries only a safe public target in a signup-home URL', () => {
+    assert.equal(buildSignupHomeHref('/@writer/post-id'), '/?returnTo=%2F%40writer%2Fpost-id');
+    assert.equal(buildSignupHomeHref('//outside.example'), '/');
+    assert.equal(buildSignupHomeHref('/settings'), '/');
+    assert.equal(buildSignupHomeHref(null), '/');
   });
 });

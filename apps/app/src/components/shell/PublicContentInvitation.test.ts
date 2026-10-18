@@ -134,28 +134,11 @@ describe('PublicContentInvitation', () => {
     assert.ok(!styleObjects.some((style) => style.width === '100%'));
   });
 
-  it('preserves the current public Post when the home CTA is used', async () => {
+  it('carries the public Post in the home href before any click or new-tab activation', async () => {
     const view = await renderInvitation();
     const mainLink = view.root.findAllByType('NavigationLink' as never)[0];
-    const button = view.root.findByType('Button' as never);
 
-    assert.equal(mainLink?.props.href, '/');
-    await act(async () => {
-      button.props.onPress({ nativeEvent: { button: 0 } });
-    });
-
-    assert.equal(tabStorage.getItem('kosmo:public-content-return-home'), '/@writer/post-id');
-  });
-
-  it('keeps a modified click in a separate tab without sharing the return target', async () => {
-    const view = await renderInvitation();
-
-    await act(async () => {
-      view.root.findByType('Button' as never).props.onPress({
-        nativeEvent: { button: 0, metaKey: true },
-      });
-    });
-
+    assert.equal(mainLink?.props.href, '/?returnTo=%2F%40writer%2Fpost-id');
     assert.equal(tabStorage.getItem('kosmo:public-content-return-home'), null);
   });
 
