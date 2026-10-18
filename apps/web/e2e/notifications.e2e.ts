@@ -256,6 +256,7 @@ test('Reply 알림 작성자 Ctrl/Cmd 새 탭과 본문 이동은 각각 한 번
     .insert(Notifications)
     .values({
       kind: NotificationKind.REPLY,
+      recipientAccountId: recipient.account.id,
       recipientProfileId: recipient.profile.id,
       sourceId: reply.id,
     })

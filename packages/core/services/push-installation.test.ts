@@ -130,7 +130,7 @@ const insertNotification = async ({
   recipientProfileId,
 }: {
   readonly createdAt: Temporal.Instant;
-  readonly recipientAccountId: string | null;
+  readonly recipientAccountId: string;
   readonly recipientProfileId: string;
 }) =>
   db
@@ -404,86 +404,6 @@ test('shared Profile delivery follows the saved recipient Account and current me
     await db.delete(Sessions).where(eq(Sessions.accountId, recipientAccount.id));
     await db.delete(AccountProfiles).where(eq(AccountProfiles.accountId, recipientAccount.id));
     await db.delete(Accounts).where(eq(Accounts.id, recipientAccount.id));
-    await cleanupFixture(fixture);
-  }
-});
-
-test('legacy social Notifications without an Account follow current Profile membership', async () => {
-  const fixture = await createFixture();
-  const profile = fixture.profiles[0];
-  const [firstSession] = fixture.sessions;
-  assert.ok(profile);
-  assert.ok(firstSession);
-  const suffix = crypto.randomUUID();
-  const secondAccount = await db
-    .insert(Accounts)
-    .values({
-      displayName: suffix,
-      oidcSubject: `subject-${suffix}`,
-      state: AccountState.ACTIVE,
-    })
-    .returning()
-    .then(firstOrThrow);
-
-  try {
-    await db.insert(AccountProfiles).values({
-      accountId: secondAccount.id,
-      profileId: profile.id,
-      role: AccountProfileRole.MEMBER,
-    });
-    const secondSession = await db
-      .insert(Sessions)
-      .values({
-        accountId: secondAccount.id,
-        state: SessionState.ACTIVE,
-        token: `token-${suffix}`,
-      })
-      .returning()
-      .then(firstOrThrow);
-    const installations = await db
-      .insert(PushInstallations)
-      .values([
-        {
-          accountId: fixture.account.id,
-          platform: PushInstallationPlatform.ANDROID,
-          registrationEpoch: Temporal.Now.instant().subtract({ seconds: 1 }),
-          sessionId: firstSession.id,
-          token: `token-${crypto.randomUUID()}`,
-        },
-        {
-          accountId: secondAccount.id,
-          platform: PushInstallationPlatform.IOS,
-          registrationEpoch: Temporal.Now.instant().subtract({ seconds: 1 }),
-          sessionId: secondSession.id,
-          token: `token-${crypto.randomUUID()}`,
-        },
-      ])
-      .returning({ accountId: PushInstallations.accountId, id: PushInstallations.id });
-    const notification = await insertNotification({
-      createdAt: Temporal.Now.instant(),
-      recipientAccountId: null,
-      recipientProfileId: profile.id,
-    });
-
-    assert.deepEqual(
-      (await findEligiblePushInstallations({ notificationId: notification.id }))
-        .map(({ id }) => id)
-        .sort(),
-      installations.map(({ id }) => id).sort(),
-    );
-
-    await db.delete(AccountProfiles).where(eq(AccountProfiles.accountId, secondAccount.id));
-    assert.deepEqual(
-      (await findEligiblePushInstallations({ notificationId: notification.id })).map(
-        ({ accountId }) => accountId,
-      ),
-      [fixture.account.id],
-    );
-  } finally {
-    await db.delete(PushInstallations).where(eq(PushInstallations.accountId, secondAccount.id));
-    await db.delete(Sessions).where(eq(Sessions.accountId, secondAccount.id));
-    await db.delete(AccountProfiles).where(eq(AccountProfiles.accountId, secondAccount.id));
-    await db.delete(Accounts).where(eq(Accounts.id, secondAccount.id));
     await cleanupFixture(fixture);
   }
 });
