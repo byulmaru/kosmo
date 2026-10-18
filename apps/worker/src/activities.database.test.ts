@@ -1144,20 +1144,26 @@ test('공통 Notification Activity는 Mention이 투영된 Quote를 안정적인
 
   const duplicateStart = new Error('Push workflow already started');
   duplicateStart.name = 'WorkflowExecutionAlreadyStartedError';
-  let startAttempts = 0;
+  const dispatched = new Set<string>();
   const start = t.mock.method(
     temporalClient.workflow,
     'start',
-    async (workflow: string | Workflow) => {
+    async (workflow: string | Workflow, options: WorkflowStartOptions) => {
       assert.equal(workflow, 'pushNotificationDeliveryWorkflow');
-      startAttempts += 1;
-      if (startAttempts === 2) {
+      if (dispatched.has(options.workflowId)) {
         throw duplicateStart;
       }
+      dispatched.add(options.workflowId);
       return undefined as never;
     },
   );
 
+  // Creation returns before effects settle. Exercise both projections explicitly rather than
+  // assuming the separate production Worker's Mention Activity has already finished.
+  await new MockActivityEnvironment().run(createNotificationActivity, {
+    kind: NotificationKind.MENTION,
+    sourceId: quote.id,
+  });
   const input = { kind: NotificationKind.QUOTE, sourceId: quote.id } as const;
   await new MockActivityEnvironment().run(createNotificationActivity, input);
   await new MockActivityEnvironment().run(createNotificationActivity, input);
@@ -1176,9 +1182,13 @@ test('공통 Notification Activity는 Mention이 투영된 Quote를 안정적인
   );
   const quoteNotification = notifications.find(({ kind }) => kind === NotificationKind.QUOTE);
   assert.ok(quoteNotification);
-  assert.equal(start.mock.calls.length, 2);
+  const mentionNotification = notifications.find(({ kind }) => kind === NotificationKind.MENTION);
+  assert.ok(mentionNotification);
+  assert.equal(start.mock.calls.length, 3);
+  assert.equal(dispatched.size, 2);
   const workflowIds = start.mock.calls.map((call) => call.arguments[1]?.workflowId);
   assert.deepEqual(workflowIds, [
+    `push-notification:${mentionNotification.id}`,
     `push-notification:${quoteNotification.id}`,
     `push-notification:${quoteNotification.id}`,
   ]);

@@ -80,6 +80,17 @@ const hasQuoteAdmissionError = (
     }),
   );
 
+const hasConfirmedPostMutationError = (
+  errors: readonly PostComposerMutationError[] | null | undefined,
+): boolean =>
+  Boolean(
+    errors?.some(({ extensions }) =>
+      ['VALIDATION', 'NOT_FOUND', 'PERMISSION_DENIED', 'CONFLICT'].includes(
+        String(extensions?.code),
+      ),
+    ),
+  );
+
 const PostComposerFragment = graphql`
   fragment PostComposer_profile on Profile {
     id
@@ -500,11 +511,7 @@ function PostComposerContents({
             quoteMode
               ? hasQuoteAdmissionError(errors)
                 ? quoteAdmissionConflictMessage
-                : errors?.some(({ extensions }) =>
-                      ['VALIDATION', 'NOT_FOUND', 'PERMISSION_DENIED', 'CONFLICT'].includes(
-                        String(extensions?.code),
-                      ),
-                    )
+                : hasConfirmedPostMutationError(errors)
                   ? submitFailureMessage
                   : quoteSubmitUncertainMessage
               : submitFailureMessage,

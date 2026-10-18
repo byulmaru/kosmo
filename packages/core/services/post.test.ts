@@ -1438,3 +1438,18 @@ test('일반 Local Post와 Reply는 저장 Workflow 없이 commit하고 effects 
   assert.equal(errors.mock.callCount(), 3);
   assert.equal(await db.$count(Posts, eq(Posts.profileId, profile.id)), 3);
 });
+
+test('Quote admission을 Source 없이 일반 작성에 재사용하지 않는다', async () => {
+  const profile = await createProfile();
+  await assert.rejects(
+    createPostWithEffects({
+      admissionId: `${Date.now()}:${crypto.randomUUID()}`,
+      origin: 'LOCAL',
+      profileId: profile.id,
+      document: postContentDocumentFromText('removed source'),
+      visibility: PostVisibility.PUBLIC,
+    }),
+    (error) => error instanceof ValidationError && error.field === 'admissionId',
+  );
+  assert.equal(await db.$count(Posts, eq(Posts.profileId, profile.id)), 0);
+});
