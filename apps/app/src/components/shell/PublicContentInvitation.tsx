@@ -30,6 +30,7 @@ export function PublicContentInvitation({ onDismiss, onLayout, pathname, visible
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { height, width } = useWindowDimensions();
+  const mobile = width < breakpoints.compact;
   const placement = getPublicContentInvitationPlacement({
     height,
     safeAreaBottom: insets.bottom,
@@ -70,14 +71,16 @@ export function PublicContentInvitation({ onDismiss, onLayout, pathname, visible
         <View style={styles.header}>
           <Text
             style={[
-              width < breakpoints.compact ? textStyles.uiCopyM : textStyles.uiCopyL,
+              mobile ? textStyles.uiCopyM : textStyles.uiCopyL,
               styles.invitationText,
               { color: theme.foregroundPrimary },
             ]}
           >
-            {'지금 가입하고 '}
-            <Text style={styles.emphasis}>취향이 통하는 사람들</Text>
-            {'과 이야기를 나눠보세요.'}
+            {mobile ? null : '지금 가입하고 '}
+            <Text style={styles.emphasis}>
+              {mobile ? '취향 맞는 사람들' : '취향이 통하는 사람들'}
+            </Text>
+            {mobile ? '과 함께해요.' : '과 이야기를 나눠보세요.'}
           </Text>
           <IconButton
             accessibilityLabel="가입 안내 닫기"
