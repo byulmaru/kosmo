@@ -111,8 +111,8 @@ trigger 크기·수직 배치, 프로필 편집 버튼, 열린 picker의 화면�
 
 Utility를 연 뒤 표시하는 `설정`·`로그아웃` 하위 행은 같은 target과 `space/32` content inset을 사용해
 아이콘을 안쪽으로 정렬한다. Footer가 닫힌 상태에서는 divider 뒤 첫 행을 `4px`에 배치하고, 행 사이 간격 없이
-`45px` 단위로 배치한다. Web은 로그인 후 피드백 항목을 표시할 때 베타 신청 link를 그 바로 위에 두며,
-Native에는 베타 신청 link를 표시하지 않는다. 열린 utility의 하위 행도 trigger 직후부터 `45px` 단위로 연속 배치한다. `compact`
+`45px` 단위로 배치한다. Web은 로그인 후 피드백 항목을 표시할 때 디스코드 커뮤니티 참여 link를 그 바로 위에 두며,
+Native에는 커뮤니티 참여 link를 표시하지 않는다. 열린 utility의 하위 행도 trigger 직후부터 `45px` 단위로 연속 배치한다. `compact`
 rail의 `44×44px` icon-only target과 `Ellipsis` utility 표현은 이 행 geometry 변경의 대상이 아니다.
 
 `/settings` 화면군의 `full`·`drawer`에서는 utility를 항상 펼치고 부모 trigger가 아닌 하위 `설정` 행을 current로
