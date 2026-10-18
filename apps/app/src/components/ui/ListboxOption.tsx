@@ -90,9 +90,11 @@ function ListboxOptionFeedback({
           : 'selection';
   const animatedBackground = useAnimatedColorTransition({
     color: backgroundColor,
+    interactionKey: pressed ? 'pressed' : active || hovered ? 'active-hover' : 'idle',
     instantKey: theme,
     reducedMotion,
     role: disabled ? 'instant' : role,
+    selectionKey: selected,
   });
   const borderColor = focusVisible
     ? theme.stateFocusRing
