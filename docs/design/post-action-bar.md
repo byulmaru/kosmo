@@ -280,7 +280,7 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - 2026-09-30 PROD-975 이관에서 fixture는 production `PostActionSurface`와 실제 Relay mutation observer를
   사용하도록 정렬한다. Storybook의 pending·error·focus 검증은 request observer로 응답을 지연·실패시켜
   수행하며, 원격 Featured sync와 Native runtime QA는 별도 통합 범위로 남긴다.
-- 이 이관은 Profile pinned segment와 기존 chronology를 분리해 유지한다. 두 목록의 위치와 페이지 진행은 각각의 목록 순서를 따른다.
+- 이 이관은 Profile pinned segment와 기존 chronology를 분리해 유지한다. 고정 목록 전체는 서버 순서로 표시하고, 기존 chronology의 페이지 진행과 실패 시 재시도는 유지한다.
 - 2026-09-09 로컬 검증: Relay·TypeScript·lint·Storybook 빌드와 Pin·PostActionBar·Posts의 123개 테스트가
   통과했다. 새 정적 빌드의 키보드 고정 모의 실행·표시 전환·More focus 복귀를 확인했고, 완료 상태의
   접근성 재검사는 위반 0건이었다. 이 기록은 fixture의 공용 UI 검증이며 실제 Pin mutation 증거가 아니다.
