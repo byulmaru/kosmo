@@ -53,13 +53,6 @@ Mute Scope는 여러 값을 동시에 가질 수 있다.
 | Hashtag Mute Rule 변경 | Owner Profile     | Hashtag Mute Rule | Scope, Decision, 만료 시각          | `Account.Active`, `HashtagMuteRule.Owner` | Scope가 하나 이상이고 만료 시각이 미래이거나 영구다                                                                            | Scope, Decision, 만료 시각이 바뀐다                                          |
 | Hashtag Mute Rule 제거 | Owner Profile     | Hashtag Mute Rule | 없음                                | `Account.Active`, `HashtagMuteRule.Owner` | Rule이 존재한다                                                                                                                | Hashtag Mute Rule이 제거된다                                                 |
 
-## 프로필 태그 기반 뮤트
-
-프로필 태그 뮤트는 해당 태그를 가진 프로필의 콘텐츠를 타임라인에서 보이지 않게 하는 목적을 포함한다.
-
-현재 UI 동작은 [Profile Tag 편집·공개 표시 문서](../../design/profile-tags.md#hashtag-mute의-현재-제공-범위)를
-참조한다.
-
 ## 권한
 
 | 권한                    | 종류      | 성립 조건                                                 |
@@ -87,3 +80,4 @@ Mute Scope는 여러 값을 동시에 가질 수 있다.
 ## 제외/보류
 
 - Hashtag 자동완성, trend, 추천 정책은 현재 범위에서 제외한다.
+- 프로필 태그 기반 뮤트의 구체적인 Post List 적용 범위와 조회 정책은 별도 검토 대상으로 남긴다.

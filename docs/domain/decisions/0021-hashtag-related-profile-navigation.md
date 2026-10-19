@@ -80,8 +80,7 @@ PROD-735 검토 중 사용자가 프로필 화면이 아니라 프로필 태그 
   TagChip은 탐색 링크로 유지하며, 프로필 화면에 태그 뮤트용 벨·메뉴·확인 진입점을 두지 않는다.
 - 태그 상세 페이지의 뮤트 대상은 그 페이지의 canonical Hashtag다. 규칙 Owner는 현재 selected Profile이며,
   출발한 Profile이나 목록에 표시된 사람을 뮤트하는 동작과 구분한다. 기존 Profile 자체의 뮤트 기능은 유지한다.
-- 기존 뮤트 확인·피드백 패턴을 재사용한다. 프로필 태그 뮤트의 제품 목적은 [Hashtag Mute Rule](../objects/hashtag-mute-rule.md)에
-  정의하며, 해당 태그를 가진 프로필의 콘텐츠를 타임라인에서 보이지 않게 하는 목적을 포함한다.
+- 기존 뮤트 확인·피드백 패턴을 재사용한다. 효과·권한·기존 규칙 보존은 [Hashtag Mute Rule](../objects/hashtag-mute-rule.md)을 따른다.
 - 뮤트 권한·상태와 관련 Profile 목록 조회를 분리한다. selected Profile이 없어도 기존 Account 인증 아래의
   목록 탐색을 유지하며, 뮤트로 관련 Profile 목록을 숨기거나 후보 정책을 변경하지 않는다.
 - PROD-735는 이 진입점 변경과 클라이언트 검증을, PROD-1029는 Hashtag Mute Rule의 서버 구현을 소유한다.

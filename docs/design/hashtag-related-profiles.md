@@ -33,8 +33,6 @@ Web·Android·iOS에서 같은 정보 구조와 상태로 탐색한다.
 
 ## 태그 상세 페이지의 뮤트·해제
 
-- 프로필 태그 뮤트는 해당 태그를 가진 프로필의 콘텐츠를 타임라인에서 보이지 않게 하는 목적을 포함한다. 세부
-  범위는 [Hashtag Mute Rule](../domain/objects/hashtag-mute-rule.md)에 정의한다.
 - 현재 UI는 기능 플래그로 제어한다. 프로덕션에서는 기존 `isDeveloper` 조건으로 개발자에게 활성화하고 일반
   사용자에게 숨기며, dev channel에서는 기존 정책에 따라 해당 기능 플래그를 항상 활성화한다.
 - 현재 UI action은 canonical Hashtag에 영구 Rule을 생성·해제하며, 생성 시 `Notification` Scope만 설정한다.
