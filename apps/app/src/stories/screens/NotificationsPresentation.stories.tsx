@@ -79,7 +79,13 @@ export const ReadAllContract: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole('heading', { name: '알림' })).toBeVisible();
-    await expect(canvas.getAllByRole('link', { name: /읽지 않은 알림/ })).toHaveLength(2);
+    const unreadItems = new Set(
+      canvas
+        .getAllByRole('link', { name: /읽지 않은 알림/ })
+        .map((link) => link.closest('[data-testid="notification-item-surface"]')),
+    );
+    expect(unreadItems.has(null)).toBe(false);
+    expect(unreadItems.size).toBe(2);
     await userEvent.click(canvas.getByRole('button', { name: '모두 읽음' }));
     await expect(canvas.queryAllByRole('link', { name: /읽지 않은 알림/ })).toHaveLength(0);
     await expect(canvas.getByRole('button', { name: '모두 읽음' })).toBeDisabled();
