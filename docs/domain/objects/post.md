@@ -223,6 +223,25 @@ Notification이 소유하며, Quote·Reply Parent·Repost Source의 구조와 �
 - Post의 Repost 수는 해당 Post를 Repost Source로 직접 참조하면서 Content와 Reply Parent가 없는 eligible
   Active Repost만 포함하고 Quote는 포함하지 않는다.
 
+### Reply 수
+
+- Post의 Reply 수는 해당 Post를 Reply Parent로 직접 참조하는 Reply 중 현재 viewer의 Post Visibility와
+  Post Eligibility를 통과하는 수다. 손자 이후의 Reply는 포함하지 않으며, 상세가 제공하는 전체 하위 Reply
+  범위와 구분한다.
+- Reply이면서 Quote인 Post도 직접 Reply로 포함한다. Quote의 Repost Source 관계만으로는 Reply로
+  집계하지 않으며, Quote의 Reply 수는 Quote 자신의 직접 Reply를 기준으로 한다.
+- 부모를 조회할 수 있다는 사실은 Reply의 조회 권한을 부여하지 않는다. 각 Reply에 기존 조회 정책을
+  독립적으로 적용하고, 조회할 수 없는 Reply의 존재를 숫자로 드러내지 않는다. 목록 전용 필터를 Post의
+  직접 조회 권한으로 취급하지 않는다.
+- Local Reply와 실제 수신·저장되어 Reply Parent가 연결된 Remote Reply를 같은 기준으로 집계한다.
+  아직 수신하지 않았거나 Reply Parent가 연결되지 않은 Remote Post까지 포함하는 전 연합우주 수치는
+  제공하지 않는다.
+- 본인이 Reply를 작성하거나 삭제한 뒤에는 서버가 확정한 결과를 바탕으로 해당 직접 Parent의 현재 viewer
+  수치를 갱신한다. 손자 Reply의 작성·삭제는 원글 수치를 바꾸지 않는다. 실패한 변경이나 확인하지 못한
+  조회 결과를 임의의 증감 또는 0으로 대신하지 않는다.
+- 다른 사용자나 원격 수신으로 바뀐 수치는 해당 데이터를 다시 조회할 때 반영한다. 이 계약은 실시간
+  구독을 요구하지 않는다.
+
 ### Post 공유 참조
 
 - Content가 있는 Post의 공유 참조는 Web에서 현재 browser origin, Android와 iOS에서 configured Local
