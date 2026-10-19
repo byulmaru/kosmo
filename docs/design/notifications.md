@@ -264,6 +264,7 @@ Reaction/Repost의 사진을 게시글 이동 영역에서 분리한다.
   `인용 알림`, `멘션 알림`, `재게시 알림`이다. 이 행은 읽음/읽지 않음 상태와 모두 읽음 대상에 남지만
   source 링크나 알림 활성화 동작은 제공하지 않는다. Post의 본문이 없을 때도 Reply/Mention/Quote wrapper를
   비워 두지 않고 같은 일반 문구를 표시한다. source가 있으면 기존 종류별 표시와 이동 동작을 유지한다.
+- Reply·Quote·Mention의 Reaction 요약 row에서 새 상세 진입 영역은 마지막 People control 오른쪽의 4px 비대화형 간격을 지난 넓은 여백으로 한정한다. 이 여백을 누르면 해당 Post 상세로 한 번 이동하고 Best Effort Read를 한 번 시작하며, Read 응답의 지연·실패가 이동을 막지 않는다. 반응 칩 사이, 마지막 칩·People control 사이와 People control 오른쪽 4px 간격은 상세 이동이나 Read를 시작하지 않는다. 반응 컨트롤의 기존 독립 동작은 유지하며, 입력 범위는 [Reaction 요약 row 계약](./reactions.md#reaction-요약-row)을 따른다.
 - Notification 활성화에 따른 Best Effort Read는 이동이나 열기를 기다리게 하지 않는다.
   Follow/FollowRequest는 기존 행 target 활성화에서, Reaction/Repost는 kind rail·사진별 Profile 또는 게시글
   영역의 활성화에서, Reply/Mention은 kind rail·작성자 Profile·시각·본문의 link navigation과 미디어 열기에서,

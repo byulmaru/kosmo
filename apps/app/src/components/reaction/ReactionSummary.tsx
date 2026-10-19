@@ -1,6 +1,7 @@
 import { Ellipsis } from 'lucide-react-native';
 import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { PostDetailBackground } from '@/components/post/PostDetailBackground';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { IconButton } from '@/components/ui/IconButton';
 import { getInteractionTargetSize } from '@/components/ui/interactionTarget';
@@ -22,6 +23,7 @@ export type ReactionSummaryProps = {
   error?: boolean;
   errorTypeIds?: ReadonlyArray<string>;
   loading?: boolean;
+  onBackgroundPress?: () => void;
   onMore?: () => void;
   onRetry?: () => void;
   onToggle?: (intent: ReactionToggleIntent) => void;
@@ -46,6 +48,7 @@ export function ReactionSummary({
   error,
   errorTypeIds = [],
   loading,
+  onBackgroundPress,
   onMore,
   onRetry,
   onToggle,
@@ -193,58 +196,69 @@ export function ReactionSummary({
   return (
     <View onLayout={onContainerLayout} style={styles.root}>
       <View style={styles.entries} testID="reaction-summary-row">
-        {visibleEntries.map((entry, index) => {
-          const entryError = errorTypes.has(entry.type);
-          const pending = pendingTypes.has(entry.type);
-          const selected = selectedTypes.has(entry.type);
-          const entryDisabled = disabled || pending || onToggle === undefined;
-          const accessibilityLabel = entryError
-            ? `${entry.type} 반응 ${entry.count}개, 오류, 다시 시도`
-            : pending
-              ? `${entry.type} 반응 ${entry.count}개, 처리 중`
-              : `${entry.type} 반응 ${entry.count}개`;
+        <View style={styles.controls}>
+          {visibleEntries.map((entry, index) => {
+            const entryError = errorTypes.has(entry.type);
+            const pending = pendingTypes.has(entry.type);
+            const selected = selectedTypes.has(entry.type);
+            const entryDisabled = disabled || pending || onToggle === undefined;
+            const accessibilityLabel = entryError
+              ? `${entry.type} 반응 ${entry.count}개, 오류, 다시 시도`
+              : pending
+                ? `${entry.type} 반응 ${entry.count}개, 처리 중`
+                : `${entry.type} 반응 ${entry.count}개`;
 
-          return (
-            <Pressable
-              accessibilityLabel={accessibilityLabel}
-              accessibilityRole="button"
-              accessibilityState={{ busy: pending, disabled: entryDisabled, selected }}
-              aria-busy={pending}
-              aria-pressed={selected}
-              disabled={entryDisabled}
-              key={`${entry.type}-${index}`}
-              onPress={() => onToggle?.({ nextSelected: !selected, optionId: entry.type })}
-              style={({ pressed }) => [
-                styles.entry,
-                {
-                  backgroundColor: theme.card,
-                  borderColor: theme.border,
-                  opacity: selected ? 1 : entryDisabled ? 0.6 : pressed ? 0.85 : 1,
-                },
-              ]}
-            >
-              {({ pressed }) => (
-                <>
-                  {selected ? (
-                    <View
-                      style={[
-                        styles.entrySelectedBackground,
-                        {
-                          backgroundColor: pressed ? theme.primaryHover : theme.primary,
-                          opacity: 0.7,
-                        },
-                      ]}
-                      testID="reaction-summary-selected-background"
-                    />
-                  ) : null}
-                  <Text style={[styles.entryEmoji, { color: theme.text }]}>{entry.type}</Text>
-                  <Text style={[styles.entryCount, { color: theme.text }]}>{entry.count}</Text>
-                </>
-              )}
-            </Pressable>
-          );
-        })}
-        {peopleEnabled ? renderPeopleControl(layout?.hiddenCount ?? 0) : null}
+            return (
+              <Pressable
+                accessibilityLabel={accessibilityLabel}
+                accessibilityRole="button"
+                accessibilityState={{ busy: pending, disabled: entryDisabled, selected }}
+                aria-busy={pending}
+                aria-pressed={selected}
+                disabled={entryDisabled}
+                key={`${entry.type}-${index}`}
+                onPress={() => onToggle?.({ nextSelected: !selected, optionId: entry.type })}
+                style={({ pressed }) => [
+                  styles.entry,
+                  {
+                    backgroundColor: theme.card,
+                    borderColor: theme.border,
+                    opacity: selected ? 1 : entryDisabled ? 0.6 : pressed ? 0.85 : 1,
+                  },
+                ]}
+              >
+                {({ pressed }) => (
+                  <>
+                    {selected ? (
+                      <View
+                        style={[
+                          styles.entrySelectedBackground,
+                          {
+                            backgroundColor: pressed ? theme.primaryHover : theme.primary,
+                            opacity: 0.7,
+                          },
+                        ]}
+                        testID="reaction-summary-selected-background"
+                      />
+                    ) : null}
+                    <Text style={[styles.entryEmoji, { color: theme.text }]}>{entry.type}</Text>
+                    <Text style={[styles.entryCount, { color: theme.text }]}>{entry.count}</Text>
+                  </>
+                )}
+              </Pressable>
+            );
+          })}
+          {peopleEnabled ? renderPeopleControl(layout?.hiddenCount ?? 0) : null}
+        </View>
+        {onBackgroundPress && layout ? (
+          <View style={styles.trailingSpace}>
+            <PostDetailBackground
+              onBackgroundPress={onBackgroundPress}
+              style={styles.detailBackground}
+              testID="reaction-summary-detail-background"
+            />
+          </View>
+        ) : null}
       </View>
 
       {peopleEnabled ? (
@@ -290,9 +304,12 @@ const styles = StyleSheet.create({
   entries: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: spacing.xs,
     maxWidth: '100%',
   },
+  controls: { alignItems: 'center', flexDirection: 'row', flexShrink: 0, gap: spacing.xs },
+  // Clip the gap when the controls leave less than 4px; never reserve width from them.
+  trailingSpace: { alignSelf: 'stretch', flex: 1, minWidth: 0, overflow: 'hidden' },
+  detailBackground: { flex: 1, marginLeft: spacing.xs },
   entry: {
     alignItems: 'center',
     borderRadius: radii.md,

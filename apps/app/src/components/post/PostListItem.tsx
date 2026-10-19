@@ -293,6 +293,7 @@ export function PostListItem({
           />
           <PostActionSurface
             actionBarStyle={Platform.OS === 'web' ? styles.webQuoteActionBar : undefined}
+            onReactionSummaryBackgroundPress={openDetail}
             reactionSummaryStyle={styles.quoteReactionSummary}
             reply={reply}
             socialActionTarget={post.actionSurface!}
@@ -451,6 +452,7 @@ function PostListRow({
         ) : null}
         <PostActionSurface
           actionBarStyle={actionBarStyle}
+          onReactionSummaryBackgroundPress={openDetail}
           reactionSummaryStyle={styles.reactionSummary}
           reply={reply}
           socialActionTarget={post.actionSurface!}
