@@ -164,8 +164,9 @@ function MentionIdentityDeletionFixture({ onSubmit }: { onSubmit: () => void }) 
                 ),
                 inserted.range,
               ],
-              previousSelection: selection,
+              previousSelection: { start: query.start, end: query.start },
               selection,
+              selectionToApply: selection,
             };
           });
         }}
@@ -179,6 +180,7 @@ function MentionIdentityDeletionFixture({ onSubmit }: { onSubmit: () => void }) 
         onVisibilityChange={() => undefined}
         remaining={500 - normalized.bodyText.length}
         selection={draft.selection}
+        selectionToApply={draft.selectionToApply}
         sensitiveMedia={false}
         surface="rail"
         visibility="PUBLIC"

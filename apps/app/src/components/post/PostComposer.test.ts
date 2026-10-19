@@ -69,6 +69,7 @@ let targetProps:
       onSubmit: () => void;
       onVisibilityChange: (value: 'DIRECT' | 'FOLLOWERS' | 'PUBLIC' | 'UNLISTED') => void;
       selection: { end: number; start: number };
+      selectionToApply?: { end: number; start: number };
       submitting?: boolean;
     }
   | undefined;
@@ -314,6 +315,7 @@ mockModule('./PostComposer', {
             renderInput: ({ webProps, ...inputProps }) =>
               createElement(TrackedTextInput, { ...inputProps, ...webProps }),
             selection: props?.selection ?? { end: 0, start: 0 },
+            selectionToApply: props?.selectionToApply,
           })
         : null,
     );
@@ -765,12 +767,20 @@ describe('PostComposer local author', () => {
     assert.equal(targetProps?.authorProfileId, profileB.id);
     await act(async () => targetProps?.onSelectMention(alice, query));
     assert.equal(targetProps?.body, ' \r\n😀 @alice ');
+    assert.deepEqual(targetProps?.selectionToApply, { start: 13, end: 13 });
+
+    await act(async () => targetProps?.onSelectionChange({ start: 13, end: 13 }));
+    assert.equal(targetProps?.selectionToApply, undefined);
+    await act(async () => targetProps?.onBodyChange(' \r\n😀 @alice !'));
+    assert.equal(targetProps?.selectionToApply, undefined);
+    assert.deepEqual(targetProps?.selection, { start: 13, end: 13 });
+    await act(async () => targetProps?.onSelectionChange({ start: 14, end: 14 }));
 
     await act(async () => targetProps?.onSubmit());
     assert.equal(mutationCalls.length, 1);
     assert.deepEqual(mutationCalls[0]?.variables.input, {
       actorProfileId: profileB.id,
-      bodyText: '😀 @alice',
+      bodyText: '😀 @alice !',
       media: mediaValue.items,
       mentions: [{ profileId: 'profile-alice', start: 3, end: 9 }],
       sensitiveMedia: true,
@@ -963,12 +973,19 @@ describe('PostComposer mention suggestions', () => {
     });
 
     const textInput = () => renderer?.root.findByType('TextInput' as never);
-    const enterText = async (value: string) => {
+    const enterText = async (value: string, caret = value.length) => {
       const onChangeText = textInput()?.props.onChangeText as
         | ((nextValue: string) => void)
         | undefined;
+      const onSelectionChange = textInput()?.props.onSelectionChange as
+        | ((event: { nativeEvent: { selection: { end: number; start: number } } }) => void)
+        | undefined;
       assert.ok(onChangeText);
+      assert.ok(onSelectionChange);
       await act(async () => onChangeText(value));
+      await act(async () =>
+        onSelectionChange({ nativeEvent: { selection: { start: caret, end: caret } } }),
+      );
     };
     const hasMessage = (message: string) =>
       renderer?.root
@@ -987,7 +1004,7 @@ describe('PostComposer mention suggestions', () => {
     assert.equal(textInputMountCount, 1);
     assert.equal(textInputUnmountCount, 0);
 
-    await enterText('@ali');
+    await enterText('@ali suffix', 4);
     assert.equal(requests.length, 1);
     assert.equal(requests[0]?.name, 'PostComposerMentionSuggestionsQuery');
     assert.deepEqual(requests[0]?.variables, {

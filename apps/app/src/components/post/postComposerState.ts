@@ -41,13 +41,14 @@ export type PostComposerDraft = Readonly<{
   mentionRanges: PostComposerMentionRange[];
   previousSelection: PostComposerTextSelection;
   selection: PostComposerTextSelection;
+  selectionToApply?: PostComposerTextSelection;
 }>;
 
 export function updatePostComposerDraftSelection(
   draft: PostComposerDraft,
   selection: PostComposerTextSelection,
 ): PostComposerDraft {
-  return { ...draft, previousSelection: draft.selection, selection };
+  return { ...draft, previousSelection: draft.selection, selection, selectionToApply: undefined };
 }
 
 export function updatePostComposerDraftBody(
@@ -64,7 +65,8 @@ export function updatePostComposerDraftBody(
       selectionHints,
     ),
     previousSelection: draft.selection,
-    selection: getPostComposerSelectionAfterTextChange(draft.body, body, selectionHints),
+    selection: draft.selection,
+    selectionToApply: undefined,
   };
 }
 
@@ -264,30 +266,6 @@ export function updatePostComposerMentionRanges(
     }
     return [first];
   });
-}
-
-export function getPostComposerSelectionAfterTextChange(
-  previousBody: string,
-  nextBody: string,
-  selectionHints: readonly PostComposerTextSelection[],
-): PostComposerTextSelection {
-  const changes = findPostComposerTextChanges(previousBody, nextBody, selectionHints);
-  const nextEnds = [...new Set(changes.map((change) => change.nextEnd))];
-  if (nextEnds.length === 1) {
-    const offset = nextEnds[0] ?? nextBody.length;
-    return { start: offset, end: offset };
-  }
-
-  const currentSelection = selectionHints.find(
-    ({ start, end }) =>
-      start === end && Number.isInteger(start) && start >= 0 && start <= nextBody.length,
-  );
-  if (currentSelection) {
-    return { start: currentSelection.start, end: currentSelection.start };
-  }
-
-  const { nextEnd } = findPostComposerTextChange(previousBody, nextBody);
-  return { start: nextEnd, end: nextEnd };
 }
 
 function findPostComposerTextChanges(
