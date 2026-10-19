@@ -27,7 +27,13 @@ Accepted
   작성자와 현재 Content의 canonical Mentioned Profile 관계에 포함된 Profile이 읽을 수 있다. Author Profile과 Mentioned
   Profile의 `Origin`은 조회 조건이 아니다. Local Post·Reply·Quote 작성에서 이 Visibility를 명시적으로 선택할 때
   Mentioned Profile 관계는 선택 사항이며, 관계가 없으면 작성자만 읽을 수 있다. 미확인·malformed·ineligible handle text는
-  수신자가 아니다.
+  수신자가 아니다. Inbound `Create(Note)`는 `to` Public, `cc` Public, author canonical followers URI 순으로 기존 visibility를
+  분류하며, 모두 없으면 inbox Create의 DIRECT 후보가 된다. DIRECT 저장에는 Mention href로 검증된 ACTIVE Local Profile과 ACTIVE
+  Local Instance가 하나 이상 필요하다. 이 조건은 inbox 종류와 delivery `context.recipient`에 관계없이 적용한다. Follow를 요구하지
+  않으며, 나머지 확인된 typed Mention Profile도 local/remote 구분 없이 Post relation으로 보존한다. `to`/`cc`는 기존 visibility
+  marker 분류에만 사용하고 `to`/`cc`/`bto`/`bcc` 주소만으로 relation이나 DIRECT 권한을 만들지 않는다. audience 주소가 없거나
+  Mention과 달라도 검증된 Mention 수신은 허용하지만, Mention되지 않은 inbox recipient에는 접근 권한을 주지 않는다. 이 inbound
+  Create 규칙은 non-inbox hydrated Note의 DIRECT materialization이나 Note Update를 추가하지 않는다.
 - [PROD-1102](https://linear.app/byulmaru/issue/PROD-1102)의 Local Note Mention body/tag projection은 표현을 제공한다.
   별도로, `DIRECT` Post의 outbound `Create(Note)`는 현재 Content의 eligible remote ActivityPub Mentioned Profile actor URI만
   `to`에 사용하고 `cc`를 생략한다. 해당 Post의 outbound `Delete`도 같은 remote Mentioned Profiles에게만 전달한다. eligible
@@ -67,7 +73,7 @@ Accepted
 - `post_mentions`는 기존 revision-owned persisted projection 경계를 유지하며, relation과 Current Content pointer는 같은
   저장 경계에서 처리한다. 구체적인 node/table shape는 구현 artifact에서 검증한다.
 - `PROD-910`은 canonical node와 revision-owned relation을 소비하는 renderer·Profile 이동을 별도로 구현한다.
-- Local Note의 ActivityPub Mention content/tag projection은 [PROD-1102](https://linear.app/byulmaru/issue/PROD-1102)와 [Post](../objects/post.md)의 Local Note 표현 계약을 따른다. 일반 link projection, remote Update(Note), Mentioned Profiles inbound audience, custom emoji, Notification/FCM은 각 후속 계약의 책임으로 남긴다.
+- Local Note의 ActivityPub Mention content/tag projection은 [PROD-1102](https://linear.app/byulmaru/issue/PROD-1102)와 [Post](../objects/post.md)의 Local Note 표현 계약을 따른다. 일반 link projection, remote Update(Note), custom emoji, Notification/FCM은 각 후속 계약의 책임으로 남긴다. Mentioned Profiles inbound audience는 [PROD-359](https://linear.app/byulmaru/issue/PROD-359)의 Create-only contract를 따른다.
 
 ## 참고
 

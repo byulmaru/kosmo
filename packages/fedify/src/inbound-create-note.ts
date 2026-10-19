@@ -240,17 +240,14 @@ type RemoteNotePostMaterialized = Extract<
   { status: 'created' | 'duplicate' }
 >;
 
-const resolveNoteVisibility = (
-  note: Note,
-  followersUri?: string | null,
-): PostVisibility | undefined =>
+const resolveNoteVisibility = (note: Note, followersUri?: string | null): PostVisibility =>
   note.toIds.some((uri) => uri.href === PUBLIC_COLLECTION.href)
     ? PostVisibility.PUBLIC
     : note.ccIds.some((uri) => uri.href === PUBLIC_COLLECTION.href)
       ? PostVisibility.UNLISTED
       : followersUri && [...note.toIds, ...note.ccIds].some((uri) => uri.href === followersUri)
         ? PostVisibility.FOLLOWERS
-        : undefined;
+        : PostVisibility.DIRECT;
 
 const createRemoteNotePost = async ({
   context,
@@ -383,9 +380,18 @@ const materializeRemoteNote = async ({
       ? source.storedActor.actor.followersUri
       : storedActor?.actor.followersUri,
   );
-  if (!visibility) {
-    return { reason: 'unsupported_note_visibility', status: 'rejected' };
+  if (visibility === PostVisibility.DIRECT) {
+    if (source.kind === 'hydrated') {
+      return { reason: 'unsupported_note_visibility', status: 'rejected' };
+    }
+
+    const targetHrefs = await collectInboundMentionTargetHrefs(note);
+    const { hasActiveLocalProfile } = await resolveStoredInboundMentionCandidates(targetHrefs);
+    if (!hasActiveLocalProfile) {
+      return { reason: 'unsupported_note_visibility', status: 'rejected' };
+    }
   }
+
   let projection;
   try {
     projection = await projectRemoteNote(

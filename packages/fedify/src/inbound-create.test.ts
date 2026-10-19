@@ -22,9 +22,12 @@ import {
 } from '@fedify/vocab';
 import { getDocumentLoader } from '@fedify/vocab-runtime';
 import {
+  AccountProfileRole,
+  AccountState,
   ActivityPubActorType,
   InstanceKind,
   InstanceState,
+  NotificationKind,
   PostState,
   PostVisibility,
   ProfileFollowPolicy,
@@ -39,7 +42,7 @@ import {
   remoteProfileLookupWorkflow,
   remoteProfileRefreshWorkflow,
 } from '@kosmo/core/temporal/workflows';
-import { eq, ne } from 'drizzle-orm';
+import { eq, ne, sql } from 'drizzle-orm';
 import { resolveStoredInboundMentionCandidates } from './inbound-mention';
 import { setInboundObservabilityReporter } from './inbound-observability';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
@@ -133,6 +136,8 @@ const mockRemoteProfileRefresh = (execute: (actorUri: string) => Promise<string>
   );
 };
 
+let AccountProfiles: typeof CoreDb.AccountProfiles;
+let Accounts: typeof CoreDb.Accounts;
 let ActivityPubActors: typeof CoreDb.ActivityPubActors;
 let ActivityPubPosts: typeof CoreDb.ActivityPubPosts;
 let db: typeof CoreDb.db;
@@ -149,6 +154,7 @@ let ProfileFollows: typeof CoreDb.ProfileFollows;
 let ProfileMedia: typeof CoreDb.ProfileMedia;
 let Profiles: typeof CoreDb.Profiles;
 let createPost: typeof CoreServices.createPost;
+let createMentionNotification: typeof CoreServices.createMentionNotification;
 let findPostByActivityPubUri: typeof findPostByActivityPubUriType;
 let handleInboundCreate: typeof handleInboundCreateType;
 let materializeRemoteProfileActor: typeof Materialization.materializeRemoteProfileActor;
@@ -161,6 +167,8 @@ describe('inbound Create dispatch', () => {
     process.env.DATABASE_URL = databaseUrl;
     process.env.PUBLIC_ORIGIN = publicOrigin;
     ({
+      AccountProfiles,
+      Accounts,
       ActivityPubActors,
       ActivityPubPosts,
       db,
@@ -178,7 +186,7 @@ describe('inbound Create dispatch', () => {
       Profiles,
     } = await import('@kosmo/core/db'));
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
-    ({ createPost } = await import('@kosmo/core/services'));
+    ({ createMentionNotification, createPost } = await import('@kosmo/core/services'));
     ({ findPostByActivityPubUri } = await import('./activitypub-post-uri'));
     ({ handleInboundCreate } = await import('./inbound-create'));
     ({ materializeHydratedRemoteNote } = await import('./inbound-create-note'));
@@ -1941,6 +1949,230 @@ describe('inbound Create dispatch', () => {
 
     assert.equal((await db.select().from(Notifications)).length, 0);
     assert.equal((await db.select().from(ProfileFollows)).length, 1);
+  });
+
+  test('materializes Mention-only DIRECT Create deliveries with the canonical visibility policy', async () => {
+    const author = await createStoredRemoteActor();
+    const recipient = await createLocalFollowerProfile('direct-recipient');
+    const unmentionedInboxOwner = await createLocalFollowerProfile('direct-inbox-owner');
+    const unmentionedFollower = await createLocalFollowerProfile('direct-unmentioned-follower');
+    const remoteMentionActorUri = new URL('https://mention.example/users/direct-target');
+    const remoteMention = await createStoredRemoteActor({
+      actorUri: remoteMentionActorUri,
+      handle: 'direct-target',
+    });
+    const recipientActorUri = new URL(`/ap/actor/${recipient.id}`, publicOrigin);
+    await ensureDrizzleLocalProfileActor({
+      actorUri: recipientActorUri,
+      localInstanceId,
+      profileId: recipient.id,
+    });
+    await db.insert(ProfileFollows).values({
+      followerProfileId: unmentionedFollower.id,
+      followeeProfileId: author.id,
+    });
+
+    const objectUri = new URL('https://remote.example/notes/direct-personal');
+    const create = new Create({
+      actor: remoteActorUri,
+      object: new Note({
+        attribution: remoteActorUri,
+        content: 'Mention-only Direct',
+        id: objectUri,
+        tags: [
+          new Mention({ href: recipientActorUri, name: '@direct-recipient' }),
+          new Mention({ href: remoteMentionActorUri, name: '@direct-target' }),
+        ],
+        to: new URL('https://unrelated.example/users/recipient'),
+      }),
+    });
+
+    await handleInboundCreate(
+      createContext(undefined, unmentionedInboxOwner.id),
+      create,
+      receivedAt,
+    );
+    await handleInboundCreate(createContext(undefined, recipient.id), create, receivedAt);
+    await handleInboundCreate(createContext(), create, receivedAt);
+
+    const { post } = await getMaterializedPost(objectUri);
+    assert.equal(post.visibility, PostVisibility.DIRECT);
+    assert.deepEqual(
+      (await db.select().from(PostMentions)).map(({ profileId }) => profileId).sort(),
+      [recipient.id, remoteMention.id].sort(),
+    );
+    assert.equal(await db.$count(ActivityPubPosts), 1);
+    assert.equal(await db.$count(Posts), 1);
+    assert.equal(await db.$count(PostContents), 1);
+
+    const { visiblePostWhere, visibleProfileWhere } = await import('@kosmo/core/visibility');
+    const canView = async (viewerProfileId: string | null) =>
+      db
+        .select({
+          visible: visiblePostWhere({
+            db,
+            post: Posts,
+            profileVisible: sql<boolean>`${visibleProfileWhere({
+              profile: Profiles,
+              instance: Instances,
+            })}`,
+            viewerProfileId,
+          }),
+        })
+        .from(Posts)
+        .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
+        .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+        .where(eq(Posts.id, post.id))
+        .then(firstOrThrow)
+        .then(({ visible }) => visible);
+
+    assert.equal(await canView(author.id), true);
+    assert.equal(await canView(recipient.id), true);
+    assert.equal(await canView(unmentionedInboxOwner.id), false);
+    assert.equal(await canView(unmentionedFollower.id), false);
+    assert.equal(await canView(null), false);
+
+    const recipientAccount = await db
+      .insert(Accounts)
+      .values({
+        displayName: 'direct-recipient',
+        oidcSubject: `activitypub-direct-${crypto.randomUUID()}`,
+        state: AccountState.ACTIVE,
+      })
+      .returning()
+      .then(firstOrThrow);
+    try {
+      await db.insert(AccountProfiles).values({
+        accountId: recipientAccount.id,
+        profileId: recipient.id,
+        role: AccountProfileRole.OWNER,
+      });
+      const [notificationId] = await createMentionNotification(post.id);
+      assert.ok(notificationId);
+      assert.deepEqual(await createMentionNotification(post.id), [notificationId]);
+      assert.deepEqual(
+        await db
+          .select({
+            kind: Notifications.kind,
+            recipientProfileId: Notifications.recipientProfileId,
+          })
+          .from(Notifications)
+          .where(eq(Notifications.sourceId, post.id)),
+        [{ kind: NotificationKind.MENTION, recipientProfileId: recipient.id }],
+      );
+    } finally {
+      await db.delete(Accounts).where(eq(Accounts.id, recipientAccount.id));
+    }
+
+    const sharedObjectUri = new URL('https://remote.example/notes/direct-shared');
+    await handleInboundCreate(
+      createContext(),
+      new Create({
+        actor: remoteActorUri,
+        object: new Note({
+          attribution: remoteActorUri,
+          content: 'Mention-only shared Direct',
+          id: sharedObjectUri,
+          tags: [new Mention({ href: recipientActorUri, name: '@direct-recipient' })],
+        }),
+      }),
+      receivedAt,
+    );
+    assert.equal(
+      (await getMaterializedPost(sharedObjectUri)).post.visibility,
+      PostVisibility.DIRECT,
+    );
+    assert.equal(await db.$count(ActivityPubPosts), 2);
+    assert.equal(await db.$count(Posts), 2);
+    assert.equal(await db.$count(PostContents), 2);
+  });
+
+  test('rejects address-only and ineligible DIRECT Mention targets', async () => {
+    await createStoredRemoteActor();
+    const recipient = await createLocalFollowerProfile('direct-address-recipient');
+    const recipientActorUri = new URL(`/ap/actor/${recipient.id}`, publicOrigin);
+    await ensureDrizzleLocalProfileActor({
+      actorUri: recipientActorUri,
+      localInstanceId,
+      profileId: recipient.id,
+    });
+
+    const remoteOnlyMentionUri = new URL('https://remote-mention.example/users/only');
+    await createStoredRemoteActor({
+      actorUri: remoteOnlyMentionUri,
+      handle: 'remote-only',
+    });
+    const disabledLocalMentionUri = new URL('https://disabled-local.example/users/mention');
+    await createStoredRemoteActor({
+      actorUri: disabledLocalMentionUri,
+      handle: 'disabled-local',
+      instanceKind: InstanceKind.LOCAL,
+      profileState: ProfileState.DISABLED,
+    });
+    const suspendedLocalInstanceMentionUri = new URL(
+      'https://suspended-local.example/users/mention',
+    );
+    await createStoredRemoteActor({
+      actorUri: suspendedLocalInstanceMentionUri,
+      handle: 'suspended-local',
+      instanceKind: InstanceKind.LOCAL,
+      instanceState: InstanceState.SUSPENDED,
+    });
+
+    const cases = [
+      {
+        context: createContext(undefined, recipient.id),
+        note: new Note({
+          attribution: remoteActorUri,
+          bcc: new URL('https://unmentioned.example/users/recipient'),
+          bto: recipientActorUri,
+          content: 'Audience fields do not grant Direct access',
+          id: new URL('https://remote.example/notes/direct-address-only'),
+          to: recipientActorUri,
+        }),
+      },
+      {
+        context: createContext(),
+        note: new Note({
+          attribution: remoteActorUri,
+          content: 'A remote-only Mention is not a shared inbox recipient',
+          id: new URL('https://remote.example/notes/direct-remote-only'),
+          tags: [new Mention({ href: remoteOnlyMentionUri, name: '@remote-only' })],
+        }),
+      },
+      {
+        context: createContext(),
+        note: new Note({
+          attribution: remoteActorUri,
+          content: 'A disabled local Profile is not a shared inbox recipient',
+          id: new URL('https://remote.example/notes/direct-disabled-local'),
+          tags: [new Mention({ href: disabledLocalMentionUri, name: '@disabled-local' })],
+        }),
+      },
+      {
+        context: createContext(),
+        note: new Note({
+          attribution: remoteActorUri,
+          content: 'A suspended local Instance is not a shared inbox recipient',
+          id: new URL('https://remote.example/notes/direct-suspended-local'),
+          tags: [new Mention({ href: suspendedLocalInstanceMentionUri, name: '@suspended-local' })],
+        }),
+      },
+    ];
+
+    for (const { context, note } of cases) {
+      await handleInboundCreate(
+        context,
+        new Create({ actor: remoteActorUri, object: note }),
+        receivedAt,
+      );
+    }
+
+    assert.equal(await db.$count(ActivityPubPosts), 0);
+    assert.equal(await db.$count(Posts), 0);
+    assert.equal(await db.$count(PostContents), 0);
+    assert.equal(await db.$count(PostMentions), 0);
+    assert.equal(await db.$count(Notifications), 0);
   });
 
   test('skips actor-only and foreign-followers-only audiences without side effects', async () => {
