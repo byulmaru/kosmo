@@ -25,7 +25,7 @@ type MentionInputRenderProps = Readonly<{
   onChangeText: (value: string) => void;
   onKeyPress: NonNullable<TextInputProps['onKeyPress']>;
   onSelectionChange: NonNullable<TextInputProps['onSelectionChange']>;
-  selection: NonNullable<TextInputProps['selection']>;
+  selection?: PostComposerTextSelection;
   webProps: InputWebProps;
 }>;
 
@@ -41,6 +41,7 @@ type Props = Readonly<{
   onRetryMentionSearch?: () => void;
   onSelectionChange: (selection: PostComposerTextSelection) => void;
   selection: PostComposerTextSelection;
+  selectionToApply?: PostComposerTextSelection;
   onSelectMention: (
     candidate: PostComposerMentionCandidate,
     query: PostComposerMentionQuery,
@@ -62,6 +63,7 @@ export function PostComposerMentionInput({
   onSelectMention,
   renderInput,
   selection,
+  selectionToApply,
 }: Props) {
   const mentionSearchEnabled = useFeatureFlag('post-composer-mention-search');
   const theme = useTheme();
@@ -162,7 +164,7 @@ export function PostComposerMentionInput({
         onChangeText,
         onKeyPress,
         onSelectionChange,
-        selection,
+        ...(selectionToApply ? { selection: selectionToApply } : {}),
         webProps,
       })}
       {visible ? (

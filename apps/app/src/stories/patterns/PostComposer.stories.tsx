@@ -919,6 +919,9 @@ export const MentionAutocompleteContract: Story = {
       start: args.body.length,
       end: args.body.length,
     }));
+    const [selectionToApply, setSelectionToApply] = useState<
+      PostComposerTextSelection | undefined
+    >();
     return (
       <PostComposer
         {...args}
@@ -926,19 +929,24 @@ export const MentionAutocompleteContract: Story = {
         onSelectionChange={(nextSelection) => {
           args.onSelectionChange(nextSelection);
           setSelection(nextSelection);
+          setSelectionToApply(undefined);
         }}
         onBodyChange={(nextBody) => {
           args.onBodyChange(nextBody);
           setBody(nextBody);
+          setSelectionToApply(undefined);
         }}
         selection={selection}
+        selectionToApply={selectionToApply}
         onSelectMention={(candidate, query) => {
           const inserted = replacePostComposerMentionQuery(body, query, candidate);
           if (inserted) {
             args.onSelectMention?.(candidate, query);
             const caret = inserted.range.end + 1;
+            const nextSelection = { start: caret, end: caret };
             setBody(inserted.body);
-            setSelection({ start: caret, end: caret });
+            setSelection(nextSelection);
+            setSelectionToApply(nextSelection);
           }
         }}
       />
@@ -951,7 +959,11 @@ export const MentionAutocompleteContract: Story = {
     expect(canvas.getByRole('listbox', { name: '멘션할 프로필 결과' })).toBeVisible();
     await userEvent.keyboard('{ArrowDown}{Enter}');
     await waitFor(() => expect(body).toHaveValue('@alice '));
+    await waitFor(() => expect((body as HTMLTextAreaElement).selectionStart).toBe(7));
     expect(canvas.queryByRole('listbox', { name: '멘션할 프로필 결과' })).toBeNull();
+    await userEvent.keyboard('이어서');
+    await waitFor(() => expect(body).toHaveValue('@alice 이어서'));
+    expect((body as HTMLTextAreaElement).selectionStart).toBe('@alice 이어서'.length);
   },
 };
 

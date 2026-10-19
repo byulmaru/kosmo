@@ -3,6 +3,10 @@ import { after, before, mock, test } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
+import type {
+  MobileFullscreenComposerShellCandidate as MobileFullscreenComposerShellCandidateComponent,
+  PostComposer as PostComposerComponent,
+} from './PostComposer';
 import type { PostComposerMentionInput as PostComposerMentionInputComponent } from './PostComposerMentionInput';
 import type {
   PostComposerMentionCandidate,
@@ -15,36 +19,76 @@ import type {
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
 
-mockModule('react-native', {
-  Platform: { OS: 'web' },
+const platform = { OS: 'web' };
+
+mockModule(require.resolve('react-native'), {
+  Modal: 'Modal',
+  Platform: platform,
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
   StyleSheet: { create: <T>(styles: T) => styles },
   Text: 'Text',
+  TextInput: 'TextInput',
+  useWindowDimensions: () => ({ height: 800, width: 1200 }),
   View: 'View',
 });
+mockModule(require.resolve('lucide-react-native'), {
+  AtSignIcon: 'AtSignIcon',
+  ChartNoAxesColumnIncreasingIcon: 'ChartNoAxesColumnIncreasingIcon',
+  ChevronDownIcon: 'ChevronDownIcon',
+  ExpandIcon: 'ExpandIcon',
+  GlobeIcon: 'GlobeIcon',
+  ImagePlusIcon: 'ImagePlusIcon',
+  LockIcon: 'LockIcon',
+  MoonIcon: 'MoonIcon',
+  SmileIcon: 'SmileIcon',
+  TriangleAlertIcon: 'TriangleAlertIcon',
+  XIcon: 'XIcon',
+});
+mockModule(require.resolve('react-native-svg'), { Circle: 'Circle', Svg: 'Svg' });
 mockModule('@/components/FeatureFlagsContext', { useFeatureFlag: () => true });
 mockModule('@/components/ui/Avatar', { Avatar: 'Avatar' });
+mockModule('@/components/ui/Button', { Button: 'Button' });
+mockModule('@/components/ui/IconButton', { IconButton: 'IconButton' });
+mockModule(new URL('../ui/TextField.tsx', import.meta.url), {
+  TextArea: 'TextArea',
+  TextField: 'TextField',
+});
 mockModule('@/theme/ThemeProvider', {
+  useElevation: () => ({}),
   useTheme: () => ({
     backgroundElevated: '#fff',
+    backgroundCanvas: '#fff',
+    backgroundSurface: '#fff',
     borderDefault: '#ddd',
+    borderSubtle: '#ddd',
     foregroundPrimary: '#111',
     foregroundSecondary: '#666',
+    foregroundMuted: '#666',
+    feedbackDangerOnSubtle: '#900',
+    primary: '#00f',
+    stateDisabledForeground: '#999',
     stateHover: '#eee',
+    statePressed: '#eee',
   }),
 });
 mockModule('@/theme/tokens', {
-  borderWidths: { 1: 1 },
-  radius: { 12: 12 },
-  space: { 4: 4, 8: 8, 12: 12 },
-  textStyles: { uiCopyM: {}, uiCopyS: {}, uiLabelM: {} },
+  borderWidths: { 0: 0, 1: 1 },
+  iconSizes: { 16: 16, 20: 20, 24: 24 },
+  radius: { 8: 8, 12: 12 },
+  space: { 0: 0, 4: 4, 8: 8, 12: 12, 16: 16 },
+  textStyles: { contentM: {}, uiCopyM: {}, uiCopyS: {}, uiHeadingS: {}, uiLabelM: {} },
+  webScrollbarStyle: () => ({}),
 });
+mockModule('./PostComposerMediaItemsTarget', { PostComposerMediaItemsTarget: 'MediaItems' });
 
 let PostComposerMentionInput: typeof PostComposerMentionInputComponent;
+let PostComposer: typeof PostComposerComponent;
+let MobileFullscreenComposerShellCandidate: typeof MobileFullscreenComposerShellCandidateComponent;
 
 before(async () => {
   ({ PostComposerMentionInput } = await import('./PostComposerMentionInput'));
+  ({ MobileFullscreenComposerShellCandidate, PostComposer } = await import('./PostComposer'));
 });
 
 after(() => {
@@ -87,6 +131,7 @@ function renderMentionInput({
   let renderer: ReactTestRenderer | null = null;
   let currentBody = body;
   let selection = { start: body.length, end: body.length };
+  let selectionToApply: { end: number; start: number } | undefined;
   const render = (
     nextBody = currentBody,
     nextAuthor = authorProfileId,
@@ -99,10 +144,13 @@ function renderMentionInput({
       mentionCandidates: nextResults,
       onBodyChange: (value) => {
         currentBody = value;
+        selectionToApply = undefined;
         onBodyChange(value);
+        renderer?.update(render());
       },
       onSelectionChange: (value) => {
         selection = value;
+        selectionToApply = undefined;
         onSelectionChange(value);
         renderer?.update(render());
       },
@@ -115,6 +163,7 @@ function renderMentionInput({
           currentBody.slice(query.end);
         const caret = query.start + candidate.relativeHandle.length + 1;
         selection = { start: caret, end: caret };
+        selectionToApply = selection;
         renderer?.update(render());
       },
       renderInput: ({ webProps, ...props }) => {
@@ -122,6 +171,7 @@ function renderMentionInput({
         return createElement('TextInput', inputProps);
       },
       selection,
+      selectionToApply,
     });
 
   return {
@@ -193,7 +243,7 @@ test('passes editor selection changes to its controlled owner', async () => {
     },
   ]);
   assert.deepEqual(selections, [{ start: 0, end: 0 }]);
-  assert.deepEqual(input.inputProps.selection, { start: 0, end: 0 });
+  assert.equal(input.inputProps.selection, undefined);
 });
 
 test('selects the highlighted candidate after IME composition and restores the editor caret', async () => {
@@ -263,6 +313,130 @@ test('selects the highlighted candidate after IME composition and restores the e
   });
   assert.deepEqual(input.inputProps.selection, { end: 7, start: 7 });
   assert.equal(input.inputProps['aria-activedescendant'], undefined);
+});
+
+test('desktop and mobile body inputs omit observed selection and apply only a one-shot caret', async () => {
+  const postComposerProps = {
+    author: null,
+    authorProfileId: 'profile-author',
+    body: '@ali',
+    contentWarning: '',
+    contentWarningExpanded: false,
+    items: [],
+    mentionCandidates: {
+      authorProfileId: 'profile-author',
+      profiles: [profileAlice],
+      query: 'ali',
+    },
+    mentionSearchState: 'ready' as const,
+    onBodyChange: () => undefined,
+    onContentWarningChange: () => undefined,
+    onContentWarningToggle: () => undefined,
+    onEmojiAction: () => undefined,
+    onExpand: () => undefined,
+    onMediaAction: () => undefined,
+    onMediaEdit: () => undefined,
+    onMediaRemove: () => undefined,
+    onMediaRetry: () => undefined,
+    onPollAction: () => undefined,
+    onSelectionChange: () => undefined,
+    onSubmit: () => undefined,
+    onVisibilityChange: () => undefined,
+    remaining: 500,
+    selection: { start: 4, end: 4 },
+    sensitiveMedia: false,
+    showCWAction: false,
+    showEmojiAction: false,
+    showMediaAction: false,
+    showPollAction: false,
+    showSubmit: false,
+    surface: 'rail' as const,
+    visibility: 'PUBLIC' as const,
+  };
+
+  for (const { Component, hostType, platformOS } of [
+    { Component: PostComposer, hostType: 'TextArea', platformOS: 'web' },
+    {
+      Component: MobileFullscreenComposerShellCandidate,
+      hostType: 'TextInput',
+      platformOS: 'web',
+    },
+    {
+      Component: MobileFullscreenComposerShellCandidate,
+      hostType: 'TextInput',
+      platformOS: 'ios',
+    },
+  ] as const) {
+    const selections: Array<{ end: number; start: number }> = [];
+    const bodies: string[] = [];
+    let props = {
+      ...postComposerProps,
+      body: '@ali',
+      onBodyChange: (body: string) => bodies.push(body),
+      onSelectionChange: (selection: { end: number; start: number }) => selections.push(selection),
+      selection: { start: 4, end: 4 },
+      selectionToApply: undefined as { end: number; start: number } | undefined,
+    };
+    platform.OS = platformOS;
+    const element = () =>
+      Component === PostComposer
+        ? createElement(PostComposer, { ...props, surface: 'rail' })
+        : createElement(MobileFullscreenComposerShellCandidate, {
+            ...props,
+            onOverlayClose: () => undefined,
+          });
+
+    let renderer: ReactTestRenderer | null = null;
+    const bodyInput = () => renderer?.root.findByType(hostType as never);
+    await act(async () => {
+      renderer = create(element());
+    });
+    assert.equal(Object.hasOwn(bodyInput()?.props ?? {}, 'selection'), false);
+
+    const observed = { start: 2, end: 2 };
+    await act(async () => {
+      (bodyInput()?.props.onSelectionChange as (event: unknown) => void)({
+        nativeEvent: { selection: observed },
+      });
+    });
+    assert.deepEqual(selections, [observed]);
+    props = { ...props, selection: observed };
+    await act(async () => renderer?.update(element()));
+    assert.equal(Object.hasOwn(bodyInput()?.props ?? {}, 'selection'), false);
+
+    await act(async () => {
+      (bodyInput()?.props.onChangeText as (body: string) => void)('@ali!');
+    });
+    assert.deepEqual(bodies, ['@ali!']);
+    props = { ...props, body: '@ali!', selectionToApply: undefined };
+    await act(async () => renderer?.update(element()));
+    assert.equal(Object.hasOwn(bodyInput()?.props ?? {}, 'selection'), false);
+
+    const insertionCaret = { start: 7, end: 7 };
+    props = { ...props, body: '@alina ', selectionToApply: insertionCaret };
+    await act(async () => renderer?.update(element()));
+    assert.deepEqual(bodyInput()?.props.selection, insertionCaret);
+
+    await act(async () => {
+      (bodyInput()?.props.onSelectionChange as (event: unknown) => void)({
+        nativeEvent: { selection: insertionCaret },
+      });
+    });
+    props = { ...props, selection: insertionCaret, selectionToApply: undefined };
+    await act(async () => renderer?.update(element()));
+    assert.equal(Object.hasOwn(bodyInput()?.props ?? {}, 'selection'), false);
+
+    props = { ...props, selectionToApply: insertionCaret };
+    await act(async () => renderer?.update(element()));
+    assert.deepEqual(bodyInput()?.props.selection, insertionCaret);
+    await act(async () => {
+      (bodyInput()?.props.onChangeText as (body: string) => void)('@alina !');
+    });
+    props = { ...props, body: '@alina !', selectionToApply: undefined };
+    await act(async () => renderer?.update(element()));
+    assert.equal(Object.hasOwn(bodyInput()?.props ?? {}, 'selection'), false);
+    await act(async () => renderer?.unmount());
+  }
 });
 
 test('shows empty-result feedback without a selection action', async () => {

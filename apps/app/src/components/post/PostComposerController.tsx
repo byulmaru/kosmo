@@ -308,6 +308,7 @@ function PostComposerContents({
         if (!inserted) {
           return previous;
         }
+        const selectionToApply = { start: inserted.range.end + 1, end: inserted.range.end + 1 };
         return {
           body: inserted.body,
           mentionRanges: [
@@ -320,10 +321,8 @@ function PostComposerContents({
             inserted.range,
           ].sort((left, right) => left.start - right.start),
           previousSelection: { start: query.start, end: query.start },
-          selection: {
-            start: inserted.range.end + 1,
-            end: inserted.range.end + 1,
-          },
+          selection: selectionToApply,
+          selectionToApply,
         };
       });
     },
@@ -686,6 +685,7 @@ function PostComposerContents({
                   items,
                   mentionCandidates: currentMentionCandidates,
                   mentionSearchState,
+                  selectionToApply: draft.selectionToApply,
                   onRetryMentionSearch:
                     mentionSearchState === 'error' && retry ? () => retry() : undefined,
                   onSelectMention: (
