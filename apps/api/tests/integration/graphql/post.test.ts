@@ -2052,17 +2052,26 @@ describe('Post Reply GraphQL 경계', () => {
       { ownerProfileId: viewer.profile.id, targetProfileId: viewerBlockedAuthor.id },
       { ownerProfileId: authorBlockedViewer.id, targetProfileId: viewer.profile.id },
     ]);
-    await createContentfulPost(viewerBlockedAuthor.id, { replyParentId: root.id });
+    const outgoingBlockedReply = await createContentfulPost(viewerBlockedAuthor.id, {
+      replyParentId: root.id,
+    });
     await createContentfulPost(authorBlockedViewer.id, { replyParentId: root.id });
 
-    const [authenticated, anonymous] = await Promise.all([
+    const [authenticated, anonymous, directlyReadable] = await Promise.all([
       requestReplyCounts([root.id], viewer.token),
       requestReplyCounts([root.id]),
+      requestGraphQL<{ node: { id: string } | null }>(
+        `query DirectReply($id: ID!) { node(id: $id) { id } }`,
+        { id: encodeGlobalId('Post', outgoingBlockedReply.id) },
+        viewer.token,
+      ),
     ]);
 
     assertNoGraphQLErrors(authenticated);
     assertNoGraphQLErrors(anonymous);
-    assert.equal(authenticated.data?.nodes[0]?.replyCount, 3);
+    assertNoGraphQLErrors(directlyReadable);
+    assert.equal(directlyReadable.data?.node?.id, encodeGlobalId('Post', outgoingBlockedReply.id));
+    assert.equal(authenticated.data?.nodes[0]?.replyCount, 4);
     assert.equal(anonymous.data?.nodes[0]?.replyCount, 3);
   });
 

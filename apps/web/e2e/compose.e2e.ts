@@ -712,7 +712,7 @@ test('Composer 프로필 선택은 draft와 공개 범위를 유지하고 선택
   expect(responsePost?.id).toEqual(expect.any(String));
   expect(responsePost).not.toHaveProperty('content');
   expect(responsePost).not.toHaveProperty('profile');
-  expect(responsePost).not.toHaveProperty('replyParent');
+  expect(responsePost).toHaveProperty('replyParent', null);
   expect(responsePost).not.toHaveProperty('repostSource');
   expect(responsePost).not.toHaveProperty('viewerBookmark');
   expect(responsePost).not.toHaveProperty('viewerRepost');

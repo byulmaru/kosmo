@@ -1,7 +1,7 @@
 import { db, Instances, Posts, Profiles } from '@kosmo/core/db';
 import { PostState } from '@kosmo/core/enums';
 import { and, count, eq, inArray, isNotNull } from 'drizzle-orm';
-import { postVisibilityAccessWhere } from '../access/visibility';
+import { directPostVisibilityAccessWhere } from '../access/visibility';
 import type { UserContext } from '@/context';
 
 type ReplyCountRow = {
@@ -27,7 +27,7 @@ export const replyCountLoader = (ctx: UserContext) =>
             inArray(Posts.replyParentId, parentIds),
             isNotNull(Posts.currentContentId),
             eq(Posts.state, PostState.ACTIVE),
-            postVisibilityAccessWhere({ ctx }),
+            directPostVisibilityAccessWhere({ ctx }),
           ),
         )
         .groupBy(Posts.replyParentId),
