@@ -1,4 +1,4 @@
-import { ArrowLeft, Check, VolumeX } from 'lucide-react-native';
+import { ArrowLeft, VolumeX } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
 import HomeRoute from '@/app/(tabs)/(protected)/home';
 import { PageHeader } from '@/components/PageHeader';
@@ -48,22 +48,6 @@ const posts = [
 }));
 const shell = shellQuery({ profiles: [viewer], selectedProfile: viewer });
 const beforeData = { ...shell, homeTimeline: timeline(...posts) };
-// 행사 모의 결과를 기존 CW 표시로 표현한다. 자연어 판정·제품 뮤트 정책은 연결하지 않는다.
-const afterData = {
-  ...shell,
-  homeTimeline: timeline(
-    {
-      ...posts[0],
-      content: {
-        ...posts[0].content!,
-        contentWarning: '뮤트한 내용 · 작품 결말·반전',
-        document: { ...posts[0].content!.document, summary: '뮤트한 내용 · 작품 결말·반전' },
-      },
-    },
-    ...posts.slice(1),
-  ),
-};
-
 function SettingExample() {
   const theme = useTheme();
   return (
@@ -93,10 +77,10 @@ function SettingExample() {
         >
           <VolumeX aria-hidden color={theme.foregroundPrimary} size={iconSizes[24]} />
           <Text style={[textStyles.uiLabelL, { color: theme.foregroundPrimary }]}>
-            이런 글이 가려져요
+            이런 부분이 가려져요
           </Text>
           <Text style={[textStyles.uiCopyL, { color: theme.foregroundPrimary }]}>
-            작품의 결말이나 반전을 직접 알려주는 글
+            작품의 결말이나 반전을 직접 알려주는 구절
           </Text>
         </View>
         <Text style={[textStyles.uiCopyM, { color: theme.foregroundSecondary }]}>
@@ -105,21 +89,6 @@ function SettingExample() {
       </View>
       <BottomTabBar onNavigate={() => undefined} profile={{ label: viewer.displayName }} />
     </View>
-  );
-}
-
-function AppliedExample() {
-  const theme = useTheme();
-  return (
-    <>
-      <View style={[styles.applied, { backgroundColor: theme.actionPrimarySubtle }]}>
-        <Check aria-hidden color={theme.foregroundPrimary} size={iconSizes[20]} />
-        <Text style={[textStyles.uiLabelM, { color: theme.foregroundPrimary }]}>
-          결말·반전 이야기를 뮤트하고 있어요
-        </Text>
-      </View>
-      <HomeRoute />
-    </>
   );
 }
 
@@ -148,14 +117,8 @@ export const Setting: Story = {
   render: () => <SettingExample />,
 };
 export const Before: Story = { render: () => <HomeRoute /> };
-export const After: Story = {
-  parameters: { relay: { data: afterData } },
-  render: () => <AppliedExample />,
-};
-
 const styles = StyleSheet.create({
   form: { flex: 1, gap: space[16], padding: space[16] },
   input: { minHeight: 144, ...textStyles.contentM },
   condition: { gap: space[12], padding: space[16], borderRadius: radius[12], borderWidth: 1 },
-  applied: { flexDirection: 'row', alignItems: 'center', gap: space[8], padding: space[12] },
 });

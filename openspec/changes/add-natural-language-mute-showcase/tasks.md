@@ -9,8 +9,8 @@
 
 ## Verification Evidence
 
-- 산출물: `docs/demos/natural-language-mute/index.html`, 같은 폴더의 `setting.jpg`·`before.jpg`·`after.jpg`·`brand-mark.png`와 `README.md`. 제작 원본은 `apps/app/src/stories/screens/NaturalLanguageMute.stories.tsx`.
-- 시각 확인: 2026-10-19 기존 앱 컴포넌트의 Web Storybook을 Light·390×844에서 직접 관찰했다. 설정 예시, 원래 홈 피드, 첫 글만 가린 홈 피드를 캡처했다. 최종 HTML은 1440×1080과 390×844에서 확인했으며 가로 넘침과 누락 이미지가 없었다. 로고·탭·반응·하단 탐색과 유지되는 두 글을 확인했다.
+- 산출물: `docs/demos/natural-language-mute/index.html`, 같은 폴더의 `setting.jpg`·`before.jpg`·`after.jpg`·`revealed.jpg`·`brand-mark.png`와 `README.md`. 제작 원본은 `apps/app/src/stories/screens/NaturalLanguageMute.stories.tsx`.
+- 시각 확인: 2026-10-19 기존 앱 컴포넌트의 Web Storybook을 Light·390×844에서 직접 관찰했다. 설정 예시, 원래 홈 피드, 첫 글의 구절만 가린 홈 피드를 캡처했다. 최종 HTML은 1440×1080과 390×844에서 확인했으며 가로 넘침과 누락 이미지가 없었다. 로고·탭·반응·하단 탐색과 유지되는 두 글을 확인했다. 영역 뮤트 변경 뒤 본문 맥락 유지, 포인터로 구절 공개와 Enter로 다시 가리기, expanded 상태를 직접 확인했다.
 - 포맷 적용: 기존 `pnpm exec prettier --write`로 원본을 정리했다. 자동 검증은 GitHub CI `Lint`에 인계하며 결과는 pending이다. 로컬 테스트는 실행하지 않았다.
 - 한계: 폰트 미설치 시 시스템 한글 sans-serif를 사용한다. 실제 행사 기기, 다른 브라우저, 인쇄는 미검증이다. 화면 이미지는 SUIT/Pretendard를 포함해 캡처되어 행사 기기의 폰트 설치에 의존하지 않는다. 실제 모델·앱·Native 검증은 범위 밖이다.
 

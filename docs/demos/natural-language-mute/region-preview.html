@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>코스모 영역 뮤트 · 소개용 본문 표현</title>
+    <style>
+      @font-face {
+        font-family: 'Pretendard Variable';
+        src: url('../../../apps/app/node_modules/pretendard/dist/web/variable/woff2/PretendardVariable.woff2')
+          format('woff2-variations');
+      }
+      :root {
+        color-scheme: light;
+        --canvas: #ffffff;
+        --ink: #1a1a1a;
+        --highlight: #fff9e6;
+        --focus: #4f46e5;
+        --selected: #ae8512;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--canvas);
+      }
+      .screen {
+        position: relative;
+        width: 390px;
+        height: 844px;
+      }
+      .screen > img {
+        display: block;
+        width: 390px;
+        height: 844px;
+      }
+      .excerpt {
+        position: absolute;
+        left: 76px;
+        top: 168px;
+        width: 298px;
+        margin: 0;
+        background: var(--canvas);
+        color: var(--ink);
+        font:
+          400 16px/24px 'Pretendard Variable',
+          'Apple SD Gothic Neo',
+          sans-serif;
+        overflow-wrap: anywhere;
+      }
+      summary {
+        cursor: pointer;
+        list-style: none;
+      }
+      summary::-webkit-details-marker {
+        display: none;
+      }
+      summary:focus-visible {
+        outline: 2px solid var(--focus);
+        outline-offset: 4px;
+      }
+      .region {
+        border-radius: 4px;
+        background: var(--ink);
+        color: transparent;
+        -webkit-box-decoration-break: clone;
+        box-decoration-break: clone;
+      }
+      details[open] .region {
+        background: var(--highlight);
+        color: var(--ink);
+        text-decoration: underline dotted var(--selected);
+        text-underline-offset: 3px;
+      }
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- 기존 홈 캡처의 본문 한 영역만 합성한 행사 목업. 앱 renderer·CW·뮤트 정책과 연결하지 않는다. -->
+    <main class="screen">
+      <img src="before.jpg" alt="코스모 홈 피드의 소개용 배경" />
+      <details class="excerpt">
+        <summary aria-label="작품 결말·반전 구절 보기 또는 다시 가리기">
+          <span aria-hidden="true"
+            >〈별의 정원〉 마지막에 <span class="region">정원사가 미래의 주인공이었다는</span> 반전…
+            첫 장면부터 힌트가 있었네! 🌙</span
+          >
+        </summary>
+        <p class="sr-only">가린 내용: 정원사가 미래의 주인공이었다는</p>
+      </details>
+    </main>
+  </body>
+</html>

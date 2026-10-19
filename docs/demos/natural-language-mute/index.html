@@ -120,6 +120,35 @@
       .result .screen-link {
         border: 2px solid var(--selected);
       }
+      .region-toggle summary {
+        cursor: pointer;
+        list-style: none;
+      }
+      .region-toggle summary::-webkit-details-marker {
+        display: none;
+      }
+      .region-toggle summary:focus-visible {
+        outline: 2px solid var(--focus);
+        outline-offset: -4px;
+      }
+      .screen-link .revealed {
+        display: none;
+      }
+      .region-toggle[open] .muted {
+        display: none;
+      }
+      .region-toggle[open] .revealed {
+        display: block;
+      }
+      .toggle-hint {
+        display: block;
+        padding: 12px 16px;
+        font-size: 14px;
+        line-height: 20px;
+        color: var(--ink);
+        background: var(--subtle);
+        border-top: 1px solid var(--line);
+      }
       .note {
         margin-top: 16px;
         padding: 12px 16px;
@@ -196,7 +225,7 @@
               height="844"
               alt="코스모의 입력 필드에 결말과 반전을 보고 싶지 않다는 문장이 적혀 있고, 이 조건으로 뮤트하기 버튼과 가림 조건이 표시된 예시."
           /></a>
-          <p class="note">가릴 내용: <strong>작품의 결말·반전을 직접 알려주는 글</strong></p>
+          <p class="note">가릴 내용: <strong>작품의 결말·반전이 드러나는 구절</strong></p>
         </figure>
         <figure class="scene">
           <figcaption>
@@ -221,22 +250,35 @@
           <figcaption>
             <div class="step">
               <span class="number">3</span>
-              <h2>스포일러 글만 가려져요</h2>
+              <h2>스포일러 구절만 가려져요</h2>
             </div>
             <p class="description">
-              같은 글과 순서 그대로. 첫 번째 글의 본문만 가림 표시로 바뀌었어요.
+              작품명과 감상은 그대로. 결말을 알려주는 구절만 검은 영역으로 가려져요.
             </p>
           </figcaption>
-          <a class="screen-link" href="after.jpg" aria-label="적용 후 피드 이미지 크게 보기"
-            ><img
-              src="after.jpg"
-              width="390"
-              height="844"
-              alt="같은 코스모 홈 피드에 뮤트 중 안내가 나타난다. 달빛의 첫 글 본문은 눈 가림 아이콘과 뮤트한 내용 · 작품 결말·반전, 보기 표시로 대체된다. 작화 감상과 행사 준비 글은 그대로 보인다."
-          /></a>
+          <details class="screen-link region-toggle">
+            <summary aria-label="가린 결말·반전 구절 보기 또는 다시 가리기">
+              <img
+                class="muted"
+                src="after.jpg"
+                width="390"
+                height="844"
+                alt="코스모 홈 피드. 첫 글의 작품명과 앞뒤 감상은 읽을 수 있고 결말 구절만 검은 막대로 가려져 있다. 다른 글과 반응·하단 탐색은 그대로다."
+              />
+              <img
+                class="revealed"
+                src="revealed.jpg"
+                width="390"
+                height="844"
+                alt="같은 자리의 가린 구절이 공개되었다. 정원사가 미래의 주인공이었다는 문장에 옅은 배경과 점선 밑줄을 표시한다."
+              />
+              <span class="toggle-hint muted">눌러서 가린 구절 보기</span>
+              <span class="toggle-hint revealed">다시 눌러 가리기</span>
+            </summary>
+          </details>
           <p class="note">
-            <strong>작화 감상·행사 준비 글은 그대로.</strong> 같은 작품을 말해도 결말을 밝히지 않는
-            글은 남아요.
+            <strong>문장 전체를 접지 않아요.</strong> 보고 싶지 않은 구절만 가리고 나머지 맥락은
+            읽을 수 있어요.
           </p>
         </figure>
       </div>
@@ -245,7 +287,7 @@
           기존 코스모 UI로 구성한 소개용 목업입니다. 설정과 가림 결과는 준비된 예시이며 실제 서비스
           기능·모델 판단이 아닙니다.
         </p>
-        <p>작품·인물·글은 모두 가상입니다.<br />각 화면을 누르면 크게 볼 수 있어요.</p>
+        <p>작품·인물·글은 모두 가상입니다.<br />세 번째 화면을 누르면 가린 구절을 볼 수 있어요.</p>
       </footer>
     </main>
   </body>
