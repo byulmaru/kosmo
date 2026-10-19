@@ -4889,6 +4889,7 @@ export const QuoteListItemInternalBackground: Story = {
     const y = (header.getBoundingClientRect().bottom + body.getBoundingClientRect().top) / 2;
     const target = document.elementFromPoint(x, y)!;
     expect(target).toBe(root);
+    expect(getComputedStyle(target).cursor).toBe('pointer');
     const coords = (offset: number) => ({
       clientX: x + offset,
       clientY: y,
@@ -6805,6 +6806,8 @@ export const ContentWarningProductionConsumersShareRevealStateInteraction: Story
     const pathname = canvas.getByTestId('content-warning-list-pathname');
     const initialPath = pathname.textContent;
     const card = listSurface.getByTestId('post-list-item-card');
+    expect(getComputedStyle(card).cursor).toBe('pointer');
+    expect(getComputedStyle(row).cursor).toBe('pointer');
     await waitFor(() => expect(card.getBoundingClientRect().height).toBeGreaterThan(0));
     const cardBounds = card.getBoundingClientRect();
     const cardCoords = (x: number) => ({
