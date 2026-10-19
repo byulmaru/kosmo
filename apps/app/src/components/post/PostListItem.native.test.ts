@@ -13,6 +13,7 @@ type ActionMenuComponent = typeof ActionMenuExport;
 type PostListItemComponent = typeof PostListItemExport;
 type NativeHarness = {
   cleanup(): void;
+  modalDidDismiss(): void;
   nativeExports: Record<string, unknown> & {
     Pressable: ComponentType<Record<string, unknown>>;
     Text: ComponentType<Record<string, unknown>>;
@@ -282,6 +283,9 @@ test('an active ActionMenu row selects once without pressing its PostListItem an
   assert.deepEqual(selections, []);
 
   await release(t);
+  assert.deepEqual(selections, []);
+
+  await act(async () => nativeHarness.modalDidDismiss());
   assert.deepEqual(selections, ['active']);
   assertFeedbackRest();
 });
