@@ -506,7 +506,7 @@ type Profile implements Node {
   migrationSource: Profile
   notifications(after: String, before: String, first: Int, last: Int): NotificationConnection!
   outgoingProfileFollowRequests(after: String, before: String, first: Int, last: Int): ProfileOutgoingProfileFollowRequestsConnection
-  pinnedPosts(after: String, before: String, first: Int, last: Int): PostConnection!
+  pinnedPosts: [Post!]!
   posts(after: String, before: String, first: Int, last: Int): PostConnection!
   private: ProfilePrivate
   profileBlocks(after: String, before: String, first: Int, last: Int): ProfileBlockConnection

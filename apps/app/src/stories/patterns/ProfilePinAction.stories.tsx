@@ -95,15 +95,19 @@ const deletionResponse = { deletePost: { postId: storyPost.id } };
 const pinResponse = {
   pinProfilePost: {
     changed: true,
-    profile: { __typename: 'Profile', id: storyPost.profile.id },
-    post: { __typename: 'Post', id: storyPost.id, isPinned: true },
+    profile: {
+      __typename: 'Profile',
+      id: storyPost.profile.id,
+      pinnedPosts: [storyPostWithPinState(true)],
+    },
+    post: storyPostWithPinState(true),
   },
 };
 const unpinResponse = {
   unpinProfilePost: {
     changed: true,
-    profile: { __typename: 'Profile', id: storyPost.profile.id },
-    post: { __typename: 'Post', id: storyPost.id, isPinned: false },
+    profile: { __typename: 'Profile', id: storyPost.profile.id, pinnedPosts: [] },
+    post: storyPostWithPinState(false),
   },
 };
 
@@ -309,22 +313,9 @@ export const OwnerMenuAndConfirmedActions: Story = {
     expect(await body.findByRole('menuitem', { name: '프로필에 고정' })).toBeVisible();
     expect(await body.findByRole('menuitem', { name: '게시글 삭제' })).toBeVisible();
     await userEvent.click(body.getByRole('menuitem', { name: '프로필에 고정' }));
-    expect(args.onPin).not.toHaveBeenCalled();
-    let pinDialog = await body.findByRole('alertdialog', { name: '프로필에 고정할까요?' });
-    expect(within(pinDialog).getByText(/게시글은 삭제되지 않아요/)).toBeVisible();
-    const cancel = within(pinDialog).getByRole('button', { name: '취소' });
-    await waitFor(() => expect(cancel).toHaveFocus());
-    await userEvent.click(cancel);
-    await waitFor(() => expect(trigger).toHaveFocus());
-    expect(args.onPin).not.toHaveBeenCalled();
-    await userEvent.click(trigger);
-    await userEvent.click(await body.findByRole('menuitem', { name: '프로필에 고정' }));
-    pinDialog = await body.findByRole('alertdialog', { name: '프로필에 고정할까요?' });
-    await userEvent.click(within(pinDialog).getByRole('button', { name: '고정' }));
     await waitFor(() => expect(args.onPin).toHaveBeenCalledTimes(1));
     expect(await canvas.findByText('고정됨')).toBeVisible();
     expect(body.queryByRole('alertdialog')).not.toBeInTheDocument();
-
     await waitFor(() => expect(trigger).toHaveFocus());
     await userEvent.click(trigger);
     const unpinMenu = await body.findByRole('menu', { name: '더 보기 메뉴' });
@@ -339,8 +330,15 @@ export const OwnerMenuAndConfirmedActions: Story = {
     await userEvent.click(trigger);
     await userEvent.click(await body.findByRole('menuitem', { name: '프로필 고정 해제' }));
     expect(args.onUnpin).not.toHaveBeenCalled();
-    const unpinDialog = await body.findByRole('alertdialog', { name: '프로필 고정을 해제할까요?' });
+    let unpinDialog = await body.findByRole('alertdialog', { name: '프로필 고정을 해제할까요?' });
     expect(within(unpinDialog).getByRole('button', { name: '취소' })).toBeVisible();
+    await userEvent.click(within(unpinDialog).getByRole('button', { name: '취소' }));
+    await waitFor(() => expect(trigger).toHaveFocus());
+    expect(args.onUnpin).not.toHaveBeenCalled();
+    expect(canvas.getByText('고정됨')).toBeVisible();
+    await userEvent.click(trigger);
+    await userEvent.click(await body.findByRole('menuitem', { name: '프로필 고정 해제' }));
+    unpinDialog = await body.findByRole('alertdialog', { name: '프로필 고정을 해제할까요?' });
     await userEvent.click(within(unpinDialog).getByRole('button', { name: '고정 해제' }));
     await waitFor(() => expect(args.onUnpin).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(canvas.queryByText('고정됨')).not.toBeInTheDocument());
@@ -391,9 +389,7 @@ export const PendingContract: Story = {
     const trigger = canvas.getByRole('button', { name: '더 보기' });
     await userEvent.click(trigger);
     await userEvent.click(await body.findByRole('menuitem', { name: '프로필에 고정' }));
-    const dialog = await body.findByRole('alertdialog', { name: '프로필에 고정할까요?' });
-    expect(args.onPin).not.toHaveBeenCalled();
-    await userEvent.click(within(dialog).getByRole('button', { name: '고정' }));
+    expect(body.queryByRole('alertdialog')).not.toBeInTheDocument();
     await waitFor(() => expect(trigger).toHaveAttribute('aria-busy', 'true'));
     expect(trigger).toHaveAttribute('aria-disabled', 'true');
     trigger.click();
@@ -415,9 +411,11 @@ export const ErrorRecoveryFocus: Story = {
     await userEvent.click(await body.findByRole('menuitem', { name: '프로필 고정 해제' }));
     const dialog = await body.findByRole('alertdialog', { name: '프로필 고정을 해제할까요?' });
     await userEvent.click(within(dialog).getByRole('button', { name: '고정 해제' }));
-    expect(
-      await body.findByText('@kosmo의 고정 상태를 변경하지 못했어요. 다시 시도해 주세요.'),
-    ).toBeVisible();
+    await waitFor(() =>
+      expect(
+        body.getByText('@kosmo의 고정 상태를 변경하지 못했어요. 다시 시도해 주세요.'),
+      ).toBeVisible(),
+    );
     expect(body.queryByRole('alertdialog')).not.toBeInTheDocument();
     expect(canvas.getByText('고정됨')).toBeVisible();
     await waitFor(() => expect(trigger).toHaveFocus());

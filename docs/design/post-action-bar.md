@@ -247,14 +247,14 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - 고정·해제에는 같은 `Pin` glyph를 사용하고 `PinOff`는 사용하지 않는다. attribution은 `16`/`secondary`,
   Web menu는 `18`/`primary`, Native menu는 `24`/`primary`를 사용하며 삭제의 `danger` 색은 유지한다.
 - 고정·해제 요청 중에도 Profile 전환을 허용한다. 실패 알림에는 요청을 시작한 Profile을 표시한다.
-- pin/unpin 성공 뒤 대상 Post의 메뉴는 저장된 고정 상태를 반영한다. 이미 표시 중인 Profile pinned segment는 이전 목록 구성과 순서를
-  유지할 수 있으며, 이후 Profile 목록을 다시 조회할 때 저장된 결과를 표시한다.
+- pin/unpin 결과는 현재 화면의 고정 상태와 목록 표시에 반영한다. 동시 요청의 응답 순서에 따라 이전 표시가 남을 수 있으며,
+  서버의 최신 고정 목록과 순서는 Profile 목록을 다시 조회할 때 확인한다.
 - 고정 Post는 Profile 목록의 pinned segment에서 우선 표시하며 Home timeline 순서는 변경하지 않는다.
 - Profile pinned segment는 조회 가능한 Local pin 전체를 server-authoritative 순서로 표시하고 개별 관리한다. Remote는 검증된
   Featured collection 전체를 원격 순서로 표시한다. pin 관계는 기존 Profile chronology의 후보·순서·pagination을 바꾸지 않으므로,
   chronology에도 포함되는 Post는 pinned segment와 원래 위치에 모두 표시될 수 있다.
-- Home, Search, Detail, Profile 게시물 메뉴에서 같은 owner 고정·해제 action을 제공한다. Profile 고정 목록은
-  authoritative order를 따라 페이지를 이어가며 chronology와 분리한다.
+- Home, Search, Detail, Profile 게시물 메뉴에서 같은 owner 고정·해제 action을 제공한다. Profile pinned segment는
+  authoritative order를 따르며 chronology와 분리한다.
 
 ### Storybook 이관 · PROD-863
 
@@ -270,9 +270,9 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - fixture는 고정·해제 요청의 busy·disabled 표시, 완료 뒤 More trigger focus 복귀, mutation 실패 시 현재 표시 유지와
   공용 한국어 오류 안내, 메뉴를 다시 열어 재시도하는 동작을 확인한다. 고정 상태를 확인할 수 없는 경우에는 고정 action만
   생략하고 다른 메뉴 action을 유지한다. 오류 원문은 표시하지 않는다.
-- 고정과 해제는 각각 `프로필에 고정할까요?`·`프로필 고정을 해제할까요?` alertdialog에서 `취소`와
-  `고정`·`고정 해제`를 확인한다. 취소하면 요청 없이 닫고 More trigger로 focus를 복원한다. 확인하면 dialog를 닫은 뒤
-  요청한다.
+- 고정은 별도 dialog 없이 즉시 요청하고 action menu를 닫은 뒤 More trigger로 focus를 복원한다. 해제는
+  `프로필 고정을 해제할까요?` alertdialog에서 `취소`와 `고정 해제`를 확인한다. 취소하면 요청 없이 닫고 More
+  trigger로 focus를 복원한다. 확인하면 dialog를 닫은 뒤 요청한다.
 - `KOSMO/Patterns/Profile/Pin Action`의 Playground는 수동 Controls·Actions용이며 자동 조작은 Controls가
   비활성화된 `Tests`에 둔다. Controls는 owner/visitor, pin/unpin, 요청 success/pending/error를 제공한다.
 - 2026-09-08 PROD-863 범위 확정에 따라 empty·removed·unavailable·loading·error 전용 상태 카드와
@@ -280,7 +280,7 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - 2026-09-30 PROD-975 이관에서 fixture는 production `PostActionSurface`와 실제 Relay mutation observer를
   사용하도록 정렬한다. Storybook의 pending·error·focus 검증은 request observer로 응답을 지연·실패시켜
   수행하며, 원격 Featured sync와 Native runtime QA는 별도 통합 범위로 남긴다.
-- 이 이관은 Profile pinned segment와 기존 chronology를 분리해 유지한다. 두 목록의 위치와 페이지 진행은 각각의 목록 순서를 따른다.
+- 이 이관은 Profile pinned segment와 기존 chronology를 분리해 유지한다. 고정 목록 전체는 서버 순서로 표시하고, 기존 chronology의 페이지 진행과 실패 시 재시도는 유지한다.
 - 2026-09-09 로컬 검증: Relay·TypeScript·lint·Storybook 빌드와 Pin·PostActionBar·Posts의 123개 테스트가
   통과했다. 새 정적 빌드의 키보드 고정 모의 실행·표시 전환·More focus 복귀를 확인했고, 완료 상태의
   접근성 재검사는 위반 0건이었다. 이 기록은 fixture의 공용 UI 검증이며 실제 Pin mutation 증거가 아니다.
